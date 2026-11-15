@@ -8,6 +8,7 @@
 #include "../discovery.h"
 #include "../vblank_pacer.h"
 #include "fakes.h"
+#include "fixtures/legacy_layout.h"
 
 using namespace ovt;
 
@@ -260,10 +261,10 @@ int main()
     {
         TempDir dir;
         FakePlane fp;
-        FakeFrame frame;
+        FakeFrame frame; frame.views = legacy::kViews;
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0);
+        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
         ctl.attach (&inst);
         double now = 0.0;
         auto run = [&] (double ms) { const double end = now + ms; while (now < end) { now += 10.0; ctl.tick (now); } };
@@ -271,7 +272,7 @@ int main()
         check (! ctl.rotationKnown() && ! fp.planeOn, "rotation " + std::to_string (rot) + ": nothing on screen: the rotation is not known yet and nothing is shown");
         frame.setAll (true, rot);
         run (400);
-        check (ctl.rotationKnown() && ctl.rotation() == rot && fp.planeOn && fp.lastRect == uiRectToPanel (rot, Rect { layout::kViews[0].region.x, layout::kViews[0].region.y, layout::kViews[0].region.w, layout::kViews[0].region.h }, 800, 1280),
+        check (ctl.rotationKnown() && ctl.rotation() == rot && fp.planeOn && fp.lastRect == uiRectToPanel (rot, Rect { legacy::kViews[0].region.x, legacy::kViews[0].region.y, legacy::kViews[0].region.w, legacy::kViews[0].region.h }, 800, 1280),
               "rotation " + std::to_string (rot) + ": found from the markers of the view on screen, and the plane is where that rotation says");
         run (1100);
         const std::string st = dir.read ("status.txt");
@@ -292,29 +293,29 @@ int main()
     {
         TempDir dir;
         FakePlane fp;
-        FakeFrame frame;
+        FakeFrame frame; frame.views = legacy::kViews;
         frame.panelW = 1280;     // a landscape panel: the UI is not turned
         frame.panelH = 800;
         fp.panelW = 1280;
         fp.panelH = 800;
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0);
+        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
         ctl.attach (&inst);
         frame.setAll (true, rot);
         double now = 0.0;
         for (int i = 0; i < 50; ++i) { now += 10.0; ctl.tick (now); }
-        const Rect ui { layout::kViews[0].region.x, layout::kViews[0].region.y, layout::kViews[0].region.w, layout::kViews[0].region.h };
+        const Rect ui { legacy::kViews[0].region.x, legacy::kViews[0].region.y, legacy::kViews[0].region.w, legacy::kViews[0].region.h };
         check (ctl.rotationKnown() && ctl.rotation() == rot && fp.planeOn && fp.lastRect == uiRectToPanel (rot, ui, 1280, 800), "rotation " + std::to_string (rot) + " (a landscape panel): found, the plane rectangle is the UI rectangle turned accordingly");
     }
     {
         // markers that match under two rotations at once (both mappings drawn): nothing is decided, nothing is shown, and the reason says why
         TempDir dir;
         FakePlane fp;
-        FakeFrame frame;
+        FakeFrame frame; frame.views = legacy::kViews;
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0);
+        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
         ctl.attach (&inst);
         frame.setAll (true, 90);
         frame.setAll (true, 270);
@@ -330,12 +331,12 @@ int main()
     {
         TempDir dir;
         FakePlane fp;
-        FakeFrame frame;
+        FakeFrame frame; frame.views = legacy::kViews;
         frame.readable = false;
         frame.fatal = "display discovery failed: no free overlay plane on CRTC 82";
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0);
+        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
         ctl.attach (&inst);
         double now = 0.0;
         for (int i = 0; i < 10; ++i) { now += 10.0; ctl.tick (now); }
@@ -347,10 +348,10 @@ int main()
         TempDir dir;
         FakePlane fp;
         fp.spares = { 52, 58 };
-        FakeFrame frame;
+        FakeFrame frame; frame.views = legacy::kViews;
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0);
+        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
         ctl.attach (&inst);
         frame.setAll (true, 90);
         double now = 0.0;
@@ -388,12 +389,12 @@ int main()
             fp.pace.periodMs = period;
             fp.pace.stride = 2;
             fp.pace.vblank = true;
-            FakeFrame frame;
+            FakeFrame frame; frame.views = legacy::kViews;
             CpuCurveRenderer renderer;
             FakeInstance inst;
             Timing t;
             t.followDisplayPace = follow;
-            Controller ctl (fp, frame, renderer, dir.paths(), t, 10.0);
+            Controller ctl (fp, frame, renderer, dir.paths(), t, 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
             ctl.attach (&inst);
             frame.setAll (true, 90);
             double now = 0.0, wait = 0.0;
@@ -414,10 +415,10 @@ int main()
     {
         TempDir dir;
         FakePlane fp;
-        FakeFrame frame;
+        FakeFrame frame; frame.views = legacy::kViews;
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0);
+        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
         ctl.attach (&inst);
         frame.setAll (true, 90);
         double now = 0.0;

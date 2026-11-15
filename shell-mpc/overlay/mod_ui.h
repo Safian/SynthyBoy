@@ -1,7 +1,13 @@
-// SynthyBoy - MPC overlay: Modulation Matrix UI (mod_ui.h).
-// Connects the Mod Matrix and Slot Detail views to engine parameters via IInstanceView.
+// SynthyBoy - MPC overlay: the MODULATION MATRIX UI, the page of the Mod tab (the plugin draws the whole tab, page_view.h): the 64 slots of the matrix (shell-mpc/ui/mod_matrix.h) and the page of one slot
+// (mod_detail.h) wired to the engine parameters (modNN.* of the table, docs/MPC.md "Modulation UI"). One object per (page view, plugin instance). Pure: no OS headers, no threads of its own; the overlay thread calls
+// update () / touch () / tick () / draw (), with the instance as IInstanceView.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// What it shows (UiStack, ui_stack.h; the element id of this UI is kElementPage): the matrix is the page; above it the details of a slot (a page over the whole tab, BACK returns) and the list popup that picks a
+// source, a target or the auxiliary source of a slot. The lists are grouped like the ADD TARGET list of the envelope and the LFO (one source of the groups: ui_bind.h DestIndex): the first level has the
+// groups, a tap on a group shows its entries (the header of the list is the way back). The Q group of the matrix is the selected row: AMOUNT, SOURCE, TARGET and the row (the fourth Q-Link steps through the rows:
+// a virtual Q target, q_router.h).
 #pragma once
 
 #include <algorithm>
@@ -11,11 +17,14 @@
 #include <string>
 #include <vector>
 
-#include "../ui/mod_matrix.h"
-#include "../ui/mod_detail.h"
+#include "../q_router.h"
 #include "../ui/list.h"
+#include "../ui/mod_detail.h"
+#include "../ui/mod_matrix.h"
 #include "curve_source.h"
+#include "page_view.h"
 #include "touch_decoder.h"
+#include "ui_bind.h"
 #include "ui_stack.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
@@ -26,48 +35,34 @@ namespace synthyboy_mpc { namespace overlay {
 class ModUi
 {
 public:
-    static constexpr int kElementModMatrix = 2; // Full-screen Mod Matrix element
-    enum Page { kPageSlotDetail = 20, kPageSourcePopup = 21, kPageDestPopup = 22 };
+    static constexpr int kElementPage = 7;          // the page of the Mod tab (the oscillator is 1, the envelope 2, the LFO 3, the filter 4)
+    static constexpr int kElementModMatrix = kElementPage;
+    enum Page { kPageDetail = 20, kPageList = 21 };
 
     enum Id : int
     {
-        kClose = 10,
         kFilterAll = 20, kFilterSource = 21, kFilterDest = 22,
         kSourceFilterStep = 25, kDestFilterStep = 26,
-        kAddSlot = 30,
+        kAdd = 30,
         kDetailBack = 40, kDetailDelete = 41,
-        kTabAux = 50, kTabShape = 51, kTabTime = 52,
-        kListPopup = 60, kListPopupBackdrop = 61,
-        // Per-row controls: kRowBase + windowRow * 10 + offset
+        kListPopup = 60, kListBackdrop = 61, kListHeader = 62,
+        // the rows of the matrix: kRowBase + window row * 10 + offset; the row of the details page: kDetailRowBase + offset
         kRowBase = 100,
-        kOffsetSource = 0,
-        kOffsetDest = 1,
-        kOffsetAmount = 2,
-        kOffsetBi = 3,
-        kOffsetBypass = 4,
-        kOffsetDetail = 5,
-        // Detail controls
-        kDetailAuxSource = 800,
-        kDetailAuxOutput = 801,
-        kDetailAuxInv = 802,
-        kDetailAuxPower = 803,
-        kDetailPower = 804,
-        kDetailStereo = 805,
-        kDetailRise = 806,
-        kDetailFall = 807,
-        kDetailDelay = 808,
-        kDetailDelaySync = 809,
-        kDetailDelayBeats = 810
+        kOffsetNumber = 0, kOffsetSource = 1, kOffsetDest = 2, kOffsetAmount = 3, kOffsetBi = 4, kOffsetBypass = 5, kOffsetDetail = 6,
+        kDetailRowBase = 300,
+        kDetailAuxSource = 800, kDetailAuxOutput, kDetailAuxInv, kDetailAuxPower, kDetailPower, kDetailStereo, kDetailRise, kDetailFall, kDetailDelay, kDetailDelaySync, kDetailDelayBeats
     };
+    enum class ListKind : uint8_t { Source, Dest, Aux };
 
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
+    static constexpr int kVirtualRow = 0;   // the virtual Q target that steps through the rows of the matrix
 
     ModUi()
     {
         setCanvas (kCanvasW, kCanvasH);
         assignIds();
-        initSourceNames();
-        initDestNames();
+        for (int g = 0; g <= uibind::kSourceGroups; ++g)
+            srcGroupNames_[g] = uibind::sourceGroupName (g);
     }
 
     void setCanvas (int w, int h)
@@ -75,109 +70,67 @@ public:
         w_ = w; h_ = h;
         const ui::Rect tab { 0, kTabY, w, kTabH };
         matrix_.place (tab);
-        // Slot detail slides in on the right (680 px wide)
-        slotDetail_.place ({ w - 680, kTabY, 680, kTabH });
-
-        // Popups
-        sourceList_.place ({ w / 2 - 250, kTabY + 40, 500, 8 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        sourceList_.setPopup (tab);
-        sourceList_.setId (kListPopup);
-        sourceList_.setBackdropId (kListPopupBackdrop);
-
-        destList_.place ({ w / 2 - 270, kTabY + 40, 540, 8 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
-        destList_.setPopup (tab);
-        destList_.setId (kListPopup);
-        destList_.setBackdropId (kListPopupBackdrop);
+        detail_.place (tab);
+        list_.place ({ w / 2 - 260, kTabY + 20, 520, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup (tab);
+        list_.setId (kListPopup);
+        list_.setBackdropId (kListBackdrop);
+        list_.setHeaderId (kListHeader);
     }
 
-    void update (IInstanceView& inst, const UiStack& stack, double nowMs)
+    /** Reads the instance: the 64 slots, the page of the open slot, the live values of the sources, the pages of the stack, the Q group. */
+    void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
     {
         (void) nowMs;
-        stackDepth_ = stack.depth();
-        pageTop_ = stack.top();
+        pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0;
+        if (pageTop_ != kPageDetail && pageTop_ != kPageList)
+            pageTop_ = 0;
+        if (pageTop_ == 0 && openSlot_ >= 0 && ! gestureDown_)
+            openSlot_ = -1;
 
-        synthyboy::LiveValues liveVals;
-        const bool hasLive = inst.live (liveVals);
-
-        // Update all 64 slots
+        const synthyboy::LiveValues* live = in.live;
         for (int s = 0; s < synthyboy::kNumModSlots; ++s)
         {
             const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (s);
-            if (sp.source < 0 || sp.destination < 0) continue;
-
+            if (sp.source < 0 || sp.destination < 0)
+                continue;
             const int srcVal = static_cast<int> (std::lround (inst.param (sp.source)));
             const int dstVal = static_cast<int> (std::lround (inst.param (sp.destination)));
-            const float amtVal = inst.param (sp.amount); // -100 .. +100
-            const bool biVal = inst.param (sp.bipolar) > 0.5f;
-            const bool bypVal = inst.param (sp.bypass) > 0.5f;
-
-            const char* sName = sourceNameOf (srcVal);
-            const char* dName = destNameOf (dstVal);
-            const int dModule = destModuleOf (dstVal);
-
-            double liveSourceVal = 0.0;
-            if (hasLive && srcVal >= 1 && srcVal <= synthyboy::LiveValues::kMaxSources)
-                liveSourceVal = static_cast<double> (liveVals.source[srcVal - 1]);
-
-            matrix_.setSlotData (s, sName, dName, static_cast<double> (amtVal) / 100.0,
-                                 biVal, bypVal, srcVal, dModule, hasLive && srcVal > 0, liveSourceVal);
+            const double amount = static_cast<double> (inst.param (sp.amount)) / 100.0;
+            const bool bi = sp.bipolar >= 0 && inst.param (sp.bipolar) > 0.5f, byp = sp.bypass >= 0 && inst.param (sp.bypass) > 0.5f;
+            double liveSource = 0.0;
+            if (live != nullptr && srcVal >= 1 && srcVal <= synthyboy::LiveValues::kMaxSources)
+                liveSource = static_cast<double> (live->source[srcVal - 1]);
+            matrix_.setSlotData (s, sourceName (srcVal), destName (dstVal), amount, bi, byp, uibind::sourceGroup (srcVal), destModuleOf (dstVal), live != nullptr && srcVal > 0, liveSource);
         }
+        matrix_.refresh();
 
-        matrix_.rebuildVisibleList();
+        if (openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots && (pageTop_ == kPageDetail || pageTop_ == kPageList))
+            pullDetail (inst, live);
 
-        // Update detail panel if open
-        if (pageTop_ == kPageSlotDetail && openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots)
-        {
-            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
-            const int srcVal = static_cast<int> (std::lround (inst.param (sp.source)));
-            const int dstVal = static_cast<int> (std::lround (inst.param (sp.destination)));
-            slotDetail_.setSlot (openSlot_, sourceNameOf (srcVal), destNameOf (dstVal));
+        // the virtual Q target of the rows: a write of the host moves the selected row
+        float x;
+        if (pageTop_ == 0 && inst.takeQVirtual (kVirtualRow, x) && matrix_.visibleSlotCount() > 0)
+            matrix_.selectRow (static_cast<int> (std::lround (x * static_cast<float> (std::max (1, matrix_.visibleSlotCount() - 1)))));
+        inst.setQVirtual (kVirtualRow, matrix_.visibleSlotCount() > 1 ? static_cast<float> (matrix_.selectedRow()) / static_cast<float> (matrix_.visibleSlotCount() - 1) : 0.0f);
 
-            const int auxSrc = static_cast<int> (std::lround (inst.param (sp.auxSource)));
-            const float auxOut = inst.param (sp.auxOutput) / 100.0f; // 0..200% -> 0..2
-            const bool auxInv = inst.param (sp.auxInv) > 0.5f;
-            const float auxPwr = inst.param (sp.auxPower);
-            slotDetail_.setAuxData (sourceNameOf (auxSrc), static_cast<double> (auxOut), auxInv, static_cast<double> (auxPwr));
-
-            const float pwr = inst.param (sp.power);
-            const bool st = inst.param (sp.stereo) > 0.5f;
-            slotDetail_.setShapeData (static_cast<double> (pwr), st);
-
-            const float r = inst.param (sp.rise);
-            const float f = inst.param (sp.fall);
-            const float d = inst.param (sp.delay);
-            const bool sync = inst.param (sp.delaySync) > 0.5f;
-            const float beats = inst.param (sp.delayBeats);
-            slotDetail_.setTimeData (static_cast<double> (r), static_cast<double> (f), static_cast<double> (d), sync, static_cast<double> (beats));
-        }
-
+        inst.setUiFullOpen (true);
         publishQGroup (inst);
     }
 
+    /** The whole picture: the page and what lies over it. */
     void draw (gpu::SceneBuilder& sb) const
     {
-        // Matrix view always drawn as base
-        matrix_.draw (sb);
-
-        // Slide-in slot detail panel if detail open
-        if (pageTop_ == kPageSlotDetail)
-        {
-            slotDetail_.draw (sb);
-        }
-        else if (pageTop_ == kPageSourcePopup)
-        {
-            sourceList_.draw (sb);
-        }
-        else if (pageTop_ == kPageDestPopup)
-        {
-            destList_.draw (sb);
-        }
+        page::ground (sb);
+        if (pageTop_ == kPageDetail || (pageTop_ == kPageList && openSlot_ >= 0))
+            detail_.draw (sb);
+        else
+            matrix_.draw (sb);
+        if (pageTop_ == kPageList)
+            list_.draw (sb);
     }
 
-    bool covers (int x, int y) const noexcept
-    {
-        return ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y);
-    }
+    bool covers (int x, int y) const noexcept { return ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y); }
 
     bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs)
     {
@@ -214,429 +167,44 @@ public:
 
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
+    void forgetQGroup() noexcept { qSet_ = false; }
 
-    ui::Change turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst)
+    void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst)
     {
-        ui::Change c;
-        if (pageTop_ == kPageSlotDetail)
-            c = slotDetail_.turnQ (knobIndex, delta);
-        else
-            c = matrix_.turnQ (knobIndex, delta);
-        handle (c, stack, inst);
-        return c;
+        handle (pageTop_ == kPageDetail ? detail_.turnQ (knobIndex, delta) : matrix_.turnQ (knobIndex, delta), stack, inst);
     }
 
     const int* qTargets() const noexcept { return qTargets_; }
     const char* qGroupName() const noexcept { return qName_; }
     int topPage() const noexcept { return pageTop_; }
+    int openSlot() const noexcept { return openSlot_; }
 
     ui::ModMatrixView& matrix() noexcept { return matrix_; }
-    ui::ModSlotDetail& detail() noexcept { return slotDetail_; }
+    ui::ModSlotDetail& detail() noexcept { return detail_; }
+    ui::ListPopup& list() noexcept { return list_; }
 
     void openSlotDetail (int slot, UiStack& stack)
     {
         openSlot_ = slot;
-        stack.openDetail (kPageSlotDetail);
+        stack.openDetail (kPageDetail);
+        pageTop_ = kPageDetail;
     }
 
-    void setFilterSource (int srcChoice)
+    /** Names. The matrix shows "" for a slot that has no source or no target. */
+    static const char* sourceName (int choice) noexcept { return choice >= 1 ? uibind::sourceName (choice) : ""; }
+    static const char* destName (int choice) noexcept
     {
-        matrix_.setFilterMode (ui::ModMatrixView::FilterSource);
-        matrix_.setSourceFilterChoice (srcChoice);
+        if (choice <= 0)
+            return "";
+        const int p = synthyboy::modDestinationParamIndex (static_cast<size_t> (choice));
+        return p >= 0 ? uibind::info (p).name : "";
     }
-
-    void setFilterDestModule (int modIdx)
-    {
-        matrix_.setFilterMode (ui::ModMatrixView::FilterDest);
-        matrix_.setDestModuleFilter (modIdx);
-    }
-
-    void setFilterAll()
-    {
-        matrix_.setFilterMode (ui::ModMatrixView::FilterAll);
-    }
-
-private:
-    int w_ = kCanvasW, h_ = kCanvasH;
-    int stackDepth_ = 0;
-    int pageTop_ = -1;
-    int openSlot_ = -1;
-    int popupSlot_ = -1;
-
-    ui::ModMatrixView matrix_;
-    ui::ModSlotDetail slotDetail_;
-    ui::ListPopup sourceList_;
-    ui::ListPopup destList_;
-
-    ui::Component* gesture_ = nullptr;
-    bool gestureDown_ = false;
-
-    int qTargets_[4] = { -1, -1, -1, -1 };
-    char qName_[32] = "MOD MATRIX";
-
-    std::vector<std::string> sourceNames_;
-    std::vector<const char*> sourceNamePtrs_;
-
-    std::vector<std::string> destNames_;
-    std::vector<const char*> destNamePtrs_;
-
-    ui::Component* topComponent() noexcept
-    {
-        if (pageTop_ == kPageSourcePopup) return &sourceList_;
-        if (pageTop_ == kPageDestPopup) return &destList_;
-        if (pageTop_ == kPageSlotDetail) return &slotDetail_;
-        return &matrix_;
-    }
-
-    void handle (ui::Change c, UiStack& stack, IInstanceView& inst)
-    {
-        if (! c) return;
-
-        // Close / Back button
-        if (c.id == kClose)
-        {
-            stack.back();
-            return;
-        }
-
-        // Filter tabs
-        if (c.id == kFilterAll) { setFilterAll(); return; }
-        if (c.id == kFilterSource) { matrix_.setFilterMode (ui::ModMatrixView::FilterSource); return; }
-        if (c.id == kFilterDest) { matrix_.setFilterMode (ui::ModMatrixView::FilterDest); return; }
-
-        // Filter steppers
-        if (c.id == kSourceFilterStep && c.kind == ui::ChangeKind::Index)
-        {
-            matrix_.setSourceFilterChoice (c.index);
-            return;
-        }
-        if (c.id == kDestFilterStep && c.kind == ui::ChangeKind::Index)
-        {
-            matrix_.setDestModuleFilter (c.index - 1);
-            return;
-        }
-
-        // Add Slot
-        if (c.id == kAddSlot)
-        {
-            // Find first unassigned slot
-            for (int s = 0; s < synthyboy::kNumModSlots; ++s)
-            {
-                const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (s);
-                const int src = static_cast<int> (std::lround (inst.param (sp.source)));
-                const int dst = static_cast<int> (std::lround (inst.param (sp.destination)));
-                if (src == 0 && dst == 0)
-                {
-                    // Assign default: Env 1 -> Cutoff (or first modulatable), +50%
-                    writePlain (inst, sp.source, 1.0f); // Env 1
-                    writePlain (inst, sp.destination, 1.0f);
-                    writeNorm (inst, sp.amount, 0.75); // +50%
-                    openSlotDetail (s, stack);
-                    break;
-                }
-            }
-            return;
-        }
-
-        // Slot Detail Back
-        if (c.id == kDetailBack)
-        {
-            stack.back();
-            return;
-        }
-
-        // Slot Detail Delete Confirmed
-        if (c.id == kDetailDelete && openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots)
-        {
-            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
-            writePlain (inst, sp.source, 0.0f);
-            writePlain (inst, sp.destination, 0.0f);
-            writePlain (inst, sp.amount, 0.0f);
-            writePlain (inst, sp.bipolar, 0.0f);
-            writePlain (inst, sp.stereo, 0.0f);
-            writePlain (inst, sp.bypass, 0.0f);
-            writePlain (inst, sp.auxSource, 0.0f);
-            stack.back();
-            return;
-        }
-
-        // Popups
-        if (c.id == kListPopupBackdrop)
-        {
-            stack.back();
-            return;
-        }
-
-        if (c.id == kListPopup && c.kind == ui::ChangeKind::Index)
-        {
-            if (pageTop_ == kPageSourcePopup && popupSlot_ >= 0 && popupSlot_ < synthyboy::kNumModSlots)
-            {
-                const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (popupSlot_);
-                writePlain (inst, sp.source, static_cast<float> (c.index));
-                stack.back();
-            }
-            else if (pageTop_ == kPageDestPopup && popupSlot_ >= 0 && popupSlot_ < synthyboy::kNumModSlots)
-            {
-                const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (popupSlot_);
-                writePlain (inst, sp.destination, static_cast<float> (c.index));
-                stack.back();
-            }
-            return;
-        }
-
-        // Per-row controls (id = kRowBase + windowRow * 10 + offset)
-        if (c.id >= kRowBase && c.id < kRowBase + ui::ModMatrixView::kWindowRows * 10)
-        {
-            const int wIdx = (c.id - kRowBase) / 10;
-            const int offset = (c.id - kRowBase) % 10;
-            const int slot = matrix_.slotAtWindowIndex (wIdx);
-
-            if (slot == ui::ModMatrixView::kMaxSlots)
-            {
-                handle (ui::Change::request (kAddSlot), stack, inst);
-                return;
-            }
-
-            if (slot < 0 || slot >= synthyboy::kNumModSlots) return;
-
-            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (slot);
-
-            if (offset == kOffsetSource)
-            {
-                popupSlot_ = slot;
-                sourceList_.state.current = static_cast<int> (std::lround (inst.param (sp.source)));
-                sourceList_.showCurrent();
-                stack.openDetail (kPageSourcePopup);
-            }
-            else if (offset == kOffsetDest)
-            {
-                popupSlot_ = slot;
-                destList_.state.current = static_cast<int> (std::lround (inst.param (sp.destination)));
-                destList_.showCurrent();
-                stack.openDetail (kPageDestPopup);
-            }
-            else if (offset == kOffsetAmount && c.kind == ui::ChangeKind::Value)
-            {
-                writeNorm (inst, sp.amount, c.value);
-            }
-            else if (offset == kOffsetBi)
-            {
-                const bool cur = inst.param (sp.bipolar) > 0.5f;
-                writePlain (inst, sp.bipolar, cur ? 0.0f : 1.0f);
-            }
-            else if (offset == kOffsetBypass)
-            {
-                const bool cur = inst.param (sp.bypass) > 0.5f;
-                writePlain (inst, sp.bypass, cur ? 0.0f : 1.0f);
-            }
-            else if (offset == kOffsetDetail)
-            {
-                openSlotDetail (slot, stack);
-            }
-            return;
-        }
-
-        // Detail controls
-        if (openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots)
-        {
-            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
-            if (c.id == kDetailAuxSource)
-            {
-                popupSlot_ = openSlot_;
-                sourceList_.state.current = static_cast<int> (std::lround (inst.param (sp.auxSource)));
-                sourceList_.showCurrent();
-                stack.openDetail (kPageSourcePopup);
-            }
-            else if (c.id == kDetailAuxOutput && c.kind == ui::ChangeKind::Value)
-            {
-                writeNorm (inst, sp.auxOutput, c.value);
-            }
-            else if (c.id == kDetailAuxInv)
-            {
-                const bool cur = inst.param (sp.auxInv) > 0.5f;
-                writePlain (inst, sp.auxInv, cur ? 0.0f : 1.0f);
-            }
-            else if (c.id == kDetailAuxPower && c.kind == ui::ChangeKind::Value)
-            {
-                writeNorm (inst, sp.auxPower, c.value);
-            }
-            else if (c.id == kDetailPower && c.kind == ui::ChangeKind::Value)
-            {
-                writeNorm (inst, sp.power, c.value);
-            }
-            else if (c.id == kDetailStereo)
-            {
-                const bool cur = inst.param (sp.stereo) > 0.5f;
-                writePlain (inst, sp.stereo, cur ? 0.0f : 1.0f);
-            }
-            else if (c.id == kDetailRise && c.kind == ui::ChangeKind::Value)
-            {
-                writeNorm (inst, sp.rise, c.value);
-            }
-            else if (c.id == kDetailFall && c.kind == ui::ChangeKind::Value)
-            {
-                writeNorm (inst, sp.fall, c.value);
-            }
-            else if (c.id == kDetailDelay && c.kind == ui::ChangeKind::Value)
-            {
-                writeNorm (inst, sp.delay, c.value);
-            }
-            else if (c.id == kDetailDelaySync)
-            {
-                const bool cur = inst.param (sp.delaySync) > 0.5f;
-                writePlain (inst, sp.delaySync, cur ? 0.0f : 1.0f);
-            }
-            else if (c.id == kDetailDelayBeats && c.kind == ui::ChangeKind::Value)
-            {
-                writeNorm (inst, sp.delayBeats, c.value);
-            }
-        }
-    }
-
-    void assignIds()
-    {
-        matrix_.close.setId (kClose);
-        matrix_.tabAll.setId (kFilterAll);
-        matrix_.tabSource.setId (kFilterSource);
-        matrix_.tabDest.setId (kFilterDest);
-        matrix_.sourceFilter.setId (kSourceFilterStep);
-        matrix_.destFilter.setId (kDestFilterStep);
-
-        for (int w = 0; w < ui::ModMatrixView::kWindowRows; ++w)
-        {
-            const int base = kRowBase + w * 10;
-            matrix_.windowRows[w].sourceBtn.setId (base + kOffsetSource);
-            matrix_.windowRows[w].destBtn.setId (base + kOffsetDest);
-            matrix_.windowRows[w].amountBar.setId (base + kOffsetAmount);
-            matrix_.windowRows[w].biToggle.setId (base + kOffsetBi);
-            matrix_.windowRows[w].bypassToggle.setId (base + kOffsetBypass);
-            matrix_.windowRows[w].detailBtn.setId (base + kOffsetDetail);
-            matrix_.windowRows[w].addBtn.setId (base + kOffsetSource);
-        }
-
-        slotDetail_.back.setId (kDetailBack);
-        slotDetail_.deleteBtn.setId (kDetailDelete);
-        slotDetail_.auxSource.setId (kDetailAuxSource);
-        slotDetail_.auxOutput.setId (kDetailAuxOutput);
-        slotDetail_.auxInv.setId (kDetailAuxInv);
-        slotDetail_.auxPower.setId (kDetailAuxPower);
-        slotDetail_.power.setId (kDetailPower);
-        slotDetail_.stereo.setId (kDetailStereo);
-        slotDetail_.rise.setId (kDetailRise);
-        slotDetail_.fall.setId (kDetailFall);
-        slotDetail_.delay.setId (kDetailDelay);
-        slotDetail_.delaySync.setId (kDetailDelaySync);
-        slotDetail_.delayBeats.setId (kDetailDelayBeats);
-    }
-
-    void publishQGroup (IInstanceView& inst)
-    {
-        if (pageTop_ == kPageSlotDetail && openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots)
-        {
-            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
-            std::snprintf (qName_, sizeof qName_, "SLOT %02d DETAIL", openSlot_ + 1);
-            if (slotDetail_.activeBlock() == ui::ModSlotDetail::BlockAux)
-            {
-                qTargets_[0] = sp.auxSource;
-                qTargets_[1] = sp.auxOutput;
-                qTargets_[2] = sp.auxInv;
-                qTargets_[3] = sp.auxPower;
-            }
-            else if (slotDetail_.activeBlock() == ui::ModSlotDetail::BlockShape)
-            {
-                qTargets_[0] = sp.power;
-                qTargets_[1] = sp.stereo;
-                qTargets_[2] = -1;
-                qTargets_[3] = -1;
-            }
-            else
-            {
-                qTargets_[0] = sp.rise;
-                qTargets_[1] = sp.fall;
-                qTargets_[2] = inst.param (sp.delaySync) > 0.5f ? sp.delayBeats : sp.delay;
-                qTargets_[3] = sp.delaySync;
-            }
-        }
-        else
-        {
-            const int sel = matrix_.selectedSlot();
-            if (sel >= 0 && sel < synthyboy::kNumModSlots)
-            {
-                const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (sel);
-                std::snprintf (qName_, sizeof qName_, "SLOT %02d", sel + 1);
-                qTargets_[0] = sp.amount;
-                qTargets_[1] = sp.source;
-                qTargets_[2] = sp.destination;
-                qTargets_[3] = -1; // row navigation
-            }
-            else
-            {
-                std::snprintf (qName_, sizeof qName_, "MOD MATRIX");
-                for (int i = 0; i < 4; ++i) qTargets_[i] = -1;
-            }
-        }
-        inst.setQGroup (qTargets_, 4);
-    }
-
-    void initSourceNames()
-    {
-        sourceNames_.clear();
-        sourceNamePtrs_.clear();
-        sourceNames_.push_back ("None");
-        const synthyboy::ModSourceInfo* t = synthyboy::modSourceTable();
-        const size_t n = synthyboy::modSourceCount();
-        for (size_t i = 0; i < n; ++i)
-            sourceNames_.push_back (t[i].name);
-
-        for (const auto& s : sourceNames_)
-            sourceNamePtrs_.push_back (s.c_str());
-
-        sourceList_.state.items = sourceNamePtrs_.data();
-        sourceList_.state.count = static_cast<int> (sourceNamePtrs_.size());
-    }
-
-    void initDestNames()
-    {
-        destNames_.clear();
-        destNamePtrs_.clear();
-        destNames_.push_back ("None");
-        const size_t n = synthyboy::modDestinationCount();
-        for (size_t i = 1; i <= n; ++i)
-        {
-            const int p = synthyboy::modDestinationParamIndex (i);
-            if (p >= 0)
-                destNames_.push_back (synthyboy::paramTable()[p].name);
-            else
-                destNames_.push_back ("-");
-        }
-
-        for (const auto& d : destNames_)
-            destNamePtrs_.push_back (d.c_str());
-
-        destList_.state.items = destNamePtrs_.data();
-        destList_.state.count = static_cast<int> (destNamePtrs_.size());
-    }
-
-    const char* sourceNameOf (int choice) const noexcept
-    {
-        if (choice >= 0 && choice < static_cast<int> (sourceNamePtrs_.size()))
-            return sourceNamePtrs_[choice];
-        return "";
-    }
-
-    const char* destNameOf (int choice) const noexcept
-    {
-        if (choice >= 0 && choice < static_cast<int> (destNamePtrs_.size()))
-            return destNamePtrs_[choice];
-        return "";
-    }
-
-    int destModuleOf (int choice) const noexcept
+    static int destModuleOf (int choice) noexcept
     {
         if (choice <= 0) return -1;
-        const int p = synthyboy::modDestinationParamIndex (choice);
+        const int p = synthyboy::modDestinationParamIndex (static_cast<size_t> (choice));
         if (p < 0) return -1;
-        const char* grp = synthyboy::paramTable()[p].group;
+        const char* grp = uibind::info (p).group;
         if (! grp) return -1;
         if (std::strstr (grp, "Osc 1")) return 0;
         if (std::strstr (grp, "Osc 2")) return 1;
@@ -647,23 +215,392 @@ private:
         if (std::strstr (grp, "Env")) return 6;
         if (std::strstr (grp, "LFO")) return 7;
         if (std::strstr (grp, "FX")) return 8;
-        return 9; // Master / Other
+        return 9;   // master and the others
+    }
+    static const char* destModuleName (int m) noexcept
+    {
+        static const char* const n[11] = { "ALL MODULES", "OSC A", "OSC B", "OSC C", "SUB / NOISE", "FILTER 1", "FILTER 2", "ENVELOPES", "LFOS", "FX", "MASTER" };
+        return m >= 0 && m < 11 ? n[m] : "";
     }
 
-    static void writeNorm (IInstanceView& v, int idx, double norm) noexcept
+private:
+    ui::Component* topComponent() noexcept
     {
-        if (idx >= 0)
-            v.writeParam (idx, static_cast<float> (std::clamp (norm, 0.0, 1.0)));
+        if (pageTop_ == kPageList) return &list_;
+        if (pageTop_ == kPageDetail) return &detail_;
+        return &matrix_;
     }
 
-    static void writePlain (IInstanceView& v, int idx, float plain) noexcept
+    // ---- the page of one slot
+    void pullDetail (IInstanceView& inst, const synthyboy::LiveValues* live)
     {
-        if (idx >= 0)
+        const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
+        const int srcVal = static_cast<int> (std::lround (inst.param (sp.source))), dstVal = static_cast<int> (std::lround (inst.param (sp.destination)));
+        detail_.setTitle (openSlot_, sourceName (srcVal), destName (dstVal));
+        const double amount = static_cast<double> (inst.param (sp.amount)) / 100.0;
+        double liveSource = 0.0;
+        if (live != nullptr && srcVal >= 1 && srcVal <= synthyboy::LiveValues::kMaxSources)
+            liveSource = static_cast<double> (live->source[srcVal - 1]);
+        detail_.summary.setSlot (openSlot_);
+        detail_.summary.updateData (sourceName (srcVal), destName (dstVal), amount, inst.param (sp.bipolar) > 0.5f, inst.param (sp.bypass) > 0.5f, live != nullptr && srcVal > 0, amount * liveSource);
+
+        const int auxSrc = static_cast<int> (std::lround (inst.param (sp.auxSource)));
+        detail_.auxSource.setValue (auxSrc > 0 ? sourceName (auxSrc) : "NONE");
+        pullKnob (inst, detail_.auxOutput, sp.auxOutput);
+        pullKnob (inst, detail_.auxPower, sp.auxPower);
+        detail_.auxInv.state.on = inst.param (sp.auxInv) > 0.5f;
+        pullKnob (inst, detail_.power, sp.power);
+        detail_.stereo.state.on = inst.param (sp.stereo) > 0.5f;
+        pullKnob (inst, detail_.rise, sp.rise);
+        pullKnob (inst, detail_.fall, sp.fall);
+        pullKnob (inst, detail_.delay, sp.delay);
+        pullKnob (inst, detail_.delayBeats, sp.delayBeats);
+        detail_.delaySync.state.on = inst.param (sp.delaySync) > 0.5f;
+        detail_.setDelaySync (detail_.delaySync.state.on);
+    }
+    static void pullKnob (const IInstanceView& v, ui::Knob& k, int p)
+    {
+        if (p < 0)
         {
-            const synthyboy::ParamInfo& i = synthyboy::paramTable()[idx];
-            v.writeParam (idx, static_cast<float> (synthyboy::toNormalised (i, synthyboy::constrainValue (i, plain))));
+            k.setEnabled (false);
+            return;
+        }
+        const synthyboy::ParamInfo& pi = uibind::info (p);
+        const float plain = v.param (p);
+        k.state.value = k.state.modValue = uibind::normOf (p, plain);
+        k.state.defaultValue = uibind::normOf (p, pi.def);
+        k.state.bipolar = pi.min < 0.0f && pi.max > 0.0f;
+        if (pi.unit == synthyboy::Unit::none)
+            std::snprintf (k.state.valueText, sizeof k.state.valueText, "%+.1f", static_cast<double> (plain));   // the curves: -10 .. +10
+        else
+            uibind::formatValue (pi, plain, k.state.valueText, sizeof k.state.valueText);
+    }
+
+    // ---- the grouped lists (the sources, the targets)
+    void openList (IInstanceView& inst, UiStack& stack, ListKind kind, int slot)
+    {
+        listKind_ = kind;
+        listSlot_ = slot;
+        listGroup_ = -1;
+        const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (slot);
+        listParam_ = kind == ListKind::Source ? sp.source : (kind == ListKind::Dest ? sp.destination : sp.auxSource);
+        const int current = static_cast<int> (std::lround (inst.param (listParam_)));
+        fillList (current);
+        stack.openDetail (kPageList);
+        pageTop_ = kPageList;
+    }
+    /** The first level: NONE and the groups; the second level: the entries of one group. `current` is the choice that is set now (its entry is the one shown first). */
+    void fillList (int current)
+    {
+        listNames_.clear();
+        listChoices_.clear();
+        const bool dest = listKind_ == ListKind::Dest;
+        if (listGroup_ < 0)
+        {
+            listNames_.push_back ("NONE");
+            listChoices_.push_back (0);
+            if (dest)
+            {
+                const uibind::DestIndex& d = uibind::DestIndex::get();
+                for (size_t g = 0; g < d.groups.size(); ++g)
+                {
+                    listNames_.push_back (d.groups[g].c_str());
+                    listChoices_.push_back (-1 - static_cast<int> (g));
+                }
+            }
+            else
+                for (int g = 1; g <= uibind::kSourceGroups; ++g)
+                {
+                    listNames_.push_back (uibind::sourceGroupName (g));
+                    listChoices_.push_back (-g);
+                }
+            list_.state.header = nullptr;
+            list_.state.headerBack = false;
+        }
+        else
+        {
+            if (dest)
+            {
+                const uibind::DestIndex& d = uibind::DestIndex::get();
+                for (int c : d.choices[static_cast<size_t> (listGroup_)])
+                {
+                    listNames_.push_back (destName (c));
+                    listChoices_.push_back (c);
+                }
+                list_.state.header = d.groups[static_cast<size_t> (listGroup_)].c_str();
+            }
+            else
+            {
+                for (int c = 1; c <= static_cast<int> (synthyboy::modSourceCount()); ++c)
+                    if (uibind::sourceGroup (c) == listGroup_ + 1)
+                    {
+                        listNames_.push_back (uibind::sourceName (c));
+                        listChoices_.push_back (c);
+                    }
+                list_.state.header = uibind::sourceGroupName (listGroup_ + 1);
+            }
+            list_.state.headerBack = true;
+        }
+        list_.state.items = listNames_.data();
+        list_.state.count = static_cast<int> (listNames_.size());
+        list_.state.current = -1;
+        for (size_t i = 0; i < listChoices_.size(); ++i)
+            if (listChoices_[i] == current && current > 0)
+                list_.state.current = static_cast<int> (i);
+        list_.showCurrent();
+    }
+    int firstUnusedSlot (const IInstanceView& inst) const noexcept
+    {
+        for (int s = 0; s < synthyboy::kNumModSlots; ++s)
+        {
+            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (s);
+            if (sp.source < 0 || sp.destination < 0)
+                continue;
+            if (static_cast<int> (std::lround (inst.param (sp.source))) == 0 && static_cast<int> (std::lround (inst.param (sp.destination))) == 0)
+                return s;
+        }
+        return -1;
+    }
+
+    void handle (ui::Change c, UiStack& stack, IInstanceView& inst)
+    {
+        if (! c)
+            return;
+        using K = ui::ChangeKind;
+
+        // the filter tabs and the filter choice
+        if (c.id == kFilterAll) { matrix_.setFilterMode (ui::ModMatrixView::FilterAll); return; }
+        if (c.id == kFilterSource) { matrix_.setFilterMode (ui::ModMatrixView::FilterSource); stepSourceFilter (0); return; }
+        if (c.id == kFilterDest) { matrix_.setFilterMode (ui::ModMatrixView::FilterDest); stepDestFilter (0); return; }
+        if (c.id == kSourceFilterStep && c.kind == K::Index) { srcFilter_ = c.index; stepSourceFilter (0); return; }
+        if (c.id == kDestFilterStep && c.kind == K::Index) { dstFilter_ = c.index; stepDestFilter (0); return; }
+
+        // a new slot: the first one that is not used (ENV 1 to the first target of the table, +50 %), its page opens
+        if (c.id == kAdd)
+        {
+            const int s = firstUnusedSlot (inst);
+            if (s >= 0)
+            {
+                const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (s);
+                uibind::writePlain (inst, sp.source, 1.0);
+                uibind::writePlain (inst, sp.destination, 1.0);
+                uibind::writeNorm (inst, sp.amount, 0.75);
+                if (sp.bypass >= 0) uibind::writePlain (inst, sp.bypass, 0.0);
+                openSlotDetail (s, stack);
+            }
+            return;
+        }
+
+        // the page of a slot
+        if (c.id == kDetailBack) { stack.back(); pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0; return; }
+        if (c.id == kDetailDelete && openSlot_ >= 0)
+        {
+            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
+            for (int p : { sp.source, sp.destination, sp.amount, sp.bipolar, sp.stereo, sp.bypass, sp.auxSource })
+                if (p >= 0)
+                    uibind::writePlain (inst, p, 0.0);
+            stack.back();
+            pageTop_ = 0;
+            return;
+        }
+
+        // the list
+        if (c.id == kListBackdrop) { stack.back(); pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0; return; }
+        if (c.id == kListHeader && c.kind == K::Request)
+        {
+            listGroup_ = -1;
+            fillList (static_cast<int> (std::lround (inst.param (listParam_))));
+            return;
+        }
+        if (c.id == kListPopup && c.kind == K::Index)
+        {
+            const int sel = c.index >= 0 && c.index < static_cast<int> (listChoices_.size()) ? listChoices_[static_cast<size_t> (c.index)] : 0;
+            if (sel < 0)   // a group: its entries
+            {
+                listGroup_ = listKind_ == ListKind::Dest ? -1 - sel : -sel - 1;
+                fillList (static_cast<int> (std::lround (inst.param (listParam_))));
+                return;
+            }
+            if (listParam_ >= 0)
+                uibind::writePlain (inst, listParam_, sel);
+            stack.back();
+            pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0;
+            return;
+        }
+
+        // the rows of the matrix (id = kRowBase + window row * 10 + offset) and the row of the page of a slot
+        int slot = -1, offset = -1;
+        if (c.id >= kRowBase && c.id < kRowBase + ui::ModMatrixView::kWindowRows * 10)
+        {
+            slot = matrix_.slotAtWindowIndex ((c.id - kRowBase) / 10);
+            offset = (c.id - kRowBase) % 10;
+        }
+        else if (c.id >= kDetailRowBase && c.id < kDetailRowBase + 10)
+        {
+            slot = openSlot_;
+            offset = c.id - kDetailRowBase;
+        }
+        if (offset >= 0)
+        {
+            if (slot < 0 || slot >= synthyboy::kNumModSlots)
+                return;
+            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (slot);
+            if (offset == kOffsetSource)
+                openList (inst, stack, ListKind::Source, slot);
+            else if (offset == kOffsetDest)
+                openList (inst, stack, ListKind::Dest, slot);
+            else if (offset == kOffsetAmount && c.kind == K::Value)
+                uibind::writeNorm (inst, sp.amount, c.value);
+            else if (offset == kOffsetBi && c.kind == K::Index)
+                uibind::writePlain (inst, sp.bipolar, c.index != 0 ? 1.0 : 0.0);
+            else if (offset == kOffsetBypass && c.kind == K::Index)
+                uibind::writePlain (inst, sp.bypass, c.index != 0 ? 0.0 : 1.0);   // the switch says ON (active): bypassed is its opposite
+            else if (offset == kOffsetDetail)
+                openSlotDetail (slot, stack);
+            return;
+        }
+
+        // the controls of the page of a slot
+        if (openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots)
+        {
+            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
+            switch (c.id)
+            {
+                case kDetailAuxSource: openList (inst, stack, ListKind::Aux, openSlot_); return;
+                case kDetailAuxOutput: if (c.kind == K::Value) uibind::writeNorm (inst, sp.auxOutput, c.value); return;
+                case kDetailAuxInv: if (c.kind == K::Index) uibind::writePlain (inst, sp.auxInv, c.index != 0 ? 1.0 : 0.0); return;
+                case kDetailAuxPower: if (c.kind == K::Value) uibind::writeNorm (inst, sp.auxPower, c.value); return;
+                case kDetailPower: if (c.kind == K::Value) uibind::writeNorm (inst, sp.power, c.value); return;
+                case kDetailStereo: if (c.kind == K::Index) uibind::writePlain (inst, sp.stereo, c.index != 0 ? 1.0 : 0.0); return;
+                case kDetailRise: if (c.kind == K::Value) uibind::writeNorm (inst, sp.rise, c.value); return;
+                case kDetailFall: if (c.kind == K::Value) uibind::writeNorm (inst, sp.fall, c.value); return;
+                case kDetailDelay: if (c.kind == K::Value) uibind::writeNorm (inst, sp.delay, c.value); return;
+                case kDetailDelayBeats: if (c.kind == K::Value) uibind::writeNorm (inst, sp.delayBeats, c.value); return;
+                case kDetailDelaySync: if (c.kind == K::Index) uibind::writePlain (inst, sp.delaySync, c.index != 0 ? 1.0 : 0.0); return;
+                default: break;
+            }
         }
     }
+
+    void stepSourceFilter (int)
+    {
+        srcFilter_ = std::clamp (srcFilter_, 0, uibind::kSourceGroups);
+        matrix_.sourceFilter.state.count = uibind::kSourceGroups + 1;
+        matrix_.sourceFilter.state.index = srcFilter_;
+        matrix_.sourceFilter.setItem (srcFilter_ == 0 ? "ALL SOURCES" : uibind::sourceGroupName (srcFilter_));
+        matrix_.setSourceFilterChoice (srcFilter_);
+    }
+    void stepDestFilter (int)
+    {
+        dstFilter_ = std::clamp (dstFilter_, 0, 10);
+        matrix_.destFilter.state.count = 11;
+        matrix_.destFilter.state.index = dstFilter_;
+        matrix_.destFilter.setItem (destModuleName (dstFilter_));
+        matrix_.setDestModuleFilter (dstFilter_ - 1);
+    }
+
+    void assignIds()
+    {
+        matrix_.tabAll.setId (kFilterAll);
+        matrix_.tabSource.setId (kFilterSource);
+        matrix_.tabDest.setId (kFilterDest);
+        matrix_.add.setId (kAdd);
+        matrix_.sourceFilter.setId (kSourceFilterStep);
+        matrix_.destFilter.setId (kDestFilterStep);
+        stepSourceFilter (0);
+        stepDestFilter (0);
+        auto rowIds = [] (ui::ModRow& r, int base)
+        {
+            r.number.setId (base + kOffsetNumber);
+            r.sourceBtn.setId (base + kOffsetSource);
+            r.destBtn.setId (base + kOffsetDest);
+            r.amountBar.setId (base + kOffsetAmount);
+            r.biToggle.setId (base + kOffsetBi);
+            r.bypassToggle.setId (base + kOffsetBypass);
+            r.detailBtn.setId (base + kOffsetDetail);
+        };
+        for (int w = 0; w < ui::ModMatrixView::kWindowRows; ++w)
+            rowIds (matrix_.windowRows[w], kRowBase + w * 10);
+        rowIds (detail_.summary, kDetailRowBase);
+
+        detail_.back.setId (kDetailBack);
+        detail_.deleteBtn.setId (kDetailDelete);
+        detail_.auxSource.setId (kDetailAuxSource);
+        detail_.auxOutput.setId (kDetailAuxOutput);
+        detail_.auxInv.setId (kDetailAuxInv);
+        detail_.auxPower.setId (kDetailAuxPower);
+        detail_.power.setId (kDetailPower);
+        detail_.stereo.setId (kDetailStereo);
+        detail_.rise.setId (kDetailRise);
+        detail_.fall.setId (kDetailFall);
+        detail_.delay.setId (kDetailDelay);
+        detail_.delayBeats.setId (kDetailDelayBeats);
+        detail_.delaySync.setId (kDetailDelaySync);
+    }
+
+    void publishQGroup (IInstanceView& inst)
+    {
+        int t[4] = { -1, -1, -1, -1 };
+        if (pageTop_ == kPageList)
+            std::snprintf (qName_, sizeof qName_, "LIST");
+        else if (pageTop_ == kPageDetail && openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots)
+        {
+            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
+            std::snprintf (qName_, sizeof qName_, "SLOT %02d %s", openSlot_ + 1, ui::ModSlotDetail::blockName (detail_.activeBlock()));
+            if (detail_.activeBlock() == ui::ModSlotDetail::BlockAux)
+            {
+                t[0] = sp.auxSource; t[1] = sp.auxOutput; t[2] = sp.auxInv; t[3] = sp.auxPower;
+            }
+            else if (detail_.activeBlock() == ui::ModSlotDetail::BlockShape)
+            {
+                t[0] = sp.power; t[1] = sp.stereo;
+            }
+            else
+            {
+                t[0] = sp.rise; t[1] = sp.fall; t[2] = detail_.delaySyncOn() ? sp.delayBeats : sp.delay; t[3] = sp.delaySync;
+            }
+        }
+        else
+        {
+            const int sel = matrix_.selectedSlot();
+            if (sel >= 0 && sel < synthyboy::kNumModSlots)
+            {
+                const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (sel);
+                std::snprintf (qName_, sizeof qName_, "SLOT %02d", sel + 1);
+                t[0] = sp.amount; t[1] = sp.source; t[2] = sp.destination;
+                t[3] = QRouter::encode (kVirtualRow, QRouter::kVirtual);   // the row
+            }
+            else
+                std::snprintf (qName_, sizeof qName_, "MOD MATRIX");
+        }
+        if (! qSet_ || std::memcmp (t, qTargets_, sizeof t) != 0)
+        {
+            std::memcpy (qTargets_, t, sizeof t);
+            inst.setQGroup (t, 4);
+            qSet_ = true;
+        }
+    }
+
+    int w_ = kCanvasW, h_ = kCanvasH;
+    int pageTop_ = 0, openSlot_ = -1;
+    int srcFilter_ = 0, dstFilter_ = 0;
+
+    ui::ModMatrixView matrix_;
+    ui::ModSlotDetail detail_;
+    ui::ListPopup list_;
+
+    ListKind listKind_ = ListKind::Source;
+    int listSlot_ = -1, listParam_ = -1, listGroup_ = -1;
+    std::vector<const char*> listNames_;
+    std::vector<int> listChoices_;   // per row: the choice value, 0 NONE, a negative number a group
+    const char* srcGroupNames_[uibind::kSourceGroups + 1] = {};
+
+    ui::Component* gesture_ = nullptr;
+    bool gestureDown_ = false;
+
+    int qTargets_[4] = { -1, -1, -1, -1 };
+    char qName_[40] = "MOD MATRIX";
+    bool qSet_ = false;
 };
 
 }} // namespace synthyboy_mpc::overlay

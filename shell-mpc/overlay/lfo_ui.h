@@ -29,6 +29,7 @@
 #include "../ui/ui.h"
 #include "../q_router.h"
 #include "curve_source.h"
+#include "page_view.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
 #include "ui_stack.h"
@@ -41,6 +42,7 @@ class LfoUi
 {
 public:
     // ---- the pages (UiStack ids)
+    static constexpr int kElementPage = 3;                                    // the page of an LFO tab is the full screen of the element (page_view.h)
     static constexpr int kElementLfo = 3;                                     // the full screen of the LFO (the oscillator is 1, the envelope 2)
     enum Page { kPageEditor = 40, kPageTargets = 41, kPageList = 42, kPageMods = 43 };
 
@@ -101,7 +103,7 @@ public:
     void update (IInstanceView& inst, int highlight, const UiStack& stack, double nowMs, const synthyboy::LiveValues* live)
     {
         highlight_ = highlight;
-        const int num = std::clamp (inst.playSelection (2), 1, kLfos);
+        const int num = page_ ? lfoNum_ : std::clamp (inst.playSelection (2), 1, kLfos);   // the page of a tab keeps its own LFO (the tab names the first one); the Play page follows the host's selector
         if (! configured_ || num != lfoNum_)
         {
             lfoNum_ = num;   // the host's own Play LFO selector (a widget, automation, a preset) chose an LFO: that is the one shown (a random LFO is chosen here only)
@@ -130,6 +132,28 @@ public:
         else if (stack.isMain())
             inst.setUiFullOpen (false);
         publishQGroup (inst);
+    }
+
+    /** The page of an LFO tab (page_view.h): the full screen of the LFO the tab names, nothing to close; the instance cells choose another LFO or random LFO for this page only. */
+    void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
+    {
+        if (! page_)
+        {
+            page_ = true;
+            lfoNum_ = std::clamp (in.instance, 1, kLfos);
+            rnd_ = 0;
+            barPage_ = (lfoNum_ - 1) / 5;
+            full_.setPageMode (true);
+            configured_ = false;
+        }
+        update (inst, 3, stack, nowMs, in.live);
+    }
+    /** The whole picture of the page: its ground, the full screen or the page above it, the cursors, the popup. */
+    void draw (gpu::SceneBuilder& sb) const
+    {
+        drawPage (sb);
+        drawLive (sb);
+        drawPopup (sb);
     }
 
     bool isMain() const noexcept { return stackDepth_ == 0; }
@@ -517,41 +541,7 @@ private:
 
     // ---- the list popup: the instances, the choices of a parameter, the groups of the destinations and the parameters of a group
     enum class ListKind : uint8_t { None, Instance, Param, Dest };
-    struct DestIndex
-    {
-        std::vector<std::string> groups;
-        std::vector<std::vector<int>> choices;   // per group: the destination choice values (1 ..) in table order
-        static const DestIndex& get()
-        {
-            static const DestIndex d = build();
-            return d;
-        }
-        static DestIndex build()
-        {
-            DestIndex d;
-            const size_t n = synthyboy::modDestinationCount();
-            for (size_t c = 1; c <= n; ++c)
-            {
-                const int p = synthyboy::modDestinationParamIndex (c);
-                if (p < 0)
-                    continue;
-                std::string g = uibind::info (p).group != nullptr ? uibind::info (p).group : "";
-                const size_t cut = g.find (" / ");
-                if (cut != std::string::npos)
-                    g.resize (cut);
-                size_t i = 0;
-                while (i < d.groups.size() && d.groups[i] != g)
-                    ++i;
-                if (i == d.groups.size())
-                {
-                    d.groups.push_back (g);
-                    d.choices.emplace_back();
-                }
-                d.choices[i].push_back (static_cast<int> (c));
-            }
-            return d;
-        }
-    };
+    using DestIndex = uibind::DestIndex;
     ListKind listKind_ = ListKind::None;
     int listParam_ = -1, listGroup_ = -1, underList_ = 0;
     std::vector<const char*> listNames_;
@@ -610,7 +600,8 @@ private:
             rnd_ = 0;
             lfoNum_ = s + 1;
             barPage_ = s / 5;
-            v.setPlaySelection (2, s + 1);   // the host follows (the Play LFO selector); the next update () reads the same number
+            if (! page_)
+                v.setPlaySelection (2, s + 1);   // the host follows (the Play LFO selector); the next update () reads the same number
         }
         configure (v);
         full_.bar.configure (rnd_ != 0, selection(), barPage_);
@@ -1455,6 +1446,7 @@ private:
     std::vector<Item> items_;
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false, configured_ = false, modsDirty_ = true, qSet_ = false, shapeDirty_ = false, haveCurve_ = false, displayHot_ = false;
+    bool page_ = false;   // the page of an LFO tab
     int w_ = 1280, h_ = 800, lfoNum_ = 1, rnd_ = 0, barPage_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = -1;
     int targetsPageIndex_ = 0, syncType_ = 0, shapeIdx_ = 0;
     int scratchSlots_[uibind::kMaxTargetSlots] = {};

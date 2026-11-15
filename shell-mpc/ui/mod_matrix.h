@@ -1,5 +1,7 @@
 // SynthyBoy - MPC UI: Modulation Matrix View
-// Full-screen scrollable matrix view (1280x628) showing modulation slots.
+// The page of the modulation matrix (1280 x 628): the slots as rows, scrolled, filtered by source or by destination module. A row is: the number (it selects the row, the fourth Q-Link of the row), the SOURCE and the
+// TARGET (buttons that open lists), the AMOUNT (the library's HBar: both ways from the middle, the value at its right end, a live marker), UNI / BI, ON / OFF and MORE (the details of the slot). The selected row is
+// one Q group: AMOUNT, SOURCE, TARGET, and the row number that the fourth Q-Link steps through.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -20,154 +22,13 @@
 namespace synthyboy_mpc { namespace ui {
 
 // ===============================================================================================================================================================
-/** Two-way horizontal amount bar with center 0, static deflection bar, thin live needle, and numeric text readout.
-    Touch/drag adjusts amount (-1.0 .. +1.0); double tap resets to 0.0; turn (delta) turns Q-Link knob. */
-class ModAmountBar : public Component
-{
-public:
-    struct State
-    {
-        double amount = 0.0;     // -1.0 .. +1.0
-        double liveAmount = 0.0; // static amount * source live value (-1.0 .. +1.0)
-        bool hasLive = false;
-        char valueText[16] = {}; // e.g. "+50%", "-100%"
-    };
-    State state;
-
-    ModAmountBar() { formatValue(); }
-
-    Size minSize() const override { return { 160, 48 }; }
-
-    void setAmount (double a)
-    {
-        state.amount = std::clamp (a, -1.0, 1.0);
-        formatValue();
-    }
-
-    void setLive (double sVal)
-    {
-        state.hasLive = true;
-        state.liveAmount = std::clamp (state.amount * sVal, -1.0, 1.0);
-    }
-
-    void clearLive() noexcept { state.hasLive = false; }
-
-    void formatValue()
-    {
-        const int pct = static_cast<int> (std::lround (state.amount * 100.0));
-        if (pct > 0)
-            std::snprintf (state.valueText, sizeof state.valueText, "+%d%%", pct);
-        else if (pct < 0)
-            std::snprintf (state.valueText, sizeof state.valueText, "%d%%", pct);
-        else
-            std::snprintf (state.valueText, sizeof state.valueText, "0%%");
-    }
-
-    Change touchDown (int x, int y, double nowMs) override
-    {
-        if (! enabled_) return Change::none();
-        tap_.down (x, y, nowMs);
-        dragStartX_ = x;
-        startAmount_ = state.amount;
-        return Change::none();
-    }
-
-    Change touchMove (int x, int y) override
-    {
-        if (! enabled_) return Change::none();
-        tap_.move (x, y);
-        // 160 px drag = 1.0 range change
-        const double delta = static_cast<double> (x - dragStartX_) / 160.0;
-        const double newAmount = std::clamp (startAmount_ + delta, -1.0, 1.0);
-        if (std::fabs (newAmount - state.amount) > 0.002)
-        {
-            state.amount = newAmount;
-            formatValue();
-            return Change::normalised (id_, (state.amount + 1.0) * 0.5);
-        }
-        return Change::none();
-    }
-
-    Change touchUp (int x, int y) override
-    {
-        (void) x; (void) y;
-        if (! enabled_) return Change::none();
-        if (tap_.up() == 2)
-        {
-            state.amount = 0.0;
-            formatValue();
-            return Change::normalised (id_, 0.5);
-        }
-        return Change::none();
-    }
-
-    Change turn (double delta) override
-    {
-        if (! enabled_) return Change::none();
-        const double newAmount = std::clamp (state.amount + delta * 0.02, -1.0, 1.0);
-        state.amount = newAmount;
-        formatValue();
-        return Change::normalised (id_, (state.amount + 1.0) * 0.5);
-    }
-
-protected:
-    void drawBody (Pen& p) const override
-    {
-        const theme::Look& T = theme::L();
-        p.control (rect_, qFrame_);
-
-        const Rect inner = rect_.inset (4);
-        if (inner.empty()) return;
-
-        const int cx = inner.x + inner.w / 2;
-        const int cy = inner.y + inner.h / 2;
-
-        // Background track line
-        p.line (static_cast<float> (inner.x + 4), static_cast<float> (cy),
-                static_cast<float> (inner.right() - 4), static_cast<float> (cy),
-                1.5f, p.c (T.track, 180));
-
-        // Center line
-        p.line (static_cast<float> (cx), static_cast<float> (inner.y + 4),
-                static_cast<float> (cx), static_cast<float> (inner.bottom() - 4),
-                1.5f, p.c (T.keylineHi, 220));
-
-        // Deflection bar
-        if (std::fabs (state.amount) > 0.005)
-        {
-            const int barW = static_cast<int> ((inner.w / 2 - 8) * std::fabs (state.amount));
-            const int x0 = state.amount > 0 ? cx : cx - barW;
-            const uint32_t col = state.amount > 0 ? T.flow[0] : T.negative;
-            p.rrect ({ x0, inner.y + 6, std::max (2, barW), std::max (4, inner.h - 12) }, 2.0f, p.c (col, 200));
-        }
-
-        // Live needle marker
-        if (state.hasLive)
-        {
-            const int lx = cx + static_cast<int> ((inner.w / 2 - 8) * state.liveAmount);
-            p.line (static_cast<float> (lx), static_cast<float> (inner.y + 2),
-                    static_cast<float> (lx), static_cast<float> (inner.bottom() - 2),
-                    2.0f, p.c (T.text, 255));
-        }
-
-        // Value text
-        p.textCentered (inner, state.valueText, T.fLabel, p.c (T.text, 255), T.fMin);
-    }
-
-private:
-    TapGesture tap_;
-    int dragStartX_ = 0;
-    double startAmount_ = 0.0;
-};
-
-
-// ===============================================================================================================================================================
-/** Row selection / stepping helper component for Q4 knob in matrix view. */
+/** The number of a row as the fourth member of its Q group: it steps the selected row (turn: an Index change with the new row), and a tap on it is the row selection of the view. */
 class ModRowSelector : public Component
 {
 public:
     int selected = 0;
     int maxRows = 0;
+    char text[8] = {};
 
     ModRowSelector() = default;
     Size minSize() const override { return { 40, 48 }; }
@@ -187,146 +48,121 @@ public:
 protected:
     void drawBody (Pen& p) const override
     {
-        (void) p; // Visuals handled by row number
+        const theme::Look& T = theme::L();
+        p.textCentered (rect_, text, T.fLabel, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
     }
 };
 
-
 // ===============================================================================================================================================================
-/** Single modulation slot row (height 64 px):
-    # | SOURCE | -> | DESTINATION | AMOUNT | UNI/BI | ON/OFF | ... (details)
-    or dimmed "+ ADD" row. */
+/** Single modulation slot row (kRowH pixels: a lane of kQLane for the Q index chips above the 56 px controls):
+    # | SOURCE | -> | TARGET | AMOUNT (HBar) | UNI / BI | ON / OFF | MORE */
 class ModRow : public Composite
 {
 public:
-    static constexpr int kRowH = 64;
+    static constexpr int kRowH = 72, kCtlH = 56;
 
     int slotIndex = 0;       // 0 .. 63
-    bool isAddRow = false;
     bool selected = false;
     bool active = false;
 
-    char slotText[8] = {};
     char sourceName[32] = {};
-    char destName[32] = {};
+    char destName[40] = {};
 
+    ModRowSelector number;
     MenuButton sourceBtn { "---", MenuButton::Icon::Down };
     MenuButton destBtn { "---", MenuButton::Icon::Down };
-    ModAmountBar amountBar;
-    MenuButton biToggle { "UNI", MenuButton::Icon::None };
-    MenuButton bypassToggle { "ON", MenuButton::Icon::None };
-    MenuButton detailBtn { "...", MenuButton::Icon::None };
-    MenuButton addBtn { "+ ADD MODULATION", MenuButton::Icon::None };
+    HBar amountBar;
+    ToggleIcon biToggle, bypassToggle;
+    MenuButton detailBtn { "MORE", MenuButton::Icon::None };
 
     ModRow()
     {
+        amountBar.state.bipolar = true;
+        amountBar.state.defaultValue = 0.5;
+        biToggle.state.icon = ToggleIcon::Icon::Generic;
+        bypassToggle.state.icon = ToggleIcon::Icon::Power;
+        addKid (number);
         addKid (sourceBtn);
         addKid (destBtn);
         addKid (amountBar);
         addKid (biToggle);
         addKid (bypassToggle);
         addKid (detailBtn);
-        addKid (addBtn, false);
     }
 
-    Size minSize() const override { return { 600, kRowH }; }
+    Size minSize() const override { return { 900, kRowH }; }
+    /** The MORE button is for the matrix; the details page shows the row without it. */
+    void showDetailButton (bool shown) { show (detailBtn, shown); }
 
-    void setSlot (int idx, bool addRow)
+    void setSlot (int idx)
     {
         slotIndex = idx;
-        isAddRow = addRow;
-        std::snprintf (slotText, sizeof slotText, "%02d", idx + 1);
-
-        show (sourceBtn, ! isAddRow);
-        show (destBtn, ! isAddRow);
-        show (amountBar, ! isAddRow);
-        show (biToggle, ! isAddRow);
-        show (bypassToggle, ! isAddRow);
-        show (detailBtn, ! isAddRow);
-        show (addBtn, isAddRow);
+        std::snprintf (number.text, sizeof number.text, "%02d", std::clamp (idx + 1, 0, 99));
         layout();
     }
 
-    void updateData (const char* src, const char* dst, double amount, bool bi, bool bypassed, bool hasLiveVal = false, double liveVal = 0.0)
+    /** `amount` -1 .. +1, `liveAmount` the live position of the modulation (-1 .. +1) when `hasLive`. */
+    void updateData (const char* src, const char* dst, double amount, bool bi, bool bypassed, bool hasLiveVal = false, double liveAmount = 0.0)
     {
         setText (sourceName, sizeof sourceName, src);
         setText (destName, sizeof destName, dst);
         sourceBtn.setLabel (src[0] != '\0' ? src : "---");
         destBtn.setLabel (dst[0] != '\0' ? dst : "---");
-        amountBar.setAmount (amount);
-        if (hasLiveVal)
-            amountBar.setLive (liveVal);
-        else
-            amountBar.clearLive();
+        amountBar.state.value = (std::clamp (amount, -1.0, 1.0) + 1.0) * 0.5;
+        amountBar.state.modValue = hasLiveVal ? (std::clamp (liveAmount, -1.0, 1.0) + 1.0) * 0.5 : amountBar.state.value;
+        std::snprintf (amountBar.state.text, sizeof amountBar.state.text, "%+d%%", static_cast<int> (std::lround (amount * 100.0)));
+        biToggle.state.on = bi;
         biToggle.setLabel (bi ? "BI" : "UNI");
+        bypassToggle.state.on = ! bypassed;
         bypassToggle.setLabel (bypassed ? "OFF" : "ON");
-        active = (src[0] != '\0' && dst[0] != '\0');
+        active = src[0] != '\0' && dst[0] != '\0';
     }
 
 protected:
     void layout() override
     {
-        if (isAddRow)
-        {
-            addBtn.place ({ rect_.x + 48, rect_.y + 4, rect_.w - 96, kRowH - 8 });
-            return;
-        }
-
-        // Layout across available width (touch targets >= 56 px)
-        const int y = rect_.y + 4;
-        const int h = kRowH - 8; // 56 px high
-        int x = rect_.x + 48;
-
-        sourceBtn.place ({ x, y, 170, h });
-        x += 170 + 30; // 30 px for arrow ->
-        destBtn.place ({ x, y, 230, h });
-        x += 230 + 12;
-        amountBar.place ({ x, y, 260, h });
-        x += 260 + 12;
-        biToggle.place ({ x, y, 64, h });
-        x += 64 + 10;
-        bypassToggle.place ({ x, y, 64, h });
-        x += 64 + 10;
-        detailBtn.place ({ x, y, 56, h });
+        const int y = rect_.y + kQLane, h = kCtlH, gap = 6;
+        int x = rect_.x + 4;
+        number.place ({ x, y, 40, h });
+        x += 40 + gap;
+        sourceBtn.place ({ x, y, 190, h });
+        x += 190 + 26;
+        destBtn.place ({ x, y, 280, h });
+        x += 280 + gap;
+        const int rightW = 72 + gap + 72 + gap + 84;
+        const int barW = std::max (160, rect_.right() - 4 - rightW - gap - x);
+        amountBar.place ({ x, y, barW, h });
+        x += barW + gap;
+        biToggle.place ({ x, y, 72, h });
+        x += 72 + gap;
+        bypassToggle.place ({ x, y, 72, h });
+        x += 72 + gap;
+        detailBtn.place ({ x, y, std::max (56, rect_.right() - 4 - x), h });
     }
 
-    void drawExtra (Pen& p) const override
+    void drawUnder (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        if (isAddRow) return;
-
-        // Slot number #
-        p.textCentered ({ rect_.x + 4, rect_.y + 4, 40, kRowH - 8 }, slotText, T.fLabel, p.c (T.textDim, 200), T.fMin);
-
-        // Arrow between source and dest
-        const int ax = rect_.x + 48 + 170 + 4;
-        p.line (static_cast<float> (ax), static_cast<float> (rect_.y + kRowH / 2),
-                static_cast<float> (ax + 18), static_cast<float> (rect_.y + kRowH / 2),
-                1.5f, p.c (T.keylineHi, 220));
-        p.line (static_cast<float> (ax + 13), static_cast<float> (rect_.y + kRowH / 2 - 4),
-                static_cast<float> (ax + 18), static_cast<float> (rect_.y + kRowH / 2),
-                1.5f, p.c (T.keylineHi, 220));
-        p.line (static_cast<float> (ax + 13), static_cast<float> (rect_.y + kRowH / 2 + 4),
-                static_cast<float> (ax + 18), static_cast<float> (rect_.y + kRowH / 2),
-                1.5f, p.c (T.keylineHi, 220));
-
-        // Subtle row bottom divider
-        p.line (static_cast<float> (rect_.x + 12), static_cast<float> (rect_.bottom() - 1),
-                static_cast<float> (rect_.right() - 12), static_cast<float> (rect_.bottom() - 1),
-                1.0f, p.c (T.keyline, 80));
+        // the arrow between the source and the target
+        const float ax = static_cast<float> (sourceBtn.rect().right() + 4), ay = static_cast<float> (sourceBtn.rect().y + kCtlH / 2);
+        p.line (ax, ay, ax + 16.0f, ay, 1.5f, p.c (T.keylineHi, 220));
+        p.line (ax + 11.0f, ay - 4.0f, ax + 16.0f, ay, 1.5f, p.c (T.keylineHi, 220));
+        p.line (ax + 11.0f, ay + 4.0f, ax + 16.0f, ay, 1.5f, p.c (T.keylineHi, 220));
+        // a faint divider under the row
+        p.line (static_cast<float> (rect_.x + 8), static_cast<float> (rect_.bottom() - 1), static_cast<float> (rect_.right() - 8), static_cast<float> (rect_.bottom() - 1), 1.0f, p.c (T.keyline, 80));
     }
 };
 
 
 // ===============================================================================================================================================================
-/** Full-screen Modulation Matrix View (1280x628) with filter tabs, inertia-free scrollable slot list, and Q-Link group. */
+/** The page of the Modulation Matrix (1280x628) with filter tabs, a scrollable slot list and the Q group of the selected row. */
 class ModMatrixView : public Composite
 {
 public:
     static constexpr int kMaxSlots = 64;
-    static constexpr int kWindowRows = 10;
-    static constexpr int kBarH = 56;
-    static constexpr int kRowH = ModRow::kRowH; // 64
+    static constexpr int kWindowRows = 8;
+    static constexpr int kBarH = 64, kHeaderH = 22;
+    static constexpr int kRowH = ModRow::kRowH; // 72
     static constexpr int kZoneW = 44;
 
     enum FilterMode : uint8_t { FilterAll = 0, FilterSource, FilterDest };
@@ -334,49 +170,44 @@ public:
     struct SlotEntry
     {
         char src[32] = {};
-        char dst[32] = {};
+        char dst[40] = {};
         double amount = 0.0;
         bool bi = false;
         bool bypass = false;
-        int srcChoice = 0;
+        int srcGroup = 0;      // the group of the source (the owner's numbering: 0 none)
         int destModule = -1;
         bool hasLive = false;
         double liveVal = 0.0;
         bool active = false;
     };
 
-    MenuButton close { "CLOSE", MenuButton::Icon::None };
     MenuButton tabAll { "ALL", MenuButton::Icon::None };
     MenuButton tabSource { "BY SOURCE", MenuButton::Icon::None };
     MenuButton tabDest { "BY DEST", MenuButton::Icon::None };
+    MenuButton add { "+ ADD", MenuButton::Icon::None };
 
     Stepper sourceFilter;
     Stepper destFilter;
 
     ModRow windowRows[kWindowRows];
-    ModRowSelector rowSelector;
     QGroup qgroup;
 
     ModMatrixView()
     {
-        addKid (close);
         addKid (tabAll);
         addKid (tabSource);
         addKid (tabDest);
+        addKid (add);
         addKid (sourceFilter);
         addKid (destFilter);
-        addKid (rowSelector);
-
         for (int i = 0; i < kWindowRows; ++i)
-        {
             addKid (windowRows[i]);
-        }
 
         setFilterMode (FilterAll);
         initFilters();
     }
 
-    Size minSize() const override { return { 800, 400 }; }
+    Size minSize() const override { return { 1280, 628 }; }
 
     void setFilterMode (FilterMode m)
     {
@@ -391,38 +222,23 @@ public:
     void rebuildVisibleList()
     {
         visibleSlotCount_ = 0;
+        totalActive_ = 0;
         for (int i = 0; i < kMaxSlots; ++i)
         {
+            totalActive_ += slots_[i].active ? 1 : 0;
             bool match = false;
             if (filterMode_ == FilterAll)
-            {
                 match = slots_[i].active;
-            }
             else if (filterMode_ == FilterSource)
-            {
-                match = (sourceFilterId_ <= 0) || (slots_[i].srcChoice == sourceFilterId_);
-            }
+                match = slots_[i].active && ((sourceFilterId_ <= 0) || (slots_[i].srcGroup == sourceFilterId_));
             else if (filterMode_ == FilterDest)
-            {
-                match = (destModuleFilterId_ < 0) || (slots_[i].destModule == destModuleFilterId_);
-            }
-
+                match = slots_[i].active && ((destModuleFilterId_ < 0) || (slots_[i].destModule == destModuleFilterId_));
             if (match)
-            {
                 visibleSlots_[visibleSlotCount_++] = i;
-            }
         }
-
-        // Add the "+ ADD" row at the end if room
-        if (filterMode_ == FilterAll && visibleSlotCount_ < kMaxSlots)
-        {
-            visibleSlots_[visibleSlotCount_++] = kMaxSlots; // add row
-        }
-
-        rowSelector.maxRows = visibleSlotCount_;
         if (selectedRow_ >= visibleSlotCount_)
             selectedRow_ = std::max (0, visibleSlotCount_ - 1);
-        rowSelector.selected = selectedRow_;
+        firstRow_ = std::clamp (firstRow_, 0, maxScroll());
 
         syncWindow();
         updateQGroup();
@@ -438,7 +254,6 @@ public:
             return;
         }
         selectedRow_ = std::clamp (idx, 0, visibleSlotCount_ - 1);
-        rowSelector.selected = selectedRow_;
 
         // Scroll into view if needed
         const int vRows = visibleRows();
@@ -458,34 +273,34 @@ public:
             return visibleSlots_[selectedRow_];
         return -1;
     }
+    int selectedRow() const noexcept { return selectedRow_; }
+    int firstRow() const noexcept { return firstRow_; }
+    int activeSlots() const noexcept { return totalActive_; }
 
     void updateQGroup()
     {
         for (int k = 0; k < 4; ++k)
             qgroup.set (k, nullptr);
 
-        if (selectedRow_ < 0 || selectedRow_ >= visibleSlotCount_)
+        const int wIdx = selectedRow_ - firstRow_;
+        if (selectedRow_ < 0 || selectedRow_ >= visibleSlotCount_ || wIdx < 0 || wIdx >= visibleRows())
         {
             qgroup.setActive (false);
             return;
         }
-
-        const int wIdx = selectedRow_ - firstRow_;
-        if (wIdx >= 0 && wIdx < kWindowRows && visibleSlots_[selectedRow_] < kMaxSlots)
-        {
-            qgroup.set (0, &windowRows[wIdx].amountBar);
-            qgroup.set (1, &windowRows[wIdx].sourceBtn);
-            qgroup.set (2, &windowRows[wIdx].destBtn);
-            qgroup.set (3, &rowSelector);
-            qgroup.setActive (true);
-        }
-        else
-        {
-            qgroup.setActive (false);
-        }
+        // the number of the selected row is the fourth member of the group: its chip is the fourth index, and the fourth Q-Link steps the row
+        ModRowSelector& num = windowRows[wIdx].number;
+        num.maxRows = visibleSlotCount_;
+        num.selected = selectedRow_;
+        qgroup.set (0, &windowRows[wIdx].amountBar);
+        qgroup.set (1, &windowRows[wIdx].sourceBtn);
+        qgroup.set (2, &windowRows[wIdx].destBtn);
+        qgroup.set (3, &num);
+        qgroup.setActive (true);
     }
 
-    void setSlotData (int slot, const char* src, const char* dst, double amount, bool bi, bool bypassed, int srcChoice, int destModule, bool hasLive = false, double liveVal = 0.0)
+    /** The data of slot `slot` (the owner calls it for all 64; an empty name is a slot that is not used): amount -1 .. +1, `srcGroup` the group of the source and `destModule` the module of the target (the filters), `liveVal` the live value of its source. */
+    void setSlotData (int slot, const char* src, const char* dst, double amount, bool bi, bool bypassed, int srcGroup, int destModule, bool hasLive = false, double liveVal = 0.0)
     {
         if (slot < 0 || slot >= kMaxSlots) return;
         SlotEntry& e = slots_[slot];
@@ -494,11 +309,28 @@ public:
         e.amount = amount;
         e.bi = bi;
         e.bypass = bypassed;
-        e.srcChoice = srcChoice;
+        e.srcGroup = srcGroup;
         e.destModule = destModule;
         e.hasLive = hasLive;
         e.liveVal = liveVal;
         e.active = (src[0] != '\0' && dst[0] != '\0');
+    }
+    /** The owner is done with a round of setSlotData: the rows follow the data (the filter and the window), the list is rebuilt only when what it lists changed. */
+    void refresh()
+    {
+        int sig = 0;
+        for (int i = 0; i < kMaxSlots; ++i)
+            sig = static_cast<int> (static_cast<unsigned> (sig) * 31u + (slots_[i].active ? static_cast<unsigned> (1 + slots_[i].srcGroup * 3 + (slots_[i].destModule + 2) * 7) : 0u));
+        if (sig != listSig_)
+        {
+            listSig_ = sig;
+            rebuildVisibleList();
+        }
+        else
+        {
+            syncWindow();
+            updateQGroup();
+        }
     }
 
     const SlotEntry& slotData (int slot) const noexcept { return slots_[std::clamp (slot, 0, kMaxSlots - 1)]; }
@@ -511,21 +343,22 @@ public:
         return (vi >= 0 && vi < visibleSlotCount_) ? visibleSlots_[vi] : -1;
     }
 
+    Rect listRect() const noexcept { return { rect_.x, rect_.y + kBarH + kHeaderH, rect_.w, rect_.h - kBarH - kHeaderH - 4 }; }
+
     Change touchDown (int x, int y, double nowMs) override
     {
-        const int listY = rect_.y + kBarH;
-        if (y >= listY && y < rect_.bottom() && x < rect_.right() - kZoneW)
+        const Rect lr = listRect();
+        const int listY = lr.y;
+        if (y >= listY && y < lr.bottom() && x < rect_.right() - (scrolls() ? kZoneW : 0))
         {
             const int clickedRow = firstRow_ + (y - listY) / kRowH;
             if (clickedRow >= 0 && clickedRow < visibleSlotCount_)
-            {
                 selectRow (clickedRow);
-            }
             dragStartY_ = y;
             startFirstRow_ = firstRow_;
             isDraggingList_ = true;
         }
-        else if (scrolls() && x >= rect_.right() - kZoneW)
+        else if (scrolls() && x >= rect_.right() - kZoneW && y >= listY)
         {
             const Rect th = thumbRect();
             if (th.contains (x, y))
@@ -541,6 +374,7 @@ public:
                 else
                     firstRow_ = std::min (maxScroll(), firstRow_ + visibleRows());
                 syncWindow();
+                updateQGroup();
                 layout();
             }
         }
@@ -550,7 +384,7 @@ public:
 
     Change touchMove (int x, int y) override
     {
-        if (isDraggingList_)
+        if (isDraggingList_ && std::abs (y - dragStartY_) > TapGesture::kSlop)
         {
             const int dy = y - dragStartY_;
             const int dRows = -dy / kRowH;
@@ -565,7 +399,7 @@ public:
         }
         else if (isDraggingThumb_)
         {
-            const int trackH = rect_.h - kBarH - 8;
+            const int trackH = listRect().h - 8;
             const int dy = y - dragStartY_;
             const int n = std::max (1, visibleSlotCount_ - visibleRows());
             const int dRows = dy * n / std::max (1, trackH);
@@ -596,6 +430,7 @@ public:
         if (scrolls())
         {
             Pen p (sb, true);
+            Cell cell (sb, zoneRect());
             const Rect z = zoneRect();
             p.rect (z.x + z.w / 2 - 1, z.y, z.x + z.w / 2 + 1, z.bottom(), p.c (theme::L().track, 120));
             p.rrect (thumbRect(), 3.0f, p.c (theme::L().keylineHi, 220));
@@ -606,28 +441,28 @@ public:
     {
         const Change c = qgroup.turn (knobIndex, delta);
         if (knobIndex == 3 && c.kind == ChangeKind::Index)
-        {
             selectRow (c.index);
-        }
         return c;
     }
 
-    int visibleRows() const noexcept { return std::min (kWindowRows, std::max (1, (rect_.h - kBarH - 8) / kRowH)); }
+    int visibleRows() const noexcept { return std::min (kWindowRows, std::max (1, (listRect().h - 4) / kRowH)); }
     int maxScroll() const noexcept { return std::max (0, visibleSlotCount_ - visibleRows()); }
     bool scrolls() const noexcept { return visibleSlotCount_ > visibleRows(); }
 
     Rect zoneRect() const noexcept
     {
-        return { rect_.right() - kZoneW, rect_.y + kBarH + 4, kZoneW, rect_.h - kBarH - 8 };
+        const Rect lr = listRect();
+        return { rect_.right() - kZoneW, lr.y + 4, kZoneW, lr.h - 8 };
     }
 
     Rect thumbRect() const noexcept
     {
-        const int trackH = rect_.h - kBarH - 8;
+        const Rect z = zoneRect();
+        const int trackH = z.h;
         const int n = std::max (1, visibleSlotCount_);
         const int thumbH = std::max (28, trackH * visibleRows() / n);
         const int thumbY = (trackH - thumbH) * firstRow_ / std::max (1, n - visibleRows());
-        return { rect_.right() - kZoneW / 2 - 5, rect_.y + kBarH + 4 + thumbY, 10, thumbH };
+        return { z.x + kZoneW / 2 - 5, z.y + thumbY, 10, thumbH };
     }
 
     void setSourceFilterChoice (int choice)
@@ -651,67 +486,69 @@ public:
             if (i < vRows && vi < visibleSlotCount_)
             {
                 const int s = visibleSlots_[vi];
-                if (s == kMaxSlots)
-                {
-                    windowRows[i].setSlot (s, true);
-                }
-                else
-                {
-                    windowRows[i].setSlot (s, false);
-                    const SlotEntry& e = slots_[s];
-                    windowRows[i].updateData (e.src, e.dst, e.amount, e.bi, e.bypass, e.hasLive, e.liveVal);
-                }
+                windowRows[i].setSlot (s);
+                const SlotEntry& e = slots_[s];
+                windowRows[i].updateData (e.src, e.dst, e.amount, e.bi, e.bypass, e.hasLive, e.hasLive ? e.amount * e.liveVal : 0.0);
                 show (windowRows[i], true);
             }
             else
-            {
                 show (windowRows[i], false);
-            }
         }
     }
 
 protected:
     void layout() override
     {
-        // Top bar
-        close.place ({ rect_.x + 12, rect_.y + 4, 100, kBarH - 8 });
-        tabAll.place ({ rect_.x + 280, rect_.y + 4, 80, kBarH - 8 });
-        tabSource.place ({ rect_.x + 368, rect_.y + 4, 130, kBarH - 8 });
-        tabDest.place ({ rect_.x + 506, rect_.y + 4, 120, kBarH - 8 });
-
+        // top bar: the title, the filter tabs and the filter choice, the slot count and + ADD
+        const int by = rect_.y + 4, bh = 56;
+        tabAll.place ({ rect_.x + 280, by, 80, bh });
+        tabSource.place ({ rect_.x + 368, by, 140, bh });
+        tabDest.place ({ rect_.x + 516, by, 120, bh });
         if (filterMode_ == FilterSource)
-            sourceFilter.place ({ rect_.x + 638, rect_.y + 4, 200, kBarH - 8 });
+            sourceFilter.place ({ rect_.x + 648, by, 260, bh });
         else if (filterMode_ == FilterDest)
-            destFilter.place ({ rect_.x + 638, rect_.y + 4, 200, kBarH - 8 });
+            destFilter.place ({ rect_.x + 648, by, 260, bh });
+        add.place ({ rect_.right() - 12 - 120, by, 120, bh });
 
         const int vRows = visibleRows();
-        const int listY = rect_.y + kBarH + 4;
+        const int listY = listRect().y;
         const int rowW = rect_.w - (scrolls() ? kZoneW : 12);
-
         for (int i = 0; i < kWindowRows; ++i)
-        {
             if (i < vRows && firstRow_ + i < visibleSlotCount_)
-            {
-                const int y = listY + i * kRowH;
-                windowRows[i].place ({ rect_.x, y, rowW, kRowH });
-            }
-        }
+                windowRows[i].place ({ rect_.x, listY + i * kRowH, rowW, kRowH });
     }
 
     void drawExtra (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        // Top bar title
-        p.textLeft ({ rect_.x + 124, rect_.y + 4, 140, kBarH - 8 }, "MOD MATRIX", T.fTitle, p.c (T.text, 255), T.fMin);
+        // the title, the slot count
+        p.textLeft ({ rect_.x + 14, rect_.y + 4, 250, 56 }, "MOD MATRIX", T.fTitle, p.c (T.text, 255), T.fMin);
+        char buf[32];
+        std::snprintf (buf, sizeof buf, "%d / %d SLOTS", totalActive_, kMaxSlots);
+        p.textRight ({ add.rect().x - 190, rect_.y + 4, 180, 56 }, buf, T.fLabel, p.c (T.textDim, 255), T.fMin);
 
-        // Highlight active filter tab
+        // the active filter tab
         const MenuButton* activeTab = (filterMode_ == FilterAll ? &tabAll : (filterMode_ == FilterSource ? &tabSource : &tabDest));
         p.rrect (activeTab->rect(), T.rControl, p.c (T.flow[0], 255), 1.6f);
 
-        // Header separator line
-        p.line (static_cast<float> (rect_.x + 8), static_cast<float> (rect_.y + kBarH - 1),
-                static_cast<float> (rect_.right() - 8), static_cast<float> (rect_.y + kBarH - 1),
-                1.5f, p.c (T.keyline, 255));
+        // the line under the bar and the names of the columns
+        p.line (static_cast<float> (rect_.x + 8), static_cast<float> (rect_.y + kBarH), static_cast<float> (rect_.right() - 8), static_cast<float> (rect_.y + kBarH), 1.5f, p.c (T.keyline, 255));
+        if (visibleSlotCount_ > 0)
+        {
+            const ModRow& r = windowRows[0];
+            const int hy = rect_.y + kBarH + 3, hh = kHeaderH - 4;
+            p.textLeft ({ r.sourceBtn.rect().x + 4, hy, 160, hh }, "SOURCE", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+            p.textLeft ({ r.destBtn.rect().x + 4, hy, 160, hh }, "TARGET", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+            p.textLeft ({ r.amountBar.rect().x + 4, hy, 160, hh }, "AMOUNT", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+            p.textCentered ({ r.biToggle.rect().x, hy, r.biToggle.rect().w, hh }, "POLARITY", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+            p.textCentered ({ r.bypassToggle.rect().x, hy, r.bypassToggle.rect().w, hh }, "STATE", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        }
+        else
+        {
+            const Rect lr = listRect();
+            p.textCentered ({ lr.x, lr.y + lr.h / 2 - 40, lr.w, 40 }, totalActive_ == 0 ? "NO MODULATION YET" : "NO SLOT FOR THIS FILTER", T.fTitle, p.c (T.textDim, 255), T.fMin);
+            p.textCentered ({ lr.x, lr.y + lr.h / 2 + 4, lr.w, 28 }, "TAP + ADD TO MAKE ONE", T.fLabel, p.c (T.textFaint, 255), T.fMin);
+        }
     }
 
 private:
@@ -722,6 +559,8 @@ private:
     SlotEntry slots_[kMaxSlots];
     int visibleSlots_[kMaxSlots + 1] = {};
     int visibleSlotCount_ = 0;
+    int totalActive_ = 0;
+    int listSig_ = -1;
     int firstRow_ = 0;
     int selectedRow_ = 0;
 

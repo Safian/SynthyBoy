@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 #include "base.h"
 #include "composite.h"
@@ -63,8 +64,8 @@ protected:
         }
 
         // Label
-        Rect lbl { rect_.x + 4, rect_.y + 2, rect_.w - 8, 16 };
-        p.textCentered (lbl, "GLIDE CURVE", 10.0f, p.c (T.textDim, 200));
+        Rect lbl { rect_.x + 4, rect_.y + 2, rect_.w - 8, 18 };
+        p.textCentered (lbl, "GLIDE CURVE", T.fSmall + 1.0f, p.c (T.textDim, 255), T.fMin);
     }
 };
 
@@ -78,7 +79,7 @@ public:
     int scaleMode = 0;   // 0 Conform, 1 Mark only
 
     MiniKeyboardDisplay() = default;
-    Size minSize() const override { return { 140, 50 }; }
+    Size minSize() const override { return { 240, 90 }; }
 
     static bool isScaleNote (int type, int key, int note) noexcept
     {
@@ -118,72 +119,56 @@ protected:
     void drawBody (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-
         p.rrect (rect_, T.rControl, p.c (T.panel1, 200));
         p.rrect (rect_, T.rControl, p.c (T.keyline, 160), 1.0f);
 
-        const int m = 4;
-        const int kbX = rect_.x + m;
-        const int kbY = rect_.y + m + 14;
-        const int kbW = rect_.w - 2 * m;
-        const int kbH = std::max (16, rect_.h - 2 * m - 16);
+        const int m = 8, labelH = 22;
+        const int kbX = rect_.x + m, kbY = rect_.y + m + labelH, kbW = rect_.w - 2 * m, kbH = std::max (24, rect_.h - 2 * m - labelH);
+        char lblBuf[48];
+        static const char* const kKeyNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+        std::snprintf (lblBuf, sizeof lblBuf, scaleType <= 0 ? "ALL 12 NOTES" : "SCALE ON %s", kKeyNames[std::clamp (scaleKey, 0, 11)]);
+        p.textLeft ({ rect_.x + m, rect_.y + 4, rect_.w - 2 * m, labelH }, lblBuf, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
 
-        // 7 white keys: C(0), D(2), E(4), F(5), G(7), A(9), B(11)
+        // the 7 white keys, then the 5 black keys over them: the notes of the scale are lit in the colour of the signal, the others are dark; the root has a bar under it
         static const int kWhites[7] = { 0, 2, 4, 5, 7, 9, 11 };
+        static const char* const kName[7] = { "C", "D", "E", "F", "G", "A", "B" };
         const float wkW = static_cast<float> (kbW) / 7.0f;
-
         for (int i = 0; i < 7; ++i)
         {
             const int note = kWhites[i];
             const bool in = isScaleNote (scaleType, scaleKey, note);
-            const Rect wr { kbX + static_cast<int> (std::round (i * wkW)), kbY,
-                            static_cast<int> (std::round ((i + 1) * wkW)) - static_cast<int> (std::round (i * wkW)), kbH };
-            const uint32_t fillCol = in ? T.onBright : T.track;
-            p.rect (wr, p.c (fillCol, in ? 230 : 80));
-            p.rrect (wr, 2.0f, p.c (T.keyline, 180), 1.0f);
-            if (in && note == scaleKey) // Root note indicator
-                p.rect (wr.x + 2, wr.bottom() - 6, wr.right() - 2, wr.bottom() - 2, p.c (T.flow[0], 255));
+            const Rect wr { kbX + static_cast<int> (std::round (i * wkW)), kbY, static_cast<int> (std::round ((i + 1) * wkW)) - static_cast<int> (std::round (i * wkW)), kbH };
+            p.rect (wr.x + 1, wr.y, wr.right() - 1, wr.bottom(), p.c (in ? T.text : T.track, in ? 235 : 255));
+            p.rrect ({ wr.x + 1, wr.y, wr.w - 2, wr.h }, 3.0f, p.c (in ? T.flow[0] : T.keyline, 255), 1.2f);
+            if (in && note == scaleKey)
+                p.rect (wr.x + 6, wr.bottom() - 10, wr.right() - 6, wr.bottom() - 4, p.c (T.flow[3], 255));
+            p.textCentered ({ wr.x, wr.bottom() - 36, wr.w, 22 }, kName[i], T.fLabel - 2.0f, p.c (in ? T.onBright : T.textDim, 255), T.fMin);
         }
-
-        // 5 black keys: C#(1), D#(3), F#(6), G#(8), A#(10)
-        static const struct { int note; float pos; } kBlacks[5] = {
-            { 1, 0.7f }, { 3, 1.7f }, { 6, 3.7f }, { 8, 4.7f }, { 10, 5.7f }
-        };
-        const float bkW = wkW * 0.6f;
-        const int bkH = static_cast<int> (std::round (kbH * 0.62f));
-
+        static const struct { int note; float pos; } kBlacks[5] = { { 1, 0.65f }, { 3, 1.65f }, { 6, 3.65f }, { 8, 4.65f }, { 10, 5.65f } };
+        const float bkW = wkW * 0.7f;
+        const int bkH = static_cast<int> (std::round (kbH * 0.6f));
         for (int i = 0; i < 5; ++i)
         {
-            const int note = kBlacks[i].note;
-            const bool in = isScaleNote (scaleType, scaleKey, note);
-            const int bx = kbX + static_cast<int> (std::round (kBlacks[i].pos * wkW));
-            const Rect br { bx, kbY, static_cast<int> (std::round (bkW)), bkH };
-            const uint32_t fillCol = in ? T.flow[1] : T.bg1;
-            p.rect (br, p.c (fillCol, in ? 240 : 200));
-            p.rrect (br, 1.5f, p.c (in ? T.flow[0] : T.keylineHi, 255), 1.0f);
-            if (in && note == scaleKey) // Root note indicator
-                p.rect (br.x + 1, br.bottom() - 4, br.right() - 1, br.bottom() - 1, p.c (T.flow[0], 255));
+            const bool in = isScaleNote (scaleType, scaleKey, kBlacks[i].note);
+            const Rect br { kbX + static_cast<int> (std::round (kBlacks[i].pos * wkW)), kbY, static_cast<int> (std::round (bkW)), bkH };
+            p.rect (br, p.c (in ? T.flow[1] : T.bg1, 255));
+            p.rrect (br, 3.0f, p.c (in ? T.flow[0] : T.keylineHi, 255), 1.2f);
+            if (in && kBlacks[i].note == scaleKey)
+                p.rect (br.x + 5, br.bottom() - 9, br.right() - 5, br.bottom() - 4, p.c (T.flow[3], 255));
         }
-
-        // Scale label header
-        char lblBuf[32];
-        static const char* const kKeyNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-        std::snprintf (lblBuf, sizeof lblBuf, "SCALE: %s", kKeyNames[std::clamp (scaleKey, 0, 11)]);
-        Rect topLbl { rect_.x + 4, rect_.y + 2, rect_.w - 8, 14 };
-        p.textCentered (topLbl, lblBuf, 10.0f, p.c (T.textDim, 220));
     }
 };
 
 // ===============================================================================================================================
-/** Live stereo peak output meters (L / R) with peak hold line and level gradients. */
+/** The peak meters of the output (what leaves the engine, 0 = -60 dB .. 1 = full scale) with the colours of a level (green, yellow, red). The owner gives each bar its level (the engine measures the larger of the two channels: both bars show it). */
 class PeakMeterDisplay : public Component
 {
 public:
-    float peakL = 0.0f; // 0 .. 1.5
+    float peakL = 0.0f; // 0 .. 1
     float peakR = 0.0f;
 
     PeakMeterDisplay() = default;
-    Size minSize() const override { return { 36, 120 }; }
+    Size minSize() const override { return { 40, 120 }; }
 
 protected:
     void drawBody (Pen& p) const override
@@ -195,8 +180,8 @@ protected:
 
         const int m = 4;
         const int barW = std::max (6, (rect_.w - 2 * m - 4) / 2);
-        const int barH = rect_.h - 2 * m - 16;
-        const int barY = rect_.y + m + 14;
+        const int barH = rect_.h - 2 * m - 22;
+        const int barY = rect_.y + m;
 
         // Left meter
         const Rect lr { rect_.x + m, barY, barW, barH };
@@ -206,9 +191,9 @@ protected:
         const Rect rr { rect_.x + m + barW + 4, barY, barW, barH };
         drawBar (p, rr, peakR);
 
-        // Label
-        Rect lbl { rect_.x + 2, rect_.y + 2, rect_.w - 4, 14 };
-        p.textCentered (lbl, "PEAK L/R", 9.0f, p.c (T.textDim, 200));
+        // the names of the bars under them
+        p.textCentered ({ lr.x - 2, rect_.bottom() - 22, barW + 4, 18 }, "L", T.fSmall + 1.0f, p.c (T.textDim, 255), T.fMin);
+        p.textCentered ({ rr.x - 2, rect_.bottom() - 22, barW + 4, 18 }, "R", T.fSmall + 1.0f, p.c (T.textDim, 255), T.fMin);
     }
 
 private:
@@ -270,122 +255,123 @@ protected:
         }
 
         char buf[32];
-        std::snprintf (buf, sizeof buf, "VOICES: %d / %d", activeVoices, polyphony);
-        p.textCentered (rect_, buf, 11.0f, p.c (T.text, 255));
+        std::snprintf (buf, sizeof buf, "%d / %d VOICES", activeVoices, polyphony);
+        p.textCentered (rect_, buf, T.fLabel, p.c (T.text, 255), T.fMin);
     }
 };
 
 // ===============================================================================================================================
-/** MasterScreen: the full-screen composite of the Master element. */
+/** MasterScreen: the page of the Master tab (1280 x 628): a header (MASTER, and the two sides MAIN and TUNING & MPE) and the blocks of the side that is on, each ONE Q group (the last two blocks of the second
+    side two):  side MAIN: OUTPUT, PITCH, VOICES, GLIDE (2 x 2 blocks);  side TUNING & MPE: SCALE (with the keyboard), TUNING, MPE (a group of three in each of its two rows).
+    Every block uses its whole height (the knobs are big, with their values), every name is in capitals. */
 class MasterScreen : public Composite
 {
 public:
-    static constexpr int kMaxGroups = 6;
+    static constexpr int kMaxGroups = 8, kBlocks = 7, kHeaderH = 64, kBlockTitleH = 34, kBlockPad = 6, kBlockGap = 8;
+    enum Side : int { SideMain = 0, SideTuning = 1 };
 
-    // Header
-    MenuButton close { "CLOSE", MenuButton::Icon::None };
+    MenuButton sideMain { "MAIN", MenuButton::Icon::None };
+    MenuButton sideTuning { "TUNING & MPE", MenuButton::Icon::None };
 
-    // Block 1: OUTPUT
+    // OUTPUT
     Knob volume { "VOLUME" };
     PeakMeterDisplay meters;
     Knob spread { "SPREAD" };
-    Stepper stereoRouting;
-    Stepper voiceOverride;
-
-    // Block 2: PITCH
+    Stepper stereoRouting, voiceOverride;
+    // PITCH
     Knob tune { "TUNE" };
-    NumberField transpose;
-    NumberField bendUp;
-    NumberField bendDown;
+    NumberField transpose, bendUp, bendDown;
     ToggleIcon bendLink;
-
-    // Block 3: VOICES
+    // VOICES
     NumberField polyphony;
-    ToggleIcon legato;
-    ToggleIcon polyLegato;
-    ToggleIcon phaseLegato;
-    Stepper sameNote;
-    Stepper stealPriority;
+    ToggleIcon legato, polyLegato, phaseLegato;
+    Stepper sameNote, stealPriority;
     VoiceMeterDisplay voiceMeter;
-
-    // Block 4: GLIDE
-    Knob portaTime { "GLIDE" };
-    Knob portaSlope { "SLOPE" };
-    ToggleIcon portaAlways;
-    ToggleIcon portaScaled;
+    // GLIDE
+    Knob portaTime { "GLIDE" }, portaSlope { "SLOPE" };
+    ToggleIcon portaAlways, portaScaled;
     PortamentoCurveDisplay portaCurve;
-
-    // Block 5: TUNING / SCALE
-    Stepper scaleType;
-    Stepper scaleKey;
-    Stepper scaleMode;
+    // SCALE
+    Stepper scaleType, scaleKey, scaleMode;
+    MiniKeyboardDisplay keyboard;
+    // TUNING
     NumberField tuningA4;
     Stepper tuningScale;
-    ToggleIcon mtsEsp;
-    ToggleIcon mtsNoteOn;
-    MiniKeyboardDisplay keyboard;
-
-    // Block 6: MPE
+    ToggleIcon mtsEsp, mtsNoteOn;
+    // MPE
     ToggleIcon mpeOn;
     NumberField mpeBend;
     Stepper mpeMacro;
-    ToggleIcon mpeYModwheel;
-    ToggleIcon mpeBendToX;
-    ToggleIcon mpeYBipolar;
+    ToggleIcon mpeYModwheel, mpeBendToX, mpeYBipolar;
 
-    // QGroups
-    QGroup groups[kMaxGroups];
+    QGroup groups[kMaxGroups];   // 0 OUTPUT, 1 PITCH, 2 VOICES, 3 GLIDE, 4 SCALE, 5 TUNING, 6 MPE (the switches of the notes), 7 MPE (the options of Y)
 
     MasterScreen()
     {
-        // Initial control configurations
-        volume.state.bipolar = false;
-        spread.state.bipolar = false;
+        volume.state.large = true; spread.state.large = true; tune.state.large = true; portaTime.state.large = true; portaSlope.state.large = true;
         tune.state.bipolar = true;
         portaSlope.state.bipolar = true;
 
         transpose.state.format = NumberField::Format::IntSigned;
-        transpose.setLabel ("TRANS");
+        transpose.setLabel ("TRANSPOSE");
         bendUp.state.format = NumberField::Format::IntPlain;
         bendUp.setLabel ("BEND UP");
         bendDown.state.format = NumberField::Format::IntPlain;
-        bendDown.setLabel ("BEND DN");
+        bendDown.setLabel ("BEND DOWN");
         bendLink.setLabel ("LINK");
-
+        bendLink.state.showState = true;
         polyphony.state.format = NumberField::Format::IntPlain;
         polyphony.setLabel ("POLY");
-        legato.setLabel ("LEGATO");
-        polyLegato.setLabel ("POLY LEG");
-        phaseLegato.setLabel ("PHASE LEG");
-
-        portaAlways.setLabel ("ALWAYS");
-        portaScaled.setLabel ("SCALED");
-
+        legato.setLabel ("LEGATO"); legato.state.showState = true;
+        polyLegato.setLabel ("POLY LEG"); polyLegato.state.showState = true;
+        phaseLegato.setLabel ("PHASE LEG"); phaseLegato.state.showState = true;
+        sameNote.setCaption ("SAME NOTE");
+        stealPriority.setCaption ("STEAL");
+        stereoRouting.setCaption ("STEREO");
+        voiceOverride.setCaption ("VOICE OVERRIDE");
+        portaAlways.setLabel ("ALWAYS"); portaAlways.state.showState = true;
+        portaScaled.setLabel ("SCALED"); portaScaled.state.showState = true;
+        scaleType.setCaption ("SCALE");
+        scaleKey.setCaption ("KEY");
+        scaleMode.setCaption ("MODE");
         tuningA4.state.format = NumberField::Format::Decimal2;
-        tuningA4.setLabel ("A4 (HZ)");
-        mtsEsp.setLabel ("MTS-ESP");
-        mtsNoteOn.setLabel ("NOTE-ON");
-
-        mpeOn.setLabel ("MPE");
+        tuningA4.setLabel ("A4 HZ");
+        tuningScale.setCaption ("TUNING");
+        mtsEsp.setLabel ("MTS-ESP"); mtsEsp.state.showState = true;
+        mtsNoteOn.setLabel ("NOTE-ON"); mtsNoteOn.state.showState = true;
+        mpeOn.setLabel ("MPE"); mpeOn.state.showState = true;
         mpeBend.state.format = NumberField::Format::IntPlain;
         mpeBend.setLabel ("MPE BEND");
-        mpeYModwheel.setLabel ("Y->WHEEL");
-        mpeBendToX.setLabel ("BEND->X");
-        mpeYBipolar.setLabel ("Y BIPOL");
+        mpeMacro.setCaption ("XYZ MACRO");
+        mpeYModwheel.setLabel ("Y TO WHEEL"); mpeYModwheel.state.showState = true;
+        mpeBendToX.setLabel ("BEND TO X"); mpeBendToX.state.showState = true;
+        mpeYBipolar.setLabel ("Y BIPOLAR"); mpeYBipolar.state.showState = true;
 
-        // Add children to composite
-        addKid (close);
-        addKid (volume); addKid (meters); addKid (spread); addKid (stereoRouting); addKid (voiceOverride);
-        addKid (tune); addKid (transpose); addKid (bendUp); addKid (bendDown); addKid (bendLink);
-        addKid (polyphony); addKid (legato); addKid (polyLegato); addKid (phaseLegato); addKid (sameNote); addKid (stealPriority); addKid (voiceMeter);
-        addKid (portaTime); addKid (portaSlope); addKid (portaAlways); addKid (portaScaled); addKid (portaCurve);
-        addKid (scaleType); addKid (scaleKey); addKid (scaleMode); addKid (tuningA4); addKid (tuningScale); addKid (mtsEsp); addKid (mtsNoteOn); addKid (keyboard);
-        addKid (mpeOn); addKid (mpeBend); addKid (mpeMacro); addKid (mpeYModwheel); addKid (mpeBendToX); addKid (mpeYBipolar);
-
+        addKid (sideMain); addKid (sideTuning);
+        for (Component* c : sideMainComponents())
+            addKid (*c);
+        for (Component* c : sideTuningComponents())
+            addKid (*c, false);
         buildGroups();
+        setSide (SideMain);
     }
 
-    Size minSize() const override { return { 1280, 800 }; }
+    Size minSize() const override { return { 1280, 628 }; }
+
+    int side() const noexcept { return side_; }
+    void setSide (int s)
+    {
+        side_ = s == SideTuning ? SideTuning : SideMain;
+        for (Component* c : sideMainComponents())
+            show (*c, side_ == SideMain);
+        for (Component* c : sideTuningComponents())
+            show (*c, side_ == SideTuning);
+        if (activeGroup_ >= 0 && sideOfGroup (activeGroup_) != side_)
+            setActiveGroup (side_ == SideMain ? 0 : 4);
+        else
+            setActiveGroup (activeGroup_);
+    }
+    static int sideOfGroup (int g) noexcept { return g < 4 ? SideMain : SideTuning; }
 
     int numGroups() const noexcept { return kMaxGroups; }
     int activeGroup() const noexcept { return activeGroup_; }
@@ -395,198 +381,204 @@ public:
         for (int i = 0; i < kMaxGroups; ++i)
             groups[i].setActive (i == activeGroup_);
     }
-
-    const char* groupName (int g) const noexcept
+    static const char* groupName (int g) noexcept
     {
-        static const char* const kNames[kMaxGroups] = { "Output", "Pitch", "Voices", "Glide", "Tuning", "MPE" };
+        static const char* const kNames[kMaxGroups] = { "OUTPUT", "PITCH", "VOICES", "GLIDE", "SCALE", "TUNING", "MPE", "MPE Y" };
         return g >= 0 && g < kMaxGroups ? kNames[g] : "";
+    }
+    static const char* blockName (int b) noexcept
+    {
+        static const char* const kNames[kBlocks] = { "OUTPUT", "PITCH", "VOICES", "GLIDE", "SCALE", "TUNING", "MPE" };
+        return b >= 0 && b < kBlocks ? kNames[b] : "";
     }
 
     Change turnQ (int slot, double delta) { return groups[activeGroup_].turn (slot, delta); }
 
     Change touchDown (int x, int y, double nowMs) override
     {
-        const Change c = Composite::touchDown (x, y, nowMs);
-        // Switch active Q group if touch was in a block
-        for (int i = 0; i < kMaxGroups; ++i)
+        Change c = Composite::touchDown (x, y, nowMs);
+        if (cap_ && cap_ != &sideMain && cap_ != &sideTuning)
         {
-            if (blockRect (i).contains (x, y))
-            {
-                setActiveGroup (i);
-                break;
-            }
+            // a control of a group makes that group the active one (the blocks MPE have two groups: the rows)
+            int hit = -1;
+            for (int i = 0; i < kMaxGroups && hit < 0; ++i)
+                if (sideOfGroup (i) == side_)
+                    for (int k = 0; k < QGroup::kSlots; ++k)
+                        if (groups[i].member (k) == cap_)
+                            hit = i;
+            if (hit < 0)   // not a member: the block it is in
+                for (int b = 0; b < kBlocks && hit < 0; ++b)
+                    if (blockVisible (b) && blockRect (b).contains (x, y))
+                        hit = b == 6 ? (y < blockRect (6).y + blockRect (6).h / 2 + 8 ? 6 : 7) : b;
+            if (hit >= 0)
+                setActiveGroup (hit);
         }
+        return c;
+    }
+    Change touchUp (int x, int y) override
+    {
+        const bool onMain = cap_ == &sideMain, onTuning = cap_ == &sideTuning;
+        const Change c = Composite::touchUp (x, y);
+        if (onMain) { setSide (SideMain); return Change::none(); }
+        if (onTuning) { setSide (SideTuning); return Change::none(); }
         return c;
     }
 
     void draw (gpu::SceneBuilder& sb) const override
     {
-        Pen p (sb, enabled_);
-        Cell cell (sb, rect_);
-        const theme::Look& T = theme::L();
-
-        // 1. Draw 6 block panels
-        for (int i = 0; i < kMaxGroups; ++i)
-        {
-            const Rect br = blockRect (i);
-            const bool isActive = (i == activeGroup_);
-            p.block (br, isActive);
-            // Title header
-            Rect titleBox { br.x + 8, br.y + 4, br.w - 16, 20 };
-            p.textLeft (titleBox, groupName (i), 12.0f, p.c (isActive ? T.q : T.textDim, 255));
-        }
-
-        // Header label
-        Rect hdr { rect_.x + 104, rect_.y + 8, 200, 56 };
-        p.textLeft (hdr, "MASTER", 24.0f, p.c (T.text, 255));
-
-        // Draw children
         Composite::draw (sb);
-
-        // Draw active QGroup frame
         groups[activeGroup_].draw (sb);
     }
 
+    bool blockVisible (int b) const noexcept { return side_ == SideMain ? b < 4 : b >= 4; }
+    /** The rectangle of block b (0 .. 6) on its side. */
     Rect blockRect (int b) const noexcept
     {
-        const int m = 8;
-        const int topY = rect_.y + 70;
-        const int totalH = rect_.bottom() - m - topY;
-        const int blockH = (totalH - m) / 2;
-        const int totalW = rect_.w - 2 * m;
-        const int blockW = (totalW - 2 * m) / 3;
-
-        const int col = b % 3;
-        const int row = b / 3;
-        const int bx = rect_.x + m + col * (blockW + m);
-        const int by = topY + row * (blockH + m);
-        return { bx, by, blockW, blockH };
+        const int m = kBlockGap, y0 = rect_.y + kHeaderH + 8, h = rect_.bottom() - 8 - y0, w = rect_.w - 2 * m;
+        if (b < 4)
+        {
+            const int bw = (w - m) / 2, bh = (h - m) / 2;
+            return { rect_.x + m + (b % 2) * (bw + m), y0 + (b / 2) * (bh + m), b % 2 == 1 ? rect_.right() - m - (rect_.x + m + bw + m) : bw, bh };
+        }
+        const int topH = (h - m) * 52 / 100, botH = h - m - topH;
+        if (b == 4)
+            return { rect_.x + m, y0, w, topH };
+        const int bw = (w - m) / 2;
+        return b == 5 ? Rect { rect_.x + m, y0 + topH + m, bw, botH } : Rect { rect_.x + m + bw + m, y0 + topH + m, rect_.right() - m - (rect_.x + m + bw + m), botH };
+    }
+    Rect inner (int b) const noexcept
+    {
+        const Rect r = blockRect (b);
+        return { r.x + kBlockPad, r.y + kBlockTitleH, std::max (0, r.w - 2 * kBlockPad), std::max (0, r.h - kBlockTitleH - kBlockPad) };
     }
 
 protected:
+    std::vector<Component*> sideMainComponents()
+    {
+        return { &volume, &meters, &spread, &stereoRouting, &voiceOverride, &tune, &transpose, &bendUp, &bendDown, &bendLink, &polyphony, &legato, &polyLegato, &phaseLegato, &sameNote, &stealPriority, &voiceMeter,
+                 &portaTime, &portaSlope, &portaAlways, &portaScaled, &portaCurve };
+    }
+    std::vector<Component*> sideTuningComponents()
+    {
+        return { &scaleType, &scaleKey, &scaleMode, &keyboard, &tuningA4, &tuningScale, &mtsEsp, &mtsNoteOn, &mpeOn, &mpeBend, &mpeMacro, &mpeYModwheel, &mpeBendToX, &mpeYBipolar };
+    }
+
     void layout() override
     {
-        // Close button at top-left
-        close.place ({ rect_.x + 8, rect_.y + 8, 84, 56 });
+        const int g = kGap, lane = kQLane;
+        sideMain.place ({ rect_.x + 300, rect_.y + 4, 160, 56 });
+        sideTuning.place ({ rect_.x + 468, rect_.y + 4, 220, 56 });
 
-        // Block 0: OUTPUT
-        {
-            const Rect br = blockRect (0);
-            const int inY = br.y + 26;
-            volume.place ({ br.x + 8, inY + 8, 116, 120 });
-            meters.place ({ br.x + 130, inY + 8, 40, 120 });
-            spread.place ({ br.x + 176, inY + 8, 108, 116 });
-            stereoRouting.place ({ br.x + 290, inY + 8, 116, 56 });
-            voiceOverride.place ({ br.x + 290, inY + 70, 116, 56 });
+        // ---- side MAIN
+        {   // OUTPUT: the meters at the left, VOLUME and SPREAD big, the two steppers at the right
+            const Rect in = inner (0);
+            meters.place ({ in.x, in.y + 4, 56, in.h - 8 });
+            const int kw = 150;
+            volume.place ({ in.x + 64, in.y, kw, in.h });
+            spread.place ({ in.x + 64 + kw + g, in.y, kw, in.h });
+            const int sx = in.x + 64 + 2 * kw + 2 * g + 4, sw = in.right() - sx, sh = 64, top = in.y + (in.h - 2 * (lane + sh) - g) / 2;
+            stereoRouting.place ({ sx, top + lane, sw, sh });
+            voiceOverride.place ({ sx, top + 2 * lane + sh + g, sw, sh });
         }
-
-        // Block 1: PITCH
-        {
-            const Rect br = blockRect (1);
-            const int inY = br.y + 26;
-            tune.place ({ br.x + 10, inY + 8, 116, 116 });
-            transpose.place ({ br.x + 134, inY + 8, 128, 56 });
-            bendUp.place ({ br.x + 270, inY + 8, 134, 56 });
-            bendDown.place ({ br.x + 134, inY + 72, 128, 56 });
-            bendLink.place ({ br.x + 270, inY + 72, 134, 56 });
+        {   // PITCH: TUNE big, the three number fields in a column, LINK at the right
+            const Rect in = inner (1);
+            tune.place ({ in.x, in.y, 150, in.h });
+            const int nx = in.x + 150 + g, nw = 290, rowH = (in.h - 3 * lane - 2 * g) / 3;
+            transpose.place ({ nx, in.y + lane, nw, rowH });
+            bendUp.place ({ nx, in.y + 2 * lane + rowH + g, nw, rowH });
+            bendDown.place ({ nx, in.y + 3 * lane + 2 * rowH + 2 * g, nw, rowH });
+            const int lx = nx + nw + g * 2;
+            bendLink.place ({ lx, in.y + (in.h - 96) / 2, in.right() - lx, 96 });
         }
-
-        // Block 2: VOICES
-        {
-            const Rect br = blockRect (2);
-            const int inY = br.y + 26;
-            polyphony.place ({ br.x + 8, inY + 8, 100, 56 });
-            voiceMeter.place ({ br.x + 114, inY + 12, 180, 48 });
-            sameNote.place ({ br.x + 300, inY + 8, 106, 56 });
-
-            legato.place ({ br.x + 8, inY + 70, 94, 56 });
-            polyLegato.place ({ br.x + 108, inY + 70, 94, 56 });
-            phaseLegato.place ({ br.x + 208, inY + 70, 94, 56 });
-            stealPriority.place ({ br.x + 308, inY + 70, 98, 56 });
+        {   // VOICES: POLY, LEGATO / POLY LEG, SAME NOTE as a grid; the voice meter, STEAL and PHASE LEG at the right
+            const Rect in = inner (2);
+            const int c1 = 170, c2 = 208, rowH = (in.h - 2 * lane - g) / 2;
+            polyphony.place ({ in.x, in.y + lane, c1, rowH });
+            legato.place ({ in.x + c1 + g, in.y + lane, c2, rowH });
+            polyLegato.place ({ in.x, in.y + 2 * lane + rowH + g, c1, rowH });
+            sameNote.place ({ in.x + c1 + g, in.y + 2 * lane + rowH + g + (rowH - 64) / 2, c2, 64 });
+            const int rx = in.x + c1 + c2 + 3 * g, rw = in.right() - rx, cell = (in.h - 2 * g) / 3;
+            voiceMeter.place ({ rx, in.y + (cell - 56) / 2, rw, 56 });
+            stealPriority.place ({ rx, in.y + cell + g + (cell - 64) / 2, rw, 64 });
+            phaseLegato.place ({ rx, in.y + 2 * (cell + g) + (cell - 72) / 2, rw, 72 });
         }
-
-        // Block 3: GLIDE
-        {
-            const Rect br = blockRect (3);
-            const int inY = br.y + 26;
-            portaTime.place ({ br.x + 8, inY + 8, 116, 116 });
-            portaSlope.place ({ br.x + 130, inY + 8, 116, 116 });
-            portaCurve.place ({ br.x + 252, inY + 8, 154, 76 });
-            portaAlways.place ({ br.x + 252, inY + 90, 74, 56 });
-            portaScaled.place ({ br.x + 332, inY + 90, 74, 56 });
+        {   // GLIDE: the two knobs, ALWAYS / SCALED stacked, the curve at the right
+            const Rect in = inner (3);
+            portaTime.place ({ in.x, in.y, 150, in.h });
+            portaSlope.place ({ in.x + 150 + g, in.y, 150, in.h });
+            const int tx = in.x + 300 + 2 * g, tw = 130, rowH = (in.h - 2 * lane - g) / 2;
+            portaAlways.place ({ tx, in.y + lane, tw, rowH });
+            portaScaled.place ({ tx, in.y + 2 * lane + rowH + g, tw, rowH });
+            const int cx = tx + tw + 2 * g;
+            portaCurve.place ({ cx, in.y + 4, in.right() - cx, in.h - 8 });
         }
-
-        // Block 4: TUNING / SCALE
-        {
-            const Rect br = blockRect (4);
-            const int inY = br.y + 26;
-            scaleType.place ({ br.x + 8, inY + 8, 160, 56 });
-            scaleKey.place ({ br.x + 174, inY + 8, 70, 56 });
-            scaleMode.place ({ br.x + 250, inY + 8, 156, 56 });
-
-            tuningA4.place ({ br.x + 8, inY + 68, 100, 56 });
-            tuningScale.place ({ br.x + 114, inY + 68, 130, 56 });
-            mtsEsp.place ({ br.x + 250, inY + 68, 74, 56 });
-            mtsNoteOn.place ({ br.x + 330, inY + 68, 76, 56 });
-
-            keyboard.place ({ br.x + 8, inY + 130, br.w - 16, 68 });
+        // ---- side TUNING & MPE
+        {   // SCALE: the three steppers in a row, the big keyboard under them
+            const Rect in = inner (4);
+            const int sw[3] = { 340, 240, 340 };
+            scaleType.place ({ in.x, in.y + lane, sw[0], 64 });
+            scaleKey.place ({ in.x + sw[0] + g, in.y + lane, sw[1], 64 });
+            scaleMode.place ({ in.x + sw[0] + sw[1] + 2 * g, in.y + lane, sw[2], 64 });
+            const int ky = in.y + lane + 64 + 10;
+            keyboard.place ({ in.x, ky, in.w, std::max (90, in.bottom() - ky) });
         }
-
-        // Block 5: MPE
-        {
-            const Rect br = blockRect (5);
-            const int inY = br.y + 26;
-            mpeOn.place ({ br.x + 8, inY + 8, 80, 56 });
-            mpeBend.place ({ br.x + 94, inY + 8, 120, 56 });
-            mpeMacro.place ({ br.x + 220, inY + 8, 186, 56 });
-
-            mpeYModwheel.place ({ br.x + 8, inY + 70, 94, 56 });
-            mpeBendToX.place ({ br.x + 108, inY + 70, 94, 56 });
-            mpeYBipolar.place ({ br.x + 208, inY + 70, 94, 56 });
+        {   // TUNING: A4, the tuning, the two MTS switches in a grid
+            const Rect in = inner (5);
+            const int cw = (in.w - g) / 2, rowH = (in.h - 2 * lane - g) / 2;
+            tuningA4.place ({ in.x, in.y + lane, cw, rowH });
+            tuningScale.place ({ in.x + cw + g, in.y + lane + (rowH - 64) / 2, in.right() - (in.x + cw + g), 64 });
+            mtsEsp.place ({ in.x, in.y + 2 * lane + rowH + g, cw, rowH });
+            mtsNoteOn.place ({ in.x + cw + g, in.y + 2 * lane + rowH + g, in.right() - (in.x + cw + g), rowH });
+        }
+        {   // MPE: MPE, MPE BEND, XYZ MACRO; Y TO WHEEL, BEND TO X, Y BIPOLAR
+            const Rect in = inner (6);
+            const int rowH = (in.h - 2 * lane - g) / 2;
+            const int w1 = 150, w2 = 190, w3 = in.w - w1 - w2 - 2 * g;
+            mpeOn.place ({ in.x, in.y + lane, w1, rowH });
+            mpeBend.place ({ in.x + w1 + g, in.y + lane, w2, rowH });
+            mpeMacro.place ({ in.x + w1 + w2 + 2 * g, in.y + lane + (rowH - 64) / 2, w3, 64 });
+            const int cw = (in.w - 2 * g) / 3;
+            mpeYModwheel.place ({ in.x, in.y + 2 * lane + rowH + g, cw, rowH });
+            mpeBendToX.place ({ in.x + cw + g, in.y + 2 * lane + rowH + g, cw, rowH });
+            mpeYBipolar.place ({ in.x + 2 * (cw + g), in.y + 2 * lane + rowH + g, in.right() - (in.x + 2 * (cw + g)), rowH });
         }
     }
 
+    void drawUnder (Pen& p) const override
+    {
+        const theme::Look& T = theme::L();
+        p.line (static_cast<float> (rect_.x + 8), static_cast<float> (rect_.y + kHeaderH - 2), static_cast<float> (rect_.right() - 8), static_cast<float> (rect_.y + kHeaderH - 2), 1.5f, p.c (T.keyline, 255));
+        for (int b = 0; b < kBlocks; ++b)
+            if (blockVisible (b))
+                p.block (blockRect (b), false);
+    }
+
+    void drawExtra (Pen& p) const override
+    {
+        const theme::Look& T = theme::L();
+        p.textLeft ({ rect_.x + 14, rect_.y + 4, 270, 56 }, "MASTER", T.fTitle, p.c (T.text, 255), T.fMin);
+        p.rrect ((side_ == SideMain ? sideMain : sideTuning).rect(), T.rControl, p.c (T.flow[0], 255), 1.6f);
+        for (int b = 0; b < kBlocks; ++b)
+            if (blockVisible (b))
+            {
+                const Rect r = blockRect (b);
+                p.textLeft ({ r.x + kBlockPad + 6, r.y + 3, std::max (0, r.w - 20), 16 }, blockName (b), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+            }
+    }
+
 private:
-    int activeGroup_ = 0;
+    int side_ = SideMain, activeGroup_ = 0;
 
     void buildGroups()
     {
-        // Group 0: Output [Volume, Spread, Stereo Routing, Voice Override]
-        groups[0].set (0, &volume);
-        groups[0].set (1, &spread);
-        groups[0].set (2, &stereoRouting);
-        groups[0].set (3, &voiceOverride);
-
-        // Group 1: Pitch [Tune, Transpose, Bend Up, Bend Down]
-        groups[1].set (0, &tune);
-        groups[1].set (1, &transpose);
-        groups[1].set (2, &bendUp);
-        groups[1].set (3, &bendDown);
-
-        // Group 2: Voices [Polyphony, Legato, Poly Legato, Same Note]
-        groups[2].set (0, &polyphony);
-        groups[2].set (1, &legato);
-        groups[2].set (2, &polyLegato);
-        groups[2].set (3, &sameNote);
-
-        // Group 3: Glide [Porta Time, Slope, Always, Scaled]
-        groups[3].set (0, &portaTime);
-        groups[3].set (1, &portaSlope);
-        groups[3].set (2, &portaAlways);
-        groups[3].set (3, &portaScaled);
-
-        // Group 4: Tuning [Scale Type, Scale Key, Scale Mode, Tuning A4]
-        groups[4].set (0, &scaleType);
-        groups[4].set (1, &scaleKey);
-        groups[4].set (2, &scaleMode);
-        groups[4].set (3, &tuningA4);
-
-        // Group 5: MPE [MPE On, MPE Bend, XYZ Macro, Y Modwheel]
-        groups[5].set (0, &mpeOn);
-        groups[5].set (1, &mpeBend);
-        groups[5].set (2, &mpeMacro);
-        groups[5].set (3, &mpeYModwheel);
-
+        groups[0].set (0, &volume); groups[0].set (1, &spread); groups[0].set (2, &stereoRouting); groups[0].set (3, &voiceOverride);
+        groups[1].set (0, &tune); groups[1].set (1, &transpose); groups[1].set (2, &bendUp); groups[1].set (3, &bendDown);
+        groups[2].set (0, &polyphony); groups[2].set (1, &legato); groups[2].set (2, &polyLegato); groups[2].set (3, &sameNote);
+        groups[3].set (0, &portaTime); groups[3].set (1, &portaSlope); groups[3].set (2, &portaAlways); groups[3].set (3, &portaScaled);
+        groups[4].set (0, &scaleType); groups[4].set (1, &scaleKey); groups[4].set (2, &scaleMode);
+        groups[5].set (0, &tuningA4); groups[5].set (1, &tuningScale); groups[5].set (2, &mtsEsp); groups[5].set (3, &mtsNoteOn);
+        groups[6].set (0, &mpeOn); groups[6].set (1, &mpeBend); groups[6].set (2, &mpeMacro);
+        groups[7].set (0, &mpeYModwheel); groups[7].set (1, &mpeBendToX); groups[7].set (2, &mpeYBipolar);
         setActiveGroup (0);
     }
 };

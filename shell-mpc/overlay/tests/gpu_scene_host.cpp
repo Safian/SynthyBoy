@@ -11,6 +11,7 @@
 #include <thread>
 
 #include "fakes.h"
+#include "fixtures/legacy_layout.h"
 #include "scene_reference.h"
 #include "synthyboy/readout.h"
 
@@ -210,7 +211,7 @@ int main()
         in.instance = &inst;
         in.nowMs = 0.0;
         v.update (in);
-        const layout::Rect& r = layout::kViews[0].region;
+        const layout::Rect& r = legacy::kViews[0].region;
         checkSameAsCpu ("filter 1", v, 0, r.w, r.h);
         gpu::SceneData sd;
         gpu::SceneBuilder sb (sd);
@@ -257,8 +258,8 @@ int main()
             in.live = &lv;
             in.nowMs = 0.0;
             v.update (in);
-            const int vi = layout::kNumViews - 4 + idx;   // play1 .. play3 are the last three views of the layout
-            check (std::string (layout::kViews[vi].name) == "play" + std::to_string (idx) && layout::kViews[vi].kind == layout::kKindPlay && layout::kViews[vi].index == idx, "the layout's last three views are play1 .. play3");
+            const int vi = legacy::kNumViews - 4 + idx;   // the Play views of the legacy table are the last three
+            check (std::string (legacy::kViews[vi].name) == "play" + std::to_string (idx) && legacy::kViews[vi].kind == layout::kKindPlay && legacy::kViews[vi].index == idx, "the layout's last three views are play1 .. play3");
             Rect r;
             check (v.regionOverride (r) && r.w == PlayView::kW && r.h == PlayView::kH && r.y == 0 && r.w == 1280 && r.h == 800, "the Play view's region is the whole screen");
             check (v.valid(), "the Play view has data after one update");
@@ -342,7 +343,7 @@ int main()
         in.instance = &inst;
         in.nowMs = 0.0;
         idle.update (in);
-        checkSameAsCpu ("play (no voice)", idle, layout::kNumViews - 2, PlayView::kW, PlayView::kH);
+        checkSameAsCpu ("play (no voice)", idle, legacy::kNumViews - 2, PlayView::kW, PlayView::kH);
     }
     {   // the scene ops of protocol 4: a curve with its own span, and text; the reference reads them the way the helper does
         gpu::SceneData sd;
@@ -387,9 +388,9 @@ int main()
         in.nowMs = 0.0;
         check (v.update (in) && v.valid(), "lfo 1 view has data");
         int idx = 0;
-        for (int i = 0; i < layout::kNumViews; ++i)
-            if (std::string (layout::kViews[i].name) == "lfo1") idx = i;
-        const layout::Rect& r = layout::kViews[idx].region;
+        for (int i = 0; i < legacy::kNumViews; ++i)
+            if (std::string (legacy::kViews[i].name) == "lfo1") idx = i;
+        const layout::Rect& r = legacy::kViews[idx].region;
         checkSameAsCpu ("lfo 1 with the cursor", v, idx, r.w, r.h);
         gpu::SceneData sd;
         gpu::SceneBuilder sb (sd);
@@ -416,9 +417,9 @@ int main()
         in.nowMs = 0.0;
         check (v.update (in) && v.valid(), "osc 1 view has data");
         int idx = 0;
-        for (int i = 0; i < layout::kNumViews; ++i)
-            if (std::string (layout::kViews[i].name) == "osc1") idx = i;
-        const layout::Rect& r = layout::kViews[idx].region;
+        for (int i = 0; i < legacy::kNumViews; ++i)
+            if (std::string (legacy::kViews[i].name) == "osc1") idx = i;
+        const layout::Rect& r = legacy::kViews[idx].region;
         checkSameAsCpu (std::string ("osc 1 (") + (v.kind() == synthyboy::OscCycle::Kind::wavetable ? "wavetable" : "other") + ")", v, idx, r.w, r.h);
         inst.set ("osc1.on", 0.0f);
         in.nowMs = 200.0;
@@ -431,12 +432,12 @@ int main()
     }
     {   // the envelope marker: transparent, two marker covers, a dot
         FakeInstance inst;
-        FakeFrame frame;
+        FakeFrame frame; frame.views = legacy::kViews;
         int ei = 0;
-        for (int i = 0; i < layout::kNumViews; ++i)
-            if (std::string (layout::kViews[i].name) == "env2") ei = i;
-        EnvView v (2, layout::kViews[ei]);
-        const layout::Rect& reg = layout::kViews[ei].region;
+        for (int i = 0; i < legacy::kNumViews; ++i)
+            if (std::string (legacy::kViews[i].name) == "env2") ei = i;
+        EnvView v (2, legacy::kViews[ei]);
+        const layout::Rect& reg = legacy::kViews[ei].region;
         inst.set ("env2.attack", 300.0f);
         inst.set ("env2.sustain", 60.0f);
         ViewInput in;

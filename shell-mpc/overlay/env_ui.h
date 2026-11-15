@@ -26,6 +26,7 @@
 #include "../q_router.h"
 #include "curve_source.h"
 #include "touch_decoder.h"
+#include "page_view.h"
 #include "ui_bind.h"
 #include "ui_stack.h"
 #include "synthyboy/readout.h"
@@ -37,6 +38,7 @@ class EnvUi
 public:
     // ---- the element and its pages (UiStack ids)
     static constexpr int kElementEnv = 2;
+    static constexpr int kElementPage = kElementEnv;   // the page of an Env tab is the full screen of the element (page_view.h)
     enum Page { kPageTargets = 30, kPageList = 31, kPageMods = 32 };
 
     // ---- the id spaces of the controls (a Change comes out with the id the owner gave)
@@ -91,7 +93,7 @@ public:
     void update (IInstanceView& inst, int highlight, const UiStack& stack, double nowMs, const synthyboy::LiveValues* live)
     {
         highlight_ = highlight;
-        const int sel = std::clamp (inst.playSelection (1), 1, kEnvs);
+        const int sel = page_ ? pageSel_ : std::clamp (inst.playSelection (1), 1, kEnvs);   // the page of a tab keeps its own envelope (the tab names the first one); the Play page follows the host's selector
         if (sel != sel_ || ! configured_)
             configure (sel);
         selectedSource_ = uibind::envSource (sel_);
@@ -114,6 +116,25 @@ public:
         else if (stack.isMain())
             inst.setUiFullOpen (false);
         publishQGroup (inst);
+    }
+
+    /** The page of an Env tab (page_view.h): the full screen of the envelope the tab names, nothing to close, the selector chooses another envelope for this page only. */
+    void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
+    {
+        if (! page_)
+        {
+            page_ = true;
+            pageSel_ = std::clamp (in.instance, 1, kEnvs);
+            full_.setPageMode (true);
+        }
+        update (inst, 2, stack, nowMs, in.live);
+    }
+    /** The whole picture of the page: its ground, the full screen or the page above it, the running dots, the popup. */
+    void draw (gpu::SceneBuilder& sb) const
+    {
+        drawPage (sb);
+        drawLive (sb);
+        drawPopup (sb);
     }
 
     bool isMain() const noexcept { return stackDepth_ == 0; }
@@ -605,41 +626,7 @@ private:
     }
 
     // ---- the list that picks a new target: the groups of the destinations, then the parameters of a group
-    struct DestIndex
-    {
-        std::vector<std::string> groups;
-        std::vector<std::vector<int>> choices;   // per group: the destination choice values (1 ..) in table order
-        static const DestIndex& get()
-        {
-            static const DestIndex d = build();
-            return d;
-        }
-        static DestIndex build()
-        {
-            DestIndex d;
-            const size_t n = synthyboy::modDestinationCount();
-            for (size_t c = 1; c <= n; ++c)
-            {
-                const int p = synthyboy::modDestinationParamIndex (c);
-                if (p < 0)
-                    continue;
-                std::string g = uibind::info (p).group != nullptr ? uibind::info (p).group : "";
-                const size_t cut = g.find (" / ");
-                if (cut != std::string::npos)
-                    g.resize (cut);
-                size_t i = 0;
-                while (i < d.groups.size() && d.groups[i] != g)
-                    ++i;
-                if (i == d.groups.size())
-                {
-                    d.groups.push_back (g);
-                    d.choices.emplace_back();
-                }
-                d.choices[i].push_back (static_cast<int> (c));
-            }
-            return d;
-        }
-    };
+    using DestIndex = uibind::DestIndex;
     std::vector<const char*> listNames_;
     int listGroup_ = -1;   // -1: the list shows the groups; else the group whose parameters it shows
     void openGroupList()
@@ -805,7 +792,10 @@ private:
         }
         if (id == kInstances && c.kind == K::Index)
         {
-            v.setPlaySelection (1, c.index + 1);
+            if (page_)
+                pageSel_ = c.index + 1;   // the page only: the host's Play selector belongs to the Play page
+            else
+                v.setPlaySelection (1, c.index + 1);
             return;
         }
         if (id == kTargetsPage && c.kind == K::Index)
@@ -1005,6 +995,8 @@ private:
     UiStack idle_;                       // an empty stack: the pages are read from it while another element's page is open
     std::vector<Item> items_;
     ui::Component* gesture_ = nullptr;
+    bool page_ = false;                  // the page of an Env tab
+    int pageSel_ = 1;                    // the envelope that page shows
     bool gestureDown_ = false, otherOpen_ = false, configured_ = false, modsDirty_ = true, qSet_ = false, beats_ = false;
     int w_ = 1280, h_ = 800, sel_ = 1, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = 0, underList_ = 0, selectedSource_ = ui::kNoSource, numTargets_ = 0, targetsPageIndex_ = 0;
     int timeMs_[5] = { -1, -1, -1, -1, -1 }, timeBeats_[5] = { -1, -1, -1, -1, -1 }, sustainP_ = -1, curveP_[3] = { -1, -1, -1 };

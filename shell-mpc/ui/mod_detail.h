@@ -1,5 +1,7 @@
-// SynthyBoy - MPC UI: Modulation Slot Detail Panel
-// Slide-in panel from the right over the matrix list (x=600..1280, w=680, h=628).
+// SynthyBoy - MPC UI: the page of one modulation slot (the details of a row of the matrix), 1280 x 628.
+// From the top: BACK, the title, DELETE; the slot's own row (SOURCE -> TARGET, AMOUNT, UNI / BI, ON / OFF: the same controls as in the matrix, so the whole slot is edited here); three blocks side by side,
+// ONE Q group each: AUXILIARY SOURCE (the second source that multiplies the first: SOURCE, SCALE, INVERT, CURVE), SHAPE (CURVE, STEREO) and TIME (RISE, FALL, DELAY or BEATS, SYNC). A tap on a member makes its
+// block the Q group. Every knob shows its value; the blocks are laid out over their whole height.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -11,93 +13,90 @@
 #include "base.h"
 #include "composite.h"
 #include "core.h"
+#include "mod_matrix.h"
 #include "qgroup.h"
 #include "theme.h"
 
 namespace synthyboy_mpc { namespace ui {
 
 // ===============================================================================================================================================================
-/** Slot Details Slide-in Panel:
-    AUX block: AUX SOURCE, AUX OUTPUT (scale), AUX INV, AUX POWER.
-    SHAPE block: POWER, STEREO.
-    TIME block: RISE, FALL, DELAY (ms / DELAY SYNC toggle: DELAY BEATS).
-    Delete button with confirmation.
-    Three Q-groups: AUX, SHAPE, TIME. */
 class ModSlotDetail : public Composite
 {
 public:
-    static constexpr int kBarH = 56;
+    static constexpr int kBarH = 64, kBlockTitleH = 34, kBlockPad = 6, kBlockGap = 8;
     enum Block : uint8_t { BlockAux = 0, BlockShape, BlockTime };
 
     int slotIndex = 0; // 0 .. 63
 
     MenuButton back { "BACK", MenuButton::Icon::None };
     MenuButton deleteBtn { "DELETE", MenuButton::Icon::None };
+    ModRow summary;   // the slot's own row (the MORE button is not used here)
 
-    // Block selector buttons
-    MenuButton tabAux { "AUX", MenuButton::Icon::None };
-    MenuButton tabShape { "SHAPE", MenuButton::Icon::None };
-    MenuButton tabTime { "TIME", MenuButton::Icon::None };
-
-    // AUX Block
-    MenuButton auxSource { "NONE", MenuButton::Icon::Down };
+    // AUX block
+    MenuButton auxSource { "SOURCE", MenuButton::Icon::Down };
     Knob auxOutput { "SCALE" };
-    MenuButton auxInv { "INV", MenuButton::Icon::None };
+    ToggleIcon auxInv;
     Knob auxPower { "CURVE" };
 
-    // SHAPE Block
+    // SHAPE block
     Knob power { "CURVE" };
-    MenuButton stereo { "STEREO", MenuButton::Icon::None };
+    ToggleIcon stereo;
 
-    // TIME Block
+    // TIME block
     Knob rise { "RISE" };
     Knob fall { "FALL" };
     Knob delay { "DELAY" };
-    MenuButton delaySync { "SYNC", MenuButton::Icon::None };
+    ToggleIcon delaySync;
     Knob delayBeats { "BEATS" };
 
-    QGroup qgroup;
+    QGroup groups[3];
 
     ModSlotDetail()
     {
         addKid (back);
         addKid (deleteBtn);
-        addKid (tabAux);
-        addKid (tabShape);
-        addKid (tabTime);
+        addKid (summary);
+        summary.showDetailButton (false);
 
-        // AUX block setup
-        auxOutput.state.value = auxOutput.state.defaultValue = 0.5; // 100%
+        auxOutput.state.defaultValue = 0.5;   // 100 %
         auxPower.state.bipolar = true;
-        auxPower.state.defaultValue = 0.5; // 0.0
+        auxPower.state.defaultValue = 0.5;
+        auxInv.state.icon = ToggleIcon::Icon::Generic;
+        auxInv.setLabel ("INVERT");
+        auxInv.state.showState = true;
         addKid (auxSource);
         addKid (auxOutput);
         addKid (auxInv);
         addKid (auxPower);
 
-        // SHAPE block setup
         power.state.bipolar = true;
-        power.state.defaultValue = 0.5; // 0.0
+        power.state.defaultValue = 0.5;
+        stereo.state.icon = ToggleIcon::Icon::Generic;
+        stereo.setLabel ("STEREO");
+        stereo.state.showState = true;
         addKid (power);
         addKid (stereo);
 
-        // TIME block setup
-        rise.state.defaultValue = 0.0;
-        fall.state.defaultValue = 0.0;
-        delay.state.defaultValue = 0.0;
-        delayBeats.state.defaultValue = 0.0;
+        delaySync.state.icon = ToggleIcon::Icon::Generic;
+        delaySync.setLabel ("SYNC");
+        delaySync.state.showState = true;
         addKid (rise);
         addKid (fall);
         addKid (delay);
+        addKid (delayBeats, false);
         addKid (delaySync);
-        addKid (delayBeats);
 
+        for (Knob* k : { &auxOutput, &auxPower, &power, &rise, &fall, &delay, &delayBeats })
+            k->state.large = true;
+        auxSource.state.label[0] = '\0';
+        setText (auxSource.state.label, sizeof auxSource.state.label, "SOURCE");
+        buildGroups();
         setActiveBlock (BlockAux);
     }
 
-    Size minSize() const override { return { 500, 400 }; }
+    Size minSize() const override { return { 1280, 628 }; }
 
-    void setSlot (int idx, const char* srcName, const char* dstName)
+    void setTitle (int idx, const char* srcName, const char* dstName)
     {
         if (slotIndex != idx)
         {
@@ -105,107 +104,52 @@ public:
             confirmDelete_ = false;
             deleteBtn.setLabel ("DELETE");
         }
-        std::snprintf (title_, sizeof title_, "SLOT %02d: %s -> %s", idx + 1,
-                       srcName && srcName[0] ? srcName : "---",
-                       dstName && dstName[0] ? dstName : "---");
+        std::snprintf (title_, sizeof title_, "SLOT %02d   %s  ->  %s", idx + 1, srcName && srcName[0] ? srcName : "---", dstName && dstName[0] ? dstName : "---");
     }
+
+    /** The DELAY is in milliseconds or in beats (the SYNC switch): the member of the TIME group follows it. */
+    void setDelaySync (bool sync)
+    {
+        if (sync == delaySyncOn_)
+            return;
+        delaySyncOn_ = sync;
+        show (delay, ! sync);
+        show (delayBeats, sync);
+        groups[BlockTime].set (2, sync ? &delayBeats : &delay);
+        if (activeBlock_ == BlockTime)
+            groups[BlockTime].setActive (true);
+    }
+    bool delaySyncOn() const noexcept { return delaySyncOn_; }
 
     void setActiveBlock (Block b)
     {
         activeBlock_ = b;
-        updateQGroup();
+        for (int k = 0; k < 3; ++k)
+            groups[k].setActive (k == b);
     }
-
     Block activeBlock() const noexcept { return activeBlock_; }
-
-    void updateQGroup()
-    {
-        for (int k = 0; k < 4; ++k)
-            qgroup.set (k, nullptr);
-
-        if (activeBlock_ == BlockAux)
-        {
-            qgroup.set (0, &auxSource);
-            qgroup.set (1, &auxOutput);
-            qgroup.set (2, &auxInv);
-            qgroup.set (3, &auxPower);
-        }
-        else if (activeBlock_ == BlockShape)
-        {
-            qgroup.set (0, &power);
-            qgroup.set (1, &stereo);
-        }
-        else if (activeBlock_ == BlockTime)
-        {
-            qgroup.set (0, &rise);
-            qgroup.set (1, &fall);
-            qgroup.set (2, delaySyncOn_ ? &delayBeats : &delay);
-            qgroup.set (3, &delaySync);
-        }
-        qgroup.setActive (true);
-    }
-
-    void setAuxData (const char* src, double output, bool inv, double curve)
-    {
-        auxSource.setLabel (src && src[0] ? src : "NONE");
-        auxOutput.state.value = std::clamp (output / 2.0, 0.0, 1.0); // 0 .. 200%
-        std::snprintf (auxOutput.state.valueText, sizeof auxOutput.state.valueText, "%d%%", static_cast<int> (std::lround (output * 100.0)));
-        auxInv.setLabel (inv ? "INV ON" : "INV OFF");
-        auxInvOn_ = inv;
-        auxPower.state.value = std::clamp ((curve + 10.0) / 20.0, 0.0, 1.0);
-        std::snprintf (auxPower.state.valueText, sizeof auxPower.state.valueText, "%.1f", curve);
-    }
-
-    void setShapeData (double crv, bool st)
-    {
-        power.state.value = std::clamp ((crv + 10.0) / 20.0, 0.0, 1.0);
-        std::snprintf (power.state.valueText, sizeof power.state.valueText, "%.1f", crv);
-        stereo.setLabel (st ? "STEREO ON" : "STEREO OFF");
-        stereoOn_ = st;
-    }
-
-    void setTimeData (double rMs, double fMs, double dMs, bool sync, double beats)
-    {
-        rise.state.value = std::clamp (rMs / 5000.0, 0.0, 1.0);
-        std::snprintf (rise.state.valueText, sizeof rise.state.valueText, "%d ms", static_cast<int> (std::lround (rMs)));
-
-        fall.state.value = std::clamp (fMs / 5000.0, 0.0, 1.0);
-        std::snprintf (fall.state.valueText, sizeof fall.state.valueText, "%d ms", static_cast<int> (std::lround (fMs)));
-
-        delay.state.value = std::clamp (dMs / 4000.0, 0.0, 1.0);
-        std::snprintf (delay.state.valueText, sizeof delay.state.valueText, "%d ms", static_cast<int> (std::lround (dMs)));
-
-        delaySyncOn_ = sync;
-        delaySync.setLabel (sync ? "SYNC: BEAT" : "SYNC: MS");
-        show (delay, ! sync);
-        show (delayBeats, sync);
-
-        delayBeats.state.value = std::clamp (beats / 8.0, 0.0, 1.0);
-        std::snprintf (delayBeats.state.valueText, sizeof delayBeats.state.valueText, "%.2f", beats);
-        updateQGroup();
-        layout();
-    }
+    static const char* blockName (int b) noexcept { static const char* const n[3] = { "AUXILIARY SOURCE", "SHAPE", "TIME" }; return b >= 0 && b < 3 ? n[b] : ""; }
+    Rect block (int b) const noexcept { return b >= 0 && b < 3 ? blocks_[b] : Rect {}; }
 
     bool isDeleteConfirmed() const noexcept { return confirmDelete_; }
 
     Change touchDown (int x, int y, double nowMs) override
     {
-        return Composite::touchDown (x, y, nowMs);
+        const Change c = Composite::touchDown (x, y, nowMs);
+        if (cap_)
+            for (int b = 0; b < 3; ++b)
+                if (blocks_[b].contains (x, y))
+                {
+                    setActiveBlock (static_cast<Block> (b));
+                    break;
+                }
+        return c;
     }
 
     Change touchUp (int x, int y) override
     {
         const bool onDelete = (cap_ == &deleteBtn);
-        const bool onTabAux = (cap_ == &tabAux);
-        const bool onTabShape = (cap_ == &tabShape);
-        const bool onTabTime = (cap_ == &tabTime);
-
         const Change c = Composite::touchUp (x, y);
-
-        if (onTabAux) { setActiveBlock (BlockAux); return Change::none(); }
-        if (onTabShape) { setActiveBlock (BlockShape); return Change::none(); }
-        if (onTabTime) { setActiveBlock (BlockTime); return Change::none(); }
-
         if (onDelete && c.kind == ChangeKind::Request)
         {
             if (! confirmDelete_)
@@ -214,113 +158,109 @@ public:
                 deleteBtn.setLabel ("CONFIRM?");
                 return Change::none();
             }
-            else
-            {
-                confirmDelete_ = false;
-                deleteBtn.setLabel ("DELETE");
-                return Change::request (deleteBtn.id());
-            }
+            confirmDelete_ = false;
+            deleteBtn.setLabel ("DELETE");
+            return Change::request (deleteBtn.id());
         }
-        else if (confirmDelete_ && ! onDelete)
+        if (confirmDelete_ && ! onDelete)
         {
             confirmDelete_ = false;
             deleteBtn.setLabel ("DELETE");
         }
-
         return c;
     }
 
     void draw (gpu::SceneBuilder& sb) const override
     {
-        // Solid panel backdrop
-        Pen p (sb, true);
-        const theme::Look& T = theme::L();
-        p.rect (rect_, colour::rgba (T.bg1, 250));
-        p.line (static_cast<float> (rect_.x), static_cast<float> (rect_.y),
-                static_cast<float> (rect_.x), static_cast<float> (rect_.bottom()),
-                2.0f, p.c (T.keylineHi, 255));
-
         Composite::draw (sb);
-        qgroup.draw (sb);
+        for (const QGroup& g : groups)
+            g.draw (sb);
     }
 
-    Change turnQ (int knobIndex, double delta)
-    {
-        return qgroup.turn (knobIndex, delta);
-    }
+    Change turnQ (int knobIndex, double delta) { return groups[activeBlock_].turn (knobIndex, delta); }
 
 protected:
+    void buildGroups()
+    {
+        groups[BlockAux].set (0, &auxSource);
+        groups[BlockAux].set (1, &auxOutput);
+        groups[BlockAux].set (2, &auxInv);
+        groups[BlockAux].set (3, &auxPower);
+        groups[BlockShape].set (0, &power);
+        groups[BlockShape].set (1, &stereo);
+        groups[BlockTime].set (0, &rise);
+        groups[BlockTime].set (1, &fall);
+        groups[BlockTime].set (2, &delay);
+        groups[BlockTime].set (3, &delaySync);
+    }
+
     void layout() override
     {
-        // Header
-        back.place ({ rect_.x + 12, rect_.y + 4, 90, kBarH - 8 });
-        tabAux.place ({ rect_.x + 360, rect_.y + 4, 60, kBarH - 8 });
-        tabShape.place ({ rect_.x + 426, rect_.y + 4, 76, kBarH - 8 });
-        tabTime.place ({ rect_.x + 508, rect_.y + 4, 64, kBarH - 8 });
-        deleteBtn.place ({ rect_.right() - 100, rect_.y + 4, 90, kBarH - 8 });
+        const int m = 8;
+        // the bar: BACK, the title, DELETE
+        back.place ({ rect_.x + m, rect_.y + 4, 100, 56 });
+        deleteBtn.place ({ rect_.right() - m - 120, rect_.y + 4, 120, 56 });
+        // the slot's own row
+        summary.place ({ rect_.x, rect_.y + kBarH, rect_.w, ModRow::kRowH });
 
-        const int x0 = rect_.x + 24;
+        // the three blocks over the rest of the height
+        const int y0 = rect_.y + kBarH + ModRow::kRowH + 6, h = rect_.bottom() - m - y0;
+        const int avail = rect_.w - 2 * m - 2 * kBlockGap;
+        const int wAux = avail * 36 / 100, wShape = avail * 26 / 100, wTime = avail - wAux - wShape;
+        blocks_[BlockAux] = { rect_.x + m, y0, wAux, h };
+        blocks_[BlockShape] = { blocks_[BlockAux].right() + kBlockGap, y0, wShape, h };
+        blocks_[BlockTime] = { blocks_[BlockShape].right() + kBlockGap, y0, wTime, h };
+        auto inner = [&] (const Rect& b) { return Rect { b.x + kBlockPad, b.y + kBlockTitleH, std::max (0, b.w - 2 * kBlockPad), std::max (0, b.h - kBlockTitleH - kBlockPad) }; };
+        // a 2 x 2 grid: the cells of the second row start a lane lower (the Q index chips of the members lie above them)
+        auto grid = [&] (const Rect& b, Component* c0, Component* c1, Component* c2, Component* c3)
+        {
+            const Rect in = inner (b);
+            const int cw = (in.w - kGap) / 2, rh = (in.h - kQLane - kGap) / 2;
+            Component* cs[4] = { c0, c1, c2, c3 };
+            for (int i = 0; i < 4; ++i)
+            {
+                const int col = i % 2, row = i / 2;
+                Rect cell { in.x + col * (cw + kGap), in.y + row * (rh + kGap + kQLane), col == 1 ? in.right() - (in.x + cw + kGap) : cw, rh };
+                if (cs[i] == &auxSource)
+                    cell = { cell.x, cell.y + (cell.h - std::min (cell.h, 110)) / 2, cell.w, std::min (cell.h, 110) };
+                else if (cs[i] == &auxInv || cs[i] == &delaySync)
+                    cell = { cell.x, cell.y + (cell.h - std::min (cell.h, 96)) / 2, cell.w, std::min (cell.h, 96) };
+                cs[i]->place (cell);
+            }
+        };
+        grid (blocks_[BlockAux], &auxSource, &auxOutput, &auxInv, &auxPower);
+        {
+            const Rect in = inner (blocks_[BlockShape]);
+            const int rh = (in.h - kQLane - kGap) / 2;
+            power.place ({ in.x, in.y, in.w, rh });
+            const int sh = std::min (rh, 96);
+            stereo.place ({ in.x, in.y + rh + kGap + kQLane + (rh - sh) / 2, in.w, sh });
+        }
+        grid (blocks_[BlockTime], &rise, &fall, &delay, &delaySync);
+        delayBeats.place (delay.rect());
+    }
 
-        // AUX block (y = rect_.y + 64, h = 160)
-        int y = rect_.y + 64;
-        auxSource.place ({ x0, y + 26, 170, 56 });
-        auxOutput.place ({ x0 + 190, y + 20, 110, 120 });
-        auxInv.place ({ x0 + 320, y + 26, 80, 56 });
-        auxPower.place ({ x0 + 420, y + 20, 110, 120 });
-
-        // SHAPE block (y = rect_.y + 244, h = 150)
-        y = rect_.y + 244;
-        power.place ({ x0, y + 20, 120, 120 });
-        stereo.place ({ x0 + 150, y + 26, 110, 56 });
-
-        // TIME block (y = rect_.y + 414, h = 180)
-        y = rect_.y + 414;
-        rise.place ({ x0, y + 20, 100, 130 });
-        fall.place ({ x0 + 110, y + 20, 100, 130 });
-        delay.place ({ x0 + 220, y + 20, 100, 130 });
-        delayBeats.place ({ x0 + 220, y + 20, 100, 130 });
-        delaySync.place ({ x0 + 330, y + 26, 96, 56 });
+    void drawUnder (Pen& p) const override
+    {
+        const theme::Look& T = theme::L();
+        for (int b = 0; b < 3; ++b)
+            p.block (blocks_[b]);
+        p.line (static_cast<float> (rect_.x + 8), static_cast<float> (rect_.y + kBarH - 2), static_cast<float> (rect_.right() - 8), static_cast<float> (rect_.y + kBarH - 2), 1.5f, p.c (T.keyline, 255));
     }
 
     void drawExtra (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-
-        // Title in header
-        p.textLeft ({ rect_.x + 112, rect_.y + 4, 240, kBarH - 8 }, title_, T.fLabel, p.c (T.text, 255), T.fMin);
-
-        // Header separator
-        p.line (static_cast<float> (rect_.x + 8), static_cast<float> (rect_.y + kBarH - 1),
-                static_cast<float> (rect_.right() - 8), static_cast<float> (rect_.y + kBarH - 1),
-                1.5f, p.c (T.keyline, 255));
-
-        // Highlight active block tab
-        const MenuButton* tab = (activeBlock_ == BlockAux ? &tabAux : (activeBlock_ == BlockShape ? &tabShape : &tabTime));
-        p.rrect (tab->rect(), T.rControl, p.c (T.flow[0], 255), 1.6f);
-
-        // Block Titles and frames
-        const int x0 = rect_.x + 16;
-        const int w = rect_.w - 32;
-
-        // AUX block outline
-        p.block ({ x0, rect_.y + 60, w, 160 });
-        p.textLeft ({ x0 + 12, rect_.y + 64, 200, 20 }, "AUXILIARY SOURCE", T.fMin + 2.0f, p.c (T.textDim, 255), T.fMin);
-
-        // SHAPE block outline
-        p.block ({ x0, rect_.y + 236, w, 150 });
-        p.textLeft ({ x0 + 12, rect_.y + 240, 200, 20 }, "SHAPE & STEREO", T.fMin + 2.0f, p.c (T.textDim, 255), T.fMin);
-
-        // TIME block outline
-        p.block ({ x0, rect_.y + 400, w, 180 });
-        p.textLeft ({ x0 + 12, rect_.y + 404, 200, 20 }, "TIME & SLEW", T.fMin + 2.0f, p.c (T.textDim, 255), T.fMin);
+        p.textLeft ({ rect_.x + 124, rect_.y + 4, rect_.w - 124 - 140, 56 }, title_, T.fTitle - 4.0f, p.c (T.text, 255), T.fMin);
+        for (int b = 0; b < 3; ++b)
+            p.textLeft ({ blocks_[b].x + kBlockPad + 4, blocks_[b].y + 3, std::max (0, blocks_[b].w - 2 * kBlockPad - 4), 16 }, blockName (b), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
     }
 
 private:
-    char title_[64] = {};
+    char title_[96] = {};
+    Rect blocks_[3];
     Block activeBlock_ = BlockAux;
     bool confirmDelete_ = false;
-    bool auxInvOn_ = false;
-    bool stereoOn_ = false;
     bool delaySyncOn_ = false;
 };
 

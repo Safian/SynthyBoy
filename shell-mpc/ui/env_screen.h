@@ -172,6 +172,14 @@ public:
         active_ = i >= 0 && i < kMaxGroups ? i : -1;
     }
     Change turnQ (int knobIndex, double delta) { return active_ >= 0 ? groups[active_].turn (knobIndex, delta) : Change::none(); }
+    /** The page of its own tab (the plugin draws the whole tab): there is nothing to close, the selector takes the place of CLOSE. */
+    void setPageMode (bool page)
+    {
+        pageMode_ = page;
+        show (close, ! page);
+        if (rect_.w > 0)
+            layout();
+    }
     Rect block (int i) const noexcept { return i >= 0 && i < kMaxGroups ? blocks_[i] : Rect {}; }
     Rect targetsBlock() const noexcept { return targetsBlock_; }
     Size minSize() const override { return { 1280, 628 }; }
@@ -203,7 +211,7 @@ protected:
         // ---- the top bar: close, the selector, the targets button
         const Rect top { rect_.x + m, rect_.y + m, W, kTopH - m };
         Rect r[3];
-        const int fixed[3] = { 96, 0, 200 }, weight[3] = { 0, 1, 0 };
+        const int fixed[3] = { pageMode_ ? 0 : 96, 0, 200 }, weight[3] = { 0, 1, 0 };
         layoutRow (top, fixed, weight, 3, kGap, r);
         close.place ({ r[0].x, top.y + (top.h - 56) / 2, r[0].w, 56 });
         const int selW = std::min (r[1].w, 6 * 120);
@@ -280,6 +288,7 @@ protected:
     static constexpr int kBlockGap = 8;
     Rect blocks_[kMaxGroups], targetsBlock_;
     int active_ = -1;
+    bool pageMode_ = false;
 };
 
 }} // namespace synthyboy_mpc::ui

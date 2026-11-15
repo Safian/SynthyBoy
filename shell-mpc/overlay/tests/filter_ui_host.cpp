@@ -1,7 +1,7 @@
-// SynthyBoy - MPC overlay tests: the FILTER UI (filter_ui.h).
-// Wiring of every control to the engine parameters (both directions), pages of the UiStack,
-// Q-groups, interactive response curve and Formant XY pad dragging, route popup, modulations,
-// touch targets >= 56 px, and drawing inside the scene ops budget.
+// SynthyBoy - MPC overlay tests: the FILTER UI (filter_ui.h), the page of the Filter tabs.
+// Wiring of every control to the engine parameters (both directions), pages of the UiStack, Q groups (one block each),
+// interactive response curve and Formant XY pad dragging with its values, route popup, model / style lists, modulations,
+// touch targets >= 56 px, a value under every knob, and drawing inside the scene ops budget.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <cmath>
@@ -101,12 +101,20 @@ struct Rig
     UiStack stack;
     double now = 1000.0;
 
-    Rig() { refresh(); }
+    float targets[4] = { 12000.0f, 20.0f, 12000.0f, 20.0f };   // the live cutoff and resonance of both filters
+    bool useTargets = false;
+    int instance = 1;
 
-    void refresh (int hl = 1)
+    Rig (int inst1 = 1) : instance (inst1) { stack.openFull (FilterUi::kElementFilter); refresh(); }
+
+    void refresh()
     {
         now += 50.0;
-        ui.update (inst, hl, stack, now, 1, 1);
+        page::Input in;
+        in.instance = instance;
+        in.targets = useTargets ? targets : nullptr;
+        in.live = inst.hasLive_ ? &inst.liveVals_ : nullptr;
+        ui.update (inst, stack, now, in);
     }
 
     bool tap (int cx, int cy, int holdMs = 40)
@@ -144,8 +152,6 @@ struct Rig
         y = c.rect().y + c.rect().h / 2;
     }
 
-    void openFull() { tapC (ui.compact().full); }
-
     void turnQ (int slot, double delta)
     {
         ui.turnQ (slot, delta, stack, inst);
@@ -179,35 +185,28 @@ void testInstancesSwitching()
     check (r.ui.selection() == 1 && r.ui.editFilter() == 1, "initial selection is F1 (filter 1)");
 
     // Tap F2 in instances selector
-    const ui::Rect selR = r.ui.compact().instances.rect();
+    const ui::Rect selR = r.ui.full().instances.rect();
     r.tap (selR.x + selR.w / 2, selR.y + selR.h / 2);
     check (r.ui.selection() == 2 && r.ui.editFilter() == 2, "tap middle of instances selector switches to F2");
 
     // Tap F1+F2 in instances selector
     r.tap (selR.x + selR.w * 5 / 6, selR.y + selR.h / 2);
     check (r.ui.selection() == 3 && r.ui.isDual(), "tap right of instances selector switches to dual F1+F2");
-    check (r.ui.compact().display.state.dual, "display state is dual");
+    check (r.ui.full().display.state.dual, "display state is dual");
 
     // Tap F1 in instances selector
     r.tap (selR.x + selR.w / 6, selR.y + selR.h / 2);
     check (r.ui.selection() == 1 && ! r.ui.isDual(), "tap left switches back to F1");
 }
 
-void testFullScreenOpensAndCloses()
+void testPageIsAlwaysOpen()
 {
     Rig r;
-    check (r.stack.isMain() && ! r.inst.fullOpen, "starts in main view (compact)");
-    r.openFull();
-    check (r.stack.depth() == 1 && r.inst.fullOpen, "full screen button opens full screen view");
-    check (r.ui.displayRect().w > 600, "full screen has large display rectangle");
-
-    r.tapC (r.ui.full().close);
-    check (r.stack.isMain() && ! r.inst.fullOpen, "close button returns to main view");
-
-    r.openFull();
-    r.stack.closeAll();
-    r.refresh();
-    check (! r.inst.fullOpen, "navigating away closes full screen");
+    check (r.stack.depth() == 1 && r.stack.element() == FilterUi::kElementFilter && r.inst.fullOpen, "the page is the full screen of the element: always open, the host widgets hidden");
+    check (r.ui.displayRect().w > 1000 && r.ui.displayRect().h > 200, "the display is large (" + std::to_string (r.ui.displayRect().w) + " x " + std::to_string (r.ui.displayRect().h) + ")");
+    check (r.ui.full().pageMode() && r.ui.full().close.rect().w == 0, "a page has no CLOSE button");
+    Rig two (2);
+    check (two.ui.selection() == 2 && two.ui.editFilter() == 2, "the tab Filter 2 shows F2");
 }
 
 void testKnobDragWritesParameter()
@@ -217,7 +216,7 @@ void testKnobDragWritesParameter()
     r.refresh();
 
     int x, y;
-    r.centre (r.ui.compact().cutoff, x, y);
+    r.centre (r.ui.full().cutoff, x, y);
     const int writesBefore = r.inst.writes;
     r.drag (x, y, x, y - 60);
 
@@ -227,13 +226,12 @@ void testKnobDragWritesParameter()
     // External change reflection
     r.inst.set ("filter1.cutoff", 8000.0f);
     r.refresh();
-    check (std::string (r.ui.compact().cutoff.state.valueText) == "8.0 kHz", "outside parameter change updates valueText on next frame (8.0 kHz)");
+    check (std::string (r.ui.full().cutoff.state.valueText) == "8.00 kHz", "outside parameter change updates valueText on next frame (8.00 kHz)");
 }
 
 void testBipolarAndToggles()
 {
     Rig r;
-    r.openFull();
 
     // Pan
     check (r.ui.full().pan.state.bipolar, "PAN knob is bipolar");
@@ -256,8 +254,8 @@ void testBipolarAndToggles()
     // Clean mode toggle
     r.inst.set ("filter1.clean_mode", 0.0f);
     r.refresh();
-    check (! r.ui.full().cleanMode.state.on, "clean mode initially OFF");
-    r.tapC (r.ui.full().cleanMode);
+    check (! r.ui.full().clean.state.on, "clean mode initially OFF");
+    r.tapC (r.ui.full().clean);
     check (r.inst.get ("filter1.clean_mode") == 1.0f, "tapping clean mode toggle turns it ON");
 }
 
@@ -269,7 +267,7 @@ void testDisplayInteractiveDrag()
     r.refresh();
 
     // Drag on FilterDisplay in compact view
-    const ui::Rect dRect = r.ui.compact().display.rect();
+    const ui::Rect dRect = r.ui.full().display.rect();
     // Drag towards top right (higher cutoff and higher resonance)
     r.drag (dRect.x + dRect.w / 4, dRect.y + dRect.h * 3 / 4, dRect.x + dRect.w * 3 / 4, dRect.y + dRect.h / 4);
 
@@ -280,7 +278,6 @@ void testDisplayInteractiveDrag()
 void testFormantModeSwitchAndDrag()
 {
     Rig r;
-    r.openFull();
     check (! r.ui.full().formantMode(), "initial mode is not Formant");
 
     // Switch model to Formant (model 5)
@@ -304,11 +301,10 @@ void testFormantModeSwitchAndDrag()
 void testModelSelectionAndListPopup()
 {
     Rig r;
-    r.openFull();
     check (r.ui.topPage() == 0, "no popup initially open");
 
     // Tap model stepper opens list popup
-    r.tapC (r.ui.full().model);
+    r.tapC (r.ui.full().modelList);
     check (r.ui.topPage() == FilterUi::kPageList, "tapping model stepper opens ListPopup");
     check (r.ui.list().state.count == 27, "model list contains 27 models");
 
@@ -325,7 +321,7 @@ void testRoutePopup()
     Rig r;
     check (r.ui.topPage() == 0, "no popup open");
 
-    r.tapC (r.ui.compact().route);
+    r.tapC (r.ui.full().route);
     check (r.ui.topPage() == FilterUi::kPageRoute, "tapping route button opens route popup");
 
     // Drag level knob inside route panel
@@ -350,15 +346,14 @@ void testRoutePopup()
 void testQGroupsAndTurn()
 {
     Rig r;
-    check (std::string (r.ui.qGroupName()) == "Main", "compact view active QGroup is Main");
+    check (std::string (r.ui.qGroupName()) == "MAIN", "the active Q group is MAIN");
     check (r.inst.q[0] == FakeInst::idx ("filter1.cutoff")
            && r.inst.q[1] == FakeInst::idx ("filter1.resonance")
            && r.inst.q[2] == FakeInst::idx ("filter1.drive")
            && r.inst.q[3] == FakeInst::idx ("filter1.mix"),
-           "compact Q-targets are CUTOFF, RESO, DRIVE, MIX");
+           "MAIN Q targets are CUTOFF, RESO, DRIVE, MIX");
 
-    r.openFull();
-    check (std::string (r.ui.qGroupName()) == "MAIN", "full screen default QGroup is MAIN");
+    check (std::string (r.ui.qGroupName()) == "MAIN", "the default Q group is MAIN");
 
     // Touch a control in OUT group (e.g. blend knob)
     int bx, by;
@@ -401,7 +396,7 @@ void testModulationsPage()
 
     // Long press on CUTOFF knob opens modulations page
     int x, y;
-    r.centre (r.ui.compact().cutoff, x, y);
+    r.centre (r.ui.full().cutoff, x, y);
     r.tap (x, y, 700); // 700 ms hold (> 600 ms long press)
 
     check (r.ui.topPage() == FilterUi::kPageMods, "long press on CUTOFF opens ModulationsPage");
@@ -415,37 +410,132 @@ void testModulationsPage()
 void testTouchTargetsAndLayoutSizes()
 {
     Rig r;
-    // Check all primary touch target sizes >= 56 px (or standard button minSize)
-    check (r.ui.compact().power.rect().w >= 52 && r.ui.compact().power.rect().h >= 52, "power button >= 52 px");
-    check (r.ui.compact().model.rect().w >= 56 && r.ui.compact().model.rect().h >= 50, "model stepper >= 50 px");
-    check (r.ui.compact().cutoff.rect().w >= 72 && r.ui.compact().cutoff.rect().h >= 72, "cutoff knob >= 72 px");
-    check (r.ui.compact().display.rect().w >= 200 && r.ui.compact().display.rect().h >= 100, "display rect >= 100 px");
+    ui::FilterFullScreen& f = r.ui.full();
+    check (f.power.rect().w >= 56 && f.power.rect().h >= 56, "power button >= 56 px");
+    check (f.model.rect().w >= 208 && f.model.rect().h >= 56 && f.style.rect().w >= 208 && f.style.rect().h >= 56, "the model and the style steppers >= 208 x 56 px");
+    check (f.modelList.rect().w >= 56 && f.modelList.rect().h >= 56, "the list button of the models >= 56 px");
+    check (f.clean.rect().w >= 72 && f.clean.rect().h >= 56 && f.route.rect().w >= 64 && f.route.rect().h >= 56, "CLEAN and OUTPUT >= 56 px");
+    check (f.instances.rect().w >= 3 * 56 && f.instances.rect().h >= 56, "F1 | F2 | F1+F2 selector >= 56 px per cell");
+    ui::Component* leaves[64];
+    const int n = f.collectLeaves (leaves, 0, 64);
+    int small = 0, leavesOk = 0;
+    for (int i = 0; i < n; ++i)
+        if (leaves[i]->rect().w > 0 && ! leaves[i]->sizeOk())
+            ++small;
+        else
+            ++leavesOk;
+    check (small == 0, "every component of the page has at least its minimum size (" + std::to_string (leavesOk) + " ok, " + std::to_string (small) + " too small)");
+    // one family of knobs: every knob of the three blocks has the same size
+    const ui::Rect a = f.cutoff.rect();
+    bool same = true;
+    for (const ui::Knob* k : { &f.resonance, &f.drive, &f.mix, &f.keytrack, &f.var, &f.combOffset, &f.level, &f.pan, &f.blend })
+        same = same && std::abs (k->rect().w - a.w) <= 3 && k->rect().h == a.h;
+    check (same, "MAIN, TRACK and OUT knobs are one family of size");
+}
 
-    r.openFull();
-    check (r.ui.full().close.rect().w >= 56 && r.ui.full().close.rect().h >= 50, "full close button >= 50 px");
-    check (r.ui.full().instances.rect().w >= 100 && r.ui.full().instances.rect().h >= 50, "full instances selector >= 50 px");
-    check (r.ui.full().routing.rect().w >= 100 && r.ui.full().routing.rect().h >= 48, "routing stepper >= 48 px");
+void testQFrameIsOneBlock()
+{
+    Rig r;
+    ui::FilterFullScreen& f = r.ui.full();
+    for (int g = 0; g < 3; ++g)
+    {
+        const ui::Rect b = f.block (g), u = f.groups[g].rect();
+        check (b.contains (u), std::string ("the Q group ") + ui::FilterFullScreen::groupName (g) + " lies inside its block");
+        ui::Component* leaves[64];
+        const int n = f.collectLeaves (leaves, 0, 64);
+        check (f.groups[g].check (leaves, n) == 0, std::string ("no other component lies in the frame of the group ") + ui::FilterFullScreen::groupName (g));
+    }
+    r.inst.set ("filter1.model", 5.0f);
+    r.refresh();
+    const ui::Rect b = f.block (3), u = f.groups[3].rect();
+    ui::Component* leaves[64];
+    const int n = f.collectLeaves (leaves, 0, 64);
+    check (b.w > 300 && b.contains (u) && f.groups[3].check (leaves, n) == 0, "the FORMANT block holds its Q group (X, Y, TRANSPOSE, SPREAD) alone, RESONANCE beside it");
+    check (f.display.rect().right() < f.block (3).x, "the display and the FORMANT block do not overlap");
+}
+
+void testEveryKnobShowsItsValue()
+{
+    Rig r;
+    ui::FilterFullScreen& f = r.ui.full();
+    bool all = true;
+    for (const ui::Knob* k : { &f.cutoff, &f.resonance, &f.drive, &f.mix, &f.keytrack, &f.var, &f.combOffset, &f.level, &f.pan, &f.blend })
+    {
+        const bool ok = k->state.valueText[0] != '\0';
+        if (! ok)
+            std::printf ("  no value under %s\n", k->state.label);
+        all = all && ok;
+    }
+    check (all, "every knob shows its value (parameter's own format)");
+    check (std::string (f.cutoff.state.valueText) == "12.00 kHz" || std::string (f.cutoff.state.valueText).find ("kHz") != std::string::npos, "the cutoff is written in Hz / kHz (" + std::string (f.cutoff.state.valueText) + ")");
+    check (std::string (f.drive.state.valueText).find ("dB") != std::string::npos, "the drive is written in dB (" + std::string (f.drive.state.valueText) + ")");
+    check (std::string (f.env1.state.label) == "ENV 1" && std::string (f.clean.state.label) == "CLEAN", "the switches have their names");
+}
+
+void testStyleListAndModelList()
+{
+    Rig r;
+    r.tapC (r.ui.full().style);   // the centre of the stepper asks for the list
+    check (r.ui.topPage() == FilterUi::kPageList && r.ui.list().state.count == 12, "tapping the style opens its list (12 styles)");
+    const ui::Rect row3 = r.ui.list().rowRect (3);
+    r.tap (row3.x + row3.w / 2, row3.y + row3.h / 2);
+    check (r.inst.get ("filter1.style") == 3.0f && r.ui.topPage() == 0, "a row of the list writes filter1.style");
+    // the ends of the stepper step by one
+    const ui::Rect s = r.ui.full().style.rect();
+    r.tap (s.x + 12, s.y + s.h / 2);
+    check (r.inst.get ("filter1.style") == 2.0f, "the left end of the style stepper steps back");
+    r.tapC (r.ui.full().model);
+    check (r.ui.topPage() == FilterUi::kPageList && r.ui.list().state.count == 27, "the middle of the model stepper opens the list of the models as well");
+    r.tap (20, 130);
+    check (r.ui.topPage() == 0, "a tap beside the list closes it");
+}
+
+void testDragShowsValues()
+{
+    Rig r;
+    ui::FilterDisplay& d = r.ui.full().display;
+    const ui::Rect dr = d.rect();
+    r.ui.touch (ev (TouchEvent::Down, dr.x + dr.w / 2, dr.y + dr.h / 2), r.stack, r.inst, r.now);
+    r.ui.touch (ev (TouchEvent::Move, dr.x + dr.w / 2 + 40, dr.y + dr.h / 2 - 20), r.stack, r.inst, r.now + 16.0);
+    check (d.dragging(), "while the point is dragged the display knows");
+    auto data = std::make_unique<gpu::SceneData>();
+    gpu::SceneBuilder with (*data);
+    with.begin (gpu::kKindPlay, 0, 1280, 800);
+    d.draw (with);
+    const uint32_t opsDragging = data->numOps;
+    r.ui.touch (ev (TouchEvent::Up, dr.x + dr.w / 2 + 40, dr.y + dr.h / 2 - 20), r.stack, r.inst, r.now + 40.0);
+    r.refresh();
+    check (! d.dragging(), "the finger lifted: no bubble");
+    auto data2 = std::make_unique<gpu::SceneData>();
+    gpu::SceneBuilder without (*data2);
+    without.begin (gpu::kKindPlay, 0, 1280, 800);
+    d.draw (without);
+    check (opsDragging > data2->numOps, "the dragged values are drawn beside the point only while it is dragged (" + std::to_string (opsDragging) + " > " + std::to_string (data2->numOps) + " ops)");
+}
+
+void testRealCurveAndLiveTargets()
+{
+    Rig r;
+    r.useTargets = true;
+    r.targets[0] = 3000.0f;   // the live (modulated) cutoff of F1
+    r.targets[1] = 40.0f;
+    r.refresh();
+    r.refresh();
+    check (r.ui.curve (1) != nullptr && r.ui.curve (1)->valid() && r.ui.curve (1)->points() == 256, "the display has the 256 points of the real response");
+    check (std::fabs (r.ui.full().display.state.liveCutoffHz - 3000.0) < 1.0, "the live cutoff comes from the readout targets of the view (" + std::to_string (r.ui.full().display.state.liveCutoffHz) + " Hz)");
+    // a resonant low pass has its peak near the cutoff and falls above it
+    const float* c = r.ui.curve (1)->curve();
+    float lo, hi;
+    r.ui.curve (1)->minMax (lo, hi);
+    check (hi > 0.0f && lo < -20.0f, "the curve is a filter response: a peak (" + std::to_string (hi) + " dB) and a fall (" + std::to_string (lo) + " dB)");
+    (void) c;
 }
 
 void testDrawingAndSceneOps()
 {
     Rig r;
-    // 1. Draw compact view
+    // 2. Draw the page
     {
-        auto data = std::make_unique<gpu::SceneData>();
-        std::memset (data.get(), 0, sizeof (gpu::SceneData));
-        gpu::SceneBuilder sb (*data);
-        sb.begin (gpu::kKindPlay, 0, 1280, 800);
-        r.ui.draw (sb);
-        check (! sb.overflow && data->numOps > 10, "compact view scene fits ops budget (" + std::to_string (data->numOps) + " ops)");
-        std::vector<uint32_t> cv;
-        renderScene (*data, cv);
-        check (cv.size() == 1280u * 800u, "CPU renderer renders compact view scene");
-    }
-
-    // 2. Draw full screen view
-    {
-        r.openFull();
         auto data = std::make_unique<gpu::SceneData>();
         std::memset (data.get(), 0, sizeof (gpu::SceneData));
         gpu::SceneBuilder sb (*data);
@@ -493,7 +583,7 @@ int main()
 {
     testEveryControlHasAParameter();
     testInstancesSwitching();
-    testFullScreenOpensAndCloses();
+    testPageIsAlwaysOpen();
     testKnobDragWritesParameter();
     testBipolarAndToggles();
     testDisplayInteractiveDrag();
@@ -503,6 +593,11 @@ int main()
     testQGroupsAndTurn();
     testModulationsPage();
     testTouchTargetsAndLayoutSizes();
+    testQFrameIsOneBlock();
+    testEveryKnobShowsItsValue();
+    testStyleListAndModelList();
+    testDragShowsValues();
+    testRealCurveAndLiveTargets();
     testDrawingAndSceneOps();
 
     std::printf (g_fails ? "filter_ui_host: FAILED (%d)\n" : "filter_ui_host: OK\n", g_fails);

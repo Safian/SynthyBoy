@@ -127,12 +127,36 @@ public:
             const float val = valueFromY (s, y);
             if (s != lastCol_ || std::fabs (val - values[activeRow][s]) > 0.01f)
             {
+                // a fast stroke skips columns: the columns between the last one and this one get the values on the line between them (drawn through, not left out); the owner takes them with takePending ()
+                numPending_ = 0;
+                if (lastCol_ >= 0 && std::abs (s - lastCol_) > 1)
+                {
+                    const int dir = s > lastCol_ ? 1 : -1;
+                    const float v0 = values[activeRow][lastCol_];
+                    for (int c = lastCol_ + dir; c != s && numPending_ < kNumSteps; c += dir)
+                    {
+                        const float t = static_cast<float> (c - lastCol_) / static_cast<float> (s - lastCol_);
+                        float v = v0 + (val - v0) * t;
+                        if (std::fabs (v) < 0.035f)
+                            v = 0.0f;
+                        values[activeRow][c] = v;
+                        pending_[numPending_++] = Change::normalised (stepId (activeRow, c), v);
+                    }
+                }
                 values[activeRow][s] = val;
                 lastCol_ = s;
                 return Change::normalised (stepId (activeRow, s), val);
             }
         }
         return Change::none();
+    }
+    /** The changes of the columns that a fast stroke passed over (after a touchMove): false when there are no more. */
+    bool takePending (Change& c) noexcept
+    {
+        if (numPending_ <= 0)
+            return false;
+        c = pending_[--numPending_];
+        return true;
     }
 
     Change touchUp (int x, int y) override
@@ -179,13 +203,13 @@ protected:
                 p.paintY2 (static_cast<float> (tr.y), static_cast<float> (tr.bottom()), T.flow[0], T.flow[1], 255);
                 p.rrect (tr, T.rChip, p.c (colour::rgba (T.flow[0], 255)));
                 p.plain();
-                p.textCentered (tr, rowName (r), 14.0f, p.c (T.onBright, 255));
+                p.textCentered (tr, rowName (r), T.fLabel, p.c (T.onBright, 255), T.fMin);
             }
             else
             {
                 p.rrect (tr, T.rChip, p.c (T.panel1, 200));
                 p.rrect (tr, T.rChip, p.c (T.keyline, 160), 1.0f);
-                p.textCentered (tr, rowName (r), 13.0f, p.c (T.textDim, 255));
+                p.textCentered (tr, rowName (r), T.fLabel - 1.0f, p.c (T.textDim, 255), T.fMin);
             }
         }
 
@@ -199,23 +223,19 @@ protected:
 
             // Column background box
             p.rrect (cr, T.rControl, p.c (activeStep ? T.panel0 : T.bg1, activeStep ? 180 : 120));
-            uint32_t borderCol = isSelected ? T.q : (activeStep ? T.keyline : T.track);
-            float borderThick = isSelected ? 1.6f : 1.0f;
+            uint32_t borderCol = isSelected ? T.q : (isSounding ? T.flow[0] : (activeStep ? T.keyline : T.track));
+            float borderThick = isSelected ? 1.8f : (isSounding ? 1.8f : 1.0f);
             p.rrect (cr, T.rControl, p.c (borderCol, 255), borderThick);
 
             // Step header area
             const Rect hdr { cr.x, cr.y + 4, cr.w, 24 };
             char numBuf[8];
             std::snprintf (numBuf, sizeof numBuf, "%d", s + 1);
-            p.textCentered (hdr, numBuf, 14.0f, p.c (activeStep ? T.text : T.textDim, 255));
+            p.textCentered (hdr, numBuf, T.fLabel, p.c (activeStep ? T.text : T.textDim, 255), T.fMin);
 
-            // Sounding voice indicator
+            // the step a voice plays now: its frame is lit, with a dot at the top
             if (isSounding)
-            {
-                const float dotX = static_cast<float> (cr.right() - 10);
-                const float dotY = static_cast<float> (cr.y + 12);
-                p.disc (dotX, dotY, 4.0f, p.c (T.inst[4], 255)); // Bright indicator dot
-            }
+                p.disc (static_cast<float> (cr.right() - 12), static_cast<float> (cr.y + 14), 4.5f, p.c (T.flow[0], 255));
 
             // Bar drawing area
             const int barPadX = 6;
@@ -267,13 +287,15 @@ protected:
             const Rect valBox { cr.x + 2, barBottom + 4, cr.w - 4, 22 };
             char valStr[24];
             formatValue (activeRow, val, valStr, sizeof valStr);
-            p.textCentered (valBox, valStr, 13.0f, p.c (activeStep ? (isSelected ? T.q : T.text) : T.textDim, 255));
+            p.textCentered (valBox, valStr, T.fLabel, p.c (activeStep ? (isSelected ? T.q : T.text) : T.textDim, 255), T.fMin);
         }
     }
 
 private:
     bool dragging_ = false;
     int lastCol_ = -1;
+    Change pending_[kNumSteps];
+    int numPending_ = 0;
 
     int findColumn (int x) const noexcept
     {
@@ -298,6 +320,7 @@ private:
         return v;
     }
 
+public:
     static void formatValue (int row, float val, char* out, size_t maxLen) noexcept
     {
         if (std::fabs (val) < 0.005f)

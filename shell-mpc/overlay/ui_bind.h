@@ -8,7 +8,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
+#include <vector>
 
 #include "../ui/ui.h"
 #include "curve_source.h"
@@ -49,6 +51,7 @@ inline void formatValue (const synthyboy::ParamInfo& pi, float plain, char* out,
         case Unit::dB: std::snprintf (out, cap, "%+.1f dB", v); break;
         case Unit::degrees: std::snprintf (out, cap, "%.0f\xc2\xb0", v); break;
         case Unit::beats: std::snprintf (out, cap, "%.2f beat", v); break;
+        case Unit::voices: std::snprintf (out, cap, v == 1.0 ? "%.0f voice" : "%.0f voices", v); break;
         default: std::snprintf (out, cap, "%.*f", dec, v); break;
     }
 }
@@ -75,6 +78,36 @@ inline void shortSourceName (const char* full, char out[7])
     else if (n == "Random per Note") s = "RND";
     else s = n;
     std::snprintf (out, 7, "%.6s", s.c_str());
+}
+/** The modulation source choice value (1 ..) of the macro n (1 .. 8); 0 when the table has none. */
+inline int macroSource (int n) noexcept
+{
+    char key[12];
+    std::snprintf (key, sizeof key, "macro%d", n);
+    const synthyboy::ModSourceInfo* t = synthyboy::modSourceTable();
+    for (size_t i = 0; i < synthyboy::modSourceCount(); ++i)
+        if (std::strcmp (t[i].key, key) == 0)
+            return static_cast<int> (i) + 1;
+    return 0;
+}
+/** The groups of the sources in a list: 1 envelopes, 2 LFOs (random ones too), 3 macros, 4 the player (velocity, note, wheels, pressure ...), 5 the sound (the outputs of the sources and filters, the voice values). 0: none. */
+constexpr int kSourceGroups = 5;
+inline const char* sourceGroupName (int g) noexcept
+{
+    static const char* const n[kSourceGroups + 1] = { "NONE", "ENVELOPES", "LFOS", "MACROS", "PLAYER", "SOUND" };
+    return g >= 0 && g <= kSourceGroups ? n[g] : "";
+}
+inline int sourceGroup (int choice) noexcept
+{
+    if (choice < 1 || choice > static_cast<int> (synthyboy::modSourceCount()))
+        return 0;
+    const char* k = synthyboy::modSourceTable()[choice - 1].key;
+    auto starts = [&] (const char* p) { return std::strncmp (k, p, std::strlen (p)) == 0; };
+    if (starts ("env")) return 1;
+    if (starts ("lfo") || starts ("rlfo")) return 2;
+    if (starts ("macro")) return 3;
+    if (starts ("osc_") || starts ("noise") || starts ("sub") || starts ("filter") || starts ("stereo") || starts ("voice_") || starts ("active_voices")) return 5;
+    return 4;
 }
 /** The modulation source ids (the choice value of modNN.source) of envelope n (1 .. 6) and LFO n (1 .. 10); ui::kNoSource for anything else. */
 inline int envSource (int n) noexcept { return n >= 1 && n <= 6 ? n : ui::kNoSource; }
@@ -159,5 +192,56 @@ inline int slotOfPair (const IInstanceView& v, int source, long destChoice) noex
     }
     return -1;
 }
+
+/** The destinations of the modulation matrix grouped for a list (the group of the parameter before " / "): the groups, then per group the destination choice values (1 ..) in table order. ONE list for every
+    page that adds a target (the envelope's and the LFO's ADD TARGET, the destination of a slot of the matrix). */
+struct DestIndex
+{
+    std::vector<std::string> groups;
+    std::vector<std::vector<int>> choices;
+    static const DestIndex& get()
+    {
+        static const DestIndex d = build();
+        return d;
+    }
+    static DestIndex build()
+    {
+        DestIndex d;
+        const size_t n = synthyboy::modDestinationCount();
+        for (size_t c = 1; c <= n; ++c)
+        {
+            const int p = synthyboy::modDestinationParamIndex (c);
+            if (p < 0)
+                continue;
+            std::string g = info (p).group != nullptr ? info (p).group : "";
+            const size_t cut = g.find (" / ");
+            if (cut != std::string::npos)
+                g.resize (cut);
+            size_t i = 0;
+            while (i < d.groups.size() && d.groups[i] != g)
+                ++i;
+            if (i == d.groups.size())
+            {
+                d.groups.push_back (g);
+                d.choices.emplace_back();
+            }
+            d.choices[i].push_back (static_cast<int> (c));
+        }
+        return d;
+    }
+    /** The group and the position inside it of a destination choice value; false when the choice is in no group. */
+    bool locate (int choice, int& group, int& index) const
+    {
+        for (size_t g = 0; g < choices.size(); ++g)
+            for (size_t i = 0; i < choices[g].size(); ++i)
+                if (choices[g][i] == choice)
+                {
+                    group = static_cast<int> (g);
+                    index = static_cast<int> (i);
+                    return true;
+                }
+        return false;
+    }
+};
 
 }}} // namespace synthyboy_mpc::overlay::uibind

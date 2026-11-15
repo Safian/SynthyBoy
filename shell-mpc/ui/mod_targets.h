@@ -66,7 +66,7 @@ public:
         page.state.count = pages;
         page.state.index = std::clamp (pageIndex, 0, pages - 1);
         page.state.wrap = false;
-        char t[16];
+        char t[32];
         std::snprintf (t, sizeof t, "%d / %d", page.state.index + 1, pages);
         page.setItem (t);
         show (page, pages > 1);

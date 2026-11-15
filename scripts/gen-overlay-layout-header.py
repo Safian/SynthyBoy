@@ -24,7 +24,9 @@ def rgb(text):
     return int(text, 16)
 
 
-KINDS = {"filter": 0, "lfo": 1, "osc": 2, "env": 3, "spectrum": 4, "play": 5}
+# 0 .. 4: the pictures of the first overlay (a live curve over a region of a host tab); 5 .. 14: the pages the plugin draws entirely (a view of the whole tab: "play" is the Play tab, the others are
+# one element each: the filter, the envelope and the LFO of the instance the tab names, the mixer, the FX chain, the modulation matrix, the macros, the master and the voice page)
+KINDS = {"filter": 0, "lfo": 1, "osc": 2, "env": 3, "spectrum": 4, "play": 5, "filterui": 6, "mixer": 7, "fx": 8, "mod": 9, "macros": 10, "master": 11, "voice": 12, "envui": 13, "lfoui": 14}
 
 
 def render(layout):
@@ -86,7 +88,8 @@ def render(layout):
         "namespace synthyboy_mpc { namespace overlay { namespace layout {",
         "struct Rect { int x, y, w, h; };",
         "struct Marker { Rect rect; unsigned rgb; unsigned cover; };   // cover: the colour of what lies under the marker (a transparent view paints it over the marker)",
-        "constexpr int kKindFilter = 0, kKindLfo = 1, kKindOsc = 2, kKindEnv = 3, kKindSpectrum = 4, kKindPlay = 5;",
+        "constexpr int kKindFilter = 0, kKindLfo = 1, kKindOsc = 2, kKindEnv = 3, kKindSpectrum = 4, kKindPlay = 5, kKindFilterUi = 6, kKindMixer = 7, kKindFx = 8, kKindMod = 9, kKindMacros = 10, kKindMaster = 11, kKindVoice = 12, kKindEnvUi = 13, kKindLfoUi = 14;",
+        "constexpr bool isPageKind (int kind) { return kind == kKindPlay || kind >= kKindFilterUi; }   // a page the plugin draws entirely (its own touch handling, the host widgets hidden under it)",
         "struct View { const char* name; int kind; int index; Rect region; bool opaque; Marker markers[2]; Rect instance; };   // instance: the film strip image bound to the display parameter \"Overlay Instance\" (one frame = this size)",
         "constexpr int kScreenW = %d;" % layout["screen"]["width"],
         "constexpr int kScreenH = %d;" % layout["screen"]["height"],

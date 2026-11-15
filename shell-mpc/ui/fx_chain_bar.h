@@ -48,7 +48,7 @@ public:
     {
         if (state.isPlus || state.empty)
             return {};
-        return { rect_.right() - 28, rect_.y + 4, 24, 24 };
+        return { rect_.right() - 56, rect_.y, 56, 44 };   // a touch target of its own
     }
 
     Change touchDown (int x, int y, double nowMs) override
@@ -133,10 +133,9 @@ protected:
 
         // 2. Active Slot Card
         // Rack badge on top left: "M", "B1", "B2"
-        const char* const rackBadges[] = { "M", "B1", "B2" };
-        const char* badge = (state.rack >= 0 && state.rack < 3) ? rackBadges[state.rack] : "M";
-        p.text (static_cast<float> (rect_.x + 6), static_cast<float> (rect_.y + 16),
-                T.fSmall, badge, p.c (T.flow[1], 240));
+        const char* const rackBadges[] = { "MAIN", "BUS 1", "BUS 2" };
+        const char* badge = (state.rack >= 0 && state.rack < 3) ? rackBadges[state.rack] : "SPLIT";
+        p.textLeft ({ rect_.x + 6, rect_.y + 4, std::max (0, rect_.w - 64), 16 }, badge, T.fSmall + 1.0f, p.c (T.flow[state.rack == 1 ? 1 : (state.rack == 2 ? 3 : 0)], 255), T.fMin);
 
         // Power toggle on top right
         const Rect pr = powerRect();
@@ -145,8 +144,9 @@ protected:
             const float pcx = static_cast<float> (pr.x + pr.w / 2);
             const float pcy = static_cast<float> (pr.y + pr.h / 2);
             const uint32_t pCol = state.on ? p.c (T.flow[0], 255) : p.c (T.textDim, 120);
-            p.arc (pcx, pcy, 6.0f, 0.2f * kPi, 1.8f * kPi, 1.5f, pCol);
-            p.line (pcx, pcy - 7.0f, pcx, pcy - 1.0f, 1.5f, pCol);
+            const float a0 = 1.5f * kPi + 0.6f;
+            p.arc (pcx, pcy, 8.0f, a0, a0 + 2.0f * kPi - 1.2f, 2.0f, pCol);
+            p.line (pcx, pcy - 10.0f, pcx, pcy - 1.0f, 2.0f, pCol);
         }
 
         // Type Pictogram in middle
@@ -245,10 +245,15 @@ public:
     int numActiveSlots() const noexcept { return numSlots_; }
     void setNumActiveSlots (int n) noexcept
     {
-        numSlots_ = std::clamp (n, 0, kMaxSlots);
+        const int m = std::clamp (n, 0, kMaxSlots);
+        if (m == numSlots_ && laidOut_)
+            return;
+        numSlots_ = m;
         for (int i = 0; i < kMaxSlots; ++i)
             show (cards[i], i < numSlots_);
         show (plusCard, numSlots_ < kMaxSlots);
+        if (rect_.w > 0)
+            layout();
     }
 
     void assignIds (int baseId)
@@ -265,7 +270,8 @@ protected:
         const int gap = 6;
         const int cardH = rect_.h - 2 * pad;
         const int totalItems = numSlots_ + (numSlots_ < kMaxSlots ? 1 : 0);
-        const int cardW = totalItems > 0 ? std::clamp ((rect_.w - 2 * pad - (totalItems - 1) * gap) / totalItems, 64, 110) : 80;
+        const int cardW = totalItems > 0 ? std::clamp ((rect_.w - 2 * pad - (totalItems - 1) * gap) / totalItems, 64, 130) : 80;
+        laidOut_ = true;
 
         int x = rect_.x + pad;
         for (int i = 0; i < numSlots_; ++i)
@@ -287,6 +293,7 @@ protected:
 
 private:
     int numSlots_ = 6;
+    bool laidOut_ = false;
 };
 
 }} // namespace synthyboy_mpc::ui

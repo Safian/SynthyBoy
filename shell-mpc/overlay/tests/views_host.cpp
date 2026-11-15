@@ -8,6 +8,7 @@
 #include <sstream>
 
 #include "fakes.h"
+#include "fixtures/legacy_layout.h"
 #include "synthyboy/filter_response.h"
 #include "synthyboy/lfo_display.h"
 #include "synthyboy/osc_cycle.h"
@@ -100,22 +101,23 @@ int main()
         int f1[2], f2[2], o[4];
         synthyboy::FilterResponse::readoutIndices (1, f1);
         synthyboy::FilterResponse::readoutIndices (2, f2);
-        bool ok = t.size() == 2 + 2 + 3 * 4 + 3 * 12 && t[0] == f1[0] && t[1] == f1[1] && t[2] == f2[0] && t[3] == f2[1];
+        // the Filter pages (two of them) ask for the cutoff and resonance of both filters each
+        bool ok = t.size() == 2 * 4 + 3 * 4 + 3 * 12 && t[0] == f1[0] && t[1] == f1[1] && t[2] == f2[0] && t[3] == f2[1] && t[4] == f1[0] && t[5] == f1[1] && t[6] == f2[0] && t[7] == f2[1];
         for (int n = 1; n <= 3 && ok; ++n)
         {
             synthyboy::OscCycle::readoutIndices (n, o);
             for (int k = 0; k < 4; ++k)
-                ok = ok && t[static_cast<size_t> (4 + (n - 1) * 4 + k)] == o[k];
+                ok = ok && t[static_cast<size_t> (8 + (n - 1) * 4 + k)] == o[k];
         }
-        // the three Play views (the last three of the layout) ask for the readout of all three oscillators each: the selected one is used
+        // the three Play views ask for the readout of all three oscillators each: the selected one is used
         for (int v = 0; v < 3 && ok; ++v)
             for (int n = 1; n <= 3 && ok; ++n)
             {
                 synthyboy::OscCycle::readoutIndices (n, o);
                 for (int k = 0; k < 4; ++k)
-                    ok = ok && t[static_cast<size_t> (16 + v * 12 + (n - 1) * 4 + k)] == o[k];
+                    ok = ok && t[static_cast<size_t> (20 + v * 12 + (n - 1) * 4 + k)] == o[k];
             }
-        check (ok, "readout targets: filter 1 (2), filter 2 (2), oscillator 1 .. 3 (4 each), the three Play views (oscillators 1 .. 3 each), as the views ask for them (" + std::to_string (t.size()) + " in all)");
+        check (ok, "readout targets: the two filter pages (4 each), oscillator 1 .. 3 (4 each), the three Play views (oscillators 1 .. 3 each), as the views ask for them (" + std::to_string (t.size()) + " in all)");
     }
     // ---- the Filter 2 view ----------------------------------------------------------------------------------------------------------------------------------------
     {
@@ -362,11 +364,11 @@ int main()
     }
     {
         Plain p;
-        FakeFrame frame;
-        const int ei = [] { for (int i = 0; i < layout::kNumViews; ++i) if (std::string (layout::kViews[i].name) == "env2") return i; return -1; }();
+        FakeFrame frame; frame.views = legacy::kViews;
+        const int ei = [] { for (int i = 0; i < legacy::kNumViews; ++i) if (std::string (legacy::kViews[i].name) == "env2") return i; return -1; }();
         check (ei >= 0, "the layout has env2");
-        EnvView v (2, layout::kViews[ei]);
-        const layout::Rect& reg = layout::kViews[ei].region;
+        EnvView v (2, legacy::kViews[ei]);
+        const layout::Rect& reg = legacy::kViews[ei].region;
         const int w = reg.w, h = reg.h;
         std::vector<uint32_t> cv (static_cast<size_t> (w) * h);
         auto input = [&] (const synthyboy::LiveValues* lv, double now)
@@ -417,16 +419,16 @@ int main()
         for (uint32_t q : cv) clear += q == 0;
         for (int m = 0; m < 2; ++m)
         {
-            const layout::Marker& mk = layout::kViews[ei].markers[m];
+            const layout::Marker& mk = legacy::kViews[ei].markers[m];
             covered += px (cv, w, mk.rect.x - reg.x + 1, mk.rect.y - reg.y + 1) == 0xff000000u + mk.cover;
         }
         check (covered == 2, "the two marker squares are painted over in the colour under them (the widget background)");
         {
-            const layout::Rect& ir = layout::kViews[ei].instance;
+            const layout::Rect& ir = legacy::kViews[ei].instance;
             bool all = true;
             for (int y = 0; y < ir.h; ++y)
                 for (int x = 0; x < ir.w; ++x)
-                    all = all && px (cv, w, ir.x - reg.x + x, ir.y - reg.y + y) == 0xff000000u + layout::kViews[ei].markers[0].cover;
+                    all = all && px (cv, w, ir.x - reg.x + x, ir.y - reg.y + y) == 0xff000000u + legacy::kViews[ei].markers[0].cover;
             check (all, "the instance picture (the colour of the slot) is painted over as well: the player never sees it");
         }
         check (clear > static_cast<int> (cv.size()) * 95 / 100, "the plane is transparent except for the dot and the two squares (" + std::to_string (100 * clear / static_cast<int> (cv.size())) + " % clear)");
@@ -515,10 +517,10 @@ int main()
     {
         TempDir dir;
         FakePlane plane;
-        FakeFrame frame;
+        FakeFrame frame; frame.views = legacy::kViews;
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0);
+        Controller ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
         inst.numTargets = 16;
         ctl.attach (&inst);
         double now = 0.0;
@@ -531,14 +533,14 @@ int main()
             if (q == std::string::npos) return "";
             return t.substr (q + std::strlen (key) + 2, t.find ('\n', q) - q - std::strlen (key) - 2);
         };
-        auto viewIndex = [] (const char* name) { for (int i = 0; i < layout::kNumViews; ++i) if (std::string (layout::kViews[i].name) == name) return i; return -1; };
+        auto viewIndex = [] (const char* name) { for (int i = 0; i < legacy::kNumViews; ++i) if (std::string (legacy::kViews[i].name) == name) return i; return -1; };
         const int lfo2 = viewIndex ("lfo2"), osc3 = viewIndex ("osc3"), f2 = viewIndex ("filter2");
         check (lfo2 >= 0 && osc3 >= 0 && f2 >= 0, "the layout has filter2, lfo2 and osc3");
         inst.set ("osc3.on", 1.0f);
         // the LFO 2 tab is on screen
         frame.setView (lfo2, true, 90);
         check (until ([&] { return plane.planeOn; }, 500) >= 0, "the markers of LFO 2: the plane is on");
-        const layout::Rect& r = layout::kViews[lfo2].region;
+        const layout::Rect& r = legacy::kViews[lfo2].region;
         check (plane.lastRect == uiRectToPanel (90, Rect { r.x, r.y, r.w, r.h }, 800, 1280), "the plane is the LFO 2 region");
         run (1200);
         check (line ("state") == "visible" && line ("view") == "lfo2" && ! line ("lfo_shape_hash").empty(), "the status file names the view (lfo2) and has its numbers");
@@ -563,7 +565,7 @@ int main()
         frame.setView (lfo2, false, 90);
         frame.setView (osc3, true, 90);
         check (until ([&] { return plane.planeOn && plane.lastRect.w == 240 && ctl.currentIndex() == osc3; }, 500) >= 0, "the Osc 3 tab: the plane is the Osc 3 region");
-        const layout::Rect& ro = layout::kViews[osc3].region;
+        const layout::Rect& ro = legacy::kViews[osc3].region;
         check (plane.lastRect == uiRectToPanel (90, Rect { ro.x, ro.y, ro.w, ro.h }, 800, 1280), "... exactly");
         run (1200);
         check (line ("view") == "osc3" && ! line ("osc_cycle_hash").empty() && line ("osc_kind") == "wavetable", "the status file names osc3 and has the cycle hash");
@@ -595,7 +597,7 @@ int main()
     // ---- two instances with different settings: every view type shows the data of the instance whose slot colour is on screen ---------------------------------------------------
     {
         struct Shot { std::vector<uint32_t> picture; uint32_t hash = 0; };
-        auto viewIndex = [] (const char* name) { for (int i = 0; i < layout::kNumViews; ++i) if (std::string (layout::kViews[i].name) == name) return i; return -1; };
+        auto viewIndex = [] (const char* name) { for (int i = 0; i < legacy::kNumViews; ++i) if (std::string (legacy::kViews[i].name) == name) return i; return -1; };
         // the setups of the two instances; the reference is a controller with ONE instance of the same settings
         auto setupA = [] (FakeInstance& i)
         {
@@ -616,8 +618,8 @@ int main()
         };
         auto shot = [&] (const char* view, auto setup)
         {
-            TempDir dir; FakePlane plane; FakeFrame frame; CpuCurveRenderer renderer; FakeInstance inst;
-            Controller ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0);
+            TempDir dir; FakePlane plane; FakeFrame frame; CpuCurveRenderer renderer; FakeInstance inst; frame.views = legacy::kViews;
+            Controller ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
             setup (inst);
             ctl.attach (&inst);
             const int v = viewIndex (view);
@@ -629,8 +631,8 @@ int main()
             s.hash = ctl.currentView() ? ctl.currentView()->hash() : 0u;
             return s;
         };
-        TempDir dir; FakePlane plane; FakeFrame frame; CpuCurveRenderer renderer; FakeInstance a, b;
-        Controller ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0);
+        TempDir dir; FakePlane plane; FakeFrame frame; CpuCurveRenderer renderer; FakeInstance a, b; frame.views = legacy::kViews;
+        Controller ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
         setupA (a); setupB (b);
         check (ctl.attach (&a) == 0 && ctl.attach (&b) == 1, "two instances: slots 0 and 1");
         double now = 0.0;

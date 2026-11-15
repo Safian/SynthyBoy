@@ -40,6 +40,7 @@
 #include "ui_stack.h"
 #include "vblank_pacer.h"
 #include "view.h"
+#include "pages.h"
 #include "play_view.h"
 #include "views.h"
 
@@ -78,12 +79,12 @@ class Controller
 public:
     /** `gpu`: the GPU helper (null: the CPU draws everything, as without the helper). Not owned. */
     Controller (IPlaneBackend& backend, IFrameSource& frames, ICurveRenderer& renderer, const Paths& paths, const Timing& timing = Timing(), double fixedComputeCostMs = -1.0,
-                gpu::IGpuOverlay* gpuOverlay = nullptr, ITouchInput* touchInput = nullptr)
-        : backend_ (backend), presenter_ (backend), frames_ (frames), renderer_ (renderer), paths_ (paths), timing_ (timing), fixedCost_ (fixedComputeCostMs), gpu_ (gpuOverlay), touchIn_ (touchInput)
+                gpu::IGpuOverlay* gpuOverlay = nullptr, ITouchInput* touchInput = nullptr, const layout::View* viewTable = layout::kViews, int numViews = layout::kNumViews)
+        : views_tbl_ (viewTable), numViews_ (std::min (numViews, static_cast<int> (Detection::kMaxViews))), backend_ (backend), presenter_ (backend), frames_ (frames), renderer_ (renderer), paths_ (paths), timing_ (timing), fixedCost_ (fixedComputeCostMs), gpu_ (gpuOverlay), touchIn_ (touchInput)
     {
-        for (int i = 0; i < layout::kNumViews; ++i)
+        for (int i = 0; i < numViews_; ++i)
         {
-            const layout::View& v = layout::kViews[i];
+            const layout::View& v = views_tbl_[i];
             for (int m = 0; m < 2; ++m)
                 markers_[i * 2 + m] = { { v.markers[m].rect.x, v.markers[m].rect.y, v.markers[m].rect.w, v.markers[m].rect.h }, v.markers[m].rgb };
             regions_[i] = { v.region.x, v.region.y, v.region.w, v.region.h };
@@ -94,9 +95,11 @@ public:
             views_.back()->targets (targets_);
             targetCount_[i] = static_cast<int> (targets_.size()) - targetBase_[i];
         }
-        detector_ = std::make_unique<PageDetector> (frames_, markers_, layout::kNumViews, instanceRects_);
+        detector_ = std::make_unique<PageDetector> (frames_, markers_, numViews_, instanceRects_);
         for (int& s : viewSlot_)
             s = -1;
+        for (int& g : uiGroup_)
+            g = -1;
     }
 
     /** The table indices the overlay wants in the engine's readout (IEngine::setReadoutTargets), all views together; view i's targets start at targetBase (i). */
@@ -113,6 +116,8 @@ public:
                 OscView (v.index, -1.0).targets (out);
             else if (v.kind == layout::kKindPlay)
                 PlayView (v.index, -1.0).targets (out);
+            else if (layout::isPageKind (v.kind))
+                pages::make (v)->targets (out);
         }
     }
 
@@ -132,7 +137,10 @@ public:
         std::lock_guard<std::mutex> g (mu_);
         const int slot = slots_.acquire (view);
         if (slot >= 0)
+        {
             ui_[slot] = UiStack();   // a new instance starts in main
+            uiGroup_[slot] = -1;
+        }
         return slot;
     }
     /** Returns the number of instances left. After it returns the overlay thread no longer touches `view` (the same lock guards every use of an instance). */
@@ -141,7 +149,10 @@ public:
         std::lock_guard<std::mutex> g (mu_);
         const int slot = slots_.slotOf (view);
         if (slot >= 0)
+        {
             ui_[slot] = UiStack();
+            uiGroup_[slot] = -1;
+        }
         slots_.release (view);
         return static_cast<size_t> (slots_.total());
     }
@@ -485,8 +496,24 @@ private:
         return slot >= 0 && slot < layout::kMaxInstances && slots_.at (slot) != nullptr && f (ui_[slot]);
     }
 
-    /** The views that belong to the Play page (and to the full-screen page of the plugin drawn over it): the stack of an instance lives while one of these is on screen for it. */
-    static bool isUiPage (int view) noexcept { return view >= 0 && view < layout::kNumViews && layout::kViews[view].kind == layout::kKindPlay; }
+    /** The views the plugin draws entirely (the Play page with the full-screen pages over it, and the pages of the elements, page_view.h): the stack of an instance lives while one of these is on screen for it. */
+    bool isUiPage (int view) const noexcept { return view >= 0 && view < numViews_ && layout::isPageKind (views_tbl_[view].kind); }
+
+    /** The stack of the instance in `slot` belongs to a group of views: the three views of the Play page share one (the full screen of an element stays open when its sub-tab changes), every page of an
+        element has its own. Another group on screen: the stack closes, and a page that always shows its element's page opens it. */
+    void ensureUiPage (int slot, int view)
+    {
+        UiStack& u = ui_[slot];
+        const int group = views_tbl_[view].kind == layout::kKindPlay ? 0 : view + 1;
+        if (uiGroup_[slot] != group)
+        {
+            u.closeAll();
+            uiGroup_[slot] = group;
+        }
+        const int element = views_[static_cast<size_t> (view)]->pageElement();
+        if (element >= 0 && (u.isMain() || u.element() != element))
+            u.openFull (element);
+    }
 
     /** After a page check: the stack of every instance closes whose page is no longer on screen (the user pressed another function key, Mixer, ...). Only a READABLE check says so: a screen that
         sleeps, an unreadable framebuffer, an ambiguous rotation and an instance picture that is not drawn yet (the page IS there, the instance is not told) change nothing. */
@@ -525,7 +552,7 @@ private:
 
     std::unique_ptr<IView> makeView (int i)
     {
-        const layout::View& v = layout::kViews[i];
+        const layout::View& v = views_tbl_[i];
         switch (v.kind)
         {
             case layout::kKindFilter: return std::make_unique<FilterView> (v.index, renderer_, fixedCost_);
@@ -534,7 +561,10 @@ private:
             case layout::kKindEnv: return std::make_unique<EnvView> (v.index, v);
             case layout::kKindSpectrum: return std::make_unique<SpectrumView>();
             case layout::kKindPlay: return std::make_unique<PlayView> (v.index, fixedCost_);
-            default: return std::make_unique<NullView> (v.name);
+            default:
+                if (layout::isPageKind (v.kind))
+                    return pages::make (v);
+                return std::make_unique<NullView> (v.name);
         }
     }
 
@@ -575,6 +605,8 @@ private:
             viewGeneration_[current_] = slots_.generation (activeSlot_);
             needFrame_ = true;
         }
+        if (isUiPage (current_))
+            ensureUiPage (activeSlot_, current_);
         IView& view = *views_[static_cast<size_t> (current_)];
         synthyboy::LiveValues lv;
         const bool haveLive = v->live (lv);
@@ -1102,16 +1134,16 @@ private:
             o << "full_recomputes_last_second: " << (v.counters().recomputes - recomputesAtSecond_) << "\n";
             v.writeStatus (o);
         }
-        for (int i = 0; i < layout::kNumViews; ++i)
+        for (int i = 0; i < numViews_; ++i)
         {
             const ViewCounters& c = views_[static_cast<size_t> (i)]->counters();
-            o << "view_" << layout::kViews[i].name << ": updates=" << c.updates << " changes=" << c.changes << " recomputes=" << c.recomputes << " frames=" << viewFrames_[static_cast<size_t> (i)].frames << "\n";
+            o << "view_" << views_tbl_[i].name << ": updates=" << c.updates << " changes=" << c.changes << " recomputes=" << c.recomputes << " frames=" << viewFrames_[static_cast<size_t> (i)].frames << "\n";
         }
         char buf[200];
-        for (int i = 0; i < layout::kNumViews; ++i)
+        for (int i = 0; i < numViews_; ++i)
         {
-            std::snprintf (buf, sizeof buf, "markers_read_%s: left=%06x right=%06x (expected %06x %06x)\n", layout::kViews[i].name, seen_[i][0] & 0xffffff, seen_[i][1] & 0xffffff,
-                           layout::kViews[i].markers[0].rgb, layout::kViews[i].markers[1].rgb);
+            std::snprintf (buf, sizeof buf, "markers_read_%s: left=%06x right=%06x (expected %06x %06x)\n", views_tbl_[i].name, seen_[i][0] & 0xffffff, seen_[i][1] & 0xffffff,
+                           views_tbl_[i].markers[0].rgb, views_tbl_[i].markers[1].rgb);
             o << buf;
         }
         o << "panel: " << presenter_.panelWidth() << "x" << presenter_.panelHeight() << "\n";
@@ -1201,6 +1233,8 @@ private:
     static constexpr double kTouchPollMs = 12.0;     // the touch screen is read this often while the Play page is on screen
     static constexpr double kMinFrameGapMs = 5.0;    // never faster than this (a present waits for the vblank, 16.7 ms, anyway)
     static constexpr double kSlackMs = 3.0;
+    const layout::View* views_tbl_;   // the views of the skin (overlay_layout.h; a test gives its own table)
+    int numViews_;
     IPlaneBackend& backend_;
     Presenter presenter_;
     IFrameSource& frames_;
@@ -1219,8 +1253,8 @@ private:
     unsigned planeLosses_ = 0, planeRefreshes_ = 0;
     std::string planeNote_ = "not on yet";
     static_assert (layout::kNumViews <= Detection::kMaxViews, "the detector and the status file hold kMaxViews views: raise it with the layout");
-    MarkerSpec markers_[layout::kNumViews * 2];
-    Rect regions_[layout::kNumViews];
+    MarkerSpec markers_[Detection::kMaxViews * 2];
+    Rect regions_[Detection::kMaxViews];
     ITouchInput* touchIn_ = nullptr;
     bool qlinkPanel_ = false, autoReduced_ = false;
     double renderAcc_ = 0.0, detailMeanMs_ = 0.0;
@@ -1238,22 +1272,23 @@ private:
     int look_ = 1;
     unsigned long qlinkPanelChanges_ = 0;
     unsigned long touchEvents_ = 0, touchTaken_ = 0;
-    Rect instanceRects_[layout::kNumViews];
-    int targetBase_[layout::kNumViews] = {};
-    int targetCount_[layout::kNumViews] = {};
+    Rect instanceRects_[Detection::kMaxViews];
+    int targetBase_[Detection::kMaxViews] = {};
+    int targetCount_[Detection::kMaxViews] = {};
     std::vector<int> targets_;
     std::vector<std::unique_ptr<IView>> views_;
     struct ViewFrames { unsigned long frames = 0, changes = 0; };
-    std::vector<ViewFrames> viewFrames_ = std::vector<ViewFrames> (layout::kNumViews);
+    std::vector<ViewFrames> viewFrames_ = std::vector<ViewFrames> (Detection::kMaxViews);
     std::unique_ptr<PageDetector> detector_;
     std::vector<uint32_t> canvas_;
 
     std::mutex mu_;
     InstanceSlots slots_;                    // under mu_
     UiStack ui_[layout::kMaxInstances];      // under mu_: the plugin-drawn pages of the instance in each slot
+    int uiGroup_[layout::kMaxInstances];     // under mu_: the group of views (ensureUiPage) the stack of each slot belongs to; -1: none yet
     unsigned long uiAutoCloses_ = 0;         // stacks closed because the page left the screen (under mu_)
-    int viewSlot_[layout::kNumViews];        // the slot whose instance each view object last read (-1: none yet); overlay thread
-    unsigned long viewGeneration_[layout::kNumViews] = {};   // ... and which holder of that slot it was (InstanceSlots::generation): a slot given to a NEW instance is not the same instance
+    int viewSlot_[Detection::kMaxViews];        // the slot whose instance each view object last read (-1: none yet); overlay thread
+    unsigned long viewGeneration_[Detection::kMaxViews] = {};   // ... and which holder of that slot it was (InstanceSlots::generation): a slot given to a NEW instance is not the same instance
     int activeSlot_ = -1, seenSlot_ = kSlotUnknown;   // the instance of the visible view / what the last check read (the status file)
     uint32_t instanceSeen_ = 0xffffffffu;
     unsigned long rereports_ = 0;

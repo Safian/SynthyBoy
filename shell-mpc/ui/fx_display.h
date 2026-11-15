@@ -1,13 +1,18 @@
-// SynthyBoy - MPC UI component library: the FX DISPLAY component (FxDisplay).
-// Specialized visual displays for effect types: EQ frequency curve, compressor transfer curve + live GR,
-// delay beat grid, filter frequency response, distortion waveshaping curve.
+// SynthyBoy - MPC UI component library: the FX DISPLAY component (FxDisplay): the picture of what an effect does, drawn from the parameters of the selected slot with thin smooth lines:
+//   EQ          the frequency response of the bands (low shelf / high pass, peak / notch, second peak / notch, high shelf / low pass: the textbook biquads of the settings), with a dot at the centre of each band
+//   COMPRESSOR  the transfer curve (input level to output level) of the bands (the three bands of the multiband compressor in three colours, the one that is on screen for the others): below the lower
+//               threshold the lower ratio, between the thresholds 1 : 1, above the upper threshold the upper ratio, and the make-up gain of the band
+//   DELAY       the echoes in time: the two taps (left above the line, right under it), the repeats with the feedback, the time axis in milliseconds (a tempo sync is turned into milliseconds by the owner)
+//   FX FILTER   the response of the filter (the owner computes it with the engine's own filter, the same as the filter page), a line with a faint fill
+//   DISTORTION  the transfer curve of the waveshaper (the type and the drive), with the identity as a reference
+// The other effects have no display (the editor gives their knobs the room). Same contract as every component (core.h): a state in, no touch.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
 #include <algorithm>
 #include <cmath>
-#include <vector>
+#include <cstdio>
 
 #include "core.h"
 #include "synthyboy/fx_types.h"
@@ -17,60 +22,23 @@ namespace synthyboy_mpc { namespace ui {
 class FxDisplay : public Component
 {
 public:
-    enum class Kind : uint8_t
-    {
-        None,
-        Eq,
-        Compressor,
-        Delay,
-        Filter,
-        Distortion,
-        Generic
-    };
+    enum class Kind : uint8_t { None, Eq, Compressor, Delay, Filter, Distortion };
 
-    struct EqParams
-    {
-        float lowFreq = 100.0f, lowGain = 0.0f, lowQ = 0.7f;
-        float midFreq = 1000.0f, midGain = 0.0f, midQ = 1.0f;
-        float mid2Freq = 3000.0f, mid2Gain = 0.0f, mid2Q = 1.0f;
-        float highFreq = 8000.0f, highGain = 0.0f, highQ = 0.7f;
-    };
-
-    struct CompParams
-    {
-        float threshold = -18.0f; // dB
-        float ratio = 4.0f;       // 1 .. 20
-        float knee = 6.0f;        // dB
-        float gainReduction = 0.0f; // dB (0 .. 20)
-    };
-
-    struct DelayParams
-    {
-        float timeMs1 = 250.0f, timeMs2 = 375.0f;
-        float feedback = 0.4f;
-        bool sync = false;
-        int div1 = 5, div2 = 6;
-    };
-
-    struct FilterParams
-    {
-        float cutoff = 2000.0f;
-        float resonance = 0.5f;
-        int mode = 0; // 0 Lowpass, 1 Highpass, 2 Bandpass, 3 Notch
-    };
-
-    struct DistParams
-    {
-        float drive = 0.0f; // dB
-        int type = 0;       // 0 Soft, 1 Hard, 2 Fold, 3 Tube
-    };
+    /** One band of the EQ: mode 0 = the band's first mode (low: shelf, mid: peak, high: shelf), 1 = the second (high pass, notch, low pass); `used` false: the band is off (the second mid band). */
+    struct EqBand { bool used = true; int mode = 0; float freq = 1000.0f, gainDb = 0.0f, resonance = 30.0f; };
+    struct EqState { EqBand low, mid, mid2, high; };
+    struct CompBand { float lowerThr = -40.0f, upperThr = -20.0f, lowerRatio = 0.0f, upperRatio = 0.5f, gainDb = 0.0f; };   // dB, ratios -1 .. +1 and 0 .. 1 (the percent / 100)
+    struct CompState { CompBand band[3]; int bands = 0; int activeBand = 1; };   // bands: 0 multiband, 1 low only, 2 high only, 3 one band
+    struct DelayState { float timeMs1 = 300.0f, timeMs2 = 300.0f, feedback = 0.4f; int style = 1; };   // style: 0 mono, 1 stereo, 2 ping pong, 3 mid ping pong, 4 tap -> delay
+    struct FilterState { const float* db = nullptr; int n = 0; float cutoffHz = 1000.0f; };   // dB at 20 Hz .. 20 kHz (log axis), the cutoff for the mark
+    struct DistState { int type = 0; float driveDb = 0.0f; float mix = 1.0f; };
 
     Kind kind = Kind::None;
-    EqParams eq;
-    CompParams comp;
-    DelayParams delay;
-    FilterParams filter;
-    DistParams dist;
+    EqState eq;
+    CompState comp;
+    DelayState delay;
+    FilterState filter;
+    DistState dist;
     char title[24] = {};
 
     FxDisplay() = default;
@@ -80,253 +48,342 @@ public:
     void setKind (Kind k, const char* name = nullptr)
     {
         kind = k;
-        if (name) setText (title, sizeof title, name);
+        setText (title, sizeof title, name != nullptr ? name : "");
     }
-
-    void setKindFromType (int fxType)
+    /** The kind of display an effect type has (None: no display). */
+    static Kind kindOfType (int fxType) noexcept
     {
         switch (fxType)
         {
-            case synthyboy::kFxTypeEq: setKind (Kind::Eq, "EQUALIZER"); break;
-            case synthyboy::kFxTypeCompressor: setKind (Kind::Compressor, "COMPRESSOR"); break;
-            case synthyboy::kFxTypeDelay: setKind (Kind::Delay, "DELAY"); break;
-            case synthyboy::kFxTypeFilter: setKind (Kind::Filter, "FX FILTER"); break;
-            case synthyboy::kFxTypeDistortion: setKind (Kind::Distortion, "DISTORTION"); break;
-            default: setKind (Kind::Generic, "EFFECT"); break;
+            case synthyboy::kFxTypeEq: return Kind::Eq;
+            case synthyboy::kFxTypeCompressor: return Kind::Compressor;
+            case synthyboy::kFxTypeDelay: return Kind::Delay;
+            case synthyboy::kFxTypeFilter: return Kind::Filter;
+            case synthyboy::kFxTypeDistortion: return Kind::Distortion;
+            default: return Kind::None;
+        }
+    }
+    void setKindFromType (int fxType)
+    {
+        switch (kindOfType (fxType))
+        {
+            case Kind::Eq: setKind (Kind::Eq, "EQUALIZER"); break;
+            case Kind::Compressor: setKind (Kind::Compressor, "COMPRESSOR"); break;
+            case Kind::Delay: setKind (Kind::Delay, "ECHOES"); break;
+            case Kind::Filter: setKind (Kind::Filter, "FILTER RESPONSE"); break;
+            case Kind::Distortion: setKind (Kind::Distortion, "WAVESHAPER"); break;
+            default: setKind (Kind::None, ""); break;
+        }
+    }
+
+    static constexpr int kPoints = 192;
+    /** The gain in dB of one EQ band at `f` Hz: the biquads of the Audio EQ Cookbook (shelf, peak, notch, high pass, low pass) at 48 kHz; the resonance 0 .. 100 % is the Q 0.5 .. 10. */
+    static float bandDb (int bandIndex, const EqBand& b, float f) noexcept
+    {
+        if (! b.used)
+            return 0.0f;
+        const float fs = 48000.0f, w0 = 2.0f * kPi * std::clamp (b.freq, 20.0f, 20000.0f) / fs, cw = std::cos (w0), sw = std::sin (w0);
+        const float q = 0.5f * std::pow (20.0f, std::clamp (b.resonance, 0.0f, 100.0f) * 0.01f), a = std::pow (10.0f, b.gainDb / 40.0f), alpha = sw / (2.0f * q);
+        float b0, b1, b2, a0, a1, a2;
+        const bool low = bandIndex == 0, high = bandIndex == 3;
+        if (low && b.mode == 0)   // low shelf
+        {
+            const float s = 2.0f * std::sqrt (a) * alpha;
+            b0 = a * ((a + 1.0f) - (a - 1.0f) * cw + s); b1 = 2.0f * a * ((a - 1.0f) - (a + 1.0f) * cw); b2 = a * ((a + 1.0f) - (a - 1.0f) * cw - s);
+            a0 = (a + 1.0f) + (a - 1.0f) * cw + s; a1 = -2.0f * ((a - 1.0f) + (a + 1.0f) * cw); a2 = (a + 1.0f) + (a - 1.0f) * cw - s;
+        }
+        else if (high && b.mode == 0)   // high shelf
+        {
+            const float s = 2.0f * std::sqrt (a) * alpha;
+            b0 = a * ((a + 1.0f) + (a - 1.0f) * cw + s); b1 = -2.0f * a * ((a - 1.0f) + (a + 1.0f) * cw); b2 = a * ((a + 1.0f) + (a - 1.0f) * cw - s);
+            a0 = (a + 1.0f) - (a - 1.0f) * cw + s; a1 = 2.0f * ((a - 1.0f) - (a + 1.0f) * cw); a2 = (a + 1.0f) - (a - 1.0f) * cw - s;
+        }
+        else if (low)   // high pass
+        {
+            b0 = (1.0f + cw) * 0.5f; b1 = -(1.0f + cw); b2 = b0; a0 = 1.0f + alpha; a1 = -2.0f * cw; a2 = 1.0f - alpha;
+        }
+        else if (high)   // low pass
+        {
+            b0 = (1.0f - cw) * 0.5f; b1 = 1.0f - cw; b2 = b0; a0 = 1.0f + alpha; a1 = -2.0f * cw; a2 = 1.0f - alpha;
+        }
+        else if (b.mode == 0)   // peak
+        {
+            b0 = 1.0f + alpha * a; b1 = -2.0f * cw; b2 = 1.0f - alpha * a; a0 = 1.0f + alpha / a; a1 = -2.0f * cw; a2 = 1.0f - alpha / a;
+        }
+        else   // notch
+        {
+            b0 = 1.0f; b1 = -2.0f * cw; b2 = 1.0f; a0 = 1.0f + alpha; a1 = -2.0f * cw; a2 = 1.0f - alpha;
+        }
+        const float w = 2.0f * kPi * f / fs, c1 = std::cos (w), s1 = std::sin (w), c2 = std::cos (2.0f * w), s2 = std::sin (2.0f * w);
+        const float nr = b0 + b1 * c1 + b2 * c2, ni = -(b1 * s1 + b2 * s2), dr = a0 + a1 * c1 + a2 * c2, di = -(a1 * s1 + a2 * s2);
+        return 10.0f * std::log10 (std::max (1.0e-12f, (nr * nr + ni * ni) / std::max (1.0e-12f, dr * dr + di * di)));
+    }
+    /** One transfer curve of the compressor: the output level in dB for the input level x (dB). */
+    static float compOut (const CompBand& b, float x) noexcept
+    {
+        float y = x;
+        if (x > b.upperThr)
+            y = b.upperThr + (x - b.upperThr) * (1.0f - std::clamp (b.upperRatio, 0.0f, 1.0f));
+        else if (x < b.lowerThr)
+            y = b.lowerThr + (x - b.lowerThr) * (1.0f - std::clamp (b.lowerRatio, -1.0f, 1.0f));
+        return y + b.gainDb;
+    }
+    /** The waveshaper: output for the input x (-1 .. +1) with the gain of the drive. */
+    static float shape (int type, float driveDb, float x) noexcept
+    {
+        const float d = std::pow (10.0f, driveDb / 20.0f), v = d * x;
+        switch (type)
+        {
+            case 1: return std::clamp (v, -1.0f, 1.0f);                                                   // hard clip
+            case 2: { const float t = std::fmod (v + 1.0f, 4.0f); const float u = t < 0.0f ? t + 4.0f : t; return u < 2.0f ? u - 1.0f : 3.0f - u; }   // linear fold: a triangle
+            case 3: return std::sin (v * 0.5f * kPi);                                                        // sine fold
+            case 4: return std::round (std::clamp (v, -1.0f, 1.0f) * 6.0f) / 6.0f;                       // bit crush: steps
+            default: return std::tanh (v);                                                                   // soft clip and the others
+        }
+    }
+
+    void draw (gpu::SceneBuilder& sb) const override
+    {
+        if (kind == Kind::None)
+            return;
+        Pen p (sb, enabled_);
+        Cell cell (sb, rect_);
+        const theme::Look& T = theme::L();
+        p.block (rect_, false);
+        p.textLeft ({ rect_.x + 12, rect_.y + 3, 260, 16 }, title, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+        const Rect plot { rect_.x + 44, rect_.y + 22, std::max (0, rect_.w - 44 - 16), std::max (0, rect_.h - 22 - 24) };
+        if (plot.w < 40 || plot.h < 30)
+            return;
+        switch (kind)
+        {
+            case Kind::Eq: drawEq (p, sb, plot); break;
+            case Kind::Compressor: drawCompressor (p, sb, plot); break;
+            case Kind::Delay: drawDelay (p, sb, plot); break;
+            case Kind::Filter: drawFilter (p, sb, plot); break;
+            case Kind::Distortion: drawDistortion (p, sb, plot); break;
+            default: break;
         }
     }
 
 protected:
-    void drawBody (Pen& p) const override
-    {
-        const theme::Look& T = theme::L();
-        p.block (rect_, false);
-        p.rrect (rect_, 6.0f, p.c (T.keyline, 160), 1.0f);
-
-        // Header caption
-        p.text (static_cast<float> (rect_.x + 10), static_cast<float> (rect_.y + 18),
-                T.fSmall, title, p.c (T.textDim, 200));
-
-        const Rect in = rect_.inset (10);
-        const int plotY = in.y + 16;
-        const int plotH = in.h - 18;
-        const Rect plot { in.x, plotY, in.w, plotH };
-
-        switch (kind)
-        {
-            case Kind::Eq: drawEq (p, plot); break;
-            case Kind::Compressor: drawCompressor (p, plot); break;
-            case Kind::Delay: drawDelay (p, plot); break;
-            case Kind::Filter: drawFilter (p, plot); break;
-            case Kind::Distortion: drawDistortion (p, plot); break;
-            default: drawGeneric (p, plot); break;
-        }
-    }
+    void drawBody (Pen&) const override {}
 
 private:
-    void drawEq (Pen& p, const Rect& plot) const
+    static float xOfHz (float hz, const Rect& r) noexcept { return static_cast<float> (r.x) + std::clamp (std::log10 (hz / 20.0f) / 3.0f, 0.0f, 1.0f) * static_cast<float> (r.w); }
+
+    /** The vertical grid line with its label, and the frequency axis of a plot. */
+    void freqGrid (Pen& p, const Rect& plot) const
     {
         const theme::Look& T = theme::L();
-        const float midY = static_cast<float> (plot.y + plot.h / 2);
-        const float x0 = static_cast<float> (plot.x), x1 = static_cast<float> (plot.right());
-
-        // Grid lines: 0 dB center line, 100 Hz, 1 kHz, 10 kHz
-        p.line (x0, midY, x1, midY, 1.0f, p.c (T.keyline, 140));
-
-        const float freqGrid[] = { 100.0f, 1000.0f, 10000.0f };
-        for (float f : freqGrid)
+        static const struct { float hz; const char* name; } kDecade[3] = { { 100.0f, "100" }, { 1000.0f, "1k" }, { 10000.0f, "10k" } };
+        for (const auto& d : kDecade)
         {
-            const float normX = (std::log10 (f) - std::log10 (20.0f)) / (std::log10 (20000.0f) - std::log10 (20.0f));
-            const float gx = x0 + normX * static_cast<float> (plot.w);
-            p.line (gx, static_cast<float> (plot.y), gx, static_cast<float> (plot.bottom()), 1.0f, p.c (T.keyline, 80));
+            const float x = xOfHz (d.hz, plot);
+            p.line (x, static_cast<float> (plot.y), x, static_cast<float> (plot.bottom()), 1.0f, p.c (T.grid, 255));
+            p.textCentered ({ static_cast<int> (x) - 24, plot.bottom() + 3, 48, 16 }, d.name, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
         }
+        p.textLeft ({ plot.x, plot.bottom() + 3, 46, 16 }, "20 Hz", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        p.textRight ({ plot.right() - 50, plot.bottom() + 3, 50, 16 }, "20 kHz", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+    }
+    /** A horizontal line of a level scale with its label at the left of the plot. */
+    void levelLine (Pen& p, const Rect& plot, float y, const char* label, bool strong) const
+    {
+        const theme::Look& T = theme::L();
+        p.line (static_cast<float> (plot.x), y, static_cast<float> (plot.right()), y, 1.0f, p.c (T.grid, strong ? 255 : 150));
+        p.textRight ({ plot.x - 42, static_cast<int> (y) - 8, 38, 16 }, label, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+    }
+    /** A curve of n rows over the plot's width: the line, with a fill to `fillTo` (0: none). */
+    static void curveLine (gpu::SceneBuilder& sb, const Rect& plot, const float* rows, int n, uint32_t col, float width, int fillAlpha, float fillTo)
+    {
+        sb.curve (rows, n, plot.x, plot.w);
+        if (fillAlpha > 0)
+            sb.fill (fillTo, colour::rgba (col, static_cast<uint32_t> (fillAlpha)));
+        sb.stroke (width, colour::rgba (col, 255));
+    }
 
-        // Compute EQ curve
-        constexpr int kPoints = 64;
-        float prevX = x0, prevY = midY;
-
+    void drawEq (Pen& p, gpu::SceneBuilder& sb, const Rect& plot) const
+    {
+        const theme::Look& T = theme::L();
+        freqGrid (p, plot);
+        const float range = 24.0f;   // +- 24 dB
+        auto yOf = [&] (float db) { return static_cast<float> (plot.y) + (0.5f - std::clamp (db, -range, range) / (2.0f * range)) * static_cast<float> (plot.h); };
+        levelLine (p, plot, yOf (12.0f), "+12", false);
+        levelLine (p, plot, yOf (0.0f), "0 dB", true);
+        levelLine (p, plot, yOf (-12.0f), "-12", false);
+        const EqBand* bands[4] = { &eq.low, &eq.mid, &eq.mid2, &eq.high };
+        float rows[kPoints];
         for (int i = 0; i < kPoints; ++i)
         {
-            const float t = static_cast<float> (i) / static_cast<float> (kPoints - 1);
-            const float freq = 20.0f * std::pow (1000.0f, t);
-            const float px = x0 + t * static_cast<float> (plot.w);
-
-            // Combined response in dB
-            float gainDb = 0.0f;
-            // Low shelf
-            const float lowRatio = freq / std::max (20.0f, eq.lowFreq);
-            gainDb += eq.lowGain / (1.0f + lowRatio * lowRatio);
-            // Mid peaking band 1
-            const float midRatio = std::log2 (freq / std::max (20.0f, eq.midFreq));
-            gainDb += eq.midGain * std::exp (-0.5f * (midRatio * midRatio) / (0.5f * eq.midQ));
-            // Mid peaking band 2
-            const float mid2Ratio = std::log2 (freq / std::max (20.0f, eq.mid2Freq));
-            gainDb += eq.mid2Gain * std::exp (-0.5f * (mid2Ratio * mid2Ratio) / (0.5f * eq.mid2Q));
-            // High shelf
-            const float highRatio = std::max (20.0f, eq.highFreq) / freq;
-            gainDb += eq.highGain / (1.0f + highRatio * highRatio);
-
-            const float py = midY - (gainDb / 24.0f) * (static_cast<float> (plot.h) * 0.45f);
-            const float clampedY = std::clamp (py, static_cast<float> (plot.y), static_cast<float> (plot.bottom()));
-
-            if (i > 0)
-                p.line (prevX, prevY, px, clampedY, 2.0f, p.c (T.flow[0], 255));
-            prevX = px;
-            prevY = clampedY;
+            const float f = 20.0f * std::pow (1000.0f, static_cast<float> (i) / static_cast<float> (kPoints - 1));
+            float db = 0.0f;
+            for (int b = 0; b < 4; ++b)
+                db += bandDb (b, *bands[b], f);
+            rows[i] = yOf (db);
         }
-    }
-
-    void drawCompressor (Pen& p, const Rect& plot) const
-    {
-        const theme::Look& T = theme::L();
-        const int grW = 16;
-        const Rect curveBox { plot.x, plot.y, plot.w - grW - 8, plot.h };
-        const Rect grBox { plot.right() - grW, plot.y, grW, plot.h };
-
-        // 1. I/O Transfer Curve (-60 dB to 0 dB)
-        p.rrect (curveBox, 3.0f, p.c (T.keyline, 100), 1.0f);
-        const float cx0 = static_cast<float> (curveBox.x), cy0 = static_cast<float> (curveBox.bottom());
-        const float cw = static_cast<float> (curveBox.w), ch = static_cast<float> (curveBox.h);
-
-        // 1:1 Reference line
-        p.line (cx0, cy0, cx0 + cw, cy0 - ch, 1.0f, p.c (T.keyline, 100));
-
-        // Threshold marker
-        const float threshNorm = std::clamp ((comp.threshold + 60.0f) / 60.0f, 0.0f, 1.0f);
-        const float tx = cx0 + threshNorm * cw;
-        const float ty = cy0 - threshNorm * ch;
-        p.line (tx, static_cast<float> (curveBox.y), tx, static_cast<float> (curveBox.bottom()), 1.0f, p.c (T.textDim, 80));
-
-        // Transfer line with threshold + ratio
-        p.line (cx0, cy0, tx, ty, 2.0f, p.c (T.flow[0], 255));
-        const float slope = 1.0f / std::max (1.0f, comp.ratio);
-        const float endNormY = threshNorm + (1.0f - threshNorm) * slope;
-        const float ey = cy0 - endNormY * ch;
-        p.line (tx, ty, cx0 + cw, ey, 2.0f, p.c (T.flow[0], 255));
-        p.disc (tx, ty, 3.5f, p.c (T.flow[1], 255));
-
-        // 2. Gain Reduction Meter
-        p.rect (grBox, p.c (T.panel1, 255));
-        p.rrect (grBox, 2.0f, p.c (T.keyline, 140), 1.0f);
-        const float grNorm = std::clamp (comp.gainReduction / 20.0f, 0.0f, 1.0f);
-        if (grNorm > 0.02f)
-        {
-            const int barH = static_cast<int> (grNorm * ch);
-            p.rect ({ grBox.x + 1, grBox.y + 1, grBox.w - 2, barH }, p.c (0xffd84a, 230));
-        }
-        p.textCentered ({ grBox.x - 4, grBox.bottom() - 14, grBox.w + 8, 14 }, "GR", T.fMin, p.c (T.textDim, 200));
-    }
-
-    void drawDelay (Pen& p, const Rect& plot) const
-    {
-        const theme::Look& T = theme::L();
-        const float midY = static_cast<float> (plot.y + plot.h / 2);
-        const float w = static_cast<float> (plot.w);
-
-        // Grid lines for beat divisions
-        p.line (static_cast<float> (plot.x), midY, static_cast<float> (plot.right()), midY, 1.0f, p.c (T.keyline, 120));
-        for (int i = 1; i <= 8; ++i)
-        {
-            const float gx = static_cast<float> (plot.x) + (static_cast<float> (i) / 8.0f) * w;
-            p.line (gx, static_cast<float> (plot.y), gx, static_cast<float> (plot.bottom()), 1.0f, p.c (T.keyline, 60));
-        }
-
-        // Tap 1 (Left)
-        const float tap1X = static_cast<float> (plot.x) + std::clamp (delay.timeMs1 / 1000.0f, 0.05f, 0.95f) * w;
-        p.line (tap1X, midY, tap1X, midY - 30.0f, 2.0f, p.c (T.flow[0], 255));
-        p.disc (tap1X, midY - 30.0f, 3.5f, p.c (T.flow[0], 255));
-        p.text (tap1X + 4.0f, midY - 20.0f, T.fMin, "L", p.c (T.text, 240));
-
-        // Tap 2 (Right)
-        const float tap2X = static_cast<float> (plot.x) + std::clamp (delay.timeMs2 / 1000.0f, 0.05f, 0.95f) * w;
-        p.line (tap2X, midY, tap2X, midY + 30.0f, 2.0f, p.c (T.flow[1], 255));
-        p.disc (tap2X, midY + 30.0f, 3.5f, p.c (T.flow[1], 255));
-        p.text (tap2X + 4.0f, midY + 24.0f, T.fMin, "R", p.c (T.text, 240));
-
-        // Echo decay ghosts
-        float f1 = delay.feedback;
-        for (int e = 1; e <= 3; ++e)
-        {
-            const float echoX = tap1X + static_cast<float> (e) * 40.0f;
-            if (echoX < static_cast<float> (plot.right()))
+        curveLine (sb, plot, rows, kPoints, T.flow[0], 0.8f, 30, yOf (0.0f));
+        for (int b = 0; b < 4; ++b)   // the centre of every band that is on
+            if (bands[b]->used)
             {
-                const float h = 30.0f * std::pow (f1, static_cast<float> (e));
-                p.line (echoX, midY, echoX, midY - h, 1.2f, p.c (T.flow[0], 140));
+                const float x = xOfHz (bands[b]->freq, plot);
+                p.disc (x, yOf (bands[b]->gainDb), 4.0f, p.c (T.flow[b == 3 ? 3 : (b == 0 ? 1 : 2)], 255));
+            }
+    }
+
+    void drawCompressor (Pen& p, gpu::SceneBuilder& sb, const Rect& plot) const
+    {
+        const theme::Look& T = theme::L();
+        const float lo = -72.0f, hi = 0.0f;   // the input axis; the output axis is the same range
+        const Rect sq { plot.x + std::max (0, (plot.w - plot.h) / 2), plot.y, std::min (plot.w, plot.h), plot.h };
+        auto xOf = [&] (float db) { return static_cast<float> (sq.x) + std::clamp ((db - lo) / (hi - lo), 0.0f, 1.0f) * static_cast<float> (sq.w); };
+        auto yOf = [&] (float db) { return static_cast<float> (sq.bottom()) - std::clamp ((db - lo) / (hi - lo), 0.0f, 1.0f) * static_cast<float> (sq.h); };
+        for (int k = 0; k <= 3; ++k)   // the grid every 18 dB
+        {
+            const float db = lo + 18.0f * static_cast<float> (k);
+            p.line (xOf (db), static_cast<float> (sq.y), xOf (db), static_cast<float> (sq.bottom()), 1.0f, p.c (T.grid, 255));
+            p.line (static_cast<float> (sq.x), yOf (db), static_cast<float> (sq.right()), yOf (db), 1.0f, p.c (T.grid, 255));
+            char t[8];
+            std::snprintf (t, sizeof t, "%.0f", db);
+            p.textCentered ({ static_cast<int> (xOf (db)) - 24, sq.bottom() + 3, 48, 16 }, t, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        }
+        p.textRight ({ sq.x - 90, sq.y, 86, 16 }, "OUT dB", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        p.textRight ({ sq.right() - 60, sq.bottom() + 3, 60, 16 }, "IN dB", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        p.line (static_cast<float> (sq.x), static_cast<float> (sq.bottom()), static_cast<float> (sq.right()), static_cast<float> (sq.y), 1.0f, p.c (T.textFaint, 120));   // 1 : 1
+        // the bands: all three of the multiband compressor, the one that is on for the others
+        static const char* const kName[3] = { "LOW", "MID", "HIGH" };
+        const uint32_t kCol[3] = { T.flow[0], T.flow[1], T.flow[3] };
+        const bool shown[3] = { comp.bands == 0 || comp.bands == 1, comp.bands == 0 || comp.bands == 3, comp.bands == 0 || comp.bands == 2 };
+        int lx = plot.x + 6;
+        // the numbers of the bands at the left of the curve (the room the square leaves)
+        if (sq.x - plot.x > 360)
+        {
+            const int tx = plot.x + 8;
+            p.textLeft ({ tx + 130, plot.y + 24, 120, 16 }, "THRESHOLDS", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+            p.textLeft ({ tx + 260, plot.y + 24, 100, 16 }, "RATIOS", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+            int row = 0;
+            for (int b = 0; b < 3; ++b)
+            {
+                if (! shown[b])
+                    continue;
+                char t[48];
+                const int y = plot.y + 44 + row * 30;
+                p.textLeft ({ tx, y, 120, 26 }, kName[b], T.fLabel, p.c (kCol[b], 255), T.fMin);
+                std::snprintf (t, sizeof t, "%.0f / %.0f dB", static_cast<double> (comp.band[b].lowerThr), static_cast<double> (comp.band[b].upperThr));
+                p.textLeft ({ tx + 130, y, 130, 26 }, t, T.fLabel, p.c (T.text, 255), T.fMin);
+                std::snprintf (t, sizeof t, "%+.0f / %.0f%%", static_cast<double> (comp.band[b].lowerRatio * 100.0f), static_cast<double> (comp.band[b].upperRatio * 100.0f));
+                p.textLeft ({ tx + 260, y, 110, 26 }, t, T.fLabel, p.c (T.text, 255), T.fMin);
+                ++row;
+            }
+        }
+        for (int b = 0; b < 3; ++b)
+        {
+            if (! shown[b])
+                continue;
+            float rows[kPoints];
+            for (int i = 0; i < kPoints; ++i)
+                rows[i] = yOf (compOut (comp.band[b], lo + (hi - lo) * static_cast<float> (i) / static_cast<float> (kPoints - 1)));
+            sb.curve (rows, kPoints, sq.x, sq.w);
+            sb.stroke (b == comp.activeBand ? 1.0f : 0.7f, colour::rgba (kCol[b], 255));
+            p.disc (xOf (comp.band[b].upperThr), yOf (compOut (comp.band[b], comp.band[b].upperThr)), 3.5f, p.c (kCol[b], 255));
+            p.disc (xOf (comp.band[b].lowerThr), yOf (compOut (comp.band[b], comp.band[b].lowerThr)), 3.5f, p.c (kCol[b], 255));
+            if (comp.bands == 0 && sq.x - plot.x <= 360)
+            {
+                p.line (static_cast<float> (lx), static_cast<float> (plot.y + 8), static_cast<float> (lx + 18), static_cast<float> (plot.y + 8), 2.0f, p.c (kCol[b], 255));
+                p.textLeft ({ lx + 24, plot.y, 50, 16 }, kName[b], T.fSmall + 1.0f, p.c (T.textDim, 255), T.fMin);
+                lx += 80;
             }
         }
     }
 
-    void drawFilter (Pen& p, const Rect& plot) const
+    void drawDelay (Pen& p, gpu::SceneBuilder&, const Rect& plot) const
     {
         const theme::Look& T = theme::L();
-        const float x0 = static_cast<float> (plot.x), x1 = static_cast<float> (plot.right());
-        const float midY = static_cast<float> (plot.y + plot.h / 2);
-
-        p.line (x0, midY, x1, midY, 1.0f, p.c (T.keyline, 100));
-
-        const float normCut = (std::log10 (std::clamp (filter.cutoff, 20.0f, 20000.0f)) - std::log10 (20.0f)) / (std::log10 (20000.0f) - std::log10 (20.0f));
-        const float cutX = x0 + normCut * static_cast<float> (plot.w);
-        const float resY = midY - filter.resonance * (static_cast<float> (plot.h) * 0.4f);
-
-        // Lowpass response
-        p.line (x0, midY - 4.0f, cutX - 10.0f, midY - 4.0f, 2.0f, p.c (T.flow[0], 255));
-        p.line (cutX - 10.0f, midY - 4.0f, cutX, resY, 2.0f, p.c (T.flow[0], 255));
-        p.line (cutX, resY, cutX + 40.0f, static_cast<float> (plot.bottom()) - 4.0f, 2.0f, p.c (T.flow[0], 255));
-        p.line (cutX + 40.0f, static_cast<float> (plot.bottom()) - 4.0f, x1, static_cast<float> (plot.bottom()) - 4.0f, 1.5f, p.c (T.flow[0], 180));
-        p.disc (cutX, resY, 4.0f, p.c (T.flow[1], 255));
-    }
-
-    void drawDistortion (Pen& p, const Rect& plot) const
-    {
-        const theme::Look& T = theme::L();
-        const float cx = static_cast<float> (plot.x + plot.w / 2);
-        const float cy = static_cast<float> (plot.y + plot.h / 2);
-
-        // Crosshairs
-        p.line (static_cast<float> (plot.x), cy, static_cast<float> (plot.right()), cy, 1.0f, p.c (T.keyline, 120));
-        p.line (cx, static_cast<float> (plot.y), cx, static_cast<float> (plot.bottom()), 1.0f, p.c (T.keyline, 120));
-
-        // Waveshaping transfer curve: y = tanh (drive * x)
-        constexpr int kN = 48;
-        const float d = std::pow (10.0f, dist.drive / 20.0f);
-        float prevX = static_cast<float> (plot.x);
-        float prevY = cy;
-
-        for (int i = 0; i < kN; ++i)
+        const float t1 = std::max (1.0f, delay.timeMs1), t2 = std::max (1.0f, delay.style == 0 ? delay.timeMs1 : delay.timeMs2);
+        const float span = std::clamp (std::max (t1, t2) * 6.0f, 600.0f, 8000.0f);
+        auto xOf = [&] (float ms) { return static_cast<float> (plot.x) + ms / span * static_cast<float> (plot.w); };
+        const float midY = static_cast<float> (plot.y + plot.h / 2), half = static_cast<float> (plot.h) * 0.42f;
+        p.line (static_cast<float> (plot.x), midY, static_cast<float> (plot.right()), midY, 1.0f, p.c (T.grid, 255));
+        // the time axis: a mark every 1 / 2 / 5 .. s, whatever fits
+        const float step = span <= 1200.0f ? 200.0f : (span <= 3000.0f ? 500.0f : (span <= 6000.0f ? 1000.0f : 2000.0f));
+        for (float ms = step; ms < span; ms += step)
         {
-            const float inX = -1.0f + 2.0f * (static_cast<float> (i) / static_cast<float> (kN - 1));
-            const float outY = std::tanh (d * inX);
-
-            const float px = cx + inX * (static_cast<float> (plot.w) * 0.45f);
-            const float py = cy - outY * (static_cast<float> (plot.h) * 0.45f);
-
-            if (i > 0)
-                p.line (prevX, prevY, px, py, 2.0f, p.c (T.flow[0], 255));
-            prevX = px;
-            prevY = py;
+            const float x = xOf (ms);
+            p.line (x, static_cast<float> (plot.y), x, static_cast<float> (plot.bottom()), 1.0f, p.c (T.grid, 150));
+            char t[12];
+            std::snprintf (t, sizeof t, ms >= 1000.0f ? "%.1f s" : "%.0f ms", ms >= 1000.0f ? ms / 1000.0f : ms);
+            p.textCentered ({ static_cast<int> (x) - 30, plot.bottom() + 3, 60, 16 }, t, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        }
+        p.textLeft ({ plot.x + 4, plot.y + 2, 20, 16 }, "L", T.fSmall + 1.0f, p.c (T.flow[0], 255), T.fMin);
+        p.textLeft ({ plot.x + 4, plot.bottom() - 18, 20, 16 }, "R", T.fSmall + 1.0f, p.c (T.flow[3], 255), T.fMin);
+        // the dry hit at 0, then the repeats: stereo = left at the time, right at the second time, each with its own feedback; ping pong = the repeats alternate; mono = both lanes together
+        const float fb = std::clamp (std::fabs (delay.feedback), 0.0f, 0.98f);
+        p.line (xOf (0.0f), midY - half, xOf (0.0f), midY + half, 2.0f, p.c (T.textDim, 255));
+        for (int lane = 0; lane < 2; ++lane)
+        {
+            const float sign = lane == 0 ? -1.0f : 1.0f;   // left up, right down
+            const uint32_t col = lane == 0 ? T.flow[0] : T.flow[3];
+            float level = 1.0f;
+            for (int k = 1; k <= 12; ++k)
+            {
+                float t = 0.0f;
+                if (delay.style == 2 || delay.style == 3)   // ping pong: the repeats alternate between the lanes
+                {
+                    if ((k % 2 == 1) != (lane == 0))
+                        continue;
+                    t = t1 * static_cast<float> (k);
+                }
+                else
+                    t = (lane == 0 ? t1 : t2) * static_cast<float> (k);
+                level = std::pow (fb, static_cast<float> (delay.style == 2 || delay.style == 3 ? k - 1 : k));
+                if (delay.style != 2 && delay.style != 3 && delay.style != 1 && lane == 1)
+                    break;
+                if (t >= span || level < 0.03f)
+                    break;
+                const float x = xOf (t), h = half * std::max (0.08f, level);
+                p.line (x, midY, x, midY + sign * h, 2.0f, p.c (col, 255));
+                p.disc (x, midY + sign * h, 3.0f, p.c (col, 255));
+            }
         }
     }
 
-    void drawGeneric (Pen& p, const Rect& plot) const
+    void drawFilter (Pen& p, gpu::SceneBuilder& sb, const Rect& plot) const
     {
         const theme::Look& T = theme::L();
-        const float cx = static_cast<float> (plot.x + plot.w / 2);
-        const float cy = static_cast<float> (plot.y + plot.h / 2);
-
-        // LFO sine wave modulation shape
-        constexpr int kN = 64;
-        float prevX = static_cast<float> (plot.x), prevY = cy;
-        for (int i = 0; i < kN; ++i)
+        freqGrid (p, plot);
+        const float top = 24.0f, bottom = -36.0f;
+        auto yOf = [&] (float db) { return static_cast<float> (plot.y) + (top - std::clamp (db, bottom, top)) / (top - bottom) * static_cast<float> (plot.h); };
+        levelLine (p, plot, yOf (12.0f), "+12", false);
+        levelLine (p, plot, yOf (0.0f), "0 dB", true);
+        levelLine (p, plot, yOf (-24.0f), "-24", false);
+        if (filter.db != nullptr && filter.n >= 2)
         {
-            const float t = static_cast<float> (i) / static_cast<float> (kN - 1);
-            const float px = static_cast<float> (plot.x) + t * static_cast<float> (plot.w);
-            const float py = cy + std::sin (t * 4.0f * kPi) * (static_cast<float> (plot.h) * 0.35f);
-            if (i > 0)
-                p.line (prevX, prevY, px, py, 1.8f, p.c (T.flow[0], 220));
-            prevX = px;
-            prevY = py;
+            float rows[gpu::kMaxCurve];
+            const int n = std::min (filter.n, static_cast<int> (gpu::kMaxCurve));
+            for (int i = 0; i < n; ++i)
+                rows[i] = yOf (filter.db[i]);
+            curveLine (sb, plot, rows, n, T.flow[0], 0.8f, 34, static_cast<float> (plot.bottom()));
         }
-        p.disc (cx, cy, 4.0f, p.c (T.flow[1], 255));
+        const float cx = xOfHz (filter.cutoffHz, plot);
+        p.line (cx, static_cast<float> (plot.y), cx, static_cast<float> (plot.bottom()), 1.0f, p.c (T.flow[1], 200));
+    }
+
+    void drawDistortion (Pen& p, gpu::SceneBuilder& sb, const Rect& plot) const
+    {
+        const theme::Look& T = theme::L();
+        const Rect sq { plot.x + std::max (0, (plot.w - plot.h) / 2), plot.y, std::min (plot.w, plot.h), plot.h };
+        const float cx = static_cast<float> (sq.x + sq.w / 2), cy = static_cast<float> (sq.y + sq.h / 2), r = static_cast<float> (sq.h) * 0.5f - 2.0f;
+        p.line (static_cast<float> (sq.x), cy, static_cast<float> (sq.right()), cy, 1.0f, p.c (T.grid, 255));
+        p.line (cx, static_cast<float> (sq.y), cx, static_cast<float> (sq.bottom()), 1.0f, p.c (T.grid, 255));
+        p.line (cx - r, cy + r, cx + r, cy - r, 1.0f, p.c (T.textFaint, 120));   // the identity
+        p.textCentered ({ static_cast<int> (cx) - 40, sq.bottom() + 3, 80, 16 }, "IN", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        float rows[kPoints];
+        for (int i = 0; i < kPoints; ++i)
+        {
+            const float x = -1.0f + 2.0f * static_cast<float> (i) / static_cast<float> (kPoints - 1);
+            const float wet = shape (dist.type, dist.driveDb, x);
+            rows[i] = cy - r * ((1.0f - dist.mix) * x + dist.mix * wet);
+        }
+        sb.curve (rows, kPoints, sq.x, sq.w);
+        sb.stroke (0.8f, colour::rgba (T.flow[0], 255));
     }
 };
 

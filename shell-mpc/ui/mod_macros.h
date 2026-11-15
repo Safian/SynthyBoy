@@ -1,5 +1,5 @@
-// SynthyBoy - MPC UI: Macros View
-// Full-screen view (1280x628) with 8 large macro cards in two rows, destination chips, and Bank 1 / Bank 2 Q-groups.
+// SynthyBoy - MPC UI: the page of the Macros (1280 x 628): the eight macros as cards in two rows of four, each with its knob (a name and a value beside the dial), the chips of what it drives under it, and under
+// the cards the live spectrum of the output (the strip the 32 meters of the host skin were). BANK 1 (the macros 1 - 4, the top row) and BANK 2 (5 - 8, the bottom row) are the two Q groups.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -7,8 +7,6 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
-#include <string>
-#include <vector>
 
 #include "base.h"
 #include "composite.h"
@@ -19,218 +17,229 @@
 namespace synthyboy_mpc { namespace ui {
 
 // ===============================================================================================================================================================
-/** Single Macro Card (large dial, label, value text, destination chips row).
-    A tap on the card or chip row requests opening the Mod Matrix filtered to this macro. */
+/** The spectrum of the output as one line with a faint fill on a log frequency axis (the 256 levels 0 .. 1 of the owner, 20 Hz .. 20 kHz): the picture of the live curve. No touch. */
+class SpectrumStrip : public Component
+{
+public:
+    static constexpr int kPoints = 256;
+    const float* levels = nullptr;   // 0 .. 1 per point, null: nothing is drawn but the frame
+
+    Size minSize() const override { return { 400, 100 }; }
+
+    void draw (gpu::SceneBuilder& sb) const override
+    {
+        Pen p (sb, enabled_);
+        Cell cell (sb, rect_);
+        const theme::Look& T = theme::L();
+        p.block (rect_);
+        const Rect in { rect_.x + 10, rect_.y + 22, std::max (0, rect_.w - 20), std::max (0, rect_.h - 22 - 20) };
+        if (in.w < 20 || in.h < 20)
+            return;
+        p.textLeft ({ rect_.x + 14, rect_.y + 3, 200, 16 }, "SPECTRUM", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+        static const struct { double hz; const char* name; } kDecade[3] = { { 100.0, "100" }, { 1000.0, "1k" }, { 10000.0, "10k" } };
+        for (const auto& d : kDecade)
+        {
+            const float x = static_cast<float> (in.x) + static_cast<float> (std::log10 (d.hz / 20.0) / 3.0 * in.w);
+            p.line (x, static_cast<float> (in.y), x, static_cast<float> (in.bottom()), 1.0f, p.c (T.grid, 255));
+            p.textCentered ({ static_cast<int> (x) - 24, in.bottom() + 2, 48, 16 }, d.name, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        }
+        p.textLeft ({ in.x, in.bottom() + 2, 50, 16 }, "20 Hz", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        p.textRight ({ in.right() - 50, in.bottom() + 2, 50, 16 }, "20 kHz", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        if (levels == nullptr)
+            return;
+        float rows[gpu::kMaxCurve];
+        const int n = std::min (kPoints, static_cast<int> (gpu::kMaxCurve));
+        for (int i = 0; i < n; ++i)
+            rows[i] = static_cast<float> (in.bottom()) - std::clamp (levels[i], 0.0f, 1.0f) * static_cast<float> (in.h - 4);
+        sb.curve (rows, n, in.x, in.w);
+        sb.fill (static_cast<float> (in.bottom()), colour::rgba (T.flow[0], 40));
+        sb.stroke (0.8f, colour::rgba (T.flow[0], 255));
+    }
+
+protected:
+    void drawBody (Pen&) const override {}
+};
+
+// ===============================================================================================================================================================
+/** Single Macro Card: the knob (name and value beside the dial) and under it the chips of the targets the macro drives (a modulation slot each). A tap on the chips asks for the targets of the macro. */
 class MacroCard : public Composite
 {
 public:
+    static constexpr int kMaxChips = 4, kChipsH = 56;
     int macroIndex = 0; // 0 .. 7
     Knob knob;
 
-    struct Chip
-    {
-        char text[20] = {};
-    };
-    std::vector<Chip> chips;
+    struct Chip { char text[20] = {}; };
+    Chip chips[kMaxChips];
+    int numChips = 0;
     int extraDestCount = 0;
 
     MacroCard()
     {
+        knob.state.side = true;
         addKid (knob);
     }
 
-    Size minSize() const override { return { 180, 160 }; }
+    Size minSize() const override { return { 280, 190 }; }
 
-    void setMacro (int idx, const char* name, double val)
+    void setMacro (int idx, const char* name)
     {
         macroIndex = idx;
-        setText (name_, sizeof name_, name && name[0] ? name : defaultName (idx));
-        knob.setLabel (name_);
-        setValue (val);
+        knob.setLabel (name && name[0] ? name : "MACRO");
+    }
+    void setValue (double val, const char* text)
+    {
+        knob.state.value = knob.state.modValue = std::clamp (val, 0.0, 1.0);
+        ui::setText (knob.state.valueText, sizeof knob.state.valueText, text);
+    }
+    /** The names of the targets (the owner passes `total` and the first kMaxChips names). */
+    void setDestinations (const char* const* names, int shown, int total)
+    {
+        numChips = std::clamp (shown, 0, kMaxChips);
+        for (int i = 0; i < numChips; ++i)
+            setText (chips[i].text, sizeof chips[i].text, names[i]);
+        extraDestCount = std::max (0, total - numChips);
+        totalDests_ = total;
     }
 
-    void setValue (double val)
-    {
-        knob.state.value = std::clamp (val, 0.0, 1.0);
-        std::snprintf (knob.state.valueText, sizeof knob.state.valueText, "%d%%", static_cast<int> (std::lround (knob.state.value * 100.0)));
-    }
-
-    void setDestinations (const std::vector<std::string>& dests)
-    {
-        chips.clear();
-        extraDestCount = 0;
-        const size_t maxChips = 3;
-        for (size_t i = 0; i < dests.size() && i < maxChips; ++i)
-        {
-            Chip c;
-            setText (c.text, sizeof c.text, dests[i].c_str());
-            chips.push_back (c);
-        }
-        if (dests.size() > maxChips)
-            extraDestCount = static_cast<int> (dests.size() - maxChips);
-    }
+    Rect chipsRect() const noexcept { return { rect_.x + 6, rect_.bottom() - 6 - kChipsH, rect_.w - 12, kChipsH }; }
 
     Change touchDown (int x, int y, double nowMs) override
     {
-        const Rect cr = chipsRect();
-        if (cr.contains (x, y))
+        tapCard_ = false;
+        if (enabled_ && chipsRect().contains (x, y))
         {
             tapCard_ = true;
             return Change::none();
         }
         return Composite::touchDown (x, y, nowMs);
     }
-
+    Change touchMove (int x, int y) override { return tapCard_ ? Change::none() : Composite::touchMove (x, y); }
     Change touchUp (int x, int y) override
     {
         if (tapCard_)
         {
             tapCard_ = false;
-            if (rect_.contains (x, y))
-                return Change::request (id_);
+            return chipsRect().contains (x, y) ? Change::request (id_) : Change::none();
         }
         return Composite::touchUp (x, y);
-    }
-
-    Rect chipsRect() const noexcept
-    {
-        return { rect_.x + 8, rect_.bottom() - 44, rect_.w - 16, 40 };
     }
 
 protected:
     void layout() override
     {
-        const int knobH = std::max (80, rect_.h - 48);
-        knob.place ({ rect_.x + 8, rect_.y + 8, rect_.w - 16, knobH });
+        // the knob lies a lane (kQLane) below the top of the card: the index chip of its Q group sits above it
+        knob.place ({ rect_.x + 6, rect_.y + kQLane + 2, rect_.w - 12, std::max (80, rect_.h - kQLane - 2 - kChipsH - 12) });
     }
+
+    void drawUnder (Pen& p) const override { p.block (rect_, qFrame_); }
 
     void drawExtra (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        p.block (rect_, qFrame_);
-
         const Rect cr = chipsRect();
-        int cx = cr.x;
-
-        if (chips.empty())
+        p.rrect (cr, T.rControl, p.c (T.keyline, 120), 1.0f);
+        if (numChips == 0)
         {
-            p.textCentered (cr, "No Destinations", T.fMin + 1.0f, p.c (T.textDim, 150), T.fMin);
+            p.textCentered (cr, "NO TARGET - TAP TO ADD", T.fLabel - 2.0f, p.c (T.textFaint, 255), T.fMin);
             return;
         }
-
-        for (const Chip& chip : chips)
+        int cx = cr.x + 6;
+        const int right = cr.right() - 6 - (extraDestCount > 0 ? 44 : 0);
+        for (int i = 0; i < numChips; ++i)
         {
-            const float tw = sdf::textWidth (chip.text, T.fMin + 1.0f);
-            const int chipW = std::clamp (static_cast<int> (std::ceil (tw)) + 14, 44, 90);
-            if (cx + chipW > cr.right() - (extraDestCount > 0 ? 44 : 0))
+            const float tw = sdf::textWidth (chips[i].text, T.fLabel - 3.0f);
+            const int chipW = std::clamp (static_cast<int> (std::ceil (tw)) + 14, 44, 110);
+            if (cx + chipW > right)
                 break;
-            const Rect chipBox { cx, cr.y + 4, chipW, cr.h - 8 };
-            p.rrect (chipBox, T.rChip, p.c (T.panel0, 255));
-            p.rrect (chipBox, T.rChip, p.c (T.keyline, 200), 1.0f);
-            p.textCentered (chipBox, chip.text, T.fMin + 1.0f, p.c (T.text, 255), T.fMin);
+            const Rect box { cx, cr.y + 8, chipW, cr.h - 16 };
+            p.rrect (box, T.rChip, p.c (T.panel0, 255));
+            p.rrect (box, T.rChip, p.c (theme::sourceColour ("MAC"), 255), 1.0f);
+            p.textCentered (box, chips[i].text, T.fLabel - 3.0f, p.c (T.text, 255), T.fMin);
             cx += chipW + 6;
         }
-
         if (extraDestCount > 0)
         {
             char buf[12];
             std::snprintf (buf, sizeof buf, "+%d", extraDestCount);
-            const Rect moreBox { cx, cr.y + 4, 38, cr.h - 8 };
-            p.rrect (moreBox, T.rChip, p.c (T.flow[0], 255));
-            p.textCentered (moreBox, buf, T.fMin + 1.0f, p.c (T.onBright, 255), T.fMin);
+            const Rect more { cr.right() - 6 - 38, cr.y + 8, 38, cr.h - 16 };
+            p.rrect (more, T.rChip, p.c (T.flow[0], 255));
+            p.textCentered (more, buf, T.fLabel - 3.0f, p.c (T.onBright, 255), T.fMin);
         }
     }
 
 private:
-    char name_[24] = {};
     bool tapCard_ = false;
-
-    static const char* defaultName (int idx) noexcept
-    {
-        static const char* const kNames[8] = {
-            "MACRO 1", "MACRO 2", "MACRO 3", "MACRO 4",
-            "MACRO 5", "MACRO 6", "MACRO 7", "MACRO 8"
-        };
-        return (idx >= 0 && idx < 8) ? kNames[idx] : "MACRO";
-    }
+    int totalDests_ = 0;
 };
 
 
 // ===============================================================================================================================================================
-/** Full-screen Macros View (1280x628) with 8 large macro cards, bank selection (1-4 / 5-8), and QGroup. */
+/** The page of the Macros (1280 x 628): the bar (title, BANK 1 / BANK 2), eight cards, the spectrum strip. */
 class MacroView : public Composite
 {
 public:
-    static constexpr int kBarH = 56;
-    static constexpr int kNumMacros = 8;
+    static constexpr int kBarH = 64, kNumMacros = 8, kSpectrumH = 140;
 
-    MenuButton close { "CLOSE", MenuButton::Icon::None };
     MenuButton bank1Btn { "BANK 1: 1-4", MenuButton::Icon::None };
     MenuButton bank2Btn { "BANK 2: 5-8", MenuButton::Icon::None };
 
     MacroCard cards[kNumMacros];
+    SpectrumStrip spectrum;
     QGroup qgroup;
 
     MacroView()
     {
-        addKid (close);
         addKid (bank1Btn);
         addKid (bank2Btn);
-
         for (int i = 0; i < kNumMacros; ++i)
         {
-            cards[i].setMacro (i, nullptr, 0.0);
+            cards[i].setMacro (i, nullptr);
             addKid (cards[i]);
         }
-
+        addKid (spectrum);
         setBank (0);
     }
 
-    Size minSize() const override { return { 800, 400 }; }
+    Size minSize() const override { return { 1280, 628 }; }
 
     void setBank (int b)
     {
         bank_ = (b == 1 ? 1 : 0);
         updateQGroup();
     }
-
     int bank() const noexcept { return bank_; }
 
     void updateQGroup()
     {
         const int offset = bank_ * 4;
         for (int k = 0; k < 4; ++k)
+            qgroup.set (k, nullptr);
+        for (int k = 0; k < 4; ++k)
             qgroup.set (k, &cards[offset + k].knob);
         qgroup.setActive (true);
     }
 
-    void setMacroValue (int idx, double val)
-    {
-        if (idx >= 0 && idx < kNumMacros)
-            cards[idx].setValue (val);
-    }
-
-    void setMacroDestinations (int idx, const std::vector<std::string>& dests)
-    {
-        if (idx >= 0 && idx < kNumMacros)
-            cards[idx].setDestinations (dests);
-    }
-
     Change touchDown (int x, int y, double nowMs) override
     {
-        return Composite::touchDown (x, y, nowMs);
+        const Change c = Composite::touchDown (x, y, nowMs);
+        if (cap_)   // a tap on a card makes its row the Q group
+            for (int i = 0; i < kNumMacros; ++i)
+                if (cap_ == &cards[i])
+                {
+                    setBank (i / 4);
+                    break;
+                }
+        return c;
     }
 
     Change touchUp (int x, int y) override
     {
         const bool onBank1 = (cap_ == &bank1Btn);
         const bool onBank2 = (cap_ == &bank2Btn);
-
         const Change c = Composite::touchUp (x, y);
-
         if (onBank1) { setBank (0); return Change::none(); }
         if (onBank2) { setBank (1); return Change::none(); }
-
         return c;
     }
 
@@ -240,55 +249,36 @@ public:
         qgroup.draw (sb);
     }
 
-    Change turnQ (int knobIndex, double delta)
-    {
-        return qgroup.turn (knobIndex, delta);
-    }
+    Change turnQ (int knobIndex, double delta) { return qgroup.turn (knobIndex, delta); }
+    Rect cardsRect() const noexcept { return { rect_.x + 8, rect_.y + kBarH + 8, rect_.w - 16, spectrum.rect().y - 8 - (rect_.y + kBarH + 8) }; }
 
 protected:
     void layout() override
     {
-        // Top bar
-        close.place ({ rect_.x + 12, rect_.y + 4, 100, kBarH - 8 });
-        bank1Btn.place ({ rect_.x + 380, rect_.y + 4, 140, kBarH - 8 });
-        bank2Btn.place ({ rect_.x + 530, rect_.y + 4, 140, kBarH - 8 });
+        const int m = 8;
+        bank1Btn.place ({ rect_.x + 300, rect_.y + 4, 170, 56 });
+        bank2Btn.place ({ rect_.x + 478, rect_.y + 4, 170, 56 });
 
-        // 2 rows x 4 columns grid
-        const int gridX = rect_.x + 16;
-        const int gridY = rect_.y + kBarH + 8;
-        const int gridW = rect_.w - 32;
-        const int gridH = rect_.h - kBarH - 16;
-
-        const int colW = (gridW - 3 * 16) / 4;
-        const int rowH = (gridH - 12) / 2;
-
+        spectrum.place ({ rect_.x + m, rect_.bottom() - m - kSpectrumH, rect_.w - 2 * m, kSpectrumH });
+        // 2 rows x 4 columns
+        const int gridY = rect_.y + kBarH + m, gridH = spectrum.rect().y - m - gridY, gap = 8;
+        const int colW = (rect_.w - 2 * m - 3 * gap) / 4, rowH = (gridH - gap) / 2;
         for (int r = 0; r < 2; ++r)
-        {
             for (int c = 0; c < 4; ++c)
-            {
-                const int idx = r * 4 + c;
-                const int x = gridX + c * (colW + 16);
-                const int y = gridY + r * (rowH + 12);
-                cards[idx].place ({ x, y, colW, rowH });
-            }
-        }
+                cards[r * 4 + c].place ({ rect_.x + m + c * (colW + gap), gridY + r * (rowH + gap), c == 3 ? rect_.right() - m - (rect_.x + m + 3 * (colW + gap)) : colW, rowH });
+    }
+
+    void drawUnder (Pen& p) const override
+    {
+        p.line (static_cast<float> (rect_.x + 8), static_cast<float> (rect_.y + kBarH - 2), static_cast<float> (rect_.right() - 8), static_cast<float> (rect_.y + kBarH - 2), 1.5f, p.c (theme::L().keyline, 255));
     }
 
     void drawExtra (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-
-        // Top bar title
-        p.textLeft ({ rect_.x + 124, rect_.y + 4, 160, kBarH - 8 }, "MACROS", T.fTitle, p.c (T.text, 255), T.fMin);
-
-        // Highlight active bank button
+        p.textLeft ({ rect_.x + 14, rect_.y + 4, 260, 56 }, "MACROS", T.fTitle, p.c (T.text, 255), T.fMin);
         const MenuButton* activeBtn = (bank_ == 0 ? &bank1Btn : &bank2Btn);
         p.rrect (activeBtn->rect(), T.rControl, p.c (T.flow[0], 255), 1.6f);
-
-        // Header separator
-        p.line (static_cast<float> (rect_.x + 8), static_cast<float> (rect_.y + kBarH - 1),
-                static_cast<float> (rect_.right() - 8), static_cast<float> (rect_.y + kBarH - 1),
-                1.5f, p.c (T.keyline, 255));
     }
 
 private:

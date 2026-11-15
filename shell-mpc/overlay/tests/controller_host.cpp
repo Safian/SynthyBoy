@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "fakes.h"
+#include "fixtures/legacy_layout.h"
 
 using namespace ovt;
 
@@ -21,7 +22,8 @@ struct Rig
 
     explicit Rig (bool attach = true, double cost = 10.0, ITouchInput* touch = nullptr)
     {
-        ctl = std::make_unique<Controller> (plane, frame, renderer, dir.paths(), Timing(), cost, nullptr, touch);
+        frame.views = legacy::kViews;
+        ctl = std::make_unique<Controller> (plane, frame, renderer, dir.paths(), Timing(), cost, nullptr, touch, legacy::kViews, legacy::kNumViews);
         inst.set ("filter1.cutoff", 1000.0f);
         inst.set ("filter1.resonance", 30.0f);
         if (attach)
@@ -52,7 +54,7 @@ static std::string line (const std::string& text, const std::string& key)
 
 int main()
 {
-    const Rect curveUi { layout::kViews[0].region.x, layout::kViews[0].region.y, layout::kViews[0].region.w, layout::kViews[0].region.h };
+    const Rect curveUi { legacy::kViews[0].region.x, legacy::kViews[0].region.y, legacy::kViews[0].region.w, legacy::kViews[0].region.h };
     // ---- the markers are there from the start: shown at the first check ----
     {
         Rig r;
@@ -101,9 +103,9 @@ int main()
         check (h >= 0 && h <= 150, "one marker missing: hidden within 150 ms (took " + std::to_string (h) + " ms)");
         check (! r.plane.buffersAlive, "... and the buffers are freed");
         check (r.plane.calls() > 0 && r.plane.callLog().back() == "destroy", "... plane off first, then the buffers");
-        r.frame.setMarker (1, true, 90, layout::kViews[0].markers[1].rgb + 2);   // +2 in blue
+        r.frame.setMarker (1, true, 90, legacy::kViews[0].markers[1].rgb + 2);   // +2 in blue
         check (r.until ([&] { return r.on(); }, 300) >= 0, "a marker 2 off in one channel is accepted");
-        r.frame.setMarker (1, true, 90, layout::kViews[0].markers[1].rgb + 3);
+        r.frame.setMarker (1, true, 90, legacy::kViews[0].markers[1].rgb + 3);
         check (r.until ([&] { return ! r.on(); }, 300) >= 0, "a marker 3 off is not");
         r.frame.setMarker (1, true, 90);
         r.until ([&] { return r.on(); }, 300);
@@ -283,9 +285,9 @@ int main()
             exact = exact && static_cast<int> (static_cast<float> (f) / 32.0f * 32.0f) == f && static_cast<float> (f) / 32.0f * 32.0f == static_cast<float> (f);
         check (exact, "every value frame / 32 times 32 is the frame again in a float (the host picks the frame by a multiplication)");
         bool apart = classifyInstanceRgb (layout::kBackgroundRgb) == kSlotUnknown;
-        for (int v = 0; v < layout::kNumViews; ++v)
+        for (int v = 0; v < legacy::kNumViews; ++v)
             for (int m = 0; m < 2; ++m)
-                apart = apart && classifyInstanceRgb (layout::kViews[v].markers[m].rgb) == kSlotUnknown && classifyInstanceRgb (layout::kViews[v].markers[m].cover) == kSlotUnknown;
+                apart = apart && classifyInstanceRgb (legacy::kViews[v].markers[m].rgb) == kSlotUnknown && classifyInstanceRgb (legacy::kViews[v].markers[m].cover) == kSlotUnknown;
         check (apart, "the background, the marker colours and the covers are not instance colours");
         FakeInstance a[18];
         InstanceSlots table;
@@ -429,7 +431,7 @@ int main()
         // a half read colour (one corner differs) is not a colour
         r.frame.setView (0, true, 90);
         r.until ([&] { return r.on(); }, 500);
-        const layout::Rect& ir = layout::kViews[0].instance;
+        const layout::Rect& ir = legacy::kViews[0].instance;
         int px, py;
         uiPointToPanel (90, ir.x + 1, ir.y + 1, 800, 1280, px, py);
         r.frame.setPixel (px, py, 0x3e14d8);
@@ -556,7 +558,7 @@ int main()
     // ---- the plugin-drawn pages of an instance: main -> full(element) -> detail(page) ..., closed when the Play page is no longer on screen; per instance, never saved ----
     {
         const int play1 = 14, play2 = 15, filter1 = 0;
-        check (layout::kViews[play1].kind == layout::kKindPlay && layout::kViews[play2].kind == layout::kKindPlay && layout::kViews[filter1].kind == layout::kKindFilter, "(the view numbers of the test)");
+        check (legacy::kViews[play1].kind == layout::kKindPlay && legacy::kViews[play2].kind == layout::kKindPlay && legacy::kViews[filter1].kind == layout::kKindFilter, "(the view numbers of the test)");
         {
             UiStack u;
             check (u.isMain() && u.level() == UiStack::Level::main && u.depth() == 0 && u.element() == -1 && u.top() == -1 && ! u.back() && ! u.closeAll(), "a stack starts in main; back and closeAll of main change nothing");

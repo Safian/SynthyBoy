@@ -119,7 +119,7 @@ protected:
 // ===============================================================================================================================================================
 /** MixerFullScreen: Complete full screen Mixer page.
     Holds MixerRoutingBar at top, 10 channel strips side by side, and 10 QGroups.
-    QGroup per strip: slot 0 fader, slot 1 pan, slot 2 send1, slot 3 send2.
+    QGroup per strip: slot 0 fader (LEVEL), slot 1 pan, slot 2 send1, slot 3 send2: one frame around the column of the strip you touched.
     Adjacency check passes with 0 offenders. */
 class MixerFullScreen : public Composite
 {
@@ -135,7 +135,7 @@ public:
     {
         addKid (routingBar);
         const char* const titles[kStrips] = {
-            "SUB", "A", "B", "C", "NOISE", "F1", "F2", "BUS 1", "BUS 2", "MASTER"
+            "SUB", "A", "B", "C", "NOISE", "F1", "F2", "BUS1", "BUS2", "MASTER"
         };
         for (int i = 0; i < kStrips; ++i)
         {
@@ -146,7 +146,7 @@ public:
         setActiveGroup (0);
     }
 
-    Size minSize() const override { return { 600, 400 }; }
+    Size minSize() const override { return { 1280, 628 }; }
 
     int activeGroup() const noexcept { return activeGroup_; }
     void setActiveGroup (int g)
@@ -217,11 +217,6 @@ protected:
             const int sx = rect_.x + pad + i * (stripW + gap);
             strips[i].place ({ sx, topY, stripW, stripH });
         }
-    }
-
-    void drawUnder (Pen& p) const override
-    {
-        p.block (rect_, true);
     }
 
     void drawExtra (Pen& p) const override

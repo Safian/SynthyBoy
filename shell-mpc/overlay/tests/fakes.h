@@ -193,6 +193,7 @@ private:
 class FakeFrame final : public IFrameSource
 {
 public:
+    const layout::View* views = layout::kViews;   // the table of views the markers are painted for (the controller test has its own)
     int panelW = 800, panelH = 1280;
     bool readable = true;
     std::string fatal;
@@ -226,7 +227,7 @@ public:
     void setViewMarker (int view, int m, bool present, int rot, uint32_t colourOverride = 0)
     {
         std::lock_guard<std::mutex> g (mu_);
-        const layout::Marker& mk = layout::kViews[view].markers[m];
+        const layout::Marker& mk = views[view].markers[m];
         for (int y = 0; y < mk.rect.h; ++y)
             for (int x = 0; x < mk.rect.w; ++x)
             {
@@ -242,7 +243,7 @@ public:
     void setViewInstanceRgb (int view, uint32_t rgb, bool present, int rot)
     {
         std::lock_guard<std::mutex> g (mu_);
-        const layout::Rect& r = layout::kViews[view].instance;
+        const layout::Rect& r = views[view].instance;
         for (int y = 0; y < r.h; ++y)
             for (int x = 0; x < r.w; ++x)
             {

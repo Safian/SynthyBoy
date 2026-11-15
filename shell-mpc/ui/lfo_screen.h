@@ -237,6 +237,14 @@ public:
         for (int i = 0; i < nGroups_; ++i)
             groups[i].draw (sb);
     }
+    /** The page of its own tab (the plugin draws the whole tab): there is nothing to close. */
+    void setPageMode (bool page)
+    {
+        pageMode_ = page;
+        show (close, ! page);
+        if (rect_.w > 0)
+            layout();
+    }
     int leaves (Component** out, int max) { return collectLeaves (out, 0, max); }
 
 protected:
@@ -251,7 +259,7 @@ protected:
         const int W = rect_.w, m = 8;
         const Rect top { rect_.x + m, rect_.y + m, W - 2 * m, kTopH };
         Rect r[5];
-        const int fixed[5] = { 84, 10 * 56 + kGap, 3 * 56 + 2 * 72 + 2 * kGap, 72, 0 }, weight[5] = { 0, 0, 0, 0, 1 };
+        const int fixed[5] = { pageMode_ ? 0 : 84, 10 * 56 + kGap, 3 * 56 + 2 * 72 + 2 * kGap, 72, 0 }, weight[5] = { 0, 0, 0, 0, 1 };
         layoutRow (top, fixed, weight, 5, kGap, r);
         close.place ({ r[0].x, top.y + (kTopH - 56) / 2, r[0].w, 56 });
         bar.place ({ r[1].x, top.y + (kTopH - 56) / 2, r[1].w, 56 });
@@ -347,7 +355,7 @@ protected:
     }
     Rect display_, blocks_[4];
     int nBlocks_ = 4, nGroups_ = 0, active_ = -1;
-    bool random_ = false, keyActive_ = false;
+    bool random_ = false, keyActive_ = false, pageMode_ = false;
     char names_[kMaxGroups][16] = {};
 };
 

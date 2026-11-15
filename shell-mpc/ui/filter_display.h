@@ -2,8 +2,7 @@
 // FilterDisplay: frequency response curve on log-frequency axis (20 Hz - 20 kHz) with interactive cutoff/reso handle,
 // dual-filter curves (F1 cyan, F2 magenta, resultant white), live voice markers; Formant mode XY-pad with vowel markers.
 // FilterRoutePanel: route popup (destination, bus 1/2 sends, level, pan).
-// FilterCompact: Play-page 1/3 element (~410x620).
-// FilterFullScreen: full screen overlay view.
+// FilterFullScreen: the page of a filter (the whole tab).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -23,8 +22,9 @@
 namespace synthyboy_mpc { namespace ui {
 
 // ===============================================================================================================================
-/** FilterDisplay: the response curve on log frequency axis (20 Hz .. 20 kHz) or Formant XY pad.
-    Interactive: dragging moves Cutoff / Resonance, or Formant X / Y. Touch target >= 56 px. */
+/** FilterDisplay: the response curve on a log frequency axis (20 Hz .. 20 kHz) with thin lines, or the Formant XY pad.
+    The curves are what the filter really does (shell-mpc/overlay/curve_source.h: the engine's own filter run on an impulse); one filter: its line with a faint fill, both filters: F1 and F2 and the
+    resultant (white). Interactive: the point on the curve is the cutoff (x) and the resonance (y), or the formant X / Y; while a finger drags it its values are written next to it. Touch target >= 56 px. */
 class FilterDisplay : public Component
 {
 public:
@@ -95,10 +95,22 @@ public:
         return std::clamp (state.formantY / 100.0, 0.0, 1.0);
     }
 
+    /** The plot area inside the block: a margin at the left for the dB scale and at the bottom for the frequencies (the formant pad uses the whole inside). */
+    Rect plot() const noexcept
+    {
+        const Rect in = rect_.inset (8);
+        return state.isFormant ? in : Rect { in.x + 30, in.y + 14, std::max (0, in.w - 30 - 6), std::max (0, in.h - 14 - 20) };
+    }
+    /** The x of a frequency inside the plot. */
+    static float xOfHz (double hz, const Rect& pl) noexcept
+    {
+        return static_cast<float> (pl.x) + static_cast<float> (std::clamp (std::log10 (std::clamp (hz, kFMin, kFMax) / kFMin) / 3.0, 0.0, 1.0) * pl.w);
+    }
+
     /** Center of the interactive handle on screen. */
     void handlePoint (float& hx, float& hy) const noexcept
     {
-        const Rect in = rect_.inset (8);
+        const Rect in = plot();
         if (state.isFormant)
         {
             hx = static_cast<float> (in.x) + static_cast<float> (formantXNorm() * in.w);
@@ -110,13 +122,14 @@ public:
             hy = static_cast<float> (in.bottom()) - static_cast<float> (resonanceNorm() * in.h);
         }
     }
+    bool dragging() const noexcept { return dragging_; }
 
     void draw (gpu::SceneBuilder& sb) const override
     {
         Pen pen (sb, enabled_);
         Cell cell (sb, rect_);
         pen.block (rect_, false);
-        const Rect in = rect_.inset (8);
+        const Rect in = plot();
         if (in.w < 20 || in.h < 20)
             return;
 
@@ -139,78 +152,96 @@ public:
 protected:
     void drawBody (Pen&) const override {}
 
+    /** The colour of filter f (1, 2): the two ends of the signal gradient. */
+    static uint32_t filterColour (int f) noexcept { return f == 2 ? theme::L().flow[3] : theme::L().flow[0]; }
+
     void drawFilterCurve (Pen& p, gpu::SceneBuilder& sb, const Rect& in) const
     {
         const theme::Look& T = theme::L();
+        char buf[24];
 
-        // 1. Grid lines: 100 Hz, 1 kHz, 10 kHz
-        const double fGrid[3] = { 100.0, 1000.0, 10000.0 };
-        for (double f : fGrid)
+        // 1. The grid: the frequency decades (100 Hz, 1 kHz, 10 kHz) and the dB lines (+24, 0, -24) with their scale
+        static const struct { double hz; const char* name; } kDecade[3] = { { 100.0, "100" }, { 1000.0, "1k" }, { 10000.0, "10k" } };
+        for (const auto& d : kDecade)
         {
-            const float gx = static_cast<float> (in.x) + static_cast<float> (std::log10 (f / kFMin) / 3.0 * in.w);
-            p.line (gx, static_cast<float> (in.y), gx, static_cast<float> (in.bottom()), 1.0f, p.c (T.grid, 60));
+            const float gx = xOfHz (d.hz, in);
+            p.line (gx, static_cast<float> (in.y), gx, static_cast<float> (in.bottom()), 1.0f, p.c (T.grid, 255));
+            p.textCentered ({ static_cast<int> (gx) - 24, in.bottom() + 3, 48, 16 }, d.name, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
         }
-        // Zero dB horizontal line
-        const float zy = dbToY (0.0, in);
-        p.line (static_cast<float> (in.x), zy, static_cast<float> (in.right()), zy, 1.0f, p.c (T.grid, 90));
+        p.textLeft ({ in.x + 2, in.bottom() + 3, 40, 16 }, "20 Hz", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        p.textRight ({ in.right() - 52, in.bottom() + 3, 50, 16 }, "20 kHz", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        static const double kDb[3] = { 24.0, 0.0, -24.0 };
+        for (double db : kDb)
+        {
+            const float gy = dbToY (db, in);
+            p.line (static_cast<float> (in.x), gy, static_cast<float> (in.right()), gy, 1.0f, p.c (T.grid, db == 0.0 ? 255 : 150));
+            std::snprintf (buf, sizeof buf, "%+.0f", db);
+            p.textRight ({ in.x - 30, static_cast<int> (gy) - 8, 26, 16 }, db == 0.0 ? "0 dB" : buf, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        }
 
-        // 2. Curves
-        const uint32_t colCyan = 0x2ee6f0;
-        const uint32_t colMagenta = 0xff2e63;
-        const uint32_t colWhite = 0xffffff;
-
+        // 2. The curves (a line of 1.5 .. 2 pixels, no glow)
         if (state.dual)
         {
-            // F1 curve (cyan)
             if (state.curve1 && state.numPoints1 >= 2)
-                drawCurvePolyline (sb, in, state.curve1, state.numPoints1, colCyan, 0, 0.75f);
-            // F2 curve (magenta)
+                drawCurvePolyline (sb, in, state.curve1, state.numPoints1, filterColour (1), 0, 0.8f);
             if (state.curve2 && state.numPoints2 >= 2)
-                drawCurvePolyline (sb, in, state.curve2, state.numPoints2, colMagenta, 0, 0.75f);
-            // Resultant curve (white)
+                drawCurvePolyline (sb, in, state.curve2, state.numPoints2, filterColour (2), 0, 0.8f);
             if (state.curveResult && state.numPointsResult >= 2)
-                drawCurvePolyline (sb, in, state.curveResult, state.numPointsResult, colWhite, 0, 0.85f);
+                drawCurvePolyline (sb, in, state.curveResult, state.numPointsResult, T.text, 0, 1.0f);
+            // the legend of the three lines
+            const struct { const char* name; uint32_t col; } kLegend[3] = { { "F1", filterColour (1) }, { "F2", filterColour (2) }, { "F1+F2", T.text } };
+            int lx = in.x + 8;
+            for (const auto& l : kLegend)
+            {
+                const int w = 26 + static_cast<int> (Pen::textWidth (l.name, T.fLabel - 2.0f));
+                p.line (static_cast<float> (lx), static_cast<float> (in.y + 11), static_cast<float> (lx + 18), static_cast<float> (in.y + 11), 2.0f, p.c (l.col, 255));
+                p.textLeft ({ lx + 24, in.y + 3, w, 16 }, l.name, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+                lx += w + 14;
+            }
         }
         else
         {
             const float* cData = state.activeFilter == 2 ? state.curve2 : state.curve1;
             const int cLen = state.activeFilter == 2 ? state.numPoints2 : state.numPoints1;
-            const uint32_t cCol = state.activeFilter == 2 ? colMagenta : colCyan;
             if (cData && cLen >= 2)
-                drawCurvePolyline (sb, in, cData, cLen, cCol, 36, 1.0f);
+                drawCurvePolyline (sb, in, cData, cLen, filterColour (state.activeFilter), 34, 0.8f);
+            std::snprintf (buf, sizeof buf, "FILTER %d", state.activeFilter);
+            p.textLeft ({ in.x + 8, in.y + 3, 120, 16 }, buf, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         }
 
-        // 3. Live voice markers (up to 8 voices)
-        if (state.numVoices > 0)
+        // 3. The voices: where each sounding voice has its cutoff (up to 8, faint)
+        for (int v = 0; v < state.numVoices && v < 8; ++v)
         {
-            for (int v = 0; v < state.numVoices && v < 8; ++v)
+            const float hz = state.voiceCutoffs[v];
+            if (hz >= static_cast<float> (kFMin) && hz <= static_cast<float> (kFMax))
             {
-                const float vHz = state.voiceCutoffs[v];
-                if (vHz >= static_cast<float> (kFMin) && vHz <= static_cast<float> (kFMax))
-                {
-                    const float vx = static_cast<float> (in.x) + static_cast<float> (std::log10 (vHz / kFMin) / 3.0 * in.w);
-                    p.line (vx, static_cast<float> (in.y + 4), vx, static_cast<float> (in.bottom() - 4), 1.0f, p.c (T.textDim, 70));
-                }
+                const float vx = xOfHz (hz, in);
+                p.line (vx, static_cast<float> (in.y + 4), vx, static_cast<float> (in.bottom() - 4), 1.0f, p.c (T.textDim, 90));
             }
         }
-
-        // 4. Modulated live cutoff line
+        // 4. The modulated live cutoff of the voice that is heard
         if (state.liveCutoffHz >= kFMin && state.liveCutoffHz <= kFMax)
         {
-            const float lx = static_cast<float> (in.x) + static_cast<float> (std::log10 (state.liveCutoffHz / kFMin) / 3.0 * in.w);
-            p.line (lx, static_cast<float> (in.y + 2), lx, static_cast<float> (in.bottom() - 2), 1.2f, p.c (T.flow[1], 180));
+            const float lx = xOfHz (state.liveCutoffHz, in);
+            p.line (lx, static_cast<float> (in.y + 2), lx, static_cast<float> (in.bottom() - 2), 1.2f, p.c (T.flow[1], 200));
         }
 
-        // 5. Interactive handle (cutoff & resonance)
+        // 5. The handle (cutoff and resonance); while a finger drags it the values are written next to it
         float hx = 0.0f, hy = 0.0f;
         handlePoint (hx, hy);
-        const uint32_t handleCol = state.activeFilter == 2 ? colMagenta : colCyan;
+        const uint32_t handleCol = filterColour (state.activeFilter);
         p.disc (hx, hy, 4.0f, p.c (handleCol, 255));
         p.arc (hx, hy, 8.5f, 0.0f, 2.0f * kPi, 1.6f, p.c (handleCol, 220));
-
-        // Frequency labels at the bottom corners
-        p.textLeft ({ in.x + 4, in.bottom() - 14, 50, 12 }, "20 Hz", T.fSmall, p.c (T.textDim, 160));
-        p.textRight ({ in.right() - 54, in.bottom() - 14, 50, 12 }, "20 kHz", T.fSmall, p.c (T.textDim, 160));
+        if (dragging_)
+        {
+            char hz[16], text[40];
+            if (state.cutoffHz >= 1000.0)
+                std::snprintf (hz, sizeof hz, "%.2f kHz", state.cutoffHz / 1000.0);
+            else
+                std::snprintf (hz, sizeof hz, "%.0f Hz", state.cutoffHz);
+            std::snprintf (text, sizeof text, "%s   RESO %.0f%%", hz, state.resonancePct);
+            bubble (p, in, hx, hy, text);
+        }
     }
 
     void drawFormantPad (Pen& p, const Rect& in) const
@@ -220,8 +251,8 @@ protected:
         // Crosshairs in center
         const float midX = static_cast<float> (in.x) + in.w * 0.5f;
         const float midY = static_cast<float> (in.y) + in.h * 0.5f;
-        p.line (static_cast<float> (in.x), midY, static_cast<float> (in.right()), midY, 1.0f, p.c (T.grid, 80));
-        p.line (midX, static_cast<float> (in.y), midX, static_cast<float> (in.bottom()), 1.0f, p.c (T.grid, 80));
+        p.line (static_cast<float> (in.x), midY, static_cast<float> (in.right()), midY, 1.0f, p.c (T.grid, 255));
+        p.line (midX, static_cast<float> (in.y), midX, static_cast<float> (in.bottom()), 1.0f, p.c (T.grid, 255));
 
         // 5 Vowel markers: I, E, A, O, U
         struct Vowel { const char* name; float x, y; };
@@ -237,8 +268,8 @@ protected:
         {
             const float vx = static_cast<float> (in.x) + v.x * in.w;
             const float vy = static_cast<float> (in.bottom()) - v.y * in.h;
-            p.arc (vx, vy, 11.0f, 0.0f, 2.0f * kPi, 1.0f, p.c (T.textDim, 120));
-            p.textCentered ({ static_cast<int> (vx) - 10, static_cast<int> (vy) - 10, 20, 20 }, v.name, T.fSmall + 2.0f, p.c (T.text, 200));
+            p.arc (vx, vy, 13.0f, 0.0f, 2.0f * kPi, 1.0f, p.c (T.textDim, 120));
+            p.textCentered ({ static_cast<int> (vx) - 12, static_cast<int> (vy) - 12, 24, 24 }, v.name, T.fLabel, p.c (T.text, 200));
         }
 
         // Live formant puck if modulated
@@ -253,12 +284,33 @@ protected:
         // Interactive puck handle
         float hx = 0.0f, hy = 0.0f;
         handlePoint (hx, hy);
-        const uint32_t col = state.activeFilter == 2 ? 0xff2e63 : 0x2ee6f0;
+        const uint32_t col = filterColour (state.activeFilter);
         p.disc (hx, hy, 5.0f, p.c (col, 255));
         p.arc (hx, hy, 12.0f, 0.0f, 2.0f * kPi, 1.8f, p.c (col, 220));
+        if (dragging_)
+        {
+            char text[40];
+            std::snprintf (text, sizeof text, "X %.0f%%   Y %.0f%%", state.formantX, state.formantY);
+            bubble (p, in, hx, hy, text);
+        }
 
-        // Corner labels
-        p.textLeft ({ in.x + 4, in.y + 4, 60, 12 }, "FORMANT XY", T.fSmall, p.c (T.textDim, 160));
+        p.textLeft ({ in.x + 4, in.y + 2, 140, 16 }, "FORMANT  X / Y", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+    }
+
+    /** The value of the dragged point as a small box beside it (on the side that has room). */
+    void bubble (Pen& p, const Rect& in, float hx, float hy, const char* text) const
+    {
+        const theme::Look& T = theme::L();
+        const float tw = Pen::textWidth (text, T.fValue - 4.0f);
+        const int w = static_cast<int>(std::ceil (tw)) + 20, h = 30;
+        int x = static_cast<int> (hx) + 18, y = static_cast<int> (hy) - h - 12;
+        if (x + w > in.right())
+            x = static_cast<int> (hx) - 18 - w;
+        if (y < in.y)
+            y = static_cast<int> (hy) + 14;
+        const Rect box { std::max (in.x, x), std::min (std::max (in.y, y), in.bottom() - h), w, h };
+        p.control (box, false, true);
+        p.textCentered (box.inset (2), text, T.fValue - 4.0f, p.c (T.text, 255), T.fMin);
     }
 
     static float dbToY (double db, const Rect& in) noexcept
@@ -287,6 +339,7 @@ protected:
 
     Change onDown (int x, int y, double /*nowMs*/) override
     {
+        dragging_ = true;
         return updateTouch (x, y);
     }
 
@@ -297,12 +350,13 @@ protected:
 
     Change onUp (int /*x*/, int /*y*/) override
     {
+        dragging_ = false;
         return Change::none();
     }
 
     Change updateTouch (int x, int y)
     {
-        const Rect in = rect_.inset (8);
+        const Rect in = plot();
         if (in.w <= 0 || in.h <= 0)
             return Change::none();
 
@@ -326,6 +380,7 @@ protected:
 private:
     int idCutoff_ = 0, idReso_ = 0;
     int idFormantX_ = 0, idFormantY_ = 0;
+    bool dragging_ = false;
 };
 
 // ===============================================================================================================================
@@ -447,157 +502,45 @@ protected:
 };
 
 // ===============================================================================================================================
-/** FilterCompact: the compact view in the left third of the Play page (~410 x 620).
-    Header: F1 | F2 | F1+F2 selector, Power, Model stepper, Route button.
-    Display: FilterDisplay with full screen button in top-right.
-    Bottom: Q-Group (CUTOFF, RESO, DRIVE, MIX) in a 2x2 grid. All touch targets >= 56 px. */
-class FilterCompact : public Composite
-{
-public:
-    PictogramSelector instances;
-    ToggleIcon power;
-    RouteButton route { "M" };
-    Stepper model;
-    MenuButton full { "", MenuButton::Icon::Expand };
-    FilterDisplay display;
-
-    // 4 Q-Knobs in 2x2 grid
-    Knob cutoff { "CUTOFF" };
-    Knob resonance { "RESO" };
-    Knob drive { "DRIVE" };
-    Knob mix { "MIX" };
-    QGroup group;
-
-    FilterCompact()
-    {
-        instances.setItem (0, -1, "F1");
-        instances.setItem (1, -1, "F2");
-        instances.setItem (2, -1, "F1+F2");
-        instances.state.count = 3;
-        instances.state.index = 0;
-        model.listable = true;
-
-        power.state.icon = ToggleIcon::Icon::Power;
-        model.listable = true;
-
-        addKid (instances);
-        addKid (power);
-        addKid (model);
-        addKid (route);
-        addKid (full);
-        addKid (display);
-        addKid (cutoff);
-        addKid (resonance);
-        addKid (drive);
-        addKid (mix);
-
-        group.set (0, &cutoff);
-        group.set (1, &resonance);
-        group.set (2, &drive);
-        group.set (3, &mix);
-        group.setActive (true);
-    }
-
-    Size minSize() const override { return { 410, 600 }; }
-    Rect displayRect() const noexcept { return display.rect(); }
-    QGroup& qGroup() noexcept { return group; }
-
-    void draw (gpu::SceneBuilder& sb) const override
-    {
-        Composite::draw (sb);
-        group.draw (sb);
-        full.draw (sb);
-    }
-
-protected:
-    void layout() override
-    {
-        const int m = 6, W = rect_.w - 2 * m;
-        // 1. Instances selector (top): 52 px high
-        instances.place ({ rect_.x + m, rect_.y + m, W, 52 });
-
-        // 2. Header row: Power (56 px), Model stepper, Route (56 px)
-        const int hy = rect_.y + m + 52 + 8;
-        power.place ({ rect_.x + m, hy, 56, 52 });
-        route.place ({ rect_.right() - m - 56, hy, 56, 52 });
-        model.place ({ rect_.x + m + 56 + kGap, hy, std::max (60, W - 112 - 2 * kGap), 52 });
-
-        // 3. Bottom 2x2 knob grid: height ~210 px
-        const int knobH = 100;
-        const int gridH = 2 * knobH + kGap;
-        const int by = rect_.bottom() - m - gridH;
-        Rect row1[2], row2[2];
-        const int f2[2] = { 0, 0 }, w2[2] = { 1, 1 };
-        layoutRow ({ rect_.x + m, by, W, knobH }, f2, w2, 2, kGap, row1);
-        layoutRow ({ rect_.x + m, by + knobH + kGap, W, knobH }, f2, w2, 2, kGap, row2);
-        cutoff.place (row1[0]);
-        resonance.place (row1[1]);
-        drive.place (row2[0]);
-        mix.place (row2[1]);
-
-        // 4. FilterDisplay: fills middle space
-        const int dy = hy + 52 + 8;
-        const int dh = std::max (40, by - 16 - dy); // 16 px margin for Q frame tabs
-        display.place ({ rect_.x + m, dy, W, dh });
-        full.place ({ display.rect().right() - 56 - 4, display.rect().y + 4, 56, 48 });
-    }
-};
-
-// ===============================================================================================================================
-/** FilterFullScreen: full screen overlay view for the filter element (1280 x 800, tab: 1280 x 628).
-    Top bar: CLOSE, POWER, instances (F1|F2|F1+F2), MODEL, ROUTE.
-    Upper-middle: large FilterDisplay (left) and ROUTING block (right).
-    Lower-middle: TONE/FORMANT block, TRACK block, MAIN block.
-    4 Q-Groups: MAIN, TRACK, OUT, FORMANT. All touch targets >= 56 px. */
+/** FilterFullScreen: the page of a filter (the plugin draws the whole tab; filter_ui.h). From the top: the power switch, the instance selector F1 | F2 | F1+F2, the model with its list, the style, the CLEAN switch and the
+    OUTPUT button (where the filter sends its signal); the display (the real response, or the Formant pad with its five knobs at the right); a row of blocks, ONE Q group each:
+      MAIN   CUTOFF  RESO  DRIVE  MIX                  TRACK   KEYTRACK  ENV 1  VAR  COMB                   OUT   LEVEL  PAN  BLEND  ROUTING                  FORMANT (Formant model)  X  Y  TRANSPOSE  SPREAD (+ RESONANCE)
+    A tap on a member makes its block the Q group; the four Q-Links then turn its members. Every knob shows its value. */
 class FilterFullScreen : public Composite
 {
 public:
-    static constexpr int kMaxGroups = 4;
-
+    static constexpr int kMaxGroups = 4;   // MAIN, TRACK, OUT, FORMANT
+    static constexpr int kTopH = 56, kBandH = 214, kBlockTitleH = 34, kBlockPad = 4, kBlockGap = 6, kSlotGap = 2;   // four knobs of 100 px in a block: the pads and gaps are small
     MenuButton close { "CLOSE", MenuButton::Icon::None };
     ToggleIcon power;
     PictogramSelector instances;
-    Stepper model;
-    RouteButton route { "M" };
-
+    Stepper model, style;
+    MenuButton modelList { "", MenuButton::Icon::Down };   // the list of the models
+    ToggleIcon clean;                                      // CLEAN MODE
+    RouteButton route { "M" };                             // OUTPUT: where the filter sends its signal (M main effects, D direct, - none)
     FilterDisplay display;
 
-    // Routing block controls
-    Stepper routing;
-    Knob blend { "BLEND" };
-    Knob level { "LEVEL" };
-    Knob pan { "PAN" };
-
-    // Tone block controls
-    Knob drive { "DRIVE" };
-    Knob var { "VAR" };
-    Knob combOffset { "COMB" };
-
-    // Formant block controls
-    Knob formantX { "X" };
-    Knob formantY { "Y" };
-    Knob formantTrans { "TRANS" };
-    Knob formantRes { "RESO" };
-    Knob formantSpread { "SPREAD" };
-
-    // Track block controls
-    Knob keytrack { "KEYTRACK" };
+    // MAIN
+    Knob cutoff { "CUTOFF" }, resonance { "RESO" }, drive { "DRIVE" }, mix { "MIX" };
+    // TRACK
+    Knob keytrack { "KEYTRACK" }, var { "VAR" }, combOffset { "COMB" };
     ToggleIcon env1;
-    ToggleIcon cleanMode;
+    // OUT
+    Knob level { "LEVEL" }, pan { "PAN" }, blend { "BLEND" }, routing { "ROUTING" };   // ROUTING: the three ways the two filters are connected (a knob over a choice: it steps)
+    // FORMANT
+    Knob formantX { "X" }, formantY { "Y" }, formantTrans { "TRANSPOSE" }, formantRes { "RESONANCE" }, formantSpread { "SPREAD" };
 
-    // Main block controls (full screen)
-    Knob cutoff { "CUTOFF" };
-    Knob resonance { "RESO" };
-    Knob mix { "MIX" };
-
-    // QGroups
     QGroup groups[kMaxGroups]; // 0: MAIN, 1: TRACK, 2: OUT, 3: FORMANT
 
     FilterFullScreen()
     {
         power.state.icon = ToggleIcon::Icon::Power;
         env1.state.icon = ToggleIcon::Icon::Generic;
-        cleanMode.state.icon = ToggleIcon::Icon::Generic;
+        env1.setLabel ("ENV 1");
+        env1.state.showState = true;
+        clean.state.icon = ToggleIcon::Icon::Generic;
+        clean.setLabel ("CLEAN");
+        clean.state.showState = true;
 
         instances.setItem (0, -1, "F1");
         instances.setItem (1, -1, "F2");
@@ -605,6 +548,7 @@ public:
         instances.state.count = 3;
         instances.state.index = 0;
         model.listable = true;
+        style.listable = true;
 
         pan.state.bipolar = true;
         keytrack.state.bipolar = true;
@@ -615,66 +559,49 @@ public:
         addKid (power);
         addKid (instances);
         addKid (model);
+        addKid (modelList);
+        addKid (style);
+        addKid (clean);
         addKid (route);
         addKid (display);
+        addKid (cutoff); addKid (resonance); addKid (drive); addKid (mix);
+        addKid (keytrack); addKid (env1); addKid (var); addKid (combOffset);
+        addKid (level); addKid (pan); addKid (blend); addKid (routing);
+        addKid (formantX, false); addKid (formantY, false); addKid (formantTrans, false); addKid (formantRes, false); addKid (formantSpread, false);
 
-        // Routing
-        addKid (routing);
-        addKid (blend);
-        addKid (level);
-        addKid (pan);
-
-        // Tone
-        addKid (drive);
-        addKid (var);
-        addKid (combOffset);
-
-        // Formant
-        addKid (formantX, false);
-        addKid (formantY, false);
-        addKid (formantTrans, false);
-        addKid (formantRes, false);
-        addKid (formantSpread, false);
-
-        // Track
-        addKid (keytrack);
-        addKid (env1);
-        addKid (cleanMode);
-
-        // Main
-        addKid (cutoff);
-        addKid (resonance);
-        addKid (mix);
-
-        setFormantMode (false);
         buildGroups();
+        setFormantMode (false);
     }
 
+    /** The page of its own tab: there is nothing to close. */
+    void setPageMode (bool page)
+    {
+        pageMode_ = page;
+        show (close, ! page);
+        if (rect_.w > 0)
+            layout();
+    }
+    /** The Formant model: the display is the XY pad and the FORMANT block sits at its right; VAR and COMB have no meaning there. */
     void setFormantMode (bool isFormant)
     {
         isFormant_ = isFormant;
         display.state.isFormant = isFormant;
-
-        show (drive, ! isFormant);
-        show (var, ! isFormant);
-        show (combOffset, ! isFormant);
-
-        show (formantX, isFormant);
-        show (formantY, isFormant);
-        show (formantTrans, isFormant);
-        show (formantRes, isFormant);
-        show (formantSpread, isFormant);
-
-        layout();
-        buildGroups();
+        for (Component* c : { static_cast<Component*> (&formantX), static_cast<Component*> (&formantY), static_cast<Component*> (&formantTrans), static_cast<Component*> (&formantRes), static_cast<Component*> (&formantSpread) })
+            show (*c, isFormant);
+        if (! isFormant && activeGroup_ == 3)
+            setActiveGroup (0);
+        if (rect_.w > 0)
+            layout();
     }
     bool formantMode() const noexcept { return isFormant_; }
+    bool pageMode() const noexcept { return pageMode_; }
 
-    Size minSize() const override { return { 1280, 800 }; }
+    Size minSize() const override { return { 1280, 628 }; }
     Rect displayRect() const noexcept { return display.rect(); }
+    Rect block (int i) const noexcept { return i == 0 ? mainBlock_ : (i == 1 ? trackBlock_ : (i == 2 ? outBlock_ : formantBlock_)); }
 
     int numGroups() const noexcept { return kMaxGroups; }
-    const char* groupName (int i) const noexcept
+    static const char* groupName (int i) noexcept
     {
         static const char* const kNames[kMaxGroups] = { "MAIN", "TRACK", "OUT", "FORMANT" };
         return i >= 0 && i < kMaxGroups ? kNames[i] : "";
@@ -696,23 +623,12 @@ public:
     {
         const Change c = Composite::touchDown (x, y, nowMs);
         if (cap_)
-        {
             for (int i = 0; i < kMaxGroups; ++i)
-            {
-                bool found = false;
-                for (int s = 0; s < QGroup::kSlots; ++s)
-                    if (groups[i].member (s) == cap_)
-                    {
-                        found = true;
-                        break;
-                    }
-                if (found)
+                if (groups[i].rect().contains (x, y) && (i != 3 || isFormant_))
                 {
                     setActiveGroup (i);
                     break;
                 }
-            }
-        }
         return c;
     }
 
@@ -726,94 +642,71 @@ public:
 protected:
     void layout() override
     {
-        const int m = 8;
-        const int W = rect_.w;
+        const int m = 8, W = rect_.w;
 
-        // 1. Top bar: CLOSE, POWER, INSTANCES, MODEL, ROUTE
-        const int topH = 52;
-        const Rect top { rect_.x + m, rect_.y + m + 16, W - 2 * m, topH };
-        Rect rTop[5];
-        const int fTop[5] = { 84, 56, 220, 0, 64 };
-        const int wTop[5] = { 0, 0, 0, 1, 0 };
-        layoutRow (top, fTop, wTop, 5, kGap, rTop);
-        close.place (rTop[0]);
-        power.place (rTop[1]);
-        instances.place (rTop[2]);
-        model.place (rTop[3]);
-        route.place (rTop[4]);
+        // 1. the top bar: CLOSE (a page has none), the power switch, F1 | F2 | F1+F2, the model and its list, the style, CLEAN, OUTPUT
+        const Rect top { rect_.x + m, rect_.y + m, W - 2 * m, kTopH };
+        Rect r[8];
+        const int fixed[8] = { pageMode_ ? 0 : 84, 56, 3 * 84, 0, 56, 0, 96, 64 + 70 }, weight[8] = { 0, 0, 0, 5, 0, 4, 0, 0 };
+        layoutRow (top, fixed, weight, 8, kGap, r);
+        close.place (r[0]);
+        power.place (r[1]);
+        instances.place (r[2]);
+        model.place (r[3]);
+        modelList.place (r[4]);
+        style.place (r[5]);
+        clean.place (r[6]);
+        outCaption_ = { r[7].x, r[7].y, 70, r[7].h };
+        route.place ({ r[7].right() - 64, r[7].y - 4, 64, 64 });
 
-        // 2. Middle area: Display (left) and ROUTING block (right)
-        const int midY = top.bottom() + m + 8;
-        const int bottomH = 240;
-        const int midH = std::max (60, rect_.bottom() - m - bottomH - m - midY);
-        const int routingW = 320;
-        const int dispW = W - 2 * m - routingW - kGap;
+        // 2. the bottom band: three blocks of four slots, one Q group each (a slot is a knob or a switch of the same size)
+        const int bandY = rect_.bottom() - m - kBandH;
+        const int avail = W - 2 * m - 2 * kBlockGap, wBlock = avail / 3;
+        mainBlock_ = { rect_.x + m, bandY, wBlock, kBandH };
+        trackBlock_ = { mainBlock_.right() + kBlockGap, bandY, wBlock, kBandH };
+        outBlock_ = { trackBlock_.right() + kBlockGap, bandY, rect_.right() - m - (trackBlock_.right() + kBlockGap), kBandH };
+        auto inner = [&] (const Rect& b) { return Rect { b.x + kBlockPad, b.y + kBlockTitleH, std::max (0, b.w - 2 * kBlockPad), std::max (0, b.h - kBlockTitleH - kBlockPad) }; };
+        auto fourSlots = [&] (const Rect& b, Component* c0, Component* c1, Component* c2, Component* c3)
+        {
+            const Rect in = inner (b);
+            const int cw = (in.w - 3 * kSlotGap) / 4;
+            Component* cs[4] = { c0, c1, c2, c3 };
+            for (int i = 0; i < 4; ++i)
+            {
+                const int x = in.x + i * (cw + kSlotGap), w = i == 3 ? in.right() - x : cw;
+                if (cs[i] == &env1)
+                {
+                    const int h = std::min (in.h, 96);
+                    cs[i]->place ({ x, in.y + (in.h - h) / 2, w, h });
+                }
+                else
+                    cs[i]->place ({ x, in.y, w, in.h });
+            }
+        };
+        fourSlots (mainBlock_, &cutoff, &resonance, &drive, &mix);
+        fourSlots (trackBlock_, &keytrack, &env1, &var, &combOffset);
+        fourSlots (outBlock_, &level, &pan, &blend, &routing);
 
-        display.place ({ rect_.x + m, midY, dispW, midH });
-
-        // Routing block
-        const Rect rBox { rect_.x + m + dispW + kGap, midY, routingW, midH };
-        routingBlock_ = rBox;
-        routing.place ({ rBox.x + 4, rBox.y + 4, rBox.w - 8, 48 });
-        const int rKnobY = rBox.y + 4 + 48 + kGap;
-        const int rKnobH = std::max (50, rBox.bottom() - 4 - rKnobY);
-        Rect rKnobs[3];
-        const int f3[3] = { 0, 0, 0 }, w3[3] = { 1, 1, 1 };
-        layoutRow ({ rBox.x + 4, rKnobY, rBox.w - 8, rKnobH }, f3, w3, 3, kGap, rKnobs);
-        blend.place (rKnobs[0]);
-        level.place (rKnobs[1]);
-        pan.place (rKnobs[2]);
-
-        // 3. Bottom area: TONE/FORMANT (left), TRACK (middle), MAIN (right)
-        const int botY = rect_.bottom() - m - bottomH;
-        const int botW = W - 2 * m;
-
-        const int toneW = isFormant_ ? 460 : 380;
-        const int trackW = 280;
-        const int mainW = botW - toneW - trackW - 2 * kGap;
-
-        // Left block: Tone or Formant
-        toneBlock_ = { rect_.x + m, botY, toneW, bottomH };
+        // 3. the display row: the display, and in the Formant model the XY pad with its block at the right
+        const int midY = top.bottom() + m + 4, midH = std::max (60, bandY - m - midY);
         if (isFormant_)
         {
-            Rect fRow1[3], fRow2[2];
-            const int fRowH = (bottomH - 16 - kGap) / 2;
-            const int f3a[3] = { 0, 0, 0 }, w3a[3] = { 1, 1, 1 };
-            const int f2a[2] = { 0, 0 }, w2a[2] = { 1, 1 };
-            layoutRow ({ toneBlock_.x + 4, toneBlock_.y + 12, toneBlock_.w - 8, fRowH }, f3a, w3a, 3, kGap, fRow1);
-            layoutRow ({ toneBlock_.x + 4, toneBlock_.y + 12 + fRowH + kGap, toneBlock_.w - 8, fRowH }, f2a, w2a, 2, kGap, fRow2);
-            formantX.place (fRow1[0]);
-            formantY.place (fRow1[1]);
-            formantTrans.place (fRow1[2]);
-            formantRes.place (fRow2[0]);
-            formantSpread.place (fRow2[1]);
+            const int fw = std::min (560, (W - 2 * m) * 45 / 100);
+            display.place ({ rect_.x + m, midY, W - 2 * m - fw - kBlockGap, midH });
+            formantBlock_ = { rect_.right() - m - fw, midY, fw, midH };
+            const Rect in = inner (formantBlock_);
+            const int areaW = in.w * 2 / 3, cw = (areaW - kGap) / 2, ch = (in.h - kQLane - kGap) / 2;   // X, Y / TRANSPOSE, SPREAD in a 2 x 2 grid (the Q group), RESONANCE in a column beside it
+            formantX.place ({ in.x, in.y, cw, ch });
+            formantY.place ({ in.x + cw + kGap, in.y, areaW - cw - kGap, ch });
+            formantTrans.place ({ in.x, in.y + ch + kGap + kQLane, cw, ch });
+            formantSpread.place ({ in.x + cw + kGap, in.y + ch + kGap + kQLane, areaW - cw - kGap, ch });
+            formantRes.place ({ in.x + areaW + kGap, in.y, in.right() - (in.x + areaW + kGap), in.h });
         }
         else
         {
-            Rect tKnobs[3];
-            const int ft3[3] = { 0, 0, 0 }, wt3[3] = { 1, 1, 1 };
-            layoutRow ({ toneBlock_.x + 4, toneBlock_.y + 20, toneBlock_.w - 8, bottomH - 28 }, ft3, wt3, 3, kGap, tKnobs);
-            drive.place (tKnobs[0]);
-            var.place (tKnobs[1]);
-            combOffset.place (tKnobs[2]);
+            display.place ({ rect_.x + m, midY, W - 2 * m, midH });
+            formantBlock_ = {};
         }
-
-        // Middle block: Track (KEYTRACK, ENV1, CLEAN)
-        trackBlock_ = { toneBlock_.right() + kGap, botY, trackW, bottomH };
-        keytrack.place ({ trackBlock_.x + 8, trackBlock_.y + 20, 110, bottomH - 28 });
-        const int togW = trackBlock_.w - 110 - 24;
-        const int togH = 52;
-        env1.place ({ trackBlock_.right() - 8 - togW, trackBlock_.y + 30, togW, togH });
-        cleanMode.place ({ trackBlock_.right() - 8 - togW, trackBlock_.y + 30 + togH + kGap, togW, togH });
-
-        // Right block: Main (CUTOFF, RESO, MIX)
-        mainBlock_ = { trackBlock_.right() + kGap, botY, mainW, bottomH };
-        Rect mKnobs[3];
-        const int fm3[3] = { 0, 0, 0 }, wm3[3] = { 1, 1, 1 };
-        layoutRow ({ mainBlock_.x + 4, mainBlock_.y + 20, mainBlock_.w - 8, bottomH - 28 }, fm3, wm3, 3, kGap, mKnobs);
-        cutoff.place (mKnobs[0]);
-        resonance.place (mKnobs[1]);
-        mix.place (mKnobs[2]);
     }
 
     void buildGroups()
@@ -822,25 +715,21 @@ protected:
             for (int k = 0; k < 4; ++k)
                 groups[i].set (k, nullptr);
 
-        // Group 0: MAIN (Cutoff, Reso, Drive / Formant X, Mix)
         groups[0].set (0, &cutoff);
         groups[0].set (1, &resonance);
-        groups[0].set (2, isFormant_ ? static_cast<Component*> (&formantX) : static_cast<Component*> (&drive));
+        groups[0].set (2, &drive);
         groups[0].set (3, &mix);
 
-        // Group 1: TRACK (Keytrack, Env1, Var, Comb)
         groups[1].set (0, &keytrack);
         groups[1].set (1, &env1);
         groups[1].set (2, &var);
         groups[1].set (3, &combOffset);
 
-        // Group 2: OUT (Level, Pan, Blend, Routing)
         groups[2].set (0, &level);
         groups[2].set (1, &pan);
         groups[2].set (2, &blend);
         groups[2].set (3, &routing);
 
-        // Group 3: FORMANT (X, Y, Transpose, Spread)
         groups[3].set (0, &formantX);
         groups[3].set (1, &formantY);
         groups[3].set (2, &formantTrans);
@@ -852,24 +741,26 @@ protected:
 
     void drawUnder (Pen& p) const override
     {
-        p.block (routingBlock_);
-        p.block (toneBlock_);
-        p.block (trackBlock_);
         p.block (mainBlock_);
+        p.block (trackBlock_);
+        p.block (outBlock_);
+        if (isFormant_)
+            p.block (formantBlock_);
     }
 
     void drawExtra (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        p.textLeft ({ routingBlock_.x + 8, routingBlock_.y + 3, routingBlock_.w - 16, 16 }, "ROUTING", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-        p.textLeft ({ toneBlock_.x + 8, toneBlock_.y + 3, toneBlock_.w - 16, 16 }, isFormant_ ? "FORMANT" : "TONE", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-        p.textLeft ({ trackBlock_.x + 8, trackBlock_.y + 3, trackBlock_.w - 16, 16 }, "TRACK", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-        p.textLeft ({ mainBlock_.x + 8, mainBlock_.y + 3, mainBlock_.w - 16, 16 }, "MAIN", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+        const Rect blocks[kMaxGroups] = { mainBlock_, trackBlock_, outBlock_, formantBlock_ };
+        for (int i = 0; i < kMaxGroups; ++i)
+            if (i != 3 || isFormant_)
+                p.textLeft ({ blocks[i].x + kBlockPad + 4, blocks[i].y + 3, std::max (0, blocks[i].w - 2 * kBlockPad - 4), 16 }, groupName (i), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+        p.textRight (outCaption_, "OUTPUT", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
     }
 
-    bool isFormant_ = false;
+    bool isFormant_ = false, pageMode_ = false;
     int activeGroup_ = 0;
-    Rect routingBlock_, toneBlock_, trackBlock_, mainBlock_;
+    Rect mainBlock_, trackBlock_, outBlock_, formantBlock_, outCaption_;
 };
 
 }} // namespace synthyboy_mpc::ui

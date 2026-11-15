@@ -93,13 +93,11 @@ inline uint32_t q() noexcept { return theme::L().q; }
 /** Copies up to cap - 1 characters (zero terminated). */
 inline void setText (char* dst, size_t cap, const char* src) noexcept
 {
-    size_t n = 0;
-    if (src)
-        while (src[n] != '\0' && n + 1 < cap)
-        {
-            dst[n] = src[n];
-            ++n;
-        }
+    size_t n = src ? std::strlen (src) : 0;   // (strlen + memmove: the compiler knows the length of a literal; a copy loop with two exits made GCC warn about reads past it)
+    if (n + 1 > cap)
+        n = cap > 0 ? cap - 1 : 0;
+    if (n > 0)
+        std::memmove (dst, src, n);
     dst[n] = '\0';
 }
 

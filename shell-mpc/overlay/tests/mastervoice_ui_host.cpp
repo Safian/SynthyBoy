@@ -1,18 +1,17 @@
-// SynthyBoy - MPC overlay tests: Master and Voice UI (master_ui.h, voice_ui.h).
-// Parameter mapping of all 33 master and 62 voice parameters, bidirectional value conversions,
-// touch interactions, drag drawing, Q-Link groups, ListPopup, and scene rendering.
+// SynthyBoy - MPC overlay tests: Master and Voice UI (master_ui.h, voice_ui.h), the pages of the Master and Voice tabs: the parameters of the master section and of the voice control in both directions, the two
+// sides of the Master page and their blocks (one Q group each, filled, every control >= 56 px with its value), the real keyboard, the meters of the engine, the lists of the steppers, the step grid (drawing
+// with a finger over several columns, the step a voice plays lit, every value of the selected step), the virtual Q targets, and the scene rendering.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <fstream>
 #include <string>
 #include <vector>
 
 #include "../master_ui.h"
 #include "../voice_ui.h"
-#include "../scene_cpu.h"
-#include "../touch_decoder.h"
+#include "demo_common.h"
 
 using namespace synthyboy_mpc;
 using namespace synthyboy_mpc::overlay;
@@ -27,378 +26,281 @@ void check (bool ok, const std::string& what)
         ++g_fails;
 }
 
-class FakeInst final : public IInstanceView
+using MRig = demo::Rig<MasterUi>;
+using VRig = demo::Rig<VoiceUi>;
+
+bool sizesOk (const std::vector<ui::Component*>& cs, std::string& bad)
 {
-public:
-    FakeInst()
-    {
-        const synthyboy::ParamInfo* t = synthyboy::paramTable();
-        for (size_t i = 0; i < synthyboy::paramCount(); ++i)
-            v_[i] = t[i].def;
-    }
-
-    float param (int i) const noexcept override
-    {
-        return (i >= 0 && i < static_cast<int> (synthyboy::kMaxParams)) ? v_[i] : 0.0f;
-    }
-
-    bool live (synthyboy::LiveValues& out) const noexcept override
-    {
-        out = liveVal;
-        return true;
-    }
-
-    double sampleRate() const noexcept override { return 48000.0; }
-    int playSelection (int) const noexcept override { return 1; }
-
-    void setQGroup (const int* t, int n) noexcept override
-    {
-        for (int i = 0; i < 4; ++i)
-            q[i] = (i < n) ? t[i] : -1;
-        ++qCalls;
-    }
-
-    void writeParam (int i, float norm) noexcept override
-    {
-        if (i < 0 || i >= static_cast<int> (synthyboy::paramCount()))
-            return;
-        const synthyboy::ParamInfo& p = synthyboy::paramTable()[i];
-        v_[i] = synthyboy::constrainValue (p, synthyboy::fromNormalised (p, norm));
-        ++writes;
-        lastWritten = i;
-    }
-
-    void setPlaySelection (int, int) noexcept override {}
-    int playLastSelector() const noexcept override { return 0; }
-    void setUiFullOpen (bool o) noexcept override { fullOpen = o; }
-
-    static int idx (const std::string& key)
-    {
-        const auto* p = synthyboy::findParamByKey (key.c_str());
-        return p ? static_cast<int> (p - synthyboy::paramTable()) : -1;
-    }
-
-    void set (const std::string& key, float v) { v_[idx (key)] = v; }
-    float get (const std::string& key) const { return v_[idx (key)]; }
-
-    synthyboy::LiveValues liveVal;
-    int q[4] = { -1, -1, -1, -1 };
-    int qCalls = 0;
-    int writes = 0;
-    int lastWritten = -1;
-    bool fullOpen = false;
-
-private:
-    float v_[synthyboy::kMaxParams] = {};
-};
-
-TouchEvent ev (TouchEvent::Kind k, int x, int y)
-{
-    TouchEvent e;
-    e.kind = k;
-    e.x = x;
-    e.y = y;
-    return e;
+    for (ui::Component* c : cs)
+        if (c->rect().w <= 0 || c->rect().h < 56 || ! c->sizeOk())
+        {
+            bad = std::to_string (c->rect().w) + " x " + std::to_string (c->rect().h);
+            return false;
+        }
+    return true;
 }
 
-// -------------------------------------------------------------------------------------------------------------------------------
-// MASTER UI TESTS
-// -------------------------------------------------------------------------------------------------------------------------------
-
-void testMasterParameterMapping()
+// ---- master ----------------------------------------------------------------------------------------------------------------------------------------------------
+void testMasterParametersExist()
 {
-    MasterUi ui;
-    FakeInst inst;
-    UiStack stack;
-    ui.update (inst, 1, stack, 1000.0);
-
-    // Verify all 33 master parameters
-    static const char* const kExpectedKeys[] = {
-        "master.volume", "master.polyphony", "master.bend_range", "master.transpose",
-        "master.tune", "master.legato", "master.portamento.time", "master.portamento.slope",
-        "master.portamento.always", "master.portamento.scaled", "master.scale.key",
-        "master.scale.type", "master.scale.mode", "master.tuning.a4", "master.tuning.scale",
-        "master.tuning.mts_esp", "master.tuning.mts_note_on_only", "master.mpe.on",
-        "master.mpe.bend_range", "voice.phase_legato", "master.voice.same_note",
-        "master.voice.steal_priority", "master.poly_legato", "master.bend_down_range",
-        "master.bend_down_link", "master.stereo_spread", "master.stereo_routing",
-        "master.voice_override", "master.mpe.xyz_macro", "master.mpe.y_modwheel",
-        "master.mpe.bend_to_x", "master.mpe.y_bipolar"
-    };
-
     int unbound = 0;
-    for (const char* key : kExpectedKeys)
-    {
-        const int p = FakeInst::idx (key);
-        if (p < 0)
+    MasterUi ui;
+    for (const MasterUi::Item& it : ui.items())
+        if (it.param < 0 && it.type != MasterUi::T::Inert)
         {
             ++unbound;
-            std::printf ("Missing engine param: %s\n", key);
+            std::printf ("  not in the table: %s\n", it.key.c_str());
         }
-    }
-    check (unbound == 0, "master: all required master parameters exist in engine table");
+    check (unbound == 0 && ui.items().size() >= 32, "master: all " + std::to_string (ui.items().size()) + " controls are bound to an engine parameter");
+}
 
-    // Check that every item in MasterUi has a valid parameter or is inert
-    int unmapped = 0;
-    for (const MasterUi::Item& it : ui.items())
+void testMasterSidesAndBlocks()
+{
+    MRig r;
+    r.refresh();
+    ui::MasterScreen& m = r.ui.screen();
+    check (m.rect().w == 1280 && m.rect().h == 628 && r.stack.element() == MasterUi::kElementPage, "the page has the whole tab and is the element of the Master tab");
+    check (m.side() == ui::MasterScreen::SideMain, "the first side is MAIN: OUTPUT, PITCH, VOICES, GLIDE");
+    std::string bad;
+    std::vector<ui::Component*> main = { &m.volume, &m.spread, &m.stereoRouting, &m.voiceOverride, &m.tune, &m.transpose, &m.bendUp, &m.bendDown, &m.bendLink, &m.polyphony, &m.legato, &m.polyLegato, &m.phaseLegato,
+                                         &m.sameNote, &m.stealPriority, &m.voiceMeter, &m.portaTime, &m.portaSlope, &m.portaAlways, &m.portaScaled };
+    check (sizesOk (main, bad), "every control of the side MAIN is >= 56 px high and has its minimum size " + bad);
+    // each block holds its group, and the blocks are filled (the controls reach the lower part of the block)
+    bool inside = true, filled = true;
+    for (int g = 0; g < 4; ++g)
     {
-        if (it.type != MasterUi::T::Inert && it.param < 0)
-        {
-            ++unmapped;
-            std::printf ("Unmapped item: %s (id %d)\n", it.key.c_str(), it.id);
-        }
+        const ui::Rect b = m.blockRect (g), u = m.groups[g].rect();
+        inside = inside && b.contains (u);
+        ui::Component* all[96];
+        const int n = m.collectLeaves (all, 0, 96);
+        inside = inside && m.groups[g].check (all, n) == 0;
+        filled = filled && u.bottom() >= b.bottom() - 90 && u.h >= 140;
     }
-    check (unmapped == 0, "master: every control in MasterUi is bound to a valid engine parameter");
-}
-
-void testMasterReadWrite()
-{
-    MasterUi ui;
-    FakeInst inst;
-    UiStack stack;
-
-    // Test writing volume
-    inst.set ("master.volume", -12.0f);
-    ui.update (inst, 1, stack, 1000.0);
-    check (std::strstr (ui.screen().volume.state.valueText, "dB") != nullptr, "master: volume knob formats dB value");
-
-    // Touch volume knob
-    const ui::Rect vr = ui.screen().volume.rect();
-    ui.touch (ev (TouchEvent::Down, vr.x + vr.w / 2, vr.y + vr.h / 2), stack, inst, 1010.0);
-    ui.touch (ev (TouchEvent::Move, vr.x + vr.w / 2, vr.y + 10), stack, inst, 1020.0);
-    ui.touch (ev (TouchEvent::Up, vr.x + vr.w / 2, vr.y + 10), stack, inst, 1030.0);
-    check (inst.writes > 0 && inst.lastWritten == FakeInst::idx ("master.volume"), "master: volume knob writes to engine");
-
-    // Test toggle legato
-    const ui::Rect lr = ui.screen().legato.rect();
-    const int legIdx = FakeInst::idx ("master.legato");
-    inst.set ("master.legato", 0.0f);
-    ui.update (inst, 1, stack, 1040.0);
-    ui.touch (ev (TouchEvent::Down, lr.x + lr.w / 2, lr.y + lr.h / 2), stack, inst, 1050.0);
-    ui.touch (ev (TouchEvent::Up, lr.x + lr.w / 2, lr.y + lr.h / 2), stack, inst, 1060.0);
-    check (inst.lastWritten == legIdx && inst.get ("master.legato") == 1.0f, "master: legato toggle writes to engine");
-
-    // Test mini keyboard scale check
-    check (ui::MiniKeyboardDisplay::isScaleNote (1, 0, 0), "master: C is in C Major scale");
-    check (! ui::MiniKeyboardDisplay::isScaleNote (1, 0, 1), "master: C# is not in C Major scale");
-    check (ui::MiniKeyboardDisplay::isScaleNote (1, 0, 4), "master: E is in C Major scale");
-}
-
-void testMasterQGroups()
-{
-    MasterUi ui;
-    FakeInst inst;
-    UiStack stack;
-    ui.update (inst, 1, stack, 1000.0);
-
-    check (ui.screen().numGroups() == 6, "master: has 6 Q-Link groups");
-
-    // Switch to Pitch group (block 1)
-    const ui::Rect pr = ui.screen().blockRect (1);
-    ui.touch (ev (TouchEvent::Down, pr.x + 20, pr.y + 10), stack, inst, 1010.0);
-    ui.touch (ev (TouchEvent::Up, pr.x + 20, pr.y + 10), stack, inst, 1020.0);
-    ui.update (inst, 1, stack, 1030.0);
-
-    check (ui.activeQ() == 1, "master: tapping pitch block activates Pitch QGroup");
-    check (inst.q[0] == FakeInst::idx ("master.tune") && inst.q[1] == FakeInst::idx ("master.transpose"),
-           "master: pitch QGroup maps tune and transpose to Q1 and Q2");
-}
-
-void testMasterListPopup()
-{
-    MasterUi ui;
-    FakeInst inst;
-    UiStack stack;
-    stack.openFull (MasterUi::kElementMaster);
-    ui.update (inst, 1, stack, 1000.0);
-
-    // Tap scale type stepper to open list popup
-    const ui::Rect st = ui.screen().scaleType.rect();
-    ui.touch (ev (TouchEvent::Down, st.x + st.w / 2, st.y + st.h / 2), stack, inst, 1010.0);
-    ui.touch (ev (TouchEvent::Up, st.x + st.w / 2, st.y + st.h / 2), stack, inst, 1020.0);
-    ui.update (inst, 1, stack, 1030.0);
-
-    check (stack.top() == MasterUi::kPageList, "master: tapping scale type opens ListPopup");
-    check (ui.list().state.count == 20, "master: list popup contains all 20 scale choices");
-
-    // Tap row 1 ("Major")
-    const ui::Rect r1 = ui.list().rowRect (1);
-    ui.touch (ev (TouchEvent::Down, r1.x + r1.w / 2, r1.y + r1.h / 2), stack, inst, 1040.0);
-    ui.touch (ev (TouchEvent::Up, r1.x + r1.w / 2, r1.y + r1.h / 2), stack, inst, 1050.0);
-    ui.update (inst, 1, stack, 1060.0);
-
-    check (stack.top() != MasterUi::kPageList, "master: selecting item closes ListPopup");
-    check (inst.get ("master.scale.type") == 1.0f, "master: selecting Major writes master.scale.type = 1");
-}
-
-// -------------------------------------------------------------------------------------------------------------------------------
-// VOICE UI TESTS
-// -------------------------------------------------------------------------------------------------------------------------------
-
-void testVoiceParameterMapping()
-{
-    VoiceUi ui;
-    FakeInst inst;
-    UiStack stack;
-    ui.update (inst, 1, stack, 1000.0);
-
-    // Verify all 48 step parameters (8 steps x 6 rows)
-    static const char* const kRows[6] = { "pan", "detune", "cutoff", "env", "mod1", "mod2" };
-    int missingSteps = 0;
-    for (int s = 1; s <= 8; ++s)
+    check (inside, "the Q group of OUTPUT, PITCH, VOICES and GLIDE lies in its block and nothing else is in its frame");
+    check (filled, "the groups fill their blocks (>= 140 px high, reaching the lower part)");
+    check (m.volume.rect().h >= 200 && m.volume.rect().w >= 140, "the VOLUME is a big knob (" + std::to_string (m.volume.rect().w) + " x " + std::to_string (m.volume.rect().h) + ")");
+    // the second side
+    r.tap (m.sideTuning);
+    check (m.side() == ui::MasterScreen::SideTuning && m.activeGroup() == 4, "TUNING & MPE shows the second side, SCALE is the Q group");
+    std::vector<ui::Component*> tun = { &m.scaleType, &m.scaleKey, &m.scaleMode, &m.tuningA4, &m.tuningScale, &m.mtsEsp, &m.mtsNoteOn, &m.mpeOn, &m.mpeBend, &m.mpeMacro, &m.mpeYModwheel, &m.mpeBendToX, &m.mpeYBipolar };
+    check (sizesOk (tun, bad), "every control of the side TUNING & MPE is >= 56 px high and has its minimum size " + bad);
+    check (m.keyboard.rect().w >= 1200 && m.keyboard.rect().h >= 120, "the keyboard is big (" + std::to_string (m.keyboard.rect().w) + " x " + std::to_string (m.keyboard.rect().h) + ")");
+    bool inside2 = true;
+    for (int g = 4; g < 8; ++g)
     {
-        for (int r = 0; r < 6; ++r)
-        {
-            const std::string key = "voicectl.s" + std::to_string (s) + "." + kRows[r];
-            if (FakeInst::idx (key) < 0)
-            {
-                ++missingSteps;
-                std::printf ("Missing step param: %s\n", key.c_str());
-            }
-        }
+        const ui::Rect b = m.blockRect (g < 6 ? g : 6), u = m.groups[g].rect();
+        ui::Component* all[96];
+        const int n = m.collectLeaves (all, 0, 96);
+        inside2 = inside2 && b.contains (u) && m.groups[g].check (all, n) == 0;
     }
-    check (missingSteps == 0, "voice: all 48 step parameters exist in engine table");
+    check (inside2, "the groups SCALE, TUNING and the two rows of MPE lie in their blocks and nothing else is in their frames");
+    r.tap (m.sideMain);
+    check (m.side() == ui::MasterScreen::SideMain && m.activeGroup() < 4, "MAIN goes back");
+}
 
-    // Verify random, scaling, targets, and length (14 parameters)
-    static const char* const kMiscKeys[] = {
-        "voicectl.length", "voicectl.rand.pan", "voicectl.rand.detune", "voicectl.rand.cutoff",
-        "voicectl.rand.env", "voicectl.rand.detune10x", "voicectl.scale.env", "voicectl.scale.lfo",
-        "voicectl.scale.lfo_mode", "voicectl.osc.a", "voicectl.osc.b", "voicectl.osc.c",
-        "voicectl.osc.sub", "voicectl.osc.noise"
-    };
+void testMasterValuesAndWrites()
+{
+    MRig r;
+    r.inst.set ("master.volume", -6.0f);
+    r.inst.set ("master.tune", 12.5f);
+    r.inst.set ("master.portamento.time", 120.0f);
+    r.inst.set ("master.stereo_spread", 100.0f);
+    r.refresh();
+    ui::MasterScreen& m = r.ui.screen();
+    check (std::string (m.volume.state.valueText) == "-6.0 dB", "the volume is -6.0 dB (" + std::string (m.volume.state.valueText) + ")");
+    check (std::string (m.tune.state.valueText).find ("ct") != std::string::npos, "the tune is in cents (" + std::string (m.tune.state.valueText) + ")");
+    check (std::string (m.portaTime.state.valueText) == "120 ms", "the glide time is 120 ms (" + std::string (m.portaTime.state.valueText) + ")");
+    check (std::string (m.spread.state.valueText).find ("%") != std::string::npos, "the spread is a percent (" + std::string (m.spread.state.valueText) + ")");
+    check (m.voiceOverride.state.caption[0] != '\0' && std::string (m.voiceOverride.state.caption) == "VOICE OVERRIDE" && std::string (m.stereoRouting.state.caption) == "STEREO", "the steppers of OUTPUT have their names (no unlabeled stepper)");
+    check (std::string (m.voiceOverride.state.text) != "" && std::string (m.voiceOverride.state.text) == "Kill", "the voice override is written by name: " + std::string (m.voiceOverride.state.text));
 
-    int missingMisc = 0;
-    for (const char* key : kMiscKeys)
+    const ui::Rect v = m.volume.rect();
+    r.drag (v.x + v.w / 2, v.y + v.h / 2, v.x + v.w / 2, v.y + v.h / 2 - 50, true);
+    check (r.inst.get ("master.volume") > -6.0f, "dragging VOLUME writes master.volume (" + std::to_string (r.inst.get ("master.volume")) + ")");
+    r.tap (m.bendLink);
+    check (r.inst.get ("master.bend_down_link") == (m.bendLink.state.on ? 1.0f : 0.0f), "LINK writes master.bend_down_link");
+    // a number field drags
+    const ui::Rect t = m.transpose.rect();
+    r.drag (t.x + t.w / 2, t.y + t.h / 2, t.x + t.w / 2, t.y + t.h / 2 - 40, true);
+    check (r.inst.get ("master.transpose") > 0.0f, "dragging TRANSPOSE writes master.transpose (" + std::to_string (r.inst.get ("master.transpose")) + ")");
+    // a stepper opens its list in the middle
+    r.tap (m.voiceOverride);
+    check (r.ui.topPage() == MasterUi::kPageList && r.ui.list().state.count == static_cast<int> (synthyboy::paramTable()[demo::Inst::idx ("master.voice_override")].numChoices), "a tap on the name of a stepper opens its list");
+    const ui::Rect row = r.ui.list().rowRect (1);
+    r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
+    check (r.inst.get ("master.voice_override") == 1.0f && r.ui.topPage() == 0, "a row writes the choice and closes the list");
+}
+
+void testMasterGroupsAndMeters()
+{
+    MRig r;
+    r.refresh();
+    ui::MasterScreen& m = r.ui.screen();
+    check (r.inst.q[0] == demo::Inst::idx ("master.volume") && r.inst.q[1] == demo::Inst::idx ("master.stereo_spread"), "OUTPUT is the first Q group: VOLUME, SPREAD, STEREO, OVERRIDE");
+    r.tap (m.portaSlope);
+    check (m.activeGroup() == 3 && r.inst.q[0] == demo::Inst::idx ("master.portamento.time") && r.inst.q[1] == demo::Inst::idx ("master.portamento.slope"), "a touch in GLIDE makes it the Q group");
+    r.tap (m.sideTuning);
+    r.tap (m.mpeBendToX);
+    check (m.activeGroup() == 7 && r.inst.q[0] == demo::Inst::idx ("master.mpe.y_modwheel") && r.inst.q[3] == -1, "the second row of MPE is a group of its own (3 members)");
+    // meters
+    r.tap (m.sideMain);
+    r.inst.haveLive = true;
+    r.inst.liveValues.stripPeak[9] = 0.8f;
+    r.inst.liveValues.activeVoices = 5;
+    r.refresh();
+    check (std::fabs (m.meters.peakL - 0.8f) < 1.0e-6f && m.voiceMeter.activeVoices == 5, "the meters are the engine's master peak and its voice count");
+    // the keyboard: C major lights 7 of the 12 notes
+    r.tap (m.sideTuning);
+    r.inst.set ("master.scale.type", 1.0f);
+    r.inst.set ("master.scale.key", 0.0f);
+    r.refresh();
+    int lit = 0;
+    for (int n = 0; n < 12; ++n)
+        lit += ui::MiniKeyboardDisplay::isScaleNote (m.keyboard.scaleType, m.keyboard.scaleKey, n) ? 1 : 0;
+    check (lit == 7 && m.keyboard.scaleType == 1, "the keyboard shows 7 of the 12 notes for a major scale");
+}
+
+void testMasterDraw()
+{
+    MRig r;
+    r.refresh();
+    for (int side = 0; side < 2; ++side)
     {
-        if (FakeInst::idx (key) < 0)
-        {
-            ++missingMisc;
-            std::printf ("Missing misc param: %s\n", key);
-        }
+        r.ui.screen().setSide (side);
+        auto data = std::make_unique<gpu::SceneData>();
+        gpu::SceneBuilder sb (*data);
+        sb.begin (gpu::kKindPlay, 0, 1280, 800);
+        r.ui.draw (sb);
+        check (! sb.overflow && data->numOps > 100, "the master side " + std::to_string (side) + " fits in the buffer (" + std::to_string (data->numOps) + " ops)");
+        std::vector<uint32_t> cv;
+        renderScene (*data, cv);
+        check (cv.size() == 1280u * 800u, "the CPU renderer draws the master side " + std::to_string (side));
     }
-    check (missingMisc == 0, "voice: all 14 voicectl control parameters exist in engine table");
+}
 
-    // Check that every item in VoiceUi is bound to a valid engine parameter
-    int unmapped = 0;
-    for (const VoiceUi::Item& it : ui.items())
+// ---- voice -----------------------------------------------------------------------------------------------------------------------------------------------------
+void testVoiceLayout()
+{
+    VRig r;
+    r.refresh();
+    ui::VoiceScreen& v = r.ui.screen();
+    check (v.rect().w == 1280 && v.rect().h == 628 && r.stack.element() == VoiceUi::kElementPage, "the page has the whole tab and is the element of the Voice tab");
+    std::string bad;
+    std::vector<ui::Component*> cs = { &v.length, &v.qStepSelect, &v.qRowSelect, &v.stepValue, &v.randPan, &v.randDetune, &v.randCutoff, &v.randEnv, &v.randDetune10x, &v.scaleEnv, &v.scaleLfo, &v.scaleLfoMode, &v.oscA, &v.oscB, &v.oscC, &v.oscSub, &v.oscNoise };
+    check (sizesOk (cs, bad), "every control of the Voice page is >= 56 px high and has its minimum size " + bad);
+    bool inside = true;
+    for (int g = 0; g < 4; ++g)
     {
-        if (it.type != VoiceUi::T::Inert && it.param < 0)
-        {
-            ++unmapped;
-            std::printf ("Unmapped voice item: %s (id %d)\n", it.key.c_str(), it.id);
-        }
+        ui::Component* all[96];
+        const int n = v.collectLeaves (all, 0, 96);
+        inside = inside && v.groups[g].check (all, n) == 0;
+        if (g > 0)
+            inside = inside && v.blockRect (g - 1).contains (v.groups[g].rect());
     }
-    check (unmapped == 0, "voice: every control in VoiceUi is bound to a valid engine parameter");
+    check (inside, "the Q groups lie in their blocks and nothing else is in their frames");
+    check (v.grid.rect().h >= 230 && v.randPan.rect().h >= 72 && v.scaleEnv.rect().h >= 72, "the grid is tall and the knobs of the blocks have the room");
+    check (v.stripRect().y >= v.grid.rect().bottom() && v.blockRect (0).y >= v.stripRect().bottom(), "the strip of the step lies between the grid and the blocks");
+    check (v.randDetune10x.rect().bottom() <= v.blockRect (0).bottom(), "the blocks hold their controls");
 }
 
-void testVoiceGridReadWriteAndDrag()
+void testVoiceGridDrawing()
 {
-    VoiceUi ui;
-    FakeInst inst;
-    UiStack stack;
-
-    // Set step 1 pan to +50% and step 2 pan to -30%
-    inst.set ("voicectl.s1.pan", 50.0f);
-    inst.set ("voicectl.s2.pan", -30.0f);
-    ui.update (inst, 1, stack, 1000.0);
-
-    check (std::fabs (ui.grid().value (0, 0) - 0.5f) < 0.02f, "voice: grid step 1 pan correctly reflects engine value (+50%)");
-    check (std::fabs (ui.grid().value (0, 1) - (-0.3f)) < 0.02f, "voice: grid step 2 pan correctly reflects engine value (-30%)");
-
-    // Test row tab switching: tap tab 1 (DETUNE)
-    const ui::Rect tab1 = ui.grid().tabRect (1);
-    ui.touch (ev (TouchEvent::Down, tab1.x + tab1.w / 2, tab1.y + tab1.h / 2), stack, inst, 1010.0);
-    ui.touch (ev (TouchEvent::Up, tab1.x + tab1.w / 2, tab1.y + tab1.h / 2), stack, inst, 1020.0);
-    ui.update (inst, 1, stack, 1030.0);
-    check (ui.grid().activeRow == 1, "voice: tapping row tab 1 activates DETUNE row");
-
-    // Test dragging across step columns 0 and 1
-    const ui::Rect col0 = ui.grid().columnRect (0);
-    const ui::Rect col1 = ui.grid().columnRect (1);
-    const int topY = col0.y + 40; // near top = high positive value
-
-    ui.touch (ev (TouchEvent::Down, col0.x + col0.w / 2, topY), stack, inst, 1040.0);
-    check (inst.writes > 0 && inst.lastWritten == FakeInst::idx ("voicectl.s1.detune"), "voice: touching col 0 writes voicectl.s1.detune");
-
-    // Drag to col 1
-    ui.touch (ev (TouchEvent::Move, col1.x + col1.w / 2, topY + 20), stack, inst, 1050.0);
-    check (inst.lastWritten == FakeInst::idx ("voicectl.s2.detune"), "voice: dragging across to col 1 writes voicectl.s2.detune");
-
-    ui.touch (ev (TouchEvent::Up, col1.x + col1.w / 2, topY + 20), stack, inst, 1060.0);
+    VRig r;
+    r.inst.set ("voicectl.length", 8.0f);
+    r.refresh();
+    ui::VoiceGrid& g = r.ui.screen().grid;
+    // a stroke over four columns at the height of +60 %
+    const ui::Rect c0 = g.columnRect (1), c5 = g.columnRect (5);
+    const int y = c0.y + 32 + (c0.h - 62) / 2 - static_cast<int> (0.6 * (c0.h - 62) * 0.47);
+    r.ui.touch ({ TouchEvent::Down, c0.x + c0.w / 2, y }, r.stack, r.inst, r.now);
+    r.ui.touch ({ TouchEvent::Move, c5.x + c5.w / 2, y }, r.stack, r.inst, r.now + 16.0);   // a jump over three columns
+    r.ui.touch ({ TouchEvent::Up, c5.x + c5.w / 2, y }, r.stack, r.inst, r.now + 40.0);
+    r.refresh();
+    int written = 0;
+    for (int s = 1; s <= 5; ++s)
+        written += r.inst.get ("voicectl.s" + std::to_string (s + 1) + ".pan") > 50.0f ? 1 : 0;
+    check (written == 5, "a stroke over columns 2 .. 6 writes every one of them, the skipped ones too (" + std::to_string (written) + " of 5)");
+    check (g.selectedStep == 5, "the selected step is the last one touched");
+    // the values at the selected step are written under the grid
+    r.inst.set ("voicectl.s6.detune", -25.0f);
+    r.inst.set ("voicectl.s6.cutoff", 40.0f);
+    r.refresh();
+    check (g.value (1, 5) < -0.2f && g.value (2, 5) > 0.3f, "the grid has every row's value of the step");
+    check (std::string (g.rowName (0)) == "PAN" && r.ui.screen().stripRect().h >= 40, "the strip under the grid has the room for the values of the step");
+    // a row tab
+    r.tapAt (g.tabRect (2).x + 10, g.tabRect (2).y + 10);
+    check (g.activeRow == 2 && std::string (r.ui.screen().qRowSelect.state.text) == "CUTOFF", "a row tab selects the row");
 }
 
-void testVoiceQGroupsAndLive()
+void testVoiceStepsLitAndQ()
 {
-    VoiceUi ui;
-    FakeInst inst;
-    UiStack stack;
+    VRig r;
+    r.inst.set ("voicectl.length", 3.0f);
+    r.inst.haveLive = true;
+    for (float& s : r.inst.liveValues.voiceStep)
+        s = -1.0f;
+    r.inst.liveValues.voiceStep[0] = 0.0f;   // the newest voice plays step 1
+    r.inst.liveValues.voiceStep[1] = 2.0f;
+    r.refresh();
+    check (r.ui.screen().grid.voiceStepMask == 0x05, "the steps the voices play are lit (steps 1 and 3)");
+    r.inst.liveValues.voiceStep[1] = 6.0f;   // beyond the length: not lit
+    r.refresh();
+    check (r.ui.screen().grid.voiceStepMask == 0x01, "a step beyond the length is not lit");
 
-    // Simulate active voice sounding
-    inst.liveVal.activeVoices = 3;
-    ui.update (inst, 1, stack, 1000.0);
-
-    check (ui.grid().voiceStepMask != 0, "voice: active sounding voice sets voiceStepMask on grid");
-
-    // Turn Q knob in Step group
-    ui.screen().setActiveGroup (0);
-    ui.grid().selectedStep = 0;
-    ui.grid().activeRow = 0;
-    const int prevWrites = inst.writes;
-    ui.turnQ (0, 1.0, stack, inst);
-    check (inst.writes > prevWrites && inst.lastWritten == FakeInst::idx ("voicectl.s1.pan"),
-           "voice: turning Q1 in Step group writes active step parameter");
-
-    // Switch to Random group
-    const ui::Rect randBlock = ui.screen().blockRect (0);
-    ui.touch (ev (TouchEvent::Down, randBlock.x + 20, randBlock.y + 10), stack, inst, 1010.0);
-    ui.touch (ev (TouchEvent::Up, randBlock.x + 20, randBlock.y + 10), stack, inst, 1020.0);
-    ui.update (inst, 1, stack, 1030.0);
-
-    check (ui.activeQ() == 1, "voice: tapping Random block activates Random QGroup");
-    check (inst.q[0] == FakeInst::idx ("voicectl.rand.pan"), "voice: Random QGroup routes Q1 to voicectl.rand.pan");
+    // the Q group STEP: two virtual targets, the length, the value of the selected step
+    ui::VoiceScreen& v = r.ui.screen();
+    check (QRouter::modeOf (r.inst.q[0]) == QRouter::kVirtual && QRouter::indexOf (r.inst.q[0]) == VoiceUi::kVirtualStep, "Q1 is the virtual step target");
+    check (QRouter::modeOf (r.inst.q[1]) == QRouter::kVirtual && QRouter::indexOf (r.inst.q[1]) == VoiceUi::kVirtualRow, "Q2 is the virtual row target");
+    check (r.inst.q[2] == demo::Inst::idx ("voicectl.length") && r.inst.q[3] == demo::Inst::idx ("voicectl.s1.pan"), "Q3 is the length, Q4 the value of the selected step");
+    r.inst.setVirtualIn (VoiceUi::kVirtualStep, 1.0f);   // the host writes step 8
+    r.refresh();
+    check (v.grid.selectedStep == 7 && r.inst.q[3] == demo::Inst::idx ("voicectl.s8.pan"), "the host's write to the virtual step target selects step 8 and the value target follows");
+    r.inst.setVirtualIn (VoiceUi::kVirtualRow, 0.4f);
+    r.refresh();
+    check (v.grid.activeRow == 2 && r.inst.q[3] == demo::Inst::idx ("voicectl.s8.cutoff"), "the virtual row target selects CUTOFF");
+    // the value field writes the step
+    const ui::Rect sv = v.stepValue.rect();
+    r.drag (sv.x + sv.w / 2, sv.y + sv.h / 2, sv.x + sv.w / 2, sv.y + sv.h / 2 - 30, true);
+    check (r.inst.get ("voicectl.s8.cutoff") > 0.0f, "the value field of the header writes the selected step (" + std::to_string (r.inst.get ("voicectl.s8.cutoff")) + ")");
+    // the other blocks write their parameters, with values
+    check (std::string (v.randPan.state.valueText).find ("%") != std::string::npos && std::string (v.scaleEnv.state.valueText).find ("%") != std::string::npos, "the knobs of the blocks show their values");
+    r.tap (v.oscNoise);
+    check (r.inst.get ("voicectl.osc.noise") != 1.0f, "a target switch writes its parameter");
+    r.tap (v.scaleLfoMode);
+    check (r.ui.topPage() == VoiceUi::kPageList && r.ui.list().state.count > 1, "the mode stepper opens its list");
 }
 
-void testSceneOpsAndTouchTargets()
+void testVoiceDraw()
 {
-    MasterUi mUi;
-    VoiceUi vUi;
-    FakeInst inst;
-    UiStack stack;
-
-    mUi.update (inst, 1, stack, 1000.0);
-    vUi.update (inst, 1, stack, 1000.0);
-
-    gpu::SceneData mData, vData;
-    gpu::SceneBuilder mSb (mData);
-    mSb.begin (gpu::kKindPlay, 0, 1280, 800);
-    mUi.draw (mSb);
-    check (mData.numOps > 0 && mData.numOps < gpu::kMaxOps, "master: scene drawing fits in budget (" + std::to_string (mData.numOps) + " ops)");
-
-    gpu::SceneBuilder vSb (vData);
-    vSb.begin (gpu::kKindPlay, 0, 1280, 800);
-    vUi.draw (vSb);
-    check (vData.numOps > 0 && vData.numOps < gpu::kMaxOps, "voice: scene drawing fits in budget (" + std::to_string (vData.numOps) + " ops)");
-
-    // Touch targets check: all interactive controls must have rect >= 56px in either dimension or standard chip sizes
-    check (mUi.screen().close.rect().h >= 56 && mUi.screen().close.rect().w >= 56, "master: close touch target >= 56px");
-    check (vUi.screen().close.rect().h >= 56 && vUi.screen().close.rect().w >= 56, "voice: close touch target >= 56px");
-    check (vUi.grid().columnRect (0).w >= 56, "voice: step column width >= 56px");
+    VRig r;
+    r.inst.haveLive = true;
+    for (float& s : r.inst.liveValues.voiceStep)
+        s = -1.0f;
+    r.inst.liveValues.voiceStep[0] = 2.0f;
+    r.refresh();
+    auto data = std::make_unique<gpu::SceneData>();
+    gpu::SceneBuilder sb (*data);
+    sb.begin (gpu::kKindPlay, 0, 1280, 800);
+    r.ui.draw (sb);
+    check (! sb.overflow && data->numOps > 100, "the voice page fits in the buffer (" + std::to_string (data->numOps) + " ops)");
+    std::vector<uint32_t> cv;
+    renderScene (*data, cv);
+    check (cv.size() == 1280u * 800u, "the CPU renderer draws the voice page");
 }
-
 } // namespace
 
 int main()
 {
-    std::printf ("=== Running Master & Voice UI Host Tests ===\n");
-    testMasterParameterMapping();
-    testMasterReadWrite();
-    testMasterQGroups();
-    testMasterListPopup();
-    testVoiceParameterMapping();
-    testVoiceGridReadWriteAndDrag();
-    testVoiceQGroupsAndLive();
-    testSceneOpsAndTouchTargets();
-
-    std::printf ("\nmastervoice_ui_host: %s (%d failures)\n", g_fails == 0 ? "OK" : "FAILED", g_fails);
-    return g_fails == 0 ? 0 : 1;
+    std::printf ("=== SynthyBoy MPC Overlay: Master & Voice Host Tests ===\n");
+    testMasterParametersExist();
+    testMasterSidesAndBlocks();
+    testMasterValuesAndWrites();
+    testMasterGroupsAndMeters();
+    testMasterDraw();
+    testVoiceLayout();
+    testVoiceGridDrawing();
+    testVoiceStepsLitAndQ();
+    testVoiceDraw();
+    std::printf (g_fails ? "mastervoice_ui_host: FAILED (%d failures)\n" : "mastervoice_ui_host: OK (0 failures)\n", g_fails);
+    return g_fails ? 1 : 0;
 }

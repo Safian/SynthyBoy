@@ -219,30 +219,34 @@ private:
 };
 
 // ===============================================================================================================================================================
-/** SendBar: Horizontal mini-slider for Bus 1 and Bus 2 sends.
-    In: label ("B1", "B2"), value 0 .. 1, valueText ("50%").
-    Out: Value changes on horizontal drag; double tap resets to 0. */
-class SendBar : public Component
+/** SliderBar: a horizontal slider in a cell of 56 pixels (a touch target): the name at the left and the value at the right on the top line, the track with its thumb under them. The PAN of a strip (both ways
+    from the middle: `bipolar`) and the sends to the two buses (from the left).
+    In: label ("PAN", "B1"), valueText (the owner formats it: "L 35", "40%"), value 0 .. 1, defaultValue, bipolar. Out: Value changes on a horizontal drag (the whole track is the whole range, relative to the
+    value at the touch down), double tap = the default, turn adds. */
+class SliderBar : public Component
 {
 public:
     struct State
     {
         char label[8] = {};
-        char valueText[12] = {};
+        char valueText[16] = {};
         double value = 0.0, defaultValue = 0.0;
+        bool bipolar = false;
     };
     State state;
-    static constexpr double kDragPx = 140.0;
 
-    SendBar() = default;
-    explicit SendBar (const char* label) { setText (state.label, sizeof state.label, label); }
+    SliderBar() = default;
+    explicit SliderBar (const char* label, bool bipolar = false) { setText (state.label, sizeof state.label, label); state.bipolar = bipolar; }
     void setLabel (const char* s) { setText (state.label, sizeof state.label, s); }
 
-    Size minSize() const override { return { 56, 22 }; }
+    Size minSize() const override { return { 96, 56 }; }
+    /** The track under the texts. */
+    Rect track() const noexcept { return { rect_.x + 12, rect_.y + 34, std::max (0, rect_.w - 24), 14 }; }
+    float xOf (double v) const noexcept { const Rect t = track(); return static_cast<float> (t.x) + static_cast<float> (std::clamp (v, 0.0, 1.0)) * static_cast<float> (std::max (1, t.w - 1)); }
 
     Change touchDown (int x, int y, double nowMs) override
     {
-        if (! enabled_)
+        if (! enabled_ || ! rect_.contains (x, y))
             return Change::none();
         captured_ = true;
         downX_ = x;
@@ -250,79 +254,57 @@ public:
         tap_.down (x, y, nowMs);
         return Change::none();
     }
-
     Change touchMove (int x, int y) override
     {
         if (! captured_ || ! enabled_)
             return Change::none();
-        tap_.move (x, y);
-        const double delta = static_cast<double> (x - downX_) / kDragPx;
-        const double newVal = std::clamp (downVal_ + delta, 0.0, 1.0);
-        if (std::fabs (newVal - state.value) > 1.0e-4)
-        {
-            state.value = newVal;
-            return Change::normalised (id_, state.value);
-        }
-        return Change::none();
+        if (! tap_.move (x, y))
+            return Change::none();
+        const double w = static_cast<double> (std::max (1, track().w));
+        return emit (downVal_ + static_cast<double> (x - downX_) / w);
     }
-
-    Change touchUp (int x, int y) override
+    Change touchUp (int, int) override
     {
         if (! captured_)
             return Change::none();
         captured_ = false;
-        const int tapCode = tap_.up();
-        if (tapCode == 2)
-        {
-            state.value = state.defaultValue;
-            return Change::normalised (id_, state.value);
-        }
-        (void) x; (void) y;
-        return Change::none();
+        return tap_.up() == 2 ? emit (state.defaultValue) : Change::none();
     }
-
-    Change turn (double delta) override
-    {
-        if (! enabled_)
-            return Change::none();
-        const double newVal = std::clamp (state.value + delta, 0.0, 1.0);
-        if (std::fabs (newVal - state.value) > 1.0e-4)
-        {
-            state.value = newVal;
-            return Change::normalised (id_, state.value);
-        }
-        return Change::none();
-    }
+    Change turn (double delta) override { return enabled_ ? emit (state.value + delta) : Change::none(); }
 
 protected:
     void drawBody (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        p.block (rect_, false);
-        p.rrect (rect_, 3.0f, p.c (qFrame_ ? T.q : T.keyline, 200), qFrame_ ? 1.5f : 1.0f);
-
-        // Progress fill
-        const float val = static_cast<float> (std::clamp (state.value, 0.0, 1.0));
-        if (val > 0.01f)
+        const Rect b = rect_.inset (2);
+        p.control (b, qFrame_);
+        p.textLeft ({ b.x + 8, b.y + 3, b.w / 2 - 8, 22 }, state.label, T.fLabel, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
+        p.textRight ({ b.x + b.w / 2, b.y + 3, b.w / 2 - 8, 22 }, state.valueText, T.fLabel, p.c (T.text, 255), T.fMin);
+        const Rect t = track();
+        const float cy = static_cast<float> (t.y) + static_cast<float> (t.h) * 0.5f, x0 = static_cast<float> (t.x), x1 = static_cast<float> (t.right());
+        const float zero = state.bipolar ? 0.5f * (x0 + x1) : x0, xv = xOf (state.value);
+        p.style (1.0f, true);
+        p.line (x0, cy, x1, cy, 3.0f, p.c (T.track, 255));
+        if (std::fabs (xv - zero) > 0.5f)
         {
-            const int barW = static_cast<int> (val * static_cast<float> (rect_.w - 4));
-            p.rect ({ rect_.x + 2, rect_.y + 2, barW, rect_.h - 4 }, p.c (T.flow[0], 160));
+            p.paintX (std::min (zero, xv), std::max (zero, xv) + 0.5f, T.flow, 255);
+            p.line (std::min (zero, xv), cy, std::max (zero, xv), cy, 3.0f, 255);
+            p.paintOff();
         }
-
-        // Label on left
-        p.text (static_cast<float> (rect_.x + 5), static_cast<float> (rect_.y + 15),
-                T.fSmall, state.label, p.c (T.textDim, 220));
-
-        // Value text on right
-        if (state.valueText[0] != '\0')
-        {
-            const float vw = Pen::textWidth (state.valueText, T.fSmall);
-            p.text (static_cast<float> (rect_.right() - 5) - vw, static_cast<float> (rect_.y + 15),
-                    T.fSmall, state.valueText, p.c (T.text, 240));
-        }
+        if (state.bipolar)
+            p.line (zero, cy - 6.0f, zero, cy + 6.0f, 1.2f, p.c (T.textDim, 200));
+        p.disc (xv, cy, 6.0f, p.c (T.text, 255));
+        p.plain();
     }
 
 private:
+    Change emit (double v)
+    {
+        v = std::clamp (v, 0.0, 1.0);
+        if (std::fabs (v - std::clamp (state.value, 0.0, 1.0)) < 1.0e-12)
+            return Change::none();
+        return Change::normalised (id_, v);
+    }
     TapGesture tap_;
     bool captured_ = false;
     int downX_ = 0;
@@ -337,19 +319,18 @@ private:
 class MixerStrip : public Composite
 {
 public:
+    static constexpr int kCellH = 56;
     char title[16] = {};
-    ToggleIcon power;
+    ToggleIcon power;                                    // the name of the strip and its switch in one cell
     MenuButton destButton { "MAIN", MenuButton::Icon::Down };
-    Knob pan { "PAN", true };
-    SendBar send1 { "B1" };
-    SendBar send2 { "B2" };
+    SliderBar pan { "PAN", true };
+    SliderBar send1 { "B1" };
+    SliderBar send2 { "B2" };
     Fader fader { "LEVEL" };
 
     MixerStrip()
     {
         power.state.icon = ToggleIcon::Icon::Power;
-        pan.state.bipolar = true;
-        pan.state.small = true;
         addKid (power);
         addKid (destButton);
         addKid (pan);
@@ -358,11 +339,12 @@ public:
         addKid (fader);
     }
 
-    Size minSize() const override { return { 56, 240 }; }
+    Size minSize() const override { return { 96, 360 }; }
 
     void setTitle (const char* t)
     {
         setText (title, sizeof title, t);
+        power.setLabel (t);
     }
 
     void assignIds (int baseId)
@@ -378,49 +360,28 @@ public:
 protected:
     void layout() override
     {
-        const int pad = 4;
-        const int innerW = rect_.w - 2 * pad;
-        int y = rect_.y + 4;
-
-        // Row 1: Header - Title (drawn) and Power button (32x32, right-aligned)
-        const int powerW = 32, powerH = 32;
-        power.place ({ rect_.right() - pad - powerW, y, powerW, powerH });
-        y += powerH + 4;
-
-        // Row 2: Destination button
-        const int destH = 30;
-        destButton.place ({ rect_.x + pad, y, innerW, destH });
-        y += destH + 6;
-
-        // Q-Group Area starts here: Pan -> Send1 -> Send2 -> Fader
-        // Row 3: Pan knob
-        const int panH = 68;
-        pan.place ({ rect_.x + pad, y, innerW, panH });
-        y += panH + 4;
-
-        // Row 4: Send 1 bar
-        const int sendH = 24;
-        send1.place ({ rect_.x + pad, y, innerW, sendH });
-        y += sendH + 4;
-
-        // Row 5: Send 2 bar
-        send2.place ({ rect_.x + pad, y, innerW, sendH });
-        y += sendH + 6;
-
-        // Row 6: Fader with integrated peak meter
-        const int faderH = std::max (60, rect_.bottom() - y - 4);
-        fader.place ({ rect_.x + pad, y, innerW, faderH });
+        const int pad = 4, innerW = rect_.w - 2 * pad, gap = 4;
+        int y = rect_.y + pad;
+        power.place ({ rect_.x + pad, y, innerW, kCellH });
+        y += kCellH + gap;
+        destButton.place ({ rect_.x + pad, y, innerW, kCellH });
+        y += kCellH + gap;
+        // the Q group of the strip lies under the destination: a lane of kQLane over every member for its index chip
+        y += kQLane;
+        pan.place ({ rect_.x + pad, y, innerW, kCellH });
+        y += kCellH + kQLane;
+        send1.place ({ rect_.x + pad, y, innerW, kCellH });
+        y += kCellH + kQLane;
+        send2.place ({ rect_.x + pad, y, innerW, kCellH });
+        y += kCellH + kQLane;
+        fader.place ({ rect_.x + pad, y, innerW, std::max (96, rect_.bottom() - y - pad) });
     }
 
     void drawUnder (Pen& p) const override
     {
         const theme::Look& T = theme::L();
         p.block (rect_, false);
-        p.rrect (rect_, 6.0f, p.c (T.keyline, 160), 1.0f);
-
-        // Strip Title at top left
-        p.text (static_cast<float> (rect_.x + 8), static_cast<float> (rect_.y + 24),
-                T.fItem, title, p.c (T.text, 255));
+        p.rrect (rect_, T.rBlock, p.c (T.keyline, 160), 1.0f);
     }
 };
 

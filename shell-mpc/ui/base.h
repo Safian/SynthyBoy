@@ -26,6 +26,7 @@ public:
         char valueText[16] = {};   // optional: the value written under the label (the owner formats it)
         double value = 0.0, modValue = 0.0, defaultValue = 0.0;
         bool bipolar = false, small = false;
+        bool large = false;        // a page with room (the slot of a knob is a big cell): the dial may grow to 190 pixels instead of 140
         bool side = false;         // the medium variant: the dial at the left, the name and the value in a column at its right (a row of a block that is not tall enough for the dial over the texts)
     };
     State state;
@@ -72,7 +73,7 @@ public:
         float d = static_cast<float> (std::min (rect_.w - 8, dialH - 8));
         if (state.small)
             d *= 0.8f;
-        d = std::min (d, 140.0f);
+        d = std::min (d, state.large ? 190.0f : 140.0f);
         d = std::max (d, 6.0f);
         g.stroke = std::max (2.4f, d * T.arcValue);
         g.track = std::max (2.0f, d * T.arcTrack);

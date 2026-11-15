@@ -55,6 +55,9 @@ public:
     virtual bool describe (gpu::SceneBuilder&, int /*viewIndex*/, int /*w*/, int /*h*/) const { return false; }
     /** The view wants another rectangle than the layout's (UI pixels of the screen, y from the top of the screen); false: the layout's. Constant for the life of the view. */
     virtual bool regionOverride (Rect&) const { return false; }
+    /** The UiStack element id of the full-screen page this view ALWAYS shows (a page the plugin draws entirely, page_view.h): the controller keeps that page open for the instance on screen and closes the
+        stack of the instance when the view changes. -1: the view has no page of its own (the Play view opens its elements itself). */
+    virtual int pageElement() const noexcept { return -1; }
     /** A touch in UI pixels (screen coordinates). `stack` is the instance's UiStack (the caller holds its lock: the view may open and close pages), `io` the instance. true: the touch belongs to this
         view's plugin-drawn pages (the application gets it as well: the screen cannot keep it from the host). */
     virtual bool onTouch (const TouchEvent&, UiStack&, IInstanceView&, double /*nowMs*/) { return false; }
