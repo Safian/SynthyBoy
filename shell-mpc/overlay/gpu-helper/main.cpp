@@ -46,6 +46,7 @@
 
 #include "../sdf_font.h"
 #include "../gpu/scene.h"
+#include "../gpu/cell_plan.h"
 #include "../vblank_linux.h"
 #include "../vblank_pacer.h"
 #include "gl_api.h"
@@ -80,8 +81,8 @@ struct Draw
     int clipBox[4] = {};                            // type 4: the scissor box (GL pixels; width 0 = clip off)
     int type = 0;                                   // 0 draw, 1 clear (colour), 2 glow begin (the layer is cleared), 3 nothing (a marker of the end of the glow)
     int prim = 0, first = 0, count = 0, kind = 0;
-    int target = -1;                                // -1 the picture, 0 / 1 the two glow layers
-    int tex = 0;                                    // 0 the font atlas, 1 / 2 the glow layers, 3 the previous picture
+    int target = -1;                                // -1 the picture, 0 / 1 the two glow layers, 2 / 3 the two cached layers
+    int tex = 0;                                    // 0 the font atlas, 1 / 2 the glow layers, 3 the previous picture, 4 / 5 the cached layers
     bool additive = false;                          // blend ONE, ONE (the bloom is added)
     float colour[4] = {};                           // premultiplied
     float colour2[4] = {};                          // premultiplied, the other end of a gradient
@@ -670,6 +671,7 @@ private:
             api_.glBindFramebuffer (GL_FRAMEBUFFER, 0);
             api_.glDeleteTextures (1, &feedbackTex_);
             dropGlow();
+            dropLayers();
         }
         feedbackTex_ = 0;
         if (dpy_ != EGL_NO_DISPLAY)
@@ -718,17 +720,29 @@ private:
         box[2] = std::min (bw_, static_cast<int> (std::ceil (hix - 0.001f))) - box[0];
         box[3] = std::min (bh_, static_cast<int> (std::ceil (hiy - 0.001f))) - box[1];
     }
-    /** The clip applies to the picture only (not to the glow layers). */
+    /** The scissor: the clip of the scene (the picture and the cached layers, not the glow layers) and, while a partial picture is painted, the box of the part that is painted (the picture only). */
     void applyScissor()
     {
-        const bool want = clipOn_ && curTarget_ < 0;
-        if (want)
+        const bool pic = curTarget_ < 0;
+        const bool clipWant = clipOn_ && (pic || curTarget_ >= 2), frameWant = frameBoxOn_ && pic;
+        if (! clipWant && ! frameWant)
         {
-            api_.glEnable (GL_SCISSOR_TEST);
-            api_.glScissor (clipBox_[0], clipBox_[1], std::max (0, clipBox_[2]), std::max (0, clipBox_[3]));
-        }
-        else
             api_.glDisable (GL_SCISSOR_TEST);
+            return;
+        }
+        int x0 = 0, y0 = 0, x1 = bw_, y1 = bh_;
+        if (clipWant)
+        {
+            x0 = std::max (x0, clipBox_[0]); y0 = std::max (y0, clipBox_[1]);
+            x1 = std::min (x1, clipBox_[0] + std::max (0, clipBox_[2])); y1 = std::min (y1, clipBox_[1] + std::max (0, clipBox_[3]));
+        }
+        if (frameWant)
+        {
+            x0 = std::max (x0, frameBox_[0]); y0 = std::max (y0, frameBox_[1]);
+            x1 = std::min (x1, frameBox_[0] + frameBox_[2]); y1 = std::min (y1, frameBox_[1] + frameBox_[3]);
+        }
+        api_.glEnable (GL_SCISSOR_TEST);
+        api_.glScissor (x0, y0, std::max (0, x1 - x0), std::max (0, y1 - y0));
     }
 
     // ---------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -785,26 +799,42 @@ private:
         return d;
     }
 
-    void buildScene (const SceneData& s)
+    using Plan = CellPlan;
+
+    void resetBuildState (const SceneData& s)
+    {
+        style_ = StyleState();
+        paint_ = PaintState();
+        setCurveOf (s, 0.0f, static_cast<float> (s.numDefault), 0.0f, static_cast<float> (s.w));
+    }
+    // the current polyline (the whole width until a Curve op says otherwise), continued horizontally to the two edges of its span
+    void setCurveOf (const SceneData& s, float firstF, float nF, float x0, float width)
+    {
+        pts_.clear();
+        int first = 0, n = 0;
+        if (! curveSpan (firstF, nF, first, n))   // the floats come from shared memory: NaN, a huge value or a sum that overflows must not reach the index
+            return;
+        pts_.push_back ({ x0, s.y[first] });
+        for (int i = 0; i < n; ++i)
+            pts_.push_back ({ x0 + static_cast<float> (i) / static_cast<float> (n - 1) * (width - 1.0f) + 0.5f, s.y[first + i] });
+        pts_.push_back ({ x0 + width, s.y[first + n - 1] });
+    }
+
+    void buildScene (const SceneData& s, const Plan* plan = nullptr)
     {
         verts_.clear();
         draws_.clear();
-        style_ = StyleState();
-        paint_ = PaintState();
+        pictureTarget_ = -1;
         buildTarget_ = -1;
         sceneFeedback_ = false;
-        // the current polyline (the whole width until a Curve op says otherwise), continued horizontally to the two edges of its span
-        auto setCurve = [&] (float firstF, float nF, float x0, float width)
-        {
-            pts_.clear();
-            int first = 0, n = 0;
-            if (! curveSpan (firstF, nF, first, n))   // the floats come from shared memory: NaN, a huge value or a sum that overflows must not reach the index
-                return;
-            pts_.push_back ({ x0, s.y[first] });
-            for (int i = 0; i < n; ++i)
-                pts_.push_back ({ x0 + static_cast<float> (i) / static_cast<float> (n - 1) * (width - 1.0f) + 0.5f, s.y[first + i] });
-            pts_.push_back ({ x0 + width, s.y[first + n - 1] });
-        };
+        resetBuildState (s);
+        buildOps (s, 0u, s.numOps, plan);
+    }
+
+    /** The draws of the ops k0 .. k1 - 1; the ops of a cached cell (plan) are skipped, the layer goes onto the picture where its first cell began. */
+    void buildOps (const SceneData& s, uint32_t k0, uint32_t k1, const Plan* plan)
+    {
+        auto setCurve = [&] (float firstF, float nF, float x0, float width) { setCurveOf (s, firstF, nF, x0, width); };
         // the two rows of a band, continued the same way
         auto rowsOf = [&] (int first, int n, float x0, float width, std::vector<Pt>& out)
         {
@@ -814,12 +844,23 @@ private:
                 out.push_back ({ x0 + static_cast<float> (i) / static_cast<float> (n - 1) * (width - 1.0f) + 0.5f, s.y[first + i] });
             out.push_back ({ x0 + width, s.y[first + n - 1] });
         };
-        setCurve (0.0f, static_cast<float> (s.numDefault), 0.0f, static_cast<float> (s.w));
-        for (uint32_t k = 0; k < s.numOps && k < static_cast<uint32_t> (kMaxOps); ++k)
+        for (uint32_t k = k0; k < k1 && k < s.numOps && k < static_cast<uint32_t> (kMaxOps); ++k)
         {
             const SceneOp& o = s.ops[k];
+            if (plan != nullptr && k < plan->inCell.size() && plan->inCell[k])
+            {
+                for (int l = 0; l < 2; ++l)
+                    if (plan->blitAt[l] == static_cast<int> (k))
+                        addLayerBlit (l, plan->box[l]);
+                continue;
+            }
             switch (o.op)
             {
+                case kOpCellBegin:
+                case kOpCellEnd:
+                    style_ = StyleState();
+                    paint_ = PaintState();
+                    break;
                 case kOpClip:
                 {
                     ClipGeom g;
@@ -1082,17 +1123,17 @@ private:
                     GlowGeom g;
                     if (buildTarget_ != 0 || ! glowEndGeom (o, g))
                     {
-                        buildTarget_ = -1;
+                        buildTarget_ = pictureTarget_;
                         break;
                     }
-                    buildTarget_ = -1;
+                    buildTarget_ = pictureTarget_;
                     const float W = static_cast<float> (s.w), H = static_cast<float> (s.h);
                     const int gw = std::max (1, (bw_ + glowDivisor_ - 1) / glowDivisor_), gh = std::max (1, (bh_ + glowDivisor_ - 1) / glowDivisor_);
                     // blur horizontally layer 0 -> 1, vertically 1 -> 0, then add layer 0 to the picture; each a full screen quad
                     for (int pass = 0; pass < 3; ++pass)
                     {
                         Draw& d = beginDraw (GL_TRIANGLES, pass == 0 ? 12 : (pass == 1 ? 13 : 10), 0, 0.0f, false);
-                        d.target = pass == 0 ? 1 : (pass == 1 ? 0 : -1);
+                        d.target = pass == 0 ? 1 : (pass == 1 ? 0 : pictureTarget_);
                         d.tex = pass == 0 ? 1 : (pass == 1 ? 2 : 1);
                         d.texel[0] = g.blur / static_cast<float> (gw);
                         d.texel[1] = g.blur / static_cast<float> (gh);
@@ -1183,9 +1224,16 @@ private:
         if (target == buildTarget_)
             return;
         buildTarget_ = target;
+        curTarget_ = target;
+        applyScissor();
         if (target < 0)
         {
             api_.glBindFramebuffer (GL_FRAMEBUFFER, 0);
+            api_.glViewport (0, 0, bw_, bh_);
+        }
+        else if (target >= 2)   // a cached layer: the size of the picture
+        {
+            api_.glBindFramebuffer (GL_FRAMEBUFFER, layerFbo_[target - 2]);
             api_.glViewport (0, 0, bw_, bh_);
         }
         else
@@ -1212,7 +1260,7 @@ private:
         const int want = d.tex;
         if (want != curTex_)
         {
-            api_.glBindTexture (GL_TEXTURE_2D, want == 0 ? atlasTex_ : (want == 3 ? feedbackTex_ : glowTex_[want - 1]));
+            api_.glBindTexture (GL_TEXTURE_2D, want == 0 ? atlasTex_ : (want == 3 ? feedbackTex_ : (want >= 4 ? layerTex_[want - 4] : glowTex_[want - 1])));
             curTex_ = want;
         }
         if (f || d.additive != l.additive)
@@ -1475,6 +1523,232 @@ private:
     float benchPhase_ = 0.0f;
 #endif
 
+
+    // ---------------------------------------------------------------------------------------------------------------------------------------------------------
+    // the cached layers (scene.h, CellBegin): the cells of a scene are drawn into two textures the size of the picture; only the cells that changed (and the cells over them) are drawn again, in a scissor box
+    bool ensureLayer (int l)
+    {
+        if (layerTex_[l] != 0 && layerW_ == bw_ && layerH_ == bh_)
+            return true;
+        if (layerW_ != bw_ || layerH_ != bh_)
+            dropLayers();
+        if (layerTex_[l] != 0)
+            return true;
+        layerTex_[l] = makeTexture (bw_, bh_);
+        api_.glGenFramebuffers (1, &layerFbo_[l]);
+        api_.glBindFramebuffer (GL_FRAMEBUFFER, layerFbo_[l]);
+        api_.glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, layerTex_[l], 0);
+        const bool ok = api_.glCheckFramebufferStatus (GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+        api_.glBindFramebuffer (GL_FRAMEBUFFER, 0);
+        buildTarget_ = -2;
+        curTex_ = -1;
+        if (! ok)
+        {
+            dropLayers();
+            return false;
+        }
+        layerW_ = bw_;
+        layerH_ = bh_;
+        layerCells_[l].clear();
+        return true;
+    }
+    void dropLayers()
+    {
+        for (int l = 0; l < 2; ++l)
+        {
+            if (layerFbo_[l]) api_.glDeleteFramebuffers (1, &layerFbo_[l]);
+            if (layerTex_[l]) api_.glDeleteTextures (1, &layerTex_[l]);
+            layerFbo_[l] = 0;
+            layerTex_[l] = 0;
+            layerCells_[l].clear();
+        }
+        layerW_ = layerH_ = 0;
+    }
+    void addLayerBlit (int l, const int box[4])
+    {
+        Draw& d = beginDraw (GL_TRIANGLES, 10, 0, 0.0f, false);
+        d.tex = 4 + l;
+        d.target = -1;
+        d.colour[0] = d.colour[1] = d.colour[2] = d.colour[3] = 1.0f;
+        quad (static_cast<float> (box[0]), static_cast<float> (box[1]), static_cast<float> (box[2]), static_cast<float> (box[3]), 0, 0, 0, 0);
+        end();
+    }
+
+    /** The boxes of the picture to paint now (canvas pixels): with the age of the back buffer (EGL_EXT_buffer_age) only what changed since that picture: the cells that were drawn again, the places of the ops that are
+        drawn every picture (now and the picture before). false: the whole picture (age unknown, a changed clip, the first pictures, or the boxes cover most of it). */
+    bool partialBoxes (std::vector<DamageRect>& out)
+    {
+        liveBoxes_.clear();
+        int clip[4] = {};
+        for (const Draw& d : draws_)
+        {
+            if (d.type == 4)
+            {
+                for (int i = 0; i < 4; ++i)
+                    clip[i] = d.clipBox[i];
+                continue;
+            }
+            if (d.type != 0 || d.count <= 0 || (d.kind == 10 && d.tex >= 4))
+                continue;
+            float x0 = 1.0e9f, y0 = 1.0e9f, x1 = -1.0e9f, y1 = -1.0e9f;
+            for (int i = d.first; i < d.first + d.count && i < static_cast<int> (verts_.size()); ++i)
+            {
+                x0 = std::min (x0, verts_[static_cast<size_t> (i)].x); x1 = std::max (x1, verts_[static_cast<size_t> (i)].x);
+                y0 = std::min (y0, verts_[static_cast<size_t> (i)].y); y1 = std::max (y1, verts_[static_cast<size_t> (i)].y);
+            }
+            if (x1 >= x0 && y1 >= y0)
+                liveBoxes_.push_back ({ static_cast<int> (std::floor (x0)) - 2, static_cast<int> (std::floor (y0)) - 2, static_cast<int> (std::ceil (x1)) + 2, static_cast<int> (std::ceil (y1)) + 2 });
+        }
+        partialOk_ = ::access ("/tmp/synthyboy-overlay-nopartial", F_OK) != 0;
+        mergeBoxes (liveBoxes_, 6);
+        std::vector<DamageRect> now = layerDamage_;
+        now.insert (now.end(), liveBoxes_.begin(), liveBoxes_.end());
+        now.insert (now.end(), prevLive_.begin(), prevLive_.end());
+        mergeBoxes (now, 6);
+        const bool clipChanged = std::memcmp (clip, lastClip_, sizeof clip) != 0;
+        std::memcpy (lastClip_, clip, sizeof clip);
+        EGLint age = 0;
+        if (! api_.eglQuerySurface (dpy_, esurf_, 0x313D /* EGL_BUFFER_AGE_EXT */, &age))
+            age = 0;
+        bool full = false;
+        framePaint (now, damageHist_, histCount_, static_cast<int> (age), out, full);
+        // this picture's damage is what the next ones may have to paint again
+        for (int i = 3; i > 0; --i)
+            damageHist_[i] = damageHist_[i - 1];
+        damageHist_[0] = now;
+        histCount_ = std::min (histCount_ + 1, 4);
+        prevLive_ = liveBoxes_;
+        if (full || clipChanged || ! partialOk_)
+            return false;
+        long long area = 0;
+        for (DamageRect& b : out)
+        {
+            b = { std::max (0, b.x0), std::max (0, b.y0), std::min (w_, b.x1), std::min (h_, b.y1) };
+            area += static_cast<long long> (std::max (0, b.x1 - b.x0)) * std::max (0, b.y1 - b.y0);
+        }
+        return area * 10 < static_cast<long long> (w_) * h_ * 7;   // more than 70 % of the picture: all of it (no gain from boxes)
+    }
+
+    /** Brings the layers up to date: what changed since the last picture (a cell whose hash or rectangle is not the one at its place before, a cell that came or went) is drawn again in the layer, in a scissor box, together with the cells that lie over it. */
+    bool renderLayers (const SceneData& s, const Plan& plan)
+    {
+        lastRedrawn_ = 0;
+        lastCached_ = 0;
+        layerDamage_.clear();
+        for (int l = 0; l < 2; ++l)
+        {
+            if (! plan.layer[l])
+            {
+                layerCells_[l].clear();
+                continue;
+            }
+            if (! ensureLayer (l))
+                return false;
+            std::vector<CellKey> keys;
+            for (const CellRef& c : plan.cells)
+                if (c.layer == l)
+                    keys.push_back ({ c.x0, c.y0, c.x1, c.y1, c.hash });
+            std::vector<DamageRect> dmg;
+            layerDamage (layerCells_[l], keys, dmg);
+            layerDamage_.insert (layerDamage_.end(), dmg.begin(), dmg.end());
+            for (const DamageRect& r : dmg)
+            {
+                verts_.clear();
+                draws_.clear();
+                sceneFeedback_ = false;
+                const int target = 2 + l;
+                pictureTarget_ = target;            // the picture of a cell is the layer (its bloom is added into the layer)
+                buildTarget_ = target;
+                {
+                    Draw c;
+                    c.type = 4;
+                    c.target = target;
+                    ClipGeom g;
+                    g.x0 = r.x0; g.y0 = r.y0; g.x1 = r.x1; g.y1 = r.y1; g.on = true;
+                    scissorBox (g, c.clipBox);
+                    draws_.push_back (c);
+                    Draw k;
+                    k.type = 1;
+                    k.target = target;
+                    draws_.push_back (k);
+                }
+                for (const CellRef& c : plan.cells)
+                    if (c.layer == l && c.x0 < r.x1 && r.x0 < c.x1 && c.y0 < r.y1 && r.y0 < c.y1)
+                    {
+                        resetBuildState (s);
+                        buildOps (s, static_cast<uint32_t> (c.begin) + 1u, static_cast<uint32_t> (c.end), nullptr);
+                        ++lastRedrawn_;
+                    }
+                runDraws();
+            }
+            layerCells_[l] = keys;
+        }
+        pictureTarget_ = -1;
+        for (const CellRef& c : plan.cells)
+            lastCached_ += static_cast<uint32_t> (c.end - c.begin - 1);
+        api_.glDisable (GL_SCISSOR_TEST);
+        buildTarget_ = -3;
+        return true;
+    }
+
+    /** Uploads the vertices and executes the draws (draws_) in order: the clears, the clips, the glow layers, the polygons. The target of every draw is its own (the picture, a glow layer, a cached layer). */
+    void runDraws (bool upload = true)
+    {
+        if (upload)
+        {
+            api_.glBindBuffer (GL_ARRAY_BUFFER, vbo_);
+            api_.glBufferData (GL_ARRAY_BUFFER, static_cast<GLsizeiptr> (verts_.size() * sizeof (Vtx)), verts_.data(), GL_DYNAMIC_DRAW);
+        }
+        setTransform();
+        curTarget_ = -2;
+        buildTarget_ = -3;      // unknown: the first draw binds its target
+        curTex_ = -1;
+        haveLast_ = false;
+        curProg_ = -1;
+        clipOn_ = false;
+        applyScissor();
+        bool glowActive = false;
+        for (const Draw& d : draws_)
+        {
+            if (d.type == 2)
+            {
+                glowActive = ensureGlow (d.divisor);
+                if (glowActive)
+                {
+                    api_.glClearColor (0.0f, 0.0f, 0.0f, 0.0f);
+                    bindTarget (1);          // both layers start empty: a blur limited to a rectangle reads the edges of the second one
+                    api_.glClear (GL_COLOR_BUFFER_BIT);
+                    bindTarget (0);
+                    api_.glClear (GL_COLOR_BUFFER_BIT);
+                }
+                continue;
+            }
+            if (d.type == 4)
+            {
+                bindTarget (d.target);
+                clipOn_ = d.clipBox[2] > 0 && d.clipBox[3] > 0;
+                for (int i = 0; i < 4; ++i)
+                    clipBox_[i] = d.clipBox[i];
+                applyScissor();
+                continue;
+            }
+            const bool glowPass = d.kind == 12 || d.kind == 13 || (d.kind == 10 && (d.tex == 1 || d.tex == 2));
+            if ((d.target == 0 || d.target == 1 || glowPass) && ! glowActive)
+                continue;                       // the glow layer could not be made: its ops and passes are not drawn
+            bindTarget (d.target);
+            if (d.type == 1)
+            {
+                api_.glClearColor (d.colour[0], d.colour[1], d.colour[2], d.colour[3]);
+                api_.glClear (GL_COLOR_BUFFER_BIT);
+                continue;
+            }
+            applyUniforms (d);
+            api_.glDrawArrays (static_cast<GLenum> (d.prim), d.first, d.count);
+            if (d.kind == 10 && (d.tex == 1 || d.tex == 2))
+                glowActive = false;             // the last pass of a glow
+        }
+    }
+
     // ---------------------------------------------------------------------------------------------------------------------------------------------------------
     // one picture
     bool renderAndPresent()
@@ -1498,55 +1772,46 @@ private:
                 return false;    // a scene of the region before this one: the right one is on its way
         }
         const double tGen = nowMs();
-        buildScene (s);
-        const double tBuilt = nowMs();
+        Plan plan;
+        bool cached = layersOk_ && planCells (s, plan);
+        if (cached && ! renderLayers (s, plan))
+        {
+            cached = false;           // the layers cannot be made: this scene is drawn whole, and the next ones too
+            layersOk_ = false;
+        }
+        if (! cached)
+            lastCached_ = lastRedrawn_ = 0;
+        buildScene (s, cached ? &plan : nullptr);
+        const double tBuilt = nowMs();   // the time from tGen to here: the layers that changed (drawn into their textures), the vertices of the rest
+        std::vector<DamageRect> boxes;
+        bool partial = false;
+        if (cached)
+            partial = partialBoxes (boxes);
+        else
+        {
+            histCount_ = 0;
+            prevLive_.clear();
+        }
         api_.glBindBuffer (GL_ARRAY_BUFFER, vbo_);
         api_.glBufferData (GL_ARRAY_BUFFER, static_cast<GLsizeiptr> (verts_.size() * sizeof (Vtx)), verts_.data(), GL_DYNAMIC_DRAW);
-        setTransform();
-        curTarget_ = -2;
-        curTex_ = -1;
-        haveLast_ = false;
-        curProg_ = -1;
-        clipOn_ = false;
-        api_.glDisable (GL_SCISSOR_TEST);
-        bool glowActive = false;
-        for (const Draw& d : draws_)
+        lastPaintedPx_ = 0;
+        if (partial)
         {
-            if (d.type == 2)
+            for (const DamageRect& b : boxes)
             {
-                glowActive = ensureGlow (d.divisor);
-                if (glowActive)
-                {
-                    api_.glClearColor (0.0f, 0.0f, 0.0f, 0.0f);
-                    bindTarget (1);          // both layers start empty: a blur limited to a rectangle reads the edges of the second one
-                    api_.glClear (GL_COLOR_BUFFER_BIT);
-                    bindTarget (0);
-                    api_.glClear (GL_COLOR_BUFFER_BIT);
-                }
-                continue;
+                ClipGeom g;
+                g.x0 = b.x0; g.y0 = b.y0; g.x1 = b.x1; g.y1 = b.y1; g.on = true;
+                scissorBox (g, frameBox_);
+                frameBoxOn_ = true;
+                lastPaintedPx_ += static_cast<uint32_t> (std::max (0, frameBox_[2]) * std::max (0, frameBox_[3]));
+                runDraws (false);
             }
-            if (d.type == 4)
-            {
-                clipOn_ = d.clipBox[2] > 0 && d.clipBox[3] > 0;
-                for (int i = 0; i < 4; ++i)
-                    clipBox_[i] = d.clipBox[i];
-                applyScissor();
-                continue;
-            }
-            const bool glowPass = d.kind == 12 || d.kind == 13 || (d.kind == 10 && d.tex != 3);
-            if ((d.target >= 0 || glowPass) && ! glowActive)
-                continue;                       // the glow layer could not be made: its ops and passes are not drawn
-            bindTarget (d.target);
-            if (d.type == 1)
-            {
-                api_.glClearColor (d.colour[0], d.colour[1], d.colour[2], d.colour[3]);
-                api_.glClear (GL_COLOR_BUFFER_BIT);
-                continue;
-            }
-            applyUniforms (d);
-            api_.glDrawArrays (static_cast<GLenum> (d.prim), d.first, d.count);
-            if (d.kind == 10 && d.tex != 3)
-                glowActive = false;             // the last pass of a glow
+            frameBoxOn_ = false;
+        }
+        else
+        {
+            lastPaintedPx_ = static_cast<uint32_t> (bw_ * bh_);
+            runDraws (false);
         }
         bindTarget (-1);
         if (sceneFeedback_ || prevFeedback_)
@@ -1559,6 +1824,7 @@ private:
         const double tSubmitted = nowMs();
         api_.glFinish();    // the buffer must be finished before the display reads it
         const double tFinished = nowMs();
+        probeBufferAge();
         maybeDump (s, seq);
         if (! api_.eglSwapBuffers (dpy_, esurf_))
         {
@@ -1678,12 +1944,39 @@ private:
         add (r.finishUs, us (tFinished - tSubmitted));
         add (r.tailUs, us (t1 - tFinished));
         add (r.ops, s.numOps);
+        add (r.cachedOps, lastCached_);
+        add (r.redrawn, lastRedrawn_);
+        add (r.paintedPx, lastPaintedPx_);
+        add (r.fullFrames, lastPaintedPx_ >= static_cast<uint32_t> (bw_ * bh_) ? 1u : 0u);
         add (r.verts, static_cast<uint32_t> (verts_.size()));
         add (r.draws, static_cast<uint32_t> (draws_.size()));
         const uint32_t b = std::min<uint32_t> (63u, total / 1000u);
         add (r.hist[b], 1u);
         add (r.count, 1u);
     }
+
+    /** Diagnostics (a file once): what the display's EGL says (extensions) and the age of the back buffer of the first pictures (EGL_EXT_buffer_age): how many pictures ago the buffer was last drawn. */
+    void probeBufferAge()
+    {
+        if (probed_ >= 24)
+            return;
+        EGLint age = -1;
+        const EGLBoolean ok = api_.eglQuerySurface (dpy_, esurf_, 0x313D /* EGL_BUFFER_AGE_EXT */, &age);
+        ages_[probed_++] = ok ? age : -2;
+        if (probed_ == 24)
+        {
+            if (FILE* f = std::fopen ("/tmp/synthyboy-overlay-gpu-egl.txt", "w"))
+            {
+                const char* ext = api_.eglQueryString (dpy_, 0x3055 /* EGL_EXTENSIONS */);
+                std::fprintf (f, "extensions: %s\nbuffer age of pictures 1..24:", ext != nullptr ? ext : "(none)");
+                for (int i = 0; i < 24; ++i)
+                    std::fprintf (f, " %d", ages_[i]);
+                std::fprintf (f, "\n");
+                std::fclose (f);
+            }
+        }
+    }
+    int probed_ = 0, ages_[24] = {};
 
     void publishPace() noexcept
     {
@@ -1888,6 +2181,19 @@ private:
     EGLConfig cfg_ = nullptr;
     EGLContext ctx_ = EGL_NO_CONTEXT;
     EGLSurface esurf_ = EGL_NO_SURFACE;
+    GLuint layerTex_[2] = {}, layerFbo_[2] = {};
+    std::vector<CellKey> layerCells_[2];
+    int layerW_ = 0, layerH_ = 0;
+    bool layersOk_ = true;
+    int pictureTarget_ = -1;
+    bool frameBoxOn_ = false;
+    int frameBox_[4] = {};                       // the box (buffer pixels) of the part of the picture that is painted now
+    std::vector<DamageRect> layerDamage_, liveBoxes_, prevLive_, damageHist_[4];   // what changed in the layers this picture, where the live ops are, where they were, what each of the last pictures changed
+    int histCount_ = 0;
+    uint32_t lastPaintedPx_ = 0;
+    int lastClip_[4] = {};
+    bool partialOk_ = true;                      // switched off by /tmp/synthyboy-overlay-nopartial (diagnostics)   // where the picture of the ops being built goes: -1 the window, 2 / 3 a cached layer
+    uint32_t lastCached_ = 0, lastRedrawn_ = 0;
     GLuint prog_[kPrograms] = {}, vbo_ = 0, atlasTex_ = 0, feedbackTex_ = 0, glowTex_[2] = {}, glowFbo_[2] = {};
     int glowW_ = 0, glowH_ = 0, curTarget_ = -2, curTex_ = -1;
     bool sceneFeedback_ = false, prevFeedback_ = false;

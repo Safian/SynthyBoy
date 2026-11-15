@@ -179,6 +179,20 @@ inline Rect tabRect (const Rect& r, const char* name = "") noexcept
 inline Rect tabHitRect (const Rect& r) noexcept { return { r.x, r.y, std::min (r.w, 56), std::min (r.h, 52) }; }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+/** A cached cell of the scene around the drawing of a part of the picture (scene.h, CellBegin): the helper keeps what the cell drew from one picture to the next and draws it again only when its content
+    (or its rectangle) changed. The rectangle must contain everything drawn inside (`pad` pixels more are added). The state ops inside must be the cell's own (it starts and ends with the default style and paint). */
+struct Cell
+{
+    Cell (gpu::SceneBuilder& sb, const Rect& r, int pad = 2) : sb_ (sb) { sb_.cellBegin (static_cast<float> (r.x - pad), static_cast<float> (r.y - pad), static_cast<float> (r.right() + pad), static_cast<float> (r.bottom() + pad)); }
+    ~Cell() { sb_.cellEnd(); }
+    Cell (const Cell&) = delete;
+    Cell& operator= (const Cell&) = delete;
+
+private:
+    gpu::SceneBuilder& sb_;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 /** The drawing pen of a component: scene ops with the colours of a disabled component dimmed. The component draws through it and keeps inside its rectangle by construction (tests check). */
 class Pen
 {
@@ -455,6 +469,7 @@ public:
     virtual void draw (gpu::SceneBuilder& sb) const
     {
         Pen pen (sb, enabled_);
+        Cell cell (sb, rect_);
         drawBody (pen);   // the index of a Q group member is drawn by its group (QGroup::draw), on the frame
     }
 

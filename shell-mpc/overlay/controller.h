@@ -1025,7 +1025,7 @@ private:
         // cumulative render statistics of the helper (the measuring script subtracts two snapshots): pictures, the sums of the microseconds of the parts, of the ops, vertices, draw calls, and the histogram of the time of a picture (1 ms buckets)
         const gpu::RenderBlock& r = g.render;
         o << "gpu_render_count: " << r.count << "\ngpu_render_sums: total_us=" << r.totalUs << " read_us=" << r.readUs << " build_us=" << r.buildUs << " submit_us=" << r.submitUs << " finish_us=" << r.finishUs << " tail_us=" << r.tailUs
-          << " ops=" << r.ops << " verts=" << r.verts << " draws=" << r.draws << " cached_ops=" << r.cachedOps << " redrawn=" << r.redrawn << "\ngpu_render_hist_ms:";
+          << " ops=" << r.ops << " verts=" << r.verts << " draws=" << r.draws << " cached_ops=" << r.cachedOps << " redrawn=" << r.redrawn << " painted_px=" << r.paintedPx << " full_frames=" << r.fullFrames << "\ngpu_render_hist_ms:";
         for (int i = 0; i < 64; ++i)
             o << " " << r.hist[i];
         o << "\n";

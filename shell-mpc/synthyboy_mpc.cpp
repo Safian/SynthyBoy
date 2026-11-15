@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <dirent.h>
+#include <sys/stat.h>
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
@@ -11,6 +14,8 @@
 #include <dlfcn.h>
 #include <fstream>
 #include <memory>
+#include <mutex>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -353,6 +358,9 @@ struct PluginInstance
         }
         std::shared_ptr<const synthyboy::StateContent> content() const override { return std::atomic_load (&inst.overlayContent); }
         const synthyboy::IContentStore* contentStore() const noexcept override { return inst.contentStore.get(); }
+        void contentRoots (std::vector<ContentRoot>& out) const override { inst.contentRootsOf (out); }
+        void requestContent (int osc, int kind, const std::string& path) override { inst.requestContentLoad (osc, kind, path); }
+        int contentLoad (std::string* message) const override { return inst.contentLoadState (message); }
         double sampleRate() const noexcept override { return inst.overlayRate.load (std::memory_order_relaxed); }
         void requestOverlayReport() noexcept override
         {
@@ -369,6 +377,179 @@ struct PluginInstance
     std::atomic<double> overlayBpm { 120.0 };      // the host's tempo for the overlay thread (the synced LFO rates)
     std::shared_ptr<const synthyboy::StateContent> overlayContent;   // a copy of `content` for the overlay thread (std::atomic_load / atomic_store): custom LFO shapes, user wavetables
     void publishOverlayContent() { std::atomic_store (&overlayContent, std::make_shared<const synthyboy::StateContent> (content)); }
+
+    // ---- the content the plugin-drawn pages load (the sample / instrument browser of the oscillator UI, overlay/content_browser.h): the overlay thread posts a request, the display thread loads it (reads the
+    // file, decodes the header, puts it into the content store, sets the engine's content). `contentMutex` serialises every change of `content` (the host thread's setChunk, this load) and the chunk's copy of it.
+    std::mutex contentMutex;
+    mutable std::mutex contentReqMutex;
+    bool contentReqPending = false;
+    int contentReqOsc = 0, contentReqKind = 0;
+    std::string contentReqPath, contentLoadMessage, contentDirPath;
+    std::atomic<int> contentLoadStatus { 0 };                 // 0 none, 1 loading, 2 done, 3 failed
+    std::atomic<long long> contentLoadFailedMs { 0 };         // when the last load failed (the failure is shown for a few seconds)
+    std::set<std::string> contentPackRoots;                    // the directories added as pack roots (once each)
+
+    /** The places the browser starts from: the SD card of the MPC, the plugin's own content folder, every USB drive that is mounted under /media (the internal partitions are not offered). Only those that exist. */
+    void contentRootsOf (std::vector<synthyboy_mpc::overlay::IInstanceView::ContentRoot>& out) const
+    {
+        out.clear();
+        auto isDir = [] (const std::string& path) { struct stat st; return ::stat (path.c_str(), &st) == 0 && S_ISDIR (st.st_mode); };
+        auto add = [&] (const char* label, const std::string& path) { if (! path.empty() && isDir (path)) out.push_back ({ label, path }); };
+        add ("SD CARD", "/sdcard");
+        add ("PLUGIN CONTENT", contentDirPath);
+        if (DIR* d = ::opendir ("/media"))
+        {
+            while (const dirent* e = ::readdir (d))
+            {
+                const std::string n = e->d_name;
+                if (n.empty() || n[0] == '.' || n == "EFI" || n.compare (0, 5, "acvs-") == 0 || n.compare (0, 5, "az01-") == 0)
+                    continue;
+                add (("USB " + n).c_str(), "/media/" + n);
+            }
+            ::closedir (d);
+        }
+    }
+    void requestContentLoad (int osc, int kind, const std::string& path)
+    {
+        std::lock_guard<std::mutex> g (contentReqMutex);
+        contentReqPending = true;
+        contentReqOsc = osc;
+        contentReqKind = kind;
+        contentReqPath = path;
+        contentLoadStatus.store (1, std::memory_order_relaxed);
+    }
+    int contentLoadState (std::string* message) const
+    {
+        int s = contentLoadStatus.load (std::memory_order_relaxed);
+        if (s == 3 && steadyMs() - contentLoadFailedMs.load (std::memory_order_relaxed) > 4000)
+            s = 0;   // a failure is said for four seconds
+        if (message != nullptr && s == 3)
+        {
+            std::lock_guard<std::mutex> g (contentReqMutex);
+            *message = contentLoadMessage;
+        }
+        return s;
+    }
+    /** The display thread, every tick: a posted request is loaded now. */
+    void contentPoll()
+    {
+        int osc = 0, kind = 0;
+        std::string path;
+        {
+            std::lock_guard<std::mutex> g (contentReqMutex);
+            if (! contentReqPending)
+                return;
+            contentReqPending = false;
+            osc = contentReqOsc;
+            kind = contentReqKind;
+            path = contentReqPath;
+        }
+        std::string why;
+        bool ok = false;
+        try { ok = loadContentFile (osc, kind, path, why); }
+        catch (...) { why = "unexpected error"; }
+        std::lock_guard<std::mutex> g (contentReqMutex);
+        contentLoadMessage = why;
+        contentLoadFailedMs.store (steadyMs(), std::memory_order_relaxed);
+        if (! contentReqPending || ! ok)   // a newer request is already waiting: its own state (loading) stays
+            contentLoadStatus.store (ok ? 2 : 3, std::memory_order_relaxed);
+    }
+    static bool readWholeFile (const std::string& path, std::vector<uint8_t>& bytes, size_t limit)
+    {
+        std::ifstream f (path, std::ios::binary | std::ios::ate);
+        if (! f)
+            return false;
+        const std::streamoff n = f.tellg();
+        if (n <= 0 || static_cast<size_t> (n) > limit)
+            return false;
+        bytes.resize (static_cast<size_t> (n));
+        f.seekg (0);
+        return static_cast<bool> (f.read (reinterpret_cast<char*> (bytes.data()), n));
+    }
+    static std::string baseName (const std::string& path) { const size_t s = path.rfind ('/'); return s == std::string::npos ? path : path.substr (s + 1); }
+    static std::string dirName (const std::string& path) { const size_t s = path.rfind ('/'); return s == std::string::npos ? std::string() : path.substr (0, s); }
+    /** kind 1: a WAV file becomes the content sample of oscillator `osc` (copied into the content store, the root note from its name). kind 2: an SFZ file is referenced where it lies (its folder is a pack
+        of the store: the samples it names are read from there); a WAV file becomes an instrument of one zone over the keyboard (stored with its own SFZ). The engine gets the new content; the chunk keeps the reference. */
+    bool loadContentFile (int osc, int kind, const std::string& path, std::string& why)
+    {
+        if (osc < 1 || osc > synthyboy::kMaxContentSamples - 1 || (kind != 1 && kind != 2) || ! contentStore || ! engine)
+        {
+            why = "no content store";
+            return false;
+        }
+        const std::string name = baseName (path);
+        std::string lower = name;
+        for (char& c : lower)
+            c = static_cast<char> (std::tolower (static_cast<unsigned char> (c)));
+        const bool sfz = lower.size() > 4 && lower.compare (lower.size() - 4, 4, ".sfz") == 0;
+        std::vector<uint8_t> bytes;
+        if (! readWholeFile (path, bytes, sfz ? 4u * 1024u * 1024u : synthyboy::kMaxContentFileBytes))
+        {
+            why = "cannot read the file";
+            return false;
+        }
+        std::lock_guard<std::mutex> g (contentMutex);
+        synthyboy::StateContent next = content;
+        synthyboy::ContentFileRef ref;
+        int rootNote = -1;
+        if (kind == 2 && sfz)
+        {
+            const std::string folder = dirName (path), pack = baseName (folder), root = dirName (folder);
+            if (pack.empty() || root.empty() || pack.find (':') != std::string::npos || name.find (':') != std::string::npos)
+            {
+                why = "the SFZ file must lie in a folder of its own";
+                return false;
+            }
+            if (contentPackRoots.insert (root).second)
+                contentStore->addPackRoot (root);
+            ref.pack = pack;
+            ref.file = name;
+            ref.name = synthyboy::fileStemOf (name);
+            int zones = 0;
+            const std::string sfzText (bytes.begin(), bytes.end());
+            for (size_t at = sfzText.find ("<region>"); at != std::string::npos; at = sfzText.find ("<region>", at + 8))
+                ++zones;
+            synthyboy::attachInstrument (next, osc, ref, zones);
+        }
+        else
+        {
+            synthyboy::SampleFacts facts;
+            if (! synthyboy::probeSampleWav (bytes, name, facts))
+            {
+                why = "not a WAV file the engine can read";
+                return false;
+            }
+            rootNote = facts.rootNote;
+            if (kind == 1)
+            {
+                if (! contentStore->addFile (synthyboy::ContentKind::sample, name, bytes, ref))
+                {
+                    why = "could not store the sample";
+                    return false;
+                }
+                synthyboy::attachSample (next, osc, ref, facts.sampleRate, static_cast<int> (std::min<int64_t> (facts.frames, 2000000000)), facts.channels);
+            }
+            else
+            {
+                const int key = rootNote >= 0 ? rootNote : 60;
+                const std::string stem = synthyboy::sanitizeFileStem (synthyboy::fileStemOf (name));
+                const std::string text = "<region> sample=" + stem + ".wav lokey=0 hikey=127 pitch_keycenter=" + std::to_string (key) + " loop_mode=no_loop\n";
+                if (! contentStore->addInstrument (stem, text, { { stem + ".wav", bytes } }, ref))
+                {
+                    why = "could not store the instrument";
+                    return false;
+                }
+                synthyboy::attachInstrument (next, osc, ref, 1);
+            }
+        }
+        content = std::move (next);
+        engine->setContent (content);
+        publishOverlayContent();
+        if (rootNote >= 0 && kind == 1)
+            if (const synthyboy::ParamInfo* p = synthyboy::findParamByKey (("osc" + std::to_string (osc) + ".sample.root").c_str()))
+                uiWrite (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, static_cast<float> (rootNote))));
+        return true;
+    }
     bool overlayAttached = false;
 
     // ---- the Play page (play_params.h, docs/MPC.md "Play page"): three selectors (saved in the chunk) and 24 proxy parameters (the real parameter of the selected instance) ----
@@ -802,6 +983,7 @@ struct PluginInstance
                 playPoll (e, PluginInstance::playBase());               // the Play page: the selectors and the proxies after it
                 qPoll (e);                                              // the Q proxies after them
                 uiPoll (e);                                             // what the plugin-drawn pages wrote
+                contentPoll();                                          // a sample or an instrument the browser asked for
 #endif
                 int step[synthyboy_mpc::kLfoLiveCount] = {};
 #if SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
@@ -978,6 +1160,9 @@ struct PluginInstance
         if (!pluginFolder.empty())
         {
             contentDir = synthyboy_mpc::contentDirFor (pluginFolder);
+#if SYNTHYBOY_MPC_OVERLAY
+            contentDirPath = contentDir;
+#endif
             // A content directory that is missing or cannot be used must not keep the plugin from loading: it then runs without a store.
             try
             {
@@ -1082,6 +1267,9 @@ static std::string buildStateChunk (PluginInstance* inst)
     synthyboy::ParamValues values = synthyboy::ParamValues::defaults();
     for (size_t i = 0; i < synthyboy::paramCount(); ++i)
         values.plain[i] = inst->paramMirror[i].load(std::memory_order_relaxed);
+#if SYNTHYBOY_MPC_OVERLAY
+    std::lock_guard<std::mutex> contentGuard (inst->contentMutex);
+#endif
     std::string state = synthyboy::saveState(values, inst->content);
     int prog = static_cast<int> (inst->currentProgram.load (std::memory_order_relaxed));
     std::string chunk = synthyboy_mpc::chunkWithProgram (state, prog, currentProgramName (inst));
@@ -1115,6 +1303,9 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
         if (inst->engine)
             inst->engine->setParam(table[i].id, values.plain[i]);
     }
+#if SYNTHYBOY_MPC_OVERLAY
+    std::lock_guard<std::mutex> contentGuard (inst->contentMutex);
+#endif
     inst->content = std::move(content);
     if (inst->engine)
         inst->engine->setContent(inst->content);

@@ -3,8 +3,13 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <cstdio>
+#include <cstdlib>
+#include <fstream>
 #include <string>
 #include <vector>
+
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "../osc_ui.h"
 #include "../scene_cpu.h"
@@ -47,6 +52,15 @@ public:
     void setPlaySelection (int g, int i) noexcept override { if (g == 0) sel = i; ++selWrites; }
     int playLastSelector() const noexcept override { return lastSel; }
     void setUiFullOpen (bool o) noexcept override { fullOpen = o; }
+    void contentRoots (std::vector<ContentRoot>& out) const override { out = roots; }
+    void requestContent (int osc, int kind, const std::string& path) override { requests.push_back ({ osc, kind, path }); loadState = 1; }
+    int contentLoad (std::string*) const override { return loadState; }
+    std::shared_ptr<const synthyboy::StateContent> content() const override { return contentPtr; }
+    struct Request { int osc, kind; std::string path; };
+    std::vector<ContentRoot> roots;
+    std::vector<Request> requests;
+    int loadState = 0;
+    std::shared_ptr<const synthyboy::StateContent> contentPtr;
     static int idx (const std::string& key) { const auto* p = synthyboy::findParamByKey (key.c_str()); return p ? static_cast<int> (p - synthyboy::paramTable()) : -1; }
     void set (const std::string& key, float v) { v_[idx (key)] = v; }
     float get (const std::string& key) const { return v_[idx (key)]; }
@@ -112,7 +126,7 @@ void testEveryControlHasAParameterOrIsDisabled()
             std::string which;
             for (const OscUi::Item& it : r.ui.items())
             {
-                if (it.type == OscUi::T::Inert)
+                if (it.type == OscUi::T::Inert || it.type == OscUi::T::Source)   // a source of content: no parameter, a file
                     continue;
                 if (it.param < 0 && it.c->enabled())
                 {
@@ -264,7 +278,7 @@ void testDisabledControls()
     r.inst.set ("osc1.type", 4.0f);
     r.refresh();
     const OscUi::Item* src = r.ui.item (OscUi::kBasic + 1);
-    check (src != nullptr && ! src->c->enabled(), "multisample: the source (content, not a parameter) is disabled");
+    check (src != nullptr && src->c->enabled() && src->type == OscUi::T::Source && src->param < 0, "multisample: the source (content, not a parameter) shows the loaded file and opens the browser");
     (void) bar;
 }
 
@@ -485,7 +499,7 @@ void testSourceAndWarpLists()
     // the other types have no source list
     r.inst.set ("osc1.type", 4.0f);
     r.refresh();
-    check (! r.ui.full().basic.source.dropdown.enabled(), "multisample: the source list is not offered (content, not a parameter)");
+    check (r.ui.full().basic.source.dropdown.enabled(), "multisample: the dropdown of the source opens the content browser");
     // drawing with the list open
     r.inst.set ("osc1.type", 0.0f);
     r.refresh();
@@ -559,6 +573,101 @@ void testSteepEdgeNoLongLine()
     check (outside == 0, "a steep polyline draws nothing outside its own extent (" + std::to_string (outside) + " pixels)");
 }
 
+
+/** A directory tree of the machine's sample library: a folder with WAV files and an SFZ, a hidden file, a text file, a nested folder. */
+std::vector<std::string> g_libraries;   // the directories this run made (removed at the end)
+std::string makeLibrary()
+{
+    char tmpl[] = "/tmp/sbovl-XXXXXX";
+    const char* dir = ::mkdtemp (tmpl);
+    const std::string root = dir != nullptr ? dir : "/tmp";
+    if (dir != nullptr)
+        g_libraries.push_back (root);
+    auto touch = [&] (const std::string& rel) { std::ofstream (root + "/" + rel) << "x"; };
+    ::mkdir ((root + "/Drums").c_str(), 0755);
+    ::mkdir ((root + "/Drums/Kicks").c_str(), 0755);
+    ::mkdir ((root + "/Pads").c_str(), 0755);
+    touch ("Drums/kick 1.wav"); touch ("Drums/Snare.WAV"); touch ("Drums/notes.txt"); touch ("Drums/.hidden.wav"); touch ("Drums/Kicks/deep.wav");
+    touch ("Pads/pad.sfz"); touch ("Pads/pad C3.wav");
+    return root;
+}
+
+void testContentBrowser()
+{
+    const std::string root = makeLibrary();
+    ContentBrowser b;
+    b.setRoots ({ { "LIBRARY", root }, { "NOWHERE", root + "/missing" } });
+    b.open (1);
+    check (b.atRoots() && b.count() == 3 && b.rows()[0].text == "SOURCES" && b.rows()[1].text == "LIBRARY \xe2\x96\xb6", "browser: it starts at the list of the roots");
+    check (b.tap (0) == ContentBrowser::Action::None, "browser: the title row at the roots does nothing");
+    check (b.tap (1) == ContentBrowser::Action::Changed && ! b.atRoots() && b.count() == 3, "browser: a root opens its folders (Drums, Pads): " + std::to_string (b.count()));
+    check (b.rows()[1].text == "Drums \xe2\x96\xb6" && b.rows()[2].text == "Pads \xe2\x96\xb6", "browser: the folders are sorted, a folder says so");
+    check (b.tap (1) == ContentBrowser::Action::Changed && b.count() == 4 && b.rows()[1].text == "Kicks \xe2\x96\xb6" && b.rows()[2].text == "kick 1.wav" && b.rows()[3].text == "Snare.WAV", "browser: a sample browser lists the folders first, then the WAV files, not the text file or the hidden one");
+    check (b.rows()[0].text.find ("Drums") != std::string::npos, "browser: the first row names the folder and goes up");
+    check (b.tap (2) == ContentBrowser::Action::Chosen && b.chosen() == root + "/Drums/kick 1.wav", "browser: a file is chosen with its path");
+    check (b.tap (0) == ContentBrowser::Action::Changed && b.count() == 3 && b.tap (0) == ContentBrowser::Action::Changed && b.atRoots(), "browser: the first row goes up, the last step is the list of the roots");
+    b.open (2);
+    b.tap (1); b.tap (2);   // LIBRARY, Pads
+    check (b.count() == 3 && b.rows()[1].text == "pad C3.wav" && b.rows()[2].text == "pad.sfz", "browser: for an instrument the SFZ files and the WAV files are listed (" + std::to_string (b.count()) + ")");
+    b.openAt (1, root + "/Drums/Kicks/deep.wav");
+    check (! b.atRoots() && b.folder() == root + "/Drums/Kicks" && b.rowOf (root + "/Drums/Kicks/deep.wav") == 1, "browser: it opens in the folder of the file that was loaded last");
+    check (b.tap (-1) == ContentBrowser::Action::None && b.tap (99) == ContentBrowser::Action::None, "browser: a row that is not there does nothing");
+}
+
+void testSourceBrowserInTheOscillatorUi()
+{
+    const std::string root = makeLibrary();
+    Rig r;
+    r.inst.roots = { { "LIBRARY", root } };
+    r.inst.set ("osc1.type", 2.0f);   // granular
+    r.refresh();
+    const OscUi::Item* src = r.ui.item (OscUi::kBasic + 1);
+    check (src != nullptr && src->c->enabled() && r.ui.compact().basic.source.stepper.listable && r.ui.compact().basic.source.dropdown.enabled(), "granular: the source of the compact view is enabled (a tap opens the browser)");
+    check (std::string (r.ui.compact().basic.source.stepper.state.text) == "NO SAMPLE", "granular: no sample loaded: the source says NO SAMPLE");
+    // from the compact view the dropdown opens the full screen and the list over it
+    r.tapC (r.ui.compact().basic.source.dropdown);
+    check (r.stack.depth() == 2 && r.stack.top() == OscUi::kPageList && r.ui.list().state.count == 2 && std::string (r.ui.list().state.items[0]) == "SOURCES", "granular: the dropdown opens the full screen and the list of the sources");
+    // LIBRARY, then Drums, then the sample
+    auto row = [&] (int i) { const ui::Rect q = r.ui.list().rowRect (i); r.tap (q.x + 30, q.y + q.h / 2); };
+    row (1);
+    check (r.ui.list().state.count == 3 && r.stack.top() == OscUi::kPageList, "granular: a tap on a root shows its folders, the popup stays");
+    row (1);
+    check (r.ui.list().state.count == 4 && r.stack.top() == OscUi::kPageList, "granular: a tap on a folder shows its files");
+    row (2);
+    check (r.inst.requests.size() == 1 && r.inst.requests[0].osc == 1 && r.inst.requests[0].kind == 1 && r.inst.requests[0].path == root + "/Drums/kick 1.wav" && r.stack.depth() == 1, "granular: a tap on a file asks the instance to load it as a sample of oscillator 1 and closes the list");
+    r.inst.loadState = 1;
+    r.refresh();
+    check (std::string (r.ui.full().basic.source.stepper.state.text) == "LOADING ...", "granular: while it loads the source says LOADING ...");
+    r.inst.loadState = 3;
+    r.refresh();
+    check (std::string (r.ui.full().basic.source.stepper.state.text) == "LOAD FAILED", "granular: a failed load is said");
+    r.inst.loadState = 2;
+    auto content = std::make_shared<synthyboy::StateContent>();
+    synthyboy::ContentSample cs;
+    cs.osc = 1; cs.ref.pack = "user.samples"; cs.ref.file = "abc/kick 1.wav"; cs.ref.name = "kick 1";
+    content->samples.push_back (cs);
+    r.inst.contentPtr = content;
+    r.refresh();
+    check (std::string (r.ui.full().basic.source.stepper.state.text) == "kick 1", "granular: the loaded sample's name is on the source");
+    // the browser opens where the last file was
+    r.tapC (r.ui.full().basic.source.dropdown);
+    check (r.stack.top() == OscUi::kPageList && std::string (r.ui.list().state.items[0]).find ("Drums") != std::string::npos && r.ui.list().state.current == 2, "granular: the browser opens in the folder of the last file, on it");
+    r.tap (20, 130);   // the backdrop closes
+    check (r.stack.depth() == 1, "the backdrop closes the browser");
+    // multisample: SFZ and WAV
+    r.inst.set ("osc1.type", 4.0f);
+    r.refresh();
+    r.tapC (r.ui.full().basic.source.dropdown);
+    check (r.stack.top() == OscUi::kPageList, "multisample: the source opens the browser too");
+    r.tap (20, 130);
+    // no roots: nothing opens
+    Rig none;
+    none.inst.set ("osc1.type", 4.0f);
+    none.refresh();
+    none.tapC (none.ui.compact().basic.source.dropdown);
+    check (none.stack.depth() == 0, "an instance without roots: the browser does not open");
+}
+
 int main()
 {
     testSteepEdgeNoLongLine();
@@ -577,8 +686,13 @@ int main()
     testModulations();
     testDrawsOneSceneInsideTheCanvas();
     testQGroupFollowsTheActiveGroup();
+    testContentBrowser();
+    testSourceBrowserInTheOscillatorUi();
     testGranularAndSubAndNoise();
     testSourceAndWarpLists();
+    for (const std::string& d : g_libraries)
+        if (d.compare (0, 11, "/tmp/sbovl-") == 0)
+            (void) std::system (("rm -rf '" + d + "'").c_str());
     std::printf (g_fails ? "osc_ui_host: FAILED (%d)\n" : "osc_ui_host: OK\n", g_fails);
     return g_fails ? 1 : 0;
 }

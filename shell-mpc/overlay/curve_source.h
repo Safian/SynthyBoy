@@ -70,6 +70,16 @@ public:
     virtual int playLastSelector() const noexcept { return 0; }
     /** A plugin-drawn full screen page is open for this instance: the plugin hides the host widgets of the Play page (the display parameter "Overlay Instance" takes a frame the skin hides them at). */
     virtual void setUiFullOpen (bool /*open*/) noexcept {}
+    /** The places the content browser of the oscillator UI starts from (label, absolute folder): the plugin offers the ones that exist on this machine (the SD card, its own content folder, the USB drives).
+        Fills `out` (cleared first). Empty: this instance cannot load content. */
+    struct ContentRoot { std::string label, path; };
+    virtual void contentRoots (std::vector<ContentRoot>& out) const { out.clear(); }
+    /** Asks the instance to load a file into oscillator `osc` (1 .. 3): kind 1 = a WAV sample (the sample of the granular oscillator), kind 2 = an instrument for the multisample oscillator (an SFZ file, or a
+        WAV that becomes one zone over the keyboard). The load happens off the overlay thread (the plugin's display thread: reading, decoding, the content store, the engine); the result is the
+        content () of a later moment and `contentLoad`. Called from the overlay thread; it only stores the request. */
+    virtual void requestContent (int /*osc*/, int /*kind*/, const std::string& /*path*/) {}
+    /** The state of the last load: 0 none yet, 1 loading, 2 done, 3 failed (`message` gets the reason when it is not null). */
+    virtual int contentLoad (std::string* /*message*/) const { return 0; }
 };
 
 class CurveSource

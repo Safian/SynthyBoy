@@ -67,7 +67,7 @@ int main()
 {
     // ---- layout of the shared structures ----------------------------------------------------------------------------------------------------------------------
     check (sizeof (gpu::Msg) == 64 && sizeof (gpu::SceneOp) == 32 && sizeof (gpu::SceneData) == 32 + 32 * gpu::kMaxOps + gpu::kMaxText + 4 * gpu::kMaxVertices, "message, op and scene have the fixed sizes of the protocol");
-    check (sizeof (gpu::SharedBlock) % 4 == 0 && gpu::kProtocolVersion == 6, "the shared block is word aligned, protocol version 6");
+    check (sizeof (gpu::SharedBlock) % 4 == 0 && gpu::kProtocolVersion == 8, "the shared block is word aligned, protocol version 8");
     {
         auto* b = new gpu::SharedBlock;
         gpu::initBlock (b);

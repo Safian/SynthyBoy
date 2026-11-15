@@ -58,6 +58,7 @@ public:
         if (u.empty())
             return;
         Pen pen (sb, true);
+        Cell cell (sb, { u.x, u.y - 17, u.w, u.h + 17 });   // the index tabs sit on the top edge of the frame
         pen.rrect (u, theme::L().rControl, pen.c (theme::L().q, 255), 2.0f);
         for (int i = 0; i < kSlots; ++i)
         {

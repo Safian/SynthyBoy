@@ -550,7 +550,7 @@ void testModulationsPage()
     check (pg.group.check (allLeaves, nl) == 0, "modulations page: the row's group is adjacent (the remove button and the other rows lie outside the union)");
     Scene sgp (1280, 628, kBackgroundRgba);
     pg.group.draw (sgp.builder());
-    check (sgp.numOps() >= 2 && sgp.data->ops[1].op == gpu::kOpRRect && pg.group.rect().y == pg.rows[2].depth.rect().y, "modulations page: the group frame is drawn around the three controls of the active row");
+    check (sgp.numOps() >= 2 && sgp.data->ops[1].op == gpu::kOpCellBegin && sgp.data->ops[2].op == gpu::kOpRRect && pg.group.rect().y == pg.rows[2].depth.rect().y, "modulations page: the group frame is drawn around the three controls of the active row");
     m.numMods = 0;
     pg.load (m, "EMPTY");
     check (pg.numRows() == 0, "modulations page: no entries: no rows");
@@ -715,7 +715,7 @@ void testQGroup()
     pg.panel.warp()->first.setHasVar (true);
     Scene s (1280, 628, kBackgroundRgba);
     pg.q[0].draw (s.builder());
-    check (s.numOps() >= 2 && s.data->ops[1].op == gpu::kOpRRect && s.data->ops[2].op != gpu::kOpRRect + 1000, "q group: the group draws one rounded outline op (after the clear), then the index marks of its members");
+    check (s.numOps() >= 2 && s.data->ops[1].op == gpu::kOpCellBegin && s.data->ops[2].op == gpu::kOpRRect, "q group: the group draws one rounded outline op (after the clear), then the index marks of its members");
     const Image im = render (s);
     check (drawnOutside (im, { pg.q[0].rect().x, pg.q[0].rect().y - 18, pg.q[0].rect().w, pg.q[0].rect().h + 18 }, backgroundPixel()) == 0, "q group: the frame is inside the union rectangle; the index marks sit on its top edge (at most 18 px above it) or inside a member");
     const Rect r = pg.q[0].rect();

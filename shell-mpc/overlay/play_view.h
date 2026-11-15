@@ -451,8 +451,9 @@ private:
         sb.clear (0u);   // transparent: the GPU helper keeps the last picture until a Clear op, and the host's own widgets of the Env / LFO thirds must show through
         if (qlinkPanel_)   // the host's Q-Link panel is up over the right edge: nothing of ours is drawn there (it stays transparent, the panel shows as on every other page)
             sb.clip (0.0f, 0.0f, static_cast<float> (PageDetector::kPanelLineX), static_cast<float> (play::kRegionH));
-        auto ground = [&] (float x0, float y0, float x1, float y1)   // the opaque ground of the look under the plugin's own pages (a gradient fill: no distance field)
+        auto ground = [&] (float x0, float y0, float x1, float y1)   // the opaque ground of the look under the plugin's own pages (a gradient fill: no distance field): a cached cell
         {
+            ui::Cell cell (sb, { static_cast<int> (x0), static_cast<int> (y0), static_cast<int> (x1 - x0), static_cast<int> (y1 - y0) }, 0);
             sb.gradientRect (x0, y0, x1, y1, ui::theme::rgba (T.bg0), ui::theme::rgba (T.bg1));
         };
         if (osc_ != nullptr)
@@ -462,13 +463,22 @@ private:
             ground (0.0f, static_cast<float> (play::kTabY), w, static_cast<float> (play::kTabY + play::kTabH));
         }
         if (osc_ == nullptr || osc_->isMain())
-            paintPanels (sb);   // the Env and LFO panels (not drawn while a full screen covers them)
+            paintPanels (sb, false);   // the Env and LFO panels (not drawn while a full screen covers them): cached cells
         if (osc_ == nullptr)
+        {
+            paintPanels (sb, true);
             return;
+        }
+        // the order is the layers' (scene.h, CellBegin): first every cached cell that lies under the live parts (the page, the picture of the data), then what moves (the running point and the cursor of the panels,
+        // the live read-outs over the picture), then the cached cells that lie over them (the full screen button of the compact view, the popups)
         osc_->drawPage (sb);
         const ui::Rect r = osc_->displayRect();
         if (! r.empty())
-            drawPicture (sb, r);
+            drawPicture (sb, r, false);
+        if (osc_ == nullptr || osc_->isMain())
+            paintPanels (sb, true);
+        if (! r.empty())
+            drawPicture (sb, r, true);
         osc_->drawOnDisplay (sb);
         osc_->drawPopup (sb);   // the popups lie over the picture
     }
@@ -515,7 +525,7 @@ private:
     }
 
     /** The picture of the oscillator in a rectangle of the canvas: what the data of OscCycle::computeDisplay is (docs/MPC.md "Oscillator UI"), drawn by ui/display.h. */
-    void drawPicture (gpu::SceneBuilder& sb, const ui::Rect& r) const
+    void drawPicture (gpu::SceneBuilder& sb, const ui::Rect& r, bool live) const
     {
         using K = synthyboy::OscCycle::Kind;
         ui::display::Data d;
@@ -570,11 +580,14 @@ private:
             d.noiseHead = live_.noise;
             d.message = kind_ == K::noise ? "NOISE" : (kind_ == K::noSample ? "NO SAMPLE" : (kind_ == K::off ? "OFF" : ""));
         }
-        ui::display::draw (sb, r, d);
+        if (live)
+            ui::display::drawLive (sb, r, d);
+        else
+            ui::display::draw (sb, r, d);
     }
 
     /** The Env and LFO panels in the language of the look (ui/display.h drawModule): a block each, the curve as a line of light, the running dot / cursor. */
-    void paintPanels (gpu::SceneBuilder& sb) const
+    void paintPanels (gpu::SceneBuilder& sb, bool live) const
     {
         using namespace play;
         float v[kEnvPoints > LfoView::kPoints ? kEnvPoints : LfoView::kPoints];
@@ -596,7 +609,10 @@ private:
                 v[i] = p == 1 ? envY_[static_cast<size_t> (i)] : 0.5f + 0.5f * lfoY_[static_cast<size_t> (i)];
             m.v = v;
             m.dot = p == 1 ? (envDotPx_ >= 0 ? static_cast<float> (envDotX_) : -1.0f) : (lfoCursorPx_ >= 0 ? lfoCursorX_ : -1.0f);
-            ui::display::drawModule (sb, m);
+            if (live)
+                ui::display::drawModuleLive (sb, m);
+            else
+                ui::display::drawModule (sb, m);
         }
     }
 

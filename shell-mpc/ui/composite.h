@@ -51,10 +51,14 @@ public:
     void draw (gpu::SceneBuilder& sb) const override
     {
         Pen pen (sb, enabled_);
-        drawUnder (pen);
+        {
+            Cell cell (sb, rect_);
+            drawUnder (pen);
+        }
         for (int i = 0; i < n_; ++i)
             if (shown_[i])
                 kids_[i]->draw (sb);
+        Cell cell (sb, rect_);
         drawExtra (pen);
     }
     Change touchDown (int x, int y, double nowMs) override
@@ -674,6 +678,7 @@ public:
         if (popup_)
         {
             Pen pen (sb, true);
+            Cell cell (sb, parent_);
             pen.rect (parent_, colour::rgba (theme::L().bg1, 190));
             pen.block (rect_, true);
         }

@@ -92,7 +92,7 @@ int main()
             pw.phases[0] = 0.3f; pw.phases[1] = 0.7f;
             nz2.noiseHead = 0.4f;
             const uint32_t bg = ov::sceneColour (theme::rgba (theme::L().bg0, 255));
-            auto pic = [&] (const display::Data& d) { Scene s (680, 360, theme::rgba (theme::L().bg0, 255)); display::draw (s.builder(), r, d); return std::make_pair (render (s), s.overflow()); };
+            auto pic = [&] (const display::Data& d) { Scene s (680, 360, theme::rgba (theme::L().bg0, 255)); display::draw (s.builder(), r, d); display::drawLive (s.builder(), r, d); return std::make_pair (render (s), s.overflow()); };
             const auto pb = pic (base), ph = pic (h), pg = pic (g), pww = pic (w), ppw = pic (pw), pn = pic (nz), pn2 = pic (nz2);
             const float hx0 = static_cast<float> (r.x + 8) + 0.25f * static_cast<float> (r.w - 16 - 1);
             check (pb.first.px != ph.first.px && colourNear (ph.first, hx0, 150.0f, 2, 0xffffff, 40) && ! ph.second && drawnOutside (ph.first, r, bg) == 0, nm + "live read-outs: a read head line per voice, white at its position");
@@ -112,6 +112,7 @@ int main()
         m.dot = 0.4f;
         Scene sm (420, 210, theme::rgba (theme::L().bg0, 255));
         display::drawModule (sm.builder(), m);
+        display::drawModuleLive (sm.builder(), m);
         const Image im = render (sm);
         check (! sm.overflow() && drawnOutside (im, m.rect, ov::sceneColour (theme::rgba (theme::L().bg0, 255))) == 0 && colourNear (im, 20.0f + 0.4f * 379.0f, 120.0f, 80, 0xffffff, 8), nm + "module panel: inside its rectangle, the running point is there");
         m.env = false;

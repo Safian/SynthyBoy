@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "../ui/ui.h"
+#include "content_browser.h"
 #include "curve_source.h"
 #include "../q_router.h"
 #include "play_osc.h"
@@ -74,6 +75,7 @@ public:
         DetailNorm,  // a DetailButton with a 0 .. 1 value
         DetailInt,   // a DetailButton with an integer value
         Route,       // the route button: the destination choice
+        Source,      // the source of a granular / multisample oscillator: the name of the file that is loaded; a tap opens the content browser
         Inert        // no value: a button
     };
 
@@ -362,8 +364,10 @@ private:
                 bind (main_, kBasic + 5, &b->noiseType, T::Stepper, "sample");
             if (abc)
             {
-                bind (main_, kBasic + 1, &b->source.stepper, T::Stepper, kind == ui::OscKind::Wavetable && ! otherType ? "wavetable" : "", kind != ui::OscKind::Wavetable || otherType);   // the source of the other types is content, not a parameter
-                const bool listOk = b == &full_.basic && kind == ui::OscKind::Wavetable && ! otherType;   // the list of all sources: on the full screen, for the wavetable type (the source of the others is content)
+                // the source of a granular / multisample oscillator is content (a file), not a parameter: its name is shown and a tap opens the content browser (the folders of the machine, the WAV files, the SFZ instruments)
+                const bool contentType = kind != ui::OscKind::Wavetable && ! otherType;
+                bind (main_, kBasic + 1, &b->source.stepper, contentType ? T::Source : T::Stepper, kind == ui::OscKind::Wavetable && ! otherType ? "wavetable" : "", ! contentType && (kind != ui::OscKind::Wavetable || otherType));
+                const bool listOk = (b == &full_.basic && kind == ui::OscKind::Wavetable && ! otherType) || contentType;   // wavetable: the list of all sources, on the full screen; the content types: the browser, from both views
                 bind (main_, kBasic + 2, &b->source.dropdown, T::Inert, "", ! listOk);
                 b->source.stepper.listable = listOk;
             }
@@ -600,6 +604,8 @@ private:
             }
             pageTop_ = top;
             pageSig_ = sig;
+            if (top != kPageList)
+                browseMode_ = false;
             loadPage (inst);
         }
     }
@@ -628,7 +634,9 @@ private:
                 break;
             case kPageMods: loadMods (inst); break;
             case kPageList:
-                if (listParam_ >= 0)
+                if (browseMode_)
+                    fillBrowserList();
+                else if (listParam_ >= 0)
                 {
                     list_.state.items = info (listParam_).choices;
                     list_.state.count = info (listParam_).numChoices;
@@ -803,6 +811,16 @@ private:
                 it.c->setEnabled (true);
                 continue;
             }
+            if (it.type == T::Source)
+            {
+                auto* st = static_cast<ui::Stepper*> (it.c);
+                st->state.count = 0;
+                st->state.index = 0;
+                st->state.wrap = false;
+                sourceText (v, st);
+                it.c->setEnabled (true);
+                continue;
+            }
             if (it.param < 0)
             {
                 it.c->setEnabled (false);
@@ -910,6 +928,36 @@ private:
             if (it.id == kWarp1Var || it.id == kWarp2Var)
                 it.c->setEnabled (false);
     }
+    static std::string stemOf (const std::string& path)
+    {
+        const size_t slash = path.rfind ('/');
+        std::string s = slash == std::string::npos ? path : path.substr (slash + 1);
+        const size_t dot = s.rfind ('.');
+        return dot == std::string::npos || dot == 0 ? s : s.substr (0, dot);
+    }
+    /** The text of the source stepper of a granular / multisample oscillator: the name of the loaded file, "LOADING ..." / "LOAD FAILED" for the last load of this oscillator, else "NO SAMPLE". */
+    void sourceText (const IInstanceView& v, ui::Stepper* st) const
+    {
+        const int osc = playosc::oscNumber (sel_);
+        std::string msg;
+        const int state = v.contentLoad (&msg);
+        if (state == 1) { st->setItem ("LOADING ..."); return; }
+        if (state == 3) { st->setItem ("LOAD FAILED"); return; }
+        const std::shared_ptr<const synthyboy::StateContent> c = v.content();
+        std::string name;
+        if (c != nullptr)
+        {
+            if (typeRaw_ == 4)
+            {
+                for (const synthyboy::ContentInstrument& i : c->instruments)
+                    if (i.osc == osc) name = i.ref.name.empty() ? stemOf (i.ref.file) : i.ref.name;
+            }
+            else
+                for (const synthyboy::ContentSample& s : c->samples)
+                    if (s.osc == osc) name = s.ref.name.empty() ? stemOf (s.ref.file) : s.ref.name;
+        }
+        st->setItem (name.empty() ? "NO SAMPLE" : name.c_str());
+    }
     bool warpOff_[2] = { false, false };
     bool routeFilter_ = false;
     bool warpIsOff (int id) const noexcept { return warpOff_[id == kWarp1Amount ? 0 : 1]; }
@@ -975,7 +1023,13 @@ private:
                 case kClose: case kDetailBack: case kModsBack: case kRouteClose: case kRouteBackdrop: stack.back(); return;
                 case kRoute: stack.openDetail (kPageRoute); return;
                 case kListBackdrop: stack.back(); return;
-                case kBasic + 1: case kBasic + 2: openList (item (kBasic + 1), stack); return;
+                case kBasic + 1: case kBasic + 2:
+                {
+                    const Item* src = item (kBasic + 1);
+                    if (src != nullptr && src->type == T::Source) openBrowser (stack, v);
+                    else openList (src, stack);
+                    return;
+                }
                 case kWarp1Type: case kWarp2Type: openList (item (id), stack); return;
                 default: break;
             }
@@ -1019,6 +1073,19 @@ private:
         }
         if (id == kList && c.kind == K::Index)
         {
+            if (browseMode_)
+            {
+                const ContentBrowser::Action a = browser_.tap (c.index);
+                if (a == ContentBrowser::Action::Changed)
+                    fillBrowserList();
+                else if (a == ContentBrowser::Action::Chosen)
+                {
+                    lastChosen_[browser_.kind() - 1] = browser_.chosen();
+                    v.requestContent (playosc::oscNumber (sel_), browser_.kind(), browser_.chosen());
+                    stack.back();
+                }
+                return;
+            }
             if (listParam_ >= 0)
                 writePlain (v, listParam_, info (listParam_).min + c.index);
             stack.back();
@@ -1066,6 +1133,38 @@ private:
             return;
         }
         write (*it, c, v);
+    }
+
+    /** The content browser in the list popup (over the full screen: from the compact view the full screen opens first): the roots the instance offers, the folders, the files. */
+    void openBrowser (UiStack& stack, IInstanceView& v)
+    {
+        std::vector<IInstanceView::ContentRoot> roots;
+        v.contentRoots (roots);
+        if (roots.empty())
+            return;
+        std::vector<ContentBrowser::Root> rs;
+        for (const auto& r : roots)
+            rs.push_back ({ r.label, r.path });
+        browser_.setRoots (std::move (rs));
+        const int kind = typeRaw_ == 4 ? 2 : 1;
+        if (! lastChosen_[kind - 1].empty())
+            browser_.openAt (kind, lastChosen_[kind - 1]);
+        else
+            browser_.open (kind);
+        browseMode_ = true;
+        listParam_ = -1;
+        if (stack.depth() == 0)
+            stack.openFull (kElementOsc);
+        stack.openDetail (kPageList);
+        fillBrowserList();
+    }
+    void fillBrowserList()
+    {
+        list_.state.items = browser_.items();
+        list_.state.count = browser_.count();
+        const int cur = browser_.rowOf (lastChosen_[browser_.kind() - 1]);
+        list_.state.current = cur;
+        list_.showCurrent();
     }
 
     /** The list popup of a choice parameter (the owner's item: its parameter): over the full screen. */
@@ -1240,6 +1339,9 @@ private:
     ui::ModulationsPage mods_;
     ui::RoutePanel route_;
     ui::ListPopup list_;
+    ContentBrowser browser_;
+    bool browseMode_ = false;
+    std::string lastChosen_[2];   // the file that was loaded last for the granular (0) and multisample (1) type: the browser opens in its folder
     int listParam_ = -1;
     ui::Rect popupBox_;
     std::vector<Item> main_, page_;

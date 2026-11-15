@@ -89,6 +89,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
     const bool wave = d.kind == Data::Kind::Wave, minmax = d.kind == Data::Kind::MinMax, spec = d.kind == Data::Kind::Spectrum;
     if (d.kind == Data::Kind::None)
         return;
+    Cell cell (sb, r);   // the picture of the data is one cached cell: it is drawn again only when the data changes (the live read-outs are drawn after it, drawLive)
     // ---- the block under the picture: a vertical gradient, the keyline
     sb.paintY (static_cast<float> (r.y), static_cast<float> (r.bottom()), dt::a (T.panel0, 255), dt::a (T.panel0, 255), dt::a (T.panel1, 255), dt::a (T.panel1, 255));
     sb.rrect (static_cast<float> (r.x), static_cast<float> (r.y), static_cast<float> (r.right()), static_cast<float> (r.bottom()), T.rBlock, 0xffffffffu);
@@ -193,18 +194,6 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
         sb.fillGradient (mid, mid - amp * scale, mid, dt::a (d.colour, 70), dt::a (d.colour, 0));
         dt::glowLine (sb, x0, x1, st, T.curve * 0.5f + (stacked ? 0.15f : 0.0f), 255, false);
         sb.paintOff();
-        // the phases of the sub oscillator's voices: a dot per voice on the curve (the newest voice the brightest)
-        for (int v = 0; v < Data::kMaxHeads; ++v)
-            if (d.phases[v] >= 0.0f)
-            {
-                const float ph = std::min (1.0f, d.phases[v]);
-                const float fi = ph * static_cast<float> (n - 1);
-                const int i0 = std::min (n - 2, static_cast<int> (fi));
-                const float py = rows[i0] + (rows[i0 + 1] - rows[i0]) * (fi - static_cast<float> (i0)), pxx = x0 + ph * static_cast<float> (iw - 1);
-                sb.style (1.0f, false);
-                sb.disc (pxx, py, v == 0 ? 3.6f : 2.6f, dt::a (d.colour, v == 0 ? 255 : 160));
-                sb.disc (pxx, py, v == 0 ? 1.8f : 1.2f, dt::a (0xffffff, v == 0 ? 255 : 200));
-            }
         // the light: the main curve and the lit frames drawn into the bloom layer (a quarter of the size), blurred, added over the picture inside the display: one cheap pass for all the lines
         if (T.backGlow > 0.0f && theme::D().glow && mainFirst >= 0)
         {
@@ -274,30 +263,6 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
             sb.style (1.0f, false);
             sb.rrect (static_cast<float> (g.x), static_cast<float> (g.y), static_cast<float> (g.right()), static_cast<float> (g.bottom()), T.rChip, dt::a (T.flow[2], 255), 1.4f);
         }
-        // the grains that sound (the real ones: where each reads and how far it has run; the window shape shows as the brightness)
-        for (int g = 0; g < std::min (d.numGrainsLive, static_cast<int> (Data::kMaxGrains)); ++g)
-        {
-            const float life = std::min (1.0f, std::max (0.0f, d.liveGrainLife[g]));
-            const float env = std::sin (kPi * life);
-            const float gx = x0 + std::min (1.0f, std::max (0.0f, d.liveGrainPos[g])) * static_cast<float> (iw - 1), hh = (bottom - top) * (0.16f + 0.30f * env);
-            sb.style (1.0f, true);
-            sb.line (gx, mid - hh, gx, mid + hh, 2.0f, dt::a (T.flow[2], static_cast<int> (70.0f + 185.0f * env)));
-        }
-        // the read heads: one line per voice (the newest voice the brightest)
-        for (int v = 0; v < Data::kMaxHeads; ++v)
-        {
-            if (d.heads[v] < 0.0f)
-                continue;
-            const float px = x0 + std::min (1.0f, d.heads[v]) * static_cast<float>(iw - 1);
-            sb.style (1.0f, false);
-            sb.line (px, top, px, bottom, v == 0 ? 1.6f : 1.1f, dt::a (0xffffff, v == 0 ? 255 : 150 - 12 * v));
-        }
-        if (d.playhead >= 0.0f)
-        {
-            const float px = x0 + d.playhead * static_cast<float> (iw - 1);
-            sb.style (1.0f, false);
-            sb.line (px, top, px, bottom, 1.4f, dt::a (0xffffff, 255));
-        }
     }
     else if (spec && n >= 2)
     {
@@ -313,18 +278,76 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
     {
         const float size = 28.0f;
         sb.text (x0 + 0.5f * (static_cast<float> (iw) - sdf::textWidth (d.message, size)), sdf::baselineForCentre (0.5f * (top + bottom), size), size, d.message, dt::a (T.textDim, 255));
-        if (d.noiseHead >= 0.0f)   // a noise whose source is a sample: its read head along a thin line
-        {
-            const float ly = mid + 0.5f * size + 14.0f, hx = x0 + std::min (1.0f, d.noiseHead) * static_cast<float> (iw - 1);
-            sb.style (1.0f, true);
-            sb.line (x0, ly, x1, ly, 1.0f, dt::a (T.grid, 255));
-            sb.disc (hx, ly, 3.4f, dt::a (d.colour, 255));
-        }
     }
     sb.style (1.0f, false);
     sb.paintOff();
 }
 
+/** The live read-outs of the engine over the picture (not cached: they move): the grains that sound (where each reads and how far it has run: the brightness follows the window), a line per read head (the newest
+    voice the brightest), the phases of the sub oscillator's voices as dots on the wave, the read head of a sample noise. Same rectangle and data as `draw`. */
+inline void drawLive (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
+{
+    namespace dt = detail;
+    const theme::Look& T = theme::L();
+    if (r.w < 60 || r.h < 40 || d.kind == Data::Kind::None)
+        return;
+    const Rect in = r.inset (8);
+    const float x0 = static_cast<float> (in.x), x1 = static_cast<float> (in.right());
+    const float top = static_cast<float> (in.y) + 6.0f, bottom = static_cast<float> (in.bottom()) - 6.0f, mid = 0.5f * (top + bottom), amp = 0.5f * (bottom - top);
+    const int iw = in.w;
+    const int n = std::min (d.n, static_cast<int> (kMaxPoints));
+    const bool minmax = d.kind == Data::Kind::MinMax;
+    sb.style (1.0f, false);
+    sb.paintOff();
+    if (d.kind == Data::Kind::Wave && n >= 2)
+    {
+        const float scale = d.numStack >= 2 && theme::D().stackFrames >= 2 ? 0.74f : 0.86f;
+        for (int v = 0; v < Data::kMaxHeads; ++v)
+            if (d.phases[v] >= 0.0f)
+            {
+                const float ph = std::min (1.0f, d.phases[v]), fi = ph * static_cast<float> (n - 1);
+                const int i0 = std::min (n - 2, static_cast<int> (fi));
+                const float f = fi - static_cast<float> (i0);
+                const float c0 = std::min (1.06f, std::max (-1.06f, d.cycle[i0])), c1 = std::min (1.06f, std::max (-1.06f, d.cycle[i0 + 1]));
+                const float py = mid - (c0 + (c1 - c0) * f) * amp * scale, pxx = x0 + ph * static_cast<float> (iw - 1);
+                sb.disc (pxx, py, v == 0 ? 3.6f : 2.6f, dt::a (d.colour, v == 0 ? 255 : 160));
+                sb.disc (pxx, py, v == 0 ? 1.8f : 1.2f, dt::a (0xffffff, v == 0 ? 255 : 200));
+            }
+    }
+    if (minmax)
+    {
+        for (int g = 0; g < std::min (d.numGrainsLive, static_cast<int> (Data::kMaxGrains)); ++g)
+        {
+            const float life = std::min (1.0f, std::max (0.0f, d.liveGrainLife[g]));
+            const float env = std::sin (kPi * life);
+            const float gx = x0 + std::min (1.0f, std::max (0.0f, d.liveGrainPos[g])) * static_cast<float> (iw - 1), hh = (bottom - top) * (0.16f + 0.30f * env);
+            sb.style (1.0f, true);
+            sb.line (gx, mid - hh, gx, mid + hh, 2.0f, dt::a (T.flow[2], static_cast<int> (70.0f + 185.0f * env)));
+        }
+        sb.style (1.0f, false);
+        for (int v = 0; v < Data::kMaxHeads; ++v)
+        {
+            if (d.heads[v] < 0.0f)
+                continue;
+            const float px = x0 + std::min (1.0f, d.heads[v]) * static_cast<float> (iw - 1);
+            sb.line (px, top, px, bottom, v == 0 ? 1.6f : 1.1f, dt::a (0xffffff, v == 0 ? 255 : 150 - 12 * v));
+        }
+        if (d.playhead >= 0.0f)
+        {
+            const float px = x0 + d.playhead * static_cast<float> (iw - 1);
+            sb.line (px, top, px, bottom, 1.4f, dt::a (0xffffff, 255));
+        }
+    }
+    if (d.kind == Data::Kind::Message && d.noiseHead >= 0.0f)   // a noise whose source is a sample: its read head along a thin line
+    {
+        const float size = 28.0f, ly = mid + 0.5f * size + 14.0f, hx = x0 + std::min (1.0f, d.noiseHead) * static_cast<float> (iw - 1);
+        sb.style (1.0f, true);
+        sb.line (x0, ly, x1, ly, 1.0f, dt::a (T.grid, 255));
+        sb.disc (hx, ly, 3.4f, dt::a (d.colour, 255));
+    }
+    sb.style (1.0f, false);
+    sb.paintOff();
+}
 
 /** A module panel (the compact view's envelope and LFO): a block with the title, the curve of the module as a line of light along its two colours (ENV orange to red, LFO green to cyan) over
     a faint area, the grid as hairlines, and the running dot (envelope) or cursor (LFO). `v` = n values 0 .. 1 (1 = the top of the plot), `dot` = the position 0 .. 1 of the running point
@@ -342,6 +365,7 @@ inline void drawModule (gpu::SceneBuilder& sb, const Module& m)
 {
     namespace dt = detail;
     const theme::Look& T = theme::L();
+    Cell cell (sb, m.rect);   // the block and the curve: cached, drawn again when the curve or the title changes (the running point is drawn after it, drawModuleLive)
     const uint32_t c0 = m.env ? T.env[0] : T.lfo[0], c1 = m.env ? T.env[1] : T.lfo[1];
     const float x0 = static_cast<float> (m.rect.x), y0 = static_cast<float> (m.rect.y), x1 = static_cast<float> (m.rect.right()), y1 = static_cast<float> (m.rect.bottom());
     sb.paintY (y0, y1, dt::a (T.panel0, 255), dt::a (T.panel0, 255), dt::a (T.panel1, 255), dt::a (T.panel1, 255));
@@ -379,17 +403,28 @@ inline void drawModule (gpu::SceneBuilder& sb, const Module& m)
         sb.paintOff();
         sb.glowEnd (T.backGlow, 1.4f, 0xffffffffu, m.plot.x - 6, m.plot.y - 6, m.plot.right() + 6, m.plot.bottom() + 6);
     }
-    if (m.dot >= 0.0f)
-    {
-        const float dx = px + std::min (1.0f, m.dot) * (pxe - px - 1.0f) + 0.5f, pos = std::min (1.0f, m.dot) * static_cast<float> (n - 1);
-        const int i = std::min (static_cast<int> (pos), n - 2);
-        const float dy = rows[i] + (rows[i + 1] - rows[i]) * (pos - static_cast<float> (i));
-        if (! m.env)
-            sb.line (dx, pt, dx, pb, 1.2f, dt::a (0xffffff, 90));
-        sb.style (1.0f, false);
-        sb.disc (dx, dy, 3.4f, dt::a (c1, 255));
-        sb.disc (dx, dy, 1.8f, 0xffffffffu);
-    }
+}
+
+/** The running point of the envelope / the cursor of the LFO over the panel (not cached: it moves). */
+inline void drawModuleLive (gpu::SceneBuilder& sb, const Module& m)
+{
+    namespace dt = detail;
+    const theme::Look& T = theme::L();
+    if (m.v == nullptr || m.n < 2 || m.dot < 0.0f)
+        return;
+    const uint32_t c1 = m.env ? T.env[1] : T.lfo[1];
+    const float px = static_cast<float> (m.plot.x), pxe = static_cast<float> (m.plot.right()), pt = static_cast<float> (m.plot.y), pb = static_cast<float> (m.plot.bottom());
+    const int n = std::min (m.n, static_cast<int> (kMaxPoints));
+    auto row = [&] (int i) { return std::min (pb + 40.0f, std::max (pt - 40.0f, pb - std::min (1.2f, std::max (-0.2f, m.v[i])) * (pb - pt))); };
+    const float dx = px + std::min (1.0f, m.dot) * (pxe - px - 1.0f) + 0.5f, pos = std::min (1.0f, m.dot) * static_cast<float> (n - 1);
+    const int i = std::min (static_cast<int> (pos), n - 2);
+    const float dy = row (i) + (row (i + 1) - row (i)) * (pos - static_cast<float> (i));
+    sb.style (1.0f, false);
+    sb.paintOff();
+    if (! m.env)
+        sb.line (dx, pt, dx, pb, 1.2f, dt::a (0xffffff, 90));
+    sb.disc (dx, dy, 3.4f, dt::a (c1, 255));
+    sb.disc (dx, dy, 1.8f, 0xffffffffu);
 }
 
 }}} // namespace synthyboy_mpc::ui::display

@@ -45,6 +45,7 @@ public:
     void draw (gpu::SceneBuilder& sb) const override
     {
         Pen pen (sb, enabled_);
+        Cell cell (sb, parent_);
         pen.rect (parent_, colour::rgba (theme::L().bg1, 190));
         drawBody (pen);
     }

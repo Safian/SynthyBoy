@@ -22,7 +22,7 @@
 
 namespace synthyboy_mpc { namespace overlay { namespace gpu {
 
-constexpr uint32_t kProtocolVersion = 7;   // 7: the shared block carries the helper's render statistics (RenderBlock: the time of every picture in a histogram and the sums of its parts). 6: the frame (kMaxOps 2048, kMaxVertices 65536 for the polylines of a scene together, kMaxCurve 2048 per polyline, a text pool of kMaxText bytes); only the used part of the scene is copied; kOpStyle (feather, round caps), kOpPaint (a gradient of four colours along x, y or an arc), kOpRRect, kOpBand, kOpFeedback, kOpGlowBegin / kOpGlowEnd; kOpText is a string from the pool in the proportional signed distance field font (sdf_font.h), any size; kOpStroke / kOpLine / kOpArc / kOpDisc / kOpVLine take their feather and caps from the style, their colour from the paint. 5: kMaxOps 640, kOpLine, kOpArc, kOpFrame. 4: kMaxOps 96, kMaxCurve 1088, kOpCurve (a polyline with its own span), kOpText, kKindPlay. 2: SceneOp::rgba2 (was f[0] .. f[5], now f[0] .. f[4]), kOpFillGradient, kKindSpectrum. 3: the hello carries the vblank pipe, the pace stride and the measured period (flag kFlagVblank), the shared block carries the helper's presentation statistics (PaceBlock), the display may be rotated 0 / 90 / 180 / 270. The plugin and the helper are shipped together; a helper of another version refuses the hello (kMsgError) and the plugin draws with the CPU.
+constexpr uint32_t kProtocolVersion = 8;   // 8: kOpCellBegin / kOpCellEnd (cached cells: the helper keeps what the static parts of a scene drew in layers and redraws only what changed). 7: the shared block carries the helper's render statistics (RenderBlock: the time of every picture in a histogram and the sums of its parts). 6: the frame (kMaxOps 2048, kMaxVertices 65536 for the polylines of a scene together, kMaxCurve 2048 per polyline, a text pool of kMaxText bytes); only the used part of the scene is copied; kOpStyle (feather, round caps), kOpPaint (a gradient of four colours along x, y or an arc), kOpRRect, kOpBand, kOpFeedback, kOpGlowBegin / kOpGlowEnd; kOpText is a string from the pool in the proportional signed distance field font (sdf_font.h), any size; kOpStroke / kOpLine / kOpArc / kOpDisc / kOpVLine take their feather and caps from the style, their colour from the paint. 5: kMaxOps 640, kOpLine, kOpArc, kOpFrame. 4: kMaxOps 96, kMaxCurve 1088, kOpCurve (a polyline with its own span), kOpText, kKindPlay. 2: SceneOp::rgba2 (was f[0] .. f[5], now f[0] .. f[4]), kOpFillGradient, kKindSpectrum. 3: the hello carries the vblank pipe, the pace stride and the measured period (flag kFlagVblank), the shared block carries the helper's presentation statistics (PaceBlock), the display may be rotated 0 / 90 / 180 / 270. The plugin and the helper are shipped together; a helper of another version refuses the hello (kMsgError) and the plugin draws with the CPU.
 constexpr uint32_t kBlockMagic = 0x53424f56u;   // 'SBOV'
 constexpr uint32_t kMsgMagic = 0x4d534f56u;     // 'MSOV' ... the first word of every message
 constexpr int kMaxVertices = 65536;              // vertices of all polylines of a scene together (a pool of floats: the rows of the curves)
@@ -81,11 +81,18 @@ enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindO
     Clip    f[0..3] = x0 y0 x1 y1 (canvas pixels): everything drawn after this op is limited to the rectangle (the pixels outside keep what they had: with a transparent Clear first, they stay transparent) until the
             next Clip op; an empty rectangle (x1 <= x0 or y1 <= y0) switches the clip off. The glow layers and the passes of a bloom are not clipped.
     GlowBegin f[0] = divisor 2, 4 or 8: the next ops go to a layer of 1 / divisor the size (cleared, transparent).
+    CellBegin f[0..3] = x0 y0 x1 y1 (the canvas rectangle that contains everything the cell draws), rgba = the hash of the content (SceneBuilder::cellEnd makes it from the ops, the text and the rows of the curves inside; the
+            text offset and the pool position of a curve are not part of it). CellEnd closes the cell. A CELL is a part of the picture that is the same from one scene to the next while its hash is the same: the helper draws the
+            cells of a scene into LAYERS (textures the size of the picture) and, when the next scene has the same cells, only the cells whose hash or rectangle changed are drawn again (scissor = their rectangle, plus the
+            cells that lie over it), then one textured quad per layer puts the layer on the picture. Rules: no nesting (the builder counts a nested begin / end and keeps only the outer pair); a cell starts and ends with
+            the default style and paint (the ops inside must not rely on a style, paint, clip or curve set before the cell, and set none that lasts after it); inside a cell no Clear, Clip or Feedback op (a GlowBegin / GlowEnd pair is allowed: its bloom is added into the layer); the
+            picture, the bloom rectangle included, must stay inside the rectangle. The ops that are NOT in a cell are drawn every picture, in their order: a cell that comes after one of them is on a second layer (over them); a cell after a second group of
+            such ops makes the whole scene uncached (drawn whole). The CPU reference draws the cells as they are (the begin / end only reset the style and the paint).
     GlowEnd rgba = tint, f[0] = gain (0 .. 4), f[1] = blur width (1 = the default, 0.5 .. 4), f[2], f[3] = x0, y0 and rgba2 = (x1 << 16) | y1 (whole pixels, below 65536): the rectangle that is blurred and added
             over the picture (an empty rectangle: the whole canvas; a rectangle is much cheaper: the passes are as big as it is). A bloom: the same curves drawn into the layer.
     The polyline: without a Curve op, SceneData::y[0 .. numPoints - 1] are rows, point i at x = i / (numPoints - 1) * (w - 1) + 0.5 (the first and the last continue horizontally to the canvas edges). */
 enum OpCode : uint32_t { kOpNone = 0, kOpClear = 1, kOpRect = 2, kOpVLine = 3, kOpFill = 4, kOpStroke = 5, kOpDisc = 6, kOpFillGradient = 7, kOpCurve = 8, kOpText = 9, kOpLine = 10, kOpArc = 11, kOpFrame = 12,
-                         kOpStyle = 13, kOpPaint = 14, kOpRRect = 15, kOpBand = 16, kOpFeedback = 17, kOpGlowBegin = 18, kOpGlowEnd = 19, kOpClip = 20 };
+                         kOpStyle = 13, kOpPaint = 14, kOpRRect = 15, kOpBand = 16, kOpFeedback = 17, kOpGlowBegin = 18, kOpGlowEnd = 19, kOpClip = 20, kOpCellBegin = 21, kOpCellEnd = 22 };
 constexpr float kMaxSoft = 64.0f;
 
 struct SceneOp
@@ -241,11 +248,77 @@ struct SceneBuilder
         s_.numText += static_cast<uint32_t> (len);
         return true;
     }
+    /** A cached cell (see the CellBegin op): everything drawn until the matching cellEnd () is one cell with the rectangle given here. Nested pairs count and are ignored. A cell without ops is dropped. */
+    void cellBegin (float x0, float y0, float x1, float y1)
+    {
+        if (cellDepth_++ > 0)
+            return;
+        cellOp_ = s_.numOps;
+        if (SceneOp* o = add (kOpCellBegin, 0)) { o->f[0] = x0; o->f[1] = y0; o->f[2] = x1; o->f[3] = y1; }
+        else cellOp_ = ~0u;
+    }
+    void cellEnd ()
+    {
+        if (cellDepth_ == 0 || --cellDepth_ > 0)
+            return;
+        if (cellOp_ == ~0u)
+            return;
+        if (s_.numOps == cellOp_ + 1)   // nothing inside: the begin op is taken back
+        {
+            --s_.numOps;
+            return;
+        }
+        if (add (kOpCellEnd, 0) != nullptr)
+            s_.ops[cellOp_].rgba = cellHash (s_, cellOp_);
+        else
+            overflow = true;
+    }
+    /** The hash of the cell that begins at op `begin` and ends at the next CellEnd op (or at numOps): its rectangle, its ops, the text and the rows of the curves they use (not the offsets into the pools). */
+    static uint32_t cellHash (const SceneData& s, uint32_t begin) noexcept
+    {
+        uint32_t h = 2166136261u;
+        auto mix = [&] (uint32_t v) { h = (h ^ (v & 255u)) * 16777619u; h = (h ^ ((v >> 8) & 255u)) * 16777619u; h = (h ^ ((v >> 16) & 255u)) * 16777619u; h = (h ^ (v >> 24)) * 16777619u; };
+        for (uint32_t k = begin; k < s.numOps && k < static_cast<uint32_t> (kMaxOps); ++k)
+        {
+            const SceneOp& o = s.ops[k];
+            if (k > begin && o.op == kOpCellEnd)
+                break;
+            mix (o.op); mix (o.rgba); mix (o.rgba2);
+            const bool isText = o.op == kOpText, isCurve = o.op == kOpCurve, isBand = o.op == kOpBand;
+            for (int i = 0; i < 5; ++i)
+            {
+                if ((isText && i == 3) || (isCurve && i == 0) || (isBand && (i == 0 || i == 4)))
+                    continue;   // positions in the pools: not part of the content
+                mix (floatBits (o.f[i]));
+            }
+            if (k == begin)
+                continue;
+            if (isText)
+            {
+                int off = static_cast<int> (o.f[3] + 0.5f), len = static_cast<int> (o.f[4] + 0.5f);
+                if (off >= 0 && len > 0 && off + len <= static_cast<int> (s.numText))
+                    for (int i = 0; i < len; ++i)
+                        h = (h ^ static_cast<uint8_t> (s.text[off + i])) * 16777619u;
+            }
+            else if (isCurve || isBand)
+            {
+                const int n = static_cast<int> (o.f[1] + 0.5f);
+                const int firsts[2] = { static_cast<int> (o.f[0] + 0.5f), isBand ? static_cast<int> (o.f[4] + 0.5f) : -1 };
+                for (int f : firsts)
+                    if (f >= 0 && n > 0 && f + n <= static_cast<int> (s.numPoints))
+                        for (int i = 0; i < n; ++i)
+                            mix (floatBits (s.y[f + i]));
+            }
+        }
+        return h == 0 ? 1u : h;
+    }
     uint32_t numOps () const noexcept { return s_.numOps; }
     bool overflow = false;
 
 private:
     SceneData& s_;
+    int cellDepth_ = 0;
+    uint32_t cellOp_ = ~0u;
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -559,10 +632,10 @@ struct PaceBlock
 
 /** The helper's render statistics, cumulative since it started (the plugin takes two snapshots and subtracts them: the mean and the 99th percentile of a window, not the last picture): the number of pictures, the sums
     of the microseconds of their parts (total = read + build + submit + finish + tail; read = the copy of the scene, build = the vertices of the ops (CPU), submit = the GL calls, finish = glFinish (the GPU), tail = the swap and
-    the framebuffer), the sums of the ops, vertices and draw calls, the pictures that were cheap because the cached layers were reused, and the histogram of the total in 1 ms buckets (the last bucket: 63 ms and more). */
+    the framebuffer), the sums of the ops, vertices and draw calls, the ops that were in cached cells and the cells drawn again, the pixels of the buffer that were painted (the box of a partial picture, buffer age) and the pictures that were painted whole, and the histogram of the total in 1 ms buckets (the last bucket: 63 ms and more). */
 struct RenderBlock
 {
-    uint32_t count, totalUs, readUs, buildUs, submitUs, finishUs, tailUs, ops, verts, draws, cachedOps, redrawn;
+    uint32_t count, totalUs, readUs, buildUs, submitUs, finishUs, tailUs, ops, verts, draws, cachedOps, redrawn, paintedPx, fullFrames;
     uint32_t hist[64];
 };
 

@@ -130,6 +130,7 @@ inline void renderScene (const gpu::SceneData& s, std::vector<uint32_t>& cv)
         {
             case kOpStyle: applyStyle (o, style); break;
             case kOpPaint: applyPaint (o, paint); break;
+            case kOpCellBegin: case kOpCellEnd: style = StyleState(); paint = PaintState(); break;   // a cell starts and ends with the default style and paint (the helper draws it on its own)
             case kOpClear: draw::setRect (cv.data(), w, h, 0, 0, w, h, c); break;
             case kOpRect: draw::fillRect (cv.data(), w, h, static_cast<int> (o.f[0]), static_cast<int> (o.f[1]), static_cast<int> (o.f[2]), static_cast<int> (o.f[3]), c); break;
             case kOpVLine:
