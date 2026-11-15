@@ -6,6 +6,9 @@
 #include <sys/stat.h>
 
 #include "ui_test.h"
+#include "../mod_detail.h"
+#include "../mod_macros.h"
+#include "../mod_matrix.h"
 
 using namespace uit;
 
@@ -498,6 +501,102 @@ static void renderAll (const std::string& dir)
             }
         }
         saveImage (dir, "motion_env_lfo.png", strip);
+    }
+    // modulation matrix view (1280x628)
+    {
+        static ModMatrixView mv;
+        mv.place ({ 0, 0, 1280, 628 });
+        struct E { int idx; const char* src; const char* dst; double amt; bool bi; bool bypass; double live; };
+        const E entries[] = {
+            { 0, "LFO 1", "CUTOFF 1", 0.65, true, false, 0.42 },
+            { 1, "ENV 1", "OSC A PITCH", -0.30, true, false, -0.21 },
+            { 2, "MACRO 1", "WT POS", 0.85, false, false, 0.85 },
+            { 3, "MOD WHEEL", "LFO 1 RATE", 0.50, false, false, 0.25 },
+            { 4, "VELOCITY", "AMP LEVEL", 0.40, false, false, 0.32 },
+            { 5, "RANDOM", "PAN", 0.25, true, false, -0.10 },
+            { 6, "AFTERTOUCH", "RESONANCE 1", 0.70, false, true, 0.0 },
+            { 7, "LFO 2", "DRIVE", -0.45, true, false, -0.30 }
+        };
+        for (const auto& e : entries)
+            mv.setSlotData (e.idx, e.src, e.dst, e.amt, e.bi, e.bypass, 1 + e.idx, 0, true, e.live);
+        mv.rebuildVisibleList();
+        mv.selectRow (0);
+        GScene s (1280, 628);
+        mv.draw (s.builder());
+        save (dir, "matrix_view.png", s);
+        if (dir.find ("look-1") != std::string::npos)
+        {
+            mkdir ("docs-tmp", 0755);
+            mkdir ("docs-tmp/mod-images", 0755);
+            save ("docs-tmp/mod-images", "matrix_view.png", s);
+        }
+    }
+    // slot detail slide-in over the matrix view (1280x628)
+    {
+        static ModMatrixView mv;
+        mv.place ({ 0, 0, 1280, 628 });
+        struct E { int idx; const char* src; const char* dst; double amt; bool bi; bool bypass; double live; };
+        const E entries[] = {
+            { 0, "LFO 1", "CUTOFF 1", 0.65, true, false, 0.42 },
+            { 1, "ENV 1", "OSC A PITCH", -0.30, true, false, -0.21 },
+            { 2, "MACRO 1", "WT POS", 0.85, false, false, 0.85 },
+            { 3, "MOD WHEEL", "LFO 1 RATE", 0.50, false, false, 0.25 },
+            { 4, "VELOCITY", "AMP LEVEL", 0.40, false, false, 0.32 }
+        };
+        for (const auto& e : entries)
+            mv.setSlotData (e.idx, e.src, e.dst, e.amt, e.bi, e.bypass, 1 + e.idx, 0, true, e.live);
+        mv.rebuildVisibleList();
+        mv.selectRow (0);
+
+        static ModSlotDetail dt;
+        dt.place ({ 600, 0, 680, 628 });
+        dt.setSlot (0, "LFO 1", "CUTOFF 1");
+        dt.setAuxData ("MOD WHEEL", 1.0, false, 2.5);
+        dt.setShapeData (1.5, true);
+        dt.setTimeData (150.0, 300.0, 100.0, false, 1.0);
+        dt.setActiveBlock (ModSlotDetail::BlockAux);
+
+        GScene s (1280, 628);
+        mv.draw (s.builder());
+        dt.draw (s.builder());
+        save (dir, "slot_detail.png", s);
+        if (dir.find ("look-1") != std::string::npos)
+        {
+            mkdir ("docs-tmp", 0755);
+            mkdir ("docs-tmp/mod-images", 0755);
+            save ("docs-tmp/mod-images", "slot_detail.png", s);
+        }
+    }
+    // macro view (1280x628)
+    {
+        static MacroView mv;
+        mv.place ({ 0, 0, 1280, 628 });
+        struct M { const char* name; double val; std::vector<std::string> dsts; };
+        const M macs[8] = {
+            { "MACRO 1", 0.72, { "CUTOFF 1", "DRIVE", "WT POS" } },
+            { "MACRO 2", 0.45, { "REVERB MIX", "DELAY FB" } },
+            { "MACRO 3", 0.60, { "WARP 1", "SUB LEVEL" } },
+            { "MACRO 4", 0.35, { "LFO 1 RATE", "CHORUS DEPTH", "PAN" } },
+            { "MACRO 5", 0.80, { "ENV 1 ATK", "COMP THRESH" } },
+            { "MACRO 6", 0.00, { "OSC B DETUNE" } },
+            { "MACRO 7", 0.55, { "NOISE LVL", "CRUSH" } },
+            { "MACRO 8", 0.20, { "LFO 2 RATE", "PHASER" } }
+        };
+        for (int i = 0; i < 8; ++i)
+        {
+            mv.cards[i].setMacro (i, macs[i].name, macs[i].val);
+            mv.setMacroDestinations (i, macs[i].dsts);
+        }
+        mv.setBank (0);
+        GScene s (1280, 628);
+        mv.draw (s.builder());
+        save (dir, "macros_view.png", s);
+        if (dir.find ("look-1") != std::string::npos)
+        {
+            mkdir ("docs-tmp", 0755);
+            mkdir ("docs-tmp/mod-images", 0755);
+            save ("docs-tmp/mod-images", "macros_view.png", s);
+        }
     }
 }
 
