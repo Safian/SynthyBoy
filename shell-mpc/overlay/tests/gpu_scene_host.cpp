@@ -286,8 +286,9 @@ int main()
             // the outline of the panel of this sub-tab is lit (the colour of the module), the other one has the quiet keyline
             auto topPixel = [&] (int p) { return cv[static_cast<size_t> (play::kTabY + play::kOy + 1) * static_cast<size_t> (r.w) + static_cast<size_t> (play::kOx + p * (play::kPanelW + play::kPanelGap) + 100)]; };
             auto bright = [] (uint32_t px) { return static_cast<int> ((px >> 16) & 255u) + static_cast<int> ((px >> 8) & 255u) + static_cast<int> (px & 255u); };
-            const int lit = idx - 1, other = lit == 1 ? 2 : 1;
-            const bool frames = idx == 1 ? std::abs (bright (topPixel (1)) - bright (topPixel (2))) < 40 : bright (topPixel (lit)) > bright (topPixel (other)) + 60;
+            // the envelope's and the LFO's thirds are plugin-drawn compact views (env_ui.h, lfo_ui.h): their sub-tab is lit by the frame of its Q group (the colour of the host's own focus frame) round the four knobs
+            auto qFramePixels = [&] (int x0, int x1) { int n = 0; for (int y = play::kTabY + 380; y < play::kTabY + play::kTabH; ++y) for (int x = x0; x < x1; ++x) n += (cv[static_cast<size_t> (y) * static_cast<size_t> (r.w) + static_cast<size_t> (x)] & 0xffffffu) == (synthyboy_mpc::ui::theme::L().q & 0xffffffu); return n; };
+            const bool frames = idx == 1 ? std::abs (bright (topPixel (1)) - bright (topPixel (2))) < 40 : (idx == 2 ? qFramePixels (440, 840) > 200 : qFramePixels (858, 1266) > 200);   // the LFO's third (lfo_ui.h) likewise, at the right
             check (frames, "play " + std::to_string (idx) + ": only the Env / LFO panel of the sub-tab has the highlight frame");
         }
         {   // under a full screen / detail page / popup every pixel of the region is opaque (the host's Env / LFO picture and its Q-Link frame must not show through); in main the oscillator third is

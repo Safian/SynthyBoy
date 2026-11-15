@@ -97,6 +97,28 @@ public:
         return Action::Chosen;
     }
     const std::string& chosen() const noexcept { return chosen_; }
+    /** The header of the list: "SOURCES" at the roots, else the path below the root's name: "SD CARD / Samples / Drums". */
+    std::string title() const
+    {
+        if (rootIdx_ < 0)
+            return "SOURCES";
+        const Root& r = roots_[static_cast<size_t> (rootIdx_)];
+        std::string t = r.label;
+        if (folder_.size() > r.path.size())
+        {
+            std::string joined;
+            size_t i = 0;
+            const std::string sub = folder_.substr (r.path.size() + 1);
+            for (size_t k = 0; k <= sub.size(); ++k)
+                if (k == sub.size() || sub[k] == '/')
+                {
+                    joined += " / " + sub.substr (i, k - i);
+                    i = k + 1;
+                }
+            t += joined;
+        }
+        return t;
+    }
     /** The row of the file (or folder) with this path, -1 when it is not in the list. */
     int rowOf (const std::string& path) const noexcept
     {

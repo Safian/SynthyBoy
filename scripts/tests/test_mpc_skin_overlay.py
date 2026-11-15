@@ -503,36 +503,25 @@ class OverlaySkinTests(unittest.TestCase):
             items = tab["componentDefinition"]["componentsData"]
             bound = lambda c: int(c["handle remapping"]["map"][0]["value"].split()[1]) if c["handle remapping"]["map"] else None
             slots = [c for c in items if c["componentData"]["type"] in SLOT_TYPES]
-            if g == 0:
-                # the oscillator third is the plugin's own drawing: no selector, no knob (the compact view and the full-screen page replace them)
-                self.assertEqual(slots[0:0] + [c for c in slots if bound(c) in sel[:1] + prox[0]], [], "the oscillator selector and the eight oscillator knobs are not host widgets")
-                self.assertEqual(sorted(set(bound(c) for c in slots)), sorted(sel[1:]), "the Play sub-tab has the Env and LFO selectors and nothing else")
-            else:
-                self.assertEqual(sorted(set(bound(c) for c in slots)), sorted(sel[1:] + prox[g]), "%s: the Env and LFO selectors and the eight knobs of its module, nothing else (a knob may have variants valid for one choice of another one)" % tab_name)
+            # the oscillator, the envelope and the LFO thirds are the plugin's own drawing: no selector, no knob (the compact views and the full-screen pages replace them)
+            self.assertEqual(sorted(set(bound(c) for c in slots)), [], "%s: the three selectors and the twenty-four knobs are not host widgets" % tab_name)
             kinds = {bound(c): c["componentData"]["type"] for c in slots}
             # every host widget of the Env and LFO thirds is hidden while the plugin's full screen is open: the "Overlay Instance" frame 24 is outside RangedEnabling 0 .. 18 of the 33 frames
             hide = "RangedEnabling/0/18/33/Parameter %d" % (first - 1)
             for c in slots:
                 self.assertIn(hide, c["bounds"].get("additionalInvalidatingHandles", []), "%s: every selector and knob of the Play pages hides while a full screen is open" % tab_name)
                 self.assertEqual(c["bounds"]["version"], 2)
-            if tab_name == "Play LFO":
-                sync = prox[2][5]
-                rate = next(c for c in slots if bound(c) == prox[2][0])
-                self.assertEqual(rate["bounds"]["additionalInvalidatingHandles"], ["IndexedEnabling/0/5/Parameter %d" % sync, hide], "the rate knob is valid when the PROXY of the sync has choice 0 (and hidden while a full screen is open)")
-                divs = [c for c in slots if bound(c) == prox[2][7]]
-                self.assertTrue(all(c["bounds"]["additionalInvalidatingHandles"][1:] == [hide] for c in divs), "the division is hidden while a full screen is open as well")
-                self.assertEqual(sorted(c["bounds"]["additionalInvalidatingHandles"][0] for c in divs), ["IndexedEnabling/%d/5/Parameter %d" % (n, sync) for n in (1, 2, 3)], "the division is valid for the three tempo syncs")
-            self.assertEqual([kinds[i] for i in sel[1:]], ["sliderWithFocusMenu"] * 2)
+            self.assertEqual(kinds, {})
             view = next(v for v in json.loads(SHARED_JSON.read_text(encoding="utf-8"))["views"] if v["tab"] == tab_name)
             for p, i in enumerate(sel):
-                if p == 0:
+                if p in (0, 1, 2):
                     continue
                 c = next(c for c in slots if bound(c) == i)
                 x, y, w, h = rect(c)
                 centre = view["region"]["x"] + p * 417 + 200
                 self.assertTrue(abs(x + w // 2 - centre) <= 2 and y + h <= 301, "the selector %d is under its panel and above the Q-Link frames" % p)
             # the knobs are copies of the control of instance 1 on its own tab (same widget), in the lower two rows, slot n = Q-Link n (Q-Link 1 .. 4 are the Q proxies, see below)
-            for s, key in enumerate(self.SLOTS[prefix] if g > 0 else ()):
+            for s, key in enumerate(self.SLOTS[prefix] if g > 2 else ()):
                 c = next(c for c in slots if bound(c) == prox[g][s])
                 x, y, w, h = rect(c)
                 self.assertEqual(x, (21, 341, 661, 981)[s % 4])
@@ -546,10 +535,10 @@ class OverlaySkinTests(unittest.TestCase):
             entry = next(e for e in self.o_ql["Screen Mode Q-Links"]["map"] if e["Tab"] == tab["fnKeyIndex"] + 1 and e["SubTab"] == tab["fnKeySubIndex"] + 1)
             expected = [-1] * 16
             # Bank Direction Column: bank 0 is read top to bottom, Q-Link 13, 9, 5, 1 = Q 1 .. Q 4; the oscillator sub-tab is Bank Direction Row with Q-Link 1 .. 4 (the host honours only the bottom row there, measured on the device)
-            self.assertEqual(entry["Bank Direction"], "Row" if g == 0 else "Column")
-            for k, n in enumerate((1, 2, 3, 4) if g == 0 else (13, 9, 5, 1)):
+            self.assertEqual(entry["Bank Direction"], "Row" if g < 3 else "Column")
+            for k, n in enumerate((1, 2, 3, 4) if g < 3 else (13, 9, 5, 1)):
                 expected[n - 1] = q[k]
-            if g > 0:
+            if g > 2:
                 for k, n in enumerate((14, 10, 6, 2)):   # bank 1 top to bottom: the second row of the module's knobs
                     expected[n - 1] = prox[g][4 + k]
             self.assertEqual([entry["Q-Links"]["Q-Link %d" % n] for n in range(1, 17)], expected,
@@ -557,17 +546,17 @@ class OverlaySkinTests(unittest.TestCase):
             self.assertEqual(tab["qlinkBoundsData"], ["16 301 288 323", "336 301 288 323", "656 301 288 323", "976 301 288 323"])
             # names: every knob has its short name over it, unique inside the tab
             names = [c["componentData"]["data"]["text"] for c in items if c["componentData"]["type"] == "Label" and c["componentData"]["name"].endswith(" name")]
-            self.assertEqual(len(names), {"osc": 0, "env": 8, "lfo": 5}[prefix], "a name over every knob and toggle (the selectors, three of the LFO's eight controls, show the host's own header)")
+            self.assertEqual(len(names), {"osc": 0, "env": 0, "lfo": 0}[prefix], "a name over every knob and toggle (the selectors, three of the LFO's eight controls, show the host's own header)")
             self.assertEqual(len(set(names)), len(names))
 
-    def test_the_oscillator_third_has_no_host_widget_and_the_others_are_as_they_were(self):
+    def test_the_three_thirds_have_no_host_widget(self):
         for tab_name, _, _ in self.PLAY:
             items = {c["componentData"]["name"] for c in self.tab(tab_name)["componentDefinition"]["componentsData"]}
-            for gone in ("Play Panel 1", "Play Title 1", "Play Osc Select"):
-                self.assertNotIn(gone, items, "%s: %s is under the plugin-drawn oscillator view" % (tab_name, gone))
-            for kept in ("Play Background", "Play Panel 2", "Play Panel 3", "Play Title 2", "Play Title 3", "Play Env Select", "Play LFO Select"):
+            for gone in ("Play Panel 1", "Play Title 1", "Play Osc Select", "Play Panel 2", "Play Title 2", "Play Env Select", "Play Panel 3", "Play Title 3", "Play LFO Select"):
+                self.assertNotIn(gone, items, "%s: %s is under a plugin-drawn view" % (tab_name, gone))
+            for kept in ("Play Background",):
                 self.assertIn(kept, items, "%s: %s stays" % (tab_name, kept))
-            self.assertFalse([n for n in items if n.startswith("Play Osc ")], "%s: no oscillator control" % tab_name)
+            self.assertFalse([n for n in items if n.startswith("Play Osc ") or n.startswith("Play Env ") or n.startswith("Play Lfo ")], "%s: no oscillator, envelope or LFO control" % tab_name)
 
     def test_there_is_no_page_only_the_overlay_can_reach_so_the_play_page_carries_the_full_screen_ui(self):
         # the format: every tab sits on a function key and is reached by the key (ui-reference "fnKeyIndex" / "fnKeySubIndex"); a plugin has no call that selects a tab (docs/MPC.md "Q proxies").
@@ -586,11 +575,7 @@ class OverlaySkinTests(unittest.TestCase):
             self.assertIn("Overlay Marker %s left" % v["name"], items)
             self.assertIn("Overlay Marker %s right" % v["name"], items)
             self.assertEqual(rect(items["Play Background"]), (23, 14, 1234, 190), "the dark picture under the plane (the overlay off)")
-            titles = [items["Play Title %d" % k]["componentData"]["data"]["text"] for k in (2, 3)]
-            self.assertEqual(titles, ["Envelope", "LFO"])
-            first = self.play_first()
-            for k in (2, 3):
-                self.assertEqual(items["Play Title %d" % k]["handle remapping"]["map"][0]["value"], "Parameter %d" % (first + k - 1), "a fixed text is drawn only when bound to a valid parameter")
+            self.assertFalse([n for n in items if n.startswith("Play Title ")], "no title of a panel: the three panels are the plugin's own drawing")
             order = [c["componentData"]["name"] for c in self.tab(v["tab"])["componentDefinition"]["componentsData"]]
             self.assertLess(order.index("Play Background"), order.index("Overlay Marker %s left" % v["name"]), "the picture is below the markers")
 

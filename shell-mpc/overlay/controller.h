@@ -933,9 +933,18 @@ private:
                 rateConfirmed_ = true;
             else if (nowMs - rateTrialMs_ >= 4000.0)
             {
-                applyStride (2);
-                rateRetryMs_ = nowMs + 120000.0;
-                rateSource_ = "60 not reached: 30";
+                if (slowGpu || detailMeanMs_ > 11.0)
+                {
+                    applyStride (2);
+                    rateRetryMs_ = nowMs + 120000.0;
+                    rateSource_ = "60 not reached: 30";
+                }
+                else
+                {
+                    // a GPU that is not short of time (a picture costs well under a vblank): the pictures a second follow what changes, not what the GPU can do: the full rate stays
+                    rateConfirmed_ = true;
+                    rateSource_ = "auto: full rate kept (cheap pictures)";
+                }
             }
         }
         else if (rateConfirmed_ && fps >= 20.0 && fps < 36.0 && detailMeanMs_ > 11.0)

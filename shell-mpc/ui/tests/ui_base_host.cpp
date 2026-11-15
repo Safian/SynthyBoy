@@ -829,8 +829,44 @@ void testModulation()
 }
 } // namespace
 
+void testHBarAndSideKnob()
+{
+    HBar b;
+    b.place ({ 0, 0, 600, 56 });
+    b.setId (5);
+    b.state.value = 0.5; b.state.defaultValue = 0.5;
+    b.touchDown (200, 28, 0.0);
+    Change c;
+    for (int x = 204; x <= 300; x += 4)
+        if (const Change m = b.touchMove (x, 28)) c = m;
+    check (c.kind == ChangeKind::Value && c.id == 5 && c.value > 0.5 && c.value <= 1.0, "bar: a drag to the right raises the value (both ways from the middle)");
+    b.touchUp (300, 28);
+    b.state.value = 0.8;
+    b.touchDown (100, 28, 100.0); b.touchUp (100, 28);
+    b.touchDown (101, 28, 200.0);
+    c = b.touchUp (101, 28);
+    check (c.kind == ChangeKind::Value && std::fabs (c.value - 0.5) < 1e-9, "bar: a double tap is the default (zero)");
+    c = b.turn (0.1);
+    check (c.kind == ChangeKind::Value && std::fabs (c.value - 0.9) < 1e-9, "bar: turn adds");
+    Knob k ("DETUNE");
+    k.state.side = true;
+    k.state.valueText[0] = '4'; k.state.valueText[1] = '0'; k.state.valueText[2] = '\0';
+    k.state.add (3, "MAC 4", 0.2);
+    k.state.selectedSource = 3;
+    k.place ({ 0, 0, 190, 90 });
+    const Knob::Geom g = k.geom();
+    check (g.cx < static_cast<float> (g.labelBox.x) && g.chip.x > static_cast<int> (g.cx) && k.sizeOk() && k.tabHit().x >= g.chip.x, "side knob: the dial at the left, the name, the value and the modulation chip in the column at its right (the chip does not lie on the dial)");
+    Stepper st;
+    st.place ({ 0, 0, 300, 64 });
+    st.setCaption ("MODE"); st.setItem ("Linear");
+    Scene sc (320, 80, kBackgroundRgba);
+    st.draw (sc.builder());
+    check (! sc.overflow() && drawnOutside (render (sc), st.rect(), backgroundPixel()) == 0, "stepper with a caption draws inside its rectangle");
+}
+
 int main()
 {
+    testHBarAndSideKnob();
     testKnob();
     testNumberField();
     testStepper();

@@ -32,6 +32,21 @@ void giveIds (OscillatorFullScreen& s)
     for (int i = 0; i < n; ++i)
         l[i]->setId (100 + i);
 }
+/** How many leaves lie under the index chips of a group (the chip of a member sits on the line above its top left corner: nothing may be there). */
+int chipsCovered (const QGroup& g, Component* const* all, int n)
+{
+    int bad = 0;
+    for (int i = 0; i < QGroup::kSlots; ++i)
+    {
+        const Component* m = g.member (i);
+        if (m == nullptr)
+            continue;
+        const Rect chip { m->rect().x + 4, std::max (0, m->rect().y - 15), 18, std::min (15, m->rect().y) };
+        for (int k = 0; k < n; ++k)
+            bad += all[k]->rect().overlaps (chip);
+    }
+    return bad;
+}
 struct Variant { OscInstance inst; OscKind kind; const char* name; };
 const Variant kVariants[] = { { OscInstance::Sub, OscKind::Wavetable, "sub" }, { OscInstance::A, OscKind::Wavetable, "A wavetable" }, { OscInstance::B, OscKind::Multisample, "B multisample" },
                               { OscInstance::C, OscKind::Granular, "C granular" }, { OscInstance::Noise, OscKind::Wavetable, "noise" } };
@@ -82,28 +97,33 @@ int main()
             check (missed == 0, nm + ": a tap on the middle of each of the " + std::to_string (n) + " leaves reaches it" + which);
         }
         check (! s.displayRect().empty() && area.contains (s.displayRect()) && ! s.displayRect().overlaps (s.bar.rect()) && ! s.displayRect().overlaps (s.panel.rect()) && ! s.displayRect().overlaps (s.tune.rect()), nm + ": the display area is reserved, and nothing else is on it");
-        check (s.displayRect().w * 100 / 1264 >= 76 && s.displayRect().w * 100 / 1264 <= 80 && s.barBlock().y == s.displayRect().bottom() + kGap && s.barBlock().x == s.displayRect().x && s.barBlock().w == s.displayRect().w && s.barBlock().contains (s.bar.rect()), nm + ": the display is about 78 percent of the width, the type bar (in its titled block) directly under it");
-        check (s.tune.rect().x > s.displayRect().right() && s.panel.rect().y >= s.bar.rect().bottom() && s.close.rect().x < s.power.rect().x && s.route.rect().x > s.basic.rect().right() - 1, nm + ": the tuning row at the right, the bottom band below, the close button at the left, the route button at the right end");
+        const bool isSub = var.inst == OscInstance::Sub;
+        check (isSub ? s.displayRect().w * 100 / 1264 >= 99 : (s.displayRect().w * 100 / 1264 >= 76 && s.displayRect().w * 100 / 1264 <= 80 && s.barBlock().w == s.displayRect().w), nm + ": the display is about 78 percent of the width (the sub oscillator's: all of it)");
+        check (s.barBlock().y == s.displayRect().bottom() + kGap && s.barBlock().x == s.displayRect().x && s.barBlock().contains (s.bar.rect()), nm + ": the type bar (in its titled block) directly under the display");
+        check ((isSub ? s.tune.rect().x > s.barBlock().right() && s.tuneBlock().y == s.barBlock().y : s.tune.rect().x > s.displayRect().right()) && s.panel.rect().y >= s.bar.rect().bottom() && s.close.rect().x < s.power.rect().x && s.route.rect().x > s.basic.rect().right() - 1, nm + ": the tuning row at the right (the sub oscillator's beside the type bar), the bottom band below, the close button at the left, the route button at the right end");
         check (s.numGroups() >= 2 && s.activeGroup() == 0 && std::string (s.groupName (0)) == "Basic" && s.groups[0].active(), nm + ": the first group is Basic and active (" + std::to_string (s.numGroups()) + " groups)");
         for (int g = 0; g < s.numGroups(); ++g)
         {
             const Component* off = nullptr;
             const int bad = s.groups[g].check (all, n, &off);
             check (bad == 0 && s.groups[g].numMembers() >= 1, nm + ": group " + s.groupName (g) + ": all members adjacent (" + std::to_string (s.groups[g].numMembers()) + " members, offenders " + std::to_string (bad) + ")");
+            check (chipsCovered (s.groups[g], all, n) == 0, nm + ": group " + s.groupName (g) + ": the index chips lie on free lanes above their members (nothing under them)");
         }
         const Rect top[4] = { s.close.rect(), s.power.rect(), s.basic.rect(), s.route.rect() };
         if (v == 0)
-        {
             for (int i = 0; i < 4; ++i) refTop[i] = top[i];
-            refDisplay = s.displayRect(); refBar = s.bar.rect(); refTune = s.tune.rect(); refPanel = s.panel.rect();
-        }
         else
         {
             bool same = true;
             for (int i = 0; i < 4; ++i) same = same && top[i] == refTop[i];
             check (same, nm + ": the top band is where it was for the sub oscillator");
-            check (s.displayRect() == refDisplay && s.bar.rect() == refBar && s.tune.rect() == refTune && s.panel.rect() == refPanel, nm + ": the display, the type bar, the tuning row and the bottom band have the same rectangles in every variant");
         }
+        if (v == 1)
+        {
+            refDisplay = s.displayRect(); refBar = s.bar.rect(); refTune = s.tune.rect(); refPanel = s.panel.rect();
+        }
+        else if (v > 1)
+            check (s.displayRect() == refDisplay && s.bar.rect() == refBar && s.tune.rect() == refTune && s.panel.rect() == refPanel, nm + ": the display, the type bar, the tuning row and the bottom band have the same rectangles in every variant (the sub oscillator has no bottom band)");
         // the Basic group of the instance
         const QGroup& bg = s.basic.group;
         if (var.inst == OscInstance::Sub)
@@ -115,7 +135,7 @@ int main()
         check (bg.member (2) == &s.basic.pan && bg.member (3) == &s.basic.level, nm + ": Basic: the third and fourth are PAN and LEVEL");
         // the type specific parts
         const bool noise = var.inst == OscInstance::Noise, sub = var.inst == OscInstance::Sub;
-        const int slots = sub ? 1 : noise ? 1 : var.kind == OscKind::Wavetable ? 4 : var.kind == OscKind::Multisample ? 3 : 4;
+        const int slots = sub ? 1 : noise ? 2 : var.kind == OscKind::Wavetable ? 4 : var.kind == OscKind::Multisample ? 3 : 4;
         check (s.bar.numSlots() == slots, nm + ": " + std::to_string (slots) + " type bar slots");
         Component* tl[8];
         const int tuneLeaves = s.tune.collectLeaves (tl, 0, 8);
@@ -123,9 +143,11 @@ int main()
         for (int i = 0; i < n; ++i)
             for (int k = 0; k < tuneLeaves; ++k)
                 tuneOnScreen += all[i] == tl[k];
-        check (s.tuneShown() == ! noise && tuneOnScreen == (noise ? 0 : sub ? 1 : 5), nm + ": the tuning row: " + (noise ? "absent" : sub ? "CRS only" : "OCT, SEM, FIN, CRS and the toggle"));
-        if (sub || noise)
-            check (s.panel.numParts() == 0 && s.panel.rect() == refPanel, nm + ": the bottom band is empty but keeps its rectangle");
+        check (s.tuneShown() && tuneOnScreen == (noise ? 3 : sub ? 1 : 5), nm + ": the tuning row: " + (noise ? "PITCH, FINE and KEY TRACK" : sub ? "CRS only" : "OCT, SEM, FIN, CRS and the toggle"));
+        if (sub)
+            check (s.panel.numParts() == 0 && s.panel.rect().h == 0, nm + ": no bottom band: the display takes its room");
+        if (noise)
+            check (s.numGroups() == 5 && std::string (s.groupName (3)) == "Source" && std::string (s.groupName (4)) == "Playback" && s.panel.numParts() == 5, nm + ": the groups Basic, Type, Tune, Source, Playback; the panel has its five parts");
         if (var.inst == OscInstance::A || var.inst == OscInstance::B || var.inst == OscInstance::C)
         {
             if (var.kind == OscKind::Granular)
@@ -158,9 +180,9 @@ int main()
         };
         auto edgeDrawn = [&] (const Rect& r) { return r.w > 4 && im.at (r.x + r.w / 2, r.y) != backgroundPixel() && im.at (r.x, r.y + r.h / 2) != backgroundPixel() && im.at (r.right() - 1, r.y + r.h / 2) != backgroundPixel() && im.at (r.x + r.w / 2, r.bottom() - 1) != backgroundPixel(); };
         check (edgeDrawn (s.barBlock()) && hasText (sub ? "SUB" : noise ? "NOISE" : var.kind == OscKind::Wavetable ? "WAVETABLE" : var.kind == OscKind::Multisample ? "MULTISAMPLE" : "GRANULAR"), nm + ": the type bar is a bordered block with a title");
-        check (noise ? (s.tuneBlock().empty() && ! hasText ("TUNE")) : (edgeDrawn (s.tuneBlock()) && hasText ("TUNE") && s.tuneBlock().contains (s.tune.rect())), nm + (noise ? ": no tuning block (the tuning row is absent)" : ": the tuning column is a bordered block titled TUNE"));
+        check (edgeDrawn (s.tuneBlock()) && hasText ("TUNE") && s.tuneBlock().contains (s.tune.rect()), nm + ": the tuning column is a bordered block titled TUNE");
         check (edgeDrawn (s.basic.rect()) || s.groups[0].active(), nm + ": Basic has an outline (the coloured frame when active)");
-        const int wantBlocks = (sub || noise) ? 0 : var.kind == OscKind::Granular ? 3 : 2;
+        const int wantBlocks = sub ? 0 : noise ? 2 : var.kind == OscKind::Granular ? 3 : 2;
         check (s.panel.numBlocks() == wantBlocks, nm + ": the bottom band has " + std::to_string (wantBlocks) + " blocks");
         bool blocksOk = true;
         for (int b = 0; b < s.panel.numBlocks(); ++b)
@@ -226,6 +248,7 @@ int main()
         Component* all[64];
         const int n = c.collectLeaves (all, 0, 64);
         check (c.basic.group.active() && c.basic.group.check (all, n) == 0 && c.basic.group.numMembers() == 4, nm + ": the Basic group is one active frame and adjacent");
+        check (chipsCovered (c.basic.group, all, n) == 0, nm + ": the index chips of the Basic group lie on free lanes above their members");
         bool inside = true, apart = true;
         for (int i = 0; i < n; ++i)
         {
@@ -305,7 +328,7 @@ int main()
         s.touchUp (cx (*len), cy (*len));
         s.setActiveGroup (4);
         s.setInstance (OscInstance::Noise, OscKind::Wavetable);
-        check (s.activeGroup() == 0 && s.numGroups() == 2, "full screen: switching the instance: the Q frame is back at Basic");
+        check (s.activeGroup() == 0 && s.numGroups() == 5, "full screen: switching the instance: the Q frame is back at Basic");
         // sub: the waveform selector, OCT in the top band, CRS in the right column
         s.setInstance (OscInstance::Sub, OscKind::Wavetable);
         giveIds (s);

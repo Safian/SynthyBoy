@@ -90,6 +90,31 @@ int main()
         check (! s.overflow() && p.sizeOk() && drawnOutside (im, { 0, 0, 1280, 628 }, backgroundPixel()) == 0, std::string ("draws inside the parent, one scene (") + (big ? "large" : "minimum size") + ", " + std::to_string (s.numOps()) + " ops)");
         writePng (outDir() + (big ? "/list_popup.png" : "/list_popup_min.png"), im, 1);
     }
+    // the header bar (the content browser's way up and path)
+    {
+        ListPopup p;
+        const char* names2[4] = { "a", "b", "c", "d" };
+        p.state.items = names2; p.state.count = 4; p.state.current = 0;
+        p.state.header = "SD CARD / Samples"; p.state.headerBack = true;
+        p.place ({ 300, 40, 600, 500 });
+        p.setPopup ({ 0, 0, 1280, 628 });
+        p.setHeaderId (9);
+        p.setId (3);
+        const Rect h = p.headerRect();
+        p.touchDown (h.x + 30, h.y + 20, 0.0);
+        const Change up = p.touchUp (h.x + 30, h.y + 20);
+        check (up.kind == ChangeKind::Request && up.id == 9 && h.h == ListPopup::kRowH && p.rowRect (0).y == h.bottom(), "list header: a tap on the bar is a Request with the header id; the rows start under it");
+        const Rect r1 = p.rowRect (1);
+        p.touchDown (r1.x + r1.w - 6, r1.y + 10, 500.0);
+        const Change row = p.touchUp (r1.x + r1.w - 6, r1.y + 10);
+        check (row.kind == ChangeKind::Index && row.index == 1, "list: a row is touched along its whole width (the far end too)");
+        p.state.headerBack = false;
+        p.touchDown (h.x + 30, h.y + 20, 900.0);
+        check (! p.touchUp (h.x + 30, h.y + 20), "list header at the roots (no way up): a tap does nothing");
+        Scene s (1280, 628, kBackgroundRgba);
+        p.draw (s.builder());
+        check (! s.overflow() && drawnOutside (render (s), { 0, 0, 1280, 628 }, backgroundPixel()) == 0, "list with a header draws inside the parent");
+    }
     std::printf (g_fails ? "ui_list_host: FAILED (%d)\n" : "ui_list_host: OK\n", g_fails);
     return g_fails ? 1 : 0;
 }

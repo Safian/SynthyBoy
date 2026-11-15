@@ -11,6 +11,8 @@
 
 #include "../play_params.h"
 #include "../ui/display.h"
+#include "env_ui.h"
+#include "lfo_ui.h"
 #include "osc_ui.h"
 #include "page_detector.h"
 #include "play_osc.h"
@@ -299,10 +301,26 @@ public:
                 osc_->setCanvas (play::kRegionW, play::kRegionH);
                 scratch_ = std::make_unique<gpu::SceneData>();
             }
-            osc_->update (*in.io, highlight_, *in.ui, in.nowMs, sel_[1], sel_[2]);
-            if (highlight_ != 1 && in.ui->isMain())
+            // the stack of the instance is shared by the elements: a page that belongs to another element is not the oscillator's (it sees an empty stack: its compact view)
+            osc_->update (*in.io, highlight_, in.ui->isMain() || in.ui->element() == OscUi::kElementOsc ? *in.ui : idleStack_, in.nowMs, sel_[1], sel_[2]);
+            if (! env_)
+                env_ = std::make_unique<EnvUi>();
+            const int openElement = in.ui->isMain() ? 0 : in.ui->element();
+            if (openElement != openElement_)
+            {
+                openElement_ = openElement;   // a full screen opened or closed: the elements publish their Q group again (the router keeps what the last page set)
+                osc_->forgetQGroup();
+                env_->forgetQGroup();
+                if (lfo_)
+                    lfo_->forgetQGroup();
+            }
+            env_->update (*in.io, highlight_, *in.ui, in.nowMs, in.live);
+            if (! lfo_)
+                lfo_ = std::make_unique<LfoUi>();
+            lfo_->update (*in.io, highlight_, *in.ui, in.nowMs, in.live);
+            if (highlight_ != 1 && highlight_ != 2 && highlight_ != 3 && in.ui->isMain())
                 publishModuleGroup (*in.io);
-            const uint32_t h = oscUiHash();
+            const uint32_t h = oscUiHash() ^ (env_->drawHash (*scratch_) * 16777619u) ^ (lfo_->drawHash (*scratch_) * 2246822519u);
             if (h != uiHash_)
             {
                 uiHash_ = h;
@@ -327,10 +345,23 @@ public:
         ui = { 0, 0, play::kRegionW, play::kRegionH };
         return true;
     }
-    bool onTouch (const TouchEvent& ev, UiStack& stack, IInstanceView& io, double nowMs) override { return osc_ != nullptr && osc_->touch (ev, stack, io, nowMs); }
-    void onTick (UiStack& stack, IInstanceView& io, double nowMs) override { if (osc_ != nullptr) osc_->tick (nowMs, stack, io); }
-    bool fingerDown() const noexcept override { return osc_ != nullptr && osc_->fingerDown(); }
-    void dropGesture() noexcept override { if (osc_ != nullptr) osc_->dropGesture(); }
+    bool onTouch (const TouchEvent& ev, UiStack& stack, IInstanceView& io, double nowMs) override
+    {
+        // the envelope's pages while its full screen is open or a finger is down on it; else the oscillator's (its third, or its full screen), else the envelope's compact view (its third)
+        if (env_ != nullptr && ((! stack.isMain() && stack.element() == EnvUi::kElementEnv) || env_->fingerDown()))
+            return env_->touch (ev, stack, io, nowMs);
+        // the LFO's pages likewise (its full screen, its editor, its lists); its compact view is the third at the right
+        if (lfo_ != nullptr && ((! stack.isMain() && stack.element() == LfoUi::kElementLfo) || lfo_->fingerDown()))
+            return lfo_->touch (ev, stack, io, nowMs);
+        if (osc_ != nullptr && osc_->touch (ev, stack, io, nowMs))
+            return true;
+        if (env_ != nullptr && env_->touch (ev, stack, io, nowMs))
+            return true;
+        return lfo_ != nullptr && lfo_->touch (ev, stack, io, nowMs);
+    }
+    void onTick (UiStack& stack, IInstanceView& io, double nowMs) override { if (osc_ != nullptr) osc_->tick (nowMs, stack, io); if (env_ != nullptr) env_->tick (nowMs, stack, io); if (lfo_ != nullptr) lfo_->tick (nowMs, stack, io); }
+    bool fingerDown() const noexcept override { return (osc_ != nullptr && osc_->fingerDown()) || (env_ != nullptr && env_->fingerDown()) || (lfo_ != nullptr && lfo_->fingerDown()); }
+    void dropGesture() noexcept override { if (osc_ != nullptr) osc_->dropGesture(); if (env_ != nullptr) env_->dropGesture(); if (lfo_ != nullptr) lfo_->dropGesture(); }
     OscUi* oscUi() noexcept { return osc_.get(); }
 
     /** The Q group of the Env and LFO sub-tabs: the Q-Links 1 .. 4 of those pages are Q 1 .. Q 4 (the skin), so the first four knobs of the module are the group (they were Q-Link 1 .. 4 before). */
@@ -432,6 +463,10 @@ public:
                 o << " " << (osc_->qTargets()[k] >= 0 ? synthyboy::paramTable()[QRouter::indexOf (osc_->qTargets()[k])].key : "-");
             o << "\n";
         }
+        if (env_ != nullptr)
+            o << "env_ui_instance: " << env_->selection() << "\nenv_ui_page: " << env_->topPage() << "\nenv_ui_q_group: " << env_->qGroupName() << "\n";
+        if (lfo_ != nullptr)
+            o << "lfo_ui_instance: " << (lfo_->random() ? "RND " : "LFO ") << lfo_->selection() << "\nlfo_ui_page: " << lfo_->topPage() << "\nlfo_ui_q_group: " << lfo_->qGroupName() << "\n";
     }
     void writeDump (std::ostream& o) const override
     {
@@ -466,6 +501,20 @@ private:
             ui::Cell cell (sb, { static_cast<int> (x0), static_cast<int> (y0), static_cast<int> (x1 - x0), static_cast<int> (y1 - y0) }, 0);
             sb.gradientRect (x0, y0, x1, y1, ui::theme::rgba (T.bg0), ui::theme::rgba (T.bg1));
         };
+        if (env_ != nullptr && ! env_->isMain())   // the full screen of the envelope covers the whole plugin area of the page: its page, its dots, its popups
+        {
+            env_->drawPage (sb);
+            env_->drawLive (sb);
+            env_->drawPopup (sb);
+            return;
+        }
+        if (lfo_ != nullptr && ! lfo_->isMain())   // the full screen of the LFO likewise: its page (the editor, the targets), its cursors, its popups
+        {
+            lfo_->drawPage (sb);
+            lfo_->drawLive (sb);
+            lfo_->drawPopup (sb);
+            return;
+        }
         if (osc_ != nullptr)
         {
             // opaque under the plugin's own pages: the whole tab for a full screen, a detail page and the popup's backdrop; the oscillator third in main (the host's panel picture, its Q-Link focus frame)
@@ -584,6 +633,13 @@ private:
         }
         else if (kind_ == K::spectral)
             d.kind = ui::display::Data::Kind::Spectrum;
+        else if (sel_[0] == playosc::kNoise && (kind_ == K::noise || kind_ == K::off))
+        {
+            // the noise: the picture of its colour (faint while the source is switched off), never the word OFF
+            d.kind = ui::display::Data::Kind::Noise;
+            d.noiseColour = std::clamp (static_cast<int> (group_[0]->value ("noise.sample") + 0.5f), 0, 8);
+            d.dim = kind_ == K::off;
+        }
         else
         {
             d.kind = ui::display::Data::Kind::Message;
@@ -603,6 +659,22 @@ private:
         float v[kEnvPoints > LfoView::kPoints ? kEnvPoints : LfoView::kPoints];
         for (int p = 1; p < kPanels; ++p)   // the oscillator panel is the plugin-drawn compact view now (osc_ui.h)
         {
+            if (p == 1 && env_ != nullptr)   // so is the envelope (env_ui.h): its own ground, the graph, the knobs; the running dots live
+            {
+                if (live)
+                    env_->drawLive (sb);
+                else
+                    env_->drawCompact (sb);
+                continue;
+            }
+            if (p == 2 && lfo_ != nullptr)   // and the LFO (lfo_ui.h): the display with the cursors of the voices, the Q group RATE
+            {
+                if (live)
+                    lfo_->drawLive (sb);
+                else
+                    lfo_->drawCompact (sb);
+                continue;
+            }
             if (qlinkPanel_ && p == 2)
                 continue;   // the LFO panel lies under the host's Q-Link panel: not drawn while it is up
             ui::display::Module m;
@@ -667,6 +739,10 @@ private:
     int displayPoints_ = synthyboy::OscCycle::kSamples;
     synthyboy::OscCycle::Result res_;
     std::unique_ptr<OscUi> osc_;
+    std::unique_ptr<EnvUi> env_;
+    std::unique_ptr<LfoUi> lfo_;
+    UiStack idleStack_;      // an empty stack: what the oscillator UI reads while another element's page is open
+    int openElement_ = 0;    // the element whose full screen is open (0: none)
     std::unique_ptr<gpu::SceneData> scratch_;
     uint32_t uiHash_ = 0;
     bool qlinkPanel_ = false;

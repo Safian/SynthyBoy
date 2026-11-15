@@ -121,6 +121,9 @@ private:
     std::atomic<int> liveNumGrains[3];
     std::atomic<float> liveGrainPos[3][LiveValues::kReadGrains], liveGrainLife[3][LiveValues::kReadGrains];
     std::atomic<float> liveSubPhase[LiveValues::kReadVoices];
+    std::atomic<float> liveEnvVoiceStage[LiveValues::kNumEnvs][LiveValues::kReadVoices], liveEnvVoiceFrac[LiveValues::kNumEnvs][LiveValues::kReadVoices];   // the fine stage and fraction of every envelope in the newest voices (newest first)
+    std::atomic<float> liveLfoVoicePhase[LiveValues::kNumLfos][LiveValues::kReadVoices];   // the cycle position of every LFO in the newest voices (newest first)
+    std::atomic<int> liveNumLfoVoices { 0 };
     std::atomic<float> liveNoisePos;
     std::atomic<int> multiZone[3], multiKey[3];   // the zone and key of the last multisample note (read-out)
     std::atomic<uint32_t> blockCounter { 0 };

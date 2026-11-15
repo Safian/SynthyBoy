@@ -147,45 +147,63 @@ public:
         applyVariant();
     }
     void setShort (bool s) { short_ = s; applyVariant(); layout(); }
-    /** The vertical variant (the full screen): one column of five equal rows (OCT, SEM, FIN, CRS, TRACK) that fill the height (short: OCT and CRS only). */
+    /** The vertical variant (the full screen): the fields in two columns (OCT SEM / FIN CRS) and TRACK across the width, three rows that fill the height (short: OCT CRS in one row). */
     void setVertical (bool v) { vertical_ = v; layout(); }
     bool isVertical() const noexcept { return vertical_; }
     /** Only CRS (the full screen of the sub oscillator: its OCT is in the top band); vertical variant only. */
     void setCrsOnly (bool b) { crsOnly_ = b; applyVariant(); layout(); }
     bool isCrsOnly() const noexcept { return crsOnly_; }
+    /** The noise: PITCH (the CRS field under another name), FINE and the key tracking (three rows that fill the height); vertical variant only. */
+    void setNoise (bool n)
+    {
+        noise_ = n;
+        crs.setLabel (n ? "PITCH" : "CRS");
+        fin.setLabel (n ? "FINE" : "FIN");
+        track.setLabel (n ? "KEY TRACK" : "TRACK");
+        applyVariant();
+        layout();
+    }
+    bool isNoise() const noexcept { return noise_; }
     static constexpr int kRowH = 56;
     bool isShort() const noexcept { return short_; }
     Size minSize() const override
     {
         if (vertical_)
-            return crsOnly_ ? Size { 80, kRowH } : short_ ? Size { 80, 2 * kRowH + kGap } : Size { 2 * 80 + kGap, 5 * kRowH + 4 * kGap };
+            return crsOnly_ ? Size { 80, kRowH } : noise_ ? Size { 2 * 80 + kGap, 2 * kRowH + kQLane } : short_ ? Size { 2 * 80 + kGap, kRowH } : Size { 2 * 80 + kGap, 3 * kRowH + 2 * kQLane };
         return short_ ? Size { 2 * 80 + kGap, 56 } : Size { 4 * 80 + 72 + 4 * kGap, 56 };
     }
 
 protected:
-    void applyVariant() { show (oct, ! crsOnly_); show (sem, ! short_ && ! crsOnly_); show (fin, ! short_ && ! crsOnly_); show (track, ! short_ && ! crsOnly_); }
+    void applyVariant()
+    {
+        show (oct, ! crsOnly_ && ! noise_); show (sem, ! short_ && ! crsOnly_ && ! noise_); show (fin, ! short_ && ! crsOnly_);
+        show (track, ! short_ && ! crsOnly_);
+    }
     void layout() override
     {
         Rect r[5];
         if (vertical_)
         {
-            auto row = [&] (int i) { return Rect { rect_.x, rect_.y + i * (kRowH + kGap), rect_.w, std::min (kRowH, std::max (0, rect_.h - i * (kRowH + kGap))) }; };
-            if (crsOnly_)
+            // two columns: rows of two fields (OCT SEM, FIN CRS; noise: PITCH FINE) and the switch across the width; the lane of the Q index chips (kQLane) between the rows; the rows fill the height
+            struct Line { Component* a; Component* b; };
+            Line lines[3];
+            int n = 0;
+            if (crsOnly_) lines[n++] = { &crs, nullptr };
+            else if (noise_) { lines[n++] = { &crs, &fin }; lines[n++] = { &track, nullptr }; }
+            else if (short_) lines[n++] = { &oct, &crs };
+            else { lines[n++] = { &oct, &sem }; lines[n++] = { &fin, &crs }; lines[n++] = { &track, nullptr }; }
+            const int H = std::max (n * kRowH, rect_.h - (n - 1) * kQLane);   // the height of the rows together
+            const int cw = (rect_.w - kGap) / 2;
+            for (int i = 0; i < n; ++i)
             {
-                crs.place (row (0));
-                return;
-            }
-            if (short_)
-            {
-                oct.place (row (0));
-                crs.place (row (1));
-            }
-            else
-            {
-                // ONE column of five equal rows (OCT, SEM, FIN, CRS, TRACK) that fill the height of the block: the row height follows the block, never below kRowH
-                const int H = std::max (5 * kRowH, rect_.h - 4 * kGap);   // the height of the five rows together
-                auto cell = [&] (int i) { const int y0 = rect_.y + i * H / 5 + i * kGap, y1 = rect_.y + (i + 1) * H / 5 + i * kGap; return Rect { rect_.x, y0, rect_.w, std::max (0, std::min (y1, rect_.bottom()) - y0) }; };
-                oct.place (cell (0)); sem.place (cell (1)); fin.place (cell (2)); crs.place (cell (3)); track.place (cell (4));
+                const int y0 = rect_.y + i * H / n + i * kQLane, y1 = rect_.y + (i + 1) * H / n + i * kQLane, h = std::max (0, std::min (y1, rect_.bottom()) - y0);
+                if (lines[i].b != nullptr)
+                {
+                    lines[i].a->place ({ rect_.x, y0, cw, h });
+                    lines[i].b->place ({ rect_.x + cw + kGap, y0, rect_.w - cw - kGap, h });
+                }
+                else
+                    lines[i].a->place ({ rect_.x, y0, rect_.w, h });
             }
             return;
         }
@@ -203,7 +221,7 @@ protected:
         }
     }
     bool short_;
-    bool vertical_ = false, crsOnly_ = false;
+    bool vertical_ = false, crsOnly_ = false, noise_ = false;
 };
 
 // ===============================================================================================================================================================
@@ -214,14 +232,14 @@ public:
     ToggleIcon toggle;
     NumberField amount { "AMOUNT", NumberField::Format::IntPlain };
 
-    ToggleNumber() { amount.state.max = 100; addKid (toggle); addKid (amount); setPrimary (&amount); }
-    Size minSize() const override { return { 56 + kGap + 80, 56 }; }
+    ToggleNumber() { amount.state.max = 100; toggle.state.showState = false; addKid (toggle); addKid (amount); setPrimary (&amount); }
+    Size minSize() const override { return { 72 + kGap + 80, 56 }; }
 
 protected:
     void layout() override
     {
         Rect r[2];
-        const int fixed[2] = { 56, 0 }, weight[2] = { 0, 1 };
+        const int fixed[2] = { 72, 0 }, weight[2] = { 0, 1 };
         layoutRow (rect_, fixed, weight, 2, kGap, r);
         toggle.place (r[0]); amount.place (r[1]);
     }
@@ -238,13 +256,13 @@ struct BarPreset { const char* name; const BarItem* items; int numItems; };
 
 namespace barpresets
 {
-constexpr BarItem kWavetableItems[] = { { BarKind::Frame, "", 2 }, { BarKind::Phase, "", 2 }, { BarKind::Rand, "RAND", 2 }, { BarKind::Stepper, "MEMORY", 3 } };
+constexpr BarItem kWavetableItems[] = { { BarKind::Frame, "FRAME", 2 }, { BarKind::Phase, "PHASE", 2 }, { BarKind::Rand, "RAND", 2 }, { BarKind::Stepper, "MEMORY", 3 } };
 constexpr BarItem kGranularItems[] = { { BarKind::Number, "XFADE", 2 }, { BarKind::GrainWindow, "AMOUNT", 3 }, { BarKind::Stepper, "LOOP", 3 }, { BarKind::UnisonDetail, "UNISON", 3 } };
-constexpr BarItem kSubItems[] = { { BarKind::Phase, "", 1 } };
+constexpr BarItem kSubItems[] = { { BarKind::Phase, "PHASE", 1 } };
 constexpr BarItem kMultisampleItems[] = { { BarKind::Envelope, "ENV", 2 }, { BarKind::ToggleNumber, "VEL TRACK", 3 }, { BarKind::Rand, "RAND", 2 } };
-constexpr BarItem kNoiseItems[] = { { BarKind::Number, "STEREO", 1 } };
+constexpr BarItem kNoiseItems[] = { { BarKind::Number, "STEREO", 3 }, { BarKind::Toggle, "ENV 1", 1 } };
 constexpr BarPreset kWavetable { "wavetable", kWavetableItems, 4 }, kGranular { "granular", kGranularItems, 4 }, kSub { "sub", kSubItems, 1 },
-                    kMultisample { "multisample", kMultisampleItems, 3 }, kNoise { "noise", kNoiseItems, 1 };
+                    kMultisample { "multisample", kMultisampleItems, 3 }, kNoise { "noise", kNoiseItems, 2 };
 }
 
 class TypeBar : public Composite
@@ -275,11 +293,13 @@ public:
                 case BarKind::Frame:
                     numbers[i].state = NumberField::State {};
                     numbers[i].state.format = NumberField::Format::IntPlain; numbers[i].state.readOnly = true; numbers[i].state.max = 255;
+                    numbers[i].setLabel (it.label);
                     c = &numbers[i];
                     break;
                 case BarKind::Phase:
                     numbers[i].state = NumberField::State {};
                     numbers[i].state.format = NumberField::Format::Degrees; numbers[i].state.icon = NumberField::Icon::Phase; numbers[i].state.max = 360;
+                    numbers[i].setLabel (it.label);
                     c = &numbers[i];
                     break;
                 case BarKind::Rand:
@@ -298,6 +318,7 @@ public:
                     steppers[i].state = Stepper::State {};
                     steppers[i].state.wrap = true;
                     steppers[i].setItem (it.label);
+                    steppers[i].setCaption (it.label);
                     c = &steppers[i];
                     break;
                 case BarKind::GrainWindow:
@@ -319,6 +340,7 @@ public:
                 case BarKind::ToggleNumber:
                     toggleNumbers[i].toggle.state = ToggleIcon::State {};
                     toggleNumbers[i].toggle.state.icon = ToggleIcon::Icon::Generic;
+                    toggleNumbers[i].toggle.setLabel ("VEL TRK");
                     toggleNumbers[i].amount.state = NumberField::State {};
                     toggleNumbers[i].amount.state.format = NumberField::Format::IntPlain; toggleNumbers[i].amount.state.max = 100;
                     toggleNumbers[i].amount.setLabel ("AMOUNT");
@@ -327,6 +349,8 @@ public:
                 case BarKind::Toggle:
                     toggles[i].state = ToggleIcon::State {};
                     toggles[i].state.icon = ToggleIcon::Icon::Generic;
+                    toggles[i].setLabel (it.label);
+                    toggles[i].state.showState = true;
                     c = &toggles[i];
                     break;
             }
@@ -366,23 +390,22 @@ protected:
 };
 
 // ===============================================================================================================================================================
-/** 10. UnisonBox: the settings (gear) button and the up / down stepper (the voice count). turn goes to the stepper. */
+/** 10. UnisonBox: the voice count (the up / down stepper with the caption VOICES) and the settings button (the gear with the label MORE) under it. turn goes to the stepper. */
 class UnisonBox : public Composite
 {
 public:
-    DetailButton gear { DetailButton::Icon::Gear };
+    DetailButton gear { DetailButton::Icon::Gear, "MORE" };
     UpDownStepper count;
+    static constexpr int kGearH = 56;
 
-    UnisonBox() { count.state.min = 1; count.state.max = 16; count.state.value = 1; addKid (gear); addKid (count); setPrimary (&count); }
-    Size minSize() const override { return { 72 + kGap + 72, 112 }; }
+    UnisonBox() { count.state.min = 1; count.state.max = 16; count.state.value = 1; count.setCaption ("VOICES"); addKid (gear); addKid (count); setPrimary (&count); }
+    Size minSize() const override { return { 116, 112 + kGap + kGearH }; }
 
 protected:
     void layout() override
     {
-        Rect r[2];
-        const int fixed[2] = { 72, 0 }, weight[2] = { 0, 1 };
-        layoutRow (rect_, fixed, weight, 2, kGap, r);
-        gear.place (r[0]); count.place (r[1]);
+        gear.place ({ rect_.x, rect_.bottom() - kGearH, rect_.w, kGearH });
+        count.place ({ rect_.x, rect_.y, rect_.w, std::max (0, rect_.h - kGap - kGearH) });
     }
 };
 
@@ -395,27 +418,28 @@ class WarpSlot : public Composite
 public:
     Knob amount { "WARP" };
     Stepper type;
-    Knob var { "VAR", true };
+    Knob var { "VAR", false };
 
-    explicit WarpSlot (bool mirrored = false) : mirrored_ (mirrored) { addKid (amount); addKid (type); addKid (var, false); setPrimary (&amount); }
+    explicit WarpSlot (bool mirrored = false) : mirrored_ (mirrored) { amount.state.side = true; addKid (amount); addKid (type); addKid (var, false); setPrimary (&amount); }
     void setTypeOff (bool off) { typeOff_ = off; type.state.dim = off; syncKids(); }
     void setHasVar (bool has) { hasVar_ = has; show (var, has); layout(); }
     void setMirrored (bool m) { mirrored_ = m; layout(); }
     bool typeOff() const noexcept { return typeOff_; }
     bool hasVar() const noexcept { return hasVar_; }
     bool mirrored() const noexcept { return mirrored_; }
-    Size minSize() const override { return { 100 + kGap + Stepper::kMinW + (hasVar_ ? kGap + kVarW : 0), 72 }; }
-    static constexpr int kStepperMaxW = 300, kVarW = 64;   // the name field and the VAR knob are as wide as their content needs, the slot is centred in the room it gets
+    Size minSize() const override { return { kAmountW + kGap + Stepper::kMinW + (hasVar_ ? kGap + kVarW : 0), 72 }; }
+    // the knob (the medium size: the dial at the left, the name and the value at its right), the name field and the VAR knob; the slot is centred in the room it gets
+    static constexpr int kAmountW = 184, kStepperMaxW = 300, kVarW = 88;
 
 protected:
     void syncKids() override { amount.setEnabled (enabled_ && ! typeOff_); var.setEnabled (enabled_ && ! typeOff_); type.setEnabled (enabled_); }
     void layout() override
     {
         // order of the pieces from the left: knob, stepper, var; mirrored: var, stepper, knob. The stepper has a largest width and the VAR knob a small one: the slot is centred in its rectangle
-        const int contentW = 100 + kGap + kStepperMaxW + (hasVar_ ? kGap + kVarW : 0);
+        const int contentW = kAmountW + kGap + kStepperMaxW + (hasVar_ ? kGap + kVarW : 0);
         const Rect area = rect_.w > contentW ? Rect { rect_.x + (rect_.w - contentW) / 2, rect_.y, contentW, rect_.h } : rect_;
         Rect r[3];
-        const int fixed[3] = { 100, 0, kVarW }, weight[3] = { 0, 1, 0 };
+        const int fixed[3] = { kAmountW, 0, kVarW }, weight[3] = { 0, 1, 0 };
         const int n = hasVar_ ? 3 : 2;
         layoutRow (area, fixed, weight, n, kGap, r);
         Rect kr = r[0], sr = r[1], vr = hasVar_ ? r[2] : Rect {};
@@ -423,7 +447,7 @@ protected:
         {
             // the same pieces, from the right: build from the mirrored positions
             Rect m[3];
-            const int mf[3] = { kVarW, 0, 100 }, mw[3] = { 0, 1, 0 };
+            const int mf[3] = { kVarW, 0, kAmountW }, mw[3] = { 0, 1, 0 };
             if (hasVar_)
             {
                 layoutRow (area, mf, mw, 3, kGap, m);
@@ -431,7 +455,7 @@ protected:
             }
             else
             {
-                const int f2[2] = { 0, 100 }, w2[2] = { 1, 0 };
+                const int f2[2] = { 0, kAmountW }, w2[2] = { 1, 0 };
                 layoutRow (area, f2, w2, 2, kGap, m);
                 sr = m[0]; kr = m[1];
             }
@@ -440,7 +464,7 @@ protected:
         amount.place (kr);
         type.place ({ sr.x, sr.y + (sr.h - sh) / 2, sr.w, sh });
         if (hasVar_)
-            var.place ({ vr.x, vr.y + std::max (0, (vr.h - 64) / 2), vr.w, std::min (vr.h, 64) });
+            var.place ({ vr.x, vr.y + std::max (0, (vr.h - 96) / 2), vr.w, std::min (vr.h, 96) });
         syncKids();
     }
     bool mirrored_, typeOff_ = false, hasVar_ = false;
@@ -459,7 +483,7 @@ public:
     Size minSize() const override
     {
         const Size a = first.minSize(), b = second.minSize();
-        return stacked_ ? Size { std::max (a.w, b.w), a.h + b.h + kGap } : Size { a.w + b.w + kCaptionW + 2 * kGap, std::max (a.h, b.h) };
+        return stacked_ ? Size { std::max (a.w, b.w), a.h + b.h + kQLane } : Size { a.w + b.w + kCaptionW + 2 * kGap, std::max (a.h, b.h) };
     }
     Rect captionBox() const noexcept { return caption_; }
 
@@ -469,10 +493,10 @@ protected:
     {
         if (stacked_)
         {
-            const int h = std::max (0, (rect_.h - kGap) / 2);
+            const int h = std::max (0, (rect_.h - kQLane) / 2);   // kQLane between the slots: the lane of the Q index chips of the second slot's members
             caption_ = {};
             first.place ({ rect_.x, rect_.y, rect_.w, h });
-            second.place ({ rect_.x, rect_.y + h + kGap, rect_.w, std::max (0, rect_.h - h - kGap) });
+            second.place ({ rect_.x, rect_.y + h + kQLane, rect_.w, std::max (0, rect_.h - h - kQLane) });
             return;
         }
         Rect r[3];
@@ -559,6 +583,7 @@ public:
     {
         oct.state.min = -4; oct.state.max = 4;
         pan.state.bipolar = true; pan.state.defaultValue = 0.5; pan.state.value = pan.state.modValue = 0.5;
+        pan.state.side = level.state.side = filter.state.side = true;
         addKid (selector); addKid (noiseType, false); addKid (source); addKid (oct, false); addKid (filter, false); addKid (pan); addKid (level);
         configure (OscInstance::A, OscKind::Wavetable);
     }
@@ -595,7 +620,8 @@ public:
     }
     OscInstance instance() const noexcept { return inst_; }
     OscKind kind() const noexcept { return kind_; }
-    void setStacked (bool s) { stacked_ = s; layout(); }
+    /** The stacked arrangement is the compact view (vertical knobs: the dial over the name and the value); the row is the top band of the full screen (side knobs: the dial at the left, the name and the value beside it). */
+    void setStacked (bool s) { stacked_ = s; pan.state.side = level.state.side = filter.state.side = ! s; layout(); }
     bool stacked() const noexcept { return stacked_; }
     /** The ids of the parts from base: selector, source stepper, dropdown, OCT, FILTER, noise type, PAN, LEVEL = base .. base + 7 (the same call in every view gives the same ids). */
     void assignIds (int base)
@@ -609,7 +635,7 @@ public:
         const Component* second = inst_ == OscInstance::Noise ? static_cast<const Component*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<const Component*> (&oct) : &source);
         const Size a = first->minSize(), b = second->minSize(), p = pan.minSize();
         if (stacked_)
-            return inst_ == OscInstance::Noise ? Size { std::max (a.w, 3 * p.w + 2 * kGap), a.h + p.h + kGap } : Size { std::max ({ a.w, b.w, 2 * p.w + kGap }), a.h + b.h + p.h + 2 * kGap };
+            return inst_ == OscInstance::Noise ? Size { std::max (a.w, 3 * p.w + 2 * kGap), a.h + p.h + kQLane } : Size { std::max ({ a.w, b.w, 2 * p.w + kGap }), a.h + b.h + p.h + 2 * kQLane };
         return { a.w + b.w + 2 * p.w + 3 * kGap, std::max ({ a.h, b.h, p.h }) };
     }
     void setEnabled (bool e) override { Composite::setEnabled (e); }
@@ -626,18 +652,18 @@ protected:
             first->place ({ rect_.x, rect_.y, rect_.w, h1 });
             Rect r[3];
             const int fixed[3] = { 0, 0, 0 }, weight[3] = { 1, 1, 1 };
-            layoutRow ({ rect_.x, rect_.y + h1 + kGap, rect_.w, std::max (0, rect_.h - h1 - kGap) }, fixed, weight, 3, kGap, r);
+            layoutRow ({ rect_.x, rect_.y + h1 + kQLane, rect_.w, std::max (0, rect_.h - h1 - kQLane) }, fixed, weight, 3, kGap, r);
             filter.place (r[0]); pan.place (r[1]); level.place (r[2]);
             return;
         }
         if (stacked_)
         {
-            const int h1 = first->minSize().h, h2 = second->minSize().h, h3 = std::max (0, rect_.h - h1 - h2 - 2 * kGap);
+            const int h1 = first->minSize().h, h2 = second->minSize().h, h3 = std::max (0, rect_.h - h1 - h2 - 2 * kQLane);
             first->place ({ rect_.x, rect_.y, rect_.w, h1 });
-            second->place ({ rect_.x, rect_.y + h1 + kGap, rect_.w, h2 });
+            second->place ({ rect_.x, rect_.y + h1 + kQLane, rect_.w, h2 });
             Rect r[2];
             const int fixed[2] = { 0, 0 }, weight[2] = { 1, 1 };
-            layoutRow ({ rect_.x, rect_.y + h1 + h2 + 2 * kGap, rect_.w, h3 }, fixed, weight, 2, kGap, r);
+            layoutRow ({ rect_.x, rect_.y + h1 + h2 + 2 * kQLane, rect_.w, h3 }, fixed, weight, 2, kGap, r);
             pan.place (r[0]); level.place (r[1]);
             return;
         }
@@ -645,7 +671,7 @@ protected:
         const int fixed[4] = { 0, 0, 0, 0 };
         const int weight[4] = { first->minSize().w, second->minSize().w, pan.minSize().w, level.minSize().w };
         layoutRow (rect_, fixed, weight, 4, kGap, r);
-        const int h1 = std::min (rect_.h, first->minSize().h), h2 = std::min (rect_.h, second->minSize().h);
+        const int h1 = std::min (rect_.h, std::max (first->minSize().h, 72)), h2 = std::min (rect_.h, std::max (second->minSize().h, 72));   // the cells fill the band's height as far as 72 px
         first->place ({ r[0].x, r[0].y + (rect_.h - h1) / 2, r[0].w, h1 });
         second->place ({ r[1].x, r[1].y + (rect_.h - h2) / 2, r[1].w, h2 });
         pan.place (r[2]); level.place (r[3]);

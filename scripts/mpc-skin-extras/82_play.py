@@ -7,9 +7,9 @@
 #   selectors  index = entries of docs/params.json + 4 LFO cursors + 32 spectrum columns + 2 pad pressure + 1 Overlay Instance + 0 .. 2
 #   proxies    after the selectors, group after group (oscillator, envelope, LFO), eight each
 #   Q proxies  "Q 1" .. "Q 4" after the last proxy (shell-mpc/q_router.h): what the four hardware knobs (Q-Link 1 .. 4) of EVERY Play sub-tab are mapped to
-# The OSCILLATOR third (the left panel) is drawn entirely by the plugin (the compact view and, over the whole page, the full-screen oscillator page; docs/MPC.md "Play page" and "Q proxies"): it has NO host
-# widget (no fallback panel picture, no title, no selector) and the Play (oscillator) sub-tab has no knob widgets at all: its Q-Links are Q 1 .. Q 4 and nothing else. The Env and LFO thirds are as they were
-# (panel picture, title, selector, the eight knobs of the Env / LFO sub-tab); their Q-Link 1 .. 4 are Q 1 .. Q 4 too (the plugin sets the group), Q-Link 5 .. 8 stay the knobs of slots 4 .. 7.
+# The OSCILLATOR third (the left panel), the ENVELOPE third (the middle one) and the LFO third (the right one) are drawn entirely by the plugin (the compact views and, over the whole page, the full-screen pages;
+# docs/MPC.md "Play page" and "Q proxies"): they have NO host widget (no fallback panel picture, no title, no selector) and the Play, Play Env and Play LFO sub-tabs have no knob widgets at all: their Q-Links
+# are Q 1 .. Q 4 and nothing else.
 # Every one of the three tabs has the same TOP (tab coordinates, 1280 x 628): the region of the overlay view (shell-mpc/overlay/overlay_layout.json "play1" .. "play3": the three live panels), with
 # the markers and the instance picture of the view; below it (y 197 ..) the three selectors, one under each panel; BOTTOM: the eight knobs of the module of the sub-tab in the lower two rows of the
 # grid (Q-Link 1 .. 8: the bottom row left to right is Q-Link 1 .. 4, the row above Q-Link 5 .. 8 = slots 0 .. 7 of the table in play_params.h).
@@ -37,7 +37,7 @@ SLOTS = 8
 QLINK_COLUMN_0 = (13, 9, 5, 1)
 QLINK_COLUMN_1 = (14, 10, 6, 2)
 Q_PROXIES = 4              # "Q 1" .. "Q 4": the parameters after the last Play proxy
-PLUGIN_DRAWN_PANEL = 0     # the oscillator panel: no host widget under (or beside) the plugin's own drawing
+PLUGIN_DRAWN_PANELS = (0, 1, 2)   # the panels (0 oscillator, 1 envelope, 2 LFO) the plugin draws entirely: no host widget under (or beside) its own drawing
 # (prefix, instances, [(key suffix of the real parameter, template suffix if the production skin has no control for it, short name)] x 8) ; the names are the ones of play_params.h
 TABLE = (
     ("osc", 3, [("frame", None, "WT Position"), ("unison.voices", None, "Unison"), ("unison.detune", None, "Detune"), ("unison.blend", None, "Blend"),
@@ -211,19 +211,19 @@ def apply(tui, qlinks, ctx):
         # fallback picture (under everything): dark region, three panels, three titles
         under = [_image("Play Background", BACKGROUND_FILE, (region["x"], region["y"], region["w"], region["h"]))]
         for p in range(GROUPS):
-            if p == PLUGIN_DRAWN_PANEL:
+            if p in PLUGIN_DRAWN_PANELS:
                 continue
             x = region["x"] + p * (PANEL_W + PANEL_GAP)
             under.append(_image("Play Panel %d" % (p + 1), PANEL_FILE, (x, region["y"], PANEL_W, region["h"])))
         items[:0] = under
         for p in range(GROUPS):
-            if p == PLUGIN_DRAWN_PANEL:
+            if p in PLUGIN_DRAWN_PANELS:
                 continue
             x = region["x"] + p * (PANEL_W + PANEL_GAP)
             extra.append(_title("Play Title %d" % (p + 1), PANEL_TITLES[p], sel_idx[p], (x + 8, region["y"] + 8, PANEL_W - 16, 28)))
         # the selectors, one under each panel
         for p in range(GROUPS):
-            if p == PLUGIN_DRAWN_PANEL:
+            if p in PLUGIN_DRAWN_PANELS:
                 continue
             kind = SELECTOR_TEMPLATES[p]
             x = region["x"] + p * (PANEL_W + PANEL_GAP) + (PANEL_W - SLOT_W) // 2
@@ -240,7 +240,7 @@ def apply(tui, qlinks, ctx):
         links = {"Q-Link %d" % i: -1 for i in range(1, 17)}
         rebind = {ctx.param_index("%s1.%s" % (prefix, suffix)): proxy_idx[highlight][s] for s, (suffix, _, _) in enumerate(slots)}   # real parameter of instance 1 -> its proxy
         for s, (suffix, fallback, short) in enumerate(slots):
-            if highlight == PLUGIN_DRAWN_PANEL:
+            if highlight in PLUGIN_DRAWN_PANELS:
                 break   # the oscillator sub-tab has no knob widgets: the compact view and the full-screen page are the plugin's own
             real = ctx.param_index("%s1.%s" % (prefix, suffix))
             templates = by_param.get(real)
@@ -261,19 +261,19 @@ def apply(tui, qlinks, ctx):
             if s >= 4:   # the second row of the module's knobs: the second Q-Link bank (column 1), read top to bottom: slots 5, 6, 7, 8
                 links["Q-Link %d" % QLINK_COLUMN_1[s - 4]] = proxy_idx[highlight][s]
         for i in range(Q_PROXIES):   # the four hardware knobs of every Play sub-tab are the Q proxies (the plugin sets what they act on)
-            links["Q-Link %d" % (i + 1 if highlight == PLUGIN_DRAWN_PANEL else QLINK_COLUMN_0[i])] = q_idx[i]
+            links["Q-Link %d" % (i + 1 if highlight in PLUGIN_DRAWN_PANELS else QLINK_COLUMN_0[i])] = q_idx[i]
         for c in extra:
             _hide_while_full_screen(c, first - OVERLAY_INSTANCE)
         items.extend(extra)
         # names over the controls (85_names.py): the meta of this tab
         tab_names = names[tab_name]["names"]
         for s, (_, _, short) in enumerate(slots):
-            if highlight != PLUGIN_DRAWN_PANEL:
+            if highlight not in PLUGIN_DRAWN_PANELS:
                 tab_names[proxy_keys[highlight][s]] = short
         entry = [m for m in qlinks["Screen Mode Q-Links"]["map"] if m["Tab"] == tab["fnKeyIndex"] + 1 and m["SubTab"] == 1]
         if len(entry) != 1:
             raise ValueError("Q-Links.json has %d entries for the tab %r" % (len(entry), tab_name))
         entry[0]["Q-Links"] = links
-        if highlight == PLUGIN_DRAWN_PANEL:
+        if highlight in PLUGIN_DRAWN_PANELS:
             entry[0]["Bank Direction"] = "Row"
         tab["qlinkBoundsData"] = ["%s %d %s %d" % (b.split()[0], QLINK_BOUNDS_Y, b.split()[2], QLINK_BOUNDS_H) for b in tab["qlinkBoundsData"]]

@@ -68,8 +68,10 @@ public:
             f.push_back (v);
         std::sort (f.begin(), f.end());
         raisedHz_ = 0;
+        // a moderate level: at least wantHz and at least half of the highest clock (the Key 61: 100 .. 600 MHz -> 300; the XL: 300 .. 1000 MHz, its lowest is 300 -> 500)
+        const long long floorHz = f.empty() ? wantHz_ : std::max (wantHz_, f.back() / 2);
         for (size_t i = 0; i + 1 < f.size(); ++i)
-            if (f[i] >= wantHz_)
+            if (f[i] >= floorHz)
             {
                 raisedHz_ = f[i];
                 break;

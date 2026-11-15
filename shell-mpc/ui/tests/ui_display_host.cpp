@@ -120,6 +120,68 @@ int main()
         display::drawModule (sl.builder(), m);
         check (render (sl).px != im.px, nm + "module panel: the LFO is drawn in its own colours");
     }
+    // ---- review 2: the cycle as the display shows it
+    {
+        // a band limited saw (the first sample in the middle of its jump, ringing at both edges)
+        std::vector<float> saw (512), sm (512);
+        for (int i = 0; i < 512; ++i)
+        {
+            float y = 0.0f;
+            for (int h = 1; h < 120; ++h)
+                y += std::sin (6.2832f * static_cast<float> (h) * static_cast<float> (i) / 512.0f) / static_cast<float> (h);
+            saw[static_cast<size_t> (i)] = -y * 0.6366f;
+        }
+        float rawStep = 0.0f, smStep = 0.0f, rawMax = 0.0f;
+        const int m = display::smoothCycle (saw.data(), sm.data(), 512);
+        for (int i = 1; i < 512; ++i)
+            rawStep = std::max (rawStep, std::fabs (saw[static_cast<size_t> (i)] - saw[static_cast<size_t> (i - 1)]));
+        for (int i = 1; i < m; ++i)
+            smStep = std::max (smStep, std::fabs (sm[static_cast<size_t> (i)] - sm[static_cast<size_t> (i - 1)]));
+        for (float v : saw) rawMax = std::max (rawMax, std::fabs (v));
+        float smMax = 0.0f;
+        for (int i = 0; i < m; ++i) smMax = std::max (smMax, std::fabs (sm[static_cast<size_t> (i)]));
+        check (rawStep > 0.3f && smStep < 0.05f && smMax <= 1.0f && m == 512 - 2 * display::cycleCrop (512), "a band limited saw: the ringing and the half jump at the edges are gone from the display's line (raw step " + std::to_string (rawStep) + ", shown " + std::to_string (smStep) + ")");
+        // a stack of identical frames is not drawn, a stack of different ones is; the unison hairlines share the x range of the main curve
+        std::vector<float> a, b;
+        wave (a, 0.0f); wave (b, 1.0f);
+        const float* same[3] = { a.data(), a.data(), a.data() };
+        const float* diff[3] = { a.data(), b.data(), b.data() };
+        check (! display::framesDiffer (a.data(), same, 3, 512) && display::framesDiffer (a.data(), diff, 3, 512), "the stack of the table: identical frames are no stack, different ones are");
+        const Rect r { 10, 10, 600, 300 };
+        const uint32_t bg = ov::sceneColour (theme::rgba (theme::L().bg0, 255));
+        display::Data d;
+        d.kind = display::Data::Kind::Wave; d.n = 512; d.cycle = saw.data(); d.colour = 0x2ee6f0;
+        for (int i = 0; i < 3; ++i) d.stack[i] = saw.data();
+        d.numStack = 3;
+        Scene one (620, 320, theme::rgba (theme::L().bg0, 255)), fan (620, 320, theme::rgba (theme::L().bg0, 255));
+        display::draw (one.builder(), r, d, false);
+        d.voices = 5; d.detune = 0.6f; d.blend = 1.0f;
+        display::draw (fan.builder(), r, d, false);
+        const Image i1 = render (one), i2 = render (fan);
+        auto columns = [&] (const Image& im, int& first, int& last) { first = -1; last = -1; for (int x = r.x + 12; x < r.right() - 12; ++x) for (int y = r.y + 14; y < r.bottom() - 14; ++y) if (im.at (x, y) != bg && std::abs (static_cast<int> (im.at (x, y) & 0xff) - static_cast<int> (bg & 0xff)) > 80) { if (first < 0) first = x; last = x; break; } };
+        int f1, l1, f2, l2;
+        columns (i1, f1, l1); columns (i2, f2, l2);
+        check (i1.px != i2.px && std::abs (f1 - f2) <= 3 && std::abs (l1 - l2) <= 3 && drawnOutside (i2, r, bg) == 0, "unison: the voices appear as lines around the main curve over the same x range (one voice: only the main curve)");
+        // the noise colours: nine pictures, all different, the dim one is fainter
+        std::vector<Image> pics;
+        for (int c = 0; c < 9; ++c)
+        {
+            display::Data nd;
+            nd.kind = display::Data::Kind::Noise; nd.noiseColour = c;
+            Scene sn (620, 320, theme::rgba (theme::L().bg0, 255));
+            display::draw (sn.builder(), r, nd, false);
+            pics.push_back (render (sn));
+            check (! sn.overflow() && drawnOutside (pics.back(), r, bg) == 0, "noise colour " + std::to_string (c) + ": the picture stays inside the display");
+        }
+        bool different = true;
+        for (int i = 0; i < 9; ++i) for (int j = i + 1; j < 9; ++j) different = different && pics[static_cast<size_t> (i)].px != pics[static_cast<size_t> (j)].px;
+        display::Data dim;
+        dim.kind = display::Data::Kind::Noise; dim.noiseColour = 0; dim.dim = true;
+        Scene sd (620, 320, theme::rgba (theme::L().bg0, 255));
+        display::draw (sd.builder(), r, dim, false);
+        auto lit = [&] (const Image& im) { long t = 0; for (int y = r.y; y < r.bottom(); ++y) for (int x = r.x; x < r.right(); ++x) t += std::abs (static_cast<int> (im.at (x, y) & 0xffffff) - static_cast<int> (bg & 0xffffff)) > 0x300000; return t; };
+        check (different && lit (render (sd)) < lit (pics[0]), "the nine noise colours have nine pictures; switched off the picture stays, fainter (no word OFF)");
+    }
     theme::setLook (1);
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;

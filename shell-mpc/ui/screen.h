@@ -44,7 +44,7 @@ public:
     }
     Rect displayRect() const noexcept { return display_; }
     QGroup& group() noexcept { return basic.group; }
-    static constexpr int kKnobH = 124, kTabGap = 20;
+    static constexpr int kKnobH = 124;
     Size minSize() const override { return { 420, 700 }; }
     void draw (gpu::SceneBuilder& sb) const override
     {
@@ -56,7 +56,7 @@ protected:
     void layout() override
     {
         const int m = 6, W = rect_.w - 2 * m;
-        const int basicH = basic.minSize().h - basic.pan.minSize().h + kKnobH + 2 * kGap;   // the two knobs get the room a third of the width allows (kKnobH), with their value under them
+        const int basicH = basic.minSize().h - basic.pan.minSize().h + kKnobH;   // the two knobs get the room a third of the width allows (kKnobH), with their value under them
         instances.place ({ rect_.x + m, rect_.y + m, W, 56 });
         const int hy = rect_.y + m + 56 + 8;
         power.place ({ rect_.x + m, hy, 64, 64 });
@@ -64,7 +64,7 @@ protected:
         nameBox_ = { rect_.x + m + 64 + 12, hy, std::max (0, W - 2 * 64 - 24), 64 };
         const int dy = hy + 64 + 8;
         const int by = rect_.bottom() - m - basicH;
-        display_ = { rect_.x + m, dy, W, std::max (0, by - kTabGap - dy) };   // kTabGap: the index tabs of the Q frame sit on its top edge
+        display_ = { rect_.x + m, dy, W, std::max (0, by - kQLane - 4 - dy) };   // kQLane: the index chip of the first member of the Q frame sits on its top edge
         full.place ({ display_.right() - 64 - 4, display_.y + 4, 64, 56 });
         basic.place ({ rect_.x + m, by, W, basicH });
     }
@@ -83,7 +83,7 @@ protected:
 class OscillatorFullScreen : public Composite
 {
 public:
-    static constexpr int kMaxGroups = 8;
+    static constexpr int kMaxGroups = 8, kBottomH = 220;   // kBottomH: the blocks of the knob panel
     MenuButton close { "CLOSE", MenuButton::Icon::None };
     ToggleIcon power;
     BasicControls basic;
@@ -110,7 +110,7 @@ public:
         switch (inst)
         {
             case OscInstance::Sub: bar.load (barpresets::kSub); panel.load (presets::kEmptyFull); break;
-            case OscInstance::Noise: bar.load (barpresets::kNoise); panel.load (presets::kEmptyFull); break;
+            case OscInstance::Noise: bar.load (barpresets::kNoise); panel.load (presets::kNoiseFull); break;
             default:
                 bar.load (kind == OscKind::Wavetable ? barpresets::kWavetable : kind == OscKind::Multisample ? barpresets::kMultisample : barpresets::kGranular);
                 panel.load (kind == OscKind::Wavetable ? presets::kWavetableFull : kind == OscKind::Multisample ? presets::kMultisampleFull : presets::kGranularFull);
@@ -118,7 +118,8 @@ public:
         }
         tune.setShort (false);
         tune.setCrsOnly (inst == OscInstance::Sub);
-        tune_shown_ = inst != OscInstance::Noise;
+        tune.setNoise (inst == OscInstance::Noise);
+        tune_shown_ = true;
         show (tune, tune_shown_);
         layout();
         buildGroups();
@@ -177,28 +178,32 @@ public:
 protected:
     void layout() override
     {
-        const int W = rect_.w, H = rect_.h, m = 8;
-        const int topH = H * 12 / 100 + 16, bottomH = H * 31 / 100;
-        const int tabH = 16;   // the index tabs of a group on the top band sit on its frame: room above it
-        const Rect top { rect_.x + m, rect_.y + m + tabH, W - 2 * m, topH - tabH };
+        // top: the lane of the Q index chips of the band, the band (the Basic group: the knobs are the medium size, the dial at the left); middle: the display over the type bar at the left, the tuning block at the
+        // right; bottom: the blocks of the type's knob panel (the sub oscillator has none: the middle takes its room)
+        const int W = rect_.w, m = 8;
+        const int topH = 88, bottomH = hasPanel() ? kBottomH : 0;
+        const Rect top { rect_.x + m, rect_.y + m + kQLane + 2, W - 2 * m, topH };
         Rect r[4];
         const int fixed[4] = { 84, 64, 0, 72 }, weight[4] = { 0, 0, 1, 0 };
         layoutRow (top, fixed, weight, 4, kGap, r);
-        close.place ({ r[0].x, r[0].y + (topH - 56) / 2, r[0].w, 56 });
-        power.place ({ r[1].x, r[1].y + (topH - 56) / 2, r[1].w, 56 });
+        close.place ({ r[0].x, top.y + (topH - 56) / 2, r[0].w, 56 });
+        power.place ({ r[1].x, top.y + (topH - 56) / 2, r[1].w, 56 });
         basic.place (r[2]);
-        route.place ({ r[3].x, r[3].y + (topH - 64) / 2, r[3].w, 64 });
-        const int midY = top.bottom() + m, midH = rect_.bottom() - m - bottomH - m - midY;
+        route.place ({ r[3].x, top.y + (topH - 64) / 2, r[3].w, 64 });
+        const int midY = top.bottom() + m, midH = rect_.bottom() - m - (bottomH > 0 ? bottomH + m : 0) - midY;
         const int leftW = (W - 2 * m) * 78 / 100, rightX = rect_.x + m + leftW + m;
         constexpr int kTitleH = KnobPanel::kBlockTitleH, kPad = KnobPanel::kBlockPad;
         const int barH = 56, barBlockH = kTitleH + barH + kPad;
-        display_ = { rect_.x + m, midY, leftW, std::max (0, midH - barBlockH - kGap) };
+        const bool sub = inst_ == OscInstance::Sub;
+        // the sub oscillator has no knob panel and only CRS to tune: its display takes the full width and the tuning block sits beside the type bar under it; the others have the display and the type bar at the left, the tuning block as tall as both at the right
+        display_ = { rect_.x + m, midY, sub ? W - 2 * m : leftW, std::max (0, midH - barBlockH - kGap) };
         barBlock_ = { rect_.x + m, display_.bottom() + kGap, leftW, barBlockH };
         bar.place ({ barBlock_.x + kPad, barBlock_.y + kTitleH, barBlock_.w - 2 * kPad, barH });
-        tuneBlock_ = { rightX, midY, rect_.right() - m - rightX, std::max (0, midH) };
+        tuneBlock_ = sub ? Rect { rightX, barBlock_.y, rect_.right() - m - rightX, barBlockH } : Rect { rightX, midY, rect_.right() - m - rightX, std::max (0, midH) };
         tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
         panel.place ({ rect_.x + m, rect_.bottom() - m - bottomH, W - 2 * m, bottomH });
     }
+    bool hasPanel() const noexcept { return inst_ != OscInstance::Sub; }
     void buildGroups()
     {
         for (QGroup& g : groups)
@@ -214,13 +219,14 @@ protected:
         {
             QGroup& g = next ("Tune");
             if (inst_ == OscInstance::Sub) g.set (0, &tune.crs);
+            else if (inst_ == OscInstance::Noise) { g.set (0, &tune.crs); g.set (1, &tune.fin); g.set (2, &tune.track); }
             else { g.set (0, &tune.oct); g.set (1, &tune.sem); g.set (2, &tune.fin); g.set (3, &tune.crs); }
         }
         const PanelPreset* pp = panel.preset();
-        static const char* const kGranularNames[] = { "Grain", "Playback", "Random" };
+        static const char* const kGranularNames[] = { "Grain", "Playback", "Random" }, * const kNoiseNames[] = { "Source", "Playback" };
         for (int i = 0; pp && i < pp->numQ && nGroups_ < kMaxGroups; ++i)
         {
-            QGroup& g = next (kind_ == OscKind::Granular ? kGranularNames[i] : "Unison");
+            QGroup& g = next (inst_ == OscInstance::Noise ? kNoiseNames[i] : (kind_ == OscKind::Granular ? kGranularNames[i] : "Unison"));
             for (int k = 0; k < 4; ++k)
                 g.set (k, pp->q[i].slot[k] == PanelSlot::Count ? nullptr : panel.part (pp->q[i].slot[k]));
         }

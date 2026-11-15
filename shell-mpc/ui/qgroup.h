@@ -48,8 +48,8 @@ public:
                 u = Rect::unite (u, c->rect());
         return u;
     }
-    /** The one frame around the whole group (nothing when not active), inside the union, and the index of every member: a tab on the top edge of the frame above the member when no other member
-        lies above it (a row of controls); inside the top right corner of the member otherwise (a column of fields, the second row of a pair). */
+    /** The one frame around the whole group (nothing when not active), inside the union, and the index of every member as a chip on the member's top left corner (Pen::qIndex): the lane above each
+        member (kQLane) is left free by the layouts, so the chip covers no content. */
     void draw (gpu::SceneBuilder& sb) const
     {
         if (! active_)
@@ -58,29 +58,11 @@ public:
         if (u.empty())
             return;
         Pen pen (sb, true);
-        Cell cell (sb, { u.x, u.y - 17, u.w, u.h + 17 });   // the index tabs sit on the top edge of the frame
+        Cell cell (sb, { u.x, u.y - 17, u.w, u.h + 17 });   // the chips of the top row sit on the top edge of the frame
         pen.rrect (u, theme::L().rControl, pen.c (theme::L().q, 255), 2.0f);
         for (int i = 0; i < kSlots; ++i)
-        {
-            const Component* m = slot_[i];
-            if (! m)
-                continue;
-            const Rect r = m->rect();
-            bool above = false;
-            for (int j = 0; j < kSlots && ! above; ++j)
-            {
-                const Component* o = slot_[j];
-                if (o && o != m)
-                {
-                    const Rect s = o->rect();
-                    above = s.bottom() <= r.y + 2 && s.right() > r.x && s.x < r.right();
-                }
-            }
-            if (above)
-                pen.qBadge (r, i + 1);
-            else
-                pen.qTab (static_cast<float> (r.x) + static_cast<float> (r.w) * 0.5f, u.y + 2, i + 1);
-        }
+            if (const Component* m = slot_[i])
+                pen.qIndex (m->rect(), i + 1);
     }
     /** The hardware knob `knobIndex` (0 .. 3) turned by delta: routed to the member of that slot; nothing when not active or the slot is empty. */
     Change turn (int knobIndex, double delta)

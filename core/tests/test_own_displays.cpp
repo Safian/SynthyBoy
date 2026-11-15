@@ -293,6 +293,31 @@ TEST (own_lfo_read_out_has_a_cursor_per_voice)
     CHECK (live.lfoVoicePhase[0][0] == live.lfoPhase[0]);                                                     // the newest voice is the one that is heard
 }
 
+// the live read-out has the fine stage of every envelope in every sounding voice (newest first): the running dots of the envelope display, one for every voice
+TEST (own_env_read_out_has_a_stage_per_voice)
+{
+    LfoRig rig ([&] (IEngine& e, ParamValues& v)
+    {
+        both (e, v, "env1.attack", 5.0f);
+        both (e, v, "env1.decay", 2000.0f);
+        both (e, v, "env1.sustain", 50.0f);
+    });
+    LiveValues live;
+    CHECK (rig.e->copyReadout (live));
+    CHECK (live.envVoiceStage[0][0] == 0.0f && live.envVoiceStage[0][1] == 0.0f);   // no voice: idle everywhere
+    rig.note();
+    for (int b = 0; b < 40; ++b)
+        rig.block();
+    Event on2 = sbtest::noteOn (0, 64, 0.8f);
+    rig.e->process (&on2, 1, rig.l.data(), rig.r.data(), 256);
+    live = rig.block();
+    CHECK (live.envVoiceStage[0][0] >= 2.0f && live.envVoiceStage[0][0] <= 5.0f);   // the newest voice is in attack .. sustain
+    CHECK (live.envVoiceStage[0][1] == 4.0f && live.envVoiceFraction[0][1] > 0.0f && live.envVoiceFraction[0][1] < 1.0f);   // the older voice is somewhere in its long decay
+    CHECK (live.envVoiceStage[0][2] == 0.0f && live.envVoiceStage[0][7] == 0.0f);   // no third voice
+    CHECK (live.envVoiceStage[0][0] == live.envFineStage[0] && live.envVoiceFraction[0][0] == live.envFineFraction[0]);   // the newest voice is the one that is heard
+    CHECK (live.envVoiceStage[5][1] >= 1.0f);                                          // every envelope is read out, not only the first
+}
+
 // ---- the oscillator cycle ---------------------------------------------------------------------------------------------------------------------------------
 
 namespace

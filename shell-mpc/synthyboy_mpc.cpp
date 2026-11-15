@@ -29,6 +29,7 @@
 #include "synthyboy/user_content.h"
 
 #include "mpc_vst2_abi.h"
+#include "output_peak.h"
 #include "output_stage.h"
 #include "plugin_paths.h"
 #include "program_list.h"
@@ -361,6 +362,9 @@ struct PluginInstance
         void contentRoots (std::vector<ContentRoot>& out) const override { inst.contentRootsOf (out); }
         void requestContent (int osc, int kind, const std::string& path) override { inst.requestContentLoad (osc, kind, path); }
         int contentLoad (std::string* message) const override { return inst.contentLoadState (message); }
+        void setLfoShape (int lfo, const synthyboy::ContentLfoShape& shape) override { inst.requestLfoShape (lfo, shape); }
+        void setQVirtual (int id, float normalised) noexcept override { inst.qRouter.setVirtualValue (id, normalised); }
+        bool takeQVirtual (int id, float& normalised) noexcept override { return inst.qRouter.takeVirtual (id, normalised); }
         double sampleRate() const noexcept override { return inst.overlayRate.load (std::memory_order_relaxed); }
         void requestOverlayReport() noexcept override
         {
@@ -404,7 +408,12 @@ struct PluginInstance
                 const std::string n = e->d_name;
                 if (n.empty() || n[0] == '.' || n == "EFI" || n.compare (0, 5, "acvs-") == 0 || n.compare (0, 5, "az01-") == 0)
                     continue;
-                add (("USB " + n).c_str(), "/media/" + n);
+                {
+                    std::string label = "USB ";
+                    for (char ch : n)
+                        label += static_cast<char> (std::toupper (static_cast<unsigned char> (ch)));   // one way of writing the names of the roots: SD CARD, USB PENDRIVE, PLUGIN CONTENT
+                    add (label.c_str(), "/media/" + n);
+                }
             }
             ::closedir (d);
         }
@@ -429,6 +438,59 @@ struct PluginInstance
             *message = contentLoadMessage;
         }
         return s;
+    }
+    // ---- the drawn shapes of the LFOs the plugin-drawn LFO page writes (overlay/lfo_ui.h): the overlay thread posts the shape (the latest per LFO wins), the display thread puts it into the content (under `contentMutex`
+    // like every change of `content`), gives it to the engine and to the overlay's copy. A shape the content validation would refuse (it would make saveState drop the whole section) is not applied.
+    std::mutex lfoShapeMutex;
+    synthyboy::ContentLfoShape lfoShapeReq[synthyboy::kMaxContentLfoShapes];
+    bool lfoShapeDue[synthyboy::kMaxContentLfoShapes] = {};
+    void requestLfoShape (int lfo, const synthyboy::ContentLfoShape& shape)
+    {
+        if (lfo < 1 || lfo > synthyboy::kMaxContentLfoShapes)
+            return;
+        std::lock_guard<std::mutex> g (lfoShapeMutex);
+        lfoShapeReq[lfo - 1] = shape;
+        lfoShapeReq[lfo - 1].lfo = lfo;
+        lfoShapeDue[lfo - 1] = true;
+    }
+    void lfoShapePoll()
+    {
+        synthyboy::ContentLfoShape take[synthyboy::kMaxContentLfoShapes];
+        bool have[synthyboy::kMaxContentLfoShapes] = {};
+        bool any = false;
+        {
+            std::lock_guard<std::mutex> g (lfoShapeMutex);
+            for (int i = 0; i < synthyboy::kMaxContentLfoShapes; ++i)
+                if (lfoShapeDue[i])
+                {
+                    take[i] = lfoShapeReq[i];
+                    have[i] = any = true;
+                    lfoShapeDue[i] = false;
+                }
+        }
+        if (! any || ! engine)
+            return;
+        std::lock_guard<std::mutex> g (contentMutex);
+        synthyboy::StateContent next = content;
+        for (int i = 0; i < synthyboy::kMaxContentLfoShapes; ++i)
+        {
+            if (! have[i])
+                continue;
+            bool replaced = false;
+            for (synthyboy::ContentLfoShape& s : next.lfoShapes)
+                if (s.lfo == i + 1)
+                {
+                    s = take[i];
+                    replaced = true;
+                }
+            if (! replaced)
+                next.lfoShapes.push_back (take[i]);
+        }
+        if (! synthyboy::validateContent (next))
+            return;
+        content = std::move (next);
+        engine->setContent (content);
+        publishOverlayContent();
     }
     /** The display thread, every tick: a posted request is loaded now. */
     void contentPoll()
@@ -984,6 +1046,7 @@ struct PluginInstance
                 qPoll (e);                                              // the Q proxies after them
                 uiPoll (e);                                             // what the plugin-drawn pages wrote
                 contentPoll();                                          // a sample or an instrument the browser asked for
+                lfoShapePoll();                                         // a drawn LFO shape the LFO page wrote
 #endif
                 int step[synthyboy_mpc::kLfoLiveCount] = {};
 #if SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
@@ -2380,6 +2443,8 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
                           out0, out1, sampleFrames);
     // Make-up gain and peak limiter (output_stage.h): what leaves here is what the host gets, so the spectrum below shows the same signal.
     inst->outputStage.process (out0, out1, sampleFrames);
+    if (out0 != nullptr)
+        synthyboy_mpc::outputPeak().note (out0, out1, sampleFrames);   // the peak for the status file (output_peak.h): one pass, relaxed atomics
 #if SYNTHYBOY_MPC_SPECTRUM
     if (out0 != nullptr)
         inst->spectrumRing.push (out0, out1, sampleFrames); // the only thing the audio thread does for the display: atomic stores into a preallocated ring

@@ -52,7 +52,7 @@ public:
         kWarp1Type = 250, kWarp1Amount, kWarp1Var, kWarp2Type, kWarp2Amount, kWarp2Var, kUnisonGear = 260, kUnisonCount,
         kDetailBack = 399, kDetail = 400,   // 400 + PanelSlot: the parts of a detail page
         kRouteTarget = 500, kRouteBalance, kRouteBus1, kRouteBus2, kRouteClose, kRouteBackdrop,
-        kList = 700, kListBackdrop,         // the list popup (source, warp types)
+        kList = 700, kListBackdrop, kListHeader,   // the list popup (source, warp types, the content browser: its header is the way up)
         kModsBack = 600, kModsRow = 610,    // 610 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kModsAddStep = 660, kModsAdd
     };
@@ -105,10 +105,11 @@ public:
         popupBox_ = { w / 2 - 340, kTabY + kTabH / 2 - 110, 680, 220 };
         route_.place (popupBox_);
         route_.setPopup (true, tab);
-        list_.place ({ 340, kTabY + 20, 600, 8 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
         list_.setPopup (tab);
         list_.setId (kList);
         list_.setBackdropId (kListBackdrop);
+        list_.setHeaderId (kListHeader);
         detail_.place (tab);
         mods_.place (tab);
     }
@@ -135,6 +136,8 @@ public:
         }
         pull (inst, main_);
         pull (inst, page_);
+        if (pageTop_ == kPageEnvelope)
+            updateEnvelope();
         if (pageTop_ == kPageList && listParam_ >= 0)
             list_.state.current = static_cast<int> (std::lround (inst.param (listParam_)));
         inst.setUiFullOpen (! stack.isMain());
@@ -148,6 +151,8 @@ public:
             return compact_.displayRect();
         if (stackDepth_ == 1 || pageTop_ == kPageRoute || pageTop_ == kPageList)
             return full_.displayRect();
+        if (pageTop_ == kPageUnison || pageTop_ == kPageGrain)
+            return detail_.displayRect();   // the same picture of the oscillator over the page (the fan of the unison voices, the grain window on the sample)
         return {};
     }
     bool isMain() const noexcept { return stackDepth_ == 0; }
@@ -175,6 +180,8 @@ public:
         if (pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope)
         {
             detail_.draw (sb);
+            if (pageTop_ == kPageEnvelope && ! detail_.displayRect().empty())
+                drawEnvelope (sb);
             return;
         }
         if (pageTop_ == kPageMods)
@@ -183,6 +190,19 @@ public:
             return;
         }
         full_.draw (sb);
+    }
+    /** The envelope of the multisample oscillator as a curve in the display area of its page (the schematic of the six values: delay, attack, hold, decay, sustain level, release). */
+    void drawEnvelope (gpu::SceneBuilder& sb) const
+    {
+        const ui::Rect r = detail_.displayRect();
+        ui::display::Module m;
+        m.rect = r;
+        m.plot = { r.x + 16, r.y + 38, r.w - 32, r.h - 52 };
+        m.env = true;
+        m.title = "ENVELOPE";
+        m.v = envCurve_;
+        m.n = kEnvPoints;
+        ui::display::drawModule (sb, m);
     }
     /** The route popup and the list popup (over the page and over the picture). */
     void drawPopup (gpu::SceneBuilder& sb) const
@@ -243,6 +263,8 @@ public:
     bool fingerDown() const noexcept { return gestureDown_; }
     /** The stack changed behind the UI's back (the page left, another instance): the gesture is dropped. */
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
+    /** Another element's page opened or closed: the Q group is published again at the next update (the router keeps what the last page set). */
+    void forgetQGroup() noexcept { qSet_ = false; }
 
     // ---- access for the tests
     ui::OscillatorCompact& compact() noexcept { return compact_; }
@@ -390,6 +412,12 @@ private:
         }
         else if (sub)
             bind (main_, kTuneCrs, &full_.tune.crs, T::Number, "tune");
+        else if (noise)
+        {
+            bind (main_, kTuneCrs, &full_.tune.crs, T::Number, "pitch");           // PITCH, FINE and the key tracking of the noise
+            bind (main_, kTuneFin, &full_.tune.fin, T::Number, "fine");
+            bind (main_, kTuneTrack, &full_.tune.track, T::Toggle, "keytrack");
+        }
         // ---- the type bar
         for (int i = 0; i < full_.bar.numSlots(); ++i)
         {
@@ -417,7 +445,7 @@ private:
                     bind (main_, kBarAmount + i, &tn->amount, T::Number, "multi.vel_track");
                     break;
                 }
-                case ui::BarKind::Toggle: break;
+                case ui::BarKind::Toggle: bind (main_, kBarSlot + i, s, T::Toggle, noise ? "env1" : ""); break;
             }
         }
         // ---- the bottom band of the full screen
@@ -526,6 +554,11 @@ private:
             case PanelSlot::Sustain: return "multi.sustain";
             case PanelSlot::Release: return "multi.release";
             case PanelSlot::Override: return "multi.override";
+            case PanelSlot::NoiseType: return "type";
+            case PanelSlot::NoiseStart: return "phase";
+            case PanelSlot::NoiseRand: return "random_phase";
+            case PanelSlot::NoiseLoop: return "loop";
+            case PanelSlot::NoiseBounce: return "bounce";
             default: return "";
         }
     }
@@ -542,8 +575,10 @@ private:
             {
                 auto& st = static_cast<ui::NumberField*> (it.c)->state;
                 st.min = pi.min; st.max = pi.max; st.defaultValue = pi.def;
-                st.step = it.id == kTuneCrs ? 0.01 : (pi.max - pi.min > 200.0f ? 10.0 : 1.0);
-                if (it.id == kTuneCrs) { st.pxPerStep = 2; st.format = ui::NumberField::Format::Decimal2; }
+                const bool fine = it.id == kTuneCrs && sel_ != playosc::kNoise;   // CRS: hundredths of a semitone; the noise's PITCH: whole semitones
+                st.step = fine ? 0.01 : (pi.max - pi.min > 200.0f ? 10.0 : 1.0);
+                if (fine) { st.pxPerStep = 2; st.format = ui::NumberField::Format::Decimal2; }
+                else if (it.id == kTuneCrs) { st.pxPerStep = 6; st.format = ui::NumberField::Format::IntSigned; }
                 if (it.id == kTuneFin) { st.pxPerStep = 3; st.format = ui::NumberField::Format::IntSigned; }
                 if (it.type == T::NumberRead) st.readOnly = true;
             }
@@ -638,6 +673,7 @@ private:
                     fillBrowserList();
                 else if (listParam_ >= 0)
                 {
+                    list_.state.header = nullptr;
                     list_.state.items = info (listParam_).choices;
                     list_.state.count = info (listParam_).numChoices;
                     list_.state.current = static_cast<int> (std::lround (inst.param (listParam_)));
@@ -653,8 +689,6 @@ private:
     void bindDetail()
     {
         detail_.back.setId (kDetailBack);
-        if (ui::ToggleIcon* t = detail_.panel.toggle (ui::PanelSlot::Override))
-            t->setLabel ("OVRIDE");
         bindPanel (page_, detail_.panel, kDetail, kindOfRaw (typeRaw_), true);
         // the detail page's ids are the panel slots' + kDetail (bindPanel gave base + slot)
         detail_.setActiveGroup (0);
@@ -693,7 +727,16 @@ private:
         setSourceText (mods_.addSource, offer[std::clamp (mods_.addSource.state.index, 0, std::max (0, n - 1))]);
         modsTargetParam_ = t != nullptr ? t->param : -1;
         modsAddOffer_ = n;
+        setTargetText (inst);
         // the rows' controls are bound for the Q group (the parameters of the slot of the row)
+    }
+    /** The value of the control the modulations page is about, beside its title. */
+    void setTargetText (const IInstanceView& v)
+    {
+        char t[16] = "";
+        if (modsTargetParam_ >= 0)
+            formatValue (info (modsTargetParam_), v.param (modsTargetParam_), t, sizeof t);
+        mods_.setTargetValue (t);
     }
     int modsTargetParam_ = -1, modsAddOffer_ = 0, savedGroup_ = -1;
     static const char* sourceName (int choice) noexcept
@@ -789,6 +832,7 @@ private:
         if (pageTop_ == kPageMods && modsTargetParam_ >= 0)
         {
             const ui::ModInput mi = modsOf (v, modsTargetParam_, selectedSource_, modRows_);
+            setTargetText (v);
             if (mi.numMods != mods_.numRows())
             {
                 loadMods (v);
@@ -798,8 +842,7 @@ private:
             {
                 ui::ModulationsPage::Row& r = mods_.rows[i];
                 r.depth.state.value = r.depth.state.modValue = (mi.mods[i].depth + 1.0) * 0.5;
-                r.polarity.state.on = mi.mods[i].bidirectional;
-                r.bypass.state.on = mi.mods[i].bypassed;
+                ui::ModulationsPage::setRowState (r, mi.mods[i].bidirectional, mi.mods[i].bypassed);
             }
         }
     }
@@ -827,6 +870,12 @@ private:
             if (it.type == T::Inert)
             {
                 it.c->setEnabled (true);
+                if (it.id == kPanel + static_cast<int> (ui::PanelSlot::WarpMenu) && it.param >= 0)   // the WARP menu of the granular oscillator says which warp it has now
+                {
+                    const synthyboy::ParamInfo& wp = info (it.param);
+                    const int wi = std::clamp (static_cast<int> (std::lround (v.param (it.param) - wp.min)), 0, std::max (0, wp.numChoices - 1));
+                    static_cast<ui::MenuButton*> (it.c)->setValue (wp.choices != nullptr ? wp.choices[wi] : "");
+                }
                 continue;
             }
             if (it.type == T::Source)
@@ -852,16 +901,19 @@ private:
                 {
                     auto* k = static_cast<ui::Knob*> (it.c);
                     k->state.value = k->state.modValue = normOf (it.param, plain);
-                    if (it.c == &compact_.basic.filter)
-                        std::snprintf (k->state.valueText, sizeof k->state.valueText, "%.0f", static_cast<double> (plain));
-                    if (it.c == &compact_.basic.pan || it.c == &compact_.basic.level)   // the compact view has room for the value under the knobs
+                    const bool isPan = it.c == &compact_.basic.pan || it.c == &full_.basic.pan, isLevel = it.c == &compact_.basic.level || it.c == &full_.basic.level;
+                    const bool isFilter = it.c == &compact_.basic.filter || it.c == &full_.basic.filter;
+                    if (isPan)
                     {
                         const int whole = static_cast<int> (std::lround (plain));
-                        if (it.c == &compact_.basic.pan)
-                            std::snprintf (k->state.valueText, sizeof k->state.valueText, whole == 0 ? "C" : (whole < 0 ? "L %d" : "R %d"), std::abs (whole));
-                        else
-                            std::snprintf (k->state.valueText, sizeof k->state.valueText, "%.1f", static_cast<double> (plain));
+                        std::snprintf (k->state.valueText, sizeof k->state.valueText, whole == 0 ? "C" : (whole < 0 ? "L %d" : "R %d"), std::abs (whole));
                     }
+                    else if (isLevel)
+                        std::snprintf (k->state.valueText, sizeof k->state.valueText, "%.1f", static_cast<double> (plain));
+                    else if (isFilter)
+                        std::snprintf (k->state.valueText, sizeof k->state.valueText, "%.0f", static_cast<double> (plain));
+                    else
+                        formatValue (pi, plain, k->state.valueText, sizeof k->state.valueText);   // every other knob says its value too (with the unit), under its name
                     break;
                 }
                 case T::Number: case T::NumberRead:
@@ -947,7 +999,67 @@ private:
         for (Item& it : list)
             if (it.id == kWarp1Var || it.id == kWarp2Var)
                 it.c->setEnabled (false);
+        // the noise: START, RAND START, LOOP and BOUNCE belong to the sample source, they are dim while the noise is generated
+        if (sel_ == playosc::kNoise)
+        {
+            const int ti = indexOfKey ("noise.type");
+            const bool sample = ti >= 0 && v.param (ti) >= 0.5f;
+            for (Item& it : list)
+                if (it.c != nullptr && it.id >= kPanel + static_cast<int> (ui::PanelSlot::NoiseStart) && it.id <= kPanel + static_cast<int> (ui::PanelSlot::NoiseBounce))
+                    it.c->setEnabled (sample && it.param >= 0);
+        }
     }
+    /** A value of a parameter as text with its unit: "35%", "+12 ct", "420 Hz", "1.20 s", "-6.0 dB" (at most 15 characters). */
+    static void formatValue (const synthyboy::ParamInfo& pi, float plain, char* out, size_t cap)
+    {
+        using synthyboy::Unit;
+        const double v = static_cast<double> (plain);
+        const int dec = std::min<int> (pi.decimals, 2);
+        switch (pi.unit)
+        {
+            case Unit::percent: std::snprintf (out, cap, pi.min < 0.0f ? "%+.*f%%" : "%.*f%%", dec, v); break;
+            case Unit::cents: std::snprintf (out, cap, "%+.0f ct", v); break;
+            case Unit::semitone: std::snprintf (out, cap, "%+.*f st", dec, v); break;
+            case Unit::Hz: if (v >= 1000.0) std::snprintf (out, cap, "%.2f kHz", v / 1000.0); else std::snprintf (out, cap, "%.0f Hz", v); break;
+            case Unit::ms: if (v >= 1000.0) std::snprintf (out, cap, "%.2f s", v / 1000.0); else std::snprintf (out, cap, v < 10.0 ? "%.1f ms" : "%.0f ms", v); break;
+            case Unit::dB: std::snprintf (out, cap, "%+.1f dB", v); break;
+            case Unit::degrees: std::snprintf (out, cap, "%.0f\xc2\xb0", v); break;
+            case Unit::beats: std::snprintf (out, cap, "%.2f", v); break;
+            default: std::snprintf (out, cap, "%.*f", dec, v); break;
+        }
+    }
+    /** The curve of the envelope page: delay, attack, hold, decay, the sustain level held for a while, release; the widths follow the six knobs (schematic: the knobs are normalised values). */
+    void updateEnvelope()
+    {
+        auto knobOf = [&] (ui::PanelSlot slot) { const ui::Knob* k = detail_.panel.knob (slot); return k != nullptr ? static_cast<float> (std::clamp (k->state.value, 0.0, 1.0)) : 0.0f; };
+        const float d = knobOf (ui::PanelSlot::Delay), a = knobOf (ui::PanelSlot::Attack), h = knobOf (ui::PanelSlot::Hold), dc = knobOf (ui::PanelSlot::Decay), su = knobOf (ui::PanelSlot::Sustain), r = knobOf (ui::PanelSlot::Release);
+        const float w[6] = { 0.03f + 0.14f * d, 0.04f + 0.20f * a, 0.02f + 0.12f * h, 0.04f + 0.24f * dc, 0.20f, 0.05f + 0.24f * r };
+        float total = 0.0f;
+        for (float x : w) total += x;
+        float edge[7] = { 0.0f };
+        for (int i = 0; i < 6; ++i)
+            edge[i + 1] = edge[i] + w[i] / total;
+        for (int i = 0; i < kEnvPoints; ++i)
+        {
+            const float t = static_cast<float> (i) / static_cast<float> (kEnvPoints - 1);
+            int seg = 0;
+            while (seg < 5 && t > edge[seg + 1]) ++seg;
+            const float f = std::clamp ((t - edge[seg]) / std::max (1.0e-6f, edge[seg + 1] - edge[seg]), 0.0f, 1.0f);
+            float y = 0.0f;
+            switch (seg)
+            {
+                case 0: y = 0.0f; break;
+                case 1: y = f; break;
+                case 2: y = 1.0f; break;
+                case 3: y = su + (1.0f - su) * std::exp (-3.0f * f); break;
+                case 4: y = su; break;
+                default: y = su * std::exp (-3.5f * f) * (1.0f - f * f * f); break;
+            }
+            envCurve_[i] = y;
+        }
+    }
+    static constexpr int kEnvPoints = 128;
+    float envCurve_[kEnvPoints] = {};
     static std::string stemOf (const std::string& path)
     {
         const size_t slash = path.rfind ('/');
@@ -1047,6 +1159,10 @@ private:
                     stack.openDetail (kPageRoute);
                     return;
                 case kListBackdrop: stack.back(); return;
+                case kListHeader:
+                    if (browseMode_ && browser_.tap (0) == ContentBrowser::Action::Changed)
+                        fillBrowserList();
+                    return;
                 case kBasic + 1: case kBasic + 2:
                 {
                     const Item* src = item (kBasic + 1);
@@ -1099,7 +1215,7 @@ private:
         {
             if (browseMode_)
             {
-                const ContentBrowser::Action a = browser_.tap (c.index);
+                const ContentBrowser::Action a = browser_.tap (c.index + 1);   // the list shows the rows after the header
                 if (a == ContentBrowser::Action::Changed)
                     fillBrowserList();
                 else if (a == ContentBrowser::Action::Chosen)
@@ -1132,7 +1248,7 @@ private:
             {
                 case 0: if (c.kind == K::Value) writeNorm (v, sp.amount, c.value); break;
                 case 1: if (c.kind == K::Index) writePlain (v, sp.bipolar, c.index != 0 ? 1.0 : 0.0); break;
-                case 2: if (c.kind == K::Index) writePlain (v, sp.bypass, c.index != 0 ? 1.0 : 0.0); break;
+                case 2: if (c.kind == K::Index) writePlain (v, sp.bypass, c.index != 0 ? 0.0 : 1.0); break;   // the switch says ON (active): bypassed is its opposite
                 default: break;
             }
             modsDirty_ = true;
@@ -1184,10 +1300,14 @@ private:
     }
     void fillBrowserList()
     {
-        list_.state.items = browser_.items();
-        list_.state.count = browser_.count();
+        // the header (the way up and the path) is the list's own bar, the rows are the ones below the first
+        browserTitle_ = browser_.title();
+        list_.state.header = browserTitle_.c_str();
+        list_.state.headerBack = ! browser_.atRoots();
+        list_.state.items = browser_.items() + 1;
+        list_.state.count = std::max (0, browser_.count() - 1);
         const int cur = browser_.rowOf (lastChosen_[browser_.kind() - 1]);
-        list_.state.current = cur;
+        list_.state.current = cur > 0 ? cur - 1 : -1;
         list_.showCurrent();
     }
 
@@ -1364,6 +1484,7 @@ private:
     ui::RoutePanel route_;
     ui::ListPopup list_;
     ContentBrowser browser_;
+    std::string browserTitle_;
     bool browseMode_ = false;
     std::string lastChosen_[2];   // the file that was loaded last for the granular (0) and multisample (1) type: the browser opens in its folder
     int listParam_ = -1;

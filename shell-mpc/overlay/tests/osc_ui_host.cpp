@@ -631,14 +631,20 @@ void testSourceBrowserInTheOscillatorUi()
     check (std::string (r.ui.compact().basic.source.stepper.state.text) == "NO SAMPLE", "granular: no sample loaded: the source says NO SAMPLE");
     // from the compact view the dropdown opens the full screen and the list over it
     r.tapC (r.ui.compact().basic.source.dropdown);
-    check (r.stack.depth() == 2 && r.stack.top() == OscUi::kPageList && r.ui.list().state.count == 2 && std::string (r.ui.list().state.items[0]) == "SOURCES", "granular: the dropdown opens the full screen and the list of the sources");
+    check (r.stack.depth() == 2 && r.stack.top() == OscUi::kPageList && r.ui.list().state.count == 1 && std::string (r.ui.list().state.header) == "SOURCES" && ! r.ui.list().state.headerBack && std::string (r.ui.list().state.items[0]) == "LIBRARY \xe2\x96\xb6", "granular: the dropdown opens the full screen and the list of the sources (the header is the title, no way up at the roots)");
     // LIBRARY, then Drums, then the sample
     auto row = [&] (int i) { const ui::Rect q = r.ui.list().rowRect (i); r.tap (q.x + 30, q.y + q.h / 2); };
+    row (0);
+    check (r.ui.list().state.count == 2 && r.stack.top() == OscUi::kPageList && r.ui.list().state.headerBack && std::string (r.ui.list().state.header) == "LIBRARY", "granular: a tap on a root shows its folders, the popup stays, the header is the way up with the path");
+    row (0);
+    check (r.ui.list().state.count == 3 && r.stack.top() == OscUi::kPageList && std::string (r.ui.list().state.header) == "LIBRARY / Drums", "granular: a tap on a folder shows its files, the header says the path");
+    {
+        const ui::Rect h = r.ui.list().headerRect();
+        r.tap (h.x + 20, h.y + h.h / 2);
+        check (r.ui.list().state.count == 2 && std::string (r.ui.list().state.header) == "LIBRARY", "granular: a tap on the header (the back arrow) goes one folder up");
+        row (0);
+    }
     row (1);
-    check (r.ui.list().state.count == 3 && r.stack.top() == OscUi::kPageList, "granular: a tap on a root shows its folders, the popup stays");
-    row (1);
-    check (r.ui.list().state.count == 4 && r.stack.top() == OscUi::kPageList, "granular: a tap on a folder shows its files");
-    row (2);
     check (r.inst.requests.size() == 1 && r.inst.requests[0].osc == 1 && r.inst.requests[0].kind == 1 && r.inst.requests[0].path == root + "/Drums/kick 1.wav" && r.stack.depth() == 1, "granular: a tap on a file asks the instance to load it as a sample of oscillator 1 and closes the list");
     r.inst.loadState = 1;
     r.refresh();
@@ -656,7 +662,7 @@ void testSourceBrowserInTheOscillatorUi()
     check (std::string (r.ui.full().basic.source.stepper.state.text) == "kick 1", "granular: the loaded sample's name is on the source");
     // the browser opens where the last file was
     r.tapC (r.ui.full().basic.source.dropdown);
-    check (r.stack.top() == OscUi::kPageList && std::string (r.ui.list().state.items[0]).find ("Drums") != std::string::npos && r.ui.list().state.current == 2, "granular: the browser opens in the folder of the last file, on it");
+    check (r.stack.top() == OscUi::kPageList && std::string (r.ui.list().state.header).find ("Drums") != std::string::npos && r.ui.list().state.current == 1, "granular: the browser opens in the folder of the last file, on it");
     r.tap (20, 130);   // the backdrop closes
     check (r.stack.depth() == 1, "the backdrop closes the browser");
     // multisample: SFZ and WAV
@@ -671,6 +677,56 @@ void testSourceBrowserInTheOscillatorUi()
     none.refresh();
     none.tapC (none.ui.compact().basic.source.dropdown);
     check (none.stack.depth() == 0, "an instance without roots: the browser does not open");
+}
+
+/** Review 2: the values under the knobs, the noise's own controls, the pictures on the detail pages, the labels. */
+void testReview2()
+{
+    {
+        Rig r;
+        r.inst.sel = 2;
+        r.inst.set ("osc1.unison.detune", 40.0f);
+        r.refresh();
+        r.openFull();
+        const OscUi::Item* it = r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::Detune));
+        check (it != nullptr && std::string (static_cast<ui::Knob*> (it->c)->state.valueText) != "", "every big knob says its value under its name (DETUNE: " + std::string (static_cast<ui::Knob*> (it->c)->state.valueText) + ")");
+        const OscUi::Item* w = r.ui.item (OscUi::kWarp1Amount);
+        check (w != nullptr && std::string (static_cast<ui::Knob*> (w->c)->state.valueText) != "" && static_cast<ui::Knob*> (w->c)->state.side, "the WARP knobs are the medium (side) size and say their value");
+        const ui::Rect pan = r.ui.full().basic.pan.rect();
+        check (pan.h >= 72 && r.ui.full().basic.pan.state.side && std::string (r.ui.full().basic.pan.state.valueText) == "C", "the header knobs of the full screen fill the band and say their value (PAN: C)");
+        r.tapC (static_cast<ui::UnisonBox*> (r.ui.full().panel.part (ui::PanelSlot::Unison))->gear);
+        check (r.stack.top() == OscUi::kPageUnison && ! r.ui.displayRect().empty() && r.ui.displayRect().h >= 150, "the unison page has the picture of the oscillator above its settings");
+    }
+    {
+        Rig r;
+        r.inst.sel = 5;
+        r.refresh();
+        r.openFull();
+        const OscUi::Item* ty = r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseType));
+        const OscUi::Item* st = r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseStart));
+        check (ty != nullptr && ty->param == Inst::idx ("noise.type") && st != nullptr && st->param == Inst::idx ("noise.phase") && ! st->c->enabled() && ty->c->enabled(), "noise: TYPE is on the panel; START (sample only) is dim while the noise is generated");
+        const OscUi::Item* pitch = r.ui.item (OscUi::kTuneCrs);
+        const OscUi::Item* fine = r.ui.item (OscUi::kTuneFin);
+        const OscUi::Item* key = r.ui.item (OscUi::kTuneTrack);
+        check (pitch != nullptr && pitch->param == Inst::idx ("noise.pitch") && fine != nullptr && fine->param == Inst::idx ("noise.fine") && key != nullptr && key->param == Inst::idx ("noise.keytrack"), "noise: the tuning column is PITCH, FINE and KEY TRACK");
+        r.inst.set ("noise.type", 1.0f);
+        r.refresh();
+        check (st->c->enabled() && r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseLoop))->c->enabled(), "noise: with the type Sample the sample controls are live");
+        const OscUi::Item* env = r.ui.item (OscUi::kBarSlot + 1);
+        check (env != nullptr && env->param == Inst::idx ("noise.env1"), "noise: the second slot of the type bar is ENV 1");
+        r.tapC (*static_cast<ui::Component*> (&r.ui.full().tune.track));
+        check (r.inst.get ("noise.keytrack") == 1.0f, "noise: KEY TRACK writes noise.keytrack");
+    }
+    {
+        Rig r;
+        r.inst.sel = 2;
+        r.refresh();
+        r.openFull();
+        r.stack.openDetail (OscUi::kPageUnison);
+        r.refresh();
+        const ui::Stepper* mode = r.ui.detail().panel.stepper (ui::PanelSlot::Mode);
+        check (mode != nullptr && std::string (mode->state.caption) == "MODE" && mode->rect().h <= 72, "unison page: the stepper has its name (MODE) and a normal height");
+    }
 }
 
 int main()
@@ -695,6 +751,7 @@ int main()
     testSourceBrowserInTheOscillatorUi();
     testGranularAndSubAndNoise();
     testSourceAndWarpLists();
+    testReview2();
     for (const std::string& d : g_libraries)
         if (d.compare (0, 11, "/tmp/sbovl-") == 0)
             (void) std::system (("rm -rf '" + d + "'").c_str());

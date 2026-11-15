@@ -28,6 +28,8 @@ namespace gpu = synthyboy_mpc::overlay::gpu;
 namespace sdf = synthyboy_mpc::overlay::sdf;
 
 constexpr float kPi = 3.14159265358979323846f;
+/** The strip above a Q group member that holds its index chip (Pen::qIndex): the vertical gap between two stacked members is at least this. */
+constexpr int kQLane = 16;
 
 struct Size { int w = 0, h = 0; };
 
@@ -367,19 +369,13 @@ public:
         const uint32_t tc = st == TabState::Coloured ? T.onBright : (st == TabState::Hollow ? srcColour : T.textDim);
         textCentered ({ t.x + 2, t.y, std::max (0, t.w - 4), t.h }, name, 11.0f, c (colour::rgba (tc, 255)), 9.0f);
     }
-    /** The small index badge (1 .. 4) of a Q-Link group member inside the top right corner of its rectangle: only for a member that has another member right above it (a column of fields, the second row of a pair), where there is no room on the frame. */
-    void qBadge (const Rect& r, int index)
-    {
-        if (index < 1 || index > 4 || r.w < 24 || r.h < 24)
-            return;
-        qChip ({ r.right() - 20, r.y + 3, 16, 18 }, index);
-    }
-    /** The index of a member as a tab on the top edge of the group's frame, above the member (its centre `cx`, the edge `edgeY` of the frame): the tab sits on the frame line, over nothing. */
-    void qTab (float cx, int edgeY, int index)
+    /** The index chip (1 .. 4) of a Q-Link group member: on the top left corner of the member, on the line above it, so that it covers none of the member's content. Every layout that has Q members leaves
+        a lane of kQLane pixels above each of them (the gap between two stacked members, the strip above a row). One rule for every member of every group. */
+    void qIndex (const Rect& member, int index)
     {
         if (index < 1 || index > 4)
             return;
-        qChip ({ static_cast<int> (std::lround (cx)) - 9, std::max (0, edgeY - 15), 18, 17 }, index);
+        qChip ({ member.x + 4, std::max (0, member.y - 15), 18, 17 }, index);
     }
     void qChip (const Rect& b, int index)
     {

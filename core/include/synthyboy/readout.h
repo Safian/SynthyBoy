@@ -52,6 +52,14 @@ struct LiveValues
     float grainLife[3][kReadGrains] = {};
     float subPhase[kReadVoices] = {};
     float noisePos = -1.0f;
+    /** The envelopes of the newest voices (newest first, kReadVoices, own engine only): the fine stage (0 idle, 1 delay, 2 attack, 3 hold, 4 decay, 5 sustain, 6 release, 7 finished or killed) and the fraction 0 .. 1 of that stage
+        that has run, of envelope n + 1 in voice v; stage 0 for a slot without a voice. The running dots of the envelope display (one per sounding voice). */
+    float envVoiceStage[kNumEnvs][kReadVoices] = {};
+    float envVoiceFraction[kNumEnvs][kReadVoices] = {};
+    /** The cycle position (as lfoPhase: 0 .. 1, the x of the cursor of the LFO display) of LFO n + 1 in the newest voices (newest first, own engine only); only the first numLfoVoices voices are valid (the Vital
+        engine writes none). The running cursors of the LFO display (one per sounding voice). */
+    float lfoVoicePhase[kNumLfos][kReadVoices] = {};
+    int numLfoVoices = 0;
     int numTargets = 0;
     float target[kMaxTargets] = {};
 };

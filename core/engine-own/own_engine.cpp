@@ -102,6 +102,15 @@ OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.fo
     }
     for (int v = 0; v < LiveValues::kReadVoices; ++v)
         liveSubPhase[v].store (-1.0f, std::memory_order_relaxed);
+    for (int e = 0; e < LiveValues::kNumEnvs; ++e)
+        for (int v = 0; v < LiveValues::kReadVoices; ++v)
+        {
+            liveEnvVoiceStage[e][v].store (0.0f, std::memory_order_relaxed);
+            liveEnvVoiceFrac[e][v].store (0.0f, std::memory_order_relaxed);
+        }
+    for (int l = 0; l < LiveValues::kNumLfos; ++l)
+        for (int v = 0; v < LiveValues::kReadVoices; ++v)
+            liveLfoVoicePhase[l][v].store (-1.0f, std::memory_order_relaxed);
     liveNoisePos.store (-1.0f, std::memory_order_relaxed);
     spectralScratch = std::make_unique<spectral::Scratch>();
     publishContent (ContentSet::build (StateContent {}, nullptr));
@@ -1262,6 +1271,16 @@ bool OwnEngine::copyReadout (LiveValues& out) const noexcept
     for (int v = 0; v < LiveValues::kReadVoices; ++v)
         out.subPhase[v] = liveSubPhase[v].load (std::memory_order_relaxed);
     out.noisePos = liveNoisePos.load (std::memory_order_relaxed);
+    out.numLfoVoices = std::clamp (liveNumLfoVoices.load (std::memory_order_relaxed), 0, static_cast<int> (LiveValues::kReadVoices));
+    for (int l = 0; l < LiveValues::kNumLfos; ++l)
+        for (int v = 0; v < LiveValues::kReadVoices; ++v)
+            out.lfoVoicePhase[l][v] = liveLfoVoicePhase[l][v].load (std::memory_order_relaxed);
+    for (int e = 0; e < LiveValues::kNumEnvs; ++e)
+        for (int v = 0; v < LiveValues::kReadVoices; ++v)
+        {
+            out.envVoiceStage[e][v] = liveEnvVoiceStage[e][v].load (std::memory_order_relaxed);
+            out.envVoiceFraction[e][v] = liveEnvVoiceFrac[e][v].load (std::memory_order_relaxed);
+        }
     for (int o = 0; o < 3; ++o)
     {
         out.sampleHead[o] = liveSampleHead[o].load (std::memory_order_relaxed);
@@ -1330,7 +1349,18 @@ void OwnEngine::writeReadout() noexcept
             for (int o = 0; o < 3; ++o)
                 liveVoicePos[o][i].store (i < found ? order[i]->readPosition (o) : -1.0f, std::memory_order_relaxed);
             liveSubPhase[i].store (i < found ? order[i]->subPhase() : -1.0f, std::memory_order_relaxed);
+            for (int l = 0; l < LiveValues::kNumLfos; ++l)
+                liveLfoVoicePhase[l][i].store (i < found ? order[i]->lfoReadout (l) : -1.0f, std::memory_order_relaxed);
+            for (int e = 0; e < LiveValues::kNumEnvs; ++e)
+            {
+                float fs = 0.0f, ff = 0.0f;
+                if (i < found)
+                    order[i]->envReadoutFine (e, fs, ff);
+                liveEnvVoiceStage[e][i].store (fs, std::memory_order_relaxed);
+                liveEnvVoiceFrac[e][i].store (ff, std::memory_order_relaxed);
+            }
         }
+        liveNumLfoVoices.store (found, std::memory_order_relaxed);
         float gp[LiveValues::kReadGrains], gl[LiveValues::kReadGrains];
         for (int o = 0; o < 3; ++o)
         {

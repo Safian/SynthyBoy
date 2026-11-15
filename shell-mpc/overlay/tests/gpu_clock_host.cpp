@@ -53,6 +53,37 @@ int main()
         c.boost (true);
         check (! c.boosted() && slurp (node + "/min_freq") == "400000000", "a min_freq that is already at least as high is not touched");
     }
+    // the XL: another node name (fb000000.gpu), 300 .. 1000 MHz with min_freq at its lowest: raised to 500 MHz (half of the highest), put back
+    {
+        char t2[] = "/tmp/sbgc-XXXXXX";
+        const std::string r2 = ::mkdtemp (t2), n2 = r2 + "/fb000000.gpu", st2 = r2 + "/orig";
+        ::mkdir (n2.c_str(), 0755);
+        std::ofstream (n2 + "/min_freq") << "300000000\n";
+        std::ofstream (n2 + "/available_frequencies") << "300000000 400000000 500000000 600000000 800000000 1000000000\n";
+        {
+            GpuClock c (r2, st2, 300000000);
+            check (c.open() && c.node() == n2 && c.raisedHz() == 500000000, "XL: the node is found by the name pattern, the clock to raise to is 500 MHz");
+            c.boost (true);
+            check (c.boosted() && slurp (n2 + "/min_freq") == "500000000", "XL: min_freq is raised above the 300 MHz it sits at");
+            c.boost (false);
+            check (slurp (n2 + "/min_freq") == "300000000", "XL: put back to the original 300 MHz");
+            c.boost (true);
+        }
+        check (slurp (n2 + "/min_freq") == "300000000", "XL: the destructor puts it back");
+        // a device with no gpu node and one whose node lacks the files: silently nothing
+        ::mkdir ((r2 + "/gpu-empty").c_str(), 0755);
+        ::remove ((n2 + "/available_frequencies").c_str());
+        GpuClock c2 (r2, st2, 300000000);
+        c2.boost (true);
+        check (! c2.open() && ! c2.boosted(), "a gpu node without min_freq / available_frequencies: nothing happens, no error");
+        // a helper that finds the file of a dead run puts the level back (open () does it)
+        std::ofstream (n2 + "/available_frequencies") << "300000000 500000000 1000000000\n";
+        std::ofstream (n2 + "/min_freq") << "500000000\n";
+        std::ofstream (st2) << "300000000\n";
+        { GpuClock h (r2, st2); h.open(); }
+        check (slurp (n2 + "/min_freq") == "300000000" && ::access (st2.c_str(), F_OK) != 0, "a leftover raised level (the plugin died) is put back by whoever opens next (the GPU helper at its exit)");
+        (void) std::system (("rm -rf '" + r2 + "'").c_str());
+    }
     GpuClock none (root + "/nowhere", state);
     none.boost (true);
     check (! none.open() && ! none.boosted(), "no devfreq directory: nothing happens");

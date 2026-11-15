@@ -26,6 +26,17 @@ Change drag (Component& c, int x, int y0, int y1, double t = 0.0)
         last = m;
     return last;
 }
+Change hdrag (Component& c, int y, int x0, int x1, double t = 0.0)
+{
+    Change last = c.touchDown (x0, y, t);
+    const int dir = x1 > x0 ? 1 : -1;
+    for (int x = x0 + dir; dir > 0 ? x <= x1 : x >= x1; x += dir * 4)
+        if (const Change m = c.touchMove (x, y))
+            last = m;
+    if (const Change m = c.touchMove (x1, y))
+        last = m;
+    return last;
+}
 int cx (const Component& c) { return c.rect().x + c.rect().w / 2; }
 int cy (const Component& c) { return c.rect().y + c.rect().h / 2; }
 /** All leaves of a component do not overlap each other and lie inside `r`. */
@@ -178,7 +189,7 @@ void testWarp()
         WarpPair sp;
         sp.setStacked (true);
         sp.place ({ 10, 10, 560, 160 });
-        check (sp.stacked() && sp.first.rect().bottom() <= sp.second.rect().y && sp.first.rect().x == sp.second.rect().x && ! sp.second.mirrored() && leavesOk (sp, sp.rect(), why) && sp.minSize().h == 2 * 72 + kGap, "warp pair stacked: the first slot over the second, both with the knob on the left" + why);
+        check (sp.stacked() && sp.first.rect().bottom() <= sp.second.rect().y && sp.first.rect().x == sp.second.rect().x && ! sp.second.mirrored() && leavesOk (sp, sp.rect(), why) && sp.minSize().h == 2 * 72 + kQLane && sp.second.rect().y - sp.first.rect().bottom() >= kQLane && sp.first.amount.state.side, "warp pair stacked: the first slot over the second (the lane of the Q chips between them), both with the medium knob on the left" + why);
         drawChecks (sp, "warp pair stacked", { 10, 10, 560, 160 }, nullptr);
     }
     // the pitch tracking toggle has a label
@@ -231,7 +242,7 @@ void testRandPair()
 void testTypeBar()
 {
     struct Case { const BarPreset* p; int slots; const char* name; };
-    const Case cases[] = { { &barpresets::kWavetable, 4, "wavetable" }, { &barpresets::kGranular, 4, "granular" }, { &barpresets::kSub, 1, "sub" }, { &barpresets::kMultisample, 3, "multisample" }, { &barpresets::kNoise, 1, "noise" } };
+    const Case cases[] = { { &barpresets::kWavetable, 4, "wavetable" }, { &barpresets::kGranular, 4, "granular" }, { &barpresets::kSub, 1, "sub" }, { &barpresets::kMultisample, 3, "multisample" }, { &barpresets::kNoise, 2, "noise" } };
     for (const Case& cs : cases)
     {
         TypeBar b (*cs.p);
@@ -300,7 +311,7 @@ void testTypeBar()
     // reload replaces the slots
     w.load (barpresets::kNoise);
     w.place ({ 10, 10, 560, 56 });
-    check (w.numSlots() == 1 && w.slot (1) == nullptr && w.slot (0)->id() == 0, "type bar: loading another preset replaces the slots");
+    check (w.numSlots() == 2 && w.slot (2) == nullptr && w.slot (0)->id() == 0, "type bar: loading another preset replaces the slots");
     // a fixed height: the content never leaves a 56 px strip
     TypeBar t (barpresets::kGranular);
     drawChecks (t, "type bar granular (exactly 56 high)", { 10, 10, 540, 56 }, nullptr);
@@ -375,7 +386,7 @@ void testRoutePanel()
 void testDetailPage()
 {
     struct Case { const PanelPreset* p; const char* title; int parts, groups; bool display; };
-    const Case cases[] = { { &presets::kUnisonDetail, "UNISON", 7, 2, false }, { &presets::kUnisonDetailMultisample, "UNISON", 6, 2, false }, { &presets::kUnisonDetailGranular, "UNISON", 5, 2, false },
+    const Case cases[] = { { &presets::kUnisonDetail, "UNISON", 7, 2, true }, { &presets::kUnisonDetailMultisample, "UNISON", 6, 2, true }, { &presets::kUnisonDetailGranular, "UNISON", 5, 2, true },
                            { &presets::kGrainDetail, "GRAIN WINDOW", 5, 2, true }, { &presets::kEnvelopeDetail, "ENVELOPE", 7, 2, true } };
     int caseNo = 0;
     for (const Case& cs : cases)
@@ -390,6 +401,24 @@ void testDetailPage()
         check (pg.sizeOk(), nm + ": fits its minimum size");
         check (cs.display == ! pg.displayRect().empty() && (pg.displayRect().empty() || (area.contains (pg.displayRect()) && ! pg.displayRect().overlaps (pg.panel.rect()))), nm + ": the display area only where the preset has one, not under the panel");
         check (! pg.back.rect().overlaps (pg.panel.rect()) && area.contains (pg.back.rect()), nm + ": the back button in the top bar, not over the grid");
+        {
+            Component* lv[64];
+            const int nl = pg.collectLeaves (lv, 0, 64);
+            int covered = 0, tall = 0, noValue = 0;
+            for (int g = 0; g < pg.numGroups(); ++g)
+                for (int i = 0; i < 4; ++i)
+                    if (const Component* m = pg.groups[g].member (i))
+                    {
+                        const Rect chip { m->rect().x + 4, std::max (0, m->rect().y - 15), 18, std::min (15, m->rect().y) };
+                        for (int k = 0; k < nl; ++k)
+                            covered += lv[k]->rect().overlaps (chip);
+                    }
+            for (int k = 0; k < nl; ++k)
+                if (dynamic_cast<Stepper*> (lv[k]) != nullptr)
+                    tall += lv[k]->rect().h > 72;   // no stepper is taller than a row of controls
+            check (covered == 0 && tall == 0, nm + ": the index chips lie on free lanes above their members, no stepper taller than 72 px" + (covered ? " (covered " + std::to_string (covered) + ")" : std::string()));
+            (void) noValue;
+        }
         std::string why;
         check (leavesOk (pg, area, why), nm + ": every leaf inside, no overlap" + why);
         Component* all[64];
@@ -460,31 +489,38 @@ void testSourceAndVertical()
 
     TuneRow t;
     t.setVertical (true);
-    t.place ({ 10, 10, 400, 5 * 56 + 4 * 4 });
+    t.place ({ 10, 10, 400, 3 * 56 + 2 * kQLane });
     check (t.isVertical() && t.sizeOk(), "tune row vertical: fits its minimum size");
-    check (leavesOk (t, t.rect(), why) && t.oct.rect().x == t.sem.rect().x && t.oct.rect().w == t.rect().w && t.oct.rect().h == t.sem.rect().h && t.sem.rect().h == t.fin.rect().h && t.fin.rect().h == t.crs.rect().h && t.crs.rect().h == t.track.rect().h && t.oct.rect().bottom() <= t.sem.rect().y && t.sem.rect().bottom() <= t.fin.rect().y && t.fin.rect().bottom() <= t.crs.rect().y && t.crs.rect().bottom() <= t.track.rect().y && t.track.rect().bottom() == t.rect().bottom(), "tune row vertical: ONE column of five equal rows (OCT SEM FIN CRS TRACK) that fills the height" + why);
+    check (leavesOk (t, t.rect(), why) && t.oct.rect().x == t.fin.rect().x && t.sem.rect().x == t.crs.rect().x && t.oct.rect().y == t.sem.rect().y && t.fin.rect().y == t.crs.rect().y && t.oct.rect().h == t.fin.rect().h && t.fin.rect().h == t.track.rect().h
+                  && t.oct.rect().bottom() + kQLane <= t.fin.rect().y && t.fin.rect().bottom() + kQLane <= t.track.rect().y && t.track.rect().bottom() == t.rect().bottom() && t.track.rect().w == t.rect().w,
+           "tune row vertical: OCT SEM / FIN CRS in two columns, TRACK across, a lane for the Q chips between the rows, three equal rows that fill the height" + why);
     {
         TuneRow tall;
         tall.setVertical (true);
         tall.place ({ 10, 10, 260, 330 });
-        check (tall.oct.rect().h > 56 && tall.track.rect().bottom() == 10 + 330 - 0 && leavesOk (tall, tall.rect(), why), "tune row vertical: a taller block gives taller rows, the column fills it" + why);
+        check (tall.oct.rect().h > 56 && tall.track.rect().bottom() == 10 + 330 - 0 && leavesOk (tall, tall.rect(), why), "tune row vertical: a taller block gives taller rows, the block fills it" + why);
     }
     t.oct.setId (1); t.crs.setId (4);
     Change d = tap (t, cx (t.oct), cy (t.oct), 0.0);
     d = tap (t, cx (t.oct), cy (t.oct), 100.0);
     check (d.kind == ChangeKind::Index || ! d, "tune row vertical: a field reacts as before");
     t.setShort (true);
-    t.place ({ 10, 10, 400, 5 * 56 + 4 * 4 });
+    t.place ({ 10, 10, 400, 3 * 56 + 2 * kQLane });
     Component* l[8];
-    check (t.collectLeaves (l, 0, 8) == 2 && t.minSize().h == 2 * 56 + 4 && leavesOk (t, t.rect(), why), "tune row vertical short: OCT and CRS" + why);
+    check (t.collectLeaves (l, 0, 8) == 2 && t.minSize().h == 56 && leavesOk (t, t.rect(), why), "tune row vertical short: OCT and CRS side by side" + why);
     t.setShort (false);
     t.setCrsOnly (true);
     t.place ({ 10, 10, 400, 5 * 56 + 4 * 4 });
     check (t.isCrsOnly() && t.collectLeaves (l, 0, 8) == 1 && l[0] == &t.crs && t.minSize().h == 56 && t.crs.rect().y == 10, "tune row vertical: CRS only (the sub oscillator's full screen)");
     t.setCrsOnly (false);
-    drawChecks (t, "tune row vertical", { 10, 10, 400, 5 * 56 + 4 * 4 }, "tunerow_vertical.png");
+    t.setNoise (true);
+    t.place ({ 10, 10, 260, 2 * 56 + kQLane + 20 });
+    check (t.isNoise() && t.collectLeaves (l, 0, 8) == 3 && l[0] == &t.fin && l[1] == &t.crs && l[2] == &t.track && std::string (t.crs.state.label) == "PITCH" && std::string (t.fin.state.label) == "FINE" && t.crs.rect().y == t.fin.rect().y && t.track.rect().y >= t.crs.rect().bottom() + kQLane && leavesOk (t, t.rect(), why),
+           "tune row vertical noise: PITCH and FINE in a row, KEY TRACK across" + why);
+    t.setNoise (false);
+    t.place ({ 10, 10, 400, 3 * 56 + 2 * kQLane });
+    drawChecks (t, "tune row vertical", { 10, 10, 400, 3 * 56 + 2 * kQLane }, "tunerow_vertical.png");
 }
-
 void testModulationsPage()
 {
     ModInput m;
@@ -498,20 +534,20 @@ void testModulationsPage()
         pg.setRowIds (i, 100 + 10 * i, 101 + 10 * i, 102 + 10 * i, 103 + 10 * i);
     pg.back.setId (1);
     check (pg.numRows() == 3 && pg.sizeOk(), "modulations page: one row per entry (3), fits");
-    check (std::fabs (pg.rows[0].depth.state.value - 0.65) < 1e-9 && std::fabs (pg.rows[1].depth.state.value - 0.25) < 1e-9 && pg.rows[1].polarity.state.on && ! pg.rows[0].polarity.state.on && pg.rows[2].bypass.state.on && std::string (pg.rows[1].name) == "ENV 1", "modulations page: the rows show the entries (depth as (d + 1) / 2, polarity, bypass, name)");
+    check (std::fabs (pg.rows[0].depth.state.value - 0.65) < 1e-9 && std::fabs (pg.rows[1].depth.state.value - 0.25) < 1e-9 && pg.rows[1].polarity.state.on && ! pg.rows[0].polarity.state.on && ! pg.rows[2].bypass.state.on && pg.rows[0].bypass.state.on && std::string (pg.rows[1].polarity.state.label) == "BI" && std::string (pg.rows[0].polarity.state.label) == "UNI" && std::string (pg.rows[2].bypass.state.label) == "OFF" && std::string (pg.rows[0].bypass.state.label) == "ON" && std::string (pg.rows[1].name) == "ENV 1", "modulations page: the rows show the entries (depth as (d + 1) / 2, polarity UNI / BI, ON / OFF, name)");
     std::string why;
     check (leavesOk (pg, pg.rect(), why), "modulations page: every leaf inside, no overlap" + why);
     bool rowsApart = true;
     for (int i = 1; i < 3; ++i)
         rowsApart = rowsApart && pg.rows[i - 1].depth.rect().bottom() <= pg.rows[i].depth.rect().y;
     check (rowsApart, "modulations page: the rows one under the other");
-    Change c = drag (pg, cx (pg.rows[1].depth), cy (pg.rows[1].depth) + 20, cy (pg.rows[1].depth) - 20);
-    check (c.kind == ChangeKind::Value && c.id == 110, "modulations page: the depth knob of row 2: id 110");
+    Change c = hdrag (pg, cy (pg.rows[1].depth), cx (pg.rows[1].depth) - 40, cx (pg.rows[1].depth) + 40);
+    check (c.kind == ChangeKind::Value && c.id == 110 && c.value > pg.rows[1].depth.state.value, "modulations page: the depth bar of row 2 (a horizontal drag to the right raises it): id 110");
     pg.touchUp (0, 0);
     c = tap (pg, cx (pg.rows[1].polarity), cy (pg.rows[1].polarity), 0.0);
     check (c.kind == ChangeKind::Index && c.id == 111 && c.index == 0, "modulations page: the polarity toggle of row 2: off (unidirectional), id 111");
     c = tap (pg, cx (pg.rows[2].bypass), cy (pg.rows[2].bypass), 100.0);
-    check (c.kind == ChangeKind::Index && c.id == 122 && c.index == 0, "modulations page: the bypass toggle of row 3: id 122");
+    check (c.kind == ChangeKind::Index && c.id == 122 && c.index == 1, "modulations page: the on / off toggle of row 3 (it is off now): on, id 122");
     c = tap (pg, cx (pg.rows[0].remove), cy (pg.rows[0].remove), 200.0);
     check (c.kind == ChangeKind::Request && c.id == 103, "modulations page: the remove button of row 1: { request, id 103 }");
     c = tap (pg, cx (pg.back), cy (pg.back), 300.0);
@@ -585,7 +621,7 @@ void testPanel (const PanelPreset& pr, int expectParts, const Rect& area, const 
 
 void testPanels()
 {
-    const Rect key61 { 10, 10, 1168, 240 }, large { 10, 10, 1900, 420 };
+    const Rect key61 { 10, 10, 1168, 380 }, large { 10, 10, 1900, 420 };
     testPanel (presets::kWavetable, 7, key61, "Key 61 region", true);
     testPanel (presets::kWavetable, 7, large, "large", false);
     testPanel (presets::kGranular, 9, key61, "Key 61 region", true);
@@ -622,7 +658,7 @@ void testPanels()
     // ids, routing, turn through a panel
     {
         KnobPanel p (presets::kWavetable);
-        p.place ({ 10, 10, 1168, 240 });
+        p.place ({ 10, 10, 1168, 380 });
         p.knob (PanelSlot::Pan)->setId (77);
         Knob* pan = p.knob (PanelSlot::Pan);
         pan->state.defaultValue = 0.5; pan->state.value = 0.9;

@@ -16,7 +16,7 @@ constexpr int kMaxStack = 9, kMaxSpectrum = 64, kMaxPoints = 1024;
 
 struct Data
 {
-    enum class Kind : uint8_t { None, Wave, MinMax, Spectrum, Message } kind = Kind::None;
+    enum class Kind : uint8_t { None, Wave, MinMax, Spectrum, Message, Noise } kind = Kind::None;
     // Wave: `cycle` = n samples (-1 .. 1, one period). MinMax: `cycle` = the lower row, `cycleMax` = the upper row (same scale, +- 1 at most). Spectrum: `cycle` = dB values (-120 .. +60).
     const float* cycle = nullptr;
     const float* cycleMax = nullptr;
@@ -47,6 +47,9 @@ struct Data
     int numSpectrum = 0;
     uint32_t colour = 0x2ee6f0;      // the instance colour (0xRRGGBB)
     const char* message = "";
+    // Noise: the picture of the noise colour (0 white .. 8 atmosphere, the order of the engine's noise sources); `dim`: the source is switched off (the picture stays, faint)
+    int noiseColour = 0;
+    bool dim = false;
 };
 
 /** The four gradient stops of a line of the instance colour: a light start, the colour, a step towards the end colour of the look, the end. */
@@ -57,6 +60,91 @@ inline void stopsOf (uint32_t c, uint32_t out[4]) noexcept
     out[1] = c;
     out[2] = theme::mix (c, T.flow[3], 0.55f);
     out[3] = T.flow[3];
+}
+
+
+/** How many samples the display leaves out at each end of a cycle: a band limited saw or square is exactly at its jump (the middle of it) in the first sample, and rings before and after it, which is the
+    shape of the band limit, not of the wave. */
+inline int cycleCrop (int n) noexcept { return std::max (2, n / 128); }
+
+/** The cycle of a wave as the display shows it: the shape of the wave, not the ringing of its band limit. A band limited saw or square has an overshoot (Gibbs) of about a tenth of the jump at every
+    edge, a few samples wide, and its first sample sits in the middle of the jump; drawn as it is, that sticks out at both ends of the plot. The first and the last cycleCrop (n) samples are left out, the
+    rest is smoothed with a short Hann window (about 2 % of the width; the end samples are repeated outward, so the ends keep their value) and kept inside +-1. Returns the number of points written
+    (n - 2 * cycleCrop (n)); `dst` may not be `src`. */
+inline int smoothCycle (const float* src, float* dst, int n) noexcept
+{
+    const int c = cycleCrop (n), m = n - 2 * c;
+    if (m < 4)
+    {
+        for (int i = 0; i < n; ++i)
+            dst[i] = std::min (1.0f, std::max (-1.0f, src[i]));
+        return n;
+    }
+    constexpr int kMaxHalf = 12;
+    const int h = std::min (kMaxHalf, std::max (2, n / 96));
+    float w[2 * kMaxHalf + 1], sum = 0.0f;
+    for (int j = -h; j <= h; ++j)
+    {
+        w[j + h] = 0.5f + 0.5f * std::cos (kPi * static_cast<float> (j) / static_cast<float> (h + 1));
+        sum += w[j + h];
+    }
+    for (int i = 0; i < m; ++i)
+    {
+        float acc = 0.0f;
+        for (int j = -h; j <= h; ++j)
+            acc += w[j + h] * src[c + std::min (m - 1, std::max (0, i + j))];
+        dst[i] = std::min (1.0f, std::max (-1.0f, acc / sum));
+    }
+    return m;
+}
+
+/** Do the frames of the stack really differ from the current one? A single cycle table (a saw, a sine) has the same frame everywhere: a stack of identical copies is no information. true when the mean
+    square difference of any frame to `cycle` is above 0.004 (a tenth of the amplitude). */
+inline bool framesDiffer (const float* cycle, const float* const* stack, int numStack, int n) noexcept
+{
+    for (int k = 0; k < numStack; ++k)
+    {
+        if (stack[k] == nullptr || n < 1)
+            continue;
+        double acc = 0.0;
+        for (int i = 0; i < n; ++i)
+        {
+            const double d = static_cast<double> (stack[k][i]) - static_cast<double> (cycle[i]);
+            acc += d * d;
+        }
+        if (acc / n > 0.004)
+            return true;
+    }
+    return false;
+}
+
+/** The look of a noise colour as a jagged line (n values -1 .. 1): white = a random value per point, pink = the same softened, brown = a random walk, Geiger = a quiet floor with single spikes, tape hiss =
+    small and fast, vinyl clicks = a floor with decaying clicks, digital hash = random steps, velvet = sparse impulses of both signs, atmosphere = slow undulation with a little grain. Deterministic (the same
+    picture every time, so it can sit in a cached cell). */
+inline void noiseShape (int colour, float* out, int n) noexcept
+{
+    uint32_t seed = 0x9e3779b9u + static_cast<uint32_t> (colour) * 7919u;
+    auto rnd = [&seed] { seed = seed * 1664525u + 1013904223u; return static_cast<float> ((seed >> 8) & 0xffffu) / 32768.0f - 1.0f; };
+    float y = 0.0f, click = 0.0f, hold = 0.0f;
+    int left = 0;
+    for (int i = 0; i < n; ++i)
+    {
+        const float r = rnd();
+        float v = 0.0f;
+        switch (colour)
+        {
+            case 0: v = 0.8f * r; break;
+            case 1: y = 0.72f * y + 0.55f * r; v = y; break;
+            case 2: y = 0.97f * y + 0.14f * r; v = y * 2.2f; break;
+            case 3: click *= 0.55f; if (std::fabs (rnd()) > 0.93f) click = (rnd() > 0.0f ? 1.0f : -1.0f) * (0.5f + 0.5f * std::fabs (r)); v = 0.04f * r + click; break;
+            case 4: v = 0.22f * r; break;
+            case 5: click *= 0.8f; if (std::fabs (rnd()) > 0.965f) click = (r > 0.0f ? 0.95f : -0.95f); v = 0.05f * r + click; break;
+            case 6: if (left <= 0) { hold = r * 0.85f; left = 2 + static_cast<int> (std::fabs (rnd()) * 6.0f); } --left; v = hold; break;
+            case 7: v = std::fabs (rnd()) > 0.955f ? (r > 0.0f ? 0.9f : -0.9f) : 0.0f; break;
+            default: { const float t = static_cast<float> (i) / static_cast<float> (std::max (1, n - 1)); v = 0.45f * std::sin (6.2832f * 1.3f * t) + 0.28f * std::sin (6.2832f * 3.1f * t + 1.0f) + 0.05f * r; break; }
+        }
+        out[i] = std::min (1.0f, std::max (-1.0f, v));
+    }
 }
 
 namespace detail
@@ -101,7 +189,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     sb.paintOff();
     sb.rrect (static_cast<float> (r.x), static_cast<float> (r.y), static_cast<float> (r.right()), static_cast<float> (r.bottom()), T.rBlock, dt::a (T.keyline, 255), T.frame);
     // ---- the grid: a centre line and quarters, hairlines
-    if (wave || minmax)
+    if (wave || minmax || d.kind == Data::Kind::Noise)
     {
         sb.line (x0, mid, x1, mid, T.hair, dt::a (T.grid, 255));
         const uint32_t gridCol = dt::a (theme::mix (T.grid, T.keyline, 0.5f), 255);
@@ -132,21 +220,25 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     }
     if (wave && n >= 2)
     {
-        const bool stacked = d.numStack >= 2 && theme::D().stackFrames >= 2;
+        float mainRows[kMaxPoints], smoothed[kMaxPoints];
+        const int m = smoothCycle (d.cycle, mainRows, n);   // the points of the picture: the cycle without its two edges, smoothed
+        // the stack of the table's frames only when the table has frames that differ (a single cycle table has none to show); all of them over the same x range as the main curve, a little higher
+        // the further back they are
+        bool stacked = d.numStack >= 2 && theme::D().stackFrames >= 2;
+        if (stacked)
+            stacked = framesDiffer (d.cycle, d.stack, std::min ({ d.numStack, static_cast<int> (kMaxStack), theme::D().stackFrames }), n);
         const float scale = stacked ? 0.74f : 0.86f;
-        // the rows of a cycle: clamped a little beyond +-1 (the overshoot of a band limited saw at its edge stays inside the plot, it does not stick out above the curve)
         auto rowsOf = [&] (const float* src, float* dst, float yOff, float k)
         {
-            for (int i = 0; i < n; ++i)
-                dst[i] = mid + yOff - std::min (1.06f, std::max (-1.06f, src[i])) * amp * scale * k;
+            for (int i = 0; i < m; ++i)
+                dst[i] = mid + yOff - src[i] * amp * scale * k;
         };
         int litFirst[kMaxStack], litX[kMaxStack], litW[kMaxStack], numLit = 0;
         float litAmount[kMaxStack];
-        // the stack: the frames of the table behind each other, the far ones fainter and thinner; the ones near the position light up
         if (stacked)
         {
             const int N = std::min ({ d.numStack, static_cast<int> (kMaxStack), theme::D().stackFrames });
-            const float dxs = static_cast<float> (in.w) * 0.010f, dys = static_cast<float> (in.h) * 0.032f;
+            const float dys = static_cast<float> (in.h) * 0.026f;
             for (int i = 0; i < N; ++i)     // from the back (the first frame) to the front
             {
                 if (d.stack[i] == nullptr)
@@ -154,16 +246,13 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
                 const float depth = static_cast<float> (N - 1 - i) / static_cast<float> (N - 1);       // 1 = the far one
                 const float pct = static_cast<float> (i) / static_cast<float> (N - 1);
                 const float lit = std::max (0.0f, 1.0f - std::fabs (pct - d.pos) * static_cast<float> (N - 1));
-                const float total = dxs * static_cast<float> (N - 1) * 0.5f;
-                const float yOff = -depth * dys * static_cast<float> (N - 1) * 0.5f - 2.0f, xOff = total - depth * total;   // the far frames start further right: all stay inside the block
-                rowsOf (d.stack[i], rows, yOff, 1.0f);
-                const int fx0 = ix + static_cast<int> (std::lround (xOff)), fw0 = iw - static_cast<int> (std::lround (xOff));
-                const int cutN = std::max (2, n / 24), cutPx = static_cast<int> (std::lround (static_cast<float> (fw0) * static_cast<float> (cutN) / static_cast<float> (n)));   // not the first and the last 4 %: the ringing at the edge of a band limited wave, seven times shifted, would make a bundle of stripes there
-                const int fx = fx0 + cutPx, fw = fw0 - 2 * cutPx;
-                const int fr = sb.curve (rows + cutN, n - 2 * cutN, fx, fw);
+                const float yOff = -depth * dys * static_cast<float> (N - 1) * 0.5f - 2.0f;
+                smoothCycle (d.stack[i], smoothed, n);
+                rowsOf (smoothed, rows, yOff, 1.0f);
+                const int fr = sb.curve (rows, m, ix, iw);
                 if (lit > 0.05f && fr >= 0 && numLit < kMaxStack)
                 {
-                    litFirst[numLit] = fr; litX[numLit] = fx; litW[numLit] = fw; litAmount[numLit] = lit;
+                    litFirst[numLit] = fr; litX[numLit] = ix; litW[numLit] = iw; litAmount[numLit] = lit;
                     ++numLit;
                 }
                 const int alpha = static_cast<int> (40.0f + 70.0f * (1.0f - depth) + 110.0f * lit);
@@ -181,8 +270,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             sb.paintOff();
             sb.style (1.0f, false);
         }
-        // the unison voices: hairlines around the main curve, a fan that opens with the detune and is as strong as the blend. They share the x grid of the main curve (not shifted in x: a shifted copy of a
-        // wave with a steep edge makes stripes at the edges of the display), so a hairline differs from the main curve in height only
+        // the unison voices: hairlines AROUND the main curve, over its x range, a little higher / lower and a little wider the more the detune; as strong as the blend. One voice: none.
         if (d.voices > 1)
         {
             const int v = std::min (std::min (d.voices, 7) - 1, theme::D().unisonHairs);
@@ -190,10 +278,9 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             for (int k = 1; k <= v; ++k)
             {
                 const float side = (k % 2 == 1 ? 1.0f : -1.0f) * static_cast<float> ((k + 1) / 2) / static_cast<float> ((v + 1) / 2);
-                const float spread = side * (0.012f + 0.07f * d.detune);
-                rowsOf (d.cycle, rows, 0.0f, 1.0f + spread);
-                const int cut = std::max (2, n / 24), cw = static_cast<int> (std::lround (static_cast<float> (iw) * static_cast<float> (n - 2 * cut) / static_cast<float> (n)));   // not the first and the last 4 %: the ringing at the edge of a band limited wave would make a bundle of stripes there
-                sb.curve (rows + cut, n - 2 * cut, ix + static_cast<int> (std::lround (static_cast<float> (iw) * static_cast<float> (cut) / static_cast<float> (n))), cw);
+                const float spread = side * (0.03f + 0.17f * d.detune);
+                rowsOf (mainRows, rows, -spread * amp * scale * 0.6f, 1.0f + spread * 0.5f);
+                sb.curve (rows, m, ix, iw);
                 dt::paintLine (sb, x0, x1, st, 255);
                 sb.style (1.0f, false);
                 sb.stroke (T.curveBack * 0.45f, static_cast<uint32_t> (alpha));
@@ -201,8 +288,8 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             sb.paintOff();
         }
         // the main curve: the area under it, the soft pass, the crisp line
-        rowsOf (d.cycle, rows, 0.0f, 1.0f);
-        const int mainFirst = sb.curve (rows, n, ix, iw);
+        rowsOf (mainRows, rows, 0.0f, 1.0f);
+        const int mainFirst = sb.curve (rows, m, ix, iw);
         sb.fillGradient (mid, mid - amp * scale, mid, dt::a (d.colour, 70), dt::a (d.colour, 0));
         dt::glowLine (sb, x0, x1, st, T.curve * 0.5f + (stacked ? 0.15f : 0.0f), 255, false);
         sb.paintOff();
@@ -214,14 +301,27 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             sb.style (1.0f, false);
             for (int i = 0; i < numLit; ++i)
             {
-                sb.curveAt (litFirst[i], n - 2 * std::max (2, n / 24), litX[i], litW[i]);
+                sb.curveAt (litFirst[i], m, litX[i], litW[i]);
                 sb.stroke (T.curve * 0.5f + 2.0f, static_cast<uint32_t> (120.0f * litAmount[i]));
             }
-            sb.curveAt (mainFirst, n, ix, iw);
+            sb.curveAt (mainFirst, m, ix, iw);
             sb.stroke (T.curve * 0.5f + 2.4f, 170);
             sb.paintOff();
             sb.glowEnd (T.backGlow, 1.4f, 0xffffffffu, r.x, r.y, r.right(), r.bottom());
         }
+        sb.style (1.0f, false);
+    }
+    else if (d.kind == Data::Kind::Noise)
+    {
+        constexpr int kNoisePoints = 256;
+        float nv[kNoisePoints];
+        noiseShape (d.noiseColour, nv, kNoisePoints);
+        for (int i = 0; i < kNoisePoints; ++i)
+            rows[i] = mid - nv[i] * amp * 0.8f;
+        sb.curve (rows, kNoisePoints, ix, iw);
+        const int a = d.dim ? 70 : 255;
+        dt::glowLine (sb, x0, x1, st, T.curve * 0.5f, a, false);
+        sb.paintOff();
         sb.style (1.0f, false);
     }
     else if (minmax && n >= 2 && d.cycleMax != nullptr)
@@ -313,15 +413,18 @@ inline void drawLive (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
     sb.paintOff();
     if (d.kind == Data::Kind::Wave && n >= 2)
     {
-        const float scale = d.numStack >= 2 && theme::D().stackFrames >= 2 ? 0.74f : 0.86f;
+        // the picture of the cycle is the smoothed one without its edges (draw): the dots sit on that line
+        float sm[kMaxPoints];
+        const int m = smoothCycle (d.cycle, sm, n), c = m == n ? 0 : cycleCrop (n);
+        const float scale = d.numStack >= 2 && theme::D().stackFrames >= 2 && framesDiffer (d.cycle, d.stack, std::min ({ d.numStack, static_cast<int> (kMaxStack), theme::D().stackFrames }), n) ? 0.74f : 0.86f;
         for (int v = 0; v < Data::kMaxHeads; ++v)
             if (d.phases[v] >= 0.0f)
             {
-                const float ph = std::min (1.0f, d.phases[v]), fi = ph * static_cast<float> (n - 1);
-                const int i0 = std::min (n - 2, static_cast<int> (fi));
+                const float ph = std::min (1.0f, d.phases[v]);
+                const float fi = std::min (static_cast<float> (m - 1), std::max (0.0f, ph * static_cast<float> (n - 1) - static_cast<float> (c)));
+                const int i0 = std::min (m - 2, static_cast<int> (fi));
                 const float f = fi - static_cast<float> (i0);
-                const float c0 = std::min (1.06f, std::max (-1.06f, d.cycle[i0])), c1 = std::min (1.06f, std::max (-1.06f, d.cycle[i0 + 1]));
-                const float py = mid - (c0 + (c1 - c0) * f) * amp * scale, pxx = x0 + ph * static_cast<float> (iw - 1);
+                const float py = mid - (sm[i0] + (sm[i0 + 1] - sm[i0]) * f) * amp * scale, pxx = x0 + fi / static_cast<float> (m - 1) * static_cast<float> (iw - 1);
                 sb.disc (pxx, py, v == 0 ? 3.6f : 2.6f, dt::a (d.colour, v == 0 ? 255 : 160));
                 sb.disc (pxx, py, v == 0 ? 1.8f : 1.2f, dt::a (0xffffff, v == 0 ? 255 : 200));
             }

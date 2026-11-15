@@ -20,6 +20,8 @@ public:
     {
         const char* const* items = nullptr;
         int count = 0, current = 0;
+        const char* header = nullptr;   // a bar of its own above the rows (the content browser: the path); null = none
+        bool headerBack = false;        // the header is also the way up: a back arrow at its left and a Request change with the id of `setHeaderId` on a tap
     };
     State state;
 
@@ -27,19 +29,22 @@ public:
     /** The dimmed backdrop covers `parent`; a tap on it closes (Request with the backdrop id). */
     void setPopup (const Rect& parent) { parent_ = parent; }
     void setBackdropId (int id) noexcept { backdropId_ = id; }
+    void setHeaderId (int id) noexcept { headerId_ = id; }
+    int headerH() const noexcept { return state.header != nullptr ? kRowH : 0; }
+    Rect headerRect() const noexcept { return { rect_.x + kPad, rect_.y + kPad, rect_.w - 2 * kPad, headerH() }; }
     /** Rows that fit into the box. */
-    int visibleRows() const noexcept { return std::max (1, (rect_.h - 2 * kPad) / kRowH); }
+    int visibleRows() const noexcept { return std::max (1, (rect_.h - 2 * kPad - headerH()) / kRowH); }
     int firstRow() const noexcept { return std::clamp (first_, 0, std::max (0, state.count - visibleRows())); }
     /** Brings the current item into the window (the owner calls it when it opens the list). */
     void showCurrent() noexcept { first_ = std::clamp (state.current - visibleRows() / 2, 0, std::max (0, state.count - visibleRows())); }
-    Rect rowRect (int row) const noexcept { return { rect_.x + kPad, rect_.y + kPad + (row - firstRow()) * kRowH, rect_.w - 2 * kPad - (scrolls() ? kZoneW : 0), kRowH }; }
+    Rect rowRect (int row) const noexcept { return { rect_.x + kPad, rect_.y + kPad + headerH() + (row - firstRow()) * kRowH, rect_.w - 2 * kPad - (scrolls() ? kZoneW : 0), kRowH }; }
     bool scrolls() const noexcept { return state.count > visibleRows(); }
     /** The scroll zone (a touch there drags the thumb or pages) and the thumb. */
-    Rect zoneRect() const noexcept { return { rect_.right() - kPad - kZoneW, rect_.y + kPad, kZoneW, rect_.h - 2 * kPad }; }
+    Rect zoneRect() const noexcept { return { rect_.right() - kPad - kZoneW, rect_.y + kPad + headerH(), kZoneW, rect_.h - 2 * kPad - headerH() }; }
     Rect thumbRect() const noexcept
     {
-        const int n = std::max (1, state.count), trackH = rect_.h - 2 * kPad, thumbH = std::max (28, trackH * visibleRows() / n), thumbY = (trackH - thumbH) * firstRow() / std::max (1, n - visibleRows());
-        return { rect_.right() - kPad - kZoneW / 2 - kBarW / 2, rect_.y + kPad + thumbY, kBarW, thumbH };
+        const int n = std::max (1, state.count), trackH = rect_.h - 2 * kPad - headerH(), thumbH = std::max (28, trackH * visibleRows() / n), thumbY = (trackH - thumbH) * firstRow() / std::max (1, n - visibleRows());
+        return { rect_.right() - kPad - kZoneW / 2 - kBarW / 2, rect_.y + kPad + headerH() + thumbY, kBarW, thumbH };
     }
 
     void draw (gpu::SceneBuilder& sb) const override
@@ -91,6 +96,19 @@ protected:
         const theme::Look& T = theme::L();
         p.block (rect_, true);
         p.rrect (rect_, T.rBlock, p.c (T.flow[0], 255), 1.6f);
+        if (state.header != nullptr)
+        {
+            const Rect h = headerRect();
+            const float cy = static_cast<float> (h.y) + static_cast<float> (h.h) * 0.5f;
+            if (state.headerBack)
+            {
+                p.style (1.0f, true);
+                p.chevron (static_cast<float> (h.x + 28), cy, 16.0f, 0, 2.4f, p.c (T.flow[0], 255));
+                p.plain();
+            }
+            p.textLeft ({ h.x + (state.headerBack ? 56 : 12), h.y + 4, std::max (0, h.w - (state.headerBack ? 64 : 20)), h.h - 8 }, state.header, T.fItem, p.c (T.text, 255), T.fMin);
+            p.rect (h.x + 8, h.bottom() - 1, h.right() - 8, h.bottom(), p.c (T.keyline, 255));
+        }
         const int n = std::max (0, state.count), f = firstRow(), last = std::min (n, f + visibleRows());
         for (int i = f; i < last; ++i)
         {
@@ -111,7 +129,7 @@ protected:
         if (scrolls())
         {
             const Rect th = thumbRect();
-            p.rrect ({ th.x, rect_.y + kPad, kBarW, rect_.h - 2 * kPad }, 5.0f, p.c (T.track, 255));
+            p.rrect ({ th.x, rect_.y + kPad + headerH(), kBarW, rect_.h - 2 * kPad - headerH() }, 5.0f, p.c (T.track, 255));
             p.paintY2 (static_cast<float> (th.y), static_cast<float> (th.bottom()), T.flow[0], T.flow[3], 255);
             p.rrect (th, 5.0f, 255);
             p.paintOff();
@@ -120,6 +138,7 @@ protected:
     Change onDown (int x, int y, double nowMs) override
     {
         tap_.down (x, y, nowMs);
+        headerHit_ = state.header != nullptr && headerRect().contains (x, y);
         y0_ = y;
         first0_ = firstRow();
         zone_ = scrolls() && zoneRect().contains (x, y);
@@ -140,8 +159,8 @@ protected:
         {
             if (grab_ > 0)
             {
-                const int trackH = rect_.h - 2 * kPad, thumbH = thumbRect().h, room = std::max (1, trackH - thumbH), rows = std::max (0, state.count - visibleRows());
-                const int ty = std::clamp (y - grab_ + 1 - (rect_.y + kPad), 0, room);
+                const int trackH = rect_.h - 2 * kPad - headerH(), thumbH = thumbRect().h, room = std::max (1, trackH - thumbH), rows = std::max (0, state.count - visibleRows());
+                const int ty = std::clamp (y - grab_ + 1 - (rect_.y + kPad + headerH()), 0, room);
                 first_ = std::clamp ((ty * rows + room / 2) / room, 0, rows);
             }
             return Change::none();
@@ -152,12 +171,15 @@ protected:
     }
     Change onUp (int x, int y) override
     {
-        const bool zone = zone_;
+        const bool zone = zone_, header = headerHit_;
         zone_ = false;
+        headerHit_ = false;
+        if (header)
+            return tap_.up() != 0 && state.headerBack ? Change::request (headerId_) : Change::none();
         if (zone || tap_.up() == 0)
             return Change::none();
-        const int row = firstRow() + (y - rect_.y - kPad) / kRowH;
-        if (y < rect_.y + kPad || row < 0 || row >= state.count || x >= rect_.x + rowRect (0).w + kPad || row >= firstRow() + visibleRows())
+        const int row = firstRow() + (y - rect_.y - kPad - headerH()) / kRowH;
+        if (y < rect_.y + kPad + headerH() || row < 0 || row >= state.count || x >= rect_.x + rowRect (0).w + kPad || row >= firstRow() + visibleRows())
             return Change::none();
         return Change::indexed (id_, row, row);
     }
@@ -172,8 +194,8 @@ protected:
     }
 
     Rect parent_;
-    int backdropId_ = 0, y0_ = 0, first0_ = 0, first_ = 0, grab_ = 0;
-    bool backdrop_ = false, zone_ = false;
+    int backdropId_ = 0, headerId_ = 0, y0_ = 0, first0_ = 0, first_ = 0, grab_ = 0;
+    bool backdrop_ = false, zone_ = false, headerHit_ = false;
     TapGesture tap_;
 };
 

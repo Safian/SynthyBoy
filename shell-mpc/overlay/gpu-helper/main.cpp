@@ -45,8 +45,10 @@
 #include <drm/drm_fourcc.h>
 #include <drm/drm_mode.h>
 
+#include "../gpu_clock.h"
 #include "../sdf_font.h"
 #include "../gpu/scene.h"
+#include "../gpu/cell_cache.h"
 #include "../gpu/cell_plan.h"
 #include "../vblank_linux.h"
 #include "../vblank_pacer.h"
@@ -1560,7 +1562,7 @@ private:
         }
         layerW_ = bw_;
         layerH_ = bh_;
-        layerCells_[l].clear();
+        cache_.forget (l);
         return true;
     }
     void dropLayers()
@@ -1571,7 +1573,7 @@ private:
             if (layerTex_[l]) api_.glDeleteTextures (1, &layerTex_[l]);
             layerFbo_[l] = 0;
             layerTex_[l] = 0;
-            layerCells_[l].clear();
+            cache_.forget (l);
         }
         layerW_ = layerH_ = 0;
     }
@@ -1611,33 +1613,10 @@ private:
                 liveBoxes_.push_back ({ static_cast<int> (std::floor (x0)) - 2, static_cast<int> (std::floor (y0)) - 2, static_cast<int> (std::ceil (x1)) + 2, static_cast<int> (std::ceil (y1)) + 2 });
         }
         partialOk_ = ::access ("/tmp/synthyboy-overlay-nopartial", F_OK) != 0;
-        mergeBoxes (liveBoxes_, 6);
-        std::vector<DamageRect> now = layerDamage_;
-        now.insert (now.end(), liveBoxes_.begin(), liveBoxes_.end());
-        now.insert (now.end(), prevLive_.begin(), prevLive_.end());
-        mergeBoxes (now, 6);
-        const bool clipChanged = std::memcmp (clip, lastClip_, sizeof clip) != 0;
-        std::memcpy (lastClip_, clip, sizeof clip);
         EGLint age = 0;
         if (! api_.eglQuerySurface (dpy_, esurf_, 0x313D /* EGL_BUFFER_AGE_EXT */, &age))
             age = 0;
-        bool full = false;
-        framePaint (now, damageHist_, histCount_, static_cast<int> (age), out, full);
-        // this picture's damage is what the next ones may have to paint again
-        for (int i = 3; i > 0; --i)
-            damageHist_[i] = damageHist_[i - 1];
-        damageHist_[0] = now;
-        histCount_ = std::min (histCount_ + 1, 4);
-        prevLive_ = liveBoxes_;
-        if (full || clipChanged || ! partialOk_)
-            return false;
-        long long area = 0;
-        for (DamageRect& b : out)
-        {
-            b = { std::max (0, b.x0), std::max (0, b.y0), std::min (w_, b.x1), std::min (h_, b.y1) };
-            area += static_cast<long long> (std::max (0, b.x1 - b.x0)) * std::max (0, b.y1 - b.y0);
-        }
-        return area * 10 < static_cast<long long> (w_) * h_ * 7;   // more than 70 % of the picture: all of it (no gain from boxes)
+        return partial_.plan (layerDamage_, liveBoxes_, clip, static_cast<int> (age), partialOk_, w_, h_, out);   // gpu/cell_cache.h (tested on the Mac)
     }
 
     /** Brings the layers up to date: what changed since the last picture (a cell whose hash or rectangle is not the one at its place before, a cell that came or went) is drawn again in the layer, in a scissor box, together with the cells that lie over it. */
@@ -1650,17 +1629,14 @@ private:
         {
             if (! plan.layer[l])
             {
-                layerCells_[l].clear();
+                cache_.forget (l);
                 continue;
             }
             if (! ensureLayer (l))
                 return false;
-            std::vector<CellKey> keys;
-            for (const CellRef& c : plan.cells)
-                if (c.layer == l)
-                    keys.push_back ({ c.x0, c.y0, c.x1, c.y1, c.hash });
+            const std::vector<CellKey> keys = LayerCache::keysOf (plan, l);
             std::vector<DamageRect> dmg;
-            layerDamage (layerCells_[l], keys, dmg);
+            cache_.damage (l, keys, dmg);
             layerDamage_.insert (layerDamage_.end(), dmg.begin(), dmg.end());
             for (const DamageRect& r : dmg)
             {
@@ -1692,7 +1668,7 @@ private:
                     }
                 runDraws();
             }
-            layerCells_[l] = keys;
+            cache_.commit (l, keys);
         }
         pictureTarget_ = -1;
         for (const CellRef& c : plan.cells)
@@ -1801,8 +1777,7 @@ private:
             partial = partialBoxes (boxes);
         else
         {
-            histCount_ = 0;
-            prevLive_.clear();
+            partial_.reset();
         }
         api_.glBindBuffer (GL_ARRAY_BUFFER, vbo_);
         api_.glBufferData (GL_ARRAY_BUFFER, static_cast<GLsizeiptr> (verts_.size() * sizeof (Vtx)), verts_.data(), GL_DYNAMIC_DRAW);
@@ -2214,16 +2189,15 @@ private:
     EGLContext ctx_ = EGL_NO_CONTEXT;
     EGLSurface esurf_ = EGL_NO_SURFACE;
     GLuint layerTex_[2] = {}, layerFbo_[2] = {};
-    std::vector<CellKey> layerCells_[2];
+    LayerCache cache_;                           // gpu/cell_cache.h: what the cached layers hold, and the plan of the partial picture
+    PartialPaint partial_;
     int layerW_ = 0, layerH_ = 0;
     bool layersOk_ = true;
     int pictureTarget_ = -1;
     bool frameBoxOn_ = false;
     int frameBox_[4] = {};                       // the box (buffer pixels) of the part of the picture that is painted now
-    std::vector<DamageRect> layerDamage_, liveBoxes_, prevLive_, damageHist_[4];   // what changed in the layers this picture, where the live ops are, where they were, what each of the last pictures changed
-    int histCount_ = 0;
+    std::vector<DamageRect> layerDamage_, liveBoxes_;   // what changed in the layers this picture, where the live ops are
     uint32_t lastPaintedPx_ = 0;
-    int lastClip_[4] = {};
     bool noSlot_ = true;                         // stride 1 without the slot wait
     bool partialOk_ = true;                      // switched off by /tmp/synthyboy-overlay-nopartial (diagnostics)   // where the picture of the ops being built goes: -1 the window, 2 / 3 a cached layer
     uint32_t lastCached_ = 0, lastRedrawn_ = 0;
@@ -2271,6 +2245,15 @@ int main()
     sigaction (SIGHUP, &sa, nullptr);
     signal (SIGPIPE, SIG_IGN);
     setvbuf (stderr, nullptr, _IOLBF, 0);
-    Helper h;
-    return h.run();
+    int rc;
+    {
+        Helper h;
+        rc = h.run();
+    }
+    // the plugin raises the lowest clock of the GPU while the picture moves (gpu_clock.h) and keeps the level it replaced in a file; when the plugin died raised (the socket ended), this puts it back
+    {
+        synthyboy_mpc::overlay::GpuClock leftover;
+        leftover.open();
+    }
+    return rc;
 }

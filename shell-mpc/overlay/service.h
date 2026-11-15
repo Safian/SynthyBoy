@@ -22,6 +22,7 @@
 #include <dlfcn.h>
 #include <sched.h>
 #endif
+#include "../output_peak.h"
 #include "../play_log.h"
 #include "../thread_policy.h"
 #include "controller.h"
@@ -249,7 +250,9 @@ private:
                         + "\ncpus_avoided: " + formatCpuList (cpu_.plan.avoided) + "\ncpus_overlay_thread_now: " + threadAffinity_ + "\ncpus_helper_now: " + helperAffinity_ + "\ncpus_audio_threads:";
         for (const std::string& n : cpu_.plan.audioThreads)
             t += " " + n;
-        return t + (cpu_.plan.audioThreads.empty() ? " none" : "") + "\n";
+        char pk[160];
+        std::snprintf (pk, sizeof pk, "\noutput_peak: %.5f\noutput_peak_total: %.5f\noutput_blocks: %lu\n", static_cast<double> (outputPeak().takeWindow()), static_cast<double> (outputPeak().total.load (std::memory_order_relaxed)), outputPeak().blocks.load (std::memory_order_relaxed));   // output_peak.h: what the plugin hands to the host
+        return t + (cpu_.plan.audioThreads.empty() ? " none" : "") + pk;
     }
 
     std::mutex cpuMu_;
