@@ -160,15 +160,25 @@ protected:
 };
 
 // ===============================================================================================================================
-/** The peak meters of the output (what leaves the engine, 0 = -60 dB .. 1 = full scale) with the colours of a level (green, yellow, red). The owner gives each bar its level (the engine measures the larger of the two channels: both bars show it). */
+/** The peak meters of the output (what leaves the engine, 0 = -60 dB .. 1 = full scale) with the colours of a level (green, yellow, red), a dB scale between the two bars (0, -6, -12, -24, -48) and a peak hold
+    line that the owner lets fall slowly. The owner gives each bar its level (the engine measures the larger of the two channels: both bars show it). Without a signal: a faint base line and the scale. */
 class PeakMeterDisplay : public Component
 {
 public:
     float peakL = 0.0f; // 0 .. 1
     float peakR = 0.0f;
+    float holdL = 0.0f, holdR = 0.0f;   // the peak hold lines (0 .. 1)
 
     PeakMeterDisplay() = default;
-    Size minSize() const override { return { 40, 120 }; }
+    Size minSize() const override { return { 76, 120 }; }
+
+    /** The owner calls it once per picture with the time since the last one: the hold lines rise with the peaks and fall by 0.5 (30 dB) a second. */
+    void updateHold (float dtSeconds) noexcept
+    {
+        const float fall = 0.5f * std::clamp (dtSeconds, 0.0f, 0.2f);
+        holdL = std::max (peakL, holdL - fall);
+        holdR = std::max (peakR, holdR - fall);
+    }
 
 protected:
     void drawBody (Pen& p) const override
@@ -178,18 +188,24 @@ protected:
         p.rrect (rect_, T.rControl, p.c (T.panel1, 200));
         p.rrect (rect_, T.rControl, p.c (T.keyline, 160), 1.0f);
 
-        const int m = 4;
-        const int barW = std::max (6, (rect_.w - 2 * m - 4) / 2);
+        const int m = 4, scaleW = 28;
+        const int barW = std::max (6, (rect_.w - 2 * m - scaleW) / 2);
         const int barH = rect_.h - 2 * m - 22;
         const int barY = rect_.y + m;
-
-        // Left meter
         const Rect lr { rect_.x + m, barY, barW, barH };
-        drawBar (p, lr, peakL);
+        const Rect rr { rect_.x + m + barW + scaleW, barY, barW, barH };
+        drawBar (p, lr, peakL, holdL);
+        drawBar (p, rr, peakR, holdR);
 
-        // Right meter
-        const Rect rr { rect_.x + m + barW + 4, barY, barW, barH };
-        drawBar (p, rr, peakR);
+        // the scale between the bars: a mark and a number for 0, -6, -12, -24, -48 dB (0 = -60 dB .. 1 = full scale)
+        static const struct { float pos; const char* name; } kMarks[5] = { { 1.0f, "0" }, { 0.9f, "-6" }, { 0.8f, "-12" }, { 0.6f, "-24" }, { 0.2f, "-48" } };
+        for (const auto& mk : kMarks)
+        {
+            const int y = lr.bottom() - static_cast<int> (std::lround (mk.pos * static_cast<float> (lr.h)));
+            p.line (static_cast<float> (lr.right()), static_cast<float> (y), static_cast<float> (lr.right() + 3), static_cast<float> (y), 1.0f, p.c (T.textDim, 200));
+            p.line (static_cast<float> (rr.x - 3), static_cast<float> (y), static_cast<float> (rr.x), static_cast<float> (y), 1.0f, p.c (T.textDim, 200));
+            p.textCentered ({ lr.right() + 2, std::min (std::max (y - 7, barY), lr.bottom() - 14), scaleW - 4, 14 }, mk.name, T.fSmall, p.c (T.textFaint, 255), T.fMin);
+        }
 
         // the names of the bars under them
         p.textCentered ({ lr.x - 2, rect_.bottom() - 22, barW + 4, 18 }, "L", T.fSmall + 1.0f, p.c (T.textDim, 255), T.fMin);
@@ -197,7 +213,7 @@ protected:
     }
 
 private:
-    void drawBar (Pen& p, const Rect& r, float level) const noexcept
+    void drawBar (Pen& p, const Rect& r, float level, float hold) const noexcept
     {
         const theme::Look& T = theme::L();
         p.rect (r, p.c (T.track, 100));
@@ -217,10 +233,15 @@ private:
                     static_cast<float> (r.right()), static_cast<float> (fillY),
                     1.5f, p.c (T.text, 255));
         }
+        else
+            p.rect (r.x + 1, r.bottom() - 3, r.right() - 1, r.bottom() - 1, p.c (T.textFaint, 150));   // at rest: the faint base line
 
-        // -6dB line
-        const float y6dB = static_cast<float> (r.bottom() - static_cast<int> (0.5f * r.h));
-        p.line (static_cast<float> (r.x), y6dB, static_cast<float> (r.right()), y6dB, 0.8f, p.c (T.keylineHi, 140));
+        // the peak hold: a line that stays where the highest peak was and falls slowly
+        if (hold > 0.02f)
+        {
+            const float hy = static_cast<float> (r.bottom()) - std::min (1.0f, hold) * static_cast<float> (r.h);
+            p.line (static_cast<float> (r.x), hy, static_cast<float> (r.right()), hy, 2.0f, p.c (hold > 1.0f ? T.negative : T.flow[0], 255));
+        }
     }
 };
 
@@ -326,6 +347,7 @@ public:
         polyLegato.setLabel ("POLY LEG"); polyLegato.state.showState = true;
         phaseLegato.setLabel ("PHASE LEG"); phaseLegato.state.showState = true;
         sameNote.setCaption ("SAME NOTE");
+        sameNote.minWidth = 140;   // a cell of the grid of the VOICES block
         stealPriority.setCaption ("STEAL");
         stereoRouting.setCaption ("STEREO");
         voiceOverride.setCaption ("VOICE OVERRIDE");
@@ -470,17 +492,18 @@ protected:
         sideTuning.place ({ rect_.x + 468, rect_.y + 4, 220, 56 });
 
         // ---- side MAIN
-        {   // OUTPUT: the meters at the left, VOLUME and SPREAD big, the two steppers at the right
+        {   // OUTPUT: the meters at the left (with their scale), VOLUME and SPREAD big, the two steppers at the right
             const Rect in = inner (0);
-            meters.place ({ in.x, in.y + 4, 56, in.h - 8 });
+            const int mw = 84;
+            meters.place ({ in.x, in.y + 4, mw, in.h - 8 });
             const int kw = 150;
-            volume.place ({ in.x + 64, in.y, kw, in.h });
-            spread.place ({ in.x + 64 + kw + g, in.y, kw, in.h });
-            const int sx = in.x + 64 + 2 * kw + 2 * g + 4, sw = in.right() - sx, sh = 64, top = in.y + (in.h - 2 * (lane + sh) - g) / 2;
+            volume.place ({ in.x + mw + 8, in.y, kw, in.h });
+            spread.place ({ in.x + mw + 8 + kw + g, in.y, kw, in.h });
+            const int sx = in.x + mw + 8 + 2 * kw + 2 * g + 4, sw = in.right() - sx, sh = 64, top = in.y + (in.h - 2 * (lane + sh) - g) / 2;
             stereoRouting.place ({ sx, top + lane, sw, sh });
             voiceOverride.place ({ sx, top + 2 * lane + sh + g, sw, sh });
         }
-        {   // PITCH: TUNE big, the three number fields in a column, LINK at the right
+        {   // PITCH: TUNE big, the three number fields in a column, LINK at the right in the size of a number field
             const Rect in = inner (1);
             tune.place ({ in.x, in.y, 150, in.h });
             const int nx = in.x + 150 + g, nw = 290, rowH = (in.h - 3 * lane - 2 * g) / 3;
@@ -488,27 +511,28 @@ protected:
             bendUp.place ({ nx, in.y + 2 * lane + rowH + g, nw, rowH });
             bendDown.place ({ nx, in.y + 3 * lane + 2 * rowH + 2 * g, nw, rowH });
             const int lx = nx + nw + g * 2;
-            bendLink.place ({ lx, in.y + (in.h - 96) / 2, in.right() - lx, 96 });
+            bendLink.place ({ lx, in.y + 2 * lane + rowH + g, in.right() - lx, rowH });
         }
-        {   // VOICES: POLY, LEGATO / POLY LEG, SAME NOTE as a grid; the voice meter, STEAL and PHASE LEG at the right
+        {   // VOICES: ONE grid of equal cells, rows of 64 pixels: POLY, LEGATO, POLY LEG, SAME NOTE (the Q group, four cells); STEAL and PHASE LEG (two cells each); the voice meter across the width
             const Rect in = inner (2);
-            const int c1 = 170, c2 = 208, rowH = (in.h - 2 * lane - g) / 2;
-            polyphony.place ({ in.x, in.y + lane, c1, rowH });
-            legato.place ({ in.x + c1 + g, in.y + lane, c2, rowH });
-            polyLegato.place ({ in.x, in.y + 2 * lane + rowH + g, c1, rowH });
-            sameNote.place ({ in.x + c1 + g, in.y + 2 * lane + rowH + g + (rowH - 64) / 2, c2, 64 });
-            const int rx = in.x + c1 + c2 + 3 * g, rw = in.right() - rx, cell = (in.h - 2 * g) / 3;
-            voiceMeter.place ({ rx, in.y + (cell - 56) / 2, rw, 56 });
-            stealPriority.place ({ rx, in.y + cell + g + (cell - 64) / 2, rw, 64 });
-            phaseLegato.place ({ rx, in.y + 2 * (cell + g) + (cell - 72) / 2, rw, 72 });
+            const int cw = (in.w - 3 * g) / 4, ch = 64;
+            auto cell = [&] (int col, int row, int span) { return Rect { in.x + col * (cw + g), in.y + lane + row * (ch + g), span * cw + (span - 1) * g, ch }; };
+            polyphony.place (cell (0, 0, 1));
+            legato.place (cell (1, 0, 1));
+            polyLegato.place (cell (2, 0, 1));
+            sameNote.place (cell (3, 0, 1));
+            stealPriority.place (cell (0, 1, 2));
+            phaseLegato.place (cell (2, 1, 2));
+            const Rect mc = cell (0, 2, 4);
+            voiceMeter.place ({ mc.x, mc.y, mc.w, std::min (ch, std::max (40, in.bottom() - mc.y)) });
         }
-        {   // GLIDE: the two knobs, ALWAYS / SCALED stacked, the curve at the right
+        {   // GLIDE: the two knobs, ALWAYS / SCALED stacked (the height of the other switches), the curve at the right
             const Rect in = inner (3);
             portaTime.place ({ in.x, in.y, 150, in.h });
             portaSlope.place ({ in.x + 150 + g, in.y, 150, in.h });
-            const int tx = in.x + 300 + 2 * g, tw = 130, rowH = (in.h - 2 * lane - g) / 2;
-            portaAlways.place ({ tx, in.y + lane, tw, rowH });
-            portaScaled.place ({ tx, in.y + 2 * lane + rowH + g, tw, rowH });
+            const int tx = in.x + 300 + 2 * g, tw = 130, th = 64, free = in.h - 2 * th - 2 * lane, y1 = in.y + lane + free / 3;
+            portaAlways.place ({ tx, y1, tw, th });
+            portaScaled.place ({ tx, y1 + th + lane + free / 3, tw, th });
             const int cx = tx + tw + 2 * g;
             portaCurve.place ({ cx, in.y + 4, in.right() - cx, in.h - 8 });
         }

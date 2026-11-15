@@ -154,27 +154,31 @@ protected:
         qStepSelect.place ({ qRowSelect.rect().x - m - Stepper::kMinW, hy, Stepper::kMinW, 56 });
         grid.place ({ rect_.x + m, rect_.y + kHeaderH + 4, rect_.w - 2 * m, kGridH });
 
-        {   // RANDOM: the four spreads, 10x DETUNE under them
+        {   // RANDOM: the four spreads as medium knobs (the dial at the left, name and value beside it) in a 2 x 2 grid, 10x DETUNE in a column of its own at the right
             const Rect in = inner (0);
-            const int kw = (in.w - 3 * g) / 4, kh = in.h - lane - g - 56;
+            const int tw = 140, kw = (in.w - tw - 2 * g) / 2, kh = (in.h - 2 * lane - g) / 2;
             Knob* ks[4] = { &randPan, &randDetune, &randCutoff, &randEnv };
             for (int i = 0; i < 4; ++i)
-                ks[i]->place ({ in.x + i * (kw + g), in.y + lane, i == 3 ? in.right() - (in.x + 3 * (kw + g)) : kw, std::max (72, kh) });
-            randDetune10x.place ({ in.x, in.bottom() - 56, 250, 56 });
+            {
+                ks[i]->state.side = true; ks[i]->state.large = false;
+                ks[i]->place ({ in.x + (i % 2) * (kw + g), in.y + lane + (i / 2) * (kh + lane + g), kw, std::max (72, kh) });
+            }
+            randDetune10x.place ({ in.right() - tw, in.y + (in.h - 64) / 2, tw, 64 });
         }
         {   // SCALING: the two time knobs, the mode under them
             const Rect in = inner (1);
-            const int kw = (in.w - g) / 2, kh = in.h - lane - 56 - lane - g;
+            const int kw = (in.w - g) / 2, kh = in.h - lane - 64 - lane - g;
             scaleEnv.place ({ in.x, in.y + lane, kw, std::max (72, kh) });
             scaleLfo.place ({ in.x + kw + g, in.y + lane, in.right() - (in.x + kw + g), std::max (72, kh) });
             scaleLfoMode.place ({ in.x, in.bottom() - 64, std::max (Stepper::kMinW, std::min (in.w, 260)), 64 });
         }
-        {   // TARGETS: the five sources in a row
+        {   // TARGETS: from the top of the block in a grid of equal cells: A, B, C, SUB (the Q group) in a row, NOISE (beside the group) in the row under it
             const Rect in = inner (2);
-            const int tw = (in.w - 4 * g) / 5, th = std::min (in.h - lane, 96);
-            ToggleIcon* ts[5] = { &oscA, &oscB, &oscC, &oscSub, &oscNoise };
-            for (int i = 0; i < 5; ++i)
-                ts[i]->place ({ in.x + i * (tw + g), in.y + lane + (in.h - lane - th) / 2, i == 4 ? in.right() - (in.x + 4 * (tw + g)) : tw, th });
+            const int tw = (in.w - 3 * g) / 4, th = 64;
+            ToggleIcon* ts[4] = { &oscA, &oscB, &oscC, &oscSub };
+            for (int i = 0; i < 4; ++i)
+                ts[i]->place ({ in.x + i * (tw + g), in.y + lane, i == 3 ? in.right() - (in.x + 3 * (tw + g)) : tw, th });
+            oscNoise.place ({ in.x, in.y + lane + th + g, in.w, th });
         }
     }
 

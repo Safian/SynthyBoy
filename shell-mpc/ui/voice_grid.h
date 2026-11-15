@@ -223,8 +223,10 @@ protected:
 
             // Column background box
             p.rrect (cr, T.rControl, p.c (activeStep ? T.panel0 : T.bg1, activeStep ? 180 : 120));
+            if (isSounding)   // the step a voice plays: the whole column carries a tint of the signal colour, besides the lit frame and the dot
+                p.rrect (cr, T.rControl, p.c (T.flow[0], 34));
             uint32_t borderCol = isSelected ? T.q : (isSounding ? T.flow[0] : (activeStep ? T.keyline : T.track));
-            float borderThick = isSelected ? 1.8f : (isSounding ? 1.8f : 1.0f);
+            float borderThick = isSelected ? 1.8f : (isSounding ? 2.2f : 1.0f);
             p.rrect (cr, T.rControl, p.c (borderCol, 255), borderThick);
 
             // Step header area
@@ -281,6 +283,17 @@ protected:
                             static_cast<float> (barX + barW - 1), static_cast<float> (botY),
                             1.5f, p.c (T.text, 255));
                 }
+            }
+
+            // The handle at the value, ALSO at zero (on the middle line): every step of the length can be grasped, whatever its value
+            if (activeStep)
+            {
+                const int extentV = static_cast<int> (std::lround (std::fabs (val) * (barH * 0.47f)));
+                const float hy = static_cast<float> (val > 0.0f ? std::max (barTop, midY - extentV) : (val < 0.0f ? std::min (barBottom, midY + extentV) : midY));
+                const float hx = static_cast<float> (barX) + static_cast<float> (barW) * 0.5f;
+                p.disc (hx, hy, 6.0f, p.c (T.text, 255));
+                if (val == 0.0f)
+                    p.arc (hx, hy, 9.5f, 0.0f, 2.0f * kPi, 1.2f, p.c (T.textDim, 200));
             }
 
             // Value text area below bar

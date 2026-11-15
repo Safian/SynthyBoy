@@ -74,7 +74,8 @@ void testMasterSidesAndBlocks()
         ui::Component* all[96];
         const int n = m.collectLeaves (all, 0, 96);
         inside = inside && m.groups[g].check (all, n) == 0;
-        filled = filled && u.bottom() >= b.bottom() - 90 && u.h >= 140;
+        // the VOICES group is one row of the grid of cells (64 px), the voice meter under it reaches the lower part of the block
+        filled = filled && (g == 2 ? m.voiceMeter.rect().bottom() >= b.bottom() - 90 && u.h >= 64 : u.bottom() >= b.bottom() - 90 && u.h >= 140);
     }
     check (inside, "the Q group of OUTPUT, PITCH, VOICES and GLIDE lies in its block and nothing else is in its frame");
     check (filled, "the groups fill their blocks (>= 140 px high, reaching the lower part)");
@@ -149,6 +150,18 @@ void testMasterGroupsAndMeters()
     r.inst.liveValues.activeVoices = 5;
     r.refresh();
     check (std::fabs (m.meters.peakL - 0.8f) < 1.0e-6f && m.voiceMeter.activeVoices == 5, "the meters are the engine's master peak and its voice count");
+    check (m.meters.holdL >= 0.8f - 1.0e-6f, "the meter has a peak hold (it stays at the highest peak)");
+    r.inst.liveValues.stripPeak[9] = 0.1f;
+    r.now += 40.0;
+    r.refresh();
+    check (m.meters.holdL > m.meters.peakL && m.meters.holdL < 0.8f + 1.0e-6f, "the peak hold falls slowly (hold " + std::to_string (m.meters.holdL) + " over the peak " + std::to_string (m.meters.peakL) + ")");
+    // the glide curve follows SLOPE live
+    r.inst.set ("master.portamento.slope", 6.0f);
+    r.refresh();
+    const float s6 = m.portaCurve.slope;
+    r.inst.set ("master.portamento.slope", -4.0f);
+    r.refresh();
+    check (s6 == 6.0f && m.portaCurve.slope == -4.0f, "the GLIDE CURVE display follows the SLOPE parameter at every update");
     // the keyboard: C major lights 7 of the 12 notes
     r.tap (m.sideTuning);
     r.inst.set ("master.scale.type", 1.0f);

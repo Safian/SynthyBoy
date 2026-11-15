@@ -86,7 +86,6 @@ public:
     /** Reads the instance: every value, the meters, the pages of the stack, the Q group. */
     void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
     {
-        (void) nowMs;
         pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0;
         pull (inst);
         full_.voiceMeter.activeVoices = in.live != nullptr ? in.live->activeVoices : 0;
@@ -94,6 +93,8 @@ public:
         const float pk = in.live != nullptr ? in.live->stripPeak[9] : 0.0f;   // the engine's master peak (the larger of the channels)
         full_.meters.peakL = pk;
         full_.meters.peakR = pk;
+        full_.meters.updateHold (lastMs_ > 0.0 ? static_cast<float> (nowMs - lastMs_) * 0.001f : 0.0f);
+        lastMs_ = nowMs;
         full_.portaCurve.slope = inst.param (slopeIdx_);
         full_.keyboard.scaleType = static_cast<int> (std::lround (inst.param (scaleTypeIdx_)));
         full_.keyboard.scaleKey = static_cast<int> (std::lround (inst.param (scaleKeyIdx_)));
@@ -364,6 +365,7 @@ private:
 
     int w_ = kCanvasW, h_ = kCanvasH;
     int pageTop_ = 0, listParam_ = -1;
+    double lastMs_ = 0.0;
     int polyphonyIdx_ = -1, slopeIdx_ = -1, scaleTypeIdx_ = -1, scaleKeyIdx_ = -1, scaleModeIdx_ = -1;
 
     ui::Component* gesture_ = nullptr;
