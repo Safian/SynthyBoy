@@ -198,6 +198,57 @@ Browser artwork tile in Sounds > INSTRUMENTS, tried on the MPC XL on 2026-11-14 
 - **Soak** (package with the callback statistics, `ov13-osc-ui-stats`, otherwise the same; four notes held all the time, a touch action every five seconds: knobs, route popup, unison page, type changes, modulations page, instance changes): 316 s, 64 action rounds, 108542 audio callbacks, every gap below 1.5 times the nominal block time (largest 3557 us against 2902 us, 1.23 times), no gap of 1.5 times or more, process time 447 us on average and 1325 us at most, dmesg unchanged, no helper restart or failure.
 
 - **Oscillator UI, round 15 (`.hw-local/mpc-perf/overlay-pkgs/ov14-osc-ui-results/`, package `ov14-osc-ui`).** The full screen, the detail pages and the popups are opaque over the whole region now (composed picture `composed-51-full-A.png`: no host graphic, no Q-Link frame); the compact view covers the third. The list popup opens from the source dropdown and from the names of the warp type steppers by touch, a tap on the 5th row wrote `osc1.wavetable` 4, the backdrop closed it. The Tune group's Q 1 and Q 2 written through the plugin's setParameter (debug file): Q 1 = 0.625 gave transpose 12, then Q 2 = 14/22 gave 15, then Q 1 = 0.25 gave -21 (octave -2, remainder 3 kept). The host's own widgets follow a write of the plugin-drawn path: with the OSC tab on screen, a write through `uiWrite` (debug file `/tmp/synthyboy-ui-fake-write`) made the host's LEVEL knob show 21.5 and TRANSPOSE 7 within a second (`screens/61`); a drag of the full screen's LEVEL showed 49.4 on the OSC tab opened afterwards. Not reached: an automation RECORDING (it needs the hardware record and play keys, nothing can press them from outside). CPU renderer: the long vertical lines at steep edges are gone (the stroke's reach was stretched by the slope; now capped); against the GPU frame 1.0 percent (main) and 2.8 percent (full screen, which also includes the other Q frame and a SEM field of a different state) of the canvas differ by more than 16 of 255 with a seven-tooth Sync polyline in the picture, inside the picture rectangle alone 4 to 6 percent (the edges of near vertical teeth are anti-aliased differently; not the level of the scenes without such a polyline, 0.01 to 0.4 percent).
+- **Overlay drawing: the frame budget (D plan, trial 17, Key 61, `.hw-local/mpc-perf/overlay-pkgs/ov16-gpu-bench-results/`, package `ov16-gpu-bench`).** The helper of the measuring build (`SYNTHYBOY_MPC_OVERLAY_BENCH`) draws a scene of its own from `/tmp/sb-bench.conf` over the whole Play region (1280 x 800 UI pixels) while four notes are held; 800 pixel wide curves, windows of 6 seconds, the GPU clock is `simple_ondemand` (100 to 600 MHz, so the lightly loaded steps run at the lowest clock and the steps near the limit are noisy). The pictures go out on the pace grid of 30 a second; a picture that takes more than about 17 ms loses every second slot (15 a second).
+
+| Step (Key 61, 4 held notes, 6 s) | pictures/s | picture ms (mean / 99th) | of it GPU | helper % | thread % | audio gap max |
+|---|---|---|---|---|---|---|
+| base-idle | 29.73 | 3.533 / 4.663 | 3.224 | 1.99 | 2.79 | 1.21x |
+| c1-p800-1.0px | 30.04 | 4.671 / 5.628 | 3.930 | 3.19 | 2.99 | 1.21x |
+| c1-p800-0.6px | 30.03 | 4.632 / 5.527 | 3.905 | 3.39 | 2.99 | 1.21x |
+| c8-p800-1.0px | 29.41 | 12.337 / 13.772 | 9.003 | 9.56 | 2.79 | 1.21x |
+| c8-p800-0.6px | 29.74 | 11.881 / 14.732 | 8.544 | 9.76 | 2.79 | 1.21x |
+| c16-p800-1.0px | 15.10 | 21.712 / 27.774 | 15.789 | 8.96 | 2.99 | 1.21x |
+| c16-p800-0.6px | 15.10 | 20.877 / 24.513 | 14.959 | 8.57 | 2.79 | 1.21x |
+| c32-p800-1.0px | 15.48 | 27.387 / 40.184 | 15.888 | 16.73 | 2.99 | 1.21x |
+| c32-p800-0.6px | 15.43 | 26.691 / 39.019 | 15.278 | 16.73 | 2.99 | 1.21x |
+| c64-p800-1.0px | 13.61 | 45.456 / 83.690 | 23.251 | 28.49 | 2.99 | 1.21x |
+| c64-p800-0.6px | 13.39 | 46.071 / 76.464 | 23.823 | 27.69 | 2.79 | 1.21x |
+| c128-p500-1.0px | 11.30 | 61.691 / 103.837 | 33.642 | 30.48 | 2.99 | 1.21x |
+| c128-p500-0.6px | 12.43 | 52.829 / 93.520 | 24.398 | 33.27 | 3.19 | 1.21x |
+| c16-p200-1.0px | 29.88 | 13.227 / 15.309 | 11.271 | 6.16 | 2.98 | 1.21x |
+| c64-p200-1.0px | 18.21 | 24.008 / 48.057 | 17.965 | 10.76 | 2.99 | 1.21x |
+| c128-p200-1.0px | 13.40 | 40.213 / 75.156 | 28.111 | 14.94 | 2.79 | 1.21x |
+| c8-p1600-1.0px | 21.86 | 16.606 / 18.325 | 10.819 | 12.55 | 2.99 | 1.21x |
+| c32-p1600-1.0px | 13.61 | 41.089 / 63.886 | 19.055 | 28.69 | 2.79 | 1.21x |
+| layers1 | 22.64 | 13.033 / 17.578 | 12.594 | 1.99 | 2.79 | 1.21x |
+| layers2 | 25.00 | 13.249 / 31.916 | 12.863 | 1.79 | 2.79 | 1.21x |
+| layers4 | 19.40 | 20.941 / 58.585 | 20.536 | 1.39 | 2.99 | 1.21x |
+| layers8 | 13.88 | 32.483 / 59.567 | 32.061 | 1.00 | 2.59 | 1.21x |
+| layers16 | 15.02 | 45.219 / 45.940 | 44.780 | 1.20 | 2.59 | 1.21x |
+| glowA-c16 | 13.48 | 35.386 / 66.618 | 26.429 | 11.75 | 2.99 | 1.21x |
+| glowB-c16 | 17.21 | 25.698 / 44.644 | 15.519 | 16.73 | 2.99 | 1.21x |
+| glowA-c32 | 11.85 | 52.225 / 95.329 | 34.562 | 20.08 | 2.98 | 1.21x |
+| glowB-c32 | 12.71 | 46.522 / 72.798 | 27.396 | 22.31 | 2.79 | 1.21x |
+| glowA-c64 | 8.40 | 90.253 / 122.905 | 55.627 | 27.63 | 3.18 | 1.21x |
+| glowB-c64 | 10.07 | 52.132 / 65.720 | 14.898 | 34.19 | 2.98 | 1.21x |
+| feedback-c16 | 16.27 | 22.462 / 36.461 | 16.039 | 9.96 | 2.79 | 1.21x |
+| nofeedback-c16 | 15.02 | 22.679 / 25.876 | 16.825 | 8.96 | 2.99 | 1.21x |
+| text40 | 29.84 | 6.863 / 8.113 | 6.055 | 3.59 | 2.79 | 1.21x |
+| text120 | 27.80 | 12.662 / 16.403 | 11.071 | 5.18 | 2.99 | 1.21x |
+| rrects100 | 23.64 | 14.318 / 33.426 | 12.859 | 3.98 | 2.79 | 1.21x |
+| bands8 | 15.10 | 17.789 / 22.110 | 12.233 | 8.17 | 2.79 | 1.21x |
+| bands32 | 13.75 | 40.701 / 61.252 | 20.213 | 26.29 | 3.39 | 1.21x |
+| stride1-c32 | 19.97 | 27.141 / 38.280 | 15.818 | 22.11 | 2.79 | 1.21x |
+| stride2-c32 | 15.14 | 28.837 / 42.518 | 17.303 | 16.33 | 2.79 | 1.21x |
+| stride1-idle | 29.90 | 3.476 / 4.505 | 3.206 | 2.19 | 2.99 | 1.21x |
+| msaa4-idle | 29.33 | 5.412 / 7.202 | 4.825 | 2.99 | 3.19 | 1.21x |
+| msaa4-c16 | 25.25 | 15.111 / 33.981 | 8.744 | 15.57 | 3.19 | 1.21x |
+| msaa4-c32 | 14.54 | 29.553 / 58.063 | 17.885 | 15.94 | 3.19 | 1.22x |
+
+Read from the table: a curve costs about half a millisecond and a little more than half a millisecond per thousand vertices, whatever its width (0.5 to 0.75 pixels cost the same as 1 pixel); a full region translucent layer costs about 13 ms at the idle clock and 2.8 ms at full clock; the soft extra pass of a glow costs about 0.9 ms per curve while the bloom (a quarter size layer, blurred, added) costs a flat 4 to 7 ms, cheaper from about six curves; 4 x MSAA is available on the plane (an EGL configuration with 4 samples works, +1.9 ms on an empty picture); the feedback layer (afterglow) costs nothing measurable but accumulates the bloom. The hang callback's longest gap stays at 1.18 to 1.22 times the nominal block in every step (ov13: 1.23). The 2 minute peak run and the temperature series were not made (the budget was enough). The pace of 60 pictures a second was not reached: with `stride=1` an empty picture still comes at 30 a second on the Play page (the cause was not found).
+
+**The budget (Key 61, 30 pictures a second, no worse audio): a picture that costs at most about 14 ms in the helper.** That holds: about 8 curves of 800 points or 16 curves of 200 to 400 points, any thickness, plus 40 to 100 texts, about 30 rounded rectangles, one bloom inside a display rectangle, at most one full region translucent layer. The protocol's frame (65 536 vertices, 128 curves) is accepted and does not harm the audio, but costs 62 ms a picture here (11 a second).
+
 ### Per the SDK documentation / not yet verified on the device
 
 These statements come from the SDK's documents (host-contract.md, install-and-test.md). A project was saved and loaded once (see above), but in which order the host restores the program and the chunk was not observed, so the host side of the program handling below is unconfirmed. Still not verified on the device: the CPU load during playback in the MPC app, and the sound of the final build (shell commit `17d6e11`): it loads in the stock MPC app, but nobody has listened to it.

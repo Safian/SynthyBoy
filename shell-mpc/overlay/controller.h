@@ -850,8 +850,7 @@ private:
         renderN_ = 0;
         if (want != ui::theme::detailLevel())
         {
-            ui::theme::setDetail (want);
-            needFrame_ = true;
+            ui::theme::setDetail (want);   // no frame is asked for: the Play view sees the new level at its next update and says it changed
             statusDue_ = true;
         }
     }
