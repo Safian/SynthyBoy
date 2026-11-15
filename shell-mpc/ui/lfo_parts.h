@@ -1,0 +1,299 @@
+// SynthyBoy - MPC UI component library: the parts of the LFO element that the oscillator did not need: ShapePicker (the 12 built-in shapes and the drawn one, as a grid of cells with the shape drawn in
+// each), SyncSwitch (HZ / BPM / KEY with TRIP and DOT), RateControl (the rate knob or the division stepper, whichever the sync mode says), InstanceBar (the LFO 1 .. 10 cells with the page cell and the
+// RND 1 .. 4 cells) . Everything else is built from the base components (base.h) and the composites of the oscillator.
+// Same contract as every component (core.h): a state and a rectangle in, a drawing and a change { id, value } out.
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+#pragma once
+
+#include "lfo_model.h"
+#include "panel.h"
+
+namespace synthyboy_mpc { namespace ui {
+
+// ===============================================================================================================================================================
+namespace lfoglyph
+{
+/** The picture of a shape in a box of about 30 x 20 pixels around (cx, cy): the built-in shapes sampled from the function the engine reads (lfo::builtinAt), the drawn one as a scribble with a point. */
+inline void draw (Pen& p, int shape, float cx, float cy, float w, float h, uint32_t col)
+{
+    p.style (1.0f, true);
+    if (shape >= 0 && shape < lfo::kNumBuiltin)
+    {
+        const int n = 24;
+        float px = cx - w * 0.5f, py = cy - 0.5f * h * lfo::builtinAt (shape, 0.0f);
+        for (int i = 1; i <= n; ++i)
+        {
+            const float t = static_cast<float> (i) / static_cast<float> (n), x = cx - w * 0.5f + w * t, y = cy - 0.5f * h * lfo::builtinAt (shape, std::min (t, 0.9999f));
+            p.line (px, py, x, y, 2.0f, col);
+            px = x; py = y;
+        }
+    }
+    else
+    {
+        static const float k[6][2] = { { -0.5f, 0.35f }, { -0.3f, -0.45f }, { -0.05f, 0.25f }, { 0.2f, -0.35f }, { 0.35f, 0.15f }, { 0.5f, -0.1f } };
+        for (int i = 0; i + 1 < 6; ++i)
+            p.line (cx + k[i][0] * w, cy + k[i][1] * h, cx + k[i + 1][0] * w, cy + k[i + 1][1] * h, 2.0f, col);
+        p.disc (cx + k[3][0] * w, cy + k[3][1] * h, 3.0f, col);
+    }
+    p.plain();
+}
+inline const char* name (int shape) noexcept
+{
+    static const char* const n[lfo::kNumShapes] = { "SINE", "TRI", "SAW UP", "SAW DN", "SQUARE", "PULSE", "STEP UP", "STEP DN", "RANDOM", "EXP UP", "EXP DN", "HALF", "DRAWN" };
+    return shape >= 0 && shape < lfo::kNumShapes ? n[shape] : "";
+}
+}
+
+// ===============================================================================================================================================================
+/** The pictures of the styles of a random LFO (Perlin noise, sample and hold, sine interpolation, the Lorenz attractor, the Rossler attractor) in the same box as the shapes. */
+inline void drawStyleGlyph (Pen& p, int style, float cx, float cy, float w, float h, uint32_t col)
+{
+    p.style (1.0f, true);
+    const int n = 28;
+    float px = 0.0f, py = 0.0f;
+    for (int i = 0; i <= n; ++i)
+    {
+        const float t = static_cast<float> (i) / static_cast<float> (n);
+        float x = cx - w * 0.5f + w * t, y = cy;
+        switch (style)
+        {
+            case 0: y = cy - h * 0.5f * (0.6f * std::sin (6.2832f * 1.3f * t + 0.5f) + 0.4f * std::sin (6.2832f * 2.9f * t + 1.7f)); break;
+            case 1: { static const float lv[6] = { 0.3f, -0.7f, 0.6f, -0.2f, -0.8f, 0.5f }; y = cy - h * 0.5f * lv[std::min (5, static_cast<int> (t * 6.0f))]; break; }
+            case 2: y = cy - h * 0.5f * (std::sin (6.2832f * 2.0f * t) * (0.5f + 0.5f * std::sin (6.2832f * 0.7f * t))); break;
+            case 3: { const float a = 6.2832f * t; x = cx + w * 0.5f * 0.8f * std::sin (a) * std::cos (0.5f * a); y = cy - h * 0.5f * std::sin (2.0f * a) * 0.8f; break; }
+            default: { const float a = 6.2832f * 2.0f * t; const float r = 0.25f + 0.75f * t; x = cx + w * 0.5f * r * std::cos (a); y = cy + h * 0.5f * r * std::sin (a); break; }
+        }
+        if (i > 0)
+            p.line (px, py, x, y, 2.0f, col);
+        px = x; py = y;
+    }
+    p.plain();
+}
+inline const char* styleName (int style) noexcept
+{
+    static const char* const n[5] = { "PERLIN", "S & H", "SINE INT", "LORENZ", "ROSSLER" };
+    return style >= 0 && style < 5 ? n[style] : "";
+}
+
+/** ShapePicker. In: the current index, the number of columns of the grid, `styles` (false: the 13 shapes of an LFO, 12 built-in and the drawn one; true: the 5 styles of a random LFO). Draw: one cell per item (a
+    grid of `cols` columns), its picture with its name under it, the current one highlighted. Out: an Index change (the new item) on a tap (on the touch up, from the cell the touch went down in); turn
+    (delta) steps through the items (no wrap). */
+class ShapePicker : public Component
+{
+public:
+    struct State { int index = 0, cols = 4; bool styles = false; };
+    State state;
+    static constexpr int kCells = lfo::kNumShapes, kStyles = 5;
+
+    int count() const noexcept { return state.styles ? kStyles : kCells; }
+    int rows() const noexcept { return (count() + std::max (1, state.cols) - 1) / std::max (1, state.cols); }
+    /** The cell of item i (i may be beyond the last item: the free cells of the last row, for the owner's own buttons). */
+    Rect cell (int i) const noexcept
+    {
+        const int cols = std::max (1, state.cols), r = rows(), c = i % cols, rw = i / cols;
+        return { rect_.x + rect_.w * c / cols, rect_.y + rect_.h * rw / r, rect_.w * (c + 1) / cols - rect_.w * c / cols, rect_.h * (rw + 1) / r - rect_.h * rw / r };
+    }
+    Size minSize() const override { return { std::max (1, state.cols) * 56, rows() * 56 }; }
+    int touchTargets (Rect* out, int max) const override { int n = 0; for (int i = 0; i < count() && n < max; ++i) out[n++] = cell (i); return n; }
+
+protected:
+    void drawBody (Pen& p) const override
+    {
+        const theme::Look& T = theme::L();
+        for (int i = 0; i < count(); ++i)
+        {
+            const Rect c = cell (i).inset (2);
+            const bool cur = i == state.index;
+            p.control (c, qFrame_ && cur, cur);
+            if (cur)
+                p.rrect (c, T.rControl, p.c (T.flow[0], 255), 1.6f);
+            const int labelH = c.h >= 44 ? 17 : 0;
+            const float gw = std::min (30.0f, static_cast<float> (c.w) - 14.0f), gh = std::min (20.0f, static_cast<float> (c.h - labelH) - 10.0f);
+            const float gx = static_cast<float> (c.x) + static_cast<float> (c.w) * 0.5f, gy = static_cast<float> (c.y) + static_cast<float> (c.h - labelH) * 0.5f;
+            if (state.styles)
+                drawStyleGlyph (p, i, gx, gy, gw, gh, p.c (cur ? T.flow[0] : T.textDim, 255));
+            else
+                lfoglyph::draw (p, i, gx, gy, gw, gh, p.c (cur ? T.flow[0] : T.textDim, 255));
+            if (labelH > 0)
+                p.textCentered ({ c.x, c.bottom() - labelH - 1, c.w, labelH }, state.styles ? styleName (i) : lfoglyph::name (i), T.fLabel - 3.0f, p.c (cur ? T.text : T.textDim, 255), T.fMin);
+        }
+    }
+    int cellAt (int x, int y) const noexcept { for (int i = 0; i < count(); ++i) if (cell (i).contains (x, y)) return i; return -1; }
+    Change onDown (int x, int y, double now) override { tap_.down (x, y, now); downCell_ = cellAt (x, y); return Change::none(); }
+    Change onMove (int x, int y) override { tap_.move (x, y); return Change::none(); }
+    Change onUp (int, int) override
+    {
+        if (tap_.up() == 0 || downCell_ < 0 || downCell_ == state.index)
+            return Change::none();
+        return Change::indexed (id_, downCell_, downCell_);
+    }
+    Change onTurn (double delta) override
+    {
+        const long d = std::lround (delta);
+        const int n = std::clamp (state.index + static_cast<int> (std::clamp<long> (d, -100, 100)), 0, count() - 1);
+        return d == 0 || n == state.index ? Change::none() : Change::indexed (id_, n, n);
+    }
+
+private:
+    TapGesture tap_;
+    int downCell_ = -1;
+};
+
+// ===============================================================================================================================================================
+/** SyncSwitch: the sync of an LFO as the player thinks of it: the mode HZ / BPM / KEY (three cells) and the switches TRIP and DOT (they only work in BPM mode: dim otherwise). In: the sync value of the parameter
+    (0 Free, 1 Tempo, 2 dotted, 3 triplet, 4 Key follow: `setSync`). Out: the changes of the three children (`mode`, `trip`, `dot`) with the ids the owner gave; `nextSync (child, change)` turns such a change into the
+    sync value to write (the mode keeps the switches, a switch exclude the other). turn goes to the mode cells. */
+class SyncSwitch : public Composite
+{
+public:
+    PictogramSelector mode;
+    ToggleIcon trip, dot;
+
+    SyncSwitch()
+    {
+        mode.setItem (0, -1, "HZ"); mode.setItem (1, -1, "BPM"); mode.setItem (2, -1, "KEY");
+        trip.state.icon = ToggleIcon::Icon::Generic; trip.setLabel ("TRIP");
+        dot.state.icon = ToggleIcon::Icon::Generic; dot.setLabel ("DOT");
+        addKid (mode); addKid (trip); addKid (dot);
+        setPrimary (&mode);
+    }
+    void setSync (int sync)
+    {
+        sync_ = sync;
+        mode.state.index = static_cast<int> (lfo::syncModeOf (sync));
+        trip.state.on = lfo::syncTrip (sync);
+        dot.state.on = lfo::syncDot (sync);
+        syncKids();
+    }
+    int sync() const noexcept { return sync_; }
+    /** The sync value after a change of one of the children (the current one when the change is none of the three). */
+    int nextSync (const Component* child, const Change& c) const noexcept
+    {
+        using M = lfo::SyncMode;
+        M m = lfo::syncModeOf (sync_);
+        bool tr = lfo::syncTrip (sync_), dt = lfo::syncDot (sync_);
+        if (child == &mode && c.kind == ChangeKind::Index)
+            m = static_cast<M> (std::clamp (c.index, 0, 2));
+        else if (child == &trip && c.kind == ChangeKind::Index) { tr = c.index != 0; if (tr) dt = false; }
+        else if (child == &dot && c.kind == ChangeKind::Index) { dt = c.index != 0; if (dt) tr = false; }
+        return lfo::syncOf (m, tr, dt);
+    }
+    Size minSize() const override { return { 3 * 56 + 2 * 72 + 2 * kGap, 56 }; }
+
+protected:
+    void syncKids() override
+    {
+        mode.setEnabled (enabled_);
+        const bool tempo = lfo::syncModeOf (sync_) == lfo::SyncMode::Bpm;
+        trip.setEnabled (enabled_ && tempo);
+        dot.setEnabled (enabled_ && tempo);
+    }
+    void layout() override
+    {
+        Rect r[3];
+        const int fixed[3] = { 0, 72, 72 }, weight[3] = { 1, 0, 0 };
+        layoutRow (rect_, fixed, weight, 3, kGap, r);
+        mode.place (r[0]); trip.place (r[1]); dot.place (r[2]);
+        syncKids();
+    }
+    int sync_ = 0;
+};
+
+// ===============================================================================================================================================================
+/** RateControl: the speed of an LFO. In the Hz mode the knob (RATE, in Hz), in the BPM mode the division stepper (1/4 note, 1/8 note ...), in the KEY mode the knob drawn dim (the rate follows the key: the
+    knob has nothing to say). One component for the compact view and the full screen; the Q group member is the whole control, the hardware knob turns whichever of the two is shown (`primary`). With
+    `setShowMode (true)` (the compact view, which has no sync switch of its own) the three cells HZ / BPM / KEY stand at the right of it: the sync mode is one touch away. */
+class RateControl : public Composite
+{
+public:
+    Knob rate { "RATE" };
+    Stepper division;
+    PictogramSelector modeCells;
+    static constexpr int kModeW = 3 * 56;
+
+    RateControl()
+    {
+        division.setCaption ("DIVISION"); division.state.wrap = false; division.listable = true;
+        modeCells.setItem (0, -1, "HZ"); modeCells.setItem (1, -1, "BPM"); modeCells.setItem (2, -1, "KEY");
+        addKid (rate); addKid (division, false); addKid (modeCells, false);
+        setPrimary (&rate);
+    }
+    void setShowMode (bool on) { showMode_ = on; show (modeCells, on); layout(); }
+    void setMode (lfo::SyncMode m)
+    {
+        mode_ = m;
+        show (rate, m != lfo::SyncMode::Bpm);
+        show (division, m == lfo::SyncMode::Bpm);
+        setPrimary (m == lfo::SyncMode::Bpm ? static_cast<Component*> (&division) : &rate);
+        rate.setLabel (m == lfo::SyncMode::Key ? "KEY" : "RATE");
+        modeCells.state.index = static_cast<int> (m);
+        syncKids();
+    }
+    lfo::SyncMode mode() const noexcept { return mode_; }
+    Size minSize() const override { return { Stepper::kMinW + (showMode_ ? kGap + kModeW : 0), 72 }; }
+
+protected:
+    void syncKids() override { rate.setEnabled (enabled_ && mode_ != lfo::SyncMode::Key); division.setEnabled (enabled_); modeCells.setEnabled (enabled_); }
+    void layout() override
+    {
+        Rect main = rect_;
+        if (showMode_)
+        {
+            const int h = std::min (rect_.h, 56);
+            modeCells.place ({ rect_.right() - kModeW, rect_.y + (rect_.h - h) / 2, kModeW, h });
+            main = { rect_.x, rect_.y, std::max (0, rect_.w - kModeW - kGap), rect_.h };
+        }
+        rate.state.side = main.h < 108 || main.w >= 2 * main.h;
+        rate.place (main);
+        const int h = std::min (main.h, 64);
+        division.place ({ main.x, main.y + (main.h - h) / 2, main.w, h });
+        syncKids();
+    }
+    lfo::SyncMode mode_ = lfo::SyncMode::Hz;
+    bool showMode_ = false;
+};
+
+// ===============================================================================================================================================================
+/** InstanceBar: which LFO the element shows: the cells of LFO 1 .. 5 (or 6 .. 10) with the page cell that turns to the other five, and the cells RND 1 .. 4. In: whether a random LFO is shown, its / the LFO's number
+    (1 ..), the page of the LFO cells. Out: Index changes of `lfoCells` (0 .. 4: the LFO of the page; 5: the page cell) and of `rndCells` (0 .. 3). */
+class InstanceBar : public Composite
+{
+public:
+    PictogramSelector lfoCells, rndCells;
+    static constexpr int kLfoCells = 6, kRndCells = 4, kCellW = 56;
+
+    InstanceBar()
+    {
+        static const char* const rl[kRndCells] = { "R1", "R2", "R3", "R4" };
+        for (int i = 0; i < kRndCells; ++i)
+            rndCells.setItem (i, -1, rl[i]);
+        configure (false, 1, 0);
+        addKid (lfoCells); addKid (rndCells);
+    }
+    /** `random`: a random LFO is shown (number 1 .. 4), else LFO 1 .. 10; `page` 0: the cells show 1 .. 5, 1: 6 .. 10. */
+    void configure (bool random, int number, int page)
+    {
+        page_ = page != 0 ? 1 : 0;
+        static const char* const names[10] = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "10" };
+        for (int i = 0; i < 5; ++i)
+            lfoCells.setItem (i, -1, names[page_ * 5 + i]);
+        lfoCells.setItem (5, -1, page_ == 0 ? "6-10" : "1-5");
+        lfoCells.state.index = ! random && number >= 1 + page_ * 5 && number <= 5 + page_ * 5 ? number - 1 - page_ * 5 : -1;
+        rndCells.state.index = random ? std::clamp (number, 1, kRndCells) - 1 : -1;
+    }
+    int page() const noexcept { return page_; }
+    Size minSize() const override { return { (kLfoCells + kRndCells) * kCellW + kGap, 56 }; }
+
+protected:
+    void layout() override
+    {
+        Rect r[2];
+        const int fixed[2] = { 0, 0 }, weight[2] = { kLfoCells, kRndCells };
+        layoutRow (rect_, fixed, weight, 2, kGap, r);
+        lfoCells.place (r[0]); rndCells.place (r[1]);
+    }
+    int page_ = 0;
+};
+
+}} // namespace synthyboy_mpc::ui

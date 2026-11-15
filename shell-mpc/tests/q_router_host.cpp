@@ -193,6 +193,32 @@ int main()
         ui.join(); audio.join(); display.join();
         check (reported.load() > 0, "threads: group changes, writes, reads and reports at the same time: every value reported is in range and every real index is a table index (" + std::to_string (reported.load()) + " reports)");
     }
+    {   // the virtual targets (the values of the LFO shape editor): no parameter behind them; the page sets the value, the host's write is kept for the page
+        QRouter r;
+        const int t[4] = { QRouter::encode (0, QRouter::kVirtual), QRouter::encode (3, QRouter::kVirtual), 5, QRouter::kNone };
+        r.setGroup (t, 4, kParams);
+        check (r.target (0) == QRouter::kNone && r.target (1) == QRouter::kNone && r.virtualId (0) == 0 && r.virtualId (1) == 3 && r.virtualId (2) == -1 && r.target (2) == 5, "a virtual target is no table index (every parameter code sees none), its id is its own");
+        r.setVirtualValue (0, 0.25f);
+        check (std::fabs (r.value (0, rd) - 0.25f) < 1e-6f && r.value (1, rd) == 0.0f, "its value is the one the page set");
+        long allocs = gAllocs.load();
+        gCount.store (true);
+        const QRouter::Write w = r.hostWrite (0, 0.75f, false, rd, wr);
+        float v = -1.0f;
+        const bool got = r.takeVirtual (0, v);
+        gCount.store (false);
+        check (w == QRouter::Write::written && got && std::fabs (v - 0.75f) < 1e-6f && gAllocs.load() == allocs, "the host's write is kept for the page (once, no allocation) and no parameter changed");
+        check (! r.takeVirtual (0, v) && std::fabs (r.value (0, rd) - 0.75f) < 1e-6f, "taken once; the value is what the host wrote until the page says another");
+        check (r.hostWrite (0, 0.75f, false, rd, wr) == QRouter::Write::echo && r.hostWrite (1, 0.5f, true, rd, wr) == QRouter::Write::restoring, "the same value is an echo, the restore window ignores a write");
+        Reports rep;
+        pollInto (r, rep);
+        rep.clear();
+        r.setVirtualValue (3, 0.5f);
+        pollInto (r, rep);
+        bool told = false;
+        for (const auto& e : rep.q) told = told || (e.first == 1 && std::fabs (e.second - 0.5f) < 1e-6f);
+        check (told && rep.real.empty(), "the page's new value is told to the host (the Q proxy), no real parameter");
+        check (r.hostWrite (2, 0.2f, false, rd, wr) == QRouter::Write::written && std::fabs (rd (5) - 0.2f) < 1e-6f, "a real target next to the virtual ones works as before");
+    }
     std::printf (fails ? "q_router_host: FAILED (%d)\n" : "q_router_host: OK\n", fails);
     return fails ? 1 : 0;
 }

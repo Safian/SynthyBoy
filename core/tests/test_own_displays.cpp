@@ -270,6 +270,29 @@ TEST (own_lfo_display_free_running_cursor_moves_and_arguments_are_checked)
         CHECK (std::isfinite (x));
 }
 
+// the live read-out has one LFO position per sounding voice (newest first): the cursors of the LFO display, one for every voice
+TEST (own_lfo_read_out_has_a_cursor_per_voice)
+{
+    LfoRig rig ([&] (IEngine& e, ParamValues& v)
+    {
+        both (e, v, "lfo1.rate", 1.0f);
+        both (e, v, "lfo1.sync_type", 0.0f); // retrigger: every voice starts its own cycle
+    });
+    LiveValues live;
+    CHECK (rig.e->copyReadout (live));
+    CHECK (live.numLfoVoices == 0);
+    rig.note();
+    for (int b = 0; b < 60; ++b)
+        rig.block();
+    Event on2 = sbtest::noteOn (0, 64, 0.8f);
+    rig.e->process (&on2, 1, rig.l.data(), rig.r.data(), 256);
+    live = rig.block();
+    CHECK (live.numLfoVoices == 2);
+    CHECK (live.lfoVoicePhase[0][0] >= 0.0f && live.lfoVoicePhase[0][1] > live.lfoVoicePhase[0][0] + 0.05f); // the older voice is further into its cycle
+    CHECK (live.lfoVoicePhase[0][2] < 0.0f && live.lfoVoicePhase[0][7] < 0.0f);                              // no third voice
+    CHECK (live.lfoVoicePhase[0][0] == live.lfoPhase[0]);                                                     // the newest voice is the one that is heard
+}
+
 // ---- the oscillator cycle ---------------------------------------------------------------------------------------------------------------------------------
 
 namespace

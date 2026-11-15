@@ -32,6 +32,9 @@ public:
     // (Q 1 of the Tune group), kSem: what is left inside the octave (Q 2). transpose = 12 * oct + sem; the two knobs no longer do the same thing.
     static constexpr int kModeShift = 16, kIndexMask = 0xffff;
     static constexpr int kPlain = 0, kOct = 1, kSem = 2;
+    /** kVirtual: the target is no parameter but a VIRTUAL value of the plugin-drawn page (the index is its id 0 .. kNumVirtual - 1: the values of the LFO shape editor). The page tells the router the value the target has
+        now (setVirtualValue); a write of the host to the Q proxy is kept for the page (takeVirtual) and not written to any parameter. target (q) is none for it: every table index code ignores it. */
+    static constexpr int kVirtual = 3, kNumVirtual = 8;
     static constexpr int encode (int tableIndex, int mode) noexcept { return tableIndex < 0 ? kNone : (tableIndex | (mode << kModeShift)); }
     static int indexOf (int encoded) noexcept { return encoded < 0 ? kNone : (encoded & kIndexMask); }
     static int modeOf (int encoded) noexcept { return encoded < 0 ? kPlain : (encoded >> kModeShift); }
@@ -77,8 +80,20 @@ public:
             groupDue_.store (true, std::memory_order_release);
     }
 
-    /** The table index of the target of Q q (0 .. 3), kNone when it has none. */
-    int target (int q) const noexcept { return indexOf (encoded (q)); }
+    /** The table index of the target of Q q (0 .. 3), kNone when it has none (or a virtual one). */
+    int target (int q) const noexcept { return modeOf (encoded (q)) == kVirtual ? kNone : indexOf (encoded (q)); }
+    /** The virtual id of the target of Q q (0 .. kNumVirtual - 1), -1 when it has none or a real one. */
+    int virtualId (int q) const noexcept { const int e = encoded (q); return e >= 0 && modeOf (e) == kVirtual && indexOf (e) < kNumVirtual ? indexOf (e) : -1; }
+    /** The page: the value (0 .. 1) virtual id has now; the host is told when it differs from what it last heard (the poll). */
+    void setVirtualValue (int id, float v) noexcept { if (id >= 0 && id < kNumVirtual) vValue_[id].store (std::isfinite (v) ? std::clamp (v, 0.0f, 1.0f) : 0.0f, std::memory_order_relaxed); }
+    /** The page: the value the host wrote to a Q proxy whose target is virtual id, once (false: nothing written since the last call). */
+    bool takeVirtual (int id, float& v) noexcept
+    {
+        if (id < 0 || id >= kNumVirtual || ! vDue_[id].exchange (false, std::memory_order_acq_rel))
+            return false;
+        v = vIn_[id].load (std::memory_order_relaxed);
+        return true;
+    }
     int mode (int q) const noexcept { return modeOf (encoded (q)); }
     int encoded (int q) const noexcept { return q >= 0 && q < kCount ? target_[q].load (std::memory_order_relaxed) : kNone; }
 
@@ -86,6 +101,8 @@ public:
     template <class Read>
     float value (int q, Read&& readNorm) const noexcept
     {
+        if (const int vid = virtualId (q); vid >= 0)
+            return vValue_[vid].load (std::memory_order_relaxed);
         const int t = target (q);
         return t == kNone ? 0.0f : viewValue (mode (q), readNorm (t));
     }
@@ -94,6 +111,19 @@ public:
     template <class Read, class WriteFn>
     Write hostWrite (int q, float host, bool restoring, Read&& readNorm, WriteFn&& write) noexcept
     {
+        if (const int vid = virtualId (q); vid >= 0)
+        {
+            const float v = std::isfinite (host) ? (host < 0.0f ? 0.0f : (host > 1.0f ? 1.0f : host)) : 0.0f;
+            if (std::fabs (v - vValue_[vid].load (std::memory_order_relaxed)) <= kTolerance)
+                return Write::echo;
+            if (restoring)
+                return Write::restoring;
+            vIn_[vid].store (v, std::memory_order_relaxed);
+            vDue_[vid].store (true, std::memory_order_release);
+            vValue_[vid].store (v, std::memory_order_relaxed);   // the host knows this value: it is the value of the target until the page says another
+            last_[q].store (v, std::memory_order_relaxed);
+            return Write::written;
+        }
         const int t = target (q);
         if (t == kNone)
             return Write::none;
@@ -146,6 +176,9 @@ private:
     std::atomic<int> target_[kCount];
     std::atomic<float> last_[kCount];       // the value of each Q as the host last heard it (a host write or a report)
     std::atomic<int> realDue_[kCount];      // the real parameter a host write of Q q changed: the poll tells the host (kNone: nothing due)
+    std::atomic<float> vValue_[kNumVirtual] = {};   // the value of every virtual target (set by the page, or by the host's write)
+    std::atomic<float> vIn_[kNumVirtual] = {};      // the last value the host wrote to a virtual target
+    std::atomic<bool> vDue_[kNumVirtual] = {};      // ... and it was not taken by the page yet
     std::atomic<bool> groupDue_ { false };
     bool lastValid_ = false;                // display thread only
 };

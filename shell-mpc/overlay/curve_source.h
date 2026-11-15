@@ -80,6 +80,14 @@ public:
     virtual void requestContent (int /*osc*/, int /*kind*/, const std::string& /*path*/) {}
     /** The state of the last load: 0 none yet, 1 loading, 2 done, 3 failed (`message` gets the reason when it is not null). */
     virtual int contentLoad (std::string* /*message*/) const { return 0; }
+    /** The plugin-drawn LFO page writes the DRAWN shape of LFO `lfo` (1 .. 10) into the content of the state (a shape with 2 .. 128 points, the loop point, the smooth flag): a request, applied by the plugin's display
+        thread (the engine gets the new content, the chunk keeps it, content () shows it a moment later); a newer request for the same LFO replaces an older one that was not applied yet. Called from the overlay
+        thread; it only stores the request. */
+    virtual void setLfoShape (int /*lfo*/, const synthyboy::ContentLfoShape& /*shape*/) {}
+    /** The VIRTUAL Q targets (q_router.h): a Q knob that is not a parameter (the values of the shape editor). The page tells the router the value (0 .. 1) a virtual target has now; the host's write to the
+        Q proxy comes back through takeQVirtual (the latest written value; false when there is none since the last call). Lock free. */
+    virtual void setQVirtual (int /*id*/, float /*normalised*/) noexcept {}
+    virtual bool takeQVirtual (int /*id*/, float& /*normalised*/) noexcept { return false; }
 };
 
 class CurveSource
