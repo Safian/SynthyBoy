@@ -83,6 +83,9 @@ struct MixOut
 {
     float* l[4];
     float* r[4];
+    /** The level meters of the mixer (one per strip: Sub, A, B, C, Noise, Filter 1, Filter 2): every voice ADDS the square of the peak of its source's mono output over this chunk to srcSq[strip] (a power sum: the
+        voices are uncorrelated; for one voice it is exactly its peak). null: nobody listens. */
+    float* srcSq = nullptr;
 };
 
 class Voice
@@ -103,6 +106,8 @@ public:
     float readPosition (int osc) const noexcept { return lib[osc].readPosition(); }
     int readGrains (int osc, float* pos, float* life, int maxN) const noexcept { return lib[osc].readGrains (pos, life, maxN); }
     float subPhase() const noexcept { return sub.firstPhase(); }
+    /** The step (0 .. 7) of the voice control this voice plays: (the number of the note - 1) modulo the length. */
+    int voiceControlStep() const noexcept { return vcStep; }
     float noisePosition() const noexcept { return noiseUseSample ? noiseSv.playheadFraction() : -1.0f; }
 
     bool isActive() const noexcept { return active; }
@@ -265,6 +270,7 @@ private:
     float envStart = 0.0f;
     float ampPrev = 0.0f, ampCur = 0.0f, velGain = 1.0f, velGainPrev = 1.0f;
     float srcLevel[7] = {};
+    int vcStep = 0;
     float outL = 0.0f, outR = 0.0f, lastLevel = 0.0f;
     float lastBusL[4] = {}, lastBusR[4] = {};
     float declickL = 0.0f, declickR = 0.0f;

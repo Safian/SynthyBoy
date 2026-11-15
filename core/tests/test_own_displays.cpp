@@ -569,3 +569,92 @@ TEST (own_env_display_beats_units_follow_the_tempo_and_arguments_are_checked)
     CHECK (! EnvDisplay::compute (v, r, g, nullptr, 64));
     CHECK (! EnvDisplay::compute (v, r, g, y.data(), 1));
 }
+
+// ---- the level meters of the mixer (LiveValues::stripPeak) ------------------------------------------------------------------------------------------------
+
+// the strips measure what their source plays: the oscillator A of a note shows on strip A and on the master, a strip of a source that is off stays at zero, the sub appears when it is switched on, the meters fall
+// back after the note, and the read-out is published without a lock (the audio thread writes atomics, the display thread reads them while it keeps running)
+TEST (own_mixer_strip_peaks_follow_the_sources_and_decay)
+{
+    LfoRig rig ([&] (IEngine& e, ParamValues& v)
+    {
+        both (e, v, "osc1.on", 1.0f);
+        both (e, v, "osc1.level", 60.0f);
+        both (e, v, "osc2.on", 0.0f);
+        both (e, v, "osc3.on", 0.0f);
+        both (e, v, "sub.on", 0.0f);
+        both (e, v, "noise.on", 0.0f);
+        both (e, v, "env1.attack", 2.0f);
+        both (e, v, "env1.sustain", 100.0f);
+    });
+    LiveValues live;
+    CHECK (rig.e->copyReadout (live));
+    for (int s = 0; s < LiveValues::kMaxStrips; ++s)
+        CHECK (live.stripPeak[s] == 0.0f);   // nothing sounds: every meter is at the floor
+    rig.note();
+    for (int b = 0; b < 40; ++b)
+        live = rig.block();
+    CHECK (live.stripPeak[1] > 0.3f && live.stripPeak[1] <= 1.0f);   // strip A
+    CHECK (live.stripPeak[2] == 0.0f && live.stripPeak[3] == 0.0f);  // B and C are off
+    CHECK (live.stripPeak[0] == 0.0f && live.stripPeak[4] == 0.0f);  // Sub and Noise are off
+    CHECK (live.stripPeak[5] > 0.3f);                                 // the oscillator goes through filter 1 (the default destination)
+    CHECK (live.stripPeak[9] > 0.3f && live.stripPeak[9] <= 1.0f);   // the master
+    CHECK (live.stripPeak[7] == 0.0f && live.stripPeak[8] == 0.0f);  // nothing is sent to the buses
+    const float held = live.stripPeak[1];
+    // a louder oscillator reads higher
+    {
+        LfoRig loud ([&] (IEngine& e, ParamValues& v)
+        {
+            both (e, v, "osc1.on", 1.0f);
+            both (e, v, "osc1.level", 100.0f);
+            both (e, v, "osc2.on", 0.0f);
+            both (e, v, "osc3.on", 0.0f);
+            both (e, v, "env1.attack", 2.0f);
+            both (e, v, "env1.sustain", 100.0f);
+        });
+        loud.note();
+        LiveValues l2;
+        for (int b = 0; b < 40; ++b)
+            l2 = loud.block();
+        CHECK (l2.stripPeak[1] > held);
+    }
+    // the sub is switched on: its strip lights up
+    set (*rig.e, "sub.on", 1.0f);
+    set (*rig.e, "sub.level", 80.0f);
+    rig.note();
+    for (int b = 0; b < 40; ++b)
+        live = rig.block();
+    CHECK (live.stripPeak[0] > 0.2f);
+    // the sends of the oscillator reach the buses
+    set (*rig.e, "osc1.bus1_send", 100.0f);
+    for (int b = 0; b < 40; ++b)
+        live = rig.block();
+    CHECK (live.stripPeak[7] > 0.2f && live.stripPeak[8] == 0.0f);
+    // all notes off: the meters fall back to the floor (release 300 ms)
+    Event off = sbtest::noteOff (0, 60);
+    rig.e->process (&off, 1, rig.l.data(), rig.r.data(), 256);
+    Event off2 = sbtest::noteOff (0, 64);
+    rig.e->process (&off2, 1, rig.l.data(), rig.r.data(), 256);
+    for (int b = 0; b < 400; ++b)
+        live = rig.block();
+    CHECK (live.stripPeak[9] < 0.05f && live.stripPeak[1] < 0.05f);
+}
+
+// the voice control: each of the newest voices reports the step of the voice control it plays (note number - 1, modulo the length): the highlighted column of the Voice page
+TEST (own_voice_control_read_out_has_the_step_of_every_voice)
+{
+    LfoRig rig ([&] (IEngine& e, ParamValues& v) { both (e, v, "voicectl.length", 3.0f); });
+    LiveValues live;
+    CHECK (rig.e->copyReadout (live));
+    CHECK (live.voiceStep[0] < 0.0f);   // no voice: nothing is lit
+    const int keys[4] = { 60, 62, 64, 65 };
+    for (int k = 0; k < 4; ++k)
+    {
+        Event on = sbtest::noteOn (0, keys[k], 0.8f);
+        rig.e->process (&on, 1, rig.l.data(), rig.r.data(), 256);
+        live = rig.block();
+    }
+    // four notes with a length of 3: the steps 0, 1, 2, 0; newest first
+    CHECK (live.voiceStep[0] == 0.0f && live.voiceStep[1] == 2.0f && live.voiceStep[2] == 1.0f && live.voiceStep[3] == 0.0f);
+    CHECK (live.voiceStep[4] < 0.0f && live.voiceStep[7] < 0.0f);
+}

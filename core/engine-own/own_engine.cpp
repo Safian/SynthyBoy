@@ -101,7 +101,10 @@ OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.fo
         multiKey[o].store (-1, std::memory_order_relaxed);
     }
     for (int v = 0; v < LiveValues::kReadVoices; ++v)
+    {
         liveSubPhase[v].store (-1.0f, std::memory_order_relaxed);
+        liveVoiceStep[v].store (-1.0f, std::memory_order_relaxed);
+    }
     for (int e = 0; e < LiveValues::kNumEnvs; ++e)
         for (int v = 0; v < LiveValues::kReadVoices; ++v)
         {
@@ -963,6 +966,8 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         rightOut = scratchRight.data();
     }
     std::fill (rightOut, rightOut + numFrames, 0.0f);
+    std::fill (std::begin (stripBlockPeak), std::end (stripBlockPeak), 0.0f);   // the meters of this block start from nothing
+    lastBlockFrames = numFrames;
 
     // ---- block snapshot
     const uint32_t gen = paramGen.load (std::memory_order_acquire);
@@ -1168,10 +1173,21 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             mo.l[t] = mixL[t];
             mo.r[t] = mixR[t];
         }
+        std::fill (std::begin (stripSq), std::end (stripSq), 0.0f);
+        mo.srcSq = stripSq;
         for (auto& v : voices)
             if (v->isActive())
                 v->render (mo, n, controlPos);
         addGhosts (n);
+        for (int s = 0; s < 7; ++s)   // Sub, A, B, C, Noise, Filter 1, Filter 2: the power sum of the voices of this period
+            stripBlockPeak[s] = std::max (stripBlockPeak[s], std::sqrt (stripSq[s]));
+        for (int b = 1; b <= 2; ++b)   // Bus 1, Bus 2: what the voices send into them, before the rack of the bus
+        {
+            float pk = 0.0f;
+            for (int i = 0; i < n; ++i)
+                pk = std::max (pk, std::max (std::fabs (mixL[b][i]), std::fabs (mixR[b][i])));
+            stripBlockPeak[6 + b] = std::max (stripBlockPeak[6 + b], pk);
+        }
         dlVoices.process (mixL[0], mixR[0], n);
         dlDirect.process (mixL[3], mixR[3], n);
         dlBusIn[0].process (mixL[1], mixR[1], n); // a bus that is fed by the other waits for what the first sends into it
@@ -1224,6 +1240,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             const float dg = lerp (directGainPrev, directGain, static_cast<float> (controlPos + (i - pos) + 1) * (1.0f / static_cast<float> (kControlPeriod)));
             left[i] = outputLimit (left[i] * g + mixL[3][i - pos] * dg);
             rightOut[i] = outputLimit (rightOut[i] * g + mixR[3][i - pos] * dg);
+            stripBlockPeak[9] = std::max (stripBlockPeak[9], std::max (std::fabs (left[i]), std::fabs (rightOut[i])));   // Master: what leaves the engine
         }
         controlPos = (controlPos + n) % kControlPeriod;
         pos = end;
@@ -1271,7 +1288,10 @@ bool OwnEngine::copyReadout (LiveValues& out) const noexcept
     for (int i = 0; i < out.numTargets; ++i)
         out.target[i] = liveTarget[i].load (std::memory_order_relaxed);
     for (int v = 0; v < LiveValues::kReadVoices; ++v)
+    {
         out.subPhase[v] = liveSubPhase[v].load (std::memory_order_relaxed);
+        out.voiceStep[v] = liveVoiceStep[v].load (std::memory_order_relaxed);
+    }
     out.noisePos = liveNoisePos.load (std::memory_order_relaxed);
     out.numLfoVoices = std::clamp (liveNumLfoVoices.load (std::memory_order_relaxed), 0, static_cast<int> (LiveValues::kReadVoices));
     for (int l = 0; l < LiveValues::kNumLfos; ++l)
@@ -1306,6 +1326,19 @@ bool OwnEngine::copyReadout (LiveValues& out) const noexcept
 void OwnEngine::writeReadout() noexcept
 {
     const ParamIndex& pi = paramIndex();
+    // the meters of the mixer: the peak of the block on a scale of 60 dB (0 = -60 dBFS, 1 = full scale), a fast attack and a release of about 300 ms; published to the display thread through atomics (no lock)
+    {
+        const float release = std::exp (-static_cast<float> (std::max (lastBlockFrames, 1)) / static_cast<float> (std::max (sampleRate, 1.0) * 0.3));
+        for (int s = 0; s < LiveValues::kMaxStrips; ++s)
+        {
+            const float pk = stripBlockPeak[s];
+            const float level = pk > 1.0e-3f ? std::clamp (1.0f + 20.0f * std::log10 (pk) / 60.0f, 0.0f, 1.0f) : 0.0f;
+            stripShown[s] = std::max (level, stripShown[s] * release);
+            if (stripShown[s] < 0.002f)
+                stripShown[s] = 0.0f;
+            liveStripPeak[s].store (stripShown[s], std::memory_order_relaxed);
+        }
+    }
     const Voice* newest = nullptr;
     for (const auto& v : voices)
         if (v->isActive() && (newest == nullptr || v->serial() > newest->serial()))
@@ -1353,6 +1386,7 @@ void OwnEngine::writeReadout() noexcept
             for (int o = 0; o < 3; ++o)
                 liveVoicePos[o][i].store (i < found ? order[i]->readPosition (o) : -1.0f, std::memory_order_relaxed);
             liveSubPhase[i].store (i < found ? order[i]->subPhase() : -1.0f, std::memory_order_relaxed);
+            liveVoiceStep[i].store (i < found ? static_cast<float> (order[i]->voiceControlStep()) : -1.0f, std::memory_order_relaxed);
             for (int l = 0; l < LiveValues::kNumLfos; ++l)
                 liveLfoVoicePhase[l][i].store (i < found ? order[i]->lfoReadout (l) : -1.0f, std::memory_order_relaxed);
             for (int e = 0; e < LiveValues::kNumEnvs; ++e)

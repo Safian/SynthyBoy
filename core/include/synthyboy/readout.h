@@ -51,6 +51,8 @@ struct LiveValues
     float grainPos[3][kReadGrains] = {};
     float grainLife[3][kReadGrains] = {};
     float subPhase[kReadVoices] = {};
+    /** The step of the voice control (0 .. 7) each of the newest voices (newest first) plays, -1 = no voice: the highlighted step column of the Voice page (own engine only). */
+    float voiceStep[kReadVoices] = {};
     float noisePos = -1.0f;
     /** The envelopes of the newest voices (newest first, kReadVoices, own engine only): the fine stage (0 idle, 1 delay, 2 attack, 3 hold, 4 decay, 5 sustain, 6 release, 7 finished or killed) and the fraction 0 .. 1 of that stage
         that has run, of envelope n + 1 in voice v; stage 0 for a slot without a voice. The running dots of the envelope display (one per sounding voice). */
@@ -60,6 +62,9 @@ struct LiveValues
         engine writes none). The running cursors of the LFO display (one per sounding voice). */
     float lfoVoicePhase[kNumLfos][kReadVoices] = {};
     int numLfoVoices = 0;
+    /** The level meters of the mixer (own engine only; the Vital engine leaves them at 0): per strip (Sub, A, B, C, Noise, Filter 1, Filter 2, Bus 1, Bus 2, Master) the peak of the signal on a scale of 60 dB:
+        0 = -60 dBFS .. 1 = full scale, with a fast attack and a release of about 300 ms. The sources are measured at their own output (the power sum of the voices), the buses before their racks, the master at
+        the output of the engine. Written by the audio thread into atomics at the end of a block, read lock free by the display thread. */
     static constexpr int kMaxStrips = 10;
     float stripPeak[kMaxStrips] = {};
     int numTargets = 0;

@@ -121,6 +121,7 @@ private:
     std::atomic<int> liveNumGrains[3];
     std::atomic<float> liveGrainPos[3][LiveValues::kReadGrains], liveGrainLife[3][LiveValues::kReadGrains];
     std::atomic<float> liveSubPhase[LiveValues::kReadVoices];
+    std::atomic<float> liveVoiceStep[LiveValues::kReadVoices];
     std::atomic<float> liveEnvVoiceStage[LiveValues::kNumEnvs][LiveValues::kReadVoices], liveEnvVoiceFrac[LiveValues::kNumEnvs][LiveValues::kReadVoices];   // the fine stage and fraction of every envelope in the newest voices (newest first)
     std::atomic<float> liveLfoVoicePhase[LiveValues::kNumLfos][LiveValues::kReadVoices];   // the cycle position of every LFO in the newest voices (newest first)
     std::atomic<int> liveNumLfoVoices { 0 };
@@ -172,6 +173,10 @@ private:
     void addGhosts (int n) noexcept;
     bool realtimeFlag = false;
     float mixL[4][kControlPeriod] = {}, mixR[4][kControlPeriod] = {}; // Main, Bus 1, Bus 2, Direct of the current period
+    // the level meters of the mixer (LiveValues::stripPeak, audio thread only until writeReadout publishes them): per strip (Sub, A, B, C, Noise, Filter 1, Filter 2, Bus 1, Bus 2, Master) the peak of this block and the
+    // shown level (the peak with a slow release); stripSq collects the power sums of the voices' sources of one control period (MixOut::srcSq)
+    float stripSq[7] = {}, stripBlockPeak[LiveValues::kMaxStrips] = {}, stripShown[LiveValues::kMaxStrips] = {};
+    int lastBlockFrames = 0;   // the frames of the block that writeReadout publishes
     float busGain[3] = { 1.0f, 1.0f, 1.0f }, busGainPrev[3] = { 1.0f, 1.0f, 1.0f }, directGain = 1.0f, directGainPrev = 1.0f;
     int busDest[2] = {}, mainBypass = 0, busBypass[2] = {};
     std::atomic<uint32_t> fxMask { kFxAll };

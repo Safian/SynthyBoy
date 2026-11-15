@@ -382,6 +382,7 @@ void Voice::evaluateVoiceControl (const TickGlobals& g) noexcept
         return;
     const int length = std::clamp (static_cast<int> (g.base[v.length] + 0.5f), 1, 8);
     const int step = static_cast<int> ((sequence - 1u) % static_cast<uint32_t> (length));
+    vcStep = step;
     auto val = [&] (int k) { return g.base[v.step[step][k]]; };
     const float rp = g.base[v.randPan] * 0.01f, rc = g.base[v.randCutoff] * 0.01f, re = g.base[v.randEnv] * 0.01f;
     const float rd = g.base[v.randDetune] * (g.base[v.rand10x] >= 0.5f ? 10.0f : 1.0f);
@@ -1041,6 +1042,18 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     fresh = false;
 }
 
+namespace
+{
+/** The largest magnitude of n samples. */
+inline float peakOf (const float* x, int n) noexcept
+{
+    float m = 0.0f;
+    for (int k = 0; k < n; ++k)
+        m = std::max (m, std::fabs (x[k]));
+    return m;
+}
+} // namespace
+
 void Voice::render (const MixOut& out, int n, int t0) noexcept
 {
     if (!active)
@@ -1150,6 +1163,11 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         }
         simd::halfSum (oscMono[o], oscL[o], oscR[o], n);
         srcLevel[o] = oscMono[o][n - 1];
+        if (out.srcSq != nullptr)
+        {
+            const float pk = peakOf (oscMono[o], n);
+            out.srcSq[1 + o] += pk * pk;   // the strips of the mixer: Sub 0, A 1, B 2, C 3, Noise 4, Filter 1 5, Filter 2 6
+        }
         route (oscDest[o], oscEnv1[o], oscL[o], oscR[o], oscBlend[o], oscSend[o][0], oscSend[o][1]);
     }
     if (subCh.on)
@@ -1159,6 +1177,11 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         for (int k = 0; k < n; ++k)
             extNext[1][k] = 0.5f * (sl[k] + sr2[k]);
         srcLevel[4] = 0.5f * (sl[n - 1] + sr2[n - 1]);
+        if (out.srcSq != nullptr)
+        {
+            const float pk = peakOf (extNext[1], n);
+            out.srcSq[0] += pk * pk;
+        }
         route (subCh.dest, subCh.env1, sl, sr2, subBlend, subSend[0], subSend[1]);
     }
     if (noiseCh.on && (noiseGain > 0.0f || noiseGainPrev > 0.0f))
@@ -1222,6 +1245,11 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         for (int k = 0; k < n; ++k)
             extNext[0][k] = 0.5f * (nl[k] + nr[k]);
         srcLevel[3] = 0.5f * (nl[n - 1] + nr[n - 1]);
+        if (out.srcSq != nullptr)
+        {
+            const float pk = peakOf (extNext[0], n);
+            out.srcSq[4] += pk * pk;
+        }
         route (noiseCh.dest, noiseCh.env1, nl, nr, noiseBlend, noiseSend[0], noiseSend[1]);
     }
 
@@ -1247,6 +1275,11 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         }
         simd::halfSum (extNext[2 + f], fout_L[f], fout_R[f], n);
         srcLevel[5 + f] = 0.5f * (fout_L[f][n - 1] + fout_R[f][n - 1]);
+        if (out.srcSq != nullptr)
+        {
+            const float pk = peakOf (extNext[2 + f], n);
+            out.srcSq[5 + f] += pk * pk;
+        }
     };
     auto toMain = [&] (int f, bool suppress)
     {
