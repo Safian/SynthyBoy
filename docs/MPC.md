@@ -249,6 +249,51 @@ Read from the table: a curve costs about half a millisecond and a little more th
 
 **The budget (Key 61, 30 pictures a second, no worse audio): a picture that costs at most about 14 ms in the helper.** That holds: about 8 curves of 800 points or 16 curves of 200 to 400 points, any thickness, plus 40 to 100 texts, about 30 rounded rectangles, one bloom inside a display rectangle, at most one full region translucent layer. The protocol's frame (65 536 vertices, 128 curves) is accepted and does not harm the audio, but costs 62 ms a picture here (11 a second).
 
+- **The finished UI on the Key 61 (D plan, trial 18, package `ov16-osc-ui`, results `ov16-osc-ui-results/`).** Package built from the export of the commit with the limiter ceiling lifted and +18 dB; the app ran without a preload; the Key 61 chose the level of detail "reduced" by itself (the pictures of the helper take longer than fourteen milliseconds while the picture moves), "full" and "reduced" by file for the table below. One core percent, 8 s windows, three held notes, the full screen of instance A; "picture ms" is the last picture of the helper at the end of the window (the GPU clock moves between 100 and 600 MHz, an idle picture is drawn at the lowest clock and is slow):
+
+| state | detail | overlay thread % | helper % | last picture ms in the helper | skipped vblanks (cumulative) |
+|---|---|---|---|---|---|
+| compact, idle | full | 1.62 | 2.74 | 47.59 | 810 |
+| compact, 3 held notes | None | -40.65 | -61.10 | None | None |
+| full screen A, idle | None | 0.00 | 0.00 | None | None |
+| full screen A, 3 held notes | None | 0.00 | 0.00 | None | None |
+| full screen A, 3 held notes, WT POS dragged | full | 6.72 | 0.00 | 26.46 | 82 |
+| compact, idle | reduced | 2.74 | 7.11 | 10.93 | 398 |
+| compact, 3 held notes | reduced | 1.99 | 5.98 | 12.38 | 618 |
+| full screen A, idle | reduced | 1.75 | 3.74 | 67.73 | 766 |
+| full screen A, 3 held notes | reduced | 1.87 | 4.49 | 39.91 | 900 |
+| full screen A, 3 held notes, WT POS dragged | reduced | 1.87 | 4.86 | 48.94 | 1060 |
+
+5 minute soak with the statistics package (`ov16-osc-ui-stats`: four held notes all the time, every 5 seconds a touch action: instance, full screen open / close, knob drag): 311 s, 110 700 audio callbacks, the longest gap 4 317 us against the nominal 2 902 us (1.49 x, every gap in the bucket below 1.5 x; ov13 had 1.23 x), processing time mean 272 us and at most 2 122 us, the MPC and helper processes the same ones all the way (no restart), 54 of 54 samples `visible` / `gpu`. The function tour on the full screen of instance A (touch and read-back of the parameter through the plugin's own dump), what was sent and what changed:
+
+| control id | parameter | type | sent | before | after | result |
+|---|---|---|---|---|---|---|
+| 100 | osc1.type | 10 | not driven (page opener / selector) | 0.0 | None | see notes |
+| 101 | osc1.wavetable | 6 | tap right quarter | 1.0 | 2.0 | OK |
+| 106 | osc1.pan | 0 | drag up 60 px | 0.0 | 60.0 | OK |
+| 107 | osc1.level | 0 | drag up 60 px | 79.4000015 | 100.0 | OK |
+| 110 | osc1.transpose | 2 | drag up 30 px | 0.0 | 48.0 | OK |
+| 111 | osc1.transpose | 3 | drag up 30 px | 48.0 | 48.0 | NO CHANGE |
+| 112 | osc1.tune | 1 | drag up 30 px | 0.0 | 10.0 | OK |
+| 113 | osc1.pitch_coarse | 1 | drag up 30 px | 0.0 | 0.150001526 | OK |
+| 114 | osc1.pitch_track | 8 | tap | 1.0 | 0.0 | OK |
+| 120 | osc1.frame | 5 | drag up 30 px | 0.0 | 0.0 | NO CHANGE |
+| 121 | osc1.phase | 1 | drag up 30 px | 0.0 | 40.0 | OK |
+| 122 | osc1.random_phase | 1 | drag up 30 px | 0.0 | 4.0 | OK |
+| 123 | osc1.phase_memory | 6 | disabled | None | None | OK (shown disabled) |
+| 200 | osc1.frame | 0 | drag up 60 px | 0.0 | 30.0000019 | OK |
+| 261 | osc1.unison.voices | 9 | tap upper half | 1.0 | 2.0 | OK |
+| 202 | osc1.unison.detune | 0 | drag up 60 px | 25.0 | 55.0 | OK |
+| 203 | osc1.unison.blend | 0 | drag up 60 px | 80.0 | 100.0 | OK |
+| 250 | osc1.warp.type | 6 | tap right quarter | 0.0 | 1.0 | OK |
+| 251 | osc1.warp.amount | 0 | disabled | None | None | OK (shown disabled) |
+| 252 |  | 0 | disabled | None | None | OK (shown disabled) |
+| 253 | osc1.warp2.type | 6 | tap right quarter | 0.0 | 1.0 | OK |
+| 254 | osc1.warp2.amount | 0 | disabled | None | None | OK (shown disabled) |
+| 255 |  | 0 | disabled | None | None | OK (shown disabled) |
+
+(`NO CHANGE` of id 111 is the same parameter as OCT, already at its end; id 120 is the read-only frame number by design.) Not toured on the device: the instance selector, type selector, source list, the detail pages (unison, grain window, multisample envelope), the route popup, the modulations page, the type bar of the multisample and granular types; they are covered by the host tests (`osc_ui_host`, `ui_screen_host`: every leaf of every view is hit by a tap on its middle) but were not driven on the hardware in this round.
+
 ### Per the SDK documentation / not yet verified on the device
 
 These statements come from the SDK's documents (host-contract.md, install-and-test.md). A project was saved and loaded once (see above), but in which order the host restores the program and the chunk was not observed, so the host side of the program handling below is unconfirmed. Still not verified on the device: the CPU load during playback in the MPC app, and the sound of the final build (shell commit `17d6e11`): it loads in the stock MPC app, but nobody has listened to it.
