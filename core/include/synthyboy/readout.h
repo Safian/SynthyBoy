@@ -60,6 +60,8 @@ struct LiveValues
         engine writes none). The running cursors of the LFO display (one per sounding voice). */
     float lfoVoicePhase[kNumLfos][kReadVoices] = {};
     int numLfoVoices = 0;
+    static constexpr int kMaxStrips = 10;
+    float stripPeak[kMaxStrips] = {};
     int numTargets = 0;
     float target[kMaxTargets] = {};
 };

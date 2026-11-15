@@ -179,5 +179,14 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_link_libraries(dump_mpc_chunks PRIVATE ${CMAKE_DL_LIBS})
     target_compile_features(dump_mpc_chunks PRIVATE cxx_std_17)
     target_compile_options(dump_mpc_chunks PRIVATE -Wall -Wextra)
+
+    add_executable(mixfx_ui_host EXCLUDE_FROM_ALL overlay/tests/mixfx_ui_host.cpp)
+    target_include_directories(mixfx_ui_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(mixfx_ui_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(mixfx_ui_host PRIVATE cxx_std_17)
+    target_compile_options(mixfx_ui_host PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
