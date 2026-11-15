@@ -1497,9 +1497,9 @@ private:
             if (s.w != w_ || s.h != h_)
                 return false;    // a scene of the region before this one: the right one is on its way
         }
-        [[maybe_unused]] const double tGen = nowMs();
+        const double tGen = nowMs();
         buildScene (s);
-        [[maybe_unused]] const double tBuilt = nowMs();
+        const double tBuilt = nowMs();
         api_.glBindBuffer (GL_ARRAY_BUFFER, vbo_);
         api_.glBufferData (GL_ARRAY_BUFFER, static_cast<GLsizeiptr> (verts_.size() * sizeof (Vtx)), verts_.data(), GL_DYNAMIC_DRAW);
         setTransform();
@@ -1556,9 +1556,9 @@ private:
             api_.glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, bw_, bh_);
         }
         prevFeedback_ = sceneFeedback_;
-        [[maybe_unused]] const double tSubmitted = nowMs();
+        const double tSubmitted = nowMs();
         api_.glFinish();    // the buffer must be finished before the display reads it
-        [[maybe_unused]] const double tFinished = nowMs();
+        const double tFinished = nowMs();
         maybeDump (s, seq);
         if (! api_.eglSwapBuffers (dpy_, esurf_))
         {
@@ -1580,6 +1580,7 @@ private:
             return false;
         }
         const double t1 = nowMs();
+        publishRender (t0, tGen, tBuilt, tSubmitted, tFinished, t1, s);
         pacer_->waitSlot();     // the vblank of the next slot of the pace grid: the plane update follows at once (the intervals of the pictures are then even)
         const double tCall = nowMs();
         if (! planeSet (fb))
@@ -1661,6 +1662,27 @@ private:
         }
         ++planeChecks_;
         return true;
+    }
+
+    /** The statistics of one picture into the shared block (relaxed atomic stores; the helper is the only writer; the plugin subtracts two snapshots). */
+    void publishRender (double t0, double tGen, double tBuilt, double tSubmitted, double tFinished, double t1, const SceneData& s) noexcept
+    {
+        RenderBlock& r = block_->render;
+        auto us = [] (double ms) { return static_cast<uint32_t> (ms < 0.0 ? 0.0 : ms * 1000.0 + 0.5); };
+        auto add = [] (uint32_t& f, uint32_t v) { __atomic_store_n (&f, f + v, __ATOMIC_RELAXED); };
+        const uint32_t total = us (t1 - t0);
+        add (r.totalUs, total);
+        add (r.readUs, us (tGen - t0));
+        add (r.buildUs, us (tBuilt - tGen));
+        add (r.submitUs, us (tSubmitted - tBuilt));
+        add (r.finishUs, us (tFinished - tSubmitted));
+        add (r.tailUs, us (t1 - tFinished));
+        add (r.ops, s.numOps);
+        add (r.verts, static_cast<uint32_t> (verts_.size()));
+        add (r.draws, static_cast<uint32_t> (draws_.size()));
+        const uint32_t b = std::min<uint32_t> (63u, total / 1000u);
+        add (r.hist[b], 1u);
+        add (r.count, 1u);
     }
 
     void publishPace() noexcept

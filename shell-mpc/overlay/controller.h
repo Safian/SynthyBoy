@@ -1022,6 +1022,13 @@ private:
           << "\ngpu_failures: " << g.failures << "\ngpu_last_error: " << (g.lastError.empty() ? "none" : g.lastError) << "\ngpu_helper_frames: " << g.frames
           << "\ngpu_helper_render_ms: " << g.helperRenderMs << "\ngpu_helper_setplane_ms: " << g.helperSetPlaneMs << "\ngpu_helper_skipped_vblanks: " << g.skippedVblanks << "\ngpu_helper_late_setplanes: " << g.lateSetPlanes
           << "\ngpu_helper_startup_ms: " << g.startupMs << "\ngpu_renderer: " << (g.glRenderer.empty() ? "none" : g.glRenderer) << "\n";
+        // cumulative render statistics of the helper (the measuring script subtracts two snapshots): pictures, the sums of the microseconds of the parts, of the ops, vertices, draw calls, and the histogram of the time of a picture (1 ms buckets)
+        const gpu::RenderBlock& r = g.render;
+        o << "gpu_render_count: " << r.count << "\ngpu_render_sums: total_us=" << r.totalUs << " read_us=" << r.readUs << " build_us=" << r.buildUs << " submit_us=" << r.submitUs << " finish_us=" << r.finishUs << " tail_us=" << r.tailUs
+          << " ops=" << r.ops << " verts=" << r.verts << " draws=" << r.draws << " cached_ops=" << r.cachedOps << " redrawn=" << r.redrawn << "\ngpu_render_hist_ms:";
+        for (int i = 0; i < 64; ++i)
+            o << " " << r.hist[i];
+        o << "\n";
     }
 
     /** The presentation intervals of the renderer in use: in vblanks and in 2 ms buckets (the pace grid is the point: the intervals of a picture a second are even when one bucket holds them all). */

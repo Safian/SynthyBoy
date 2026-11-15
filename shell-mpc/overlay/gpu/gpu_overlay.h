@@ -94,6 +94,7 @@ struct GpuStatus
     unsigned long skippedVblanks = 0, lateSetPlanes = 0;
     std::string glRenderer;
     double startupMs = 0.0;
+    RenderBlock render {};           // the helper's render statistics (cumulative: two snapshots give a window)
     PaceBlock pace {};               // the helper's presentation intervals (shared block), valid when pace.count > 0 or the helper has run
     bool paceKnown = false;
 };
@@ -306,6 +307,7 @@ public:
         s.glRenderer = glRenderer_;
         s.startupMs = startupMs_;
         s.pace = pace_;
+        s.render = render_;
         s.paceKnown = paceKnown_;
         return s;
     }
@@ -423,6 +425,12 @@ private:
         p.reserved = 0;
         pace_ = p;
         paceKnown_ = p.stride != 0;
+        RenderBlock r;
+        uint32_t* dst = &r.count;
+        const uint32_t* src = &b->render.count;
+        for (size_t i = 0; i < sizeof (RenderBlock) / sizeof (uint32_t); ++i)
+            dst[i] = __atomic_load_n (src + i, __ATOMIC_RELAXED);
+        render_ = r;
     }
 
     /** Kills the helper (when there is one), cleans what it may have left on the display, closes the channel. */
@@ -512,6 +520,7 @@ private:
     State state_ = State::Idle;
     bool forceCpu_ = false, shown_ = false, hiding_ = false, unacked_ = false, keepPlane_ = false, paceKnown_ = false;
     PaceBlock pace_ {};
+    RenderBlock render_ {};
     double startedAt_ = 0.0, runningSince_ = 0.0, retryAt_ = 0.0, unackedSince_ = 0.0, hideAt_ = 0.0;
     uint32_t lastSeq_ = 0, acked_ = 0;
     int failures_ = 0, rotation_ = 90, viewIndex_ = -1;

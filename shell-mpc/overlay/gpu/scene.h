@@ -22,7 +22,7 @@
 
 namespace synthyboy_mpc { namespace overlay { namespace gpu {
 
-constexpr uint32_t kProtocolVersion = 6;   // 6: the frame (kMaxOps 2048, kMaxVertices 65536 for the polylines of a scene together, kMaxCurve 2048 per polyline, a text pool of kMaxText bytes); only the used part of the scene is copied; kOpStyle (feather, round caps), kOpPaint (a gradient of four colours along x, y or an arc), kOpRRect, kOpBand, kOpFeedback, kOpGlowBegin / kOpGlowEnd; kOpText is a string from the pool in the proportional signed distance field font (sdf_font.h), any size; kOpStroke / kOpLine / kOpArc / kOpDisc / kOpVLine take their feather and caps from the style, their colour from the paint. 5: kMaxOps 640, kOpLine, kOpArc, kOpFrame. 4: kMaxOps 96, kMaxCurve 1088, kOpCurve (a polyline with its own span), kOpText, kKindPlay. 2: SceneOp::rgba2 (was f[0] .. f[5], now f[0] .. f[4]), kOpFillGradient, kKindSpectrum. 3: the hello carries the vblank pipe, the pace stride and the measured period (flag kFlagVblank), the shared block carries the helper's presentation statistics (PaceBlock), the display may be rotated 0 / 90 / 180 / 270. The plugin and the helper are shipped together; a helper of another version refuses the hello (kMsgError) and the plugin draws with the CPU.
+constexpr uint32_t kProtocolVersion = 7;   // 7: the shared block carries the helper's render statistics (RenderBlock: the time of every picture in a histogram and the sums of its parts). 6: the frame (kMaxOps 2048, kMaxVertices 65536 for the polylines of a scene together, kMaxCurve 2048 per polyline, a text pool of kMaxText bytes); only the used part of the scene is copied; kOpStyle (feather, round caps), kOpPaint (a gradient of four colours along x, y or an arc), kOpRRect, kOpBand, kOpFeedback, kOpGlowBegin / kOpGlowEnd; kOpText is a string from the pool in the proportional signed distance field font (sdf_font.h), any size; kOpStroke / kOpLine / kOpArc / kOpDisc / kOpVLine take their feather and caps from the style, their colour from the paint. 5: kMaxOps 640, kOpLine, kOpArc, kOpFrame. 4: kMaxOps 96, kMaxCurve 1088, kOpCurve (a polyline with its own span), kOpText, kKindPlay. 2: SceneOp::rgba2 (was f[0] .. f[5], now f[0] .. f[4]), kOpFillGradient, kKindSpectrum. 3: the hello carries the vblank pipe, the pace stride and the measured period (flag kFlagVblank), the shared block carries the helper's presentation statistics (PaceBlock), the display may be rotated 0 / 90 / 180 / 270. The plugin and the helper are shipped together; a helper of another version refuses the hello (kMsgError) and the plugin draws with the CPU.
 constexpr uint32_t kBlockMagic = 0x53424f56u;   // 'SBOV'
 constexpr uint32_t kMsgMagic = 0x4d534f56u;     // 'MSOV' ... the first word of every message
 constexpr int kMaxVertices = 65536;              // vertices of all polylines of a scene together (a pool of floats: the rows of the curves)
@@ -557,6 +557,15 @@ struct PaceBlock
     uint32_t planeChecks, reserved;   // how often the helper has asked the display, right after an update, whether the plane shows our framebuffer on our CRTC (once a second)
 };
 
+/** The helper's render statistics, cumulative since it started (the plugin takes two snapshots and subtracts them: the mean and the 99th percentile of a window, not the last picture): the number of pictures, the sums
+    of the microseconds of their parts (total = read + build + submit + finish + tail; read = the copy of the scene, build = the vertices of the ops (CPU), submit = the GL calls, finish = glFinish (the GPU), tail = the swap and
+    the framebuffer), the sums of the ops, vertices and draw calls, the pictures that were cheap because the cached layers were reused, and the histogram of the total in 1 ms buckets (the last bucket: 63 ms and more). */
+struct RenderBlock
+{
+    uint32_t count, totalUs, readUs, buildUs, submitUs, finishUs, tailUs, ops, verts, draws, cachedOps, redrawn;
+    uint32_t hist[64];
+};
+
 struct SharedBlock
 {
     uint32_t magic;
@@ -567,6 +576,7 @@ struct SharedBlock
     uint32_t words[kSceneWords];     // SceneData, word by word (relaxed atomic accesses; the seqlock orders them)
     Ledger ledger;
     PaceBlock pace;
+    RenderBlock render;
 };
 
 inline void initBlock (SharedBlock* b) noexcept
