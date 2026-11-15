@@ -271,6 +271,27 @@ TEST (own_osc_granular_read_out_has_the_grains)
     CHECK (live.numGrains[1] == 0 && live.numGrains[2] == 0);
 }
 
+// the same with the one-shot mode of the loop and a note held for seconds (what the device does): the grains go on being reported while the cloud plays
+TEST (own_osc_granular_read_out_one_shot_held_note)
+{
+    Rig r (true, "osc1.type", 2.0f);
+    set (*r.e, "osc1.sample.loop_mode", 0.0f);
+    LiveValues live;
+    std::vector<float> l (256), rr (256);
+    Event on = sbtest::noteOn (0, 69, 1.0f);
+    r.e->process (&on, 1, l.data(), rr.data(), 256);
+    int seen = 0, blocks = 0;
+    for (int i = 0; i < 400; ++i)
+    {
+        r.e->process (nullptr, 0, l.data(), rr.data(), 256);
+        if (r.e->copyReadout (live) && live.numGrains[0] > 0)
+            ++seen;
+        ++blocks;
+    }
+    std::printf ("    granular one-shot: grains reported in %d of %d blocks, last scan %.3f, %d grains now\n", seen, blocks, live.voicePos[0][0], live.numGrains[0]);
+    CHECK (seen > blocks / 2);
+}
+
 // the multisample oscillator reports where the zone's file is being read, per voice
 TEST (own_osc_multisample_read_out_has_the_position)
 {

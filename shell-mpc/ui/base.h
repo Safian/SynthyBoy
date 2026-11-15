@@ -243,7 +243,13 @@ protected:
         const uint32_t headCol = p.c (qFrame_ ? T.q : T.textDim, 255);
         if (head)
         {
-            const Rect headBox { in.x, in.y + 1, in.w, 16 };
+            Rect headBox { in.x, in.y + 1, in.w, 16 };
+            if (tabState (state) != TabState::Absent)   // the modulation chip sits at the top left: the head moves right of it (and stays centred in what is left)
+            {
+                const Rect chip = tabRect (rect_, tabName (state));
+                const int off = std::max (0, chip.right() + 2 - in.x);
+                headBox = { in.x + off, in.y + 1, std::max (0, in.w - off), 16 };
+            }
             if (state.icon == Icon::None)
                 p.textCentered (headBox, state.label, T.fLabel - 2.0f, headCol, T.fMin);
             else if (state.label[0] == '\0')
