@@ -528,6 +528,22 @@ int main()
         r.run (1300);
         check (line (r.dir.read ("status.txt"), "ui_look") == "1", "an unreadable look file is no choice: look 1 is back");
     }
+    // ---- the level of detail ----
+    {
+        Rig r;
+        r.frame.setAll (true, 90);
+        r.until ([&] { return r.on(); }, 300);
+        r.dir.write ("detail", "full\n");
+        r.run (1300);
+        check (line (r.dir.read ("status.txt"), "ui_detail") == "full" && line (r.dir.read ("status.txt"), "ui_detail_source") == "file" && synthyboy_mpc::ui::theme::detailLevel() == 1, "the detail file says full: level full");
+        r.dir.write ("detail", "2\n");
+        r.run (1300);
+        check (line (r.dir.read ("status.txt"), "ui_detail") == "reduced" && synthyboy_mpc::ui::theme::detailLevel() == 2, "the detail file says 2: level reduced");
+        r.dir.write ("detail", "auto\n");
+        r.run (1300);
+        check (line (r.dir.read ("status.txt"), "ui_detail_source") == "auto" && line (r.dir.read ("status.txt"), "ui_detail") == "reduced", "automatic without the GPU helper (the CPU draws): reduced");
+        synthyboy_mpc::ui::theme::setDetail (1);
+    }
     // ---- the curve dump on request ----
     {
         Rig r;

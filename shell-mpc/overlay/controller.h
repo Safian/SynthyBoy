@@ -50,6 +50,7 @@ struct Paths
     std::string rotation = "/tmp/synthyboy-overlay-rot";
     std::string noGpu = "/tmp/synthyboy-overlay-nogpu";
     std::string status = "/tmp/synthyboy-overlay-status.txt";
+    std::string detail = "/tmp/synthyboy-overlay-detail";   // 1 / full, 2 / reduced: the level of detail of the UI (ui/theme.h Detail); without the file (or "auto") the plugin chooses from the measured frame time
     std::string look = "/tmp/synthyboy-overlay-look";   // a number 1 .. 3: the look of the UI (ui/theme.h); without the file look 1
     std::string dumpRequest = "/tmp/synthyboy-overlay-dump";
     std::string dump = "/tmp/synthyboy-overlay-curve.txt";
@@ -617,6 +618,15 @@ private:
     /** The GPU path of a tick: update, describe, hand the scene over. The helper draws and presents; this thread never waits for the vblank. */
     void drawGpu (double nowMs)
     {
+        if (gpu_ != nullptr)
+        {
+            const double r = gpu_->status().helperRenderMs;
+            if (r > 0.0)
+            {
+                renderAcc_ += r;
+                ++renderN_;
+            }
+        }
         bool changed = false;
         if (! updateView (nowMs, changed))
             return;
@@ -818,8 +828,45 @@ private:
                 needFrame_ = true;
             }
         }
+        chooseDetail();
         updateRotation (nowMs);
         dumpRequested_ = exists (paths_.dumpRequest);
+    }
+
+    /** The level of detail (once a second): the file's when it says one; else "full" while the helper's pictures cost at most kDetailBudgetMs (the mean of the second, 3 seconds in a row over it
+        switch to "reduced" for the rest of the run); the CPU drawing, when the helper is not on, is "reduced". The mean is the helper's render time (the CPU side, glFinish included). */
+    static constexpr double kDetailBudgetMs = 14.0;
+    void chooseDetail()
+    {
+        int want = 0;
+        {
+            std::ifstream in (paths_.detail);
+            std::string w;
+            if (in && (in >> w))
+                want = (w == "1" || w == "full") ? 1 : ((w == "2" || w == "reduced") ? 2 : 0);
+        }
+        detailSource_ = want != 0 ? "file" : "auto";
+        const bool gpuOn = gpu_ != nullptr && usingGpu_ && gpuShown_ && ! noGpu_;
+        if (want == 0)
+        {
+            if (gpuOn && renderN_ >= 5)
+            {
+                const double mean = renderAcc_ / renderN_;
+                detailMeanMs_ = mean;
+                overBudget_ = mean > kDetailBudgetMs ? overBudget_ + 1 : 0;
+                if (overBudget_ >= 3 && ui::theme::detailLevel() == 1)
+                    autoReduced_ = true;
+            }
+            want = (! gpuOn && current_ >= 0) || autoReduced_ ? 2 : 1;
+        }
+        renderAcc_ = 0.0;
+        renderN_ = 0;
+        if (want != ui::theme::detailLevel())
+        {
+            ui::theme::setDetail (want);
+            needFrame_ = true;
+            statusDue_ = true;
+        }
     }
 
     /** The rotation in use: the file's, else the one found from the markers (cached for the life of the process), else the default while searching. */
@@ -945,7 +992,7 @@ private:
             std::lock_guard<std::mutex> g (mu_);
             const UiStack& u = activeSlot_ >= 0 ? ui_[activeSlot_] : ui_[0];
             o << "ui_state: " << (activeSlot_ < 0 || u.isMain() ? "main" : (u.level() == UiStack::Level::full ? "full" : "detail")) << "\nui_depth: " << (activeSlot_ < 0 ? 0 : u.depth())
-              << "\nui_auto_closes: " << uiAutoCloses_ << "\nui_look: " << look_ << "\nqlink_panel: " << (qlinkPanel_ ? "yes" : "no") << "\nqlink_panel_changes: " << qlinkPanelChanges_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\n" << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
+              << "\nui_auto_closes: " << uiAutoCloses_ << "\nui_look: " << look_ << "\nui_detail: " << ui::theme::D().name << "\nui_detail_source: " << detailSource_ << "\nui_detail_helper_render_ms: " << detailMeanMs_ << "\nqlink_panel: " << (qlinkPanel_ ? "yes" : "no") << "\nqlink_panel_changes: " << qlinkPanelChanges_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\n" << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
         }
         o << "frames_last_second: " << (final_ ? 0u : framesLast_) << "\n";
         o << "frames_total: " << framesTotal() << "\n";
@@ -1072,7 +1119,10 @@ private:
     MarkerSpec markers_[layout::kNumViews * 2];
     Rect regions_[layout::kNumViews];
     ITouchInput* touchIn_ = nullptr;
-    bool qlinkPanel_ = false, panelFast_ = false;
+    bool qlinkPanel_ = false, panelFast_ = false, autoReduced_ = false;
+    double renderAcc_ = 0.0, detailMeanMs_ = 0.0;
+    int renderN_ = 0, overBudget_ = 0;
+    const char* detailSource_ = "auto";
     int look_ = 1;
     unsigned long qlinkPanelChanges_ = 0;
     unsigned long touchEvents_ = 0, touchTaken_ = 0;

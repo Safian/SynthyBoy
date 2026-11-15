@@ -723,6 +723,16 @@ int main()
             check (! gpu::glowBeginGeom (g, d), "glow: a divisor of 3 is refused");
             g.f[0] = 4.0f;
             check (gpu::glowBeginGeom (g, d) && d == 4, "glow: a divisor of 4 is accepted");
+            {
+                auto s2 = std::make_unique<gpu::SceneData>();
+                gpu::SceneBuilder b2 (*s2);
+                b2.glowBegin (4);
+                b2.glowEnd (1.5f, 1.0f, 0xffffffffu, 10, 20, 300, 200);
+                gpu::GlowGeom gg;
+                check (gpu::glowEndGeom (s2->ops[1], gg) && gg.rect && gg.x0 == 10.0f && gg.y0 == 20.0f && gg.x1 == 300.0f && gg.y1 == 200.0f && gg.gain == 1.5f, "glow end: the rectangle of the bloom travels in the op");
+                b2.glowEnd (1.0f, 1.0f);
+                check (gpu::glowEndGeom (s2->ops[2], gg) && ! gg.rect, "glow end without a rectangle: the whole canvas");
+            }
         }
         {   // a big frame: 128 curves of 500 points (64000 vertices) go through the shared block and the CPU reference
             auto sd = std::make_unique<gpu::SceneData>();

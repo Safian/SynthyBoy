@@ -57,11 +57,11 @@ inline void paintLine (gpu::SceneBuilder& sb, float x0, float x1, const uint32_t
     sb.paintX (x0, x1, a (st[0], alpha), a (st[1], alpha), a (st[2], alpha), a (st[3], alpha));
 }
 /** One glowing line along a curve that was just added with sb.curve: the soft pass, the crisp pass. */
-inline void glowLine (gpu::SceneBuilder& sb, float x0, float x1, const uint32_t st[4], float half, int alpha)
+inline void glowLine (gpu::SceneBuilder& sb, float x0, float x1, const uint32_t st[4], float half, int alpha, bool softPass = true)
 {
     const theme::Look& T = theme::L();
     paintLine (sb, x0, x1, st, 255);
-    if (T.glowAlpha > 0.0f)
+    if (softPass && T.glowAlpha > 0.0f && theme::D().glow)
     {
         sb.style (T.glowSoft, false);
         sb.stroke (half + T.glowWidth, static_cast<uint32_t> (std::min (255.0f, T.glowAlpha * 255.0f * static_cast<float> (alpha) / 255.0f)));
@@ -93,7 +93,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
     sb.paintOff();
     sb.rrect (static_cast<float> (r.x), static_cast<float> (r.y), static_cast<float> (r.right()), static_cast<float> (r.bottom()), T.rBlock, dt::a (T.keyline, 255), T.frame);
     // ---- the afterglow: the previous picture of this rectangle, faded, under the new one (the GPU's feedback; the CPU reference does not draw it)
-    if (T.afterglow > 0.0f && (d.kind == Data::Kind::Wave || d.kind == Data::Kind::MinMax))
+    if (T.afterglow > 0.0f && theme::D().afterglow && (d.kind == Data::Kind::Wave || d.kind == Data::Kind::MinMax))
         sb.feedback (static_cast<float> (r.x + 1), static_cast<float> (r.y + 1), static_cast<float> (r.right() - 1), static_cast<float> (r.bottom() - 1), T.afterglow);
     // ---- the grid: a centre line and quarters, hairlines
     if (wave || minmax)
@@ -109,7 +109,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
     float rows[kMaxPoints], rows2[kMaxPoints];
     const int n = std::min (d.n, static_cast<int> (kMaxPoints));
     // ---- the faint spectrum along the bottom of the wave
-    if (wave && d.spectrum != nullptr && d.numSpectrum >= 2)
+    if (wave && theme::D().spectrum && d.spectrum != nullptr && d.numSpectrum >= 2)
     {
         const int m = std::min (d.numSpectrum, static_cast<int> (kMaxSpectrum));
         float sp[kMaxSpectrum];
@@ -120,17 +120,19 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
     }
     if (wave && n >= 2)
     {
-        const bool stacked = d.numStack >= 2;
+        const bool stacked = d.numStack >= 2 && theme::D().stackFrames >= 2;
         const float scale = stacked ? 0.78f : 0.92f;
         auto rowsOf = [&] (const float* src, float* dst, float yOff, float k)
         {
             for (int i = 0; i < n; ++i)
                 dst[i] = mid + yOff - std::min (1.4f, std::max (-1.4f, src[i])) * amp * scale * k;
         };
+        int litFirst[kMaxStack], litX[kMaxStack], litW[kMaxStack], numLit = 0;
+        float litAmount[kMaxStack];
         // the stack: the frames of the table behind each other, the far ones fainter and thinner; the ones near the position light up
         if (stacked)
         {
-            const int N = std::min (d.numStack, static_cast<int> (kMaxStack));
+            const int N = std::min ({ d.numStack, static_cast<int> (kMaxStack), theme::D().stackFrames });
             const float dxs = static_cast<float> (in.w) * 0.010f, dys = static_cast<float> (in.h) * 0.032f;
             for (int i = 0; i < N; ++i)     // from the back (the first frame) to the front
             {
@@ -142,12 +144,18 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
                 const float total = dxs * static_cast<float> (N - 1) * 0.5f;
                 const float yOff = -depth * dys * static_cast<float> (N - 1) * 0.5f - 2.0f, xOff = total - depth * total;   // the far frames start further right: all stay inside the block
                 rowsOf (d.stack[i], rows, yOff, 1.0f);
-                sb.curve (rows, n, ix + static_cast<int> (std::lround (xOff)), iw - static_cast<int> (std::lround (xOff)));
+                const int fx = ix + static_cast<int> (std::lround (xOff)), fw = iw - static_cast<int> (std::lround (xOff));
+                const int fr = sb.curve (rows, n, fx, fw);
+                if (lit > 0.05f && fr >= 0 && numLit < kMaxStack)
+                {
+                    litFirst[numLit] = fr; litX[numLit] = fx; litW[numLit] = fw; litAmount[numLit] = lit;
+                    ++numLit;
+                }
                 const int alpha = static_cast<int> (40.0f + 70.0f * (1.0f - depth) + 110.0f * lit);
                 const uint32_t dc = theme::mix (T.flow[0], T.flow[3], depth);                       // the far frames are the end colour of the look, the near ones the start
                 const uint32_t ds[4] = { dc, dc, dc, dc }, lit4[4] = { st[0], st[1], st[2], st[3] };
                 if (lit > 0.01f)
-                    dt::glowLine (sb, x0, x1, lit > 0.5f ? lit4 : ds, T.curveBack * 0.5f + 0.5f * lit * T.curve, alpha);
+                    dt::glowLine (sb, x0, x1, lit > 0.5f ? lit4 : ds, T.curveBack * 0.5f + 0.5f * lit * T.curve, alpha, false);
                 else
                 {
                     dt::paintLine (sb, x0, x1, ds, 255);
@@ -161,7 +169,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
         // the unison voices: hairlines around the main curve, spread in time by the detune, as strong as the blend
         if (d.voices > 1)
         {
-            const int v = std::min (d.voices, 7) - 1;
+            const int v = std::min (std::min (d.voices, 7) - 1, theme::D().unisonHairs);
             const int alpha = static_cast<int> (30.0f + 90.0f * d.blend);
             for (int k = 1; k <= v; ++k)
             {
@@ -178,10 +186,26 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
         }
         // the main curve: the area under it, the soft pass, the crisp line
         rowsOf (d.cycle, rows, 0.0f, 1.0f);
-        sb.curve (rows, n, ix, iw);
+        const int mainFirst = sb.curve (rows, n, ix, iw);
         sb.fillGradient (mid, mid - amp * scale, mid, dt::a (d.colour, 70), dt::a (d.colour, 0));
-        dt::glowLine (sb, x0, x1, st, T.curve * 0.5f + (stacked ? 0.15f : 0.0f), 255);
+        dt::glowLine (sb, x0, x1, st, T.curve * 0.5f + (stacked ? 0.15f : 0.0f), 255, false);
         sb.paintOff();
+        // the light: the main curve and the lit frames drawn into the bloom layer (a quarter of the size), blurred, added over the picture inside the display: one cheap pass for all the lines
+        if (T.glowAlpha > 0.0f && theme::D().glow && mainFirst >= 0)
+        {
+            sb.glowBegin (4);
+            dt::paintLine (sb, x0, x1, st, 255);
+            sb.style (1.0f, false);
+            for (int i = 0; i < numLit; ++i)
+            {
+                sb.curveAt (litFirst[i], n, litX[i], litW[i]);
+                sb.stroke (T.curve * 0.5f + 0.8f, static_cast<uint32_t> (230.0f * litAmount[i]));
+            }
+            sb.curveAt (mainFirst, n, ix, iw);
+            sb.stroke (T.curve * 0.5f + 1.0f, 255);
+            sb.paintOff();
+            sb.glowEnd (0.8f + 2.0f * T.glowAlpha, 1.0f, 0xffffffffu, r.x, r.y, r.right(), r.bottom());
+        }
         sb.style (1.0f, false);
     }
     else if (minmax && n >= 2 && d.cycleMax != nullptr)
@@ -306,14 +330,22 @@ inline void drawModule (gpu::SceneBuilder& sb, const Module& m)
     float rows[kMaxPoints];
     for (int i = 0; i < n; ++i)
         rows[i] = std::min (pb + 40.0f, std::max (pt - 40.0f, pb - std::min (1.2f, std::max (-0.2f, m.v[i])) * (pb - pt)));
-    sb.curve (rows, n, m.plot.x, m.plot.w);
+    const int first = sb.curve (rows, n, m.plot.x, m.plot.w);
     sb.fillGradient (zero, pt, zero, dt::a (c0, 70), dt::a (c0, 0));
-    sb.paintX (px, pxe, dt::a (c0, 255), dt::a (theme::mix (c0, c1, 0.33f), 255), dt::a (theme::mix (c0, c1, 0.66f), 255), dt::a (c1, 255));
-    sb.style (T.glowSoft, false);
-    sb.stroke (T.curve * 0.5f + T.glowWidth, static_cast<uint32_t> (T.glowAlpha * 255.0f));
+    const uint32_t cs[4] = { dt::a (c0, 255), dt::a (theme::mix (c0, c1, 0.33f), 255), dt::a (theme::mix (c0, c1, 0.66f), 255), dt::a (c1, 255) };
+    sb.paintX (px, pxe, cs[0], cs[1], cs[2], cs[3]);
     sb.style (1.0f, false);
     sb.stroke (T.curve * 0.5f + 0.15f, 255);
     sb.paintOff();
+    if (T.glowAlpha > 0.0f && theme::D().glow && first >= 0)
+    {
+        sb.glowBegin (4);
+        sb.paintX (px, pxe, cs[0], cs[1], cs[2], cs[3]);
+        sb.curveAt (first, n, m.plot.x, m.plot.w);
+        sb.stroke (T.curve * 0.5f + 1.0f, 255);
+        sb.paintOff();
+        sb.glowEnd (0.8f + 2.0f * T.glowAlpha, 1.0f, 0xffffffffu, m.plot.x - 6, m.plot.y - 6, m.plot.right() + 6, m.plot.bottom() + 6);
+    }
     if (m.dot >= 0.0f)
     {
         const float dx = px + std::min (1.0f, m.dot) * (pxe - px - 1.0f) + 0.5f, pos = std::min (1.0f, m.dot) * static_cast<float> (n - 1);
@@ -321,8 +353,11 @@ inline void drawModule (gpu::SceneBuilder& sb, const Module& m)
         const float dy = rows[i] + (rows[i + 1] - rows[i]) * (pos - static_cast<float> (i));
         if (! m.env)
             sb.line (dx, pt, dx, pb, 1.2f, dt::a (0xffffff, 90));
-        sb.style (T.glowSoft, false);
-        sb.disc (dx, dy, 6.5f, dt::a (c1, 150));
+        if (theme::D().glow)
+        {
+            sb.style (T.glowSoft, false);
+            sb.disc (dx, dy, 6.5f, dt::a (c1, 150));
+        }
         sb.style (1.0f, false);
         sb.disc (dx, dy, 3.2f, 0xffffffffu);
     }

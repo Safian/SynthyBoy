@@ -33,9 +33,7 @@ struct GScene : Scene
     GScene (int w, int h) : Scene (w, h, theme::rgba (theme::L().bg0, 255))
     {
         const theme::Look& T = theme::L();
-        builder().paintY (0.0f, static_cast<float> (h), theme::rgba (T.bg0), theme::rgba (T.bg0), theme::rgba (T.bg1), theme::rgba (T.bg1));
-        builder().rrect (0.0f, 0.0f, static_cast<float> (w), static_cast<float> (h), 0.0f, 0xffffffffu);
-        builder().paintOff();
+        builder().gradientRect (0.0f, 0.0f, static_cast<float> (w), static_cast<float> (h), theme::rgba (T.bg0), theme::rgba (T.bg1));
     }
 };
 void label (gpu::SceneBuilder& sb, int x, int y, const char* t) { sb.text (static_cast<float> (x), static_cast<float> (y + 14), 14.0f, t, theme::rgba (theme::L().textDim)); }

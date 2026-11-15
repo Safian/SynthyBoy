@@ -102,6 +102,13 @@ public:
         }
         if (! group_[0])
             return false;
+        if (ui::theme::detailLevel() != detailSeen_)   // the level of detail changed: the picture of the oscillator is made again (the stack, the spectrum)
+        {
+            detailSeen_ = ui::theme::detailLevel();
+            forced_[0] = true;
+            have_[0] = false;
+            changed = true;
+        }
         // ---- oscillator: the picture of the display rectangle of the plugin-drawn oscillator UI (the cycle of a wavetable, the overview of a sample, multisample or granular oscillator, the spectrum of a
         // spectral one, the noise colour, the sub oscillator's waveform)
         if (playosc::oscNumber (sel_[0]) == 0 && sel_[0] == playosc::kSub)
@@ -155,8 +162,8 @@ public:
                 stackN_ = 0;
                 if (wt && kind_ == synthyboy::OscCycle::Kind::wavetable)
                 {
-                    constexpr int kStackFrames = 7;
-                    if (stack_.size() != static_cast<size_t> (kStackFrames))
+                    const int kStackFrames = ui::theme::D().stackFrames >= 2 ? ui::theme::D().stackFrames : 0;
+                    if (kStackFrames > 0 && stack_.size() != static_cast<size_t> (kStackFrames))
                         stack_.assign (static_cast<size_t> (kStackFrames), std::vector<float> (static_cast<size_t> (synthyboy::OscCycle::kSamples), 0.0f));
                     for (int k = 0; k < kStackFrames; ++k)
                     {
@@ -410,11 +417,9 @@ private:
     {
         const ui::theme::Look& T = ui::theme::L();
         sb.clear (0u);   // transparent: the GPU helper keeps the last picture until a Clear op, and the host's own widgets of the Env / LFO thirds must show through
-        auto ground = [&] (float x0, float y0, float x1, float y1)   // the opaque ground of the look under the plugin's own pages
+        auto ground = [&] (float x0, float y0, float x1, float y1)   // the opaque ground of the look under the plugin's own pages (a gradient fill: no distance field)
         {
-            sb.paintY (y0, y1, ui::theme::rgba (T.bg0), ui::theme::rgba (T.bg0), ui::theme::rgba (T.bg1), ui::theme::rgba (T.bg1));
-            sb.rrect (x0, y0, x1, y1, 0.0f, 0xffffffffu);
-            sb.paintOff();
+            sb.gradientRect (x0, y0, x1, y1, ui::theme::rgba (T.bg0), ui::theme::rgba (T.bg1));
         };
         if (osc_ != nullptr)
         {
@@ -455,7 +460,7 @@ private:
     {
         const int n = std::min (displayPoints_, static_cast<int> (cycle_.size()));
         spectrum_.assign (static_cast<size_t> (ui::display::kMaxSpectrum), 0.0f);
-        if (n < 64 || kind_ == synthyboy::OscCycle::Kind::off)
+        if (! ui::theme::D().spectrum || n < 64 || kind_ == synthyboy::OscCycle::Kind::off)
             return;
         for (int k = 1; k <= ui::display::kMaxSpectrum; ++k)
         {
@@ -577,7 +582,7 @@ private:
     double bpm_ = 0.0;
     std::vector<float> cycle_, cycleMax_, envY_, lfoY_, spectrum_;
     std::vector<std::vector<float>> stack_;
-    int stackN_ = 0;
+    int stackN_ = 0, detailSeen_ = 1;
     int displayPoints_ = synthyboy::OscCycle::kSamples;
     synthyboy::OscCycle::Result res_;
     std::unique_ptr<OscUi> osc_;

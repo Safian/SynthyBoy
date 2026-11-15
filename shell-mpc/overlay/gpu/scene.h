@@ -79,7 +79,8 @@ enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindO
             row the exact coverage of the strip [A, B] (a band thinner than a pixel is a faint line): the min / max picture of a dense wave. Not limited by the current Curve op.
     Feedback f[0..3] = x0 y0 x1 y1, f[4] = gain 0 .. 1: the previous presented picture of this region, times gain, source over (the afterglow when the scene draws an opaque ground first).
     GlowBegin f[0] = divisor 2, 4 or 8: the next ops go to a layer of 1 / divisor the size (cleared, transparent).
-    GlowEnd rgba = tint, f[0] = gain (0 .. 4), f[1] = blur width (1 = the default, 0.5 .. 4): the layer is blurred and added over the picture. A bloom: the same curves drawn into the layer.
+    GlowEnd rgba = tint, f[0] = gain (0 .. 4), f[1] = blur width (1 = the default, 0.5 .. 4), f[2], f[3] = x0, y0 and rgba2 = (x1 << 16) | y1 (whole pixels, below 65536): the rectangle that is blurred and added
+            over the picture (an empty rectangle: the whole canvas; a rectangle is much cheaper: the passes are as big as it is). A bloom: the same curves drawn into the layer.
     The polyline: without a Curve op, SceneData::y[0 .. numPoints - 1] are rows, point i at x = i / (numPoints - 1) * (w - 1) + 0.5 (the first and the last continue horizontally to the canvas edges). */
 enum OpCode : uint32_t { kOpNone = 0, kOpClear = 1, kOpRect = 2, kOpVLine = 3, kOpFill = 4, kOpStroke = 5, kOpDisc = 6, kOpFillGradient = 7, kOpCurve = 8, kOpText = 9, kOpLine = 10, kOpArc = 11, kOpFrame = 12,
                          kOpStyle = 13, kOpPaint = 14, kOpRRect = 15, kOpBand = 16, kOpFeedback = 17, kOpGlowBegin = 18, kOpGlowEnd = 19 };
@@ -161,7 +162,14 @@ struct SceneBuilder
     }
     void feedback (float x0, float y0, float x1, float y1, float gain) { if (SceneOp* o = add (kOpFeedback, 0)) { o->f[0] = x0; o->f[1] = y0; o->f[2] = x1; o->f[3] = y1; o->f[4] = gain; } }
     void glowBegin (int divisor) { if (SceneOp* o = add (kOpGlowBegin, 0)) o->f[0] = static_cast<float> (divisor); }
-    void glowEnd (float gain, float blur, uint32_t tint = 0xffffffffu) { if (SceneOp* o = add (kOpGlowEnd, tint)) { o->f[0] = gain; o->f[1] = blur; } }
+    void glowEnd (float gain, float blur, uint32_t tint = 0xffffffffu, int x0 = 0, int y0 = 0, int x1 = 0, int y1 = 0)
+    {
+        if (SceneOp* o = add (kOpGlowEnd, tint))
+        {
+            o->f[0] = gain; o->f[1] = blur; o->f[2] = static_cast<float> (x0); o->f[3] = static_cast<float> (y0);
+            o->rgba2 = (static_cast<uint32_t> (std::min (std::max (x1, 0), 65535)) << 16) | static_cast<uint32_t> (std::min (std::max (y1, 0), 65535));
+        }
+    }
     /** The scene's one polyline over the whole width (n <= kMaxCurve; more is a programming error: it is cut and `overflow` is set). It occupies the first vertices of the pool: call it before
         any curve (a Curve op does not use it). */
     void polyline (const float* rows, int n)
@@ -196,6 +204,14 @@ struct SceneBuilder
     {
         if (first < 0 || n < 2 || first + n > static_cast<int> (s_.numPoints)) { overflow = true; return; }
         if (SceneOp* o = add (kOpCurve, 0)) { o->f[0] = static_cast<float> (first); o->f[1] = static_cast<float> (n); o->f[2] = static_cast<float> (x0); o->f[3] = static_cast<float> (width); }
+    }
+    /** A rectangle with a vertical gradient (top colour at y0, bottom colour at y1): a flat two point curve and a gradient fill under it, the cheapest fill with a gradient (no distance field). It makes the
+        flat curve the current polyline. */
+    void gradientRect (float x0, float y0, float x1, float y1, uint32_t rgbaTop, uint32_t rgbaBottom)
+    {
+        const float rows[2] = { y0 - 0.001f, y0 - 0.001f };   // a hair above the edge: the top row is covered whole (and the row above not visibly)
+        if (curve (rows, 2, static_cast<int> (x0), static_cast<int> (x1 - x0)) >= 0)
+            fillGradient (y1, y0, y1, rgbaTop, rgbaBottom);
     }
     /** The area between the rows `top` and `bottom` (both n values) over the columns x0 .. x0 + width - 1. */
     void band (const float* top, const float* bottom, int n, int x0, int width, uint32_t rgba)
@@ -450,7 +466,7 @@ inline bool feedbackGeom (const SceneOp& o, FeedbackGeom& g) noexcept
     return g.x1 > g.x0 && g.y1 > g.y0;
 }
 
-struct GlowGeom { int divisor; float gain, blur; };
+struct GlowGeom { int divisor; float gain, blur; float x0, y0, x1, y1; bool rect; };
 inline bool glowBeginGeom (const SceneOp& o, int& divisor) noexcept
 {
     if (! std::isfinite (o.f[0]))
@@ -468,6 +484,11 @@ inline bool glowEndGeom (const SceneOp& o, GlowGeom& g) noexcept
     g.divisor = 0;
     g.gain = std::min (o.f[0], 4.0f);
     g.blur = std::min (std::max (o.f[1], 0.5f), 4.0f);
+    g.x0 = coordOk (o.f[2]) ? o.f[2] : 0.0f;
+    g.y0 = coordOk (o.f[3]) ? o.f[3] : 0.0f;
+    g.x1 = static_cast<float> (o.rgba2 >> 16);
+    g.y1 = static_cast<float> (o.rgba2 & 0xffffu);
+    g.rect = g.x1 > g.x0 && g.y1 > g.y0;
     return true;
 }
 

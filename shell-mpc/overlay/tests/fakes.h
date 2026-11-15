@@ -53,6 +53,7 @@ struct TempDir
         p.rotation = path + "/rot";
         p.noGpu = path + "/nogpu";
         p.look = path + "/look";
+        p.detail = path + "/detail";
         p.status = path + "/status.txt";
         p.dumpRequest = path + "/dump";
         p.dump = path + "/curve.txt";

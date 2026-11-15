@@ -107,6 +107,26 @@ inline const Look kLook3 = {
     8, 12
 };
 
+/** The LEVEL OF DETAIL, next to the look: how much of the drawing is made (the number of frames of the wavetable stack, of unison hairlines, the spectrum, the soft light passes, the afterglow).
+    "full" is the designed, richest picture; "reduced" is what a machine that cannot keep it within its frame time gets (the plugin chooses from the measured frame time of the GPU helper; a file
+    overrides it, see controller.h). One table, no branches on the machine in the components. */
+struct Detail
+{
+    const char* name;
+    int stackFrames;      // frames of the wavetable shown behind the current one (0 = none)
+    int unisonHairs;      // at most this many unison hairlines around the main curve
+    bool spectrum;        // the faint spectrum under a wave
+    bool glow;            // the soft light passes (curves, arcs, dots)
+    bool afterglow;       // the feedback layer under the displays
+};
+inline const Detail kDetailFull = { "full", 7, 6, true, true, true };
+inline const Detail kDetailReduced = { "reduced", 3, 2, false, false, false };
+inline const Detail* g_detail = &kDetailFull;
+/** 1 = full, 2 = reduced (anything else: full). */
+inline void setDetail (int n) noexcept { g_detail = n == 2 ? &kDetailReduced : &kDetailFull; }
+inline const Detail& D() noexcept { return *g_detail; }
+inline int detailLevel() noexcept { return g_detail == &kDetailReduced ? 2 : 1; }
+
 inline const Look* g_look = &kLook1;
 /** The active look (1 .. 3; anything else selects look 1). The views read it on every draw: switching is one pointer. */
 inline void setLook (int n) noexcept { g_look = n == 2 ? &kLook2 : (n == 3 ? &kLook3 : &kLook1); }

@@ -76,6 +76,7 @@ struct PaintU { float mode = 0.0f, a = 0.0f, inv = 1.0f; float c[4][4] = {}; }; 
     8 rounded rectangle (d0, d1 = offset from the centre), 9 band (d0 = coverage), 10 a texture times colour, 12 / 13 the blur of the glow layer (horizontal / vertical). */
 struct Draw
 {
+    int prog = 0;                                   // the program (programFor)
     int type = 0;                                   // 0 draw, 1 clear (colour), 2 glow begin (the layer is cleared), 3 nothing (a marker of the end of the glow)
     int prim = 0, first = 0, count = 0, kind = 0;
     int target = -1;                                // -1 the picture, 0 / 1 the two glow layers
@@ -206,12 +207,17 @@ private:
         "attribute vec2 aPos; attribute vec2 aD; varying vec2 vD; varying vec2 vP; varying vec2 vC; uniform vec3 uRowX; uniform vec3 uRowY;\n"
         "void main() { vD = aD; vP = aPos; gl_Position = vec4 (dot (uRowX.xy, aPos) + uRowX.z, dot (uRowY.xy, aPos) + uRowY.z, 0.0, 1.0); vC = gl_Position.xy * 0.5 + 0.5; }\n";
     // premultiplied output. kinds: see struct Draw. The coverage functions are the ones of scene.h (edgeCoverage, lineCoverage, rrectCoverage, arcContains, arcParam) and sdf_font.h (coverage).
+    // FIVE programs from one source (a fragment shader with every kind in it is slow on the Mali-T760 at its lowest clock: the cost of a fragment grows with the code the compiler keeps):
+    // P_SOLID (a plain colour: rectangles, frames), P_BASIC (ink, line, disc, gradient, band), P_SHAPE (arc, rounded rectangle), P_TEXT (distance field text), P_TEX (feedback, glow passes).
+    static constexpr int kPrograms = 5;
+    static constexpr const char* kFsDefines[kPrograms] = { "#define P_SOLID 1\n", "#define P_BASIC 1\n", "#define P_SHAPE 1\n", "#define P_TEXT 1\n", "#define P_TEX 1\n" };
     static constexpr const char* kFs =
         "precision highp float;\n"
         "varying vec2 vD; varying vec2 vP; varying vec2 vC;\n"
         "uniform float uKind; uniform vec4 uC0; uniform vec4 uC1; uniform float uHalf; uniform float uR; uniform vec4 uU; uniform float uSoft;\n"
         "uniform vec4 uE; uniform vec4 uA; uniform float uLen; uniform float uTextK; uniform vec4 uRR; uniform vec2 uTexel;\n"
         "uniform vec3 uPm; uniform vec4 uP0; uniform vec4 uP1; uniform vec4 uP2; uniform vec4 uP3; uniform sampler2D uTex;\n"
+        "#if defined(P_BASIC) || defined(P_SHAPE) || defined(P_TEXT)\n"
         "float edge (float x) { float c = clamp (0.5 + x / uSoft, 0.0, 1.0); return uSoft > 1.0 ? c * c * (3.0 - 2.0 * c) : c; }\n"
         "float lineCov (float d) { float c = edge (uHalf - d); return uSoft > 1.0 ? c : min (c, 2.0 * uHalf); }\n"
         "vec4 pal (float t) { t = clamp (t, 0.0, 1.0) * 3.0; if (t < 1.0) return mix (uP0, uP1, t); if (t < 2.0) return mix (uP1, uP2, t - 1.0); return mix (uP2, uP3, t - 2.0); }\n"
@@ -220,7 +226,11 @@ private:
         "  if (uPm.x < 1.5) t = (vP.x - uPm.y) * uPm.z; else if (uPm.x < 2.5) t = (vP.y - uPm.y) * uPm.z;\n"
         "  return pal (t) * uC0.a;\n"
         "}\n"
+        "#endif\n"
         "void main() {\n"
+        "#if defined(P_SOLID)\n"
+        "  gl_FragColor = uC0;\n"
+        "#elif defined(P_BASIC)\n"
         "  if (uKind < 0.5) { gl_FragColor = ink (0.0); return; }\n"
         "  if (uKind < 1.5) {\n"
         "    float d = abs (vD.x);\n"
@@ -229,6 +239,8 @@ private:
         "  }\n"
         "  if (uKind < 2.5) { gl_FragColor = ink (0.0) * edge (uHalf - length (vD)); return; }\n"
         "  if (uKind < 3.5) { gl_FragColor = mix (uC0, uC1, clamp (vD.x, 0.0, 1.0)); return; }\n"
+        "  gl_FragColor = ink (0.0) * clamp (vD.x, 0.0, 1.0);\n"                 // the band: d0 is the coverage
+        "#elif defined(P_SHAPE)\n"
         "  if (uKind < 6.5) {\n"   // the ring segment: the ring by the distance from the centre, the ends by cross products of the offset with the directions of the two ends (arcContains of scene.h)
         "    float cov = lineCov (abs (length (vD) - uR));\n"
         "    bool inside = true;\n"
@@ -240,25 +252,34 @@ private:
         "    if (uPm.x > 2.5) { float a = atan (vD.y, vD.x) - uA.x; a -= 6.28318530718 * floor (a / 6.28318530718); t = a * uA.y; }\n"
         "    gl_FragColor = ink (t) * cov; return;\n"
         "  }\n"
-        "  if (uKind < 7.5) {\n"
-        "    float v = texture2D (uTex, vD).a;\n"
-        "    gl_FragColor = ink (0.0) * clamp (0.5 + (v - 0.5) * uTextK, 0.0, 1.0); return;\n"
-        "  }\n"
-        "  if (uKind < 8.5) {\n"
-        "    vec2 q = abs (vD) - uRR.xy;\n"
-        "    float d = length (max (q, 0.0)) + min (max (q.x, q.y), 0.0) - uRR.z;\n"
-        "    float cov = edge (-d);\n"
-        "    if (uRR.w > 0.0) cov = max (cov - edge (-d - uRR.w), 0.0);\n"
-        "    gl_FragColor = ink (0.0) * cov; return;\n"
-        "  }\n"
-        "  if (uKind < 9.5) { gl_FragColor = ink (0.0) * clamp (vD.x, 0.0, 1.0); return; }\n"
+        "  vec2 q = abs (vD) - uRR.xy;\n"
+        "  float d = length (max (q, 0.0)) + min (max (q.x, q.y), 0.0) - uRR.z;\n"
+        "  float cov = edge (-d);\n"
+        "  if (uRR.w > 0.0) cov = max (cov - edge (-d - uRR.w), 0.0);\n"
+        "  gl_FragColor = ink (0.0) * cov;\n"
+        "#elif defined(P_TEXT)\n"
+        "  float v = texture2D (uTex, vD).a;\n"
+        "  gl_FragColor = ink (0.0) * clamp (0.5 + (v - 0.5) * uTextK, 0.0, 1.0);\n"
+        "#else\n"
         "  if (uKind < 10.5) { gl_FragColor = texture2D (uTex, vC) * uC0; return; }\n"
         "  vec2 st = uKind < 12.5 ? vec2 (uTexel.x, 0.0) : vec2 (0.0, uTexel.y);\n"   // the blur: 9 taps from 5 linear samples
         "  vec4 s = texture2D (uTex, vC) * 0.2270270270;\n"
         "  s += (texture2D (uTex, vC + st * 1.3846153846) + texture2D (uTex, vC - st * 1.3846153846)) * 0.3162162162;\n"
         "  s += (texture2D (uTex, vC + st * 3.2307692308) + texture2D (uTex, vC - st * 3.2307692308)) * 0.0702702703;\n"
         "  gl_FragColor = s;\n"
+        "#endif\n"
         "}\n";
+
+    static int programFor (int kind, bool painted) noexcept
+    {
+        if (kind == 0)
+            return painted ? 1 : 0;
+        if (kind == 1 || kind == 2 || kind == 3 || kind == 9)
+            return 1;
+        if ((kind >= 4 && kind <= 6) || kind == 8)
+            return 2;
+        return kind == 7 ? 3 : 4;
+    }
 
     GLuint compile (GLenum type, const char* src, std::string& error)
     {
@@ -437,30 +458,40 @@ private:
             error = "eglMakeCurrent without a surface failed (no surfaceless context)";
             return false;
         }
-        GLuint vs = compile (GL_VERTEX_SHADER, kVs, error), fs = compile (GL_FRAGMENT_SHADER, kFs, error);
-        if (! vs || ! fs)
+        GLuint vs = compile (GL_VERTEX_SHADER, kVs, error);
+        if (! vs)
             return false;
-        prog_ = api_.glCreateProgram();
-        api_.glAttachShader (prog_, vs);
-        api_.glAttachShader (prog_, fs);
-        api_.glBindAttribLocation (prog_, 0, "aPos");
-        api_.glBindAttribLocation (prog_, 1, "aD");
-        api_.glLinkProgram (prog_);
-        GLint ok = 0;
-        api_.glGetProgramiv (prog_, GL_LINK_STATUS, &ok);
-        if (! ok)
+        for (int pi = 0; pi < kPrograms; ++pi)
         {
-            char log[512] = {};
-            api_.glGetProgramInfoLog (prog_, sizeof log, nullptr, log);
-            error = std::string ("link: ") + log;
-            return false;
+            const std::string src = std::string (kFsDefines[pi]) + kFs;
+            GLuint fs = compile (GL_FRAGMENT_SHADER, src.c_str(), error);
+            if (! fs)
+                return false;
+            prog_[pi] = api_.glCreateProgram();
+            api_.glAttachShader (prog_[pi], vs);
+            api_.glAttachShader (prog_[pi], fs);
+            api_.glBindAttribLocation (prog_[pi], 0, "aPos");
+            api_.glBindAttribLocation (prog_[pi], 1, "aD");
+            api_.glLinkProgram (prog_[pi]);
+            GLint ok = 0;
+            api_.glGetProgramiv (prog_[pi], GL_LINK_STATUS, &ok);
+            if (! ok)
+            {
+                char log[512] = {};
+                api_.glGetProgramInfoLog (prog_[pi], sizeof log, nullptr, log);
+                error = std::string ("link: ") + log;
+                return false;
+            }
+            api_.glUseProgram (prog_[pi]);
+            auto loc = [&] (const char* name) { return api_.glGetUniformLocation (prog_[pi], name); };
+            Locs& u = locs_[pi];
+            u.rowX = loc ("uRowX"); u.rowY = loc ("uRowY"); u.kind = loc ("uKind"); u.c0 = loc ("uC0"); u.c1 = loc ("uC1"); u.half = loc ("uHalf"); u.r = loc ("uR"); u.u = loc ("uU");
+            u.soft = loc ("uSoft"); u.e = loc ("uE"); u.a = loc ("uA"); u.len = loc ("uLen"); u.textK = loc ("uTextK"); u.rr = loc ("uRR"); u.texel = loc ("uTexel"); u.pm = loc ("uPm");
+            u.p0 = loc ("uP0"); u.p1 = loc ("uP1"); u.p2 = loc ("uP2"); u.p3 = loc ("uP3"); u.tex = loc ("uTex");
+            api_.glUniform1i (u.tex, 0);
         }
-        api_.glUseProgram (prog_);
-        auto loc = [&] (const char* name) { return api_.glGetUniformLocation (prog_, name); };
-        u_.rowX = loc ("uRowX"); u_.rowY = loc ("uRowY"); u_.kind = loc ("uKind"); u_.c0 = loc ("uC0"); u_.c1 = loc ("uC1"); u_.half = loc ("uHalf"); u_.r = loc ("uR"); u_.u = loc ("uU");
-        u_.soft = loc ("uSoft"); u_.e = loc ("uE"); u_.a = loc ("uA"); u_.len = loc ("uLen"); u_.textK = loc ("uTextK"); u_.rr = loc ("uRR"); u_.texel = loc ("uTexel"); u_.pm = loc ("uPm");
-        u_.p0 = loc ("uP0"); u_.p1 = loc ("uP1"); u_.p2 = loc ("uP2"); u_.p3 = loc ("uP3"); u_.tex = loc ("uTex");
-        api_.glUniform1i (u_.tex, 0);
+        u_ = locs_[0];
+        curProg_ = 0;
         // the font atlas (alpha, bilinear): the signed distance field of sdf_font_data.h
         api_.glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
         api_.glGenTextures (1, &atlasTex_);
@@ -727,6 +758,7 @@ private:
         d.tex = 0;
         if (paint)
             setPaintU (d.pt, paint_);
+        d.prog = programFor (kind, paint && paint_.mode != 0);
         return d;
     }
 
@@ -1035,7 +1067,13 @@ private:
                                 d.colour[c] *= g.gain;
                             d.additive = true;
                         }
-                        quad (0.0f, 0.0f, W, H, 0, 0, 0, 0);
+                        if (g.rect)   // the passes are as big as the rectangle (a little more for the blur to reach): the cost follows the area
+                        {
+                            const float m = pass == 2 ? 0.0f : 3.0f * static_cast<float> (glowDivisor_) * g.blur * 4.0f;
+                            quad (std::max (0.0f, g.x0 - m), std::max (0.0f, g.y0 - m), std::min (W, g.x1 + m), std::min (H, g.y1 + m), 0, 0, 0, 0);
+                        }
+                        else
+                            quad (0.0f, 0.0f, W, H, 0, 0, 0, 0);
                         end();
                     }
                     break;
@@ -1124,6 +1162,14 @@ private:
     /** The uniforms of a draw; only what differs from the draw before is sent (hundreds of draws of a frame share most of their state). */
     void applyUniforms (const Draw& d)
     {
+        if (d.prog != curProg_)
+        {
+            curProg_ = d.prog;
+            api_.glUseProgram (prog_[curProg_]);
+            u_ = locs_[curProg_];
+            setTransform();
+            haveLast_ = false;
+        }
         const Draw& l = last_;
         const bool f = ! haveLast_;
         auto same4 = [] (const float* a, const float* b) { return a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3]; };
@@ -1248,6 +1294,7 @@ private:
         benchReported_ = false;
         benchWindowStart_ = nowMs() + 700.0;   // the first 0.7 s (the new scene's first pictures, the pace grid settling) are not counted
         benchRender_.clear();
+        benchGen_.clear(); benchBuild_.clear(); benchSubmit_.clear(); benchFinish_.clear();
         benchSet_.clear();
         benchInterval_.clear();
         benchSkippedStart_ = skipped_;
@@ -1272,12 +1319,14 @@ private:
         const size_t n = benchRender_.size();
         if (n) { avg /= static_cast<double> (n); avgSet /= static_cast<double> (n); }
         if (! benchInterval_.empty()) avgInt /= static_cast<double> (benchInterval_.size());
+        auto mean = [] (const std::vector<float>& v) { double a = 0.0; for (float x : v) a += x; return v.empty() ? 0.0 : a / static_cast<double> (v.size()); };
+        const double gen = mean (benchGen_), bld = mean (benchBuild_), sub = mean (benchSubmit_), fin = mean (benchFinish_), finP99 = benchPercentile (benchFinish_, 0.99);
         const double p99 = benchPercentile (benchRender_, 0.99), mx = benchRender_.empty() ? 0.0 : benchRender_.back();
         const double ip99 = benchPercentile (benchInterval_, 0.99);
         if (FILE* f = std::fopen ("/tmp/sb-bench-stats.txt", "a"))
         {
-            std::fprintf (f, "id=%s frames=%zu seconds=%.2f fps=%.2f render_avg_ms=%.3f render_p99_ms=%.3f render_max_ms=%.3f setplane_avg_ms=%.3f interval_avg_ms=%.3f interval_p99_ms=%.3f skipped_vblanks=%lu late_setplane=%lu stride=%d verts=%zu draws=%zu msaa=%d\n",
-                          benchCfg_.id.c_str(), n, secs, static_cast<double> (n) / secs, avg, p99, mx, avgSet, avgInt, ip99, skipped_ - benchSkippedStart_, late_ - benchLateStart_, stride_, verts_.size(), draws_.size(), wantSamples_);
+            std::fprintf (f, "id=%s frames=%zu seconds=%.2f fps=%.2f render_avg_ms=%.3f render_p99_ms=%.3f render_max_ms=%.3f setplane_avg_ms=%.3f interval_avg_ms=%.3f interval_p99_ms=%.3f skipped_vblanks=%lu late_setplane=%lu stride=%d verts=%zu draws=%zu msaa=%d gen_ms=%.3f build_ms=%.3f submit_ms=%.3f finish_ms=%.3f finish_p99_ms=%.3f\n",
+                          benchCfg_.id.c_str(), n, secs, static_cast<double> (n) / secs, avg, p99, mx, avgSet, avgInt, ip99, skipped_ - benchSkippedStart_, late_ - benchLateStart_, stride_, verts_.size(), draws_.size(), wantSamples_, gen, bld, sub, fin, finP99);
             std::fclose (f);
         }
     }
@@ -1385,7 +1434,7 @@ private:
     double benchLastPoll_ = 0.0, benchWindowStart_ = 0.0, benchLastFrameMs_ = 0.0;
     time_t benchMtime_ = 0;
     long benchMtimeNs_ = 0;
-    std::vector<float> benchRender_, benchSet_, benchInterval_;
+    std::vector<float> benchRender_, benchSet_, benchInterval_, benchGen_, benchBuild_, benchSubmit_, benchFinish_;
     unsigned long benchSkippedStart_ = 0, benchLateStart_ = 0, benchFramesStart_ = 0;
     float benchPhase_ = 0.0f;
 #endif
@@ -1412,13 +1461,16 @@ private:
             if (s.w != w_ || s.h != h_)
                 return false;    // a scene of the region before this one: the right one is on its way
         }
+        [[maybe_unused]] const double tGen = nowMs();
         buildScene (s);
+        [[maybe_unused]] const double tBuilt = nowMs();
         api_.glBindBuffer (GL_ARRAY_BUFFER, vbo_);
         api_.glBufferData (GL_ARRAY_BUFFER, static_cast<GLsizeiptr> (verts_.size() * sizeof (Vtx)), verts_.data(), GL_DYNAMIC_DRAW);
         setTransform();
         curTarget_ = -2;
         curTex_ = -1;
         haveLast_ = false;
+        curProg_ = -1;
         bool glowActive = false;
         for (const Draw& d : draws_)
         {
@@ -1456,7 +1508,9 @@ private:
             api_.glCopyTexSubImage2D (GL_TEXTURE_2D, 0, 0, 0, 0, 0, bw_, bh_);
         }
         prevFeedback_ = sceneFeedback_;
+        [[maybe_unused]] const double tSubmitted = nowMs();
         api_.glFinish();    // the buffer must be finished before the display reads it
+        [[maybe_unused]] const double tFinished = nowMs();
         maybeDump (s, seq);
         if (! api_.eglSwapBuffers (dpy_, esurf_))
         {
@@ -1510,6 +1564,13 @@ private:
         }
 #ifdef SYNTHYBOY_OVERLAY_BENCH
         benchRecord (t1 - t0, t2 - tCall, benchLastFrameMs_ > 0.0 ? t2 - benchLastFrameMs_ : 0.0);
+        if (benchActive_ && ! benchReported_ && nowMs() >= benchWindowStart_ && benchGen_.size() < 20000)
+        {
+            benchGen_.push_back (static_cast<float> (tGen - t0));
+            benchBuild_.push_back (static_cast<float> (tBuilt - tGen));
+            benchSubmit_.push_back (static_cast<float> (tSubmitted - tBuilt));
+            benchFinish_.push_back (static_cast<float> (tFinished - tSubmitted));
+        }
         benchLastFrameMs_ = t2;
 #endif
         lastFrameMs_ = t2;
@@ -1757,10 +1818,12 @@ private:
     EGLConfig cfg_ = nullptr;
     EGLContext ctx_ = EGL_NO_CONTEXT;
     EGLSurface esurf_ = EGL_NO_SURFACE;
-    GLuint prog_ = 0, vbo_ = 0, atlasTex_ = 0, feedbackTex_ = 0, glowTex_[2] = {}, glowFbo_[2] = {};
+    GLuint prog_[kPrograms] = {}, vbo_ = 0, atlasTex_ = 0, feedbackTex_ = 0, glowTex_[2] = {}, glowFbo_[2] = {};
     int glowW_ = 0, glowH_ = 0, curTarget_ = -2, curTex_ = -1;
     bool sceneFeedback_ = false, prevFeedback_ = false;
     struct Locs { GLint rowX = -1, rowY = -1, kind = -1, c0 = -1, c1 = -1, half = -1, r = -1, u = -1, soft = -1, e = -1, a = -1, len = -1, textK = -1, rr = -1, texel = -1, pm = -1, p0 = -1, p1 = -1, p2 = -1, p3 = -1, tex = -1; } u_;
+    Locs locs_[kPrograms];
+    int curProg_ = -1;
     Draw last_;
     bool haveLast_ = false;
     Import imports_[kMaxLedger];
