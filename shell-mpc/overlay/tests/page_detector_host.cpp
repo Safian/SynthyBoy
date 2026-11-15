@@ -87,7 +87,7 @@ int main()
     check (pics.size() == 5, "the fixtures load (" + std::to_string (pics.size()) + " pictures)");
     MarkerSpec markers[layout::kNumViews * 2];
     Rect instances[layout::kNumViews];
-    int play1 = -1, spectrum = -1;
+    int play1 = -1;
     for (int i = 0; i < layout::kNumViews; ++i)
     {
         const layout::View& v = layout::kViews[i];
@@ -95,7 +95,6 @@ int main()
             markers[i * 2 + m] = { { v.markers[m].rect.x, v.markers[m].rect.y, v.markers[m].rect.w, v.markers[m].rect.h }, v.markers[m].rgb };
         instances[i] = { v.instance.x, v.instance.y, v.instance.w, v.instance.h };
         if (std::string (v.name) == "play1") play1 = i;
-        if (std::string (v.name) == "spectrum") spectrum = i;
     }
     auto detect = [&] (const char* name)
     {
