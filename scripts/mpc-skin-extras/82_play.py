@@ -33,6 +33,7 @@ GROUPS = 3
 SLOTS = 8
 # The Key 61 has one column of four knobs; Bank Direction "Column" banks the 4 x 4 grid (Q-Links.json 8.2 / 8.3 of the SDK's ui-reference.md) by columns read TOP TO BOTTOM: bank 0 = Q-Link 13, 9, 5, 1, bank 1 = 14, 10, 6, 2.
 # The Play pages' first bank is the four Q proxies: the top knob is Q 1, the bottom one Q 4 (measured on the device: the panel showed Q 1 at the bottom for Q-Link 1).
+# The oscillator sub-tab (the first sub-tab of the first tab) is the exception, measured on the device with injected knob turns: the host honours only the bottom row (Q-Link 1 .. 4) there and fills the rows above with its own assignments (Macro 1, Master Volume, Macro 5 ...) whatever this file says; so that sub-tab uses Bank Direction "Row", bank 0 = Q-Link 1, 2, 3, 4 = top knob .. bottom knob. The cause is not known.
 QLINK_COLUMN_0 = (13, 9, 5, 1)
 QLINK_COLUMN_1 = (14, 10, 6, 2)
 Q_PROXIES = 4              # "Q 1" .. "Q 4": the parameters after the last Play proxy
@@ -260,7 +261,7 @@ def apply(tui, qlinks, ctx):
             if s >= 4:   # the second row of the module's knobs: the second Q-Link bank (column 1), read top to bottom: slots 5, 6, 7, 8
                 links["Q-Link %d" % QLINK_COLUMN_1[s - 4]] = proxy_idx[highlight][s]
         for i in range(Q_PROXIES):   # the four hardware knobs of every Play sub-tab are the Q proxies (the plugin sets what they act on)
-            links["Q-Link %d" % QLINK_COLUMN_0[i]] = q_idx[i]
+            links["Q-Link %d" % (i + 1 if highlight == PLUGIN_DRAWN_PANEL else QLINK_COLUMN_0[i])] = q_idx[i]
         for c in extra:
             _hide_while_full_screen(c, first - OVERLAY_INSTANCE)
         items.extend(extra)
@@ -273,4 +274,6 @@ def apply(tui, qlinks, ctx):
         if len(entry) != 1:
             raise ValueError("Q-Links.json has %d entries for the tab %r" % (len(entry), tab_name))
         entry[0]["Q-Links"] = links
+        if highlight == PLUGIN_DRAWN_PANEL:
+            entry[0]["Bank Direction"] = "Row"
         tab["qlinkBoundsData"] = ["%s %d %s %d" % (b.split()[0], QLINK_BOUNDS_Y, b.split()[2], QLINK_BOUNDS_H) for b in tab["qlinkBoundsData"]]

@@ -545,13 +545,15 @@ class OverlaySkinTests(unittest.TestCase):
                     self.assertEqual(c["componentData"]["type"], rc["componentData"]["type"], "%s is the same widget as the real parameter's control" % c["componentData"]["name"])
             entry = next(e for e in self.o_ql["Screen Mode Q-Links"]["map"] if e["Tab"] == tab["fnKeyIndex"] + 1 and e["SubTab"] == tab["fnKeySubIndex"] + 1)
             expected = [-1] * 16
-            for k, n in enumerate((13, 9, 5, 1)):   # Bank Direction Column: bank 0 is read top to bottom, Q-Link 13, 9, 5, 1 = Q 1 .. Q 4
+            # Bank Direction Column: bank 0 is read top to bottom, Q-Link 13, 9, 5, 1 = Q 1 .. Q 4; the oscillator sub-tab is Bank Direction Row with Q-Link 1 .. 4 (the host honours only the bottom row there, measured on the device)
+            self.assertEqual(entry["Bank Direction"], "Row" if g == 0 else "Column")
+            for k, n in enumerate((1, 2, 3, 4) if g == 0 else (13, 9, 5, 1)):
                 expected[n - 1] = q[k]
             if g > 0:
                 for k, n in enumerate((14, 10, 6, 2)):   # bank 1 top to bottom: the second row of the module's knobs
                     expected[n - 1] = prox[g][4 + k]
             self.assertEqual([entry["Q-Links"]["Q-Link %d" % n] for n in range(1, 17)], expected,
-                             "%s: the first bank (Q-Link 13, 9, 5, 1, top to bottom) is Q 1 .. Q 4, the second (14, 10, 6, 2) the second row of the module's knobs (none on the oscillator sub-tab), the others free" % tab_name)
+                             "%s: the first bank (Q-Link 13, 9, 5, 1 top to bottom; Q-Link 1 .. 4 with Bank Direction Row on the oscillator sub-tab) is Q 1 .. Q 4, the second (14, 10, 6, 2) the second row of the module's knobs (none on the oscillator sub-tab), the others free" % tab_name)
             self.assertEqual(tab["qlinkBoundsData"], ["16 301 288 323", "336 301 288 323", "656 301 288 323", "976 301 288 323"])
             # names: every knob has its short name over it, unique inside the tab
             names = [c["componentData"]["data"]["text"] for c in items if c["componentData"]["type"] == "Label" and c["componentData"]["name"].endswith(" name")]
