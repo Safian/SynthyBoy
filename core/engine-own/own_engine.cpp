@@ -103,6 +103,8 @@ OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.fo
     for (int v = 0; v < LiveValues::kReadVoices; ++v)
         liveSubPhase[v].store (-1.0f, std::memory_order_relaxed);
     liveNoisePos.store (-1.0f, std::memory_order_relaxed);
+    for (int s = 0; s < LiveValues::kMaxStrips; ++s)
+        liveStripPeak[s].store (0.0f, std::memory_order_relaxed);
     spectralScratch = std::make_unique<spectral::Scratch>();
     publishContent (ContentSet::build (StateContent {}, nullptr));
 }
@@ -1276,6 +1278,8 @@ bool OwnEngine::copyReadout (LiveValues& out) const noexcept
         out.multisampleZone[o] = multiZone[o].load (std::memory_order_relaxed);
         out.multisampleKey[o] = multiKey[o].load (std::memory_order_relaxed);
     }
+    for (int s = 0; s < LiveValues::kMaxStrips; ++s)
+        out.stripPeak[s] = liveStripPeak[s].load (std::memory_order_relaxed);
     return true;
 }
 

@@ -288,6 +288,7 @@ public:
         for (auto& x : envFine) x.store (0.0f);
         for (auto& x : envFrac) x.store (0.0f);
         for (auto& x : extra) x.store (0.0f);
+        for (auto& x : stripPeak) x.store (0.0f);
     }
     int index (const char* key) const
     {
@@ -316,6 +317,8 @@ public:
             out.envFineStage[i] = envFine[i].load();
             out.envFineFraction[i] = envFrac[i].load();
         }
+        for (int i = 0; i < synthyboy::LiveValues::kMaxStrips; ++i)
+            out.stripPeak[i] = stripPeak[i].load();
         return true;
     }
     /** The live cutoff / resonance as the array a view gets (null while hasLive is false). */
@@ -352,7 +355,7 @@ public:
     float lt_[2] = {};
     std::atomic<int> voices { 0 };
     std::atomic<double> bpmValue { 120.0 };
-    std::atomic<float> lfoPhase[synthyboy::LiveValues::kNumLfos], envFine[synthyboy::LiveValues::kNumEnvs], envFrac[synthyboy::LiveValues::kNumEnvs], extra[synthyboy::LiveValues::kMaxTargets];
+    std::atomic<float> lfoPhase[synthyboy::LiveValues::kNumLfos], envFine[synthyboy::LiveValues::kNumEnvs], envFrac[synthyboy::LiveValues::kNumEnvs], extra[synthyboy::LiveValues::kMaxTargets], stripPeak[synthyboy::LiveValues::kMaxStrips];
     int numTargets = 2;   // how many readout targets the fake reports (the controller's list: filter views 2 each, osc views 4 each, in the order of the layout)
     mutable std::mutex cmu;
     std::shared_ptr<const synthyboy::StateContent> contentPtr;

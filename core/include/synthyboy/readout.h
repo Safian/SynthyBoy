@@ -52,6 +52,8 @@ struct LiveValues
     float grainLife[3][kReadGrains] = {};
     float subPhase[kReadVoices] = {};
     float noisePos = -1.0f;
+    static constexpr int kMaxStrips = 10;
+    float stripPeak[kMaxStrips] = {};
     int numTargets = 0;
     float target[kMaxTargets] = {};
 };

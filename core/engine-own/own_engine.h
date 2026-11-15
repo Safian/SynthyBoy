@@ -125,7 +125,7 @@ private:
     std::atomic<int> multiZone[3], multiKey[3];   // the zone and key of the last multisample note (read-out)
     std::atomic<uint32_t> blockCounter { 0 };
     // the live read-out (written at the end of a block, read by the display)
-    std::atomic<float> liveSource[LiveValues::kMaxSources], liveLfo[LiveValues::kNumLfos], liveEnvStage[LiveValues::kNumEnvs], liveEnvPos[LiveValues::kNumEnvs], liveEnvFine[LiveValues::kNumEnvs], liveEnvFineFrac[LiveValues::kNumEnvs], liveTarget[LiveValues::kMaxTargets];
+    std::atomic<float> liveSource[LiveValues::kMaxSources], liveLfo[LiveValues::kNumLfos], liveEnvStage[LiveValues::kNumEnvs], liveEnvPos[LiveValues::kNumEnvs], liveEnvFine[LiveValues::kNumEnvs], liveEnvFineFrac[LiveValues::kNumEnvs], liveTarget[LiveValues::kMaxTargets], liveStripPeak[LiveValues::kMaxStrips];
     std::atomic<int> liveNumTargets { 0 }, pendingTargets[LiveValues::kMaxTargets];
     std::atomic<int> pendingCount { 0 };
     int activeTargets[LiveValues::kMaxTargets] = {}, activeTargetCount = 0;
