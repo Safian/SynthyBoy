@@ -62,6 +62,9 @@ inline float rowOf (const Rect& plot, float v) noexcept
 }
 inline float colOf (const Rect& plot, float x) noexcept { return static_cast<float> (plot.x) + std::clamp (x, 0.0f, 1.0f) * static_cast<float> (std::max (1, plot.w - 1)); }
 
+/** The level of detail (theme.h Detail): the reduced tier (the Key 61) draws no faint area under the curve, no lead-in, at most two cursors and half the points of the curve. */
+inline bool rich() noexcept { return theme::detailLevel() == 1; }
+
 /** The four stops of the line of an LFO: its two colours (the look's LFO gradient) in four equal steps. */
 inline void stops (uint32_t out[4]) noexcept
 {
@@ -109,7 +112,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     if (d.kind == Data::Kind::Shape && d.y != nullptr && d.n >= 2)
     {
         const int lead = leadWidth (r, d);
-        if (lead > 0)
+        if (lead > 0 && rich())
         {
             // the lead-in: the delay (the LFO does not move: a flat line on the middle), then the rise (the swing grows from nothing to full): the two edges of the envelope of the amplitude
             const float lx0 = static_cast<float> (r.x + 8), lx1 = x0, share = d.delayShare + d.riseShare, dEnd = lx0 + (lx1 - lx0) * (share > 0.0f ? d.delayShare / share : 0.0f);
@@ -121,13 +124,15 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             sb.line (dEnd, mid, lx1, mid + amp, T.hair + 0.3f, fc);
             sb.line (lx1, top, lx1, bottom, T.hair, a (T.keyline, 255));
         }
-        const int n = std::min (d.n, kMaxPoints);
+        const int step = rich() ? 1 : 2;   // the reduced tier: every second point of the curve (the vertical steps of a stepped shape stay: two neighbouring points make them)
+        const int n = std::min ((d.n + step - 1) / step, kMaxPoints);
         for (int i = 0; i < n; ++i)
-            rows[i] = std::min (bottom + 40.0f, std::max (top - 40.0f, rowOf (plot, d.y[i])));
+            rows[i] = std::min (bottom + 40.0f, std::max (top - 40.0f, rowOf (plot, d.y[std::min (d.n - 1, i * step)])));
         const int first = sb.curve (rows, n, plot.x, plot.w);
         if (first >= 0)
         {
-            sb.fillGradient (mid, top, mid, a (T.lfo[0], d.dim ? 25 : 60), a (T.lfo[0], 0));
+            if (rich())
+                sb.fillGradient (mid, top, mid, a (T.lfo[0], d.dim ? 25 : 60), a (T.lfo[0], 0));
             sb.paintX (x0, x1, a (st[0], alpha), a (st[1], alpha), a (st[2], alpha), a (st[3], alpha));
             sb.style (1.0f, false);
             sb.stroke (T.curve * 0.5f + 0.15f, 255);
@@ -147,7 +152,8 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             rows[i] = std::min (bottom + 40.0f, std::max (top - 40.0f, rowOf (plot, d.trace[i])));
         if (sb.curve (rows, n, plot.x, plot.w) >= 0)
         {
-            sb.fillGradient (mid, top, mid, a (T.lfo[0], d.dim ? 25 : 50), a (T.lfo[0], 0));
+            if (rich())
+                sb.fillGradient (mid, top, mid, a (T.lfo[0], d.dim ? 25 : 50), a (T.lfo[0], 0));
             sb.paintX (x0, x1, a (st[0], alpha), a (st[1], alpha), a (st[2], alpha), a (st[3], alpha));
             sb.style (1.0f, false);
             sb.stroke (T.curve * 0.5f + 0.15f, 255);
@@ -174,7 +180,7 @@ inline void drawLive (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
     sb.paintOff();
     if (d.kind == Data::Kind::Shape)
     {
-        for (int i = std::min (d.numCursors, kMaxCursors) - 1; i >= 0; --i)   // the newest last: on top
+        for (int i = std::min (d.numCursors, rich() ? kMaxCursors : 2) - 1; i >= 0; --i)   // the newest last: on top
         {
             if (d.cx[i] < 0.0f)
                 continue;

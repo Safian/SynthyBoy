@@ -408,6 +408,16 @@ void testDisplay()
     lfodisplay::draw (s2.builder(), r, rnd);
     lfodisplay::drawLive (s2.builder(), r, rnd);
     check (! s2.overflow(), "display: the trace of a random LFO fits one scene");
+    // the reduced tier of detail: less is drawn (no lead-in, no area, two cursors)
+    theme::setDetail (2);
+    Scene sr (760, 340, 0x0b1026ffu);
+    lfodisplay::draw (sr.builder(), r, d);
+    lfodisplay::drawLive (sr.builder(), r, d);
+    theme::setDetail (1);
+    Scene sf (760, 340, 0x0b1026ffu);
+    lfodisplay::draw (sf.builder(), r, d);
+    lfodisplay::drawLive (sf.builder(), r, d);
+    check (! sr.overflow() && sr.numOps() < sf.numOps(), "display: the reduced tier draws fewer ops (" + std::to_string (sr.numOps()) + " against " + std::to_string (sf.numOps()) + ")");
     d.dim = true;
     Scene s3 (760, 340, 0x0b1026ffu);
     lfodisplay::drawLive (s3.builder(), r, d);

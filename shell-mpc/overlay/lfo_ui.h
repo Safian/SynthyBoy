@@ -418,6 +418,7 @@ private:
         modsDirty_ = true;
         gesture_ = nullptr; gestureDown_ = false;
         pageSig_ = -1;
+        nCache_ = 0;
     }
 
     // ======================================================================================================================================================================
@@ -732,7 +733,21 @@ private:
             st->setItem (t);
         }
     }
-    int paramOf (const char* suffix) const noexcept { return uibind::indexOfKey (prefix_ + suffix); }
+    /** The table index of a key of the LFO shown ("sync" -> lfo3.sync): looked up once per string literal and configuration (the update asks for a dozen of them every picture). */
+    int paramOf (const char* suffix) const
+    {
+        for (int i = 0; i < nCache_; ++i)
+            if (cacheKey_[i] == suffix)
+                return cacheIdx_[i];
+        const int idx = uibind::indexOfKey (prefix_ + suffix);
+        if (nCache_ < kCache)
+        {
+            cacheKey_[nCache_] = suffix;
+            cacheIdx_[nCache_] = idx;
+            ++nCache_;
+        }
+        return idx;
+    }
     void pull (IInstanceView& v)
     {
         for (Item& it : items_)
@@ -1446,6 +1461,9 @@ private:
     int grid_[kLfos] = {};               // the grid of the editor of every LFO (0: not chosen yet: the grid the shape was drawn on)
     double modsAtMs_ = -1000.0, shapeSentMs_ = -1000.0, curveAtMs_ = -1000.0, traceAtMs_ = -1000.0, displayChangedMs_ = -1000.0, lastNowMs_ = 0.0, bpm_ = 120.0, bpmSeen_ = -1.0;
     std::string prefix_ = "lfo1.";
+    static constexpr int kCache = 16;
+    mutable const char* cacheKey_[kCache] = {};
+    mutable int cacheIdx_[kCache] = {}, nCache_ = 0;
     char qName_[16] = {}, name_[40] = {}, label_[40] = {};
     int qTargets_[4] = { -1, -1, -1, -1 };
     // the display
