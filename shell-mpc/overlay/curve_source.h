@@ -88,6 +88,8 @@ public:
         Q proxy comes back through takeQVirtual (the latest written value; false when there is none since the last call). Lock free. */
     virtual void setQVirtual (int /*id*/, float /*normalised*/) noexcept {}
     virtual bool takeQVirtual (int /*id*/, float& /*normalised*/) noexcept { return false; }
+    /** How many times the host wrote one of the four Q proxies so far (a hardware knob was turned: the host draws its Q-Link panel over the right edge a moment later). Lock free. */
+    virtual unsigned long qWriteCount() const noexcept { return 0; }
 };
 
 class CurveSource

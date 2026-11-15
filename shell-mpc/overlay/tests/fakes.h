@@ -57,6 +57,7 @@ struct TempDir
         p.rate = path + "/rate";
         p.gpuClock = path + "/gpuclock";
         p.status = path + "/status.txt";
+        p.noPanelHold = path + "/nopanelhold";
         p.dumpRequest = path + "/dump";
         p.dump = path + "/curve.txt";
         return p;
@@ -344,6 +345,8 @@ public:
     void setPlaySelection (int g, int i) noexcept override { if (g >= 0 && g < 3) playSel[g].store (i); }
     void setUiFullOpen (bool o) noexcept override { uiFullOpen.store (o); }
     std::atomic<bool> uiFullOpen { false };
+    std::atomic<unsigned long> qWrites { 0 };   // the host's writes to the Q proxies (a test raises it to say "a hardware knob is being turned")
+    unsigned long qWriteCount() const noexcept override { return qWrites.load(); }
     std::atomic<int> uiWrites { 0 };
     void requestOverlayReport() noexcept override { reportRequests.fetch_add (1); }
     /** The ring of the output (the spectrum view); only when `hasRing` is set, like a plugin built without the spectrum has none. */

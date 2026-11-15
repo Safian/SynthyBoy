@@ -121,6 +121,7 @@ int main()
         check (r.hostWrite (0, 7.0f, false, rd, w) == QRouter::Write::written && rd (2) == 1.0f && r.hostWrite (0, -3.0f, false, rd, w) == QRouter::Write::written && rd (2) == 0.0f, "a value outside 0 .. 1 is limited");
         check (r.hostWrite (0, std::nanf (""), false, rd, w) == QRouter::Write::echo && rd (2) == 0.0f, "NaN is taken as 0 (the target already has it)");
         check (r.hostWrite (7, 0.5f, false, rd, w) == QRouter::Write::none && r.hostWrite (-1, 0.5f, false, rd, w) == QRouter::Write::none, "a Q outside 0 .. 3: nothing");
+        check (r.writeCount() == 10, "every host write counts, whatever came of it (an echo, no target, outside the Qs): " + std::to_string (r.writeCount()));
     }
     {
         // what the display thread reports

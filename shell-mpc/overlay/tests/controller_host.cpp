@@ -99,14 +99,14 @@ int main()
         const double t = r.until ([&] { return r.on(); }, 500);
         check (t >= 0 && t <= 110, "the markers appear: shown within 110 ms (took " + std::to_string (t) + " ms)");
         r.frame.setMarker (1, false, 90);
-        const double h = r.until ([&] { return ! r.on(); }, 500);
-        check (h >= 0 && h <= 150, "one marker missing: hidden within 150 ms (took " + std::to_string (h) + " ms)");
+        const double h = r.until ([&] { return ! r.on(); }, 800);
+        check (h >= 350 && h <= 650, "the right marker missing (the left one there): kept for the panel's slide, 400 ms, then hidden (took " + std::to_string (h) + " ms)");
         check (! r.plane.buffersAlive, "... and the buffers are freed");
         check (r.plane.calls() > 0 && r.plane.callLog().back() == "destroy", "... plane off first, then the buffers");
         r.frame.setMarker (1, true, 90, legacy::kViews[0].markers[1].rgb + 2);   // +2 in blue
         check (r.until ([&] { return r.on(); }, 300) >= 0, "a marker 2 off in one channel is accepted");
         r.frame.setMarker (1, true, 90, legacy::kViews[0].markers[1].rgb + 3);
-        check (r.until ([&] { return ! r.on(); }, 300) >= 0, "a marker 3 off is not");
+        check (r.until ([&] { return ! r.on(); }, 700) >= 0, "a marker 3 off is not (the page is kept for the panel's 400 ms first)");
         r.frame.setMarker (1, true, 90);
         r.until ([&] { return r.on(); }, 300);
         // the framebuffer cannot be read for one check: hidden, and it comes back
@@ -114,6 +114,67 @@ int main()
         check (r.until ([&] { return ! r.on(); }, 300) >= 0, "framebuffer unreadable: hidden");
         r.frame.readable = true;
         check (r.until ([&] { return r.on(); }, 300) >= 0, "readable again: back");
+    }
+    // ---- the host's Q-Link panel slides in and out (the right marker is covered first and uncovered last, the panel is not recognised meanwhile) and a knob turn is announced by the plugin ----
+    {
+        Rig r;
+        r.frame.setAll (true, 90);
+        check (r.until ([&] { return r.on(); }, 500) >= 0, "the page is on");
+        r.run (300);
+        check (! r.ctl->qlinkPanelUp(), "no panel, no knob: the flag is down");
+        // the slide: right marker gone for 250 ms, then back: the page never goes away, the panel counts as up meanwhile
+        r.frame.setMarker (1, false, 90);
+        bool always = true, panelSeen = false;
+        for (int i = 0; i < 25; ++i)
+        {
+            r.run (10);
+            always = always && r.on();
+            panelSeen = panelSeen || r.ctl->qlinkPanelUp();
+        }
+        check (always && panelSeen, "the right marker covered for 250 ms: the page stays on and the panel flag is up (the picture is clipped at the panel's edge)");
+        r.frame.setMarker (1, true, 90);
+        for (int i = 0; i < 40; ++i)
+        {
+            r.run (10);
+            always = always && r.on();
+        }
+        check (always && ! r.ctl->qlinkPanelUp(), "the marker back: still on, the flag down again, the page never blinked");
+        // a knob turn: the first write raises the flag before the detector has seen anything, steady writes keep it, 700 ms after the last one it falls
+        const unsigned long ch0 = r.ctl->qlinkPanelChangeCount();
+        r.inst.qWrites++;
+        r.run (20);
+        check (r.ctl->qlinkPanelUp(), "a host write to a Q proxy raises the panel flag at once (the panel is about to be drawn)");
+        for (int i = 0; i < 40; ++i)
+        {
+            r.run (50);
+            r.inst.qWrites++;
+        }
+        check (r.ctl->qlinkPanelUp() && r.ctl->qlinkPanelChangeCount() == ch0 + 1, "two seconds of turning: the flag stays up, it changed once (" + std::to_string (r.ctl->qlinkPanelChangeCount() - ch0) + ")");
+        r.run (600);
+        check (r.ctl->qlinkPanelUp(), "600 ms after the last write: still up");
+        r.run (200);
+        check (! r.ctl->qlinkPanelUp() && r.ctl->qlinkPanelChangeCount() == ch0 + 2, "800 ms after the last write: down, one change in all");
+        r.run (1200);
+        const std::string st = r.dir.read ("status.txt");
+        check (! line (st, "qlink_panel_detect_lag_ms").empty() && ! line (st, "view_hides").empty(), "the status file has the lag between a knob's first write and the panel's first sight, and the count of pages that went off the screen");
+        check (line (st, "view_hides") == "0", "the slide and the turns hid the page not once (view_hides " + line (st, "view_hides") + ")");
+        check (! line (st, "qlink_panel_bridged").empty() && ! line (st, "qlink_panel_anticipated").empty() && line (st, "qlink_panel") == "no", "the status file has the counters of the bridged frames and of the announced turns");
+    }
+    // ---- the diagnostics file "nopanelhold": the behaviour before the rules (the page goes with its right marker, a knob's writes announce nothing) ----
+    {
+        Rig r;
+        r.dir.touch ("nopanelhold");
+        r.frame.setAll (true, 90);
+        check (r.until ([&] { return r.on(); }, 500) >= 0, "the page is on");
+        r.run (1200);
+        r.inst.qWrites++;
+        r.run (100);
+        check (! r.ctl->qlinkPanelUp(), "with the file: a host write to a Q proxy raises nothing");
+        r.frame.setMarker (1, false, 90);
+        const double h = r.until ([&] { return ! r.on(); }, 500);
+        check (h >= 0 && h <= 150, "with the file: the right marker missing hides the page within 150 ms (took " + std::to_string (h) + " ms)");
+        r.run (1200);
+        check (line (r.dir.read ("status.txt"), "view_hides") == "1", "... and that was counted as one hide");
     }
     // ---- failures disable for good, without a retry storm ----
     {

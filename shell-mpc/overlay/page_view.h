@@ -147,6 +147,11 @@ public:
         char hex[16];
         std::snprintf (hex, sizeof hex, "%08x", hash_);
         o << "page_view: " << name_ << "\npage_instance: " << instance_ << "\npage_top: " << ui_.topPage() << "\npage_hash: " << hex << "\n";
+        const int* qt = ui_.qTargets();   // the Q group this page published: table index (the view in the bits above 16: kVirtual = 3 is "not a parameter"), -1 none
+        o << "page_q_targets:";
+        for (int i = 0; i < 4; ++i)
+            o << ' ' << qt[i];
+        o << "\n";
     }
     void writeDump (std::ostream& o) const override { o << "# page view " << name_ << ": instance " << instance_ << ", top page " << ui_.topPage() << "\n"; }
     Ui& ui() noexcept { return ui_; }

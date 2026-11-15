@@ -94,6 +94,8 @@ public:
         v = vIn_[id].load (std::memory_order_relaxed);
         return true;
     }
+    /** How many times the host wrote a Q proxy since the router exists (any outcome: an echo or a write to a Q without a target counts too). The overlay thread reads it. */
+    unsigned long writeCount() const noexcept { return writes_.load (std::memory_order_relaxed); }
     int mode (int q) const noexcept { return modeOf (encoded (q)); }
     int encoded (int q) const noexcept { return q >= 0 && q < kCount ? target_[q].load (std::memory_order_relaxed) : kNone; }
 
@@ -111,6 +113,7 @@ public:
     template <class Read, class WriteFn>
     Write hostWrite (int q, float host, bool restoring, Read&& readNorm, WriteFn&& write) noexcept
     {
+        writes_.fetch_add (1, std::memory_order_relaxed);   // every call counts, whatever came of it: the overlay learns that a hardware knob is being turned (the host's Q-Link panel is about to be drawn)
         if (const int vid = virtualId (q); vid >= 0)
         {
             const float v = std::isfinite (host) ? (host < 0.0f ? 0.0f : (host > 1.0f ? 1.0f : host)) : 0.0f;
@@ -180,6 +183,7 @@ private:
     std::atomic<float> vIn_[kNumVirtual] = {};      // the last value the host wrote to a virtual target
     std::atomic<bool> vDue_[kNumVirtual] = {};      // ... and it was not taken by the page yet
     std::atomic<bool> groupDue_ { false };
+    std::atomic<unsigned long> writes_ { 0 };
     bool lastValid_ = false;                // display thread only
 };
 

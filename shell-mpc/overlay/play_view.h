@@ -473,9 +473,27 @@ public:
             o << "\n";
         }
         if (env_ != nullptr)
-            o << "env_ui_instance: " << env_->selection() << "\nenv_ui_page: " << env_->topPage() << "\nenv_ui_q_group: " << env_->qGroupName() << "\n";
+        {
+            o << "env_ui_instance: " << env_->selection() << "\nenv_ui_page: " << env_->topPage() << "\nenv_ui_q_group: " << env_->qGroupName() << "\nenv_ui_q_targets:";
+            for (int k = 0; k < 4; ++k)
+                o << " " << (env_->qTargets()[k] >= 0 ? synthyboy::paramTable()[QRouter::indexOf (env_->qTargets()[k])].key : "-");
+            o << "\n";
+        }
         if (lfo_ != nullptr)
-            o << "lfo_ui_instance: " << (lfo_->random() ? "RND " : "LFO ") << lfo_->selection() << "\nlfo_ui_page: " << lfo_->topPage() << "\nlfo_ui_q_group: " << lfo_->qGroupName() << "\n";
+        {
+            o << "lfo_ui_instance: " << (lfo_->random() ? "RND " : "LFO ") << lfo_->selection() << "\nlfo_ui_page: " << lfo_->topPage() << "\nlfo_ui_q_group: " << lfo_->qGroupName() << "\nlfo_ui_q_targets:";
+            for (int k = 0; k < 4; ++k)
+            {
+                const int t = lfo_->qTargets()[k];
+                if (t < 0)
+                    o << " -";
+                else if (QRouter::modeOf (t) == QRouter::kVirtual)
+                    o << " virtual" << QRouter::indexOf (t);   // the shape editor's values: not a parameter
+                else
+                    o << " " << synthyboy::paramTable()[QRouter::indexOf (t)].key;
+            }
+            o << "\n";
+        }
     }
     void writeDump (std::ostream& o) const override
     {

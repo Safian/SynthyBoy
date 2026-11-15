@@ -136,6 +136,23 @@ int main()
         PageDetector det2 (src2, markers, layout::kNumViews, instances);
         check (! det2.check (90).qlinkPanel, "a Play tab whose right marker is covered by something that is not the panel: not the panel");
     }
+    {
+        // the panel sliding in (or out): its fill already covers the right marker, its black line is not at x 1024 yet. No page is recognised, but the left marker and the instance picture are there:
+        // partialView names the view, so the controller can keep the page for the length of the slide
+        Picture p = pics.at ("play");
+        p.crop[1].rgb.assign (p.crop[1].rgb.size(), 0x1e1d1eu);
+        PictureSource src (p);
+        PageDetector det (src, markers, layout::kNumViews, instances);
+        const Detection d = det.check (90);
+        check (d.view < 0 && ! d.qlinkPanel && d.partialView == play1, "the right marker covered by the fill, no panel look yet (the slide): no view, partialView = the Play tab");
+        PictureSource srcOk (pics.at ("play"));
+        PageDetector detOk (srcOk, markers, layout::kNumViews, instances);
+        check (detOk.check (90).view == play1, "a Play tab as it is has its view");
+        Picture q = pics.at ("macros");
+        PictureSource srcM (q);
+        PageDetector detM (srcM, markers, layout::kNumViews, instances);
+        check (detM.check (90).partialView < 0, "another tab: no partial view");
+    }
     std::printf (g_fails ? "page_detector_host: FAILED (%d)\n" : "page_detector_host: OK\n", g_fails);
     return g_fails ? 1 : 0;
 }
