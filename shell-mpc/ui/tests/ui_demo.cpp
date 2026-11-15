@@ -394,6 +394,52 @@ static void renderAll (const std::string& dir)
         save (dir, "display_kinds.png", s);
     }
     {
+        // the two levels of detail side by side: full (left) and reduced (right): the stack, the unison hairlines, the spectrum, the light
+        constexpr int W = 640, H = 760;
+        Image both;
+        both.w = 2 * W;
+        both.h = H;
+        both.px.assign (static_cast<size_t> (both.w) * static_cast<size_t> (both.h), 0u);
+        for (int lvl = 1; lvl <= 2; ++lvl)
+        {
+            theme::setDetail (lvl);
+            static DemoDisplay dd;
+            dd.wave (0.45f, 7, theme::instanceColour (2));
+            GScene s (W, H);
+            showDisplay (s.builder(), { 14, 14, W - 28, 330 }, dd.data);
+            std::vector<float> env (256);
+            for (int i = 0; i < 256; ++i)
+            {
+                const float t = static_cast<float> (i) / 255.0f;
+                env[static_cast<size_t> (i)] = t < 0.12f ? t / 0.12f : (t < 0.4f ? 1.0f - 0.35f * (t - 0.12f) / 0.28f : (t < 0.75f ? 0.65f : 0.65f * (1.0f - (t - 0.75f) / 0.25f)));
+            }
+            display::Module m;
+            m.rect = { 14, 360, W - 28, 190 };
+            m.plot = { 28, 404, W - 56, 120 };
+            m.title = lvl == 1 ? "ENV 1   FULL" : "ENV 1   REDUCED";
+            m.highlighted = true;
+            m.v = env.data();
+            m.n = 256;
+            m.dot = 0.3f;
+            display::drawModule (s.builder(), m);
+            static Knob k[3];
+            for (int i = 0; i < 3; ++i)
+            {
+                k[i].state = Knob::State {};
+                k[i].setLabel (i == 0 ? "WT POS" : (i == 1 ? "DETUNE" : "BLEND"));
+                k[i].state.value = k[i].state.modValue = 0.3 + 0.25 * i;
+                k[i].place ({ 30 + i * 200, 570, 180, 170 });
+                k[i].draw (s.builder());
+            }
+            const Image im = render (s);
+            for (int y = 0; y < H; ++y)
+                for (int x = 0; x < W; ++x)
+                    both.px[static_cast<size_t> (y) * static_cast<size_t> (both.w) + static_cast<size_t> ((lvl - 1) * W + x)] = im.at (x, y);
+        }
+        theme::setDetail (1);
+        saveImage (dir, "detail_full_vs_reduced.png", both);
+    }
+    {
         // 8 frames of the wavetable position moving 0.05 .. 0.95: the lit frames of the stack run along the table
         constexpr int W = 420, H = 240;
         Image strip;
