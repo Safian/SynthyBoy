@@ -1,0 +1,213 @@
+[  0%] Building CXX object core/shapes/CMakeFiles/synthyboy_shapes.dir/src/shape.cpp.o
+[  0%] Building CXX object core/filters-serum/CMakeFiles/synthyboy_filters_serum.dir/src/filter.cpp.o
+[  0%] Building CXX object core/wavetable-edit/CMakeFiles/synthyboy_wtedit.dir/src/fft.cpp.o
+[  0%] Building CXX object core/fx-serum-a/CMakeFiles/synthyboy_fx_serum_a.dir/src/hyper_dimension.cpp.o
+[  0%] Building CXX object core/shapes/CMakeFiles/synthyboy_shapes.dir/src/lfo.cpp.o
+[  0%] Building CXX object core/sample-osc/CMakeFiles/synthyboy_sampleosc.dir/src/sample_data.cpp.o
+[  0%] Building CXX object core/fx-serum-b/CMakeFiles/synthyboy_fx_serum_b.dir/fft.cpp.o
+[  0%] Building CXX object core/sample-osc/CMakeFiles/synthyboy_sampleosc.dir/src/sample_voice.cpp.o
+[  0%] Building CXX object core/filters-serum/CMakeFiles/synthyboy_filters_serum.dir/src/filter_types.cpp.o
+[  0%] Building CXX object core/sample-osc/CMakeFiles/synthyboy_sampleosc.dir/src/wav_reader.cpp.o
+[  0%] Building CXX object core/fx-serum-a/CMakeFiles/synthyboy_fx_serum_a.dir/src/utility.cpp.o
+[  5%] Building CXX object core/shapes/CMakeFiles/synthyboy_shapes.dir/src/envelope.cpp.o
+[  5%] Building CXX object core/wavetable-edit/CMakeFiles/synthyboy_wtedit.dir/src/wavetable.cpp.o
+[  5%] Building CXX object core/fx-serum-a/CMakeFiles/synthyboy_fx_serum_a.dir/src/splitter_lh.cpp.o
+[ 11%] Building CXX object core/fx-serum-b/CMakeFiles/synthyboy_fx_serum_b.dir/wav_reader.cpp.o
+[ 11%] Building CXX object core/shapes/CMakeFiles/synthyboy_shapes.dir/src/remap.cpp.o
+[ 11%] Linking CXX static library libsynthyboy_filters_serum.a
+[ 11%] Building CXX object core/fx-serum-b/CMakeFiles/synthyboy_fx_serum_b.dir/bode.cpp.o
+[ 11%] Built target synthyboy_filters_serum
+[ 11%] Building CXX object core/fx-serum-a/CMakeFiles/synthyboy_fx_serum_a.dir/src/splitter_lmh.cpp.o
+[ 11%] Building CXX object core/fx-serum-b/CMakeFiles/synthyboy_fx_serum_b.dir/convolve.cpp.o
+[ 11%] Linking CXX static library libsynthyboy_sampleosc.a
+[ 11%] Linking CXX static library libsynthyboy_shapes.a
+[ 11%] Building CXX object core/fx-serum-a/CMakeFiles/synthyboy_fx_serum_a.dir/src/splitter_ms.cpp.o
+[ 11%] Building CXX object core/wavetable-edit/CMakeFiles/synthyboy_wtedit.dir/src/drawing_tools.cpp.o
+[ 11%] Built target synthyboy_sampleosc
+[ 11%] Building CXX object core/wavetable-edit/CMakeFiles/synthyboy_wtedit.dir/src/frame_ops.cpp.o
+[ 11%] Built target synthyboy_shapes
+[ 11%] Building CXX object core/fx-serum-a/CMakeFiles/synthyboy_fx_serum_a.dir/src/stereo_splitter.cpp.o
+[ 11%] Building CXX object core/multisample/CMakeFiles/synthyboy_multisample.dir/src/multisample.cpp.o
+[ 11%] Building CXX object core/wavetable-edit/CMakeFiles/synthyboy_wtedit.dir/src/vital_model.cpp.o
+[ 11%] Building CXX object core/granular/CMakeFiles/synthyboy_granular.dir/src/granular.cpp.o
+[ 11%] Building CXX object core/wavetable-edit/CMakeFiles/synthyboy_wtedit.dir/src/undo.cpp.o
+[ 11%] Building CXX object core/spectral/CMakeFiles/synthyboy_spectral.dir/src/spectral.cpp.o
+[ 11%] Linking CXX static library libsynthyboy_fx_serum_a.a
+[ 11%] Linking CXX static library libsynthyboy_fx_serum_b.a
+[ 11%] Built target synthyboy_fx_serum_a
+[ 11%] Building CXX object core/wavetable-edit/CMakeFiles/synthyboy_wtedit.dir/src/audio_import.cpp.o
+[ 11%] Built target synthyboy_fx_serum_b
+[ 11%] Building CXX object core/wavetable-edit/CMakeFiles/synthyboy_wtedit.dir/src/image_import.cpp.o
+[ 11%] Linking CXX static library libsynthyboy_granular.a
+[ 11%] Built target synthyboy_granular
+[ 11%] Building CXX object core/wavetable-edit/CMakeFiles/synthyboy_wtedit.dir/src/wav_export.cpp.o
+[ 11%] Building CXX object core/wavetable-edit/CMakeFiles/synthyboy_wtedit.dir/src/player.cpp.o
+[ 11%] Linking CXX static library libsynthyboy_spectral.a
+[ 11%] Built target synthyboy_spectral
+[ 16%] Linking CXX static library libsynthyboy_wtedit.a
+[ 16%] Built target synthyboy_wtedit
+[ 16%] Linking CXX static library libsynthyboy_multisample.a
+[ 16%] Built target synthyboy_multisample
+[ 16%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/synth_types.cpp.o
+[ 16%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/file_source.cpp.o
+[ 16%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/synth_parameters.cpp.o
+[ 16%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/tuning.cpp.o
+[ 22%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/frequency_filter_modifier.cpp.o
+[ 22%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/phase_modifier.cpp.o
+[ 22%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/line_generator.cpp.o
+[ 22%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/pitch_detector.cpp.o
+[ 22%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/shepard_tone_source.cpp.o
+[ 22%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/slew_limit_modifier.cpp.o
+[ 22%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/wave_fold_modifier.cpp.o
+[ 27%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/wave_line_source.cpp.o
+[ 27%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/wave_source.cpp.o
+[ 27%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/wave_warp_modifier.cpp.o
+[ 27%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/wave_window_modifier.cpp.o
+[ 27%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/wavetable_component.cpp.o
+[ 27%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/wavetable_component_factory.cpp.o
+[ 27%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/wavetable_creator.cpp.o
+[ 27%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/wavetable_group.cpp.o
+[ 27%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/common/wavetable/wavetable_keyframe.cpp.o
+[ 27%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/effects/compressor.cpp.o
+[ 27%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/effects/delay.cpp.o
+[ 27%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/effects/distortion.cpp.o
+[ 33%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/effects/phaser.cpp.o
+[ 33%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/effects/reverb.cpp.o
+[ 33%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/effects/reverb_algorithms.cpp.o
+[ 33%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/comb_filter.cpp.o
+[ 33%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/dc_filter.cpp.o
+[ 33%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/decimator.cpp.o
+[ 33%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/digital_svf.cpp.o
+[ 33%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/diode_filter.cpp.o
+[ 33%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/dirty_filter.cpp.o
+[ 33%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/fir_halfband_decimator.cpp.o
+[ 33%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/formant_filter.cpp.o
+[ 38%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/formant_manager.cpp.o
+[ 38%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/iir_halfband_decimator.cpp.o
+[ 38%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/ladder_filter.cpp.o
+[ 38%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/linkwitz_riley_filter.cpp.o
+[ 38%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/phaser_filter.cpp.o
+[ 38%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/sallen_key_filter.cpp.o
+[ 38%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/synth_filter.cpp.o
+[ 38%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/upsampler.cpp.o
+[ 38%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/filters/vocal_tract.cpp.o
+[ 38%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/framework/feedback.cpp.o
+[ 38%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/framework/operators.cpp.o
+[ 44%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/framework/processor.cpp.o
+[ 44%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/framework/processor_router.cpp.o
+[ 44%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/framework/synth_module.cpp.o
+[ 44%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/framework/utils.cpp.o
+[ 44%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/framework/value.cpp.o
+[ 44%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/framework/voice_handler.cpp.o
+[ 44%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/lookups/wave_frame.cpp.o
+[ 44%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/lookups/wavetable.cpp.o
+[ 44%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modulators/envelope.cpp.o
+[ 44%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modulators/line_map.cpp.o
+[ 44%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modulators/random_lfo.cpp.o
+[ 50%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modulators/synth_lfo.cpp.o
+[ 50%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modulators/trigger_random.cpp.o
+[ 50%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/chorus_module.cpp.o
+[ 50%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/comb_module.cpp.o
+[ 50%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/compressor_module.cpp.o
+[ 50%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/delay_module.cpp.o
+[ 50%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/distortion_module.cpp.o
+[ 50%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/envelope_module.cpp.o
+[ 50%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/equalizer_module.cpp.o
+[ 50%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/filter_module.cpp.o
+[ 50%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/filters_module.cpp.o
+[ 55%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/flanger_module.cpp.o
+[ 55%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/formant_module.cpp.o
+[ 55%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/lfo_module.cpp.o
+[ 55%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/modulation_connection_processor.cpp.o
+[ 55%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/oscillator_module.cpp.o
+[ 55%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/phaser_module.cpp.o
+[ 55%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/producers_module.cpp.o
+[ 55%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/random_lfo_module.cpp.o
+[ 55%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/reorderable_effect_chain.cpp.o
+[ 55%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/reverb_module.cpp.o
+[ 55%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/sample_module.cpp.o
+[ 61%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/serum_filter_bank.cpp.o
+[ 61%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/serum_fx_modules.cpp.o
+[ 61%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/sub_module.cpp.o
+[ 61%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/modules/synth_voice_handler.cpp.o
+[ 61%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/producers/sample_oscillator.cpp.o
+[ 61%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/producers/sample_source.cpp.o
+[ 61%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/producers/sub_source.cpp.o
+[ 61%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/producers/synth_oscillator.cpp.o
+[ 61%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/synth_engine/sound_engine.cpp.o
+[ 61%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/utilities/legato_filter.cpp.o
+[ 61%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/utilities/peak_meter.cpp.o
+[ 61%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/utilities/portamento_slope.cpp.o
+[ 66%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/utilities/smooth_value.cpp.o
+[ 66%] Building CXX object core/engine-vital/CMakeFiles/synthyboy_engine_vital.dir/upstream/src/synthesis/utilities/value_switch.cpp.o
+[ 66%] Linking CXX static library libsynthyboy_engine_vital.a
+[ 66%] Built target synthyboy_engine_vital
+[ 66%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/number.cpp.o
+[ 66%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/param_table.cpp.o
+[ 66%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/params.cpp.o
+[ 66%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/engine_factory.cpp.o
+[ 66%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/fx_types.cpp.o
+[ 66%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/fx_rack.cpp.o
+[ 72%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/state.cpp.o
+[ 72%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/modulation.cpp.o
+[ 72%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/content_state.cpp.o
+[ 72%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/engine_caps.cpp.o
+[ 72%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/sha256.cpp.o
+[ 72%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/preset.cpp.o
+[ 72%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/content_pack.cpp.o
+[ 72%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/content_store.cpp.o
+[ 72%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/user_content.cpp.o
+[ 77%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/user_library.cpp.o
+[ 77%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/library_items.cpp.o
+[ 77%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/kick_pages.cpp.o
+[ 77%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/shell_features.cpp.o
+[ 77%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/preferences.cpp.o
+[ 77%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/offline_render.cpp.o
+[ 77%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/filter_response.cpp.o
+[ 77%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/lfo_display.cpp.o
+[ 77%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/env_display.cpp.o
+[ 77%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/osc_cycle.cpp.o
+[ 77%] Building CXX object core/CMakeFiles/synthyboy_core.dir/src/wave_convert.cpp.o
+[ 83%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-own/own_engine.cpp.o
+[ 83%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-own/own_support.cpp.o
+[ 83%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-own/fx/fx_chain.cpp.o
+[ 83%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-own/fx/fx_modules.cpp.o
+[ 83%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-own/osc/wavetable_bank.cpp.o
+[ 83%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-own/osc/morph.cpp.o
+[ 83%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-own/osc/content_set.cpp.o
+[ 83%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-own/osc/lib_osc.cpp.o
+[ 83%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-own/matrix/mod_matrix.cpp.o
+[ 83%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-own/voice/param_index.cpp.o
+[ 83%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-own/voice/voice.cpp.o
+[ 83%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-own/dsp/section_timing.cpp.o
+[ 88%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-vital/adapter/vital_engine.cpp.o
+[ 88%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-vital/adapter/vital_bindings.cpp.o
+[ 88%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-vital/adapter/vital_fx_pool.cpp.o
+[ 88%] Building CXX object core/CMakeFiles/synthyboy_core.dir/engine-vital/adapter/vital_tables.cpp.o
+[ 88%] Building CXX object core/CMakeFiles/synthyboy_core.dir/tuning/tuning.cpp.o
+[ 88%] Building CXX object core/CMakeFiles/synthyboy_core.dir/tuning/scl_parser.cpp.o
+[ 88%] Building CXX object core/CMakeFiles/synthyboy_core.dir/tuning/kbm_parser.cpp.o
+[ 88%] Building CXX object core/CMakeFiles/synthyboy_core.dir/tuning/tun_parser.cpp.o
+[ 88%] Building CXX object core/CMakeFiles/synthyboy_core.dir/formula/src/formula.cpp.o
+[ 88%] Building CXX object core/CMakeFiles/synthyboy_core.dir/wavetable-render/wavetable_render.cpp.o
+[ 88%] Building CXX object core/CMakeFiles/synthyboy_core.dir/vital-import/zip_reader.cpp.o
+[ 94%] Building CXX object core/CMakeFiles/synthyboy_core.dir/vital-import/json_reader.cpp.o
+[ 94%] Building CXX object core/CMakeFiles/synthyboy_core.dir/vital-import/vital_map.cpp.o
+[ 94%] Building CXX object core/CMakeFiles/synthyboy_core.dir/vital-import/vital_content.cpp.o
+[ 94%] Building CXX object core/CMakeFiles/synthyboy_core.dir/vital-import/builtin_ref.cpp.o
+[ 94%] Building CXX object core/CMakeFiles/synthyboy_core.dir/vital-import/vital_batch.cpp.o
+[ 94%] Building CXX object core/CMakeFiles/synthyboy_core.dir/vital-import/plugin_import.cpp.o
+[ 94%] Building CXX object core/CMakeFiles/synthyboy_core.dir/vital-import/vital_import.cpp.o
+[ 94%] Building CXX object core/CMakeFiles/synthyboy_core.dir/serum-import/zstd_decode.cpp.o
+[ 94%] Building CXX object core/CMakeFiles/synthyboy_core.dir/serum-import/cbor_reader.cpp.o
+[ 94%] Building CXX object core/CMakeFiles/synthyboy_core.dir/serum-import/audio_decode.cpp.o
+[ 94%] Building CXX object core/CMakeFiles/synthyboy_core.dir/serum-import/serum_container.cpp.o
+[100%] Building CXX object core/CMakeFiles/synthyboy_core.dir/serum-import/serum_map.cpp.o
+[100%] Building CXX object core/CMakeFiles/synthyboy_core.dir/serum-import/serum_import.cpp.o
+[100%] Building CXX object core/CMakeFiles/synthyboy_core.dir/serum-import/serum_voice.cpp.o
+[100%] Building CXX object core/CMakeFiles/synthyboy_core.dir/serum-import/serum_content.cpp.o
+[100%] Building CXX object core/CMakeFiles/synthyboy_core.dir/serum-import/serum_fx.cpp.o
+[100%] Building CXX object core/CMakeFiles/synthyboy_core.dir/serum-import/serum_api.cpp.o
+[100%] Building CXX object core/CMakeFiles/synthyboy_core.dir/serum-import/serum_plugin_import.cpp.o
+[100%] Linking CXX static library libsynthyboy_core.a
+[100%] Built target synthyboy_core

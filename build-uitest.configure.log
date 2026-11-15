@@ -1,0 +1,38 @@
+-- The C compiler identification is AppleClang 21.0.0.21000401
+-- The CXX compiler identification is AppleClang 21.0.0.21000401
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Configuring juceaide
+-- Building juceaide
+-- Exporting juceaide
+-- Testing juceaide
+-- Finished setting up juceaide
+-- clap-juce-extensions: applying /Users/szabi/Documents/Projects/Safian/SynthyBoyVST/.claude/worktrees/agy-ui3-mod-fx/third_party/patches/clap-juce-extensions-extension-hook.patch
+patching file 'include/clap-juce-extensions/clap-juce-extensions.h'
+patching file 'src/wrapper/clap-juce-wrapper.cpp'
+-- Building CLAP with CLAP_CXX_STANDARD=17
+-- CLAP version: 1.2.7
+-- SYNTHYBOY_WITH_VITAL=ON: Vital-derived engine is built (core/engine-vital)
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- bitmap GUI: embedding the fonts
+-- Creating CLAP SynthyBoy_CLAP from SynthyBoy
+-- Setting Misbehaviour handler level to 'Ignore'
+-- Setting Checking handler level to 'Minimal'
+-- Setting event resolution to 64 samples
+-- Setting "Always split block" to OFF
+-- Setting "Use JUCE parameter ranges" to OFF
+-- Found Python3: /opt/homebrew/Frameworks/Python.framework/Versions/3.15/bin/python3.15 (found version "3.15.0") found components: Interpreter
+-- JUCE shell engine: vital, tier: high
+-- Configuring done (32.6s)
+-- Generating done (0.4s)
+-- Build files have been written to: /Users/szabi/Documents/Projects/Safian/SynthyBoyVST/.claude/worktrees/agy-ui3-mod-fx/build-uitest
