@@ -26,12 +26,12 @@ int main()
         {
             const theme::Look& l = *looks[i];
             complete = complete && l.name[0] != '\0' && l.curve > 0.0f && l.curve < 2.0f && l.curveHi > l.curve && l.curveBack < l.curve && l.fTitle > l.fValue && l.fValue > l.fLabel && l.fLabel > l.fSmall && l.fSmall >= l.fMin
-                       && l.rBlock > l.rControl && l.rControl > l.rChip && l.gap > 0 && l.glowAlpha > 0.0f && l.q == 0xffc23d;
+                       && l.rBlock > l.rControl && l.rControl > l.rChip && l.gap > 0 && l.backGlow >= 0.0f && l.backGlow < 0.5f && l.q == 0xffc23d;
             for (int j = i + 1; j < 3; ++j)
-                distinct = distinct && (looks[j]->flow[0] != l.flow[0] || looks[j]->flow[3] != l.flow[3]) && looks[j]->glowAlpha != l.glowAlpha && looks[j]->inst[1] != l.inst[1];
+                distinct = distinct && (looks[j]->flow[0] != l.flow[0] || looks[j]->flow[3] != l.flow[3]) && looks[j]->backGlow != l.backGlow && looks[j]->inst[1] != l.inst[1];
         }
         check (complete, "the three looks have every number (strokes, type scale, radii, spacing, the Q-Link colour)");
-        check (distinct, "the three looks differ in their colours, in the light and in how the instance colours are dealt");
+        check (distinct, "the three looks differ in their colours, in the faint back glow and in how the instance colours are dealt");
         theme::setLook (2);
         check (&theme::L() == &theme::kLook2, "setLook (2) selects look 2");
         theme::setLook (7);

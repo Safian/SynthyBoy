@@ -198,8 +198,6 @@ public:
     void paintY2 (float y0, float y1, uint32_t a, uint32_t b, int alpha) { sb_.paintY (y0, y1, c (a, alpha), c (a, alpha), c (b, alpha), c (b, alpha)); }
     void paintX2 (float x0, float x1, uint32_t a, uint32_t b, int alpha) { sb_.paintX (x0, x1, c (a, alpha), c (a, alpha), c (b, alpha), c (b, alpha)); }
     void rrect (const Rect& r, float radius, uint32_t col, float outline = 0.0f) { if (! r.empty()) sb_.rrect (static_cast<float> (r.x), static_cast<float> (r.y), static_cast<float> (r.right()), static_cast<float> (r.bottom()), radius, col, outline); }
-    /** A glowing version of a line / arc / disc is the same op drawn before with a soft style; `glow` says whether the look has any light (the first look: yes). */
-    float glowAlpha() const noexcept { return theme::L().glowAlpha; }
     /** A block (panel): rounded, a vertical gradient fill, a keyline; `hi` = the keyline of a focused block. */
     void block (const Rect& r, bool hi = false)
     {

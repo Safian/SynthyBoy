@@ -52,7 +52,7 @@ public:
         d = std::max (d, 6.0f);
         g.stroke = std::max (2.4f, d * T.arcValue);
         g.track = std::max (2.0f, d * T.arcTrack);
-        g.radius = d * 0.5f - g.stroke * 0.5f - 2.0f - std::min (6.0f, T.glowSoft * 0.5f);
+        g.radius = d * 0.5f - g.stroke * 0.5f - 3.0f;
         g.cx = static_cast<float> (rect_.x) + static_cast<float> (rect_.w) * 0.5f;
         g.cy = static_cast<float> (rect_.y) + static_cast<float> (dialH) * 0.5f;
         g.labelBox = { rect_.x + 2, rect_.bottom() - labelH + 2, rect_.w - 4, std::max (0, labelH - 4) };
@@ -88,12 +88,6 @@ protected:
         p.arc (cx, cy, R, a0, a1, g.track, p.c (T.track, 255));
         if (std::fabs (av - from) > 0.004f)
         {
-            if (theme::D().glow)
-            {
-                p.style (T.glowSoft, true);
-                p.paintArc (T.flow, static_cast<int> (T.glowAlpha * 255.0f));
-                p.arc (cx, cy, R, std::min (from, av), std::max (from, av), tw + 3.0f, 255);
-            }
             p.style (1.0f, true);
             p.paintArc (T.flow, 255);
             p.arc (cx, cy, R, std::min (from, av), std::max (from, av), tw, 255);
@@ -114,25 +108,11 @@ protected:
         {
             float mx, my;
             modPoint (mx, my);
-            const ModEntry* e = state.selected();
-            const uint32_t mc = e ? theme::sourceColour (e->name) : T.text;
-            if (theme::D().glow)
-            {
-                p.style (T.glowSoft * 0.7f, false);
-                p.disc (mx, my, std::max (2.0f, tw * 0.7f) + 2.0f, p.c (mc, static_cast<int> (T.glowAlpha * 255.0f)));
-                p.plain();
-            }
             p.disc (mx, my, std::max (2.0f, tw * 0.7f), p.c (T.text, 255));
         }
         p.line (cx + R * 0.25f * std::cos (av), cy + R * 0.25f * std::sin (av), cx + R * 0.6f * std::cos (av), cy + R * 0.6f * std::sin (av), 1.6f, p.c (T.text, 235));
         float vx, vy;
         valuePoint (vx, vy);
-        if (theme::D().glow)
-        {
-            p.style (T.glowSoft * 0.7f, false);
-            p.disc (vx, vy, std::max (2.5f, tw * 0.9f) + 2.0f, p.c (T.flow[3], static_cast<int> (T.glowAlpha * 255.0f)));
-            p.plain();
-        }
         p.disc (vx, vy, std::max (2.5f, tw * 0.9f), p.c (T.text, 255));
         if (state.small)
             p.disc (cx, cy, std::max (2.0f, R * 0.18f), p.c (T.flow[2], 255));
@@ -530,9 +510,6 @@ protected:
         if (labelH > 0)
             p.textCentered ({ b.x, b.bottom() - labelH, b.w, labelH }, state.label, T.fLabel - 2.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
         const uint32_t col = state.on ? p.c (T.flow[0], 255) : p.c (T.textFaint, 255);
-        p.style (state.on ? T.glowSoft * 0.6f : 1.0f, true);
-        if (state.on)
-            drawIconGlow (p, cx, cy, s);
         p.style (1.0f, true);
         switch (state.icon)
         {
@@ -555,11 +532,6 @@ protected:
                 break;
         }
         p.plain();
-    }
-    /** The soft light under the icon of a switched on toggle. */
-    void drawIconGlow (Pen& p, float cx, float cy, float s) const
-    {
-        p.disc (cx, cy, s + 3.0f, p.c (theme::L().flow[0], static_cast<int> (theme::L().glowAlpha * 200.0f)));
     }
     Change onDown (int x, int y, double now) override { tap_.down (x, y, now); return Change::none(); }
     Change onMove (int x, int y) override { tap_.move (x, y); return Change::none(); }

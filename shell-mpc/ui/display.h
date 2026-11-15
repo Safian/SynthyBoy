@@ -56,16 +56,10 @@ inline void paintLine (gpu::SceneBuilder& sb, float x0, float x1, const uint32_t
 {
     sb.paintX (x0, x1, a (st[0], alpha), a (st[1], alpha), a (st[2], alpha), a (st[3], alpha));
 }
-/** One glowing line along a curve that was just added with sb.curve: the soft pass, the crisp pass. */
-inline void glowLine (gpu::SceneBuilder& sb, float x0, float x1, const uint32_t st[4], float half, int alpha, bool softPass = true)
+/** One crisp line along a curve that was just added with sb.curve (the colour gradient along x, anti-aliased, no light around it). */
+inline void glowLine (gpu::SceneBuilder& sb, float x0, float x1, const uint32_t st[4], float half, int alpha, bool = true)
 {
-    const theme::Look& T = theme::L();
     paintLine (sb, x0, x1, st, 255);
-    if (softPass && T.glowAlpha > 0.0f && theme::D().glow)
-    {
-        sb.style (T.glowSoft, false);
-        sb.stroke (half + T.glowWidth, static_cast<uint32_t> (std::min (255.0f, T.glowAlpha * 255.0f * static_cast<float> (alpha) / 255.0f)));
-    }
     sb.style (1.0f, false);
     sb.stroke (half, static_cast<uint32_t> (alpha));
 }
@@ -191,7 +185,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
         dt::glowLine (sb, x0, x1, st, T.curve * 0.5f + (stacked ? 0.15f : 0.0f), 255, false);
         sb.paintOff();
         // the light: the main curve and the lit frames drawn into the bloom layer (a quarter of the size), blurred, added over the picture inside the display: one cheap pass for all the lines
-        if (T.glowAlpha > 0.0f && theme::D().glow && mainFirst >= 0)
+        if (T.backGlow > 0.0f && theme::D().glow && mainFirst >= 0)
         {
             sb.glowBegin (4);
             dt::paintLine (sb, x0, x1, st, 255);
@@ -204,7 +198,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
             sb.curveAt (mainFirst, n, ix, iw);
             sb.stroke (T.curve * 0.5f + 2.4f, 170);
             sb.paintOff();
-            sb.glowEnd (0.55f + 1.2f * T.glowAlpha, 1.0f, 0xffffffffu, r.x, r.y, r.right(), r.bottom());
+            sb.glowEnd (T.backGlow, 1.4f, 0xffffffffu, r.x, r.y, r.right(), r.bottom());
         }
         sb.style (1.0f, false);
     }
@@ -249,9 +243,6 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
             sb.rect (xs, top, std::max (xs, xe), bottom, dt::a (T.q, 16));
             for (float x : { xs, xe })
             {
-                sb.style (T.glowSoft * 0.6f, false);
-                sb.line (x, top, x, bottom, 4.0f, dt::a (T.q, static_cast<int> (T.glowAlpha * 255.0f)));
-                sb.style (1.0f, false);
                 sb.line (x, top, x, bottom, 1.5f, dt::a (T.q, 255));
             }
         }
@@ -259,16 +250,12 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
         {
             const float gx = x0 + d.grainPos * static_cast<float> (iw - 1), gw = std::max (6.0f, d.grainSize * static_cast<float> (iw - 1));
             const Rect g { static_cast<int> (gx), static_cast<int> (top), static_cast<int> (gw), static_cast<int> (bottom - top) };
-            sb.style (T.glowSoft, false);
-            sb.rrect (static_cast<float> (g.x), static_cast<float> (g.y), static_cast<float> (g.right()), static_cast<float> (g.bottom()), T.rChip, dt::a (T.flow[2], static_cast<int> (T.glowAlpha * 255.0f)));
             sb.style (1.0f, false);
             sb.rrect (static_cast<float> (g.x), static_cast<float> (g.y), static_cast<float> (g.right()), static_cast<float> (g.bottom()), T.rChip, dt::a (T.flow[2], 255), 1.4f);
         }
         if (d.playhead >= 0.0f)
         {
             const float px = x0 + d.playhead * static_cast<float> (iw - 1);
-            sb.style (T.glowSoft * 0.6f, false);
-            sb.line (px, top, px, bottom, 4.0f, dt::a (0xffffff, 80));
             sb.style (1.0f, false);
             sb.line (px, top, px, bottom, 1.4f, dt::a (0xffffff, 255));
         }
@@ -337,14 +324,14 @@ inline void drawModule (gpu::SceneBuilder& sb, const Module& m)
     sb.style (1.0f, false);
     sb.stroke (T.curve * 0.5f + 0.15f, 255);
     sb.paintOff();
-    if (T.glowAlpha > 0.0f && theme::D().glow && first >= 0)
+    if (T.backGlow > 0.0f && theme::D().glow && first >= 0)
     {
         sb.glowBegin (4);
         sb.paintX (px, pxe, cs[0], cs[1], cs[2], cs[3]);
         sb.curveAt (first, n, m.plot.x, m.plot.w);
         sb.stroke (T.curve * 0.5f + 2.4f, 170);
         sb.paintOff();
-        sb.glowEnd (0.55f + 1.2f * T.glowAlpha, 1.0f, 0xffffffffu, m.plot.x - 6, m.plot.y - 6, m.plot.right() + 6, m.plot.bottom() + 6);
+        sb.glowEnd (T.backGlow, 1.4f, 0xffffffffu, m.plot.x - 6, m.plot.y - 6, m.plot.right() + 6, m.plot.bottom() + 6);
     }
     if (m.dot >= 0.0f)
     {
@@ -353,13 +340,9 @@ inline void drawModule (gpu::SceneBuilder& sb, const Module& m)
         const float dy = rows[i] + (rows[i + 1] - rows[i]) * (pos - static_cast<float> (i));
         if (! m.env)
             sb.line (dx, pt, dx, pb, 1.2f, dt::a (0xffffff, 90));
-        if (theme::D().glow)
-        {
-            sb.style (T.glowSoft, false);
-            sb.disc (dx, dy, 6.5f, dt::a (c1, 150));
-        }
         sb.style (1.0f, false);
-        sb.disc (dx, dy, 3.2f, 0xffffffffu);
+        sb.disc (dx, dy, 3.4f, dt::a (c1, 255));
+        sb.disc (dx, dy, 1.8f, 0xffffffffu);
     }
 }
 
