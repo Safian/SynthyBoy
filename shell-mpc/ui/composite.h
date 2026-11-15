@@ -156,7 +156,7 @@ public:
     Size minSize() const override
     {
         if (vertical_)
-            return crsOnly_ ? Size { 80, kRowH } : short_ ? Size { 80, 2 * kRowH + kGap } : Size { 80, 5 * kRowH + 4 * kGap };
+            return crsOnly_ ? Size { 80, kRowH } : short_ ? Size { 80, 2 * kRowH + kGap } : Size { 2 * 80 + kGap, 3 * kRowH + 2 * kGap };
         return short_ ? Size { 2 * 80 + kGap, 56 } : Size { 4 * 80 + 72 + 4 * kGap, 56 };
     }
 
@@ -173,13 +173,18 @@ protected:
                 crs.place (row (0));
                 return;
             }
-            oct.place (row (0));
             if (short_)
+            {
+                oct.place (row (0));
                 crs.place (row (1));
+            }
             else
             {
-                sem.place (row (1)); fin.place (row (2)); crs.place (row (3));
-                const Rect t = row (4);
+                // a 2 x 2 grid (OCT SEM / FIN CRS) and the toggle under it: a short number needs a short field, not the width of the column
+                const int cw = std::max (0, (rect_.w - kGap) / 2);
+                auto cell = [&] (int rowIdx, int col) { const Rect q = row (rowIdx); return Rect { q.x + col * (cw + kGap), q.y, col == 0 ? cw : q.w - cw - kGap, q.h }; };
+                oct.place (cell (0, 0)); sem.place (cell (0, 1)); fin.place (cell (1, 0)); crs.place (cell (1, 1));
+                const Rect t = row (2);
                 track.place ({ t.x, t.y, std::min (72, t.w), t.h });
             }
             return;

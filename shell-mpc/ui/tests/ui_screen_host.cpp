@@ -61,8 +61,28 @@ int main()
         }
         check (inside, nm + ": every leaf inside the screen and at least its minimum size");
         check (apart, nm + ": no two leaves overlap");
+        // what is drawn is what is touched: a tap on the middle of every enabled leaf reaches that leaf (no other control, no dead spot under the drawing)
+        {
+            int missed = 0;
+            std::string which;
+            for (int i = 0; i < n; ++i)
+            {
+                if (! all[i]->enabled())
+                    continue;
+                const int px = all[i]->rect().x + all[i]->rect().w / 2, py = all[i]->rect().y + all[i]->rect().h / 2;
+                s.touchDown (px, py, 0.0);
+                if (! all[i]->capturing())
+                {
+                    ++missed;
+                    which += " (" + std::to_string (px) + "," + std::to_string (py) + ")";
+                }
+                s.touchUp (px, py);
+            }
+            s.setActiveGroup (0);
+            check (missed == 0, nm + ": a tap on the middle of each of the " + std::to_string (n) + " leaves reaches it" + which);
+        }
         check (! s.displayRect().empty() && area.contains (s.displayRect()) && ! s.displayRect().overlaps (s.bar.rect()) && ! s.displayRect().overlaps (s.panel.rect()) && ! s.displayRect().overlaps (s.tune.rect()), nm + ": the display area is reserved, and nothing else is on it");
-        check (s.displayRect().w * 100 / 1264 >= 62 && s.displayRect().w * 100 / 1264 <= 66 && s.barBlock().y == s.displayRect().bottom() + kGap && s.barBlock().x == s.displayRect().x && s.barBlock().w == s.displayRect().w && s.barBlock().contains (s.bar.rect()), nm + ": the display is about 64 percent of the width, the type bar (in its titled block) directly under it");
+        check (s.displayRect().w * 100 / 1264 >= 76 && s.displayRect().w * 100 / 1264 <= 80 && s.barBlock().y == s.displayRect().bottom() + kGap && s.barBlock().x == s.displayRect().x && s.barBlock().w == s.displayRect().w && s.barBlock().contains (s.bar.rect()), nm + ": the display is about 78 percent of the width, the type bar (in its titled block) directly under it");
         check (s.tune.rect().x > s.displayRect().right() && s.panel.rect().y >= s.bar.rect().bottom() && s.close.rect().x < s.power.rect().x && s.route.rect().x > s.basic.rect().right() - 1, nm + ": the tuning row at the right, the bottom band below, the close button at the left, the route button at the right end");
         check (s.numGroups() >= 2 && s.activeGroup() == 0 && std::string (s.groupName (0)) == "Basic" && s.groups[0].active(), nm + ": the first group is Basic and active (" + std::to_string (s.numGroups()) + " groups)");
         for (int g = 0; g < s.numGroups(); ++g)
@@ -324,6 +344,55 @@ int main()
         Scene sc2 (630, 1050, kBackgroundRgba);
         c.draw (sc2.builder());
         check (! sc2.overflow() && drawnOutside (render (sc2), c.rect(), backgroundPixel()) == 0, "compact: 630 x 1050: draws inside");
+    }
+    // ---- what is drawn is what is touched, for the compact view of every instance and every detail page: a tap on the middle of each enabled leaf reaches it
+    {
+        auto everyLeaf = [&] (Component& page, const std::string& nm)
+        {
+            Component* l[128];
+            const int nl = page.collectLeaves (l, 0, 128);
+            int missed = 0;
+            std::string which;
+            for (int i = 0; i < nl; ++i)
+            {
+                if (! l[i]->enabled() || l[i]->rect().empty())
+                    continue;
+                const int px = l[i]->rect().x + l[i]->rect().w / 2, py = l[i]->rect().y + l[i]->rect().h / 2;
+                page.touchDown (px, py, 0.0);
+                if (! l[i]->capturing())
+                {
+                    ++missed;
+                    which += " (" + std::to_string (px) + "," + std::to_string (py) + ")";
+                }
+                page.touchUp (px, py);
+            }
+            check (nl > 3 && missed == 0, nm + ": a tap on the middle of each of the " + std::to_string (nl) + " leaves reaches it" + which);
+        };
+        const OscInstance insts[5] = { OscInstance::Sub, OscInstance::A, OscInstance::B, OscInstance::C, OscInstance::Noise };
+        for (OscInstance i : insts)
+        {
+            static OscillatorCompact oc;
+            oc.place ({ 8, 114, 420, 620 });
+            oc.setInstance (i, OscKind::Wavetable);
+            everyLeaf (oc, "compact view");
+        }
+        const PanelPreset* pres[5] = { &presets::kUnisonDetail, &presets::kUnisonDetailMultisample, &presets::kUnisonDetailGranular, &presets::kGrainDetail, &presets::kEnvelopeDetail };
+        for (const PanelPreset* pr : pres)
+        {
+            static DetailPage pg;
+            pg.load (*pr, "DETAIL");
+            pg.place ({ 0, 110, 1280, 628 });
+            everyLeaf (pg, std::string ("detail page ") + pr->name);
+        }
+        {
+            ModInput m;
+            m.add (7, "LFO 2", 0.35);
+            m.add (8, "ENV 1", -0.5, true);
+            static ModulationsPage mp;
+            mp.load (m, "DETUNE");
+            mp.place ({ 0, 110, 1280, 628 });
+            everyLeaf (mp, "modulations page");
+        }
     }
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;

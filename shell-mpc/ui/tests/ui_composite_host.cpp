@@ -462,7 +462,7 @@ void testSourceAndVertical()
     t.setVertical (true);
     t.place ({ 10, 10, 400, 5 * 56 + 4 * 4 });
     check (t.isVertical() && t.sizeOk(), "tune row vertical: fits its minimum size");
-    check (leavesOk (t, t.rect(), why) && t.oct.rect().bottom() <= t.sem.rect().y && t.sem.rect().bottom() <= t.fin.rect().y && t.fin.rect().bottom() <= t.crs.rect().y && t.crs.rect().bottom() <= t.track.rect().y, "tune row vertical: OCT, SEM, FIN, CRS and the toggle one under the other" + why);
+    check (leavesOk (t, t.rect(), why) && t.oct.rect().right() <= t.sem.rect().x && t.oct.rect().y == t.sem.rect().y && t.fin.rect().y == t.crs.rect().y && t.oct.rect().bottom() <= t.fin.rect().y && t.crs.rect().bottom() <= t.track.rect().y && t.oct.rect().w < 200, "tune row vertical: a 2 x 2 grid (OCT SEM / FIN CRS) and the toggle under it, the fields as wide as their content needs" + why);
     t.oct.setId (1); t.crs.setId (4);
     Change d = tap (t, cx (t.oct), cy (t.oct), 0.0);
     d = tap (t, cx (t.oct), cy (t.oct), 100.0);

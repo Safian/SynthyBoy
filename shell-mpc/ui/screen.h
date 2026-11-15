@@ -187,7 +187,7 @@ protected:
         basic.place (r[2]);
         route.place ({ r[3].x, r[3].y + (topH - 64) / 2, r[3].w, 64 });
         const int midY = top.bottom() + m, midH = rect_.bottom() - m - bottomH - m - midY;
-        const int leftW = (W - 2 * m) * 64 / 100, rightX = rect_.x + m + leftW + m;
+        const int leftW = (W - 2 * m) * 78 / 100, rightX = rect_.x + m + leftW + m;
         constexpr int kTitleH = KnobPanel::kBlockTitleH, kPad = KnobPanel::kBlockPad;
         const int barH = 56, barBlockH = kTitleH + barH + kPad;
         display_ = { rect_.x + m, midY, leftW, std::max (0, midH - barBlockH - kGap) };
