@@ -317,7 +317,7 @@ private:
         {
             presenter_.hide();
             hideGpu (nowMs);
-            current_ = -1;
+            current_ = shownView_ = -1;
             activeSlot_ = -1;
             setState ("hidden: " + hiddenReason);
             return timing_.detectEveryMs;
@@ -430,7 +430,7 @@ private:
             std::lock_guard<std::mutex> g (mu_);
             if (! slots_.at (activeSlot_))     // the instance whose page is on screen has closed since the last check
             {
-                current_ = -1;
+                current_ = shownView_ = -1;
                 activeSlot_ = -1;
                 needFrame_ = true;
             }
@@ -608,6 +608,11 @@ private:
         if (isUiPage (current_))
             ensureUiPage (activeSlot_, current_);
         IView& view = *views_[static_cast<size_t> (current_)];
+        if (shownView_ != current_)
+        {
+            shownView_ = current_;
+            view.onShown();   // another view was on screen: this one sets its shared state (the Q group) again
+        }
         synthyboy::LiveValues lv;
         const bool haveLive = v->live (lv);
         ViewInput in;
@@ -1298,7 +1303,7 @@ private:
     std::string state_ = "hidden: starting";
     std::function<double()> cpuClock_;
     bool killed_ = false, disabledHere_ = false, dumpRequested_ = false, needFrame_ = true;
-    int current_ = -1;
+    int current_ = -1, shownView_ = -1;   // shownView_: the view whose update () ran last (onShown () when it changes)
     int rotation_ = 90, unreadable_ = 0;
     uint32_t seen_[Detection::kMaxViews][2] = {};
     double nextSwitchesMs_ = 0.0, nextDetectMs_ = 0.0, lastFrameMs_ = -1000.0, secondStartMs_ = 0.0, cpuAtSecond_ = 0.0, cpuPercent_ = 0.0;

@@ -64,6 +64,8 @@ public:
     /** The clock while a finger is down (long press). */
     virtual void onTick (UiStack&, IInstanceView&, double /*nowMs*/) {}
     /** A finger is down on the plugin-drawn pages (the controller keeps its pace fast). */
+    /** The view comes on screen again after another view (or none) was on it: whatever it set in a shared place (the Q group of the four hardware knobs: the router keeps what the LAST page set) is to be set again. */
+    virtual void onShown() {}
     virtual bool fingerDown() const noexcept { return false; }
     /** The stack of the instance was closed from outside (the Play page left): a running gesture ends. */
     virtual void dropGesture() noexcept {}

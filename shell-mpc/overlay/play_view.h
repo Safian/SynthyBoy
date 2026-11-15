@@ -360,6 +360,15 @@ public:
         return lfo_ != nullptr && lfo_->touch (ev, stack, io, nowMs);
     }
     void onTick (UiStack& stack, IInstanceView& io, double nowMs) override { if (osc_ != nullptr) osc_->tick (nowMs, stack, io); if (env_ != nullptr) env_->tick (nowMs, stack, io); if (lfo_ != nullptr) lfo_->tick (nowMs, stack, io); }
+    void onShown() override
+    {
+        if (osc_)
+            osc_->forgetQGroup();
+        if (env_)
+            env_->forgetQGroup();
+        if (lfo_)
+            lfo_->forgetQGroup();
+    }
     bool fingerDown() const noexcept override { return (osc_ != nullptr && osc_->fingerDown()) || (env_ != nullptr && env_->fingerDown()) || (lfo_ != nullptr && lfo_->fingerDown()); }
     void dropGesture() noexcept override { if (osc_ != nullptr) osc_->dropGesture(); if (env_ != nullptr) env_->dropGesture(); if (lfo_ != nullptr) lfo_->dropGesture(); }
     OscUi* oscUi() noexcept { return osc_.get(); }

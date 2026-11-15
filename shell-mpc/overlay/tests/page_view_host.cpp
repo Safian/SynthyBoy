@@ -109,6 +109,24 @@ int main()
         const std::string st = r.dir.read ("status.txt");
         check (st.find ("page_view: env3") != std::string::npos && st.find ("page_instance: 3") != std::string::npos, "the status file names the page view and its instance");
     }
+    // ---- the Q group: the router keeps what the LAST page set, so a page that comes back on screen sets its group again (the Q-Links must act on the page that is up)
+    {
+        Rig r;
+        const int mixer = r.viewOf ("mixer"), filter1 = r.viewOf ("filter1");
+        r.frame.setView (mixer, true, 90);
+        r.run (600);
+        const int mixerFirst = r.inst.qGroup[0];
+        check (mixerFirst >= 0, "the Mixer page sets its Q group (the level of the strip)");
+        r.frame.setView (mixer, false, 90);
+        r.frame.setView (filter1, true, 90);
+        r.run (600);
+        const int filterFirst = r.inst.qGroup[0];
+        check (filterFirst >= 0 && filterFirst != mixerFirst, "the Filter page sets its own Q group (the cutoff)");
+        r.frame.setView (filter1, false, 90);
+        r.frame.setView (mixer, true, 90);
+        r.run (600);
+        check (r.inst.qGroup[0] == mixerFirst, "back on the Mixer page: its Q group is set again, the Q-Links act on the page that is up (" + std::to_string (r.inst.qGroup[0]) + ")");
+    }
     // ---- the blank instance picture while the page is up: the page is there, the instance is not told (the widgets are hidden by design): the page stays
     {
         Rig r;
