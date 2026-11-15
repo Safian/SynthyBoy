@@ -939,6 +939,37 @@ The envelope of the Play page is drawn by the plugin too (overlay build only): t
 
 **What the envelope modulates.** The TARGETS button opens the modulation matrix seen from the source (`ModTargetsPage`: a row per slot whose source is this envelope, with the target's name, the depth, the polarity, on / off and remove; paged when there are more than six). ADD TARGET opens the list of the groups of the modulatable parameters, then the parameters of the group; the new slot starts at half depth (bipolar when the parameter swings around zero). A long press on a knob or a field opens the modulations of that control, as on the oscillator pages.
 
+## Plugin-drawn pages (overlay build)
+
+Besides the Play tab, the plugin draws these tabs entirely (a `PageView<Ui>` per view, `shell-mpc/overlay/page_view.h`, the aliases in `pages.h`; the controller opens the element page of the tab with `View::pageElement()` and keeps one `UiStack` group per tab, so a change of tab closes the detail pages of the previous one). A page has the whole screen (1280 x 800 region, opaque, the markers at the top, the host's Q-Link side panel stays visible), its own Q groups (`Q proxies and the plugin-drawn pages`) and its readout targets (`pages::make(view)->targets`).
+
+| Tab (overlay variant) | View kind (`overlay_layout.json`) | Element | Page id |
+| --- | --- | --- | --- |
+| Play, Play Env, Play LFO | `play` | oscillator / envelope / LFO elements in `PlayView` | - |
+| Filter 1, Filter 2 | `filterui` | `FilterUi` (`filter_ui.h`) | 4 |
+| Mixer | `mixer` | `MixerUi` | 5 |
+| FX | `fx` | `FxUi` | 6 |
+| Mod | `mod` | `ModUi` | 7 |
+| Macros | `macros` | `MacroUi` | 8 |
+| Master | `master` | `MasterUi` | 9 |
+| Voice | `voice` | `VoiceUi` | 10 |
+| Env 1 - Env 4 | `envui` | `EnvUi` in page mode | - |
+| LFO 1 - LFO 4 | `lfoui` | `LfoUi` in page mode | - |
+
+Master and Voice are no longer members of `PlayView`. All elements bind to engine parameters with `ui_bind.h` (`uibind::`: key lookup, plain and normalised writes, `formatValue` with the unit of the parameter, the modulation slots of a parameter, `DestIndex`: the grouped destination list) and open the modulations of a control (long press) and the sources' target list with the shared `ModulationsPage` / `ModTargetsPage`.
+
+**Skin.** `scripts/mpc-skin-extras/83_pages.py` (overlay variant only) hides every host widget of a page tab (except `Overlay Marker *` and `Overlay Instance`) while the plugin's page is open (`RangedEnabling` on the overlay parameter, as `82_play.py` does for Play), sets Q-Link 1 .. 4 to the Q proxies "Q 1" .. "Q 4" and `Bank Direction` to `Row`. `scripts/overlay-skin/mpc-ui-pages-overlay.json` has 26 tabs (the limit of the host is 32; the Model tabs, Mod 3-4, Mod Amt and the single effect tabs are gone because the plugin's pages hold their controls).
+
+**Filter UI.** A real response curve (log frequency grid, dB scale, the response computed from the parameters: `FilterResponse`), the live cutoff from the readout, a drag bubble with cutoff and resonance, the formant pad with its X / Y / TRANSPOSE / SPREAD, a list of the models and a stepper of the styles (the styles are the second level of the model; they are a separate stepper, not a nested list), ROUTING, three blocks MAIN / TRACK / OUT, one Q group each. ENV 1 is a toggle because the engine parameter is binary.
+
+**Mod matrix and macros.** Tabs ALL / BY SOURCE / BY DEST, rows of 72 px (source, target, depth bar, UNI/BI, ON/OFF, MORE), the slot detail page (auxiliary source, shape, time; delete with a confirmation), the grouped lists, the macros as 8 cards with their targets and the live spectrum strip. The virtual Q target steps the selected row.
+
+**Mixer and FX.** Strips with slider bars, a fader and a meter fed by `stripPeak`. The FX page is the chain bar plus the slot editor with a display per type (EQ and compressor are drawn from the textbook biquad and threshold / ratio models, not from the engine's measured response; delay, FX filter and distortion from their parameters), pages of knobs and a Q group per row. `readout.h` publishes `stripPeak[10]` (a level on a 60 dB scale with a release that lets a peak fall within a fraction of a second, atomics, no lock) and `voiceStep[kReadVoices]`; engine tests `own_mixer_strip_peaks_follow_the_sources_and_decay` and `own_voice_control_read_out_has_the_step_of_every_voice`.
+
+**Master and Voice.** Master: two sides (OUTPUT / PITCH / VOICES / GLIDE, and SCALE with a keyboard / TUNING / MPE), meters from `stripPeak`. Voice: the 8 x 6 step grid with the sounding step lit (`voiceStep`), a drawn value strip, blocks RANDOM / SCALING / TARGETS; virtual Q targets step and row.
+
+**Tests and images.** `filter_ui_host.cpp`, `mod_ui_host.cpp`, `mixfx_ui_host.cpp`, `mastervoice_ui_host.cpp` (all in `shell-mpc/overlay/tests/`), `page_view_host.cpp` (the real layout, opening, groups, status naming, readout targets) run in `shell-mpc/accept.sh` (the last ones also under AddressSanitizer); the `*_ui_demo.cpp` programs (shared `demo_common.h`) write the demonstration pictures into `$B/ui-images/<element>/look-N` (the collected set is in `.hw-local/mpc-ui-plans/komponens-kepek/`). The old 17-view table lives in `tests/fixtures/legacy_layout.h` for the tests of the controller that do not need the new pages.
+
 ## Browser tile
 
 The host displays a graphic tile in the Sounds > INSTRUMENTS plugin selector when the package contains `Plugin Skins/browser_images/soundsmode.png`.

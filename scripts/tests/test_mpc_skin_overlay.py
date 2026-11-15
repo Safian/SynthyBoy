@@ -69,7 +69,8 @@ def header_views():
     return out, origin, bg
 
 
-KINDS = {"filter": 0, "lfo": 1, "osc": 2, "env": 3, "spectrum": 4, "play": 5}
+PAGE_KINDS = ("play", "filterui", "mixer", "fx", "mod", "macros", "master", "voice", "envui", "lfoui")
+KINDS = {"filter": 0, "lfo": 1, "osc": 2, "env": 3, "spectrum": 4, "play": 5, "filterui": 6, "mixer": 7, "fx": 8, "mod": 9, "macros": 10, "master": 11, "voice": 12, "envui": 13, "lfoui": 14}
 
 
 class SharedConstantsTests(unittest.TestCase):
@@ -111,8 +112,8 @@ class SharedConstantsTests(unittest.TestCase):
                 every.append((v["name"], int(m["rgb"], 16)))
             left, right = v["markers"]
             if v["opaque"]:
-                # the spectrum view covers the row of the meters: its markers sit in the 8 px gap after the first and before the last meter column (one column pitch from the end)
-                near = 40 if v["kind"] == "spectrum" else 30
+                # a page (the whole tab) has its markers 33 px from the left edge and 39 px from the right one (the host's Q-Link panel covers the right end of the Play tab)
+                near = 40
                 self.assertLess(left["x"] - c["x"], near, "the left marker is near the left end of the region")
                 self.assertLess(c["x"] + c["w"] - right["x"] - right["w"], near, "the right marker is near the right end")
             else:
@@ -148,46 +149,51 @@ class SharedConstantsTests(unittest.TestCase):
         tabs = [v["tab"] for v in layout["views"]]
         self.assertEqual(len(set(tabs)), len(tabs), "one view per tab")
 
-    def test_the_spectrum_view_is_the_row_of_the_meters(self):
-        """The numbers of the meter row live in the shared JSON only (meterRow); 40_spectrum.py reads them and the spectrum view covers exactly that row."""
+    def test_the_meter_row_numbers_live_in_the_shared_json_only(self):
+        """The numbers of the meter row live in the shared JSON only (meterRow); 40_spectrum.py reads them (the Macros page of the plugin hides the meters and draws the spectrum itself)."""
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
         row = layout["meterRow"]
         width = row["columns"] * row["columnW"] + (row["columns"] - 1) * row["gap"]
-        view = next(v for v in layout["views"] if v["kind"] == "spectrum")
-        self.assertEqual(view["region"], {"x": row["x"], "y": row["y"], "w": width, "h": row["h"]})
-        self.assertEqual(view["tab"], "Macros")
         self.assertEqual(row["x"], (layout["screen"]["width"] - width) // 2, "the row is centred on the screen")
-        # every marker and the instance picture is in a gap between two columns (not over a meter: with the overlay off the meters are what is seen)
-        pitch = row["columnW"] + row["gap"]
-        gaps = [(row["x"] + k * pitch + row["columnW"], row["x"] + (k + 1) * pitch) for k in range(row["columns"] - 1)]
-        for r in list(view["markers"]) + [view["instance"]]:
-            self.assertTrue(any(a <= r["x"] and r["x"] + r["w"] <= b for a, b in gaps), "%r is inside a gap between two meters" % r)
-        # the module reads the same numbers
         spec = importlib.util.spec_from_file_location("spectrum_module", ROOT / "scripts" / "mpc-skin-extras" / "40_spectrum.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         self.assertEqual((mod.COLUMNS, mod.COLUMN_W, mod.GAP, mod.X0, mod.Y, mod.COLUMN_H), (row["columns"], row["columnW"], row["gap"], row["x"], row["y"], row["h"]))
 
+    def test_every_page_kind_is_a_whole_tab_and_has_one_view_per_tab(self):
+        layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
+        pages = [v for v in layout["views"] if v["kind"] in PAGE_KINDS]
+        self.assertEqual(sorted({v["kind"] for v in pages}), sorted(PAGE_KINDS))
+        for v in pages:
+            if v["kind"] != "play":
+                self.assertEqual(v["region"], {"x": 0, "y": 0, "w": 1280, "h": 628}, v["name"])
+        # the header of the plugin has the same kinds and the test of the page kinds
+        text = SHARED_HEADER.read_text(encoding="utf-8")
+        self.assertIn("constexpr bool isPageKind", text)
+
 
 class OverlayLayoutFileTests(unittest.TestCase):
-    def test_layout_is_the_production_one_plus_two_pages_and_the_play_pages(self):
+    def test_layout_is_the_production_one_minus_the_pages_the_plugin_draws_plus_the_play_pages(self):
         prod, ovl = json.loads(PROD_LAYOUT.read_text(encoding="utf-8")), json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))
         self.assertEqual(ovl["variant"], "overlay")
         self.assertNotIn("variant", prod)
-        self.assertEqual((len(prod["pages"]), len(ovl["pages"]), ovl["tabLimit"]), (34, 39, 39))   # the production layout, + 2 filter model tabs, + the 3 Play tabs
+        self.assertNotIn("tabLimit", ovl, "the overlay layout stays within the 32 tabs of the host")
+        self.assertEqual((len(prod["pages"]), len(ovl["pages"])), (34, 26))   # the production layout; the 3 Play tabs, minus the tabs the plugin's pages replace (F1 / F2 model, Mod 3-4, Mod Amt, the single effects)
+        self.assertLessEqual(len(ovl["pages"]), 32)
         play = ovl["pages"][:3]
         self.assertEqual([(p["name"], p["fn"], p["kick"], p.get("custom")) for p in play], [(n, "Play", [], True) for n in ("Play", "Play Env", "Play LFO")])
-        ovl = dict(ovl, pages=ovl["pages"][3:])   # the rest is checked as before
-        names = [p["name"] for p in ovl["pages"]]
-        self.assertEqual(names[names.index("Filter 1"):names.index("Filter 1") + 4], ["Filter 1", "F1 Model", "Filter 2", "F2 Model"])
-        rest = [{k: v for k, v in p.items() if k != "label"} for p in ovl["pages"] if p["name"] not in ("Filter 1", "F1 Model", "Filter 2", "F2 Model")]   # (the labels of the function keys are the overlay's own)
-        self.assertEqual(rest, [p for p in prod["pages"] if p["name"] not in ("Filter 1", "Filter 2")], "every other page is the production page")
-        for n in (1, 2):
-            pages = [p for p in ovl["pages"] if p["name"] in ("Filter %d" % n, "F%d Model" % n)]
-            self.assertEqual({p["fn"] for p in pages}, {"Filter"})
-            self.assertEqual(sorted(k for p in pages for k in p["kick"]), ["filter%d_main" % n, "filter%d_model" % n])
-            self.assertEqual(sorted(k for p in prod["pages"] if p["name"] == "Filter %d" % n for k in p["kick"]),
-                             ["filter%d_main" % n, "filter%d_model" % n])
+        renamed = {"Mod": "Mod 1-2", "FX": "FX Chain"}
+        prod_by_name = {p["name"]: p for p in prod["pages"]}
+        for p in ovl["pages"][3:]:
+            q = prod_by_name[renamed.get(p["name"], p["name"])]
+            self.assertEqual(p["fn"], q["fn"], p["name"])
+            self.assertEqual([k for k in p["kick"] if k in q["kick"]], p["kick"], "%s: only pages of the production tab" % p["name"])
+        gone = {"F1 Model", "F2 Model", "Mod 3-4", "Mod Amt", "FX Filt", "Distort", "Comp 1", "Comp 2", "EQ", "Chorus", "Delay", "Phaser", "FX Level"}
+        self.assertFalse(gone & {p["name"] for p in ovl["pages"]})
+        # every view of the shared JSON is on a tab of the layout
+        layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
+        names = {p["name"] for p in ovl["pages"]}
+        self.assertEqual({v["tab"] for v in layout["views"]} - names, set())
 
 
 @unittest.skipUnless(HAVE_SDK, "MPC SDK not found (set MPC_SDK)")
@@ -258,80 +264,58 @@ class OverlaySkinTests(unittest.TestCase):
         self.assertNotIn("filter1.cutoff", f1)
 
     # ---- the overlay skin ----
-    def test_39_tabs_and_the_sub_tabs_are_under_the_same_function_key(self):
+    def test_26_tabs_and_the_sub_tabs_are_under_the_same_function_key(self):
         tabs = self.o_tui["pageData"]["tabs"]
-        self.assertEqual(len(tabs), 39)
-        f1, m1, f2, m2 = self.tab("Filter 1"), self.tab("F1 Model"), self.tab("Filter 2"), self.tab("F2 Model")
-        self.assertEqual((f1["fnKeyIndex"], m1["fnKeyIndex"], f2["fnKeyIndex"], m2["fnKeyIndex"]), (4, 4, 4, 4))   # the Play key is the first one
-        self.assertEqual((f1["fnKeySubIndex"], m1["fnKeySubIndex"], f2["fnKeySubIndex"], m2["fnKeySubIndex"]), (0, 1, 2, 3))
-        self.assertEqual(len({(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs}), 39)
+        self.assertEqual(len(tabs), 26)
+        self.assertLessEqual(len(tabs), 32, "the host's limit")
+        f1, f2 = self.tab("Filter 1"), self.tab("Filter 2")
+        self.assertEqual((f1["fnKeyIndex"], f2["fnKeyIndex"]), (4, 4))   # the Play key is the first one
+        self.assertEqual((f1["fnKeySubIndex"], f2["fnKeySubIndex"]), (0, 1))
+        self.assertEqual(len({(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs}), 26)
+        for gone in ("F1 Model", "F2 Model", "Mod 3-4", "Mod Amt", "FX Filt", "Distort", "Comp 1", "Comp 2", "EQ", "Chorus", "Delay", "Phaser", "FX Level"):
+            self.assertFalse([t for t in tabs if t["tabName"] == gone], gone)
 
-    def rows_of(self, n):
-        return [["filter%d.on" % n, "filter%d.model" % n, "filter%d.style" % n, "filter%d.drive" % n],
-                ["filter%d.cutoff" % n, "filter%d.resonance" % n, "filter%d.mix" % n, "filter%d.keytrack" % n]]
+    PAGE_TABS = ("Filter 1", "Filter 2", "Env 1", "Env 2", "Env 3", "Env 4", "LFO 1", "LFO 2", "LFO 3", "LFO 4", "Macros", "Mixer", "Mod", "FX", "Master", "Voice")
 
-    def test_filter_tabs_have_the_two_rows_of_controls(self):
-        for n in (1, 2):
-            f = self.tab("Filter %d" % n)
-            got = {k: rect(c) for k, c in self.controls(f).items()}
-            expected_order = self.rows_of(n)
-            self.assertEqual(sorted(got), sorted(k for row in expected_order for k in row))
-            for r, row in enumerate(expected_order):
-                ys = {got[k][1] + got[k][3] // 2 for k in row}
-                xs = [got[k][0] for k in row]
-                self.assertEqual(xs, sorted(xs), row)
-                self.assertEqual(xs, [21, 341, 661, 981], "slots on the axes of the four columns")
-                self.assertLessEqual(max(ys) - min(ys), 40, "one row")
-                if r:
-                    self.assertGreater(min(ys), max({got[k][1] + got[k][3] // 2 for k in expected_order[0]}) + 100, "row 4 is below row 3")
-            # the curve area is above the controls and the Q-Link frames start under it
-            layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
-            c = next(v for v in layout["views"] if v["name"] == "filter%d" % n)["region"]
-            self.assertLessEqual(c["y"] + c["h"], 301)
-            self.assertEqual(f["qlinkBoundsData"], ["16 301 288 323", "336 301 288 323", "656 301 288 323", "976 301 288 323"])
-            self.assertTrue(all(y >= 301 for _, y, _, _ in got.values()))
+    def test_the_page_tabs_are_the_views_of_the_layout(self):
+        layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
+        views = {v["tab"] for v in layout["views"] if v["kind"] in PAGE_KINDS and v["kind"] != "play"}
+        self.assertEqual(views, set(self.PAGE_TABS))
 
-    def test_qlink_maps_match_the_two_rows(self):
-        idx = {p["key"]: i for i, p in enumerate(self.params)}
-        for n in (1, 2):
-            f = self.tab("Filter %d" % n)
-            entry = next(e for e in self.o_ql["Screen Mode Q-Links"]["map"] if e["Tab"] == f["fnKeyIndex"] + 1 and e["SubTab"] == f["fnKeySubIndex"] + 1)
-            want = {}
-            for r, row in enumerate(self.rows_of(n)):
-                for col, key in enumerate(row):
-                    want["Q-Link %d" % (4 * (3 - (2 + r)) + col + 1)] = idx[key]   # Bank Direction Column: the lower row is Q-Link 1 .. 4
-            links = entry["Q-Links"]
-            self.assertEqual({k: v for k, v in links.items() if v != -1}, want)
-            self.assertEqual(links["Q-Link 1"], idx["filter%d.cutoff" % n])
+    def test_no_host_widget_of_a_page_tab_is_visible_under_the_plugins_page(self):
+        hide = "RangedEnabling/0/18/33/Parameter %d" % (len(self.params) + 4 + 32 + 2)
+        for name in self.PAGE_TABS:
+            comps = self.tab(name)["componentDefinition"]["componentsData"]
+            hidden = 0
+            for c in comps:
+                if c["componentData"]["name"].startswith(("Overlay Marker", "Overlay Instance")):
+                    self.assertNotIn(hide, c["bounds"].get("additionalInvalidatingHandles", []), "%s: the plugin finds the page by this picture" % c["componentData"]["name"])
+                else:
+                    self.assertIn(hide, c["bounds"].get("additionalInvalidatingHandles", []), "%s on %s hides while the plugin's page is up" % (c["componentData"]["name"], name))
+                    self.assertEqual(c["bounds"]["version"], 2)
+                    hidden += 1
+            self.assertGreater(hidden, 0, name)
 
-    def test_parameters_come_from_params_json_not_from_numbers(self):
-        for n in (1, 2):
-            f = self.controls(self.tab("Filter %d" % n))
-            self.assertEqual(f["filter%d.cutoff" % n]["handle remapping"]["map"][0]["value"], "Parameter %d" % next(i for i, p in enumerate(self.params) if p["key"] == "filter%d.cutoff" % n))
-
-    def test_every_control_of_the_production_filter_tabs_is_still_reachable(self):
-        for n in (1, 2):
-            old = set(self.controls(self.tab("Filter %d" % n, self.p_tui)))
-            new_main, new_model = set(self.controls(self.tab("Filter %d" % n))), set(self.controls(self.tab("F%d Model" % n)))
-            self.assertEqual(sorted(old - (new_main | new_model)), [], "filter %d" % n)
-            self.assertEqual(sorted(new_main & new_model), [])
-            self.assertEqual(sorted(new_model), sorted("filter%d.%s" % (n, k) for k in ("blend", "comb_offset", "formant.x", "formant.y", "formant.resonance", "formant.spread", "formant.transpose")))
-            # and in the Q-Link map of the sub-tab
-            m = self.tab("F%d Model" % n)
-            entry = next(e for e in self.o_ql["Screen Mode Q-Links"]["map"] if e["Tab"] == m["fnKeyIndex"] + 1 and e["SubTab"] == m["fnKeySubIndex"] + 1)
-            idx = {p["key"]: i for i, p in enumerate(self.params)}
-            self.assertEqual(sorted(v for v in entry["Q-Links"].values() if v != -1), sorted(idx[k] for k in new_model))
+    def test_the_page_tabs_have_the_q_proxies_on_q_link_1_to_4_in_the_row_direction(self):
+        first_proxy = len(self.params) + 4 + 32 + 2 + 1 + 3 + 24   # "Q 1": after the Overlay Instance, the Play selectors and the 24 Play proxies
+        for name in self.PAGE_TABS:
+            tab = self.tab(name)
+            entry = next(e for e in self.o_ql["Screen Mode Q-Links"]["map"] if e["Tab"] == tab["fnKeyIndex"] + 1 and e["SubTab"] == tab["fnKeySubIndex"] + 1)
+            self.assertEqual(entry["Bank Direction"], "Row", name)
+            self.assertEqual([entry["Q-Links"]["Q-Link %d" % n] for n in range(1, 17)], [first_proxy + i for i in range(4)] + [-1] * 12, name)
+            self.assertEqual(tab["qlinkBoundsData"], ["16 301 288 323", "336 301 288 323", "656 301 288 323", "976 301 288 323"], name)
 
     def test_all_other_tabs_are_the_production_tabs_plus_the_marker_pictures(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
         with_markers = {v["tab"] for v in layout["views"]}
         for t in self.p_tui["pageData"]["tabs"]:
-            if t["tabName"] in ("Filter 1", "Filter 2"):
-                continue
+            if t["tabName"] not in {p["name"] for p in json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))["pages"]} or t["tabName"] in self.PAGE_TABS:
+                continue   # a tab the plugin's pages replace, or a page tab (its widgets are hidden while the page is up: test_no_host_widget...)
             o = self.tab(t["tabName"])
             ot = {k: v for k, v in o.items() if k not in ("fnKeySubIndex", "fnKeyIndex", "tabName")}   # (the label of a function key is the overlay's tabName: test_function_key_labels...)
             pt = {k: v for k, v in t.items() if k not in ("fnKeySubIndex", "fnKeyIndex", "tabName")}
             self.assertEqual(o["fnKeyIndex"], t["fnKeyIndex"] + 1, "%s: the Play key is the first, every other key moved one place" % t["tabName"])
+            self.assertEqual(o["qlinkBoundsData"], t["qlinkBoundsData"])
             if t["tabName"] in with_markers:
                 comps = ot["componentDefinition"]["componentsData"]
                 vname = next(v["name"] for v in layout["views"] if v["tab"] == t["tabName"])
@@ -349,30 +333,15 @@ class OverlaySkinTests(unittest.TestCase):
             for c in pictures:
                 self.assertLess(order.index(c["componentData"]["name"]), order.index("Overlay Marker %s left" % name.lower().replace(" ", "")), "the markers are above the pictures")
 
-    def test_the_macros_tab_keeps_its_32_meters_and_the_markers_are_in_the_gaps_above_them(self):
-        layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
-        view = next(v for v in layout["views"] if v["kind"] == "spectrum")
+    def test_the_macros_tab_keeps_its_32_meters_hidden_under_the_page_and_the_markers_are_above_them(self):
         comps = self.tab("Macros")["componentDefinition"]["componentsData"]
         meters = [c for c in comps if c["componentData"]["type"] == "Meter"]
         self.assertEqual(len(meters), 32)
         order = [c["componentData"]["name"] for c in comps]
-        for name in ("Overlay Marker spectrum left", "Overlay Marker spectrum right", "Overlay Instance spectrum"):
+        for name in ("Overlay Marker macros left", "Overlay Marker macros right", "Overlay Instance macros"):
             self.assertGreater(order.index(name), max(order.index(m["componentData"]["name"]) for m in meters), "%s is drawn above the meters" % name)
-            c = comps[order.index(name)]
-            x, y, w, h = rect(c)
-            for m in meters:
-                mx, my, mw, mh = rect(m)
-                self.assertFalse(x < mx + mw and mx < x + w and y < my + mh and my < y + h, "%s does not overlap a meter" % name)
         prod = {c["componentData"]["name"]: rect(c) for c in self.tab("Macros", self.p_tui)["componentDefinition"]["componentsData"] if c["componentData"]["type"] == "Meter"}
         self.assertEqual({c["componentData"]["name"]: rect(c) for c in meters}, prod, "the meters are the production meters, in the same places")
-        self.assertEqual(view["tab"], "Macros")
-
-    def test_names_are_there(self):
-        for n in (1, 2):
-            f = self.tab("Filter %d" % n)
-            texts = {c["componentData"]["name"] for c in f["componentDefinition"]["componentsData"] if c["componentData"]["type"] == "Label"}
-            for key in ("Cutoff", "Resonance", "Key Tracking", "On", "Drive", "Mix"):
-                self.assertIn("Filter %d %s name" % (n, key), texts)
 
     def test_marker_pictures_have_the_exact_colours_and_positions(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
@@ -457,17 +426,16 @@ class OverlaySkinTests(unittest.TestCase):
         self.assertEqual([(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs[:3]], [(0, 0), (0, 1), (0, 2)])
         self.assertEqual(tabs[3]["tabName"], "Macros")
         self.assertEqual(tabs[3]["fnKeyIndex"], 1)
-        self.assertEqual(len({t["fnKeyIndex"] for t in tabs}), 11, "eleven function keys")
+        self.assertEqual(len({t["fnKeyIndex"] for t in tabs}), 10, "ten function keys")
         self.assertFalse(any("Play" in t["tabName"] for t in self.p_tui["pageData"]["tabs"]), "the production skin has no Play tab")
 
     def test_function_key_labels_are_the_short_names_and_the_other_sub_tabs_keep_theirs(self):
         # the host draws the tabName of the current sub-tab on the function key: the first sub-tab of every key carries the short label
         tabs = self.o_tui["pageData"]["tabs"]
         first = [t["tabName"] for t in tabs if t["fnKeySubIndex"] == 0]
-        self.assertEqual(first, ["Play", "Macros", "Osc", "Mix", "Filter", "Env", "LFO", "Mod", "FX", "FX 2", "Master"])
+        self.assertEqual(first, ["Play", "Macros", "Osc", "Mix", "Filter", "Env", "LFO", "Mod", "FX", "Master"])
         later = [t["tabName"] for t in tabs if t["fnKeySubIndex"] > 0]
-        self.assertEqual(later, ["Play Env", "Play LFO", "Osc1 Shp", "Osc 2", "Osc2 Shp", "Osc 3", "Osc3 Shp", "Mixer", "F1 Model", "Filter 2", "F2 Model", "Env 2", "Env 3", "Env 4",
-                                 "LFO 2", "LFO 3", "LFO 4", "Mod 3-4", "Mod Amt", "FX Filt", "Distort", "Comp 1", "Comp 2", "EQ", "Delay", "Phaser", "FX Level", "Voice"])
+        self.assertEqual(later, ["Play Env", "Play LFO", "Osc1 Shp", "Osc 2", "Osc2 Shp", "Osc 3", "Osc3 Shp", "Mixer", "Filter 2", "Env 2", "Env 3", "Env 4", "LFO 2", "LFO 3", "LFO 4", "Voice"])
         names = [t["tabName"] for t in tabs]
         self.assertEqual(len(names), len(set(names)), "the tab names of the finished skin are unique")
         self.assertTrue(all(1 <= len(n) <= 8 for n in names))
@@ -477,7 +445,7 @@ class OverlaySkinTests(unittest.TestCase):
         # the internal names stay in skin-meta.json, labels only for the pages that have one; the production skin has none
         meta = json.loads((self.ovl.parent / "skin-meta.json").read_text(encoding="utf-8"))
         self.assertEqual(meta["labels"], self.LABELS)
-        self.assertEqual(sorted(meta["labels"].values()), sorted(["Osc", "Mix", "Filter", "Env", "LFO", "Mod", "FX", "FX 2"]))
+        self.assertEqual(sorted(meta["labels"].values()), sorted(["Osc", "Mix", "Filter", "Env", "LFO"]))
         self.assertNotIn("labels", json.loads((self.prod.parent / "skin-meta.json").read_text(encoding="utf-8")))
         self.assertEqual([t["tabName"] for t in self.p_tui["pageData"]["tabs"] if t["fnKeySubIndex"] == 0][:4], ["Macros", "Osc 1", "Sub/Nois", "Filter 1"], "the production skin keeps its names")
 
@@ -562,7 +530,7 @@ class OverlaySkinTests(unittest.TestCase):
         # the format: every tab sits on a function key and is reached by the key (ui-reference "fnKeyIndex" / "fnKeySubIndex"); a plugin has no call that selects a tab (docs/MPC.md "Q proxies").
         names = [t["tabName"] for t in self.o_tui["pageData"]["tabs"]]
         self.assertFalse([n for n in names if "Full" in n], "no blank page of its own: the full-screen page is drawn over the Play page")
-        self.assertEqual(len(names), 39, "the tab count of the overlay skin is unchanged")
+        self.assertEqual(len(names), 26, "the tab count of the overlay skin")
 
     def test_play_views_markers_and_the_fallback_picture(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
@@ -583,10 +551,9 @@ class OverlaySkinTests(unittest.TestCase):
         res = subprocess.run([sys.executable, "-I", str(SDK / "tools" / "validate.py"), str(self.ovl.parent)], capture_output=True, text=True)
         report = res.stdout + res.stderr
         errors = [l for l in report.splitlines() if l.startswith("ERROR") and "plugin.json missing" not in l]
-        self.assertEqual([e for e in errors if "tabs; at most 32" not in e], [], report)
-        self.assertEqual([e for e in errors if "tabs; at most 32" in e], ["ERROR  TUI.json: 39 tabs; at most 32 are supported"], report)
+        self.assertEqual(errors, [], report)
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
-        names = ["overlay_curve_bg.png", "overlay_instance_6x6.png", "overlay_instance_4x4.png"] + ["overlay_marker_%s_%s.png" % (v["name"], s) for v in layout["views"] for s in ("left", "right")]
+        names = ["overlay_instance_6x6.png"] + ["overlay_marker_%s_%s.png" % (v["name"], s) for v in layout["views"] for s in ("left", "right")]
         for name in names:
             self.assertIn("image %s present" % name, report)
 

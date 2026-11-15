@@ -2,7 +2,6 @@
   "format": "synthyboy-mpc-ui-pages",
   "version": 2,
   "variant": "overlay",
-  "tabLimit": 39,
   "pages": [
     {
       "name": "Play",
@@ -102,24 +101,10 @@
       "label": "Filter"
     },
     {
-      "name": "F1 Model",
-      "fn": "Filter",
-      "kick": [
-        "filter1_model"
-      ]
-    },
-    {
       "name": "Filter 2",
       "fn": "Filter",
       "kick": [
         "filter2_main"
-      ]
-    },
-    {
-      "name": "F2 Model",
-      "fn": "Filter",
-      "kick": [
-        "filter2_model"
       ]
     },
     {
@@ -181,108 +166,19 @@
       ]
     },
     {
-      "name": "Mod 1-2",
+      "name": "Mod",
       "fn": "Mod",
       "kick": [
         "mod_slot_1",
         "mod_slot_2"
-      ],
-      "label": "Mod"
-    },
-    {
-      "name": "Mod 3-4",
-      "fn": "Mod",
-      "kick": [
-        "mod_slot_3",
-        "mod_slot_4"
       ]
     },
     {
-      "name": "Mod Amt",
-      "fn": "Mod",
-      "kick": [
-        "mod_amounts_1_8",
-        "mod_amounts_9_16"
-      ]
-    },
-    {
-      "name": "FX Chain",
+      "name": "FX",
       "fn": "FX",
       "kick": [
         "fx_order_1",
         "fx_switches"
-      ],
-      "label": "FX"
-    },
-    {
-      "name": "FX Filt",
-      "fn": "FX",
-      "kick": [
-        "fx_filter_1",
-        "fx_filter_2"
-      ]
-    },
-    {
-      "name": "Distort",
-      "fn": "FX",
-      "kick": [
-        "fx_distortion"
-      ]
-    },
-    {
-      "name": "Comp 1",
-      "fn": "FX",
-      "kick": [
-        "fx_comp_main",
-        "fx_comp_low"
-      ]
-    },
-    {
-      "name": "Comp 2",
-      "fn": "FX",
-      "kick": [
-        "fx_comp_mid",
-        "fx_comp_high"
-      ]
-    },
-    {
-      "name": "EQ",
-      "fn": "FX",
-      "kick": [
-        "fx_eq_low_mid",
-        "fx_eq_high"
-      ]
-    },
-    {
-      "name": "Chorus",
-      "fn": "FX 2",
-      "kick": [
-        "fx_chorus_1",
-        "fx_chorus_2"
-      ],
-      "label": "FX 2"
-    },
-    {
-      "name": "Delay",
-      "fn": "FX 2",
-      "kick": [
-        "fx_delay_1",
-        "fx_delay_2"
-      ]
-    },
-    {
-      "name": "Phaser",
-      "fn": "FX 2",
-      "kick": [
-        "fx_phaser_1",
-        "fx_phaser_2"
-      ]
-    },
-    {
-      "name": "FX Level",
-      "fn": "FX 2",
-      "kick": [
-        "fx_levels"
       ]
     },
     {

@@ -188,5 +188,23 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_link_libraries(mixfx_ui_host PRIVATE synthyboy_core Threads::Threads)
     target_compile_features(mixfx_ui_host PRIVATE cxx_std_17)
     target_compile_options(mixfx_ui_host PRIVATE -Wall -Wextra -Wpedantic)
+
+    add_executable(mastervoice_ui_host EXCLUDE_FROM_ALL overlay/tests/mastervoice_ui_host.cpp)
+    target_include_directories(mastervoice_ui_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(mastervoice_ui_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(mastervoice_ui_host PRIVATE cxx_std_17)
+    target_compile_options(mastervoice_ui_host PRIVATE -Wall -Wextra -Wpedantic)
+
+    add_executable(page_view_host EXCLUDE_FROM_ALL overlay/tests/page_view_host.cpp)
+    target_include_directories(page_view_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(page_view_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(page_view_host PRIVATE cxx_std_17)
+    target_compile_options(page_view_host PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 

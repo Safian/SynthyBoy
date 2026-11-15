@@ -184,6 +184,18 @@ $B/mod_ui_host > $B/mod-ui-host.log 2>&1 || { grep -E "^FAIL" $B/mod-ui-host.log
 # the mixer and FX UI (shell-mpc/overlay/mixer_ui.h, fx_ui.h: channels, faders, meters, destination popup, FX chain bar, slot editor, Q groups)
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/mixfx_ui_host $OVSRC/mixfx_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: mixfx_ui_host build"; exit 1; }
 $B/mixfx_ui_host > $B/mixfx-ui-host.log 2>&1 || { grep -E "^FAIL" $B/mixfx-ui-host.log; echo "ACCEPT FAIL: mixfx_ui_host (the mixer and FX UI: layout, Q groups, parameters)"; exit 1; }
+# the master and voice UI (shell-mpc/overlay/master_ui.h, voice_ui.h: output, pitch, voices, glide, scale, MPE; the step grid, the random, scaling and target blocks, Q groups)
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/mastervoice_ui_host $OVSRC/mastervoice_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: mastervoice_ui_host build"; exit 1; }
+$B/mastervoice_ui_host > $B/mastervoice-ui-host.log 2>&1 || { grep -E "^FAIL" $B/mastervoice-ui-host.log; echo "ACCEPT FAIL: mastervoice_ui_host (the master and voice UI: wiring, grid, Q groups)"; exit 1; }
+# the plugin-drawn pages (shell-mpc/overlay/page_view.h, pages.h: the real layout, the controller opens the element page of the tab, group changes, the blank instance picture, the readout targets)
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/page_view_host $OVSRC/page_view_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: page_view_host build"; exit 1; }
+$B/page_view_host > $B/page-view-host.log 2>&1 || { grep -E "^FAIL" $B/page-view-host.log; echo "ACCEPT FAIL: page_view_host (the plugin-drawn pages: opening, groups, readout targets)"; exit 1; }
+# the demonstration images of the four elements the same way as the other elements (filter, mod + macros, mixer + fx, master + voice), into $B/ui-images/<element>
+for d in filter mod mixfx mastervoice; do
+    mkdir -p $B/ui-images/$d
+    c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/${d}_ui_demo $OVSRC/${d}_ui_demo.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ${d}_ui_demo build"; exit 1; }
+    $B/${d}_ui_demo $B/ui-images/$d > $B/$d-ui-demo.log 2>&1 || { grep -E "^FAIL" $B/$d-ui-demo.log; echo "ACCEPT FAIL: ${d}_ui_demo (the ${d} pages)"; exit 1; }
+done
 # the cached cells of the scene protocol (gpu/scene.h CellBegin, gpu/cell_plan.h): the hash, the plan of the layers, the damage between two pictures, the part to paint for the age of the back buffer, the CPU reference
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -I shell-mpc -o $B/cell_plan_host $OVSRC/cell_plan_host.cpp || { echo "ACCEPT FAIL: cell_plan_host build"; exit 1; }
 $B/cell_plan_host > $B/cell-plan-host.log 2>&1 || { grep -E "^FAIL" $B/cell-plan-host.log; echo "ACCEPT FAIL: cell_plan_host (cached cells: hash, plan, damage, paint boxes)"; exit 1; }
@@ -195,7 +207,7 @@ $B/gpu_clock_host > $B/gpu-clock-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-clock
 c++ -std=c++17 -O1 -Wall -Wextra -I core/include -I shell-mpc/overlay -o $B/tour_dump $OVSRC/tour_dump.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: tour_dump build"; exit 1; }
 [ "$($B/tour_dump | wc -l)" -gt 800 ] || { echo "ACCEPT FAIL: tour_dump lists too few controls"; exit 1; }
 # the controller, the views and the GPU backend once more under AddressSanitizer + UBSan (instances are freed while their page is on screen: no use after free)
-for t in controller_host views_host gpu_backend_host spectrum_view_host display_host osc_ui_host env_ui_host lfo_ui_host cell_plan_host cell_cache_host filter_ui_host mod_ui_host mixfx_ui_host; do
+for t in controller_host views_host gpu_backend_host spectrum_view_host display_host osc_ui_host env_ui_host lfo_ui_host cell_plan_host cell_cache_host filter_ui_host mod_ui_host mixfx_ui_host mastervoice_ui_host page_view_host; do
     c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/${t}_asan $OVSRC/$t.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
     $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
@@ -204,15 +216,15 @@ done
 # renders the oscillator pages and the detail pages into $B/ui-images (PNG, for a human; not compared)
 mkdir -p $B/ui-images
 for t in ui_base_host ui_composite_host ui_screen_host ui_list_host ui_display_host ui_env_host ui_lfo_host; do
-    c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -o $B/${t}_asan shell-mpc/ui/tests/$t.cpp || { echo "ACCEPT FAIL: $t build"; exit 1; }
+    c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -o $B/${t}_asan shell-mpc/ui/tests/$t.cpp || { echo "ACCEPT FAIL: $t build"; exit 1; }
     UI_OUT=$B/ui-images $B/${t}_asan > $B/$t.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t.log | head; echo "ACCEPT FAIL: $t (UI components: interface, drawing, Q groups)"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
 done
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -o $B/ui_demo shell-mpc/ui/tests/ui_demo.cpp || { echo "ACCEPT FAIL: ui_demo build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -o $B/ui_demo shell-mpc/ui/tests/ui_demo.cpp || { echo "ACCEPT FAIL: ui_demo build"; exit 1; }
 $B/ui_demo $B/ui-images > $B/ui-demo.log 2>&1 || { grep -E "^FAIL" $B/ui-demo.log; echo "ACCEPT FAIL: ui_demo (the demonstration pages)"; exit 1; }
 # the envelope element: the library parts (ui_env_demo) and the real pages driven by engine parameters (env_ui_demo), into $B/ui-images/env
 mkdir -p $B/ui-images/env
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -o $B/ui_env_demo shell-mpc/ui/tests/ui_env_demo.cpp || { echo "ACCEPT FAIL: ui_env_demo build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -o $B/ui_env_demo shell-mpc/ui/tests/ui_env_demo.cpp || { echo "ACCEPT FAIL: ui_env_demo build"; exit 1; }
 $B/ui_env_demo $B/ui-images/env > $B/ui-env-demo.log 2>&1 || { grep -E "^FAIL" $B/ui-env-demo.log; echo "ACCEPT FAIL: ui_env_demo (the envelope parts)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/env_ui_demo $OVSRC/env_ui_demo.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: env_ui_demo build"; exit 1; }
 $B/env_ui_demo $B/ui-images/env > $B/env-ui-demo.log 2>&1 || { grep -E "^FAIL" $B/env-ui-demo.log; echo "ACCEPT FAIL: env_ui_demo (the envelope pages)"; exit 1; }
