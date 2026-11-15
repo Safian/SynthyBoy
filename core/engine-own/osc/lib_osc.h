@@ -136,6 +136,8 @@ public:
     /** The first zone and the key of the last note of the multisample type (-1 before one was played): the read-out of the display. */
     int lastZone() const noexcept { return lastZone_; }
     int lastKey() const noexcept { return lastKey_; }
+    /** The read head of the first unison player of a sample oscillator as a fraction (0 .. 1) of the file; -1 when nothing plays (the read-out of the display). Written by the audio thread. */
+    float sampleHead() const noexcept { return headFrac_; }
 
 private:
     struct Unison
@@ -190,6 +192,8 @@ private:
     int heldZones[kSlots] = {};
     int numHeld = 0;
     int lastZone_ = -1, lastKey_ = -1;
+    double sampleFrames_ = 0.0;      // the length of the file under the sample players (set when the parameters are applied)
+    float headFrac_ = -1.0f;
     int noteVelocity127 = 100;
     std::vector<float> tmpL, tmpR, mixL, mixR, modBuf, rateBuf;
     // Mask / Vocode warps: the last 2048 samples of the other oscillators and the noise, and their magnitude spectra

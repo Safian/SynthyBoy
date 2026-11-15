@@ -184,6 +184,18 @@ public:
                 changed = true;
             }
         }
+        // ---- the read head of a sample oscillator (live: the voice that is heard; -1 = not playing / another type)
+        {
+            float head = -1.0f;
+            const int o = playosc::oscNumber (sel_[0]);
+            if (in.live != nullptr && o >= 1 && o <= play::kOscs && kind_ == synthyboy::OscCycle::Kind::sample)
+                head = in.live->sampleHead[o - 1];
+            if (std::fabs (head - playhead_) > 0.003f || (head < 0.0f) != (playhead_ < 0.0f))
+            {
+                playhead_ = head;
+                changed = true;
+            }
+        }
         // ---- envelope: the curve (cheap) and the dot
         {
             const bool data = group_[1]->read (*in.instance) || bpm != bpm_;
@@ -533,6 +545,7 @@ private:
             d.grain = kind_ == K::granular && res_.grainSize > 0.0f;
             d.grainPos = res_.grainPosition;
             d.grainSize = res_.grainSize;
+            d.playhead = kind_ == K::sample ? playhead_ : -1.0f;   // live: where the voice that is heard reads the sample
         }
         else if (kind_ == K::spectral)
             d.kind = ui::display::Data::Kind::Spectrum;
@@ -584,6 +597,7 @@ private:
     std::vector<float> cycle_, cycleMax_, envY_, lfoY_, spectrum_;
     std::vector<std::vector<float>> stack_;
     int stackN_ = 0, detailSeen_ = 1;
+    float playhead_ = -1.0f;
     int displayPoints_ = synthyboy::OscCycle::kSamples;
     synthyboy::OscCycle::Result res_;
     std::unique_ptr<OscUi> osc_;

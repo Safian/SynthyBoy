@@ -358,6 +358,7 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
         default: break;
     }
     const double fileSeconds = haveSample ? static_cast<double> (smp->view.numFrames) / smp->view.sampleRate : 1.0;
+    sampleFrames_ = haveSample ? static_cast<double> (smp->view.numFrames) : 0.0;
     const float scanRange = static_cast<float> (1 << std::clamp (static_cast<int> (v[lk_sScanRange] + 0.5f), 0, 3));
     double speed = static_cast<double> (v[lk_sScan]) * 0.01 * scanRange;
     if (v[lk_sScanReverse] >= 0.5f)
@@ -580,6 +581,7 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
 
 void LibOsc::beginType (int type) noexcept
 {
+    headFrac_ = -1.0f;
     const ContentSet* cs = boundSet;
     const float* v = lp.v;
     const int oi = oscIdx;
@@ -789,8 +791,14 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
         {
             sampleosc::SampleVoice& sv = sampleVoices[static_cast<size_t> (u)];
             if (!sv.isActive())
+            {
+                if (u == 0)
+                    headFrac_ = -1.0f;
                 continue;
+            }
             sv.processModulated (a, b, n, rm);
+            if (u == 0)
+                headFrac_ = sampleFrames_ > 1.0 ? static_cast<float> (std::min (1.0, std::max (0.0, sv.getPlayheadPosition() / sampleFrames_))) : -1.0f;
             for (int k = 0; k < n; ++k)
             {
                 const float t = static_cast<float> (t0 + k + 1) * invP;

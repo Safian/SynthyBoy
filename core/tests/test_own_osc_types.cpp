@@ -191,6 +191,34 @@ TEST (own_osc_sample_type_unison_is_a_line_of_voices_panned_across)
     CHECK_NEAR (db (ar), -4.94, 1.0);
 }
 
+// S3b: the display's read-out: the read head of the sample type moves along the file (0 .. 1), -1 before a note and for another type
+TEST (own_osc_sample_type_read_head_is_live)
+{
+    Rig r (true, "osc1.type", 1.0f);
+    set (*r.e, "osc1.sample.loop_mode", 0.0f);
+    LiveValues live;
+    std::vector<float> l (256), rr (256);
+    r.e->process (nullptr, 0, l.data(), rr.data(), 256);
+    CHECK (r.e->copyReadout (live));
+    CHECK (live.sampleHead[0] < 0.0f);
+    Event on = sbtest::noteOn (0, 69, 1.0f);
+    r.e->process (&on, 1, l.data(), rr.data(), 256);
+    CHECK (r.e->copyReadout (live));
+    const float first = live.sampleHead[0];
+    for (int i = 0; i < 40; ++i)
+        r.e->process (nullptr, 0, l.data(), rr.data(), 256);
+    CHECK (r.e->copyReadout (live));
+    std::printf ("    S3b read head after one block %.4f, after 41 blocks %.4f\n", first, live.sampleHead[0]);
+    CHECK (first >= 0.0f && first < 0.05f);
+    CHECK (live.sampleHead[0] > first + 0.08f && live.sampleHead[0] <= 1.0f);   // 41 blocks of 256 at 44.1 kHz on a 2 s file: about a fifth of the way
+    CHECK (live.sampleHead[1] < 0.0f && live.sampleHead[2] < 0.0f);
+    Rig w (false);
+    Event on2 = sbtest::noteOn (0, 69, 1.0f);
+    w.e->process (&on2, 1, l.data(), rr.data(), 256);
+    CHECK (w.e->copyReadout (live));
+    CHECK (live.sampleHead[0] < 0.0f);              // a wavetable oscillator has no read head
+}
+
 // S4: granular and spectral types play the same sample at the same pitch and at a level in the range of the Sample type
 TEST (own_osc_granular_and_spectral_types_play_the_sample)
 {

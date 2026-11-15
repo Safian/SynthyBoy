@@ -116,6 +116,7 @@ private:
     uint32_t chokeLatest[3][256] = {}, chokeCounter[3] = {};
     std::atomic<int> qualityTier { 2 };
     std::atomic<bool> ultraRender { false };
+    std::atomic<float> liveSampleHead[3];         // the read head of the sample oscillators (the voice that is heard), -1 = none
     std::atomic<int> multiZone[3], multiKey[3];   // the zone and key of the last multisample note (read-out)
     std::atomic<uint32_t> blockCounter { 0 };
     // the live read-out (written at the end of a block, read by the display)

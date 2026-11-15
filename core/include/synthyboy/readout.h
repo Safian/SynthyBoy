@@ -39,6 +39,8 @@ struct LiveValues
     /** GROUPC WP-13: the zone (index into the SFZ regions of oscillator n + 1) and the key of the last note of a multisample oscillator; -1 before one was played. */
     int multisampleZone[3] = { -1, -1, -1 };
     int multisampleKey[3] = { -1, -1, -1 };
+    /** The read head (0 .. 1 of the file) of the sample oscillator n + 1 for the voice that is heard; -1 when no voice plays it or the oscillator is of another type. Own engine only. */
+    float sampleHead[3] = { -1.0f, -1.0f, -1.0f };
     int numTargets = 0;
     float target[kMaxTargets] = {};
 };

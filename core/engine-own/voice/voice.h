@@ -97,6 +97,7 @@ public:
     void kill() noexcept;
     int multisampleZone (int osc) const noexcept { return lib[osc].lastZone(); }
     int multisampleKey (int osc) const noexcept { return lib[osc].lastKey(); }
+    float sampleHead (int osc) const noexcept { return lib[osc].sampleHead(); }
 
     bool isActive() const noexcept { return active; }
     bool isReleased() const noexcept { return released; }

@@ -89,6 +89,7 @@ OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.fo
     for (int o = 0; o < 3; ++o)
     {
         multiZone[o].store (-1, std::memory_order_relaxed);
+        liveSampleHead[o].store (-1.0f, std::memory_order_relaxed);
         multiKey[o].store (-1, std::memory_order_relaxed);
     }
     spectralScratch = std::make_unique<spectral::Scratch>();
@@ -1249,6 +1250,7 @@ bool OwnEngine::copyReadout (LiveValues& out) const noexcept
         out.target[i] = liveTarget[i].load (std::memory_order_relaxed);
     for (int o = 0; o < 3; ++o)
     {
+        out.sampleHead[o] = liveSampleHead[o].load (std::memory_order_relaxed);
         out.multisampleZone[o] = multiZone[o].load (std::memory_order_relaxed);
         out.multisampleKey[o] = multiKey[o].load (std::memory_order_relaxed);
     }
@@ -1283,6 +1285,8 @@ void OwnEngine::writeReadout() noexcept
         const bool lfo = (id >= kSrcLfo1 && id < kSrcLfo1 + 8) || id == kSrcLfo9 || id == kSrcLfo10;
         liveSource[i].store (lfo ? 2.0f * v - 1.0f : v, std::memory_order_relaxed);
     }
+    for (int o = 0; o < 3; ++o)
+        liveSampleHead[o].store (newest != nullptr ? newest->sampleHead (o) : -1.0f, std::memory_order_relaxed);
     for (int l = 0; l < LiveValues::kNumLfos; ++l)
         liveLfo[l].store (newest != nullptr ? newest->lfoReadout (l) : -1.0f, std::memory_order_relaxed);
     for (int e = 0; e < LiveValues::kNumEnvs; ++e)
