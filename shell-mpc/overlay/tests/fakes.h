@@ -52,6 +52,7 @@ struct TempDir
         p.killSwitch = path + "/off";
         p.rotation = path + "/rot";
         p.noGpu = path + "/nogpu";
+        p.look = path + "/look";
         p.status = path + "/status.txt";
         p.dumpRequest = path + "/dump";
         p.dump = path + "/curve.txt";

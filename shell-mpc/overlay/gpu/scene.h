@@ -183,11 +183,18 @@ struct SceneBuilder
         return first;
     }
     /** Appends the rows as another polyline and makes it the current one (kOpCurve) over the columns x0 .. x0 + width - 1; the following Fill and Stroke ops draw it. */
-    void curve (const float* rows, int n, int x0, int width)
+    int curve (const float* rows, int n, int x0, int width)
     {
         const int first = addRows (rows, n);
         if (first < 0)
-            return;
+            return -1;
+        curveAt (first, n, x0, width);
+        return first;
+    }
+    /** Makes rows that are in the pool already (the return value of curve ()) the current polyline again, over another span: the same vertices drawn a second time (a glow pass, a shifted copy) cost no new vertices. */
+    void curveAt (int first, int n, int x0, int width)
+    {
+        if (first < 0 || n < 2 || first + n > static_cast<int> (s_.numPoints)) { overflow = true; return; }
         if (SceneOp* o = add (kOpCurve, 0)) { o->f[0] = static_cast<float> (first); o->f[1] = static_cast<float> (n); o->f[2] = static_cast<float> (x0); o->f[3] = static_cast<float> (width); }
     }
     /** The area between the rows `top` and `bottom` (both n values) over the columns x0 .. x0 + width - 1. */

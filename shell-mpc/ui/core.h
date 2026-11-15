@@ -171,7 +171,7 @@ inline Rect tabHitRect (const Rect& r) noexcept { return { r.x, r.y, std::min (r
 class Pen
 {
 public:
-    Pen (gpu::SceneBuilder& sb, bool enabled) : sb_ (sb), dim_ (enabled ? 255 : 100) {}
+    Pen (gpu::SceneBuilder& sb, bool enabled) : sb_ (sb), dim_ (enabled ? 255 : 150) {}
 
     /** The colour `rgba` (0xRRGGBBAA) with the alpha of a disabled component scaled down. */
     uint32_t c (uint32_t rgba) const noexcept { return (rgba & 0xffffff00u) | (((rgba & 255u) * dim_ + 127u) / 255u); }

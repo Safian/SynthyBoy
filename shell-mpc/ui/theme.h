@@ -39,6 +39,7 @@ struct Look
     float frame;                              // the outline of a block
     // ---- light
     float glowSoft, glowAlpha, glowWidth;     // the feather of the soft pass, its alpha (0 .. 1), the half width added to the line
+    float afterglow;                          // the display keeps this share (0 .. 1) of its previous picture under the new one (a trail; 0 = none): the GPU's feedback layer
     // ---- type (pixels per em)
     float fTitle, fValue, fLabel, fItem, fSmall, fMin;
     // ---- shape (pixels)
@@ -60,7 +61,7 @@ inline const Look kLook1 = {
     1.25f, 2.0f, 0.9f, 1.0f,
     0.060f, 0.078f, 0.042f,
     1.0f,
-    8.0f, 0.34f, 2.2f,
+    8.0f, 0.34f, 2.2f, 0.55f,
     28.0f, 24.0f, 15.0f, 22.0f, 12.0f, 9.0f,
     14.0f, 10.0f, 6.0f,
     8, 12
@@ -80,7 +81,7 @@ inline const Look kLook2 = {
     1.0f, 1.7f, 0.7f, 0.8f,
     0.050f, 0.062f, 0.036f,
     1.0f,
-    6.0f, 0.20f, 1.8f,
+    6.0f, 0.20f, 1.8f, 0.0f,
     28.0f, 24.0f, 15.0f, 22.0f, 12.0f, 9.0f,
     12.0f, 8.0f, 5.0f,
     8, 12
@@ -100,7 +101,7 @@ inline const Look kLook3 = {
     1.5f, 2.4f, 1.1f, 1.0f,
     0.075f, 0.098f, 0.052f,
     1.5f,
-    10.0f, 0.46f, 2.8f,
+    10.0f, 0.46f, 2.8f, 0.72f,
     28.0f, 24.0f, 15.0f, 22.0f, 12.0f, 9.0f,
     16.0f, 12.0f, 8.0f,
     8, 12

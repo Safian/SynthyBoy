@@ -50,6 +50,7 @@ struct Paths
     std::string rotation = "/tmp/synthyboy-overlay-rot";
     std::string noGpu = "/tmp/synthyboy-overlay-nogpu";
     std::string status = "/tmp/synthyboy-overlay-status.txt";
+    std::string look = "/tmp/synthyboy-overlay-look";   // a number 1 .. 3: the look of the UI (ui/theme.h); without the file look 1
     std::string dumpRequest = "/tmp/synthyboy-overlay-dump";
     std::string dump = "/tmp/synthyboy-overlay-curve.txt";
 };
@@ -318,6 +319,7 @@ private:
             {
                 qlinkPanel_ = on;
                 needFrame_ = true;
+                statusDue_ = true;     // the status file says it right away (the latency of the cover is measured through it)
                 ++qlinkPanelChanges_;
             }
         }
@@ -367,6 +369,7 @@ private:
             {
                 qlinkPanel_ = panelNow;
                 needFrame_ = true;
+                statusDue_ = true;
                 ++qlinkPanelChanges_;
             }
             // which instance's page it is: the view's own markers are on screen, and the instance picture says whose page it is
@@ -802,6 +805,19 @@ private:
         if (in && (in >> v) && (v == 0 || v == 90 || v == 180 || v == 270))
             over = v;
         rotationOverride_ = over;
+        {
+            int look = 1;
+            std::ifstream lf (paths_.look);
+            int lv = 0;
+            if (lf && (lf >> lv) && lv >= 1 && lv <= 3)
+                look = lv;
+            if (look != look_)
+            {
+                look_ = look;
+                ui::theme::setLook (look);
+                needFrame_ = true;
+            }
+        }
         updateRotation (nowMs);
         dumpRequested_ = exists (paths_.dumpRequest);
     }
@@ -929,7 +945,7 @@ private:
             std::lock_guard<std::mutex> g (mu_);
             const UiStack& u = activeSlot_ >= 0 ? ui_[activeSlot_] : ui_[0];
             o << "ui_state: " << (activeSlot_ < 0 || u.isMain() ? "main" : (u.level() == UiStack::Level::full ? "full" : "detail")) << "\nui_depth: " << (activeSlot_ < 0 ? 0 : u.depth())
-              << "\nui_auto_closes: " << uiAutoCloses_ << "\nqlink_panel: " << (qlinkPanel_ ? "yes" : "no") << "\nqlink_panel_changes: " << qlinkPanelChanges_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\n" << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
+              << "\nui_auto_closes: " << uiAutoCloses_ << "\nui_look: " << look_ << "\nqlink_panel: " << (qlinkPanel_ ? "yes" : "no") << "\nqlink_panel_changes: " << qlinkPanelChanges_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\n" << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
         }
         o << "frames_last_second: " << (final_ ? 0u : framesLast_) << "\n";
         o << "frames_total: " << framesTotal() << "\n";
@@ -1057,6 +1073,7 @@ private:
     Rect regions_[layout::kNumViews];
     ITouchInput* touchIn_ = nullptr;
     bool qlinkPanel_ = false, panelFast_ = false;
+    int look_ = 1;
     unsigned long qlinkPanelChanges_ = 0;
     unsigned long touchEvents_ = 0, touchTaken_ = 0;
     Rect instanceRects_[layout::kNumViews];

@@ -92,6 +92,9 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
     sb.rrect (static_cast<float> (r.x), static_cast<float> (r.y), static_cast<float> (r.right()), static_cast<float> (r.bottom()), T.rBlock, 0xffffffffu);
     sb.paintOff();
     sb.rrect (static_cast<float> (r.x), static_cast<float> (r.y), static_cast<float> (r.right()), static_cast<float> (r.bottom()), T.rBlock, dt::a (T.keyline, 255), T.frame);
+    // ---- the afterglow: the previous picture of this rectangle, faded, under the new one (the GPU's feedback; the CPU reference does not draw it)
+    if (T.afterglow > 0.0f && (d.kind == Data::Kind::Wave || d.kind == Data::Kind::MinMax))
+        sb.feedback (static_cast<float> (r.x + 1), static_cast<float> (r.y + 1), static_cast<float> (r.right() - 1), static_cast<float> (r.bottom() - 1), T.afterglow);
     // ---- the grid: a centre line and quarters, hairlines
     if (wave || minmax)
     {

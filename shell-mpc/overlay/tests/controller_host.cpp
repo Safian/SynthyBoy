@@ -514,6 +514,20 @@ int main()
         r.run (1300);
         check (r.ctl->rotation() == 90, "an unreadable rotation file is no override: the rotation found from the markers (90, the first view) is back");
     }
+    // ---- the look file ----
+    {
+        Rig r;
+        r.frame.setAll (true, 90);
+        r.until ([&] { return r.on(); }, 300);
+        r.run (1300);
+        check (line (r.dir.read ("status.txt"), "ui_look") == "1" && &synthyboy_mpc::ui::theme::L() == &synthyboy_mpc::ui::theme::kLook1, "without a look file the UI has look 1");
+        r.dir.write ("look", "3\n");
+        r.run (1300);
+        check (line (r.dir.read ("status.txt"), "ui_look") == "3" && &synthyboy_mpc::ui::theme::L() == &synthyboy_mpc::ui::theme::kLook3, "the look file selects look 3 within a second");
+        r.dir.write ("look", "banana");
+        r.run (1300);
+        check (line (r.dir.read ("status.txt"), "ui_look") == "1", "an unreadable look file is no choice: look 1 is back");
+    }
     // ---- the curve dump on request ----
     {
         Rig r;

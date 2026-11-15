@@ -1328,12 +1328,19 @@ private:
                 rows2[static_cast<size_t> (k)] = rows[static_cast<size_t> (k)] + 6.0f + 4.0f * std::sin (9.0f * t + static_cast<float> (i));
             }
         };
-        auto drawCurves = [&] (bool glowSource)
+        std::vector<int> firsts;
+        auto drawCurves = [&] (bool glowSource, bool again)
         {
             for (int i = 0; i < c.curves; ++i)
             {
-                build (i);
-                sb.curve (rows.data(), c.points, static_cast<int> (x0), static_cast<int> (W));
+                if (again)
+                    sb.curveAt (firsts[static_cast<size_t> (i)], c.points, static_cast<int> (x0), static_cast<int> (W));
+                else
+                {
+                    build (i);
+                    const int first = sb.curve (rows.data(), c.points, static_cast<int> (x0), static_cast<int> (W));
+                    firsts.push_back (first);
+                }
                 sb.paintX (x0, x0 + W, rgba8 (0x2e, 0xe6, 0xf0, 255), rgba8 (0x6c, 0x7b, 0xff, 255), rgba8 (0xb4, 0x5c, 0xff, 255), rgba8 (0xff, 0x4f, 0xc3, 255));
                 if (glowSource)
                 {
@@ -1364,10 +1371,12 @@ private:
         if (c.glow == 2 && c.curves > 0)
         {
             sb.glowBegin (4);
-            drawCurves (true);
+            drawCurves (true, false);
             sb.glowEnd (1.6f, 1.0f);
+            drawCurves (false, true);
         }
-        drawCurves (false);
+        else
+            drawCurves (false, false);
         for (int t = 0; t < c.text; ++t)
             sb.text (12.0f + static_cast<float> ((t * 71) % std::max (1, w_ - 200)), 30.0f + static_cast<float> ((t * 29) % std::max (1, h_ - 40)), 14.0f + static_cast<float> (t % 5) * 4.0f, "Wavetable Position 1.25 Hz", rgba8 (0xe6, 0xe6, 0xf2, 230));
     }
