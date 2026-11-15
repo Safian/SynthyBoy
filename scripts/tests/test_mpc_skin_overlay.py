@@ -510,11 +510,17 @@ class OverlaySkinTests(unittest.TestCase):
             else:
                 self.assertEqual(sorted(set(bound(c) for c in slots)), sorted(sel[1:] + prox[g]), "%s: the Env and LFO selectors and the eight knobs of its module, nothing else (a knob may have variants valid for one choice of another one)" % tab_name)
             kinds = {bound(c): c["componentData"]["type"] for c in slots}
+            # every host widget of the Env and LFO thirds is hidden while the plugin's full screen is open: the "Overlay Instance" frame 24 is outside RangedEnabling 0 .. 18 of the 33 frames
+            hide = "RangedEnabling/0/18/33/Parameter %d" % (first - 1)
+            for c in slots:
+                self.assertIn(hide, c["bounds"].get("additionalInvalidatingHandles", []), "%s: every selector and knob of the Play pages hides while a full screen is open" % tab_name)
+                self.assertEqual(c["bounds"]["version"], 2)
             if tab_name == "Play LFO":
                 sync = prox[2][5]
                 rate = next(c for c in slots if bound(c) == prox[2][0])
-                self.assertEqual(rate["bounds"]["additionalInvalidatingHandles"], ["IndexedEnabling/0/5/Parameter %d" % sync], "the rate knob is valid when the PROXY of the sync has choice 0")
+                self.assertEqual(rate["bounds"]["additionalInvalidatingHandles"], ["IndexedEnabling/0/5/Parameter %d" % sync, hide], "the rate knob is valid when the PROXY of the sync has choice 0 (and hidden while a full screen is open)")
                 divs = [c for c in slots if bound(c) == prox[2][7]]
+                self.assertTrue(all(c["bounds"]["additionalInvalidatingHandles"][1:] == [hide] for c in divs), "the division is hidden while a full screen is open as well")
                 self.assertEqual(sorted(c["bounds"]["additionalInvalidatingHandles"][0] for c in divs), ["IndexedEnabling/%d/5/Parameter %d" % (n, sync) for n in (1, 2, 3)], "the division is valid for the three tempo syncs")
             self.assertEqual([kinds[i] for i in sel[1:]], ["sliderWithFocusMenu"] * 2)
             view = next(v for v in json.loads(SHARED_JSON.read_text(encoding="utf-8"))["views"] if v["tab"] == tab_name)
