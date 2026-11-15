@@ -518,6 +518,234 @@ void glyphImage (const std::string& dir)
     saveImage (dir, "glyphs.png", render (s));
 }
 
+void renderFilterPages (const std::string& dir)
+{
+    constexpr int nPts = 256;
+    std::vector<float> curve1 (nPts), curve2 (nPts), curveRes (nPts);
+    for (int i = 0; i < nPts; ++i)
+    {
+        const double fNorm = static_cast<double> (i) / (nPts - 1);
+        const double d1 = (fNorm - 0.55) * 10.0;
+        curve1[i] = static_cast<float> (d1 < 0.0 ? (d1 > -1.0 ? 9.0 * (1.0 + d1) : 0.0) : 9.0 - d1 * 18.0);
+
+        const double d2 = std::fabs (fNorm - 0.72) * 15.0;
+        curve2[i] = static_cast<float> (6.0 - d2 * 12.0);
+
+        const double g1 = std::pow (10.0, curve1[i] / 20.0);
+        const double g2 = std::pow (10.0, curve2[i] / 20.0);
+        curveRes[i] = static_cast<float> (20.0 * std::log10 (std::max (1e-6, g1 + g2)));
+    }
+
+    // 1. Compact Filter 1
+    {
+        GScene s (430, 640);
+        FilterCompact fc;
+        fc.place ({ 10, 10, 410, 620 });
+        fc.instances.state.index = 0;
+        fc.power.state.on = true;
+        fc.model.setItem ("Analog 24dB");
+        fc.cutoff.state.value = fc.cutoff.state.modValue = 0.55;
+        fc.cutoff.setLabel ("CUTOFF");
+        setText (fc.cutoff.state.valueText, sizeof fc.cutoff.state.valueText, "1.2 kHz");
+        fc.resonance.state.value = fc.resonance.state.modValue = 0.45;
+        fc.resonance.setLabel ("RESO");
+        setText (fc.resonance.state.valueText, sizeof fc.resonance.state.valueText, "45 %");
+        fc.drive.state.value = fc.drive.state.modValue = 0.20;
+        fc.drive.setLabel ("DRIVE");
+        setText (fc.drive.state.valueText, sizeof fc.drive.state.valueText, "20 %");
+        fc.mix.state.value = fc.mix.state.modValue = 1.0;
+        fc.mix.setLabel ("MIX");
+        setText (fc.mix.state.valueText, sizeof fc.mix.state.valueText, "100 %");
+
+        fc.display.state.curve1 = curve1.data();
+        fc.display.state.numPoints1 = nPts;
+        fc.display.state.cutoffHz = 1200.0;
+        fc.display.state.resonancePct = 45.0;
+        fc.display.state.liveCutoffHz = 1350.0;
+        fc.display.state.numVoices = 4;
+        fc.display.state.voiceCutoffs[0] = 800.0f;
+        fc.display.state.voiceCutoffs[1] = 1200.0f;
+        fc.display.state.voiceCutoffs[2] = 1600.0f;
+        fc.display.state.voiceCutoffs[3] = 2400.0f;
+
+        fc.draw (s.builder());
+        save (dir, "compact_filter1.png", s);
+    }
+
+    // 2. Compact Filter 2
+    {
+        GScene s (430, 640);
+        FilterCompact fc;
+        fc.place ({ 10, 10, 410, 620 });
+        fc.instances.state.index = 1;
+        fc.power.state.on = true;
+        fc.model.setItem ("Ladder 12dB");
+        fc.cutoff.state.value = fc.cutoff.state.modValue = 0.72;
+        fc.cutoff.setLabel ("CUTOFF");
+        setText (fc.cutoff.state.valueText, sizeof fc.cutoff.state.valueText, "3.2 kHz");
+        fc.resonance.state.value = fc.resonance.state.modValue = 0.60;
+        fc.resonance.setLabel ("RESO");
+        setText (fc.resonance.state.valueText, sizeof fc.resonance.state.valueText, "60 %");
+        fc.drive.state.value = fc.drive.state.modValue = 0.35;
+        fc.drive.setLabel ("DRIVE");
+        setText (fc.drive.state.valueText, sizeof fc.drive.state.valueText, "35 %");
+        fc.mix.state.value = fc.mix.state.modValue = 0.85;
+        fc.mix.setLabel ("MIX");
+        setText (fc.mix.state.valueText, sizeof fc.mix.state.valueText, "85 %");
+
+        fc.display.state.activeFilter = 2;
+        fc.display.state.curve2 = curve2.data();
+        fc.display.state.numPoints2 = nPts;
+        fc.display.state.cutoffHz = 3200.0;
+        fc.display.state.resonancePct = 60.0;
+
+        fc.draw (s.builder());
+        save (dir, "compact_filter2.png", s);
+    }
+
+    // 3. Compact Filter Dual (F1 + F2)
+    {
+        GScene s (430, 640);
+        FilterCompact fc;
+        fc.place ({ 10, 10, 410, 620 });
+        fc.instances.state.index = 2;
+        fc.power.state.on = true;
+        fc.model.setItem ("Parallel");
+        fc.cutoff.state.value = fc.cutoff.state.modValue = 0.55;
+        fc.cutoff.setLabel ("CUTOFF");
+        setText (fc.cutoff.state.valueText, sizeof fc.cutoff.state.valueText, "1.2 kHz");
+        fc.resonance.state.value = fc.resonance.state.modValue = 0.45;
+        fc.resonance.setLabel ("RESO");
+        setText (fc.resonance.state.valueText, sizeof fc.resonance.state.valueText, "45 %");
+
+        fc.display.state.dual = true;
+        fc.display.state.curve1 = curve1.data();
+        fc.display.state.numPoints1 = nPts;
+        fc.display.state.curve2 = curve2.data();
+        fc.display.state.numPoints2 = nPts;
+        fc.display.state.curveResult = curveRes.data();
+        fc.display.state.numPointsResult = nPts;
+
+        fc.draw (s.builder());
+        save (dir, "compact_filter_dual.png", s);
+    }
+
+    // 4. Full Screen Filter 1
+    {
+        GScene s (1280, 800);
+        FilterFullScreen fs;
+        fs.place ({ 0, 110, 1280, 628 });
+        fs.instances.state.index = 0;
+        fs.power.state.on = true;
+        fs.model.setItem ("Analog 24dB");
+        fs.routing.setItem ("Parallel");
+        setText (fs.blend.state.valueText, sizeof fs.blend.state.valueText, "50%");
+        setText (fs.level.state.valueText, sizeof fs.level.state.valueText, "0.0 dB");
+        setText (fs.pan.state.valueText, sizeof fs.pan.state.valueText, "C");
+
+        fs.cutoff.state.value = fs.cutoff.state.modValue = 0.55;
+        setText (fs.cutoff.state.valueText, sizeof fs.cutoff.state.valueText, "1.2 kHz");
+        fs.resonance.state.value = fs.resonance.state.modValue = 0.45;
+        setText (fs.resonance.state.valueText, sizeof fs.resonance.state.valueText, "45 %");
+        fs.drive.state.value = fs.drive.state.modValue = 0.20;
+        setText (fs.drive.state.valueText, sizeof fs.drive.state.valueText, "20 %");
+        fs.mix.state.value = fs.mix.state.modValue = 1.0;
+        setText (fs.mix.state.valueText, sizeof fs.mix.state.valueText, "100 %");
+
+        fs.display.state.curve1 = curve1.data();
+        fs.display.state.numPoints1 = nPts;
+        fs.display.state.cutoffHz = 1200.0;
+        fs.display.state.resonancePct = 45.0;
+        fs.display.state.liveCutoffHz = 1350.0;
+        fs.display.state.numVoices = 4;
+        fs.display.state.voiceCutoffs[0] = 800.0f;
+        fs.display.state.voiceCutoffs[1] = 1200.0f;
+        fs.display.state.voiceCutoffs[2] = 1600.0f;
+        fs.display.state.voiceCutoffs[3] = 2400.0f;
+
+        fs.setActiveGroup (0);
+        fs.draw (s.builder());
+        save (dir, "fullscreen_filter1.png", s);
+    }
+
+    // 5. Full Screen Filter 2
+    {
+        GScene s (1280, 800);
+        FilterFullScreen fs;
+        fs.place ({ 0, 110, 1280, 628 });
+        fs.instances.state.index = 1;
+        fs.power.state.on = true;
+        fs.model.setItem ("Ladder 12dB");
+        fs.routing.setItem ("Series 1>2");
+
+        fs.cutoff.state.value = fs.cutoff.state.modValue = 0.72;
+        setText (fs.cutoff.state.valueText, sizeof fs.cutoff.state.valueText, "3.2 kHz");
+        fs.resonance.state.value = fs.resonance.state.modValue = 0.60;
+        setText (fs.resonance.state.valueText, sizeof fs.resonance.state.valueText, "60 %");
+        fs.drive.state.value = fs.drive.state.modValue = 0.35;
+        setText (fs.drive.state.valueText, sizeof fs.drive.state.valueText, "35 %");
+        fs.mix.state.value = fs.mix.state.modValue = 0.85;
+        setText (fs.mix.state.valueText, sizeof fs.mix.state.valueText, "85 %");
+
+        fs.display.state.activeFilter = 2;
+        fs.display.state.curve2 = curve2.data();
+        fs.display.state.numPoints2 = nPts;
+        fs.display.state.cutoffHz = 3200.0;
+        fs.display.state.resonancePct = 60.0;
+
+        fs.setActiveGroup (1);
+        fs.draw (s.builder());
+        save (dir, "fullscreen_filter2.png", s);
+    }
+
+    // 6. Full Screen Formant Mode
+    {
+        GScene s (1280, 800);
+        FilterFullScreen fs;
+        fs.place ({ 0, 110, 1280, 628 });
+        fs.setFormantMode (true);
+        fs.instances.state.index = 0;
+        fs.power.state.on = true;
+        fs.model.setItem ("Formant");
+        fs.display.state.isFormant = true;
+        fs.display.state.formantX = 65.0;
+        fs.display.state.formantY = 55.0;
+
+        setText (fs.formantX.state.valueText, sizeof fs.formantX.state.valueText, "65 %");
+        setText (fs.formantY.state.valueText, sizeof fs.formantY.state.valueText, "55 %");
+        setText (fs.formantTrans.state.valueText, sizeof fs.formantTrans.state.valueText, "+0 st");
+        setText (fs.formantRes.state.valueText, sizeof fs.formantRes.state.valueText, "40 %");
+        setText (fs.formantSpread.state.valueText, sizeof fs.formantSpread.state.valueText, "25 %");
+
+        fs.setActiveGroup (3);
+        fs.draw (s.builder());
+        save (dir, "fullscreen_filter_formant.png", s);
+    }
+
+    // 7. Route Popup
+    {
+        GScene s (1280, 800);
+        FilterFullScreen fs;
+        fs.place ({ 0, 110, 1280, 628 });
+        fs.draw (s.builder());
+
+        FilterRoutePanel rp;
+        const Rect popupBox { 1280 / 2 - 240, 110 + 628 / 2 - 110, 480, 220 };
+        rp.place (popupBox);
+        rp.setPopup (true, { 0, 110, 1280, 628 });
+        rp.destination.setItem ("Main Out");
+        rp.destination.state.count = 4;
+        rp.destination.state.index = 0;
+        setText (rp.level.state.valueText, sizeof rp.level.state.valueText, "0.0 dB");
+        setText (rp.pan.state.valueText, sizeof rp.pan.state.valueText, "C");
+        setText (rp.bus1.state.valueText, sizeof rp.bus1.state.valueText, "0 %");
+        setText (rp.bus2.state.valueText, sizeof rp.bus2.state.valueText, "0 %");
+
+        rp.draw (s.builder());
+        save (dir, "route_popup_filter.png", s);
+    }
+}
+
 int main (int argc, char** argv)
 {
     const std::string base = argc > 1 ? argv[1] : ".";
@@ -528,9 +756,13 @@ int main (int argc, char** argv)
         mkdir (base.c_str(), 0755);
         mkdir (dir.c_str(), 0755);
         renderAll (dir);
+        renderFilterPages (dir);
         glyphImage (dir);
     }
     theme::setLook (1);
+    mkdir ("docs-tmp", 0755);
+    mkdir ("docs-tmp/filter-images", 0755);
+    renderFilterPages ("docs-tmp/filter-images");
     std::printf ("%s: %d images, %d failed\n", g_fails ? "FAIL" : "PASS", g_images, g_fails);
     return g_fails ? 1 : 0;
 }
