@@ -620,11 +620,15 @@ private:
     {
         if (gpu_ != nullptr)
         {
-            const double r = gpu_->status().helperRenderMs;
-            if (r > 0.0)
+            const gpu::GpuStatus g = gpu_->status();
+            if (g.frames != detailFrames_)    // a new picture of the helper: its render time counts once
             {
-                renderAcc_ += r;
-                ++renderN_;
+                detailFrames_ = g.frames;
+                if (g.helperRenderMs > 0.0)
+                {
+                    renderAcc_ += g.helperRenderMs;
+                    ++renderN_;
+                }
             }
         }
         bool changed = false;
@@ -836,6 +840,7 @@ private:
     /** The level of detail (once a second): the file's when it says one; else "full" while the helper's pictures cost at most kDetailBudgetMs (the mean of the second, 3 seconds in a row over it
         switch to "reduced" for the rest of the run); the CPU drawing, when the helper is not on, is "reduced". The mean is the helper's render time (the CPU side, glFinish included). */
     static constexpr double kDetailBudgetMs = 14.0;
+    static constexpr int kDetailMinFrames = 12;
     void chooseDetail()
     {
         int want = 0;
@@ -849,7 +854,7 @@ private:
         const bool gpuOn = gpu_ != nullptr && usingGpu_ && gpuShown_ && ! noGpu_;
         if (want == 0)
         {
-            if (gpuOn && renderN_ >= 5)
+            if (gpuOn && renderN_ >= kDetailMinFrames)   // only seconds with a moving picture count: a page at rest draws a few pictures at the idle clock of the GPU, which says nothing
             {
                 const double mean = renderAcc_ / renderN_;
                 detailMeanMs_ = mean;
@@ -1122,6 +1127,7 @@ private:
     bool qlinkPanel_ = false, panelFast_ = false, autoReduced_ = false;
     double renderAcc_ = 0.0, detailMeanMs_ = 0.0;
     int renderN_ = 0, overBudget_ = 0;
+    unsigned long detailFrames_ = 0;
     const char* detailSource_ = "auto";
     int look_ = 1;
     unsigned long qlinkPanelChanges_ = 0;
