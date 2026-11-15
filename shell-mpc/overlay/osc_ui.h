@@ -702,6 +702,24 @@ private:
         return choice >= 1 && choice <= static_cast<int> (synthyboy::modSourceCount()) ? t[choice - 1].name : "";
     }
     static void setSourceText (ui::Stepper& s, int choice) { s.setItem (sourceName (choice)); }
+    /** The name of a modulation source in at most 6 characters that still says which one it is (the chip of a knob, the row of the modulations page): "Macro 3" -> "MAC 3", "Random LFO 2" -> "RLFO 2",
+        "Velocity" -> "VEL", the others their first six characters. The prefixes are the ones theme::sourceColour knows. */
+    static void shortSourceName (const char* full, char out[7])
+    {
+        const std::string n = full;
+        auto number = [&] { const size_t sp = n.rfind (' '); return sp == std::string::npos ? std::string() : n.substr (sp); };
+        std::string s;
+        if (n.compare (0, 6, "Macro ") == 0) s = "MAC" + number();
+        else if (n.compare (0, 11, "Random LFO ") == 0) s = "RLFO" + number();
+        else if (n == "Velocity") s = "VEL";
+        else if (n == "Aftertouch") s = "AT";
+        else if (n == "Poly Aftertouch") s = "PAT";
+        else if (n == "Mod Wheel") s = "MOD WH";
+        else if (n == "Pitch Wheel") s = "PITCH";
+        else if (n == "Random per Note") s = "RND";
+        else s = n;
+        std::snprintf (out, 7, "%.6s", s.c_str());
+    }
 
     /** The modulations of the parameter `param`: a scan of the 64 slots of the matrix (the slots whose destination is this parameter). `rows` (may be null) gets the slot of every entry. */
     static ui::ModInput modsOf (const IInstanceView& v, int param, int selected, ModRow* rows)
@@ -724,7 +742,7 @@ private:
             const bool bi = sp.bipolar >= 0 && v.param (sp.bipolar) >= 0.5f;
             const bool by = sp.bypass >= 0 && v.param (sp.bypass) >= 0.5f;
             char name[7];
-            std::snprintf (name, sizeof name, "%.6s", sourceName (src));
+            shortSourceName (sourceName (src), name);
             mi.add (src, name, depth, bi, by);
             if (rows != nullptr)
                 rows[n] = { s, src };
@@ -834,7 +852,9 @@ private:
                 {
                     auto* k = static_cast<ui::Knob*> (it.c);
                     k->state.value = k->state.modValue = normOf (it.param, plain);
-                    if (it.c == &compact_.basic.pan || it.c == &compact_.basic.level)   // the compact view has room for the value under the two knobs
+                    if (it.c == &compact_.basic.filter)
+                        std::snprintf (k->state.valueText, sizeof k->state.valueText, "%.0f", static_cast<double> (plain));
+                    if (it.c == &compact_.basic.pan || it.c == &compact_.basic.level)   // the compact view has room for the value under the knobs
                     {
                         const int whole = static_cast<int> (std::lround (plain));
                         if (it.c == &compact_.basic.pan)

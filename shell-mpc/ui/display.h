@@ -157,8 +157,10 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
                 const float total = dxs * static_cast<float> (N - 1) * 0.5f;
                 const float yOff = -depth * dys * static_cast<float> (N - 1) * 0.5f - 2.0f, xOff = total - depth * total;   // the far frames start further right: all stay inside the block
                 rowsOf (d.stack[i], rows, yOff, 1.0f);
-                const int fx = ix + static_cast<int> (std::lround (xOff)), fw = iw - static_cast<int> (std::lround (xOff));
-                const int fr = sb.curve (rows, n, fx, fw);
+                const int fx0 = ix + static_cast<int> (std::lround (xOff)), fw0 = iw - static_cast<int> (std::lround (xOff));
+                const int cutN = std::max (2, n / 24), cutPx = static_cast<int> (std::lround (static_cast<float> (fw0) * static_cast<float> (cutN) / static_cast<float> (n)));   // not the first and the last 4 %: the ringing at the edge of a band limited wave, seven times shifted, would make a bundle of stripes there
+                const int fx = fx0 + cutPx, fw = fw0 - 2 * cutPx;
+                const int fr = sb.curve (rows + cutN, n - 2 * cutN, fx, fw);
                 if (lit > 0.05f && fr >= 0 && numLit < kMaxStack)
                 {
                     litFirst[numLit] = fr; litX[numLit] = fx; litW[numLit] = fw; litAmount[numLit] = lit;
@@ -212,7 +214,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             sb.style (1.0f, false);
             for (int i = 0; i < numLit; ++i)
             {
-                sb.curveAt (litFirst[i], n, litX[i], litW[i]);
+                sb.curveAt (litFirst[i], n - 2 * std::max (2, n / 24), litX[i], litW[i]);
                 sb.stroke (T.curve * 0.5f + 2.0f, static_cast<uint32_t> (120.0f * litAmount[i]));
             }
             sb.curveAt (mainFirst, n, ix, iw);

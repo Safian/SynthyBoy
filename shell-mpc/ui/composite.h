@@ -609,7 +609,7 @@ public:
         const Component* second = inst_ == OscInstance::Noise ? static_cast<const Component*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<const Component*> (&oct) : &source);
         const Size a = first->minSize(), b = second->minSize(), p = pan.minSize();
         if (stacked_)
-            return { std::max ({ a.w, b.w, 2 * p.w + kGap }), a.h + b.h + p.h + 2 * kGap };
+            return inst_ == OscInstance::Noise ? Size { std::max (a.w, 3 * p.w + 2 * kGap), a.h + p.h + kGap } : Size { std::max ({ a.w, b.w, 2 * p.w + kGap }), a.h + b.h + p.h + 2 * kGap };
         return { a.w + b.w + 2 * p.w + 3 * kGap, std::max ({ a.h, b.h, p.h }) };
     }
     void setEnabled (bool e) override { Composite::setEnabled (e); }
@@ -619,6 +619,17 @@ protected:
     {
         Component* first = inst_ == OscInstance::Noise ? static_cast<Component*> (&noiseType) : &selector;
         Component* second = inst_ == OscInstance::Noise ? static_cast<Component*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<Component*> (&oct) : &source);
+        if (stacked_ && inst_ == OscInstance::Noise)
+        {
+            // the noise: the type stepper, then FILTER, PAN and LEVEL as one row of three knobs of the same size
+            const int h1 = first->minSize().h;
+            first->place ({ rect_.x, rect_.y, rect_.w, h1 });
+            Rect r[3];
+            const int fixed[3] = { 0, 0, 0 }, weight[3] = { 1, 1, 1 };
+            layoutRow ({ rect_.x, rect_.y + h1 + kGap, rect_.w, std::max (0, rect_.h - h1 - kGap) }, fixed, weight, 3, kGap, r);
+            filter.place (r[0]); pan.place (r[1]); level.place (r[2]);
+            return;
+        }
         if (stacked_)
         {
             const int h1 = first->minSize().h, h2 = second->minSize().h, h3 = std::max (0, rect_.h - h1 - h2 - 2 * kGap);

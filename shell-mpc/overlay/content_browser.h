@@ -100,6 +100,8 @@ public:
     /** The row of the file (or folder) with this path, -1 when it is not in the list. */
     int rowOf (const std::string& path) const noexcept
     {
+        if (path.empty())
+            return -1;
         for (size_t i = 0; i < rows_.size(); ++i)
             if (rows_[i].path == path)
                 return static_cast<int> (i);
