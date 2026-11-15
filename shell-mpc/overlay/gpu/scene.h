@@ -78,12 +78,14 @@ enum SceneKind : uint32_t { kKindNone = 0, kKindFilter = 1, kKindLfo = 2, kKindO
     Band    f[0] = first vertex of the upper rows A, f[1] = n, f[2] = x0, f[3] = width (as Curve), f[4] = first vertex of the lower rows B (same n): the area between two polylines, per pixel
             row the exact coverage of the strip [A, B] (a band thinner than a pixel is a faint line): the min / max picture of a dense wave. Not limited by the current Curve op.
     Feedback f[0..3] = x0 y0 x1 y1, f[4] = gain 0 .. 1: the previous presented picture of this region, times gain, source over (the afterglow when the scene draws an opaque ground first).
+    Clip    f[0..3] = x0 y0 x1 y1 (canvas pixels): everything drawn after this op is limited to the rectangle (the pixels outside keep what they had: with a transparent Clear first, they stay transparent) until the
+            next Clip op; an empty rectangle (x1 <= x0 or y1 <= y0) switches the clip off. The glow layers and the passes of a bloom are not clipped.
     GlowBegin f[0] = divisor 2, 4 or 8: the next ops go to a layer of 1 / divisor the size (cleared, transparent).
     GlowEnd rgba = tint, f[0] = gain (0 .. 4), f[1] = blur width (1 = the default, 0.5 .. 4), f[2], f[3] = x0, y0 and rgba2 = (x1 << 16) | y1 (whole pixels, below 65536): the rectangle that is blurred and added
             over the picture (an empty rectangle: the whole canvas; a rectangle is much cheaper: the passes are as big as it is). A bloom: the same curves drawn into the layer.
     The polyline: without a Curve op, SceneData::y[0 .. numPoints - 1] are rows, point i at x = i / (numPoints - 1) * (w - 1) + 0.5 (the first and the last continue horizontally to the canvas edges). */
 enum OpCode : uint32_t { kOpNone = 0, kOpClear = 1, kOpRect = 2, kOpVLine = 3, kOpFill = 4, kOpStroke = 5, kOpDisc = 6, kOpFillGradient = 7, kOpCurve = 8, kOpText = 9, kOpLine = 10, kOpArc = 11, kOpFrame = 12,
-                         kOpStyle = 13, kOpPaint = 14, kOpRRect = 15, kOpBand = 16, kOpFeedback = 17, kOpGlowBegin = 18, kOpGlowEnd = 19 };
+                         kOpStyle = 13, kOpPaint = 14, kOpRRect = 15, kOpBand = 16, kOpFeedback = 17, kOpGlowBegin = 18, kOpGlowEnd = 19, kOpClip = 20 };
 constexpr float kMaxSoft = 64.0f;
 
 struct SceneOp
@@ -160,6 +162,9 @@ struct SceneBuilder
     {
         if (SceneOp* o = add (kOpRRect, rgba)) { o->f[0] = x0; o->f[1] = y0; o->f[2] = x1; o->f[3] = y1; o->f[4] = radius; o->rgba2 = floatBits (outlineWidth); }
     }
+    /** Limits the following ops to the rectangle (see the Clip op); `clipOff ()` switches it off. */
+    void clip (float x0, float y0, float x1, float y1) { if (SceneOp* o = add (kOpClip, 0)) { o->f[0] = x0; o->f[1] = y0; o->f[2] = x1; o->f[3] = y1; } }
+    void clipOff() { clip (0.0f, 0.0f, 0.0f, 0.0f); }
     void feedback (float x0, float y0, float x1, float y1, float gain) { if (SceneOp* o = add (kOpFeedback, 0)) { o->f[0] = x0; o->f[1] = y0; o->f[2] = x1; o->f[3] = y1; o->f[4] = gain; } }
     void glowBegin (int divisor) { if (SceneOp* o = add (kOpGlowBegin, 0)) o->f[0] = static_cast<float> (divisor); }
     void glowEnd (float gain, float blur, uint32_t tint = 0xffffffffu, int x0 = 0, int y0 = 0, int x1 = 0, int y1 = 0)
@@ -452,6 +457,18 @@ inline float bandCoverage (float top, float bottom, int row) noexcept
     if (top > bottom) { const float t = top; top = bottom; bottom = t; }
     const float lo = std::max (top, static_cast<float> (row)), hi = std::min (bottom, static_cast<float> (row) + 1.0f);
     return hi > lo ? hi - lo : 0.0f;
+}
+
+/** The clip rectangle in whole pixels (outward rounded); `on` false for an empty rectangle (clip off). false return: the op is not valid (NaN, a coordinate beyond the limit). */
+struct ClipGeom { int x0, y0, x1, y1; bool on; };
+inline bool clipGeom (const SceneOp& o, ClipGeom& g) noexcept
+{
+    for (int i = 0; i < 4; ++i)
+        if (! coordOk (o.f[i]))
+            return false;
+    g.x0 = static_cast<int> (std::floor (o.f[0])); g.y0 = static_cast<int> (std::floor (o.f[1])); g.x1 = static_cast<int> (std::ceil (o.f[2])); g.y1 = static_cast<int> (std::ceil (o.f[3]));
+    g.on = g.x1 > g.x0 && g.y1 > g.y0;
+    return true;
 }
 
 struct FeedbackGeom { float x0, y0, x1, y1, gain; };

@@ -92,7 +92,7 @@ public:
     OscUi() { setCanvas (kCanvasW, kCanvasH); configure (nullptr, 2, true); }
 
     // ----------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    /** The canvas is the whole screen (1280 x 800: the Play view's region, so that it can cover the host's Q-Link panel over the right edge); the pages live in the tab (y kTabY .. kTabY + kTabH). */
+    /** The canvas is the whole screen (1280 x 800: the Play view's region; every coordinate is a screen pixel); the pages live in the tab (y kTabY .. kTabY + kTabH). */
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
     void setCanvas (int w, int h)
     {

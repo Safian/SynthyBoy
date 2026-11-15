@@ -31,7 +31,7 @@ constexpr float kTitleSize = 24.0f;                              // pixels per e
 constexpr int kPlotX = 10, kPlotTop = 40, kPlotBottomMargin = 8, kPlotW = 380;
 constexpr int kEnvPoints = 256;
 constexpr int kOx = 23, kOy = 14, kPanelH = 190;                // the Env and LFO panels as they always were (tab coordinates of the old region)
-constexpr int kRegionW = 1280, kRegionH = 800, kTabY = 110, kTabH = 628;   // the region of the view: the whole screen (so that it can cover the host's Q-Link panel over the right edge); the Play tab (the compact oscillator view, the full screen, the Env and LFO panels) is its rows kTabY .. kTabY + kTabH
+constexpr int kRegionW = 1280, kRegionH = 800, kTabY = 110, kTabH = 628;   // the region of the view: the whole screen (every coordinate of the pages and of the touch is a screen pixel); the Play tab (the compact oscillator view, the full screen, the Env and LFO panels) is its rows kTabY .. kTabY + kTabH
 constexpr int kDisplayPoints = 256;                              // the points of a min / max overview (two polylines of this many vertices)
 
 /** The title of panel p (0 oscillator, 1 envelope, 2 LFO) for the instance n (1 ..). */
@@ -429,6 +429,8 @@ private:
     {
         const ui::theme::Look& T = ui::theme::L();
         sb.clear (0u);   // transparent: the GPU helper keeps the last picture until a Clear op, and the host's own widgets of the Env / LFO thirds must show through
+        if (qlinkPanel_)   // the host's Q-Link panel is up over the right edge: nothing of ours is drawn there (it stays transparent, the panel shows as on every other page)
+            sb.clip (0.0f, 0.0f, static_cast<float> (PageDetector::kPanelLineX), static_cast<float> (play::kRegionH));
         auto ground = [&] (float x0, float y0, float x1, float y1)   // the opaque ground of the look under the plugin's own pages (a gradient fill: no distance field)
         {
             sb.gradientRect (x0, y0, x1, y1, ui::theme::rgba (T.bg0), ui::theme::rgba (T.bg1));
@@ -439,12 +441,8 @@ private:
             const float w = osc_->isMain() ? 432.0f : static_cast<float> (play::kRegionW);
             ground (0.0f, static_cast<float> (play::kTabY), w, static_cast<float> (play::kTabY + play::kTabH));
         }
-        if (qlinkPanel_)   // the host's Q-Link panel (while a hardware knob is turned): covered over the whole height of the screen, the header and the tab bar included
-            ground (static_cast<float> (PageDetector::kPanelLineX), 0.0f, static_cast<float> (play::kRegionW), static_cast<float> (play::kRegionH));
         if (osc_ == nullptr || osc_->isMain())
             paintPanels (sb);   // the Env and LFO panels (not drawn while a full screen covers them)
-        if (qlinkPanel_ && (osc_ == nullptr || osc_->isMain()))
-            drawLfoSelector (sb);   // the host's LFO selector lies under the covered strip: its state is drawn here while the panel is up
         if (osc_ == nullptr)
             return;
         osc_->drawPage (sb);
@@ -453,19 +451,6 @@ private:
             drawPicture (sb, r);
         osc_->drawOnDisplay (sb);
         osc_->drawPopup (sb);   // the popups lie over the picture
-    }
-
-    /** The look of the host's "PLAY LFO" selector (slider and its value text under the LFO panel) for the selected LFO. */
-    void drawLfoSelector (gpu::SceneBuilder& sb) const
-    {
-        const int cx = 1057, y0 = play::kTabY + 217;
-        sb.text (static_cast<float> (cx) - 0.5f * sdf::textWidth ("PLAY LFO", 14.0f), static_cast<float> (y0 + 10), 14.0f, "PLAY LFO", gpu::rgba8 (0x8c, 0x8c, 0x8c, 255));
-        const int bx = 995, by = play::kTabY + 233, bw = 124, bh = 23;
-        sb.frame (static_cast<float> (bx), static_cast<float> (by), static_cast<float> (bx + bw), static_cast<float> (by + bh), 1.0f, gpu::rgba8 (0x6e, 0x6e, 0x70, 255));
-        const int fillW = 4 + (bw - 6) * (std::clamp (sel_[2], 1, play::kLfos) - 1) / (play::kLfos - 1);
-        sb.rect (static_cast<float> (bx + 1), static_cast<float> (by + 1), static_cast<float> (bx + 1 + fillW), static_cast<float> (by + bh - 1), gpu::rgba8 (0xd3, 0x11, 0x45, 255));
-        const std::string t = "LFO " + std::to_string (sel_[2]);
-        sb.text (static_cast<float> (cx) - 0.5f * sdf::textWidth (t.c_str(), 22.0f), static_cast<float> (by + bh + 27), 22.0f, t.c_str(), gpu::rgba8 (0xe6, 0xe6, 0xe6, 255));
     }
 
     /** The magnitudes of the first harmonics of the cycle (0 .. 1, a square root so that the weak ones show): the faint spectrum under the wave. */
@@ -564,6 +549,8 @@ private:
         float v[kEnvPoints > LfoView::kPoints ? kEnvPoints : LfoView::kPoints];
         for (int p = 1; p < kPanels; ++p)   // the oscillator panel is the plugin-drawn compact view now (osc_ui.h)
         {
+            if (qlinkPanel_ && p == 2)
+                continue;   // the LFO panel lies under the host's Q-Link panel: not drawn while it is up
             ui::display::Module m;
             const int x0 = kOx + panelX (p), y0 = kOy + kTabY;
             m.rect = { x0, y0, kPanelW, kPanelH };

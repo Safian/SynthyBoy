@@ -310,7 +310,7 @@ int main()
                 check (transparent == 0, std::string (depth == 0 ? "main: the oscillator third" : (depth == 1 ? "full screen: the whole region" : "popup: the whole region")) + " is opaque (" + std::to_string (transparent) + " transparent pixels)");
             }
         }
-        {   // the host's Q-Link panel is up: our picture covers the strip x >= 1024 over the whole height (header and tab bar included), in main and under a full screen
+        {   // the host's Q-Link panel is up: our picture is TRANSPARENT in the strip x >= 1024 over the whole height (the panel shows through), in main and under a full screen; left of it everything is drawn
             for (int depth = 0; depth < 2; ++depth)
             {
                 PlayView pv (1, 10.0);
@@ -322,11 +322,17 @@ int main()
                 in.nowMs = 500.0; pv.update (in);
                 std::vector<uint32_t> cv (static_cast<size_t> (PlayView::kW) * PlayView::kH);
                 pv.render (cv.data(), PlayView::kW, PlayView::kH);
-                int transparent = 0;
+                int drawn = 0, leftDrawn = 0;
                 for (int y = 0; y < PlayView::kH; ++y)
-                    for (int x = 1024; x < PlayView::kW; ++x)
-                        transparent += (cv[static_cast<size_t> (y) * PlayView::kW + static_cast<size_t> (x)] >> 24) != 255u;
-                check (transparent == 0, std::string ("Q-Link panel up, ") + (depth ? "full screen" : "main") + ": the strip x >= 1024 is covered over the whole screen height (" + std::to_string (transparent) + " transparent pixels)");
+                    for (int x = 0; x < PlayView::kW; ++x)
+                    {
+                        const bool px = (cv[static_cast<size_t> (y) * PlayView::kW + static_cast<size_t> (x)] >> 24) != 0u;
+                        if (x >= 1024)
+                            drawn += px;
+                        else if (y >= play::kTabY && y < play::kTabY + play::kTabH && x < 430)
+                            leftDrawn += px;
+                    }
+                check (drawn == 0 && leftDrawn > 100000, std::string ("Q-Link panel up, ") + (depth ? "full screen" : "main") + ": the strip x >= 1024 is transparent over the whole screen height (" + std::to_string (drawn) + " pixels drawn there), the rest is drawn (" + std::to_string (leftDrawn) + ")");
             }
         }
         // the cursor / dot off (no voice): still the same picture on both renderers
@@ -733,6 +739,23 @@ int main()
                 b2.glowEnd (1.0f, 1.0f);
                 check (gpu::glowEndGeom (s2->ops[2], gg) && ! gg.rect, "glow end without a rectangle: the whole canvas");
             }
+        }
+        {   // the clip: ops after it stay inside the rectangle, and the picture before it is kept outside (the CPU reference), an empty rectangle switches it off
+            auto sd = std::make_unique<gpu::SceneData>();
+            gpu::SceneBuilder sb (*sd);
+            sb.begin (gpu::kKindUi, 0, 100, 40);
+            sb.clear (0u);
+            sb.rect (0.0f, 0.0f, 100.0f, 10.0f, 0x0000ffffu);
+            sb.clip (0.0f, 0.0f, 60.0f, 40.0f);
+            sb.rect (0.0f, 0.0f, 100.0f, 40.0f, 0xff0000ffu);
+            sb.clipOff();
+            sb.rect (0.0f, 30.0f, 100.0f, 40.0f, 0x00ff00ffu);
+            renderSceneReference (*sd, cv);
+            check (redAt (cv, 100, 30, 20) == 255 && alphaAt (cv, 100, 80, 20) == 0 && blueAt (cv, 100, 80, 5) == 255 && redAt (cv, 100, 80, 5) == 0 && alphaAt (cv, 100, 80, 35) == 255, "clip: drawn inside the rectangle, the outside keeps what it had (transparent, or the earlier blue), after the clip is off everything is drawn");
+            gpu::SceneOp bad {};
+            bad.op = gpu::kOpClip; bad.f[0] = std::numeric_limits<float>::quiet_NaN();
+            gpu::ClipGeom cg;
+            check (! gpu::clipGeom (bad, cg), "clip: a NaN coordinate is refused");
         }
         {   // a big frame: 128 curves of 500 points (64000 vertices) go through the shared block and the CPU reference
             auto sd = std::make_unique<gpu::SceneData>();

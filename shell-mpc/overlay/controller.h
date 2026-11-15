@@ -309,21 +309,6 @@ private:
             return timing_.detectEveryMs;
         }
 
-        // the host's Q-Link panel appears and goes within a frame or two: while a Play view is on screen only its few sample pixels are read at every step (about every 33 ms, the GPU scene rhythm),
-        // so that our cover of the panel comes and goes with it (the full page check below is every 100 ms)
-        panelFast_ = false;
-        if (current_ >= 0 && current_ < layout::kNumViews && layout::kViews[current_].kind == layout::kKindPlay && rotationKnown() && nowMs < nextDetectMs_)
-        {
-            panelFast_ = true;
-            const bool on = detector_->panelPresent (rotation_);
-            if (on != qlinkPanel_)
-            {
-                qlinkPanel_ = on;
-                needFrame_ = true;
-                statusDue_ = true;     // the status file says it right away (the latency of the cover is measured through it)
-                ++qlinkPanelChanges_;
-            }
-        }
         if (nowMs >= nextDetectMs_)
         {
             nextDetectMs_ = nowMs + timing_.detectEveryMs;
@@ -364,13 +349,10 @@ private:
             else
                 unreadable_ = 0;
             instanceSeen_ = d.instanceSeen;
-            const bool playOnScreen = d.view >= 0 && d.view < layout::kNumViews && layout::kViews[d.view].kind == layout::kKindPlay && rotationKnown();
-            const bool panelNow = playOnScreen ? detector_->panelPresent (rotation_) : (d.view >= 0 && d.qlinkPanel);   // on a Play view the signature itself decides (the same pixels as the fast check)
-            if (qlinkPanel_ != panelNow)
+            if (qlinkPanel_ != (d.view >= 0 && d.qlinkPanel))
             {
-                qlinkPanel_ = panelNow;
+                qlinkPanel_ = d.view >= 0 && d.qlinkPanel;
                 needFrame_ = true;
-                statusDue_ = true;
                 ++qlinkPanelChanges_;
             }
             // which instance's page it is: the view's own markers are on screen, and the instance picture says whose page it is
@@ -1124,7 +1106,7 @@ private:
     MarkerSpec markers_[layout::kNumViews * 2];
     Rect regions_[layout::kNumViews];
     ITouchInput* touchIn_ = nullptr;
-    bool qlinkPanel_ = false, panelFast_ = false, autoReduced_ = false;
+    bool qlinkPanel_ = false, autoReduced_ = false;
     double renderAcc_ = 0.0, detailMeanMs_ = 0.0;
     int renderN_ = 0, overBudget_ = 0;
     unsigned long detailFrames_ = 0;

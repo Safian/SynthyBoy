@@ -80,6 +80,19 @@ inline void renderScene (const gpu::SceneData& s, std::vector<uint32_t>& cv)
     StyleState style;
     PaintState paint;
     int glowDepth = 0;   // inside GlowBegin .. GlowEnd: not drawn
+    // the clip: the picture before the clip is kept, and what the clipped ops drew outside the rectangle is put back when the clip changes or the scene ends
+    ClipGeom clipNow {};
+    std::vector<uint32_t> beforeClip;
+    auto endClip = [&]
+    {
+        if (! clipNow.on)
+            return;
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x)
+                if (x < clipNow.x0 || x >= clipNow.x1 || y < clipNow.y0 || y >= clipNow.y1)
+                    cv[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)] = beforeClip[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)];
+        clipNow.on = false;
+    };
     // the current polyline: without a Curve op the whole scene polyline over the full width; a Curve op selects vertices and a span of columns
     int first = 0, count = s.numDefault >= 2 && s.numDefault <= static_cast<uint32_t> (kMaxCurve) ? static_cast<int> (s.numDefault) : 0, x0 = 0, cols = w;
     auto columns = [&]
@@ -95,6 +108,17 @@ inline void renderScene (const gpu::SceneData& s, std::vector<uint32_t>& cv)
     for (uint32_t k = 0; k < s.numOps && k < static_cast<uint32_t> (kMaxOps); ++k)
     {
         const SceneOp& o = s.ops[k];
+        if (o.op == kOpClip)
+        {
+            endClip();
+            ClipGeom g;
+            if (clipGeom (o, g) && g.on)
+            {
+                clipNow = g;
+                beforeClip = cv;
+            }
+            continue;
+        }
         if (o.op == kOpGlowBegin) { int d; if (glowBeginGeom (o, d)) ++glowDepth; continue; }
         if (o.op == kOpGlowEnd) { if (glowDepth > 0) --glowDepth; continue; }
         if (glowDepth > 0)
@@ -319,6 +343,7 @@ inline void renderScene (const gpu::SceneData& s, std::vector<uint32_t>& cv)
             default: break;
         }
     }
+    endClip();
 }
 
 }} // namespace synthyboy_mpc::overlay

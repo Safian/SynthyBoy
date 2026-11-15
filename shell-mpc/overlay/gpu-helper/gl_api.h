@@ -84,6 +84,7 @@ typedef ptrdiff_t GLsizeiptr;
 #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
 #define GL_UNPACK_ALIGNMENT 0x0CF5
 #define GL_SAMPLES 0x80A9
+#define GL_SCISSOR_TEST 0x0C11
 
 // ---- GBM (Mesa gbm.h)
 struct gbm_device;
@@ -143,6 +144,8 @@ struct Api
     X (void, glClearColor, (GLfloat r, GLfloat g, GLfloat b, GLfloat a)) \
     X (void, glClear, (GLbitfield mask)) \
     X (void, glEnable, (GLenum cap)) \
+    X (void, glDisable, (GLenum cap)) \
+    X (void, glScissor, (GLint x, GLint y, GLsizei w, GLsizei h)) \
     X (void, glBlendFunc, (GLenum s, GLenum d)) \
     X (void, glDrawArrays, (GLenum mode, GLint first, GLsizei count)) \
     X (void, glFinish, (void)) \

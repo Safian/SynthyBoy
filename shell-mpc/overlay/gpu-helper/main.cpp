@@ -77,6 +77,7 @@ struct PaintU { float mode = 0.0f, a = 0.0f, inv = 1.0f; float c[4][4] = {}; }; 
 struct Draw
 {
     int prog = 0;                                   // the program (programFor)
+    int clipBox[4] = {};                            // type 4: the scissor box (GL pixels; width 0 = clip off)
     int type = 0;                                   // 0 draw, 1 clear (colour), 2 glow begin (the layer is cleared), 3 nothing (a marker of the end of the glow)
     int prim = 0, first = 0, count = 0, kind = 0;
     int target = -1;                                // -1 the picture, 0 / 1 the two glow layers
@@ -682,30 +683,52 @@ private:
         shown_ = false;
     }
 
-    void setTransform()
+    /** The two rows of the transform canvas -> clip space for the rotation: clip x = rx[0] * x + rx[1] * y + rx[2], clip y = ry[0] * x + ry[1] * y + ry[2]. */
+    void transformRows (float rx[3], float ry[3]) const
     {
         const float W = static_cast<float> (w_), H = static_cast<float> (h_);
         // the buffer pixel (bx, by) of the canvas pixel (x, y), memory row 0 = the top of the GL framebuffer: 90: (y, W - x); 270: (H - y, x); 0: (x, y); 180: (W - x, H - y)
-        if (rot_ == 90)
+        if (rot_ == 90)       { rx[0] = 0.0f; rx[1] = 2.0f / H; rx[2] = -1.0f; ry[0] = 2.0f / W; ry[1] = 0.0f; ry[2] = -1.0f; }
+        else if (rot_ == 270) { rx[0] = 0.0f; rx[1] = -2.0f / H; rx[2] = 1.0f; ry[0] = -2.0f / W; ry[1] = 0.0f; ry[2] = 1.0f; }
+        else if (rot_ == 0)   { rx[0] = 2.0f / W; rx[1] = 0.0f; rx[2] = -1.0f; ry[0] = 0.0f; ry[1] = -2.0f / H; ry[2] = 1.0f; }
+        else                  { rx[0] = -2.0f / W; rx[1] = 0.0f; rx[2] = 1.0f; ry[0] = 0.0f; ry[1] = 2.0f / H; ry[2] = -1.0f; }
+    }
+    void setTransform()
+    {
+        float rx[3], ry[3];
+        transformRows (rx, ry);
+        api_.glUniform3f (u_.rowX, rx[0], rx[1], rx[2]);
+        api_.glUniform3f (u_.rowY, ry[0], ry[1], ry[2]);
+    }
+    /** The scissor box (GL pixels of the picture buffer) of a canvas rectangle, rounded outward. */
+    void scissorBox (const ClipGeom& g, int box[4]) const
+    {
+        float rx[3], ry[3];
+        transformRows (rx, ry);
+        float lox = 1.0e9f, hix = -1.0e9f, loy = 1.0e9f, hiy = -1.0e9f;
+        const float xs[2] = { static_cast<float> (g.x0), static_cast<float> (g.x1) }, ys[2] = { static_cast<float> (g.y0), static_cast<float> (g.y1) };
+        for (float x : xs)
+            for (float y : ys)
+            {
+                const float px = ((rx[0] * x + rx[1] * y + rx[2]) * 0.5f + 0.5f) * static_cast<float> (bw_), py = ((ry[0] * x + ry[1] * y + ry[2]) * 0.5f + 0.5f) * static_cast<float> (bh_);
+                lox = std::min (lox, px); hix = std::max (hix, px); loy = std::min (loy, py); hiy = std::max (hiy, py);
+            }
+        box[0] = std::max (0, static_cast<int> (std::floor (lox + 0.001f)));
+        box[1] = std::max (0, static_cast<int> (std::floor (loy + 0.001f)));
+        box[2] = std::min (bw_, static_cast<int> (std::ceil (hix - 0.001f))) - box[0];
+        box[3] = std::min (bh_, static_cast<int> (std::ceil (hiy - 0.001f))) - box[1];
+    }
+    /** The clip applies to the picture only (not to the glow layers). */
+    void applyScissor()
+    {
+        const bool want = clipOn_ && curTarget_ < 0;
+        if (want)
         {
-            api_.glUniform3f (u_.rowX, 0.0f, 2.0f / H, -1.0f);
-            api_.glUniform3f (u_.rowY, 2.0f / W, 0.0f, -1.0f);
-        }
-        else if (rot_ == 270)
-        {
-            api_.glUniform3f (u_.rowX, 0.0f, -2.0f / H, 1.0f);
-            api_.glUniform3f (u_.rowY, -2.0f / W, 0.0f, 1.0f);
-        }
-        else if (rot_ == 0)
-        {
-            api_.glUniform3f (u_.rowX, 2.0f / W, 0.0f, -1.0f);
-            api_.glUniform3f (u_.rowY, 0.0f, -2.0f / H, 1.0f);
+            api_.glEnable (GL_SCISSOR_TEST);
+            api_.glScissor (clipBox_[0], clipBox_[1], std::max (0, clipBox_[2]), std::max (0, clipBox_[3]));
         }
         else
-        {
-            api_.glUniform3f (u_.rowX, -2.0f / W, 0.0f, 1.0f);
-            api_.glUniform3f (u_.rowY, 0.0f, 2.0f / H, -1.0f);
-        }
+            api_.glDisable (GL_SCISSOR_TEST);
     }
 
     // ---------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -797,6 +820,19 @@ private:
             const SceneOp& o = s.ops[k];
             switch (o.op)
             {
+                case kOpClip:
+                {
+                    ClipGeom g;
+                    if (! clipGeom (o, g))
+                        break;
+                    Draw d;
+                    d.type = 4;
+                    d.target = -1;
+                    if (g.on)
+                        scissorBox (g, d.clipBox);
+                    draws_.push_back (d);
+                    break;
+                }
                 case kOpStyle: applyStyle (o, style_); break;
                 case kOpPaint: applyPaint (o, paint_); break;
                 case kOpClear:
@@ -1471,6 +1507,8 @@ private:
         curTex_ = -1;
         haveLast_ = false;
         curProg_ = -1;
+        clipOn_ = false;
+        api_.glDisable (GL_SCISSOR_TEST);
         bool glowActive = false;
         for (const Draw& d : draws_)
         {
@@ -1485,6 +1523,14 @@ private:
                     bindTarget (0);
                     api_.glClear (GL_COLOR_BUFFER_BIT);
                 }
+                continue;
+            }
+            if (d.type == 4)
+            {
+                clipOn_ = d.clipBox[2] > 0 && d.clipBox[3] > 0;
+                for (int i = 0; i < 4; ++i)
+                    clipBox_[i] = d.clipBox[i];
+                applyScissor();
                 continue;
             }
             const bool glowPass = d.kind == 12 || d.kind == 13 || (d.kind == 10 && d.tex != 3);
@@ -1834,7 +1880,8 @@ private:
     std::vector<Pt> pts_, bandA_, bandB_;
     StyleState style_;
     PaintState paint_;
-    int glowDivisor_ = 4, buildTarget_ = -1, wantSamples_ = 0;
+    int glowDivisor_ = 4, buildTarget_ = -1, wantSamples_ = 0, clipBox_[4] = {};
+    bool clipOn_ = false;
     SceneData scene_ {};
     bool shown_ = false, dirty_ = false, planeOn_ = false;
     int w_ = 0, h_ = 0, bw_ = 0, bh_ = 0, panelX_ = 0, panelY_ = 0, rot_ = 90, exitCode_ = 0;
