@@ -14,9 +14,22 @@ using namespace uit;
 
 namespace
 {
+static std::string g_filter;
+
+static bool matchesFilter (const char* name)
+{
+    if (g_filter.empty())
+        return true;
+    if (g_filter == "master,voice")
+        return (std::strstr (name, "master") != nullptr || std::strstr (name, "voice") != nullptr);
+    return (std::strstr (name, g_filter.c_str()) != nullptr);
+}
+
 int g_images = 0;
 bool save (const std::string& dir, const char* name, const Scene& s, int scale = 1)
 {
+    if (! matchesFilter (name))
+        return true;
     check (! s.overflow(), std::string (name) + ": the scene fits (" + std::to_string (s.numOps()) + " ops of " + std::to_string (gpu::kMaxOps) + ")");
     const bool ok = writePng (dir + "/" + name, render (s), scale);
     check (ok, std::string (name) + ": written");
@@ -25,6 +38,8 @@ bool save (const std::string& dir, const char* name, const Scene& s, int scale =
 }
 bool saveImage (const std::string& dir, const char* name, const Image& im)
 {
+    if (! matchesFilter (name))
+        return true;
     const bool ok = writePng (dir + "/" + name, im, 1);
     check (ok, std::string (name) + ": written");
     g_images += ok;
@@ -597,6 +612,101 @@ static void renderAll (const std::string& dir)
             mkdir ("docs-tmp/mod-images", 0755);
             save ("docs-tmp/mod-images", "macros_view.png", s);
         }
+    // ---- Master full screen (Output, Pitch, Voices, Glide, Tuning/Scale, MPE)
+    {
+        static MasterScreen ms;
+        ms.place ({ 0, 0, 1280, 800 });
+        ms.volume.state.value = 0.75;
+        ms.spread.state.value = 1.0;
+        ms.tune.state.value = 0.5;
+        ms.portaSlope.state.value = 0.65;
+        ms.portaCurve.slope = 2.5f;
+        ms.keyboard.scaleType = 1; // Major
+        ms.keyboard.scaleKey = 0;  // C
+        ms.meters.peakL = 0.85f;
+        ms.meters.peakR = 0.72f;
+        ms.voiceMeter.activeVoices = 5;
+        ms.voiceMeter.polyphony = 16;
+        ms.scaleType.state.count = 20; ms.scaleType.setItem ("MAJOR");
+        ms.scaleKey.state.count = 12; ms.scaleKey.setItem ("C");
+        ms.scaleMode.state.count = 2; ms.scaleMode.setItem ("CONFORM");
+        ms.tuningScale.state.count = 4; ms.tuningScale.setItem ("12-TET");
+        ms.sameNote.state.count = 3; ms.sameNote.setItem ("STEAL");
+        ms.stealPriority.state.count = 5; ms.stealPriority.setItem ("NEWEST");
+        ms.voiceOverride.state.count = 2; ms.voiceOverride.setItem ("KILL");
+        ms.mpeMacro.state.count = 3; ms.mpeMacro.setItem ("OFF");
+        std::snprintf (ms.volume.state.valueText, sizeof ms.volume.state.valueText, "-6.0 dB");
+        std::snprintf (ms.spread.state.valueText, sizeof ms.spread.state.valueText, "100%%");
+        std::snprintf (ms.tune.state.valueText, sizeof ms.tune.state.valueText, "0.0 c");
+        std::snprintf (ms.portaTime.state.valueText, sizeof ms.portaTime.state.valueText, "120 ms");
+        std::snprintf (ms.portaSlope.state.valueText, sizeof ms.portaSlope.state.valueText, "+2.5");
+        ms.transpose.state.value = 0;
+        ms.bendUp.state.value = 2;
+        ms.bendDown.state.value = 2;
+        ms.bendLink.state.on = true;
+        ms.polyphony.state.value = 16;
+        ms.legato.state.on = false;
+        ms.polyLegato.state.on = false;
+        ms.phaseLegato.state.on = false;
+        ms.portaAlways.state.on = false;
+        ms.portaScaled.state.on = false;
+        ms.tuningA4.state.value = 440.0;
+        ms.mtsEsp.state.on = false;
+        ms.mpeOn.state.on = false;
+        ms.mpeBend.state.value = 48;
+        ms.setActiveGroup (0);
+        GScene s (1280, 800);
+        ms.draw (s.builder());
+        save (dir, "master_fullscreen.png", s);
+
+        // Tuning active QGroup
+        ms.setActiveGroup (4);
+        GScene sTun (1280, 800);
+        ms.draw (sTun.builder());
+        save (dir, "master_fullscreen_tuning.png", sTun);
+    }
+    // ---- Voice full screen (Step grid with drag drawing, Random, Scaling, Targets)
+    {
+        static VoiceScreen vs;
+        vs.place ({ 0, 0, 1280, 800 });
+        vs.length.state.value = 8;
+        vs.grid.length = 8;
+        vs.grid.activeRow = 0; // PAN
+        vs.grid.selectedStep = 2;
+        vs.grid.voiceStepMask = 0x05; // steps 0 and 2 sounding
+        const float panVals[8] = { -0.7f, -0.3f, 0.0f, 0.4f, 0.8f, 0.5f, -0.2f, -0.6f };
+        for (int s = 0; s < 8; ++s)
+            vs.grid.setValue (0, s, panVals[s]);
+        const float detuneVals[8] = { 0.1f, -0.2f, 0.35f, -0.15f, 0.5f, -0.4f, 0.2f, 0.0f };
+        for (int s = 0; s < 8; ++s)
+            vs.grid.setValue (1, s, detuneVals[s]);
+        const float cutoffVals[8] = { -0.5f, 0.2f, 0.6f, 0.8f, 0.4f, -0.1f, -0.3f, 0.0f };
+        for (int s = 0; s < 8; ++s)
+            vs.grid.setValue (2, s, cutoffVals[s]);
+        vs.randPan.state.value = 0.25; std::snprintf (vs.randPan.state.valueText, sizeof vs.randPan.state.valueText, "25%%");
+        vs.randDetune.state.value = 0.40; std::snprintf (vs.randDetune.state.valueText, sizeof vs.randDetune.state.valueText, "40 c");
+        vs.randCutoff.state.value = 0.15; std::snprintf (vs.randCutoff.state.valueText, sizeof vs.randCutoff.state.valueText, "15%%");
+        vs.randEnv.state.value = 0.10; std::snprintf (vs.randEnv.state.valueText, sizeof vs.randEnv.state.valueText, "10%%");
+        vs.scaleEnv.state.value = 0.50; std::snprintf (vs.scaleEnv.state.valueText, sizeof vs.scaleEnv.state.valueText, "100%%");
+        vs.scaleLfo.state.value = 0.50; std::snprintf (vs.scaleLfo.state.valueText, sizeof vs.scaleLfo.state.valueText, "100%%");
+        vs.scaleLfoMode.state.count = 2; vs.scaleLfoMode.setItem ("PERCENT");
+        vs.oscA.state.on = true;
+        vs.oscB.state.on = true;
+        vs.oscC.state.on = true;
+        vs.oscSub.state.on = true;
+        vs.oscNoise.state.on = true;
+        vs.setActiveGroup (0);
+        GScene s (1280, 800);
+        vs.draw (s.builder());
+        save (dir, "voice_fullscreen.png", s);
+
+        // Detune row active
+        vs.grid.activeRow = 1;
+        vs.grid.selectedStep = 4;
+        vs.setActiveGroup (1); // Random group active
+        GScene sDet (1280, 800);
+        vs.draw (sDet.builder());
+        save (dir, "voice_fullscreen_detune.png", sDet);
     }
 }
 
@@ -848,6 +958,7 @@ void renderFilterPages (const std::string& dir)
 int main (int argc, char** argv)
 {
     const std::string base = argc > 1 ? argv[1] : ".";
+    g_filter = argc > 2 ? argv[2] : (base.find ("mastervoice") != std::string::npos ? "master,voice" : "");
     for (int look = 1; look <= 3; ++look)
     {
         theme::setLook (look);

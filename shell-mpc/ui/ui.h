@@ -12,3 +12,6 @@
 #include "mixer_screen.h"
 #include "fx_screen.h"
 #endif
+#include "voice_grid.h"
+#include "voice_master.h"
+#include "voice_screen.h"
