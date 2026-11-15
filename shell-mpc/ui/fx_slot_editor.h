@@ -141,6 +141,10 @@ public:
         Composite::draw (sb);
         if (activeRow_ >= 0 && activeRow_ < numRows())
             groups[activeRow_].draw (sb);
+        // the other row on the page is a quad too: its chips stand there quietly, a touch on it makes it the active one (its four values are then on the Q-Links)
+        for (int r = firstRowOfPage(); r < firstRowOfPage() + rowsPerPage() && r < numRows(); ++r)
+            if (r != activeRow_ && r * 4 + 3 < numParams_)
+                groups[r].drawIdle (sb);
     }
 
 protected:

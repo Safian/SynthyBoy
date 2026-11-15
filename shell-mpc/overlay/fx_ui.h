@@ -92,9 +92,10 @@ public:
     int topPage() const noexcept { return listOpen_ ? kPageList : 0; }
 
     /** Reads the instance: the chain (only when its structure changed), the selected effect with its knobs, display data and Q group. */
-    void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input&)
+    void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
     {
         (void) nowMs;
+        live_ = in.live;
         // the structure of the chain: a signature of the parameters that decide it
         for (size_t i = 0; i < synthyboy::paramCount(); ++i)
             plain_[i] = inst.param (static_cast<int> (i));
@@ -261,6 +262,8 @@ private:
         }
         screen_.chainBar.plusCard.state.isPlus = true;
         screen_.chainBar.plusCard.setEnabled (numActive < ui::FxChainBar::kMaxSlots);
+        for (ui::FxSlotCard& sp : screen_.chainBar.spare)
+            sp.setEnabled (numActive < ui::FxChainBar::kMaxSlots);
     }
 
     /** The value of the parameter with the key `key` of the selected effect (plain), or `def` when the effect has no such parameter. */
@@ -448,6 +451,11 @@ private:
                 d.dist.type = static_cast<int> (std::lround (plainOfKey (item, type, inst, "distortion.type", 0.0f)));
                 d.dist.driveDb = plainOfKey (item, type, inst, "distortion.drive", 0.0f);
                 d.dist.mix = plainOfKey (item, type, inst, "distortion.mix", 100.0f) * 0.01f;
+                {   // where the signal is now: the meter of the rack's input (the bus meters are before their racks; the main rack: the master meter, after it), 0 = -60 dBFS .. 1 = full scale
+                    const int rk = std::clamp (synthyboy::fxItemRack (plain_.data(), item), 0, 2);
+                    const float pk = live_ != nullptr ? live_->stripPeak[rk == 0 ? 9 : 6 + rk] : 0.0f;
+                    d.dist.inLevel = pk > 0.005f ? std::pow (10.0f, (pk * 60.0f - 60.0f) / 20.0f) : -1.0f;
+                }
                 break;
             default: break;
         }
@@ -686,6 +694,7 @@ private:
     Item selectedItem_ { false, -1 };
     std::vector<Item> cardItems_;
     std::vector<float> plain_;
+    const synthyboy::LiveValues* live_ = nullptr;   // the readout of the last update (the meters)
     uint32_t chainSig_ = 0;
     int orderIdx_[16] = {};
     const char* typeNames_[synthyboy::kNumFxInstanceTypes - 1] = {};

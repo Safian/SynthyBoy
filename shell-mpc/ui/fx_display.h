@@ -4,7 +4,7 @@
 //               threshold the lower ratio, between the thresholds 1 : 1, above the upper threshold the upper ratio, and the make-up gain of the band
 //   DELAY       the echoes in time: the two taps (left above the line, right under it), the repeats with the feedback, the time axis in milliseconds (a tempo sync is turned into milliseconds by the owner)
 //   FX FILTER   the response of the filter (the owner computes it with the engine's own filter, the same as the filter page), a line with a faint fill
-//   DISTORTION  the transfer curve of the waveshaper (the type and the drive), with the identity as a reference
+//   DISTORTION  the transfer curve of the waveshaper (the type and the drive) over the whole plot, with the grid, the scales, the identity as a reference and the present signal level as a dot
 // The other effects have no display (the editor gives their knobs the room). Same contract as every component (core.h): a state in, no touch.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -31,7 +31,7 @@ public:
     struct CompState { CompBand band[3]; int bands = 0; int activeBand = 1; };   // bands: 0 multiband, 1 low only, 2 high only, 3 one band
     struct DelayState { float timeMs1 = 300.0f, timeMs2 = 300.0f, feedback = 0.4f; int style = 1; };   // style: 0 mono, 1 stereo, 2 ping pong, 3 mid ping pong, 4 tap -> delay
     struct FilterState { const float* db = nullptr; int n = 0; float cutoffHz = 1000.0f; };   // dB at 20 Hz .. 20 kHz (log axis), the cutoff for the mark
-    struct DistState { int type = 0; float driveDb = 0.0f; float mix = 1.0f; };
+    struct DistState { int type = 0; float driveDb = 0.0f; float mix = 1.0f; float inLevel = -1.0f; };   // inLevel: the present peak level of the signal at the input (0 .. 1 of full scale; < 0: not known)
 
     Kind kind = Kind::None;
     EqState eq;
@@ -246,7 +246,7 @@ private:
             p.textCentered ({ static_cast<int> (xOf (db)) - 24, sq.bottom() + 3, 48, 16 }, t, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
         }
         p.textRight ({ sq.x - 90, sq.y, 86, 16 }, "OUT dB", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
-        p.textRight ({ sq.right() - 60, sq.bottom() + 3, 60, 16 }, "IN dB", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        p.textLeft ({ sq.right() + 6, sq.bottom() + 3, 60, 16 }, "IN dB", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
         p.line (static_cast<float> (sq.x), static_cast<float> (sq.bottom()), static_cast<float> (sq.right()), static_cast<float> (sq.y), 1.0f, p.c (T.textFaint, 120));   // 1 : 1
         // the bands: all three of the multiband compressor, the one that is on for the others
         static const char* const kName[3] = { "LOW", "MID", "HIGH" };
@@ -366,24 +366,48 @@ private:
         p.line (cx, static_cast<float> (plot.y), cx, static_cast<float> (plot.bottom()), 1.0f, p.c (T.flow[1], 200));
     }
 
+    /** The transfer curve of the waveshaper over the whole plot (input -1 .. +1 across, output -1 .. +1 up): a grid every half, the scale on both axes, the identity as the reference, the curve with the drive and
+        the mix, and where the signal is just now (the present peak level at the input and its mirror: the two ends of the swing) as a dot on the curve. */
     void drawDistortion (Pen& p, gpu::SceneBuilder& sb, const Rect& plot) const
     {
         const theme::Look& T = theme::L();
-        const Rect sq { plot.x + std::max (0, (plot.w - plot.h) / 2), plot.y, std::min (plot.w, plot.h), plot.h };
-        const float cx = static_cast<float> (sq.x + sq.w / 2), cy = static_cast<float> (sq.y + sq.h / 2), r = static_cast<float> (sq.h) * 0.5f - 2.0f;
-        p.line (static_cast<float> (sq.x), cy, static_cast<float> (sq.right()), cy, 1.0f, p.c (T.grid, 255));
-        p.line (cx, static_cast<float> (sq.y), cx, static_cast<float> (sq.bottom()), 1.0f, p.c (T.grid, 255));
-        p.line (cx - r, cy + r, cx + r, cy - r, 1.0f, p.c (T.textFaint, 120));   // the identity
-        p.textCentered ({ static_cast<int> (cx) - 40, sq.bottom() + 3, 80, 16 }, "IN", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        const float cx = static_cast<float> (plot.x) + static_cast<float> (plot.w) * 0.5f, cy = static_cast<float> (plot.y) + static_cast<float> (plot.h) * 0.5f;
+        const float rx = static_cast<float> (plot.w) * 0.5f, ry = static_cast<float> (plot.h) * 0.5f - 2.0f;
+        auto xOf = [&] (float v) { return cx + rx * v; };
+        auto yOf = [&] (float v) { return cy - ry * v; };
+        for (int k = -2; k <= 2; ++k)   // the grid: -1, -0.5, 0, +0.5, +1
+        {
+            const float v = 0.5f * static_cast<float> (k);
+            const uint32_t gc = p.c (T.grid, k == 0 ? 255 : 150);
+            p.line (xOf (v), static_cast<float> (plot.y), xOf (v), static_cast<float> (plot.bottom()), 1.0f, gc);
+            p.line (static_cast<float> (plot.x), yOf (v), static_cast<float> (plot.right()), yOf (v), 1.0f, gc);
+            const char* t = k == -2 ? "-1" : (k == 0 ? "0" : (k == 2 ? "+1" : (k < 0 ? "-.5" : "+.5")));
+            p.textCentered ({ static_cast<int> (xOf (v)) - 24, plot.bottom() + 3, 48, 16 }, t, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+            p.textRight ({ plot.x - 42, static_cast<int> (yOf (v)) - 8, 38, 16 }, t, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+        }
+        p.textLeft ({ plot.x + 6, plot.y + 2, 60, 16 }, "OUT", T.fSmall + 1.0f, p.c (T.textDim, 255), T.fMin);
+        p.textRight ({ plot.right() - 66, plot.bottom() - 18, 60, 16 }, "IN", T.fSmall + 1.0f, p.c (T.textDim, 255), T.fMin);
+        p.line (xOf (-1.0f), yOf (-1.0f), xOf (1.0f), yOf (1.0f), 1.0f, p.c (T.textFaint, 120));   // the identity
         float rows[kPoints];
         for (int i = 0; i < kPoints; ++i)
         {
             const float x = -1.0f + 2.0f * static_cast<float> (i) / static_cast<float> (kPoints - 1);
             const float wet = shape (dist.type, dist.driveDb, x);
-            rows[i] = cy - r * ((1.0f - dist.mix) * x + dist.mix * wet);
+            rows[i] = yOf (std::clamp ((1.0f - dist.mix) * x + dist.mix * wet, -1.0f, 1.0f));
         }
-        sb.curve (rows, kPoints, sq.x, sq.w);
+        sb.curve (rows, kPoints, plot.x, plot.w);
         sb.stroke (0.8f, colour::rgba (T.flow[0], 255));
+        if (dist.inLevel > 0.0f)
+        {
+            const float lv = std::clamp (dist.inLevel, 0.0f, 1.0f);
+            for (int sgn = -1; sgn <= 1; sgn += 2)
+            {
+                const float x = static_cast<float> (sgn) * lv, wet = shape (dist.type, dist.driveDb, x);
+                const float y = yOf (std::clamp ((1.0f - dist.mix) * x + dist.mix * wet, -1.0f, 1.0f));
+                p.line (xOf (x), yOf (0.0f), xOf (x), y, 1.0f, p.c (T.flow[3], 140));
+                p.disc (xOf (x), y, 4.0f, p.c (T.flow[3], 255));
+            }
+        }
     }
 };
 

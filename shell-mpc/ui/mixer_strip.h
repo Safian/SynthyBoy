@@ -23,6 +23,11 @@ public:
         double value = 0.75, modValue = 0.75, defaultValue = 0.75;
         float peak = 0.0f, peakHold = 0.0f;
         bool hasMeter = true;
+        // the scale beside the track: up to kMaxTicks marks (position 0 .. 1 along the track, a short text: "0", "-12", "50") the owner sets from the parameter's range and unit
+        static constexpr int kMaxTicks = 6;
+        int numTicks = 0;
+        float tickPos[kMaxTicks] = {};
+        char tickText[kMaxTicks][6] = {};
     };
     State state;
     static constexpr double kDragPx = 200.0;
@@ -37,7 +42,7 @@ public:
     {
         int trackX = 0, trackTop = 0, trackBottom = 0, trackH = 0;
         int meterX = 0, meterW = 0;
-        int thumbW = 0, thumbH = 0, thumbY = 0;
+        int thumbW = 0, thumbH = 0, thumbY = 0, scaleX = 0, scaleW = 0;
         Rect labelBox, valueBox;
     };
 
@@ -55,13 +60,16 @@ public:
         g.trackBottom = bottom;
         g.trackH = std::max (10, bottom - top);
 
+        // from the left: the scale (its numbers), the track with the thumb, the level meter beside it (the thumb never covers it)
         g.meterW = state.hasMeter ? 8 : 0;
         const int contentW = rect_.w - 8;
-        g.trackX = rect_.x + 4 + (contentW - g.meterW) / 2;
-        g.meterX = g.trackX + 18;
-
-        g.thumbW = std::clamp (contentW - g.meterW - 4, 36, 56);
+        g.scaleW = state.numTicks > 0 ? 26 : 0;
+        g.thumbW = std::clamp (contentW - g.scaleW - g.meterW - 8, 32, 56);
         g.thumbH = 26;
+        const int used = g.scaleW + g.thumbW + (g.meterW > 0 ? 3 + g.meterW : 0), margin = std::max (0, (contentW - used) / 2);
+        g.scaleX = rect_.x + 4 + margin;
+        g.trackX = g.scaleX + g.scaleW + g.thumbW / 2;
+        g.meterX = g.trackX + g.thumbW / 2 + 3;
 
         const double clampedVal = std::clamp (state.value, 0.0, 1.0);
         g.thumbY = static_cast<int> (g.trackBottom - clampedVal * g.trackH - g.thumbH * 0.5f);
@@ -150,26 +158,31 @@ protected:
                 static_cast<float> (g.trackX), static_cast<float> (g.trackBottom),
                 2.0f, p.c (T.track, 200));
 
-        // Graduation tick marks
-        const float tickPositions[] = { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f };
-        for (float pos : tickPositions)
+        // Graduation: a tick and its number for every mark of the owner's scale (dB or %), the unity / default mark a little stronger
+        for (int i = 0; i < state.numTicks; ++i)
         {
-            const float ty = static_cast<float> (g.trackBottom - pos * g.trackH);
-            const float tickLen = (pos == 0.75f || pos == 0.0f) ? 6.0f : 4.0f;
-            p.line (static_cast<float> (g.trackX) - tickLen - 1.0f, ty,
-                    static_cast<float> (g.trackX) - 2.0f, ty,
-                    1.0f, p.c (T.textDim, (pos == 0.75f ? 220 : 120)));
+            const float ty = static_cast<float> (g.trackBottom) - std::clamp (state.tickPos[i], 0.0f, 1.0f) * static_cast<float> (g.trackH);
+            const int tx1 = g.trackX - g.thumbW / 2 - 2;
+            p.line (static_cast<float> (tx1 - 5), ty, static_cast<float> (tx1), ty, 1.0f, p.c (T.textDim, 170));
+            p.textRight ({ g.scaleX, static_cast<int> (ty) - 7, g.scaleW - 7, 14 }, state.tickText[i], T.fSmall, p.c (T.textFaint, 255), T.fMin);
         }
 
-        // 4. Integrated Peak Meter
+        // 4. Integrated Peak Meter: 0 = -60 dBFS .. 1 = full scale; the rail has a line every 12 dB, and at rest (no signal) a dim base line, so it never stands there as an empty box
         if (state.hasMeter)
         {
             const Rect meterSlot { g.meterX, g.trackTop, g.meterW, g.trackH };
             p.rect (meterSlot, p.c (T.panel1, 255));
             p.rrect (meterSlot, 2.0f, p.c (T.keyline, 160), 1.0f);
+            for (int k = 1; k <= 5; ++k)   // -48, -36, -24, -12, 0 dB
+            {
+                const float ly = static_cast<float> (g.trackBottom) - static_cast<float> (k) * 0.2f * static_cast<float> (g.trackH);
+                p.line (static_cast<float> (g.meterX + g.meterW - 3), ly, static_cast<float> (g.meterX + g.meterW), ly, 1.0f, p.c (T.textDim, k == 5 ? 200 : 110));
+            }
 
             const float pk = std::clamp (state.peak, 0.0f, 1.0f);
-            if (pk > 0.005f)
+            if (pk <= 0.005f)
+                p.rect ({ g.meterX + 1, g.trackBottom - 3, g.meterW - 2, 2 }, p.c (T.textFaint, 150));
+            else
             {
                 const int fillH = static_cast<int> (pk * static_cast<float> (g.trackH));
                 const int fillY = g.trackBottom - fillH;
@@ -203,7 +216,7 @@ protected:
         // 5. Thumb cap
         const Rect tr = thumbRect();
         p.block (tr, true);
-        p.rrect (tr, 4.0f, p.c (qFrame_ ? T.q : T.keylineHi, 255), qFrame_ ? 2.0f : 1.2f);
+        p.rrect (tr, 4.0f, p.c (T.keylineHi, 255), 1.2f);   // (the one Q frame is the group's)
         // Center index line on thumb
         const float midY = static_cast<float> (tr.y + tr.h / 2);
         p.line (static_cast<float> (tr.x + 4), midY,
@@ -366,15 +379,16 @@ protected:
         y += kCellH + gap;
         destButton.place ({ rect_.x + pad, y, innerW, kCellH });
         y += kCellH + gap;
-        // the Q group of the strip lies under the destination: a lane of kQLane over every member for its index chip
+        // the Q group of the strip lies under the destination, top down in the order of its numbers: LEVEL (the fader) 1, PAN 2, B1 3, B2 4; a lane of kQLane over every member for its index chip
         y += kQLane;
+        const int bottomY = rect_.bottom() - pad - 3 * kCellH - 3 * kQLane;
+        fader.place ({ rect_.x + pad, y, innerW, std::max (96, bottomY - y) });
+        y = std::max (y + 96, bottomY) + kQLane;
         pan.place ({ rect_.x + pad, y, innerW, kCellH });
         y += kCellH + kQLane;
         send1.place ({ rect_.x + pad, y, innerW, kCellH });
         y += kCellH + kQLane;
         send2.place ({ rect_.x + pad, y, innerW, kCellH });
-        y += kCellH + kQLane;
-        fader.place ({ rect_.x + pad, y, innerW, std::max (96, rect_.bottom() - y - pad) });
     }
 
     void drawUnder (Pen& p) const override

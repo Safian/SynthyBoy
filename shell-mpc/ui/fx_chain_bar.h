@@ -36,6 +36,7 @@ public:
         int rack = 0;              // 0 Main, 1 Bus 1, 2 Bus 2
         bool selected = false;
         bool isPlus = false;
+        bool faint = false;        // a free place after the first "+": the same add button, drawn quietly
         bool empty = false;
     };
     State state;
@@ -112,11 +113,19 @@ protected:
     void drawBody (Pen& p) const override
     {
         const theme::Look& T = theme::L();
+        if (state.faint)
+        {
+            p.rrect (rect_, T.rControl, p.c (T.keyline, 90), 1.0f);
+            const float cx = static_cast<float> (rect_.x + rect_.w / 2), cy = static_cast<float> (rect_.y + rect_.h / 2);
+            p.line (cx - 8.0f, cy, cx + 8.0f, cy, 1.5f, p.c (T.textFaint, 120));
+            p.line (cx, cy - 8.0f, cx, cy + 8.0f, 1.5f, p.c (T.textFaint, 120));
+            return;
+        }
         p.block (rect_, state.selected);
 
         // Selection / focus outline
         if (state.selected)
-            p.rrect (rect_, T.rControl, p.c (qFrame_ ? T.q : T.flow[0], 255), qFrame_ ? 2.0f : 1.6f);
+            p.rrect (rect_, T.rControl, p.c (T.flow[0], 255), 1.6f);
         else
             p.rrect (rect_, T.rControl, p.c (T.keyline, 160), 1.0f);
 
@@ -127,7 +136,7 @@ protected:
             const float cy = static_cast<float> (rect_.y + rect_.h / 2);
             p.line (cx - 10.0f, cy, cx + 10.0f, cy, 2.0f, p.c (T.textDim, 220));
             p.line (cx, cy - 10.0f, cx, cy + 10.0f, 2.0f, p.c (T.textDim, 220));
-            p.textCentered ({ rect_.x + 2, rect_.bottom() - 18, rect_.w - 4, 16 }, "ADD", T.fSmall, p.c (T.textDim, 180));
+            p.textCentered ({ rect_.x + 2, rect_.bottom() - 19, rect_.w - 4, 17 }, "ADD", T.fLabel - 2.0f, p.c (T.textDim, 220));
             return;
         }
 
@@ -135,7 +144,7 @@ protected:
         // Rack badge on top left: "M", "B1", "B2"
         const char* const rackBadges[] = { "MAIN", "BUS 1", "BUS 2" };
         const char* badge = (state.rack >= 0 && state.rack < 3) ? rackBadges[state.rack] : "SPLIT";
-        p.textLeft ({ rect_.x + 6, rect_.y + 4, std::max (0, rect_.w - 64), 16 }, badge, T.fSmall + 1.0f, p.c (T.flow[state.rack == 1 ? 1 : (state.rack == 2 ? 3 : 0)], 255), T.fMin);
+        p.textLeft ({ rect_.x + 6, rect_.y + 4, std::max (0, rect_.w - 64), 16 }, badge, T.fLabel - 2.0f, p.c (T.flow[state.rack == 1 ? 1 : (state.rack == 2 ? 3 : 0)], 255), T.fMin);
 
         // Power toggle on top right
         const Rect pr = powerRect();
@@ -153,9 +162,9 @@ protected:
         drawTypePictogram (p, rect_.x + rect_.w / 2, rect_.y + rect_.h / 2);
 
         // Type Name at bottom
-        p.textCentered ({ rect_.x + 2, rect_.bottom() - 17, rect_.w - 4, 15 },
+        p.textCentered ({ rect_.x + 2, rect_.bottom() - 21, rect_.w - 4, 19 },
                         state.name[0] != '\0' ? state.name : "EMPTY",
-                        T.fSmall, p.c (state.on ? T.text : T.textDim, 240));
+                        T.fLabel - 1.0f, p.c (state.on ? T.text : T.textDim, 255), T.fSmall);
     }
 
 private:
@@ -225,9 +234,10 @@ private:
 class FxChainBar : public Composite
 {
 public:
-    static constexpr int kMaxSlots = 16;
+    static constexpr int kMaxSlots = 16, kCardW = 124;
     FxSlotCard cards[kMaxSlots];
     FxSlotCard plusCard;
+    FxSlotCard spare[kMaxSlots];   // the free places after the "+" card, up to the room the bar has: a quiet "+" each (the same add)
 
     FxChainBar()
     {
@@ -238,6 +248,11 @@ public:
         }
         plusCard.state.isPlus = true;
         addKid (plusCard);
+        for (FxSlotCard& c : spare)
+        {
+            c.state.isPlus = c.state.faint = true;
+            addKid (c, false);
+        }
     }
 
     Size minSize() const override { return { 400, 68 }; }
@@ -261,6 +276,8 @@ public:
         for (int i = 0; i < kMaxSlots; ++i)
             cards[i].setId (baseId + i);
         plusCard.setId (baseId + kMaxSlots);
+        for (FxSlotCard& c : spare)
+            c.setId (baseId + kMaxSlots);
     }
 
 protected:
@@ -270,7 +287,8 @@ protected:
         const int gap = 6;
         const int cardH = rect_.h - 2 * pad;
         const int totalItems = numSlots_ + (numSlots_ < kMaxSlots ? 1 : 0);
-        const int cardW = totalItems > 0 ? std::clamp ((rect_.w - 2 * pad - (totalItems - 1) * gap) / totalItems, 64, 130) : 80;
+        // wide cards (the type name reads at its size); only when the chain is long do they shrink to the room
+        const int cardW = totalItems > 0 ? std::clamp ((rect_.w - 2 * pad - (totalItems - 1) * gap) / totalItems, 64, kCardW) : kCardW;
         laidOut_ = true;
 
         int x = rect_.x + pad;
@@ -282,6 +300,20 @@ protected:
         if (numSlots_ < kMaxSlots)
         {
             plusCard.place ({ x, rect_.y + pad, cardW, cardH });
+            x += cardW + gap;
+        }
+        // the places that are still free, as far as they fit into the bar (at most kMaxSlots places in all)
+        int places = numSlots_ + (numSlots_ < kMaxSlots ? 1 : 0);
+        for (int i = 0; i < kMaxSlots; ++i)
+        {
+            const bool fits = places < kMaxSlots && x + cardW <= rect_.right() - pad;
+            show (spare[i], fits);
+            if (fits)
+            {
+                spare[i].place ({ x, rect_.y + pad, cardW, cardH });
+                x += cardW + gap;
+                ++places;
+            }
         }
     }
 

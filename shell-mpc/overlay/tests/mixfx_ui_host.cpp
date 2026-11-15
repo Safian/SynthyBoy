@@ -73,6 +73,8 @@ void testMixerValuesAndWrites()
     check (std::string (m.strips[1].fader.state.valueText) == "50.0%", "the level of A is a percent (" + std::string (m.strips[1].fader.state.valueText) + ")");
     check (std::string (m.strips[5].fader.state.valueText).find ("dB") != std::string::npos, "the level of F1 is in dB (" + std::string (m.strips[5].fader.state.valueText) + ")");
     check (std::string (m.strips[7].fader.state.valueText).find ("dB") != std::string::npos, "the level of BUS 1 is in dB (" + std::string (m.strips[7].fader.state.valueText) + ")");
+    check (m.strips[1].fader.state.numTicks == 5 && std::string (m.strips[1].fader.state.tickText[4]) == "100" && std::string (m.strips[5].fader.state.tickText[0]) == "0", "the faders have their scale: 0 .. 100 for a percent, 0 / -12 / -24 / -48 for a dB level");
+    check (m.strips[1].fader.rect().y < m.strips[1].pan.rect().y && m.strips[1].pan.rect().y < m.strips[1].send1.rect().y && m.strips[1].send1.rect().y < m.strips[1].send2.rect().y, "the strip reads top down in the order of its Q numbers: LEVEL 1, PAN 2, B1 3, B2 4");
     check (std::string (m.strips[1].pan.state.valueText) == "L 35", "the pan is L 35 (" + std::string (m.strips[1].pan.state.valueText) + ")");
     check (std::string (m.strips[1].send1.state.valueText) == "40.0%", "the send is 40.0% (" + std::string (m.strips[1].send1.state.valueText) + ")");
     check (std::string (m.strips[7].pan.state.valueText) == "-" && ! m.strips[7].pan.enabled(), "a bus has no pan: a dash, dim");
@@ -161,6 +163,7 @@ void testFxChain()
     FxRig r;
     r.refresh();
     check (r.ui.numCards() == 0 && ! r.ui.screen().editorShown(), "an empty chain shows the hint and no editor");
+    check (r.ui.screen().chainBar.spare[0].rect().w > 0 && r.ui.screen().chainBar.spare[0].rect().x > r.ui.screen().chainBar.plusCard.rect().x, "after the + ADD card the free places stand in the bar as quiet plus cells");
     r.tap (r.ui.screen().chainBar.plusCard);
     check (r.ui.listOpen() && r.ui.list().state.count == synthyboy::kNumFxInstanceTypes - 1, "+ ADD opens the list of the effect types (13)");
     r.tapAt (20, 130);   // a tap beside the list closes it

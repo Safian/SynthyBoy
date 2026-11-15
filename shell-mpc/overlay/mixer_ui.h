@@ -112,6 +112,7 @@ public:
                 strip.fader.state.value = strip.fader.state.modValue = uibind::normOf (b.levelParam, plain);
                 strip.fader.state.defaultValue = uibind::normOf (b.levelParam, pi.def);
                 uibind::formatValue (pi, plain, strip.fader.state.valueText, sizeof strip.fader.state.valueText);   // the parameter's own unit: % or dB
+                setScale (strip.fader, pi);
                 strip.fader.setEnabled (true);
             }
             else
@@ -247,6 +248,34 @@ private:
     bool gestureDown_ = false;
     int qTargets_[4] = { -1, -1, -1, -1 };
     bool qSet_ = false;
+
+    /** The scale beside a fader from the parameter's own range: in dB the marks 0, -12, -24, -48 that lie in the range (0 is the stronger one), else a mark every 25 %. */
+    static void setScale (ui::Fader& f, const synthyboy::ParamInfo& pi)
+    {
+        f.state.numTicks = 0;
+        auto add = [&] (double plain, const char* text)
+        {
+            if (f.state.numTicks >= ui::Fader::State::kMaxTicks || plain < static_cast<double> (pi.min) - 1.0e-6 || plain > static_cast<double> (pi.max) + 1.0e-6)
+                return;
+            f.state.tickPos[f.state.numTicks] = static_cast<float> (synthyboy::toNormalised (pi, static_cast<float> (plain)));
+            ui::setText (f.state.tickText[f.state.numTicks], sizeof f.state.tickText[0], text);
+            ++f.state.numTicks;
+        };
+        if (pi.unit == synthyboy::Unit::dB)
+        {
+            add (0.0, "0"); add (-12.0, "-12"); add (-24.0, "-24"); add (-48.0, "-48");
+        }
+        else
+        {
+            const double lo = static_cast<double> (pi.min), hi = static_cast<double> (pi.max);
+            for (int k = 0; k <= 4; ++k)
+            {
+                char t[8];
+                std::snprintf (t, sizeof t, "%.0f", lo + (hi - lo) * 0.25 * k);
+                add (lo + (hi - lo) * 0.25 * k, t);
+            }
+        }
+    }
 
     void initBindings()
     {

@@ -45,10 +45,10 @@ protected:
         p.block (rect_, false);
         p.rrect (rect_, 4.0f, p.c (T.keyline, 140), 1.0f);
 
-        // Destination target nodes across the top of the routing bar
+        // the five destinations along the top: the one the selected strip feeds is lit, the others are faint
         struct Target { const char* label; float x; };
         const float w = static_cast<float> (rect_.w);
-        const float topY = static_cast<float> (rect_.y + 16);
+        const float chipB = static_cast<float> (rect_.y + 30);
         const Target targets[] = {
             { "FLT 1", rect_.x + w * 0.16f },
             { "FLT 2", rect_.x + w * 0.32f },
@@ -56,63 +56,63 @@ protected:
             { "DIRECT", rect_.x + w * 0.72f },
             { "MASTER", rect_.x + w * 0.90f }
         };
-
-        for (const Target& t : targets)
-        {
-            const Rect chip { static_cast<int> (t.x - 26.0f), rect_.y + 5, 52, 20 };
-            p.rrect (chip, 3.0f, p.c (T.keylineHi, 180), 1.0f);
-            p.textCentered (chip, t.label, T.fSmall, p.c (T.textDim, 230));
-        }
-
-        // Draw signal lines from each strip's bottom x to target top
         const float stripStep = w / static_cast<float> (kStrips);
-        const float botY = static_cast<float> (rect_.bottom() - 4);
-
-        for (int s = 0; s < kStrips; ++s)
+        const int s = selectedStrip;
+        const float sx = static_cast<float> (rect_.x) + (static_cast<float> (s) + 0.5f) * stripStep;
+        // where the selected strip goes: up to two of the targets (the blend of the two filters feeds both), or a neighbouring bus, or nothing
+        int to[2] = { -1, -1 };
+        float busX = -1.0f;
+        const int d = destinations[s];
+        if (s < 5)   // Sub, A, B, C, Noise
         {
-            const float sx = static_cast<float> (rect_.x) + (static_cast<float> (s) + 0.5f) * stripStep;
-            const bool sel = (s == selectedStrip);
-            const uint32_t col = sel ? p.c (T.flow[0], 255) : p.c (T.keyline, 130);
-            const float stroke = sel ? 2.0f : 1.0f;
-
-            float tx = targets[4].x; // default master
-            if (s < 5) // Sub, A, B, C, Noise
-            {
-                const int d = destinations[s];
-                if (d == 0) tx = targets[0].x;      // Filter 1
-                else if (d == 1) tx = targets[1].x; // Filter 2
-                else if (d == 2) tx = (targets[0].x + targets[1].x) * 0.5f; // Filters 1+2
-                else if (d == 3) tx = targets[2].x; // Main FX
-                else if (d == 4) tx = targets[3].x; // Direct
-                else if (d == 5) tx = (targets[0].x + targets[1].x) * 0.5f; // Blend
-                else continue; // None: no line
-            }
-            else if (s == 5 || s == 6) // F1, F2
-            {
-                const int d = destinations[s];
-                if (d == 0) tx = targets[2].x;      // Main FX
-                else if (d == 1) tx = targets[3].x; // Direct
-                else continue;
-            }
-            else if (s == 7 || s == 8) // Bus 1, Bus 2
-            {
-                const int d = destinations[s];
-                if (d == 0) tx = targets[2].x;      // Main
-                else if (d == 1) tx = targets[3].x; // Direct
-                else tx = (s == 7 ? sx + stripStep : sx - stripStep); // Other bus
-            }
-            else // Master
-            {
-                tx = targets[4].x;
-            }
-
-            // Draw clean connection
-            const float midY = (topY + botY) * 0.5f;
-            p.line (sx, botY, sx, midY, stroke, col);
-            p.line (sx, midY, tx, midY, stroke, col);
-            p.line (tx, midY, tx, topY + 9.0f, stroke, col);
-            p.disc (sx, botY, sel ? 3.0f : 2.0f, col);
+            if (d == 0) to[0] = 0;
+            else if (d == 1) to[0] = 1;
+            else if (d == 2 || d == 5) { to[0] = 0; to[1] = 1; }
+            else if (d == 3) to[0] = 2;
+            else if (d == 4) to[0] = 3;
         }
+        else if (s == 5 || s == 6)   // F1, F2
+        {
+            if (d == 0) to[0] = 2;
+            else if (d == 1) to[0] = 3;
+        }
+        else if (s == 7 || s == 8)   // Bus 1, Bus 2
+        {
+            if (d == 0) to[0] = 2;
+            else if (d == 1) to[0] = 3;
+            else busX = sx + (s == 7 ? stripStep : -stripStep);
+        }
+        else
+            to[0] = 4;   // Master
+        for (int i = 0; i < 5; ++i)
+        {
+            const Target& t = targets[i];
+            const bool lit = i == to[0] || i == to[1];
+            const Rect chip { static_cast<int> (t.x - 34.0f), rect_.y + 5, 68, 24 };
+            p.rrect (chip, 4.0f, p.c (lit ? T.flow[0] : T.keylineHi, lit ? 255 : 90), lit ? 1.6f : 1.0f);
+            p.textCentered (chip, t.label, T.fLabel - 1.0f, p.c (lit ? T.text : T.textFaint, lit ? 255 : 150));
+        }
+
+        // ONE line: from the selected strip up to its destination
+        const float botY = static_cast<float> (rect_.bottom() - 4), midY = (chipB + botY) * 0.5f + 3.0f;
+        const uint32_t col = p.c (T.flow[0], 255);
+        p.disc (sx, botY, 3.0f, col);
+        p.line (sx, botY, sx, midY, 2.0f, col);
+        for (int k = 0; k < 2; ++k)
+            if (to[k] >= 0)
+            {
+                const float tx = targets[to[k]].x;
+                p.line (std::min (sx, tx), midY, std::max (sx, tx), midY, 2.0f, col);
+                p.line (tx, midY, tx, chipB, 2.0f, col);
+            }
+        if (busX >= 0.0f)   // into the other bus: along the bar to its strip
+        {
+            p.line (std::min (sx, busX), midY, std::max (sx, busX), midY, 2.0f, col);
+            p.line (busX, midY, busX, botY, 2.0f, col);
+            p.disc (busX, botY, 3.0f, col);
+        }
+        if (to[0] < 0 && busX < 0.0f)   // no destination: the line ends at its strip's mid line
+            p.line (sx - 8.0f, midY, sx + 8.0f, midY, 2.0f, col);
     }
 };
 
