@@ -233,14 +233,15 @@ public:
         sb_.paintOff();
         rrect (r, t.rBlock, c (colour::rgba (hi ? t.keylineHi : t.keyline, 255)), t.frame);
     }
-    /** A control: smaller radius, the panel colour, a keyline (the colour of the Q-Link frame when `q`). */
-    void control (const Rect& r, bool q = false, bool hi = false)
+    /** A control: smaller radius, the panel colour, a keyline. One Q-Link group is marked by ONE frame around the whole group (QGroup::draw) and the index chips; a member never draws a frame of its own, so
+        `q` (the member is in the active group) does not change the keyline: the rule lives here, once, for every page. */
+    void control (const Rect& r, bool /*q*/ = false, bool hi = false)
     {
         const theme::Look& t = theme::L();
         paintY2 (static_cast<float> (r.y), static_cast<float> (r.bottom()), t.panel0, t.panel1, 255);
         rrect (r, t.rControl, c (colour::rgba (t.panel1, 255)));
         sb_.paintOff();
-        rrect (r, t.rControl, c (colour::rgba (q ? t.q : (hi ? t.keylineHi : t.keyline), 255)), q ? 1.6f : t.frame);
+        rrect (r, t.rControl, c (colour::rgba (hi ? t.keylineHi : t.keyline, 255)), t.frame);
     }
     /** A string with the pen at (x, baseline), `size` pixels per em (the font of sdf_font.h; any length, UTF-8). */
     void text (float x, float baseline, float size, const char* s, uint32_t col, float tracking = 0.0f) { if (s[0] != '\0' && size > 0.0f) sb_.text (x, baseline, size, s, col, tracking); }
@@ -369,17 +370,26 @@ public:
     }
     /** The index chip (1 .. 4) of a Q-Link group member: on the top left corner of the member, on the line above it, so that it covers none of the member's content. Every layout that has Q members leaves
         a lane of kQLane pixels above each of them (the gap between two stacked members, the strip above a row). One rule for every member of every group. */
-    void qIndex (const Rect& member, int index)
+    void qIndex (const Rect& member, int index, bool idle = false)
     {
         if (index < 1 || index > 4)
             return;
-        qChip ({ member.x + 4, std::max (0, member.y - 15), 18, 17 }, index);
+        qChip ({ member.x + 4, std::max (0, member.y - 15), 18, 17 }, index, idle);
     }
-    void qChip (const Rect& b, int index)
+    /** `idle`: the chip of a quad that is not the active one (a bank a touch or the page stepper selects): the keyline colours, quiet. */
+    void qChip (const Rect& b, int index, bool idle = false)
     {
-        rrect (b, 5.0f, c (colour::rgba (theme::L().q, 255)));
+        const theme::Look& T = theme::L();
         char d[2] = { static_cast<char> ('0' + index), '\0' };
-        textCentered (b, d, 13.0f, c (colour::rgba (theme::L().onBright, 255)), 8.0f);
+        if (idle)
+        {
+            rrect (b, 5.0f, c (colour::rgba (T.panel1, 255)));
+            rrect (b, 5.0f, c (colour::rgba (T.keylineHi, 255)), 1.0f);
+            textCentered (b, d, 13.0f, c (colour::rgba (T.textDim, 255)), 8.0f);
+            return;
+        }
+        rrect (b, 5.0f, c (colour::rgba (T.q, 255)));
+        textCentered (b, d, 13.0f, c (colour::rgba (T.onBright, 255)), 8.0f);
     }
 
 private:

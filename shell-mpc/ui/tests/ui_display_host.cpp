@@ -182,6 +182,60 @@ int main()
         auto lit = [&] (const Image& im) { long t = 0; for (int y = r.y; y < r.bottom(); ++y) for (int x = r.x; x < r.right(); ++x) t += std::abs (static_cast<int> (im.at (x, y) & 0xffffff) - static_cast<int> (bg & 0xffffff)) > 0x300000; return t; };
         check (different && lit (render (sd)) < lit (pics[0]), "the nine noise colours have nine pictures; switched off the picture stays, fainter (no word OFF)");
     }
+    // ---- review 2: the filter curve is cut at the frame (no flat stretch along the bottom); the Q frame is ONE frame; the macro frame runs around the cards; the toggle in a row of knobs has the cell of a knob
+    {
+        theme::setLook (1);
+        FilterDisplay fd;
+        fd.place ({ 0, 0, 1000, 400 });
+        float falling[200], deep[200];
+        for (int i = 0; i < 200; ++i)
+        {
+            falling[i] = 6.0f - 0.9f * static_cast<float> (i);   // runs under -48 dB at about point 60
+            deep[i] = i > 90 && i < 110 ? -90.0f : 0.0f;         // a deep notch in the middle
+        }
+        auto curves = [&] (const float* db)
+        {
+            fd.state.curve1 = db; fd.state.numPoints1 = 200; fd.state.dual = false; fd.state.activeFilter = 1;
+            Scene s (1000, 400);
+            fd.draw (s.builder());
+            int n = 0;
+            for (uint32_t k = 0; k < s.data->numOps; ++k)
+                n += s.data->ops[k].op == gpu::kOpCurve;
+            return n;
+        };
+        check (curves (falling) == 1, "filter display: a curve that falls under -48 dB is ONE line that ends on the bottom edge (no flat stretch)");
+        check (curves (deep) == 2, "filter display: a deep notch splits the line into two stretches that leave and re-enter through the bottom edge");
+        check (FilterDisplay::kDbBottom == -48.0, "filter display: the bottom of the plot is -48 dB");
+    }
+    {
+        // a member of a Q group never draws a yellow keyline of its own: the picture of an active member is the one of an inactive one
+        NumberField a, b;
+        a.place ({ 20, 20, 160, 64 }); b.place ({ 20, 20, 160, 64 });
+        b.setQ (true, 2);
+        Scene sa (200, 100), sb2 (200, 100);
+        a.draw (sa.builder()); b.draw (sb2.builder());
+        const Image ia = render (sa), ib = render (sb2);
+        long yellow = 0;
+        for (int y = 20; y < 84; ++y)
+            for (int x = 20; x < 180; ++x)
+                if (ia.at (x, y) != ib.at (x, y) && (ib.at (x, y) & 0xffffff) == (theme::L().q & 0xffffff))
+                    ++yellow;
+        check (yellow == 0, "Q rule: a member in the active group has no frame of its own (one frame is the group's)");
+        QGroup g;
+        g.set (0, &a); g.set (1, &b);
+        g.setActive (true);
+        Scene s1 (300, 200), s2 (300, 200);
+        g.draw (s1.builder());
+        const Rect around { 4, 4, 280, 180 };
+        g.draw (s2.builder(), &around);
+        check (render (s1).px != render (s2).px && drawnOutside (render (s2), { 3, 3, 282, 182 }, 0) == 0, "QGroup: the frame can run around cards (a rectangle given by the owner), inside the rectangle");
+        ToggleIcon t;
+        t.state.knobLike = true; t.setLabel ("ENV 1");
+        t.place ({ 0, 0, 100, 160 });
+        Scene st (100, 160);
+        t.draw (st.builder());
+        check (! st.overflow() && drawnOutside (render (st), { 0, 0, 100, 160 }, 0) == 0, "ToggleIcon in a row of knobs: the picture stays in its cell");
+    }
     theme::setLook (1);
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;

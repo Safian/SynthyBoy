@@ -50,19 +50,35 @@ public:
     }
     /** The one frame around the whole group (nothing when not active), inside the union, and the index of every member as a chip on the member's top left corner (Pen::qIndex): the lane above each
         member (kQLane) is left free by the layouts, so the chip covers no content. */
-    void draw (gpu::SceneBuilder& sb) const
+    void draw (gpu::SceneBuilder& sb, const Rect* around = nullptr) const
     {
         if (! active_)
             return;
-        const Rect u = rect();
-        if (u.empty())
+        const Rect m = rect();
+        if (m.empty())
             return;
+        // `around`: the rectangle of the frame when the members lie inside cards (a macro card, a block): the ONE frame then runs around the cards, never through them; the chips stay at the members
+        const Rect u = around && ! around->empty() ? Rect::unite (*around, m) : m;
         Pen pen (sb, true);
         Cell cell (sb, { u.x, u.y - 17, u.w, u.h + 17 });   // the chips of the top row sit on the top edge of the frame
         pen.rrect (u, theme::L().rControl, pen.c (theme::L().q, 255), 2.0f);
         for (int i = 0; i < kSlots; ++i)
             if (const Component* m = slot_[i])
                 pen.qIndex (m->rect(), i + 1);
+    }
+    /** The quiet index chips of a group that is NOT the active one (a bank that a touch on one of its members, or the page stepper, makes the active one): no frame, the four chips in the keyline colours. */
+    void drawIdle (gpu::SceneBuilder& sb) const
+    {
+        if (active_)
+            return;
+        const Rect u = rect();
+        if (u.empty())
+            return;
+        Pen pen (sb, true);
+        Cell cell (sb, { u.x, u.y - 17, u.w, 19 });
+        for (int i = 0; i < kSlots; ++i)
+            if (const Component* m = slot_[i]; m && ! m->rect().empty())
+                pen.qIndex (m->rect(), i + 1, true);
     }
     /** The hardware knob `knobIndex` (0 .. 3) turned by delta: routed to the member of that slot; nothing when not active or the slot is empty. */
     Change turn (int knobIndex, double delta)

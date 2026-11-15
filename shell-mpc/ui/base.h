@@ -402,7 +402,8 @@ public:
     struct State { int count = 0, index = 0; char text[48] = {}; bool dim = false, wrap = false; char caption[16] = {}; };   // caption: the name of the value (MODE, STACK ...), small at the top; the item below it
     State state;
 
-    Size minSize() const override { return { kMinW, 56 }; }
+    Size minSize() const override { return { std::min (kMinW, minWidth), 56 }; }
+    int minWidth = kMinW;   // a stepper in a grid of cells with short choices (SAME NOTE) may be narrower than the usual 208
     void setCaption (const char* s) { setText (state.caption, sizeof state.caption, s); }
     static constexpr int kMinW = 208;   // two 28 px zones, a text of about 14 characters at 22 pixels and the frame
     void setItem (const char* text) { setText (state.text, sizeof state.text, text); }
@@ -549,7 +550,11 @@ class ToggleIcon : public Component
 {
 public:
     enum class Icon : uint8_t { Power, PitchTrack, Generic };
-    struct State { bool on = false; Icon icon = Icon::Generic; char label[16] = {}; bool showState = false; };   // label (<= 8 characters, optional): under the icon; showState: " ON" / " OFF" after it
+    struct State
+    {
+        bool on = false; Icon icon = Icon::Generic; char label[16] = {}; bool showState = false;   // label (<= 8 characters, optional): under the icon; showState: " ON" / " OFF" after it
+        bool knobLike = false;   // in a row of knobs: no box; the icon where the dial is, the name on the line of the knob names, ON / OFF on the line of the values (the cell of a knob, the names in one line)
+    };
     State state;
 
     ToggleIcon() = default;
@@ -560,11 +565,16 @@ protected:
     void drawBody (Pen& p) const override
     {
         const theme::Look& T = theme::L();
+        if (state.knobLike)
+        {
+            drawKnobLike (p);
+            return;
+        }
         const Rect b = rect_.inset (4);
         p.control (b, qFrame_);
         char lab[32];
         std::snprintf (lab, sizeof lab, "%s%s", state.label, state.showState ? (state.on ? " ON" : " OFF") : "");
-        const bool wide = state.label[0] && b.w >= 2 * b.h;   // a wide row (the tuning column): the icon at the left, the label beside it
+        const bool wide = state.label[0] && b.w >= 2 * b.h && Pen::textWidth (lab, T.fValue - 4.0f) + static_cast<float> (b.h) + 22.0f <= static_cast<float> (b.w);   // a wide row (the tuning column) whose label fits beside the icon: the icon at the left, the label beside it; else the icon over the label
         const int labelH = state.label[0] && ! wide ? 18 : 0;
         float cx = static_cast<float> (b.x) + static_cast<float> (b.w) * 0.5f, cy = static_cast<float> (b.y) + static_cast<float> (b.h - labelH) * 0.5f;
         const float s = static_cast<float> (std::min (wide ? b.h : b.w, b.h - labelH)) * 0.32f;
@@ -599,6 +609,31 @@ protected:
                 break;
         }
         p.plain();
+    }
+    /** The knob-like variant: the same cell geometry as Knob::geom (the name above the value line, the dial area above them), so the names of a row of knobs and switches stand in one line. */
+    void drawKnobLike (Pen& p) const
+    {
+        const theme::Look& T = theme::L();
+        const float labelSize = state.label[0] != '\0' ? Pen::fitSize (state.label, static_cast<float> (rect_.w - 4), 20.0f, T.fLabel, T.fMin) : 0.0f;
+        const int labelH = labelSize > 0.0f ? static_cast<int> (std::ceil (labelSize * 0.89f)) + 7 : 0, valueH = 20, dialH = rect_.h - labelH - valueH;
+        const float d = std::clamp (static_cast<float> (std::min (rect_.w - 8, dialH - 8)), 6.0f, 140.0f);
+        const float cx = static_cast<float> (rect_.x) + static_cast<float> (rect_.w) * 0.5f, cy = static_cast<float> (rect_.y) + static_cast<float> (dialH) * 0.5f, s = d * 0.15f;
+        const uint32_t col = state.on ? p.c (T.flow[0], 255) : p.c (T.textFaint, 255);
+        p.style (1.0f, true);
+        if (state.icon == Icon::Power)
+        {
+            const float a0 = 1.5f * kPi + 0.6f;
+            p.arc (cx, cy, s * 1.5f, a0, a0 + 2.0f * kPi - 1.2f, 2.4f, col);
+            p.line (cx, cy - s * 1.5f - 1.0f, cx, cy - 1.0f, 2.4f, col);
+        }
+        else if (state.on)
+            p.disc (cx, cy, s * 1.3f, col);
+        else
+            p.arc (cx, cy, s * 1.4f, 0.0f, 2.0f * kPi, 2.4f, col);
+        p.plain();
+        if (labelSize > 0.0f)
+            p.textCentered ({ rect_.x + 2, rect_.bottom() - valueH - labelH + 2, rect_.w - 4, std::max (0, labelH - 4) }, state.label, labelSize, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
+        p.textCentered ({ rect_.x + 2, rect_.bottom() - valueH, rect_.w - 4, valueH }, state.on ? "ON" : "OFF", T.fLabel, p.c (state.on ? T.text : T.textDim, 255), T.fMin);
     }
     Change onDown (int x, int y, double now) override { tap_.down (x, y, now); return Change::none(); }
     Change onMove (int x, int y) override { tap_.move (x, y); return Change::none(); }
@@ -978,10 +1013,11 @@ inline const Def* find (int id) noexcept
 class PictogramSelector : public Component
 {
 public:
-    static constexpr int kMaxItems = 8, kCellW = 76, kCellH = 56;   // kCellW: the cell for the longest label of 6 characters; shorter labels need less (cellMinW)
+    static constexpr int kMaxItems = 10, kCellW = 76, kCellH = 56;   // kCellW: the cell for the longest label of 6 characters; shorter labels need less (cellMinW)
     struct Item { int pictogram = 0; char label[16] = {}; bool enabled = true; };
     struct State { int count = 0, index = 0; Item items[kMaxItems]; };
     State state;
+    int narrowestCell = 56;   // the least width of a cell (a bar of many short labels, like the instance numbers, sets it lower)
 
     void setItem (int i, int pictogramId, const char* label, bool enabled = true)
     {
@@ -1008,7 +1044,7 @@ public:
         int longest = 0;
         for (int i = 0; i < count(); ++i)
             longest = std::max (longest, static_cast<int> (std::strlen (state.items[i].label)));
-        return std::max (56, static_cast<int> (std::ceil (sdf::textWidth ("MMMMMMMMMMMMMMMM", theme::L().fLabel - 2.0f) * static_cast<float> (longest) / 16.0f)) + 10);
+        return std::max (narrowestCell, static_cast<int> (std::ceil (sdf::textWidth ("MMMMMMMMMMMMMMMM", theme::L().fLabel - 2.0f) * static_cast<float> (longest) / 16.0f)) + 10);
     }
     Size minSize() const override
     {
