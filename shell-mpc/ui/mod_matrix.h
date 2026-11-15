@@ -125,11 +125,12 @@ protected:
         int x = rect_.x + 4;
         number.place ({ x, y, 40, h });
         x += 40 + gap;
-        sourceBtn.place ({ x, y, 190, h });
-        x += 190 + 26;
-        destBtn.place ({ x, y, 280, h });
-        x += 280 + gap;
-        const int rightW = 72 + gap + 72 + gap + 84;
+        // the AMOUNT bar is the widest element of the row (the fields of the source and the target are only as wide as their names need; the bar gets the rest, at least 380 pixels)
+        sourceBtn.place ({ x, y, 176, h });
+        x += 176 + 26;
+        destBtn.place ({ x, y, 244, h });
+        x += 244 + gap;
+        const int rightW = 72 + gap + 72 + gap + 76;
         const int barW = std::max (160, rect_.right() - 4 - rightW - gap - x);
         amountBar.place ({ x, y, barW, h });
         x += barW + gap;
@@ -163,7 +164,7 @@ public:
     static constexpr int kWindowRows = 8;
     static constexpr int kBarH = 64, kHeaderH = 22;
     static constexpr int kRowH = ModRow::kRowH; // 72
-    static constexpr int kZoneW = 44;
+    static constexpr int kZoneW = 44, kThumbW = 24;
 
     enum FilterMode : uint8_t { FilterAll = 0, FilterSource, FilterDest };
 
@@ -432,8 +433,8 @@ public:
             Pen p (sb, true);
             Cell cell (sb, zoneRect());
             const Rect z = zoneRect();
-            p.rect (z.x + z.w / 2 - 1, z.y, z.x + z.w / 2 + 1, z.bottom(), p.c (theme::L().track, 120));
-            p.rrect (thumbRect(), 3.0f, p.c (theme::L().keylineHi, 220));
+            p.rrect ({ z.x + z.w / 2 - kThumbW / 2, z.y, kThumbW, z.h }, 6.0f, p.c (theme::L().track, 120));   // the track and the thumb are as wide as a finger needs (24 px)
+            p.rrect (thumbRect(), 6.0f, p.c (theme::L().keylineHi, 235));
         }
     }
 
@@ -462,7 +463,7 @@ public:
         const int n = std::max (1, visibleSlotCount_);
         const int thumbH = std::max (28, trackH * visibleRows() / n);
         const int thumbY = (trackH - thumbH) * firstRow_ / std::max (1, n - visibleRows());
-        return { z.x + kZoneW / 2 - 5, z.y + thumbY, 10, thumbH };
+        return { z.x + kZoneW / 2 - kThumbW / 2, z.y + thumbY, kThumbW, thumbH };
     }
 
     void setSourceFilterChoice (int choice)

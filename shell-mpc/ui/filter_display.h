@@ -30,7 +30,7 @@ class FilterDisplay : public Component
 public:
     static constexpr int kMaxCurve = 256;
     static constexpr double kFMin = 20.0, kFMax = 20000.0;
-    static constexpr double kDbTop = 30.0, kDbBottom = -36.0;
+    static constexpr double kDbTop = 30.0, kDbBottom = -48.0;   // the bottom of the plot is -48 dB: the curve leaves it through the frame (cut at the edge), it never runs along it
 
     struct State
     {
@@ -162,6 +162,11 @@ protected:
 
         // 1. The grid: the frequency decades (100 Hz, 1 kHz, 10 kHz) and the dB lines (+24, 0, -24) with their scale
         static const struct { double hz; const char* name; } kDecade[3] = { { 100.0, "100" }, { 1000.0, "1k" }, { 10000.0, "10k" } };
+                for (double hz : { 50.0, 200.0, 500.0, 2000.0, 5000.0 })
+        {
+            const float gx = xOfHz (hz, in);
+            p.line (gx, static_cast<float> (in.y), gx, static_cast<float> (in.bottom()), 1.0f, p.c (T.grid, 90));
+        }
         for (const auto& d : kDecade)
         {
             const float gx = xOfHz (d.hz, in);
@@ -170,13 +175,14 @@ protected:
         }
         p.textLeft ({ in.x + 2, in.bottom() + 3, 40, 16 }, "20 Hz", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
         p.textRight ({ in.right() - 52, in.bottom() + 3, 50, 16 }, "20 kHz", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
-        static const double kDb[3] = { 24.0, 0.0, -24.0 };
+        static const double kDb[4] = { 24.0, 0.0, -24.0, -48.0 };
         for (double db : kDb)
         {
             const float gy = dbToY (db, in);
-            p.line (static_cast<float> (in.x), gy, static_cast<float> (in.right()), gy, 1.0f, p.c (T.grid, db == 0.0 ? 255 : 150));
+            if (db > kDbBottom)
+                p.line (static_cast<float> (in.x), gy, static_cast<float> (in.right()), gy, 1.0f, p.c (T.grid, db == 0.0 ? 255 : 150));
             std::snprintf (buf, sizeof buf, "%+.0f", db);
-            p.textRight ({ in.x - 30, static_cast<int> (gy) - 8, 26, 16 }, db == 0.0 ? "0 dB" : buf, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
+            p.textRight ({ in.x - 34, std::min (static_cast<int> (gy) - 8, in.bottom() - 12), 30, 16 }, db == 0.0 ? "0 dB" : buf, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
         }
 
         // 2. The curves (a line of 1.5 .. 2 pixels, no glow)
@@ -315,26 +321,70 @@ protected:
 
     static float dbToY (double db, const Rect& in) noexcept
     {
-        const double margin = 8.0;
-        const double h = std::max (10.0, static_cast<double> (in.h) - 2.0 * margin);
-        const double pxPerDb = h / (kDbTop - kDbBottom);
-        const double y = in.y + margin + (kDbTop - db) * pxPerDb;
+        const double y = in.y + (kDbTop - db) * static_cast<double> (in.h) / (kDbTop - kDbBottom);
         return static_cast<float> (std::clamp (y, static_cast<double> (in.y), static_cast<double> (in.bottom())));
     }
 
+    /** The curve cut at the frame: every stretch of the curve inside the plot (-48 .. +30 dB) is drawn as a line of its own that ends exactly on the edge it leaves through, so a deep notch or a fall below the
+        floor runs out of the picture instead of lying along its bottom. The fill under a stretch goes down to the bottom of the plot. */
     static void drawCurvePolyline (gpu::SceneBuilder& sb, const Rect& in, const float* dbData, int nPoints, uint32_t col, int fillAlpha, float strokeWidth)
     {
         if (nPoints < 2 || in.w < 4)
             return;
-        float rows[gpu::kMaxCurve];
         const int n = std::min (nPoints, gpu::kMaxCurve);
-        for (int i = 0; i < n; ++i)
-            rows[i] = dbToY (static_cast<double> (dbData[i]), in);
-
-        sb.curve (rows, n, in.x, in.w);
-        if (fillAlpha > 0)
-            sb.fill (static_cast<float> (in.bottom()), colour::rgba (col, static_cast<uint32_t> (fillAlpha)));
-        sb.stroke (strokeWidth, colour::rgba (col, 255));
+        const double xStep = static_cast<double> (in.w) / static_cast<double> (n - 1);
+        auto inside = [&] (double db) { return db >= kDbBottom && db <= kDbTop; };
+        auto edgeOf = [&] (double db) { return db < kDbBottom ? kDbBottom : kDbTop; };
+        int i = 0;
+        while (i < n)
+        {
+            if (! inside (static_cast<double> (dbData[i])))
+            {
+                ++i;
+                continue;
+            }
+            int j = i;   // the stretch i .. j is inside
+            while (j + 1 < n && inside (static_cast<double> (dbData[j + 1])))
+                ++j;
+            double xa = static_cast<double> (in.x) + xStep * i, xb = static_cast<double> (in.x) + xStep * j;
+            double dbA = static_cast<double> (dbData[i]), dbB = static_cast<double> (dbData[j]);
+            if (i > 0)   // it came in through an edge: start where the line crosses it
+            {
+                const double d0 = static_cast<double> (dbData[i - 1]), d1 = dbA, e = edgeOf (d0);
+                const double t = d1 != d0 ? (e - d0) / (d1 - d0) : 1.0;
+                xa = static_cast<double> (in.x) + xStep * (i - 1 + std::clamp (t, 0.0, 1.0));
+                dbA = e;
+            }
+            if (j + 1 < n)   // it leaves through an edge
+            {
+                const double d0 = dbB, d1 = static_cast<double> (dbData[j + 1]), e = edgeOf (d1);
+                const double t = d1 != d0 ? (e - d0) / (d1 - d0) : 0.0;
+                xb = static_cast<double> (in.x) + xStep * (j + std::clamp (t, 0.0, 1.0));
+                dbB = e;
+            }
+            // the stretch as evenly spaced rows between xa and xb (a row about every 2 pixels at most)
+            const int w = std::max (1, static_cast<int> (std::lround (xb - xa)));
+            const int m = std::clamp (static_cast<int> (std::ceil (static_cast<double> (w) / xStep)) + 1, 2, gpu::kMaxCurve);
+            float rows[gpu::kMaxCurve];
+            for (int k = 0; k < m; ++k)
+            {
+                const double x = xa + (xb - xa) * static_cast<double> (k) / static_cast<double> (m - 1);
+                const double f = std::clamp ((x - static_cast<double> (in.x)) / xStep, 0.0, static_cast<double> (n - 1));
+                const int f0 = std::min (static_cast<int> (f), n - 2);
+                const double u = f - static_cast<double> (f0);
+                double db = static_cast<double> (dbData[f0]) * (1.0 - u) + static_cast<double> (dbData[f0 + 1]) * u;
+                if (k == 0) db = dbA;
+                if (k == m - 1) db = dbB;
+                rows[k] = dbToY (db, in);
+            }
+            if (sb.curve (rows, m, static_cast<int> (std::lround (xa)), w) >= 0)
+            {
+                if (fillAlpha > 0)
+                    sb.fill (static_cast<float> (in.bottom()), colour::rgba (col, static_cast<uint32_t> (fillAlpha)));
+                sb.stroke (strokeWidth, colour::rgba (col, 255));
+            }
+            i = j + 1;
+        }
     }
 
     Change onDown (int x, int y, double /*nowMs*/) override
@@ -537,7 +587,8 @@ public:
         power.state.icon = ToggleIcon::Icon::Power;
         env1.state.icon = ToggleIcon::Icon::Generic;
         env1.setLabel ("ENV 1");
-        env1.state.showState = true;
+        env1.state.showState = false;
+        env1.state.knobLike = true;   // the cell of a knob, the name in line with the other names of the row
         clean.state.icon = ToggleIcon::Icon::Generic;
         clean.setLabel ("CLEAN");
         clean.state.showState = true;
@@ -674,13 +725,7 @@ protected:
             for (int i = 0; i < 4; ++i)
             {
                 const int x = in.x + i * (cw + kSlotGap), w = i == 3 ? in.right() - x : cw;
-                if (cs[i] == &env1)
-                {
-                    const int h = std::min (in.h, 96);
-                    cs[i]->place ({ x, in.y + (in.h - h) / 2, w, h });
-                }
-                else
-                    cs[i]->place ({ x, in.y, w, in.h });
+                cs[i]->place ({ x, in.y, w, in.h });
             }
         };
         fourSlots (mainBlock_, &cutoff, &resonance, &drive, &mix);

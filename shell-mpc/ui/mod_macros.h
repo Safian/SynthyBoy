@@ -35,6 +35,16 @@ public:
         const Rect in { rect_.x + 10, rect_.y + 22, std::max (0, rect_.w - 20), std::max (0, rect_.h - 22 - 20) };
         if (in.w < 20 || in.h < 20)
             return;
+        // the scale: the level axis is linear in dB from -60 (the base line) to -12 dB (the top), the same as the 32 meters of the skin: faint lines every 12 dB with their numbers, so that a silent strip still says what it measures
+        for (int k = 1; k <= 4; ++k)
+        {
+            const float gy = static_cast<float> (in.bottom()) - static_cast<float> (k) * 0.25f * static_cast<float> (in.h - 4);
+            p.line (static_cast<float> (in.x), gy, static_cast<float> (in.right()), gy, 1.0f, p.c (T.grid, k == 4 ? 200 : 110));
+            char db[8];
+            std::snprintf (db, sizeof db, "%d", -60 + 12 * k);
+            p.textLeft ({ in.x + 3, static_cast<int> (gy) + 1, 30, 13 }, db, T.fSmall, p.c (T.textFaint, 255), T.fMin);
+        }
+        p.textRight ({ in.right() - 34, in.y, 32, 13 }, "dB", T.fSmall, p.c (T.textFaint, 255), T.fMin);
         p.textLeft ({ rect_.x + 14, rect_.y + 3, 200, 16 }, "SPECTRUM", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         static const struct { double hz; const char* name; } kDecade[3] = { { 100.0, "100" }, { 1000.0, "1k" }, { 10000.0, "10k" } };
         for (const auto& d : kDecade)
@@ -51,9 +61,13 @@ public:
         const int n = std::min (kPoints, static_cast<int> (gpu::kMaxCurve));
         for (int i = 0; i < n; ++i)
             rows[i] = static_cast<float> (in.bottom()) - std::clamp (levels[i], 0.0f, 1.0f) * static_cast<float> (in.h - 4);
+        bool sound = false;
+        for (int i = 0; i < n && ! sound; ++i)
+            sound = levels[i] > 0.0f;
         sb.curve (rows, n, in.x, in.w);
-        sb.fill (static_cast<float> (in.bottom()), colour::rgba (T.flow[0], 40));
-        sb.stroke (0.8f, colour::rgba (T.flow[0], 255));
+        if (sound)
+            sb.fill (static_cast<float> (in.bottom()), colour::rgba (T.flow[0], 40));
+        sb.stroke (0.8f, colour::rgba (T.flow[0], sound ? 255 : 90));   // no sound: only the faint base line
     }
 
 protected:
@@ -132,7 +146,7 @@ protected:
         knob.place ({ rect_.x + 6, rect_.y + kQLane + 2, rect_.w - 12, std::max (80, rect_.h - kQLane - 2 - kChipsH - 12) });
     }
 
-    void drawUnder (Pen& p) const override { p.block (rect_, qFrame_); }
+    void drawUnder (Pen& p) const override { p.block (rect_, false); }
 
     void drawExtra (Pen& p) const override
     {
@@ -246,7 +260,13 @@ public:
     void draw (gpu::SceneBuilder& sb) const override
     {
         Composite::draw (sb);
-        qgroup.draw (sb);
+        // one frame around the four cards of the bank (the knobs are the members; the frame never cuts through a card)
+        const int o = bank_ * 4;
+        Rect cards4 = cards[o].rect();
+        for (int k = 1; k < 4; ++k)
+            cards4 = Rect::unite (cards4, cards[o + k].rect());
+        const Rect around { cards4.x - 3, cards4.y - 3, cards4.w + 6, cards4.h + 6 };
+        qgroup.draw (sb, &around);
     }
 
     Change turnQ (int knobIndex, double delta) { return qgroup.turn (knobIndex, delta); }
