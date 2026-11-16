@@ -411,8 +411,15 @@ private:
         ui::FilterDisplay& disp = full_.display;
         if (c.id == kDisplayCutoff)
         {
-            uibind::writeNorm (inst, paramForId (kCutoff, editFilter_), c.value);
-            uibind::writeNorm (inst, paramForId (kResonance, editFilter_), disp.resonanceNorm());
+            const int targetFilter = sel_ == 3 ? disp.state.activeFilter : editFilter_;
+            if (sel_ == 3)
+                editFilter_ = targetFilter;
+            const int pCut = paramForId (kCutoff, targetFilter);
+            if (pCut >= 0)
+                uibind::writeNorm (inst, pCut, static_cast<float> (uibind::normOf (pCut, static_cast<float> (disp.cutoffHzFor (targetFilter)))));
+            const int pRes = paramForId (kResonance, targetFilter);
+            if (pRes >= 0)
+                uibind::writeNorm (inst, pRes, static_cast<float> (disp.resonanceNorm()));
             return;
         }
         if (c.id == kDisplayFormant)
@@ -541,6 +548,24 @@ private:
         const float* c2 = curve2_->curve();
         if (! c1 || ! c2)
             return;
+        const int on1Idx = paramForId (kPower, 1);
+        const int on2Idx = paramForId (kPower, 2);
+        const bool on1 = on1Idx >= 0 && inst.param (on1Idx) >= 0.5f;
+        const bool on2 = on2Idx >= 0 && inst.param (on2Idx) >= 0.5f;
+
+        if (! on1 && ! on2)
+            return;
+        if (on1 && ! on2)
+        {
+            std::copy (c1, c1 + CurveSource::kPoints, curveResult_.data());
+            return;
+        }
+        if (! on1 && on2)
+        {
+            std::copy (c2, c2 + CurveSource::kPoints, curveResult_.data());
+            return;
+        }
+
         const int rIdx = uibind::indexOfKey ("filter.routing");
         const int routing = rIdx >= 0 ? static_cast<int> (std::lround (inst.param (rIdx))) : 0;
         for (int i = 0; i < CurveSource::kPoints; ++i)
@@ -577,16 +602,38 @@ private:
             d.state.curveResult = nullptr;
             d.state.numPointsResult = 0;
         }
-        const int cutIdx = paramForId (kCutoff, editFilter_), resIdx = paramForId (kResonance, editFilter_);
+        const int cut1Idx = paramForId (kCutoff, 1), res1Idx = paramForId (kResonance, 1);
+        const int cut2Idx = paramForId (kCutoff, 2), res2Idx = paramForId (kResonance, 2);
+        const int on1Idx = paramForId (kPower, 1), on2Idx = paramForId (kPower, 2);
+        d.state.filter1On = on1Idx >= 0 && inst.param (on1Idx) >= 0.5f;
+        d.state.filter2On = on2Idx >= 0 && inst.param (on2Idx) >= 0.5f;
+
         if (! d.dragging())   // while a finger drags the point it follows the finger, not the parameter that is written a frame later
         {
-            d.state.cutoffHz = cutIdx >= 0 ? inst.param (cutIdx) : 12000.0;
-            d.state.resonancePct = resIdx >= 0 ? inst.param (resIdx) : 20.0;
+            d.state.cutoffHz1 = cut1Idx >= 0 ? inst.param (cut1Idx) : 12000.0;
+            d.state.resonancePct1 = res1Idx >= 0 ? inst.param (res1Idx) : 20.0;
+            d.state.cutoffHz2 = cut2Idx >= 0 ? inst.param (cut2Idx) : 12000.0;
+            d.state.resonancePct2 = res2Idx >= 0 ? inst.param (res2Idx) : 20.0;
+            d.state.cutoffHz = editFilter_ == 2 ? d.state.cutoffHz2 : d.state.cutoffHz1;
+            d.state.resonancePct = editFilter_ == 2 ? d.state.resonancePct2 : d.state.resonancePct1;
             if (d.state.isFormant)
             {
                 const int fxIdx = paramForId (kFormantX, editFilter_), fyIdx = paramForId (kFormantY, editFilter_);
                 d.state.formantX = fxIdx >= 0 ? inst.param (fxIdx) : 50.0;
                 d.state.formantY = fyIdx >= 0 ? inst.param (fyIdx) : 50.0;
+            }
+        }
+        else
+        {
+            if (d.state.activeFilter == 1)
+            {
+                d.state.cutoffHz2 = cut2Idx >= 0 ? inst.param (cut2Idx) : 12000.0;
+                d.state.resonancePct2 = res2Idx >= 0 ? inst.param (res2Idx) : 20.0;
+            }
+            else
+            {
+                d.state.cutoffHz1 = cut1Idx >= 0 ? inst.param (cut1Idx) : 12000.0;
+                d.state.resonancePct1 = res1Idx >= 0 ? inst.param (res1Idx) : 20.0;
             }
         }
         const CurveSource* active = editFilter_ == 2 ? curve2_.get() : curve1_.get();
@@ -598,6 +645,7 @@ private:
         {
             d.state.numVoices = std::min (live->activeVoices, 8);
             const int ktIdx = paramForId (kKeytrack, editFilter_);
+            const int cutIdx = editFilter_ == 2 ? cut2Idx : cut1Idx;
             const float kt = ktIdx >= 0 ? inst.param (ktIdx) * 0.01f : 0.0f;
             const float baseCutoff = cutIdx >= 0 ? inst.param (cutIdx) : 12000.0f;
             for (int v = 0; v < d.state.numVoices; ++v)
@@ -682,6 +730,7 @@ private:
             pullKnob (inst, *kid.first, kid.second);
         full_.combOffset.setEnabled (model == kModelComb);   // the comb offset has a meaning in the Comb model only
         full_.var.setEnabled (! formant);
+        full_.clean.setEnabled (model != kModelComb && ! formant);
         // OUTPUT: where the filter sends its signal (M: the effects, D: direct out, -: nowhere)
         const int dstIdx = paramForId (kRouteDest, f);
         if (dstIdx >= 0)

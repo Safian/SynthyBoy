@@ -50,6 +50,14 @@ public:
         double cutoffHz = 12000.0;
         double resonancePct = 20.0;
 
+        // Dual mode: cutoff & resonance of both filters
+        double cutoffHz1 = 12000.0;
+        double resonancePct1 = 20.0;
+        double cutoffHz2 = 12000.0;
+        double resonancePct2 = 20.0;
+        bool filter1On = true;
+        bool filter2On = true;
+
         // Modulated live values
         double liveCutoffHz = -1.0;
         double liveResoPct = -1.0;
@@ -78,13 +86,19 @@ public:
 
     Size minSize() const override { return { 240, 140 }; }
 
+    double cutoffHzFor (int f) const noexcept
+    {
+        return state.dual ? (f == 2 ? state.cutoffHz2 : state.cutoffHz1) : state.cutoffHz;
+    }
     double cutoffNorm() const noexcept
     {
-        return std::clamp (std::log10 (std::clamp (state.cutoffHz, kFMin, kFMax) / kFMin) / 3.0, 0.0, 1.0);
+        const double cut = state.dual ? (state.activeFilter == 2 ? state.cutoffHz2 : state.cutoffHz1) : state.cutoffHz;
+        return std::clamp (std::log10 (std::clamp (cut, kFMin, kFMax) / kFMin) / 3.0, 0.0, 1.0);
     }
     double resonanceNorm() const noexcept
     {
-        return std::clamp (state.resonancePct / 100.0, 0.0, 1.0);
+        const double res = state.dual ? (state.activeFilter == 2 ? state.resonancePct2 : state.resonancePct1) : state.resonancePct;
+        return std::clamp (res / 100.0, 0.0, 1.0);
     }
     double formantXNorm() const noexcept
     {
@@ -107,8 +121,26 @@ public:
         return static_cast<float> (pl.x) + static_cast<float> (std::clamp (std::log10 (std::clamp (hz, kFMin, kFMax) / kFMin) / 3.0, 0.0, 1.0) * pl.w);
     }
 
+    /** The y on a curve at a given frequency inside the plot. */
+    static float yOnCurve (const float* curve, int numPoints, double hz, const Rect& in) noexcept
+    {
+        if (! curve || numPoints < 2)
+            return static_cast<float> (in.bottom()) - static_cast<float> (0.2 * in.h);
+        const double norm = std::clamp (std::log10 (std::clamp (hz, kFMin, kFMax) / kFMin) / 3.0, 0.0, 1.0);
+        const double fIdx = norm * static_cast<double> (numPoints - 1);
+        const int i0 = std::clamp (static_cast<int> (fIdx), 0, numPoints - 2);
+        const double frac = fIdx - static_cast<double> (i0);
+        const double db = static_cast<double> (curve[i0]) * (1.0 - frac) + static_cast<double> (curve[i0 + 1]) * frac;
+        return dbToY (db, in);
+    }
+
     /** Center of the interactive handle on screen. */
     void handlePoint (float& hx, float& hy) const noexcept
+    {
+        handlePointFor (state.activeFilter, hx, hy);
+    }
+
+    void handlePointFor (int f, float& hx, float& hy) const noexcept
     {
         const Rect in = plot();
         if (state.isFormant)
@@ -118,8 +150,11 @@ public:
         }
         else
         {
-            hx = static_cast<float> (in.x) + static_cast<float> (cutoffNorm() * in.w);
-            hy = static_cast<float> (in.bottom()) - static_cast<float> (resonanceNorm() * in.h);
+            const double cut = state.dual ? (f == 2 ? state.cutoffHz2 : state.cutoffHz1) : state.cutoffHz;
+            const float* cData = f == 2 ? state.curve2 : state.curve1;
+            const int cLen = f == 2 ? state.numPoints2 : state.numPoints1;
+            hx = xOfHz (cut, in);
+            hy = yOnCurve (cData, cLen, cut, in);
         }
     }
     bool dragging() const noexcept { return dragging_; }
@@ -185,15 +220,15 @@ protected:
             p.textRight ({ in.x - 34, std::min (static_cast<int> (gy) - 8, in.bottom() - 12), 30, 16 }, db == 0.0 ? "0 dB" : buf, T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
         }
 
-        // 2. The curves (a line of 1.5 .. 2 pixels, no glow)
+        // 2. The curves (thin crisp lines, labelled F1 / F2, resulting curve as main curve)
         if (state.dual)
         {
             if (state.curve1 && state.numPoints1 >= 2)
-                drawCurvePolyline (sb, in, state.curve1, state.numPoints1, filterColour (1), 0, 0.8f);
+                drawCurvePolyline (sb, in, state.curve1, state.numPoints1, filterColour (1), 0, 1.0f);
             if (state.curve2 && state.numPoints2 >= 2)
-                drawCurvePolyline (sb, in, state.curve2, state.numPoints2, filterColour (2), 0, 0.8f);
+                drawCurvePolyline (sb, in, state.curve2, state.numPoints2, filterColour (2), 0, 1.0f);
             if (state.curveResult && state.numPointsResult >= 2)
-                drawCurvePolyline (sb, in, state.curveResult, state.numPointsResult, T.text, 0, 1.0f);
+                drawCurvePolyline (sb, in, state.curveResult, state.numPointsResult, T.text, 0, 1.8f);
             // the legend of the three lines
             const struct { const char* name; uint32_t col; } kLegend[3] = { { "F1", filterColour (1) }, { "F2", filterColour (2) }, { "F1+F2", T.text } };
             int lx = in.x + 8;
@@ -210,7 +245,7 @@ protected:
             const float* cData = state.activeFilter == 2 ? state.curve2 : state.curve1;
             const int cLen = state.activeFilter == 2 ? state.numPoints2 : state.numPoints1;
             if (cData && cLen >= 2)
-                drawCurvePolyline (sb, in, cData, cLen, filterColour (state.activeFilter), 34, 0.8f);
+                drawCurvePolyline (sb, in, cData, cLen, filterColour (state.activeFilter), 34, 1.8f);
             std::snprintf (buf, sizeof buf, "FILTER %d", state.activeFilter);
             p.textLeft ({ in.x + 8, in.y + 3, 120, 16 }, buf, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         }
@@ -232,21 +267,51 @@ protected:
             p.line (lx, static_cast<float> (in.y + 2), lx, static_cast<float> (in.bottom() - 2), 1.2f, p.c (T.flow[1], 200));
         }
 
-        // 5. The handle (cutoff and resonance); while a finger drags it the values are written next to it
-        float hx = 0.0f, hy = 0.0f;
-        handlePoint (hx, hy);
-        const uint32_t handleCol = filterColour (state.activeFilter);
-        p.disc (hx, hy, 4.0f, p.c (handleCol, 255));
-        p.arc (hx, hy, 8.5f, 0.0f, 2.0f * kPi, 1.6f, p.c (handleCol, 220));
-        if (dragging_)
+        // 5. The cutoff handles on their curves
+        if (state.dual)
         {
-            char hz[16], text[40];
-            if (state.cutoffHz >= 1000.0)
-                std::snprintf (hz, sizeof hz, "%.2f kHz", state.cutoffHz / 1000.0);
-            else
-                std::snprintf (hz, sizeof hz, "%.0f Hz", state.cutoffHz);
-            std::snprintf (text, sizeof text, "%s   RESO %.0f%%", hz, state.resonancePct);
-            bubble (p, in, hx, hy, text);
+            float hx1 = 0.0f, hy1 = 0.0f, hx2 = 0.0f, hy2 = 0.0f;
+            handlePointFor (1, hx1, hy1);
+            handlePointFor (2, hx2, hy2);
+            const uint32_t col1 = filterColour (1);
+            const uint32_t col2 = filterColour (2);
+            p.disc (hx1, hy1, 4.0f, p.c (col1, 255));
+            p.arc (hx1, hy1, 8.5f, 0.0f, 2.0f * kPi, 1.6f, p.c (col1, 220));
+            p.disc (hx2, hy2, 4.0f, p.c (col2, 255));
+            p.arc (hx2, hy2, 8.5f, 0.0f, 2.0f * kPi, 1.6f, p.c (col2, 220));
+
+            if (dragging_)
+            {
+                const double curCut = state.activeFilter == 2 ? state.cutoffHz2 : state.cutoffHz1;
+                const double curRes = state.activeFilter == 2 ? state.resonancePct2 : state.resonancePct1;
+                const float curHx = state.activeFilter == 2 ? hx2 : hx1;
+                const float curHy = state.activeFilter == 2 ? hy2 : hy1;
+                char hz[16], text[40];
+                if (curCut >= 1000.0)
+                    std::snprintf (hz, sizeof hz, "%.2f kHz", curCut / 1000.0);
+                else
+                    std::snprintf (hz, sizeof hz, "%.0f Hz", curCut);
+                std::snprintf (text, sizeof text, "F%d: %s   RESO %.0f%%", state.activeFilter, hz, curRes);
+                bubble (p, in, curHx, curHy, text);
+            }
+        }
+        else
+        {
+            float hx = 0.0f, hy = 0.0f;
+            handlePoint (hx, hy);
+            const uint32_t handleCol = filterColour (state.activeFilter);
+            p.disc (hx, hy, 4.0f, p.c (handleCol, 255));
+            p.arc (hx, hy, 8.5f, 0.0f, 2.0f * kPi, 1.6f, p.c (handleCol, 220));
+            if (dragging_)
+            {
+                char hz[16], text[40];
+                if (state.cutoffHz >= 1000.0)
+                    std::snprintf (hz, sizeof hz, "%.2f kHz", state.cutoffHz / 1000.0);
+                else
+                    std::snprintf (hz, sizeof hz, "%.0f Hz", state.cutoffHz);
+                std::snprintf (text, sizeof text, "%s   RESO %.0f%%", hz, state.resonancePct);
+                bubble (p, in, hx, hy, text);
+            }
         }
     }
 
@@ -390,6 +455,17 @@ protected:
     Change onDown (int x, int y, double /*nowMs*/) override
     {
         dragging_ = true;
+        if (state.dual && ! state.isFormant)
+        {
+            float hx1 = 0.0f, hy1 = 0.0f, hx2 = 0.0f, hy2 = 0.0f;
+            handlePointFor (1, hx1, hy1);
+            handlePointFor (2, hx2, hy2);
+            const float dx1 = static_cast<float> (x) - hx1, dy1 = static_cast<float> (y) - hy1;
+            const float dx2 = static_cast<float> (x) - hx2, dy2 = static_cast<float> (y) - hy2;
+            const float distSq1 = dx1 * dx1 + dy1 * dy1;
+            const float distSq2 = dx2 * dx2 + dy2 * dy2;
+            state.activeFilter = distSq2 < distSq1 ? 2 : 1;
+        }
         return updateTouch (x, y);
     }
 
@@ -421,8 +497,23 @@ protected:
         }
         else
         {
-            state.cutoffHz = kFMin * std::pow (10.0, normX * 3.0);
-            state.resonancePct = normY * 100.0;
+            const double newCut = kFMin * std::pow (10.0, normX * 3.0);
+            const double newRes = normY * 100.0;
+            if (state.dual)
+            {
+                if (state.activeFilter == 2)
+                {
+                    state.cutoffHz2 = newCut;
+                    state.resonancePct2 = newRes;
+                }
+                else
+                {
+                    state.cutoffHz1 = newCut;
+                    state.resonancePct1 = newRes;
+                }
+            }
+            state.cutoffHz = newCut;
+            state.resonancePct = newRes;
             return Change::normalised (idCutoff_, normX);
         }
     }
@@ -552,6 +643,95 @@ protected:
 };
 
 // ===============================================================================================================================
+/** FilterKnob: a knob that, when disabled, dims the dial and its value text consistently. */
+class FilterKnob : public Knob
+{
+public:
+    using Knob::Knob;
+
+protected:
+    void drawBody (Pen& p) const override
+    {
+        if (enabled_)
+        {
+            Knob::drawBody (p);
+            return;
+        }
+        const theme::Look& T = theme::L();
+        const Geom g = geom();
+        const float cx = g.cx, cy = g.cy, R = g.radius, tw = g.stroke;
+        const float a0 = angleOf (0.0), a1 = angleOf (1.0), av = angleOf (state.value), am = angleOf (0.5);
+        p.style (1.0f, true);
+        p.arc (cx, cy, R, a0, a1, g.track, p.c (T.track, 255));
+        if (state.bipolar)
+            p.line (cx + (R - tw * 0.5f - 2.0f) * std::cos (am), cy + (R - tw * 0.5f - 2.0f) * std::sin (am), cx + (R + tw * 0.5f + 2.0f) * std::cos (am), cy + (R + tw * 0.5f + 2.0f) * std::sin (am), 1.5f, p.c (T.textFaint, 200));
+        p.line (cx + R * 0.25f * std::cos (av), cy + R * 0.25f * std::sin (av), cx + R * 0.6f * std::cos (av), cy + R * 0.6f * std::sin (av), 1.6f, p.c (T.textDim, 200));
+        float vx, vy;
+        valuePoint (vx, vy);
+        p.disc (vx, vy, std::max (2.5f, tw * 0.9f), p.c (T.textDim, 200));
+        p.plain();
+        if (g.labelSize > 0.0f)
+        {
+            if (state.side)
+                p.textLeft (g.labelBox, state.label, g.labelSize, p.c (T.textDim, 255), T.fMin);
+            else
+                p.textCentered (g.labelBox, state.label, g.labelSize, p.c (T.textDim, 255), T.fMin);
+        }
+        if (g.valueBox.h > 0)
+        {
+            if (state.side)
+                p.textLeft (g.valueBox, state.valueText, g.valueSize, p.c (T.textDim, 255), T.fMin);
+            else
+                p.textCentered (g.valueBox, state.valueText, g.valueSize, p.c (T.textDim, 255), T.fMin);
+        }
+    }
+};
+
+/** FilterToggle: a toggle button that dims both the icon and label text when disabled. */
+class FilterToggle : public ToggleIcon
+{
+public:
+    using ToggleIcon::ToggleIcon;
+
+protected:
+    void drawBody (Pen& p) const override
+    {
+        if (enabled_)
+        {
+            ToggleIcon::drawBody (p);
+            return;
+        }
+        const theme::Look& T = theme::L();
+        if (state.knobLike)
+        {
+            const float labelSize = state.label[0] != '\0' ? Pen::fitSize (state.label, static_cast<float> (rect_.w - 4), 20.0f, T.fLabel, T.fMin) : 0.0f;
+            const int labelH = labelSize > 0.0f ? static_cast<int> (std::ceil (labelSize * 0.89f)) + 7 : 0, valueH = 20, dialH = rect_.h - labelH - valueH;
+            const float d = std::clamp (static_cast<float> (std::min (rect_.w - 8, dialH - 8)), 6.0f, 140.0f);
+            const float cx = static_cast<float> (rect_.x) + static_cast<float> (rect_.w) * 0.5f, cy = static_cast<float> (rect_.y) + static_cast<float> (dialH) * 0.5f, s = d * 0.15f;
+            p.style (1.0f, true);
+            p.arc (cx, cy, s * 1.4f, 0.0f, 2.0f * kPi, 2.4f, p.c (T.textFaint, 200));
+            p.plain();
+            if (labelSize > 0.0f)
+                p.textCentered ({ rect_.x + 2, rect_.bottom() - valueH - labelH + 2, rect_.w - 4, std::max (0, labelH - 4) }, state.label, labelSize, p.c (T.textDim, 255), T.fMin);
+            p.textCentered ({ rect_.x + 2, rect_.bottom() - valueH, rect_.w - 4, valueH }, state.on ? "ON" : "OFF", T.fLabel, p.c (T.textDim, 255), T.fMin);
+            return;
+        }
+        const Rect b = rect_.inset (4);
+        p.control (b, false);
+        char lab[32];
+        std::snprintf (lab, sizeof lab, "%s%s", state.label, state.showState ? (state.on ? " ON" : " OFF") : "");
+        const int labelH = state.label[0] ? 18 : 0;
+        const float cx = static_cast<float> (b.x) + static_cast<float> (b.w) * 0.5f, cy = static_cast<float> (b.y) + static_cast<float> (b.h - labelH) * 0.5f;
+        const float s = static_cast<float> (std::min (b.w, b.h - labelH)) * 0.32f;
+        if (labelH > 0)
+            p.textCentered ({ b.x, b.bottom() - labelH, b.w, labelH }, lab, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+        p.style (1.0f, true);
+        p.arc (cx, cy, s, 0.0f, 2.0f * kPi, 2.4f, p.c (T.textFaint, 200));
+        p.plain();
+    }
+};
+
+// ===============================================================================================================================
 /** FilterFullScreen: the page of a filter (the plugin draws the whole tab; filter_ui.h). From the top: the power switch, the instance selector F1 | F2 | F1+F2, the model with its list, the style, the CLEAN switch and the
     OUTPUT button (where the filter sends its signal); the display (the real response, or the Formant pad with its five knobs at the right); a row of blocks, ONE Q group each:
       MAIN   CUTOFF  RESO  DRIVE  MIX                  TRACK   KEYTRACK  ENV 1  VAR  COMB                   OUT   LEVEL  PAN  BLEND  ROUTING                  FORMANT (Formant model)  X  Y  TRANSPOSE  SPREAD (+ RESONANCE)
@@ -566,19 +746,19 @@ public:
     PictogramSelector instances;
     Stepper model, style;
     MenuButton modelList { "", MenuButton::Icon::Down };   // the list of the models
-    ToggleIcon clean;                                      // CLEAN MODE
+    FilterToggle clean;                                    // CLEAN MODE
     RouteButton route { "M" };                             // OUTPUT: where the filter sends its signal (M main effects, D direct, - none)
     FilterDisplay display;
 
     // MAIN
-    Knob cutoff { "CUTOFF" }, resonance { "RESO" }, drive { "DRIVE" }, mix { "MIX" };
+    FilterKnob cutoff { "CUTOFF" }, resonance { "RESO" }, drive { "DRIVE" }, mix { "MIX" };
     // TRACK
-    Knob keytrack { "KEYTRACK" }, var { "VAR" }, combOffset { "COMB" };
+    FilterKnob keytrack { "KEYTRACK" }, var { "VAR" }, combOffset { "COMB" };
     ToggleIcon env1;
     // OUT
-    Knob level { "LEVEL" }, pan { "PAN" }, blend { "BLEND" }, routing { "ROUTING" };   // ROUTING: the three ways the two filters are connected (a knob over a choice: it steps)
+    FilterKnob level { "LEVEL" }, pan { "PAN" }, blend { "BLEND" }, routing { "ROUTING" };   // ROUTING: the three ways the two filters are connected (a knob over a choice: it steps)
     // FORMANT
-    Knob formantX { "X" }, formantY { "Y" }, formantTrans { "TRANSPOSE" }, formantRes { "RESONANCE" }, formantSpread { "SPREAD" };
+    FilterKnob formantX { "X" }, formantY { "Y" }, formantTrans { "TRANSPOSE" }, formantRes { "RESONANCE" }, formantSpread { "SPREAD" };
 
     QGroup groups[kMaxGroups]; // 0: MAIN, 1: TRACK, 2: OUT, 3: FORMANT
 
