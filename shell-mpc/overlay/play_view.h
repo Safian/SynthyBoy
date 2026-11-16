@@ -13,6 +13,7 @@
 #include "../ui/display.h"
 #include "env_ui.h"
 #include "lfo_ui.h"
+#include "osc_display.h"
 #include "osc_ui.h"
 #include "page_detector.h"
 #include "play_osc.h"
@@ -56,26 +57,17 @@ public:
     static constexpr int kW = play::kRegionW, kH = play::kRegionH;
 
     /** `highlight`: 1 oscillator panel, 2 envelope panel, 3 LFO panel (the sub-tab this view belongs to). */
-    PlayView (int highlight, double fixedCostMs) : highlight_ (highlight), name_ ("play" + std::to_string (highlight))
+    PlayView (int highlight, double fixedCostMs) : osd_ (fixedCostMs), highlight_ (highlight), name_ ("play" + std::to_string (highlight))
     {
         for (ComputeBudget& b : budget_)
             b.fixedCostMs = fixedCostMs;
-        cycle_.assign (synthyboy::OscCycle::kSamples, 0.0f);
-        cycleMax_.assign (synthyboy::OscCycle::kSamples, 0.0f);
         envY_.assign (play::kEnvPoints, 0.0f);
         lfoY_.assign (LfoView::kPoints, 0.0f);
-        for (int o = 0; o < play::kOscs; ++o)
-            synthyboy::OscCycle::readoutIndices (o + 1, targetIdx_[o]);
     }
 
     const char* name() const noexcept override { return name_.c_str(); }
     /** All three oscillators' readouts (12 values): the selected one is used. */
-    void targets (std::vector<int>& out) const override
-    {
-        for (int o = 0; o < play::kOscs; ++o)
-            for (int i = 0; i < 4; ++i)
-                out.push_back (targetIdx_[o][i]);
-    }
+    void targets (std::vector<int>& out) const override { osd_.targets (out); }
 
     bool update (const ViewInput& in) override
     {
@@ -93,133 +85,18 @@ public:
             {
                 sel_[p] = want[p];
                 const char* prefix[play::kPanels] = { "osc", "env", "lfo" };
-                if (p == 0)
-                    group_[p] = std::make_unique<ParamGroup> (sel_[0] == playosc::kSub ? std::string ("sub.") : (sel_[0] == playosc::kNoise ? std::string ("noise.") : std::string ("osc") + std::to_string (playosc::oscNumber (sel_[0])) + "."));
-                else
+                if (p > 0)
+                {
                     group_[p] = std::make_unique<ParamGroup> (std::string (prefix[p]) + std::to_string (sel_[p]) + ".");
-                forced_[p] = true;
-                have_[p] = false;
-                changed = true;
-            }
-        }
-        if (! group_[0])
-            return false;
-        if (ui::theme::detailLevel() != detailSeen_)   // the level of detail changed: the picture of the oscillator is made again (the stack, the spectrum)
-        {
-            detailSeen_ = ui::theme::detailLevel();
-            forced_[0] = true;
-            have_[0] = false;
-            changed = true;
-        }
-        // ---- oscillator: the picture of the display rectangle of the plugin-drawn oscillator UI (the cycle of a wavetable, the overview of a sample, multisample or granular oscillator, the spectrum of a
-        // spectral one, the noise colour, the sub oscillator's waveform)
-        if (playosc::oscNumber (sel_[0]) == 0 && sel_[0] == playosc::kSub)
-        {
-            const float wave = group_[0]->value ("sub.waveform"), phase = group_[0]->value ("sub.phase");
-            const bool data = group_[0]->read (*in.instance) || ! have_[0] || forced_[0];
-            if (data)
-            {
-                fillSub (static_cast<int> (std::lround (wave)), phase);
-                stackN_ = 0;
-                computeSpectrum();
-                kind_ = synthyboy::OscCycle::Kind::wavetable;
-                res_ = synthyboy::OscCycle::Result();
-                res_.kind = kind_;
-                group_[0]->accept();
-                have_[0] = true;
-                forced_[0] = false;
-                changed = true;
-                displayDataMs_ = in.nowMs;
-            }
-        }
-        else
-        {
-            if (! oc_)
-                oc_ = std::make_unique<synthyboy::OscCycle>();
-            const int osc = sel_[0] == playosc::kNoise ? 4 : playosc::oscNumber (sel_[0]);
-            float t[4] = { -1, -1, -1, -1 };
-            if (in.targets != nullptr && osc <= play::kOscs)
-                for (int i = 0; i < 4; ++i)
-                    t[i] = std::round (in.targets[(osc - 1) * 4 + i] * 100.0f) / 100.0f;
-            const bool data = group_[0]->read (*in.instance) || newContent || std::memcmp (t, lastTargets_, sizeof t) != 0;
-            if ((data || ! have_[0]) && (forced_[0] || ! have_[0] || budget_[0].due (in.nowMs)))
-            {
-                const auto t0 = std::chrono::steady_clock::now();
-                if (newContent)
-                    oc_->setContent (content != nullptr ? *content : synthyboy::StateContent {}, store);
-                synthyboy::OscCycle::Request req;
-                req.osc = osc;
-                req.bpm = bpm;
-                if (in.targets != nullptr && osc <= play::kOscs)
-                {
-                    req.framePercent = t[0];
-                    req.warpAmountPercent[0] = t[1];
-                    req.warpAmountPercent[1] = t[2];
-                    req.morphAmountPercent = t[3];
+                    forced_[p] = true;
+                    have_[p] = false;
                 }
-                const bool wt = osc != 4 && group_[0]->value ((std::string ("osc") + std::to_string (osc) + ".type").c_str()) < 0.5f;
-                displayPoints_ = wt ? synthyboy::OscCycle::kSamples : play::kDisplayPoints;
-                res_ = oc_->computeDisplay (group_[0]->values(), req, cycle_.data(), cycleMax_.data(), displayPoints_);
-                kind_ = res_.kind;
-                // the wavetable's frames behind the current one (fixed positions along the table) and a faint spectrum of the cycle
-                stackN_ = 0;
-                if (wt && kind_ == synthyboy::OscCycle::Kind::wavetable)
-                {
-                    const int kStackFrames = ui::theme::D().stackFrames >= 2 ? ui::theme::D().stackFrames : 0;
-                    if (kStackFrames > 0 && stack_.size() != static_cast<size_t> (kStackFrames))
-                        stack_.assign (static_cast<size_t> (kStackFrames), std::vector<float> (static_cast<size_t> (synthyboy::OscCycle::kSamples), 0.0f));
-                    for (int k = 0; k < kStackFrames; ++k)
-                    {
-                        synthyboy::OscCycle::Request rq = req;
-                        rq.framePercent = 100.0f * static_cast<float> (k) / static_cast<float> (kStackFrames - 1);
-                        oc_->computeDisplay (group_[0]->values(), rq, stack_[static_cast<size_t> (k)].data(), cycleMax_.data(), displayPoints_);
-                    }
-                    stackN_ = kStackFrames;
-                }
-                computeSpectrum();
-                budget_[0].spent (in.nowMs, msSince (t0));
-                counters_.lastComputeMs = budget_[0].costMs;
-                ++counters_.recomputes;
-                group_[0]->accept();
-                std::memcpy (lastTargets_, t, sizeof t);
-                have_[0] = true;
-                forced_[0] = false;
-                changed = true;
-                displayDataMs_ = in.nowMs;
-            }
-        }
-        // ---- the live read-outs of the engine: the read heads of the newest voices (sample, multisample, the scan of a granular cloud), the grains that sound, the phases of the sub, the read head of a sample noise
-        {
-            Live nl;
-            const int o = playosc::oscNumber (sel_[0]);
-            if (in.live != nullptr)
-            {
-                if (o >= 1 && o <= play::kOscs && (kind_ == synthyboy::OscCycle::Kind::sample || kind_ == synthyboy::OscCycle::Kind::multisample || kind_ == synthyboy::OscCycle::Kind::granular))
-                {
-                    for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)
-                        nl.heads[v] = in.live->voicePos[o - 1][v];
-                    if (kind_ == synthyboy::OscCycle::Kind::granular)
-                    {
-                        nl.numGrains = std::min (in.live->numGrains[o - 1], static_cast<int> (ui::display::Data::kMaxGrains));
-                        for (int g = 0; g < nl.numGrains; ++g)
-                        {
-                            nl.grainPos[g] = in.live->grainPos[o - 1][g];
-                            nl.grainLife[g] = in.live->grainLife[o - 1][g];
-                        }
-                    }
-                }
-                if (sel_[0] == playosc::kSub)
-                    for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)
-                        nl.phases[v] = in.live->subPhase[v];
-                if (sel_[0] == playosc::kNoise && kind_ == synthyboy::OscCycle::Kind::noise)
-                    nl.noise = in.live->noisePos;
-            }
-            if (nl.differs (live_))
-            {
-                live_ = nl;
                 changed = true;
             }
         }
+        // ---- oscillator: the picture of the display rectangle of the plugin-drawn oscillator UI (osc_display.h: the cycle of a wavetable, the overview of a sample, multisample or granular oscillator, the
+        // spectrum of a spectral one, the noise colour, the sub oscillator's waveform, the live read-outs)
+        changed = osd_.update (*in.instance, sel_[0], in.targets, in.live, in.nowMs, counters_) || changed;
         // ---- envelope: the curve (cheap) and the dot
         {
             const bool data = group_[1]->read (*in.instance) || bpm != bpm_;
@@ -325,18 +202,10 @@ public:
                 changed = true;
             }
         }
-        {
-            const bool hot = in.nowMs - displayDataMs_ < 350.0;
-            if (hot != displayHot_)
-            {
-                displayHot_ = hot;
-                changed = true;   // the picture is described again (cached cell or not)
-            }
-        }
         counters_.changes += changed;
         return changed;
     }
-    bool valid() const noexcept override { return have_[0] && have_[1] && have_[2]; }
+    bool valid() const noexcept override { return osd_.valid() && have_[1] && have_[2]; }
 
     bool regionOverride (Rect& ui) const override
     {
@@ -417,7 +286,7 @@ public:
         uint32_t h = 2166136261u;
         for (int p = 0; p < play::kPanels; ++p)
             h = fnv (h, sel_[p]);
-        for (float v : cycle_)
+        for (float v : osd_.cycle())
             h = fnv (h, static_cast<int32_t> (std::lround (static_cast<double> (v) * 1000.0)));
         for (float v : envY_)
             h = fnv (h, static_cast<int32_t> (std::lround (static_cast<double> (v) * 1000.0)));
@@ -429,7 +298,7 @@ public:
     uint32_t panelHash (int p) const noexcept
     {
         uint32_t h = fnv (2166136261u, sel_[p]);
-        const std::vector<float>& v = p == 0 ? cycle_ : (p == 1 ? envY_ : lfoY_);
+        const std::vector<float>& v = p == 0 ? osd_.cycle() : (p == 1 ? envY_ : lfoY_);
         const double scale = p == 0 ? 1000.0 : (p == 1 ? 1000.0 : 100.0);
         for (float x : v)
             h = fnv (h, static_cast<int32_t> (std::lround (static_cast<double> (x) * scale)));
@@ -447,7 +316,7 @@ public:
             std::snprintf (hash, sizeof hash, "%08x", panelHash (p));
             o << "play_" << names[p] << "_hash: " << hash << "\n";
         }
-        o << "play_osc_kind: " << (kind_ == synthyboy::OscCycle::Kind::wavetable ? "wavetable" : (kind_ == synthyboy::OscCycle::Kind::off ? "off" : "other")) << "\nplay_env_dot_x: "
+        o << "play_osc_kind: " << (osd_.kind() == synthyboy::OscCycle::Kind::wavetable ? "wavetable" : (osd_.kind() == synthyboy::OscCycle::Kind::off ? "off" : "other")) << "\nplay_env_dot_x: "
           << (envDotPx_ < 0 ? -1.0 : envDotX_) << "\nplay_lfo_cursor_x: " << (lfoCursorPx_ < 0 ? -1.0f : lfoCursorX_) << "\nplay_recomputes_total: " << counters_.recomputes << "\n";
         if (osc_ != nullptr)
         {
@@ -482,8 +351,8 @@ public:
     void writeDump (std::ostream& o) const override
     {
         o << "# view " << name_ << ": highlight " << highlight_ << ", osc " << sel_[0] << " env " << sel_[1] << " lfo " << sel_[2] << "\n# osc cycle\n";
-        for (size_t i = 0; i < cycle_.size(); ++i)
-            o << i << " " << cycle_[i] << "\n";
+        for (size_t i = 0; i < osd_.cycle().size(); ++i)
+            o << i << " " << osd_.cycle()[i] << "\n";
         o << "# env curve\n";
         for (size_t i = 0; i < envY_.size(); ++i)
             o << i << " " << envY_[i] << "\n";
@@ -544,123 +413,13 @@ private:
         osc_->drawPage (sb);
         const ui::Rect r = osc_->displayRect();
         if (! r.empty())
-            drawPicture (sb, r, false);
+            osd_.draw (sb, r, false);
         if (osc_ == nullptr || osc_->isMain())
             paintPanels (sb, true);
         if (! r.empty())
-            drawPicture (sb, r, true);
+            osd_.draw (sb, r, true);
         osc_->drawOnDisplay (sb);
         osc_->drawPopup (sb);   // the popups lie over the picture
-    }
-
-    /** The magnitudes of the first harmonics of the cycle (0 .. 1, a square root so that the weak ones show): the faint spectrum under the wave. */
-    void computeSpectrum()
-    {
-        const int n = std::min (displayPoints_, static_cast<int> (cycle_.size()));
-        spectrum_.assign (static_cast<size_t> (ui::display::kMaxSpectrum), 0.0f);
-        if (! ui::theme::D().spectrum || n < 64 || kind_ == synthyboy::OscCycle::Kind::off)
-            return;
-        for (int k = 1; k <= ui::display::kMaxSpectrum; ++k)
-        {
-            double re = 0.0, im = 0.0;
-            for (int i = 0; i < n; ++i)
-            {
-                const double a = 6.283185307179586 * static_cast<double> (k) * static_cast<double> (i) / static_cast<double> (n);
-                re += static_cast<double> (cycle_[static_cast<size_t> (i)]) * std::cos (a);
-                im -= static_cast<double> (cycle_[static_cast<size_t> (i)]) * std::sin (a);
-            }
-            spectrum_[static_cast<size_t> (k - 1)] = static_cast<float> (std::sqrt (std::min (1.0, std::sqrt (re * re + im * im) / (0.5 * n))));
-        }
-    }
-
-    void fillSub (int wave, float phasePercent)
-    {
-        const int n = static_cast<int> (cycle_.size());
-        for (int i = 0; i < n; ++i)
-        {
-            const double t = std::fmod (static_cast<double> (i) / n + static_cast<double> (phasePercent) * 0.01, 1.0);
-            double v = 0.0;
-            switch (wave)
-            {
-                case 0: v = std::sin (2.0 * 3.14159265358979 * t); break;
-                case 1: v = std::tanh (3.0 * std::sin (2.0 * 3.14159265358979 * t)); break;
-                case 2: v = t < 0.25 ? 4.0 * t : (t < 0.75 ? 2.0 - 4.0 * t : 4.0 * t - 4.0); break;
-                case 3: v = 2.0 * t - 1.0; break;
-                case 4: v = t < 0.5 ? 1.0 : -1.0; break;
-                default: v = t < 0.25 ? 1.0 : -1.0; break;
-            }
-            cycle_[static_cast<size_t> (i)] = static_cast<float> (v);
-        }
-        displayPoints_ = n;
-    }
-
-    /** The picture of the oscillator in a rectangle of the canvas: what the data of OscCycle::computeDisplay is (docs/MPC.md "Oscillator UI"), drawn by ui/display.h. */
-    void drawPicture (gpu::SceneBuilder& sb, const ui::Rect& r, bool live) const
-    {
-        using K = synthyboy::OscCycle::Kind;
-        ui::display::Data d;
-        d.colour = ui::theme::instanceColour (sel_[0] - 1);
-        d.n = std::min (displayPoints_, static_cast<int> (cycle_.size()));
-        d.cycle = cycle_.data();
-        if (kind_ == K::wavetable)
-        {
-            d.kind = ui::display::Data::Kind::Wave;
-            if (sel_[0] != playosc::kSub)
-            {
-                const std::string base = "osc" + std::to_string (playosc::oscNumber (sel_[0])) + ".unison.";
-                d.voices = std::clamp (static_cast<int> (group_[0]->value ((base + "voices").c_str()) + 0.5f), 1, 16);
-                d.detune = std::clamp (group_[0]->value ((base + "detune").c_str()) / 100.0f, 0.0f, 1.0f);
-                d.blend = std::clamp (group_[0]->value ((base + "blend").c_str()) / 100.0f, 0.0f, 1.0f);
-                d.pos = std::clamp (lastTargets_[0] / 100.0f, 0.0f, 1.0f);
-                d.numStack = stackN_;
-                for (int i = 0; i < stackN_; ++i)
-                    d.stack[i] = stack_[static_cast<size_t> (i)].data();
-                d.spectrum = spectrum_.data();
-                d.numSpectrum = static_cast<int> (spectrum_.size());
-            }
-            else
-                for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)   // the sub oscillator: the phase of every voice on the wave
-                    d.phases[v] = live_.phases[v];
-        }
-        else if (kind_ == K::sample || kind_ == K::multisample || kind_ == K::granular)
-        {
-            d.kind = ui::display::Data::Kind::MinMax;
-            d.cycle = cycle_.data();
-            d.cycleMax = cycleMax_.data();
-            d.loopOn = res_.loopOn;
-            d.loopStart = res_.loopStart;
-            d.loopEnd = res_.loopEnd;
-            d.grain = kind_ == K::granular && res_.grainSize > 0.0f;
-            d.grainPos = res_.grainPosition;
-            d.grainSize = res_.grainSize;
-            for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)   // live: where the newest voices read their file (the grains that sound and the scan of a cloud included)
-                d.heads[v] = live_.heads[v];
-            d.numGrainsLive = live_.numGrains;
-            for (int g = 0; g < live_.numGrains; ++g)
-            {
-                d.liveGrainPos[g] = live_.grainPos[g];
-                d.liveGrainLife[g] = live_.grainLife[g];
-            }
-        }
-        else if (kind_ == K::spectral)
-            d.kind = ui::display::Data::Kind::Spectrum;
-        else if (sel_[0] == playosc::kNoise && (kind_ == K::noise || kind_ == K::off))
-        {
-            // the noise: the picture of its colour (faint while the source is switched off), never the word OFF
-            d.kind = ui::display::Data::Kind::Noise;
-            d.noiseColour = std::clamp (static_cast<int> (group_[0]->value ("noise.sample") + 0.5f), 0, 8);
-            d.dim = kind_ == K::off;
-        }
-        else
-        {
-            d.kind = ui::display::Data::Kind::Message;
-            d.noiseHead = live_.noise;
-            d.message = kind_ == K::noise ? "NOISE" : (kind_ == K::noSample ? "NO SAMPLE" : (kind_ == K::off ? "OFF" : ""));
-        }
-        if (live)
-            ui::display::drawLive (sb, r, d);
-        else
-            ui::display::draw (sb, r, d, ! displayHot_);   // while the data changes every picture (a knob dragged along the wavetable) it is drawn with the picture, not into a layer
     }
 
     /** The Env and LFO panels in the language of the look (ui/display.h drawModule): a block each, the curve as a line of light, the running dot / cursor. */
@@ -707,29 +466,7 @@ private:
         }
     }
 
-    /** The live read-outs shown in the display (a change of one pixel or of a grain's step is a change of the picture). */
-    struct Live
-    {
-        float heads[ui::display::Data::kMaxHeads], phases[ui::display::Data::kMaxHeads], grainPos[ui::display::Data::kMaxGrains], grainLife[ui::display::Data::kMaxGrains], noise = -1.0f;
-        int numGrains = 0;
-        Live() { std::fill (heads, heads + ui::display::Data::kMaxHeads, -1.0f); std::fill (phases, phases + ui::display::Data::kMaxHeads, -1.0f); std::fill (grainPos, grainPos + ui::display::Data::kMaxGrains, 0.0f); std::fill (grainLife, grainLife + ui::display::Data::kMaxGrains, 0.0f); }
-        static bool far (float a, float b, float tol) noexcept { return (a < 0.0f) != (b < 0.0f) || std::fabs (a - b) > tol; }
-        bool differs (const Live& o) const noexcept
-        {
-            for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)
-                if (far (heads[v], o.heads[v], 0.0025f) || far (phases[v], o.phases[v], 0.0025f))
-                    return true;
-            if (numGrains != o.numGrains || far (noise, o.noise, 0.0025f))
-                return true;
-            for (int g = 0; g < numGrains; ++g)
-                if (far (grainPos[g], o.grainPos[g], 0.0025f) || far (grainLife[g], o.grainLife[g], 0.04f))
-                    return true;
-            return false;
-        }
-    };
-    Live live_;
-    double displayDataMs_ = -1.0e9;   // when the data of the display last changed
-    bool displayHot_ = false;          // it changed within the last third of a second: drawn uncached
+    OscDisplay osd_;   // the data and the drawing of the oscillator's display (shared with the OSC tab's pages)
     int highlight_;
     std::string name_;
     int sel_[play::kPanels] = { 0, 0, 0 };
@@ -737,16 +474,10 @@ private:
     ComputeBudget budget_[play::kPanels];
     bool have_[play::kPanels] = { false, false, false };
     bool forced_[play::kPanels] = { true, true, true };
-    int targetIdx_[play::kOscs][4] = {};
-    std::unique_ptr<synthyboy::OscCycle> oc_;
     std::shared_ptr<const synthyboy::StateContent> content_;
     const synthyboy::IContentStore* store_ = nullptr;
     double bpm_ = 0.0;
-    std::vector<float> cycle_, cycleMax_, envY_, lfoY_, spectrum_;
-    std::vector<std::vector<float>> stack_;
-    int stackN_ = 0, detailSeen_ = 1;
-    int displayPoints_ = synthyboy::OscCycle::kSamples;
-    synthyboy::OscCycle::Result res_;
+    std::vector<float> envY_, lfoY_;
     std::unique_ptr<OscUi> osc_;
     std::unique_ptr<EnvUi> env_;
     std::unique_ptr<LfoUi> lfo_;
@@ -755,9 +486,7 @@ private:
     std::unique_ptr<gpu::SceneData> scratch_;
     uint32_t uiHash_ = 0;
     int edgeX_ = 1280;   // the key (ViewInput::panelEdgeX)
-    float lastTargets_[4] = { -1, -1, -1, -1 };
     float lastSources_[kSourceSlots] = {};
-    synthyboy::OscCycle::Kind kind_ = synthyboy::OscCycle::Kind::other;
     synthyboy::EnvDisplay::Geometry envGeom_;
     int envDotPx_ = -1, lfoCursorPx_ = -1;
     double envDotX_ = 0.0;
