@@ -6,7 +6,8 @@
 #   - the host widgets of the tab (the knobs, the faders, the meters ...) stay where the other modules put them, so that with the overlay off or disabled the tab works as before, but every one of them is hidden while
 #     the plugin's page is up (RangedEnabling on the display parameter "Overlay Instance": the plugin reports the frame 24 then, 82_play.py): they cannot take the touch that the plugin's page takes. The marker squares and
 #     the instance picture (50_filter_overlay.py) are never hidden: the plugin finds the page by them.
-#   - the four hardware knobs of the tab (Q-Link 1 .. 4) are the Q proxies "Q 1" .. "Q 4" (shell-mpc/q_router.h): the page sets what they act on, bank direction "Row" (the first bank, Q-Link 1 .. 4 = the bottom row of the grid).
+#   - the hardware knobs of the tab (Q-Link 1 .. 16) are the Q proxies "Q 1" .. "Q 16" (shell-mpc/q_router.h): the page sets what they act on (the active group on Q 1 .. 4, the next groups on 5 .. 16), bank direction "Row"
+#     (bank 1 = Q-Link 1 .. 4 = the bottom row of the grid, then 5 .. 8, 9 .. 12, 13 .. 16; the MPC XL has all 16 knobs at once).
 # Runs after 82_play.py (the Q proxies are registered by it), before 85_names.py and 90_frames.py.
 
 import json
@@ -16,7 +17,7 @@ HERE = Path(__file__).resolve().parent
 LAYOUT_JSON = HERE.parent.parent / "shell-mpc" / "overlay" / "overlay_layout.json"
 PAGE_KINDS = ("filterui", "lfoui", "envui", "oscui", "macros", "mixer", "fx", "mod", "master", "voice")
 LFO_CURSORS, SPECTRUM_COLUMNS, PAD_PRESSURE_PARAMS = 4, 32, 2
-PLAY_GROUPS, PLAY_SLOTS, Q_PROXIES = 3, 8, 4
+PLAY_GROUPS, PLAY_SLOTS, Q_PROXIES = 3, 8, 16
 FULL_FRAME_LAST_VISIBLE = 18   # the widgets are visible while the "Overlay Instance" frame is 0 .. 18 (the slots use 1 .. 17); the plugin takes frame 24 while a page is up
 QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 301, 323
 KEEP = ("Overlay Marker", "Overlay Instance")   # the names of the components the plugin finds the page by

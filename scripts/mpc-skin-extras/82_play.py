@@ -6,10 +6,10 @@
 # pad pressure ones are "Overlay Instance", the selectors "Play Osc", "Play Env", "Play LFO" and the 24 proxy parameters (shell-mpc/play_params.h, docs/MPC.md "Play page"):
 #   selectors  index = entries of docs/params.json + 4 LFO cursors + 32 spectrum columns + 2 pad pressure + 1 Overlay Instance + 0 .. 2
 #   proxies    after the selectors, group after group (oscillator, envelope, LFO), eight each
-#   Q proxies  "Q 1" .. "Q 4" after the last proxy (shell-mpc/q_router.h): what the four hardware knobs (Q-Link 1 .. 4) of EVERY Play sub-tab are mapped to
+#   Q proxies  "Q 1" .. "Q 16" after the last proxy (shell-mpc/q_router.h): what the 16 hardware knobs (Q-Link 1 .. 16) of EVERY Play sub-tab are mapped to
 # The OSCILLATOR third (the left panel), the ENVELOPE third (the middle one) and the LFO third (the right one) are drawn entirely by the plugin (the compact views and, over the whole page, the full-screen pages;
 # docs/MPC.md "Play page" and "Q proxies"): they have NO host widget (no fallback panel picture, no title, no selector) and the Play, Play Env and Play LFO sub-tabs have no knob widgets at all: their Q-Links
-# are Q 1 .. Q 4 and nothing else.
+# are Q 1 .. Q 16 and nothing else.
 # Every one of the three tabs has the same TOP (tab coordinates, 1280 x 628): the region of the overlay view (shell-mpc/overlay/overlay_layout.json "play1" .. "play3": the three live panels), with
 # the markers and the instance picture of the view; below it (y 197 ..) the three selectors, one under each panel; BOTTOM: the eight knobs of the module of the sub-tab in the lower two rows of the
 # grid (Q-Link 1 .. 8: the bottom row left to right is Q-Link 1 .. 4, the row above Q-Link 5 .. 8 = slots 0 .. 7 of the table in play_params.h).
@@ -36,7 +36,7 @@ SLOTS = 8
 # The oscillator sub-tab (the first sub-tab of the first tab) is the exception, measured on the device with injected knob turns: the host honours only the bottom row (Q-Link 1 .. 4) there and fills the rows above with its own assignments (Macro 1, Master Volume, Macro 5 ...) whatever this file says; so that sub-tab uses Bank Direction "Row", bank 0 = Q-Link 1, 2, 3, 4 = top knob .. bottom knob. The cause: the host keeps a SNAPSHOT of the Q-Links.json the track was made with in the project and it wins over this file where it has an entry (docs/MPC.md "The host keeps a Q-Link map per track"); in a new project the whole file is honoured.
 QLINK_COLUMN_0 = (13, 9, 5, 1)
 QLINK_COLUMN_1 = (14, 10, 6, 2)
-Q_PROXIES = 4              # "Q 1" .. "Q 4": the parameters after the last Play proxy
+Q_PROXIES = 16             # "Q 1" .. "Q 16": the parameters after the last Play proxy (the first four are older than the rest: docs/MPC.md "Parameter order")
 PLUGIN_DRAWN_PANELS = (0, 1, 2)   # the panels (0 oscillator, 1 envelope, 2 LFO) the plugin draws entirely: no host widget under (or beside) its own drawing
 # (prefix, instances, [(key suffix of the real parameter, template suffix if the production skin has no control for it, short name)] x 8) ; the names are the ones of play_params.h
 TABLE = (
@@ -260,7 +260,7 @@ def apply(tui, qlinks, ctx):
                 extra.extend(segs)
             if s >= 4:   # the second row of the module's knobs: the second Q-Link bank (column 1), read top to bottom: slots 5, 6, 7, 8
                 links["Q-Link %d" % QLINK_COLUMN_1[s - 4]] = proxy_idx[highlight][s]
-        for i in range(Q_PROXIES):   # the four hardware knobs of every Play sub-tab are the Q proxies (the plugin sets what they act on)
+        for i in range(Q_PROXIES if highlight in PLUGIN_DRAWN_PANELS else 4):   # the hardware knobs of every Play sub-tab are the Q proxies (the plugin sets what they act on): Q-Link n = Q n, the host's own numbering
             links["Q-Link %d" % (i + 1 if highlight in PLUGIN_DRAWN_PANELS else QLINK_COLUMN_0[i])] = q_idx[i]
         for c in extra:
             _hide_while_full_screen(c, first - OVERLAY_INSTANCE)
