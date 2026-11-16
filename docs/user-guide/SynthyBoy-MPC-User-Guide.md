@@ -2,7 +2,7 @@
 
 Status: first draft, written from the source code and the developer notes of the branch `feature/mpc-overlay`
 (commit a9251b1b) and from pictures rendered by the code, not from a device session. Every point marked
-`TODO(owner)` is a question that the code and the developer notes do not answer. Other pages are being
+`TODO(owner)` is a question that the code, the developer notes and the Akai manuals do not answer. Other pages are being
 reworked while this draft is written; the last chapter lists what will need an update.
 
 How to read the pictures: they are rendered by the developer's test program with the default ("Init")
@@ -45,7 +45,12 @@ noise generator, two filters, six envelopes, ten LFOs and four random LFOs, eigh
 modulation matrix, a set of 13 effect types, and a master section with tuning, MPE and voice control.
 112 factory presets come with it.
 
-**Tested devices.** MPC Key 61 with MPC OS 3.10.1.12, and MPC XL. Other MPC models have not been tested.
+**One package, two hardware generations.** SynthyBoy is one package: the plugin with its own drawn screens (there is no
+second, plainer version). It is built for both generations of standalone MPC hardware, the first generation (32-bit) and
+the second generation (64-bit); the MPC loads the build that fits.
+
+**Tested devices.** Built for both generations, tested on the **MPC Key 61** (first generation, MPC OS 3.10.1.12) and on the
+**MPC XL** (second generation). Other MPC models have not been tested.
 
 **What "experimental display overlay" means for you.** The MPC does not let a plugin draw its own screens,
 so the plugin draws its pages itself, on a separate display layer on top of the MPC's picture. The MPC's
@@ -53,37 +58,40 @@ header and tab bar are still the MPC's own, and the MPC firmware does not know a
 so a firmware update or an unusual host situation (for example a pop-up of the host over the page, or the
 device dimming in standby) can make the plugin's picture disappear or flicker. The sound is not affected.
 
-This guide describes the version with the plugin-drawn pages ("overlay build").
-
 ## 2. Install and first start
 
-Steps, as given in the developer notes (`docs/MPC.md`, "Install on the MPC"):
+The Akai manuals describe the host side. Where this guide names a manual, it means the **MPC Standalone OS User
+Guide v3.10.1** (MPC Key 61 and the other first-generation devices) and the **MPC Live III, MPC XL User Guide v3.10.1**
+(MPC XL). The two guides have the same chapters for these steps.
 
-1. Copy the whole folder `Safian - VST - SynthyBoy` into a folder named exactly `VST2 Plugins` at the root
-   of a USB drive, an SD card, or the MPC's internal drive.
-2. The MPC must run MPC OS 3.10.1 or later.
-3. In **Preferences > Enhancements (Beta)** turn on both **Enable Enhancements** and **External Plugin
-   Support**. The plugin stays hidden until both switches are on.
-4. A plugin that was copied while the MPC application was running appears only after the MPC application
-   is restarted.
-5. Open the plugin browser (the developer notes name: instrument track, plugin program, browse; or an
-   insert slot). The plugin is listed under **External Plugins**.
-   TODO(owner): Give the exact on-screen steps and button names, on the Key 61 and on the XL, for putting
-   SynthyBoy on an instrument track (the notes only say "instrument track -> plugin program -> browse, or an
-   insert slot").
-6. Replacing the plugin: copy the new folder over the old one, then remove and re-add the plugin on the
-   track (or restart the MPC if the skins changed). Uninstalling: delete the folder from `VST2 Plugins`;
-   projects that used it then load without the plugin.
+1. **Put the plugin on a drive.** Copy the whole folder `Safian - VST - SynthyBoy` into a folder named exactly
+   `VST2 Plugins`. The manuals say this folder can be on the internal MPC drive or on an attached drive (the developer
+   notes: at the root of a USB drive, an SD card, or the internal drive). The MPC must run MPC OS 3.10.1 or later.
+2. **Switch on external plugins.** Press **Menu**, tap the **Preferences** icon, open the **Enhancements** tab, tap
+   **Enable Enhancements** so that it is On, then switch on **External Plugin Support**. The plugin stays hidden until both
+   are on. The manual chapter is "Updates in v3.10.1 > Experimental Enhancements" (also described in Preferences >
+   Enhancements). The manual warns that these plugins are not tested or supported by inMusic and that a faulty plugin can
+   freeze the device: save your work often.
+3. **Restart.** A plugin copied while the MPC application was running appears only after the MPC application is
+   restarted.
+4. **Make a plugin track.** In Main Mode tap **+ New Track** at the bottom left, choose **Plugin** as the type, then use the
+   **Plugin** field to open the plugin window and pick SynthyBoy (the window can be sorted by Type or Manufacturer; tap
+   **Select** to confirm or **Close** to cancel). Manual chapters: "Getting Started > Adding and Recording with a Plugin
+   Track" and "Track Types > Plugin Tracks". The **Preferences > General > Default Plugin Synth** setting decides which
+   plugin a new plugin track starts with.
+5. **Choose a preset.** Use the **Preset** field of the plugin track (see chapter 7), or **Sounds Mode** (chapter 7).
+6. **Open the plugin's screens.** The plugin's own pages come up in the area between the MPC's header and its tab
+   bar; see chapter 3.
+7. Replacing the plugin: copy the new folder over the old one, then remove and re-add the plugin on the track (or restart
+   the MPC if the skins changed). Uninstalling: delete the folder from `VST2 Plugins`; projects that used it then load
+   without the plugin.
 
-The package contains two builds of the plugin (32-bit for the Key 61, 64-bit for the XL); the MPC picks the
-one that fits.
+TODO(owner): The manuals do not say where SynthyBoy appears in the plugin window (the developer notes say under
+"External Plugins"). Confirm the name of the list or tab on the device.
 
-TODO(owner): The pages in this guide exist only in the "overlay" package. How does a user get that package,
-and how can he tell it from a package without the drawn pages (name of the folder, version number, the
-Play page looks like chapter 5.1)?
-
-**First start.** Put the plugin on a track and press the key **Play** (the first function key). You should
-see the three panels of chapter 5.1. If you see only a dark empty area, see chapter 9.
+**First start.** Put the plugin on a track and open Track Edit Mode (the **Edit Instrument** button in Sounds Mode does
+this); press the key **Play** (the first function key). You should see the three panels of chapter 5.1. If you see only a
+dark empty area, see chapter 9.
 
 A project that already had SynthyBoy on a track with an older version keeps that track's old Q-Link
 assignment until the plugin is inserted again (chapter 8).
@@ -168,11 +176,12 @@ groups leaves the rest of the slots without a function.
 **MPC XL (16 knobs).** All 16 knobs are alive at once: knobs 1 - 4 turn the active group, knobs 5 - 16 the next
 groups. The quiet chips on those groups show the numbers 5 - 16.
 
-**MPC Key 61 (4 knobs, four banks).** The four knobs always turn four values. The bank button steps through
+**MPC Key 61 (4 knobs, four banks).** The four knobs always turn four values. The **Q-Link** button steps through
 four banks: bank 1 = slots 1 - 4 (the active group), bank 2 = slots 5 - 8, bank 3 = 9 - 12, bank 4 = 13 - 16. On
 this device the quiet chips show numbers 1 - 4 relative to the bank, so you know which group a bank leads
 to. The host remembers the bank per tab.
-TODO(owner): What is the exact label of the bank button on the Key 61 hardware (the notes say "the bank button")?
+(Standalone OS User Guide, "Other Features Explained > Q-Links": the Q-Link controls are divided into four banks cycled
+with the Q-Link button; a yellow box marked with a Q outlines the current Screen-mode control.)
 
 **Stepped targets** (switches, lists, integer steppers such as polyphony): a Q-Link does not sweep them from 0 to
 100 percent of its travel; it makes **one step per small turn** (3/128 of the knob's travel). The ends of a
@@ -426,8 +435,7 @@ The tab only decides which envelope is shown first.
 - **TARGETS** (top right, with the number of targets): opens the list of what the envelope modulates, with depth, UNI/BI, ON/OFF, remove, and ADD TARGET (chapter 6). The panel right of the graph ("MODULATES n TARGET(S)") lists the targets and their depth.
 - **ADSR** (Q 1 - 4): ATTACK 0 .. 10000 ms (default 5), DECAY 0 .. 10000 ms (400), SUSTAIN 0 .. 100 percent (100), RELEASE 0 .. 10000 ms (200).
 - **SHAPE:** A CURVE, D CURVE, R CURVE: -20 .. +20, defaults 0, -3, -3.
-- **TIME:** DELAY 0 .. 4000 ms, HOLD 0 .. 4000 ms, **BEATS** (switch: times in beats instead of milliseconds: delay 0 .. 8, attack 0 .. 16, hold 0 .. 8, decay 0 .. 16, release 0 .. 16 beats), **LEGATO** (the parameter is "Legato Inverted", Off/On).
-  TODO(owner): What does the LEGATO switch do, in words a musician understands (the notes only name the parameter "Env N Legato Inverted")?
+- **TIME:** DELAY 0 .. 4000 ms, HOLD 0 .. 4000 ms, **BEATS** (switch: times in beats instead of milliseconds: delay 0 .. 8, attack 0 .. 16, hold 0 .. 8, decay 0 .. 16, release 0 .. 16 beats), **LEGATO** (the parameter is "Legato Inverted", Off/On). With the main LEGATO switch on the Master page, a note played while another is held takes over the sounding voice and the envelopes do not start again. Switching LEGATO on for an envelope here makes **that envelope** restart on every note, even in that situation (it restarts from its current level, not from zero). It has no effect while the main LEGATO is off.
 
 ### 5.9 LFOs and the drawn-shape editor
 
@@ -439,8 +447,7 @@ The pages LFO 1 - LFO 4 each show one LFO; the top bar switches to **1 .. 10** (
 
 **Display** (left): the shape of one cycle, with the phase marker, a cursor that runs with the sounding voice. A strip above the graph shows delay and rise when set.
 
-**Shape picker** (right, 13 cells): SINE, TRI, SAW UP, SAW DN, SQUARE, PULSE (25 percent), STEP UP, STEP DN, RANDOM (random steps), EXP UP, EXP DN, HALF (half sine), DRAWN (your own shape). Under it two switches: **SMOOTH** and **HOST**.
-TODO(owner): What does HOST (parameter "LFO N Host Sync") do for a musician?
+**Shape picker** (right, 13 cells): SINE, TRI, SAW UP, SAW DN, SQUARE, PULSE (25 percent), STEP UP, STEP DN, RANDOM (random steps), EXP UP, EXP DN, HALF (half sine), DRAWN (your own shape). Under it two switches: **SMOOTH** and **HOST**. **HOST** only matters when the LFO's MODE is Free-run (and the sync is not Key follow): then the LFO's phase is taken from the host's song position while the transport plays, so a song plays the same every time; with HOST off the LFO runs freely and keeps its own clock.
 
 **Blocks (one Q group each):**
 
@@ -469,7 +476,6 @@ TODO(owner): What does HOST (parameter "LFO N Host Sync") do for a musician?
 Style picker: PERLIN, S & H (sample and hold), SINE INT (sine interpolate), LORENZ, ROSSLER; block RANDOM: RATE 0.01 .. 200 Hz (default 2), STYLE, SYNC (Free (Hz), Tempo, Tempo dotted, Tempo triplet, Key follow), STEREO (Off/On); block TRIGGER: MODE (Retrigger or Free-run); a KEY FOLLOW block in KEY sync. The display is the trace of the output.
 
 **The drawn-shape editor.** The **EDIT** button at the top right of the display opens the editor page over the page (BACK returns). If you press EDIT on a built-in shape, the shape is copied into points and becomes a drawn shape (the LFO's shape is then DRAWN). Choosing the cell DRAWN in the picker only makes the shape a drawn one (a triangle when it has no points yet); it does not open the editor.
-TODO(owner): In the rendered gallery picture the EDIT button is not visible on the LFO page, although the code places it at the top right of the display. Confirm where the user opens the editor on the device.
 
 - **Tools** (a row of four): **POINT**, **FLAT**, **RAMP+**, **RAMP-**.
   - POINT: tap on empty ground adds a point (snapped to the grid when SNAP is on), and dragging moves it; touching a point selects and drags it (the two end points only up and down); the small handle in the middle of a segment drags its curve (power -20 .. +20); a **long press** on a point deletes it.
@@ -523,26 +529,25 @@ More in chapter 6.
 
 ![Compressor](img/fx-compressor.png)
 
-TODO(owner): How many effects does the chain hold, and what do the "MAIN / B1 / B2" racks do for a musician (the notes only say the effect moves to another rack)?
+**Racks and limits.** There are three racks. **MAIN** processes the whole sound that comes out of the filters and the Mixer's "Effects only" routes. **BUS 1** and **BUS 2** are two side paths: each is fed by the **B1** and **B2** sends of the Mixer strips (chapter 5.6), has its own chain of effects, and then goes to the destination set on its Mixer strip (Main, Direct, or the other bus). The engine has **16 effect slots in all**, shared by the three racks: you can add up to 16 effects in total, in any mix of MAIN, BUS 1 and BUS 2; the chain bar only adds an effect while a slot is free. The effects that sit in the engine's fixed chain are listed too, switched on or off.
 
-The knobs follow the order of the parameter table. Parameters of the 13 effect types (name, range, default):
+The knobs follow the order of the parameter table. Parameters of the 13 effect types (name, range, default). The one- or two-sentence descriptions are to be confirmed by the author.
 
-1. **Chorus** (page of 12): Mix 0 .. 100 percent (50), Rate 0.02 .. 8 Hz (0.4), Sync (Free (Hz), Tempo, Tempo dotted, Tempo triplet), Division (Freeze ... 1/64 note, 11 choices from 32 bars), Depth 0 .. 100 percent (50), Feedback -95 .. +95 percent (40), Delay 1 and Delay 2 1 .. 20 ms (2, 8), Voices 1 .. 4 (4), Filter Cutoff 20 .. 20000 Hz (260), Filter Spread 0 .. 100 percent (100), Level -24 .. +12 dB (0). A modulated delay line effect.
-2. **Compressor** (3 pages, display): Mix 0 .. 100 percent, Attack 0 .. 100 percent, Release 0 .. 100 percent, Bands (Multiband, Low band, High band, Single band), for Low, Mid, High: Lower Threshold -120 .. +12 dB (-40), Upper Threshold (-20), Lower Ratio -100 .. +100 percent (0), Upper Ratio 0 .. 100 percent (50), Gain -36 .. +36 dB (0); Level -24 .. +12 dB; Mode (Compress, Limit, Serum); Limiter Latency Comp (Off/On); Low Crossover 20 .. 1000 Hz (120); High Crossover 200 .. 16000 Hz (2500).
-3. **Delay** (display): Mix 0 .. 100 percent (30), Feedback -100 .. +100 percent (40), Time and Time 2 2 .. 4000 ms (300), Sync (Free, Tempo, dotted, triplet; default Tempo), Division and Division 2 (4 bars ... 1/32 note), Style (Mono, Stereo, Ping pong, Mid ping pong, Tap->Delay; default Stereo), Filter Cutoff 20 .. 20000 Hz (260), Filter Spread 0 .. 100 percent, Level, High Quality (Off/On), Offset and Offset Left 0.25 .. 4 (1).
-4. **Distortion** (display): Type (14 choices: Soft clip, Hard clip, Linear fold, Sine fold, Bit crush, Down sample, Tube, Diode 1 ...), Drive -30 .. +30 dB, Mix 0 .. 100 percent (100), Filter Order (None, Pre, Post), Filter Cutoff 20 .. 20000 Hz (4000), Filter Resonance 0 .. 100 percent (50), Filter Blend 0 .. 100 percent, Level, Filter Key Track -100 .. +100 percent.
-5. **EQ** (3 pages, display): bands Low (Mode Shelf or High pass; Cutoff 100 Hz; Gain -24 .. +24 dB; Resonance 0 .. 100 percent), Mid (Peak or Notch; 1000 Hz), High (Shelf or Low pass; 8000 Hz), Mid 2 (Off, Peak, Notch; 3000 Hz), each Cutoff 20 .. 20000 Hz; Level -24 .. +12 dB; Law (Vital, Serum).
-6. **FX Filter** (display): the same controls as a Filter page (Model, Style, Cutoff 20 .. 20000 Hz, Resonance, Drive 0 .. 20 dB, Blend, Mix, Key Tracking, Comb Blend Offset, Formant X, Y, Resonance, Spread, Transpose, Var, Pan, Level -60 .. +12 dB, Clean Mode).
-7. **Flanger**: Mix (50), Feedback -100 .. +100 percent (50), Rate 0.04 .. 4 Hz (0.25), Sync, Division, Depth 0 .. 100 percent, Center 20 .. 16000 Hz (330), Phase Offset 0 .. 360 degrees (120), Level.
-8. **Phaser**: Mix, Feedback 0 .. 100 percent, Rate 0.04 .. 4 Hz (0.12), Sync, Division, Depth 0 .. 48 semitones (24), Center 20 .. 16000 Hz (2000), Blend 0 .. 100 percent, Phase Offset 0 .. 360 degrees (120), Level, Depth 2 -48 .. +48 semitones.
-9. **Reverb** (2 pages): Mix 0 .. 100 percent (25), Size 0 .. 100 percent, Decay 20 .. 30000 ms (1500), Pre-delay 0 .. 300 ms, Pre Low Cut and Pre High Cut 20 .. 12000 Hz, Low and High Shelf Cutoff and Gain (-6 .. 0 dB), Chorus Amount 0 .. 100 percent, Chorus Rate 0.01 .. 8 Hz, Force Enable (Off/On), Level, Type (Vital, Plate, Hall, Vintage, Nitrous, Basin), Room (Space, Marble, Rectangle, Hexagon, Box), Width 0 .. 200 percent, ER Size, Diffusion A, Diffusion B, Feedback (0 .. 100 percent).
-10. **Hyper/Dimension**: Hyper Rate 0.05 .. 10 Hz, Hyper Unison 0 .. 7 voices, Hyper Detune 0 .. 100 percent, Hyper Retrigger (Off/On), Hyper Mix, Dimension Size 0 .. 100 percent, Dimension Mix 0 .. 100 percent, Level.
-11. **Utility**: Polarity Left and Right (Off/On), Low Pass 20 .. 20000 Hz, High Pass 20 .. 20000 Hz, Mono Bass (Off/On) and its Frequency 20 .. 500 Hz (120), Width 0 .. 200 percent (100), Pan -100 .. +100 percent, Mix, Level.
-12. **Bode**: Mono Input (Off/On), Shift 0 .. 100 percent, Range 1 .. 5000 Hz (100), Direction -100 .. +100 percent (100), Width 0 .. 100 percent, Delay 1 .. 2000 ms (100), Sync, Division, Feedback 0 .. 100 percent, Balance -100 .. +100 percent, Blur 0 .. 100 percent, Retrigger (Off/On), Mix (50), Level.
-13. **Convolve**: Impulse (None, Preset IR), Size 0 .. 100 percent, Tone -100 .. +100 percent, Minimum Phase (Off/On), Pre-delay 0 .. 500 ms, Sync, Division, Attack 0 .. 2000 ms, Decay 0 .. 100 percent (100), Damping 0 .. 100 percent, IR Gain -40 .. +24 dB, Mix (30), Level, Law (Vital, Serum).
+1. **Chorus** Thickens the sound by mixing in delayed copies whose delay time is moved by a slow modulation. (page of 12): Mix 0 .. 100 percent (50), Rate 0.02 .. 8 Hz (0.4), Sync (Free (Hz), Tempo, Tempo dotted, Tempo triplet), Division (Freeze ... 1/64 note, 11 choices from 32 bars), Depth 0 .. 100 percent (50), Feedback -95 .. +95 percent (40), Delay 1 and Delay 2 1 .. 20 ms (2, 8), Voices 1 .. 4 (4), Filter Cutoff 20 .. 20000 Hz (260), Filter Spread 0 .. 100 percent (100), Level -24 .. +12 dB (0). A modulated delay line effect.
+2. **Compressor** Evens out loud and quiet parts. It works in three bands (low, mid, high) with their own thresholds, ratios and gain, or as a single band; the mode can be Compress or Limit. (3 pages, display): Mix 0 .. 100 percent, Attack 0 .. 100 percent, Release 0 .. 100 percent, Bands (Multiband, Low band, High band, Single band), for Low, Mid, High: Lower Threshold -120 .. +12 dB (-40), Upper Threshold (-20), Lower Ratio -100 .. +100 percent (0), Upper Ratio 0 .. 100 percent (50), Gain -36 .. +36 dB (0); Level -24 .. +12 dB; Mode (Compress, Limit, Serum); Limiter Latency Comp (Off/On); Low Crossover 20 .. 1000 Hz (120); High Crossover 200 .. 16000 Hz (2500).
+3. **Delay** Repeats the sound as echoes. The time is free or tempo-synced, feedback sets the number of repeats, and the styles include ping pong. (display): Mix 0 .. 100 percent (30), Feedback -100 .. +100 percent (40), Time and Time 2 2 .. 4000 ms (300), Sync (Free, Tempo, dotted, triplet; default Tempo), Division and Division 2 (4 bars ... 1/32 note), Style (Mono, Stereo, Ping pong, Mid ping pong, Tap->Delay; default Stereo), Filter Cutoff 20 .. 20000 Hz (260), Filter Spread 0 .. 100 percent, Level, High Quality (Off/On), Offset and Offset Left 0.25 .. 4 (1).
+4. **Distortion** Adds harmonics by clipping, folding or reducing the signal (soft and hard clip, folds, bit crush, down sample, tube, diode ...), with an optional filter before or after. (display): Type (14 choices: Soft clip, Hard clip, Linear fold, Sine fold, Bit crush, Down sample, Tube, Diode 1 ...), Drive -30 .. +30 dB, Mix 0 .. 100 percent (100), Filter Order (None, Pre, Post), Filter Cutoff 20 .. 20000 Hz (4000), Filter Resonance 0 .. 100 percent (50), Filter Blend 0 .. 100 percent, Level, Filter Key Track -100 .. +100 percent.
+5. **EQ** A tone control with four bands (low, mid, mid 2, high), each with cutoff, gain and resonance. (3 pages, display): bands Low (Mode Shelf or High pass; Cutoff 100 Hz; Gain -24 .. +24 dB; Resonance 0 .. 100 percent), Mid (Peak or Notch; 1000 Hz), High (Shelf or Low pass; 8000 Hz), Mid 2 (Off, Peak, Notch; 3000 Hz), each Cutoff 20 .. 20000 Hz; Level -24 .. +12 dB; Law (Vital, Serum).
+6. **FX Filter** A filter used as an effect on the whole signal, with the same models as the voice filters. (display): the same controls as a Filter page (Model, Style, Cutoff 20 .. 20000 Hz, Resonance, Drive 0 .. 20 dB, Blend, Mix, Key Tracking, Comb Blend Offset, Formant X, Y, Resonance, Spread, Transpose, Var, Pan, Level -60 .. +12 dB, Clean Mode).
+7. **Flanger** Sweeps a very short delay with feedback, giving a moving, metallic comb-filter sound.: Mix (50), Feedback -100 .. +100 percent (50), Rate 0.04 .. 4 Hz (0.25), Sync, Division, Depth 0 .. 100 percent, Center 20 .. 16000 Hz (330), Phase Offset 0 .. 360 degrees (120), Level.
+8. **Phaser** Sweeps a series of notches through the sound, with feedback, for a swirling movement.: Mix, Feedback 0 .. 100 percent, Rate 0.04 .. 4 Hz (0.12), Sync, Division, Depth 0 .. 48 semitones (24), Center 20 .. 16000 Hz (2000), Blend 0 .. 100 percent, Phase Offset 0 .. 360 degrees (120), Level, Depth 2 -48 .. +48 semitones.
+9. **Reverb** Adds the space of a room or hall: size, decay time, pre-delay, tone shaping and several reverb types. (2 pages): Mix 0 .. 100 percent (25), Size 0 .. 100 percent, Decay 20 .. 30000 ms (1500), Pre-delay 0 .. 300 ms, Pre Low Cut and Pre High Cut 20 .. 12000 Hz, Low and High Shelf Cutoff and Gain (-6 .. 0 dB), Chorus Amount 0 .. 100 percent, Chorus Rate 0.01 .. 8 Hz, Force Enable (Off/On), Level, Type (Vital, Plate, Hall, Vintage, Nitrous, Basin), Room (Space, Marble, Rectangle, Hexagon, Box), Width 0 .. 200 percent, ER Size, Diffusion A, Diffusion B, Feedback (0 .. 100 percent).
+10. **Hyper/Dimension** Hyper thickens the sound with several detuned copies; Dimension widens the stereo picture.: Hyper Rate 0.05 .. 10 Hz, Hyper Unison 0 .. 7 voices, Hyper Detune 0 .. 100 percent, Hyper Retrigger (Off/On), Hyper Mix, Dimension Size 0 .. 100 percent, Dimension Mix 0 .. 100 percent, Level.
+11. **Utility** Housekeeping tools: polarity flip per channel, low-pass and high-pass filters, mono bass, stereo width, pan and level.: Polarity Left and Right (Off/On), Low Pass 20 .. 20000 Hz, High Pass 20 .. 20000 Hz, Mono Bass (Off/On) and its Frequency 20 .. 500 Hz (120), Width 0 .. 200 percent (100), Pan -100 .. +100 percent, Mix, Level.
+12. **Bode** Shifts all frequencies of the sound by a fixed amount (a frequency shifter), with delay, feedback and blur.: Mono Input (Off/On), Shift 0 .. 100 percent, Range 1 .. 5000 Hz (100), Direction -100 .. +100 percent (100), Width 0 .. 100 percent, Delay 1 .. 2000 ms (100), Sync, Division, Feedback 0 .. 100 percent, Balance -100 .. +100 percent, Blur 0 .. 100 percent, Retrigger (Off/On), Mix (50), Level.
+13. **Convolve** Gives the sound the character of a recorded space or device by convolving it with an impulse response.: Impulse (None, Preset IR), Size 0 .. 100 percent, Tone -100 .. +100 percent, Minimum Phase (Off/On), Pre-delay 0 .. 500 ms, Sync, Division, Attack 0 .. 2000 ms, Decay 0 .. 100 percent (100), Damping 0 .. 100 percent, IR Gain -40 .. +24 dB, Mix (30), Level, Law (Vital, Serum).
 
 For Q-Links: one Q group per row of four knobs on the page that is on screen.
-TODO(owner): The rendered pictures show the rate of the Chorus and the Reverb chorus as "0 Hz" although the parameters are 0.4 Hz and 0.25 Hz. Is that a display fault that will be fixed, or is it the intended rounding?
 
 ### 5.12 Master
 
@@ -583,8 +588,7 @@ Q groups: OUTPUT (VOLUME, SPREAD, STEREO, VOICE OVERRIDE), PITCH, VOICES (POLY .
 - **TUNING:** A4 HZ (400 .. 480 Hz, default 440), TUNING (12-TET, Pythagorean, Just intonation, User file), MTS-ESP switch, NOTE-ON switch (MTS-ESP note-on only).
 - **MPE:** MPE on/off, MPE BEND (1 .. 96 semitones, default 48), XYZ MACRO (Off, XYZ -> Macro 1, 2, 3, YZ -> Macro 1, 2), Y TO WHEEL, BEND TO X, Y BIPOLAR (switches).
 
-**Pad pressure (MPC XL pads).** The plugin opens Filter 1 with the pressure of each held pad: on by default, 35 percent (a full pressure opens the cutoff by about one octave); it works only with **Full Level switched off** (with Full Level on every hit has velocity 127 and sends no pressure). The setting is not part of a preset. Polyphonic pressure only; channel aftertouch is ignored.
-TODO(owner): There is no control for "Pad Pressure" and "Pad Pressure Amount" on the plugin-drawn Master page. Where does the user change them (host parameter list, Q-Link assignment)?
+**Pad pressure (MPC XL pads).** The XL pads send a pressure value for each held pad. A preset uses it through the modulation matrix: a route from the source **Poly Aftertouch** to a parameter, for example Filter 1 Cutoff (the preset "MPE Pressure Lead" does this). The plugin also has a plugin-wide pad-pressure switch for the Filter 1 cutoff; it is **off** by default. For any pad pressure to arrive, the pad's **Full Level must be off** (with Full Level on every hit has velocity 127 and sends no pressure). Only per-pad (polyphonic) pressure counts; channel aftertouch is ignored by that switch.
 
 ### 5.13 Voice control
 
@@ -601,7 +605,7 @@ A sequencer of per-voice offsets: eight steps and six rows.
 - **TARGETS:** switches OSC A, OSC B, OSC C, SUB, NOISE (all on by default): which sound sources the voice control acts on.
 - Q groups: STEP, RANDOM, 10x DETUNE, SCALING, TARGETS, NOISE.
 
-TODO(owner): Explain in plain words how a voice picks its step (does each new note advance one step, and is the sequence reset on a new chord?). The code lights the step a voice plays but the notes do not state the advance rule.
+**How the steps are used.** Every new note takes the next step, and the sequence goes round after LENGTH steps (note 1 plays step 1, note 2 step 2 ... note LENGTH+1 step 1 again). A chord takes one step per note. The count is not reset by a new chord or by stopping the transport; it starts again from step 1 only when the plugin's audio is started again (for example a project load).
 
 ---
 
@@ -643,12 +647,15 @@ The plugin offers **113 programs** to the host: "Init" (the default sound) and 1
 | Pad | 23 | Cathedral Choir; Comb Reso Swell; Dark Cinema Drone; Deep Sea Ambient; Diffusor Cloud Pad; Ethereal Glass; Frozen Aurora; Gentle Flute Pad; Golden Dawn Pad; Harmonic Cloud; Hyper Dimension Pad; Infinite Horizon; Lush Analog Pad; Odd Harmonics Pad; Radiant Pulse Pad; Slow Motion Waves; Space Odyssey Pad; Starlight Shimmer; Subtle Tape Drift; Tri-Band Split Texture; Velvet Strings; Vintage Brass Pad; Vowel Choir Pad |
 | Pluck | 16 | Acoustic Style Pluck; Aux Keyscale Pluck; Bell Mallet Pluck; Chime Drop; Comb Zither; Digital Glass Tap; Electric Mute Pluck; Formant Pop Pluck; Harmonic Tine Pluck; Harp Drops; Kalimba Tines; Marimba Synth; Pizzicato Strings; Rubber Bass Pluck; Spruce Guitar; Trance Short Pluck |
 
-The presets are CC0 licensed (Safian Szabolcs). They are chosen in the host's **PRESET** field of the header; the host lists them by name (the category is not part of the name).
-TODO(owner): Describe the exact gesture and screen for choosing a preset in the PRESET field on the Key 61 and the XL (the developer notes say only that the presets are exposed as programs and appear in the host's preset browser).
+The presets are CC0 licensed (Safian Szabolcs). The host lists them by name (the category is not part of the name).
+
+**Choosing a preset** (Akai manuals, "Track Types > Plugin Tracks" and "Sounds Mode"):
+- In the plugin track's settings (and when you make the track) use the **Preset** field to choose a preset of the loaded plugin; the host's header shows the current one in its PRESET field.
+- Or use **Sounds Mode**: press **Menu** and tap **Sounds** (or press the **Sounds** button on the Key 61 and the XL), choose the plugin and the preset, and tap **Locate Preset** at the top to open the preset list of the selected plugin instrument. **Edit Instrument** at the bottom opens Track Edit Mode, where the plugin's pages are. Favorites (the first tab at the bottom) saves presets you use most.
 
 **The "*" mark.** The plugin puts " *" after the preset name when you changed a parameter after loading the preset, or when a project was loaded that held changed settings. Loading a preset again clears the mark. A project remembers the preset by name and finds it again even when a later version has a different preset list; if the name is not found the saved sound is kept without a preset.
 
-The Pad Pressure settings are not part of a preset (a preset change leaves them alone). The Play-page selectors (which oscillator, envelope and LFO the Play page shows) are saved with the project.
+The plugin-wide pad-pressure switch is not part of a preset (a preset change leaves it alone). The Play-page selectors (which oscillator, envelope and LFO the Play page shows) are saved with the project.
 
 ## 8. Known limitations
 
@@ -662,15 +669,14 @@ The Pad Pressure settings are not part of a preset (a preset change leaves them 
 - **One finger.** Only one finger is followed.
 - **Up to 16 instances.** The 17th and later instances never show the drawn pages.
 - **Controls that are dim.** The wavetable MEMORY stepper, the WARP VAR knobs and the oscillator types Sample and Spectral cannot be set from the plugin pages.
-- **Channel aftertouch** (a Key 61 key) is ignored by the pad-pressure layer; only per-pad polyphonic pressure acts.
-- **Pad Pressure** works only with Full Level off (XL pads: with Full Level on every hit has velocity 127 and no pressure).
+- **Pad pressure** needs the pad's Full Level to be off. The plugin-wide pad-pressure switch ignores channel aftertouch (a Key 61 key); only per-pad polyphonic pressure acts.
 
 ## 9. Troubleshooting
 
 | Problem | What to check |
 |---|---|
 | The plugin is not in the browser | The folder must be named `Safian - VST - SynthyBoy` inside `VST2 Plugins` at the root of the drive. MPC OS 3.10.1 or later. In Preferences > Enhancements (Beta) both **Enable Enhancements** and **External Plugin Support** must be on. After copying a plugin, restart the MPC application. |
-| The plugin loads but the pages are plain host pages or dark areas | The picture needs the overlay package (chapter 2). The display layer disables itself for the rest of the session when the display driver refuses it or no free display plane is left; restart the MPC application. A pop-up of the host over the area also hides it. |
+| The plugin loads but the pages are plain host pages or dark areas | The display layer disables itself for the rest of the session when the display driver refuses it or no free display plane is left; restart the MPC application. A pop-up of the host over the area also hides it. |
 | The picture flickers or is cut at the right edge (Key 61) | Switch off the Q-Link Status pop-up (chapter 8). Changing the tab (for example Play, Macros, Play) takes a new reference. |
 | The picture disappears when the device dims | Standby: it returns on wake (chapter 8). |
 | The picture is missing on one track | Only the instance whose page is on screen is drawn. More than 16 instances: the extra ones are never drawn. |
@@ -678,8 +684,8 @@ The Pad Pressure settings are not part of a preset (a preset change leaves them 
 | Knob names in the Key 61 pop-up are old | The host updates names when a group changes; touch the knob again (about half a second). |
 | A knob steps a list or switch instead of sweeping | By design: stepped values move one step per small turn. |
 | Touch does nothing | Only one finger is followed; lift the first finger. Touch to the right of a host pop-up on the Key 61 is not taken. |
-| No sound | On the plugin pages check: Mixer: the strip's power is lit and its destination is not None; level not at 0; BUS and MASTER FX power as expected; Master VOLUME is not at its minimum; the filters are not on a Direct/None route you did not intend. TODO(owner): Which host-side checks belong here (track mute, MIDI channel, the track's plugin program, input routing)? |
-| Too quiet next to stock instruments, or clipping | The plugin adds +18 dB and has no limiter (chapter 8): adjust the track level. |
+| No sound | Host side (Akai manuals, "Track Types > Plugin Tracks", mixer chapters): the right track is selected and the track is a plugin track with SynthyBoy loaded; the track is not muted and its level is up; the track's MIDI input port and channel match what you play (MIDI Input Port, MIDI Input Channel); the output level of the MPC is up. Our side: the Mixer page (chapter 5.6): the strip's power is lit and its destination is not None; levels are not at 0; MASTER VOLUME on the Master page is not at its minimum. Pads on the XL: pad pressure only acts with Full Level off, but notes sound either way. |
+| Distortion or clipping | The output has no limiter (chapter 8): lower the track level. |
 | Preset changes after project reload | The project stores the preset by name; if the name is gone from the list the saved sound stays. |
 
 ## 10. To update when the UI changes
@@ -691,5 +697,6 @@ These chapters describe the current tree and depend on pages that are being rewo
 - **Toggles and option lists** on **5.12 Master / 5.13 Voice** (switch looks and ON/OFF text), **5.7 Filter** (CLEAN, ENV 1, and the model and style lists) and **5.11 FX** (switch cells such as Sync, Mode, Law, Type; the list popups): the pictures filter, master-main, master-tuning, voice, fx-reverb, fx-eq, fx-compressor, fx-chorus, and the control tables.
 - **Standby:** chapter 8 (limitation), chapter 9 (the row about dimming).
 - **Q-Link behaviour** (4.3, the Q-group lists of each chapter): when the Env and LFO pages publish their blocks as separate groups, the Q-Link lines of 5.1, 5.8, 5.9 change.
-- **Chapter 2 and chapter 7:** the install steps and the PRESET field, once the TODO(owner) answers are in.
+- **5.12 Master (pad pressure):** a Master page control for the plugin-wide pad-pressure switch is coming; the text in 5.12 and in chapter 8 must then name it.
+- **Chapter 2:** the plugin window name under which SynthyBoy is listed, once confirmed on the device.
 - **All pictures** in `img/` are rendered with `scripts/render-ui-gallery.py` and must be re-rendered after a UI change.
