@@ -122,7 +122,7 @@ int main (int argc, char** argv)
     firstSpectrum.store (n + 4);
     AEffect* e = entry (hostCallback);
     if (! e) { std::fprintf (stderr, "plugin did not load\n"); return 2; }
-    lastIndex.store (e->numParams - 1 - (overlayBuild ? 31 : 0));   // Overlay Instance is followed by the 27 parameters of the Play page (shell-mpc/play_params.h) and the 16 Q proxies (shell-mpc/q_router.h);   // the display thread's first report comes a tick (>= 50 ms) after creation
+    lastIndex.store (e->numParams - 1 - (overlayBuild ? 43 : 0));   // Overlay Instance is followed by the 27 parameters of the Play page (shell-mpc/play_params.h) and the 16 Q proxies (shell-mpc/q_router.h);   // the display thread's first report comes a tick (>= 50 ms) after creation
     const auto created = std::chrono::steady_clock::now();
     e->dispatcher (e, effOpen, 0, 0, nullptr, 0.0f);
     e->dispatcher (e, effSetSampleRate, 0, 0, nullptr, 44100.0f);
