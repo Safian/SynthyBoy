@@ -2040,6 +2040,15 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             if (real >= 0)
             {
                 fillParameterProperties (synthyboy::paramTable()[real], props);
+                if (stepCountOf (synthyboy::paramTable()[real]) >= 2)
+                {
+                    // a stepped target (a toggle, a list, an integer stepper) is driven by the router in steps of its own (6 increments each, q_router.h), so the host must see a plain knob: with the target's integer range
+                    // (stepInteger / UsesIntegerMinMax) the host quantised its increments itself (a list of 5 jumped four entries for six increments, a list of 20 did not move for fourteen single increments; Key 61, 2026-11-16)
+                    props->flags = kVstParameterCanRamp;
+                    props->minInteger = props->maxInteger = props->stepInteger = 0;
+                    props->stepFloat = props->smallStepFloat = 1.0f / 128.0f;
+                    props->largeStepFloat = 1.0f / 16.0f;
+                }
                 return 1;
             }
             std::memset (props, 0, sizeof (*props));
