@@ -138,7 +138,7 @@ protected:
         const theme::Look& T = theme::L();
         if (state.title[0] != '\0' && state.titleInLane)
             p.textLeft ({ rect_.x + 30, rect_.y - 16, std::max (0, rect_.w - 32), 16 }, state.title, T.fLabel - 3.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
-        if (state.title[0] != '\0')
+        else if (state.title[0] != '\0')
             p.textLeft ({ rect_.x + 4, rect_.y + 4, std::max (0, rect_.w - 8), kTitleH - 6 }, state.title, T.fLabel - 2.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
         const int n = std::min (state.count, kMaxOptions);
         for (int i = 0; i < n; ++i)
