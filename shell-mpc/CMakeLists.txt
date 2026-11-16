@@ -319,5 +319,19 @@ if(NOT CMAKE_CROSSCOMPILING)
 
     add_test(NAME osc_page_host COMMAND osc_page_host)
     add_test(NAME osc_ui_host COMMAND osc_ui_host)
+
+    # the automatic layout lint of the plugin-drawn pages (every page, Init and every factory preset): a finding that is not in the baseline fails it, a baseline entry that no longer occurs too
+    add_executable(layout_lint_host EXCLUDE_FROM_ALL overlay/tests/layout_lint_host.cpp)
+    target_include_directories(layout_lint_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_compile_definitions(layout_lint_host PRIVATE "LINT_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\"")
+    target_link_libraries(layout_lint_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(layout_lint_host PRIVATE cxx_std_17)
+    target_compile_options(layout_lint_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME layout_lint_host_selftest COMMAND layout_lint_host --self-test)
+    add_test(NAME layout_lint_host COMMAND layout_lint_host --presets-dir "${CMAKE_SOURCE_DIR}/content/presets"
+        --baseline "${CMAKE_CURRENT_SOURCE_DIR}/overlay/tests/layout_lint_baseline.json" --quiet)
 endif()
 
