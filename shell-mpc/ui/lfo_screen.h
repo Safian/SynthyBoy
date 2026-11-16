@@ -320,10 +320,12 @@ protected:
             const int botY = inner (0).y + topH + kQLane;
             const int botH = inner (0).bottom() - botY;
 
-            // RATE: RATE knob large with the value, RISE and SMOOTH medium in one row
+            // RATE: the RATE knob is large (the whole height of the block, with its value) on the left; RISE and SMOOTH are the medium knobs of the page (the size of PHASE, DELAY, SWING, STEREO) one above the other on the right
             Rect in0 = inner (0);
-            rate.place ({ in0.x, in0.y, in0.w, topH });
-            pair ({ in0.x, botY, in0.w, botH }, rise, smoothTime);
+            const int rw = in0.w * 11 / 20;
+            rate.place ({ in0.x, in0.y, rw, in0.h });
+            rise.place ({ in0.x + rw + kGap, in0.y, in0.w - rw - kGap, topH });
+            smoothTime.place ({ in0.x + rw + kGap, botY, in0.w - rw - kGap, botH });
 
             // TIMING: MODE stepper + PHASE + DELAY
             Rect in1 = inner (1);
@@ -345,7 +347,7 @@ protected:
             pair ({ in.x, in.y, in.w, rowH }, style, sync);
             pair ({ in.x, in.y + rowH + kQLane, in.w, rateH }, rate, stereoToggle);
             in = inner (1);
-            mode.place ({ in.x, in.y, in.w, rowH });
+            mode.place ({ in.x, in.y + (in.h - rowH) / 2, in.w, rowH });   // the only control of the block: in the middle of it
             if (keyActive_)
                 stack2 (inner (2), keyTranspose, keyTune);
         }

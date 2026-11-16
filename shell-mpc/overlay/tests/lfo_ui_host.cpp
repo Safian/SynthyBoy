@@ -282,6 +282,15 @@ void testFullScreen()
     check (r.inst.q[0] == paramIdx ("lfo1.shape") && r.inst.q[1] == paramIdx ("lfo1.rate") &&
            r.inst.q[2] == paramIdx ("lfo1.fade_in") && r.inst.q[3] == paramIdx ("lfo1.smooth_time"),
            "full screen: the Q group RATE is shape (grid), rate, rise, smooth");
+    // Q1 is the shape grid: the knob writes lfo1.shape (the proxy writes the target) and the grid follows; the page has no SHAPE stepper and no SYNC stepper (the HZ / BPM / KEY buttons are the sync) and one MONO
+    r.key ("lfo1.shape", 5.0f);
+    check (r.ui.full().picker.state.index == 5 && r.ui.full().groups[0].member (0) == &r.ui.full().picker, "a knob step on Q1 moves the selected cell of the shape grid (the grid is Q1)");
+    {
+        ui::Component* leaves[160];
+        const int nl = r.ui.full().collectLeaves (leaves, 0, 160);
+        auto has = [&] (const ui::Component* c) { for (int i = 0; i < nl; ++i) if (leaves[i] == c) return true; return false; };
+        check (! has (&r.ui.full().shape) && ! has (&r.ui.full().sync) && ! has (&r.ui.full().monoQ) && has (&r.ui.full().monoTop), "no SHAPE stepper, no SYNC stepper, one MONO (the header's) on the page");
+    }
     r.tapC (r.ui.full().swing);
     check (r.ui.activeQ() == 2 && r.inst.q[0] == paramIdx ("lfo1.direction") && r.inst.q[1] == paramIdx ("lfo1.swing") && r.inst.q[2] == paramIdx ("lfo1.stereo") && r.inst.q[3] < 0,
            "a touch on SWING: the MOTION group (direction, swing, stereo)");

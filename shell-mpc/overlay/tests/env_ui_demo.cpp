@@ -117,6 +117,19 @@ void renderAll (const std::string& dir)
             save (dir, name.c_str(), r.ui);
         }
     }
+    {   // the compact view with targets: ENV 1 and ENV 3 modulate something and carry the dot in their tab, the others carry no mark
+        Rig r;
+        setEnv (r.inst, 3, 800.0f, 200.0f, 2400.0f, 80.0f, 3000.0f, -5.0f, -8.0f, 6.0f, 150.0f);
+        r.inst.env = 3;
+        r.inst.set ("mod01.source", 3.0f);
+        r.inst.set ("mod01.destination", static_cast<float> (synthyboy::modDestinationChoiceOf (static_cast<size_t> (Inst::idx ("filter1.cutoff")))));
+        r.inst.set ("mod01.amount", 35.0f);
+        r.inst.set ("mod02.source", 1.0f);
+        r.inst.set ("mod02.destination", static_cast<float> (synthyboy::modDestinationChoiceOf (static_cast<size_t> (Inst::idx ("osc1.level")))));
+        r.inst.set ("mod02.amount", 60.0f);
+        r.refresh();
+        save (dir, "compact_targets_dots.png", r.ui);
+    }
     {   // the full screen of ENV 3 (a pad) with a voice in the decay and one in the release, the decay handle selected; ADSR group active
         Rig r;
         setEnv (r.inst, 3, 800.0f, 200.0f, 2400.0f, 80.0f, 3000.0f, -5.0f, -8.0f, 6.0f, 150.0f);
