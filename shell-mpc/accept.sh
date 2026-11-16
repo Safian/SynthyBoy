@@ -232,6 +232,13 @@ for t in controller_host qlink_panel_host mouse_host views_host gpu_backend_host
     $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
 done
+# the four host tests of the pointer / pop-up work that had no sanitizer run (review of 2026-11-16): the setting file, the plane order, the key of the pop-up, the detector on the captured pictures
+for t in qlink_setting_host stacking_host panel_key_host; do
+    c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I shell-mpc/overlay -o $B/${t}_asan $OVSRC/$t.cpp || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
+    $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
+done
+c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I shell-mpc/overlay -DQLINK_FIXTURE=\"shell-mpc/overlay/tests/fixtures/qlink_panel_fixtures.bin\" -o $B/page_detector_host_asan $OVSRC/page_detector_host.cpp || { echo "ACCEPT FAIL: page_detector_host asan build"; exit 1; }
+$B/page_detector_host_asan > $B/page-detector-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/page-detector-asan.log | head; echo "ACCEPT FAIL: page_detector_host under AddressSanitizer / UBSan"; exit 1; }
 # the Q slots test under AddressSanitizer + UBSan too, with the libc++ container annotation check off: the FX part adds an effect through the static core library (not instrumented), which pushes to vectors the annotating libc++ then reports at the next reallocation (a false report of the annotation, the same code in mixfx_ui_host happens to grow its vectors differently)
 c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/qslots_host_asan $OVSRC/qslots_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: qslots_host asan build"; exit 1; }
 ASAN_OPTIONS=detect_container_overflow=0 $B/qslots_host_asan > $B/qslots_host-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/qslots_host-asan.log | head; echo "ACCEPT FAIL: qslots_host under AddressSanitizer / UBSan"; exit 1; }

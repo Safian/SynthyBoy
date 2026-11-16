@@ -33,6 +33,7 @@ class FakeSys final : public ITouchSyscalls
 public:
     struct Node
     {
+        uint64_t stampGen = 0;
         bool exists = false, rel = false, relX = false, relY = false, key = false, btnLeft = false, abs = false;
         std::vector<uint8_t> stream;
         size_t off = 0;
@@ -72,6 +73,7 @@ public:
         return 100 + i;
     }
     int close (int fd) override { ++closes; (void) fd; return 0; }
+    bool nodeStamp (const char* path, uint64_t& stamp) override { int i = -1; if (std::sscanf (path, "/dev/input/event%d", &i) != 1 || i < 0 || i >= 32 || ! nodes[i].exists) return false; stamp = 1000u + static_cast<uint64_t> (i) + nodes[i].stampGen; return true; }
     ssize_t read (int fd, void* buf, size_t count) override
     {
         Node& n = nodes[fd - 100];
@@ -194,6 +196,15 @@ int main()
         sys.push (3, { { kKey, kBtnLeft, 1 }, { kSyn, kReport, 0 }, { kRel, kWheel, 2 }, { kSyn, kReport, 0 }, { kKey, kBtnLeft, 0 }, { kSyn, kReport, 0 } });
         poll();
         check (s.v.size() == 3 && s.v[0].kind == MouseEvent::Down && s.v[1].kind == MouseEvent::Wheel && s.v[1].notches == 2 && s.v[2].kind == MouseEvent::Up, "the events of the node come through (down, wheel 2, up)");
+        {   // follow-up 7: a node that is no mouse is opened once; the next scans do one stat and nothing else, until the node changes
+            const int opens0 = sys.opens;
+            sys.clock += 2500; poll();
+            sys.clock += 2500; poll();
+            check (sys.opens == opens0, "the nodes known not to be mice are not opened again (opens " + std::to_string (sys.opens - opens0) + " in two scans)");
+            sys.nodes[5].stampGen += 1;   // the node changed (something else was plugged in under that number)
+            sys.clock += 2500; poll();
+            check (sys.opens == opens0 + 1, "a node whose stamp changed is looked at again");
+        }
         // hot plug: a second mouse appears
         sys.addMouse (9);
         sys.clock += 500;

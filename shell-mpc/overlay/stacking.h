@@ -132,13 +132,11 @@ public:
             error_ = error;
             ++failures_;
             restoreFailed_ = true;
+            return;   // the value at rest is KEPT (and our hold with it): the next release () tries again, and a take () does not mistake the value we set for the one at rest
         }
-        else
-        {
-            ++restores_;
-            restoreFailed_ = false;
-            ourZpos_ = rest_;
-        }
+        ++restores_;
+        restoreFailed_ = false;
+        ourZpos_ = rest_;
         applied_ = false;
     }
 

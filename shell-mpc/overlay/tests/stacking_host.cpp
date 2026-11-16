@@ -143,6 +143,21 @@ int main()
         g.release();
         check (d.planes[52].value == 4 && d.planes[46].value == 0, "released: only the plane we hold is put back");
     }
+    // ---- a restore that fails keeps the value at rest for the next try (review follow-up 6) ----
+    {
+        FakeDriver d;
+        d.add (34, 0); d.add (40, 1); d.add (46, 2);
+        StackingGuard g (d);
+        g.take (46, 34, { 34, 40 });
+        d.failWrites = true;
+        g.release();
+        check (g.applied() && g.rest() == 2 && d.planes[46].value == 0, "a failed restore: the hold and the value at rest (2) are kept");
+        g.take (46, 34, { 34, 40 });
+        check (g.rest() == 2, "a take () after the failed restore does not take the value we set (0) for the one at rest");
+        d.failWrites = false;
+        g.release();
+        check (! g.applied() && d.planes[46].value == 2, "the next release () puts the value at rest back (" + std::to_string (d.planes[46].value) + ")");
+    }
     // ---- a failing write is not fatal ----
     {
         FakeDriver d;
