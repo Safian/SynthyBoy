@@ -319,5 +319,26 @@ if(NOT CMAKE_CROSSCOMPILING)
 
     add_test(NAME osc_page_host COMMAND osc_page_host)
     add_test(NAME osc_ui_host COMMAND osc_ui_host)
+
+    # --- UI Component Library Coverage Tests ---
+    set(UI_COV_TARGETS
+        ui_cov_knobs_values_host
+        ui_cov_steppers_lists_host
+        ui_cov_toggles_buttons_host
+        ui_cov_popups_scroll_host
+        ui_cov_composites_panels_host
+        ui_cov_qgroups_chips_host
+        ui_cov_layout_text_host)
+
+    foreach(cov_target IN LISTS UI_COV_TARGETS)
+        add_executable(${cov_target} ui/tests/${cov_target}.cpp)
+        target_include_directories(${cov_target} PRIVATE
+            "${CMAKE_SOURCE_DIR}/core/include"
+            "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+        target_compile_features(${cov_target} PRIVATE cxx_std_17)
+        target_compile_options(${cov_target} PRIVATE -Wall -Wextra -Wpedantic)
+        add_test(NAME ${cov_target} COMMAND ${cov_target})
+    endforeach()
 endif()
 
