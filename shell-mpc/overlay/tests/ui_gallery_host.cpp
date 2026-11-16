@@ -390,6 +390,14 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         rFlt1.in.targets = live1;
         rFlt1.refresh (2);
         rFlt1.picture (outDir + "/" + state + "_filter1.png");
+        {   // the OUTPUT popup of the filter (destination, buses, level, pan)
+            GalleryRig<FilterUi> rOut (baseInst, 1);
+            rOut.in.targets = live1;
+            rOut.refresh (2);
+            rOut.stack.openDetail (FilterUi::kPageRoute);
+            rOut.refresh (2);
+            rOut.picture (outDir + "/" + state + "_filter1_output.png");
+        }
 
         GalleryRig<FilterUi> rFlt2 (baseInst, 2);
         synthyboy::FilterResponse::readoutIndices (2, idx);
@@ -488,6 +496,13 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         rModRows.refresh (2);
         rModRows.picture (outDir + "/" + state + "_mod_rows.png");
         rModRows.picture (outDir + "/" + state + "_mod.png");
+        {   // the page of one modulation slot (the first row of the list)
+            GalleryRig<ModUi> rSlot (modRowsInst, 1);
+            rSlot.refresh (2);
+            rSlot.ui.openSlotDetail (0, rSlot.stack);
+            rSlot.refresh (2);
+            rSlot.picture (outDir + "/" + state + "_mod_slot.png");
+        }
     }
 
     // 9. FX (gallery and each of the 13 effect editors, every page of each)

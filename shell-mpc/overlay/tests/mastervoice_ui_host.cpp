@@ -35,7 +35,7 @@ bool sizesOk (const std::vector<ui::Component*>& cs, std::string& bad)
     for (ui::Component* c : cs)
         if (c->rect().w <= 0 || c->rect().h < 56 || ! c->sizeOk())
         {
-            bad = std::to_string (c->rect().w) + " x " + std::to_string (c->rect().h);
+            bad = std::to_string (c->rect().w) + " x " + std::to_string (c->rect().h) + " min " + std::to_string (c->minSize().w) + " x " + std::to_string (c->minSize().h);
             return false;
         }
     return true;
@@ -263,10 +263,19 @@ void testVoiceLayout()
     check (v.grid.rect().h >= 230 && v.randPan.rect().h >= 72 && v.scaleEnv.rect().h >= 72, "the grid is tall and the knobs of the blocks have the room");
     check (v.stripRect().y >= v.grid.rect().bottom() && v.blockRect (0).y >= v.stripRect().bottom(), "the strip of the step lies between the grid and the blocks");
     check (v.randDetune10x.rect().bottom() <= v.blockRect (0).bottom(), "the blocks hold their controls");
-    check (v.oscA.rect().w == v.oscB.rect().w && v.oscB.rect().w == v.oscC.rect().w &&
-           v.oscC.rect().w == v.oscSub.rect().w && v.oscSub.rect().w == v.oscNoise.rect().w &&
-           v.oscA.rect().h == v.oscNoise.rect().h,
-           "targets are five equal cells in one grid (width " + std::to_string (v.oscA.rect().w) + ", height " + std::to_string (v.oscA.rect().h) + ")");
+    {   // the targets: five LED toggles in two columns, the fifth across the block; none lower than 56 px, none overlapping, all inside the TARGETS block
+        const ui::LedToggle* ts[5] = { &v.oscA, &v.oscB, &v.oscC, &v.oscSub, &v.oscNoise };
+        bool ok = true;
+        for (int i = 0; i < 5; ++i)
+        {
+            ok = ok && ts[i]->rect().h >= 56 && ts[i]->rect().w >= 96 && v.blockRect (2).contains (ts[i]->rect());
+            for (int j = i + 1; j < 5; ++j)
+                ok = ok && ! ts[i]->rect().overlaps (ts[j]->rect());
+        }
+        check (ok && v.oscA.rect().y == v.oscB.rect().y && v.oscC.rect().y == v.oscSub.rect().y && v.oscNoise.rect().y > v.oscC.rect().y && v.oscNoise.rect().w == v.oscA.rect().w && v.oscA.rect().w == v.oscB.rect().w && v.oscB.rect().w == v.oscC.rect().w,
+               "targets are five LED toggles of the same width in two columns (cell " + std::to_string (v.oscA.rect().w) + " x " + std::to_string (v.oscA.rect().h) + "), NOISE in the third row, not spanning");
+        check (v.scaleLfoMode.columns() == 2 && v.scaleLfoMode.rowRect (1).h >= 56 && v.scaleLfoMode.state.count == 2, "the LFO time mode is a LED list of two options side by side, both visible");
+    }
 }
 
 void testVoiceGridDrawing()
@@ -343,8 +352,16 @@ void testVoiceStepsLitAndQ()
     r.ui.forgetQGroup();
     r.refresh();
     check (v.activeGroup() == 0, "forgetQGroup restores group 0");
-    r.tap (v.scaleLfoMode);
-    check (r.ui.topPage() == VoiceUi::kPageList && r.ui.list().state.count > 1, "the mode stepper opens its list");
+    {
+        const ui::Rect row1 = v.scaleLfoMode.rowRect (1);
+        r.tapAt (row1.x + row1.w / 2, row1.y + row1.h / 2);
+        r.refresh();
+        check (r.inst.get ("voicectl.scale.lfo_mode") == 1.0f && v.scaleLfoMode.state.index == 1 && v.activeGroup() == 3, "a tap on the second option of the LFO time mode selects it (parameter, lit dot, group SCALING)");
+        const float before = r.inst.get ("voicectl.osc.a");
+        r.tap (v.oscA);
+        r.refresh();
+        check (r.inst.get ("voicectl.osc.a") != before && v.oscA.state.on == (r.inst.get ("voicectl.osc.a") > 0.5f), "a tap on a target LED toggle flips its parameter and its dot");
+    }
 }
 
 void testVoiceDraw()

@@ -361,70 +361,86 @@ void testEveryEffectType()
             const int lastParam = std::min (ed.numParams(), firstParam + ed.rowsPerPage() * 4);
             const int expectedOnPage = lastParam - firstParam;
 
-            int shownKnobs = 0, shownSteppers = 0;
+            int shownKnobs = 0, shownSteppers = 0, shownLists = 0, shownToggles = 0, fallbacks = 0;
             int withValue = 0, withName = 0, small = 0;
-            bool noEnumAsKnob = true;
+            bool kindsOk = true, overlap = false, inside = true;
+            std::vector<const ui::Component*> shownNow;
 
             for (int i = 0; i < ui::FxSlotEditor::kMaxParams; ++i)
             {
                 const bool onThisPage = (i >= firstParam && i < lastParam);
                 const bool choice = ed.isChoice (i);
-
-                bool knobShown = false;
-                for (int c = 0; c < ed.numChildren(); ++c)
-                    if (ed.child (c) == &ed.knobs[i] && ed.childShown (c))
-                        knobShown = true;
-
-                bool stepperShown = false;
-                for (int c = 0; c < ed.numChildren(); ++c)
-                    if (ed.child (c) == &ed.steppers[i] && ed.childShown (c))
-                        stepperShown = true;
-
-                // An enumerated parameter must NEVER be laid out as a knob
-                if (choice && knobShown)
-                    noEnumAsKnob = false;
-                // A continuous parameter must never be laid out as a stepper
-                if (! choice && stepperShown)
-                    noEnumAsKnob = false;
-
-                if (onThisPage)
+                const ui::Component* members[4] = { &ed.knobs[i], &ed.steppers[i], &ed.lists[i], &ed.toggles[i] };
+                bool shownKind[4] = { false, false, false, false };
+                for (int k = 0; k < 4; ++k)
+                    shownKind[k] = isShown (ed, members[k]);
+                const int nShown = shownKind[0] + shownKind[1] + shownKind[2] + shownKind[3];
+                if (! onThisPage)
                 {
-                    if (choice)
-                    {
-                        if (stepperShown && ! knobShown)
-                        {
-                            ++shownSteppers;
-                            withName += ed.steppers[i].state.caption[0] != '\0';
-                            withValue += ed.steppers[i].state.text[0] != '\0';
-                            small += ed.steppers[i].rect().w < 100 || ed.steppers[i].rect().h < 56;
-                        }
-                    }
-                    else
-                    {
-                        if (knobShown && ! stepperShown)
-                        {
-                            ++shownKnobs;
-                            withName += ed.knobs[i].state.label[0] != '\0';
-                            withValue += ed.knobs[i].state.valueText[0] != '\0';
-                            small += ed.knobs[i].rect().w < 100 || ed.knobs[i].rect().h < 72;
-                        }
-                    }
+                    kindsOk = kindsOk && nShown == 0;
+                    continue;
                 }
-                else
+                const ui::FxSlotEditor::Kind kind = ed.kindOf (i);
+                const synthyboy::ParamInfo* pi = synthyboy::fxInstanceSource (t, i);
+                // exactly one control is shown, of the kind the cell has; an enumerated parameter is never a knob, a continuous one is always a knob
+                kindsOk = kindsOk && nShown == 1 && shownKind[static_cast<int> (kind)] && (kind == ui::FxSlotEditor::Kind::Knob) == ! choice;
+                // a list of up to 8 values is a LED list (a toggle for Off / On), a longer one a stepper; a short one that is a stepper is a fallback: none is expected (every list fits its cell)
+                // a short list is a stepper only where its list does not fit the cell (the display and the rows keep their size)
+                if (choice && pi->numChoices <= 8 && kind == ui::FxSlotEditor::Kind::Stepper && ed.listFits (i, ed.steppers[i].rect().w, ed.steppers[i].rect().h) && ed.baseKind (i) == ui::FxSlotEditor::Kind::List)
+                    ++fallbacks;
+                if (choice && pi->numChoices <= 8 && kind == ui::FxSlotEditor::Kind::List)
+                    kindsOk = kindsOk && ed.listFits (i, ed.lists[i].rect().w, ed.lists[i].rect().h);
+                if (choice && pi->numChoices > 8)
+                    kindsOk = kindsOk && kind == ui::FxSlotEditor::Kind::Stepper;
+                const ui::Component* c = members[static_cast<int> (kind)];
+                small += c->rect().h < 56 || ! c->sizeOk();
+                for (const ui::Component* o : shownNow)
+                    overlap = overlap || o->rect().overlaps (c->rect());
+                shownNow.push_back (c);
+                inside = inside && ed.rect().contains (c->rect());
+                switch (kind)
                 {
-                    if (knobShown || stepperShown)
-                        noEnumAsKnob = false;
+                    case ui::FxSlotEditor::Kind::Knob:
+                        ++shownKnobs; withName += ed.knobs[i].state.label[0] != '\0'; withValue += ed.knobs[i].state.valueText[0] != '\0'; break;
+                    case ui::FxSlotEditor::Kind::Stepper:
+                        ++shownSteppers; withName += ed.steppers[i].state.caption[0] != '\0'; withValue += ed.steppers[i].state.text[0] != '\0'; break;
+                    case ui::FxSlotEditor::Kind::List:
+                        ++shownLists; withName += ed.lists[i].state.title[0] != '\0'; withValue += ed.lists[i].state.count == pi->numChoices && ed.lists[i].state.index >= 0; break;
+                    case ui::FxSlotEditor::Kind::Toggle:
+                        ++shownToggles; withName += ed.toggles[i].state.label[0] != '\0'; ++withValue; break;
                 }
             }
 
-            const int totalShown = shownKnobs + shownSteppers;
-            check (noEnumAsKnob && totalShown == expectedOnPage && withName == totalShown && withValue == totalShown && small == 0,
-                   std::string (d.name) + " page " + std::to_string (pg + 1) + " of " + std::to_string (ed.numPages()) + ": " + std::to_string (shownKnobs) + " knobs and " + std::to_string (shownSteppers) + " steppers (no enumerated param is a knob)");
+            // the display keeps its height, the knobs of the page have one size, every cell of a row is the same rectangle (the chips stand in one line), the rows have the standard height
+            bool uniform = ! ed.hasDisplay() || ed.displayRect().h == ui::FxSlotEditor::kDisplayH;
+            int knobH = -1;
+            for (int i = firstParam; i < lastParam; ++i)
+            {
+                const ui::Rect cell = ed.memberOf (i)->rect();
+                uniform = uniform && cell.h <= (ed.knobArea().h / ed.rowsPerPage());
+                if (ed.kindOf (i) == ui::FxSlotEditor::Kind::Knob)
+                {
+                    knobH = knobH < 0 ? cell.h : knobH;
+                    uniform = uniform && cell.h == knobH;
+                }
+                const int first = (i / 4) * 4;
+                uniform = uniform && cell.y == ed.memberOf (first)->rect().y;
+            }
+            check (uniform, std::string (d.name) + " page " + std::to_string (pg + 1) + ": the display keeps its height, one knob size, the chips of a row stand in one line");
+            const int totalShown = shownKnobs + shownSteppers + shownLists + shownToggles;
+            if (fallbacks > 0 || overlap || ! inside || small > 0)
+            {
+                std::printf ("  editor %d,%d %dx%d display %d,%d %dx%d knobArea %d,%d %dx%d\n", ed.rect().x, ed.rect().y, ed.rect().w, ed.rect().h, ed.displayRect().x, ed.displayRect().y, ed.displayRect().w, ed.displayRect().h, ed.knobArea().x, ed.knobArea().y, ed.knobArea().w, ed.knobArea().h);
+                for (int i = firstParam; i < lastParam; ++i)
+                    std::printf ("  p%d kind %d rect %d,%d %dx%d\n", i, static_cast<int> (ed.kindOf (i)), ed.memberOf (i)->rect().x, ed.memberOf (i)->rect().y, ed.memberOf (i)->rect().w, ed.memberOf (i)->rect().h);
+            }
+            check (kindsOk && ! overlap && inside && totalShown == expectedOnPage && withName == totalShown && withValue == totalShown && small == 0 && fallbacks == 0,
+                   std::string (d.name) + " page " + std::to_string (pg + 1) + " of " + std::to_string (ed.numPages()) + ": " + std::to_string (shownKnobs) + " knobs, " + std::to_string (shownSteppers) + " steppers, " + std::to_string (shownLists) + " lists, " + std::to_string (shownToggles) + " toggles (one control per cell, no list turned into a stepper, nothing overlaps, every control >= 56 px)");
 
             // the controls fill the page: the lowest control ends near the bottom of the page
             int bottom = 0;
             for (int i = firstParam; i < lastParam; ++i)
-                bottom = std::max (bottom, ed.isChoice (i) ? ed.steppers[i].rect().bottom() : ed.knobs[i].rect().bottom());
+                bottom = std::max (bottom, ed.memberOf (i)->rect().bottom());
             const int rowsUsed = (expectedOnPage + 3) / 4;
             check (rowsUsed < ed.rowsPerPage() || bottom >= ed.knobArea().bottom() - ed.knobArea().h / ed.rowsPerPage(),
                    std::string (d.name) + " page " + std::to_string (pg + 1) + ": controls use the page (the last row ends at " + std::to_string (bottom) + " of " + std::to_string (ed.knobArea().bottom()) + ")");
@@ -470,8 +486,18 @@ void testFxEditing()
                "Distortion FILTER ORDER is a stepper with caption 'FILTER ORDER' and value 'None'");
         check (isShown (ed, &ed.steppers[0]) && ! isShown (ed, &ed.knobs[0]),
                "Distortion TYPE stepper is shown, knob is hidden");
-        check (isShown (ed, &ed.steppers[3]) && ! isShown (ed, &ed.knobs[3]),
-               "Distortion FILTER ORDER stepper is shown, knob is hidden");
+        check (isShown (ed, &ed.lists[3]) && ! isShown (ed, &ed.knobs[3]) && ! isShown (ed, &ed.steppers[3]) && ed.kindOf (3) == ui::FxSlotEditor::Kind::List,
+               "Distortion FILTER ORDER (3 values) is a LED list, not a knob and not a stepper");
+        check (std::string (ed.lists[3].state.title) == "FILTER ORDER" && ed.lists[3].state.count == 3 && ed.lists[3].state.index == 0 && std::string (ed.lists[3].state.names[2]) == "Post" && ed.lists[3].rect().h >= 56 * ed.lists[3].rows(),
+               "the list has its title, all three values and the lit first one");
+        {
+            const ui::Rect row2 = ed.lists[3].rowRect (2);
+            r.tapAt (row2.x + row2.w / 2, row2.y + row2.h / 2);
+            r.refresh();
+            const int orderIdx = synthyboy::fxInstanceKeys (r.ui.cardItem (0).index).p[3];
+            check (r.inst.param (orderIdx) == synthyboy::fxInstanceNormalise (synthyboy::kFxTypeDistortion, 3, 2.0f) && ed.lists[3].state.index == 2, "a tap on 'Post' writes the parameter and lights its dot");
+            check (ed.activeRow() == 0 && ed.groups[0].member (3) == &ed.lists[3], "the list is the fourth member of the first row group and the tap made that group active");
+        }
 
         // Q-Link turning steps through choices
         const int slot = r.ui.cardItem (0).index;
@@ -505,7 +531,7 @@ void testFxEditing()
         addEffect (r, 4);   // EQ: row 4 in type list
         ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
         r.refresh();
-        check (ed.isChoice (0) && ! ed.isChoice (1), "EQ LOW MODE is a choice stepper, LOW CUTOFF is a continuous knob");
+        check (ed.isChoice (0) && ! ed.isChoice (1) && ed.kindOf (0) == ui::FxSlotEditor::Kind::List && ed.lists[0].state.count == 2, "EQ LOW MODE is a LED list of its two values, LOW CUTOFF is a continuous knob");
         check (std::string (ed.steppers[0].state.caption) == "LOW MODE" && std::string (ed.knobs[1].state.label) == "LOW CUTOFF",
                "the controls have the descriptor's names without the name of the effect (" + std::string (ed.knobs[1].state.label) + ")");
         check (std::string (ed.steppers[0].state.text) == "Shelf" && std::string (ed.knobs[1].state.valueText).find ("Hz") != std::string::npos,

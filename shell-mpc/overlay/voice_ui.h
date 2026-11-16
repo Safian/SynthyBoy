@@ -52,7 +52,7 @@ public:
         kList = 700, kListBackdrop = 701
     };
 
-    enum class T : uint8_t { Knob, Number, Toggle, Stepper, GridStep, Inert };
+    enum class T : uint8_t { Knob, Number, Toggle, Stepper, List, GridStep, Inert };
 
     struct Item
     {
@@ -249,7 +249,6 @@ private:
             for (int s = 0; s < 8; ++s)
                 bind (kGridBase + r * 8 + s, &full_.grid, T::GridStep, "voicectl.s" + std::to_string (s + 1) + "." + kRows[r], r, s);
 
-        full_.scaleLfoMode.listable = true;
         bind (kRandPan, &full_.randPan, T::Knob, "voicectl.rand.pan");
         bind (kRandDetune, &full_.randDetune, T::Knob, "voicectl.rand.detune");
         bind (kRandCutoff, &full_.randCutoff, T::Knob, "voicectl.rand.cutoff");
@@ -257,7 +256,7 @@ private:
         bind (kRandDetune10x, &full_.randDetune10x, T::Toggle, "voicectl.rand.detune10x");
         bind (kScaleEnv, &full_.scaleEnv, T::Knob, "voicectl.scale.env");
         bind (kScaleLfo, &full_.scaleLfo, T::Knob, "voicectl.scale.lfo");
-        bind (kScaleLfoMode, &full_.scaleLfoMode, T::Stepper, "voicectl.scale.lfo_mode");
+        bind (kScaleLfoMode, &full_.scaleLfoMode, T::List, "voicectl.scale.lfo_mode");
         bind (kOscA, &full_.oscA, T::Toggle, "voicectl.osc.a");
         bind (kOscB, &full_.oscB, T::Toggle, "voicectl.osc.b");
         bind (kOscC, &full_.oscC, T::Toggle, "voicectl.osc.c");
@@ -302,6 +301,13 @@ private:
                     st->state.index = std::clamp (static_cast<int> (std::lround (val)), 0, st->state.count - 1);
                     if (p.numChoices > 0)
                         st->setItem (p.choices[st->state.index]);
+                    break;
+                }
+                case T::List:
+                {
+                    ui::LedList* ll = static_cast<ui::LedList*> (it.c);
+                    ll->setOptions (p.choices, p.numChoices > 0 ? p.numChoices : 0);
+                    ll->state.index = std::clamp (static_cast<int> (std::lround (val)), 0, std::max (0, ll->state.count - 1));
                     break;
                 }
                 case T::GridStep:

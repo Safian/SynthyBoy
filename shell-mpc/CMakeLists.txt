@@ -344,5 +344,14 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(macro_names_ui_host PRIVATE cxx_std_17)
     target_compile_options(macro_names_ui_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME macro_names_ui_host COMMAND macro_names_ui_host)
+
+    add_executable(ui_led_host EXCLUDE_FROM_ALL ui/tests/ui_led_host.cpp)
+    target_include_directories(ui_led_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_compile_features(ui_led_host PRIVATE cxx_std_17)
+    target_compile_options(ui_led_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME ui_led_host COMMAND ui_led_host)
 endif()
 

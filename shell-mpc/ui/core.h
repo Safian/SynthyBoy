@@ -476,7 +476,8 @@ public:
     void setId (int id) noexcept { id_ = id; }
     /** The smallest size at which the component is legible with its touch targets (the layout must give at least this). */
     virtual Size minSize() const = 0;
-    bool sizeOk() const noexcept { const Size m = minSize(); return rect_.w >= m.w && rect_.h >= m.h; }
+    /** The rectangle is enough for the component (a component that has more than one arrangement, a LedList, says so when any of them fits). */
+    virtual bool sizeOk() const noexcept { const Size m = minSize(); return rect_.w >= m.w && rect_.h >= m.h; }
 
     // ---- the output: the drawing
     virtual void draw (gpu::SceneBuilder& sb) const
