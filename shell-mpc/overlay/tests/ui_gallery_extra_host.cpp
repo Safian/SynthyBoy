@@ -1,0 +1,1243 @@
+// SynthyBoy - MPC overlay: UI gallery extra renderer host
+// Renders every page, popup and state the standard UI gallery does not render at 1280x800 into PNGs.
+// Copyright (C) 2026 Safian Szabolcs
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "../../ui/ui.h"
+#include "../../ui/tests/ui_test.h"
+#include "demo_common.h"
+#include "env_ui.h"
+#include "filter_ui.h"
+#include "fx_ui.h"
+#include "lfo_ui.h"
+#include "macro_ui.h"
+#include "master_ui.h"
+#include "mixer_ui.h"
+#include "mod_ui.h"
+#include "osc_page.h"
+#include "osc_ui.h"
+#include "pages.h"
+#include "play_view.h"
+#include "synthyboy/filter_response.h"
+#include "synthyboy/fx_rack.h"
+#include "synthyboy/fx_types.h"
+#include "synthyboy/osc_cycle.h"
+#include "synthyboy/params.h"
+#include "synthyboy/preset.h"
+#include "synthyboy/state.h"
+#include "voice_ui.h"
+
+namespace fs = std::filesystem;
+using namespace synthyboy_mpc;
+using namespace synthyboy_mpc::overlay;
+
+namespace
+{
+
+class GalleryInst final : public IInstanceView
+{
+public:
+    GalleryInst()
+    {
+        const synthyboy::ParamInfo* t = synthyboy::paramTable();
+        for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+            v_[i] = t[i].def;
+        initLiveValues();
+    }
+
+    void initLiveValues()
+    {
+        haveLive = true;
+        liveValues.stripPeak[0] = 0.5f;
+        liveValues.stripPeak[1] = 0.72f;
+        liveValues.stripPeak[2] = 0.64f;
+        liveValues.stripPeak[5] = 0.83f;
+        liveValues.stripPeak[6] = 0.5f;
+        liveValues.stripPeak[7] = 0.3f;
+        liveValues.stripPeak[9] = 0.78f;
+        liveValues.activeVoices = 4;
+        for (float& s : liveValues.voiceStep)
+            s = -1.0f;
+        liveValues.voiceStep[0] = 2.0f;
+        liveValues.voiceStep[1] = 3.0f;
+        for (int i = 0; i < synthyboy::LiveValues::kNumEnvs; ++i)
+        {
+            liveValues.envFineStage[i] = 1;
+            liveValues.envFineFraction[i] = 0.35f;
+        }
+        for (int i = 0; i < synthyboy::LiveValues::kNumLfos; ++i)
+            liveValues.lfoPhase[i] = 0.4f;
+        liveValues.source[0] = 0.7f;
+        liveValues.source[6] = 0.6f;
+        liveValues.source[7] = -0.3f;
+    }
+
+    float param (int i) const noexcept override
+    {
+        return (i >= 0 && static_cast<size_t> (i) < synthyboy::kMaxParams) ? v_[i] : 0.0f;
+    }
+
+    bool live (synthyboy::LiveValues& out) const noexcept override
+    {
+        out = liveValues;
+        return haveLive;
+    }
+
+    double sampleRate() const noexcept override { return 48000.0; }
+    double bpm() const noexcept override { return 120.0; }
+
+    void writeParam (int i, float norm) noexcept override
+    {
+        if (i >= 0 && static_cast<size_t> (i) < synthyboy::kMaxParams)
+        {
+            const synthyboy::ParamInfo& p = synthyboy::paramTable()[i];
+            v_[i] = synthyboy::constrainValue (p, synthyboy::fromNormalised (p, norm));
+        }
+    }
+
+    void setQGroup (const int* t, int n) noexcept override
+    {
+        for (int i = 0; i < 4; ++i)
+            q[i] = i < n ? t[i] : -1;
+    }
+
+    void setUiFullOpen (bool open) noexcept override { fullOpen = open; }
+
+    int playSelection (int group) const noexcept override
+    {
+        return (group >= 0 && group < 3) ? playSel[group] : 1;
+    }
+
+    void setPlaySelection (int group, int inst) noexcept override
+    {
+        if (group >= 0 && group < 3)
+            playSel[group] = inst;
+    }
+
+    int playLastSelector() const noexcept override { return 2; }
+
+    void setQVirtual (int id, float v) noexcept override
+    {
+        if (id >= 0 && id < 8)
+            virtualOut[id] = v;
+    }
+
+    bool takeQVirtual (int id, float& v) noexcept override
+    {
+        if (id < 0 || id >= 8 || ! virtualDue[id])
+            return false;
+        virtualDue[id] = false;
+        v = virtualIn[id];
+        return true;
+    }
+
+    std::shared_ptr<const synthyboy::StateContent> content() const override { return content_; }
+
+    void setContent (std::shared_ptr<const synthyboy::StateContent> c) { content_ = std::move (c); }
+
+    void setLfoShape (int lfo, const synthyboy::ContentLfoShape& shape) override
+    {
+        auto c = std::make_shared<synthyboy::StateContent>();
+        if (content_)
+            *c = *content_;
+        bool found = false;
+        for (auto& s : c->lfoShapes)
+        {
+            if (s.lfo == lfo)
+            {
+                s = shape;
+                found = true;
+                break;
+            }
+        }
+        if (! found)
+            c->lfoShapes.push_back (shape);
+        content_ = c;
+    }
+
+    static int idx (const std::string& key)
+    {
+        const auto* p = synthyboy::findParamByKey (key.c_str());
+        return p ? static_cast<int> (p - synthyboy::paramTable()) : -1;
+    }
+
+    float get (const std::string& key) const
+    {
+        const int i = idx (key);
+        return i >= 0 ? v_[i] : 0.0f;
+    }
+
+    void set (const std::string& key, float v)
+    {
+        const int i = idx (key);
+        if (i >= 0)
+            v_[i] = v;
+    }
+
+    void setAt (int i, float v)
+    {
+        if (i >= 0 && static_cast<size_t> (i) < synthyboy::kMaxParams)
+            v_[i] = v;
+    }
+
+    void mod (int n, int source, const std::string& destKey, float amount, bool bipolar = false, bool bypass = false)
+    {
+        char k[24];
+        std::snprintf (k, sizeof k, "mod%02d.", n);
+        set (std::string (k) + "source", static_cast<float> (source));
+        set (std::string (k) + "destination", static_cast<float> (synthyboy::modDestinationChoiceOf (static_cast<size_t> (idx (destKey)))));
+        set (std::string (k) + "amount", amount);
+        set (std::string (k) + "bipolar", bipolar ? 1.0f : 0.0f);
+        set (std::string (k) + "bypass", bypass ? 1.0f : 0.0f);
+    }
+
+    bool loadPresetFile (const std::string& path)
+    {
+        std::ifstream f (path, std::ios::binary);
+        if (! f.is_open())
+            return false;
+        std::string str ((std::istreambuf_iterator<char> (f)), std::istreambuf_iterator<char>());
+        synthyboy::PresetMeta meta;
+        synthyboy::ParamValues values;
+        synthyboy::StateContent content;
+        synthyboy::LoadResult res = synthyboy::loadPreset (str.data(), str.size(), meta, values, content);
+        if (res.status == synthyboy::LoadStatus::invalid)
+            return false;
+        for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+            v_[i] = values.plain[i];
+        if (res.content == synthyboy::ContentStatus::ok)
+            content_ = std::make_shared<synthyboy::StateContent> (std::move (content));
+        return true;
+    }
+
+    int q[4] = { -1, -1, -1, -1 };
+    int playSel[3] = { 2, 1, 1 };
+    bool fullOpen = false;
+    bool haveLive = true;
+    synthyboy::LiveValues liveValues;
+    float virtualOut[8] = {}, virtualIn[8] = {};
+    bool virtualDue[8] = {};
+
+private:
+    float v_[synthyboy::kMaxParams] = {};
+    std::shared_ptr<const synthyboy::StateContent> content_;
+};
+
+inline uint32_t lerpRgb (uint32_t c0, uint32_t c1, float t)
+{
+    const int r0 = (c0 >> 16) & 255, g0 = (c0 >> 8) & 255, b0 = c0 & 255;
+    const int r1 = (c1 >> 16) & 255, g1 = (c1 >> 8) & 255, b1 = c1 & 255;
+    const int r = std::clamp (static_cast<int> (std::round (r0 + (r1 - r0) * t)), 0, 255);
+    const int g = std::clamp (static_cast<int> (std::round (g0 + (g1 - g0) * t)), 0, 255);
+    const int b = std::clamp (static_cast<int> (std::round (b0 + (b1 - b0) * t)), 0, 255);
+    return ui::theme::rgba (static_cast<uint32_t> ((r << 16) | (g << 8) | b), 255);
+}
+
+void compositeAndWritePng (const std::string& path, uit::Image& im)
+{
+    const ui::theme::Look& T = ui::theme::L();
+    const int w = im.w, h = im.h;
+    for (int y = 0; y < h; ++y)
+    {
+        const float t = static_cast<float> (y) / static_cast<float> (h);
+        const uint32_t bg = lerpRgb (T.bg0, T.bg1, t);
+        for (int x = 0; x < w; ++x)
+        {
+            uint32_t& p = im.px[static_cast<size_t> (y) * static_cast<size_t> (w) + static_cast<size_t> (x)];
+            const uint32_t a = p >> 24;
+            if (a == 0)
+                p = bg;
+            else if (a < 255)
+            {
+                const uint32_t inv = 255 - a;
+                const uint32_t r = ((p >> 16) & 255) + (((bg >> 16) & 255) * inv) / 255;
+                const uint32_t g = ((p >> 8) & 255) + (((bg >> 8) & 255) * inv) / 255;
+                const uint32_t b = (p & 255) + ((bg & 255) * inv) / 255;
+                p = (255 << 24) | (r << 16) | (g << 8) | b;
+            }
+        }
+    }
+    uit::writePng (path, im, 1);
+}
+
+template <class F>
+void saveScene (const std::string& path, F&& draw, int w = 1280, int h = 800)
+{
+    auto scene = std::make_unique<gpu::SceneData>();
+    gpu::SceneBuilder sb (*scene);
+    sb.begin (gpu::kKindPlay, 0, w, h);
+    const ui::theme::Look& T = ui::theme::L();
+    sb.clear (ui::theme::rgba (T.bg0, 255));
+    sb.gradientRect (0.0f, 0.0f, static_cast<float> (w), static_cast<float> (h), ui::theme::rgba (T.bg0), ui::theme::rgba (T.bg1));
+    draw (sb);
+    uit::Image im;
+    im.w = w; im.h = h;
+    synthyboy_mpc::overlay::renderScene (*scene, im.px);
+    compositeAndWritePng (path, im);
+}
+
+template <class Ui>
+struct GalleryRig
+{
+    Ui ui;
+    GalleryInst inst;
+    UiStack stack;
+    page::Input in;
+    double now = 1000.0;
+
+    explicit GalleryRig (const GalleryInst& baseInst, int instance = 1)
+        : inst (baseInst)
+    {
+        in.instance = instance;
+        stack.openFull (Ui::kElementPage);
+    }
+
+    void refresh (int times = 2)
+    {
+        for (int i = 0; i < times; ++i)
+        {
+            now += 150.0;
+            in.live = inst.haveLive ? &inst.liveValues : nullptr;
+            ui.update (inst, stack, now, in);
+        }
+    }
+
+    void picture (const std::string& path)
+    {
+        saveScene (path, [this] (gpu::SceneBuilder& sb) { ui.draw (sb); });
+    }
+
+    void tapAt (int x, int y, int holdMs = 40)
+    {
+        TouchEvent e; e.kind = TouchEvent::Down; e.x = x; e.y = y;
+        ui.touch (e, stack, inst, now);
+        ui.tick (now + holdMs, stack, inst);
+        e.kind = TouchEvent::Up;
+        ui.touch (e, stack, inst, now + holdMs);
+        refresh();
+    }
+    void tap (const ui::Component& c, int holdMs = 40)
+    {
+        tapAt (c.rect().x + c.rect().w / 2, c.rect().y + c.rect().h / 2, holdMs);
+    }
+};
+
+void addEffect (GalleryRig<FxUi>& r, int type)
+{
+    r.tap (r.ui.screen().chainBar.plusCard);
+    r.ui.list().state.current = type - 1;
+    r.ui.list().showCurrent();
+    const ui::Rect row = r.ui.list().rowRect (type - 1);
+    r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
+}
+
+void setupEffectNonDefault (GalleryInst& inst, int type)
+{
+    switch (type)
+    {
+        case 1: // chorus
+            inst.set ("chorus.on", 1.0f);
+            inst.set ("chorus.depth", 75.0f);
+            inst.set ("chorus.feedback", 55.0f);
+            inst.set ("chorus.mix", 65.0f);
+            break;
+        case 2: // compressor
+            inst.set ("compressor.on", 1.0f);
+            inst.set ("compressor.threshold", -22.0f);
+            inst.set ("compressor.ratio", 4.0f);
+            inst.set ("compressor.attack", 15.0f);
+            inst.set ("compressor.release", 120.0f);
+            inst.set ("compressor.makeup", 6.0f);
+            inst.set ("compressor.mix", 100.0f);
+            break;
+        case 3: // delay
+            inst.set ("delay.on", 1.0f);
+            inst.set ("delay.feedback", 60.0f);
+            inst.set ("delay.mix", 50.0f);
+            inst.set ("delay.ping_pong", 1.0f);
+            break;
+        case 4: // distortion
+            inst.set ("distortion.on", 1.0f);
+            inst.set ("distortion.type", 1.0f); // Soft clip
+            inst.set ("distortion.drive", 14.0f);
+            inst.set ("distortion.mix", 85.0f);
+            break;
+        case 5: // eq
+            inst.set ("eq.on", 1.0f);
+            inst.set ("eq.low_gain", 4.0f);
+            inst.set ("eq.band1_gain", 6.0f);
+            inst.set ("eq.band1_cutoff", 800.0f);
+            inst.set ("eq.band2_gain", -5.0f);
+            inst.set ("eq.band2_cutoff", 2500.0f);
+            inst.set ("eq.high_gain", 3.0f);
+            break;
+        case 6: // filter
+            inst.set ("fxfilter.on", 1.0f);
+            inst.set ("fxfilter.cutoff", 1800.0f);
+            inst.set ("fxfilter.resonance", 65.0f);
+            inst.set ("fxfilter.drive", 8.0f);
+            inst.set ("fxfilter.mix", 80.0f);
+            break;
+        case 7: // flanger
+            inst.set ("flanger.on", 1.0f);
+            inst.set ("flanger.depth", 70.0f);
+            inst.set ("flanger.feedback", 65.0f);
+            inst.set ("flanger.mix", 60.0f);
+            break;
+        case 8: // phaser
+            inst.set ("phaser.on", 1.0f);
+            inst.set ("phaser.feedback", 75.0f);
+            inst.set ("phaser.center", 1400.0f);
+            inst.set ("phaser.mix", 70.0f);
+            break;
+        case 9: // reverb
+            inst.set ("reverb.on", 1.0f);
+            inst.set ("reverb.decay_time", 3.2f);
+            inst.set ("reverb.mix", 45.0f);
+            inst.set ("reverb.size", 75.0f);
+            break;
+        case 10: // hyperdimension
+            inst.set ("hyper_dimension.on", 1.0f);
+            inst.set ("hyper_dimension.dimension_mix", 70.0f);
+            inst.set ("hyper_dimension.hyper_mix", 65.0f);
+            break;
+        case 11: // utility
+            inst.set ("utility.on", 1.0f);
+            inst.set ("utility.width", 140.0f);
+            inst.set ("utility.pan", -15.0f);
+            inst.set ("utility.gain", 2.0f);
+            break;
+        case 12: // bode
+            inst.set ("bode.on", 1.0f);
+            inst.set ("bode.shift_hz", 180.0f);
+            inst.set ("bode.feedback", 40.0f);
+            inst.set ("bode.mix", 70.0f);
+            break;
+        case 13: // convolve
+            inst.set ("convolve.on", 1.0f);
+            inst.set ("convolve.mix", 65.0f);
+            break;
+        default:
+            break;
+    }
+}
+
+void renderExtraStates (const std::string& outDir, const std::string& state, GalleryInst& baseInst)
+{
+    std::printf ("Rendering extra states for: %s ...\n", state.c_str());
+
+    // =========================================================================
+    // 1. Oscillator pages (Osc A)
+    // =========================================================================
+    {
+        // 1.1 SAMPLE oscillator type on Osc A - empty
+        {
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.inst.set ("osc1.type", 1.0f); // Sample
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_osca_sample_empty.png");
+        }
+
+        // 1.2 SAMPLE oscillator type on Osc A - content loaded
+        {
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.inst.set ("osc1.type", 1.0f); // Sample
+            auto c = std::make_shared<synthyboy::StateContent>();
+            if (r.inst.content())
+                *c = *r.inst.content();
+            synthyboy::ContentSample cs;
+            cs.osc = 1;
+            cs.ref.pack = "user.samples";
+            cs.ref.file = "drums/acoustic_snare.wav";
+            cs.ref.name = "Acoustic Snare";
+            c->samples.push_back (cs);
+            r.inst.setContent (c);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_osca_sample_loaded.png");
+        }
+
+        // 1.3 GRAIN oscillator type on Osc A - empty
+        {
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.inst.set ("osc1.type", 2.0f); // Granular
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_osca_grain_empty.png");
+        }
+
+        // 1.4 GRAIN oscillator type on Osc A - content loaded
+        {
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.inst.set ("osc1.type", 2.0f); // Granular
+            auto c = std::make_shared<synthyboy::StateContent>();
+            if (r.inst.content())
+                *c = *r.inst.content();
+            synthyboy::ContentSample cs;
+            cs.osc = 1;
+            cs.ref.pack = "user.samples";
+            cs.ref.file = "pads/analog_choir.wav";
+            cs.ref.name = "Analog Choir";
+            c->samples.push_back (cs);
+            r.inst.setContent (c);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_osca_grain_loaded.png");
+        }
+
+        // 1.5 Wavetable browser / list popup
+        {
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.inst.set ("osc1.type", 0.0f); // Wavetable
+            r.refresh (2);
+            r.tap (r.ui.ui().full().basic.source.dropdown);
+            r.picture (outDir + "/" + state + "_osca_wavetable_list.png");
+        }
+
+        // 1.6 Warp type list popup
+        {
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.inst.set ("osc1.type", 0.0f);
+            r.refresh (2);
+            if (r.ui.ui().full().panel.warp())
+                r.tap (r.ui.ui().full().panel.warp()->first.type);
+            r.picture (outDir + "/" + state + "_osca_warp_list.png");
+        }
+
+        // 1.7 Route / destination popup
+        {
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.refresh (2);
+            r.tap (r.ui.ui().full().route);
+            r.picture (outDir + "/" + state + "_osca_route.png");
+        }
+
+        // 1.8 Unison page (MORE)
+        {
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.stack.openDetail (OscUi::kPageUnison);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_osca_unison.png");
+        }
+
+        // 1.9 Grain window page
+        {
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.inst.set ("osc1.type", 2.0f); // Granular
+            r.refresh (2);
+            r.stack.openDetail (OscUi::kPageGrain);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_osca_grain_window.png");
+        }
+
+        // 1.10 Osc modulation list page - zero routes
+        {
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            for (int i = 1; i <= 64; ++i)
+            {
+                char k[24]; std::snprintf (k, sizeof k, "mod%02d.destination", i);
+                if (static_cast<int> (r.inst.get (k)) == synthyboy::modDestinationChoiceOf (static_cast<size_t> (GalleryInst::idx ("osc1.level"))))
+                    r.inst.set (k, 0.0f);
+            }
+            r.refresh (2);
+            const ui::Rect rc = r.ui.ui().full().basic.level.rect();
+            r.tapAt (rc.x + rc.w / 2, rc.y + rc.h / 2, 700);
+            if (r.stack.top() != OscUi::kPageMods)
+                r.stack.openDetail (OscUi::kPageMods);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_osca_mods_empty.png");
+        }
+
+        // 1.11 Osc modulation list page - several routes
+        {
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.inst.mod (1, 1, "osc1.level", 40.0f, false);
+            r.inst.mod (2, 7, "osc1.level", -50.0f, true);
+            r.inst.mod (3, 23, "osc1.level", 30.0f, false);
+            const ui::Rect rc = r.ui.ui().full().basic.level.rect();
+            r.tapAt (rc.x + rc.w / 2, rc.y + rc.h / 2, 700);
+            if (r.stack.top() != OscUi::kPageMods)
+                r.stack.openDetail (OscUi::kPageMods);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_osca_mods_routes.png");
+        }
+    }
+
+    // =========================================================================
+    // 2. Filter
+    // =========================================================================
+    {
+        // 2.1 Standard model layout (Digital model)
+        {
+            GalleryRig<FilterUi> r (baseInst, 1);
+            r.inst.set ("filter1.model", 3.0f); // Digital
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_filter1_model_standard.png");
+        }
+
+        // 2.2 Formant model layout (isFormant mode with XY pad block)
+        {
+            GalleryRig<FilterUi> r (baseInst, 1);
+            r.inst.set ("filter1.model", 5.0f); // Formant
+            r.inst.set ("filter1.formant.x", 45.0f);
+            r.inst.set ("filter1.formant.y", 75.0f);
+            r.inst.set ("filter1.formant.resonance", 60.0f);
+            r.inst.set ("filter1.formant.spread", 30.0f);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_filter1_model_formant.png");
+        }
+
+        // 2.3 Comb model layout (enables Comb Offset knob)
+        {
+            GalleryRig<FilterUi> r (baseInst, 1);
+            r.inst.set ("filter1.model", 6.0f); // Comb
+            r.inst.set ("filter1.comb_offset", 35.0f);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_filter1_model_comb.png");
+        }
+
+        // 2.4 Style list popup
+        {
+            GalleryRig<FilterUi> r (baseInst, 1);
+            r.refresh (2);
+            r.tap (r.ui.full().style);
+            r.picture (outDir + "/" + state + "_filter1_style_list.png");
+        }
+
+        // 2.5 Output / routing popup
+        {
+            GalleryRig<FilterUi> r (baseInst, 1);
+            r.refresh (2);
+            r.tap (r.ui.full().route);
+            r.picture (outDir + "/" + state + "_filter1_route.png");
+        }
+
+        // 2.6 F1+F2 Parallel routing
+        {
+            GalleryRig<FilterUi> r (baseInst, 3);
+            r.inst.set ("filter.routing", 0.0f); // Parallel
+            r.inst.set ("filter1.on", 1.0f); r.inst.set ("filter1.cutoff", 4000.0f); r.inst.set ("filter1.resonance", 50.0f);
+            r.inst.set ("filter2.on", 1.0f); r.inst.set ("filter2.cutoff", 800.0f); r.inst.set ("filter2.resonance", 60.0f);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_filter_dual_parallel.png");
+        }
+
+        // 2.7 F1+F2 Serial routing
+        {
+            GalleryRig<FilterUi> r (baseInst, 3);
+            r.inst.set ("filter.routing", 1.0f); // Serial
+            r.inst.set ("filter1.on", 1.0f); r.inst.set ("filter1.cutoff", 4000.0f); r.inst.set ("filter1.resonance", 50.0f);
+            r.inst.set ("filter2.on", 1.0f); r.inst.set ("filter2.cutoff", 800.0f); r.inst.set ("filter2.resonance", 60.0f);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_filter_dual_serial.png");
+        }
+    }
+
+    // =========================================================================
+    // 3. Envelope
+    // =========================================================================
+    {
+        // 3.1 Targets page with zero targets
+        {
+            GalleryRig<EnvUi> r (baseInst, 1);
+            for (int i = 1; i <= 64; ++i)
+            {
+                char k[24]; std::snprintf (k, sizeof k, "mod%02d.source", i);
+                if (static_cast<int> (r.inst.get (k)) == 1)
+                    r.inst.set (k, 0.0f);
+            }
+            r.stack.openDetail (EnvUi::kPageTargets);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_env1_targets_empty.png");
+        }
+
+        // 3.2 Targets page with several targets
+        {
+            GalleryRig<EnvUi> r (baseInst, 1);
+            r.inst.mod (1, 1, "filter1.cutoff", 55.0f);
+            r.inst.mod (2, 1, "osc1.level", -35.0f);
+            r.inst.mod (3, 1, "filter1.resonance", 40.0f);
+            r.stack.openDetail (EnvUi::kPageTargets);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_env1_targets_several.png");
+        }
+
+        // 3.3 BEATS mode
+        {
+            GalleryRig<EnvUi> r (baseInst, 1);
+            r.inst.set ("env1.units", 1.0f); // Beats mode
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_env1_beats.png");
+        }
+
+        // 3.4 Envelopes 2-6
+        for (int i = 2; i <= 6; ++i)
+        {
+            GalleryRig<EnvUi> r (baseInst, i);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_env" + std::to_string (i) + ".png");
+        }
+    }
+
+    // =========================================================================
+    // 4. LFO
+    // =========================================================================
+    {
+        // 4.1 BPM mode with controls
+        {
+            GalleryRig<LfoUi> r (baseInst, 1);
+            r.inst.set ("lfo1.sync", 1.0f); // BPM mode
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_lfo1_bpm.png");
+        }
+
+        // 4.2 KEY mode with controls
+        {
+            GalleryRig<LfoUi> r (baseInst, 1);
+            r.inst.set ("lfo1.sync", 4.0f); // Key sync mode
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_lfo1_key.png");
+        }
+
+        // 4.3 Random LFO
+        {
+            GalleryRig<LfoUi> r (baseInst, 1);
+            r.refresh (1);
+            const ui::Rect rcell = r.ui.full().bar.rndCells.cell (0);
+            r.tapAt (rcell.x + 4, rcell.y + 20);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_lfo_random.png");
+        }
+
+        // 4.4 Shape DRAWN
+        {
+            GalleryRig<LfoUi> r (baseInst, 1);
+            r.inst.set ("lfo1.shape", 12.0f); // Custom drawn shape
+            synthyboy::ContentLfoShape cs;
+            cs.lfo = 1;
+            cs.points = {
+                { 0.0f, 0.1f, 0.0f },
+                { 0.25f, 0.85f, 2.0f },
+                { 0.5f, 0.15f, -1.8f },
+                { 0.75f, 0.9f, 0.0f },
+                { 1.0f, 0.0f, 0.0f }
+            };
+            r.inst.setLfoShape (1, cs);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_lfo1_shape_drawn.png");
+        }
+
+        // 4.5 Shape editor page - empty
+        {
+            GalleryRig<LfoUi> r (baseInst, 1);
+            r.tap (r.ui.full().edit);
+            r.ui.editor().model = ui::lfo::ShapeModel::twoPoints (0.0f, 0.0f);
+            r.ui.editor().sync();
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_lfo_editor_empty.png");
+        }
+
+        // 4.6 Shape editor page - a few points
+        {
+            GalleryRig<LfoUi> r (baseInst, 1);
+            r.tap (r.ui.full().edit);
+            r.ui.editor().model = ui::lfo::ShapeModel::fromBuiltin (4); // square (4 points)
+            r.ui.editor().sync();
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_lfo_editor_points.png");
+        }
+
+        // 4.7 Shape editor page - Point tool
+        {
+            GalleryRig<LfoUi> r (baseInst, 1);
+            r.tap (r.ui.full().edit);
+            r.ui.editor().tools.state.index = ui::ToolSelector::Point;
+            r.ui.editor().canvas.state.tool = ui::ToolSelector::Point;
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_lfo_editor_tool_point.png");
+        }
+
+        // 4.8 Shape editor page - Flat tool
+        {
+            GalleryRig<LfoUi> r (baseInst, 1);
+            r.tap (r.ui.full().edit);
+            r.ui.editor().tools.state.index = ui::ToolSelector::Flat;
+            r.ui.editor().canvas.state.tool = ui::ToolSelector::Flat;
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_lfo_editor_tool_flat.png");
+        }
+
+        // 4.9 Shape editor page - RampUp tool
+        {
+            GalleryRig<LfoUi> r (baseInst, 1);
+            r.tap (r.ui.full().edit);
+            r.ui.editor().tools.state.index = ui::ToolSelector::RampUp;
+            r.ui.editor().canvas.state.tool = ui::ToolSelector::RampUp;
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_lfo_editor_tool_ramp_up.png");
+        }
+
+        // 4.10 Shape editor page - RampDown tool
+        {
+            GalleryRig<LfoUi> r (baseInst, 1);
+            r.tap (r.ui.full().edit);
+            r.ui.editor().tools.state.index = ui::ToolSelector::RampDown;
+            r.ui.editor().canvas.state.tool = ui::ToolSelector::RampDown;
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_lfo_editor_tool_ramp_down.png");
+        }
+    }
+
+    // =========================================================================
+    // 5. Mod matrix
+    // =========================================================================
+    {
+        // 5.1 Slot detail page (MORE) with AUX / SHAPE / TIME blocks
+        {
+            GalleryRig<ModUi> r (baseInst, 1);
+            r.inst.mod (1, 7, "filter1.cutoff", 50.0f);
+            r.ui.openSlotDetail (0, r.stack);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_mod_slot_detail.png");
+        }
+
+        // 5.2 Source picker groups (top level)
+        {
+            GalleryRig<ModUi> r (baseInst, 1);
+            r.inst.mod (1, 7, "filter1.cutoff", 50.0f);
+            r.ui.openList (r.inst, r.stack, ModUi::ListKind::Source, 0);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_mod_source_picker_groups.png");
+        }
+
+        // 5.3 Source picker groups expanded (1..4)
+        for (int g = 1; g <= 4; ++g)
+        {
+            GalleryRig<ModUi> r (baseInst, 1);
+            r.inst.mod (1, 7, "filter1.cutoff", 50.0f);
+            r.ui.openList (r.inst, r.stack, ModUi::ListKind::Source, 0);
+            r.ui.handle (ui::Change::index (ModUi::kList, g), r.stack, r.inst);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_mod_source_picker_group" + std::to_string (g) + ".png");
+        }
+
+        // 5.4 Target picker groups (top level)
+        {
+            GalleryRig<ModUi> r (baseInst, 1);
+            r.inst.mod (1, 7, "filter1.cutoff", 50.0f);
+            r.ui.openList (r.inst, r.stack, ModUi::ListKind::Dest, 0);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_mod_target_picker_groups.png");
+        }
+
+        // 5.5 Target picker groups expanded (first 4 groups)
+        for (int g = 0; g < 4; ++g)
+        {
+            GalleryRig<ModUi> r (baseInst, 1);
+            r.inst.mod (1, 7, "filter1.cutoff", 50.0f);
+            r.ui.openList (r.inst, r.stack, ModUi::ListKind::Dest, 0);
+            r.ui.handle (ui::Change::index (ModUi::kList, g + 1), r.stack, r.inst);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_mod_target_picker_group" + std::to_string (g) + ".png");
+        }
+
+        // 5.6 BY SOURCE view
+        {
+            GalleryRig<ModUi> r (baseInst, 1);
+            r.inst.mod (1, 7, "filter1.cutoff", 60.0f);
+            r.inst.mod (2, 7, "filter1.resonance", -30.0f);
+            r.inst.mod (3, 1, "osc1.tune", 25.0f);
+            r.ui.matrix().setFilterMode (ui::ModMatrixView::FilterSource);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_mod_by_source.png");
+        }
+
+        // 5.7 BY DEST view
+        {
+            GalleryRig<ModUi> r (baseInst, 1);
+            r.inst.mod (1, 7, "filter1.cutoff", 60.0f);
+            r.inst.mod (2, 7, "filter1.resonance", -30.0f);
+            r.inst.mod (3, 1, "osc1.tune", 25.0f);
+            r.ui.matrix().setFilterMode (ui::ModMatrixView::FilterDest);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_mod_by_dest.png");
+        }
+
+        // 5.8 Full matrix that scrolls
+        {
+            GalleryRig<ModUi> r (baseInst, 1);
+            for (int i = 1; i <= 16; ++i)
+                r.inst.mod (i, (i % 6) + 1, (i % 2 == 0 ? "filter1.cutoff" : "osc1.level"), static_cast<float> (i * 5 - 40));
+            r.ui.matrix().setFilterMode (ui::ModMatrixView::FilterAll);
+            r.ui.matrix().scroll (4); // scroll down by 4 rows
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_mod_matrix_scrolled.png");
+        }
+    }
+
+    // =========================================================================
+    // 6. Macros
+    // =========================================================================
+    {
+        // 6.1 Macro targets page
+        {
+            GalleryRig<MacroUi> r (baseInst, 1);
+            r.inst.mod (1, 23, "filter1.cutoff", 50.0f);
+            r.inst.mod (2, 23, "filter1.resonance", -35.0f);
+            r.inst.mod (3, 23, "master.volume", 20.0f);
+            r.ui.openTargets (1, r.stack);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_macro_targets.png");
+        }
+
+        // 6.2 Bank 2
+        {
+            GalleryRig<MacroUi> r (baseInst, 1);
+            r.ui.setBank (1); // Bank 2
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_macros_bank2.png");
+        }
+    }
+
+    // =========================================================================
+    // 7. Mixer
+    // =========================================================================
+    {
+        // 7.1 Each strip selected once (routing line drawn)
+        static const char* const kStripNames[10] = {
+            "sub", "osca", "oscb", "oscc", "noise", "filter1", "filter2", "bus1", "bus2", "master"
+        };
+        for (int s = 0; s < 10; ++s)
+        {
+            GalleryRig<MixerUi> r (baseInst, 1);
+            r.ui.screen().setSelectedStrip (s);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_mixer_strip_" + kStripNames[s] + ".png");
+        }
+
+        // 7.2 Destination popup
+        {
+            GalleryRig<MixerUi> r (baseInst, 1);
+            r.refresh (2);
+            r.tap (r.ui.screen().strips[1].destButton); // Osc A strip destination
+            r.picture (outDir + "/" + state + "_mixer_dest_popup.png");
+        }
+    }
+
+    // =========================================================================
+    // 8. FX
+    // =========================================================================
+    {
+        // 8.1 Every effect type on each page with effect switched on & non-default values
+        static const char* const kFxNames[14] = {
+            "", "chorus", "compressor", "delay", "distortion", "eq", "filter",
+            "flanger", "phaser", "reverb", "hyperdimension", "utility", "bode", "convolve"
+        };
+        for (int t = 1; t <= 13; ++t)
+        {
+            GalleryRig<FxUi> r (baseInst, 1);
+            setupEffectNonDefault (r.inst, t);
+            r.refresh();
+            addEffect (r, t);
+            const int numPages = r.ui.screen().slotEditor.numPages();
+            for (int p = 0; p < numPages; ++p)
+            {
+                r.ui.screen().slotEditor.setPage (p);
+                r.refresh (2);
+                std::string fname = state + "_fx_" + kFxNames[t];
+                if (numPages > 1)
+                    r.picture (outDir + "/" + fname + "_page" + std::to_string (p + 1) + ".png");
+                else
+                    r.picture (outDir + "/" + fname + ".png");
+            }
+        }
+
+        // 8.2 Rack selector on BUS 1
+        {
+            GalleryRig<FxUi> r (baseInst, 1);
+            setupEffectNonDefault (r.inst, 4);
+            r.refresh();
+            addEffect (r, 4); // Distortion
+            r.ui.handle (ui::Change::index (FxUi::kEditorRack, 1), r.stack, r.inst); // Bus 1
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_fx_rack_bus1.png");
+        }
+
+        // 8.3 Rack selector on BUS 2
+        {
+            GalleryRig<FxUi> r (baseInst, 1);
+            setupEffectNonDefault (r.inst, 4);
+            r.refresh();
+            addEffect (r, 4); // Distortion
+            r.ui.handle (ui::Change::index (FxUi::kEditorRack, 2), r.stack, r.inst); // Bus 2
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_fx_rack_bus2.png");
+        }
+
+        // 8.4 Chain with nine effects (bar full)
+        {
+            GalleryRig<FxUi> r (baseInst, 1);
+            r.refresh();
+            for (int t = 1; t <= 9; ++t)
+                addEffect (r, t);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_fx_chain_full.png");
+        }
+
+        // 8.5 Gallery when chain has effects (ADD pressed)
+        {
+            GalleryRig<FxUi> r (baseInst, 1);
+            r.refresh();
+            addEffect (r, 1); // Chorus
+            addEffect (r, 3); // Delay
+            r.tap (r.ui.screen().chainBar.plusCard);
+            r.picture (outDir + "/" + state + "_fx_gallery_add.png");
+        }
+
+        // 8.6 Effect parameter choice list popup in slot editor
+        {
+            GalleryRig<FxUi> r (baseInst, 1);
+            setupEffectNonDefault (r.inst, 4);
+            r.refresh();
+            addEffect (r, 4); // Distortion
+            r.tap (r.ui.screen().slotEditor.steppers[0]); // Distortion type stepper dropdown
+            r.picture (outDir + "/" + state + "_fx_param_choice_popup.png");
+        }
+    }
+
+    // =========================================================================
+    // 9. Master
+    // =========================================================================
+    {
+        // 9.1 Main side with non-default values
+        {
+            GalleryRig<MasterUi> r (baseInst, 1);
+            r.inst.set ("master.volume", 0.85f);
+            r.inst.set ("master.pan", 25.0f);
+            r.inst.set ("master.limiter", 1.0f);
+            r.inst.set ("master.voice_limit", 8.0f);
+            r.ui.screen().setSide (ui::MasterScreen::SideMain);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_master_main.png");
+        }
+
+        // 9.2 Tuning/MPE side with non-default values
+        {
+            GalleryRig<MasterUi> r (baseInst, 1);
+            r.inst.set ("master.bend_up", 12.0f);
+            r.inst.set ("master.bend_down", -12.0f);
+            r.inst.set ("master.mpe", 1.0f);
+            r.inst.set ("master.tune_base", 432.0f);
+            r.ui.screen().setSide (ui::MasterScreen::SideTuning);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_master_tuning_mpe.png");
+        }
+    }
+
+    // =========================================================================
+    // 10. Voice
+    // =========================================================================
+    {
+        // Sequence with diverse non-default values per step and each row selected
+        static const char* const kVoiceRows[6] = { "pan", "detune", "cutoff", "env", "mod1", "mod2" };
+        static const float kStepVals[8] = { -0.7f, 0.4f, 0.85f, -0.3f, 0.6f, -0.9f, 0.2f, -0.5f };
+
+        for (int r = 0; r < 6; ++r)
+        {
+            GalleryRig<VoiceUi> rVoice (baseInst, 1);
+            for (int s = 0; s < 8; ++s)
+            {
+                std::string paramKey = "voicectl.s" + std::to_string (s + 1) + "." + kVoiceRows[r];
+                rVoice.inst.set (paramKey, kStepVals[(s + r) % 8] * 100.0f);
+            }
+            rVoice.ui.screen().grid.activeRow = r;
+            rVoice.ui.screen().grid.selectedStep = r;
+            rVoice.refresh (2);
+            rVoice.picture (outDir + "/" + state + "_voice_row_" + kVoiceRows[r] + ".png");
+        }
+    }
+}
+
+} // namespace
+
+int main (int argc, char** argv)
+{
+    std::string outDir;
+    std::vector<std::string> presets;
+    bool testMode = false;
+
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string arg = argv[i];
+        if (arg == "--out" && i + 1 < argc)
+        {
+            outDir = argv[++i];
+        }
+        else if (arg == "--preset" && i + 1 < argc)
+        {
+            presets.push_back (argv[++i]);
+        }
+        else if (arg == "--presets")
+        {
+            while (i + 1 < argc && argv[i + 1][0] != '-')
+                presets.push_back (argv[++i]);
+        }
+        else if (arg == "--test")
+        {
+            testMode = true;
+        }
+        else if (arg == "--help" || arg == "-h")
+        {
+            std::printf ("Usage: %s [--out DIR] [--preset FILE ...] [--presets FILE ...] [--test]\n", argv[0]);
+            return 0;
+        }
+    }
+
+    if (testMode)
+    {
+        std::printf ("Running ui_gallery_extra_host test...\n");
+        std::string tmpDir = "/tmp/synthyboy_ui_gallery_extra_test";
+        fs::create_directories (tmpDir);
+        GalleryInst inst;
+        renderExtraStates (tmpDir, "test_init", inst);
+
+        // Verify key images exist and are not empty
+        std::vector<std::string> expected = {
+            "test_init_osca_sample_empty.png",
+            "test_init_osca_sample_loaded.png",
+            "test_init_osca_grain_empty.png",
+            "test_init_osca_grain_loaded.png",
+            "test_init_osca_wavetable_list.png",
+            "test_init_osca_warp_list.png",
+            "test_init_osca_route.png",
+            "test_init_osca_unison.png",
+            "test_init_osca_grain_window.png",
+            "test_init_osca_mods_empty.png",
+            "test_init_osca_mods_routes.png",
+            "test_init_filter1_model_standard.png",
+            "test_init_filter1_model_formant.png",
+            "test_init_filter1_model_comb.png",
+            "test_init_filter1_style_list.png",
+            "test_init_filter1_route.png",
+            "test_init_filter_dual_parallel.png",
+            "test_init_filter_dual_serial.png",
+            "test_init_env1_targets_empty.png",
+            "test_init_env1_targets_several.png",
+            "test_init_env1_beats.png",
+            "test_init_env2.png",
+            "test_init_env3.png",
+            "test_init_env4.png",
+            "test_init_env5.png",
+            "test_init_env6.png",
+            "test_init_lfo1_bpm.png",
+            "test_init_lfo1_key.png",
+            "test_init_lfo_random.png",
+            "test_init_lfo1_shape_drawn.png",
+            "test_init_lfo_editor_empty.png",
+            "test_init_lfo_editor_points.png",
+            "test_init_lfo_editor_tool_point.png",
+            "test_init_lfo_editor_tool_flat.png",
+            "test_init_lfo_editor_tool_ramp_up.png",
+            "test_init_lfo_editor_tool_ramp_down.png",
+            "test_init_mod_slot_detail.png",
+            "test_init_mod_source_picker_groups.png",
+            "test_init_mod_source_picker_group1.png",
+            "test_init_mod_target_picker_groups.png",
+            "test_init_mod_target_picker_group0.png",
+            "test_init_mod_by_source.png",
+            "test_init_mod_by_dest.png",
+            "test_init_mod_matrix_scrolled.png",
+            "test_init_macro_targets.png",
+            "test_init_macros_bank2.png",
+            "test_init_mixer_strip_sub.png",
+            "test_init_mixer_strip_osca.png",
+            "test_init_mixer_dest_popup.png",
+            "test_init_fx_chorus.png",
+            "test_init_fx_compressor_page1.png",
+            "test_init_fx_compressor_page2.png",
+            "test_init_fx_rack_bus1.png",
+            "test_init_fx_rack_bus2.png",
+            "test_init_fx_chain_full.png",
+            "test_init_fx_gallery_add.png",
+            "test_init_fx_param_choice_popup.png",
+            "test_init_master_main.png",
+            "test_init_master_tuning_mpe.png",
+            "test_init_voice_row_pan.png",
+            "test_init_voice_row_detune.png"
+        };
+
+        bool ok = true;
+        for (const auto& item : expected)
+        {
+            std::string path = tmpDir + "/" + item;
+            if (! fs::exists (path) || fs::file_size (path) < 1000)
+            {
+                std::printf ("FAIL: Missing or empty test image: %s\n", item.c_str());
+                ok = false;
+            }
+        }
+        fs::remove_all (tmpDir);
+        if (ok)
+        {
+            std::printf ("PASS  ui_gallery_extra_host self-test: all expected images rendered successfully\n");
+            std::printf ("ui_gallery_extra_host: OK\n");
+            return 0;
+        }
+        return 1;
+    }
+
+    if (outDir.empty())
+        outDir = "build/ui-gallery-extra";
+
+    fs::create_directories (outDir);
+
+    // Render Init state
+    {
+        GalleryInst initInst;
+        renderExtraStates (outDir, "Init", initInst);
+    }
+
+    // Default preset if none specified
+    if (presets.empty())
+    {
+        std::vector<std::string> defaults = {
+            "content/presets/Bass/scream_filter_bass.sbpreset"
+        };
+        for (const auto& p : defaults)
+            if (fs::exists (p))
+                presets.push_back (p);
+    }
+
+    // Render presets
+    for (const auto& p : presets)
+    {
+        if (! fs::exists (p))
+        {
+            std::fprintf (stderr, "Warning: Preset file not found: %s\n", p.c_str());
+            continue;
+        }
+        std::string stem = fs::path (p).stem().string();
+        GalleryInst inst;
+        if (inst.loadPresetFile (p))
+        {
+            renderExtraStates (outDir, stem, inst);
+        }
+        else
+        {
+            std::fprintf (stderr, "Error loading preset: %s\n", p.c_str());
+        }
+    }
+
+    std::printf ("ui_gallery_extra_host: finished rendering to %s\n", outDir.c_str());
+    return 0;
+}
