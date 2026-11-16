@@ -189,6 +189,23 @@ int main (int argc, char** argv)
         }
         check (ok, "the selectors are stepped integers 0 .. n - 1 (displayed as 1 .. n)");
     }
+    {
+        // the mark of a changed program: the host drops its own "*" when it reads the name again (audioMasterUpdateDisplay), so the plugin carries the mark in the program name
+        AEffect* pm = make();
+        char nm[64] = {};
+        pm->dispatcher (pm, effGetProgramName, 0, 0, nm, 0.0f);
+        const std::string clean = nm;
+        check (clean.size() < 2 || clean.substr (clean.size() - 2) != " *", "a fresh instance: the program name has no mark (" + clean + ")");
+        pm->setParameter (pm, 0, 0.123f);
+        std::memset (nm, 0, sizeof nm);
+        pm->dispatcher (pm, effGetProgramName, 0, 0, nm, 0.0f);
+        check (std::string (nm) == clean + " *", "a parameter edit: the name carries the mark (" + std::string (nm) + ")");
+        pm->dispatcher (pm, effSetProgram, 0, 1, nullptr, 0.0f);
+        std::memset (nm, 0, sizeof nm);
+        pm->dispatcher (pm, effGetProgramName, 0, 0, nm, 0.0f);
+        check (std::string (nm).size() >= 2 && std::string (nm).substr (std::string (nm).size() - 2) != " *", "loading a program clears the mark (" + std::string (nm) + ")");
+        closeIt (pm);
+    }
     // the defaults of the selectors
     check (a->getParameter (a, sel0) == 0.0f && a->getParameter (a, sel0 + 1) == 0.0f && a->getParameter (a, sel0 + 2) == 0.0f && text (a, effGetParamDisplay, sel0 + 2) == "LFO 1", "the selectors start at 1 / 1 / 1");
 

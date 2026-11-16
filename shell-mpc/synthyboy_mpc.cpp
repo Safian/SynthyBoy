@@ -312,6 +312,17 @@ struct PluginInstance
     // and saved again.  Only the UI thread touches these.
     bool noProgram = false;
     std::string noProgramName;
+#if SYNTHYBOY_MPC_OVERLAY
+    // The host shows a mark ("*") after the program name when the sound is not the program any more, and drops it when it is told to read the program name again (audioMasterUpdateDisplay, which the Q
+    // proxies need: docs/MPC.md "Q proxies"). So the plugin keeps the mark itself: programModified is set by a chunk restore or a parameter change, cleared by loading a program, and the name the
+    // host reads carries " *" while it is set. programMarkDue: the display thread tells the host when it changed.
+    std::atomic<bool> programModified { false }, programMarkDue { false };
+    void setProgramModified (bool m) noexcept
+    {
+        if (programModified.exchange (m, std::memory_order_relaxed) != m)
+            programMarkDue.store (true, std::memory_order_release);
+    }
+#endif
 
     // Chunk buffer: owned by the plugin instance, reused across effGetChunk calls.
     std::vector<char> chunkBuffer;
@@ -770,6 +781,8 @@ struct PluginInstance
         qFakeWrite (e);
         if (! audioMaster)
             return;
+        if (programMarkDue.exchange (false, std::memory_order_acq_rel))
+            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);   // the program name has or has no mark now
         const VstInt32 base = qBase();
         qRouter.poll ([this] (int t) noexcept { return qReadNorm (t); },
                       [&] (int q, float v) { audioMaster (e, audioMasterAutomate, base + q, 0, nullptr, v); },
@@ -1547,6 +1560,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         inst->currentProgram.store (prog, std::memory_order_relaxed);
         inst->noProgram = false;
         inst->noProgramName.clear();
+#if SYNTHYBOY_MPC_OVERLAY
+        inst->setProgramModified (false);
+#endif
         // Request display update from host
         if (inst->audioMaster)
             inst->audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
@@ -1570,7 +1586,11 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (!inst) return 0;
         char* name = static_cast<char*>(ptr);
         if (!name) return 0;
-        const std::string& progName = currentProgramName (inst);
+        std::string progName = currentProgramName (inst);
+#if SYNTHYBOY_MPC_OVERLAY
+        if (inst->programModified.load (std::memory_order_relaxed))
+            progName += " *";
+#endif
         copyString(name, kVstMaxProgNameLen + 1, progName.c_str());
         return 1;
     }
@@ -1925,6 +1945,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 }
 #endif
 
+#if SYNTHYBOY_MPC_OVERLAY
+                inst->setProgramModified (true);   // a project's state: the host marks the program as changed after a chunk restore
+#endif
                 if (idx == -1)
                 {
                     // Plain state document without a program number: leave currentProgram / noProgram / noProgramName as they are
@@ -2243,6 +2266,10 @@ static void writeRealParam (PluginInstance* inst, size_t index, float parameter)
 
     // Disarm protection: any parameter write from the host disarms it
     inst->protectedProgram.store (-1, std::memory_order_relaxed);
+
+#if SYNTHYBOY_MPC_OVERLAY
+    inst->setProgramModified (true);
+#endif
 
     // Call engine directly (IEngine::setParam is lock-free, any thread)
     if (inst->engine)
