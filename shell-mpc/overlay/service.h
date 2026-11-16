@@ -167,11 +167,13 @@ private:
         mouse_ = std::make_unique<LinuxMouseReader>();           // the mice: found at run time, hot plug, read only, never grabbed (mouse_linux.h)
         pointer_ = std::make_unique<LinuxPointerSource> (display_);   // the host's pointer plane: where the pointer is (drm_linux.h)
 #endif
-        Timing timing;
 #if SYNTHYBOY_MPC_INHOST_DRAW
+        Timing timing;
         timing.detectEveryMs = 33.0;   // the page is read from the hook's snapshot of the host's frame (no kernel calls): look at it every frame of ours
-#endif
         controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, Paths(), timing, -1.0, gpu_.get(), touch_.get());
+#else
+        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, Paths(), Timing(), -1.0, gpu_.get(), touch_.get());
+#endif
 #if defined(__linux__)
         controller_->setMouse (mouse_.get(), pointer_.get());
         controller_->setExtraStatus ([this] { return cpuStatus(); });
