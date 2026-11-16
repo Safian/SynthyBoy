@@ -28,6 +28,7 @@
 #include "../ui/shape_editor.h"
 #include "../ui/ui.h"
 #include "../q_router.h"
+#include "q_publish.h"
 #include "curve_source.h"
 #include "page_view.h"
 #include "touch_decoder.h"
@@ -163,7 +164,8 @@ public:
     int selection() const noexcept { return rnd_ != 0 ? rnd_ : lfoNum_; }
     int topPage() const noexcept { return pageTop_; }
     int activeQ() const noexcept { return full_.activeGroup(); }
-    const int* qTargets() const noexcept { return qTargets_; }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
+    int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
     /** The modulation source id (choice of modNN.source) of the LFO shown. */
     int source() const noexcept { return rnd_ != 0 ? 14 + rnd_ : uibind::lfoSource (lfoNum_); }
@@ -313,7 +315,7 @@ public:
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
     /** A full screen opened or closed somewhere: the router keeps what the last page set, so this UI publishes its Q group again at the next update (). */
-    void forgetQGroup() noexcept { qSet_ = false; }
+    void forgetQGroup() noexcept { qSlots_.forget(); }
 
     // ---- access for the tests
     ui::LfoCompact& compact() noexcept { return compact_; }
@@ -452,7 +454,7 @@ private:
         seen_.assign (dispIdx_.size(), 0.0f);
         haveCurve_ = false;
         std::fill (std::begin (trace_), std::end (trace_), 0.0f);
-        qSet_ = false;
+        qSlots_.forget();
         modsDirty_ = true;
         gesture_ = nullptr; gestureDown_ = false;
         pageSig_ = -1;
@@ -483,7 +485,7 @@ private:
             default: break;
         }
         modsDirty_ = true;
-        qSet_ = false;
+        qSlots_.forget();
     }
 
     // ---- the targets page: the rows of the matrix whose source is this LFO
@@ -1395,51 +1397,55 @@ private:
         }
         return -1;
     }
+    /** The groups of the page in reading order, published to the sixteen Q slots (q_publish.h): the compact view has RATE (RANDOM); the full screen its blocks (RATE, TIMING, MOTION, KEY when it is there, SHAPE; RANDOM,
+        TRIGGER, KEY for a random LFO), the active one on Q 1 .. 4, the next on 5 .. 16; the editor its four virtual knobs; the targets and modulation pages one group per row. */
     void publishQGroup (IInstanceView& v)
     {
-        int t[4] = { -1, -1, -1, -1 };
-        const ui::QGroup* g = nullptr;
         const char* name = "";
+        auto members = [this] (const ui::QGroup& g, int* t) { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (g.member (i)); };
         if (stackDepth_ == 0)
         {
-            g = &compact_.group;
             name = rnd_ != 0 ? "Random" : "Rate";
             compact_.group.setActive (highlight_ == 3);
             if (highlight_ != 3)
                 return;   // another sub-tab: its element owns the group
+            qSlots_.publish (v, 1, 0, [&] (int, int* t) { members (compact_.group, t); });
         }
         else if (pageTop_ == kPageEditor)
         {
             name = "Edit";
-            for (int i = 0; i < 4; ++i)
-                t[i] = QRouter::encode (i, QRouter::kVirtual);
+            qSlots_.publish (v, 1, 0, [] (int, int* t) { for (int i = 0; i < 4; ++i) t[i] = QRouter::encode (i, QRouter::kVirtual); });
         }
         else if (pageTop_ == kPageTargets || pageTop_ == kPageMods)
         {
-            name = pageTop_ == kPageTargets ? "Targets" : "Mods";
-            const int row = pageTop_ == kPageTargets ? targets_.activeRow() : mods_.activeRow();
-            const ModRow* rows = pageTop_ == kPageTargets ? targetRows_ : modRows_;
-            if (row >= 0 && row < ui::ModulationsPage::kMaxRows && rows[row].slot >= 0)
-            {
-                const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (rows[row].slot);
-                t[0] = sp.amount; t[1] = sp.bipolar; t[2] = sp.bypass;
-            }
+            const bool tg = pageTop_ == kPageTargets;
+            name = tg ? "Targets" : "Mods";
+            const ModRow* rows = tg ? targetRows_ : modRows_;
+            const int n = tg ? targets_.numRows() : mods_.numRows(), act = tg ? targets_.activeRow() : mods_.activeRow();
+            qSlots_.publish (v, n, act, [&] (int row, int* t) { modRowTargets (row >= 0 && row < ui::ModulationsPage::kMaxRows ? rows[row].slot : -1, t); });
+            if (tg)
+                setRowBlocks (targets_, ui::ModTargetsPage::kPerPage, n, act);
+            else
+                setRowBlocks (mods_, ui::ModulationsPage::kMaxRows, n, act);
         }
         else if (pageTop_ == kPageList)
+        {
             name = "List";
+            qSlots_.publish (v, 0, 0, [] (int, int*) {});
+        }
         else
         {
-            g = full_.activeGroup() >= 0 ? &full_.groups[full_.activeGroup()] : nullptr;
             name = full_.activeGroup() >= 0 ? full_.groupName (full_.activeGroup()) : "";
-        }
-        if (g != nullptr)
-            for (int i = 0; i < 4; ++i)
-                t[i] = paramOfMember (g->member (i));
-        if (! qSet_ || std::memcmp (t, qTargets_, sizeof t) != 0)
-        {
-            std::memcpy (qTargets_, t, sizeof t);
-            v.setQGroup (t, 4);
-            qSet_ = true;
+            int ids[ui::LfoFullScreen::kMaxGroups], used = 0, pos = -1;
+            for (int g = 0; g < full_.numGroups() && g < ui::LfoFullScreen::kMaxGroups; ++g)
+                if (full_.groups[g].numMembers() > 0 && ! (g == full_.keyGroup() && ! full_.keyActive()))   // the KEY block is there only with the key follow sync
+                {
+                    if (g == full_.activeGroup())
+                        pos = used;
+                    ids[used++] = g;
+                }
+            qSlots_.publish (v, used, pos, [&] (int k, int* t) { members (full_.groups[ids[k]], t); });
+            setBlocks (full_.groups, ui::LfoFullScreen::kMaxGroups, ids, used, pos);
         }
         ui::setText (qName_, sizeof qName_, name);
     }
@@ -1454,7 +1460,7 @@ private:
     UiStack idle_;                       // an empty stack: the pages are read from it while another element's page is open
     std::vector<Item> items_;
     ui::Component* gesture_ = nullptr;
-    bool gestureDown_ = false, configured_ = false, modsDirty_ = true, qSet_ = false, shapeDirty_ = false, haveCurve_ = false, displayHot_ = false;
+    bool gestureDown_ = false, configured_ = false, modsDirty_ = true, shapeDirty_ = false, haveCurve_ = false, displayHot_ = false;
     bool page_ = false;   // the page of an LFO tab
     int w_ = 1280, h_ = 800, lfoNum_ = 1, rnd_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = -1;
     int targetsPageIndex_ = 0, syncType_ = 0, shapeIdx_ = 0;
@@ -1466,7 +1472,7 @@ private:
     mutable const char* cacheKey_[kCache] = {};
     mutable int cacheIdx_[kCache] = {}, nCache_ = 0;
     char qName_[16] = {}, name_[40] = {}, label_[40] = {};
-    int qTargets_[4] = { -1, -1, -1, -1 };
+    QSlots qSlots_;
     // the display
     synthyboy::ParamValues values_ = synthyboy::ParamValues::defaults();
     std::vector<int> dispIdx_;

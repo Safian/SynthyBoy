@@ -218,6 +218,62 @@ int main()
         k.describe (sk);
         check (f.writes.empty() && line (sk, "display_plane_zpos").find ("no value puts") != std::string::npos, "no primary plane known: nothing is written (" + line (sk, "display_plane_zpos") + ")");
     }
+    // ---- the whole take / verify / show path on the MPC XL table (planes 34 host 0, 40 pointer 1, 46 rest 2, 52 rest 3; every zpos a mutable range 0 .. 7) ----
+    {
+        // the discovery: a plane of an earlier run that was not put back (46 with our zpos 0) is still a candidate, because its zpos can be written; an immutable one at that value is not
+        DrmSnapshot snap;
+        CrtcInfo crtc; crtc.id = 100; crtc.index = 0; crtc.modeValid = true; crtc.width = 1280; crtc.height = 800; crtc.vrefresh = 60; crtc.fbId = 7;
+        snap.crtcs.push_back (crtc);
+        auto plane = [] (uint32_t id, int type, uint32_t crtcId, uint32_t fb, uint64_t z, bool mut) {
+            PlaneInfo p; p.id = id; p.type = type; p.possibleCrtcs = 1; p.crtcId = crtcId; p.fbId = fb; p.hasZpos = true; p.zpos = z; p.zposMutable = mut; p.zposMin = 0; p.zposMax = 7; p.formats.push_back (kFourccArgb8888); return p; };
+        snap.planes = { plane (34, kPlaneTypePrimary, 100, 7, 0, true), plane (40, kPlaneTypeOverlay, 100, 9, 1, true), plane (46, kPlaneTypeOverlay, 0, 0, 0, true), plane (52, kPlaneTypeOverlay, 0, 0, 3, true) };
+        DisplayInfo di = discoverDisplay (snap);
+        check (di.ok && di.candidates.size() == 2 && di.candidates[0] == 46 && di.plane() == 46, "XL discovery with plane 46 left at our zpos 0 by an earlier run: 46 is the first candidate (its zpos is writable)");
+        snap.planes[2].zposMutable = false;
+        di = discoverDisplay (snap);
+        check (di.ok && di.candidates.size() == 1 && di.candidates[0] == 52, "... an immutable zpos of 0 would go under the pointer: only 52 is offered");
+    }
+    {
+        FakeDriver d;
+        d.add (34, 0); d.add (40, 1); d.add (46, 2); d.add (52, 3);
+        const std::vector<uint32_t> app { 34, 40 };
+        auto orderOk = [&] (uint32_t ours, const std::string& what) {
+            const bool ok = stackedAbove (d.planes[ours].value, ours, d.planes[34].value, 34) && stackedAbove (d.planes[40].value, 40, d.planes[ours].value, ours);
+            check (ok, what + " (host " + std::to_string (d.planes[34].value) + ", pointer " + std::to_string (d.planes[40].value) + ", ours " + std::to_string (d.planes[ours].value) + ": host < ours < pointer)");
+        };
+        StackingHolds h (d);
+        // the CPU picture is shown first (plane 52), then the helper starts on the same plane and takes over; the presenter hides its buffers
+        h.take (StackingHolds::Cpu, 52, 34, app);
+        orderOk (52, "CPU path shows plane 52");
+        h.take (StackingHolds::Gpu, 52, 34, app);
+        orderOk (52, "the helper starts on plane 52");
+        h.release (StackingHolds::Cpu);   // Presenter::hide () -> disablePlane () when the helper takes the plane
+        orderOk (52, "the presenter's hide () while the helper holds the plane: the order stays");
+        check (h.guard().restores() == 0 && h.guard().sets() == 1, "... no restore, one set in all (sets " + std::to_string (h.guard().sets()) + ", restores " + std::to_string (h.guard().restores()) + ")");
+        h.release (StackingHolds::Cpu);
+        orderOk (52, "a second hide () (nothing of the CPU path left): no effect");
+        // a mode set of the application resets the plane: the check while the helper shows it puts it right
+        d.planes[52].value = 3;
+        h.verify (StackingHolds::Gpu, 52, 34, app);
+        orderOk (52, "the application reset the zpos: the check while the helper shows the plane sets it again");
+        std::string st;
+        h.describe (st);
+        check (line (st, "display_pointer_plane") == "above ours" && line (st, "display_plane_zpos").find ("rest 3, set 0") == 0, "status: " + line (st, "display_plane_zpos") + "; pointer " + line (st, "display_pointer_plane"));
+        // the helper reports SETPLANE failing on 52 that is free again: the plane is given up (both holds), the zpos goes back, the next plane is taken
+        h.releaseAll();
+        check (d.planes[52].value == 3, "the plane is given up: its rest zpos 3 is back");
+        h.take (StackingHolds::Gpu, 46, 34, app);
+        orderOk (46, "the helper restarts on the next plane 46");
+        h.release (StackingHolds::Gpu);
+        check (d.planes[46].value == 2, "the helper ends: rest zpos 2 is back");
+        // the original defect sequence of the XL (takes 2, sets 1, restores 1): the helper took the order, then the presenter's hide () wrote the rest value back
+        FakeDriver e;
+        e.add (34, 0); e.add (40, 1); e.add (52, 3);
+        StackingHolds k (e);
+        k.take (StackingHolds::Gpu, 52, 34, app);
+        k.release (StackingHolds::Cpu);
+        check (e.planes[52].value == 0 && k.guard().restores() == 0, "the helper's order survives a hide () of the CPU path that never took the plane");
+    }
     std::printf (g_fails ? "stacking_host: FAILED (%d)\n" : "stacking_host: OK\n", g_fails);
     return g_fails ? 1 : 0;
 }
