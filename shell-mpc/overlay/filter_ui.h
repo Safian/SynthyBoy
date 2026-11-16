@@ -765,9 +765,8 @@ private:
         {
             const int dst = static_cast<int> (std::lround (inst.param (dstIdx)));
             const synthyboy::ParamInfo& pi = info (dstIdx);
-            route_.destination.state.count = pi.numChoices;
-            route_.destination.state.index = std::clamp (dst, 0, std::max (0, pi.numChoices - 1));
-            route_.destination.setItem (dst >= 0 && dst < pi.numChoices ? pi.choices[dst] : "");
+            route_.destination.setOptions (pi.choices, pi.numChoices);
+            route_.destination.state.index = std::clamp (dst, 0, std::max (0, route_.destination.state.count - 1));
             full_.route.setTarget (dst == 1 ? "D" : (dst == 2 ? "-" : "M"));
             full_.route.state.segment[0] = full_.route.state.segment[1] = dst == 0;
         }

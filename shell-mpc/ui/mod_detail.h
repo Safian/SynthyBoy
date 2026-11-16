@@ -13,6 +13,7 @@
 #include "base.h"
 #include "composite.h"
 #include "core.h"
+#include "led_toggle.h"
 #include "mod_matrix.h"
 #include "qgroup.h"
 #include "theme.h"
@@ -35,18 +36,18 @@ public:
     // AUX block
     MenuButton auxSource { "SOURCE", MenuButton::Icon::Down };
     Knob auxOutput { "SCALE" };
-    ToggleIcon auxInv;
+    LedToggle auxInv;
     Knob auxPower { "CURVE" };
 
     // SHAPE block
     Knob power { "CURVE" };
-    ToggleIcon stereo;
+    LedToggle stereo;
 
     // TIME block
     Knob rise { "RISE" };
     Knob fall { "FALL" };
     Knob delay { "DELAY" };
-    ToggleIcon delaySync;
+    LedToggle delaySync;
     Knob delayBeats { "BEATS" };
 
     QGroup groups[3];
@@ -61,9 +62,7 @@ public:
         auxOutput.state.defaultValue = 0.5;   // 100 %
         auxPower.state.bipolar = true;
         auxPower.state.defaultValue = 0.5;
-        auxInv.state.icon = ToggleIcon::Icon::Generic;
         auxInv.setLabel ("INVERT");
-        auxInv.state.showState = true;
         addKid (auxSource);
         addKid (auxOutput);
         addKid (auxInv);
@@ -71,15 +70,11 @@ public:
 
         power.state.bipolar = true;
         power.state.defaultValue = 0.5;
-        stereo.state.icon = ToggleIcon::Icon::Generic;
         stereo.setLabel ("STEREO");
-        stereo.state.showState = true;
         addKid (power);
         addKid (stereo);
 
-        delaySync.state.icon = ToggleIcon::Icon::Generic;
         delaySync.setLabel ("SYNC");
-        delaySync.state.showState = true;
         addKid (rise);
         addKid (fall);
         addKid (delay);
@@ -226,18 +221,17 @@ protected:
                 Rect cell { in.x + col * (cw + kGap), in.y + row * (rh + kGap + kQLane), col == 1 ? in.right() - (in.x + cw + kGap) : cw, rh };
                 if (cs[i] == &auxSource)
                     cell = { cell.x, cell.y + (cell.h - std::min (cell.h, 110)) / 2, cell.w, std::min (cell.h, 110) };
-                else if (cs[i] == &auxInv || cs[i] == &delaySync)
-                    cell = { cell.x, cell.y + (cell.h - std::min (cell.h, 96)) / 2, cell.w, std::min (cell.h, 96) };
+                else if (cs[i] == &auxInv || cs[i] == &delaySync)   // a LED toggle: one row of 56 px, in the middle of its cell
+                    cell = { cell.x, cell.y + (cell.h - std::min (cell.h, led::kRowH)) / 2, cell.w, std::min (cell.h, led::kRowH) };
                 cs[i]->place (cell);
             }
         };
         grid (blocks_[BlockAux], &auxSource, &auxOutput, &auxInv, &auxPower);
         {
             const Rect in = inner (blocks_[BlockShape]);
-            const int rh = (in.h - kQLane - kGap) / 2;
+            const int sh = led::kRowH, rh = in.h - kQLane - kGap - sh;   // STEREO is one LED row; the room it leaves goes to the CURVE knob
             power.place ({ in.x, in.y, in.w, rh });
-            const int sh = std::min (rh, 96);
-            stereo.place ({ in.x, in.y + rh + kGap + kQLane + (rh - sh) / 2, in.w, sh });
+            stereo.place ({ in.x, in.y + rh + kGap + kQLane, in.w, sh });
         }
         grid (blocks_[BlockTime], &rise, &fall, &delay, &delaySync);
         delayBeats.place (delay.rect());

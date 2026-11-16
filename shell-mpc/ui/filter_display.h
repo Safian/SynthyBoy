@@ -527,12 +527,12 @@ private:
 };
 
 // ===============================================================================================================================
-/** FilterRoutePanel: route popup for a filter instance (destination, bus 1/2 sends, level, pan).
+/** FilterRoutePanel: route popup for a filter instance (destination as a LED list of its three values side by side, bus 1/2 sends, level, pan).
     Popup modal with dimmed backdrop. Touch targets >= 56 px. */
 class FilterRoutePanel : public Composite
 {
 public:
-    Stepper destination;
+    LedList destination;   // Effects only | Direct out | None: all visible, one tap
     Knob bus1 { "BUS 1" }, bus2 { "BUS 2" };
     Knob level { "LEVEL" }, pan { "PAN" };
     MenuButton close { "CLOSE", MenuButton::Icon::None };
@@ -544,6 +544,7 @@ public:
         pan.state.defaultValue = 0.5;
         pan.state.value = pan.state.modValue = 0.5;
         level.state.defaultValue = 0.833; // ~0 dB
+        destination.setTitle ("DESTINATION");
         addKid (destination);
         addKid (close);
         addKid (bus1);
@@ -618,11 +619,11 @@ protected:
     void layout() override
     {
         const int m = 8;
-        const int rowH = 52;
-        close.place ({ rect_.right() - m - 84, rect_.y + m, 84, rowH });
+        const int rowH = LedList::kTitleH + led::kRowH;   // the title and one row of three values
+        close.place ({ rect_.right() - m - 84, rect_.y + m, 84, 56 });
         destination.place ({ rect_.x + m, rect_.y + m, rect_.w - 2 * m - 84 - kGap, rowH });
 
-        const int ky = rect_.y + m + rowH + kGap;
+        const int ky = rect_.y + m + rowH + kQLane;   // the lane of the index chips of the knobs under the list
         const int kh = std::max (60, rect_.bottom() - m - ky);
         Rect k[4];
         const int f4[4] = { 0, 0, 0, 0 }, w4[4] = { 1, 1, 1, 1 };
