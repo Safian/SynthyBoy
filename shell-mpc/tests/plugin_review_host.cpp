@@ -1,7 +1,8 @@
 // Robustness review of the plugin shell (review of 2026-11-16, docs: .hw-local/mpc-ui-plans/robustness-review.md): the built overlay plugin loaded like the host loads it, hostile conditions one per CHILD process
 // (a hang or an AddressSanitizer abort is a result, not the end of the test). Build the plugin with -DSYNTHYBOY_MPC_OVERLAY=ON and the test and the plugin with -fsanitize=address,undefined. Usage: plugin_review_host <plugin>.
-//   R4  the name / label / display buffers of effGetParamName / Label / Display: the SDK (mpc_vst2_abi.h: kVstMaxParamStrLen = 8, "the conservative limit") promises 9 bytes, the shell's own comment assumes
-//       24, and it writes a NUL at offset 63 every time (`buf[63] = '\0'`, synthyboy_mpc.cpp:1666 / 1722 / 1761 / ...) and names of up to 41 characters. Control: a 64 byte buffer is fine.
+//   R4  the name / label / display buffers of effGetParamName / Label / Display: the plugin used to write a NUL at offset 63 every time and names of up to 37 characters, into a buffer whose size it does not
+//       know. The bound is kParamStrBytes (32, host_strings.h: the SDK framework's own limit): every parameter of the list is asked into a heap buffer of EXACTLY that size (and of the SDK's program /
+//       effect / vendor / product sizes) with a canary after the string: nothing past the terminator may change. Control: a 64 byte buffer is fine.
 //   R5  a FIFO at /tmp/synthyboy-overlay-fake-slot (the debug switch the display thread opens with fopen every second): the display thread blocks in fopen for ever, and effClose, which joins it, never returns.
 //   R6  a 700 MB single line in the file the display thread getline()s every tick (/tmp/synthyboy-q-fake-group, path from SYNTHYBOY_MPC_Q_FAKE_FILE): the display thread is busy for seconds and effClose waits for it.
 //   R7  with the play log switched on (the file /tmp/synthyboy-play-log; here SYNTHYBOY_MPC_PLAY_LOG_FILE) every setParameter of the host takes a mutex and does fopen / fwrite / fclose of a file: file I/O on the
@@ -16,6 +17,7 @@
 #include <dlfcn.h>
 #include <string>
 #include <thread>
+#include <set>
 #include <vector>
 
 #include <fcntl.h>
@@ -24,6 +26,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "host_strings.h"
 #include "mpc_vst2_abi.h"
 #include "synthyboy/params.h"
 
@@ -101,16 +104,64 @@ static void inChild (const char* what, F&& body)
     std::printf ("\n");
 }
 
-/** Asks for name / label / display of parameter `index` into a heap buffer of exactly `size` bytes (so AddressSanitizer sees every byte past it). */
-static void askStrings (AEffect* e, int index, size_t size)
+/** Asks for name / label / display of parameter `index` into a heap buffer of exactly `size` bytes filled with 'Z' (so AddressSanitizer sees every byte past it and the canary shows a write inside it that is not the string).
+    The string must end inside the buffer and every byte after its NUL must still be 'Z'. Returns the number of violations. */
+static int askStrings (AEffect* e, int index, size_t size, bool exact = false)
 {
+    int bad = 0;
     for (int op : { effGetParamName, effGetParamLabel, effGetParamDisplay })
     {
         char* buf = static_cast<char*> (std::malloc (size));
         std::memset (buf, 'Z', size);
         e->dispatcher (e, op, index, 0, buf, 0.0f);
+        size_t len = 0;
+        while (len < size && buf[len] != '\0')
+            ++len;
+        if (exact)
+        {
+            bool tail = len < size;
+            for (size_t i = len + 1; i < size; ++i)
+                tail = tail && buf[i] == 'Z';
+            if (! tail)
+            {
+                std::printf ("INFO  parameter %d opcode %d: the string is not terminated inside %zu bytes or something was written after its NUL\n", index, op, size);
+                ++bad;
+            }
+        }
         std::free (buf);
     }
+    return bad;
+}
+
+/** The program names, the effect name and the vendor / product strings into buffers of exactly the sizes the SDK documents (+ the NUL), with the same canary. */
+static int askOtherStrings (AEffect* e)
+{
+    int bad = 0;
+    auto one = [&] (VstInt32 op, VstInt32 index, size_t size)
+    {
+        char* buf = static_cast<char*> (std::malloc (size));
+        std::memset (buf, 'Z', size);
+        e->dispatcher (e, op, index, 0, buf, 0.0f);
+        size_t len = 0;
+        while (len < size && buf[len] != '\0')
+            ++len;
+        bool tail = len < size;
+        for (size_t i = len + 1; i < size; ++i)
+            tail = tail && buf[i] == 'Z';
+        if (! tail)
+        {
+            std::printf ("INFO  opcode %d index %d: not terminated inside %zu bytes or written after the NUL\n", op, index, size);
+            ++bad;
+        }
+        std::free (buf);
+    };
+    one (effGetProgramName, 0, kVstMaxProgNameLen + 1);
+    for (int i = 0; i < e->numPrograms; ++i)
+        one (effGetProgramNameIndexed, i, kVstMaxProgNameLen + 1);
+    one (effGetEffectName, 0, kVstMaxEffectNameLen + 1);
+    one (effGetVendorString, 0, kVstMaxVendorStrLen + 1);
+    one (effGetProductString, 0, kVstMaxProductStrLen + 1);
+    return bad;
 }
 
 int main (int argc, char** argv)
@@ -136,29 +187,44 @@ int main (int argc, char** argv)
         e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);
         return 0;
     });
-    inChild ("R4a: parameter 0 (a short name) into a 32 byte buffer: nothing may be written past the string", [&]
+    inChild ("R4a: every parameter of the list (the engine's, the display ones, pad pressure, overlay, Play, Q) into a buffer of exactly 32 bytes (kParamStrBytes): nothing written past the string", [&]
     {
         AEffect* e = make();
         if (! e) return 2;
-        askStrings (e, 0, 32);
+        int bad = 0;
+        for (int i = 0; i < e->numParams; ++i)
+            bad += askStrings (e, i, synthyboy_mpc::kParamStrBytes, true);
         e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);
-        return 0;
+        return bad == 0 ? 0 : 1;
     });
-    inChild ("R4b: the parameter with the longest name into a 24 byte buffer (the size the shell's own comment assumes)", [&]
+    inChild ("R4b: the parameter with the longest name into a buffer of exactly 32 bytes; every name of the engine's list is at most 31 characters, readable and unique", [&]
     {
         AEffect* e = make();
         if (! e) return 2;
-        askStrings (e, longest, 24);
+        int bad = askStrings (e, longest, synthyboy_mpc::kParamStrBytes, true);
+        std::set<std::string> seen;
+        for (int i = 0; i < nEngine; ++i)
+        {
+            char name[synthyboy_mpc::kParamStrBytes];
+            std::memset (name, 'Z', sizeof name);
+            e->dispatcher (e, effGetParamName, i, 0, name, 0.0f);
+            const size_t len = ::strnlen (name, sizeof name);
+            if (len == 0 || len >= sizeof name || ! seen.insert (name).second)
+            {
+                std::printf ("INFO  parameter %d: name '%.31s' has %zu characters or is not unique\n", i, name, len);
+                ++bad;
+            }
+        }
         e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);
-        return 0;
+        return bad == 0 ? 0 : 1;
     });
-    inChild ("R4c: parameter 0 into a 9 byte buffer (kVstMaxParamStrLen + 1, the SDK's own number)", [&]
+    inChild ("R4c: program names, effect name, vendor and product strings into buffers of exactly the sizes the SDK documents", [&]
     {
         AEffect* e = make();
         if (! e) return 2;
-        askStrings (e, 0, 9);
+        int bad = askOtherStrings (e);
         e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);
-        return 0;
+        return bad == 0 ? 0 : 1;
     });
 
     inChild ("R5: effClose returns within 3 s although /tmp/synthyboy-overlay-fake-slot is a FIFO nobody writes", [&]

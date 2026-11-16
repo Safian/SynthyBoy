@@ -342,6 +342,13 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(safe_file_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME safe_file_host COMMAND safe_file_host)
 
+    add_executable(host_strings_host EXCLUDE_FROM_ALL tests/host_strings_host.cpp)
+    target_include_directories(host_strings_host PRIVATE "${CMAKE_SOURCE_DIR}/core/include" "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(host_strings_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(host_strings_host PRIVATE cxx_std_17)
+    target_compile_options(host_strings_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME host_strings_host COMMAND host_strings_host)
+
     add_executable(q_router_review_host EXCLUDE_FROM_ALL tests/q_router_review_host.cpp)
     target_include_directories(q_router_review_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(q_router_review_host PRIVATE Threads::Threads)

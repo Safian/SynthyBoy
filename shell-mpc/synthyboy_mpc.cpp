@@ -30,6 +30,7 @@
 
 #include "mpc_vst2_abi.h"
 #include "output_peak.h"
+#include "host_strings.h"
 #include "output_stage.h"
 #include "plugin_paths.h"
 #include "program_list.h"
@@ -1637,6 +1638,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (!inst) return 0;
         char* buf = static_cast<char*>(ptr);
         if (!buf || index < 0) return 0;
+        constexpr size_t kCap = synthyboy_mpc::kParamStrBytes;   // the bytes this plugin writes into the host's buffer, NUL included (host_strings.h): nothing else of the buffer is touched
 
 #if SYNTHYBOY_MPC_OVERLAY
         if (PluginInstance::isOverlayParam (index))
@@ -1644,17 +1646,16 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             const int frame = static_cast<int> (inst->overlayValue.load (std::memory_order_relaxed) * static_cast<float> (synthyboy_mpc::overlay::layout::kInstanceSteps) + 0.5f);
             const int slot = synthyboy_mpc::overlay::slotOfInstanceFrame (frame);
             if (opcode == effGetParamName)
-                copyString (buf, 64, "Overlay Instance");
+                synthyboy_mpc::putBounded (buf, kCap, "Overlay Instance");
             else if (opcode == effGetParamLabel)
                 buf[0] = '\0';
             else if (slot == synthyboy_mpc::overlay::kSlotUnknown)
-                copyString (buf, 64, "blank");
+                synthyboy_mpc::putBounded (buf, kCap, "blank");
             else if (slot == synthyboy_mpc::overlay::kSlotNone)
-                copyString (buf, 64, "none");
+                synthyboy_mpc::putBounded (buf, kCap, "none");
             else
-                std::snprintf (buf, 64, "slot %d", slot);
-            buf[63] = '\0';
-            return 1;
+                std::snprintf (buf, kCap, "slot %d", slot);
+                        return 1;
         }
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
@@ -1667,23 +1668,25 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             if (real < 0)
             {
                 if (opcode == effGetParamName)
-                    std::snprintf (buf, 64, "Q %d", q + 1);
+                    std::snprintf (buf, kCap, "Q %d", q + 1);
                 else
                     buf[0] = '\0';
             }
             else if (opcode == effGetParamName)
-                std::snprintf (buf, 64, "%s%s", synthyboy::paramTable()[real].name, mode == synthyboy_mpc::QRouter::kOct ? " Oct" : (mode == synthyboy_mpc::QRouter::kSem ? " Sem" : ""));
+            {
+                // the target's name, shortened by the same word list as the parameter table's names so that name and suffix fit the bound together
+                synthyboy_mpc::nameWithSuffix (synthyboy::paramTable()[real].name, mode == synthyboy_mpc::QRouter::kOct ? " Oct" : (mode == synthyboy_mpc::QRouter::kSem ? " Sem" : ""), buf, kCap);
+            }
             else if (opcode == effGetParamLabel)
-                copyString (buf, 64, mode == synthyboy_mpc::QRouter::kOct ? "oct" : (mode == synthyboy_mpc::QRouter::kSem ? "st" : synthyboy::unitLabel (synthyboy::paramTable()[real].unit)));
+                synthyboy_mpc::putBounded (buf, kCap, mode == synthyboy_mpc::QRouter::kOct ? "oct" : (mode == synthyboy_mpc::QRouter::kSem ? "st" : synthyboy::unitLabel (synthyboy::paramTable()[real].unit)));
             else if (mode == synthyboy_mpc::QRouter::kOct || mode == synthyboy_mpc::QRouter::kSem)
             {
                 const int t = static_cast<int> (std::lround (inst->paramMirror[real].load (std::memory_order_relaxed)));
-                std::snprintf (buf, 64, "%+d", mode == synthyboy_mpc::QRouter::kOct ? synthyboy_mpc::QRouter::octOfTranspose (t) : synthyboy_mpc::QRouter::semOfTranspose (t));
+                std::snprintf (buf, kCap, "%+d", mode == synthyboy_mpc::QRouter::kOct ? synthyboy_mpc::QRouter::octOfTranspose (t) : synthyboy_mpc::QRouter::semOfTranspose (t));
             }
             else
-                synthyboy::valueToText (synthyboy::paramTable()[real], inst->paramMirror[real].load (std::memory_order_relaxed), buf, 64);
-            buf[63] = '\0';
-            return 1;
+                synthyboy::valueToText (synthyboy::paramTable()[real], inst->paramMirror[real].load (std::memory_order_relaxed), buf, kCap);
+                        return 1;
         }
         if (PluginInstance::isPlayParam (index))
         {
@@ -1692,26 +1695,24 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             {
                 const int g = index - PluginInstance::playBase();
                 if (opcode == effGetParamName)
-                    copyString (buf, 64, pl::selectorName (g));
+                    synthyboy_mpc::putBounded (buf, kCap, pl::selectorName (g));
                 else if (opcode == effGetParamLabel)
                     buf[0] = '\0';
                 else
-                    copyString (buf, 64, pl::selectorText (g, inst->playSel[g].load (std::memory_order_relaxed)).c_str());
-                buf[63] = '\0';
-                return 1;
+                    synthyboy_mpc::putBounded (buf, kCap, pl::selectorText (g, inst->playSel[g].load (std::memory_order_relaxed)).c_str());
+                                return 1;
             }
             const int p = PluginInstance::playProxyOf (index);
             const int real = inst->playRealOf (p);
             if (opcode == effGetParamName)
-                copyString (buf, 64, pl::slots (PluginInstance::playGroupOfProxy (p))[PluginInstance::playSlotOfProxy (p)].proxyName);
+                synthyboy_mpc::putBounded (buf, kCap, pl::slots (PluginInstance::playGroupOfProxy (p))[PluginInstance::playSlotOfProxy (p)].proxyName);
             else if (real < 0)
                 buf[0] = '\0';
             else if (opcode == effGetParamLabel)
-                copyString (buf, 64, synthyboy::unitLabel (synthyboy::paramTable()[real].unit));
+                synthyboy_mpc::putBounded (buf, kCap, synthyboy::unitLabel (synthyboy::paramTable()[real].unit));
             else
-                synthyboy::valueToText (synthyboy::paramTable()[real], inst->paramMirror[real].load (std::memory_order_relaxed), buf, 64);
-            buf[63] = '\0';
-            return 1;
+                synthyboy::valueToText (synthyboy::paramTable()[real], inst->paramMirror[real].load (std::memory_order_relaxed), buf, kCap);
+                        return 1;
         }
 #endif
 #if SYNTHYBOY_MPC_LFO_LIVE
@@ -1724,30 +1725,29 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             if (opcode == effGetParamName)
             {
                 if (n >= synthyboy_mpc::kLfoLiveCount)
-                    std::snprintf (buf, 64, "Spectrum %d", n - synthyboy_mpc::kLfoLiveCount + 1);
+                    std::snprintf (buf, kCap, "Spectrum %d", n - synthyboy_mpc::kLfoLiveCount + 1);
                 else
-                    std::snprintf (buf, 64, "LFO %d Cursor", n + 1);
+                    std::snprintf (buf, kCap, "LFO %d Cursor", n + 1);
             }
             else if (opcode == effGetParamLabel)
                 buf[0] = '\0';
             else if (step == 0)
-                copyString (buf, 64, n < synthyboy_mpc::kLfoLiveCount ? "idle" : "0");
+                synthyboy_mpc::putBounded (buf, kCap, n < synthyboy_mpc::kLfoLiveCount ? "idle" : "0");
             else
-                std::snprintf (buf, 64, "%d/%d", step, steps);
+                std::snprintf (buf, kCap, "%d/%d", step, steps);
 #else
             const int n = index - static_cast<int> (synthyboy::paramCount());
             const int step = static_cast<int> (inst->liveValue[n].load (std::memory_order_relaxed) * static_cast<float> (synthyboy_mpc::kLfoLiveSteps) + 0.5f);
             if (opcode == effGetParamName)
-                std::snprintf (buf, 64, "LFO %d Cursor", n + 1);
+                std::snprintf (buf, kCap, "LFO %d Cursor", n + 1);
             else if (opcode == effGetParamLabel)
                 buf[0] = '\0';
             else if (step == 0)
-                copyString (buf, 64, "idle");
+                synthyboy_mpc::putBounded (buf, kCap, "idle");
             else
-                std::snprintf (buf, 64, "%d/%d", step, synthyboy_mpc::kLfoLiveSteps);
+                std::snprintf (buf, kCap, "%d/%d", step, synthyboy_mpc::kLfoLiveSteps);
 #endif
-            buf[63] = '\0';
-            return 1;
+                        return 1;
         }
 #endif
 #if SYNTHYBOY_MPC_PAD_PRESSURE
@@ -1755,15 +1755,14 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         {
             const bool amount = index == PluginInstance::padPressureBase() + 1;
             if (opcode == effGetParamName)
-                copyString (buf, 64, amount ? "Pad Pressure Amount" : "Pad Pressure");
+                synthyboy_mpc::putBounded (buf, kCap, amount ? "Pad Pressure Amount" : "Pad Pressure");
             else if (opcode == effGetParamLabel)
-                copyString (buf, 64, amount ? "%" : "");
+                synthyboy_mpc::putBounded (buf, kCap, amount ? "%" : "");
             else if (amount)
-                std::snprintf (buf, 64, "%d", static_cast<int> (inst->padPressureAmount.load (std::memory_order_relaxed) + 0.5f));
+                std::snprintf (buf, kCap, "%d", static_cast<int> (inst->padPressureAmount.load (std::memory_order_relaxed) + 0.5f));
             else
-                copyString (buf, 64, inst->padPressure.load (std::memory_order_relaxed) ? "On" : "Off");
-            buf[63] = '\0';
-            return 1;
+                synthyboy_mpc::putBounded (buf, kCap, inst->padPressure.load (std::memory_order_relaxed) ? "On" : "Off");
+                        return 1;
         }
 #endif
         size_t paramCount = synthyboy::paramCount();
@@ -1771,24 +1770,19 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
         const synthyboy::ParamInfo* info = synthyboy::paramTable() + index;
 
-        // Use a generous buffer size (host passes at least 24 bytes for params)
-        constexpr int kMaxParamStr = 64;
-
         if (opcode == effGetParamName)
         {
-            copyString(buf, kMaxParamStr, info->name);
-            buf[kMaxParamStr - 1] = '\0';
+            synthyboy_mpc::shortName (info->name, buf, kCap, synthyboy_mpc::kParamNameChars);   // 38 of the names are longer than the bound: the word list shortens them
         }
         else if (opcode == effGetParamLabel)
         {
             const char* unit = synthyboy::unitLabel(info->unit);
-            copyString(buf, kMaxParamStr, unit);
-            buf[kMaxParamStr - 1] = '\0';
+            synthyboy_mpc::putBounded (buf, kCap, unit);
         }
         else // effGetParamDisplay
         {
             float plain = inst->paramMirror[index].load(std::memory_order_relaxed);
-            synthyboy::valueToText(*info, plain, buf, kMaxParamStr);
+            synthyboy::valueToText(*info, plain, buf, kCap);
         }
         return 1;
     }
@@ -2120,7 +2114,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (name)
         {
             copyString(name, kVstMaxEffectNameLen + 1, "SynthyBoy");
-            name[kVstMaxEffectNameLen] = '\0';
         }
         return 1;
     }
@@ -2131,7 +2124,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (vendor)
         {
             copyString(vendor, kVstMaxVendorStrLen + 1, "Safian");
-            vendor[kVstMaxVendorStrLen] = '\0';
         }
         return 1;
     }
@@ -2142,7 +2134,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (product)
         {
             copyString(product, kVstMaxProductStrLen + 1, "SynthyBoy");
-            product[kVstMaxProductStrLen] = '\0';
         }
         return 1;
     }
