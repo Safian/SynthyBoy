@@ -46,6 +46,12 @@
 #include "pages.h"
 #include "play_view.h"
 #include "views.h"
+#ifndef SYNTHYBOY_MPC_INHOST_DRAW
+#define SYNTHYBOY_MPC_INHOST_DRAW 0
+#endif
+#if SYNTHYBOY_MPC_INHOST_DRAW
+#include "inhost/glue.h"
+#endif
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -511,6 +517,11 @@ private:
         }
         int edge = PanelKey::kNoKey;
         if (current_ >= 0 && rotationKnown() && qlinkOpt_.keyOn())
+#if SYNTHYBOY_MPC_INHOST_DRAW
+            if (inhost::hostEdgeActive())
+                edge = inhost::hostEdge();   // in-host drawing: the hook cut the frame at the host's pop-up in the frame itself, the edge is the one it found
+            else
+#endif
         {
             PanelKey& k = keys_[current_];
             if (! k.hasReference())
@@ -953,6 +964,9 @@ private:
             return;
         rotateCanvasInto (rotation_, canvas_.data(), w, h, back, stride);
         const auto t2 = Clock::now();
+#if SYNTHYBOY_MPC_INHOST_DRAW
+        inhost::noteFrame (current_, activeSlot_, rotation_);   // the in-host path publishes this picture for this view and instance
+#endif
         const bool ok = presenter_.present();   // waits for the vblank on the device
         const auto t3 = Clock::now();
         // the work before SETPLANE (the full computation included, which only some of the pictures need): a decaying maximum, so that even those pictures are ready in time

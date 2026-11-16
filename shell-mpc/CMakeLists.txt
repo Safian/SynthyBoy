@@ -142,6 +142,22 @@ if(SYNTHYBOY_MPC_OVERLAY_GPU_ACTIVE)
     add_subdirectory(overlay/gpu-helper)
 endif()
 
+# In-host drawing (SYNTHYBOY_MPC_INHOST_DRAW, default OFF, shell-mpc/overlay/inhost/; docs/MPC.md "In-host drawing"): a second, EXPERIMENTAL way to present the overlay picture. Instead of a display plane the plugin puts a hook on the
+# host's own call of drmModeAtomicCommit (one GOT slot of /usr/bin/MPC, found and checked at run time, put back when the last instance closes) and copies the CPU-rendered picture into the host's buffer right before the host
+# flips it; the plane overlay stays the fall back (hook refused, kill-switch file /tmp/synthyboy-overlay-inhost-off, a hook that misbehaves). Needs the overlay and a Linux target; the GPU helper is not started in this build.
+# OFF builds the plugin byte for byte as it was without this code.
+option(SYNTHYBOY_MPC_INHOST_DRAW "MPC shell: draw the overlay picture into the host's own frame instead of on a display plane (experimental, needs SYNTHYBOY_MPC_OVERLAY)" OFF)
+if(SYNTHYBOY_MPC_INHOST_DRAW)
+    if(NOT SYNTHYBOY_MPC_OVERLAY)
+        message(FATAL_ERROR "SYNTHYBOY_MPC_INHOST_DRAW needs SYNTHYBOY_MPC_OVERLAY=ON")
+    endif()
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        message(FATAL_ERROR "SYNTHYBOY_MPC_INHOST_DRAW needs a Linux target (DRM, the host's GOT)")
+    endif()
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_INHOST_DRAW=1)
+    target_link_libraries(synthyboy_mpc PRIVATE ${CMAKE_DL_LIBS})
+endif()
+
 # Pad pressure to Filter 1 cutoff (docs/MPC.md "Pad pressure"): two automatable parameters "Pad Pressure" and "Pad Pressure Amount" after the spectrum columns (before the overlay build's "Overlay Instance", which stays last), saved in
 # the state chunk. The skin of scripts/mpc-skin-extras/45_pad_pressure.py refers to them, so the MPC package needs the plugin built with this ON (the default of this shell). The
 # source default is 0: OFF builds the plugin byte for byte as it was without this code. The layer itself is in the own engine (the engine of the MPC package).
@@ -319,5 +335,10 @@ if(NOT CMAKE_CROSSCOMPILING)
 
     add_test(NAME osc_page_host COMMAND osc_page_host)
     add_test(NAME osc_ui_host COMMAND osc_ui_host)
+    add_executable(inhost_host EXCLUDE_FROM_ALL overlay/tests/inhost_host.cpp)
+    target_include_directories(inhost_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/overlay")
+    target_link_libraries(inhost_host PRIVATE Threads::Threads)
+    target_compile_features(inhost_host PRIVATE cxx_std_17)
+    target_compile_options(inhost_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME inhost_host COMMAND inhost_host)
 endif()
-
