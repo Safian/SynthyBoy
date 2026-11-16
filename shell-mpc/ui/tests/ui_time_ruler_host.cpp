@@ -103,6 +103,15 @@ int main()
         check (std::strlen (small) <= 3, "a short buffer is not overrun and stays terminated");
     }
 
+    {
+        char one[1] = { 'x' };
+        formatRulerTime (0.0, one, sizeof one);
+        check (one[0] == '\0', "a buffer of one byte gets only the terminator, also for 0");
+        const TimeRuler r = makeTimeRuler (1e15, 0.0f, 100000.0f, 1.0f);
+        check (r.count >= 2 && r.count <= TimeRuler::kMaxTicks, "a huge ratio of time to step does not overflow the count");
+        check (near (rulerStepMs (100.00000000000001 * 8.0, 800.0f, 100.0f), 100.0), "an exact fit is not pushed to the next step by rounding");
+    }
+
     if (failures == 0)
         std::printf ("ui_time_ruler_host: OK\n");
     return failures == 0 ? 0 : 1;
