@@ -39,6 +39,7 @@ public:
     int numGroups() const noexcept { return slotEditor.numRows(); }
     void showEditor (bool s) { show (slotEditor, s); }
     bool editorShown() const noexcept { return editorShown_; }
+    bool galleryShown() const noexcept { return ! editorShown_ && gallery.numTypes() > 0; }
     static const char* groupName (int g) noexcept
     {
         static const char* const names[kMaxGroups] = { "PARAMETERS 1-4", "PARAMETERS 5-8", "PARAMETERS 9-12", "PARAMETERS 13-16", "PARAMETERS 17-20", "PARAMETERS 21-24" };

@@ -355,6 +355,9 @@ public:
 
     Change touchDown (int x, int y, double nowMs) override
     {
+        if (boardShown())
+            return Composite::touchDown (x, y, nowMs);
+
         const Rect lr = listRect();
         const int listY = lr.y;
         if (y >= listY && y < lr.bottom() && x < rect_.right() - (scrolls() ? kZoneW : 0))

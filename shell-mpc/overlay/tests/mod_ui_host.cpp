@@ -242,6 +242,72 @@ void testSlotParamsExistence()
     check (allValid, "all 64 slots have valid parameter table indices for all 16 parameters");
 }
 
+void testModEmptyStateAndBoard()
+{
+    ModRig r;
+    r.refresh();
+    check (r.ui.matrix().activeSlots() == 0, "matrix has 0 active slots initially");
+    check (r.ui.matrix().boardShown(), "empty matrix shows quick-add board (NO MODULATION YET is replaced)");
+    const ui::ModSourceBoard& b = r.ui.matrix().board;
+    check (b.numSources() == static_cast<int> (synthyboy::modSourceCount()), "board has all 57 engine sources (" + std::to_string (b.numSources()) + ")");
+    check (b.numGroups() == 5, "board has 5 source groups");
+    check (b.fits(), "all chips fit inside the available height");
+
+    // touch targets >= 56 px
+    bool chipsOk = true;
+    for (int i = 0; i < b.numSources(); ++i)
+    {
+        const ui::Rect cr = b.chipRect (i);
+        chipsOk = chipsOk && cr.h >= 56 && cr.w >= 64 && b.rect().contains (cr);
+    }
+    check (chipsOk, "every chip is >= 64x56 px and lies inside the board rect");
+
+    // + ADD stays
+    check (r.ui.matrix().add.rect().h >= 56 && r.ui.matrix().add.rect().w >= 100, "+ ADD button is present in empty state");
+
+    // scene content in empty state
+    auto data = std::make_unique<gpu::SceneData>();
+    std::memset (data.get(), 0, sizeof (gpu::SceneData));
+    gpu::SceneBuilder sb (*data);
+    sb.begin (gpu::kKindPlay, 0, 1280, 800);
+    r.ui.draw (sb);
+    check (! sb.overflow && data->numOps > 50, "empty mod page scene fits in buffer (" + std::to_string (data->numOps) + " ops)");
+    std::vector<uint32_t> cv;
+    renderScene (*data, cv);
+    check (cv.size() == 1280u * 800u, "CPU renderer draws empty mod page with board");
+
+    // tap on a source chip opens the shared target picker (ModTargetsPage with list)
+    const ui::Rect c0 = b.chipRect (0); // ENV 1
+    r.tap (c0.x + c0.w / 2, c0.y + c0.h / 2);
+    check (r.ui.topPage() == ModUi::kPageList && r.stack.top() == ModUi::kPageList, "tapping source chip opens target picker list");
+    check (r.ui.targetsSource() == 1, "target picker is for ENV 1 (source 1)");
+
+    // pick a target: group 0 -> parameter 0
+    const ui::Rect grp0 = r.ui.list().rowRect (0);
+    r.tap (grp0.x + grp0.w / 2, grp0.y + grp0.h / 2);
+    check (r.ui.list().state.header != nullptr, "destination group opened");
+    const ui::Rect dst0 = r.ui.list().rowRect (0);
+    r.tap (dst0.x + dst0.w / 2, dst0.y + dst0.h / 2);
+
+    // check row is made in engine
+    check (r.inst.get ("mod01.source") == 1.0f && r.inst.get ("mod01.destination") > 0.0f, "tap on target made modulation row in engine");
+    check (r.ui.topPage() == ModUi::kPageTargets, "targets page is now shown with the created row");
+    check (r.ui.targetsPage().numRows() == 1, "targets page shows 1 row");
+
+    // BACK returns to matrix and board is gone
+    r.tapC (r.ui.targetsPage().back);
+    check (r.ui.topPage() == 0 && r.stack.depth() == 1, "BACK returns to mod matrix");
+    r.refresh();
+    check (! r.ui.matrix().boardShown(), "board is gone after row is made");
+    check (r.ui.matrix().visibleSlotCount() == 1, "matrix list is shown with the created row");
+
+    // deleting the slot returns the board
+    r.inst.set ("mod01.source", 0.0f);
+    r.inst.set ("mod01.destination", 0.0f);
+    r.refresh();
+    check (r.ui.matrix().boardShown(), "board returns when all slots are empty");
+}
+
 void testMatrixViewLayoutAndTargets()
 {
     ModRig r;
@@ -637,6 +703,7 @@ int main()
     std::printf ("=== SynthyBoy MPC Overlay: Mod Matrix & Macros Host Tests ===\n");
 
     testSlotParamsExistence();
+    testModEmptyStateAndBoard();
     testMatrixViewLayoutAndTargets();
     testMatrixRowParameterWrites();
     testMatrixQLinkGroup();

@@ -162,7 +162,7 @@ void testFxChain()
 {
     FxRig r;
     r.refresh();
-    check (r.ui.numCards() == 0 && ! r.ui.screen().editorShown(), "an empty chain shows the hint and no editor");
+    check (r.ui.numCards() == 0 && ! r.ui.screen().editorShown() && r.ui.screen().galleryShown(), "an empty chain shows the gallery and no editor");
     check (r.ui.screen().chainBar.spare[0].rect().w > 0 && r.ui.screen().chainBar.spare[0].rect().x > r.ui.screen().chainBar.plusCard.rect().x, "after the + ADD card the free places stand in the bar as quiet plus cells");
     r.tap (r.ui.screen().chainBar.plusCard);
     check (r.ui.listOpen() && r.ui.list().state.count == synthyboy::kNumFxInstanceTypes - 1, "+ ADD opens the list of the effect types (13)");
@@ -191,6 +191,48 @@ void testFxChain()
     // remove
     r.tap (r.ui.screen().slotEditor.remove);
     check (r.ui.numCards() == 1, "REMOVE takes the slot out of the chain");
+}
+
+void testFxGalleryEmptyState()
+{
+    FxRig r;
+    r.refresh();
+    check (r.ui.numCards() == 0 && ! r.ui.screen().editorShown() && r.ui.screen().galleryShown(), "empty chain shows the gallery and no editor");
+    const ui::FxGallery& g = r.ui.screen().gallery;
+    check (g.numTypes() == synthyboy::kNumFxInstanceTypes - 1, "gallery has all 13 engine effect types (" + std::to_string (g.numTypes()) + ")");
+    check (g.rect().w >= 1200 && g.rect().h >= 400, "gallery fills the editor panel area (" + std::to_string (g.rect().w) + " x " + std::to_string (g.rect().h) + ")");
+
+    // verify each card's dimensions and touch targets >= 56 px
+    bool allCardsOk = true;
+    for (int i = 0; i < g.numTypes(); ++i)
+    {
+        const ui::Rect c = g.cardRect (i);
+        const ui::Rect pic = g.pictureRect (i);
+        allCardsOk = allCardsOk && (c.w >= 56 && c.h >= 56 && g.rect().contains (c) && c.contains (pic));
+    }
+    check (allCardsOk, "every gallery card is >= 56 px with a picture inside and within bounds");
+
+    // scene content in empty state
+    auto data = std::make_unique<gpu::SceneData>();
+    gpu::SceneBuilder sb (*data);
+    sb.begin (gpu::kKindPlay, 0, 1280, 800);
+    r.ui.draw (sb);
+    check (! sb.overflow && data->numOps > 50, "empty FX page scene fits in buffer (" + std::to_string (data->numOps) + " ops)");
+    std::vector<uint32_t> cv;
+    renderScene (*data, cv);
+    check (cv.size() == 1280u * 800u, "the CPU renderer draws the empty FX page with gallery");
+
+    // tap on a card in the gallery: card 4 (EQ)
+    const ui::Rect c4 = g.cardRect (4);
+    r.tapAt (c4.x + c4.w / 2, c4.y + c4.h / 2);
+    check (r.ui.numCards() == 1, "tapping gallery card adds effect to chain (1 card now)");
+    check (r.ui.selectedSlot() == 0, "the added effect is selected");
+    check (r.ui.screen().editorShown() && ! r.ui.screen().galleryShown(), "the editor is shown and the gallery is gone");
+    check (r.ui.screen().slotEditor.currentType() == synthyboy::kFxTypeEq, "the editor displays the chosen effect (EQ)");
+
+    // removing the effect returns the empty state and the gallery
+    r.tap (r.ui.screen().slotEditor.remove);
+    check (r.ui.numCards() == 0 && ! r.ui.screen().editorShown() && r.ui.screen().galleryShown(), "removing the only effect returns the gallery");
 }
 
 void testEveryEffectType()
@@ -341,6 +383,7 @@ int main()
     testMixerValuesAndWrites();
     testMixerGroupsAndList();
     testMixerDraw();
+    testFxGalleryEmptyState();
     testFxChain();
     testEveryEffectType();
     testFxEditing();
