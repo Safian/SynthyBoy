@@ -273,14 +273,28 @@ int main (int argc, char** argv)
         if (! e) return 2;
         const std::string out = sw + ".txt";
         std::remove (out.c_str());
+        // the display thread writes the log out once a tick: wait for its first write (the lines of the plugin's own start), then the calls of the host's thread are timed and the file must not change meanwhile
+        long long s0 = -1;
+        for (int i = 0; i < 40 && s0 < 0; ++i)
+        {
+            std::this_thread::sleep_for (std::chrono::milliseconds (50));
+            struct stat st0;
+            if (::stat (out.c_str(), &st0) == 0 && st0.st_size > 0)
+                s0 = st0.st_size;
+        }
+        if (s0 < 0)
+            s0 = 0;   // a build without the debug hooks never writes the log
         const int idx = 5;
         const double t0 = nowSec();
-        for (int i = 0; i < 2000; ++i)
+        const int calls = 500;
+        for (int i = 0; i < calls; ++i)
             e->setParameter (e, idx, (i & 1) ? 0.25f : 0.75f);
-        const double us = (nowSec() - t0) * 1e6 / 2000.0;
+        const double span = nowSec() - t0;
+        const double us = span * 1e6 / calls;
         struct stat st;
-        const bool wrote = ::stat (out.c_str(), &st) == 0 && st.st_size > 0;
-        std::printf ("INFO  2000 setParameter calls: %.1f us each, log file %s (%lld bytes)\n", us, wrote ? "WRITTEN" : "not written", wrote ? static_cast<long long> (st.st_size) : 0ll);
+        const long long s1 = ::stat (out.c_str(), &st) == 0 ? static_cast<long long> (st.st_size) : 0;
+        const bool wrote = span < 0.08 && s1 != s0;   // a write inside the window of a few milliseconds can only be the calling thread's
+        std::printf ("INFO  %d setParameter calls: %.1f us each, log file %lld -> %lld bytes (window %.0f ms)\n", calls, us, s0, s1, span * 1000.0);
         e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);
         std::remove (out.c_str());
         std::remove (sw.c_str());
