@@ -4,7 +4,9 @@
 
 #include "synthyboy/content_state.h"
 
+#include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <cstring>
 #include <set>
 
@@ -157,7 +159,8 @@ bool operator== (const StateContent& a, const StateContent& b) noexcept
         && sameVector (a.instruments, b.instruments, [] (const ContentInstrument& x, const ContentInstrument& y) { return x.osc == y.osc && same (x.ref, y.ref) && x.zones == y.zones; })
         && sameVector (a.modCurves, b.modCurves, [] (const ContentModCurve& x, const ContentModCurve& y)
                        { return x.slot == y.slot && x.riseMs == y.riseMs && x.fallMs == y.fallMs
-                             && sameVector (x.points, y.points, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; }); });
+                             && sameVector (x.points, y.points, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; }); })
+        && std::equal (std::begin (a.macroNames), std::end (a.macroNames), std::begin (b.macroNames));
 }
 
 bool validateContent (const StateContent& c) noexcept
@@ -283,5 +286,93 @@ bool validateContent (const StateContent& c) noexcept
     {
         return false;
     }
+}
+
+std::string defaultMacroName (int index)
+{
+    return index >= 0 && index < kNumMacros ? "Macro " + std::to_string (index + 1) : std::string();
+}
+
+namespace
+{
+/** One UTF-8 sequence at s[i]: its code point and length, or length 0 when it is not valid (stray continuation byte, truncated, overlong, a surrogate half, beyond U+10FFFF). */
+int decodeUtf8 (const std::string& s, size_t i, unsigned& cp) noexcept
+{
+    const auto at = [&] (size_t k) { return static_cast<unsigned char> (s[k]); };
+    const unsigned c = at (i);
+    if (c < 0x80u)
+    {
+        cp = c;
+        return 1;
+    }
+    int len = 0;
+    unsigned minimum = 0;
+    if (c >= 0xc2u && c <= 0xdfu) { len = 2; cp = c & 0x1fu; minimum = 0x80u; }
+    else if (c >= 0xe0u && c <= 0xefu) { len = 3; cp = c & 0x0fu; minimum = 0x800u; }
+    else if (c >= 0xf0u && c <= 0xf4u) { len = 4; cp = c & 0x07u; minimum = 0x10000u; }
+    else return 0;
+    if (i + static_cast<size_t> (len) > s.size())
+        return 0;
+    for (int k = 1; k < len; ++k)
+    {
+        const unsigned b = at (i + static_cast<size_t> (k));
+        if ((b & 0xc0u) != 0x80u)
+            return 0;
+        cp = (cp << 6) | (b & 0x3fu);
+    }
+    if (cp < minimum || cp > 0x10ffffu || (cp >= 0xd800u && cp <= 0xdfffu))
+        return 0;
+    return len;
+}
+
+bool isBlankLike (unsigned cp) noexcept
+{
+    return cp < 0x20u || (cp >= 0x7fu && cp <= 0x9fu) || (cp >= 0x200bu && cp <= 0x200fu) || (cp >= 0x2028u && cp <= 0x202eu)
+        || (cp >= 0x2060u && cp <= 0x2064u) || (cp >= 0x2066u && cp <= 0x2069u) || cp == 0xfeffu || cp == 0xa0u || cp == 0x3000u;
+}
+} // namespace
+
+std::string sanitizeMacroName (const std::string& text, int index)
+{
+    std::string out;
+    int chars = 0;
+    bool pendingSpace = false;
+    for (size_t i = 0; i < text.size();)
+    {
+        unsigned cp = 0;
+        const int len = decodeUtf8 (text, i, cp);
+        if (len == 0)
+        {
+            ++i;   // an invalid byte is dropped
+            continue;
+        }
+        const size_t at = i;
+        i += static_cast<size_t> (len);
+        if (cp == 0x20u || isBlankLike (cp))
+        {
+            pendingSpace = ! out.empty();   // leading blanks go, a run of blanks is one space
+            continue;
+        }
+        if (chars >= kMaxMacroNameChars)
+            break;
+        if (pendingSpace)
+        {
+            if (chars + 1 >= kMaxMacroNameChars)
+                break;   // the space would be the last character: it would be trimmed again
+            out += ' ';
+            ++chars;
+            pendingSpace = false;
+        }
+        out.append (text, at, static_cast<size_t> (len));
+        ++chars;
+    }
+    return out == defaultMacroName (index) ? std::string() : out;
+}
+
+std::string macroDisplayName (const StateContent& content, int index)
+{
+    if (index < 0 || index >= kNumMacros)
+        return std::string();
+    return content.macroNames[index].empty() ? defaultMacroName (index) : content.macroNames[index];
 }
 } // namespace synthyboy
