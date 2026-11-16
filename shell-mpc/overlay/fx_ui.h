@@ -349,17 +349,34 @@ private:
                 }
             }
             ui::Knob& knob = ed.knobs[p];
+            ui::Stepper& stepper = ed.steppers[p];
+            const bool isChoiceParam = ed.isChoice (p);
             knob.state.value = knob.state.modValue = norm;
             if (pi != nullptr)
             {
-                knob.state.defaultValue = synthyboy::toNormalised (*pi, pi->def);
-                knob.state.bipolar = pi->min < 0.0f && pi->max > 0.0f;
-                paramText (*pi, plainVal, knob.state.valueText, sizeof knob.state.valueText);
                 char name[24];
                 knobName (pi->name, desc.name, name, sizeof name);
-                knob.setLabel (name);
+                if (isChoiceParam)
+                {
+                    stepper.setCaption (name);
+                    stepper.state.count = pi->numChoices;
+                    const int curIdx = std::clamp (static_cast<int> (std::lround (plainVal)), 0, std::max (0, pi->numChoices - 1));
+                    stepper.state.index = curIdx;
+                    if (pi->choices != nullptr && curIdx >= 0 && curIdx < pi->numChoices)
+                        stepper.setItem (pi->choices[curIdx]);
+                    else
+                        stepper.setItem ("---");
+                }
+                else
+                {
+                    knob.state.defaultValue = synthyboy::toNormalised (*pi, pi->def);
+                    knob.state.bipolar = pi->min < 0.0f && pi->max > 0.0f;
+                    paramText (*pi, plainVal, knob.state.valueText, sizeof knob.state.valueText);
+                    knob.setLabel (name);
+                }
             }
-            knob.setEnabled (pi != nullptr && paramIdx >= 0);
+            knob.setEnabled (pi != nullptr && paramIdx >= 0 && ! isChoiceParam);
+            stepper.setEnabled (pi != nullptr && paramIdx >= 0 && isChoiceParam);
         }
         // the power, the rack
         ed.power.state.on = synthyboy::fxItemOn (plain_.data(), item);
@@ -555,6 +572,8 @@ private:
 
     void openTypeList (UiStack& stack)
     {
+        listKind_ = ListKind::Type;
+        listParam_ = -1;
         listNames_.clear();
         for (int t = 1; t < synthyboy::kNumFxInstanceTypes; ++t)
             listNames_.push_back (typeNames_[t - 1]);
@@ -565,6 +584,43 @@ private:
         const ui::Rect btn = screen_.chainBar.plusCard.rect();
         const int popX = std::clamp (btn.x - (popW - btn.w) / 2, 10, w_ - popW - 10);
         const int popY = std::clamp (btn.bottom() + 4, kTabY + 10, kTabY + kTabH - popH - 10);
+        list_.place ({ popX, popY, popW, popH });
+        list_.showCurrent();
+        listOpen_ = true;
+        stack.openDetail (kPageList);
+    }
+
+    void openParamChoiceList (int p, UiStack& stack, IInstanceView& inst)
+    {
+        if (cardItems_.empty() || selectedSlot_ >= static_cast<int> (cardItems_.size()))
+            return;
+        const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
+        const int type = synthyboy::fxItemType (plain_.data(), item);
+        const synthyboy::ParamInfo* pi = synthyboy::fxInstanceSource (type, p);
+        if (pi == nullptr || pi->numChoices <= 0 || pi->choices == nullptr)
+            return;
+        listKind_ = ListKind::ParamChoice;
+        listParam_ = p;
+        listNames_.clear();
+        for (int i = 0; i < pi->numChoices; ++i)
+            listNames_.push_back (pi->choices[i]);
+        list_.state.items = listNames_.data();
+        list_.state.count = pi->numChoices;
+        const int idx = paramIndexOf (item, p);
+        int curChoice = 0;
+        if (idx >= 0)
+        {
+            const float plainVal = item.pool ? synthyboy::fxInstancePlain (type, p, inst.param (idx)) : inst.param (idx);
+            curChoice = std::clamp (static_cast<int> (std::lround (plainVal)), 0, pi->numChoices - 1);
+        }
+        list_.state.current = curChoice;
+        const int popW = std::clamp (screen_.slotEditor.steppers[p].rect().w, 240, 360);
+        const int popH = std::min (9, list_.state.count) * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad;
+        const ui::Rect btn = screen_.slotEditor.steppers[p].rect();
+        const int popX = std::clamp (btn.x + (btn.w - popW) / 2, 10, w_ - popW - 10);
+        int popY = btn.bottom() + 4;
+        if (popY + popH > kTabY + kTabH - 10)
+            popY = std::max (kTabY + 10, btn.y - popH - 4);
         list_.place ({ popX, popY, popW, popH });
         list_.showCurrent();
         listOpen_ = true;
@@ -591,10 +647,29 @@ private:
         if (! c)
             return;
         using K = ui::ChangeKind;
-        // the list of the types: a new effect at the end of the Main rack
+        // the list of the types or parameter choices
         if (c.id == kList && c.kind == K::Index)
         {
-            addEffect (inst, c.index + 1);
+            if (listKind_ == ListKind::Type)
+            {
+                addEffect (inst, c.index + 1);
+            }
+            else if (listKind_ == ListKind::ParamChoice && listParam_ >= 0)
+            {
+                if (! cardItems_.empty() && selectedSlot_ >= 0 && selectedSlot_ < static_cast<int> (cardItems_.size()))
+                {
+                    const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
+                    const int type = synthyboy::fxItemType (plain_.data(), item);
+                    const int idx = paramIndexOf (item, listParam_);
+                    const synthyboy::ParamInfo* pi = synthyboy::fxInstanceSource (type, listParam_);
+                    if (idx >= 0 && pi != nullptr)
+                    {
+                        const float norm = synthyboy::fxInstanceNormalise (type, listParam_, static_cast<float> (c.index));
+                        inst.writeParam (idx, norm);
+                    }
+                }
+                listParam_ = -1;
+            }
             listOpen_ = false;
             stack.back();
             return;
@@ -607,6 +682,7 @@ private:
         }
         if (c.id == kListBackdrop)
         {
+            listParam_ = -1;
             listOpen_ = false;
             stack.back();
             return;
@@ -702,17 +778,37 @@ private:
                 selectionChanged_ = true;
             }
         }
-        else if (c.id >= kEditorBase && c.id < kEditorBase + ui::FxSlotEditor::kMaxParams && c.kind == K::Value)
+        else if (c.id >= kEditorBase && c.id < kEditorBase + ui::FxSlotEditor::kMaxParams)
         {
-            const int idx = paramIndexOf (item, c.id - kEditorBase);
-            if (idx >= 0)
+            const int p = c.id - kEditorBase;
+            const int idx = paramIndexOf (item, p);
+            if (c.kind == K::Value && idx >= 0)
+            {
                 uibind::writeNorm (inst, idx, c.value);
+            }
+            else if (c.kind == K::Index)
+            {
+                const int type = synthyboy::fxItemType (plain_.data(), item);
+                const synthyboy::ParamInfo* pi = synthyboy::fxInstanceSource (type, p);
+                if (idx >= 0 && pi != nullptr)
+                {
+                    const float norm = synthyboy::fxInstanceNormalise (type, p, static_cast<float> (c.index));
+                    inst.writeParam (idx, norm);
+                }
+            }
+            else if (c.kind == K::Request)
+            {
+                openParamChoiceList (p, stack, inst);
+            }
         }
     }
 
     int w_ = kCanvasW, h_ = kCanvasH;
     ui::FxFullScreen screen_;
     ui::ListPopup list_;
+    enum class ListKind : uint8_t { Type, ParamChoice };
+    ListKind listKind_ = ListKind::Type;
+    int listParam_ = -1;
     bool listOpen_ = false, selectionChanged_ = true;
     int selectedSlot_ = 0;
     Item selectedItem_ { false, -1 };

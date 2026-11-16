@@ -780,8 +780,10 @@ private:
             {
                 const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (sel);
                 std::snprintf (qName_, sizeof qName_, "SLOT %02d", sel + 1);
-                t[0] = sp.amount; t[1] = sp.source; t[2] = sp.destination;
-                t[3] = QRouter::encode (kVirtualRow, QRouter::kVirtual);   // the row
+                t[0] = QRouter::encode (kVirtualRow, QRouter::kVirtual);   // Q1 = row select
+                t[1] = sp.source;                                          // Q2 = SOURCE
+                t[2] = sp.destination;                                     // Q3 = TARGET
+                t[3] = sp.amount;                                          // Q4 = AMOUNT
             }
             else
                 std::snprintf (qName_, sizeof qName_, "MOD MATRIX");

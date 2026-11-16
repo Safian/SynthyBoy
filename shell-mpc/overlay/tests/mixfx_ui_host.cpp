@@ -34,6 +34,14 @@ void check (bool ok, const std::string& what)
 using MixRig = demo::Rig<MixerUi>;
 using FxRig = demo::Rig<FxUi>;
 
+bool isShown (const ui::Composite& p, const ui::Component* target)
+{
+    for (int c = 0; c < p.numChildren(); ++c)
+        if (p.child (c) == target && p.childShown (c))
+            return true;
+    return false;
+}
+
 // ---- the mixer -------------------------------------------------------------------------------------------------------------------------------------------------
 void testMixerLayout()
 {
@@ -341,35 +349,89 @@ void testEveryEffectType()
         addEffect (r, t - 1);
         ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
         const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (t);
-        bool ok = ed.currentType() == t && ed.numParams() == d.count;
-        int shown = 0, withValue = 0, withName = 0, small = 0;
-        // the knobs of the first page
-        for (int i = 0; i < ui::FxSlotEditor::kMaxParams; ++i)
+        check (ed.currentType() == t && ed.numParams() == d.count, std::string (d.name) + ": the page has the effect's parameters");
+
+        // Walk every page of each effect type
+        for (int pg = 0; pg < ed.numPages(); ++pg)
         {
-            const ui::Knob& k = ed.knobs[i];
-            if (k.rect().w <= 0)
-                continue;
-            bool visibleKnob = false;
-            for (int c = 0; c < ed.numChildren(); ++c)
-                visibleKnob = visibleKnob || (ed.child (c) == &k && ed.childShown (c));
-            if (! visibleKnob)
-                continue;
-            ++shown;
-            withValue += k.state.valueText[0] != '\0';
-            withName += k.state.label[0] != '\0';
-            small += k.rect().w < 100 || k.rect().h < 72;
+            ed.setPage (pg);
+            r.refresh();
+
+            const int firstParam = ed.firstRowOfPage() * 4;
+            const int lastParam = std::min (ed.numParams(), firstParam + ed.rowsPerPage() * 4);
+            const int expectedOnPage = lastParam - firstParam;
+
+            int shownKnobs = 0, shownSteppers = 0;
+            int withValue = 0, withName = 0, small = 0;
+            bool noEnumAsKnob = true;
+
+            for (int i = 0; i < ui::FxSlotEditor::kMaxParams; ++i)
+            {
+                const bool onThisPage = (i >= firstParam && i < lastParam);
+                const bool choice = ed.isChoice (i);
+
+                bool knobShown = false;
+                for (int c = 0; c < ed.numChildren(); ++c)
+                    if (ed.child (c) == &ed.knobs[i] && ed.childShown (c))
+                        knobShown = true;
+
+                bool stepperShown = false;
+                for (int c = 0; c < ed.numChildren(); ++c)
+                    if (ed.child (c) == &ed.steppers[i] && ed.childShown (c))
+                        stepperShown = true;
+
+                // An enumerated parameter must NEVER be laid out as a knob
+                if (choice && knobShown)
+                    noEnumAsKnob = false;
+                // A continuous parameter must never be laid out as a stepper
+                if (! choice && stepperShown)
+                    noEnumAsKnob = false;
+
+                if (onThisPage)
+                {
+                    if (choice)
+                    {
+                        if (stepperShown && ! knobShown)
+                        {
+                            ++shownSteppers;
+                            withName += ed.steppers[i].state.caption[0] != '\0';
+                            withValue += ed.steppers[i].state.text[0] != '\0';
+                            small += ed.steppers[i].rect().w < 100 || ed.steppers[i].rect().h < 56;
+                        }
+                    }
+                    else
+                    {
+                        if (knobShown && ! stepperShown)
+                        {
+                            ++shownKnobs;
+                            withName += ed.knobs[i].state.label[0] != '\0';
+                            withValue += ed.knobs[i].state.valueText[0] != '\0';
+                            small += ed.knobs[i].rect().w < 100 || ed.knobs[i].rect().h < 72;
+                        }
+                    }
+                }
+                else
+                {
+                    if (knobShown || stepperShown)
+                        noEnumAsKnob = false;
+                }
+            }
+
+            const int totalShown = shownKnobs + shownSteppers;
+            check (noEnumAsKnob && totalShown == expectedOnPage && withName == totalShown && withValue == totalShown && small == 0,
+                   std::string (d.name) + " page " + std::to_string (pg + 1) + " of " + std::to_string (ed.numPages()) + ": " + std::to_string (shownKnobs) + " knobs and " + std::to_string (shownSteppers) + " steppers (no enumerated param is a knob)");
+
+            // the controls fill the page: the lowest control ends near the bottom of the page
+            int bottom = 0;
+            for (int i = firstParam; i < lastParam; ++i)
+                bottom = std::max (bottom, ed.isChoice (i) ? ed.steppers[i].rect().bottom() : ed.knobs[i].rect().bottom());
+            const int rowsUsed = (expectedOnPage + 3) / 4;
+            check (rowsUsed < ed.rowsPerPage() || bottom >= ed.knobArea().bottom() - ed.knobArea().h / ed.rowsPerPage(),
+                   std::string (d.name) + " page " + std::to_string (pg + 1) + ": controls use the page (the last row ends at " + std::to_string (bottom) + " of " + std::to_string (ed.knobArea().bottom()) + ")");
         }
-        ok = ok && shown == std::min (ed.numParams(), ed.rowsPerPage() * 4) && withValue == shown && withName == shown && small == 0;
-        // the knobs fill the page: the lowest knob ends near the bottom of the page
-        int bottom = 0;
-        for (int i = 0; i < ui::FxSlotEditor::kMaxParams; ++i)
-            for (int c = 0; c < ed.numChildren(); ++c)
-                if (ed.child (c) == &ed.knobs[i] && ed.childShown (c))
-                    bottom = std::max (bottom, ed.knobs[i].rect().bottom());
-        const int rowsUsed = (std::min (ed.numParams(), ed.rowsPerPage() * 4) + 3) / 4;
-        check (ok, std::string (d.name) + ": " + std::to_string (shown) + " knobs of " + std::to_string (d.count) + " on page 1 of " + std::to_string (ed.numPages()) + ", each with a name, a value and >= 100 x 72 px");
-        check (rowsUsed < ed.rowsPerPage() || bottom >= ed.knobArea().bottom() - ed.knobArea().h / ed.rowsPerPage(), std::string (d.name) + ": the knobs use the page (the last row ends at " + std::to_string (bottom) + " of " + std::to_string (ed.knobArea().bottom()) + ")");
+
         check (ed.hasDisplay() == (ui::FxDisplay::kindOfType (t) != ui::FxDisplay::Kind::None), std::string (d.name) + ": a display exactly where the effect has a picture");
+
         // no text of a value is a bare number where the parameter has a unit
         bool units = true;
         for (int p = 0; p < std::min (d.count, 24); ++p)
@@ -387,37 +449,89 @@ void testEveryEffectType()
                     units = units && ok;
                 }
         }
-        check (units, std::string (d.name) + ": every value of a parameter that has a unit is written with it");
+        check (units, std::string (d.name) + ": every continuous value that has a unit is written with it");
     }
 }
 
 void testFxEditing()
 {
-    FxRig r;
-    r.refresh();
-    addEffect (r, 4);   // EQ
-    ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
-    r.refresh();
-    check (std::string (ed.knobs[0].state.label) == "LOW MODE" && std::string (ed.knobs[1].state.label) == "LOW CUTOFF", "the knobs have the descriptor's names without the name of the effect (" + std::string (ed.knobs[1].state.label) + ")");
-    check (std::string (ed.knobs[0].state.valueText) == "Shelf" && std::string (ed.knobs[1].state.valueText).find ("Hz") != std::string::npos, "a choice is written by name and a frequency with Hz (" + std::string (ed.knobs[1].state.valueText) + ")");
-    // the EQ display reads the bands: a boost at 1 kHz is a bump
-    check (ed.display.kind == ui::FxDisplay::Kind::Eq && ed.display.rect().w > 1000, "the EQ has its display over the whole width");
-    const synthyboy::FxRackItem item = r.ui.cardItem (0);
-    const synthyboy::FxTypeDescriptor& eqd = synthyboy::fxTypeDescriptor (synthyboy::kFxTypeEq);
-    check (std::string (synthyboy::paramTable()[eqd.source[6]].key) == "eq.mid.gain", "parameter 6 of the EQ is eq.mid.gain");
-    const int slot = item.index;
-    const int gainIdx = synthyboy::fxInstanceKeys (slot).p[6];
-    r.inst.setAt (gainIdx, synthyboy::fxInstanceNormalise (synthyboy::kFxTypeEq, 6, 12.0f));
-    r.refresh();
-    check (std::fabs (ui::FxDisplay::bandDb (1, ed.display.eq.mid, 1000.0f) - 12.0f) < 0.5f, "the display response at the centre of a +12 dB peak is +12 dB");
-    check (std::fabs (ui::FxDisplay::bandDb (1, ed.display.eq.mid, 30.0f)) < 0.5f && std::fabs (ui::FxDisplay::bandDb (1, ed.display.eq.mid, 15000.0f)) < 0.5f, "far from it the band is flat");
-    check (ui::FxDisplay::bandDb (0, ed.display.eq.low, 20.0f) < 0.1f, "no boost: a flat response");
-    // the knob writes the parameter (the pool stores the normalised value)
-    const ui::Rect k = ed.knobs[6].rect();
-    r.drag (k.x + k.w / 2, k.y + k.h / 2, k.x + k.w / 2, k.y + k.h / 2 + 30, true);
-    check (r.inst.param (gainIdx) < synthyboy::fxInstanceNormalise (synthyboy::kFxTypeEq, 6, 12.0f), "dragging the knob down lowers the gain");
-    // the Q group is the row of the knob that was touched
-    check (ed.activeRow() == 1 && r.inst.q[2] == synthyboy::fxInstanceKeys (slot).p[6] && r.inst.q[0] == synthyboy::fxInstanceKeys (slot).p[4], "the Q group is the row of the knob (params 5 .. 8)");
+    // Test 1: Distortion (as in prompt: Distortion TYPE "Soft clip", FILTER ORDER "None")
+    {
+        FxRig r;
+        r.refresh();
+        addEffect (r, 3);   // Distortion: row 3 in type list
+        ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+        r.refresh();
+        check (ed.currentType() == synthyboy::kFxTypeDistortion, "added Distortion effect");
+        check (ed.isChoice (0) && ed.isChoice (3), "Distortion TYPE (param 0) and FILTER ORDER (param 3) are enumerated");
+        check (std::string (ed.steppers[0].state.caption) == "TYPE" && std::string (ed.steppers[0].state.text) == "Soft clip",
+               "Distortion TYPE is a stepper with caption 'TYPE' and value 'Soft clip'");
+        check (std::string (ed.steppers[3].state.caption) == "FILTER ORDER" && std::string (ed.steppers[3].state.text) == "None",
+               "Distortion FILTER ORDER is a stepper with caption 'FILTER ORDER' and value 'None'");
+        check (isShown (ed, &ed.steppers[0]) && ! isShown (ed, &ed.knobs[0]),
+               "Distortion TYPE stepper is shown, knob is hidden");
+        check (isShown (ed, &ed.steppers[3]) && ! isShown (ed, &ed.knobs[3]),
+               "Distortion FILTER ORDER stepper is shown, knob is hidden");
+
+        // Q-Link turning steps through choices
+        const int slot = r.ui.cardItem (0).index;
+        const int typeParamIdx = synthyboy::fxInstanceKeys (slot).p[0];
+        r.ui.turnQ (0, 1.0, r.stack, r.inst); // turn Q1 to step TYPE
+        r.refresh();
+        check (std::string (ed.steppers[0].state.text) == "Hard clip",
+               "turning Q-Link 1 steps Distortion TYPE to 'Hard clip'");
+        check (r.inst.param (typeParamIdx) == synthyboy::fxInstanceNormalise (synthyboy::kFxTypeDistortion, 0, 1.0f),
+               "engine parameter reflects stepped TYPE choice");
+
+        // Tapping stepper middle opens ListPopup with choices
+        const ui::Rect st0 = ed.steppers[0].rect();
+        r.tapAt (st0.x + st0.w / 2, st0.y + st0.h / 2);
+        check (r.ui.listOpen() && r.stack.top() == FxUi::kPageList, "tapping stepper middle opens list popup of choices");
+        check (r.ui.list().state.count == 14, "Distortion TYPE popup lists all 14 choices");
+        // Select choice 4 ("Bit crush")
+        const ui::Rect row4 = r.ui.list().rowRect (4);
+        r.tapAt (row4.x + row4.w / 2, row4.y + row4.h / 2);
+        r.refresh();
+        check (! r.ui.listOpen() && r.stack.depth() == 1, "selecting choice closes list popup");
+        check (std::string (ed.steppers[0].state.text) == "Bit crush", "stepper reflects selected choice 'Bit crush'");
+        check (r.inst.param (typeParamIdx) == synthyboy::fxInstanceNormalise (synthyboy::kFxTypeDistortion, 0, 4.0f),
+               "engine parameter reflects Bit crush");
+    }
+
+    // Test 2: EQ editing (continuous and choice parameters, display, etc.)
+    {
+        FxRig r;
+        r.refresh();
+        addEffect (r, 4);   // EQ: row 4 in type list
+        ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+        r.refresh();
+        check (ed.isChoice (0) && ! ed.isChoice (1), "EQ LOW MODE is a choice stepper, LOW CUTOFF is a continuous knob");
+        check (std::string (ed.steppers[0].state.caption) == "LOW MODE" && std::string (ed.knobs[1].state.label) == "LOW CUTOFF",
+               "the controls have the descriptor's names without the name of the effect (" + std::string (ed.knobs[1].state.label) + ")");
+        check (std::string (ed.steppers[0].state.text) == "Shelf" && std::string (ed.knobs[1].state.valueText).find ("Hz") != std::string::npos,
+               "a choice is written by name and a frequency with Hz (" + std::string (ed.knobs[1].state.valueText) + ")");
+
+        // the EQ display reads the bands: a boost at 1 kHz is a bump
+        check (ed.display.kind == ui::FxDisplay::Kind::Eq && ed.display.rect().w > 1000, "the EQ has its display over the whole width");
+        const synthyboy::FxRackItem item = r.ui.cardItem (0);
+        const synthyboy::FxTypeDescriptor& eqd = synthyboy::fxTypeDescriptor (synthyboy::kFxTypeEq);
+        check (std::string (synthyboy::paramTable()[eqd.source[6]].key) == "eq.mid.gain", "parameter 6 of the EQ is eq.mid.gain");
+        const int slot = item.index;
+        const int gainIdx = synthyboy::fxInstanceKeys (slot).p[6];
+        r.inst.setAt (gainIdx, synthyboy::fxInstanceNormalise (synthyboy::kFxTypeEq, 6, 12.0f));
+        r.refresh();
+        check (std::fabs (ui::FxDisplay::bandDb (1, ed.display.eq.mid, 1000.0f) - 12.0f) < 0.5f, "the display response at the centre of a +12 dB peak is +12 dB");
+        check (std::fabs (ui::FxDisplay::bandDb (1, ed.display.eq.mid, 30.0f)) < 0.5f && std::fabs (ui::FxDisplay::bandDb (1, ed.display.eq.mid, 15000.0f)) < 0.5f, "far from it the band is flat");
+        check (ui::FxDisplay::bandDb (0, ed.display.eq.low, 20.0f) < 0.1f, "no boost: a flat response");
+
+        // the knob writes the parameter (the pool stores the normalised value)
+        const ui::Rect k = ed.knobs[6].rect();
+        r.drag (k.x + k.w / 2, k.y + k.h / 2, k.x + k.w / 2, k.y + k.h / 2 + 30, true);
+        check (r.inst.param (gainIdx) < synthyboy::fxInstanceNormalise (synthyboy::kFxTypeEq, 6, 12.0f), "dragging the knob down lowers the gain");
+
+        // the Q group is the row of the knob that was touched
+        check (ed.activeRow() == 1 && r.inst.q[2] == synthyboy::fxInstanceKeys (slot).p[6] && r.inst.q[0] == synthyboy::fxInstanceKeys (slot).p[4], "the Q group is the row of the knob (params 5 .. 8)");
+    }
 }
 
 void testFxPagesAndDisplays()

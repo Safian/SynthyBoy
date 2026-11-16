@@ -1,7 +1,7 @@
 // SynthyBoy - MPC UI: Modulation Matrix View
-// The page of the modulation matrix (1280 x 628): the slots as rows, scrolled, filtered by source or by destination module. A row is: the number (it selects the row, the fourth Q-Link of the row), the SOURCE and the
+// The page of the modulation matrix (1280 x 628): the slots as rows, scrolled, filtered by source or by destination module. A row is: the number (it selects the row, the first Q-Link of the row), the SOURCE and the
 // TARGET (buttons that open lists), the AMOUNT (the library's HBar: both ways from the middle, the value at its right end, a live marker), UNI / BI, ON / OFF and MORE (the details of the slot). The selected row is
-// one Q group: AMOUNT, SOURCE, TARGET, and the row number that the fourth Q-Link steps through.
+// one Q group: row number (Q1), SOURCE (Q2), TARGET (Q3), and AMOUNT (Q4).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -23,7 +23,7 @@
 namespace synthyboy_mpc { namespace ui {
 
 // ===============================================================================================================================================================
-/** The number of a row as the fourth member of its Q group: it steps the selected row (turn: an Index change with the new row), and a tap on it is the row selection of the view. */
+/** The number of a row as the first member of its Q group: it steps the selected row (turn: an Index change with the new row), and a tap on it is the row selection of the view. */
 class ModRowSelector : public Component
 {
 public:
@@ -296,14 +296,14 @@ public:
             qgroup.setActive (false);
             return;
         }
-        // the number of the selected row is the fourth member of the group: its chip is the fourth index, and the fourth Q-Link steps the row
+        // the number of the selected row is the first member of the group: its chip is the first index, and the first Q-Link steps the row
         ModRowSelector& num = windowRows[wIdx].number;
         num.maxRows = visibleSlotCount_;
         num.selected = selectedRow_;
-        qgroup.set (0, &windowRows[wIdx].amountBar);
+        qgroup.set (0, &num);
         qgroup.set (1, &windowRows[wIdx].sourceBtn);
         qgroup.set (2, &windowRows[wIdx].destBtn);
-        qgroup.set (3, &num);
+        qgroup.set (3, &windowRows[wIdx].amountBar);
         qgroup.setActive (true);
     }
 
@@ -451,7 +451,7 @@ public:
     Change turnQ (int knobIndex, double delta)
     {
         const Change c = qgroup.turn (knobIndex, delta);
-        if (knobIndex == 3 && c.kind == ChangeKind::Index)
+        if (knobIndex == 0 && c.kind == ChangeKind::Index)
             selectRow (c.index);
         return c;
     }
