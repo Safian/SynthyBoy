@@ -2307,7 +2307,18 @@ static void writeRealParam (PluginInstance* inst, size_t index, float parameter)
 
     // Call engine directly (IEngine::setParam is lock-free, any thread)
     if (inst->engine)
+    {
         inst->engine->setParam(info->id, plain);
+        // two writers of one parameter (the host's thread, the overlay's touch, the display thread, a state) can interleave the mirror and the engine: the last store of the mirror wins in both places
+        for (int again = 0; again < 2; ++again)
+        {
+            const float mirrored = inst->paramMirror[index].load(std::memory_order_relaxed);
+            if (mirrored == plain)
+                break;
+            plain = mirrored;
+            inst->engine->setParam(info->id, plain);
+        }
+    }
 }
 
 static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)

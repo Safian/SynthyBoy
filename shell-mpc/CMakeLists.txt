@@ -246,6 +246,13 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(ui_env_host PRIVATE cxx_std_17)
     target_compile_options(ui_env_host PRIVATE -Wall -Wextra -Wpedantic)
 
+    add_executable(q_router_review_host EXCLUDE_FROM_ALL tests/q_router_review_host.cpp)
+    target_include_directories(q_router_review_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(q_router_review_host PRIVATE Threads::Threads)
+    target_compile_features(q_router_review_host PRIVATE cxx_std_17)
+    target_compile_options(q_router_review_host PRIVATE -Wall -Wextra)
+    add_test(NAME q_router_review_host COMMAND q_router_review_host)
+
     add_executable(ui_time_ruler_host EXCLUDE_FROM_ALL ui/tests/ui_time_ruler_host.cpp)
     target_include_directories(ui_time_ruler_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ui")
     target_compile_features(ui_time_ruler_host PRIVATE cxx_std_17)
