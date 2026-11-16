@@ -23,6 +23,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 PARAMS_JSON_PATH = os.path.join(ROOT_DIR, "docs", "params.json")
 LEVELS_PATH = os.path.join(SCRIPT_DIR, "factory-preset-levels.json")
+MACRO_NAMES_PATH = os.path.join(SCRIPT_DIR, "factory-preset-macro-names.json")
 DEFAULT_OUTPUT_DIR = os.path.join(ROOT_DIR, "content", "presets")
 
 with open(PARAMS_JSON_PATH, "r", encoding="utf-8") as f:
@@ -63,8 +64,33 @@ def point_text(p) -> str:
     return '{"x":%s,"y":%s,"power":%s}' % (format_g9(p[0]), format_g9(p[1]), format_g9(p[2] if len(p) > 2 else 0.0))
 
 
+MAX_MACRO_NAME_CHARS = 16   # kMaxMacroNameChars of core/include/synthyboy/content_state.h
+
+
+def check_macro_names(preset: str, names) -> list:
+    """The eight names of a preset in the form the C++ writer keeps them (sanitizeMacroName): ASCII text, no blanks at the ends or two in a row, at most
+    16 characters, never the default name of its own macro (that is the empty text). A name outside these rules is an error, not silently cleaned: the file is edited by hand."""
+    if not isinstance(names, list) or len(names) != 8 or not all(isinstance(n, str) for n in names):
+        raise ValueError(f"{MACRO_NAMES_PATH}: {preset}: expected a list of eight strings")
+    for i, n in enumerate(names):
+        if n == f"Macro {i + 1}":
+            raise ValueError(f"{MACRO_NAMES_PATH}: {preset}: macro {i + 1} is called its default name; write an empty string")
+        if n != " ".join(n.split()) or not all(32 <= ord(c) < 127 for c in n) or len(n) > MAX_MACRO_NAME_CHARS:
+            raise ValueError(f"{MACRO_NAMES_PATH}: {preset}: macro {i + 1} name {n!r} is not clean (ASCII, single blanks, none at the ends, at most {MAX_MACRO_NAME_CHARS} characters)")
+    return names
+
+
+def load_macro_names() -> dict:
+    """{preset name: [eight macro names]} (scripts/name-preset-macros.py writes it, the owner corrects it by hand); a preset without an entry has the default names."""
+    if not os.path.isfile(MACRO_NAMES_PATH):
+        return {}
+    with open(MACRO_NAMES_PATH, "r", encoding="utf-8") as f:
+        doc = json.load(f)
+    return {name: check_macro_names(name, names) for name, names in doc.get("presets", {}).items()}
+
+
 def content_text(content) -> str:
-    """The `content` section of the state (only custom LFO shapes are produced here; same writer as C++ putContent)."""
+    """The `content` section of the state (custom LFO shapes and macro names are produced here; same writer as C++ putContent, the names last)."""
     if not content:
         return ""
     parts = []
@@ -78,6 +104,9 @@ def content_text(content) -> str:
             item += ',"points":[' + ",".join(point_text(p) for p in s["points"]) + "]}"
             items.append(item)
         parts.append('"lfo_shapes":[' + ",".join(items) + "]")
+    names = content.get("macro_names")
+    if names and any(names):
+        parts.append('"macro_names":[' + ",".join(json.dumps(n, ensure_ascii=False) for n in names) + "]")
     return ',"content":{' + ",".join(parts) + "}" if parts else ""
 
 
@@ -556,18 +585,25 @@ def build_all():
     unknown = sorted(set(levels) - set(p[0] for p in presets) - set(x[0] for x in showcase))
     if unknown:
         raise KeyError(f"{LEVELS_PATH}: no preset named {unknown}")
+    macro_names = load_macro_names()
+    unknown = sorted(set(macro_names) - set(p[0] for p in presets) - set(x[0] for x in showcase))
+    if unknown:
+        raise KeyError(f"{MACRO_NAMES_PATH}: no preset named {unknown}")
     for name, category, tags, desc, ov in presets:
         ov = with_macros(category, ov)
         check_macros(name, {**default_values, **{k: float(v) for k, v in ov.items()}})
         if name in levels:
             ov["master.volume"] = levels[name]
-        meta, doc = make_preset(name, category, tags, desc, ov, strict=False)
+        content = {"macro_names": macro_names[name]} if name in macro_names else None
+        meta, doc = make_preset(name, category, tags, desc, ov, content=content, strict=False)
         out.append((name, category, meta, doc))
     for name, category, tags, desc, ov, content in showcase:
         ov = with_macros(category, ov)
         check_macros(name, {**default_values, **{k: float(v) for k, v in ov.items()}})
         if name in levels:
             ov["master.volume"] = levels[name]
+        if name in macro_names:
+            content = {**(content or {}), "macro_names": macro_names[name]}
         meta, doc = make_preset(name, category, tags, desc, ov, content=content, strict=True)
         out.append((name, category, meta, doc))
     return out
