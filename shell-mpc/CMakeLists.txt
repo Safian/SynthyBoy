@@ -334,8 +334,14 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME layout_lint_host COMMAND layout_lint_host --presets-dir "${CMAKE_SOURCE_DIR}/content/presets"
         --baseline "${CMAKE_CURRENT_SOURCE_DIR}/overlay/tests/layout_lint_baseline.json" --quiet)
 
-    # Robustness review (docs: .hw-local/mpc-ui-plans/robustness-review.md): these tests FAIL on purpose while the findings they reproduce are open, so none of them is registered with add_test.
-    # Build by hand: cmake --build <dir> --target q_router_review_host controller_review_host chunk_review_host plugin_review_host; plugin_review_host takes the plugin (overlay build) as its argument.
+    # Robustness review (docs: .hw-local/mpc-ui-plans/robustness-review.md): the host tests that reproduced the findings; they pass now and are registered (the plugin_review_host takes the built plugin as its argument).
+    add_executable(safe_file_host EXCLUDE_FROM_ALL tests/safe_file_host.cpp)
+    target_include_directories(safe_file_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(safe_file_host PRIVATE Threads::Threads)
+    target_compile_features(safe_file_host PRIVATE cxx_std_17)
+    target_compile_options(safe_file_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME safe_file_host COMMAND safe_file_host)
+
     add_executable(q_router_review_host EXCLUDE_FROM_ALL tests/q_router_review_host.cpp)
     target_include_directories(q_router_review_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(q_router_review_host PRIVATE Threads::Threads)
