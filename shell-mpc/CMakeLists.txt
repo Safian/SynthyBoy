@@ -319,5 +319,20 @@ if(NOT CMAKE_CROSSCOMPILING)
 
     add_test(NAME osc_page_host COMMAND osc_page_host)
     add_test(NAME osc_ui_host COMMAND osc_ui_host)
+
+    # the host's standby dim (overlay/standby.h) and the parameter coverage of the pages without a test of their own
+    add_executable(standby_host EXCLUDE_FROM_ALL overlay/tests/standby_host.cpp)
+    add_executable(coverage_host EXCLUDE_FROM_ALL overlay/tests/coverage_host.cpp)
+    foreach(t standby_host coverage_host)
+        target_include_directories(${t} PRIVATE
+            "${CMAKE_SOURCE_DIR}/core/include"
+            "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+        target_link_libraries(${t} PRIVATE synthyboy_core Threads::Threads)
+        target_compile_features(${t} PRIVATE cxx_std_17)
+        target_compile_options(${t} PRIVATE -Wall -Wextra -Wpedantic)
+    endforeach()
+    add_test(NAME standby_host COMMAND standby_host)
+    add_test(NAME coverage_host COMMAND coverage_host)
 endif()
 
