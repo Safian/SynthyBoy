@@ -4,6 +4,9 @@
 
 #include <clocale>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 
 #include "synthyboy/content_state.h"
@@ -250,3 +253,48 @@ TEST (the_state_chunk_with_names_stays_inside_the_limits)
     for (int i = 0; i < kNumMacros; ++i)
         CHECK_EQ (back.macroNames[i].size(), static_cast<size_t> (kMaxMacroNameChars));
 }
+
+#ifdef SYNTHYBOY_TEST_SOURCE_DIR
+TEST (the_factory_presets_carry_clean_names_and_load_as_before)
+{
+    namespace fs = std::filesystem;
+    int presets = 0, named = 0, names = 0;
+    for (const auto& dir : fs::directory_iterator (fs::path (SYNTHYBOY_TEST_SOURCE_DIR) / "content" / "presets"))
+    {
+        if (! dir.is_directory())
+            continue;
+        for (const auto& file : fs::directory_iterator (dir.path()))
+        {
+            if (file.path().extension() != ".sbpreset")
+                continue;
+            std::ifstream in (file.path(), std::ios::binary);
+            std::stringstream buffer;
+            buffer << in.rdbuf();
+            const std::string text = buffer.str();
+            PresetMeta meta;
+            ParamValues values = ParamValues::defaults();
+            StateContent content;
+            const LoadResult r = loadPreset (text.data(), text.size(), meta, values, content);
+            CHECK (r.status == LoadStatus::ok);
+            ++presets;
+            bool any = false;
+            for (int i = 0; i < kNumMacros; ++i)
+            {
+                CHECK_EQ (content.macroNames[i], sanitizeMacroName (content.macroNames[i], i));   // clean as stored
+                any = any || ! content.macroNames[i].empty();
+                names += ! content.macroNames[i].empty();
+            }
+            named += any;
+            CHECK_EQ (text.find ("macro_names") != std::string::npos, any);
+            // the loaded sound writes back as the same names
+            const std::string again = saveState (values, content);
+            StateContent back;
+            ParamValues v2 = ParamValues::defaults();
+            loadStateWithContent (again.data(), again.size(), v2, back);
+            CHECK (back == content);
+        }
+    }
+    CHECK_EQ (presets, 112);
+    CHECK (named >= 100 && names >= 300);
+}
+#endif
