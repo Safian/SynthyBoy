@@ -5,6 +5,8 @@
 
 #include "display.h"
 #include "filter_display.h"
+#include "led_list.h"
+#include "led_toggle.h"
 #include "list.h"
 #include "panel.h"
 #include "screen.h"
