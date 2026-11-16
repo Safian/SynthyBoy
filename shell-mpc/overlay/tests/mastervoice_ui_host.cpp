@@ -229,6 +229,10 @@ void testVoiceLayout()
     check (v.grid.rect().h >= 230 && v.randPan.rect().h >= 72 && v.scaleEnv.rect().h >= 72, "the grid is tall and the knobs of the blocks have the room");
     check (v.stripRect().y >= v.grid.rect().bottom() && v.blockRect (0).y >= v.stripRect().bottom(), "the strip of the step lies between the grid and the blocks");
     check (v.randDetune10x.rect().bottom() <= v.blockRect (0).bottom(), "the blocks hold their controls");
+    check (v.oscA.rect().w == v.oscB.rect().w && v.oscB.rect().w == v.oscC.rect().w &&
+           v.oscC.rect().w == v.oscSub.rect().w && v.oscSub.rect().w == v.oscNoise.rect().w &&
+           v.oscA.rect().h == v.oscNoise.rect().h,
+           "targets are five equal cells in one grid (width " + std::to_string (v.oscA.rect().w) + ", height " + std::to_string (v.oscA.rect().h) + ")");
 }
 
 void testVoiceGridDrawing()

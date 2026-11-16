@@ -127,6 +127,7 @@ public:
 
     LfoFullScreen()
     {
+        rate.rate.state.large = true;
         monoTop.state.icon = ToggleIcon::Icon::Generic; monoTop.setLabel ("MONO");
         monoQ.state.icon = ToggleIcon::Icon::Generic; monoQ.setLabel ("MONO"); monoQ.state.showState = true;
         stereoToggle.state.icon = ToggleIcon::Icon::Generic; stereoToggle.setLabel ("STEREO"); stereoToggle.state.showState = true;
@@ -142,9 +143,9 @@ public:
         picker.state.cols = kPickerCols;
         addKid (close); addKid (bar); addKid (syncSwitch); addKid (monoTop); addKid (targets);
         addKid (picker); addKid (smoothPick); addKid (hostPick); addKid (edit);
-        addKid (shape); addKid (style, false); addKid (rate); addKid (rise); addKid (smoothTime);
-        addKid (sync); addKid (mode); addKid (phase); addKid (delay);
-        addKid (direction); addKid (swing); addKid (stereo); addKid (monoQ); addKid (stereoToggle, false);
+        addKid (style, false); addKid (rate); addKid (rise); addKid (smoothTime);
+        addKid (sync, false); addKid (mode); addKid (phase); addKid (delay);
+        addKid (direction); addKid (swing); addKid (stereo); addKid (stereoToggle, false);
         addKid (keyTranspose); addKid (keyTune);
         configure (false);
         setKeyActive (false);
@@ -156,22 +157,26 @@ public:
         picker.state.styles = random;
         picker.state.cols = random ? 2 : kPickerCols;
         show (smoothPick, ! random); show (hostPick, ! random); show (edit, ! random); show (monoTop, ! random);
-        show (shape, ! random); show (rise, ! random); show (smoothTime, ! random); show (style, random);
-        show (phase, ! random); show (delay, ! random); show (direction, ! random); show (swing, ! random); show (stereo, ! random); show (monoQ, ! random); show (stereoToggle, random);
-        show (mode, true); show (sync, true);
+        show (rise, ! random); show (smoothTime, ! random); show (style, random);
+        show (phase, ! random); show (delay, ! random); show (direction, ! random); show (swing, ! random); show (stereo, ! random); show (stereoToggle, random);
+        show (mode, true);
+        show (shape, false); show (sync, random); show (monoQ, false);
         for (QGroup& g : groups)
+        {
+            g.setFrameRect ({});
             for (int i = 0; i < 4; ++i)
                 g.set (i, nullptr);
+        }
         nGroups_ = 0;
         auto next = [&] (const char* name) -> QGroup& { setText (names_[nGroups_], sizeof names_[0], name); return groups[nGroups_++]; };
         if (! random)
         {
             QGroup& r = next ("Rate");
-            r.set (0, &shape); r.set (1, &rate); r.set (2, &rise); r.set (3, &smoothTime);
+            r.set (0, &picker); r.set (1, &rate); r.set (2, &rise); r.set (3, &smoothTime);
             QGroup& t = next ("Timing");
-            t.set (0, &sync); t.set (1, &mode); t.set (2, &phase); t.set (3, &delay);
+            t.set (0, &mode); t.set (1, &phase); t.set (2, &delay);
             QGroup& mo = next ("Motion");
-            mo.set (0, &direction); mo.set (1, &swing); mo.set (2, &stereo); mo.set (3, &monoQ);
+            mo.set (0, &direction); mo.set (1, &swing); mo.set (2, &stereo);
             QGroup& k = next ("Key");
             k.set (0, &keyTranspose); k.set (1, &keyTune);
         }
@@ -223,12 +228,17 @@ public:
     {
         const Change c = Composite::touchDown (x, y, nowMs);
         if (cap_)
-            for (int i = 0; i < nGroups_; ++i)
-                if (groups[i].rect().contains (x, y) && ! (i == keyGroup() && ! keyActive_))
-                {
-                    setActiveGroup (i);
-                    break;
-                }
+        {
+            if (picker.rect().contains (x, y))
+                setActiveGroup (0);
+            else
+                for (int i = 0; i < nBlocks_; ++i)
+                    if (blocks_[i].contains (x, y) && ! (i == keyGroup() && ! keyActive_))
+                    {
+                        setActiveGroup (i);
+                        break;
+                    }
+        }
         return c;
     }
     void draw (gpu::SceneBuilder& sb) const override
@@ -257,17 +267,17 @@ protected:
     void layout() override
     {
         const int W = rect_.w, m = 8;
-        const Rect top { rect_.x + m, rect_.y + m, W - 2 * m, kTopH };
+        const Rect top { rect_.x + m, rect_.y + 4, W - 2 * m, 56 };
         Rect r[5];
         const int fixed[5] = { pageMode_ ? 0 : 84, (InstanceBar::kLfoCells + InstanceBar::kRndCells) * InstanceBar::kCellW + kGap, 3 * 56 + 2 * 72 + 2 * kGap, 72, 0 }, weight[5] = { 0, 0, 0, 0, 1 };
         layoutRow (top, fixed, weight, 5, kGap, r);
-        close.place ({ r[0].x, top.y + (kTopH - 56) / 2, r[0].w, 56 });
-        bar.place ({ r[1].x, top.y + (kTopH - 56) / 2, r[1].w, 56 });
-        syncSwitch.place ({ r[2].x, top.y + (kTopH - 56) / 2, r[2].w, 56 });
-        monoTop.place ({ r[3].x, top.y + (kTopH - 56) / 2, r[3].w, 56 });
-        targets.place ({ r[4].x, top.y + (kTopH - 56) / 2, std::min (r[4].w, 200), 56 });
+        close.place ({ r[0].x, top.y, r[0].w, 56 });
+        bar.place ({ r[1].x, top.y, r[1].w, 56 });
+        syncSwitch.place ({ r[2].x, top.y, r[2].w, 56 });
+        monoTop.place ({ r[3].x, top.y, r[3].w, 56 });
+        targets.place ({ r[4].x, top.y, std::min (r[4].w, 200), 56 });
         const int bandH = random_ ? kBandRandomH : kBandH;
-        const int midY = top.bottom() + m, bandY = rect_.bottom() - m - bandH, midH = std::max (0, bandY - m - midY);
+        const int midY = top.bottom() + kQLane, bandY = rect_.bottom() - m - bandH, midH = std::max (0, bandY - m - midY);
         const int colW = std::min (random_ ? 232 : 304, W / 4);
         display_ = { rect_.x + m, midY, W - 3 * m - colW, midH };
         // the picker: three rows of cells (the 13 shapes in five columns; the five styles in two columns fill the height); under it, one row of SMOOTH and HOST; EDIT on the corner of the display
@@ -295,7 +305,7 @@ protected:
             blocks_[i] = { x, bandY, right - x, bandH };
             x = right + m;
         }
-        const int pad = 6, titleH = 22, rowH = 56, rateH = 72;
+        const int pad = 6, titleH = 22, rowH = 56;
         auto inner = [&] (int i) { return Rect { blocks_[i].x + pad, blocks_[i].y + titleH + kQLane, blocks_[i].w - 2 * pad, blocks_[i].h - titleH - kQLane - pad }; };
         auto pair = [&] (const Rect& cell, Component& a, Component& b) { const int cw = (cell.w - kGap) / 2; a.place ({ cell.x, cell.y, cw, cell.h }); b.place ({ cell.x + cw + kGap, cell.y, cell.w - cw - kGap, cell.h }); };
         auto stack2 = [&] (const Rect& cell, Component& a, Component& b)   // two fields one above the other, as tall as the block lets them be (at most 96)
@@ -304,28 +314,33 @@ protected:
             a.place ({ cell.x, cell.y, cell.w, h });
             b.place ({ cell.x, cell.y + h + kQLane, cell.w, h });
         };
-        // one size of knob on the page: every pair of knobs gets the height the tightest block (RATE: a row, the rate control, the pair) leaves, bottom aligned
-        const int kH = std::max (72, inner (0).h - rowH - rateH - 2 * kQLane);
-        auto knobs = [&] (const Rect& in, Component& a, Component& b) { pair ({ in.x, in.bottom() - kH, in.w, kH }, a, b); };
         if (! random_)
         {
-            Rect in = inner (0);
-            shape.place ({ in.x, in.y, in.w, rowH });
-            rate.place ({ in.x, in.y + rowH + kQLane, in.w, rateH });
-            knobs (in, rise, smoothTime);
-            in = inner (1);
-            sync.place ({ in.x, in.y, in.w, rowH });
-            mode.place ({ in.x, in.y + rowH + kQLane, in.w, rowH });
-            knobs (in, phase, delay);
-            in = inner (2);
-            direction.place ({ in.x, in.y, in.w, rowH });
-            knobs ({ in.x, in.y, in.w, in.h - rowH - kQLane }, swing, stereo);
-            monoQ.place ({ in.x, in.bottom() - rowH, in.w, rowH });
+            const int topH = (inner (0).h - kQLane) / 2;
+            const int botY = inner (0).y + topH + kQLane;
+            const int botH = inner (0).bottom() - botY;
+
+            // RATE: RATE knob large with the value, RISE and SMOOTH medium in one row
+            Rect in0 = inner (0);
+            rate.place ({ in0.x, in0.y, in0.w, topH });
+            pair ({ in0.x, botY, in0.w, botH }, rise, smoothTime);
+
+            // TIMING: MODE stepper + PHASE + DELAY
+            Rect in1 = inner (1);
+            mode.place ({ in1.x, in1.y + (topH - rowH) / 2, in1.w, rowH });
+            pair ({ in1.x, botY, in1.w, botH }, phase, delay);
+
+            // MOTION: DIRECTION + SWING + STEREO
+            Rect in2 = inner (2);
+            direction.place ({ in2.x, in2.y + (topH - rowH) / 2, in2.w, rowH });
+            pair ({ in2.x, botY, in2.w, botH }, swing, stereo);
+
             if (keyActive_)
                 stack2 (inner (3), keyTranspose, keyTune);
         }
         else
         {
+            const int rateH = 72;
             Rect in = inner (0);
             pair ({ in.x, in.y, in.w, rowH }, style, sync);
             pair ({ in.x, in.y + rowH + kQLane, in.w, rateH }, rate, stereoToggle);
@@ -334,6 +349,8 @@ protected:
             if (keyActive_)
                 stack2 (inner (2), keyTranspose, keyTune);
         }
+        for (int i = 0; i < kMaxGroups; ++i)
+            groups[i].setFrameRect (i < nBlocks_ ? blocks_[i] : Rect {});
     }
     void drawUnder (Pen& p) const override
     {

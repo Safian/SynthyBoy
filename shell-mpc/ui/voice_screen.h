@@ -172,13 +172,12 @@ protected:
             scaleLfo.place ({ in.x + kw + g, in.y + lane, in.right() - (in.x + kw + g), std::max (72, kh) });
             scaleLfoMode.place ({ in.x, in.bottom() - 64, std::max (Stepper::kMinW, std::min (in.w, 260)), 64 });
         }
-        {   // TARGETS: from the top of the block in a grid of equal cells: A, B, C, SUB (the Q group) in a row, NOISE (beside the group) in the row under it
+        {   // TARGETS: five equal cells in one grid: OSC A, OSC B, OSC C, SUB, NOISE
             const Rect in = inner (2);
-            const int tw = (in.w - 3 * g) / 4, th = 64;
-            ToggleIcon* ts[4] = { &oscA, &oscB, &oscC, &oscSub };
-            for (int i = 0; i < 4; ++i)
-                ts[i]->place ({ in.x + i * (tw + g), in.y + lane, i == 3 ? in.right() - (in.x + 3 * (tw + g)) : tw, th });
-            oscNoise.place ({ in.x, in.y + lane + th + g, in.w, th });
+            const int tw = (in.w - 4 * g) / 5, th = 64;
+            ToggleIcon* ts[5] = { &oscA, &oscB, &oscC, &oscSub, &oscNoise };
+            for (int i = 0; i < 5; ++i)
+                ts[i]->place ({ in.x + i * (tw + g), in.y + lane, tw, th });
         }
     }
 

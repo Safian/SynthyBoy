@@ -23,10 +23,16 @@ inline uint32_t envColour (int n) noexcept
 
 // ===============================================================================================================================================================
 /** EnvSelector: the six buttons ENV 1 .. 6, a PictogramSelector (the same touch rules: a tap on a cell, turn steps) that is drawn in the colours of the envelopes: the current one outlined in its own colour,
-    the others carry a short bar of theirs. */
+    an envelope that has modulation targets marked with a small filled dot. */
 class EnvSelector : public PictogramSelector
 {
 public:
+    uint8_t targetMask_ = 0;
+
+    void setTargetMask (uint8_t m) noexcept { targetMask_ = m; }
+    uint8_t targetMask() const noexcept { return targetMask_; }
+    bool hasTargets (int i) const noexcept { return i >= 0 && i < kNumEnvs && (targetMask_ & (1u << i)) != 0; }
+
     EnvSelector()
     {
         for (int i = 0; i < kNumEnvs; ++i)
@@ -56,8 +62,8 @@ protected:
             p.control (c, false, cur);
             if (cur)
                 p.rrect (c, T.rControl, p.c (col, 255), 1.8f);
-            else
-                p.rrect ({ c.x + c.w / 2 - 10, c.bottom() - 6, 20, 2 }, 1.0f, p.c (col, 200));
+            if (hasTargets (i))
+                p.disc (static_cast<float> (c.x + c.w / 2), static_cast<float> (c.bottom() - 7), 2.5f, p.c (col, 255));
             p.textCentered ({ c.x + 2, c.y + 2, std::max (0, c.w - 4), std::max (0, c.h - 8) }, state.items[i].label, T.fLabel + 2.0f, p.c (cur ? T.text : T.textDim, 255), T.fMin);
         }
     }

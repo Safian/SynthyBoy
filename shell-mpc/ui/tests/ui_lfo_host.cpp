@@ -259,6 +259,20 @@ void testViews()
         // the Q frame moves to a tapped group
         if (! random)
         {
+            check (f.groups[0].member (0) == &f.picker && f.groups[0].member (1) == &f.rate &&
+                   f.groups[0].member (2) == &f.rise && f.groups[0].member (3) == &f.smoothTime,
+                   nm + ": group 0 is picker (Q1), rate, rise, smooth");
+            check (f.groups[1].member (0) == &f.mode && f.groups[1].member (1) == &f.phase &&
+                   f.groups[1].member (2) == &f.delay && f.groups[1].member (3) == nullptr,
+                   nm + ": group 1 is mode, phase, delay");
+            check (f.groups[2].member (0) == &f.direction && f.groups[2].member (1) == &f.swing &&
+                   f.groups[2].member (2) == &f.stereo && f.groups[2].member (3) == nullptr,
+                   nm + ": group 2 is direction, swing, stereo");
+            check (f.rate.rate.state.large, nm + ": rate knob is large");
+            check (f.rise.rect().h == f.smoothTime.rect().h && f.rise.rect().h == f.phase.rect().h &&
+                   f.rise.rect().h == f.delay.rect().h && f.rise.rect().h == f.swing.rect().h &&
+                   f.rise.rect().h == f.stereo.rect().h,
+                   nm + ": one knob size family for rise, smooth, phase, delay, swing, stereo");
             f.touchDown (cx (f.direction), cy (f.direction), 0.0);
             f.touchUp (cx (f.direction), cy (f.direction));
             check (f.activeGroup() == 2 && f.groups[2].active() && ! f.groups[0].active(), nm + ": a touch on DIRECTION makes MOTION the active group");

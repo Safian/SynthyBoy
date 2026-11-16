@@ -354,11 +354,27 @@ void testModulatedKnobsShowTheirSource()
     r.refresh();
     check (r.ui.numTargets() == 1, "the envelope counts its targets: 1");
     check (! r.ui.full().targetsBlock().empty(), "the full screen has the block of the targets when there is one");
+    check (r.ui.compact().instances.hasTargets (0) && ! r.ui.compact().instances.hasTargets (1),
+           "compact env tabs: ENV 1 has target dot (hasTargets=true), ENV 2 has no mark (hasTargets=false)");
+    check (r.ui.full().instances.hasTargets (0) && ! r.ui.full().instances.hasTargets (1),
+           "full screen env tabs: ENV 1 has target dot, ENV 2 has no mark");
+    // add target for ENV 4 as well
+    r.inst.set ("mod02.source", 4.0f);
+    r.inst.set ("mod02.destination", static_cast<float> (synthyboy::modDestinationChoiceOf (static_cast<size_t> (envIdx (1, "attack")))));
+    r.inst.set ("mod02.amount", 25.0f);
+    r.now += 500.0;
+    r.refresh();
+    check (r.ui.compact().instances.hasTargets (0) && r.ui.compact().instances.hasTargets (3) && ! r.ui.compact().instances.hasTargets (1),
+           "ENV 1 and ENV 4 have target dots (targetMask " + std::to_string (r.ui.targetMask()) + ")");
     {
         Rig q;
         q.openFull();
         q.refresh();
         check (q.ui.numTargets() == 0 && q.ui.full().targetsBlock().empty() && q.ui.full().graph.rect().w > 1200, "no target: no empty block, the graph takes the whole width (" + std::to_string (q.ui.full().graph.rect().w) + ")");
+        check (q.ui.full().instances.targetMask() == 0, "no envelope has targets: targetMask is 0, no dots or marks on any tab");
+        for (int i = 0; i < 6; ++i)
+            check (! q.ui.full().instances.hasTargets (i) && ! q.ui.compact().instances.hasTargets (i),
+                   "env " + std::to_string (i + 1) + " has no target dot");
     }
 }
 

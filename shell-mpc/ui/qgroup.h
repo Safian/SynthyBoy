@@ -39,6 +39,9 @@ public:
             if (slot_[i])
                 slot_[i]->setQ (a, i + 1);
     }
+    void setFrameRect (const Rect& r) noexcept { frameRect_ = r; }
+    Rect frameRect() const noexcept { return frameRect_; }
+
     /** The union of the members' rectangles. */
     Rect rect() const noexcept
     {
@@ -54,13 +57,14 @@ public:
     {
         if (! active_)
             return;
-        const Rect m = rect();
+        const Rect m = frameRect_.empty() ? rect() : frameRect_;
         if (m.empty())
             return;
         // `around`: the rectangle of the frame when the members lie inside cards (a macro card, a block): the ONE frame then runs around the cards, never through them; the chips stay at the members
         const Rect u = around && ! around->empty() ? Rect::unite (*around, m) : m;
+        const Rect total = Rect::unite (u, rect());
         Pen pen (sb, true);
-        Cell cell (sb, { u.x, u.y - 17, u.w, u.h + 17 });   // the chips of the top row sit on the top edge of the frame
+        Cell cell (sb, { total.x, total.y - 17, total.w, total.h + 17 });   // the chips sit on the members
         pen.rrect (u, theme::L().rControl, pen.c (theme::L().q, 255), 2.0f);
         for (int i = 0; i < kSlots; ++i)
             if (const Component* m = slot_[i])
@@ -89,7 +93,7 @@ public:
     /** The adjacency check: how many components of `all` (the leaves of the layout) that are not members, and not parts of a member, overlap the union; `first` gets the first such one. */
     int check (Component* const* all, int n, const Component** first = nullptr) const
     {
-        const Rect u = rect();
+        const Rect u = frameRect_.empty() ? rect() : frameRect_;
         Component* own[kSlots * kMaxCheck];
         int nOwn = 0;
         for (Component* c : slot_)
@@ -117,6 +121,7 @@ public:
     }
 
 private:
+    Rect frameRect_ = {};
     Component* slot_[kSlots] = {};
     bool active_ = false;
 };

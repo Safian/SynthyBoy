@@ -107,16 +107,17 @@ protected:
             const bool cur = i == state.index;
             p.control (c, qFrame_ && cur, cur);
             if (cur)
-                p.rrect (c, T.rControl, p.c (T.flow[0], 255), 1.6f);
+                p.rrect (c, T.rControl, p.c (qFrame_ ? T.q : T.flow[0], 255), 1.6f);
             const int labelH = c.h >= 44 ? 17 : 0;
             const float gw = std::min (30.0f, static_cast<float> (c.w) - 14.0f), gh = std::min (20.0f, static_cast<float> (c.h - labelH) - 10.0f);
             const float gx = static_cast<float> (c.x) + static_cast<float> (c.w) * 0.5f, gy = static_cast<float> (c.y) + static_cast<float> (c.h - labelH) * 0.5f;
+            const uint32_t glyphCol = p.c (cur ? (qFrame_ ? T.q : T.flow[0]) : T.textDim, 255);
             if (state.styles)
-                drawStyleGlyph (p, i, gx, gy, gw, gh, p.c (cur ? T.flow[0] : T.textDim, 255));
+                drawStyleGlyph (p, i, gx, gy, gw, gh, glyphCol);
             else
-                lfoglyph::draw (p, i, gx, gy, gw, gh, p.c (cur ? T.flow[0] : T.textDim, 255));
+                lfoglyph::draw (p, i, gx, gy, gw, gh, glyphCol);
             if (labelH > 0)
-                p.textCentered ({ c.x, c.bottom() - labelH - 1, c.w, labelH }, state.styles ? styleName (i) : lfoglyph::name (i), T.fLabel - 3.0f, p.c (cur ? T.text : T.textDim, 255), T.fMin);
+                p.textCentered ({ c.x, c.bottom() - labelH - 1, c.w, labelH }, state.styles ? styleName (i) : lfoglyph::name (i), T.fLabel - 3.0f, p.c (cur ? (qFrame_ ? T.q : T.text) : T.textDim, 255), T.fMin);
         }
     }
     int cellAt (int x, int y) const noexcept { for (int i = 0; i < count(); ++i) if (cell (i).contains (x, y)) return i; return -1; }
@@ -244,7 +245,10 @@ protected:
             modeCells.place ({ rect_.right() - kModeW, rect_.y + (rect_.h - h) / 2, kModeW, h });
             main = { rect_.x, rect_.y, std::max (0, rect_.w - kModeW - kGap), rect_.h };
         }
-        rate.state.side = main.h < 108 || main.w >= 2 * main.h;
+        if (rate.state.large)
+            rate.state.side = false;
+        else
+            rate.state.side = main.h < 108 || main.w >= 2 * main.h;
         rate.place (main);
         const int h = std::min (main.h, 64);
         division.place ({ main.x, main.y + (main.h - h) / 2, main.w, h });
