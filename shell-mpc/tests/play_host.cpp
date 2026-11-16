@@ -531,19 +531,19 @@ int main (int argc, char** argv)
                 (void) tgt;
             };
             const float l0 = plain (tList);
-            knob (0, tList, 1); knob (0, tList, 1);
+            for (int i = 0; i < 5; ++i) knob (0, tList, 1);   // five increments: one short of a step (6 / 128 of travel)
             const bool notYet = plain (tList) == l0;
-            knob (0, tList, 1); knob (0, tList, 1);
+            knob (0, tList, 1);
             const float l1 = plain (tList);
             knob (0, tList, -3); knob (0, tList, -3);
             const float l2 = plain (tList);
             (void) li;
-            check (notYet && l1 == l0 + 1.0f && l2 == l0, "VOICE OVERRIDE (a two value list) steps after 3 increments of travel (not before) and back (the host keeps its own value here)");
+            check (notYet && l1 == l0 + 1.0f && l2 == l0, "VOICE OVERRIDE (a two value list) steps after 6 increments of travel (not before) and back (the host keeps its own value here)");
             const float t0 = plain (tTog);
-            knob (1, tTog, 3);
+            knob (1, tTog, 6);
             const float t1 = plain (tTog);
-            knob (1, tTog, -3);
-            check (t1 != t0 && plain (tTog) == t0, "a toggle flips after about 3 increments and flips back");
+            knob (1, tTog, -6);
+            check (t1 != t0 && plain (tTog) == t0, "a toggle flips after 6 increments and flips back");
         }
         // all sixteen slots: Q 5 .. Q 16 are proxies of the next groups; names, units, values and writes like Q 1 .. Q 4
         {
