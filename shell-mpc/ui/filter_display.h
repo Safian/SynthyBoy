@@ -868,6 +868,9 @@ public:
         Composite::draw (sb);
         for (int i = 0; i < kMaxGroups; ++i)
             groups[i].draw (sb);
+        for (int i = 0; i < kMaxGroups; ++i)
+            if (i != activeGroup_)
+                groups[i].drawMapped (sb);
     }
 
 protected:

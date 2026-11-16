@@ -331,10 +331,10 @@ public:
     {
         ++qGroupCalls;
         qGroupN = n;
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < 16; ++i)
             qGroup[i] = i < n && targets != nullptr ? targets[i] : -1;
     }
-    int qGroup[4] = { -1, -1, -1, -1 }, qGroupN = 0, qGroupCalls = 0;   // the last Q group the UI set (the test thread only)
+    int qGroup[16] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 }, qGroupN = 0, qGroupCalls = 0;   // the last Q slots the UI set (16: the active group first; the test thread only)
     void writeParam (int i, float norm) noexcept override
     {
         const synthyboy::ParamInfo& p = synthyboy::paramTable()[i];

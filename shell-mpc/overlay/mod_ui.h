@@ -28,6 +28,7 @@
 #include "../ui/mod_targets.h"
 #include "curve_source.h"
 #include "page_view.h"
+#include "q_publish.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
 #include "ui_stack.h"
@@ -179,14 +180,14 @@ public:
 
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
-    void forgetQGroup() noexcept { qSet_ = false; }
+    void forgetQGroup() noexcept { qSlots_.forget(); }
 
     void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst)
     {
         handle (pageTop_ == kPageDetail ? detail_.turnQ (knobIndex, delta) : (pageTop_ == kPageTargets ? targets_.turnQ (knobIndex, delta) : matrix_.turnQ (knobIndex, delta)), stack, inst);
     }
 
-    const int* qTargets() const noexcept { return qTargets_; }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
     const char* qGroupName() const noexcept { return qName_; }
     int topPage() const noexcept { return pageTop_; }
     int openSlot() const noexcept { return openSlot_; }
@@ -739,39 +740,47 @@ private:
         detail_.delaySync.setId (kDetailDelaySync);
     }
 
+    /** The groups of the page in reading order: a targets list has one group per row, the slot detail its three blocks (AUXILIARY SOURCE, SHAPE, TIME), the matrix the selected slot. The active group is on Q 1 .. 4, the
+        next three (wrapping) on 5 .. 16. */
     void publishQGroup (IInstanceView& inst)
     {
-        int t[4] = { -1, -1, -1, -1 };
+        for (int b = 0; b < 3; ++b)
+            detail_.groups[b].setBlock (-1);
         if (pageTop_ == kPageList)
+        {
             std::snprintf (qName_, sizeof qName_, "LIST");
+            qSlots_.publish (inst, 0, 0, [] (int, int*) {});
+        }
         else if (pageTop_ == kPageTargets)
         {
             char title[28];
             boardLabel (targetsSource_, title, sizeof title);
             std::snprintf (qName_, sizeof qName_, "%s TARGETS", title);
-            const int row = targets_.activeRow();
-            if (row >= 0 && row < ui::ModTargetsPage::kPerPage && targetRows_[row].slot >= 0)
-            {
-                const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (targetRows_[row].slot);
-                t[0] = sp.amount; t[1] = sp.bipolar; t[2] = sp.bypass;
-            }
+            qSlots_.publish (inst, targets_.numRows(), targets_.activeRow(), [this] (int row, int* t) { modRowTargets (row < ui::ModTargetsPage::kPerPage ? targetRows_[row].slot : -1, t); });
+            setRowBlocks (targets_, ui::ModTargetsPage::kPerPage, targets_.numRows(), targets_.activeRow());
         }
         else if (pageTop_ == kPageDetail && openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots)
         {
             const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
             std::snprintf (qName_, sizeof qName_, "SLOT %02d %s", openSlot_ + 1, ui::ModSlotDetail::blockName (detail_.activeBlock()));
-            if (detail_.activeBlock() == ui::ModSlotDetail::BlockAux)
+            const int active = static_cast<int> (detail_.activeBlock());
+            qSlots_.publish (inst, 3, active, [&] (int block, int* t)
             {
-                t[0] = sp.auxSource; t[1] = sp.auxOutput; t[2] = sp.auxInv; t[3] = sp.auxPower;
-            }
-            else if (detail_.activeBlock() == ui::ModSlotDetail::BlockShape)
-            {
-                t[0] = sp.power; t[1] = sp.stereo;
-            }
-            else
-            {
-                t[0] = sp.rise; t[1] = sp.fall; t[2] = detail_.delaySyncOn() ? sp.delayBeats : sp.delay; t[3] = sp.delaySync;
-            }
+                if (block == ui::ModSlotDetail::BlockAux)
+                {
+                    t[0] = sp.auxSource; t[1] = sp.auxOutput; t[2] = sp.auxInv; t[3] = sp.auxPower;
+                }
+                else if (block == ui::ModSlotDetail::BlockShape)
+                {
+                    t[0] = sp.power; t[1] = sp.stereo;
+                }
+                else
+                {
+                    t[0] = sp.rise; t[1] = sp.fall; t[2] = detail_.delaySyncOn() ? sp.delayBeats : sp.delay; t[3] = sp.delaySync;
+                }
+            });
+            for (int b = 0; b < 3; ++b)
+                detail_.groups[b].setBlock (QRouter::blockOfGroup (3, active, b));
         }
         else
         {
@@ -780,19 +789,19 @@ private:
             {
                 const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (sel);
                 std::snprintf (qName_, sizeof qName_, "SLOT %02d", sel + 1);
-                t[0] = QRouter::encode (kVirtualRow, QRouter::kVirtual);   // Q1 = row select
-                t[1] = sp.source;                                          // Q2 = SOURCE
-                t[2] = sp.destination;                                     // Q3 = TARGET
-                t[3] = sp.amount;                                          // Q4 = AMOUNT
+                qSlots_.publish (inst, 1, 0, [&] (int, int* t)
+                {
+                    t[0] = QRouter::encode (kVirtualRow, QRouter::kVirtual);   // Q1 = row select
+                    t[1] = sp.source;                                          // Q2 = SOURCE
+                    t[2] = sp.destination;                                     // Q3 = TARGET
+                    t[3] = sp.amount;                                          // Q4 = AMOUNT
+                });
             }
             else
+            {
                 std::snprintf (qName_, sizeof qName_, "MOD MATRIX");
-        }
-        if (! qSet_ || std::memcmp (t, qTargets_, sizeof t) != 0)
-        {
-            std::memcpy (qTargets_, t, sizeof t);
-            inst.setQGroup (t, 4);
-            qSet_ = true;
+                qSlots_.publish (inst, 0, 0, [] (int, int*) {});
+            }
         }
     }
 
@@ -819,9 +828,8 @@ private:
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;
 
-    int qTargets_[4] = { -1, -1, -1, -1 };
+    QSlots qSlots_;
     char qName_[40] = "MOD MATRIX";
-    bool qSet_ = false;
 };
 
 }} // namespace synthyboy_mpc::overlay

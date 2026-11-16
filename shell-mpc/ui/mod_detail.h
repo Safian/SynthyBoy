@@ -175,6 +175,9 @@ public:
         Composite::draw (sb);
         for (const QGroup& g : groups)
             g.draw (sb);
+        for (int k = 0; k < 3; ++k)
+            if (k != activeBlock_)
+                groups[k].drawMapped (sb);
     }
 
     Change turnQ (int knobIndex, double delta) { return groups[activeBlock_].turn (knobIndex, delta); }

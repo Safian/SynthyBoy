@@ -25,6 +25,7 @@
 #include "curve_source.h"
 #include "../q_router.h"
 #include "play_osc.h"
+#include "q_publish.h"
 #include "touch_decoder.h"
 #include "ui_stack.h"
 #include "synthyboy/modulation.h"
@@ -172,7 +173,7 @@ public:
     int typeRaw() const noexcept { return sel_ == playosc::kSub || sel_ == playosc::kNoise ? -1 : typeRaw_; }
     const char* typeName() const noexcept { return typeName_; }
     /** The list of the targets of the active Q group (table indices, -1 none) and the name of the group. */
-    const int* qTargets() const noexcept { return qTargets_; }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
     const char* qGroupName() const noexcept { return qName_; }
 
     void draw (gpu::SceneBuilder& sb) const
@@ -275,7 +276,7 @@ public:
     /** The stack changed behind the UI's back (the page left, another instance): the gesture is dropped. */
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
     /** Another element's page opened or closed: the Q group is published again at the next update (the router keeps what the last page set). */
-    void forgetQGroup() noexcept { qSet_ = false; }
+    void forgetQGroup() noexcept { qSlots_.forget(); }
 
     // ---- access for the tests
     ui::OscillatorCompact& compact() noexcept { return compact_; }
@@ -486,8 +487,8 @@ private:
         pageLoaded_ = 0;
         pageTop_ = 0;
         modsDirty_ = true;
-        std::memset (qTargets_, 0xff, sizeof qTargets_);
-        qSet_ = false;
+        qSlots_.clear();
+        qSlots_.forget();
         gesture_ = nullptr; gestureDown_ = false;
         (void) otherType;
     }
@@ -743,7 +744,7 @@ private:
         }
         configureNumberRanges (page_);
         modsDirty_ = true;
-        qSet_ = false;
+        qSlots_.forget();
     }
     void bindDetail()
     {
@@ -1475,60 +1476,55 @@ private:
             return QRouter::encode (it.param, QRouter::kSem);   // Q 2: what is left inside the octave
         return it.param;
     }
+    /** The groups of the page in reading order: the compact view has one (Basic), the full screen the blocks of its panel (Basic, Tune, ... Warp), the detail pages their blocks, the modulation list one per row; the active
+        group is on Q 1 .. 4, the next three (wrapping) on 5 .. 16. */
     void publishQGroup (IInstanceView& v)
     {
-        int t[4] = { -1, -1, -1, -1 };
-        const ui::QGroup* g = nullptr;
         const char* name = "";
+        auto members = [this] (const ui::QGroup& g, int* t) { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (g.member (i)); };
         if (stackDepth_ == 0)
         {
-            g = &compact_.basic.group;
             name = "Basic";
             compact_.basic.group.setActive (highlight_ == 1);
+            if (highlight_ != 1)
+            {
+                qActive_ = 0;
+                return;   // the Env / LFO sub-tab: the view of the Env / LFO owns the group (EnvUi / LfoUi)
+            }
+            qSlots_.publish (v, 1, 0, [&] (int, int* t) { members (compact_.basic.group, t); });
         }
         else if (pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope)
         {
-            g = detail_.activeGroup() >= 0 ? &detail_.groups[detail_.activeGroup()] : nullptr;
             name = "Detail";
+            qSlots_.publish (v, detail_.numGroups(), detail_.activeGroup(), [&] (int g, int* t) { members (detail_.groups[g], t); });
+            ui::QGroup* gs = detail_.groups;
+            for (int g = 0; g < ui::DetailPage::kMaxGroups; ++g)
+                gs[g].setBlock (g < detail_.numGroups() ? QRouter::blockOfGroup (detail_.numGroups(), detail_.activeGroup(), g) : -1);
         }
         else if (pageTop_ == kPageMods)
         {
-            g = &mods_.group;
             name = "Mods";
-            const int row = mods_.activeRow();
-            if (row >= 0 && row < ui::ModulationsPage::kMaxRows && modRows_[row].slot >= 0)
-            {
-                const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (modRows_[row].slot);
-                t[0] = sp.amount; t[1] = sp.bipolar; t[2] = sp.bypass;
-            }
-            g = nullptr;
+            qSlots_.publish (v, mods_.numRows(), mods_.activeRow(), [this] (int row, int* t) { modRowTargets (row < ui::ModulationsPage::kMaxRows ? modRows_[row].slot : -1, t); });
+            setRowBlocks (mods_, ui::ModulationsPage::kMaxRows, mods_.numRows(), mods_.activeRow());
         }
         else if (pageTop_ == kPageList)
         {
             name = "List";
+            qSlots_.publish (v, 0, 0, [] (int, int*) {});
         }
         else if (pageTop_ == kPageRoute)
         {
-            g = &route_.group;
             name = "Route";
+            qSlots_.publish (v, 1, 0, [&] (int, int* t) { members (route_.group, t); });
         }
         else
         {
-            g = full_.activeGroup() >= 0 ? &full_.groups[full_.activeGroup()] : nullptr;
             name = full_.activeGroup() >= 0 ? full_.groupName (full_.activeGroup()) : "";
+            qSlots_.publish (v, full_.numGroups(), full_.activeGroup(), [&] (int g, int* t) { members (full_.groups[g], t); });
+            for (int g = 0; g < ui::OscillatorFullScreen::kMaxGroups; ++g)
+                full_.groups[g].setBlock (g < full_.numGroups() ? QRouter::blockOfGroup (full_.numGroups(), full_.activeGroup(), g) : -1);
         }
-        if (g != nullptr)
-            for (int i = 0; i < 4; ++i)
-                t[i] = paramOfMember (g->member (i));
         qActive_ = stackDepth_ == 0 ? 0 : (pageTop_ == 0 ? full_.activeGroup() : 0);
-        if (highlight_ != 1 && stackDepth_ == 0)
-            return;   // the Env / LFO sub-tab: the view of the Env / LFO owns the group (EnvUi / LfoUi)
-        if (! qSet_ || std::memcmp (t, qTargets_, sizeof t) != 0)
-        {
-            std::memcpy (qTargets_, t, sizeof t);
-            v.setQGroup (t, 4);
-            qSet_ = true;
-        }
         ui::setText (qName_, sizeof qName_, name);
     }
 
@@ -1547,7 +1543,7 @@ private:
     ui::Rect popupBox_;
     std::vector<Item> main_, page_;
     ui::Component* gesture_ = nullptr;
-    bool gestureDown_ = false, configured_ = false, modsDirty_ = true, qSet_ = false;
+    bool gestureDown_ = false, configured_ = false, modsDirty_ = true;
     int pageSel_ = 0;   // the oscillator of a page of the OSC tab (setPage), 0: the Play page's UI
     int noiseSample_ = -1;
     int w_ = 1280, h_ = 628, sel_ = 2, typeRaw_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = 0, pageLoaded_ = 0, qActive_ = 0;
@@ -1555,7 +1551,7 @@ private:
     double modsAtMs_ = -1000.0;
     std::string prefix_ = "osc1.";
     char typeName_[16] = {}, qName_[16] = {};
-    int qTargets_[4] = { -1, -1, -1, -1 };
+    QSlots qSlots_;
 };
 
 }} // namespace synthyboy_mpc::overlay

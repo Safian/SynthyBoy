@@ -21,6 +21,7 @@
 #include "../ui/ui.h"
 #include "curve_source.h"
 #include "page_view.h"
+#include "q_publish.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
 #include "ui_stack.h"
@@ -81,7 +82,7 @@ public:
     const ui::ListPopup& list() const noexcept { return list_; }
     const StripBinding& binding (int strip) const noexcept { return bindings_[strip]; }
     int topPage() const noexcept { return listOpen_ ? kPageList : 0; }
-    const int* qTargets() const noexcept { return qTargets_; }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
     const char* qGroupName() const noexcept { return screen_.groupName (screen_.activeGroup()); }
 
     /** Reads the instance: every value of every strip, the meters, the pages of the stack, the Q group. */
@@ -236,7 +237,7 @@ public:
 
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
-    void forgetQGroup() noexcept { qSet_ = false; }
+    void forgetQGroup() noexcept { qSlots_.forget(); }
     void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst) { handle (screen_.turnQ (knobIndex, delta), stack, inst); }
     bool listOpen() const noexcept { return listOpen_; }
 
@@ -249,8 +250,7 @@ private:
     StripBinding bindings_[ui::MixerFullScreen::kStrips];
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;
-    int qTargets_[4] = { -1, -1, -1, -1 };
-    bool qSet_ = false;
+    QSlots qSlots_;
 
     /** The scale beside a fader from the parameter's own range: in dB the marks 0, -12, -24, -48 that lie in the range (0 is the stronger one), else a mark every 25 %. */
     static void setScale (ui::Fader& f, const synthyboy::ParamInfo& pi)
@@ -295,19 +295,20 @@ private:
         bindings_[9] = { idx ("main.fx_bypass"), idx ("master.volume"), -1, -1, -1, -1, true };
     }
 
+    /** The groups of the page are the strips in reading order (left to right): the selected strip is on Q 1 .. 4, the next three strips (wrapping) on 5 .. 16. */
     void publishQGroup (IInstanceView& inst)
     {
         const int s = screen_.activeGroup();
         if (s < 0 || s >= ui::MixerFullScreen::kStrips)
             return;
-        const StripBinding& b = bindings_[s];
-        const int targets[4] = { b.levelParam, b.panParam, b.send1Param, b.send2Param };
-        if (! qSet_ || std::memcmp (targets, qTargets_, sizeof targets) != 0)
+        constexpr int kN = ui::MixerFullScreen::kStrips;
+        qSlots_.publish (inst, kN, s, [this] (int g, int* t)
         {
-            std::memcpy (qTargets_, targets, sizeof targets);
-            inst.setQGroup (targets, 4);
-            qSet_ = true;
-        }
+            const StripBinding& b = bindings_[g];
+            t[0] = b.levelParam; t[1] = b.panParam; t[2] = b.send1Param; t[3] = b.send2Param;
+        });
+        for (int g = 0; g < kN; ++g)
+            screen_.groups[g].setBlock (QRouter::blockOfGroup (kN, s, g));
     }
 
     void handle (const ui::Change& c, UiStack& stack, IInstanceView& inst)

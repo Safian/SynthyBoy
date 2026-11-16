@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include <atomic>
+
 #include "core.h"
 
 namespace synthyboy_mpc { namespace ui {
@@ -16,6 +18,14 @@ class QGroup
 public:
     static constexpr int kSlots = 4;
     static constexpr int kMaxCheck = 64;
+
+    /** The device has 16 Q-Link knobs at once (the MPC XL): the idle chips of the groups that sit on the other three rows of the knobs (setBlock 1 .. 3) show the knob numbers 5 .. 16, and a group that is not mapped shows
+        no chip. On a device with four knobs (the Key 61: the bank button steps through the rows) the idle chips stay 1 .. 4, relative to the bank. A process wide setting, made once by the overlay at start. */
+    static void setWideDevice (bool wide) noexcept { wideFlag().store (wide, std::memory_order_relaxed); }
+    static bool wideDevice() noexcept { return wideFlag().load (std::memory_order_relaxed); }
+    /** Which block of four knobs the group has while it is not the active one (QRouter::blockOfGroup): 0 the active group, 1 .. 3 the next groups of the page, -1 no knobs (the default). The page sets it for every group it publishes. */
+    void setBlock (int block) noexcept { block_ = block; }
+    int block() const noexcept { return block_; }
 
     /** Puts a member into slot 0 .. 3 (null empties it). The frame of the group follows the members' rectangles when it is drawn. */
     bool set (int slot, Component* c)
@@ -81,13 +91,38 @@ public:
         if (active_)
             return;
         const Rect u = rect();
-        if (u.empty())
+        const bool wide = wideDevice();
+        if (u.empty() || (wide && block_ < 1))
             return;
         Pen pen (sb, true);
         Cell cell (sb, { u.x, u.y - 17, u.w, 19 });
         for (int i = 0; i < kSlots; ++i)
             if (const Component* m = slot_[i]; m && ! m->rect().empty())
-                pen.qIndex (m->rect(), i + 1, true);
+                pen.qIndex (m->rect(), wide ? block_ * kSlots + i + 1 : i + 1, true);
+    }
+    /** The idle chips of a group that sits on one of the other three blocks of knobs (setBlock 1 .. 3) and nothing for the others: the page shows where the next groups are (the XL: the knobs 5 .. 16, the Key 61: the banks 2 .. 4 as 1 .. 4). */
+    void drawMapped (gpu::SceneBuilder& sb) const
+    {
+        if (block_ >= 1)
+            drawIdle (sb);
+    }
+    /** The same chips for a group that is not a QGroup of its own: a row of a list whose members are the first `n` (at most 4) of `members` (null: skipped); `block` as setBlock (nothing for a block below 1). */
+    static void drawMappedMembers (gpu::SceneBuilder& sb, int block, const Component* const* members, int n)
+    {
+        if (block < 1)
+            return;
+        const bool wide = wideDevice();
+        Rect u;
+        for (int i = 0; i < n; ++i)
+            if (members[i])
+                u = Rect::unite (u, members[i]->rect());
+        if (u.empty())
+            return;
+        Pen pen (sb, true);
+        Cell cell (sb, { u.x, u.y - 17, u.w, 19 });
+        for (int i = 0; i < n && i < kSlots; ++i)
+            if (members[i] && ! members[i]->rect().empty())
+                pen.qIndex (members[i]->rect(), wide ? block * kSlots + i + 1 : i + 1, true);
     }
     /** The hardware knob `knobIndex` (0 .. 3) turned by delta: routed to the member of that slot; nothing when not active or the slot is empty. */
     Change turn (int knobIndex, double delta)
@@ -132,7 +167,9 @@ public:
     }
 
 private:
+    static std::atomic<bool>& wideFlag() noexcept { static std::atomic<bool> f { false }; return f; }
     Rect frameRect_ = {};
+    int block_ = -1;
     bool frameless_ = false;
     Component* slot_[kSlots] = {};
     bool active_ = false;

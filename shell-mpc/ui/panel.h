@@ -604,6 +604,9 @@ public:
         Composite::draw (sb);
         for (int i = 0; i < nGroups_; ++i)
             groups[i].draw (sb);
+        for (int i = 0; i < nGroups_; ++i)
+            if (i != active_)
+                groups[i].drawMapped (sb);
     }
 
 protected:
@@ -738,7 +741,15 @@ public:
     {
         Composite::draw (sb);
         group.draw (sb);
+        for (int i = 0; i < nRows_ && i < kMaxRows; ++i)
+            if (i != activeRow_)
+            {
+                const Component* m[3] = { &rows[i].depth, &rows[i].polarity, &rows[i].bypass };
+                QGroup::drawMappedMembers (sb, rowBlock_[i], m, 3);
+            }
     }
+    /** The block of knobs (QRouter::blockOfGroup) the row has while it is not the active one: its idle chips show it (-1: none). */
+    void setRowBlock (int row, int block) noexcept { if (row >= 0 && row < kMaxRows) rowBlock_[row] = block; }
     void setRowIds (int row, int depth, int polarity, int bypass, int remove)
     {
         if (row < 0 || row >= kMaxRows)
@@ -798,6 +809,7 @@ protected:
     }
     char title_[32] = {}, target_[24] = {};
     int nRows_ = 0, activeRow_ = -1;
+    int rowBlock_[kMaxRows] = {};
 };
 
 }} // namespace synthyboy_mpc::ui

@@ -58,7 +58,8 @@ public:
     virtual const SpectrumRing* spectrumRing() const noexcept { return nullptr; }
     /** The instance the Play page shows in panel `group` (0 oscillator 1 .. 5: Sub, A, B, C, Noise (play_osc.h), 1 envelope 1 .. 6, 2 LFO 1 .. 10): the plugin parameters "Play Osc", "Play Env", "Play LFO". 1 when the instance has none. */
     virtual int playSelection (int /*group*/) const noexcept { return 1; }
-    /** The plugin-drawn pages set the targets of the four Q proxies ("Q 1" .. "Q 4", q_router.h): the first `n` (at most 4) of `targets`, each a parameter table index or -1 (none). Called from the overlay
+    /** The plugin-drawn pages set the targets of the sixteen Q proxies ("Q 1" .. "Q 16", q_router.h): the first `n` (at most 16) of `targets`, each a parameter table index or -1 (none). Slots 1 .. 4 are the active group of the page, 5 .. 8 / 9 .. 12 / 13 .. 16
+        the next groups in reading order (overlay/q_publish.h); a page that only knows one group passes n = 4 and the other slots have no target. Called from the overlay
         thread while the instance is registered; it must be lock free (the plugin's display thread tells the host the new values). */
     virtual void setQGroup (const int* /*targets*/, int /*n*/) noexcept {}
     /** The plugin-drawn pages write a real parameter (table index) with a NORMALISED value (0 .. 1): the same write as the host's own (mirror, protection, engine), and the host is told afterwards
@@ -88,7 +89,7 @@ public:
         Q proxy comes back through takeQVirtual (the latest written value; false when there is none since the last call). Lock free. */
     virtual void setQVirtual (int /*id*/, float /*normalised*/) noexcept {}
     virtual bool takeQVirtual (int /*id*/, float& /*normalised*/) noexcept { return false; }
-    /** How many times the host wrote one of the four Q proxies so far (a hardware knob was turned: the host draws its Q-Link panel over the right edge a moment later). Lock free. */
+    /** How many times the host wrote one of the Q proxies so far (a hardware knob was turned: the host draws its Q-Link panel over the right edge a moment later). Lock free. */
     virtual unsigned long qWriteCount() const noexcept { return 0; }
 };
 

@@ -22,6 +22,7 @@
 #include "../ui/mod_targets.h"
 #include "curve_source.h"
 #include "page_view.h"
+#include "q_publish.h"
 #include "spectrum_curve.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
@@ -91,7 +92,7 @@ public:
             else if (top == kPageList)
                 listGroup_ = -1;
             pageTop_ = top;
-            qSet_ = false;
+            qSlots_.forget();
             modsDirty_ = true;
             if (top == kPageList)
                 fillList();
@@ -170,14 +171,14 @@ public:
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
     /** The page comes on screen again (another view was shown): it starts on BANK 1 (macros 1 .. 4) every time, so what the page shows and what the knobs write on arrival never depend on a bank left from an earlier visit; the group is published again. */
-    void forgetQGroup() noexcept { view_.setBank (0); qSet_ = false; }
+    void forgetQGroup() noexcept { view_.setBank (0); qSlots_.forget(); }
 
     void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst)
     {
         handle (pageTop_ == kPageTargets ? targets_.turnQ (knobIndex, delta) : view_.turnQ (knobIndex, delta), stack, inst);
     }
 
-    const int* qTargets() const noexcept { return qTargets_; }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
     const char* qGroupName() const noexcept { return qName_; }
     int topPage() const noexcept { return pageTop_; }
     /** The macro whose targets page is open (0 .. 7), -1 none. */
@@ -402,8 +403,8 @@ private:
             }
             return;
         }
-        if (id == kBank1) { view_.setBank (0); qSet_ = false; return; }
-        if (id == kBank2) { view_.setBank (1); qSet_ = false; return; }
+        if (id == kBank1) { view_.setBank (0); qSlots_.forget(); return; }
+        if (id == kBank2) { view_.setBank (1); qSlots_.forget(); return; }
         if (id == kList && c.kind == K::Index)
         {
             if (listGroup_ < 0)
@@ -450,32 +451,24 @@ private:
         }
     }
 
+    /** The groups of the page: the two banks of four macros (MACROS 1-4, MACROS 5-8) in reading order, the shown bank on Q 1 .. 4 and the other one on 5 .. 8; a targets list has one group per row. */
     void publishQGroup (IInstanceView& v)
     {
-        int t[4] = { -1, -1, -1, -1 };
         if (pageTop_ == kPageTargets)
         {
             std::snprintf (qName_, sizeof qName_, "MACRO %d TARGETS", targetMacro_ + 1);
-            const int row = targets_.activeRow();
-            if (row >= 0 && row < ui::ModTargetsPage::kPerPage && targetRows_[row].slot >= 0)
-            {
-                const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (targetRows_[row].slot);
-                t[0] = sp.amount; t[1] = sp.bipolar; t[2] = sp.bypass;
-            }
+            qSlots_.publish (v, targets_.numRows(), targets_.activeRow(), [this] (int row, int* t) { modRowTargets (row < ui::ModTargetsPage::kPerPage ? targetRows_[row].slot : -1, t); });
+            setRowBlocks (targets_, ui::ModTargetsPage::kPerPage, targets_.numRows(), targets_.activeRow());
         }
         else if (pageTop_ == kPageList)
+        {
             std::snprintf (qName_, sizeof qName_, "LIST");
+            qSlots_.publish (v, 0, 0, [] (int, int*) {});
+        }
         else
         {
             std::snprintf (qName_, sizeof qName_, view_.bank() == 0 ? "MACROS 1-4" : "MACROS 5-8");
-            for (int k = 0; k < 4; ++k)
-                t[k] = macroParams_[view_.bank() * 4 + k];
-        }
-        if (! qSet_ || std::memcmp (t, qTargets_, sizeof t) != 0)
-        {
-            std::memcpy (qTargets_, t, sizeof t);
-            v.setQGroup (t, 4);
-            qSet_ = true;
+            qSlots_.publish (v, 2, view_.bank(), [this] (int bank, int* t) { for (int k = 0; k < 4; ++k) t[k] = macroParams_[bank * 4 + k]; });
         }
     }
 
@@ -496,9 +489,8 @@ private:
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;
 
-    int qTargets_[4] = { -1, -1, -1, -1 };
+    QSlots qSlots_;
     char qName_[32] = "MACROS 1-4";
-    bool qSet_ = false;
 };
 
 }} // namespace synthyboy_mpc::overlay

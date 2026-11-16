@@ -182,6 +182,9 @@ public:
         Composite::draw (sb);
         for (int i = 0; i < nGroups_; ++i)
             groups[i].draw (sb);
+        for (int i = 0; i < nGroups_; ++i)
+            if (i != active_)
+                groups[i].drawMapped (sb);
     }
     /** All the leaves that are on the screen now (what the adjacency check looks at). */
     int leaves (Component** out, int max) { return collectLeaves (out, 0, max); }

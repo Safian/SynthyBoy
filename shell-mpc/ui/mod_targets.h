@@ -127,7 +127,15 @@ public:
     {
         Composite::draw (sb);
         group.draw (sb);
+        for (int i = 0; i < nRows_ && i < kPerPage; ++i)
+            if (i != activeRow_)
+            {
+                const Component* m[3] = { &rows[i].depth, &rows[i].polarity, &rows[i].bypass };
+                QGroup::drawMappedMembers (sb, rowBlock_[i], m, 3);
+            }
     }
+    /** The block of knobs (QRouter::blockOfGroup) the row has while it is not the active one: its idle chips show it (-1: none). */
+    void setRowBlock (int row, int block) noexcept { if (row >= 0 && row < kPerPage) rowBlock_[row] = block; }
 
 protected:
     void layout() override
@@ -162,6 +170,7 @@ protected:
     char title_[24] = {};
     uint32_t colour_ = 0xffffff;
     int nRows_ = 0, activeRow_ = 0, total_ = 0;
+    int rowBlock_[kPerPage] = {};
 };
 
 }} // namespace synthyboy_mpc::ui

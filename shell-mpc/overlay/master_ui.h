@@ -21,6 +21,7 @@
 #include "../ui/voice_master.h"
 #include "curve_source.h"
 #include "page_view.h"
+#include "q_publish.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
 #include "ui_stack.h"
@@ -143,7 +144,7 @@ public:
     void forgetQGroup() noexcept
     {
         full_.setActiveGroup (full_.side() == ui::MasterScreen::SideMain ? 0 : 6);
-        qSet_ = false;
+        qSlots_.forget();
     }
     int topPage() const noexcept { return pageTop_; }
 
@@ -174,7 +175,7 @@ public:
         return nullptr;
     }
     int activeQ() const noexcept { return full_.activeGroup(); }
-    const int* qTargets() const noexcept { return qTargets_; }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
 
 private:
     void bind (int id, ui::Component* c, T type, const std::string& key)
@@ -335,6 +336,7 @@ private:
         }
     }
 
+    /** The groups of the page are the groups of the side that is up (Main: OUTPUT .. GLIDE, Tuning: SCALE .. MPE Y) in reading order; the active group is on Q 1 .. 4, the next three (wrapping inside the side) on 5 .. 16. */
     void publishQGroup (IInstanceView& inst)
     {
         const int g = full_.activeGroup();
@@ -350,15 +352,19 @@ private:
             { "master.mpe.on", "master.mpe.bend_range", "master.mpe.xyz_macro", "" },
             { "master.mpe.y_modwheel", "master.mpe.bend_to_x", "master.mpe.y_bipolar", "" }
         };
-        int t[4];
-        for (int i = 0; i < 4; ++i)
-            t[i] = pageTop_ == kPageList ? -1 : uibind::indexOfKey (kGroupKeys[g][i]);
-        if (! qSet_ || std::memcmp (t, qTargets_, sizeof t) != 0)
-        {
-            std::memcpy (qTargets_, t, sizeof t);
-            inst.setQGroup (t, 4);
-            qSet_ = true;
-        }
+        const bool main = g < 6;
+        const int first = main ? 0 : 6, count = main ? 6 : 4;
+        const bool list = pageTop_ == kPageList;
+        if (list)
+            qSlots_.publish (inst, 0, 0, [] (int, int*) {});   // the list has no group: no slot has a target
+        else
+            qSlots_.publish (inst, count, g - first, [&] (int k, int* t)
+            {
+                for (int i = 0; i < 4; ++i)
+                    t[i] = uibind::indexOfKey (kGroupKeys[first + k][i]);
+            });
+        for (int i = 0; i < ui::MasterScreen::kMaxGroups; ++i)
+            full_.groups[i].setBlock (list || i < first || i >= first + count ? -1 : QRouter::blockOfGroup (count, g - first, i - first));
     }
 
     ui::Component* topComponent() noexcept
@@ -378,8 +384,7 @@ private:
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;
 
-    int qTargets_[4] = { -1, -1, -1, -1 };
-    bool qSet_ = false;
+    QSlots qSlots_;
 };
 
 }} // namespace synthyboy_mpc::overlay

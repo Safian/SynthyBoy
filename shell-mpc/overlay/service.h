@@ -29,6 +29,8 @@
 #include "cpu_plan_linux.h"
 #include "drm_linux.h"
 #include "gpu/gpu_overlay.h"
+#include "q_device.h"
+#include "../ui/qgroup.h"
 #include "touch_linux.h"
 #if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU)
 #include "gpu/helper_transport_linux.h"
@@ -128,6 +130,7 @@ private:
     {
         if (controller_)
             return;
+        ui::QGroup::setWideDevice (detectSixteenQLinks());   // the idle chips of the other mapped groups: knob numbers 5 .. 16 on the XL, 1 .. 4 (bank-relative) on the others
 #if defined(__linux__)
         display_ = std::make_shared<LinuxDisplay>();     // found at run time by the first use (discovery.h): the CRTC, the planes, the panel, the refresh
         backend_ = std::make_unique<LinuxPlaneBackend> (display_);
