@@ -33,7 +33,8 @@ Contents
 7. Presets
 8. Known limitations
 9. Troubleshooting
-10. To update when the UI changes
+10. Second-generation pads (MPCe), MPC XL and other gen 2 devices
+11. To update when the UI changes
 
 ---
 
@@ -539,13 +540,13 @@ The knobs follow the order of the parameter table. Parameters of the 13 effect t
 4. **Distortion** Adds harmonics by clipping, folding or reducing the signal (soft and hard clip, folds, bit crush, down sample, tube, diode ...), with an optional filter before or after. (display): Type (14 choices: Soft clip, Hard clip, Linear fold, Sine fold, Bit crush, Down sample, Tube, Diode 1 ...), Drive -30 .. +30 dB, Mix 0 .. 100 percent (100), Filter Order (None, Pre, Post), Filter Cutoff 20 .. 20000 Hz (4000), Filter Resonance 0 .. 100 percent (50), Filter Blend 0 .. 100 percent, Level, Filter Key Track -100 .. +100 percent.
 5. **EQ** A tone control with four bands (low, mid, mid 2, high), each with cutoff, gain and resonance. (3 pages, display): bands Low (Mode Shelf or High pass; Cutoff 100 Hz; Gain -24 .. +24 dB; Resonance 0 .. 100 percent), Mid (Peak or Notch; 1000 Hz), High (Shelf or Low pass; 8000 Hz), Mid 2 (Off, Peak, Notch; 3000 Hz), each Cutoff 20 .. 20000 Hz; Level -24 .. +12 dB; Law (Vital, Serum).
 6. **FX Filter** A filter used as an effect on the whole signal, with the same models as the voice filters. (display): the same controls as a Filter page (Model, Style, Cutoff 20 .. 20000 Hz, Resonance, Drive 0 .. 20 dB, Blend, Mix, Key Tracking, Comb Blend Offset, Formant X, Y, Resonance, Spread, Transpose, Var, Pan, Level -60 .. +12 dB, Clean Mode).
-7. **Flanger** Sweeps a very short delay with feedback, giving a moving, metallic comb-filter sound.: Mix (50), Feedback -100 .. +100 percent (50), Rate 0.04 .. 4 Hz (0.25), Sync, Division, Depth 0 .. 100 percent, Center 20 .. 16000 Hz (330), Phase Offset 0 .. 360 degrees (120), Level.
-8. **Phaser** Sweeps a series of notches through the sound, with feedback, for a swirling movement.: Mix, Feedback 0 .. 100 percent, Rate 0.04 .. 4 Hz (0.12), Sync, Division, Depth 0 .. 48 semitones (24), Center 20 .. 16000 Hz (2000), Blend 0 .. 100 percent, Phase Offset 0 .. 360 degrees (120), Level, Depth 2 -48 .. +48 semitones.
+7. **Flanger** Sweeps a very short delay with feedback, giving a moving, metallic comb-filter sound. Parameters: Mix (50), Feedback -100 .. +100 percent (50), Rate 0.04 .. 4 Hz (0.25), Sync, Division, Depth 0 .. 100 percent, Center 20 .. 16000 Hz (330), Phase Offset 0 .. 360 degrees (120), Level.
+8. **Phaser** Sweeps a series of notches through the sound, with feedback, for a swirling movement. Parameters: Mix, Feedback 0 .. 100 percent, Rate 0.04 .. 4 Hz (0.12), Sync, Division, Depth 0 .. 48 semitones (24), Center 20 .. 16000 Hz (2000), Blend 0 .. 100 percent, Phase Offset 0 .. 360 degrees (120), Level, Depth 2 -48 .. +48 semitones.
 9. **Reverb** Adds the space of a room or hall: size, decay time, pre-delay, tone shaping and several reverb types. (2 pages): Mix 0 .. 100 percent (25), Size 0 .. 100 percent, Decay 20 .. 30000 ms (1500), Pre-delay 0 .. 300 ms, Pre Low Cut and Pre High Cut 20 .. 12000 Hz, Low and High Shelf Cutoff and Gain (-6 .. 0 dB), Chorus Amount 0 .. 100 percent, Chorus Rate 0.01 .. 8 Hz, Force Enable (Off/On), Level, Type (Vital, Plate, Hall, Vintage, Nitrous, Basin), Room (Space, Marble, Rectangle, Hexagon, Box), Width 0 .. 200 percent, ER Size, Diffusion A, Diffusion B, Feedback (0 .. 100 percent).
-10. **Hyper/Dimension** Hyper thickens the sound with several detuned copies; Dimension widens the stereo picture.: Hyper Rate 0.05 .. 10 Hz, Hyper Unison 0 .. 7 voices, Hyper Detune 0 .. 100 percent, Hyper Retrigger (Off/On), Hyper Mix, Dimension Size 0 .. 100 percent, Dimension Mix 0 .. 100 percent, Level.
-11. **Utility** Housekeeping tools: polarity flip per channel, low-pass and high-pass filters, mono bass, stereo width, pan and level.: Polarity Left and Right (Off/On), Low Pass 20 .. 20000 Hz, High Pass 20 .. 20000 Hz, Mono Bass (Off/On) and its Frequency 20 .. 500 Hz (120), Width 0 .. 200 percent (100), Pan -100 .. +100 percent, Mix, Level.
-12. **Bode** Shifts all frequencies of the sound by a fixed amount (a frequency shifter), with delay, feedback and blur.: Mono Input (Off/On), Shift 0 .. 100 percent, Range 1 .. 5000 Hz (100), Direction -100 .. +100 percent (100), Width 0 .. 100 percent, Delay 1 .. 2000 ms (100), Sync, Division, Feedback 0 .. 100 percent, Balance -100 .. +100 percent, Blur 0 .. 100 percent, Retrigger (Off/On), Mix (50), Level.
-13. **Convolve** Gives the sound the character of a recorded space or device by convolving it with an impulse response.: Impulse (None, Preset IR), Size 0 .. 100 percent, Tone -100 .. +100 percent, Minimum Phase (Off/On), Pre-delay 0 .. 500 ms, Sync, Division, Attack 0 .. 2000 ms, Decay 0 .. 100 percent (100), Damping 0 .. 100 percent, IR Gain -40 .. +24 dB, Mix (30), Level, Law (Vital, Serum).
+10. **Hyper/Dimension** Hyper thickens the sound with several detuned copies; Dimension widens the stereo picture. Parameters: Hyper Rate 0.05 .. 10 Hz, Hyper Unison 0 .. 7 voices, Hyper Detune 0 .. 100 percent, Hyper Retrigger (Off/On), Hyper Mix, Dimension Size 0 .. 100 percent, Dimension Mix 0 .. 100 percent, Level.
+11. **Utility** Housekeeping tools: polarity flip per channel, low-pass and high-pass filters, mono bass, stereo width, pan and level. Parameters: Polarity Left and Right (Off/On), Low Pass 20 .. 20000 Hz, High Pass 20 .. 20000 Hz, Mono Bass (Off/On) and its Frequency 20 .. 500 Hz (120), Width 0 .. 200 percent (100), Pan -100 .. +100 percent, Mix, Level.
+12. **Bode** Shifts all frequencies of the sound by a fixed amount (a frequency shifter), with delay, feedback and blur. Parameters: Mono Input (Off/On), Shift 0 .. 100 percent, Range 1 .. 5000 Hz (100), Direction -100 .. +100 percent (100), Width 0 .. 100 percent, Delay 1 .. 2000 ms (100), Sync, Division, Feedback 0 .. 100 percent, Balance -100 .. +100 percent, Blur 0 .. 100 percent, Retrigger (Off/On), Mix (50), Level.
+13. **Convolve** Gives the sound the character of a recorded space or device by convolving it with an impulse response. Parameters: Impulse (None, Preset IR), Size 0 .. 100 percent, Tone -100 .. +100 percent, Minimum Phase (Off/On), Pre-delay 0 .. 500 ms, Sync, Division, Attack 0 .. 2000 ms, Decay 0 .. 100 percent (100), Damping 0 .. 100 percent, IR Gain -40 .. +24 dB, Mix (30), Level, Law (Vital, Serum).
 
 For Q-Links: one Q group per row of four knobs on the page that is on screen.
 
@@ -688,7 +689,78 @@ The plugin-wide pad-pressure switch is not part of a preset (a preset change lea
 | Distortion or clipping | The output has no limiter (chapter 8): lower the track level. |
 | Preset changes after project reload | The project stores the preset by name; if the name is gone from the list the saved sound stays. |
 
-## 10. To update when the UI changes
+## 10. Second-generation pads (MPCe): playing SynthyBoy expressively
+
+**Second-generation hardware only (MPC XL and the other gen 2 devices). The first generation, for example the MPC Key 61, does not have these pads.** (The Key 61 has keys; its aftertouch and wheels reach SynthyBoy as ordinary MIDI, see the sources in chapter 6.)
+
+Manual references in this chapter are to the **MPC Live III, MPC XL User Guide v3.10.1** (page numbers are those of that guide) and to the release notes 3.6 and 3.7. Read this chapter with one rule in mind: the manual describes what the pads can do **inside the MPC** (drum tracks, layers, the drum track's own modulation matrix). Only what the MPC sends on to a plugin track can drive SynthyBoy. We measured that on an MPC XL (MPC OS 3.10.1.12).
+
+### 10.1 What the pads add, and what reaches the plugin
+
+The manual calls these the **MPCe pads**. Besides the strike velocity, each pad senses **pressure**, the **position of the finger (X and Y)** and the **corner (quadrant)** it is struck in; four corner gestures can select articulations or layers on drum tracks (guide pp. 13, 234; release notes 3.6, 3.7).
+
+| Pad gesture | What the manual says the MPC does with it | What the MPC sends to a SynthyBoy plugin track (measured on the XL) | Arrives in SynthyBoy as |
+|---|---|---|---|
+| Strike | Note and velocity | Note on / note off on MIDI channel 1; velocity varies (96 and 127 were seen) while Full Level is off | **Velocity** (and Note). Velocity tracking on the Master page, VEL TRACK, scales it |
+| Strike with Full Level on | Fixed velocity | Velocity always 127, no pressure | Velocity is always 127; **Poly Aftertouch is zero** |
+| Press harder after the strike | Pressure (aftertouch) of each pad; the pad setting Aftertouch can be Off, Channel or Poly in controller mode (guide p. 369) | **Polyphonic aftertouch**, one stream per held pad, values 1 .. 127, about every 6 milliseconds; no channel pressure | **Poly Aftertouch** (per note). The source **Aftertouch** (channel pressure) does not move |
+| Finger position left / right (Pad X) and up / down (Pad Y) | Mod sources Pad X, Pad Y, Pad XY Center Dist, Pad XY Press Dist, Pad dX, Pad dY of a **drum track's** modulation matrix; MPCe Q-Link Mode (guide p. 350: only on a Drum Track) | **Nothing**: no pitch bend, no CC (also no CC 74), no other CC, no MPE channel rotation | **Not available**: Slide, Expression X, Pitch Wheel, Mod Wheel do not move from the pads |
+| Corner (quadrant) | Articulations and layers on drum tracks | No separate message (it would have to be derived from X / Y) | Not available |
+| Lift the finger | Note off | Note off was counted; the release velocity value was not read | Release Velocity / Lift: not verified with SynthyBoy |
+| MPCe Q-Link Mode (pads as XY controls of parameters) | Drum tracks only | Not measured toward a plugin track | Not verified with SynthyBoy |
+| 8x8 (64 pads) mode, Pad Perform scales and chords, Note Repeat, 16 Levels | Host features (guide p. 72, 83) | Not measured toward a plugin track | Not verified with SynthyBoy |
+
+So with SynthyBoy the pads give you **velocity and per-pad pressure**. They do **not** give you per-note X / Y: do not build performances that wait for Slide, Expression X or MPE messages from the pads.
+
+### 10.2 Host settings
+
+- **Full Level must be off.** The XL button is called **Full Level / Set Level** (guide p. 389, hardware overview). When it is on, every hit has velocity 127 and the pads send no pressure (measured). Also check **Preferences > General > Enable Pads User Level By Default**, which makes pads play at a set level by default (guide p. 66): leave it unchecked for normal velocity response.
+- **Pad feel** (guide p. 63, Preferences > Hardware): **Pad Threshold**, **Pad Sensitivity**, **Pad Curve** (A is nearly linear, B to D exponential) and the **Velocity & Aftertouch** meters. Use the meters while pressing a pad to see how much pressure you really produce; the plugin sees the same pressure.
+- **Aftertouch on the pads in Pad Perform:** the Pad Perform window has a **Use Aftertouch** box; on the XL, Shift plus **Notes / Pad CTRL** switches pad aftertouch (guide p. 83). Whether this box changes what reaches SynthyBoy was not measured. The measurements above were made with the pads' normal setting.
+- **Recording:** **Preferences > Sequencer > Record Pad Aftertouch Events** decides whether pad aftertouch is recorded into the sequence (guide p. 64). Whether recorded pressure replays into SynthyBoy was not measured.
+- **MPE on the Master page: leave it off for the pads.** The MPE switches (chapter 5.12) work with MPE controllers that send each note on its own MIDI channel. The XL pads send everything on channel 1 and no X / Y, so MPE ON, XYZ MACRO, Y TO WHEEL and BEND TO X have nothing to act on from the pads.
+- Plugin-wide pad pressure: SynthyBoy has a switch that opens Filter 1 with pad pressure; it is off by default (chapter 5.12). You do not need it for the recipes below: they use the modulation matrix per preset.
+
+### 10.3 Recipes
+
+All recipes use the Mod page (chapter 5.10). Put the plugin on a plugin track on the XL, switch Full Level off, and keep a pad pressed while you edit to hear the effect. A route made from the matrix is part of the preset's sound and is saved with the project.
+
+**Recipe 1: pressure opens the filter.**
+1. Press the **Mod** function key.
+2. With no route in use, the source board shows; tap **POLY AFTERTOUCH** (group PLAYER). With routes in use press **+ ADD** and then tap **SOURCE** of the new row and choose Poly Aftertouch.
+3. Pick the destination: the groups list first, then choose **Filter 1 Cutoff** (**TARGET** on an existing row).
+4. Drag the **AMOUNT** bar to about +50 to +60 percent (the factory preset "MPE Pressure Lead" uses +55 percent).
+5. Choose a preset whose cutoff is low enough to open, play a pad and press into it.
+
+**Recipe 2: pressure moves the wavetable position.**
+1. Same as recipe 1, but choose **Osc 1 Frame** as the target (Osc 2 Frame, Osc 3 Frame for the other oscillators).
+2. Choose a wavetable that changes along its frames, for example Saw to Square or FM Sweep (Osc page, source stepper, chapter 5.3), set the WT POS knob to the start position and the amount to taste.
+
+**Recipe 3: pressure adds vibrato** (route amount is modulated).
+1. Make a route **LFO 1** to **Osc 1 Tune** with a small amount (the Tune parameter is in cents, so a small amount is enough), and set the LFO rate on the LFO page (chapter 5.9).
+2. Make a second route from **Poly Aftertouch**, and choose as its target the amount of the first route (the destination is named **Mod NN Amount**, NN being the slot number of the first route).
+3. Pressing a pad now fades the vibrato in. The engine lists the route amounts as modulation destinations; this recipe was **not verified with the pads on a device**.
+
+**Recipe 4: per-pad expression with MPE X / Y.** Not possible with the pads, because X / Y do not reach the plugin (10.1). The factory preset "MPE Pressure Lead" also has a **Slide** route; from the XL pads that route stays silent, only an MPE controller moves it.
+
+**Recipe 5: velocity and release velocity.**
+- Master page, **VEL TRACK** (-100 .. +100 percent, default +100): how strongly velocity shapes the sound.
+- To make velocity brighten the sound, make a route **Velocity** to **Filter 1 Cutoff**.
+- **Release Velocity** (and **Lift**, which reads the same value) can be routed in the same way, for example to a release-related parameter. Whether the pads send a useful release velocity was **not verified**.
+
+**Recipe 6: macros on the Q-Links while you play pads.** On the XL all 16 Q-Link knobs are alive (chapter 4.3). Make the macro routes on the Macros page (chapter 5.2), open Macros so that knobs 1 - 4 and 5 - 8 are the eight macros, and turn them with one hand while the pads play. Macros can drive any modulatable parameter, so one knob can change several things at once. Combine with recipe 1 so the pads' pressure and a macro together control the sound.
+
+### 10.4 Factory presets that respond to the pads
+
+Searched in the 112 factory presets for routes from Velocity, Release Velocity, Poly Aftertouch, Aftertouch, Slide, Lift, Expression X, Pitch Wheel, Mod Wheel, Note, Random per Note, the Note-On sources and Oct Note (active routes only):
+
+| Preset | Routes from pad / performance sources |
+|---|---|
+| Lead / MPE Pressure Lead | **Poly Aftertouch** to Filter 1 Cutoff (+55 percent) and to Osc 1 Unison Detune (+20 percent); **Slide** to Osc 1 Warp Amount (+50 percent; silent from the XL pads) |
+
+No other factory preset has a route from these sources in its matrix (most routes use macros, LFOs and envelopes). Velocity acts in every preset through VEL TRACK on the Master page. (Update this table when presets with pressure routes are added.)
+
+## 11. To update when the UI changes
 
 These chapters describe the current tree and depend on pages that are being reworked now:
 
@@ -700,3 +772,4 @@ These chapters describe the current tree and depend on pages that are being rewo
 - **5.12 Master (pad pressure):** a Master page control for the plugin-wide pad-pressure switch is coming; the text in 5.12 and in chapter 8 must then name it.
 - **Chapter 2:** the plugin window name under which SynthyBoy is listed, once confirmed on the device.
 - **All pictures** in `img/` are rendered with `scripts/render-ui-gallery.py` and must be re-rendered after a UI change.
+- **Chapter 10 (second-generation pads):** the table in 10.1 and the recipes depend on what the MPC sends to a plugin track (re-measure after a firmware update), on the Master page pad-pressure control that is coming, and on the factory presets: update the list in 10.4 whenever presets with pressure or other performance routes are added.
