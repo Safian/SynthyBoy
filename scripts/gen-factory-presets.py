@@ -24,6 +24,7 @@ ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 PARAMS_JSON_PATH = os.path.join(ROOT_DIR, "docs", "params.json")
 LEVELS_PATH = os.path.join(SCRIPT_DIR, "factory-preset-levels.json")
 MACRO_NAMES_PATH = os.path.join(SCRIPT_DIR, "factory-preset-macro-names.json")
+PAD_PRESSURE_PATH = os.path.join(SCRIPT_DIR, "factory-preset-pad-pressure.json")
 DEFAULT_OUTPUT_DIR = os.path.join(ROOT_DIR, "content", "presets")
 
 with open(PARAMS_JSON_PATH, "r", encoding="utf-8") as f:
@@ -479,6 +480,34 @@ def with_macros(category: str, ov: dict) -> dict:
     return out
 
 
+def load_pad_pressure() -> dict:
+    """{preset name: amount in percent} of the factory presets that route Poly Aftertouch to the cutoff of Filter 1 themselves (scripts/propose-pad-pressure.py writes it, the owner corrects it by hand);
+    a preset without an entry has no such route."""
+    if not os.path.isfile(PAD_PRESSURE_PATH):
+        return {}
+    with open(PAD_PRESSURE_PATH, "r", encoding="utf-8") as f:
+        doc = json.load(f)
+    out = {}
+    for name, amount in doc.get("presets", {}).items():
+        if not isinstance(amount, (int, float)) or not 0 < amount <= 100:
+            raise ValueError(f"{PAD_PRESSURE_PATH}: {name}: the amount must be a percent above 0 and at most 100")
+        out[name] = amount
+    return out
+
+
+def with_pad_pressure(name: str, ov: dict, amounts: dict) -> dict:
+    """`ov` plus the route Poly Aftertouch -> Filter 1 Cutoff in the next free mod slot, for a preset that has an amount in the pad pressure data."""
+    if name not in amounts:
+        return ov
+    out = dict(ov)
+    used = [int(k[3:5]) for k in out if k.startswith("mod") and k[3:5].isdigit()]
+    slot = max(used, default=0) + 1
+    if slot > NUM_MOD_SLOTS:
+        raise ValueError(f"{name}: no free mod slot for the pad pressure route")
+    out.update(mod(slot, "poly_aftertouch", "filter1.cutoff", amounts[name]))
+    return out
+
+
 def file_name_of(name: str) -> str:
     return name.lower().replace(" ", "_").replace("-", "_") + ".sbpreset"
 
@@ -585,12 +614,16 @@ def build_all():
     unknown = sorted(set(levels) - set(p[0] for p in presets) - set(x[0] for x in showcase))
     if unknown:
         raise KeyError(f"{LEVELS_PATH}: no preset named {unknown}")
+    pad_pressure = load_pad_pressure()
+    unknown = sorted(set(pad_pressure) - set(p[0] for p in presets) - set(x[0] for x in showcase))
+    if unknown:
+        raise KeyError(f"{PAD_PRESSURE_PATH}: no preset named {unknown}")
     macro_names = load_macro_names()
     unknown = sorted(set(macro_names) - set(p[0] for p in presets) - set(x[0] for x in showcase))
     if unknown:
         raise KeyError(f"{MACRO_NAMES_PATH}: no preset named {unknown}")
     for name, category, tags, desc, ov in presets:
-        ov = with_macros(category, ov)
+        ov = with_pad_pressure(name, with_macros(category, ov), pad_pressure)
         check_macros(name, {**default_values, **{k: float(v) for k, v in ov.items()}})
         if name in levels:
             ov["master.volume"] = levels[name]
@@ -598,7 +631,7 @@ def build_all():
         meta, doc = make_preset(name, category, tags, desc, ov, content=content, strict=False)
         out.append((name, category, meta, doc))
     for name, category, tags, desc, ov, content in showcase:
-        ov = with_macros(category, ov)
+        ov = with_pad_pressure(name, with_macros(category, ov), pad_pressure)
         check_macros(name, {**default_values, **{k: float(v) for k, v in ov.items()}})
         if name in levels:
             ov["master.volume"] = levels[name]
