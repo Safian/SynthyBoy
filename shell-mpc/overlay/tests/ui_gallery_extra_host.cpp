@@ -546,7 +546,7 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             for (int i = 1; i <= 64; ++i)
             {
                 char k[24]; std::snprintf (k, sizeof k, "mod%02d.destination", i);
-                if (static_cast<int> (r.inst.get (k)) == synthyboy::modDestinationChoiceOf (static_cast<size_t> (GalleryInst::idx ("osc1.level"))))
+                if (static_cast<int> (r.inst.get (k)) == static_cast<int> (synthyboy::modDestinationChoiceOf (static_cast<size_t> (GalleryInst::idx ("osc1.level")))))
                     r.inst.set (k, 0.0f);
             }
             r.refresh (2);
@@ -741,7 +741,9 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
         {
             GalleryRig<LfoUi> r (baseInst, 1);
             r.tap (r.ui.full().edit);
-            r.ui.editor().model = ui::lfo::ShapeModel::twoPoints (0.0f, 0.0f);
+            ui::lfo::ShapeModel m;
+            m.n = 0;
+            r.ui.editor().model = m;
             r.ui.editor().sync();
             r.refresh (2);
             r.picture (outDir + "/" + state + "_lfo_editor_empty.png");
@@ -806,7 +808,8 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
         {
             GalleryRig<ModUi> r (baseInst, 1);
             r.inst.mod (1, 7, "filter1.cutoff", 50.0f);
-            r.ui.openSlotDetail (0, r.stack);
+            r.refresh (2);
+            r.tap (r.ui.matrix().windowRows[0].detailBtn);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_mod_slot_detail.png");
         }
@@ -815,18 +818,21 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
         {
             GalleryRig<ModUi> r (baseInst, 1);
             r.inst.mod (1, 7, "filter1.cutoff", 50.0f);
-            r.ui.openList (r.inst, r.stack, ModUi::ListKind::Source, 0);
+            r.refresh (2);
+            r.tap (r.ui.matrix().windowRows[0].sourceBtn);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_mod_source_picker_groups.png");
         }
 
-        // 5.3 Source picker groups expanded (1..4)
-        for (int g = 1; g <= 4; ++g)
+        // 5.3 Source picker groups expanded (1..5)
+        for (int g = 1; g <= uibind::kSourceGroups; ++g)
         {
             GalleryRig<ModUi> r (baseInst, 1);
             r.inst.mod (1, 7, "filter1.cutoff", 50.0f);
-            r.ui.openList (r.inst, r.stack, ModUi::ListKind::Source, 0);
-            r.ui.handle (ui::Change::index (ModUi::kList, g), r.stack, r.inst);
+            r.refresh (2);
+            r.tap (r.ui.matrix().windowRows[0].sourceBtn);
+            const ui::Rect row = r.ui.list().rowRect (g);
+            r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_mod_source_picker_group" + std::to_string (g) + ".png");
         }
@@ -835,18 +841,22 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
         {
             GalleryRig<ModUi> r (baseInst, 1);
             r.inst.mod (1, 7, "filter1.cutoff", 50.0f);
-            r.ui.openList (r.inst, r.stack, ModUi::ListKind::Dest, 0);
+            r.refresh (2);
+            r.tap (r.ui.matrix().windowRows[0].destBtn);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_mod_target_picker_groups.png");
         }
 
-        // 5.5 Target picker groups expanded (first 4 groups)
-        for (int g = 0; g < 4; ++g)
+        // 5.5 Target picker groups expanded (every group in DestIndex)
+        const uibind::DestIndex& dIndex = uibind::DestIndex::get();
+        for (size_t g = 0; g < dIndex.groups.size(); ++g)
         {
             GalleryRig<ModUi> r (baseInst, 1);
             r.inst.mod (1, 7, "filter1.cutoff", 50.0f);
-            r.ui.openList (r.inst, r.stack, ModUi::ListKind::Dest, 0);
-            r.ui.handle (ui::Change::index (ModUi::kList, g + 1), r.stack, r.inst);
+            r.refresh (2);
+            r.tap (r.ui.matrix().windowRows[0].destBtn);
+            const ui::Rect row = r.ui.list().rowRect (static_cast<int> (1 + g));
+            r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_mod_target_picker_group" + std::to_string (g) + ".png");
         }
@@ -857,7 +867,8 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.inst.mod (1, 7, "filter1.cutoff", 60.0f);
             r.inst.mod (2, 7, "filter1.resonance", -30.0f);
             r.inst.mod (3, 1, "osc1.tune", 25.0f);
-            r.ui.matrix().setFilterMode (ui::ModMatrixView::FilterSource);
+            r.refresh (2);
+            r.tap (r.ui.matrix().tabSource);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_mod_by_source.png");
         }
@@ -868,7 +879,8 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.inst.mod (1, 7, "filter1.cutoff", 60.0f);
             r.inst.mod (2, 7, "filter1.resonance", -30.0f);
             r.inst.mod (3, 1, "osc1.tune", 25.0f);
-            r.ui.matrix().setFilterMode (ui::ModMatrixView::FilterDest);
+            r.refresh (2);
+            r.tap (r.ui.matrix().tabDest);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_mod_by_dest.png");
         }
@@ -878,8 +890,8 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             GalleryRig<ModUi> r (baseInst, 1);
             for (int i = 1; i <= 16; ++i)
                 r.inst.mod (i, (i % 6) + 1, (i % 2 == 0 ? "filter1.cutoff" : "osc1.level"), static_cast<float> (i * 5 - 40));
-            r.ui.matrix().setFilterMode (ui::ModMatrixView::FilterAll);
-            r.ui.matrix().scroll (4); // scroll down by 4 rows
+            r.refresh (2);
+            r.ui.wheel (600, 300, -4, r.stack, r.inst, r.now);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_mod_matrix_scrolled.png");
         }
@@ -895,7 +907,9 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.inst.mod (1, 23, "filter1.cutoff", 50.0f);
             r.inst.mod (2, 23, "filter1.resonance", -35.0f);
             r.inst.mod (3, 23, "master.volume", 20.0f);
-            r.ui.openTargets (1, r.stack);
+            r.refresh (2);
+            const ui::Rect rc = r.ui.view().cards[0].chipsRect();
+            r.tapAt (rc.x + rc.w / 2, rc.y + rc.h / 2);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_macro_targets.png");
         }
@@ -903,7 +917,8 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
         // 6.2 Bank 2
         {
             GalleryRig<MacroUi> r (baseInst, 1);
-            r.ui.setBank (1); // Bank 2
+            r.refresh (2);
+            r.tap (r.ui.view().bank2Btn);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_macros_bank2.png");
         }
@@ -920,7 +935,8 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
         for (int s = 0; s < 10; ++s)
         {
             GalleryRig<MixerUi> r (baseInst, 1);
-            r.ui.screen().setSelectedStrip (s);
+            r.refresh (2);
+            r.tap (r.ui.screen().strips[s]);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_mixer_strip_" + kStripNames[s] + ".png");
         }
@@ -968,7 +984,8 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             setupEffectNonDefault (r.inst, 4);
             r.refresh();
             addEffect (r, 4); // Distortion
-            r.ui.handle (ui::Change::index (FxUi::kEditorRack, 1), r.stack, r.inst); // Bus 1
+            const ui::Rect rk = r.ui.screen().slotEditor.rack.rect();
+            r.tapAt (rk.x + rk.w * 3 / 4, rk.y + rk.h / 2); // step to Bus 1
             r.refresh (2);
             r.picture (outDir + "/" + state + "_fx_rack_bus1.png");
         }
@@ -979,7 +996,9 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             setupEffectNonDefault (r.inst, 4);
             r.refresh();
             addEffect (r, 4); // Distortion
-            r.ui.handle (ui::Change::index (FxUi::kEditorRack, 2), r.stack, r.inst); // Bus 2
+            const ui::Rect rk = r.ui.screen().slotEditor.rack.rect();
+            r.tapAt (rk.x + rk.w * 3 / 4, rk.y + rk.h / 2); // step to Bus 1
+            r.tapAt (rk.x + rk.w * 3 / 4, rk.y + rk.h / 2); // step to Bus 2
             r.refresh (2);
             r.picture (outDir + "/" + state + "_fx_rack_bus2.png");
         }
@@ -1060,10 +1079,45 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
                 std::string paramKey = "voicectl.s" + std::to_string (s + 1) + "." + kVoiceRows[r];
                 rVoice.inst.set (paramKey, kStepVals[(s + r) % 8] * 100.0f);
             }
-            rVoice.ui.screen().grid.activeRow = r;
+            rVoice.refresh (2);
+            const ui::Rect tr = rVoice.ui.screen().grid.tabRect (r);
+            rVoice.tapAt (tr.x + tr.w / 2, tr.y + tr.h / 2);
             rVoice.ui.screen().grid.selectedStep = r;
             rVoice.refresh (2);
             rVoice.picture (outDir + "/" + state + "_voice_row_" + kVoiceRows[r] + ".png");
+        }
+    }
+
+    // =========================================================================
+    // 11. UI Component Library Popups
+    // =========================================================================
+    {
+        // 11.1 Generic ListPopup over screen
+        {
+            saveScene (outDir + "/" + state + "_lib_list_popup.png", [] (gpu::SceneBuilder& sb)
+            {
+                static const char* const kItems[] = { "SAW", "PULSE", "TRIANGLE", "SINE", "SQUARE", "ORGAN", "VOCAL", "METALLIC" };
+                ui::ListPopup p;
+                p.state.items = kItems;
+                p.state.count = 8;
+                p.state.current = 2;
+                p.state.header = "WAVEFORM SELECT";
+                p.state.headerBack = true;
+                p.setPopup ({ 0, 0, 1280, 800 });
+                p.place ({ 440, 160, 400, 480 });
+                p.draw (sb);
+            });
+        }
+
+        // 11.2 Generic RoutePanel popup over screen
+        {
+            saveScene (outDir + "/" + state + "_lib_route_panel.png", [] (gpu::SceneBuilder& sb)
+            {
+                ui::RoutePanel rp;
+                rp.setPopup (true, { 0, 0, 1280, 800 });
+                rp.place ({ 480, 220, 320, 360 });
+                rp.draw (sb);
+            });
         }
     }
 }
@@ -1173,7 +1227,9 @@ int main (int argc, char** argv)
             "test_init_master_main.png",
             "test_init_master_tuning_mpe.png",
             "test_init_voice_row_pan.png",
-            "test_init_voice_row_detune.png"
+            "test_init_voice_row_detune.png",
+            "test_init_lib_list_popup.png",
+            "test_init_lib_route_panel.png"
         };
 
         bool ok = true;
