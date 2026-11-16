@@ -354,6 +354,20 @@ public:
 
     Size minSize() const override { return { 96, 360 }; }
 
+    /** Which of the four Q members the strip has: a member whose parameter does not exist in the engine (the buses and the master have a level only) is left out, not drawn dim: it is not drawn, takes no touch,
+        and is no member of the strip's Q group (MixerFullScreen::setStripMembers). The strip keeps its height and the others keep their places (the layout does not depend on it). */
+    void setPresent (bool level, bool panPresent, bool send1Present, bool send2Present)
+    {
+        show (fader, level);
+        show (pan, panPresent);
+        show (send1, send1Present);
+        show (send2, send2Present);
+    }
+    bool hasLevel() const noexcept { return shownKid (fader); }
+    bool hasPan() const noexcept { return shownKid (pan); }
+    bool hasSend1() const noexcept { return shownKid (send1); }
+    bool hasSend2() const noexcept { return shownKid (send2); }
+
     void setTitle (const char* t)
     {
         setText (title, sizeof title, t);
@@ -396,6 +410,15 @@ protected:
         const theme::Look& T = theme::L();
         p.block (rect_, false);
         p.rrect (rect_, T.rBlock, p.c (T.keyline, 160), 1.0f);
+    }
+
+private:
+    bool shownKid (const Component& c) const noexcept
+    {
+        for (int i = 0; i < numChildren(); ++i)
+            if (child (i) == &c)
+                return childShown (i);
+        return false;
     }
 };
 

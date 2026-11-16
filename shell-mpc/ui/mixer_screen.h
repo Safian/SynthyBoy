@@ -120,6 +120,7 @@ protected:
 /** MixerFullScreen: Complete full screen Mixer page.
     Holds MixerRoutingBar at top, 10 channel strips side by side, and 10 QGroups.
     QGroup per strip: slot 0 fader (LEVEL), slot 1 pan, slot 2 send1, slot 3 send2: one frame around the column of the strip you touched.
+    A member the strip does not have (setStripMembers: BUS 1, BUS 2 and MASTER have a level only) is no slot of its group: no chip, not in the frame.
     Adjacency check passes with 0 offenders. */
 class MixerFullScreen : public Composite
 {
@@ -171,6 +172,19 @@ public:
     {
         for (int i = 0; i < kStrips; ++i)
             strips[i].assignIds (baseId + i * 10);
+    }
+
+    /** Which of LEVEL (Q1), PAN (Q2), B1 (Q3), B2 (Q4) the strip has an engine parameter for. A member it has not is left out of the strip (not drawn, no touch) and of the strip's Q group (no chip, not in
+        the frame); the strip keeps its height and the other members their places. */
+    void setStripMembers (int strip, bool level, bool pan, bool send1, bool send2)
+    {
+        if (strip < 0 || strip >= kStrips)
+            return;
+        strips[strip].setPresent (level, pan, send1, send2);
+        groups[strip].set (0, level ? &strips[strip].fader : nullptr);
+        groups[strip].set (1, pan ? &strips[strip].pan : nullptr);
+        groups[strip].set (2, send1 ? &strips[strip].send1 : nullptr);
+        groups[strip].set (3, send2 ? &strips[strip].send2 : nullptr);
     }
 
     Change touchDown (int x, int y, double nowMs) override
