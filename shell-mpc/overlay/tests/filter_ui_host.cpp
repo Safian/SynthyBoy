@@ -577,6 +577,192 @@ void testDrawingAndSceneOps()
     }
 }
 
+void testDualSceneHasThreeCurves()
+{
+    Rig r;
+    r.inst.set ("filter1.on", 1.0f);
+    r.inst.set ("filter2.on", 1.0f);
+    r.inst.set ("filter1.model", 2.0f);
+    r.inst.set ("filter1.cutoff", 2000.0f);
+    r.inst.set ("filter2.model", 3.0f);
+    r.inst.set ("filter2.cutoff", 6000.0f);
+    r.refresh();
+
+    // Tap F1+F2 in instances selector
+    const ui::Rect selR = r.ui.full().instances.rect();
+    r.tap (selR.x + selR.w * 5 / 6, selR.y + selR.h / 2);
+    r.refresh();
+    check (r.ui.isDual(), "switched to dual F1+F2");
+
+    // Check display component drawing has exactly 3 curves (F1, F2, F1+F2)
+    {
+        auto data = std::make_unique<gpu::SceneData>();
+        std::memset (data.get(), 0, sizeof (gpu::SceneData));
+        gpu::SceneBuilder sb (*data);
+        sb.begin (gpu::kKindPlay, 0, 1280, 800);
+        r.ui.full().display.draw (sb);
+
+        int numCurves = 0;
+        for (uint32_t i = 0; i < data->numOps; ++i)
+            if (data->ops[i].op == gpu::kOpCurve)
+                ++numCurves;
+
+        check (numCurves == 3, "F1+F2 display scene has exactly three curves (F1, F2 and F1+F2 resultant): found " + std::to_string (numCurves));
+    }
+
+    // Check full page scene has exactly 3 response curves
+    {
+        auto data = std::make_unique<gpu::SceneData>();
+        std::memset (data.get(), 0, sizeof (gpu::SceneData));
+        gpu::SceneBuilder sb (*data);
+        sb.begin (gpu::kKindPlay, 0, 1280, 800);
+        r.ui.draw (sb);
+
+        int numCurves = 0;
+        for (uint32_t i = 0; i < data->numOps; ++i)
+            if (data->ops[i].op == gpu::kOpCurve && data->ops[i].f[1] > 2.0f)
+                ++numCurves;
+
+        check (numCurves == 3, "F1+F2 page scene has exactly three filter curves: found " + std::to_string (numCurves));
+    }
+}
+
+void testSerialAndParallelGiveDifferentResultingCurves()
+{
+    Rig r;
+    r.inst.set ("filter1.on", 1.0f);
+    r.inst.set ("filter2.on", 1.0f);
+    r.inst.set ("filter1.model", 2.0f);
+    r.inst.set ("filter1.cutoff", 1000.0f);
+    r.inst.set ("filter1.resonance", 40.0f);
+    r.inst.set ("filter2.model", 3.0f);
+    r.inst.set ("filter2.cutoff", 4000.0f);
+    r.inst.set ("filter2.resonance", 40.0f);
+
+    // Switch to dual
+    const ui::Rect selR = r.ui.full().instances.rect();
+    r.tap (selR.x + selR.w * 5 / 6, selR.y + selR.h / 2);
+
+    // Parallel routing
+    r.inst.set ("filter.routing", 0.0f);
+    r.refresh();
+    const float* parRes = r.ui.full().display.state.curveResult;
+    check (parRes != nullptr, "parallel curveResult is valid");
+    std::vector<float> parCurve (parRes, parRes + CurveSource::kPoints);
+
+    // Serial routing
+    r.inst.set ("filter.routing", 1.0f);
+    r.refresh();
+    const float* serRes = r.ui.full().display.state.curveResult;
+    check (serRes != nullptr, "serial curveResult is valid");
+
+    float maxDiff = 0.0f;
+    for (int i = 0; i < CurveSource::kPoints; ++i)
+        maxDiff = std::max (maxDiff, std::fabs (parCurve[static_cast<size_t> (i)] - serRes[i]));
+
+    check (maxDiff > 3.0f, "serial and parallel give different resulting curves for the same two filters (max diff " + std::to_string (maxDiff) + " dB)");
+}
+
+void testResultingCurveEqualsSingleFilterWhenOtherOff()
+{
+    Rig r;
+    // Switch to dual F1+F2
+    const ui::Rect selR = r.ui.full().instances.rect();
+    r.tap (selR.x + selR.w * 5 / 6, selR.y + selR.h / 2);
+
+    r.inst.set ("filter1.model", 2.0f);
+    r.inst.set ("filter1.cutoff", 1500.0f);
+    r.inst.set ("filter1.resonance", 50.0f);
+    r.inst.set ("filter2.model", 3.0f);
+    r.inst.set ("filter2.cutoff", 5000.0f);
+    r.inst.set ("filter2.resonance", 60.0f);
+
+    for (int routing = 0; routing <= 1; ++routing)
+    {
+        const std::string rName = routing == 0 ? "parallel" : "serial";
+        r.inst.set ("filter.routing", static_cast<float> (routing));
+
+        // Case A: F1 ON, F2 OFF
+        r.inst.set ("filter1.on", 1.0f);
+        r.inst.set ("filter2.on", 0.0f);
+        r.refresh();
+        const float* resA = r.ui.full().display.state.curveResult;
+        const float* c1 = r.ui.full().display.state.curve1;
+        check (resA != nullptr && c1 != nullptr, "curves present for F1 ON / F2 OFF (" + rName + ")");
+        float diffA = 0.0f;
+        for (int i = 0; i < CurveSource::kPoints; ++i)
+            diffA = std::max (diffA, std::fabs (resA[i] - c1[i]));
+        check (diffA < 1.0e-5f, "resulting curve equals filter 1 curve when filter 2 is off (" + rName + ", diff " + std::to_string (diffA) + ")");
+
+        // Case B: F1 OFF, F2 ON
+        r.inst.set ("filter1.on", 0.0f);
+        r.inst.set ("filter2.on", 1.0f);
+        r.refresh();
+        const float* resB = r.ui.full().display.state.curveResult;
+        const float* c2 = r.ui.full().display.state.curve2;
+        check (resB != nullptr && c2 != nullptr, "curves present for F1 OFF / F2 ON (" + rName + ")");
+        float diffB = 0.0f;
+        for (int i = 0; i < CurveSource::kPoints; ++i)
+            diffB = std::max (diffB, std::fabs (resB[i] - c2[i]));
+        check (diffB < 1.0e-5f, "resulting curve equals filter 2 curve when filter 1 is off (" + rName + ", diff " + std::to_string (diffB) + ")");
+    }
+}
+
+void testDualHandlesOnCurvesAndDraggable()
+{
+    Rig r;
+    r.inst.set ("filter1.on", 1.0f);
+    r.inst.set ("filter2.on", 1.0f);
+    r.inst.set ("filter1.cutoff", 800.0f);
+    r.inst.set ("filter1.resonance", 30.0f);
+    r.inst.set ("filter2.cutoff", 6000.0f);
+    r.inst.set ("filter2.resonance", 45.0f);
+
+    // Switch to dual
+    const ui::Rect selR = r.ui.full().instances.rect();
+    r.tap (selR.x + selR.w * 5 / 6, selR.y + selR.h / 2);
+    r.refresh();
+
+    // Verify handle points lie on the curves
+    float hx1 = 0.0f, hy1 = 0.0f, hx2 = 0.0f, hy2 = 0.0f;
+    r.ui.full().display.handlePointFor (1, hx1, hy1);
+    r.ui.full().display.handlePointFor (2, hx2, hy2);
+    check (hx1 > 0.0f && hy1 > 0.0f, "handle 1 position is valid");
+    check (hx2 > hx1 && hy2 > 0.0f, "handle 2 position is valid and to the right of handle 1");
+
+    // Drag near handle 2 -> should move filter 2 cutoff, filter 1 remains unchanged
+    const float cut1Before = r.inst.get ("filter1.cutoff");
+    r.drag (static_cast<int> (hx2), static_cast<int> (hy2), static_cast<int> (hx2 - 60), static_cast<int> (hy2));
+    check (r.inst.get ("filter2.cutoff") < 5500.0f, "dragging handle 2 decreases filter 2 cutoff (" + std::to_string (r.inst.get ("filter2.cutoff")) + " Hz)");
+    check (std::fabs (r.inst.get ("filter1.cutoff") - cut1Before) < 1.0f, "dragging handle 2 does not alter filter 1 cutoff");
+
+    // Drag near handle 1 -> should move filter 1 cutoff
+    r.ui.full().display.handlePointFor (1, hx1, hy1);
+    r.drag (static_cast<int> (hx1), static_cast<int> (hy1), static_cast<int> (hx1 + 60), static_cast<int> (hy1));
+    check (r.inst.get ("filter1.cutoff") > 1000.0f, "dragging handle 1 increases filter 1 cutoff (" + std::to_string (r.inst.get ("filter1.cutoff")) + " Hz)");
+}
+
+void testDisabledControlDimming()
+{
+    Rig r;
+    // When model is Analog (model 0, not Comb), COMB knob must be disabled and dim
+    r.inst.set ("filter1.model", 0.0f);
+    r.refresh();
+    check (! r.ui.full().combOffset.enabled(), "COMB knob is disabled for Analog model");
+
+    // When model is Comb (model 6), COMB knob is enabled
+    r.inst.set ("filter1.model", 6.0f);
+    r.refresh();
+    check (r.ui.full().combOffset.enabled(), "COMB knob is enabled for Comb model");
+    check (! r.ui.full().clean.enabled(), "CLEAN mode is disabled for Comb model");
+
+    // When model is Formant (model 5), VAR and CLEAN are disabled
+    r.inst.set ("filter1.model", 5.0f);
+    r.refresh();
+    check (! r.ui.full().var.enabled(), "VAR knob is disabled for Formant model");
+    check (! r.ui.full().clean.enabled(), "CLEAN mode is disabled for Formant model");
+}
+
 } // namespace
 
 int main()
@@ -599,6 +785,11 @@ int main()
     testDragShowsValues();
     testRealCurveAndLiveTargets();
     testDrawingAndSceneOps();
+    testDualSceneHasThreeCurves();
+    testSerialAndParallelGiveDifferentResultingCurves();
+    testResultingCurveEqualsSingleFilterWhenOtherOff();
+    testDualHandlesOnCurvesAndDraggable();
+    testDisabledControlDimming();
 
     std::printf (g_fails ? "filter_ui_host: FAILED (%d)\n" : "filter_ui_host: OK\n", g_fails);
     return g_fails ? 1 : 0;

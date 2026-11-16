@@ -44,6 +44,8 @@ void renderAll (const std::string& dir)
     }
     {   // F2 a band pass and the two together in parallel and in series
         Rig r;
+        r.inst.set ("filter1.on", 1.0f);
+        r.inst.set ("filter2.on", 1.0f);
         r.inst.set ("filter2.model", 8.0f); r.inst.set ("filter2.cutoff", 900.0f); r.inst.set ("filter2.resonance", 35.0f); r.inst.set ("filter2.style", 3.0f);
         r.inst.set ("filter1.model", 2.0f); r.inst.set ("filter1.cutoff", 4200.0f); r.inst.set ("filter1.resonance", 30.0f);
         r.refresh (2);
