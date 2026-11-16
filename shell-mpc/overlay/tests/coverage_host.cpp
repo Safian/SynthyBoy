@@ -710,7 +710,10 @@ int main()
         for (int i = 0; i < count(); ++i)
             all.params.insert (i);
         for (const Module& m : mods)
+        {
             all.controls.insert (m.controls.begin(), m.controls.end());
+            all.controls.insert (m.disabled.begin(), m.disabled.end());   // a control drawn disabled is on a page
+        }
         for (int i = 0; i < count(); ++i)
         {
             const char* k = tbl()[i].key;
@@ -820,7 +823,7 @@ void initKnownGaps()
         "splitter_lmh.freq_high", "splitter_lmh.low_bypass", "splitter_lmh.mid_bypass", "splitter_lmh.high_bypass", "splitter_lmh.level", "splitter_ms.mid_bypass",
         "splitter_ms.side_bypass", "splitter_ms.level", "oscN.remap.on", "oscN.remap.slot", "oscN.remap.rise", "oscN.remap.fall", "oscN.pitch_mode",
         "oscN.pitch_bend_track", "oscN.fixed_pitch", "oscN.transpose_snap", "oscN.unison.blend_shape", "oscN.unison.stack_repeat", "oscN.phase_legato",
-        "oscN.phase_memory", "quality.oversample_4x", "quality.no_smoothing", "oscN.env1", "oscN.ratio_src", "oscN.smooth_interp", "oscN.sample.slice",
+        "quality.oversample_4x", "quality.no_smoothing", "oscN.env1", "oscN.ratio_src", "oscN.smooth_interp", "oscN.sample.slice",
         "oscN.gran.density_mode", "oscN.gran.density_sync", "oscN.gran.density_grains", "oscN.gran.length_mode", "oscN.gran.length_sync", "oscN.gran.length_percent",
         "oscN.gran.jump_start", "oscN.gran.max_grains", "oscN.gran.scan_keytrack", "oscN.gran.reverse_grains", "oscN.gran.rand_warp", "oscN.gran.rand_warp2",
         "oscN.gran.spawn_pattern", "oscN.gran.y_axis", "oscN.gran.xy_y", "oscN.spec.freq_lo", "oscN.spec.freq_hi", "oscN.spec.lohi_smooth", "oscN.spec.lohi_post_warp",
