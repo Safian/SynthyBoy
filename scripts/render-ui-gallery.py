@@ -86,16 +86,16 @@ def find_or_build_host(repo_root, custom_bin=None, build_dir=None):
     raise RuntimeError("Could not find or build ui_gallery_host binary.")
 
 
-def parse_page_and_state(filename, known_views):
+def parse_page_and_state(filename, known_views, states):
     stem = Path(filename).stem
     # Filename format: <state>_<view_or_page>.png
-    # Find matching known view or determine state
+    # Find the longest matching state name
     state = "Init"
     rest = stem
-    for prefix in ["Init_", "scream_filter_bass_", "tri_band_split_texture_", "aux_keyscale_pluck_"]:
-        if stem.startswith(prefix):
-            state = prefix[:-1]
-            rest = stem[len(prefix):]
+    for s in sorted(states, key=len, reverse=True):
+        if stem.startswith(s + "_"):
+            state = s
+            rest = stem[len(s) + 1:]
             break
     else:
         # Generic prefix up to first underscore before known view
@@ -275,6 +275,8 @@ def main():
     parser.add_argument("--presets", nargs="*", default=[], help="Presets to render (.sbpreset files)")
     parser.add_argument("--host-bin", default="", help="Path to ui_gallery_host binary")
     parser.add_argument("--build-dir", default="", help="Build directory")
+    parser.add_argument("--list", action="store_true", help="Print STATE\\tPAGE\\tFILE lines (sorted by state, then page)")
+    parser.add_argument("--only", default="", help="Comma-separated list of page-name beginnings to include in --list and contact sheet")
     args = parser.parse_args()
 
     repo_root = find_repo_root()
@@ -310,6 +312,9 @@ def main():
             if p_path.is_file():
                 preset_paths.append(str(p_path))
 
+    # Build states list from preset stems
+    states = ["Init"] + [Path(p).stem for p in preset_paths]
+
     # Run ui_gallery_host
     cmd = [str(host_bin), "--out", str(out_dir)]
     if preset_paths:
@@ -328,20 +333,38 @@ def main():
 
     images_info = []
     for img in png_files:
-        st, title, match_v = parse_page_and_state(img.name, views)
+        st, title, match_v = parse_page_and_state(img.name, views, states)
+        # Extract raw page name from filename for --list and --only
+        stem = Path(img.name).stem
+        page_name = stem[len(st) + 1:] if stem.startswith(st + "_") else stem
         images_info.append({
             "path": img,
             "rel_path": img.name,
             "state": st,
             "page_title": title,
+            "page_name": page_name,
             "view": match_v,
         })
 
+    # Apply --only filter
+    filtered_info = images_info
+    if args.only:
+        prefixes = [p for p in args.only.split(",") if p]
+        if prefixes:
+            filtered_info = [info for info in images_info
+                             if any(info["page_name"].startswith(pfx) for pfx in prefixes)]
+
+    # --list output
+    if args.list:
+        sorted_rows = sorted(filtered_info, key=lambda i: (i["state"], i["page_name"]))
+        for info in sorted_rows:
+            print(f"{info['state']}\t{info['page_name']}\t{info['rel_path']}")
+
     # Generate index.html contact sheet
-    index_file = generate_contact_sheet(out_dir, images_info)
+    index_file = generate_contact_sheet(out_dir, filtered_info)
     print(f"Generated contact sheet: {index_file}")
 
-    # Check views coverage
+    # Check views coverage (against all files, not filtered)
     missing_views = []
     for v in views:
         v_name = v["name"]
