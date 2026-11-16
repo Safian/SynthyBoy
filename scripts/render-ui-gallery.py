@@ -38,7 +38,26 @@ def load_layout_views(repo_root):
     return data.get("views", [])
 
 
-def find_or_build_host(repo_root, custom_bin=None, build_dir=None):
+def host_binary_in(bdir):
+    for sub in ["shell-mpc", ""]:
+        bin_path = Path(bdir) / sub / "ui_gallery_host"
+        if bin_path.is_file() and os.access(bin_path, os.X_OK):
+            return bin_path
+    return None
+
+
+def run_build(bdir):
+    """The build step of a configured build directory: the ui_gallery_host target (an up to date binary costs one no-op ninja run). Returns the exit code."""
+    print(f"Building ui_gallery_host in {bdir}...")
+    return subprocess.run(["cmake", "--build", str(bdir), "--target", "ui_gallery_host", "-j4"]).returncode
+
+
+def find_or_build_host(repo_root, custom_bin=None, build_dir=None, build=None):
+    """The ui_gallery_host to run. A binary named with --host-bin is used as it is. Otherwise, when a build directory with a CMake cache is known (--build-dir, or one of the usual
+    names under the repository), its target is ALWAYS built first, so the pictures are never those of a binary older than the sources (an existing binary was used without a rebuild
+    before: stale pictures after a merge); a failing build is an error, never a silent fall back to the old binary. Without any configured directory an existing binary is used,
+    else one is configured and built under build/. `build` is the build step (a function of the directory returning the exit code); tests pass a fake one."""
+    build = build or run_build
     if custom_bin and os.path.isfile(custom_bin) and os.access(custom_bin, os.X_OK):
         return Path(custom_bin)
 
@@ -52,22 +71,22 @@ def find_or_build_host(repo_root, custom_bin=None, build_dir=None):
         repo_root / "build-native",
     ])
 
-    for bdir in candidate_dirs:
-        for sub in ["shell-mpc", ""]:
-            bin_path = bdir / sub / "ui_gallery_host"
-            if bin_path.is_file() and os.access(bin_path, os.X_OK):
-                return bin_path
+    configured = [d for d in candidate_dirs if (d / "CMakeCache.txt").is_file()]
+    if build_dir and Path(build_dir) in configured:
+        configured = [Path(build_dir)]   # the directory the caller named: only that one
+    for bdir in configured:
+        rc = build(bdir)
+        if rc != 0:
+            raise RuntimeError(f"The build of ui_gallery_host in {bdir} failed (exit code {rc}); not using a possibly stale binary.")
+        found = host_binary_in(bdir)
+        if found:
+            return found
+        raise RuntimeError(f"The build in {bdir} succeeded but there is no ui_gallery_host binary in it (is SYNTHYBOY_BUILD_MPC_SHELL on?).")
 
-    # Attempt to build via cmake if a build directory with CMakeCache.txt exists
     for bdir in candidate_dirs:
-        if (bdir / "CMakeCache.txt").is_file():
-            print(f"Building ui_gallery_host in {bdir}...")
-            res = subprocess.run(["cmake", "--build", str(bdir), "--target", "ui_gallery_host", "-j4"])
-            if res.returncode == 0:
-                for sub in ["shell-mpc", ""]:
-                    bin_path = bdir / sub / "ui_gallery_host"
-                    if bin_path.is_file() and os.access(bin_path, os.X_OK):
-                        return bin_path
+        found = host_binary_in(bdir)
+        if found:
+            return found
 
     # If no configured build directory exists, configure and build under repo_root / "build"
     default_build = repo_root / "build"
@@ -78,10 +97,9 @@ def find_or_build_host(repo_root, custom_bin=None, build_dir=None):
         "-DCMAKE_BUILD_TYPE=Release", "-DSYNTHYBOY_BUILD_MPC_SHELL=ON"
     ], check=True)
     subprocess.run(["cmake", "--build", str(default_build), "--target", "ui_gallery_host", "-j4"], check=True)
-    for sub in ["shell-mpc", ""]:
-        bin_path = default_build / sub / "ui_gallery_host"
-        if bin_path.is_file() and os.access(bin_path, os.X_OK):
-            return bin_path
+    found = host_binary_in(default_build)
+    if found:
+        return found
 
     raise RuntimeError("Could not find or build ui_gallery_host binary.")
 

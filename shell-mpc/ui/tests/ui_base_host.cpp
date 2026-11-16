@@ -443,7 +443,7 @@ void testKnobDrawing()
         b2.state.add (1, "LFO 1", 0.4); b2.state.selectedSource = 1;
         Scene s1 (200, 150, kBackgroundRgba), s2 (200, 150, kBackgroundRgba);
         a2.draw (s1.builder()); b2.draw (s2.builder());
-        check (render (s1).px != render (s2).px && colourNear (render (s2), 5, 5, 2, theme::sourceColour ("LFO 1"), 6), nm + ": the modulation tab at the top left");
+        check (render (s1).px != render (s2).px && colourNear (render (s2), static_cast<float> (b2.geom().tabBox.x + 3), static_cast<float> (b2.geom().tabBox.y + 9), 2, theme::sourceColour ("LFO 1"), 6) && ! b2.geom().tabBox.empty() && b2.geom().tabBox.y >= b2.geom().labelBox.y - 2, nm + ": the modulation tab sits in the label row (right of the name, not over the dial)");
         b2.state = a2.state; b2.state.bipolar = true;
         Scene s3 (200, 150, kBackgroundRgba);
         b2.draw (s3.builder());
@@ -681,7 +681,7 @@ void testModulation()
         return k;
     };
     auto pic = [] (const Knob& k) { Scene s (160, 120, kBackgroundRgba); k.draw (s.builder()); return render (s); };
-    const Rect t = tabRect ({ 0, 0, 160, 120 }, "LFO 2");
+    const Rect t = knobWith (m, 0.5)->geom().tabBox;   // the chip lives in the label row, right of the name
     const float tx = static_cast<float> (t.x + 3), ty = static_cast<float> (t.y + 9);   // inside the chip, left of its text
     {
         auto k = knobWith (none, 0.5);
@@ -721,6 +721,19 @@ void testModulation()
         k->draw (s2.builder());
         check (s1.numOps() == s2.numOps() + 0 || s1.numOps() >= s2.numOps(), "knob arc: the bypassed source draws no arc op");
     }
+    // S4: the chip never covers the dial (the arc, the handle): at every knob size it lies below the dial's circle, right of the name, inside the rectangle
+    for (const Size sz : { Size { 100, 84 }, Size { 110, 96 }, Size { 160, 120 }, Size { 72, 70 }, Size { 200, 200 } })
+    {
+        Knob kc ("RELEASE");
+        kc.place ({ 10, 20, sz.w, sz.h });
+        kc.state.add (1, "MAC 3", 0.5);
+        kc.state.selectedSource = 1;
+        kc.state.valueText[0] = 0;
+        const Knob::Geom g = kc.geom();
+        const std::string nm = "knob chip " + std::to_string (sz.w) + "x" + std::to_string (sz.h);
+        check (! g.tabBox.empty() && g.tabBox.y >= static_cast<int> (g.cy + g.radius + g.stroke * 0.5f) - 1 && g.tabBox.x >= g.labelBox.right() - 0 && g.tabBox.right() <= kc.rect().right() && g.tabBox.bottom() <= kc.rect().bottom(),
+               nm + ": the chip is below the dial and right of the name, inside the cell");
+    }
     // the depth gesture: only from the tab, only when the selected source is in the entries
     Knob k ("DETUNE");
     k.place ({ 50, 40, 160, 120 });
@@ -729,7 +742,8 @@ void testModulation()
     k.state.add (7, "LFO 2", 0.3);
     k.state.add (8, "ENV 1", -0.2);
     k.state.selectedSource = 7;
-    const int tabX = 55, tabY = 46, bodyX = 130, bodyY = 100;
+    const Rect tabHitR = k.tabHit();
+    const int tabX = tabHitR.x + tabHitR.w / 2, tabY = tabHitR.y + tabHitR.h / 2, bodyX = 130, bodyY = 100;
     Change c = k.touchDown (tabX, tabY, 0.0);
     c = k.touchMove (tabX, tabY - 20);
     check (c.kind == ChangeKind::Depth && c.id == 3 && c.index == 7 && near (c.value, 0.5 /* 0.3 + 20/100 */), "depth gesture: from the tab: { id 3, source 7, depth 0.3 + 0.2 }");

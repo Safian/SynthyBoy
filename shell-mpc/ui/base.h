@@ -42,13 +42,14 @@ public:
 
     /** The geometry of the dial inside the rectangle (public so that the tests can find the markers). `chip` is the rectangle the modulation chip and its depth drag are anchored to (the knob's own; the
         text column of a side knob, so that the chip lies beside the dial and not over it); `valueSize` the size of the value text. */
-    struct Geom { float cx, cy, radius, stroke, track; Rect labelBox, valueBox, chip; float labelSize, valueSize; };
+    struct Geom { float cx, cy, radius, stroke, track; Rect labelBox, valueBox, chip, tabBox; float labelSize, valueSize; bool labelLeft; };   // tabBox: the modulation chip (empty: none), in the label row right of the name; labelLeft: the name is left aligned to leave it room
     Geom geom() const noexcept
     {
         const theme::Look& T = theme::L();
         Geom g {};
         g.chip = rect_;
         g.valueSize = T.fLabel;
+        g.labelLeft = state.side;
         if (state.side)
         {
             const float d = std::max (6.0f, std::min (static_cast<float> (rect_.h - 8), 120.0f));
@@ -83,6 +84,18 @@ public:
         g.cy = static_cast<float> (rect_.y) + static_cast<float> (dialH) * 0.5f;
         g.labelBox = { rect_.x + 2, rect_.bottom() - valueH - labelH + 2, rect_.w - 4, std::max (0, labelH - 4) };
         g.valueBox = { rect_.x + 2, rect_.bottom() - valueH, rect_.w - 4, valueH };
+        if (tabState (state) != TabState::Absent && g.labelBox.h >= 14)
+        {
+            // the modulation chip lives in the label row, right of the name (a chip over the dial hid the arc and the handle): the name moves left and shrinks to what is left
+            const Rect probe = tabRect ({ 0, 0, 1000, 100 }, tabName (state));
+            const int ch = std::min (18, g.labelBox.h + 2), cw = probe.w;
+            g.tabBox = { g.labelBox.right() - cw, g.labelBox.y + (g.labelBox.h - ch) / 2, cw, ch };
+            g.chip = g.tabBox;
+            const int room = std::max (0, g.tabBox.x - 4 - g.labelBox.x);
+            g.labelBox.w = room;
+            g.labelLeft = true;
+            g.labelSize = state.label[0] != '\0' ? Pen::fitSize (state.label, static_cast<float> (room), static_cast<float> (g.labelBox.h), g.labelSize, T.fMin) : 0.0f;
+        }
         return g;
     }
     static float angleOf (double v) noexcept { return kStartAngle + static_cast<float> (std::clamp (v, 0.0, 1.0)) * kSweep; }
@@ -92,7 +105,16 @@ public:
     /** The live modulated marker is drawn when the modulated value differs from the value. */
     bool modulated() const noexcept { return std::fabs (state.modValue - state.value) > 1.0e-4; }
     TabState tab() const noexcept { return tabState (state); }
-    Rect tabHit() const noexcept { return tabHitRect (geom().chip); }
+    Rect tabHit() const noexcept
+    {
+        const Geom g = geom();
+        if (g.tabBox.empty())
+            return tabHitRect (g.chip);
+        // the chip is in the label row: the target is the chip widened to 56 pixels and grown upwards and downwards over the label and value rows (not over the dial)
+        const int w = std::max (56, g.tabBox.w), x = std::max (rect_.x, g.tabBox.right() - w);
+        const int y = std::max (rect_.y, g.tabBox.y - 8), b = std::min (rect_.bottom(), g.tabBox.bottom() + 28);
+        return { x, y, std::min (w, rect_.right() - x), std::max (0, b - y) };
+    }
 
 protected:
     void point (double v, float radiusOffset, float& x, float& y) const noexcept
@@ -143,10 +165,13 @@ protected:
         p.disc (vx, vy, std::max (2.5f, tw * 0.9f), p.c (T.text, 255));
         if (state.small)
             p.disc (cx, cy, std::max (2.0f, R * 0.18f), p.c (T.flow[2], 255));
-        p.modTab (g.chip, tab(), state.selected() ? theme::sourceColour (state.selected()->name) : T.keyline, tabName (state));
+        if (! g.tabBox.empty())
+            p.modTabBox (g.tabBox, tab(), state.selected() ? theme::sourceColour (state.selected()->name) : T.keyline, tabName (state));
+        else
+            p.modTab (g.chip, tab(), state.selected() ? theme::sourceColour (state.selected()->name) : T.keyline, tabName (state));
         if (g.labelSize > 0.0f)
         {
-            if (state.side)
+            if (g.labelLeft)
                 p.textLeft (g.labelBox, state.label, g.labelSize, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
             else
                 p.textCentered (g.labelBox, state.label, g.labelSize, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);

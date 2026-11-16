@@ -289,7 +289,7 @@ void testFullScreen()
         ui::Component* leaves[160];
         const int nl = r.ui.full().collectLeaves (leaves, 0, 160);
         auto has = [&] (const ui::Component* c) { for (int i = 0; i < nl; ++i) if (leaves[i] == c) return true; return false; };
-        check (! has (&r.ui.full().shape) && has (&r.ui.full().sync) && has (&r.ui.full().monoQ) && ! has (&r.ui.full().monoTop), "no SHAPE stepper, SYNC stepper in Timing, MONO in Motion");
+        check (! has (&r.ui.full().shape) && ! has (&r.ui.full().sync) && has (&r.ui.full().monoQ) && ! has (&r.ui.full().monoTop) && r.ui.full().groups[1].member (0) == &r.ui.full().syncSwitch, "no SHAPE stepper, no SYNC stepper (the HZ / BPM / KEY row is the Timing group's Q1), MONO in Motion");
     }
     r.tapC (r.ui.full().swing);
     check (r.ui.activeQ() == 2 && r.inst.q[0] == paramIdx ("lfo1.direction") && r.inst.q[1] == paramIdx ("lfo1.swing") && r.inst.q[2] == paramIdx ("lfo1.stereo") && r.inst.q[3] == paramIdx ("lfo1.mono"),

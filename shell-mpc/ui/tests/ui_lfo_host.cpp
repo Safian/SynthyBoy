@@ -262,9 +262,9 @@ void testViews()
             check (f.groups[0].member (0) == &f.picker && f.groups[0].member (1) == &f.rate &&
                    f.groups[0].member (2) == &f.rise && f.groups[0].member (3) == &f.smoothTime,
                    nm + ": group 0 is picker (Q1), rate, rise, smooth");
-            check (f.groups[1].member (0) == &f.sync && f.groups[1].member (1) == &f.mode &&
+            check (f.groups[1].member (0) == &f.syncSwitch && f.groups[1].member (1) == &f.mode &&
                    f.groups[1].member (2) == &f.phase && f.groups[1].member (3) == &f.delay,
-                   nm + ": group 1 is sync, mode, phase, delay");
+                   nm + ": group 1 is the HZ / BPM / KEY row, mode, phase, delay (no second SYNC stepper)");
             check (f.groups[2].member (0) == &f.direction && f.groups[2].member (1) == &f.swing &&
                    f.groups[2].member (2) == &f.stereo && f.groups[2].member (3) == &f.monoQ,
                    nm + ": group 2 is direction, swing, stereo, mono");

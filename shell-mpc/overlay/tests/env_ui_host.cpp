@@ -238,6 +238,8 @@ void testGraphHandlesWriteParameters()
     Rig r;
     r.openFull();
     ui::EnvGraph& g = r.ui.full().graph;
+    r.inst.set ("env1.attack", 900.0f); r.inst.set ("env1.decay", 900.0f); r.inst.set ("env1.release", 900.0f);   // stages wide enough for their curve handles (a stage under 30 pixels has none)
+    r.refresh();
     // the sizes of the touch targets
     ui::Rect t[8];
     const int n = g.touchTargets (t, 8);

@@ -101,7 +101,7 @@ protected:
 class LfoFullScreen : public Composite
 {
 public:
-    static constexpr int kMaxGroups = 6, kBandH = 308, kBandRandomH = 196, kTopH = 64, kPickerCols = 5;   // kBandRandomH: the bottom band of a random LFO is lower (the display takes the room)
+    static constexpr int kMaxGroups = 6, kBandH = 290, kBandRandomH = 196, kTopH = 64, kPickerCols = 5;   // kBandRandomH: the bottom band of a random LFO is lower (the display takes the room)
     MenuButton close { "CLOSE", MenuButton::Icon::None };
     InstanceBar bar;
     SyncSwitch syncSwitch;
@@ -160,7 +160,7 @@ public:
         show (rise, ! random); show (smoothTime, ! random); show (style, random);
         show (phase, ! random); show (delay, ! random); show (direction, ! random); show (swing, ! random); show (stereo, ! random); show (stereoToggle, random);
         show (mode, true);
-        show (shape, false); show (sync, true); show (monoQ, ! random);
+        show (shape, false); show (sync, false); show (monoQ, ! random);   // the SYNC stepper is gone: the HZ / BPM / KEY row of the top bar IS the sync control (and the Q member), a second one was the same control twice
         for (QGroup& g : groups)
         {
             g.setFrameRect ({});
@@ -176,7 +176,8 @@ public:
             r.set (0, &picker); r.set (1, &rate); r.set (2, &rise); r.set (3, &smoothTime);
             r.setFrameless (true);   // the shape grid (Q 1) and the RATE block lie apart: one quad is marked by its four chips and the Q colour, not by a frame around everything between them
             QGroup& t = next ("Timing");
-            t.set (0, &sync); t.set (1, &mode); t.set (2, &phase); t.set (3, &delay);
+            t.set (0, &syncSwitch); t.set (1, &mode); t.set (2, &phase); t.set (3, &delay);
+            t.setFrameless (true);   // the HZ / BPM / KEY row is in the top bar, apart from the block: marked by its chips
             QGroup& mo = next ("Motion");
             mo.set (0, &direction); mo.set (1, &swing); mo.set (2, &stereo); mo.set (3, &monoQ);
             keyGroup_ = nGroups_;
@@ -189,7 +190,8 @@ public:
         else
         {
             QGroup& r = next ("Random");
-            r.set (0, &style); r.set (1, &rate); r.set (2, &sync); r.set (3, &stereoToggle);
+            r.set (0, &style); r.set (1, &rate); r.set (2, &syncSwitch); r.set (3, &stereoToggle);
+            r.setFrameless (true);   // the HZ / BPM / KEY row is in the top bar, apart from the block
             QGroup& t = next ("Trigger");
             t.set (0, &mode);
             keyGroup_ = nGroups_;
@@ -279,7 +281,7 @@ protected:
     void layout() override
     {
         const int W = rect_.w, m = 8;
-        const Rect top { rect_.x + m, rect_.y + 2, W - 2 * m, 56 };
+        const Rect top { rect_.x + m, rect_.y + 2 + kQLane, W - 2 * m, 56 };   // the lane above holds the Q chip of the HZ / BPM / KEY row
         Rect r[5];
         const int fixed[5] = { pageMode_ ? 0 : 84, (InstanceBar::kLfoCells + InstanceBar::kRndCells) * InstanceBar::kCellW + kGap, 3 * 56 + 2 * 72 + 2 * kGap, 0, 0 }, weight[5] = { 0, 0, 0, 0, 1 };
         layoutRow (top, fixed, weight, 5, kGap, r);
@@ -287,6 +289,7 @@ protected:
         bar.place ({ r[1].x, top.y, r[1].w, 56 });
         syncSwitch.place ({ r[2].x, top.y, r[2].w, 56 });
         monoTop.place ({});
+        sync.place ({});   // gone from the page (see configure)
         targets.place ({ r[4].x, top.y, std::min (r[4].w, 200), 56 });
         const int bandH = random_ ? kBandRandomH : kBandH;
         const int midY = top.bottom() + 15, bandY = rect_.bottom() - m - bandH, midH = std::max (0, bandY - m - midY);
@@ -319,7 +322,6 @@ protected:
         }
         const int pad = 6, titleH = 22, rowH = 56;
         auto inner = [&] (int i) { return Rect { blocks_[i].x + pad, blocks_[i].y + titleH + kQLane, blocks_[i].w - 2 * pad, blocks_[i].h - titleH - kQLane - pad }; };
-        auto pair = [&] (const Rect& cell, Component& a, Component& b) { const int cw = (cell.w - kGap) / 2; a.place ({ cell.x, cell.y, cw, cell.h }); b.place ({ cell.x + cw + kGap, cell.y, cell.w - cw - kGap, cell.h }); };
         auto stack2 = [&] (const Rect& cell, Component& a, Component& b)   // two fields one above the other, as tall as the block lets them be (at most 96)
         {
             const int h = std::min (96, (cell.h - kQLane) / 2);
@@ -330,7 +332,7 @@ protected:
         {
             // one size for the medium knobs of the page (RISE, SMOOTH, PHASE, DELAY, SWING, STEREO): a cell of kKnobH pixels, the dial at the left with its name and value beside it when the cell is wide enough
             // (172 px, the minimum of a side knob), over the texts when it is not (the KEY BLOCK narrows the others)
-            const int kKnobH = 122;
+            const int kKnobH = 114;
             auto medium = [&] (Knob& k, const Rect& cell) { k.state.side = cell.w >= 172; k.place (cell); };
             auto mediumPair = [&] (const Rect& cell, Knob& a, Knob& b)
             {
@@ -351,7 +353,7 @@ protected:
             {
                 const Rect in = inner (1);
                 const int topH = std::min (96, in.h - kKnobH - kQLane);
-                pair ({ in.x, in.y, in.w, topH }, sync, mode);
+                mode.place ({ in.x, in.y, in.w, topH });   // the sync is the HZ / BPM / KEY row above; MODE takes the whole width
                 mediumPair ({ in.x, in.bottom() - kKnobH, in.w, kKnobH }, phase, delay);
             }
 
@@ -377,7 +379,7 @@ protected:
             const int rw = std::min (220, in.w * 28 / 100);
             rate.place ({ in.x, in.y, rw, in.h });
             const Rect right { in.x + rw + kGap, in.y, in.w - rw - kGap, in.h };
-            pair ({ right.x, right.y, right.w, rowH }, style, sync);
+            style.place ({ right.x, right.y, right.w, rowH });
             stereoToggle.place ({ right.x, right.y + rowH + kQLane, right.w, std::min (rowH, std::max (0, right.h - rowH - kQLane)) });
             in = inner (1);
             mode.place ({ in.x, in.y + (in.h - rowH) / 2, in.w, rowH });   // the only control of the block: in the middle of it

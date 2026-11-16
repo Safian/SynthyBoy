@@ -408,7 +408,6 @@ private:
         bind (kHostPick, &full_.hostPick, T::Toggle, rnd ? "" : "host");
         bind (kEdit, &full_.edit, T::Inert, "");
         bind (kStyle, &full_.style, T::Stepper, rnd ? "style" : "");
-        bind (kSync, &full_.sync, T::Stepper, "sync");
         bind (kRate, &full_.rate.rate, T::Knob, "rate");
         bind (kDivision, &full_.rate.division, T::Stepper, "division");
         bind (kRise, &full_.rise, T::Knob, rnd ? "" : "fade_in");
@@ -1390,6 +1389,8 @@ private:
     {
         while (m != nullptr)
         {
+            if (m == &full_.syncSwitch || m == &full_.syncSwitch.mode)
+                return paramOf ("sync");   // the HZ / BPM / KEY row is the member: a knob step moves the selection (the sync values: Free, Tempo, dotted, triplet, Key follow)
             for (const Item& it : items_)
                 if (it.c == m && it.type != T::Inert)
                     return it.param;

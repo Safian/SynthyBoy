@@ -41,6 +41,7 @@ void testHandlesAndHitTest()
     EnvGraph g;
     g.place ({ 20, 20, 800, 340 });
     g.state.shape.t[envgraph::Hold] = 0.2;
+    g.state.shape.t[envgraph::Attack] = 0.5;   // an attack with room for its curve handle (a stage under kCurveRoom pixels has none)
     double px[envgraph::kNumHandles], py[envgraph::kNumHandles];
     const EnvGraph::Geom geo = g.geom();
     bool inside = true;
@@ -71,7 +72,7 @@ void testDragFollowsTheFinger()
     Touch tc;
     double hx, hy;
     g.handlePoint (envgraph::Attack, hx, hy);
-    const int x0 = static_cast<int> (std::lround (hx)), y0 = static_cast<int> (std::lround (hy));
+    const int x0 = static_cast<int> (hx), y0 = static_cast<int> (std::lround (hy));   // left of the joint of attack and the zero-length hold: the attack (a touch right of it takes the hold)
     check (! tc.down (g, x0, y0), "touch down alone gives no change");
     Change c;
     for (int i = 1; i <= 12; ++i)
@@ -120,7 +121,7 @@ void testSerumEnvelopeGraph()
         for (int i = 0; i < 5; ++i)
             g.state.shape.t[i] = 0.0;
         const EnvGraph::Geom geo = g.geom();
-        check (geo.zoomMs == 100.0, "all-zero times: stepped auto-zoom is 100 ms");
+        check (geo.window == 1000.0 && geo.locked, "all-zero times: locked, the picture stands for the 1 s an empty envelope shows");
         check (geo.x[1] == geo.x[0] && geo.x[2] == geo.x[1] && geo.x[3] == geo.x[2] && geo.x[4] == geo.x[3],
                "all-zero times: delay, attack, hold, decay all collapsed to 0 px width");
         check (geo.x[6] == geo.x[5], "all-zero times: release collapsed to 0 px width");
@@ -151,9 +152,9 @@ void testSerumEnvelopeGraph()
         const EnvGraph::Geom geo300 = g300.geom();
         const double w300 = geo300.x[2] - geo300.x[1];
 
-        check (geo5.zoomMs == 100.0, "attack 5 ms: auto-zoom is 100 ms");
-        check (geo300.zoomMs == 500.0, "attack 300 ms: stepped auto-zoom steps to 500 ms");
-        check (w300 > w5 * 5.0, "attack 300 ms (" + std::to_string (w300) + " px) is much wider than 5 ms (" + std::to_string (w5) + " px) on time scale");
+        check (std::fabs (geo5.window - 5.0) < 1.0e-6, "attack 5 ms: locked, the plot stands for exactly the 5 ms the envelope needs");
+        check (std::fabs (geo300.window - 300.0) < 1.0e-6 && std::fabs (geo300.x[6] - (g300.plot().right())) < 1.0e-6, "attack 300 ms: the window is 300 ms and the envelope ends at the right edge of the plot");
+        check (w300 >= w5 - 1.0e-6 && std::fabs (w300 - (g300.plot().w - geo300.sustainGap)) < 1.0e-6, "attack 300 ms (" + std::to_string (w300) + " px) takes the whole width, 5 ms (" + std::to_string (w5) + " px) too: locked fit, the ruler tells the difference");
     }
 
     // 3. Delay 500 ms
@@ -164,8 +165,8 @@ void testSerumEnvelopeGraph()
         g.state.shape.t[0] = envgraph::normFromTimeMs (0, 500.0);
         const EnvGraph::Geom geo = g.geom();
         const double wDelay = geo.x[1] - geo.x[0];
-        check (geo.zoomMs == 500.0, "delay 500 ms: auto-zoom is 500 ms");
-        check (wDelay > 50.0, "delay 500 ms takes time-proportional width (" + std::to_string (wDelay) + " px)");
+        check (std::fabs (geo.window - 500.0) < 1.0e-6, "delay 500 ms: the window is 500 ms");
+        check (wDelay > 50.0, "delay 500 ms takes width (" + std::to_string (wDelay) + " px)");
     }
 
     // 4. Hold 200 ms
@@ -177,8 +178,8 @@ void testSerumEnvelopeGraph()
         g.state.shape.t[2] = envgraph::normFromTimeMs (2, 200.0);
         const EnvGraph::Geom geo = g.geom();
         const double wHold = geo.x[3] - geo.x[2];
-        check (geo.zoomMs == 500.0, "hold 200 ms + attack 100 ms: auto-zoom is 500 ms");
-        check (wHold > 40.0, "hold 200 ms takes width between attack and decay (" + std::to_string (wHold) + " px)");
+        check (std::fabs (geo.window - 300.0) < 1.0e-6, "hold 200 ms + attack 100 ms: the window is 300 ms");
+        check (std::fabs (wHold / (geo.x[3] - geo.x[1]) - 2.0 / 3.0) < 1.0e-6, "hold 200 ms next to attack 100 ms takes two thirds of their width (" + std::to_string (wHold) + " px)");
     }
 
     // 5. Sustain 0 %, 50 %, 100 %
@@ -207,9 +208,135 @@ void testSerumEnvelopeGraph()
         const EnvGraph::Geom geo = g.geom();
         const double wAttack = geo.x[2] - geo.x[1];
         const double wRelease = geo.x[6] - geo.x[5];
-        check (geo.zoomMs == 20000.0, "release 10 s next to attack 1 ms: auto-zoom is 20000 ms (20 s)");
-        check (wAttack >= 6.0, "attack 1 ms stays visible at minimum 6 px (" + std::to_string (wAttack) + " px)");
+        check (std::fabs (geo.window - 10001.0) < 1.0e-3, "release 10 s next to attack 1 ms: the window is 10.001 s");
+        check (wAttack >= envgraph::kMinStageW - 1.0e-9, "attack 1 ms stays visible at the minimum width (" + std::to_string (wAttack) + " px)");
         check (wRelease > 200.0, "release 10 s takes large proportional width (" + std::to_string (wRelease) + " px)");
+    }
+}
+
+
+void testLockedFitRulerAndZoom()
+{
+    // LOCKED fit: the envelope fills the plot whatever its times (the ruler changes), every stage with time keeps its minimum width, the sum is exact
+    for (double ms : { 3.0, 80.0, 1500.0, 9000.0 })
+    {
+        EnvGraph g;
+        g.place ({ 20, 20, 800, 340 });
+        g.state.shape.t[0] = 0.0; g.state.shape.t[2] = 0.0;
+        g.state.shape.t[1] = envgraph::normFromTimeMs (1, 2.0);   // a very short attack next to ...
+        g.state.shape.t[3] = envgraph::normFromTimeMs (3, ms);
+        g.state.shape.t[4] = envgraph::normFromTimeMs (4, ms / 3.0);
+        const EnvGraph::Geom geo = g.geom();
+        check (std::fabs (geo.x[6] - g.plot().right()) < 1.0e-6, "locked, decay " + std::to_string (static_cast<int> (ms)) + " ms: the envelope ends at the right edge of the plot");
+        check (geo.x[2] - geo.x[1] >= envgraph::kMinStageW - 1.0e-9, "locked: the 2 ms attack keeps its minimum width");
+        check (geo.cu[4] > 0.0 && std::fabs (geo.window - geo.cu[6]) < 1.0e-6, "locked: the ruler's window is the whole time");
+        // the handles of the short attack are apart and each takes a touch at its own centre
+        double ax, ay, ox, oy;
+        g.handlePoint (envgraph::Attack, ax, ay);
+        g.handlePoint (envgraph::Delay, ox, oy);
+        check (std::hypot (ax - ox, ay - oy) >= envgraph::kMinStageW - 1.0e-9 && g.handleAt (static_cast<int> (std::lround (ax)), static_cast<int> (std::lround (ay))) == envgraph::Attack, "locked: the 2 ms attack's handle is apart from the origin and touchable");
+    }
+    // the ruler: round marks, time_ruler.h, drawn under the plot (a picture with the labels differs from one without)
+    {
+        const TimeRuler r = makeTimeRuler (1500.0, 0.0f, 800.0f, 84.0f);
+        check (r.count >= 3 && r.stepMs > 0.0 && std::strcmp (r.ticks[0].label, "0") == 0, "time ruler: marks at round times from 0");
+    }
+    // UNLOCKED: the zoom decides, an envelope longer than the window runs past the right edge, its handles beyond the edge are not offered
+    {
+        EnvGraph g;
+        g.place ({ 20, 20, 800, 340 });
+        g.state.shape.t[0] = 0.0; g.state.shape.t[2] = 0.0;
+        g.state.shape.t[1] = envgraph::normFromTimeMs (1, 100.0);
+        g.state.shape.t[3] = envgraph::normFromTimeMs (3, 400.0);
+        g.state.shape.t[4] = envgraph::normFromTimeMs (4, 2000.0);
+        g.state.locked = false;
+        g.state.zoom = 1000.0;
+        const EnvGraph::Geom geo = g.geom();
+        check (std::fabs (geo.pxPerUnit - (g.plot().w - geo.sustainGap) / 1000.0) < 1.0e-9 && geo.x[6] > g.plot().right(), "unlocked: the scale is the zoom (1000 ms over the plot), the release runs past the edge");
+        Rect t[8];
+        const int n = g.touchTargets (t, 8);
+        check (n < 8, "unlocked: the handles past the right edge are not offered (" + std::to_string (n) + " targets)");
+        g.state.zoom = 4000.0;
+        check (g.touchTargets (t, 8) >= 6, "unlocked and zoomed out: the handles are back");
+    }
+    // the LOCK button: a tap toggles, unlocking keeps the picture as it is (no jump)
+    {
+        EnvGraph g;
+        g.place ({ 20, 20, 800, 340 });
+        g.state.shape.t[1] = envgraph::normFromTimeMs (1, 300.0);
+        g.state.shape.t[3] = envgraph::normFromTimeMs (3, 500.0);
+        const EnvGraph::Geom before = g.geom();
+        const Rect lk = g.lockRect();
+        check (lk.w >= 56 && lk.h >= 34, "the LOCK button is at least 56 wide");
+        Touch tc;
+        tc.down (g, lk.x + lk.w / 2, lk.y + lk.h / 2);
+        const Change c = tc.up (g, lk.x + lk.w / 2, lk.y + lk.h / 2);
+        check (c && g.edit().handle == EnvGraph::kLock && ! g.state.locked, "a tap on LOCK unlocks");
+        const EnvGraph::Geom after = g.geom();
+        bool same = true;
+        for (int k = 0; k < 7; ++k)
+            same = same && std::fabs (before.x[k] - after.x[k]) < 1.0e-6;
+        check (same, "unlocking does not move the picture");
+        // zoom by a horizontal drag along the ruler band: right = in, left = out
+        const Rect zr = g.zoomRect();
+        check (! zr.empty() && zr.h >= 24, "unlocked: there is a zoom band under the plot");
+        const double z0 = g.state.zoom;
+        Touch tz;
+        tz.down (g, zr.x + zr.w / 2, zr.y + zr.h / 2);
+        tz.move (g, zr.x + zr.w / 2 + 80, zr.y + zr.h / 2);
+        check (g.state.zoom < z0 * 0.7 && g.edit().handle == EnvGraph::kZoom, "a drag right along the ruler zooms in (" + std::to_string (z0) + " -> " + std::to_string (g.state.zoom) + ")");
+        tz.up (g, zr.x + zr.w / 2 + 80, zr.y + zr.h / 2);
+        Touch ty;
+        ty.down (g, zr.x + zr.w / 2, zr.y + zr.h / 2);
+        ty.move (g, zr.x + zr.w / 2 - 300, zr.y + zr.h / 2);
+        check (g.state.zoom > z0, "a drag left zooms out");
+        ty.up (g, zr.x + zr.w / 2 - 300, zr.y + zr.h / 2);
+        const Rect lk2 = g.lockRect();
+        Touch tl;
+        tl.down (g, lk2.x + 10, lk2.y + 10);
+        tl.up (g, lk2.x + 10, lk2.y + 10);
+        check (g.state.locked, "a second tap on LOCK locks again");
+    }
+    // locked drag: the handle's end stays under the finger although the picture refits at every step
+    {
+        EnvGraph g;
+        g.place ({ 20, 20, 800, 340 });
+        g.state.shape.t[0] = 0.0; g.state.shape.t[2] = 0.0;
+        g.state.shape.t[1] = envgraph::normFromTimeMs (1, 200.0);
+        g.state.shape.t[3] = envgraph::normFromTimeMs (3, 600.0);
+        g.state.shape.t[4] = envgraph::normFromTimeMs (4, 800.0);
+        double hx, hy;
+        g.handlePoint (envgraph::Attack, hx, hy);
+        const int x0 = static_cast<int> (std::lround (hx)), y0 = static_cast<int> (std::lround (hy));
+        Touch tc;
+        tc.down (g, x0, y0);
+        for (int i = 1; i <= 10; ++i)
+            if (tc.move (g, x0 + 8 * i, y0))
+                g.state.shape.t[1] = g.edit().t;
+        tc.up (g, x0 + 80, y0);
+        g.handlePoint (envgraph::Attack, hx, hy);
+        check (std::fabs (hx - (x0 + 80)) < 2.0 && g.state.shape.t[1] > envgraph::normFromTimeMs (1, 200.0), "locked drag of the attack handle: it is under the finger after 80 px (" + std::to_string (hx) + " vs " + std::to_string (x0 + 80) + ")");
+    }
+    // the ghost lies on the axis of the envelope in front: the same time is at the same x
+    {
+        EnvGraph g;
+        g.place ({ 20, 20, 800, 340 });
+        g.state.shape.t[1] = envgraph::normFromTimeMs (1, 400.0);
+        g.state.ghost = true;
+        g.state.ghostShape.t[1] = envgraph::normFromTimeMs (1, 200.0);
+        Scene sc (900, 400, kBackgroundRgba);
+        g.draw (sc.builder());
+        check (sc.numOps() > 10, "a graph with a ghost draws");
+    }
+    // BEATS: the axis is in beats (the ruler says beats)
+    {
+        EnvGraph g;
+        g.place ({ 20, 20, 800, 340 });
+        g.state.beats = true;
+        g.state.shape.t[1] = envgraph::normFromTime (1, 1.0, true);
+        g.state.shape.t[3] = envgraph::normFromTime (3, 2.0, true);
+        const EnvGraph::Geom geo = g.geom();
+        check (std::fabs (envgraph::stageTime (g.state.shape, 1, true) - 1.0) < 1.0e-9 && std::fabs (geo.window - (1.0 + 2.0 + envgraph::stageTime (g.state.shape, 4, true))) < 1.0e-6, "beats: the stages are in beats and the window is their sum");
     }
 }
 
@@ -235,6 +362,7 @@ void testCurveHandleFollowsTheFinger()
         EnvGraph g;
         g.place ({ 20, 20, 800, 340 });
         g.state.shape.sustain = 0.5;
+        g.state.shape.t[1] = 0.5;
         g.state.shape.curve[0] = 0.0; g.state.shape.curve[1] = 0.0; g.state.shape.curve[2] = 0.0;
         Touch tc;
         double hx, hy;
@@ -426,6 +554,7 @@ int main()
     testShapeMath();
     testHandlesAndHitTest();
     testSerumEnvelopeGraph();
+    testLockedFitRulerAndZoom();
     testDragFollowsTheFinger();
     testDecayIsTwoDimensional();
     testCurveHandleFollowsTheFinger();

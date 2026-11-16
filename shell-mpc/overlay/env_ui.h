@@ -485,8 +485,20 @@ private:
             if (sel_ != 1)
             {
                 ui::envgraph::Shape gs;
-                if (shapeOf (v, 1, false, gs, nullptr))
+                const int unitsIdx = uibind::indexOfKey ("env1.units");
+                const bool gb = unitsIdx >= 0 && v.param (unitsIdx) >= 0.5f;   // ENV 1 in beats or in ms: its own switch
+                if (shapeOf (v, 1, gb, gs, nullptr))
                 {
+                    if (gb != beats_)
+                    {
+                        // on the axis of the envelope in front: the times are converted with the tempo (a beat is 60000 / bpm ms)
+                        const double bpm = std::max (1.0, v.bpm());
+                        for (int i = 0; i < 5; ++i)
+                        {
+                            const double u = ui::envgraph::timeFromNorm (i, gs.t[i], gb);
+                            gs.t[i] = ui::envgraph::normFromTime (i, gb ? u * 60000.0 / bpm : u * bpm / 60000.0, beats_);
+                        }
+                    }
                     st.ghost = true;
                     st.ghostShape = gs;
                 }
