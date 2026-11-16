@@ -250,10 +250,21 @@ int main (int argc, char** argv)
         if (fd < 0 || ::ftruncate (fd, 6ll << 20) != 0) return 2;   // a sparse file of NUL bytes: no newline anywhere
         ::close (fd);
         ::setenv ("SYNTHYBOY_MPC_Q_FAKE_FILE", file.c_str(), 1);
+        // the first instance runs with the path pointing at nothing (the plugin reads the path once): what an instance and its display thread cost by themselves; the second runs with the big file there:
+        // it must not grow the peak any further (the file is read for 256 bytes at most, whatever its size)
+        std::remove (file.c_str());
+        ::setenv ("SYNTHYBOY_MPC_Q_FAKE_FILE", file.c_str(), 1);
+        AEffect* e0 = make();
+        if (! e0) return 2;
+        std::this_thread::sleep_for (std::chrono::milliseconds (400));
+        closeTimed (e0, 20.0);
+        const int fd2 = ::open (file.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        if (fd2 < 0 || ::ftruncate (fd2, 6ll << 20) != 0) return 2;
+        ::close (fd2);
         const long before = peakMb();
         AEffect* e = make();
         if (! e) return 2;
-        std::this_thread::sleep_for (std::chrono::milliseconds (400));   // the display thread's first ticks: it is inside getline now
+        std::this_thread::sleep_for (std::chrono::milliseconds (400));   // the display thread's first ticks: it has looked at the file now
         const double t = closeTimed (e, 20.0);
         const long grew = peakMb() - before;
         std::printf ("INFO  effClose took %s, peak memory grew by %ld MB\n", t < 0 ? "more than 20 s" : (std::to_string (t) + " s").c_str(), grew);

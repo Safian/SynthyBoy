@@ -216,7 +216,13 @@ int main (int argc, char** argv)
                && log.find ("Play selector 0") != std::string::npos, "play log: effSetProgram, effSetChunk and the parameter writes are in the log with what the plugin did");
         check (dumped && dump.rfind ("selectors ", 0) == 0 && dump.find ("\nchunk ") != std::string::npos && dump.find ("\np 3 ") != std::string::npos && ! std::ifstream (base + "-dump").good(), "play log: the dump request writes the state and the request file is gone");
         // the cap: a flood of writes ends at 512 KB with the last line saying so
-        for (int k = 0; k < 20000; ++k) e->setParameter (e, 3, (k & 1) ? 0.1f : 0.9f);
+        // (the lines go through a ring that the display thread writes out once a tick: a flood in a few milliseconds would overflow it, so the host's thread paces itself)
+        for (int round = 0; round < 14; ++round)
+        {
+            for (int k = 0; k < 1500; ++k) e->setParameter (e, 3, (k & 1) ? 0.1f : 0.9f);
+            sleepMs (150);
+        }
+        sleepMs (300);
         const std::string full = fileText (base + ".txt");
         check (full.size() > 400 * 1024 && full.size() < 600 * 1024 && full.find ("log full") != std::string::npos, "play log: the file stops growing at 512 KB (" + std::to_string (full.size()) + " bytes)");
         closeIt (e);

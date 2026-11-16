@@ -1277,7 +1277,7 @@ struct PluginInstance
     static void injectFault (const char* feature)
     {
 #if SYNTHYBOY_MPC_DEBUG_HOOKS
-        static const char* const want = std::getenv ("SYNTHYBOY_MPC_TEST_FAULT");
+        const char* const want = std::getenv ("SYNTHYBOY_MPC_TEST_FAULT");   // looked at on every tick: a test sets it after other instances ran
         if (want != nullptr && std::strcmp (want, feature) == 0)
             throw std::runtime_error (std::string ("injected fault in ") + feature);
 #else
