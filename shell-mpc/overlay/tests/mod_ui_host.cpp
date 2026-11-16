@@ -389,22 +389,29 @@ void testMatrixQLinkGroup()
     r.refresh();
 
     const synthyboy::ModSlotParams sp0 = synthyboy::modSlotParams (0);
-    check (r.inst.q[0] == sp0.amount, "Q1 targets mod01.amount");
+    check (QRouter::modeOf (r.inst.q[0]) == QRouter::kVirtual && QRouter::indexOf (r.inst.q[0]) == ModUi::kVirtualRow, "Q1 is the virtual target that steps through the rows");
     check (r.inst.q[1] == sp0.source, "Q2 targets mod01.source");
     check (r.inst.q[2] == sp0.destination, "Q3 targets mod01.destination");
-    check (QRouter::modeOf (r.inst.q[3]) == QRouter::kVirtual && QRouter::indexOf (r.inst.q[3]) == ModUi::kVirtualRow, "Q4 is the virtual target that steps through the rows");
+    check (r.inst.q[3] == sp0.amount, "Q4 targets mod01.amount");
 
     const float prevAmt = r.inst.get ("mod01.amount");
-    r.ui.turnQ (0, 5.0, r.stack, r.inst);
+    r.ui.turnQ (3, 5.0, r.stack, r.inst);
     r.refresh();
-    check (r.inst.get ("mod01.amount") > prevAmt, "turning Q1 increases mod01.amount");
+    check (r.inst.get ("mod01.amount") > prevAmt, "turning Q4 increases mod01.amount");
+
+    // turning Q1 steps the selected row
+    r.ui.turnQ (0, 1.0, r.stack, r.inst);
+    r.refresh();
+    check (r.ui.matrix().selectedRow() == 1, "turning Q1 steps the selected row");
+    r.ui.matrix().selectRow (0);
+    r.refresh();
 
     // the host writes the virtual target: the selected row moves
     r.inst.qVirtualIn[ModUi::kVirtualRow] = 1.0f;
     r.inst.qVirtualDue[ModUi::kVirtualRow] = true;
     r.refresh();
-    check (r.ui.matrix().selectedRow() == 2 && std::string (r.ui.qGroupName()) == "SLOT 03", "the fourth Q-Link steps the row (" + std::string (r.ui.qGroupName()) + ")");
-    check (r.inst.q[0] == synthyboy::modSlotParams (2).amount, "the Q group follows the selected row");
+    check (r.ui.matrix().selectedRow() == 2 && std::string (r.ui.qGroupName()) == "SLOT 03", "the first Q-Link steps the row (" + std::string (r.ui.qGroupName()) + ")");
+    check (r.inst.q[3] == synthyboy::modSlotParams (2).amount, "the Q group follows the selected row");
     check (std::fabs (r.inst.qVirtual[ModUi::kVirtualRow] - 1.0f) < 1.0e-6f, "the page tells the router the row position");
 
     // a tap on a row selects it
