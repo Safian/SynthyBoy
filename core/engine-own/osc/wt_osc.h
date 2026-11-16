@@ -46,7 +46,9 @@ struct OscTick
     bool oversample = false;              // run 4x oversampled even without a warp (ultra quality)
     bool smooth = false;                  // oscN.smooth_interp: blend the neighbouring frames (off: the frame steps, with a short cross-fade)
     bool shareMorph = false;              // tier low only: all unison voices share one morph cycle (no morph spread across them)
-    bool lowCost = false;                 // tier low: a warp runs 2x oversampled with a 32 tap decimator instead of 4x with 128 taps, the spectral morph is rebuilt every 512 samples
+    bool lowWarp = false;                 // economy group Warp (tier low): a warp runs 2x oversampled with a 32 tap decimator instead of 4x with 128 taps
+    bool lowMorph = false;                // economy group Morph (tier low): the spectral morph is rebuilt every 512 samples, from a transform of half the size
+    bool fastMath = false;                // economy group Math (tier low): the warps use the cheaper forms of dsp/fastmath.h
 };
 
 /** True if every field of the two ticks is equal (floats compared as values: a NaN is never equal, which only costs the shortcut). */
@@ -58,7 +60,7 @@ inline bool sameOscTick (const OscTick& a, const OscTick& b) noexcept
         && a.warpSrc[0] == b.warpSrc[0] && a.warpSrc[1] == b.warpSrc[1] && a.warpAmount[0] == b.warpAmount[0] && a.warpAmount[1] == b.warpAmount[1]
         && a.warpPhase[0] == b.warpPhase[0] && a.warpPhase[1] == b.warpPhase[1] && a.warpSpread[0] == b.warpSpread[0] && a.warpSpread[1] == b.warpSpread[1]
         && a.startPhase == b.startPhase && a.active == b.active && a.remap == b.remap && a.morphType == b.morphType && a.morphAmount == b.morphAmount
-        && a.morphSpread == b.morphSpread && a.oversample == b.oversample && a.smooth == b.smooth && a.lowCost == b.lowCost && a.shareMorph == b.shareMorph;
+        && a.morphSpread == b.morphSpread && a.oversample == b.oversample && a.smooth == b.smooth && a.lowWarp == b.lowWarp && a.lowMorph == b.lowMorph && a.fastMath == b.fastMath && a.shareMorph == b.shareMorph;
 }
 
 /** Hermite interpolation of the four samples x[-1], x[0], x[1], x[2] at x[0] + f. */
@@ -392,17 +394,17 @@ public:
             morphAge = 0;
             return;
         }
-        const int rebuildEvery = tick.lowCost ? 2 * kMorphRebuild : kMorphRebuild;
+        const int rebuildEvery = tick.lowMorph ? 2 * kMorphRebuild : kMorphRebuild;
         if (firstOfNote)
             morphAge = rebuildEvery; // build now, no cross-fade from stale data
         if (morphAge >= rebuildEvery)
         {
             const Wavetable& wt = *tick.wt;
             const int pairs = (curCount + 1) / 2;
-            const int groups = tick.lowCost && tick.shareMorph ? 1 : std::min (kMorphGroups, std::max (1, pairs)); // tier low: the unison voices share one morph cycle (no morph spread across them)
+            const int groups = tick.lowMorph && tick.shareMorph ? 1 : std::min (kMorphGroups, std::max (1, pairs)); // tier low: the unison voices share one morph cycle (no morph spread across them)
             morphGroups = groups;
             const bool warped = tick.oversample || warpNeedsOversampling (tick.warp[0]) || warpNeedsOversampling (tick.warp[1]);
-            const float nyq = static_cast<float> (warped ? (tick.lowCost ? 1.0 : 3.2) * sampleRate : 0.5 * sampleRate);
+            const float nyq = static_cast<float> (warped ? (tick.lowWarp ? 1.0 : 3.2) * sampleRate : 0.5 * sampleRate);
             float fmax = 1.0f, incMax = 0.0f;
             for (int v = 0; v < curCount; ++v)
             {
@@ -434,11 +436,11 @@ public:
                     key.type = tick.morphType;
                     key.maxHarmonic = K;
                     key.hostRate = sampleRate;
-                    key.fast = tick.lowCost;
+                    key.fast = tick.lowMorph;
                     if (cache == nullptr || !cache->fetch (key, b - 1))
                     {
                         SB_SECTION (sections::oscMorphBuild);
-                        buildMorphCycle (wt, framePos, true, tick.morphType, key.m, K, incMax, sampleRate, b, *morphScratch, tick.lowCost);
+                        buildMorphCycle (wt, framePos, true, tick.morphType, key.m, K, incMax, sampleRate, b, *morphScratch, tick.lowMorph);
                         if (cache != nullptr)
                             cache->store (key, b - 1);
                     }
@@ -486,10 +488,10 @@ public:
             for (int w = 0; w < 2; ++w)
                 bw = std::max (bw, warpBandwidthFactor (tick.warp[w], tick.warpAmount[w]));
             const float fmax = std::max (curInc[v], prevInc[v]) * static_cast<float> (sampleRate) * bw;
-            const int os = tick.lowCost ? kOversampleLow : kOversample, nt = tick.lowCost ? kTapsLow : kTaps;
+            const int os = tick.lowWarp ? kOversampleLow : kOversample, nt = tick.lowWarp ? kTapsLow : kTaps;
             const double rateI = sampleRate * (warped ? os : 1);
             // band limit: the coarsest level that keeps the highest harmonic below Nyquist (of the rate the oscillator runs at)
-            const int level = Wavetable::levelFor (static_cast<float> (warped ? (tick.lowCost ? 1.0 : 3.2) * sampleRate : nyq) / std::max (fmax, 1.0f));
+            const int level = Wavetable::levelFor (static_cast<float> (warped ? (tick.lowWarp ? 1.0 : 3.2) * sampleRate : nyq) / std::max (fmax, 1.0f));
             int N = Wavetable::size (level);
             // two cycles and the weight of the second one at the start / end of this chunk
             const float* cA = nullptr;
@@ -560,10 +562,10 @@ public:
                 const float m0 = cs0 >= 0 && cross != nullptr && cross[cs0] ? lerp (k > 0 ? cross[cs0][k - 1] : lastCross[cs0], cross[cs0][k], fk) : 0.0f;
                 const float m1 = cs1 >= 0 && cross != nullptr && cross[cs1] ? lerp (k > 0 ? cross[cs1][k - 1] : lastCross[cs1], cross[cs1][k], fk) : 0.0f;
                 if (tick.warp[0] != 0)
-                    pp = warpPhase (tick.warp[0], pp, a0, tick.warpPhase[0], m0, window, tick.remap, tick.lowCost);
+                    pp = warpPhase (tick.warp[0], pp, a0, tick.warpPhase[0], m0, window, tick.remap, tick.fastMath);
                 if (tick.warp[1] != 0)
                 {
-                    pp = warpPhase (tick.warp[1], pp, a1, tick.warpPhase[1], m1, w2, tick.remap, tick.lowCost);
+                    pp = warpPhase (tick.warp[1], pp, a1, tick.warpPhase[1], m1, w2, tick.remap, tick.fastMath);
                     window *= w2;
                 }
                 auto read = [&] (float q) noexcept
@@ -590,9 +592,9 @@ public:
                     }
                 y *= window;
                 if (tick.warp[0] != 0)
-                    y = warpSample (tick.warp[0], y, a0, m0, tick.lowCost);
+                    y = warpSample (tick.warp[0], y, a0, m0, tick.fastMath);
                 if (tick.warp[1] != 0)
-                    y = warpSample (tick.warp[1], y, a1, m1, tick.lowCost);
+                    y = warpSample (tick.warp[1], y, a1, m1, tick.fastMath);
                 if (filt0)
                     y = filterStage (0, tick.warp[0], a0, y);
                 if (filt1)
@@ -619,7 +621,7 @@ public:
             }
             else
             {
-                const float* taps = tick.lowCost ? decimatorTaps2() : decimatorTaps();
+                const float* taps = tick.lowWarp ? decimatorTaps2() : decimatorTaps();
                 float* hist = history.data() + static_cast<size_t> (v) * (kTaps - 1); // the last nt - 1 samples of the os x signal, then this period's
                 float buf[kTaps - 1 + kOversample * kControlPeriod];
                 std::copy (hist, hist + nt - 1, buf);
@@ -659,7 +661,7 @@ public:
                     const float t = static_cast<float> (t0 + k + 1) * invP;
                     const float* x = buf + k * os + 1; // the newest sample of the group is x[nt - 1]
                     float acc = 0.0f;
-                    if (tick.lowCost)
+                    if (tick.lowWarp)
                         acc = dot32 (x, kDecimator2Rev.c); // tier low: the same taps, four partial sums (rounding differs from the sequential sum by about 1e-7 relative)
                     else
                         for (int i = 0; i < nt; ++i)

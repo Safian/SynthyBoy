@@ -39,7 +39,7 @@ public:
 
     void prepare (double sampleRate, int maxBlockFrames, const Quality& quality) override;
     void setQuality (const Quality& newQuality) noexcept override;
-    /** The unison voices per oscillator at tier low (the MPC tier), on top of the cap of the quality: the voice count is min (patch value, cap), the rest of the unison law
+    /** The unison voices per oscillator at tier low (a quality with oversampling 1 and no explicit Quality::economy), on top of the cap of the quality: the voice count is min (patch value, cap), the rest of the unison law
         (detune width, spread, blend, level normalisation) is that of a patch that asks for the cap. 0 = no such cap. Never touches a parameter value, never applies at
         medium / high or to an offline render (that runs on a twin at the high tier). Any thread, lock free; read at the start of every block. */
     void setLowTierUnisonCap (int voices) noexcept { lowUnisonCap.store (std::max (0, voices), std::memory_order_relaxed); }
@@ -115,6 +115,8 @@ private:
     int switchKeySnap[3] = { -1, -1, -1 };
     uint32_t chokeLatest[3][256] = {}, chokeCounter[3] = {};
     std::atomic<int> qualityTier { 2 };
+    std::atomic<bool> tierLowCap { false };  // the quality is a plain tier low (Quality::economy negative, oversampling 1): setLowTierUnisonCap applies; a quality with explicit economy groups carries its own cap in maxUnison
+    std::atomic<uint32_t> economyMask { 0 }; // the economy groups in force (Quality::economy, EconomyFlags); read at the start of every block
     std::atomic<bool> ultraRender { false };
     std::atomic<float> liveSampleHead[3];         // the read head of the sample oscillators (the voice that is heard), -1 = none
     std::atomic<float> liveVoicePos[3][LiveValues::kReadVoices];   // the read positions of the newest voices (newest first), -1 = none

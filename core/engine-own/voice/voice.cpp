@@ -137,7 +137,7 @@ void Voice::clearMod() noexcept
 
 float Voice::modulatedSlow (int idx, float b, float d) const noexcept
 {
-    return modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), b, d, gl->quality == 0);
+    return modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), b, d, (gl->economy & kEconomyMath) != 0);
 }
 
 void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
@@ -562,7 +562,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         }
         // tier low: an envelope (not the amplitude envelope) that no slot reads is advanced every fourth period (staggered) by four periods
         double stepDt = dt;
-        if (g.quality == 0 && !fresh && e > 0 && ((g.usedSources >> srcEnv (e)) & 1u) == 0)
+        if ((g.economy & kEconomyControl) != 0 && !fresh && e > 0 && ((g.usedSources >> srcEnv (e)) & 1u) == 0)
         {
             if (((tickCount + static_cast<uint32_t> (e)) & 3u) != 0u)
                 continue; // envOut keeps its last value
@@ -583,7 +583,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     ++tickCount;
     for (int l = 0; l < 10; ++l)
     {
-        if (g.quality == 0 && !fresh && ((g.usedSources >> srcLfo (l)) & 1u) == 0)
+        if ((g.economy & kEconomyControl) != 0 && !fresh && ((g.usedSources >> srcLfo (l)) & 1u) == 0)
         {
             if (((tickCount + static_cast<uint32_t> (l)) & 3u) != 0u)
                 continue; // lfoOut / lfoOutR keep their last values
@@ -596,7 +596,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     {
         // tier low: a random LFO that no slot reads is stepped every fourth period (staggered) by four periods' worth of cycles
         int steps = 1;
-        if (g.quality == 0 && !fresh && ((g.usedSources >> srcRlfo (r)) & 1u) == 0)
+        if ((g.economy & kEconomyControl) != 0 && !fresh && ((g.usedSources >> srcRlfo (r)) & 1u) == 0)
         {
             if (((tickCount + static_cast<uint32_t> (r)) & 3u) != 0u)
                 continue; // rlfoOut / rlfoOutR keep their last values
@@ -888,7 +888,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         else
             remapInit[o] = false;
         t.oversample = g.oversample;
-        t.lowCost = g.quality == 0;
+        t.lowWarp = (g.economy & kEconomyWarp) != 0;
+        t.lowMorph = (g.economy & kEconomyMorph) != 0;
+        t.fastMath = (g.economy & kEconomyMath) != 0;
         t.shareMorph = g.lowShareMorph;
         t.remap = nullptr;
         if (cs != nullptr)
@@ -1024,7 +1026,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         {
             FilterSettings& s = filtSet[f];
             fillFilterSettings (s, fi, [this] (int i) { return P (i); }, [this] (int i) { return PR (i); }, fi.cleanMode >= 0 && g.base[fi.cleanMode] >= 0.5f,
-                                keyNum, vc.cutoffSemis, g.quality == 0);
+                                keyNum, vc.cutoffSemis, (g.economy & kEconomyMath) != 0);
             filt[f].set (s);
             if (fresh)
                 filt[f].reset(); // the smoothers start at the targets of this note, not at the ones of the note this voice played before
@@ -1235,8 +1237,8 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         {
             const float t = static_cast<float> (t0 + k + 1) * invP;
             const float g = lerp (noiseGainPrev, noiseGain, t);
-            float a = noiseSample (noiseColour, noiseState[0], noiseRng, g, gl->quality == 0);
-            float b = noiseStereo > 0.0f ? lerp (a, noiseSample (noiseColour, noiseState[1], noiseRng, g, gl->quality == 0), noiseStereo) : a;
+            float a = noiseSample (noiseColour, noiseState[0], noiseRng, g, (gl->economy & kEconomyMath) != 0);
+            float b = noiseStereo > 0.0f ? lerp (a, noiseSample (noiseColour, noiseState[1], noiseRng, g, (gl->economy & kEconomyMath) != 0), noiseStereo) : a;
             if (noiseColour <= 3)
                 shapeNoise (a, b);
             nl[k] = a * g * 1.41421356f * gl2;

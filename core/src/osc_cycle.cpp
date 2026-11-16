@@ -273,7 +273,9 @@ OscCycle::Result OscCycle::computeDisplay (const ParamValues& values, const Requ
         }
         t.frame = frame;
         t.oversample = false;
-        t.lowCost = false;
+        t.lowWarp = false;
+        t.lowMorph = false;
+        t.fastMath = false;
         t.shareMorph = false;
         t.remap = nullptr;
         if (cs != nullptr && cs->remap[o][slot].size() == 257)
