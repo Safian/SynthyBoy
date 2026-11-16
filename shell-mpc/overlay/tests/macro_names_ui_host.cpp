@@ -22,7 +22,7 @@ namespace
 int failures = 0;
 void check (bool ok, const std::string& what)
 {
-    if (! ok || std::getenv ("MACRO_NAMES_VERBOSE"))
+    if (! ok || std::getenv ("MACRO_NAMES_UI_HOST_VERBOSE"))
         std::printf ("%s  %s\n", ok ? "PASS" : "FAIL", what.c_str());
     if (! ok)
         ++failures;
@@ -373,6 +373,6 @@ int main()
     testKeyboardKeys();
     testKeyboardGeometry();
     testPageViewScopeAndModPage();
-    std::printf (failures == 0 ? "macro_names_host: OK\n" : "macro_names_host: FAILED (%d failures)\n", failures);
+    std::printf (failures == 0 ? "macro_names_ui_host: OK\n" : "macro_names_ui_host: FAILED (%d failures)\n", failures);
     return failures == 0 ? 0 : 1;
 }

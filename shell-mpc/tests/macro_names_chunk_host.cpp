@@ -2,7 +2,7 @@
 // the names loads with the default ones, a program change or a load replaces them, the Q proxy whose target is a macro reports the name (the host is told by audioMasterUpdateDisplay when it changes),
 // a rename of the Macros page (the debug file SYNTHYBOY_MPC_MACRO_NAME_FILE stands for the page) reaches the chunk, dirty names are cleaned, the parameter list is the one of before (2719).
 //
-// Usage: macro_names_host <plugin library with the overlay>. Run under ThreadSanitizer too.
+// Usage: macro_names_chunk_host <plugin library with the overlay>. Run under ThreadSanitizer too.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "mpc_vst2_abi.h"
@@ -40,7 +40,7 @@ static int updates (AEffect* e) { std::lock_guard<std::mutex> g (mu); return upd
 static int fails = 0;
 static void check (bool ok, const std::string& what)
 {
-    if (! ok || std::getenv ("MACRO_NAMES_HOST_VERBOSE"))
+    if (! ok || std::getenv ("MACRO_NAMES_CHUNK_HOST_VERBOSE"))
         std::printf ("%s  %s\n", ok ? "PASS" : "FAIL", what.c_str());
     if (! ok) ++fails;
 }
@@ -95,7 +95,7 @@ static std::string stateWith (std::initializer_list<std::pair<int, const char*>>
 
 int main (int argc, char** argv)
 {
-    if (argc < 2) { std::fprintf (stderr, "usage: macro_names_host <plugin>\n"); return 2; }
+    if (argc < 2) { std::fprintf (stderr, "usage: macro_names_chunk_host <plugin>\n"); return 2; }
     const std::string qFake = "/tmp/synthyboy-q-fake-group-macronames-" + std::to_string (static_cast<long> (getpid()));
     const std::string nameFile = "/tmp/synthyboy-macro-name-macronames-" + std::to_string (static_cast<long> (getpid()));
     setenv ("SYNTHYBOY_MPC_Q_FAKE_FILE", qFake.c_str(), 1);
@@ -194,6 +194,6 @@ int main (int argc, char** argv)
     c->dispatcher (c, effClose, 0, 0, nullptr, 0.0f);
     std::remove (qFake.c_str());
     std::remove (nameFile.c_str());
-    std::printf (fails == 0 ? "macro_names_host: OK\n" : "macro_names_host: FAILED (%d failures)\n", fails);
+    std::printf (fails == 0 ? "macro_names_chunk_host: OK\n" : "macro_names_chunk_host: FAILED (%d failures)\n", fails);
     return fails == 0 ? 0 : 1;
 }

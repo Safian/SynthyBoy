@@ -321,14 +321,14 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME osc_ui_host COMMAND osc_ui_host)
 
     # the names of the macros on the plugin-drawn pages: short forms, cards, chips, the keyboard page (docs/ui-design/macro-names.md)
-    add_executable(macro_names_host EXCLUDE_FROM_ALL overlay/tests/macro_names_host.cpp)
-    target_include_directories(macro_names_host PRIVATE
+    add_executable(macro_names_ui_host EXCLUDE_FROM_ALL overlay/tests/macro_names_ui_host.cpp)
+    target_include_directories(macro_names_ui_host PRIVATE
         "${CMAKE_SOURCE_DIR}/core/include"
         "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
         "${CMAKE_CURRENT_SOURCE_DIR}/ui")
-    target_link_libraries(macro_names_host PRIVATE synthyboy_core Threads::Threads)
-    target_compile_features(macro_names_host PRIVATE cxx_std_17)
-    target_compile_options(macro_names_host PRIVATE -Wall -Wextra -Wpedantic)
-    add_test(NAME macro_names_host COMMAND macro_names_host)
+    target_link_libraries(macro_names_ui_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(macro_names_ui_host PRIVATE cxx_std_17)
+    target_compile_options(macro_names_ui_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME macro_names_ui_host COMMAND macro_names_ui_host)
 endif()
 
