@@ -115,6 +115,89 @@ public:
         return false;
     }
 
+    struct KeyRects
+    {
+        Rect white[7];
+        int whiteNote[7];
+        Rect black[5];
+        int blackNote[5];
+    };
+
+    KeyRects computeRects() const noexcept
+    {
+        KeyRects kr;
+        const int m = 8, labelH = 22;
+        const int kbX = rect_.x + m, kbY = rect_.y + m + labelH, kbW = rect_.w - 2 * m, kbH = std::max (24, rect_.h - 2 * m - labelH);
+        const float wkW = static_cast<float> (kbW) / 7.0f;
+        static const int kWhites[7] = { 0, 2, 4, 5, 7, 9, 11 };
+        for (int i = 0; i < 7; ++i)
+        {
+            kr.whiteNote[i] = kWhites[i];
+            const int x0 = kbX + static_cast<int> (std::round (i * wkW));
+            const int x1 = kbX + static_cast<int> (std::round ((i + 1) * wkW));
+            kr.white[i] = { x0, kbY, x1 - x0, kbH };
+        }
+        static const struct { int note; float pos; } kBlacks[5] = {
+            { 1, 0.96f }, { 3, 2.04f }, { 6, 3.95f }, { 8, 5.00f }, { 10, 6.05f }
+        };
+        const float bkW = std::round (wkW * 0.58f);
+        const int bkH = static_cast<int> (std::round (kbH * 0.60f));
+        for (int i = 0; i < 5; ++i)
+        {
+            kr.blackNote[i] = kBlacks[i].note;
+            const int cx = kbX + static_cast<int> (std::round (kBlacks[i].pos * wkW));
+            const int x0 = cx - static_cast<int> (bkW * 0.5f);
+            kr.black[i] = { x0, kbY, static_cast<int> (bkW), bkH };
+        }
+        return kr;
+    }
+
+    int hitTestNote (int x, int y) const noexcept
+    {
+        const KeyRects kr = computeRects();
+        for (int i = 0; i < 5; ++i)
+            if (kr.black[i].contains (x, y))
+                return kr.blackNote[i];
+        for (int i = 0; i < 7; ++i)
+            if (kr.white[i].contains (x, y))
+                return kr.whiteNote[i];
+        return -1;
+    }
+
+    Change onDown (int x, int y, double now) override
+    {
+        tap_.down (x, y, now);
+        downNote_ = hitTestNote (x, y);
+        if (downNote_ >= 0)
+        {
+            scaleKey = downNote_;
+            return Change::indexed (id_, downNote_, static_cast<double> (downNote_));
+        }
+        return Change::none();
+    }
+    Change onMove (int x, int y) override
+    {
+        tap_.move (x, y);
+        const int note = hitTestNote (x, y);
+        if (note >= 0 && note != downNote_)
+        {
+            downNote_ = note;
+            scaleKey = note;
+            return Change::indexed (id_, note, static_cast<double> (note));
+        }
+        return Change::none();
+    }
+    Change onUp (int x, int y) override
+    {
+        const int note = hitTestNote (x, y);
+        if (tap_.up() != 0 && note >= 0)
+        {
+            scaleKey = note;
+            return Change::indexed (id_, note, static_cast<double> (note));
+        }
+        return Change::none();
+    }
+
 protected:
     void drawBody (Pen& p) const override
     {
@@ -123,40 +206,49 @@ protected:
         p.rrect (rect_, T.rControl, p.c (T.keyline, 160), 1.0f);
 
         const int m = 8, labelH = 22;
-        const int kbX = rect_.x + m, kbY = rect_.y + m + labelH, kbW = rect_.w - 2 * m, kbH = std::max (24, rect_.h - 2 * m - labelH);
         char lblBuf[48];
         static const char* const kKeyNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
         std::snprintf (lblBuf, sizeof lblBuf, scaleType <= 0 ? "ALL 12 NOTES" : "SCALE ON %s", kKeyNames[std::clamp (scaleKey, 0, 11)]);
         p.textLeft ({ rect_.x + m, rect_.y + 4, rect_.w - 2 * m, labelH }, lblBuf, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
 
-        // the 7 white keys, then the 5 black keys over them: the notes of the scale are lit in the colour of the signal, the others are dark; the root has a bar under it
-        static const int kWhites[7] = { 0, 2, 4, 5, 7, 9, 11 };
+        const KeyRects kr = computeRects();
         static const char* const kName[7] = { "C", "D", "E", "F", "G", "A", "B" };
-        const float wkW = static_cast<float> (kbW) / 7.0f;
+
+        // 7 white keys (dark surface from palette with thin outlines)
         for (int i = 0; i < 7; ++i)
         {
-            const int note = kWhites[i];
+            const int note = kr.whiteNote[i];
             const bool in = isScaleNote (scaleType, scaleKey, note);
-            const Rect wr { kbX + static_cast<int> (std::round (i * wkW)), kbY, static_cast<int> (std::round ((i + 1) * wkW)) - static_cast<int> (std::round (i * wkW)), kbH };
-            p.rect (wr.x + 1, wr.y, wr.right() - 1, wr.bottom(), p.c (in ? T.text : T.track, in ? 235 : 255));
-            p.rrect ({ wr.x + 1, wr.y, wr.w - 2, wr.h }, 3.0f, p.c (in ? T.flow[0] : T.keyline, 255), 1.2f);
-            if (in && note == scaleKey)
-                p.rect (wr.x + 6, wr.bottom() - 10, wr.right() - 6, wr.bottom() - 4, p.c (T.flow[3], 255));
-            p.textCentered ({ wr.x, wr.bottom() - 36, wr.w, 22 }, kName[i], T.fLabel - 2.0f, p.c (in ? T.onBright : T.textDim, 255), T.fMin);
+            const bool isRoot = (note == scaleKey);
+            const Rect wr = kr.white[i];
+            p.rect (wr.x + 1, wr.y, wr.right() - 1, wr.bottom(), p.c (in ? T.panel0 : T.bg1, 255));
+            if (in)
+                p.rect (wr.x + 1, wr.y, wr.right() - 1, wr.bottom(), p.c (T.flow[0], 28));
+            p.rrect ({ wr.x + 1, wr.y, wr.w - 2, wr.h }, 3.0f, p.c (in ? (isRoot ? T.flow[0] : T.keylineHi) : T.keyline, 255), isRoot ? 1.5f : 1.0f);
+            if (isRoot)
+                p.rect (wr.x + 8, wr.bottom() - 6, wr.right() - 8, wr.bottom() - 2, p.c (T.flow[0], 255));
+            p.textCentered ({ wr.x, wr.bottom() - 30, wr.w, 22 }, kName[i], T.fLabel, p.c (in ? (isRoot ? T.flow[0] : T.text) : T.textDim, 255), T.fMin);
         }
-        static const struct { int note; float pos; } kBlacks[5] = { { 1, 0.65f }, { 3, 1.65f }, { 6, 3.65f }, { 8, 4.65f }, { 10, 5.65f } };
-        const float bkW = wkW * 0.7f;
-        const int bkH = static_cast<int> (std::round (kbH * 0.6f));
+
+        // 5 black keys (darker surface from palette, narrower and shorter, drawn above white keys)
         for (int i = 0; i < 5; ++i)
         {
-            const bool in = isScaleNote (scaleType, scaleKey, kBlacks[i].note);
-            const Rect br { kbX + static_cast<int> (std::round (kBlacks[i].pos * wkW)), kbY, static_cast<int> (std::round (bkW)), bkH };
-            p.rect (br, p.c (in ? T.flow[1] : T.bg1, 255));
-            p.rrect (br, 3.0f, p.c (in ? T.flow[0] : T.keylineHi, 255), 1.2f);
-            if (in && kBlacks[i].note == scaleKey)
-                p.rect (br.x + 5, br.bottom() - 9, br.right() - 5, br.bottom() - 4, p.c (T.flow[3], 255));
+            const int note = kr.blackNote[i];
+            const bool in = isScaleNote (scaleType, scaleKey, note);
+            const bool isRoot = (note == scaleKey);
+            const Rect br = kr.black[i];
+            p.rect (br, p.c (T.bg0, 255));
+            if (in)
+                p.rect (br, p.c (T.flow[0], 40));
+            p.rrect (br, 3.0f, p.c (in ? (isRoot ? T.flow[0] : T.keylineHi) : T.keyline, 255), isRoot ? 1.5f : 1.0f);
+            if (isRoot)
+                p.rect (br.x + 6, br.bottom() - 7, br.right() - 6, br.bottom() - 3, p.c (T.flow[0], 255));
         }
     }
+
+private:
+    TapGesture tap_;
+    int downNote_ = -1;
 };
 
 // ===============================================================================================================================

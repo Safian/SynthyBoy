@@ -207,6 +207,18 @@ void testMasterGroupsAndMeters()
     for (int n = 0; n < 12; ++n)
         lit += ui::MiniKeyboardDisplay::isScaleNote (m.keyboard.scaleType, m.keyboard.scaleKey, n) ? 1 : 0;
     check (lit == 7 && m.keyboard.scaleType == 1, "the keyboard shows 7 of the 12 notes for a major scale");
+    // keyboard touch targets and note selection
+    const auto kr = m.keyboard.computeRects();
+    bool allKeysWide = true;
+    for (int i = 0; i < 7; ++i) if (kr.white[i].w < 56) allKeysWide = false;
+    for (int i = 0; i < 5; ++i) if (kr.black[i].w < 56) allKeysWide = false;
+    check (allKeysWide, "every key of the keyboard is at least 56 px wide (touch target)");
+    // tap on black key F# (black key index 2, note 6)
+    r.tapAt (kr.black[2].x + kr.black[2].w / 2, kr.black[2].y + kr.black[2].h / 2);
+    check (r.inst.get ("master.scale.key") == 6.0f, "tap on F# black key sets scale key to 6 (F#)");
+    // tap on white key G (white key index 4, note 7)
+    r.tapAt (kr.white[4].x + kr.white[4].w / 2, kr.white[4].bottom() - 15);
+    check (r.inst.get ("master.scale.key") == 7.0f, "tap on G white key sets scale key to 7 (G)");
 }
 
 void testMasterDraw()
