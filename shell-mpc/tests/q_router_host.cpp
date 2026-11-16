@@ -220,6 +220,7 @@ int main()
         bool told = false;
         for (const auto& e : rep.q) told = told || (e.first == 1 && std::fabs (e.second - 0.5f) < 1e-6f);
         check (told && rep.real.empty(), "the page's new value is told to the host (the Q proxy), no real parameter");
+        wr (5, 0.9f);   // what the threads test left in the target must not be the value written below (that would be an echo, not a write)
         check (r.hostWrite (2, 0.2f, false, rd, wr) == QRouter::Write::written && std::fabs (rd (5) - 0.2f) < 1e-6f, "a real target next to the virtual ones works as before");
     }
     std::printf (fails ? "q_router_host: FAILED (%d)\n" : "q_router_host: OK\n", fails);
