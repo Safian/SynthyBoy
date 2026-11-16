@@ -264,7 +264,7 @@ void testWrites()
     check (R.inst.get ("lfo1.shape") == 12.0f && R.inst.contentPtr->lfoShapes.size() == 1 && R.inst.contentPtr->lfoShapes[0].lfo == 1, "the picker: the drawn shape; the content has a shape for it (the engine reads a drawn shape without points as a flat line)");
     // MONO, HOST, SMOOTH
     R.tapC (R.ui.full().monoTop);
-    check (R.inst.get ("lfo1.mono") == 1.0f && R.ui.full().monoQ.state.on, "MONO in the top bar and in the MOTION group are one parameter");
+    check (R.inst.get ("lfo1.mono") == 1.0f && R.ui.full().monoTop.state.on, "MONO in the top bar writes lfo1.mono");
     R.tapC (R.ui.full().hostPick);
     check (R.inst.get ("lfo1.host") == 1.0f, "HOST");
     const float smooth = R.inst.get ("lfo1.smooth");
@@ -279,14 +279,18 @@ void testFullScreen()
     r.openFull();
     check (r.stack.depth() == 1 && r.stack.element() == LfoUi::kElementLfo && r.inst.fullOpen, "the full screen button opens the LFO's element and tells the plugin");
     check (r.ui.displayRect().w > 800, "the full screen has a display rectangle");
-    check (r.inst.q[0] == paramIdx ("lfo1.shape") && r.inst.q[1] == paramIdx ("lfo1.rate"), "full screen: the Q group is RATE");
+    check (r.inst.q[0] == paramIdx ("lfo1.shape") && r.inst.q[1] == paramIdx ("lfo1.rate") &&
+           r.inst.q[2] == paramIdx ("lfo1.fade_in") && r.inst.q[3] == paramIdx ("lfo1.smooth_time"),
+           "full screen: the Q group RATE is shape (grid), rate, rise, smooth");
     r.tapC (r.ui.full().swing);
-    check (r.ui.activeQ() == 2 && r.inst.q[0] == paramIdx ("lfo1.direction") && r.inst.q[1] == paramIdx ("lfo1.swing") && r.inst.q[2] == paramIdx ("lfo1.stereo") && r.inst.q[3] == paramIdx ("lfo1.mono"), "a touch on SWING: the MOTION group (direction, swing, stereo, mono)");
+    check (r.ui.activeQ() == 2 && r.inst.q[0] == paramIdx ("lfo1.direction") && r.inst.q[1] == paramIdx ("lfo1.swing") && r.inst.q[2] == paramIdx ("lfo1.stereo") && r.inst.q[3] < 0,
+           "a touch on SWING: the MOTION group (direction, swing, stereo)");
     r.tapC (r.ui.full().mode);
     check (r.stack.depth() == 2 && r.ui.list().state.count == 6, "MODE: the list of the six sync types opens");
     r.stack.back();
     r.refresh();
-    check (r.ui.activeQ() == 1 && r.inst.q[0] == paramIdx ("lfo1.sync") && r.inst.q[1] == paramIdx ("lfo1.sync_type") && r.inst.q[2] == paramIdx ("lfo1.phase") && r.inst.q[3] == paramIdx ("lfo1.delay"), "the TIMING group (sync, mode, phase, delay)");
+    check (r.ui.activeQ() == 1 && r.inst.q[0] == paramIdx ("lfo1.sync_type") && r.inst.q[1] == paramIdx ("lfo1.phase") && r.inst.q[2] == paramIdx ("lfo1.delay") && r.inst.q[3] < 0,
+           "the TIMING group (mode, phase, delay)");
     r.tapC (r.ui.full().close);
     check (r.stack.isMain() && ! r.inst.fullOpen, "the close button: main again");
     r.openFull();

@@ -387,20 +387,18 @@ private:
         bind (kSmoothPick, &full_.smoothPick, T::Toggle, rnd ? "" : "smooth");
         bind (kHostPick, &full_.hostPick, T::Toggle, rnd ? "" : "host");
         bind (kEdit, &full_.edit, T::Inert, "");
-        bind (kShape, &full_.shape, T::Stepper, rnd ? "" : "shape");
         bind (kStyle, &full_.style, T::Stepper, rnd ? "style" : "");
+        bind (kSync, &full_.sync, T::Stepper, rnd ? "sync" : "");
         bind (kRate, &full_.rate.rate, T::Knob, "rate");
         bind (kDivision, &full_.rate.division, T::Stepper, "division");
         bind (kRise, &full_.rise, T::Knob, rnd ? "" : "fade_in");
         bind (kSmoothTime, &full_.smoothTime, T::Knob, rnd ? "" : "smooth_time");
-        bind (kSync, &full_.sync, T::Stepper, "sync");
         bind (kMode, &full_.mode, T::Stepper, "sync_type");
         bind (kPhase, &full_.phase, T::Knob, rnd ? "" : "phase");
         bind (kDelay, &full_.delay, T::Knob, rnd ? "" : "delay");
         bind (kDirection, &full_.direction, T::Stepper, rnd ? "" : "direction");
         bind (kSwing, &full_.swing, T::Knob, rnd ? "" : "swing");
         bind (kStereo, &full_.stereo, T::Knob, rnd ? "" : "stereo");
-        bind (kMono, &full_.monoQ, T::Toggle, rnd ? "" : "mono");
         bind (kStereoToggle, &full_.stereoToggle, T::Toggle, rnd ? "stereo" : "");
         bind (kKeyTranspose, &full_.keyTranspose, T::Number, "keytrack_transpose");
         bind (kKeyTune, &full_.keyTune, T::Number, "keytrack_tune");
@@ -1371,7 +1369,7 @@ private:
         while (m != nullptr)
         {
             for (const Item& it : items_)
-                if (it.c == m && it.type != T::Inert && it.type != T::Picker)
+                if (it.c == m && it.type != T::Inert)
                     return it.param;
             m = m->primaryChild();
         }
