@@ -130,7 +130,7 @@ protected:
             if (lit)
                 p.rrect (r.inset (5), T.rChip, p.c (T.flow[0], on ? 30 : 14));
             const float cy = static_cast<float> (r.y) + static_cast<float> (r.h) * 0.5f;
-            led::dot (p, static_cast<float> (r.x + led::kDotX), cy, lit, on ? 255 : 80);
+            led::dot (p, static_cast<float> (r.x + led::kDotX), cy, lit, on ? 255 : 80, qFrame_);
             const uint32_t col = qFrame_ && lit ? p.c (T.q, on ? 255 : 90) : p.c (lit ? T.text : T.textDim, on ? (lit ? 255 : 200) : 80);
             p.textLeft ({ r.x + led::kTextX, r.y + 2, std::max (0, r.w - led::kTextX - led::kPadR), std::max (0, r.h - 4) }, state.names[i], led::nameSize(), col, T.fMin);
         }

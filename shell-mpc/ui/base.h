@@ -553,7 +553,7 @@ public:
     enum class Icon : uint8_t { Power, PitchTrack, Generic };
     struct State
     {
-        bool on = false; Icon icon = Icon::Generic; char label[16] = {}; bool showState = false;   // label (<= 8 characters, optional): under the icon; showState: " ON" / " OFF" after it
+        bool on = false; Icon icon = Icon::Generic; char label[24] = {}; bool showState = false;   // label (<= 8 characters, optional): under the icon; showState: " ON" / " OFF" after it
         bool knobLike = false;   // in a row of knobs: no box; the icon where the dial is, the name on the line of the knob names, ON / OFF on the line of the values (the cell of a knob, the names in one line)
     };
     State state;

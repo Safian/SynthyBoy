@@ -16,22 +16,22 @@ namespace led {
 constexpr int kRowH = 56;        // the touch height of a row
 constexpr int kMinToggleW = 96;
 constexpr int kDotX = 20;        // the centre of the dot, from the left edge of the row
-constexpr int kTextX = 34;       // the name starts here
-constexpr int kPadR = 8;
+constexpr int kTextX = 33;       // the name starts here
+constexpr int kPadR = 7;
 constexpr float kDotR = 6.5f;    // the radius of the lit dot (the ring of an unlit one is a little smaller: the same outer size)
-inline float nameSize() noexcept { return theme::L().fLabel + 4.0f; }
+inline float nameSize() noexcept { return theme::L().fLabel + 3.0f; }
 /** The width a name needs in a row (dot, gap, text, right padding). */
 inline int widthFor (const char* name) noexcept { return kTextX + kPadR + 2 + static_cast<int> (std::ceil (Pen::textWidth (name, nameSize()))); }
 
 /** The dot at (cx, cy): lit = a filled disc in the accent colour, unlit = a thin ring in the faint ink colour. Flat: no glow, no gradient. `dimA`: alpha 0 .. 255 of the whole dot (a disabled option). */
-inline void dot (Pen& p, float cx, float cy, bool lit, int dimA = 255)
+inline void dot (Pen& p, float cx, float cy, bool lit, int dimA = 255, bool qRing = false)
 {
     const theme::Look& T = theme::L();
     p.style (1.0f, true);
     if (lit)
         p.disc (cx, cy, kDotR, p.c (T.flow[0], dimA));
     else
-        p.arc (cx, cy, kDotR - 0.8f, 0.0f, 2.0f * kPi, 1.6f, p.c (T.textFaint, dimA));
+        p.arc (cx, cy, kDotR - 0.8f, 0.0f, 2.0f * kPi, 1.6f, p.c (qRing ? T.q : T.textFaint, dimA));
     p.plain();
 }
 }
@@ -52,8 +52,8 @@ protected:
         const Rect b = rect_.inset (2);
         p.control (b, qFrame_);
         const float cy = static_cast<float> (b.y) + static_cast<float> (b.h) * 0.5f;
-        led::dot (p, static_cast<float> (b.x + led::kDotX - 2), cy, state.on);
-        const uint32_t col = qFrame_ ? p.c (T.q, state.on ? 255 : 150) : p.c (state.on ? T.text : T.textDim, state.on ? 255 : 200);
+        led::dot (p, static_cast<float> (b.x + led::kDotX - 2), cy, state.on, 255, qFrame_);
+        const uint32_t col = state.on ? p.c (qFrame_ ? T.q : T.text, 255) : p.c (T.textDim, 200);   // the Q colour marks the lit name; an unlit one keeps its dim ink and a Q coloured ring
         p.textLeft ({ b.x + led::kTextX - 2, b.y + 2, std::max (0, b.w - led::kTextX - led::kPadR + 2), std::max (0, b.h - 4) }, state.label, led::nameSize(), col, T.fMin);
     }
     Change onDown (int x, int y, double now) override { tap_.down (x, y, now); return Change::none(); }
