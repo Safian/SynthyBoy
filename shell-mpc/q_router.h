@@ -146,6 +146,7 @@ public:
     /** For the status file: the raw value the host wrote to Q q last, the delta of that write, the travel accumulated for the next step. */
     float lastRaw (int q) const noexcept { return q >= 0 && q < kCount ? dbgRaw_[q].load (std::memory_order_relaxed) : 0.0f; }
     float lastDelta (int q) const noexcept { return q >= 0 && q < kCount ? dbgDelta_[q].load (std::memory_order_relaxed) : 0.0f; }
+    float turnSum (int q) const noexcept { return q >= 0 && q < kCount ? dbgSum_[q].load (std::memory_order_relaxed) : 0.0f; }
     float travel (int q) const noexcept { return q >= 0 && q < kCount ? acc_[q].load (std::memory_order_relaxed) : 0.0f; }
     /** The status file lines of the stepping: the travel per step in force, and for every knob that has a stepped-capable target the last raw value the host wrote, the delta of that write (both in proxy units 0 .. 1 and
         in 1/128 increments) and the travel accumulated towards the next step. `q_step_travel` says where the number comes from (`overridden` by the debug file or the default). A knob without a target has no line. */
@@ -160,8 +161,8 @@ public:
             const int t = target (q);
             if (t == kNone)
                 continue;
-            std::snprintf (b, sizeof b, "q_knob_%d: target %d, raw %.6f (%.2f/128), delta %+.6f (%+.2f/128), travel %+.6f (%+.2f/128 of %.2f per step)\n", q + 1, t, static_cast<double> (lastRaw (q)), static_cast<double> (lastRaw (q) * 128.0f),
-                           static_cast<double> (lastDelta (q)), static_cast<double> (lastDelta (q) * 128.0f), static_cast<double> (travel (q)), static_cast<double> (travel (q) * 128.0f), static_cast<double> (st * 128.0f));
+            std::snprintf (b, sizeof b, "q_knob_%d: target %d, raw %.6f (%.2f/128), delta %+.6f (%+.2f/128), travel %+.6f (%+.2f/128 of %.2f per step), turned %+.2f/128 in all\n", q + 1, t, static_cast<double> (lastRaw (q)), static_cast<double> (lastRaw (q) * 128.0f),
+                           static_cast<double> (lastDelta (q)), static_cast<double> (lastDelta (q) * 128.0f), static_cast<double> (travel (q)), static_cast<double> (travel (q) * 128.0f), static_cast<double> (st * 128.0f), static_cast<double> (turnSum (q) * 128.0f));
             out += b;
         }
     }
@@ -198,6 +199,7 @@ public:
             delta = std::fabs (aR - kOneIncrement) < std::fabs (aB - kOneIncrement) ? dRep : dBase;
         dbgRaw_[q].store (v, std::memory_order_relaxed);
         dbgDelta_[q].store (delta, std::memory_order_relaxed);
+        dbgSum_[q].store (dbgSum_[q].load (std::memory_order_relaxed) + delta, std::memory_order_relaxed);   // for the calibration of a quarter turn: the sum of every move the host made on this knob
         base_[q].store (v, std::memory_order_relaxed);
         float cur = readNorm (t);
         if (std::fabs (v - cur) <= kTolerance)   // an echo of what was reported
@@ -319,7 +321,7 @@ private:
     std::atomic<float> rep_[kCount] = {};   // the last value reported to the host
     std::atomic<bool> repDue_[kCount] = {};
     std::atomic<float> acc_[kCount] = {};   // the travel accumulated for the next step of a stepped target (signed)
-    std::atomic<float> dbgRaw_[kCount] = {}, dbgDelta_[kCount] = {};
+    std::atomic<float> dbgRaw_[kCount] = {}, dbgDelta_[kCount] = {}, dbgSum_[kCount] = {};
     std::atomic<float> stepTravel_ { kStepTravelDefault };
     std::atomic<float> last_[kCount];       // the value of each Q as the host last heard it (a host write or a report)
     std::atomic<int> realDue_[kCount];      // the real parameter a host write of Q q changed: the poll tells the host (kNone: nothing due)

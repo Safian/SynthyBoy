@@ -332,7 +332,7 @@ int main()
             std::string st;
             r.describe (st);
             check (st.find ("q_step_travel: 0.046875 (6.00 increments of 1/128, default)") == 0, "status: the step travel in force is the first line (" + st.substr (0, st.find ('\n')) + ")");
-            const size_t k1 = st.find ("q_knob_1: target 1, raw 0.023438 (3.00/128), delta +0.023438 (+3.00/128), travel +0.023438 (+3.00/128 of 6.00 per step)");
+            const size_t k1 = st.find ("q_knob_1: target 1, raw 0.023438 (3.00/128), delta +0.023438 (+3.00/128), travel +0.023438 (+3.00/128 of 6.00 per step), turned +3.00/128 in all");
             check (k1 != std::string::npos, "status: knob 1 shows the raw value last written, the delta of that write and the accumulated travel");
             check (st.find ("q_knob_4: target 4") != std::string::npos && st.find ("q_knob_5") == std::string::npos, "status: a line per knob that has a target, none for the others");
             r.setStepTravel (10.0f / 128.0f);
