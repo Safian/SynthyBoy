@@ -129,6 +129,7 @@
 #include "play_log.h"
 #include "play_params.h"
 #include "q_router.h"
+#include "macro_names.h"
 
 namespace
 {
@@ -390,6 +391,7 @@ struct PluginInstance
         void requestContent (int osc, int kind, const std::string& path) override { inst.requestContentLoad (osc, kind, path); }
         int contentLoad (std::string* message) const override { return inst.contentLoadState (message); }
         void setLfoShape (int lfo, const synthyboy::ContentLfoShape& shape) override { inst.requestLfoShape (lfo, shape); }
+        void setMacroName (int macro, const std::string& name) override { inst.macroNameQueue.post (macro, name); }
         void setQVirtual (int id, float normalised) noexcept override { inst.qRouter.setVirtualValue (id, normalised); }
         bool takeQVirtual (int id, float& normalised) noexcept override { return inst.qRouter.takeVirtual (id, normalised); }
         unsigned long qWriteCount() const noexcept override { return inst.qRouter.writeCount(); }
@@ -519,6 +521,56 @@ struct PluginInstance
         content = std::move (next);
         engine->setContent (content);
         publishOverlayContent();
+    }
+    // ---- the names of the macros (docs/ui-design/macro-names.md): the Macros page posts a rename, the display thread puts it into the content (under `contentMutex`, the engine does not need it), publishes the overlay's
+    // copy and tells the host the names of the Q proxies changed (audioMasterUpdateDisplay). A load of a program, preset or chunk that brings other names sets macroNamesDue in applyState: the host is told too.
+    synthyboy_mpc::MacroNameQueue macroNameQueue;
+    std::atomic<bool> macroNamesDue { false };
+    /** Debug switch for the host tests (the pages are not in them): with SYNTHYBOY_MPC_MACRO_NAME_FILE set to a path, a line "n name" in that file (n = 1 .. 8, the rest of the line is the name) is a rename of macro n
+        as the Macros page asks for it, applied when the line changes. Without the variable nothing is read. Display thread. */
+    std::string macroNameFakeLast;
+    void macroNameFakeFile()
+    {
+        static const std::string path = [] { const char* p = std::getenv ("SYNTHYBOY_MPC_MACRO_NAME_FILE"); return std::string (p != nullptr ? p : ""); }();
+        if (path.empty())
+            return;
+        std::ifstream f (path);
+        std::string line;
+        if (! f || ! std::getline (f, line) || line == macroNameFakeLast)
+            return;
+        macroNameFakeLast = line;
+        const int m = std::atoi (line.c_str());
+        const size_t sp = line.find (' ');
+        macroNameQueue.post (m - 1, sp == std::string::npos ? std::string() : line.substr (sp + 1));
+    }
+    void macroNamePoll (AEffect* e)
+    {
+        macroNameFakeFile();
+        std::string names[synthyboy::kNumMacros];
+        bool have[synthyboy::kNumMacros] = {};
+        if (macroNameQueue.take (names, have))
+        {
+            std::lock_guard<std::mutex> g (contentMutex);
+            bool changed = false;
+            for (int m = 0; m < synthyboy::kNumMacros; ++m)
+            {
+                if (! have[m])
+                    continue;
+                const std::string clean = synthyboy::sanitizeMacroName (names[m], m);
+                if (clean != content.macroNames[m])
+                {
+                    content.macroNames[m] = clean;
+                    changed = true;
+                }
+            }
+            if (changed)
+            {
+                publishOverlayContent();
+                macroNamesDue.store (true, std::memory_order_release);
+            }
+        }
+        if (macroNamesDue.exchange (false, std::memory_order_acq_rel) && audioMaster)
+            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);   // the host reads the names of the Q proxies again
     }
     /** The display thread, every tick: a posted request is loaded now. */
     void contentPoll()
@@ -1092,6 +1144,7 @@ struct PluginInstance
                 uiPoll (e);                                             // what the plugin-drawn pages wrote
                 contentPoll();                                          // a sample or an instrument the browser asked for
                 lfoShapePoll();                                         // a drawn LFO shape the LFO page wrote
+                macroNamePoll (e);                                      // a name the Macros page gave a macro
 #endif
                 int step[synthyboy_mpc::kLfoLiveCount] = {};
 #if SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
@@ -1414,11 +1467,18 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
 #if SYNTHYBOY_MPC_OVERLAY
     std::lock_guard<std::mutex> contentGuard (inst->contentMutex);
 #endif
+#if SYNTHYBOY_MPC_OVERLAY
+    bool namesChanged = false;
+    for (int m = 0; m < synthyboy::kNumMacros; ++m)
+        namesChanged = namesChanged || inst->content.macroNames[m] != content.macroNames[m];
+#endif
     inst->content = std::move(content);
     if (inst->engine)
         inst->engine->setContent(inst->content);
 #if SYNTHYBOY_MPC_OVERLAY
     inst->publishOverlayContent();
+    if (namesChanged)
+        inst->macroNamesDue.store (true, std::memory_order_release);   // the display thread tells the host the names of the Q proxies are other now
 #endif
 }
 
@@ -1672,7 +1732,10 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     buf[0] = '\0';
             }
             else if (opcode == effGetParamName)
-                std::snprintf (buf, 64, "%s%s", synthyboy::paramTable()[real].name, mode == synthyboy_mpc::QRouter::kOct ? " Oct" : (mode == synthyboy_mpc::QRouter::kSem ? " Sem" : ""));
+            {
+                if (! synthyboy_mpc::macroParamName (std::atomic_load (&inst->overlayContent), real, buf, 64))   // a macro: the name it has been given ("Filter Sweep")
+                    std::snprintf (buf, 64, "%s%s", synthyboy::paramTable()[real].name, mode == synthyboy_mpc::QRouter::kOct ? " Oct" : (mode == synthyboy_mpc::QRouter::kSem ? " Sem" : ""));
+            }
             else if (opcode == effGetParamLabel)
                 copyString (buf, 64, mode == synthyboy_mpc::QRouter::kOct ? "oct" : (mode == synthyboy_mpc::QRouter::kSem ? "st" : synthyboy::unitLabel (synthyboy::paramTable()[real].unit)));
             else if (mode == synthyboy_mpc::QRouter::kOct || mode == synthyboy_mpc::QRouter::kSem)

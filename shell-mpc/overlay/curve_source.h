@@ -85,6 +85,10 @@ public:
         thread (the engine gets the new content, the chunk keeps it, content () shows it a moment later); a newer request for the same LFO replaces an older one that was not applied yet. Called from the overlay
         thread; it only stores the request. */
     virtual void setLfoShape (int /*lfo*/, const synthyboy::ContentLfoShape& /*shape*/) {}
+    /** The plugin-drawn Macros page names macro `macro` (0 .. 7): `name` is cleaned and cut (synthyboy::sanitizeMacroName), "" is the default name. A request, applied by the plugin's display thread
+        (the state's content, the chunk and content () show it a moment later; the host is told the names of the Q proxies changed); a newer request for the same macro replaces an older one that was
+        not applied yet. Called from the overlay thread; it only stores the request. */
+    virtual void setMacroName (int /*macro*/, const std::string& /*name*/) {}
     /** The VIRTUAL Q targets (q_router.h): a Q knob that is not a parameter (the values of the shape editor). The page tells the router the value (0 .. 1) a virtual target has now; the host's write to the
         Q proxy comes back through takeQVirtual (the latest written value; false when there is none since the last call). Lock free. */
     virtual void setQVirtual (int /*id*/, float /*normalised*/) noexcept {}

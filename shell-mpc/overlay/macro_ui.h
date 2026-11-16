@@ -6,9 +6,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // Q groups: BANK 1 = the macros 1 .. 4 (the top row of cards), BANK 2 = the macros 5 .. 8; a tap on a card makes its row the group. On the targets page: the depth, the polarity and the switch of the active row.
+// The name of a macro is the button beside its dial: a tap opens the keyboard page (ui/text_entry.h, a page of the stack like the targets page; no Q group), OK stores the trimmed name through
+// IInstanceView::setMacroName, CANCEL and every other way out leave it.
 #pragma once
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -20,7 +23,9 @@
 #include "../ui/list.h"
 #include "../ui/mod_macros.h"
 #include "../ui/mod_targets.h"
+#include "../ui/text_entry.h"
 #include "curve_source.h"
+#include "macro_names.h"
 #include "page_view.h"
 #include "q_publish.h"
 #include "spectrum_curve.h"
@@ -38,7 +43,7 @@ class MacroUi
 public:
     static constexpr int kElementPage = 8;           // the page of the Macros tab
     static constexpr int kElementMacros = kElementPage;
-    enum Page { kPageTargets = 50, kPageList = 51 };
+    enum Page { kPageTargets = 50, kPageList = 51, kPageKeyboard = 52 };
 
     enum Id : int
     {
@@ -46,7 +51,9 @@ public:
         kMacroKnobBase = 100,    // 100 .. 107
         kMacroCardBase = 200,    // 200 .. 207: the chips of a card ask for the targets of the macro
         kTargetsBack = 300, kTargetsPage, kTargetsAdd, kTargetsRow = 310,   // 310 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
-        kList = 400, kListBackdrop, kListHeader
+        kList = 400, kListBackdrop, kListHeader,
+        kMacroNameBase = 500,    // 500 .. 507: the name of a card (a tap opens the keyboard page)
+        kKeyboardOk = 520, kKeyboardCancel
     };
     using ModRow = uibind::ModRow;
 
@@ -72,6 +79,7 @@ public:
         const ui::Rect tab { 0, kTabY, w, kTabH };
         view_.place (tab);
         targets_.place (tab);
+        entry_.place (tab);
         list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
         list_.setPopup (tab);
         list_.setId (kList);
@@ -91,11 +99,17 @@ public:
                 targetsPageIndex_ = 0;
             else if (top == kPageList)
                 listGroup_ = -1;
+            else if (top == kPageKeyboard)
+                beginKeyboard (inst);
             pageTop_ = top;
             qSlots_.forget();
             modsDirty_ = true;
             if (top == kPageList)
                 fillList();
+        }
+        {
+            const auto content = inst.content();   // the names of the macros (content.macro_names)
+            names_.load (content.get());
         }
         for (int m = 0; m < 8; ++m)
         {
@@ -105,9 +119,7 @@ public:
             char text[16];
             uibind::formatValue (uibind::info (macroParams_[m]), v, text, sizeof text);
             view_.cards[m].setValue (uibind::normOf (macroParams_[m], v), text);
-            char name[16];
-            std::snprintf (name, sizeof name, "MACRO %d", m + 1);
-            view_.cards[m].setMacro (m, name);
+            view_.cards[m].setMacro (m, cardName (m).c_str());
         }
         if (nowMs - modsAtMs_ >= kModsRefreshMs || modsDirty_)
         {
@@ -125,7 +137,9 @@ public:
     void draw (gpu::SceneBuilder& sb) const
     {
         page::ground (sb);
-        if (pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets))
+        if (pageTop_ == kPageKeyboard)
+            entry_.draw (sb);
+        else if (pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets))
             targets_.draw (sb);
         else
             view_.draw (sb);
@@ -201,6 +215,19 @@ public:
     int targetsOf() const noexcept { return pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets) ? targetMacro_ : -1; }
 
     ui::MacroView& view() noexcept { return view_; }
+    ui::TextEntry& keyboard() noexcept { return entry_; }
+    /** The macro whose name the keyboard page edits (0 .. 7), -1 when the page is not open. */
+    int editedMacro() const noexcept { return pageTop_ == kPageKeyboard ? editMacro_ : -1; }
+    /** The text a card carries as its name: "MACRO n" for the default, else the name in capitals (the style of the labels of the pages). */
+    std::string cardName (int m) const
+    {
+        if (! names_.custom (m))
+            return "MACRO " + std::to_string (m + 1);
+        std::string s = names_.full (m);
+        for (char& c : s)
+            c = static_cast<char> (std::toupper (static_cast<unsigned char> (c)));
+        return s;
+    }
     ui::ModTargetsPage& targetsPage() noexcept { return targets_; }
     ui::ListPopup& list() noexcept { return list_; }
     int bank() const noexcept { return view_.bank(); }
@@ -212,6 +239,7 @@ private:
     ui::Component* topComponent() noexcept
     {
         if (pageTop_ == kPageList) return &list_;
+        if (pageTop_ == kPageKeyboard) return &entry_;
         if (pageTop_ == kPageTargets) return &targets_;
         return &view_;
     }
@@ -224,6 +252,7 @@ private:
         {
             view_.cards[i].knob.setId (kMacroKnobBase + i);
             view_.cards[i].setId (kMacroCardBase + i);
+            view_.cards[i].nameId = kMacroNameBase + i;
         }
         targets_.back.setId (kTargetsBack);
         targets_.page.setId (kTargetsPage);
@@ -310,7 +339,7 @@ private:
             e[i].bypassed = sp.bypass >= 0 && v.param (sp.bypass) >= 0.5f;
             targetRows_[i] = { slots[first + i], source };
         }
-        bool same = ! fresh && n == targets_.numRows() && total == targetTotal_;
+        bool same = ! fresh && n == targets_.numRows() && total == targetTotal_ && cardName (std::clamp (targetMacro_, 0, 7)) == targetsTitle_;
         for (int i = 0; same && i < n; ++i)
         {
             const ui::ModTargetsPage::Row& r = targets_.rows[i];
@@ -320,8 +349,9 @@ private:
             return;
         targetTotal_ = total;
         char title[32];
-        std::snprintf (title, sizeof title, "MACRO %d", targetMacro_ + 1);
+        std::snprintf (title, sizeof title, "%s", cardName (std::clamp (targetMacro_, 0, 7)).c_str());
         targets_.load (e, n, title, ui::theme::sourceColour ("MAC"), total, targetsPageIndex_);
+        std::snprintf (targetsTitle_, sizeof targetsTitle_, "%s", title);
         targets_.back.setId (kTargetsBack);
         targets_.page.setId (kTargetsPage);
         targets_.add.setId (kTargetsAdd);
@@ -397,6 +427,23 @@ private:
             {
                 listGroup_ = -1;
                 fillList();
+                return;
+            }
+            if (id >= kMacroNameBase && id < kMacroNameBase + 8)   // the name of a card: the keyboard page
+            {
+                editMacro_ = id - kMacroNameBase;
+                stack.openDetail (kPageKeyboard);
+                return;
+            }
+            if (id == kKeyboardOk)   // the trimmed name is the macro's from now on ("" is the default name)
+            {
+                v.setMacroName (editMacro_, synthyboy::sanitizeMacroName (entry_.text(), editMacro_));
+                stack.back();
+                return;
+            }
+            if (id == kKeyboardCancel)
+            {
+                stack.back();
                 return;
             }
             if (id >= kMacroCardBase && id < kMacroCardBase + 8)   // the chips of a card: the targets of the macro
@@ -476,9 +523,9 @@ private:
             qSlots_.publish (v, targets_.numRows(), targets_.activeRow(), [this] (int row, int* t) { modRowTargets (row < ui::ModTargetsPage::kPerPage ? targetRows_[row].slot : -1, t); });
             setRowBlocks (targets_, ui::ModTargetsPage::kPerPage, targets_.numRows(), targets_.activeRow());
         }
-        else if (pageTop_ == kPageList)
+        else if (pageTop_ == kPageList || pageTop_ == kPageKeyboard)   // no group: the knobs do nothing on these pages
         {
-            std::snprintf (qName_, sizeof qName_, "LIST");
+            std::snprintf (qName_, sizeof qName_, pageTop_ == kPageList ? "LIST" : "KEYBOARD");
             qSlots_.publish (v, 0, 0, [] (int, int*) {});
         }
         else
@@ -495,6 +542,20 @@ private:
     int macroSource_[8] = {};
     std::vector<const char*> listNames_;
 
+    /** The keyboard page opens with the macro's own name (empty for the default: a new name starts with a capital). */
+    void beginKeyboard (IInstanceView& inst)
+    {
+        const auto content = inst.content();
+        const std::string current = content != nullptr && editMacro_ >= 0 && editMacro_ < synthyboy::kNumMacros ? content->macroNames[editMacro_] : std::string();
+        char title[40];
+        std::snprintf (title, sizeof title, "NAME OF MACRO %d", editMacro_ + 1);
+        entry_.begin (title, current.c_str(), synthyboy::kMaxMacroNameChars, kKeyboardOk, kKeyboardCancel);
+    }
+
+    MacroNames names_;
+    int editMacro_ = 0;
+    char targetsTitle_[32] = {};
+    ui::TextEntry entry_;
     ui::MacroView view_;
     ui::ModTargetsPage targets_;
     ui::ListPopup list_;
