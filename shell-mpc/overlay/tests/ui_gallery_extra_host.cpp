@@ -737,14 +737,16 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.picture (outDir + "/" + state + "_lfo1_shape_drawn.png");
         }
 
-        // 4.5 Shape editor page - empty
+        // 4.5 Shape editor page - empty (minimum 2 points: start and end)
         {
             GalleryRig<LfoUi> r (baseInst, 1);
+            r.inst.set ("lfo1.shape", 12.0f);
+            synthyboy::ContentLfoShape cs;
+            cs.lfo = 1;
+            cs.points = { { 0.0f, 0.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } };
+            r.inst.setLfoShape (1, cs);
+            r.refresh();
             r.tap (r.ui.full().edit);
-            ui::lfo::ShapeModel m;
-            m.n = 0;
-            r.ui.editor().model = m;
-            r.ui.editor().sync();
             r.refresh (2);
             r.picture (outDir + "/" + state + "_lfo_editor_empty.png");
         }
@@ -752,9 +754,13 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
         // 4.6 Shape editor page - a few points
         {
             GalleryRig<LfoUi> r (baseInst, 1);
+            r.inst.set ("lfo1.shape", 12.0f);
+            synthyboy::ContentLfoShape cs;
+            cs.lfo = 1;
+            cs.points = { { 0.0f, 1.0f, 0.0f }, { 0.33f, 0.0f, 0.0f }, { 0.66f, 1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } };
+            r.inst.setLfoShape (1, cs);
+            r.refresh();
             r.tap (r.ui.full().edit);
-            r.ui.editor().model = ui::lfo::ShapeModel::fromBuiltin (4); // square (4 points)
-            r.ui.editor().sync();
             r.refresh (2);
             r.picture (outDir + "/" + state + "_lfo_editor_points.png");
         }
@@ -762,9 +768,10 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
         // 4.7 Shape editor page - Point tool
         {
             GalleryRig<LfoUi> r (baseInst, 1);
+            r.refresh();
             r.tap (r.ui.full().edit);
-            r.ui.editor().tools.state.index = ui::ToolSelector::Point;
-            r.ui.editor().canvas.state.tool = ui::ToolSelector::Point;
+            const ui::Rect c = r.ui.editor().tools.cell (ui::ToolSelector::Point);
+            r.tapAt (c.x + c.w / 2, c.y + c.h / 2);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_lfo_editor_tool_point.png");
         }
@@ -772,9 +779,10 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
         // 4.8 Shape editor page - Flat tool
         {
             GalleryRig<LfoUi> r (baseInst, 1);
+            r.refresh();
             r.tap (r.ui.full().edit);
-            r.ui.editor().tools.state.index = ui::ToolSelector::Flat;
-            r.ui.editor().canvas.state.tool = ui::ToolSelector::Flat;
+            const ui::Rect c = r.ui.editor().tools.cell (ui::ToolSelector::Flat);
+            r.tapAt (c.x + c.w / 2, c.y + c.h / 2);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_lfo_editor_tool_flat.png");
         }
@@ -782,9 +790,10 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
         // 4.9 Shape editor page - RampUp tool
         {
             GalleryRig<LfoUi> r (baseInst, 1);
+            r.refresh();
             r.tap (r.ui.full().edit);
-            r.ui.editor().tools.state.index = ui::ToolSelector::RampUp;
-            r.ui.editor().canvas.state.tool = ui::ToolSelector::RampUp;
+            const ui::Rect c = r.ui.editor().tools.cell (ui::ToolSelector::RampUp);
+            r.tapAt (c.x + c.w / 2, c.y + c.h / 2);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_lfo_editor_tool_ramp_up.png");
         }
@@ -792,9 +801,10 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
         // 4.10 Shape editor page - RampDown tool
         {
             GalleryRig<LfoUi> r (baseInst, 1);
+            r.refresh();
             r.tap (r.ui.full().edit);
-            r.ui.editor().tools.state.index = ui::ToolSelector::RampDown;
-            r.ui.editor().canvas.state.tool = ui::ToolSelector::RampDown;
+            const ui::Rect c = r.ui.editor().tools.cell (ui::ToolSelector::RampDown);
+            r.tapAt (c.x + c.w / 2, c.y + c.h / 2);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_lfo_editor_tool_ramp_down.png");
         }
