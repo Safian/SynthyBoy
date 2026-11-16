@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "../master_ui.h"
@@ -63,20 +64,23 @@ void testMasterSidesAndBlocks()
     check (m.side() == ui::MasterScreen::SideMain, "the first side is MAIN: OUTPUT, PITCH, VOICES, GLIDE");
     std::string bad;
     std::vector<ui::Component*> main = { &m.volume, &m.spread, &m.stereoRouting, &m.voiceOverride, &m.tune, &m.transpose, &m.bendUp, &m.bendDown, &m.bendLink, &m.polyphony, &m.legato, &m.polyLegato, &m.phaseLegato,
-                                         &m.sameNote, &m.stealPriority, &m.voiceMeter, &m.portaTime, &m.portaSlope, &m.portaAlways, &m.portaScaled };
+                                         &m.sameNote, &m.stealPriority, &m.velocityTrack, &m.voiceMeter, &m.portaTime, &m.portaSlope, &m.portaAlways, &m.portaScaled };
     check (sizesOk (main, bad), "every control of the side MAIN is >= 56 px high and has its minimum size " + bad);
     // each block holds its group, and the blocks are filled (the controls reach the lower part of the block)
     bool inside = true, filled = true;
-    for (int g = 0; g < 4; ++g)
+    static const int kMainGroupBlock[6] = { 0, 1, 1, 2, 2, 3 };
+    for (int g = 0; g < 6; ++g)
     {
-        const ui::Rect b = m.blockRect (g), u = m.groups[g].rect();
+        const ui::Rect b = m.blockRect (kMainGroupBlock[g]), u = m.groups[g].rect();
         inside = inside && b.contains (u);
         ui::Component* all[96];
         const int n = m.collectLeaves (all, 0, 96);
         inside = inside && m.groups[g].check (all, n) == 0;
-        // the VOICES group is one row of the grid of cells (64 px), the voice meter under it reaches the lower part of the block
-        filled = filled && (g == 2 ? m.voiceMeter.rect().bottom() >= b.bottom() - 90 && u.h >= 64 : (g == 1 || g == 3 ? u.h >= 120 && (g == 1 ? m.bendLink.rect().bottom() : m.portaCurve.rect().bottom()) >= b.bottom() - 40 : u.bottom() >= b.bottom() - 90 && u.h >= 140));
     }
+    filled = filled && m.voiceMeter.rect().bottom() >= m.blockRect (2).bottom() - 90;
+    filled = filled && m.bendLink.rect().bottom() >= m.blockRect (1).bottom() - 40;
+    filled = filled && m.portaCurve.rect().bottom() >= m.blockRect (3).bottom() - 40;
+    filled = filled && m.voiceOverride.rect().bottom() >= m.blockRect (0).bottom() - 90;
     check (inside, "the Q group of OUTPUT, PITCH, VOICES and GLIDE lies in its block and nothing else is in its frame");
     check (filled, "the groups fill their blocks (>= 140 px high, reaching the lower part; PITCH and GLIDE: a row of four cells and LINK / the curve under it)");
     check (m.volume.rect().h >= 200 && m.volume.rect().w >= 140, "the VOLUME is a big knob (" + std::to_string (m.volume.rect().w) + " x " + std::to_string (m.volume.rect().h) + ")");
@@ -100,21 +104,23 @@ void testMasterSidesAndBlocks()
     }
     // the second side
     r.tap (m.sideTuning);
-    check (m.side() == ui::MasterScreen::SideTuning && m.activeGroup() == 4, "TUNING & MPE shows the second side, SCALE is the Q group");
+    check (m.side() == ui::MasterScreen::SideTuning && m.activeGroup() == 6, "TUNING & MPE shows the second side, SCALE is the Q group");
     std::vector<ui::Component*> tun = { &m.scaleType, &m.scaleKey, &m.scaleMode, &m.tuningA4, &m.tuningScale, &m.mtsEsp, &m.mtsNoteOn, &m.mpeOn, &m.mpeBend, &m.mpeMacro, &m.mpeYModwheel, &m.mpeBendToX, &m.mpeYBipolar };
     check (sizesOk (tun, bad), "every control of the side TUNING & MPE is >= 56 px high and has its minimum size " + bad);
     check (m.keyboard.rect().w >= 1200 && m.keyboard.rect().h >= 120, "the keyboard is big (" + std::to_string (m.keyboard.rect().w) + " x " + std::to_string (m.keyboard.rect().h) + ")");
     bool inside2 = true;
-    for (int g = 4; g < 8; ++g)
+    static const int kSubGroupBlock[4] = { 4, 5, 6, 6 };
+    for (int i = 0; i < 4; ++i)
     {
-        const ui::Rect b = m.blockRect (g < 6 ? g : 6), u = m.groups[g].rect();
+        const int g = 6 + i;
+        const ui::Rect b = m.blockRect (kSubGroupBlock[i]), u = m.groups[g].rect();
         ui::Component* all[96];
         const int n = m.collectLeaves (all, 0, 96);
         inside2 = inside2 && b.contains (u) && m.groups[g].check (all, n) == 0;
     }
     check (inside2, "the groups SCALE, TUNING and the two rows of MPE lie in their blocks and nothing else is in their frames");
     r.tap (m.sideMain);
-    check (m.side() == ui::MasterScreen::SideMain && m.activeGroup() < 4, "MAIN goes back");
+    check (m.side() == ui::MasterScreen::SideMain && m.activeGroup() < 6, "MAIN goes back");
 }
 
 void testMasterValuesAndWrites()
@@ -157,10 +163,22 @@ void testMasterGroupsAndMeters()
     ui::MasterScreen& m = r.ui.screen();
     check (r.inst.q[0] == demo::Inst::idx ("master.volume") && r.inst.q[1] == demo::Inst::idx ("master.stereo_spread"), "OUTPUT is the first Q group: VOLUME, SPREAD, STEREO, OVERRIDE");
     r.tap (m.portaSlope);
-    check (m.activeGroup() == 3 && r.inst.q[0] == demo::Inst::idx ("master.portamento.time") && r.inst.q[1] == demo::Inst::idx ("master.portamento.slope"), "a touch in GLIDE makes it the Q group");
+    check (m.activeGroup() == 5 && r.inst.q[0] == demo::Inst::idx ("master.portamento.time") && r.inst.q[1] == demo::Inst::idx ("master.portamento.slope"), "a touch in GLIDE makes it the Q group");
+    r.tap (m.bendLink);
+    check (m.activeGroup() == 2 && r.inst.q[0] == demo::Inst::idx ("master.bend_down_link"), "a touch on LINK makes it the Q group");
+    r.tap (m.velocityTrack);
+    check (m.activeGroup() == 4 && r.inst.q[2] == demo::Inst::idx ("master.velocity_track"), "a touch on VEL TRACK makes VOICES 2 the Q group");
     r.tap (m.sideTuning);
+    check (m.activeGroup() == 6, "switching to TUNING restores SCALE default Q group");
     r.tap (m.mpeBendToX);
-    check (m.activeGroup() == 7 && r.inst.q[0] == demo::Inst::idx ("master.mpe.y_modwheel") && r.inst.q[3] == -1, "the second row of MPE is a group of its own (3 members)");
+    check (m.activeGroup() == 9 && r.inst.q[0] == demo::Inst::idx ("master.mpe.y_modwheel") && r.inst.q[3] == -1, "the second row of MPE is a group of its own (3 members)");
+    r.ui.forgetQGroup();
+    r.refresh();
+    check (m.activeGroup() == 6, "forgetQGroup restores default group on tuning side");
+    r.tap (m.sideMain);
+    r.ui.forgetQGroup();
+    r.refresh();
+    check (m.activeGroup() == 0, "forgetQGroup restores default group on main side");
     // meters
     r.tap (m.sideMain);
     r.inst.haveLive = true;
@@ -220,13 +238,14 @@ void testVoiceLayout()
     std::vector<ui::Component*> cs = { &v.length, &v.qStepSelect, &v.qRowSelect, &v.stepValue, &v.randPan, &v.randDetune, &v.randCutoff, &v.randEnv, &v.randDetune10x, &v.scaleEnv, &v.scaleLfo, &v.scaleLfoMode, &v.oscA, &v.oscB, &v.oscC, &v.oscSub, &v.oscNoise };
     check (sizesOk (cs, bad), "every control of the Voice page is >= 56 px high and has its minimum size " + bad);
     bool inside = true;
-    for (int g = 0; g < 4; ++g)
+    static const int kVoiceGroupBlock[6] = { -1, 0, 0, 1, 2, 2 };
+    for (int g = 0; g < 6; ++g)
     {
         ui::Component* all[96];
         const int n = v.collectLeaves (all, 0, 96);
         inside = inside && v.groups[g].check (all, n) == 0;
         if (g > 0)
-            inside = inside && v.blockRect (g - 1).contains (v.groups[g].rect());
+            inside = inside && v.blockRect (kVoiceGroupBlock[g]).contains (v.groups[g].rect());
     }
     check (inside, "the Q groups lie in their blocks and nothing else is in their frames");
     check (v.grid.rect().h >= 230 && v.randPan.rect().h >= 72 && v.scaleEnv.rect().h >= 72, "the grid is tall and the knobs of the blocks have the room");
@@ -299,8 +318,19 @@ void testVoiceStepsLitAndQ()
     check (r.inst.get ("voicectl.s8.cutoff") > 0.0f, "the value field of the header writes the selected step (" + std::to_string (r.inst.get ("voicectl.s8.cutoff")) + ")");
     // the other blocks write their parameters, with values
     check (std::string (v.randPan.state.valueText).find ("%") != std::string::npos && std::string (v.scaleEnv.state.valueText).find ("%") != std::string::npos, "the knobs of the blocks show their values");
+    r.tap (v.randDetune10x);
+    r.refresh();
+    check (v.activeGroup() == 2 && r.inst.q[0] == demo::Inst::idx ("voicectl.rand.detune10x"), "tapping 10x DETUNE activates group 2");
+    r.tap (v.scaleEnv);
+    r.refresh();
+    check (v.activeGroup() == 3 && r.inst.q[0] == demo::Inst::idx ("voicectl.scale.env"), "tapping SCALING activates group 3");
     r.tap (v.oscNoise);
+    r.refresh();
+    check (v.activeGroup() == 5 && r.inst.q[0] == demo::Inst::idx ("voicectl.osc.noise"), "tapping NOISE activates group 5");
     check (r.inst.get ("voicectl.osc.noise") != 1.0f, "a target switch writes its parameter");
+    r.ui.forgetQGroup();
+    r.refresh();
+    check (v.activeGroup() == 0, "forgetQGroup restores group 0");
     r.tap (v.scaleLfoMode);
     check (r.ui.topPage() == VoiceUi::kPageList && r.ui.list().state.count > 1, "the mode stepper opens its list");
 }
@@ -322,6 +352,110 @@ void testVoiceDraw()
     renderScene (*data, cv);
     check (cv.size() == 1280u * 800u, "the CPU renderer draws the voice page");
 }
+void testFullCoverage()
+{
+    const auto* table = synthyboy::paramTable();
+    const size_t count = synthyboy::paramCount();
+    int totalChecked = 0;
+    int missingFromPages = 0;
+    int missingFromQGroups = 0;
+
+    MasterUi masterUi;
+    VoiceUi voiceUi;
+
+    std::unordered_set<std::string> masterKeys;
+    for (const auto& it : masterUi.items())
+        if (it.param >= 0 && it.type != MasterUi::T::Inert)
+            masterKeys.insert (it.key);
+
+    std::unordered_set<std::string> voiceKeys;
+    for (const auto& it : voiceUi.items())
+        if (it.param >= 0 && it.type != VoiceUi::T::Inert)
+            voiceKeys.insert (it.key);
+
+    std::unordered_set<int> masterQParams;
+    for (int g = 0; g < masterUi.screen().numGroups(); ++g)
+    {
+        masterUi.screen().setActiveGroup (g);
+        demo::Inst inst;
+        UiStack stack;
+        page::Input in;
+        masterUi.update (inst, stack, 0.0, in);
+        for (int slot = 0; slot < 4; ++slot)
+        {
+            const int target = masterUi.qTargets()[slot];
+            if (target >= 0 && target < static_cast<int> (count))
+                masterQParams.insert (target);
+        }
+    }
+
+    std::unordered_set<int> voiceQParams;
+    for (int g = 0; g < voiceUi.screen().numGroups(); ++g)
+    {
+        voiceUi.screen().setActiveGroup (g);
+        demo::Inst inst;
+        UiStack stack;
+        page::Input in;
+        voiceUi.update (inst, stack, 0.0, in);
+        for (int slot = 0; slot < 4; ++slot)
+        {
+            const int target = voiceUi.qTargets()[slot];
+            if (target >= 0 && target < static_cast<int> (count))
+                voiceQParams.insert (target);
+        }
+    }
+
+    std::vector<std::string> missingList;
+    for (size_t i = 0; i < count; ++i)
+    {
+        const std::string key = table[i].key;
+        const bool isMaster = key.rfind ("master.", 0) == 0;
+        const bool isVoice = key.rfind ("voice.", 0) == 0;
+        const bool isVoiceCtl = key.rfind ("voicectl.", 0) == 0;
+        if (! isMaster && ! isVoice && ! isVoiceCtl)
+            continue;
+
+        ++totalChecked;
+
+        bool onPage = false;
+        bool inQ = false;
+
+        if (isVoiceCtl)
+        {
+            onPage = voiceKeys.count (key) > 0;
+            if (key.rfind ("voicectl.s", 0) == 0)
+            {
+                inQ = onPage;
+            }
+            else
+            {
+                inQ = voiceQParams.count (static_cast<int> (i)) > 0;
+            }
+        }
+        else
+        {
+            onPage = masterKeys.count (key) > 0;
+            inQ = masterQParams.count (static_cast<int> (i)) > 0;
+        }
+
+        if (! onPage)
+        {
+            ++missingFromPages;
+            missingList.push_back ("MISSING_PAGE: " + key);
+        }
+        if (! inQ)
+        {
+            ++missingFromQGroups;
+            missingList.push_back ("MISSING_Q: " + key);
+        }
+    }
+
+    for (const auto& m : missingList)
+        std::printf ("  %s\n", m.c_str());
+
+    check (totalChecked == 95, "coverage: found exactly 95 parameters for master.*, voice.*, voicectl.* (found " + std::to_string (totalChecked) + ")");
+    check (missingFromPages == 0 && missingFromQGroups == 0, "coverage: all " + std::to_string (totalChecked) + " parameters have controls and are in Q groups");
+}
 } // namespace
 
 int main()
@@ -336,6 +470,7 @@ int main()
     testVoiceGridDrawing();
     testVoiceStepsLitAndQ();
     testVoiceDraw();
+    testFullCoverage();
     std::printf (g_fails ? "mastervoice_ui_host: FAILED (%d failures)\n" : "mastervoice_ui_host: OK (0 failures)\n", g_fails);
     return g_fails ? 1 : 0;
 }
