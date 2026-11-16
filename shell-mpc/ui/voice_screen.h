@@ -1,6 +1,7 @@
 // SynthyBoy - MPC UI component library: VoiceScreen, the page of the Voice tab (1280 x 628): the header (VOICE CONTROL, the Q group of the step: the row, the step, the length), the step grid (8 steps, the
 // six rows PAN, DETUNE, CUTOFF, ENV, MOD 1, MOD 2: draw with a finger, the step a voice plays is lit), a strip with ALL the values of the selected step, and three blocks that use their height: RANDOM (the four
-// spreads and 10x DETUNE), SCALING (the time scale of the envelopes and the LFOs and its mode), TARGETS (which sources the voice control acts on). One Q group each (the Targets of the fifth, NOISE, is beside the group).
+// spreads in a row of large knobs and the 10x DETUNE LED toggle under them), SCALING (the time scale of the envelopes and the LFOs and its mode as a LED list), TARGETS (which sources the voice control acts on: five LED
+// toggles, two columns). One Q group each (the Targets of the fifth, NOISE, is beside the group).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -13,6 +14,8 @@
 #include "base.h"
 #include "composite.h"
 #include "core.h"
+#include "led_list.h"
+#include "led_toggle.h"
 #include "qgroup.h"
 #include "theme.h"
 #include "voice_grid.h"
@@ -38,15 +41,15 @@ public:
     Knob randDetune { "DETUNE" };
     Knob randCutoff { "CUTOFF" };
     Knob randEnv { "ENV" };
-    ToggleIcon randDetune10x;
+    LedToggle randDetune10x;
 
     // Block 1: SCALING (voicectl.scale.*)
     Knob scaleEnv { "ENV TIME" };
     Knob scaleLfo { "LFO TIME" };
-    Stepper scaleLfoMode;
+    LedList scaleLfoMode;   // PERCENT / RATE: both visible
 
     // Block 2: TARGETS (voicectl.osc.*)
-    ToggleIcon oscA, oscB, oscC, oscSub, oscNoise;
+    LedToggle oscA, oscB, oscC, oscSub, oscNoise;
 
     // QGroups
     QGroup groups[kMaxGroups];
@@ -62,12 +65,9 @@ public:
         qRowSelect.setItem ("PAN");
         qStepSelect.setCaption ("STEP");
         qRowSelect.setCaption ("ROW");
-        scaleLfoMode.setCaption ("LFO TIME MODE");
+        scaleLfoMode.setTitle ("LFO TIME MODE");
 
         randDetune10x.setLabel ("10x DETUNE");
-        randDetune10x.state.showState = true;
-        for (ToggleIcon* t : { &oscA, &oscB, &oscC, &oscSub, &oscNoise })
-            t->state.showState = false;
         oscA.setLabel ("OSC A");
         oscB.setLabel ("OSC B");
         oscC.setLabel ("OSC C");
@@ -182,30 +182,35 @@ protected:
         qStepSelect.place ({ qRowSelect.rect().x - m - Stepper::kMinW, hy, Stepper::kMinW, 56 });
         grid.place ({ rect_.x + m, rect_.y + kHeaderH + 4, rect_.w - 2 * m, kGridH });
 
-        {   // RANDOM: the four spreads as medium knobs (the dial at the left, name and value beside it) in a 2 x 2 grid, 10x DETUNE in a column of its own at the right
+        {   // RANDOM: the four spreads as ONE row of large knobs (dial, name and value under it), 10x DETUNE as a LED toggle row across the block under them. The first row starts at the top of the block: the index chips sit in its title strip
             const Rect in = inner (0);
-            const int tw = 140, kw = (in.w - tw - 2 * g) / 2, kh = (in.h - 2 * lane - g) / 2;
+            const int th = 56, kh = std::max (72, in.h - lane - th - 4), kw = (in.w - 3 * g) / 4;
             Knob* ks[4] = { &randPan, &randDetune, &randCutoff, &randEnv };
             for (int i = 0; i < 4; ++i)
             {
-                ks[i]->state.side = true; ks[i]->state.large = false;
-                ks[i]->place ({ in.x + (i % 2) * (kw + g), in.y + lane + (i / 2) * (kh + lane + g), kw, std::max (72, kh) });
+                ks[i]->state.side = false; ks[i]->state.large = true;
+                const int x = in.x + i * (kw + g);
+                ks[i]->place ({ x, in.y, i == 3 ? in.right() - x : kw, kh });
             }
-            randDetune10x.place ({ in.right() - tw, in.y + (in.h - 64) / 2, tw, 64 });
+            randDetune10x.place ({ in.x, in.bottom() - th, in.w, th });
         }
-        {   // SCALING: the two time knobs, the mode under them
+        {   // SCALING: the two time knobs, the mode (a LED list of two, side by side, with its title) under them
             const Rect in = inner (1);
-            const int kw = (in.w - g) / 2, kh = in.h - lane - 64 - lane - g;
-            scaleEnv.place ({ in.x, in.y + lane, kw, std::max (72, kh) });
-            scaleLfo.place ({ in.x + kw + g, in.y + lane, in.right() - (in.x + kw + g), std::max (72, kh) });
-            scaleLfoMode.place ({ in.x, in.bottom() - 64, std::max (Stepper::kMinW, std::min (in.w, 260)), 64 });
+            const int lh = LedList::kTitleH + led::kRowH, kw = (in.w - g) / 2, kh = std::max (72, in.h - lane - lh - 4);
+            scaleEnv.place ({ in.x, in.y, kw, kh });
+            scaleLfo.place ({ in.x + kw + g, in.y, in.right() - (in.x + kw + g), kh });
+            scaleLfoMode.place ({ in.x, in.bottom() - lh, in.w, lh });
         }
-        {   // TARGETS: five equal cells in one grid: OSC A, OSC B, OSC C, SUB, NOISE
+        {   // TARGETS: five LED toggles in two columns (OSC A, OSC B / OSC C, SUB / NOISE across the block), rows that share the height; a lane above the rows below the first
             const Rect in = inner (2);
-            const int tw = (in.w - 4 * g) / 5, th = std::max (64, in.h - lane);
-            ToggleIcon* ts[5] = { &oscA, &oscB, &oscC, &oscSub, &oscNoise };
-            for (int i = 0; i < 5; ++i)
-                ts[i]->place ({ in.x + i * (tw + g), in.y + lane, tw, th });
+            const int rows = 3, th = std::max (led::kRowH, (in.h - 2 * lane) / rows), cw = (in.w - g) / 2;
+            LedToggle* ts[4] = { &oscA, &oscB, &oscC, &oscSub };
+            for (int i = 0; i < 4; ++i)
+            {
+                const int x = in.x + (i % 2) * (cw + g);
+                ts[i]->place ({ x, in.y + (i / 2) * (th + lane), i % 2 == 0 ? cw : in.right() - x, th });
+            }
+            oscNoise.place ({ in.x, in.y + 2 * (th + lane), in.w, th });
         }
     }
 

@@ -81,6 +81,15 @@ public:
         }
         return best;
     }
+    /** Legible when ANY arrangement (one, two or three columns) fits the rectangle: its rows at least 56 px high, its columns as wide as the widest name needs. */
+    bool sizeOk() const noexcept override
+    {
+        const int n = std::clamp (state.count, 1, kMaxOptions), need = columnNeed();
+        for (int c = 1; c <= std::min (kMaxColumns, n); ++c)
+            if (rect_.w >= c * need && rect_.h >= led::kRowH * ((n + c - 1) / c) + titleH())
+                return true;
+        return false;
+    }
     double wheelUnit() const noexcept override { return -1.0; }   // the wheel up goes up the list
 
     /** The touch rectangle of option i (the rows tile the rectangle below the title, the options fill the columns downwards). */
