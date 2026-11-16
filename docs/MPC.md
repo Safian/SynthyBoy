@@ -981,6 +981,8 @@ Master and Voice are no longer members of `PlayView`. All elements bind to engin
 
 **Tests and images.** `filter_ui_host.cpp`, `mod_ui_host.cpp`, `mixfx_ui_host.cpp`, `mastervoice_ui_host.cpp` (all in `shell-mpc/overlay/tests/`), `page_view_host.cpp` (the real layout, opening, groups, status naming, readout targets) run in `shell-mpc/accept.sh` (the last ones also under AddressSanitizer); the `*_ui_demo.cpp` programs (shared `demo_common.h`) write the demonstration pictures into `$B/ui-images/<element>/look-N` (the collected set is in `.hw-local/mpc-ui-plans/komponens-kepek/`). The old 17-view table lives in `tests/fixtures/legacy_layout.h` for the tests of the controller that do not need the new pages.
 
+**UI gallery renderer.** `scripts/render-ui-gallery.py` renders every plugin-drawn page of the overlay build at 1280x800 for offline visual reviews without a hardware device. Driven by `shell-mpc/overlay/tests/ui_gallery_host.cpp` through the CPU reference renderer, it captures the Init state and factory presets across all views discovered directly from `overlay_layout.json` (Play 1-3, Macros, Osc A/B/C/Sub/Noise with unison and mod details, Mixer, Filter 1/2, Env 1-4 with/without targets, LFO 1-4 and random LFO, Mod matrix empty/populated, FX gallery and all 13 effect editors, Master sides, and Voice). Output images and an `index.html` contact sheet are placed into the `--out` folder (default: under the build tree). Usage: `python3 scripts/render-ui-gallery.py [--out DIR] [--presets FILE...]`. Tests: `scripts/tests/test_render_ui_gallery.py` and `ui_gallery_host --test`.
+
 ## Browser tile
 
 The host displays a graphic tile in the Sounds > INSTRUMENTS plugin selector when the package contains `Plugin Skins/browser_images/soundsmode.png`.
