@@ -35,6 +35,7 @@
 #include "overlay_layout.h"
 #include "page_detector.h"
 #include "panel_key.h"
+#include "qlink_setting.h"
 #include "presenter.h"
 #include "renderer.h"
 #include "touch_input.h"
@@ -56,6 +57,7 @@ struct Paths
     std::string detail = "/tmp/synthyboy-overlay-detail";   // 1 / full, 2 / reduced: the level of detail of the UI (ui/theme.h Detail); without the file (or "auto") the plugin chooses from the measured frame time
     std::string gpuClock = "/tmp/synthyboy-overlay-gpuclock";   // "off": the clock of the GPU is left to its governor; otherwise it is raised while the picture moves (gpu_clock.h)
     std::string rate = "/tmp/synthyboy-overlay-fps";   // 30 or 60: the pictures a second the GPU path aims at; without the file (or "auto") 30 on a GPU of the Mali-T series (the Key 61), 60 (tried, kept when it is reached) on the others
+    std::string qlinkSettings = "/data/Settings/MPC/MPC.settings";   // the host's settings (read only): the option "Show Q-Link Status When Touched" (qlink_setting.h); with it off the key does nothing
     std::string look = "/tmp/synthyboy-overlay-look";   // a number 1 .. 3: the look of the UI (ui/theme.h); without the file look 1
     std::string dumpRequest = "/tmp/synthyboy-overlay-dump";
     std::string dump = "/tmp/synthyboy-overlay-curve.txt";
@@ -374,7 +376,7 @@ private:
             // With no reference (a new page, or the reference was dropped) the key cannot say where the band begins; the page is held all the same while the panel is there (its look fully in, or its black line
             // anywhere in the strip: PanelKey::findLine) and the picture is cut at that line (updateKey): better a strip too much than the page blinking off for as long as the panel is up
             bool blindHold = false;
-            if (d.view < 0 && d.partialView >= 0 && d.partialView == current_ && current_ >= 0 && rotationKnown() && ! keys_[static_cast<size_t> (current_)].hasReference())
+            if (qlinkOpt_.keyOn() && d.view < 0 && d.partialView >= 0 && d.partialView == current_ && current_ >= 0 && rotationKnown() && ! keys_[static_cast<size_t> (current_)].hasReference())
                 blindHold = d.partialLook || PanelKey::findLine (frames_, rotation_) < PanelKey::kNoKey;
             if (d.view < 0 && d.partialView >= 0 && d.partialView == current_ && current_ >= 0 && (keyEdge_ <= markers_[d.partialView * 2 + 1].rect.x || blindHold))
             {
@@ -477,7 +479,7 @@ private:
             lastQWriteMs_ = nowMs;
         }
         int edge = PanelKey::kNoKey;
-        if (current_ >= 0 && rotationKnown())
+        if (current_ >= 0 && rotationKnown() && qlinkOpt_.keyOn())
         {
             PanelKey& k = keys_[current_];
             if (! k.hasReference())
@@ -940,6 +942,18 @@ private:
     void readSwitches (double nowMs)
     {
         killed_ = exists (paths_.killSwitch);
+        if (qlinkOpt_.poll())
+        {
+            // the option of the host changed (or was read the first time): with it off the pop-up never comes, the key is off entirely: nothing is read, nothing is cut, the references are dropped
+            if (! qlinkOpt_.keyOn())
+            {
+                for (PanelKey& k : keys_)
+                    k.forget();
+                bandWholeSinceMs_ = -1.0;
+            }
+            keyOptionChanges_++;
+            needFrame_ = true;
+        }
         const bool noGpu = exists (paths_.noGpu);
         if (noGpu != noGpu_)
         {
@@ -1242,7 +1256,7 @@ private:
             std::lock_guard<std::mutex> g (mu_);
             const UiStack& u = activeSlot_ >= 0 ? ui_[activeSlot_] : ui_[0];
             o << "ui_state: " << (activeSlot_ < 0 || u.isMain() ? "main" : (u.level() == UiStack::Level::full ? "full" : "detail")) << "\nui_depth: " << (activeSlot_ < 0 ? 0 : u.depth())
-              << "\nui_auto_closes: " << uiAutoCloses_ << "\ngpu_clock_boost: " << (clock_.boosted() ? "yes" : "no") << "\ngpu_rate_stride: " << rateStride_ << "\ngpu_rate_source: " << rateSource_ << "\nui_look: " << look_ << "\nui_detail: " << ui::theme::D().name << "\nui_detail_source: " << detailSource_ << "\nui_detail_helper_render_ms: " << detailMeanMs_ << "\nqlink_panel: " << (keyEdge_ < PanelKey::kNoKey ? "yes" : "no") << "\nqlink_panel_changes: " << qlinkPanelChanges_ << "\nkey_active: " << (keyEdge_ < PanelKey::kNoKey ? "yes" : "no") << "\nkey_pixels: " << (PanelKey::kNoKey - keyEdge_) << "\nkey_reference_taken: " << keyReferences_ << "\nkey_reference_retakes: " << keyRetakes_ << "\nkey_holds: " << keyHolds_ << "\nkey_blind_ticks: " << keyBlindTicks_ << "\nkey_cost_ms: " << (keyMeasures_ > 0 ? keyCostSum_ / static_cast<double> (keyMeasures_) : 0.0) << " (max " << keyCostMax_ << ")\nview_hides: " << viewHides_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\n" << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
+              << "\nui_auto_closes: " << uiAutoCloses_ << "\ngpu_clock_boost: " << (clock_.boosted() ? "yes" : "no") << "\ngpu_rate_stride: " << rateStride_ << "\ngpu_rate_source: " << rateSource_ << "\nui_look: " << look_ << "\nui_detail: " << ui::theme::D().name << "\nui_detail_source: " << detailSource_ << "\nui_detail_helper_render_ms: " << detailMeanMs_ << "\nqlink_panel: " << (keyEdge_ < PanelKey::kNoKey ? "yes" : "no") << "\nqlink_panel_changes: " << qlinkPanelChanges_ << "\nkey_active: " << (keyEdge_ < PanelKey::kNoKey ? "yes" : "no") << "\nkey_pixels: " << (PanelKey::kNoKey - keyEdge_) << "\nkey_reference_taken: " << keyReferences_ << "\nkey_reference_retakes: " << keyRetakes_ << "\nqlink_status_option: " << qlinkSettingText (qlinkOpt_.value()) << "\nkey_enabled: " << (qlinkOpt_.keyOn() ? "yes" : "no") << "\nqlink_status_option_reads: " << qlinkOpt_.reads() << " (of " << qlinkOpt_.polls() << " checks)\nkey_holds: " << keyHolds_ << "\nkey_blind_ticks: " << keyBlindTicks_ << "\nkey_cost_ms: " << (keyMeasures_ > 0 ? keyCostSum_ / static_cast<double> (keyMeasures_) : 0.0) << " (max " << keyCostMax_ << ")\nview_hides: " << viewHides_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\n" << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
         }
         o << "frames_last_second: " << (final_ ? 0u : framesLast_) << "\n";
         o << "frames_total: " << framesTotal() << "\n";
@@ -1362,6 +1376,7 @@ private:
     IFrameSource& frames_;
     ICurveRenderer& renderer_;
     Paths paths_;
+    QLinkSettingFile qlinkOpt_ { paths_.qlinkSettings };   // the host's option for the pop-up (qlink_setting.h): read at the start and when the file changes; off: the key does nothing
     Timing timing_;
     double fixedCost_;
     gpu::IGpuOverlay* gpu_ = nullptr;
@@ -1384,7 +1399,7 @@ private:
     int keyEdge_ = PanelKey::kNoKey;
     static constexpr int kBlindEdge = PageDetector::kPanelLineX - 2;   // the cut while there is no reference: the left edge of the panel when it is fully in, less the grown edge
     double lastWholeMs_ = 0.0, wholeSinceMs_ = 0.0, bandWholeSinceMs_ = -1.0, viewSinceMs_ = 0.0, lastQWriteMs_ = 0.0, keyCostSum_ = 0.0, keyCostMax_ = 0.0;
-    unsigned long qWrites_ = 0, keyReferences_ = 0, keyRetakes_ = 0, keyHolds_ = 0, keyMeasures_ = 0, keyBlindTicks_ = 0, viewHides_ = 0, qlinkPanelChanges_ = 0;
+    unsigned long qWrites_ = 0, keyReferences_ = 0, keyRetakes_ = 0, keyHolds_ = 0, keyMeasures_ = 0, keyBlindTicks_ = 0, keyOptionChanges_ = 0, viewHides_ = 0, qlinkPanelChanges_ = 0;
     int qWriteSlot_ = -1;
     double renderAcc_ = 0.0, detailMeanMs_ = 0.0;
     GpuClock clock_;                                      // the lowest clock the GPU's governor may use, raised while the picture moves

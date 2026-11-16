@@ -355,6 +355,54 @@ int main()
         r.run (3000);
         check (r.stuckTicks == 0 && r.hiddenTicks == 0, "the pop-up comes as the dim ends: never stuck, never hidden (stuck " + std::to_string (r.stuckTicks) + ", hidden " + std::to_string (r.hiddenTicks) + ")");
     }
+    // ---- the host's option "Show Q-Link Status When Touched" (qlink_setting.h): off, the key does nothing at all ----
+    {
+        const std::string off = "<PROPERTIES>\n  <VALUE name=\"SynthContentLocations\"/>\n  <VALUE name=\"ShowQLinksStatusOverlay\" val=\"0\"/>\n</PROPERTIES>\n";
+        const std::string on = "<PROPERTIES>\n  <VALUE name=\"SynthContentLocations\"/>\n  <VALUE name=\"ShowQLinksStatusOverlay\" val=\"1\"/>\n</PROPERTIES>\n";
+        Rig r;
+        check (r.field ("qlink_status_option_reads") == 0, "no tick yet: the file was not read");
+        r.host.setPage (true);
+        r.run (2500);
+        auto text = [&] (const char* k) { const std::string t = r.dir.read ("status.txt"); const std::string key = std::string (k) + ": "; const size_t p = t.find (key); return p == std::string::npos ? std::string ("-") : t.substr (p + key.size(), t.find ('\n', p) - p - key.size()); };
+        check (text ("qlink_status_option") == "unknown" && text ("key_enabled") == "yes", "no settings file: unknown, the key is on (option " + text ("qlink_status_option") + ", enabled " + text ("key_enabled") + ")");
+        check (r.field ("key_reference_taken") == 1, "... and it works: the reference was taken");
+        // the owner switches the option off (the host writes its settings)
+        r.dir.write ("MPC.settings", off);
+        r.run (1500);
+        check (text ("qlink_status_option") == "0" && text ("key_enabled") == "no", "the file says 0: the status says so and the key is off (option " + text ("qlink_status_option") + ", enabled " + text ("key_enabled") + ")");
+        const unsigned long measuresBefore = r.field ("key_reference_taken");
+        r.slideIn (250.0);
+        r.run (1000);
+        check (r.ctl->keyEdge() == PanelKey::kNoKey, "key off: a panel on the screen is not cut at (the host never draws it with the option off; nothing is read)");
+        r.slideOut (250.0);
+        r.run (2500);
+        check (r.field ("key_reference_taken") == measuresBefore && r.field ("key_blind_ticks") == 0, "key off: no reference is taken and no blind cut is made");
+        // a new page under the key that is off: no reference either
+        r.host.setPage (false);
+        r.run (300);
+        r.host.setPage (true);
+        r.run (3000);
+        check (r.field ("key_reference_taken") == measuresBefore && r.ctl->state() == "visible", "key off: a page entered later takes no reference either, and is shown");
+        const unsigned long reads = r.field ("qlink_status_option_reads");
+        r.run (5000);
+        check (r.field ("qlink_status_option_reads") == reads, "the file is not read again while it is unchanged (reads " + std::to_string (reads) + ")");
+        // the option is switched on again
+        r.dir.write ("MPC.settings", on + "\n");
+        r.run (3500);
+        check (text ("qlink_status_option") == "1" && text ("key_enabled") == "yes" && r.field ("key_reference_taken") == measuresBefore + 1, "the file says 1: the key is on again and takes its reference (" + text ("qlink_status_option") + ", taken " + std::to_string (r.field ("key_reference_taken")) + ")");
+        r.slideIn (250.0);
+        r.run (500);
+        check (r.ctl->keyEdge() >= 1020 && r.ctl->keyEdge() <= 1024, "... and follows the pop-up (cut at " + std::to_string (r.ctl->keyEdge()) + ")");
+        // switched off while the pop-up is up and the picture is cut: let go at once
+        r.dir.write ("MPC.settings", off);
+        r.run (1500);
+        check (r.ctl->keyEdge() == PanelKey::kNoKey, "the option goes off while the picture is cut: the cut is let go");
+        // a file with another key only: unknown, on
+        r.host.setLeft (1280);
+        r.dir.write ("MPC.settings", "<PROPERTIES>\n  <VALUE name=\"Other\" val=\"0\"/>\n</PROPERTIES>\n");
+        r.run (1500);
+        check (text ("qlink_status_option") == "unknown" && text ("key_enabled") == "yes", "a settings file without the key: unknown, the key stays on");
+    }
     std::printf (g_fails ? "qlink_panel_host: FAILED (%d)\n" : "qlink_panel_host: OK\n", g_fails);
     return g_fails ? 1 : 0;
 }
