@@ -227,5 +227,35 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_link_libraries(page_view_host PRIVATE synthyboy_core Threads::Threads)
     target_compile_features(page_view_host PRIVATE cxx_std_17)
     target_compile_options(page_view_host PRIVATE -Wall -Wextra -Wpedantic)
+
+    add_executable(osc_ui_host EXCLUDE_FROM_ALL overlay/tests/osc_ui_host.cpp)
+    target_include_directories(osc_ui_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(osc_ui_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(osc_ui_host PRIVATE cxx_std_17)
+    target_compile_options(osc_ui_host PRIVATE -Wall -Wextra -Wpedantic)
+
+    add_executable(osc_page_host EXCLUDE_FROM_ALL overlay/tests/osc_page_host.cpp)
+    target_include_directories(osc_page_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(osc_page_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(osc_page_host PRIVATE cxx_std_17)
+    target_compile_options(osc_page_host PRIVATE -Wall -Wextra -Wpedantic)
+
+    add_executable(osc_page_ui_demo EXCLUDE_FROM_ALL overlay/tests/osc_page_ui_demo.cpp)
+    target_include_directories(osc_page_ui_demo PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(osc_page_ui_demo PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(osc_page_ui_demo PRIVATE cxx_std_17)
+    target_compile_options(osc_page_ui_demo PRIVATE -Wall -Wextra -Wpedantic)
+
+    add_test(NAME osc_page_host COMMAND osc_page_host)
+    add_test(NAME osc_ui_host COMMAND osc_ui_host)
 endif()
 

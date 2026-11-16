@@ -46,9 +46,12 @@ void renderAll (const std::string& dir)
         r.picture (dir, "osc_sub.png");
     }
     {
-        ORig r (5);   // Noise
+        ORig r (5);   // Noise (generated)
         r.refresh (3);
         r.picture (dir, "osc_noise.png");
+        r.inst.set ("noise.type", 1.0f);   // Noise (sample)
+        r.refresh (3);
+        r.picture (dir, "osc_noise_sample.png");
     }
 }
 } // namespace
