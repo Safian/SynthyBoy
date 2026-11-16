@@ -166,17 +166,17 @@ int main()
         feed (kKey, kBtnLeft, 0);
         check (s.v.size() == 3 && s.v[2].kind == MouseEvent::Up && ! d.buttonDown(), "BTN_LEFT up: an Up");
         feed (kRel, kRelX, 4); feed (kSyn, kReport, 0);
-        check (s.v.size() == 3, "movement with no button: nothing (the host moves its pointer, the pages do not care)");
+        check (s.v.size() == 4 && s.v[3].kind == MouseEvent::Move, "movement with no button: a Move too (the router only reads the pointer's position for the status; the pages get nothing)");
         feed (kKey, kBtnRight, 1);
-        check (s.v.size() == 3, "another button: not ours");
+        check (s.v.size() == 4, "another button: not ours");
         feed (kRel, kWheel, 1); feed (kRel, kWheel, 2); feed (kSyn, kReport, 0);
-        check (s.v.size() == 4 && s.v[3].kind == MouseEvent::Wheel && s.v[3].notches == 3, "wheel notches of one report are summed (3)");
+        check (s.v.size() == 5 && s.v[4].kind == MouseEvent::Wheel && s.v[4].notches == 3, "wheel notches of one report are summed (3)");
         feed (kRel, kWheel, -1); feed (kSyn, kReport, 0);
-        check (s.v.size() == 5 && s.v[4].notches == -1, "wheel the other way: -1");
+        check (s.v.size() == 6 && s.v[5].notches == -1, "wheel the other way: -1");
         feed (kRel, kWheel, 1); feed (kSyn, MouseDecoder::kSynDropped, 0); feed (kSyn, kReport, 0);
-        check (s.v.size() == 5, "SYN_DROPPED: the half-done report is thrown away");
+        check (s.v.size() == 6, "SYN_DROPPED: the half-done report is thrown away");
         feed (kKey, kBtnLeft, 1); feed (kRel, kRelX, 1); feed (kRel, kWheel, 1); feed (kSyn, kReport, 0);
-        check (s.v.size() == 8 && s.v[5].kind == MouseEvent::Down && s.v[6].kind == MouseEvent::Wheel && s.v[7].kind == MouseEvent::Move, "a report with the wheel and a drag: both, the wheel first");
+        check (s.v.size() == 9 && s.v[6].kind == MouseEvent::Down && s.v[7].kind == MouseEvent::Wheel && s.v[8].kind == MouseEvent::Move, "a report with the wheel and a drag: both, the wheel first");
     }
     // ---- the reader ----
     {
