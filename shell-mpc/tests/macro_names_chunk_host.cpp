@@ -2,7 +2,7 @@
 // the names loads with the default ones, a program change or a load replaces them, the Q proxy whose target is a macro reports the name (the host is told by audioMasterUpdateDisplay when it changes),
 // a rename of the Macros page (the debug file SYNTHYBOY_MPC_MACRO_NAME_FILE stands for the page) reaches the chunk, dirty names are cleaned, the parameter list is the one of before (2719).
 //
-// Usage: macro_names_chunk_host <plugin library with the overlay>. Run under ThreadSanitizer too.
+// Usage: macro_names_chunk_host <plugin library with the overlay> [<the same library inside a plugin folder with Content/presets: the factory programs and their names>]. Run under ThreadSanitizer too.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "mpc_vst2_abi.h"
@@ -95,7 +95,7 @@ static std::string stateWith (std::initializer_list<std::pair<int, const char*>>
 
 int main (int argc, char** argv)
 {
-    if (argc < 2) { std::fprintf (stderr, "usage: macro_names_chunk_host <plugin>\n"); return 2; }
+    if (argc < 2) { std::fprintf (stderr, "usage: macro_names_chunk_host <plugin> [<packaged plugin>]\n"); return 2; }
     const std::string qFake = "/tmp/synthyboy-q-fake-group-macronames-" + std::to_string (static_cast<long> (getpid()));
     const std::string nameFile = "/tmp/synthyboy-macro-name-macronames-" + std::to_string (static_cast<long> (getpid()));
     setenv ("SYNTHYBOY_MPC_Q_FAKE_FILE", qFake.c_str(), 1);
@@ -187,6 +187,44 @@ int main (int argc, char** argv)
         check (setChunk (a, wide), "a chunk with a name of 20 three byte characters loads");
         writeGroup (std::to_string (macroIdx[0]) + " -1 -1 -1");
         check (waitFor (2000, [&] { return text (a, effGetParamName, q0).size() == 48; }), "the name is cut to 16 characters (48 bytes), whole characters, inside the 64 byte buffer of the host");
+    }
+
+    // ---- a factory program of the package (the library inside a plugin folder with Content/presets, argv[2]): its names come with it, the next program has its own
+    if (argc >= 3)
+    {
+        std::remove (nameFile.c_str());   // the renames of the page above are not for the new instance
+        void* pkg = dlopen (argv[2], RTLD_NOW | RTLD_LOCAL);
+        Main pkgEntry = pkg ? reinterpret_cast<Main> (dlsym (pkg, "VSTPluginMain")) : nullptr;
+        AEffect* f = pkgEntry ? pkgEntry (hostCallback) : nullptr;
+        if (f == nullptr)
+        {
+            check (false, "the packaged library loads");
+        }
+        else
+        {
+            f->dispatcher (f, effOpen, 0, 0, nullptr, 0.0f);
+            f->dispatcher (f, effSetSampleRate, 0, 0, nullptr, 44100.0f);
+            f->dispatcher (f, effSetBlockSize, 0, 256, nullptr, 0.0f);
+            int boom = -1, plain = -1;
+            for (int i = 0; i < f->numPrograms; ++i)
+            {
+                char nm[128] = {};
+                f->dispatcher (f, effGetProgramNameIndexed, i, 0, nm, 0.0f);
+                if (std::string (nm) == "808 Boom") boom = i;
+                if (std::string (nm) == "Init") plain = i;
+            }
+            check (boom > 0 && f->numPrograms >= 100, "the package has the factory programs (" + std::to_string (f->numPrograms) + ")");
+            writeGroup (std::to_string (macroIdx[0]) + " " + std::to_string (macroIdx[1]) + " " + std::to_string (macroIdx[2]) + " " + std::to_string (macroIdx[3]));
+            const int udf = updates (f);
+            f->dispatcher (f, effSetProgram, 0, boom, nullptr, 0.0f);
+            check (waitFor (3000, [&] { return text (f, effGetParamName, q0) == "Cutoff"; }) && text (f, effGetParamName, q0 + 1) == "Drive" && text (f, effGetParamName, q0 + 2) == "Decay + LFO Rate" && text (f, effGetParamName, q0 + 3) == "Detune + Chorus",
+                   "the factory program 808 Boom: its macros are called Cutoff, Drive, Decay + LFO Rate, Detune + Chorus [" + text (f, effGetParamName, q0) + "|" + text (f, effGetParamName, q0 + 1) + "|" + text (f, effGetParamName, q0 + 2) + "|" + text (f, effGetParamName, q0 + 3) + "]");
+            check (waitFor (2000, [&] { return updates (f) > udf; }), "... the host is told");
+            check (getChunk (f).find ("\"macro_names\":[\"Cutoff\",\"Drive\",\"Decay + LFO Rate\",\"Detune + Chorus\",\"\",\"Reso\",\"\",\"\"]") != std::string::npos, "... the chunk carries them");
+            f->dispatcher (f, effSetProgram, 0, plain >= 0 ? plain : 0, nullptr, 0.0f);
+            check (waitFor (3000, [&] { return text (f, effGetParamName, q0) == "Macro 1"; }) && getChunk (f).find ("macro_names") == std::string::npos, "the init program has the default names again");
+            f->dispatcher (f, effClose, 0, 0, nullptr, 0.0f);
+        }
     }
 
     a->dispatcher (a, effClose, 0, 0, nullptr, 0.0f);
