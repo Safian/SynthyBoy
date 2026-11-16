@@ -392,6 +392,20 @@ struct PluginInstance
         int contentLoad (std::string* message) const override { return inst.contentLoadState (message); }
         void setLfoShape (int lfo, const synthyboy::ContentLfoShape& shape) override { inst.requestLfoShape (lfo, shape); }
         void setMacroName (int macro, const std::string& name) override { inst.macroNameQueue.post (macro, name); }
+#if SYNTHYBOY_MPC_PAD_PRESSURE
+        bool padPressure (bool& on, float& percent) const noexcept override
+        {
+            on = inst.padPressure.load (std::memory_order_relaxed);
+            percent = inst.padPressureAmount.load (std::memory_order_relaxed);
+            return true;
+        }
+        void setPadPressure (bool on, float percent) noexcept override
+        {
+            inst.padPressure.store (on, std::memory_order_relaxed);
+            inst.padPressureAmount.store (std::min (std::max (percent, 0.0f), 100.0f), std::memory_order_relaxed);
+            inst.updateEnginePadPressure();
+        }
+#endif
         void setQVirtual (int id, float normalised) noexcept override { inst.qRouter.setVirtualValue (id, normalised); }
         bool takeQVirtual (int id, float& normalised) noexcept override { return inst.qRouter.takeVirtual (id, normalised); }
         unsigned long qWriteCount() const noexcept override { return inst.qRouter.writeCount(); }

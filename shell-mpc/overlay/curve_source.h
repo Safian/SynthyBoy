@@ -85,6 +85,11 @@ public:
         thread (the engine gets the new content, the chunk keeps it, content () shows it a moment later); a newer request for the same LFO replaces an older one that was not applied yet. Called from the overlay
         thread; it only stores the request. */
     virtual void setLfoShape (int /*lfo*/, const synthyboy::ContentLfoShape& /*shape*/) {}
+    /** The plugin-wide pad pressure layer (shell parameters "Pad Pressure" and "Pad Pressure Amount", docs/MPC.md "Pad pressure"): fills `on` and `percent` (0 .. 100) and returns true, false when this instance has none
+        (the Master page then shows the two controls disabled). Lock free. */
+    virtual bool padPressure (bool& /*on*/, float& /*percent*/) const noexcept { return false; }
+    /** The Master page sets the layer (the instance applies it to its settings and to the engine, the chunk keeps it). Lock free. */
+    virtual void setPadPressure (bool /*on*/, float /*percent*/) noexcept {}
     /** The plugin-drawn Macros page names macro `macro` (0 .. 7): `name` is cleaned and cut (synthyboy::sanitizeMacroName), "" is the default name. A request, applied by the plugin's display thread
         (the state's content, the chunk and content () show it a moment later; the host is told the names of the Q proxies changed); a newer request for the same macro replaces an older one that was
         not applied yet. Called from the overlay thread; it only stores the request. */

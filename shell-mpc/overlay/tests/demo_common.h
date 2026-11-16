@@ -30,6 +30,11 @@ public:
             v_[i] = t[i].def;
     }
     float param (int i) const noexcept override { return v_[i]; }
+    bool padPressure (bool& on, float& percent) const noexcept override { on = padOn; percent = padPercent; return true; }
+    void setPadPressure (bool on, float percent) noexcept override { padOn = on; padPercent = percent; ++padWrites; }
+    bool padOn = false;
+    float padPercent = 35.0f;
+    int padWrites = 0;
     bool live (synthyboy::LiveValues& out) const noexcept override
     {
         out = liveValues;
