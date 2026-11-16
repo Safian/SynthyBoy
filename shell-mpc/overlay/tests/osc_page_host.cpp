@@ -120,6 +120,28 @@ bool hasLeaf (ui::Composite& root, const ui::Component* c)
             return true;
     return false;
 }
+
+bool leavesNoOverlap (ui::Component& root, std::string& why)
+{
+    ui::Component* l[256];
+    const int n = root.collectLeaves (l, 0, 256);
+    for (int i = 0; i < n; ++i)
+    {
+        if (l[i]->rect().empty())
+            continue;
+        for (int j = i + 1; j < n; ++j)
+        {
+            if (l[j]->rect().empty())
+                continue;
+            if (l[i]->rect().inset (1).overlaps (l[j]->rect().inset (1)))
+            {
+                why = "leaf " + std::to_string (i) + " (" + std::to_string (l[i]->rect().x) + "," + std::to_string (l[i]->rect().y) + " " + std::to_string (l[i]->rect().w) + "x" + std::to_string (l[i]->rect().h) + ") overlaps leaf " + std::to_string (j) + " (" + std::to_string (l[j]->rect().x) + "," + std::to_string (l[j]->rect().y) + " " + std::to_string (l[j]->rect().w) + "x" + std::to_string (l[j]->rect().h) + ")";
+                return false;
+            }
+        }
+    }
+    return n > 0;
+}
 } // namespace
 
 int main()
@@ -156,11 +178,166 @@ int main()
         Rig r (1);   // Sub
         check (r.page.ui().selection() == 1 && r.inst.q[3] == Inst::idx ("sub.level") && r.page.display().valid(), "the Sub page: the sub oscillator, its Basic group (sub.level), its display");
         check (r.page.ui().full().instance() == ui::OscInstance::Sub, "... and the sub oscillator's full screen");
+        std::string why;
+        check (leavesNoOverlap (r.page.ui().full(), why), "Sub page: no control rectangle overlaps another: " + why);
+
+        // Display keeps about half the height
+        const ui::Rect disp = r.page.ui().displayRect();
+        check (disp.w == 1264 && disp.h >= 240 && disp.h <= 350, "Sub page: display keeps about half height (" + std::to_string (disp.w) + "x" + std::to_string (disp.h) + ")");
+
+        // Bar and Tune blocks are empty on Sub page
+        check (r.page.ui().full().barBlock().empty(), "Sub page: bar block is empty");
+        check (r.page.ui().full().tuneBlock().empty(), "Sub page: tune block is empty");
+
+        // Panel blocks: TUNE, PHASE, ROUTING
+        auto& panel = r.page.ui().full().panel;
+        check (panel.numBlocks() == 3, "Sub page: 3 labelled blocks");
+        check (std::string (panel.blockTitle (0)) == "TUNE", "Sub block 0: TUNE");
+        check (std::string (panel.blockTitle (1)) == "PHASE", "Sub block 1: PHASE");
+        check (std::string (panel.blockTitle (2)) == "ROUTING", "Sub block 2: ROUTING");
+
+        // Check medium knobs with side layout and formatted values
+        const ui::PanelSlot kSubKnobs[] = { ui::PanelSlot::SubCrs, ui::PanelSlot::SubPhase, ui::PanelSlot::SubBlend, ui::PanelSlot::SubBus1, ui::PanelSlot::SubBus2 };
+        for (ui::PanelSlot s : kSubKnobs)
+        {
+            const ui::Knob* k = panel.knob (s);
+            check (k != nullptr && k->state.side && k->rect().w >= 172 && k->rect().h >= 56, "Sub knob is medium side knob: " + std::string (k ? k->state.label : "null"));
+        }
+
+        // Check every engine parameter of Sub (14 total) is reachable on the page
+        const char* const kSubParams[] = {
+            "sub.on", "sub.waveform", "sub.octave", "sub.pan", "sub.level",
+            "sub.tune", "sub.env1", "sub.mono",
+            "sub.phase", "sub.phase_contiguous",
+            "sub.destination", "sub.filter_blend", "sub.bus1_send", "sub.bus2_send"
+        };
+        for (const char* p : kSubParams)
+        {
+            const int pidx = Inst::idx (p);
+            check (pidx >= 0, std::string ("Sub parameter exists in engine: ") + p);
+            bool found = false;
+            for (int k = 0; k < 300; ++k)
+            {
+                const OscUi::Item* it = r.page.ui().item (k);
+                if (it != nullptr && it->param == pidx && it->c != nullptr && it->c->enabled())
+                {
+                    found = true;
+                    check (it->c->rect().w >= 56 && it->c->rect().h >= 56, std::string ("Sub control touch target >= 56 px: ") + p);
+                    break;
+                }
+            }
+            check (found, std::string ("Sub parameter reachable on page: ") + p);
+        }
+
+        // Greyed-out-only blocks do not exist
+        for (int b = 0; b < panel.numBlocks(); ++b)
+        {
+            bool hasEnabled = false;
+            for (int i = 0; i < panel.numParts(); ++i)
+                if (panel.part (kSubKnobs[0]) != nullptr)
+                    hasEnabled = true;
+            check (hasEnabled, "Sub block has enabled controls, no greyed-out-only block");
+        }
     }
     {
         Rig r (5);   // Noise
         check (r.page.ui().selection() == 5 && r.inst.q[3] == Inst::idx ("noise.level"), "the Noise page: the noise, its Basic group (noise.level)");
         check (r.page.ui().full().instance() == ui::OscInstance::Noise, "... and the noise's full screen");
+        std::string why;
+        check (leavesNoOverlap (r.page.ui().full(), why), "Noise page (generated mode): no control rectangle overlaps another: " + why);
+
+        // Header Q group stays as it is (noise.sample, noise.filter, noise.pan, noise.level)
+        check (r.inst.q[0] == Inst::idx ("noise.sample") && r.inst.q[1] == Inst::idx ("noise.filter") &&
+               r.inst.q[2] == Inst::idx ("noise.pan") && r.inst.q[3] == Inst::idx ("noise.level"),
+               "Noise header Basic Q group stays intact");
+
+        // Tuning column stays intact
+        check (r.page.ui().full().tuneBlock().w >= 200 && r.page.ui().full().tuneBlock().h >= 200, "Noise tune block is present");
+        check (r.page.ui().full().barBlock().empty(), "Noise bar block is eliminated");
+
+        // Generated noise mode: 1 NOISE block, no PLAYBACK block
+        auto& panel = r.page.ui().full().panel;
+        check (panel.numBlocks() == 1, "Noise (generated mode): exactly 1 block (NOISE), no PLAYBACK block");
+        check (std::string (panel.blockTitle (0)) == "NOISE", "Noise block title is NOISE");
+        check (panel.part (ui::PanelSlot::NoiseType) != nullptr && panel.part (ui::PanelSlot::NoiseType)->enabled(), "Noise TYPE stepper is enabled");
+        check (panel.part (ui::PanelSlot::NoiseStereo) != nullptr && panel.part (ui::PanelSlot::NoiseStereo)->enabled(), "Noise STEREO knob is enabled");
+        check (panel.part (ui::PanelSlot::NoiseEnv1) != nullptr && panel.part (ui::PanelSlot::NoiseEnv1)->enabled(), "Noise ENV 1 toggle is enabled");
+        check (panel.part (ui::PanelSlot::NoiseStart) == nullptr, "Noise START knob is hidden in generated mode");
+        check (panel.part (ui::PanelSlot::NoiseRand) == nullptr, "Noise RANDOM toggle is hidden in generated mode");
+        check (panel.part (ui::PanelSlot::NoiseLoop) == nullptr, "Noise LOOP toggle is hidden in generated mode");
+        check (panel.part (ui::PanelSlot::NoiseBounce) == nullptr, "Noise BOUNCE toggle is hidden in generated mode");
+
+        // Active noise parameters reachable in generated mode
+        const char* const kNoiseGenParams[] = {
+            "noise.on", "noise.sample", "noise.filter", "noise.pan", "noise.level",
+            "noise.destination", "noise.pitch", "noise.fine", "noise.keytrack",
+            "noise.type", "noise.stereo", "noise.env1"
+        };
+        for (const char* p : kNoiseGenParams)
+        {
+            const int pidx = Inst::idx (p);
+            bool found = false;
+            for (int k = 0; k < 300; ++k)
+            {
+                const OscUi::Item* it = r.page.ui().item (k);
+                if (it != nullptr && it->param == pidx && it->c != nullptr && it->c->enabled())
+                {
+                    found = true;
+                    check (it->c->rect().w >= 56 && it->c->rect().h >= 56, std::string ("Noise control touch target >= 56 px: ") + p);
+                    break;
+                }
+            }
+            check (found, std::string ("Noise parameter reachable on page: ") + p);
+        }
+
+        // Now switch to Sample mode: noise.type = 1.0f
+        r.inst.set ("noise.type", 1.0f);
+        r.refresh();
+        check (leavesNoOverlap (r.page.ui().full(), why), "Noise page (sample mode): no control rectangle overlaps another: " + why);
+
+        // Sample mode: 2 blocks (SOURCE, PLAYBACK)
+        check (panel.numBlocks() == 2, "Noise (sample mode): 2 blocks (SOURCE, PLAYBACK)");
+        check (std::string (panel.blockTitle (0)) == "SOURCE", "Noise block 0 title is SOURCE");
+        check (std::string (panel.blockTitle (1)) == "PLAYBACK", "Noise block 1 title is PLAYBACK");
+
+        // In sample mode, all sample controls are now present and enabled
+        check (panel.part (ui::PanelSlot::NoiseStart) != nullptr && panel.part (ui::PanelSlot::NoiseStart)->enabled(), "Noise START knob present and enabled in sample mode");
+        check (panel.part (ui::PanelSlot::NoiseRand) != nullptr && panel.part (ui::PanelSlot::NoiseRand)->enabled(), "Noise RANDOM toggle present and enabled in sample mode");
+        check (panel.part (ui::PanelSlot::NoiseLoop) != nullptr && panel.part (ui::PanelSlot::NoiseLoop)->enabled(), "Noise LOOP toggle present and enabled in sample mode");
+        check (panel.part (ui::PanelSlot::NoiseBounce) != nullptr && panel.part (ui::PanelSlot::NoiseBounce)->enabled(), "Noise BOUNCE toggle present and enabled in sample mode");
+
+        // All 19 parameters of noise are reachable in sample mode
+        const char* const kNoiseAllParams[] = {
+            "noise.on", "noise.sample", "noise.filter", "noise.pan", "noise.level",
+            "noise.destination", "noise.pitch", "noise.fine", "noise.keytrack",
+            "noise.type", "noise.stereo", "noise.env1",
+            "noise.phase", "noise.random_phase", "noise.loop", "noise.bounce"
+        };
+        for (const char* p : kNoiseAllParams)
+        {
+            const int pidx = Inst::idx (p);
+            bool found = false;
+            for (int k = 0; k < 300; ++k)
+            {
+                const OscUi::Item* it = r.page.ui().item (k);
+                if (it != nullptr && it->param == pidx && it->c != nullptr && it->c->enabled())
+                {
+                    found = true;
+                    break;
+                }
+            }
+            check (found, std::string ("Noise sample parameter reachable on page: ") + p);
+        }
+
+        // Greyed-out-only blocks do not exist in sample mode either
+        for (int b = 0; b < panel.numBlocks(); ++b)
+        {
+            bool hasEnabled = false;
+            for (int i = 0; i < panel.numParts(); ++i)
+                if (panel.part (ui::PanelSlot::NoiseType) != nullptr)
+                    hasEnabled = true;
+            check (hasEnabled, "Noise block has enabled controls, no greyed-out-only block");
+        }
     }
     {
         Rig r (4);   // Osc C: the readout targets

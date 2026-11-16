@@ -547,13 +547,13 @@ void testGranularAndSubAndNoise()
     s.inst.sel = 1;
     s.refresh();
     s.openFull();
-    check (s.ui.full().panel.preset() == &ui::presets::kEmptyFull, "sub: an empty bottom band");
+    check (s.ui.full().panel.preset() == &ui::presets::kSubFull, "sub: the proper control area preset");
     s.inst.set ("sub.phase", 50.0f);
     s.refresh();
-    check (static_cast<ui::NumberField*> (s.ui.item (OscUi::kBarSlot)->c)->state.value == 180.0, "sub phase 50 % shows as 180 degrees");
+    check (s.ui.full().panel.knob (ui::PanelSlot::SubPhase) != nullptr && s.ui.full().panel.knob (ui::PanelSlot::SubPhase)->state.value == 0.5 && std::string (s.ui.full().panel.knob (ui::PanelSlot::SubPhase)->state.valueText) == "180\xc2\xb0", "sub phase 50 % shows as 180 degrees");
     s.inst.set ("sub.tune", 7.0f);
     s.refresh();
-    check (s.ui.full().tune.crs.state.value == 7.0, "sub CRS = sub.tune");
+    check (s.ui.full().panel.knob (ui::PanelSlot::SubCrs) != nullptr && std::string (s.ui.full().panel.knob (ui::PanelSlot::SubCrs)->state.valueText).find ("7") != std::string::npos, "sub CRS = sub.tune");
 }
 }   // namespace
 
@@ -703,17 +703,19 @@ void testReview2()
         r.refresh();
         r.openFull();
         const OscUi::Item* ty = r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseType));
-        const OscUi::Item* st = r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseStart));
-        check (ty != nullptr && ty->param == Inst::idx ("noise.type") && st != nullptr && st->param == Inst::idx ("noise.phase") && ! st->c->enabled() && ty->c->enabled(), "noise: TYPE is on the panel; START (sample only) is dim while the noise is generated");
+        check (ty != nullptr && ty->param == Inst::idx ("noise.type") && ty->c->enabled(), "noise: TYPE is on the panel");
+        check (r.ui.full().panel.part (ui::PanelSlot::NoiseStart) == nullptr, "noise: START (sample only) is hidden while the noise is generated");
+        check (r.ui.full().panel.part (ui::PanelSlot::NoiseStereo) != nullptr, "noise: STEREO is on the panel");
         const OscUi::Item* pitch = r.ui.item (OscUi::kTuneCrs);
         const OscUi::Item* fine = r.ui.item (OscUi::kTuneFin);
         const OscUi::Item* key = r.ui.item (OscUi::kTuneTrack);
         check (pitch != nullptr && pitch->param == Inst::idx ("noise.pitch") && fine != nullptr && fine->param == Inst::idx ("noise.fine") && key != nullptr && key->param == Inst::idx ("noise.keytrack"), "noise: the tuning column is PITCH, FINE and KEY TRACK");
         r.inst.set ("noise.type", 1.0f);
         r.refresh();
-        check (st->c->enabled() && r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseLoop))->c->enabled(), "noise: with the type Sample the sample controls are live");
-        const OscUi::Item* env = r.ui.item (OscUi::kBarSlot + 1);
-        check (env != nullptr && env->param == Inst::idx ("noise.env1"), "noise: the second slot of the type bar is ENV 1");
+        const OscUi::Item* st = r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseStart));
+        check (st != nullptr && st->c->enabled() && r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseLoop))->c->enabled(), "noise: with the type Sample the sample controls are live");
+        const OscUi::Item* env = r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseEnv1));
+        check (env != nullptr && env->param == Inst::idx ("noise.env1"), "noise: ENV 1 is on the panel");
         r.tapC (*static_cast<ui::Component*> (&r.ui.full().tune.track));
         check (r.inst.get ("noise.keytrack") == 1.0f, "noise: KEY TRACK writes noise.keytrack");
     }

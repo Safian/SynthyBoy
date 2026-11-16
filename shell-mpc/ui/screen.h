@@ -107,20 +107,23 @@ public:
         inst_ = inst;
         kind_ = kind;
         basic.configure (inst, kind);
+        bar_shown_ = inst != OscInstance::Sub && inst != OscInstance::Noise;
+        tune_shown_ = inst != OscInstance::Sub;
+        show (bar, bar_shown_);
+        show (tune, tune_shown_);
+        static const BarPreset kEmptyBar { "none", nullptr, 0 };
         switch (inst)
         {
-            case OscInstance::Sub: bar.load (barpresets::kSub); panel.load (presets::kEmptyFull); break;
-            case OscInstance::Noise: bar.load (barpresets::kNoise); panel.load (presets::kNoiseFull); break;
+            case OscInstance::Sub: bar.load (kEmptyBar); panel.load (presets::kSubFull); break;
+            case OscInstance::Noise: bar.load (kEmptyBar); panel.load (presets::kNoiseGenFull); break;
             default:
                 bar.load (kind == OscKind::Wavetable ? barpresets::kWavetable : kind == OscKind::Multisample ? barpresets::kMultisample : barpresets::kGranular);
                 panel.load (kind == OscKind::Wavetable ? presets::kWavetableFull : kind == OscKind::Multisample ? presets::kMultisampleFull : presets::kGranularFull);
                 break;
         }
         tune.setShort (false);
-        tune.setCrsOnly (inst == OscInstance::Sub);
+        tune.setCrsOnly (false);
         tune.setNoise (inst == OscInstance::Noise);
-        tune_shown_ = true;
-        show (tune, tune_shown_);
         layout();
         buildGroups();
     }
@@ -158,6 +161,7 @@ public:
         active_ = i >= 0 && i < nGroups_ ? i : -1;
     }
     Change turnQ (int knobIndex, double delta) { return active_ >= 0 ? groups[active_].turn (knobIndex, delta) : Change::none(); }
+    void rebuildGroups() { layout(); buildGroups(); }
     bool tuneShown() const noexcept { return tune_shown_; }
     Size minSize() const override { return { 1280, 800 }; }
 
@@ -188,7 +192,10 @@ protected:
         // top: the lane of the Q index chips of the band, the band (the Basic group: the knobs are the medium size, the dial at the left); middle: the display over the type bar at the left, the tuning block at the
         // right; bottom: the blocks of the type's knob panel (the sub oscillator has none: the middle takes its room)
         const int W = rect_.w, m = 8;
-        const int topH = 88, bottomH = hasPanel() ? kBottomH : 0;
+        const bool sub = inst_ == OscInstance::Sub;
+        const bool noise = inst_ == OscInstance::Noise;
+        const int topH = 88;
+        const int bottomH = sub ? 245 : kBottomH;
         const Rect top { rect_.x + m, rect_.y + m + kQLane + 2, W - 2 * m, topH };
         Rect r[4];
         const int fixed[4] = { 84, 64, 0, 72 }, weight[4] = { 0, 0, 1, 0 };
@@ -201,16 +208,34 @@ protected:
         const int leftW = (W - 2 * m) * 78 / 100, rightX = rect_.x + m + leftW + m;
         constexpr int kTitleH = KnobPanel::kBlockTitleH, kPad = KnobPanel::kBlockPad;
         const int barH = 56, barBlockH = kTitleH + barH + kPad;
-        const bool sub = inst_ == OscInstance::Sub;
-        // the sub oscillator has no knob panel and only CRS to tune: its display takes the full width and the tuning block sits beside the type bar under it; the others have the display and the type bar at the left, the tuning block as tall as both at the right
-        display_ = { rect_.x + m, midY, sub ? W - 2 * m : leftW, std::max (0, midH - barBlockH - kGap) };
-        barBlock_ = { rect_.x + m, display_.bottom() + kGap, leftW, barBlockH };
-        bar.place ({ barBlock_.x + kPad, barBlock_.y + kTitleH, barBlock_.w - 2 * kPad, barH });
-        tuneBlock_ = sub ? Rect { rightX, barBlock_.y, rect_.right() - m - rightX, barBlockH } : Rect { rightX, midY, rect_.right() - m - rightX, std::max (0, midH) };
-        tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
+
+        if (sub)
+        {
+            display_ = { rect_.x + m, midY, W - 2 * m, midH };
+            barBlock_ = {};
+            bar.place ({});
+            tuneBlock_ = {};
+            tune.place ({});
+        }
+        else if (noise)
+        {
+            display_ = { rect_.x + m, midY, leftW, midH };
+            barBlock_ = {};
+            bar.place ({});
+            tuneBlock_ = { rightX, midY, rect_.right() - m - rightX, std::max (0, midH) };
+            tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
+        }
+        else
+        {
+            display_ = { rect_.x + m, midY, leftW, std::max (0, midH - barBlockH - kGap) };
+            barBlock_ = { rect_.x + m, display_.bottom() + kGap, leftW, barBlockH };
+            bar.place ({ barBlock_.x + kPad, barBlock_.y + kTitleH, barBlock_.w - 2 * kPad, barH });
+            tuneBlock_ = Rect { rightX, midY, rect_.right() - m - rightX, std::max (0, midH) };
+            tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
+        }
         panel.place ({ rect_.x + m, rect_.bottom() - m - bottomH, W - 2 * m, bottomH });
     }
-    bool hasPanel() const noexcept { return inst_ != OscInstance::Sub; }
+    bool hasPanel() const noexcept { return true; }
     void buildGroups()
     {
         for (QGroup& g : groups)
@@ -221,19 +246,28 @@ protected:
         QGroup& b = next ("Basic");
         for (int i = 0; i < 4; ++i)
             b.set (i, basic.group.member (i));
-        fillGroup (next ("Type"), bar);
+        if (bar_shown_)
+            fillGroup (next ("Type"), bar);
         if (tune_shown_)
         {
             QGroup& g = next ("Tune");
-            if (inst_ == OscInstance::Sub) g.set (0, &tune.crs);
-            else if (inst_ == OscInstance::Noise) { g.set (0, &tune.crs); g.set (1, &tune.fin); g.set (2, &tune.track); }
+            if (inst_ == OscInstance::Noise) { g.set (0, &tune.crs); g.set (1, &tune.fin); g.set (2, &tune.track); }
             else { g.set (0, &tune.oct); g.set (1, &tune.sem); g.set (2, &tune.fin); g.set (3, &tune.crs); }
         }
         const PanelPreset* pp = panel.preset();
-        static const char* const kGranularNames[] = { "Grain", "Playback", "Random" }, * const kNoiseNames[] = { "Source", "Playback" };
+        static const char* const kGranularNames[] = { "Grain", "Playback", "Random" };
+        static const char* const kNoiseNames[] = { "Source", "Playback" };
+        static const char* const kSubNames[] = { "Tune", "Phase", "Routing" };
         for (int i = 0; pp && i < pp->numQ && nGroups_ < kMaxGroups; ++i)
         {
-            QGroup& g = next (inst_ == OscInstance::Noise ? kNoiseNames[i] : (kind_ == OscKind::Granular ? kGranularNames[i] : "Unison"));
+            const char* gname = "Unison";
+            if (inst_ == OscInstance::Sub)
+                gname = i < 3 ? kSubNames[i] : "Sub";
+            else if (inst_ == OscInstance::Noise)
+                gname = pp->numQ == 1 ? "Noise" : (i < 2 ? kNoiseNames[i] : "Noise");
+            else if (kind_ == OscKind::Granular)
+                gname = kGranularNames[i];
+            QGroup& g = next (gname);
             for (int k = 0; k < 4; ++k)
                 g.set (k, pp->q[i].slot[k] == PanelSlot::Count ? nullptr : panel.part (pp->q[i].slot[k]));
         }
@@ -250,7 +284,8 @@ protected:
     {
         // every Q group has a block of its own (the active one also has the coloured frame of its QGroup): Basic, the type bar, the tuning column; the panel draws its own blocks
         p.block (basic.rect());
-        p.block (barBlock_);
+        if (bar_shown_)
+            p.block (barBlock_);
         if (tune_shown_)
             p.block (tuneBlock_);
     }
@@ -259,7 +294,8 @@ protected:
         const theme::Look& T = theme::L();
         if (pageTitle_[0] != '\0')
             p.textCentered (close.rect(), pageTitle_, T.fTitle, p.c (T.text, 255), T.fMin);
-        p.textLeft ({ barBlock_.x + KnobPanel::kBlockPad + 4, barBlock_.y + 3, std::max (0, barBlock_.w - 16), 16 }, barTitle (), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+        if (bar_shown_)
+            p.textLeft ({ barBlock_.x + KnobPanel::kBlockPad + 4, barBlock_.y + 3, std::max (0, barBlock_.w - 16), 16 }, barTitle (), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         if (tune_shown_)
         {
             p.textLeft ({ tuneBlock_.x + KnobPanel::kBlockPad + 4, tuneBlock_.y + 3, std::max (0, tuneBlock_.w - 16), 16 }, "TUNE", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
@@ -274,7 +310,7 @@ protected:
     Rect display_, barBlock_, tuneBlock_;
     OscInstance inst_ = OscInstance::A;
     OscKind kind_ = OscKind::Wavetable;
-    bool tune_shown_ = true;
+    bool tune_shown_ = true, bar_shown_ = true;
     int nGroups_ = 0, active_ = -1;
     char names_[kMaxGroups][20] = {};
     char pageTitle_[16] = {};

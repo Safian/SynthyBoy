@@ -12,7 +12,10 @@ namespace synthyboy_mpc { namespace ui {
 /** The place of a part in a preset: the owner finds a child by it (`KnobPanel::part (slot)`). */
 enum class PanelSlot : uint8_t { WtPos, Unison, Detune, Blend, Warp, Pan, Level, WarpMenu, Scan, Dens, Length, Offset, Dir, Pitch, Filter,
                                  Mode, Stack, Width, Range, WtSpread, Warp1Spread, Warp2Spread, Amount, AmountRand, Skew, SkewRand, Shape, LengthRand, PanRand, LevelRand, Timbre, Start, Delay, Attack, Hold, Decay, Sustain, Release, Override,
-                                 NoiseType, NoiseStart, NoiseRand, NoiseLoop, NoiseBounce, Count };
+                                 NoiseType, NoiseStart, NoiseRand, NoiseLoop, NoiseBounce,
+                                 NoiseStereo, NoiseEnv1,
+                                 SubCrs, SubEnv1, SubMono, SubPhase, SubContig, SubDest, SubBlend, SubBus1, SubBus2,
+                                 Count };
 enum class PartKind : uint8_t { Knob, RandPair, Unison, WarpPair, Menu, Stepper, Toggle };
 
 /** One part of a preset: what, which slot, its label, and the cells it covers in the grid. */
@@ -136,21 +139,67 @@ constexpr PanelItem kGranularFullItems[] = {
 constexpr QSpec kGranularFullQ[] = { { { PanelSlot::Scan, PanelSlot::Dens, PanelSlot::Length, PanelSlot::WarpMenu } },
                                      { { PanelSlot::Offset, PanelSlot::Dir, PanelSlot::Pitch, PanelSlot::Count } },
                                      { { PanelSlot::LengthRand, PanelSlot::PanRand, PanelSlot::LevelRand, PanelSlot::Count } } };
-// the noise: the SOURCE block (generated noise or a sample, and where in the sample it starts) and the PLAYBACK block of the switches that only a sample uses (random start, loop, ping-pong)
-constexpr PanelItem kNoiseFullItems[] = {
+// the sub oscillator: TUNE (CRS, ENV 1, MONO), PHASE (PHASE, FREE RUN), ROUTING (DEST, BLEND, BUS 1, BUS 2)
+constexpr PanelItem kSubFullItems[] = {
+    { PartKind::Knob, PanelSlot::SubCrs, "CRS", 0, 0, 2, 1, true, 0 },
+    { PartKind::Toggle, PanelSlot::SubEnv1, "ENV 1", 0, 1, 1, 1, false, 0 },
+    { PartKind::Toggle, PanelSlot::SubMono, "MONO", 1, 1, 1, 1, false, 0 },
+
+    { PartKind::Knob, PanelSlot::SubPhase, "PHASE", 0, 0, 1, 1, false, 1 },
+    { PartKind::Toggle, PanelSlot::SubContig, "FREE RUN", 0, 1, 1, 1, false, 1 },
+
+    { PartKind::Stepper, PanelSlot::SubDest, "DEST", 0, 0, 1, 1, false, 2 },
+    { PartKind::Knob, PanelSlot::SubBlend, "BLEND", 1, 0, 1, 1, false, 2 },
+    { PartKind::Knob, PanelSlot::SubBus1, "BUS 1", 0, 1, 1, 1, false, 2 },
+    { PartKind::Knob, PanelSlot::SubBus2, "BUS 2", 1, 1, 1, 1, false, 2 },
+};
+constexpr PanelBlock kSubBlocks[] = {
+    { "TUNE", 0, 0, 1, 1, 2, 2 },
+    { "PHASE", 1, 0, 1, 1, 1, 2 },
+    { "ROUTING", 2, 0, 2, 1, 2, 2 },
+};
+constexpr QSpec kSubFullQ[] = {
+    { { PanelSlot::SubCrs, PanelSlot::SubEnv1, PanelSlot::SubMono, PanelSlot::Count } },
+    { { PanelSlot::SubPhase, PanelSlot::SubContig, PanelSlot::Count, PanelSlot::Count } },
+    { { PanelSlot::SubDest, PanelSlot::SubBlend, PanelSlot::SubBus1, PanelSlot::SubBus2 } },
+};
+constexpr PanelPreset kSubFull { "sub (full screen)", 4, 1, -1, kSubFullItems, 9, kSubFullQ, 3, 0, kSubBlocks, 3 };
+
+// the noise: when type is Noise (generated): TYPE stepper, STEREO knob, ENV 1 toggle in one NOISE block taking the full width
+constexpr PanelItem kNoiseGenItems[] = {
+    { PartKind::Stepper, PanelSlot::NoiseType, "TYPE", 0, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::NoiseStereo, "STEREO", 1, 0, 1, 1, false, 0 },
+    { PartKind::Toggle, PanelSlot::NoiseEnv1, "ENV 1", 2, 0, 1, 1, false, 0 },
+};
+constexpr PanelBlock kNoiseGenBlocks[] = { { "NOISE", 0, 0, 3, 1, 3, 1 } };
+constexpr QSpec kNoiseGenQ[] = { { { PanelSlot::NoiseType, PanelSlot::NoiseStereo, PanelSlot::NoiseEnv1, PanelSlot::Count } } };
+constexpr PanelPreset kNoiseGenFull { "noise (full screen, generated)", 3, 1, -1, kNoiseGenItems, 3, kNoiseGenQ, 1, 0, kNoiseGenBlocks, 1 };
+
+// the noise: when type is Sample: SOURCE block (TYPE, START, STEREO, ENV 1) and PLAYBACK block (RANDOM, LOOP, BOUNCE)
+constexpr PanelItem kNoiseSampleItems[] = {
     { PartKind::Stepper, PanelSlot::NoiseType, "TYPE", 0, 0, 1, 1, false, 0 },
     { PartKind::Knob, PanelSlot::NoiseStart, "START", 1, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::NoiseStereo, "STEREO", 2, 0, 1, 1, false, 0 },
+    { PartKind::Toggle, PanelSlot::NoiseEnv1, "ENV 1", 3, 0, 1, 1, false, 0 },
     { PartKind::Toggle, PanelSlot::NoiseRand, "RANDOM", 0, 0, 1, 1, false, 1 },
     { PartKind::Toggle, PanelSlot::NoiseLoop, "LOOP", 1, 0, 1, 1, false, 1 },
     { PartKind::Toggle, PanelSlot::NoiseBounce, "BOUNCE", 2, 0, 1, 1, false, 1 },
 };
-constexpr PanelBlock kNoiseBlocks[] = { { "SOURCE", 0, 0, 2, 1, 2, 1 }, { "PLAYBACK", 2, 0, 3, 1, 3, 1 } };
-constexpr QSpec kNoiseFullQ[] = { { { PanelSlot::NoiseType, PanelSlot::NoiseStart, PanelSlot::Count, PanelSlot::Count } },
-                                  { { PanelSlot::NoiseRand, PanelSlot::NoiseLoop, PanelSlot::NoiseBounce, PanelSlot::Count } } };
+constexpr PanelBlock kNoiseSampleBlocks[] = { { "SOURCE", 0, 0, 4, 1, 4, 1 }, { "PLAYBACK", 4, 0, 3, 1, 3, 1 } };
+constexpr QSpec kNoiseSampleQ[] = { { { PanelSlot::NoiseType, PanelSlot::NoiseStart, PanelSlot::NoiseStereo, PanelSlot::NoiseEnv1 } },
+                                    { { PanelSlot::NoiseRand, PanelSlot::NoiseLoop, PanelSlot::NoiseBounce, PanelSlot::Count } } };
+constexpr PanelPreset kNoiseSampleFull { "noise (full screen, sample)", 7, 1, -1, kNoiseSampleItems, 7, kNoiseSampleQ, 2, 0, kNoiseSampleBlocks, 2 };
+
+// Legacy / default noise preset alias
+constexpr PanelPreset kNoiseFull = kNoiseGenFull;
+constexpr PanelItem kNoiseFullItems[] = {
+    { PartKind::Stepper, PanelSlot::NoiseType, "TYPE", 0, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::NoiseStereo, "STEREO", 1, 0, 1, 1, false, 0 },
+    { PartKind::Toggle, PanelSlot::NoiseEnv1, "ENV 1", 2, 0, 1, 1, false, 0 },
+};
 constexpr PanelItem kNoItems[] = { { PartKind::Knob, PanelSlot::Count, "", 0, 0, 1, 1, false } };
 constexpr PanelPreset kWavetableFull { "wavetable (full screen)", 2, 1, -1, kWavetableFullItems, 5, kWavetableFullQ, 1, 0, kWavetableBlocks, 2 };
 constexpr PanelPreset kGranularFull { "granular (full screen)", 10, 1, -1, kGranularFullItems, 10, kGranularFullQ, 3, 0, kGranularBlocks, 3 };
-constexpr PanelPreset kNoiseFull { "noise (full screen)", 5, 1, -1, kNoiseFullItems, 5, kNoiseFullQ, 2, 0, kNoiseBlocks, 2 };
 constexpr PanelPreset kEmptyFull { "none (full screen)", 4, 1, -1, kNoItems, 0, nullptr, 0, 0 };
 constexpr PanelItem kMultisampleFullItems[] = {
     { PartKind::Knob, PanelSlot::Timbre, "TIMBRE", 0, 0, 1, 1, false, 0 },
@@ -196,7 +245,7 @@ constexpr PanelPreset kGrainDetail { "grain window", 1, 1, -1, kGrainDetailItems
 class KnobPanel : public Composite
 {
 public:
-    static constexpr int kMaxKnobs = 12, kMaxPairs = 3, kMaxItems = 12, kMaxSteppers = 4, kMaxToggles = 4;
+    static constexpr int kMaxKnobs = 12, kMaxPairs = 3, kMaxItems = 12, kMaxSteppers = 4, kMaxToggles = 6;
     static constexpr int kSeparatorGap = 16;
 
     KnobPanel() = default;
@@ -378,6 +427,8 @@ protected:
             if (! items_[i].comp)
                 continue;
             const int x0 = colX (it.col), y0 = rowY (it.row), x1 = colX (it.col + it.colSpan - 1) + cw, y1 = rowY (it.row + it.rowSpan - 1) + ch;
+            if (it.kind == PartKind::Knob)
+                static_cast<Knob*> (items_[i].comp)->state.side = (x1 - x0 >= 172);
             items_[i].comp->place ({ x0, y0, x1 - x0, y1 - y0 });
         }
         if (p.separatorBefore >= 0)
@@ -429,6 +480,8 @@ protected:
                     iy0 = mid - cap / 2;
                     iy1 = iy0 + cap;
                 }
+                if (it.kind == PartKind::Knob)
+                    static_cast<Knob*> (items_[i].comp)->state.side = (ix1 - ix0 >= 172);
                 items_[i].comp->place ({ ix0, iy0, ix1 - ix0, iy1 - iy0 });
             }
         }
