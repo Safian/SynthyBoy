@@ -27,11 +27,49 @@ enum Handle : int { None = -1, Delay = 0, Attack, Hold, Decay, Release, CurveA, 
 struct Shape
 {
     double t[5] = { 0.0, 0.1, 0.0, 0.38, 0.3 };
+    double timeMs[5] = { 0.0, 100.0, 0.0, 400.0, 200.0 };
     double sustain = 1.0;
     double curve[3] = { 0.0, -3.0, -3.0 };
 };
 
 constexpr double kMinStage = 1.0, kSustainWidth = 1.4;   // natural widths: a stage is kMinStage + its normalised time wide, the sustain segment kSustainWidth
+
+inline double maxTimeMs (int stage) noexcept
+{
+    return (stage == 0 || stage == 2) ? 4000.0 : 10000.0;
+}
+inline double skewOf (int stage) noexcept
+{
+    return (stage == 0 || stage == 2) ? 0.4 : 0.3;
+}
+inline double timeMsFromNorm (int stage, double norm) noexcept
+{
+    norm = std::clamp (norm, 0.0, 1.0);
+    if (norm <= 0.0) return 0.0;
+    return maxTimeMs (stage) * std::pow (norm, 1.0 / skewOf (stage));
+}
+inline double normFromTimeMs (int stage, double ms) noexcept
+{
+    if (ms <= 0.0) return 0.0;
+    return std::clamp (std::pow (std::min (ms, maxTimeMs (stage)) / maxTimeMs (stage), skewOf (stage)), 0.0, 1.0);
+}
+inline double stageTimeMs (const Shape& s, int stage) noexcept
+{
+    if (stage < 0 || stage >= 5) return 0.0;
+    return timeMsFromNorm (stage, s.t[stage]);
+}
+constexpr double kZoomStepsMs[] = {
+    100.0, 200.0, 500.0,
+    1000.0, 2000.0, 5000.0,
+    10000.0, 20000.0, 50000.0
+};
+inline double steppedZoomMs (double totalTimeMs) noexcept
+{
+    for (double step : kZoomStepsMs)
+        if (totalTimeMs <= step)
+            return step;
+    return kZoomStepsMs[sizeof (kZoomStepsMs) / sizeof (kZoomStepsMs[0]) - 1];
+}
 
 /** The curve function of the engine (own::powerShape): 0 = straight, negative = fast start, positive = slow start. */
 inline double powerShape (double x, double power) noexcept
@@ -103,7 +141,15 @@ public:
     int draggedHandle() const noexcept { return drag_; }
 
     /** The geometry the drawing and the touch use: x[0] = the left end of the curve, x[1 .. 6] = the ends of the six stages (delay, attack, hold, decay, sustain, release), the rows of level 1 and 0. */
-    struct Geom { double x[7]; double scale, yTop, yBot; };
+    struct Geom
+    {
+        double x[7];
+        double zoomMs = 1000.0;
+        double pxPerMs = 1.0;
+        double sustainGap = 16.0;
+        double scale = 1.0;
+        double yTop = 0.0, yBot = 0.0;
+    };
     Geom geom() const noexcept { return geomFor (state.shape); }
     static double levelRow (const Geom& g, double level) noexcept { return g.yBot - (g.yBot - g.yTop) * std::clamp (level, 0.0, 1.0); }
     /** The centre of a handle (canvas pixels). */
@@ -116,11 +162,20 @@ public:
         double bestD = 1.0e9;
         for (int h = 0; h < envgraph::kNumHandles; ++h)
         {
+            if (h == envgraph::CurveA && g.x[2] <= g.x[1]) continue;
+            if (h == envgraph::CurveD && g.x[4] <= g.x[3]) continue;
+            if (h == envgraph::CurveR && g.x[6] <= g.x[5]) continue;
+
             double px, py;
             handlePointOf (g, state.shape, h, px, py);
             if (std::fabs (px - x) > kHit * 0.5 || std::fabs (py - y) > kHit * 0.5)
                 continue;
-            const double d = std::hypot (px - x, py - y) + (h >= envgraph::CurveA ? 3.0 : 0.0);   // the end of a stage wins a tie with the curve handle on it
+            double d = std::hypot (px - x, py - y) + (h >= envgraph::CurveA ? 3.0 : 0.0);
+            if (g.x[3] <= g.x[2] + 1.0e-3)
+            {
+                if (h == envgraph::Hold && x > g.x[2]) d -= 2.0;
+                if (h == envgraph::Attack && x <= g.x[2]) d -= 2.0;
+            }
             if (d < bestD)
             {
                 bestD = d;
@@ -135,6 +190,9 @@ public:
         int n = 0;
         for (int h = 0; h < envgraph::kNumHandles && n < max; ++h)
         {
+            if (h == envgraph::CurveA && g.x[2] <= g.x[1]) continue;
+            if (h == envgraph::CurveD && g.x[4] <= g.x[3]) continue;
+            if (h == envgraph::CurveR && g.x[6] <= g.x[5]) continue;
             double px, py;
             handlePointOf (g, state.shape, h, px, py);
             out[n++] = { static_cast<int> (std::lround (px)) - kHit / 2, static_cast<int> (std::lround (py)) - kHit / 2, kHit, kHit };
@@ -184,17 +242,50 @@ protected:
     Geom geomFor (const Shape& s) const noexcept
     {
         const Rect p = plot();
-        double w[6], sum = 0.0;
-        envgraph::naturalWidths (s, w);
-        for (double v : w)
-            sum += v;
         Geom g {};
-        g.scale = static_cast<double> (p.w) / sum;
         g.yTop = static_cast<double> (p.y);
         g.yBot = static_cast<double> (p.bottom());
         g.x[0] = static_cast<double> (p.x);
-        for (int i = 0; i < 6; ++i)
-            g.x[i + 1] = g.x[i] + w[i] * g.scale;
+
+        double ms[5];
+        double totalMs = 0.0;
+        for (int i = 0; i < 5; ++i)
+        {
+            ms[i] = envgraph::stageTimeMs (s, i);
+            totalMs += ms[i];
+        }
+
+        g.zoomMs = envgraph::steppedZoomMs (totalMs);
+        const bool comp = compactChrome();
+        g.sustainGap = comp ? 12.0 : 16.0;
+        const double availW = std::max (20.0, static_cast<double> (p.w) - g.sustainGap);
+        g.pxPerMs = availW / g.zoomMs;
+        g.scale = g.pxPerMs;
+
+        double w[5];
+        double sumW = 0.0;
+        for (int i = 0; i < 5; ++i)
+        {
+            if (ms[i] <= 0.0)
+                w[i] = 0.0;
+            else
+                w[i] = std::max (6.0, ms[i] * g.pxPerMs);
+            sumW += w[i];
+        }
+
+        if (sumW > availW)
+        {
+            const double sc = availW / sumW;
+            for (int i = 0; i < 5; ++i)
+                w[i] *= sc;
+        }
+
+        g.x[1] = g.x[0] + w[0];
+        g.x[2] = g.x[1] + w[1];
+        g.x[3] = g.x[2] + w[2];
+        g.x[4] = g.x[3] + w[3];
+        g.x[5] = g.x[4] + g.sustainGap;
+        g.x[6] = g.x[5] + w[4];
         return g;
     }
     static void handlePointOf (const Geom& g, const Shape& s, int h, double& px, double& py) noexcept
@@ -222,8 +313,13 @@ protected:
             int st = 0;
             while (st < 5 && x >= g.x[st + 1])
                 ++st;
-            const double f = g.x[st + 1] > g.x[st] ? (x - g.x[st]) / (g.x[st + 1] - g.x[st]) : 0.0;
-            rows[i] = static_cast<float> (levelRow (g, envgraph::levelAt (s, st, f)));
+            double f = 0.0;
+            if (g.x[st + 1] > g.x[st])
+                f = (x - g.x[st]) / (g.x[st + 1] - g.x[st]);
+            double lvl = 0.0;
+            if (x <= g.x[6])
+                lvl = envgraph::levelAt (s, st, f);
+            rows[i] = static_cast<float> (levelRow (g, lvl));
         }
     }
     void paintStatic (gpu::SceneBuilder& sb, Pen& p) const
@@ -238,17 +334,45 @@ protected:
         const uint32_t c0 = state.colour != 0 ? state.colour : T.env[0], c1 = state.colour != 0 ? theme::mix (state.colour, T.env[1], 0.5f) : T.env[1];
         const uint32_t cs[4] = { c0, theme::mix (c0, c1, 0.33f), theme::mix (c0, c1, 0.66f), c1 };
         const float px0 = static_cast<float> (pl.x), px1 = static_cast<float> (pl.right());
-        // ---- the grid: the levels 0, 50 and 100 %, the borders of the stages as hairlines
+
+        // ---- the horizontal grid: levels 0, 50, 100 %
         for (int k = 0; k < 3; ++k)
         {
             const float y = static_cast<float> (levelRow (g, 0.5 * k));
             sb.line (px0, y, px1, y, T.hair, theme::rgba (T.grid, k == 0 ? 255 : 150));
         }
+
+        // ---- vertical time grid: lines at round times with small labels
         if (! reduced)
-            for (int i = 1; i < 6; ++i)
-                sb.line (static_cast<float> (g.x[i]), static_cast<float> (g.yTop), static_cast<float> (g.x[i]), static_cast<float> (g.yBot), T.hair, theme::rgba (T.grid, i == 4 ? 220 : 110));
+        {
+            double gridStepMs = 100.0;
+            if (g.zoomMs <= 100.0) gridStepMs = 25.0;
+            else if (g.zoomMs <= 200.0) gridStepMs = 50.0;
+            else if (g.zoomMs <= 500.0) gridStepMs = 100.0;
+            else if (g.zoomMs <= 1000.0) gridStepMs = 200.0;
+            else if (g.zoomMs <= 2000.0) gridStepMs = 500.0;
+            else if (g.zoomMs <= 5000.0) gridStepMs = 1000.0;
+            else if (g.zoomMs <= 10000.0) gridStepMs = 2000.0;
+            else if (g.zoomMs <= 20000.0) gridStepMs = 5000.0;
+            else gridStepMs = 10000.0;
+
+            for (double t = gridStepMs; t < g.zoomMs; t += gridStepMs)
+            {
+                const float gx = static_cast<float> (g.x[0] + t * g.pxPerMs + (t * g.pxPerMs > (g.x[4] - g.x[0]) ? g.sustainGap : 0.0));
+                if (gx < px0 || gx > px1)
+                    continue;
+                sb.line (gx, static_cast<float> (g.yTop), gx, static_cast<float> (g.yBot), T.hair, theme::rgba (T.grid, 110));
+                char lbl[16];
+                if (t >= 1000.0)
+                    std::snprintf (lbl, sizeof lbl, "%g s", t / 1000.0);
+                else
+                    std::snprintf (lbl, sizeof lbl, "%.0f ms", t);
+                p.textCentered ({ static_cast<int> (std::lround (gx)) - 24, static_cast<int> (std::lround (g.yBot)) + 2, 48, 12 }, lbl, T.fSmall - 1.0f, p.c (T.textFaint, 180), 8.0f);
+            }
+        }
+
         // ---- the ghost: another envelope behind this one (a thin faint line)
-        constexpr int kMaxN = gpu::kMaxCurve;   // one row per pixel of the plot: the graph of the full width (no side column) is about 1250 pixels
+        constexpr int kMaxN = gpu::kMaxCurve;
         float rows[kMaxN], rowsGhost[kMaxN];
         const int n = std::min (pl.w, kMaxN);
         if (state.ghost && ! reduced)
@@ -261,7 +385,8 @@ protected:
             sb.stroke (T.curveBack * 0.5f, 70);
             sb.paintOff();
         }
-        // ---- the curve: a faint area under it, then one crisp line per run of stages (a stage that is 0 is dim)
+
+        // ---- the curve: a faint area under it, then one crisp line
         curveRows (state.shape, g, rows, n);
         const int first = sb.curve (rows, n, pl.x, n);
         if (first < 0)
@@ -270,48 +395,35 @@ protected:
             sb.fillGradient (static_cast<float> (g.yBot), static_cast<float> (g.yTop), static_cast<float> (g.yBot), theme::rgba (c0, 56), theme::rgba (c0, 0));
         sb.style (1.0f, true);
         sb.paintX (px0, px1, theme::rgba (cs[0], 255), theme::rgba (cs[1], 255), theme::rgba (cs[2], 255), theme::rgba (cs[3], 255));
-        int run0 = 0;
-        bool runDim = isZero (0);
         const float half = T.curve * 0.5f + 0.15f;
-        for (int st = 1; st <= 6; ++st)
-        {
-            if (st < 6 && isZero (st) == runDim)
-                continue;
-            const int a = std::clamp (static_cast<int> (std::lround (g.x[run0] - g.x[0])) - 1, 0, n - 2), b = std::clamp (static_cast<int> (std::lround (g.x[st] - g.x[0])) + 1, a + 2, n);
-            sb.curveAt (first + a, b - a, pl.x + a, b - a);
-            sb.stroke (half, runDim ? 110u : 255u);
-            run0 = st;
-            if (st < 6)
-                runDim = isZero (st);
-        }
+        const int curveEndPx = std::clamp (static_cast<int> (std::lround (g.x[6] - g.x[0])) + 1, 2, n);
+        sb.curveAt (first, curveEndPx, pl.x, curveEndPx);
+        sb.stroke (half, 255u);
         sb.paintOff();
         sb.style (1.0f, false);
-        // ---- the value of every time handle under the axis (full detail, the roomy graph), the name of the unit
+
+        // ---- stage names only as a legend that does not pretend to be the axis
         if (! comp && ! reduced)
         {
-            // the labels of the segments: DELAY, ATTACK, HOLD, DECAY (the time), SUSTAIN (the level), RELEASE; each under its own segment
-            static const char* const kAxis[6] = { "DELAY", "ATTACK", "HOLD", "DECAY", "SUSTAIN", "RELEASE" };
-            static const int kEndOf[6] = { 1, 2, 3, 4, 5, 6 }, kStartOf[6] = { 0, 1, 2, 3, 4, 5 }, kTextOf[6] = { 0, 1, 2, 3, -1, 4 };
-            for (int i = 0; i < 6; ++i)
-            {
-                const Rect b { static_cast<int> (std::lround (g.x[kStartOf[i]])), pl.bottom() + 4, static_cast<int> (std::lround (g.x[kEndOf[i]] - g.x[kStartOf[i]])), 22 };
-                if (b.w < 24)
-                    continue;
-                const char* text = i == 3 && state.decayTime[0] != '\0' ? state.decayTime : (i == 4 ? state.sustainText : state.text[kTextOf[i]]);
-                if (i == 4 && text[0] == '\0')
-                    continue;
-                p.textCentered ({ b.x, b.y, b.w, 12 }, kAxis[i], T.fSmall - 1.0f, p.c (T.textFaint, 255), 8.0f);
-                p.textCentered ({ b.x, b.y + 12, b.w, 14 }, text, T.fSmall + 1.0f, p.c (T.textDim, 255), 8.0f);
-            }
+            static const char* const kLegend = "DELAY   ATTACK   HOLD   DECAY   SUSTAIN   RELEASE";
+            p.textRight ({ pl.x, rect_.y + 8, pl.w, 16 }, kLegend, T.fSmall - 1.0f, p.c (T.textFaint, 180));
         }
+
         // ---- the handles
         for (int h = 0; h < envgraph::kNumHandles; ++h)
         {
+            const bool curveH = h >= envgraph::CurveA;
+            if (curveH)
+            {
+                if ((h == envgraph::CurveA && g.x[2] <= g.x[1]) ||
+                    (h == envgraph::CurveD && g.x[4] <= g.x[3]) ||
+                    (h == envgraph::CurveR && g.x[6] <= g.x[5]))
+                    continue;
+            }
             double hx, hy;
             handlePointOf (g, state.shape, h, hx, hy);
             const bool sel = h == state.selected || h == drag_;
-            const bool curveH = h >= envgraph::CurveA;
-            const bool dim = h <= envgraph::Release && h != envgraph::Decay && state.shape.t[h < envgraph::Decay ? h : 4] <= 0.0;
+            const bool dim = h <= envgraph::Release && h != envgraph::Decay && isZero (h < envgraph::Decay ? h : 4);
             static const int kColourOf[envgraph::kNumHandles] = { 0, 1, 1, 2, 3, 1, 2, 3 };
             const uint32_t col = cs[kColourOf[h]];
             const float r = curveH ? 4.0f : 6.5f;
@@ -327,6 +439,7 @@ protected:
                 p.disc (static_cast<float> (hx), static_cast<float> (hy), 2.4f, p.c (col, 255));
             p.plain();
         }
+
         // ---- the value of the selected / dragged handle over it
         const int sh = drag_ != envgraph::None ? drag_ : state.selected;
         if (sh != envgraph::None && state.text[sh][0] != '\0')
@@ -347,7 +460,9 @@ protected:
     }
     bool isZero (int stage) const noexcept   // stage 0 .. 5: a time stage whose time is 0
     {
-        return stage == 4 ? false : state.shape.t[stage < 4 ? stage : 4] <= 0.0;
+        if (stage == 4) return false;
+        const int s = stage < 4 ? stage : 4;
+        return envgraph::stageTimeMs (state.shape, s) <= 0.0;
     }
 
     // ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -376,35 +491,25 @@ protected:
         Edit e;
         e.handle = drag_;
         const double dyPx = static_cast<double> (y - tap_.startY());
+        const double dxPx = static_cast<double> (x - tap_.startX());
         if (drag_ <= envgraph::Release)
         {
-            // the handle follows the finger: its x is the finger's. With a = the natural width of the stages before this one, b = of all the others and r = the finger's place along the plot (0 .. 1), the stage's own
-            // natural width w is where (a + w) / (b + w) = r, that is w = (r b - a) / (1 - r) (the picture fits the plot at every step, so the scale moves with the width).
-            double w[6], a = 0.0, b = 0.0;
-            envgraph::naturalWidths (start_, w);
-            const int stage = drag_ == envgraph::Release ? 5 : drag_;
-            for (int i = 0; i < 6; ++i)
-            {
-                a += i < stage ? w[i] : 0.0;
-                b += i != stage ? w[i] : 0.0;
-            }
-            const Rect pl = plot();
-            const double r = (downX_ + static_cast<double> (x - tap_.startX()) - static_cast<double> (pl.x)) / std::max (1.0, static_cast<double> (pl.w));
-            const double wNew = r >= 0.999 ? envgraph::kMinStage + 1.0 : (r * b - a) / (1.0 - r);
-            e.t = std::clamp (wNew - envgraph::kMinStage, 0.0, 1.0);
+            const int stage = drag_ == envgraph::Release ? 4 : drag_;
+            const double t0Ms = envgraph::stageTimeMs (start_, stage);
+            const double deltaMs = dxPx / std::max (1.0e-3, g0.pxPerMs);
+            const double newMs = std::max (0.0, t0Ms + deltaMs);
+            e.t = envgraph::normFromTimeMs (stage, newMs);
             if (drag_ == envgraph::Decay)
                 e.level = std::clamp (start_.sustain - dyPx / std::max (1.0, g0.yBot - g0.yTop), 0.0, 1.0);
         }
         else
         {
-            // a curve handle follows the finger vertically: the level of the middle of the stage at the finger's row, then the curve that puts the middle there (closed form); with too little height under the
-            // stage for that (a sustain near 100 % has no decay to bend) a relative move: 20 units over half the height of the plot
             double hx, hy;
             handlePointOf (g0, start_, drag_, hx, hy);
             const double lvl = 1.0 - (std::clamp (hy + dyPx, g0.yTop, g0.yBot) - g0.yTop) / std::max (1.0, g0.yBot - g0.yTop);
             const double s = start_.sustain;
             const double range = drag_ == envgraph::CurveA ? 1.0 : (drag_ == envgraph::CurveD ? 1.0 - s : s);
-            if (range < 0.12)
+            if (range < 0.08)
                 e.curve = std::clamp (start_.curve[drag_ - envgraph::CurveA] - dyPx * 20.0 / std::max (1.0, 0.5 * (g0.yBot - g0.yTop)), -20.0, 20.0);
             else if (drag_ == envgraph::CurveA)
                 e.curve = -envgraph::curveForMiddle (lvl);

@@ -446,6 +446,28 @@ void testDisplay()
     Scene s3 (760, 340, 0x0b1026ffu);
     lfodisplay::drawLive (s3.builder(), r, d);
     check (s3.numOps() <= 1, "display: a dim LFO has no cursors");
+
+    // B3 (LFO graph): PHASE moves a start marker; RISE/DELAY > 0 shows separate strip above graph
+    {
+        lfodisplay::Data dClean = d;
+        dClean.dim = false;
+        dClean.delayShare = 0.0f;
+        dClean.riseShare = 0.0f;
+        dClean.phase = 0.25f;
+        Scene scNoLead (760, 340, 0x0b1026ffu);
+        lfodisplay::draw (scNoLead.builder(), r, dClean);
+        lfodisplay::drawLive (scNoLead.builder(), r, dClean);
+        check (! scNoLead.overflow(), "display clean: no lead strip fits scene");
+
+        lfodisplay::Data dWithLead = dClean;
+        dWithLead.delayShare = 0.3f;
+        dWithLead.riseShare = 0.4f;
+        Scene scWithLead (760, 340, 0x0b1026ffu);
+        lfodisplay::draw (scWithLead.builder(), r, dWithLead);
+        lfodisplay::drawLive (scWithLead.builder(), r, dWithLead);
+        check (! scWithLead.overflow(), "display with delay/rise: separate lead strip fits scene");
+        check (scWithLead.numOps() > scNoLead.numOps(), "display with delay/rise: draws extra ops for the lead-in strip above the shape graph");
+    }
 }
 }
 

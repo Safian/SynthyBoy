@@ -289,17 +289,17 @@ void testFullScreen()
         ui::Component* leaves[160];
         const int nl = r.ui.full().collectLeaves (leaves, 0, 160);
         auto has = [&] (const ui::Component* c) { for (int i = 0; i < nl; ++i) if (leaves[i] == c) return true; return false; };
-        check (! has (&r.ui.full().shape) && ! has (&r.ui.full().sync) && ! has (&r.ui.full().monoQ) && has (&r.ui.full().monoTop), "no SHAPE stepper, no SYNC stepper, one MONO (the header's) on the page");
+        check (! has (&r.ui.full().shape) && has (&r.ui.full().sync) && has (&r.ui.full().monoQ) && ! has (&r.ui.full().monoTop), "no SHAPE stepper, SYNC stepper in Timing, MONO in Motion");
     }
     r.tapC (r.ui.full().swing);
-    check (r.ui.activeQ() == 2 && r.inst.q[0] == paramIdx ("lfo1.direction") && r.inst.q[1] == paramIdx ("lfo1.swing") && r.inst.q[2] == paramIdx ("lfo1.stereo") && r.inst.q[3] < 0,
-           "a touch on SWING: the MOTION group (direction, swing, stereo)");
+    check (r.ui.activeQ() == 2 && r.inst.q[0] == paramIdx ("lfo1.direction") && r.inst.q[1] == paramIdx ("lfo1.swing") && r.inst.q[2] == paramIdx ("lfo1.stereo") && r.inst.q[3] == paramIdx ("lfo1.mono"),
+           "a touch on SWING: the MOTION group (direction, swing, stereo, mono)");
     r.tapC (r.ui.full().mode);
     check (r.stack.depth() == 2 && r.ui.list().state.count == 6, "MODE: the list of the six sync types opens");
     r.stack.back();
     r.refresh();
-    check (r.ui.activeQ() == 1 && r.inst.q[0] == paramIdx ("lfo1.sync_type") && r.inst.q[1] == paramIdx ("lfo1.phase") && r.inst.q[2] == paramIdx ("lfo1.delay") && r.inst.q[3] < 0,
-           "the TIMING group (mode, phase, delay)");
+    check (r.ui.activeQ() == 1 && r.inst.q[0] == paramIdx ("lfo1.sync") && r.inst.q[1] == paramIdx ("lfo1.sync_type") && r.inst.q[2] == paramIdx ("lfo1.phase") && r.inst.q[3] == paramIdx ("lfo1.delay"),
+           "the TIMING group (sync, mode, phase, delay)");
     r.tapC (r.ui.full().close);
     check (r.stack.isMain() && ! r.inst.fullOpen, "the close button: main again");
     r.openFull();
@@ -642,12 +642,95 @@ void testTouchAndDraw()
     r.refresh();
     render ("lfo_compact_random", 1280, 740, [&] (gpu::SceneBuilder& sb) { r.ui.drawCompact (sb); r.ui.drawLive (sb); });
 }
+
+void testLfoParameterCoverage()
+{
+    // B1.b: Every parameter of every LFO (lfo1..lfo10, 17 params each)
+    // and every random LFO (rlfo1..rlfo4, 8 params each) must have a control
+    // on the page in some state and be a member of some Q group.
+    for (int lfo = 1; lfo <= 10; ++lfo)
+    {
+        const std::string pre = "lfo" + std::to_string (lfo) + ".";
+        int tested = 0;
+        for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+        {
+            const synthyboy::ParamInfo& pi = synthyboy::paramTable()[i];
+            if (std::strncmp (pi.key, pre.c_str(), pre.size()) != 0)
+                continue;
+            ++tested;
+            bool foundInQ = false;
+            for (float sync : { 0.0f, 1.0f, 4.0f })
+            {
+                Rig r;
+                r.inst.sel[2] = lfo;
+                r.inst.set (pre + "sync", sync);
+                r.refresh();
+                r.openFull();
+                for (int g = 0; g < r.ui.full().numGroups() && ! foundInQ; ++g)
+                {
+                    r.ui.full().setActiveGroup (g);
+                    r.refresh();
+                    for (int m = 0; m < 4; ++m)
+                    {
+                        if (r.inst.q[m] == static_cast<int> (i))
+                        {
+                            foundInQ = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            check (foundInQ, std::string (pi.key) + " is mapped to a control and reachable in a Q group");
+        }
+        check (tested == 17, "LFO " + std::to_string (lfo) + ": all 17 engine parameters checked");
+    }
+
+    for (int rlfo = 1; rlfo <= 4; ++rlfo)
+    {
+        const std::string pre = "rlfo" + std::to_string (rlfo) + ".";
+        int tested = 0;
+        for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+        {
+            const synthyboy::ParamInfo& pi = synthyboy::paramTable()[i];
+            if (std::strncmp (pi.key, pre.c_str(), pre.size()) != 0)
+                continue;
+            ++tested;
+            bool foundInQ = false;
+            for (float sync : { 0.0f, 1.0f, 4.0f })
+            {
+                Rig r;
+                r.inst.sel[2] = 1;
+                r.refresh();
+                r.openFull();
+                r.tap (r.ui.full().bar.rndCells.cell (rlfo - 1).x + 4, r.ui.full().bar.rndCells.cell (rlfo - 1).y + 20);
+                r.inst.set (pre + "sync", sync);
+                r.refresh();
+                for (int g = 0; g < r.ui.full().numGroups() && ! foundInQ; ++g)
+                {
+                    r.ui.full().setActiveGroup (g);
+                    r.refresh();
+                    for (int m = 0; m < 4; ++m)
+                    {
+                        if (r.inst.q[m] == static_cast<int> (i))
+                        {
+                            foundInQ = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            check (foundInQ, std::string (pi.key) + " is mapped to a control and reachable in a Q group");
+        }
+        check (tested == 8, "random LFO " + std::to_string (rlfo) + ": all 8 engine parameters checked");
+    }
+}
 }
 
 int main()
 {
     if (const char* dir = std::getenv ("LFO_IMAGES"))
         mkdir (dir, 0755);
+    testLfoParameterCoverage();
     testBindings();
     testCompactQGroup();
     testWrites();

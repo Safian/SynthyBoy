@@ -427,8 +427,12 @@ private:
             if (p < 0)
                 return false;
             s.t[i] = uibind::normOf (p, v.param (p));
+            s.timeMs[i] = static_cast<double> (v.param (p));
             if (def != nullptr)
+            {
                 def->t[i] = uibind::normOf (p, uibind::info (p).def);
+                def->timeMs[i] = static_cast<double> (uibind::info (p).def);
+            }
         }
         const int sp = uibind::indexOfKey (pre + "sustain");
         if (sp < 0)

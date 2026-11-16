@@ -465,7 +465,7 @@ private:
             case kPageTargets: targetsPageIndex_ = 0; loadTargets (inst, true); break;
             case kPageMods: loadMods (inst); break;
             case kPageEditor: editor_.sync(); break;
-            default: full_.setActiveGroup (0); break;
+            default: break;
         }
         modsDirty_ = true;
         qSet_ = false;
@@ -866,6 +866,7 @@ private:
             const bool envType = syncType_ >= 2 && syncType_ <= 5;
             d.envelope = envType;
             const float phase = std::clamp (v.param (paramOf ("phase")) / 360.0f, 0.0f, 1.0f);
+            d.phase = phase;
             d.loopX = syncType_ >= 3 ? phase : -1.0f;
             const double hz = rateHz (v);
             if (hz > 0.0)
