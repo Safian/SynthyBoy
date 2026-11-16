@@ -35,6 +35,7 @@ static std::mutex reportMu;
 static std::map<AEffect*, std::map<int, Report>> reports;
 static std::atomic<bool> echo { false };   // a host that sets every reported value back (the worst case for a feedback loop)
 static std::atomic<int> totalReports { 0 };
+static std::map<AEffect*, int> updateDisplays;   // audioMasterUpdateDisplay calls of each instance (the host re-reads the names of the Q proxies); under reportMu
 
 static VstIntPtr hostCallback (AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr, void*, float opt)
 {
@@ -50,6 +51,11 @@ static VstIntPtr hostCallback (AEffect* e, VstInt32 opcode, VstInt32 index, VstI
         if (echo.load())
             e->setParameter (e, index, opt);
         return 1;
+    }
+    if (opcode == audioMasterUpdateDisplay)
+    {
+        std::lock_guard<std::mutex> g (reportMu);
+        ++updateDisplays[e];
     }
     return opcode == audioMasterVersion ? 2400 : 0;
 }
@@ -433,6 +439,8 @@ int main (int argc, char** argv)
             none = none && qa->getParameter (qa, q0 + i) == 0.0f && text (qa, effGetParamDisplay, q0 + i).empty();
         check (none, "with no group the four Q proxies read 0 and show nothing");
         resetReports (qa);
+        auto updates = [&] { std::lock_guard<std::mutex> g (reportMu); return updateDisplays[qa]; };
+        const int ud0 = updates();
         writeGroup (std::to_string (tLevel) + " -1 " + std::to_string (tPan) + " " + std::to_string (tSubLevel));
         check (waitFor (2000, [&] { for (int i = 0; i < 4; ++i) if (reportOf (qa, q0 + i).count < 1) return false; return true; }), "a group is set: the host is told the values of all four Q proxies");
         sleepMs (400);
@@ -440,10 +448,13 @@ int main (int argc, char** argv)
         for (int i = 0; i < 4; ++i)
             once = once && reportOf (qa, q0 + i).count == 1 && reportOf (qa, q0 + i).last == qa->getParameter (qa, q0 + i);
         check (once, "... once each, with the value the plugin reports on a read");
+        check (updates() == ud0 + 1, "... and, once for the whole group, audioMasterUpdateDisplay: the host reads the new names again (" + std::to_string (updates() - ud0) + ")");
         check (qa->getParameter (qa, q0) == qa->getParameter (qa, tLevel) && qa->getParameter (qa, q0 + 1) == 0.0f && qa->getParameter (qa, q0 + 2) == qa->getParameter (qa, tPan) && qa->getParameter (qa, q0 + 3) == qa->getParameter (qa, tSubLevel),
               "getParameter on Q n is the target's value (0 for none)");
         check (text (qa, effGetParamDisplay, q0) == text (qa, effGetParamDisplay, tLevel) && text (qa, effGetParamLabel, q0) == text (qa, effGetParamLabel, tLevel) && text (qa, effGetParamDisplay, q0 + 1).empty()
                && text (qa, effGetParamName, q0 + 1) == "Q 2", "display text and label are the target's, a Q without a target shows nothing (the name stays Q n)");
+        check (text (qa, effGetParamName, q0) == synthyboy::paramTable()[tLevel].name && text (qa, effGetParamName, q0 + 2) == synthyboy::paramTable()[tPan].name && text (qa, effGetParamName, q0 + 3) == synthyboy::paramTable()[tSubLevel].name,
+               "the name of a Q is the name of its target (" + text (qa, effGetParamName, q0) + ", " + text (qa, effGetParamName, q0 + 2) + ", " + text (qa, effGetParamName, q0 + 3) + ")");
         {
             VstParameterProperties qp, rp;
             std::memset (&qp, 0, sizeof qp); std::memset (&rp, 0, sizeof rp);
@@ -470,6 +481,18 @@ int main (int argc, char** argv)
         writeGroup (std::to_string (tCut) + " " + std::to_string (tLevel) + " -1 -1");
         check (waitFor (2000, [&] { for (int i = 0; i < 4; ++i) if (reportOf (qa, q0 + i).count < 1) return false; return true; }) && reportOf (qa, q0).last == qa->getParameter (qa, tCut) && reportOf (qa, q0 + 2).last == 0.0f && reportOf (qa, q0 + 3).last == 0.0f,
               "another group: the host is told the four new values (0 for the Qs without a target)");
+        check (text (qa, effGetParamName, q0) == synthyboy::paramTable()[tCut].name && text (qa, effGetParamName, q0 + 1) == synthyboy::paramTable()[tLevel].name && text (qa, effGetParamName, q0 + 2) == "Q 3",
+              "a new group: the names follow (" + text (qa, effGetParamName, q0) + ", " + text (qa, effGetParamName, q0 + 1) + ", " + text (qa, effGetParamName, q0 + 2) + ")");
+        {
+            // a transpose that is split into octaves and semitones names its two knobs and shows each part
+            const int tTrans = idx ("master.transpose");
+            resetReports (qa);
+            qa->setParameter (qa, tTrans, synthyboy::toNormalised (synthyboy::paramTable()[tTrans], 14.0f));
+            writeGroup (std::to_string (tTrans | (synthyboy_mpc::QRouter::kOct << synthyboy_mpc::QRouter::kModeShift)) + " " + std::to_string (tTrans | (synthyboy_mpc::QRouter::kSem << synthyboy_mpc::QRouter::kModeShift)) + " -1 -1");
+            check (waitFor (2000, [&] { return text (qa, effGetParamName, q0) == std::string (synthyboy::paramTable()[tTrans].name) + " Oct"; }) && text (qa, effGetParamName, q0 + 1) == std::string (synthyboy::paramTable()[tTrans].name) + " Sem"
+                       && text (qa, effGetParamDisplay, q0) == "+1" && text (qa, effGetParamDisplay, q0 + 1) == "+2" && text (qa, effGetParamLabel, q0) == "oct" && text (qa, effGetParamLabel, q0 + 1) == "st",
+                   "a split transpose: Oct and Sem names, +1 oct and +2 st for 14 (" + text (qa, effGetParamName, q0) + " " + text (qa, effGetParamDisplay, q0) + " / " + text (qa, effGetParamName, q0 + 1) + " " + text (qa, effGetParamDisplay, q0 + 1) + ")");
+        }
         // the Q proxies are not in the chunk and a group does not change it
         const std::string withGroup = getChunk (qa);
         writeGroup ("-1 -1 -1 -1");

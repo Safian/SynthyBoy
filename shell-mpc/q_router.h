@@ -7,7 +7,7 @@
 //   - getParameter on Q n: the normalised value of the target now, 0 when it has none (value);
 //   - setParameter on Q n: the same write as the host's own write to the target (hostWrite -> the plugin's writeRealParam); nothing when the target is none, when the value is the one the target has
 //     (an echo of a report) or inside the restore window (the chunk wins: docs/MPC.md "Project save and reload"; the same rule as the Play proxies);
-//   - when the group changes the host is told the four new values (poll, the display thread: audioMasterAutomate), so the knob display of the host follows; a target that changes by another route
+//   - when the group changes the host is told the four new values (poll, the display thread: audioMasterAutomate), so the knob display of the host follows (and the plugin then tells it that the names changed: audioMasterUpdateDisplay, see docs/MPC.md); a target that changes by another route
 //     (its own page, a preset, automation, the touch screen of the plugin's own UI) is reported the same way; a write the host made to a Q proxy makes the poll report the real parameter too.
 // Audio thread rule: value () and hostWrite () (the getParameter / setParameter paths) use only relaxed / acquire-release atomics: no allocation, no lock, no loop longer than four steps.
 // Not saved in the chunk, not offered for automation: an automation recorded on a Q proxy replays into whatever group is active when it plays (docs/MPC.md).
@@ -148,6 +148,12 @@ public:
     template <class Read, class ReportQ, class ReportReal>
     void poll (Read&& readNorm, ReportQ&& reportQ, ReportReal&& reportReal) noexcept
     {
+        poll (readNorm, reportQ, reportReal, [] {});
+    }
+    /** As above; groupChanged () is called once, after the four values of a changed group were reported: the names, units and value texts of the proxies are other now (the plugin tells the host). */
+    template <class Read, class ReportQ, class ReportReal, class GroupChanged>
+    void poll (Read&& readNorm, ReportQ&& reportQ, ReportReal&& reportReal, GroupChanged&& groupChanged) noexcept
+    {
         if (! lastValid_)
         {
             for (int q = 0; q < kCount; ++q)
@@ -155,12 +161,15 @@ public:
             lastValid_ = true;
         }
         if (groupDue_.exchange (false, std::memory_order_acq_rel))
+        {
             for (int q = 0; q < kCount; ++q)
             {
                 const float v = value (q, readNorm);
                 last_[q].store (v, std::memory_order_relaxed);
                 reportQ (q, v);
             }
+            groupChanged();
+        }
         for (int q = 0; q < kCount; ++q)
         {
             const float v = value (q, readNorm);

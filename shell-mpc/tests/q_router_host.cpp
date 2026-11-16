@@ -47,11 +47,12 @@ struct Reports
 {
     std::vector<std::pair<int, float>> q;
     std::vector<int> real;
-    void clear() { q.clear(); real.clear(); }
+    int groups = 0;   // how often the group-changed callback ran (the plugin tells the host the names are other)
+    void clear() { q.clear(); real.clear(); groups = 0; }
 };
 static void pollInto (QRouter& r, Reports& out)
 {
-    r.poll (rd, [&] (int q, float v) { out.q.emplace_back (q, v); }, [&] (int t) { out.real.push_back (t); });
+    r.poll (rd, [&] (int q, float v) { out.q.emplace_back (q, v); }, [&] (int t) { out.real.push_back (t); }, [&] { ++out.groups; });
 }
 
 int main()
@@ -134,12 +135,13 @@ int main()
         pollInto (r, rep);
         check (rep.q.size() == 4 && rep.q[0].first == 0 && std::fabs (rep.q[0].second - rd (2)) < 1e-6f && rep.q[2].first == 2 && rep.q[2].second == 0.0f && rep.q[3].first == 3 && std::fabs (rep.q[3].second - rd (8)) < 1e-6f && rep.real.empty(),
                "a group change: the host is told all four values (0 for none) once");
+        check (rep.groups == 1, "... and the group-changed callback runs once, after them");
         rep.clear();
         pollInto (r, rep);
         check (rep.q.empty(), "the same state again: nothing");
         r.setGroup (g, 4, kParams);
         pollInto (r, rep);
-        check (rep.q.empty(), "the same group set again: nothing is reported");
+        check (rep.q.empty() && rep.groups == 0, "the same group set again: nothing is reported and the host is not told the names changed");
         wr (4, 0.77f);   // the target changes by another route (its own page, a preset, the touch screen)
         pollInto (r, rep);
         check (rep.q.size() == 1 && rep.q[0].first == 1 && rep.q[0].second == 0.77f, "a target that changes elsewhere: that Q is reported once");

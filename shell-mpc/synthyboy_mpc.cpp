@@ -773,7 +773,14 @@ struct PluginInstance
         const VstInt32 base = qBase();
         qRouter.poll ([this] (int t) noexcept { return qReadNorm (t); },
                       [&] (int q, float v) { audioMaster (e, audioMasterAutomate, base + q, 0, nullptr, v); },
-                      [&] (int real) { audioMaster (e, audioMasterAutomate, real, 0, nullptr, qReadNorm (real)); });
+                      [&] (int real) { audioMaster (e, audioMasterAutomate, real, 0, nullptr, qReadNorm (real)); },
+                      [&] { qNotifyGroup (e); });
+    }
+    /** The group changed: the names, units and value texts of the Q proxies are other now. The host keeps what it read for good unless it is told (measured on the Key 61, docs/MPC.md "Q proxies and the
+        plugin-drawn pages"): audioMasterUpdateDisplay makes it read them again, audioMasterIOChanged does not. */
+    void qNotifyGroup (AEffect* e)
+    {
+        audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
     }
 
     static VstInt32 playBase() noexcept { return overlayParamIndex() + 1; }   // "Play Osc"; "Play Env" and "Play LFO" follow, then the proxies
@@ -1609,14 +1616,26 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 #if SYNTHYBOY_MPC_OVERLAY
         if (PluginInstance::isQParam (index))
         {
+            // the proxy reports the CURRENT target: its name (a transpose that is split in two knobs says Oct / Sem), its unit and its value text; "Q n" while it has none (or a virtual one)
             const int q = index - PluginInstance::qBase();
             const int real = inst->qRouter.target (q);
-            if (opcode == effGetParamName)
-                std::snprintf (buf, 64, "Q %d", q + 1);
-            else if (real < 0)
-                buf[0] = '\0';
+            const int mode = inst->qRouter.mode (q);
+            if (real < 0)
+            {
+                if (opcode == effGetParamName)
+                    std::snprintf (buf, 64, "Q %d", q + 1);
+                else
+                    buf[0] = '\0';
+            }
+            else if (opcode == effGetParamName)
+                std::snprintf (buf, 64, "%s%s", synthyboy::paramTable()[real].name, mode == synthyboy_mpc::QRouter::kOct ? " Oct" : (mode == synthyboy_mpc::QRouter::kSem ? " Sem" : ""));
             else if (opcode == effGetParamLabel)
-                copyString (buf, 64, synthyboy::unitLabel (synthyboy::paramTable()[real].unit));
+                copyString (buf, 64, mode == synthyboy_mpc::QRouter::kOct ? "oct" : (mode == synthyboy_mpc::QRouter::kSem ? "st" : synthyboy::unitLabel (synthyboy::paramTable()[real].unit)));
+            else if (mode == synthyboy_mpc::QRouter::kOct || mode == synthyboy_mpc::QRouter::kSem)
+            {
+                const int t = static_cast<int> (std::lround (inst->paramMirror[real].load (std::memory_order_relaxed)));
+                std::snprintf (buf, 64, "%+d", mode == synthyboy_mpc::QRouter::kOct ? synthyboy_mpc::QRouter::octOfTranspose (t) : synthyboy_mpc::QRouter::semOfTranspose (t));
+            }
             else
                 synthyboy::valueToText (synthyboy::paramTable()[real], inst->paramMirror[real].load (std::memory_order_relaxed), buf, 64);
             buf[63] = '\0';
