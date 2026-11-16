@@ -501,6 +501,19 @@ public:
     virtual Change tick (double /*nowMs*/) { return Change::none(); }
     /** The hardware knob assigned to the component turned by `delta` detents (a knob: normalised units; a list / number: whole steps). */
     virtual Change turn (double delta) { return enabled_ ? onTurn (delta) : Change::none(); }
+    /** The mouse wheel over the component: `notches` (positive: away from the user, "up") turn it as many steps of its own (wheelUnit) as a hardware knob step would. */
+    Change wheel (int notches) { return turn (static_cast<double> (notches) * wheelUnit()); }
+    /** What one notch of the wheel is in the units of turn (): a knob and a bar one Q-Link step (1 / 128 of the range), a number, a stepper one whole step; a list is turned the other way round (the wheel up goes up the list). */
+    virtual double wheelUnit() const noexcept { return 1.0; }
+    /** The wheel at the point (x, y): true when the component takes it (it lies over the component, which is enabled); `out` is the change it makes. A composite asks its children; one that scrolls takes the wheel
+        where its children do not. */
+    virtual bool wheelOver (int x, int y, int notches, Change& out)
+    {
+        if (! enabled_ || ! rect_.contains (x, y))
+            return false;
+        out = wheel (notches);
+        return true;
+    }
     bool capturing() const noexcept { return captured_; }
 
     // ---- structure

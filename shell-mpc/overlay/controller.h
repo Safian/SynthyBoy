@@ -35,6 +35,8 @@
 #include "overlay_layout.h"
 #include "page_detector.h"
 #include "panel_key.h"
+#include "mouse_router.h"
+#include "qlink_setting.h"
 #include "presenter.h"
 #include "renderer.h"
 #include "touch_input.h"
@@ -56,6 +58,8 @@ struct Paths
     std::string detail = "/tmp/synthyboy-overlay-detail";   // 1 / full, 2 / reduced: the level of detail of the UI (ui/theme.h Detail); without the file (or "auto") the plugin chooses from the measured frame time
     std::string gpuClock = "/tmp/synthyboy-overlay-gpuclock";   // "off": the clock of the GPU is left to its governor; otherwise it is raised while the picture moves (gpu_clock.h)
     std::string rate = "/tmp/synthyboy-overlay-fps";   // 30 or 60: the pictures a second the GPU path aims at; without the file (or "auto") 30 on a GPU of the Mali-T series (the Key 61), 60 (tried, kept when it is reached) on the others
+    std::string pointerHotSpot = "/tmp/synthyboy-overlay-pointer-hotspot";   // debug: "x y", the pixel of the host's pointer plane picture that is the arrow's tip (plane pixels, panel orientation); overrides the measured / default hot spot
+    std::string qlinkSettings = "/data/Settings/MPC/MPC.settings";   // the host's settings (read only): the option "Show Q-Link Status When Touched" (qlink_setting.h); with it off the key does nothing
     std::string look = "/tmp/synthyboy-overlay-look";   // a number 1 .. 3: the look of the UI (ui/theme.h); without the file look 1
     std::string dumpRequest = "/tmp/synthyboy-overlay-dump";
     std::string dump = "/tmp/synthyboy-overlay-curve.txt";
@@ -201,6 +205,35 @@ public:
         }
     }
 
+    /** The mouse: its events and the host's pointer plane (mouse_router.h). Not owned; called before the first tick. */
+    void setMouse (IMouseInput* mouse, IPointerSource* pointer)
+    {
+        if (mouse != nullptr && pointer != nullptr)
+            mouse_ = std::make_unique<MouseRouter> (*mouse, *pointer);
+        else
+            mouse_.reset();
+    }
+    unsigned long wheelEvents() const noexcept { return wheelEvents_; }
+    unsigned long wheelTaken() const noexcept { return wheelTaken_; }
+    /** The mouse wheel at a point of the UI (upright UI pixels): the control under it takes it (tests call it directly). */
+    void wheelEvent (int x, int y, int notches, double nowMs)
+    {
+        ++wheelEvents_;
+        if (keyEdge_ < PanelKey::kNoKey && x >= keyEdge_)
+            return;   // the host shows through there (its panel): our controls do not take it
+        std::lock_guard<std::mutex> g (mu_);
+        if (current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0)
+            return;
+        IInstanceView* v = slots_.at (activeSlot_);
+        if (v == nullptr)
+            return;
+        if (views_[static_cast<size_t> (current_)]->onWheel (x, y, notches, ui_[activeSlot_], *v, nowMs))
+        {
+            ++wheelTaken_;
+            needFrame_ = true;
+        }
+    }
+
     /** Plane off, buffers freed (the overlay thread has stopped, or this is the thread). */
     void shutdown() noexcept
     {
@@ -247,7 +280,7 @@ public:
             lastNowMs_ = nowMs;
             const auto t0 = std::chrono::steady_clock::now();
             double wait = step (nowMs);
-            if (touchIn_ != nullptr && current_ >= 0 && isUiPage (current_) && activeSlot_ >= 0)
+            if ((touchIn_ != nullptr || mouse_) && current_ >= 0 && isUiPage (current_) && activeSlot_ >= 0)
                 wait = std::min (wait, kTouchPollMs);   // the plugin-drawn pages are on screen: look at the touch screen often
             tickMaxMs_ = std::max (tickMaxMs_, std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count());
             return wait;
@@ -371,7 +404,12 @@ private:
             instanceSeen_ = d.instanceSeen;
             // the host's Q-Link panel covers the right marker of the page; while it slides its black line is not at its place and no panel look is recognised yet. The key (PanelKey) says where the host's band
             // begins: a view that was on screen and has its left marker only, with the band at or left of the right marker, is the same page under the panel (no time hold: the key follows the pixels)
-            if (d.view < 0 && d.partialView >= 0 && d.partialView == current_ && current_ >= 0 && keyEdge_ <= markers_[d.partialView * 2 + 1].rect.x)
+            // With no reference (a new page, or the reference was dropped) the key cannot say where the band begins; the page is held all the same while the panel is there (its look fully in, or its black line
+            // anywhere in the strip: PanelKey::findLine) and the picture is cut at that line (updateKey): better a strip too much than the page blinking off for as long as the panel is up
+            bool blindHold = false;
+            if (qlinkOpt_.keyOn() && d.view < 0 && d.partialView >= 0 && d.partialView == current_ && current_ >= 0 && rotationKnown() && ! keys_[static_cast<size_t> (current_)].hasReference())
+                blindHold = d.partialLook || PanelKey::findLine (frames_, rotation_) < PanelKey::kNoKey;
+            if (d.view < 0 && d.partialView >= 0 && d.partialView == current_ && current_ >= 0 && (keyEdge_ <= markers_[d.partialView * 2 + 1].rect.x || blindHold))
             {
                 d.view = d.partialView;
                 d.slot = seenSlot_;
@@ -423,7 +461,10 @@ private:
                 if (current_ >= 0 && view < 0)
                     ++viewHides_;   // the page went off the screen (a blink when the panel comes or goes)
                 if (view >= 0 && view != current_)
+                {
                     keys_[view].forget();   // another tab or sub-tab: the host's picture under us is another one, the reference is taken again
+                    bandWholeSinceMs_ = -1.0;
+                }
                 viewSinceMs_ = nowMs;
                 current_ = view;
                 activeSlot_ = slot;
@@ -469,14 +510,27 @@ private:
             lastQWriteMs_ = nowMs;
         }
         int edge = PanelKey::kNoKey;
-        if (current_ >= 0 && rotationKnown())
+        if (current_ >= 0 && rotationKnown() && qlinkOpt_.keyOn())
         {
             PanelKey& k = keys_[current_];
             if (! k.hasReference())
             {
                 const bool settled = wasWhole_ && nowMs - wholeSinceMs_ >= kKeySettleMs && nowMs - lastWholeMs_ <= kKeyFreshMs && nowMs - viewSinceMs_ >= kKeySettleMs && nowMs - lastQWriteMs_ >= kKeyQuietMs;
-                if (settled && k.capture (frames_, rotation_))
+                if (settled && k.consider (frames_, rotation_, nowMs, kKeyStableMs, *keyCand_))
                     ++keyReferences_;
+                else if (! settled)
+                    keyCand_->drop();
+                if (! k.hasReference() && current_ >= 0)
+                {
+                    // no reference to compare with: the panel's black line is looked for in the strip itself (every tick, the detector's look is up to 100 ms old), and while the page is held by the panel (the
+                    // markers covered) and no line is found yet, the line the panel has when it is fully in
+                    const int line = PanelKey::findLine (frames_, rotation_);
+                    if (line < PanelKey::kNoKey || ! wasWhole_)
+                    {
+                        edge = std::min (kBlindEdge, line);
+                        ++keyBlindTicks_;
+                    }
+                }
             }
             else
             {
@@ -488,13 +542,20 @@ private:
                 ++keyMeasures_;
                 if (r.read)
                 {
-                    if (r.edge < PanelKey::kNoKey && keyEdge_ >= PanelKey::kNoKey)
-                        bandSinceMs_ = nowMs;
-                    // a band that stays while the detector still sees BOTH markers (looks that came after the band did): the host's picture under us is another one now
-                    const bool bandWhileWhole = r.edge < PanelKey::kNoKey && wasWhole_ && lastWholeMs_ - bandSinceMs_ >= kKeyStaleMs;
+                    // a band that stays while the detector sees BOTH markers, for kKeyStaleMs without a break: the host's picture under us is another one now. (The time is the time of the band AND the markers
+                    // together: a panel that has been up for seconds and now slides out shows the right marker again at once, and that is no reason to drop the reference.)
+                    if (r.edge < PanelKey::kNoKey && wasWhole_)
+                    {
+                        if (bandWholeSinceMs_ < 0.0)
+                            bandWholeSinceMs_ = nowMs;
+                    }
+                    else
+                        bandWholeSinceMs_ = -1.0;
+                    const bool bandWhileWhole = bandWholeSinceMs_ >= 0.0 && nowMs - bandWholeSinceMs_ >= kKeyStaleMs;
                     if (r.stale || bandWhileWhole)
                     {
                         k.forget();   // not the picture under us any more
+                        bandWholeSinceMs_ = -1.0;
                         ++keyRetakes_;
                     }
                     else
@@ -660,6 +721,7 @@ private:
     /** The touch screen: only while a view of the Play page is on screen (the plugin-drawn pages are there); the events go to the view, a running finger gets the clock for the long press. */
     void pollTouch (double nowMs)
     {
+        pollMouse (nowMs);
         if (touchIn_ == nullptr || current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0 || ! presenter_.opened())
             return;
         touchIn_->configure (presenter_.panelWidth(), presenter_.panelHeight(), rotation_);
@@ -669,6 +731,28 @@ private:
         if (v != nullptr && views_[static_cast<size_t> (current_)]->fingerDown())
         {
             views_[static_cast<size_t> (current_)]->onTick (ui_[activeSlot_], *v, nowMs);
+            needFrame_ = true;
+        }
+    }
+
+    /** The mouse: like the touch screen only while a plugin-drawn page is on screen (the events of other times are read and thrown away: they must not arrive later). Left button = a finger, the wheel = steps. */
+    void pollMouse (double nowMs)
+    {
+        if (! mouse_)
+            return;
+        if (current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0 || ! presenter_.opened())
+        {
+            mouse_->idle();             // a drag that was running when the page went is over (the page drops its gesture itself)
+            return;
+        }
+        mouse_->configure (presenter_.panelWidth(), presenter_.panelHeight(), rotation_);
+        mouse_->poll (nowMs, timing_.frameEveryMs, [this, nowMs] (const TouchEvent& ev) { touchEvent (ev, nowMs); },
+                      [this, nowMs] (int x, int y, int notches) { wheelEvent (x, y, notches, nowMs); });
+        std::lock_guard<std::mutex> g (mu_);
+        IInstanceView* v = slots_.at (activeSlot_);
+        if (v != nullptr && mouse_->buttonDown() && views_[static_cast<size_t> (current_)]->fingerDown())
+        {
+            views_[static_cast<size_t> (current_)]->onTick (ui_[activeSlot_], *v, nowMs);   // the clock of a long press
             needFrame_ = true;
         }
     }
@@ -912,6 +996,18 @@ private:
     void readSwitches (double nowMs)
     {
         killed_ = exists (paths_.killSwitch);
+        if (qlinkOpt_.poll())
+        {
+            // the option of the host changed (or was read the first time): with it off the pop-up never comes, the key is off entirely: nothing is read, nothing is cut, the references are dropped
+            if (! qlinkOpt_.keyOn())
+            {
+                for (PanelKey& k : keys_)
+                    k.forget();
+                bandWholeSinceMs_ = -1.0;
+            }
+            keyOptionChanges_++;
+            needFrame_ = true;
+        }
         const bool noGpu = exists (paths_.noGpu);
         if (noGpu != noGpu_)
         {
@@ -942,6 +1038,14 @@ private:
                 ui::theme::setLook (look);
                 needFrame_ = true;
             }
+        }
+        if (mouse_)
+        {
+            std::ifstream hf (paths_.pointerHotSpot);
+            std::string text;
+            if (hf)
+                std::getline (hf, text);
+            mouse_->setHotSpotOverride (text);
         }
         chooseDetail();
         chooseRate (nowMs);
@@ -1214,7 +1318,7 @@ private:
             std::lock_guard<std::mutex> g (mu_);
             const UiStack& u = activeSlot_ >= 0 ? ui_[activeSlot_] : ui_[0];
             o << "ui_state: " << (activeSlot_ < 0 || u.isMain() ? "main" : (u.level() == UiStack::Level::full ? "full" : "detail")) << "\nui_depth: " << (activeSlot_ < 0 ? 0 : u.depth())
-              << "\nui_auto_closes: " << uiAutoCloses_ << "\ngpu_clock_boost: " << (clock_.boosted() ? "yes" : "no") << "\ngpu_rate_stride: " << rateStride_ << "\ngpu_rate_source: " << rateSource_ << "\nui_look: " << look_ << "\nui_detail: " << ui::theme::D().name << "\nui_detail_source: " << detailSource_ << "\nui_detail_helper_render_ms: " << detailMeanMs_ << "\nqlink_panel: " << (keyEdge_ < PanelKey::kNoKey ? "yes" : "no") << "\nqlink_panel_changes: " << qlinkPanelChanges_ << "\nkey_active: " << (keyEdge_ < PanelKey::kNoKey ? "yes" : "no") << "\nkey_pixels: " << (PanelKey::kNoKey - keyEdge_) << "\nkey_reference_taken: " << keyReferences_ << "\nkey_reference_retakes: " << keyRetakes_ << "\nkey_holds: " << keyHolds_ << "\nkey_cost_ms: " << (keyMeasures_ > 0 ? keyCostSum_ / static_cast<double> (keyMeasures_) : 0.0) << " (max " << keyCostMax_ << ")\nview_hides: " << viewHides_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\n" << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
+              << "\nui_auto_closes: " << uiAutoCloses_ << "\ngpu_clock_boost: " << (clock_.boosted() ? "yes" : "no") << "\ngpu_rate_stride: " << rateStride_ << "\ngpu_rate_source: " << rateSource_ << "\nui_look: " << look_ << "\nui_detail: " << ui::theme::D().name << "\nui_detail_source: " << detailSource_ << "\nui_detail_helper_render_ms: " << detailMeanMs_ << "\nqlink_panel: " << (keyEdge_ < PanelKey::kNoKey ? "yes" : "no") << "\nqlink_panel_changes: " << qlinkPanelChanges_ << "\nkey_active: " << (keyEdge_ < PanelKey::kNoKey ? "yes" : "no") << "\nkey_pixels: " << (PanelKey::kNoKey - keyEdge_) << "\nkey_reference_taken: " << keyReferences_ << "\nkey_reference_retakes: " << keyRetakes_ << "\nqlink_status_option: " << qlinkSettingText (qlinkOpt_.value()) << "\nkey_enabled: " << (qlinkOpt_.keyOn() ? "yes" : "no") << "\nqlink_status_option_reads: " << qlinkOpt_.reads() << " (of " << qlinkOpt_.polls() << " checks)\nkey_holds: " << keyHolds_ << "\nkey_blind_ticks: " << keyBlindTicks_ << "\nkey_cost_ms: " << (keyMeasures_ > 0 ? keyCostSum_ / static_cast<double> (keyMeasures_) : 0.0) << " (max " << keyCostMax_ << ")\nview_hides: " << viewHides_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\nwheel_events: " << wheelEvents_ << "\nwheel_taken: " << wheelTaken_ << "\nmouse_input: " << (mouse_ ? "yes" : "no") << "\n" << (mouse_ ? mouse_->describe() : std::string()) << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
         }
         o << "frames_last_second: " << (final_ ? 0u : framesLast_) << "\n";
         o << "frames_total: " << framesTotal() << "\n";
@@ -1334,6 +1438,7 @@ private:
     IFrameSource& frames_;
     ICurveRenderer& renderer_;
     Paths paths_;
+    QLinkSettingFile qlinkOpt_ { paths_.qlinkSettings };   // the host's option for the pop-up (qlink_setting.h): read at the start and when the file changes; off: the key does nothing
     Timing timing_;
     double fixedCost_;
     gpu::IGpuOverlay* gpu_ = nullptr;
@@ -1350,12 +1455,15 @@ private:
     MarkerSpec markers_[Detection::kMaxViews * 2];
     Rect regions_[Detection::kMaxViews];
     ITouchInput* touchIn_ = nullptr;
+    std::unique_ptr<MouseRouter> mouse_;
     bool autoReduced_ = false, wasWhole_ = false;
-    static constexpr double kKeySettleMs = 600.0, kKeyFreshMs = 250.0, kKeyQuietMs = 800.0, kKeyStaleMs = 300.0;   // the page must be whole and still this long before the reference is taken, the look at it this fresh, no knob write this lately
-    PanelKey keys_[Detection::kMaxViews];                 // the reference of the strip under each view (taken again on a view change)
+    static constexpr double kKeySettleMs = 600.0, kKeyFreshMs = 250.0, kKeyQuietMs = 800.0, kKeyStaleMs = 300.0, kKeyStableMs = 250.0;   // the page must be whole and still this long before the reference is taken, the look at it this fresh, no knob write this lately
+    std::unique_ptr<PanelKey::Candidate> keyCand_ { new PanelKey::Candidate() };   // the look of the strip that may become the next reference (one for the view on screen); on the heap with the references: 14 KB each, the controller lives on the stack of some tests
+    std::vector<PanelKey> keys_ = std::vector<PanelKey> (Detection::kMaxViews);                 // the reference of the strip under each view (taken again on a view change)
     int keyEdge_ = PanelKey::kNoKey;
-    double lastWholeMs_ = 0.0, wholeSinceMs_ = 0.0, bandSinceMs_ = 0.0, viewSinceMs_ = 0.0, lastQWriteMs_ = 0.0, keyCostSum_ = 0.0, keyCostMax_ = 0.0;
-    unsigned long qWrites_ = 0, keyReferences_ = 0, keyRetakes_ = 0, keyHolds_ = 0, keyMeasures_ = 0, viewHides_ = 0, qlinkPanelChanges_ = 0;
+    static constexpr int kBlindEdge = PageDetector::kPanelLineX - 2;   // the cut while there is no reference: the left edge of the panel when it is fully in, less the grown edge
+    double lastWholeMs_ = 0.0, wholeSinceMs_ = 0.0, bandWholeSinceMs_ = -1.0, viewSinceMs_ = 0.0, lastQWriteMs_ = 0.0, keyCostSum_ = 0.0, keyCostMax_ = 0.0;
+    unsigned long qWrites_ = 0, keyReferences_ = 0, keyRetakes_ = 0, keyHolds_ = 0, keyMeasures_ = 0, keyBlindTicks_ = 0, keyOptionChanges_ = 0, viewHides_ = 0, qlinkPanelChanges_ = 0;
     int qWriteSlot_ = -1;
     double renderAcc_ = 0.0, detailMeanMs_ = 0.0;
     GpuClock clock_;                                      // the lowest clock the GPU's governor may use, raised while the picture moves
@@ -1370,7 +1478,7 @@ private:
     unsigned long detailFrames_ = 0;
     const char* detailSource_ = "auto";
     int look_ = 1;
-    unsigned long touchEvents_ = 0, touchTaken_ = 0;
+    unsigned long touchEvents_ = 0, touchTaken_ = 0, wheelEvents_ = 0, wheelTaken_ = 0;
     Rect instanceRects_[Detection::kMaxViews];
     int targetBase_[Detection::kMaxViews] = {};
     int targetCount_[Detection::kMaxViews] = {};

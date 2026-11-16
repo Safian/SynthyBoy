@@ -168,6 +168,21 @@ public:
             handle (gesture_->tick (nowMs), stack, inst);
     }
 
+    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the control of the page under the pointer takes it as steps of its own (a knob: one Q-Link step, a stepper, a list, a scrolled
+        list; ui::Component::wheelOver). false: nothing of this page lies there, or a finger is down on it. */
+    bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs)
+    {
+        ui::Component* top = topComponent();
+        if (gestureDown_ || ! top || ! covers (x, y))
+            return false;
+        ui::Change ch;
+        if (! top->wheelOver (x, y, notches, ch))
+            return false;
+        handle (ch, stack, inst);
+        (void) nowMs;
+        return true;
+    }
+
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
     /** The page comes on screen again (another view was shown): it starts on BANK 1 (macros 1 .. 4) every time, so what the page shows and what the knobs write on arrival never depend on a bank left from an earlier visit; the group is published again. */

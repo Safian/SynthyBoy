@@ -1981,6 +1981,7 @@ private:
             __atomic_store_n (&block_->pace.ms[i], ps.ms[i], __ATOMIC_RELAXED);
         __atomic_store_n (&block_->pace.count, ps.count, __ATOMIC_RELAXED);
         __atomic_store_n (&block_->pace.planeChecks, planeChecks_, __ATOMIC_RELAXED);
+        __atomic_store_n (&block_->pace.planeRefreshes, planeRefreshes_, __ATOMIC_RELAXED);
     }
 
     /** Debug (flag from the hello): while /tmp/synthyboy-overlay-gpu-dump exists, the finished frame is read back (glReadPixels, rows as GL returns them: bottom up) and written to

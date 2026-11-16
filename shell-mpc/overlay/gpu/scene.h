@@ -627,7 +627,7 @@ struct PaceBlock
     uint32_t count, stride, periodUs, onGrid;
     uint32_t vb[10];
     uint32_t ms[64];
-    uint32_t planeChecks, reserved;   // how often the helper has asked the display, right after an update, whether the plane shows our framebuffer on our CRTC (once a second)
+    uint32_t planeChecks, planeRefreshes;   // planeChecks: how often the helper has asked the display, right after an update, whether the plane shows our framebuffer on our CRTC (once a second); planeRefreshes: how often it found the plane switched off (a mode set of the application) and set it again (the plugin then takes the stacking again)
 };
 
 /** The helper's render statistics, cumulative since it started (the plugin takes two snapshots and subtracts them: the mean and the 99th percentile of a window, not the last picture): the number of pictures, the sums

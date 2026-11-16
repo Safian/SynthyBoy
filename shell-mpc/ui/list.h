@@ -26,6 +26,7 @@ public:
     State state;
 
     Size minSize() const override { return { 240, 3 * kRowH + 2 * kPad }; }
+    double wheelUnit() const noexcept override { return -1.0; }   // the mouse wheel up goes up the list (turn () with a positive delta moves the current item down)
     /** The dimmed backdrop covers `parent`; a tap on it closes (Request with the backdrop id). */
     void setPopup (const Rect& parent) { parent_ = parent; }
     void setBackdropId (int id) noexcept { backdropId_ = id; }

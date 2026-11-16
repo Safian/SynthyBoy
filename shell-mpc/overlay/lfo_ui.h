@@ -295,6 +295,21 @@ public:
         if (gesture_ && gestureDown_)
             handle (gesture_->tick (nowMs), stack, inst, nowMs);
     }
+    /** The mouse wheel at (x, y) (UI pixels, `notches` positive away from the user): the control of the page under the pointer takes it as steps of its own (a knob: one Q-Link step, a stepper, a list, a scrolled
+        list; ui::Component::wheelOver). false: nothing of this page lies there, or a finger is down on it. */
+    bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs)
+    {
+        ui::Component* top = topComponent();
+        if (gestureDown_ || ! top || ! covers (x, y))
+            return false;
+        ui::Change ch;
+        if (! top->wheelOver (x, y, notches, ch))
+            return false;
+        handle (ch, stack, inst, nowMs);
+        (void) nowMs;
+        return true;
+    }
+
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
     /** A full screen opened or closed somewhere: the router keeps what the last page set, so this UI publishes its Q group again at the next update (). */
