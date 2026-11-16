@@ -50,8 +50,9 @@ modulation matrix, a set of 13 effect types, and a master section with tuning, M
 second, plainer version). It is built for both generations of standalone MPC hardware, the first generation (32-bit) and
 the second generation (64-bit); the MPC loads the build that fits.
 
-**Tested devices.** Built for both generations, tested on the **MPC Key 61** (first generation, MPC OS 3.10.1.12) and on the
-**MPC XL** (second generation). Other MPC models have not been tested.
+**Devices.** Built for both generations. It was developed and tried by its author on the **MPC Key 61** (first
+generation, MPC OS 3.10.1.12) and the **MPC XL** (second generation). It has not been tried on other MPC models. Some
+details described for the XL (see 4.3) are the design and are not yet confirmed on the device.
 
 **What "experimental display overlay" means for you.** The MPC does not let a plugin draw its own screens,
 so the plugin draws its pages itself, on a separate display layer on top of the MPC's picture. The MPC's
@@ -175,7 +176,7 @@ SynthyBoy always maps the 16 Q-Link slots: slots 1 - 4 belong to the **active gr
 groups leaves the rest of the slots without a function.
 
 **MPC XL (16 knobs).** All 16 knobs are alive at once: knobs 1 - 4 turn the active group, knobs 5 - 16 the next
-groups. The quiet chips on those groups show the numbers 5 - 16.
+groups. The quiet chips on those groups are meant to show the numbers 5 - 16 (as designed; not yet confirmed on the XL).
 
 **MPC Key 61 (4 knobs, four banks).** The four knobs always turn four values. The **Q-Link** button steps through
 four banks: bank 1 = slots 1 - 4 (the active group), bank 2 = slots 5 - 8, bank 3 = 9 - 12, bank 4 = 13 - 16. On
@@ -185,12 +186,13 @@ to. The host remembers the bank per tab.
 with the Q-Link button; a yellow box marked with a Q outlines the current Screen-mode control.)
 
 **Stepped targets** (switches, lists, integer steppers such as polyphony): a Q-Link does not sweep them from 0 to
-100 percent of its travel; it makes **one step per small turn** (3/128 of the knob's travel). The ends of a
-list do nothing. After a step the host's knob display follows the real position.
+100 percent of its travel; a small turn of the knob moves one step (one value of the list, or the switch). The ends of a
+list stop.
 
 **Knob displays.** The name, value text, unit and dial position the MPC shows for a knob are those of the
 real parameter it currently controls (for example "Filter 1 Cutoff" or "Macro 5"). When you change the
-active group or the page, the names change with it. A knob without a target shows "Q n" and nothing else.
+active group or the page, the names change with it. A knob without a target shows "Q n" and nothing else. (These names
+on the XL's own knob displays are the design; they are not yet confirmed on the device.)
 
 **Key 61 pop-up.** On the Key 61 the host shows a "Q-Link Status" pop-up on the right when a knob is touched. See
 chapter 8 on how to switch it off. On the XL there is no such pop-up (the knobs have their own displays).
@@ -205,7 +207,7 @@ two seconds.
 
 ### 4.5 Value displays
 
-Every control shows its value in the parameter's own unit. Pan is written C, L 35 or R 35; levels in dB or percent;
+Every control shows its value in the parameter's own unit. On the oscillator, mixer and filter pages pan is written C, L 35 or R 35 (other pages, for example the effects, may write it differently); levels in dB or percent;
 times in ms or s; tunings in semitones (st) or cents (ct).
 
 ## 5. The pages
@@ -358,11 +360,12 @@ Sine, Rounded Rect, Triangle, Saw, Square, Pulse; the pictogram HALF is the choi
 
 ![Noise](img/osc-noise.png)
 
-The noise generator. Header: power (Noise On), the source stepper (the colour: White Noise, Pink Noise, Brown Noise, Geiger,
+The noise generator. Header: power (Noise On), the source stepper (Noise Sample: White Noise, Pink Noise, Brown Noise, Geiger,
 Tape Hiss, Vinyl Clicks, Digital Hash, Velvet Noise, Atmosphere), **FILTER** (-100 .. +100 percent), **PAN**, **LEVEL**
 (0 .. 100 percent, default 25), route button.
 
 - TUNE: PITCH (-48 .. +48 semitones), FINE (-100 .. +100 cents), KEY TRACK (switch).
+- **Two different controls.** The header stepper chooses which of the nine noise sources the generator plays. The **TYPE** stepper in the bottom block (Noise Type: Noise / Sample) chooses whether the source is that generated noise (Noise) or a sample file from the plugin's content (Sample); if no sample file is loaded in Sample mode, the generator plays instead.
 - Bottom: with TYPE = Noise (generated) one block NOISE: TYPE stepper (Noise / Sample), STEREO (0 .. 100 percent), ENV 1.
   With TYPE = Sample: block SOURCE (TYPE, START = Noise Phase 0 .. 100 percent, STEREO, ENV 1) and block PLAYBACK (RANDOM, LOOP, BOUNCE switches).
 - Q groups: header (source, FILTER, PAN, LEVEL), TUNE, the bottom blocks.
@@ -660,12 +663,12 @@ The plugin-wide pad-pressure switch is not part of a preset (a preset change lea
 
 ## 8. Known limitations
 
-- **Key 61: switch off the host's "Q-Link Status" pop-up.** When a Q-Link knob is touched the Key 61 shows a pop-up on the right. The plugin's picture can flicker around it. Switch it off: **Preferences > General > Show Q-Link Status When Touched**, or hold the Q-Link button and tap **Q-Link Status**. With the pop-up off the picture is stable. The XL has no such pop-up.
+- **Key 61: switch off the host's "Q-Link Status" pop-up.** When a Q-Link knob is touched the Key 61 shows a pop-up on the right. The plugin's picture can flicker around it. Switch it off: **Preferences > General > Show Q-Link Status When Touched**, or press and hold the **Q-Link** button to open the Q-Links window and tap **Q-Link Status** (Standalone OS User Guide v3.10.1, section "Q-Links", p. 314: the button enables or disables the pop-up, and the same setting is in Preferences > General). With the pop-up off the picture should be stable (this has not yet been confirmed on a device after the latest rework). The XL has no such pop-up.
 - **Standby.** The plugin's picture disappears while the device is dimmed in standby and comes back when the device wakes. (This is being worked on.)
 - **Older projects keep their old Q-Link map.** A project saved with an older version of the plugin keeps the old Q-Link assignment of that track until you **insert the plugin on the track again**. Symptom: on the plugin pages the knobs change other parameters than the ones the display shows. A new project does not have this problem.
 - **No limiter, loud output.** The output has a fixed make-up gain of +18 dB and no limiter. Loud presets can exceed full scale. Lower the track level (or put a limiter on the track). The level control of the plugin is Master Volume (default -12 dB).
 - **Q-Link automation.** Recording automation on a Q-Link knob records the host's "Q n" slot, which replays into whatever group is active at that moment. Record automation on the real parameter instead (its own control; on a page where you can reach it, a parameter of the host's list).
-- **Experimental display layer.** It uses a display plane that the MPC firmware does not offer to plugins. A firmware update, or the MPC itself using the plane, can make the plugin's picture disappear for the rest of the session; the sound continues. Only the Key 61 (MPC OS 3.10.1.12) and the MPC XL were tested.
+- **Experimental display layer.** It uses a display plane that the MPC firmware does not offer to plugins. A firmware update, or the MPC itself using the plane, can make the plugin's picture disappear for the rest of the session; the sound continues. It was tried by its author on the Key 61 (MPC OS 3.10.1.12) and the MPC XL only.
 - **Host pop-ups.** A pop-up of the host over the middle of the plugin's area can hide the picture while it is on screen.
 - **One finger.** Only one finger is followed.
 - **Up to 16 instances.** The 17th and later instances never show the drawn pages.
@@ -683,7 +686,7 @@ The plugin-wide pad-pressure switch is not part of a preset (a preset change lea
 | The picture is missing on one track | Only the instance whose page is on screen is drawn. More than 16 instances: the extra ones are never drawn. |
 | Q-Link knobs change other parameters than shown | The project has an old Q-Link map (chapter 8): insert the plugin on that track again. |
 | Knob names in the Key 61 pop-up are old | The host updates names when a group changes; touch the knob again (about half a second). |
-| A knob steps a list or switch instead of sweeping | By design: stepped values move one step per small turn. |
+| A knob steps a list or switch instead of sweeping | By design: a small turn moves a stepped value by one step. |
 | Touch does nothing | Only one finger is followed; lift the first finger. Touch to the right of a host pop-up on the Key 61 is not taken. |
 | No sound | Host side (Akai manuals, "Track Types > Plugin Tracks", mixer chapters): the right track is selected and the track is a plugin track with SynthyBoy loaded; the track is not muted and its level is up; the track's MIDI input port and channel match what you play (MIDI Input Port, MIDI Input Channel); the output level of the MPC is up. Our side: the Mixer page (chapter 5.6): the strip's power is lit and its destination is not None; levels are not at 0; MASTER VOLUME on the Master page is not at its minimum. Pads on the XL: pad pressure only acts with Full Level off, but notes sound either way. |
 | Distortion or clipping | The output has no limiter (chapter 8): lower the track level. |
@@ -773,3 +776,8 @@ These chapters describe the current tree and depend on pages that are being rewo
 - **Chapter 2:** the plugin window name under which SynthyBoy is listed, once confirmed on the device.
 - **All pictures** in `img/` are rendered with `scripts/render-ui-gallery.py` and must be re-rendered after a UI change.
 - **Chapter 10 (second-generation pads):** the table in 10.1 and the recipes depend on what the MPC sends to a plugin track (re-measure after a firmware update), on the Master page pad-pressure control that is coming, and on the factory presets: update the list in 10.4 whenever presets with pressure or other performance routes are added.
+- **Sound quality settings per device** (polyphony cap, unison cap, which effects run on which device): the guide does not describe them yet; they are being set per device. Chapter 5.12 (POLY), 5.3 (unison VOICES), 5.11 (effects) and chapter 7 (presets) must be re-read when they are final.
+- **Q-Link stepping** (4.3 and the troubleshooting row about knobs that step): the amount of turn per step and how the display follows are being re-calibrated.
+- **5.12 Master, OUTPUT:** the STEREO control (a percentage) is currently drawn as a stepper with arrows; the guide does not describe a gesture for it until the control is final.
+- **4.3 on the XL:** the chips 5 - 16 and the names on the XL's knob displays, once measured on the device. The pictures show the Key 61 numbering on idle chips; re-render with a 16-knob option when the gallery can.
+- **All pictures** were re-rendered on 2026-11-16 from the then-current `feature/mpc-overlay`; re-render again after fixes to pages (for example the title overlap in the oscillator picture, the filter cell highlight, the modulation page of a control).
