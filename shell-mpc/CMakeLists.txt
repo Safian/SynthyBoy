@@ -253,6 +253,12 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(q_router_review_host PRIVATE -Wall -Wextra)
     add_test(NAME q_router_review_host COMMAND q_router_review_host)
 
+    add_executable(q_step_rule_host EXCLUDE_FROM_ALL tests/q_step_rule_host.cpp)
+    target_include_directories(q_step_rule_host PRIVATE "${CMAKE_SOURCE_DIR}/core/include" "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(q_step_rule_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(q_step_rule_host PRIVATE cxx_std_17)
+    add_test(NAME q_step_rule_host COMMAND q_step_rule_host)
+
     add_executable(ui_time_ruler_host EXCLUDE_FROM_ALL ui/tests/ui_time_ruler_host.cpp)
     target_include_directories(ui_time_ruler_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ui")
     target_compile_features(ui_time_ruler_host PRIVATE cxx_std_17)

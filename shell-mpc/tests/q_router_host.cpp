@@ -360,8 +360,25 @@ int main()
         check (seen == std::vector<float> { 3, 2, 1, 0 }, "... and down");
         turn (1, step * 0.5f); turn (1, -step * 0.4f); turn (1, step * 0.5f);
         check (rd (2) == 0.0f, "travel that changes direction does not add up");
-        turn (1, step * 5.0f);
-        check (std::round (rd (2) * 4.0f) == 4.0f, "one write of several steps of travel steps several times");
+        turn (1, step * 3.2f);
+        check (std::round (rd (2) * 4.0f) == 3.0f, "one write of 3.2 steps of travel makes 3 steps");
+        {
+            int writes = 0;
+            const float before = rd (2);
+            QRouter j;
+            const int gj[4] = { 2, -1, -1, -1 };
+            j.setGroup (gj, 1, kParams);
+            Reports rj;
+            pollInto (j, rj);
+            const float held = rd (2);
+            j.hostWrite (0, std::clamp (held + 0.5f, 0.0f, 1.0f), false, rd, [&] (int t, float v) { ++writes; wr (t, v); }, stepsOf);
+            check (writes == 0 && rd (2) == before, "a host write 0.5 away is a jump, no travel: no step, no parameter write");
+            Reports rj2;
+            pollInto (j, rj2);
+            const float h2 = rd (2);
+            j.hostWrite (0, h2 + 0.9f * 4.0f * step * 0.0f + 3.0f * step, false, rd, [&] (int t, float v) { ++writes; wr (t, v); }, stepsOf);
+            check (writes <= 1, "a write of three steps writes the parameter once (" + std::to_string (writes) + ")");
+        }
         // a long list reaches both ends without the host's value saturating on the way (the host writes one increment at a time: 6 per step)
         bool sat = false;
         int writesUp = 0, writesDown = 0;
@@ -420,6 +437,42 @@ int main()
                 if (rd (6) == 1.0f) flipAt = static_cast<float> (k);
             }
             check (flipAt == 6.0f, "one increment per touch (the host starts at the report): the toggle flips with the 6th (" + std::to_string (flipAt) + ")");
+        }
+        {   // N increments are floor (N / 6) steps for every kind of host and every interleaving of the reports, and entering a page moves nothing (review of 2026-11-16, points 1 and 3)
+            const float inc = 1.0f / 128.0f;
+            const int gm[4] = { 3, 1, -1, -1 };   // 3: a list of 57 standing in the middle, 1: a toggle that is ON
+            for (int kind = 0; kind < 3; ++kind)   // 0 adopts every report at once, 1 never adopts, 2 adopts one poll late (reports land between its increments)
+            {
+                wr (3, 28.0f / 56.0f);
+                wr (1, 1.0f);
+                QRouter m;
+                m.setGroup (gm, 2, kParams);
+                Reports first;
+                pollInto (m, first);                                   // the page is entered: the host is told 0.5 and 1.0
+                float own = 28.0f / 56.0f, own1 = 1.0f, late = -1.0f;
+                int stepsTaken = 0;
+                for (int k = 0; k < 6 * 5; ++k)
+                {
+                    own += inc;
+                    if (kind == 0) own = std::clamp (own, 0.0f, 1.0f);
+                    const float before = rd (3);
+                    m.hostWrite (0, own, false, rd, wr, stepsOf);
+                    stepsTaken += static_cast<int> (std::lround ((rd (3) - before) * 56.0f));
+                    Reports x;
+                    pollInto (m, x);
+                    for (const auto& e : x.q)
+                        if (e.first == 0)
+                        {
+                            if (kind == 0) own = e.second;                    // adopts at once
+                            else if (kind == 2) { if (late >= 0.0f) own = late; late = e.second; }   // adopts the previous report, one poll late
+                        }
+                }
+                check (kind == 2 ? (stepsTaken == 4 || stepsTaken == 5) : stepsTaken == 5, "30 increments make 5 steps (one fewer is allowed for the host that adopts a poll late: it comes back to a value one step behind) on a list of 57 standing in the middle (host kind " + std::to_string (kind) + ": " + std::to_string (stepsTaken) + ")");
+                const float t0 = rd (1);
+                float o1 = own1 + 0.0f;
+                for (int k = 0; k < 3; ++k) { o1 -= inc; m.hostWrite (1, o1, false, rd, wr, stepsOf); }
+                check (rd (1) == t0, "a toggle that is ON when its page is entered: three increments down do not flip it (host kind " + std::to_string (kind) + ")");
+            }
         }
         // a continuous target is exactly as before
         wr (4, 0.2f);

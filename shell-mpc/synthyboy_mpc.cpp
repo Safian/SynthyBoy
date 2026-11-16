@@ -129,21 +129,11 @@
 #include "play_log.h"
 #include "play_params.h"
 #include "q_router.h"
+#include "q_step_rule.h"
 
 namespace
 {
-/** The number of values of a stepped parameter (a toggle 2, a list its entries, an integer stepper its range), 0 for a continuous one: what the Q proxies drive relatively (q_router.h). */
-int stepCountOf (const synthyboy::ParamInfo& p) noexcept
-{
-    if (p.scale == synthyboy::Scale::stepped)
-        return static_cast<int> (std::lround (p.max - p.min)) + 1;
-    if (p.interval > 0.0f && p.max > p.min)
-    {
-        const int n = static_cast<int> (std::lround ((p.max - p.min) / p.interval)) + 1;
-        return n <= 64 ? n : 0;
-    }
-    return 0;
-}
+using synthyboy_mpc::stepCountOf;   // the rule of the relative Q proxies: q_step_rule.h
 } // namespace
 #include "synthyboy/readout.h"
 #endif

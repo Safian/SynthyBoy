@@ -158,6 +158,7 @@ public:
     /** Relative stepping of STEPPED targets (a toggle, a list, an integer stepper): the proxy's absolute 0 .. 1 is the wrong control for them (a toggle needs half of the knob's travel, a short list a third), so the travel of
         the host's value since its last write is accumulated and one step of the target happens per kStepTravelDefault of travel, in the direction of the turn. Proxy units; the plugin may override it from a debug file. */
     static constexpr float kStepTravelDefault = 6.0f / 128.0f;   // 6 host increments of 1/128 per step (owner, MPC XL, 2026-11-16: the first 3 were half of what feels right); the file /tmp/synthyboy-overlay-q-step-travel still overrides it
+    static constexpr int kMaxStepsPerWrite = 4;   // the most steps one host write makes (and the move, in steps, above which a write is a jump and no travel)
     static constexpr float kOneIncrement = 1.0f / 128.0f;   // what one click of a Q-Link moves the host's value (Key 61, measured: the writes of a burst are 1/128 apart)
     void setStepTravel (float t) noexcept { stepTravel_.store (t > 1.0e-4f ? t : kStepTravelDefault, std::memory_order_relaxed); }
     float stepTravel() const noexcept { return stepTravel_.load (std::memory_order_relaxed); }
@@ -245,28 +246,46 @@ public:
             return Write::echo;
         }
         if (restoring)
+        {
+            acc_[q].store (0.0f, std::memory_order_relaxed);   // the project is being restored: this write is the host putting a stored value back, no turn (the base was taken above)
             return Write::restoring;
+        }
+        const float travel = stepTravel();
+        // a hand gives one increment per write (a burst or a coalesced write a few): a move of more than kMaxStepsPerWrite steps is the host jumping (an automation point, an adopted report that was far, a touch
+        // screen drag of the host's own) and no travel: the value is the new baseline, nothing steps. So one host write makes at most kMaxStepsPerWrite steps, and writes the target ONCE (the entries in between are
+        // no state anyone should hear: the audio thread may be the caller).
+        if (std::fabs (delta) > kMaxStepsPerWrite * travel)
+        {
+            acc_[q].store (0.0f, std::memory_order_relaxed);
+            last_[q].store (v, std::memory_order_relaxed);
+            return Write::none;
+        }
         float acc = acc_[q].load (std::memory_order_relaxed);
         if ((delta > 0.0f) != (acc > 0.0f) || acc == 0.0f)
             acc = 0.0f;   // another direction (or the first write): start again
         acc += delta;
-        const float travel = stepTravel();
         bool wrote = false;
-        int guard = 0;
-        while (std::fabs (acc) >= travel && guard++ < 64)
+        int steps = 0;
+        while (std::fabs (acc) >= travel && steps < kMaxStepsPerWrite)
         {
-            const int dir = acc > 0.0f ? 1 : -1;
-            acc -= static_cast<float> (dir) * travel;
+            acc -= (acc > 0.0f ? 1.0f : -1.0f) * travel;
+            ++steps;
+        }
+        if (std::fabs (acc) >= travel)
+            acc = 0.0f;   // more travel than the bound allows is dropped (it cannot come from one write: the bound above is the same number)
+        if (steps > 0)
+        {
+            const int dir = delta > 0.0f ? 1 : -1;
             const int idx = static_cast<int> (std::lround (cur * static_cast<float> (n - 1)));
-            const int next = std::clamp (idx + dir, 0, n - 1);
+            const int next = std::clamp (idx + dir * steps, 0, n - 1);
             if (next == idx)
-            {
                 acc = 0.0f;   // the end of a list: further turning does nothing
-                break;
+            else
+            {
+                cur = static_cast<float> (next) / static_cast<float> (n - 1);
+                write (t, cur);
+                wrote = true;
             }
-            cur = static_cast<float> (next) / static_cast<float> (n - 1);
-            write (t, cur);
-            wrote = true;
         }
         acc_[q].store (acc, std::memory_order_relaxed);
         last_[q].store (v, std::memory_order_relaxed);   // the host holds v: the poll tells it the real position (it differs from v), so the host's value follows the target

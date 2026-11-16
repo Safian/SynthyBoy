@@ -420,6 +420,9 @@ c++ -std=c++17 -O1 -g -fsanitize=thread -I shell-mpc -o $TL/q_router_host shell-
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/q_router_host > $TL/q-router.log 2>&1
 grep -q "WARNING: ThreadSanitizer" $TL/q-router.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/q-router.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races in the Q router (full report: $TL/q-router.log)"; exit 1; }
 grep -q "^FAIL" $TL/q-router.log && { grep "^FAIL" $TL/q-router.log; echo "ACCEPT FAIL: tsan q_router_host"; exit 1; }
+# which parameters the Q proxies drive relatively (q_step_rule.h): the stepped ones and the integer steppers of up to 32 values; the quantised amounts that stay absolute are pinned
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc -o $B/q_step_rule_host shell-mpc/tests/q_step_rule_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: q_step_rule_host build"; exit 1; }
+$B/q_step_rule_host > $B/q-step-rule.log 2>&1 || { grep -E "^FAIL" $B/q-step-rule.log; echo "ACCEPT FAIL: q_step_rule_host (which parameters step relatively)"; exit 1; }
 # the robustness review of the router (docs/MPC.md "Stepped targets"): a group change must not leave the old step baseline (R1), and a write must not mix the index of one group with the view of another (R2); -O2, AddressSanitizer + UBSan, ThreadSanitizer
 c++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -I shell-mpc -o $B/q_router_review_host shell-mpc/tests/q_router_review_host.cpp -lpthread || { echo "ACCEPT FAIL: q_router_review_host build"; exit 1; }
 $B/q_router_review_host > $B/q-router-review.log 2>&1 || { grep -E "^FAIL" $B/q-router-review.log; echo "ACCEPT FAIL: q_router_review_host (O2)"; exit 1; }
