@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <thread>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
@@ -145,6 +146,28 @@ public:
             uiGroup_[slot] = -1;
         }
         return slot;
+    }
+    /** As detach (), but it waits for the lock for at most `limitMs` (a tick of the overlay thread that is stuck must not hold up effClose of the host for ever). True when the instance is detached: after it the overlay thread no
+        longer touches `view`; false when the lock could not be had in time: the overlay thread may still use `view`, the caller must keep the instance alive. `left` is then not set. */
+    bool detachWithin (IInstanceView* view, int limitMs, size_t& left)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds (limitMs);
+        while (! mu_.try_lock())
+        {
+            if (std::chrono::steady_clock::now() >= deadline)
+                return false;
+            std::this_thread::sleep_for (std::chrono::milliseconds (2));
+        }
+        std::lock_guard<std::mutex> g (mu_, std::adopt_lock);
+        const int slot = slots_.slotOf (view);
+        if (slot >= 0)
+        {
+            ui_[slot] = UiStack();
+            uiGroup_[slot] = -1;
+        }
+        slots_.release (view);
+        left = static_cast<size_t> (slots_.total());
+        return true;
     }
     /** Returns the number of instances left. After it returns the overlay thread no longer touches `view` (the same lock guards every use of an instance). */
     size_t detach (IInstanceView* view)
