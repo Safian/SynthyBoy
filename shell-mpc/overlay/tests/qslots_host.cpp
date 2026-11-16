@@ -213,9 +213,9 @@ void testFx()
     demo::Rig<FxUi> r;
     r.refresh();
     r.tap (r.ui.screen().chainBar.plusCard);
-    r.ui.list().state.current = 3;   // Distortion: eight parameters, so two rows
+    r.ui.list().state.current = 4;   // the type in row 4 (EQ), as the Mixer and FX test does
     r.ui.list().showCurrent();
-    const ui::Rect row = r.ui.list().rowRect (3);
+    const ui::Rect row = r.ui.list().rowRect (4);
     r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
     ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
     const int first = ed.firstRowOfPage(), rows = std::min (ed.rowsPerPage(), ed.numRows() - first);
