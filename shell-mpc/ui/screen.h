@@ -126,6 +126,7 @@ public:
         tune.setNoise (inst == OscInstance::Noise);
         layout();
         buildGroups();
+        setActiveGroup (0);
     }
     /** An oscillator type the library has no full screen for (the engine's Sample and Spectral types, only on the host's own pages): the type bar and the bottom band are empty (the owner draws the
         type name), the other parts stay. Call after `setInstance`. */
@@ -189,14 +190,16 @@ public:
 protected:
     void layout() override
     {
-        // top: the lane of the Q index chips of the band, the band (the Basic group: the knobs are the medium size, the dial at the left); middle: the display over the type bar at the left, the tuning block at the
+        // top: the lane of the Q index chips of the band, the band (the Basic group: the knobs are the medium size, the dial at the left); middle: the type bar under the header with the display below it at the left (at least 240 px tall), the tuning block at the
         // right; bottom: the blocks of the type's knob panel (the sub oscillator has none: the middle takes its room)
-        const int W = rect_.w, m = 8;
+        const int W = rect_.w, H = rect_.h, m = 8;
         const bool sub = inst_ == OscInstance::Sub;
         const bool noise = inst_ == OscInstance::Noise;
-        const int topH = 88;
-        const int bottomH = sub ? 245 : kBottomH;
-        const Rect top { rect_.x + m, rect_.y + m + kQLane + 2, W - 2 * m, topH };
+        const bool isTab = H <= 650;
+        const int topH = isTab ? 72 : 88;
+        const int bottomH = sub ? 245 : (isTab ? 212 : kBottomH);
+        const int lane = isTab ? 22 : (m + kQLane + 2);
+        const Rect top { rect_.x + m, rect_.y + lane, W - 2 * m, topH };
         Rect r[4];
         const int fixed[4] = { 84, 64, 0, 72 }, weight[4] = { 0, 0, 1, 0 };
         layoutRow (top, fixed, weight, 4, kGap, r);
@@ -204,14 +207,17 @@ protected:
         power.place ({ r[1].x, top.y + (topH - 56) / 2, r[1].w, 56 });
         basic.place (r[2]);
         route.place ({ r[3].x, top.y + (topH - 64) / 2, r[3].w, 64 });
-        const int midY = top.bottom() + m, midH = rect_.bottom() - m - (bottomH > 0 ? bottomH + m : 0) - midY;
+        const int gap = kGap;
+        const int panelY = rect_.bottom() - (isTab ? 0 : m) - bottomH;
         const int leftW = (W - 2 * m) * 78 / 100, rightX = rect_.x + m + leftW + m;
         constexpr int kTitleH = KnobPanel::kBlockTitleH, kPad = KnobPanel::kBlockPad;
-        const int barH = 56, barBlockH = kTitleH + barH + kPad;
+        const int barH = 56, barBlockH = isTab ? 70 : (kTitleH + barH + kPad);
+        const int titleH = isTab ? 14 : kTitleH;
 
         if (sub)
         {
-            display_ = { rect_.x + m, midY, W - 2 * m, midH };
+            const int midY = top.bottom() + gap;
+            display_ = { rect_.x + m, midY, W - 2 * m, std::max (0, panelY - gap - midY) };
             barBlock_ = {};
             bar.place ({});
             tuneBlock_ = {};
@@ -219,21 +225,24 @@ protected:
         }
         else if (noise)
         {
+            const int midY = top.bottom() + gap;
+            const int midH = std::max (0, panelY - gap - midY);
             display_ = { rect_.x + m, midY, leftW, midH };
             barBlock_ = {};
             bar.place ({});
-            tuneBlock_ = { rightX, midY, rect_.right() - m - rightX, std::max (0, midH) };
+            tuneBlock_ = { rightX, midY, rect_.right() - m - rightX, midH };
             tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
         }
         else
         {
-            display_ = { rect_.x + m, midY, leftW, std::max (0, midH - barBlockH - kGap) };
-            barBlock_ = { rect_.x + m, display_.bottom() + kGap, leftW, barBlockH };
-            bar.place ({ barBlock_.x + kPad, barBlock_.y + kTitleH, barBlock_.w - 2 * kPad, barH });
-            tuneBlock_ = Rect { rightX, midY, rect_.right() - m - rightX, std::max (0, midH) };
+            barBlock_ = { rect_.x + m, top.bottom() + gap, leftW, barBlockH };
+            bar.place ({ barBlock_.x + kPad, barBlock_.y + titleH, barBlock_.w - 2 * kPad, barH });
+            const int dispY = barBlock_.bottom() + gap;
+            display_ = { rect_.x + m, dispY, leftW, std::max (0, panelY - gap - dispY) };
+            tuneBlock_ = Rect { rightX, barBlock_.y, rect_.right() - m - rightX, std::max (0, display_.bottom() - barBlock_.y) };
             tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
         }
-        panel.place ({ rect_.x + m, rect_.bottom() - m - bottomH, W - 2 * m, bottomH });
+        panel.place ({ rect_.x + m, panelY, W - 2 * m, bottomH });
     }
     bool hasPanel() const noexcept { return true; }
     void buildGroups()

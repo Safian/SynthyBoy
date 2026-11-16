@@ -212,6 +212,7 @@ private:
         bind (kPortaScaled, &full_.portaScaled, T::Toggle, "master.portamento.scaled");
         bind (kScaleType, &full_.scaleType, T::Stepper, "master.scale.type");
         bind (kScaleKey, &full_.scaleKey, T::Stepper, "master.scale.key");
+        full_.keyboard.setId (kScaleKey);
         bind (kScaleMode, &full_.scaleMode, T::Stepper, "master.scale.mode");
         bind (kTuningA4, &full_.tuningA4, T::Number, "master.tuning.a4");
         bind (kTuningScale, &full_.tuningScale, T::Stepper, "master.tuning.scale");

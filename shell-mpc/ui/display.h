@@ -222,16 +222,23 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     {
         float mainRows[kMaxPoints], smoothed[kMaxPoints];
         const int m = smoothCycle (d.cycle, mainRows, n);   // the points of the picture: the cycle without its two edges, smoothed
+        float peak = 0.001f;
+        for (int i = 0; i < m; ++i)
+            peak = std::max (peak, std::fabs (mainRows[i]));
+
+        // Scale wave so that from its own peak it spans at least 80 % of display height
+        const float targetAmp = static_cast<float> (r.h) * 0.42f;
+        const float waveScale = targetAmp / peak;
+
         // the stack of the table's frames only when the table has frames that differ (a single cycle table has none to show); all of them over the same x range as the main curve, a little higher
         // the further back they are
         bool stacked = d.numStack >= 2 && theme::D().stackFrames >= 2;
         if (stacked)
             stacked = framesDiffer (d.cycle, d.stack, std::min ({ d.numStack, static_cast<int> (kMaxStack), theme::D().stackFrames }), n);
-        const float scale = stacked ? 0.74f : 0.86f;
         auto rowsOf = [&] (const float* src, float* dst, float yOff, float k)
         {
             for (int i = 0; i < m; ++i)
-                dst[i] = mid + yOff - src[i] * amp * scale * k;
+                dst[i] = mid + yOff - src[i] * waveScale * k;
         };
         int litFirst[kMaxStack], litX[kMaxStack], litW[kMaxStack], numLit = 0;
         float litAmount[kMaxStack];
@@ -248,7 +255,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
                 const float lit = std::max (0.0f, 1.0f - std::fabs (pct - d.pos) * static_cast<float> (N - 1));
                 const float yOff = -depth * dys * static_cast<float> (N - 1) * 0.5f - 2.0f;
                 smoothCycle (d.stack[i], smoothed, n);
-                rowsOf (smoothed, rows, yOff, 1.0f);
+                rowsOf (smoothed, rows, yOff, 0.90f);
                 const int fr = sb.curve (rows, m, ix, iw);
                 if (lit > 0.05f && fr >= 0 && numLit < kMaxStack)
                 {
@@ -270,7 +277,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             sb.paintOff();
             sb.style (1.0f, false);
         }
-        // the unison voices: hairlines AROUND the main curve, over its x range, a little higher / lower and a little wider the more the detune; as strong as the blend. One voice: none.
+        // the unison voices: hairlines only as a thin spread around the main curve over the same x range (rule V1 of review-osc-ui-2), off at UNISON 1
         if (d.voices > 1)
         {
             const int v = std::min (std::min (d.voices, 7) - 1, theme::D().unisonHairs);
@@ -278,20 +285,32 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             for (int k = 1; k <= v; ++k)
             {
                 const float side = (k % 2 == 1 ? 1.0f : -1.0f) * static_cast<float> ((k + 1) / 2) / static_cast<float> ((v + 1) / 2);
-                const float spread = side * (0.03f + 0.17f * d.detune);
-                rowsOf (mainRows, rows, -spread * amp * scale * 0.6f, 1.0f + spread * 0.5f);
+                const float yOff = side * (1.5f + 4.5f * d.detune);
+                rowsOf (mainRows, rows, yOff, 1.0f);
                 sb.curve (rows, m, ix, iw);
                 dt::paintLine (sb, x0, x1, st, 255);
                 sb.style (1.0f, false);
-                sb.stroke (T.curveBack * 0.45f, static_cast<uint32_t> (alpha));
+                sb.stroke (T.curveBack * 0.40f, static_cast<uint32_t> (alpha));
             }
             sb.paintOff();
         }
-        // the main curve: the area under it, the soft pass, the crisp line
+        // the main curve: bipolar fill to the zero line (mid), the crisp line, and the vertical discontinuity
         rowsOf (mainRows, rows, 0.0f, 1.0f);
         const int mainFirst = sb.curve (rows, m, ix, iw);
-        sb.fillGradient (mid, mid - amp * scale, mid, dt::a (d.colour, 70), dt::a (d.colour, 0));
+        sb.fill (mid, dt::a (d.colour, 50));
         dt::glowLine (sb, x0, x1, st, T.curve * 0.5f + (stacked ? 0.15f : 0.0f), 255, false);
+
+        // the discontinuity drawn as a vertical line (for saw / square)
+        if (mainRows[m - 1] - mainRows[0] > 0.3f)
+        {
+            dt::glowLine (sb, x1, x1, st, T.curve * 0.5f + (stacked ? 0.15f : 0.0f), 255, false);
+            sb.line (x1, rows[m - 1], x1, rows[0], T.curve, dt::a (st[1], 255));
+        }
+        else if (mainRows[0] - mainRows[m - 1] > 0.3f)
+        {
+            dt::glowLine (sb, x0, x0, st, T.curve * 0.5f + (stacked ? 0.15f : 0.0f), 255, false);
+            sb.line (x0, rows[0], x0, rows[m - 1], T.curve, dt::a (st[1], 255));
+        }
         sb.paintOff();
         // the light: the main curve and the lit frames drawn into the bloom layer (a quarter of the size), blurred, added over the picture inside the display: one cheap pass for all the lines
         if (T.backGlow > 0.0f && theme::D().glow && mainFirst >= 0)
@@ -405,7 +424,7 @@ inline void drawLive (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
         return;
     const Rect in = r.inset (8);
     const float x0 = static_cast<float> (in.x), x1 = static_cast<float> (in.right());
-    const float top = static_cast<float> (in.y) + 6.0f, bottom = static_cast<float> (in.bottom()) - 6.0f, mid = 0.5f * (top + bottom), amp = 0.5f * (bottom - top);
+    const float top = static_cast<float> (in.y) + 6.0f, bottom = static_cast<float> (in.bottom()) - 6.0f, mid = 0.5f * (top + bottom);
     const int iw = in.w;
     const int n = std::min (d.n, static_cast<int> (kMaxPoints));
     const bool minmax = d.kind == Data::Kind::MinMax;
@@ -416,7 +435,10 @@ inline void drawLive (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
         // the picture of the cycle is the smoothed one without its edges (draw): the dots sit on that line
         float sm[kMaxPoints];
         const int m = smoothCycle (d.cycle, sm, n), c = m == n ? 0 : cycleCrop (n);
-        const float scale = d.numStack >= 2 && theme::D().stackFrames >= 2 && framesDiffer (d.cycle, d.stack, std::min ({ d.numStack, static_cast<int> (kMaxStack), theme::D().stackFrames }), n) ? 0.74f : 0.86f;
+        float livePeak = 0.001f;
+        for (int i = 0; i < m; ++i)
+            livePeak = std::max (livePeak, std::fabs (sm[i]));
+        const float liveWaveScale = (static_cast<float> (r.h) * 0.42f) / livePeak;
         for (int v = 0; v < Data::kMaxHeads; ++v)
             if (d.phases[v] >= 0.0f)
             {
@@ -424,7 +446,7 @@ inline void drawLive (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
                 const float fi = std::min (static_cast<float> (m - 1), std::max (0.0f, ph * static_cast<float> (n - 1) - static_cast<float> (c)));
                 const int i0 = std::min (m - 2, static_cast<int> (fi));
                 const float f = fi - static_cast<float> (i0);
-                const float py = mid - (sm[i0] + (sm[i0 + 1] - sm[i0]) * f) * amp * scale, pxx = x0 + fi / static_cast<float> (m - 1) * static_cast<float> (iw - 1);
+                const float py = mid - (sm[i0] + (sm[i0 + 1] - sm[i0]) * f) * liveWaveScale, pxx = x0 + fi / static_cast<float> (m - 1) * static_cast<float> (iw - 1);
                 sb.disc (pxx, py, v == 0 ? 3.6f : 2.6f, dt::a (d.colour, v == 0 ? 255 : 160));
                 sb.disc (pxx, py, v == 0 ? 1.8f : 1.2f, dt::a (0xffffff, v == 0 ? 255 : 200));
             }
