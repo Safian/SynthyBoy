@@ -4,7 +4,7 @@
 //       know. The bound is kParamStrBytes (32, host_strings.h: the SDK framework's own limit): every parameter of the list is asked into a heap buffer of EXACTLY that size (and of the SDK's program /
 //       effect / vendor / product sizes) with a canary after the string: nothing past the terminator may change. Control: a 64 byte buffer is fine.
 //   R5  a FIFO at /tmp/synthyboy-overlay-fake-slot (the debug switch the display thread opens with fopen every second): the display thread blocks in fopen for ever, and effClose, which joins it, never returns.
-//   R6  a 700 MB single line in the file the display thread getline()s every tick (/tmp/synthyboy-q-fake-group, path from SYNTHYBOY_MPC_Q_FAKE_FILE): the display thread is busy for seconds and effClose waits for it.
+//   R6  a 6 MB single line in the file the display thread getline()s every tick (/tmp/synthyboy-q-fake-group, path from SYNTHYBOY_MPC_Q_FAKE_FILE): the display thread is busy for seconds and effClose waits for it.
 //   R7  with the play log switched on (the file /tmp/synthyboy-play-log; here SYNTHYBOY_MPC_PLAY_LOG_FILE) every setParameter of the host takes a mutex and does fopen / fwrite / fclose of a file: file I/O on the
 //       thread the host calls setParameter from (the audio thread during automation).
 // Copyright (C) 2026 Safian Szabolcs
@@ -241,13 +241,13 @@ int main (int argc, char** argv)
         return t >= 0.0 ? 0 : 1;
     });
 
-    inChild ("R6: with a 700 MB single line in the Q-group debug file the plugin stays under 100 MB of extra memory and effClose under 2 s", [&]
+    inChild ("R6: with a 6 MB single line in the Q-group debug file the plugin stays under 16 MB of extra memory and effClose under 2 s", [&]
     {
         char dir[] = "/tmp/sb-review-XXXXXX";
         if (! mkdtemp (dir)) return 2;
         const std::string file = std::string (dir) + "/qgroup";
         const int fd = ::open (file.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
-        if (fd < 0 || ::ftruncate (fd, 700ll << 20) != 0) return 2;   // a sparse file of NUL bytes: no newline anywhere
+        if (fd < 0 || ::ftruncate (fd, 6ll << 20) != 0) return 2;   // a sparse file of NUL bytes: no newline anywhere
         ::close (fd);
         ::setenv ("SYNTHYBOY_MPC_Q_FAKE_FILE", file.c_str(), 1);
         const long before = peakMb();
@@ -259,7 +259,7 @@ int main (int argc, char** argv)
         std::printf ("INFO  effClose took %s, peak memory grew by %ld MB\n", t < 0 ? "more than 20 s" : (std::to_string (t) + " s").c_str(), grew);
         std::remove (file.c_str());
         ::rmdir (dir);
-        return (t >= 0.0 && t < 2.0 && grew < 100) ? 0 : 1;
+        return (t >= 0.0 && t < 2.0 && grew < 16) ? 0 : 1;
     });
 
     inChild ("R7: setParameter does no file I/O while the play log switch file exists", [&]

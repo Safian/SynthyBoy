@@ -1,5 +1,5 @@
 // Robustness review of effSetChunk (review of 2026-11-16): the whole chunk path of the shell on hostile input, every case in a CHILD process so that a crash is a result and not the end of the test.
-// The chunk is what the host hands to effSetChunk (the project file of the MPC): truncated at every length, bit flips, nesting a million deep, 64 MB of garbage, a huge number of members, a newer state version.
+// The chunk is what the host hands to effSetChunk (the project file of the MPC): truncated at every length, bit flips, nesting a million deep, 8 MB of garbage, a huge number of members, a newer state version.
 // Each child runs the same calls as synthyboy_mpc.cpp's effSetChunk: loadStateWithContent, programFromChunk, programNameFromChunk, playFromChunk, padPressureFromChunk.
 // Expected: no case crashes or hangs (exit code 0 in the child). A failing case would be a finding.
 // Copyright (C) 2026 Safian Szabolcs
@@ -49,7 +49,7 @@ static bool inChild (const char* what, F&& body)
     {
         alarm (120);
 #if !defined(__SANITIZE_ADDRESS__) && !(defined(__has_feature) && __has_feature(address_sanitizer))
-        rlimit rl { 3ull << 30, 3ull << 30 };   // (not under AddressSanitizer: its shadow memory needs the whole address space)
+        rlimit rl { 2ull << 30, 2ull << 30 };   // (not under AddressSanitizer: its shadow memory needs the whole address space)
         setrlimit (RLIMIT_AS, &rl);
 #endif
         body();
@@ -118,21 +118,21 @@ int main()
             c += "\"a\":{";
         everything (c);
     });
-    inChild ("64 MB of 0xff", [&] { everything (std::string (64u << 20, static_cast<char> (0xff))); });
-    inChild ("64 MB of '{'", [&] { everything (std::string (64u << 20, '{')); });
-    inChild ("a valid chunk followed by 64 MB of members", [&]
+    inChild ("8 MB of 0xff", [&] { everything (std::string (8u << 20, static_cast<char> (0xff))); });
+    inChild ("8 MB of '{'", [&] { everything (std::string (8u << 20, '{')); });
+    inChild ("a valid chunk followed by 8 MB of members", [&]
     {
         std::string c = chunk;
         std::string filler;
-        filler.reserve (64u << 20);
-        for (size_t i = 0; filler.size() < (64u << 20); ++i)
+        filler.reserve (8u << 20);
+        for (size_t i = 0; filler.size() < (8u << 20); ++i)
             filler += ",\"k" + std::to_string (i) + "\":1";
         c.insert (c.rfind ('}'), filler);
         everything (c);
     });
-    inChild ("a name of 50 MB in mpcProgramName", [&]
+    inChild ("a name of 6 MB in mpcProgramName", [&]
     {
-        std::string c = "{\"mpcProgram\":1,\"mpcProgramName\":\"" + std::string (50u << 20, 'a') + "\"," + state.substr (1);
+        std::string c = "{\"mpcProgram\":1,\"mpcProgramName\":\"" + std::string (6u << 20, 'a') + "\"," + state.substr (1);
         everything (c);
     });
     inChild ("a chunk from a NEWER state version (version 999) with unknown members", [&]

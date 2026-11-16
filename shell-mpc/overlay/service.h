@@ -150,6 +150,20 @@ private:
     Service() = default;
     const std::chrono::steady_clock::time_point epoch_ = std::chrono::steady_clock::now();
 
+    /** The files the controller looks at in the shipped plugin. The switches that are features (overlay-off, nogpu, rot, look, detail, fps, gpuclock) and the status file stay; the debug ones (the pointer hot spot, the
+        curve dump request) are empty without SYNTHYBOY_MPC_DEBUG_HOOKS, so the plugin does not look at them. */
+    static Paths shippedPaths()
+    {
+        Paths p;
+#if defined(SYNTHYBOY_MPC_DEBUG_HOOKS) && SYNTHYBOY_MPC_DEBUG_HOOKS
+#else
+        p.pointerHotSpot.clear();
+        p.dumpRequest.clear();
+        p.dump.clear();
+#endif
+        return p;
+    }
+
     void ensureController()
     {
         if (controller_)
@@ -176,7 +190,7 @@ private:
         mouse_ = std::make_unique<LinuxMouseReader>();           // the mice: found at run time, hot plug, read only, never grabbed (mouse_linux.h)
         pointer_ = std::make_unique<LinuxPointerSource> (display_);   // the host's pointer plane: where the pointer is (drm_linux.h)
 #endif
-        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, Paths(), Timing(), -1.0, gpu_.get(), touch_.get());
+        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, shippedPaths(), Timing(), -1.0, gpu_.get(), touch_.get());
 #if defined(__linux__)
         controller_->setMouse (mouse_.get(), pointer_.get());
         controller_->setExtraStatus ([this] { return cpuStatus(); });

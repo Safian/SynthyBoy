@@ -17,6 +17,8 @@
 #include <dirent.h>
 #include <unistd.h>
 
+#include "../safe_file.h"
+
 namespace synthyboy_mpc { namespace overlay {
 
 class GpuClock
@@ -54,18 +56,30 @@ public:
         }
         if (node_.empty())
             return false;
-        std::ifstream left (state_);
-        long long old = 0;
-        if (left && (left >> old) && old > 0)
-        {
-            write (old);   // the run before this one died with the clock raised
-            std::remove (state_.c_str());
-        }
-        std::ifstream av (node_ + "/available_frequencies");
+        // the clocks the GPU offers (a sysfs file: at most 4 KB of it are read); every number written into min_freq below is one of these (robustness review F16: a file in /tmp must not choose what goes into sysfs)
         std::vector<long long> f;
-        long long v = 0;
-        while (av >> v)
-            f.push_back (v);
+        {
+            char text[4096];
+            if (safefile::readSmall ((node_ + "/available_frequencies").c_str(), text, sizeof text) > 0)
+                for (const char* at = text; *at != '\0';)
+                {
+                    char* end = nullptr;
+                    const long long v = std::strtoll (at, &end, 10);
+                    if (end == at)
+                        break;
+                    f.push_back (v);
+                    at = end;
+                }
+        }
+        long long old = 0;
+        if (long n = 0; safefile::readInt (state_.c_str(), n) && n > 0)
+            old = n;
+        if (old > 0)
+        {
+            if (std::find (f.begin(), f.end(), old) != f.end())
+                write (old);   // the run before this one died with the clock raised
+            ::unlink (state_.c_str());
+        }
         std::sort (f.begin(), f.end());
         raisedHz_ = 0;
         // a moderate level: at least wantHz and at least half of the highest clock (the Key 61: 100 .. 600 MHz -> 300; the XL: 300 .. 1000 MHz, its lowest is 300 -> 500)
@@ -90,12 +104,13 @@ public:
             return;
         if (on)
         {
-            std::ifstream in (node_ + "/min_freq");
-            long long cur = 0;
-            if (! (in >> cur) || cur <= 0 || cur >= raisedHz_)
+            long cur = 0;
+            if (! safefile::readInt ((node_ + "/min_freq").c_str(), cur) || cur <= 0 || cur >= raisedHz_)
                 return;   // unreadable, or already at least that high: not ours to change
             saved_ = cur;
-            if (std::ofstream (state_) << saved_ << "\n")
+            char text[32];
+            const int len = std::snprintf (text, sizeof text, "%lld\n", saved_);
+            if (safefile::writeSmall (state_.c_str(), text, static_cast<size_t> (len)))
                 if (write (raisedHz_))
                     boosted_ = true;
         }
@@ -107,7 +122,7 @@ public:
         if (! boosted_)
             return;
         write (saved_);
-        std::remove (state_.c_str());
+        ::unlink (state_.c_str());
         boosted_ = false;
     }
     bool boosted() const noexcept { return boosted_; }

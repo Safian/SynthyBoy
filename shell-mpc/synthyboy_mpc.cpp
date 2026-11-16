@@ -418,7 +418,7 @@ struct PluginInstance
     struct OverlayView final : synthyboy_mpc::overlay::IInstanceView
     {
         explicit OverlayView (PluginInstance& owner) : inst (owner) {}
-        float param (int tableIndex) const noexcept override { return inst.paramMirror[tableIndex].load (std::memory_order_relaxed); }
+        float param (int tableIndex) const noexcept override { return static_cast<unsigned> (tableIndex) < synthyboy::kMaxParams ? inst.paramMirror[tableIndex].load (std::memory_order_relaxed) : 0.0f; }
         bool live (synthyboy::LiveValues& out) const noexcept override
         {
             return inst.engine && inst.engine->copyReadout (out) && out.block != 0; // block 0: the engine wrote no values yet
@@ -2356,24 +2356,22 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         VstSpeakerArrangement** inArr = reinterpret_cast<VstSpeakerArrangement**>(ptr);
         VstSpeakerArrangement** outArr = reinterpret_cast<VstSpeakerArrangement**>(value);
 
-        if (inArr)
+        // two const objects, made once (the initialisation of a function-local static is thread safe), never written again: the host's threads may all ask (robustness review F17)
+        static const VstSpeakerArrangement emptyArr = [] { VstSpeakerArrangement a; std::memset (&a, 0, sizeof a); a.type = kSpeakerArrEmpty; a.numChannels = 0; return a; }();
+        static const VstSpeakerArrangement stereoArr = []
         {
-            static VstSpeakerArrangement emptyArr;
-            std::memset(&emptyArr, 0, sizeof(emptyArr));
-            emptyArr.type = kSpeakerArrEmpty;
-            emptyArr.numChannels = 0;
-            *inArr = &emptyArr;
-        }
-        if (outArr)
-        {
-            static VstSpeakerArrangement stereoArr;
-            std::memset(&stereoArr, 0, sizeof(stereoArr));
-            stereoArr.type = kSpeakerArrStereo;
-            stereoArr.numChannels = 2;
+            VstSpeakerArrangement a;
+            std::memset (&a, 0, sizeof a);
+            a.type = kSpeakerArrStereo;
+            a.numChannels = 2;
             for (int i = 0; i < 2; ++i)
-                stereoArr.speakers[i].type = i;
-            *outArr = &stereoArr;
-        }
+                a.speakers[i].type = i;
+            return a;
+        }();
+        if (inArr)
+            *inArr = const_cast<VstSpeakerArrangement*> (&emptyArr);
+        if (outArr)
+            *outArr = const_cast<VstSpeakerArrangement*> (&stereoArr);
         return 1;
     }
 

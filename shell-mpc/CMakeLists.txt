@@ -101,6 +101,15 @@ endif()
 # The overlay build has ONE more display-only parameter after the spectrum columns, "Overlay Instance" (which plugin instance's page is on screen: several instances); the display thread
 # reports it to the host, so the overlay needs SYNTHYBOY_MPC_LFO_LIVE.
 option(SYNTHYBOY_MPC_OVERLAY "MPC shell: live pictures (filter, LFO, oscillator, envelope, spectrum) on a free display plane (experimental, Key 61 and MPC XL)" OFF)
+# Debug hooks: the /tmp files that only the host tests and the acceptance runs on the device use (fake slot, fake Q group / write, fake page write, Q step travel, the play log and its dump, the display thread's
+# fault injection). OFF (default, and always for the package): the plugin does not look at them, and no thread of the host can reach a file through them. Needs the overlay.
+option(SYNTHYBOY_MPC_DEBUG_HOOKS "MPC shell: debug / acceptance switch files in /tmp (host tests, device checks); never in the package" OFF)
+if(SYNTHYBOY_MPC_DEBUG_HOOKS)
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_DEBUG_HOOKS=1)
+else()
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_DEBUG_HOOKS=0)
+endif()
+
 if(SYNTHYBOY_MPC_OVERLAY)
     if(NOT SYNTHYBOY_MPC_LFO_LIVE)
         message(FATAL_ERROR "SYNTHYBOY_MPC_OVERLAY needs SYNTHYBOY_MPC_LFO_LIVE (the display thread reports the parameter 'Overlay Instance' to the host)")

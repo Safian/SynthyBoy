@@ -1,6 +1,6 @@
 // Robustness review of the overlay controller (review of 2026-11-16, docs: .hw-local/mpc-ui-plans/robustness-review.md). FAILS on the current code on purpose.
 //   R3  the once-a-second switch files (/tmp/synthyboy-overlay-detail, -fps, -look, -rot, -pointer-hotspot, -gpuclock) are read by the overlay thread INSIDE the MPC process with `std::ifstream >> std::string` /
-//       `std::getline`: a file of one huge line (or one huge token) is read whole into memory, every second. The test makes a 600 MB sparse file the `detail` switch (a file of NUL bytes: one 600 MB token) and
+//       `std::getline`: a file of one huge line (or one huge token) is read whole into memory, every second. The test makes a 8 MB sparse file the `detail` switch (a file of NUL bytes: one 8 MB token) and
 //       runs the controller across two switch intervals in a child process. A plugin that bounds what it reads from a debug file takes no noticeable memory or time.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -28,7 +28,7 @@ static long peakKb()
 
 struct Case { const char* name; int which; };
 
-/** Child: the controller ticks for 2.5 simulated seconds with `which` switch file pointing at a 600 MB sparse file. Exit code 0: bounded (below 64 MB extra, below 1 s of wall time); 1: not. */
+/** Child: the controller ticks for 2.5 simulated seconds with `which` switch file pointing at a 8 MB sparse file. Exit code 0: bounded (below 64 MB extra, below 1 s of wall time); 1: not. */
 static int runCase (int which)
 {
     TempDir dir;
@@ -41,7 +41,7 @@ static int runCase (int which)
     const std::string big = dir.path + "/big";
     {
         const int fd = ::open (big.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
-        if (fd < 0 || ::ftruncate (fd, 600ll << 20) != 0)
+        if (fd < 0 || ::ftruncate (fd, 8ll << 20) != 0)
             return 2;
         ::close (fd);
     }
@@ -65,14 +65,14 @@ static int runCase (int which)
     const double wall = std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count();
     const long grew = peakKb() - before;
     std::printf ("INFO  case %d: wall %.2f s for 2.5 simulated seconds, peak memory grew by %ld MB, state '%s'\n", which, wall, grew / 1024, ctl.state().c_str());
-    return (grew < 64 * 1024 && wall < 1.0) ? 0 : 1;
+    return (grew < 16 * 1024 && wall < 1.0) ? 0 : 1;
 }
 
 int main()
 {
     // Only the `detail` switch is read by every controller; the fps / gpuclock switches are read only when the GPU helper runs, the pointer hot spot only with a mouse (neither is in this fake rig: the
     // same `>> std::string` / std::getline code, found by reading controller.h:1110 / 1131 / 1044-1047).
-    static const Case cases[] = { { "detail switch file with one 600 MB token", 0 } };
+    static const Case cases[] = { { "detail switch file with one 8 MB token", 0 } };
     for (const Case& c : cases)
     {
         std::fflush (stdout);

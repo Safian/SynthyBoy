@@ -26,6 +26,7 @@
 #include "../drm_interfaces.h"
 #include "../geometry.h"
 #include "scene.h"
+#include "../../safe_file.h"
 
 namespace synthyboy_mpc { namespace overlay { namespace gpu {
 
@@ -35,10 +36,10 @@ inline bool trimLogFile (const char* path, long long maxBytes) noexcept
 {
     if (path == nullptr || *path == 0)
         return false;
-    struct stat st;
-    if (::stat (path, &st) != 0 || static_cast<long long> (st.st_size) <= maxBytes)
+    const long long size = safefile::regularFileSize (path);   // lstat: a symlink at the name is not a file of ours and is never truncated (robustness review F16)
+    if (size < 0 || size <= maxBytes)
         return false;
-    return ::truncate (path, 0) == 0;
+    return safefile::truncateRegular (path);
 }
 
 /** What waitpid (pid, WNOHANG) said about the helper, as the transport must read it. */
@@ -133,7 +134,11 @@ public:
 
 struct GpuConfig
 {
-    uint32_t flags = kFlagDump;
+#ifdef SYNTHYBOY_MPC_DEBUG_HOOKS
+    uint32_t flags = SYNTHYBOY_MPC_DEBUG_HOOKS ? kFlagDump : 0u;   // the helper's frame dump (a debug file in /tmp) only in a debug-hooks build
+#else
+    uint32_t flags = kFlagDump;   // the tests build this header without the option
+#endif
     double startTimeoutMs = 3000.0;     // spawn -> ready (the device needs about 100 ms)
     double ackTimeoutMs = 700.0;        // a scene (or a show) without a frame acknowledgement: the helper hangs
     double hideTimeoutMs = 700.0;

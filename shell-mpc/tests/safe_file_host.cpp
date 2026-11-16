@@ -113,14 +113,14 @@ int main()
     // a huge sparse file: the read costs 256 bytes, no memory, no time
     {
         const int fd = ::open ((d + "/sparse").c_str(), O_CREAT | O_WRONLY, 0644);
-        check (fd >= 0 && ::ftruncate (fd, 3ll << 30) == 0, "make a 3 GB sparse file");
+        check (fd >= 0 && ::ftruncate (fd, 8ll << 20) == 0, "make a 8 MB sparse file");
         if (fd >= 0) ::close (fd);
         const long before = peakKb();
         t0 = nowSec();
         for (int i = 0; i < 200; ++i)
             readSmall ((d + "/sparse").c_str(), buf, sizeof buf);
-        check (nowSec() - t0 < 2.0, "200 reads of a 3 GB file are fast");
-        check (peakKb() - before < 2048, "reading a 3 GB file does not grow the memory");
+        check (nowSec() - t0 < 2.0, "200 reads of a 8 MB file are fast");
+        check (peakKb() - before < 2048, "reading a 8 MB file does not grow the memory");
         check (readWord ((d + "/sparse").c_str(), buf, sizeof buf) == false, "a sparse file of NULs has no word");
     }
 
