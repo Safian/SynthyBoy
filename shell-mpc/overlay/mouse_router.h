@@ -74,6 +74,16 @@ public:
                 case MouseEvent::Move: moved = true; break;
             }
         });
+        if (moved && ! down_)
+            readPending_ = true;
+        if (readPending_ && ! down_ && nowMs - lastReadMs_ >= pictureMs)
+        {
+            readPending_ = false;
+            // the mouse moves with no button down: the position is read for the status file (pointer_ui_xy follows the pointer, at most once per picture while it moves; nothing is sent to the pages)
+            lastReadMs_ = nowMs;
+            int x = 0, y = 0;
+            position (x, y);
+        }
         if (down_ && (moved || movePending_))
         {
             movePending_ = true;
@@ -191,6 +201,8 @@ private:
     int panelW_ = 800, panelH_ = 1280, rotation_ = 90;
     bool down_ = false, movePending_ = false, override_ = false, planeSeen_ = false;
     int overrideX_ = 0, overrideY_ = 0, lastX_ = 0, lastY_ = 0, uiX_ = 0, uiY_ = 0;
+    double lastReadMs_ = -1000.0;
+    bool readPending_ = false;   // the mouse moved with no button down: the position is read for the status file at the next picture time
     double lastMoveMs_ = -1.0e9;
     HotSpot hot_;
     PointerPlane lastPlane_;

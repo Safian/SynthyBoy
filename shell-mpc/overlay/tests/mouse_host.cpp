@@ -317,6 +317,22 @@ int main()
         r.poll (135.0, 33.0, sinkT, sinkW);
         const std::string d = r.describe();
         check (d.find ("pointer_plane: 40") != std::string::npos && d.find ("pointer_hotspot: 0,63 (measured)") != std::string::npos && d.find ("pointer_ui_xy:") != std::string::npos && d.find ("mouse_wheel_notches: 0") != std::string::npos, "the status lines have the plane, the mapped UI position and the hot spot");
+        {   // the pointer moves with no button down: pointer_ui_xy follows it (at most once per picture), nothing reaches the pages
+            const size_t t0 = touches.size();
+            place (420, 260);
+            m.move();
+            r.poll (200.0, 33.0, sinkT, sinkW);
+            int mx, my;
+            pointerToUi (p.p, defaultHotSpot (90, 64, 64), 90, 800, 1280, mx, my);
+            check (r.describe().find ("pointer_ui_xy: " + std::to_string (mx) + "," + std::to_string (my) + "\n") != std::string::npos && touches.size() == t0, "a move without a button: the status has the pointer's position, no touch is sent");
+            const int reads = p.reads;
+            place (440, 280);
+            m.move();
+            r.poll (210.0, 33.0, sinkT, sinkW);
+            check (p.reads == reads, "a second move within a picture's time is not read at once (cheap while the mouse moves)");
+            r.poll (240.0, 33.0, sinkT, sinkW);
+            check (p.reads == reads + 1, "... it is read at the next picture time, so the last position shows");
+        }
         // the debug override of the hot spot: the tip is somewhere else in the picture
         place (500, 300);
         r.setHotSpotOverride ("10 50");
