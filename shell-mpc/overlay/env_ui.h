@@ -267,6 +267,7 @@ public:
     int curveParam (int i) const noexcept { return i >= 0 && i < 3 ? curveP_[i] : -1; }
     /** The envelope that has a table index the transition of which the UI shows now (the number of the target rows etc.). */
     int numTargets() const noexcept { return numTargets_; }
+    uint8_t targetMask() const noexcept { return full_.instances.targetMask(); }
     static constexpr int kEnvs = 6;
 
 private:
@@ -531,6 +532,21 @@ private:
             targetName (static_cast<size_t> (std::lround (v.param (sp.destination))), name, sizeof name);
             std::snprintf (full_.targetLines[i].text, sizeof full_.targetLines[i].text, "%.28s  %+.0f%%", name, static_cast<double> (v.param (sp.amount)));
         }
+        uint8_t targetMask = 0;
+        for (int s = 0; s < synthyboy::kNumModSlots; ++s)
+        {
+            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (s);
+            if (sp.source < 0 || sp.destination < 0)
+                continue;
+            if (std::lround (v.param (sp.destination)) > 0)
+            {
+                const int src = static_cast<int> (std::lround (v.param (sp.source)));
+                if (src >= 1 && src <= kEnvs)
+                    targetMask |= static_cast<uint8_t> (1u << (src - 1));
+            }
+        }
+        compact_.instances.setTargetMask (targetMask);
+        full_.instances.setTargetMask (targetMask);
         if (pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets))
             loadTargets (v, false);
         else if (pageTop_ == kPageMods && modsTargetParam_ >= 0)

@@ -229,6 +229,9 @@ void testCompactLayout()
     const Rect fb = c.full.rect();
     const Change ch = (tc.down (c, fb.x + fb.w / 2, fb.y + fb.h / 2), tc.up (c, fb.x + fb.w / 2, fb.y + fb.h / 2));
     check (ch.kind == ChangeKind::Request && ch.id == c.full.id (), "a tap on the full screen button over the graph is that button's request, not the graph's");
+    check (c.instances.targetMask() == 0 && ! c.instances.hasTargets (0), "compact: selector targetMask starts at 0");
+    c.instances.setTargetMask (0x05);
+    check (c.instances.hasTargets (0) && ! c.instances.hasTargets (1) && c.instances.hasTargets (2), "compact: selector hasTargets reflects mask (ENV 1 and 3)");
     Scene s (1280, 800, kBackgroundRgba);
     c.draw (s.builder());
     const Image im = render (s);
@@ -275,6 +278,9 @@ void testFullScreenLayout()
     tc.up (f, k.x + k.w / 2, k.y + k.h / 2);
     check (f.activeGroup() == 2, "a touch on a TIME knob makes the TIME group the active one");
     f.setActiveGroup (0);
+    check (f.instances.targetMask() == 0 && ! f.instances.hasTargets (0), "full screen: selector targetMask starts at 0");
+    f.instances.setTargetMask (0x05);
+    check (f.instances.hasTargets (0) && ! f.instances.hasTargets (1) && f.instances.hasTargets (2), "full screen: selector hasTargets reflects mask (ENV 1 and 3)");
     Scene s (1280, 800, kBackgroundRgba);
     f.draw (s.builder());
     f.drawLive (s.builder());
