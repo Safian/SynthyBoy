@@ -140,6 +140,7 @@ public:
     /** Relative stepping of STEPPED targets (a toggle, a list, an integer stepper): the proxy's absolute 0 .. 1 is the wrong control for them (a toggle needs half of the knob's travel, a short list a third), so the travel of
         the host's value since its last write is accumulated and one step of the target happens per kStepTravelDefault of travel, in the direction of the turn. Proxy units; the plugin may override it from a debug file. */
     static constexpr float kStepTravelDefault = 6.0f / 128.0f;   // 6 host increments of 1/128 per step (owner, MPC XL, 2026-11-16: the first 3 were half of what feels right); the file /tmp/synthyboy-overlay-q-step-travel still overrides it
+    static constexpr float kOneIncrement = 1.0f / 128.0f;   // what one click of a Q-Link moves the host's value (Key 61, measured: the writes of a burst are 1/128 apart)
     void setStepTravel (float t) noexcept { stepTravel_.store (t > 1.0e-4f ? t : kStepTravelDefault, std::memory_order_relaxed); }
     float stepTravel() const noexcept { return stepTravel_.load (std::memory_order_relaxed); }
     /** For the status file: the raw value the host wrote to Q q last, the delta of that write, the travel accumulated for the next step. */
@@ -177,15 +178,24 @@ public:
             return hostWrite (q, host, restoring, readNorm, write);
         writes_.fetch_add (1, std::memory_order_relaxed);
         const float v = std::isfinite (host) ? std::clamp (host, 0.0f, 1.0f) : 0.0f;
-        // the host's own value continues either from its last write or, when it took our report as its value, from the report: the report when the write is near it (assumed: the host adopts reports, NOT yet measured on a device), else the last write
+        // how far did the host move its own value with this write? Two bases are possible: the host's previous write (it keeps its own value while a knob is turned: the writes of a burst follow each other) and the value
+        // we last REPORTED (the host takes the report as its value when the knob is touched again: the first write of a touch is the report plus an increment). A report that arrives in the middle of a burst must not
+        // count: it differs from the host's own value by up to a whole step of the target, so measuring from it counted a write twice (a step after 3 increments instead of 6) or backwards (a list of 12 needed 11).
+        // Measured on the Key 61 (host writes in the play log): a burst at 20 ms continues from the host's own value (increments of 1/128, now and then several in one write), one increment per touch starts at the
+        // report. The plugin cannot see the touches, so it takes the distance that looks like an increment: the one of the two (from the previous write, from the last report) that is nearer to ONE increment; a write
+        // that repeats the previous one exactly is the first write of a new touch (from the report). After a step the report has moved by the step of the target, so the first write of the next touch is that far from
+        // the previous write and exactly one increment from the report: it is the report that counts then.
         const float base = base_[q].load (std::memory_order_relaxed);
-        float delta = v - base;
-        if (repDue_[q].exchange (false, std::memory_order_acq_rel))
-        {
-            const float d2 = v - rep_[q].load (std::memory_order_relaxed);
-            if (std::fabs (d2) <= 4.0f * stepTravel())   // the host took our report (the usual case: its dial follows it); a far write is a host that kept its own value
-                delta = d2;
-        }
+        const float rep = rep_[q].load (std::memory_order_relaxed);
+        repDue_[q].store (false, std::memory_order_relaxed);
+        const float dBase = v - base, dRep = v - rep, aB = std::fabs (dBase), aR = std::fabs (dRep);
+        float delta;
+        if (aB <= 1.0e-7f)
+            delta = dRep;
+        else if (aR <= 1.0e-7f)
+            delta = dBase;
+        else
+            delta = std::fabs (aR - kOneIncrement) < std::fabs (aB - kOneIncrement) ? dRep : dBase;
         dbgRaw_[q].store (v, std::memory_order_relaxed);
         dbgDelta_[q].store (delta, std::memory_order_relaxed);
         base_[q].store (v, std::memory_order_relaxed);

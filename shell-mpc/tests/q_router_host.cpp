@@ -362,13 +362,65 @@ int main()
         check (rd (2) == 0.0f, "travel that changes direction does not add up");
         turn (1, step * 5.0f);
         check (std::round (rd (2) * 4.0f) == 4.0f, "one write of several steps of travel steps several times");
-        // a long list reaches both ends without the host's value saturating on the way
+        // a long list reaches both ends without the host's value saturating on the way (the host writes one increment at a time: 6 per step)
         bool sat = false;
         int writesUp = 0, writesDown = 0;
-        while (rd (3) < 1.0f && writesUp < 70) { turn (2, step * 1.05f); ++writesUp; sat = sat || (host[2] >= 1.0f && rd (3) < 1.0f); }
-        check (rd (3) == 1.0f && ! sat && writesUp >= 54 && writesUp <= 56, "a list of 57 reaches its last entry in 54 to 56 writes (" + std::to_string (writesUp) + ") and the host's value does not saturate before it");
-        while (rd (3) > 0.0f && writesDown < 70) { turn (2, -step * 1.05f); ++writesDown; sat = sat || (host[2] <= 0.0f && rd (3) > 0.0f); }
-        check (rd (3) == 0.0f && ! sat && writesDown >= 54 && writesDown <= 56, "... and back to the first (" + std::to_string (writesDown) + ")");
+        while (rd (3) < 1.0f && writesUp < 400) { turn (2, 1.0f / 128.0f); ++writesUp; sat = sat || (host[2] >= 1.0f && rd (3) < 1.0f); }
+        check (rd (3) == 1.0f && ! sat && writesUp >= 330 && writesUp <= 345, "a list of 57 reaches its last entry in 56 steps of 6 increments (" + std::to_string (writesUp) + " writes) and the host's value does not saturate before it");
+        while (rd (3) > 0.0f && writesDown < 400) { turn (2, -1.0f / 128.0f); ++writesDown; sat = sat || (host[2] <= 0.0f && rd (3) > 0.0f); }
+        check (rd (3) == 0.0f && ! sat && writesDown >= 330 && writesDown <= 345, "... and back to the first (" + std::to_string (writesDown) + ")");
+        {   // the two hosts of the Key 61 measurements: a burst continues from the host's OWN value (reports that arrive in the middle must not count again), one increment per touch starts at the report
+            const float inc = 1.0f / 128.0f;
+            QRouter b;
+            for (int i = 0; i < kParams; ++i) wr (i, 0.0f);
+            const int gb[4] = { 5, 6, 0, 0 };   // 5: a list of 12 (the step of the target 1 / 11 is 11.6 increments), 6: a toggle
+            b.setGroup (gb, 2, kParams);
+            auto stepsB = [] (int t) noexcept { return t == 5 ? 12 : (t == 6 ? 2 : 0); };
+            Reports r0;
+            pollInto (b, r0);
+            // (1) a burst of 66 increments, the host keeps its own value, the plugin reports the real position after every write (a report lands between two writes of the burst)
+            float own = 0.0f;
+            for (int k = 0; k < 66; ++k)
+            {
+                own = std::clamp (own + inc, 0.0f, 1.0f);
+                b.hostWrite (0, own, false, rd, wr, stepsB);
+                Reports x;
+                pollInto (b, x);   // the report is NOT adopted: the host goes on from its own value
+            }
+            const int stepsDone = static_cast<int> (std::lround (rd (5) * 11.0f));
+            check (stepsDone == 11 || stepsDone == 10, "a burst of 66 increments on a list of 12 (host keeps its own value, reports land in the burst): 11 steps, not more, not less (" + std::to_string (stepsDone) + ")");
+            // (2) a burst of 6 on a toggle: exactly one step, even with a report in the middle
+            wr (6, 0.0f);
+            QRouter c;
+            c.setGroup (gb, 2, kParams);
+            Reports r1;
+            pollInto (c, r1);
+            float own2 = 0.0f;
+            for (int k = 0; k < 6; ++k)
+            {
+                own2 += inc;
+                c.hostWrite (1, own2, false, rd, wr, stepsB);
+                if (k == 2) { Reports x; pollInto (c, x); }
+            }
+            check (rd (6) == 1.0f, "a burst of 6 increments flips a toggle (a report in the middle does not count twice)");
+            // (3) one increment per touch: the host starts at the report each time
+            wr (6, 0.0f);
+            QRouter d;
+            d.setGroup (gb, 2, kParams);
+            Reports r2;
+            pollInto (d, r2);
+            float flipAt = -1.0f;
+            float rep = 0.0f;
+            for (int k = 1; k <= 8 && flipAt < 0.0f; ++k)
+            {
+                d.hostWrite (1, std::clamp (rep + inc, 0.0f, 1.0f), false, rd, wr, stepsB);
+                Reports x;
+                pollInto (d, x);
+                for (const auto& e : x.q) if (e.first == 1) rep = e.second;   // the host takes the report at the next touch
+                if (rd (6) == 1.0f) flipAt = static_cast<float> (k);
+            }
+            check (flipAt == 6.0f, "one increment per touch (the host starts at the report): the toggle flips with the 6th (" + std::to_string (flipAt) + ")");
+        }
         // a continuous target is exactly as before
         wr (4, 0.2f);
         r.setGroup (g, 4, kParams); pollInto (r, rep);
