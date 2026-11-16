@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // Values: every value is written with the parameter's own format (uibind::formatValue): the level of a strip in % or dB as the parameter is, the pan as C / L 35 / R 35, the sends in %. The meters are the
-// engine's LiveValues::stripPeak (own engine: per strip, with a release of 300 ms), a hold line falls slowly from the highest level. The Q group is the strip you touched: LEVEL, PAN, B1, B2; a tap on the
-// destination opens the list of its choices over the page.
+// engine's LiveValues::stripPeak (own engine: per strip, with a release of 300 ms), a hold line falls slowly from the highest level. The Q group is the strip you touched: LEVEL, PAN, B1, B2 (published at the touch); a member the engine has no parameter for
+// (the buses and the master have a level only) is left out: not drawn, no chip, not in the frame. A tap on the destination opens the list of its choices over the page.
 #pragma once
 
 #include <algorithm>
@@ -59,6 +59,8 @@ public:
     MixerUi()
     {
         initBindings();
+        for (int s = 0; s < ui::MixerFullScreen::kStrips; ++s)   // a member the engine has no parameter for is left out of the strip and of its Q group
+            screen_.setStripMembers (s, bindings_[s].levelParam >= 0, bindings_[s].panParam >= 0, bindings_[s].send1Param >= 0, bindings_[s].send2Param >= 0);
         screen_.assignIds (kStripBase);
         setCanvas (kCanvasW, kCanvasH);
     }
@@ -210,6 +212,7 @@ public:
             gesture_ = top;
             gestureDown_ = true;
             handle (top->touchDown (ev.x, ev.y, nowMs), stack, inst);
+            publishQGroup (inst);   // a tap on a strip made it the selected one: its four targets are the Q group at once, not at the next update
             return true;
         }
         if (! gesture_ || ! gestureDown_)
