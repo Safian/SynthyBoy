@@ -1466,7 +1466,7 @@ private:
                 t[i] = paramOfMember (g->member (i));
         qActive_ = stackDepth_ == 0 ? 0 : (pageTop_ == 0 ? full_.activeGroup() : 0);
         if (highlight_ != 1 && stackDepth_ == 0)
-            return;   // the Env / LFO sub-tab: the view of the Env / LFO owns the group (PlayView::publishModuleGroup)
+            return;   // the Env / LFO sub-tab: the view of the Env / LFO owns the group (EnvUi / LfoUi)
         if (! qSet_ || std::memcmp (t, qTargets_, sizeof t) != 0)
         {
             std::memcpy (qTargets_, t, sizeof t);

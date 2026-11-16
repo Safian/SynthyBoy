@@ -318,8 +318,6 @@ public:
             if (! lfo_)
                 lfo_ = std::make_unique<LfoUi>();
             lfo_->update (*in.io, highlight_, *in.ui, in.nowMs, in.live);
-            if (highlight_ != 1 && highlight_ != 2 && highlight_ != 3 && in.ui->isMain())
-                publishModuleGroup (*in.io);
             const uint32_t h = oscUiHash() ^ (env_->drawHash (*scratch_) * 16777619u) ^ (lfo_->drawHash (*scratch_) * 2246822519u);
             if (h != uiHash_)
             {
@@ -373,20 +371,6 @@ public:
     void dropGesture() noexcept override { if (osc_ != nullptr) osc_->dropGesture(); if (env_ != nullptr) env_->dropGesture(); if (lfo_ != nullptr) lfo_->dropGesture(); }
     OscUi* oscUi() noexcept { return osc_.get(); }
 
-    /** The Q group of the Env and LFO sub-tabs: the Q-Links 1 .. 4 of those pages are Q 1 .. Q 4 (the skin), so the first four knobs of the module are the group (they were Q-Link 1 .. 4 before). */
-    void publishModuleGroup (IInstanceView& io)
-    {
-        const int g = highlight_ == 2 ? 1 : 2;
-        int t[4];
-        for (int s = 0; s < 4; ++s)
-            t[s] = synthyboy_mpc::play::realIndex (g, sel_[g], s);
-        if (! moduleGroupSet_ || std::memcmp (t, moduleGroup_, sizeof t) != 0)
-        {
-            std::memcpy (moduleGroup_, t, sizeof t);
-            io.setQGroup (t, 4);
-            moduleGroupSet_ = true;
-        }
-    }
     uint32_t oscUiHash()
     {
         gpu::SceneBuilder sb (*scratch_);
@@ -771,8 +755,6 @@ private:
     std::unique_ptr<gpu::SceneData> scratch_;
     uint32_t uiHash_ = 0;
     int edgeX_ = 1280;   // the key (ViewInput::panelEdgeX)
-    int moduleGroup_[4] = { -1, -1, -1, -1 };
-    bool moduleGroupSet_ = false;
     float lastTargets_[4] = { -1, -1, -1, -1 };
     float lastSources_[kSourceSlots] = {};
     synthyboy::OscCycle::Kind kind_ = synthyboy::OscCycle::Kind::other;
