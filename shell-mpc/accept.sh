@@ -195,6 +195,9 @@ $B/mastervoice_ui_host > $B/mastervoice-ui-host.log 2>&1 || { grep -E "^FAIL" $B
 # the plugin-drawn pages (shell-mpc/overlay/page_view.h, pages.h: the real layout, the controller opens the element page of the tab, group changes, the blank instance picture, the readout targets)
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/page_view_host $OVSRC/page_view_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: page_view_host build"; exit 1; }
 $B/page_view_host > $B/page-view-host.log 2>&1 || { grep -E "^FAIL" $B/page-view-host.log; echo "ACCEPT FAIL: page_view_host (the plugin-drawn pages: opening, groups, readout targets)"; exit 1; }
+# the Q slots the pages publish (shell-mpc/overlay/q_publish.h: sixteen Q proxies, the active group on Q 1 .. 4, the next groups of the page on 5 .. 16), the idle chips and the device rule (q_device.h)
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/qslots_host $OVSRC/qslots_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: qslots_host build"; exit 1; }
+$B/qslots_host > $B/qslots-host.log 2>&1 || { grep -E "^FAIL" $B/qslots-host.log; echo "ACCEPT FAIL: qslots_host (the Q slots of every page, the chips, the device rule)"; exit 1; }
 # the pages of the OSC tab (shell-mpc/overlay/osc_page.h: the oscillator UI in its page mode with the oscillator's display: the oscillator the tab names, no CLOSE, Q groups, writes, detail pages)
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/osc_page_host $OVSRC/osc_page_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: osc_page_host build"; exit 1; }
 $B/osc_page_host > $B/osc-page-host.log 2>&1 || { grep -E "^FAIL" $B/osc-page-host.log; echo "ACCEPT FAIL: osc_page_host (the pages of the OSC tab)"; exit 1; }
@@ -215,7 +218,7 @@ $B/gpu_clock_host > $B/gpu-clock-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-clock
 c++ -std=c++17 -O1 -Wall -Wextra -I core/include -I shell-mpc/overlay -o $B/tour_dump $OVSRC/tour_dump.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: tour_dump build"; exit 1; }
 [ "$($B/tour_dump | wc -l)" -gt 800 ] || { echo "ACCEPT FAIL: tour_dump lists too few controls"; exit 1; }
 # the controller, the views and the GPU backend once more under AddressSanitizer + UBSan (instances are freed while their page is on screen: no use after free)
-for t in controller_host views_host gpu_backend_host spectrum_view_host display_host osc_ui_host env_ui_host lfo_ui_host cell_plan_host cell_cache_host filter_ui_host mod_ui_host mixfx_ui_host mastervoice_ui_host page_view_host osc_page_host; do
+for t in controller_host views_host gpu_backend_host spectrum_view_host display_host osc_ui_host env_ui_host lfo_ui_host cell_plan_host cell_cache_host filter_ui_host mod_ui_host mixfx_ui_host mastervoice_ui_host page_view_host osc_page_host qslots_host; do
     c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/${t}_asan $OVSRC/$t.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
     $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }

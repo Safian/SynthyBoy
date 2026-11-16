@@ -1,4 +1,4 @@
-// SynthyBoy - MPC shell test: the Q router (shell-mpc/q_router.h, docs/MPC.md "Q proxies"): four proxies that stand for the target of the active group. Pure logic, no plugin: the
+// SynthyBoy - MPC shell test: the Q router (shell-mpc/q_router.h, docs/MPC.md "Q proxies"): sixteen proxies: Q 1 .. 4 stand for the targets of the active group, Q 5 .. 16 for the next groups of the page. Pure logic, no plugin: the
 // parameters are a small array here. Checks the group (up to four targets, "none", out of range), reading, writing (echo, restore window, clamping, NaN), what the display thread reports
 // (a group change: all four values once; a changed target: that Q once; a host write: the real parameter, not the Q itself), no allocation on the getParameter / setParameter paths, and
 // threads writing, reading, changing the group and polling at the same time (run it under ThreadSanitizer too).
@@ -11,6 +11,7 @@
 #include <new>
 #include <string>
 #include <thread>
+#include <algorithm>
 #include <vector>
 
 #include "q_router.h"
@@ -106,7 +107,7 @@ int main()
         check (r.target (3) == QRouter::kNone, "no group (null): all none");
         const int five[5] = { 1, 2, 3, 4, 5 };
         r.setGroup (five, 5, kParams);
-        check (r.target (3) == 4 && r.target (4) == QRouter::kNone, "more than four targets: the first four");
+        check (r.target (3) == 4 && r.target (4) == 5 && r.target (5) == QRouter::kNone, "five targets: Q 5 has the fifth, Q 6 .. 16 have none");
     }
     {
         QRouter r;
@@ -133,8 +134,8 @@ int main()
         const int g[4] = { 2, 4, QRouter::kNone, 8 };
         r.setGroup (g, 4, kParams);
         pollInto (r, rep);
-        check (rep.q.size() == 4 && rep.q[0].first == 0 && std::fabs (rep.q[0].second - rd (2)) < 1e-6f && rep.q[2].first == 2 && rep.q[2].second == 0.0f && rep.q[3].first == 3 && std::fabs (rep.q[3].second - rd (8)) < 1e-6f && rep.real.empty(),
-               "a group change: the host is told all four values (0 for none) once");
+        check (rep.q.size() == 16 && rep.q[0].first == 0 && std::fabs (rep.q[0].second - rd (2)) < 1e-6f && rep.q[2].first == 2 && rep.q[2].second == 0.0f && rep.q[3].first == 3 && std::fabs (rep.q[3].second - rd (8)) < 1e-6f && rep.real.empty(),
+               "a group change: the host is told all sixteen values (0 for none) once");
         check (rep.groups == 1, "... and the group-changed callback runs once, after them");
         rep.clear();
         pollInto (r, rep);
@@ -157,7 +158,7 @@ int main()
         const int g2[4] = { 10, 11, 12, 13 };
         r.setGroup (g2, 4, kParams);
         pollInto (r, rep);
-        check (rep.q.size() == 4 && rep.real.size() == 1 && rep.real[0] == 2, "a group change right after a write: the four new values and the real parameter of the write");
+        check (rep.q.size() == 16 && rep.real.size() == 1 && rep.real[0] == 2, "a group change right after a write: the sixteen new values and the real parameter of the write");
         // the host that echoes every report back changes nothing and starts no loop
         rep.clear();
         int writes = 0;
@@ -222,6 +223,88 @@ int main()
         check (told && rep.real.empty(), "the page's new value is told to the host (the Q proxy), no real parameter");
         wr (5, 0.9f);   // what the threads test left in the target must not be the value written below (that would be an echo, not a write)
         check (r.hostWrite (2, 0.2f, false, rd, wr) == QRouter::Write::written && std::fabs (rd (5) - 0.2f) < 1e-6f, "a real target next to the virtual ones works as before");
+    }
+    {   // sixteen slots: the proxies, the mapping rule of a page's groups, the notification count
+        check (QRouter::kCount == 16 && QRouter::kGroupSize == 4 && QRouter::kGroups == 4, "sixteen proxies: four groups of four");
+        // a page with six groups: group g has the targets 4 * g .. 4 * g + 3 (kParams = 16 is the real table here, so a larger table is not needed: the targets are group number * 10 + knob)
+        auto targetsOf = [] (int g, int* t) { for (int i = 0; i < 4; ++i) t[i] = g * 10 + i; };
+        int out[QRouter::kCount];
+        int used = QRouter::mapGroups (6, 0, targetsOf, out);
+        bool ok = used == 16;
+        for (int k = 0; k < 4; ++k)
+            for (int i = 0; i < 4; ++i)
+                ok = ok && out[4 * k + i] == k * 10 + i;
+        check (ok, "six groups, group 0 active: slots 1-4 = group 0, 5-8 = group 1, 9-12 = group 2, 13-16 = group 3");
+        used = QRouter::mapGroups (6, 4, targetsOf, out);
+        ok = used == 16 && out[0] == 40 && out[3] == 43 && out[4] == 50 && out[8] == 0 && out[12] == 10 && out[15] == 13;
+        check (ok, "group 4 active: 4, then 5, then the page wraps around to 0 and 1 (each group once)");
+        used = QRouter::mapGroups (6, 5, targetsOf, out);
+        check (used == 16 && out[0] == 50 && out[4] == 0 && out[8] == 10 && out[12] == 20, "the last group active: the next groups are the first ones");
+        used = QRouter::mapGroups (3, 1, targetsOf, out);
+        ok = used == 12 && out[0] == 10 && out[4] == 20 && out[8] == 0 && out[12] == QRouter::kNone && out[15] == QRouter::kNone;
+        check (ok, "three groups: slots 13-16 stay without a target (no group is repeated)");
+        used = QRouter::mapGroups (1, 0, targetsOf, out);
+        ok = used == 4 && out[3] == 3;
+        for (int i = 4; i < 16; ++i)
+            ok = ok && out[i] == QRouter::kNone;
+        check (ok, "one group: slots 5-16 have no target");
+        used = QRouter::mapGroups (2, 1, targetsOf, out);
+        check (used == 8 && out[0] == 10 && out[4] == 0 && out[8] == QRouter::kNone, "two groups: the other one on 5-8");
+        check (QRouter::mapGroups (0, 0, targetsOf, out) == 0 && out[0] == QRouter::kNone && QRouter::mapGroups (4, -1, targetsOf, out) == 0 && out[0] == QRouter::kNone && QRouter::mapGroups (4, 4, targetsOf, out) == 0,
+               "no group, or no active one: nothing is mapped");
+        check (QRouter::blockOfGroup (6, 4, 4) == 0 && QRouter::blockOfGroup (6, 4, 5) == 1 && QRouter::blockOfGroup (6, 4, 0) == 2 && QRouter::blockOfGroup (6, 4, 1) == 3 && QRouter::blockOfGroup (6, 4, 2) == -1 && QRouter::blockOfGroup (6, 4, 3) == -1
+               && QRouter::blockOfGroup (2, 0, 1) == 1 && QRouter::blockOfGroup (1, 0, 0) == 0 && QRouter::blockOfGroup (3, 3, 0) == -1 && QRouter::blockOfGroup (3, 0, 3) == -1, "blockOfGroup agrees with the mapping (-1: the group has no knobs)");
+        // the router with sixteen slots: the targets, reading, writing, the notification
+        QRouter r;
+        for (int i = 0; i < kParams; ++i)
+            wr (i, 0.05f * static_cast<float> (i));
+        int slots[16];
+        for (int i = 0; i < 16; ++i)
+            slots[i] = i;
+        r.setGroup (slots, 16, kParams);
+        ok = true;
+        for (int q = 0; q < 16; ++q)
+            ok = ok && r.target (q) == q;
+        check (ok, "all sixteen targets are kept");
+        check (r.target (16) == QRouter::kNone && r.target (-1) == QRouter::kNone, "a Q outside 0 .. 15 has no target");
+        Reports rep;
+        pollInto (r, rep);
+        check (rep.q.size() == 16 && rep.groups == 1, "the first group: sixteen values, the callback once");
+        rep.clear();
+        pollInto (r, rep);
+        check (rep.q.empty() && rep.groups == 0, "nothing changed: no value and no notification");
+        r.setGroup (slots, 16, kParams);
+        pollInto (r, rep);
+        check (rep.q.empty() && rep.groups == 0, "the same sixteen slots again: no notification");
+        int moved[16];
+        std::copy (slots, slots + 16, moved);
+        moved[15] = 3;   // only the last slot changes
+        r.setGroup (moved, 16, kParams);
+        pollInto (r, rep);
+        check (rep.q.size() == 16 && rep.groups == 1, "a change of slot 16 only: one notification (the host reads all names again)");
+        rep.clear();
+        int swapped[16];
+        std::copy (moved, moved + 16, swapped);
+        for (int i = 4; i < 16; ++i)
+            swapped[i] = QRouter::kNone;
+        r.setGroup (swapped, 4, kParams);   // a page that only knows one group: the first four, the others none
+        pollInto (r, rep);
+        check (rep.groups == 1 && r.target (3) == 3 && r.target (4) == QRouter::kNone && r.target (15) == QRouter::kNone, "a page that publishes four slots empties Q 5 .. 16, with one notification");
+        rep.clear();
+        r.setGroup (slots, 16, kParams);
+        rep.clear();
+        pollInto (r, rep);
+        rep.clear();
+        r.setGroup (slots, 16, kParams);
+        pollInto (r, rep);
+        check (rep.groups == 0, "no change after the last publish: no notification");
+        // a write to Q 5 .. 16 goes to the target of that slot, the real parameter is reported
+        wr (12, 0.1f);
+        const QRouter::Write w = r.hostWrite (12, 0.6f, false, rd, wr);
+        pollInto (r, rep);
+        check (w == QRouter::Write::written && std::fabs (rd (12) - 0.6f) < 1e-6f && rep.real.size() == 1 && rep.real[0] == 12, "a write to Q 13 reaches its target and the real parameter is reported");
+        // a Q write outside the table is none
+        check (r.hostWrite (16, 0.2f, false, rd, wr) == QRouter::Write::none, "a write to a Q that does not exist is none");
     }
     std::printf (fails ? "q_router_host: FAILED (%d)\n" : "q_router_host: OK\n", fails);
     return fails ? 1 : 0;

@@ -216,7 +216,7 @@ int main (int argc, char** argv)
     e->dispatcher (e, effMainsChanged, 0, 1, nullptr, 0.0f);
 
     // the two pad pressure parameters (shell-mpc/pad_pressure.h, default ON) follow the display parameters (only "Overlay Instance" of the overlay build is after them) and are no part of what is checked here
-    const int ovl = overlayBuild ? 1 + 27 + 4 : 0;   // "Overlay Instance" and after it the Play page's 3 selectors and 24 proxies (shell-mpc/play_params.h), then "Q 1" .. "Q 4" (shell-mpc/q_router.h)
+    const int ovl = overlayBuild ? 1 + 27 + 16 : 0;   // "Overlay Instance" and after it the Play page's 3 selectors and 24 proxies (shell-mpc/play_params.h), then "Q 1" .. "Q 16" (shell-mpc/q_router.h)
     const int pad = text (e, effGetParamName, e->numParams - 2 - ovl) == "Pad Pressure" ? 2 : 0;
     const std::string chunkFull = getChunk (e);
     std::string chunk = chunkFull;
