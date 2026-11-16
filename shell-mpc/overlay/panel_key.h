@@ -36,14 +36,21 @@ public:
     };
 
     bool hasReference() const noexcept { return have_; }
-    void forget() noexcept { have_ = false; haveCand_ = false; }
-    /** The reference candidate is dropped (the page is not settled any more): the next look starts the stable time again. */
-    void dropCandidate() noexcept { haveCand_ = false; }
+    void forget() noexcept { have_ = false; }
+
+    /** The look that may become the reference: one of them is enough for the whole overlay (it belongs to the view that is on screen), so it is not part of every PanelKey. */
+    struct Candidate
+    {
+        uint32_t px[kRows][kCols] = {};
+        bool have = false;
+        double sinceMs = 0.0;
+        void drop() noexcept { have = false; }
+    };
 
     /** Takes the reference only from a strip that stood still: the first look is the candidate, every later look must equal it (the same tolerance as the measure), and after `stableMs` the candidate becomes
         the reference. A panel that slides in or out changes the strip all the time, so a reference is never taken from a strip with the panel part way in (it would hold the panel's black line at that place
         and cut the picture there for good); the pop-up of a touch comes without any parameter write, so nothing but the picture itself can tell. Returns true on the look that took it. */
-    bool consider (IFrameSource& src, int rotation, double nowMs, double stableMs)
+    bool consider (IFrameSource& src, int rotation, double nowMs, double stableMs, Candidate& cand)
     {
         int w = 0, h = 0;
         if (! src.begin (w, h))
@@ -56,22 +63,22 @@ public:
         src.end();
         if (! ok)
             return false;
-        bool same = haveCand_;
+        bool same = cand.have;
         for (int r = 0; r < kRows && same; ++r)
             for (int c = 0; c < kCols && same; ++c)
-                same = ! differs (cur[r][c], cand_[r][c]);
+                same = ! differs (cur[r][c], cand.px[r][c]);
         if (! same)
         {
-            std::copy (&cur[0][0], &cur[0][0] + kRows * kCols, &cand_[0][0]);
-            haveCand_ = true;
-            candSinceMs_ = nowMs;
+            std::copy (&cur[0][0], &cur[0][0] + kRows * kCols, &cand.px[0][0]);
+            cand.have = true;
+            cand.sinceMs = nowMs;
             return false;
         }
-        if (nowMs - candSinceMs_ < stableMs)
+        if (nowMs - cand.sinceMs < stableMs)
             return false;
-        std::copy (&cand_[0][0], &cand_[0][0] + kRows * kCols, &ref_[0][0]);
+        std::copy (&cand.px[0][0], &cand.px[0][0] + kRows * kCols, &ref_[0][0]);
         have_ = true;
-        haveCand_ = false;
+        cand.have = false;
         return true;
     }
 
@@ -172,9 +179,7 @@ private:
     }
 
     uint32_t ref_[kRows][kCols] = {};
-    uint32_t cand_[kRows][kCols] = {};
-    bool have_ = false, haveCand_ = false;
-    double candSinceMs_ = 0.0;
+    bool have_ = false;
 };
 
 }} // namespace synthyboy_mpc::overlay

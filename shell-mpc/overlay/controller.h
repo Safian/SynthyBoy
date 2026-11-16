@@ -516,10 +516,10 @@ private:
             if (! k.hasReference())
             {
                 const bool settled = wasWhole_ && nowMs - wholeSinceMs_ >= kKeySettleMs && nowMs - lastWholeMs_ <= kKeyFreshMs && nowMs - viewSinceMs_ >= kKeySettleMs && nowMs - lastQWriteMs_ >= kKeyQuietMs;
-                if (settled && k.consider (frames_, rotation_, nowMs, kKeyStableMs))
+                if (settled && k.consider (frames_, rotation_, nowMs, kKeyStableMs, *keyCand_))
                     ++keyReferences_;
                 else if (! settled)
-                    k.dropCandidate();
+                    keyCand_->drop();
                 if (! k.hasReference() && current_ >= 0)
                 {
                     // no reference to compare with: the panel's black line is looked for in the strip itself (every tick, the detector's look is up to 100 ms old), and while the page is held by the panel (the
@@ -1458,7 +1458,8 @@ private:
     std::unique_ptr<MouseRouter> mouse_;
     bool autoReduced_ = false, wasWhole_ = false;
     static constexpr double kKeySettleMs = 600.0, kKeyFreshMs = 250.0, kKeyQuietMs = 800.0, kKeyStaleMs = 300.0, kKeyStableMs = 250.0;   // the page must be whole and still this long before the reference is taken, the look at it this fresh, no knob write this lately
-    PanelKey keys_[Detection::kMaxViews];                 // the reference of the strip under each view (taken again on a view change)
+    std::unique_ptr<PanelKey::Candidate> keyCand_ { new PanelKey::Candidate() };   // the look of the strip that may become the next reference (one for the view on screen); on the heap with the references: 14 KB each, the controller lives on the stack of some tests
+    std::vector<PanelKey> keys_ = std::vector<PanelKey> (Detection::kMaxViews);                 // the reference of the strip under each view (taken again on a view change)
     int keyEdge_ = PanelKey::kNoKey;
     static constexpr int kBlindEdge = PageDetector::kPanelLineX - 2;   // the cut while there is no reference: the left edge of the panel when it is fully in, less the grown edge
     double lastWholeMs_ = 0.0, wholeSinceMs_ = 0.0, bandWholeSinceMs_ = -1.0, viewSinceMs_ = 0.0, lastQWriteMs_ = 0.0, keyCostSum_ = 0.0, keyCostMax_ = 0.0;

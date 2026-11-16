@@ -277,6 +277,59 @@ struct CRig
 
 }
 
+/** The stacking of the plane (stacking.h): taken before the helper starts, put back when it is gone, kept when the plane was lost. */
+static void testStacking()
+{
+    // ---- the stacking of the plane against the host's pointer plane (stacking.h): taken before the helper starts, put back when the helper is gone, kept when the plane was lost ----
+    {
+        auto rig = std::make_unique<BackendRig>();   // on the heap: a rig is big, and under the sanitizer every block of main keeps its frame
+        BackendRig& r = *rig;
+        r.backend.request (r.now);
+        check (r.helper.stackingTakesAtStart == 1 && r.plane.countOf ("takestacking") == 1, "the stacking is taken once before the helper is started (it comes before the helper's first SETPLANE)");
+        r.advance (100.0);
+        check (r.backend.show (r.ui, r.panel, 90, 0, "filter1", r.now), "the helper shows a view");
+        r.advance (200.0);
+        check (r.plane.countOf ("releasestacking") == 0, "while the helper runs the zpos stays as taken");
+        r.helper.block()->pace.planeRefreshes = 1;   // the helper found the plane switched off by a mode set and set it again
+        r.advance (50.0);
+        check (r.plane.countOf ("takestacking") == 2, "the helper set a switched-off plane again: the stacking is taken again (" + std::to_string (r.plane.countOf ("takestacking")) + ")");
+        r.advance (50.0);
+        check (r.plane.countOf ("takestacking") == 2, "... once per event");
+        r.backend.shutdown();
+        check (r.plane.countOf ("releasestacking") == 1, "shutdown: the zpos at rest is put back");
+        r.backend.request (r.now);
+        check (r.plane.countOf ("takestacking") == 3 && r.helper.stackingTakesAtStart == 3, "the helper starts again: the stacking is taken again before it");
+    }
+    {
+        auto rig = std::make_unique<BackendRig>();   // on the heap: a rig is big, and under the sanitizer every block of main keeps its frame
+        BackendRig& r = *rig;
+        r.backend.request (r.now);
+        r.advance (100.0);
+        r.helper.mode = FakeHelper::ErrorOnShow;
+        r.backend.show (r.ui, r.panel, 90, 0, "filter1", r.now);
+        r.advance (60.0);
+        check (r.plane.countOf ("releasestacking") >= 1, "the helper fails: the plugin takes the plane away and puts the zpos back");
+    }
+    {
+        auto rig = std::make_unique<BackendRig>();   // on the heap: a rig is big, and under the sanitizer every block of main keeps its frame
+        BackendRig& r = *rig;
+        r.plane.spares = { 52 };
+        r.backend.request (r.now);
+        r.advance (100.0);
+        r.helper.mode = FakeHelper::SetPlaneError;
+        r.backend.show (r.ui, r.panel, 90, 0, "filter1", r.now);
+        r.advance (30.0);
+        check (r.plane.countOf ("releasestacking") == 0, "a SETPLANE error (the plane may be another program's): the zpos is not written back on a plane that is not ours");
+    }
+    {
+        auto rig = std::make_unique<BackendRig>();   // on the heap: a rig is big, and under the sanitizer every block of main keeps its frame
+        BackendRig& r = *rig;
+        check (r.startAndShow(), "a helper is running with a view shown");
+        r.backend.abandonPlane();
+        check (r.plane.countOf ("releasestacking") == 0, "abandonPlane: the plane is not ours any more: no zpos is written back");
+    }
+}
+
 int main()
 {
     // ---- healthy: start, show, scene, acknowledgement, hide ------------------------------------------------------------------------------------------------
@@ -322,50 +375,7 @@ int main()
         r.backend.shutdown();
         check (! r.helper.running && r.helper.quits == 1 && clean (r.plane) && std::string (r.backend.status().state) == "idle", "shutdown: the helper was told to quit and left, nothing is left behind");
     }
-    // ---- the stacking of the plane against the host's pointer plane (stacking.h): taken before the helper starts, put back when the helper is gone, kept when the plane was lost ----
-    {
-        BackendRig r;
-        r.backend.request (r.now);
-        check (r.helper.stackingTakesAtStart == 1 && r.plane.countOf ("takestacking") == 1, "the stacking is taken once before the helper is started (it comes before the helper's first SETPLANE)");
-        r.advance (100.0);
-        check (r.backend.show (r.ui, r.panel, 90, 0, "filter1", r.now), "the helper shows a view");
-        r.advance (200.0);
-        check (r.plane.countOf ("releasestacking") == 0, "while the helper runs the zpos stays as taken");
-        r.helper.block()->pace.planeRefreshes = 1;   // the helper found the plane switched off by a mode set and set it again
-        r.advance (50.0);
-        check (r.plane.countOf ("takestacking") == 2, "the helper set a switched-off plane again: the stacking is taken again (" + std::to_string (r.plane.countOf ("takestacking")) + ")");
-        r.advance (50.0);
-        check (r.plane.countOf ("takestacking") == 2, "... once per event");
-        r.backend.shutdown();
-        check (r.plane.countOf ("releasestacking") == 1, "shutdown: the zpos at rest is put back");
-        r.backend.request (r.now);
-        check (r.plane.countOf ("takestacking") == 3 && r.helper.stackingTakesAtStart == 3, "the helper starts again: the stacking is taken again before it");
-    }
-    {
-        BackendRig r;
-        r.backend.request (r.now);
-        r.advance (100.0);
-        r.helper.mode = FakeHelper::ErrorOnShow;
-        r.backend.show (r.ui, r.panel, 90, 0, "filter1", r.now);
-        r.advance (60.0);
-        check (r.plane.countOf ("releasestacking") >= 1, "the helper fails: the plugin takes the plane away and puts the zpos back");
-    }
-    {
-        BackendRig r;
-        r.plane.spares = { 52 };
-        r.backend.request (r.now);
-        r.advance (100.0);
-        r.helper.mode = FakeHelper::SetPlaneError;
-        r.backend.show (r.ui, r.panel, 90, 0, "filter1", r.now);
-        r.advance (30.0);
-        check (r.plane.countOf ("releasestacking") == 0, "a SETPLANE error (the plane may be another program's): the zpos is not written back on a plane that is not ours");
-    }
-    {
-        BackendRig r;
-        check (r.startAndShow(), "a helper is running with a view shown");
-        r.backend.abandonPlane();
-        check (r.plane.countOf ("releasestacking") == 0, "abandonPlane: the plane is not ours any more: no zpos is written back");
-    }
+    testStacking();
     // ---- what the plugin tells the helper about the display it found (plane, CRTC, pace) -----------------------------------------------------------------------
     {
         BackendRig r;

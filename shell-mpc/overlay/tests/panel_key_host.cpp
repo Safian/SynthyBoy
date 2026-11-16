@@ -122,31 +122,34 @@ int main()
     {
         Fb f2;
         PanelKey k2;
-        check (! k2.consider (f2, 90, 0.0, 250.0) && ! k2.hasReference(), "consider: the first look is a candidate only");
-        check (! k2.consider (f2, 90, 200.0, 250.0) && ! k2.hasReference(), "consider: 200 ms of a still strip are not enough for 250 ms");
-        check (k2.consider (f2, 90, 260.0, 250.0) && k2.hasReference() && k2.measure (f2, 90).edge == PanelKey::kNoKey, "consider: 260 ms of a still strip: the reference is taken, the strip is not cut");
+        PanelKey::Candidate c2;
+        check (! k2.consider (f2, 90, 0.0, 250.0, c2) && ! k2.hasReference(), "consider: the first look is a candidate only");
+        check (! k2.consider (f2, 90, 200.0, 250.0, c2) && ! k2.hasReference(), "consider: 200 ms of a still strip are not enough for 250 ms");
+        check (k2.consider (f2, 90, 260.0, 250.0, c2) && k2.hasReference() && k2.measure (f2, 90).edge == PanelKey::kNoKey, "consider: 260 ms of a still strip: the reference is taken, the strip is not cut");
         PanelKey k3;
+        PanelKey::Candidate c3;
         double t = 0.0;
         bool taken = false;
         for (int left = 1280; left >= 1100 && ! taken; left -= 10)      // the panel slides in while the candidate is being watched
         {
             f2.clear();
             f2.panel (left);
-            taken = k3.consider (f2, 90, t += 10.0, 250.0);
+            taken = k3.consider (f2, 90, t += 10.0, 250.0, c3);
         }
         check (! taken && ! k3.hasReference(), "consider: a strip with a panel sliding over it (every look different) never becomes the reference");
         f2.clear();
         f2.panel (1150);
         for (int i = 0; i < 40 && ! taken; ++i)
-            taken = k3.consider (f2, 90, t += 10.0, 250.0);
+            taken = k3.consider (f2, 90, t += 10.0, 250.0, c3);
         check (taken, "consider: once the panel stands still the strip (with the panel in it) is taken: the controller's own checks (the markers, the band that stays) are what let it go");
         PanelKey k4;
-        k4.consider (f2, 90, 0.0, 250.0);
-        k4.dropCandidate();
-        check (! k4.consider (f2, 90, 300.0, 250.0), "dropCandidate: the stable time starts again");
+        PanelKey::Candidate c4;
+        k4.consider (f2, 90, 0.0, 250.0, c4);
+        c4.drop();
+        check (! k4.consider (f2, 90, 300.0, 250.0, c4), "Candidate::drop: the stable time starts again");
         k4.forget();
         f2.readable = false;
-        check (! k4.consider (f2, 90, 600.0, 250.0), "consider: an unreadable framebuffer takes nothing");
+        check (! k4.consider (f2, 90, 600.0, 250.0, c4), "consider: an unreadable framebuffer takes nothing");
     }
     std::printf (g_fails ? "panel_key_host: FAILED (%d)\n" : "panel_key_host: OK\n", g_fails);
     return g_fails ? 1 : 0;
