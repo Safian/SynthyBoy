@@ -264,20 +264,33 @@ protected:
         p.rrect (rect_, T.rChip, p.c (T.panel1, 200));
         p.rrect (rect_, T.rChip, p.c (T.keyline, 160), 1.0f);
 
-        const int maxVoices = std::max (1, polyphony);
-        const float frac = std::clamp (static_cast<float> (activeVoices) / static_cast<float> (maxVoices), 0.0f, 1.0f);
-        if (frac > 0.005f)
+        const int totalCells = std::clamp (polyphony, 1, 32);
+        const int m = 6;
+        const int gap = 3;
+        const int textW = 140;
+        const int cellsW = std::max (10, rect_.w - 2 * m - textW - 8);
+        const int cellW = std::max (4, (cellsW - (totalCells - 1) * gap) / totalCells);
+        const int cellH = std::max (12, rect_.h - 2 * m);
+        const int cellY = rect_.y + (rect_.h - cellH) / 2;
+
+        for (int i = 0; i < totalCells; ++i)
         {
-            const int barW = static_cast<int> (std::lround (frac * (rect_.w - 4)));
-            Rect fr { rect_.x + 2, rect_.y + 2, barW, rect_.h - 4 };
-            p.paintX2 (static_cast<float> (fr.x), static_cast<float> (fr.right()), T.flow[0], T.flow[1], 255);
-            p.rrect (fr, T.rChip - 1.0f, p.c (colour::rgba (T.flow[0], 255)));
-            p.plain();
+            const int cx = rect_.x + m + i * (cellW + gap);
+            const Rect cr { cx, cellY, cellW, cellH };
+            if (i < activeVoices)
+            {
+                p.rrect (cr, 2.0f, p.c (T.flow[0], 255));
+            }
+            else
+            {
+                p.rrect (cr, 2.0f, p.c (T.track, 120));
+                p.rrect (cr, 2.0f, p.c (T.keyline, 80), 1.0f);
+            }
         }
 
         char buf[32];
         std::snprintf (buf, sizeof buf, "%d / %d VOICES", activeVoices, polyphony);
-        p.textCentered (rect_, buf, T.fLabel, p.c (T.text, 255), T.fMin);
+        p.textCentered ({ rect_.right() - textW - 4, rect_.y, textW, rect_.h }, buf, T.fLabel, p.c (T.text, 255), T.fMin);
     }
 };
 
@@ -288,7 +301,7 @@ protected:
 class MasterScreen : public Composite
 {
 public:
-    static constexpr int kMaxGroups = 8, kBlocks = 7, kHeaderH = 64, kBlockTitleH = 34, kBlockPad = 6, kBlockGap = 8;
+    static constexpr int kMaxGroups = 10, kBlocks = 7, kHeaderH = 64, kBlockTitleH = 34, kBlockPad = 6, kBlockGap = 8;
     enum Side : int { SideMain = 0, SideTuning = 1 };
 
     MenuButton sideMain { "MAIN", MenuButton::Icon::None };
@@ -307,6 +320,7 @@ public:
     NumberField polyphony;
     ToggleIcon legato, polyLegato, phaseLegato;
     Stepper sameNote, stealPriority;
+    NumberField velocityTrack;
     VoiceMeterDisplay voiceMeter;
     // GLIDE
     Knob portaTime { "GLIDE" }, portaSlope { "SLOPE" };
@@ -325,7 +339,7 @@ public:
     Stepper mpeMacro;
     ToggleIcon mpeYModwheel, mpeBendToX, mpeYBipolar;
 
-    QGroup groups[kMaxGroups];   // 0 OUTPUT, 1 PITCH, 2 VOICES, 3 GLIDE, 4 SCALE, 5 TUNING, 6 MPE (the switches of the notes), 7 MPE (the options of Y)
+    QGroup groups[kMaxGroups];   // 0 OUTPUT, 1 PITCH, 2 LINK, 3 VOICES, 4 VOICE OPTS, 5 GLIDE, 6 SCALE, 7 TUNING, 8 MPE, 9 MPE Y
 
     MasterScreen()
     {
@@ -349,6 +363,9 @@ public:
         sameNote.setCaption ("SAME NOTE");
         sameNote.minWidth = 140;   // a cell of the grid of the VOICES block
         stealPriority.setCaption ("STEAL");
+        stealPriority.minWidth = 140;
+        velocityTrack.state.format = NumberField::Format::IntSigned;
+        velocityTrack.setLabel ("VEL TRACK");
         stereoRouting.setCaption ("STEREO");
         voiceOverride.setCaption ("VOICE OVERRIDE");
         portaAlways.setLabel ("ALWAYS"); portaAlways.state.showState = true;
@@ -365,6 +382,7 @@ public:
         mpeBend.state.format = NumberField::Format::IntPlain;
         mpeBend.setLabel ("MPE BEND");
         mpeMacro.setCaption ("XYZ MACRO");
+        mpeMacro.minWidth = 140;
         mpeYModwheel.setLabel ("Y TO WHEEL"); mpeYModwheel.state.showState = true;
         mpeBendToX.setLabel ("BEND TO X"); mpeBendToX.state.showState = true;
         mpeYBipolar.setLabel ("Y BIPOLAR"); mpeYBipolar.state.showState = true;
@@ -389,11 +407,11 @@ public:
         for (Component* c : sideTuningComponents())
             show (*c, side_ == SideTuning);
         if (activeGroup_ >= 0 && sideOfGroup (activeGroup_) != side_)
-            setActiveGroup (side_ == SideMain ? 0 : 4);
+            setActiveGroup (side_ == SideMain ? 0 : 6);
         else
             setActiveGroup (activeGroup_);
     }
-    static int sideOfGroup (int g) noexcept { return g < 4 ? SideMain : SideTuning; }
+    static int sideOfGroup (int g) noexcept { return g < 6 ? SideMain : SideTuning; }
 
     int numGroups() const noexcept { return kMaxGroups; }
     int activeGroup() const noexcept { return activeGroup_; }
@@ -405,7 +423,7 @@ public:
     }
     static const char* groupName (int g) noexcept
     {
-        static const char* const kNames[kMaxGroups] = { "OUTPUT", "PITCH", "VOICES", "GLIDE", "SCALE", "TUNING", "MPE", "MPE Y" };
+        static const char* const kNames[kMaxGroups] = { "OUTPUT", "PITCH", "LINK", "VOICES", "VOICE OPTS", "GLIDE", "SCALE", "TUNING", "MPE", "MPE Y" };
         return g >= 0 && g < kMaxGroups ? kNames[g] : "";
     }
     static const char* blockName (int b) noexcept
@@ -421,7 +439,6 @@ public:
         Change c = Composite::touchDown (x, y, nowMs);
         if (cap_ && cap_ != &sideMain && cap_ != &sideTuning)
         {
-            // a control of a group makes that group the active one (the blocks MPE have two groups: the rows)
             int hit = -1;
             for (int i = 0; i < kMaxGroups && hit < 0; ++i)
                 if (sideOfGroup (i) == side_)
@@ -429,9 +446,21 @@ public:
                         if (groups[i].member (k) == cap_)
                             hit = i;
             if (hit < 0)   // not a member: the block it is in
-                for (int b = 0; b < kBlocks && hit < 0; ++b)
-                    if (blockVisible (b) && blockRect (b).contains (x, y))
-                        hit = b == 6 ? (y < blockRect (6).y + blockRect (6).h / 2 + 8 ? 6 : 7) : b;
+            {
+                if (side_ == SideMain)
+                {
+                    if (blockRect (0).contains (x, y)) hit = 0;
+                    else if (blockRect (1).contains (x, y)) hit = (y < bendLink.rect().y ? 1 : 2);
+                    else if (blockRect (2).contains (x, y)) hit = (y < stealPriority.rect().y ? 3 : 4);
+                    else if (blockRect (3).contains (x, y)) hit = 5;
+                }
+                else
+                {
+                    if (blockRect (4).contains (x, y)) hit = 6;
+                    else if (blockRect (5).contains (x, y)) hit = 7;
+                    else if (blockRect (6).contains (x, y)) hit = (y < mpeYModwheel.rect().y ? 8 : 9);
+                }
+            }
             if (hit >= 0)
                 setActiveGroup (hit);
         }
@@ -449,7 +478,11 @@ public:
     void draw (gpu::SceneBuilder& sb) const override
     {
         Composite::draw (sb);
-        groups[activeGroup_].draw (sb);
+        if (activeGroup_ >= 0 && activeGroup_ < kMaxGroups)
+            groups[activeGroup_].draw (sb);
+        for (int i = 0; i < kMaxGroups; ++i)
+            if (i != activeGroup_ && sideOfGroup (i) == side_)
+                groups[i].drawIdle (sb);
     }
 
     bool blockVisible (int b) const noexcept { return side_ == SideMain ? b < 4 : b >= 4; }
@@ -477,7 +510,7 @@ public:
 protected:
     std::vector<Component*> sideMainComponents()
     {
-        return { &volume, &meters, &spread, &stereoRouting, &voiceOverride, &tune, &transpose, &bendUp, &bendDown, &bendLink, &polyphony, &legato, &polyLegato, &phaseLegato, &sameNote, &stealPriority, &voiceMeter,
+        return { &volume, &meters, &spread, &stereoRouting, &voiceOverride, &tune, &transpose, &bendUp, &bendDown, &bendLink, &polyphony, &legato, &polyLegato, &phaseLegato, &sameNote, &stealPriority, &velocityTrack, &voiceMeter,
                  &portaTime, &portaSlope, &portaAlways, &portaScaled, &portaCurve };
     }
     std::vector<Component*> sideTuningComponents()
@@ -503,7 +536,7 @@ protected:
             stereoRouting.place ({ sx, top + lane, sw, sh });
             voiceOverride.place ({ sx, top + 2 * lane + sh + g, sw, sh });
         }
-        {   // PITCH: the cell grid of VOICES (four columns of equal width, the same gaps): one row of four cells of one height (TUNE, TRANSPOSE, BEND UP, BEND DOWN: the Q group), LINK under it across the width,
+        {   // PITCH: the cell grid of VOICES (four columns of equal width, the same gaps): one row of four cells of one height (TUNE, TRANSPOSE, BEND UP, BEND DOWN: PITCH 1 Q group), LINK under it across the width (PITCH 2 Q group),
             // the same toggle as LEGATO and the others
             const Rect in = inner (1);
             const int cw = (in.w - 3 * g) / 4, h0 = 130, linkH = 64;
@@ -515,7 +548,7 @@ protected:
             bendDown.place ({ col (3), y0, in.right() - col (3), h0 });
             bendLink.place ({ in.x, y1, in.w, linkH });
         }
-        {   // VOICES: ONE grid of equal cells, rows of 64 pixels: POLY, LEGATO, POLY LEG, SAME NOTE (the Q group, four cells); STEAL and PHASE LEG (two cells each); the voice meter across the width
+        {   // VOICES: ONE grid of equal cells, rows of 64 pixels: POLY, LEGATO, POLY LEG, SAME NOTE (VOICES 1 Q group, four cells); STEAL (span 2), PHASE LEG (span 1), VEL TRACK (span 1) (VOICES 2 Q group); the voice meter across the width
             const Rect in = inner (2);
             const int cw = (in.w - 3 * g) / 4, ch = 64;
             auto cell = [&] (int col, int row, int span) { return Rect { in.x + col * (cw + g), in.y + lane + row * (ch + g), span * cw + (span - 1) * g, ch }; };
@@ -524,7 +557,8 @@ protected:
             polyLegato.place (cell (2, 0, 1));
             sameNote.place (cell (3, 0, 1));
             stealPriority.place (cell (0, 1, 2));
-            phaseLegato.place (cell (2, 1, 2));
+            phaseLegato.place (cell (2, 1, 1));
+            velocityTrack.place (cell (3, 1, 1));
             const Rect mc = cell (0, 2, 4);
             voiceMeter.place ({ mc.x, mc.y, mc.w, std::min (ch, std::max (40, in.bottom() - mc.y)) });
         }
@@ -541,34 +575,32 @@ protected:
             portaCurve.place ({ in.x, y1, in.w, std::max (40, in.bottom() - y1) });
         }
         // ---- side TUNING & MPE
-        {   // SCALE: the three steppers in a row, the big keyboard under them
+        {   // SCALE: the three steppers in a row spanning the width, the big keyboard under them
             const Rect in = inner (4);
-            const int sw[3] = { 340, 240, 340 };
-            scaleType.place ({ in.x, in.y + lane, sw[0], 64 });
-            scaleKey.place ({ in.x + sw[0] + g, in.y + lane, sw[1], 64 });
-            scaleMode.place ({ in.x + sw[0] + sw[1] + 2 * g, in.y + lane, sw[2], 64 });
+            const int cw = (in.w - 2 * g) / 3;
+            scaleType.place ({ in.x, in.y + lane, cw, 64 });
+            scaleKey.place ({ in.x + cw + g, in.y + lane, cw, 64 });
+            scaleMode.place ({ in.x + 2 * (cw + g), in.y + lane, in.right() - (in.x + 2 * (cw + g)), 64 });
             const int ky = in.y + lane + 64 + 10;
             keyboard.place ({ in.x, ky, in.w, std::max (90, in.bottom() - ky) });
         }
-        {   // TUNING: A4, the tuning, the two MTS switches in a grid
+        {   // TUNING: A4, the tuning, the two MTS switches in a 2x2 grid
             const Rect in = inner (5);
-            const int cw = (in.w - g) / 2, rowH = (in.h - 2 * lane - g) / 2;
-            tuningA4.place ({ in.x, in.y + lane, cw, rowH });
-            tuningScale.place ({ in.x + cw + g, in.y + lane + (rowH - 64) / 2, in.right() - (in.x + cw + g), 64 });
-            mtsEsp.place ({ in.x, in.y + 2 * lane + rowH + g, cw, rowH });
-            mtsNoteOn.place ({ in.x + cw + g, in.y + 2 * lane + rowH + g, in.right() - (in.x + cw + g), rowH });
+            const int cw = (in.w - g) / 2, ch = 64;
+            tuningA4.place ({ in.x, in.y + lane, cw, ch });
+            tuningScale.place ({ in.x + cw + g, in.y + lane, in.right() - (in.x + cw + g), ch });
+            mtsEsp.place ({ in.x, in.y + 2 * lane + ch + g, cw, ch });
+            mtsNoteOn.place ({ in.x + cw + g, in.y + 2 * lane + ch + g, in.right() - (in.x + cw + g), ch });
         }
-        {   // MPE: MPE, MPE BEND, XYZ MACRO; Y TO WHEEL, BEND TO X, Y BIPOLAR
+        {   // MPE: MPE, MPE BEND, XYZ MACRO; Y TO WHEEL, BEND TO X, Y BIPOLAR in a 3x2 grid
             const Rect in = inner (6);
-            const int rowH = (in.h - 2 * lane - g) / 2;
-            const int w1 = 150, w2 = 190, w3 = in.w - w1 - w2 - 2 * g;
-            mpeOn.place ({ in.x, in.y + lane, w1, rowH });
-            mpeBend.place ({ in.x + w1 + g, in.y + lane, w2, rowH });
-            mpeMacro.place ({ in.x + w1 + w2 + 2 * g, in.y + lane + (rowH - 64) / 2, w3, 64 });
-            const int cw = (in.w - 2 * g) / 3;
-            mpeYModwheel.place ({ in.x, in.y + 2 * lane + rowH + g, cw, rowH });
-            mpeBendToX.place ({ in.x + cw + g, in.y + 2 * lane + rowH + g, cw, rowH });
-            mpeYBipolar.place ({ in.x + 2 * (cw + g), in.y + 2 * lane + rowH + g, in.right() - (in.x + 2 * (cw + g)), rowH });
+            const int cw = (in.w - 2 * g) / 3, ch = 64;
+            mpeOn.place ({ in.x, in.y + lane, cw, ch });
+            mpeBend.place ({ in.x + cw + g, in.y + lane, cw, ch });
+            mpeMacro.place ({ in.x + 2 * (cw + g), in.y + lane, in.right() - (in.x + 2 * (cw + g)), ch });
+            mpeYModwheel.place ({ in.x, in.y + 2 * lane + ch + g, cw, ch });
+            mpeBendToX.place ({ in.x + cw + g, in.y + 2 * lane + ch + g, cw, ch });
+            mpeYBipolar.place ({ in.x + 2 * (cw + g), in.y + 2 * lane + ch + g, in.right() - (in.x + 2 * (cw + g)), ch });
         }
     }
 
@@ -601,12 +633,14 @@ private:
     {
         groups[0].set (0, &volume); groups[0].set (1, &spread); groups[0].set (2, &stereoRouting); groups[0].set (3, &voiceOverride);
         groups[1].set (0, &tune); groups[1].set (1, &transpose); groups[1].set (2, &bendUp); groups[1].set (3, &bendDown);
-        groups[2].set (0, &polyphony); groups[2].set (1, &legato); groups[2].set (2, &polyLegato); groups[2].set (3, &sameNote);
-        groups[3].set (0, &portaTime); groups[3].set (1, &portaSlope); groups[3].set (2, &portaAlways); groups[3].set (3, &portaScaled);
-        groups[4].set (0, &scaleType); groups[4].set (1, &scaleKey); groups[4].set (2, &scaleMode);
-        groups[5].set (0, &tuningA4); groups[5].set (1, &tuningScale); groups[5].set (2, &mtsEsp); groups[5].set (3, &mtsNoteOn);
-        groups[6].set (0, &mpeOn); groups[6].set (1, &mpeBend); groups[6].set (2, &mpeMacro);
-        groups[7].set (0, &mpeYModwheel); groups[7].set (1, &mpeBendToX); groups[7].set (2, &mpeYBipolar);
+        groups[2].set (0, &bendLink);
+        groups[3].set (0, &polyphony); groups[3].set (1, &legato); groups[3].set (2, &polyLegato); groups[3].set (3, &sameNote);
+        groups[4].set (0, &stealPriority); groups[4].set (1, &phaseLegato); groups[4].set (2, &velocityTrack);
+        groups[5].set (0, &portaTime); groups[5].set (1, &portaSlope); groups[5].set (2, &portaAlways); groups[5].set (3, &portaScaled);
+        groups[6].set (0, &scaleType); groups[6].set (1, &scaleKey); groups[6].set (2, &scaleMode);
+        groups[7].set (0, &tuningA4); groups[7].set (1, &tuningScale); groups[7].set (2, &mtsEsp); groups[7].set (3, &mtsNoteOn);
+        groups[8].set (0, &mpeOn); groups[8].set (1, &mpeBend); groups[8].set (2, &mpeMacro);
+        groups[9].set (0, &mpeYModwheel); groups[9].set (1, &mpeBendToX); groups[9].set (2, &mpeYBipolar);
         setActiveGroup (0);
     }
 };
