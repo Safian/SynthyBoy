@@ -29,6 +29,7 @@ struct Detection
     uint32_t instanceSeen = 0xffffffffu;   // the pixel at the centre of that picture (0xffffffff when it could not be read), for the status file
     uint32_t seen[kMaxViews][2] = {};   // the pixel at the centre of every marker (0xRRGGBB; 0xffffffff when it could not be read), for the status file
     bool qlinkPanel = false;         // the host's Q-Link side panel is drawn over the right edge (while a hardware knob is turned); it covers the right marker of a page, the view is still on screen (our layer is transparent in the strip meanwhile)
+    bool partialLook = false;        // with partialView: the host's panel look (the black line and the fill, see qlinkPanelOnScreen) is on screen: the panel is fully in
     int partialView = -1;            // with no view on screen: the first view whose left marker (and its instance picture) is on screen while the right one is NOT, and the panel is not recognised either: the picture of the host's Q-Link panel sliding in or out (it covers the right marker first and last), or something else on top of the right marker
     int count = 0;                   // views checked
 };
@@ -106,7 +107,10 @@ public:
                     d.qlinkPanel = true;
             }
             if (! all && rightOnlyMissing && d.partialView < 0)
+            {
                 d.partialView = i;
+                d.partialLook = qlinkPanelOnScreen (rotation, w, h);
+            }
             if (all && d.view < 0)
             {
                 d.view = i;

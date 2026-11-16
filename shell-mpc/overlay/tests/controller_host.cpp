@@ -142,7 +142,7 @@ int main()
         r.frame.setAll (true, 90);
         check (r.until ([&] { return r.on(); }, 500) >= 0, "the page is on");
         check (r.ctl->keyEdge() == PanelKey::kNoKey, "no panel: not cut");
-        r.run (1500);   // settled: the reference is taken
+        r.run (2200);   // settled (600 ms), then the strip stands still for the stable time (250 ms): the reference is taken
         check (line (r.dir.read ("status.txt"), "key_reference_taken") == "1", "the page was whole and still: the reference of the strip was taken once (" + line (r.dir.read ("status.txt"), "key_reference_taken") + ")");
         // the panel slides in: the line at three places, then in; the page never goes, the cut follows the line at the very next tick
         bool always = true;
@@ -189,14 +189,14 @@ int main()
         r.frame.setMarker (1, true, 90);
         r.run (300);
         check (r.ctl->keyEdge() == PanelKey::kNoKey, "the strip changed completely (a band from the strip's left end): no cut");
-        r.run (1500);
+        r.run (2200);
         check (line (r.dir.read ("status.txt"), "key_reference_retakes") != "0", "... the reference was dropped (key_reference_retakes " + line (r.dir.read ("status.txt"), "key_reference_retakes") + ")");
         check (line (r.dir.read ("status.txt"), "key_reference_taken") == "2", "... and it was taken again (" + line (r.dir.read ("status.txt"), "key_reference_taken") + ")");
         // another tab: the reference goes with the view
         r.frame.setAll (false, 90);
         r.run (300);
         r.frame.setAll (true, 90);
-        r.run (1500);
+        r.run (2200);
         check (line (r.dir.read ("status.txt"), "key_reference_taken") == "3", "the view came back: its reference is taken again (" + line (r.dir.read ("status.txt"), "key_reference_taken") + ")");
         const std::string st = r.dir.read ("status.txt");
         check (! line (st, "key_cost_ms").empty() && ! line (st, "key_pixels").empty() && ! line (st, "key_active").empty(), "the status file has key_active, key_pixels and key_cost_ms");

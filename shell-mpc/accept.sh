@@ -150,6 +150,8 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc
 $B/curve_host > $B/curve-host.log 2>&1 || { grep -E "^FAIL" $B/curve-host.log; echo "ACCEPT FAIL: curve_host (curve source)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/controller_host $OVSRC/controller_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: controller_host build"; exit 1; }
 $B/controller_host > $B/controller-host.log 2>&1 || { grep -E "^FAIL" $B/controller-host.log; echo "ACCEPT FAIL: controller_host (state machine)"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/qlink_panel_host $OVSRC/qlink_panel_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: qlink_panel_host build"; exit 1; }
+$B/qlink_panel_host > $B/qlink-panel-host.log 2>&1 || { grep -E "^FAIL|^      " $B/qlink-panel-host.log; echo "ACCEPT FAIL: qlink_panel_host (the host's Q-Link pop-up replayed against the key)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/views_host $OVSRC/views_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: views_host build"; exit 1; }
 $B/views_host > $B/views-host.log 2>&1 || { grep -E "^FAIL" $B/views-host.log; echo "ACCEPT FAIL: views_host (the views: LFO, oscillator, envelope, filter 2, several views in the controller)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/gpu_scene_host $OVSRC/gpu_scene_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: gpu_scene_host build"; exit 1; }
@@ -215,7 +217,7 @@ $B/gpu_clock_host > $B/gpu-clock-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-clock
 c++ -std=c++17 -O1 -Wall -Wextra -I core/include -I shell-mpc/overlay -o $B/tour_dump $OVSRC/tour_dump.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: tour_dump build"; exit 1; }
 [ "$($B/tour_dump | wc -l)" -gt 800 ] || { echo "ACCEPT FAIL: tour_dump lists too few controls"; exit 1; }
 # the controller, the views and the GPU backend once more under AddressSanitizer + UBSan (instances are freed while their page is on screen: no use after free)
-for t in controller_host views_host gpu_backend_host spectrum_view_host display_host osc_ui_host env_ui_host lfo_ui_host cell_plan_host cell_cache_host filter_ui_host mod_ui_host mixfx_ui_host mastervoice_ui_host page_view_host osc_page_host; do
+for t in controller_host qlink_panel_host views_host gpu_backend_host spectrum_view_host display_host osc_ui_host env_ui_host lfo_ui_host cell_plan_host cell_cache_host filter_ui_host mod_ui_host mixfx_ui_host mastervoice_ui_host page_view_host osc_page_host; do
     c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/${t}_asan $OVSRC/$t.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
     $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
