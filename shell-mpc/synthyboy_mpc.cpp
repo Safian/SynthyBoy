@@ -113,7 +113,7 @@
 #include "pad_pressure.h"
 #endif
 
-// Make-up gain of the output stage in dB (CMake cache entry of the same name, docs/MPC.md "Output level"). 0 = only the limiter.
+// Make-up gain of the output stage in dB (CMake cache entry of the same name, docs/MPC.md "Output level"). 0 = no gain. The peak limiter behind it is compiled in only with SYNTHYBOY_MPC_OUTPUT_LIMITER (default off).
 // Live filter curve on a free display plane (docs/MPC.md "Overlay (experimental)"). Compile switch SYNTHYBOY_MPC_OVERLAY (CMake option of the same name; the source default is 0:
 // with 0 nothing below the switch is compiled and the plugin is exactly the one without this code). The module itself is shell-mpc/overlay/; the shell only tells it when an
 // instance exists (attach / detach) and answers its two questions (a parameter value, the live cutoff and resonance of filter 1). Needs a skin made with the overlay layout.
@@ -133,7 +133,7 @@
 #endif
 
 #ifndef SYNTHYBOY_MPC_OUTPUT_GAIN_DB
-#define SYNTHYBOY_MPC_OUTPUT_GAIN_DB 6.0
+#define SYNTHYBOY_MPC_OUTPUT_GAIN_DB 18.0
 #endif
 
 // ---------------------------------------------------------------------------
@@ -336,7 +336,7 @@ struct PluginInstance
     std::atomic<float> paramUndo[synthyboy::kMaxParams];   // the value a parameter had before the host's last change of it (NaN: none): see writeRealParam
 #endif
 
-    // Output stage: the make-up gain of the MPC shell (SYNTHYBOY_MPC_OUTPUT_GAIN_DB, set once in the constructor) and the peak limiter behind it.
+    // Output stage: the make-up gain of the MPC shell (SYNTHYBOY_MPC_OUTPUT_GAIN_DB, set once in the constructor) and, only when built with SYNTHYBOY_MPC_OUTPUT_LIMITER, the peak limiter behind it.
     // Only the audio thread calls process(); prepare() runs with the engine's prepare (effMainsChanged, the host is not processing then).
     synthyboy_mpc::OutputStage outputStage;
 
@@ -2488,7 +2488,7 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     inst->engine->process(inst->events.count > 0 ? inst->events.slots : nullptr,
                           static_cast<int>(inst->events.count),
                           out0, out1, sampleFrames);
-    // Make-up gain and peak limiter (output_stage.h): what leaves here is what the host gets, so the spectrum below shows the same signal.
+    // Make-up gain and, when built with it, the peak limiter (output_stage.h): what leaves here is what the host gets, so the spectrum below shows the same signal.
     inst->outputStage.process (out0, out1, sampleFrames);
     if (out0 != nullptr)
         synthyboy_mpc::outputPeak().note (out0, out1, sampleFrames);   // the peak for the status file (output_peak.h): one pass, relaxed atomics
