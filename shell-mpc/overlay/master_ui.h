@@ -43,7 +43,7 @@ public:
         // PITCH
         kTune = 110, kTranspose, kBendUp, kBendDown, kBendLink,
         // VOICES
-        kPolyphony = 120, kLegato, kPolyLegato, kPhaseLegato, kSameNote, kStealPriority,
+        kPolyphony = 120, kLegato, kPolyLegato, kPhaseLegato, kSameNote, kStealPriority, kVelocityTrack,
         // GLIDE
         kPortaTime = 130, kPortaSlope, kPortaAlways, kPortaScaled,
         // SCALE, TUNING
@@ -140,7 +140,11 @@ public:
 
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
-    void forgetQGroup() noexcept { qSet_ = false; }
+    void forgetQGroup() noexcept
+    {
+        full_.setActiveGroup (full_.side() == ui::MasterScreen::SideMain ? 0 : 6);
+        qSet_ = false;
+    }
     int topPage() const noexcept { return pageTop_; }
 
     ui::Change turnQ (int slot, double delta, UiStack& stack, IInstanceView& inst)
@@ -201,6 +205,7 @@ private:
         bind (kPhaseLegato, &full_.phaseLegato, T::Toggle, "voice.phase_legato");
         bind (kSameNote, &full_.sameNote, T::Stepper, "master.voice.same_note");
         bind (kStealPriority, &full_.stealPriority, T::Stepper, "master.voice.steal_priority");
+        bind (kVelocityTrack, &full_.velocityTrack, T::Number, "master.velocity_track");
         bind (kPortaTime, &full_.portaTime, T::Knob, "master.portamento.time");
         bind (kPortaSlope, &full_.portaSlope, T::Knob, "master.portamento.slope");
         bind (kPortaAlways, &full_.portaAlways, T::Toggle, "master.portamento.always");
@@ -333,10 +338,12 @@ private:
     void publishQGroup (IInstanceView& inst)
     {
         const int g = full_.activeGroup();
-        static const char* const kGroupKeys[8][4] = {
+        static const char* const kGroupKeys[10][4] = {
             { "master.volume", "master.stereo_spread", "master.stereo_routing", "master.voice_override" },
             { "master.tune", "master.transpose", "master.bend_range", "master.bend_down_range" },
+            { "master.bend_down_link", "", "", "" },
             { "master.polyphony", "master.legato", "master.poly_legato", "master.voice.same_note" },
+            { "master.voice.steal_priority", "voice.phase_legato", "master.velocity_track", "" },
             { "master.portamento.time", "master.portamento.slope", "master.portamento.always", "master.portamento.scaled" },
             { "master.scale.type", "master.scale.key", "master.scale.mode", "" },
             { "master.tuning.a4", "master.tuning.scale", "master.tuning.mts_esp", "master.tuning.mts_note_on_only" },

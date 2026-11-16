@@ -22,7 +22,7 @@ namespace synthyboy_mpc { namespace ui {
 class VoiceScreen : public Composite
 {
 public:
-    static constexpr int kMaxGroups = 4, kHeaderH = 80, kGridH = 236, kStripH = 40, kBlockTitleH = 34, kBlockPad = 6, kBlockGap = 8;
+    static constexpr int kMaxGroups = 6, kHeaderH = 80, kGridH = 236, kStripH = 40, kBlockTitleH = 34, kBlockPad = 6, kBlockGap = 8;
 
     // Header
     NumberField length;       // voicectl.length (1..8)
@@ -101,7 +101,7 @@ public:
 
     static const char* groupName (int g) noexcept
     {
-        static const char* const kNames[kMaxGroups] = { "STEP", "RANDOM", "SCALING", "TARGETS" };
+        static const char* const kNames[kMaxGroups] = { "STEP", "RANDOM", "RAND 10x", "SCALING", "TARGETS", "NOISE" };
         return g >= 0 && g < kMaxGroups ? kNames[g] : "";
     }
 
@@ -111,13 +111,38 @@ public:
     {
         const Change c = Composite::touchDown (x, y, nowMs);
         if (grid.rect().contains (x, y) || qStepSelect.rect().contains (x, y) || qRowSelect.rect().contains (x, y) || length.rect().contains (x, y) || stepValue.rect().contains (x, y) || stripRect().contains (x, y))
+        {
             setActiveGroup (0);
-        else if (blockRect (0).contains (x, y))
-            setActiveGroup (1);
-        else if (blockRect (1).contains (x, y))
-            setActiveGroup (2);
-        else if (blockRect (2).contains (x, y))
-            setActiveGroup (3);
+        }
+        else
+        {
+            bool hit = false;
+            for (int g = 1; g < kMaxGroups; ++g)
+            {
+                for (int s = 0; s < QGroup::kSlots; ++s)
+                {
+                    if (const Component* m = groups[g].member (s))
+                    {
+                        if (m->rect().contains (x, y))
+                        {
+                            setActiveGroup (g);
+                            hit = true;
+                            break;
+                        }
+                    }
+                }
+                if (hit) break;
+            }
+            if (! hit)
+            {
+                if (blockRect (0).contains (x, y))
+                    setActiveGroup (x >= randDetune10x.rect().x - 6 ? 2 : 1);
+                else if (blockRect (1).contains (x, y))
+                    setActiveGroup (3);
+                else if (blockRect (2).contains (x, y))
+                    setActiveGroup (x >= oscNoise.rect().x - 6 ? 5 : 4);
+            }
+        }
         return c;
     }
 
@@ -125,6 +150,9 @@ public:
     {
         Composite::draw (sb);
         groups[activeGroup_].draw (sb);
+        for (int i = 0; i < kMaxGroups; ++i)
+            if (i != activeGroup_)
+                groups[i].drawIdle (sb);
     }
 
     Rect stripRect() const noexcept { return { rect_.x + 8, grid.rect().bottom() + 6, rect_.w - 16, kStripH }; }
@@ -196,10 +224,11 @@ protected:
     {
         const theme::Look& T = theme::L();
         p.textLeft ({ rect_.x + 14, rect_.y + 4, std::max (0, qStepSelect.rect().x - rect_.x - 20), 56 }, "VOICE CONTROL", T.fTitle, p.c (T.text, 255), T.fMin);
+        static const char* const kBlockTitles[3] = { "RANDOM", "SCALING", "TARGETS" };
         for (int b = 0; b < 3; ++b)
         {
             const Rect r = blockRect (b);
-            p.textLeft ({ r.x + kBlockPad + 6, r.y + 3, std::max (0, r.w - 20), 16 }, groupName (b + 1), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+            p.textLeft ({ r.x + kBlockPad + 6, r.y + 3, std::max (0, r.w - 20), 16 }, kBlockTitles[b], T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         }
         // the selected step: every row's value
         const Rect sr = stripRect();
@@ -225,9 +254,25 @@ private:
         groups[0].set (1, &qRowSelect);
         groups[0].set (2, &length);
         groups[0].set (3, &stepValue);
-        groups[1].set (0, &randPan); groups[1].set (1, &randDetune); groups[1].set (2, &randCutoff); groups[1].set (3, &randEnv);
-        groups[2].set (0, &scaleEnv); groups[2].set (1, &scaleLfo); groups[2].set (2, &scaleLfoMode);
-        groups[3].set (0, &oscA); groups[3].set (1, &oscB); groups[3].set (2, &oscC); groups[3].set (3, &oscSub);
+
+        groups[1].set (0, &randPan);
+        groups[1].set (1, &randDetune);
+        groups[1].set (2, &randCutoff);
+        groups[1].set (3, &randEnv);
+
+        groups[2].set (0, &randDetune10x);
+
+        groups[3].set (0, &scaleEnv);
+        groups[3].set (1, &scaleLfo);
+        groups[3].set (2, &scaleLfoMode);
+
+        groups[4].set (0, &oscA);
+        groups[4].set (1, &oscB);
+        groups[4].set (2, &oscC);
+        groups[4].set (3, &oscSub);
+
+        groups[5].set (0, &oscNoise);
+
         setActiveGroup (0);
     }
 };

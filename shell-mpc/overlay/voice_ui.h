@@ -168,7 +168,11 @@ public:
 
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
-    void forgetQGroup() noexcept { qSet_ = false; }
+    void forgetQGroup() noexcept
+    {
+        full_.setActiveGroup (0);
+        qSet_ = false;
+    }
     int topPage() const noexcept { return pageTop_; }
 
     ui::Change turnQ (int slot, double delta, UiStack& stack, IInstanceView& inst)
@@ -394,12 +398,20 @@ private:
         }
         else if (g == 2)
         {
+            t[0] = uibind::indexOfKey ("voicectl.rand.detune10x");
+        }
+        else if (g == 3)
+        {
             t[0] = uibind::indexOfKey ("voicectl.scale.env"); t[1] = uibind::indexOfKey ("voicectl.scale.lfo"); t[2] = uibind::indexOfKey ("voicectl.scale.lfo_mode");
         }
-        else
+        else if (g == 4)
         {
             t[0] = uibind::indexOfKey ("voicectl.osc.a"); t[1] = uibind::indexOfKey ("voicectl.osc.b");
             t[2] = uibind::indexOfKey ("voicectl.osc.c"); t[3] = uibind::indexOfKey ("voicectl.osc.sub");
+        }
+        else if (g == 5)
+        {
+            t[0] = uibind::indexOfKey ("voicectl.osc.noise");
         }
         if (! qSet_ || std::memcmp (t, qTargets_, sizeof t) != 0)
         {
