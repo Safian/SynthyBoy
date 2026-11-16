@@ -290,7 +290,10 @@ protected:
         syncSwitch.place ({ r[2].x, top.y, r[2].w, 56 });
         monoTop.place ({});
         sync.place ({});   // gone from the page (see configure)
-        targets.place ({ r[4].x, top.y, std::min (r[4].w, 200), 56 });
+        // the open-the-editor button at the top of the button column (the right end of the top bar, over the shape picker), for every shape; the TARGETS button leaves it room
+        const int editW = random_ ? 0 : 104;
+        edit.place (random_ ? Rect {} : Rect { r[4].right() - editW, top.y, editW, 56 });
+        targets.place ({ r[4].x, top.y, std::min (std::max (0, r[4].w - (random_ ? 0 : editW + kGap)), 200), 56 });
         const int bandH = random_ ? kBandRandomH : kBandH;
         const int midY = top.bottom() + 15, bandY = rect_.bottom() - m - bandH, midH = std::max (0, bandY - m - midY);
         const int colW = std::min (random_ ? 232 : 304, W / 4);
@@ -303,7 +306,6 @@ protected:
             smoothPick.place ({ picker.rect().x, by, hw, bh });
             hostPick.place ({ picker.rect().x + hw + kGap, by, colW - hw - kGap, bh });
         }
-        edit.place ({ display_.right() - 4 - 104, display_.y + 4, 104, 56 });
         // the blocks of the bottom band
         const int n = (random_ ? 3 : 4) - (keyActive_ ? 0 : 1);
         nBlocks_ = n;

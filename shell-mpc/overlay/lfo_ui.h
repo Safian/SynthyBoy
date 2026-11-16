@@ -52,7 +52,7 @@ public:
     {
         kClose = 1, kFullButton, kInstance, kLfoCells, kRndCells, kSyncMode, kSyncTrip, kSyncDot, kMonoTop, kTargets, kPicker, kSmoothPick, kHostPick, kEdit,
         kShape = 100, kStyle, kRate, kDivision, kRise, kSmoothTime, kSync, kMode, kPhase, kDelay, kDirection, kSwing, kStereo, kMono, kStereoToggle, kKeyTranspose, kKeyTune,
-        kEdBack = 200, kEdTools, kEdUndo, kEdDelete, kEdSnap, kEdLoop, kEdSmooth, kEdCanvas, kEdX, kEdY, kEdCurve, kEdGrid,
+        kEdBack = 200, kEdTools, kEdUndo, kEdDelete, kEdSnap, kEdLoop, kEdSmooth, kEdCanvas, kEdX, kEdY, kEdCurve, kEdGridX, kEdGridY, kEdPoint,
         kTargetsBack = 300, kTargetsPage, kTargetsAdd, kTargetsRow = 310,   // 310 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kList = 400, kListBackdrop, kListHeader,
         kModsBack = 500, kModsRow = 510, kModsAddStep = 560, kModsAdd
@@ -327,7 +327,9 @@ public:
     const std::vector<Item>& items() const noexcept { return items_; }
     const Item* item (int id) const noexcept { for (const Item& it : items_) if (it.id == id) return &it; return nullptr; }
     const ui::lfodisplay::Data& displayData() const noexcept { return data_; }
-    int gridOf (int lfo) const noexcept { return lfo >= 1 && lfo <= kLfos ? grid_[lfo - 1] : 8; }
+    int gridOf (int lfo) const noexcept { return gridXOf (lfo); }
+    int gridXOf (int lfo) const noexcept { return lfo >= 1 && lfo <= kLfos ? gridX_[lfo - 1] : 8; }
+    int gridYOf (int lfo) const noexcept { return lfo >= 1 && lfo <= kLfos ? gridY_[lfo - 1] : 8; }
     static constexpr int kLfos = 10;
 
     // ---- the drawn shape and the content state (public for the tests)
@@ -342,10 +344,13 @@ public:
         m.clean();
         return m;
     }
-    static synthyboy::ContentLfoShape contentOf (int lfo, const ui::lfo::ShapeModel& m)
+    /** The content entry of a shape and, stored with it (state version 5, "grid_x" / "grid_y"), the grid of the editor (0 = not stored). */
+    static synthyboy::ContentLfoShape contentOf (int lfo, const ui::lfo::ShapeModel& m, int gridX = 0, int gridY = 0)
     {
         synthyboy::ContentLfoShape s;
         s.lfo = lfo;
+        s.gridX = gridX >= ui::lfo::kMinGrid && gridX <= ui::lfo::kMaxGrid ? gridX : 0;
+        s.gridY = gridY >= ui::lfo::kMinGrid && gridY <= ui::lfo::kMaxGrid ? gridY : 0;
         s.name = "Drawn";
         s.smooth = m.smooth;
         s.loopPoint = m.loop >= 0 && m.loop < m.n ? m.loop : -1;
@@ -891,7 +896,7 @@ private:
                 d.delayShare = static_cast<float> (std::min (4.0, static_cast<double> (v.param (paramOf ("delay"))) * 0.001 / period));
                 d.riseShare = static_cast<float> (std::min (4.0, static_cast<double> (v.param (paramOf ("fade_in"))) * 0.001 / period));
             }
-            d.grid = 0;
+            d.gridX = d.gridY = 0;
             // the cursors: one per sounding voice (the mono LFO has one), the first at the value the LFO really gives now
             d.numCursors = 0;
             if (live != nullptr)
@@ -964,14 +969,23 @@ private:
         editor_.undo.clear();
         editor_.canvas.state.selected = -1;
         editor_.canvas.state.selectedSeg = -1;
-        int& g = grid_[lfoNum_ - 1];
-        if (g == 0)
-            g = ui::lfo::inferGrid (m);
-        editor_.canvas.state.grid = g;
+        // the grid: the one stored with the shape (the preset / the project), else the one the editor had for this LFO, else the default (the grid the points lie on)
+        int& gx = gridX_[lfoNum_ - 1];
+        int& gy = gridY_[lfoNum_ - 1];
+        if (have != nullptr && shape == ui::lfo::kShapeCustom && have->gridX > 0 && have->gridY > 0)
+        {
+            gx = have->gridX;
+            gy = have->gridY;
+        }
+        else if (gx == 0 || gy == 0)
+            gx = gy = ui::lfo::inferGrid (m);
+        editor_.canvas.state.gridX = gx;
+        editor_.canvas.state.gridY = gy;
+        editor_.setActiveGroup (0);
         setIds();
         if (shape != ui::lfo::kShapeCustom || have == nullptr)
         {
-            v.setLfoShape (lfoNum_, contentOf (lfoNum_, m));
+            v.setLfoShape (lfoNum_, contentOf (lfoNum_, m, gx, gy));
             uibind::writePlain (v, shapeP, ui::lfo::kShapeCustom);
         }
         editor_.sync();
@@ -991,13 +1005,13 @@ private:
     {
         if (rnd_ != 0 || contentShape (lfoNum_) != nullptr)
             return;
-        v.setLfoShape (lfoNum_, contentOf (lfoNum_, ui::lfo::ShapeModel::fromBuiltin (1)));
+        v.setLfoShape (lfoNum_, contentOf (lfoNum_, ui::lfo::ShapeModel::fromBuiltin (1), gridXOf (lfoNum_), gridYOf (lfoNum_)));
     }
     void setIds()
     {
         editor_.back.setId (kEdBack); editor_.tools.setId (kEdTools); editor_.undoButton.setId (kEdUndo); editor_.del.setId (kEdDelete);
         editor_.snap.setId (kEdSnap); editor_.loop.setId (kEdLoop); editor_.smooth.setId (kEdSmooth); editor_.canvas.setId (kEdCanvas);
-        editor_.fx.setId (kEdX); editor_.fy.setId (kEdY); editor_.fcurve.setId (kEdCurve); editor_.fgrid.setId (kEdGrid);
+        editor_.fx.setId (kEdX); editor_.fy.setId (kEdY); editor_.fcurve.setId (kEdCurve); editor_.fgx.setId (kEdGridX); editor_.fgy.setId (kEdGridY); editor_.fpoint.setId (kEdPoint);
     }
     void markDirty() noexcept { shapeDirty_ = true; }
     /** Sends the model to the content state (the plugin applies it on its display thread). */
@@ -1007,9 +1021,11 @@ private:
             return;
         shapeDirty_ = false;
         shapeSentMs_ = nowMs;
-        v.setLfoShape (lfoNum_, contentOf (lfoNum_, editor_.model));
+        v.setLfoShape (lfoNum_, contentOf (lfoNum_, editor_.model, editor_.canvas.state.gridX, editor_.canvas.state.gridY));
     }
-    // the virtual targets of the Q group EDIT: 0 X, 1 Y, 2 CURVE, 3 GRID, each as 0 .. 1
+    // the virtual targets of the Q groups of the editor, each as 0 .. 1: EDIT 0 POINT (the selected point of n), 1 X, 2 Y, 3 CURVE; GRID 4 GRID X, 5 GRID Y, 6 SNAP
+    static float gridNorm (int g) noexcept { return static_cast<float> (g - ui::lfo::kMinGrid) / static_cast<float> (ui::lfo::kMaxGrid - ui::lfo::kMinGrid); }
+    static int gridOfNorm (float x) noexcept { return std::clamp (ui::lfo::kMinGrid + static_cast<int> (std::lround (x * static_cast<float> (ui::lfo::kMaxGrid - ui::lfo::kMinGrid))), ui::lfo::kMinGrid, ui::lfo::kMaxGrid); }
     float virtualValue (int id) const noexcept
     {
         const ui::lfo::ShapeModel& m = editor_.model;
@@ -1017,43 +1033,57 @@ private:
         const bool ok = sel >= 0 && sel < m.n;
         switch (id)
         {
-            case 0: return ok ? m.p[sel].x : 0.0f;
-            case 1: return ok ? m.p[sel].y : 0.0f;
-            case 2: return ok && sel + 1 < m.n ? (m.p[sel].power + ui::lfo::kMaxPower) / (2.0f * ui::lfo::kMaxPower) : 0.5f;
-            default: return static_cast<float> (editor_.canvas.state.grid - ui::lfo::kMinGrid) / static_cast<float> (ui::lfo::kMaxGrid - ui::lfo::kMinGrid);
+            case 0: return ok && m.n > 1 ? static_cast<float> (sel) / static_cast<float> (m.n - 1) : 0.0f;
+            case 1: return ok ? m.p[sel].x : 0.0f;
+            case 2: return ok ? m.p[sel].y : 0.0f;
+            case 3: return ok && sel + 1 < m.n ? (m.p[sel].power + ui::lfo::kMaxPower) / (2.0f * ui::lfo::kMaxPower) : 0.5f;
+            case 4: return gridNorm (editor_.canvas.state.gridX);
+            case 5: return gridNorm (editor_.canvas.state.gridY);
+            default: return editor_.canvas.state.snap ? 1.0f : 0.0f;
         }
     }
     void applyVirtual (int id, float x)
     {
         ui::lfo::ShapeModel& m = editor_.model;
         ui::ShapeCanvas::State& cs = editor_.canvas.state;
-        const int sel = cs.selected;
-        const bool ok = sel >= 0 && sel < m.n;
-        if (id == 3)
+        if (id == 4 || id == 5)
         {
-            const int g = std::clamp (ui::lfo::kMinGrid + static_cast<int> (std::lround (x * static_cast<float> (ui::lfo::kMaxGrid - ui::lfo::kMinGrid))), ui::lfo::kMinGrid, ui::lfo::kMaxGrid);
-            cs.grid = g;
-            grid_[lfoNum_ - 1] = g;
+            const int g = gridOfNorm (x);
+            (id == 4 ? cs.gridX : cs.gridY) = g;
+            (id == 4 ? gridX_ : gridY_)[lfoNum_ - 1] = g;
+            markDirty();   // the grid is stored with the shape (state version 5)
             return;
         }
-        if (! ok)
+        if (id == 6)
+        {
+            cs.snap = x >= 0.5f;
+            return;
+        }
+        if (id == 0)
+        {
+            cs.selected = m.n > 0 ? std::clamp (static_cast<int> (std::lround (x * static_cast<float> (std::max (1, m.n - 1)))), 0, m.n - 1) : -1;
+            cs.selectedSeg = -1;
+            return;
+        }
+        const int sel = cs.selected;
+        if (! (sel >= 0 && sel < m.n))
             return;
         editor_.undo.push (m);
-        if (id == 0) m.move (sel, x, m.p[sel].y);
-        else if (id == 1) m.move (sel, m.p[sel].x, x);
+        if (id == 1) m.move (sel, x, m.p[sel].y);
+        else if (id == 2) m.move (sel, m.p[sel].x, x);
         else if (sel + 1 < m.n) m.setPower (sel, std::round (x * 2.0f * ui::lfo::kMaxPower - ui::lfo::kMaxPower));
         markDirty();
     }
     void updateEditor (IInstanceView& v, double nowMs)
     {
-        for (int id = 0; id < 4; ++id)
+        for (int id = 0; id < 7; ++id)
         {
             float x;
             if (v.takeQVirtual (id, x))
                 applyVirtual (id, x);
         }
         editor_.sync();
-        for (int id = 0; id < 4; ++id)
+        for (int id = 0; id < 7; ++id)
             v.setQVirtual (id, virtualValue (id));
         if (shapeDirty_ && (nowMs - shapeSentMs_ >= kShapeSendMs || ! gestureDown_))
             flushShape (v, nowMs);
@@ -1126,11 +1156,20 @@ private:
                     markDirty();
                 }
                 break;
-            case kEdGrid:
+            case kEdGridX: case kEdGridY:
                 if (c.kind == K::Index || c.kind == K::Value)
                 {
-                    cs.grid = std::clamp (static_cast<int> (std::lround (c.value)), ui::lfo::kMinGrid, ui::lfo::kMaxGrid);
-                    grid_[lfoNum_ - 1] = cs.grid;
+                    const int g = std::clamp (static_cast<int> (std::lround (c.value)), ui::lfo::kMinGrid, ui::lfo::kMaxGrid);
+                    (c.id == kEdGridX ? cs.gridX : cs.gridY) = g;
+                    (c.id == kEdGridX ? gridX_ : gridY_)[lfoNum_ - 1] = g;
+                    markDirty();   // the grid is stored with the shape (state version 5)
+                }
+                break;
+            case kEdPoint:
+                if ((c.kind == K::Index || c.kind == K::Value) && m.n > 0)
+                {
+                    cs.selected = std::clamp (static_cast<int> (std::lround (c.value)) - 1, 0, m.n - 1);
+                    cs.selectedSeg = -1;
                 }
                 break;
             default: break;
@@ -1177,7 +1216,7 @@ private:
             return;
         using K = ui::ChangeKind;
         const int id = c.id;
-        if (id >= kEdBack && id <= kEdGrid && stackDepth_ > 0 && pageTop_ == kPageEditor)
+        if (id >= kEdBack && id <= kEdPoint && stackDepth_ > 0 && pageTop_ == kPageEditor)
         {
             editorChange (c, stack, v, nowMs);
             return;
@@ -1414,8 +1453,12 @@ private:
         }
         else if (pageTop_ == kPageEditor)
         {
-            name = "Edit";
-            qSlots_.publish (v, 1, 0, [] (int, int* t) { for (int i = 0; i < 4; ++i) t[i] = QRouter::encode (i, QRouter::kVirtual); });
+            const int act = std::clamp (editor_.activeGroup(), 0, ui::ShapeEditorPage::kGroups - 1);
+            name = act == 0 ? "Edit" : "Grid";
+            // EDIT = the virtual targets 0 .. 3 (POINT, X, Y, CURVE), GRID = 4 .. 6 (GRID X, GRID Y, SNAP); the active one is on Q 1 .. 4, the other on Q 5 .. 8
+            qSlots_.publish (v, ui::ShapeEditorPage::kGroups, act, [] (int g, int* t) { for (int i = 0; i < 4; ++i) t[i] = g * 4 + i < 7 ? QRouter::encode (g * 4 + i, QRouter::kVirtual) : -1; });
+            int ids[ui::ShapeEditorPage::kGroups] = { 0, 1 };
+            setBlocks (editor_.groups, ui::ShapeEditorPage::kGroups, ids, ui::ShapeEditorPage::kGroups, act);
         }
         else if (pageTop_ == kPageTargets || pageTop_ == kPageMods)
         {
@@ -1466,7 +1509,7 @@ private:
     int w_ = 1280, h_ = 800, lfoNum_ = 1, rnd_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = -1;
     int targetsPageIndex_ = 0, syncType_ = 0, shapeIdx_ = 0;
     int scratchSlots_[uibind::kMaxTargetSlots] = {};
-    int grid_[kLfos] = {};               // the grid of the editor of every LFO (0: not chosen yet: the grid the shape was drawn on)
+    int gridX_[kLfos] = {}, gridY_[kLfos] = {};   // the grid of the editor of every LFO (0: not chosen yet: the grid the shape was drawn on; stored with the shape, state version 5)
     double modsAtMs_ = -1000.0, shapeSentMs_ = -1000.0, curveAtMs_ = -1000.0, traceAtMs_ = -1000.0, displayChangedMs_ = -1000.0, lastNowMs_ = 0.0, bpm_ = 120.0, bpmSeen_ = -1.0;
     std::string prefix_ = "lfo1.";
     static constexpr int kCache = 16;

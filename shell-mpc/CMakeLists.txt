@@ -246,6 +246,11 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(ui_env_host PRIVATE cxx_std_17)
     target_compile_options(ui_env_host PRIVATE -Wall -Wextra -Wpedantic)
 
+    add_executable(ui_time_ruler_host EXCLUDE_FROM_ALL ui/tests/ui_time_ruler_host.cpp)
+    target_include_directories(ui_time_ruler_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_compile_features(ui_time_ruler_host PRIVATE cxx_std_17)
+    target_compile_options(ui_time_ruler_host PRIVATE -Wall -Wextra -Wpedantic)
+
     add_executable(ui_lfo_host EXCLUDE_FROM_ALL ui/tests/ui_lfo_host.cpp)
     target_include_directories(ui_lfo_host PRIVATE
         "${CMAKE_SOURCE_DIR}/core/include"
@@ -258,6 +263,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME lfo_ui_host COMMAND lfo_ui_host)
     add_test(NAME ui_env_host COMMAND ui_env_host)
     add_test(NAME ui_lfo_host COMMAND ui_lfo_host)
+    add_test(NAME ui_time_ruler_host COMMAND ui_time_ruler_host)
 
     add_test(NAME mod_ui_host COMMAND mod_ui_host)
     add_test(NAME mixfx_ui_host COMMAND mixfx_ui_host)

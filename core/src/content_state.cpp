@@ -136,7 +136,7 @@ bool operator== (const StateContent& a, const StateContent& b) noexcept
                        { return x.osc == y.osc && same (x.ref, y.ref) && x.sampleRate == y.sampleRate && x.frames == y.frames
                              && x.channels == y.channels && x.slices == y.slices; })
         && sameVector (a.lfoShapes, b.lfoShapes, [] (const ContentLfoShape& x, const ContentLfoShape& y)
-                       { return x.lfo == y.lfo && x.name == y.name && x.smooth == y.smooth && x.loopPoint == y.loopPoint
+                       { return x.lfo == y.lfo && x.name == y.name && x.smooth == y.smooth && x.loopPoint == y.loopPoint && x.gridX == y.gridX && x.gridY == y.gridY
                              && sameVector (x.points, y.points, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; }); })
         && sameVector (a.velocityCurve, b.velocityCurve, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; })
         && sameVector (a.noteCurve, b.noteCurve, [] (const ContentPoint& p, const ContentPoint& q) { return p == q; })
@@ -194,7 +194,8 @@ bool validateContent (const StateContent& c) noexcept
         std::set<int> lfos;
         for (const auto& l : c.lfoShapes)
             if (l.lfo < 1 || l.lfo > kMaxContentLfoShapes || ! lfos.insert (l.lfo).second || ! plainString (l.name, kMaxContentStringBytes)
-                || ! pointsOk (l.points, kMaxLfoShapePoints, true, true) || l.loopPoint < -1 || l.loopPoint >= static_cast<int> (l.points.size()))
+                || ! pointsOk (l.points, kMaxLfoShapePoints, true, true) || l.loopPoint < -1 || l.loopPoint >= static_cast<int> (l.points.size())
+                || (l.gridX != 0 && (l.gridX < kMinLfoGrid || l.gridX > kMaxLfoGrid)) || (l.gridY != 0 && (l.gridY < kMinLfoGrid || l.gridY > kMaxLfoGrid)))
                 return false;
 
         if (! pointsOk (c.velocityCurve, kMaxCurvePoints, false, false) || ! pointsOk (c.noteCurve, kMaxCurvePoints, false, false)

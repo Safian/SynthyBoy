@@ -95,7 +95,12 @@ struct ContentLfoShape
     bool smooth = false;
     int loopPoint = -1; // -1: none
     std::vector<ContentPoint> points;
+    /** The grid of the shape editor, in divisions of the cycle (gridX, the time axis) and of the height (gridY), kMinLfoGrid .. kMaxLfoGrid; 0 = not stored (a state of version 4 or older, or a shape
+        that was never edited): the editor then takes its default grid (the coarsest of 4, 8, 12, 16, 24, 32 the points of the shape lie on, else 8). Stored from state version 5 as "grid_x" / "grid_y"
+        of the entry in "lfo_shapes"; a reader of version 4 does not know the keys and skips them. */
+    int gridX = 0, gridY = 0;
 };
+constexpr int kMinLfoGrid = 2, kMaxLfoGrid = 32;
 
 /** A drawn remap curve of the wavetable position of one oscillator (G69, 13-new-keys.md 4.14): input position 0..1 (frame / last frame) to
     output position 0..1. `slot` is the Remap 1..4 preset of oscN.remap.slot; a slot without an entry is the identity. */

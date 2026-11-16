@@ -11,7 +11,9 @@
 
 namespace synthyboy
 {
-constexpr int kStateVersion = 4;
+/** The version of the state document (host chunk and the "state" of an .sbpreset). 5: an entry of content.lfo_shapes may have "grid_x" and "grid_y" (the grid of the LFO shape editor, 2 .. 32 divisions; absent = not stored
+    = the editor's default). A document of version 4 loads as before, with no grid; a reader of version 4 reads a version 5 document as `newer_version` and skips the two keys (the shape itself is read in full). */
+constexpr int kStateVersion = 5;
 
 /** Largest accepted state document. */
 constexpr size_t kMaxStateBytes = 1u << 20;

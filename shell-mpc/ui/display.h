@@ -208,16 +208,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
         dataCell.emplace (sb, r);
     float rows[kMaxPoints], rows2[kMaxPoints];
     const int n = std::min (d.n, static_cast<int> (kMaxPoints));
-    // ---- the faint spectrum along the bottom of the wave
-    if (wave && theme::D().spectrum && d.spectrum != nullptr && d.numSpectrum >= 2)
-    {
-        const int m = std::min (d.numSpectrum, static_cast<int> (kMaxSpectrum));
-        float sp[kMaxSpectrum];
-        for (int i = 0; i < m; ++i)
-            sp[i] = bottom - std::min (1.0f, std::max (0.0f, d.spectrum[i])) * (bottom - top) * 0.26f;
-        sb.curve (sp, m, ix, iw);
-        sb.fillGradient (bottom, bottom - (bottom - top) * 0.26f, bottom, dt::a (d.colour, 46), dt::a (d.colour, 0));
-    }
+    // (no spectrum fill along the bottom: it read as a stray patch at the bottom-left of the display; the wave alone, the zero line and the grid)
     if (wave && n >= 2)
     {
         float mainRows[kMaxPoints], smoothed[kMaxPoints];
@@ -238,7 +229,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
         auto rowsOf = [&] (const float* src, float* dst, float yOff, float k)
         {
             for (int i = 0; i < m; ++i)
-                dst[i] = mid + yOff - src[i] * waveScale * k;
+                dst[i] = std::clamp (mid + yOff - src[i] * waveScale * k, top + 1.0f, bottom - 1.0f);   // a frame of the table that is taller than the main cycle stays in the display (it flattens at the edge)
         };
         int litFirst[kMaxStack], litX[kMaxStack], litW[kMaxStack], numLit = 0;
         float litAmount[kMaxStack];
