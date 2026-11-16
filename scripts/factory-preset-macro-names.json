@@ -1,0 +1,1126 @@
+{
+ "format": "synthyboy-factory-macro-names",
+ "version": 1,
+ "presets": {
+  "808 Boom": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Acid Saw Reso": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Click Attack Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   "Noise"
+  ],
+  "Comb Metal Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Custom Shape Wobble": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "Spread",
+   "Reso",
+   "",
+   ""
+  ],
+  "Diode Saturated Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Dirty Distortion Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "EMS Squelch Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Fast Arp Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Fat Reese": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "Spread",
+   "Reso",
+   "Detune + Warp",
+   ""
+  ],
+  "Formant Vowel Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Gritty Square Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Harmonic Sine Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Moog Ladder Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Odd Harmonics Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Pulse Width Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Punchy Pluck Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Scream Filter Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "Spread",
+   "Reso",
+   "",
+   ""
+  ],
+  "Solid Sub": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Space Wobble Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Sub Duo Octave": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "Detune + Warp",
+   ""
+  ],
+  "Sync Growl Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Warm Analog Bass": [
+   "Cutoff",
+   "Drive",
+   "Decay + LFO Rate",
+   "Detune + Chorus",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Alien Communication": [
+   "FX Filter",
+   "LFO",
+   "Distortion + Osc",
+   "Reverb + Delay",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Bode Shifter Drone": [
+   "FX Filter",
+   "LFO",
+   "Distortion + Osc",
+   "Reverb + Delay",
+   "Spread",
+   "Reso",
+   "",
+   ""
+  ],
+  "Cosmic Teleport": [
+   "FX Filter",
+   "LFO",
+   "Distortion + Osc",
+   "Reverb + Delay",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Game Over Zap": [
+   "FX Filter",
+   "LFO",
+   "Drive + Warp",
+   "Reverb + Delay",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Metal Gong Strike": [
+   "FX Filter",
+   "LFO",
+   "Distortion + Osc",
+   "Reverb + Delay",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Noise Riser": [
+   "FX Filter",
+   "LFO",
+   "Distortion + Osc",
+   "Reverb + Delay",
+   "",
+   "Reso",
+   "",
+   "Noise"
+  ],
+  "Sci-Fi Laser Sweep": [
+   "FX Filter",
+   "LFO",
+   "Distortion + Osc",
+   "Reverb + Delay",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Sonar Ping": [
+   "FX Filter",
+   "LFO",
+   "Distortion + Osc",
+   "Reverb + Delay",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Space Wind Storm": [
+   "FX Filter",
+   "LFO",
+   "Distortion + Osc",
+   "Reverb + Delay",
+   "",
+   "Reso",
+   "",
+   "Noise"
+  ],
+  "Sub Drop Boom": [
+   "FX Filter",
+   "LFO",
+   "Distortion + Osc",
+   "Reverb + Delay",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Vinyl Dust Crackle": [
+   "FX Filter",
+   "LFO",
+   "Distortion + Osc",
+   "Reverb + Delay",
+   "",
+   "Reso",
+   "",
+   "Noise"
+  ],
+  "Accordion Reed": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "Detune + Warp",
+   ""
+  ],
+  "B3 Drawbar Organ": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Celesta Bells": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Clavinet Funk": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Dream Grand Piano": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "Detune + Warp",
+   ""
+  ],
+  "Dyno Electric Piano": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "FM Soft Organ": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Glass Organ Tones": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Harpsichord Bar": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Just Intonation Keys": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Lo-Fi Rhodes": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Muted Honky Tonk": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "Spread",
+   "Reso",
+   "",
+   ""
+  ],
+  "Rotary Rock Organ": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Utility Width Keys": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "Detune + Warp",
+   ""
+  ],
+  "Vibraphone Bars": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Vintage Electric Tine": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "Detune + Warp",
+   ""
+  ],
+  "Warm Toy Piano": [
+   "Cutoff + Warp",
+   "LFO + Phaser",
+   "Release + Decay",
+   "Chorus + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Bell Chime Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "Spread",
+   "Reso",
+   "",
+   ""
+  ],
+  "Chorused Saw Solo": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Cosmic Drift Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "Spread",
+   "Reso",
+   "",
+   ""
+  ],
+  "Diode Bite Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Dirty Peak Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Dual Octave Hero": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "Detune + Warp",
+   ""
+  ],
+  "FM Digital Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Harmonic Shimmer Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Hyper Saw Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "Spread",
+   "Reso",
+   "Detune + Warp",
+   ""
+  ],
+  "Laser Beam Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Metallic Edge Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "MPE Pressure Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Phaser Sweep Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Plucked Lead Tone": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Pulse Width Mod Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Screaming Sync Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Solo Square Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Staccato Bleep Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Tri Soft Solo": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Twin Warp Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Vocaloid Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Warm Vintage Lead": [
+   "Cutoff + Morph",
+   "Warp + Frame",
+   "Detune",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Cathedral Choir": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "",
+   "",
+   "",
+   ""
+  ],
+  "Comb Reso Swell": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "",
+   "",
+   "",
+   ""
+  ],
+  "Dark Cinema Drone": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "",
+   "",
+   "Detune + Warp",
+   ""
+  ],
+  "Deep Sea Ambient": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "",
+   "",
+   "",
+   ""
+  ],
+  "Diffusor Cloud Pad": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "Spread",
+   "",
+   "",
+   ""
+  ],
+  "Ethereal Glass": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "Spread",
+   "",
+   "",
+   ""
+  ],
+  "Frozen Aurora": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "Spread",
+   "",
+   "",
+   ""
+  ],
+  "Gentle Flute Pad": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "",
+   "",
+   "",
+   "Noise"
+  ],
+  "Golden Dawn Pad": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "",
+   "",
+   "Detune + Warp",
+   ""
+  ],
+  "Harmonic Cloud": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "Spread",
+   "",
+   "",
+   ""
+  ],
+  "Hyper Dimension Pad": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "",
+   "",
+   "",
+   ""
+  ],
+  "Infinite Horizon": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "Spread",
+   "",
+   "Detune + Warp",
+   ""
+  ],
+  "Lush Analog Pad": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "Spread",
+   "",
+   "Detune + Warp",
+   ""
+  ],
+  "Odd Harmonics Pad": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "",
+   "",
+   "",
+   ""
+  ],
+  "Radiant Pulse Pad": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "",
+   "",
+   "",
+   ""
+  ],
+  "Slow Motion Waves": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "",
+   "",
+   "",
+   ""
+  ],
+  "Space Odyssey Pad": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "Spread",
+   "",
+   "",
+   ""
+  ],
+  "Starlight Shimmer": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "",
+   "",
+   "",
+   ""
+  ],
+  "Subtle Tape Drift": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "",
+   "",
+   "",
+   ""
+  ],
+  "Tri-Band Split Texture": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "Spread",
+   "",
+   "",
+   ""
+  ],
+  "Velvet Strings": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "Spread",
+   "",
+   "",
+   ""
+  ],
+  "Vintage Brass Pad": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "Spread",
+   "",
+   "",
+   ""
+  ],
+  "Vowel Choir Pad": [
+   "Cutoff + Reso",
+   "Frame",
+   "LFO + Envelope",
+   "Reverb + Chorus",
+   "",
+   "",
+   "",
+   ""
+  ],
+  "Acoustic Style Pluck": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Aux Keyscale Pluck": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Bell Mallet Pluck": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Chime Drop": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Comb Zither": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Digital Glass Tap": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Electric Mute Pluck": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Formant Pop Pluck": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Harmonic Tine Pluck": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Harp Drops": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Kalimba Tines": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "Detune + Warp",
+   ""
+  ],
+  "Marimba Synth": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Pizzicato Strings": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "Spread",
+   "Reso",
+   "",
+   ""
+  ],
+  "Rubber Bass Pluck": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Spruce Guitar": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ],
+  "Trance Short Pluck": [
+   "Cutoff + Decay",
+   "Decay + Release",
+   "Morph + Noise",
+   "Delay + Reverb",
+   "",
+   "Reso",
+   "",
+   ""
+  ]
+ }
+}
