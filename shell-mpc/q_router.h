@@ -135,6 +135,77 @@ public:
         return t == kNone ? 0.0f : viewValue (mode (q), readNorm (t));
     }
 
+    /** Relative stepping of STEPPED targets (a toggle, a list, an integer stepper): the proxy's absolute 0 .. 1 is the wrong control for them (a toggle needs half of the knob's travel, a short list a third), so the travel of
+        the host's value since its last write is accumulated and one step of the target happens per kStepTravelDefault of travel, in the direction of the turn. Proxy units; the plugin may override it from a debug file. */
+    static constexpr float kStepTravelDefault = 3.0f / 128.0f;   // 3 host increments of 1/128 (to be calibrated on the devices)
+    void setStepTravel (float t) noexcept { stepTravel_.store (t > 1.0e-4f ? t : kStepTravelDefault, std::memory_order_relaxed); }
+    float stepTravel() const noexcept { return stepTravel_.load (std::memory_order_relaxed); }
+    /** For the status file: the raw value the host wrote to Q q last, the delta of that write, the travel accumulated for the next step. */
+    float lastRaw (int q) const noexcept { return q >= 0 && q < kCount ? dbgRaw_[q].load (std::memory_order_relaxed) : 0.0f; }
+    float lastDelta (int q) const noexcept { return q >= 0 && q < kCount ? dbgDelta_[q].load (std::memory_order_relaxed) : 0.0f; }
+    float travel (int q) const noexcept { return q >= 0 && q < kCount ? acc_[q].load (std::memory_order_relaxed) : 0.0f; }
+
+    /** As hostWrite below, with `stepsOf (tableIndex)`: the number of values of a stepped target (a toggle 2, a list its entries), 0 for a continuous one. A stepped plain target is driven relatively (see kStepTravelDefault):
+        steps happen in the direction of the turn, a change of direction starts the travel again, at the ends nothing happens; the poll then reports the target's real position to the host, so the host's own value never
+        runs into its limit while steps are left. The virtual targets have no step count here and stay absolute (setVirtualSteps gives one). */
+    template <class Read, class WriteFn, class StepsOf>
+    Write hostWrite (int q, float host, bool restoring, Read&& readNorm, WriteFn&& write, StepsOf&& stepsOf) noexcept
+    {
+        const int t = target (q);
+        const int n = (t == kNone || mode (q) != kPlain || virtualId (q) >= 0) ? 0 : stepsOf (t);
+        if (n < 2)
+            return hostWrite (q, host, restoring, readNorm, write);
+        writes_.fetch_add (1, std::memory_order_relaxed);
+        const float v = std::isfinite (host) ? std::clamp (host, 0.0f, 1.0f) : 0.0f;
+        // the host's own value continues either from its last write or, when it took our report as its value, from the report: the report when the write is near it (assumed: the host adopts reports, NOT yet measured on a device), else the last write
+        const float base = base_[q].load (std::memory_order_relaxed);
+        float delta = v - base;
+        if (repDue_[q].exchange (false, std::memory_order_acq_rel))
+        {
+            const float d2 = v - rep_[q].load (std::memory_order_relaxed);
+            if (std::fabs (d2) <= 4.0f * stepTravel())   // the host took our report (the usual case: its dial follows it); a far write is a host that kept its own value
+                delta = d2;
+        }
+        dbgRaw_[q].store (v, std::memory_order_relaxed);
+        dbgDelta_[q].store (delta, std::memory_order_relaxed);
+        base_[q].store (v, std::memory_order_relaxed);
+        float cur = readNorm (t);
+        if (std::fabs (v - cur) <= kTolerance)   // an echo of what was reported
+        {
+            acc_[q].store (0.0f, std::memory_order_relaxed);
+            return Write::echo;
+        }
+        if (restoring)
+            return Write::restoring;
+        float acc = acc_[q].load (std::memory_order_relaxed);
+        if ((delta > 0.0f) != (acc > 0.0f) || acc == 0.0f)
+            acc = 0.0f;   // another direction (or the first write): start again
+        acc += delta;
+        const float travel = stepTravel();
+        bool wrote = false;
+        int guard = 0;
+        while (std::fabs (acc) >= travel && guard++ < 64)
+        {
+            const int dir = acc > 0.0f ? 1 : -1;
+            acc -= static_cast<float> (dir) * travel;
+            const int idx = static_cast<int> (std::lround (cur * static_cast<float> (n - 1)));
+            const int next = std::clamp (idx + dir, 0, n - 1);
+            if (next == idx)
+            {
+                acc = 0.0f;   // the end of a list: further turning does nothing
+                break;
+            }
+            cur = static_cast<float> (next) / static_cast<float> (n - 1);
+            write (t, cur);
+            wrote = true;
+        }
+        acc_[q].store (acc, std::memory_order_relaxed);
+        last_[q].store (v, std::memory_order_relaxed);   // the host holds v: the poll tells it the real position (it differs from v), so the host's value follows the target
+        if (wrote)
+            realDue_[q].store (t, std::memory_order_release);
+        return wrote ? Write::written : Write::none;
+    }
+
     /** The host writes Q q. The write goes to the target through write (tableIndex, normalised) unless the target is none, the value is the target's own (echo) or the restore window is open. */
     template <class Read, class WriteFn>
     Write hostWrite (int q, float host, bool restoring, Read&& readNorm, WriteFn&& write) noexcept
@@ -202,6 +273,8 @@ public:
             if (std::fabs (v - last_[q].load (std::memory_order_relaxed)) > kTolerance)
             {
                 last_[q].store (v, std::memory_order_relaxed);
+                rep_[q].store (v, std::memory_order_relaxed);   // the host may take the reported value as its own: the next write's travel is measured from the nearer of this and its last write
+                repDue_[q].store (true, std::memory_order_release);
                 reportQ (q, v);
             }
             const int real = realDue_[q].exchange (kNone, std::memory_order_acq_rel);
@@ -212,6 +285,12 @@ public:
 
 private:
     std::atomic<int> target_[kCount];
+    std::atomic<float> base_[kCount] = {};  // the value the host holds for Q q (its last write or the last report): the travel of the next write is measured from it
+    std::atomic<float> rep_[kCount] = {};   // the last value reported to the host
+    std::atomic<bool> repDue_[kCount] = {};
+    std::atomic<float> acc_[kCount] = {};   // the travel accumulated for the next step of a stepped target (signed)
+    std::atomic<float> dbgRaw_[kCount] = {}, dbgDelta_[kCount] = {};
+    std::atomic<float> stepTravel_ { kStepTravelDefault };
     std::atomic<float> last_[kCount];       // the value of each Q as the host last heard it (a host write or a report)
     std::atomic<int> realDue_[kCount];      // the real parameter a host write of Q q changed: the poll tells the host (kNone: nothing due)
     std::atomic<float> vValue_[kNumVirtual] = {};   // the value of every virtual target (set by the page, or by the host's write)

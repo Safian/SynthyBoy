@@ -516,6 +516,35 @@ int main (int argc, char** argv)
                        && text (qa, effGetParamDisplay, q0) == "+1" && text (qa, effGetParamDisplay, q0 + 1) == "+2" && text (qa, effGetParamLabel, q0) == "oct" && text (qa, effGetParamLabel, q0 + 1) == "st",
                    "a split transpose: Oct and Sem names, +1 oct and +2 st for 14 (" + text (qa, effGetParamName, q0) + " " + text (qa, effGetParamDisplay, q0) + " / " + text (qa, effGetParamName, q0 + 1) + " " + text (qa, effGetParamDisplay, q0 + 1) + ")");
         }
+        // stepped targets are driven relatively (QRouter, kStepTravelDefault): the Master page's VOICE OVERRIDE (a list) and a toggle step both ways with small knob increments, a continuous one does not change its behaviour
+        {
+            const int tList = idx ("master.voice_override"), tTog = idx ("master.legato");
+            writeGroup (std::to_string (tList) + " " + std::to_string (tTog) + " -1 -1");
+            sleepMs (700);
+            const synthyboy::ParamInfo& li = synthyboy::paramTable()[tList];
+            auto plain = [&] (int t) { return synthyboy::fromNormalised (synthyboy::paramTable()[t], qa->getParameter (qa, t)); };
+            float held[2] = { qa->getParameter (qa, q0), qa->getParameter (qa, q0 + 1) };
+            auto knob = [&] (int q, int tgt, int incs)   // the host: its value is the reported one plus the increments (1/128 each)
+            {
+                held[q] = std::clamp (held[q] + static_cast<float> (incs) / 128.0f, 0.0f, 1.0f);   // the host holds its own value and does not take our report
+                qa->setParameter (qa, q0 + q, held[q]);
+                (void) tgt;
+            };
+            const float l0 = plain (tList);
+            knob (0, tList, 1); knob (0, tList, 1);
+            const bool notYet = plain (tList) == l0;
+            knob (0, tList, 1); knob (0, tList, 1);
+            const float l1 = plain (tList);
+            knob (0, tList, -3); knob (0, tList, -3);
+            const float l2 = plain (tList);
+            (void) li;
+            check (notYet && l1 == l0 + 1.0f && l2 == l0, "VOICE OVERRIDE (a two value list) steps after 3 increments of travel (not before) and back (the host keeps its own value here)");
+            const float t0 = plain (tTog);
+            knob (1, tTog, 3);
+            const float t1 = plain (tTog);
+            knob (1, tTog, -3);
+            check (t1 != t0 && plain (tTog) == t0, "a toggle flips after about 3 increments and flips back");
+        }
         // all sixteen slots: Q 5 .. Q 16 are proxies of the next groups; names, units, values and writes like Q 1 .. Q 4
         {
             const int sixteen[16] = { tLevel, tPan, tSubLevel, tCut, idx ("osc2.level"), idx ("osc2.pan"), idx ("osc3.level"), idx ("osc3.pan"), idx ("filter1.resonance"), idx ("filter2.cutoff"), idx ("filter2.resonance"), idx ("master.volume"), -1, idx ("osc1.unison.detune"), idx ("env1.attack"), idx ("env1.release") };

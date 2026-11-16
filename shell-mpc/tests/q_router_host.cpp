@@ -306,6 +306,66 @@ int main()
         // a Q write outside the table is none
         check (r.hostWrite (16, 0.2f, false, rd, wr) == QRouter::Write::none, "a write to a Q that does not exist is none");
     }
+    {   // stepped targets are driven relatively: one step per kStepTravelDefault of host travel, in the direction of the turn
+        QRouter r;
+        for (int i = 0; i < kParams; ++i)
+            wr (i, 0.0f);
+        const int g[4] = { 1, 2, 3, 4 };   // 1: a toggle (2 values), 2: a list of 5, 3: a list of 57, 4: continuous
+        r.setGroup (g, 4, kParams);
+        auto stepsOf = [] (int t) noexcept { return t == 1 ? 2 : (t == 2 ? 5 : (t == 3 ? 57 : 0)); };
+        Reports rep;
+        pollInto (r, rep);
+        const float step = QRouter::kStepTravelDefault;
+        float host[4] = { 0.0f, 0.0f, 0.0f, 0.0f };   // what the host holds for each Q: it takes every report as its own value
+        auto turn = [&] (int q, float d)
+        {
+            host[q] = std::clamp (host[q] + d, 0.0f, 1.0f);
+            const QRouter::Write w = r.hostWrite (q, host[q], false, rd, wr, stepsOf);
+            Reports x;
+            pollInto (r, x);
+            for (const auto& e : x.q) host[e.first] = e.second;   // the host adopts the report
+            return w;
+        };
+        turn (0, step * 0.9f);
+        check (rd (1) == 0.0f, "a toggle does not flip before one step of travel");
+        turn (0, step * 0.2f);
+        check (rd (1) == 1.0f, "a toggle flips after one step of travel (" + std::to_string (rd (1)) + ")");
+        check (std::fabs (host[0] - 1.0f) < 1e-6f, "the host's value follows the target's real position");
+        turn (0, -step * 1.1f);
+        check (rd (1) == 0.0f, "turning back flips it back after one step (the direction change starts the travel again)");
+        turn (0, -step * 3.0f);
+        check (rd (1) == 0.0f, "at the end of a list further turning does nothing");
+        // a list of 5 walks both ways, one value per step
+        std::vector<float> seen;
+        for (int k = 0; k < 4; ++k) { turn (1, step * 1.05f); seen.push_back (std::round (rd (2) * 4.0f)); }
+        check (seen == std::vector<float> { 1, 2, 3, 4 }, "a list walks up one value per step");
+        seen.clear();
+        for (int k = 0; k < 4; ++k) { turn (1, -step * 1.05f); seen.push_back (std::round (rd (2) * 4.0f)); }
+        check (seen == std::vector<float> { 3, 2, 1, 0 }, "... and down");
+        turn (1, step * 0.5f); turn (1, -step * 0.4f); turn (1, step * 0.5f);
+        check (rd (2) == 0.0f, "travel that changes direction does not add up");
+        turn (1, step * 5.0f);
+        check (std::round (rd (2) * 4.0f) == 4.0f, "one write of several steps of travel steps several times");
+        // a long list reaches both ends without the host's value saturating on the way
+        bool sat = false;
+        int writesUp = 0, writesDown = 0;
+        while (rd (3) < 1.0f && writesUp < 70) { turn (2, step * 1.05f); ++writesUp; sat = sat || (host[2] >= 1.0f && rd (3) < 1.0f); }
+        check (rd (3) == 1.0f && ! sat && writesUp >= 54 && writesUp <= 56, "a list of 57 reaches its last entry in 54 to 56 writes (" + std::to_string (writesUp) + ") and the host's value does not saturate before it");
+        while (rd (3) > 0.0f && writesDown < 70) { turn (2, -step * 1.05f); ++writesDown; sat = sat || (host[2] <= 0.0f && rd (3) > 0.0f); }
+        check (rd (3) == 0.0f && ! sat && writesDown >= 54 && writesDown <= 56, "... and back to the first (" + std::to_string (writesDown) + ")");
+        // a continuous target is exactly as before
+        wr (4, 0.2f);
+        r.setGroup (g, 4, kParams); pollInto (r, rep);
+        const QRouter::Write w = r.hostWrite (3, 0.7f, false, rd, wr, stepsOf);
+        check (w == QRouter::Write::written && std::fabs (rd (4) - 0.7f) < 1e-6f, "a continuous target follows the absolute value as before");
+        // the notification count: a step reports the position (values), the group callback only for a group change
+        Reports n;
+        pollInto (r, n);
+        turn (0, step * 1.1f);
+        Reports n2;
+        pollInto (r, n2);
+        check (n2.groups == 0, "stepping never calls the group-changed callback");
+    }
     std::printf (fails ? "q_router_host: FAILED (%d)\n" : "q_router_host: OK\n", fails);
     return fails ? 1 : 0;
 }

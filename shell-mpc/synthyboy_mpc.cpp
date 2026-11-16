@@ -129,6 +129,22 @@
 #include "play_log.h"
 #include "play_params.h"
 #include "q_router.h"
+
+namespace
+{
+/** The number of values of a stepped parameter (a toggle 2, a list its entries, an integer stepper its range), 0 for a continuous one: what the Q proxies drive relatively (q_router.h). */
+int stepCountOf (const synthyboy::ParamInfo& p) noexcept
+{
+    if (p.scale == synthyboy::Scale::stepped)
+        return static_cast<int> (std::lround (p.max - p.min)) + 1;
+    if (p.interval > 0.0f && p.max > p.min)
+    {
+        const int n = static_cast<int> (std::lround ((p.max - p.min) / p.interval)) + 1;
+        return n <= 64 ? n : 0;
+    }
+    return 0;
+}
+} // namespace
 #include "synthyboy/readout.h"
 #endif
 
@@ -774,9 +790,17 @@ struct PluginInstance
         if (q >= 1 && q <= synthyboy_mpc::QRouter::kCount && e != nullptr && e->setParameter != nullptr)
             e->setParameter (e, qBase() + q - 1, static_cast<float> (v));
     }
+    /** Debug switch: while the file /tmp/synthyboy-overlay-q-step-travel exists its first number is the travel of a Q proxy per step of a stepped target, in 1/128 host increments (default 3). Display thread. */
+    void qStepTravelFile()
+    {
+        std::ifstream f ("/tmp/synthyboy-overlay-q-step-travel");
+        double n = 0.0;
+        qRouter.setStepTravel (f && (f >> n) && n > 0.0 ? static_cast<float> (n / 128.0) : synthyboy_mpc::QRouter::kStepTravelDefault);
+    }
     /** The display thread, every tick: the host is told the Q values after a group change or a change of a target, and the real parameter a Q write changed. */
     void qPoll (AEffect* e)
     {
+        qStepTravelFile();
         qFakeGroup();
         qFakeWrite (e);
         if (! audioMaster)
@@ -2291,7 +2315,8 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
         {
             const int q = index - PluginInstance::qBase();
             const synthyboy_mpc::QRouter::Write w = inst->qRouter.hostWrite (q, parameter, restoring, [inst] (int t) noexcept { return inst->qReadNorm (t); },
-                                                                              [inst] (int t, float v) { writeRealParam (inst, static_cast<size_t> (t), v); });
+                                                                              [inst] (int t, float v) { writeRealParam (inst, static_cast<size_t> (t), v); },
+                                                                              [] (int t) noexcept { return stepCountOf (synthyboy::paramTable()[t]); });
             if (logging)
             {
                 static const char* const kOutcome[] = { "no target", "echo, nothing changed", "ignored (restore window)", "written" };
