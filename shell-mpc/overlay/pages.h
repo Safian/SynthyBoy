@@ -14,6 +14,7 @@
 #include "master_ui.h"
 #include "mixer_ui.h"
 #include "mod_ui.h"
+#include "osc_page.h"
 #include "overlay_layout.h"
 #include "page_view.h"
 #include "voice_ui.h"
@@ -29,6 +30,7 @@ using MasterPage = PageView<MasterUi>;
 using VoicePage = PageView<VoiceUi>;
 using EnvPage = PageView<EnvUi>;
 using LfoPage = PageView<LfoUi>;
+using OscPage = PageView<OscPageUi>;
 
 /** The table indices a filter page reads live: the cutoff and the resonance of filter 1, then of filter 2 (synthyboy::FilterResponse::readoutIndices). */
 inline std::vector<int> filterTargets()
@@ -58,6 +60,7 @@ inline std::unique_ptr<IView> make (const layout::View& v)
         case layout::kKindVoice: return std::make_unique<VoicePage> (v.name, v.index);
         case layout::kKindEnvUi: return std::make_unique<EnvPage> (v.name, v.index);
         case layout::kKindLfoUi: return std::make_unique<LfoPage> (v.name, v.index);
+        case layout::kKindOscUi: return std::make_unique<OscPage> (v.name, v.index, OscPageUi::targetsOf (v.index));
         default: return nullptr;
     }
 }

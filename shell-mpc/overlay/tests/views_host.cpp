@@ -242,23 +242,20 @@ int main()
         v.update (input (p.inst, &lv, nullptr, 600.0));
         check (v.shape()[LfoView::kPoints / 2] > 0.9f && v.shape()[0] < -0.9f, "a custom shape from the content of the state is drawn (a triangle: low at the ends, high in the middle)");
     }
-    // ---- the oscillator view ------------------------------------------------------------------------------------------------------------------------------------------
+    // ---- the oscillator's display (osc_display.h: the data of the Play page's picture and of the OSC tab's pages) ------------------------------------------------------------------------------------------------------------------------------------------
     {
         Plain p;
-        OscView v (2, 10.0);
-        const int w = 512, h = 240;
+        OscDisplay v (10.0);
+        ViewCounters counters;
+        const int sel = 3;   // the selector's number of oscillator B (osc2)
+        auto tg = [] (float a, float b, float c, float d) { static float t[12]; std::fill (t, t + 12, -1.0f); t[4] = a; t[5] = b; t[6] = c; t[7] = d; return t; };   // the readout values of the three oscillators: B's are 4 .. 7
+        auto upd = [&] (const float* t, double ms) { return v.update (p.inst, sel, t, nullptr, ms, counters); };
         p.inst.set ("osc2.on", 1.0f);
         p.inst.set ("osc2.type", 0.0f);
         p.inst.set ("osc2.wavetable", 1.0f);   // the saw
         p.inst.set ("osc2.frame", 0.0f);
-        std::vector<uint32_t> cv (static_cast<size_t> (w) * h);
-        check (v.update (input (p.inst, nullptr, nullptr, 0.0)) && v.valid() && v.kind() == synthyboy::OscCycle::Kind::wavetable, "oscillator view: first update renders a wavetable cycle");
-        v.render (cv.data(), w, h);
-        check (cv[0] == 0xff000000u + layout::kBackgroundRgb, "oscillator view: opaque dark background");
-        int a, b, a2, b2;
-        lineRows (cv, w, h, 20, a, b);
-        lineRows (cv, w, h, w - 20, a2, b2);
-        check (a >= 0 && a2 >= 0 && std::fabs (0.5 * (a + b) - 0.5 * (a2 + b2)) > 100.0, "the saw's line is far apart at the two ends of the cycle (a ramp: rows " + std::to_string (0.5 * (a + b)) + " and " + std::to_string (0.5 * (a2 + b2)) + ")");
+        check (upd (nullptr, 0.0) && v.valid() && v.kind() == synthyboy::OscCycle::Kind::wavetable, "oscillator display: first update computes a wavetable cycle");
+        check (std::fabs (v.cycle()[synthyboy::OscCycle::kSamples / 16] - v.cycle()[synthyboy::OscCycle::kSamples * 15 / 16]) > 1.0f, "the saw's cycle is a ramp: far apart at the two ends");
         const uint32_t h0 = v.hash();
         // frame: a multi frame table; the knob and the live (modulated) value both move the picture
         int table = -1;   // the first built-in table whose first and last frame differ
@@ -281,43 +278,41 @@ int main()
         }
         check (table >= 0, "a multi frame built-in table exists (" + std::to_string (table) + ")");
         p.inst.set ("osc2.wavetable", static_cast<float> (table));
-        v.update (input (p.inst, nullptr, nullptr, 300.0));
+        upd (nullptr, 300.0);
         const uint32_t hFrame0 = v.hash();
         p.inst.set ("osc2.frame", 100.0f);
-        v.update (input (p.inst, nullptr, nullptr, 600.0));
+        upd (nullptr, 600.0);
         check (v.hash() != hFrame0, "the frame knob changes the picture (hash " + std::to_string (hFrame0) + " -> " + std::to_string (v.hash()) + ")");
         p.inst.set ("osc2.frame", 0.0f);
-        v.update (input (p.inst, nullptr, nullptr, 900.0));
+        upd (nullptr, 900.0);
         check (v.hash() == hFrame0, "... and back to the first picture with the knob back");
         const float live[4] = { 100.0f, 0.0f, 0.0f, 0.0f };
-        v.update (input (p.inst, nullptr, live, 1100.0));
+        upd (tg (live[0], live[1], live[2], live[3]), 1100.0);
         const uint32_t hLive = v.hash();
         p.inst.set ("osc2.frame", 100.0f);
-        v.update (input (p.inst, nullptr, nullptr, 1500.0));
+        upd (nullptr, 1500.0);
         check (hLive == v.hash(), "a modulated frame position from the readout draws the same picture as the knob at that value");
         // warp
         p.inst.set ("osc2.frame", 0.0f);
         p.inst.set ("osc2.warp.type", 4.0f);
         const float warped[4] = { 0.0f, 80.0f, 0.0f, 0.0f };
-        v.update (input (p.inst, nullptr, warped, 1800.0));
+        upd (tg (warped[0], warped[1], warped[2], warped[3]), 1800.0);
         check (v.hash() != hFrame0, "a modulated warp amount from the readout changes the picture");
         (void) h0;
         // the types without a single cycle: the empty frame, honestly
         p.inst.set ("osc2.type", 1.0f);
-        v.update (input (p.inst, nullptr, nullptr, 2100.0));
-        check (v.kind() == synthyboy::OscCycle::Kind::other, "a sample oscillator: no single cycle (kind other)");
-        v.render (cv.data(), w, h);
-        check (countIf (cv, isAccent) == 0, "... and nothing is drawn but the frame");
+        upd (nullptr, 2100.0);
+        check (v.kind() != synthyboy::OscCycle::Kind::wavetable && v.kind() != synthyboy::OscCycle::Kind::off, "a sample oscillator: no single cycle (an overview or no sample)");
         p.inst.set ("osc2.type", 0.0f);
         p.inst.set ("osc2.on", 0.0f);
-        v.update (input (p.inst, nullptr, nullptr, 2400.0));
+        upd (nullptr, 2400.0);
         check (v.kind() == synthyboy::OscCycle::Kind::off, "an oscillator that is off: kind off");
         // another oscillator's parameters change nothing
         p.inst.set ("osc2.on", 1.0f);
-        v.update (input (p.inst, nullptr, nullptr, 2700.0));
+        upd (nullptr, 2700.0);
         const uint32_t hh = v.hash();
         p.inst.set ("osc1.frame", 77.0f);
-        check (! v.update (input (p.inst, nullptr, nullptr, 3000.0)) && v.hash() == hh, "a parameter of another oscillator changes nothing");
+        check (! upd (nullptr, 3000.0) && v.hash() == hh, "a parameter of another oscillator changes nothing");
     }
     // ---- the envelope widget's geometry rule and the envelope view -----------------------------------------------------------------------------------------------------
     {
@@ -534,9 +529,8 @@ int main()
             return t.substr (q + std::strlen (key) + 2, t.find ('\n', q) - q - std::strlen (key) - 2);
         };
         auto viewIndex = [] (const char* name) { for (int i = 0; i < legacy::kNumViews; ++i) if (std::string (legacy::kViews[i].name) == name) return i; return -1; };
-        const int lfo2 = viewIndex ("lfo2"), osc3 = viewIndex ("osc3"), f2 = viewIndex ("filter2");
-        check (lfo2 >= 0 && osc3 >= 0 && f2 >= 0, "the layout has filter2, lfo2 and osc3");
-        inst.set ("osc3.on", 1.0f);
+        const int lfo2 = viewIndex ("lfo2"), f2 = viewIndex ("filter2");
+        check (lfo2 >= 0 && f2 >= 0, "the layout has filter2 and lfo2");
         // the LFO 2 tab is on screen
         frame.setView (lfo2, true, 90);
         check (until ([&] { return plane.planeOn; }, 500) >= 0, "the markers of LFO 2: the plane is on");
@@ -561,20 +555,8 @@ int main()
         shown = plane.presented;
         run (2000);
         check (plane.presented == shown, "the voice is gone: the cursor is gone and the pictures stop");
-        // another tab: the oscillator view takes the plane over, with its own region
-        frame.setView (lfo2, false, 90);
-        frame.setView (osc3, true, 90);
-        check (until ([&] { return plane.planeOn && plane.lastRect.w == 240 && ctl.currentIndex() == osc3; }, 500) >= 0, "the Osc 3 tab: the plane is the Osc 3 region");
-        const layout::Rect& ro = legacy::kViews[osc3].region;
-        check (plane.lastRect == uiRectToPanel (90, Rect { ro.x, ro.y, ro.w, ro.h }, 800, 1280), "... exactly");
-        run (1200);
-        check (line ("view") == "osc3" && ! line ("osc_cycle_hash").empty() && line ("osc_kind") == "wavetable", "the status file names osc3 and has the cycle hash");
-        // the panel buffer that is shown is the osc picture: opaque
-        int alpha255 = 0;
-        for (uint32_t p : plane.shownCopy) alpha255 += (p >> 24) == 255;
-        check (alpha255 == static_cast<int> (plane.shownCopy.size()), "every pixel of the shown picture is opaque (the skin's own picture is hidden under it)");
         // nothing on screen: off
-        frame.setView (osc3, false, 90);
+        frame.setView (lfo2, false, 90);
         check (until ([&] { return ! plane.planeOn; }, 500) >= 0 && ctl.state() == "hidden: no view on screen", "no markers: the plane goes");
         // filter 2 and its live values (targets 2 and 3)
         frame.setView (f2, true, 90);
@@ -588,7 +570,7 @@ int main()
         inst.hasLive = true;
         run (1300);
         check (line ("curve_hash") != hashA && std::stof (line ("live_cutoff_hz")) > 2999.0f, "the live values of the filter 2 targets move the Filter 2 curve (status: cutoff " + line ("live_cutoff_hz") + ")");
-        check (line ("view_lfo2").find ("updates=") == 0 && line ("view_osc3").find ("frames=") != std::string::npos, "the status file has the counters of every view");
+        check (line ("view_lfo2").find ("updates=") == 0 && line ("view_env2").find ("frames=") != std::string::npos, "the status file has the counters of every view");
         // the dump is the visible view's data
         dir.touch ("dump");
         run (1500);
@@ -638,7 +620,7 @@ int main()
         double now = 0.0;
         auto run = [&] (double ms) { const double end = now + ms; while (now < end) { now += 10.0; ctl.tick (now); } };
         auto until = [&] (auto cond, double maxMs) { const double s0 = now; while (now - s0 < maxMs) { now += 10.0; ctl.tick (now); if (cond()) return now - s0; } return -1.0; };
-        for (const char* name : { "lfo2", "osc3", "filter2", "env2" })
+        for (const char* name : { "lfo2", "filter2", "env2" })
         {
             const int v = viewIndex (name);
             const Shot refA = shot (name, setupA), refB = shot (name, setupB);

@@ -113,8 +113,6 @@ public:
             const layout::View& v = layout::kViews[i];
             if (v.kind == layout::kKindFilter)
                 FilterView (v.index, stub, -1.0).targets (out);
-            else if (v.kind == layout::kKindOsc)
-                OscView (v.index, -1.0).targets (out);
             else if (v.kind == layout::kKindPlay)
                 PlayView (v.index, -1.0).targets (out);
             else if (layout::isPageKind (v.kind))
@@ -649,7 +647,6 @@ private:
         {
             case layout::kKindFilter: return std::make_unique<FilterView> (v.index, renderer_, fixedCost_);
             case layout::kKindLfo: return std::make_unique<LfoView> (v.index, fixedCost_);
-            case layout::kKindOsc: return std::make_unique<OscView> (v.index, fixedCost_);
             case layout::kKindEnv: return std::make_unique<EnvView> (v.index, v);
             case layout::kKindSpectrum: return std::make_unique<SpectrumView>();
             case layout::kKindPlay: return std::make_unique<PlayView> (v.index, fixedCost_);

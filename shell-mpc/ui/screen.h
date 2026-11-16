@@ -136,6 +136,13 @@ public:
     }
     OscInstance instance() const noexcept { return inst_; }
     OscKind kind() const noexcept { return kind_; }
+    /** The screen is a PAGE of a tab (the OSC tab: the tab names the oscillator and nothing closes it): the CLOSE button is not there, its place carries the name of the oscillator ("" = a full screen with a close button). */
+    void setPageTitle (const char* title)
+    {
+        setText (pageTitle_, sizeof pageTitle_, title != nullptr ? title : "");
+        show (close, pageTitle_[0] == '\0');
+    }
+    bool isPage() const noexcept { return pageTitle_[0] != '\0'; }
     /** The rectangle reserved for the display (the picture is drawn by the overlay views). */
     Rect displayRect() const noexcept { return display_; }
     /** The titled outlines (blocks) of the type bar and of the tuning column (empty when the tuning row is absent). The panel's own blocks are `panel.blockRect (i)`. */
@@ -250,6 +257,8 @@ protected:
     void drawExtra (Pen& p) const override
     {
         const theme::Look& T = theme::L();
+        if (pageTitle_[0] != '\0')
+            p.textCentered (close.rect(), pageTitle_, T.fTitle, p.c (T.text, 255), T.fMin);
         p.textLeft ({ barBlock_.x + KnobPanel::kBlockPad + 4, barBlock_.y + 3, std::max (0, barBlock_.w - 16), 16 }, barTitle (), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         if (tune_shown_)
         {
@@ -268,6 +277,7 @@ protected:
     bool tune_shown_ = true;
     int nGroups_ = 0, active_ = -1;
     char names_[kMaxGroups][20] = {};
+    char pageTitle_[16] = {};
 };
 
 }} // namespace synthyboy_mpc::ui

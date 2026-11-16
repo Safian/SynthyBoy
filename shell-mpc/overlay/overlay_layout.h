@@ -7,7 +7,7 @@
 namespace synthyboy_mpc { namespace overlay { namespace layout {
 struct Rect { int x, y, w, h; };
 struct Marker { Rect rect; unsigned rgb; unsigned cover; };   // cover: the colour of what lies under the marker (a transparent view paints it over the marker)
-constexpr int kKindFilter = 0, kKindLfo = 1, kKindOsc = 2, kKindEnv = 3, kKindSpectrum = 4, kKindPlay = 5, kKindFilterUi = 6, kKindMixer = 7, kKindFx = 8, kKindMod = 9, kKindMacros = 10, kKindMaster = 11, kKindVoice = 12, kKindEnvUi = 13, kKindLfoUi = 14;
+constexpr int kKindFilter = 0, kKindLfo = 1, kKindEnv = 3, kKindSpectrum = 4, kKindPlay = 5, kKindFilterUi = 6, kKindMixer = 7, kKindFx = 8, kKindMod = 9, kKindMacros = 10, kKindMaster = 11, kKindVoice = 12, kKindEnvUi = 13, kKindLfoUi = 14, kKindOscUi = 15;
 constexpr bool isPageKind (int kind) { return kind == kKindPlay || kind >= kKindFilterUi; }   // a page the plugin draws entirely (its own touch handling, the host widgets hidden under it)
 struct View { const char* name; int kind; int index; Rect region; bool opaque; Marker markers[2]; Rect instance; };   // instance: the film strip image bound to the display parameter "Overlay Instance" (one frame = this size)
 constexpr int kScreenW = 1280;
@@ -20,7 +20,7 @@ constexpr int kInstanceSteps = 32;   // the parameter's value of frame f is f / 
 constexpr unsigned kInstanceSlotRgb[kMaxInstances] = { 0x1414d8, 0x3e14d8, 0x6814d8, 0x9214d8, 0x143ed8, 0x3e3ed8, 0x683ed8, 0x923ed8, 0x1468d8, 0x3e68d8, 0x6868d8, 0x9268d8, 0x1492d8, 0x3e92d8, 0x6892d8, 0x9292d8 };
 constexpr unsigned kInstanceNoneRgb = 0xc814d8;    // frame 17: an instance without a slot
 constexpr unsigned kInstanceBlankRgb = 0x14c8d8;   // frame 0 (nothing reported yet) and the frames after 17
-constexpr int kNumViews = 22;
+constexpr int kNumViews = 24;
 constexpr View kViews[kNumViews] = {
     { "filter1", 6, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x103a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a1064, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Filter 1"
     { "filter2", 6, 2, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x173a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a1764, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Filter 2"
@@ -28,9 +28,6 @@ constexpr View kViews[kNumViews] = {
     { "lfo2", 14, 2, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x253a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a2564, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "LFO 2"
     { "lfo3", 14, 3, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x2c3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a2c64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "LFO 3"
     { "lfo4", 14, 4, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x333a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a3364, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "LFO 4"
-    { "osc1", 2, 1, { 384, 140, 512, 240 }, true, { { { 394, 150, 6, 6 }, 0x3a3a2c, 0x1e1d1e }, { { 880, 150, 6, 6 }, 0x3a3a64, 0x1e1d1e } }, { 406, 150, 6, 6 } },   // tab "Osc 1"
-    { "osc2", 2, 2, { 384, 140, 512, 240 }, true, { { { 394, 150, 6, 6 }, 0x413a2c, 0x1e1d1e }, { { 880, 150, 6, 6 }, 0x3a4164, 0x1e1d1e } }, { 406, 150, 6, 6 } },   // tab "Osc 2"
-    { "osc3", 2, 3, { 384, 140, 512, 240 }, true, { { { 394, 150, 6, 6 }, 0x483a2c, 0x1e1d1e }, { { 880, 150, 6, 6 }, 0x3a4864, 0x1e1d1e } }, { 406, 150, 6, 6 } },   // tab "Osc 3"
     { "env1", 13, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x4f3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a4f64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Env 1"
     { "env2", 13, 2, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x563a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a5664, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Env 2"
     { "env3", 13, 3, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x5d3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a5d64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Env 3"
@@ -44,5 +41,10 @@ constexpr View kViews[kNumViews] = {
     { "mod", 9, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x953a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a9564, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Mod"
     { "master", 11, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x9c3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a9c64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Master"
     { "voice", 12, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0xa33a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3aa364, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Voice"
+    { "osca", 15, 2, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0xaa3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3aaa64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Osc A"
+    { "oscb", 15, 3, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0xb13a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3ab164, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Osc B"
+    { "oscc", 15, 4, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0xb83a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3ab864, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Osc C"
+    { "oscsub", 15, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0xbf3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3abf64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Osc Sub"
+    { "oscnoise", 15, 5, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0xc63a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3ac664, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Osc Noise"
 };
 }}} // namespace synthyboy_mpc::overlay::layout

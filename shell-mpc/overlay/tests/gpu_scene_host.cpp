@@ -409,27 +409,6 @@ int main()
         for (uint32_t k = 0; k < s3.numOps; ++k) cur += s3.ops[k].op == gpu::kOpDisc;
         check (cur == 0, "lfo 1 without a voice: no cursor in the scene");
     }
-    {   // an oscillator: a wavetable, and the empty frame of one that is off
-        FakeInstance inst;
-        OscView v (1, 10.0);
-        ViewInput in;
-        in.instance = &inst;
-        in.nowMs = 0.0;
-        check (v.update (in) && v.valid(), "osc 1 view has data");
-        int idx = 0;
-        for (int i = 0; i < legacy::kNumViews; ++i)
-            if (std::string (legacy::kViews[i].name) == "osc1") idx = i;
-        const layout::Rect& r = legacy::kViews[idx].region;
-        checkSameAsCpu (std::string ("osc 1 (") + (v.kind() == synthyboy::OscCycle::Kind::wavetable ? "wavetable" : "other") + ")", v, idx, r.w, r.h);
-        inst.set ("osc1.on", 0.0f);
-        in.nowMs = 200.0;
-        v.update (in);
-        checkSameAsCpu ("osc 1 switched off", v, idx, r.w, r.h);
-        gpu::SceneData sd;
-        gpu::SceneBuilder sb (sd);
-        v.describe (sb, idx, r.w, r.h);
-        check (v.kind() != synthyboy::OscCycle::Kind::wavetable ? sd.numPoints == 0 : sd.numPoints == 512, "osc 1: a wavetable carries the 512 point cycle, any other kind the empty frame");
-    }
     {   // the envelope marker: transparent, two marker covers, a dot
         FakeInstance inst;
         FakeFrame frame; frame.views = legacy::kViews;

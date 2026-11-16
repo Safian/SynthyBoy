@@ -46,7 +46,7 @@ int main()
 {
     // ---- the layout: the pages, their colours, their tabs
     {
-        const char* const names[] = { "filter1", "filter2", "lfo1", "lfo2", "lfo3", "lfo4", "env1", "env2", "env3", "env4", "macros", "mixer", "fx", "mod", "master", "voice" };
+        const char* const names[] = { "filter1", "filter2", "lfo1", "lfo2", "lfo3", "lfo4", "env1", "env2", "env3", "env4", "osca", "oscb", "oscc", "oscsub", "oscnoise", "macros", "mixer", "fx", "mod", "master", "voice" };
         Rig r;
         bool all = true, pageKinds = true, wholeTab = true;
         for (const char* n : names)
@@ -60,15 +60,15 @@ int main()
                 wholeTab = wholeTab && lv.region.x == 0 && lv.region.w == 1280 && lv.region.h == 628 && lv.opaque;
             }
         }
-        check (all && pageKinds && wholeTab, "the layout has the 16 page views of the tabs the plugin draws entirely (whole tab, opaque)");
-        check (layout::isPageKind (layout::kKindPlay) && ! layout::isPageKind (layout::kKindOsc) && ! layout::isPageKind (layout::kKindFilter), "a page kind is the Play page and the pages of the elements; the oscillator tabs keep their own pictures");
+        check (all && pageKinds && wholeTab, "the layout has the 21 page views of the tabs the plugin draws entirely (whole tab, opaque)");
+        check (layout::isPageKind (layout::kKindPlay) && layout::isPageKind (layout::kKindOscUi) && ! layout::isPageKind (layout::kKindFilter), "a page kind is the Play page and the pages of the elements (the oscillators of the OSC tab included): no tab of the layout is a host page any more");
         check (layout::kNumViews <= 24, "the layout has " + std::to_string (layout::kNumViews) + " views (the detector holds 24)");
     }
     // ---- the controller opens the page of the element for the instance whose tab is on screen
     {
         Rig r;
         const int slot = r.ctl->slotOf (&r.inst);
-        const int filter1 = r.viewOf ("filter1"), mixer = r.viewOf ("mixer"), osc1 = r.viewOf ("osc1"), play1 = r.viewOf ("play1"), env2 = r.viewOf ("env2");
+        const int filter1 = r.viewOf ("filter1"), mixer = r.viewOf ("mixer"), osca = r.viewOf ("osca"), oscsub = r.viewOf ("oscsub"), play1 = r.viewOf ("play1"), env2 = r.viewOf ("env2");
         r.frame.setView (filter1, true, 90);
         r.run (600);
         check (r.ctl->currentIndex() == filter1 && ! r.ctl->uiState (slot).isMain() && r.ctl->uiState (slot).element() == FilterUi::kElementPage, "the Filter tab: the page of the filter element is open for the instance");
@@ -80,12 +80,21 @@ int main()
         check (r.ctl->currentIndex() == mixer && r.ctl->uiState (slot).element() == MixerUi::kElementPage && r.ctl->uiState (slot).depth() == 1, "the Mixer tab: the stack holds the mixer page only");
         r.ctl->openDetail (slot, MixerUi::kPageList);
         r.run (200);
-        // the same page again after another tab
+        // an oscillator page of the OSC tab: the page of the oscillator UI, clean (no detail page of the mixer)
         r.frame.setView (mixer, false, 90);
-        r.frame.setView (osc1, true, 90);
+        r.inst.playSel[0] = 3;   // the Play page's selector says oscillator B: the Osc A page must not follow it nor write it
+        r.frame.setView (osca, true, 90);
         r.run (500);
-        check (r.ctl->currentIndex() == osc1 && r.ctl->uiState (slot).isMain() && ! r.inst.uiFullOpen.load(), "a tab of the host (Osc 1): the stack is closed and the host widgets come back");
-        r.frame.setView (osc1, false, 90);
+        check (r.ctl->currentIndex() == osca && r.ctl->uiState (slot).element() == OscUi::kElementOsc && r.ctl->uiState (slot).depth() == 1 && r.inst.uiFullOpen.load(), "the Osc A tab: the full page of the oscillator UI is open, the host widgets are hidden");
+        {
+            const auto* pg = dynamic_cast<const pages::OscPage*> (r.ctl->currentView());
+            check (pg != nullptr && pg->ui().selection() == 2 && pg->ui().ui().selection() == 2 && r.inst.playSel[0] == 3, "the Osc A page shows oscillator A (selector number 2) whatever the Play selector says (B), and does not write it");
+        }
+        r.frame.setView (osca, false, 90);
+        r.frame.setView (oscsub, true, 90);
+        r.run (500);
+        check (r.ctl->currentIndex() == oscsub && r.ctl->uiState (slot).element() == OscUi::kElementOsc && r.inst.playSel[0] == 3, "the Sub tab: the same page for the sub oscillator; the Play selector is still B");
+        r.frame.setView (oscsub, false, 90);
         r.frame.setView (env2, true, 90);
         r.run (500);
         check (r.ctl->currentIndex() == env2 && r.ctl->uiState (slot).element() == EnvUi::kElementPage, "the Env 2 tab: the page of the envelope element");
@@ -150,9 +159,9 @@ int main()
         for (int i = 0; i < layout::kNumViews; ++i)
         {
             const int k = layout::kViews[i].kind;
-            expect += k == layout::kKindFilterUi ? 4 : (k == layout::kKindOsc ? 4 : (k == layout::kKindPlay ? 12 : 0));
+            expect += k == layout::kKindFilterUi ? 4 : (k == layout::kKindOscUi ? static_cast<int> (OscPageUi::targetsOf (layout::kViews[i].index).size()) : (k == layout::kKindPlay ? 12 : 0));
         }
-        check (filterPages == 2 && static_cast<int> (t.size()) == expect && expect <= synthyboy::LiveValues::kMaxTargets, "readout targets: " + std::to_string (t.size()) + " (the filter pages 4 each, the oscillators 4 each, the Play views 12 each), within the engine's " + std::to_string (synthyboy::LiveValues::kMaxTargets));
+        check (filterPages == 2 && static_cast<int> (t.size()) == expect && expect <= synthyboy::LiveValues::kMaxTargets, "readout targets: " + std::to_string (t.size()) + " (the filter pages 4 each, the oscillator pages A, B, C 4 each, the Play views 12 each), within the engine's " + std::to_string (synthyboy::LiveValues::kMaxTargets));
     }
     std::printf (g_fails ? "page_view_host: FAILED (%d)\n" : "page_view_host: OK\n", g_fails);
     return g_fails ? 1 : 0;

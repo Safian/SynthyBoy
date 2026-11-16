@@ -118,7 +118,7 @@ public:
     void update (IInstanceView& inst, int highlight, const UiStack& stack, double nowMs, int selectedEnv, int selectedLfo)
     {
         highlight_ = highlight;
-        const int sel = std::clamp (inst.playSelection (0), 1, playosc::kInstances);
+        const int sel = pageSel_ > 0 ? pageSel_ : std::clamp (inst.playSelection (0), 1, playosc::kInstances);
         const int typeIdx = typeParam (sel);
         const int raw = typeIdx >= 0 ? static_cast<int> (std::lround (inst.param (typeIdx))) : 0;
         if (sel != sel_ || raw != typeRaw_ || ! configured_)
@@ -143,6 +143,11 @@ public:
         inst.setUiFullOpen (! stack.isMain());
         publishQGroup (inst);
     }
+
+    /** This UI is a PAGE of the OSC tab (osc_page.h): the tab names the oscillator (`sel`: 1 Sub, 2 A, 3 B, 4 C, 5 Noise), so the selection is not the Play page's selector, the full screen has no CLOSE button (its place
+        carries the name) and nothing writes the selector. 0 (the default): the Play page's UI. */
+    void setPage (int sel) noexcept { pageSel_ = sel >= 1 && sel <= playosc::kInstances ? sel : 0; configured_ = false; }
+    bool isPage() const noexcept { return pageSel_ > 0; }
 
     /** The rectangle (canvas coordinates) the picture of the oscillator goes into now; empty when the current page shows none. */
     ui::Rect displayRect() const noexcept
@@ -353,6 +358,10 @@ private:
             typeName_[0] = '\0';
         compact_.setInstance (uiInstance(), kind);
         full_.setInstance (uiInstance(), kind);
+        {
+            static const char* const kTitles[playosc::kInstances] = { "SUB", "OSC A", "OSC B", "OSC C", "NOISE" };
+            full_.setPageTitle (pageSel_ > 0 ? kTitles[pageSel_ - 1] : "");
+        }
         if (otherType)
             full_.setUnsupportedType();
         full_.setActiveGroup (0);
@@ -1492,6 +1501,7 @@ private:
     std::vector<Item> main_, page_;
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false, configured_ = false, modsDirty_ = true, qSet_ = false;
+    int pageSel_ = 0;   // the oscillator of a page of the OSC tab (setPage), 0: the Play page's UI
     int w_ = 1280, h_ = 628, sel_ = 2, typeRaw_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = 0, pageLoaded_ = 0, qActive_ = 0;
     int envSel_ = 1, lfoSel_ = 1, selectedSource_ = ui::kNoSource;
     double modsAtMs_ = -1000.0;
