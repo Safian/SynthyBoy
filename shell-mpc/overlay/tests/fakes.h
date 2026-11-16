@@ -60,6 +60,7 @@ struct TempDir
         p.dumpRequest = path + "/dump";
         p.dump = path + "/curve.txt";
         p.qlinkSettings = path + "/MPC.settings";
+        p.backlightDir = path + "/backlight";
         return p;
     }
     void touch (const std::string& name) const { if (FILE* f = std::fopen ((path + "/" + name).c_str(), "w")) std::fclose (f); }
