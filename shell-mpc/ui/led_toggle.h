@@ -16,8 +16,8 @@ namespace led {
 constexpr int kRowH = 56;        // the touch height of a row
 constexpr int kMinToggleW = 96;
 constexpr int kDotX = 20;        // the centre of the dot, from the left edge of the row
-constexpr int kTextX = 38;       // the name starts here
-constexpr int kPadR = 12;
+constexpr int kTextX = 34;       // the name starts here
+constexpr int kPadR = 8;
 constexpr float kDotR = 6.5f;    // the radius of the lit dot (the ring of an unlit one is a little smaller: the same outer size)
 inline float nameSize() noexcept { return theme::L().fLabel + 4.0f; }
 /** The width a name needs in a row (dot, gap, text, right padding). */
@@ -42,6 +42,7 @@ public:
     LedToggle() { state.icon = Icon::Generic; }
     /** The width a toggle with this name needs (at least 96 px). */
     static int widthFor (const char* name) noexcept { return std::max (led::kMinToggleW, led::widthFor (name)); }
+    static constexpr int kBandW = 100;   // the width of a toggle that sits in the slot of a band of knobs
     Size minSize() const override { return { widthFor (state.label), led::kRowH }; }
 
 protected:

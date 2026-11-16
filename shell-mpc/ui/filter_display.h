@@ -14,6 +14,8 @@
 #include <string>
 
 #include "composite.h"
+#include "led_list.h"
+#include "led_toggle.h"
 #include "list.h"
 #include "panel.h"
 #include "qgroup.h"
@@ -740,13 +742,14 @@ class FilterFullScreen : public Composite
 {
 public:
     static constexpr int kMaxGroups = 4;   // MAIN, TRACK, OUT, FORMANT
-    static constexpr int kTopH = 56, kBandH = 214, kBlockTitleH = 34, kBlockPad = 4, kBlockGap = 6, kSlotGap = 2;   // four knobs of 100 px in a block: the pads and gaps are small
+    static constexpr int kRoutingW = 150;  // the ROUTING list: dot, "Series 1 to 2", padding
+    static constexpr int kTopH = 56, kBandH = 214, kBlockTitleH = 34, kBlockPad = 2, kBlockGap = 4, kSlotGap = 0, kBandMargin = 4;   // twelve slots of 100 px (the knobs' minimum) and the ROUTING list in one band: the pads and gaps are as small as they get
     MenuButton close { "CLOSE", MenuButton::Icon::None };
     ToggleIcon power;
     PictogramSelector instances;
     Stepper model, style;
     MenuButton modelList { "", MenuButton::Icon::Down };   // the list of the models
-    FilterToggle clean;                                    // CLEAN MODE
+    LedToggle clean;                                       // CLEAN MODE (a LED toggle: flat dot + name)
     RouteButton route { "M" };                             // OUTPUT: where the filter sends its signal (M main effects, D direct, - none)
     FilterDisplay display;
 
@@ -754,9 +757,10 @@ public:
     FilterKnob cutoff { "CUTOFF" }, resonance { "RESO" }, drive { "DRIVE" }, mix { "MIX" };
     // TRACK
     FilterKnob keytrack { "KEYTRACK" }, var { "VAR" }, combOffset { "COMB" };
-    ToggleIcon env1;
+    LedToggle env1;   // a LED toggle in its slot of the block
     // OUT
-    FilterKnob level { "LEVEL" }, pan { "PAN" }, blend { "BLEND" }, routing { "ROUTING" };   // ROUTING: the three ways the two filters are connected (a knob over a choice: it steps)
+    FilterKnob level { "LEVEL" }, pan { "PAN" }, blend { "BLEND" };
+    LedList routing;   // ROUTING: the three ways the two filters are connected, all three visible (the caption is drawn in the title strip of the block)
     // FORMANT
     FilterKnob formantX { "X" }, formantY { "Y" }, formantTrans { "TRANSPOSE" }, formantRes { "RESONANCE" }, formantSpread { "SPREAD" };
 
@@ -765,13 +769,8 @@ public:
     FilterFullScreen()
     {
         power.state.icon = ToggleIcon::Icon::Power;
-        env1.state.icon = ToggleIcon::Icon::Generic;
         env1.setLabel ("ENV 1");
-        env1.state.showState = false;
-        env1.state.knobLike = true;   // the cell of a knob, the name in line with the other names of the row
-        clean.state.icon = ToggleIcon::Icon::Generic;
         clean.setLabel ("CLEAN");
-        clean.state.showState = true;
 
         instances.setItem (0, -1, "F1");
         instances.setItem (1, -1, "F2");
@@ -881,7 +880,7 @@ protected:
         // 1. the top bar: CLOSE (a page has none), the power switch, F1 | F2 | F1+F2, the model and its list, the style, CLEAN, OUTPUT
         const Rect top { rect_.x + m, rect_.y + m, W - 2 * m, kTopH };
         Rect r[8];
-        const int fixed[8] = { pageMode_ ? 0 : 84, 56, 3 * 84, 0, 56, 0, 96, 64 + 70 }, weight[8] = { 0, 0, 0, 5, 0, 4, 0, 0 };
+        const int fixed[8] = { pageMode_ ? 0 : 84, 56, 3 * 84, 0, 56, 0, LedToggle::widthFor ("CLEAN"), 64 + 70 }, weight[8] = { 0, 0, 0, 5, 0, 4, 0, 0 };
         layoutRow (top, fixed, weight, 8, kGap, r);
         close.place (r[0]);
         power.place (r[1]);
@@ -894,26 +893,45 @@ protected:
         route.place ({ r[7].right() - 64, r[7].y - 4, 64, 64 });
 
         // 2. the bottom band: three blocks of four slots, one Q group each (a slot is a knob or a switch of the same size)
-        const int bandY = rect_.bottom() - m - kBandH;
-        const int avail = W - 2 * m - 2 * kBlockGap, wBlock = avail / 3;
-        mainBlock_ = { rect_.x + m, bandY, wBlock, kBandH };
-        trackBlock_ = { mainBlock_.right() + kBlockGap, bandY, wBlock, kBandH };
-        outBlock_ = { trackBlock_.right() + kBlockGap, bandY, rect_.right() - m - (trackBlock_.right() + kBlockGap), kBandH };
+        const int bandY = rect_.bottom() - kBandMargin - kBandH;
+        // the blocks are as wide as their slots need: a knob slot, the ENV 1 toggle (a LED toggle of its minimum width) and the ROUTING list (three rows of 56 px, the longest name in one column)
+        const int pads = 2 * kBlockPad + 3 * kSlotGap, togW = LedToggle::kBandW, listW = kRoutingW;
+        const int avail = W - 2 * kBandMargin - 2 * kBlockGap, unit = (avail - 3 * pads - togW - listW) / 10;
+        const int wMain = 4 * unit + pads, wTrack = 3 * unit + togW + pads;
+        mainBlock_ = { rect_.x + kBandMargin, bandY, wMain, kBandH };
+        trackBlock_ = { mainBlock_.right() + kBlockGap, bandY, wTrack, kBandH };
+        outBlock_ = { trackBlock_.right() + kBlockGap, bandY, rect_.right() - kBandMargin - (trackBlock_.right() + kBlockGap), kBandH };
         auto inner = [&] (const Rect& b) { return Rect { b.x + kBlockPad, b.y + kBlockTitleH, std::max (0, b.w - 2 * kBlockPad), std::max (0, b.h - kBlockTitleH - kBlockPad) }; };
-        auto fourSlots = [&] (const Rect& b, Component* c0, Component* c1, Component* c2, Component* c3)
+        // four slots side by side; `fixedW[i]` > 0: that slot has exactly that width, the others share the rest equally
+        auto fourSlots = [&] (const Rect& b, Component* c0, Component* c1, Component* c2, Component* c3, const int* fixedW)
         {
             const Rect in = inner (b);
-            const int cw = (in.w - 3 * kSlotGap) / 4;
-            Component* cs[4] = { c0, c1, c2, c3 };
+            int fixedSum = 0, nFree = 0;
             for (int i = 0; i < 4; ++i)
             {
-                const int x = in.x + i * (cw + kSlotGap), w = i == 3 ? in.right() - x : cw;
+                if (fixedW[i] > 0)
+                    fixedSum += fixedW[i];
+                else
+                    ++nFree;
+            }
+            const int cw = nFree > 0 ? (in.w - 3 * kSlotGap - fixedSum) / nFree : 0;
+            Component* cs[4] = { c0, c1, c2, c3 };
+            int x = in.x;
+            for (int i = 0; i < 4; ++i)
+            {
+                const int w = i == 3 ? in.right() - x : (fixedW[i] > 0 ? fixedW[i] : cw);
                 cs[i]->place ({ x, in.y, w, in.h });
+                x += w + kSlotGap;
             }
         };
-        fourSlots (mainBlock_, &cutoff, &resonance, &drive, &mix);
-        fourSlots (trackBlock_, &keytrack, &env1, &var, &combOffset);
-        fourSlots (outBlock_, &level, &pan, &blend, &routing);
+        const int noFixed[4] = { 0, 0, 0, 0 }, trackFixed[4] = { 0, togW, 0, 0 }, outFixed[4] = { 0, 0, 0, listW };
+        fourSlots (mainBlock_, &cutoff, &resonance, &drive, &mix, noFixed);
+        fourSlots (trackBlock_, &keytrack, &env1, &var, &combOffset, trackFixed);
+        fourSlots (outBlock_, &level, &pan, &blend, &routing, outFixed);
+        {   // ENV 1: a 56 px LED toggle at the height of the dials of its neighbours (the cell was a knob-sized switch)
+            const Rect c = env1.rect();
+            env1.place ({ c.x, c.y + std::max (0, (c.h - 42 - led::kRowH) / 2), c.w, led::kRowH });
+        }
 
         // 3. the display row: the display, and in the Formant model the XY pad with its block at the right
         const int midY = top.bottom() + m + 4, midH = std::max (60, bandY - m - midY);
@@ -984,6 +1002,8 @@ protected:
             if (i != 3 || isFormant_)
                 p.textLeft ({ blocks[i].x + kBlockPad + 4, blocks[i].y + 3, std::max (0, blocks[i].w - 2 * kBlockPad - 4), 16 }, groupName (i), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         p.textRight (outCaption_, "OUTPUT", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+        // the name of the LED list in the title strip of its block (the list has no title of its own: the three rows use the whole height)
+        p.textLeft ({ routing.rect().x + 28, outBlock_.y + 3, std::max (0, routing.rect().w - 28), 16 }, "ROUTING", T.fLabel - 2.0f, p.c (activeGroup_ == 2 ? T.q : T.textDim, 255), T.fMin);
     }
 
     bool isFormant_ = false, pageMode_ = false;

@@ -421,7 +421,10 @@ void testTouchTargetsAndLayoutSizes()
     int small = 0, leavesOk = 0;
     for (int i = 0; i < n; ++i)
         if (leaves[i]->rect().w > 0 && ! leaves[i]->sizeOk())
+        {
+            std::printf ("  too small: %d x %d (min %d x %d) id %d\n", leaves[i]->rect().w, leaves[i]->rect().h, leaves[i]->minSize().w, leaves[i]->minSize().h, leaves[i]->id());
             ++small;
+        }
         else
             ++leavesOk;
     check (small == 0, "every component of the page has at least its minimum size (" + std::to_string (leavesOk) + " ok, " + std::to_string (small) + " too small)");
@@ -765,8 +768,32 @@ void testDisabledControlDimming()
 
 } // namespace
 
+// ENV 1 and CLEAN are LED toggles, ROUTING a LED list of its three options (all visible); a tap writes the parameter, the lit dot follows it
+void testLedControls()
+{
+    Rig r;
+    ui::FilterFullScreen& f = r.ui.full();
+    r.refresh();
+    check (f.routing.state.count == 3 && f.routing.columns() == 1 && f.routing.rowRect (0).h >= 56 && f.routing.rowRect (2).h >= 56, "ROUTING: three options, one column, rows >= 56 px, all visible");
+    check (f.env1.rect().h >= 56 && f.env1.rect().w >= 96 && f.clean.rect().h >= 56 && f.clean.rect().w >= 96, "ENV 1 and CLEAN: LED toggles of at least 96 x 56 px");
+    const ui::Rect row2 = f.routing.rowRect (2);
+    r.tap (row2.x + row2.w / 2, row2.y + row2.h / 2);
+    r.refresh();
+    check (r.inst.get ("filter.routing") == 2.0f && f.routing.state.index == 2, "a tap on the third ROUTING option writes filter.routing = 2 and lights its dot");
+    check (f.activeGroup() == 2, "the tap made OUT the Q group");
+    const float env0 = r.inst.get ("filter1.env1");
+    r.tapC (f.env1);
+    r.refresh();
+    check (r.inst.get ("filter1.env1") != env0 && f.env1.state.on == (r.inst.get ("filter1.env1") > 0.5f), "a tap on ENV 1 flips filter1.env1 and its dot");
+    check (f.activeGroup() == 1, "the tap made TRACK the Q group");
+    r.tap (f.routing.rowRect (2).x + 20, f.routing.rowRect (2).y + 20);
+    r.turnQ (3, 1.0);
+    check (r.inst.get ("filter.routing") == 2.0f, "a Q-Link step up on the last ROUTING option stays (no wrap)");
+}
+
 int main()
 {
+    testLedControls();
     testEveryControlHasAParameter();
     testInstancesSwitching();
     testPageIsAlwaysOpen();

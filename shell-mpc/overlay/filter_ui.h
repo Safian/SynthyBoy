@@ -547,7 +547,7 @@ private:
     }
     std::vector<ui::Knob*> knobsOfPage()
     {
-        return { &full_.cutoff, &full_.resonance, &full_.drive, &full_.mix, &full_.keytrack, &full_.var, &full_.combOffset, &full_.level, &full_.pan, &full_.blend, &full_.routing,
+        return { &full_.cutoff, &full_.resonance, &full_.drive, &full_.mix, &full_.keytrack, &full_.var, &full_.combOffset, &full_.level, &full_.pan, &full_.blend,
                  &full_.formantX, &full_.formantY, &full_.formantTrans, &full_.formantRes, &full_.formantSpread };
     }
     const ui::Knob* knobOf (int id)
@@ -710,6 +710,16 @@ private:
         if (p >= 0)
             t.state.on = v.param (p) >= 0.5f;
     }
+    void pullList (IInstanceView& v, ui::LedList& l, int id)
+    {
+        const int p = paramForId (id, editFilter_);
+        l.setEnabled (p >= 0);
+        if (p < 0)
+            return;
+        const synthyboy::ParamInfo& pi = info (p);
+        l.setOptions (pi.choices, pi.numChoices);
+        l.state.index = std::clamp (static_cast<int> (std::lround (v.param (p))), 0, std::max (0, l.state.count - 1));
+    }
     void pullStepper (IInstanceView& v, ui::Stepper& s, int id)
     {
         const int p = paramForId (id, editFilter_);
@@ -738,10 +748,11 @@ private:
         pullToggle (inst, full_.power, kPower);
         pullToggle (inst, full_.clean, kClean);
         pullToggle (inst, full_.env1, kEnv1);
+        pullList (inst, full_.routing, kRouting);
         for (const auto& kid : { std::make_pair (&full_.cutoff, static_cast<int> (kCutoff)), std::make_pair (&full_.resonance, static_cast<int> (kResonance)), std::make_pair (&full_.drive, static_cast<int> (kDrive)),
                                  std::make_pair (&full_.mix, static_cast<int> (kMix)), std::make_pair (&full_.keytrack, static_cast<int> (kKeytrack)), std::make_pair (&full_.var, static_cast<int> (kVar)),
                                  std::make_pair (&full_.combOffset, static_cast<int> (kCombOffset)), std::make_pair (&full_.level, static_cast<int> (kLevel)), std::make_pair (&full_.pan, static_cast<int> (kPan)),
-                                 std::make_pair (&full_.blend, static_cast<int> (kBlend)), std::make_pair (&full_.routing, static_cast<int> (kRouting)), std::make_pair (&full_.formantX, static_cast<int> (kFormantX)), std::make_pair (&full_.formantY, static_cast<int> (kFormantY)),
+                                 std::make_pair (&full_.blend, static_cast<int> (kBlend)), std::make_pair (&full_.formantX, static_cast<int> (kFormantX)), std::make_pair (&full_.formantY, static_cast<int> (kFormantY)),
                                  std::make_pair (&full_.formantTrans, static_cast<int> (kFormantTrans)), std::make_pair (&full_.formantRes, static_cast<int> (kFormantRes)),
                                  std::make_pair (&full_.formantSpread, static_cast<int> (kFormantSpread)) })
             pullKnob (inst, *kid.first, kid.second);
