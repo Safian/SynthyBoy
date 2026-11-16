@@ -12,6 +12,7 @@
 // Nothing here allocates and nothing throws; every function is for threads that may block for a moment (the display thread, the overlay thread), never the audio thread.
 #pragma once
 
+#include <atomic>
 #include <cerrno>
 #include <cstddef>
 #include <cstdio>
@@ -153,6 +154,57 @@ inline bool readTwoNumbers (const char* path, double& a, double& b) noexcept
     a = x;
     b = y;
     return true;
+}
+
+/** Opens `path` for reading like openRegularForRead, but a symlink in the last component IS followed (a user's own sample or preset file may be a link); the target must be a regular file. Never blocks. */
+inline int openRegularFollowing (const char* path) noexcept
+{
+    if (path == nullptr || *path == '\0')
+        return -1;
+    const int fd = ::open (path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0)
+        return -1;
+    struct stat st;
+    if (::fstat (fd, &st) != 0 || ! S_ISREG (st.st_mode))
+    {
+        ::close (fd);
+        return -1;
+    }
+    return fd;
+}
+
+/** A user's file (a sample, a preset) read whole into `out` (anything with resize () and data (): std::vector<uint8_t>, std::string), for files that are meant to be big. The size comes from fstat of the opened regular file and must be in 1 .. `limit`
+    (else false, nothing is allocated); the file is read in blocks of 1 MB and `cancel` (may be null) is looked at between the blocks: a set flag ends the read at once (effClose is waiting). A FIFO, a device or a directory is refused, the open never blocks. */
+template <class Container>
+inline bool readWholeBounded (const char* path, Container& out, size_t limit, const std::atomic<bool>* cancel = nullptr) noexcept
+{
+    const int fd = openRegularFollowing (path);
+    if (fd < 0)
+        return false;
+    struct stat st;
+    bool ok = ::fstat (fd, &st) == 0 && st.st_size > 0 && static_cast<unsigned long long> (st.st_size) <= static_cast<unsigned long long> (limit);
+    const size_t total = ok ? static_cast<size_t> (st.st_size) : 0;
+    try { if (ok) out.resize (total); }
+    catch (...) { ok = false; }
+    size_t got = 0;
+    while (ok && got < total)
+    {
+        if (cancel != nullptr && cancel->load (std::memory_order_relaxed))
+        {
+            ok = false;
+            break;
+        }
+        const size_t want = total - got < (1u << 20) ? total - got : (1u << 20);
+        const ssize_t n = ::read (fd, reinterpret_cast<char*> (out.data()) + got, want);
+        if (n > 0)
+            got += static_cast<size_t> (n);
+        else if (n < 0 && errno == EINTR)
+            continue;
+        else
+            ok = false;   // shorter than fstat said (truncated while reading) or an error
+    }
+    ::close (fd);
+    return ok;
 }
 
 /** Opens `path` for writing under the rules above, truncated to 0 (-1: not possible: the name is a symlink, a FIFO, a directory, a device or cannot be created). `append`: no truncation, writes go to the end. */
