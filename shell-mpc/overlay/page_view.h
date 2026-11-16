@@ -127,6 +127,7 @@ public:
         return true;
     }
     bool onTouch (const TouchEvent& ev, UiStack& stack, IInstanceView& io, double nowMs) override { return ! stack.isMain() && ui_.touch (ev, stack, io, nowMs); }
+    bool onWheel (int x, int y, int notches, UiStack& stack, IInstanceView& io, double nowMs) override { return ! stack.isMain() && ui_.wheel (x, y, notches, stack, io, nowMs); }
     void onTick (UiStack& stack, IInstanceView& io, double nowMs) override { if (! stack.isMain()) ui_.tick (nowMs, stack, io); }
     void onShown() override { ui_.forgetQGroup(); }
     bool fingerDown() const noexcept override { return ui_.fingerDown(); }

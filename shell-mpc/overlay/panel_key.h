@@ -38,6 +38,50 @@ public:
     bool hasReference() const noexcept { return have_; }
     void forget() noexcept { have_ = false; }
 
+    /** The look that may become the reference: one of them is enough for the whole overlay (it belongs to the view that is on screen), so it is not part of every PanelKey. */
+    struct Candidate
+    {
+        uint32_t px[kRows][kCols] = {};
+        bool have = false;
+        double sinceMs = 0.0;
+        void drop() noexcept { have = false; }
+    };
+
+    /** Takes the reference only from a strip that stood still: the first look is the candidate, every later look must equal it (the same tolerance as the measure), and after `stableMs` the candidate becomes
+        the reference. A panel that slides in or out changes the strip all the time, so a reference is never taken from a strip with the panel part way in (it would hold the panel's black line at that place
+        and cut the picture there for good); the pop-up of a touch comes without any parameter write, so nothing but the picture itself can tell. Returns true on the look that took it. */
+    bool consider (IFrameSource& src, int rotation, double nowMs, double stableMs, Candidate& cand)
+    {
+        int w = 0, h = 0;
+        if (! src.begin (w, h))
+            return false;
+        uint32_t cur[kRows][kCols];
+        bool ok = true;
+        for (int r = 0; r < kRows && ok; ++r)
+            for (int c = 0; c < kCols && ok; ++c)
+                ok = sample (src, rotation, w, h, c, r, cur[r][c]);
+        src.end();
+        if (! ok)
+            return false;
+        bool same = cand.have;
+        for (int r = 0; r < kRows && same; ++r)
+            for (int c = 0; c < kCols && same; ++c)
+                same = ! differs (cur[r][c], cand.px[r][c]);
+        if (! same)
+        {
+            std::copy (&cur[0][0], &cur[0][0] + kRows * kCols, &cand.px[0][0]);
+            cand.have = true;
+            cand.sinceMs = nowMs;
+            return false;
+        }
+        if (nowMs - cand.sinceMs < stableMs)
+            return false;
+        std::copy (&cand.px[0][0], &cand.px[0][0] + kRows * kCols, &ref_[0][0]);
+        have_ = true;
+        cand.have = false;
+        return true;
+    }
+
     /** Takes the reference: the strip as it is now. The caller makes sure that nothing of the host lies over it (the page is whole, no knob is being turned). */
     bool capture (IFrameSource& src, int rotation)
     {
@@ -91,6 +135,30 @@ public:
             res.stale = firstBand == 0;
         }
         return res;
+    }
+
+    /** Without a reference: the cut at the panel's black line, found in the strip itself (the first sampled column in which most rows are black), or kNoKey when there is none. The line is two pixels wide and
+        runs over the whole height of the panel, which no page of the host does; the cut lies kGrow pixels left of it. */
+    static int findLine (IFrameSource& src, int rotation)
+    {
+        int w = 0, h = 0;
+        if (! src.begin (w, h))
+            return kNoKey;
+        int found = kNoKey;
+        for (int c = 0; c < kCols && found == kNoKey; ++c)
+        {
+            int black = 0;
+            for (int r = 0; r < kRows && black + (kRows - r) >= kBandRows; ++r)
+            {
+                uint32_t v = 0;
+                if (sample (src, rotation, w, h, c, r, v) && ! differs (v, 0u))
+                    ++black;
+            }
+            if (black >= kBandRows)
+                found = std::max (kX0, kX0 + c * kStep - kGrow);
+        }
+        src.end();
+        return found;
     }
 
     static int rowY (int r) noexcept { return kY0 + (kY1 - kY0) * r / (kRows - 1); }

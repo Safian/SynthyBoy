@@ -10,7 +10,9 @@
 //
 // LinuxPlaneBackend: the overlay plane is driven through the APPLICATION's descriptor. Only legacy SETPLANE on the one overlay plane, ADDFB2 / RMFB and dumb buffers; never client caps,
 // never a mode set, never an atomic commit, never the application's planes. The plane must be free (no CRTC, no framebuffer) when we start and must support AR24 (ARGB8888). The update
-// is issued at a vblank of the pace grid (vblank_pacer.h); a SETPLANE that fails moves the module to the next free plane before it gives up.
+// is issued at a vblank of the pace grid (vblank_pacer.h); a SETPLANE that fails moves the module to the next free plane before it gives up. One more write on the plane: its "zpos" property, only when
+// the driver has a MUTABLE one (the MPC XL; the Key 61 has none): the plane is put directly above the application's primary plane and below its pointer plane (discovery.h chooseZpos, stacking.h) before it
+// is first shown, and the value it had at rest is written back when the plane is released.
 //
 // LinuxFrameSource: reads the application's primary framebuffer read only through a descriptor of its OWN (opened here: a GEM handle closed on the app's descriptor could close the
 // app's own handle). GETCRTC -> framebuffer id, GETFB2 -> handle / size / pitch, PRIME export -> dma-buf, read-only mmap, DMA_BUF_SYNC around the reads. The app turns 2 or 3
@@ -40,11 +42,13 @@
 
 #include "discovery.h"
 #include "drm_interfaces.h"
+#include "mouse_input.h"
+#include "stacking.h"
 #include "vblank_linux.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
-class LinuxDisplay
+class LinuxDisplay final : public IZposDriver
 {
 public:
     ~LinuxDisplay()
@@ -138,6 +142,70 @@ public:
     unsigned planeSwitches() const noexcept { return planeSwitches_; }
     double discoveryMs() const noexcept { return discoveryMs_; }
 
+    // ---- the zpos property (IZposDriver). Read through our own descriptor, written through the application's (the master: a property of a plane may only be set by it).
+    bool readZpos (uint32_t plane, PlaneZpos& out) override
+    {
+        out = PlaneZpos();
+        const PlaneInfo* pi = planeInfo (plane);
+        if (pi == nullptr)
+            return false;
+        if (! pi->hasZpos || pi->zposProp == 0)
+            return true;                          // a plane without the property: read, has none
+        uint64_t v = pi->zpos;
+        if (! planePropertyValue (own_, plane, pi->zposProp, v))
+            return false;
+        out.has = true;
+        out.mutableProp = pi->zposMutable;
+        out.min = pi->zposMin;
+        out.max = pi->zposMax;
+        out.value = v;
+        return true;
+    }
+    bool writeZpos (uint32_t plane, uint64_t value, std::string& error) override
+    {
+        const PlaneInfo* pi = planeInfo (plane);
+        if (pi == nullptr || pi->zposProp == 0)
+        {
+            error = "no zpos property on plane " + std::to_string (plane);
+            return false;
+        }
+        drm_mode_obj_set_property s;
+        std::memset (&s, 0, sizeof s);
+        s.value = value;
+        s.prop_id = pi->zposProp;
+        s.obj_id = plane;
+        s.obj_type = DRM_MODE_OBJECT_PLANE;
+        if (ioctl (fd_, DRM_IOCTL_MODE_OBJ_SETPROPERTY, &s) < 0)
+        {
+            error = std::string ("OBJ_SETPROPERTY zpos: ") + std::strerror (errno);
+            return false;
+        }
+        return true;
+    }
+    std::vector<uint32_t> allPlaneIds() const
+    {
+        std::vector<uint32_t> ids;
+        for (const PlaneInfo& p : planes_)
+            ids.push_back (p.id);
+        return ids;
+    }
+    /** The planes the application has on our CRTC right now (a plane that shows a framebuffer on it), our own plane left out: its pointer may have appeared since the discovery. */
+    std::vector<uint32_t> liveAppPlanes()
+    {
+        std::vector<uint32_t> out = info_.appPlanes;
+        for (const PlaneInfo& p : planes_)
+        {
+            if (p.id == info_.plane() || std::find (out.begin(), out.end(), p.id) != out.end())
+                continue;
+            drm_mode_get_plane gp;
+            std::memset (&gp, 0, sizeof gp);
+            gp.plane_id = p.id;
+            if (ioctl (own_, DRM_IOCTL_MODE_GETPLANE, &gp) == 0 && gp.crtc_id == info_.crtc && gp.fb_id != 0)
+                out.push_back (p.id);
+        }
+        return out;
+    }
+
     void describe (std::string& out) const
     {
         out += "display_device: " + info_.device + "\n";
@@ -222,6 +290,7 @@ private:
             }
             fd_ = c.fd;
             own_ = own;
+            planes_ = snap.planes;
             info_ = d;
             info_.ok = true;
             measure();
@@ -352,14 +421,64 @@ private:
             {
                 pi.hasZpos = true;
                 pi.zpos = vals[i];
+                pi.zposProp = ids[i];
+                // a range that may be written (not immutable): its limits are the property's values (a second call fetches them)
+                if ((gp.flags & DRM_MODE_PROP_LEGACY_TYPE) == DRM_MODE_PROP_RANGE && ! (gp.flags & DRM_MODE_PROP_IMMUTABLE) && gp.count_values >= 2)
+                {
+                    std::vector<uint64_t> range (gp.count_values);
+                    drm_mode_get_property g2;
+                    std::memset (&g2, 0, sizeof g2);
+                    g2.prop_id = ids[i];
+                    g2.count_values = gp.count_values;
+                    g2.values_ptr = reinterpret_cast<uintptr_t> (range.data());
+                    if (ioctl (fd, DRM_IOCTL_MODE_GETPROPERTY, &g2) == 0)
+                    {
+                        pi.zposMutable = true;
+                        pi.zposMin = range[0];
+                        pi.zposMax = range[1];
+                    }
+                }
             }
         }
+    }
+
+    const PlaneInfo* planeInfo (uint32_t id) const
+    {
+        for (const PlaneInfo& p : planes_)
+            if (p.id == id)
+                return &p;
+        return nullptr;
+    }
+
+    /** The current value of property `prop` of a plane (OBJ_GETPROPERTIES). */
+    static bool planePropertyValue (int fd, uint32_t plane, uint32_t prop, uint64_t& value)
+    {
+        drm_mode_obj_get_properties g;
+        std::memset (&g, 0, sizeof g);
+        g.obj_id = plane;
+        g.obj_type = DRM_MODE_OBJECT_PLANE;
+        if (ioctl (fd, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &g) < 0 || g.count_props == 0)
+            return false;
+        std::vector<uint32_t> ids (g.count_props);
+        std::vector<uint64_t> vals (g.count_props);
+        g.props_ptr = reinterpret_cast<uintptr_t> (ids.data());
+        g.prop_values_ptr = reinterpret_cast<uintptr_t> (vals.data());
+        if (ioctl (fd, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &g) < 0)
+            return false;
+        for (uint32_t i = 0; i < g.count_props && i < ids.size(); ++i)
+            if (ids[i] == prop)
+            {
+                value = vals[i];
+                return true;
+            }
+        return false;
     }
 
     int state_ = 0;   // 0 not yet, 1 found, 2 failed
     std::string error_;
     int fd_ = -1, own_ = -1;
     DisplayInfo info_;
+    std::vector<PlaneInfo> planes_;      // the snapshot of the discovery (the properties' ids and ranges)
     PaceParams pace_;
     uint32_t lastFb_ = 0;
     bool switchedOff_ = false;
@@ -370,7 +489,7 @@ private:
 class LinuxPlaneBackend final : public IPlaneBackend
 {
 public:
-    explicit LinuxPlaneBackend (std::shared_ptr<LinuxDisplay> display) : display_ (std::move (display)) {}
+    explicit LinuxPlaneBackend (std::shared_ptr<LinuxDisplay> display) : display_ (std::move (display)), stacking_ (*display_) {}
     ~LinuxPlaneBackend() override
     {
         disablePlane();
@@ -458,6 +577,11 @@ public:
     {
         if (index < 0 || index > 1 || buf_[index].fb == 0)
             return fail (error, "no buffer");
+        if (! planeSet_ || stackingDirty_)
+        {
+            stackingDirty_ = false;
+            takeStacking();               // before the plane is first shown (and again when it was switched off and is set again): above the host's picture, below its pointer
+        }
         if (pace_)
             pace_->pacer.waitSlot();      // the vblank of the next slot of the grid: the update is made the moment it is reached
         bool ok = doSetPlane (index, panel);
@@ -466,11 +590,12 @@ public:
             // the plane may have been taken by another program since the discovery: the next free one
             const int err = errno;
             std::string why;
-            if (! display_->crtcActive() || ! display_->advance (why))
+            if (! display_->crtcActive() || ! stackingLeave() || ! display_->advance (why))
             {
                 errno = err;
                 break;
             }
+            takeStacking();               // the new plane
             ok = doSetPlane (index, panel);
         }
         if (! ok)
@@ -486,7 +611,19 @@ public:
     uint32_t planeId() const noexcept override { return display_->plane(); }
     PaceParams paceParams() const noexcept override { return display_->pace(); }
     bool planeStillOurs (std::string& why) override { return display_->planeStillOurs (why); }
-    bool planeWasSwitchedOff() noexcept override { return display_->takeSwitchedOff(); }
+    bool planeWasSwitchedOff() noexcept override
+    {
+        const bool v = display_->takeSwitchedOff();
+        if (v)
+            stackingDirty_ = true;       // a mode set of the application may have reset the zpos with the rest of the plane
+        return v;
+    }
+    void takeStacking() override
+    {
+        if (display_->ready() && display_->plane() != 0)
+            stacking_.take (display_->plane(), display_->info().primaryPlane, display_->liveAppPlanes());
+    }
+    void releaseStacking() noexcept override { stacking_.release(); }
     bool nextPlane (std::string& why) override
     {
         planeSet_ = false;
@@ -495,20 +632,29 @@ public:
             why = "the display is off (the CRTC has no mode): the plane is kept";   // a failure while the display is off is no loss of the plane
             return true;
         }
+        stackingLeave();
         return display_->advance (why);
     }
-    void describe (std::string& out) const override { display_->describe (out); }
+    void describe (std::string& out) const override
+    {
+        display_->describe (out);
+        stacking_.describe (out);
+    }
     const PaceStats* paceStats() const noexcept override { return pace_ ? &pace_->pacer.stats() : nullptr; }
 
     void disablePlane() noexcept override
     {
-        if (fd_ < 0 || ! planeSet_)
+        if (fd_ < 0)
             return;
-        drm_mode_set_plane s;
-        std::memset (&s, 0, sizeof s);
-        s.plane_id = display_->plane();   // fb 0 and crtc 0 take the plane off
-        ioctl (fd_, DRM_IOCTL_MODE_SETPLANE, &s);
-        planeSet_ = false;
+        if (planeSet_)
+        {
+            drm_mode_set_plane s;
+            std::memset (&s, 0, sizeof s);
+            s.plane_id = display_->plane();   // fb 0 and crtc 0 take the plane off
+            ioctl (fd_, DRM_IOCTL_MODE_SETPLANE, &s);
+            planeSet_ = false;
+        }
+        stacking_.release();                  // the plane is off: its zpos goes back to what it had at rest
     }
 
     int displayFd() const noexcept override { return fd_; }
@@ -522,6 +668,7 @@ public:
         s.plane_id = display_->plane();
         ioctl (fd_, DRM_IOCTL_MODE_SETPLANE, &s);
         planeSet_ = false;
+        stacking_.release();
     }
 
     void removeForeign (uint32_t fbId, uint32_t gemHandle) noexcept override
@@ -578,6 +725,16 @@ private:
         return false;
     }
 
+    /** The plane we hold is given up (SETPLANE failed on it, or it was taken): if nobody holds it (it is free) the zpos it had at rest is put back; a plane another program has is not touched. Always true. */
+    bool stackingLeave() noexcept
+    {
+        if (display_->planeFree (display_->plane()))
+            stacking_.release();
+        else
+            stacking_.drop();
+        return true;
+    }
+
     bool doSetPlane (int index, const Rect& panel)
     {
         drm_mode_set_plane s;
@@ -604,10 +761,166 @@ private:
     };
 
     std::shared_ptr<LinuxDisplay> display_;
+    StackingGuard stacking_;
     int fd_ = -1;   // the application's descriptor: borrowed, never closed here
-    bool planeSet_ = false;
+    bool planeSet_ = false, stackingDirty_ = false;
     Buf buf_[2];
     std::unique_ptr<Pacing> pace_;
+};
+
+/** The host's pointer plane: the application's small plane (at most 128 x 128 pixels: the arrow) on our CRTC, with the framebuffer of the arrow on it. Its position is the plane's CRTC_X / CRTC_Y, read from the
+    properties through a descriptor of our own with the atomic capability (a capability of that descriptor only: the properties of the atomic API are not listed to a client without it; the legacy GETPLANE gives no
+    position). Nothing is written. Called from the overlay thread, at the moment of a button or wheel event and while a button is held (at most once per picture). */
+class LinuxPointerSource final : public IPointerSource
+{
+public:
+    explicit LinuxPointerSource (std::shared_ptr<LinuxDisplay> display) : display_ (std::move (display)) {}
+    ~LinuxPointerSource() override
+    {
+        if (fd_ >= 0)
+            ::close (fd_);
+    }
+
+    PointerPlane read() override
+    {
+        PointerPlane out;
+        if (! open())
+            return out;
+        PlaneProps p;
+        if (plane_ != 0 && readPlane (plane_, p) && usable (p))
+            return fill (plane_, p);
+        plane_ = 0;
+        for (uint32_t id : display_->allPlaneIds())
+        {
+            if (id == display_->plane() || id == display_->info().primaryPlane)
+                continue;
+            if (readPlane (id, p) && usable (p))
+            {
+                plane_ = id;
+                return fill (id, p);
+            }
+        }
+        return out;
+    }
+
+    std::string describe() const override { return "pointer_source: " + (reason_.empty() ? std::string (fd_ >= 0 ? "atomic properties of the CRTC_X / CRTC_Y of the pointer plane" : "not opened yet") : "unavailable: " + reason_) + "\n"; }
+
+private:
+    struct PlaneProps { bool ok = false; uint64_t crtc = 0, fb = 0; int64_t x = 0, y = 0, w = 0, h = 0; };
+
+    bool open()
+    {
+        if (fd_ >= 0)
+            return true;
+        if (! reason_.empty() || ! display_->ready())
+            return false;
+        fd_ = ::open (display_->info().device.c_str(), O_RDWR | O_CLOEXEC);
+        if (fd_ < 0)
+        {
+            reason_ = "cannot open " + display_->info().device + ": " + std::strerror (errno);
+            return false;
+        }
+        drm_set_client_cap cap;
+        std::memset (&cap, 0, sizeof cap);
+        cap.capability = DRM_CLIENT_CAP_UNIVERSAL_PLANES;
+        cap.value = 1;
+        ioctl (fd_, DRM_IOCTL_SET_CLIENT_CAP, &cap);
+        cap.capability = DRM_CLIENT_CAP_ATOMIC;       // on this descriptor only: the plane's CRTC_X / CRTC_Y are properties of the atomic API
+        cap.value = 1;
+        if (ioctl (fd_, DRM_IOCTL_SET_CLIENT_CAP, &cap) < 0)
+        {
+            reason_ = std::string ("DRM_CLIENT_CAP_ATOMIC: ") + std::strerror (errno);
+            ::close (fd_);
+            fd_ = -1;
+            return false;
+        }
+        return true;
+    }
+
+    /** The ids of the properties by name (the same for every plane of the driver), learnt from the first plane read. */
+    bool learn (uint32_t plane)
+    {
+        drm_mode_obj_get_properties g;
+        std::memset (&g, 0, sizeof g);
+        g.obj_id = plane;
+        g.obj_type = DRM_MODE_OBJECT_PLANE;
+        if (ioctl (fd_, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &g) < 0 || g.count_props == 0)
+            return false;
+        std::vector<uint32_t> ids (g.count_props);
+        std::vector<uint64_t> vals (g.count_props);
+        g.props_ptr = reinterpret_cast<uintptr_t> (ids.data());
+        g.prop_values_ptr = reinterpret_cast<uintptr_t> (vals.data());
+        if (ioctl (fd_, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &g) < 0)
+            return false;
+        for (uint32_t i = 0; i < g.count_props && i < ids.size(); ++i)
+        {
+            drm_mode_get_property gp;
+            std::memset (&gp, 0, sizeof gp);
+            gp.prop_id = ids[i];
+            if (ioctl (fd_, DRM_IOCTL_MODE_GETPROPERTY, &gp) < 0)
+                continue;
+            if (! std::strcmp (gp.name, "CRTC_X")) pX_ = ids[i];
+            else if (! std::strcmp (gp.name, "CRTC_Y")) pY_ = ids[i];
+            else if (! std::strcmp (gp.name, "CRTC_W")) pW_ = ids[i];
+            else if (! std::strcmp (gp.name, "CRTC_H")) pH_ = ids[i];
+            else if (! std::strcmp (gp.name, "CRTC_ID")) pCrtc_ = ids[i];
+            else if (! std::strcmp (gp.name, "FB_ID")) pFb_ = ids[i];
+        }
+        if (! (pX_ && pY_ && pW_ && pH_ && pCrtc_ && pFb_))
+        {
+            reason_ = "the plane has no CRTC_X / CRTC_Y / CRTC_W / CRTC_H / CRTC_ID / FB_ID property (the driver is not atomic)";
+            return false;
+        }
+        return true;
+    }
+
+    bool readPlane (uint32_t plane, PlaneProps& p)
+    {
+        p = PlaneProps();
+        if (! pX_ && ! learn (plane))
+            return false;
+        uint32_t ids[64];
+        uint64_t vals[64];
+        drm_mode_obj_get_properties g;
+        std::memset (&g, 0, sizeof g);
+        g.obj_id = plane;
+        g.obj_type = DRM_MODE_OBJECT_PLANE;
+        g.count_props = 64;
+        g.props_ptr = reinterpret_cast<uintptr_t> (ids);
+        g.prop_values_ptr = reinterpret_cast<uintptr_t> (vals);
+        if (ioctl (fd_, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &g) < 0)
+            return false;
+        for (uint32_t i = 0; i < g.count_props && i < 64; ++i)
+        {
+            if (ids[i] == pX_) p.x = static_cast<int64_t> (vals[i]);
+            else if (ids[i] == pY_) p.y = static_cast<int64_t> (vals[i]);
+            else if (ids[i] == pW_) p.w = static_cast<int64_t> (vals[i]);
+            else if (ids[i] == pH_) p.h = static_cast<int64_t> (vals[i]);
+            else if (ids[i] == pCrtc_) p.crtc = vals[i];
+            else if (ids[i] == pFb_) p.fb = vals[i];
+        }
+        p.ok = true;
+        return true;
+    }
+
+    bool usable (const PlaneProps& p) const noexcept { return p.ok && p.fb != 0 && p.crtc == display_->info().crtc && p.w > 0 && p.h > 0 && p.w <= 128 && p.h <= 128; }
+
+    static PointerPlane fill (uint32_t id, const PlaneProps& p)
+    {
+        PointerPlane out;
+        out.valid = true;
+        out.id = id;
+        out.x = static_cast<int> (p.x);
+        out.y = static_cast<int> (p.y);
+        out.w = static_cast<int> (p.w);
+        out.h = static_cast<int> (p.h);
+        return out;
+    }
+
+    std::shared_ptr<LinuxDisplay> display_;
+    int fd_ = -1;
+    uint32_t plane_ = 0, pX_ = 0, pY_ = 0, pW_ = 0, pH_ = 0, pCrtc_ = 0, pFb_ = 0;
+    std::string reason_;
 };
 
 class LinuxFrameSource final : public IFrameSource

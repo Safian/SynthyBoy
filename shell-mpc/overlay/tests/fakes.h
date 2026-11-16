@@ -59,6 +59,7 @@ struct TempDir
         p.status = path + "/status.txt";
         p.dumpRequest = path + "/dump";
         p.dump = path + "/curve.txt";
+        p.qlinkSettings = path + "/MPC.settings";
         return p;
     }
     void touch (const std::string& name) const { if (FILE* f = std::fopen ((path + "/" + name).c_str(), "w")) std::fclose (f); }
@@ -155,6 +156,8 @@ public:
     // for the GPU helper: the descriptor, the forced plane off, the objects another process made on the shared descriptor (the fake helper of gpu_backend_host.cpp adds them)
     int displayFd() const noexcept override { return 42; }
     void forceDisablePlane() noexcept override { log ("forcedisable"); planeOn = false; }
+    void takeStacking() override { log ("takestacking"); }
+    void releaseStacking() noexcept override { log ("releasestacking"); }
     void removeForeign (uint32_t fb, uint32_t handle) noexcept override
     {
         std::lock_guard<std::mutex> g (mu_);
