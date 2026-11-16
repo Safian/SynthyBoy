@@ -393,6 +393,7 @@ struct PluginInstance
         void setQVirtual (int id, float normalised) noexcept override { inst.qRouter.setVirtualValue (id, normalised); }
         bool takeQVirtual (int id, float& normalised) noexcept override { return inst.qRouter.takeVirtual (id, normalised); }
         unsigned long qWriteCount() const noexcept override { return inst.qRouter.writeCount(); }
+        void qStatus (std::string& out) const override { inst.qRouter.describe (out); }
         double sampleRate() const noexcept override { return inst.overlayRate.load (std::memory_order_relaxed); }
         void requestOverlayReport() noexcept override
         {
@@ -790,7 +791,7 @@ struct PluginInstance
         if (q >= 1 && q <= synthyboy_mpc::QRouter::kCount && e != nullptr && e->setParameter != nullptr)
             e->setParameter (e, qBase() + q - 1, static_cast<float> (v));
     }
-    /** Debug switch: while the file /tmp/synthyboy-overlay-q-step-travel exists its first number is the travel of a Q proxy per step of a stepped target, in 1/128 host increments (default 3). Display thread. */
+    /** Debug switch: while the file /tmp/synthyboy-overlay-q-step-travel exists its first number is the travel of a Q proxy per step of a stepped target, in 1/128 host increments (default 6). Display thread. */
     void qStepTravelFile()
     {
         std::ifstream f ("/tmp/synthyboy-overlay-q-step-travel");

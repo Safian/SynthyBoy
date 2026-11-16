@@ -14,6 +14,8 @@
 #pragma once
 
 #include <atomic>
+#include <cstdio>
+#include <string>
 #include <algorithm>
 #include <cmath>
 
@@ -137,13 +139,31 @@ public:
 
     /** Relative stepping of STEPPED targets (a toggle, a list, an integer stepper): the proxy's absolute 0 .. 1 is the wrong control for them (a toggle needs half of the knob's travel, a short list a third), so the travel of
         the host's value since its last write is accumulated and one step of the target happens per kStepTravelDefault of travel, in the direction of the turn. Proxy units; the plugin may override it from a debug file. */
-    static constexpr float kStepTravelDefault = 3.0f / 128.0f;   // 3 host increments of 1/128 (to be calibrated on the devices)
+    static constexpr float kStepTravelDefault = 6.0f / 128.0f;   // 6 host increments of 1/128 per step (owner, MPC XL, 2026-11-16: the first 3 were half of what feels right); the file /tmp/synthyboy-overlay-q-step-travel still overrides it
     void setStepTravel (float t) noexcept { stepTravel_.store (t > 1.0e-4f ? t : kStepTravelDefault, std::memory_order_relaxed); }
     float stepTravel() const noexcept { return stepTravel_.load (std::memory_order_relaxed); }
     /** For the status file: the raw value the host wrote to Q q last, the delta of that write, the travel accumulated for the next step. */
     float lastRaw (int q) const noexcept { return q >= 0 && q < kCount ? dbgRaw_[q].load (std::memory_order_relaxed) : 0.0f; }
     float lastDelta (int q) const noexcept { return q >= 0 && q < kCount ? dbgDelta_[q].load (std::memory_order_relaxed) : 0.0f; }
     float travel (int q) const noexcept { return q >= 0 && q < kCount ? acc_[q].load (std::memory_order_relaxed) : 0.0f; }
+    /** The status file lines of the stepping: the travel per step in force, and for every knob that has a stepped-capable target the last raw value the host wrote, the delta of that write (both in proxy units 0 .. 1 and
+        in 1/128 increments) and the travel accumulated towards the next step. `q_step_travel` says where the number comes from (`overridden` by the debug file or the default). A knob without a target has no line. */
+    void describe (std::string& out) const
+    {
+        char b[240];
+        const float st = stepTravel();
+        std::snprintf (b, sizeof b, "q_step_travel: %.6f (%.2f increments of 1/128, %s)\n", static_cast<double> (st), static_cast<double> (st * 128.0f), std::fabs (st - kStepTravelDefault) < 1.0e-7f ? "default" : "overridden");
+        out += b;
+        for (int q = 0; q < kCount; ++q)
+        {
+            const int t = target (q);
+            if (t == kNone)
+                continue;
+            std::snprintf (b, sizeof b, "q_knob_%d: target %d, raw %.6f (%.2f/128), delta %+.6f (%+.2f/128), travel %+.6f (%+.2f/128 of %.2f per step)\n", q + 1, t, static_cast<double> (lastRaw (q)), static_cast<double> (lastRaw (q) * 128.0f),
+                           static_cast<double> (lastDelta (q)), static_cast<double> (lastDelta (q) * 128.0f), static_cast<double> (travel (q)), static_cast<double> (travel (q) * 128.0f), static_cast<double> (st * 128.0f));
+            out += b;
+        }
+    }
 
     /** As hostWrite below, with `stepsOf (tableIndex)`: the number of values of a stepped target (a toggle 2, a list its entries), 0 for a continuous one. A stepped plain target is driven relatively (see kStepTravelDefault):
         steps happen in the direction of the turn, a change of direction starts the travel again, at the ends nothing happens; the poll then reports the target's real position to the host, so the host's own value never
