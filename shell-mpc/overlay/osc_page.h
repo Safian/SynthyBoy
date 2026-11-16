@@ -68,6 +68,7 @@ public:
     void forgetQGroup() noexcept { osc_.forgetQGroup(); }
     int topPage() const noexcept { return osc_.topPage(); }
     const int* qTargets() const noexcept { return osc_.qTargets(); }
+    int qSlotCount() const noexcept { return QRouter::kCount; }
 
     // ---- access for the tests
     OscUi& ui() noexcept { return osc_; }

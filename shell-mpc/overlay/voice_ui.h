@@ -204,6 +204,7 @@ public:
     }
     int activeQ() const noexcept { return full_.activeGroup(); }
     const int* qTargets() const noexcept { return qSlots_.data(); }
+    int qSlotCount() const noexcept { return QRouter::kCount; }
 
 private:
     void bind (int id, ui::Component* c, T type, const std::string& key, int row = -1, int step = -1)

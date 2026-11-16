@@ -99,6 +99,7 @@ public:
     int numCards() const noexcept { return static_cast<int> (cardItems_.size()); }
     const synthyboy::FxRackItem& cardItem (int i) const noexcept { return cardItems_[static_cast<size_t> (i)]; }
     const int* qTargets() const noexcept { return qSlots_.data(); }
+    int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
     int topPage() const noexcept { return listOpen_ ? kPageList : 0; }
 

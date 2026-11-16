@@ -83,6 +83,7 @@ public:
     const StripBinding& binding (int strip) const noexcept { return bindings_[strip]; }
     int topPage() const noexcept { return listOpen_ ? kPageList : 0; }
     const int* qTargets() const noexcept { return qSlots_.data(); }
+    int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return screen_.groupName (screen_.activeGroup()); }
 
     /** Reads the instance: every value of every strip, the meters, the pages of the stack, the Q group. */

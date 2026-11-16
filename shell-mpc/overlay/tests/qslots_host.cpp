@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 
+#include "../env_ui.h"
 #include "../filter_ui.h"
 #include "../fx_ui.h"
 #include "../macro_ui.h"
@@ -251,6 +252,13 @@ void testOneGroupPage()
     check (inst.qN == 16 && used >= 1 && used <= 4 && inst.q[4] == -1 && inst.q[8] == -1 && inst.q[15] == -1, "the compact oscillator view (one group): only the first four slots can have a target (" + std::to_string (used) + " set)");
 }
 
+void testStatusSlotCount()
+{
+    MixerUi mixer;
+    EnvUi env;
+    check (page::QSlotCount<MixerUi>::of (mixer) == 16 && page::QSlotCount<EnvUi>::of (env) == 4, "the status file lists 16 slots for a page that publishes them (page_q_slots) and 4 for one that still publishes one group");
+}
+
 void testDeviceRule()
 {
     check (hasSixteenQLinks ("Akai Professional MPC XL", false) && hasSixteenQLinks ("Akai Professional MPC XL", true), "device rule: a name that says XL means 16 knobs, whatever the architecture");
@@ -293,6 +301,7 @@ int main()
     testMacros();
     testFx();
     testOneGroupPage();
+    testStatusSlotCount();
     testDeviceRule();
     testChips();
     std::printf (g_fails ? "qslots_host: FAILED (%d)\n" : "qslots_host: OK\n", g_fails);

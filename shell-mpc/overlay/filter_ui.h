@@ -132,6 +132,7 @@ public:
     int editFilter() const noexcept { return editFilter_; }  // 1 or 2: the filter the knobs belong to
     bool isDual() const noexcept { return sel_ == 3; }
     const int* qTargets() const noexcept { return qSlots_.data(); }
+    int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
     int topPage() const noexcept { return pageTop_; }
     ui::Rect displayRect() const noexcept { return full_.displayRect(); }

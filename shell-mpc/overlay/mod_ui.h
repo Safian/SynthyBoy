@@ -188,6 +188,7 @@ public:
     }
 
     const int* qTargets() const noexcept { return qSlots_.data(); }
+    int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
     int topPage() const noexcept { return pageTop_; }
     int openSlot() const noexcept { return openSlot_; }

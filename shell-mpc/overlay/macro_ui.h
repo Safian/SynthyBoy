@@ -179,6 +179,7 @@ public:
     }
 
     const int* qTargets() const noexcept { return qSlots_.data(); }
+    int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
     int topPage() const noexcept { return pageTop_; }
     /** The macro whose targets page is open (0 .. 7), -1 none. */

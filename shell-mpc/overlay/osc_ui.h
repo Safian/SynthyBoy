@@ -174,6 +174,7 @@ public:
     const char* typeName() const noexcept { return typeName_; }
     /** The list of the targets of the active Q group (table indices, -1 none) and the name of the group. */
     const int* qTargets() const noexcept { return qSlots_.data(); }
+    int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
 
     void draw (gpu::SceneBuilder& sb) const
