@@ -300,6 +300,21 @@ static void testStacking()
         r.backend.request (r.now);
         check (r.plane.countOf ("takestacking") == 3 && r.helper.stackingTakesAtStart == 3, "the helper starts again: the stacking is taken again before it");
     }
+    {   // the order of the plane is checked while the helper shows it (a presenter hide () or a mode set of the application may have changed the zpos behind our back: the XL defect of 2026-11-16)
+        auto rig = std::make_unique<BackendRig>();
+        BackendRig& r = *rig;
+        r.backend.request (r.now);
+        r.advance (100.0);
+        check (r.backend.show (r.ui, r.panel, 90, 0, "filter1", r.now), "the helper shows a view (check of the order)");
+        r.advance (200.0);
+        const int t0 = r.plane.countOf ("takestacking");
+        r.advance (1000.0);
+        check (r.plane.countOf ("takestacking") == t0, "not checked again within the first second");
+        r.advance (2100.0);
+        check (r.plane.countOf ("takestacking") == t0 + 1, "while the helper shows, the order of the plane is checked after two seconds (" + std::to_string (r.plane.countOf ("takestacking") - t0) + " more takes)");
+        r.advance (2100.0);
+        check (r.plane.countOf ("takestacking") == t0 + 2, "... and again after two more");
+    }
     {
         auto rig = std::make_unique<BackendRig>();   // on the heap: a rig is big, and under the sanitizer every block of main keeps its frame
         BackendRig& r = *rig;

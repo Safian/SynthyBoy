@@ -41,7 +41,8 @@ void setNumber (std::string& text, const std::string& key, double value)
 
 std::string asVersion3 (std::string text)
 {
-    text.replace (text.find ("\"version\":4"), 11, "\"version\":3");
+    const std::string current = "\"version\":" + std::to_string (kStateVersion);   // the version the writer writes now (4 when this test was made, 5 since the LFO grid)
+    text.replace (text.find (current), current.size(), "\"version\":3");
     return text;
 }
 
@@ -153,7 +154,7 @@ TEST (version_4_document_is_not_rescaled_and_round_trips)
     v.plain[indexOfKey (poolKey (0, numberOf (kFxTypeEq, "eq.mid.gain")).c_str())] = 0.8f;
     v.plain[indexOfKey ("eq.mid2.mode")] = 1.0f;
     const std::string doc = saveState (v);
-    CHECK (doc.find ("\"version\":4") != std::string::npos);
+    CHECK (doc.find ("\"version\":" + std::to_string (kStateVersion)) != std::string::npos);   // a document of the current version (4 here when the test was made) is not rescaled
     auto loaded = ParamValues::defaults();
     CHECK (loadState (doc.data(), doc.size(), loaded).status == LoadStatus::ok);
     CHECK (saveState (loaded) == doc);
