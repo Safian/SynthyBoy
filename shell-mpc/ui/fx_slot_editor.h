@@ -1,9 +1,8 @@
 // SynthyBoy - MPC UI component library: the FX SLOT EDITOR component (FxSlotEditor): the page of the selected effect. From the top: the power switch, the name of the effect, its rack (MAIN / BUS 1 / BUS 2),
 // the page of the knobs, REMOVE; the display of the effect (the response, the transfer curve, the echoes ... fx_display.h) for the types that have one; the knobs of the parameters in rows of four, ONE Q group
 // per row, every knob with the parameter's own name and value (the unit from the engine's descriptor). An enumerated parameter is shown by its size: an on / off one is a LED toggle, one with 3 to 8 values (or
-// two named ones) a LED list with ALL values visible, a longer one (or one whose list does not fit its cell) the stepper with its popup. The rows have the height their cells need (a list of five values is taller than a
-// knob); the display gives up height before a list is turned into a stepper. An effect with more parameters than a page holds (8 under a display, 12 without) has its pages: a stepper moves between them, a Q group
-// on another page makes that page the one on screen. Nothing is left empty: without a display the knobs take its room.
+// two named ones) a LED list with ALL values visible, a longer one (or one whose list does not fit its cell) the stepper with its popup. A list's name stands in the lane of the index chip; every row has the standard height and every cell the same rectangle; a list that does not fit its cell is a stepper. An effect with more parameters than a page holds (8 under a display, 12 without) has its pages: a stepper moves between them, a Q group
+// on another page makes that page the one on screen. The display keeps its height, a page with fewer rows than it can hold keeps the standard row height.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -30,7 +29,7 @@ class FxSlotEditor : public Composite
 public:
     static constexpr int kMaxParams = synthyboy::kFxInstanceParams; // 24
     static constexpr int kMaxRows = 6;                              // 6 rows of 4 = 24 params
-    static constexpr int kHeaderH = 56, kDisplayH = 188, kMinDisplayH = 112, kKnobWant = 96;
+    static constexpr int kHeaderH = 56, kDisplayH = 176;
     /** How the parameter of a cell is shown. */
     enum class Kind : uint8_t { Knob, Stepper, List, Toggle };
 
@@ -62,6 +61,8 @@ public:
             steppers[i].listable = true;
             steppers[i].minWidth = 100;
             addKid (steppers[i], false);
+            lists[i].state.titleInLane = true;
+            toggles[i].centre = 0.5f;
             addKid (lists[i], false);
             addKid (toggles[i], false);
         }
@@ -242,33 +243,20 @@ protected:
                 groups[r].set (c, idx < kMaxParams ? memberOf (idx) : nullptr);
             }
     }
-    /** The height a LED list of parameter `p` needs in a cell `w` wide (its fewest rows of 56 px and its title where the names fit the columns); 0: no arrangement fits the width. */
-    int listNeed (int p, int w) const
+public:
+    /** Does the LED list of parameter `p` fit a cell of this size (some column count with rows of at least 56 px and columns wide enough for the longest name)? */
+    bool listFits (int p, int w, int h) const
     {
         const synthyboy::ParamInfo* pi = synthyboy::fxInstanceSource (currentType_, p);
         if (pi == nullptr || pi->choices == nullptr)
-            return 0;
+            return false;
         int need = 0;
         for (int i = 0; i < pi->numChoices; ++i)
             need = std::max (need, led::widthFor (pi->choices[i]));
-        int best = 0;
-        for (int c = 1; c <= LedList::kMaxColumns && c <= pi->numChoices; ++c)
-            if (w >= c * need)
-            {
-                const int h = led::kRowH * ((pi->numChoices + c - 1) / c) + LedList::kTitleH;
-                best = best == 0 ? h : std::min (best, h);
-            }
-        return best;
+        return LedList::fitsIn (pi->numChoices, w, h, 0, need);
     }
-    int cellNeed (int p, int w) const
-    {
-        switch (kind_[p])
-        {
-            case Kind::Toggle: return led::kRowH;
-            case Kind::List: return listNeed (p, w);
-            default: return 72;
-        }
-    }
+
+protected:
 
     void layout() override
     {
@@ -285,124 +273,38 @@ protected:
             right -= gap;
         }
         rack.place ({ right - 230, hd.y, 230, kHeaderH });
-        // the room under the header holds the display and the rows of cells; a cell is a knob, a stepper, a LED toggle or a LED list: the rows are as high as their tallest cell needs, the display gives up
-        // height (down to kMinDisplayH) before a list is turned into a stepper, what is left is shared by the rows
-        const int y0 = hd.bottom() + m, room = std::max (0, rect_.bottom() - m - y0);
-        const int firstRow = firstRowOfPage(), rows = std::max (1, std::min (rowsPerPage(), numRows() - firstRow)), gapX = 8, cellW = (rect_.w - 2 * m - 3 * gapX) / 4;
-        const bool hasDisplay = display.kind != FxDisplay::Kind::None;
-        int need[kMaxRows] = {}, want[kMaxRows] = {};
-        int dispH = hasDisplay ? kDisplayH : 0;
-        for (int i = 0; i < kMaxParams; ++i)
-            kind_[i] = i < numParams_ ? baseKind (i) : Kind::Knob;   // every layout starts from what the values say; a list that does not fit becomes a stepper below
-        auto cellW_of = [&] (int col) { return col == 3 ? rect_.w - 2 * m - 3 * (cellW + gapX) : cellW; };
-        for (;;)
+        // the display (always kDisplayH), then the rows of cells under it: every row has the STANDARD height (the room of the page shared by the rows a page can hold, whether it has them or not), every cell is the
+        // same rectangle whatever it holds (a knob, a stepper, a LED list, a LED toggle drawn in the middle of it), so the index chips of a row stand in one line. A list that does not fit its cell is a stepper.
+        int y = hd.bottom() + m;
+        if (display.kind != FxDisplay::Kind::None)
         {
-            int sumNeed = 0, sumWant = 0;
-            for (int r = 0; r < rows; ++r)
-            {
-                int cn = 0, cw = 0;   // the tallest cell: the least it needs, what it likes (a knob likes 96 px, the rest its need)
-                for (int col = 0; col < 4; ++col)
-                {
-                    const int idx = (firstRow + r) * 4 + col;
-                    if (idx >= kMaxParams || idx >= numParams_)
-                        continue;
-                    if (kind_[idx] == Kind::List && listNeed (idx, cellW_of (col)) == 0)
-                        kind_[idx] = Kind::Stepper;   // no arrangement of its values fits the width of the cell
-                    const int n = cellNeed (idx, cellW_of (col));
-                    cn = std::max (cn, n);
-                    cw = std::max (cw, kind_[idx] == Kind::Knob || kind_[idx] == Kind::Stepper ? kKnobWant : n);
-                }
-                need[r] = kQLane + std::max (cn, led::kRowH) + 4;
-                want[r] = kQLane + std::max (cw, led::kRowH) + 4;
-                sumNeed += need[r];
-                sumWant += want[r];
-            }
-            // the display takes what the rows leave (at most kDisplayH; the rows are at their wish while the display keeps 140 px, below that the rows give up height down to their need, then the display down to kMinDisplayH)
-            bool fits = true;
-            if (! hasDisplay)
-                fits = room >= sumNeed;
-            else
-            {
-                int d = std::clamp (room - m - sumWant, 140, kDisplayH);
-                if (room - (d + m) < sumNeed)
-                {
-                    d = room - m - sumNeed;
-                    fits = d >= kMinDisplayH;
-                }
-                dispH = fits ? d : kMinDisplayH;
-            }
-            if (fits)
-                break;
-            // not even the smallest display and the rows fit: the tallest list of the page becomes a stepper (a list is never squeezed below its 56 px rows), then the rows are counted again
-            int worst = -1, worstNeed = 0;
-            for (int r = 0; r < rows; ++r)
-                for (int col = 0; col < 4; ++col)
-                {
-                    const int idx = (firstRow + r) * 4 + col;
-                    if (idx < kMaxParams && idx < numParams_ && kind_[idx] == Kind::List && listNeed (idx, cellW_of (col)) > worstNeed)
-                    {
-                        worstNeed = listNeed (idx, cellW_of (col));
-                        worst = idx;
-                    }
-                }
-            if (worst < 0)
-                break;
-            kind_[worst] = Kind::Stepper;
-        }
-        int y = y0;
-        if (hasDisplay)
-        {
-            display.place ({ rect_.x + m, y, rect_.w - 2 * m, dispH });
-            y += dispH + m;
+            display.place ({ rect_.x + m, y, rect_.w - 2 * m, kDisplayH });
+            y += kDisplayH + m;
         }
         knobArea_ = { rect_.x + m, y, rect_.w - 2 * m, std::max (0, rect_.bottom() - m - y) };
-        // the rows: at least their need, the room shared out evenly (a row that needs more than its share keeps its need, the others share the rest)
-        int rowH[kMaxRows] = {}, total = knobArea_.h, freeRows = rows;
-        bool fixedRow[kMaxRows] = {};
-        for (bool again = true; again && freeRows > 0;)
-        {
-            again = false;
-            for (int r = 0; r < rows; ++r)
-                if (! fixedRow[r] && need[r] > total / freeRows)
-                {
-                    fixedRow[r] = true;
-                    rowH[r] = need[r];
-                    total -= need[r];
-                    --freeRows;
-                    again = true;
-                    break;
-                }
-        }
-        for (int r = 0, left = freeRows; r < rows; ++r)
-            if (! fixedRow[r])
-            {
-                rowH[r] = total / std::max (1, left);
-                total -= rowH[r];
-                --left;
-            }
-        int rowY = knobArea_.y;
+        const int rows = rowsPerPage(), rowH = knobArea_.h / std::max (1, rows), firstRow = firstRowOfPage();
+        const int gapX = 8, cellW = (knobArea_.w - 3 * gapX) / 4;
+        for (int i = 0; i < kMaxParams; ++i)
+            kind_[i] = i < numParams_ ? baseKind (i) : Kind::Knob;
         for (int r = 0; r < rows; ++r)
-        {
             for (int col = 0; col < 4; ++col)
             {
                 const int idx = (firstRow + r) * 4 + col;
                 if (idx >= kMaxParams)
                     continue;
                 // a lane (kQLane) above every cell for the index chip of its Q group
-                const int kx = knobArea_.x + col * (cellW + gapX), ky = rowY + kQLane;
-                const Rect cellRect { kx, ky, col == 3 ? knobArea_.right() - kx : cellW, std::max (56, rowH[r] - kQLane - 4) };
+                const int kx = knobArea_.x + col * (cellW + gapX), ky = knobArea_.y + r * rowH + kQLane;
+                const Rect cellRect { kx, ky, col == 3 ? knobArea_.right() - kx : cellW, std::max (72, rowH - kQLane) };
+                if (idx < numParams_ && kind_[idx] == Kind::List && ! listFits (idx, cellRect.w, cellRect.h))
+                    kind_[idx] = Kind::Stepper;
                 knobs[idx].place (cellRect);
                 steppers[idx].place (cellRect);
                 lists[idx].place (cellRect);
-                // a toggle is one row of 56 px (at most 80), in the middle of its cell
-                const int th = std::clamp (cellRect.h, led::kRowH, 80);
-                toggles[idx].place ({ cellRect.x, cellRect.y + (cellRect.h - th) / 2, cellRect.w, th });
+                toggles[idx].place (cellRect);
             }
-            rowY += rowH[r];
-        }
         for (int i = 0; i < kMaxParams; ++i)
         {
-            const bool onPage = i < numParams_ && i >= firstRow * 4 && i < (firstRow + rowsPerPage()) * 4;
+            const bool onPage = i < numParams_ && i >= firstRow * 4 && i < (firstRow + rows) * 4;
             show (knobs[i], onPage && kind_[i] == Kind::Knob);
             show (steppers[i], onPage && kind_[i] == Kind::Stepper);
             show (lists[i], onPage && kind_[i] == Kind::List);

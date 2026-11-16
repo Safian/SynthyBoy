@@ -19,6 +19,18 @@ static bool noGlow (const Scene& s)
     return true;
 }
 
+/** The item itself has no box and no fill: only dots (disc / ring), text and the cell / state ops; no rectangle, frame, rounded rectangle, gradient paint or fill. */
+static bool frameless (const Scene& s)
+{
+    for (uint32_t i = 0; i < s.data->numOps; ++i)
+    {
+        const uint32_t o = s.data->ops[i].op;
+        if (o == gpu::kOpRect || o == gpu::kOpFrame || o == gpu::kOpRRect || o == gpu::kOpFill || o == gpu::kOpFillGradient || o == gpu::kOpStroke || o == gpu::kOpBand)
+            return false;
+    }
+    return true;
+}
+
 static void fill (LedList& l, int n)
 {
     static const char* const names[8] = { "Sine", "Saw", "Square", "Triangle", "Pulse", "Noise", "Random", "Steps" };
@@ -50,14 +62,19 @@ int main()
         t.touchDown (150, 120, 100.0);
         c = t.touchUp (150, 120);
         check (c.kind == ChangeKind::Index && c.index == 0, "LedToggle: a tap on an lit one switches off");
-        c = t.turn (1.0);
-        check (c.kind == ChangeKind::Index && c.index == 0, "LedToggle: a Q-Link step flips (on -> off)");
-        t.state.on = false;
+        // the ToggleIcon contract: a step up switches on, a step down off, nothing when it already is
         c = t.turn (-1.0);
-        check (c.kind == ChangeKind::Index && c.index == 1, "LedToggle: a Q-Link step flips (off -> on), either direction");
+        check (c.kind == ChangeKind::Index && c.index == 0, "LedToggle: a Q-Link step down switches an on toggle off");
+        check (! t.turn (1.0), "LedToggle: a step up on an on toggle does nothing");
+        t.state.on = false;
+        c = t.turn (1.0);
+        check (c.kind == ChangeKind::Index && c.index == 1, "LedToggle: a Q-Link step up switches an off toggle on");
+        check (! t.turn (-1.0), "LedToggle: a step down on an off toggle does nothing");
         check (! t.turn (0.0), "LedToggle: a zero step does nothing");
         Change w;
-        check (t.wheelOver (150, 120, 1, w) && w.kind == ChangeKind::Index && w.index == 1, "LedToggle: the wheel over it flips");
+        check (t.wheelOver (150, 120, 1, w) && w.kind == ChangeKind::Index && w.index == 1, "LedToggle: the wheel up over an off toggle switches it on");
+        t.state.on = true;
+        check (t.wheelOver (150, 120, 1, w) && ! w, "LedToggle: the wheel up over an on toggle does nothing");
         check (! t.wheelOver (10, 10, 1, w), "LedToggle: the wheel outside does nothing");
         t.touchDown (150, 120, 200.0);
         t.touchMove (150, 400);
@@ -81,6 +98,7 @@ int main()
             const Image iOn = render (on);
             check (! on.overflow() && drawnOutside (iOn, { 38, 28, sz.w + 4, sz.h + 4 }, backgroundPixel()) == 0, "LedToggle " + std::to_string (sz.w) + "x" + std::to_string (sz.h) + ": draws only inside its rectangle");
             check (noGlow (on), "LedToggle: no glow op, no soft feather");
+            check (frameless (on), "LedToggle: no box, no cell fill: only the dot and the name");
             d.state.on = false;
             Scene off (500, 200, kBackgroundRgba);
             d.draw (off.builder());
@@ -90,7 +108,7 @@ int main()
                 for (int x = 40; x < 40 + sz.w; ++x)
                     diff += iOn.at (x, y) != iOff.at (x, y);
             check (diff > 100, "LedToggle: the lit and the unlit picture differ (" + std::to_string (diff) + " pixels)");
-            const float dotX = 40.0f + static_cast<float> (led::kDotX - 2), dotY = 30.0f + static_cast<float> (sz.h) * 0.5f;
+            const float dotX = 40.0f + static_cast<float> (led::kDotX), dotY = 30.0f + static_cast<float> (sz.h) * 0.5f;
             check (colourNear (iOn, dotX, dotY, 1, theme::L().flow[0], 6), "LedToggle: the lit dot is the accent colour (flat)");
             check (! colourNear (iOff, dotX, dotY, 1, theme::L().flow[0], 6), "LedToggle: the unlit dot is not (a thin ring)");
         }
@@ -108,7 +126,7 @@ int main()
         check (render (sq).px != render (sn).px, "LedToggle: the Q colour changes the drawing");
         check (! g.turn (0, 1.0), "LedToggle: an inactive group routes nothing");
         g.setActive (true);
-        check (g.turn (0, 1.0).kind == ChangeKind::Index, "LedToggle: the group routes a Q-Link step to it");
+        check (g.turn (0, 1.0).kind == ChangeKind::Index, "LedToggle: the group routes a Q-Link step up to it (off -> on)");
         Scene idle (400, 200, kBackgroundRgba);
         g.setActive (false);
         g.setBlock (1);
@@ -153,6 +171,19 @@ int main()
                 }
                 check (okRows && inside && ! overlap, "  rows >= 56 px where the rectangle allows, inside, not overlapping");
             }
+        }
+        // reading order: the options go along the row, then the next row
+        {
+            LedList rm;
+            fill (rm, 4);
+            rm.place ({ 0, 0, 400, 112 });
+            check (rm.columns() == 2 && rm.rowRect (0).y == rm.rowRect (1).y && rm.rowRect (1).x > rm.rowRect (0).x && rm.rowRect (2).y > rm.rowRect (0).y && rm.rowRect (2).x == rm.rowRect (0).x && rm.rowRect (3).x == rm.rowRect (1).x,
+                   "a 2 x 2 list reads in rows: 0 1 / 2 3");
+            rm.place ({ 0, 0, 600, 112 });
+            LedList six; fill (six, 6);
+            six.place ({ 0, 0, 480, 112 });
+            check (six.columns() == 3 && six.rowRect (2).y == six.rowRect (0).y && six.rowRect (3).y > six.rowRect (0).y && six.rowRect (3).x == six.rowRect (0).x, "a 3 x 2 list reads 0 1 2 / 3 4 5");
+            check (LedList::fitsIn (4, 310, 112, 0, need) && ! LedList::fitsIn (4, 310, 111, 0, need) && ! LedList::fitsIn (5, 200, 112, 0, need), "fitsIn: rows of 56 px and the width of the names decide");
         }
         // the title takes its strip, the rows tile the rest
         l.setTitle ("SYNC");
@@ -234,6 +265,7 @@ int main()
                 const Image ia = render (a), ib = render (b);
                 check (! a.overflow() && drawnOutside (ia, { 38, 28, sz.w + 4, sz.h + 4 }, backgroundPixel()) == 0, "LedList n=" + std::to_string (n) + " " + std::to_string (sz.w) + "x" + std::to_string (sz.h) + ": draws only inside its rectangle");
                 check (noGlow (a), "  no glow op");
+                check (frameless (a) && frameless (b), "  no outer frame, no filled highlight behind the lit row: only dots and text");
                 check (ia.px != ib.px, "  the picture follows the lit option");
                 const Rect r0 = d.rowRect (0);
                 check (colourNear (ia, static_cast<float> (r0.x + led::kDotX), static_cast<float> (r0.y) + static_cast<float> (r0.h) * 0.5f, 1, theme::L().flow[0], 8), "  the lit dot is the accent colour");

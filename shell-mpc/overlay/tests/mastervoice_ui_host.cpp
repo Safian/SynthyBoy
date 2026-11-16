@@ -272,8 +272,8 @@ void testVoiceLayout()
             for (int j = i + 1; j < 5; ++j)
                 ok = ok && ! ts[i]->rect().overlaps (ts[j]->rect());
         }
-        check (ok && v.oscA.rect().y == v.oscB.rect().y && v.oscC.rect().y == v.oscSub.rect().y && v.oscNoise.rect().y > v.oscC.rect().y,
-               "targets are five LED toggles in two columns (cell " + std::to_string (v.oscA.rect().w) + " x " + std::to_string (v.oscA.rect().h) + "), NOISE across the block");
+        check (ok && v.oscA.rect().y == v.oscB.rect().y && v.oscC.rect().y == v.oscSub.rect().y && v.oscNoise.rect().y > v.oscC.rect().y && v.oscNoise.rect().w == v.oscA.rect().w && v.oscA.rect().w == v.oscB.rect().w && v.oscB.rect().w == v.oscC.rect().w,
+               "targets are five LED toggles of the same width in two columns (cell " + std::to_string (v.oscA.rect().w) + " x " + std::to_string (v.oscA.rect().h) + "), NOISE in the third row, not spanning");
         check (v.scaleLfoMode.columns() == 2 && v.scaleLfoMode.rowRect (1).h >= 56 && v.scaleLfoMode.state.count == 2, "the LFO time mode is a LED list of two options side by side, both visible");
     }
 }

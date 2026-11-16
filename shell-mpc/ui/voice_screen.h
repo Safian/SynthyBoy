@@ -1,7 +1,7 @@
 // SynthyBoy - MPC UI component library: VoiceScreen, the page of the Voice tab (1280 x 628): the header (VOICE CONTROL, the Q group of the step: the row, the step, the length), the step grid (8 steps, the
 // six rows PAN, DETUNE, CUTOFF, ENV, MOD 1, MOD 2: draw with a finger, the step a voice plays is lit), a strip with ALL the values of the selected step, and three blocks that use their height: RANDOM (the four
 // spreads in a row of large knobs and the 10x DETUNE LED toggle under them), SCALING (the time scale of the envelopes and the LFOs and its mode as a LED list), TARGETS (which sources the voice control acts on: five LED
-// toggles, two columns). One Q group each (the Targets of the fifth, NOISE, is beside the group).
+// toggles of the same width, two columns). One Q group each (the Targets of the fifth, NOISE, is beside the group).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -159,7 +159,7 @@ public:
     Rect blockRect (int b) const noexcept
     {
         const int m = kBlockGap, y0 = stripRect().bottom() + 8, h = rect_.bottom() - 8 - y0, totalW = rect_.w - 2 * m;
-        const int w0 = 520, w1 = 330, w2 = totalW - w0 - w1 - 2 * m;
+        const int w0 = 520, w1 = 380, w2 = totalW - w0 - w1 - 2 * m;
         if (b == 0) return { rect_.x + m, y0, w0, h };
         if (b == 1) return { rect_.x + m + w0 + m, y0, w1, h };
         return { rect_.x + m + w0 + m + w1 + m, y0, w2, h };
@@ -192,25 +192,25 @@ protected:
                 const int x = in.x + i * (kw + g);
                 ks[i]->place ({ x, in.y, i == 3 ? in.right() - x : kw, kh });
             }
-            randDetune10x.place ({ in.x, in.bottom() - th, in.w, th });
+            randDetune10x.place ({ in.x, in.bottom() - th, LedToggle::widthFor (randDetune10x.state.label), th });   // as wide as its name needs
         }
         {   // SCALING: the two time knobs, the mode (a LED list of two, side by side, with its title) under them
             const Rect in = inner (1);
             const int lh = LedList::kTitleH + led::kRowH, kw = (in.w - g) / 2, kh = std::max (72, in.h - lane - lh - 4);
+            for (Knob* k : { &scaleEnv, &scaleLfo })
+            {
+                k->state.side = true; k->state.large = false;   // the medium size: the dial at the left, the name and the value beside it
+            }
             scaleEnv.place ({ in.x, in.y, kw, kh });
             scaleLfo.place ({ in.x + kw + g, in.y, in.right() - (in.x + kw + g), kh });
             scaleLfoMode.place ({ in.x, in.bottom() - lh, in.w, lh });
         }
-        {   // TARGETS: five LED toggles in two columns (OSC A, OSC B / OSC C, SUB / NOISE across the block), rows that share the height; a lane above the rows below the first
+        {   // TARGETS: five LED toggles of the same width in one grid of two columns (OSC A, OSC B / OSC C, SUB / NOISE); a lane above the rows below the first
             const Rect in = inner (2);
             const int rows = 3, th = std::max (led::kRowH, (in.h - 2 * lane) / rows), cw = (in.w - g) / 2;
-            LedToggle* ts[4] = { &oscA, &oscB, &oscC, &oscSub };
-            for (int i = 0; i < 4; ++i)
-            {
-                const int x = in.x + (i % 2) * (cw + g);
-                ts[i]->place ({ x, in.y + (i / 2) * (th + lane), i % 2 == 0 ? cw : in.right() - x, th });
-            }
-            oscNoise.place ({ in.x, in.y + 2 * (th + lane), in.w, th });
+            LedToggle* ts[5] = { &oscA, &oscB, &oscC, &oscSub, &oscNoise };
+            for (int i = 0; i < 5; ++i)
+                ts[i]->place ({ in.x + (i % 2) * (cw + g), in.y + (i / 2) * (th + lane), cw, th });
         }
     }
 

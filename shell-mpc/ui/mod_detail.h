@@ -221,15 +221,14 @@ protected:
                 Rect cell { in.x + col * (cw + kGap), in.y + row * (rh + kGap + kQLane), col == 1 ? in.right() - (in.x + cw + kGap) : cw, rh };
                 if (cs[i] == &auxSource)
                     cell = { cell.x, cell.y + (cell.h - std::min (cell.h, 110)) / 2, cell.w, std::min (cell.h, 110) };
-                else if (cs[i] == &auxInv || cs[i] == &delaySync)   // a LED toggle: one row of 56 px, in the middle of its cell
-                    cell = { cell.x, cell.y + (cell.h - std::min (cell.h, led::kRowH)) / 2, cell.w, std::min (cell.h, led::kRowH) };
+                // a LED toggle (INVERT, SYNC) is the whole cell like a knob (its index chip stands in line with the neighbours) and draws its dot and name in the middle
                 cs[i]->place (cell);
             }
         };
         grid (blocks_[BlockAux], &auxSource, &auxOutput, &auxInv, &auxPower);
         {
             const Rect in = inner (blocks_[BlockShape]);
-            const int sh = led::kRowH, rh = in.h - kQLane - kGap - sh;   // STEREO is one LED row; the room it leaves goes to the CURVE knob
+            const int sh = led::kRowH, rh = in.h - kQLane - kGap - sh;   // STEREO is one LED row (its cell); the room it leaves goes to the CURVE knob
             power.place ({ in.x, in.y, in.w, rh });
             stereo.place ({ in.x, in.y + rh + kGap + kQLane, in.w, sh });
         }

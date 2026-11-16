@@ -920,7 +920,7 @@ protected:
             int x = in.x;
             for (int i = 0; i < 4; ++i)
             {
-                const int w = i == 3 ? in.right() - x : (fixedW[i] > 0 ? fixedW[i] : cw);
+                const int w = i == 3 ? in.right() - x - (fixedW[3] > 0 ? 6 : 0) : (fixedW[i] > 0 ? fixedW[i] : cw);
                 cs[i]->place ({ x, in.y, w, in.h });
                 x += w + kSlotGap;
             }
@@ -929,10 +929,7 @@ protected:
         fourSlots (mainBlock_, &cutoff, &resonance, &drive, &mix, noFixed);
         fourSlots (trackBlock_, &keytrack, &env1, &var, &combOffset, trackFixed);
         fourSlots (outBlock_, &level, &pan, &blend, &routing, outFixed);
-        {   // ENV 1: a 56 px LED toggle at the height of the dials of its neighbours (the cell was a knob-sized switch)
-            const Rect c = env1.rect();
-            env1.place ({ c.x, c.y + std::max (0, (c.h - 42 - led::kRowH) / 2), c.w, led::kRowH });
-        }
+        env1.centre = 0.38f;   // ENV 1 is the whole slot (its index chip stands in line with the knobs), the dot and the name at the height of the dials
 
         // 3. the display row: the display, and in the Formant model the XY pad with its block at the right
         const int midY = top.bottom() + m + 4, midH = std::max (60, bandY - m - midY);

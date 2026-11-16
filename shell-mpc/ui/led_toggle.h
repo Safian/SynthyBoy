@@ -2,7 +2,7 @@
 // brightness of the name; there is no ON / OFF word (the value text the Q proxy reports stays On / Off: that comes from the engine parameter). Same contract as every component (core.h).
 // It is a ToggleIcon (same state: `on`, `label`; the owners that read and write a toggle keep working) with another drawing and another size: 56 px high, as wide as its name needs (96 px at least).
 // In: on, label (15 characters). Out: an Index change 0 / 1 on a tap (made on the touch up); a Q-Link step and a wheel notch FLIP the state (either direction).
-// Look: the library palette and fonts only; a flat dot (no glow, no gradient halo), a thin crisp outline; the active Q member: the chip comes from the group, the name takes the Q colour (lit: full, unlit: dimmed).
+// Look: no box and no fill (the dot and the name on the ground of the block); the library palette and fonts only; a flat dot (no glow, no gradient halo), a thin crisp outline; the active Q member: the chip comes from the group, the name takes the Q colour (lit: full, unlit: dimmed).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -15,9 +15,9 @@ namespace synthyboy_mpc { namespace ui {
 namespace led {
 constexpr int kRowH = 56;        // the touch height of a row
 constexpr int kMinToggleW = 96;
-constexpr int kDotX = 20;        // the centre of the dot, from the left edge of the row
-constexpr int kTextX = 33;       // the name starts here
-constexpr int kPadR = 7;
+constexpr int kDotX = 11;        // the centre of the dot, from the left edge of the row
+constexpr int kTextX = 25;       // the name starts here
+constexpr int kPadR = 6;
 constexpr float kDotR = 6.5f;    // the radius of the lit dot (the ring of an unlit one is a little smaller: the same outer size)
 inline float nameSize() noexcept { return theme::L().fLabel + 3.0f; }
 /** The width a name needs in a row (dot, gap, text, right padding). */
@@ -44,22 +44,32 @@ public:
     static int widthFor (const char* name) noexcept { return std::max (led::kMinToggleW, led::widthFor (name)); }
     static constexpr int kBandW = 100;   // the width of a toggle that sits in the slot of a band of knobs
     Size minSize() const override { return { widthFor (state.label), led::kRowH }; }
+    /** The height of the dot and the name in the rectangle, as a fraction of it (0.5: the middle). A toggle that is the member of a Q group takes the whole cell of its slot (the index chip stands at the cell's corner, in line with its
+        neighbours) and draws itself at the height of the dials beside it by this. */
+    float centre = 0.5f;
 
 protected:
     void drawBody (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        const Rect b = rect_.inset (2);
-        p.control (b, qFrame_);
-        const float cy = static_cast<float> (b.y) + static_cast<float> (b.h) * 0.5f;
-        led::dot (p, static_cast<float> (b.x + led::kDotX - 2), cy, state.on, 255, qFrame_);
+        const Rect b = rect_;   // no box, no fill: the dot and the name on the ground of the block; the touch rectangle is invisible
+        const float cy = static_cast<float> (b.y) + static_cast<float> (b.h) * centre;
+        led::dot (p, static_cast<float> (b.x + led::kDotX), cy, state.on, 255, qFrame_);
         const uint32_t col = state.on ? p.c (qFrame_ ? T.q : T.text, 255) : p.c (T.textDim, 200);   // the Q colour marks the lit name; an unlit one keeps its dim ink and a Q coloured ring
-        p.textLeft ({ b.x + led::kTextX - 2, b.y + 2, std::max (0, b.w - led::kTextX - led::kPadR + 2), std::max (0, b.h - 4) }, state.label, led::nameSize(), col, T.fMin);
+        p.textLeft ({ b.x + led::kTextX, static_cast<int> (std::round (cy)) - led::kRowH / 2, std::max (0, b.w - led::kTextX - led::kPadR), led::kRowH }, state.label, led::nameSize(), col, T.fMin);
     }
     Change onDown (int x, int y, double now) override { tap_.down (x, y, now); return Change::none(); }
     Change onMove (int x, int y) override { tap_.move (x, y); return Change::none(); }
     Change onUp (int, int) override { return tap_.up() != 0 ? flip() : Change::none(); }
-    Change onTurn (double delta) override { return delta != 0.0 ? flip() : Change::none(); }
+    /** The ToggleIcon contract: a step up switches on, a step down off, nothing when it already is. */
+    Change onTurn (double delta) override
+    {
+        if (delta > 0.0)
+            return state.on ? Change::none() : flip();
+        if (delta < 0.0)
+            return state.on ? flip() : Change::none();
+        return Change::none();
+    }
 
 private:
     Change flip() const { return Change::indexed (id_, state.on ? 0 : 1, state.on ? 0.0 : 1.0); }

@@ -2,9 +2,9 @@
 // In: the options (names of 23 characters), their number, the index of the lit one, an optional bit mask of disabled options (not valid in the current state: drawn dim, no reaction, skipped by steps),
 // an optional small title above. Out: an Index change { id, index } (the option) on a tap on an enabled row (made on the touch up); turn (delta) / the wheel move the selection by whole steps over the
 // enabled options WITHOUT wrapping (a step beyond the ends does nothing). The wheel up goes up the list (like ListPopup).
-// Geometry (the component decides from its rectangle, `columnsFor`): one column when the rows are at least 56 px high there, else two, else three columns (filled down first); a row is never lower
+// Geometry (the component decides from its rectangle, `columnsFor`): one column when the rows are at least 56 px high there, else two, else three columns (filled row by row); a row is never lower
 // than 56 px where the rectangle allows it and never narrower than its text (dot, name). Where nothing fits the choice with the highest rows is used and the name is cut with an ellipsis.
-// Look: the palette and fonts of the library; a flat dot (lit = accent colour filled, unlit = a thin dim ring), the lit row has a faint flat tint; no glow. The active Q member: the title and the lit name take the
+// Look: the palette and fonts of the library; a flat dot (lit = accent colour filled, unlit = a thin dim ring), no box, no frame, no fill: the lit dot and the brighter name are the selection; no glow. The active Q member: the title and the lit name take the
 // Q colour (the chip comes from the group).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -24,6 +24,7 @@ public:
         uint8_t disabledMask = 0;   // bit i set: option i is not valid now
         char names[kMaxOptions][kNameLen] = {};
         char title[kNameLen] = {};
+        bool titleInLane = false;   // the title is drawn in the lane of the Q index chip above the rectangle (right of the chip) and takes no room of the list
     };
     State state;
 
@@ -37,7 +38,7 @@ public:
             setOption (i, names[i]);
     }
     bool optionEnabled (int i) const noexcept { return i >= 0 && i < state.count && (state.disabledMask & (1u << i)) == 0; }
-    int titleH() const noexcept { return state.title[0] != '\0' ? kTitleH : 0; }
+    int titleH() const noexcept { return state.title[0] != '\0' && ! state.titleInLane ? kTitleH : 0; }
 
     /** The width the widest name of the list needs in one column. */
     int columnNeed() const noexcept
@@ -49,6 +50,15 @@ public:
     }
     /** The number of columns (1 .. 3) for a list of n options in a w x h rectangle: the fewest where the rows are at least 56 px high and the columns wide enough for the text; where no choice satisfies both, the one with the
         highest rows (ties: the fewer columns). */
+    /** Does a list of n options whose widest name needs `columnNeed` fit a w x h rectangle (some column count has rows >= 56 px and columns wide enough)? */
+    static bool fitsIn (int n, int w, int h, int titleH, int columnNeed) noexcept
+    {
+        n = std::clamp (n, 1, kMaxOptions);
+        for (int c = 1; c <= std::min (kMaxColumns, n); ++c)
+            if (w / c >= columnNeed && (h - titleH) / ((n + c - 1) / c) >= led::kRowH)
+                return true;
+        return false;
+    }
     static int columnsFor (int n, int w, int h, int titleH, int columnNeed) noexcept
     {
         n = std::clamp (n, 1, kMaxOptions);
@@ -92,10 +102,10 @@ public:
     }
     double wheelUnit() const noexcept override { return -1.0; }   // the wheel up goes up the list
 
-    /** The touch rectangle of option i (the rows tile the rectangle below the title, the options fill the columns downwards). */
+    /** The touch rectangle of option i (the rows tile the rectangle below the title, the options are placed in reading order: along the row, then the next row). */
     Rect rowRect (int i) const noexcept
     {
-        const int c = columns(), r = rows(), col = i / r, row = i % r, top = rect_.y + titleH(), bodyH = rect_.h - titleH();
+        const int c = columns(), r = rows(), col = i % c, row = i / c, top = rect_.y + titleH(), bodyH = rect_.h - titleH();
         const int x0 = rect_.x + col * rect_.w / c, x1 = rect_.x + (col + 1) * rect_.w / c;
         return { x0, top + row * bodyH / r, x1 - x0, top + (row + 1) * bodyH / r - (top + row * bodyH / r) };
     }
@@ -115,20 +125,26 @@ public:
         return -1;
     }
 
+public:
+    void draw (gpu::SceneBuilder& sb) const override
+    {
+        Pen pen (sb, enabled_);
+        Cell cell (sb, rect_, state.titleInLane ? 22 : 2);
+        drawBody (pen);
+    }
 protected:
     void drawBody (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        p.control (rect_.inset (2), qFrame_);
+        if (state.title[0] != '\0' && state.titleInLane)
+            p.textLeft ({ rect_.x + 30, rect_.y - 16, std::max (0, rect_.w - 32), 16 }, state.title, T.fLabel - 3.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
         if (state.title[0] != '\0')
-            p.textLeft ({ rect_.x + 12, rect_.y + 4, std::max (0, rect_.w - 24), kTitleH - 6 }, state.title, T.fLabel - 2.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
+            p.textLeft ({ rect_.x + 4, rect_.y + 4, std::max (0, rect_.w - 8), kTitleH - 6 }, state.title, T.fLabel - 2.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
         const int n = std::min (state.count, kMaxOptions);
         for (int i = 0; i < n; ++i)
         {
             const Rect r = rowRect (i);
             const bool lit = i == state.index, on = optionEnabled (i);
-            if (lit)
-                p.rrect (r.inset (5), T.rChip, p.c (T.flow[0], on ? 30 : 14));
             const float cy = static_cast<float> (r.y) + static_cast<float> (r.h) * 0.5f;
             led::dot (p, static_cast<float> (r.x + led::kDotX), cy, lit, on ? 255 : 80, qFrame_);
             const uint32_t col = qFrame_ && lit ? p.c (T.q, on ? 255 : 90) : p.c (lit ? T.text : T.textDim, on ? (lit ? 255 : 200) : 80);

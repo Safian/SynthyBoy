@@ -385,8 +385,11 @@ void testEveryEffectType()
                 // exactly one control is shown, of the kind the cell has; an enumerated parameter is never a knob, a continuous one is always a knob
                 kindsOk = kindsOk && nShown == 1 && shownKind[static_cast<int> (kind)] && (kind == ui::FxSlotEditor::Kind::Knob) == ! choice;
                 // a list of up to 8 values is a LED list (a toggle for Off / On), a longer one a stepper; a short one that is a stepper is a fallback: none is expected (every list fits its cell)
-                if (choice && pi->numChoices <= 8 && kind == ui::FxSlotEditor::Kind::Stepper)
+                // a short list is a stepper only where its list does not fit the cell (the display and the rows keep their size)
+                if (choice && pi->numChoices <= 8 && kind == ui::FxSlotEditor::Kind::Stepper && ed.listFits (i, ed.steppers[i].rect().w, ed.steppers[i].rect().h) && ed.baseKind (i) == ui::FxSlotEditor::Kind::List)
                     ++fallbacks;
+                if (choice && pi->numChoices <= 8 && kind == ui::FxSlotEditor::Kind::List)
+                    kindsOk = kindsOk && ed.listFits (i, ed.lists[i].rect().w, ed.lists[i].rect().h);
                 if (choice && pi->numChoices > 8)
                     kindsOk = kindsOk && kind == ui::FxSlotEditor::Kind::Stepper;
                 const ui::Component* c = members[static_cast<int> (kind)];
@@ -408,6 +411,22 @@ void testEveryEffectType()
                 }
             }
 
+            // the display keeps its height, the knobs of the page have one size, every cell of a row is the same rectangle (the chips stand in one line), the rows have the standard height
+            bool uniform = ! ed.hasDisplay() || ed.displayRect().h == ui::FxSlotEditor::kDisplayH;
+            int knobH = -1;
+            for (int i = firstParam; i < lastParam; ++i)
+            {
+                const ui::Rect cell = ed.memberOf (i)->rect();
+                uniform = uniform && cell.h <= (ed.knobArea().h / ed.rowsPerPage());
+                if (ed.kindOf (i) == ui::FxSlotEditor::Kind::Knob)
+                {
+                    knobH = knobH < 0 ? cell.h : knobH;
+                    uniform = uniform && cell.h == knobH;
+                }
+                const int first = (i / 4) * 4;
+                uniform = uniform && cell.y == ed.memberOf (first)->rect().y;
+            }
+            check (uniform, std::string (d.name) + " page " + std::to_string (pg + 1) + ": the display keeps its height, one knob size, the chips of a row stand in one line");
             const int totalShown = shownKnobs + shownSteppers + shownLists + shownToggles;
             if (fallbacks > 0 || overlap || ! inside || small > 0)
             {
