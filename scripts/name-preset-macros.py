@@ -85,8 +85,22 @@ def pair(first, second):
     return both if len(both) <= MAX_CHARS else None
 
 
+def fit(text):
+    """At most MAX_CHARS characters: a longer text is cut at the end of a word when one ends in time, else in the middle of one."""
+    if len(text) <= MAX_CHARS:
+        return text
+    cut = text[:MAX_CHARS]
+    if text[MAX_CHARS] != " " and " " in cut and cut.rfind(" ") >= 3:
+        cut = cut[:cut.rfind(" ")]
+    return cut.rstrip(" +-")
+
+
 def combine(keys, params, macro):
-    """The name of a macro that drives `keys` (parameter keys in the order of the slots), "" for the default name."""
+    """The name of a macro that drives `keys` (parameter keys in the order of the slots), "" for the default name; at most MAX_CHARS characters."""
+    return fit(combine_unbounded(keys, params, macro))
+
+
+def combine_unbounded(keys, params, macro):
     keys = list(dict.fromkeys(keys))
     if not keys:
         return ""
