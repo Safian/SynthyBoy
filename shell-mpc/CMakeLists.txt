@@ -319,5 +319,39 @@ if(NOT CMAKE_CROSSCOMPILING)
 
     add_test(NAME osc_page_host COMMAND osc_page_host)
     add_test(NAME osc_ui_host COMMAND osc_ui_host)
+
+    # Robustness review (docs: .hw-local/mpc-ui-plans/robustness-review.md): these tests FAIL on purpose while the findings they reproduce are open, so none of them is registered with add_test.
+    # Build by hand: cmake --build <dir> --target q_router_review_host controller_review_host chunk_review_host plugin_review_host; plugin_review_host takes the plugin (overlay build) as its argument.
+    add_executable(q_router_review_host EXCLUDE_FROM_ALL tests/q_router_review_host.cpp)
+    target_include_directories(q_router_review_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(q_router_review_host PRIVATE Threads::Threads)
+    target_compile_features(q_router_review_host PRIVATE cxx_std_17)
+    target_compile_options(q_router_review_host PRIVATE -Wall -Wextra)
+
+    add_executable(controller_review_host EXCLUDE_FROM_ALL overlay/tests/controller_review_host.cpp)
+    target_include_directories(controller_review_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(controller_review_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(controller_review_host PRIVATE cxx_std_17)
+    target_compile_options(controller_review_host PRIVATE -Wall -Wextra)
+
+    add_executable(chunk_review_host EXCLUDE_FROM_ALL tests/chunk_review_host.cpp)
+    target_include_directories(chunk_review_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(chunk_review_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(chunk_review_host PRIVATE cxx_std_17)
+    target_compile_options(chunk_review_host PRIVATE -Wall -Wextra)
+
+    add_executable(plugin_review_host EXCLUDE_FROM_ALL tests/plugin_review_host.cpp)
+    target_include_directories(plugin_review_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${MPC_SDK_DIR}/framework"
+        "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(plugin_review_host PRIVATE synthyboy_core Threads::Threads ${CMAKE_DL_LIBS})
+    target_compile_features(plugin_review_host PRIVATE cxx_std_17)
+    target_compile_options(plugin_review_host PRIVATE -Wall -Wextra)
 endif()
 
