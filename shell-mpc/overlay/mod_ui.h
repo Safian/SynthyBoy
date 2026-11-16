@@ -278,15 +278,18 @@ private:
         b.clear();
         for (int g = 1; g <= uibind::kSourceGroups; ++g)
             b.setGroupName (g - 1, uibind::sourceGroupName (g));
+        // the order of a group is the engine's, except that the random LFOs come after the ten LFOs (LFO 1 .. 10, then RLFO 1 .. 4: the engine numbers its LFO 9 and 10 after them); display order only, the choice
+        // numbers (the engine's indices) are what the chips carry
         for (int g = 1; g <= uibind::kSourceGroups; ++g)
-            for (int c = 1; c <= static_cast<int> (synthyboy::modSourceCount()); ++c)
-                if (uibind::sourceGroup (c) == g)
-                {
-                    char label[28], colour[12];
-                    boardLabel (c, label, sizeof label);
-                    boardColourName (c, colour, sizeof colour);
-                    b.add (c, label, colour, g - 1);
-                }
+            for (int pass = 0; pass < 2; ++pass)
+                for (int c = 1; c <= static_cast<int> (synthyboy::modSourceCount()); ++c)
+                    if (uibind::sourceGroup (c) == g && (std::strncmp (synthyboy::modSourceTable()[c - 1].key, "rlfo", 4) == 0) == (pass == 1))
+                    {
+                        char label[28], colour[12];
+                        boardLabel (c, label, sizeof label);
+                        boardColourName (c, colour, sizeof colour);
+                        b.add (c, label, colour, g - 1);
+                    }
         matrix_.rebuildVisibleList();
     }
 

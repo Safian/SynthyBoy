@@ -480,6 +480,8 @@ private:
                 uibind::formatValue (uibind::info (timeParam (3, beats_)), v.param (timeParam (3, beats_)), t, sizeof t);
                 std::snprintf (u, sizeof u, "%s %.0f%%", t, static_cast<double> (v.param (sustainP_)));
                 std::snprintf (st.text[ui::envgraph::Decay], sizeof st.text[ui::envgraph::Decay], "%.15s", u);
+                std::snprintf (st.decayTime, sizeof st.decayTime, "%.15s", t);   // under the axis: the time under DECAY, the level under SUSTAIN
+                std::snprintf (st.sustainText, sizeof st.sustainText, "%.0f%%", static_cast<double> (v.param (sustainP_)));
             }
             for (int i = 0; i < 3; ++i)
                 if (curveP_[i] >= 0)

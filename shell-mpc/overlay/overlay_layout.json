@@ -861,7 +861,7 @@
       "name": "oscsub",
       "kind": "oscui",
       "index": 1,
-      "tab": "Osc Sub",
+      "tab": "Sub",
       "region": {
         "x": 0,
         "y": 0,
@@ -898,7 +898,7 @@
       "name": "oscnoise",
       "kind": "oscui",
       "index": 5,
-      "tab": "Osc Noise",
+      "tab": "Noise",
       "region": {
         "x": 0,
         "y": 0,

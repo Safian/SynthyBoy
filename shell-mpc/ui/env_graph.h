@@ -80,7 +80,8 @@ public:
         Shape ghostShape;
         int numDots = 0;
         Dot dots[kMaxDots];                                  // newest voice first
-        char text[envgraph::kNumHandles][16] = {};           // the value of every handle as text (with the unit)
+        char text[envgraph::kNumHandles][16] = {};           // the value of every handle as text (with the unit); the Decay handle's text is the time and the sustain level (its bubble)
+        char decayTime[16] = {}, sustainText[16] = {};       // the labels under the axis: the decay TIME alone under the decay segment, the sustain LEVEL under the sustain segment (empty: the Decay handle's text / no label)
         uint32_t colour = 0;                                 // 0xRRGGBB of the curve; 0 = the envelope colours of the look
         int selected = envgraph::None;                       // the handle whose value is written on the graph (a tap selects, the drag selects)
         bool beats = false;                                  // the units of the times: ms or beats (the caption of the axis)
@@ -288,15 +289,19 @@ protected:
         // ---- the value of every time handle under the axis (full detail, the roomy graph), the name of the unit
         if (! comp && ! reduced)
         {
-            static const char* const kAxis[5] = { "DELAY", "ATTACK", "HOLD", "DECAY", "RELEASE" };
-            static const int kEndOf[5] = { 1, 2, 3, 4, 6 }, kStartOf[5] = { 0, 1, 2, 3, 5 };
-            for (int i = 0; i < 5; ++i)
+            // the labels of the segments: DELAY, ATTACK, HOLD, DECAY (the time), SUSTAIN (the level), RELEASE; each under its own segment
+            static const char* const kAxis[6] = { "DELAY", "ATTACK", "HOLD", "DECAY", "SUSTAIN", "RELEASE" };
+            static const int kEndOf[6] = { 1, 2, 3, 4, 5, 6 }, kStartOf[6] = { 0, 1, 2, 3, 4, 5 }, kTextOf[6] = { 0, 1, 2, 3, -1, 4 };
+            for (int i = 0; i < 6; ++i)
             {
                 const Rect b { static_cast<int> (std::lround (g.x[kStartOf[i]])), pl.bottom() + 4, static_cast<int> (std::lround (g.x[kEndOf[i]] - g.x[kStartOf[i]])), 22 };
                 if (b.w < 24)
                     continue;
+                const char* text = i == 3 && state.decayTime[0] != '\0' ? state.decayTime : (i == 4 ? state.sustainText : state.text[kTextOf[i]]);
+                if (i == 4 && text[0] == '\0')
+                    continue;
                 p.textCentered ({ b.x, b.y, b.w, 12 }, kAxis[i], T.fSmall - 1.0f, p.c (T.textFaint, 255), 8.0f);
-                p.textCentered ({ b.x, b.y + 12, b.w, 14 }, state.text[i], T.fSmall + 1.0f, p.c (T.textDim, 255), 8.0f);
+                p.textCentered ({ b.x, b.y + 12, b.w, 14 }, text, T.fSmall + 1.0f, p.c (T.textDim, 255), 8.0f);
             }
         }
         // ---- the handles

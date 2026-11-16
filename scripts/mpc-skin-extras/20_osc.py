@@ -1,4 +1,4 @@
-# SynthyBoy - MPC skin extra: the wavetable picture of the oscillators on the tabs Osc 1 .. Osc 3.
+# SynthyBoy - MPC skin extra: the wavetable picture of the oscillators on the tabs Osc 1 .. Osc 3 (the production skin; the overlay variant has no such tab: its OSC tab is drawn by the plugin).
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
@@ -74,6 +74,8 @@ def _move_knobs_down(tab, qlinks, ctx, n):
 
 
 def apply(tui, qlinks, ctx):
+    if ctx.meta is not None and ctx.meta.get("variant") == "overlay":
+        return   # the overlay variant draws the oscillator tab itself (pages of the oscillator UI, shell-mpc/overlay/osc_page.h): no host picture, no moved knobs
     choices = _choices()
     count = len(choices)
     frames = {}

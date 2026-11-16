@@ -164,6 +164,7 @@ public:
         for (QGroup& g : groups)
         {
             g.setFrameRect ({});
+            g.setFrameless (false);
             for (int i = 0; i < 4; ++i)
                 g.set (i, nullptr);
         }
@@ -173,6 +174,7 @@ public:
         {
             QGroup& r = next ("Rate");
             r.set (0, &picker); r.set (1, &rate); r.set (2, &rise); r.set (3, &smoothTime);
+            r.setFrameless (true);   // the shape grid (Q 1) and the RATE block lie apart: one quad is marked by its four chips and the Q colour, not by a frame around everything between them
             QGroup& t = next ("Timing");
             t.set (0, &mode); t.set (1, &phase); t.set (2, &delay);
             QGroup& mo = next ("Motion");
@@ -316,43 +318,55 @@ protected:
         };
         if (! random_)
         {
-            const int topH = (inner (0).h - kQLane) / 2;
-            const int botY = inner (0).y + topH + kQLane;
-            const int botH = inner (0).bottom() - botY;
+            // one size for the medium knobs of the page (RISE, SMOOTH, PHASE, DELAY, SWING, STEREO): a cell of kKnobH pixels, the dial at the left with its name and value beside it when the cell is wide enough
+            // (172 px, the minimum of a side knob), over the texts when it is not (the KEY BLOCK narrows the others)
+            const int kKnobH = 122;
+            auto medium = [&] (Knob& k, const Rect& cell) { k.state.side = cell.w >= 172; k.place (cell); };
+            auto mediumPair = [&] (const Rect& cell, Knob& a, Knob& b)
+            {
+                const int cw = (cell.w - kGap) / 2;
+                medium (a, { cell.x, cell.y, cw, cell.h });
+                medium (b, { cell.x + cw + kGap, cell.y, cell.w - cw - kGap, cell.h });
+            };
 
-            // RATE: the RATE knob is large (the whole height of the block, with its value) on the left; RISE and SMOOTH are the medium knobs of the page (the size of PHASE, DELAY, SWING, STEREO) one above the other on the right
+            // RATE: the RATE knob is large (the whole height of the block, with its value) on the left; RISE and SMOOTH one above the other on the right, medium
             Rect in0 = inner (0);
-            const int rw = in0.w * 11 / 20;
+            const int rw = in0.w * 45 / 100;
             rate.place ({ in0.x, in0.y, rw, in0.h });
-            rise.place ({ in0.x + rw + kGap, in0.y, in0.w - rw - kGap, topH });
-            smoothTime.place ({ in0.x + rw + kGap, botY, in0.w - rw - kGap, botH });
+            const int sx = in0.x + rw + kGap, sw = in0.w - rw - kGap;
+            medium (rise, { sx, in0.y, sw, kKnobH });
+            medium (smoothTime, { sx, in0.bottom() - kKnobH, sw, kKnobH });
 
-            // TIMING: MODE stepper + PHASE + DELAY
-            Rect in1 = inner (1);
-            mode.place ({ in1.x, in1.y + (topH - rowH) / 2, in1.w, rowH });
-            pair ({ in1.x, botY, in1.w, botH }, phase, delay);
-
-            // MOTION: DIRECTION + SWING + STEREO
-            Rect in2 = inner (2);
-            direction.place ({ in2.x, in2.y + (topH - rowH) / 2, in2.w, rowH });
-            pair ({ in2.x, botY, in2.w, botH }, swing, stereo);
+            // TIMING and MOTION: the stepper at the top of the block (as tall as the room above the knobs lets it be), the two medium knobs under it, at the bottom
+            auto block = [&] (int i, Component& top, Knob& a, Knob& b)
+            {
+                const Rect in = inner (i);
+                const int topH = std::min (96, in.h - kKnobH - kQLane);
+                top.place ({ in.x, in.y, in.w, topH });
+                mediumPair ({ in.x, in.bottom() - kKnobH, in.w, kKnobH }, a, b);
+            };
+            block (1, mode, phase, delay);
+            block (2, direction, swing, stereo);
 
             if (keyActive_)
                 stack2 (inner (3), keyTranspose, keyTune);
         }
         else
         {
-            const int rateH = 72;
+            // RANDOM: the RATE knob is large (the whole height of the block) on the left, as on the LFO page; STYLE and SYNC side by side and STEREO under them on the right
             Rect in = inner (0);
-            pair ({ in.x, in.y, in.w, rowH }, style, sync);
-            pair ({ in.x, in.y + rowH + kQLane, in.w, rateH }, rate, stereoToggle);
+            const int rw = std::min (220, in.w * 28 / 100);
+            rate.place ({ in.x, in.y, rw, in.h });
+            const Rect right { in.x + rw + kGap, in.y, in.w - rw - kGap, in.h };
+            pair ({ right.x, right.y, right.w, rowH }, style, sync);
+            stereoToggle.place ({ right.x, right.y + rowH + kQLane, right.w, std::min (rowH, std::max (0, right.h - rowH - kQLane)) });
             in = inner (1);
             mode.place ({ in.x, in.y + (in.h - rowH) / 2, in.w, rowH });   // the only control of the block: in the middle of it
             if (keyActive_)
                 stack2 (inner (2), keyTranspose, keyTune);
         }
         for (int i = 0; i < kMaxGroups; ++i)
-            groups[i].setFrameRect (i < nBlocks_ ? blocks_[i] : Rect {});
+            groups[i].setFrameRect (i < nBlocks_ && ! groups[i].frameless() ? blocks_[i] : Rect {});
     }
     void drawUnder (Pen& p) const override
     {

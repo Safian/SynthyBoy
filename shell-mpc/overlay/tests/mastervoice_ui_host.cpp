@@ -75,25 +75,28 @@ void testMasterSidesAndBlocks()
         const int n = m.collectLeaves (all, 0, 96);
         inside = inside && m.groups[g].check (all, n) == 0;
         // the VOICES group is one row of the grid of cells (64 px), the voice meter under it reaches the lower part of the block
-        filled = filled && (g == 2 ? m.voiceMeter.rect().bottom() >= b.bottom() - 90 && u.h >= 64 : u.bottom() >= b.bottom() - 90 && u.h >= 140);
+        filled = filled && (g == 2 ? m.voiceMeter.rect().bottom() >= b.bottom() - 90 && u.h >= 64 : (g == 1 || g == 3 ? u.h >= 120 && (g == 1 ? m.bendLink.rect().bottom() : m.portaCurve.rect().bottom()) >= b.bottom() - 40 : u.bottom() >= b.bottom() - 90 && u.h >= 140));
     }
     check (inside, "the Q group of OUTPUT, PITCH, VOICES and GLIDE lies in its block and nothing else is in its frame");
-    check (filled, "the groups fill their blocks (>= 140 px high, reaching the lower part)");
+    check (filled, "the groups fill their blocks (>= 140 px high, reaching the lower part; PITCH and GLIDE: a row of four cells and LINK / the curve under it)");
     check (m.volume.rect().h >= 200 && m.volume.rect().w >= 140, "the VOLUME is a big knob (" + std::to_string (m.volume.rect().w) + " x " + std::to_string (m.volume.rect().h) + ")");
-    // one knob family: only VOLUME and SPREAD are large; PITCH and GLIDE use the cell grid of VOICES (four equal columns) and fill their block to the right edge (no empty third)
+    // one knob family: only VOLUME and SPREAD are large (their cell is taller, so they are drawn larger); PITCH and GLIDE use the cell grid of VOICES (four equal columns), their four Q cells have one height and width,
+    // LINK is the same toggle as LEGATO under the row, and the two blocks reach the right edge and the bottom of their block
     check (m.volume.state.large && m.spread.state.large && ! m.tune.state.large && ! m.portaTime.state.large && ! m.portaSlope.state.large, "only VOLUME and SPREAD are large knobs");
+    check (m.volume.rect().h >= m.tune.rect().h + 60 && m.spread.rect().h >= m.portaTime.rect().h + 60, "the large knobs have the tall cells (" + std::to_string (m.volume.rect().h) + " against " + std::to_string (m.tune.rect().h) + ")");
     {
-        // the blocks of the right column are the same width as those of the left (to a pixel); the columns are measured from the left edge of each block's inner rectangle
         const int cw = m.polyphony.rect().w;
-        const ui::Rect pi = m.inner (1), gi = m.inner (3), vi = m.inner (2);
+        const ui::Rect pi = m.inner (1), gi = m.inner (3);
         auto near = [] (int a, int b) { return std::abs (a - b) <= 1; };
-        check (near (m.tune.rect().w, cw) && near (m.bendUp.rect().w, cw) && near (m.bendDown.rect().w, cw) && m.transpose.rect().right() == m.bendDown.rect().right() && m.transpose.rect().x == m.bendUp.rect().x && near (m.portaTime.rect().w, cw) && near (m.portaSlope.rect().w, cw)
-                   && near (m.portaAlways.rect().w, cw) && near (m.portaScaled.rect().w, cw),
+        check (near (m.tune.rect().w, cw) && near (m.transpose.rect().w, cw) && near (m.bendUp.rect().w, cw) && near (m.bendDown.rect().w, cw) && near (m.portaTime.rect().w, cw) && near (m.portaSlope.rect().w, cw)
+                   && near (m.portaAlways.rect().w, 2 * cw + m.portaSlope.rect().x - m.portaTime.rect().right()) && m.portaAlways.rect().w == m.portaScaled.rect().w,
                "PITCH and GLIDE cells are the cells of the VOICES grid (" + std::to_string (cw) + " px)");
-        check (m.tune.rect().x == pi.x && m.portaTime.rect().x == gi.x && near (m.bendLink.rect().x - pi.x, m.sameNote.rect().x - vi.x) && near (m.portaCurve.rect().x - gi.x, m.sameNote.rect().x - vi.x)
-                   && m.bendLink.rect().right() == pi.right() && m.portaCurve.rect().right() == gi.right(),
-               "PITCH and GLIDE reach the right edge of their block on the columns of VOICES");
-        check (m.bendLink.rect().h >= 120 && m.bendLink.state.knobLike && m.bendUp.rect().bottom() >= pi.bottom() - 2 && m.portaScaled.rect().bottom() >= gi.bottom() - 2, "PITCH and GLIDE use the whole height of their block");
+        check (m.tune.rect().h == m.transpose.rect().h && m.transpose.rect().h == m.bendUp.rect().h && m.bendUp.rect().h == m.bendDown.rect().h && m.portaTime.rect().h == m.portaSlope.rect().h && m.portaAlways.rect().h == m.portaScaled.rect().h,
+               "the four cells of the PITCH group have one height (TRANSPOSE is as tall as BEND UP); GLIDE and SLOPE one, ALWAYS and SCALED one (the wide toggle of the page)");
+        check (m.tune.rect().h == m.portaTime.rect().h, "the knobs of PITCH and GLIDE have the same cell");
+        check (m.bendDown.rect().right() == pi.right() && m.portaScaled.rect().right() == gi.right() && m.portaAlways.rect().right() == gi.right() && m.bendLink.rect().w == pi.w && m.bendLink.rect().bottom() <= pi.bottom() && m.portaCurve.rect().bottom() >= gi.bottom() - 2 && m.portaCurve.rect().w == gi.w,
+               "PITCH and GLIDE fill their block across the width; LINK and the curve are under the row of four");
+        check (! m.bendLink.state.knobLike && m.bendLink.rect().h >= 56 && ! m.bendLink.rect().overlaps (m.groups[1].rect()), "LINK is the plain toggle of the page (not a knob cell), outside the Q frame of PITCH");
     }
     // the second side
     r.tap (m.sideTuning);

@@ -40,6 +40,10 @@ public:
                 slot_[i]->setQ (a, i + 1);
     }
     void setFrameRect (const Rect& r) noexcept { frameRect_ = r; }
+    /** A group whose members lie APART in the layout (the shape grid and the RATE block of the LFO page): no frame (a frame around the union would take in everything between them), the four active chips and the
+        members' Q colour mark the quad; the adjacency check does not apply. */
+    void setFrameless (bool f) noexcept { frameless_ = f; }
+    bool frameless() const noexcept { return frameless_; }
     Rect frameRect() const noexcept { return frameRect_; }
 
     /** The union of the members' rectangles. */
@@ -65,7 +69,8 @@ public:
         const Rect total = Rect::unite (u, rect());
         Pen pen (sb, true);
         Cell cell (sb, { total.x, total.y - 17, total.w, total.h + 17 });   // the chips sit on the members
-        pen.rrect (u, theme::L().rControl, pen.c (theme::L().q, 255), 2.0f);
+        if (! frameless_)
+            pen.rrect (u, theme::L().rControl, pen.c (theme::L().q, 255), 2.0f);
         for (int i = 0; i < kSlots; ++i)
             if (const Component* m = slot_[i])
                 pen.qIndex (m->rect(), i + 1);
@@ -93,6 +98,12 @@ public:
     /** The adjacency check: how many components of `all` (the leaves of the layout) that are not members, and not parts of a member, overlap the union; `first` gets the first such one. */
     int check (Component* const* all, int n, const Component** first = nullptr) const
     {
+        if (frameless_)
+        {
+            if (first)
+                *first = nullptr;
+            return 0;
+        }
         const Rect u = frameRect_.empty() ? rect() : frameRect_;
         Component* own[kSlots * kMaxCheck];
         int nOwn = 0;
@@ -122,6 +133,7 @@ public:
 
 private:
     Rect frameRect_ = {};
+    bool frameless_ = false;
     Component* slot_[kSlots] = {};
     bool active_ = false;
 };

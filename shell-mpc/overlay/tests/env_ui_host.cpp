@@ -233,6 +233,12 @@ void testGraphHandlesWriteParameters()
     for (int i = 0; i < n; ++i)
         big = big && t[i].w >= 56 && t[i].h >= 56;
     check (big, "the eight handles have touch targets of at least 56 x 56 pixels");
+    // the labels under the axis: the decay TIME under DECAY and the sustain LEVEL under SUSTAIN, not run together
+    r.inst.set ("env1.decay", 400.0f);
+    r.inst.set ("env1.sustain", 55.0f);
+    r.refresh();
+    check (std::string (g.state.decayTime) == "400 ms" && std::string (g.state.sustainText) == "55%" && std::string (g.state.text[ui::envgraph::Decay]).find ("55%") != std::string::npos,
+           "under the axis DECAY says " + std::string (g.state.decayTime) + " and SUSTAIN says " + std::string (g.state.sustainText) + " (the handle's own bubble keeps both: " + g.state.text[ui::envgraph::Decay] + ")");
     // the end of the attack: a drag to the right makes the attack longer
     const float a0 = r.inst.get ("env1.attack");
     r.dragHandle (g, ui::envgraph::Attack, 60, 0);

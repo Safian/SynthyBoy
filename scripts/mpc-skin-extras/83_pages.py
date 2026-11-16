@@ -1,4 +1,4 @@
-# SynthyBoy - MPC skin extra: the PAGES the plugin draws entirely, of the OVERLAY skin variant (scripts/overlay-skin/mpc-ui-pages-overlay.json): the tabs Filter 1 / 2, Env 1 .. 4, LFO 1 .. 4, Macros, Mixer, Mod, FX, Master and
+# SynthyBoy - MPC skin extra: the PAGES the plugin draws entirely, of the OVERLAY skin variant (scripts/overlay-skin/mpc-ui-pages-overlay.json): the tabs Filter 1 / 2, Osc A / B / C / Sub / Noise, Env 1 .. 4, LFO 1 .. 4, Macros, Mixer, Mod, FX, Master and
 # Voice (the views of shell-mpc/overlay/overlay_layout.json whose kind is one of the page kinds; the Play tabs are 82_play.py's). Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
@@ -14,7 +14,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 LAYOUT_JSON = HERE.parent.parent / "shell-mpc" / "overlay" / "overlay_layout.json"
-PAGE_KINDS = ("filterui", "lfoui", "envui", "macros", "mixer", "fx", "mod", "master", "voice")
+PAGE_KINDS = ("filterui", "lfoui", "envui", "oscui", "macros", "mixer", "fx", "mod", "master", "voice")
 LFO_CURSORS, SPECTRUM_COLUMNS, PAD_PRESSURE_PARAMS = 4, 32, 2
 PLAY_GROUPS, PLAY_SLOTS, Q_PROXIES = 3, 8, 4
 FULL_FRAME_LAST_VISIBLE = 18   # the widgets are visible while the "Overlay Instance" frame is 0 .. 18 (the slots use 1 .. 17); the plugin takes frame 24 while a page is up

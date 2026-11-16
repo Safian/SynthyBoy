@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Inactive unless skin-meta.json says "variant": "overlay" (the layout file of that variant sets it; the production layout does not, and this module then changes nothing).
-# The overlay draws over tabs (shell-mpc/overlay/overlay_layout.json: the VIEWS): one cycle of Oscillator 1 .. 3 over a region of its tab, and the PAGES it draws entirely (the Play tabs, Filter 1 / 2, Env 1 .. 4, LFO 1 .. 4,
+# The overlay draws over tabs (shell-mpc/overlay/overlay_layout.json: the VIEWS): the PAGES it draws entirely (the Play tabs, Filter 1 / 2, Osc A / B / C / Sub / Noise, Env 1 .. 4, LFO 1 .. 4,
 # Macros, Mixer, Mod, FX, Master, Voice: 82_play.py and 83_pages.py hide their host widgets while the plugin's page is up and give them the Q proxies). Every view has a region and a pair of marker squares of
 # colours that no other view uses; this module draws them (and the instance picture) on the tab of every view. It does not move any control: the tabs keep what the other modules made of them, which is what
 # the player sees when the overlay is off or disabled.
@@ -33,8 +33,8 @@ ROWS = (45, 196, 346, 497)
 QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 301, 323   # x and width of the frames: 90_frames.py
 LFO_CURSORS, SPECTRUM_COLUMNS, PAD_PRESSURE_PARAMS = 4, 32, 2   # the parameters before "Overlay Instance" (shell-mpc/lfo_live.h, shell-mpc/spectrum.h, shell-mpc/pad_pressure.h; 45_pad_pressure.py)
 FILTERS = (1, 2)
-# the kinds of the views of overlay_layout.json (scripts/gen-overlay-layout-header.py KINDS): the pictures over a region of a host tab (osc) and the pages the plugin draws entirely (83_pages.py, 82_play.py)
-KNOWN_KINDS = ("osc", "play", "filterui", "lfoui", "envui", "macros", "mixer", "fx", "mod", "master", "voice")
+# the kinds of the views of overlay_layout.json (scripts/gen-overlay-layout-header.py KINDS): the pictures over a region of a host tab (none any more) and the pages the plugin draws entirely (83_pages.py, 82_play.py)
+KNOWN_KINDS = ("play", "filterui", "lfoui", "envui", "oscui", "macros", "mixer", "fx", "mod", "master", "voice")
 
 
 def png_solid(width, height, rgb):

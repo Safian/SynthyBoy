@@ -252,6 +252,17 @@ void testModEmptyStateAndBoard()
     check (b.numSources() == static_cast<int> (synthyboy::modSourceCount()), "board has all 57 engine sources (" + std::to_string (b.numSources()) + ")");
     check (b.numGroups() == 5, "board has 5 source groups");
     check (b.fits(), "all chips fit inside the available height");
+    {
+        // the LFOS row reads LFO 1 .. LFO 10, then RLFO 1 .. RLFO 4 (display order; the chips carry the engine's choice numbers)
+        std::vector<std::string> lfos;
+        for (int i = 0; i < b.numSources(); ++i)
+            if (std::strncmp (b.sourceLabel (i), "LFO ", 4) == 0 || std::strncmp (b.sourceLabel (i), "RLFO ", 5) == 0)
+                lfos.push_back (b.sourceLabel (i));
+        std::vector<std::string> want;
+        for (int k = 1; k <= 10; ++k) want.push_back ("LFO " + std::to_string (k));
+        for (int k = 1; k <= 4; ++k) want.push_back ("RLFO " + std::to_string (k));
+        check (lfos == want, "the LFO sources of the board read LFO 1 .. 10, then RLFO 1 .. 4");
+    }
 
     // touch targets >= 56 px
     bool chipsOk = true;

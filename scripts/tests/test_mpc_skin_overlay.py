@@ -69,8 +69,8 @@ def header_views():
     return out, origin, bg
 
 
-PAGE_KINDS = ("play", "filterui", "mixer", "fx", "mod", "macros", "master", "voice", "envui", "lfoui")
-KINDS = {"filter": 0, "lfo": 1, "osc": 2, "env": 3, "spectrum": 4, "play": 5, "filterui": 6, "mixer": 7, "fx": 8, "mod": 9, "macros": 10, "master": 11, "voice": 12, "envui": 13, "lfoui": 14}
+PAGE_KINDS = ("play", "filterui", "mixer", "fx", "mod", "macros", "master", "voice", "envui", "lfoui", "oscui")
+KINDS = {"filter": 0, "lfo": 1, "env": 3, "spectrum": 4, "play": 5, "filterui": 6, "mixer": 7, "fx": 8, "mod": 9, "macros": 10, "master": 11, "voice": 12, "envui": 13, "lfoui": 14, "oscui": 15}
 
 
 class SharedConstantsTests(unittest.TestCase):
@@ -178,17 +178,21 @@ class OverlayLayoutFileTests(unittest.TestCase):
         self.assertEqual(ovl["variant"], "overlay")
         self.assertNotIn("variant", prod)
         self.assertNotIn("tabLimit", ovl, "the overlay layout stays within the 32 tabs of the host")
-        self.assertEqual((len(prod["pages"]), len(ovl["pages"])), (34, 26))   # the production layout; the 3 Play tabs, minus the tabs the plugin's pages replace (F1 / F2 model, Mod 3-4, Mod Amt, the single effects)
+        self.assertEqual((len(prod["pages"]), len(ovl["pages"])), (34, 24))   # the production layout; the 3 Play tabs, minus the tabs the plugin's pages replace (F1 / F2 model, Mod 3-4, Mod Amt, the single effects, the six oscillator tabs and Sub/Nois: five pages of the oscillator UI take their place)
         self.assertLessEqual(len(ovl["pages"]), 32)
         play = ovl["pages"][:3]
         self.assertEqual([(p["name"], p["fn"], p["kick"], p.get("custom")) for p in play], [(n, "Play", [], True) for n in ("Play", "Play Env", "Play LFO")])
         renamed = {"Mod": "Mod 1-2", "FX": "FX Chain"}
         prod_by_name = {p["name"]: p for p in prod["pages"]}
+        osc_pages = {"Osc A": "osc1_main", "Osc B": "osc2_main", "Osc C": "osc3_main", "Sub": "sub_main", "Noise": "noise"}   # the OSC tab: one page of the oscillator UI per oscillator (its host widgets stay under it, hidden)
         for p in ovl["pages"][3:]:
+            if p["name"] in osc_pages:
+                self.assertEqual((p["fn"], p["kick"]), ("Osc", [osc_pages[p["name"]]]), p["name"])
+                continue
             q = prod_by_name[renamed.get(p["name"], p["name"])]
             self.assertEqual(p["fn"], q["fn"], p["name"])
             self.assertEqual([k for k in p["kick"] if k in q["kick"]], p["kick"], "%s: only pages of the production tab" % p["name"])
-        gone = {"F1 Model", "F2 Model", "Mod 3-4", "Mod Amt", "FX Filt", "Distort", "Comp 1", "Comp 2", "EQ", "Chorus", "Delay", "Phaser", "FX Level"}
+        gone = {"F1 Model", "F2 Model", "Mod 3-4", "Mod Amt", "FX Filt", "Distort", "Comp 1", "Comp 2", "EQ", "Chorus", "Delay", "Phaser", "FX Level", "Osc 1", "Osc1 Shp", "Osc 2", "Osc2 Shp", "Osc 3", "Osc3 Shp", "Sub/Nois"}
         self.assertFalse(gone & {p["name"] for p in ovl["pages"]})
         # every view of the shared JSON is on a tab of the layout
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
@@ -264,18 +268,18 @@ class OverlaySkinTests(unittest.TestCase):
         self.assertNotIn("filter1.cutoff", f1)
 
     # ---- the overlay skin ----
-    def test_26_tabs_and_the_sub_tabs_are_under_the_same_function_key(self):
+    def test_24_tabs_and_the_sub_tabs_are_under_the_same_function_key(self):
         tabs = self.o_tui["pageData"]["tabs"]
-        self.assertEqual(len(tabs), 26)
+        self.assertEqual(len(tabs), 24)
         self.assertLessEqual(len(tabs), 32, "the host's limit")
         f1, f2 = self.tab("Filter 1"), self.tab("Filter 2")
         self.assertEqual((f1["fnKeyIndex"], f2["fnKeyIndex"]), (4, 4))   # the Play key is the first one
         self.assertEqual((f1["fnKeySubIndex"], f2["fnKeySubIndex"]), (0, 1))
-        self.assertEqual(len({(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs}), 26)
-        for gone in ("F1 Model", "F2 Model", "Mod 3-4", "Mod Amt", "FX Filt", "Distort", "Comp 1", "Comp 2", "EQ", "Chorus", "Delay", "Phaser", "FX Level"):
+        self.assertEqual(len({(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs}), 24)
+        for gone in ("F1 Model", "F2 Model", "Mod 3-4", "Mod Amt", "FX Filt", "Distort", "Comp 1", "Comp 2", "EQ", "Chorus", "Delay", "Phaser", "FX Level", "Osc 1", "Osc1 Shp", "Osc 2", "Osc2 Shp", "Osc 3", "Osc3 Shp", "Sub/Nois"):
             self.assertFalse([t for t in tabs if t["tabName"] == gone], gone)
 
-    PAGE_TABS = ("Filter 1", "Filter 2", "Env 1", "Env 2", "Env 3", "Env 4", "LFO 1", "LFO 2", "LFO 3", "LFO 4", "Macros", "Mixer", "Mod", "FX", "Master", "Voice")
+    PAGE_TABS = ("Filter 1", "Filter 2", "Osc A", "Osc B", "Osc C", "Sub", "Noise", "Env 1", "Env 2", "Env 3", "Env 4", "LFO 1", "LFO 2", "LFO 3", "LFO 4", "Macros", "Mixer", "Mod", "FX", "Master", "Voice")
 
     def test_the_page_tabs_are_the_views_of_the_layout(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
@@ -324,8 +328,8 @@ class OverlaySkinTests(unittest.TestCase):
                 ot["componentDefinition"]["componentsData"] = comps[:-3]
             self.assertEqual(ot, pt, t["tabName"])
 
-    def test_the_pictures_of_the_lfo_and_osc_tabs_stay_under_the_views(self):
-        for name in ("LFO 1", "LFO 4", "Osc 1", "Osc 3"):
+    def test_the_pictures_of_the_lfo_tabs_stay_under_the_views(self):
+        for name in ("LFO 1", "LFO 4"):
             comps = self.tab(name)["componentDefinition"]["componentsData"]
             pictures = [c for c in comps if c["componentData"]["type"] == "Image" and not c["componentData"]["name"].startswith(("Overlay Marker", "Overlay Instance"))]
             self.assertGreaterEqual(len(pictures), 10, name)
@@ -435,7 +439,7 @@ class OverlaySkinTests(unittest.TestCase):
         first = [t["tabName"] for t in tabs if t["fnKeySubIndex"] == 0]
         self.assertEqual(first, ["Play", "Macros", "Osc", "Mix", "Filter", "Env", "LFO", "Mod", "FX", "Master"])
         later = [t["tabName"] for t in tabs if t["fnKeySubIndex"] > 0]
-        self.assertEqual(later, ["Play Env", "Play LFO", "Osc1 Shp", "Osc 2", "Osc2 Shp", "Osc 3", "Osc3 Shp", "Mixer", "Filter 2", "Env 2", "Env 3", "Env 4", "LFO 2", "LFO 3", "LFO 4", "Voice"])
+        self.assertEqual(later, ["Play Env", "Play LFO", "Osc B", "Osc C", "Sub", "Noise", "Filter 2", "Env 2", "Env 3", "Env 4", "LFO 2", "LFO 3", "LFO 4", "Voice"])
         names = [t["tabName"] for t in tabs]
         self.assertEqual(len(names), len(set(names)), "the tab names of the finished skin are unique")
         self.assertTrue(all(1 <= len(n) <= 8 for n in names))
@@ -452,7 +456,7 @@ class OverlaySkinTests(unittest.TestCase):
     def test_a_label_that_clashes_or_is_too_long_stops_the_generator(self):
         import test_gen_mpc_ui_layout as lay
         base = json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))
-        for page, label in (("Osc 1", "Osc 2"), ("Env 1", "Env 1 long"), ("Osc 1", "Mixer"), ("Env 1", "")):
+        for page, label in (("Osc A", "Osc B"), ("Env 1", "Env 1 long"), ("Osc A", "Mix"), ("Env 1", "")):
             doc = json.loads(json.dumps(base))
             next(p for p in doc["pages"] if p["name"] == page)["label"] = label
             with tempfile.TemporaryDirectory() as tmp:
@@ -530,7 +534,7 @@ class OverlaySkinTests(unittest.TestCase):
         # the format: every tab sits on a function key and is reached by the key (ui-reference "fnKeyIndex" / "fnKeySubIndex"); a plugin has no call that selects a tab (docs/MPC.md "Q proxies").
         names = [t["tabName"] for t in self.o_tui["pageData"]["tabs"]]
         self.assertFalse([n for n in names if "Full" in n], "no blank page of its own: the full-screen page is drawn over the Play page")
-        self.assertEqual(len(names), 26, "the tab count of the overlay skin")
+        self.assertEqual(len(names), 24, "the tab count of the overlay skin")
 
     def test_play_views_markers_and_the_fallback_picture(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
