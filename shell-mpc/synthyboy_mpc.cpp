@@ -784,6 +784,10 @@ struct PluginInstance
     /** Debug switch: while the file /tmp/synthyboy-overlay-q-step-travel exists its first number is the travel of a Q proxy per step of a stepped target, in 1/128 host increments (default 6). Display thread. */
     void qStepTravelFile()
     {
+        const long long nowMs = steadyMs();   // once a second (it was an std::ifstream per tick per instance)
+        if (nowMs - qStepFileAtMs < 1000)
+            return;
+        qStepFileAtMs = nowMs;
         std::ifstream f ("/tmp/synthyboy-overlay-q-step-travel");
         double n = 0.0;
         qRouter.setStepTravel (f && (f >> n) && n > 0.0 ? static_cast<float> (n / 128.0) : synthyboy_mpc::QRouter::kStepTravelDefault);
@@ -897,6 +901,7 @@ struct PluginInstance
     std::atomic<bool> overlayAsked { false };                  // set by the overlay thread only (requestOverlayReport): the debug mode "stale" ends with it
     bool overlayStaleReleased = false;                         // display thread only
     std::chrono::steady_clock::time_point overlayNextFileCheck {};   // display thread only
+    long long qStepFileAtMs = -100000;   // display thread only: when the Q step travel file was read last
     static constexpr const char* kOverlayFakeSlotFile = "/tmp/synthyboy-overlay-fake-slot";
 
     /** The value for the real slot, or what the debug file says (a number 0 .. 15 = report that slot, any other number or "none" = the none colour, "blank" = frame 0, "stale" = frame 0 until the
