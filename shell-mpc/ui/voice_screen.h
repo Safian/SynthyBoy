@@ -202,7 +202,7 @@ protected:
         }
         {   // TARGETS: five equal cells in one grid: OSC A, OSC B, OSC C, SUB, NOISE
             const Rect in = inner (2);
-            const int tw = (in.w - 4 * g) / 5, th = 64;
+            const int tw = (in.w - 4 * g) / 5, th = std::max (64, in.h - lane);
             ToggleIcon* ts[5] = { &oscA, &oscB, &oscC, &oscSub, &oscNoise };
             for (int i = 0; i < 5; ++i)
                 ts[i]->place ({ in.x + i * (tw + g), in.y + lane, tw, th });
