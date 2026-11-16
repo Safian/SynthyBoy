@@ -262,6 +262,7 @@ void testStatusSlotCount()
 void testDeviceRule()
 {
     check (hasSixteenQLinks ("Akai Professional MPC XL", false) && hasSixteenQLinks ("Akai Professional MPC XL", true), "device rule: a name that says XL means 16 knobs, whatever the architecture");
+    check (hasSixteenQLinks ("Akai Professional MPC XL", false), "device rule: the exact string measured on the MPC XL (2026-11-16, /proc/device-tree/model) is 16 knobs");
     check (! hasSixteenQLinks ("Akai Professional MPC Key 61", false) && ! hasSixteenQLinks ("Akai Professional MPC Key 61", true), "device rule: the Key 61 has four knobs, whatever the architecture");
     check (! hasSixteenQLinks ("Akai Professional MPC Live III", true) && ! hasSixteenQLinks ("MPC One", false) && ! hasSixteenQLinks ("XLR board", true), "device rule: another name is four knobs even on a 64-bit build (XL must be a word)");
     check (hasSixteenQLinks ("", true) && ! hasSixteenQLinks ("", false), "device rule: no readable name: the 64-bit build is taken for the XL, the 32-bit build is not");
