@@ -226,6 +226,19 @@ public:
             return true;
         return lfo_ != nullptr && lfo_->touch (ev, stack, io, nowMs);
     }
+    bool onWheel (int x, int y, int notches, UiStack& stack, IInstanceView& io, double nowMs) override
+    {
+        // the same routing as a touch: the envelope's / LFO's full screens while open, else the three panels in turn
+        if (env_ != nullptr && ! stack.isMain() && stack.element() == EnvUi::kElementEnv)
+            return env_->wheel (x, y, notches, stack, io, nowMs);
+        if (lfo_ != nullptr && ! stack.isMain() && stack.element() == LfoUi::kElementLfo)
+            return lfo_->wheel (x, y, notches, stack, io, nowMs);
+        if (osc_ != nullptr && osc_->wheel (x, y, notches, stack, io, nowMs))
+            return true;
+        if (env_ != nullptr && env_->wheel (x, y, notches, stack, io, nowMs))
+            return true;
+        return lfo_ != nullptr && lfo_->wheel (x, y, notches, stack, io, nowMs);
+    }
     void onTick (UiStack& stack, IInstanceView& io, double nowMs) override { if (osc_ != nullptr) osc_->tick (nowMs, stack, io); if (env_ != nullptr) env_->tick (nowMs, stack, io); if (lfo_ != nullptr) lfo_->tick (nowMs, stack, io); }
     void onShown() override
     {

@@ -29,6 +29,7 @@
 #include "cpu_plan_linux.h"
 #include "drm_linux.h"
 #include "gpu/gpu_overlay.h"
+#include "mouse_linux.h"
 #include "touch_linux.h"
 #if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU)
 #include "gpu/helper_transport_linux.h"
@@ -146,9 +147,12 @@ private:
 #endif
 #if defined(__linux__)
         touch_ = std::make_unique<TouchInput>();   // the evdev node is found at run time (touch_linux.h); read only, never grabbed
+        mouse_ = std::make_unique<LinuxMouseReader>();           // the mice: found at run time, hot plug, read only, never grabbed (mouse_linux.h)
+        pointer_ = std::make_unique<LinuxPointerSource> (display_);   // the host's pointer plane: where the pointer is (drm_linux.h)
 #endif
         controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, Paths(), Timing(), -1.0, gpu_.get(), touch_.get());
 #if defined(__linux__)
+        controller_->setMouse (mouse_.get(), pointer_.get());
         controller_->setExtraStatus ([this] { return cpuStatus(); });
 #endif
     }
@@ -276,6 +280,8 @@ private:
     std::unique_ptr<gpu::IHelperTransport> transport_;
     std::unique_ptr<gpu::IGpuOverlay> gpu_;
     std::unique_ptr<ITouchInput> touch_;
+    std::unique_ptr<IMouseInput> mouse_;
+    std::unique_ptr<IPointerSource> pointer_;
     std::unique_ptr<Controller> controller_;
 };
 

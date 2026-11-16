@@ -42,6 +42,7 @@
 
 #include "discovery.h"
 #include "drm_interfaces.h"
+#include "mouse_input.h"
 #include "stacking.h"
 #include "vblank_linux.h"
 
@@ -180,6 +181,13 @@ public:
             return false;
         }
         return true;
+    }
+    std::vector<uint32_t> allPlaneIds() const
+    {
+        std::vector<uint32_t> ids;
+        for (const PlaneInfo& p : planes_)
+            ids.push_back (p.id);
+        return ids;
     }
     /** The planes the application has on our CRTC right now (a plane that shows a framebuffer on it), our own plane left out: its pointer may have appeared since the discovery. */
     std::vector<uint32_t> liveAppPlanes()
@@ -758,6 +766,161 @@ private:
     bool planeSet_ = false, stackingDirty_ = false;
     Buf buf_[2];
     std::unique_ptr<Pacing> pace_;
+};
+
+/** The host's pointer plane: the application's small plane (at most 128 x 128 pixels: the arrow) on our CRTC, with the framebuffer of the arrow on it. Its position is the plane's CRTC_X / CRTC_Y, read from the
+    properties through a descriptor of our own with the atomic capability (a capability of that descriptor only: the properties of the atomic API are not listed to a client without it; the legacy GETPLANE gives no
+    position). Nothing is written. Called from the overlay thread, at the moment of a button or wheel event and while a button is held (at most once per picture). */
+class LinuxPointerSource final : public IPointerSource
+{
+public:
+    explicit LinuxPointerSource (std::shared_ptr<LinuxDisplay> display) : display_ (std::move (display)) {}
+    ~LinuxPointerSource() override
+    {
+        if (fd_ >= 0)
+            ::close (fd_);
+    }
+
+    PointerPlane read() override
+    {
+        PointerPlane out;
+        if (! open())
+            return out;
+        PlaneProps p;
+        if (plane_ != 0 && readPlane (plane_, p) && usable (p))
+            return fill (plane_, p);
+        plane_ = 0;
+        for (uint32_t id : display_->allPlaneIds())
+        {
+            if (id == display_->plane() || id == display_->info().primaryPlane)
+                continue;
+            if (readPlane (id, p) && usable (p))
+            {
+                plane_ = id;
+                return fill (id, p);
+            }
+        }
+        return out;
+    }
+
+    std::string describe() const override { return "pointer_source: " + (reason_.empty() ? std::string (fd_ >= 0 ? "atomic properties of the CRTC_X / CRTC_Y of the pointer plane" : "not opened yet") : "unavailable: " + reason_) + "\n"; }
+
+private:
+    struct PlaneProps { bool ok = false; uint64_t crtc = 0, fb = 0; int64_t x = 0, y = 0, w = 0, h = 0; };
+
+    bool open()
+    {
+        if (fd_ >= 0)
+            return true;
+        if (! reason_.empty() || ! display_->ready())
+            return false;
+        fd_ = ::open (display_->info().device.c_str(), O_RDWR | O_CLOEXEC);
+        if (fd_ < 0)
+        {
+            reason_ = "cannot open " + display_->info().device + ": " + std::strerror (errno);
+            return false;
+        }
+        drm_set_client_cap cap;
+        std::memset (&cap, 0, sizeof cap);
+        cap.capability = DRM_CLIENT_CAP_UNIVERSAL_PLANES;
+        cap.value = 1;
+        ioctl (fd_, DRM_IOCTL_SET_CLIENT_CAP, &cap);
+        cap.capability = DRM_CLIENT_CAP_ATOMIC;       // on this descriptor only: the plane's CRTC_X / CRTC_Y are properties of the atomic API
+        cap.value = 1;
+        if (ioctl (fd_, DRM_IOCTL_SET_CLIENT_CAP, &cap) < 0)
+        {
+            reason_ = std::string ("DRM_CLIENT_CAP_ATOMIC: ") + std::strerror (errno);
+            ::close (fd_);
+            fd_ = -1;
+            return false;
+        }
+        return true;
+    }
+
+    /** The ids of the properties by name (the same for every plane of the driver), learnt from the first plane read. */
+    bool learn (uint32_t plane)
+    {
+        drm_mode_obj_get_properties g;
+        std::memset (&g, 0, sizeof g);
+        g.obj_id = plane;
+        g.obj_type = DRM_MODE_OBJECT_PLANE;
+        if (ioctl (fd_, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &g) < 0 || g.count_props == 0)
+            return false;
+        std::vector<uint32_t> ids (g.count_props);
+        std::vector<uint64_t> vals (g.count_props);
+        g.props_ptr = reinterpret_cast<uintptr_t> (ids.data());
+        g.prop_values_ptr = reinterpret_cast<uintptr_t> (vals.data());
+        if (ioctl (fd_, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &g) < 0)
+            return false;
+        for (uint32_t i = 0; i < g.count_props && i < ids.size(); ++i)
+        {
+            drm_mode_get_property gp;
+            std::memset (&gp, 0, sizeof gp);
+            gp.prop_id = ids[i];
+            if (ioctl (fd_, DRM_IOCTL_MODE_GETPROPERTY, &gp) < 0)
+                continue;
+            if (! std::strcmp (gp.name, "CRTC_X")) pX_ = ids[i];
+            else if (! std::strcmp (gp.name, "CRTC_Y")) pY_ = ids[i];
+            else if (! std::strcmp (gp.name, "CRTC_W")) pW_ = ids[i];
+            else if (! std::strcmp (gp.name, "CRTC_H")) pH_ = ids[i];
+            else if (! std::strcmp (gp.name, "CRTC_ID")) pCrtc_ = ids[i];
+            else if (! std::strcmp (gp.name, "FB_ID")) pFb_ = ids[i];
+        }
+        if (! (pX_ && pY_ && pW_ && pH_ && pCrtc_ && pFb_))
+        {
+            reason_ = "the plane has no CRTC_X / CRTC_Y / CRTC_W / CRTC_H / CRTC_ID / FB_ID property (the driver is not atomic)";
+            return false;
+        }
+        return true;
+    }
+
+    bool readPlane (uint32_t plane, PlaneProps& p)
+    {
+        p = PlaneProps();
+        if (! pX_ && ! learn (plane))
+            return false;
+        uint32_t ids[64];
+        uint64_t vals[64];
+        drm_mode_obj_get_properties g;
+        std::memset (&g, 0, sizeof g);
+        g.obj_id = plane;
+        g.obj_type = DRM_MODE_OBJECT_PLANE;
+        g.count_props = 64;
+        g.props_ptr = reinterpret_cast<uintptr_t> (ids);
+        g.prop_values_ptr = reinterpret_cast<uintptr_t> (vals);
+        if (ioctl (fd_, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &g) < 0)
+            return false;
+        for (uint32_t i = 0; i < g.count_props && i < 64; ++i)
+        {
+            if (ids[i] == pX_) p.x = static_cast<int64_t> (vals[i]);
+            else if (ids[i] == pY_) p.y = static_cast<int64_t> (vals[i]);
+            else if (ids[i] == pW_) p.w = static_cast<int64_t> (vals[i]);
+            else if (ids[i] == pH_) p.h = static_cast<int64_t> (vals[i]);
+            else if (ids[i] == pCrtc_) p.crtc = vals[i];
+            else if (ids[i] == pFb_) p.fb = vals[i];
+        }
+        p.ok = true;
+        return true;
+    }
+
+    bool usable (const PlaneProps& p) const noexcept { return p.ok && p.fb != 0 && p.crtc == display_->info().crtc && p.w > 0 && p.h > 0 && p.w <= 128 && p.h <= 128; }
+
+    static PointerPlane fill (uint32_t id, const PlaneProps& p)
+    {
+        PointerPlane out;
+        out.valid = true;
+        out.id = id;
+        out.x = static_cast<int> (p.x);
+        out.y = static_cast<int> (p.y);
+        out.w = static_cast<int> (p.w);
+        out.h = static_cast<int> (p.h);
+        return out;
+    }
+
+    std::shared_ptr<LinuxDisplay> display_;
+    int fd_ = -1;
+    uint32_t plane_ = 0, pX_ = 0, pY_ = 0, pW_ = 0, pH_ = 0, pCrtc_ = 0, pFb_ = 0;
+    std::string reason_;
 };
 
 class LinuxFrameSource final : public IFrameSource

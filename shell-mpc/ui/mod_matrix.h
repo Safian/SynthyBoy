@@ -433,6 +433,25 @@ public:
         return Composite::touchUp (x, y);
     }
 
+    /** The mouse wheel: a control of a row takes it as it is (a knob, a stepper); over the rest of the list it scrolls, one row a notch (the wheel up shows the earlier rows). */
+    bool wheelOver (int x, int y, int notches, Change& out) override
+    {
+        if (Composite::wheelOver (x, y, notches, out))
+            return true;
+        if (! enabled_ || ! scrolls() || ! listRect().contains (x, y))
+            return false;
+        const int newFirst = std::clamp (firstRow_ - notches, 0, maxScroll());
+        if (newFirst != firstRow_)
+        {
+            firstRow_ = newFirst;
+            syncWindow();
+            updateQGroup();
+            layout();
+        }
+        out = Change::none();
+        return true;
+    }
+
     void draw (gpu::SceneBuilder& sb) const override
     {
         Composite::draw (sb);

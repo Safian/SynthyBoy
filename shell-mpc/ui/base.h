@@ -38,6 +38,7 @@ public:
     void setLabel (const char* s) { setText (state.label, sizeof state.label, s); }
 
     Size minSize() const override { return state.small ? Size { 72, 56 } : (state.side ? Size { 172, 72 } : Size { 100, 72 }); }
+    double wheelUnit() const noexcept override { return 1.0 / 128.0; }   // the mouse wheel: one notch = one Q-Link step (1 / 128 of the range)
 
     /** The geometry of the dial inside the rectangle (public so that the tests can find the markers). `chip` is the rectangle the modulation chip and its depth drag are anchored to (the knob's own; the
         text column of a side knob, so that the chip lies beside the dial and not over it); `valueSize` the size of the value text. */
@@ -722,6 +723,7 @@ public:
 
     HBar() = default;
     Size minSize() const override { return { 200, 56 }; }
+    double wheelUnit() const noexcept override { return 1.0 / 128.0; }
     void setValueText (const char* s) { setText (state.text, sizeof state.text, s); }
     /** The track (inside the rectangle, left of the text). */
     Rect track() const noexcept { return { rect_.x + kPad, rect_.y, std::max (0, rect_.w - 2 * kPad - kTextW), rect_.h }; }
@@ -807,6 +809,7 @@ public:
     void setValueText (const char* s) { setText (state.text, sizeof state.text, s); }
 
     Size minSize() const override { return state.icon != Icon::None && state.label[0] != '\0' ? Size { 116, 56 } : Size { 72, 56 }; }
+    double wheelUnit() const noexcept override { return state.hasValue && ! state.integer ? 1.0 / 128.0 : 1.0; }
 
 protected:
     void drawBody (Pen& p) const override

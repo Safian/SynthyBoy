@@ -62,6 +62,7 @@ public:
         osc_.drawPopup (sb);
     }
     bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs) { return osc_.touch (ev, stack, inst, nowMs); }
+    bool wheel (int x, int y, int notches, UiStack& stack, IInstanceView& inst, double nowMs) { return osc_.wheel (x, y, notches, stack, inst, nowMs); }
     void tick (double nowMs, UiStack& stack, IInstanceView& inst) { osc_.tick (nowMs, stack, inst); }
     bool fingerDown() const noexcept { return osc_.fingerDown(); }
     void dropGesture() noexcept { osc_.dropGesture(); }

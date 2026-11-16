@@ -35,6 +35,7 @@
 #include "overlay_layout.h"
 #include "page_detector.h"
 #include "panel_key.h"
+#include "mouse_router.h"
 #include "qlink_setting.h"
 #include "presenter.h"
 #include "renderer.h"
@@ -57,6 +58,7 @@ struct Paths
     std::string detail = "/tmp/synthyboy-overlay-detail";   // 1 / full, 2 / reduced: the level of detail of the UI (ui/theme.h Detail); without the file (or "auto") the plugin chooses from the measured frame time
     std::string gpuClock = "/tmp/synthyboy-overlay-gpuclock";   // "off": the clock of the GPU is left to its governor; otherwise it is raised while the picture moves (gpu_clock.h)
     std::string rate = "/tmp/synthyboy-overlay-fps";   // 30 or 60: the pictures a second the GPU path aims at; without the file (or "auto") 30 on a GPU of the Mali-T series (the Key 61), 60 (tried, kept when it is reached) on the others
+    std::string pointerHotSpot = "/tmp/synthyboy-overlay-pointer-hotspot";   // debug: "x y", the pixel of the host's pointer plane picture that is the arrow's tip (plane pixels, panel orientation); overrides the measured / default hot spot
     std::string qlinkSettings = "/data/Settings/MPC/MPC.settings";   // the host's settings (read only): the option "Show Q-Link Status When Touched" (qlink_setting.h); with it off the key does nothing
     std::string look = "/tmp/synthyboy-overlay-look";   // a number 1 .. 3: the look of the UI (ui/theme.h); without the file look 1
     std::string dumpRequest = "/tmp/synthyboy-overlay-dump";
@@ -203,6 +205,35 @@ public:
         }
     }
 
+    /** The mouse: its events and the host's pointer plane (mouse_router.h). Not owned; called before the first tick. */
+    void setMouse (IMouseInput* mouse, IPointerSource* pointer)
+    {
+        if (mouse != nullptr && pointer != nullptr)
+            mouse_ = std::make_unique<MouseRouter> (*mouse, *pointer);
+        else
+            mouse_.reset();
+    }
+    unsigned long wheelEvents() const noexcept { return wheelEvents_; }
+    unsigned long wheelTaken() const noexcept { return wheelTaken_; }
+    /** The mouse wheel at a point of the UI (upright UI pixels): the control under it takes it (tests call it directly). */
+    void wheelEvent (int x, int y, int notches, double nowMs)
+    {
+        ++wheelEvents_;
+        if (keyEdge_ < PanelKey::kNoKey && x >= keyEdge_)
+            return;   // the host shows through there (its panel): our controls do not take it
+        std::lock_guard<std::mutex> g (mu_);
+        if (current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0)
+            return;
+        IInstanceView* v = slots_.at (activeSlot_);
+        if (v == nullptr)
+            return;
+        if (views_[static_cast<size_t> (current_)]->onWheel (x, y, notches, ui_[activeSlot_], *v, nowMs))
+        {
+            ++wheelTaken_;
+            needFrame_ = true;
+        }
+    }
+
     /** Plane off, buffers freed (the overlay thread has stopped, or this is the thread). */
     void shutdown() noexcept
     {
@@ -249,7 +280,7 @@ public:
             lastNowMs_ = nowMs;
             const auto t0 = std::chrono::steady_clock::now();
             double wait = step (nowMs);
-            if (touchIn_ != nullptr && current_ >= 0 && isUiPage (current_) && activeSlot_ >= 0)
+            if ((touchIn_ != nullptr || mouse_) && current_ >= 0 && isUiPage (current_) && activeSlot_ >= 0)
                 wait = std::min (wait, kTouchPollMs);   // the plugin-drawn pages are on screen: look at the touch screen often
             tickMaxMs_ = std::max (tickMaxMs_, std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count());
             return wait;
@@ -690,6 +721,7 @@ private:
     /** The touch screen: only while a view of the Play page is on screen (the plugin-drawn pages are there); the events go to the view, a running finger gets the clock for the long press. */
     void pollTouch (double nowMs)
     {
+        pollMouse (nowMs);
         if (touchIn_ == nullptr || current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0 || ! presenter_.opened())
             return;
         touchIn_->configure (presenter_.panelWidth(), presenter_.panelHeight(), rotation_);
@@ -699,6 +731,28 @@ private:
         if (v != nullptr && views_[static_cast<size_t> (current_)]->fingerDown())
         {
             views_[static_cast<size_t> (current_)]->onTick (ui_[activeSlot_], *v, nowMs);
+            needFrame_ = true;
+        }
+    }
+
+    /** The mouse: like the touch screen only while a plugin-drawn page is on screen (the events of other times are read and thrown away: they must not arrive later). Left button = a finger, the wheel = steps. */
+    void pollMouse (double nowMs)
+    {
+        if (! mouse_)
+            return;
+        if (current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0 || ! presenter_.opened())
+        {
+            mouse_->idle();             // a drag that was running when the page went is over (the page drops its gesture itself)
+            return;
+        }
+        mouse_->configure (presenter_.panelWidth(), presenter_.panelHeight(), rotation_);
+        mouse_->poll (nowMs, timing_.frameEveryMs, [this, nowMs] (const TouchEvent& ev) { touchEvent (ev, nowMs); },
+                      [this, nowMs] (int x, int y, int notches) { wheelEvent (x, y, notches, nowMs); });
+        std::lock_guard<std::mutex> g (mu_);
+        IInstanceView* v = slots_.at (activeSlot_);
+        if (v != nullptr && mouse_->buttonDown() && views_[static_cast<size_t> (current_)]->fingerDown())
+        {
+            views_[static_cast<size_t> (current_)]->onTick (ui_[activeSlot_], *v, nowMs);   // the clock of a long press
             needFrame_ = true;
         }
     }
@@ -985,6 +1039,14 @@ private:
                 needFrame_ = true;
             }
         }
+        if (mouse_)
+        {
+            std::ifstream hf (paths_.pointerHotSpot);
+            std::string text;
+            if (hf)
+                std::getline (hf, text);
+            mouse_->setHotSpotOverride (text);
+        }
         chooseDetail();
         chooseRate (nowMs);
         updateRotation (nowMs);
@@ -1256,7 +1318,7 @@ private:
             std::lock_guard<std::mutex> g (mu_);
             const UiStack& u = activeSlot_ >= 0 ? ui_[activeSlot_] : ui_[0];
             o << "ui_state: " << (activeSlot_ < 0 || u.isMain() ? "main" : (u.level() == UiStack::Level::full ? "full" : "detail")) << "\nui_depth: " << (activeSlot_ < 0 ? 0 : u.depth())
-              << "\nui_auto_closes: " << uiAutoCloses_ << "\ngpu_clock_boost: " << (clock_.boosted() ? "yes" : "no") << "\ngpu_rate_stride: " << rateStride_ << "\ngpu_rate_source: " << rateSource_ << "\nui_look: " << look_ << "\nui_detail: " << ui::theme::D().name << "\nui_detail_source: " << detailSource_ << "\nui_detail_helper_render_ms: " << detailMeanMs_ << "\nqlink_panel: " << (keyEdge_ < PanelKey::kNoKey ? "yes" : "no") << "\nqlink_panel_changes: " << qlinkPanelChanges_ << "\nkey_active: " << (keyEdge_ < PanelKey::kNoKey ? "yes" : "no") << "\nkey_pixels: " << (PanelKey::kNoKey - keyEdge_) << "\nkey_reference_taken: " << keyReferences_ << "\nkey_reference_retakes: " << keyRetakes_ << "\nqlink_status_option: " << qlinkSettingText (qlinkOpt_.value()) << "\nkey_enabled: " << (qlinkOpt_.keyOn() ? "yes" : "no") << "\nqlink_status_option_reads: " << qlinkOpt_.reads() << " (of " << qlinkOpt_.polls() << " checks)\nkey_holds: " << keyHolds_ << "\nkey_blind_ticks: " << keyBlindTicks_ << "\nkey_cost_ms: " << (keyMeasures_ > 0 ? keyCostSum_ / static_cast<double> (keyMeasures_) : 0.0) << " (max " << keyCostMax_ << ")\nview_hides: " << viewHides_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\n" << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
+              << "\nui_auto_closes: " << uiAutoCloses_ << "\ngpu_clock_boost: " << (clock_.boosted() ? "yes" : "no") << "\ngpu_rate_stride: " << rateStride_ << "\ngpu_rate_source: " << rateSource_ << "\nui_look: " << look_ << "\nui_detail: " << ui::theme::D().name << "\nui_detail_source: " << detailSource_ << "\nui_detail_helper_render_ms: " << detailMeanMs_ << "\nqlink_panel: " << (keyEdge_ < PanelKey::kNoKey ? "yes" : "no") << "\nqlink_panel_changes: " << qlinkPanelChanges_ << "\nkey_active: " << (keyEdge_ < PanelKey::kNoKey ? "yes" : "no") << "\nkey_pixels: " << (PanelKey::kNoKey - keyEdge_) << "\nkey_reference_taken: " << keyReferences_ << "\nkey_reference_retakes: " << keyRetakes_ << "\nqlink_status_option: " << qlinkSettingText (qlinkOpt_.value()) << "\nkey_enabled: " << (qlinkOpt_.keyOn() ? "yes" : "no") << "\nqlink_status_option_reads: " << qlinkOpt_.reads() << " (of " << qlinkOpt_.polls() << " checks)\nkey_holds: " << keyHolds_ << "\nkey_blind_ticks: " << keyBlindTicks_ << "\nkey_cost_ms: " << (keyMeasures_ > 0 ? keyCostSum_ / static_cast<double> (keyMeasures_) : 0.0) << " (max " << keyCostMax_ << ")\nview_hides: " << viewHides_ << "\ntouch_input: " << (touchIn_ != nullptr ? "yes" : "no") << "\ntouch_events: " << touchEvents_ << "\ntouch_taken: " << touchTaken_ << "\nwheel_events: " << wheelEvents_ << "\nwheel_taken: " << wheelTaken_ << "\nmouse_input: " << (mouse_ ? "yes" : "no") << "\n" << (mouse_ ? mouse_->describe() : std::string()) << (touchIn_ != nullptr ? touchIn_->describe() : std::string());
         }
         o << "frames_last_second: " << (final_ ? 0u : framesLast_) << "\n";
         o << "frames_total: " << framesTotal() << "\n";
@@ -1393,6 +1455,7 @@ private:
     MarkerSpec markers_[Detection::kMaxViews * 2];
     Rect regions_[Detection::kMaxViews];
     ITouchInput* touchIn_ = nullptr;
+    std::unique_ptr<MouseRouter> mouse_;
     bool autoReduced_ = false, wasWhole_ = false;
     static constexpr double kKeySettleMs = 600.0, kKeyFreshMs = 250.0, kKeyQuietMs = 800.0, kKeyStaleMs = 300.0, kKeyStableMs = 250.0;   // the page must be whole and still this long before the reference is taken, the look at it this fresh, no knob write this lately
     PanelKey keys_[Detection::kMaxViews];                 // the reference of the strip under each view (taken again on a view change)
@@ -1414,7 +1477,7 @@ private:
     unsigned long detailFrames_ = 0;
     const char* detailSource_ = "auto";
     int look_ = 1;
-    unsigned long touchEvents_ = 0, touchTaken_ = 0;
+    unsigned long touchEvents_ = 0, touchTaken_ = 0, wheelEvents_ = 0, wheelTaken_ = 0;
     Rect instanceRects_[Detection::kMaxViews];
     int targetBase_[Detection::kMaxViews] = {};
     int targetCount_[Detection::kMaxViews] = {};

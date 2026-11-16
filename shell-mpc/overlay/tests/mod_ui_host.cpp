@@ -542,6 +542,16 @@ void testFilterAndScroll()
     check (m.scrolls() && m.visibleRows() == 7, "the matrix shows 7 rows and scrolls the rest (" + std::to_string (m.visibleRows()) + ")");
     r.drag (600, m.listRect().y + 300, 600, m.listRect().y + 40);
     check (m.firstRow() > 0, "a vertical drag scrolls the list");
+    // the mouse wheel over the list scrolls it a row a notch (up: the earlier rows), through the page's own wheel entry
+    {
+        const int f0 = m.firstRow();
+        const ui::Rect lr = m.listRect();
+        check (r.ui.wheel (lr.x + lr.w / 2, lr.y + 4, -1, r.stack, r.inst, r.now) && m.firstRow() == f0 + 1, "the wheel down over the list scrolls one row (" + std::to_string (f0) + " -> " + std::to_string (m.firstRow()) + ")");
+        check (r.ui.wheel (lr.x + lr.w / 2, lr.y + 4, 1, r.stack, r.inst, r.now) && m.firstRow() == f0, "the wheel up scrolls back");
+        r.ui.wheel (lr.x + lr.w / 2, lr.y + 4, 50, r.stack, r.inst, r.now);
+        check (m.firstRow() == 0, "the wheel up past the top stops at the first row");
+        check (! r.ui.wheel (5, 5, 1, r.stack, r.inst, r.now), "the wheel above the page (the host's top bar): not taken");
+    }
     r.tapC (m.tabSource);
     check (m.filterMode() == ui::ModMatrixView::FilterSource, "BY SOURCE");
     r.tapC (m.sourceFilter);   // the right half of the stepper: ENVELOPES

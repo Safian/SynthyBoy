@@ -83,6 +83,15 @@ public:
     }
     Change tick (double nowMs) override { return cap_ ? cap_->tick (nowMs) : Change::none(); }
     Change turn (double delta) override { return enabled_ && primary_ ? primary_->turn (delta) : Change::none(); }
+    bool wheelOver (int x, int y, int notches, Change& out) override
+    {
+        if (! enabled_ || ! rect_.contains (x, y))
+            return false;
+        for (int i = 0; i < n_; ++i)
+            if (shown_[i] && kids_[i]->wheelOver (x, y, notches, out))
+                return true;
+        return false;
+    }
     int touchTargets (Rect* out, int max) const override
     {
         int n = 0;

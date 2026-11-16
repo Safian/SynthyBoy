@@ -61,6 +61,9 @@ public:
     /** A touch in UI pixels (screen coordinates). `stack` is the instance's UiStack (the caller holds its lock: the view may open and close pages), `io` the instance. true: the touch belongs to this
         view's plugin-drawn pages (the application gets it as well: the screen cannot keep it from the host). */
     virtual bool onTouch (const TouchEvent&, UiStack&, IInstanceView&, double /*nowMs*/) { return false; }
+    /** The mouse wheel at (x, y) in UI pixels, `notches` positive away from the user: the control under the pointer takes it (a knob a Q-Link step, a stepper or a list one step, a scrolled list scrolls). true: it
+        lay over a control of this view's plugin-drawn pages. `stack` as for onTouch. */
+    virtual bool onWheel (int /*x*/, int /*y*/, int /*notches*/, UiStack&, IInstanceView&, double /*nowMs*/) { return false; }
     /** The clock while a finger is down (long press). */
     virtual void onTick (UiStack&, IInstanceView&, double /*nowMs*/) {}
     /** A finger is down on the plugin-drawn pages (the controller keeps its pace fast). */
