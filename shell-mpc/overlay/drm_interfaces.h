@@ -46,6 +46,11 @@ public:
     virtual int displayFd() const noexcept { return -1; }
     /** Takes the plane off whatever put something on it (the helper may have). Safe at any time, also twice. */
     virtual void forceDisablePlane() noexcept {}
+    /** Puts our plane where it must lie against the host's pointer plane (the zpos rule of discovery.h, stacking.h): called before the plane is first shown (the GPU path: before the helper starts and when the
+        helper has set a plane that was switched off again), every time the plane is taken again. Reads before it writes; a failure is logged in the status text and is not fatal. Defaults: nothing. */
+    virtual void takeStacking() {}
+    /** Puts back what takeStacking changed (the zpos at rest): the overlay releases the plane, the helper is gone. Safe at any time, also twice. */
+    virtual void releaseStacking() noexcept {}
     /** Removes a framebuffer and a GEM handle that another process made on the shared descriptor (0 = none). */
     virtual void removeForeign (uint32_t /*fbId*/, uint32_t /*gemHandle*/) noexcept {}
     // What run-time discovery found (valid after open ()); the defaults are the numbers of the tests' fakes.

@@ -169,7 +169,15 @@ public:
                 return;
         }
         if (SharedBlock* b = tr_.block())
+        {
             readPace (b);
+            if (pace_.planeRefreshes != lastRefreshes_)
+            {
+                lastRefreshes_ = pace_.planeRefreshes;
+                if (state_ == State::Running)
+                    plane_.takeStacking();   // the helper found the plane switched off (a mode set of the application) and set it again: the zpos may have been reset with it
+            }
+        }
         if (! tr_.alive())
             return fail (now, "the helper process is gone");
         if (state_ == State::Starting && now - startedAt_ > cfg_.startTimeoutMs)
@@ -344,6 +352,8 @@ private:
             scheduleAfterFailure (now);
             return;
         }
+        plane_.takeStacking();   // before the helper's first SETPLANE: our plane goes above the host's picture and below its pointer
+        lastRefreshes_ = 0;
         if (! tr_.start (fd, hello, error))
         {
             lastError_ = "cannot start the helper: " + error;
@@ -434,7 +444,7 @@ private:
         for (int i = 0; i < 64; ++i)
             p.ms[i] = __atomic_load_n (&b->pace.ms[i], __ATOMIC_RELAXED);
         p.planeChecks = __atomic_load_n (&b->pace.planeChecks, __ATOMIC_RELAXED);
-        p.reserved = 0;
+        p.planeRefreshes = __atomic_load_n (&b->pace.planeRefreshes, __ATOMIC_RELAXED);
         pace_ = p;
         paceKnown_ = p.stride != 0;
         RenderBlock r;
@@ -479,6 +489,8 @@ private:
             }
         if (touched && planeOff)
             plane_.forceDisablePlane();
+        if (planeOff)
+            plane_.releaseStacking();   // the zpos the plane had at rest is put back (the helper is dead or gone: nothing of it shows on the plane any more)
         if (SharedBlock* b = tr_.block())
             for (int i = 0; i < kMaxLedger; ++i)
             {
@@ -530,6 +542,7 @@ private:
     IPlaneBackend& plane_;
     GpuConfig cfg_;
     State state_ = State::Idle;
+    uint32_t lastRefreshes_ = 0;
     bool forceCpu_ = false, shown_ = false, hiding_ = false, unacked_ = false, keepPlane_ = false, paceKnown_ = false;
     PaceBlock pace_ {};
     RenderBlock render_ {};

@@ -35,6 +35,9 @@ struct PlaneInfo
     int type = kPlaneTypeUnknown;    // the "type" property
     bool hasZpos = false;
     uint64_t zpos = 0;               // the "zpos" property (the value at rest / of the current state)
+    bool zposMutable = false;        // the property is a range that may be written (not immutable): the XL's planes 0 .. 7; the Key 61 has no zpos property at all
+    uint64_t zposMin = 0, zposMax = 0;   // the range, when zposMutable
+    uint32_t zposProp = 0;           // the id of the property on this plane (for OBJ_GETPROPERTIES / OBJ_SETPROPERTY)
     std::vector<uint32_t> formats;
     bool hasArgb() const { return std::find (formats.begin(), formats.end(), kFourccArgb8888) != formats.end(); }
 };
@@ -148,6 +151,83 @@ inline DisplayInfo discoverDisplay (const DrmSnapshot& snap)
     }
     d.ok = true;
     return d;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Stacking: the host keeps its mouse pointer on a small plane of its own. Measured on the MPC XL (2026-11-16): planes 34 (the host's picture, zpos 0), 40 (the host's pointer, 64x64, type Overlay,
+// zpos 1) and 46 (ours, zpos 2); every plane has a "zpos" property that is a mutable range 0 .. 7. With ours at 2 the pointer was hidden UNDER our picture; with our zpos set to 0 the kernel's
+// normalised order was host 0, ours 1, pointer 2 (planes with equal zpos are ordered by plane object id, the lower id below) and the pointer was visible on top. On the Key 61 no plane has a zpos
+// property and the pointer is on top by the hardware's own order.
+
+/** A plane of the application on our CRTC with what the order needs of it. */
+struct StackPlane
+{
+    uint32_t id = 0;
+    uint64_t zpos = 0;
+};
+
+/** The kernel's order of two planes on one CRTC: by zpos, equal zpos by plane id (the lower id below). */
+inline bool stackedAbove (uint64_t zposA, uint32_t idA, uint64_t zposB, uint32_t idB) noexcept
+{
+    return zposA > zposB || (zposA == zposB && idA > idB);
+}
+
+struct ZposChoice
+{
+    bool possible = false;           // a value exists that puts our plane directly above the primary plane and below every other plane of the application
+    uint64_t value = 0;              // the value to set (== the current one: nothing to write)
+};
+
+/** The zpos that puts our plane (`ourId`) ABOVE the application's primary plane and BELOW every other plane the application has on the CRTC (its pointer / sprite planes), by the kernel's order.
+    `rangeMin` .. `rangeMax`: what the property allows; `mutableProp` false (immutable or no property): not possible. The value is the LOWEST that satisfies the rule (directly above the primary plane), also
+    when the plane's `current` value would do: the application's pointer plane may be hidden now (not on the CRTC, so not in `others`) and come later at a low zpos. Not possible (the range does not allow it, no primary plane known, ...): the caller keeps today's behaviour (the plane as discovery found it, above every application plane). */
+inline ZposChoice chooseZpos (uint32_t ourId, bool mutableProp, uint64_t rangeMin, uint64_t rangeMax, uint64_t current, const StackPlane* primary, const std::vector<StackPlane>& others)
+{
+    ZposChoice c;
+    if (! mutableProp || primary == nullptr || primary->id == 0 || rangeMin > rangeMax)
+        return c;
+    auto ok = [&] (uint64_t z)
+    {
+        if (z < rangeMin || z > rangeMax || ! stackedAbove (z, ourId, primary->zpos, primary->id))
+            return false;
+        for (const StackPlane& o : others)
+            if (o.id != ourId && o.id != primary->id && ! stackedAbove (o.zpos, o.id, z, ourId))
+                return false;
+        return true;
+    };
+    (void) current;
+    // the lowest value above the primary: its zpos when our id is the higher one (equal zpos: the higher id is above), else one more
+    uint64_t z = std::max<uint64_t> (rangeMin, ourId > primary->id ? primary->zpos : primary->zpos + 1);
+    if (ok (z))
+    {
+        c.possible = true;
+        c.value = z;
+    }
+    return c;
+}
+
+enum class PointerStacking { None, Above, Covered, Unknown };
+
+/** Where the application's other planes (its pointer) lie against ours: Above (every one is above ours: visible), Covered (one of them lies under ours: our picture hides it), None (it has no other
+    plane), Unknown (zpos is not known for some plane: the hardware's own order, as on the Key 61). */
+inline PointerStacking pointerStacking (uint32_t ourId, bool ourHasZpos, uint64_t ourZpos, const std::vector<PlaneInfo>& others)
+{
+    PointerStacking r = PointerStacking::None;
+    for (const PlaneInfo& o : others)
+    {
+        if (o.id == ourId)
+            continue;
+        if (! o.hasZpos || ! ourHasZpos)
+            return PointerStacking::Unknown;
+        if (! stackedAbove (o.zpos, o.id, ourZpos, ourId))
+            return PointerStacking::Covered;
+        r = PointerStacking::Above;
+    }
+    return r;
+}
+inline const char* pointerStackingText (PointerStacking p) noexcept
+{
+    return p == PointerStacking::Above ? "above ours" : p == PointerStacking::Covered ? "covered by ours" : p == PointerStacking::None ? "none" : "unknown (no zpos on every plane)";
 }
 
 /** After a plane failed or was taken by another program: the next spare. false: none left. */
