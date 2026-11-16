@@ -95,7 +95,10 @@ inline void shortName (int choice, char out[7])
     const int m = macroOfSource (choice);
     if (m >= 0)
     {
-        std::snprintf (out, 7, "%s", names != nullptr ? names->shortName (m) : MacroNames().shortName (m));
+        if (names != nullptr)
+            std::snprintf (out, 7, "%s", names->shortName (m));
+        else
+            std::snprintf (out, 7, "MAC %d", m + 1);   // outside a scope: the default names
         return;
     }
     shortSourceName (sourceName (choice), out);
