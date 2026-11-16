@@ -29,6 +29,7 @@
 #include "synthyboy/user_content.h"
 
 #include "mpc_vst2_abi.h"
+#include "device_profile.h"
 #include "output_peak.h"
 #include "output_stage.h"
 #include "plugin_paths.h"
@@ -1833,7 +1834,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             int bs = inst->maxBlockSize > 0 ? inst->maxBlockSize : 128;
             if (!inst->prepared || sr != inst->lastPreparedSampleRate || bs != inst->lastPreparedBlockSize)
             {
-                synthyboy::Quality quality = synthyboy::qualityForTier(synthyboy::Tier::low);
+                // The quality profile of this device (device_profile.h: a table by device name with overrides, "low" everywhere until the devices are measured), fixed for the life of the process.
+                synthyboy::Quality quality = synthyboy_mpc::profileQuality (synthyboy_mpc::profileInForce().profile);
                 quality.realtime = true; // live: audio thread never waits for helper thread
                 inst->engine->prepare(safeSr, bs, quality);
                 inst->outputStage.prepare (safeSr);

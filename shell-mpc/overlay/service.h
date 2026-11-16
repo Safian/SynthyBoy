@@ -22,6 +22,7 @@
 #include <dlfcn.h>
 #include <sched.h>
 #endif
+#include "../device_profile.h"
 #include "../output_peak.h"
 #include "../play_log.h"
 #include "../thread_policy.h"
@@ -259,7 +260,7 @@ private:
             t += " " + n;
         char pk[160];
         std::snprintf (pk, sizeof pk, "\noutput_peak: %.5f\noutput_peak_total: %.5f\noutput_blocks: %lu\n", static_cast<double> (outputPeak().takeWindow()), static_cast<double> (outputPeak().total.load (std::memory_order_relaxed)), outputPeak().blocks.load (std::memory_order_relaxed));   // output_peak.h: what the plugin hands to the host
-        return t + (cpu_.plan.audioThreads.empty() ? " none" : "") + pk;
+        return t + (cpu_.plan.audioThreads.empty() ? " none" : "") + pk + "quality_profile: " + describeProfile (profileInForce().profile) + " (" + profileInForce().source + ")\n";   // device_profile.h: the engine quality of this process
     }
 
     std::mutex cpuMu_;

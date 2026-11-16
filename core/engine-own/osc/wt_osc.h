@@ -123,18 +123,34 @@ public:
         }
     };
     static inline const ReversedTaps kDecimator2Rev {};
+    /** The same for the 128 taps of the 4x decimator (used when the warp runs 4x and the Math economy group is on). */
+    struct ReversedTaps4
+    {
+        float c[kTaps];
+        ReversedTaps4()
+        {
+            for (int i = 0; i < kTaps; ++i)
+                c[i] = kDecimator4.c[kTaps - 1 - i];
+        }
+    };
+    static inline const ReversedTaps4 kDecimator4Rev {};
     /** sum of taps[i] * x[i] over the 32 taps of the low cost decimator, as four interleaved partial sums (lane j takes the taps 4k + j) added as (s0 + s1) + (s2 + s3): the
         NEON and the scalar version do the same additions in the same order. */
-    static float dot32 (const float* x, const float* taps) noexcept
+    static float dot32 (const float* x, const float* taps) noexcept { return dotLanes (x, taps, kTapsLow); }
+    /** The same four partial sums over the 128 taps of the 4x decimator (the Math economy group with the 4x warp: rounding differs from the sequential sum of the
+        medium / high tiers by about 1e-7 relative, as at 2x). */
+    static float dot128 (const float* x, const float* taps) noexcept { return dotLanes (x, taps, kTaps); }
+    /** sum of taps[i] * x[i] over n taps (a multiple of 4) as four interleaved partial sums added as (s0 + s1) + (s2 + s3). */
+    static float dotLanes (const float* x, const float* taps, int n) noexcept
     {
 #if SB_NEON
         float32x4_t acc = vmulq_f32 (vld1q_f32 (x), vld1q_f32 (taps));
-        for (int k = 4; k < kTapsLow; k += 4)
+        for (int k = 4; k < n; k += 4)
             acc = vaddq_f32 (acc, vmulq_f32 (vld1q_f32 (x + k), vld1q_f32 (taps + k)));
         return (vgetq_lane_f32 (acc, 0) + vgetq_lane_f32 (acc, 1)) + (vgetq_lane_f32 (acc, 2) + vgetq_lane_f32 (acc, 3));
 #else
         float s0 = taps[0] * x[0], s1 = taps[1] * x[1], s2 = taps[2] * x[2], s3 = taps[3] * x[3];
-        for (int k = 4; k < kTapsLow; k += 4)
+        for (int k = 4; k < n; k += 4)
         {
             s0 += taps[k] * x[k];
             s1 += taps[k + 1] * x[k + 1];
@@ -663,6 +679,8 @@ public:
                     float acc = 0.0f;
                     if (tick.lowWarp)
                         acc = dot32 (x, kDecimator2Rev.c); // tier low: the same taps, four partial sums (rounding differs from the sequential sum by about 1e-7 relative)
+                    else if (tick.fastMath)
+                        acc = dot128 (x, kDecimator4Rev.c); // the 4x warp of a profile that keeps the Math economy group: the 128 taps in four partial sums, the same bound
                     else
                         for (int i = 0; i < nt; ++i)
                             acc += taps[i] * x[nt - 1 - i];

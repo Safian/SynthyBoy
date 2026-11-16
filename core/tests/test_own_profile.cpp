@@ -287,6 +287,8 @@ TEST (a_state_is_the_same_state_at_every_profile_and_sounds_within_the_bounds)
         { "heavy: math fast against exact", &heavy, low, quality (8, 3, 1, kLowFx, all & ~kEconomyMath), 0.2, -15.0, 0 },
         // the warp at 2x against 4x: the same level; the 4x decimator is 8 samples later (docs/MPC.md: about 8 instead of 16 samples), the rest is the aliasing (measured -25 dB)
         { "warped: warp 2x against 4x", &warped, quality (8, 3, 1, kLowFx, kEconomyWarp), quality (8, 3, 1, kLowFx, 0), 0.2, -15.0, 8 },
+        // the 4x warp with the Math group on sums the 128 decimator taps in four partial sums (the group's other forms act on the filter here): the same waveform
+        { "warped: 4x warp, math fast against exact", &warped, quality (8, 3, 1, kLowFx, kEconomyMath), quality (8, 3, 1, kLowFx, 0), 0.05, -100.0, 0 },
         // the morph at half rate from the half size transform: a static morph is the same cycle (measured -137 dB), a moving one lags (heavy: measured -88 dB)
         { "morphed: morph half against full", &morphed, quality (8, 3, 1, kLowFx, kEconomyMorph), quality (8, 3, 1, kLowFx, 0), 0.05, -100.0, 0 },
         { "heavy: morph half against full", &heavy, low, quality (8, 3, 1, kLowFx, all & ~kEconomyMorph), 0.05, -60.0, 0 },
