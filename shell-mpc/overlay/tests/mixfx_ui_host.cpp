@@ -77,7 +77,7 @@ void testMixerValuesAndWrites()
     check (m.strips[1].fader.rect().y < m.strips[1].pan.rect().y && m.strips[1].pan.rect().y < m.strips[1].send1.rect().y && m.strips[1].send1.rect().y < m.strips[1].send2.rect().y, "the strip reads top down in the order of its Q numbers: LEVEL 1, PAN 2, B1 3, B2 4");
     check (std::string (m.strips[1].pan.state.valueText) == "L 35", "the pan is L 35 (" + std::string (m.strips[1].pan.state.valueText) + ")");
     check (std::string (m.strips[1].send1.state.valueText) == "40.0%", "the send is 40.0% (" + std::string (m.strips[1].send1.state.valueText) + ")");
-    check (std::string (m.strips[7].pan.state.valueText) == "-" && ! m.strips[7].pan.enabled(), "a bus has no pan: a dash, dim");
+    check (! m.strips[7].hasPan() && ! m.strips[7].hasSend1() && ! m.strips[7].hasSend2() && m.strips[7].hasLevel(), "a bus has no pan and no sends: those controls are left out (not drawn dim), the level stays");
 
     // writes: the fader, the pan, the sends, the switch
     const ui::Rect f = m.strips[1].fader.rect();
@@ -120,6 +120,103 @@ void testMixerGroupsAndList()
     r.inst.liveValues.stripPeak[9] = 0.94f;
     r.refresh();
     check (std::fabs (m.strips[0].fader.state.peak - 0.82f) < 0.001f && std::fabs (m.strips[9].fader.state.peak - 0.94f) < 0.001f && m.strips[3].fader.state.peak == 0.0f, "the meters follow the engine's strip peaks");
+}
+
+// Every strip is a Q group of its own: Q1 LEVEL, Q2 PAN, Q3 B1, Q4 B2 of the strip that was touched. A member the engine has no parameter for (BUS 1, BUS 2 and MASTER have a level only) is left out:
+// no chip, not in the frame, its control not drawn and not touchable; the strip keeps its height and the other controls their places.
+void testMixerQPerStrip()
+{
+    const char* const keys[10][4] = {
+        { "sub.level", "sub.pan", "sub.bus1_send", "sub.bus2_send" },
+        { "osc1.level", "osc1.pan", "osc1.bus1_send", "osc1.bus2_send" },
+        { "osc2.level", "osc2.pan", "osc2.bus1_send", "osc2.bus2_send" },
+        { "osc3.level", "osc3.pan", "osc3.bus1_send", "osc3.bus2_send" },
+        { "noise.level", "noise.pan", "noise.bus1_send", "noise.bus2_send" },
+        { "filter1.level", "filter1.pan", "filter1.bus1_send", "filter1.bus2_send" },
+        { "filter2.level", "filter2.pan", "filter2.bus1_send", "filter2.bus2_send" },
+        { "bus1.level", "", "", "" },
+        { "bus2.level", "", "", "" },
+        { "master.volume", "", "", "" } };
+    MixRig r;
+    r.refresh();
+    ui::MixerFullScreen& m = r.ui.screen();
+    bool all = true;
+    std::string why;
+    auto fail = [&] (int s, const char* what) { if (all) why = std::string (" (strip ") + std::to_string (s) + ": " + what + ")"; all = false; };
+    // the pixels the hidden controls would have drawn: the strip's own ground (a vertical gradient: every row of it is one colour), nothing else
+    auto flat = [] (const std::vector<uint32_t>& cv, ui::Rect a) -> bool
+    {
+        for (int y = a.y; y < a.bottom(); ++y)
+            for (int x = a.x; x < a.right(); ++x)
+                if (cv[static_cast<size_t> (y) * 1280u + static_cast<size_t> (x)] != cv[static_cast<size_t> (y) * 1280u + static_cast<size_t> (a.x)])
+                    return false;
+        return true;
+    };
+    const ui::Rect pan0 = m.strips[0].pan.rect(), s1Pan = m.strips[7].pan.rect();
+    for (int s = 0; s < 10; ++s)
+    {
+        ui::MixerStrip& st = m.strips[s];
+        // a tap in the strip's name cell would switch it; a tap on the fader track alone changes nothing
+        r.tapAt (st.fader.rect().x + 6, st.fader.rect().y + 6);
+        r.refresh();
+        const int idx[4] = { demo::Inst::idx (keys[s][0]), keys[s][1][0] ? demo::Inst::idx (keys[s][1]) : -1, keys[s][2][0] ? demo::Inst::idx (keys[s][2]) : -1, keys[s][3][0] ? demo::Inst::idx (keys[s][3]) : -1 };
+        if (m.activeGroup() != s || ! m.groups[s].active())
+            fail (s, "the strip is not the active group");
+        if (m.routingBar.selectedStrip != s)
+            fail (s, "the routing bar does not follow the strip");
+        for (int g = 0; g < 10; ++g)
+            if (g != s && m.groups[g].active())
+                fail (s, "another group is active too");
+        int members = 0;
+        for (int q = 0; q < 4; ++q)
+        {
+            if (r.inst.q[q] != idx[q])
+                fail (s, "the published target is wrong");
+            const bool member = m.groups[s].member (q) != nullptr;
+            members += member;
+            if (member != (r.inst.q[q] >= 0))     // a chip only where there is a target
+                fail (s, "a chip without a target, or a target without a chip");
+            if (member && m.groups[s].member (q)->qIndex() != q + 1)
+                fail (s, "the chip number is not the Q number");
+        }
+        if (m.groups[s].numMembers() != members || (s < 7 && members != 4) || (s >= 7 && members != 1))
+            fail (s, "the number of members");
+        // the frame: around the present members, in the strip's own column, touching no other strip
+        const ui::Rect fr = m.groups[s].rect();
+        if (fr.empty() || ! st.rect().contains (fr) || fr.x != st.fader.rect().x || fr.w != st.fader.rect().w)
+            fail (s, "the frame is not in the strip's column");
+        for (int g = 0; g < 10; ++g)
+            if (g != s && m.strips[g].rect().overlaps (fr))
+                fail (s, "the frame reaches another strip");
+        // the left-out controls: same places as everywhere, not touchable, not among the leaves
+        if (st.pan.rect().y != pan0.y || st.pan.rect().h != pan0.h || st.rect().h != m.strips[0].rect().h)
+            fail (s, "the strip or its controls moved");
+        ui::Component* leaves[64];
+        const int n = st.collectLeaves (leaves, 0, 64);
+        for (int i = 0; i < n; ++i)
+            if ((leaves[i] == &st.pan && ! st.hasPan()) || (leaves[i] == &st.send1 && ! st.hasSend1()) || (leaves[i] == &st.send2 && ! st.hasSend2()))
+                fail (s, "a left-out control is still a leaf");
+    }
+    check (all, "selecting each of the ten strips publishes its Q targets (LEVEL, PAN, B1, B2; fewer where the engine has none), moves the frame and the routing line, no chip without a target" + why);
+
+    // the bus strips: PAN, B1 and B2 are not drawn at all (the ground of the strip shows) and a tap there does nothing
+    r.tapAt (m.strips[7].fader.rect().x + 6, m.strips[7].fader.rect().y + 6);
+    auto data = std::make_unique<gpu::SceneData>();
+    gpu::SceneBuilder sb (*data);
+    sb.begin (gpu::kKindPlay, 0, 1280, 800);
+    r.ui.draw (sb);
+    std::vector<uint32_t> cv;
+    renderScene (*data, cv);
+    const ui::MixerStrip& bus = m.strips[7];
+    const ui::Rect below { bus.rect().x + 10, s1Pan.y - ui::kQLane + 4, bus.rect().w - 20, bus.rect().bottom() - (s1Pan.y - ui::kQLane + 4) - 10 };   // inside the strip's own border and the frame of the fader
+    check (flat (cv, below), "BUS 1: the space where PAN, B1 and B2 sit on the other strips is empty (no greyed control, no chip, no frame)");
+    check (! flat (cv, { m.strips[1].pan.rect().x + 2, m.strips[1].pan.rect().y + 2, m.strips[1].pan.rect().w - 4, m.strips[1].pan.rect().h - 4 }), "the same place on strip A is drawn (the check sees a control)");
+    const int writesBefore = r.inst.writes;
+    r.tapAt (s1Pan.x + s1Pan.w / 2, s1Pan.y + s1Pan.h / 2);
+    check (r.inst.writes == writesBefore && m.activeGroup() == 7, "a tap where the left-out PAN would be writes nothing and keeps BUS 1 selected");
+    // the strips with all four members are still all four: a strip that was selected before is not left changed
+    r.tapAt (m.strips[3].fader.rect().x + 6, m.strips[3].fader.rect().y + 6);
+    check (m.activeGroup() == 3 && r.inst.q[1] == demo::Inst::idx ("osc3.pan") && r.inst.q[3] == demo::Inst::idx ("osc3.bus2_send"), "going back from a bus to a full strip brings PAN, B1 and B2 back");
 }
 
 void testMixerDraw()
@@ -382,6 +479,7 @@ int main()
     testMixerLayout();
     testMixerValuesAndWrites();
     testMixerGroupsAndList();
+    testMixerQPerStrip();
     testMixerDraw();
     testFxGalleryEmptyState();
     testFxChain();
