@@ -49,7 +49,7 @@ public:
         kBarToggle = 130,                   // 130 .. 133: the toggle of a toggle + number slot
         kBarAmount = 140,                   // 140 .. 143: its amount
         kPanel = 200,                       // 200 + PanelSlot: the parts of the full screen's bottom band
-        kWarp1Type = 250, kWarp1Amount, kWarp1Var, kWarp2Type, kWarp2Amount, kWarp2Var, kUnisonGear = 260, kUnisonCount,
+        kWarp1Type = 300, kWarp1Amount, kWarp1Var, kWarp2Type, kWarp2Amount, kWarp2Var, kUnisonGear = 310, kUnisonCount,
         kDetailBack = 399, kDetail = 400,   // 400 + PanelSlot: the parts of a detail page
         kRouteTarget = 500, kRouteBalance, kRouteBus1, kRouteBus2, kRouteClose, kRouteBackdrop,
         kList = 700, kListBackdrop, kListHeader,   // the list popup (source, warp types, the content browser: its header is the way up)
@@ -133,6 +133,12 @@ public:
             refreshMods (inst);
             modsAtMs_ = nowMs;
             modsDirty_ = false;
+        }
+        if (sel_ == playosc::kNoise)
+        {
+            const int ti = indexOfKey ("noise.type");
+            const bool sample = ti >= 0 && inst.param (ti) >= 0.5f;
+            updateNoiseType (sample, inst);
         }
         pull (inst, main_);
         pull (inst, page_);
@@ -358,6 +364,22 @@ private:
             typeName_[0] = '\0';
         compact_.setInstance (uiInstance(), kind);
         full_.setInstance (uiInstance(), kind);
+        if (noise && inst != nullptr)
+        {
+            const int ti = indexOfKey ("noise.type");
+            const bool sample = ti >= 0 && inst->param (ti) >= 0.5f;
+            noiseSample_ = sample ? 1 : 0;
+            full_.panel.load (sample ? ui::presets::kNoiseSampleFull : ui::presets::kNoiseGenFull);
+            full_.rebuildGroups();
+        }
+        else if (noise)
+        {
+            noiseSample_ = 0;
+            full_.panel.load (ui::presets::kNoiseGenFull);
+            full_.rebuildGroups();
+        }
+        else
+            noiseSample_ = -1;
         {
             static const char* const kTitles[playosc::kInstances] = { "SUB", "OSC A", "OSC B", "OSC C", "NOISE" };
             full_.setPageTitle (pageSel_ > 0 ? kTitles[pageSel_ - 1] : "");
@@ -419,8 +441,6 @@ private:
             bind (main_, kTuneCrs, &full_.tune.crs, T::Number, "pitch_coarse");
             bind (main_, kTuneTrack, &full_.tune.track, T::Toggle, "pitch_track");
         }
-        else if (sub)
-            bind (main_, kTuneCrs, &full_.tune.crs, T::Number, "tune");
         else if (noise)
         {
             bind (main_, kTuneCrs, &full_.tune.crs, T::Number, "pitch");           // PITCH, FINE and the key tracking of the noise
@@ -519,6 +539,25 @@ private:
         }
         (void) kind; (void) abc;
     }
+    void rebindMainPanel()
+    {
+        main_.erase (std::remove_if (main_.begin(), main_.end(), [] (const Item& it) {
+            return it.id >= kPanel && it.id < kPanel + static_cast<int> (ui::PanelSlot::Count);
+        }), main_.end());
+        bindPanel (main_, full_.panel, kPanel, ui::OscKind::Wavetable, false);
+        configureNumberRanges (main_);
+    }
+    void updateNoiseType (bool sample, IInstanceView& inst)
+    {
+        const int sInt = sample ? 1 : 0;
+        if (noiseSample_ == sInt)
+            return;
+        noiseSample_ = sInt;
+        full_.panel.load (sample ? ui::presets::kNoiseSampleFull : ui::presets::kNoiseGenFull);
+        full_.rebuildGroups();
+        rebindMainPanel();
+        resolveQ (inst);
+    }
     static const char* slotKey (ui::PanelSlot s) noexcept
     {
         using ui::PanelSlot;
@@ -568,6 +607,17 @@ private:
             case PanelSlot::NoiseRand: return "random_phase";
             case PanelSlot::NoiseLoop: return "loop";
             case PanelSlot::NoiseBounce: return "bounce";
+            case PanelSlot::NoiseStereo: return "stereo";
+            case PanelSlot::NoiseEnv1: return "env1";
+            case PanelSlot::SubCrs: return "tune";
+            case PanelSlot::SubEnv1: return "env1";
+            case PanelSlot::SubMono: return "mono";
+            case PanelSlot::SubPhase: return "phase";
+            case PanelSlot::SubContig: return "phase_contiguous";
+            case PanelSlot::SubDest: return "destination";
+            case PanelSlot::SubBlend: return "filter_blend";
+            case PanelSlot::SubBus1: return "bus1_send";
+            case PanelSlot::SubBus2: return "bus2_send";
             default: return "";
         }
     }
@@ -921,6 +971,11 @@ private:
                         std::snprintf (k->state.valueText, sizeof k->state.valueText, "%.1f", static_cast<double> (plain));
                     else if (isFilter)
                         std::snprintf (k->state.valueText, sizeof k->state.valueText, "%.0f", static_cast<double> (plain));
+                    else if (it.id == kPanel + static_cast<int> (ui::PanelSlot::SubPhase))
+                    {
+                        const double deg = std::round (static_cast<double> (plain) * 3.6);
+                        std::snprintf (k->state.valueText, sizeof k->state.valueText, "%.0f\xc2\xb0", deg);
+                    }
                     else
                         formatValue (pi, plain, k->state.valueText, sizeof k->state.valueText);   // every other knob says its value too (with the unit), under its name
                     break;
@@ -1008,15 +1063,7 @@ private:
         for (Item& it : list)
             if (it.id == kWarp1Var || it.id == kWarp2Var)
                 it.c->setEnabled (false);
-        // the noise: START, RAND START, LOOP and BOUNCE belong to the sample source, they are dim while the noise is generated
-        if (sel_ == playosc::kNoise)
-        {
-            const int ti = indexOfKey ("noise.type");
-            const bool sample = ti >= 0 && v.param (ti) >= 0.5f;
-            for (Item& it : list)
-                if (it.c != nullptr && it.id >= kPanel + static_cast<int> (ui::PanelSlot::NoiseStart) && it.id <= kPanel + static_cast<int> (ui::PanelSlot::NoiseBounce))
-                    it.c->setEnabled (sample && it.param >= 0);
-        }
+
     }
     /** A value of a parameter as text with its unit: "35%", "+12 ct", "420 Hz", "1.20 s", "-6.0 dB" (at most 15 characters). */
     static void formatValue (const synthyboy::ParamInfo& pi, float plain, char* out, size_t cap)
@@ -1502,6 +1549,7 @@ private:
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false, configured_ = false, modsDirty_ = true, qSet_ = false;
     int pageSel_ = 0;   // the oscillator of a page of the OSC tab (setPage), 0: the Play page's UI
+    int noiseSample_ = -1;
     int w_ = 1280, h_ = 628, sel_ = 2, typeRaw_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = 0, pageLoaded_ = 0, qActive_ = 0;
     int envSel_ = 1, lfoSel_ = 1, selectedSource_ = ui::kNoSource;
     double modsAtMs_ = -1000.0;
