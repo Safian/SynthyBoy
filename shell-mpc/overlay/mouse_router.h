@@ -14,8 +14,9 @@
 
 namespace synthyboy_mpc { namespace overlay {
 
-// The Key 61's arrow tip in its pointer plane (rotation 90): measured on the device (docs/MPC.md); kKey61HotSpotMeasured false until it was.
-constexpr bool kKey61HotSpotMeasured = false;
+// The Key 61's arrow tip in its pointer plane (rotation 90), measured on the device on 2026-11-16 from the plane's picture (docs/MPC.md "The mouse path"): the pointer plane is the application's CURSOR type plane 35, 64 x 64 AR24, the
+// arrow is drawn turned with the screen, its tip is the outline pixel in the bottom left corner (0, 63), the same as the corner rule gives.
+constexpr bool kKey61HotSpotMeasured = true;
 constexpr int kKey61HotSpotX = 0, kKey61HotSpotY = 63;
 
 /** The arrow tip measured on a device: (rotation, panel size) -> the pixel of the pointer plane's picture. false: not measured (the default rule is used). The Key 61's (rotation 90, panel 800 x 1280) is

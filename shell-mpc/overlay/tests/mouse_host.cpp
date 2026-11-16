@@ -256,6 +256,9 @@ int main()
             }
             check (ok, "rotation " + std::to_string (rot) + ": the arrow tip at a UI point maps back to it");
         }
+        HotSpot m;
+        check (measuredHotSpot (90, 800, 1280, 64, 64, m) && m.x == 0 && m.y == 63 && std::string (m.source) == "measured" && m.x == h90.x && m.y == h90.y, "the Key 61 (rotation 90, 800 x 1280): the measured hot spot (0, 63), as the corner rule says");
+        check (! measuredHotSpot (270, 800, 1280, 64, 64, m), "the XL (rotation 270): not measured, the corner rule is used");
         int x = 0, y = 0;
         check (parseHotSpot ("12 40", x, y) && x == 12 && y == 40 && parseHotSpot ("3,60\n", x, y) && x == 3 && y == 60, "the override file text: two numbers");
         check (! parseHotSpot ("", x, y) && ! parseHotSpot ("abc", x, y) && ! parseHotSpot ("5", x, y) && ! parseHotSpot ("5 9999", x, y), "... anything else is no override");
@@ -313,7 +316,7 @@ int main()
         m.wheel (1);
         r.poll (135.0, 33.0, sinkT, sinkW);
         const std::string d = r.describe();
-        check (d.find ("pointer_plane: 40") != std::string::npos && d.find ("pointer_hotspot: 0,63 (default)") != std::string::npos && d.find ("pointer_ui_xy:") != std::string::npos && d.find ("mouse_wheel_notches: 0") != std::string::npos, "the status lines have the plane, the mapped UI position and the hot spot");
+        check (d.find ("pointer_plane: 40") != std::string::npos && d.find ("pointer_hotspot: 0,63 (measured)") != std::string::npos && d.find ("pointer_ui_xy:") != std::string::npos && d.find ("mouse_wheel_notches: 0") != std::string::npos, "the status lines have the plane, the mapped UI position and the hot spot");
         // the debug override of the hot spot: the tip is somewhere else in the picture
         place (500, 300);
         r.setHotSpotOverride ("10 50");
