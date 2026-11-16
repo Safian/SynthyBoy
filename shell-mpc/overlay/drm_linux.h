@@ -881,18 +881,22 @@ private:
         p = PlaneProps();
         if (! pX_ && ! learn (plane))
             return false;
-        uint32_t ids[64];
-        uint64_t vals[64];
+        // two calls: the first gives the real number of properties (the vendor kernels of the RK3588 give a plane several dozen: a fixed 64 is no safe ceiling, and the ioctl copies NOTHING when the object has more
+        // properties than the count it was given, so a loop over a fixed array read unfilled words), the second fills vectors of that size
         drm_mode_obj_get_properties g;
         std::memset (&g, 0, sizeof g);
         g.obj_id = plane;
         g.obj_type = DRM_MODE_OBJECT_PLANE;
-        g.count_props = 64;
-        g.props_ptr = reinterpret_cast<uintptr_t> (ids);
-        g.prop_values_ptr = reinterpret_cast<uintptr_t> (vals);
-        if (ioctl (fd_, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &g) < 0)
+        if (ioctl (fd_, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &g) < 0 || g.count_props == 0 || g.count_props > 1024)
             return false;
-        for (uint32_t i = 0; i < g.count_props && i < 64; ++i)
+        std::vector<uint32_t> ids (g.count_props, 0u);
+        std::vector<uint64_t> vals (g.count_props, 0u);
+        const uint32_t count = g.count_props;
+        g.props_ptr = reinterpret_cast<uintptr_t> (ids.data());
+        g.prop_values_ptr = reinterpret_cast<uintptr_t> (vals.data());
+        if (ioctl (fd_, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &g) < 0 || g.count_props > count)
+            return false;   // the plane changed between the two calls: the next read tries again
+        for (uint32_t i = 0; i < g.count_props; ++i)
         {
             if (ids[i] == pX_) p.x = static_cast<int64_t> (vals[i]);
             else if (ids[i] == pY_) p.y = static_cast<int64_t> (vals[i]);

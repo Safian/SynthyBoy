@@ -333,6 +333,25 @@ int main()
             r.poll (240.0, 33.0, sinkT, sinkW);
             check (p.reads == reads + 1, "... it is read at the next picture time, so the last position shows");
         }
+        {   // two mice: the button of the second one does not end the drag of the first (follow-up 3 of the review)
+            FakeMouse m2;
+            FakePointer p2;
+            MouseRouter r2 (m2, p2);
+            r2.configure (800, 1280, 90);
+            std::vector<TouchEvent> t2;
+            auto sT = [&] (const TouchEvent& e) { t2.push_back (e); };
+            auto sW = [&] (int, int, int) {};
+            p2.p.valid = true; p2.p.id = 40; p2.p.w = p2.p.h = 64; p2.p.x = 100; p2.p.y = 100;
+            auto ev = [&] (MouseEvent::Kind k, int dev) { MouseEvent e; e.kind = k; e.device = dev; m2.queue.push_back (e); };
+            ev (MouseEvent::Down, 0);
+            r2.poll (0.0, 33.0, sT, sW);
+            ev (MouseEvent::Down, 1); ev (MouseEvent::Up, 1);
+            r2.poll (10.0, 33.0, sT, sW);
+            check (r2.buttonDown() && t2.size() == 1, "mouse B pressing and releasing while mouse A holds its button: A's drag goes on, B sends nothing");
+            ev (MouseEvent::Up, 0);
+            r2.poll (20.0, 33.0, sT, sW);
+            check (! r2.buttonDown() && t2.size() == 2 && t2[1].kind == TouchEvent::Up, "A's own Up ends it");
+        }
         // the debug override of the hot spot: the tip is somewhere else in the picture
         place (500, 300);
         r.setHotSpotOverride ("10 50");
