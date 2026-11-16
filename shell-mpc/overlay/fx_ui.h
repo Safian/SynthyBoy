@@ -8,6 +8,8 @@
 // What it shows (UiStack): the page is always open; above it the list popup that picks the type of a new effect. The cards: a tap selects, the power zone switches, a drag moves the card (fxMove: the rack and
 // the position), + ADD adds an effect of the chosen type at the end of the Main rack. The page of an effect has its power switch, its rack (a stepper: the effect moves to another rack), the pages of its knobs,
 // REMOVE (the slots of the pool: the modules of the fixed chain are switched off instead), the display (EQ, compressor, delay, FX filter, distortion) and the knobs in rows of four: one Q group per row.
+// An empty chain has no effect to edit: the page is the GALLERY of the effect types the engine has (ui/fx_gallery.h, a card with a picture per type); one tap on a card adds that effect at the end of the Main
+// rack (the same as + ADD and a row of its list) and selects it, so the page of the new effect replaces the gallery.
 #pragma once
 
 #include <algorithm>
@@ -50,7 +52,8 @@ public:
         kEditorBase = 4000,
         kEditorPower = kEditorBase + 100, kEditorRack, kEditorPage, kEditorRemove,
         kList = 5000,
-        kListBackdrop = 5001
+        kListBackdrop = 5001,
+        kGallery = 5100
     };
 
     FxUi()
@@ -59,8 +62,15 @@ public:
         cardItems_.reserve (ui::FxChainBar::kMaxSlots);
         screen_.assignIds (kChainBase, kEditorBase);
         setCanvas (kCanvasW, kCanvasH);
+        int galleryTypes[synthyboy::kNumFxInstanceTypes - 1];
         for (int t = 1; t < synthyboy::kNumFxInstanceTypes; ++t)
+        {
             typeNames_[t - 1] = synthyboy::fxTypeDescriptor (t).name;
+            galleryTypes[t - 1] = t;
+        }
+        screen_.gallery.setTypes (galleryTypes, typeNames_, synthyboy::kNumFxInstanceTypes - 1);
+        screen_.gallery.setId (kGallery);
+        screen_.setEditorShown (false);
         for (int i = 0; i < 16; ++i)
         {
             char key[16];
@@ -561,6 +571,21 @@ private:
         stack.openDetail (kPageList);
     }
 
+    /** A new effect of `type` (synthyboy::FxInstanceType) at the end of the Main rack; it becomes the selected one. false: the pool is full or the type is none. */
+    bool addEffect (IInstanceView& inst, int type)
+    {
+        if (type <= synthyboy::kFxTypeNone || type >= synthyboy::kNumFxInstanceTypes)
+            return false;
+        std::vector<synthyboy::FxWrite> writes;
+        const int newSlot = synthyboy::fxAddModule (plain_.data(), type, 0, writes);
+        if (newSlot < 0)
+            return false;
+        selectedItem_ = { true, newSlot };
+        selectionChanged_ = true;
+        applyWrites (inst, writes);
+        return true;
+    }
+
     void handle (const ui::Change& c, UiStack& stack, IInstanceView& inst)
     {
         if (! c)
@@ -569,16 +594,15 @@ private:
         // the list of the types: a new effect at the end of the Main rack
         if (c.id == kList && c.kind == K::Index)
         {
-            std::vector<synthyboy::FxWrite> writes;
-            const int newSlot = synthyboy::fxAddModule (plain_.data(), c.index + 1, 0, writes);
-            if (newSlot >= 0)
-            {
-                selectedItem_ = { true, newSlot };
-                selectionChanged_ = true;
-                applyWrites (inst, writes);
-            }
+            addEffect (inst, c.index + 1);
             listOpen_ = false;
             stack.back();
+            return;
+        }
+        // the gallery of the empty chain: a card is a type (the number of the engine), the effect goes to the end of the Main rack and is selected
+        if (c.id == kGallery && c.kind == K::Index)
+        {
+            addEffect (inst, c.index);
             return;
         }
         if (c.id == kListBackdrop)

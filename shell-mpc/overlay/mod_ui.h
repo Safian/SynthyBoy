@@ -1,6 +1,9 @@
 // SynthyBoy - MPC overlay: the MODULATION MATRIX UI, the page of the Mod tab (the plugin draws the whole tab, page_view.h): the 64 slots of the matrix (shell-mpc/ui/mod_matrix.h) and the page of one slot
 // (mod_detail.h) wired to the engine parameters (modNN.* of the table, docs/MPC.md "Modulation UI"). One object per (page view, plugin instance). Pure: no OS headers, no threads of its own; the overlay thread calls
 // update () / touch () / tick () / draw (), with the instance as IInstanceView.
+// While no slot is in use the matrix has no rows to show: the page is the quick-add BOARD instead (ui/mod_board.h): every source the engine has, as chips in groups. A tap on a chip opens the targets page of
+// that source (ui/mod_targets.h, the page of the envelope, the LFO and the macros: "where does this source go") with the grouped list of the targets on top of it; the target that is picked makes the slot, and
+// the page shows it. BACK returns to the matrix, which lists the slot (the board is gone as soon as one slot is in use).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
@@ -11,6 +14,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -21,6 +25,7 @@
 #include "../ui/list.h"
 #include "../ui/mod_detail.h"
 #include "../ui/mod_matrix.h"
+#include "../ui/mod_targets.h"
 #include "curve_source.h"
 #include "page_view.h"
 #include "touch_decoder.h"
@@ -37,22 +42,23 @@ class ModUi
 public:
     static constexpr int kElementPage = 7;          // the page of the Mod tab (the oscillator is 1, the envelope 2, the LFO 3, the filter 4)
     static constexpr int kElementModMatrix = kElementPage;
-    enum Page { kPageDetail = 20, kPageList = 21 };
+    enum Page { kPageDetail = 20, kPageList = 21, kPageTargets = 22 };
 
     enum Id : int
     {
         kFilterAll = 20, kFilterSource = 21, kFilterDest = 22,
         kSourceFilterStep = 25, kDestFilterStep = 26,
-        kAdd = 30,
+        kAdd = 30, kBoard = 35,
         kDetailBack = 40, kDetailDelete = 41,
         kListPopup = 60, kListBackdrop = 61, kListHeader = 62,
         // the rows of the matrix: kRowBase + window row * 10 + offset; the row of the details page: kDetailRowBase + offset
         kRowBase = 100,
         kOffsetNumber = 0, kOffsetSource = 1, kOffsetDest = 2, kOffsetAmount = 3, kOffsetBi = 4, kOffsetBypass = 5, kOffsetDetail = 6,
         kDetailRowBase = 300,
+        kTargetsBack = 330, kTargetsPage, kTargetsAdd, kTargetsRow = 340,   // the targets page of a source: kTargetsRow + 4 * row + (0 depth, 1 polarity, 2 on / off, 3 remove)
         kDetailAuxSource = 800, kDetailAuxOutput, kDetailAuxInv, kDetailAuxPower, kDetailPower, kDetailStereo, kDetailRise, kDetailFall, kDetailDelay, kDetailDelaySync, kDetailDelayBeats
     };
-    enum class ListKind : uint8_t { Source, Dest, Aux };
+    enum class ListKind : uint8_t { Source, Dest, Aux, NewTarget };   // NewTarget: the target of a new slot of the source on the targets page
 
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
     static constexpr int kVirtualRow = 0;   // the virtual Q target that steps through the rows of the matrix
@@ -63,6 +69,7 @@ public:
         assignIds();
         for (int g = 0; g <= uibind::kSourceGroups; ++g)
             srcGroupNames_[g] = uibind::sourceGroupName (g);
+        fillBoard();
     }
 
     void setCanvas (int w, int h)
@@ -71,6 +78,7 @@ public:
         const ui::Rect tab { 0, kTabY, w, kTabH };
         matrix_.place (tab);
         detail_.place (tab);
+        targets_.place (tab);
         list_.place ({ w / 2 - 260, kTabY + 20, 520, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
         list_.setPopup (tab);
         list_.setId (kListPopup);
@@ -83,7 +91,7 @@ public:
     {
         (void) nowMs;
         pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0;
-        if (pageTop_ != kPageDetail && pageTop_ != kPageList)
+        if (pageTop_ != kPageDetail && pageTop_ != kPageList && pageTop_ != kPageTargets)
             pageTop_ = 0;
         if (pageTop_ == 0 && openSlot_ >= 0 && ! gestureDown_)
             openSlot_ = -1;
@@ -105,8 +113,10 @@ public:
         }
         matrix_.refresh();
 
-        if (openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots && (pageTop_ == kPageDetail || pageTop_ == kPageList))
+        if (openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots && (pageTop_ == kPageDetail || (pageTop_ == kPageList && listKind_ != ListKind::NewTarget)))
             pullDetail (inst, live);
+        if (targetsShown())
+            loadTargets (inst, false);
 
         // the virtual Q target of the rows: a write of the host moves the selected row
         float x;
@@ -122,7 +132,9 @@ public:
     void draw (gpu::SceneBuilder& sb) const
     {
         page::ground (sb);
-        if (pageTop_ == kPageDetail || (pageTop_ == kPageList && openSlot_ >= 0))
+        if (targetsShown())
+            targets_.draw (sb);
+        else if (pageTop_ == kPageDetail || (pageTop_ == kPageList && openSlot_ >= 0))
             detail_.draw (sb);
         else
             matrix_.draw (sb);
@@ -171,7 +183,7 @@ public:
 
     void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst)
     {
-        handle (pageTop_ == kPageDetail ? detail_.turnQ (knobIndex, delta) : matrix_.turnQ (knobIndex, delta), stack, inst);
+        handle (pageTop_ == kPageDetail ? detail_.turnQ (knobIndex, delta) : (pageTop_ == kPageTargets ? targets_.turnQ (knobIndex, delta) : matrix_.turnQ (knobIndex, delta)), stack, inst);
     }
 
     const int* qTargets() const noexcept { return qTargets_; }
@@ -182,6 +194,9 @@ public:
     ui::ModMatrixView& matrix() noexcept { return matrix_; }
     ui::ModSlotDetail& detail() noexcept { return detail_; }
     ui::ListPopup& list() noexcept { return list_; }
+    ui::ModTargetsPage& targetsPage() noexcept { return targets_; }
+    /** The source (the choice value of modNN.source) whose targets page is or was open last (0: none yet). */
+    int targetsSource() const noexcept { return targetsSource_; }
 
     void openSlotDetail (int slot, UiStack& stack)
     {
@@ -228,8 +243,144 @@ private:
     {
         if (pageTop_ == kPageList) return &list_;
         if (pageTop_ == kPageDetail) return &detail_;
+        if (pageTop_ == kPageTargets) return &targets_;
         return &matrix_;
     }
+
+    // ---- the quick-add board: every source the engine has, in groups (ui_bind.h sourceGroup), in the order of the engine's table
+    /** The text of a chip: the engine's name of the source in capitals ("Poly Aftertouch" -> "POLY AFTERTOUCH"; the random LFOs by their short name, "RLFO 2"). */
+    static void boardLabel (int choice, char* out, size_t cap)
+    {
+        const char* key = synthyboy::modSourceTable()[choice - 1].key;
+        if (std::strncmp (key, "rlfo", 4) == 0)   // the random LFOs: the short name of the LFO page's instance bar (RLFO 1), so that the whole LFO family fits one row of the board
+            uibind::shortSourceName (uibind::sourceName (choice), out);
+        else
+            std::snprintf (out, cap, "%s", uibind::sourceName (choice));
+        for (char* c = out; *c != '\0'; ++c)
+            *c = static_cast<char> (std::toupper (static_cast<unsigned char> (*c)));
+    }
+    /** The name that picks the colour of a chip (theme::sourceColour): the short name of the source, the random sources as RND (the colour of the random LFO of the LFO page). */
+    static void boardColourName (int choice, char* out, size_t cap)
+    {
+        const char* key = synthyboy::modSourceTable()[choice - 1].key;
+        if (std::strncmp (key, "rlfo", 4) == 0 || std::strcmp (key, "random") == 0)
+            std::snprintf (out, cap, "RND");
+        else
+        {
+            char sn[7];
+            uibind::shortSourceName (uibind::sourceName (choice), sn);
+            std::snprintf (out, cap, "%s", sn);
+        }
+    }
+    void fillBoard()
+    {
+        ui::ModSourceBoard& b = matrix_.board;
+        b.clear();
+        for (int g = 1; g <= uibind::kSourceGroups; ++g)
+            b.setGroupName (g - 1, uibind::sourceGroupName (g));
+        for (int g = 1; g <= uibind::kSourceGroups; ++g)
+            for (int c = 1; c <= static_cast<int> (synthyboy::modSourceCount()); ++c)
+                if (uibind::sourceGroup (c) == g)
+                {
+                    char label[28], colour[12];
+                    boardLabel (c, label, sizeof label);
+                    boardColourName (c, colour, sizeof colour);
+                    b.add (c, label, colour, g - 1);
+                }
+        matrix_.rebuildVisibleList();
+    }
+
+    // ---- the targets page of one source (the board's tap, ADD TARGET): the slots whose source it is
+    bool targetsShown() const noexcept { return pageTop_ == kPageTargets || (pageTop_ == kPageList && listKind_ == ListKind::NewTarget); }
+    void syncTop (const UiStack& stack) noexcept { pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0; }
+    void loadTargets (const IInstanceView& v, bool fresh)
+    {
+        constexpr int kPer = ui::ModTargetsPage::kPerPage;
+        const int total = uibind::slotsOfSource (v, targetsSource_, scratchSlots_, uibind::kMaxTargetSlots);
+        const int pages = std::max (1, (total + kPer - 1) / kPer);
+        targetsPageIndex_ = std::clamp (targetsPageIndex_, 0, pages - 1);
+        const int first = targetsPageIndex_ * kPer, n = std::clamp (total - first, 0, kPer);
+        ui::ModTargetsPage::Entry e[kPer];
+        for (int i = 0; i < kPer; ++i)
+            targetRows_[i] = {};
+        for (int i = 0; i < n; ++i)
+        {
+            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (scratchSlots_[first + i]);
+            ui::setText (e[i].name, sizeof e[i].name, destName (static_cast<int> (std::lround (v.param (sp.destination)))));
+            e[i].depth = std::clamp (static_cast<double> (v.param (sp.amount)) / 100.0, -1.0, 1.0);
+            e[i].bidirectional = sp.bipolar >= 0 && v.param (sp.bipolar) >= 0.5f;
+            e[i].bypassed = sp.bypass >= 0 && v.param (sp.bypass) >= 0.5f;
+            targetRows_[i] = { scratchSlots_[first + i], targetsSource_ };
+        }
+        // only a change of the rows is loaded again (a reload resets the touch of a row that is being dragged)
+        bool same = ! fresh && targetsLoaded_ == targetsSource_ && n == targets_.numRows() && total == targetTotal_;
+        for (int i = 0; same && i < n; ++i)
+        {
+            const ui::ModTargetsPage::Row& r = targets_.rows[i];
+            same = std::strcmp (r.name, e[i].name) == 0 && std::fabs (r.depth.state.value - (e[i].depth + 1.0) * 0.5) < 1.0e-9 && r.polarity.state.on == e[i].bidirectional && r.bypass.state.on == ! e[i].bypassed;
+        }
+        if (same)
+            return;
+        targetTotal_ = total;
+        targetsLoaded_ = targetsSource_;
+        char title[28];
+        boardLabel (targetsSource_, title, sizeof title);
+        char colour[12];
+        boardColourName (targetsSource_, colour, sizeof colour);
+        targets_.load (e, n, title, ui::theme::sourceColour (colour), total, targetsPageIndex_);
+    }
+    /** The board's tap: the targets page of the source, and over it the list that picks the first target. */
+    void beginTargets (IInstanceView& inst, UiStack& stack, int source)
+    {
+        if (source < 1 || source > static_cast<int> (synthyboy::modSourceCount()) || ! stack.openDetail (kPageTargets))
+            return;
+        targetsSource_ = source;
+        targetsPageIndex_ = 0;
+        openSlot_ = -1;
+        pageTop_ = kPageTargets;
+        loadTargets (inst, true);
+        openNewTargetList (inst, stack);
+    }
+    void openNewTargetList (IInstanceView& inst, UiStack& stack)
+    {
+        listKind_ = ListKind::NewTarget;
+        listSlot_ = -1;
+        listParam_ = -1;
+        listGroup_ = -1;
+        fillList (0);
+        if (stack.openDetail (kPageList))
+            pageTop_ = kPageList;
+        (void) inst;
+    }
+    /** A new slot of `source` with the target `destChoice`: the first free slot, +50 %, unipolar unless the target swings around zero, on; the source is written last so that the slot appears whole. */
+    bool addTargetSlot (IInstanceView& inst, int source, int destChoice)
+    {
+        if (source < 1 || destChoice <= 0 || uibind::slotOfPair (inst, source, destChoice) >= 0)
+            return false;   // that target is on the list already
+        const int slot = uibind::freeSlot (inst);
+        if (slot < 0)
+            return false;
+        const int p = synthyboy::modDestinationParamIndex (static_cast<size_t> (destChoice));
+        const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (slot);
+        uibind::writePlain (inst, sp.destination, destChoice);
+        uibind::writePlain (inst, sp.amount, 50.0);
+        if (sp.bypass >= 0) uibind::writePlain (inst, sp.bypass, 0.0);
+        if (sp.bipolar >= 0) uibind::writePlain (inst, sp.bipolar, p >= 0 && uibind::info (p).min < 0.0f && uibind::info (p).max > 0.0f ? 1.0 : 0.0);
+        uibind::writePlain (inst, sp.source, source);
+        const int total = uibind::slotsOfSource (inst, source, scratchSlots_, uibind::kMaxTargetSlots);
+        targetsPageIndex_ = std::max (0, (total - 1) / ui::ModTargetsPage::kPerPage);   // the page that shows the new row
+        return true;
+    }
+    static void clearSlot (IInstanceView& inst, int slot)
+    {
+        const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (slot);
+        for (int p : { sp.source, sp.destination, sp.amount, sp.bipolar, sp.stereo, sp.bypass, sp.auxSource })
+            if (p >= 0)
+                uibind::writePlain (inst, p, 0.0);
+    }
+    /** The choice that is set now in the parameter the open list edits (0 when the list edits none: the target of a new slot). */
+    int listCurrent (const IInstanceView& inst) const noexcept { return listParam_ >= 0 ? static_cast<int> (std::lround (inst.param (listParam_))) : 0; }
+    bool destList() const noexcept { return listKind_ == ListKind::Dest || listKind_ == ListKind::NewTarget; }
 
     // ---- the page of one slot
     void pullDetail (IInstanceView& inst, const synthyboy::LiveValues* live)
@@ -294,11 +445,14 @@ private:
     {
         listNames_.clear();
         listChoices_.clear();
-        const bool dest = listKind_ == ListKind::Dest;
+        const bool dest = destList();
         if (listGroup_ < 0)
         {
-            listNames_.push_back ("NONE");
-            listChoices_.push_back (0);
+            if (listKind_ != ListKind::NewTarget)   // a new slot has to have a target: no NONE in that list
+            {
+                listNames_.push_back ("NONE");
+                listChoices_.push_back (0);
+            }
             if (dest)
             {
                 const uibind::DestIndex& d = uibind::DestIndex::get();
@@ -375,6 +529,42 @@ private:
         if (c.id == kSourceFilterStep && c.kind == K::Index) { srcFilter_ = c.index; stepSourceFilter (0); return; }
         if (c.id == kDestFilterStep && c.kind == K::Index) { dstFilter_ = c.index; stepDestFilter (0); return; }
 
+        // the board of the sources: a tap opens the targets page of the source and the list of its first target
+        if (c.id == kBoard && c.kind == K::Index)
+        {
+            beginTargets (inst, stack, c.index);
+            return;
+        }
+
+        // the targets page of a source
+        if (c.id == kTargetsBack && c.kind == K::Request) { stack.back(); syncTop (stack); return; }
+        if (c.id == kTargetsAdd && c.kind == K::Request) { openNewTargetList (inst, stack); return; }
+        if (c.id == kTargetsPage && c.kind == K::Index)
+        {
+            targetsPageIndex_ = c.index;
+            loadTargets (inst, true);
+            return;
+        }
+        if (c.id >= kTargetsRow && c.id < kTargetsRow + 4 * ui::ModTargetsPage::kPerPage)
+        {
+            const int slot = targetRows_[(c.id - kTargetsRow) / 4].slot, what = (c.id - kTargetsRow) % 4;
+            if (slot < 0)
+                return;
+            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (slot);
+            if (what == 0 && c.kind == K::Value)
+                uibind::writeNorm (inst, sp.amount, c.value);
+            else if (what == 1 && c.kind == K::Index)
+                uibind::writePlain (inst, sp.bipolar, c.index != 0 ? 1.0 : 0.0);
+            else if (what == 2 && c.kind == K::Index)
+                uibind::writePlain (inst, sp.bypass, c.index != 0 ? 0.0 : 1.0);   // the switch says ON (active): bypassed is its opposite
+            else if (what == 3 && c.kind == K::Request)
+            {
+                clearSlot (inst, slot);
+                loadTargets (inst, true);
+            }
+            return;
+        }
+
         // a new slot: the first one that is not used (ENV 1 to the first target of the table, +50 %), its page opens
         if (c.id == kAdd)
         {
@@ -395,10 +585,7 @@ private:
         if (c.id == kDetailBack) { stack.back(); pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0; return; }
         if (c.id == kDetailDelete && openSlot_ >= 0)
         {
-            const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
-            for (int p : { sp.source, sp.destination, sp.amount, sp.bipolar, sp.stereo, sp.bypass, sp.auxSource })
-                if (p >= 0)
-                    uibind::writePlain (inst, p, 0.0);
+            clearSlot (inst, openSlot_);
             stack.back();
             pageTop_ = 0;
             return;
@@ -409,7 +596,7 @@ private:
         if (c.id == kListHeader && c.kind == K::Request)
         {
             listGroup_ = -1;
-            fillList (static_cast<int> (std::lround (inst.param (listParam_))));
+            fillList (listCurrent (inst));
             return;
         }
         if (c.id == kListPopup && c.kind == K::Index)
@@ -417,14 +604,19 @@ private:
             const int sel = c.index >= 0 && c.index < static_cast<int> (listChoices_.size()) ? listChoices_[static_cast<size_t> (c.index)] : 0;
             if (sel < 0)   // a group: its entries
             {
-                listGroup_ = listKind_ == ListKind::Dest ? -1 - sel : -sel - 1;
-                fillList (static_cast<int> (std::lround (inst.param (listParam_))));
+                listGroup_ = destList() ? -1 - sel : -sel - 1;
+                fillList (listCurrent (inst));
                 return;
             }
-            if (listParam_ >= 0)
+            if (listKind_ == ListKind::NewTarget)
+            {
+                addTargetSlot (inst, targetsSource_, sel);
+                loadTargets (inst, true);
+            }
+            else if (listParam_ >= 0)
                 uibind::writePlain (inst, listParam_, sel);
             stack.back();
-            pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0;
+            syncTop (stack);
             return;
         }
 
@@ -505,6 +697,12 @@ private:
         matrix_.tabSource.setId (kFilterSource);
         matrix_.tabDest.setId (kFilterDest);
         matrix_.add.setId (kAdd);
+        matrix_.board.setId (kBoard);
+        targets_.back.setId (kTargetsBack);
+        targets_.page.setId (kTargetsPage);
+        targets_.add.setId (kTargetsAdd);
+        for (int r = 0; r < ui::ModTargetsPage::kPerPage; ++r)
+            targets_.setRowIds (r, kTargetsRow + 4 * r, kTargetsRow + 4 * r + 1, kTargetsRow + 4 * r + 2, kTargetsRow + 4 * r + 3);
         matrix_.sourceFilter.setId (kSourceFilterStep);
         matrix_.destFilter.setId (kDestFilterStep);
         stepSourceFilter (0);
@@ -543,6 +741,18 @@ private:
         int t[4] = { -1, -1, -1, -1 };
         if (pageTop_ == kPageList)
             std::snprintf (qName_, sizeof qName_, "LIST");
+        else if (pageTop_ == kPageTargets)
+        {
+            char title[28];
+            boardLabel (targetsSource_, title, sizeof title);
+            std::snprintf (qName_, sizeof qName_, "%s TARGETS", title);
+            const int row = targets_.activeRow();
+            if (row >= 0 && row < ui::ModTargetsPage::kPerPage && targetRows_[row].slot >= 0)
+            {
+                const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (targetRows_[row].slot);
+                t[0] = sp.amount; t[1] = sp.bipolar; t[2] = sp.bypass;
+            }
+        }
         else if (pageTop_ == kPageDetail && openSlot_ >= 0 && openSlot_ < synthyboy::kNumModSlots)
         {
             const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (openSlot_);
@@ -588,6 +798,12 @@ private:
     ui::ModMatrixView matrix_;
     ui::ModSlotDetail detail_;
     ui::ListPopup list_;
+    ui::ModTargetsPage targets_;
+
+    // the targets page of a source: which source, the page of its rows, the slot of every row shown
+    int targetsSource_ = 0, targetsLoaded_ = 0, targetsPageIndex_ = 0, targetTotal_ = -1;
+    uibind::ModRow targetRows_[ui::ModTargetsPage::kPerPage];
+    int scratchSlots_[uibind::kMaxTargetSlots] = {};
 
     ListKind listKind_ = ListKind::Source;
     int listSlot_ = -1, listParam_ = -1, listGroup_ = -1;

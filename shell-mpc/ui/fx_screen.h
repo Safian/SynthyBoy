@@ -1,5 +1,6 @@
 // SynthyBoy - MPC UI component library: the FX PAGE (FxFullScreen): the chain bar across the top (the effects in processing order, the cards drag to reorder, + ADD), under it the page of the selected effect
-// (fx_slot_editor.h). Q groups: the rows of four knobs of the effect on screen.
+// (fx_slot_editor.h). Q groups: the rows of four knobs of the effect on screen. While the chain is empty there is no effect to edit: the gallery of the effect types (fx_gallery.h) takes the place
+// of the page, one tap on a card adds that effect.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -8,6 +9,7 @@
 #include "composite.h"
 #include "core.h"
 #include "fx_chain_bar.h"
+#include "fx_gallery.h"
 #include "fx_slot_editor.h"
 #include "qgroup.h"
 
@@ -21,11 +23,13 @@ public:
 
     FxChainBar chainBar;
     FxSlotEditor slotEditor;
+    FxGallery gallery;   // the page of an empty chain
 
     FxFullScreen()
     {
         addKid (chainBar);
         addKid (slotEditor);
+        addKid (gallery, false);
     }
 
     Size minSize() const override { return { 1280, 628 }; }
@@ -35,6 +39,7 @@ public:
     int numGroups() const noexcept { return slotEditor.numRows(); }
     void showEditor (bool s) { show (slotEditor, s); }
     bool editorShown() const noexcept { return editorShown_; }
+    bool galleryShown() const noexcept { return ! editorShown_ && gallery.numTypes() > 0; }
     static const char* groupName (int g) noexcept
     {
         static const char* const names[kMaxGroups] = { "PARAMETERS 1-4", "PARAMETERS 5-8", "PARAMETERS 9-12", "PARAMETERS 13-16", "PARAMETERS 17-20", "PARAMETERS 21-24" };
@@ -49,25 +54,12 @@ public:
 
     Change turnQ (int knobIndex, double delta) { return slotEditor.turnQ (knobIndex, delta); }
 
-    void draw (gpu::SceneBuilder& sb) const override
-    {
-        Composite::draw (sb);
-        if (! editorShown_)
-        {
-            Pen p (sb, enabled_);
-            Cell cell (sb, rect_);
-            const theme::Look& T = theme::L();
-            const Rect r { rect_.x + 8, rect_.y + kBarH + 16, rect_.w - 16, rect_.h - kBarH - 24 };
-            p.block (r, false);
-            p.textCentered ({ r.x, r.y + r.h / 2 - 44, r.w, 44 }, "NO EFFECT YET", T.fTitle, p.c (T.textDim, 255), T.fMin);
-            p.textCentered ({ r.x, r.y + r.h / 2 + 4, r.w, 28 }, "TAP + ADD IN THE CHAIN ABOVE", T.fLabel, p.c (T.textFaint, 255), T.fMin);
-        }
-    }
-    /** The owner says whether an effect is on the page (an empty chain has the hint instead). */
+    /** The owner says whether an effect is on the page (an empty chain has the gallery of the types instead). */
     void setEditorShown (bool s)
     {
         editorShown_ = s;
         show (slotEditor, s);
+        show (gallery, ! s && gallery.numTypes() > 0);
     }
 
 protected:
@@ -77,6 +69,7 @@ protected:
         chainBar.place ({ rect_.x + pad, rect_.y + pad, rect_.w - 2 * pad, kBarH });
         const int topY = rect_.y + pad + kBarH + pad;
         slotEditor.place ({ rect_.x, topY, rect_.w, std::max (100, rect_.bottom() - topY) });
+        gallery.place ({ rect_.x + pad, topY, rect_.w - 2 * pad, std::max (100, rect_.bottom() - topY - pad) });
     }
 
 private:

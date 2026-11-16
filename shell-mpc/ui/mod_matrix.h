@@ -16,6 +16,7 @@
 #include "composite.h"
 #include "core.h"
 #include "list.h"
+#include "mod_board.h"
 #include "qgroup.h"
 #include "theme.h"
 
@@ -191,6 +192,7 @@ public:
     Stepper destFilter;
 
     ModRow windowRows[kWindowRows];
+    ModSourceBoard board;   // the quick-add board: it takes the list's place while no slot is in use (the owner fills it with the sources)
     QGroup qgroup;
 
     ModMatrixView()
@@ -203,6 +205,7 @@ public:
         addKid (destFilter);
         for (int i = 0; i < kWindowRows; ++i)
             addKid (windowRows[i]);
+        addKid (board, false);
 
         setFilterMode (FilterAll);
         initFilters();
@@ -241,10 +244,14 @@ public:
             selectedRow_ = std::max (0, visibleSlotCount_ - 1);
         firstRow_ = std::clamp (firstRow_, 0, maxScroll());
 
+        show (board, totalActive_ == 0 && board.numSources() > 0);
         syncWindow();
         updateQGroup();
         layout();
     }
+
+    /** True while the board of the sources is what the page shows: no slot is in use at all (with one in use the list is the page, whatever the filter says). */
+    bool boardShown() const noexcept { return totalActive_ == 0 && board.numSources() > 0; }
 
     void selectRow (int idx)
     {
@@ -348,6 +355,9 @@ public:
 
     Change touchDown (int x, int y, double nowMs) override
     {
+        if (boardShown())
+            return Composite::touchDown (x, y, nowMs);
+
         const Rect lr = listRect();
         const int listY = lr.y;
         if (y >= listY && y < lr.bottom() && x < rect_.right() - (scrolls() ? kZoneW : 0))
@@ -511,6 +521,8 @@ protected:
             destFilter.place ({ rect_.x + 648, by, 260, bh });
         add.place ({ rect_.right() - 12 - 120, by, 120, bh });
 
+        if (! (board.rect() == listRect()))
+            board.place (listRect());
         const int vRows = visibleRows();
         const int listY = listRect().y;
         const int rowW = rect_.w - (scrolls() ? kZoneW : 12);
@@ -544,10 +556,10 @@ protected:
             p.textCentered ({ r.biToggle.rect().x, hy, r.biToggle.rect().w, hh }, "POLARITY", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
             p.textCentered ({ r.bypassToggle.rect().x, hy, r.bypassToggle.rect().w, hh }, "STATE", T.fSmall + 1.0f, p.c (T.textFaint, 255), T.fMin);
         }
-        else
+        else if (totalActive_ > 0)   // slots exist, the filter hides them all (with none at all the board of the sources is the page)
         {
             const Rect lr = listRect();
-            p.textCentered ({ lr.x, lr.y + lr.h / 2 - 40, lr.w, 40 }, totalActive_ == 0 ? "NO MODULATION YET" : "NO SLOT FOR THIS FILTER", T.fTitle, p.c (T.textDim, 255), T.fMin);
+            p.textCentered ({ lr.x, lr.y + lr.h / 2 - 40, lr.w, 40 }, "NO SLOT FOR THIS FILTER", T.fTitle, p.c (T.textDim, 255), T.fMin);
             p.textCentered ({ lr.x, lr.y + lr.h / 2 + 4, lr.w, 28 }, "TAP + ADD TO MAKE ONE", T.fLabel, p.c (T.textFaint, 255), T.fMin);
         }
     }
