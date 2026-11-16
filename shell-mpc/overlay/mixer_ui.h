@@ -116,7 +116,7 @@ public:
                 strip.fader.state.value = strip.fader.state.modValue = uibind::normOf (b.levelParam, plain);
                 strip.fader.state.defaultValue = uibind::normOf (b.levelParam, pi.def);
                 uibind::formatValue (pi, plain, strip.fader.state.valueText, sizeof strip.fader.state.valueText);   // the parameter's own unit: % or dB
-                setScale (strip.fader, pi);
+                setScale (strip.fader, pi, s >= 7);
                 strip.fader.setEnabled (true);
             }
             else
@@ -178,16 +178,25 @@ public:
             send (strip.send2, b.send2Param);
         }
 
-        // the meters of the engine: the level and a hold line that falls slowly
+        // the meters of the engine: the level and peak hold (MASTER gets the peak hold the Master page's output meter has)
+        const float dt = lastMs_ > 0.0 ? static_cast<float> (nowMs - lastMs_) * 0.001f : 0.0f;
+        lastMs_ = nowMs;
         for (int s = 0; s < ui::MixerFullScreen::kStrips; ++s)
         {
             ui::Fader& f = screen_.strips[s].fader;
             const float pk = in.live != nullptr ? in.live->stripPeak[s] : 0.0f;
             f.state.peak = pk;
-            if (pk > f.state.peakHold)
-                f.state.peakHold = pk;
+            if (s == 9)   // MASTER: peak hold exactly like Master page's output meter
+            {
+                f.state.hasPeakHold = true;
+                const float fall = 0.5f * std::clamp (dt, 0.0f, 0.2f);
+                f.state.peakHold = std::max (pk, f.state.peakHold - fall);
+            }
             else
-                f.state.peakHold = std::max (0.0f, f.state.peakHold - 0.01f);
+            {
+                f.state.hasPeakHold = false;
+                f.state.peakHold = 0.0f;
+            }
         }
         inst.setUiFullOpen (true);
         publishQGroup (inst);
@@ -267,11 +276,14 @@ private:
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;
     QSlots qSlots_;
+    double lastMs_ = 0.0;
 
-    /** The scale beside a fader from the parameter's own range: in dB the marks 0, -12, -24, -48 that lie in the range (0 is the stronger one), else a mark every 25 %. */
-    static void setScale (ui::Fader& f, const synthyboy::ParamInfo& pi)
+    /** The scale beside a fader from the parameter's own range: in dB the marks 0, -12, -24, -48 that lie in the range (0 is the stronger one), else a mark every 25 %.
+        Full-height faders (fine = true) use a finer dB scale with marks every 6 dB down to -24 and -36, -48. */
+    static void setScale (ui::Fader& f, const synthyboy::ParamInfo& pi, bool fine)
     {
         f.state.numTicks = 0;
+        f.state.isFine = fine;
         auto add = [&] (double plain, const char* text)
         {
             if (f.state.numTicks >= ui::Fader::State::kMaxTicks || plain < static_cast<double> (pi.min) - 1.0e-6 || plain > static_cast<double> (pi.max) + 1.0e-6)
@@ -282,7 +294,14 @@ private:
         };
         if (pi.unit == synthyboy::Unit::dB)
         {
-            add (0.0, "0"); add (-12.0, "-12"); add (-24.0, "-24"); add (-48.0, "-48");
+            if (fine)
+            {
+                add (+6.0, "+6"); add (0.0, "0"); add (-6.0, "-6"); add (-12.0, "-12"); add (-18.0, "-18"); add (-24.0, "-24"); add (-36.0, "-36"); add (-48.0, "-48");
+            }
+            else
+            {
+                add (0.0, "0"); add (-12.0, "-12"); add (-24.0, "-24"); add (-48.0, "-48");
+            }
         }
         else
         {
