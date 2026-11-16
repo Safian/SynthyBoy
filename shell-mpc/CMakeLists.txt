@@ -207,6 +207,19 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(mod_ui_host PRIVATE cxx_std_17)
     target_compile_options(mod_ui_host PRIVATE -Wall -Wextra -Wpedantic)
 
+    add_executable(filter_ui_host EXCLUDE_FROM_ALL overlay/tests/filter_ui_host.cpp)
+    add_executable(filter_ui_demo EXCLUDE_FROM_ALL overlay/tests/filter_ui_demo.cpp)
+    foreach(t filter_ui_host filter_ui_demo)
+        target_include_directories(${t} PRIVATE
+            "${CMAKE_SOURCE_DIR}/core/include"
+            "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+        target_link_libraries(${t} PRIVATE synthyboy_core Threads::Threads)
+        target_compile_features(${t} PRIVATE cxx_std_17)
+        target_compile_options(${t} PRIVATE -Wall -Wextra -Wpedantic)
+    endforeach()
+    add_test(NAME filter_ui_host COMMAND filter_ui_host)
+
     add_test(NAME mod_ui_host COMMAND mod_ui_host)
     add_test(NAME mixfx_ui_host COMMAND mixfx_ui_host)
 
