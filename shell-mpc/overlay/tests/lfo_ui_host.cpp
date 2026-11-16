@@ -263,8 +263,8 @@ void testWrites()
     R.tap (pk.cell (12).x + 10, pk.cell (12).y + 10);
     check (R.inst.get ("lfo1.shape") == 12.0f && R.inst.contentPtr->lfoShapes.size() == 1 && R.inst.contentPtr->lfoShapes[0].lfo == 1, "the picker: the drawn shape; the content has a shape for it (the engine reads a drawn shape without points as a flat line)");
     // MONO, HOST, SMOOTH
-    R.tapC (R.ui.full().monoTop);
-    check (R.inst.get ("lfo1.mono") == 1.0f && R.ui.full().monoTop.state.on, "MONO in the top bar writes lfo1.mono");
+    R.tapC (R.ui.full().monoQ);
+    check (R.inst.get ("lfo1.mono") == 1.0f && R.ui.full().monoQ.state.on, "MONO in the motion block writes lfo1.mono");
     R.tapC (R.ui.full().hostPick);
     check (R.inst.get ("lfo1.host") == 1.0f, "HOST");
     const float smooth = R.inst.get ("lfo1.smooth");

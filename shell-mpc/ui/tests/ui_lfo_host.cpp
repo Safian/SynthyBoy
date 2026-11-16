@@ -251,7 +251,7 @@ void testViews()
         const std::string nm = std::string ("full screen ") + (random ? "random" : (variant == 1 ? "LFO, key follow" : "LFO"));
         checkView (f, { 0, 110, 1280, 628 }, nm, f.groups, f.numGroups(), 0x0b1026ffu);
         f.setActiveGroup (0);
-        check (f.numGroups() == (random ? 3 : 4) && f.activeGroup() == 0 && f.groups[0].active(), nm + ": " + std::to_string (f.numGroups()) + " groups, the first active");
+        check (f.numGroups() == (random ? 3 : 5) && f.activeGroup() == 0 && f.groups[0].active(), nm + ": " + std::to_string (f.numGroups()) + " groups, the first active");
         check (! f.displayRect().empty() && f.displayRect().w > 800 && f.displayRect().h >= 200, nm + ": the display " + std::to_string (f.displayRect().w) + " x " + std::to_string (f.displayRect().h));
         check (f.displayRect().right() <= f.picker.rect().x && f.picker.rect().right() <= 1280, nm + ": the picker at the right of the display");
         for (int b = 0; b < f.numBlocks(); ++b)
@@ -262,12 +262,14 @@ void testViews()
             check (f.groups[0].member (0) == &f.picker && f.groups[0].member (1) == &f.rate &&
                    f.groups[0].member (2) == &f.rise && f.groups[0].member (3) == &f.smoothTime,
                    nm + ": group 0 is picker (Q1), rate, rise, smooth");
-            check (f.groups[1].member (0) == &f.mode && f.groups[1].member (1) == &f.phase &&
-                   f.groups[1].member (2) == &f.delay && f.groups[1].member (3) == nullptr,
-                   nm + ": group 1 is mode, phase, delay");
+            check (f.groups[1].member (0) == &f.sync && f.groups[1].member (1) == &f.mode &&
+                   f.groups[1].member (2) == &f.phase && f.groups[1].member (3) == &f.delay,
+                   nm + ": group 1 is sync, mode, phase, delay");
             check (f.groups[2].member (0) == &f.direction && f.groups[2].member (1) == &f.swing &&
-                   f.groups[2].member (2) == &f.stereo && f.groups[2].member (3) == nullptr,
-                   nm + ": group 2 is direction, swing, stereo");
+                   f.groups[2].member (2) == &f.stereo && f.groups[2].member (3) == &f.monoQ,
+                   nm + ": group 2 is direction, swing, stereo, mono");
+            check (f.groups[4].member (0) == &f.smoothPick && f.groups[4].member (1) == &f.hostPick,
+                   nm + ": group 4 is smooth, host");
             check (f.rate.rate.state.large, nm + ": rate knob is large");
             check (f.rise.rect().h == f.smoothTime.rect().h && f.rise.rect().h == f.phase.rect().h &&
                    f.rise.rect().h == f.delay.rect().h && f.rise.rect().h == f.swing.rect().h &&
@@ -276,6 +278,14 @@ void testViews()
             f.touchDown (cx (f.direction), cy (f.direction), 0.0);
             f.touchUp (cx (f.direction), cy (f.direction));
             check (f.activeGroup() == 2 && f.groups[2].active() && ! f.groups[0].active(), nm + ": a touch on DIRECTION makes MOTION the active group");
+            // tap on TIMING block background
+            f.touchDown (f.block (1).x + 10, f.block (1).y + 10, 0.0);
+            f.touchUp (f.block (1).x + 10, f.block (1).y + 10);
+            check (f.activeGroup() == 1 && f.groups[1].active(), nm + ": tap on TIMING block makes it active");
+            // tap on smoothPick activates group 4 (Shape)
+            f.touchDown (cx (f.smoothPick), cy (f.smoothPick), 0.0);
+            f.touchUp (cx (f.smoothPick), cy (f.smoothPick));
+            check (f.activeGroup() == 4 && f.groups[4].active(), nm + ": tap on SMOOTH makes SHAPE active");
             f.touchDown (cx (f.keyTune), cy (f.keyTune), 0.0);
             f.touchUp (cx (f.keyTune), cy (f.keyTune));
             check ((variant == 1) == (f.activeGroup() == 3), nm + ": the KEY group is only active in the key follow sync");

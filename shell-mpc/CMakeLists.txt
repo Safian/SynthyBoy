@@ -207,6 +207,45 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(mod_ui_host PRIVATE cxx_std_17)
     target_compile_options(mod_ui_host PRIVATE -Wall -Wextra -Wpedantic)
 
+    add_executable(env_ui_host EXCLUDE_FROM_ALL overlay/tests/env_ui_host.cpp)
+    target_include_directories(env_ui_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(env_ui_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(env_ui_host PRIVATE cxx_std_17)
+    target_compile_options(env_ui_host PRIVATE -Wall -Wextra -Wpedantic)
+
+    add_executable(lfo_ui_host EXCLUDE_FROM_ALL overlay/tests/lfo_ui_host.cpp)
+    target_include_directories(lfo_ui_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(lfo_ui_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(lfo_ui_host PRIVATE cxx_std_17)
+    target_compile_options(lfo_ui_host PRIVATE -Wall -Wextra -Wpedantic)
+
+    add_executable(ui_env_host EXCLUDE_FROM_ALL ui/tests/ui_env_host.cpp)
+    target_include_directories(ui_env_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_compile_features(ui_env_host PRIVATE cxx_std_17)
+    target_compile_options(ui_env_host PRIVATE -Wall -Wextra -Wpedantic)
+
+    add_executable(ui_lfo_host EXCLUDE_FROM_ALL ui/tests/ui_lfo_host.cpp)
+    target_include_directories(ui_lfo_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_compile_features(ui_lfo_host PRIVATE cxx_std_17)
+    target_compile_options(ui_lfo_host PRIVATE -Wall -Wextra -Wpedantic)
+
+    add_test(NAME env_ui_host COMMAND env_ui_host)
+    add_test(NAME lfo_ui_host COMMAND lfo_ui_host)
+    add_test(NAME ui_env_host COMMAND ui_env_host)
+    add_test(NAME ui_lfo_host COMMAND ui_lfo_host)
+
     add_test(NAME mod_ui_host COMMAND mod_ui_host)
     add_test(NAME mixfx_ui_host COMMAND mixfx_ui_host)
 

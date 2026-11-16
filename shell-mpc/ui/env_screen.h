@@ -193,20 +193,26 @@ public:
     Change touchDown (int x, int y, double nowMs) override
     {
         const Change c = Composite::touchDown (x, y, nowMs);
-        if (cap_)
-            for (int i = 0; i < kMaxGroups; ++i)
-                if (groups[i].rect().contains (x, y))
-                {
-                    setActiveGroup (i);
-                    break;
-                }
+        for (int i = 0; i < kMaxGroups; ++i)
+        {
+            if (blocks_[i].contains (x, y) || groups[i].rect().contains (x, y))
+            {
+                setActiveGroup (i);
+                break;
+            }
+        }
         return c;
     }
     void draw (gpu::SceneBuilder& sb) const override
     {
         Composite::draw (sb);
-        for (const QGroup& g : groups)
-            g.draw (sb);
+        for (int i = 0; i < kMaxGroups; ++i)
+        {
+            if (i == active_)
+                groups[i].draw (sb);
+            else
+                groups[i].drawIdle (sb);
+        }
     }
     void drawLive (gpu::SceneBuilder& sb) const { graph.drawLive (sb); }
 
@@ -248,6 +254,8 @@ protected:
         Component* shape[3] = { &aCurve, &dCurve, &rCurve };
         Component* time[4] = { &delay, &hold, &beats, &legato };
         inner (0, 4, adsr, 4); inner (1, 3, shape, 3); inner (2, 4, time, 4);
+        for (int i = 0; i < kMaxGroups; ++i)
+            groups[i].setFrameRect (blocks_[i]);
         // ---- the middle: the graph (the whole width; a column of the targets at its right only when there are targets)
         const int midY = top.bottom() + m, midH = bandY - m - midY;
         const int gw = numTargets > 0 ? (W - m) * 70 / 100 : W;
