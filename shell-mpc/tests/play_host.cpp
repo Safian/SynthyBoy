@@ -159,12 +159,18 @@ int main (int argc, char** argv)
     const int ovl = n + 4 + 32 + 2;   // "Overlay Instance"
     const int sel0 = ovl + 1, prox0 = ovl + 1 + pl::kSelectors;
     const int q0 = ovl + 1 + pl::kParams;   // "Q 1"
-    check (a->numParams == q0 + synthyboy_mpc::QRouter::kCount && q0 == 2703 && a->numParams == 2707, "numParams is the engine's count + 4 + 32 + 2 + Overlay Instance + 3 selectors + 24 proxies + 4 Q proxies = 2707 (" + std::to_string (a->numParams) + ")");
+    // THE FORMAT (docs/MPC.md "Parameter order"): saved projects keep parameter indices, so the old ones must never move. Q 1 .. Q 4 stay at 2703 .. 2706, the twelve new proxies Q 5 .. Q 16 are appended after them
+    // (2707 .. 2718), the count is 2719. Every number is written out on purpose: a change of the layout fails here.
+    check (n == 2637 && ovl == 2675 && sel0 == 2676 && prox0 == 2679 && q0 == 2703, "the old indices: engine 0 .. 2636, Overlay Instance 2675, Play selectors 2676 .. 2678, Play proxies 2679 .. 2702, Q 1 at 2703");
+    check (synthyboy_mpc::QRouter::kCount == 16 && a->numParams == q0 + 16 && a->numParams == 2719, "numParams is the engine's count + 4 + 32 + 2 + Overlay Instance + 3 selectors + 24 proxies + 16 Q proxies = 2719 (" + std::to_string (a->numParams) + ")");
     {
         bool qn = true;
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < 16; ++i)
             qn = qn && text (a, effGetParamName, q0 + i) == "Q " + std::to_string (i + 1) && a->dispatcher (a, effCanBeAutomated, q0 + i, 0, nullptr, 0.0f) == 0;
-        check (qn && text (a, effGetParamName, q0 - 1) == pl::slots (2)[7].proxyName, "order: the last Play proxy, then Q 1 .. Q 4; the Q proxies are not automatable");
+        check (qn && text (a, effGetParamName, q0 - 1) == pl::slots (2)[7].proxyName, "order: the last Play proxy, then Q 1 .. Q 16; the Q proxies are not automatable");
+        check (text (a, effGetParamName, 2703) == "Q 1" && text (a, effGetParamName, 2706) == "Q 4" && text (a, effGetParamName, 2707) == "Q 5" && text (a, effGetParamName, 2718) == "Q 16", "Q 1 .. Q 4 at 2703 .. 2706 (as in the first builds), Q 5 at 2707, Q 16 at 2718");
+        check (text (a, effGetParamName, 0) == synthyboy::paramTable()[0].name && text (a, effGetParamName, n - 1) == synthyboy::paramTable()[n - 1].name && text (a, effGetParamName, n) == "LFO 1 Cursor" && text (a, effGetParamName, n + 4) == "Spectrum 1"
+                   && text (a, effGetParamName, n + 36) == "Pad Pressure" && text (a, effGetParamName, n + 37) == "Pad Pressure Amount", "the indices below the overlay block did not move either");
     }
     check (text (a, effGetParamName, ovl) == "Overlay Instance" && text (a, effGetParamName, sel0) == "Play Osc" && text (a, effGetParamName, sel0 + 1) == "Play Env" && text (a, effGetParamName, sel0 + 2) == "Play LFO", "order: Overlay Instance, Play Osc, Play Env, Play LFO");
     bool names = true, automation = true;
@@ -509,6 +515,44 @@ int main (int argc, char** argv)
             check (waitFor (2000, [&] { return text (qa, effGetParamName, q0) == std::string (synthyboy::paramTable()[tTrans].name) + " Oct"; }) && text (qa, effGetParamName, q0 + 1) == std::string (synthyboy::paramTable()[tTrans].name) + " Sem"
                        && text (qa, effGetParamDisplay, q0) == "+1" && text (qa, effGetParamDisplay, q0 + 1) == "+2" && text (qa, effGetParamLabel, q0) == "oct" && text (qa, effGetParamLabel, q0 + 1) == "st",
                    "a split transpose: Oct and Sem names, +1 oct and +2 st for 14 (" + text (qa, effGetParamName, q0) + " " + text (qa, effGetParamDisplay, q0) + " / " + text (qa, effGetParamName, q0 + 1) + " " + text (qa, effGetParamDisplay, q0 + 1) + ")");
+        }
+        // all sixteen slots: Q 5 .. Q 16 are proxies of the next groups; names, units, values and writes like Q 1 .. Q 4
+        {
+            const int sixteen[16] = { tLevel, tPan, tSubLevel, tCut, idx ("osc2.level"), idx ("osc2.pan"), idx ("osc3.level"), idx ("osc3.pan"), idx ("filter1.resonance"), idx ("filter2.cutoff"), idx ("filter2.resonance"), idx ("master.volume"), -1, idx ("osc1.unison.detune"), idx ("env1.attack"), idx ("env1.release") };
+            std::string line;
+            for (int i = 0; i < 16; ++i)
+                line += (i ? " " : "") + std::to_string (sixteen[i]);
+            resetReports (qa);
+            const int ud1 = updates();
+            writeGroup (line);
+            check (waitFor (2000, [&] { for (int i = 0; i < 16; ++i) if (reportOf (qa, q0 + i).count < 1) return false; return true; }), "a 16 slot group: the host is told the values of all sixteen Q proxies");
+            sleepMs (400);
+            check (updates() == ud1 + 1, "... with one audioMasterUpdateDisplay for the whole change (" + std::to_string (updates() - ud1) + ")");
+            bool ok = true;
+            for (int i = 0; i < 16; ++i)
+            {
+                if (sixteen[i] < 0)
+                {
+                    ok = ok && text (qa, effGetParamName, q0 + i) == "Q " + std::to_string (i + 1) && qa->getParameter (qa, q0 + i) == 0.0f;
+                    continue;
+                }
+                const synthyboy::ParamInfo& pi = synthyboy::paramTable()[sixteen[i]];
+                ok = ok && text (qa, effGetParamName, q0 + i) == pi.name && text (qa, effGetParamLabel, q0 + i) == synthyboy::unitLabel (pi.unit)
+                     && text (qa, effGetParamDisplay, q0 + i) == text (qa, effGetParamDisplay, sixteen[i]) && qa->getParameter (qa, q0 + i) == qa->getParameter (qa, sixteen[i]);
+            }
+            check (ok, "every one of Q 1 .. Q 16 reports the name, unit, value text and value of its target (a slot without a target: Q n, 0)");
+            const float before = qa->getParameter (qa, sixteen[13]);
+            qa->setParameter (qa, q0 + 13, std::fabs (before - 0.37f) < 0.05f ? 0.8f : 0.37f);   // Q 14: osc1.unison.detune
+            check (std::fabs (qa->getParameter (qa, sixteen[13]) - before) > 0.01f && qa->getParameter (qa, q0 + 13) == qa->getParameter (qa, sixteen[13]), "a write to Q 14 reaches its target");
+            const int ud2 = updates();
+            writeGroup (line + " ");   // the same targets with a trailing blank: another line, the same slots
+            sleepMs (500);
+            check (updates() == ud2, "the same sixteen targets again: no notification to the host");
+            std::string line2 = line;
+            line2.replace (line2.rfind (' '), std::string::npos, " " + std::to_string (tLevel));   // only the last slot changes
+            writeGroup (line2);
+            check (waitFor (2000, [&] { return updates() == ud2 + 1; }), "a change of Q 16 alone: one notification");
+            check (text (qa, effGetParamName, q0 + 15) == synthyboy::paramTable()[tLevel].name, "... and its name follows");
         }
         // the Q proxies are not in the chunk and a group does not change it
         const std::string withGroup = getChunk (qa);

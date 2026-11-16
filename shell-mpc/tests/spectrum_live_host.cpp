@@ -122,7 +122,7 @@ int main (int argc, char** argv)
     firstSpectrum.store (n + 4);
     AEffect* e = entry (hostCallback);
     if (! e) { std::fprintf (stderr, "plugin did not load\n"); return 2; }
-    lastIndex.store (e->numParams - 1 - (overlayBuild ? 31 : 0));   // Overlay Instance is followed by the 27 parameters of the Play page (shell-mpc/play_params.h) and the 4 Q proxies (shell-mpc/q_router.h);   // the display thread's first report comes a tick (>= 50 ms) after creation
+    lastIndex.store (e->numParams - 1 - (overlayBuild ? 43 : 0));   // Overlay Instance is followed by the 27 parameters of the Play page (shell-mpc/play_params.h) and the 16 Q proxies (shell-mpc/q_router.h);   // the display thread's first report comes a tick (>= 50 ms) after creation
     const auto created = std::chrono::steady_clock::now();
     e->dispatcher (e, effOpen, 0, 0, nullptr, 0.0f);
     e->dispatcher (e, effSetSampleRate, 0, 0, nullptr, 44100.0f);
@@ -130,7 +130,7 @@ int main (int argc, char** argv)
     e->dispatcher (e, effMainsChanged, 0, 1, nullptr, 0.0f);
 
     // the two pad pressure parameters (shell-mpc/pad_pressure.h, default ON) follow the spectrum columns; only "Overlay Instance" of the overlay build is after them
-    const int ovl = overlayBuild ? 1 + 27 + 4 : 0;   // Overlay Instance, the Play page's 27 parameters (shell-mpc/play_params.h) and the 4 Q proxies (shell-mpc/q_router.h)
+    const int ovl = overlayBuild ? 1 + 27 + 16 : 0;   // Overlay Instance, the Play page's 27 parameters (shell-mpc/play_params.h) and the 16 Q proxies (shell-mpc/q_router.h)
     char padName[64] = {};
     e->dispatcher (e, effGetParamName, e->numParams - 2 - ovl, 0, padName, 0.0f);
     const int pad = std::string (padName) == "Pad Pressure" ? 2 : 0;

@@ -45,16 +45,17 @@ public:
     }
     void setQGroup (const int* t, int n) noexcept override
     {
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < 16; ++i)
             q[i] = i < n ? t[i] : -1;
+        qN = n;
         ++qCalls;
     }
     void setUiFullOpen (bool open) noexcept override { fullOpen = open; }
     double bpm() const noexcept override { return 120.0; }
     float get (const std::string& key) const { const int i = idx (key); return i >= 0 ? v_[i] : 0.0f; }
     void setAt (int i, float v) { v_[i] = v; }
-    int q[4] = { -1, -1, -1, -1 };
-    int qCalls = 0, writes = 0, lastWritten = -1;
+    int q[16] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };   // the Q slots the page published last (Q 1 .. Q 16)
+    int qN = 0, qCalls = 0, writes = 0, lastWritten = -1;
     bool fullOpen = false;
     int playLastSelector() const noexcept override { return 2; }
     void setQVirtual (int id, float v) noexcept override { if (id >= 0 && id < 8) virtualOut[id] = v; }

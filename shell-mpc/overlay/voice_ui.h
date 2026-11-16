@@ -22,6 +22,7 @@
 #include "../ui/voice_screen.h"
 #include "curve_source.h"
 #include "page_view.h"
+#include "q_publish.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
 #include "ui_stack.h"
@@ -171,7 +172,7 @@ public:
     void forgetQGroup() noexcept
     {
         full_.setActiveGroup (0);
-        qSet_ = false;
+        qSlots_.forget();
     }
     int topPage() const noexcept { return pageTop_; }
 
@@ -202,7 +203,8 @@ public:
         return nullptr;
     }
     int activeQ() const noexcept { return full_.activeGroup(); }
-    const int* qTargets() const noexcept { return qTargets_; }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
+    int qSlotCount() const noexcept { return QRouter::kCount; }
 
 private:
     void bind (int id, ui::Component* c, T type, const std::string& key, int row = -1, int step = -1)
@@ -377,48 +379,42 @@ private:
         return uibind::indexOfKey ("voicectl.s" + std::to_string (std::clamp (step, 0, 7) + 1) + "." + kRows[std::clamp (row, 0, 5)]);
     }
 
+    /** The groups of the page are its six blocks in reading order (STEP, RANDOM, RAND 10x, SCALING, TARGETS, NOISE): the active one is on Q 1 .. 4, the next three (wrapping) on 5 .. 16. */
     void publishQGroup (IInstanceView& inst)
     {
         const int g = full_.activeGroup();
-        int t[4] = { -1, -1, -1, -1 };
-        if (pageTop_ == kPageList)
+        constexpr int kN = ui::VoiceScreen::kMaxGroups;
+        const bool list = pageTop_ == kPageList;
+        qSlots_.publish (inst, list ? 0 : kN, g, [this] (int k, int* t)
         {
-        }
-        else if (g == 0)   // STEP: the step and the row (virtual targets), the length, the value of the selected step
-        {
-            t[0] = QRouter::encode (kVirtualStep, QRouter::kVirtual);
-            t[1] = QRouter::encode (kVirtualRow, QRouter::kVirtual);
-            t[2] = uibind::indexOfKey ("voicectl.length");
-            t[3] = stepParam (full_.grid.activeRow, full_.grid.selectedStep);
-        }
-        else if (g == 1)
-        {
-            t[0] = uibind::indexOfKey ("voicectl.rand.pan"); t[1] = uibind::indexOfKey ("voicectl.rand.detune");
-            t[2] = uibind::indexOfKey ("voicectl.rand.cutoff"); t[3] = uibind::indexOfKey ("voicectl.rand.env");
-        }
-        else if (g == 2)
-        {
-            t[0] = uibind::indexOfKey ("voicectl.rand.detune10x");
-        }
-        else if (g == 3)
-        {
-            t[0] = uibind::indexOfKey ("voicectl.scale.env"); t[1] = uibind::indexOfKey ("voicectl.scale.lfo"); t[2] = uibind::indexOfKey ("voicectl.scale.lfo_mode");
-        }
-        else if (g == 4)
-        {
-            t[0] = uibind::indexOfKey ("voicectl.osc.a"); t[1] = uibind::indexOfKey ("voicectl.osc.b");
-            t[2] = uibind::indexOfKey ("voicectl.osc.c"); t[3] = uibind::indexOfKey ("voicectl.osc.sub");
-        }
-        else if (g == 5)
-        {
-            t[0] = uibind::indexOfKey ("voicectl.osc.noise");
-        }
-        if (! qSet_ || std::memcmp (t, qTargets_, sizeof t) != 0)
-        {
-            std::memcpy (qTargets_, t, sizeof t);
-            inst.setQGroup (t, 4);
-            qSet_ = true;
-        }
+            if (k == 0)   // STEP: the step and the row (virtual targets), the length, the value of the selected step
+            {
+                t[0] = QRouter::encode (kVirtualStep, QRouter::kVirtual);
+                t[1] = QRouter::encode (kVirtualRow, QRouter::kVirtual);
+                t[2] = uibind::indexOfKey ("voicectl.length");
+                t[3] = stepParam (full_.grid.activeRow, full_.grid.selectedStep);
+            }
+            else if (k == 1)
+            {
+                t[0] = uibind::indexOfKey ("voicectl.rand.pan"); t[1] = uibind::indexOfKey ("voicectl.rand.detune");
+                t[2] = uibind::indexOfKey ("voicectl.rand.cutoff"); t[3] = uibind::indexOfKey ("voicectl.rand.env");
+            }
+            else if (k == 2)
+                t[0] = uibind::indexOfKey ("voicectl.rand.detune10x");
+            else if (k == 3)
+            {
+                t[0] = uibind::indexOfKey ("voicectl.scale.env"); t[1] = uibind::indexOfKey ("voicectl.scale.lfo"); t[2] = uibind::indexOfKey ("voicectl.scale.lfo_mode");
+            }
+            else if (k == 4)
+            {
+                t[0] = uibind::indexOfKey ("voicectl.osc.a"); t[1] = uibind::indexOfKey ("voicectl.osc.b");
+                t[2] = uibind::indexOfKey ("voicectl.osc.c"); t[3] = uibind::indexOfKey ("voicectl.osc.sub");
+            }
+            else if (k == 5)
+                t[0] = uibind::indexOfKey ("voicectl.osc.noise");
+        });
+        for (int i = 0; i < kN; ++i)
+            full_.groups[i].setBlock (list ? -1 : QRouter::blockOfGroup (kN, g, i));
     }
 
     ui::Component* topComponent() noexcept
@@ -436,8 +432,7 @@ private:
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;
 
-    int qTargets_[4] = { -1, -1, -1, -1 };
-    bool qSet_ = false;
+    QSlots qSlots_;
 };
 
 }} // namespace synthyboy_mpc::overlay

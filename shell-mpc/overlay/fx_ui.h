@@ -26,6 +26,7 @@
 #include "../ui/ui.h"
 #include "curve_source.h"
 #include "page_view.h"
+#include "q_publish.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
 #include "ui_stack.h"
@@ -97,7 +98,8 @@ public:
     int selectedSlot() const noexcept { return selectedSlot_; }
     int numCards() const noexcept { return static_cast<int> (cardItems_.size()); }
     const synthyboy::FxRackItem& cardItem (int i) const noexcept { return cardItems_[static_cast<size_t> (i)]; }
-    const int* qTargets() const noexcept { return qTargets_; }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
+    int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
     int topPage() const noexcept { return listOpen_ ? kPageList : 0; }
 
@@ -170,7 +172,7 @@ public:
 
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
-    void forgetQGroup() noexcept { qSet_ = false; }
+    void forgetQGroup() noexcept { qSlots_.forget(); }
     void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst) { handle (screen_.turnQ (knobIndex, delta), stack, inst); }
     bool listOpen() const noexcept { return listOpen_; }
 
@@ -538,26 +540,33 @@ private:
         d.filter.cutoffHz = filterVals_[2];
     }
 
+    /** The groups of the page are the rows of four values of the open effect that are on the page of the editor (the first and the second row, or three rows without a display), in reading order: the active row is
+        on Q 1 .. 4, the other rows of the page (wrapping) on 5 .. 16. A row the active one is not on the page of (a page change is about to select another) is the only group. */
     void publishQGroup (IInstanceView& inst)
     {
-        int t[4] = { -1, -1, -1, -1 };
         const char* name = "";
+        ui::FxSlotEditor& ed = screen_.slotEditor;
+        for (int r = 0; r < ui::FxSlotEditor::kMaxRows; ++r)
+            ed.groups[r].setBlock (-1);
         if (listOpen_)
+        {
             name = "List";
+            qSlots_.publish (inst, 0, 0, [] (int, int*) {});
+        }
         else if (selectedSlot_ >= 0 && selectedSlot_ < static_cast<int> (cardItems_.size()))
         {
-            const int row = screen_.slotEditor.activeRow();
+            const int row = ed.activeRow();
             name = ui::FxFullScreen::groupName (row);
             const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
-            for (int c = 0; c < 4; ++c)
-                t[c] = paramIndexOf (item, row * 4 + c);
+            const int first = ed.firstRowOfPage(), n = std::max (0, std::min (ed.rowsPerPage(), ed.numRows() - first));
+            const bool onPage = row >= first && row < first + n;
+            const int count = onPage ? n : 1, base = onPage ? first : row, active = onPage ? row - first : 0;
+            qSlots_.publish (inst, count, active, [&] (int k, int* t) { for (int c = 0; c < 4; ++c) t[c] = paramIndexOf (item, (base + k) * 4 + c); });
+            for (int k = 0; k < count; ++k)
+                ed.groups[base + k].setBlock (QRouter::blockOfGroup (count, active, k));
         }
-        if (! qSet_ || std::memcmp (t, qTargets_, sizeof t) != 0)
-        {
-            std::memcpy (qTargets_, t, sizeof t);
-            inst.setQGroup (t, 4);
-            qSet_ = true;
-        }
+        else
+            qSlots_.publish (inst, 0, 0, [] (int, int*) {});
         ui::setText (qName_, sizeof qName_, name);
     }
 
@@ -705,7 +714,7 @@ private:
                 selectedSlot_ = idx;
                 selectedItem_ = item;
                 screen_.slotEditor.setActiveRow (0);
-                qSet_ = false;
+                qSlots_.forget();
             }
             else if (c.index == ui::FxSlotCard::kTogglePower)
             {
@@ -829,9 +838,8 @@ private:
 
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;
-    int qTargets_[4] = { -1, -1, -1, -1 };
+    QSlots qSlots_;
     char qName_[24] = {};
-    bool qSet_ = false;
 };
 
 }} // namespace synthyboy_mpc::overlay

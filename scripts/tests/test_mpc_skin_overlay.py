@@ -300,13 +300,22 @@ class OverlaySkinTests(unittest.TestCase):
                     hidden += 1
             self.assertGreater(hidden, 0, name)
 
-    def test_the_page_tabs_have_the_q_proxies_on_q_link_1_to_4_in_the_row_direction(self):
+    def test_the_q_proxies_are_sixteen_and_the_old_indices_did_not_move(self):
+        # the FORMAT (docs/MPC.md "Parameter order"): saved projects keep parameter indices; Q 1 .. Q 4 stay at 2703 .. 2706, Q 5 .. Q 16 follow at 2707 .. 2718, count 2719
+        self.assertEqual(len(self.params), 2637)
+        first_proxy = len(self.params) + 4 + 32 + 2 + 1 + 3 + 24
+        self.assertEqual(first_proxy, 2703)
+        used = {v for e in self.o_ql["Screen Mode Q-Links"]["map"] for v in e["Q-Links"].values() if v >= first_proxy}
+        self.assertEqual(sorted(used), list(range(first_proxy, first_proxy + 16)), "the Q-Link maps use exactly the sixteen Q proxies")
+        self.assertEqual(first_proxy + 16, 2719, "the parameter count of the overlay package")
+
+    def test_the_page_tabs_have_the_q_proxies_on_all_sixteen_q_links_in_the_row_direction(self):
         first_proxy = len(self.params) + 4 + 32 + 2 + 1 + 3 + 24   # "Q 1": after the Overlay Instance, the Play selectors and the 24 Play proxies
         for name in self.PAGE_TABS:
             tab = self.tab(name)
             entry = next(e for e in self.o_ql["Screen Mode Q-Links"]["map"] if e["Tab"] == tab["fnKeyIndex"] + 1 and e["SubTab"] == tab["fnKeySubIndex"] + 1)
             self.assertEqual(entry["Bank Direction"], "Row", name)
-            self.assertEqual([entry["Q-Links"]["Q-Link %d" % n] for n in range(1, 17)], [first_proxy + i for i in range(4)] + [-1] * 12, name)
+            self.assertEqual([entry["Q-Links"]["Q-Link %d" % n] for n in range(1, 17)], [first_proxy + i for i in range(16)], name)
             self.assertEqual(tab["qlinkBoundsData"], ["16 301 288 323", "336 301 288 323", "656 301 288 323", "976 301 288 323"], name)
 
     def test_all_other_tabs_are_the_production_tabs_plus_the_marker_pictures(self):
@@ -469,7 +478,7 @@ class OverlaySkinTests(unittest.TestCase):
         first = self.play_first()
         sel = [first + g for g in range(3)]
         prox = [[first + 3 + g * 8 + s for s in range(8)] for g in range(3)]
-        q = [first + 3 + 24 + i for i in range(4)]
+        q = [first + 3 + 24 + i for i in range(16)]
         for g, (tab_name, prefix, _) in enumerate(self.PLAY):
             tab = self.tab(tab_name)
             items = tab["componentDefinition"]["componentsData"]
@@ -506,9 +515,9 @@ class OverlaySkinTests(unittest.TestCase):
                     self.assertEqual(c["componentData"]["type"], rc["componentData"]["type"], "%s is the same widget as the real parameter's control" % c["componentData"]["name"])
             entry = next(e for e in self.o_ql["Screen Mode Q-Links"]["map"] if e["Tab"] == tab["fnKeyIndex"] + 1 and e["SubTab"] == tab["fnKeySubIndex"] + 1)
             expected = [-1] * 16
-            # Bank Direction Column: bank 0 is read top to bottom, Q-Link 13, 9, 5, 1 = Q 1 .. Q 4; the oscillator sub-tab is Bank Direction Row with Q-Link 1 .. 4 (the host honours only the bottom row there, measured on the device)
+            # the plugin-drawn panels: Bank Direction Row, Q-Link n = Q n for all 16 (the host's own numbering: Q-Link 1 .. 4 the bottom row, the active group); any other sub-tab would use Bank Direction Column, bank 0 read top to bottom: Q-Link 13, 9, 5, 1 = Q 1 .. Q 4
             self.assertEqual(entry["Bank Direction"], "Row" if g < 3 else "Column")
-            for k, n in enumerate((1, 2, 3, 4) if g < 3 else (13, 9, 5, 1)):
+            for k, n in enumerate(tuple(range(1, 17)) if g < 3 else (13, 9, 5, 1)):
                 expected[n - 1] = q[k]
             if g > 2:
                 for k, n in enumerate((14, 10, 6, 2)):   # bank 1 top to bottom: the second row of the module's knobs

@@ -25,6 +25,7 @@
 #include "../ui/ui.h"
 #include "curve_source.h"
 #include "page_view.h"
+#include "q_publish.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
 #include "ui_stack.h"
@@ -130,7 +131,8 @@ public:
     int selection() const noexcept { return sel_; }          // 1: F1, 2: F2, 3: F1+F2
     int editFilter() const noexcept { return editFilter_; }  // 1 or 2: the filter the knobs belong to
     bool isDual() const noexcept { return sel_ == 3; }
-    const int* qTargets() const noexcept { return qTargets_; }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
+    int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
     int topPage() const noexcept { return pageTop_; }
     ui::Rect displayRect() const noexcept { return full_.displayRect(); }
@@ -197,7 +199,7 @@ public:
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { if (gesture_ != nullptr) gesture_->touchUp (-1, -1); gesture_ = nullptr; gestureDown_ = false; }   // (a finger that is gone: the display stops drawing the dragged values)
     /** Another element's page was open: the Q group is published again at the next update. */
-    void forgetQGroup() noexcept { qSet_ = false; }
+    void forgetQGroup() noexcept { qSlots_.forget(); }
 
     ui::FilterFullScreen& full() noexcept { return full_; }
     ui::FilterRoutePanel& routePanel() noexcept { return route_; }
@@ -393,7 +395,7 @@ private:
             if (sel_ <= 2)
                 editFilter_ = sel_;
             full_.instances.state.index = sel_ - 1;
-            qSet_ = false;
+            qSlots_.forget();
             return;
         }
 
@@ -749,45 +751,53 @@ private:
         pullKnob (inst, route_.pan, kRoutePan);
     }
 
+    /** The groups of the page in reading order: the filter screen has MAIN, TRACK, OUT (and FORMANT with the Formant model); the output panel has one, the modulation list one per row. The active group is on Q 1 .. 4, the
+        next three (wrapping) on 5 .. 16. */
     void publishQGroup (IInstanceView& v)
     {
-        int t[4] = { -1, -1, -1, -1 };
         const char* name = "";
         if (pageTop_ == kPageRoute)
         {
             name = "Output";
-            t[0] = paramForId (kRouteDest, editFilter_);
-            t[1] = paramForId (kRouteBus1, editFilter_);
-            t[2] = paramForId (kRouteBus2, editFilter_);
-            t[3] = paramForId (kRouteLevel, editFilter_);
+            qSlots_.publish (v, 1, 0, [this] (int, int* t)
+            {
+                t[0] = paramForId (kRouteDest, editFilter_);
+                t[1] = paramForId (kRouteBus1, editFilter_);
+                t[2] = paramForId (kRouteBus2, editFilter_);
+                t[3] = paramForId (kRouteLevel, editFilter_);
+            });
         }
         else if (pageTop_ == kPageMods)
         {
             name = "Mods";
-            const int row = mods_.activeRow();
-            if (row >= 0 && row < ui::ModulationsPage::kMaxRows && modRows_[row].slot >= 0)
-            {
-                const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (modRows_[row].slot);
-                t[0] = sp.amount; t[1] = sp.bipolar; t[2] = sp.bypass;
-            }
+            qSlots_.publish (v, mods_.numRows(), mods_.activeRow(), [this] (int row, int* t) { modRowTargets (row < ui::ModulationsPage::kMaxRows ? modRows_[row].slot : -1, t); });
+            setRowBlocks (mods_, ui::ModulationsPage::kMaxRows, mods_.numRows(), mods_.activeRow());
         }
         else if (pageTop_ == 0)
         {
             const int ag = full_.activeGroup();
             name = ui::FilterFullScreen::groupName (ag);
-            const ui::Component* members[4] = {};
-            if (ag >= 0)
+            int ids[ui::FilterFullScreen::kMaxGroups], pos = -1;
+            int used = 0;
+            for (int g = 0; g < ui::FilterFullScreen::kMaxGroups; ++g)
+                if (g != 3 || full_.formantMode())
+                {
+                    if (g == ag)
+                        pos = used;
+                    ids[used++] = g;
+                }
+            qSlots_.publish (v, used, pos, [&] (int k, int* t)
+            {
                 for (int i = 0; i < 4; ++i)
-                    members[i] = full_.groups[ag].member (i);
-            for (int i = 0; i < 4; ++i)
-                t[i] = members[i] != nullptr ? paramOfMember (members[i]) : -1;
+                {
+                    const ui::Component* m = full_.groups[ids[k]].member (i);
+                    t[i] = m != nullptr ? paramOfMember (m) : -1;
+                }
+            });
+            setBlocks (full_.groups, ui::FilterFullScreen::kMaxGroups, ids, used, pos);
         }
-        if (! qSet_ || std::memcmp (t, qTargets_, sizeof t) != 0)
-        {
-            std::memcpy (qTargets_, t, sizeof t);
-            v.setQGroup (t, 4);
-            qSet_ = true;
-        }
+        else
+            qSlots_.publish (v, 0, 0, [] (int, int*) {});
         ui::setText (qName_, sizeof qName_, name);
     }
     int paramOfMember (const ui::Component* m) const noexcept
@@ -827,9 +837,8 @@ private:
     int envSel_ = 1, lfoSel_ = 1, selectedSource_ = ui::kNoSource;
     int listParam_ = -1;
 
-    int qTargets_[4] = { -1, -1, -1, -1 };
+    QSlots qSlots_;
     char qName_[20] = {};
-    bool qSet_ = false;
 };
 
 }} // namespace synthyboy_mpc::overlay

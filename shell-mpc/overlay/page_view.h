@@ -12,6 +12,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../ui/theme.h"
@@ -60,6 +61,15 @@ inline uint32_t sceneHash (const gpu::SceneData& d) noexcept
     }
     return h;
 }
+} // namespace page
+
+namespace page
+{
+/** How many Q slots the element publishes (qTargets () has that many entries): 16 for an element with a qSlotCount (), 4 for the others. */
+template <class Ui, class = void>
+struct QSlotCount { static int of (const Ui&) noexcept { return 4; } };
+template <class Ui>
+struct QSlotCount<Ui, decltype (void (std::declval<const Ui&>().qSlotCount()))> { static int of (const Ui& u) noexcept { return u.qSlotCount(); } };
 } // namespace page
 
 /** The elements a page can show are classes with:
@@ -150,6 +160,11 @@ public:
         const int* qt = ui_.qTargets();   // the Q group this page published: table index (the view in the bits above 16: kVirtual = 3 is "not a parameter"), -1 none
         o << "page_q_targets:";
         for (int i = 0; i < 4; ++i)
+            o << ' ' << qt[i];
+        o << "\n";
+        const int slots = page::QSlotCount<Ui>::of (ui_);   // all the slots (Q 1 .. Q 16: the active group first, then the next groups of the page, q_publish.h)
+        o << "page_q_slots:";
+        for (int i = 0; i < slots; ++i)
             o << ' ' << qt[i];
         o << "\n";
     }

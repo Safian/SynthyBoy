@@ -125,7 +125,7 @@ int main (int argc, char** argv)
 
     AEffect* a = make();
     if (! a) { std::fprintf (stderr, "plugin did not load\n"); return 2; }
-    constexpr int kPlayParams = 27 + 4;   // the Play page's 3 selectors and 24 proxies and the 4 Q proxies after Overlay Instance (shell-mpc/play_params.h, shell-mpc/q_router.h; play_host.cpp checks them)
+    constexpr int kPlayParams = 27 + 16;   // the Play page's 3 selectors and 24 proxies and the 16 Q proxies after Overlay Instance (shell-mpc/play_params.h, shell-mpc/q_router.h; play_host.cpp checks them)
     const int idx = a->numParams - 1 - kPlayParams;   // Overlay Instance
     // parameter order (docs/MPC.md "Parameter order"): engine, 4 cursors, 32 spectrum columns, Pad Pressure, Pad Pressure Amount, Overlay Instance LAST
     check (text (a, effGetParamName, idx - 2) == "Pad Pressure" && text (a, effGetParamName, idx - 1) == "Pad Pressure Amount", "the two pad pressure parameters come right before it (their indexes do not move in the overlay build)");

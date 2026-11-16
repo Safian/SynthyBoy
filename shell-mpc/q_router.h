@@ -1,15 +1,15 @@
-// SynthyBoy - MPC shell (overlay build only): the Q proxies. Four plugin parameters "Q 1" .. "Q 4" after the last Play proxy; the four hardware knobs (Q-Links) of the host are mapped to them on the
+// SynthyBoy - MPC shell (overlay build only): the Q proxies. Sixteen plugin parameters "Q 1" .. "Q 16" after the last Play proxy; the hardware knobs (Q-Links) of the host are mapped to them on the
 // pages the plugin draws itself (docs/MPC.md "Q proxies"). Pure logic over atomics, no state of the plugin (the plugin passes in how to read and write a real parameter), so that the host tests can use it.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// The active GROUP is up to four TARGETS, each the table index of an engine parameter or "none" (setGroup, called by the UI: the overlay thread). A Q proxy has no value of its own:
+// The page's targets are up to sixteen SLOTS (four groups of four, mapGroups): slots 1-4 are the ACTIVE group, 5-8 / 9-12 / 13-16 the next groups of the page in reading order. Each slot is the table index of an engine parameter or "none" (setGroup, called by the UI: the overlay thread). A Q proxy has no value of its own:
 //   - getParameter on Q n: the normalised value of the target now, 0 when it has none (value);
 //   - setParameter on Q n: the same write as the host's own write to the target (hostWrite -> the plugin's writeRealParam); nothing when the target is none, when the value is the one the target has
 //     (an echo of a report) or inside the restore window (the chunk wins: docs/MPC.md "Project save and reload"; the same rule as the Play proxies);
-//   - when the group changes the host is told the four new values (poll, the display thread: audioMasterAutomate), so the knob display of the host follows (and the plugin then tells it that the names changed: audioMasterUpdateDisplay, see docs/MPC.md); a target that changes by another route
+//   - when the group changes the host is told the sixteen new values (poll, the display thread: audioMasterAutomate), so the knob display of the host follows (and the plugin then tells it that the names changed: audioMasterUpdateDisplay, see docs/MPC.md); a target that changes by another route
 //     (its own page, a preset, automation, the touch screen of the plugin's own UI) is reported the same way; a write the host made to a Q proxy makes the poll report the real parameter too.
-// Audio thread rule: value () and hostWrite () (the getParameter / setParameter paths) use only relaxed / acquire-release atomics: no allocation, no lock, no loop longer than four steps.
+// Audio thread rule: value () and hostWrite () (the getParameter / setParameter paths) use only relaxed / acquire-release atomics: no allocation, no lock, no loop longer than sixteen steps.
 // Not saved in the chunk, not offered for automation: an automation recorded on a Q proxy replays into whatever group is active when it plays (docs/MPC.md).
 #pragma once
 
@@ -22,7 +22,9 @@ namespace synthyboy_mpc {
 class QRouter
 {
 public:
-    static constexpr int kCount = 4;
+    static constexpr int kGroupSize = 4;                  // the knobs of one group (the four Q-Links of the Key 61, one row of the XL)
+    static constexpr int kGroups = 4;                     // the groups reachable at once
+    static constexpr int kCount = kGroupSize * kGroups;   // 16 proxies "Q 1" .. "Q 16"
     static constexpr int kNone = -1;
     static constexpr float kTolerance = 1.0e-6f;   // an echo / a change smaller than this is none (one millionth: as for the Play proxies)
 
@@ -57,6 +59,30 @@ public:
         return static_cast<float> (std::clamp (nt, -48, 48) + 48) / kTransposeRange;
     }
 
+    /** The slot block (0: the active group, 1 .. 3: the next groups in reading order, wrapping, each group once) a group of a page with `nGroups` groups gets when group `active` is the active one; -1 when the
+        group has no block (more than four groups) or the arguments are out of range. Slots 4 * block .. 4 * block + 3 are its four knobs. */
+    static int blockOfGroup (int nGroups, int active, int group) noexcept
+    {
+        if (nGroups <= 0 || active < 0 || active >= nGroups || group < 0 || group >= nGroups)
+            return -1;
+        const int k = (group - active + nGroups) % nGroups;
+        return k < kGroups ? k : -1;
+    }
+    /** The 16 slots of a page: `targetsOf (group, int* four)` fills the four targets of a group (table indices, encoded or -1). Fewer than four groups leave the rest of the slots without a target.
+        `out` gets kCount values; returns how many slots are in use (a multiple of four, 0 when the page has no group). */
+    template <class TargetsOf>
+    static int mapGroups (int nGroups, int active, TargetsOf&& targetsOf, int* out) noexcept
+    {
+        for (int i = 0; i < kCount; ++i)
+            out[i] = kNone;
+        if (nGroups <= 0 || active < 0 || active >= nGroups)
+            return 0;
+        const int blocks = std::min (nGroups, kGroups);
+        for (int k = 0; k < blocks; ++k)
+            targetsOf ((active + k) % nGroups, out + k * kGroupSize);
+        return blocks * kGroupSize;
+    }
+
     QRouter() noexcept
     {
         for (int q = 0; q < kCount; ++q)
@@ -67,7 +93,7 @@ public:
         }
     }
 
-    /** The UI sets the active group: targets[0 .. n-1] (n at most 4; the rest are none). A target outside 0 .. paramCount - 1 is none. Any thread; the poll reports the new values when the group changed. */
+    /** The UI sets the slots: targets[0 .. n-1] (n at most 16; the rest are none: a page that knows one group passes four). A target outside 0 .. paramCount - 1 is none. Any thread; the poll reports the new values when the group changed. */
     void setGroup (const int* targets, int n, int paramCount) noexcept
     {
         bool changed = false;
@@ -80,7 +106,7 @@ public:
             groupDue_.store (true, std::memory_order_release);
     }
 
-    /** The table index of the target of Q q (0 .. 3), kNone when it has none (or a virtual one). */
+    /** The table index of the target of Q q (0 .. 15), kNone when it has none (or a virtual one). */
     int target (int q) const noexcept { return modeOf (encoded (q)) == kVirtual ? kNone : indexOf (encoded (q)); }
     /** The virtual id of the target of Q q (0 .. kNumVirtual - 1), -1 when it has none or a real one. */
     int virtualId (int q) const noexcept { const int e = encoded (q); return e >= 0 && modeOf (e) == kVirtual && indexOf (e) < kNumVirtual ? indexOf (e) : -1; }
@@ -143,14 +169,14 @@ public:
         return Write::written;
     }
 
-    /** The display thread, every tick. reportQ (q, value): the host is told the value of Q q; reportReal (tableIndex): the host is told the real parameter changed. A group change reports all four Q
+    /** The display thread, every tick. reportQ (q, value): the host is told the value of Q q; reportReal (tableIndex): the host is told the real parameter changed. A group change reports all sixteen Q
         values once; otherwise a value is reported only when it differs from what the host last heard. */
     template <class Read, class ReportQ, class ReportReal>
     void poll (Read&& readNorm, ReportQ&& reportQ, ReportReal&& reportReal) noexcept
     {
         poll (readNorm, reportQ, reportReal, [] {});
     }
-    /** As above; groupChanged () is called once, after the four values of a changed group were reported: the names, units and value texts of the proxies are other now (the plugin tells the host). */
+    /** As above; groupChanged () is called once, after the sixteen values of a changed group were reported: the names, units and value texts of the proxies are other now (the plugin tells the host). */
     template <class Read, class ReportQ, class ReportReal, class GroupChanged>
     void poll (Read&& readNorm, ReportQ&& reportQ, ReportReal&& reportReal, GroupChanged&& groupChanged) noexcept
     {
