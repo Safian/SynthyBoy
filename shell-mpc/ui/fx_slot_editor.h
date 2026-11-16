@@ -32,6 +32,7 @@ public:
     MenuButton remove { "REMOVE", MenuButton::Icon::None };
     FxDisplay display;
     Knob knobs[kMaxParams];
+    Stepper steppers[kMaxParams];
     QGroup groups[kMaxRows];
 
     FxSlotEditor()
@@ -49,6 +50,9 @@ public:
         {
             knobs[i].state.side = true;   // the dial at the left, the name and the value beside it: the cells are wide
             addKid (knobs[i], false);
+            steppers[i].listable = true;
+            steppers[i].minWidth = 100;
+            addKid (steppers[i], false);
         }
         for (int r = 0; r < kMaxRows; ++r)
             for (int c = 0; c < 4; ++c)
@@ -67,7 +71,13 @@ public:
     int firstRowOfPage() const noexcept { return page_ * rowsPerPage(); }
     bool hasDisplay() const noexcept { return display.kind != FxDisplay::Kind::None; }
 
-    /** The effect on the page: the display kind, the knobs of its parameters (the owner labels them), the pages. `removable`: a slot of the pool (the modules of the fixed chain cannot be removed). */
+    bool isChoice (int p) const noexcept
+    {
+        const synthyboy::ParamInfo* pi = synthyboy::fxInstanceSource (currentType_, p);
+        return pi != nullptr && pi->numChoices > 0 && pi->choices != nullptr;
+    }
+
+    /** The effect on the page: the display kind, the knobs or steppers of its parameters (the owner labels them), the pages. `removable`: a slot of the pool (the modules of the fixed chain cannot be removed). */
     void setType (int type, bool removable)
     {
         const bool changed = type != currentType_;
@@ -85,7 +95,11 @@ public:
             activeRow_ = 0;
         }
         for (int i = 0; i < kMaxParams; ++i)
-            knobs[i].setEnabled (i < numParams_);
+        {
+            const bool ch = isChoice (i);
+            knobs[i].setEnabled (i < numParams_ && ! ch);
+            steppers[i].setEnabled (i < numParams_ && ch);
+        }
         syncPage();
     }
 
@@ -112,7 +126,10 @@ public:
     void assignIds (int baseId, int powerId, int rackId, int pageId, int removeId)
     {
         for (int i = 0; i < kMaxParams; ++i)
+        {
             knobs[i].setId (baseId + i);
+            steppers[i].setId (baseId + i);
+        }
         power.setId (powerId);
         rack.setId (rackId);
         page.setId (pageId);
@@ -124,9 +141,9 @@ public:
     Change touchDown (int x, int y, double nowMs) override
     {
         const Change c = Composite::touchDown (x, y, nowMs);
-        if (cap_)   // a tap on a knob makes its row the Q group
+        if (cap_)   // a tap on a knob or stepper makes its row the Q group
             for (int i = 0; i < numParams_; ++i)
-                if (cap_ == &knobs[i])
+                if (cap_ == &knobs[i] || cap_ == &steppers[i])
                 {
                     setActiveRow (i / 4);
                     break;
@@ -148,13 +165,27 @@ public:
     }
 
 protected:
-    /** The knobs of the page are shown, the others are not; the layout follows. */
+    /** The knobs and steppers of the page are shown, the others are not; the layout follows. */
     void syncPage()
     {
         page_ = std::clamp (page_, 0, numPages() - 1);
         const int first = firstRowOfPage() * 4, last = first + rowsPerPage() * 4;
         for (int i = 0; i < kMaxParams; ++i)
-            show (knobs[i], i < numParams_ && i >= first && i < last);
+        {
+            const bool onPage = i < numParams_ && i >= first && i < last;
+            const bool ch = isChoice (i);
+            show (knobs[i], onPage && ! ch);
+            show (steppers[i], onPage && ch);
+        }
+        for (int r = 0; r < kMaxRows; ++r)
+            for (int c = 0; c < 4; ++c)
+            {
+                const int idx = r * 4 + c;
+                if (idx < kMaxParams)
+                    groups[r].set (c, isChoice (idx) ? static_cast<Component*> (&steppers[idx]) : static_cast<Component*> (&knobs[idx]));
+                else
+                    groups[r].set (c, nullptr);
+            }
         show (page, numPages() > 1);
         page.state.count = numPages();
         page.state.index = page_;
@@ -184,7 +215,7 @@ protected:
             right -= gap;
         }
         rack.place ({ right - 230, hd.y, 230, kHeaderH });
-        // the display, then the rows of knobs under it
+        // the display, then the rows of knobs and steppers under it
         int y = hd.bottom() + m;
         if (display.kind != FxDisplay::Kind::None)
         {
@@ -201,9 +232,11 @@ protected:
                 const int idx = (firstRow + r) * 4 + col;
                 if (idx >= kMaxParams)
                     continue;
-                // a lane (kQLane) above every knob for the index chip of its Q group
+                // a lane (kQLane) above every knob or stepper for the index chip of its Q group
                 const int kx = knobArea_.x + col * (cellW + gapX), ky = knobArea_.y + r * rowH + kQLane;
-                knobs[idx].place ({ kx, ky, col == 3 ? knobArea_.right() - kx : cellW, std::max (72, rowH - kQLane - 4) });
+                const Rect cellRect { kx, ky, col == 3 ? knobArea_.right() - kx : cellW, std::max (72, rowH - kQLane - 4) };
+                knobs[idx].place (cellRect);
+                steppers[idx].place (cellRect);
             }
     }
 
