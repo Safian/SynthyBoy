@@ -99,6 +99,8 @@ public:
         const int unitsIdx = uibind::indexOfKey (prefix_ + "units");
         beats_ = unitsIdx >= 0 && inst.param (unitsIdx) >= 0.5f;
         const bool open = stack.depth() > 0 && stack.element() == kElementEnv;
+        if (open && stackDepth_ == 0)
+            full_.setActiveGroup (0);
         stackDepth_ = open ? stack.depth() : 0;
         otherOpen_ = stack.depth() > 0 && ! open;
         syncPages (open ? stack : idle_, inst);
@@ -230,6 +232,7 @@ public:
             gesture_ = top;
             gestureDown_ = true;
             handle (top->touchDown (x, y, nowMs), stack, inst);
+            publishQGroup (inst);
             return true;
         }
         if (! gesture_ || ! gestureDown_)
@@ -424,8 +427,12 @@ private:
             if (p < 0)
                 return false;
             s.t[i] = uibind::normOf (p, v.param (p));
+            s.timeMs[i] = static_cast<double> (v.param (p));
             if (def != nullptr)
+            {
                 def->t[i] = uibind::normOf (p, uibind::info (p).def);
+                def->timeMs[i] = static_cast<double> (uibind::info (p).def);
+            }
         }
         const int sp = uibind::indexOfKey (pre + "sustain");
         if (sp < 0)
@@ -594,7 +601,7 @@ private:
             case kPageTargets: targetsPageIndex_ = 0; loadTargets (inst, true); break;
             case kPageMods: loadMods (inst); break;
             case kPageList: openGroupList(); break;
-            default: break;
+            default: full_.setActiveGroup (0); break;
         }
     }
 

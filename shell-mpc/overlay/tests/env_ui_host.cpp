@@ -166,6 +166,18 @@ void testFullScreenGroups()
     r.tapC (r.ui.full().hold);
     check (r.ui.activeQ() == 2 && r.inst.q[0] == envIdx (1, "delay") && r.inst.q[1] == envIdx (1, "hold") && r.inst.q[2] == envIdx (1, "units") && r.inst.q[3] == envIdx (1, "legato_inverted"),
            "the TIME group: delay, hold, units, legato");
+    // a tap on the background of a block makes it active
+    r.tap (r.ui.full().block (1).x + 10, r.ui.full().block (1).y + 10);
+    check (r.ui.activeQ() == 1, "tap on SHAPE block background: SHAPE is active group");
+    r.tap (r.ui.full().block (0).x + 10, r.ui.full().block (0).y + 10);
+    check (r.ui.activeQ() == 0, "tap on ADSR block background: ADSR is active group");
+    // opening a detail page and coming back restores default group ADSR
+    r.tap (r.ui.full().block (1).x + 10, r.ui.full().block (1).y + 10);
+    check (r.ui.activeQ() == 1, "active group is SHAPE before targets");
+    r.tapC (r.ui.full().targets);
+    check (r.ui.topPage() == EnvUi::kPageTargets, "targets page opened");
+    r.tapC (r.ui.targetsPage().back);
+    check (r.ui.topPage() == 0 && r.ui.activeQ() == 0 && r.inst.q[0] == envIdx (1, "attack"), "coming back from targets restores default group ADSR");
     r.tapC (r.ui.full().close);
     check (r.stack.isMain() && ! r.inst.fullOpen, "close: main again, the plugin is told");
     r.openFull();
@@ -532,10 +544,53 @@ void testPlayViewRoutesTheElements()
     check (! inst.uiFullOpen.load(), "closed from outside: the host widgets come back");
 }
 
+void testEnvelopeParameterCoverage()
+{
+    // Every single env<N>.* parameter in the engine parameter table must be reachable on the page
+    // in some state (ms or beats) and be a member of some Q group.
+    for (int env = 1; env <= 6; ++env)
+    {
+        const std::string pre = "env" + std::to_string (env) + ".";
+        int tested = 0;
+        for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+        {
+            const synthyboy::ParamInfo& pi = synthyboy::paramTable()[i];
+            if (std::strncmp (pi.key, pre.c_str(), pre.size()) != 0)
+                continue;
+            ++tested;
+            bool foundInQ = false;
+            for (float units : { 0.0f, 1.0f })
+            {
+                Rig r;
+                r.inst.env = env;
+                r.inst.set (pre + "units", units);
+                r.refresh();
+                r.openFull();
+                for (int g = 0; g < ui::EnvFullScreen::kMaxGroups && ! foundInQ; ++g)
+                {
+                    r.ui.full().setActiveGroup (g);
+                    r.refresh();
+                    for (int m = 0; m < 4; ++m)
+                    {
+                        if (r.inst.q[m] == static_cast<int> (i))
+                        {
+                            foundInQ = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            check (foundInQ, std::string (pi.key) + " is mapped to a control and reachable in a Q group");
+        }
+        check (tested == 16, "envelope " + std::to_string (env) + ": all 16 engine parameters checked");
+    }
+}
+
 } // namespace
 
 int main()
 {
+    testEnvelopeParameterCoverage();
     testEveryControlHasAParameter();
     testSelectorWritesPlayEnv();
     testCompactQGroupOnlyOnTheEnvSubTab();

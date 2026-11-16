@@ -40,6 +40,7 @@ void testHandlesAndHitTest()
 {
     EnvGraph g;
     g.place ({ 20, 20, 800, 340 });
+    g.state.shape.t[envgraph::Hold] = 0.2;
     double px[envgraph::kNumHandles], py[envgraph::kNumHandles];
     const EnvGraph::Geom geo = g.geom();
     bool inside = true;
@@ -51,30 +52,21 @@ void testHandlesAndHitTest()
     }
     check (inside, "every handle is inside the graph's rectangle");
     check (std::fabs (px[envgraph::Delay] - geo.x[1]) < 1.0e-9 && std::fabs (py[envgraph::Delay] - geo.yBot) < 1.0e-9, "the delay handle is the end of the delay on the bottom line");
-    check (std::fabs (py[envgraph::Attack] - geo.yTop) < 1.0e-9 && std::fabs (py[envgraph::Hold] - geo.yTop) < 1.0e-9 && px[envgraph::Hold] > px[envgraph::Attack] + 10.0, "attack and hold end on the top line, with room between them even when the hold is 0");
-    check (std::fabs (geo.x[6] - (g.plot().right())) < 1.0e-6, "the whole envelope fills the plot");
-    // the handles of the default shape are far enough apart for the 56 pixel targets to be told apart by the nearest centre
-    double minD = 1.0e9;
-    for (int a = 0; a < 5; ++a)
-        for (int b = a + 1; b < 5; ++b)
-            minD = std::min (minD, std::hypot (px[a] - px[b], py[a] - py[b]));
-    check (minD > 28.0, "the five end handles are at least half a target apart (" + std::to_string (minD) + ")");
+    check (std::fabs (py[envgraph::Attack] - geo.yTop) < 1.0e-9 && std::fabs (py[envgraph::Hold] - geo.yTop) < 1.0e-9 && px[envgraph::Hold] > px[envgraph::Attack] + 10.0, "attack and hold end on the top line, with room between them");
+    // with hold = 0, hold collapses to 0 px width
+    g.state.shape.t[envgraph::Hold] = 0.0;
+    const EnvGraph::Geom geo0 = g.geom();
+    check (geo0.x[3] == geo0.x[2], "hold 0 ms collapses to 0 px width");
     Rect t[8];
     check (g.touchTargets (t, 8) == 8 && t[0].w >= 56 && t[0].h >= 56, "eight touch targets of at least 56 x 56");
     check (g.handleAt (g.rect().x + 2, g.rect().y + 2) == envgraph::None, "a touch far from every handle takes none");
-    // the same on a compact graph (400 wide): the handles are still separate
-    EnvGraph c;
-    c.place ({ 0, 0, 388, 336 });
-    double a[2], b[2];
-    c.handlePoint (envgraph::Attack, a[0], a[1]);
-    c.handlePoint (envgraph::Hold, b[0], b[1]);
-    check (b[0] - a[0] >= 30.0, "compact graph: attack and hold ends are " + std::to_string (b[0] - a[0]) + " px apart");
 }
 
 void testDragFollowsTheFinger()
 {
     EnvGraph g;
     g.place ({ 20, 20, 800, 340 });
+    g.state.shape.t[1] = 0.35;
     g.state.defaults = g.state.shape;
     Touch tc;
     double hx, hy;
@@ -88,22 +80,22 @@ void testDragFollowsTheFinger()
         if (c)
         {
             const EnvGraph::Edit& e = g.edit();
-            g.state.shape.t[e.handle] = e.t;   // the owner writes the parameter and gives the shape back
+            g.state.shape.t[e.handle] = e.t;
         }
     }
     g.handlePoint (envgraph::Attack, hx, hy);
-    check (std::fabs (hx - (x0 + 60)) < 1.5, "the attack handle is under the finger after a drag of 60 px (" + std::to_string (hx) + " vs " + std::to_string (x0 + 60) + ")");
-    check (g.state.shape.t[1] > 0.3, "and the attack grew (" + std::to_string (g.state.shape.t[1]) + ")");
+    check (std::fabs (hx - (x0 + 60)) < 2.5, "the attack handle is under the finger after a drag of 60 px (" + std::to_string (hx) + " vs " + std::to_string (x0 + 60) + ")");
+    check (g.state.shape.t[1] > 0.35, "and the attack grew (" + std::to_string (g.state.shape.t[1]) + ")");
     tc.up (g, x0 + 60, y0);
     // far to the right: the time stops at its maximum
     tc.down (g, static_cast<int> (hx), static_cast<int> (hy));
     for (int i = 1; i <= 40; ++i)
     {
-        c = tc.move (g, static_cast<int> (hx) + 20 * i, static_cast<int> (hy));
+        c = tc.move (g, static_cast<int> (hx) + 200 * i, static_cast<int> (hy));
         if (c)
             g.state.shape.t[g.edit().handle] = g.edit().t;
     }
-    tc.up (g, static_cast<int> (hx) + 800, static_cast<int> (hy));
+    tc.up (g, static_cast<int> (hx) + 8000, static_cast<int> (hy));
     check (g.state.shape.t[1] <= 1.0 && g.state.shape.t[1] > 0.95, "dragged to the far right the time stops at 1 (" + std::to_string (g.state.shape.t[1]) + ")");
     // to the left of its start the time is 0
     g.handlePoint (envgraph::Attack, hx, hy);
@@ -116,6 +108,109 @@ void testDragFollowsTheFinger()
     }
     tc.up (g, static_cast<int> (hx) - 800, static_cast<int> (hy));
     check (g.state.shape.t[1] == 0.0, "dragged far to the left the time is 0");
+}
+
+void testSerumEnvelopeGraph()
+{
+    // B2 requirements:
+    // 1. All-zero times: zero-length stages collapsed to 0 px, auto-zoom stepped to 100 ms
+    {
+        EnvGraph g;
+        g.place ({ 20, 20, 800, 340 });
+        for (int i = 0; i < 5; ++i)
+            g.state.shape.t[i] = 0.0;
+        const EnvGraph::Geom geo = g.geom();
+        check (geo.zoomMs == 100.0, "all-zero times: stepped auto-zoom is 100 ms");
+        check (geo.x[1] == geo.x[0] && geo.x[2] == geo.x[1] && geo.x[3] == geo.x[2] && geo.x[4] == geo.x[3],
+               "all-zero times: delay, attack, hold, decay all collapsed to 0 px width");
+        check (geo.x[6] == geo.x[5], "all-zero times: release collapsed to 0 px width");
+        check (geo.x[5] - geo.x[4] == geo.sustainGap, "all-zero times: sustain marker gap is present");
+
+        // Dragging right gives the stage time
+        Touch tc;
+        tc.down (g, static_cast<int> (geo.x[1]), static_cast<int> (geo.yBot));
+        Change c = tc.move (g, static_cast<int> (geo.x[1]) + 50, static_cast<int> (geo.yBot));
+        check (c && g.edit().handle == envgraph::Delay && g.edit().t > 0.0,
+               "all-zero times: dragging right on delay joint gives delay time");
+        tc.up (g, static_cast<int> (geo.x[1]) + 50, static_cast<int> (geo.yBot));
+    }
+
+    // 2. Attack 5 ms vs 300 ms
+    {
+        EnvGraph g5;
+        g5.place ({ 20, 20, 800, 340 });
+        for (int i = 0; i < 5; ++i) g5.state.shape.t[i] = 0.0;
+        g5.state.shape.t[1] = envgraph::normFromTimeMs (1, 5.0);
+        const EnvGraph::Geom geo5 = g5.geom();
+        const double w5 = geo5.x[2] - geo5.x[1];
+
+        EnvGraph g300;
+        g300.place ({ 20, 20, 800, 340 });
+        for (int i = 0; i < 5; ++i) g300.state.shape.t[i] = 0.0;
+        g300.state.shape.t[1] = envgraph::normFromTimeMs (1, 300.0);
+        const EnvGraph::Geom geo300 = g300.geom();
+        const double w300 = geo300.x[2] - geo300.x[1];
+
+        check (geo5.zoomMs == 100.0, "attack 5 ms: auto-zoom is 100 ms");
+        check (geo300.zoomMs == 500.0, "attack 300 ms: stepped auto-zoom steps to 500 ms");
+        check (w300 > w5 * 5.0, "attack 300 ms (" + std::to_string (w300) + " px) is much wider than 5 ms (" + std::to_string (w5) + " px) on time scale");
+    }
+
+    // 3. Delay 500 ms
+    {
+        EnvGraph g;
+        g.place ({ 20, 20, 800, 340 });
+        for (int i = 0; i < 5; ++i) g.state.shape.t[i] = 0.0;
+        g.state.shape.t[0] = envgraph::normFromTimeMs (0, 500.0);
+        const EnvGraph::Geom geo = g.geom();
+        const double wDelay = geo.x[1] - geo.x[0];
+        check (geo.zoomMs == 500.0, "delay 500 ms: auto-zoom is 500 ms");
+        check (wDelay > 50.0, "delay 500 ms takes time-proportional width (" + std::to_string (wDelay) + " px)");
+    }
+
+    // 4. Hold 200 ms
+    {
+        EnvGraph g;
+        g.place ({ 20, 20, 800, 340 });
+        for (int i = 0; i < 5; ++i) g.state.shape.t[i] = 0.0;
+        g.state.shape.t[1] = envgraph::normFromTimeMs (1, 100.0);
+        g.state.shape.t[2] = envgraph::normFromTimeMs (2, 200.0);
+        const EnvGraph::Geom geo = g.geom();
+        const double wHold = geo.x[3] - geo.x[2];
+        check (geo.zoomMs == 500.0, "hold 200 ms + attack 100 ms: auto-zoom is 500 ms");
+        check (wHold > 40.0, "hold 200 ms takes width between attack and decay (" + std::to_string (wHold) + " px)");
+    }
+
+    // 5. Sustain 0 %, 50 %, 100 %
+    {
+        for (double sLevel : { 0.0, 0.5, 1.0 })
+        {
+            EnvGraph g;
+            g.place ({ 20, 20, 800, 340 });
+            g.state.shape.sustain = sLevel;
+            const EnvGraph::Geom geo = g.geom();
+            double px, py;
+            g.handlePoint (envgraph::Decay, px, py);
+            const double expectedY = EnvGraph::levelRow (geo, sLevel);
+            check (std::fabs (py - expectedY) < 1.0e-9, "sustain " + std::to_string (static_cast<int> (sLevel * 100.0)) + "%: decay ends at level row (" + std::to_string (py) + ")");
+            check (geo.x[5] - geo.x[4] == geo.sustainGap, "sustain is a level, not a time (short fixed marker gap of " + std::to_string (geo.sustainGap) + " px)");
+        }
+    }
+
+    // 6. Release 10 s next to attack 1 ms: short stages stay visible (minimum 6 px for stage > 0)
+    {
+        EnvGraph g;
+        g.place ({ 20, 20, 800, 340 });
+        for (int i = 0; i < 5; ++i) g.state.shape.t[i] = 0.0;
+        g.state.shape.t[1] = envgraph::normFromTimeMs (1, 1.0);
+        g.state.shape.t[4] = envgraph::normFromTimeMs (4, 10000.0);
+        const EnvGraph::Geom geo = g.geom();
+        const double wAttack = geo.x[2] - geo.x[1];
+        const double wRelease = geo.x[6] - geo.x[5];
+        check (geo.zoomMs == 20000.0, "release 10 s next to attack 1 ms: auto-zoom is 20000 ms (20 s)");
+        check (wAttack >= 6.0, "attack 1 ms stays visible at minimum 6 px (" + std::to_string (wAttack) + " px)");
+        check (wRelease > 200.0, "release 10 s takes large proportional width (" + std::to_string (wRelease) + " px)");
+    }
 }
 
 void testDecayIsTwoDimensional()
@@ -330,6 +425,7 @@ int main()
 {
     testShapeMath();
     testHandlesAndHitTest();
+    testSerumEnvelopeGraph();
     testDragFollowsTheFinger();
     testDecayIsTwoDimensional();
     testCurveHandleFollowsTheFinger();

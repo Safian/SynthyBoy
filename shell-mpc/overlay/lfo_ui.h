@@ -111,6 +111,8 @@ public:
             configure (inst);
         }
         const bool open = stack.depth() > 0 && stack.element() == kElementLfo;
+        if (open && stackDepth_ == 0)
+            full_.setActiveGroup (0);
         stackDepth_ = open ? stack.depth() : 0;
         syncPages (open ? stack : idle_, inst);
         content_ = inst.content();
@@ -270,6 +272,7 @@ public:
             gesture_ = top;
             gestureDown_ = true;
             handle (top->touchDown (x, y, nowMs), stack, inst, nowMs);
+            publishQGroup (inst);
             return true;
         }
         if (! gesture_ || ! gestureDown_)
@@ -381,14 +384,14 @@ private:
         bind (kSyncMode, &full_.syncSwitch.mode, T::Inert, "");
         bind (kSyncTrip, &full_.syncSwitch.trip, T::Inert, "");
         bind (kSyncDot, &full_.syncSwitch.dot, T::Inert, "");
-        bind (kMonoTop, &full_.monoTop, T::Toggle, rnd ? "" : "mono");
+        bind (kMonoTop, &full_.monoTop, T::Inert, "");
         bind (kTargets, &full_.targets, T::Inert, "");
         bind (kPicker, &full_.picker, T::Picker, rnd ? "style" : "shape");
         bind (kSmoothPick, &full_.smoothPick, T::Toggle, rnd ? "" : "smooth");
         bind (kHostPick, &full_.hostPick, T::Toggle, rnd ? "" : "host");
         bind (kEdit, &full_.edit, T::Inert, "");
         bind (kStyle, &full_.style, T::Stepper, rnd ? "style" : "");
-        bind (kSync, &full_.sync, T::Stepper, rnd ? "sync" : "");
+        bind (kSync, &full_.sync, T::Stepper, "sync");
         bind (kRate, &full_.rate.rate, T::Knob, "rate");
         bind (kDivision, &full_.rate.division, T::Stepper, "division");
         bind (kRise, &full_.rise, T::Knob, rnd ? "" : "fade_in");
@@ -399,6 +402,7 @@ private:
         bind (kDirection, &full_.direction, T::Stepper, rnd ? "" : "direction");
         bind (kSwing, &full_.swing, T::Knob, rnd ? "" : "swing");
         bind (kStereo, &full_.stereo, T::Knob, rnd ? "" : "stereo");
+        bind (kMono, &full_.monoQ, T::Toggle, rnd ? "" : "mono");
         bind (kStereoToggle, &full_.stereoToggle, T::Toggle, rnd ? "stereo" : "");
         bind (kKeyTranspose, &full_.keyTranspose, T::Number, "keytrack_transpose");
         bind (kKeyTune, &full_.keyTune, T::Number, "keytrack_tune");
@@ -862,6 +866,7 @@ private:
             const bool envType = syncType_ >= 2 && syncType_ <= 5;
             d.envelope = envType;
             const float phase = std::clamp (v.param (paramOf ("phase")) / 360.0f, 0.0f, 1.0f);
+            d.phase = phase;
             d.loopX = syncType_ >= 3 ? phase : -1.0f;
             const double hz = rateHz (v);
             if (hz > 0.0)

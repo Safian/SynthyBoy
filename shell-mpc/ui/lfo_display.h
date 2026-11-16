@@ -25,6 +25,7 @@ struct Data
     float delayShare = 0.0f, riseShare = 0.0f;
     int grid = 0;                // lines of the grid of the shape editor (2 .. 32); 0 = quarters
     float loopX = -1.0f;         // x 0 .. 1 of the loop point of an envelope type, < 0 = none
+    float phase = 0.0f;          // start phase 0 .. 1 (0 .. 360 degrees)
     bool envelope = false;       // the picture is the whole run of an envelope type (no repeat)
     int numCursors = 0;          // the voices: the position x 0 .. 1 over the cycle and the output y -1 .. 1 of each (newest first)
     float cx[kMaxCursors] = {}, cy[kMaxCursors] = {};
@@ -47,12 +48,23 @@ inline int leadWidth (const Rect& r, const Data& d) noexcept
     const int w = r.w - 16;
     return std::clamp (static_cast<int> (std::lround (static_cast<float> (w) * s / (1.0f + s))), 20, static_cast<int> (static_cast<float> (w) * 0.3f));
 }
-/** The rectangle of the curve inside the block: the inner area without the lead-in strip, with a margin above and below that the extremes fit in. */
+inline bool hasLeadStrip (const Data& d) noexcept
+{
+    return d.kind == Data::Kind::Shape && ! d.editing && (d.delayShare > 0.0f || d.riseShare > 0.0f);
+}
+inline Rect stripRect (const Rect& r, const Data& d) noexcept
+{
+    if (! hasLeadStrip (d))
+        return {};
+    const Rect in = r.inset (8);
+    return { in.x, in.y + 2, in.w, 18 };
+}
+/** The rectangle of the curve inside the block: the shape graph is one clean cycle. With delay or rise > 0 a small separate strip sits above the graph. */
 inline Rect plotRect (const Rect& r, const Data& d) noexcept
 {
     const Rect in = r.inset (8);
-    const int lead = leadWidth (r, d);
-    return { in.x + lead, in.y + 6, std::max (0, in.w - lead), std::max (0, in.h - 12) };
+    const int topPad = hasLeadStrip (d) ? 24 : 6;
+    return { in.x, in.y + topPad, in.w, std::max (0, in.h - topPad - 6) };
 }
 /** The row of the value v (-1 .. 1) in a plot rectangle. */
 inline float rowOf (const Rect& plot, float v) noexcept
@@ -111,18 +123,22 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     float rows[kMaxPoints];
     if (d.kind == Data::Kind::Shape && d.y != nullptr && d.n >= 2)
     {
-        const int lead = leadWidth (r, d);
-        if (lead > 0 && rich())
+        if (hasLeadStrip (d) && rich())
         {
-            // the lead-in: the delay (the LFO does not move: a flat line on the middle), then the rise (the swing grows from nothing to full): the two edges of the envelope of the amplitude
-            const float lx0 = static_cast<float> (r.x + 8), lx1 = x0, share = d.delayShare + d.riseShare, dEnd = lx0 + (lx1 - lx0) * (share > 0.0f ? d.delayShare / share : 0.0f);
-            const uint32_t fc = a (st[1], d.dim ? 40 : 110);
+            const Rect stR = stripRect (r, d);
+            const float sx0 = static_cast<float> (stR.x), sx1 = static_cast<float> (stR.right() - 1);
+            const float sTop = static_cast<float> (stR.y), sBot = static_cast<float> (stR.bottom());
+            const float share = d.delayShare + d.riseShare;
+            const float dFrac = share > 0.0f ? d.delayShare / share : 0.0f;
+            const float dEnd = sx0 + (sx1 - sx0) * dFrac;
+            const uint32_t fc = a (st[1], d.dim ? 40 : 160);
             sb.style (1.0f, false);
-            sb.line (lx0, mid, dEnd, mid, T.hair + 0.3f, fc);
-            const float amp = 0.5f * (bottom - top) * 0.9f;
-            sb.line (dEnd, mid, lx1, mid - amp, T.hair + 0.3f, fc);
-            sb.line (dEnd, mid, lx1, mid + amp, T.hair + 0.3f, fc);
-            sb.line (lx1, top, lx1, bottom, T.hair, a (T.keyline, 255));
+            sb.paintOff();
+            sb.rrect (sx0, sTop, sx1, sBot, T.rChip, a (T.panel0, 200));
+            sb.rrect (sx0, sTop, sx1, sBot, T.rChip, a (T.keyline, 100), T.hair);
+            sb.line (sx0, sBot - 2.0f, dEnd, sBot - 2.0f, T.hair + 0.3f, fc);
+            sb.line (dEnd, sBot - 2.0f, sx1, sTop + 2.0f, T.hair + 0.5f, fc);
+            sb.text (sx0 + 6.0f, sTop + 13.0f, T.fSmall - 1.0f, d.delayShare > 0.0f ? "DELAY / RISE" : "RISE", a (T.textDim, 180));
         }
         const int step = rich() ? 1 : 2;   // the reduced tier: every second point of the curve (the vertical steps of a stepped shape stay: two neighbouring points make them)
         const int n = std::min ((d.n + step - 1) / step, kMaxPoints);
@@ -137,6 +153,14 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             sb.style (1.0f, false);
             sb.stroke (T.curve * 0.5f + 0.15f, 255);
             sb.paintOff();
+        }
+        // Start marker from phase (0 .. 1): moves across the clean shape cycle
+        if (d.phase > 0.0f && d.phase <= 1.0f)
+        {
+            const float px = colOf (plot, d.phase);
+            sb.line (px, top, px, bottom, 1.2f, a (T.q, 220));
+            sb.disc (px, top + 4.0f, 3.2f, a (T.q, 255));
+            sb.disc (px, top + 4.0f, 1.5f, 0xffffffffu);
         }
         if (d.loopX >= 0.0f)
         {
