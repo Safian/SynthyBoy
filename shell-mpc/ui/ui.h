@@ -8,6 +8,7 @@
 #include "list.h"
 #include "panel.h"
 #include "screen.h"
+#include "text_entry.h"
 #include "mixer_screen.h"
 #include "fx_screen.h"
 #include "voice_grid.h"

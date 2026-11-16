@@ -877,9 +877,46 @@ private:
                         return true;
                     });
                 });
+            if (std::strcmp (key, "macro_names") == 0)
+                return readMacroNames (c, d);
             handled = false;
             return true;
         });
+    }
+
+    /** "macro_names": an array of up to eight strings (entry i = macro i + 1). Never marks the section bad: a name is cleaned and cut (sanitizeMacroName), an entry that is not a string is the default
+        name, entries beyond the eighth are ignored, a value that is not an array is ignored, so a hand-edited name can never cost the rest of the content. */
+    bool readMacroNames (StateContent& c, int depth)
+    {
+        if (depth > kMaxDepth)
+            return false;
+        if (p >= end || *p != '[')
+            return skipValue (depth);
+        ++p;
+        skipWs();
+        if (consume (']'))
+            return true;
+        for (int i = 0;; ++i)
+        {
+            skipWs();
+            if (p < end && *p == '"')
+            {
+                std::string raw;
+                bool tooLong = false;
+                if (! parseStringInto (raw, 4 * kMaxMacroNameBytes, tooLong))   // a longer text is cut here, then cleaned and cut again
+                    return false;
+                if (i < kNumMacros)
+                    c.macroNames[i] = sanitizeMacroName (raw, i);
+            }
+            else if (! skipValue (depth + 1))
+            {
+                return false;
+            }
+            skipWs();
+            if (consume (','))
+                continue;
+            return consume (']');
+        }
     }
 
     bool parseContentSection (Parsed& out)
@@ -1336,6 +1373,18 @@ void putContent (std::string& s, const StateContent& c)
         }
         s += ']';
     }
+    if (! c.noMacroNames())
+    {
+        section ("macro_names");
+        s += '[';
+        for (int i = 0; i < kNumMacros; ++i)
+        {
+            if (i > 0)
+                s += ',';
+            putJsonString (s, sanitizeMacroName (c.macroNames[i], i));
+        }
+        s += ']';
+    }
     s += '}';
 }
 } // namespace
@@ -1365,7 +1414,22 @@ std::string saveState (const ParamValues& values, const StateContent& content)
     }
     s += '}';
     if (! content.empty() && validateContent (content))
-        putContent (s, content);
+    {
+        // the names are written in their clean form whatever the caller put there (they are the only part of the content that may hold free text from a keyboard)
+        bool clean = true;
+        for (int i = 0; i < kNumMacros; ++i)
+            clean = clean && sanitizeMacroName (content.macroNames[i], i) == content.macroNames[i];
+        if (clean)
+            putContent (s, content);
+        else
+        {
+            StateContent cleaned = content;
+            for (int i = 0; i < kNumMacros; ++i)
+                cleaned.macroNames[i] = sanitizeMacroName (content.macroNames[i], i);
+            if (! cleaned.empty())
+                putContent (s, cleaned);
+        }
+    }
     s += '}';
     return s;
 }

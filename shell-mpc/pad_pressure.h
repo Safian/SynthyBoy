@@ -20,7 +20,7 @@
 namespace synthyboy_mpc
 {
 constexpr int kPadPressureParams = 2;          // "Pad Pressure", "Pad Pressure Amount"
-constexpr bool kPadPressureDefaultOn = true;
+constexpr bool kPadPressureDefaultOn = false;   // pressure is the preset's business (a route Poly Aftertouch -> Filter 1 Cutoff in the matrix); the plugin-wide layer is for whoever wants it on every sound
 constexpr float kPadPressureDefaultPercent = 35.0f;
 
 inline float padPressureDepth (bool on, float percent) noexcept

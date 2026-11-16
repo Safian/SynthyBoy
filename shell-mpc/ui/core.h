@@ -95,7 +95,11 @@ inline void setText (char* dst, size_t cap, const char* src) noexcept
 {
     size_t n = src ? std::strlen (src) : 0;   // (strlen + memmove: the compiler knows the length of a literal; a copy loop with two exits made GCC warn about reads past it)
     if (n + 1 > cap)
+    {
         n = cap > 0 ? cap - 1 : 0;
+        while (n > 0 && (static_cast<unsigned char> (src[n]) & 0xc0u) == 0x80u)   // a cut never falls inside a UTF-8 sequence
+            --n;
+    }
     if (n > 0)
         std::memmove (dst, src, n);
     dst[n] = '\0';
@@ -112,6 +116,9 @@ struct ModEntry
     char name[7] = {};
     double depth = 0.0;
     bool bidirectional = false, bypassed = false;
+    bool macro = false;   // the source is a macro: the colour of the macros, whatever the (short) name says (a macro can be called anything)
+    /** The colour of the source on the depth arc, the tab and the row: by its kind for a macro, else by its name (theme::sourceColour). */
+    uint32_t colour() const noexcept { return theme::sourceColour (macro ? "MAC" : name); }
 };
 struct ModInput
 {
@@ -120,12 +127,12 @@ struct ModInput
     int numMods = 0;
     int selectedSource = kNoSource;
 
-    bool add (int source, const char* name, double depth, bool bidirectional = false, bool bypassed = false) noexcept
+    bool add (int source, const char* name, double depth, bool bidirectional = false, bool bypassed = false, bool macro = false) noexcept
     {
         if (numMods >= kMaxMods)
             return false;
         ModEntry& e = mods[numMods++];
-        e.source = source; setText (e.name, sizeof e.name, name); e.depth = depth; e.bidirectional = bidirectional; e.bypassed = bypassed;
+        e.source = source; setText (e.name, sizeof e.name, name); e.depth = depth; e.bidirectional = bidirectional; e.bypassed = bypassed; e.macro = macro;
         return true;
     }
     /** The entry of the selected source (null when none is selected or it is not in `mods`). */

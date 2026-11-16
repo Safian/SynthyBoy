@@ -470,6 +470,25 @@ void testFullCoverage()
 }
 } // namespace
 
+// the plugin-wide pad pressure layer: two controls in the VOICES block, shell parameters (no Q group), off by default in the plugin
+void testMasterPadPressure()
+{
+    MRig r;
+    r.refresh();
+    ui::MasterScreen& m = r.ui.screen();
+    check (m.padPressure.enabled() && m.padAmount.enabled() && ! m.padPressure.state.on && m.padAmount.state.value == 35.0, "pad pressure: the two controls show the layer (off, 35 %)");
+    check (m.padPressure.rect().h >= 56 && m.padAmount.rect().h >= 56 && m.padPressure.rect().w >= 56 && m.padAmount.rect().w >= 56 && m.padPressure.sizeOk() && m.padAmount.sizeOk(), "pad pressure: touch targets of at least 56 pixels");
+    check (! m.padPressure.rect().overlaps (m.voiceMeter.rect()) && ! m.padAmount.rect().overlaps (m.voiceMeter.rect()) && ! m.padPressure.rect().overlaps (m.padAmount.rect()) && m.blockRect (2).contains (m.padAmount.rect()) && m.blockRect (2).contains (m.padPressure.rect()), "pad pressure: inside the VOICES block, over nothing");
+    r.tap (m.padPressure);
+    check (r.inst.padOn && r.inst.padWrites == 1, "a tap on PAD PRESS switches the layer on");
+    r.refresh();
+    check (m.padPressure.state.on, "... and the control shows it");
+    const ui::Rect a = m.padAmount.rect();
+    r.drag (a.x + a.w / 2, a.y + a.h / 2, a.x + a.w / 2, a.y + a.h / 2 - 60, true);
+    check (r.inst.padOn && r.inst.padPercent > 35.0f && r.inst.padPercent <= 100.0f, "dragging PAD % sets the amount (" + std::to_string (r.inst.padPercent) + ")");
+    check (! r.ui.item (MasterUi::kPadPressure) || r.ui.item (MasterUi::kPadPressure)->param < 0, "the two are not engine parameters");
+}
+
 int main()
 {
     std::printf ("=== SynthyBoy MPC Overlay: Master & Voice Host Tests ===\n");
@@ -478,6 +497,7 @@ int main()
     testMasterValuesAndWrites();
     testMasterGroupsAndMeters();
     testMasterDraw();
+    testMasterPadPressure();
     testVoiceLayout();
     testVoiceGridDrawing();
     testVoiceStepsLitAndQ();
