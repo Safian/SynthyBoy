@@ -203,7 +203,7 @@ protected:
         const bool noise = inst_ == OscInstance::Noise;
         const bool isTab = H <= 650;
         const int topH = isTab ? 78 : 88;   // 78: the dial of the Basic knobs is as big as the dial of the warp slots (70 px, one size on the page)
-        const int bottomH = sub ? 245 : (isTab ? 216 : kBottomH);
+        const int bottomH = isTab ? 216 : kBottomH;
         const int lane = isTab ? 22 : (m + kQLane + 2);
         const Rect top { rect_.x + m, rect_.y + lane, W - 2 * m, topH };
         Rect r[4];

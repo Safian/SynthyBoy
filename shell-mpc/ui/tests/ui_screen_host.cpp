@@ -407,7 +407,10 @@ int main()
         noise.place (area);
         noise.setInstance (OscInstance::Noise, OscKind::Wavetable);
         check (isLed (noise.panel.part (PanelSlot::NoiseEnv1), "ENV 1") && isLed (&noise.tune.track, "KEY TRACK"), "noise: ENV 1 and KEY TRACK are LED toggles");
-        check (noise.panel.part (PanelSlot::NoiseType) != nullptr && noise.panel.part (PanelSlot::NoiseStereo) != nullptr && std::abs (cy (*noise.panel.part (PanelSlot::NoiseType)) - cy (*noise.panel.part (PanelSlot::NoiseEnv1))) <= 2 && std::abs (cy (*noise.panel.part (PanelSlot::NoiseStereo)) - cy (*noise.panel.part (PanelSlot::NoiseEnv1))) <= 2, "noise: KIND, STEREO and ENV 1 are on one line");
+        check (noise.panel.part (PanelSlot::NoiseType) != nullptr && noise.panel.part (PanelSlot::NoiseStereo) != nullptr &&
+               std::abs (cy (*noise.panel.part (PanelSlot::NoiseType)) - cy (*noise.panel.part (PanelSlot::NoiseStereo))) <= 2 &&
+               cy (*noise.panel.part (PanelSlot::NoiseEnv1)) > cy (*noise.panel.part (PanelSlot::NoiseType)),
+               "noise: KIND and STEREO share baseline in row 0, ENV 1 is in row 1");
         OscillatorFullScreen wt;
         wt.place (area);
         wt.setInstance (OscInstance::A, OscKind::Wavetable);
