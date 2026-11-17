@@ -25,7 +25,7 @@ if(Python3_Interpreter_FOUND)
     execute_process(COMMAND "${Python3_EXECUTABLE}" -c "import numpy" RESULT_VARIABLE synthyboy_numpy_missing OUTPUT_QUIET ERROR_QUIET)
     if(NOT synthyboy_numpy_missing)
         add_test(NAME synthyboy_factory_content_reproducible
-                 COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/scripts/gen-content-pack.py"
+                 COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/gen-content-pack.py"
                          --check --out-root "${PROJECT_SOURCE_DIR}/content")
     endif()
 endif()
