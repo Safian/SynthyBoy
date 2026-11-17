@@ -1,0 +1,138 @@
+# SynthyBoy Consolidated Device Check List
+
+Consolidated checklist of physical device verifications for the main session and the project owner, gathered from all unverified, unmeasured, and open notes across project documentation (`docs/MPC.md`, `docs/user-guide/SynthyBoy-MPC-User-Guide.md`, `docs/user-guide/mpce-pads.md`, `docs/user-guide/INSTALL.md`, `docs/release/OPEN-QUESTIONS.md`, `docs/release/SOUND-SET-BATCH-1.md`, `docs/ui-design/*.md`, and `.hw-local/mpc-ui-plans/`).
+
+## Structure & Execution Notes
+- **Grouping**: Grouped first by target hardware (**MPC XL gen 2**, **MPC Key 61 gen 1**, or **both**), then by required executor:
+  - `script`: Measurable programmatically through status files, captures, debugfs, or injected input.
+    > **Knob Injection Note**: Only the **MPC Key 61** has hardware knob injection capability (`hwctl` / `stepq.py`). The **MPC XL** has no knob injector and requires a person at the physical console for any knob rotation.
+  - `ears`: Acoustic evaluation requiring listening (sound design, distortion, clicks, crackle, filter response).
+  - `hands and eyes`: Visual and tactile inspection requiring a person directly at the physical console.
+- **Priority**: Ordered within each section by release impact: `[blocking]` &rarr; `[should]` &rarr; `[nice]`.
+- **Pre-filled Results**: Only items conclusively verified on hardware as of 2026-11-17 (recorded in state files and worker reports) are marked `[DONE 2026-11-17]`; all others remain `[OPEN]`.
+
+---
+
+## 1. MPC XL gen 2
+
+*(Note: MPC XL has no knob injector; all knob interactions require manual operation by a person at the device.)*
+
+### 1.1 `script` (measurable through status files, captures or injected input; no knob injector)
+- `[DONE 2026-11-17]` `[blocking]` What to do: Verify pointer plane DRM stacking order on MPC XL helper startup | Look at: DRM plane zpos assignments (`discovery.h`, `stacking.h`) and debugfs plane list | Pass: Plugin plane allocates at zpos strictly below host mouse cursor plane (plane 77) without occlusion | Source: `reviews/work-pointer-panel.md` Section 1, `docs/MPC.md:694`, `STATE-2026-11-17-pause.md` step 3
+- `[DONE 2026-11-17]` `[blocking]` What to do: Run full quality profile benchmark suite on MPC XL A76 core 6 with `synthyboy_tier_bench` | Look at: Median and 99th percentile block rendering times in `/tmp/sbtb/xl-r4-all.csv` | Pass: Profile `high,voices=16,control=economy` stays within 50% CPU budget (measured p99 35.4% on Lush Analog Pad) | Source: `xl-tier-bench.md` Round 4, `xl-tier-analysis.md` Update 3 point 1
+- `[OPEN]` `[should]` What to do: Run overlay presentation rate test at stride 1 with `/tmp/synthyboy-overlay-fps` set to 60 during held 3-note chords | Look at: Status file frame interval counter and `diag/pace-trace-*.txt` logs | Pass: MPC XL sustains >= 45 frames per second presentation rate without random 1-vblank dropouts | Source: `docs/MPC.md:174,305`, `docs/release/OPEN-QUESTIONS.md` A10
+- `[OPEN]` `[should]` What to do: Connect USB mouse and record raw pointer plane position samples and click coordinates | Look at: `LinuxPointerSource` properties and `mouse_router.h` `measuredHotSpot` | Pass: Click registers exactly at the visual arrow tip coordinate (determines offset from `defaultHotSpot`) | Source: `reviews/work-pointer-panel.md` follow-up 2, `docs/MPC.md:999`, `docs/release/OPEN-QUESTIONS.md` A5
+- `[OPEN]` `[nice]` What to do: Capture raw MIDI Note-Off events (`0x80`) from MPC XL pads during rapid finger releases | Look at: Third byte (velocity) of Note-Off event stream in plugin MIDI log | Pass: Note-Off velocity reflects release speed (dynamic values) rather than fixed 0 or 64 | Source: `docs/user-guide/mpce-pads.md:85,10.5`, `docs/user-guide/SynthyBoy-MPC-User-Guide.md` chapter 11
+- `[OPEN]` `[nice]` What to do: Capture incoming MIDI stream while playing chords in Pad Perform mode with "Use Aftertouch" active | Look at: MIDI message type bytes in `synthyboy_mpc.cpp` input logger | Pass: Host sends polyphonic aftertouch (`0xA0`) for each voice in chord without collapsing to channel aftertouch (`0xD0`) | Source: `docs/user-guide/mpce-pads.md:10.2`
+- `[OPEN]` `[nice]` What to do: Record continuous pressure stream across pad sub-quadrants in 8x8 Notes mode | Look at: Per-note polyphonic aftertouch streams in MIDI monitor | Pass: Each sub-quadrant independently transmits smooth poly aftertouch without edge crosstalk | Source: `docs/user-guide/mpce-pads.md:10.3`
+- `[OPEN]` `[nice]` What to do: Stream pressure while holding pads with Note Repeat or Arpeggiator active | Look at: Interleaved MIDI note-ons and poly aftertouch events | Pass: Host transmits continuous aftertouch stream (`0xA0`) alongside repeats or dynamically scales note-on velocities | Source: `docs/user-guide/mpce-pads.md:10.4`
+- `[OPEN]` `[nice]` What to do: Record poly aftertouch pressure response curves under different hardware Pad Curve settings (A, B, C, D) | Look at: Transfer function curvature of recorded pressure values in script analysis | Pass: Determines whether hardware pad curves reshape continuous poly aftertouch stream or initial strike velocity only | Source: `docs/user-guide/mpce-pads.md:10.6`
+- `[OPEN]` `[nice]` What to do: Query host VST2 audioMaster and output event capabilities for pad LED back-channel control | Look at: Host VST2 vendor-specific opcodes and response codes | Pass: Establishes definitively whether host VST2 ABI allows plugin-driven pad RGB lighting | Source: `docs/MPC.md:636`, `xl-teszt-lista.md` item 7
+
+### 1.2 `ears` (needs listening)
+- `[OPEN]` `[blocking]` What to do: Audition 24 Batch 1 factory presets on MPC XL across full 16 polyphonic voices | Look at: Acoustic response, stereo spread, filter warmth, and absence of harsh clipping or clicks | Pass: All 24 presets render with intended musical character and balanced output dynamics | Source: `STATE-2026-11-17-pause.md` step 4, `docs/release/SOUND-SET-BATCH-1.md` Section 1 & 6
+- `[OPEN]` `[blocking]` What to do: Play pads with varying finger pressure on presets with Poly Aftertouch routed to Filter Cutoff (e.g. MPE Pressure Lead, Bowed Pressure Strings) | Look at: Acoustic smoothness and filter opening depth under physical pad pressure with Full Level OFF | Pass: Filter opens smoothly with increasing pressure without zipper noise or steppiness; Full Level ON disables pressure response | Source: `docs/MPC.md:653`, `docs/release/OPEN-QUESTIONS.md` A7, `docs/user-guide/mpce-pads.md` Section 10, `xl-teszt-lista.md` item 5
+
+### 1.3 `hands and eyes` (needs a person at the device)
+- `[DONE 2026-11-17]` `[blocking]` What to do: Verify full-screen overlay rendering across all 24 plugin-drawn pages on MPC XL | Look at: Display output on 10.1-inch screen, yellow focus frames, and Q-Link chips 5..16 | Pass: All 24 drawn pages render correctly without clipped controls and display chips 5..16 on wide layout | Source: `worker-reports/agy-g1-uilib-tests-REPORT.md`, `reviews/work-layout-lint.md`, `reviews/work-q16-and-01ac74a3.md`, `docs/MPC.md:966`
+- `[OPEN]` `[blocking]` What to do: Turn each of the 16 hardware Q-Link knobs across active pages (Play, Macros, Osc, Filter, FX) on MPC XL | Look at: Corresponding on-screen controls and the dedicated OLED display strip above each knob | Pass: Each physical knob turns its mapped parameter; OLED displays show short parameter/macro names without truncation glitches | Source: `docs/MPC.md:966,968`, `docs/release/OPEN-QUESTIONS.md` A3, `docs/user-guide/SynthyBoy-MPC-User-Guide.md` chapter 11
+- `[OPEN]` `[blocking]` What to do: Turn hardware knobs mapped to stepped targets (lists, toggles, steppers) by 1/4 turn (90 degrees) on MPC XL | Look at: Number of steps advanced on screen and `turned` metric in status file | Pass: A quarter turn advances stepped targets by expected calibrated steps (~1 step per 6 detents) without runaway jumping | Source: `docs/MPC.md:964`, `docs/release/OPEN-QUESTIONS.md` A2, `docs/user-guide/SynthyBoy-MPC-User-Guide.md` chapter 11
+- `[OPEN]` `[should]` What to do: Leave MPC XL idle until host screen enters standby dimming; then tap touchscreen to wake | Look at: Screen backlight, overlay canvas dimming factor, and wake-up touch reaction | Pass: Overlay dims to half brightness without disappearing; first touch wakes device cleanly and is swallowed without moving parameters | Source: `STATE-2026-11-17-pause.md` step 3, `reviews/work-standby-audit.md` defect 1 & follow-up 2, `docs/user-guide/SynthyBoy-MPC-User-Guide.md` chapter 11
+- `[OPEN]` `[should]` What to do: Connect USB mouse to MPC XL and click on small targets (QGroup chips, tab buttons, fine handles) | Look at: Visual cursor position relative to activated target hitboxes | Pass: Clicks trigger accurately at the tip of the host cursor without offset displacement | Source: `reviews/work-pointer-panel.md` follow-up 2, `docs/MPC.md:999`, `docs/release/OPEN-QUESTIONS.md` A5
+- `[OPEN]` `[should]` What to do: Tap < and > navigation buttons on MPC XL host tab bar to cycle across all 10 function tabs (34/36 subtabs) | Look at: Host tab bar scroll position and corresponding overlay page view activation | Pass: All tabs and subtabs can be navigated cleanly; overlay synchronizes view immediately without lag or visual desync | Source: `docs/user-guide/SynthyBoy-MPC-User-Guide.md` chapter 11
+- `[OPEN]` `[nice]` What to do: Press hardware Q-Link bank buttons on MPC XL console while plugin overlay is active | Look at: 16-knob assignment mapping and overlay status indicators | Pass: 16 physical knobs remain fully mapped; pressing bank buttons does not corrupt active Q-Link routing | Source: `docs/MPC.md:318`, `docs/release/OPEN-QUESTIONS.md` A10
+- `[OPEN]` `[nice]` What to do: Set up MPCe drum pad with Q-Link Learn in Project mode on a Drum Track to target SynthyBoy Cutoff via X/Y pad sliding | Look at: Parameter motion on SynthyBoy screen during pad slide while sequence plays | Pass: Pad X/Y position modulates target parameter or conclusively proves host blocks cross-track automation | Source: `docs/user-guide/mpce-pads.md:10.1`, `docs/MPC.md:636`, `xl-teszt-lista.md` item 7
+
+---
+
+## 2. MPC Key 61 gen 1
+
+*(Note: MPC Key 61 supports automated knob injection via `hwctl` / `stepq.py`.)*
+
+### 2.1 `script` (measurable through status files, captures or injected input; knob injector available)
+- `[DONE 2026-11-17]` `[blocking]` What to do: Run profile bench suite at profile `low` with `synthyboy_tier_bench` on MPC Key 61 core 3 | Look at: Median and 99th percentile block rendering times in `/tmp/sbtb/k61-r3-after.csv` | Pass: Six dearest presets execute at median 35-42% and p99 55-60%, with zero audio blocks exceeding 100% budget | Source: `xl-tier-bench.md` Round 3 & 4, `xl-tier-analysis.md` Update 2 & 3
+- `[OPEN]` `[blocking]` What to do: Inject automated knob touches and turns using `popup.sh` with host option "Show Q-Link Status When Touched" enabled | Look at: Status file `key_blind_ticks`, `dimmed`, `qlink_status_option`, and frame logs | Pass: `key_blind_ticks` stays 0; overlay never flickers or blinks during pop-up slide-in, hold, or slide-out | Source: `docs/MPC.md:1017`, `docs/release/OPEN-QUESTIONS.md` A1, `reviews/work-pointer-panel.md` follow-up 4, `STATE-2026-11-17-pause.md` step 3
+- `[OPEN]` `[blocking]` What to do: Inject stepped knob increments via `hwctl` using `stepq.py` at 6/128 stepping across list, toggle, and stepper targets | Look at: Status file `turned` metric and real parameter write logs | Pass: One knob detent advances target by exactly 1 step without multiple skips; first write after group change does not jump | Source: `docs/MPC.md:964`, `docs/release/OPEN-QUESTIONS.md` A2, `reviews/work-q16-and-01ac74a3.md`, `STATE-2026-11-17-pause.md` step 3
+- `[OPEN]` `[should]` What to do: Benchmark NEON 4-lane formant filter kernel against scalar implementation on Formant Vowel Bass and Vowel Choir Pad (`tb --core 3`) | Look at: Section execution times and CPU cycles in `tbs` output | Pass: 4-lane NEON formant filter shows measurable CPU reduction compared to scalar loop; verify renders match bit-for-bit (0 of 30 differ) | Source: `STATE-2026-11-17-pause.md` step 3, `xl-tier-bench.md` Round 4 step 3, `xl-tier-analysis.md` Update 3 point 3
+- `[OPEN]` `[should]` What to do: Measure CPU load impact of enabling FORCE ON on Splitter LMH / Splitter LH under profile `low` with 8 sounding voices | Look at: Real-time audio callback execution time and callback statistics | Pass: Callback execution time remains below 2.902 ms block duration without callback gaps > 1.5x | Source: `docs/user-guide/SynthyBoy-MPC-User-Guide.md` chapter 11 ("Sound")
+- `[OPEN]` `[should]` What to do: Move USB mouse across overlay on Key 61 and sample pointer coordinates via debugfs | Look at: CRTC position of cursor plane 35 relative to overlay plane 38 | Pass: Plane 35 `crtc-pos` tracks mouse motion smoothly and cursor renders visibly over overlay plane 38 | Source: `docs/MPC.md:999`, `research-draw-into-host.md:138`
+
+### 2.2 `ears` (needs listening)
+- `[OPEN]` `[blocking]` What to do: Hold 8-note chords on dearest factory presets (Lush Analog Pad, Diffusor Cloud Pad, Scream Filter Bass, Diode Saturated Bass) under profile `low` | Look at: Audio outputs for buffer underruns, clicks, crackle, or voice dropouts | Pass: Sustained chords play back cleanly without audible buffer underruns or digital crackling | Source: `docs/user-guide/SynthyBoy-MPC-User-Guide.md` chapter 11 ("Sound"), `docs/MPC.md:84`, `OPEN-QUESTIONS.md` A9
+
+### 2.3 `hands and eyes` (needs a person at the device)
+- `[OPEN]` `[should]` What to do: Touch and turn hardware Q-Link knobs across 4 banks on Key 61 while navigating tabs in a new project | Look at: Yellow group frames and on-screen parameter response | Pass: Knobs Q1..Q4 map accurately to active Q group in all banks; bank button switches banks smoothly | Source: `docs/MPC.md:1019`, `docs/release/OPEN-QUESTIONS.md` A1
+
+---
+
+## 3. both (Runs on MPC XL gen 2 and MPC Key 61 gen 1)
+
+### 3.1 `script` (measurable through status files, captures or injected input)
+- `[OPEN]` `[blocking]` What to do: Instantiate two separate SynthyBoy instances on two distinct plugin tracks in a single project | Look at: DRM plane allocation, memory footprint (`VmRSS`), CPU utilization, and overlay switching | Pass: Both instances synthesize audio independently; overlay switches active view cleanly without plane collision or crash | Source: `docs/MPC.md:148,744`, `docs/release/OPEN-QUESTIONS.md` A11
+- `[OPEN]` `[should]` What to do: Toggle "Show Q-Link Status When Touched" in host Preferences and observe `/data/Settings/MPC/MPC.settings` over time | Look at: File modification timestamp and XML attribute `ShowQLinksStatusOverlay` | Pass: Determines whether host writes settings immediately, periodically, or only upon application exit | Source: `docs/user-guide/INSTALL.md:249`, `reviews/work-pointer-panel.md` follow-up 8, `docs/MPC.md:1017`
+- `[OPEN]` `[should]` What to do: Run soak test script (`.hw-local/mpc-tools/soak/soak.py`) for multiple hours with continuous note triggering and tab switching | Look at: Process `VmRSS` memory, `/data` free space, kernel `dmesg`, and audio callback latency | Pass: Zero memory leaks (`VmRSS` stable), zero filesystem disk exhaustion, no crash dumps or kernel errors | Source: `docs/MPC.md:148`, `reviews/work-standby-audit.md` point 10
+- `[OPEN]` `[should]` What to do: Route audio source to `Direct out` and sweep `master.volume` across range (-45 dB to +6 dB) | Look at: Output level meter in audio test harness | Pass: Confirms whether Direct out bypasses or obeys `master.volume`, validating preset levelling rules | Source: `docs/release/SOUND-SET-BATCH-1.md` Section 7.2, `STATE-2026-11-17-pause.md` step 5
+- `[OPEN]` `[should]` What to do: Play chromatic scale C1..C6 on Comb filter with 100% keytracking | Look at: Fundamental frequency of ringing comb harmonics on audio spectrum analyser | Pass: Comb filter harmonics tune to concert pitch within 2 cents across all octaves (verifies fix of 19 cents flatness) | Source: `docs/release/SOUND-SET-BATCH-1.md` Section 7.6, `STATE-2026-11-17-pause.md` step 5
+- `[OPEN]` `[nice]` What to do: Compare rendered envelope graphic visual curvature with audio amplitude decay contour | Look at: Logarithmic/exponential decay shape of audio output vs drawn pixel curve | Pass: Visual envelope curve corresponds accurately to audible envelope transfer characteristics | Source: `docs/MPC.md:369`, `docs/release/OPEN-QUESTIONS.md` A12, `xl-teszt-lista.md` item 7
+- `[OPEN]` `[nice]` What to do: Attempt to trigger host page or tab changes via VST2 `audioMaster` callback opcodes | Look at: Host UI page state and return codes | Pass: Confirms host ignores external tab switch requests (validates plugin interface constraints) | Source: `docs/MPC.md:974`, `docs/release/OPEN-QUESTIONS.md` A14
+- `[OPEN]` `[nice]` What to do: Launch plugin on host with spoofed or unrecognised device name string | Look at: Selected device quality profile in status file / logs | Pass: System correctly defaults to `low` profile (`kProfileUnknownDevice` / `kProfileNoNameArm64` / `kProfileNoNameArm32`) | Source: `docs/MPC.md:421-422`, `docs/release/OPEN-QUESTIONS.md` A4
+
+### 3.2 `ears` (needs listening)
+- `[OPEN]` `[blocking]` What to do: Play 8-note velocity-127 chords across factory presets with +18 dB output gain, comparing limiter ON vs OFF (`SYNTHYBOY_MPC_OUTPUT_LIMITER`) | Look at: Listen for digital clipping distortion vs limiter compression artifacts on MPC main outputs | Pass: Audio output avoids harsh digital overs above 0 dBFS and levels match native MPC instruments | Source: `docs/release/SOUND-SET-BATCH-1.md` Section 2, `STATE-2026-11-17-pause.md` line 31, `OPEN-QUESTIONS.md` A7
+- `[OPEN]` `[blocking]` What to do: Sweep Ladder filter (model 2) cutoff from 10 kHz through 20 kHz with high resonance | Look at: Audio output continuity on spectrum analyser | Pass: Confirms whether audio output collapses above 18-19 kHz as reported, verifying engine defect | Source: `docs/release/SOUND-SET-BATCH-1.md` Section 7.1, `STATE-2026-11-17-pause.md` step 5
+- `[OPEN]` `[should]` What to do: Sweep oscillator options (fixed pitch, transpose snap with note mask, key fold, key warp, phase memory, phase legato) across melodic lines | Look at: Audible timbre changes as parameters are modulated | Pass: Each parameter audibly alters the sound according to its design specification | Source: `docs/MPC.md:1069`, `docs/user-guide/SynthyBoy-MPC-User-Guide.md` chapter 11 ("Oscillators")
+- `[OPEN]` `[should]` What to do: Test Smear at 100% and High Pass at >60% on Spectral oscillator morph modes | Look at: Audible signal presence during parameter sweep | Pass: Verifies whether output goes silent as documented in engine audit | Source: `docs/release/SOUND-SET-BATCH-1.md` Section 7.3, `STATE-2026-11-17-pause.md` step 5
+
+### 3.3 `hands and eyes` (needs a person at the device)
+- `[DONE 2026-11-17]` `[blocking]` What to do: Open host Sounds mode (**Sounds** > **Instruments** > tap **SynthyBoy** tile) with `.xpl` files in package `Presets/` folder on both devices | Look at: Host preset browser list and preset load behavior | Pass: Preset list displays all 112/136 presets; presets load correctly with sound matching VST2 program list; path in file does not need to match device path | Source: `.hw-local/mpc-perf/xpl-presets/README.md`, `STATE-2026-11-17-pause.md`, `docs/RELEASE.md:175`, `docs/release/OPEN-QUESTIONS.md` A15
+- `[OPEN]` `[blocking]` What to do: Modify parameters and custom macro names; save project under a new name; restart MPC app; reload project | Look at: Parameter values, custom macro names, and active preset sound upon reload | Pass: All modified parameters, macro names, and preset configurations restore identically to saved state | Source: `docs/MPC.md:326`, `docs/release/OPEN-QUESTIONS.md` A9, `xl-teszt-lista.md` item 6
+- `[OPEN]` `[blocking]` What to do: Arm track automation recording; record several bars of knob adjustments; inspect host automation lane editor | Look at: Recorded automation parameter list in MPC grid view | Pass: Only musical parameters are recorded; internal display parameters (`LFO n Cursor`, `Spectrum n`, `Overlay Instance`) never appear in automation data | Source: `xl-teszt-lista.md` item 7, `docs/MPC.md:115`
+- `[OPEN]` `[blocking]` What to do: Open host modal dialog (e.g. Save Project or Sample Record) while a plugin overlay page is active | Look at: Screen display and touchscreen interactivity | Pass: Overlay does not cover or suppress host modal dialog; touch inputs reach host dialog cleanly without being swallowed | Source: `reviews/work-standby-audit.md` defect 1
+- `[OPEN]` `[should]` What to do: Scroll 36 target pickers, drag Mixer faders, and adjust LFO editor envelope node handles on touchscreen | Look at: Touch tracking fidelity and responsiveness on physical 7-inch and 10.1-inch screens | Pass: Touch tracking is smooth; 500 ms long-press does not conflict with rotary dragging; hitboxes reliably grab fine handles | Source: `worker-reports/agy-g5b-gallery-extra-REPORT.md`, `worker-reports/agy-g6-mixer-REPORT.md`, `worker-reports/ui9-env-lfo.md`
+- `[OPEN]` `[should]` What to do: Load presets with custom macro names (e.g. Filter Sweep, Big Wobble); inspect macro cards, modulation chips, and knob displays | Look at: Text labels on screen and hardware displays | Pass: Custom names appear correctly formatted and truncated to 16 characters maximum without memory corruption or mojibake | Source: `docs/ui-design/macro-names.md` Section 2-3, `docs/release/OPEN-QUESTIONS.md` A3
+- `[OPEN]` `[nice]` What to do: Play loud staccato chords while watching Meter widgets on Mixer and Macros pages | Look at: Visual peak indicator line and decay motion | Pass: Peak hold marker renders cleanly and decays smoothly at ~30 dB/s without visual artifacts | Source: `docs/MPC.md:138`, `worker-reports/agy-g6-mixer-REPORT.md`
+- `[OPEN]` `[nice]` What to do: Check instrument picker menu path from Main screen (Track > Plug-in > tap instrument selector) | Look at: Category / tab name where SynthyBoy tile appears in host browser | Pass: Confirms exact menu location name ("External Plugins" vs "Instruments") for user documentation | Source: `docs/user-guide/SynthyBoy-MPC-User-Guide.md` chapter 11 ("Q-Links, mouse, devices"), `xl-teszt-lista.md` item 1, `docs/user-guide/INSTALL.md:116`
+- `[OPEN]` `[nice]` What to do: Install and launch package on untested MPC standalone models (MPC One, One+, Live I/II, X, X SE, Key 37, Live III) | Look at: Host launch logs, UI scaling, thermal status, and audio playback | Pass: Plugin boots and operates stably without crashes or visual displacement across form factors | Source: `docs/user-guide/INSTALL.md` Section 12.1, `worker-reports/agy-g3-changelog-REPORT.md`
+
+---
+
+## 4. Inconsistent Device Facts in Documentation
+
+The following device-related facts are stated inconsistently across documentation files in the repository and local plans:
+
+### 4.1 Host Pointer Plane vs Overlay Plane Stacking Order on MPC Key 61
+- **`docs/MPC.md:694`**:
+  > *"The host keeps its mouse pointer plane (plane 35 on the Key 61, plane 77 on the XL) at zpos 1 or 2... our plane must sit BELOW the pointer plane (otherwise the pointer vanishes whenever it moves over the plugin's area); on hardware where zpos is mutable we set our plane below the pointer."*
+- **`research-draw-into-host.md:138`**:
+  > *"Key 61: the conclusion 'an opaque overlay hides the host pointer' above was INFERRED from the plane order and is WRONG as observed: with the overlay visible on the Play page (plane 38, full screen) the owner saw the mouse pointer ON TOP of our picture, and plane 35's crtc-pos followed the mouse (398,577 -> 94,115 while he moved it; sampled every 0.5 s). The cursor plane is shown above plane 38 on this hardware although debugfs lists normalized-zpos 1 < 2. MEASURED (owner's eyes + position samples). No action needed on the Key 61."*
+
+### 4.2 Q-Link Status Pop-up Setting State and Immediate Flush on Key 61
+- **`docs/MPC.md:1017`**:
+  > *"the owner says he switched the option off on his Key 61, so the pop-up cannot appear there (the settings file on the device, read at 19:52 on 2026-11-16, still said `val=\"1\"`, file dated 04:48: the host had not written the change, or it was made later than the file)"*
+- **`docs/user-guide/INSTALL.md:249`**:
+  > *"Whether toggling 'Show Q-Link Status When Touched' in Preferences immediately flushes `/data/Settings/MPC/MPC.settings` to storage or waits until application exit/shutdown must be confirmed on the device."*
+
+### 4.3 MPCe Pad X/Y Routing via Drum Track Q-Link Mode
+- **`docs/user-guide/mpce-pads.md:10.1`**:
+  > *"Can an MPCe pad on a Drum Track be assigned via Q-Link Learn in 'Project' mode to automate a SynthyBoy VST parameter (e.g. Filter Cutoff or Wavetable Frame) using its X or Y axis while a sequence is playing?"*
+- **`TERV-2026-11-14.md:58`** *(and `docs/MPC.md:636`)*:
+  > *"- A helyi modell X/Y „receptje" hibás: ne kerüljön a doksiba; az X/Y → Macro 1–2 csak gépi mérés után írható le."*
+  > *("Not measured: the MPCe Q-Link mode from a drum track to plugin parameters, 16 Levels, Note Repeat, pad lighting from a plugin.")*
+
+### 4.4 Decoded Filmstrip Disk Footprint in `/var/tmp/filmstrips`
+- **`docs/MPC.md:113`**:
+  > *"The host unpacks every film strip into `/var/tmp/filmstrips` (decoded size counts): with the skin loaded 174 files, 422 MB; without the LFO pictures 173 files, 417 MB."*
+- **`gepi-kapuk-eredmeny.md:35`** *(and `docs/MPC.md:216`)*:
+  > *"- `/var/tmp/filmstrips` a végleges skinnel a Key 61-en: 189 fájl / kb. 490 MB (ebből az app saját, plugin nélküli része kb. 200 MB); a firmware csak bootkor törli."*
+
+### 4.5 Plugin Menu Location in MPC Standalone Host Browser
+- **`docs/user-guide/SynthyBoy-MPC-User-Guide.md:11`**:
+  > *"Chapter 2: the name of the list or tab under which SynthyBoy appears in the plugin window (the developer notes say 'External Plugins'). The manuals do not say."*
+- **`xl-teszt-lista.md:17`** *(and `INSTALL.md:116`)*:
+  > *"1. Betöltés: új plugin-sáv → Sounds → Instruments 2. oldal → SynthyBoy."*
+
+### 4.6 Output Stage Headroom vs Reference Level (+18 dB Make-Up vs Clipping)
+- **`docs/release/SOUND-SET-BATCH-1.md:31-33`**:
+  > *"The brief asks for presets that sit at the set's reference level (chord RMS -20 dBFS) and do not clip at the +18 dB stage with an eight note chord at velocity 127. They are incompatible: -20 dBFS RMS plus 18 dB is -2 dBFS RMS, so any signal with a crest factor above 2 dB is over full scale. Measured: the 8-note velocity-127 peak of the 24 is -1.3 .. -12.0 dBFS raw, which is 6.0 .. 16.7 dBFS after the +18 dB"*
+- **`STATE-2026-11-17-pause.md:31`**:
+  > *"Output level policy: with +18 dB make-up and no limiter a full 8-note chord peaks +6..+17 dBFS on every preset (old and new). My recommendation: output limiter ON by default (the switch exists)."*
