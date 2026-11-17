@@ -26,8 +26,8 @@
     },
     {
       "path": "Bass/punchy_pluck_bass.sbpreset",
-      "sha256": "7bed47a9c71d9f1d5c5e1641c1310966555d85c1b8da1263db585a6f8a2643a6",
-      "size": 50354
+      "sha256": "89bdaf5015e2d9f1fa226fae70e99958c14f5853552598c9e00f0f3e1b450f3a",
+      "size": 50355
     },
     {
       "path": "Bass/dirty_distortion_bass.sbpreset",
@@ -56,8 +56,8 @@
     },
     {
       "path": "Bass/pulse_width_bass.sbpreset",
-      "sha256": "d2a916d4d4608321f86de83fede2df4eceff5311de93bf1a307980dde6c775aa",
-      "size": 50341
+      "sha256": "c59ceba757c5e9350320d323de16d984f1f91956894f88b3ddf1f832b72514fb",
+      "size": 50343
     },
     {
       "path": "Bass/comb_metal_bass.sbpreset",
@@ -81,8 +81,8 @@
     },
     {
       "path": "Bass/warm_analog_bass.sbpreset",
-      "sha256": "095797453e942dd92be90f03424824a28555d9669d1ec45bc5044e908609ffc1",
-      "size": 50341
+      "sha256": "1b837e6ae27fd0ee7c7a46607958c9be6b13929fcb88eece06bb7d77fc3cb2bf",
+      "size": 50343
     },
     {
       "path": "Bass/gritty_square_bass.sbpreset",
@@ -101,8 +101,8 @@
     },
     {
       "path": "Bass/fast_arp_bass.sbpreset",
-      "sha256": "4c371504fb17dfc4be4338c433901198685060d1e2cc6fb4038b1ee1ce994c68",
-      "size": 50333
+      "sha256": "a5a81d5e61f87f2ff6fd9a1124487b7fe266b3524113e3ddeff8bce4c828b804",
+      "size": 50463
     },
     {
       "path": "Bass/space_wobble_bass.sbpreset",
@@ -476,13 +476,13 @@
     },
     {
       "path": "FX/sub_drop_boom.sbpreset",
-      "sha256": "a35a1ab8c8166bbebca6668d01c9fa3c12e5d914e00bc0cb375504129f451951",
-      "size": 50346
+      "sha256": "e80f256aff1e70aa1b35028164049dc773da8d45e49458d18b4bbaf317c5af1e",
+      "size": 50347
     },
     {
       "path": "FX/space_wind_storm.sbpreset",
-      "sha256": "afe0d5c45028ad428db7ac5c3e5fc2131c220f2335529bcb36d7d7ccc1f2be6f",
-      "size": 50361
+      "sha256": "6602ed77e65d8b04c8524ce48126b8a8cd0b8ed2900a3c321f63f2455fbbd830",
+      "size": 50363
     },
     {
       "path": "FX/alien_communication.sbpreset",
@@ -501,8 +501,8 @@
     },
     {
       "path": "FX/cosmic_teleport.sbpreset",
-      "sha256": "43646b7d699cf319363c94b5f5fd290c58fa9d36e03d3755db4587f25e44b0da",
-      "size": 50352
+      "sha256": "cf471c2fb0ceee48e9fa00af652374f2040af2c16f6398f508c264c33af673b5",
+      "size": 50354
     },
     {
       "path": "FX/vinyl_dust_crackle.sbpreset",
@@ -596,8 +596,8 @@
     },
     {
       "path": "FX/detonation_tail.sbpreset",
-      "sha256": "e3135e5d3fcc32e29de8500cc060df0ca25ab4edb07355a35306517861fd3b70",
-      "size": 50513
+      "sha256": "155114662f060ca86797290033f0573561902dcff4ba2d1bd3ae9701663b1c5d",
+      "size": 50515
     },
     {
       "path": "Keys/tine_glass_keys.sbpreset",
