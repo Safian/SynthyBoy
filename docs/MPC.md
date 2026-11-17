@@ -391,7 +391,36 @@ The shell takes the engine's quality from a profile, chosen once per process for
 - Each key changes one setting; what a setting changes in the sound is the list in "Sound differences at tier low". Example: `low,unison=7,fx=all` keeps the cheap forms and gives seven unison voices and all effects.
 - In the engine the settings are `Quality::maxVoices`, `maxUnison`, `fxMask`, the interpolation tier and `Quality::economy` (`EconomyFlags` in `core/include/synthyboy/quality.h`: Warp, Morph, Math, Control). A quality without explicit groups behaves as the three tiers always did; the three tiers render the same samples as before the groups existed (all 112 factory presets at the three tiers, compared file by file).
 
-**Which device gets which profile.** The table `kDeviceProfiles` in `device_profile.h`, keyed by the exact name in `/proc/device-tree/model`: `Akai Professional MPC XL` and `Akai Professional MPC Key 61` (the two names read from the devices). A name that is not in the table gets `kProfileUnknownDevice`; when the name cannot be read the architecture of the build decides (`kProfileNoNameArm64`, `kProfileNoNameArm32`). **Every row is `low` today**: no device has been measured with the profile bench yet, and a setting that makes the audio crackle is worse than a lower one. Raising a device is an edit of its row (and of the check in `shell-mpc/tests/device_profile_host.cpp` that states what the package runs).
+**Which device gets which profile.** The table `kDeviceProfiles` in `device_profile.h`, keyed by the exact name in `/proc/device-tree/model`:
+
+| Device name | Profile | Why |
+|---|---|---|
+| `Akai Professional MPC XL` | `low,unison=16,fx=all,voices=16,warp=4x,morph=full` | the highest step of the bench's ladder inside 50 % of the block (table below) |
+| `Akai Professional MPC Key 61` | `low` | `low` already fills the block on its dearest presets (below): no room for a step up until the engine is cheaper |
+| a name that is not in the table | `low` (`kProfileUnknownDevice`) | not measured |
+| no name readable | `low` (`kProfileNoNameArm64`, `kProfileNoNameArm32`: by the architecture of the build) | not measured |
+
+So on the MPC XL a preset plays 16 voices with up to 16 unison voices, with its reverb, flanger, Hyper / Dimension, Bode and Convolve, the warps 4x oversampled and the morph at the full rate; the Math and Control groups stay on there too (the exact forms cost 7 points of the block for a difference no measurement found, the full control rate doubles the dearest blocks). Raising a device is an edit of its row (and of the check in `shell-mpc/tests/device_profile_host.cpp` that states what the package runs), after a bench run on it.
+
+The rule a row follows: the highest step of the bench's ladder whose dearest factory preset, held with all notes of the step's polyphony, stays at a 99th percentile block time of at most N % of the 2.902 ms block on one audio core (the median of three passes of 30 s, the highest pass within N as well), with no block of a factory preset longer than the block; N = 50 on the XL, 70 on the Key 61.
+
+Measured on the MPC XL on 2026-11-17 (A76 core 6 at 2.4 GHz, governor `performance`, the application idle with the test project; `synthyboy_tier_bench --core 6 --set ladder --seconds 30 --repeat 3 --budget 50`, loads Diffusor Cloud Pad, Lush Analog Pad, Twin Warp Lead, EMS Squelch Bass: the dearest of all 112 on that core under `low` and under `low,unison=16,fx=all`):
+
+| Step | Notes | 99th percentile of the dearest preset, % of the block (lowest - highest pass) | Longest block, % | Dearest preset | |
+|---|---|---|---|---|---|
+| `low` | 8 | 15.28 (15.27 - 15.32) | 22.21 | Diffusor Cloud Pad | inside |
+| `low,unison=7` | 8 | 16.36 (16.35 - 16.39) | 23.43 | Diffusor Cloud Pad | inside |
+| `low,unison=7,fx=all` | 8 | 21.81 (21.77 - 21.82) | 28.99 | Diffusor Cloud Pad | inside |
+| `low,unison=16,fx=all` | 8 | 21.77 (21.76 - 22.01) | 28.60 | Diffusor Cloud Pad | inside |
+| `low,unison=16,fx=all,voices=12` | 12 | 28.05 (28.04 - 28.07) | 39.01 | Diffusor Cloud Pad | inside |
+| `low,unison=16,fx=all,voices=16` | 16 | 34.30 (34.26 - 34.42) | 48.14 | Diffusor Cloud Pad | inside |
+| `low,unison=16,fx=all,voices=16,warp=4x` | 16 | 47.12 (47.08 - 47.21) | 65.08 | Twin Warp Lead | inside |
+| **`low,unison=16,fx=all,voices=16,warp=4x,morph=full`** | 16 | 46.93 (46.63 - 47.12) | 63.96 | Twin Warp Lead | inside: the XL's row |
+| `high,voices=16,control=economy` | 16 | 54.32 (54.24 - 54.36) | 73.39 | Twin Warp Lead | over |
+| `high,voices=16` | 16 | 103.16 (103.09 - 103.31) | 118.80 | Twin Warp Lead | over |
+| `high` | 32 | 115.79 (115.61 - 115.89) | 146.01 | Twin Warp Lead | over (525 blocks longer than the block) |
+
+Measured on the Key 61 on 2026-11-17 (core 3, Cortex-A17 at 1.608 GHz, isolated by the kernel, governor `performance`, the application idle with the test project; all 112 presets, 8 notes, 4 s each): under `low` the dearest presets are Diffusor Cloud Pad (99th percentile 100.7 %, longest block 149 %, 17 blocks longer than the block), Scream Filter Bass (96.3 %), EMS Squelch Bass (87.2 %), Formant Vowel Bass (81.7 %), Diode Saturated Bass (80.9 %); the mean over the presets of the mean block is 36.4 %. Under `low,unison=16,fx=all`: Diffusor Cloud Pad 104.8 % (141 blocks over), Alien Communication 97.2 %, Scream Filter Bass 96.9 %, Dream Grand Piano 94.6 %, Dyno Electric Piano 91.1 %. Read with care: in that run every preset, the lightest one included (median 4.9 %, 99th percentile 23.3 %), has its 99th percentile about 20 to 25 points of the block above its median, while on the XL the two are 1.5 to 3 points apart; a part of a block that does not depend on the preset is not the engine's (the bench is a normal process on a core that also runs one of the application's real-time audio threads). The medians (Diffusor Cloud Pad 75.6 %) are nearer to what the engine itself takes; the earlier bench of 2026-11-13 ("Observed on the device") had that preset at an average of 60 % and a 99th percentile of 68 %. Either way the Key 61 has no room.
 
 **Overrides**, the first that holds a valid profile wins; one that does not parse is skipped and named in the report:
 

@@ -11,8 +11,8 @@
 // quality.h. Example: "low,unison=7,warp=4x" keeps the cheap approximations and gives seven unison voices and the 4x warps.
 //
 // Which profile a device gets is the table kDeviceProfiles below, keyed by the name the kernel gives the device (/proc/device-tree/model). A name that is not in the table gets
-// kProfileUnknownDevice; when the name cannot be read at all the architecture of the build decides (the rows arm64 / arm32). Every row is "low" until the devices are measured
-// (bench/tier_bench.cpp): changing a device's quality is an edit of one string of the table.
+// kProfileUnknownDevice; when the name cannot be read at all the architecture of the build decides (the rows arm64 / arm32). A row is raised only after the device was measured
+// with bench/tier_bench.cpp (docs/MPC.md "Quality profile per device" has the measured tables); every other row is "low". Changing a device's quality is an edit of one string.
 //
 // Overrides, the first that holds a valid profile wins:
 //   1. the first line of the file /tmp/synthyboy-mpc-profile (the environment variable SYNTHYBOY_MPC_PROFILE_FILE names another file): tests and trials on the device
@@ -175,10 +175,15 @@ struct DeviceProfileRow
     const char* profile; // a profile text
 };
 
-/** The measured names of the two devices. EVERY profile is "low" until the bench was run on the device: the line to edit after a measurement. */
+/** The measured names of the two devices; the line to edit after a measurement.
+    MPC XL (aarch64, RK3588: 4 x Cortex-A55 + 4 x Cortex-A76, the host's audio workers on the A76 cores 4 - 7), measured 2026-11-17 on A76 core 6 at 2.4 GHz: the highest
+    step of the bench's ladder whose dearest factory preset stays within 50 % of the block at the 99th percentile with 16 notes held (46.9 %, Twin Warp Lead; the next
+    step, the exact math, is at 54.3 %).
+    MPC Key 61 (arm32, Cortex-A17 at 1.6 GHz): "low" already reaches the length of the block on its dearest presets with 8 notes held (99th percentile 100.7 % on core 3
+    with the application running, 2026-11-17): no room for a step up until the engine is cheaper. */
 constexpr DeviceProfileRow kDeviceProfiles[] = {
-    { "Akai Professional MPC XL", "low" },     // aarch64, RK3588: 4 x Cortex-A55 + 4 x Cortex-A76, the host's audio workers on the A76 cores 4 - 7
-    { "Akai Professional MPC Key 61", "low" }, // arm32, 4 cores
+    { "Akai Professional MPC XL", "low,unison=16,fx=all,voices=16,warp=4x,morph=full" },
+    { "Akai Professional MPC Key 61", "low" },
 };
 /** A device whose name was read and is not in the table. */
 constexpr const char* kProfileUnknownDevice = "low";

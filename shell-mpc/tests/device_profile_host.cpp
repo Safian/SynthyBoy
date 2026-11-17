@@ -129,13 +129,18 @@ int main (int argc, char** argv)
         c = profileFromTable ("", false);
         check (c.source == "table: no device name, 32-bit build", "no name, 32-bit build: the architecture row: " + c.source);
 
-        // THE DEFAULT IS UNCHANGED until the devices are measured: every row is the profile the MPC build has always run. (When a row is changed after the bench run, this check
-        // is the one to change with it: it says on purpose what the package runs.)
-        bool allLow = true;
-        for (const char* m : { "Akai Professional MPC XL", "Akai Professional MPC Key 61", "Akai Professional MPC Live III", "" })
+        // WHAT THE PACKAGE RUNS, said on purpose (change it with the table): the MPC XL the profile its bench run of 2026-11-17 allows, every other device, known or not,
+        // the profile the MPC build has always run.
+        const Profile xl = profileFromTable ("Akai Professional MPC XL", true).profile;
+        check (xl.maxVoices == 16 && xl.unison == 16 && xl.fxMask == synthyboy::kFxAll && xl.samples == 0
+               && xl.economy == (synthyboy::kEconomyMath | synthyboy::kEconomyControl),
+               "the MPC XL runs 16 voices, 16 unison voices, all effects, the 4x warps and the full morph rate, with the fast math and the control economy: " + describeProfile (xl));
+        check (profileFromTable ("Akai Professional MPC XL", false).profile == xl, "the XL's row does not depend on the architecture of the build");
+        bool restLow = true;
+        for (const char* m : { "Akai Professional MPC Key 61", "Akai Professional MPC Live III", "" })
             for (const bool b64 : { false, true })
-                allLow = allLow && profileFromTable (m, b64).profile == profileLow();
-        check (allLow, "every device, known or not, 32-bit or 64-bit, runs 'low' (the default until the bench numbers of the devices exist)");
+                restLow = restLow && profileFromTable (m, b64).profile == profileLow();
+        check (restLow, "the Key 61, an unknown device and a device without a name run 'low', 32-bit or 64-bit");
     }
 
     // ---- the overrides and their order ---------------------------------------------------------------------------------------------------------------
