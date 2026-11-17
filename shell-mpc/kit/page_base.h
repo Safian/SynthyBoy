@@ -91,10 +91,11 @@ public:
             gestureDown_ = false;
             if (! covers (ev.x, ev.y))
                 return false;
-            ui::Component* hit = pageTop_ == kListPage ? static_cast<ui::Component*> (&list_) : pick (ev.x, ev.y);
+            ui::Component* top = modalComponent();   // a popup above the page takes every touch
+            ui::Component* hit = top != nullptr ? top : pick (ev.x, ev.y);
             if (hit == nullptr)
                 return true;   // the page lies there, nothing on it
-            if (pageTop_ != kListPage)
+            if (top == nullptr)
                 activateGroupAt (ev.x, ev.y);
             gesture_ = hit;
             gestureDown_ = true;
@@ -120,8 +121,8 @@ public:
             return false;
         ui::Change ch;
         bool took = false;
-        if (pageTop_ == kListPage)
-            took = list_.wheelOver (x, y, notches, ch);
+        if (ui::Component* top = modalComponent())
+            took = top->wheelOver (x, y, notches, ch);
         else
             for (size_t i = parts_.size(); i-- > 0 && ! took;)
                 took = parts_[i]->wheelOver (x, y, notches, ch);
@@ -197,10 +198,13 @@ protected:
     virtual void onChange (const ui::Change& /*ch*/, IInstance& /*inst*/, UiStack& /*stack*/) {}
     /** Extra drawing above the components and below the popup. */
     virtual void drawOver (gpu::SceneBuilder& /*sb*/) const {}
+    /** A popup of the page that is open now (a ListPopup of its own, opened with stack.openDetail (id) and drawn in drawOver ()): it takes every touch and the wheel, and the Q slots are cleared while it is up. null: none. */
+    virtual ui::Component* modal() noexcept { return nullptr; }
 
     const IParamSource& paramsOf (const IInstance& inst) const noexcept { return inst.params(); }
 
 private:
+    ui::Component* modalComponent() noexcept { return pageTop_ == kListPage ? static_cast<ui::Component*> (&list_) : modal(); }
     bool covers (int x, int y) const noexcept { return ui::Rect { 0, kTabY, kCanvasW, kTabH }.contains (x, y); }
     ui::Component* pick (int x, int y) const noexcept
     {
@@ -271,7 +275,7 @@ private:
                 ids[used++] = g;
             }
         int t[synthyboy_mpc::QRouter::kCount];
-        const bool list = pageTop_ == kListPage;
+        const bool list = modalComponent() != nullptr;
         if (list || used == 0)
             for (int& v : t)
                 v = synthyboy_mpc::QRouter::kNone;

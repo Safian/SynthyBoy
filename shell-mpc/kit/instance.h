@@ -20,6 +20,7 @@
 #include <cstring>
 #include <string>
 
+#include "content_source.h"
 #include "param_source.h"
 
 namespace mpckit {
@@ -87,6 +88,8 @@ public:
     virtual void requestOverlayReport() noexcept {}
 
     // ---- optional parts
+    /** A list of things the plugin owns that a page shows (presets, samples): null when the plugin has none (content_source.h). */
+    virtual IContentSource* content() noexcept { return nullptr; }
     /** The shell-level settings of this instance (null: none). */
     virtual IInstanceState* state() noexcept { return nullptr; }
     virtual const IInstanceState* state() const noexcept { return nullptr; }
