@@ -52,7 +52,7 @@ c++ -std=c++17 -O1 -Wall -Wextra -o $B/paths_test shell-mpc/tests/paths_test.cpp
 # MPC manifest: only binaries that exist, version.xml
 python3 scripts/tests/test_gen_mpc_manifest.py > $B/manifest-test.log 2>&1 || { tail -25 $B/manifest-test.log; echo "ACCEPT FAIL: scripts/tests/test_gen_mpc_manifest.py"; exit 1; }
 python3 scripts/tests/test_gen_mpc_package.py > $B/package-test.log 2>&1 || { tail -30 $B/package-test.log; echo "ACCEPT FAIL: scripts/tests/test_gen_mpc_package.py"; exit 1; }
-# the .xpl generator (scripts/gen-mpc-xpl.py): files the device wrote decode and re-render byte for byte, generated files decode to the same structure; with dump_mpc_chunks built (above) all 112 presets are generated from the built plugin
+# the .xpl generator (scripts/gen-mpc-xpl.py): files the device wrote decode and re-render byte for byte, generated files decode to the same structure; with dump_mpc_chunks built (above) all 136 presets are generated from the built plugin
 python3 scripts/tests/test_gen_mpc_xpl.py > $B/xpl-test.log 2>&1 || { tail -30 $B/xpl-test.log; echo "ACCEPT FAIL: scripts/tests/test_gen_mpc_xpl.py"; exit 1; }
 for f in scripts/build-mpc.sh scripts/build-armv7-mpc.sh scripts/mpc-container-build.sh; do [ -f $f ] && bash -n $f || { echo "ACCEPT FAIL: $f missing or not valid bash"; exit 1; }; done
 # factory presets as programs: the list header, then the library inside a plugin folder (Content/presets) and outside one
@@ -79,7 +79,7 @@ $B/host_sim "$PLIB" dump > $B/dump-pkg.json 2> $B/dump-pkg.err || { tail -20 $B/
 python3 - $B/dump-pkg.json <<'PY' || { echo "ACCEPT FAIL: program list in the host_sim dump"; exit 1; }
 import json, sys
 d = json.load(open(sys.argv[1])); pr = d.get("programs", [])
-ok = len(pr) == 113 and pr[0] == "Init" and "808 Boom" in pr
+ok = len(pr) == 137 and pr[0] == "Init" and "808 Boom" in pr
 if not ok: print("programs in the dump:", len(pr), pr[:5])
 sys.exit(0 if ok else 1)
 PY
