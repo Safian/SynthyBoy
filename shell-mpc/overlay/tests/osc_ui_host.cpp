@@ -220,7 +220,6 @@ void testTypeSelectorAndKinds()
 {
     Rig r;
     r.openFull();
-    const ui::Rect sel = r.ui.full().basic.selector.rect();
     // five cells: wavetable, multisample, sample, granular, spectral
     auto cell = [&] (int i) { const ui::Rect q = r.ui.full().basic.selector.rect(); r.tap (q.x + q.w * (2 * i + 1) / 10, q.y + q.h / 2); };
     cell (3);
@@ -685,6 +684,146 @@ void testSourceBrowserInTheOscillatorUi()
     check (none.stack.depth() == 0, "an instance without roots: the browser does not open");
 }
 
+
+/** The detail pages of the types (osc_spec_page.h): how each is reached, BACK, the size of the display, every visible control writes its parameter, the hidden states, the Q groups, the empty state. */
+void testSpecPages()
+{
+    namespace os = synthyboy_mpc::overlay::oscspec;
+    struct Case { int type; int slot; int page; const char* name; };
+    // the buttons of the type bars: wavetable MAP, sample REGION / SLICE, granular GRAIN, spectral FILTER / SCAN
+    const Case cases[] = { { 0, 3, os::kWtMap, "wavetable MAP" }, { 1, 1, os::kSampleRegion, "sample REGION" }, { 1, 2, os::kSampleSlice, "sample SLICE" }, { 2, 0, os::kGrain, "granular GRAIN" },
+                           { 3, 1, os::kSpecFilter, "spectral FILTER" }, { 3, 2, os::kSpecScan, "spectral SCAN" } };
+    for (const Case& c : cases)
+    {
+        Rig r;
+        r.inst.set ("osc1.type", static_cast<float> (c.type));
+        r.refresh();
+        r.openFull();
+        const OscUi::Item* b = r.ui.item (OscUi::kBarSlot + c.slot);
+        check (b != nullptr && b->c != nullptr, std::string (c.name) + ": the type bar has the button");
+        if (b == nullptr)
+            continue;
+        r.tapC (*b->c);
+        check (r.stack.top() == c.page, std::string (c.name) + ": the button opens the page");
+        check (r.ui.displayRect().h >= 240, std::string (c.name) + ": the display is at least 240 px tall");
+        // every control that is on the page has its size, none lies over another
+        const oscspec::OscSpecPage& pg = r.ui.specPage();
+        int shown = 0;
+        bool sizes = true, overlap = false;
+        for (int i = 0; i < pg.spec()->numCtls; ++i)
+            if (pg.visible (i))
+            {
+                ++shown;
+                const ui::Component* ci = const_cast<oscspec::OscSpecPage&> (pg).control (i);
+                sizes = sizes && ci->rect().h >= 56 && ci->rect().w >= 56;
+                for (int j = i + 1; j < pg.spec()->numCtls; ++j)
+                    if (pg.visible (j))
+                        overlap = overlap || ci->rect().overlaps (const_cast<oscspec::OscSpecPage&> (pg).control (j)->rect());
+            }
+        check (shown >= 2 && sizes && ! overlap, std::string (c.name) + ": the visible controls are 56 px or more and do not overlap");
+        // each visible control writes its parameter
+        int wrote = 0, tried = 0;
+        for (int i = 0; i < pg.spec()->numCtls; ++i)
+        {
+            if (! pg.visible (i))
+                continue;
+            const OscUi::Item* it = r.ui.item (OscUi::kSpec + i);
+            if (it == nullptr || it->param < 0)
+                continue;
+            ++tried;
+            const float before = r.inst.param (it->param);
+            const ui::Rect q = it->c->rect();
+            if (pg.spec()->ctls[i].kind == os::K::Stepper)
+                r.tap (q.x + q.w - 10, q.y + q.h / 2);
+            else if (pg.spec()->ctls[i].kind == os::K::Knob)
+            {
+                r.drag (q.x + q.w / 2, q.y + q.h / 2, q.x + q.w / 2, q.y + q.h / 2 - 60);
+                if (r.inst.param (it->param) == before)
+                    r.drag (q.x + q.w / 2, q.y + q.h / 2, q.x + q.w / 2, q.y + q.h / 2 + 60);
+            }
+            else
+                r.tapC (*it->c);
+            if (r.inst.param (it->param) != before)
+                ++wrote;
+            if (r.stack.top() != c.page)   // a stepper with a long list may have opened its popup
+                r.stack.back();
+            r.refresh();
+        }
+        check (tried > 0 && wrote >= tried - 1, std::string (c.name) + ": the controls write their parameters (" + std::to_string (wrote) + " of " + std::to_string (tried) + ")");
+        // BACK returns to the full screen
+        r.tapC (r.ui.specPage().back);
+        check (r.stack.depth() == 1 && r.stack.top() == OscUi::kElementOsc, std::string (c.name) + ": BACK returns to the full screen");
+    }
+    // the MORE page from the tune column, for every type; its Q groups
+    for (int type : { 0, 4, 1, 2, 3 })
+    {
+        Rig r;
+        r.inst.set ("osc1.type", static_cast<float> (type));
+        r.refresh();
+        r.openFull();
+        r.tapC (r.ui.full().tune.more);
+        check (r.stack.top() == os::kMore && r.ui.specPage().numGroups() == 6, "type " + std::to_string (type) + ": MORE opens the options page with six blocks");
+        check (r.ui.displayRect().empty(), "the options page has no display (the room goes to the blocks)");
+        r.tapC (*r.ui.specPage().control (0));   // ON
+        check (r.inst.get ("osc1.on") == 0.0f, "MORE: the power switch is a control of the page (osc1.on)");
+        check (r.inst.q[0] == Inst::idx ("osc1.on") && r.inst.q[1] == Inst::idx ("osc1.env1") && r.inst.q[3] == Inst::idx ("osc1.pitch_track"), "MORE: the first block is a Q group: ON, ENV 1, SMOOTH, TRACK");
+    }
+    // hidden states: the loop points exist only while a loop mode is on, the grain divisions only in their mode
+    {
+        Rig r;
+        r.inst.set ("osc1.type", 1.0f);
+        r.refresh();
+        r.openFull();
+        r.stack.openDetail (os::kSampleRegion);
+        r.refresh();
+        auto vis = [&] (const char* key) { for (int i = 0; i < r.ui.specPage().spec()->numCtls; ++i) if (std::string (r.ui.specPage().spec()->ctls[i].key) == key) return r.ui.specPage().visible (i); return false; };
+        check (! vis ("sample.loop_start") && ! vis ("sample.loop_relative") && vis ("sample.loop_mode"), "sample: one shot hides the loop points and options");
+        const int groups0 = r.ui.specPage().numGroups();
+        r.inst.set ("osc1.sample.loop_mode", 1.0f);
+        r.refresh();
+        check (vis ("sample.loop_start") && vis ("sample.loop_xfade") && r.ui.specPage().numGroups() == groups0 + 1, "sample: a loop mode shows the loop points and the LOOP OPTIONS block appears");
+        r.inst.set ("osc1.sample.keytrack", 0.0f);
+        r.refresh();
+        check (! vis ("sample.root"), "sample: with key tracking off the root note is hidden");
+        r.inst.set ("osc1.type", 2.0f);
+        r.refresh();
+        r.stack.back();
+        r.stack.openDetail (os::kGrain);
+        r.refresh();
+        check (! vis ("gran.density_sync") && ! vis ("gran.density_grains") && ! vis ("gran.length_percent") && ! vis ("gran.xy_y"), "grain: free density and length have no divisions");
+        r.inst.set ("osc1.gran.density_mode", 1.0f); r.inst.set ("osc1.gran.length_mode", 2.0f); r.inst.set ("osc1.gran.y_axis", 3.0f);
+        r.refresh();
+        check (vis ("gran.density_sync") && ! vis ("gran.density_grains") && vis ("gran.length_percent") && ! vis ("gran.length_sync") && vis ("gran.xy_y"), "grain: each mode shows its own value, the Y position follows the axis");
+    }
+    // the empty state: a type that plays a file shows one button that opens the browser; a loaded file takes it away
+    {
+        Rig r;
+        r.inst.roots = { { "LIB", "/tmp" } };
+        r.inst.set ("osc1.type", 1.0f);
+        r.refresh();
+        r.openFull();
+        check (r.ui.loadButtonShown(), "sample without a file: the LOAD button is on the display");
+        r.tapC (r.ui.loadButton());
+        check (r.stack.top() == OscUi::kPageList, "the LOAD button opens the browser in one tap");
+        r.stack.back();
+        r.refresh();
+        r.stack.openDetail (os::kSampleRegion);
+        r.refresh();
+        check (r.ui.loadButtonShown(), "the page of the type has the LOAD button too");
+        auto content = std::make_shared<synthyboy::StateContent>();
+        synthyboy::ContentSample cs;
+        cs.osc = 1; cs.ref.pack = "p"; cs.ref.file = "a.wav"; cs.ref.name = "a";
+        content->samples.push_back (cs);
+        r.inst.contentPtr = content;
+        r.refresh();
+        check (! r.ui.loadButtonShown(), "with a file loaded the button is gone");
+        Rig w;
+        w.refresh();
+        w.openFull();
+        check (! w.ui.loadButtonShown(), "a wavetable never shows it");
+    }
+}
+
 /** Review 2: the values under the knobs, the noise's own controls, the pictures on the detail pages, the labels. */
 void testReview2()
 {
@@ -760,6 +899,7 @@ int main()
     testGranularAndSubAndNoise();
     testSourceAndWarpLists();
     testReview2();
+    testSpecPages();
     for (const std::string& d : g_libraries)
         if (d.compare (0, 11, "/tmp/sbovl-") == 0)
             (void) std::system (("rm -rf '" + d + "'").c_str());
