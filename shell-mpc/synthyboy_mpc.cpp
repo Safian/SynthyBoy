@@ -1658,6 +1658,8 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
     inst->content = std::move(content);
     if (inst->engine)
         inst->engine->setContent(inst->content);
+    if (inst->engine)
+        inst->engine->readyContent();   // not the audio thread: the built-in tables the state names are there before the next block (a table another thread is still making is waited for)
 #if SYNTHYBOY_MPC_OVERLAY
     inst->publishOverlayContent();
     if (namesChanged)
@@ -2079,6 +2081,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 // The quality profile of this device (device_profile.h: a table by device name with overrides, "low" everywhere until the devices are measured), fixed for the life of the process.
                 synthyboy::Quality quality = synthyboy_mpc::profileQuality (synthyboy_mpc::profileInForce().profile);
                 quality.realtime = true; // live: audio thread never waits for helper thread
+                quality.lazyTables = true; // the 64 frame built-in tables nothing names are built by a low priority thread, not before the host's resume call returns (docs/MPC.md "Start-up time")
                 inst->engine->prepare(safeSr, bs, quality);
                 inst->outputStage.prepare (safeSr);
                 inst->prepared = true;

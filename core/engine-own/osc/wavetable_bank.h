@@ -60,9 +60,25 @@ private:
 };
 
 /** Shared immutable bank of the built-in tables (index = oscN.wavetable choice; 13 "Preset table" has no entry here: nullptr; index kNumWavetableChoices is the
-    rounded rectangle of the sub oscillator). The first call builds the bank (allocates): call it from prepare (). */
+    rounded rectangle of the sub oscillator). Every table is built once, on first need, by whoever needs it first and is not the audio thread.
+    builtinWavetable (): the table, built on the calling thread when it is not there yet (allocates, FFTs: NOT for the audio thread; tests, tools, the overlay's drawing). */
 constexpr int kRoundedRectTable = 15;
 const Wavetable* builtinWavetable (int choice) noexcept;
+/** The audio thread's read: the table when it is built, nullptr when it is not (yet): no build, no allocation, no lock, one acquire load. A null table is the caller's existing fallback
+    (the voice plays the saw, the spectral filter has no table), the same as for "Preset table" without its content. */
+const Wavetable* builtinWavetableIfReady (int choice) noexcept;
+/** Any thread, lock free: the table `choice` is wanted soon; the background builder (startBuiltinBankBackground) takes it before the others. */
+void requestBuiltinWavetable (int choice) noexcept;
+/** Builds, on the calling thread, the tables whose bit (1 << choice) is set in `mask` (waits for a table the background builder is making). Not for the audio thread. */
+void ensureBuiltinWavetables (unsigned mask) noexcept;
+/** The tables of one cycle (sine, saw, square, triangle, pulse, saw down, rounded rectangle): a few milliseconds all together; the eight 64 frame tables are the cost (docs/MPC.md "Start-up time"). */
+void ensureBuiltinSingleCycleTables() noexcept;
+/** All tables, on the calling thread and a few helper threads (the former behaviour of the first call of builtinWavetable (); offline rendering). */
+void ensureAllBuiltinWavetables() noexcept;
+/** Starts (once per process) the low priority thread that builds the tables not built yet, the requested ones first. Not for the audio thread. */
+void startBuiltinBankBackground() noexcept;
+/** Milliseconds spent building tables so far, summed over all threads (the status file: open_ms_detail_wavetables). */
+double builtinBankBuildMs() noexcept;
 
 /** A table from decoded audio: `samples` holds numFrames * 2048 samples (frames one after the other). Not real time (allocates, FFTs). Null for no frames. */
 std::unique_ptr<Wavetable> makeWavetableFromSamples (const float* samples, int numFrames);

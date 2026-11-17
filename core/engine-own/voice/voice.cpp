@@ -835,9 +835,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         oscEnv1[o] = P (oi.env1) >= 0.5f;
         const ContentSet* cs = g.content;
         int wtChoice = std::clamp (static_cast<int> (P (oi.wavetable) + 0.5f), 0, kNumWavetableChoices - 1);
-        t.wt = wtChoice == kWavetablePresetTable ? (cs != nullptr ? cs->userTable[o].get() : nullptr) : builtinWavetable (wtChoice);
+        t.wt = wtChoice == kWavetablePresetTable ? (cs != nullptr ? cs->userTable[o].get() : nullptr) : builtinWavetableIfReady (wtChoice);   // audio thread: only a table that is built (a morph table the background builder has not finished yet reads as null)
         if (t.wt == nullptr)
-            t.wt = builtinWavetable (kWavetableSaw); // the preset table needs its content (a missing file: the saw)
+            t.wt = builtinWavetableIfReady (kWavetableSaw); // the preset table needs its content (a missing file: the saw); a table not built yet: the saw too, until it is (prepare () builds the one cycle tables)
         // ---- pitch: the coarse term of the pitch mode and the Ratio source
         const bool track = P (oi.pitchTrack) >= 0.5f;
         const bool bendTrack = P (oi.bendTrack) >= 0.5f;
@@ -988,7 +988,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         subCh.env1 = P (si.env1) >= 0.5f;
         subTick.active = subCh.on;
         static const int kSubTable[6] = { 0, kRoundedRectTable, 3, 1, 2, 4 };
-        subTick.wt = builtinWavetable (kSubTable[std::clamp (static_cast<int> (P (si.waveform) + 0.5f), 0, 5)]);
+        subTick.wt = builtinWavetableIfReady (kSubTable[std::clamp (static_cast<int> (P (si.waveform) + 0.5f), 0, 5)]);
         subTick.semis = noteSemis + std::round (P (si.octave)) * 12.0f + P (si.tune) + (vc.mask[4] ? vc.detuneSemis : 0.0f);
         // sub.mono (document 02, 9): only the voice with the lowest note of the sounding voices (within half a semitone) carries the sub; the gate moves the level, which the
         // oscillator ramps across the period

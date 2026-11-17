@@ -62,6 +62,8 @@ public:
     void process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept override;
     void setTransport (const TransportInfo& t) noexcept override;
     void setReadoutTargets (const int* idx, int count) noexcept override;
+    void readyContent() noexcept override;
+    double wavetableBuildMs() const noexcept override;
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
     int latencySamples() const noexcept override { return reportedLatency.load (std::memory_order_relaxed); }
     void setTuningSource (const tuning::ITuningSource* s) noexcept override { noteTuning.setSource (s); paramGen.fetch_add (1u, std::memory_order_release); }
@@ -171,6 +173,8 @@ private:
     FxChain fx[3];                 // the racks Main, Bus 1, Bus 2
     FxPool fxPool;                 // the 16 slots of the effect instance pool
     int fxiTypeIndex[kNumFxInstances] = {};
+    int wtParamIdx[6] = { -1, -1, -1, -1, -1, -1 };   // table positions of osc1..3.wavetable and osc1..3.spec.flt_table: the keys that name a built-in table (set once in the constructor)
+    unsigned wavetableMaskOfParams() const noexcept;   // bit (1 << choice) for every built-in table the current values of those keys name
     IntDelay dlVoices, dlBusOut[2], dlBusIn[2], dlMainOut, dlDirect;  // latency compensation (document 06, 11)
     std::atomic<int> reportedLatency { 0 };
     void clearLatencyDelays() noexcept;

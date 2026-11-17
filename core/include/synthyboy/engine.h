@@ -119,6 +119,12 @@ public:
     /** Copies the live values of the last blocks (readout.h). Any thread, lock free; false (nothing written) for an engine that has none. */
     virtual bool copyReadout (LiveValues& /*out*/) const noexcept { return false; }
 
+    /** Not real time (the host's thread, the display thread; never the audio thread): builds on the calling thread whatever the CURRENT parameter values need and prepare () left to a background thread
+        (the own engine: the built-in wavetables the oscillators name). Call it after a state or program was applied. A no-op for an engine that builds everything in prepare (). */
+    virtual void readyContent() noexcept {}
+    /** Milliseconds this engine has spent building its built-in wavetables (summed over all threads that built them; 0: none or not known): the start-up record of the shell. Any thread. */
+    virtual double wavetableBuildMs() const noexcept { return 0.0; }
+
     /** Number of sounding voices (including released ones that are still fading out) after the last process(). */
     virtual int activeVoices() const noexcept = 0;
 

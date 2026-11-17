@@ -95,6 +95,14 @@ OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.fo
         params[i].store (i < paramCount() ? table[i].def : 0.0f, std::memory_order_relaxed);
     for (int i = 0; i < kNumFxInstances; ++i)
         fxiTypeIndex[i] = fxInstanceKeys (i).type;
+    {
+        static const char* const kWtKeys[6] = { "osc1.wavetable", "osc2.wavetable", "osc3.wavetable", "osc1.spec.flt_table", "osc2.spec.flt_table", "osc3.spec.flt_table" };
+        for (int i = 0; i < 6; ++i)
+        {
+            const ParamInfo* info = findParamByKey (kWtKeys[i]);
+            wtParamIdx[i] = info != nullptr ? findParamIndex (info->id) : -1;
+        }
+    }
     for (auto& k : switchKeyAtomic)
         k.store (-1, std::memory_order_relaxed);
     for (int o = 0; o < 3; ++o)
@@ -238,6 +246,12 @@ void OwnEngine::setParam (uint32_t id, float plain) noexcept
     const float v = constrainValue (paramTable()[i], plain);
     params[static_cast<size_t> (i)].store (v, std::memory_order_relaxed);
     paramGen.fetch_add (1u, std::memory_order_release);
+    for (int k = 0; k < 6; ++k)
+        if (wtParamIdx[k] == i)
+        {
+            requestBuiltinWavetable (std::clamp (static_cast<int> (v + 0.5f), 0, kNumWavetableChoices - 1));   // lock free: the background builder takes this table before the others (a table not built yet reads as null on the audio thread)
+            break;
+        }
     for (int s = 0; s < kNumFxInstances; ++s)
         if (fxiTypeIndex[s] == i)
         {
@@ -305,8 +319,16 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
     setQuality (quality);
     scratchRight.assign (static_cast<size_t> (std::max (maxBlockFrames, 4096)), 0.0f);
-    for (int c = 0; c <= kNumWavetableChoices; ++c)
-        builtinWavetable (c); // builds the shared bank (allocates): not on the audio thread
+    // The built-in tables (allocates, FFTs: not on the audio thread). Offline (tests, renders) and every shell that does not ask for lazyTables: all of them here, as always. Lazy (the MPC shell): the one cycle tables (a few ms) and the tables the current parameters name
+    // are built here; the eight 64 frame tables that nothing names wait for a low priority thread (docs/MPC.md "Start-up time"). Until one is built the audio thread reads it as null and the voice plays the saw.
+    if (quality.realtime && quality.lazyTables)
+    {
+        ensureBuiltinSingleCycleTables();
+        ensureBuiltinWavetables (wavetableMaskOfParams());
+        startBuiltinBankBackground();
+    }
+    else
+        ensureAllBuiltinWavetables();
     // the lazily built tables of the keys (they allocate on first use): build them here
     (void) paramIndex();
     (void) fxIndex();
@@ -350,6 +372,25 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     mixCached = latCached = false;
     prepared = true;
     reset();
+}
+
+unsigned OwnEngine::wavetableMaskOfParams() const noexcept
+{
+    unsigned mask = 0;
+    for (int k = 0; k < 6; ++k)
+        if (wtParamIdx[k] >= 0)
+            mask |= 1u << std::clamp (static_cast<int> (params[static_cast<size_t> (wtParamIdx[k])].load (std::memory_order_relaxed) + 0.5f), 0, kNumWavetableChoices - 1);
+    return mask;
+}
+
+void OwnEngine::readyContent() noexcept
+{
+    ensureBuiltinWavetables (wavetableMaskOfParams());
+}
+
+double OwnEngine::wavetableBuildMs() const noexcept
+{
+    return builtinBankBuildMs();
 }
 
 void OwnEngine::silence() noexcept

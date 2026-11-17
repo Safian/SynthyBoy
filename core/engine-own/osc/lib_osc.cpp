@@ -505,7 +505,7 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
         if (v[lk_fltUse] >= 0.5f && haveSample)
         {
             fltTableChoice = std::clamp (static_cast<int> (v[lk_fltTable] + 0.5f), 0, kNumWavetableChoices - 1);
-            fwt = fltTableChoice == kWavetablePresetTable ? (content != nullptr ? content->userTable[oscIndex].get() : nullptr) : builtinWavetable (fltTableChoice);
+            fwt = fltTableChoice == kWavetablePresetTable ? (content != nullptr ? content->userTable[oscIndex].get() : nullptr) : builtinWavetableIfReady (fltTableChoice);   // audio thread: a table not built yet is no table (the filter then has none, as without content)
         }
         if (fwt != nullptr)
         {

@@ -89,6 +89,9 @@ struct Quality
     /** The economy groups of the own engine (EconomyFlags). Negative (default): by the tier, all groups when `oversampling` is 1 and none otherwise, which is what the
         three tiers always did. 0 .. kEconomyAll: exactly these groups, whatever the oversampling says. */
     int economy = -1;
+    /** false (default): prepare () builds every built-in wavetable before it returns (what every shell did). true (needs `realtime`; the MPC shell sets it): prepare () builds only the one cycle tables and the
+        tables the current parameters name; the others are built by a low priority thread, and a caller that applies a state calls IEngine::readyContent () (docs/MPC.md "Start-up time"). */
+    bool lazyTables = false;
 };
 
 /** The economy groups a quality runs with (see Quality::economy). */
