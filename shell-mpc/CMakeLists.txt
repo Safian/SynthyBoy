@@ -521,5 +521,16 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(device_profile_host PRIVATE cxx_std_17)
     target_compile_options(device_profile_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME device_profile_host COMMAND device_profile_host)
+
+    # Data consistency tests for the FX page tables (ui/fx_layout.h, ui/choice_names.h)
+    add_executable(ui_fx_tables_host EXCLUDE_FROM_ALL ui/tests/ui_fx_tables_host.cpp)
+    target_include_directories(ui_fx_tables_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(ui_fx_tables_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(ui_fx_tables_host PRIVATE cxx_std_17)
+    target_compile_options(ui_fx_tables_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME ui_fx_tables_host COMMAND ui_fx_tables_host)
 endif()
 
