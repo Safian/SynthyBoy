@@ -1,10 +1,10 @@
 # Batch 2, the Multisample oscillator type (key-mapped instruments of the factory sample pack). `add`, `R`, `pressure`, `WT`, `SMP`, `IMP`, `INST`, `C` are provided by factory-presets-batch2.py.
 
 add("Nylon Zone Pluck", "Pluck", "pluck,nylon,multisample,zones,voice-control,round-robin,guitar",
-    "Plucked nylon strings in six key zones, one recording to a zone and every zone at its own pitch and brightness; the voice control gives each note of a run its own pan, tuning and cutoff in a repeating pattern of eight (a human hand never plays the same note twice), a short saw pluck sits under it and the wheel shifts which zone sounds",
+    "Plucked nylon strings in six key zones, one recording to a zone and every zone at its own pitch and brightness; the voice control gives each note of a run its own pan, tuning and cutoff in a repeating pattern of eight (a human hand never plays the same note twice), a short saw pluck sits under it and the wheel doubles the strings (two unison voices that drift apart)",
     {
         "master.polyphony": 10,
-        "osc1.on": 1, "osc1.type": "Multisample", "osc1.level": 76, "osc1.multi.vel_track": 100, "osc1.unison.voices": 1,
+        "osc1.on": 1, "osc1.type": "Multisample", "osc1.level": 76, "osc1.multi.vel_track": 100, "osc1.unison.voices": 2, "osc1.unison.detune": 3, "osc1.unison.spread": 45,
         "osc2.on": 1, "osc2.wavetable": "Saw", "osc2.level": 16, "osc2.unison.voices": 2, "osc2.unison.detune": 8, "osc2.unison.spread": 40,
         "filter1.on": 1, "filter1.model": "Analog", "filter1.style": 0, "filter1.cutoff": 2600, "filter1.resonance": 10, "filter1.keytrack": 60,
         "env1.attack": 0, "env1.decay": 900, "env1.sustain": 0, "env1.release": 380,
@@ -20,15 +20,15 @@ add("Nylon Zone Pluck", "Pluck", "pluck,nylon,multisample,zones,voice-control,ro
     [
         R("env2", "filter1.cutoff", 14),                                                   # the pick
         R("velocity", "filter1.cutoff", 18), R("velocity", "osc2.level", 20),
-        R("mod_wheel", "osc1.multi.timbre", 30), R("mod_wheel", "delay.mix", 22),
+        R("mod_wheel", "osc1.unison.detune", 40), R("mod_wheel", "delay.mix", 22),
         R("macro1", "filter1.cutoff", 55),                                                 # Bright
         R("macro2", "osc2.level", 55),                                                     # Saw Pluck
-        R("macro3", "osc1.multi.timbre", 25),                                              # Zone Shift
+        R("macro3", "osc1.unison.detune", 60),                                             # Double
         R("macro4", "env1.decay", 40), R("macro4", "env1.release", 25),                    # Sustain
         R("macro5", "delay.mix", 38),                                                      # Echo
         R("macro6", "reverb.mix", 35), R("macro6", "reverb.decay", 25),                    # Room
     ],
-    ["Bright", "Saw Pluck", "Zone Shift", "Sustain", "Echo", "Room", "", ""],
+    ["Bright", "Saw Pluck", "Double", "Sustain", "Echo", "Room", "", ""],
     content=C(instruments=[INST(1, "pluck_nylon")]))
 
 add("Marimba Layer Keys", "Keys", "keys,marimba,mallet,multisample,velocity-layers,convolve,room",

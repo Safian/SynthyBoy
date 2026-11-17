@@ -64,7 +64,7 @@ add("Spectral Gong Pad", "Pad", "pad,spectral,gong,metal,inharmonic,drone,wide",
     {
         "master.polyphony": 4,
         "osc1.on": 1, "osc1.type": "Spectral", "osc1.level": 56, "osc1.sample.root": 36, "osc1.sample.loop_mode": "Forward/reverse loop", "osc1.sample.loop_start": 8, "osc1.sample.loop_end": 55, "osc1.sample.normalize": 1,
-        "osc1.sample.scan": 25, "osc1.spec.freq_lo": 120, "osc1.spec.freq_hi": 10000, "osc1.spec.phase_lock": 1,
+        "osc1.sample.scan": 25, "osc1.spec.freq_lo": 120, "osc1.spec.freq_hi": 10000, "osc1.spec.phase_lock": 1, "osc1.warp.type": "Add Subharmonics", "osc1.warp.amount": 0,
         "osc1.unison.voices": 2, "osc1.unison.detune": 10, "osc1.unison.spread": 100, "osc1.sample.uni_start": 20, "osc1.sample.uni_span": 25,
         "osc2.on": 1, "osc2.wavetable": "Bell Partials", "osc2.frame": 35, "osc2.level": 18, "osc2.transpose": 0,
         "filter1.on": 1, "filter1.model": "Analog", "filter1.style": 0, "filter1.cutoff": 2500, "filter1.resonance": 10, "filter1.keytrack": 40,
@@ -81,12 +81,12 @@ add("Spectral Gong Pad", "Pad", "pad,spectral,gong,metal,inharmonic,drone,wide",
         R("mod_wheel", "osc1.spec.freq_shift", 4), R("mod_wheel", "utility.width", 25),
         R("macro1", "osc1.sample.scan", 75),                                               # Scan Speed (a quarter of the speed up to the full one: the amount is a share of the whole -1 .. 1 range of the scan)
         R("macro2", "osc1.spec.freq_shift", 7),                                            # Shift
-        R("macro3", "osc1.sample.uni_span", 60),                                           # Spread Read
+        R("macro3", "osc1.warp.amount", 70),                                              # Subharmonics
         R("macro4", "filter1.cutoff", 40),                                                 # Bright
         R("macro5", "reverb.mix", 35),                                                     # Space
         R("macro6", "osc2.level", 45),                                                     # Bell Layer
     ],
-    ["Scan Speed", "Shift", "Spread Read", "Bright", "Space", "Bell Layer", "", ""],
+    ["Scan Speed", "Shift", "Subharmonics", "Bright", "Space", "Bell Layer", "", ""],
     content=C(samples=[SMP(1, "gong_metal")]))
 
 add("Spectral Chord Morph", "FX", "fx,spectral,morph,chords,scan,transient,evolving",

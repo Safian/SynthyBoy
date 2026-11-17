@@ -202,6 +202,11 @@ def analyse_wav(path):
     return o
 
 
+def best_distance(a, b):
+    """The larger spectral distance of the held note (0.1 .. 1.4 s) and of the whole render with its tail (0.1 .. 3 s): a macro of the space shows in the tail, a macro of the attack in the note."""
+    return max((LAB.spectral_distance(a, b, int(0.1 * SR), int(t1 * SR)) for t1 in (1.4, 3.0)), key=lambda t: t[0])
+
+
 def audible(t):
     dist, lev, shift, side, beat, hf, lf, fine = t
     return dist >= 3 or abs(lev) >= 3 or abs(shift) >= 0.3 or abs(side) >= 3 or abs(beat) >= 1 or abs(hf) >= 4 or abs(lf) >= 4 or fine >= 6
@@ -270,11 +275,11 @@ def report(binary, work):
         for m in range(1, 9):
             a, b = work / "wavvar" / "high" / f"{stem}__m{m}_0.wav", work / "wavvar" / "high" / f"{stem}__m{m}_100.wav"
             if a.is_file() and b.is_file():
-                macros[m] = LAB.spectral_distance(load_wav(a), load_wav(b), int(0.1 * SR), int(3.0 * SR))
+                macros[m] = best_distance(load_wav(a), load_wav(b))
         for ctrl in ("mod_wheel", "poly_aftertouch", "velocity"):
             a, b = work / "wavvar" / "high" / f"{stem}__{ctrl}_0.wav", work / "wavvar" / "high" / f"{stem}__{ctrl}_100.wav"
             if a.is_file() and b.is_file():
-                ctrls[ctrl] = LAB.spectral_distance(load_wav(a), load_wav(b), int(0.1 * SR), int(3.0 * SR))
+                ctrls[ctrl] = best_distance(load_wav(a), load_wav(b))
         o["macros"] = {str(k): list(v) for k, v in macros.items()}
         o["macros_audible"] = {str(k): bool(audible(v)) for k, v in macros.items()}
         o["controls"] = {k: list(v) for k, v in ctrls.items()}

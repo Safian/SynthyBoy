@@ -59,7 +59,7 @@ add("Glass Ping Pluck", "Pluck", "pluck,glass,bell,sample,plate,convolve,shimmer
     content=C(samples=[SMP(1, "glass_ping")], impulses=[IMP("plate")]))
 
 add("Breakbeat Slice Keys", "Keys", "keys,drums,slice,loop,sample,bus,parallel,crush,convolve,room",
-    "A two bar break cut into 32 slices that you play from C1: every key is one sixteenth, so a rhythm is a melody; a second, crushed and compressed copy runs on bus 1 in parallel, a small-room impulse response glues it together",
+    "A two bar break cut into 32 slices that you play from C2 (MIDI 36): every key is one sixteenth, so a rhythm is a melody; a second, crushed and compressed copy runs on bus 1 in parallel, a small-room impulse response glues it together",
     {
         "master.polyphony": 6,
         "osc1.on": 1, "osc1.type": "Sample", "osc1.level": 78, "osc1.sample.root": 60, "osc1.sample.loop_mode": "One-shot", "osc1.sample.normalize": 1,
@@ -73,7 +73,7 @@ add("Breakbeat Slice Keys", "Keys", "keys,drums,slice,loop,sample,bus,parallel,c
         "convolve.on": 1, "convolve.ir": "Preset IR", "convolve.mix": 24, "convolve.ir_gain": 0,
     },
     [
-        R("velocity", "distortion.drive", 35), R("velocity", "bus1.level", 6),
+        R("velocity", "distortion.drive", 50), R("velocity", "bus1.level", 12),
         R("mod_wheel", "distortion.drive", 40), R("mod_wheel", "bus1.level", 8),
         R("macro1", "bus1.level", 14), R("macro1", "distortion.drive", 35),               # Smash
         R("macro2", "convolve.mix", 45),                                                   # Room

@@ -122,7 +122,7 @@ add("Gong Grain Swarm", "FX", "fx,granular,gong,swarm,metal,bus,random,texture",
         R("macro1", "osc1.gran.density", -4.5),                                             # Sparse (60 grains a second down to 15)
         R("macro2", "osc1.gran.rand_pitch", 45),                                           # Pitch Chaos
         R("macro3", "osc1.gran.rand_offset", 100), R("macro3", "osc1.gran.rand_level", 70), R("macro3", "osc1.gran.rand_dir", 60),   # Scatter
-        R("macro4", "osc1.gran.length", -1.5),                                             # Short Grains
+        R("macro4", "osc1.gran.length", -1.65),                                            # Short Grains
         R("macro5", "bus2.level", 12),                                                     # Echo Cloud
         R("macro6", "filter1.cutoff", -40),                                                # Dark
     ],
@@ -182,7 +182,7 @@ add("Rising Grain Riser", "FX", "fx,riser,granular,build,swell,bus,shimmer,sweep
         R("macro3", "osc1.gran.rand_pitch", 40),                                           # Scatter
         R("macro4", "bus2.level", 12),                                                     # Throw
         R("macro5", "filter1.resonance", 60),                                              # Edge
-        R("macro6", "osc1.gran.length", -1.2),                                             # Short Grains
+        R("macro6", "osc1.gran.length", -3.5),                                             # Short Grains
     ],
     ["Slow", "Sparse", "Scatter", "Throw", "Edge", "Short Grains", "", ""],
     content=C(samples=[SMP(1, "rising_texture")]))

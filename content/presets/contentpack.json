@@ -706,8 +706,8 @@
     },
     {
       "path": "FX/gong_grain_swarm.sbpreset",
-      "sha256": "e84b39e86c378243dc15e4c33736af2a51e047ed41b693cbe67a8ed30acb33a3",
-      "size": 50934
+      "sha256": "3eb0f80992aaacd9a9e1954d307a75ec806ace2e48d74d12170d14dd6e70b1f8",
+      "size": 50935
     },
     {
       "path": "Pluck/stutter_grain_kit.sbpreset",
@@ -716,13 +716,13 @@
     },
     {
       "path": "FX/rising_grain_riser.sbpreset",
-      "sha256": "12031b3820b87f83b58af126d016f8c9adc3b0baf62d75f128f5623adc9d1677",
+      "sha256": "18e25a9cb1761a51dd8ec6c11fb10d5377d644babafbb7ae0d2030bfb1748c0e",
       "size": 50929
     },
     {
       "path": "Pluck/nylon_zone_pluck.sbpreset",
-      "sha256": "650535073e2dd0917b338c1f30d7357e82c9e3ca841f33b3dfa5b59956ada355",
-      "size": 50942
+      "sha256": "6fe49fb6ce204681c94468aef11c64122e145a03b1182763b06efe87f008cbd7",
+      "size": 50964
     },
     {
       "path": "Keys/marimba_layer_keys.sbpreset",
@@ -746,8 +746,8 @@
     },
     {
       "path": "Keys/breakbeat_slice_keys.sbpreset",
-      "sha256": "e05d4832613c2c009d3e6a0c73740a8f8996b003549b7a9eb5784dc166e7ed4f",
-      "size": 51254
+      "sha256": "9d29f562c37586320a18a1074873d87f42d9a11bb84b2e619124e771d0453e7d",
+      "size": 51265
     },
     {
       "path": "Pad/bowed_mpe_strings.sbpreset",
@@ -776,7 +776,7 @@
     },
     {
       "path": "Pad/spectral_gong_pad.sbpreset",
-      "sha256": "70e07e36611753d797b353a32974da409c90ffc4a7c1e7331ca7c5426ebeba88",
+      "sha256": "061e0a5022212013109ad23ae98551405afb97246c9c209d2f1ccbc9125d2bce",
       "size": 50907
     },
     {
