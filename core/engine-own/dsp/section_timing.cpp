@@ -48,6 +48,12 @@ void ownSectionRead (int index, double& totalMs, unsigned long long& calls) noex
     calls = index >= 0 && index < own::sections::kCount ? t.calls[index] : 0;
 }
 
+unsigned long long ownSectionChildCalls (int index) noexcept
+{
+    const auto& t = own::sections::totals();
+    return index >= 0 && index < own::sections::kCount ? t.childCalls[index] : 0;
+}
+
 double ownSectionClockCostNs() noexcept
 {
     // the cost of one scope (two clock reads and the bookkeeping) as the engine pays it: a loop of empty scopes

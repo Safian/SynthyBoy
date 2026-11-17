@@ -56,6 +56,7 @@ struct Totals
 {
     uint64_t ns[kCount] = {};
     uint64_t calls[kCount] = {};
+    uint64_t childCalls[kCount] = {}; // scopes of other sections entered directly inside this one (each leaves about one clock read in this section's time)
 };
 Totals& totals() noexcept; // section_timing.cpp (the engine library); the audio thread writes, the bench reads between blocks
 uint64_t nowNs() noexcept;
@@ -81,7 +82,10 @@ struct Scope
         t.calls[id] += 1;
         current() = parent;
         if (parent != nullptr)
+        {
             parent->child += elapsed;
+            t.childCalls[parent->id] += 1;
+        }
     }
     static Scope*& current() noexcept { static Scope* p = nullptr; return p; }
     Id id;
