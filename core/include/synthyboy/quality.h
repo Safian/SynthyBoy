@@ -65,7 +65,7 @@ enum EconomyFlags : uint32_t
     kEconomyWarp    = 1u << 0, // a warped oscillator runs 2x oversampled with a 32 tap decimator (not 4x with 128 taps); its table band limit is 1.0 (not 3.2) times the host rate
     kEconomyMorph   = 1u << 1, // the spectral morph cycle is rebuilt every 512 samples (not 256) from a transform of half the size
     kEconomyMath    = 1u << 2, // table / rational / polynomial forms of tanh, sin, cos, exp, pow, log2; interpolated filter setups, held filter / chorus / phaser coefficients, the cheaper noise draw
-    kEconomyControl = 1u << 3, // unread modulators stepped every fourth control period, events on the 32 sample grid, a stolen voice faded by a short ramp, an effect rack on silence not processed
+    kEconomyControl = 1u << 3, // unread modulators stepped every fourth control period, events on the 32 sample grid, a stolen voice faded by a short ramp, an effect rack on silence and an effect with mix 0 not processed
     kEconomyAll     = (1u << 4) - 1u
 };
 

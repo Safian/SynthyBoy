@@ -153,6 +153,11 @@ bool setOwnPadPressureToCutoff (IEngine& engine, float amount01) noexcept;
 bool setOwnLowTierMorphSpread (IEngine& engine, bool keep) noexcept;
 /** Own engine only: the fade of a stolen voice at tier low in seconds (default 0.003; 0.05 = as at medium / high). */
 bool setOwnLowTierKillFade (IEngine& engine, float seconds) noexcept;
+/** Own engine only, for measurements: switches off ways the engine saves work without changing the sound, so that one binary can be measured with and without each
+    (bench/tier_bench.cpp --no-fx-mute, --scalar-filters). Bits of `off`: kOwnSavingFxMute = an effect whose mix is exactly 0 is processed all the same (FxModule::process),
+    kOwnSavingVectorFilters = the voice filters run their scalar loops also where a vector kernel exists. Default 0 (every saving on). False if `engine` is not an own engine. */
+enum OwnSaving : uint32_t { kOwnSavingFxMute = 1u << 0, kOwnSavingVectorFilters = 1u << 1 };
+bool setOwnSavingsOff (IEngine& engine, uint32_t off) noexcept;
 
 enum class EngineKind
 {

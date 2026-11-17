@@ -111,7 +111,7 @@ public:
     void configure (const FxFrame& f, const float* b, const float* d) noexcept override
     {
         Chorus::Params p;
-        p.mix = clamp01 (pct (b, d, mix));
+        p.mix = wetMix (clamp01 (pct (b, d, mix)));
         p.rate = lfoRate (b, d, rate, sync, division, f.bpm);
         p.depth = clamp01 (pct (b, d, depth));
         p.feedback = pct (b, d, feedback);
@@ -197,12 +197,13 @@ public:
         spread = K ("delay.filter_spread"); offset = K ("delay.offset"); offsetLeft = K ("delay.offset_left"); hq = K ("delay.hq");
     }
     int moduleIndex() const noexcept override { return 2; }
+    float flushSeconds() const noexcept override { return 20.0f; } // an echo may come 16 s after the one before (4 s times the offset)
     void prepare (double sr, int) override { fx.prepare (sr); }
     void reset() noexcept override { fx.reset(); }
     void configure (const FxFrame& f, const float* b, const float* d) noexcept override
     {
         Delay::Params p;
-        p.mix = clamp01 (pct (b, d, mix));
+        p.mix = wetMix (clamp01 (pct (b, d, mix)));
         p.feedback = pct (b, d, feedback);
         const int s = choice (b, sync);
         if (s == 0)
@@ -250,7 +251,7 @@ public:
         Distortion::Params p;
         p.type = choice (b, type);
         p.driveDb = V (b, d, drive);
-        p.mix = clamp01 (pct (b, d, mix));
+        p.mix = wetMix (clamp01 (pct (b, d, mix)));
         p.order = choice (b, order);
         const float kt = keytrack >= 0 ? pct (b, d, keytrack) : 0.0f;
         p.cutoff = V (b, d, cutoff) * std::exp2 (kt * (f.lastNote - 60.0f) * (1.0f / 12.0f));
@@ -338,7 +339,7 @@ public:
         s.mix = 1.0f;
         s.var = pct (b, d, var);
         fx.set (s);
-        wetMix = clamp01 (pct (b, d, mix));
+        wetGain = wetMix (clamp01 (pct (b, d, mix)));
     }
     void run (float* l, float* r, int n) noexcept override
     {
@@ -346,14 +347,14 @@ public:
         fx.process (l, r, wl, wr, n);
         for (int i = 0; i < n; ++i) // the filters mix linearly (document 06, 1)
         {
-            l[i] = l[i] + (wl[i] - l[i]) * wetMix;
-            r[i] = r[i] + (wr[i] - r[i]) * wetMix;
+            l[i] = l[i] + (wl[i] - l[i]) * wetGain;
+            r[i] = r[i] + (wr[i] - r[i]) * wetGain;
         }
     }
 
 private:
     FilterUnit fx;
-    float wetMix = 1.0f;
+    float wetGain = 1.0f;
     int model, style, cutoff, res, drive, blend, mix, var;
 };
 
@@ -372,7 +373,7 @@ public:
     void configure (const FxFrame& f, const float* b, const float* d) noexcept override
     {
         Flanger::Params p;
-        p.mix = clamp01 (pct (b, d, mix));
+        p.mix = wetMix (clamp01 (pct (b, d, mix)));
         p.feedback = pct (b, d, feedback);
         p.rate = lfoRate (b, d, rate, sync, division, f.bpm);
         p.depth = clamp01 (pct (b, d, depth));
@@ -403,7 +404,7 @@ public:
     void configure (const FxFrame& f, const float* b, const float* d) noexcept override
     {
         Phaser::Params p;
-        p.mix = clamp01 (pct (b, d, mix));
+        p.mix = wetMix (clamp01 (pct (b, d, mix)));
         p.feedback = pct (b, d, feedback);
         p.rate = lfoRate (b, d, rate, sync, division, f.bpm);
         p.depthSemis = V (b, d, depth);
@@ -434,12 +435,14 @@ public:
         width = K ("reverb.width"); diffA = K ("reverb.diff_a"); diffB = K ("reverb.diff_b"); room = K ("reverb.room"); er = K ("reverb.er_size"); feedback = K ("reverb.feedback");
     }
     int moduleIndex() const noexcept override { return 8; }
+    float flushSeconds() const noexcept override { return 20.0f; } // a long tail falls slowly: be sure it is gone, not between two reflections
+    void idleAdvance (int n) noexcept override { fx.idle (n); }
     void prepare (double sr, int) override { fx.prepare (sr); }
     void reset() noexcept override { fx.reset(); }
     void configure (const FxFrame&, const float* b, const float* d) noexcept override
     {
         Reverb::Params p;
-        p.mix = clamp01 (pct (b, d, mix));
+        p.mix = wetMix (clamp01 (pct (b, d, mix)));
         p.size = clamp01 (pct (b, d, size));
         p.decay = V (b, d, decay) * 0.001f;
         p.predelay = V (b, d, pre) * 0.001f;

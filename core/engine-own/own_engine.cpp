@@ -33,6 +33,15 @@ bool setOwnLowTierKillFade (IEngine& engine, float seconds) noexcept
     return true;
 }
 
+bool setOwnSavingsOff (IEngine& engine, uint32_t off) noexcept
+{
+    auto* own = dynamic_cast<own::OwnEngine*> (&engine);
+    if (own == nullptr)
+        return false;
+    own->setSavingsOff (off);
+    return true;
+}
+
 bool setOwnLowTierMorphSpread (IEngine& engine, bool keep) noexcept
 {
     auto* own = dynamic_cast<own::OwnEngine*> (&engine);
@@ -1097,6 +1106,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             frame.content = globals.content;
             frame.realtime = realtimeFlag;
             frame.lowCost = (globals.economy & kEconomyMath) != 0;
+            frame.muteSkip = (globals.economy & kEconomyControl) != 0 && (savingsOff.load (std::memory_order_relaxed) & kOwnSavingFxMute) == 0;
             for (auto& f : fx)
             {
                 f.setLowCost ((globals.economy & kEconomyControl) != 0);

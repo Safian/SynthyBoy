@@ -147,6 +147,16 @@ public:
         pdCur = -1.0f;
     }
     void set (const Params& np) noexcept { p = np; }
+    /** Advances the phase of the tail's modulation by n samples without processing (the module is skipped): the same steps as the sample loops take. */
+    void idle (int n) noexcept
+    {
+        const float sr = static_cast<float> (sampleRate);
+        for (int s = 0; s < n; ++s)
+        {
+            phase += std::min (p.chorusRate, 16.0f) / sr;
+            phase -= std::floor (phase);
+        }
+    }
 
     void process (float* l, float* r, int n) noexcept
     {

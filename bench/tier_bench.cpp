@@ -29,6 +29,8 @@
 //                   percentiles and prints the lowest and highest pass next to it (the spread).
 //   --budget PCT    add a verdict to the summary: a profile is "inside" when the 99th percentile of its dearest factory preset is at most PCT % of the block and
 //                   no block of any of its factory presets, in any pass, was longer than its real time
+//   --no-fx-mute    process an effect whose mix is exactly 0 all the same (the engine before that saving: for a before / after with one binary)
+//   --scalar-filters  run the voice filters' scalar loops also where a vector kernel exists (the same: before / after)
 //   --notes K       hold K notes instead of the profile's polyphony (the notes over the polyphony of the profile or of the preset steal voices)
 //   --paced         start every block at its real time (a run then takes its audio time): the caches and the frequency governor see what they see under the host. Without it
 //                   the blocks follow each other at once (the usual, fast way).
@@ -72,7 +74,7 @@ using namespace synthyboy;
 namespace
 {
 // The candidate profiles from the cheapest to the dearest. The order is the audible gain per cost found with bench/profile_compare.cpp and this bench on the
-// development machine: first the unison voices (14 factory presets ask for more than 3, three pads change by a whole register), then the effects that low bypasses
+// development machine: first the unison voices (14 factory presets ask for more than 3; the texture of the detuned voices, levels within 3 dB), then the effects that low bypasses
 // (31 factory presets sound through them), then the polyphony, then the 4x warps (7 presets, a small difference) and the full morph rate; then the exact math and
 // the better sample interpolation, which no measurement could tell from the cheap forms on the factory presets; and last the full control rate: its 50 ms fade
 // of a stolen voice doubles the dearest blocks (the old and the new chord sound together) for a difference only heard when voices are stolen. The factory presets
@@ -151,6 +153,7 @@ struct Options
     bool list = false;
     int repeat = 1;
     double budget = 0.0;
+    uint32_t savingsOff = 0; // --no-fx-mute, --scalar-filters: OwnSaving bits switched off (before / after measurements with one binary)
 };
 
 struct PresetData
@@ -253,6 +256,7 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
 {
     auto engine = createEngine (EngineKind::own);
     applyLoad (*engine, load);
+    setOwnSavingsOff (*engine, o.savingsOff);
     Quality quality = synthyboy_mpc::profileQuality (profile);
     quality.realtime = true; // as the shell: the audio thread never waits for a helper thread
     engine->prepare (o.sampleRate, o.block, quality);
@@ -395,7 +399,7 @@ long currentKhz (int cpu)
 [[noreturn]] void usage (const char* message)
 {
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
-                          "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]\n", message);
+                          "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--no-fx-mute] [--scalar-filters] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -424,6 +428,8 @@ int main (int argc, char** argv)
         else if (a == "--sections")    o.sections = true;
         else if (a == "--list")        o.list = true;
         else if (a == "--repeat")      o.repeat = std::atoi (next());
+        else if (a == "--no-fx-mute")  o.savingsOff |= kOwnSavingFxMute;
+        else if (a == "--scalar-filters") o.savingsOff |= kOwnSavingVectorFilters;
         else if (a == "--budget")      o.budget = std::atof (next());
         else usage (("unknown argument " + a).c_str());
     }
@@ -553,8 +559,9 @@ int main (int argc, char** argv)
     const std::string model = readLine ("/proc/device-tree/model").c_str(); // (c_str: the device tree string ends with a 0 byte)
     const double budgetMs = 1000.0 * o.block / o.sampleRate;
 
-    std::printf ("synthyboy_tier_bench: %.0f Hz, block %d frames = %.3f ms, %.1f s measured per run after 1 s of warm-up, retrigger every %.2f s, flush-to-zero %s, %s\n", o.sampleRate, o.block,
-                 budgetMs, o.seconds, o.retrigger, o.ftz ? "on" : "off", o.paced ? "blocks paced at real time" : "blocks back to back");
+    std::printf ("synthyboy_tier_bench: %.0f Hz, block %d frames = %.3f ms, %.1f s measured per run after 1 s of warm-up, retrigger every %.2f s, flush-to-zero %s, %s%s%s\n", o.sampleRate, o.block,
+                 budgetMs, o.seconds, o.retrigger, o.ftz ? "on" : "off", o.paced ? "blocks paced at real time" : "blocks back to back",
+                 (o.savingsOff & kOwnSavingFxMute) != 0 ? ", effects with mix 0 processed (--no-fx-mute)" : "", (o.savingsOff & kOwnSavingVectorFilters) != 0 ? ", scalar filters (--scalar-filters)" : "");
     std::printf ("device: %s; %s; build %s\n", model.empty() ? "(no device tree name)" : model.c_str(), cpuText.empty() ? "cpu not pinned (not Linux)" : cpuText.c_str(),
 #if defined(__aarch64__)
                  "arm64"

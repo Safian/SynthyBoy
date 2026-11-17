@@ -52,6 +52,8 @@ public:
     /** Tier low: the fade of a stolen voice in seconds (0.05 = the 50 ms of medium / high). Any thread, lock free. */
     void setLowTierKillFade (float seconds) noexcept { lowKillSeconds.store (std::max (0.0005f, seconds), std::memory_order_relaxed); }
     int lowTierUnisonCap() const noexcept { return lowUnisonCap.load (std::memory_order_relaxed); }
+    /** Measurements only (setOwnSavingsOff): the OwnSaving bits that are switched off. Any thread, lock free; read at the start of every block. */
+    void setSavingsOff (uint32_t off) noexcept { savingsOff.store (off, std::memory_order_relaxed); }
     void reset() override;
     void setParam (uint32_t id, float plain) noexcept override;
     float getParam (uint32_t id) const noexcept override;
@@ -100,6 +102,7 @@ private:
     std::atomic<float> padPressureToCutoff { 0.0f };
     std::atomic<float> lowKillSeconds { kDefaultLowTierKillSeconds };
     std::atomic<bool> lowKeepMorphSpread { kDefaultLowTierMorphSpread };
+    std::atomic<uint32_t> savingsOff { 0 };
     std::atomic<int> activeCount { 0 };
     // transport (set from any thread by the shell between blocks; read by the audio thread)
     std::atomic<double> tpBpm { 120.0 }, tpPos { 0.0 };
