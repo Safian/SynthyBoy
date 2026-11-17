@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "FM Feedback Saw",
+ "category": "Digital",
+ "description": "One operator with feedback 0 to 1.9: sine, saw, noisy saw.",
+ "frames": 64,
+ "seed": "fm_feedback_saw",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "fm_feedback_saw"
+  }
+ }
+}

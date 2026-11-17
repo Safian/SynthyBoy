@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "FM Index Sweep",
+ "category": "Digital",
+ "description": "2:1 FM, the index rising 0 to 9: sine, brass, metal.",
+ "frames": 64,
+ "seed": "fm_index_sweep",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "fm_index_sweep"
+  }
+ }
+}

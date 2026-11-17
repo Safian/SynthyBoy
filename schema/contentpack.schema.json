@@ -25,6 +25,8 @@
         "additionalProperties": false,
         "properties": {
           "path": { "type": "string", "minLength": 1 },
+          "category": { "type": "string", "minLength": 1, "description": "optional: the browser category of a wavetable (default: the sub folder name)" },
+          "title": { "type": "string", "minLength": 1, "description": "optional: the human name shown in the browser (default: the file stem)" },
           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
           "size": { "type": "integer", "minimum": 0 }
         }

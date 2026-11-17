@@ -1,0 +1,25 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Free Bar Modes",
+ "category": "Metallic",
+ "description": "The modes of a free bar (1, 2.756, 5.404, 8.933, 13.34, 18.64 ...) with the fundamental walking from harmonic 1 to 6: vibraphone and marimba bar colours from soft to bright.",
+ "frames": 64,
+ "seed": "free_bar_modes",
+ "source": {
+  "type": "partials",
+  "params": {
+   "set": "bar",
+   "scale": {
+    "law": "linear",
+    "from": 1,
+    "to": 6
+   },
+   "count": 8,
+   "rolloff": 0.8,
+   "seed": 4
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

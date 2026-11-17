@@ -1,0 +1,21 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "FM 3 To 1 Index",
+ "category": "Digital",
+ "description": "FM with the modulator at 3 times the carrier, the index rising 0 to 8 (slow start): sine, hollow odd-ish tone, bright glassy FM.",
+ "frames": 64,
+ "seed": "fm_triple_index",
+ "source": {
+  "type": "fm",
+  "params": {
+   "carrier": 1,
+   "r1": 3,
+   "i1": {
+    "law": "curve",
+    "from": 0,
+    "to": 8,
+    "power": 1.3
+   }
+  }
+ }
+}

@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Ring Mod Ladder",
+ "category": "Metallic",
+ "description": "Ring modulation of two sines at the integer ratios 2 to 17, four frames each, the depth rising inside a step.",
+ "frames": 64,
+ "seed": "ring_mod_ladder",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "ring_mod_ladder"
+  }
+ }
+}

@@ -1,0 +1,31 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Resonant Comb Metal",
+ "category": "Metallic",
+ "description": "A falling saw spectrum through a resonant (feedback) comb, delay 0.03 to 0.4 of the cycle, feedback 0.9, phases scattered: sharp ringing peaks that drift like a flanged cymbal.",
+ "frames": 64,
+ "seed": "resonant_comb_metal",
+ "source": {
+  "type": "spec",
+  "params": {
+   "rcomb_d": {
+    "law": "linear",
+    "from": 0.03,
+    "to": 0.4
+   },
+   "rcomb_g": 0.9,
+   "scatter": 1.0,
+   "seed": 9
+  },
+  "input": {
+   "type": "additive",
+   "params": {
+    "count": 300,
+    "rolloff": 0.7
+   }
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

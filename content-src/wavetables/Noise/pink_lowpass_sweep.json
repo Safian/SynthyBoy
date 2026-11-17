@@ -1,0 +1,32 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Pink Lowpass Sweep",
+ "category": "Noise",
+ "description": "Frozen pink noise through a resonant 4 pole low pass whose cutoff falls from the 300th to the 2nd harmonic (quickly at first): a filter closing on noise.",
+ "frames": 64,
+ "seed": "pink_lowpass_sweep",
+ "source": {
+  "type": "spec",
+  "params": {
+   "lp_cut": {
+    "law": "curve",
+    "from": 300,
+    "to": 2,
+    "power": 0.35
+   },
+   "lp_res": 1.5,
+   "lp_poles": "4"
+  },
+  "input": {
+   "type": "noise",
+   "params": {
+    "tilt": 1.0,
+    "seed": 2,
+    "count": 300
+   }
+  }
+ },
+ "post": {
+  "limit": 320
+ }
+}

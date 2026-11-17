@@ -1,0 +1,44 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Overtone Duet",
+ "category": "Vocal",
+ "description": "Two narrow resonances over the same drone cross in opposite directions: one climbs from the 4th to the 20th partial while the other falls from the 20th to the 4th.",
+ "frames": 64,
+ "seed": "overtone_duet",
+ "source": {
+  "type": "mix",
+  "params": {
+   "match": "none"
+  },
+  "inputs": [
+   {
+    "type": "additive",
+    "params": {
+     "count": 200,
+     "rolloff": 1.3,
+     "peak_center": {
+      "law": "linear",
+      "from": 4,
+      "to": 20
+     },
+     "peak_width": 0.09,
+     "peak_gain_db": 18
+    }
+   },
+   {
+    "type": "additive",
+    "params": {
+     "count": 200,
+     "rolloff": 1.3,
+     "peak_center": {
+      "law": "linear",
+      "from": 20,
+      "to": 4
+     },
+     "peak_width": 0.09,
+     "peak_gain_db": 18
+    }
+   }
+  ]
+ }
+}

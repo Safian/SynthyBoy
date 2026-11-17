@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Metal Comb Sweep",
+ "category": "Metallic",
+ "description": "A comb sweeps through a saw's spectrum (spacing 3 to 16 harmonics): ringing metal.",
+ "frames": 64,
+ "seed": "metal_comb_sweep",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "metal_comb_sweep"
+  }
+ }
+}

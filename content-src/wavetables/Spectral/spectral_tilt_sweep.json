@@ -1,0 +1,20 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Spectral Tilt Sweep",
+ "category": "Spectral",
+ "description": "The harmonic roll-off steepens from 0.3 (buzzy) to 2.6 (almost a sine): the brightness control as a table.",
+ "frames": 64,
+ "seed": "spectral_tilt_sweep",
+ "source": {
+  "type": "additive",
+  "params": {
+   "count": 200,
+   "rolloff": {
+    "law": "linear",
+    "from": 0.3,
+    "to": 2.6
+   },
+   "phase_quad": 0.01
+  }
+ }
+}

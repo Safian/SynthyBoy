@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "PWM Triple Stack",
+ "category": "Analog",
+ "description": "Three pulse waves stacked, their widths walking apart from 50 % towards 6 % and 94 %: a PWM unison in one table.",
+ "frames": 64,
+ "seed": "pwm_triple_stack",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "pwm_triple_stack"
+  }
+ }
+}

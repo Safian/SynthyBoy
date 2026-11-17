@@ -1,0 +1,26 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Saw Soft Clip",
+ "category": "Analog",
+ "description": "A saw driven into a tanh soft clipper, the drive rising 0.5 to 14: saw to a rounded square-like overdrive.",
+ "frames": 64,
+ "seed": "saw_soft_clip",
+ "source": {
+  "type": "shape",
+  "params": {
+   "mode": "tanh",
+   "drive": {
+    "law": "curve",
+    "from": 0.5,
+    "to": 14,
+    "power": 1.5
+   }
+  },
+  "input": {
+   "type": "classic",
+   "params": {
+    "saw": 1.0
+   }
+  }
+ }
+}

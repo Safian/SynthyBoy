@@ -57,7 +57,7 @@ add("Spectral Bowed Glass", "Lead", "lead,spectral,bowed,glass,comb,legato,expre
         R("macro6", "reverb.mix", 50), R("macro6", "reverb.decay", 20), R("macro6", "delay.mix", 35),   # Space
     ],
     ["Comb", "Glass", "Glass Shape", "Bright", "Vibrato Rate", "Space", "", ""],
-    content=C(wavetables=[WT(2, "additive_glass_harmonica")], samples=[SMP(1, "bowed_tone")]))
+    content=C(wavetables=[WT(2, "Spectral/additive_glass_harmonica")], samples=[SMP(1, "bowed_tone")]))
 
 add("Spectral Gong Pad", "Pad", "pad,spectral,gong,metal,inharmonic,drone,wide",
     "The gong's spectrum held and bowed: the Spectral oscillator scans a slice of the gong's decay back and forth (loop forward-reverse), so the inharmonic partials swell and fade like a bowed metal plate, and every unison voice reads it from another place; the bass below 200 Hz is kept in the middle",

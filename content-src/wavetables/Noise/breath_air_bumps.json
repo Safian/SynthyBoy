@@ -1,0 +1,43 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Breath Air Bumps",
+ "category": "Noise",
+ "description": "Noise through two broad resonances (like the chiff and tube of a flute): the lower rises from the 18th to the 60th harmonic, the upper from the 70th to the 190th.",
+ "frames": 64,
+ "seed": "breath_air_bumps",
+ "source": {
+  "type": "spec",
+  "params": {
+   "band_center": {
+    "law": "linear",
+    "from": 70,
+    "to": 190
+   },
+   "band_width": 0.6,
+   "band_gain_db": 22
+  },
+  "input": {
+   "type": "spec",
+   "params": {
+    "band_center": {
+     "law": "linear",
+     "from": 18,
+     "to": 60
+    },
+    "band_width": 0.7,
+    "band_gain_db": 22
+   },
+   "input": {
+    "type": "noise",
+    "params": {
+     "tilt": 0.3,
+     "seed": 7,
+     "count": 300
+    }
+   }
+  }
+ },
+ "post": {
+  "limit": 320
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Odd Harmonic Ladder",
+ "category": "Spectral",
+ "description": "Odd harmonics (1/n) are added one after the other, 1 up to the 60th: a pure sine grows into a hollow square-like tone.",
+ "frames": 64,
+ "seed": "odd_harmonic_ladder",
+ "source": {
+  "type": "additive",
+  "params": {
+   "count": {
+    "law": "linear",
+    "from": 1,
+    "to": 60
+   },
+   "rolloff": 1.0,
+   "mask": "odd"
+  }
+ }
+}

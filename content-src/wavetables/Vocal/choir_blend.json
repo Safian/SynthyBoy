@@ -1,0 +1,87 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Choir Blend",
+ "category": "Vocal",
+ "description": "Men, women and children sing the vowel sequence ah, aw, oo, eh, ee, ah together (scattered phases, level matched mix) at 175 Hz.",
+ "frames": 64,
+ "seed": "choir_blend",
+ "source": {
+  "type": "mix",
+  "params": {
+   "g1": 0.6,
+   "g2": 0.45,
+   "g3": 0.3
+  },
+  "inputs": [
+   {
+    "type": "formant",
+    "params": {
+     "f0": 175,
+     "voice": "men",
+     "sequence": [
+      "a",
+      "o",
+      "u",
+      "E",
+      "i",
+      "a"
+     ],
+     "pos": {
+      "law": "linear",
+      "from": 0,
+      "to": 5
+     },
+     "scatter": 1.0,
+     "seed": 1
+    }
+   },
+   {
+    "type": "formant",
+    "params": {
+     "f0": 175,
+     "voice": "women",
+     "sequence": [
+      "a",
+      "o",
+      "u",
+      "E",
+      "i",
+      "a"
+     ],
+     "pos": {
+      "law": "linear",
+      "from": 0,
+      "to": 5
+     },
+     "scatter": 1.0,
+     "seed": 2
+    }
+   },
+   {
+    "type": "formant",
+    "params": {
+     "f0": 175,
+     "voice": "children",
+     "sequence": [
+      "a",
+      "o",
+      "u",
+      "E",
+      "i",
+      "a"
+     ],
+     "pos": {
+      "law": "linear",
+      "from": 0,
+      "to": 5
+     },
+     "scatter": 1.0,
+     "seed": 3
+    }
+   }
+  ]
+ },
+ "post": {
+  "limit": 250
+ }
+}

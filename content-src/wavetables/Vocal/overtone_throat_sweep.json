@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Overtone Throat Sweep",
+ "category": "Vocal",
+ "description": "A narrow resonance walks up the harmonic series from the 4th to the 20th partial and back over a fixed drone.",
+ "frames": 64,
+ "seed": "overtone_throat_sweep",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "overtone_throat_sweep"
+  }
+ }
+}
