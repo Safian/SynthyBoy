@@ -30,7 +30,7 @@ public:
     struct State
     {
         int slot = 0;              // 0 .. 15
-        int type = 0;              // synthyboy::FxInstanceType
+        int type = 0;              // synthyboy::FxInstanceType, or the kind of a splitter (fxl::kKindSplitterLh / Lmh / Ms: kNumFxInstanceTypes + 0 .. 2)
         char name[24] = {};
         bool on = true;
         int rack = 0;              // 0 Main, 1 Bus 1, 2 Bus 2
@@ -256,6 +256,27 @@ private:
                     const float x = fcx - 4.0f + static_cast<float> (i) * 3.5f;
                     p.line (x, fcy + 7.0f, x, fcy + 7.0f - (6.0f - static_cast<float> (i)), 1.3f, col);
                 }
+                break;
+            case synthyboy::kNumFxInstanceTypes: // splitter Low / High: the signal cut in two, a bar per band
+                p.line (fcx, fcy - 8.0f, fcx, fcy + 8.0f, 1.2f, p.c (T.textDim, 200));
+                p.line (fcx - 11.0f, fcy - 4.0f, fcx - 3.0f, fcy - 4.0f, 2.2f, col);
+                p.line (fcx - 11.0f, fcy + 4.0f, fcx - 3.0f, fcy + 4.0f, 2.2f, col);
+                p.line (fcx + 3.0f, fcy - 4.0f, fcx + 11.0f, fcy - 4.0f, 2.2f, col);
+                p.line (fcx + 3.0f, fcy + 4.0f, fcx + 11.0f, fcy + 4.0f, 2.2f, col);
+                break;
+            case synthyboy::kNumFxInstanceTypes + 1: // splitter Low / Mid / High: three zones
+                for (int i = -1; i <= 1; ++i)
+                {
+                    const float x = fcx + static_cast<float> (i) * 9.0f;
+                    p.line (x - 3.5f, fcy - 5.0f, x + 3.5f, fcy - 5.0f, 2.2f, col);
+                    p.line (x - 3.5f, fcy + 5.0f, x + 3.5f, fcy + 5.0f, 2.2f, col);
+                }
+                p.line (fcx - 4.5f, fcy - 8.0f, fcx - 4.5f, fcy + 8.0f, 1.2f, p.c (T.textDim, 200));
+                p.line (fcx + 4.5f, fcy - 8.0f, fcx + 4.5f, fcy + 8.0f, 1.2f, p.c (T.textDim, 200));
+                break;
+            case synthyboy::kNumFxInstanceTypes + 2: // splitter Mid / Side: the two lanes
+                p.line (fcx - 11.0f, fcy - 5.0f, fcx + 11.0f, fcy - 5.0f, 3.0f, col);
+                p.line (fcx - 11.0f, fcy + 5.0f, fcx + 11.0f, fcy + 5.0f, 3.0f, p.c (T.flow[3], state.on ? 220 : 140));
                 break;
             default: // Generic diamond
                 p.line (fcx - 6.0f, fcy, fcx, fcy - 6.0f, 1.2f, col);

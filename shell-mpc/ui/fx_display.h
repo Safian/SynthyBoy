@@ -5,6 +5,8 @@
 //   DELAY       the echoes in time: the two taps (left above the line, right under it), the repeats with the feedback, the time axis in milliseconds (a tempo sync is turned into milliseconds by the owner)
 //   FX FILTER   the response of the filter (the owner computes it with the engine's own filter, the same as the filter page), a line with a faint fill
 //   DISTORTION  the transfer curve of the waveshaper (the type and the drive) over the whole plot, with the grid, the scales, the identity as a reference and the present signal level as a dot
+//   SPLITTER    the bands the splitter makes: Low / High and Low / Mid / High as regions of the frequency axis with the crossover frequencies, Mid / Side as the two lanes; a band that is bypassed (passes around the
+//               racks of its band) is drawn hollow with BYPASS
 // The other effects have no display (the editor gives their knobs the room). Same contract as every component (core.h): a state in, no touch.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -22,7 +24,7 @@ namespace synthyboy_mpc { namespace ui {
 class FxDisplay : public Component
 {
 public:
-    enum class Kind : uint8_t { None, Eq, Compressor, Delay, Filter, Distortion };
+    enum class Kind : uint8_t { None, Eq, Compressor, Delay, Filter, Distortion, Split };
 
     /** One band of the EQ: mode 0 = the band's first mode (low: shelf, mid: peak, high: shelf), 1 = the second (high pass, notch, low pass); `used` false: the band is off (the second mid band). */
     struct EqBand { bool used = true; int mode = 0; float freq = 1000.0f, gainDb = 0.0f, resonance = 30.0f; };
@@ -31,6 +33,8 @@ public:
     struct CompState { CompBand band[3]; int bands = 0; int activeBand = 1; };   // bands: 0 multiband, 1 low only, 2 high only, 3 one band
     struct DelayState { float timeMs1 = 300.0f, timeMs2 = 300.0f, feedback = 0.4f; int style = 1; };   // style: 0 mono, 1 stereo, 2 ping pong, 3 mid ping pong, 4 tap -> delay
     struct FilterState { const float* db = nullptr; int n = 0; float cutoffHz = 1000.0f; };   // dB at 20 Hz .. 20 kHz (log axis), the cutoff for the mark
+    /** The splitter: mode 0 Low / High, 1 Low / Mid / High, 2 Mid / Side; f1 the (lower) crossover, f2 the upper one (Low / Mid / High); bypass[]: low, mid, high (Mid / Side: mid, side in 0 and 1). */
+    struct SplitState { int mode = 0; float f1 = 500.0f, f2 = 3000.0f; bool bypass[3] = {}; };
     struct DistState { int type = 0; float driveDb = 0.0f; float mix = 1.0f; float inLevel = -1.0f; };   // inLevel: the present peak level of the signal at the input (0 .. 1 of full scale; < 0: not known)
 
     Kind kind = Kind::None;
@@ -39,6 +43,7 @@ public:
     DelayState delay;
     FilterState filter;
     DistState dist;
+    SplitState split;
     char title[24] = {};
 
     FxDisplay() = default;
@@ -60,6 +65,7 @@ public:
             case synthyboy::kFxTypeDelay: return Kind::Delay;
             case synthyboy::kFxTypeFilter: return Kind::Filter;
             case synthyboy::kFxTypeDistortion: return Kind::Distortion;
+            case synthyboy::kNumFxInstanceTypes: case synthyboy::kNumFxInstanceTypes + 1: case synthyboy::kNumFxInstanceTypes + 2: return Kind::Split;   // the three splitters (fx_layout.h kKindSplitter*)
             default: return Kind::None;
         }
     }
@@ -72,6 +78,7 @@ public:
             case Kind::Delay: setKind (Kind::Delay, "ECHOES"); break;
             case Kind::Filter: setKind (Kind::Filter, "FILTER RESPONSE"); break;
             case Kind::Distortion: setKind (Kind::Distortion, "WAVESHAPER"); break;
+            case Kind::Split: setKind (Kind::Split, fxType == synthyboy::kNumFxInstanceTypes + 2 ? "MID AND SIDE" : "BANDS"); break;
             default: setKind (Kind::None, ""); break;
         }
     }
@@ -161,6 +168,7 @@ public:
             case Kind::Delay: drawDelay (p, sb, plot); break;
             case Kind::Filter: drawFilter (p, sb, plot); break;
             case Kind::Distortion: drawDistortion (p, sb, plot); break;
+            case Kind::Split: drawSplit (p, plot); break;
             default: break;
         }
     }
@@ -236,12 +244,13 @@ private:
         const float lo = -72.0f, hi = 0.0f;
         static const char* const kName[3] = { "LOW", "MID", "HIGH" };
         const uint32_t kCol[3] = { T.flow[0], T.flow[1], T.flow[3] };
-        const int gap = 24, labelH = 22, axisH = 20;
-        const int cellW = (plot.w - 2 * gap) / 3, side = std::max (40, std::min (cellW - 40, plot.h - labelH - axisH));
+        const int gap = 30, labelH = 22, axisH = 20;
+        // the plots use the room the block has: as wide as a third of it allows (the transfer curve is not a square plot: the 1 : 1 line runs from corner to corner) and as high as the block
+        const int cellW = (plot.w - 2 * gap) / 3, pw = std::max (60, std::min (cellW - 8, 420)), ph = std::max (40, plot.h - labelH - axisH);
         for (int b = 0; b < 3; ++b)
         {
-            const int cx = plot.x + b * (cellW + gap) + (cellW - side) / 2;
-            const Rect sq { cx, plot.y + labelH, side, side };
+            const int cx = plot.x + b * (cellW + gap) + (cellW - pw) / 2;
+            const Rect sq { cx, plot.y + labelH, pw, ph };
             auto xOf = [&] (float db) { return static_cast<float> (sq.x) + std::clamp ((db - lo) / (hi - lo), 0.0f, 1.0f) * static_cast<float> (sq.w); };
             auto yOf = [&] (float db) { return static_cast<float> (sq.bottom()) - std::clamp ((db - lo) / (hi - lo), 0.0f, 1.0f) * static_cast<float> (sq.h); };
             for (int k = 0; k <= 3; ++k)
@@ -294,7 +303,8 @@ private:
         // the bands: all three of the multiband compressor, the one that is on for the others
         static const char* const kName[3] = { "LOW", "MID", "HIGH" };
         const uint32_t kCol[3] = { T.flow[0], T.flow[1], T.flow[3] };
-        const bool shown[3] = { comp.bands == 0 || comp.bands == 1, comp.bands == 0 || comp.bands == 3, comp.bands == 0 || comp.bands == 2 };
+        // the engine: Low band = two bands (the low one and the mid values for the rest), High band = two bands (the mid values below, the high one above), Single band = the mid values alone
+        const bool shown[3] = { comp.bands == 0 || comp.bands == 1, true, comp.bands == 0 || comp.bands == 2 };
         int lx = plot.x + 6;
         // the numbers of the bands at the left of the curve (the room the square leaves)
         if (sq.x - plot.x > 360)
@@ -408,6 +418,67 @@ private:
         }
         const float cx = xOfHz (filter.cutoffHz, plot);
         p.line (cx, static_cast<float> (plot.y), cx, static_cast<float> (plot.bottom()), 1.0f, p.c (T.flow[1], 200));
+    }
+
+    /** The bands of a splitter: the frequency axis (20 Hz .. 20 kHz, log) cut at the crossover frequencies into regions, each with its name; a bypassed band is outlined and says BYPASS. Mid / Side: two lanes. */
+    void drawSplit (Pen& p, const Rect& plot) const
+    {
+        const theme::Look& T = theme::L();
+        const uint32_t kCol[3] = { T.flow[0], T.flow[1], T.flow[3] };
+        auto region = [&] (const Rect& r, const char* name, uint32_t col, bool bypassed, const char* range)
+        {
+            if (r.w < 4)
+                return;
+            if (bypassed)
+                p.rrect (r, 6.0f, p.c (col, 140), 1.2f);
+            else
+            {
+                p.rrect (r, 6.0f, p.c (col, 70));
+                p.rrect (r, 6.0f, p.c (col, 255), 1.4f);
+            }
+            p.textCentered ({ r.x, r.y + r.h / 2 - 34, r.w, 28 }, name, T.fLabel + 3.0f, p.c (bypassed ? T.textDim : T.text, 255), T.fMin);
+            if (range[0] != '\0')
+                p.textCentered ({ r.x, r.y + r.h / 2 - 4, r.w, 22 }, range, T.fLabel, p.c (T.textDim, 255), T.fMin);
+            if (bypassed)
+                p.textCentered ({ r.x, r.y + r.h / 2 + 20, r.w, 22 }, "BYPASS", T.fLabel, p.c (T.text, 255), T.fMin);
+        };
+        auto hz = [] (float f, char* out, size_t n)
+        {
+            if (f >= 1000.0f)
+                std::snprintf (out, n, "%.1f kHz", static_cast<double> (f) / 1000.0);
+            else
+                std::snprintf (out, n, "%.0f Hz", static_cast<double> (f));
+        };
+        if (split.mode == 2)   // mid / side: two lanes, the mid one on top
+        {
+            const int gap = 12, h = (plot.h - gap) / 2;
+            region ({ plot.x, plot.y, plot.w, h }, "MID", kCol[0], split.bypass[0], "the centre of the stereo picture");
+            region ({ plot.x, plot.y + h + gap, plot.w, h }, "SIDE", kCol[2], split.bypass[1], "what makes it wide");
+            return;
+        }
+        freqGrid (p, plot);
+        const bool three = split.mode == 1;
+        const float f1 = std::clamp (split.f1, 20.0f, 20000.0f), f2 = std::clamp (three ? std::max (split.f2, f1) : f1, 20.0f, 20000.0f);
+        const int x1 = static_cast<int> (xOfHz (f1, plot)), x2 = static_cast<int> (xOfHz (f2, plot)), pad = 3, top = plot.y + 2, h = plot.h - 4;
+        char a[16], b[16], t[40];
+        hz (f1, a, sizeof a);
+        hz (f2, b, sizeof b);
+        if (three)
+        {
+            std::snprintf (t, sizeof t, "below %s", a);
+            region ({ plot.x, top, x1 - plot.x - pad, h }, "LOW", kCol[0], split.bypass[0], t);
+            std::snprintf (t, sizeof t, "%s to %s", a, b);
+            region ({ x1 + pad, top, x2 - x1 - 2 * pad, h }, "MID", kCol[1], split.bypass[1], t);
+            std::snprintf (t, sizeof t, "above %s", b);
+            region ({ x2 + pad, top, plot.right() - x2 - pad, h }, "HIGH", kCol[2], split.bypass[2], t);
+        }
+        else
+        {
+            std::snprintf (t, sizeof t, "below %s", a);
+            region ({ plot.x, top, x1 - plot.x - pad, h }, "LOW", kCol[0], split.bypass[0], t);
+            std::snprintf (t, sizeof t, "above %s", a);
+            region ({ x1 + pad, top, plot.right() - x1 - pad, h }, "HIGH", kCol[2], split.bypass[2], t);
+        }
     }
 
     /** The transfer curve of the waveshaper over the whole plot (input -1 .. +1 across, output -1 .. +1 up): a grid every half, the scale on both axes, the identity as the reference, the curve with the drive and

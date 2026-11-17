@@ -260,6 +260,8 @@ public:
         int pxPerStep = 8;
     };
     State state;
+    /** The size the drawn box is limited to (0: the whole rectangle), at the left of the rectangle and centred in its height: a cell of a page that is far bigger than a number needs holds the field at its left (under the index chip) and the touch zone stays the whole cell. */
+    Size maxBox { 0, 0 };
 
     NumberField() = default;
     NumberField (const char* label, Format f) { setText (state.label, sizeof state.label, label); state.format = f; }
@@ -289,7 +291,14 @@ public:
 
 protected:
     double stepSize() const noexcept { return state.step > 0.0 ? state.step : 1.0; }
-    Rect box() const noexcept { return rect_.inset (2); }
+    Rect box() const noexcept
+    {
+        const Rect r = rect_.inset (2);
+        if (maxBox.w <= 0 || maxBox.h <= 0)
+            return r;
+        const int w = std::min (r.w, maxBox.w), h = std::min (r.h, maxBox.h);
+        return { r.x, r.y + (r.h - h) / 2, w, h };
+    }
 
     void drawBody (Pen& p) const override
     {

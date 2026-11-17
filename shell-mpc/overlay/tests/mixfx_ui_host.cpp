@@ -286,7 +286,7 @@ void testFxChain()
     check (r.ui.numCards() == 0 && ! r.ui.screen().editorShown() && r.ui.screen().galleryShown(), "an empty chain shows the gallery and no editor");
     check (r.ui.screen().chainBar.spare[0].rect().w > 0 && r.ui.screen().chainBar.spare[0].rect().x > r.ui.screen().chainBar.plusCard.rect().x, "after the + ADD card the free places stand in the bar as quiet plus cells");
     r.tap (r.ui.screen().chainBar.plusCard);
-    check (r.ui.listOpen() && r.ui.list().state.count == synthyboy::kNumFxInstanceTypes - 1, "+ ADD opens the list of the effect types (13)");
+    check (r.ui.listOpen() && r.ui.list().state.count == ui::fxl::kNumKinds - 1, "+ ADD opens the list of the effects (the 13 types and the 3 splitters: 16)");
     r.tapAt (20, 130);   // a tap beside the list closes it
     check (! r.ui.listOpen(), "a tap beside the list closes it");
     addEffect (r, 4);   // EQ
@@ -320,7 +320,7 @@ void testFxGalleryEmptyState()
     r.refresh();
     check (r.ui.numCards() == 0 && ! r.ui.screen().editorShown() && r.ui.screen().galleryShown(), "empty chain shows the gallery and no editor");
     const ui::FxGallery& g = r.ui.screen().gallery;
-    check (g.numTypes() == synthyboy::kNumFxInstanceTypes - 1, "gallery has all 13 engine effect types (" + std::to_string (g.numTypes()) + ")");
+    check (g.numTypes() == ui::fxl::kNumKinds - 1, "gallery has all 16 effects of the engine: the 13 types and the 3 splitters (" + std::to_string (g.numTypes()) + ")");
     check (g.rect().w >= 1200 && g.rect().h >= 400, "gallery fills the editor panel area (" + std::to_string (g.rect().w) + " x " + std::to_string (g.rect().h) + ")");
 
     // verify each card's dimensions and touch targets >= 56 px
@@ -356,132 +356,227 @@ void testFxGalleryEmptyState()
     check (r.ui.numCards() == 0 && ! r.ui.screen().editorShown() && r.ui.screen().galleryShown(), "removing the only effect returns the gallery");
 }
 
+/** The members of a cell of the page: the controls of the cell (both of a pair) and which of them is shown. */
+int shownControls (ui::FxSlotEditor& ed, int p)
+{
+    const ui::Component* members[5] = { &ed.knobs[p], &ed.steppers[p], &ed.lists[p], &ed.toggles[p], &ed.numbers[p] };
+    int n = 0;
+    for (const ui::Component* c : members)
+        n += isShown (ed, c);
+    return n;
+}
+
+/** The kinds of effect the FX page has: a type of the pool is added by its row of the list, a splitter the same way (the list holds the 16 kinds in order). */
+void addKind (FxRig& r, int kind)
+{
+    addEffect (r, kind - 1);
+}
+
+/** Checks every page of the open effect in its present state: one control of the kind its values ask for in every cell the table shows, nothing off the page, touch size, no overlap, one line of chips per row, the
+    names and values, the display, the Q groups (a member exactly where a live control is), the closing-up rule (a hidden cell is at the end of its row, the last shown cell of a row is live). */
+bool pagesOk (FxRig& r, std::string& why)
+{
+    ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+    bool ok = true;
+    auto bad = [&] (const std::string& w) { if (ok) why = w; ok = false; };
+    const ui::fxl::Layout& lay = ed.layoutTable();
+    if (ed.hasDisplay() != (lay.displayH > 0) || (ed.hasDisplay() && ed.displayRect().h != lay.displayH))
+        bad ("the display has the height the table says");
+    if (ed.rowsPerPage() != lay.rowsPerPage)
+        bad ("rows per page");
+    for (int pg = 0; pg < ed.numPages(); ++pg)
+    {
+        ed.setPage (pg);
+        r.refresh();
+        const int first = ed.firstRowOfPage(), rows = std::min (ed.rowsPerPage(), ed.numRows() - first);
+        std::vector<const ui::Component*> shownNow;
+        std::vector<char> onPage (static_cast<size_t> (ui::FxSlotEditor::kMaxParams), 0);
+        for (int rr = 0; rr < rows; ++rr)
+        {
+            int lastShown = -1, lastLive = -1, liveCount = 0, rowY = -1;
+            for (int c = 0; c < 4; ++c)
+            {
+                const int p = ed.controlInCell (first + rr, c);
+                if (p < 0)
+                {
+                    if (lastShown >= 0 && c < 4 && ed.controlInCell (first + rr, std::min (3, c + 1)) >= 0)
+                        bad ("a hole in a row");
+                    continue;
+                }
+                lastShown = c;
+                onPage[static_cast<size_t> (p)] = 1;
+                const synthyboy::ParamInfo* pi = ed.infoOf (p);
+                if (pi == nullptr) { bad ("a control without a parameter"); continue; }
+                if (shownControls (ed, p) != 1) bad (std::string (pi->key) + ": exactly one control of the cell is shown");
+                const ui::FxSlotEditor::Kind k = ed.kindOf (p);
+                const bool choice = pi->numChoices > 0;
+                if (choice == (k == ui::FxSlotEditor::Kind::Knob || k == ui::FxSlotEditor::Kind::Number)) bad (std::string (pi->key) + ": a choice is never a knob, a continuous value always");
+                if ((k == ui::FxSlotEditor::Kind::Number) != (! choice && pi->interval == 1.0f)) bad (std::string (pi->key) + ": a whole number is a number field");
+                if (choice && pi->numChoices > 8 && k != ui::FxSlotEditor::Kind::Stepper) bad (std::string (pi->key) + ": more than 8 values is a stepper");
+                if (choice && pi->numChoices <= 8 && k == ui::FxSlotEditor::Kind::List && ! ed.listFits (p, ed.lists[p].rect().w, ed.lists[p].rect().h)) bad (std::string (pi->key) + ": a list fits its cell");
+                if (choice && pi->numChoices <= 8 && k == ui::FxSlotEditor::Kind::Stepper && ed.baseKind (p) == ui::FxSlotEditor::Kind::List && ed.listFits (p, ed.steppers[p].rect().w, ed.steppers[p].rect().h)) bad (std::string (pi->key) + ": a list that fits is not a stepper");
+                const ui::Component* comp = ed.memberOf (p);
+                if (comp->rect().h < 56 || ! comp->sizeOk()) bad (std::string (pi->key) + ": >= 56 px and legible");
+                for (const ui::Component* o : shownNow)
+                    if (o->rect().overlaps (comp->rect())) bad (std::string (pi->key) + ": nothing overlaps");
+                shownNow.push_back (comp);
+                if (! ed.rect().contains (comp->rect())) bad (std::string (pi->key) + ": inside the page");
+                rowY = rowY < 0 ? comp->rect().y : rowY;
+                if (comp->rect().y != rowY) bad (std::string (pi->key) + ": the chips of a row stand in one line");
+                if (comp->rect().h > ed.knobArea().h / ed.rowsPerPage()) bad (std::string (pi->key) + ": the row has the standard height");
+                switch (k)
+                {
+                    case ui::FxSlotEditor::Kind::Knob: if (ed.knobs[p].state.label[0] == '\0' || ed.knobs[p].state.valueText[0] == '\0') bad (std::string (pi->key) + ": a name and a value"); break;
+                    case ui::FxSlotEditor::Kind::Stepper: if (ed.steppers[p].state.caption[0] == '\0' || ed.steppers[p].state.text[0] == '\0') bad (std::string (pi->key) + ": a name and a value"); break;
+                    case ui::FxSlotEditor::Kind::List: if (ed.lists[p].state.title[0] == '\0' || ed.lists[p].state.count != pi->numChoices) bad (std::string (pi->key) + ": a name and all the values"); break;
+                    case ui::FxSlotEditor::Kind::Toggle: if (ed.toggles[p].state.label[0] == '\0') bad (std::string (pi->key) + ": a name"); break;
+                    case ui::FxSlotEditor::Kind::Number: if (ed.numbers[p].state.label[0] == '\0' || ed.numbers[p].state.max <= ed.numbers[p].state.min) bad (std::string (pi->key) + ": a name and a range"); break;
+                }
+                if (ed.isLive (p)) { lastLive = c; ++liveCount; }
+                else if (ed.memberControl (first + rr, c) >= 0) bad ("a dim control is a Q member");
+                if (ed.isLive (p) != ed.memberOf (p)->enabled()) bad (std::string (pi->key) + ": dim exactly where it is not live");
+                // the Q group of the row has a member exactly here
+                if (ed.isLive (p) != (ed.groups[first + rr].member (c) == ed.memberOf (p))) bad (std::string (pi->key) + ": a Q chip exactly on a live control");
+            }
+            if (lastShown != lastLive) bad ("the last cell of a row that is shown is live (what does nothing at the end of a row is hidden)");
+            if (liveCount == 0) bad ("a row with nothing live is not on the page");
+            if (ed.groups[first + rr].numMembers() != liveCount) bad ("the number of the Q members of a row");
+        }
+        // what is not on the page is not shown
+        for (int p = 0; p < ed.numParams(); ++p)
+            if (! onPage[static_cast<size_t> (p)] && shownControls (ed, p) != 0)
+                bad (std::string ("off the page: ") + (ed.infoOf (p) ? ed.infoOf (p)->key : "?"));
+    }
+    return ok;
+}
+
+/** Every combination of the values of the keys the conditions of the table name (the sync, the model, the mode ...) written into the fake instance of a freshly added effect; `fn` runs in each state. */
+template <class Fn>
+void forEveryState (FxRig& r, int kind, Fn&& fn)
+{
+    ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+    std::vector<const char*> keys;
+    for (int p = 0; p < ed.numParams(); ++p)
+        if (ed.altOf (p) != nullptr && ! ed.altOf (p)->live.always() && std::find_if (keys.begin(), keys.end(), [&] (const char* k) { return std::strcmp (k, ed.altOf (p)->live.key) == 0; }) == keys.end())
+            keys.push_back (ed.altOf (p)->live.key);
+    std::vector<int> counts, at (keys.size(), 0);
+    for (const char* k : keys)
+        counts.push_back (std::max (1, static_cast<int> (synthyboy::paramTable()[demo::Inst::idx (k)].numChoices)));
+    const synthyboy::FxRackItem item = r.ui.cardItem (r.ui.selectedSlot());
+    for (;;)
+    {
+        for (size_t i = 0; i < keys.size(); ++i)
+        {
+            const int ctl = ed.controlOfKey (keys[i]);
+            const int idx = r.ui.paramIndexOf (item, ctl);
+            r.inst.setAt (idx, item.pool ? synthyboy::fxInstanceNormalise (kind, ctl, static_cast<float> (at[i])) : static_cast<float> (at[i]));
+        }
+        r.refresh (2);
+        fn (at);
+        size_t i = 0;
+        while (i < at.size() && ++at[i] >= counts[i])
+            at[i++] = 0;
+        if (i == at.size())
+            break;
+    }
+}
+
 void testEveryEffectType()
 {
-    for (int t = 1; t < synthyboy::kNumFxInstanceTypes; ++t)
+    for (int kind = 1; kind < ui::fxl::kNumKinds; ++kind)
     {
         FxRig r;
         r.refresh();
-        addEffect (r, t - 1);
+        addKind (r, kind);
         ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
-        const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (t);
-        check (ed.currentType() == t && ed.numParams() == d.count, std::string (d.name) + ": the page has the effect's parameters");
+        const ui::fxl::Layout& lay = ui::fxl::layoutOf (kind);
+        const std::string name = lay.name;
+        check (ed.currentType() == kind && r.ui.numCards() == 1, name + ": adding it makes its card and its page (the kind " + std::to_string (kind) + ")");
 
-        // Walk every page of each effect type
-        for (int pg = 0; pg < ed.numPages(); ++pg)
+        // the table: every parameter of the type's own list has its control (the number of the control is the number of the parameter), once; the splitters and the extras of the reverb come after
+        bool table = true;
+        std::string why;
+        if (kind < synthyboy::kNumFxInstanceTypes)
         {
-            ed.setPage (pg);
-            r.refresh();
-
-            const int firstParam = ed.firstRowOfPage() * 4;
-            const int lastParam = std::min (ed.numParams(), firstParam + ed.rowsPerPage() * 4);
-            const int expectedOnPage = lastParam - firstParam;
-
-            int shownKnobs = 0, shownSteppers = 0, shownLists = 0, shownToggles = 0, fallbacks = 0;
-            int withValue = 0, withName = 0, small = 0;
-            bool kindsOk = true, overlap = false, inside = true;
-            std::vector<const ui::Component*> shownNow;
-
-            for (int i = 0; i < ui::FxSlotEditor::kMaxParams; ++i)
-            {
-                const bool onThisPage = (i >= firstParam && i < lastParam);
-                const bool choice = ed.isChoice (i);
-                const ui::Component* members[4] = { &ed.knobs[i], &ed.steppers[i], &ed.lists[i], &ed.toggles[i] };
-                bool shownKind[4] = { false, false, false, false };
-                for (int k = 0; k < 4; ++k)
-                    shownKind[k] = isShown (ed, members[k]);
-                const int nShown = shownKind[0] + shownKind[1] + shownKind[2] + shownKind[3];
-                if (! onThisPage)
+            const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (kind);
+            for (int p = 0; p < d.count; ++p)
+                if (ed.infoOf (p) == nullptr || ed.infoOf (p) != &synthyboy::paramTable()[d.source[p]])
                 {
-                    kindsOk = kindsOk && nShown == 0;
-                    continue;
+                    table = false;
+                    why = std::string (" (parameter ") + std::to_string (p) + " of the type has no control)";
                 }
-                const ui::FxSlotEditor::Kind kind = ed.kindOf (i);
-                const synthyboy::ParamInfo* pi = synthyboy::fxInstanceSource (t, i);
-                // exactly one control is shown, of the kind the cell has; an enumerated parameter is never a knob, a continuous one is always a knob
-                kindsOk = kindsOk && nShown == 1 && shownKind[static_cast<int> (kind)] && (kind == ui::FxSlotEditor::Kind::Knob) == ! choice;
-                // a list of up to 8 values is a LED list (a toggle for Off / On), a longer one a stepper; a short one that is a stepper is a fallback: none is expected (every list fits its cell)
-                // a short list is a stepper only where its list does not fit the cell (the display and the rows keep their size)
-                if (choice && pi->numChoices <= 8 && kind == ui::FxSlotEditor::Kind::Stepper && ed.listFits (i, ed.steppers[i].rect().w, ed.steppers[i].rect().h) && ed.baseKind (i) == ui::FxSlotEditor::Kind::List)
-                    ++fallbacks;
-                if (choice && pi->numChoices <= 8 && kind == ui::FxSlotEditor::Kind::List)
-                    kindsOk = kindsOk && ed.listFits (i, ed.lists[i].rect().w, ed.lists[i].rect().h);
-                if (choice && pi->numChoices > 8)
-                    kindsOk = kindsOk && kind == ui::FxSlotEditor::Kind::Stepper;
-                const ui::Component* c = members[static_cast<int> (kind)];
-                small += c->rect().h < 56 || ! c->sizeOk();
-                for (const ui::Component* o : shownNow)
-                    overlap = overlap || o->rect().overlaps (c->rect());
-                shownNow.push_back (c);
-                inside = inside && ed.rect().contains (c->rect());
-                switch (kind)
-                {
-                    case ui::FxSlotEditor::Kind::Knob:
-                        ++shownKnobs; withName += ed.knobs[i].state.label[0] != '\0'; withValue += ed.knobs[i].state.valueText[0] != '\0'; break;
-                    case ui::FxSlotEditor::Kind::Stepper:
-                        ++shownSteppers; withName += ed.steppers[i].state.caption[0] != '\0'; withValue += ed.steppers[i].state.text[0] != '\0'; break;
-                    case ui::FxSlotEditor::Kind::List:
-                        ++shownLists; withName += ed.lists[i].state.title[0] != '\0'; withValue += ed.lists[i].state.count == pi->numChoices && ed.lists[i].state.index >= 0; break;
-                    case ui::FxSlotEditor::Kind::Toggle:
-                        ++shownToggles; withName += ed.toggles[i].state.label[0] != '\0'; ++withValue; break;
-                }
-            }
-
-            // the display keeps its height, the knobs of the page have one size, every cell of a row is the same rectangle (the chips stand in one line), the rows have the standard height
-            bool uniform = ! ed.hasDisplay() || ed.displayRect().h == ui::FxSlotEditor::kDisplayH;
-            int knobH = -1;
-            for (int i = firstParam; i < lastParam; ++i)
-            {
-                const ui::Rect cell = ed.memberOf (i)->rect();
-                uniform = uniform && cell.h <= (ed.knobArea().h / ed.rowsPerPage());
-                if (ed.kindOf (i) == ui::FxSlotEditor::Kind::Knob)
-                {
-                    knobH = knobH < 0 ? cell.h : knobH;
-                    uniform = uniform && cell.h == knobH;
-                }
-                const int first = (i / 4) * 4;
-                uniform = uniform && cell.y == ed.memberOf (first)->rect().y;
-            }
-            check (uniform, std::string (d.name) + " page " + std::to_string (pg + 1) + ": the display keeps its height, one knob size, the chips of a row stand in one line");
-            const int totalShown = shownKnobs + shownSteppers + shownLists + shownToggles;
-            if (fallbacks > 0 || overlap || ! inside || small > 0)
-            {
-                std::printf ("  editor %d,%d %dx%d display %d,%d %dx%d knobArea %d,%d %dx%d\n", ed.rect().x, ed.rect().y, ed.rect().w, ed.rect().h, ed.displayRect().x, ed.displayRect().y, ed.displayRect().w, ed.displayRect().h, ed.knobArea().x, ed.knobArea().y, ed.knobArea().w, ed.knobArea().h);
-                for (int i = firstParam; i < lastParam; ++i)
-                    std::printf ("  p%d kind %d rect %d,%d %dx%d\n", i, static_cast<int> (ed.kindOf (i)), ed.memberOf (i)->rect().x, ed.memberOf (i)->rect().y, ed.memberOf (i)->rect().w, ed.memberOf (i)->rect().h);
-            }
-            check (kindsOk && ! overlap && inside && totalShown == expectedOnPage && withName == totalShown && withValue == totalShown && small == 0 && fallbacks == 0,
-                   std::string (d.name) + " page " + std::to_string (pg + 1) + " of " + std::to_string (ed.numPages()) + ": " + std::to_string (shownKnobs) + " knobs, " + std::to_string (shownSteppers) + " steppers, " + std::to_string (shownLists) + " lists, " + std::to_string (shownToggles) + " toggles (one control per cell, no list turned into a stepper, nothing overlaps, every control >= 56 px)");
-
-            // the controls fill the page: the lowest control ends near the bottom of the page
-            int bottom = 0;
-            for (int i = firstParam; i < lastParam; ++i)
-                bottom = std::max (bottom, ed.memberOf (i)->rect().bottom());
-            const int rowsUsed = (expectedOnPage + 3) / 4;
-            check (rowsUsed < ed.rowsPerPage() || bottom >= ed.knobArea().bottom() - ed.knobArea().h / ed.rowsPerPage(),
-                   std::string (d.name) + " page " + std::to_string (pg + 1) + ": controls use the page (the last row ends at " + std::to_string (bottom) + " of " + std::to_string (ed.knobArea().bottom()) + ")");
         }
+        int cells = 0;
+        for (int rr = 0; rr < lay.numRows; ++rr)
+            for (int c = 0; c < 4; ++c)
+                for (const ui::fxl::Alt& a : lay.row[rr].cell[c].alt)
+                    cells += a.key != nullptr;
+        int controls = 0;
+        for (int p = 0; p < ui::FxSlotEditor::kMaxParams; ++p)
+            controls += ed.infoOf (p) != nullptr;
+        if (controls != cells)
+        {
+            table = false;
+            why += " (a key of the table is not an engine parameter: " + std::to_string (controls) + " of " + std::to_string (cells) + ")";
+        }
+        check (table, name + ": the table has a control for every parameter of the effect, each once" + why);
+        check (lay.numRows <= ui::fxl::kMaxRows && lay.rowsPerPage >= 2 && lay.rowsPerPage <= ui::fxl::kMaxPageRows, name + ": the table fits the page");
 
-        check (ed.hasDisplay() == (ui::FxDisplay::kindOfType (t) != ui::FxDisplay::Kind::None), std::string (d.name) + ": a display exactly where the effect has a picture");
+        // every state the conditions of the table can make: the pages, and no page with fewer than three live members unless the effect has fewer than three in that state
+        std::string defWhy;
+        r.refresh (2);
+        const bool defaultOk = pagesOk (r, defWhy);
+        check (defaultOk, name + ": every page of the default state (" + std::to_string (ed.numPages()) + " pages, " + std::to_string (ed.numRows()) + " rows): one control of its kind per cell, sizes, one line of chips, Q members only on live controls" + (defaultOk ? "" : " - " + defWhy));
+        int states = 0;
+        bool members = true, everyOk = true;
+        std::string memberWhy, everyWhy;
+        forEveryState (r, kind, [&] (const std::vector<int>& at)
+        {
+            ++states;
+            std::string st;
+            for (int v : at)
+                st += " " + std::to_string (v);
+            int total = 0;
+            for (int rr = 0; rr < ed.numRows(); ++rr)
+                for (int c = 0; c < 4; ++c)
+                    total += ed.memberControl (rr, c) >= 0;
+            for (int pg = 0; pg < ed.numPages(); ++pg)
+            {
+                int onPage = 0;
+                for (int rr = pg * ed.rowsPerPage(); rr < std::min (ed.numRows(), (pg + 1) * ed.rowsPerPage()); ++rr)
+                    for (int c = 0; c < 4; ++c)
+                        onPage += ed.memberControl (rr, c) >= 0;
+                if (onPage < 3 && total >= 3)
+                {
+                    members = false;
+                    memberWhy = " (page " + std::to_string (pg + 1) + " has " + std::to_string (onPage) + " in the state" + st + ")";
+                }
+            }
+            std::string w;
+            if (! pagesOk (r, w))
+            {
+                everyOk = false;
+                everyWhy = " (" + w + " in the state" + st + ")";
+            }
+        });
+        check (members, name + ": in none of the " + std::to_string (states) + " states of its conditions does a page have fewer than 3 controls" + memberWhy);
+        check (everyOk, name + ": every page of every state is whole (the closing-up rule, one line of chips, sizes)" + everyWhy);
 
         // no text of a value is a bare number where the parameter has a unit
         bool units = true;
-        for (int p = 0; p < std::min (d.count, 24); ++p)
+        for (int p = 0; p < ed.numParams(); ++p)
         {
-            const synthyboy::ParamInfo* pi = synthyboy::fxInstanceSource (t, p);
-            if (pi == nullptr || pi->numChoices > 0 || pi->unit == synthyboy::Unit::none)
+            const synthyboy::ParamInfo* pi = ed.infoOf (p);
+            if (pi == nullptr || pi->numChoices > 0 || pi->unit == synthyboy::Unit::none || ed.kindOf (p) != ui::FxSlotEditor::Kind::Knob)
                 continue;
-            for (int c = 0; c < ed.numChildren(); ++c)
-                if (ed.child (c) == &ed.knobs[p] && ed.childShown (c))
-                {
-                    const std::string v = ed.knobs[p].state.valueText;
-                    const bool ok = v.find_first_not_of ("0123456789.+-") != std::string::npos;
-                    if (! ok)
-                        std::printf ("  no unit: %s = '%s'\n", pi->key, v.c_str());
-                    units = units && ok;
-                }
+            const std::string v = ed.knobs[p].state.valueText;
+            const bool ok = v.find_first_not_of ("0123456789.+-") != std::string::npos;
+            if (! ok)
+                std::printf ("  no unit: %s = '%s'\n", pi->key, v.c_str());
+            units = units && ok;
         }
-        check (units, std::string (d.name) + ": every continuous value that has a unit is written with it");
+        check (units, name + ": every continuous value that has a unit is written with it");
+        check (ed.hasDisplay() == (lay.displayH > 0), name + ": a display exactly where the table says");
     }
 }
 
@@ -495,7 +590,7 @@ void testFxEditing()
         ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
         r.refresh();
         check (ed.currentType() == synthyboy::kFxTypeDistortion, "added Distortion effect");
-        check (ed.isChoice (0) && ed.isChoice (3), "Distortion TYPE (param 0) and FILTER ORDER (param 3) are enumerated");
+        check (ed.isChoice (0) && ed.isChoice (3), "Distortion TYPE (control 0) and FILTER ORDER (control 3) are enumerated");
         check (std::string (ed.steppers[0].state.caption) == "TYPE" && std::string (ed.steppers[0].state.text) == "Soft clip",
                "Distortion TYPE is a stepper with caption 'TYPE' and value 'Soft clip'");
         check (std::string (ed.steppers[3].state.caption) == "FILTER ORDER" && std::string (ed.steppers[3].state.text) == "None",
@@ -512,7 +607,9 @@ void testFxEditing()
             r.refresh();
             const int orderIdx = synthyboy::fxInstanceKeys (r.ui.cardItem (0).index).p[3];
             check (r.inst.param (orderIdx) == synthyboy::fxInstanceNormalise (synthyboy::kFxTypeDistortion, 3, 2.0f) && ed.lists[3].state.index == 2, "a tap on 'Post' writes the parameter and lights its dot");
-            check (ed.activeRow() == 0 && ed.groups[0].member (3) == &ed.lists[3], "the list is the fourth member of the first row group and the tap made that group active");
+            check (ed.activeRow() == 1 && ed.groups[1].member (0) == &ed.lists[3] && std::string (ed.rowTitle (1)) == "FILTER", "the list is the first member of the FILTER block (the second row) and the tap made that group active");
+            ed.setActiveRow (0);
+            r.refresh();
         }
 
         // Q-Link turning steps through choices
@@ -588,61 +685,282 @@ void testValueText()
     check (text ("utility.pan", 0.0f) == "C" && text ("utility.pan", -50.0f) == "L 50" && text ("utility.pan", 50.0f) == "R 50", "a pan reads C / L 50 / R 50 like the mixer (" + text ("utility.pan", 0.0f) + ")");
 }
 
-/** What does nothing in the state of the effect is drawn dim and takes no touch: the DIVISION while the sync is Free (Hz) and the RATE while it follows the tempo (Chorus: one table for the effects with a sync), the filter values of a Distortion without a filter. */
-void testDependentValuesAreDim()
+/** ONE rule for what does nothing in the state of the effect (ui/fx_layout.h): a pair of controls that exclude each other (RATE / DIVISION) is ONE cell that shows the live one; a control that is not live is hidden when no live
+    control follows it in its row (the row closes up, a row with nothing live is gone and the rows below move up), else it is dim in its place and takes no touch. */
+void testClosingUpRule()
 {
-    auto enabledOf = [] (ui::FxSlotEditor& ed, const char* key) -> int
-    {
-        const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (ed.currentType());
-        const int idx = demo::Inst::idx (key);
-        for (int p = 0; p < d.count; ++p)
-            if (d.source[p] == idx)
-            {
-                const ui::Component* members[4] = { &ed.knobs[p], &ed.steppers[p], &ed.lists[p], &ed.toggles[p] };
-                for (const ui::Component* c : members)
-                    if (c->enabled())
-                        return 1;
-                return 0;
-            }
-        return -1;
-    };
-    // the control of a parameter of the open effect is changed through the editor, as a finger does it (the effect lives in the pool: its values are not the engine's keys)
+    // the state of the effect is written through the editor, as a finger does it (the effect lives in the pool)
     auto choose = [] (FxRig& r, const char* key, int option)
     {
         ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
-        const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (ed.currentType());
-        const int idx = demo::Inst::idx (key);
-        for (int p = 0; p < d.count; ++p)
-            if (d.source[p] == idx)
-            {
-                const ui::Rect row = ed.lists[p].rowRect (option);
-                r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
-                return true;
-            }
-        return false;
+        const int p = ed.controlOfKey (key);
+        if (p < 0)
+            return false;
+        if (ed.kindOf (p) == ui::FxSlotEditor::Kind::List)
+        {
+            if (ed.rowOfControl (p) >= 0)
+                ed.setActiveRow (ed.rowOfControl (p));   // the page of the control
+            r.refresh();
+            const ui::Rect row = ed.lists[p].rowRect (option);
+            r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
+        }
+        else
+        {
+            const synthyboy::FxRackItem item = r.ui.cardItem (r.ui.selectedSlot());
+            r.inst.setAt (r.ui.paramIndexOf (item, p), synthyboy::fxInstanceNormalise (r.ui.screen().slotEditor.currentType(), p, static_cast<float> (option)));
+        }
+        r.refresh (2);
+        return true;
     };
-    {
+    auto shown = [] (ui::FxSlotEditor& ed, const char* key) { const int p = ed.controlOfKey (key); return p >= 0 && ed.rowOfControl (p) >= 0 && ed.isLive (p) ? 1 : (p >= 0 && ed.rowOfControl (p) >= 0 ? 2 : 0); };   // 1 live, 2 dim, 0 not on the page
+    {   // RATE / DIVISION: one cell
         FxRig r;
         r.refresh();
-        addEffect (r, 0);   // the first type of the gallery: Chorus
+        addEffect (r, 0);   // Chorus
         ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
         r.refresh();
-        check (enabledOf (ed, "chorus.rate") == 1 && enabledOf (ed, "chorus.division") == 0, "Chorus in Free (Hz) sync: the RATE is live and the DIVISION is dim (" + std::to_string (enabledOf (ed, "chorus.rate")) + ", " + std::to_string (enabledOf (ed, "chorus.division")) + ")");
+        const int rate = ed.controlOfKey ("chorus.rate"), div = ed.controlOfKey ("chorus.division");
+        check (shown (ed, "chorus.rate") == 1 && shown (ed, "chorus.division") == 0 && ed.memberOf (rate)->rect() == ed.memberOf (div)->rect(), "Chorus in Free (Hz) sync: the cell shows the RATE, the DIVISION is not on the page (the same cell)");
         check (choose (r, "chorus.sync", 1), "the SYNC list of the Chorus is there");
-        r.refresh (2);
-        check (enabledOf (ed, "chorus.rate") == 0 && enabledOf (ed, "chorus.division") == 1, "Chorus following the tempo: the DIVISION is live and the RATE is dim");
+        check (shown (ed, "chorus.rate") == 0 && shown (ed, "chorus.division") == 1 && ed.groups[0].member (0) == ed.memberOf (div), "Chorus following the tempo: the cell shows the DIVISION, which is the first member of its Q group");
+        choose (r, "chorus.sync", 0);
+        check (shown (ed, "chorus.rate") == 1 && ed.groups[0].member (0) == ed.memberOf (rate), "and back to the RATE");
     }
-    {
+    {   // a whole row closes up: the filter of the Distortion
         FxRig r;
         r.refresh();
         addEffect (r, 3);   // Distortion
         ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
         r.refresh();
-        check (enabledOf (ed, "distortion.filter_cutoff") == 0 && enabledOf (ed, "distortion.drive") == 1, "Distortion without a filter (order None): the filter values are dim, the drive is live");
+        check (shown (ed, "distortion.filter_cutoff") == 0 && shown (ed, "distortion.filter_blend") == 0 && shown (ed, "distortion.filter_keytrack") == 0 && shown (ed, "distortion.filter_order") == 1 && shown (ed, "distortion.drive") == 1,
+              "Distortion without a filter (order None): the filter values are not on the page (the end of their row is hidden), the order and the drive are live");
+        check (ed.numRows() == 2, "the FILTER KEY row is gone: " + std::to_string (ed.numRows()) + " rows (the row of the order has only the order)");
+        check (ed.groups[1].numMembers() == 1, "its Q group has the one member");
         check (choose (r, "distortion.filter_order", 1), "the filter order of the Distortion is a list");
-        r.refresh (2);
-        check (enabledOf (ed, "distortion.filter_cutoff") == 1, "Distortion with a filter before it: the filter values are live");
+        check (shown (ed, "distortion.filter_cutoff") == 1 && shown (ed, "distortion.filter_keytrack") == 1 && ed.numRows() == 3 && ed.groups[1].numMembers() == 4, "Distortion with a filter before it: the filter values are live, the row of the key track is back (3 rows)");
     }
+    {   // the second middle band of the EQ, the end of its row
+        FxRig r;
+        r.refresh();
+        addEffect (r, 4);   // EQ
+        ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+        r.refresh();
+        check (shown (ed, "eq.mid2.mode") == 1 && shown (ed, "eq.mid2.cutoff") == 0 && shown (ed, "eq.mid2.gain") == 0 && shown (ed, "eq.mid2.resonance") == 0, "EQ with the second middle band Off: only its MODE is on the page");
+        check (choose (r, "eq.mid2.mode", 1), "the MID 2 mode is a list");
+        check (shown (ed, "eq.mid2.cutoff") == 1 && shown (ed, "eq.mid2.resonance") == 1, "EQ with the second middle band on: its values are live");
+    }
+    {   // dim in place: a control that is not live with a live one behind it in its row
+        FxRig r;
+        r.refresh();
+        addEffect (r, 1);   // Compressor
+        ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+        r.refresh();
+        check (shown (ed, "compressor.limit_latency_comp") == 2 && shown (ed, "compressor.crossover_high") == 1, "Compressor in Compress mode: the limiter latency is dim in its place (the crossovers behind it are live)");
+        const int lat = ed.controlOfKey ("compressor.limit_latency_comp");
+        check (! ed.memberOf (lat)->enabled() && ed.groups[ed.rowOfControl (lat)].member (1) == nullptr && ed.groups[ed.rowOfControl (lat)].numMembers() == 3, "the dim control takes no touch and has no Q chip");
+        const synthyboy::FxRackItem item = r.ui.cardItem (0);
+        const int before = r.inst.writes;
+        r.tap (*ed.memberOf (lat));
+        check (r.inst.writes == before, "a tap on it writes nothing");
+        check (choose (r, "compressor.limit", 1), "the MODE list");
+        check (shown (ed, "compressor.limit_latency_comp") == 1, "in Limit mode the latency is live");
+        // the band mode: Low band has no high band and no upper crossover; the other rows move up
+        const int rowsMulti = ed.numRows();
+        check (choose (r, "compressor.bands", 1), "the BANDS list");
+        check (shown (ed, "compressor.high.lower_threshold") == 0 && shown (ed, "compressor.crossover_high") == 0 && shown (ed, "compressor.crossover_low") == 1 && shown (ed, "compressor.mid.gain") == 1 && ed.numRows() == rowsMulti - 1,
+              "Compressor in the Low band mode: the high band row is gone (" + std::to_string (rowsMulti) + " -> " + std::to_string (ed.numRows()) + " rows), the upper crossover is hidden, the lower one is live");
+        check (choose (r, "compressor.bands", 3), "single band");
+        check (shown (ed, "compressor.low.upper_ratio") == 0 && shown (ed, "compressor.high.upper_ratio") == 0 && shown (ed, "compressor.mid.upper_ratio") == 1 && shown (ed, "compressor.low.gain") == 2 && shown (ed, "compressor.crossover_low") == 0,
+              "Single band: only the middle band is live; the gain of the low band is dim in its row, the crossovers are hidden");
+        (void) item;
+    }
+    {   // Utility: the mono bass frequency is the end of its row
+        FxRig r;
+        r.refresh();
+        addEffect (r, 10);   // Utility
+        ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+        r.refresh();
+        check (shown (ed, "utility.mono_bass") == 1 && shown (ed, "utility.mono_freq") == 0, "Utility with the mono bass off: its frequency is not on the page");
+        check (choose (r, "utility.mono_bass", 1), "the mono bass");
+        check (shown (ed, "utility.mono_freq") == 1, "with the mono bass on the frequency is live");
+    }
+    {   // the FX filter: the comb offset and the formant values share a row, by the model
+        FxRig r;
+        r.refresh();
+        addEffect (r, 5);   // FX filter
+        ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+        r.refresh();
+        const int rows = ed.numRows();
+        check (shown (ed, "fxfilter.comb_offset") == 0 && shown (ed, "fxfilter.formant.x") == 0 && shown (ed, "fxfilter.formant.transpose") == 0, "FX filter in a model without values of its own: the comb / formant values are not on the page (" + std::to_string (rows) + " rows)");
+        check (choose (r, "fxfilter.model", 6), "the model (a stepper: more than 8 values)");
+        check (shown (ed, "fxfilter.comb_offset") == 1 && shown (ed, "fxfilter.formant.x") == 0 && ed.numRows() == rows + 1, "Comb: the COMB OFFSET is in the cell the formant X would have (one more row)");
+        check (choose (r, "fxfilter.model", 5), "Formant");
+        check (shown (ed, "fxfilter.formant.x") == 1 && shown (ed, "fxfilter.formant.spread") == 1 && shown (ed, "fxfilter.formant.transpose") == 1 && shown (ed, "fxfilter.comb_offset") == 0, "Formant: the five formant values are live, the comb offset is not on the page");
+    }
+    {   // the reverb: the room and the feedback exist in the algorithms that have them
+        FxRig r;
+        r.refresh();
+        addEffect (r, 8);   // Reverb
+        ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+        r.refresh();
+        check (shown (ed, "reverb.room") == 0 && shown (ed, "reverb.feedback") == 0 && shown (ed, "reverb.type") == 1, "Reverb in the first algorithm: no room and no feedback on the page");
+        check (choose (r, "reverb.type", 4), "the algorithm");
+        check (shown (ed, "reverb.room") == 1 && shown (ed, "reverb.feedback") == 1, "Nitrous: room and feedback are live");
+        check (choose (r, "reverb.type", 5), "Basin");
+        check (shown (ed, "reverb.room") == 0 && shown (ed, "reverb.feedback") == 1, "Basin has the feedback, no room");
+    }
+}
+
+/** The splitters are modules of the fixed chain with no type of the pool: the page of each has its controls, a display of the bands and the Q groups; they are added from the list and the gallery, switched off with their power. */
+void testSplitterPages()
+{
+    const struct { int kind; const char* name; int controls; } kSplit[3] = { { ui::fxl::kKindSplitterLh, "Splitter L/H", 4 }, { ui::fxl::kKindSplitterLmh, "Splitter L/M/H", 6 }, { ui::fxl::kKindSplitterMs, "Splitter M/S", 3 } };
+    for (const auto& sp : kSplit)
+    {
+        FxRig r;
+        r.refresh();
+        addKind (r, sp.kind);
+        ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+        const synthyboy::FxRackItem item = r.ui.cardItem (0);
+        const std::string n = sp.name;
+        check (r.ui.numCards() == 1 && ! item.pool && item.index == 13 + (sp.kind - ui::fxl::kKindSplitterLh) && ed.currentType() == sp.kind, n + ": adding it switches the module of the fixed chain on and selects it");
+        check (r.ui.screen().chainBar.cards[0].state.type == sp.kind && std::string (r.ui.screen().chainBar.cards[0].state.name) == n, n + ": its card has its own picture and its name");
+        check (ed.numParams() == sp.controls && ed.numRows() >= 1 && ed.hasDisplay() && ed.display.kind == ui::FxDisplay::Kind::Split, n + ": the page has " + std::to_string (sp.controls) + " controls and the display of the bands");
+        // every parameter of the splitter is a control that writes it, and is on a Q group
+        std::string key = n == "Splitter L/H" ? "splitter_lh." : (n == "Splitter L/M/H" ? "splitter_lmh." : "splitter_ms.");
+        int reached = 0, wanted = 0, q = 0;
+        for (int i = 0; i < static_cast<int> (synthyboy::paramCount()); ++i)
+        {
+            const std::string k = synthyboy::paramTable()[i].key;
+            if (k.compare (0, key.size(), key) != 0 || k == key + "on" || k == key + "rack")
+                continue;
+            ++wanted;
+            const int p = ed.controlOfKey (k.c_str());
+            reached += p >= 0 && ed.rowOfControl (p) >= 0;
+            for (int rr = 0; rr < ed.numRows(); ++rr)
+                for (int c = 0; c < 4; ++c)
+                    q += ed.memberControl (rr, c) == p && p >= 0;
+            check (p >= 0 && r.ui.paramIndexOf (item, p) == i, n + ": " + k + " has its control and it writes the engine's key");
+        }
+        check (reached == wanted && q == wanted, n + ": every parameter is on the page and a member of a Q group (" + std::to_string (reached) + " / " + std::to_string (wanted) + ")");
+        // a toggle writes the bypass, a knob the frequency
+        const int bp = ed.controlOfKey ((key + (sp.kind == ui::fxl::kKindSplitterMs ? "mid_bypass" : "low_bypass")).c_str());
+        r.tap (*ed.memberOf (bp));
+        check (r.inst.param (r.ui.paramIndexOf (item, bp)) > 0.5f, n + ": a tap on the bypass writes it");
+        r.refresh (2);
+        check ((sp.kind == ui::fxl::kKindSplitterMs ? ed.display.split.bypass[0] : ed.display.split.bypass[0]) && ed.toggles[bp].state.on, n + ": the display and the toggle follow the bypass");
+        const int lvl = ed.controlOfKey ((key + "level").c_str());
+        const ui::Rect k = ed.knobs[lvl].rect();
+        const float before = r.inst.param (r.ui.paramIndexOf (item, lvl));
+        r.drag (k.x + k.w / 2, k.y + k.h / 2, k.x + k.w / 2, k.y + k.h / 2 - 60, true);
+        check (r.inst.param (r.ui.paramIndexOf (item, lvl)) != before, n + ": the level knob writes the level");
+        // the power zone and the picture
+        const ui::Rect pr = r.ui.screen().chainBar.cards[0].powerRect();
+        r.tapAt (pr.x + pr.w / 2, pr.y + pr.h / 2);
+        check (! r.ui.screen().chainBar.cards[0].state.on, n + ": the power zone switches it off");
+        auto data = std::make_unique<gpu::SceneData>();
+        gpu::SceneBuilder sb (*data);
+        sb.begin (gpu::kKindPlay, 0, 1280, 800);
+        r.ui.draw (sb);
+        std::vector<uint32_t> cv;
+        renderScene (*data, cv);
+        check (! sb.overflow && cv.size() == 1280u * 800u, n + ": the page is drawn");
+    }
+    // a splitter that is on in the engine has its card without any edit of ours
+    FxRig r;
+    r.inst.set ("splitter_lmh.on", 1.0f);
+    r.refresh();
+    check (r.ui.numCards() == 1 && r.ui.screen().chainBar.cards[0].state.type == ui::fxl::kKindSplitterLmh && r.ui.screen().slotEditor.currentType() == ui::fxl::kKindSplitterLmh, "a splitter that is on (a preset) has its card and its editor");
+    r.inst.set ("splitter_lmh.on", 0.0f);
+    r.refresh (2);
+    check (r.ui.numCards() == 1 && ! r.ui.screen().chainBar.cards[0].state.on, "switched off in the engine the selected module keeps its card (dim), as the other modules of the fixed chain");
+}
+
+/** The number field of the FX editor: VOICES and UNISON are whole numbers. */
+void testNumberFields()
+{
+    FxRig r;
+    r.refresh();
+    addEffect (r, 0);   // Chorus
+    ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+    const synthyboy::FxRackItem item = r.ui.cardItem (0);
+    const int v = ed.controlOfKey ("chorus.voices");
+    check (v >= 0 && ed.kindOf (v) == ui::FxSlotEditor::Kind::Number && isShown (ed, &ed.numbers[v]) && ! isShown (ed, &ed.knobs[v]), "the VOICES of the Chorus is a number field, not a knob");
+    check (std::string (ed.numbers[v].state.label) == "VOICES" && ed.numbers[v].state.min == 1.0 && ed.numbers[v].state.max == 4.0 && ed.numbers[v].state.step == 1.0 && ed.numbers[v].state.value == 4.0, "it counts 1 .. 4 in whole steps and shows 4");
+    const ui::Rect nr = ed.numbers[v].rect();
+    r.drag (nr.x + nr.w / 2, nr.y + nr.h / 2, nr.x + nr.w / 2, nr.y + nr.h / 2 + 16, true);   // down 2 steps at 8 px
+    const float plain = synthyboy::fxInstancePlain (synthyboy::kFxTypeChorus, v, r.inst.param (r.ui.paramIndexOf (item, v)));
+    check (plain == 2.0f && ed.numbers[v].state.value == 2.0, "a drag down by two steps writes the whole number 2 (" + std::to_string (plain) + ")");
+    r.ui.screen().setActiveGroup (1);
+    r.refresh();
+    r.ui.turnQ (0, 1.0, r.stack, r.inst);
+    check (synthyboy::fxInstancePlain (synthyboy::kFxTypeChorus, v, r.inst.param (r.ui.paramIndexOf (item, v))) == 3.0f, "a Q-Link step moves the number by one");
+    check (ed.groups[1].member (0) == &ed.numbers[v], "the number field is a member of the Q group of its row");
+    // the drawn box is limited, the touch zone is the whole cell
+    check (nr.w > 200 && ed.numbers[v].maxBox.w == 200, "the field is drawn in the middle of its cell (the touch zone is the cell)");
+    FxRig h;
+    h.refresh();
+    addEffect (h, 9);   // Hyper / Dimension
+    ui::FxSlotEditor& he = h.ui.screen().slotEditor;
+    const int u = he.controlOfKey ("hyperdim.unison");
+    check (u >= 0 && he.kindOf (u) == ui::FxSlotEditor::Kind::Number && he.numbers[u].state.min == 0.0 && he.numbers[u].state.max == 7.0, "the UNISON of the Hyper / Dimension is a number field 0 .. 7");
+    // only whole parameters are number fields: every continuous parameter of every effect that has interval 1 is one
+    bool all = true;
+    for (int kind = 1; kind < ui::fxl::kNumKinds; ++kind)
+    {
+        FxRig q;
+        q.refresh();
+        addKind (q, kind);
+        for (int p = 0; p < q.ui.screen().slotEditor.numParams(); ++p)
+        {
+            const synthyboy::ParamInfo* pi = q.ui.screen().slotEditor.infoOf (p);
+            if (pi != nullptr)
+                all = all && ((q.ui.screen().slotEditor.kindOf (p) == ui::FxSlotEditor::Kind::Number) == (pi->numChoices == 0 && pi->interval == 1.0f));
+        }
+    }
+    check (all, "a number field exactly where the parameter is a whole number");
+}
+
+/** The names of the laws and types on the screen: by what they do, no name of another product anywhere on the FX pages. */
+void testChoiceNames()
+{
+    check (std::string (ui::shownChoice ("eq.law", 0, "Vital")) == "State variable" && std::string (ui::shownChoice ("eq.law", 1, "Serum")) == "Biquad", "the EQ laws are State variable and Biquad");
+    check (std::string (ui::shownChoice ("convolve.law", 0, "Vital")) == "Relative" && std::string (ui::shownChoice ("convolve.law", 1, "Serum")) == "Seconds", "the Convolve laws are Relative and Seconds");
+    check (std::string (ui::shownChoice ("osc2.unison.law", 0, "Vital")) == "Equal power" && std::string (ui::shownChoice ("osc2.unison.law", 1, "Serum")) == "Fixed gain", "the unison laws are Equal power and Fixed gain (the same function for the oscillator pages)");
+    check (std::string (ui::shownChoice ("compressor.limit", 2, "Serum")) == "Peak" && std::string (ui::shownChoice ("compressor.limit", 1, "Limit")) == "Limit", "the third compressor mode is Peak");
+    check (std::string (ui::shownChoice ("reverb.type", 0, "Vital")) == "Dense" && std::string (ui::shownChoice ("reverb.type", 2, "Hall")) == "Hall", "the first reverb algorithm is Dense, the others keep their names");
+    check (std::string (ui::shownLabel ("eq.law")) == "BAND SHAPE" && std::string (ui::shownLabel ("convolve.law")) == "SCALING" && std::string (ui::shownLabel ("reverb.type")) == "ALGORITHM" && ui::shownLabel ("chorus.rate") == nullptr, "the labels of the laws and of the algorithm");
+    // no page of an effect shows a name of another product: walk the pages of every effect in the state of every choice of the laws and of the type
+    bool clean = true;
+    std::string where;
+    for (int kind = 1; kind < ui::fxl::kNumKinds; ++kind)
+    {
+        FxRig r;
+        r.refresh();
+        addKind (r, kind);
+        ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+        for (int p = 0; p < ed.numParams(); ++p)
+        {
+            const synthyboy::ParamInfo* pi = ed.infoOf (p);
+            if (pi == nullptr || pi->numChoices <= 0)
+                continue;
+            const synthyboy::FxRackItem item = r.ui.cardItem (0);
+            for (int c = 0; c < pi->numChoices; ++c)
+            {
+                r.inst.setAt (r.ui.paramIndexOf (item, p), item.pool ? synthyboy::fxInstanceNormalise (kind, p, static_cast<float> (c)) : static_cast<float> (c));
+                r.refresh (2);
+                std::string seen = std::string (ed.steppers[p].state.text) + "|" + ed.steppers[p].state.caption + "|" + ed.lists[p].state.title + "|" + ed.toggles[p].state.label;
+                for (int o = 0; o < ed.lists[p].state.count; ++o)
+                    seen += std::string ("|") + ed.lists[p].state.names[o];
+                if (seen.find ("Vital") != std::string::npos || seen.find ("Serum") != std::string::npos)
+                {
+                    clean = false;
+                    where = pi->key;
+                }
+            }
+        }
+    }
+    check (clean, "no page of an FX editor shows 'Vital' or 'Serum'" + (clean ? std::string() : " (" + where + ")"));
 }
 
 void testFxPagesAndDisplays()
@@ -712,7 +1030,10 @@ int main()
     testFxEditing();
     testFxPagesAndDisplays();
     testValueText();
-    testDependentValuesAreDim();
+    testClosingUpRule();
+    testSplitterPages();
+    testNumberFields();
+    testChoiceNames();
     testFxDraw();
     std::printf (g_fails ? "mixfx_ui_host: FAILED (%d failures)\n" : "mixfx_ui_host: OK\n", g_fails);
     return g_fails ? 1 : 0;

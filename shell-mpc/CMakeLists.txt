@@ -382,6 +382,17 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(ui_led_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME ui_led_host COMMAND ui_led_host)
 
+    # the FX slot editor driven by the tables of the effects (ui/fx_layout.h): the tables against the engine, the one rule for what does nothing, the pages, the number field kind
+    add_executable(ui_fx_editor_host EXCLUDE_FROM_ALL ui/tests/ui_fx_editor_host.cpp)
+    target_include_directories(ui_fx_editor_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(ui_fx_editor_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(ui_fx_editor_host PRIVATE cxx_std_17)
+    target_compile_options(ui_fx_editor_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME ui_fx_editor_host COMMAND ui_fx_editor_host)
+
     # the host's standby dim (overlay/standby.h) and the parameter coverage of the pages without a test of their own
     add_executable(standby_host EXCLUDE_FROM_ALL overlay/tests/standby_host.cpp)
     add_executable(coverage_host EXCLUDE_FROM_ALL overlay/tests/coverage_host.cpp)

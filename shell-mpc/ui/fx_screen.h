@@ -1,5 +1,5 @@
 // SynthyBoy - MPC UI component library: the FX PAGE (FxFullScreen): the chain bar across the top (the effects in processing order, the cards drag to reorder, + ADD), under it the page of the selected effect
-// (fx_slot_editor.h). Q groups: the rows of four knobs of the effect on screen. While the chain is empty there is no effect to edit: the gallery of the effect types (fx_gallery.h) takes the place
+// (fx_slot_editor.h). Q groups: the rows (blocks) of four controls of the effect on screen. While the chain is empty there is no effect to edit: the gallery of the effect types (fx_gallery.h) takes the place
 // of the page, one tap on a card adds that effect.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -40,11 +40,8 @@ public:
     void showEditor (bool s) { show (slotEditor, s); }
     bool editorShown() const noexcept { return editorShown_; }
     bool galleryShown() const noexcept { return ! editorShown_ && gallery.numTypes() > 0; }
-    static const char* groupName (int g) noexcept
-    {
-        static const char* const names[kMaxGroups] = { "PARAMETERS 1-4", "PARAMETERS 5-8", "PARAMETERS 9-12", "PARAMETERS 13-16", "PARAMETERS 17-20", "PARAMETERS 21-24" };
-        return g >= 0 && g < kMaxGroups ? names[g] : "";
-    }
+    /** The name of the Q group of a row on the page: the name of its block ("LOW BAND", "MODULATION"). */
+    const char* groupName (int g) const noexcept { return slotEditor.rowTitle (g); }
 
     void assignIds (int chainBaseId, int editorBaseId)
     {
