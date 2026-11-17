@@ -1190,6 +1190,8 @@ private:
                 it.c->setEnabled (! warpIsOff (it.id));
             if (it.id == kRouteBalance)
                 it.c->setEnabled (routeFilter_);
+            if (it.id == kRoute && sel_ == playosc::kSub)
+                it.c->setEnabled (false);   // the sub oscillator has no route button (its routing is the ROUTING block of its page): the hidden button takes no touch and no Q-Link
         }
         // the PHASE knob of a warp slot is the warp's phase: dimmed with the slot while its type is off
         for (Item& it : list)

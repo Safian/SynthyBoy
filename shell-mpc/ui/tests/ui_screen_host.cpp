@@ -266,14 +266,18 @@ int main()
         check (c.basic.group.active() && c.basic.group.check (all, n) == 0 && c.basic.group.numMembers() == 4, nm + ": the Basic group is one active frame and adjacent");
         check (chipsCovered (c.basic.group, all, n) == 0, nm + ": the index chips of the Basic group lie on free lanes above their members");
         bool inside = true, apart = true;
+        const bool subHeader = var.inst == OscInstance::Sub;
         for (int i = 0; i < n; ++i)
         {
+            if (all[i]->rect().empty() && all[i] == &c.route && subHeader)
+                continue;   // not shown: the sub oscillator has no route button in the header (its routing is the ROUTING block of its page), the same on the Play page as on the page
             inside = inside && c.rect().contains (all[i]->rect()) && all[i]->sizeOk();
             for (int j = i + 1; j < n; ++j)
                 apart = apart && ! all[i]->rect().overlaps (all[j]->rect());
         }
         check (inside && apart, nm + ": every leaf inside, at least its minimum size, no overlap");
-        check (! c.displayRect().empty() && c.rect().contains (c.displayRect()) && ! c.displayRect().overlaps (c.full.rect()) && c.full.rect().bottom() <= c.displayRect().y && c.full.rect().right() <= c.route.rect().x && ! c.full.rect().overlaps (c.power.rect()), nm + ": the display area is reserved, the full screen button stands in the header row (it does not cover the curve)");
+        check (c.route.rect().empty() == subHeader, nm + ": the route button is in the header of every instance but the sub oscillator");
+        check (! c.displayRect().empty() && c.rect().contains (c.displayRect()) && ! c.displayRect().overlaps (c.full.rect()) && c.full.rect().bottom() <= c.displayRect().y && (subHeader || c.full.rect().right() <= c.route.rect().x) && c.full.rect().right() <= c.rect().right() && ! c.full.rect().overlaps (c.power.rect()), nm + ": the display area is reserved, the full screen button stands in the header row (it does not cover the curve)");
         check (c.displayRect().bottom() <= c.basic.rect().y && c.instances.rect().bottom() <= c.power.rect().y && ! c.displayRect().overlaps (c.basic.rect()), nm + ": instance selector, header, display, Basic: top to bottom");
         Scene sc (420, 700, kBackgroundRgba);
         c.draw (sc.builder());
