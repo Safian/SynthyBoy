@@ -49,22 +49,27 @@ void testMixerLayout()
     r.refresh();
     ui::MixerFullScreen& m = r.ui.screen();
     check (m.rect().w == 1280 && m.rect().h == 628 && r.stack.element() == MixerUi::kElementPage, "the page has the whole tab and is the element of the Mixer tab");
-    bool targets = true, family = true, inside = true;
+    bool targets = true, family = true, inside = true, uniformHeader = true;
     for (int s = 0; s < 10; ++s)
     {
         const ui::MixerStrip& st = m.strips[s];
-        targets = targets && st.power.rect().h >= 56 && st.destButton.rect().h >= 56 && st.pan.rect().h >= 56 && st.send1.rect().h >= 56 && st.send2.rect().h >= 56 && st.fader.rect().h >= 150 && st.sizeOk();
-        family = family && st.pan.rect().w == m.strips[0].pan.rect().w && st.fader.rect().h == m.strips[0].fader.rect().h;
-        inside = inside && st.rect().contains (st.pan.rect()) && st.rect().contains (st.fader.rect());
-        ui::Component* leaves[16];
+        targets = targets && st.power.rect().h >= 56 && st.destButton.rect().h >= 56 && st.fader.rect().h >= 150 && st.sizeOk();
+        if (st.hasPan())
+            targets = targets && st.pan.rect().h >= 56 && st.send1.rect().h >= 56 && st.send2.rect().h >= 56;
+        if (s < 7)
+            family = family && st.pan.rect().w == m.strips[0].pan.rect().w && st.fader.rect().h == m.strips[0].fader.rect().h;
+        else
+            family = family && st.fader.rect().h >= 380; // BUS 1, BUS 2 and MASTER have full-height faders
+        inside = inside && (! st.hasPan() || st.rect().contains (st.pan.rect())) && st.rect().contains (st.fader.rect());
         ui::Component* all[64];
         const int n = m.collectLeaves (all, 0, 64);
-        (void) leaves;
         inside = inside && m.groups[s].check (all, n) == 0 && st.rect().contains (m.groups[s].rect());
+        uniformHeader = uniformHeader && st.power.rect().h == 56 && st.destButton.rect().h == 56;
     }
     check (targets, "every cell of every strip is >= 56 px high, the fader >= 150 px, and the strip has its minimum size");
-    check (family, "all strips are one family (the same pan and fader size)");
+    check (family, "all strips are one family (standard fader and full-height fader families)");
     check (inside, "the Q group of every strip lies in its strip and nothing else is in its frame");
+    check (uniformHeader, "all ten strips have uniform 56 px header and route button heights");
     check (m.strips[0].pan.rect().w >= 96 && m.strips[0].pan.rect().h == 56, "the PAN is a 56 px slider cell, not a speck (" + std::to_string (m.strips[0].pan.rect().w) + " x " + std::to_string (m.strips[0].pan.rect().h) + ")");
 }
 
@@ -82,6 +87,8 @@ void testMixerValuesAndWrites()
     check (std::string (m.strips[5].fader.state.valueText).find ("dB") != std::string::npos, "the level of F1 is in dB (" + std::string (m.strips[5].fader.state.valueText) + ")");
     check (std::string (m.strips[7].fader.state.valueText).find ("dB") != std::string::npos, "the level of BUS 1 is in dB (" + std::string (m.strips[7].fader.state.valueText) + ")");
     check (m.strips[1].fader.state.numTicks == 5 && std::string (m.strips[1].fader.state.tickText[4]) == "100" && std::string (m.strips[5].fader.state.tickText[0]) == "0", "the faders have their scale: 0 .. 100 for a percent, 0 / -12 / -24 / -48 for a dB level");
+    check (m.strips[7].fader.state.isFine && m.strips[7].fader.state.numTicks == 8, "BUS 1 fader has a finer dB scale with 8 marks (+6 to -48 dB)");
+    check (m.strips[9].fader.state.isFine && m.strips[9].fader.state.numTicks == 8, "MASTER fader has a finer dB scale with 8 marks (+6 to -48 dB)");
     check (m.strips[1].fader.rect().y < m.strips[1].pan.rect().y && m.strips[1].pan.rect().y < m.strips[1].send1.rect().y && m.strips[1].send1.rect().y < m.strips[1].send2.rect().y, "the strip reads top down in the order of its Q numbers: LEVEL 1, PAN 2, B1 3, B2 4");
     check (std::string (m.strips[1].pan.state.valueText) == "L 35", "the pan is L 35 (" + std::string (m.strips[1].pan.state.valueText) + ")");
     check (std::string (m.strips[1].send1.state.valueText) == "40.0%", "the send is 40.0% (" + std::string (m.strips[1].send1.state.valueText) + ")");
@@ -128,6 +135,8 @@ void testMixerGroupsAndList()
     r.inst.liveValues.stripPeak[9] = 0.94f;
     r.refresh();
     check (std::fabs (m.strips[0].fader.state.peak - 0.82f) < 0.001f && std::fabs (m.strips[9].fader.state.peak - 0.94f) < 0.001f && m.strips[3].fader.state.peak == 0.0f, "the meters follow the engine's strip peaks");
+    check (m.strips[9].fader.state.hasPeakHold && m.strips[9].fader.state.peakHold >= 0.94f, "MASTER meter has peak hold matching engine peak");
+    check (! m.strips[0].fader.state.hasPeakHold, "strip 0 meter has no peak hold");
 }
 
 // Every strip is a Q group of its own: Q1 LEVEL, Q2 PAN, Q3 B1, Q4 B2 of the strip that was touched. A member the engine has no parameter for (BUS 1, BUS 2 and MASTER have a level only) is left out:
@@ -160,7 +169,7 @@ void testMixerQPerStrip()
                     return false;
         return true;
     };
-    const ui::Rect pan0 = m.strips[0].pan.rect(), s1Pan = m.strips[7].pan.rect();
+    const ui::Rect pan0 = m.strips[0].pan.rect();
     for (int s = 0; s < 10; ++s)
     {
         ui::MixerStrip& st = m.strips[s];
@@ -197,8 +206,16 @@ void testMixerQPerStrip()
             if (g != s && m.strips[g].rect().overlaps (fr))
                 fail (s, "the frame reaches another strip");
         // the left-out controls: same places as everywhere, not touchable, not among the leaves
-        if (st.pan.rect().y != pan0.y || st.pan.rect().h != pan0.h || st.rect().h != m.strips[0].rect().h)
-            fail (s, "the strip or its controls moved");
+        if (s < 7)
+        {
+            if (st.pan.rect().y != pan0.y || st.pan.rect().h != pan0.h || st.rect().h != m.strips[0].rect().h)
+                fail (s, "the strip or its controls moved");
+        }
+        else
+        {
+            if (st.fader.rect().h < 380 || st.fader.rect().bottom() < st.rect().bottom() - 10)
+                fail (s, "the bus fader does not run the full height");
+        }
         ui::Component* leaves[64];
         const int n = st.collectLeaves (leaves, 0, 64);
         for (int i = 0; i < n; ++i)
@@ -207,7 +224,7 @@ void testMixerQPerStrip()
     }
     check (all, "selecting each of the ten strips publishes its Q targets (LEVEL, PAN, B1, B2; fewer where the engine has none), moves the frame and the routing line, no chip without a target" + why);
 
-    // the bus strips: PAN, B1 and B2 are not drawn at all (the ground of the strip shows) and a tap there does nothing
+    // the bus strips: the fader and meter run the full height of the strip, PAN / B1 / B2 are not present
     r.tapAt (m.strips[7].fader.rect().x + 6, m.strips[7].fader.rect().y + 6);
     auto data = std::make_unique<gpu::SceneData>();
     gpu::SceneBuilder sb (*data);
@@ -216,11 +233,10 @@ void testMixerQPerStrip()
     std::vector<uint32_t> cv;
     renderScene (*data, cv);
     const ui::MixerStrip& bus = m.strips[7];
-    const ui::Rect below { bus.rect().x + 10, s1Pan.y - ui::kQLane + 4, bus.rect().w - 20, bus.rect().bottom() - (s1Pan.y - ui::kQLane + 4) - 10 };   // inside the strip's own border and the frame of the fader
-    check (flat (cv, below), "BUS 1: the space where PAN, B1 and B2 sit on the other strips is empty (no greyed control, no chip, no frame)");
+    check (bus.fader.rect().h >= 380 && bus.fader.rect().bottom() >= bus.rect().bottom() - 10, "BUS 1: the fader and meter run the full height of the strip (longer throw, no empty space at bottom)");
     check (! flat (cv, { m.strips[1].pan.rect().x + 2, m.strips[1].pan.rect().y + 2, m.strips[1].pan.rect().w - 4, m.strips[1].pan.rect().h - 4 }), "the same place on strip A is drawn (the check sees a control)");
     const int writesBefore = r.inst.writes;
-    r.tapAt (s1Pan.x + s1Pan.w / 2, s1Pan.y + s1Pan.h / 2);
+    r.tapAt (bus.rect().x + bus.rect().w / 2, pan0.y + pan0.h / 2);
     check (r.inst.writes == writesBefore && m.activeGroup() == 7, "a tap where the left-out PAN would be writes nothing and keeps BUS 1 selected");
     // the strips with all four members are still all four: a strip that was selected before is not left changed
     r.tapAt (m.strips[3].fader.rect().x + 6, m.strips[3].fader.rect().y + 6);

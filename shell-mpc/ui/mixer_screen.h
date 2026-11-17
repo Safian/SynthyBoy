@@ -56,9 +56,11 @@ protected:
             { "DIRECT", rect_.x + w * 0.72f },
             { "MASTER", rect_.x + w * 0.90f }
         };
-        const float stripStep = w / static_cast<float> (kStrips);
+        const float totalW = w;
+        const float gap = 4.0f;
+        const float stripW = (totalW - (static_cast<float> (kStrips) - 1.0f) * gap) / static_cast<float> (kStrips);
         const int s = selectedStrip;
-        const float sx = static_cast<float> (rect_.x) + (static_cast<float> (s) + 0.5f) * stripStep;
+        const float sx = static_cast<float> (rect_.x) + static_cast<float> (s) * (stripW + gap) + stripW * 0.5f;
         // where the selected strip goes: up to two of the targets (the blend of the two filters feeds both), or a neighbouring bus, or nothing
         int to[2] = { -1, -1 };
         float busX = -1.0f;
@@ -80,7 +82,7 @@ protected:
         {
             if (d == 0) to[0] = 2;
             else if (d == 1) to[0] = 3;
-            else busX = sx + (s == 7 ? stripStep : -stripStep);
+            else busX = sx + (s == 7 ? (stripW + gap) : -(stripW + gap));
         }
         else
             to[0] = 4;   // Master
@@ -213,7 +215,28 @@ public:
         groups[activeGroup_].draw (sb);
         for (int i = 0; i < kMaxGroups; ++i)
             if (i != activeGroup_)
-                groups[i].drawMapped (sb);
+                drawStripMapped (sb, i);
+    }
+
+    void drawStripMapped (gpu::SceneBuilder& sb, int g) const
+    {
+        if (g < 0 || g >= kStrips)
+            return;
+        const int block = groups[g].block();
+        if (block < 1)
+            return;
+        const bool wide = QGroup::wideDevice();
+        Pen pen (sb, true);
+        for (int slot = 0; slot < QGroup::kSlots; ++slot)
+        {
+            const Component* m = groups[g].member (slot);
+            if (m && ! m->rect().empty())
+            {
+                const Rect mr = m->rect();
+                Cell cell (sb, { mr.x, mr.y - 17, mr.w, 19 });
+                pen.qIndex (mr, wide ? block * QGroup::kSlots + slot + 1 : slot + 1, true);
+            }
+        }
     }
 
 protected:

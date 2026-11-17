@@ -23,8 +23,10 @@ public:
         double value = 0.75, modValue = 0.75, defaultValue = 0.75;
         float peak = 0.0f, peakHold = 0.0f;
         bool hasMeter = true;
+        bool isFine = false;
+        bool hasPeakHold = false;
         // the scale beside the track: up to kMaxTicks marks (position 0 .. 1 along the track, a short text: "0", "-12", "50") the owner sets from the parameter's range and unit
-        static constexpr int kMaxTicks = 6;
+        static constexpr int kMaxTicks = 10;
         int numTicks = 0;
         float tickPos[kMaxTicks] = {};
         char tickText[kMaxTicks][6] = {};
@@ -163,53 +165,52 @@ protected:
         {
             const float ty = static_cast<float> (g.trackBottom) - std::clamp (state.tickPos[i], 0.0f, 1.0f) * static_cast<float> (g.trackH);
             const int tx1 = g.trackX - g.thumbW / 2 - 2;
-            p.line (static_cast<float> (tx1 - 5), ty, static_cast<float> (tx1), ty, 1.0f, p.c (T.textDim, 170));
-            p.textRight ({ g.scaleX, static_cast<int> (ty) - 7, g.scaleW - 7, 14 }, state.tickText[i], T.fSmall, p.c (T.textFaint, 255), T.fMin);
+            const bool unity = std::strcmp (state.tickText[i], "0") == 0;
+            p.line (static_cast<float> (tx1 - (unity ? 7 : 5)), ty, static_cast<float> (tx1), ty, unity ? 1.5f : 1.0f, p.c (unity ? T.text : T.textDim, unity ? 220 : 170));
+            p.textRight ({ g.scaleX, static_cast<int> (ty) - 7, g.scaleW - 7, 14 }, state.tickText[i], T.fSmall, p.c (unity ? T.text : T.textFaint, 255), T.fMin);
         }
 
-        // 4. Integrated Peak Meter: 0 = -60 dBFS .. 1 = full scale; the rail has a line every 12 dB, and at rest (no signal) a dim base line, so it never stands there as an empty box
+        // 4. Integrated Peak Meter: 0 = -60 dBFS .. 1 = full scale; color ramp from library palette (cyan at bottom to magenta at top; yellow is Q focus and never hot)
         if (state.hasMeter)
         {
             const Rect meterSlot { g.meterX, g.trackTop, g.meterW, g.trackH };
             p.rect (meterSlot, p.c (T.panel1, 255));
             p.rrect (meterSlot, 2.0f, p.c (T.keyline, 160), 1.0f);
-            for (int k = 1; k <= 5; ++k)   // -48, -36, -24, -12, 0 dB
+            const int numLines = state.isFine ? 8 : 5;
+            for (int k = 1; k <= numLines; ++k)
             {
-                const float ly = static_cast<float> (g.trackBottom) - static_cast<float> (k) * 0.2f * static_cast<float> (g.trackH);
-                p.line (static_cast<float> (g.meterX + g.meterW - 3), ly, static_cast<float> (g.meterX + g.meterW), ly, 1.0f, p.c (T.textDim, k == 5 ? 200 : 110));
+                const float ly = static_cast<float> (g.trackBottom) - static_cast<float> (k) * (1.0f / static_cast<float> (numLines)) * static_cast<float> (g.trackH);
+                p.line (static_cast<float> (g.meterX + g.meterW - 3), ly, static_cast<float> (g.meterX + g.meterW), ly, 1.0f, p.c (T.textDim, k == numLines ? 200 : 110));
             }
 
-            const float pk = std::clamp (state.peak, 0.0f, 1.0f);
+            const float pk = std::clamp (state.peak, 0.0f, 1.2f);
             if (pk <= 0.005f)
                 p.rect ({ g.meterX + 1, g.trackBottom - 3, g.meterW - 2, 2 }, p.c (T.textFaint, 150));
             else
             {
-                const int fillH = static_cast<int> (pk * static_cast<float> (g.trackH));
+                const int fillH = static_cast<int> (std::min (1.0f, pk) * static_cast<float> (g.trackH));
                 const int fillY = g.trackBottom - fillH;
 
-                // Threshold splits: 0..0.7 (green), 0.7..0.88 (yellow), 0.88..1.0 (red)
-                const int greenTop = g.trackBottom - static_cast<int> (std::min (pk, 0.70f) * g.trackH);
-                p.rect ({ g.meterX + 1, greenTop, g.meterW - 2, g.trackBottom - greenTop }, p.c (0x5cff9d, 220));
+                // Color ramp: cyan (T.flow[0]) at bottom to magenta (T.flow[3]) at top; red (T.negative) if clipping
+                const uint32_t topCol = pk > 1.0f ? T.negative : T.flow[3];
+                const uint32_t meterRamp[4] = { topCol, T.flow[2], T.flow[1], T.flow[0] };
+                p.paintY (static_cast<float> (g.trackTop), static_cast<float> (g.trackBottom), meterRamp, 240);
+                p.rect ({ g.meterX + 1, fillY, g.meterW - 2, fillH }, p.c (topCol, 240));
+                p.plain();
 
-                if (pk > 0.70f)
-                {
-                    const int yellowTop = g.trackBottom - static_cast<int> (std::min (pk, 0.88f) * g.trackH);
-                    p.rect ({ g.meterX + 1, yellowTop, g.meterW - 2, greenTop - yellowTop }, p.c (0xffd84a, 230));
-                }
-                if (pk > 0.88f)
-                {
-                    p.rect ({ g.meterX + 1, fillY, g.meterW - 2, (g.trackBottom - static_cast<int> (0.88f * g.trackH)) - fillY }, p.c (0xff4f4f, 240));
-                }
+                // Crisp top peak line
+                p.line (static_cast<float> (g.meterX), static_cast<float> (fillY),
+                        static_cast<float> (g.meterX + g.meterW), static_cast<float> (fillY),
+                        1.5f, p.c (T.text, 255));
             }
 
-            // Peak hold line
-            const float pkh = std::clamp (state.peakHold, 0.0f, 1.0f);
-            if (pkh > 0.01f)
+            // Peak hold line: MASTER gets the peak hold the Master page's output meter has
+            if (state.hasPeakHold && state.peakHold > 0.02f)
             {
-                const float hy = static_cast<float> (g.trackBottom) - pkh * static_cast<float> (g.trackH);
+                const float hy = static_cast<float> (g.trackBottom) - std::min (1.0f, state.peakHold) * static_cast<float> (g.trackH);
                 p.line (static_cast<float> (g.meterX), hy,
                         static_cast<float> (g.meterX + g.meterW), hy,
-                        1.5f, p.c (0xffffff, 250));
+                        2.0f, p.c (state.peakHold > 1.0f ? T.negative : T.flow[0], 255));
             }
         }
 
@@ -325,6 +326,81 @@ private:
 };
 
 // ===============================================================================================================================================================
+/** StripPower: Channel strip header power toggle with label.
+    One uniform layout for all ten strips: power icon above, name under it at one size that fits the longest name. */
+class StripPower : public ToggleIcon
+{
+public:
+    StripPower()
+    {
+        state.icon = ToggleIcon::Icon::Power;
+    }
+
+protected:
+    void drawBody (Pen& p) const override
+    {
+        const theme::Look& T = theme::L();
+        const Rect b = rect_.inset (3);
+        p.control (b, qFrame_);
+
+        const int labelH = 16;
+        const float cx = static_cast<float> (b.x) + static_cast<float> (b.w) * 0.5f;
+        const float cy = static_cast<float> (b.y) + static_cast<float> (b.h - labelH) * 0.5f;
+        const float s = static_cast<float> (std::min (b.w, b.h - labelH)) * 0.28f;
+
+        // One uniform layout for all strips: power icon above, name under it at one size that fits the longest name
+        if (state.label[0] != '\0')
+        {
+            p.textCentered ({ b.x + 2, b.bottom() - labelH - 2, b.w - 4, labelH },
+                            state.label, T.fSmall + 1.0f,
+                            p.c (qFrame_ ? T.q : (state.on ? T.text : T.textDim), 255), T.fMin);
+        }
+
+        const uint32_t col = state.on ? p.c (T.flow[0], 255) : p.c (T.textFaint, 255);
+        p.style (1.0f, true);
+        const float a0 = 1.5f * kPi + 0.6f;
+        p.arc (cx, cy, s, a0, a0 + 2.0f * kPi - 1.2f, 2.2f, col);
+        p.line (cx, cy - s - 1.0f, cx, cy - 1.0f, 2.2f, col);
+        p.plain();
+    }
+};
+
+// ===============================================================================================================================================================
+/** RouteDropdown: Strip destination route button.
+    Touch target >= 56 px. Arrow width and text fitting ensure long labels like "Effects only" do not touch the arrow. */
+class RouteDropdown : public MenuButton
+{
+public:
+    using MenuButton::MenuButton;
+
+protected:
+    void drawBody (Pen& p) const override
+    {
+        const theme::Look& T = theme::L();
+        const Rect b = rect_.inset (3);
+        p.control (b, qFrame_);
+        if (state.label[0] != '\0')
+        {
+            const int iw = state.icon == Icon::None ? 0 : 20;
+            const Rect iconBox { b.right() - iw - 2, b.y, iw, b.h };
+            const int textW = std::max (0, b.w - iw - 6);
+            const float maxW = static_cast<float> (textW);
+            const float fSize = Pen::fitSize (state.label, maxW, 20.0f, T.fLabel, T.fMin);
+            p.textCentered ({ b.x + 2, b.y + 2, textW, std::max (0, b.h - 4) }, state.label, fSize, p.c (qFrame_ ? T.q : T.text, 255), T.fMin);
+
+            if (state.icon == Icon::Down)
+            {
+                const float cx = static_cast<float> (iconBox.x) + static_cast<float> (iconBox.w) * 0.5f;
+                const float cy = static_cast<float> (iconBox.y) + static_cast<float> (iconBox.h) * 0.5f;
+                p.style (1.0f, true);
+                p.chevron (cx, cy, 10.0f, 3, 2.0f, p.c (T.textDim, 255));
+                p.plain();
+            }
+        }
+    }
+};
+
+// ===============================================================================================================================================================
 /** MixerStrip: One complete channel strip of the Mixer.
     Components:
       Header: power toggle, destination button
@@ -334,8 +410,8 @@ class MixerStrip : public Composite
 public:
     static constexpr int kCellH = 56;
     char title[16] = {};
-    ToggleIcon power;                                    // the name of the strip and its switch in one cell
-    MenuButton destButton { "MAIN", MenuButton::Icon::Down };
+    StripPower power;                                    // uniform header: icon above, name under it
+    RouteDropdown destButton { "MAIN", MenuButton::Icon::Down };
     SliderBar pan { "PAN", true };
     SliderBar send1 { "B1" };
     SliderBar send2 { "B2" };
@@ -343,7 +419,6 @@ public:
 
     MixerStrip()
     {
-        power.state.icon = ToggleIcon::Icon::Power;
         addKid (power);
         addKid (destButton);
         addKid (pan);
@@ -395,14 +470,28 @@ protected:
         y += kCellH + gap;
         // the Q group of the strip lies under the destination, top down in the order of its numbers: LEVEL (the fader) 1, PAN 2, B1 3, B2 4; a lane of kQLane over every member for its index chip
         y += kQLane;
-        const int bottomY = rect_.bottom() - pad - 3 * kCellH - 3 * kQLane;
-        fader.place ({ rect_.x + pad, y, innerW, std::max (96, bottomY - y) });
-        y = std::max (y + 96, bottomY) + kQLane;
-        pan.place ({ rect_.x + pad, y, innerW, kCellH });
-        y += kCellH + kQLane;
-        send1.place ({ rect_.x + pad, y, innerW, kCellH });
-        y += kCellH + kQLane;
-        send2.place ({ rect_.x + pad, y, innerW, kCellH });
+
+        if (hasPan() || hasSend1() || hasSend2())
+        {
+            // Strips with PAN, B1, B2: fader above, 3 slider cells stacked at bottom
+            const int bottomY = rect_.bottom() - pad - 3 * kCellH - 3 * kQLane;
+            fader.place ({ rect_.x + pad, y, innerW, std::max (96, bottomY - y) });
+            y = std::max (y + 96, bottomY) + kQLane;
+            pan.place ({ rect_.x + pad, y, innerW, kCellH });
+            y += kCellH + kQLane;
+            send1.place ({ rect_.x + pad, y, innerW, kCellH });
+            y += kCellH + kQLane;
+            send2.place ({ rect_.x + pad, y, innerW, kCellH });
+        }
+        else
+        {
+            // BUS 1, BUS 2 and MASTER: no PAN / B1 / B2; fader runs the full height of the strip
+            const int bottomY = rect_.bottom() - pad;
+            fader.place ({ rect_.x + pad, y, innerW, std::max (96, bottomY - y) });
+            pan.place ({ 0, 0, 0, 0 });
+            send1.place ({ 0, 0, 0, 0 });
+            send2.place ({ 0, 0, 0, 0 });
+        }
     }
 
     void drawUnder (Pen& p) const override
