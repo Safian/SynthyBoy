@@ -437,8 +437,8 @@ class OverlaySkinTests(unittest.TestCase):
         tabs = self.o_tui["pageData"]["tabs"]
         self.assertEqual([t["tabName"] for t in tabs[:1]], ["Play"])
         self.assertEqual([(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs[:1]], [(0, 0)])
-        self.assertEqual(tabs[3]["tabName"], "Macros")
-        self.assertEqual(tabs[3]["fnKeyIndex"], 1)
+        self.assertEqual(tabs[1]["tabName"], "Macros")   # one Play tab: Macros is the second
+        self.assertEqual(tabs[1]["fnKeyIndex"], 1)
         self.assertEqual(len({t["fnKeyIndex"] for t in tabs}), 10, "ten function keys")
         self.assertFalse(any("Play" in t["tabName"] for t in self.p_tui["pageData"]["tabs"]), "the production skin has no Play tab")
 

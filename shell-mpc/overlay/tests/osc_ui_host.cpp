@@ -147,21 +147,27 @@ void testNoiseBasicQ1IsNoiseSample()
     Rig r;
     r.inst.sel = 5;
     r.refresh();
-    check (r.inst.q[0] == Inst::idx ("noise.sample") && r.inst.q[1] == Inst::idx ("noise.filter") && r.inst.q[2] == Inst::idx ("noise.pan") && r.inst.q[3] == Inst::idx ("noise.level"),
+    int ct[4];
+    r.ui.compactTargets (ct);   // the main state's Q group is published by the Play view (PlayView::publishQ): the oscillator's compact group is what it asks for
+    check (ct[0] == Inst::idx ("noise.sample") && ct[1] == Inst::idx ("noise.filter") && ct[2] == Inst::idx ("noise.pan") && ct[3] == Inst::idx ("noise.level"),
            "noise: the Basic group is noise.sample, noise.filter, noise.pan, noise.level (not noise.type)");
 }
 
 void testBasicGroupsAndSelection()
 {
     Rig r;
-    check (r.inst.q[0] == Inst::idx ("osc1.type") && r.inst.q[1] == Inst::idx ("osc1.wavetable") && r.inst.q[2] == Inst::idx ("osc1.pan") && r.inst.q[3] == Inst::idx ("osc1.level"),
-           "A: the Basic group is type, wavetable, pan, level of osc1");
+    int ct[4];
+    r.ui.compactTargets (ct);
+    check (ct[0] == Inst::idx ("osc1.type") && ct[1] == Inst::idx ("osc1.wavetable") && ct[2] == Inst::idx ("osc1.pan") && ct[3] == Inst::idx ("osc1.level"),
+           "A: the Basic group is type, wavetable, pan, level of osc1");;
     r.inst.sel = 1;
     r.refresh();
-    check (r.inst.q[0] == Inst::idx ("sub.waveform") && r.inst.q[1] == Inst::idx ("sub.octave") && r.inst.q[2] == Inst::idx ("sub.pan") && r.inst.q[3] == Inst::idx ("sub.level"), "Sub: waveform, octave, pan, level");
+    r.ui.compactTargets (ct);
+    check (ct[0] == Inst::idx ("sub.waveform") && ct[1] == Inst::idx ("sub.octave") && ct[2] == Inst::idx ("sub.pan") && ct[3] == Inst::idx ("sub.level"), "Sub: waveform, octave, pan, level");
     r.inst.sel = 4;
     r.refresh();
-    check (r.inst.q[0] == Inst::idx ("osc3.type") && r.inst.q[2] == Inst::idx ("osc3.pan"), "C is osc3");
+    r.ui.compactTargets (ct);
+    check (ct[0] == Inst::idx ("osc3.type") && ct[2] == Inst::idx ("osc3.pan"), "C is osc3");
     // the compact view's source selector (the one selector of the three thirds: a stepper with a list) writes the Play Osc selector
     r.inst.sel = 2;
     r.refresh();
