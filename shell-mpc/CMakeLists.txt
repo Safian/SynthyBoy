@@ -532,5 +532,15 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(ui_fx_tables_host PRIVATE cxx_std_17)
     target_compile_options(ui_fx_tables_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME ui_fx_tables_host COMMAND ui_fx_tables_host)
+
+    # UI component library coverage: new parts host tests (NoteMask, FxBandBoard, Knob LED/dialMax, NumberField maxBox/text, LedList 2-digit chips)
+    add_executable(ui_cov_new_parts_host ui/tests/ui_cov_new_parts_host.cpp)
+    target_include_directories(ui_cov_new_parts_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_compile_features(ui_cov_new_parts_host PRIVATE cxx_std_17)
+    target_compile_options(ui_cov_new_parts_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME ui_cov_new_parts_host COMMAND ui_cov_new_parts_host)
 endif()
 
