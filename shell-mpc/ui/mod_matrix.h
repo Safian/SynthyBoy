@@ -38,12 +38,11 @@ public:
     {
         if (maxRows <= 0) return Change::none();
         int step = delta > 0.0 ? 1 : (delta < 0.0 ? -1 : 0);
-        if (step != 0)
-        {
-            selected = std::clamp (selected + step, 0, maxRows - 1);
-            return Change::indexed (id_, selected, static_cast<double> (selected));
-        }
-        return Change::none();
+        const int next = std::clamp (selected + step, 0, maxRows - 1);
+        if (step == 0 || next == selected)   // at the first or the last row a further step changes nothing: no change is reported
+            return Change::none();
+        selected = next;
+        return Change::indexed (id_, selected, static_cast<double> (selected));
     }
 
 protected:

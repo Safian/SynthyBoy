@@ -39,6 +39,7 @@ public:
     void setLabel (const char* s) { setText (state.label, sizeof state.label, s); }
 
     Size minSize() const override { return { 56, 120 }; }
+    double wheelUnit() const noexcept override { return 1.0 / 128.0; }   // the mouse wheel: one notch = one Q-Link step (1 / 128 of the range), not the whole range
 
     struct Geom
     {
@@ -86,7 +87,8 @@ public:
 
     Change touchDown (int x, int y, double nowMs) override
     {
-        if (! enabled_)
+        captured_ = false;
+        if (! enabled_ || ! rect_.contains (x, y))
             return Change::none();
         captured_ = true;
         dragCandidate_ = true;
@@ -227,7 +229,7 @@ protected:
 
 private:
     TapGesture tap_;
-    bool captured_ = false, dragCandidate_ = false;
+    bool dragCandidate_ = false;   // (the capture is Component::captured_: capturing () tells the truth)
     int downX_ = 0, downY_ = 0;
     double downVal_ = 0.0;
 };
@@ -254,12 +256,14 @@ public:
     void setLabel (const char* s) { setText (state.label, sizeof state.label, s); }
 
     Size minSize() const override { return { 96, 56 }; }
+    double wheelUnit() const noexcept override { return 1.0 / 128.0; }   // one notch = one Q-Link step (1 / 128 of the range)
     /** The track under the texts. */
     Rect track() const noexcept { return { rect_.x + 12, rect_.y + 34, std::max (0, rect_.w - 24), 14 }; }
     float xOf (double v) const noexcept { const Rect t = track(); return static_cast<float> (t.x) + static_cast<float> (std::clamp (v, 0.0, 1.0)) * static_cast<float> (std::max (1, t.w - 1)); }
 
     Change touchDown (int x, int y, double nowMs) override
     {
+        captured_ = false;
         if (! enabled_ || ! rect_.contains (x, y))
             return Change::none();
         captured_ = true;
@@ -320,7 +324,6 @@ private:
         return Change::normalised (id_, v);
     }
     TapGesture tap_;
-    bool captured_ = false;
     int downX_ = 0;
     double downVal_ = 0.0;
 };
@@ -426,7 +429,9 @@ public:
         addKid (fader);
     }
 
-    Size minSize() const override { return { 96, 360 }; }
+    /** The height the layout needs at the least: the header (power, destination), then the Q group of the strip with its fader at 96 px and the three slider cells, each under a lane for its index chip. */
+    static constexpr int kMinH = 4 + kCellH + 4 + kCellH + 4 + kQLane + 96 + kQLane + kCellH + kQLane + kCellH + kQLane + kCellH + 4;
+    Size minSize() const override { return { 96, kMinH }; }
 
     /** Which of the four Q members the strip has: a member whose parameter does not exist in the engine (the buses and the master have a level only) is left out, not drawn dim: it is not drawn, takes no touch,
         and is no member of the strip's Q group (MixerFullScreen::setStripMembers). The strip keeps its height and the others keep their places (the layout does not depend on it). */

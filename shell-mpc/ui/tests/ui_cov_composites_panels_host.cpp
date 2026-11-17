@@ -102,7 +102,7 @@ static void test_type_bar_presets()
     // 1. Wavetable preset: Frame, Phase, Rand, Memory
     tb.load (barpresets::kWavetable);
     check (tb.numSlots() == 4, "Wavetable TypeBar has 4 slots");
-    check (tb.minSize().w == 3 * 80 + Stepper::kMinW + 3 * kGap, "Wavetable TypeBar minSize sums slot minimums");
+    check (tb.minSize().w == 3 * 80 + 116 + 3 * kGap && tb.minSize().w == 368, "Wavetable TypeBar minSize sums slot minimums (three 80 px fields and the 116 px MAP button)");
     Image im = drawComponent (tb, 500, 200);
     check (drawnOutside (im, tb.rect(), backgroundPixel()) == 0, "Wavetable TypeBar draws strictly inside rect");
 
@@ -278,6 +278,34 @@ static void test_mixer_strip_layout_and_q_presence()
     check (drawnOutside (im, ms.rect(), backgroundPixel()) == 0, "MixerStrip at 420px height draws strictly inside rect");
 }
 
+// Regression (library finding 3 and 4 of the first coverage round): a mixer strip placed at the height it reports as its minimum lays all its members inside itself; a chain bar shows only the cards of the
+// slots it has (the others are not placed and not drawn), also before any layout.
+static void test_mixer_strip_min_size_and_chain_bar_cards()
+{
+    MixerStrip ms;
+    const Size minS = ms.minSize();
+    check (minS.w == 96 && minS.h == MixerStrip::kMinH && minS.h == 456, "MixerStrip reports the height its layout needs (456)");
+    ms.place ({ 0, 0, minS.w, minS.h });
+    ms.assignIds (700);
+    ms.setPresent (true, true, true, true);
+    bool inside = true;
+    for (const Component* c : { static_cast<const Component*> (&ms.power), static_cast<const Component*> (&ms.destButton), static_cast<const Component*> (&ms.pan),
+                                static_cast<const Component*> (&ms.send1), static_cast<const Component*> (&ms.send2), static_cast<const Component*> (&ms.fader) })
+        inside = inside && ms.rect().contains (c->rect());
+    check (inside, "at its minimum height every member of the strip lies inside it (send 2 included)");
+    check (ms.fader.rect().h >= 96 && ms.send2.rect().bottom() <= ms.rect().bottom(), "the fader keeps its 96 px and the last slider ends inside the strip");
+    const Image im = drawComponent (ms, 200, 500);
+    check (drawnOutside (im, ms.rect(), backgroundPixel()) == 0, "the strip at its minimum height draws strictly inside its rectangle");
+
+    FxChainBar fb;
+    check (! fb.childShown (10) && fb.childShown (0) && fb.childShown (5), "a chain bar that has not been given its slots shows the cards of the first six only");
+    fb.place ({ 8, 100, 1264, 88 });   // (the room the FX page gives it)
+    const Image im2 = drawComponent (fb, 1280, 300);
+    check (drawnOutside (im2, fb.rect(), backgroundPixel()) == 0, "a chain bar draws inside its rectangle: no card at the origin");
+    fb.setNumActiveSlots (2);
+    check (fb.childShown (1) && ! fb.childShown (2) && ! fb.childShown (10), "the cards follow the number of slots");
+}
+
 int main()
 {
     test_composite_base_behavior();
@@ -289,6 +317,7 @@ int main()
     test_knob_panel_and_filter_route_panel();
     test_mixer_strip_layout_and_q_presence();
 
+    test_mixer_strip_min_size_and_chain_bar_cards();
     std::printf ("ui_cov_composites_panels_host: %d failure(s)\n", g_fails);
     return g_fails ? 1 : 0;
 }

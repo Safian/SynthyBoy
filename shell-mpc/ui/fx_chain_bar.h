@@ -325,7 +325,7 @@ public:
         for (int i = 0; i < kMaxSlots; ++i)
         {
             cards[i].state.slot = i;
-            addKid (cards[i]);
+            addKid (cards[i], i < numSlots_);   // only the cards of the slots the bar starts with: the others are not placed yet
         }
         plusCard.state.isPlus = true;
         addKid (plusCard);

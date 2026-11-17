@@ -288,6 +288,27 @@ static void test_shape_canvas_point_editing_and_undo()
     check (drawnOutside (im, sc.rect(), backgroundPixel()) == 0, "ShapeCanvas draws strictly inside rect");
 }
 
+// Regression (library finding 5 of the first coverage round): a release to the left of the rows of a list popup is no selection of a row (as one to the right is none).
+static void test_list_popup_release_outside_the_rows()
+{
+    static const char* const items[] = { "Item 0", "Item 1", "Item 2" };
+    ListPopup lp;
+    lp.setId (50);
+    lp.place ({ 100, 100, 200, 200 });
+    lp.state.items = items;
+    lp.state.count = 3;
+    const Rect row = lp.rowRect (0);
+    lp.touchDown (row.x + 20, row.y + 10, 1.0);
+    Change c = lp.touchUp (20, row.y + 10);
+    check (c.kind != ChangeKind::Index, "a release to the left of the popup is no row selection");
+    lp.touchDown (row.x + 20, row.y + 10, 2.0);
+    c = lp.touchUp (row.right() + 6, row.y + 10);
+    check (c.kind != ChangeKind::Index, "and neither is one to the right of the rows");
+    lp.touchDown (row.x + 20, row.y + 10, 3.0);
+    c = lp.touchUp (row.x + 30, row.y + 10);
+    check (c.kind == ChangeKind::Index && c.index == 0, "a release over the row selects it");
+}
+
 int main()
 {
     test_list_popup_selection_and_turn();
@@ -297,6 +318,7 @@ int main()
     test_mod_source_board_chips_and_groups();
     test_shape_canvas_point_editing_and_undo();
 
+    test_list_popup_release_outside_the_rows();
     std::printf ("ui_cov_popups_scroll_host: %d failure(s)\n", g_fails);
     return g_fails ? 1 : 0;
 }
