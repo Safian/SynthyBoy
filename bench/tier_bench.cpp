@@ -12,7 +12,7 @@
 //   --set NAME      the list of profiles (default settings):
 //                     settings  "low" (what the MPC build ships) and one change at a time: unison 4 / 7 / 16, warp 4x, morph full, math exact, control full, fx all,
 //                               samples high; then everything at once with 8 voices; each with the notes of its polyphony
-//                     ladder    the candidate profiles from the cheapest to the dearest (kLadder below), each at ITS full polyphony
+//                     ladder    the candidate profiles from the cheapest to the dearest (kLadder below), each at ITS full polyphony (8, 12, 16, 24, 32 notes)
 //                     tiers     low, medium, high at their full polyphony (8 / 16 / 32 notes)
 //                     quick     low, low,unison=7 and high,voices=8
 //   --config P      one more profile (the grammar of device_profile.h, e.g. "low,unison=7,warp=4x"); with at least one --config and no --set only these run
@@ -66,19 +66,19 @@ using namespace synthyboy;
 
 namespace
 {
-// The candidate profiles from the cheapest to the dearest: each step adds what the step before lacked. The order follows the cost and audible gain measured on the
-// development machine (the analysis that came with this bench); the device decides how far up it gets.
+// The candidate profiles from the cheapest to the dearest. The order is the audible gain per cost found with bench/profile_compare.cpp and this bench on the
+// development machine: first the unison voices (three factory pads lose a whole register at 3 voices), then the effects that low bypasses (31 factory presets are
+// made with them), then the polyphony, then the 4x warps, the full morph rate and control rate, and last the exact math (which no measurement could tell from the
+// approximations). A device runs the highest step that stays inside its budget.
 const char* const kLadder[] = {
     "low",
-    "low,unison=4",
     "low,unison=7",
-    "low,unison=7,warp=4x",
-    "low,unison=7,warp=4x,morph=full",
-    "low,unison=7,warp=4x,morph=full,control=full",
-    "low,unison=7,warp=4x,morph=full,control=full,math=exact",
-    "low,unison=7,warp=4x,morph=full,control=full,math=exact,fx=all",
-    "high,voices=8",
-    "high,voices=12",
+    "low,unison=7,fx=all",
+    "low,unison=16,fx=all",
+    "low,unison=16,fx=all,voices=12",
+    "low,unison=16,fx=all,voices=16",
+    "low,unison=16,fx=all,voices=16,warp=4x",
+    "low,unison=16,fx=all,voices=16,warp=4x,morph=full,control=full",
     "high,voices=16",
     "high,voices=24",
     "high",
@@ -374,6 +374,15 @@ std::string describeCpu (int& cpuOut)
 #endif
 }
 
+/** The frequency the kernel reports for a CPU right now in kHz (Linux cpufreq; 0 when it cannot be read). Read after every run: a number taken on a core that
+    sat at a low frequency says nothing about the core. */
+long currentKhz (int cpu)
+{
+    if (cpu < 0)
+        return 0;
+    return std::atol (readLine ("/sys/devices/system/cpu/cpu" + std::to_string (cpu) + "/cpufreq/scaling_cur_freq").c_str());
+}
+
 [[noreturn]] void usage (const char* message)
 {
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
@@ -566,10 +575,10 @@ int main (int argc, char** argv)
         return 1;
     }
     if (csv != nullptr)
-        std::fprintf (csv, "device,cpu,cpu_info,profile,settings,load,group,notes,voices_mean,voices_max,sr,block,blocks,min_pct,median_pct,p99_pct,max_pct,mean_pct,min_ms,median_ms,p99_ms,max_ms,mean_ms,blocks_over_100pct\n");
+        std::fprintf (csv, "device,cpu,cpu_info,profile,settings,load,group,notes,voices_mean,voices_max,sr,block,blocks,min_pct,median_pct,p99_pct,max_pct,mean_pct,min_ms,median_ms,p99_ms,max_ms,mean_ms,blocks_over_100pct,cpu_khz_after_run\n");
 
     std::printf ("\nshare of the block's real time (%.3f ms = 100 %%) spent in process(), one core:\n", budgetMs);
-    std::printf ("%-58s %-24s %5s %6s | %7s %7s %7s %7s %7s | %5s\n", "profile", "load", "notes", "voices", "min %", "median%", "p99 %", "max %", "mean %", "over");
+    std::printf ("%-58s %-24s %5s %6s | %7s %7s %7s %7s %7s | %5s %8s\n", "profile", "load", "notes", "voices", "min %", "median%", "p99 %", "max %", "mean %", "over", "cpu MHz");
     struct Summary { std::string preset; double p99 = -1.0, max = -1.0; double worstP99 = -1.0; };
     std::vector<Summary> summaries (configs.size());
     for (size_t c = 0; c < configs.size(); ++c)
@@ -579,8 +588,9 @@ int main (int argc, char** argv)
         {
             const Result r = run (o, profiles[c], l, notes);
             const double k = 100.0 / budgetMs;
-            std::printf ("%-58s %-24.24s %5d %6.1f | %7.2f %7.2f %7.2f %7.2f %7.2f | %5lld\n", configs[c].c_str(), l.name.c_str(), notes, r.voicesMean, r.minMs * k, r.medianMs * k, r.p99Ms * k,
-                         r.maxMs * k, r.meanMs * k, r.over);
+            const long khz = currentKhz (cpu);
+            std::printf ("%-58s %-24.24s %5d %6.1f | %7.2f %7.2f %7.2f %7.2f %7.2f | %5lld %8ld\n", configs[c].c_str(), l.name.c_str(), notes, r.voicesMean, r.minMs * k, r.medianMs * k, r.p99Ms * k,
+                         r.maxMs * k, r.meanMs * k, r.over, khz / 1000);
             std::fflush (stdout);
             if (o.sections)
             {
@@ -593,9 +603,9 @@ int main (int argc, char** argv)
             }
             if (csv != nullptr)
             {
-                std::fprintf (csv, "\"%s\",%d,\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%d,%.2f,%d,%.0f,%d,%lld,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%.5f,%.5f,%.5f,%lld\n", model.c_str(), cpu, cpuText.c_str(),
+                std::fprintf (csv, "\"%s\",%d,\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%d,%.2f,%d,%.0f,%d,%lld,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%.5f,%.5f,%.5f,%lld,%ld\n", model.c_str(), cpu, cpuText.c_str(),
                               configs[c].c_str(), synthyboy_mpc::describeProfile (profiles[c]).c_str(), l.name.c_str(), l.group.c_str(), notes, r.voicesMean, r.voicesMax, o.sampleRate, o.block,
-                              r.blocks, r.minMs * k, r.medianMs * k, r.p99Ms * k, r.maxMs * k, r.meanMs * k, r.minMs, r.medianMs, r.p99Ms, r.maxMs, r.meanMs, r.over);
+                              r.blocks, r.minMs * k, r.medianMs * k, r.p99Ms * k, r.maxMs * k, r.meanMs * k, r.minMs, r.medianMs, r.p99Ms, r.maxMs, r.meanMs, r.over, khz);
                 std::fflush (csv);
             }
             if (l.kind == Load::preset && r.p99Ms * k > summaries[c].p99)

@@ -578,7 +578,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         envCacheBpm = g.bpm;
     }
     // ---- LFOs
-    // Tier low (g.quality == 0, "economy"): an LFO that no slot reads only feeds the display, so it is evaluated every fourth period (staggered) over four periods' time
+    // Economy group Control (tier low): an LFO that no slot reads only feeds the display, so it is evaluated every fourth period (staggered) over four periods' time
     // instead of every period: the phase and the fade keep their pace, the display gets a value 1.4 ms old at most.
     ++tickCount;
     for (int l = 0; l < 10; ++l)
