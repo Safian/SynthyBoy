@@ -202,6 +202,26 @@ void testMasterGroupsAndMeters()
     r.now += 40.0;
     r.refresh();
     check (m.meters.holdL > m.meters.peakL && m.meters.holdL < 0.8f + 1.0e-6f, "the peak hold falls slowly (hold " + std::to_string (m.meters.holdL) + " over the peak " + std::to_string (m.meters.peakL) + ")");
+    // the numbers of the dB scale never run into each other, on the meter of the page and on a short one
+    for (int h : { m.meters.rect().h, 90, 120, 200, 400 })
+    {
+        ui::PeakMeterDisplay pm;
+        pm.place ({ 10, 10, 90, h });
+        ui::Rect box[ui::PeakMeterDisplay::kNumMarks];
+        bool shown[ui::PeakMeterDisplay::kNumMarks];
+        pm.scaleLabels (box, shown);
+        bool apart = shown[0] && shown[ui::PeakMeterDisplay::kNumMarks - 1], inside = true;
+        int last = -1000, writes = 0;
+        for (int i = 0; i < ui::PeakMeterDisplay::kNumMarks; ++i)
+            if (shown[i])
+            {
+                apart = apart && box[i].y >= last;
+                last = box[i].bottom();
+                inside = inside && pm.rect().contains (box[i]);
+                ++writes;
+            }
+        check (apart && inside && writes >= 3, "the scale numbers of a meter " + std::to_string (h) + " px tall do not overlap and stand inside it (" + std::to_string (writes) + " of 5 written)");
+    }
     // the glide curve follows SLOPE live
     r.inst.set ("master.portamento.slope", 6.0f);
     r.refresh();
