@@ -54,7 +54,7 @@ add("Spectral Bowed Glass", "Lead", "lead,spectral,bowed,glass,comb,legato,expre
         R("macro3", "osc2.frame", 50),                                                     # Glass Shape
         R("macro4", "filter1.cutoff", 55),                                                 # Bright
         R("macro5", "lfo1.rate", 40),                                                      # Vibrato Rate
-        R("macro6", "reverb.mix", 30), R("macro6", "delay.mix", 20),                       # Space
+        R("macro6", "reverb.mix", 50), R("macro6", "reverb.decay", 20), R("macro6", "delay.mix", 35),   # Space
     ],
     ["Comb", "Glass", "Glass Shape", "Bright", "Vibrato Rate", "Space", "", ""],
     content=C(wavetables=[WT(2, "additive_glass_harmonica")], samples=[SMP(1, "bowed_tone")]))
@@ -83,7 +83,7 @@ add("Spectral Gong Pad", "Pad", "pad,spectral,gong,metal,inharmonic,drone,wide",
         R("macro2", "osc1.spec.freq_shift", 7),                                            # Shift
         R("macro3", "osc1.warp.amount", 70),                                              # Subharmonics
         R("macro4", "filter1.cutoff", 40),                                                 # Bright
-        R("macro5", "reverb.mix", 35),                                                     # Space
+        R("macro5", "reverb.mix", 55), R("macro5", "reverb.decay", 20),                    # Space
         R("macro6", "osc2.level", 45),                                                     # Bell Layer
     ],
     ["Scan Speed", "Shift", "Subharmonics", "Bright", "Space", "Bell Layer", "", ""],

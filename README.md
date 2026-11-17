@@ -28,6 +28,9 @@ feeds garbage and mutated documents to every parser, and `synthyboy_preset_sanit
 2.3, Q29), macros 5-8 where the preset has something for them to open; all presets sit at a chord level of -20 dBFS RMS (four presets whose chord peak would pass -1.5 dBFS stay lower) (`scripts/tune-preset-levels.py`,
 numbers in `docs/ui-design/PRESETS-REPORT.md`).
 
+`content/factory-wavetables/` (16 wavetables) and `content/factory-samples/` (12 samples, 3 multisample instruments, 3 impulse responses for Convolve) are two more content packs, 11.5 MB in all, synthesised by
+`scripts/gen-content-pack.py` (CC0-1.0, deterministic, `--check`); the presets of sound set batch 2 name their files by pack id, path and SHA-256 (`docs/release/SOUND-SET-BATCH-2.md`).
+
 | Category | Presets | Of which showcase presets (version 3 engine features) |
 |----------|--------:|--------------------------------------------------------|
 | Bass | 23 | Scream Filter Bass (Scream filter), EMS Squelch Bass (EMS ladder), Custom Shape Wobble (custom LFO shape in `content.lfo_shapes`) |

@@ -82,7 +82,7 @@ add("Drawbar Organ Keys", "Keys", "keys,organ,drawbars,tonewheel,rotary,bus,over
         R("mod_wheel", "chorus.mix", 30), R("mod_wheel", "phaser.mix", 30),
         R("velocity", "filter1.cutoff", 10), R("velocity", "osc1.frame", 14),
         R("macro1", "osc1.frame", 70),                                                     # Registration
-        R("macro2", "osc2.level", 40),                                                     # Percussion
+        R("macro2", "osc2.level", 70), R("macro2", "env2.decay", 25),                      # Percussion
         R("macro3", "bus1.level", 12), R("macro3", "distortion.drive", 25),                # Overdrive
         R("macro4", "noise.level", 20),                                                    # Click
         R("macro5", "chorus.rate", 55), R("macro5", "phaser.rate", 45),                    # Rotary Speed

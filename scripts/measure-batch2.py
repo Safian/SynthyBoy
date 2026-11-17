@@ -244,6 +244,13 @@ def report(binary, work):
                 if uses_source(doc, ctrl):
                     for v in (0, 100):
                         (var_dir / f"{stem}__{ctrl}_{v}.sbpreset").write_text(variant_doc(doc, {f"macro.{plan[name]['standin_n']}": v}, remap=(ctrl, standin)))
+    # the level render: the same presets with the attack cut (LEVEL_OVERRIDES): what the master volume was tuned on; peak and level at the sustain
+    lv_dir = work / "lvrep"
+    if lv_dir.exists():
+        for f in lv_dir.rglob("*.sbpreset"):
+            f.unlink()
+    write_entries([(n, c, m, level_doc(n, doc)) for n, c, m, doc in entries], lv_dir)
+    lv = {t: run_render(binary, lv_dir, work, tier=t)[0] for t in ("high", "low")}
     res = {}
     for tier in ("high", "low"):
         rows, fails, out = run_render(binary, base, work, tier=tier, wav=work / "wav")
@@ -264,6 +271,7 @@ def report(binary, work):
             r = res[tier].get(stem + ".sbpreset")
             o[tier] = r
         o["nocontent"] = nrows.get(stem + ".sbpreset")
+        o["sustain"] = {t: lv[t].get(stem + ".sbpreset") for t in ("high", "low")}
         wavp = work / "wav" / "high" / f"{stem}.wav"
         if wavp.is_file():
             o["wav"] = analyse_wav(wavp)

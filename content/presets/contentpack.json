@@ -731,7 +731,7 @@
     },
     {
       "path": "Keys/glass_zone_bells.sbpreset",
-      "sha256": "854451b1688cbb06c389388566fd21a587ef540df48abf7ba0fcc8bc21abca98",
+      "sha256": "208a36b82cf0c23fd77c3cc54a6dbc76a443b1b1542c517943b903ee16171d5c",
       "size": 51019
     },
     {
@@ -771,13 +771,13 @@
     },
     {
       "path": "Lead/spectral_bowed_glass.sbpreset",
-      "sha256": "d9fd17f568d2f033eebfe21ff73efa2b954b04118ee6cfea456a64fbe035f82e",
-      "size": 51158
+      "sha256": "57788bd1874e819a337ae8e87c0edc5730f3eb492c9fc061bdbe1036c69a21ea",
+      "size": 51162
     },
     {
       "path": "Pad/spectral_gong_pad.sbpreset",
-      "sha256": "061e0a5022212013109ad23ae98551405afb97246c9c209d2f1ccbc9125d2bce",
-      "size": 50907
+      "sha256": "aef8643e90cd3651494d1f48a44c0b4fff0985dc72172ff8ea999109cf6791b2",
+      "size": 50911
     },
     {
       "path": "FX/spectral_chord_morph.sbpreset",
@@ -796,8 +796,8 @@
     },
     {
       "path": "Keys/drawbar_organ_keys.sbpreset",
-      "sha256": "4054b49f4a0706cf8a69fdcf3a3f66fd1addc250abeffc0a2c59c2c705392a31",
-      "size": 50937
+      "sha256": "119aec282b8499af35d29c3610e2afbb197ac201377327b07ac4f5454e1853a8",
+      "size": 50941
     },
     {
       "path": "Pad/throat_singer_drone.sbpreset",

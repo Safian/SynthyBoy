@@ -65,7 +65,7 @@ add("Glass Zone Bells", "Keys", "keys,bells,glass,multisample,scale,hirajoshi,co
         "osc1.on": 1, "osc1.type": "Multisample", "osc1.level": 72, "osc1.unison.voices": 2, "osc1.unison.detune": 6, "osc1.unison.spread": 60,
         "osc2.on": 1, "osc2.wavetable": "Bell Partials", "osc2.frame": 40, "osc2.level": 14, "osc2.transpose": 0,
         "sub.on": 1, "sub.waveform": "Sine", "sub.octave": -1, "sub.level": 14,
-        "filter1.on": 1, "filter1.model": "Digital", "filter1.style": 0, "filter1.cutoff": 2800, "filter1.resonance": 8, "filter1.keytrack": 50,
+        "filter1.on": 1, "filter1.model": "Digital", "filter1.style": 0, "filter1.cutoff": 1800, "filter1.resonance": 8, "filter1.keytrack": 50,
         "env1.attack": 0, "env1.decay": 2600, "env1.sustain": 0, "env1.release": 800,
         "delay.on": 1, "delay.sync": 2, "delay.division": 5, "delay.mix": 14, "delay.feedback": 34, "delay.style": "Ping pong",
         "convolve.on": 1, "convolve.ir": "Preset IR", "convolve.mix": 36, "convolve.ir_gain": 0,
@@ -74,7 +74,7 @@ add("Glass Zone Bells", "Keys", "keys,bells,glass,multisample,scale,hirajoshi,co
     [
         R("velocity", "filter1.cutoff", 20), R("velocity", "osc2.level", 14),
         R("mod_wheel", "osc1.multi.timbre", 25), R("mod_wheel", "convolve.mix", 25),
-        R("macro1", "filter1.cutoff", 55),                                                 # Bright
+        R("macro1", "filter1.cutoff", 62),                                                 # Bright
         R("macro2", "convolve.mix", 45), R("macro2", "convolve.attack", 8),                # Plate
         R("macro3", "osc2.level", 55),                                                     # Bell Layer
         R("macro4", "delay.mix", 38),                                                      # Echo
