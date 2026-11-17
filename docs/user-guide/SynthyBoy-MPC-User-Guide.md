@@ -687,7 +687,7 @@ The picture shows the BACK card, the three effects of the band (FX Filter select
 
 ![Master main](img/master-main.png)
 
-Two sides, chosen by the buttons **MAIN** and **TUNING & MPE** at the top. The picture is rendered for a 16-knob device: all ten Q groups of the page (four on the first row, two on the second...) get their numbers. On the Key 61 the idle groups show 1 - 4 and the Q-Link button steps to them.
+Two sides, chosen by the buttons **MAIN** and **TUNING & MPE** at the top. The picture is rendered for a 16-knob device: the groups are numbered in reading order and the first four are the active group. On the Key 61 the idle groups show 1 - 4 and the Q-Link button steps to them.
 
 **MAIN side** (four blocks):
 
