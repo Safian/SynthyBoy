@@ -37,8 +37,12 @@ fx.slotEditor.setType (synthyboy::kFxTypeChorus, true);          // kind of the 
 fx.slotEditor.setState ([&] (const char* key) { return plainValueOf (key); });
 for (int p = 0; p < fx.slotEditor.numParams(); ++p)
     if (fx.slotEditor.kindOf (p) == FxSlotEditor::Kind::Knob)
-        static_cast<Knob*> (fx.slotEditor.memberOf (p))->state.value = normOf (fx.slotEditor.infoOf (p));  // memberOf: the control to fill
+    {
+        const synthyboy::ParamInfo& pi = *fx.slotEditor.infoOf (p);
+        static_cast<Knob*> (fx.slotEditor.memberOf (p))->state.value = synthyboy::toNormalised (pi, plainValueOf (pi.key));
+    }
 ```
+`plainValueOf` is the owner's own function (it reads the instance).
 `shell-mpc/overlay/fx_ui.h` is the real example.
 
 ## Used on
