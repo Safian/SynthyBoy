@@ -335,6 +335,17 @@ void testVoiceGridDrawing()
     r.tapAt (row2.x + row2.w / 2, row2.y + row2.h / 2);
     check (g.activeRow == 2 && vs.rowList.state.index == 2 && r.inst.q[1] != -1 && QRouter::indexOf (r.inst.q[1]) == VoiceUi::kVirtualRow, "a tap on CUTOFF selects the row; the list is Q2 of the header group (the virtual row target)");
     check (vs.groups[0].member (1) == &vs.rowList && vs.groups[0].frameless() && vs.groups[0].numMembers() == 4, "the header group is [STEP, the ROW list, LENGTH, VALUE] and has no frame (its members lie apart)");
+    {
+        // the VALUE field shows the value the way the grid cell does: a centred pan is "MID", not "0"
+        r.tapAt (vs.rowList.rowRect (0).x + vs.rowList.rowRect (0).w / 2, vs.rowList.rowRect (0).y + vs.rowList.rowRect (0).h / 2);
+        r.refresh();
+        char want[16], got[16];
+        ui::VoiceGrid::formatValue (0, g.value (0, g.selectedStep), want, sizeof want);
+        ui::NumberField::formatValue (vs.stepValue.state, got);
+        check (std::string (got) == std::string (want) && (g.value (0, g.selectedStep) != 0.0f || std::string (got) == "MID"), "the VALUE field of the PAN row has the format of the grid cell (" + std::string (got) + " / " + std::string (want) + ")");
+        r.tapAt (vs.rowList.rowRect (2).x + vs.rowList.rowRect (2).w / 2, vs.rowList.rowRect (2).y + vs.rowList.rowRect (2).h / 2);
+        r.refresh();
+    }
     check (std::string (vs.stepValue.state.label) == "CUTOFF", "the VALUE field names the row (" + std::string (vs.stepValue.state.label) + ")");
     check (vs.length.rect().w >= 160 && vs.stepValue.rect().w >= 180 && vs.qStepSelect.rect().right() <= vs.length.rect().x, "LENGTH and VALUE have the room the ROW stepper left (" + std::to_string (vs.length.rect().w) + ", " + std::to_string (vs.stepValue.rect().w) + " px)");
     check (r.ui.screen().turnQ (1, 1.0).index == 3, "a Q-Link step on Q2 moves the row on (the list)");

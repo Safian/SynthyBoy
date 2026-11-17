@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -918,6 +919,57 @@ void testReview2()
     }
 }
 
+// the follow-ups of the oscillator pages: the board of sources on a control without modulations, the shown names of the unison law (no product name on any page), one format of the voice step value
+void testFollowUps()
+{
+    {
+        Rig r;
+        r.openFull();
+        int x, y;
+        r.centre (r.ui.full().basic.level, x, y);
+        r.ui.touch (ev (TouchEvent::Down, x, y + kOY), r.stack, r.inst, r.now);
+        r.now += 700.0;
+        r.ui.tick (r.now, r.stack, r.inst);
+        r.ui.touch (ev (TouchEvent::Up, x, y + kOY), r.stack, r.inst, r.now);
+        r.refresh();
+        check (r.stack.top() == OscUi::kPageMods && r.ui.modsPage().numRows() == 0, "the modulations page of a control nothing modulates opens");
+        check (r.ui.modsPage().boardShown() && r.ui.modsPage().board.numSources() > 10, "the page of a control without modulations is the board of every source, as on the other pages");
+    }
+    bool clean = true;
+    std::string where;
+    for (int osc = 1; osc <= 3 && clean; ++osc)
+        for (int law = 0; law < 2; ++law)
+        {
+            Rig r;
+            const std::string key = "osc" + std::to_string (osc) + ".unison.law";
+            r.inst.set (key.c_str(), static_cast<float> (law));
+            r.refresh();
+            r.openFull();
+            r.stack.openDetail (oscspec::kMore);
+            r.refresh();
+            const oscspec::OscSpecPage& pg = r.ui.specPage();
+            std::string seen;
+            for (int i = 0; pg.spec() != nullptr && i < pg.spec()->numCtls; ++i)
+                if (pg.spec()->ctls[i].kind == oscspec::K::List && std::strcmp (pg.spec()->ctls[i].key, "unison.law") == 0)
+                {
+                    const ui::LedList* l = dynamic_cast<const ui::LedList*> (const_cast<oscspec::OscSpecPage&> (pg).control (i));
+                    if (l != nullptr)
+                    {
+                        seen += std::string (l->state.title);
+                        for (int o = 0; o < l->state.count; ++o)
+                            seen += std::string ("|") + l->state.names[o];
+                        check (std::string (l->state.names[0]) == "Equal power" && std::string (l->state.names[1]) == "Fixed gain" && std::string (l->state.title) == "VOICE LAW", "the unison law is Equal power / Fixed gain under VOICE LAW (" + seen + ")");
+                    }
+                }
+            if (seen.find ("Vital") != std::string::npos || seen.find ("Serum") != std::string::npos)
+            {
+                clean = false;
+                where = key;
+            }
+        }
+    check (clean, "no oscillator page shows 'Vital' or 'Serum'" + (clean ? std::string() : " (" + where + ")"));
+}
+
 int main()
 {
     testSteepEdgeNoLongLine();
@@ -942,6 +994,7 @@ int main()
     testSourceAndWarpLists();
     testReview2();
     testSpecPages();
+    testFollowUps();
     for (const std::string& d : g_libraries)
         if (d.compare (0, 11, "/tmp/sbovl-") == 0)
             (void) std::system (("rm -rf '" + d + "'").c_str());

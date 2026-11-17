@@ -483,6 +483,25 @@ grep -qE "^FAIL|WARNING: ThreadSanitizer" $TL/macro-names-chunk.log && { grep -E
 # the release-like overlay build gives the same chunk and the same parameter list as the hooks build
 $B/lfo_live_host "$OVLREL" on overlay > $B/live-ovlrel.log 2>&1 || { grep -E "^FAIL" $B/live-ovlrel.log; echo "ACCEPT FAIL: lfo_live_host with the release-like overlay build"; exit 1; }
 [ "$(grep -h '^chunk ' $B/live-ovlon.log)" = "$(grep -h '^chunk ' $B/live-ovlrel.log)" ] || { echo "ACCEPT FAIL: the state chunk differs between the hooks build and the release-like overlay build"; exit 1; }
+# the quality profile per device (shell-mpc/device_profile.h, docs/MPC.md "Quality profile per device"): the texts, the device table, the overrides; plainly and under AddressSanitizer + UBSan
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -o $B/device_profile_host shell-mpc/tests/device_profile_host.cpp || { echo "ACCEPT FAIL: device_profile_host build"; exit 1; }
+$B/device_profile_host > $B/device-profile-host.log 2>&1 || { grep -E "^FAIL" $B/device-profile-host.log; echo "ACCEPT FAIL: device_profile_host (quality profile per device: texts, table, overrides)"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I core/include -o $B/device_profile_host_asan shell-mpc/tests/device_profile_host.cpp || { echo "ACCEPT FAIL: device_profile_host asan build"; exit 1; }
+$B/device_profile_host_asan > $B/device-profile-host-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/device-profile-host-asan.log | head; echo "ACCEPT FAIL: device_profile_host under AddressSanitizer / UBSan"; exit 1; }
+# the editors of the FX pages (ui/fx_slot_editor.h, fx_layout.h: the tables of the 16 effects, the splitters), plainly and under AddressSanitizer + UBSan
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/ui_fx_editor_host shell-mpc/ui/tests/ui_fx_editor_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ui_fx_editor_host build"; exit 1; }
+UI_OUT=$B/ui-images $B/ui_fx_editor_host > $B/ui-fx-editor-host.log 2>&1 || { grep -E "^FAIL" $B/ui-fx-editor-host.log; echo "ACCEPT FAIL: ui_fx_editor_host (the FX editors)"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/ui_fx_editor_host_asan shell-mpc/ui/tests/ui_fx_editor_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ui_fx_editor_host asan build"; exit 1; }
+ASAN_OPTIONS=detect_container_overflow=0 UI_OUT=$B/ui-images $B/ui_fx_editor_host_asan > $B/ui-fx-editor-host-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/ui-fx-editor-host-asan.log | head; echo "ACCEPT FAIL: ui_fx_editor_host under AddressSanitizer / UBSan"; exit 1; }
+# the headers of the oscillator pages stand alone (osc_spec_page.h: the spec tables of the pages; osc_marks.h: the marks of the oscillator displays)
+for h in osc_spec_page osc_marks; do
+    echo "#include \"$h.h\"" > $B/hdr_$h.cpp
+    c++ -std=c++17 -fsyntax-only -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui $B/hdr_$h.cpp || { echo "ACCEPT FAIL: shell-mpc/overlay/$h.h does not compile on its own"; exit 1; }
+done
+# the cross build of the quality profile bench: syntax and usage only (the build itself needs Docker and is run by hand)
+bash -n scripts/build-tier-bench.sh && bash scripts/build-tier-bench.sh --help > $B/tier-bench-help.log 2>&1 || { echo "ACCEPT FAIL: scripts/build-tier-bench.sh (syntax / --help)"; exit 1; }
+# the documents of the release (docs/release/*: form, cited commits and lines, numbers) and of the MPC (docs/MPC.md: structure, measured numbers only under the device observations)
+python3 -m unittest scripts/tests/test_docs_release.py scripts/tests/test_docs_mpc.py > $B/docs-test.log 2>&1 || { tail -25 $B/docs-test.log; echo "ACCEPT FAIL: the tests of docs/release and docs/MPC.md"; exit 1; }
 # the touch decoder and the evdev reader (touch_decoder.h, touch_linux.h; fakes for the syscalls, a capture of the Key 61 as a fixture): plainly with -Werror and under AddressSanitizer + UBSan
 bash shell-mpc/overlay/tests/run_touch_tests.sh > $B/touch.log 2>&1 || { grep -E "FAIL|error" $B/touch.log | head -20; echo "ACCEPT FAIL: touch_host"; exit 1; }
 echo "ACCEPT OK"
