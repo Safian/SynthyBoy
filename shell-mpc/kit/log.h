@@ -168,7 +168,7 @@ public:
         }
         s->ns = std::chrono::duration_cast<std::chrono::nanoseconds> (std::chrono::steady_clock::now() - origin_).count();
         s->level = static_cast<uint8_t> (level);
-        s->thread = static_cast<uint16_t> (reinterpret_cast<uintptr_t> (pthread_self()) >> 4);
+        s->thread = static_cast<uint16_t> ((uintptr_t) (pthread_self()) >> 4)   /* pthread_t is a pointer on macOS and an integer number on glibc: the C cast takes both */;
         std::strncpy (s->category, category, kCategoryName - 1);
         s->category[kCategoryName - 1] = '\0';
         std::vsnprintf (s->text, kTextBytes, fmt, ap);
