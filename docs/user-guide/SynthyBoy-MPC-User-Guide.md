@@ -147,6 +147,7 @@ is lifted.
 | Gesture | What it does |
 |---|---|
 | **Tap** | Presses buttons and switches, selects a card, row or cell, steps a list, opens a page. On a stepper with arrows (< Name >): the left half goes back, the right half forward; on a stepper with a name, a tap on the middle half opens the list of all choices, the outer quarters still step. |
+| **Tap on a LED switch or a LED list** | A LED switch (a dot and a name, no frame) flips when you tap its whole cell. In a LED list every choice is visible, the lit dot is the current one; tap a name to choose it. A LED in front of a knob's name (SMOOTH on the LFO page) switches what the knob sets: the knob is dim while the LED is off. |
 | **Drag up / down** on a knob or number field | Changes the value (up = more). A knob covers its whole range over 200 pixels of drag. A number field changes one step per its own number of pixels. |
 | **Horizontal drag** on a bar (modulation depth bars) | Changes the value; the whole bar is the whole range. |
 | **Vertical drag** on a fader (Mixer) | Changes the level. |
@@ -159,15 +160,17 @@ Not every control has every gesture; the chapters say what each control does.
 
 ### 4.2 The Q frame and the numbered chips
 
-Every page that has controls groups them in **Q groups** of four values. One group is **active**: it has a
+Every page that has controls groups them in **Q groups** of four values (a block of the screen, a row, a strip). One group is **active**: it has a
 **yellow frame**, and its four members have yellow **numbered chips** (1 to 4) at their top left corner. The
 chip number is the Q-Link knob that turns that control.
 
 - **Make another group active:** touch (tap or start a drag on) a control of that group; the frame moves to
   it. Pages that have a "bank" (Macros) or a selected strip (Mixer) also move the frame when you tap their
-  buttons or strips.
-- **Quiet chips** on the other groups show which knob would turn them (see 4.3).
-- A page can have fewer groups than knobs; the knobs without a group do nothing.
+  buttons or strips. Returning to a page makes its first group active again.
+- **Quiet chips** on the other groups show which knob would turn them. On a device with 16 knobs (the XL) they carry the numbers **5 to 16**, in reading order: the next group has 5 - 8, the one after 9 - 12, then 13 - 16. On the Key 61, which has four knobs, they show 1 - 4, relative to the bank (see 4.3).
+- Some groups have no frame because their members lie apart on the page (the LFO shape picker and the RATE block, the voice-control ROW list). They show only the chips.
+- A page can have fewer groups than knobs; the knobs without a group do nothing. A page with more than four groups (the oscillator page has a fifth, the warps) shows chips on the first four only.
+- **A LED switch has its own chip** when it is a member of a group. A switch that only opens a page (MAP, MORE, the gears) has none.
 
 ### 4.3 The Q-Link knobs
 
@@ -176,7 +179,10 @@ SynthyBoy always maps the 16 Q-Link slots: slots 1 - 4 belong to the **active gr
 groups leaves the rest of the slots without a function.
 
 **MPC XL (16 knobs).** All 16 knobs are alive at once: knobs 1 - 4 turn the active group, knobs 5 - 16 the next
-groups. The quiet chips on those groups are meant to show the numbers 5 - 16 (as designed; not yet confirmed on the XL).
+groups. The chips 5 - 16 are on the XL's screen: the XL screenshot below shows them on the Osc A page (5 - 8 on the wavetable bar, 9 - 12 on the tune block, 13 - 16 on the unison block; the warp rows are the fifth group and have none until you touch them).
+The XL is not a photograph: it is the host's own screenshot with the plugin's drawn frame laid over it, taken on the MPC XL with an earlier build (in it the TRACK switch is still an arc icon).
+
+![XL screenshot: Osc A](img/xl-osc-a.png)
 
 **MPC Key 61 (4 knobs, four banks).** The four knobs always turn four values. The **Q-Link** button steps through
 four banks: bank 1 = slots 1 - 4 (the active group), bank 2 = slots 5 - 8, bank 3 = 9 - 12, bank 4 = 13 - 16. On
@@ -186,24 +192,24 @@ to. The host remembers the bank per tab.
 with the Q-Link button; a yellow box marked with a Q outlines the current Screen-mode control.)
 
 **Stepped targets** (switches, lists, integer steppers such as polyphony): a Q-Link does not sweep them from 0 to
-100 percent of its travel; a small turn of the knob moves one step (one value of the list, or the switch). The ends of a
-list stop.
+100 percent of its travel. The knob moves **one step per small turn**: one value of the list, or the switch. A small turn is about 6 of the 128 clicks of the knob's travel (about one twentieth), so a whole list is reachable with one sweep and a toggle flips with a short turn. A change of direction starts the count again; the ends of a list stop. A very fast turn moves at most four steps at once.
+Fine-grained whole-number values (a grain density, a transpose in semitones) are not stepped this way: they behave as normal knobs.
 
 **Knob displays.** The name, value text, unit and dial position the MPC shows for a knob are those of the
 real parameter it currently controls (for example "Filter 1 Cutoff" or "Macro 5"). When you change the
-active group or the page, the names change with it. A knob without a target shows "Q n" and nothing else. (These names
-on the XL's own knob displays are the design; they are not yet confirmed on the device.)
+active group or the page, the names change with it. A knob without a target shows "Q n" and nothing else.
 
-**Key 61 pop-up.** On the Key 61 the host shows a "Q-Link Status" pop-up on the right when a knob is touched. See
-chapter 8 on how to switch it off. On the XL there is no such pop-up (the knobs have their own displays).
+**Key 61 pop-up.** On the Key 61 the host shows a "Q-Link Status" pop-up on the right when a knob is touched. **Switch it off** (Preferences > General > "Show Q-Link Status When Touched"; chapter 8). On the XL there is no such pop-up (the knobs have their own displays).
 
 ### 4.4 USB mouse
 
-A USB mouse works like a finger on the plugin's pages: the **left button** is a touch (press and drag work
-as on the screen), and the **wheel** steps the control under the pointer: one wheel notch is one Q-Link step
-on a knob or bar, one step on a stepper or number, and the wheel moves a list up when you roll away from yourself.
-The mouse pointer you see is the MPC's own pointer. Plug the mouse in at any time; it is picked up within about
-two seconds.
+A USB mouse works like a finger on the plugin's pages. Plug it in at any time; it is picked up within about
+two seconds. The mouse pointer you see is the MPC's own pointer, and the MPC keeps receiving every mouse event as well.
+
+- **Left button = touch.** Press and drag work as on the screen: a press on a knob and a drag turns it relatively (a vertical drag; the whole range over 200 pixels, as with a finger). **A click on the arc of a knob does not make the value jump** to where the pointer is, just as the factory UI does not.
+- **Wheel = Q-Link steps** for the control under the pointer, no press needed. One notch on a knob or a bar is one Q-Link step (1/128 of the range); on a number field, a stepper or an up / down stepper one whole step (rolling away from yourself goes to the next value). On a list, rolling away from yourself moves up the list. On the Mod page the wheel scrolls the rows where no control is under the pointer. A button takes no wheel step. While a finger is down, the wheel is ignored.
+- Other mouse buttons belong to the MPC. With two mice the one whose button went down first owns the gesture.
+- Where the host's own picture shows through (a pop-up of the host, the part cut away for the Key 61's Q-Link pop-up) the plugin's pages take no mouse input, exactly as for touches.
 
 ### 4.5 Value displays
 
