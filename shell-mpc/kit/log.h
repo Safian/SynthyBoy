@@ -157,7 +157,7 @@ public:
     }
 
     /** Any thread: formats and publishes one record. No allocation, no lock, no I/O. */
-    void write (const char* category, Level level, const char* fmt, va_list ap) noexcept
+    void write (const char* category, Level level, const char* fmt, va_list ap) noexcept __attribute__ ((format (printf, 4, 0)))
     {
         size_t pos = 0;
         Slot* s = claim (pos);
@@ -173,6 +173,15 @@ public:
         s->category[kCategoryName - 1] = '\0';
         std::vsnprintf (s->text, kTextBytes, fmt, ap);
         s->seq.store (pos + 1, std::memory_order_release);   // published
+    }
+
+    /** The same with the arguments of a printf: any thread, no allocation, no lock, no I/O. */
+    void writef (const char* category, Level level, const char* fmt, ...) noexcept __attribute__ ((format (printf, 4, 5)))
+    {
+        va_list ap;
+        va_start (ap, fmt);
+        write (category, level, fmt, ap);
+        va_end (ap);
     }
 
     /** Milliseconds since this logger was made (the clock of the records). */

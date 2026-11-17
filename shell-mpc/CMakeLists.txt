@@ -460,6 +460,16 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(poll_guard_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME poll_guard_host COMMAND poll_guard_host)
 
+    # The start-up record and the developer log (kit/log.h): logic only, no plugin needed.
+    foreach(t startup_timing_host log_host log_off_host log_rt_host)
+        add_executable(${t} EXCLUDE_FROM_ALL tests/${t}.cpp)
+        target_include_directories(${t} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+        target_link_libraries(${t} PRIVATE Threads::Threads)
+        target_compile_features(${t} PRIVATE cxx_std_17)
+        target_compile_options(${t} PRIVATE -Wall -Wextra -Wpedantic)
+        add_test(NAME ${t} COMMAND ${t})
+    endforeach()
+
     add_executable(play_log_host EXCLUDE_FROM_ALL tests/play_log_host.cpp)
     target_include_directories(play_log_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(play_log_host PRIVATE Threads::Threads)

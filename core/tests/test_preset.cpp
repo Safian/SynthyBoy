@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -315,6 +316,90 @@ TEST (factory_presets_pack_validation)
         CHECK_EQ (e.meta.license, "CC0-1.0");
         CHECK (! e.meta.name.empty());
         CHECK (! e.meta.category.empty());
+    }
+}
+
+TEST (scan_prefix_read_equals_whole_file_parse)
+{
+    // scanPresetDirectory reads the first 4 KB of a file (the meta object sits there) and falls back to 64 KB: the entries must be exactly what a parse of the whole file gives, for the factory bank
+    // (names, categories and every meta field) and for a preset whose description is longer than the prefix.
+    const std::filesystem::path repoRoot = std::filesystem::path (__FILE__).parent_path().parent_path().parent_path();
+    const std::filesystem::path factoryDir = repoRoot / "content" / "presets";
+    const auto entries = scanPresetDirectory (factoryDir.string());
+    CHECK_EQ (entries.size(), 136u);
+    for (const auto& e : entries)
+    {
+        std::ifstream f (e.path, std::ios::binary);
+        std::string whole ((std::istreambuf_iterator<char> (f)), std::istreambuf_iterator<char>());
+        PresetMeta full;
+        CHECK (readPresetMeta (whole.data(), whole.size(), full));
+        CHECK_EQ (e.meta.name, full.name);
+        CHECK_EQ (e.meta.category, full.category);
+        CHECK_EQ (e.meta.author, full.author);
+        CHECK_EQ (e.meta.license, full.license);
+        CHECK_EQ (e.meta.tags, full.tags);
+        CHECK_EQ (e.meta.description, full.description);
+    }
+
+    const std::filesystem::path tempDir = std::filesystem::temp_directory_path() / "synthyboy_scan_prefix_tmp";
+    std::error_code ec;
+    std::filesystem::remove_all (tempDir, ec);
+    std::filesystem::create_directories (tempDir, ec);
+    PresetMeta longMeta;
+    longMeta.name = "Long Description";
+    longMeta.category = "Pad";
+    longMeta.license = "CC0-1.0";
+    longMeta.description = std::string (6000, 'x');   // the meta object ends after the 4 KB prefix: the fallback read must find it
+    const std::string text = savePreset (longMeta, ParamValues::defaults());
+    {
+        std::ofstream f ((tempDir / "long.sbpreset").string(), std::ios::binary);
+        f.write (text.data(), static_cast<std::streamsize> (text.size()));
+    }
+    const auto scanned = scanPresetDirectory (tempDir.string());
+    if (CHECK_EQ (scanned.size(), 1u))
+    {
+        CHECK_EQ (scanned[0].meta.name, "Long Description");
+        CHECK_EQ (scanned[0].meta.description.size(), 6000u);
+    }
+    std::filesystem::remove_all (tempDir, ec);
+}
+
+TEST (factory_presets_load_values_are_stable)
+{
+    // Every factory preset loads to the same parameter values whether it is read as a whole file (loadPreset) or selected through the scanned entry (path from scanPresetDirectory, read on selection, as the MPC
+    // shell does): the scan keeps only names and paths, the values come from the file when the program is selected.
+    const std::filesystem::path repoRoot = std::filesystem::path (__FILE__).parent_path().parent_path().parent_path();
+    const auto entries = scanPresetDirectory ((repoRoot / "content" / "presets").string());
+    CHECK_EQ (entries.size(), 136u);
+    for (const auto& e : entries)
+    {
+        std::ifstream f (e.path, std::ios::binary);
+        std::string whole ((std::istreambuf_iterator<char> (f)), std::istreambuf_iterator<char>());
+        PresetMeta meta;
+        ParamValues first = ParamValues::defaults(), second = ParamValues::defaults();
+        const LoadResult r1 = loadPreset (whole.data(), whole.size(), meta, first);
+        CHECK (r1.status == LoadStatus::ok || r1.status == LoadStatus::newer_version);
+        // a second, independent load of a copy of the bytes: identical values (nothing is cached or left from a previous load)
+        const std::string copy = whole;
+        PresetMeta meta2;
+        const LoadResult r2 = loadPreset (copy.data(), copy.size(), meta2, second);
+        CHECK (r2.status == r1.status);
+        CHECK_EQ (meta.name, meta2.name);
+        bool same = true;
+        for (size_t i = 0; i < paramCount(); ++i)
+            same = same && first.plain[i] == second.plain[i];
+        CHECK (same);
+        CHECK_EQ (meta.name, e.meta.name);
+        // state round trip: save the loaded values and load them again
+        const std::string saved = savePreset (meta, first);
+        PresetMeta meta3;
+        ParamValues third = ParamValues::defaults();
+        const LoadResult r3 = loadPreset (saved.data(), saved.size(), meta3, third);
+        CHECK (r3.status == LoadStatus::ok || r3.status == LoadStatus::newer_version);
+        bool round = true;
+        for (size_t i = 0; i < paramCount(); ++i)
+            round = round && std::fabs (first.plain[i] - third.plain[i]) <= 1.0e-4f * std::max (1.0f, std::fabs (first.plain[i]));   // the text has a few decimals
+        CHECK (round);
     }
 }
 

@@ -521,6 +521,69 @@ TEST (own_wavetable_bank_memory)
     CHECK (bytes < 32u * 1024u * 1024u);
 }
 
+// the lazy bank (Quality::lazyTables): the tables are built on demand and read by the audio thread through builtinWavetableIfReady; the sound is the one of the eager prepare ()
+TEST (own_lazy_wavetable_bank_ready_and_same)
+{
+    own::ensureBuiltinWavetables ((1u << 5) | (1u << 12));
+    const own::Wavetable* a = own::builtinWavetableIfReady (5);
+    CHECK (a != nullptr);
+    CHECK (own::builtinWavetable (5) == a);                       // the same object, not a second build
+    CHECK (own::builtinWavetableIfReady (kWavetablePresetTable) == nullptr);   // "Preset table" has no built-in table
+    CHECK (own::builtinWavetableIfReady (-1) == nullptr && own::builtinWavetableIfReady (999) == nullptr);
+    own::requestBuiltinWavetable (-3);                            // out of range: ignored
+    own::requestBuiltinWavetable (999);
+    CHECK (own::builtinBankBuildMs() >= 0.0);
+}
+
+TEST (own_lazy_tables_render_the_same_as_eager_prepare)
+{
+    auto render = [] (bool lazy)
+    {
+        auto eng = createOwnEngine();
+        auto setp = [&] (const char* key, float v)
+        {
+            const ParamInfo* p = findParamByKey (key);
+            if (p != nullptr)
+                eng->setParam (p->id, v);
+        };
+        setp ("osc1.wavetable", 7.0f);
+        setp ("osc2.wavetable", 12.0f);
+        setp ("osc2.on", 1.0f);
+        setp ("filter1.on", 0.0f);
+        Quality q;
+        q.realtime = true;
+        q.lazyTables = lazy;
+        eng->prepare (48000.0, 256, q);
+        eng->readyContent();
+        std::vector<float> out;
+        std::vector<float> l (256), r (256);
+        for (int b = 0; b < 40; ++b)
+        {
+            std::vector<Event> ev;
+            if (b == 0)
+            {
+                ev.push_back (sbtest::noteOn (0, 48));
+                ev.push_back (sbtest::noteOn (64, 55));
+            }
+            eng->process (ev.data(), static_cast<int> (ev.size()), l.data(), r.data(), 256);
+            out.insert (out.end(), l.begin(), l.end());
+            out.insert (out.end(), r.begin(), r.end());
+        }
+        return out;
+    };
+    const std::vector<float> eager = render (false), lazy = render (true);
+    CHECK_EQ (eager.size(), lazy.size());
+    bool same = eager.size() == lazy.size();
+    double energy = 0.0;
+    for (size_t i = 0; same && i < eager.size(); ++i)
+    {
+        same = eager[i] == lazy[i];
+        energy += static_cast<double> (eager[i]) * eager[i];
+    }
+    CHECK (same);
+    CHECK (energy > 1.0e-6);   // it did sound
+}
+
 // Render OSC Warp bakes the warp of the oscillator into a 256 frame table; the table played at the same warp position sounds like the warp
 TEST (own_render_osc_warp_bake_matches_the_live_warp)
 {
