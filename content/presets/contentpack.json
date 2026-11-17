@@ -7,7 +7,7 @@
   "attribution": "Safian Szabolcs",
   "kind": "presets",
   "requires_plugin": ">=0.1.0",
-  "description": "132 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
+  "description": "134 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
   "files": [
     {
       "path": "Bass/solid_sub.sbpreset",
@@ -588,6 +588,16 @@
       "path": "Bass/pitch_drop_808.sbpreset",
       "sha256": "21f981b4c41c4bc0ea3f6930cc91f4680b53d122204de424b19b60940da47742",
       "size": 50494
+    },
+    {
+      "path": "FX/bode_barber_riser.sbpreset",
+      "sha256": "265b02152b4fdd46af62f37dfefe1c6b2d494dc05ce6c4d6d122f95380084a61",
+      "size": 50609
+    },
+    {
+      "path": "FX/detonation_tail.sbpreset",
+      "sha256": "e3135e5d3fcc32e29de8500cc060df0ca25ab4edb07355a35306517861fd3b70",
+      "size": 50513
     },
     {
       "path": "Keys/tine_glass_keys.sbpreset",

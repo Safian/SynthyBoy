@@ -1321,6 +1321,26 @@
    "",
    "",
    ""
+  ],
+  "Bode Barber Riser": [
+   "Height",
+   "Spin",
+   "Noise",
+   "Space",
+   "Length",
+   "",
+   "",
+   ""
+  ],
+  "Detonation Tail": [
+   "Impact",
+   "Boom",
+   "Tail",
+   "Crush",
+   "Air",
+   "",
+   "",
+   ""
   ]
  }
 }
