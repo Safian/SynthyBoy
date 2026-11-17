@@ -47,11 +47,12 @@ public:
 
     void place (const Rect& r) override { rect_ = r; layout(); }
     void setEnabled (bool e) override { enabled_ = e; cap_ = nullptr; syncKids(); }
+    void setInactive (bool i) override { inactive_ = i; for (int k = 0; k < n_; ++k) kids_[k]->setInactive (i); }
     void setQ (bool frame, int index) override { qFrame_ = frame; qIndex_ = frame ? index : 0; for (int i = 0; i < n_; ++i) kids_[i]->setQ (frame, 0); }
 
     void draw (gpu::SceneBuilder& sb) const override
     {
-        Pen pen (sb, enabled_);
+        Pen pen (sb, enabled_, inactive_);
         {
             Cell cell (sb, rect_);
             drawUnder (pen);
@@ -565,11 +566,21 @@ public:
     MenuButton dropdown { "", MenuButton::Icon::Down };
 
     SourcePicker() { addKid (stepper); addKid (dropdown); setPrimary (&stepper); }
-    Size minSize() const override { return { stepper.minSize().w + kGap + 56, 56 }; }   // the stepper's own minimum (a narrower one in the compact row of the Play page)
+    Size minSize() const override { return { stepper.minSize().w + (compact_ ? 0 : kGap + 56), 56 }; }   // the stepper's own minimum (a narrower one in the compact row of the Play page)
+    /** The compact variant (the row of the Play page, where PAN and LEVEL stand beside it): no list button, the stepper has the whole width so that a table name has the room it needs; a tap on the name (`listable`) is the list / the browser. */
+    void setCompact (bool c) { compact_ = c; show (dropdown, ! c); layout(); }
+    bool compact() const noexcept { return compact_; }
 
 protected:
+    bool compact_ = false;
     void layout() override
     {
+        if (compact_)
+        {
+            stepper.place (rect_);
+            dropdown.place ({});
+            return;
+        }
         Rect r[2];
         const int fixed[2] = { 0, 56 }, weight[2] = { 1, 0 };
         layoutRow (rect_, fixed, weight, 2, kGap, r);
@@ -589,7 +600,7 @@ inline const char* instanceName (OscInstance i) noexcept { static const char* co
 class BasicControls : public Composite
 {
 public:
-    PictogramSelector selector;
+    TypeSelector selector;   // the type / waveform: the row of cells (the full screen) or, stacked, a drop-down (the Play page's third)
     Stepper noiseType;
     SourcePicker source;
     NumberField oct { "OCT", NumberField::Format::IntSigned };
@@ -646,7 +657,9 @@ public:
     {
         stacked_ = s;
         pan.state.side = level.state.side = filter.state.side = ! s;
-        source.stepper.minWidth = s ? 120 : Stepper::kMinW;   // the compact row holds the table stepper, PAN and LEVEL side by side: the stepper may be narrower there (its text is fitted)
+        selector.dropdown = s;
+        source.stepper.minWidth = s ? 150 : Stepper::kMinW;   // the compact row holds the table stepper, PAN and LEVEL side by side: about 200 px for the stepper alone (no list button: the name is the list), 140 px of text
+        source.setCompact (s);
         layout();
     }
     bool stacked() const noexcept { return stacked_; }
@@ -662,7 +675,7 @@ public:
         const Component* second = inst_ == OscInstance::Noise ? static_cast<const Component*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<const Component*> (&oct) : &source);
         const Size a = first->minSize(), b = second->minSize(), p = pan.minSize();
         if (stacked_)
-            return inst_ == OscInstance::Noise ? Size { std::max (a.w, 3 * p.w + 2 * kGap), a.h + p.h + kQLane } : Size { std::max (a.w, b.w + 2 * p.w + 2 * kGap), a.h + kQLane + std::max (b.h, p.h) };
+            return inst_ == OscInstance::Noise ? Size { std::max (a.w, 3 * p.w + 2 * kGap), a.h + p.h + kQLane } : Size { std::max ({ a.w + b.w + kGap, 2 * Size { 172, 72 }.w + kGap }), std::max (a.h, b.h) + kQLane + 72 };
         return { a.w + b.w + 2 * p.w + 3 * kGap, std::max ({ a.h, b.h, p.h }) };
     }
     void setEnabled (bool e) override { Composite::setEnabled (e); }
@@ -674,6 +687,8 @@ protected:
         Component* second = inst_ == OscInstance::Noise ? static_cast<Component*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<Component*> (&oct) : &source);
         if (stacked_ && inst_ == OscInstance::Noise)
         {
+            filter.state.side = pan.state.side = level.state.side = false;   // three vertical knobs in one row (a third is too narrow for three side knobs)
+            filter.state.dialMax = pan.state.dialMax = level.state.dialMax = 0;
             // the noise: the type stepper, then FILTER, PAN and LEVEL as one row of three knobs of the same size
             const int h1 = first->minSize().h;
             first->place ({ rect_.x, rect_.y, rect_.w, h1 });
@@ -685,15 +700,15 @@ protected:
         }
         if (stacked_)
         {
-            // the type cells, then ONE row: the second member (the table stepper with its list button, OCT) at the left, PAN and LEVEL at the right (vertical knobs: the dial over the name and the value). The second member is as tall
-            // as a control (at least 56 px, 76 px as far as the row allows: its middle stands at the dial's), the knobs fill the row.
-            const int h1 = first->minSize().h, rowY = rect_.y + h1 + kQLane, rowH = std::max (0, rect_.h - h1 - kQLane);
-            first->place ({ rect_.x, rect_.y, rect_.w, h1 });
-            const int knobW = std::max (pan.minSize().w, (rect_.w - 2 * kGap) / 4), leftW = std::max (0, rect_.w - 2 * knobW - 2 * kGap);
-            const int h2 = std::min (rowH, std::max (second->minSize().h, 76));
-            second->place ({ rect_.x, rowY, leftW, h2 });
-            pan.place ({ rect_.x + leftW + kGap, rowY, knobW, rowH });
-            level.place ({ rect_.x + leftW + kGap + knobW + kGap, rowY, std::max (0, rect_.right() - (rect_.x + leftW + kGap + knobW + kGap)), rowH });
+            // two rows of the same height, the rows of the envelope third's knobs: row 1 the two selectors side by side (the type as a drop-down at the left, the table / content stepper or OCT at the right, 72 px high, in the middle of
+            // the row), row 2 PAN and LEVEL as the side variant of the knob (the dial at the left, the name and the value beside it: the size of the envelope's knobs, dial at most 96 px); the lane of the Q chips between the rows
+            const int rowH = std::max (0, (rect_.h - kQLane) / 2), row2Y = rect_.y + rowH + kQLane, cw = (rect_.w - kGap) / 2, h1 = std::min (rowH, 72), y1 = rect_.y + (rowH - h1) / 2;
+            first->place ({ rect_.x, y1, cw, h1 });
+            second->place ({ rect_.x + cw + kGap, y1, rect_.w - cw - kGap, h1 });
+            pan.state.side = level.state.side = true;
+            pan.state.dialMax = level.state.dialMax = 96;
+            pan.place ({ rect_.x, row2Y, cw, rowH });
+            level.place ({ rect_.x + cw + kGap, row2Y, rect_.w - cw - kGap, rowH });
             return;
         }
         Rect r[4];

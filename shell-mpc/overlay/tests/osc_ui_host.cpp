@@ -57,6 +57,8 @@ public:
     void requestContent (int osc, int kind, const std::string& path) override { requests.push_back ({ osc, kind, path }); loadState = 1; }
     int contentLoad (std::string*) const override { return loadState; }
     std::shared_ptr<const synthyboy::StateContent> content() const override { return contentPtr; }
+    unsigned missingContent() const noexcept override { return missingBits; }
+    unsigned missingBits = 0;   // the engine's missing_content bits
     struct Request { int osc, kind; std::string path; };
     std::vector<ContentRoot> roots;
     std::vector<Request> requests;
@@ -654,7 +656,7 @@ void testSourceBrowserInTheOscillatorUi()
     check (src != nullptr && src->c->enabled() && r.ui.compact().basic.source.stepper.listable && r.ui.compact().basic.source.dropdown.enabled(), "granular: the source of the compact view is enabled (a tap opens the browser)");
     check (std::string (r.ui.compact().basic.source.stepper.state.text) == "NO SAMPLE", "granular: no sample loaded: the source says NO SAMPLE");
     // from the compact view the dropdown opens the full screen and the list over it
-    r.tapC (r.ui.compact().basic.source.dropdown);
+    r.tapC (r.ui.compact().basic.source.stepper);   // the name of the source is the list / the browser (the compact row has no list button)
     check (r.stack.depth() == 2 && r.stack.top() == OscUi::kPageList && r.ui.list().state.count == 1 && std::string (r.ui.list().state.header) == "SOURCES" && ! r.ui.list().state.headerBack && std::string (r.ui.list().state.items[0]) == "LIBRARY \xe2\x96\xb6", "granular: the dropdown opens the full screen and the list of the sources (the header is the title, no way up at the roots)");
     // LIBRARY, then Drums, then the sample
     auto row = [&] (int i) { const ui::Rect q = r.ui.list().rowRect (i); r.tap (q.x + 30, q.y + q.h / 2); };
@@ -699,10 +701,92 @@ void testSourceBrowserInTheOscillatorUi()
     Rig none;
     none.inst.set ("osc1.type", 4.0f);
     none.refresh();
-    none.tapC (none.ui.compact().basic.source.dropdown);
+    none.tapC (none.ui.compact().basic.source.stepper);
     check (none.stack.depth() == 0, "an instance without roots: the browser does not open");
 }
 
+
+/** The content the sound needs and does not have: "content missing: <name>" over the display, the name from the state's content reference (title, else file name without extension, underscores as spaces). */
+void testMissingContentLine()
+{
+    Rig r;
+    r.inst.set ("osc1.type", 1.0f);   // a sample oscillator
+    auto content = std::make_shared<synthyboy::StateContent>();
+    synthyboy::ContentSample cs;
+    cs.osc = 1; cs.ref.pack = "p"; cs.ref.file = "drums/drum_loop_120bpm.wav";
+    content->samples.push_back (cs);
+    r.inst.contentPtr = content;
+    r.refresh();
+    check (r.ui.missingText().empty(), "nothing missing: no line over the display");
+    r.inst.missingBits = 1u << 0;
+    r.refresh();
+    check (r.ui.missingText() == "content missing: drum loop 120bpm", "the file of oscillator A is missing: 'content missing: drum loop 120bpm' (" + r.ui.missingText() + ")");
+    r.inst.missingBits = 1u << 1;   // oscillator B's file: not A's
+    r.refresh();
+    check (r.ui.missingText().empty(), "the line is for the oscillator on screen only");
+    r.inst.missingBits = 1u << 0;
+    content->samples[0].ref.name = "Break Beat";   // the pack's title wins
+    r.refresh();
+    check (r.ui.missingText() == "content missing: Break Beat", "the pack's title is the name when it has one");
+    r.inst.set ("osc1.type", 0.0f);
+    r.inst.missingBits = 1u << 3;   // the user wavetable of A
+    r.refresh();
+    check (r.ui.missingText() == "content missing", "a missing wavetable without a reference in the state: the line says content missing");
+}
+
+/** The type drop-down of the compact view: closed it shows the current type, a tap opens the list of the types with their pictograms (rows >= 56 px), a row chooses (the same write the cells made). */
+void testTypeDropdown()
+{
+    Rig r;
+    r.inst.set ("osc1.type", 0.0f);
+    r.refresh();
+    ui::TypeSelector& t = r.ui.compact().basic.selector;
+    check (t.dropdown && std::string (t.state.items[t.state.index].label) == "WAVE" && t.rect().h >= 56, "the type is a drop-down in the compact view: closed it shows WAVE");
+    r.tapC (t);
+    {
+        const ui::ListPopup& l = r.ui.list();
+        const char* const want[5] = { "WAVE", "MULTI", "SAMPLE", "GRAIN", "SPEC" };
+        bool ok = r.stack.isMain() && l.state.count == 5 && l.state.icons != nullptr && l.state.current == 0;
+        for (int i = 0; i < 5 && ok; ++i)
+            ok = std::string (l.state.items[i]) == want[i] && l.state.icons[i] >= 0 && l.rowRect (i).h >= 56;
+        check (ok, "a tap opens the list of the five types with their pictograms (rows >= 56 px), no page of the stack");
+    }
+    {
+        const ui::Rect row = r.ui.list().rowRect (3);   // GRAIN
+        r.tap (row.x + row.w / 2, row.y + row.h / 2);
+    }
+    check (r.inst.get ("osc1.type") == 2.0f && r.stack.isMain(), "the row GRAIN writes the granular type (osc1.type = 2) and the list closes");
+    r.refresh();
+    check (std::string (t.state.items[t.state.index].label) == "GRAIN", "the closed drop-down shows GRAIN");
+    // the sub oscillator: the six waveforms
+    r.inst.sel = 1;
+    r.refresh();
+    ui::TypeSelector& st = r.ui.compact().basic.selector;
+    r.tapC (st);
+    check (r.ui.list().state.count == 6 && std::string (r.ui.list().state.items[5]) == "PULSE", "the sub oscillator's drop-down lists the six waveforms");
+    r.tap (20, 130);   // the backdrop closes
+    check (r.stack.isMain(), "a tap on the backdrop closes the list");
+}
+
+/** A switched-off oscillator: the inactive (grey) look for the display, the controls under it and the Q frames, the power button red, nothing disabled (the controls stay operable). */
+void testInactiveLook()
+{
+    const uint32_t g = ui::Pen::inactiveGrey (0x2ee6f0ffu);
+    check (((g >> 24) & 255u) == ((g >> 16) & 255u) && ((g >> 16) & 255u) == ((g >> 8) & 255u) && (g & 255u) == 255u && ((g >> 8) & 255u) > 0u, "the inactive look: a colour becomes a grey of its own brightness, the alpha stays");
+    Rig r;
+    r.inst.set ("osc1.on", 1.0f);
+    r.refresh();
+    check (! r.ui.compact().basic.inactive() && ! r.ui.compact().basic.pan.inactive() && ! r.ui.compact().basic.group.inactive() && r.ui.compact().power.state.on, "an oscillator that is on: the controls have the normal look");
+    r.inst.set ("osc1.on", 0.0f);
+    r.refresh();
+    ui::OscillatorCompact& c = r.ui.compact();
+    check (! c.power.state.on && c.power.state.negativeOff && ! c.power.inactive() && ! c.instances.inactive() && ! c.full.inactive(), "switched off: the power button is red (negative colour), the selector and the corner buttons keep their look");
+    check (c.basic.inactive() && c.basic.pan.inactive() && c.basic.level.inactive() && c.basic.selector.inactive() && c.basic.group.inactive() && c.basic.pan.enabled() && c.basic.level.enabled() && c.basic.selector.enabled(), "switched off: the whole Q block is grey and still operable (enabled)");
+    check (r.ui.full().basic.inactive() && r.ui.full().panel.inactive() && r.ui.full().groups[0].inactive() && ! r.ui.full().power.inactive() && ! r.ui.full().close.inactive(), "switched off: the full screen's blocks and groups are grey, its power button and close button are not");
+    r.inst.set ("osc1.on", 1.0f);
+    r.refresh();
+    check (! c.basic.inactive() && ! c.basic.group.inactive() && ! r.ui.full().panel.inactive(), "switched on again: the normal look is back");
+}
 
 /** The detail pages of the types (osc_spec_page.h): how each is reached, BACK, the size of the display, every visible control writes its parameter, the hidden states, the Q groups, the empty state. */
 void testSpecPages()
@@ -1006,6 +1090,9 @@ int main()
     testQGroupFollowsTheActiveGroup();
     testContentBrowser();
     testSourceBrowserInTheOscillatorUi();
+    testMissingContentLine();
+    testInactiveLook();
+    testTypeDropdown();
     testGranularAndSubAndNoise();
     testSourceAndWarpLists();
     testReview2();

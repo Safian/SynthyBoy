@@ -548,7 +548,7 @@ void testPlayViewRoutesTheElements()
     in.nowMs = 500.0;
     pv.update (in);
     check (pv.valid(), "the Play view has data");
-    check (inst.qGroup[0] == inst.index ("env3.attack") && inst.qGroup[3] == inst.index ("env3.release"), "sub-tab Env: the Q group is the ADSR of the selected envelope (env3)");
+    check (inst.qGroup[0] == inst.index ("env3.attack") && inst.qGroup[3] == inst.index ("env3.release"), "the envelope third is the active one: its Q group (the ADSR of env3) is on Q 1 .. 4");
     auto touch = [&] (TouchEvent::Kind k, int x, int y) { TouchEvent e; e.kind = k; e.x = x; e.y = y; in.nowMs += 60.0; return pv.onTouch (e, st, inst, in.nowMs); };
     auto tap = [&] (int x, int y) { const bool a = touch (TouchEvent::Down, x, y); touch (TouchEvent::Up, x, y); in.nowMs += 200.0; pv.update (in); return a; };
     // the full screen button of the envelope's compact view (the corner of its graph)
@@ -586,6 +586,48 @@ void testPlayViewRoutesTheElements()
     in.nowMs += 100.0;
     pv.update (in);
     check (! inst.uiFullOpen.load(), "closed from outside: the host widgets come back");
+}
+
+// ---- ONE Play page: the groups of the three thirds on Q 1 .. 12 in reading order; the third that is touched becomes the active one (4 knob device: it moves to Q 1 .. 4, the others follow in reading order, wrapping);
+// the 16 knob device: the slots stay where they are, whatever is touched
+void testPlayPageQSlots()
+{
+    for (const bool wide : { false, true })
+    {
+        ui::QGroup::setWideDevice (wide);
+        ovt::FakeInstance inst;
+        inst.playSel[0] = 2; inst.playSel[1] = 3; inst.playSel[2] = 1;
+        synthyboy::LiveValues lv;
+        PlayView pv (1, 10.0);
+        UiStack st;
+        ViewInput in;
+        in.instance = &inst; in.io = &inst; in.ui = &st; in.live = &lv; in.nowMs = 0.0;
+        pv.update (in);
+        in.nowMs = 500.0;
+        pv.update (in);
+        const std::string dev = wide ? "16 knob device: " : "4 knob device: ";
+        check (std::string (pv.name()) == "play1", dev + "the one Play view is named play1");
+        check (inst.qGroup[0] == inst.index ("osc2.type") && inst.qGroup[2] == inst.index ("osc2.pan") && inst.qGroup[3] == inst.index ("osc2.level") && inst.qGroup[4] == inst.index ("env3.attack") && inst.qGroup[7] == inst.index ("env3.release")
+                   && inst.qGroup[8] == inst.index ("lfo1.shape") && inst.qGroup[12] == -1 && inst.qGroup[15] == -1,
+               dev + "the oscillator's group on Q 1 .. 4, the envelope's on 5 .. 8, the LFO's on 9 .. 12, nothing on 13 .. 16");
+        auto touch = [&] (TouchEvent::Kind k, int x, int y) { TouchEvent e; e.kind = k; e.x = x; e.y = y; in.nowMs += 60.0; return pv.onTouch (e, st, inst, in.nowMs); };
+        touch (TouchEvent::Down, 1000, 330);   // the LFO's third (a touch on its display)
+        touch (TouchEvent::Up, 1000, 330);
+        in.nowMs += 200.0;
+        pv.update (in);
+        check (pv.highlight() == 3, dev + "a touch in the LFO's third makes its group the active one");
+        if (wide)
+            check (inst.qGroup[0] == inst.index ("osc2.type") && inst.qGroup[4] == inst.index ("env3.attack") && inst.qGroup[8] == inst.index ("lfo1.shape"), dev + "the slots stay where they are under a touch");
+        else
+            check (inst.qGroup[0] == inst.index ("lfo1.shape") && inst.qGroup[4] == inst.index ("osc2.type") && inst.qGroup[8] == inst.index ("env3.attack"), dev + "the LFO's group is on Q 1 .. 4, the oscillator's and the envelope's follow in reading order");
+        touch (TouchEvent::Down, 640, 330);   // the envelope's third
+        touch (TouchEvent::Up, 640, 330);
+        in.nowMs += 200.0;
+        pv.update (in);
+        if (! wide)
+            check (pv.highlight() == 2 && inst.qGroup[0] == inst.index ("env3.attack") && inst.qGroup[4] == inst.index ("lfo1.shape") && inst.qGroup[8] == inst.index ("osc2.type"), dev + "the envelope touched: its group on Q 1 .. 4, then the LFO's, then the oscillator's");
+    }
+    ui::QGroup::setWideDevice (false);
 }
 
 void testEnvelopeParameterCoverage()
@@ -651,6 +693,7 @@ int main()
     testDrawing();
     testHashChangesWithTheDots();
     testPlayViewRoutesTheElements();
+    testPlayPageQSlots();
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;
 }

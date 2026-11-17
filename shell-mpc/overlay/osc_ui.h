@@ -152,8 +152,10 @@ public:
             const bool sample = ti >= 0 && inst.param (ti) >= 0.5f;
             updateNoiseType (sample, inst);
         }
+        updateMissing (inst);
         pull (inst, main_);
         pull (inst, page_);
+        applyInactive();
         updateSpecVisibility (inst);
         updateLoadButton (inst);
         if (pageTop_ == kPageEnvelope)
@@ -256,8 +258,13 @@ public:
     /** What goes on top of the picture in the display rectangle (the full screen button of the compact view). */
     void drawOnDisplay (gpu::SceneBuilder& sb) const
     {
+        drawMissing (sb);
         if (stackDepth_ == 0)
+        {
             compact_.full.draw (sb);
+            compact_.power.draw (sb);
+            compact_.route.draw (sb);   // the buttons that stand in the corners of the display lie over its picture
+        }
         else if (loadShown_)
             loadBtn_.draw (sb);
     }
@@ -490,6 +497,7 @@ private:
                 const bool listOk = (b == &full_.basic && kind == ui::OscKind::Wavetable && ! otherType) || contentType;   // wavetable: the list of all sources, on the full screen; the content types: the browser, from both views
                 bind (main_, kBasic + 2, &b->source.dropdown, T::Inert, "", ! listOk);
                 b->source.stepper.listable = listOk;
+                b->source.stepper.contentName = contentType;   // a file name: the middle goes when it does not fit (content_name.h), the lint accepts that
             }
             if (sub)
                 bind (main_, kBasic + 3, &b->oct, T::Number, "octave");
@@ -1281,11 +1289,11 @@ private:
             if (typeRaw_ == 4)
             {
                 for (const synthyboy::ContentInstrument& i : c->instruments)
-                    if (i.osc == osc) name = i.ref.name.empty() ? stemOf (i.ref.file) : i.ref.name;
+                    if (i.osc == osc) name = ui::contentname::display (i.ref.name, i.ref.file);
             }
             else
                 for (const synthyboy::ContentSample& s : c->samples)
-                    if (s.osc == osc) name = s.ref.name.empty() ? stemOf (s.ref.file) : s.ref.name;
+                    if (s.osc == osc) name = ui::contentname::display (s.ref.name, s.ref.file);
         }
         st->setItem (name.empty() ? "NO SAMPLE" : name.c_str());
     }
@@ -1352,6 +1360,13 @@ private:
         {
             if (id == kList && c.kind == K::Index)
             {
+                if (popupIsType_)   // the type list: the same Index change the cells made (the owner's handler below writes the type)
+                {
+                    const int chosen = c.index;
+                    closeSourceList();
+                    handle (ui::Change::indexed (kBasic, chosen, chosen), stack, v);
+                    return;
+                }
                 v.setPlaySelection (0, c.index + 1);
                 closeSourceList();
             }
@@ -1365,6 +1380,7 @@ private:
             switch (id)
             {
                 case kInstances: openSourceList(); return;
+                case kBasic + 0: openTypeList(); return;   // the type drop-down of the compact view (the full screen's cells never send it)
                 case kFullButton: stack.openFull (kElementOsc); return;
                 case kClose: case kDetailBack: case kModsBack: case kRouteClose: case kRouteBackdrop: stack.back(); return;
                 case kTuneMore: stack.openDetail (oscspec::kMore); return;
@@ -1503,14 +1519,88 @@ private:
             if (typeRaw_ == 4)
             {
                 for (const synthyboy::ContentInstrument& i : c->instruments)
-                    if (i.osc == osc) name = i.ref.name.empty() ? stemOf (i.ref.file) : i.ref.name;
+                    if (i.osc == osc) name = ui::contentname::display (i.ref.name, i.ref.file);
             }
             else
                 for (const synthyboy::ContentSample& s : c->samples)
-                    if (s.osc == osc) name = s.ref.name.empty() ? stemOf (s.ref.file) : s.ref.name;
+                    if (s.osc == osc) name = ui::contentname::display (s.ref.name, s.ref.file);
         }
         return name;
     }
+    // ---- the content the sound needs and does not have (IInstanceView::missingContent: bits 0 .. 2 the file of oscillator 1 .. 3, 3 .. 5 the user wavetable of oscillator 1 .. 3, 6 the impulse of Convolve, 7 the sample of the noise)
+    /** The INACTIVE look of a switched-off oscillator (docs/ui-components/theme.md, `ui::Pen::inactiveGrey`): the controls under the display, the blocks and the Q frames are drawn grey, the display picture is grey too (OscDisplay);
+        the power button is red (`negativeOff`) and the selector and the buttons of the display keep their colours. Nothing is disabled: the controls stay operable, a patch can be prepared on a switched-off oscillator (as before). */
+    void applyInactive()
+    {
+        const bool off = ! compact_.power.state.on;
+        compact_.setInactive (off);
+        compact_.instances.setInactive (false); compact_.power.setInactive (false); compact_.full.setInactive (false); compact_.route.setInactive (false);
+        compact_.basic.group.setInactive (off);
+        full_.setInactive (off);
+        full_.close.setInactive (false); full_.power.setInactive (false); full_.route.setInactive (false);
+        for (ui::QGroup& g : full_.groups)
+            g.setInactive (off);
+    }
+    /** The text "content missing: <name>" for the oscillator on screen ("" when it misses nothing); the name is taken from the state's content reference (the pack's title, else the file name; the reference is there although the file is not). */
+    void updateMissing (const IInstanceView& v)
+    {
+        missingText_.clear();
+        const unsigned bits = v.missingContent();
+        if (bits == 0)
+            return;
+        const int osc = playosc::oscNumber (sel_);
+        bool missing = false;
+        std::string name;
+        const std::shared_ptr<const synthyboy::StateContent> c = v.content();
+        if (sel_ == playosc::kNoise)
+        {
+            missing = (bits & (1u << 7)) != 0;
+            if (missing && c != nullptr)
+                for (const synthyboy::ContentSample& s : c->samples)
+                    if (s.osc == synthyboy::kNoiseSampleOsc)
+                        name = ui::contentname::display (s.ref.name, s.ref.file);
+        }
+        else if (osc >= 1 && osc <= 3)
+        {
+            const bool fileType = typeRaw_ == 1 || typeRaw_ == 2 || typeRaw_ == 3 || typeRaw_ == 4;
+            if (fileType)
+            {
+                missing = (bits & (1u << (osc - 1))) != 0;
+                if (missing)
+                    name = loadedName (v);
+            }
+            else
+            {
+                missing = (bits & (1u << (3 + osc - 1))) != 0;
+                if (missing && c != nullptr)
+                    for (const synthyboy::ContentWavetable& w : c->wavetables)
+                        if (w.osc == osc)
+                            name = ui::contentname::display (w.ref.name, w.ref.file);
+            }
+        }
+        if (missing)
+            missingText_ = name.empty() ? std::string ("content missing") : "content missing: " + name;
+    }
+    const std::string& missingText() const noexcept { return missingText_; }
+    /** The line over the display (in the display rectangle of the state on screen), in the warning colour; a name that does not fit loses its middle. */
+    void drawMissing (gpu::SceneBuilder& sb) const
+    {
+        const ui::Rect r = displayRect();
+        if (missingText_.empty() || r.empty())
+            return;
+        const ui::theme::Look& T = ui::theme::L();
+        const ui::Rect box { r.x + 4 + 64 + 8, r.y + 8, std::max (0, r.w - 2 * (4 + 64 + 8)), 48 };   // between the power button (top left) and the full screen button (top right) of the display
+        const float size = ui::Pen::fitSize (missingText_.c_str(), static_cast<float> (box.w), static_cast<float> (box.h), T.fLabel + 4.0f, T.fMin);
+        if (size <= 0.0f)
+            return;
+        char fitted[160];
+        ui::contentname::middleFit (missingText_.c_str(), size, static_cast<float> (box.w), fitted, static_cast<int> (sizeof fitted));
+        ui::Cell cell (sb, box);
+        ui::Pen pen (sb, true);
+        pen.textCentered (box, fitted, T.fLabel + 4.0f, pen.c (T.negative, 255), T.fMin);
+    }
+    std::string missingText_;
+
     /** The empty state: a type that plays a file with no file loaded gets one button over its display (the page of the type and the full screen). */
     void updateLoadButton (const IInstanceView& v)
     {
@@ -1568,6 +1658,8 @@ private:
         list_.state.header = nullptr;
         list_.state.headerBack = false;
         list_.state.items = kNames;
+        list_.state.icons = nullptr;
+        popupIsType_ = false;
         list_.state.count = playosc::kInstances;
         list_.state.current = sel_ - 1;
         list_.place ({ third.x + 6, third.y + 6 + ui::playrows::kSelectorH, third.w - 12, playosc::kInstances * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
@@ -1575,9 +1667,37 @@ private:
         list_.showCurrent();
         srcPopup_ = true;
     }
+    /** The list of the type drop-down of the compact view: the items of the selector (WAVE .. SPEC, or the six waveforms of the sub) with their pictograms, rows of 56 px, a popup over the third. */
+    void openTypeList()
+    {
+        const ui::TypeSelector& sel = compact_.basic.selector;
+        typeNames_.clear(); typeIcons_.clear();
+        for (int i = 0; i < sel.state.count; ++i)
+        {
+            typeNames_.push_back (sel.state.items[i].label);
+            typeIcons_.push_back (sel.state.items[i].pictogram);
+        }
+        const ui::Rect third { kCompactX, kTabY + 4, kCompactW, kTabH - 8 };
+        list_.state.header = nullptr;
+        list_.state.headerBack = false;
+        list_.state.items = typeNames_.data();
+        list_.state.icons = typeIcons_.data();
+        list_.state.count = sel.state.count;
+        list_.state.current = sel.state.index;
+        list_.place ({ third.x + 6, third.y + 6 + ui::playrows::kSelectorH, third.w - 12, std::min (sel.state.count, 8) * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup (third);
+        list_.showCurrent();
+        popupIsType_ = true;
+        srcPopup_ = true;
+    }
+    std::vector<const char*> typeNames_;
+    std::vector<int> typeIcons_;
+    bool popupIsType_ = false;
     void closeSourceList()
     {
         srcPopup_ = false;
+        popupIsType_ = false;
+        list_.state.icons = nullptr;
         list_.state.current = -1;
         list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
         list_.setPopup ({ 0, kTabY, w_, kTabH });
@@ -1683,6 +1803,9 @@ private:
     // the Q group: the four targets the hardware knobs are mapped to
     void resolveQ (IInstanceView&) {}
     /** The table index behind a member of a Q group (a composite: its primary child); -1 when there is none. */
+    /** The four targets of the Basic group of the compact view (table indices, -1 none) and its block of knobs (the Play view maps the groups of the three thirds together). */
+    void compactTargets (int* t) const noexcept { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (compact_.basic.group.member (i)); }
+    void setCompactBlock (int block) noexcept { compact_.basic.group.setBlock (block); }
     int paramOfMember (const ui::Component* m) const noexcept
     {
         while (m != nullptr)
@@ -1715,12 +1838,8 @@ private:
         {
             name = "Basic";
             compact_.basic.group.setActive (highlight_ == 1);
-            if (highlight_ != 1)
-            {
-                qActive_ = 0;
-                return;   // the Env / LFO sub-tab: the view of the Env / LFO owns the group (EnvUi / LfoUi)
-            }
-            qSlots_.publish (v, 1, 0, [&] (int, int* t) { members (compact_.basic.group, t); });
+            qActive_ = 0;
+            return;   // the main state: the Play view publishes the three groups of the page together (PlayView::publishQ), the oscillator's is the first
         }
         else if (pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope)
         {

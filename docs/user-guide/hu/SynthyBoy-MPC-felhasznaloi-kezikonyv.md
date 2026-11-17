@@ -90,7 +90,7 @@ A képernyő 1280 x 800 képpont felbontású és érintésérzékeny.
 
 | Funkciófül | Oldalak (léptetési sorrendben) | Fejezet |
 |---|---|---|
-| Play | Play, Play Env, Play LFO | 5.1 |
+| Play | Play | 5.1 |
 | Macros | Macros | 5.2 |
 | Osc | Osc A, Osc B, Osc C, Sub, Noise | 5.3, 5.4, 5.5 |
 | Mix | Mixer | 5.6 |
@@ -178,14 +178,14 @@ Az alábbi fejezetekben a "tartomány" a `docs/params.json` fájlból származó
 
 ![Play](../img/play.png)
 
-A Play fül három aloldallal rendelkezik: **Play**, **Play Env** és **Play LFO**. Mindhárom ugyanazt a képet mutatja: három élő panelt egymás mellett, egy **oszcillátor** panelt (balra), egy **burkoló (envelope)** panelt (középen) és egy **LFO** panelt (jobbra). Az aloldal dönti el, hogy melyik panel csoportja legyen aktív (sárga keretes) a Q-Linkekhez: az oszcillátor a Play oldalon, a burkoló a Play Env oldalon, az LFO a Play LFO oldalon.
+A Play fül EGY oldal: három élő panel egymás mellett, egy **oszcillátor** panel (balra), egy **burkoló (envelope)** panel (középen) és egy **LFO** panel (jobbra). Az első négy Q-Link (potméter) az oszcillátor panelé (típus, tábla vagy OCT, PAN, LEVEL), a következő négy a burkolóé (ATTACK, DECAY, SUSTAIN, RELEASE), a következő négy az LFO-é (SHAPE, RATE, RISE, SMOOTH). Az MPC XL-en mind a tizenkettő egyszerre a potméterekön van, és minden vezérlő a saját potméterének számát viseli. A Key 61-en a sárga keret jelöli az éppen aktív négy potmétert; egy másik panel vezérlőjének megérintése hozza a csoportját a négy potméterre (a többi sorban követi), a többihez a Q-Link bank gombok szolgálnak. Minden panel tetején egy választó van: középen az aktuális elem, két oldalán a szomszédai (egy érintéssel lépünk rá, vagy végighúzással), a névre koppintva megnyílik a lista. A kikapcsolt oszcillátor szürkén látszik (a bekapcsoló gomb piros).
 Ez a felület való a játékra és az azonnali finomhangolásra: a három leggyakrabban használt elem fő vezérlői egyetlen nézetben érhetők el.
 
-A burkoló panel bekeretezett ADSR csoporttal (a sárga keret a négy burkoló potméteren van):
+A burkoló panel az ADSR csoportjával (XL-en az 5-8. Q-Link; a Key 61-en a keret rajta van, amíg ő az aktív csoport):
 
 ![Play Env](../img/play-env.png)
 
-Az LFO panel bekeretezett csoportjával (SHAPE, RATE, RISE, SMOOTH):
+Az LFO panel csoportja (SHAPE, RATE, RISE, SMOOTH: XL-en a 9-12. Q-Link):
 
 ![Play LFO](../img/play-lfo.png)
 

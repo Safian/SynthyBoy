@@ -375,7 +375,7 @@ private:
                 continue;
             if (it.type == T::Pick)
             {
-                auto* st = static_cast<ui::EnvStepper*> (it.c);
+                auto* st = static_cast<ui::EnvCarousel*> (it.c);
                 st->state.count = kEnvs; st->state.index = sel_ - 1; st->state.wrap = true;
                 st->setItem (kEnvNames[std::clamp (sel_, 1, kEnvs) - 1]);
                 continue;
@@ -732,7 +732,7 @@ private:
         list_.state.count = kEnvs;
         list_.state.current = sel_ - 1;
         list_.state.dotMask = full_.instances.targetMask();
-        list_.state.dotColours = ui::EnvStepper::colours();
+        list_.state.dotColours = ui::EnvCarousel::colours();
         list_.place ({ third.x + 6, third.y + 6 + ui::playrows::kSelectorH, third.w - 12, kEnvs * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
         list_.setPopup (third);
         list_.showCurrent();
@@ -1037,6 +1037,9 @@ private:
 
     // ======================================================================================================================================================================
     // the Q group: the four targets the hardware knobs are mapped to
+    /** The four targets of the ADSR group of the compact view and its block of knobs (the Play view maps the groups of the three thirds together). */
+    void compactTargets (int* t) const noexcept { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (compact_.group.member (i)); }
+    void setCompactBlock (int block) noexcept { compact_.group.setBlock (block); }
     int paramOfMember (const ui::Component* m) const noexcept
     {
         while (m != nullptr)
@@ -1060,9 +1063,7 @@ private:
         {
             name = "ADSR";
             compact_.group.setActive (highlight_ == 2);
-            if (highlight_ != 2)
-                return;   // another sub-tab: its element owns the group
-            qSlots_.publish (v, 1, 0, [&] (int, int* t) { members (compact_.group, t); });
+            return;   // the main state: the Play view publishes the three groups of the page together (PlayView::publishQ)
         }
         else if (pageTop_ == kPageTargets || pageTop_ == kPageMods)
         {

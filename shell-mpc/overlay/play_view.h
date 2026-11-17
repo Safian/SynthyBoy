@@ -57,8 +57,9 @@ class PlayView final : public IView
 public:
     static constexpr int kW = play::kRegionW, kH = play::kRegionH;
 
-    /** `highlight`: 1 oscillator panel, 2 envelope panel, 3 LFO panel (the sub-tab this view belongs to). */
-    PlayView (int highlight, double fixedCostMs) : osd_ (fixedCostMs), highlight_ (highlight), name_ ("play" + std::to_string (highlight))
+    /** ONE Play page (2026-11-18; the sub-tabs Play Env and Play LFO are gone). `highlight`: the third whose Q group is the active one at first (1 oscillator, 2 envelope, 3 LFO; the page starts with 1; a touch on a control
+        of a third makes it the active one: on the 4 knob device it moves to Q 1 .. 4 with the others following in reading order, on the 16 knob device the slots stay where they are). The view is named "play1". */
+    PlayView (int highlight, double fixedCostMs) : osd_ (fixedCostMs), highlight_ (std::clamp (highlight, 1, 3)), name_ ("play1")
     {
         for (ComputeBudget& b : budget_)
             b.fixedCostMs = fixedCostMs;
@@ -198,6 +199,7 @@ public:
             if (! lfo_)
                 lfo_ = std::make_unique<LfoUi>();
             lfo_->update (*in.io, highlight_, *in.ui, in.nowMs, in.live);
+            publishQ (in);
             const uint32_t h = oscUiHash() ^ (env_->drawHash (*scratch_) * 16777619u) ^ (lfo_->drawHash (*scratch_) * 2246822519u);
             if (h != uiHash_)
             {
@@ -218,6 +220,8 @@ public:
     bool onTouch (const TouchEvent& ev, UiStack& stack, IInstanceView& io, double nowMs) override
     {
         const NamesScope scope (names_);
+        if (ev.kind == TouchEvent::Down && stack.isMain() && ev.y >= play::kTabY)   // a touch on a third makes its Q group the active one (the same rule as every page: the group that was touched)
+            highlight_ = ev.x < 434 ? 1 : (ev.x < 850 ? 2 : 3);
         // the envelope's pages while its full screen is open or a finger is down on it; else the oscillator's (its third, or its full screen), else the envelope's compact view (its third)
         if (env_ != nullptr && ((! stack.isMain() && stack.element() == EnvUi::kElementEnv) || env_->fingerDown()))
             return env_->touch (ev, stack, io, nowMs);
@@ -247,6 +251,7 @@ public:
     void onTick (UiStack& stack, IInstanceView& io, double nowMs) override { const NamesScope scope (names_); if (osc_ != nullptr) osc_->tick (nowMs, stack, io); if (env_ != nullptr) env_->tick (nowMs, stack, io); if (lfo_ != nullptr) lfo_->tick (nowMs, stack, io); }
     void onShown() override
     {
+        qs_.forget();
         if (osc_)
             osc_->forgetQGroup();
         if (env_)
@@ -328,6 +333,24 @@ public:
     }
     int selection (int p) const noexcept { return sel_[p]; }
     int highlight() const noexcept { return highlight_; }
+    /** The three groups of the page in reading order (oscillator, envelope, LFO), mapped to the sixteen Q slots together while all three thirds show their compact views: the active third's group on Q 1 .. 4, the next ones on 5 .. 8
+        and 9 .. 12 (wrapping); on the 16 knob device the order never changes (QRouter::wide). While a full screen is open its own page publishes, and this view publishes again when it closes. */
+    void publishQ (const ViewInput& in)
+    {
+        if (in.io == nullptr || osc_ == nullptr || env_ == nullptr || lfo_ == nullptr)
+            return;
+        if (! (in.ui->isMain() && osc_->isMain() && env_->isMain() && lfo_->isMain()))
+        {
+            qs_.forget();
+            return;
+        }
+        const int active = highlight_ - 1;
+        osc_->setCompactBlock (QRouter::blockOfGroup (3, active, 0));
+        env_->setCompactBlock (QRouter::blockOfGroup (3, active, 1));
+        lfo_->setCompactBlock (QRouter::blockOfGroup (3, active, 2));
+        qs_.publish (*in.io, 3, active, [&] (int g, int* t) { if (g == 0) osc_->compactTargets (t); else if (g == 1) env_->compactTargets (t); else lfo_->compactTargets (t); });
+    }
+    const int* qTargets() const noexcept { return qs_.data(); }
     void writeStatus (std::ostream& o) const override
     {
         char hash[16];
@@ -491,6 +514,7 @@ private:
     OscDisplay osd_;   // the data and the drawing of the oscillator's display (shared with the OSC tab's pages)
     int highlight_;
     std::string name_;
+    QSlots qs_;   // what the page published of its sixteen Q slots (the three groups together)
     int sel_[play::kPanels] = { 0, 0, 0 };
     std::unique_ptr<ParamGroup> group_[play::kPanels];
     ComputeBudget budget_[play::kPanels];

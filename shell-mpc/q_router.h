@@ -63,10 +63,17 @@ public:
 
     /** The slot block (0: the active group, 1 .. 3: the next groups in reading order, wrapping, each group once) a group of a page with `nGroups` groups gets when group `active` is the active one; -1 when the
         group has no block (more than four groups) or the arguments are out of range. Slots 4 * block .. 4 * block + 3 are its four knobs. */
+    /** The device has 16 Q-Link knobs (the MPC XL): a page whose groups all fit (at most four) keeps its slots where they are whatever group a touch made the active one: nothing re-orders under the player's hand. The
+        probe is the UI library's device flag (ui::QGroup::wideDevice, set once at start; q_publish.h connects the two): the router itself has no state of a device. A page of more than four groups pages as before. */
+    using Probe = bool (*) ();
+    static Probe& wideProbe() noexcept { static Probe p = nullptr; return p; }
+    static bool wide() noexcept { return wideProbe() != nullptr && wideProbe()(); }
     static int blockOfGroup (int nGroups, int active, int group) noexcept
     {
         if (nGroups <= 0 || active < 0 || active >= nGroups || group < 0 || group >= nGroups)
             return -1;
+        if (wide() && nGroups <= kGroups)
+            active = 0;
         const int k = (group - active + nGroups) % nGroups;
         return k < kGroups ? k : -1;
     }
@@ -79,6 +86,8 @@ public:
             out[i] = kNone;
         if (nGroups <= 0 || active < 0 || active >= nGroups)
             return 0;
+        if (wide() && nGroups <= kGroups)
+            active = 0;   // the XL: the groups of a page that fits the sixteen knobs stay on their knobs
         const int blocks = std::min (nGroups, kGroups);
         for (int k = 0; k < blocks; ++k)
             targetsOf ((active + k) % nGroups, out + k * kGroupSize);

@@ -43,7 +43,7 @@ if (c.kind == ChangeKind::Index && c.id == 70) current = c.index;
 ```
 
 ## Used on
-`BasicControls::selector` (oscillator type, sub waveform), `InstanceBar::lfoCells` and `rndCells`, `EnvSelector` (not instantiated by the current pages, they use `EnvStepper`). Pictures: `docs/user-guide/img/osc-a.png`, `osc-sub.png`, `lfo.png`.
+`BasicControls::selector` (oscillator type, sub waveform), `InstanceBar::lfoCells` and `rndCells`, `EnvSelector` (not instantiated by the current pages, they use `EnvCarousel`). `TypeSelector` (base.h): a `PictogramSelector` with `dropdown`: one box with the current item's pictogram and name and a chevron; a tap is a `Request`, the turn and the Index change are the selector's; the compact oscillator view uses it with a `ListPopup` whose `icons` carry the pictograms. Pictures: `docs/user-guide/img/osc-a.png`, `osc-sub.png`, `lfo.png`.
 
 ## Limits and pitfalls
 - More than 10 items are dropped. The MPC.md section says "up to 8 items"; the header says 10.

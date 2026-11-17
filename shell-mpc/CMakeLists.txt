@@ -412,6 +412,15 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(ui_led_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME ui_led_host COMMAND ui_led_host)
 
+    add_executable(ui_carousel_host EXCLUDE_FROM_ALL ui/tests/ui_carousel_host.cpp)
+    target_include_directories(ui_carousel_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_compile_features(ui_carousel_host PRIVATE cxx_std_17)
+    target_compile_options(ui_carousel_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME ui_carousel_host COMMAND ui_carousel_host)
+
     # the FX slot editor driven by the tables of the effects (ui/fx_layout.h): the tables against the engine, the one rule for what does nothing, the pages, the number field kind
     add_executable(ui_fx_editor_host EXCLUDE_FROM_ALL ui/tests/ui_fx_editor_host.cpp)
     target_include_directories(ui_fx_editor_host PRIVATE

@@ -9,6 +9,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include "carousel.h"
 #include "panel.h"
 #include "play_rows.h"
 
@@ -18,7 +19,7 @@ namespace synthyboy_mpc { namespace ui {
 class OscillatorCompact : public Composite
 {
 public:
-    Stepper instances;   // the source: Sub, Osc A, Osc B, Osc C, Noise: the ONE selector of the three thirds (a Stepper: the arrows step, a tap on the name opens the list of the five)
+    Carousel instances;   // the source: Sub, Osc A, Osc B, Osc C, Noise: the ONE selector of the three thirds (a Carousel: the neighbours step, a tap on the name opens the list of the five)
     ToggleIcon power;
     RouteButton route { "M" };
     MenuButton full { "", MenuButton::Icon::Expand };   // the "full screen" button: four corner brackets
@@ -29,15 +30,17 @@ public:
     {
         instances.state.count = 5;
         instances.state.wrap = true;
+        instances.state.names = sourceNames();
         instances.listable = true;
-        instances.minWidth = 120;   // the room between the power button and the buttons at the right of the header row: about 200 px of a third
         power.state.icon = ToggleIcon::Icon::Power;
+        power.state.negativeOff = true;
         basic.setStacked (true);
         addKid (instances); addKid (power); addKid (route); addKid (basic); addKid (full);
         setInstance (OscInstance::A, OscKind::Wavetable);
     }
     /** The names of the five entries of the selector and of its list (the wording of the owner). */
-    static const char* sourceName (OscInstance i) noexcept { static const char* const n[5] = { "Sub", "Osc A", "Osc B", "Osc C", "Noise" }; return n[static_cast<int> (i)]; }
+    static const char* const* sourceNames() noexcept { static const char* const n[5] = { "Sub", "Osc A", "Osc B", "Osc C", "Noise" }; return n; }
+    static const char* sourceName (OscInstance i) noexcept { return sourceNames()[static_cast<int> (i)]; }
     static const char* sourceName (int i) noexcept { return sourceName (static_cast<OscInstance> (std::clamp (i, 0, 4))); }
     void setInstance (OscInstance i, OscKind k)
     {
@@ -58,20 +61,19 @@ public:
     }
 
 protected:
-    // top to bottom (play_rows.h): the header row (power, the source selector, the full screen button, the route button: 56 px, the same row as the selector of the other two thirds), the display (the rectangle of the three thirds),
-    // and from the controls line the Basic group in one frame: the type cells, then ONE row (the table stepper / OCT / the noise's knobs, PAN, LEVEL)
+    // top to bottom (play_rows.h): the top row (the source selector), the display (the rectangle of the three thirds; the power button in its top left corner, the full screen button in its top right and the route button in its bottom right
+    // corner, 4 px from the edges, 64 x 56: the full screen button is placed exactly as the envelope graph's and the LFO display's), and from the controls line the Basic group in one frame
     void layout() override
     {
         const int m = playrows::kMargin, W = rect_.w - 2 * m, rowH = playrows::kSelectorH;
-        const bool sub = inst_ == OscInstance::Sub;   // the sub oscillator's routing is the ROUTING block of its page: no route button in its header (as on the page)
-        const int btnW = 64, gap = 8;
+        const bool sub = inst_ == OscInstance::Sub;   // the sub oscillator's routing is the ROUTING block of its page: no route button (as on the page)
+        const int btnW = 64, inset = 4;
         const int hy = rect_.y + m;
-        power.place ({ rect_.x + m, hy, rowH, rowH });
-        route.place (sub ? Rect {} : Rect { rect_.right() - m - btnW, hy - (64 - rowH) / 2, btnW, 64 });   // the route button is 64 px tall at least: centred on the row, one pixel row of margin above is enough
-        full.place ({ rect_.right() - m - btnW - (sub ? 0 : gap + btnW), hy, btnW, rowH });   // the full screen button stands in the header row, not over the curve of the display
-        const int sx = rect_.x + m + rowH + gap, sr = full.rect().x - gap;
-        instances.place ({ sx, hy, std::max (0, sr - sx), rowH });
         display_ = playrows::displayRect (rect_);
+        power.place ({ display_.x + inset, display_.y + inset, btnW, rowH });
+        full.place ({ display_.right() - btnW - inset, display_.y + inset, btnW, rowH });
+        route.place (sub ? Rect {} : Rect { display_.right() - btnW - inset, display_.bottom() - rowH - inset, btnW, rowH });   // the route button (F1 ...): the bottom right corner of the display, 56 px high
+        instances.place ({ rect_.x + m, hy, W, rowH });
         const int by = playrows::controlsLine (rect_);
         basic.place ({ rect_.x + m, by, W, std::max (0, rect_.bottom() - m - by) });
     }
@@ -103,6 +105,7 @@ public:
     OscillatorFullScreen()
     {
         power.state.icon = ToggleIcon::Icon::Power;
+        power.state.negativeOff = true;
         tune.setVertical (true);
         addKid (close); addKid (power); addKid (basic); addKid (route); addKid (bar); addKid (tune); addKid (panel);
         setInstance (OscInstance::A, OscKind::Wavetable);
@@ -219,6 +222,7 @@ protected:
         route.place (sub ? Rect {} : Rect { r[3].x, top.y + (topH - 64) / 2, r[3].w, 64 });
         const int gap = kGap;
         const int panelY = rect_.bottom() - (isTab ? 0 : m) - bottomH;
+        Rect panelRect { rect_.x + m, panelY, W - 2 * m, bottomH };
         const int leftW = (W - 2 * m) * 78 / 100, rightX = rect_.x + m + leftW + m;
         constexpr int kTitleH = KnobPanel::kBlockTitleH, kPad = KnobPanel::kBlockPad;
         const int barH = 56, barBlockH = isTab ? 70 : (kTitleH + barH + kPad);
@@ -232,6 +236,19 @@ protected:
             bar.place ({});
             tuneBlock_ = {};
             tune.place ({});
+        }
+        else if (noise && panel.preset() != nullptr && panel.preset()->items == presets::kNoiseGenItems)
+        {
+            // the generated noise: ONE clean grid in the bottom band, two blocks of the same height side by side, the same two rows in both: TUNE (PITCH, FINE / KEY TRACK) at the left and NOISE (KIND, STEREO / ENV 1) at the right, the
+            // rows of the two blocks are the same rows (same top, same title strip, same row heights, the lane of the chips between them); the display has the whole width above them, as on the sub oscillator's page
+            const int midY = top.bottom() + gap;
+            display_ = { rect_.x + m, midY, W - 2 * m, std::max (0, panelY - gap - midY) };
+            barBlock_ = {};
+            bar.place ({});
+            const int halfW = (W - 3 * m) / 2;
+            tuneBlock_ = { rect_.x + m, panelY, halfW, bottomH };
+            tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
+            panelRect = { tuneBlock_.right() + m, panelY, W - 2 * m - halfW - m, bottomH };
         }
         else if (noise)
         {
@@ -252,7 +269,7 @@ protected:
             tuneBlock_ = Rect { rightX, barBlock_.y, rect_.right() - m - rightX, std::max (0, display_.bottom() - barBlock_.y) };
             tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
         }
-        panel.place ({ rect_.x + m, panelY, W - 2 * m, bottomH });
+        panel.place (panelRect);
     }
     bool hasPanel() const noexcept { return true; }
     void buildGroups()

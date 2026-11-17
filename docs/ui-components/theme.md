@@ -30,6 +30,8 @@ Colours are `0xRRGGBB`; alpha is the drawing's business (`theme::rgba (rgb, a)` 
 | `instanceColour (i)` | 0 Sub, 1 A, 2 B, 3 C, 4 Noise |
 | `mix (a, b, t)` | mixes two `0xRRGGBB` colours |
 
+**The inactive look.** A component of a switched-off thing (an oscillator that is off) is drawn grey: `Component::setInactive (true)` (a composite hands it to its parts, `QGroup::setInactive` does the frame and the chips). The pen then turns every colour into a grey of its own brightness at `Pen::kInactivePercent` (70) percent (`Pen::inactiveGrey (rgba)`); alpha stays. The component stays operable (it is not `setEnabled (false)`, which dims by alpha). One rule for every component; displays that draw their own colours (the oscillator picture) call `Pen::inactiveGrey` on their instance colour. The power button of an oscillator is the exception: `ToggleIcon::State::negativeOff` draws its icon in `Look::negative` (red) while it is off.
+
 Components read the look through `colour::` (core.h) or `theme::L()`; `Pen::look()` returns it.
 
 ## Size

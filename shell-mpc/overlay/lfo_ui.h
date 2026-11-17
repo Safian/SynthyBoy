@@ -635,11 +635,12 @@ private:
         list_.state.count = static_cast<int> (listNames_.size());
         list_.showCurrent();
     }
-    static const char* instanceName (int i) noexcept
+    static const char* const* instanceNames() noexcept
     {
         static const char* const n[kInstances] = { "LFO 1", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8", "LFO 9", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4" };
-        return n[std::clamp (i, 0, kInstances - 1)];
+        return n;
     }
+    static const char* instanceName (int i) noexcept { return instanceNames()[std::clamp (i, 0, kInstances - 1)]; }
     /** The instance as one number 0 .. 13: LFO 1 .. 10, then RND 1 .. 4. */
     int slot() const noexcept { return rnd_ != 0 ? kLfos + rnd_ - 1 : lfoNum_ - 1; }
     void selectSlot (int s, IInstanceView& v)
@@ -802,8 +803,9 @@ private:
             {
                 if (it.id == kInstance)
                 {
-                    auto* st = static_cast<ui::Stepper*> (it.c);
+                    auto* st = static_cast<ui::Carousel*> (it.c);
                     st->state.count = kInstances; st->state.index = slot(); st->state.wrap = true;
+                    st->state.names = instanceNames();
                     st->setItem (instanceName (slot()));
                 }
                 it.c->setEnabled (true);
@@ -1489,6 +1491,9 @@ private:
 
     // ======================================================================================================================================================================
     // the Q group: the four targets the hardware knobs are mapped to
+    /** The four targets of the RATE (or RANDOM) group of the compact view and its block of knobs (the Play view maps the groups of the three thirds together). */
+    void compactTargets (int* t) const noexcept { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (compact_.group.member (i)); }
+    void setCompactBlock (int block) noexcept { compact_.group.setBlock (block); }
     int paramOfMember (const ui::Component* m) const noexcept
     {
         while (m != nullptr)
@@ -1512,9 +1517,7 @@ private:
         {
             name = rnd_ != 0 ? "Random" : "Rate";
             compact_.group.setActive (highlight_ == 3);
-            if (highlight_ != 3)
-                return;   // another sub-tab: its element owns the group
-            qSlots_.publish (v, 1, 0, [&] (int, int* t) { members (compact_.group, t); });
+            return;   // the main state: the Play view publishes the three groups of the page together (PlayView::publishQ)
         }
         else if (pageTop_ == kPageEditor)
         {

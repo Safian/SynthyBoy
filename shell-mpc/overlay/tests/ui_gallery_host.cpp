@@ -145,6 +145,18 @@ public:
         content_ = c;
     }
     void setContent (std::shared_ptr<const synthyboy::StateContent> c) { content_ = std::move (c); }
+    /** A sample the state refers to (a pack, a long file name, no title) whose file is not there: the content reference without the data, and the engine's missing_content bit of the oscillator (`missingContent`). */
+    void addMissingSample (int osc, const std::string& file)
+    {
+        auto c = content_ ? std::make_shared<synthyboy::StateContent> (*content_) : std::make_shared<synthyboy::StateContent>();
+        synthyboy::ContentSample cs;
+        cs.osc = osc; cs.ref.pack = "gallery"; cs.ref.file = file;
+        c->samples.push_back (cs);
+        content_ = c;
+        missingBits |= 1u << (osc - 1);
+    }
+    unsigned missingContent() const noexcept override { return missingBits; }
+    unsigned missingBits = 0;
 
     static int idx (const std::string& key)
     {
@@ -302,7 +314,7 @@ inline std::string slugify (const std::string& s)
 
 void savePlay (const std::string& path, int highlight, GalleryInst& inst,
                int oscSel = 2, int envSel = 1, int lfoSlot = 1,
-               int w = 1280, int h = 800)
+               int w = 1280, int h = 800, const std::function<void (PlayView&, UiStack&)>& act = nullptr)
 {
     const int savedOsc = inst.playSelection (0);
     const int savedEnv = inst.playSelection (1);
@@ -327,6 +339,12 @@ void savePlay (const std::string& path, int highlight, GalleryInst& inst,
     }
     in.nowMs = 1500.0;
     pv.update (in);
+    if (act)   // a touch on the page (the type list opened, ...), then the picture
+    {
+        act (pv, stack);
+        in.nowMs = 1600.0;
+        pv.update (in);
+    }
 
     uit::Image im;
     im.w = w; im.h = h;
@@ -419,11 +437,43 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
 
     // 1. Play 1-3
     if (shouldRender ("play1.png")) savePlay (outDir + "/" + state + "_play1.png", 1, baseInst);
-    if (shouldRender ("play2.png")) savePlay (outDir + "/" + state + "_play2.png", 2, baseInst);
-    if (shouldRender ("play3.png")) savePlay (outDir + "/" + state + "_play3.png", 3, baseInst);
+    // (one Play page since 2026-11-18: the play2 / play3 states are gone)
+
+    // (a0) the Play page (2026-11-18): oscillator A, Sub and Noise switched off (grey display and controls, the power button red), the selectors (carousels) at the first, a middle and the last entry of each third,
+    // the type drop-down closed (the compact views above) and open for A, Sub and Noise
+    {
+        struct Off { const char* name; const char* key; int sel; };
+        for (const Off& o : { Off { "osca", "osc1.on", playosc::kA }, Off { "sub", "sub.on", playosc::kSub }, Off { "noise", "noise.on", playosc::kNoise } })
+            if (shouldRender (std::string ("play1_off_") + o.name + ".png"))
+            {
+                GalleryInst off = baseInst;
+                off.set (o.key, 0.0f);
+                savePlay (outDir + "/" + state + "_play1_off_" + o.name + ".png", 1, off, o.sel, 1, 1);
+            }
+        const int oscSel[3] = { playosc::kSub, playosc::kB, playosc::kNoise }, envSel[3] = { 1, 3, 6 }, lfoSel[3] = { 1, 5, 14 };
+        const char* const pos[3] = { "first", "middle", "last" };
+        for (int i = 0; i < 3; ++i)
+            if (shouldRender (std::string ("play1_carousel_") + pos[i] + ".png"))
+                savePlay (outDir + "/" + state + "_play1_carousel_" + pos[i] + ".png", 1, baseInst, oscSel[i], envSel[i], lfoSel[i]);
+        struct Ty { const char* name; int sel; };
+        for (const Ty& t : { Ty { "osca", playosc::kA }, Ty { "sub", playosc::kSub }, Ty { "noise", playosc::kNoise } })
+            if (shouldRender (std::string ("play1_type_open_") + t.name + ".png"))
+                savePlay (outDir + "/" + state + "_play1_type_open_" + t.name + ".png", 1, baseInst, t.sel, 1, 1, 1280, 800,
+                          [&baseInst] (PlayView& pv, UiStack& st)
+                          {
+                              OscUi* o = pv.oscUi();
+                              if (o == nullptr) return;
+                              GalleryInst io = baseInst;
+                              const ui::Rect r = o->compact().basic.selector.rect();
+                              TouchEvent d; d.kind = TouchEvent::Down; d.x = r.x + r.w / 2; d.y = r.y + r.h / 2;
+                              TouchEvent u = d; u.kind = TouchEvent::Up;
+                              pv.onTouch (d, st, io, 1550.0);
+                              pv.onTouch (u, st, io, 1590.0);
+                          });
+    }
 
     // (a) Play 1-3 for each of the five oscillator sources, envelope 1 and 6, and LFO 1, 10, R1
-    for (int p = 1; p <= 3; ++p)
+    for (int p = 1; p <= 1; ++p)   // the one Play page
     {
         const std::string pstr = std::to_string (p);
         // Oscillator sources: Sub, Osc A, Osc B, Osc C, Noise
@@ -529,6 +579,15 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
                         rp.picture (outDir + "/" + state + "_osca_" + t.name + "_" + pg.name + (loaded ? "_loaded" : "") + ".png");
                     }
                 }
+        }
+        // Osc A: a sample type whose file is missing: "content missing: <name>" on the display (the name from the state's reference, underscores as spaces, the middle goes when it is too long)
+        {
+            GalleryInst gm = baseInst;
+            gm.set ("osc1.type", 1.0f);
+            gm.addMissingSample (1, "packs/drums/drum_loop_120bpm_breakbeat_long_file_name_final_take.wav");
+            GalleryRig<OscPageUi> rm (gm, 2);
+            rm.refresh (2);
+            rm.picture (outDir + "/" + state + "_osca_missing_content.png");
         }
         GalleryRig<OscPageUi> rOscSub (baseInst, 1); rOscSub.refresh (2); rOscSub.picture (outDir + "/" + state + "_oscsub.png");
         GalleryRig<OscPageUi> rOscNoise (baseInst, 5); rOscNoise.refresh (2); rOscNoise.picture (outDir + "/" + state + "_oscnoise.png");

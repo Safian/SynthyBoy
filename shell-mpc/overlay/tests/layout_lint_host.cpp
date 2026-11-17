@@ -568,7 +568,8 @@ void analyse (Capture& cap, Sink& sink)
     {
         const TextOp& t = cap.texts[i];
         const std::string tn = "text[" + maskDigits (t.s) + "]@" + gridOf (t.box.x0, t.box.y0);
-        if (t.s.find ("\xE2\x80\xA6") != std::string::npos)
+        // an ellipsis at the END of a text is a cut (a finding); an ellipsis in the MIDDLE is the rule for the name of a piece of content (ui/content_name.h: a file name is shown by title or stem and loses its middle, never its end)
+        if (t.s.size() >= 3 && t.s.compare (t.s.size() - 3, 3, "\xE2\x80\xA6") == 0)
             sink.add (cap, "d", 2, tn, "ellipsis", "\"" + t.s + "\" is cut with an ellipsis (" + frectStr (t.box) + ")");
         if (t.hasCell && (t.box.x0 < t.cell.x0 - 0.5f || t.box.x1 > t.cell.x1 + 0.5f || t.box.y0 < t.cell.y0 - 0.5f || t.box.y1 > t.cell.y1 + 0.5f))
             sink.add (cap, "d", 2, tn, "cell", "\"" + t.s + "\" " + frectStr (t.box) + " leaves its cache cell " + frectStr (t.cell));

@@ -1,4 +1,4 @@
-# SynthyBoy - MPC skin extra: the Play page of the OVERLAY skin variant (scripts/overlay-skin/mpc-ui-pages-overlay.json: the pages "Play", "Play Env", "Play LFO", sub-tabs of the first function key).
+# SynthyBoy - MPC skin extra: the Play page of the OVERLAY skin variant (scripts/overlay-skin/mpc-ui-pages-overlay.json: the page "Play", the only tab of the first function key since 2026-11-18).
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
@@ -27,7 +27,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 LAYOUT_JSON = HERE.parent.parent / "shell-mpc" / "overlay" / "overlay_layout.json"
-TABS = ("Play", "Play Env", "Play LFO")
+TABS = ("Play",)   # ONE Play page since 2026-11-18 (the sub-tabs "Play Env" and "Play LFO" are gone: one page, the Q groups of the three thirds in reading order on Q 1 .. 12)
 LFO_CURSORS, SPECTRUM_COLUMNS, PAD_PRESSURE_PARAMS, OVERLAY_INSTANCE = 4, 32, 2, 1
 GROUPS = 3
 SLOTS = 8

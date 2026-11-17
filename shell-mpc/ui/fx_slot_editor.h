@@ -10,6 +10,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -34,6 +35,7 @@ public:
     static constexpr int kMaxParams = synthyboy::kFxInstanceParams; // 24
     static constexpr int kMaxRows = fxl::kMaxRows;                  // rows (blocks) of a table
     static constexpr int kHeaderH = 56, kDisplayH = 176;
+    char notice[128] = {};   // a line in the header right of the effect's name ("content missing: <name>"); empty = none. The owner sets it at every update.
     /** How the control of a cell is shown. */
     enum class Kind : uint8_t { Knob, Stepper, List, Toggle, Number };
 
@@ -408,6 +410,18 @@ protected:
         }
         else
             p.textLeft ({ tx, rect_.y + 8, tw, kHeaderH }, name_, T.fTitle, p.c (T.text, 255), T.fMin);
+        if (notice[0] != '\0')   // a notice in the header, right of the name (the missing impulse of Convolve): the name of a file loses its middle when it does not fit (content_name.h)
+        {
+            const int nx = tx + static_cast<int>(std::ceil (Pen::textWidth (name_, T.fTitle))) + 24;
+            const Rect box { nx, rect_.y + 8, std::max (0, rack.rect().x - 8 - nx), kHeaderH };
+            const float size = Pen::fitSize (notice, static_cast<float> (box.w), static_cast<float> (box.h), T.fLabel + 2.0f, T.fMin);
+            if (size > 0.0f)
+            {
+                char fitted[160];
+                contentname::middleFit (notice, size, static_cast<float> (box.w), fitted, static_cast<int> (sizeof fitted));
+                p.textRight (box, fitted, T.fLabel + 2.0f, p.c (T.negative, 255), T.fMin);
+            }
+        }
     }
 
 private:

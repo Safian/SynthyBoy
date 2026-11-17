@@ -8,10 +8,14 @@
 #include <cstring>
 
 #include "../q_router.h"
+#include "../ui/qgroup.h"
 #include "curve_source.h"
 #include "synthyboy/params.h"
 
 namespace synthyboy_mpc { namespace overlay {
+
+/** Connects the router's device rule to the UI library's device flag (ui::QGroup::setWideDevice, set once by the overlay at start): one switch for the frames, the chips and the slot order. */
+inline const bool kQDeviceRule = (QRouter::wideProbe() = &ui::QGroup::wideDevice, true);
 
 /** The groups of a screen that have members, in index order (a screen can have a group that is empty for the instance on it, like the FORMANT block of a filter without formants): ids[k] is the index of the k-th one, the
     result is how many there are; `activePos` gets the position of `active` among them (-1: the active group is none of them). */

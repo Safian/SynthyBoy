@@ -446,6 +446,18 @@ private:
         const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
         const int kind = kindOfItem (item);
         ui::FxSlotEditor& ed = screen_.slotEditor;
+        ed.notice[0] = '\0';
+        if (kind == synthyboy::kFxTypeConvolve && (inst.missingContent() & (1u << 6)) != 0)   // the impulse of Convolve is not there: the effect is bypassed, the page says which file it wants
+        {
+            std::string nm;
+            const std::shared_ptr<const synthyboy::StateContent> c = inst.content();
+            if (c != nullptr && ! c->impulses.empty())
+                nm = ui::contentname::display (c->impulses[0].name, c->impulses[0].file);
+            if (nm.empty())
+                std::snprintf (ed.notice, sizeof ed.notice, "content missing");
+            else
+                std::snprintf (ed.notice, sizeof ed.notice, "content missing: %s", nm.c_str());
+        }
         ed.setType (kind, true);   // every effect can be removed: a slot of the pool is freed, a module of instance 0 is switched off and leaves its band
         // the state of the effect decides which controls are live (the table of the effect, ui/fx_layout.h): the rows that have nothing live close up
         ed.setState ([&] (const char* key) { return plainOfKey (item, kind, inst, key, 0.0f); });
@@ -474,7 +486,7 @@ private:
                 {
                     const int model = static_cast<int> (std::lround (plainOfKey (item, kind, inst, "fxfilter.model", 0.0f)));
                     choiceCount = synthyboy::filters::filterModelStyleCount (model);
-                    customChoices = synthyboy::filters::filterModelStyleNames (model);
+                    customChoices = ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
                     if (choiceCount > 0 && static_cast<int> (std::lround (plainVal)) >= choiceCount)
                     {
                         const int clamped = choiceCount - 1;
@@ -885,7 +897,7 @@ private:
             const int count = synthyboy::filters::filterModelStyleCount (model);
             if (count <= 1)
                 return; // One-style rule: a model with one style has no list popup
-            const char* const* styleNames = synthyboy::filters::filterModelStyleNames (model);
+            const char* const* styleNames = ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
             for (int i = 0; i < count; ++i)
                 listNames_.push_back (styleNames != nullptr && styleNames[i] != nullptr ? styleNames[i] : "");
             list_.state.items = listNames_.data();

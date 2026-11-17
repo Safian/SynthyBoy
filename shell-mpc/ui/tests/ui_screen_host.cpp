@@ -105,6 +105,13 @@ int main()
         const bool isSub = var.inst == OscInstance::Sub;
         if (var.inst == OscInstance::Noise)
         {
+            // the generated noise page is one grid: TUNE and NOISE blocks side by side with the same top and height, the same two rows (PITCH, FINE | KIND, STEREO and KEY TRACK | ENV 1), no hole
+            const Component *kd = s.panel.part (PanelSlot::NoiseType), *st = s.panel.part (PanelSlot::NoiseStereo), *e1 = s.panel.part (PanelSlot::NoiseEnv1);
+            check (kd != nullptr && st != nullptr && e1 != nullptr && s.tuneBlock().y == s.panel.blockRect (0).y && s.tuneBlock().h == s.panel.blockRect (0).h && s.tuneBlock().right() <= s.panel.blockRect (0).x && s.tuneBlock().y >= s.displayRect().bottom(),
+                   nm + ": noise: the TUNE block and the NOISE block stand side by side under the display, same top and same height");
+            check (kd != nullptr && st != nullptr && e1 != nullptr && std::abs (s.tune.crs.rect().y - kd->rect().y) <= 40 && std::abs (cy (s.tune.crs) - cy (*st)) <= 2 && std::abs (cy (s.tune.fin) - cy (*st)) <= 2 && std::abs (cy (s.tune.track) - cy (*e1)) <= 2,
+                   nm + ": noise: the rows are shared: PITCH and FINE on the line of STEREO, KEY TRACK on the line of ENV 1");
+            check (st != nullptr && st->rect().h >= 72 && s.tune.crs.rect().w >= 120, nm + ": noise: the STEREO knob has the common size (>= 72 px) and the fields are wide (no hole)");
             const Stepper* kind = dynamic_cast<const Stepper*> (s.panel.part (PanelSlot::NoiseType));
             check (std::string (s.basic.noiseType.state.caption) == "SOUND" && kind != nullptr && std::string (kind->state.caption) == "KIND", nm + ": the two noise steppers say what they select (SOUND in the header, KIND in the block)");
         }
@@ -113,11 +120,11 @@ int main()
             const WarpPair* w = s.panel.warp();
             check (w != nullptr && std::string (w->first.amount.state.label) == "WARP 1" && std::string (w->second.amount.state.label) == "WARP 2", nm + ": the two warp knobs are named WARP 1 and WARP 2");
         }
-        check (isSub ? s.displayRect().w * 100 / 1264 >= 99 : (s.displayRect().w * 100 / 1264 >= 76 && s.displayRect().w * 100 / 1264 <= 80 && (var.inst == OscInstance::Noise || s.barBlock().w == s.displayRect().w)), nm + ": the display is about 78 percent of the width (the sub oscillator's: all of it)");
+        check (isSub || var.inst == OscInstance::Noise ? s.displayRect().w * 100 / 1264 >= 99 : (s.displayRect().w * 100 / 1264 >= 76 && s.displayRect().w * 100 / 1264 <= 80 && s.barBlock().w == s.displayRect().w), nm + ": the display is about 78 percent of the width (the sub oscillator's and the generated noise's: all of it)");
         check (s.displayRect().h >= 240, nm + ": the display is at least 240 px tall (" + std::to_string (s.displayRect().h) + " px)");
         if (! isSub && var.inst != OscInstance::Noise)
             check (s.displayRect().y == s.barBlock().bottom() + kGap && s.barBlock().x == s.displayRect().x && s.barBlock().contains (s.bar.rect()), nm + ": the type bar (in its titled block) directly under the header and over the display");
-        check ((isSub ? true : s.tune.rect().x > s.displayRect().right()) && s.panel.rect().y >= s.displayRect().bottom() && s.close.rect().x < s.power.rect().x && (isSub ? s.route.rect().empty() : s.route.rect().x > s.basic.rect().right() - 1), nm + ": the tuning row at the right, the bottom band below, the close button at the left, the route button at the right end");
+        check ((isSub ? true : var.inst == OscInstance::Noise ? s.tune.rect().y >= s.displayRect().bottom() : s.tune.rect().x > s.displayRect().right()) && s.panel.rect().y >= s.displayRect().bottom() && s.close.rect().x < s.power.rect().x && (isSub ? s.route.rect().empty() : s.route.rect().x > s.basic.rect().right() - 1), nm + ": the tuning row at the right, the bottom band below, the close button at the left, the route button at the right end");
         check (s.numGroups() >= 2 && s.activeGroup() == 0 && std::string (s.groupName (0)) == "Basic" && s.groups[0].active(), nm + ": the first group is Basic and active (" + std::to_string (s.numGroups()) + " groups)");
         for (int g = 0; g < s.numGroups(); ++g)
         {
@@ -287,12 +294,19 @@ int main()
         }
         check (inside && apart, nm + ": every leaf inside, at least its minimum size, no overlap" + why);
         check (c.route.rect().empty() == subHeader, nm + ": the route button is in the header of every instance but the sub oscillator");
-        check (! c.displayRect().empty() && c.rect().contains (c.displayRect()) && ! c.displayRect().overlaps (c.full.rect()) && c.full.rect().bottom() <= c.displayRect().y && (subHeader || c.full.rect().right() <= c.route.rect().x) && c.full.rect().right() <= c.rect().right() && ! c.full.rect().overlaps (c.power.rect()), nm + ": the display area is reserved, the full screen button stands in the header row (it does not cover the curve)");
+        {   // the buttons in the corners of the display: the full screen button exactly where the envelope graph's and the LFO display's is (top right, 4 px in, 64 x 56), the power button in the top left corner with the same inset
+            const Rect d = c.displayRect(), f = c.full.rect(), w = c.power.rect();
+            EnvCompact ec;
+            ec.place ({ 440, 114, 400, 620 });
+            const Rect ef = ec.full.rect(), eg = ec.graphRect();
+            check (! d.empty() && c.rect().contains (d) && d.contains (f) && d.contains (w) && f.right() == d.right() - 4 && f.y == d.y + 4 && w.x == d.x + 4 && w.y == d.y + 4 && f.w == ef.w && f.h == ef.h && ef.right() == eg.right() - 4 && ef.y == eg.y + 4 && ! f.overlaps (w) && w.w >= 56 && w.h >= 56,
+                   nm + ": the full screen button (top right) and the power button (top left) stand in the corners of the display, 4 px in, the full screen button like the envelope graph's");
+        }
         {
             const Rect hdr = c.instances.rect();
-            const bool row = c.power.rect().y == hdr.y && c.power.rect().h == hdr.h && c.full.rect().y == hdr.y && c.power.rect().right() <= hdr.x && hdr.right() <= c.full.rect().x && (subHeader || c.full.rect().right() <= c.route.rect().x);
-            check (hdr.h >= 56 && hdr.h == playrows::kSelectorH && row && c.power.rect().w >= 56 && c.full.rect().h >= 56 && (subHeader || c.route.rect().h >= 56), nm + ": the top row is the header: power, the source selector, full screen, route, left to right in ONE row of 56 px (no row of tabs)");
-            check (c.instances.rect().bottom() <= c.displayRect().y && c.displayRect().bottom() <= c.basic.rect().y && ! c.displayRect().overlaps (c.basic.rect()) && c.basic.rect().y == playrows::controlsLine (c.rect()), nm + ": header row, display, Basic: top to bottom, Basic at the common controls line");
+            const bool row = c.instances.rect().y == c.rect().y + playrows::kMargin && c.instances.rect().right() == c.rect().right() - playrows::kMargin;
+            check (hdr.h == playrows::kSelectorH && row && (subHeader || (c.route.rect().h >= 56 && c.displayRect().contains (c.route.rect()) && c.route.rect().right() == c.displayRect().right() - 4 && c.route.rect().bottom() == c.displayRect().bottom() - 4 && ! c.route.rect().overlaps (c.full.rect()))) && c.power.state.negativeOff, nm + ": the top row holds the source selector only (the route button is in the bottom right corner of the display), 56 px, like the other two thirds; the power button is red while off");
+            check (c.instances.rect().bottom() <= c.displayRect().y && c.displayRect().bottom() <= c.basic.rect().y && ! c.displayRect().overlaps (c.basic.rect()) && c.basic.rect().y == playrows::controlsLine (c.rect()), nm + ": top row, display, Basic: top to bottom, Basic at the common controls line");
             check (c.displayRect().x == playrows::displayRect (c.rect()).x && c.displayRect().y == playrows::displayRect (c.rect()).y && c.displayRect().h == playrows::displayRect (c.rect()).h, nm + ": the display is the rectangle shared by the three thirds");
             check (c.instances.listable && c.instances.state.count == 5 && c.instances.state.index == static_cast<int> (var.inst) && std::string (c.instances.state.text) == OscillatorCompact::sourceName (var.inst) && c.instances.rect().w >= 120, nm + ": the source selector shows the current source (" + c.instances.state.text + ") and opens a list of five");
             Rect cells[8]; const int nt = c.instances.touchTargets (cells, 8);
@@ -300,6 +314,32 @@ int main()
             for (int t = 0; t < nt; ++t)
                 big = big && cells[t].h >= 56 && cells[t].w >= 56;
             check (big, nm + ": the touch targets of the source selector are at least 56 px");
+            if (var.inst != OscInstance::Noise)
+            {
+                // two rows like the envelope third's knobs: row 1 the type drop-down and the table / OCT selector side by side (at the 1/3 width the table stepper keeps 200 px, 140 px of text, so the longest built-in
+                // table name is written whole at a legible size and the two selectors are NOT stacked), row 2 PAN and LEVEL as the side knobs of the envelope third
+                EnvCompact ec;
+                ec.place ({ 440, 114, 400, 620 });
+                const Component* sec = var.inst == OscInstance::Sub ? static_cast<const Component*> (&c.basic.oct) : static_cast<const Component*> (&c.basic.source);
+                const Rect tr = c.basic.selector.rect(), sr = sec->rect();
+                const bool rows = c.basic.selector.dropdown && tr.y == sr.y && tr.h == sr.h && tr.right() <= sr.x && sr.right() <= c.basic.rect().right() && tr.h >= 56 && sr.h >= 56 && tr.bottom() <= c.basic.pan.rect().y && sr.bottom() <= c.basic.level.rect().y;
+                const bool knobs = c.basic.pan.state.side && c.basic.level.state.side && c.basic.pan.rect().y == ec.sustain.rect().y && c.basic.level.rect().y == ec.release.rect().y && c.basic.pan.rect().h == ec.sustain.rect().h
+                                   && c.basic.pan.state.dialMax == ec.sustain.state.dialMax && c.basic.pan.rect().w >= 172 && c.basic.level.rect().w >= 172 && c.basic.pan.rect().y == c.basic.level.rect().y;
+                check (rows && knobs, nm + ": row 1 = the type drop-down and the " + (var.inst == OscInstance::Sub ? "OCT field" : "table stepper") + " side by side, row 2 = PAN and LEVEL: the side knobs of the envelope third, same rows and size");
+                if (var.inst != OscInstance::Sub)
+                {
+                    const float size = Pen::fitSize ("Harmonic Series", static_cast<float> (sr.w - 2 * 28 - 4), static_cast<float> (sr.h - 4), theme::L().fValue, theme::L().fMin);
+                    check (c.basic.source.compact() && c.basic.source.dropdown.rect().empty() && sr.w >= 190 && size >= 12.0f && sdf::textWidth ("Harmonic Series", size) <= static_cast<float> (sr.w - 2 * 28 - 4) + 0.5f,
+                           nm + ": the table stepper (" + std::to_string (sr.w) + " px) writes 'Harmonic Series' whole at " + std::to_string (static_cast<int> (size)) + " px");
+                }
+                Rect cells[4];
+                check (c.basic.selector.touchTargets (cells, 4) == 1 && cells[0].h >= 56 && cells[0].w >= 56, nm + ": the type drop-down is one touch target of at least 56 px");
+                const Change tc = tap (c, cx (c.basic.selector), cy (c.basic.selector), 0.0);
+                check (tc.kind == ChangeKind::Request && tc.id == c.basic.selector.id(), nm + ": a tap on the type drop-down is a Request (the owner opens the list of types)");
+                const int before = c.basic.selector.state.index, countN = c.basic.selector.state.count;
+                const Change turned = c.basic.selector.turn (before + 1 < countN ? 1.0 : -1.0);
+                check (turned.kind == ChangeKind::Index && turned.id == c.basic.selector.id() && turned.index == (before + 1 < countN ? before + 1 : before - 1), nm + ": a Q turn steps the type through the list as the cells did");
+            }
         }
         Scene sc (420, 700, kBackgroundRgba);
         c.draw (sc.builder());
@@ -310,7 +350,7 @@ int main()
             for (int y = c.full.rect().y; y < c.full.rect().bottom(); ++y)
                 for (int x = c.full.rect().x; x < c.full.rect().right(); ++x)
                     on += img.at (x, y) != panelPx && img.at (x, y) != backgroundPixel();
-            check (! c.displayRect().overlaps (c.full.rect()) && on > 60 && colourNear (img, static_cast<float> (cx (c.full) - 10), static_cast<float> (cy (c.full) - 10), 2, colour::accent(), 20) && colourNear (img, static_cast<float> (cx (c.full) + 10), static_cast<float> (cy (c.full) + 10), 2, colour::accent(), 20), nm + ": the full screen button is drawn in the header row, clear of the display (" + std::to_string (on) + " button pixels in its rectangle: frame and the expand corners)");
+            check (c.displayRect().contains (c.full.rect()) && on > 60 && colourNear (img, static_cast<float> (cx (c.full) - 10), static_cast<float> (cy (c.full) - 10), 2, colour::accent(), 20) && colourNear (img, static_cast<float> (cx (c.full) + 10), static_cast<float> (cy (c.full) + 10), 2, colour::accent(), 20), nm + ": the full screen button is drawn in the top right corner of the display (" + std::to_string (on) + " button pixels in its rectangle: frame and the expand corners)");
         }
         check (! sc.overflow() && drawnOutside (render (sc), c.rect(), backgroundPixel()) == 0 && c.sizeOk(), nm + ": draws inside, fits one scene (" + std::to_string (sc.numOps()) + " ops)");
         writePng (outDir() + "/compact_" + std::to_string (v) + ".png", render (sc), 1);

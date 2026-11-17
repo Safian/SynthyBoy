@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include "content_name.h"
 #include "core.h"
 
 namespace synthyboy_mpc { namespace ui {
@@ -158,7 +159,7 @@ public:
     /** A knob with a switched-off LED is drawn dim all over (as a disabled one) and takes no touch but the switch. */
     void draw (gpu::SceneBuilder& sb) const override
     {
-        Pen pen (sb, enabled_ && ! (state.led && ! state.ledOn));
+        Pen pen (sb, enabled_ && ! (state.led && ! state.ledOn), inactive_);
         Cell cell (sb, rect_);
         drawBody (pen);
     }
@@ -520,6 +521,7 @@ public:
     State state;
 
     Size minSize() const override { return { std::min (kMinW, minWidth), 56 }; }
+    bool contentName = false;   // the text is the name of a piece of content (a file): too long for its box it loses its middle, not its end (content_name.h); the layout lint accepts that
     int minWidth = kMinW;   // a stepper in a grid of cells with short choices (SAME NOTE) may be narrower than the usual 208
     void setCaption (const char* s) { setText (state.caption, sizeof state.caption, s); }
     static constexpr int kMinW = 208;   // two 28 px zones, a text of about 14 characters at 22 pixels and the frame
@@ -546,13 +548,26 @@ protected:
         p.chevron (static_cast<float> (b.x + kZone / 2), cy, 12.0f, 0, 2.0f, p.c (T.textDim, canPrev ? 255 : 60));   // one colour for both arrows: the colour of a label (the gradient means position and value only)
         p.chevron (static_cast<float> (b.right() - kZone / 2), cy, 12.0f, 1, 2.0f, p.c (T.textDim, canNext ? 255 : 60));
         p.plain();
+        char fitted[96];
+        auto shown = [&] (const Rect& zone) -> const char*
+        {
+            if (! contentName)
+                return state.text;
+            const float size = Pen::fitSize (state.text, static_cast<float> (zone.w), static_cast<float> (zone.h), T.fValue, T.fMin);
+            if (size <= 0.0f)
+                return state.text;
+            contentname::middleFit (state.text, size, static_cast<float> (zone.w), fitted, static_cast<int> (sizeof fitted));   // a name too long for its box loses its middle, never its end
+            return fitted;
+        };
         if (state.caption[0] != '\0')
         {
+            const Rect zone { b.x + kZone, b.y + 19, std::max (0, b.w - 2 * kZone), std::max (0, b.h - 22) };
             p.textCentered ({ b.x + kZone, b.y + 3, std::max (0, b.w - 2 * kZone), 17 }, state.caption, T.fLabel - 2.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
-            p.textCentered ({ b.x + kZone, b.y + 19, std::max (0, b.w - 2 * kZone), std::max (0, b.h - 22) }, state.text, T.fValue, p.c (T.text, state.dim ? 90 : 255), T.fMin);
+            p.textCentered (zone, shown (zone), T.fValue, p.c (T.text, state.dim ? 90 : 255), T.fMin);
             return;
         }
-        p.textCentered ({ b.x + kZone, b.y + 2, std::max (0, b.w - 2 * kZone), std::max (0, b.h - 4) }, state.text, T.fValue, p.c (T.text, state.dim ? 90 : 255), T.fMin);
+        const Rect zone { b.x + kZone, b.y + 2, std::max (0, b.w - 2 * kZone), std::max (0, b.h - 4) };
+        p.textCentered (zone, shown (zone), T.fValue, p.c (T.text, state.dim ? 90 : 255), T.fMin);
     }
     Change onDown (int x, int y, double now) override
     {
@@ -670,6 +685,7 @@ public:
     struct State
     {
         bool on = false; Icon icon = Icon::Generic; char label[24] = {}; bool showState = false;   // label (<= 8 characters, optional): under the icon; showState: " ON" / " OFF" after it
+        bool negativeOff = false;   // the power button of an oscillator: drawn in the theme's negative colour (red) while it is off, in the normal active colour while on
         bool knobLike = false;   // in a row of knobs: no box; the icon where the dial is, the name on the line of the knob names, ON / OFF on the line of the values (the cell of a knob, the names in one line)
     };
     State state;
@@ -703,7 +719,7 @@ protected:
         }
         if (labelH > 0)
             p.textCentered ({ b.x, b.bottom() - labelH, b.w, labelH }, lab, T.fLabel - 2.0f, p.c (qFrame_ ? T.q : (state.on ? T.text : T.textDim), 255), T.fMin);
-        const uint32_t col = state.on ? p.c (T.flow[0], 255) : p.c (T.textFaint, 255);
+        const uint32_t col = state.on ? p.c (T.flow[0], 255) : p.c (state.negativeOff ? T.negative : T.textFaint, 255);
         p.style (1.0f, true);
         switch (state.icon)
         {
@@ -1262,9 +1278,61 @@ protected:
         return target == state.index || count() == 0 ? Change::none() : Change::indexed (id_, target, target);
     }
 
-private:
+protected:
     TapGesture tap_;
     int downCell_ = -1;
+};
+
+/** TypeSelector: a PictogramSelector (the same items, ids, Index change and turn) that can be a DROP-DOWN: with `dropdown` set it is ONE box that shows the current item (its small pictogram and its name, a chevron at the right); a tap is a Request
+    with the id (the owner opens the list of the items, ListPopup with `icons`), a turn steps through the items as before. Without `dropdown` it is the row of cells (the full screen's type bar of the oscillator, the owner's older pages). */
+class TypeSelector : public PictogramSelector
+{
+public:
+    bool dropdown = false;
+    Size minSize() const override { return dropdown ? Size { 140, 56 } : PictogramSelector::minSize(); }
+    int touchTargets (Rect* out, int max) const override
+    {
+        if (! dropdown)
+            return PictogramSelector::touchTargets (out, max);
+        if (max > 0)
+            out[0] = rect_;
+        return max > 0 ? 1 : 0;
+    }
+
+protected:
+    void drawBody (Pen& p) const override
+    {
+        if (! dropdown)
+        {
+            PictogramSelector::drawBody (p);
+            return;
+        }
+        const theme::Look& T = theme::L();
+        const Rect b = rect_.inset (2);
+        p.control (b, qFrame_);
+        const int i = std::clamp (state.index, 0, std::max (0, count() - 1));
+        if (count() == 0)
+            return;
+        const Item& it = state.items[i];
+        int textX = b.x + 10;
+        if (const pictogram::Def* d = pictogram::find (it.pictogram))
+        {
+            p.style (1.0f, true);
+            d->draw (p, static_cast<float> (b.x) + 32.0f, static_cast<float> (b.y) + static_cast<float> (b.h) * 0.5f, p.c (T.flow[0], 255));
+            p.plain();
+            textX = b.x + 56;
+        }
+        p.textCentered ({ textX, b.y + 2, std::max (0, b.right() - 36 - textX), std::max (0, b.h - 4) }, it.label, T.fValue, p.c (qFrame_ ? T.q : T.text, 255), T.fMin);
+        p.style (1.0f, true);
+        p.chevron (static_cast<float> (b.right() - 18), static_cast<float> (b.y) + static_cast<float> (b.h) * 0.5f, 12.0f, 3, 2.2f, p.c (T.textDim, 255));
+        p.plain();
+    }
+    Change onUp (int x, int y) override
+    {
+        if (! dropdown)
+            return PictogramSelector::onUp (x, y);
+        return tap_.up() != 0 ? Change::request (id_) : Change::none();
+    }
 };
 
 }} // namespace synthyboy_mpc::ui

@@ -63,7 +63,7 @@ void testMasterSidesAndBlocks()
     check (m.rect().w == 1280 && m.rect().h == 628 && r.stack.element() == MasterUi::kElementPage, "the page has the whole tab and is the element of the Master tab");
     check (m.side() == ui::MasterScreen::SideMain, "the first side is MAIN: OUTPUT, PITCH, VOICES, GLIDE");
     std::string bad;
-    std::vector<ui::Component*> main = { &m.volume, &m.spread, &m.stereoRouting, &m.voiceOverride, &m.outputLimiter, &m.tune, &m.transpose, &m.bendUp, &m.bendDown, &m.bendLink, &m.polyphony, &m.legato, &m.polyLegato, &m.phaseLegato,
+    std::vector<ui::Component*> main = { &m.volume, &m.spread, &m.stereoRouting, &m.voiceOverride, &m.outputLimiter, &m.noSmoothing, &m.oversample4x, &m.tune, &m.transpose, &m.bendUp, &m.bendDown, &m.bendLink, &m.polyphony, &m.legato, &m.polyLegato, &m.phaseLegato,
                                          &m.sameNote, &m.stealPriority, &m.velocityTrack, &m.padPressure, &m.padAmount, &m.portaTime, &m.portaSlope, &m.portaAlways, &m.portaScaled };
     check (sizesOk (main, bad), "every control of the side MAIN is >= 56 px high and has its minimum size " + bad);
     // each block holds its group, and the blocks are filled (the controls reach the lower part of the block)
@@ -597,6 +597,8 @@ void testMasterOutputLimiter()
     check (m.blockRect (0).contains (m.outputLimiter.rect()) && ! m.outputLimiter.rect().overlaps (m.voiceOverride.rect()) && ! m.outputLimiter.rect().overlaps (m.stereoRouting.rect())
                && ! m.outputLimiter.rect().overlaps (m.spread.rect()) && ! m.outputLimiter.rect().overlaps (m.volume.rect()) && ! m.outputLimiter.rect().overlaps (m.meters.rect()),
            "output limiter: inside the OUTPUT block, over nothing");
+    check (! m.groups[0].rect().overlaps (m.outputLimiter.rect()) && m.outputLimiter.rect().y >= m.groups[0].rect().bottom(), "output limiter: outside the Q frame of the OUTPUT group (it is no member), under the knobs");
+    check (m.outputLimiter.enabled() && r.inst.limiterOn == m.outputLimiter.state.on, "output limiter: a live control (not dim) that shows the real state");
     r.tap (m.outputLimiter);
     check (r.inst.limiterOn && r.inst.limiterWrites == 1, "a tap on LIMIT switches the limiter on");
     r.refresh();
@@ -604,6 +606,28 @@ void testMasterOutputLimiter()
     r.tap (m.outputLimiter);
     check (! r.inst.limiterOn && r.inst.limiterWrites == 2, "a second tap switches it off again");
     check (! r.ui.item (MasterUi::kLimiter) || r.ui.item (MasterUi::kLimiter)->param < 0, "the switch is not an engine parameter");
+}
+
+// QUALITY: quality.no_smoothing and quality.oversample_4x as two LED switches in the OUTPUT block, touch only
+void testMasterQuality()
+{
+    MRig r;
+    r.refresh();
+    ui::MasterScreen& m = r.ui.screen();
+    const MasterUi::Item* a = r.ui.item (MasterUi::kNoSmoothing);
+    const MasterUi::Item* b = r.ui.item (MasterUi::kOversample4x);
+    check (a != nullptr && b != nullptr && a->param >= 0 && b->param >= 0, "quality: NO SMOOTHING and OVERSAMPLE 4X are bound to quality.no_smoothing and quality.oversample_4x");
+    check (m.noSmoothing.rect().h >= 56 && m.oversample4x.rect().h >= 56 && m.noSmoothing.sizeOk() && m.oversample4x.sizeOk(), "quality: touch targets of at least 56 pixels, the labels fit");
+    bool inQ = false;
+    for (const ui::Component* c : { static_cast<const ui::Component*> (&m.noSmoothing), static_cast<const ui::Component*> (&m.oversample4x) })
+        inQ = inQ || m.groups[0].rect().overlaps (c->rect()) || ! m.blockRect (0).contains (c->rect());
+    check (! inQ && ! m.noSmoothing.rect().overlaps (m.oversample4x.rect()) && ! m.noSmoothing.rect().overlaps (m.outputLimiter.rect()) && ! m.oversample4x.rect().overlaps (m.outputLimiter.rect()), "quality: in the OUTPUT block, outside the Q frame, apart from LIMIT and from each other");
+    r.tap (m.noSmoothing);
+    check (r.inst.get ("quality.no_smoothing") > 0.5f, "a tap on NO SMOOTHING switches quality.no_smoothing on");
+    r.refresh();
+    check (m.noSmoothing.state.on, "... and the control shows it");
+    r.tap (m.oversample4x);
+    check (r.inst.get ("quality.oversample_4x") > 0.5f, "a tap on OVERSAMPLE 4X switches quality.oversample_4x on");
 }
 
 int main()
@@ -616,6 +640,7 @@ int main()
     testMasterDraw();
     testMasterPadPressure();
     testMasterOutputLimiter();
+    testMasterQuality();
     testVoiceLayout();
     testVoiceGridDrawing();
     testVoiceStepsLitAndQ();

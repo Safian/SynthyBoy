@@ -408,7 +408,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     {
         sb.rect (static_cast<float> (r.x + 2), static_cast<float> (r.y + 2), static_cast<float> (r.right() - 2), static_cast<float> (r.bottom() - 2), dt::a (T.panel0, 165));
         const float size = 20.0f;
-        sb.text (x0 + 6.0f, sdf::baselineForCentre (static_cast<float> (r.y) + 24.0f, size), size, "OFF", dt::a (T.textDim, 255));
+        sb.text (x0 + 76.0f, sdf::baselineForCentre (static_cast<float> (r.y) + 32.0f, size), size, "OFF", dt::a (T.textDim, 255));   // right of the power button in the top left corner of the display (4 px + 64 px)
     }
 }
 

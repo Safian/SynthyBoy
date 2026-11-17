@@ -10,6 +10,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include "carousel.h"
 #include "lfo_parts.h"
 #include "play_rows.h"
 
@@ -19,7 +20,7 @@ namespace synthyboy_mpc { namespace ui {
 class LfoCompact : public Composite
 {
 public:
-    Stepper instance;                                       // LFO 1 .. 10, RND 1 .. 4
+    Carousel instance;                                      // LFO 1 .. 10, RND 1 .. 4: the selector of the three thirds (neighbours step, the name opens the list)
     MenuButton full { "", MenuButton::Icon::Expand };      // the full screen button, on the display
     Stepper shape, style, sync;
     RateControl rate;

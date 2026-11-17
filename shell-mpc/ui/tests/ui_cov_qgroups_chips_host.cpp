@@ -158,10 +158,12 @@ static void test_qgroup_wide_device_and_idle_chips()
         check (s.numOps() > 0, "drawMapped with block >= 1 generates scene ops");
     }
     qg.setBlock (0);
+    uint32_t chipsOnly = 0;
     {
         Scene s (400, 300);
         qg.drawMapped (s.builder());
-        check (s.numOps() == 0, "drawMapped with block 0 does nothing");
+        chipsOnly = s.numOps();
+        check (chipsOnly > 0, "wide device: drawMapped with block 0 draws the chips 1 .. 4 (the group of the first four knobs is a group like the others)");
     }
 
     // Static drawMappedMembers helper
@@ -174,7 +176,30 @@ static void test_qgroup_wide_device_and_idle_chips()
     {
         Scene s (400, 300);
         QGroup::drawMappedMembers (s.builder(), 0, members, 2);
-        check (s.numOps() == 0, "drawMappedMembers with block 0 does nothing");
+        check (s.numOps() > 0, "wide device: drawMappedMembers with block 0 draws the chips 1 .. 4");
+    }
+    // the rule of the 16 knob device: an ACTIVE group draws no frame (the same ops as the chips alone), the labels of its members are not in the Q colour, and the chip numbers do not depend on which group is active
+    {
+        qg.setBlock (0);
+        qg.setActive (true);
+        Scene w (400, 300);
+        qg.draw (w.builder());
+        check (w.numOps() == chipsOnly && ! k0.qFrame() && ! k1.qFrame(), "wide device: an active group emits no frame op, only its chips; its members' labels keep the normal colours");
+        qg.setActive (false);
+        qg.setBlock (2);
+        Scene a (400, 300);
+        qg.draw (a.builder());
+        Scene b (400, 300);
+        qg.drawIdle (b.builder());
+        check (a.numOps() == b.numOps() && a.numOps() > 0, "wide device: the chips of a group are drawn the same whether or not it is the active one (slot numbers 9 .. 12 here)");
+        QGroup::setWideDevice (false);
+        qg.setBlock (0);
+        qg.setActive (true);
+        Scene n (400, 300);
+        qg.draw (n.builder());
+        check (n.numOps() > chipsOnly && k0.qFrame(), "4 knob device: the active group has its frame and its labels in the Q colour (as before)");
+        qg.setActive (false);
+        QGroup::setWideDevice (true);
     }
 
     // Reset wide device flag
