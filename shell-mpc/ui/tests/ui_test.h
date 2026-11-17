@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -191,10 +192,15 @@ inline Image drawComponent (const Component& c, int canvasW, int canvasH)
     return render (s);
 }
 
+/** Where the pictures of the tests go: the directory in UI_OUT (made when it is not there), else a directory of its own under the system's temporary directory. NEVER the working directory: a test run from
+    the source tree (shell-mpc/) put its pictures into the repository, where they were committed by mistake. */
 inline std::string outDir()
 {
     const char* d = std::getenv ("UI_OUT");
-    return d && *d ? d : ".";
+    std::error_code ec;
+    const std::filesystem::path dir = d && *d ? std::filesystem::path (d) : std::filesystem::temp_directory_path (ec) / "synthyboy-ui-images";
+    std::filesystem::create_directories (dir, ec);
+    return dir.string();
 }
 
 } // namespace uit
