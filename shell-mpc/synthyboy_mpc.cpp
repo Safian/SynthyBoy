@@ -373,6 +373,9 @@ struct PluginInstance
     // Output stage: the make-up gain of the MPC shell (SYNTHYBOY_MPC_OUTPUT_GAIN_DB, set once in the constructor) and, only when built with SYNTHYBOY_MPC_OUTPUT_LIMITER, the peak limiter behind it.
     // Only the audio thread calls process(); prepare() runs with the engine's prepare (effMainsChanged, the host is not processing then).
     synthyboy_mpc::SwitchableOutputStage outputStage;
+    // All Sound Off requests of the host side (effStopProcess, effMainsChanged (0)): the audio thread puts one event at the front of its next block (processReplacing).
+    std::atomic<bool> soundOffPending { false };
+    std::atomic<unsigned> soundOffRequests { 0 };
     // The output limiter as a plugin setting (Master page, OUTPUT block, "LIMIT"; saved in the chunk as "mpcOutputLimiter"; docs/MPC.md "Output limiter"). Not an engine parameter and not a host
     // parameter (the host's parameter count does not change). SYNTHYBOY_MPC_OUTPUT_LIMITER in the environment (or a build with it ON) forces the state for tests (output_stage.h).
     std::atomic<bool> outputLimiter { synthyboy_mpc::kOutputLimiterDefaultOn };
@@ -465,6 +468,17 @@ struct PluginInstance
             inst.updateEnginePadPressure();
         }
 #endif
+        void voiceStatus (std::string& out) const override
+        {
+            synthyboy::VoiceStats s;
+            if (inst.engine == nullptr || ! inst.engine->voiceStats (s))
+                return;
+            char b[480];
+            std::snprintf (b, sizeof b, "voices_active: %d\nvoices_released: %d\nvoices_sustaining: %d\nheld_keys: %d\nheld_lowest: %d\nheld_highest: %d\norphan_voices: %d\nnote_ons: %u\nnote_offs: %u\nnote_offs_unmatched: %u\nvoices_stolen: %u\nsustain_pedal: %d\nsound_off_requests: %u\n",
+                           s.active, s.released, s.sustaining, s.heldKeys, s.lowestHeld, s.highestHeld, s.orphans, s.noteOns, s.noteOffs, s.unmatchedNoteOffs, s.stolen, s.sustainPedal ? 1 : 0,
+                           inst.soundOffRequests.load (std::memory_order_relaxed));
+            out += b;
+        }
         void setQVirtual (int id, float normalised) noexcept override { inst.qRouter.setVirtualValue (id, normalised); }
         bool takeQVirtual (int id, float& normalised) noexcept override { return inst.qRouter.takeVirtual (id, normalised); }
         unsigned long qWriteCount() const noexcept override { return inst.qRouter.writeCount(); }
@@ -2065,6 +2079,11 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     {
         if (!inst) return 0;
         inst->mainsOn = (value != 0);
+        if (value == 0)
+        {
+            inst->soundOffRequests.fetch_add (1u, std::memory_order_relaxed);
+            inst->soundOffPending.store (true, std::memory_order_release);
+        }
 #if SYNTHYBOY_MPC_CALLBACK_STATS
         inst->callbackStats.restartGaps();
 #endif
@@ -2506,6 +2525,11 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
     case effStopProcess:
     {
+        if (inst)
+        {
+            inst->soundOffRequests.fetch_add (1u, std::memory_order_relaxed);
+            inst->soundOffPending.store (true, std::memory_order_release);   // the voices stop at the next block (CC 120 for the engine): nothing keeps sounding after the host stopped processing
+        }
         return 1;
     }
 
@@ -2771,6 +2795,21 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     {
         if (static_cast<int32_t>(inst->events.slots[i].frame) >= sampleFrames)
             inst->events.slots[i].frame = sampleFrames - 1;
+    }
+
+    // All Sound Off (stop / mains off): one event at the front of the block, the same as CC 120 from the keyboard
+    if (inst->soundOffPending.exchange (false, std::memory_order_acquire))
+    {
+        synthyboy::Event off;
+        off.type = synthyboy::Event::AllNotesOff;
+        off.channel = -1;
+        off.value = 1.0f;
+        off.frame = 0;
+        const size_t keep = std::min (inst->events.count, EventBuffer::kCapacity - 1);
+        for (size_t i = keep; i > 0; --i)
+            inst->events.slots[i] = inst->events.slots[i - 1];
+        inst->events.slots[0] = off;
+        inst->events.count = keep + 1;
     }
 
     float* out0 = (e->numOutputs > 0) ? outputs[0] : nullptr;

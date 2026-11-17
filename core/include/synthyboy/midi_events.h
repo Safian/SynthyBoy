@@ -96,6 +96,7 @@ inline bool translateMidiMessage (const uint8_t* bytes, int numBytes, int frame,
             if (d1 == 120 || d1 == 123)
             {
                 out.type = Event::AllNotesOff;
+                out.value = d1 == 120 ? 1.0f : 0.0f; // CC 120 All Sound Off: the voices stop at once (OwnEngine); CC 123 All Notes Off: they release
                 return true;
             }
             return false;

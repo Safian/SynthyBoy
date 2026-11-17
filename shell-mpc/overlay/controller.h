@@ -1412,7 +1412,16 @@ private:
                     if (IInstanceView* v = slots_.at (activeSlot_))
                         v->qStatus (qs);
             }
-            o << qs;   // the stepping of the Q proxies of the instance on screen: q_step_travel and q_knob_n (raw value, delta, travel)
+            o << qs;
+            std::string vs;
+            {
+                std::lock_guard<std::mutex> g (mu_);
+                if (activeSlot_ >= 0)
+                    if (IInstanceView* v = slots_.at (activeSlot_))
+                        v->voiceStatus (vs);
+            }
+            o << vs;   // the voices and the keys the engine believes are held (a stuck note shows as orphan_voices > 0 or held_keys > 0 with no key down)
+            // the stepping of the Q proxies of the instance on screen: q_step_travel and q_knob_n (raw value, delta, travel)
         }
         if (extraStatus_)
             o << extraStatus_();

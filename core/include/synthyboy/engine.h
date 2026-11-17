@@ -31,6 +31,20 @@ namespace synthyboy
  * Threading: prepare / reset / destruction are called while no process() runs. setParam, getParam and activeVoices
  * may be called from any thread at any time (lock free); process() is called from one audio thread at a time.
  */
+/** What an engine can tell about its voices and the keys it believes are held (diagnostics: the status file of the MPC shell, the note storm tests). All values as of the end of the last
+    process(); the counters count since prepare() / reset (never wrap in practice). */
+struct VoiceStats
+{
+    int active = 0;            // sounding voices, the released ones that still fade included
+    int released = 0;          // of these in their release stage (or fading out)
+    int sustaining = 0;        // of these not released (a key down, or the pedal)
+    int heldKeys = 0;          // keys the engine believes are down (events only)
+    int lowestHeld = -1, highestHeld = -1;   // MIDI notes, -1 none
+    int orphans = 0;           // not released voices whose key is not held while the pedal is up: the bug state (a stuck note); always 0
+    bool sustainPedal = false; // the pedal of any channel is down
+    unsigned noteOns = 0, noteOffs = 0, unmatchedNoteOffs = 0, stolen = 0;
+};
+
 class IEngine
 {
 public:
@@ -121,6 +135,8 @@ public:
 
     /** Number of sounding voices (including released ones that are still fading out) after the last process(). */
     virtual int activeVoices() const noexcept = 0;
+    /** The voice and held key diagnostics; false (nothing written) for an engine that has none. Any thread, lock free. */
+    virtual bool voiceStats (VoiceStats& /*out*/) const noexcept { return false; }
 
     /** Latency of the output in samples at the host rate, as of the last process() (any thread). engine-vital: Bode's Hilbert filter
         delays the signal path it sits in, the engine delays every other path to match (the Direct output, the other buses, the bands of

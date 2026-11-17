@@ -425,6 +425,7 @@ void OwnEngine::reset()
     pnumTouched = 0;
     smoothedGain.setCurrentAndTarget (dbToGain (readParam (kParamMasterVolume)) * (readParam (kParamMasterVolume) > -60.0f ? 1.0f : 0.0f));
     activeCount.store (0, std::memory_order_relaxed);
+    cntNoteOns = cntNoteOffs = cntUnmatched = cntStolen = 0;
 }
 
 int OwnEngine::polyphonyLimit() const noexcept
@@ -490,6 +491,8 @@ Voice* OwnEngine::allocateVoice (bool legato) noexcept
     if (free != nullptr && (killMode || n < P))
         return free; // Kill mode: the overflow is resolved at the next control tick (killExcess)
     Voice* victim = pickVictim (false);
+    if (victim != nullptr)
+        ++cntStolen;
     return victim != nullptr ? victim : (free != nullptr ? free : pickVictim (true));
 }
 
@@ -561,6 +564,7 @@ void OwnEngine::killExcess() noexcept
         Voice* v = pickVictim (false);
         if (v == nullptr)
             break;
+        ++cntStolen;
         if ((economyMask.load (std::memory_order_relaxed) & kEconomyControl) != 0)
             ghostKill (*v); // tier low: the voice stops, a ramp of its last output fades on the buses
         else
@@ -712,6 +716,7 @@ void OwnEngine::noteOn (const Event& e) noexcept
     if (e.key < 0 || e.key > 127)
         return;
     const MasterIdx& mi = paramIndex().master;
+    ++cntNoteOns;
     Pressed n;
     n.channel = std::clamp<int> (e.channel, 0, numChannels - 1);
     n.velocity = std::isnan (e.value) ? 0.0f : std::clamp (e.value, 0.0f, 1.0f);
@@ -765,6 +770,8 @@ void OwnEngine::noteOn (const Event& e) noexcept
 void OwnEngine::noteOff (const Event& e) noexcept
 {
     const int channel = std::clamp<int> (e.channel, 0, numChannels - 1);
+    ++cntNoteOffs;
+    bool matched = false;
     removePressed (e.key, channel);
     const float relVel = std::isnan (e.value) ? 0.0f : std::clamp (e.value, 0.0f, 1.0f);
     bool recalled = false;
@@ -775,6 +782,7 @@ void OwnEngine::noteOff (const Event& e) noexcept
             continue;
         if (e.noteId >= 0 && v.noteId() >= 0 && v.noteId() != e.noteId)
             continue;
+        matched = true;
         if (sustainDown[channel])
         {
             sustainPending[i] = 1;
@@ -816,6 +824,8 @@ void OwnEngine::noteOff (const Event& e) noexcept
         }
         v.release (relVel);
     }
+    if (!matched)
+        ++cntUnmatched;
 }
 
 void OwnEngine::setSustain (int channel, bool down) noexcept
@@ -889,7 +899,20 @@ void OwnEngine::handleEvent (const Event& e) noexcept
         case Event::AllNotesOff:
             for (size_t i = 0; i < voices.size(); ++i)
                 if (e.channel < 0 || voices[i]->channel() == e.channel)
-                    voices[i]->release (0.0f);
+                {
+                    if (e.value >= 0.5f && voices[i]->isActive() && !voices[i]->killing())
+                    {
+                        // All Sound Off (CC 120, the shell's stop and mains off): the voices stop at once with the short ramp, not through their release stages
+                        if ((economyMask.load (std::memory_order_relaxed) & kEconomyControl) != 0)
+                            ghostKill (*voices[i]);
+                        else
+                            voices[i]->startKill();
+                    }
+                    else
+                        voices[i]->release (0.0f);
+                }
+            if (e.value >= 0.5f && e.channel < 0)
+                std::fill (std::begin (sustainDown), std::end (sustainDown), false);
             std::fill (sustainPending.begin(), sustainPending.end(), static_cast<uint8_t> (0));
             numPressed = 0;
             break;
@@ -1427,8 +1450,65 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     for (const auto& v : voices)
         count += (v->isActive() && !v->killing()) ? 1 : 0; // a voice in its 50 ms kill fade is on its way out: the count stays within the polyphony
     activeCount.store (count, std::memory_order_relaxed);
+    publishStats();
     writeReadout();
     blockCounter.fetch_add (1, std::memory_order_relaxed);
+}
+
+/** The snapshot of voiceStats (): the voices, the keys the events say are held, and the bug state: a voice that is not released while its key is not held and the pedal is up. */
+void OwnEngine::publishStats() noexcept
+{
+    int active = 0, released = 0, sustaining = 0, orphans = 0;
+    for (const auto& v : voices)
+    {
+        if (!v->isActive())
+            continue;
+        ++active;
+        if (v->isReleased() || v->killing())
+        {
+            ++released;
+            continue;
+        }
+        ++sustaining;
+        bool held = sustainDown[std::clamp (v->channel(), 0, numChannels - 1)];
+        for (int i = 0; i < numPressed && !held; ++i)
+            held = pressed[i].playedKey == v->playedKey() && pressed[i].channel == v->channel();
+        if (!held)
+            ++orphans;
+    }
+    int lo = -1, hi = -1;
+    for (int i = 0; i < numPressed; ++i)
+    {
+        lo = lo < 0 ? pressed[i].playedKey : std::min (lo, pressed[i].playedKey);
+        hi = std::max (hi, pressed[i].playedKey);
+    }
+    bool pedal = false;
+    for (int c = 0; c < numChannels; ++c)
+        pedal = pedal || sustainDown[c];
+    const int ints[8] = { active, released, sustaining, numPressed, lo, hi, orphans, pedal ? 1 : 0 };
+    for (int i = 0; i < 8; ++i)
+        stIntegers[i].store (ints[i], std::memory_order_relaxed);
+    stCounters[0].store (cntNoteOns, std::memory_order_relaxed);
+    stCounters[1].store (cntNoteOffs, std::memory_order_relaxed);
+    stCounters[2].store (cntUnmatched, std::memory_order_relaxed);
+    stCounters[3].store (cntStolen, std::memory_order_relaxed);
+}
+
+bool OwnEngine::voiceStats (VoiceStats& out) const noexcept
+{
+    out.active = stIntegers[0].load (std::memory_order_relaxed);
+    out.released = stIntegers[1].load (std::memory_order_relaxed);
+    out.sustaining = stIntegers[2].load (std::memory_order_relaxed);
+    out.heldKeys = stIntegers[3].load (std::memory_order_relaxed);
+    out.lowestHeld = stIntegers[4].load (std::memory_order_relaxed);
+    out.highestHeld = stIntegers[5].load (std::memory_order_relaxed);
+    out.orphans = stIntegers[6].load (std::memory_order_relaxed);
+    out.sustainPedal = stIntegers[7].load (std::memory_order_relaxed) != 0;
+    out.noteOns = stCounters[0].load (std::memory_order_relaxed);
+    out.noteOffs = stCounters[1].load (std::memory_order_relaxed);
+    out.unmatchedNoteOffs = stCounters[2].load (std::memory_order_relaxed);
+    out.stolen = stCounters[3].load (std::memory_order_relaxed);
+    return true;
 }
 
 void OwnEngine::setReadoutTargets (const int* idx, int count) noexcept

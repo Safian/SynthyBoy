@@ -63,6 +63,7 @@ public:
     void setTransport (const TransportInfo& t) noexcept override;
     void setReadoutTargets (const int* idx, int count) noexcept override;
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
+    bool voiceStats (VoiceStats& out) const noexcept override;
     int latencySamples() const noexcept override { return reportedLatency.load (std::memory_order_relaxed); }
     void setTuningSource (const tuning::ITuningSource* s) noexcept override { noteTuning.setSource (s); paramGen.fetch_add (1u, std::memory_order_release); }
     EngineCapsMask capabilities() const noexcept override;
@@ -110,6 +111,11 @@ private:
     std::atomic<bool> lowKeepMorphSpread { kDefaultLowTierMorphSpread };
     std::atomic<uint32_t> savingsOff { 0 };
     std::atomic<int> activeCount { 0 };
+    // voice diagnostics (voiceStats): the counters are written by the audio thread, the snapshot at the end of every block
+    unsigned cntNoteOns = 0, cntNoteOffs = 0, cntUnmatched = 0, cntStolen = 0;
+    std::atomic<int> stIntegers[8] = {};   // active, released, sustaining, heldKeys, lowestHeld, highestHeld, orphans, pedal
+    std::atomic<unsigned> stCounters[4] = {};
+    void publishStats() noexcept;
     // transport (set from any thread by the shell between blocks; read by the audio thread)
     std::atomic<double> tpBpm { 120.0 }, tpPos { 0.0 };
     std::atomic<bool> tpPlaying { false };
