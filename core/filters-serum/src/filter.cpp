@@ -143,6 +143,7 @@ public:
         const auto srFloat = static_cast<float> (sampleRate_);
         const float smoothCoeff = std::min (0.05f, 180.0f / srFloat);
         const int hold = params_.coefHold;
+        int holdCount = 0; // i % hold without the integer division, which 32 bit ARM makes through a library call, once per sample
 
         for (int i = 0; i < numSamples; ++i)
         {
@@ -158,11 +159,13 @@ public:
 
             smoothedCutoff_ += smoothCoeff * (targetCutoff - smoothedCutoff_);
             smoothedRes_ += smoothCoeff * (targetRes - smoothedRes_);
-            if (hold <= 1 || (i % hold) == 0)
+            if (hold <= 1 || holdCount == 0)
             {
                 heldCutoff_ = smoothedCutoff_;
                 heldRes_ = smoothedRes_;
             }
+            if (++holdCount >= hold)
+                holdCount = 0;
 
             const float sampleIn = sanitize (in[i]);
             out[i] = sanitize (processInternal (sampleIn, hold <= 1 ? smoothedCutoff_ : heldCutoff_, hold <= 1 ? smoothedRes_ : heldRes_));

@@ -31,6 +31,9 @@
 //                   no block of any of its factory presets, in any pass, was longer than its real time
 //   --no-fx-mute    process an effect whose mix is exactly 0 all the same (the engine before that saving: for a before / after with one binary)
 //   --scalar-filters  run the voice filters' scalar loops also where a vector kernel exists (the same: before / after)
+//   --verify        no timing: every load is rendered twice under every profile, once with the savings (the pair kernels of the filters, the skipped effects with
+//                   mix 0) and once without, offline, 3 s with the chord struck twice, and the samples are compared. They must be the same values (the exit code is
+//                   1 otherwise): this is the check that the vector code of THIS CPU computes what the scalar code computes.
 //   --notes K       hold K notes instead of the profile's polyphony (the notes over the polyphony of the profile or of the preset steal voices)
 //   --paced         start every block at its real time (a run then takes its audio time): the caches and the frequency governor see what they see under the host. Without it
 //                   the blocks follow each other at once (the usual, fast way).
@@ -153,6 +156,7 @@ struct Options
     bool list = false;
     int repeat = 1;
     double budget = 0.0;
+    bool verify = false;
     uint32_t savingsOff = 0; // --no-fx-mute, --scalar-filters: OwnSaving bits switched off (before / after measurements with one binary)
 };
 
@@ -348,6 +352,48 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
     return r;
 }
 
+/** --verify: the load under the profile, offline, with the savings named in `off` switched off; left then right of every block. */
+std::vector<float> renderForVerify (const Options& o, const synthyboy_mpc::Profile& profile, const Load& load, int notes, uint32_t off)
+{
+    auto engine = createEngine (EngineKind::own);
+    applyLoad (*engine, load);
+    setOwnSavingsOff (*engine, off);
+    Quality quality = synthyboy_mpc::profileQuality (profile);
+    quality.realtime = false;
+    engine->prepare (o.sampleRate, o.block, quality);
+    std::vector<float> out, l (static_cast<size_t> (o.block)), r (static_cast<size_t> (o.block));
+    const int blocks = static_cast<int> (3.0 * o.sampleRate / o.block), second = static_cast<int> (1.2 * o.sampleRate / o.block);
+    std::vector<Event> events;
+    for (int b = 0; b < blocks; ++b)
+    {
+        events.clear();
+        if (b == 0 || b == second)
+        {
+            for (int v = 0; v < notes && b != 0; ++v)
+            {
+                Event off2;
+                off2.type = Event::NoteOff;
+                off2.key = static_cast<int16_t> (36 + (v * 7) % 60);
+                events.push_back (off2);
+            }
+            for (int v = 0; v < notes; ++v)
+            {
+                Event on;
+                on.type = Event::NoteOn;
+                on.key = static_cast<int16_t> (36 + (v * 7) % 60);
+                on.value = 0.6f + 0.4f * static_cast<float> (v % 3) / 2.0f;
+                on.frame = std::min (v, o.block - 1);
+                events.push_back (on);
+            }
+            std::stable_sort (events.begin(), events.end(), [] (const Event& x, const Event& y) { return x.frame < y.frame; });
+        }
+        engine->process (events.data(), static_cast<int> (events.size()), l.data(), r.data(), o.block);
+        out.insert (out.end(), l.begin(), l.end());
+        out.insert (out.end(), r.begin(), r.end());
+    }
+    return out;
+}
+
 std::string readLine (const std::string& path)
 {
     std::ifstream in (path);
@@ -399,7 +445,7 @@ long currentKhz (int cpu)
 [[noreturn]] void usage (const char* message)
 {
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
-                          "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--no-fx-mute] [--scalar-filters] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]\n", message);
+                          "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -428,6 +474,7 @@ int main (int argc, char** argv)
         else if (a == "--sections")    o.sections = true;
         else if (a == "--list")        o.list = true;
         else if (a == "--repeat")      o.repeat = std::atoi (next());
+        else if (a == "--verify")      o.verify = true;
         else if (a == "--no-fx-mute")  o.savingsOff |= kOwnSavingFxMute;
         else if (a == "--scalar-filters") o.savingsOff |= kOwnSavingVectorFilters;
         else if (a == "--budget")      o.budget = std::atof (next());
@@ -585,6 +632,44 @@ int main (int argc, char** argv)
         std::printf ("%zu runs, %.0f s of audio (a run takes its audio time multiplied by the load it measures)\n", configs.size() * loads.size() * static_cast<size_t> (o.repeat),
                      static_cast<double> (configs.size() * loads.size()) * (o.seconds + 1.0) * o.repeat);
         return 0;
+    }
+
+    if (o.verify)
+    {
+        std::printf ("\nverify: every load under every profile, with the savings and without (filters one side after the other, effects with mix 0 processed): the samples must be the same\n");
+        int failures = 0, runs = 0;
+        for (size_t c = 0; c < configs.size(); ++c)
+        {
+            const int notes = o.notes > 0 ? o.notes : profiles[c].maxVoices;
+            int bad = 0;
+            for (const auto& l : loads)
+            {
+                const std::vector<float> with = renderForVerify (o, profiles[c], l, notes, 0), without = renderForVerify (o, profiles[c], l, notes, kOwnSavingFxMute | kOwnSavingVectorFilters);
+                size_t differ = 0;
+                float worst = 0.0f, peak = 0.0f;
+                for (size_t i = 0; i < with.size(); ++i)
+                {
+                    peak = std::max (peak, std::fabs (with[i]));
+                    if (! (with[i] == without[i])) // values: +0 and -0 are the same sample; a NaN on either side counts as a difference
+                    {
+                        ++differ;
+                        worst = std::max (worst, std::fabs (with[i] - without[i]));
+                    }
+                }
+                ++runs;
+                if (differ != 0)
+                {
+                    ++bad;
+                    std::printf ("DIFFERENT  %-58s %-24.24s %zu of %zu samples, largest difference %.3g (peak %.3f)\n", configs[c].c_str(), l.name.c_str(), differ, with.size(),
+                                 static_cast<double> (worst), static_cast<double> (peak));
+                }
+                std::fflush (stdout);
+            }
+            failures += bad;
+            std::printf ("%-58s %zu loads: %s\n", configs[c].c_str(), loads.size(), bad == 0 ? "the same samples" : "DIFFERENCES (above)");
+        }
+        std::printf ("verify: %d of %d renders differ\n", failures, runs);
+        return failures == 0 ? 0 : 1;
     }
 
     FILE* csv = o.csv.empty() ? nullptr : std::fopen (o.csv.c_str(), "w");
