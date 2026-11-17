@@ -19,7 +19,11 @@ namespace synthyboy_mpc { namespace ui { namespace contentname {
 inline std::string display (const std::string& title, const std::string& file)
 {
     if (! title.empty())
-        return title;
+    {
+        std::string t = title;
+        std::replace (t.begin(), t.end(), '_', ' ');   // a title that is a file name written with underscores reads as words too
+        return t;
+    }
     const size_t slash = file.rfind ('/');
     std::string s = slash == std::string::npos ? file : file.substr (slash + 1);
     const size_t dot = s.rfind ('.');

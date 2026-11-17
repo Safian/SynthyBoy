@@ -549,25 +549,28 @@ protected:
         p.chevron (static_cast<float> (b.right() - kZone / 2), cy, 12.0f, 1, 2.0f, p.c (T.textDim, canNext ? 255 : 60));
         p.plain();
         char fitted[96];
+        float drawSize = T.fValue;   // the size the text is drawn at: the one the middle cut was made for (a text drawn larger would be cut again by the pen, at its end)
         auto shown = [&] (const Rect& zone) -> const char*
         {
+            drawSize = T.fValue;
             if (! contentName)
                 return state.text;
             const float size = Pen::fitSize (state.text, static_cast<float> (zone.w), static_cast<float> (zone.h), T.fValue, T.fMin);
             if (size <= 0.0f)
                 return state.text;
             contentname::middleFit (state.text, size, static_cast<float> (zone.w), fitted, static_cast<int> (sizeof fitted));   // a name too long for its box loses its middle, never its end
+            drawSize = size;
             return fitted;
         };
         if (state.caption[0] != '\0')
         {
             const Rect zone { b.x + kZone, b.y + 19, std::max (0, b.w - 2 * kZone), std::max (0, b.h - 22) };
             p.textCentered ({ b.x + kZone, b.y + 3, std::max (0, b.w - 2 * kZone), 17 }, state.caption, T.fLabel - 2.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
-            p.textCentered (zone, shown (zone), T.fValue, p.c (T.text, state.dim ? 90 : 255), T.fMin);
+            { const char* t = shown (zone); p.textCentered (zone, t, drawSize, p.c (T.text, state.dim ? 90 : 255), T.fMin); }
             return;
         }
         const Rect zone { b.x + kZone, b.y + 2, std::max (0, b.w - 2 * kZone), std::max (0, b.h - 4) };
-        p.textCentered (zone, shown (zone), T.fValue, p.c (T.text, state.dim ? 90 : 255), T.fMin);
+        { const char* t = shown (zone); p.textCentered (zone, t, drawSize, p.c (T.text, state.dim ? 90 : 255), T.fMin); }
     }
     Change onDown (int x, int y, double now) override
     {
