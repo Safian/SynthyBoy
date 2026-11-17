@@ -124,6 +124,8 @@ public:
     virtual void readyContent() noexcept {}
     /** Milliseconds this engine has spent building its built-in wavetables (summed over all threads that built them; 0: none or not known): the start-up record of the shell. Any thread. */
     virtual double wavetableBuildMs() const noexcept { return 0.0; }
+    /** Milliseconds the last prepare () spent on part `part` of its work: 0 the voice pool, 1 the effects (pool and the three racks); 0.0 for another part or an engine that does not know. Any thread. */
+    virtual double prepareDetailMs (int /*part*/) const noexcept { return 0.0; }
 
     /** Number of sounding voices (including released ones that are still fading out) after the last process(). */
     virtual int activeVoices() const noexcept = 0;

@@ -1277,6 +1277,8 @@ struct PluginInstance
                     readoutPublished = true;
                     try { publishReadoutTargets(); } catch (...) {}
                 }
+                if (engine)
+                    synthyboy_mpc::startupTimes().setWavetableMs (engine->wavetableBuildMs());   // the background builder goes on after prepare: the status shows its running total
 #endif
                 gLive.run ([&]
                 {
@@ -2143,6 +2145,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 inst->lastPreparedSampleRate = sr;
                 inst->lastPreparedBlockSize = bs;
                 synthyboy_mpc::startupTimes().setWavetableMs (inst->engine->wavetableBuildMs());
+                synthyboy_mpc::startupTimes().setPrepareParts (inst->engine->prepareDetailMs (0), inst->engine->prepareDetailMs (1));
                 MPCKIT_LOG ("startup", info, "engine prepared (sr %d, block %d)", sr, bs);
             }
             else

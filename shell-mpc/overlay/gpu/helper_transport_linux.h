@@ -10,6 +10,7 @@
 #pragma once
 
 #if defined(__linux__)
+#include "../../write_files.h"
 #include <cerrno>
 #include <csignal>
 #include <cstdio>
@@ -35,7 +36,12 @@ class LinuxHelperTransport final : public IHelperTransport
 {
 public:
     /** `helperPath`: the executable (next to the plugin). `logPath`: where its stdout / stderr go. */
-    LinuxHelperTransport (std::string helperPath, std::string logPath = "/tmp/synthyboy-overlay-gpu.log") : path_ (std::move (helperPath)), log_ (std::move (logPath)) {}
+#if SYNTHYBOY_MPC_WRITE_FILES
+    static constexpr const char* kDefaultLog = "/tmp/synthyboy-overlay-gpu.log";
+#else
+    static constexpr const char* kDefaultLog = "/dev/null";   // the release build (write_files.h): the helper's output goes nowhere (trimLogFile ignores a device)
+#endif
+    LinuxHelperTransport (std::string helperPath, std::string logPath = kDefaultLog) : path_ (std::move (helperPath)), log_ (std::move (logPath)) {}
     ~LinuxHelperTransport() override
     {
         kill();

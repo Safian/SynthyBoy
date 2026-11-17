@@ -104,6 +104,8 @@ public:
     void addDetail (Detail d, int64_t ns) noexcept { detailNs_[d].fetch_add (ns, std::memory_order_relaxed); }
     /** The engine's wavetable build time (summed over its threads), in ms: stored as the latest value. */
     void setWavetableMs (double ms) noexcept { wavetableMs_.store (ms, std::memory_order_relaxed); }
+    /** What the engine reports of its last prepare: the voice pool and the effects, in ms. */
+    void setPrepareParts (double voicesMs, double fxMs) noexcept { voicesMs_.store (voicesMs, std::memory_order_relaxed); fxMs_.store (fxMs, std::memory_order_relaxed); }
 
     /** What one call of the host cost inside our dispatcher (host thread). */
     void callDone (Call c, int64_t ns) noexcept
@@ -201,7 +203,7 @@ public:
             std::snprintf (line, sizeof line, "open_ms_detail_%s: %.3f\n", detailName (d), static_cast<double> (detailNs_[d].load (std::memory_order_relaxed)) / 1.0e6);
             out += line;
         }
-        std::snprintf (line, sizeof line, "open_ms_detail_wavetables: %.3f\n", wavetableMs_.load (std::memory_order_relaxed));
+        std::snprintf (line, sizeof line, "open_ms_detail_wavetables: %.3f\nopen_ms_detail_prepare_voices: %.3f\nopen_ms_detail_prepare_fx: %.3f\n", wavetableMs_.load (std::memory_order_relaxed), voicesMs_.load (std::memory_order_relaxed), fxMs_.load (std::memory_order_relaxed));
         out += line;
         for (int c = 0; c < kCalls; ++c)
         {
@@ -222,6 +224,8 @@ public:
         for (auto& d : detailNs_) d.store (0);
         for (int c = 0; c < kCalls; ++c) { callCount_[c].store (0); callSum_[c].store (0); callMax_[c].store (0); }
         wavetableMs_.store (0.0);
+        voicesMs_.store (0.0);
+        fxMs_.store (0.0);
     }
 
 private:
@@ -230,7 +234,7 @@ private:
     std::atomic<int64_t> detailNs_[kDetails] = {};
     std::atomic<unsigned long> callCount_[kCalls] = {};
     std::atomic<int64_t> callSum_[kCalls] = {}, callMax_[kCalls] = {};
-    std::atomic<double> wavetableMs_ { 0.0 };
+    std::atomic<double> wavetableMs_ { 0.0 }, voicesMs_ { 0.0 }, fxMs_ { 0.0 };
 };
 
 inline StartupTimes& startupTimes() noexcept

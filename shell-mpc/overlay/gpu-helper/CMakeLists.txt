@@ -11,6 +11,11 @@ add_custom_command(TARGET synthyboy_overlay_gpu POST_BUILD
     COMMAND ${CMAKE_STRIP} --strip-unneeded -o $<TARGET_FILE:synthyboy_overlay_gpu>.stripped $<TARGET_FILE:synthyboy_overlay_gpu>
     COMMENT "stripped copy of the GPU helper")
 
+# SYNTHYBOY_MPC_DEV_LOG (shell-mpc/CMakeLists.txt) OFF: the helper writes no probe file and its output goes to /dev/null (shell-mpc/write_files.h).
+if(DEFINED SYNTHYBOY_MPC_DEV_LOG AND NOT SYNTHYBOY_MPC_DEV_LOG)
+    target_compile_definitions(synthyboy_overlay_gpu PRIVATE SYNTHYBOY_MPC_WRITE_FILES=0)
+endif()
+
 # The measuring scene (docs/MPC.md "Observed on the device", D plan trial 17): a debug build only, never the product. OFF by default.
 option(SYNTHYBOY_MPC_OVERLAY_BENCH "MPC overlay GPU helper: draw a measuring scene of its own (/tmp/sb-bench.conf) and write /tmp/sb-bench-stats.txt (diagnostics only)" OFF)
 if(SYNTHYBOY_MPC_OVERLAY_BENCH)

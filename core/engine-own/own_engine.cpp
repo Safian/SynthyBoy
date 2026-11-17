@@ -335,6 +335,7 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     (void) destLawOf (0);
     (void) WtOsc::decimatorTaps();
 
+    const auto tVoices0 = std::chrono::steady_clock::now();
     voices.clear();
     heldSrcValid = false;
     for (int i = 0; i < kPoolVoices; ++i)
@@ -350,6 +351,8 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     pdelta.assign (paramCount(), 0.0f);
     ptouched.assign (static_cast<size_t> (kNumModSlots), 0);
     pnumTouched = 0;
+    const auto tFx0 = std::chrono::steady_clock::now();
+    prepareVoicesMs.store (std::chrono::duration<double, std::milli> (tFx0 - tVoices0).count(), std::memory_order_relaxed);
     stopFxWorker();   // no module is built while the pool is prepared again
     realtimeFlag = quality.realtime;
     {
@@ -366,6 +369,7 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
         fx[i].setPool (&fxPool);
         fx[i].prepare (sampleRate, maxBlockFrames);
     }
+    prepareFxMs.store (std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - tFx0).count(), std::memory_order_relaxed);
     smoothedGain.reset (sampleRate, 0.02);
     morphCache.prepare();
     snapValid = false;

@@ -45,6 +45,7 @@
 #include "renderer.h"
 #include "touch_input.h"
 #include "../safe_file.h"
+#include "../write_files.h"
 #include "ui_stack.h"
 #include "vblank_pacer.h"
 #include "view.h"
@@ -60,6 +61,7 @@ struct Paths
     std::string rotation = "/tmp/synthyboy-overlay-rot";
     std::string noGpu = "/tmp/synthyboy-overlay-nogpu";
     std::string status = "/tmp/synthyboy-overlay-status.txt";
+    std::string statusRequest = "/tmp/synthyboy-overlay-status-on";   // only a build with SYNTHYBOY_MPC_WRITE_FILES 0 (write_files.h) looks at it: the status file is written while this file exists
     std::string detail = "/tmp/synthyboy-overlay-detail";   // 1 / full, 2 / reduced: the level of detail of the UI (ui/theme.h Detail); without the file (or "auto") the plugin chooses from the measured frame time
     std::string gpuClock = "/tmp/synthyboy-overlay-gpuclock";   // "off": the clock of the GPU is left to its governor; otherwise it is raised while the picture moves (gpu_clock.h)
     std::string rate = "/tmp/synthyboy-overlay-fps";   // 30 or 60: the pictures a second the GPU path aims at; without the file (or "auto") 30 on a GPU of the Mali-T series (the Key 61), 60 (tried, kept when it is reached) on the others
@@ -1122,6 +1124,9 @@ private:
     void readSwitches (double nowMs)
     {
         killed_ = exists (paths_.killSwitch);
+#if ! SYNTHYBOY_MPC_WRITE_FILES
+        statusRequested_ = ! paths_.statusRequest.empty() && exists (paths_.statusRequest);
+#endif
         if (qlinkOpt_.poll())
         {
             // the option of the host changed (or was read the first time): with it off the pop-up never comes, the key is off entirely: nothing is read, nothing is cut, the references are dropped
@@ -1396,6 +1401,10 @@ private:
 
     void writeStatus (bool final_)
     {
+#if ! SYNTHYBOY_MPC_WRITE_FILES
+        if (! statusRequested_)
+            return;   // the release build (write_files.h): no periodic status file unless /tmp/synthyboy-overlay-status-on exists (read once a second in readSwitches)
+#endif
         std::ostringstream o;
         o << "state: " << state_ << "\n";
         o << "view: " << (current_ >= 0 && state_ == "visible" ? views_[static_cast<size_t> (current_)]->name() : "none") << "\n";
@@ -1619,6 +1628,7 @@ private:
     struct ViewFrames { unsigned long frames = 0, changes = 0; };
     std::vector<ViewFrames> viewFrames_ = std::vector<ViewFrames> (Detection::kMaxViews);
     std::unique_ptr<PageDetector> detector_;
+    bool statusRequested_ = false;   // SYNTHYBOY_MPC_WRITE_FILES 0 only: the request file existed at the last look
     bool viewsBuilt_ = false;   // buildViews () has run (the overlay thread's first tick when the constructor was told to defer)
     std::vector<uint32_t> canvas_;
 
