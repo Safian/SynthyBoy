@@ -322,7 +322,7 @@ void testFullScreen()
     r.tap (bar.lfoCells.cell (6).x + 4, bar.lfoCells.cell (6).y + 20);
     check (r.inst.sel[2] == 7 && r.ui.selection() == 7 && bar.lfoCells.state.index == 6, "the seventh cell: LFO 7 (no pages: all ten LFOs are in the bar)");
     r.tap (bar.rndCells.cell (1).x + 4, bar.rndCells.cell (1).y + 20);
-    check (r.ui.random() && r.ui.selection() == 2 && r.ui.full().random() && r.ui.full().numGroups() == 3, "RND 2: the random LFO, the full screen of the random LFO");
+    check (r.ui.random() && r.ui.selection() == 2 && r.ui.full().random() && r.ui.full().numGroups() == 2, "RND 2: the random LFO, the full screen of the random LFO");
     check (r.inst.q[0] == paramIdx ("rlfo2.style") && r.inst.q[1] == paramIdx ("rlfo2.rate") && r.inst.q[2] == paramIdx ("rlfo2.sync") && r.inst.q[3] == paramIdx ("rlfo2.stereo"), "random full screen: the RANDOM group");
     r.tap (r.ui.full().picker.cell (3).x + 10, r.ui.full().picker.cell (3).y + 10);
     check (r.inst.get ("rlfo2.style") == 3.0f, "the style picker: Lorenz");
@@ -478,6 +478,43 @@ void testTargets()
         found += std::lround (q.inst.get (synthyboy::paramTable()[synthyboy::modSlotParams (sl).source].key)) == uibind::envSource (2);
     q.refresh();
     check (found == 1 && mp.numRows() == 1 && ! mp.boardShown(), "a tap on the ENV 2 chip makes the modulation of the RATE: one slot, one row, the board is gone");
+}
+
+/** The key follow sync (point 50 of the whole-UI review): the rate depends on the note, so the display has no time to smooth in: it shows the SHAPE, one clean cycle from the floor at full amplitude, with the smoothing on and off alike. */
+void testKeyFollowCurve()
+{
+    Rig r;
+    r.refresh();
+    r.key ("lfo1.sync", 4.0f);
+    r.key ("lfo1.shape", 0.0f);
+    r.key ("lfo1.phase", 0.0f);
+    r.key ("lfo1.smooth", 1.0f);
+    r.key ("lfo1.smooth_time", 5.0f);
+    r.now += 200.0;
+    r.refresh();
+    const ui::lfodisplay::Data& d = r.ui.displayData();
+    std::vector<float> smoothOn (d.y, d.y + d.n);
+    float lo = 1, hi = -1;
+    for (float y : smoothOn) { lo = std::min (lo, y); hi = std::max (hi, y); }
+    check (lo < -0.97f && hi > 0.97f, "key follow, SMOOTH on: the sine swings the whole height, -1 .. 1 (" + std::to_string (lo) + " .. " + std::to_string (hi) + ")");
+    check (smoothOn[0] < -0.97f && smoothOn[smoothOn.size() - 1] < -0.97f, "key follow, SMOOTH on: one clean cycle from the floor to the floor (" + std::to_string (smoothOn[0]) + " .. " + std::to_string (smoothOn[smoothOn.size() - 1]) + ")");
+    r.key ("lfo1.smooth", 0.0f);
+    r.now += 200.0;
+    r.refresh();
+    float diff = 0.0f;
+    for (int i = 0; i < d.n; ++i)
+        diff = std::max (diff, std::fabs (d.y[i] - smoothOn[static_cast<size_t> (i)]));
+    check (diff < 1.0e-6f, "key follow: the picture is the same with SMOOTH on and off (it shows the shape; " + std::to_string (diff) + ")");
+    // in the free sync the smoothing is in the picture (a fast LFO is rounded by it)
+    r.key ("lfo1.sync", 0.0f);
+    r.key ("lfo1.rate", 200.0f);
+    r.key ("lfo1.smooth", 1.0f);
+    r.key ("lfo1.smooth_time", 5.0f);
+    r.now += 200.0;
+    r.refresh();
+    float lo2 = 1, hi2 = -1;
+    for (int i = 0; i < d.n; ++i) { lo2 = std::min (lo2, d.y[i]); hi2 = std::max (hi2, d.y[i]); }
+    check (hi2 - lo2 < 1.9f, "free sync, a fast rate with SMOOTH: the smoothing is still drawn (" + std::to_string (lo2) + " .. " + std::to_string (hi2) + ")");
 }
 
 void testDisplay()
@@ -766,6 +803,7 @@ int main()
     testEditor();
     testTargets();
     testDisplay();
+    testKeyFollowCurve();
     testTouchAndDraw();
     std::printf ("%s: %d failed\n", uit::g_fails ? "FAIL" : "PASS", uit::g_fails);
     return uit::g_fails ? 1 : 0;

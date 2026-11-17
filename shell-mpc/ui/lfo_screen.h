@@ -166,45 +166,7 @@ public:
         show (phase, ! random); show (delay, ! random); show (direction, ! random); show (swing, ! random); show (stereo, ! random); show (stereoToggle, random);
         show (mode, ! random); show (modeList, random);
         show (shape, false); show (sync, false); show (monoQ, ! random);   // the HZ / BPM / KEY list is the sync control (and the Q member) of TIMING / RANDOM
-        for (QGroup& g : groups)
-        {
-            g.setFrameRect ({});
-            g.setFrameless (false);
-            for (int i = 0; i < 4; ++i)
-                g.set (i, nullptr);
-        }
-        for (int& b : blockOfGroup_)
-            b = -1;
-        nGroups_ = 0;
-        auto next = [&] (const char* name, int block) -> QGroup& { setText (names_[nGroups_], sizeof names_[0], name); blockOfGroup_[nGroups_] = block; return groups[nGroups_++]; };
-        if (! random)
-        {
-            QGroup& r = next ("Rate", 0);
-            r.set (0, &picker); r.set (1, &rate); r.set (2, &rise); r.set (3, &smoothTime);
-            r.setFrameless (true);   // the shape grid (Q 1) and the RATE block lie apart: one quad is marked by its four chips and the Q colour, not by a frame around everything between them
-            QGroup& t = next ("Timing", 1);
-            t.set (0, &syncSwitch.mode); t.set (1, &phase); t.set (2, &delay); t.set (3, &mode);   // reading order of the block: the list and the knob over it, the stepper under
-            QGroup& mo = next ("Motion", 2);
-            mo.set (0, &direction); mo.set (1, &swing); mo.set (2, &stereo); mo.set (3, &monoQ);
-            keyGroup_ = nGroups_;
-            QGroup& k = next ("Key", 3);
-            k.set (0, &keyTranspose); k.set (1, &keyTune);
-            QGroup& sh = next ("Shape", -1);
-            sh.set (0, &smoothPick); sh.set (1, &hostPick);
-            sh.setFrameless (true);
-        }
-        else
-        {
-            QGroup& r = next ("Random", 0);
-            r.set (0, &picker); r.set (1, &rate); r.set (2, &syncSwitch.mode); r.set (3, &stereoToggle);
-            r.setFrameless (true);   // the style grid (Q 1) lies apart from the block: marked by its chips
-            QGroup& t = next ("Trigger", 0);
-            t.set (0, &modeList);
-            t.setFrameless (true);   // two groups in one block: the chips mark them
-            keyGroup_ = nGroups_;
-            QGroup& k = next ("Key", 1);
-            k.set (0, &keyTranspose); k.set (1, &keyTune);
-        }
+        buildGroups();
         layout();
         active_ = -1;
         setActiveGroup (0);
@@ -216,16 +178,27 @@ public:
         syncSwitch.setSync (sync);
         rate.setSync (sync);
     }
-    /** The key follow sync: only then the KEY block is there (its place goes to the other blocks otherwise: nothing dim and idle on the page). */
+    /** The key follow sync: the two numbers TRANSPOSE and TUNE (they set the rate) take the place of the RATE knob in the first block (the knob has nothing to say: it is not on the page, no dead control), as their own Q
+        group right after the first one; the Q groups are built again, the group that was active stays the active one (by its name). */
     void setKeyActive (bool on)
     {
         const bool changed = on != keyActive_;
         keyActive_ = on;
         show (keyTranspose, on); show (keyTune, on);
+        show (rate, ! on);
         keyTranspose.setEnabled (enabled_ && on); keyTune.setEnabled (enabled_ && on);
-        if (! on && active_ == keyGroup())
-            setActiveGroup (0);
-        if (changed && rect_.w > 0)
+        if (! changed)
+            return;
+        char was[sizeof names_[0]] = {};
+        if (active_ >= 0 && active_ < nGroups_)
+            setText (was, sizeof was, names_[active_]);
+        buildGroups();
+        int again = 0;
+        for (int i = 0; i < nGroups_; ++i)
+            if (std::strcmp (names_[i], was) == 0)
+                again = i;
+        setActiveGroup (again);
+        if (rect_.w > 0)
             layout();
     }
     bool keyActive() const noexcept { return keyActive_; }
@@ -286,6 +259,60 @@ public:
     int leaves (Component** out, int max) { return collectLeaves (out, 0, max); }
 
 protected:
+    /** The Q groups of the page in reading order (the blocks left to right, the members of a block top to bottom): the shape page RATE, [KEY], TIMING, MOTION, SHAPE; a random LFO RANDOM, [KEY], TRIGGER. The KEY group
+        (TRANSPOSE and TUNE, in the first block where the rate knob is not) is there in the key follow sync only. */
+    void buildGroups()
+    {
+        for (QGroup& g : groups)
+        {
+            g.setFrameRect ({});
+            g.setFrameless (false);
+            for (int i = 0; i < 4; ++i)
+                g.set (i, nullptr);
+        }
+        for (int& b : blockOfGroup_)
+            b = -1;
+        nGroups_ = 0;
+        keyGroup_ = -1;
+        auto next = [&] (const char* name, int block) -> QGroup& { setText (names_[nGroups_], sizeof names_[0], name); blockOfGroup_[nGroups_] = block; return groups[nGroups_++]; };
+        auto key = [&] (int block)
+        {
+            if (! keyActive_)
+                return;
+            keyGroup_ = nGroups_;
+            QGroup& k = next ("Key", block);
+            k.set (0, &keyTranspose); k.set (1, &keyTune);
+            k.setFrameless (true);   // two groups in one block: the chips mark them
+        };
+        if (! random_)
+        {
+            QGroup& r = next ("Rate", 0);
+            r.set (0, &picker); r.set (1, keyActive_ ? nullptr : static_cast<Component*> (&rate)); r.set (2, &rise); r.set (3, &smoothTime);
+            r.setFrameless (true);   // the shape grid (Q 1) and the RATE block lie apart: one quad is marked by its four chips and the Q colour, not by a frame around everything between them
+            key (0);
+            QGroup& t = next ("Timing", 1);
+            t.set (0, &syncSwitch.mode); t.set (1, &phase); t.set (2, &delay); t.set (3, &mode);   // reading order of the block: the list and the knob over it, the stepper under
+            QGroup& mo = next ("Motion", 2);
+            mo.set (0, &direction); mo.set (1, &swing); mo.set (2, &stereo); mo.set (3, &monoQ);
+            QGroup& sh = next ("Shape", -1);
+            sh.set (0, &smoothPick); sh.set (1, &hostPick);
+            sh.setFrameless (true);
+        }
+        else
+        {
+            QGroup& r = next ("Random", 0);
+            r.set (0, &picker); r.set (1, keyActive_ ? nullptr : static_cast<Component*> (&rate)); r.set (2, &syncSwitch.mode); r.set (3, &stereoToggle);
+            r.setFrameless (true);   // the style grid (Q 1) lies apart from the block: marked by its chips
+            key (0);
+            QGroup& t = next ("Trigger", 0);
+            t.set (0, &modeList);
+            t.setFrameless (true);   // two groups in one block: the chips mark them
+        }
+        for (int i = 0; i < kMaxGroups; ++i)
+            groups[i].setActive (false);
+        if (rect_.w > 0)
+            layout();
+    }
     void syncKids() override
     {
         Composite::syncKids();
@@ -318,9 +345,9 @@ protected:
             hostPick.place ({ picker.rect().x + hw + kGap, by, colW - hw - kGap, bh });
         }
         // the blocks of the bottom band
-        const int n = (random_ ? 2 : 4) - (keyActive_ ? 0 : 1);
+        const int n = random_ ? 1 : 3;   // the key follow has no block of its own: its two numbers stand in the RATE block
         nBlocks_ = n;
-        static const int wShape[4] = { 3, 4, 3, 2 }, wRandom[2] = { 5, 2 };   // without the KEY block the others take its place
+        static const int wShape[3] = { 3, 4, 3 }, wRandom[1] = { 1 };
         const int* wt = random_ ? wRandom : wShape;
         int sum = 0;
         for (int i = 0; i < n; ++i) sum += wt[i];
@@ -353,6 +380,8 @@ protected:
             Rect in0 = inner (0);
             const int rw = std::min (in0.w * 45 / 100, in0.w - 172 - kGap);
             rate.place ({ in0.x, in0.y, rw, in0.h });
+            if (keyActive_)   // the key follow: the two numbers that set the rate stand where the rate knob stands
+                stack2 ({ in0.x, in0.y, rw, in0.h }, keyTranspose, keyTune);
             const int sx = in0.x + rw + kGap, sw = in0.w - rw - kGap;
             medium (rise, { sx, in0.y, sw, kKnobH });
             medium (smoothTime, { sx, in0.bottom() - kKnobH, sw, kKnobH });
@@ -378,8 +407,6 @@ protected:
                 monoQ.place ({ in.x, in.y + 3 * th + kQLane, lw, in.h - 3 * th - kQLane });
             }
 
-            if (keyActive_)
-                stack2 (inner (3), keyTranspose, keyTune);
         }
         else
         {
@@ -388,13 +415,13 @@ protected:
             Rect in = inner (0);
             const int rw = std::min (220, in.w * 28 / 100), lh = 2 * th - 8;
             rate.place ({ in.x, in.y, rw, in.h });
+            if (keyActive_)
+                stack2 ({ in.x, in.y, rw, in.h }, keyTranspose, keyTune);
             const int x0 = in.x + rw + kGap, rest = in.right() - x0 - 2 * kGap;
             const int syncW = std::max (3 * 84, rest * 40 / 100), stereoW = std::max (112, rest * 18 / 100);
             syncSwitch.mode.place ({ x0, in.y, syncW, lh });
             stereoToggle.place ({ x0 + syncW + kGap, in.y, stereoW, lh });
             modeList.place ({ x0 + syncW + stereoW + 2 * kGap, in.y, in.right() - (x0 + syncW + stereoW + 2 * kGap), lh });
-            if (keyActive_)
-                stack2 (inner (1), keyTranspose, keyTune);
         }
         for (int i = 0; i < kMaxGroups; ++i)
             groups[i].setFrameRect (i < nGroups_ && blockOfGroup_[i] >= 0 && blockOfGroup_[i] < nBlocks_ && ! groups[i].frameless() ? blocks_[blockOfGroup_[i]] : Rect {});
@@ -409,15 +436,17 @@ protected:
     void drawExtra (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        static const char* const kShape[4] = { "RATE", "TIMING", "MOTION", "KEY FOLLOW" }, * const kRandom[2] = { "RANDOM", "KEY FOLLOW" };
+        static const char* const kShape[3] = { "RATE", "TIMING", "MOTION" }, * const kRandom[1] = { "RANDOM" };
         for (int i = 0; i < nBlocks_; ++i)
         {
-            const bool dim = false;
-            p.textLeft ({ blocks_[i].x + 10, blocks_[i].y + 4, std::max (0, blocks_[i].w - 20), 18 }, random_ ? kRandom[i] : kShape[i], T.fLabel - 2.0f, p.c (T.textDim, dim ? 110 : 255), T.fMin);
+            const char* title = random_ ? kRandom[i] : kShape[i];
+            if (i == 0 && keyActive_)
+                title = random_ ? "RANDOM - RATE FOLLOWS THE KEY" : "RATE - FOLLOWS THE KEY";
+            p.textLeft ({ blocks_[i].x + 10, blocks_[i].y + 4, std::max (0, blocks_[i].w - 20), 18 }, title, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         }
     }
     Rect display_, blocks_[4];
-    int nBlocks_ = 4, nGroups_ = 0, active_ = -1, keyGroup_ = -1, blockOfGroup_[kMaxGroups] = {};
+    int nBlocks_ = 3, nGroups_ = 0, active_ = -1, keyGroup_ = -1, blockOfGroup_[kMaxGroups] = {};
     bool random_ = false, keyActive_ = false, pageMode_ = false;
     char names_[kMaxGroups][16] = {};
 };
