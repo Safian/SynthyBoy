@@ -2855,6 +2855,8 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     } statsScope (inst->callbackStats, sampleFrames, inst->sampleRate);
 #endif
 
+    const int64_t firstBlockT0 = synthyboy_mpc::startupTimes().reached (synthyboy_mpc::StartupTimes::kFirstAudio) ? 0 : synthyboy_mpc::StartupTimes::nowNs();   // only until the first block has gone all the way
+
     // Save and flush denormals
     uint32_t savedFz = flushDenormalsSave();
     flushDenormalsOn();
@@ -2925,6 +2927,8 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     // Clear remaining events
     inst->events.clear();
 
+    if (firstBlockT0 != 0)
+        synthyboy_mpc::startupTimes().addDetail (synthyboy_mpc::StartupTimes::kFirstBlock, synthyboy_mpc::StartupTimes::nowNs() - firstBlockT0);
     synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kFirstAudio);   // the first block that went all the way (a relaxed load after the first)
     // Restore denormal mode
     flushDenormalsRestore(savedFz);
