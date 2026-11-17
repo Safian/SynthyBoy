@@ -15,6 +15,7 @@
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import sys
@@ -102,6 +103,10 @@ def content_text(content) -> str:
             item = '{"lfo":%d,"name":%s,"smooth":%s' % (s["lfo"], json.dumps(s["name"]), "true" if s.get("smooth") else "false")
             if s.get("loop_point", -1) >= 0:
                 item += ',"loop_point":%d' % s["loop_point"]
+            if s.get("grid_x", 0) >= 2:      # the grid of the shape editor (core/include/synthyboy/content_state.h): the loader reads it in a document of any version, the factory documents stay at the version of docs/params.json
+                item += ',"grid_x":%d' % s["grid_x"]
+            if s.get("grid_y", 0) >= 2:
+                item += ',"grid_y":%d' % s["grid_y"]
             item += ',"points":[' + ",".join(point_text(p) for p in s["points"]) + "]}"
             items.append(item)
         parts.append('"lfo_shapes":[' + ",".join(items) + "]")
@@ -599,6 +604,25 @@ assert len(set(p[0] for p in presets) | set(s[0] for s in showcase)) == 112, "pr
 assert len(set(file_name_of(p[0]) for p in presets) | set(file_name_of(s[0]) for s in showcase)) == 112
 
 
+BATCH_FILES = ("factory-presets-batch1.py",)   # the sound set batches after the first hundred and the showcase (scripts/sb_preset_dsl.py is their vocabulary)
+
+
+def load_batches() -> list:
+    """[(name, category, tags, description, params incl. mod routes, content)] of the batch files, in order. A batch preset is written whole (its macro wiring and pad pressure route are in its own routes)."""
+    if SCRIPT_DIR not in sys.path:
+        sys.path.insert(0, SCRIPT_DIR)
+    out = []
+    for fname in BATCH_FILES:
+        path = os.path.join(SCRIPT_DIR, fname)
+        if not os.path.isfile(path):
+            continue
+        spec = importlib.util.spec_from_file_location("factory_batch_" + fname.split(".")[0].replace("-", "_"), path)
+        mod_ = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod_)
+        out += mod_.build()
+    return out
+
+
 def load_levels() -> dict:
     """master.volume per preset name (level normalisation, scripts/tune-preset-levels.py); a preset without an entry keeps its own."""
     if not os.path.isfile(LEVELS_PATH):
@@ -611,15 +635,19 @@ def build_all():
     """All presets as (name, category, meta, document text), in a fixed order."""
     out = []
     levels = load_levels()
-    unknown = sorted(set(levels) - set(p[0] for p in presets) - set(x[0] for x in showcase))
+    batches = load_batches()
+    known = set(p[0] for p in presets) | set(x[0] for x in showcase) | set(b[0] for b in batches)
+    assert len(known) == len(presets) + len(showcase) + len(batches), "preset names must be unique"
+    assert len(set(file_name_of(n) for n in known)) == len(known), "preset file names must be unique"
+    unknown = sorted(set(levels) - known)
     if unknown:
         raise KeyError(f"{LEVELS_PATH}: no preset named {unknown}")
     pad_pressure = load_pad_pressure()
-    unknown = sorted(set(pad_pressure) - set(p[0] for p in presets) - set(x[0] for x in showcase))
+    unknown = sorted(set(pad_pressure) - known)
     if unknown:
         raise KeyError(f"{PAD_PRESSURE_PATH}: no preset named {unknown}")
     macro_names = load_macro_names()
-    unknown = sorted(set(macro_names) - set(p[0] for p in presets) - set(x[0] for x in showcase))
+    unknown = sorted(set(macro_names) - known)
     if unknown:
         raise KeyError(f"{MACRO_NAMES_PATH}: no preset named {unknown}")
     for name, category, tags, desc, ov in presets:
@@ -632,6 +660,15 @@ def build_all():
         out.append((name, category, meta, doc))
     for name, category, tags, desc, ov, content in showcase:
         ov = with_pad_pressure(name, with_macros(category, ov), pad_pressure)
+        check_macros(name, {**default_values, **{k: float(v) for k, v in ov.items()}})
+        if name in levels:
+            ov["master.volume"] = levels[name]
+        if name in macro_names:
+            content = {**(content or {}), "macro_names": macro_names[name]}
+        meta, doc = make_preset(name, category, tags, desc, ov, content=content, strict=True)
+        out.append((name, category, meta, doc))
+    for name, category, tags, desc, ov, content in batches:
+        ov = dict(ov)
         check_macros(name, {**default_values, **{k: float(v) for k, v in ov.items()}})
         if name in levels:
             ov["master.volume"] = levels[name]
