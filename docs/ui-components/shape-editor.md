@@ -28,8 +28,7 @@ Snap on or off, grid sizes, loop point, smoothing.
 ShapeEditorPage page;
 page.place ({ 0, 110, 1280, 628 });
 page.canvas.setId (500);
-page.model.initLinear();                        // or fromBuiltin (shape) / your stored points
-page.canvas.state.shape = &page.model;          // the page's own model
+page.model.initLinear();                        // the page's own model (the canvas points at it); or load your stored points
 Change c = page.touchDown (x, y, nowMs);
 c = page.touchMove (x, y + 10);
 if (c.id == 500 && c.index == ShapeCanvas::Edited)
