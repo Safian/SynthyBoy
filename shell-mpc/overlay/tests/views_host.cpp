@@ -102,22 +102,22 @@ int main()
         synthyboy::FilterResponse::readoutIndices (1, f1);
         synthyboy::FilterResponse::readoutIndices (2, f2);
         // the Filter pages (two of them) ask for the cutoff and resonance of both filters each
-        bool ok = t.size() == 2 * 4 + 3 * 4 + 3 * 12 && t[0] == f1[0] && t[1] == f1[1] && t[2] == f2[0] && t[3] == f2[1] && t[4] == f1[0] && t[5] == f1[1] && t[6] == f2[0] && t[7] == f2[1];
+        bool ok = t.size() == 2 * 4 + 3 * 4 + 1 * 12 && t[0] == f1[0] && t[1] == f1[1] && t[2] == f2[0] && t[3] == f2[1] && t[4] == f1[0] && t[5] == f1[1] && t[6] == f2[0] && t[7] == f2[1];
         for (int n = 1; n <= 3 && ok; ++n)
         {
             synthyboy::OscCycle::readoutIndices (n, o);
             for (int k = 0; k < 4; ++k)
                 ok = ok && t[static_cast<size_t> (8 + (n - 1) * 4 + k)] == o[k];
         }
-        // the three Play views ask for the readout of all three oscillators each: the selected one is used
-        for (int v = 0; v < 3 && ok; ++v)
+        // the one Play view asks for the readout of all three oscillators: the selected one is used
+        for (int v = 0; v < 1 && ok; ++v)
             for (int n = 1; n <= 3 && ok; ++n)
             {
                 synthyboy::OscCycle::readoutIndices (n, o);
                 for (int k = 0; k < 4; ++k)
                     ok = ok && t[static_cast<size_t> (20 + v * 12 + (n - 1) * 4 + k)] == o[k];
             }
-        check (ok, "readout targets: the two filter pages (4 each), oscillator 1 .. 3 (4 each), the three Play views (oscillators 1 .. 3 each), as the views ask for them (" + std::to_string (t.size()) + " in all)");
+        check (ok, "readout targets: the two filter pages (4 each), oscillator 1 .. 3 (4 each), the Play view (oscillators 1 .. 3), as the views ask for them (" + std::to_string (t.size()) + " in all)");
     }
     // ---- the Filter 2 view ----------------------------------------------------------------------------------------------------------------------------------------
     {
