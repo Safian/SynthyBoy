@@ -471,5 +471,15 @@ if(NOT CMAKE_CROSSCOMPILING)
         target_compile_options(${cov_target} PRIVATE -Wall -Wextra -Wpedantic)
         add_test(NAME ${cov_target} COMMAND ${cov_target})
     endforeach()
+
+    add_executable(ui_gallery_extra_host EXCLUDE_FROM_ALL overlay/tests/ui_gallery_extra_host.cpp)
+    target_include_directories(ui_gallery_extra_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(ui_gallery_extra_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(ui_gallery_extra_host PRIVATE cxx_std_17)
+    target_compile_options(ui_gallery_extra_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME ui_gallery_extra_host COMMAND ui_gallery_extra_host --test)
 endif()
 
