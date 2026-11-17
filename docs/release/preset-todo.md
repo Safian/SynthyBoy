@@ -8,89 +8,89 @@ Gép és csomag, amin hallgattad (pl. XL ov31):
 
 ## Presetek
 
-Init: 
+Init: ok
 
 ### Bass
 
-808 Boom: 
+808 Boom: ok
 
-Acid Saw Reso: 
+Acid Saw Reso: ok
 
-Bend Formant Growl: 
+Bend Formant Growl:  ok
 
-Click Attack Bass: 
+Click Attack Bass: ok
 
-Comb Metal Bass: 
+Comb Metal Bass: ok
 
-Custom Shape Wobble: 
+Custom Shape Wobble: ok
 
-Diode Saturated Bass: 
+Diode Saturated Bass: ok
 
-Dirty Distortion Bass: 
+Dirty Distortion Bass:  +6 decibellel hangosabb amúgy ok ok
 
-EMS Squelch Bass: 
+EMS Squelch Bass: +6db, ok.
 
-Fast Arp Bass: 
+Fast Arp Bass: +6db ok - de ez mitől arp?
 
-Fat Reese: 
+Fat Reese: ok
 
-Formant Vowel Bass: 
+Formant Vowel Bass: ok
 
-Gritty Square Bass: 
+Gritty Square Bass: +6db kb, amúgy ok
 
-Harmonic Sine Bass: 
+Harmonic Sine Bass: -3 db vel halkabb
 
 Ladder FM Bass *: 
 
-Moog Ladder Bass: 
+Moog Ladder Bass: ok
 
-Odd Harmonics Bass: 
+Odd Harmonics Bass: ok
 
 Pitch Drop 808: 
 
-Pulse Width Bass: 
+Pulse Width Bass: ez szerintme vagy 2oktávval magasabban szól mint kéne meg 2-3db halkabban
 
-Punchy Pluck Bass: 
+Punchy Pluck Bass: egy okávval lentebb van mint kéne
 
 Reese Dual Phase Bass *: 
 
-Scream Filter Bass: 
+Scream Filter Bass: 3 db-vel halkabb kb
 
-Solid Sub: 
+Solid Sub: 3 db halkabb
 
-Space Wobble Bass: 
+Space Wobble Bass: ok
 
-Sub Duo Octave: 
+Sub Duo Octave: 2 db vel halkabb
 
 Subterranean Duo: 
 
-Sync Growl Bass: 
+Sync Growl Bass: 3 db vel halkabb
 
 Triple Fold Reese: 
 
-Warm Analog Bass: 
+Warm Analog Bass: két oktávval magasabban van mint kéne
 
 ### FX
 
-Alien Communication: 
+Alien Communication: -9 db vel halkabb kb 
 
-Bode Barber Riser: 
+Bode Barber Riser:
 
-Bode Shifter Drone: 
+Bode Shifter Drone:  ok
 
 Breath of Machines: 
 
-Cosmic Teleport: 
+Cosmic Teleport: -9 db vel halkabb meg két oktávval magasabb kb
 
-Detonation Tail: 
+Detonation Tail: két oktávval magasabb
 
 Game Over Zap: 
 
 Gong Grain Swarm *: 
 
-Metal Gong Strike: 
+Metal Gong Strike: ok
 
-Noise Riser: 
+Noise Riser: ok
 
 Reverse Gong Swell *: 
 
@@ -98,15 +98,15 @@ Rising Grain Riser *:
 
 Sci-Fi Laser Sweep: 
 
-Sonar Ping: 
+Sonar Ping: 1 db vel halkabb
 
-Space Wind Storm: 
+Space Wind Storm: 2 oktávval magasabb
 
 Spectral Chord Morph *: 
 
-Sub Drop Boom: 
+Sub Drop Boom: 1 oktával alcsonyabb 3 dbvel halkabb
 
-Vinyl Dust Crackle: 
+Vinyl Dust Crackle: ok
 
 ### Keys
 
