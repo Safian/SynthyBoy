@@ -451,7 +451,8 @@ Tape Hiss, Vinyl Clicks, Digital Hash, Velvet Noise, Atmosphere), **FILTER** (-1
 
 ![Mixer](img/mixer.png)
 
-Ten channel strips from left to right: **SUB, A, B, C, NOISE, F1, F2, BUS1, BUS2, MASTER**, and above them a routing
+Ten channel strips, side by side, without frames around the sliders: the name and the value sit over a thin track.
+They run from left to right: **SUB, A, B, C, NOISE, F1, F2, BUS1, BUS2, MASTER**, and above them a routing
 bar (FLT 1, FLT 2, MAIN FX, DIRECT, MASTER) that draws the path of the **selected strip** (a tap on a strip selects it).
 
 Each strip (top to bottom):
@@ -463,21 +464,24 @@ Each strip (top to bottom):
   - BUS1, BUS2: Main, Direct, Other bus.
   - MASTER: OUT (fixed).
 - **LEVEL fader** with a peak meter beside it: SUB, A, B, C, NOISE 0 .. 100 percent; F1, F2 -60 .. +12 dB (default 0); BUS1, BUS2 -60 .. +6 dB
-  (default 0); MASTER = Master Volume -60 .. +6 dB (default -12). Vertical drag; double tap = default. A hold line falls slowly from the highest level.
-- **PAN** (-100 .. +100 percent), **B1** and **B2** (sends to bus 1 and bus 2, 0 .. 100 percent): on SUB, A, B, C, NOISE, F1, F2 only. The buses and MASTER have a level only.
+  (default 0); MASTER = Master Volume -60 .. +6 dB (default -12). Vertical drag; double tap = default. A hold line falls slowly from the highest level. The meter has a dB scale (a mark every 12 dB, or at 0 / -6 / -12 / -24 / -48) and a colour ramp: blue-green when quiet, violet near full scale. At rest it shows a faint base line, never an empty box.
+- **PAN** (-100 .. +100 percent), **B1** and **B2** (sends to bus 1 and bus 2, 0 .. 100 percent): thin sliders without a box, on SUB, A, B, C, NOISE, F1, F2 only. The buses and MASTER have a level only; their PAN and sends are left out, not dimmed.
 
-Q group: the strip you touched: LEVEL (1), PAN (2), B1 (3), B2 (4). On the XL the next strips (wrapping) follow on knobs 5 - 16.
+Q group: the strip you touched (yellow frame around the whole strip; in the picture it is SUB): LEVEL (1), PAN (2), B1 (3), B2 (4). On the XL the next three strips (wrapping) follow on knobs 5 - 16: in the picture A has 5 - 8, B has 9 - 12, C has 13 - 16. On the Key 61 the Q-Link button steps to them (chapter 4.3).
 
 ### 5.7 Filter 1 / 2
 
 ![Filter](img/filter.png)
 
-The page of the Filter tab shows **one filter at a time**: the tab Filter 1 starts on F1, Filter 2 on F2; the cells **F1, F2, F1+F2**
-in the header switch between them (F1+F2 draws both response curves and the combined one).
+The picture shows Filter 1 with the Digital model, the response curve with the cutoff handle, and the three blocks. The OUTPUT button at the top right shows M (Effects only).
+
+The page of the Filter tab shows **one filter at a time**: the tab Filter 1 starts on F1, Filter 2 on F2. The **CURVES** list at the top
+left (F1, F2, F1+F2; the lit dot is the choice) says which curves the display draws and which filter the knobs edit; F1+F2 draws both response curves and the combined one.
+It is not the routing list (Parallel / Series) and not the Filter 1 / Filter 2 tabs of the MPC, which only choose where the page opens.
 
 **Header:** power (Filter N On), model stepper (27 models: Analog, Dirty, Ladder, Digital, Diode, Formant, Comb, Phaser, Multi SVF, Slope, EQ 6 dB,
 Ring Mod, Sample Hold, Smear, French LP, Add Bass, Scream, New Wsp, DJ Mixer, Diffusor, EMS Ladder, PZ SVF, Normal, Multi Morph, Flanges, Misc, New)
-with a list button, style stepper (12 styles, "Style A (12 dB)", "Style B (24 dB)" ... "Style L"), **CLEAN** switch (dim for Comb and Formant),
+with a list button, style stepper (12 styles, "Style A (12 dB)", "Style B (24 dB)" ... "Style L"), **CLEAN** LED switch (dim for Comb and Formant),
 **OUTPUT** route button (M = Effects only by default; Filter N Destination: Effects only, Direct out, None; the popup also has BUS 1, BUS 2, level, pan).
 
 **Display.** The response curve the filter really has (log frequency 20 Hz .. 20 kHz, dB scale from +24 down to -48), drawn with the live cutoff and resonance of the voice that sounded last
@@ -492,18 +496,18 @@ with a list button, style stepper (12 styles, "Style A (12 dB)", "Style B (24 dB
 | | DRIVE | 0 .. 20 dB |
 | | MIX | 0 .. 100 percent, default 100 |
 | TRACK | KEYTRACK | -100 .. +100 percent |
-| | ENV 1 | switch: Env 1 shapes the filter (default On) |
+| | ENV 1 | LED switch: Env 1 shapes the filter (default On) |
 | | VAR | 0 .. 100 percent, default 50 (dim with Formant) |
 | | COMB | Comb Blend Offset 0 .. 84 semitones, default 42 (dim unless the model is Comb) |
 | OUT | LEVEL | -60 .. +12 dB |
 | | PAN | -100 .. +100 percent |
 | | BLEND | 0 .. 100 percent |
-| | ROUTING | Filter Routing: Parallel, Series 1 to 2, Series 2 to 1 (one setting for both filters) |
+| | ROUTING | a LED list of three: Parallel, Series 1 to 2, Series 2 to 1 (one setting for both filters) |
 
 With the model **Formant** a fourth group FORMANT appears with X, Y (0 .. 100 percent), TRANSPOSE (-12 .. +12 semitones) and SPREAD (-100 .. +100 percent), and the display shows the formant pad.
 TODO(owner): Describe the Formant page from a picture (the rendered gallery shows only the default model), including which control sets Formant Resonance (30 .. 100 percent).
 
-Controls that do not apply to the current model are dimmed, including their value text. A long press on a knob opens its modulation page (chapter 6).
+Controls that do not apply to the current model are dimmed, including their value text (in the picture COMB is dim because the model is not Comb). A long press on a knob opens its modulation page (chapter 6).
 
 ### 5.8 Envelopes
 
