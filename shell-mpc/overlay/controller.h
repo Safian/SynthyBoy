@@ -1637,7 +1637,7 @@ private:
     struct ViewFrames { unsigned long frames = 0, changes = 0; };
     std::vector<ViewFrames> viewFrames_ = std::vector<ViewFrames> (Detection::kMaxViews);
     std::unique_ptr<PageDetector> detector_;
-    bool statusRequested_ = false;   // SYNTHYBOY_MPC_WRITE_FILES 0 only: the request file existed at the last look
+    [[maybe_unused]] bool statusRequested_ = false;   // SYNTHYBOY_MPC_WRITE_FILES 0 only: the request file existed at the last look
     bool viewsBuilt_ = false;   // buildViews () has run (the overlay thread's first tick when the constructor was told to defer)
     std::vector<uint32_t> canvas_;
 
