@@ -151,8 +151,9 @@ static constexpr const char* const kClassicDiodeStyles[2] = {
 static constexpr const char* const kClassicFormantStyles[3] = {
     "A-O-I-E", "A-I-U-O", "Vocal Tract"
 };
-static constexpr const char* const kClassicCombStyles[1] = {
-    "Comb"
+// the six styles of the Comb (docs/engine-spec/05-filters.md 8.1): feedback_style = style mod 3 (comb, positive flange, negative flange), filter_style = style div 3 (blend filter, band filter); style 0 is the plain comb of old
+static constexpr const char* const kClassicCombStyles[6] = {
+    "Comb", "Positive Flange", "Negative Flange", "Comb Band", "Positive Flange Band", "Negative Flange Band"
 };
 static constexpr const char* const kClassicPhaserStyles[2] = {
     "Positive Feedback", "Negative Feedback"
