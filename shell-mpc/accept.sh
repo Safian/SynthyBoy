@@ -23,10 +23,13 @@ grep -qE "produced silence|extremely quiet" $B/test.log && { echo "ACCEPT FAIL: 
 $HSR "$LIB" $ENGINE_N $B/test32.log test --seconds 2 --block 32 --notes 60 || { grep -E "^(FAIL|WARN)|Result" $B/test32.log; echo "ACCEPT FAIL: host_sim test with --block 32"; exit 1; }
 grep -qE "produced silence" $B/test32.log && { echo "ACCEPT FAIL: block 32 run"; exit 1; }
 $B/host_sim "$LIB" dump > $B/dump.json 2> $B/dump.err || { tail -20 $B/dump.err; echo "ACCEPT FAIL: host_sim dump"; exit 1; }
-python3 - $B/dump.json docs/params.json <<'PY' || { echo "ACCEPT FAIL: parameter table"; exit 1; }
-import json, sys
+# the names that do not fit the 31 characters of the host's buffer are shortened by the plugin (host_strings.h): the docs names go through the same function
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc -o $B/short_name_filter shell-mpc/tests/short_name_filter.cpp || { echo "ACCEPT FAIL: short_name_filter build"; exit 1; }
+python3 - $B/dump.json docs/params.json $B/short_name_filter <<'PY' || { echo "ACCEPT FAIL: parameter table"; exit 1; }
+import json, subprocess, sys
 d = json.load(open(sys.argv[1])); p = json.load(open(sys.argv[2]))
 a = [x["name"] for x in d["params"]]; b = [x["name"] for x in p["params"]]
+b = subprocess.run([sys.argv[3]], input="\n".join(b) + "\n", capture_output=True, text=True, check=True).stdout.split("\n")[:-1]   # the names as the host gets them
 ok = True
 extra = ["LFO %d Cursor" % n for n in (1, 2, 3, 4)] + ["Spectrum %d" % n for n in range(1, 33)] + ["Pad Pressure", "Pad Pressure Amount"]   # SYNTHYBOY_MPC_LFO_LIVE and SYNTHYBOY_MPC_SPECTRUM (default ON): display-only parameters after the engine's list, then the two SYNTHYBOY_MPC_PAD_PRESSURE parameters
 if len(a) != p["count"] + len(extra) or a[p["count"]:] != extra: print(f"param count {len(a)} != {p['count']} + 38 extra parameters {a[p['count']:]}"); ok = False
