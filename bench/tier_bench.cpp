@@ -13,7 +13,7 @@
 //   --set NAME      the list of profiles (default settings):
 //                     settings  "low" (what the MPC build ships) and one change at a time: unison 4 / 7 / 16, warp 4x, morph full, math exact, control full, fx all,
 //                               samples high; then everything at once with 8 voices; each with the notes of its polyphony
-//                     ladder    the candidate profiles from the cheapest to the dearest (kLadder below), each at ITS full polyphony (8, 12, 16, 24, 32 notes)
+//                     ladder    the candidate profiles from the cheapest to the dearest (kLadder below), each at ITS full polyphony (8, 12, 16, 32 notes)
 //                     tiers     low, medium, high at their full polyphony (8 / 16 / 32 notes)
 //                     quick     low, low,unison=7 and high,voices=8
 //   --config P      one more profile (the grammar of device_profile.h, e.g. "low,unison=7,warp=4x"); with at least one --config and no --set only these run
@@ -72,9 +72,11 @@ using namespace synthyboy;
 namespace
 {
 // The candidate profiles from the cheapest to the dearest. The order is the audible gain per cost found with bench/profile_compare.cpp and this bench on the
-// development machine: first the unison voices (three factory pads lose a whole register at 3 voices), then the effects that low bypasses (31 factory presets are
-// made with them), then the polyphony, then the 4x warps, the full morph rate and control rate, and last the exact math (which no measurement could tell from the
-// approximations). A device runs the highest step that stays inside its budget.
+// development machine: first the unison voices (14 factory presets ask for more than 3, three pads change by a whole register), then the effects that low bypasses
+// (31 factory presets sound through them), then the polyphony, then the 4x warps (7 presets, a small difference) and the full morph rate; then the exact math and
+// the better sample interpolation, which no measurement could tell from the cheap forms on the factory presets; and last the full control rate: its 50 ms fade
+// of a stolen voice doubles the dearest blocks (the old and the new chord sound together) for a difference only heard when voices are stolen. The factory presets
+// ask for at most 16 voices themselves, so the last step costs them nothing more: it is for user patches.
 const char* const kLadder[] = {
     "low",
     "low,unison=7",
@@ -83,9 +85,9 @@ const char* const kLadder[] = {
     "low,unison=16,fx=all,voices=12",
     "low,unison=16,fx=all,voices=16",
     "low,unison=16,fx=all,voices=16,warp=4x",
-    "low,unison=16,fx=all,voices=16,warp=4x,morph=full,control=full",
+    "low,unison=16,fx=all,voices=16,warp=4x,morph=full",
+    "high,voices=16,control=economy",
     "high,voices=16",
-    "high,voices=24",
     "high",
 };
 const char* const kSettings[] = {
