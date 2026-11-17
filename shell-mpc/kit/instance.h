@@ -89,7 +89,7 @@ public:
 
     // ---- optional parts
     /** A list of things the plugin owns that a page shows (presets, samples): null when the plugin has none (content_source.h). */
-    virtual IContentSource* content() noexcept { return nullptr; }
+    virtual IContentSource* contentSource() noexcept { return nullptr; }
     /** The shell-level settings of this instance (null: none). */
     virtual IInstanceState* state() noexcept { return nullptr; }
     virtual const IInstanceState* state() const noexcept { return nullptr; }
