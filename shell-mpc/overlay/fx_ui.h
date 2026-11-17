@@ -408,12 +408,18 @@ private:
                     const int curIdx = std::clamp (static_cast<int> (std::lround (plainVal)), 0, std::max (0, pi->numChoices - 1));
                     stepper.state.index = curIdx;
                     if (pi->choices != nullptr && curIdx >= 0 && curIdx < pi->numChoices)
-                        stepper.setItem (pi->choices[curIdx]);
+                        stepper.setItem (shownChoice (pi->choices[curIdx]));
                     else
                         stepper.setItem ("---");
                     // the same value as a LED list (3 .. 8 values, all visible) and as a LED toggle (Off / On): the editor shows the kind the cell has
                     list.setTitle (name);
-                    list.setOptions (pi->choices, std::min (static_cast<int> (pi->numChoices), static_cast<int> (ui::LedList::kMaxOptions)));
+                    {
+                        const char* shown[ui::LedList::kMaxOptions];
+                        const int cnt = std::min (static_cast<int> (pi->numChoices), static_cast<int> (ui::LedList::kMaxOptions));
+                        for (int c = 0; c < cnt; ++c)
+                            shown[c] = shownChoice (pi->choices[c]);
+                        list.setOptions (shown, cnt);
+                    }
                     list.state.index = std::min (curIdx, ui::LedList::kMaxOptions - 1);
                     toggle.setLabel (name);
                     toggle.state.on = curIdx == 1;
@@ -442,13 +448,23 @@ private:
         pullDisplay (inst, item, type, ed.display);
     }
 
+    /** What a choice is called on the screen: the engine's names "Vital" and "Serum" of a law or a type are the names of other products; the screen names them by what they are (the original weights / the measured ones). */
+    static const char* shownChoice (const char* name) noexcept
+    {
+        if (name == nullptr)
+            return "---";
+        if (std::strcmp (name, "Vital") == 0) return "Classic";
+        if (std::strcmp (name, "Serum") == 0) return "Measured";
+        return name;
+    }
+
     /** The text of a value: the name of a choice, else the number with the parameter's unit. */
     static void paramText (const synthyboy::ParamInfo& pi, float plain, char* out, size_t cap)
     {
         if (pi.numChoices > 0 && pi.choices != nullptr)
         {
             const int n = std::clamp (static_cast<int> (std::lround (plain)), 0, pi.numChoices - 1);
-            std::snprintf (out, cap, "%.15s", pi.choices[n]);
+            std::snprintf (out, cap, "%.15s", shownChoice (pi.choices[n]));
             return;
         }
         uibind::formatValue (pi, plain, out, cap);
