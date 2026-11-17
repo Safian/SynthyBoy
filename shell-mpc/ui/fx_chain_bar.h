@@ -49,7 +49,7 @@ public:
     {
         if (state.isPlus || state.empty)
             return {};
-        return { rect_.right() - 56, rect_.y, 56, 44 };   // a touch target of its own
+        return { rect_.right() - 56, rect_.y, 56, std::min (56, rect_.h) };   // a touch target of its own, 56 px
     }
 
     Change touchDown (int x, int y, double nowMs) override
@@ -216,6 +216,45 @@ private:
                     const float h = 10.0f - static_cast<float> (i) * 2.5f;
                     p.line (fcx - 8.0f + static_cast<float> (i) * 5.0f, fcy + 5.0f,
                             fcx - 8.0f + static_cast<float> (i) * 5.0f, fcy + 5.0f - h, 1.5f, col);
+                }
+                break;
+            case synthyboy::kFxTypeFlanger: // the comb of a short delay: teeth along a line
+                for (int i = 0; i < 6; ++i)
+                {
+                    const float x = fcx - 10.0f + static_cast<float> (i) * 4.0f;
+                    p.line (x, fcy + 6.0f, x, fcy - ((i % 2 == 0) ? 7.0f : 3.0f), 1.5f, col);
+                }
+                break;
+            case synthyboy::kFxTypePhaser: // a few notches in a line
+                p.line (fcx - 10.0f, fcy - 4.0f, fcx + 10.0f, fcy - 4.0f, 1.2f, col);
+                for (int i = 0; i < 3; ++i)
+                {
+                    const float x = fcx - 6.0f + static_cast<float> (i) * 6.0f;
+                    p.line (x, fcy - 4.0f, x, fcy + 6.0f, 1.5f, col);
+                }
+                break;
+            case synthyboy::kFxTypeHyperDimension: // the fan of voices
+                for (int i = -2; i <= 2; ++i)
+                    p.line (fcx, fcy + 7.0f, fcx + static_cast<float> (i) * 4.5f, fcy - 7.0f, 1.3f, col);
+                break;
+            case synthyboy::kFxTypeUtility: // gain: a steep line over the identity
+                p.line (fcx - 8.0f, fcy + 7.0f, fcx + 8.0f, fcy - 7.0f, 1.2f, p.c (T.textDim, 160));
+                p.line (fcx - 8.0f, fcy + 7.0f, fcx + 4.0f, fcy - 7.0f, 1.8f, col);
+                break;
+            case synthyboy::kFxTypeBode: // the lines of the spectrum and the same lines shifted up
+                for (int i = 0; i < 3; ++i)
+                {
+                    const float x = fcx - 8.0f + static_cast<float> (i) * 5.0f;
+                    p.line (x, fcy + 7.0f, x, fcy + 1.0f, 1.5f, p.c (T.textDim, 160));
+                    p.line (x + 3.0f, fcy - 1.0f, x + 3.0f, fcy - 7.0f, 1.5f, col);
+                }
+                break;
+            case synthyboy::kFxTypeConvolve: // an impulse and its response
+                p.line (fcx - 9.0f, fcy + 7.0f, fcx - 9.0f, fcy - 7.0f, 1.8f, col);
+                for (int i = 0; i < 5; ++i)
+                {
+                    const float x = fcx - 4.0f + static_cast<float> (i) * 3.5f;
+                    p.line (x, fcy + 7.0f, x, fcy + 7.0f - (6.0f - static_cast<float> (i)), 1.3f, col);
                 }
                 break;
             default: // Generic diamond
