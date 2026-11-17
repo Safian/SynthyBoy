@@ -96,7 +96,7 @@ using OutputStage = BasicOutputStage<>;
 
 // ---- the limiter as a plugin setting (docs/MPC.md "Output limiter") ----
 /** The default of the setting "LIMIT" on the Master page (OUTPUT block): the one constant to flip. A project saved before the setting existed keeps this default. */
-constexpr bool kOutputLimiterDefaultOn = true;
+constexpr bool kOutputLimiterDefaultOn = false;
 
 /** SYNTHYBOY_MPC_OUTPUT_LIMITER in the environment forces the limiter for tests: "1" on, "0" off, anything else (or unset) leaves it to the setting. A build with
     -DSYNTHYBOY_MPC_OUTPUT_LIMITER=1 forces it on as before (the value 0 of the default build forces nothing). Returns -1 (not forced), 0 (off) or 1 (on). */

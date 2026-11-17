@@ -2234,7 +2234,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 }
 #endif
                 {
-                    // the output limiter setting rides in the chunk; a chunk without it (an older one) leaves the setting as it is (the default is on)
+                    // the output limiter setting rides in the chunk; a chunk without it (an older one) leaves the setting as it is (the default is off)
                     bool limiterOn = inst->outputLimiter.load (std::memory_order_relaxed);
                     if (synthyboy_mpc::outputLimiterFromChunk (chunk, static_cast<size_t>(size), limiterOn))
                     {
