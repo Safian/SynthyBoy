@@ -346,15 +346,15 @@ TEST (own_osc_granular_and_spectral_types_play_the_sample)
     }
 }
 
-// S5: a sample type without content is silent
-TEST (own_osc_sample_type_without_content_is_silent)
+// S5: a sample type without content is not silent: the missing file is tolerated and flagged, the oscillator plays its built-in wavetable (docs/ARCHITECTURE.md section 6, test_own_content_policy)
+TEST (own_osc_sample_type_without_content_plays_the_built_in_wavetable)
 {
     for (int t = 1; t <= 4; ++t)
     {
         Rig r (false, "osc1.type", static_cast<float> (t));
         const Out o = r.render (69, 0.5, 0.6);
-        CHECK (peakOf (o.l, 0, o.l.size()) == 0.0);
-        CHECK (peakOf (o.r, 0, o.r.size()) == 0.0);
+        CHECK (peakOf (o.l, 0, o.l.size()) > 0.01);
+        CHECK (peakOf (o.r, 0, o.r.size()) > 0.01);
     }
 }
 

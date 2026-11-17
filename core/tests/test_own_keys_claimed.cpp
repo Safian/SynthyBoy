@@ -354,10 +354,10 @@ TEST (own_no_smoothing_reaches_every_effect_type)
         { "hyperdim", { { "hyperdim.on", 1 }, { "hyperdim.detune", 100 } }, "hyperdim.mix", 0, 100 },
         { "utility", { { "utility.on", 1 } }, "utility.hpf", 20, 3000 },
         { "bode", { { "bode.on", 1 }, { "bode.range", 400 } }, "bode.shift", 0, 100 },
-        { "convolve", { { "convolve.on", 1 } }, "convolve.tone", 0, 100 },
+        { "convolve", { { "convolve.on", 1 } }, "convolve.size", 100, 5 },
         { "splitter_lh", { { "splitter_lh.on", 1 }, { "splitter_lh.freq", 600 } }, "splitter_lh.low_bypass", 0, 1 },
         { "splitter_lmh", { { "splitter_lmh.on", 1 } }, "splitter_lmh.mid_bypass", 0, 1 },
-        { "splitter_ms", { { "splitter_ms.on", 1 } }, "splitter_ms.side_bypass", 0, 1 },
+        { "splitter_ms", { { "splitter_ms.on", 1 } }, "splitter_ms.mid_bypass", 0, 1 },
     };
     auto firstBlock = [] (const Fx& fx, float startValue, bool step)
     {
