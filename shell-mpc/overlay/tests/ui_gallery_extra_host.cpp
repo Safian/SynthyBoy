@@ -1106,7 +1106,7 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
                 rVoice.inst.set (paramKey, kStepVals[(s + r) % 8] * 100.0f);
             }
             rVoice.refresh (2);
-            const ui::Rect tr = rVoice.ui.screen().grid.tabRect (r);
+            const ui::Rect tr = rVoice.ui.screen().rowList.rowRect (r);   // the ROW list (the old tabs of the grid are gone)
             rVoice.tapAt (tr.x + tr.w / 2, tr.y + tr.h / 2);
             rVoice.ui.screen().grid.selectedStep = r;
             rVoice.refresh (2);
