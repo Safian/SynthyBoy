@@ -52,7 +52,7 @@ public:
             return true;
         }
         std::string why;
-        if (! rt.configure (display_->fd(), display_->ownFd(), display_->info().primaryPlane, panelW, panelH, why))
+        if (! rt.configure (display_->fd(), display_->ownFd(), display_->info().primaryPlane, panelW, panelH, display_->pace().pipe, why))
         {
             why_ = why;
             return true;

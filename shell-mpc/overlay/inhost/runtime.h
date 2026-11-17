@@ -101,7 +101,7 @@ public:
 
     // ---- the overlay thread ----
     /** Called when the display is known (the backend's open ()): maps nothing yet, builds the tables, starts the writer thread. */
-    bool configure (int hostFd, int ownFd, uint32_t primaryPlane, int panelW, int panelH, std::string& why)
+    bool configure (int hostFd, int ownFd, uint32_t primaryPlane, int panelW, int panelH, int vblankPipe, std::string& why)
     {
         std::lock_guard<std::mutex> g (lifeMu_);
         if (! installed_)
@@ -118,6 +118,9 @@ public:
         }
         ownFd_ = ownFd;
         hostFd_ = hostFd;
+        vblankPipe_ = vblankPipe;
+        core_.waitVblank = &Runtime::waitVblankThunk;
+        core_.waitVblankCtx = this;
         primary_ = primaryPlane;
         W_ = panelW;
         H_ = panelH;
@@ -198,19 +201,19 @@ public:
         std::lock_guard<std::mutex> g (lifeMu_);
         const Counters& c = core_.counters;
         const uint32_t flips = c.flips.load(), copied = c.copied.load(), fw = c.frontWrites.load();
-        char b[2200];
+        char b[3600];
         static const char* const kStateName[] = { "off", "armed", "draining", "faulted" };
         std::snprintf (b, sizeof b,
                        "inhost_build: yes\ninhost_state: %s\ninhost_hook_installed: %s\ninhost_install_note: %s\ninhost_fault: %s\n"
                        "inhost_slot: %p -> %p (expected libdrm function %p in %s)\ninhost_slot_protection: %s\ninhost_request_stride: %zu\ninhost_primary_plane: %u (FB_ID property %u)\n"
                        "inhost_hook_entries: %u\ninhost_importers_of_commit: %s\ninhost_fb_prop_source: %s\ninhost_host_fd: %d\ninhost_mapped_buffers: %d\ninhost_flips_seen: %u\ninhost_flips_with_page: %u\ninhost_frames_copied: %u\ninhost_frames_missed: %u\ninhost_copies_clipped: %u\ninhost_copies_dimmed: %u\n"
-                       "inhost_unidentified_flips: %u\ninhost_commits_without_fb: %u\ninhost_copy_ms: %.3f (max %.3f)\ninhost_hook_ms: %.3f (max %.3f)\ninhost_hook_over_limit: %u\n"
+                       "inhost_unidentified_flips: %u\ninhost_commits_without_fb: %u\ninhost_read_phase_ms: %.3f (max %.3f)\ninhost_copy_aborted: %u\ninhost_background_fills: %u\ninhost_erased_pictures: %u\ninhost_vblank_waits: %u\ninhost_copy_ms: %.3f (max %.3f)\ninhost_hook_ms: %.3f (max %.3f)\ninhost_hook_over_limit: %u\n"
                        "inhost_front_writes: %u\ninhost_front_full_writes: %u\ninhost_front_write_ms: %.3f (max %.3f)\ninhost_front_rows: %u\ninhost_front_retries: %u\n"
                        "inhost_fallbacks: %u\ninhost_hook_installs: %u\ninhost_hook_removals: %u\ninhost_buffer_remaps: %u\ninhost_busy_skips: %u\ninhost_backlight_dim: %s\ninhost_kill_switch: %s\ninhost_ring_readers: %d\n",
                        kStateName[state_.load() & 3], installed_ ? "yes" : "no", installNote_.c_str(), faultReason_.empty() ? "none" : faultReason_.c_str(),
                        slotAddr_, hookAddr_, expectedAddr_, expectedPath_.c_str(), protNote_.c_str(), stride_, primary_, fbProp_.load(),
                        entries_.load(), importers_.c_str(), propSource_.c_str(), hostFd_, fbs_.count(), flips, c.pageFlips.load(), copied, c.missed.load(), c.clipped.load(), c.dimmedCopies.load(),
-                       c.unidentified.load(), c.noFbItem.load(), copied ? c.copyUsSum.load() / 1000.0 / copied : 0.0, c.copyUsMax.load() / 1000.0, flips ? c.hookUsSum.load() / 1000.0 / flips : 0.0, c.hookUsMax.load() / 1000.0, c.overLimit.load(),
+                       c.unidentified.load(), c.noFbItem.load(), flips ? c.readUsSum.load() / 1000.0 / flips : 0.0, c.readUsMax.load() / 1000.0, c.aborted.load(), c.bgFills.load(), c.erased.load(), c.vblankWaits.load(), copied ? c.copyUsSum.load() / 1000.0 / copied : 0.0, c.copyUsMax.load() / 1000.0, flips ? c.hookUsSum.load() / 1000.0 / flips : 0.0, c.hookUsMax.load() / 1000.0, c.overLimit.load(),
                        fw, c.frontFull.load(), fw ? c.frontUsSum.load() / 1000.0 / fw : 0.0, c.frontUsMax.load() / 1000.0, c.frontRows.load(), c.frontRetries.load(),
                        c.fallbacks.load(), c.installs.load(), c.removals.load(), c.fbRemaps.load(), c.busySkips.load(), core_.backlightDim.load() ? "dimmed" : "normal", kill() ? "present" : "absent", ring_.readersNow());
         return b;
@@ -636,6 +639,17 @@ private:
         }
     }
 
+    /** One vblank of our own descriptor (the writer thread; a failure or a timeout of the driver just returns: the write then goes ahead without the sync). */
+    static void waitVblankThunk (void* self)
+    {
+        Runtime& rt = *static_cast<Runtime*> (self);
+        drm_wait_vblank vbl;
+        std::memset (&vbl, 0, sizeof vbl);
+        vbl.request.type = static_cast<drm_vblank_seq_type> (_DRM_VBLANK_RELATIVE | (rt.vblankPipe_ > 0 ? ((rt.vblankPipe_ << _DRM_VBLANK_HIGH_CRTC_SHIFT) & _DRM_VBLANK_HIGH_CRTC_MASK) : 0));
+        vbl.request.sequence = 1;
+        ioctl (rt.ownFd_, DRM_IOCTL_WAIT_VBLANK, &vbl);
+    }
+
     // ======== the writer thread ========
     double nowMs() const { return std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now().time_since_epoch()).count(); }
 
@@ -747,7 +761,7 @@ private:
                 again = retry;
             }
             else
-                core_.forgetFront();
+                core_.eraseFront (plan);
         }
     }
     void handleVerdict (FallbackPolicy::Verdict v) { pendingWhy_ = FallbackPolicy::name (v); }
@@ -787,6 +801,7 @@ private:
     int refs_ = 0;
     bool installed_ = false, configured_ = false;
     std::atomic<bool> frontNeedsLook_ { false };
+    int vblankPipe_ = 0;
     int hostFd_ = -1, ownFd_ = -1, W_ = 0, H_ = 0, backlightMax_ = 0;
     double nextBacklight_ = 0.0;
     uint32_t primary_ = 0;

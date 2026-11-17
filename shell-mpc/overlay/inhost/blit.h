@@ -11,6 +11,9 @@
 #include <cstring>
 
 #include "../geometry.h"
+#if defined(__ARM_NEON)
+#include <arm_neon.h>
+#endif
 
 namespace synthyboy_mpc { namespace overlay { namespace inhost {
 
@@ -31,6 +34,36 @@ inline void classifyRows (const uint32_t* pix, int w, int h, uint8_t* kinds) noe
         }
         kinds[y] = orA == 0u ? kRowTransparent : (andA == 0xffu ? kRowOpaque : kRowMixed);
     }
+}
+
+/** Copies `bytes` (a multiple of 4) from cached memory into write-combined memory, in order. On ARM with NEON: the destination is brought to 16 byte alignment, then 64 bytes per round (four q registers,
+    sequential stores, the source prefetched a few lines ahead): the write-combining buffer fills whole lines. Elsewhere memcpy. */
+inline void copyToWc (void* dst, const void* src, size_t bytes) noexcept
+{
+#if defined(__ARM_NEON)
+    uint8_t* d = static_cast<uint8_t*> (dst);
+    const uint8_t* s = static_cast<const uint8_t*> (src);
+    while (bytes >= 4 && (reinterpret_cast<uintptr_t> (d) & 15u) != 0)
+    {
+        std::memcpy (d, s, 4);
+        d += 4; s += 4; bytes -= 4;
+    }
+    while (bytes >= 64)
+    {
+        __builtin_prefetch (s + 256);
+        const uint32x4_t a = vld1q_u32 (reinterpret_cast<const uint32_t*> (s)), b = vld1q_u32 (reinterpret_cast<const uint32_t*> (s + 16));
+        const uint32x4_t c = vld1q_u32 (reinterpret_cast<const uint32_t*> (s + 32)), e = vld1q_u32 (reinterpret_cast<const uint32_t*> (s + 48));
+        vst1q_u32 (reinterpret_cast<uint32_t*> (d), a);
+        vst1q_u32 (reinterpret_cast<uint32_t*> (d + 16), b);
+        vst1q_u32 (reinterpret_cast<uint32_t*> (d + 32), c);
+        vst1q_u32 (reinterpret_cast<uint32_t*> (d + 48), e);
+        d += 64; s += 64; bytes -= 64;
+    }
+    if (bytes != 0)
+        std::memcpy (d, s, bytes);
+#else
+    std::memcpy (dst, src, bytes);
+#endif
 }
 
 /** Colour scaled by dim256 / 256 (256 = unchanged), alpha kept. */
@@ -109,7 +142,7 @@ inline size_t blitRows (uint8_t* dst, size_t pitchBytes, int dstW, int dstH, con
         if (kind == kRowOpaque)
         {
             if (dim256 >= 256u)
-                std::memcpy (d, s, n * 4u);
+                copyToWc (d, s, n * 4u);
             else
                 for (size_t i = 0; i < n; ++i)
                     d[i] = dimPixel (s[i], dim256);
@@ -128,6 +161,24 @@ inline size_t blitRows (uint8_t* dst, size_t pitchBytes, int dstW, int dstH, con
         written += n;
     }
     return written;
+}
+
+/** Fills the rows [rowFrom, rowTo) of the panel rectangle `r` (clipped to `clip` and the buffer) with one colour (a page's background, darkened by dim256 / 256). */
+inline void fillRect (uint8_t* dst, size_t pitchBytes, int dstW, int dstH, const Rect& r, const Rect& clip, uint32_t rgb, unsigned dim256) noexcept
+{
+    if (dst == nullptr)
+        return;
+    const int x0 = std::max ({ r.x, clip.x, 0 }), x1 = std::min ({ r.x + r.w, clip.x + clip.w, dstW });
+    const int y0 = std::max ({ r.y, clip.y, 0 }), y1 = std::min ({ r.y + r.h, clip.y + clip.h, dstH });
+    if (x1 <= x0 || y1 <= y0)
+        return;
+    const uint32_t px = dimPixel (0xff000000u | (rgb & 0xffffffu), dim256);
+    for (int y = y0; y < y1; ++y)
+    {
+        uint32_t* d = reinterpret_cast<uint32_t*> (dst + static_cast<size_t> (y) * pitchBytes) + x0;
+        for (int x = 0; x < x1 - x0; ++x)
+            d[x] = px;
+    }
 }
 
 }}} // namespace synthyboy_mpc::overlay::inhost

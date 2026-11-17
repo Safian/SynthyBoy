@@ -93,6 +93,10 @@ struct Counters
     std::atomic<uint32_t> noFbItem { 0 };         // commits with the page flip event flag and no framebuffer item of the primary plane
     std::atomic<uint32_t> copyUsSum { 0 }, copyUsMax { 0 };   // the blit alone
     std::atomic<uint32_t> hookUsSum { 0 }, hookUsMax { 0 };   // the whole hook before the commit (analysis + copy)
+    std::atomic<uint32_t> readUsSum { 0 }, readUsMax { 0 };   // phase: reading the sample points + detector + pop-up scan + dim test
+    std::atomic<uint32_t> aborted { 0 };          // copies stopped at the time budget (the writer thread finishes them after the commit)
+    std::atomic<uint32_t> bgFills { 0 }, erased { 0 };   // frames of a page whose picture is not ready: the page's background instead of the host's skin; pictures taken out of an idle buffer
+    std::atomic<uint32_t> vblankWaits { 0 };
     std::atomic<uint32_t> overLimit { 0 };        // hooks longer than the limit
     std::atomic<uint32_t> frontWrites { 0 }, frontRows { 0 }, frontUsSum { 0 }, frontUsMax { 0 }, frontRetries { 0 }, frontFull { 0 };
     std::atomic<uint32_t> busySkips { 0 };        // flips left alone because another thread held the hook's state
@@ -130,6 +134,12 @@ public:
     std::atomic<bool> backlightDim { false };
 
     /** The hook, before the commit. `fbId`: the framebuffer the request puts on the primary plane (0: the request has none). */
+    /** The time the hook may use before the commit; a copy that is not finished by then is stopped (microseconds). */
+    static constexpr uint32_t kBudgetUs = 6000;
+    /** Waits for the next vblank (set by the runtime; null: no wait). The writer thread only. */
+    void (*waitVblank) (void*) = nullptr;
+    void* waitVblankCtx = nullptr;
+
     FlipResult onFlip (uint32_t fbId, const SamplePlan& plan) noexcept
     {
         FlipResult res;
@@ -152,7 +162,11 @@ public:
         FrameRing::Hold hold;
         const bool have = ring_.acquire (hold);
         const int wantedView = have ? hold.meta.view : -1, wantedSlot = have ? hold.meta.slot : -1;
+        const uint32_t r0 = clock_();
         Look lk = analyzer_.analyze (plan, fb->map, fb->pitch, snap_, wantedView, wantedSlot, backlightDim.load (std::memory_order_relaxed));
+        const uint32_t r1 = clock_();
+        Counters::add (counters.readUsSum, r1 - r0);
+        Counters::peak (counters.readUsMax, r1 - r0);
         pendingLook_.look = lk;
         if (! lk.dimmed)
         {
@@ -166,12 +180,27 @@ public:
             {
                 const uint32_t b0 = clock_();
                 const Rect clip = clipToEdge (hold.pic.panel, plan.rotation(), lk.edge, plan.panelW(), plan.panelH());
-                blitRows (fb->map, fb->pitch, fb->w, fb->h, hold.pic, clip, lk.dim256, 0, hold.pic.h);
+                // bounded: 64 rows at a time, the clock looked at between them; a copy that runs over the budget stops (the rows left are written by the writer thread after the commit)
+                bool whole = true;
+                for (int row = 0; row < hold.pic.h; row += 64)
+                {
+                    blitRows (fb->map, fb->pitch, fb->w, fb->h, hold.pic, clip, lk.dim256, row, std::min (row + 64, hold.pic.h));
+                    if (clock_() - t0 > kBudgetUs && row + 64 < hold.pic.h)
+                    {
+                        whole = false;
+                        break;
+                    }
+                }
                 std::atomic_thread_fence (std::memory_order_seq_cst);   // the write-combined stores are out before the commit
                 const uint32_t b1 = clock_();
-                pendingLook_.drawnGen = hold.meta.gen;
-                res.drew = true;
-                Counters::bump (counters.copied);
+                if (whole)
+                {
+                    pendingLook_.drawnGen = hold.meta.gen;
+                    res.drew = true;
+                    Counters::bump (counters.copied);
+                }
+                else
+                    Counters::bump (counters.aborted);
                 if (lk.edge < PanelKey::kNoKey)
                     Counters::bump (counters.clipped);
                 if (lk.dimmed)
@@ -180,7 +209,16 @@ public:
                 Counters::peak (counters.copyUsMax, b1 - b0);
             }
             else
+            {
+                // our page is on screen but its picture is not ready (a tab was just changed, another instance's picture, nothing published yet): the host's skin of the page would show for these frames, so the
+                // page's own dark background is put over its region instead (the picture follows within a few frames, the skin never shows)
+                const Rect region = regionPanel (lk.view, plan);
+                const Rect clip = clipToEdge (region, plan.rotation(), lk.edge, plan.panelW(), plan.panelH());
+                fillRect (fb->map, fb->pitch, fb->w, fb->h, region, clip, layout::kBackgroundRgb, lk.dim256);
+                std::atomic_thread_fence (std::memory_order_seq_cst);
+                Counters::bump (counters.bgFills);
                 Counters::bump (counters.missed);
+            }
         }
         if (have)
             ring_.release (hold);
@@ -285,7 +323,17 @@ public:
                 return true;   // nothing differs from what the buffer holds
             }
         }
+        if (waitVblank != nullptr)
+        {
+            waitVblank (waitVblankCtx);   // the writes follow the scan-out of the frame from its start (they are faster than the scan): no tear line inside the changed rows
+            Counters::bump (counters.vblankWaits);
+        }
         const uint32_t seqBefore = flipSeq.load (std::memory_order_acquire);
+        if (inCommit.load (std::memory_order_seq_cst))
+        {
+            needAgain = true;
+            return false;
+        }
         const uint32_t t0 = clock_();
         const Rect clip = clipToEdge (hold.pic.panel, plan.rotation(), L.look.edge, plan.panelW(), plan.panelH());
         blitRows (fb->map, fb->pitch, fb->w, fb->h, hold.pic, clip, L.look.dim256, r0, r1);
@@ -312,6 +360,25 @@ public:
 
     /** The picture of the frame is gone (the overlay hid it): the belief about the buffer's content is dropped. */
     void forgetFront() noexcept { belief_.valid = false; }
+    /** The overlay hid our picture while the host is idle (no flip will repaint the buffer): the page's region of the buffer on screen gets the skin's dark page background instead of a picture that is no longer
+        ours to show. (The host's own pixels under it are not kept: reading them back from write-combined memory costs 14 ms; for the plugin-drawn pages they are this background anyway: the skin hides the host
+        widgets there.) Writer thread. */
+    void eraseFront (const SamplePlan& plan) noexcept
+    {
+        if (! belief_.valid || inCommit.load (std::memory_order_seq_cst))
+            return;
+        LookRecord L;
+        const FbView* fb = look.load (L) ? fbs_.find (L.fb) : nullptr;
+        const bool ours = fb != nullptr && L.look.valid && belief_.fb == L.fb && belief_.flipSeq == L.flipSeq && belief_.flipSeq == flipSeq.load (std::memory_order_acquire);
+        if (ours)
+        {
+            const Rect region = regionPanel (L.look.view, plan);
+            fillRect (fb->map, fb->pitch, fb->w, fb->h, region, clipToEdge (region, plan.rotation(), L.look.edge, plan.panelW(), plan.panelH()), layout::kBackgroundRgb, L.look.dim256);
+            std::atomic_thread_fence (std::memory_order_seq_cst);
+            Counters::bump (counters.erased);
+        }
+        belief_.valid = false;
+    }
     void reset() noexcept
     {
         analyzer_.reset();
@@ -346,6 +413,11 @@ private:
         int w = 0, h = 0;
     };
 
+    static Rect regionPanel (int view, const SamplePlan& plan) noexcept
+    {
+        const layout::View& v = layout::kViews[view >= 0 && view < layout::kNumViews ? view : 0];
+        return uiRectToPanel (plan.rotation(), { v.region.x, v.region.y, v.region.w, v.region.h }, plan.panelW(), plan.panelH());
+    }
     bool pictureFits (const FrameRing::Hold& hold, const Look& lk, const SamplePlan& plan, const FbView& fb) const noexcept
     {
         if (hold.meta.view != lk.view || hold.meta.rotation != plan.rotation())

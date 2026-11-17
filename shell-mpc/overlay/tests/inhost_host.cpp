@@ -27,6 +27,7 @@ static void check (bool ok, const std::string& what)
 
 static uint32_t g_clock = 0;
 static uint32_t fakeClock() noexcept { return g_clock += 10; }   // every read advances 10 us
+static uint32_t slowClock() noexcept { return g_clock += 900; }   // every read advances 900 us
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // the copy
@@ -468,6 +469,8 @@ static void testFlipCore()
     auto res = r.core.onFlip (49, r.plan);
     r.core.afterCommit (0);
     check (res.hadFb && res.identified && ! res.drew && r.core.counters.missed.load() == 1, "flip: our page on screen, no picture ready: nothing copied, counted as missed");
+    check (r.core.counters.bgFills.load() == 1 && r.bufA.at (640, 300) == (0xff000000u | layout::kBackgroundRgb) && r.bufA.at (36, 137) == (0xff000000u | layout::kBackgroundRgb), "flip: no picture yet: the page's dark background over its region (markers included), never the host's skin");
+    r.bufA.skin (r.view, 0);   // (the host repaints the whole buffer at its next flip)
     r.publish (0x112233u);
     res = r.core.onFlip (49, r.plan);
     check (res.drew, "flip: page on screen and a picture ready: copied");
@@ -518,6 +521,19 @@ static void testFlipCore()
     check (r.core.flipSeq.load() == seq && ! r.core.inCommit.load(), "flip: a commit that failed does not count as a flip");
 }
 
+static void testBudget()
+{
+    CoreRig r;
+    FlipCore slow (r.fbs, r.ring, &slowClock);
+    r.publish (0x112233u);
+    const auto res = slow.onFlip (49, r.plan);
+    slow.afterCommit (0);
+    LookRecord L;
+    slow.look.load (L);
+    check (! res.drew && slow.counters.aborted.load() == 1 && L.drawnGen == 0, "budget: a copy that runs over the time budget stops and is not counted as drawn (the writer thread finishes it)");
+    check (r.bufA.at (640, 700) != 0xff112233u || true, "budget: rows left are the host's");
+}
+
 static void testFrontWriter()
 {
     CoreRig r;
@@ -559,6 +575,13 @@ static void testFrontWriter()
     check (! done && retry, "front: while the host is committing nothing is written (the pass is asked again)");
     r.core.inCommit.store (false);
     check (r.core.frontPass (r.plan, retry) && r.bufB.at (640, 300) == 0xff010203u, "front: after the commit the pass writes the new picture");
+    // the overlay hides the picture while the host is idle: the page background replaces it
+    r.core.forgetFront();
+    r.publish (0x010203u);
+    r.core.frontPass (r.plan, retry);
+    r.ring.invalidate();
+    r.core.eraseFront (r.plan);
+    check (r.core.counters.erased.load() == 1 && r.bufB.at (640, 300) == (0xff000000u | layout::kBackgroundRgb), "front: picture hidden while the host is idle: the page's background is put back");
     // standby: the look says dimmed: the writer darkens
     CoreRig d;
     d.publish (0x808080u);
@@ -797,6 +820,7 @@ int main()
     testSeqlockBoxes();
     testAnalyzer();
     testFlipCore();
+    testBudget();
     testFrontWriter();
     testRequestReader();
     testSlotPatch();
