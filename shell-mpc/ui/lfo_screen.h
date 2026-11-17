@@ -320,7 +320,7 @@ protected:
         // the blocks of the bottom band
         const int n = (random_ ? 2 : 4) - (keyActive_ ? 0 : 1);
         nBlocks_ = n;
-        static const int wShape[4] = { 3, 4, 3, 2 }, wRandom[2] = { 4, 2 };   // without the KEY block the others take its place
+        static const int wShape[4] = { 3, 4, 3, 2 }, wRandom[2] = { 5, 2 };   // without the KEY block the others take its place
         const int* wt = random_ ? wRandom : wShape;
         int sum = 0;
         for (int i = 0; i < n; ++i) sum += wt[i];
@@ -383,14 +383,16 @@ protected:
         }
         else
         {
-            // RANDOM: the RATE knob is large (the whole height of the block) on the left, as on the LFO page; HZ / BPM / KEY and STEREO in a row at the right, the trigger (a LED list of two) under them
+            // RANDOM: the RATE knob is large (the whole height of the block) on the left, as on the LFO page; at its right in ONE row HZ / BPM / KEY (a LED list of three, in one row), STEREO and the trigger (a LED list of two);
+            // the rectangles are as tall as two rows less one (a list keeps its options in one row there) and as wide as the block lets them be, so that the chips of the four members stand on one line
             Rect in = inner (0);
-            const int rw = std::min (220, in.w * 28 / 100);
+            const int rw = std::min (220, in.w * 28 / 100), lh = 2 * th - 8;
             rate.place ({ in.x, in.y, rw, in.h });
-            const int x0 = in.x + rw + kGap, lw = 3 * 84, y2 = in.y + th + kQLane;
-            syncSwitch.mode.place ({ x0, in.y, lw, th });
-            stereoToggle.place ({ x0 + lw + kGap, in.y, std::min (in.right() - (x0 + lw + kGap), 200), th });
-            modeList.place ({ x0, y2, 2 * 130, th });
+            const int x0 = in.x + rw + kGap, rest = in.right() - x0 - 2 * kGap;
+            const int syncW = std::max (3 * 84, rest * 40 / 100), stereoW = std::max (112, rest * 18 / 100);
+            syncSwitch.mode.place ({ x0, in.y, syncW, lh });
+            stereoToggle.place ({ x0 + syncW + kGap, in.y, stereoW, lh });
+            modeList.place ({ x0 + syncW + stereoW + 2 * kGap, in.y, in.right() - (x0 + syncW + stereoW + 2 * kGap), lh });
             if (keyActive_)
                 stack2 (inner (1), keyTranspose, keyTune);
         }

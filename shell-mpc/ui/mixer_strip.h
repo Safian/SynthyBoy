@@ -326,7 +326,7 @@ private:
 };
 
 // ===============================================================================================================================================================
-/** StripPower: Channel strip header power toggle with label.
+/** StripPower: Channel strip header power toggle with label (frameless: the power glyph and the name).
     One uniform layout for all ten strips: power icon above, name under it at one size that fits the longest name. */
 class StripPower : public ToggleIcon
 {
@@ -340,8 +340,7 @@ protected:
     void drawBody (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        const Rect b = rect_.inset (3);
-        p.control (b, qFrame_);
+        const Rect b = rect_.inset (3);   // no box around it: the glyph (lit in the accent colour while the strip is on) and the name are the control, as for every LED control
 
         const int labelH = 16;
         const float cx = static_cast<float> (b.x) + static_cast<float> (b.w) * 0.5f;
