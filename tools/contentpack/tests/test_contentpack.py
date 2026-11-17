@@ -188,7 +188,7 @@ class PackTests(unittest.TestCase):
         factory = ROOT / "content" / "presets"
         self.assertEqual(cp.verify_directory(factory), [])
         summary = cp.build_pack(factory, self.tmp / "factory")
-        self.assertEqual((summary["id"], summary["files"]), ("com.safian.synthyboy.factory-presets", 136))
+        self.assertEqual((summary["id"], summary["files"]), ("com.safian.synthyboy.factory-presets", 160))
         self.assertLess(summary["size"], cp.DEFAULT_MAX_BYTES)
         self.assertEqual(cp.verify_zip(self.tmp / "factory" / summary["file"], summary["id"], summary["version"]), [])
 

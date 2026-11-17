@@ -326,7 +326,7 @@ TEST (scan_prefix_read_equals_whole_file_parse)
     const std::filesystem::path repoRoot = std::filesystem::path (__FILE__).parent_path().parent_path().parent_path();
     const std::filesystem::path factoryDir = repoRoot / "content" / "presets";
     const auto entries = scanPresetDirectory (factoryDir.string());
-    CHECK_EQ (entries.size(), 136u);
+    CHECK_EQ (entries.size(), 160u);
     for (const auto& e : entries)
     {
         std::ifstream f (e.path, std::ios::binary);
@@ -370,7 +370,7 @@ TEST (factory_presets_load_values_are_stable)
     // shell does): the scan keeps only names and paths, the values come from the file when the program is selected.
     const std::filesystem::path repoRoot = std::filesystem::path (__FILE__).parent_path().parent_path().parent_path();
     const auto entries = scanPresetDirectory ((repoRoot / "content" / "presets").string());
-    CHECK_EQ (entries.size(), 136u);
+    CHECK_EQ (entries.size(), 160u);
     for (const auto& e : entries)
     {
         std::ifstream f (e.path, std::ios::binary);

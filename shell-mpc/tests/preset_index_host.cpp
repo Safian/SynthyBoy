@@ -41,7 +41,7 @@ int main (int argc, char** argv)
     check (std::system (cmd.c_str()) == 0, "the index script ran");
 
     const auto scanned = scanPrograms (dir);
-    check (scanned.size() == 136, "the scan finds the 136 factory presets");
+    check (scanned.size() == 160, "the scan finds the 160 factory presets");
     std::vector<ProgramEntry> fromIndex;
     std::string why;
     check (loadPresetIndex (dir, fromIndex, why) && why == "index", "a current index is used");
@@ -52,7 +52,7 @@ int main (int argc, char** argv)
     // a preset file added: the listing no longer matches, the scan decides (and finds the new one)
     fs::copy_file (fs::path (dir) / "Bass" / "808_boom.sbpreset", fs::path (dir) / "Bass" / "extra_copy.sbpreset", ec);
     const auto withExtra = loadPrograms (dir, &source);
-    check (source.rfind ("scan", 0) == 0 && withExtra.size() == 137 && same (withExtra, scanPrograms (dir)), "a new file makes the index stale: the scan is used");
+    check (source.rfind ("scan", 0) == 0 && withExtra.size() == 161 && same (withExtra, scanPrograms (dir)), "a new file makes the index stale: the scan is used");
     fs::remove (fs::path (dir) / "Bass" / "extra_copy.sbpreset", ec);
     check (loadPresetIndex (dir, fromIndex, why), "the index is current again");
 

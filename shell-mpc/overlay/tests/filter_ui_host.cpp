@@ -964,17 +964,17 @@ void testFilterModelStyles()
     check (r.inst.get ("filter1.style") == 1.0f && r.ui.full().style.state.index == 1,
            "clamp on model change 9->4: style clamped to 1");
 
-    // Switch to Model 6 (Comb, 1 style): style must clamp to 0
+    // Switch to Model 6 (Comb, 6 styles since the six comb styles of the engine): style 1 is valid and stays
     r.inst.set ("filter1.model", 6.0f);
     r.refresh();
-    check (r.inst.get ("filter1.style") == 0.0f && r.ui.full().style.state.index == 0,
-           "clamp on model change 4->6: style clamped to 0");
+    check (r.inst.get ("filter1.style") == 1.0f && r.ui.full().style.state.index == 1,
+           "model change 4->6: style 1 stays (Comb has six styles)");
 
-    // Switch back to Model 8 (12 styles): style 0 is valid and remains 0
+    // Switch back to Model 8 (12 styles): style 1 is valid and remains 1
     r.inst.set ("filter1.model", 8.0f);
     r.refresh();
-    check (r.inst.get ("filter1.style") == 0.0f && r.ui.full().style.state.index == 0,
-           "switch 6->8: style 0 remains 0");
+    check (r.inst.get ("filter1.style") == 1.0f && r.ui.full().style.state.index == 1,
+           "switch 6->8: style 1 remains 1");
 
     // 3. Clamp on model change via UI interactions
     // Set Model 8, style 11
@@ -1003,11 +1003,11 @@ void testFilterModelStyles()
     r.tap (sr.right() - 10, sr.y + sr.h / 2);
     check (r.inst.get ("filter1.style") == 2.0f, "style stepped to 2");
 
-    // Step model forward to model 6 (Comb, 1 style) -> style must clamp to 0
+    // Step model forward to model 6 (Comb, 6 styles) -> style 2 is valid and stays
     r.tap (mr.right() - 10, mr.y + mr.h / 2);
     check (r.inst.get ("filter1.model") == 6.0f, "model stepped to 6");
-    check (r.inst.get ("filter1.style") == 0.0f && r.ui.full().style.state.index == 0,
-           "style clamped to 0 on model stepping to 6");
+    check (r.inst.get ("filter1.style") == 2.0f && r.ui.full().style.state.index == 2,
+           "style 2 stays on model stepping to 6 (Comb has six styles)");
 
     // 4. Stepper and wheel bounds
     r.inst.set ("filter1.model", 4.0f); // Diode: 2 styles (0 and 1)
@@ -1028,9 +1028,10 @@ void testFilterModelStyles()
     check (r.inst.get ("filter1.style") == 1.0f, "mouse wheel over style stepper stays clamped to 1");
 
     // 5. Verify Filter 2 also clamps style on model change
-    r.inst.set ("filter2.model", 8.0f);
-    r.inst.set ("filter2.style", 11.0f);
-    Rig r2 (2); // opens on F2
+    Rig r2 (2); // opens on F2 (its own instance: the values are set on it)
+    r2.inst.set ("filter2.model", 8.0f);
+    r2.inst.set ("filter2.style", 11.0f);
+    r2.refresh();
     check (r2.inst.get ("filter2.style") == 11.0f && r2.ui.full().style.state.index == 11,
            "filter 2 style 11 retained for model 8");
     r2.inst.set ("filter2.model", 4.0f); // Diode: 2 styles
