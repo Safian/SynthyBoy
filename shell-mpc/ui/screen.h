@@ -9,6 +9,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include "carousel.h"
 #include "panel.h"
 #include "play_rows.h"
 
@@ -18,7 +19,7 @@ namespace synthyboy_mpc { namespace ui {
 class OscillatorCompact : public Composite
 {
 public:
-    Stepper instances;   // the source: Sub, Osc A, Osc B, Osc C, Noise: the ONE selector of the three thirds (a Stepper: the arrows step, a tap on the name opens the list of the five)
+    Carousel instances;   // the source: Sub, Osc A, Osc B, Osc C, Noise: the ONE selector of the three thirds (a Carousel: the neighbours step, a tap on the name opens the list of the five)
     ToggleIcon power;
     RouteButton route { "M" };
     MenuButton full { "", MenuButton::Icon::Expand };   // the "full screen" button: four corner brackets
@@ -29,8 +30,8 @@ public:
     {
         instances.state.count = 5;
         instances.state.wrap = true;
+        instances.state.names = sourceNames();
         instances.listable = true;
-        instances.minWidth = 120;   // the room between the power button and the buttons at the right of the header row: about 200 px of a third
         power.state.icon = ToggleIcon::Icon::Power;
         power.state.negativeOff = true;
         basic.setStacked (true);
@@ -38,7 +39,8 @@ public:
         setInstance (OscInstance::A, OscKind::Wavetable);
     }
     /** The names of the five entries of the selector and of its list (the wording of the owner). */
-    static const char* sourceName (OscInstance i) noexcept { static const char* const n[5] = { "Sub", "Osc A", "Osc B", "Osc C", "Noise" }; return n[static_cast<int> (i)]; }
+    static const char* const* sourceNames() noexcept { static const char* const n[5] = { "Sub", "Osc A", "Osc B", "Osc C", "Noise" }; return n; }
+    static const char* sourceName (OscInstance i) noexcept { return sourceNames()[static_cast<int> (i)]; }
     static const char* sourceName (int i) noexcept { return sourceName (static_cast<OscInstance> (std::clamp (i, 0, 4))); }
     void setInstance (OscInstance i, OscKind k)
     {

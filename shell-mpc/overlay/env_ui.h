@@ -375,7 +375,7 @@ private:
                 continue;
             if (it.type == T::Pick)
             {
-                auto* st = static_cast<ui::EnvStepper*> (it.c);
+                auto* st = static_cast<ui::EnvCarousel*> (it.c);
                 st->state.count = kEnvs; st->state.index = sel_ - 1; st->state.wrap = true;
                 st->setItem (kEnvNames[std::clamp (sel_, 1, kEnvs) - 1]);
                 continue;
@@ -732,7 +732,7 @@ private:
         list_.state.count = kEnvs;
         list_.state.current = sel_ - 1;
         list_.state.dotMask = full_.instances.targetMask();
-        list_.state.dotColours = ui::EnvStepper::colours();
+        list_.state.dotColours = ui::EnvCarousel::colours();
         list_.place ({ third.x + 6, third.y + 6 + ui::playrows::kSelectorH, third.w - 12, kEnvs * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
         list_.setPopup (third);
         list_.showCurrent();

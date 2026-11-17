@@ -67,7 +67,7 @@ For AI coding agents. Imperative and terse. Human docs with one page per compone
 ## How changes are verified in this project
 - The WORKER does targeted checks only: the one test file of the one component, once, not after every edit.
 - The INTEGRATION SESSION (or one runner) runs, once per integration round on the merged tree, through the build gate `bash /Users/szabi/Documents/Projects/Safian/.hw-local/tools/buildslot.sh <command>` (at most two heavy jobs at a time, `-j4`): `shell-mpc/accept.sh` (builds and runs the UI tests under AddressSanitizer and UBSan), the overlay host tests, `layout_lint_host`, `coverage_host`, `qslots_host`, and the gallery render (`scripts/render-ui-gallery.py`, `scripts/render-ui-gallery-extra.py`). A worker does NOT run the full suite, a cross build, a sanitizer build or the gallery.
-- Which tests cover what: `ui_base_host.cpp` (base controls), `ui_composite_host.cpp` (composites), `ui_screen_host.cpp` (the two oscillator views, rows of the thirds), `ui_cov_*_host.cpp` (knobs and values, steppers and lists, toggles and buttons, popups and scrolling, Q groups and chips, layout and text, composites and panels, new parts), `ui_led_host.cpp` (LED controls), per-screen tests `ui_env_host`, `ui_lfo_host`, `ui_fx_editor_host`, `ui_fx_tables_host`, `ui_display_host`, `ui_list_host`, `ui_text_entry_host`, `ui_time_ruler_host`; `ui_demo.cpp` and `demo_page.h` show real usage; `shell-mpc/overlay/tests/` for pages, Q slots, coverage, lint, cached cells (`cell_plan_host`, `cell_cache_host`, `gpu_scene_host`).
+- Which tests cover what: `ui_base_host.cpp` (base controls), `ui_composite_host.cpp` (composites), `ui_screen_host.cpp` (the two oscillator views, rows of the thirds), `ui_cov_*_host.cpp` (knobs and values, steppers and lists, toggles and buttons, popups and scrolling, Q groups and chips, layout and text, composites and panels, new parts), `ui_led_host.cpp` (LED controls), `ui_carousel_host.cpp` (the selector of the thirds), per-screen tests `ui_env_host`, `ui_lfo_host`, `ui_fx_editor_host`, `ui_fx_tables_host`, `ui_display_host`, `ui_list_host`, `ui_text_entry_host`, `ui_time_ruler_host`; `ui_demo.cpp` and `demo_page.h` show real usage; `shell-mpc/overlay/tests/` for pages, Q slots, coverage, lint, cached cells (`cell_plan_host`, `cell_cache_host`, `gpu_scene_host`).
 
 ## Common mistakes found in this project's reviews
 - A control that is correct on one page and wrong on another: fix the component, not the page.
@@ -98,6 +98,7 @@ QGroup | qgroup.h | four members, one frame, chips, knob routing | - (turn gives
 Knob | base.h | rotary 0..1 with modulation arc and chip | V D M I(led)
 NumberField | base.h | whole number or step value, drag | I D M
 Stepper | base.h | prev / next choice, listable name | I R
+Carousel | carousel.h | current entry in the middle, neighbours at the sides, tap / drag steps, name opens the list | I R
 UpDownStepper | base.h | small integer up / down | I
 ToggleIcon | base.h | boxed on / off with icon | I
 LedToggle | led_toggle.h | frameless dot + name on / off | I
@@ -131,7 +132,8 @@ DetailPage | panel.h | back + display + panel in Q groups | R per part
 OscillatorCompact | screen.h | third of the Play page | I R V
 OscillatorFullScreen | screen.h | full oscillator page | I R V M
 EnvGraph | env_graph.h | DAHDSR graph with handles | V R
-EnvStepper / EnvSelector | env_screen.h | envelope 1..6 selector | I R
+EnvCarousel / EnvSelector | env_screen.h | envelope 1..6 selector (carousel with target dots) / cells | I R
+TypeSelector | base.h | PictogramSelector that can be a drop-down (type of an oscillator) | I R
 EnvCompact / EnvFullScreen | env_screen.h | envelope views | V I R
 FilterDisplay | filter_display.h | response + cutoff/reso handle, formant pad | V (x only)
 FilterRoutePanel | filter_display.h | route popup of a filter | V I R

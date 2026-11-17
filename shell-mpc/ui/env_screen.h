@@ -8,6 +8,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include "carousel.h"
 #include "env_graph.h"
 #include "led_toggle.h"
 #include "panel.h"
@@ -72,16 +73,22 @@ protected:
 };
 
 // ===============================================================================================================================================================
-/** EnvStepper: the selector of the envelope in the compact view, the same component as the LFO's and the oscillator's (a Stepper: the arrows step, a tap on the name opens the list of ENV 1 .. 6), with what the six tabs showed: a small dot in the
-    colour of the current envelope beside the name when it has modulation targets (`setTargetMask`: bit n = envelope n + 1), the name in the colour of the envelope. The list rows carry the same dots (ListPopup::State::dotMask). */
-class EnvStepper : public Stepper
+/** EnvCarousel: the selector of the envelope in the compact view, the same component as the LFO's and the oscillator's (a Carousel: the current entry in the middle, the neighbours at its sides, a tap on a neighbour steps, a tap on the
+    name opens the list of ENV 1 .. 6), with what the six tabs showed: a small dot in the colour of the envelope beside the name (and a smaller one beside the neighbour's) when the envelope has modulation targets (`setTargetMask`:
+    bit n = envelope n + 1). The list rows carry the same dots (ListPopup::State::dotMask). */
+class EnvCarousel : public Carousel
 {
 public:
     uint8_t targetMask_ = 0;
-    void setTargetMask (uint8_t m) noexcept { targetMask_ = m; }
+    void setTargetMask (uint8_t m) noexcept { targetMask_ = m; state.dotMask = m; state.dotColours = colours(); }
     uint8_t targetMask() const noexcept { return targetMask_; }
     bool hasTargets (int i) const noexcept { return i >= 0 && i < kNumEnvs && (targetMask_ & (1u << i)) != 0; }
-    EnvStepper() { state.count = kNumEnvs; state.wrap = true; listable = true; setItem ("ENV 1"); }
+    EnvCarousel()
+    {
+        static const char* const kNames[kNumEnvs] = { "ENV 1", "ENV 2", "ENV 3", "ENV 4", "ENV 5", "ENV 6" };
+        state.count = kNumEnvs; state.wrap = true; state.names = kNames; state.dotColours = colours();
+        setItem ("ENV 1");
+    }
     /** The colours of the six envelopes (the list rows use them for their dots). */
     static const uint32_t* colours() noexcept
     {
@@ -90,24 +97,13 @@ public:
             c[i] = envColour (i);
         return c;
     }
-
-protected:
-    void drawBody (Pen& p) const override
-    {
-        Stepper::drawBody (p);
-        if (hasTargets (state.index))
-        {
-            const Rect b = rect_.inset (2);
-            p.disc (static_cast<float> (b.x + 28 + 10), static_cast<float> (b.y + b.h / 2), 4.0f, p.c (envColour (state.index), 255));
-        }
-    }
 };
 
 // ===============================================================================================================================================================
 class EnvCompact : public Composite
 {
 public:
-    EnvStepper instances;
+    EnvCarousel instances;
     EnvGraph graph;
     MenuButton full { "", MenuButton::Icon::Expand };
     Knob attack { "ATTACK" }, decay { "DECAY" }, sustain { "SUSTAIN" }, release { "RELEASE" };

@@ -63,6 +63,7 @@ A scene is built with `gpu::SceneData data;` (heap: about 336 KB) and `gpu::Scen
 | on / off | `LedToggle` | [toggle.md](toggle.md) |
 | 2 to 8 named choices, all visible | `LedList` | [led-list.md](led-list.md) |
 | more than 8 choices, or no room | `Stepper` with `listable` + `ListPopup` | [stepper.md](stepper.md), [list-popup.md](list-popup.md) |
+| a short list of named entries stepped through often (the selector of a Play third) | `Carousel` + `ListPopup` | [carousel.md](carousel.md) |
 | choice that is better seen than read | `PictogramSelector` | [pictogram-selector.md](pictogram-selector.md) |
 | continuous value 0 to 1 | `Knob` | [knob.md](knob.md) |
 | continuous value in a row or cell | `SliderBar`, `HBar` | [bars.md](bars.md) |
@@ -86,7 +87,7 @@ A scene is built with `gpu::SceneData data;` (heap: about 336 KB) and `gpu::Scen
 | your own widget | derive from `Component` / `Composite` | [core.md](core.md), [composites.md](composites.md) |
 
 ## The components
-**Basic controls**: [Knob](knob.md), [NumberField](number-field.md), [Stepper and UpDownStepper](stepper.md), [LedToggle and ToggleIcon](toggle.md), [LedList](led-list.md), [MenuButton, DetailButton, RouteButton, RouteDropdown](buttons.md), [HBar, SliderBar, Fader](bars.md), [PictogramSelector](pictogram-selector.md), [NoteMask](note-mask.md).
+**Basic controls**: [Knob](knob.md), [NumberField](number-field.md), [Stepper and UpDownStepper](stepper.md), [Carousel and EnvCarousel](carousel.md), [LedToggle and ToggleIcon](toggle.md), [LedList](led-list.md), [MenuButton, DetailButton, RouteButton, RouteDropdown](buttons.md), [HBar, SliderBar, Fader](bars.md), [PictogramSelector](pictogram-selector.md), [NoteMask](note-mask.md).
 
 **Lists and pop-ups**: [ListPopup](list-popup.md), [TextEntry](text-entry.md), [ModSourceBoard](mod-source-board.md), [FxGallery](fx-gallery.md) (engine-bound), [ModulationsPage and ModTargetsPage](modulations-page.md).
 

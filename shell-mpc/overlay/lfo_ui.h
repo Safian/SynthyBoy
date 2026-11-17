@@ -635,11 +635,12 @@ private:
         list_.state.count = static_cast<int> (listNames_.size());
         list_.showCurrent();
     }
-    static const char* instanceName (int i) noexcept
+    static const char* const* instanceNames() noexcept
     {
         static const char* const n[kInstances] = { "LFO 1", "LFO 2", "LFO 3", "LFO 4", "LFO 5", "LFO 6", "LFO 7", "LFO 8", "LFO 9", "LFO 10", "RND 1", "RND 2", "RND 3", "RND 4" };
-        return n[std::clamp (i, 0, kInstances - 1)];
+        return n;
     }
+    static const char* instanceName (int i) noexcept { return instanceNames()[std::clamp (i, 0, kInstances - 1)]; }
     /** The instance as one number 0 .. 13: LFO 1 .. 10, then RND 1 .. 4. */
     int slot() const noexcept { return rnd_ != 0 ? kLfos + rnd_ - 1 : lfoNum_ - 1; }
     void selectSlot (int s, IInstanceView& v)
@@ -802,8 +803,9 @@ private:
             {
                 if (it.id == kInstance)
                 {
-                    auto* st = static_cast<ui::Stepper*> (it.c);
+                    auto* st = static_cast<ui::Carousel*> (it.c);
                     st->state.count = kInstances; st->state.index = slot(); st->state.wrap = true;
+                    st->state.names = instanceNames();
                     st->setItem (instanceName (slot()));
                 }
                 it.c->setEnabled (true);

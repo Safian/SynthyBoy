@@ -5,7 +5,7 @@
 `UpDownStepper`: a vertical box with a number and an up and a down half: a small integer (the unison voices 1 to 16).
 
 ## Header and types
-`shell-mpc/ui/base.h`: `Stepper`, `Stepper::State`, `UpDownStepper`, `UpDownStepper::State`. Derived: `EnvStepper` (`env_screen.h`).
+`shell-mpc/ui/base.h`: `Stepper`, `Stepper::State`, `UpDownStepper`, `UpDownStepper::State`. The envelope selector of the Play page is an `EnvCarousel` ([carousel.md](carousel.md)).
 
 ## State fields
 `Stepper::State`:
@@ -42,7 +42,7 @@ Nothing at an end without `wrap`, nothing when `count <= 1`. Arrows are dim wher
 Both can be Q members, one slot. A turn is stepped. The mouse wheel is one step per notch.
 
 ## Options and variants
-`wrap`, `dim`, `caption`, `listable`, `minWidth`. `EnvStepper` is a `Stepper` of 6 entries with `setTargetMask (mask)` (a dot for envelopes that have targets) and `colours()`.
+`wrap`, `dim`, `caption`, `listable`, `minWidth`. The Play pages' three top selectors (source, envelope, LFO) are [Carousels](carousel.md), not Steppers.
 
 ## Minimal example
 ```cpp
@@ -62,7 +62,7 @@ else if (c.kind == ChangeKind::Request)         { /* open a ListPopup */ }
 ```
 
 ## Used on
-`FilterFullScreen::model`, `style` (listable, with `modelList` button); `MasterScreen::scaleType`, `scaleKey`; `FxSlotEditor::steppers`, `rack`, `page`; `LfoCompact::instance` (listable); `OscillatorCompact::instances` (the Sub / A / B / C / Noise selector); `UnisonBox::count` (`UpDownStepper`); `VoiceScreen::qStepSelect`; `ModMatrixView::sourceFilter`. Pictures: `docs/user-guide/img/filter.png`, `master-main.png`.
+`FilterFullScreen::model`, `style` (listable, with `modelList` button); `MasterScreen::scaleType`, `scaleKey`; `FxSlotEditor::steppers`, `rack`, `page`; the table / content selector of `OscillatorCompact` (`BasicControls::source`); `UnisonBox::count` (`UpDownStepper`); `VoiceScreen::qStepSelect`; `ModMatrixView::sourceFilter`. Pictures: `docs/user-guide/img/filter.png`, `master-main.png`.
 
 ## Limits and pitfalls
 - The stepper does not know the list: the owner sets `text` on every update from `index`.
