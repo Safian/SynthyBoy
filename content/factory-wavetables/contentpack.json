@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "id": "com.safian.synthyboy.factory-wavetables",
+  "name": "Factory Wavetables",
+  "version": "1.0.0",
+  "license": "CC0-1.0",
+  "attribution": "Safian Szabolcs",
+  "kind": "wavetables",
+  "requires_plugin": ">=0.1.0",
+  "description": "16 wavetables made by scripts/gen-content-pack.py (formant sweeps, PWM stacks, additive bells, FM series, organ drawbars, vocal and metallic tables) under CC0-1.0; 2048 samples per frame.",
+  "files": [
+    {
+      "path": "additive_bell_strike.wav",
+      "sha256": "7b3f2968eaadfce27e5944b180d656ac3598179bbb598964d98166c64dbd9962",
+      "size": 262188
+    },
+    {
+      "path": "additive_glass_harmonica.wav",
+      "sha256": "88079754c6da0880f72e93e01e583eb4bde977b64d8a471fe923e9a00713c2c1",
+      "size": 196652
+    },
+    {
+      "path": "choir_singers_shift.wav",
+      "sha256": "d80eb714240bfd0e5d69bc8e69c2b2fb860e5affa17bec07e2917024a97f8cc3",
+      "size": 196652
+    },
+    {
+      "path": "fm_feedback_saw.wav",
+      "sha256": "5b3bf98b0e59c17804fbb3b67431cd04f6e60a7f3087ec37bfba307023c43dcc",
+      "size": 262188
+    },
+    {
+      "path": "fm_index_sweep.wav",
+      "sha256": "bdd7591fad68c24c72fde08576dd0dd97cb56ecb092d4f111bac3392a89ac5f8",
+      "size": 262188
+    },
+    {
+      "path": "fm_ratio_ladder.wav",
+      "sha256": "32ac1add55fcccdeadccb6588296b4324f28c2df545fc1d72a9a40c59d925ef1",
+      "size": 262188
+    },
+    {
+      "path": "formant_sweep_aeiou.wav",
+      "sha256": "6e5b0b708423a55b597831453bc5ddc44ef99a21048dfc92c0f41223bb4015ef",
+      "size": 262188
+    },
+    {
+      "path": "harmonic_sieve.wav",
+      "sha256": "33d41da1f703e1709437e290f7d0257706b86316e726cb8a99ca9d458bc8859b",
+      "size": 131116
+    },
+    {
+      "path": "metal_comb_sweep.wav",
+      "sha256": "7bc6d16bada58e08253e11195431219316bdbf0ea1ce901d6660500c3dc30328",
+      "size": 262188
+    },
+    {
+      "path": "organ_drawbars_16.wav",
+      "sha256": "b09efad0727cc2afe889ea1680e8eedbeace0ad72b80f574bdf3c0e6a3cb763a",
+      "size": 127020
+    },
+    {
+      "path": "overtone_throat_sweep.wav",
+      "sha256": "b0bc665d04662cb9683e67541588bcf0d7c6ec43a900675697bc4c2b24487be8",
+      "size": 262188
+    },
+    {
+      "path": "pwm_dual_phase.wav",
+      "sha256": "919a0f702e2e5549f647d35703b24cedf6db05bce2a39fa0a7bb7a65b38d6be2",
+      "size": 262188
+    },
+    {
+      "path": "pwm_saw_blend.wav",
+      "sha256": "ac63eeb51abba1433619cfae3c5ab2e5b8050f326922d681a8f3777e50999665",
+      "size": 262188
+    },
+    {
+      "path": "pwm_triple_stack.wav",
+      "sha256": "ba3adb5a56fe0720cc85da8a7bb828ed2211d5f3aee1638e7bab22632dec87b0",
+      "size": 262188
+    },
+    {
+      "path": "ring_mod_ladder.wav",
+      "sha256": "7862884f1c1a7d69ccebdc795c07c6b0c85bf583bb1adb6448aa417a6c106b43",
+      "size": 262188
+    },
+    {
+      "path": "sine_fold_sweep.wav",
+      "sha256": "82a8ee1d796ab016c1db92d117a0f96ed69aa30f10dfcb4674cbfc3dd963ff6f",
+      "size": 262188
+    }
+  ]
+}
