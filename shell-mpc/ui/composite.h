@@ -47,11 +47,12 @@ public:
 
     void place (const Rect& r) override { rect_ = r; layout(); }
     void setEnabled (bool e) override { enabled_ = e; cap_ = nullptr; syncKids(); }
+    void setInactive (bool i) override { inactive_ = i; for (int k = 0; k < n_; ++k) kids_[k]->setInactive (i); }
     void setQ (bool frame, int index) override { qFrame_ = frame; qIndex_ = frame ? index : 0; for (int i = 0; i < n_; ++i) kids_[i]->setQ (frame, 0); }
 
     void draw (gpu::SceneBuilder& sb) const override
     {
-        Pen pen (sb, enabled_);
+        Pen pen (sb, enabled_, inactive_);
         {
             Cell cell (sb, rect_);
             drawUnder (pen);

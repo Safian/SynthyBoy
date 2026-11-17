@@ -32,6 +32,7 @@ public:
         instances.listable = true;
         instances.minWidth = 120;   // the room between the power button and the buttons at the right of the header row: about 200 px of a third
         power.state.icon = ToggleIcon::Icon::Power;
+        power.state.negativeOff = true;
         basic.setStacked (true);
         addKid (instances); addKid (power); addKid (route); addKid (basic); addKid (full);
         setInstance (OscInstance::A, OscKind::Wavetable);
@@ -58,20 +59,19 @@ public:
     }
 
 protected:
-    // top to bottom (play_rows.h): the header row (power, the source selector, the full screen button, the route button: 56 px, the same row as the selector of the other two thirds), the display (the rectangle of the three thirds),
-    // and from the controls line the Basic group in one frame: the type cells, then ONE row (the table stepper / OCT / the noise's knobs, PAN, LEVEL)
+    // top to bottom (play_rows.h): the top row (the source selector, and the route button), the display (the rectangle of the three thirds; the power button in its top left corner and the full screen button in its top right
+    // corner, 4 px from the edges, 64 x 56: the full screen button is placed exactly as the envelope graph's and the LFO display's), and from the controls line the Basic group in one frame
     void layout() override
     {
         const int m = playrows::kMargin, W = rect_.w - 2 * m, rowH = playrows::kSelectorH;
-        const bool sub = inst_ == OscInstance::Sub;   // the sub oscillator's routing is the ROUTING block of its page: no route button in its header (as on the page)
-        const int btnW = 64, gap = 8;
+        const bool sub = inst_ == OscInstance::Sub;   // the sub oscillator's routing is the ROUTING block of its page: no route button (as on the page)
+        const int btnW = 64, gap = 8, inset = 4;
         const int hy = rect_.y + m;
-        power.place ({ rect_.x + m, hy, rowH, rowH });
-        route.place (sub ? Rect {} : Rect { rect_.right() - m - btnW, hy - (64 - rowH) / 2, btnW, 64 });   // the route button is 64 px tall at least: centred on the row, one pixel row of margin above is enough
-        full.place ({ rect_.right() - m - btnW - (sub ? 0 : gap + btnW), hy, btnW, rowH });   // the full screen button stands in the header row, not over the curve of the display
-        const int sx = rect_.x + m + rowH + gap, sr = full.rect().x - gap;
-        instances.place ({ sx, hy, std::max (0, sr - sx), rowH });
         display_ = playrows::displayRect (rect_);
+        power.place ({ display_.x + inset, display_.y + inset, btnW, rowH });
+        full.place ({ display_.right() - btnW - inset, display_.y + inset, btnW, rowH });
+        route.place (sub ? Rect {} : Rect { rect_.right() - m - btnW, hy, btnW, rowH });
+        instances.place ({ rect_.x + m, hy, std::max (0, W - (sub ? 0 : btnW + gap)), rowH });
         const int by = playrows::controlsLine (rect_);
         basic.place ({ rect_.x + m, by, W, std::max (0, rect_.bottom() - m - by) });
     }
@@ -103,6 +103,7 @@ public:
     OscillatorFullScreen()
     {
         power.state.icon = ToggleIcon::Icon::Power;
+        power.state.negativeOff = true;
         tune.setVertical (true);
         addKid (close); addKid (power); addKid (basic); addKid (route); addKid (bar); addKid (tune); addKid (panel);
         setInstance (OscInstance::A, OscKind::Wavetable);

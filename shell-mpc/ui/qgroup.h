@@ -26,6 +26,9 @@ public:
     static bool wideDevice() noexcept { return wideFlag().load (std::memory_order_relaxed); }
     /** Which block of four knobs the group has while it is not the active one (QRouter::blockOfGroup): 0 the active group, 1 .. 3 the next groups of the page, -1 no knobs (the default). The page sets it for every group it publishes. */
     void setBlock (int block) noexcept { block_ = block; }
+    /** The inactive look (core.h Pen): the frame and the chips are drawn grey too (the group of a switched-off oscillator). */
+    void setInactive (bool i) noexcept { inactive_ = i; }
+    bool inactive() const noexcept { return inactive_; }
     int block() const noexcept { return block_; }
 
     /** Puts a member into slot 0 .. 3 (null empties it). The frame of the group follows the members' rectangles when it is drawn. */
@@ -77,7 +80,7 @@ public:
             return;
         // `around`: the rectangle of the frame when the members lie inside cards (a macro card, a block): the ONE frame then runs around the cards, never through them; the chips stay at the members
         const Rect u = around && ! around->empty() ? Rect::unite (*around, m) : m;
-        Pen pen (sb, true);
+        Pen pen (sb, true, inactive_);
         if (! frameless_)
         {
             Cell cell (sb, u);   // the frame lies inside the rectangle of the frame: the cell is repainted when the group becomes active / idle or moves, nothing else is
@@ -107,7 +110,7 @@ public:
         const bool wide = wideDevice();
         if (u.empty() || (wide && block_ < 1))
             return;
-        Pen pen (sb, true);
+        Pen pen (sb, true, inactive_);
         for (int i = 0; i < kSlots; ++i)
             if (const Component* m = slot_[i]; m && ! m->rect().empty())
                 chip (sb, pen, m->rect(), wide ? block_ * kSlots + i + 1 : i + 1, true);
@@ -130,7 +133,7 @@ public:
                 u = Rect::unite (u, members[i]->rect());
         if (u.empty())
             return;
-        Pen pen (sb, true);
+        Pen pen (sb, true, inactive_);
         for (int i = 0; i < n && i < kSlots; ++i)
             if (members[i] && ! members[i]->rect().empty())
                 chip (sb, pen, members[i]->rect(), wide ? block * kSlots + i + 1 : i + 1, true);
@@ -181,7 +184,7 @@ private:
     static std::atomic<bool>& wideFlag() noexcept { static std::atomic<bool> f { false }; return f; }
     Rect frameRect_ = {};
     int block_ = -1;
-    bool frameless_ = false;
+    bool frameless_ = false, inactive_ = false;
     Component* slot_[kSlots] = {};
     bool active_ = false;
 };

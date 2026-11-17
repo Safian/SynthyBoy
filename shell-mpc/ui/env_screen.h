@@ -132,7 +132,7 @@ public:
     void draw (gpu::SceneBuilder& sb) const override
     {
         {
-            Pen pen (sb, enabled_);
+            Pen pen (sb, enabled_, inactive_);
             Cell cell (sb, rect_);
             drawUnder (pen);
         }

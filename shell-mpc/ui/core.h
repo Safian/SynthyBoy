@@ -206,10 +206,19 @@ private:
 class Pen
 {
 public:
-    Pen (gpu::SceneBuilder& sb, bool enabled) : sb_ (sb), dim_ (enabled ? 255 : 150) {}
+    /** `inactive`: the INACTIVE look of the theme (docs/ui-components/theme.md): every colour goes to a grey of its own brightness, a little darker (kInactivePercent); the component stays operable (a switched-off oscillator's controls). One rule here,
+        used by every component that draws through a pen. */
+    Pen (gpu::SceneBuilder& sb, bool enabled, bool inactive = false) : sb_ (sb), dim_ (enabled ? 255 : 150), grey_ (inactive) {}
+    static constexpr uint32_t kInactivePercent = 70;
+    /** The grey of a colour in the inactive look (0xRRGGBBAA in, the same alpha out). */
+    static uint32_t inactiveGrey (uint32_t rgba) noexcept
+    {
+        const uint32_t r = (rgba >> 24) & 255u, g = (rgba >> 16) & 255u, b = (rgba >> 8) & 255u, luma = (r * 30u + g * 59u + b * 11u) / 100u, v = luma * kInactivePercent / 100u;
+        return (v << 24) | (v << 16) | (v << 8) | (rgba & 255u);
+    }
 
-    /** The colour `rgba` (0xRRGGBBAA) with the alpha of a disabled component scaled down. */
-    uint32_t c (uint32_t rgba) const noexcept { return (rgba & 0xffffff00u) | (((rgba & 255u) * dim_ + 127u) / 255u); }
+    /** The colour `rgba` (0xRRGGBBAA) with the alpha of a disabled component scaled down, and grey in the inactive look. */
+    uint32_t c (uint32_t rgba) const noexcept { if (grey_) rgba = inactiveGrey (rgba); return (rgba & 0xffffff00u) | (((rgba & 255u) * dim_ + 127u) / 255u); }
     uint32_t c (uint32_t rgb, int alpha) const noexcept { return c (colour::rgba (rgb, static_cast<uint32_t> (alpha))); }
 
     void rect (int x0, int y0, int x1, int y1, uint32_t col) { if (x1 > x0 && y1 > y0) sb_.rect (static_cast<float> (x0), static_cast<float> (y0), static_cast<float> (x1), static_cast<float> (y1), col); }
@@ -412,6 +421,7 @@ public:
 private:
     gpu::SceneBuilder& sb_;
     uint32_t dim_;
+    bool grey_ = false;
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -476,6 +486,9 @@ public:
     virtual void place (const Rect& r) { rect_ = r; }
     bool enabled() const noexcept { return enabled_; }
     virtual void setEnabled (bool e) { enabled_ = e; if (! e) captured_ = false; }
+    /** The INACTIVE look (a switched-off oscillator): drawn grey (Pen::inactiveGrey), still operable. A composite hands it to its parts. */
+    bool inactive() const noexcept { return inactive_; }
+    virtual void setInactive (bool i) { inactive_ = i; }
     bool qFrame() const noexcept { return qFrame_; }
     int qIndex() const noexcept { return qIndex_; }
     /** The component belongs to the active Q-Link group (frame true) as member number `index` (1 .. 4, 0 = no badge). */
@@ -490,7 +503,7 @@ public:
     // ---- the output: the drawing
     virtual void draw (gpu::SceneBuilder& sb) const
     {
-        Pen pen (sb, enabled_);
+        Pen pen (sb, enabled_, inactive_);
         Cell cell (sb, rect_);
         drawBody (pen);   // the index of a Q group member is drawn by its group (QGroup::draw), on the frame
     }
@@ -548,7 +561,7 @@ protected:
     virtual Change onTurn (double) { return Change::none(); }
 
     Rect rect_;
-    bool enabled_ = true, qFrame_ = false, captured_ = false;
+    bool enabled_ = true, qFrame_ = false, captured_ = false, inactive_ = false;
     int qIndex_ = 0, id_ = 0;
 };
 

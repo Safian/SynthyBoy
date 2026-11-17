@@ -155,6 +155,7 @@ public:
         updateMissing (inst);
         pull (inst, main_);
         pull (inst, page_);
+        applyInactive();
         updateSpecVisibility (inst);
         updateLoadButton (inst);
         if (pageTop_ == kPageEnvelope)
@@ -259,7 +260,10 @@ public:
     {
         drawMissing (sb);
         if (stackDepth_ == 0)
+        {
             compact_.full.draw (sb);
+            compact_.power.draw (sb);   // the buttons that stand in the corners of the display lie over its picture
+        }
         else if (loadShown_)
             loadBtn_.draw (sb);
     }
@@ -1515,6 +1519,19 @@ private:
         return name;
     }
     // ---- the content the sound needs and does not have (IInstanceView::missingContent: bits 0 .. 2 the file of oscillator 1 .. 3, 3 .. 5 the user wavetable of oscillator 1 .. 3, 6 the impulse of Convolve, 7 the sample of the noise)
+    /** The INACTIVE look of a switched-off oscillator (docs/ui-components/theme.md, `ui::Pen::inactiveGrey`): the controls under the display, the blocks and the Q frames are drawn grey, the display picture is grey too (OscDisplay);
+        the power button is red (`negativeOff`) and the selector and the buttons of the display keep their colours. Nothing is disabled: the controls stay operable, a patch can be prepared on a switched-off oscillator (as before). */
+    void applyInactive()
+    {
+        const bool off = ! compact_.power.state.on;
+        compact_.setInactive (off);
+        compact_.instances.setInactive (false); compact_.power.setInactive (false); compact_.full.setInactive (false); compact_.route.setInactive (false);
+        compact_.basic.group.setInactive (off);
+        full_.setInactive (off);
+        full_.close.setInactive (false); full_.power.setInactive (false); full_.route.setInactive (false);
+        for (ui::QGroup& g : full_.groups)
+            g.setInactive (off);
+    }
     /** The text "content missing: <name>" for the oscillator on screen ("" when it misses nothing); the name is taken from the state's content reference (the pack's title, else the file name; the reference is there although the file is not). */
     void updateMissing (const IInstanceView& v)
     {
@@ -1563,7 +1580,7 @@ private:
         if (missingText_.empty() || r.empty())
             return;
         const ui::theme::Look& T = ui::theme::L();
-        const ui::Rect box { r.x + 16, r.y + 12, std::max (0, r.w - 32), 40 };
+        const ui::Rect box { r.x + 4 + 64 + 8, r.y + 8, std::max (0, r.w - 2 * (4 + 64 + 8)), 48 };   // between the power button (top left) and the full screen button (top right) of the display
         const float size = ui::Pen::fitSize (missingText_.c_str(), static_cast<float> (box.w), static_cast<float> (box.h), T.fLabel + 4.0f, T.fMin);
         if (size <= 0.0f)
             return;

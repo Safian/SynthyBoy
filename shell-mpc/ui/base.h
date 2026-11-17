@@ -159,7 +159,7 @@ public:
     /** A knob with a switched-off LED is drawn dim all over (as a disabled one) and takes no touch but the switch. */
     void draw (gpu::SceneBuilder& sb) const override
     {
-        Pen pen (sb, enabled_ && ! (state.led && ! state.ledOn));
+        Pen pen (sb, enabled_ && ! (state.led && ! state.ledOn), inactive_);
         Cell cell (sb, rect_);
         drawBody (pen);
     }
@@ -685,6 +685,7 @@ public:
     struct State
     {
         bool on = false; Icon icon = Icon::Generic; char label[24] = {}; bool showState = false;   // label (<= 8 characters, optional): under the icon; showState: " ON" / " OFF" after it
+        bool negativeOff = false;   // the power button of an oscillator: drawn in the theme's negative colour (red) while it is off, in the normal active colour while on
         bool knobLike = false;   // in a row of knobs: no box; the icon where the dial is, the name on the line of the knob names, ON / OFF on the line of the values (the cell of a knob, the names in one line)
     };
     State state;
@@ -718,7 +719,7 @@ protected:
         }
         if (labelH > 0)
             p.textCentered ({ b.x, b.bottom() - labelH, b.w, labelH }, lab, T.fLabel - 2.0f, p.c (qFrame_ ? T.q : (state.on ? T.text : T.textDim), 255), T.fMin);
-        const uint32_t col = state.on ? p.c (T.flow[0], 255) : p.c (T.textFaint, 255);
+        const uint32_t col = state.on ? p.c (T.flow[0], 255) : p.c (state.negativeOff ? T.negative : T.textFaint, 255);
         p.style (1.0f, true);
         switch (state.icon)
         {
