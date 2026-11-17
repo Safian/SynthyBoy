@@ -200,6 +200,7 @@ endif()
 add_subdirectory(shell-clap)
 if(SYNTHYBOY_BUILD_MPC_SHELL)
     add_subdirectory(shell-mpc)
+    add_subdirectory(template-mpc)   # the starter template of an MPC plugin with plugin-drawn pages (template-mpc/README.md); its host test is mpckit_demo_pages_host
 endif()
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(bench)
