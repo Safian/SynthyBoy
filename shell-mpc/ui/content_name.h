@@ -34,7 +34,7 @@ inline std::string display (const std::string& title, const std::string& file)
 inline void middleFit (const char* s, float size, float maxW, char* out, int cap)
 {
     const int n = static_cast<int> (std::strlen (s));
-    if (cap < 8 || sdf::textWidth (s, n, size) <= maxW)
+    if (cap < 8 || overlay::sdf::textWidth (s, n, size) <= maxW)
     {
         const int c = std::min (n, std::max (0, cap - 1));
         std::memcpy (out, s, static_cast<size_t> (c));
@@ -50,7 +50,7 @@ inline void middleFit (const char* s, float size, float maxW, char* out, int cap
         while (head > 0 && ! boundary (head)) --head;
         while (tail > 0 && ! boundary (n - tail)) --tail;
         const std::string cand = std::string (s, static_cast<size_t> (head)) + kEll + std::string (s + n - tail, static_cast<size_t> (tail));
-        if (static_cast<int> (cand.size()) < cap && sdf::textWidth (cand.c_str(), static_cast<int> (cand.size()), size) <= maxW)
+        if (static_cast<int> (cand.size()) < cap && overlay::sdf::textWidth (cand.c_str(), static_cast<int> (cand.size()), size) <= maxW)
         {
             best = cand;
             break;

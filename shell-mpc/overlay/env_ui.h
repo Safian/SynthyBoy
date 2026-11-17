@@ -1038,8 +1038,10 @@ private:
     // ======================================================================================================================================================================
     // the Q group: the four targets the hardware knobs are mapped to
     /** The four targets of the ADSR group of the compact view and its block of knobs (the Play view maps the groups of the three thirds together). */
+public:   // the Play view reads the targets of the compact group and sets its block
     void compactTargets (int* t) const noexcept { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (compact_.group.member (i)); }
     void setCompactBlock (int block) noexcept { compact_.group.setBlock (block); }
+private:
     int paramOfMember (const ui::Component* m) const noexcept
     {
         while (m != nullptr)

@@ -1581,7 +1581,9 @@ private:
         if (missing)
             missingText_ = name.empty() ? std::string ("content missing") : "content missing: " + name;
     }
+public:
     const std::string& missingText() const noexcept { return missingText_; }
+private:
     /** The line over the display (in the display rectangle of the state on screen), in the warning colour; a name that does not fit loses its middle. */
     void drawMissing (gpu::SceneBuilder& sb) const
     {
@@ -1804,8 +1806,10 @@ private:
     void resolveQ (IInstanceView&) {}
     /** The table index behind a member of a Q group (a composite: its primary child); -1 when there is none. */
     /** The four targets of the Basic group of the compact view (table indices, -1 none) and its block of knobs (the Play view maps the groups of the three thirds together). */
+public:   // the Play view reads the targets of the compact group and sets its block
     void compactTargets (int* t) const noexcept { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (compact_.basic.group.member (i)); }
     void setCompactBlock (int block) noexcept { compact_.basic.group.setBlock (block); }
+private:
     int paramOfMember (const ui::Component* m) const noexcept
     {
         while (m != nullptr)
