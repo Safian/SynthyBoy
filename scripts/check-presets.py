@@ -293,8 +293,14 @@ class PresetChecker:
                 # Macro target tracking & nonexistent parameter check (Rule 12)
                 dest_entry = self.mod_destinations.get(dst)
                 dest_param_key = dest_entry.get("key") if dest_entry else None
+                macro_sources_in_slot = []
                 if src in self.macro_sources:
-                    macro_entry = self.macro_sources[src]
+                    macro_sources_in_slot.append((src, s_k, "main"))
+                if aux_src in self.macro_sources and aux_src != src:
+                    macro_sources_in_slot.append((aux_src, aux_k, "aux"))
+
+                for m_choice, field_key, role in macro_sources_in_slot:
+                    macro_entry = self.macro_sources[m_choice]
                     macro_key = macro_entry.get("key", "")
                     m_num_match = re.search(r"\d+", macro_key)
                     macro_num = int(m_num_match.group(0)) if m_num_match else 0

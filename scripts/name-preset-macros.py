@@ -5,7 +5,7 @@
 #
 #   name-preset-macros.py [--presets DIR] [--names FILE] [--proposal FILE] [--rederive] [--write] [--check]
 #
-# Reads every .sbpreset below DIR (default content/presets): the mod matrix slots whose source is a macro and that really drive something (a destination, an amount that is not
+# Reads every .sbpreset below DIR (default content/presets): the mod matrix slots whose source or aux source is a macro and that really drive something (a destination, an amount that is not
 # zero, not bypassed) are the targets of that macro. A macro with targets gets a readable name from them, a macro without targets keeps the default name (an empty string):
 #   one target (or targets that share one short name)  -> its short name: "Cutoff", "Reso", "Drive", "Warp", "Detune", "LFO Rate" ...
 #   two targets                                         -> "A + B" when it fits 16 characters, else the module both belong to ("Filter"), else their two modules ("LFO + Phaser"), else "A +" (the first one and a plus)
@@ -132,7 +132,7 @@ def combine_unbounded(keys, params, macro):
 
 
 def macro_targets(state_params, doc):
-    """{macro (1 .. 8): [(destination key, amount percent)]} of the slots that drive something."""
+    """{macro (1 .. 8): [(destination key, amount percent)]} of the slots that drive something (main or aux source)."""
     source_key = {s["choice"]: s["key"] for s in doc["modSources"]}
     dest_key = {d["choice"]: d["key"] for d in doc["modDestinations"]}
     out = {}
@@ -142,9 +142,34 @@ def macro_targets(state_params, doc):
         amount = float(state_params.get(p + "amount", 0))
         if not src or not dst or amount == 0 or state_params.get(p + "bypass", 0):
             continue
+
+        target_param = dest_key.get(dst)
+        if not target_param:
+            continue
+
+        # If destination is another slot's amount (e.g. mod01.amount), resolve to that slot's target
+        m_slot = re.match(r"^mod(\d+)\.amount$", target_param)
+        if m_slot:
+            target_slot = int(m_slot.group(1))
+            t_dst = int(state_params.get(f"mod{target_slot:02d}.destination", 0))
+            if t_dst in dest_key:
+                target_param = dest_key[t_dst]
+
+        # Main source
         key = source_key.get(src, "")
-        if key.startswith("macro") and key[5:].isdigit() and dst in dest_key:
-            out.setdefault(int(key[5:]), []).append((dest_key[dst], amount))
+        main_macro = None
+        if key.startswith("macro") and key[5:].isdigit():
+            main_macro = int(key[5:])
+            out.setdefault(main_macro, []).append((target_param, amount))
+
+        # Aux source (treat aux use as use)
+        aux = int(state_params.get(p + "aux_source", 0))
+        if aux:
+            aux_key = source_key.get(aux, "")
+            if aux_key.startswith("macro") and aux_key[5:].isdigit():
+                aux_macro = int(aux_key[5:])
+                if aux_macro != main_macro:
+                    out.setdefault(aux_macro, []).append((target_param, amount))
     return out
 
 

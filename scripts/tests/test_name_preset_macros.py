@@ -98,6 +98,40 @@ class Targets(unittest.TestCase):
         }
         self.assertEqual(npm.macro_targets(state, DOC), {3: [("filter1.cutoff", 40.0)], 8: [("reverb.mix", -20.0)]})
 
+    def test_aux_source_counts_as_macro_target_and_generates_sensible_name(self):
+        src = {s["key"]: s["choice"] for s in DOC["modSources"]}
+        dst = {d["key"]: d["choice"] for d in DOC["modDestinations"]}
+        # LFO 1 -> filter1.cutoff scaled by Macro 2 as aux source
+        state = {
+            "mod01.source": src["lfo1"],
+            "mod01.destination": dst["filter1.cutoff"],
+            "mod01.amount": 50,
+            "mod01.aux_source": src["macro2"],
+        }
+        targets = npm.macro_targets(state, DOC)
+        self.assertIn(2, targets)
+        self.assertEqual(targets[2], [("filter1.cutoff", 50.0)])
+        derived_name = npm.combine([k for k, _ in targets[2]], PARAMS, 2)
+        self.assertEqual(derived_name, "Cutoff")
+
+    def test_macro_driving_route_amount_resolves_sensibly(self):
+        src = {s["key"]: s["choice"] for s in DOC["modSources"]}
+        dst = {d["key"]: d["choice"] for d in DOC["modDestinations"]}
+        # Slot 1: LFO -> Cutoff. Slot 2: Macro 1 -> mod01.amount
+        state = {
+            "mod01.source": src["lfo1"],
+            "mod01.destination": dst["filter1.cutoff"],
+            "mod01.amount": 50,
+            "mod02.source": src["macro1"],
+            "mod02.destination": dst["mod01.amount"],
+            "mod02.amount": 30,
+        }
+        targets = npm.macro_targets(state, DOC)
+        self.assertIn(1, targets)
+        self.assertEqual(targets[1], [("filter1.cutoff", 30.0)])
+        derived_name = npm.combine([k for k, _ in targets[1]], PARAMS, 1)
+        self.assertEqual(derived_name, "Cutoff")
+
 
 class FactoryPresets(unittest.TestCase):
     def test_the_names_are_in_the_presets_and_follow_the_rules(self):

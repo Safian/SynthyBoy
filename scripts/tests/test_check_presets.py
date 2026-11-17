@@ -372,6 +372,21 @@ class CheckPresetsTest(unittest.TestCase):
         self.assertEqual(res2.returncode, 1)
         self.assertIn("macro_unused_with_targets", res2.stdout)
 
+        # Case C: mod matrix routes macro 1 as AUX source, but meta description states macro 1 is unused
+        preset_doc3 = make_valid_preset(overrides={
+            "mod01.source": 1.0,  # env1
+            "mod01.destination": 1.0,  # master.volume
+            "mod01.amount": 30.0,
+            "mod01.aux_source": 19.0,  # macro1 as aux source
+        })
+        preset_doc3["meta"]["description"] = "Bass patch, Macro 1 is unused."
+        bad_file3 = self.bass_dir / "unused_macro3.sbpreset"
+        bad_file3.write_text(json.dumps(preset_doc3), encoding="utf-8")
+
+        res3 = self._run_checker(str(bad_file3))
+        self.assertEqual(res3.returncode, 1)
+        self.assertIn("macro_unused_with_targets", res3.stdout)
+
     def test_defect_macro_target_pointing_at_nonexistent_param(self):
         preset_doc = make_valid_preset()
         preset_doc["macros"] = [
