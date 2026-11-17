@@ -225,8 +225,9 @@ int main (int argc, char** argv)
         // the overlay build's chunk has the three Play selectors (shell-mpc/play_params.h) in addition; without them it is the chunk of every other build (compared by accept.sh)
         const size_t a = chunk.find (",\"mpcPlayOsc5\":"), b = chunk.find (",\"mpcPadPressure\":");
         check (a != std::string::npos && b != std::string::npos && a < b, "the overlay build's chunk has the Play selectors before the pad pressure members");
+        const size_t lim = chunk.find (",\"mpcOutputLimiter\":");   // the limiter setting (every build) stands between the Play selectors and the pad pressure members
         if (a != std::string::npos && b != std::string::npos && a < b)
-            chunk.erase (a, b - a);
+            chunk.erase (a, (lim != std::string::npos && lim > a && lim < b ? lim : b) - a);
     }
     std::printf ("chunk %zu %zu\n", chunk.size(), std::hash<std::string>{} (chunk));
     check (! chunk.empty() && chunk.find ("Cursor") == std::string::npos, "state chunk is available and has no display parameter");
