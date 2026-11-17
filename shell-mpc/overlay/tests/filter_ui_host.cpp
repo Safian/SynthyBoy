@@ -906,7 +906,8 @@ void testFilterModelStyles()
             bool namesMatch = true;
             for (int s = 0; s < expectedCount; ++s)
             {
-                const char* expectedName = synthyboy::filters::filterModelStyleName (m, s);
+                const char* const* classic = ui::filterStyleNames (m);   // the classic models 0 .. 7 show the documented names, the others the engine's
+                const char* expectedName = classic != nullptr ? classic[s] : synthyboy::filters::filterModelStyleName (m, s);
                 const char* actualName = r.ui.list().state.items[s];
                 if (actualName == nullptr || expectedName == nullptr || std::string (actualName) != expectedName)
                 {
@@ -914,7 +915,13 @@ void testFilterModelStyles()
                     break;
                 }
             }
-            check (namesMatch, "style list popup item names match filterModelStyleNames for model " + std::to_string (m));
+            check (namesMatch, "style list popup item names are the documented names (classic models) or the engine's for model " + std::to_string (m));
+            {
+                const ui::ListPopup& lp = r.ui.list();
+                const int rowsShown = std::min (expectedCount, 9);
+                check (lp.rect().h == rowsShown * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad && lp.rect().w >= 280 && lp.rect().w < 600 && lp.rect().x > 340,
+                       "style list popup for model " + std::to_string (m) + " is sized to its content (" + std::to_string (lp.rect().w) + " x " + std::to_string (lp.rect().h) + ")");
+            }
 
             // Close popup
             r.tap (20, 130);

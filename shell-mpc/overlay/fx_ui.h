@@ -474,7 +474,7 @@ private:
                 {
                     const int model = static_cast<int> (std::lround (plainOfKey (item, kind, inst, "fxfilter.model", 0.0f)));
                     choiceCount = synthyboy::filters::filterModelStyleCount (model);
-                    customChoices = synthyboy::filters::filterModelStyleNames (model);
+                    customChoices = ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
                     if (choiceCount > 0 && static_cast<int> (std::lround (plainVal)) >= choiceCount)
                     {
                         const int clamped = choiceCount - 1;
@@ -885,7 +885,7 @@ private:
             const int count = synthyboy::filters::filterModelStyleCount (model);
             if (count <= 1)
                 return; // One-style rule: a model with one style has no list popup
-            const char* const* styleNames = synthyboy::filters::filterModelStyleNames (model);
+            const char* const* styleNames = ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
             for (int i = 0; i < count; ++i)
                 listNames_.push_back (styleNames != nullptr && styleNames[i] != nullptr ? styleNames[i] : "");
             list_.state.items = listNames_.data();

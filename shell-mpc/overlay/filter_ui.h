@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "../q_router.h"
+#include "../ui/choice_names.h"
 #include "../ui/ui.h"
 #include "curve_source.h"
 #include "page_view.h"
@@ -131,9 +132,10 @@ public:
                 const int mIdx = paramForId (kModel, editFilter_);
                 const int model = mIdx >= 0 ? static_cast<int> (std::lround (inst.param (mIdx))) : 0;
                 const int count = synthyboy::filters::filterModelStyleCount (model);
-                list_.state.items = synthyboy::filters::filterModelStyleNames (model);
+                list_.state.items = ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
                 list_.state.count = count;
                 list_.state.current = std::clamp (static_cast<int> (std::lround (inst.param (listParam_))), 0, std::max (0, count - 1));
+                placeList (true);
             }
             else
                 list_.state.current = static_cast<int> (std::lround (inst.param (listParam_)));
@@ -502,6 +504,22 @@ private:
     /** The parameter of a control of the page (a knob, a stepper, a switch). */
     int activeParamOfControl (int id) const noexcept { return paramForId (id, editFilter_); }
 
+    /** The box of the list popup: the standard one (600 px wide, nine rows) or, for the style list, the size of its content: as wide as the longest name needs (and at least 280 px), as tall as its rows, centred. */
+    void placeList (bool fitContent)
+    {
+        if (! fitContent)
+        {
+            list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+            return;
+        }
+        int widest = 0;
+        for (int i = 0; i < list_.state.count && list_.state.items != nullptr; ++i)
+            if (list_.state.items[i] != nullptr)
+                widest = std::max (widest, static_cast<int> (std::ceil (ui::Pen::textWidth (list_.state.items[i], ui::theme::L().fItem))));
+        const int w = std::clamp (widest + 12 + 20 + 2 * ui::ListPopup::kPad, 280, 600), rows = std::clamp (list_.state.count, 1, 9);
+        list_.place ({ (kCanvasW - w) / 2, kTabY + 20, w, rows * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+    }
+
     void openList (IInstanceView& inst, UiStack& stack, int id)
     {
         listParam_ = paramForId (id, editFilter_);
@@ -515,9 +533,10 @@ private:
             // One-style rule: a model with one style has no list popup
             if (count <= 1)
                 return;
-            list_.state.items = synthyboy::filters::filterModelStyleNames (model);
+            list_.state.items = ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
             list_.state.count = count;
             list_.state.current = std::clamp (static_cast<int> (std::lround (inst.param (listParam_))), 0, std::max (0, count - 1));
+            placeList (true);
             list_.showCurrent();
             stack.openDetail (kPageList);
             return;
@@ -526,6 +545,7 @@ private:
         list_.state.items = pi.choices;
         list_.state.count = pi.numChoices;
         list_.state.current = static_cast<int> (std::lround (inst.param (listParam_)));
+        placeList (false);
         list_.showCurrent();
         stack.openDetail (kPageList);
     }
@@ -808,7 +828,7 @@ private:
 
         const int sIdx = paramForId (kStyle, f);
         const int styleCount = synthyboy::filters::filterModelStyleCount (model);
-        const char* const* styleNames = synthyboy::filters::filterModelStyleNames (model);
+        const char* const* styleNames = ui::shownFilterStyleNames (model, synthyboy::filters::filterModelStyleNames (model));
         if (sIdx >= 0)
         {
             int curStyle = static_cast<int> (std::lround (inst.param (sIdx)));

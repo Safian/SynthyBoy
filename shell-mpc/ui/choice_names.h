@@ -65,4 +65,35 @@ inline const char* shownLabel (const char* key) noexcept
     }
 }
 
+/** The names of the styles of the eight classic filter models (0 Analog, 1 Dirty, 2 Ladder, 3 Digital, 4 Diode, 5 Formant, 6 Comb, 7 Phaser) by what each style DOES (docs/engine-spec/05-filters.md section 13: nothing is invented, a name is
+    the documented behaviour in a few words); every name is at most 16 characters so that it fits the style stepper and the list. The array has as many names as the model has styles. nullptr for the Serum-collection models 8 .. 26: their
+    names are the engine's own (real type names such as "MG Low 12") and are used as they are. */
+inline const char* const* filterStyleNames (int model) noexcept
+{
+    static const char* const kAnalog[6] = { "12 dB", "24 dB", "Notch swap", "Dual notch", "Band peak notch", "24 dB plain" };
+    static const char* const kLadder[6] = { "12 dB", "24 dB", "Taps C", "Taps D", "Taps E", "Same as A" };
+    static const char* const kDigital[6] = { "12 dB", "24 dB", "Notch swap", "Dual notch", "Band peak notch", "Shelf" };
+    static const char* const kDiode[2] = { "12 dB", "24 dB" };
+    static const char* const kFormant[3] = { "A-I-U-O", "A-O-I-E", "Vocal tract" };
+    static const char* const kComb[6] = { "Comb", "Positive flange", "Negative flange", "Band comb", "Band pos. flange", "Band neg. flange" };
+    static const char* const kPhaser[2] = { "Feedback", "Inverted" };
+    switch (model)
+    {
+        case 0: case 1: return kAnalog;
+        case 2: return kLadder;
+        case 3: return kDigital;
+        case 4: return kDiode;
+        case 5: return kFormant;
+        case 6: return kComb;
+        case 7: return kPhaser;
+        default: return nullptr;
+    }
+}
+/** The names to show for `model`: the classic table above, else the engine's list (`engineNames`, which may be nullptr). */
+inline const char* const* shownFilterStyleNames (int model, const char* const* engineNames) noexcept
+{
+    const char* const* n = filterStyleNames (model);
+    return n != nullptr ? n : engineNames;
+}
+
 }} // namespace synthyboy_mpc::ui
