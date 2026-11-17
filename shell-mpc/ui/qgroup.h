@@ -156,7 +156,7 @@ public:
                 u = Rect::unite (u, members[i]->rect());
         if (u.empty())
             return;
-        Pen pen (sb, true, inactive_);
+        Pen pen (sb, true);
         for (int i = 0; i < n && i < kSlots; ++i)
             if (members[i] && ! members[i]->rect().empty())
                 chip (sb, pen, members[i]->rect(), wide ? block * kSlots + i + 1 : i + 1, ! wide);
