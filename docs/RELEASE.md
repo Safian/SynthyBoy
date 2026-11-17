@@ -172,7 +172,7 @@ scripts/build-mpc.sh --xpl-presets xl --dump-tool build-native/shell-mpc/dump_mp
    ```
 
 > [!NOTE]
-> **Checked on the Key 61:** a set written with the XL path (`/nvme/VST2 Plugins/.../synthyboy-arm64.so`) shows its list and loads its presets on the Key 61, so the `file=` path of `<PLUGIN>` need not match the device; one shared set serves both (`XPL_PATH_MODE=shared`, the default). `scripts/mpc-fix-xpl-paths.py` stays as a tool.
+> **Checked on the Key 61:** a set written with the XL path (`/nvme/VST2 Plugins/.../synthyboy-arm64.so`) shows its list and loads its presets on the Key 61, so the `file=` path of `<PLUGIN>` need not match the device; one shared set serves both (`XPL_PATH_MODE=shared`, the default). `scripts/mpc-fix-xpl-paths.py` stays as a tool. Not verified: the shared set on the MPC XL itself after a package install.
 
 
 ## Pins and secrets

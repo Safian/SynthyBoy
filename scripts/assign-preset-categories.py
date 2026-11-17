@@ -112,7 +112,7 @@ def suggest_category(
     if (
         any(
             k in t_lower or k in d_lower or k in n_lower
-            for k in ["pentatonic step", "tempo gate", "fast arp", "trance short pluck", "radiant pulse"]
+            for k in ["pentatonic step", "tempo gate", "fast arp", "trance short pluck", "radiant pulse", "arpeggiat", "sequence"]
         )
         or params.get("arp.on", 0)
     ):

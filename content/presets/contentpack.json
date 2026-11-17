@@ -606,8 +606,8 @@
     },
     {
       "path": "Pluck/karplus_harp.sbpreset",
-      "sha256": "f5c6d9df7bfe964a5707b1cb8834f67d8836d31721bbc57a47d64c5880e8c591",
-      "size": 50556
+      "sha256": "5d69fd4af465fed32983497ec26a204d59f983ff0c2c326de1ed3ab5b0c1bd76",
+      "size": 50559
     },
     {
       "path": "Pluck/ring_mod_gamelan.sbpreset",
