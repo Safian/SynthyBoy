@@ -25,6 +25,7 @@
 #include "../device_profile.h"
 #include "../output_peak.h"
 #include "../play_log.h"
+#include "../startup_timing.h"
 #include "../poll_guard.h"
 #include "../thread_policy.h"
 #include "controller.h"
@@ -271,7 +272,9 @@ private:
 #endif
             const auto tickStart = std::chrono::steady_clock::now();
             double wait = 1000.0;
-            gTick.run ([&] { wait = controller_->tick (now); });   // Controller::tick catches everything itself; this is the second barrier (and the count)
+            gTick.run ([&] { wait = controller_->tick (now); });
+            if (! startupTimes().uiReached() && controller_->framesTotal() > 0)
+                startupTimes().markUi();   // the first frame of our UI that was shown (a relaxed load once it is set)   // Controller::tick catches everything itself; this is the second barrier (and the count)
             if (gTick.off)
             {
                 lk.lock();
@@ -327,7 +330,7 @@ private:
             t += " " + n;
         char pk[160];
         std::snprintf (pk, sizeof pk, "\noutput_peak: %.5f\noutput_peak_total: %.5f\noutput_blocks: %lu\n", static_cast<double> (outputPeak().takeWindow()), static_cast<double> (outputPeak().total.load (std::memory_order_relaxed)), outputPeak().blocks.load (std::memory_order_relaxed));   // output_peak.h: what the plugin hands to the host
-        return t + (cpu_.plan.audioThreads.empty() ? " none" : "") + pk + "quality_profile: " + describeProfile (profileInForce().profile) + " (" + profileInForce().source + ")\n";   // device_profile.h: the engine quality of this process
+        return t + (cpu_.plan.audioThreads.empty() ? " none" : "") + pk + "quality_profile: " + describeProfile (profileInForce().profile) + " (" + profileInForce().source + ")\n" + startupTimes().describe();   // startup_timing.h: open_ms_* and host_call_max_ms_*   // device_profile.h: the engine quality of this process
     }
 
     std::mutex cpuMu_;

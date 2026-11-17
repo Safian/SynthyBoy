@@ -33,6 +33,8 @@
 #include "mpc_vst2_abi.h"
 #include "device_profile.h"
 #include "output_peak.h"
+#include "startup_timing.h"
+#include "kit/log.h"
 #include "host_strings.h"
 #include "output_stage.h"
 #include "safe_file.h"
@@ -1109,15 +1111,27 @@ struct PluginInstance
             audioMaster (e, audioMasterAutomate, paramIndex, 0, nullptr, overlayValue.load (std::memory_order_relaxed));
     }
 
+    /** The knobs the views show live (the filters' cutoff and resonance, the oscillators' frame and warp): the audio thread takes the list over at the end of its next block. Building the list constructs every
+        page once (24 scenes): the display thread does it at its start, not the host's thread in VSTPluginMain. */
+    void publishReadoutTargets()
+    {
+        if (! engine)
+            return;
+        synthyboy_mpc::StartupDetailScope t (synthyboy_mpc::StartupTimes::kOverlayReadout);
+        std::vector<int> idx;
+        synthyboy_mpc::overlay::Controller::readoutTargets (idx);
+        engine->setReadoutTargets (idx.data(), static_cast<int> (idx.size()));
+    }
+
     void startOverlay()
     {
         if (overlayAttached)
             return;
         if (engine)
         {
-            std::vector<int> idx;
-            synthyboy_mpc::overlay::Controller::readoutTargets (idx);   // the knobs the views show live (the filters' cutoff and resonance, the oscillators' frame and warp): the audio thread takes the list over at the end of its next block
-            engine->setReadoutTargets (idx.data(), static_cast<int> (idx.size()));
+#if ! SYNTHYBOY_MPC_LFO_LIVE
+            publishReadoutTargets();   // no display thread in this build: here
+#endif
             publishOverlayContent();
         }
         const int slot = synthyboy_mpc::overlay::Service::instance().attach (&overlayView);   // the slot stays this instance's until effClose; -1: more than 16 instances
@@ -1232,6 +1246,9 @@ struct PluginInstance
             synthyboy_mpc::SpectrumAnalyser analyser;   // allocates here, once, on this thread
             float specLast[synthyboy_mpc::kSpectrumCount] = {};
 #endif
+#if SYNTHYBOY_MPC_OVERLAY
+            bool readoutPublished = false;
+#endif
             while (!liveStop.load (std::memory_order_relaxed))
             {
 #if SYNTHYBOY_MPC_SPECTRUM
@@ -1255,6 +1272,11 @@ struct PluginInstance
                 gContent.run ([&] { injectFault ("content"); contentPoll(); });                                          // a sample or an instrument the browser asked for
                 gShape.run ([&] { injectFault ("shape"); lfoShapePoll(); });                                             // a drawn LFO shape the LFO page wrote
                 gMacroName.run ([&] { injectFault ("macro"); macroNamePoll (e); });                                      // a name the Macros page gave a macro
+                if (! readoutPublished)   // once, after the first report of the overlay slot above (see publishReadoutTargets)
+                {
+                    readoutPublished = true;
+                    try { publishReadoutTargets(); } catch (...) {}
+                }
 #endif
                 gLive.run ([&]
                 {
@@ -1467,6 +1489,8 @@ struct PluginInstance
 #if SYNTHYBOY_MPC_PAD_PRESSURE
         updateEnginePadPressure();
 #endif
+        synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kEngineCreate);
+        MPCKIT_LOG ("startup", info, "engine created at %.2f ms", mpckit::devlog::logger().elapsedMs());
 
         // Build content store path: Content/ next to the plugin binary.
         // UserContentStore keeps its files under <user directory>/content.
@@ -1492,10 +1516,15 @@ struct PluginInstance
             if (engine && contentStore)
                 engine->setContentStore (contentStore.get());
         }
+        synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kContentStore);
 
         // Scan factory presets (never on the audio thread).
-        if (!contentDir.empty())
-            programs = synthyboy_mpc::scanPrograms (contentDir + "/presets");
+        {
+            MPCKIT_SCOPE ("startup", "scan factory presets");
+            if (!contentDir.empty())
+                programs = synthyboy_mpc::scanPrograms (contentDir + "/presets");
+        }
+        synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kScanPresets);
 
         // Apply default values to engine and mirror
         if (engine)
@@ -1511,6 +1540,7 @@ struct PluginInstance
 #endif
             }
         }
+        synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kDefaultParams);
     }
 
     /** The end of this instance's life (effClose calls it, the destructor again, harmlessly), in the order that keeps everything alive for whoever still uses it:
@@ -1704,8 +1734,31 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
             if (! inst->hostKnows.load (std::memory_order_relaxed))
                 inst->hostKnows.store (true, std::memory_order_release);   // the host holds the AEffect pointer now: the display thread may call it back (robustness review F12)
         }
-    try { return dispatch(e, opcode, index, value, ptr, opt); }
-    catch (...) { return 0; }
+    synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kFirstCall);   // the host's first call of this plugin (once; a relaxed load afterwards)
+    // What the host waits for: the time of every call it makes of us, the longest of each kind kept (status file host_call_max_ms_*). Not the per-block audio calls.
+    int slot = -1;
+    switch (opcode)
+    {
+        case effOpen: slot = synthyboy_mpc::StartupTimes::kCallOpen; break;
+        case effSetProgram: slot = synthyboy_mpc::StartupTimes::kCallSetProgram; break;
+        case effGetProgramName: slot = synthyboy_mpc::StartupTimes::kCallGetProgramName; break;
+        case effGetProgramNameIndexed: slot = synthyboy_mpc::StartupTimes::kCallGetProgramNameIndexed; break;
+        case effGetChunk: slot = synthyboy_mpc::StartupTimes::kCallGetChunk; break;
+        case effSetChunk: slot = synthyboy_mpc::StartupTimes::kCallSetChunk; break;
+        case effMainsChanged: slot = synthyboy_mpc::StartupTimes::kCallMains; break;
+        case effSetSampleRate: slot = synthyboy_mpc::StartupTimes::kCallSampleRate; break;
+        case effSetBlockSize: slot = synthyboy_mpc::StartupTimes::kCallBlockSize; break;
+        case effGetParamName: case effGetParamLabel: case effGetParamDisplay: case effGetParameterProperties: case effCanBeAutomated: slot = synthyboy_mpc::StartupTimes::kCallParamInfo; break;
+        case effProcessEvents: break;   // every block, on the audio thread: not timed here
+        default: slot = synthyboy_mpc::StartupTimes::kCallOther; break;
+    }
+    const int64_t t0 = slot >= 0 ? synthyboy_mpc::StartupTimes::nowNs() : 0;
+    VstIntPtr result = 0;
+    try { result = dispatch(e, opcode, index, value, ptr, opt); }
+    catch (...) { result = 0; }
+    if (slot >= 0)
+        synthyboy_mpc::startupTimes().callDone (static_cast<synthyboy_mpc::StartupTimes::Call> (slot), synthyboy_mpc::StartupTimes::nowNs() - t0);
+    return result;
 }
 
 #if SYNTHYBOY_MPC_CALLBACK_STATS
@@ -2070,6 +2123,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 #if SYNTHYBOY_MPC_CALLBACK_STATS
         inst->callbackStats.restartGaps();
 #endif
+        if (inst->mainsOn)
+            synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kResume);
         // Prepare when mains go on if sample rate or block size changed since last prepare
         if (inst->mainsOn && inst->engine)
         {
@@ -2087,6 +2142,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 inst->prepared = true;
                 inst->lastPreparedSampleRate = sr;
                 inst->lastPreparedBlockSize = bs;
+                synthyboy_mpc::startupTimes().setWavetableMs (inst->engine->wavetableBuildMs());
+                MPCKIT_LOG ("startup", info, "engine prepared (sr %d, block %d)", sr, bs);
             }
             else
             {
@@ -2094,6 +2151,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 inst->outputStage.reset();
             }
         }
+        if (inst->mainsOn)
+            synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kPrepared);
         return 1;
     }
 
@@ -2795,6 +2854,7 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     // Clear remaining events
     inst->events.clear();
 
+    synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kFirstAudio);   // the first block that went all the way (a relaxed load after the first)
     // Restore denormal mode
     flushDenormalsRestore(savedFz);
 }
@@ -2814,6 +2874,8 @@ extern "C"
 {
     MPC_PLUGIN_EXPORT AEffect* VSTPluginMain(audioMasterCallback audioMaster)
     {
+        synthyboy_mpc::startupTimes().begin();   // the start-up record (startup_timing.h): time zero is the first entry here
+        MPCKIT_LOG_START ("synthyboy");        // dev builds only: the developer log (kit/log.h), off until /tmp/synthyboy-log.conf switches a category on
         // Create the plugin instance. No exception may reach the host: a failure here means "no plugin".
         PluginInstance* inst = nullptr;
         try { inst = new PluginInstance(); }
@@ -2874,11 +2936,11 @@ extern "C"
             audioMaster(effect, audioMasterVersion, 0, 0, nullptr, 0.0f);
 
 #if SYNTHYBOY_MPC_LFO_LIVE
-        try { inst->startLive (effect); }
+        try { synthyboy_mpc::StartupDetailScope t (synthyboy_mpc::StartupTimes::kStartLive); inst->startLive (effect); }
         catch (...) {} // no thread: the cursors stay idle
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
-        try { inst->startOverlay(); synthyboy_mpc::PlayLog::line ("VSTPluginMain: instance %p attached to the overlay, slot %d", static_cast<void*> (inst), inst->overlaySlot.load()); }
+        try { synthyboy_mpc::StartupDetailScope t (synthyboy_mpc::StartupTimes::kStartOverlay); inst->startOverlay(); synthyboy_mpc::PlayLog::line ("VSTPluginMain: instance %p attached to the overlay, slot %d", static_cast<void*> (inst), inst->overlaySlot.load()); }
         catch (const std::exception& ex) { synthyboy_mpc::PlayLog::line ("VSTPluginMain: startOverlay threw: %s", ex.what()); } // no overlay: the plugin works as without it
         catch (...) { synthyboy_mpc::PlayLog::line ("VSTPluginMain: startOverlay threw"); }
 #endif
@@ -2887,6 +2949,8 @@ extern "C"
         catch (...) {} // no file: the statistics are only collected
 #endif
 
+        synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kMainReturned);
+        MPCKIT_LOG ("startup", info, "VSTPluginMain returns");
         return effect;
     }
 }
