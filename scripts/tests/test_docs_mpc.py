@@ -116,13 +116,15 @@ class MpcDocTests(unittest.TestCase):
         import json
         observed = (section("Known host behaviour") or "").split("### Per the SDK documentation")[0]
         line = next(l for l in observed.splitlines() if "14 of the 112 factory presets" in l)
-        # the document reports the measurement of the first 112 factory presets (2026-11-13); the 24 presets of sound set batch 1 came after it and are not in it
+        # the document reports the measurement of the first 112 factory presets (2026-11-13); the 24 presets each of sound set batches 1 and 2 came after it and are not in it
         import importlib.util
-        spec = importlib.util.spec_from_file_location("factory_presets_batch1", str(ROOT / "scripts" / "factory-presets-batch1.py"))
-        batch1 = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(batch1)
-        later = {e[0] for e in batch1.build()}
-        self.assertEqual(len(later), 24)
+        later = set()
+        for part in ("factory-presets-batch1.py", "factory-presets-batch2.py"):
+            spec = importlib.util.spec_from_file_location("factory_presets_" + part[16:22], str(ROOT / "scripts" / part))
+            batch = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(batch)
+            later |= {e[0] for e in batch.build()}
+        self.assertEqual(len(later), 48)
         files = sorted((ROOT / "content" / "presets").rglob("*.sbpreset"))
         self.assertEqual(len(files), 112 + len(later))
         files = [f for f in files if json.loads(f.read_text(encoding="utf-8"))["meta"]["name"] not in later]

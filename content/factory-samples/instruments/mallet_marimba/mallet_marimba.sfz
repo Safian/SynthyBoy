@@ -1,0 +1,13 @@
+// SynthyBoy factory instrument: marimba bars, five zones in two velocity layers, made by scripts/gen-content-pack.py (CC0-1.0)
+<control>
+<group> loop_mode=no_loop ampeg_release=0.25 ampeg_attack=0.0
+<region> sample=samples/marimba_48_v1.wav lokey=24 hikey=52 lovel=1 hivel=84 pitch_keycenter=48
+<region> sample=samples/marimba_48_v2.wav lokey=24 hikey=52 lovel=85 hivel=127 pitch_keycenter=48
+<region> sample=samples/marimba_57_v1.wav lokey=53 hikey=61 lovel=1 hivel=84 pitch_keycenter=57
+<region> sample=samples/marimba_57_v2.wav lokey=53 hikey=61 lovel=85 hivel=127 pitch_keycenter=57
+<region> sample=samples/marimba_66_v1.wav lokey=62 hikey=70 lovel=1 hivel=84 pitch_keycenter=66
+<region> sample=samples/marimba_66_v2.wav lokey=62 hikey=70 lovel=85 hivel=127 pitch_keycenter=66
+<region> sample=samples/marimba_75_v1.wav lokey=71 hikey=79 lovel=1 hivel=84 pitch_keycenter=75
+<region> sample=samples/marimba_75_v2.wav lokey=71 hikey=79 lovel=85 hivel=127 pitch_keycenter=75
+<region> sample=samples/marimba_84_v1.wav lokey=80 hikey=108 lovel=1 hivel=84 pitch_keycenter=84
+<region> sample=samples/marimba_84_v2.wav lokey=80 hikey=108 lovel=85 hivel=127 pitch_keycenter=84

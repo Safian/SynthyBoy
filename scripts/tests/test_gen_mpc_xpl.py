@@ -257,7 +257,7 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
         self.assertIn("Preset Name: Acid Saw Reso", res.stdout)
         self.assertIn("numPrograms:    113", res.stdout)
 
-    def test_all_136_presets_with_helper_or_fixtures(self):
+    def test_all_160_presets_with_helper_or_fixtures(self):
         # Look for built native helper and plugin module
         build_dirs = [REPO_ROOT / "build-native", REPO_ROOT / "build-mpc", REPO_ROOT / "build"]
         helper_bin = None
@@ -305,9 +305,9 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
                 gen_res = subprocess.run(gen_cmd, capture_output=True, text=True)
                 self.assertEqual(gen_res.returncode, 0, f"Generator failed: {gen_res.stderr}\n{gen_res.stdout}")
 
-                # Verify exactly 136 .xpl files generated (the 112 of the first sets and the 24 of sound set batch 1)
+                # Verify exactly 160 .xpl files generated (the 112 of the first sets and the 24 each of sound set batches 1 and 2)
                 xpl_files = list(out_dir.glob("*.xpl"))
-                self.assertEqual(len(xpl_files), 136, f"Expected 136 preset files, got {len(xpl_files)}")
+                self.assertEqual(len(xpl_files), 160, f"Expected 160 preset files, got {len(xpl_files)}")
 
                 # Check each file has valid envelope and header, and decodes (dec.py) to the structure of the file the device wrote
                 device_blob = TestDecodesLikeDeviceFiles._decode_with_dec_py(get_example_path("zz-sbtest-program.xpl"))
