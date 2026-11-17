@@ -314,14 +314,31 @@ int main()
             for (int t = 0; t < nt; ++t)
                 big = big && cells[t].h >= 56 && cells[t].w >= 56;
             check (big, nm + ": the touch targets of the source selector are at least 56 px");
-            if (var.inst != OscInstance::Sub && var.inst != OscInstance::Noise)
+            if (var.inst != OscInstance::Noise)
             {
-                // the row of the table stepper, PAN and LEVEL: the stepper has the width (no list button) so that the longest built-in table name is written whole at a legible size (never cut with an ellipsis)
-                const Rect sr = c.basic.source.stepper.rect();
-                const float size = Pen::fitSize ("Harmonic Series", static_cast<float> (sr.w - 2 * 28 - 4), static_cast<float> (sr.h - 4), theme::L().fValue, theme::L().fMin);
-                check (c.basic.source.compact() && c.basic.source.dropdown.rect().empty() && sr.w >= 190 && sr.h >= 56 && sr.right() <= c.basic.pan.rect().x && c.basic.pan.rect().right() <= c.basic.level.rect().x && c.basic.pan.rect().y == c.basic.level.rect().y && size >= 12.0f
-                           && sdf::textWidth ("Harmonic Series", size) <= static_cast<float> (sr.w - 2 * 28 - 4) + 0.5f,
-                       nm + ": the table stepper, PAN and LEVEL are one row; the stepper (" + std::to_string (sr.w) + " px) writes 'Harmonic Series' whole at " + std::to_string (static_cast<int> (size)) + " px");
+                // two rows like the envelope third's knobs: row 1 the type drop-down and the table / OCT selector side by side (at the 1/3 width the table stepper keeps 200 px, 140 px of text, so the longest built-in
+                // table name is written whole at a legible size and the two selectors are NOT stacked), row 2 PAN and LEVEL as the side knobs of the envelope third
+                EnvCompact ec;
+                ec.place ({ 440, 114, 400, 620 });
+                const Component* sec = var.inst == OscInstance::Sub ? static_cast<const Component*> (&c.basic.oct) : static_cast<const Component*> (&c.basic.source);
+                const Rect tr = c.basic.selector.rect(), sr = sec->rect();
+                const bool rows = c.basic.selector.dropdown && tr.y == sr.y && tr.h == sr.h && tr.right() <= sr.x && sr.right() <= c.basic.rect().right() && tr.h >= 56 && sr.h >= 56 && tr.bottom() <= c.basic.pan.rect().y && sr.bottom() <= c.basic.level.rect().y;
+                const bool knobs = c.basic.pan.state.side && c.basic.level.state.side && c.basic.pan.rect().y == ec.sustain.rect().y && c.basic.level.rect().y == ec.release.rect().y && c.basic.pan.rect().h == ec.sustain.rect().h
+                                   && c.basic.pan.state.dialMax == ec.sustain.state.dialMax && c.basic.pan.rect().w >= 172 && c.basic.level.rect().w >= 172 && c.basic.pan.rect().y == c.basic.level.rect().y;
+                check (rows && knobs, nm + ": row 1 = the type drop-down and the " + (var.inst == OscInstance::Sub ? "OCT field" : "table stepper") + " side by side, row 2 = PAN and LEVEL: the side knobs of the envelope third, same rows and size");
+                if (var.inst != OscInstance::Sub)
+                {
+                    const float size = Pen::fitSize ("Harmonic Series", static_cast<float> (sr.w - 2 * 28 - 4), static_cast<float> (sr.h - 4), theme::L().fValue, theme::L().fMin);
+                    check (c.basic.source.compact() && c.basic.source.dropdown.rect().empty() && sr.w >= 190 && size >= 12.0f && sdf::textWidth ("Harmonic Series", size) <= static_cast<float> (sr.w - 2 * 28 - 4) + 0.5f,
+                           nm + ": the table stepper (" + std::to_string (sr.w) + " px) writes 'Harmonic Series' whole at " + std::to_string (static_cast<int> (size)) + " px");
+                }
+                Rect cells[4];
+                check (c.basic.selector.touchTargets (cells, 4) == 1 && cells[0].h >= 56 && cells[0].w >= 56, nm + ": the type drop-down is one touch target of at least 56 px");
+                const Change tc = tap (c, cx (c.basic.selector), cy (c.basic.selector), 0.0);
+                check (tc.kind == ChangeKind::Request && tc.id == c.basic.selector.id(), nm + ": a tap on the type drop-down is a Request (the owner opens the list of types)");
+                const int before = c.basic.selector.state.index, countN = c.basic.selector.state.count;
+                const Change turned = c.basic.selector.turn (before + 1 < countN ? 1.0 : -1.0);
+                check (turned.kind == ChangeKind::Index && turned.id == c.basic.selector.id() && turned.index == (before + 1 < countN ? before + 1 : before - 1), nm + ": a Q turn steps the type through the list as the cells did");
             }
         }
         Scene sc (420, 700, kBackgroundRgba);

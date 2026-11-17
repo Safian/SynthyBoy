@@ -1360,6 +1360,13 @@ private:
         {
             if (id == kList && c.kind == K::Index)
             {
+                if (popupIsType_)   // the type list: the same Index change the cells made (the owner's handler below writes the type)
+                {
+                    const int chosen = c.index;
+                    closeSourceList();
+                    handle (ui::Change::indexed (kBasic, chosen, chosen), stack, v);
+                    return;
+                }
                 v.setPlaySelection (0, c.index + 1);
                 closeSourceList();
             }
@@ -1373,6 +1380,7 @@ private:
             switch (id)
             {
                 case kInstances: openSourceList(); return;
+                case kBasic + 0: openTypeList(); return;   // the type drop-down of the compact view (the full screen's cells never send it)
                 case kFullButton: stack.openFull (kElementOsc); return;
                 case kClose: case kDetailBack: case kModsBack: case kRouteClose: case kRouteBackdrop: stack.back(); return;
                 case kTuneMore: stack.openDetail (oscspec::kMore); return;
@@ -1650,6 +1658,8 @@ private:
         list_.state.header = nullptr;
         list_.state.headerBack = false;
         list_.state.items = kNames;
+        list_.state.icons = nullptr;
+        popupIsType_ = false;
         list_.state.count = playosc::kInstances;
         list_.state.current = sel_ - 1;
         list_.place ({ third.x + 6, third.y + 6 + ui::playrows::kSelectorH, third.w - 12, playosc::kInstances * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
@@ -1657,9 +1667,37 @@ private:
         list_.showCurrent();
         srcPopup_ = true;
     }
+    /** The list of the type drop-down of the compact view: the items of the selector (WAVE .. SPEC, or the six waveforms of the sub) with their pictograms, rows of 56 px, a popup over the third. */
+    void openTypeList()
+    {
+        const ui::TypeSelector& sel = compact_.basic.selector;
+        typeNames_.clear(); typeIcons_.clear();
+        for (int i = 0; i < sel.state.count; ++i)
+        {
+            typeNames_.push_back (sel.state.items[i].label);
+            typeIcons_.push_back (sel.state.items[i].pictogram);
+        }
+        const ui::Rect third { kCompactX, kTabY + 4, kCompactW, kTabH - 8 };
+        list_.state.header = nullptr;
+        list_.state.headerBack = false;
+        list_.state.items = typeNames_.data();
+        list_.state.icons = typeIcons_.data();
+        list_.state.count = sel.state.count;
+        list_.state.current = sel.state.index;
+        list_.place ({ third.x + 6, third.y + 6 + ui::playrows::kSelectorH, third.w - 12, std::min (sel.state.count, 8) * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup (third);
+        list_.showCurrent();
+        popupIsType_ = true;
+        srcPopup_ = true;
+    }
+    std::vector<const char*> typeNames_;
+    std::vector<int> typeIcons_;
+    bool popupIsType_ = false;
     void closeSourceList()
     {
         srcPopup_ = false;
+        popupIsType_ = false;
+        list_.state.icons = nullptr;
         list_.state.current = -1;
         list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
         list_.setPopup ({ 0, kTabY, w_, kTabH });

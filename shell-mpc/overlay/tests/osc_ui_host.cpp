@@ -734,6 +734,40 @@ void testMissingContentLine()
     check (r.ui.missingText() == "content missing", "a missing wavetable without a reference in the state: the line says content missing");
 }
 
+/** The type drop-down of the compact view: closed it shows the current type, a tap opens the list of the types with their pictograms (rows >= 56 px), a row chooses (the same write the cells made). */
+void testTypeDropdown()
+{
+    Rig r;
+    r.inst.set ("osc1.type", 0.0f);
+    r.refresh();
+    ui::TypeSelector& t = r.ui.compact().basic.selector;
+    check (t.dropdown && std::string (t.state.items[t.state.index].label) == "WAVE" && t.rect().h >= 56, "the type is a drop-down in the compact view: closed it shows WAVE");
+    r.tapC (t);
+    {
+        const ui::ListPopup& l = r.ui.list();
+        const char* const want[5] = { "WAVE", "MULTI", "SAMPLE", "GRAIN", "SPEC" };
+        bool ok = r.stack.isMain() && l.state.count == 5 && l.state.icons != nullptr && l.state.current == 0;
+        for (int i = 0; i < 5 && ok; ++i)
+            ok = std::string (l.state.items[i]) == want[i] && l.state.icons[i] >= 0 && l.rowRect (i).h >= 56;
+        check (ok, "a tap opens the list of the five types with their pictograms (rows >= 56 px), no page of the stack");
+    }
+    {
+        const ui::Rect row = r.ui.list().rowRect (3);   // GRAIN
+        r.tap (row.x + row.w / 2, row.y + row.h / 2);
+    }
+    check (r.inst.get ("osc1.type") == 2.0f && r.stack.isMain(), "the row GRAIN writes the granular type (osc1.type = 2) and the list closes");
+    r.refresh();
+    check (std::string (t.state.items[t.state.index].label) == "GRAIN", "the closed drop-down shows GRAIN");
+    // the sub oscillator: the six waveforms
+    r.inst.sel = 1;
+    r.refresh();
+    ui::TypeSelector& st = r.ui.compact().basic.selector;
+    r.tapC (st);
+    check (r.ui.list().state.count == 6 && std::string (r.ui.list().state.items[5]) == "PULSE", "the sub oscillator's drop-down lists the six waveforms");
+    r.tap (20, 130);   // the backdrop closes
+    check (r.stack.isMain(), "a tap on the backdrop closes the list");
+}
+
 /** A switched-off oscillator: the inactive (grey) look for the display, the controls under it and the Q frames, the power button red, nothing disabled (the controls stay operable). */
 void testInactiveLook()
 {
@@ -1058,6 +1092,7 @@ int main()
     testSourceBrowserInTheOscillatorUi();
     testMissingContentLine();
     testInactiveLook();
+    testTypeDropdown();
     testGranularAndSubAndNoise();
     testSourceAndWarpLists();
     testReview2();

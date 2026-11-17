@@ -1278,9 +1278,61 @@ protected:
         return target == state.index || count() == 0 ? Change::none() : Change::indexed (id_, target, target);
     }
 
-private:
+protected:
     TapGesture tap_;
     int downCell_ = -1;
+};
+
+/** TypeSelector: a PictogramSelector (the same items, ids, Index change and turn) that can be a DROP-DOWN: with `dropdown` set it is ONE box that shows the current item (its small pictogram and its name, a chevron at the right); a tap is a Request
+    with the id (the owner opens the list of the items, ListPopup with `icons`), a turn steps through the items as before. Without `dropdown` it is the row of cells (the full screen's type bar of the oscillator, the owner's older pages). */
+class TypeSelector : public PictogramSelector
+{
+public:
+    bool dropdown = false;
+    Size minSize() const override { return dropdown ? Size { 140, 56 } : PictogramSelector::minSize(); }
+    int touchTargets (Rect* out, int max) const override
+    {
+        if (! dropdown)
+            return PictogramSelector::touchTargets (out, max);
+        if (max > 0)
+            out[0] = rect_;
+        return max > 0 ? 1 : 0;
+    }
+
+protected:
+    void drawBody (Pen& p) const override
+    {
+        if (! dropdown)
+        {
+            PictogramSelector::drawBody (p);
+            return;
+        }
+        const theme::Look& T = theme::L();
+        const Rect b = rect_.inset (2);
+        p.control (b, qFrame_);
+        const int i = std::clamp (state.index, 0, std::max (0, count() - 1));
+        if (count() == 0)
+            return;
+        const Item& it = state.items[i];
+        int textX = b.x + 10;
+        if (const pictogram::Def* d = pictogram::find (it.pictogram))
+        {
+            p.style (1.0f, true);
+            d->draw (p, static_cast<float> (b.x) + 32.0f, static_cast<float> (b.y) + static_cast<float> (b.h) * 0.5f, p.c (T.flow[0], 255));
+            p.plain();
+            textX = b.x + 56;
+        }
+        p.textCentered ({ textX, b.y + 2, std::max (0, b.right() - 36 - textX), std::max (0, b.h - 4) }, it.label, T.fValue, p.c (qFrame_ ? T.q : T.text, 255), T.fMin);
+        p.style (1.0f, true);
+        p.chevron (static_cast<float> (b.right() - 18), static_cast<float> (b.y) + static_cast<float> (b.h) * 0.5f, 12.0f, 3, 2.2f, p.c (T.textDim, 255));
+        p.plain();
+    }
+    Change onUp (int x, int y) override
+    {
+        if (! dropdown)
+            return PictogramSelector::onUp (x, y);
+        return tap_.up() != 0 ? Change::request (id_) : Change::none();
+    }
 };
 
 }} // namespace synthyboy_mpc::ui
