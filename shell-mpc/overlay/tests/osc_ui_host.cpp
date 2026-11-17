@@ -57,6 +57,8 @@ public:
     void requestContent (int osc, int kind, const std::string& path) override { requests.push_back ({ osc, kind, path }); loadState = 1; }
     int contentLoad (std::string*) const override { return loadState; }
     std::shared_ptr<const synthyboy::StateContent> content() const override { return contentPtr; }
+    unsigned missingContent() const noexcept override { return missingBits; }
+    unsigned missingBits = 0;   // the engine's missing_content bits
     struct Request { int osc, kind; std::string path; };
     std::vector<ContentRoot> roots;
     std::vector<Request> requests;
@@ -704,6 +706,34 @@ void testSourceBrowserInTheOscillatorUi()
 }
 
 
+/** The content the sound needs and does not have: "content missing: <name>" over the display, the name from the state's content reference (title, else file name without extension, underscores as spaces). */
+void testMissingContentLine()
+{
+    Rig r;
+    r.inst.set ("osc1.type", 1.0f);   // a sample oscillator
+    auto content = std::make_shared<synthyboy::StateContent>();
+    synthyboy::ContentSample cs;
+    cs.osc = 1; cs.ref.pack = "p"; cs.ref.file = "drums/drum_loop_120bpm.wav";
+    content->samples.push_back (cs);
+    r.inst.contentPtr = content;
+    r.refresh();
+    check (r.ui.missingText().empty(), "nothing missing: no line over the display");
+    r.inst.missingBits = 1u << 0;
+    r.refresh();
+    check (r.ui.missingText() == "content missing: drum loop 120bpm", "the file of oscillator A is missing: 'content missing: drum loop 120bpm' (" + r.ui.missingText() + ")");
+    r.inst.missingBits = 1u << 1;   // oscillator B's file: not A's
+    r.refresh();
+    check (r.ui.missingText().empty(), "the line is for the oscillator on screen only");
+    r.inst.missingBits = 1u << 0;
+    content->samples[0].ref.name = "Break Beat";   // the pack's title wins
+    r.refresh();
+    check (r.ui.missingText() == "content missing: Break Beat", "the pack's title is the name when it has one");
+    r.inst.set ("osc1.type", 0.0f);
+    r.inst.missingBits = 1u << 3;   // the user wavetable of A
+    r.refresh();
+    check (r.ui.missingText() == "content missing", "a missing wavetable without a reference in the state: the line says content missing");
+}
+
 /** The detail pages of the types (osc_spec_page.h): how each is reached, BACK, the size of the display, every visible control writes its parameter, the hidden states, the Q groups, the empty state. */
 void testSpecPages()
 {
@@ -1006,6 +1036,7 @@ int main()
     testQGroupFollowsTheActiveGroup();
     testContentBrowser();
     testSourceBrowserInTheOscillatorUi();
+    testMissingContentLine();
     testGranularAndSubAndNoise();
     testSourceAndWarpLists();
     testReview2();
