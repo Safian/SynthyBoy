@@ -1241,6 +1241,56 @@
    "",
    "",
    ""
+  ],
+  "Tine Glass Keys": [
+   "Bell",
+   "Bark",
+   "Sustain",
+   "Phase",
+   "Mellow",
+   "",
+   "",
+   ""
+  ],
+  "Karplus Harp": [
+   "Brightness",
+   "Ring Tone",
+   "Pick Softness",
+   "Space",
+   "Body",
+   "",
+   "",
+   ""
+  ],
+  "Ring Mod Gamelan": [
+   "Metal",
+   "Inharmonic",
+   "Ring Time",
+   "Space",
+   "Shimmer",
+   "",
+   "",
+   ""
+  ],
+  "Pentatonic Step Pluck": [
+   "Bright",
+   "Hold",
+   "Squelch",
+   "Echo",
+   "Fat",
+   "",
+   "",
+   ""
+  ],
+  "Tempo Gate Chords": [
+   "Smooth",
+   "Pump",
+   "Bright",
+   "Echo",
+   "Fat",
+   "",
+   "",
+   ""
   ]
  }
 }

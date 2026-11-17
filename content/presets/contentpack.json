@@ -7,7 +7,7 @@
   "attribution": "Safian Szabolcs",
   "kind": "presets",
   "requires_plugin": ">=0.1.0",
-  "description": "124 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
+  "description": "129 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
   "files": [
     {
       "path": "Bass/solid_sub.sbpreset",
@@ -588,6 +588,31 @@
       "path": "Bass/pitch_drop_808.sbpreset",
       "sha256": "21f981b4c41c4bc0ea3f6930cc91f4680b53d122204de424b19b60940da47742",
       "size": 50494
+    },
+    {
+      "path": "Keys/tine_glass_keys.sbpreset",
+      "sha256": "292cd4949d8a3c7d7f4326064da7ad13e2f2df1de8f4504ae196e2a154980078",
+      "size": 50549
+    },
+    {
+      "path": "Pluck/karplus_harp.sbpreset",
+      "sha256": "f5c6d9df7bfe964a5707b1cb8834f67d8836d31721bbc57a47d64c5880e8c591",
+      "size": 50556
+    },
+    {
+      "path": "Pluck/ring_mod_gamelan.sbpreset",
+      "sha256": "095b6c3e2c55f01ec24fd64d3406a9f0a70fec0f830de21c10f8dd3a59d93c27",
+      "size": 50523
+    },
+    {
+      "path": "Pluck/pentatonic_step_pluck.sbpreset",
+      "sha256": "a6306165a28a09c3cd2866800fd17a50e598c223e584adace5be698a65a9583f",
+      "size": 51736
+    },
+    {
+      "path": "Keys/tempo_gate_chords.sbpreset",
+      "sha256": "3744a1a1189e225f8fe9cf01c218e09f72307d3804dede7701054ff66cfcd765",
+      "size": 51519
     },
     {
       "path": "Lead/sync_cry_lead.sbpreset",
