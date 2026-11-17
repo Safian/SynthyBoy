@@ -385,7 +385,7 @@ static void test_mod_row_selector()
     mrs.maxRows = 8;
     mrs.selected = 0;
 
-    check (mrs.minSize().w == 40 && mrs.minSize().h == 48, "ModRowSelector minSize is 40x48");
+    check (mrs.minSize().w == 56 && mrs.minSize().h == 56, "ModRowSelector minSize is 56x56 (a touch target)");
 
     // Turn up advances selection
     Change c = mrs.turn (1.0);

@@ -99,10 +99,10 @@ static void test_type_bar_presets()
     TypeBar tb;
     tb.place ({ 50, 50, 400, 56 });
 
-    // 1. Wavetable preset: Frame, Phase, Rand, Memory
+    // 1. Wavetable preset: Frame, Phase, Rand, MAP (the page of the frame remap)
     tb.load (barpresets::kWavetable);
     check (tb.numSlots() == 4, "Wavetable TypeBar has 4 slots");
-    check (tb.minSize().w == 3 * 80 + Stepper::kMinW + 3 * kGap, "Wavetable TypeBar minSize sums slot minimums");
+    check (tb.minSize().w == tb.numbers[0].minSize().w + tb.numbers[1].minSize().w + tb.numbers[2].minSize().w + tb.details[3].minSize().w + 3 * kGap, "Wavetable TypeBar minSize sums slot minimums (three number fields and the MAP button)");
     Image im = drawComponent (tb, 500, 200);
     check (drawnOutside (im, tb.rect(), backgroundPixel()) == 0, "Wavetable TypeBar draws strictly inside rect");
 
