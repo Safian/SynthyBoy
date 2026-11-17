@@ -215,6 +215,8 @@ Four cascaded one-pole low-pass stages, each with the algebraic saturator `sat(v
 Outputs are linear combinations of the stage outputs: 24 dB low-pass = stage 4; 12 dB low-pass = stage 2; band-pass 12 = s1 - s2; band-pass 24 = -s2 + 2 s3 - s4; high-pass 24 = x - 4 s1 + 6 s2 - 4 s3 + s4; high-pass 12 = x - 2 s1 + s2; the notch / swap styles are
 combinations with the weights of the code table (rows of the form `[1, -4, 6, -4, 1]`). The max cutoff is 20 kHz. Self-oscillates at high resonance.
 
+*Own engine, delay-free feedback.* Each trapezoidal stage is `y = G x + (1 - G) s` (`G = g/(1 + g)`), so the four stages add `(1 - G) (G^3 s1 + G^2 s2 + G s3 + s4)` to the input's share `G^4 u`, and the input of the loop is `u = tanh (0.9 (d' x - k (1 - G) S)/(1 + k G^4)) 1.1` with `S = G^3 s1 + G^2 s2 + G s3 + s4`. The factor `(1 - G)` was missing: harmless at low cutoffs (`G` about 0.03 at 1 kHz) but at the top of the range (`G` 0.8 .. 0.86 above 17 kHz) the feedback was 5 .. 7 times too strong and the output collapsed (saw C4, resonance 22 %: -35 dB at 18 kHz, -68 dB at 20 kHz). Test `own_ladder_rms_over_cutoff`.
+
 ## 6. Diode (model 4) -- the diode ladder with a high-pass in front
 
 Four stages of the TB-303-style diode ladder (each stage averages with its neighbours: `s2 <- (s1 + s3)/2` etc., the algebraic saturator in each), feedback `k` from stage 4, input `tanh(0.5 (d' hp - k s4))` where `hp` is the input through a 2-pole high-pass
