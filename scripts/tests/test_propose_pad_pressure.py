@@ -60,6 +60,12 @@ class FactoryPresets(unittest.TestCase):
         data = json.loads(pp.DATA_FILE.read_text(encoding="utf-8"))["presets"]
         self.assertGreaterEqual(len(data), 30)
         self.assertLessEqual(len(data), 70)
+        # the presets of sound set batch 1 carry their pressure route in their own data (scripts/factory-presets-batch1.py), as MPE Pressure Lead does
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("factory_presets_batch1", str(ROOT / "scripts" / "factory-presets-batch1.py"))
+        batch1 = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(batch1)
+        own = {e[0] for e in batch1.build()}
         seen = 0
         for rel, name, category, params in pp.read_presets(pp.PRESETS_DIR):
             has = pp.routes_pressure(params, DOC)
@@ -68,7 +74,7 @@ class FactoryPresets(unittest.TestCase):
                 self.assertNotIn(category, ("Bass", "Pluck"), name)
                 seen += 1
             elif has:
-                self.assertEqual(name, "MPE Pressure Lead")             # its own route
+                self.assertTrue(name == "MPE Pressure Lead" or name in own, name)    # their own route
         self.assertEqual(seen, len(data))
 
     def test_check_passes(self):

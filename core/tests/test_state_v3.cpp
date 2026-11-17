@@ -693,7 +693,7 @@ TEST (preset_with_content_round_trips_and_factory_presets_of_version_2_still_loa
             PresetMeta m;
             const auto fr = loadPreset (doc.data(), doc.size(), m, garbage, c);
             const bool hasContent = doc.find ("\"content\":") != std::string::npos;
-                // the factory presets carry the version of their last regeneration (4: macro names); state version 5 only added the optional LFO grid keys, which no factory preset has
+                // the factory presets carry the version of their last regeneration (4: macro names); state version 5 only added the optional LFO grid keys, which two presets of sound set batch 1 carry in a document of version 4 (the loader reads them whatever the version)
             const bool ok = CHECK (fr.status == LoadStatus::ok) && CHECK (fr.version >= 4 && fr.version <= kStateVersion) && CHECK_EQ (fr.applied, static_cast<int> (paramCount()))
                          && CHECK (hasContent ? fr.content == ContentStatus::ok : (fr.content == ContentStatus::absent && c.empty())) && CHECK (! m.name.empty());
             if (! ok)

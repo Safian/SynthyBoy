@@ -3,7 +3,7 @@
 SynthyBoy for the MPC is a synthesizer plugin (VST2) for standalone Akai MPC hardware, packaged as `Safian - VST - SynthyBoy` with a 32-bit ARMv7 and a 64-bit AArch64 build; it was tried by its author on the MPC Key 61 and the MPC XL only (docs/MPC.md#package-layout, docs/MPC.md#overlay-experimental).
 It runs the project's own sound engine at quality tier low, which on the MPC means 8 voices of polyphony and at most 3 unison voices per oscillator (docs/MPC.md#sound-differences-at-tier-low, c3a2065); re-read this line when the per-device quality profiles are merged.
 Its screens are drawn by the plugin itself on an experimental display overlay, and the hardware Q-Link knobs are mapped to the controls of the page on screen (docs/MPC.md#overlay-experimental, docs/MPC.md#q-proxies-and-the-plugin-drawn-pages-overlay-build).
-The instrument has 112 factory presets, 3 oscillators (wavetable, sample, granular, spectral, multisample), a sub oscillator and a noise source, 27 filter models in 12 styles, 6 envelopes, 10 LFOs and 4 random LFOs, a 64-slot modulation matrix and 13 effect types (docs/params.json, docs/MPC.md#filter-ui, docs/MPC.md#mod-matrix-and-macros).
+The instrument has 136 factory presets, 3 oscillators (wavetable, sample, granular, spectral, multisample), a sub oscillator and a noise source, 27 filter models in 12 styles, 6 envelopes, 10 LFOs and 4 random LFOs, a 64-slot modulation matrix and 13 effect types (docs/params.json, docs/MPC.md#filter-ui, docs/MPC.md#mod-matrix-and-macros).
 The same codebase also builds the desktop plugin (VST3, CLAP, Audio Unit); this change log covers the MPC release only (README.md#synthyboy).
 
 ---
@@ -23,7 +23,7 @@ The same codebase also builds the desktop plugin (VST3, CLAP, Audio Unit); this 
 - **Pad pressure integration**: Polyphonic aftertouch (MIDI 0xA0) adds a per-voice cutoff offset to Filter 1 (up to 36 semitones, smoothed with a 12 ms one-pole filter), leaving matrix presets without duplicate effects (docs/MPC.md#pad-pressure, 45_pad_pressure.py, test_own_pad_pressure.cpp).
 
 ### Presets
-- **Factory content**: 112 factory presets in CC0 ContentPack format under `content/presets/` generated deterministically via `scripts/gen-factory-presets.py` (README.md#factory-content, docs/MPC.md#build, 0a46744f).
+- **Factory content**: 136 factory presets (the first 112 and the 24 of sound set batch 1, docs/release/SOUND-SET-BATCH-1.md) in CC0 ContentPack format under `content/presets/` generated deterministically via `scripts/gen-factory-presets.py` (README.md#factory-content, docs/MPC.md#build, 0a46744f).
 - **State format**: Each preset is a `synthyboy-preset` file (format 1) holding a `synthyboy-state` version 4 with all 2637 parameter keys explicit, the same count and state version as the parameter table (`content/presets/Bass/scream_filter_bass.sbpreset`, docs/params.json `count` and `stateVersion`; 038b6538 introduced state v3, since raised).
 - **Level normalization**: Presets are calibrated to a chord loudness of -20 dBFS RMS, preserving peak headroom (README.md#factory-content, docs/MPC.md#output-level).
 - **Showcase patches**: Includes 12 specialized showcase presets demonstrating version 3 DSP features, including Scream Filter Bass, Custom Shape Wobble, MPE Pressure Lead, Diffusor Cloud Pad, and Bode Shifter Drone (README.md#factory-content, 0a46744f).

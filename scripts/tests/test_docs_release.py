@@ -121,8 +121,8 @@ class DocsReleaseTests(unittest.TestCase):
         n_pre = len([f for f in os.listdir(os.path.join(ROOT, "content", "presets")) if os.path.isdir(os.path.join(ROOT, "content", "presets", f))])
         count = sum(len([x for x in os.listdir(os.path.join(ROOT, "content", "presets", d)) if x.endswith(".sbpreset")])
                     for d in os.listdir(os.path.join(ROOT, "content", "presets")) if os.path.isdir(os.path.join(ROOT, "content", "presets", d)))
-        self.assertEqual(count, 112)
-        self.assertIn("112 factory presets", self.changelog)
+        self.assertEqual(count, 136)
+        self.assertIn("136 factory presets", self.changelog)
         self.assertGreater(n_files, 0)
         self.assertGreater(n_pre, 0)
         # parameter sequence of the overlay build: engine + 4 cursors + 32 spectrum + 2 pad pressure + 1 instance + 3 selectors + 24 proxies + 16 Q

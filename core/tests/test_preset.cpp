@@ -296,9 +296,9 @@ TEST (factory_presets_pack_validation)
     CHECK_EQ (pack.license, "CC0-1.0");
     CHECK_EQ (pack.attribution, "Safian Szabolcs");
     CHECK_EQ (pack.kind, "presets");
-    CHECK_EQ (pack.files.size(), 112u);
+    CHECK_EQ (pack.files.size(), 136u);
 
-    // Verify all 112 presets on disk against manifest SHA-256
+    // Verify all 136 presets on disk against manifest SHA-256
     std::vector<std::string> errors;
     CHECK (verifyContentPack (factoryDir.string(), pack, errors));
     if (! errors.empty())
@@ -307,9 +307,9 @@ TEST (factory_presets_pack_validation)
             std::printf ("    [factory_pack error] %s\n", err.c_str());
     }
 
-    // Verify all 112 presets via directory scanner and check license
+    // Verify all 136 presets via directory scanner and check license
     const auto entries = scanPresetDirectory (factoryDir.string());
-    CHECK_EQ (entries.size(), 112u);
+    CHECK_EQ (entries.size(), 136u);
     for (const auto& e : entries)
     {
         CHECK_EQ (e.meta.license, "CC0-1.0");
