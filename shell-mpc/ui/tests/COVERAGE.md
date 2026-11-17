@@ -916,7 +916,7 @@ For each component class, it records what it does in one line, its public behavi
 ## Coverage Test Plan (7 New Test Areas)
 
 To achieve complete host test coverage of all untested behaviours across the library, tests are partitioned into 7 focused suites:
-1. **Knobs and Values** (`ui_cov_knobs_values_host.cpp`): Wheel response on `Knob` and `HBar`, side/small knob layouts, `NumberField` formats and read-only mode, `Fader` / `SliderBar` bounds and sensitivities, tick long press modulation requests.
+1. **Knobs and Values** (`ui_cov_knobs_values_host.cpp`): Wheel response on `Knob` and `HBar`, side/small knob layouts, `NumberField` formats and read-only mode, `Fader` / `SliderBar` bounds and sensitivities (the wheel step of one Q-Link step and the capture: regressions of the first findings), tick long press modulation requests.
 2. **Steppers and Lists** (`ui_cov_steppers_lists_host.cpp`): `Stepper` listable middle tap, wrap logic, `UpDownStepper` clamping, `PictogramSelector` vertical layout, disabled item skip, `ShapePicker`, `ToolSelector`, `ModRowSelector`.
 3. **Toggles and Buttons** (`ui_cov_toggles_buttons_host.cpp`): `ToggleIcon` knobLike styling, showState text, `FilterToggle` clean rendering, `MenuButton` expand icon, `DetailButton` value vs tap request separation, `RouteButton` LED indicators.
 4. **Popups and Scroll Areas** (`ui_cov_popups_scroll_host.cpp`): `ListPopup` header back, scroll zone dragging, paging above/below thumb, backdrop dismissal, `FxGallery` card grid layout and tap, `ModSourceBoard` chips, `ShapeCanvas` point editing.
