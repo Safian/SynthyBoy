@@ -29,8 +29,21 @@ VST2_CHUNK_MAGIC = b"CcnK"  # 0x43636e4b: VST chunk magic
 VST2_FX_MAGIC_BANK = b"FBCh"  # 0x46424368: Bank chunk magic (opaque bank)
 DEFAULT_FX_ID = b"SfSB"  # Plugin unique ID ('S','f','S','B' -> 0x53665342)
 DEFAULT_FX_VERSION = 1000
-DEFAULT_NUM_PROGRAMS = 113
+DEFAULT_NUM_PROGRAMS = 137
 BANK_HEADER_SIZE = 160
+
+
+def count_factory_presets(presets_dir: Optional[Path] = None) -> int:
+    """Count the .sbpreset files in presets_dir (default content/presets)."""
+    pdir = presets_dir if presets_dir is not None else (Path(__file__).resolve().parent.parent / "content" / "presets")
+    if pdir.is_dir():
+        return len(list(pdir.glob("*/*.sbpreset")))
+    return 136
+
+
+def default_num_programs(presets_dir: Optional[Path] = None) -> int:
+    """Number of programs: factory preset count + 1 (Init program)."""
+    return count_factory_presets(presets_dir) + 1
 
 
 # The preset name is text of an XML element: markup characters are written as entities (the host's XML writer is JUCE's; & < > are the ones that matter for a text node, the quotes are
@@ -135,7 +148,7 @@ def parse_bank_header(header_bytes: bytes) -> Dict[str, Any]:
 
 def build_bank_header(
     chunk_size: int,
-    num_programs: int = DEFAULT_NUM_PROGRAMS,
+    num_programs: Optional[int] = None,
     fx_id: bytes = DEFAULT_FX_ID,
     fx_version: int = DEFAULT_FX_VERSION,
     current_program: int = 0,
@@ -147,6 +160,8 @@ def build_bank_header(
     Analysis of device-saved files confirms that `chunk_size` at offset 156 is the
     only header field that depends on the chunk length.
     """
+    if num_programs is None:
+        num_programs = DEFAULT_NUM_PROGRAMS
     if len(fx_id) != 4:
         raise ValueError(f"fx_id must be exactly 4 bytes, got {fx_id!r}")
 
@@ -277,6 +292,8 @@ def create_xpl_from_chunk(
     template_info: Dict[str, Any],
     plugin_path: Optional[str] = None,
     date_override: Optional[str] = None,
+    num_programs: Optional[int] = None,
+    presets_dir: Optional[Path] = None,
 ) -> Tuple[str, str]:
     """Create an .xpl XML string and its safe filename from a raw chunk and template."""
     attrs = dict(template_info["plugin_attrs"])
@@ -286,9 +303,11 @@ def create_xpl_from_chunk(
     version_date = date_override if date_override is not None else template_info["version_date"]
     version_file = template_info["version_file"]
 
-    # Reconstruct bank header from template's header parameters and new chunk size
+    # Reconstruct bank header with derived or overridden num_programs
+    if num_programs is None:
+        num_programs = default_num_programs(presets_dir)
+
     tmpl_hdr = template_info.get("header", {})
-    num_programs = tmpl_hdr.get("num_programs", DEFAULT_NUM_PROGRAMS)
     fx_id = tmpl_hdr.get("fx_id", DEFAULT_FX_ID)
     fx_version = tmpl_hdr.get("fx_version", DEFAULT_FX_VERSION)
 
@@ -434,6 +453,8 @@ def main() -> int:
     parser.add_argument("--template", type=Path, help="Template .xpl file to source XML envelope and attributes from")
     parser.add_argument("--plugin-path", type=str, help="Override path to plugin binary on device (<PLUGIN file=...>)")
     parser.add_argument("--date", type=str, help="Override date attribute in <version date=...>")
+    parser.add_argument("--num-programs", type=int, default=None, help="Override number of programs in VST2 bank header (default: factory presets count + 1 for Init)")
+    parser.add_argument("--presets", type=Path, default=None, help="Directory containing factory presets to derive program count from")
     parser.add_argument("--out", type=Path, help="Output directory for generated .xpl files")
     parser.add_argument("--check", type=Path, help="Inspect and verify an existing .xpl file")
 
@@ -465,6 +486,7 @@ def main() -> int:
     # Collision detection for FAT/exFAT filesystem (case-insensitive filename check)
     seen_files: Dict[str, str] = {}
     generated_count = 0
+    effective_num_programs = args.num_programs if args.num_programs is not None else default_num_programs(args.presets)
 
     for preset_name, chunk_data in entries:
         filename, xml_content = create_xpl_from_chunk(
@@ -473,6 +495,7 @@ def main() -> int:
             template_info=template_info,
             plugin_path=args.plugin_path,
             date_override=args.date,
+            num_programs=effective_num_programs,
         )
 
         fn_key = filename.lower()

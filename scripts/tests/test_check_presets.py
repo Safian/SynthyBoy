@@ -38,6 +38,7 @@ def make_synthetic_params() -> dict:
             {"key": f"mod{i:02d}.amount", "min": -100.0, "max": 100.0, "default": 0.0, "scale": "linear", "interval": 0},
             {"key": f"mod{i:02d}.bypass", "min": 0.0, "max": 1.0, "default": 0.0, "scale": "stepped", "interval": 1, "flags": ["stepped"]},
             {"key": f"mod{i:02d}.aux_source", "min": 0.0, "max": 57.0, "default": 0.0, "scale": "stepped", "interval": 1, "flags": ["stepped"]},
+            {"key": f"mod{i:02d}.bipolar", "min": 0.0, "max": 1.0, "default": 0.0, "scale": "stepped", "interval": 1, "flags": ["stepped"]},
         ])
 
     return {
@@ -75,6 +76,7 @@ def make_valid_preset(name="Test Preset", category="Bass", overrides=None) -> di
         params[f"mod{i:02d}.amount"] = 0.0
         params[f"mod{i:02d}.bypass"] = 0.0
         params[f"mod{i:02d}.aux_source"] = 0.0
+        params[f"mod{i:02d}.bipolar"] = 0.0
 
     if overrides:
         params.update(overrides)
@@ -284,6 +286,65 @@ class CheckPresetsTest(unittest.TestCase):
         self.assertEqual(res.returncode, 1)
         self.assertIn("mod_slot_duplicate", res.stdout)
 
+    def test_mod_slot_not_duplicate_when_aux_source_differs(self):
+        # Plain route vs route with aux source (engine sums them: different routes)
+        preset_doc = make_valid_preset(overrides={
+            "mod01.source": 1.0,
+            "mod01.destination": 1.0,
+            "mod01.amount": 25.0,
+            "mod01.aux_source": 0.0,
+            "mod02.source": 1.0,
+            "mod02.destination": 1.0,
+            "mod02.amount": 50.0,
+            "mod02.aux_source": 7.0,  # LFO 1 as aux
+        })
+        ok_file = self.bass_dir / "aux_slot.sbpreset"
+        ok_file.write_text(json.dumps(preset_doc), encoding="utf-8")
+
+        res = self._run_checker(str(ok_file))
+        self.assertNotIn("mod_slot_duplicate", res.stdout)
+        self.assertEqual(res.returncode, 0)
+
+    def test_mod_slot_not_duplicate_when_polarity_differs(self):
+        # Route with bipolar=0 vs route with bipolar=1
+        preset_doc = make_valid_preset(overrides={
+            "mod01.source": 1.0,
+            "mod01.destination": 1.0,
+            "mod01.amount": 25.0,
+            "mod01.bipolar": 0.0,
+            "mod02.source": 1.0,
+            "mod02.destination": 1.0,
+            "mod02.amount": 50.0,
+            "mod02.bipolar": 1.0,
+        })
+        ok_file = self.bass_dir / "bipolar_slot.sbpreset"
+        ok_file.write_text(json.dumps(preset_doc), encoding="utf-8")
+
+        res = self._run_checker(str(ok_file))
+        self.assertNotIn("mod_slot_duplicate", res.stdout)
+        self.assertEqual(res.returncode, 0)
+
+    def test_mod_slot_duplicate_when_source_aux_target_polarity_match(self):
+        # Two routes with identical source, aux_source, destination and polarity
+        preset_doc = make_valid_preset(overrides={
+            "mod01.source": 1.0,
+            "mod01.destination": 1.0,
+            "mod01.amount": 25.0,
+            "mod01.aux_source": 7.0,
+            "mod01.bipolar": 1.0,
+            "mod02.source": 1.0,
+            "mod02.destination": 1.0,
+            "mod02.amount": 50.0,
+            "mod02.aux_source": 7.0,
+            "mod02.bipolar": 1.0,
+        })
+        bad_file = self.bass_dir / "dup_aux_slot.sbpreset"
+        bad_file.write_text(json.dumps(preset_doc), encoding="utf-8")
+
+        res = self._run_checker(str(bad_file))
+        self.assertEqual(res.returncode, 1)
+        self.assertIn("mod_slot_duplicate", res.stdout)
+
     def test_defect_macro_with_targets_named_or_documented_unused(self):
         # Case A: explicit macro structure with name "Unused"
         preset_doc1 = make_valid_preset()
@@ -310,6 +371,21 @@ class CheckPresetsTest(unittest.TestCase):
         res2 = self._run_checker(str(bad_file2))
         self.assertEqual(res2.returncode, 1)
         self.assertIn("macro_unused_with_targets", res2.stdout)
+
+        # Case C: mod matrix routes macro 1 as AUX source, but meta description states macro 1 is unused
+        preset_doc3 = make_valid_preset(overrides={
+            "mod01.source": 1.0,  # env1
+            "mod01.destination": 1.0,  # master.volume
+            "mod01.amount": 30.0,
+            "mod01.aux_source": 19.0,  # macro1 as aux source
+        })
+        preset_doc3["meta"]["description"] = "Bass patch, Macro 1 is unused."
+        bad_file3 = self.bass_dir / "unused_macro3.sbpreset"
+        bad_file3.write_text(json.dumps(preset_doc3), encoding="utf-8")
+
+        res3 = self._run_checker(str(bad_file3))
+        self.assertEqual(res3.returncode, 1)
+        self.assertIn("macro_unused_with_targets", res3.stdout)
 
     def test_defect_macro_target_pointing_at_nonexistent_param(self):
         preset_doc = make_valid_preset()
