@@ -444,6 +444,8 @@ void testCompactLayout()
         sizes = sizes && c.child (i)->sizeOk();
     check (sizes, "compact: every part has at least its minimum size (touch targets of 56 px and more)");
     check (c.graph.rect().h > 280 && c.graph.rect().w >= 380, "compact: the graph is big (" + std::to_string (c.graph.rect().w) + " x " + std::to_string (c.graph.rect().h) + ")");
+    check (c.graph.rect().y == playrows::displayRect (c.rect()).y && c.graph.rect().h == playrows::displayRect (c.rect()).h && c.attack.rect().y == playrows::controlsLine (c.rect()), "compact: the graph is the display rectangle shared by the three thirds and the knobs start at the common controls line");
+    check (c.instances.rect().h == 56 && c.instances.listable && c.instances.state.count == kNumEnvs && c.instances.rect().y == c.rect().y + 6, "compact: the envelope selector is the one selector of the thirds (a stepper with a list, 56 px, the top row), not six tabs");
     check (c.graph.rect().contains (c.full.rect()) && c.full.rect().w >= 56 && c.full.rect().h >= 56, "compact: the full screen button (56 x 56 or more) lies in the corner of the graph");
     Component* leaves[64];
     const int n = c.collectLeaves (leaves, 0, 64);

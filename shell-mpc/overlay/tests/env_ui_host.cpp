@@ -132,8 +132,24 @@ void testSelectorWritesPlayEnv()
 {
     Rig r;
     const ui::Rect c = r.ui.compact().instances.rect();
-    r.tap (c.x + c.w * 4 / 6 + 4, c.y + c.h / 2);
-    check (r.inst.env == 5, "tap on the fifth cell of the selector: Play Env = 5");
+    check (c.h >= 56 && std::string (r.ui.compact().instances.state.text) == "ENV 1" && r.ui.compact().instances.listable, "the selector shows ENV 1 and has a list");
+    r.tap (c.x + c.w * 7 / 8, c.y + c.h / 2);   // the right arrow: the next envelope
+    check (r.inst.env == 2, "tap on the right arrow of the selector: Play Env = 2");
+    r.refresh();
+    r.tap (c.x + c.w / 2, c.y + c.h / 2);   // the name: the list of the six envelopes
+    {
+        const ui::ListPopup& l = r.ui.list();
+        bool names = l.state.count == 6 && l.state.current == 1;
+        for (int i = 0; i < 6 && names; ++i)
+            names = std::string (l.state.items[i]) == "ENV " + std::to_string (i + 1) && l.rowRect (i).h >= 56;
+        check (r.stack.isMain() && names, "a tap on the name opens the list ENV 1 .. 6 (rows >= 56 px), no page of the stack opened");
+    }
+    {
+        const ui::Rect row = r.ui.list().rowRect (4);
+        r.tap (row.x + row.w / 2, row.y + row.h / 2);
+    }
+    check (r.inst.env == 5, "tap on the fifth row of the list: Play Env = 5");
+    r.refresh();
     check (r.ui.selection() == 5, "the UI follows the selector");
     check (r.inst.q[0] == envIdx (5, "attack") && r.inst.q[1] == envIdx (5, "decay") && r.inst.q[2] == envIdx (5, "sustain") && r.inst.q[3] == envIdx (5, "release"),
            "the ADSR group follows the envelope: attack, decay, sustain, release of env5");
@@ -375,9 +391,9 @@ void testModulatedKnobsShowTheirSource()
     check (r.ui.numTargets() == 1, "the envelope counts its targets: 1");
     check (r.ui.full().numTargetLines == 1 && r.ui.full().tagsRect().w >= 200 && r.ui.full().graph.rect().w > 1200, "the full screen lists its target as a tag in the top bar (room " + std::to_string (r.ui.full().tagsRect().w) + " px) and the graph keeps the whole width");
     check (r.ui.compact().instances.hasTargets (0) && ! r.ui.compact().instances.hasTargets (1),
-           "compact env tabs: ENV 1 has target dot (hasTargets=true), ENV 2 has no mark (hasTargets=false)");
+           "compact env selector: ENV 1 has target dot (hasTargets=true), ENV 2 has no mark (hasTargets=false)");
     check (r.ui.full().instances.hasTargets (0) && ! r.ui.full().instances.hasTargets (1),
-           "full screen env tabs: ENV 1 has target dot, ENV 2 has no mark");
+           "full screen env cells: ENV 1 has target dot, ENV 2 has no mark");
     // add target for ENV 4 as well
     r.inst.set ("mod02.source", 4.0f);
     r.inst.set ("mod02.destination", static_cast<float> (synthyboy::modDestinationChoiceOf (static_cast<size_t> (envIdx (1, "attack")))));

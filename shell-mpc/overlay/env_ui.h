@@ -55,7 +55,7 @@ public:
     enum KnobId : int { kAttack = 0, kDecay, kSustain, kRelease, kACurve, kDCurve, kRCurve, kDelay, kHold, kNumKnobs };
 
     /** What a value is and how it converts to the engine's plain value. */
-    enum class T : uint8_t { Knob, Field, Toggle, Select, Graph, Inert };
+    enum class T : uint8_t { Knob, Field, Toggle, Select, Pick, Graph, Inert };   // Select: the cells of the full screen (a PictogramSelector); Pick: the stepper with a list of the compact view
 
     struct Item
     {
@@ -103,6 +103,8 @@ public:
         if (open && stackDepth_ == 0)
             full_.setActiveGroup (0);
         stackDepth_ = open ? stack.depth() : 0;
+        if (stackDepth_ > 0 && instPopup_)
+            closeInstanceList();
         otherOpen_ = stack.depth() > 0 && ! open;
         syncPages (open ? stack : idle_, inst);
         if (nowMs - modsAtMs_ >= kModsRefreshMs || modsDirty_)
@@ -158,6 +160,8 @@ public:
             sb.gradientRect (static_cast<float> (kGroundX0), static_cast<float> (kTabY), static_cast<float> (kGroundX1), static_cast<float> (kTabY + kTabH), ui::theme::rgba (L.bg0), ui::theme::rgba (L.bg1));
         }
         compact_.draw (sb);
+        if (instPopup_)
+            list_.draw (sb);   // the list of the selector lies over the third (drawLive paints no dots then)
     }
     /** The opaque ground of the whole tab and the page of the stack (the full screen, the targets, the modulations of a control). */
     void drawPage (gpu::SceneBuilder& sb) const
@@ -183,7 +187,10 @@ public:
     void drawLive (gpu::SceneBuilder& sb) const
     {
         if (stackDepth_ == 0)
-            compact_.drawLive (sb);
+        {
+            if (! instPopup_)
+                compact_.drawLive (sb);
+        }
         else if (pageTop_ == 0)
             full_.drawLive (sb);
     }
@@ -331,7 +338,7 @@ private:
         bind (kClose, &full_.close, T::Inert, "");
         bind (kFullButton, &compact_.full, T::Inert, "");
         bind (kTargets, &full_.targets, T::Inert, "");
-        bind (kInstances, &compact_.instances, T::Select, "");
+        bind (kInstances, &compact_.instances, T::Pick, "");
         bind (kInstances, &full_.instances, T::Select, "");
         bind (kGraph, &compact_.graph, T::Graph, "");
         bind (kGraph, &full_.graph, T::Graph, "");
@@ -366,6 +373,13 @@ private:
         {
             if (it.c == nullptr)
                 continue;
+            if (it.type == T::Pick)
+            {
+                auto* st = static_cast<ui::EnvStepper*> (it.c);
+                st->state.count = kEnvs; st->state.index = sel_ - 1; st->state.wrap = true;
+                st->setItem (kEnvNames[std::clamp (sel_, 1, kEnvs) - 1]);
+                continue;
+            }
             if (it.type == T::Select)
             {
                 static_cast<ui::PictogramSelector*> (it.c)->state.index = sel_ - 1;
@@ -707,6 +721,33 @@ private:
         list_.showCurrent();
     }
 
+    // ---- the list of the selector of the compact view: ENV 1 .. 6, a popup over the third (not a page of the stack), a dot on the rows of the envelopes that have targets
+    static constexpr const char* kEnvNames[kEnvs] = { "ENV 1", "ENV 2", "ENV 3", "ENV 4", "ENV 5", "ENV 6" };
+    void openInstanceList()
+    {
+        const ui::Rect third { kCompactX, kTabY + 4, kCompactW, kTabH - 8 };
+        list_.state.header = nullptr;
+        list_.state.headerBack = false;
+        list_.state.items = kEnvNames;
+        list_.state.count = kEnvs;
+        list_.state.current = sel_ - 1;
+        list_.state.dotMask = full_.instances.targetMask();
+        list_.state.dotColours = ui::EnvStepper::colours();
+        list_.place ({ third.x + 6, third.y + 6 + ui::playrows::kSelectorH, third.w - 12, kEnvs * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup (third);
+        list_.showCurrent();
+        instPopup_ = true;
+    }
+    void closeInstanceList()
+    {
+        instPopup_ = false;
+        list_.state.dotMask = 0;
+        list_.state.dotColours = nullptr;
+        list_.state.current = -1;
+        list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup ({ 0, kTabY, w_, kTabH });
+    }
+
     // ---- the modulations page of one control (a long press on a knob or a field)
     ModRow modRows_[ui::ModulationsPage::kMaxRows];
     int modsTarget_ = 0, modsTargetParam_ = -1, modsAddOffer_ = 0;
@@ -756,7 +797,7 @@ private:
     ui::Component* topComponent() noexcept
     {
         if (stackDepth_ == 0)
-            return &compact_;
+            return instPopup_ ? static_cast<ui::Component*> (&list_) : &compact_;
         if (pageTop_ == kPageTargets)
             return &targets_;
         if (pageTop_ == kPageMods)
@@ -779,10 +820,25 @@ private:
             return;
         using K = ui::ChangeKind;
         const int id = c.id;
+        if (instPopup_ && stackDepth_ == 0)   // the list of the selector of the compact view
+        {
+            if (id == kList && c.kind == K::Index)
+            {
+                if (page_)
+                    pageSel_ = c.index + 1;
+                else
+                    v.setPlaySelection (1, c.index + 1);
+                closeInstanceList();
+            }
+            else if (id == kListBackdrop && c.kind == K::Request)
+                closeInstanceList();
+            return;
+        }
         if (c.kind == K::Request)
         {
             switch (id)
             {
+                case kInstances: openInstanceList(); return;
                 case kFullButton: stack.openFull (kElementEnv); return;
                 case kClose: case kTargetsBack: case kModsBack: case kListBackdrop: stack.back(); return;
                 case kTargets: stack.openDetail (kPageTargets); return;
@@ -1045,6 +1101,7 @@ private:
     UiStack idle_;                       // an empty stack: the pages are read from it while another element's page is open
     std::vector<Item> items_;
     ui::Component* gesture_ = nullptr;
+    bool instPopup_ = false;             // the list of the selector of the compact view is open (main state only)
     bool page_ = false;                  // the page of an Env tab
     int pageSel_ = 1;                    // the envelope that page shows
     bool gestureDown_ = false, otherOpen_ = false, configured_ = false, modsDirty_ = true, beats_ = false;

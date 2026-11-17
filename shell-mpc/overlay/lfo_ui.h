@@ -116,6 +116,8 @@ public:
         if (open && stackDepth_ == 0)
             full_.setActiveGroup (0);
         stackDepth_ = open ? stack.depth() : 0;
+        if (stackDepth_ > 0 && instPopup_)
+            closeInstanceList();
         syncPages (open ? stack : idle_, inst);
         content_ = inst.content();
         bpm_ = inst.bpm();
@@ -191,6 +193,8 @@ public:
         compact_.draw (sb);
         ui::lfodisplay::draw (sb, compact_.displayRect(), data_, ! displayHot_);
         compact_.full.draw (sb);
+        if (instPopup_)
+            list_.draw (sb);   // the list of the selector lies over the third (drawLive paints no cursors then)
     }
     /** The opaque ground of the whole tab and the page of the stack (the full screen, the editor, the targets, the modulations of a control). */
     void drawPage (gpu::SceneBuilder& sb) const
@@ -224,7 +228,10 @@ public:
     void drawLive (gpu::SceneBuilder& sb) const
     {
         if (stackDepth_ == 0)
-            ui::lfodisplay::drawLive (sb, compact_.displayRect(), data_);
+        {
+            if (! instPopup_)
+                ui::lfodisplay::drawLive (sb, compact_.displayRect(), data_);
+        }
         else if (pageTop_ == 0 || (pageTop_ == kPageList && underList_ == 0))
             ui::lfodisplay::drawLive (sb, full_.displayRect(), data_);
     }
@@ -567,6 +574,27 @@ private:
     ListKind listKind_ = ListKind::None;
     int listParam_ = -1, listGroup_ = -1, underList_ = 0;
     std::vector<const char*> listNames_;
+    /** The list of the selector of the compact view: LFO 1 .. 10, RND 1 .. 4 (scrolls), a popup over the third (not a page of the stack): the same behaviour as the envelope's and the oscillator's selector. */
+    void openInstanceList (const IInstanceView& v)
+    {
+        const ui::Rect third { kCompactX, kTabY + 4, kCompactW, kTabH - 8 };
+        listKind_ = ListKind::Instance;
+        fillList (&v);
+        const int rows = std::min (kInstances, (third.h - 6 - ui::playrows::kSelectorH - 6 - 2 * ui::ListPopup::kPad) / ui::ListPopup::kRowH);
+        list_.place ({ third.x + 6, third.y + 6 + ui::playrows::kSelectorH, third.w - 12, rows * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup (third);
+        list_.showCurrent();
+        instPopup_ = true;
+    }
+    void closeInstanceList()
+    {
+        instPopup_ = false;
+        listKind_ = ListKind::None;
+        list_.state.current = -1;
+        list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup ({ 0, kTabY, w_, kTabH });
+    }
+    bool instPopup_ = false;   // the list of the selector of the compact view is open (main state only)
     void fillList (const IInstanceView* v)
     {
         listNames_.clear();
@@ -1200,7 +1228,7 @@ private:
     ui::Component* topComponent() noexcept
     {
         if (stackDepth_ == 0)
-            return &compact_;
+            return instPopup_ ? static_cast<ui::Component*> (&list_) : &compact_;
         if (pageTop_ == kPageEditor)
             return &editor_;
         if (pageTop_ == kPageTargets)
@@ -1239,6 +1267,17 @@ private:
             editorChange (c, stack, v, nowMs);
             return;
         }
+        if (instPopup_ && stackDepth_ == 0)   // the list of the selector of the compact view
+        {
+            if (id == kList && c.kind == K::Index)
+            {
+                selectSlot (c.index, v);
+                closeInstanceList();
+            }
+            else if (id == kListBackdrop && c.kind == K::Request)
+                closeInstanceList();
+            return;
+        }
         if (c.kind == K::Request)
         {
             switch (id)
@@ -1250,7 +1289,7 @@ private:
                 case kTargetsAdd: listKind_ = ListKind::Dest; listGroup_ = -1; stack.openDetail (kPageList); fillList (&v); return;
                 case kListHeader: if (listKind_ == ListKind::Dest) { listGroup_ = -1; fillList (&v); } return;
                 case kEdit: openEditor (stack, v); return;
-                case kInstance: listKind_ = ListKind::Instance; if (stack.depth() == 0) stack.openFull (kElementLfo); stack.openDetail (kPageList); fillList (&v); return;
+                case kInstance: openInstanceList (v); return;
                 case kShape: case kStyle: case kSync: case kMode: case kDirection: case kDivision:
                     if (stack.depth() == 0)
                         stack.openFull (kElementLfo);   // the list lies over the full screen: from the compact view that opens first

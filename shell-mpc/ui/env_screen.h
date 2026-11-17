@@ -1,6 +1,6 @@
 // SynthyBoy - MPC UI component library: the two views of the ENVELOPE element (ENV 1 .. 6), layout presets built from library components (owner approved plan "ui-elem-envelope-lfo.md"; drawn for 1280 x 800,
 // the Play page's tab is 1280 x 628 at y 110). Same contract as every component (core.h).
-//  - EnvCompact: the third of the width (400 x 620) in the middle of the Play page: the instance selector (ENV 1 .. 6), the envelope graph with the "full screen" button in its top right corner (the handles
+//  - EnvCompact: the third of the width (400 x 620) in the middle of the Play page: the instance selector (ENV 1 .. 6: the ONE selector of the three thirds, a Stepper with the list of its entries; the colour of the envelope and the dot "it has targets" stand in it), the envelope graph with the "full screen" button in its top right corner (the handles
 //    can be dragged here too), and under it the ADSR Q group (ATTACK, DECAY, SUSTAIN, RELEASE) in one frame.
 //  - EnvFullScreen: the top bar (close, the instance selector, the targets button), the big graph (the whole width; the times stand under it and on the knobs, so there are no second boxes for them), the
 //    list of what the envelope modulates at its right (only when it modulates something: otherwise the TARGETS button is enough), and the bottom band of three Q groups, each a titled block: ADSR [ATTACK, DECAY, SUSTAIN, RELEASE], SHAPE [A CURVE, D CURVE, R CURVE], TIME [DELAY, HOLD, BEATS, LEGATO].
@@ -11,6 +11,7 @@
 #include "env_graph.h"
 #include "led_toggle.h"
 #include "panel.h"
+#include "play_rows.h"
 
 namespace synthyboy_mpc { namespace ui {
 
@@ -71,10 +72,42 @@ protected:
 };
 
 // ===============================================================================================================================================================
+/** EnvStepper: the selector of the envelope in the compact view, the same component as the LFO's and the oscillator's (a Stepper: the arrows step, a tap on the name opens the list of ENV 1 .. 6), with what the six tabs showed: a small dot in the
+    colour of the current envelope beside the name when it has modulation targets (`setTargetMask`: bit n = envelope n + 1), the name in the colour of the envelope. The list rows carry the same dots (ListPopup::State::dotMask). */
+class EnvStepper : public Stepper
+{
+public:
+    uint8_t targetMask_ = 0;
+    void setTargetMask (uint8_t m) noexcept { targetMask_ = m; }
+    uint8_t targetMask() const noexcept { return targetMask_; }
+    bool hasTargets (int i) const noexcept { return i >= 0 && i < kNumEnvs && (targetMask_ & (1u << i)) != 0; }
+    EnvStepper() { state.count = kNumEnvs; state.wrap = true; listable = true; setItem ("ENV 1"); }
+    /** The colours of the six envelopes (the list rows use them for their dots). */
+    static const uint32_t* colours() noexcept
+    {
+        static uint32_t c[kNumEnvs];
+        for (int i = 0; i < kNumEnvs; ++i)
+            c[i] = envColour (i);
+        return c;
+    }
+
+protected:
+    void drawBody (Pen& p) const override
+    {
+        Stepper::drawBody (p);
+        if (hasTargets (state.index))
+        {
+            const Rect b = rect_.inset (2);
+            p.disc (static_cast<float> (b.x + 28 + 10), static_cast<float> (b.y + b.h / 2), 4.0f, p.c (envColour (state.index), 255));
+        }
+    }
+};
+
+// ===============================================================================================================================================================
 class EnvCompact : public Composite
 {
 public:
-    EnvSelector instances;
+    EnvStepper instances;
     EnvGraph graph;
     MenuButton full { "", MenuButton::Icon::Expand };
     Knob attack { "ATTACK" }, decay { "DECAY" }, sustain { "SUSTAIN" }, release { "RELEASE" };
@@ -84,7 +117,10 @@ public:
     EnvCompact()
     {
         for (Knob* k : { &attack, &decay, &sustain, &release })
+        {
             k->state.side = true;
+            k->state.dialMax = 96;   // the rows are as tall as the third leaves (about 108 px): the dial stays as big as before and the name and the value keep their room
+        }
         addKid (instances); addKid (full); addKid (graph);   // the full screen button lies over the graph: it takes the touch first and is drawn last (draw below)
         addKid (attack); addKid (decay); addKid (sustain); addKid (release);
         group.set (0, &attack); group.set (1, &decay); group.set (2, &sustain); group.set (3, &release);
@@ -114,15 +150,16 @@ protected:
     {
         const int W = rect_.w - 2 * kMargin;
         instances.place ({ rect_.x + kMargin, rect_.y + kMargin, W, kSelectorH });
-        const int knobsH = kQLane + 2 * kKnobH + kQLane, by = rect_.bottom() - kMargin - knobsH + kQLane;
-        const int gy = rect_.y + kMargin + kSelectorH + 8, gh = std::max (0, by - kQLane - 4 - gy);
-        graph.place ({ rect_.x + kMargin, gy, W, gh });
+        // the display is the one of the three thirds (play_rows.h); the knobs start at the common controls line (their Q chip lane lies above it) and share what is left of the third
+        const Rect gr = playrows::displayRect (rect_);
+        graph.place (gr);
         full.place ({ graph.rect().right() - 64 - 4, graph.rect().y + 4, 64, 56 });
+        const int by = playrows::controlsLine (rect_), kh = std::max (kKnobH, (rect_.bottom() - kMargin - by - kQLane) / 2);
         const int cw = (W - kGap) / 2;
-        attack.place ({ rect_.x + kMargin, by, cw, kKnobH });
-        decay.place ({ rect_.x + kMargin + cw + kGap, by, W - cw - kGap, kKnobH });
-        sustain.place ({ rect_.x + kMargin, by + kKnobH + kQLane, cw, kKnobH });
-        release.place ({ rect_.x + kMargin + cw + kGap, by + kKnobH + kQLane, W - cw - kGap, kKnobH });
+        attack.place ({ rect_.x + kMargin, by, cw, kh });
+        decay.place ({ rect_.x + kMargin + cw + kGap, by, W - cw - kGap, kh });
+        sustain.place ({ rect_.x + kMargin, by + kh + kQLane, cw, kh });
+        release.place ({ rect_.x + kMargin + cw + kGap, by + kh + kQLane, W - cw - kGap, kh });
     }
 };
 

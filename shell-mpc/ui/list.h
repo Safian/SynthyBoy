@@ -22,6 +22,8 @@ public:
         int count = 0, current = 0;
         const char* header = nullptr;   // a bar of its own above the rows (the content browser: the path); null = none
         bool headerBack = false;        // the header is also the way up: a back arrow at its left and a Request change with the id of `setHeaderId` on a tap
+        unsigned dotMask = 0;           // bit i set: a small dot at the right end of row i (the envelopes that modulate something: the same dot the selector shows); 0 = none
+        const uint32_t* dotColours = nullptr;   // the colour of the dot of row i (one entry per row, rgb as the look's colours); null = the accent colour
     };
     State state;
 
@@ -125,7 +127,10 @@ protected:
                 p.plain();
             }
             const char* name = state.items != nullptr && state.items[i] != nullptr ? state.items[i] : "";
-            p.textLeft ({ r.x + 12, r.y + 4, std::max (0, r.w - 20), r.h - 8 }, name, T.fItem, p.c (cur ? T.text : T.textDim, 255), T.fMin);
+            const bool dot = i < 32 && (state.dotMask & (1u << i)) != 0;
+            p.textLeft ({ r.x + 12, r.y + 4, std::max (0, r.w - 20 - (dot ? 24 : 0)), r.h - 8 }, name, T.fItem, p.c (cur ? T.text : T.textDim, 255), T.fMin);
+            if (dot)
+                p.disc (static_cast<float> (r.right() - 16), static_cast<float> (r.y + r.h / 2), 4.0f, p.c (state.dotColours != nullptr ? state.dotColours[i] : T.flow[0], 255));
         }
         if (scrolls())
         {

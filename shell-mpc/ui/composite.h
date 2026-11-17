@@ -565,7 +565,7 @@ public:
     MenuButton dropdown { "", MenuButton::Icon::Down };
 
     SourcePicker() { addKid (stepper); addKid (dropdown); setPrimary (&stepper); }
-    Size minSize() const override { return { Stepper::kMinW + kGap + 56, 56 }; }
+    Size minSize() const override { return { stepper.minSize().w + kGap + 56, 56 }; }   // the stepper's own minimum (a narrower one in the compact row of the Play page)
 
 protected:
     void layout() override
@@ -642,7 +642,13 @@ public:
     OscInstance instance() const noexcept { return inst_; }
     OscKind kind() const noexcept { return kind_; }
     /** The stacked arrangement is the compact view (vertical knobs: the dial over the name and the value); the row is the top band of the full screen (side knobs: the dial at the left, the name and the value beside it). */
-    void setStacked (bool s) { stacked_ = s; pan.state.side = level.state.side = filter.state.side = ! s; layout(); }
+    void setStacked (bool s)
+    {
+        stacked_ = s;
+        pan.state.side = level.state.side = filter.state.side = ! s;
+        source.stepper.minWidth = s ? 120 : Stepper::kMinW;   // the compact row holds the table stepper, PAN and LEVEL side by side: the stepper may be narrower there (its text is fitted)
+        layout();
+    }
     bool stacked() const noexcept { return stacked_; }
     /** The ids of the parts from base: selector, source stepper, dropdown, OCT, FILTER, noise type, PAN, LEVEL = base .. base + 7 (the same call in every view gives the same ids). */
     void assignIds (int base)
@@ -656,7 +662,7 @@ public:
         const Component* second = inst_ == OscInstance::Noise ? static_cast<const Component*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<const Component*> (&oct) : &source);
         const Size a = first->minSize(), b = second->minSize(), p = pan.minSize();
         if (stacked_)
-            return inst_ == OscInstance::Noise ? Size { std::max (a.w, 3 * p.w + 2 * kGap), a.h + p.h + kQLane } : Size { std::max ({ a.w, b.w, 2 * p.w + kGap }), a.h + b.h + p.h + 2 * kQLane };
+            return inst_ == OscInstance::Noise ? Size { std::max (a.w, 3 * p.w + 2 * kGap), a.h + p.h + kQLane } : Size { std::max (a.w, b.w + 2 * p.w + 2 * kGap), a.h + kQLane + std::max (b.h, p.h) };
         return { a.w + b.w + 2 * p.w + 3 * kGap, std::max ({ a.h, b.h, p.h }) };
     }
     void setEnabled (bool e) override { Composite::setEnabled (e); }
@@ -679,13 +685,15 @@ protected:
         }
         if (stacked_)
         {
-            const int h1 = first->minSize().h, h2 = second->minSize().h, h3 = std::max (0, rect_.h - h1 - h2 - 2 * kQLane);
+            // the type cells, then ONE row: the second member (the table stepper with its list button, OCT) at the left, PAN and LEVEL at the right (vertical knobs: the dial over the name and the value). The second member is as tall
+            // as a control (at least 56 px, 76 px as far as the row allows: its middle stands at the dial's), the knobs fill the row.
+            const int h1 = first->minSize().h, rowY = rect_.y + h1 + kQLane, rowH = std::max (0, rect_.h - h1 - kQLane);
             first->place ({ rect_.x, rect_.y, rect_.w, h1 });
-            second->place ({ rect_.x, rect_.y + h1 + kQLane, rect_.w, h2 });
-            Rect r[2];
-            const int fixed[2] = { 0, 0 }, weight[2] = { 1, 1 };
-            layoutRow ({ rect_.x, rect_.y + h1 + h2 + 2 * kQLane, rect_.w, h3 }, fixed, weight, 2, kGap, r);
-            pan.place (r[0]); level.place (r[1]);
+            const int knobW = std::max (pan.minSize().w, (rect_.w - 2 * kGap) / 4), leftW = std::max (0, rect_.w - 2 * knobW - 2 * kGap);
+            const int h2 = std::min (rowH, std::max (second->minSize().h, 76));
+            second->place ({ rect_.x, rowY, leftW, h2 });
+            pan.place ({ rect_.x + leftW + kGap, rowY, knobW, rowH });
+            level.place ({ rect_.x + leftW + kGap + knobW + kGap, rowY, std::max (0, rect_.right() - (rect_.x + leftW + kGap + knobW + kGap)), rowH });
             return;
         }
         Rect r[4];

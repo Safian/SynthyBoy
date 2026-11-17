@@ -219,9 +219,9 @@ static void test_basic_controls_variants()
 
     // Compact stacked mode
     bc.setStacked (true);
-    bc.place ({ 50, 50, 260, 240 });
+    bc.place ({ 50, 50, 420, 232 });   // the compact row of the Play page: the type cells, then ONE row (the second member, PAN, LEVEL)
     check (bc.stacked(), "BasicControls stacked is true");
-    im = drawComponent (bc, 350, 320);
+    im = drawComponent (bc, 520, 320);
     check (drawnOutside (im, bc.rect(), backgroundPixel()) == 0, "BasicControls stacked draws strictly inside rect");
 }
 

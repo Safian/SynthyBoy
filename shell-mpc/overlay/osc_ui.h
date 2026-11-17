@@ -104,11 +104,12 @@ public:
     // ----------------------------------------------------------------------------------------------------------------------------------------------------------------------
     /** The canvas is the whole screen (1280 x 800: the Play view's region; every coordinate is a screen pixel); the pages live in the tab (y kTabY .. kTabY + kTabH). */
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
+    static constexpr int kCompactX = 8, kCompactW = 420;                // the left third of the Play page
     void setCanvas (int w, int h)
     {
         w_ = w; h_ = h;
         const ui::Rect tab { 0, kTabY, w, kTabH };
-        compact_.place ({ 8, kTabY + 4, 420, kTabH - 8 });
+        compact_.place ({ kCompactX, kTabY + 4, kCompactW, kTabH - 8 });
         full_.place (tab);
         popupBox_ = { w / 2 - 340, kTabY + kTabH / 2 - 110, 680, 220 };
         route_.place (popupBox_);
@@ -133,6 +134,8 @@ public:
         if (sel != sel_ || raw != typeRaw_ || ! configured_)
             configure (&inst, sel, false, raw);
         stackDepth_ = stack.depth();
+        if (stackDepth_ > 0 && srcPopup_)
+            closeSourceList();
         syncPages (stack, inst);
         envSel_ = selectedEnv; lfoSel_ = selectedLfo;
         const int lastSel = inst.playLastSelector();
@@ -237,7 +240,13 @@ public:
     /** The route popup and the list popup (over the page and over the picture). */
     void drawPopup (gpu::SceneBuilder& sb) const
     {
-        if (stackDepth_ == 0 || pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope || pageTop_ == kPageMods || oscspec::isSpecPage (pageTop_))
+        if (stackDepth_ == 0)
+        {
+            if (srcPopup_)
+                list_.draw (sb);   // the list of the source selector lies over the third
+            return;
+        }
+        if (pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope || pageTop_ == kPageMods || oscspec::isSpecPage (pageTop_))
             return;
         if (pageTop_ == kPageRoute)
             route_.draw (sb);
@@ -261,7 +270,7 @@ public:
     /** The touch hit this view's drawing (the main state: the oscillator third; any other state: everything). */
     bool covers (int x, int y) const noexcept
     {
-        return stackDepth_ > 0 ? ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y) : ui::Rect { 8, kTabY + 4, 420, kTabH - 8 }.contains (x, y);
+        return stackDepth_ > 0 ? ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y) : ui::Rect { kCompactX, kTabY + 4, kCompactW, kTabH - 8 }.contains (x, y);
     }
 
     // ----------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -275,7 +284,7 @@ public:
             gesture_ = nullptr;
             if (! covers (ev.x, ev.y) || ! top)
                 return false;
-            if (loadShown_ && loadBtn_.rect().contains (x, y))
+            if (loadShown_ && ! srcPopup_ && loadBtn_.rect().contains (x, y))
             {
                 loadBtn_.touchDown (x, y, nowMs);
                 gesture_ = &loadBtn_;
@@ -1318,7 +1327,7 @@ private:
     ui::Component* topComponent() noexcept
     {
         if (stackDepth_ == 0)
-            return &compact_;
+            return srcPopup_ ? static_cast<ui::Component*> (&list_) : &compact_;
         if (oscspec::isSpecPage (pageTop_))
             return &spec_;
         if (pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope)
@@ -1338,11 +1347,24 @@ private:
             return;
         using K = ui::ChangeKind;
         const int id = c.id;
+        // ---- the list of the source selector of the compact view (a popup over the third, not a page of the stack)
+        if (srcPopup_ && stackDepth_ == 0)
+        {
+            if (id == kList && c.kind == K::Index)
+            {
+                v.setPlaySelection (0, c.index + 1);
+                closeSourceList();
+            }
+            else if (id == kListBackdrop && c.kind == K::Request)
+                closeSourceList();
+            return;
+        }
         // ---- navigation
         if (c.kind == K::Request)
         {
             switch (id)
             {
+                case kInstances: openSourceList(); return;
                 case kFullButton: stack.openFull (kElementOsc); return;
                 case kClose: case kDetailBack: case kModsBack: case kRouteClose: case kRouteBackdrop: stack.back(); return;
                 case kTuneMore: stack.openDetail (oscspec::kMore); return;
@@ -1538,6 +1560,29 @@ private:
         list_.showCurrent();
     }
 
+    /** The list of the source selector of the compact view: Sub, Osc A, Osc B, Osc C, Noise (the names of the selector), five rows of 56 px under the header row, a popup over the third. */
+    void openSourceList()
+    {
+        static const char* const kNames[playosc::kInstances] = { "Sub", "Osc A", "Osc B", "Osc C", "Noise" };
+        const ui::Rect third { kCompactX, kTabY + 4, kCompactW, kTabH - 8 };
+        list_.state.header = nullptr;
+        list_.state.headerBack = false;
+        list_.state.items = kNames;
+        list_.state.count = playosc::kInstances;
+        list_.state.current = sel_ - 1;
+        list_.place ({ third.x + 6, third.y + 6 + ui::playrows::kSelectorH, third.w - 12, playosc::kInstances * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup (third);
+        list_.showCurrent();
+        srcPopup_ = true;
+    }
+    void closeSourceList()
+    {
+        srcPopup_ = false;
+        list_.state.current = -1;
+        list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup ({ 0, kTabY, w_, kTabH });
+    }
+
     /** The list popup of a choice parameter (the owner's item: its parameter): over the full screen. */
     void openList (const Item* it, UiStack& stack)
     {
@@ -1726,6 +1771,7 @@ private:
     ui::ModulationsPage mods_;
     ui::RoutePanel route_;
     ui::ListPopup list_;
+    bool srcPopup_ = false;   // the list of the source selector of the compact view is open (main state only)
     oscspec::OscSpecPage spec_;
     ui::MenuButton loadBtn_ { "LOAD SAMPLE", ui::MenuButton::Icon::None };
     ui::Rect marksRect_;
