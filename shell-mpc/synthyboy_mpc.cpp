@@ -2878,7 +2878,7 @@ extern "C"
     MPC_PLUGIN_EXPORT AEffect* VSTPluginMain(audioMasterCallback audioMaster)
     {
         synthyboy_mpc::startupTimes().begin();   // the start-up record (startup_timing.h): time zero is the first entry here
-        MPCKIT_LOG_START ("synthyboy");        // dev builds only: the developer log (kit/log.h), off until /tmp/synthyboy-log.conf switches a category on
+        try { MPCKIT_LOG_START ("synthyboy"); } catch (...) {}   // dev builds only: the developer log (kit/log.h), off until /tmp/synthyboy-log.conf switches a category on
         // Create the plugin instance. No exception may reach the host: a failure here means "no plugin".
         PluginInstance* inst = nullptr;
         try { inst = new PluginInstance(); }
