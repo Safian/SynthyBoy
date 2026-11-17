@@ -284,7 +284,8 @@ int fxDuplicate (const float* plain, FxRackItem item, std::vector<FxWrite>& writ
 
 bool fxMove (const float* plain, FxRackItem item, int rack, int index, std::vector<FxWrite>& writes)
 {
-    rack = std::clamp (rack, 0, kNumPoolRacks - 1);
+    // a module of instance 0 that is no splitter can sit in a band rack (3 .. 9) too; a slot of the pool and a splitter only in a bus (0 .. 2)
+    rack = std::clamp (rack, 0, ! item.pool && item.index < 13 ? kNumFxRacks - 1 : kNumPoolRacks - 1);
     const FxRacks racks = fxRacks (plain);
     int fromRack = 0, fromIndex = 0;
     if (! racks.find (item, fromRack, fromIndex))

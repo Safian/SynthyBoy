@@ -262,6 +262,47 @@ TEST (fxrack_move_reorders_within_a_rack_and_between_racks)
     CHECK (consistent (v));
 }
 
+TEST (fxrack_move_puts_a_module_into_a_band_rack_and_keeps_slots_and_splitters_out)
+{
+    ParamValues v = ParamValues::defaults();
+    std::vector<FxWrite> w;
+    // chorus (0), delay (2) and reverb (8) into the bands of the L/M/H splitter (racks 5 .. 7), in an order of their own
+    for (const auto& m : { std::pair<int, int> { 0, 6 }, { 2, 6 }, { 8, 5 } })
+    {
+        w.clear();
+        CHECK (fxMove (v.plain, { false, m.first }, m.second, 99, w));
+        applyTo (v, w);
+    }
+    CHECK_EQ (listOf (v, 6).size(), static_cast<size_t> (2));
+    CHECK (listOf (v, 6)[0] == (FxRackItem { false, 0 }) && listOf (v, 6)[1] == (FxRackItem { false, 2 }));
+    CHECK (listOf (v, 5).size() == 1 && listOf (v, 5)[0] == (FxRackItem { false, 8 }));
+    CHECK_EQ (fxItemRack (v.plain, { false, 2 }), 6);
+    CHECK_EQ (listOf (v, 0).size(), static_cast<size_t> (13));
+    // reorder inside the band: the delay in front of the chorus
+    w.clear();
+    CHECK (fxMove (v.plain, { false, 2 }, 6, 0, w));
+    applyTo (v, w);
+    CHECK (listOf (v, 6)[0] == (FxRackItem { false, 2 }) && listOf (v, 6)[1] == (FxRackItem { false, 0 }));
+    // back to a bus
+    w.clear();
+    CHECK (fxMove (v.plain, { false, 2 }, 1, 0, w));
+    applyTo (v, w);
+    CHECK (listOf (v, 6).size() == 1 && listOf (v, 1)[0] == (FxRackItem { false, 2 }));
+    // a splitter and a slot of the pool stay in the buses: the rack is clamped
+    w.clear();
+    fxMove (v.plain, { false, 14 }, 7, 0, w);
+    applyTo (v, w);
+    CHECK_EQ (fxItemRack (v.plain, { false, 14 }), 2);
+    w.clear();
+    const int slot = fxAddModule (v.plain, kFxTypeDelay, 0, w);
+    applyTo (v, w);
+    w.clear();
+    fxMove (v.plain, { true, slot }, 9, 0, w);
+    applyTo (v, w);
+    CHECK (fxItemRack (v.plain, { true, slot }) <= 2);
+    CHECK (consistent (v));
+}
+
 TEST (fxrack_random_edits_always_give_the_lists_that_were_asked_for)
 {
     sbtest::Rng rng (2026);
