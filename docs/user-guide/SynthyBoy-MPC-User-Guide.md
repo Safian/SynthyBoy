@@ -1,13 +1,14 @@
-# SynthyBoy for MPC - User Guide (first draft)
+# SynthyBoy for MPC - User Guide (second draft)
 
-Status: first draft, written from the source code and the developer notes of the branch `feature/mpc-overlay`
-(commit a9251b1b) and from pictures rendered by the code, not from a device session. Every point marked
-`TODO(owner)` is a question that the code, the developer notes and the Akai manuals do not answer. Other pages are being
-reworked while this draft is written; the last chapter lists what will need an update.
+Status: second draft, brought up to the plugin-drawn screens of the branch `feature/mpc-overlay` (the oscillator pages with five types and seven detail
+pages, LED controls, the LFO editor with a grid, the 16 effect pages and the splitters, 16 Q-Link knobs, the mouse, and the per-device sound quality).
+It is written from the source code, the developer notes (`docs/MPC.md`), pictures rendered by the code and, for the Q-Link chips and the header, one XL screenshot;
+it is not the result of a full device session. What could not be confirmed is collected in chapter 11 ("To confirm on the device").
 
 How to read the pictures: they are rendered by the developer's test program with the default ("Init")
 sound, cut to the plugin's own area (1280 x 628 pixels). They are not photographs of the device, and the
-values on your screen will differ. The MPC's own header and tab bar are not in the pictures.
+values on your screen will differ. The MPC's own header and tab bar are not in the pictures, except in the XL screenshot of chapter 4.3.
+The pictures are rendered for a wide device: the small numbers 5 .. 16 are the Q-Link knobs of the XL (chapter 4.3).
 
 Contents
 
@@ -31,19 +32,20 @@ Contents
    - 5.13 Voice control
 6. Modulation
 7. Presets
+   - 7.1 Sound quality on each device
 8. Known limitations
 9. Troubleshooting
 10. Second-generation pads (MPCe), MPC XL and other gen 2 devices
-11. To update when the UI changes
+11. To confirm on the device
 
 ---
 
 ## 1. What it is
 
 SynthyBoy is a synthesizer plugin for Akai MPC hardware (VST2 format, loaded by the MPC's external plugin
-support). It has three oscillators (A, B, C) that play wavetables, samples or grains, a sub oscillator, a
+support). It has three oscillators (A, B, C) that each play wavetables, a multisample instrument, a sample, grains or a spectrum, a sub oscillator, a
 noise generator, two filters, six envelopes, ten LFOs and four random LFOs, eight macros, a 64-slot
-modulation matrix, a set of 13 effect types, and a master section with tuning, MPE and voice control.
+modulation matrix, 16 effects (13 effects and three band splitters), and a master section with tuning, MPE and voice control.
 112 factory presets come with it.
 
 **One package, two hardware generations.** SynthyBoy is one package: the plugin with its own drawn screens (there is no
@@ -52,7 +54,14 @@ the second generation (64-bit); the MPC loads the build that fits.
 
 **Devices.** Built for both generations. It was developed and tried by its author on the **MPC Key 61** (first
 generation, MPC OS 3.10.1.12) and the **MPC XL** (second generation). It has not been tried on other MPC models. Some
-details described for the XL (see 4.3) are the design and are not yet confirmed on the device.
+details described for the XL are the design and are not yet confirmed on the device (chapter 11).
+
+**Where the two generations differ** (first generation = MPC Key 61, second generation = MPC XL):
+- Q-Link knobs: 4 knobs and a bank button on the Key 61, 16 knobs on the XL (chapter 4.3).
+- Q-Link Status pop-up: on the Key 61 only; switch it off (chapter 8).
+- Sound quality: 8 voices, at most 3 unison voices, five effects skipped on the Key 61; 16 voices, up to 16 unison voices, all effects on the XL (chapter 7.1).
+- Pads with pressure: XL only (chapter 10); the Key 61 has keys with aftertouch.
+- The mouse: the pointer position is measured on the Key 61, not yet on the XL (chapters 4.4, 11).
 
 **What "experimental display overlay" means for you.** The MPC does not let a plugin draw its own screens,
 so the plugin draws its pages itself, on a separate display layer on top of the MPC's picture. The MPC's
@@ -88,8 +97,8 @@ Guide v3.10.1** (MPC Key 61 and the other first-generation devices) and the **MP
    the MPC if the skins changed). Uninstalling: delete the folder from `VST2 Plugins`; projects that used it then load
    without the plugin.
 
-TODO(owner): The manuals do not say where SynthyBoy appears in the plugin window (the developer notes say under
-"External Plugins"). Confirm the name of the list or tab on the device.
+The manuals do not say where SynthyBoy appears in the plugin window (the developer notes say under
+"External Plugins"); see chapter 11.
 
 **First start.** Put the plugin on a track and open Track Edit Mode (the **Edit Instrument** button in Sounds Mode does
 this); press the key **Play** (the first function key). You should see the three panels of chapter 5.1. If you see only a
@@ -511,7 +520,7 @@ with a list button, style stepper (12 styles, "Style A (12 dB)", "Style B (24 dB
 | | ROUTING | a LED list of three: Parallel, Series 1 to 2, Series 2 to 1 (one setting for both filters) |
 
 With the model **Formant** a fourth group FORMANT appears with X, Y (0 .. 100 percent), TRANSPOSE (-12 .. +12 semitones) and SPREAD (-100 .. +100 percent), and the display shows the formant pad.
-TODO(owner): Describe the Formant page from a picture (the rendered gallery shows only the default model), including which control sets Formant Resonance (30 .. 100 percent).
+The Formant page has no picture yet (chapter 11).
 
 Controls that do not apply to the current model are dimmed, including their value text (in the picture COMB is dim because the model is not Comb). A long press on a knob opens its modulation page (chapter 6).
 
