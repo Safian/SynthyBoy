@@ -37,7 +37,7 @@ add("Marimba Layer Keys", "Keys", "keys,marimba,mallet,multisample,velocity-laye
         "master.polyphony": 12,
         "osc1.on": 1, "osc1.type": "Multisample", "osc1.level": 78, "osc1.multi.vel_track": 60, "osc1.unison.voices": 2, "osc1.unison.detune": 4, "osc1.unison.spread": 30,
         "osc2.on": 1, "osc2.wavetable": "Sine", "osc2.level": 12, "osc2.transpose": 12,
-        "filter1.on": 1, "filter1.model": "Analog", "filter1.style": 0, "filter1.cutoff": 9000, "filter1.resonance": 8, "filter1.keytrack": 50,
+        "filter1.on": 1, "filter1.model": "Analog", "filter1.style": 0, "filter1.cutoff": 3500, "filter1.resonance": 8, "filter1.keytrack": 50,
         "env1.attack": 0, "env1.decay": 1400, "env1.sustain": 0, "env1.release": 300,
         "lfo1.shape": "Sine", "lfo1.rate": 5.5,
         "utility.on": 1, "utility.width": 120,
@@ -45,7 +45,7 @@ add("Marimba Layer Keys", "Keys", "keys,marimba,mallet,multisample,velocity-laye
         "chorus.on": 1, "chorus.mix": 14, "chorus.rate": 0.3,
     },
     [
-        R("velocity", "filter1.cutoff", 12),
+        R("velocity", "filter1.cutoff", 20),
         R("lfo1", "utility.pan", 10, aux="mod_wheel"),                                     # tremolo
         R("mod_wheel", "osc1.multi.timbre", 20), R("mod_wheel", "osc2.level", 25),
         R("macro1", "osc1.multi.timbre", 30),                                              # Zone Shift

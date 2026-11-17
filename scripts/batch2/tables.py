@@ -35,7 +35,7 @@ add("Vowel Table Lead", "Lead", "lead,vowel,formant,wavetable,legato,mod-wheel,e
         "master.polyphony": 1, "master.legato": 1, "master.portamento.time": 60,
         "osc1.on": 1, "osc1.wavetable": "Preset table", "osc1.frame": 0, "osc1.level": 66, "osc1.unison.voices": 3, "osc1.unison.detune": 7, "osc1.unison.spread": 60,
         "osc2.on": 1, "osc2.wavetable": "Triangle", "osc2.level": 20, "osc2.transpose": -12,
-        "filter1.on": 1, "filter1.model": "Digital", "filter1.style": 0, "filter1.cutoff": 3000, "filter1.resonance": 10, "filter1.keytrack": 55,
+        "filter1.on": 1, "filter1.model": "Digital", "filter1.style": 0, "filter1.cutoff": 6500, "filter1.resonance": 10, "filter1.keytrack": 55,
         "env1.attack": 50, "env1.decay": 400, "env1.sustain": 95, "env1.release": 260,
         "lfo1.shape": "Sine", "lfo1.rate": 5.2, "lfo1.fade_in": 600, "lfo2.shape": "Sine", "lfo2.rate": 5.2, "lfo2.fade_in": 500,
         "delay.on": 1, "delay.sync": 2, "delay.division": 5, "delay.mix": 14, "delay.feedback": 30,
@@ -48,13 +48,13 @@ add("Vowel Table Lead", "Lead", "lead,vowel,formant,wavetable,legato,mod-wheel,e
         pressure(34), R("poly_aftertouch", "osc1.frame", 12),
         R("velocity", "filter1.cutoff", 18), R("velocity", "osc1.frame", 10),
         R("macro1", "osc1.frame", 100),                                                    # Vowel
-        R("macro2", "filter1.cutoff", 50),                                                 # Bright
+        R("macro2", "filter1.cutoff", -48),                                                # Dark
         R("macro3", "osc1.unison.detune", 60),                                             # Choir
         R("macro4", "osc2.level", 55),                                                     # Octave Down
         R("macro5", "lfo1.rate", 40),                                                      # Vibrato Rate
         R("macro6", "reverb.mix", 30), R("macro6", "delay.mix", 20),                       # Space
     ],
-    ["Vowel", "Bright", "Choir", "Octave Down", "Vibrato Rate", "Space", "", ""],
+    ["Vowel", "Dark", "Choir", "Octave Down", "Vibrato Rate", "Space", "", ""],
     content=C(wavetables=[WT(1, "formant_sweep_aeiou")]))
 
 add("Drawbar Organ Keys", "Keys", "keys,organ,drawbars,tonewheel,rotary,bus,overdrive,percussion",
@@ -80,10 +80,10 @@ add("Drawbar Organ Keys", "Keys", "keys,organ,drawbars,tonewheel,rotary,bus,over
         R("env3", "noise.level", 14),                                                      # key click
         R("lfo1", "osc1.tune", 2, aux="mod_wheel"),                                        # the wheel is the rotary's vibrato
         R("mod_wheel", "chorus.mix", 30), R("mod_wheel", "phaser.mix", 30),
-        R("velocity", "filter1.cutoff", 10),
+        R("velocity", "filter1.cutoff", 10), R("velocity", "osc1.frame", 14),
         R("macro1", "osc1.frame", 70),                                                     # Registration
         R("macro2", "osc2.level", 40),                                                     # Percussion
-        R("macro3", "bus1.level", 40), R("macro3", "distortion.drive", 25),                # Overdrive
+        R("macro3", "bus1.level", 12), R("macro3", "distortion.drive", 25),                # Overdrive
         R("macro4", "noise.level", 20),                                                    # Click
         R("macro5", "chorus.rate", 55), R("macro5", "phaser.rate", 45),                    # Rotary Speed
         R("macro6", "filter1.cutoff", 50),                                                 # Bright

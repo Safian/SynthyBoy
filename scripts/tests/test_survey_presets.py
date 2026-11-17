@@ -358,9 +358,9 @@ class TestSurveyPresets(unittest.TestCase):
         r = subprocess.run(cmd, capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
         data = json.loads(r.stdout)
-        self.assertEqual(data["summary"]["total_presets"], 136)
+        self.assertEqual(data["summary"]["total_presets"], 160)
         self.assertEqual(data["housekeeping"]["disabled_module_routes_count"], 79)
-        self.assertEqual(data["similarity"]["total_pairs"], 9180)   # 136 * 135 / 2
+        self.assertEqual(data["similarity"]["total_pairs"], 12720)   # 160 * 159 / 2
 
 
 if __name__ == "__main__":

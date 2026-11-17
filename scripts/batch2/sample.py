@@ -39,23 +39,23 @@ add("Glass Ping Pluck", "Pluck", "pluck,glass,bell,sample,plate,convolve,shimmer
         "osc1.on": 1, "osc1.type": "Sample", "osc1.level": 72, "osc1.sample.root": 72, "osc1.sample.keytrack": 1, "osc1.sample.loop_mode": "One-shot", "osc1.sample.normalize": 1,
         "osc1.unison.voices": 2, "osc1.unison.detune": 10, "osc1.unison.spread": 55,
         "osc2.on": 1, "osc2.wavetable": "Bell Partials", "osc2.frame": 55, "osc2.level": 18, "osc2.transpose": 0,
-        "filter1.on": 1, "filter1.model": "Digital", "filter1.style": 0, "filter1.cutoff": 2400, "filter1.resonance": 10, "filter1.keytrack": 55,
+        "filter1.on": 1, "filter1.model": "Digital", "filter1.style": 0, "filter1.cutoff": 7000, "filter1.resonance": 10, "filter1.keytrack": 55,
         "env1.attack": 0, "env1.decay": 3200, "env1.sustain": 0, "env1.release": 700,
         "delay.on": 1, "delay.sync": 2, "delay.division": 5, "delay.mix": 14, "delay.feedback": 32, "delay.style": "Ping pong",
         "convolve.on": 1, "convolve.ir": "Preset IR", "convolve.mix": 38, "convolve.ir_gain": 0,
         "eq.on": 1, "eq.low.mode": "High pass", "eq.low.cutoff": 140,
     },
     [
-        R("velocity", "filter1.cutoff", 30), R("velocity", "osc2.level", 14),
+        R("velocity", "filter1.cutoff", 18), R("velocity", "osc2.level", 14),
         R("mod_wheel", "convolve.mix", 30), R("mod_wheel", "osc1.unison.detune", 25),
-        R("macro1", "filter1.cutoff", 60),                                                 # Bright
+        R("macro1", "filter1.cutoff", -45),                                                # Dark
         R("macro2", "convolve.mix", 45), R("macro2", "convolve.attack", 10),               # Plate
         R("macro3", "osc1.unison.detune", 60),                                             # Shimmer
         R("macro4", "delay.mix", 38),                                                      # Echo
         R("macro5", "osc2.level", 50),                                                     # Body
         R("macro6", "env1.release", 35), R("macro6", "env1.decay", 20),                    # Ring
     ],
-    ["Bright", "Plate", "Shimmer", "Echo", "Body", "Ring", "", ""],
+    ["Dark", "Plate", "Shimmer", "Echo", "Body", "Ring", "", ""],
     content=C(samples=[SMP(1, "glass_ping")], impulses=[IMP("plate")]))
 
 add("Breakbeat Slice Keys", "Keys", "keys,drums,slice,loop,sample,bus,parallel,crush,convolve,room",
@@ -64,6 +64,7 @@ add("Breakbeat Slice Keys", "Keys", "keys,drums,slice,loop,sample,bus,parallel,c
         "master.polyphony": 6,
         "osc1.on": 1, "osc1.type": "Sample", "osc1.level": 78, "osc1.sample.root": 60, "osc1.sample.loop_mode": "One-shot", "osc1.sample.normalize": 1,
         "osc1.sample.slice_mode": "Manual", "osc1.sample.slice_play": "Play single slice", "osc1.sample.slice_root": 36, "osc1.bus1_send": 70,
+        "osc2.on": 1, "osc2.wavetable": "Sine", "osc2.level": 10, "osc2.transpose": -24,
         "filter1.on": 1, "filter1.model": "Analog", "filter1.cutoff": 16000, "filter1.resonance": 12,
         "env1.attack": 0, "env1.decay": 450, "env1.sustain": 100, "env1.release": 60,
         "bus1.level": -6, "bus1.destination": "Main",
@@ -72,15 +73,16 @@ add("Breakbeat Slice Keys", "Keys", "keys,drums,slice,loop,sample,bus,parallel,c
         "convolve.on": 1, "convolve.ir": "Preset IR", "convolve.mix": 24, "convolve.ir_gain": 0,
     },
     [
-        R("velocity", "distortion.drive", 35), R("velocity", "bus1.level", 20),
-        R("mod_wheel", "distortion.drive", 40), R("mod_wheel", "bus1.level", 30),
-        R("macro1", "bus1.level", 50), R("macro1", "distortion.drive", 35),               # Smash
+        R("velocity", "distortion.drive", 35), R("velocity", "bus1.level", 6),
+        R("mod_wheel", "distortion.drive", 40), R("mod_wheel", "bus1.level", 8),
+        R("macro1", "bus1.level", 14), R("macro1", "distortion.drive", 35),               # Smash
         R("macro2", "convolve.mix", 45),                                                   # Room
         R("macro3", "osc1.sample.slice", 60),                                              # Shift
-        R("macro4", "filter1.cutoff", -62),                                                # Tone (dark when up)
+        R("macro4", "filter1.cutoff", -62),                                                # Dark
         R("macro5", "env1.sustain", -85),                                                  # Snap (the slice decays to 15 % in 450 ms instead of ringing to its end)
+        R("macro6", "osc2.level", 55),                                                     # Sub Layer
     ],
-    ["Smash", "Room", "Shift", "Dark", "Snap", "", "", ""],
+    ["Smash", "Room", "Shift", "Dark", "Snap", "Sub Layer", "", ""],
     content=C(samples=[SMP(1, "drum_loop_120bpm", slices=[k / 32 for k in range(32)])], impulses=[IMP("small_room")]))
 
 add("Bowed MPE Strings", "Pad", "pad,strings,bowed,sample,loop,mpe,pressure,expressive",

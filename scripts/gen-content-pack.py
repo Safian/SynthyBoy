@@ -172,7 +172,7 @@ def finish_frame(x, limit=600):
 
 def table_formant_sweep(name):
     frames = []
-    seq = ["a", "e", "i", "o", "u", "a"]
+    seq = ["a", "e", "i", "o", "u"]
     n = 64
     for i in range(n):
         pos = i / (n - 1) * (len(seq) - 1)
@@ -600,7 +600,7 @@ def make_drums():
     hat = hat_noise[:len(th)] / np.std(hat_noise) * 0.25 * np.exp(-th / 0.012)
     to = np.arange(int(0.35 * SR)) / SR
     ohat = hat_noise[1000:1000 + len(to)] / np.std(hat_noise) * 0.22 * np.exp(-to / 0.1)
-    kicks = [0, 6, 10, 16, 20, 26, 30]
+    kicks = [0, 6, 10, 16, 20, 24, 26, 30]
     snares = [4, 12, 20, 28]
     ghost = [15, 31]
     for s in kicks:

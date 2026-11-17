@@ -96,6 +96,7 @@ add("Spectral Chord Morph", "FX", "fx,spectral,morph,chords,scan,transient,evolv
         "osc1.on": 1, "osc1.type": "Spectral", "osc1.level": 58, "osc1.sample.root": 60, "osc1.sample.loop_mode": "Forward loop", "osc1.sample.normalize": 1,
         "osc1.sample.scan": 100, "osc1.spec.freq_lo": 60, "osc1.spec.freq_hi": 12000, "osc1.warp.type": "Spectral Shift", "osc1.warp.amount": 0,
         "osc1.unison.voices": 2, "osc1.unison.detune": 7, "osc1.unison.spread": 80,
+        "osc2.on": 1, "osc2.wavetable": "Sine to Saw", "osc2.frame": 25, "osc2.level": 14, "osc2.transpose": -12,
         "filter1.on": 1, "filter1.model": "Analog", "filter1.style": 0, "filter1.cutoff": 2600, "filter1.resonance": 10, "filter1.keytrack": 25,
         "env1.attack": 500, "env1.decay": 1500, "env1.sustain": 92, "env1.release": 2200,
         "reverb.on": 1, "reverb.type": "Hall", "reverb.mix": 26, "reverb.decay": 4500, "reverb.size": 70,
