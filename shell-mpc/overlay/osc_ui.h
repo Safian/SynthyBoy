@@ -1776,6 +1776,8 @@ private:
             if (! wtLastFile_.empty())
             {
                 wtBrowser_.markRefused (wtLastPack_, wtLastFile_, message.substr (sizeof kPrefix - 1));
+                if (wtMode_)
+                    fillWavetableList();   // the browser's strings were made again: the list points at the new ones
                 wtLastFile_.clear();
                 stepValid_ = false;   // our position was the file that failed: the content's file is where we are
             }
