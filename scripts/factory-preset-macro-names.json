@@ -1361,6 +1361,246 @@
    "",
    "",
    ""
+  ],
+  "Chord Cloud Pad": [
+   "Section",
+   "Thin Out",
+   "Short Grains",
+   "Scatter",
+   "Bright",
+   "Space",
+   "Drift",
+   ""
+  ],
+  "Vowel Scrub Choir": [
+   "Vowel",
+   "Cloud",
+   "Short Grains",
+   "Table Layer",
+   "Space",
+   "Bright",
+   "",
+   ""
+  ],
+  "Frozen Pluck Drone": [
+   "Freeze Point",
+   "Cloud",
+   "Short Grains",
+   "Plate Bus",
+   "Pitch Scatter",
+   "Bright",
+   "",
+   ""
+  ],
+  "Gong Grain Swarm": [
+   "Sparse",
+   "Pitch Chaos",
+   "Scatter",
+   "Short Grains",
+   "Echo Cloud",
+   "Dark",
+   "",
+   ""
+  ],
+  "Stutter Grain Kit": [
+   "Nudge",
+   "Scatter",
+   "Snap",
+   "Pitch Rand",
+   "Dark",
+   "Echo",
+   "",
+   ""
+  ],
+  "Rising Grain Riser": [
+   "Slow",
+   "Sparse",
+   "Scatter",
+   "Throw",
+   "Edge",
+   "Short Grains",
+   "",
+   ""
+  ],
+  "Nylon Zone Pluck": [
+   "Bright",
+   "Saw Pluck",
+   "Zone Shift",
+   "Sustain",
+   "Echo",
+   "Room",
+   "",
+   ""
+  ],
+  "Marimba Layer Keys": [
+   "Zone Shift",
+   "Room",
+   "Octave Sine",
+   "Mellow",
+   "Ring",
+   "Chorus",
+   "",
+   ""
+  ],
+  "Glass Zone Bells": [
+   "Bright",
+   "Plate",
+   "Bell Layer",
+   "Echo",
+   "Ring",
+   "Sub",
+   "",
+   ""
+  ],
+  "Dusty Rhodes Keys": [
+   "Tine Bark",
+   "Dust",
+   "Chorus",
+   "Dry Amp",
+   "Sustain",
+   "Tone",
+   "",
+   ""
+  ],
+  "Glass Ping Pluck": [
+   "Bright",
+   "Plate",
+   "Shimmer",
+   "Echo",
+   "Body",
+   "Ring",
+   "",
+   ""
+  ],
+  "Breakbeat Slice Keys": [
+   "Smash",
+   "Room",
+   "Shift",
+   "Dark",
+   "Snap",
+   "",
+   "",
+   ""
+  ],
+  "Bowed MPE Strings": [
+   "Brightness",
+   "Rosin",
+   "Vibrato Rate",
+   "Bow Speed",
+   "Hall",
+   "Saw Layer",
+   "",
+   ""
+  ],
+  "Reverse Gong Swell": [
+   "Slow Down",
+   "Shimmer",
+   "Air",
+   "Space",
+   "Bright",
+   "",
+   "",
+   ""
+  ],
+  "Breath Flute Lead": [
+   "Breath",
+   "Chiff",
+   "Vibrato Rate",
+   "Bright",
+   "Overblow",
+   "Space",
+   "",
+   ""
+  ],
+  "Spectral Vowel Freeze": [
+   "Vowel",
+   "Harmonics",
+   "Shift",
+   "Hi Cut",
+   "Space",
+   "Saw Layer",
+   "",
+   ""
+  ],
+  "Spectral Bowed Glass": [
+   "Comb",
+   "Glass",
+   "Glass Shape",
+   "Bright",
+   "Vibrato Rate",
+   "Space",
+   "",
+   ""
+  ],
+  "Spectral Gong Pad": [
+   "Scan Speed",
+   "Shift",
+   "Spread Read",
+   "Bright",
+   "Space",
+   "Bell Layer",
+   "",
+   ""
+  ],
+  "Spectral Chord Morph": [
+   "Slow",
+   "Shift Warp",
+   "Freq Shift",
+   "Hi Cut",
+   "Space",
+   "Bright",
+   "",
+   ""
+  ],
+  "Reese Dual Phase Bass": [
+   "Phase",
+   "Cutoff",
+   "Growl",
+   "Dry Cab",
+   "Octave Saw",
+   "Movement Rate",
+   "",
+   ""
+  ],
+  "Vowel Table Lead": [
+   "Vowel",
+   "Bright",
+   "Choir",
+   "Octave Down",
+   "Vibrato Rate",
+   "Space",
+   "",
+   ""
+  ],
+  "Drawbar Organ Keys": [
+   "Registration",
+   "Percussion",
+   "Overdrive",
+   "Click",
+   "Rotary Speed",
+   "Bright",
+   "",
+   ""
+  ],
+  "Throat Singer Drone": [
+   "Overtone",
+   "Walk Speed",
+   "Drone",
+   "Bright",
+   "Space",
+   "Choir",
+   "",
+   ""
+  ],
+  "Ladder FM Bass": [
+   "Ratio",
+   "Snap Length",
+   "Drive",
+   "Sub",
+   "Cutoff",
+   "Decay",
+   "",
+   ""
   ]
  }
 }

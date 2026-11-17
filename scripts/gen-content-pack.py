@@ -179,9 +179,9 @@ def table_formant_sweep(name):
         s = min(int(pos), len(seq) - 2)
         t = smooth_step(pos - s)
         fm = vowel_mix(seq[s], seq[s + 1], t)
-        # the formants are in Hz for a voice at 110 Hz: harmonic k stands at 110 k Hz (the cycle is the fixed pitch the vowel was made for)
-        k = np.arange(1, 400)
-        f = 110.0 * k
+        # the formants are in Hz for a voice at 220 Hz (A3): harmonic k stands at 220 k Hz (the cycle is the pitch the vowel was made for: the best range of the table is A2 .. A4)
+        k = np.arange(1, 200)
+        f = 220.0 * k
         amps = formant_gain(f, fm) / k ** 0.85
         frames.append(finish_frame(frame_from_harmonics(amps)))
     return np.concatenate(frames)
