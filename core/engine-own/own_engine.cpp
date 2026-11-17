@@ -1054,6 +1054,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     globals.switchKey = switchKeySnap;
     globals.quality = qualityTier.load (std::memory_order_relaxed);
     globals.economy = economyMask.load (std::memory_order_relaxed);
+    globals.scalarFilters = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingVectorFilters) != 0;
     globals.usedSources = matrix.sourceMask();
     globals.morphCache = &morphCache;
     globals.killSeconds = (globals.economy & kEconomyControl) != 0 ? lowKillSeconds.load (std::memory_order_relaxed) : 0.05f;

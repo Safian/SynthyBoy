@@ -20,6 +20,7 @@ struct FilterSettings
     float cutoffHz = 12000.0f, resonance = 0.2f, drive = 0.0f, blend = 0.0f, mix = 1.0f, var = 0.5f;
     bool clean = false;
     bool fast = false;                    // tier low: cheaper tanh in the classic models
+    bool scalarOnly = false;              // measurements (setOwnSavingsOff): the two sides of a Serum model run one after the other also where a pair kernel exists
     float cutoffHzR = -1.0f, level = 1.0f, driveDb = 0.0f, combOffset = 42.0f, formantX = 0.5f, formantY = 0.5f, formantRes = 0.85f, formantSpread = 0.0f, formantTranspose = 0.0f;
 };
 
@@ -101,6 +102,7 @@ public:
         if (s.cutoffHzR > 0.0f)
             curPR.cutoffHz = s.cutoffHzR;
         classic = s.model < filters::kFirstSerumModel;
+        scalarOnly = s.scalarOnly;
         prevMix = curMix;
         curMix = clamp01 (s.mix);
         prevClean = curClean;
@@ -206,8 +208,11 @@ public:
                     tmpL[k] = inL[k] * g;
                     tmpR[k] = inR[k] * g;
                 }
-                left.process (tmpL, outL, n);
-                right.process (tmpR, outR, n);
+                if (scalarOnly || !filters::Filter::processPair (left, right, tmpL, outL, tmpR, outR, n))
+                {
+                    left.process (tmpL, outL, n);
+                    right.process (tmpR, outR, n);
+                }
                 for (int k = 0; k < n; ++k)
                 {
                     const float g = dbToGain (24.0f * lerp (prevClean, curClean, static_cast<float> (t0 + k + 1) * invP));
@@ -217,8 +222,12 @@ public:
             }
             else
             {
-                left.process (inL, outL, n);
-                right.process (inR, outR, n);
+                // the two sides in one pass where the collection has a pair kernel for the type (the same samples), else one after the other
+                if (scalarOnly || !filters::Filter::processPair (left, right, inL, outL, inR, outR, n))
+                {
+                    left.process (inL, outL, n);
+                    right.process (inR, outR, n);
+                }
             }
         }
         bool runaway = false;
@@ -244,7 +253,7 @@ private:
     ClassicFilter cl[2];
     ClassicParams prevP, curP, prevPR, curPR;
     filters::FilterParams paramsR;
-    bool classic = false;
+    bool classic = false, scalarOnly = false;
     float trim = 1.0f;
     float prevMix = 1.0f, curMix = 1.0f, prevClean = 0.0f, curClean = 0.0f;
 };

@@ -1027,6 +1027,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             FilterSettings& s = filtSet[f];
             fillFilterSettings (s, fi, [this] (int i) { return P (i); }, [this] (int i) { return PR (i); }, fi.cleanMode >= 0 && g.base[fi.cleanMode] >= 0.5f,
                                 keyNum, vc.cutoffSemis, (g.economy & kEconomyMath) != 0);
+            s.scalarOnly = g.scalarFilters;
             filt[f].set (s);
             if (fresh)
                 filt[f].reset(); // the smoothers start at the targets of this note, not at the ones of the note this voice played before

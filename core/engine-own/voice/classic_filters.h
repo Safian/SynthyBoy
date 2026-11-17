@@ -161,6 +161,8 @@ public:
         memoValid = true;
         svfValid = false;
         ladValid = false;
+        dioValid = false;
+        fmtValid = false;
         mf = std::clamp (p.cutoffHz, 8.0f, static_cast<float> (sr) * 0.45f);
         md = std::pow (10.0f, p.driveDb * 0.05f);
         mr = clamp01 (p.res);
@@ -668,33 +670,45 @@ private:
     static constexpr float kDiodeCorner = SB_DIODE_CORNER, kDiodeGain = SB_DIODE_GAIN, kDiodePre = 100.0f, kDiodeFb = SB_DIODE_FB, kDiodeW = 1.0f;
     void diode (const float* in, float* out, int n, float f, float r, float d, const ClassicParams& p) noexcept
     {
-        const float k = 0.7f + 16.3f * r * r * r;
-        const float dIn = (0.5f * k + 1.0f) * d, post = 1.0f / std::sqrt (d);
-        const float fc = std::clamp (f * kDiodeCorner, 5.0f, static_cast<float> (sr) * 0.45f);
-        const float g = std::tan (kPif * std::min (fc / static_cast<float> (sr), 0.499f));
-        const float braw = clamp01 (p.blendRaw * 0.5f); // 0 .. 1
-        // the high pass in front: 24 dB style: the corner moves from cutoff 2^-9 to 2^-1 with the blend; 12 dB style: fixed 2^-1, the amount is blend^2 / 4
-        const bool style12 = p.style == 0;
-        const float hpHz = f * std::exp2 (style12 ? -1.0f : -9.0f + 8.0f * braw);
-        const float amount = style12 ? braw * braw * 0.25f : 1.0f;
-        const float gh = std::tan (kPif * std::clamp (hpHz, 1.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr));
-        const float gf = std::tan (kPif * 20.0f / static_cast<float> (sr));
-        const float gp = std::tan (kPif * std::clamp (f * kDiodePre, 5.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr));
-        const float inv = 1.0f / (1.0f + g);
-        // tridiagonal matrix (constant per block): stage i takes w/2 of each neighbour and (1 - w) of the previous stage; w = 1 averages the neighbours
+        // Everything below up to the sample loop is a function of the parameters alone (a square root, four tangents, an exp2, a dozen divisions): it is kept while
+        // they stay the same (remember ()), as the setups of the other models are. The same expressions, so the same values.
+        if (!dioValid)
+        {
+            DiodeSetup& z = dio;
+            z.k = 0.7f + 16.3f * r * r * r;
+            z.dIn = (0.5f * z.k + 1.0f) * d;
+            z.post = 1.0f / std::sqrt (d);
+            const float fc = std::clamp (f * kDiodeCorner, 5.0f, static_cast<float> (sr) * 0.45f);
+            z.g = std::tan (kPif * std::min (fc / static_cast<float> (sr), 0.499f));
+            const float brawS = clamp01 (p.blendRaw * 0.5f); // 0 .. 1
+            // the high pass in front: 24 dB style: the corner moves from cutoff 2^-9 to 2^-1 with the blend; 12 dB style: fixed 2^-1, the amount is blend^2 / 4
+            const bool style12S = p.style == 0;
+            const float hpHz = f * std::exp2 (style12S ? -1.0f : -9.0f + 8.0f * brawS);
+            z.amount = style12S ? brawS * brawS * 0.25f : 1.0f;
+            z.gh = std::tan (kPif * std::clamp (hpHz, 1.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr));
+            z.gf = std::tan (kPif * 20.0f / static_cast<float> (sr));
+            z.gp = std::tan (kPif * std::clamp (f * kDiodePre, 5.0f, static_cast<float> (sr) * 0.45f) / static_cast<float> (sr));
+            // tridiagonal matrix (constant per block): stage i takes w/2 of each neighbour and (1 - w) of the previous stage; w = 1 averages the neighbours
+            const float wS = kDiodeW, upS = 0.5f * wS, loS = 1.0f - 0.5f * wS;
+            z.bb = 1.0f + z.g;
+            z.cp[0] = -z.g * upS / z.bb;
+            for (int j = 1; j < 4; ++j)
+                z.cp[j] = (j < 3 ? -z.g * upS : 0.0f) / (z.bb + z.g * loS * z.cp[j - 1]);
+            // tier low: the divisions by constants of the block become multiplications by their reciprocals (a few units in the last place)
+            z.invBb = 1.0f / z.bb;
+            z.hpA = z.gh / (1.0f + z.gh);
+            z.hfA = z.gf / (1.0f + z.gf);
+            z.invD[0] = 0.0f;
+            for (int j = 1; j < 4; ++j)
+                z.invD[j] = 1.0f / (z.bb + z.g * loS * z.cp[j - 1]);
+            dioValid = true;
+        }
+        const float k = dio.k, dIn = dio.dIn, post = dio.post, g = dio.g, amount = dio.amount, gh = dio.gh, gf = dio.gf, gp = dio.gp, bb = dio.bb;
         const float w = kDiodeW, up = 0.5f * w, lo = 1.0f - 0.5f * w;
-        const float bb = 1.0f + g;
-        float cp[4];
-        cp[0] = -g * up / bb;
-        for (int j = 1; j < 4; ++j)
-            cp[j] = (j < 3 ? -g * up : 0.0f) / (bb + g * lo * cp[j - 1]);
-        (void) inv;
-        // tier low: the divisions by constants of the block become multiplications by their reciprocals (a few units in the last place)
+        const float* const cp = dio.cp;
+        const float* const invD = dio.invD;
         const bool quick = fastMath;
-        const float invBb = 1.0f / bb, hpA = gh / (1.0f + gh), hfA = gf / (1.0f + gf);
-        float invD[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-        for (int j = 1; j < 4; ++j)
-            invD[j] = 1.0f / (bb + g * lo * cp[j - 1]);
+        const float invBb = dio.invBb, hpA = dio.hpA, hfA = dio.hfA;
         for (int i = 0; i < n; ++i)
         {
             const float x = in[i];
@@ -740,6 +754,11 @@ private:
         }
     }
     float dv[4] = {}, dHp[2] = {}, dFb = 0.0f, dU = 0.0f, dPre = 0.0f, tilt = 0.0f;
+    struct DiodeSetup { float k = 0.0f, dIn = 0.0f, post = 1.0f, g = 0.0f, amount = 0.0f, gh = 0.0f, gf = 0.0f, gp = 0.0f, bb = 1.0f, cp[4] = {}, invBb = 1.0f, hpA = 0.0f, hfA = 0.0f, invD[4] = {}; };
+    DiodeSetup dio;      // the setup of the diode model for the parameters last passed to remember ()
+    bool dioValid = false;
+    struct FormantSetup { float gain[4] = {}, kq[4] = {}, bpGain[4] = {}; };
+    bool fmtValid = false;
 
     void formant (const float* in, float* out, int n, const ClassicParams& p) noexcept
     {
@@ -751,9 +770,14 @@ private:
             { { -2, 0.70f, 67.350f }, { -6, 0.75f, 79.350f }, { -14, 1.0f, 99.755f }, { -14, 1.0f, 101.038f } },   // O
             { { 0, 0.70f, 65.038f }, { -20, 0.75f, 74.370f }, { -17, 1.0f, 100.409f }, { -14, 1.0f, 101.646f } } };// U
         static const int kStyle0[4] = { 0, 2, 4, 3 }, kStyle1[4] = { 0, 3, 2, 1 }, kStyle2[4] = { 1, 4, 3, 0 }; // corners (0,0) (1,0) (0,1) (1,1): A I U O / A O I E / E U O A
+        // The gains and the coefficients of the four resonators (four pow, four exp2, four tan, eight divisions) are functions of the parameters alone: kept while
+        // they stay the same (remember ()). The same expressions, so the same values.
+        if (!fmtValid)
+        {
         const int* c = p.style == 0 ? kStyle0 : (p.style == 1 ? kStyle1 : kStyle2);
         const float tract = p.style >= 2 ? 1.25f : 1.0f; // the vocal tract style: the same four resonators, narrower, with a gentle spectral tilt (the glottal source)
-        float gain[4], note[4], q[4];
+        float* const gain = fmt.gain;
+        float note[4], q[4];
         for (int k = 0; k < 4; ++k)
         {
             auto mixv = [&] (int comp)
@@ -769,8 +793,9 @@ private:
             q[k] = (4.0f + 26.0f * rr * rr * rr) * tract;
         }
         // the four resonators keep their frequency and Q for the whole block: the coefficients (an exp2, a tan, a division each) are computed once, not for every sample
-        Svf::Coef cf[4];
-        float kq[4], bpGain[4];
+        Svf::Coef* const cf = fmtCf;
+        float* const kq = fmt.kq;
+        float* const bpGain = fmt.bpGain;
         for (int k = 0; k < 4; ++k)
         {
             const float hz = 8.1757989f * std::exp2 (note[k] / 12.0f);
@@ -778,6 +803,12 @@ private:
             cf[k] = Svf::coefficients (Svf::coefficient (hz, sr), kq[k]);
             bpGain[k] = 1.0f / q[k];
         }
+        fmtValid = true;
+        }
+        const Svf::Coef* const cf = fmtCf;
+        const float* const gain = fmt.gain;
+        const float* const kq = fmt.kq;
+        const float* const bpGain = fmt.bpGain;
         for (int i = 0; i < n; ++i)
         {
             float y = 0.0f;
@@ -852,6 +883,8 @@ private:
     static constexpr float kAn[6] = { 1.0f, 0.462f, 1.088f, 0.915f, 1.249f, 0.97f };
     float s[6] = {};
     Svf fm[4];
+    FormantSetup fmt;    // the setup of the formant model for the parameters last passed to remember ()
+    Svf::Coef fmtCf[4];
     DelayLine comb;
     bool combUsed = false;
     float ap[12] = {};

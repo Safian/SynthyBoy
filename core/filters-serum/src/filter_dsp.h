@@ -367,6 +367,37 @@ public:
             writeIndex_ = 0;
     }
 
+    /** Where a delay of `delaySamples` reads: the whole samples and the fraction, as read () works them out. A caller that reads the same delay sample after sample
+        keeps the tap (pair kernels of filter.cpp). The line must not be empty. */
+    struct Tap
+    {
+        size_t intD = 1;
+        float frac = 0.0f;
+    };
+    bool empty() const noexcept { return buffer_.empty(); }
+    Tap tapFor (float delaySamples) const noexcept
+    {
+        const float maxD = static_cast<float> (buffer_.size() - 2);
+        const float d = std::max (1.0f, std::min (delaySamples, maxD));
+        Tap t;
+        t.intD = static_cast<size_t> (d);
+        t.frac = d - static_cast<float> (t.intD);
+        return t;
+    }
+    float readTap (const Tap& t) const noexcept
+    {
+        const size_t intD = t.intD;
+        const float frac = t.frac;
+        const size_t size = buffer_.size();
+        size_t i1 = writeIndex_ + size - intD;
+        if (i1 >= size)
+            i1 -= size;
+        size_t i2 = writeIndex_ + size - intD - 1;
+        if (i2 >= size)
+            i2 -= size;
+        return buffer_[i1] * (1.0f - frac) + buffer_[i2] * frac;
+    }
+
     float read (float delaySamples) const noexcept
     {
         if (buffer_.empty())
