@@ -20,6 +20,35 @@ DEFAULT_PRESETS = [
 ]
 
 
+def find_preset_with_most_modulation_routes(repo_root):
+    """Scan content/presets for the factory preset with the highest count of active unbypassed modulation routes."""
+    presets_dir = Path(repo_root) / "content" / "presets"
+    if not presets_dir.is_dir():
+        return None
+    best_path = None
+    best_count = -1
+    for p in sorted(presets_dir.glob("**/*.sbpreset")):
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            params = d.get("state", {}).get("params", {})
+            count = 0
+            for slot in range(1, 65):
+                pfx = f"mod{slot:02d}."
+                src = params.get(pfx + "source", 0)
+                dst = params.get(pfx + "destination", 0)
+                amt = params.get(pfx + "amount", 0)
+                bypass = params.get(pfx + "bypass", 0)
+                if src > 0 and dst > 0 and not bypass and amt != 0:
+                    count += 1
+            if count > best_count:
+                best_count = count
+                best_path = p
+        except Exception:
+            continue
+    return best_path
+
+
 def find_repo_root():
     cur = Path(__file__).resolve().parent
     while cur != cur.parent:
@@ -287,6 +316,74 @@ def generate_contact_sheet(out_dir, images_info):
     return index_file
 
 
+def create_contact_sheets(out_dir, images_info, pictures_per_sheet=8):
+    """Write graphical contact sheets of 8 pictures each using PIL if available."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        print("PIL (Pillow) is not installed; skipping graphical contact sheet step.")
+        return []
+
+    if not images_info:
+        return []
+
+    out_dir = Path(out_dir)
+    sheet_files = []
+
+    # 8 pictures per sheet arranged in a 4x2 grid
+    cols = 4
+    rows = 2
+    thumb_w = 640
+    thumb_h = 400
+    pad = 20
+    header_h = 32
+    card_h = thumb_h + header_h
+
+    sheet_w = pad + cols * (thumb_w + pad)
+    sheet_h = pad + rows * (card_h + pad)
+
+    bg_color = (30, 29, 30)
+    card_bg = (38, 37, 39)
+    text_color = (238, 241, 255)
+    border_color = (61, 59, 62)
+
+    total_images = len(images_info)
+    sheet_count = (total_images + pictures_per_sheet - 1) // pictures_per_sheet
+
+    for sheet_idx in range(sheet_count):
+        batch = images_info[sheet_idx * pictures_per_sheet : (sheet_idx + 1) * pictures_per_sheet]
+        sheet_img = Image.new("RGB", (sheet_w, sheet_h), bg_color)
+        draw = ImageDraw.Draw(sheet_img)
+
+        for i, info in enumerate(batch):
+            col = i % cols
+            row = i // cols
+            x0 = pad + col * (thumb_w + pad)
+            y0 = pad + row * (card_h + pad)
+
+            draw.rectangle([x0, y0, x0 + thumb_w, y0 + card_h], fill=card_bg, outline=border_color)
+
+            img_path = info.get("path")
+            if img_path and Path(img_path).is_file():
+                try:
+                    with Image.open(img_path) as im:
+                        im_thumb = im.convert("RGB").resize((thumb_w, thumb_h), Image.Resampling.LANCZOS)
+                        sheet_img.paste(im_thumb, (x0, y0))
+                except Exception:
+                    pass
+
+            label = f"{info.get('state', '')} : {info.get('page_name', '')}"
+            draw.text((x0 + 10, y0 + thumb_h + 8), label, fill=text_color)
+
+        sheet_filename = f"contact_sheet_{sheet_idx + 1:02d}.png"
+        sheet_path = out_dir / sheet_filename
+        sheet_img.save(sheet_path, "PNG")
+        sheet_files.append(sheet_path)
+
+    print(f"Generated {len(sheet_files)} image contact sheets ({pictures_per_sheet} pictures/sheet) in {out_dir}")
+    return sheet_files
+
+
 def main():
     parser = argparse.ArgumentParser(description="SynthyBoy UI gallery renderer")
     parser.add_argument("--out", default="", help="Output directory for PNGs and index.html (default: build/ui-gallery)")
@@ -296,6 +393,7 @@ def main():
     parser.add_argument("--list", action="store_true", help="Print STATE\\tPAGE\\tFILE lines (sorted by state, then page)")
     parser.add_argument("--knobs", type=int, default=16, choices=[4, 16], help="Q-Link knobs of the device: 16 (MPC XL, the default: idle chips 5..16) or 4 (Key 61)")
     parser.add_argument("--only", default="", help="Comma-separated list of page-name beginnings to include in --list and contact sheet")
+    parser.add_argument("--only-prefix", default="", help="Render only states whose name starts with this prefix")
     args = parser.parse_args()
 
     repo_root = find_repo_root()
@@ -331,11 +429,21 @@ def main():
             if p_path.is_file():
                 preset_paths.append(str(p_path))
 
+        # Dynamically scan factory presets for the one with the most modulation routes
+        long_preset = find_preset_with_most_modulation_routes(repo_root)
+        if long_preset:
+            long_path_str = str(long_preset.resolve())
+            if long_path_str not in preset_paths:
+                print(f"Adding preset with most modulation routes: {long_preset.name} ({long_preset})")
+                preset_paths.append(long_path_str)
+
     # Build states list from preset stems
     states = ["Init"] + [Path(p).stem for p in preset_paths]
 
     # Run ui_gallery_host
     cmd = [str(host_bin), "--out", str(out_dir), "--knobs", str(args.knobs)]
+    if args.only_prefix:
+        cmd.extend(["--only-prefix", args.only_prefix])
     if preset_paths:
         cmd.append("--presets")
         cmd.extend(preset_paths)
@@ -346,8 +454,8 @@ def main():
         print(f"Error: host binary exited with code {res.returncode}", file=sys.stderr)
         return res.returncode
 
-    # Discover generated PNG images
-    png_files = sorted(out_dir.glob("*.png"))
+    # Discover generated PNG images (excluding any generated contact sheets)
+    png_files = sorted([f for f in out_dir.glob("*.png") if not f.name.startswith("contact_sheet_")])
     print(f"Found {len(png_files)} rendered PNG images in {out_dir}")
 
     images_info = []
@@ -370,8 +478,15 @@ def main():
     if args.only:
         prefixes = [p for p in args.only.split(",") if p]
         if prefixes:
-            filtered_info = [info for info in images_info
+            filtered_info = [info for info in filtered_info
                              if any(info["page_name"].startswith(pfx) for pfx in prefixes)]
+
+    # Apply --only-prefix filter
+    if args.only_prefix:
+        filtered_info = [info for info in filtered_info
+                         if Path(info["rel_path"]).stem.startswith(args.only_prefix)
+                         or info["state"].startswith(args.only_prefix)
+                         or info["page_name"].startswith(args.only_prefix)]
 
     # --list output
     if args.list:
@@ -381,16 +496,19 @@ def main():
 
     # Generate index.html contact sheet
     index_file = generate_contact_sheet(out_dir, filtered_info)
-    print(f"Generated contact sheet: {index_file}")
+    print(f"Generated HTML contact sheet: {index_file}")
 
-    # Check views coverage (against all files, not filtered)
+    # Generate graphical contact sheets (8 pictures per sheet) via PIL
+    create_contact_sheets(out_dir, filtered_info, pictures_per_sheet=8)
+
+    # Check views coverage (against all files, not filtered; skipped if filtering by prefix/only)
     missing_views = []
     for v in views:
         v_name = v["name"]
         if not any(v_name in img.name for img in png_files):
             missing_views.append(v_name)
 
-    if missing_views:
+    if not (args.only or args.only_prefix) and missing_views:
         print(f"Warning: The following {len(missing_views)} views had no pictures: {missing_views}", file=sys.stderr)
         return 1
 

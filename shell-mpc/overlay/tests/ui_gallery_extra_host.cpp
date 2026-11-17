@@ -47,6 +47,15 @@ using namespace synthyboy_mpc::overlay;
 namespace
 {
 
+static std::string g_onlyPrefix;
+
+inline bool shouldRender (const std::string& name)
+{
+    if (g_onlyPrefix.empty())
+        return true;
+    return name.rfind (g_onlyPrefix, 0) == 0;
+}
+
 class GalleryInst final : public IInstanceView
 {
 public:
@@ -231,6 +240,20 @@ public:
     float virtualOut[8] = {}, virtualIn[8] = {};
     bool virtualDue[8] = {};
 
+    bool padPressure (bool& on, float& percent) const noexcept override
+    {
+        on = padPressureOn;
+        percent = padPressurePercent;
+        return true;
+    }
+    void setPadPressure (bool on, float percent) noexcept override
+    {
+        padPressureOn = on;
+        padPressurePercent = percent;
+    }
+    bool padPressureOn = false;
+    float padPressurePercent = 35.0f;
+
 private:
     float v_[synthyboy::kMaxParams] = {};
     std::shared_ptr<const synthyboy::StateContent> content_;
@@ -276,6 +299,10 @@ void compositeAndWritePng (const std::string& path, uit::Image& im)
 template <class F>
 void saveScene (const std::string& path, F&& draw, int w = 1280, int h = 800)
 {
+    const std::string stem = fs::path (path).stem().string();
+    if (! shouldRender (stem))
+        return;
+
     auto scene = std::make_unique<gpu::SceneData>();
     gpu::SceneBuilder sb (*scene);
     sb.begin (gpu::kKindPlay, 0, w, h);
@@ -627,6 +654,24 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.refresh (2);
             r.tap (r.ui.full().style);
             r.picture (outDir + "/" + state + "_filter1_style_list.png");
+        }
+
+        // 2.4b Style list popup (classic: Ladder)
+        {
+            GalleryRig<FilterUi> r (baseInst, 1);
+            r.inst.set ("filter1.model", 2.0f); // Ladder (classic)
+            r.refresh (2);
+            r.tap (r.ui.full().style);
+            r.picture (outDir + "/" + state + "_filter1_style_list_classic.png");
+        }
+
+        // 2.4c Style list popup (Serum: Scream)
+        {
+            GalleryRig<FilterUi> r (baseInst, 1);
+            r.inst.set ("filter1.model", 16.0f); // Scream (Serum)
+            r.refresh (2);
+            r.tap (r.ui.full().style);
+            r.picture (outDir + "/" + state + "_filter1_style_list_serum.png");
         }
 
         // 2.5 Output / routing popup
@@ -1089,6 +1134,19 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.picture (outDir + "/" + state + "_master_main.png");
         }
 
+        // 9.1b Main side with PAD PRESS switch on
+        {
+            GalleryRig<MasterUi> r (baseInst, 1);
+            r.inst.setPadPressure (true, 50.0f);
+            r.inst.set ("master.volume", 0.85f);
+            r.inst.set ("master.pan", 25.0f);
+            r.inst.set ("master.limiter", 1.0f);
+            r.inst.set ("master.voice_limit", 8.0f);
+            r.ui.screen().setSide (ui::MasterScreen::SideMain);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_master_pad_press.png");
+        }
+
         // 9.2 Tuning/MPE side with non-default values
         {
             GalleryRig<MasterUi> r (baseInst, 1);
@@ -1186,13 +1244,17 @@ int main (int argc, char** argv)
             while (i + 1 < argc && argv[i + 1][0] != '-')
                 presets.push_back (argv[++i]);
         }
+        else if (arg == "--only-prefix" && i + 1 < argc)
+        {
+            g_onlyPrefix = argv[++i];
+        }
         else if (arg == "--test")
         {
             testMode = true;
         }
         else if (arg == "--help" || arg == "-h")
         {
-            std::printf ("Usage: %s [--out DIR] [--preset FILE ...] [--presets FILE ...] [--test]\n", argv[0]);
+            std::printf ("Usage: %s [--out DIR] [--preset FILE ...] [--presets FILE ...] [--only-prefix PFX] [--test]\n", argv[0]);
             return 0;
         }
     }
@@ -1222,6 +1284,8 @@ int main (int argc, char** argv)
             "test_init_filter1_model_formant.png",
             "test_init_filter1_model_comb.png",
             "test_init_filter1_style_list.png",
+            "test_init_filter1_style_list_classic.png",
+            "test_init_filter1_style_list_serum.png",
             "test_init_filter1_route.png",
             "test_init_filter_dual_parallel.png",
             "test_init_filter_dual_serial.png",
@@ -1267,6 +1331,7 @@ int main (int argc, char** argv)
             "test_init_fx_gallery_add.png",
             "test_init_fx_param_choice_popup.png",
             "test_init_master_main.png",
+            "test_init_master_pad_press.png",
             "test_init_master_tuning_mpe.png",
             "test_init_voice_row_pan.png",
             "test_init_voice_row_detune.png",
