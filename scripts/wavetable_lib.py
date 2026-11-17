@@ -114,7 +114,7 @@ NODES = {
     "additive": {"inputs": 0, "params": {
         "count": num(64, 1, 512), "rolloff": num(1.0, 0, 4), "mask": enum("all", "all", "odd", "even", "prime", "every"), "mask_n": num(2, 1, 32, True), "mask_soft": num(0.0, 0, 1),
         "stretch": num(0.0, 0, 0.02), "comb_period": num(0.0, 0, 64), "comb_depth": num(1.0, 0, 1), "comb_offset": num(0.0, 0, 64),
-        "peak_center": num(8.0, 1, 300), "peak_width": num(1.0, 0.1, 4), "peak_gain_db": num(0.0, -30, 36),
+        "peak_center": num(8.0, 1, 300), "peak_width": num(1.0, 0.04, 4), "peak_gain_db": num(0.0, -30, 36),
         "phase_quad": num(0.0, 0, 0.05), "phase_random": num(0.0, 0, 1), "fundamental": num(1.0, 0, 4)}},
     "formant": {"inputs": 0, "params": {
         "f0": num(130.0, 60, 600), "voice": enum("men", "men", "women", "children"), "voice_b": enum("", "", "men", "women", "children"), "voice_mix": num(0.0, 0, 1),
@@ -899,11 +899,13 @@ def measures(samples):
     env = envelope(fr)
     d = np.sqrt(np.mean((env[1:] - env[:-1]) ** 2, axis=1)) if nfr > 1 else np.zeros(1)
     dw = np.sqrt(np.mean((fr[1:] - fr[:-1]) ** 2, axis=1)) / (0.5 * (rms[1:] + rms[:-1]) + 1e-12) if nfr > 1 else np.zeros(1)     # waveform step: RMS difference of neighbouring frames / their RMS
+    mv_env = float(np.max(np.sqrt(np.mean((env - env[0]) ** 2, axis=1))))                                   # farthest any frame is from frame 0, dB (RMS over the 32 bands)
+    mv_wave = float(np.max(np.sqrt(np.mean((fr - fr[0]) ** 2, axis=1)) / (rms[0] + 1e-12)))                 # same for the waveform, relative to the RMS of frame 0
     alias = 10 * np.log10(np.max(np.sum(p[:, 383:], axis=1) / np.maximum(p.sum(axis=1), 1e-18)) + 1e-12)
     crest = 20 * np.log10(np.max(np.abs(fr), axis=1) / (rms + 1e-12))
     return {"frames": nfr, "peak": float(np.max(np.abs(fr))), "rms_min_db": float(rms_db.min()), "rms_max_db": float(rms_db.max()), "spread_db": float(rms_db.max() - rms_db.min()),
             "highest_harmonic": hi, "dc": float(np.max(np.abs(fr.mean(axis=1)))), "eff_mean": float(eff.mean()), "eff_min": float(eff.min()), "eff_max": float(eff.max()),
-            "step_mean_db": float(d.mean()), "step_max_db": float(d.max()), "wave_step_mean": float(dw.mean()), "wave_step_max": float(dw.max()), "alias_db": float(alias), "crest_mean_db": float(crest.mean()), "crest_max_db": float(crest.max())}
+            "step_mean_db": float(d.mean()), "step_max_db": float(d.max()), "move_env_db": mv_env, "move_wave": mv_wave, "wave_step_mean": float(dw.mean()), "wave_step_max": float(dw.max()), "alias_db": float(alias), "crest_mean_db": float(crest.mean()), "crest_max_db": float(crest.max())}
 
 
 def png_bytes(rgb):

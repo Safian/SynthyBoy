@@ -970,13 +970,14 @@ def main():
     ap.add_argument("--addons-root", default=os.path.join(HERE, "..", "content-addons"))
     ap.add_argument("--check", action="store_true", help="write nothing; exit 1 when a file differs from what the recipes make")
     ap.add_argument("--list", action="store_true", help="print the wavetable catalogue (category, file, frames, bytes, title)")
+    ap.add_argument("--addon", action="append", help="process only this add-on pack (a folder name below content-src/addons); the factory packs are left alone (repeatable)")
     ap.add_argument("--only", action="append", choices=wl.CATEGORIES, help="regenerate (or check) only this wavetable category; samples are left alone (repeatable)")
     a = ap.parse_args()
     root = os.path.abspath(a.out_root)
     entries = load_recipes(RECIPES_ROOT)
     targets = []      # (directory, {relative path: bytes}, selected paths or None)
     wt_dir = os.path.join(root, "factory-wavetables")
-    files, meta, selected = wavetable_files(entries, a.only, wt_dir)
+    files, meta, selected = wavetable_files(entries, a.only, wt_dir) if not a.addon else ({}, {}, set())
     if a.list:
         print_catalogue(entries, files)
         for d, m, ents in addon_packs():
@@ -986,11 +987,15 @@ def main():
         return 0
     sel = selected | {"contentpack.json"}
     pack_meta = factory_wavetable_meta(entries)
-    targets.append((wt_dir, dict(files, **{"contentpack.json": manifest_text(pack_meta, files, meta).encode("utf-8")}), sel if a.only else None))
+    if not a.addon:
+        targets.append((wt_dir, dict(files, **{"contentpack.json": manifest_text(pack_meta, files, meta).encode("utf-8")}), sel if a.only else None))
     if not a.only:
-        sm = samples_files()
-        targets.append((os.path.join(root, "factory-samples"), dict(sm, **{"contentpack.json": manifest_text(PACKS["factory-samples"], sm).encode("utf-8")}), None))
+        if not a.addon:
+            sm = samples_files()
+            targets.append((os.path.join(root, "factory-samples"), dict(sm, **{"contentpack.json": manifest_text(PACKS["factory-samples"], sm).encode("utf-8")}), None))
         for d, m, ents in addon_packs():
+            if a.addon and d not in a.addon:
+                continue
             f2, m2, _ = wavetable_files(ents, None, "")
             targets.append((os.path.join(os.path.abspath(a.addons_root), d), dict(f2, **{"contentpack.json": manifest_text(m, f2, m2).encode("utf-8")}), None))
     total = sum(len(b) for _, fs, _ in targets for b in fs.values())
