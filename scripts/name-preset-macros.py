@@ -40,6 +40,7 @@ SHORT_NAMES = {
     "distortion.mix": "Dist Mix", "reverb.decay": "Rev Decay", "reverb.mix": "Reverb", "chorus.mix": "Chorus", "delay.mix": "Delay", "phaser.mix": "Phaser",
     "fxfilter.mix": "FX Filter", "fxfilter.cutoff": "FX Cutoff", "rlfo1.rate": "Rnd LFO Rate", "rlfo2.rate": "Rnd LFO Rate",
     "compressor.mix": "Comp Mix", "compressor.mid.gain": "Comp Gain", "filter1.comb_offset": "Comb Offset", "filter1.formant.resonance": "Formant Res", "filter2.formant.resonance": "Formant Res", "flanger.feedback": "Flange Fdbk", "utility.width": "Width", "bode.feed": "Feedback", "bode.shift": "Shift", "bode.mix": "Bode Mix",
+    "osc1.gran.density": "Grain Dens", "osc2.gran.density": "Grain Dens", "osc3.gran.density": "Grain Dens",
     "noise.level": "Noise", "lfo1.rate": "LFO Rate", "lfo2.rate": "LFO Rate", "lfo3.rate": "LFO Rate", "lfo4.rate": "LFO Rate",
 }
 # The words that open a parameter's name and say which module it is (the page it is on says it too); they go.

@@ -350,10 +350,10 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
         self.assertEqual(tmpl["header"]["num_programs"], 113)  # template has old 113
         chunk = (FIXTURES_DIR / "acid_saw_reso.chunk").read_bytes()
         name = "Acid Saw Reso"
-        # Without num_programs override, it derives 137 from factory presets count (136) + 1 (Init)
+        # Without num_programs override, it derives 161 from factory presets count (160) + 1 (Init)
         _, xml_text = gen_mpc_xpl.create_xpl_from_chunk(chunk, name, tmpl)
         parsed = gen_mpc_xpl.parse_xpl(xml_text)
-        self.assertEqual(parsed["header"]["num_programs"], 137)
+        self.assertEqual(parsed["header"]["num_programs"], 161)
 
     def test_create_xpl_override_num_programs(self):
         tmpl = gen_mpc_xpl.parse_xpl(get_example_path("prev_Acid_Saw_Reso.xpl").read_text(encoding="utf-8"))
