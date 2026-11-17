@@ -534,31 +534,37 @@ The three blocks under the graph are one Q group each (in the picture: ADSR yell
 
 ![LFO](img/lfo.png)
 
-The pages LFO 1 - LFO 4 each show one LFO; the top bar switches to **1 .. 10** (LFOs) or **R1 .. R4** (random LFOs). The tab only decides which is shown first.
+The pages LFO 1 - LFO 4 each show one LFO; the bar at the top switches to **1 .. 10** (LFOs) or **R1 .. R4** (random LFOs), all in one row. The tab only decides which is shown first.
+An LFO is a repeating wave that moves a parameter (vibrato, tremolo, a wobbling filter). You give it targets with the **TARGETS** button (chapter 6).
 
-**Top bar:** instance cells, the sync mode **HZ / BPM / KEY**, switches **TRIP** (triplet) and **DOT** (dotted) (active only in BPM), the **TARGETS** button (what the LFO modulates, chapter 6).
+**Top bar:** the instance cells, **EDIT** (opens the shape editor, below) and **TARGETS** (what the LFO modulates, with the number of routes).
 
-**Display** (left): the shape of one cycle, with the phase marker, a cursor that runs with the sounding voice. A strip above the graph shows delay and rise when set.
+**Display** (left): the shape of one cycle, with the phase marker and a cursor that runs with the sounding voice. A strip above the graph shows delay and rise when set. In KEY follow mode (the sync list on KEY) the display shows the shape at full height.
 
-**Shape picker** (right, 13 cells): SINE, TRI, SAW UP, SAW DN, SQUARE, PULSE (25 percent), STEP UP, STEP DN, RANDOM (random steps), EXP UP, EXP DN, HALF (half sine), DRAWN (your own shape). Under it two switches: **SMOOTH** and **HOST**. **HOST** only matters when the LFO's MODE is Free-run (and the sync is not Key follow): then the LFO's phase is taken from the host's song position while the transport plays, so a song plays the same every time; with HOST off the LFO runs freely and keeps its own clock.
+**Shape picker** (right, 13 cells; Q 1): SINE, TRI, SAW UP, SAW DN, SQUARE, PULSE (25 percent), STEP UP, STEP DN, RANDOM (random steps), EXP UP, EXP DN, HALF (half sine), DRAWN (your own shape).
+Under it the **HOST** LED switch. **HOST** only matters when the LFO's MODE is Free-run (and the sync is not KEY): then the LFO's phase is taken from the host's song position while the transport plays, so a song plays the same every time; with HOST off the LFO runs freely and keeps its own clock.
 
-**Blocks (one Q group each):**
+**Blocks (one Q group each; the controls are not framed one by one):**
 
 | Block | Control | Parameter, range |
 |---|---|---|
-| RATE | the shape picker is Q 1; RATE | 0.01 .. 200 Hz, default 2 (in BPM mode: DIVISION, 13 choices Freeze, 32 bars, 16 bars, 8 bars, 4 bars, 2 bars, 1 bar, 1/2 note, 1/4 note, 1/8 note, 1/16 note, 1/32 note, 1/64 note; dim in KEY) |
+| RATE | RATE (the large knob) | 0.01 .. 200 Hz, default 2 |
 | | RISE | fade in 0 .. 8000 ms |
-| | SMOOTH | smooth time 1 .. 1000 ms (dim when the SMOOTH switch is off) |
-| TIMING | SYNC | Free (Hz), Tempo, Tempo dotted, Tempo triplet, Key follow (this is the same as the HZ / BPM / KEY buttons and TRIP / DOT) |
-| | MODE | Retrigger, Free-run, Envelope, Sustain envelope, Loop at point, Loop and hold |
+| | SMOOTH | the **LED on the label** is the smoothing switch, the knob is the smooth time 1 .. 1000 ms. The knob is dim while the LED is off. A tap on the label text switches the LED. |
+| TIMING | SYNC list **HZ / BPM / KEY** | Free (Hz), Tempo (BPM), Key follow. The tempo variants (dotted, triplet) are the TRIP and DOT switches in the RATE block |
+| | MODE | Retrigger, Free-run, Envelope, Sustain envelope, Loop at point, Loop and hold (a stepper with a list; the names are long) |
 | | PHASE | 0 .. 360 degrees |
 | | DELAY | 0 .. 4000 ms |
-| MOTION | DIRECTION | Forward, Reverse, Ping pong |
+| MOTION | DIRECTION | a list: Forward, Reverse, Ping pong |
 | | SWING | 0 .. 100 percent |
 | | STEREO | -180 .. +180 degrees (offset between left and right) |
-| | MONO | switch |
-| KEY FOLLOW (only in KEY sync) | TRANSPOSE | -60 .. +36 semitones, default -12 |
-| | TUNE | -100 .. +100 cents |
+| | MONO | LED switch |
+
+**BPM mode.** With the sync list on BPM the RATE knob is replaced by the **DIVISION** stepper (13 choices: Freeze, 32 bars, 16 bars, 8 bars, 4 bars, 2 bars, 1 bar, 1/2 note, 1/4 note, 1/8 note, 1/16 note, 1/32 note, 1/64 note) with the LED switches **TRIP** (triplet) and **DOT** (dotted) under it; they exist only in this mode.
+
+![LFO in BPM mode (lower half of the page)](img/lfo-bpm.png)
+
+**KEY mode.** With the sync list on KEY the rate follows the note you play, so the RATE knob is not on the page. The block is named "RATE - FOLLOWS THE KEY" and holds **TRANSPOSE** (-60 .. +36 semitones, default -12) and **TUNE** (-100 .. +100 cents), each its own Q group right after RATE.
 
 ![LFO in KEY mode](img/lfo-key.png)
 
@@ -566,16 +572,21 @@ The pages LFO 1 - LFO 4 each show one LFO; the top bar switches to **1 .. 10** (
 
 ![Random LFO](img/lfo-random.png)
 
-Style picker: PERLIN, S & H (sample and hold), SINE INT (sine interpolate), LORENZ, ROSSLER; block RANDOM: RATE 0.01 .. 200 Hz (default 2), STYLE, SYNC (Free (Hz), Tempo, Tempo dotted, Tempo triplet, Key follow), STEREO (Off/On); block TRIGGER: MODE (Retrigger or Free-run); a KEY FOLLOW block in KEY sync. The display is the trace of the output.
+The style grid is Q 1 and has no stepper of its own: PERLIN, S & H (sample and hold), SINE INT (sine interpolate), LORENZ, ROSSLER. The display is the trace of the output. The block RANDOM is one row: the RATE knob (0.01 .. 200 Hz, default 2), the HZ / BPM / KEY list, the STEREO LED switch and the trigger MODE (a list of two: Retrigger, Free-run). In KEY follow the TRANSPOSE and TUNE block replaces the rate as above. Random LFOs have no EDIT button.
 
-**The drawn-shape editor.** The **EDIT** button at the top right of the display opens the editor page over the page (BACK returns). If you press EDIT on a built-in shape, the shape is copied into points and becomes a drawn shape (the LFO's shape is then DRAWN). Choosing the cell DRAWN in the picker only makes the shape a drawn one (a triangle when it has no points yet); it does not open the editor.
+**The drawn-shape editor.** The **EDIT** button at the top right opens the editor page over the page (BACK returns). If you press EDIT on a built-in shape, the shape is copied into points and becomes a drawn shape (the LFO's shape is then DRAWN); the original shape is one tap away in the picker. Choosing the cell DRAWN in the picker only makes the shape a drawn one (a triangle when it has no points yet); it does not open the editor.
+
+![LFO editor](img/lfo-editor.png)
 
 - **Tools** (a row of four): **POINT**, **FLAT**, **RAMP+**, **RAMP-**.
   - POINT: tap on empty ground adds a point (snapped to the grid when SNAP is on), and dragging moves it; touching a point selects and drags it (the two end points only up and down); the small handle in the middle of a segment drags its curve (power -20 .. +20); a **long press** on a point deletes it.
   - FLAT / RAMP+ / RAMP-: touching a cell of the grid draws a flat piece, a rising or a falling ramp over the cell's column; dragging across draws a staircase or saw.
-- Buttons: **UNDO**, **DELETE**, switches **SNAP**, **LOOP**, **SMOOTH**.
-- **EDIT Q group** (the SELECTED POINT): X, Y, CURVE, GRID (virtual knobs of the plugin: they change the selected point).
+- The corner of the canvas shows how many points the shape has (up to 128).
+- **SELECTED POINT** (Q 1 - 4): POINT (which point is selected), X (its time), Y (its level), CURVE (the curve of the segment after it). Without a selected point they show a dash.
+- **GRID** (Q 5 - 7 on a 16-knob device): **GRID X** (columns of the cycle, 2 .. 32), **GRID Y** (rows of the height, 2 .. 32) and **SNAP** (a LED toggle: points snap to the grid lines). The grid is drawn on the canvas and used by SNAP and by the cell tools (FLAT, RAMP+, RAMP-). **The grid is stored in the preset together with the shape** (state version 5): a preset keeps its grid when you load it. A preset saved before that has no grid stored; the editor then takes the coarsest of 4, 8, 12, 16, 24, 32 whose lines all points lie on, else 8.
+- Buttons: **UNDO**, **DELETE**; LED toggles **LOOP** and **SMOOTH** (smooth makes the cosine S-curve of every segment). A shape has one loop point and one smooth flag.
 - A drawn shape that has no points is read as a flat line.
+- The built-in shapes become exact points (sine = 3 points + smooth); EXP UP, EXP DN and HALF become 16 short segments and so follow the original only closely.
 
 ### 5.10 Mod matrix
 
