@@ -169,3 +169,61 @@ TEST (four_warped_samples_at_once_equal_four_scalar_samples)
     CHECK (true);
 #endif
 }
+
+// ---- the Digital filter model's pair loop: the NEON form against the scalar loop --------------------------------------------------------------------------------
+#include "voice/classic_filters.h"
+
+TEST (digital_filter_pair_loop_in_lanes_equals_the_scalar_loop)
+{
+#if SB_NEON
+    TestRng r (21);
+    long long bad = 0, total = 0;
+    for (int run = 0; run < 400; ++run)
+    {
+        ClassicFilter refA, refB, laneA, laneB;
+        for (ClassicFilter* f : { &refA, &refB, &laneA, &laneB })
+        {
+            f->prepare (44100.0);
+            f->reset();
+            f->fastMath = run % 3 != 0; // the limiter's tanh in its fast and its library form
+        }
+        for (int block = 0; block < 120; ++block)
+        {
+            // setups as the model makes them: g = tan (pi f / sr), damping, drive gains, section weights; the two channels alike or not
+            auto setup = [&] ()
+            {
+                ClassicFilter::SvfSetup z;
+                z.g = std::tan (3.14159265f * (0.0004f + 0.44f * r.uni() * r.uni()));
+                z.R = 0.03f + 2.0f * r.uni();
+                z.R1 = r.uni() < 0.7f ? 1.0f : 0.5f + r.uni();
+                z.dEff = 0.2f + 6.0f * r.uni();
+                z.post = 0.3f + 1.5f * r.uni();
+                z.wa = { 2.0f * r.uni() - 1.0f, 2.0f * r.uni() - 1.0f, 2.0f * r.uni() - 1.0f };
+                z.wb = { 2.0f * r.uni() - 1.0f, 2.0f * r.uni() - 1.0f, 2.0f * r.uni() - 1.0f };
+                return z;
+            };
+            ClassicFilter::SvfSetup za = setup(), zb = block % 2 == 0 ? za : setup();
+            za.two = zb.two = (run % 2) == 0;
+            const int n = block % 7 == 0 ? 5 : 8;
+            float inA[8], inB[8], oA[8], oB[8], pA[8], pB[8];
+            const int kind = block % 6;
+            for (int i = 0; i < n; ++i)
+            {
+                const float gain = kind == 0 ? 3.0f : (kind == 1 ? 0.0f : (kind == 2 ? 1.0e-19f : (kind == 3 ? 0.02f : 0.6f)));
+                inA[i] = gain * (2.0f * r.uni() - 1.0f);
+                inB[i] = gain * (2.0f * r.uni() - 1.0f);
+            }
+            if (run == 399 && block == 60)
+                inA[2] = std::nanf (""); // a NaN goes the same way in both forms (and stays in the filter in both)
+            ClassicFilter::svfPairLoopScalar (refA, refB, za, zb, inA, oA, inB, oB, n, 3);
+            ClassicFilter::svfPairLoop (laneA, laneB, za, zb, inA, pA, inB, pB, n, 3);
+            bad += std::memcmp (oA, pA, static_cast<size_t> (n) * 4) == 0 && std::memcmp (oB, pB, static_cast<size_t> (n) * 4) == 0 ? 0 : 1;
+            total += 2 * n;
+        }
+    }
+    std::printf ("    %lld samples in 48000 blocks (one and two sections, loud, silent, tiny and NaN input): %lld blocks differ\n", total, bad);
+    CHECK_EQ (bad, 0);
+#else
+    CHECK (true);
+#endif
+}

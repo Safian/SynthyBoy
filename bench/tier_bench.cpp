@@ -255,6 +255,7 @@ struct Result
     double voicesMean = 0.0;  // sounding voices at the end of a block, mean
     int voicesMax = 0;
     std::vector<double> sectionMs; // per block, by section (--sections)
+    std::vector<double> sectionCalls; // scopes entered per block, by section
 };
 
 Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load& load, int notes)
@@ -348,6 +349,7 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
             unsigned long long calls = 0;
             ownSectionRead (i, total, calls);
             r.sectionMs.push_back (total / static_cast<double> (measured));
+            r.sectionCalls.push_back (static_cast<double> (calls) / static_cast<double> (measured));
         }
     }
     return r;
@@ -705,12 +707,23 @@ int main (int argc, char** argv)
                 std::fflush (stdout);
                 if (o.sections)
                 {
-                    double total = 0.0;
-                    for (const double ms : r.sectionMs)
-                        total += ms;
+                    // every scope reads the clock twice, and that time lands in the section (and in its parent): "less clock" takes calls x the measured cost of
+                    // a scope off each section, which the small sections of the voice tick need on a device whose clock costs about a microsecond
+                    const double clockMs = ownSectionClockCostNs() * 1.0e-6;
+                    double total = 0.0, totalLess = 0.0;
+                    for (size_t i = 0; i < r.sectionMs.size(); ++i)
+                    {
+                        total += r.sectionMs[i];
+                        totalLess += std::max (0.0, r.sectionMs[i] - r.sectionCalls[i] * clockMs);
+                    }
+                    std::printf ("    sections: one scope costs about %.0f ns here; sum %.4f ms / block, less the clock %.4f ms / block\n", ownSectionClockCostNs(), total, totalLess);
                     for (size_t i = 0; i < r.sectionMs.size(); ++i)
                         if (r.sectionMs[i] > 0.0)
-                            std::printf ("    section %-52s %8.4f ms / block %6.1f %%\n", ownSectionName (static_cast<int> (i)), r.sectionMs[i], total > 0.0 ? 100.0 * r.sectionMs[i] / total : 0.0);
+                        {
+                            const double less = std::max (0.0, r.sectionMs[i] - r.sectionCalls[i] * clockMs);
+                            std::printf ("    section %-52s %8.4f ms / block %6.1f %%  %7.1f calls / block  less clock %8.4f ms %6.1f %%\n", ownSectionName (static_cast<int> (i)),
+                                         r.sectionMs[i], total > 0.0 ? 100.0 * r.sectionMs[i] / total : 0.0, r.sectionCalls[i], less, totalLess > 0.0 ? 100.0 * less / totalLess : 0.0);
+                        }
                 }
                 if (csv != nullptr)
                 {

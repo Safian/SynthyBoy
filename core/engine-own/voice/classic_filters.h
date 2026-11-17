@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "../dsp/util.h"
+#include "../dsp/simd.h"
 #include "../dsp/fastmath.h"
 #include "../fx/fx_dsp.h"
 
@@ -151,6 +152,7 @@ public:
         return a <= 0.66f ? v : std::copysign (0.66f + 0.34f * th ((a - 0.66f) / 0.34f), v);
     }
     bool fastMath = false;
+    bool scalarLoops = false; // measurements (setOwnSavingsOff, kOwnSavingVectorFilters): the scalar pair loop also where the NEON form exists
     /** The values derived from the parameters (several pow / sqrt / tan) are kept while the parameters stay the same, as they do for most control periods. */
     void remember (const ClassicParams& p) noexcept
     {
@@ -206,6 +208,97 @@ public:
         instead of running one after the other. The samples are those of two separate process () calls. False (nothing done) if the case does not apply. */
     /** Two channels of the state variable models in one loop, the setups given (the two chains are independent and overlap). */
     static void svfPairLoop (ClassicFilter& A, ClassicFilter& B, const SvfSetup& za, const SvfSetup& zb, const float* inA, float* outA, const float* inB, float* outB, int n, int model) noexcept
+    {
+#if SB_NEON
+        if (model == 3 && !A.scalarLoops)
+        {
+            svfPairLoopDigitalNeon (A, B, za, zb, inA, outA, inB, outB, n);
+            return;
+        }
+#endif
+        svfPairLoopScalar (A, B, za, zb, inA, outA, inB, outB, n, model);
+    }
+#if SB_NEON
+    /** The Digital model (3) of svfPairLoopScalar () with the two channels in the two lanes of a NEON register: the operations of tpt () and of the loop one by one
+        (separate multiply and add, the true division: one instruction on AArch64, two scalar divisions on 32 bit ARM), flushDenormal () as a select, and the limiter
+        hardtanh () as the scalar function itself for a lane above its knee (below it the value passes: the common case costs a compare). The same samples. */
+    static void svfPairLoopDigitalNeon (ClassicFilter& A, ClassicFilter& B, const SvfSetup& za, const SvfSetup& zb, const float* inA, float* outA, const float* inB, float* outB, int n) noexcept
+    {
+        auto pair = [] (float a, float b) noexcept { const float t[2] = { a, b }; return vld1_f32 (t); };
+        auto divide = [] (float32x2_t a, float32x2_t b) noexcept
+        {
+ #if defined(__aarch64__)
+            return vdiv_f32 (a, b);
+ #else
+            const float t[2] = { vget_lane_f32 (a, 0) / vget_lane_f32 (b, 0), vget_lane_f32 (a, 1) / vget_lane_f32 (b, 1) };
+            return vld1_f32 (t);
+ #endif
+        };
+        auto flush = [] (float32x2_t v) noexcept { return vbsl_f32 (vclt_f32 (vabs_f32 (v), vdup_n_f32 (1.0e-18f)), vdup_n_f32 (0.0f), v); };
+        auto limit = [&A, &B] (float32x2_t v) noexcept
+        {
+            // hardtanh (): a <= 0.66 ? v : ...; the comparison of the scalar function, per lane (a NaN is not <= 0.66 and goes through the function, as there)
+            const uint32x2_t below = vcle_f32 (vabs_f32 (v), vdup_n_f32 (0.66f));
+            if ((vget_lane_u32 (below, 0) & vget_lane_u32 (below, 1)) != 0u)
+                return v;
+            const float t[2] = { A.hardtanh (vget_lane_f32 (v, 0)), B.hardtanh (vget_lane_f32 (v, 1)) };
+            return vld1_f32 (t);
+        };
+        const bool two = za.two;
+        const float32x2_t g = pair (za.g, zb.g), R = pair (za.R, zb.R), dEff = pair (za.dEff, zb.dEff), post = pair (za.post, zb.post);
+        const float32x2_t waLp = pair (za.wa.lp, zb.wa.lp), waBp = pair (za.wa.bp, zb.wa.bp), waHp = pair (za.wa.hp, zb.wa.hp);
+        const float32x2_t wbLp = pair (za.wb.lp, zb.wb.lp), wbBp = pair (za.wb.bp, zb.wb.bp), wbHp = pair (za.wb.hp, zb.wb.hp);
+        // the denominators of tpt (): 1 + g Rloop + g g, with Rloop = R1 in the first section and R in the last (the same expression, once instead of per sample)
+        const float32x2_t den1 = pair (1.0f + za.g * za.R1 + za.g * za.g, 1.0f + zb.g * zb.R1 + zb.g * zb.g);
+        const float32x2_t den2 = pair (1.0f + za.g * za.R + za.g * za.g, 1.0f + zb.g * zb.R + zb.g * zb.g);
+        const float32x2_t twoV = vdup_n_f32 (2.0f);
+        const int k2 = two ? 3 : 0;
+        float32x2_t a1 = pair (A.s[0], B.s[0]), a2 = pair (A.s[1], B.s[1]);       // the states of the first section (the only one when !two)
+        float32x2_t b1 = pair (A.s[k2], B.s[k2]), b2 = pair (A.s[k2 + 1], B.s[k2 + 1]); // the states of the last section
+        for (int i = 0; i < n; ++i)
+        {
+            float32x2_t u = vmul_f32 (pair (inA[i], inB[i]), dEff);
+            if (two)
+            {
+                // tpt (0, u, g, R1, R, ...): the loop runs with R1, the high pass output with the true R
+                const float32x2_t v3 = vsub_f32 (u, a2);
+                const float32x2_t v1 = divide (vadd_f32 (a1, vmul_f32 (g, v3)), den1);
+                const float32x2_t v2 = vadd_f32 (a2, vmul_f32 (g, v1));
+                a1 = flush (vsub_f32 (vmul_f32 (twoV, v1), a1));
+                a2 = flush (vsub_f32 (vmul_f32 (twoV, v2), a2));
+                const float32x2_t hp = vsub_f32 (vsub_f32 (u, vmul_f32 (R, v1)), v2);
+                const float32x2_t y1 = vadd_f32 (vadd_f32 (vmul_f32 (waLp, v2), vmul_f32 (waBp, v1)), vmul_f32 (waHp, hp));
+                u = limit (y1);
+            }
+            float32x2_t& c1 = two ? b1 : a1;
+            float32x2_t& c2 = two ? b2 : a2;
+            const float32x2_t v3 = vsub_f32 (u, c2);
+            const float32x2_t v1 = divide (vadd_f32 (c1, vmul_f32 (g, v3)), den2);
+            const float32x2_t v2 = vadd_f32 (c2, vmul_f32 (g, v1));
+            c1 = flush (vsub_f32 (vmul_f32 (twoV, v1), c1));
+            c2 = flush (vsub_f32 (vmul_f32 (twoV, v2), c2));
+            const float32x2_t hp = vsub_f32 (vsub_f32 (u, vmul_f32 (R, v1)), v2);
+            const float32x2_t y = limit (vadd_f32 (vadd_f32 (vmul_f32 (wbLp, v2), vmul_f32 (wbBp, v1)), vmul_f32 (wbHp, hp)));
+            const float32x2_t o = vmul_f32 (y, post);
+            outA[i] = vget_lane_f32 (o, 0);
+            outB[i] = vget_lane_f32 (o, 1);
+        }
+        if (two)
+        {
+            A.s[0] = vget_lane_f32 (a1, 0); B.s[0] = vget_lane_f32 (a1, 1);
+            A.s[1] = vget_lane_f32 (a2, 0); B.s[1] = vget_lane_f32 (a2, 1);
+            A.s[3] = vget_lane_f32 (b1, 0); B.s[3] = vget_lane_f32 (b1, 1);
+            A.s[4] = vget_lane_f32 (b2, 0); B.s[4] = vget_lane_f32 (b2, 1);
+        }
+        else
+        {
+            A.s[0] = vget_lane_f32 (a1, 0); B.s[0] = vget_lane_f32 (a1, 1);
+            A.s[1] = vget_lane_f32 (a2, 0); B.s[1] = vget_lane_f32 (a2, 1);
+        }
+    }
+#endif
+    /** The scalar loop of svfPairLoop (): every model, every build. */
+    static void svfPairLoopScalar (ClassicFilter& A, ClassicFilter& B, const SvfSetup& za, const SvfSetup& zb, const float* inA, float* outA, const float* inB, float* outB, int n, int model) noexcept
     {
         const bool linearHard = model == 3;
         const bool two = za.two;

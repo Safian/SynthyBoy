@@ -103,6 +103,7 @@ public:
             curPR.cutoffHz = s.cutoffHzR;
         classic = s.model < filters::kFirstSerumModel;
         scalarOnly = s.scalarOnly;
+        cl[0].scalarLoops = cl[1].scalarLoops = s.scalarOnly;
         prevMix = curMix;
         curMix = clamp01 (s.mix);
         prevClean = curClean;
