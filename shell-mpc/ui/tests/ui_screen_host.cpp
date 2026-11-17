@@ -133,7 +133,7 @@ int main()
         else if (var.inst == OscInstance::Noise)
             check (bg.member (0) == &s.basic.noiseType && bg.member (1) == &s.basic.filter, nm + ": Basic = noise type, FILTER, PAN, LEVEL");
         else
-            check (bg.member (0) == &s.basic.selector && bg.member (1) == &s.basic.source && s.basic.selector.state.count == 3, nm + ": Basic = type (three pictograms), source, PAN, LEVEL");
+            check (bg.member (0) == &s.basic.selector && bg.member (1) == &s.basic.source && s.basic.selector.state.count == 5, nm + ": Basic = type (five pictograms), source, PAN, LEVEL");
         check (bg.member (2) == &s.basic.pan && bg.member (3) == &s.basic.level, nm + ": Basic: the third and fourth are PAN and LEVEL");
         // the type specific parts
         const bool noise = var.inst == OscInstance::Noise, sub = var.inst == OscInstance::Sub;
@@ -145,7 +145,7 @@ int main()
         for (int i = 0; i < n; ++i)
             for (int k = 0; k < tuneLeaves; ++k)
                 tuneOnScreen += all[i] == tl[k];
-        check (sub ? ! s.tuneShown() : (s.tuneShown() && tuneOnScreen == (noise ? 3 : 5)), nm + ": the tuning row: " + (noise ? "PITCH, FINE and KEY TRACK" : sub ? "none" : "OCT, SEM, FIN, CRS and the toggle"));
+        check (sub ? ! s.tuneShown() : (s.tuneShown() && tuneOnScreen == (noise ? 3 : 6)), nm + ": the tuning row: " + (noise ? "PITCH, FINE and KEY TRACK" : sub ? "none" : "OCT, SEM, FIN, CRS, the toggle and MORE"));
         if (sub)
             check (s.panel.numParts() == 9, nm + ": the sub oscillator has its 9 parameters in its bottom panel");
         if (noise)
@@ -155,7 +155,7 @@ int main()
             if (var.kind == OscKind::Granular)
                 check (s.numGroups() == 6 && std::string (s.groupName (3)) == "Grain" && std::string (s.groupName (4)) == "Playback" && std::string (s.groupName (5)) == "Random", nm + ": the groups Grain, Playback, Random");
             else
-                check (s.numGroups() == 5 && std::string (s.groupName (3)) == "Unison" && std::string (s.groupName (4)) == "Warp", nm + ": the groups Unison and Warp");
+                check (s.numGroups() == 6 && std::string (s.groupName (3)) == "Unison" && std::string (s.groupName (4)) == "Warp 1" && std::string (s.groupName (5)) == "Warp 2", nm + ": the groups Unison, Warp 1 and Warp 2");
             if (var.kind == OscKind::Multisample)
                 check (s.panel.knob (PanelSlot::Timbre) && ! s.panel.knob (PanelSlot::WtPos) && s.groups[3].member (0) == s.panel.knob (PanelSlot::Timbre), nm + ": the Unison group starts with TIMBRE");
         }
@@ -299,7 +299,7 @@ int main()
         tap (s, cx (*s.panel.knob (PanelSlot::Detune)), cy (*s.panel.knob (PanelSlot::Detune)), 1000.0);
         check (std::string (s.groupName (s.activeGroup())) == "Unison", "full screen: a tap on DETUNE: the group Unison");
         tap (s, cx (s.panel.warp()->second.type), cy (s.panel.warp()->second.type), 2000.0);
-        check (std::string (s.groupName (s.activeGroup())) == "Warp", "full screen: a tap in the warp pair: the group Warp");
+        check (std::string (s.groupName (s.activeGroup())) == "Warp 2", "full screen: a tap in the second warp slot: the group Warp 2");
         tap (s, cx (s.basic.level), cy (s.basic.level), 3000.0);
         check (s.activeGroup() == 0, "full screen: a tap on LEVEL: back to Basic");
         c = s.turnQ (3, 0.25);

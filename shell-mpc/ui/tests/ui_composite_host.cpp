@@ -248,8 +248,8 @@ void testTypeBar()
         TypeBar b (*cs.p);
         const std::string nm = std::string ("type bar ") + cs.name;
         check (b.numSlots() == cs.slots && b.slot (cs.slots) == nullptr, nm + ": " + std::to_string (cs.slots) + " slots from the table, no more");
-        b.place ({ 10, 10, 560, 56 });
-        check (b.rect().w >= b.minSize().w && b.minSize().h == 56, nm + ": the minimum size (" + std::to_string (b.minSize().w) + " x 56) fits 520 x 56");
+        b.place ({ 10, 10, 640, 56 });
+        check (b.rect().w >= b.minSize().w && b.minSize().h == 56, nm + ": the minimum size (" + std::to_string (b.minSize().w) + " x 56) fits 640 x 56");
         std::string why;
         check (leavesOk (b, b.rect(), why), nm + ": the slots are inside and do not overlap" + why);
         bool order = true;
@@ -275,16 +275,15 @@ void testTypeBar()
     NumberField& frame = static_cast<NumberField&> (*w.slot (0));
     NumberField& phase = static_cast<NumberField&> (*w.slot (1));
     NumberField& rnd = static_cast<NumberField&> (*w.slot (2));
-    Stepper& memory = static_cast<Stepper&> (*w.slot (3));
     check (frame.state.readOnly && frame.state.format == NumberField::Format::IntPlain && phase.state.format == NumberField::Format::Degrees && phase.state.icon == NumberField::Icon::Phase && rnd.state.icon == NumberField::Icon::Rand && std::string (rnd.state.label) == "RAND", "type bar wavetable: frame number (read only), phase (degrees, icon), RAND (icon + label), phase memory");
     check (! drag (w, cx (frame), cy (frame) + 20, cy (frame) - 20), "type bar wavetable: the frame number does not react");
     w.touchUp (0, 0);
     Change c = drag (w, cx (phase), cy (phase) + 20, cy (phase) - 20);
     check (c.kind == ChangeKind::Index && c.id == 41, "type bar wavetable: a drag on the phase: id 41");
     w.touchUp (0, 0);
-    memory.state.count = 3; memory.state.index = 0;
-    c = tap (w, memory.rect().right() - 10, cy (memory), 0.0);
-    check (c.kind == ChangeKind::Index && c.id == 43 && c.index == 1, "type bar wavetable: the phase memory stepper: next, id 43");
+    check (w.slot (3) != nullptr && w.preset()->items[3].kind == BarKind::Page && std::string (w.preset()->items[3].label) == "MAP", "type bar wavetable: the fourth slot is the MAP page button (the phase memory moved to the options page)");
+    c = tap (w, cx (*w.slot (3)), cy (*w.slot (3)), 100.0);
+    check (c.kind == ChangeKind::Request && c.id == 43, "type bar wavetable: the MAP button: request, id 43");
     // granular: the details buttons and the stepper
     TypeBar g (barpresets::kGranular);
     g.place ({ 10, 10, 560, 56 });
@@ -386,7 +385,7 @@ void testRoutePanel()
 void testDetailPage()
 {
     struct Case { const PanelPreset* p; const char* title; int parts, groups; bool display; };
-    const Case cases[] = { { &presets::kUnisonDetail, "UNISON", 7, 2, true }, { &presets::kUnisonDetailMultisample, "UNISON", 6, 2, true }, { &presets::kUnisonDetailGranular, "UNISON", 5, 2, true },
+    const Case cases[] = { { &presets::kUnisonDetail, "UNISON", 7, 2, true }, { &presets::kUnisonDetailMultisample, "UNISON", 6, 2, true }, { &presets::kUnisonDetailGranular, "UNISON", 6, 2, true },
                            { &presets::kGrainDetail, "GRAIN WINDOW", 5, 2, true }, { &presets::kEnvelopeDetail, "ENVELOPE", 7, 2, true } };
     int caseNo = 0;
     for (const Case& cs : cases)
@@ -455,7 +454,7 @@ void testDetailPage()
         pg.load (presets::kUnisonDetailMultisample, "UNISON");
         check (pg.groups[0].member (3) == pg.panel.knob (PanelSlot::Range) && pg.groups[1].member (0) == pg.panel.knob (PanelSlot::Warp1Spread) && pg.groups[1].member (1) == pg.panel.knob (PanelSlot::Warp2Spread) && pg.groups[1].member (2) == nullptr && ! pg.panel.knob (PanelSlot::WtSpread), "detail page multisample unison: [MODE, STACK, WIDTH, RANGE] and [WARP 1 spread, WARP 2 spread]");
         pg.load (presets::kUnisonDetailGranular, "UNISON");
-        check (pg.groups[1].member (0) == pg.panel.knob (PanelSlot::Start) && pg.groups[1].member (1) == nullptr, "detail page granular unison: [MODE, STACK, WIDTH, RANGE] and [START]");
+        check (pg.groups[1].member (0) == pg.panel.knob (PanelSlot::Start) && pg.groups[1].member (1) == pg.panel.knob (PanelSlot::Span) && pg.groups[1].member (2) == nullptr, "detail page granular unison: [MODE, STACK, WIDTH, RANGE] and [START, SPAN]");
         pg.load (presets::kUnisonDetail, "UNISON");
         check (pg.groups[1].member (0) == pg.panel.knob (PanelSlot::WtSpread) && pg.groups[1].member (2) == pg.panel.knob (PanelSlot::Warp2Spread), "detail page wavetable unison: [MODE, STACK, WIDTH, RANGE] and [WT POS, WARP 1, WARP 2 spread]");
         pg.load (presets::kEnvelopeDetail, "ENVELOPE");
@@ -492,8 +491,8 @@ void testSourceAndVertical()
     t.place ({ 10, 10, 400, 3 * 56 + 2 * kQLane });
     check (t.isVertical() && t.sizeOk(), "tune row vertical: fits its minimum size");
     check (leavesOk (t, t.rect(), why) && t.oct.rect().x == t.fin.rect().x && t.sem.rect().x == t.crs.rect().x && t.oct.rect().y == t.sem.rect().y && t.fin.rect().y == t.crs.rect().y && t.oct.rect().h == t.fin.rect().h && t.fin.rect().h == t.track.rect().h
-                  && t.oct.rect().bottom() + kQLane <= t.fin.rect().y && t.fin.rect().bottom() + kQLane <= t.track.rect().y && t.track.rect().bottom() == t.rect().bottom() && t.track.rect().w == t.rect().w,
-           "tune row vertical: OCT SEM / FIN CRS in two columns, TRACK across, a lane for the Q chips between the rows, three equal rows that fill the height" + why);
+                  && t.oct.rect().bottom() + kQLane <= t.fin.rect().y && t.fin.rect().bottom() + kQLane <= t.track.rect().y && t.track.rect().bottom() == t.rect().bottom() && t.track.rect().w + kGap + t.more.rect().w == t.rect().w && t.more.rect().y == t.track.rect().y,
+           "tune row vertical: OCT SEM / FIN CRS in two columns, TRACK and MORE across, a lane for the Q chips between the rows, three equal rows that fill the height" + why);
     {
         TuneRow tall;
         tall.setVertical (true);
