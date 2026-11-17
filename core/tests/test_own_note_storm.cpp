@@ -85,6 +85,8 @@ struct Rig
         CHECK (s.sustaining <= s.active);
         if (exactHeld)
         {
+            if (s.heldKeys != static_cast<int> (held.size()))
+                std::printf ("    held keys: the engine says %d, the test holds %zu (lowest %d / %d, highest %d / %d)\n", s.heldKeys, held.size(), s.lowestHeld, held.empty() ? -1 : *held.begin(), s.highestHeld, held.empty() ? -1 : *held.rbegin());
             CHECK_EQ (s.heldKeys, static_cast<int> (held.size()));
             CHECK_EQ (s.lowestHeld, held.empty() ? -1 : *held.begin());
             CHECK_EQ (s.highestHeld, held.empty() ? -1 : *held.rbegin());

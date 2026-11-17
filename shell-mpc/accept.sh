@@ -56,7 +56,7 @@ python3 scripts/tests/test_gen_mpc_package.py > $B/package-test.log 2>&1 || { ta
 python3 scripts/tests/test_gen_mpc_xpl.py > $B/xpl-test.log 2>&1 || { tail -30 $B/xpl-test.log; echo "ACCEPT FAIL: scripts/tests/test_gen_mpc_xpl.py"; exit 1; }
 for f in scripts/build-mpc.sh scripts/build-armv7-mpc.sh scripts/mpc-container-build.sh; do [ -f $f ] && bash -n $f || { echo "ACCEPT FAIL: $f missing or not valid bash"; exit 1; }; done
 # factory presets as programs: the list header, then the library inside a plugin folder (Content/presets) and outside one
-INC="-I core/include -I $MPC_SDK/framework"
+INC="-I core/include -I core/filters-serum/include -I $MPC_SDK/framework"
 c++ -std=c++17 -O1 -Wall -Wextra $INC -o $B/programs_test shell-mpc/tests/programs_test.cpp $B/core/libsynthyboy_core.a > $B/programs-build.log 2>&1 || { grep -E "error" -A4 $B/programs-build.log | head -30; echo "ACCEPT FAIL: programs_test build (shell-mpc/program_list.h)"; exit 1; }
 $B/programs_test content/presets > $B/programs.log 2>&1 || { grep -E "^FAIL" $B/programs.log; echo "ACCEPT FAIL: programs_test"; exit 1; }
 PK="$B/pkg/Safian - VST - SynthyBoy"
@@ -87,7 +87,7 @@ $HSR "$PLIB" $ENGINE_N $B/test-pkg.log test --seconds 2 --notes 48,55 || { grep 
 grep -qE "produced silence" $B/test-pkg.log && { echo "ACCEPT FAIL: host_sim test of the packaged library"; exit 1; }
 grep -q 'Content/presets' scripts/build-mpc.sh || { echo "ACCEPT FAIL: scripts/build-mpc.sh does not copy content/presets to Content/presets"; exit 1; }
 # stub host: state round trip with content, re-prepare on rate change, two-thread parameter writes (plain build, then ThreadSanitizer)
-INC="-I core/include -I $MPC_SDK/framework"
+INC="-I core/include -I core/filters-serum/include -I $MPC_SDK/framework"
 c++ -std=c++17 -O1 $INC -o $B/stub_host shell-mpc/tests/stub_host.cpp $B/core/libsynthyboy_core.a || { echo "ACCEPT FAIL: stub_host build"; exit 1; }
 $B/stub_host "$LIB" > $B/stub.log 2>&1 || { tail -15 $B/stub.log; echo "ACCEPT FAIL: stub_host"; exit 1; }
 T=build-mpc-tsan
@@ -115,7 +115,7 @@ grep -q "programs_host: OK" $T/programs.log || { grep -E "^FAIL|^      " $T/prog
 # Live LFO display (SYNTHYBOY_MPC_LFO_LIVE, default ON in this shell): the main build above has it. Four more builds with the own engine (the readout of the cursors
 # comes from it): OFF (nothing after the engine's parameters), ON (cursors follow a held note), SELFTEST (cursors sweep without a note), SELFTEST + NOTIFY=OFF
 # (no audioMasterAutomate). All four give the same state chunk. The ON build runs once more under ThreadSanitizer (the display thread reads the engine's atomics).
-LIVEINC="-I core/include -I shell-mpc -I $MPC_SDK/framework"
+LIVEINC="-I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework"
 live_build() { # name, cmake options...
     n=$1; shift
     cmake -S . -B build-mpc-live-$n -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK" "$@" > build-mpc-live-$n.configure.log 2>&1 && cmake --build build-mpc-live-$n --target synthyboy_mpc > build-mpc-live-$n.build.log 2>&1 || { tail -30 build-mpc-live-$n.build.log; echo "ACCEPT FAIL: build of the LFO display variant $n"; exit 1; }
@@ -155,27 +155,27 @@ OVCORE=$(find $B/core -name '*.a' | tr '\n' ' ')
 OVSRC=shell-mpc/overlay/tests
 c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I shell-mpc/overlay -o $B/geometry_render_host $OVSRC/geometry_render_host.cpp || { echo "ACCEPT FAIL: geometry_render_host build"; exit 1; }
 $B/geometry_render_host > $B/geometry-render.log 2>&1 || { grep -E "^FAIL|ERROR" $B/geometry-render.log | head; echo "ACCEPT FAIL: geometry_render_host (rotation mapping, renderer)"; exit 1; }
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/curve_host $OVSRC/curve_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: curve_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/curve_host $OVSRC/curve_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: curve_host build"; exit 1; }
 $B/curve_host > $B/curve-host.log 2>&1 || { grep -E "^FAIL" $B/curve-host.log; echo "ACCEPT FAIL: curve_host (curve source)"; exit 1; }
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/controller_host $OVSRC/controller_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: controller_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/controller_host $OVSRC/controller_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: controller_host build"; exit 1; }
 $B/controller_host > $B/controller-host.log 2>&1 || { grep -E "^FAIL" $B/controller-host.log; echo "ACCEPT FAIL: controller_host (state machine)"; exit 1; }
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/qlink_panel_host $OVSRC/qlink_panel_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: qlink_panel_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/qlink_panel_host $OVSRC/qlink_panel_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: qlink_panel_host build"; exit 1; }
 $B/qlink_panel_host > $B/qlink-panel-host.log 2>&1 || { grep -E "^FAIL|^      " $B/qlink-panel-host.log; echo "ACCEPT FAIL: qlink_panel_host (the host's Q-Link pop-up replayed against the key)"; exit 1; }
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/mouse_host $OVSRC/mouse_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: mouse_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/mouse_host $OVSRC/mouse_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: mouse_host build"; exit 1; }
 $B/mouse_host > $B/mouse-host.log 2>&1 || { grep -E "^FAIL" $B/mouse-host.log; echo "ACCEPT FAIL: mouse_host (the mouse on the plugin-drawn pages)"; exit 1; }
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/views_host $OVSRC/views_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: views_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/views_host $OVSRC/views_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: views_host build"; exit 1; }
 $B/views_host > $B/views-host.log 2>&1 || { grep -E "^FAIL" $B/views-host.log; echo "ACCEPT FAIL: views_host (the views: LFO, oscillator, envelope, filter 2, several views in the controller)"; exit 1; }
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/gpu_scene_host $OVSRC/gpu_scene_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: gpu_scene_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/gpu_scene_host $OVSRC/gpu_scene_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: gpu_scene_host build"; exit 1; }
 $B/gpu_scene_host > $B/gpu-scene-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-scene-host.log; echo "ACCEPT FAIL: gpu_scene_host (GPU scene protocol: seqlock, every view type as a scene)"; exit 1; }
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/gpu_backend_host $OVSRC/gpu_backend_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: gpu_backend_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/gpu_backend_host $OVSRC/gpu_backend_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: gpu_backend_host build"; exit 1; }
 $B/gpu_backend_host > $B/gpu-backend-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-backend-host.log; echo "ACCEPT FAIL: gpu_backend_host (GPU helper health state machine and fallback with a fake helper)"; exit 1; }
 # run-time discovery (discovery.h: the plane tables of BOTH devices, a busy plane, no free plane, the cores), the rotation found from the markers, the pace grid with a fake vblank clock, a plane another program takes
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/display_host $OVSRC/display_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: display_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/display_host $OVSRC/display_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: display_host build"; exit 1; }
 $B/display_host > $B/display-host.log 2>&1 || { grep -E "^FAIL" $B/display-host.log; echo "ACCEPT FAIL: display_host (discovery of the display and the cores, rotation search, pace grid, lost plane)"; exit 1; }
 # the spectrum curve (shell-mpc/overlay/spectrum_curve.h: FFT of the overlay thread from the ring, 256 points, attack / release) and the spectrum view with a fake instance, the picture of both renderers, the controller
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -o $B/spectrum_curve_host $OVSRC/spectrum_curve_host.cpp -lpthread || { echo "ACCEPT FAIL: spectrum_curve_host build"; exit 1; }
 $B/spectrum_curve_host > $B/spectrum-curve-host.log 2>&1 || { grep -E "^FAIL" $B/spectrum-curve-host.log; echo "ACCEPT FAIL: spectrum_curve_host (the spectrum curve: sine, two sines, noise, silence, timing)"; exit 1; }
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/spectrum_view_host $OVSRC/spectrum_view_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: spectrum_view_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/spectrum_view_host $OVSRC/spectrum_view_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: spectrum_view_host build"; exit 1; }
 $B/spectrum_view_host > $B/spectrum-view-host.log 2>&1 || { grep -E "^FAIL" $B/spectrum-view-host.log; echo "ACCEPT FAIL: spectrum_view_host (the spectrum view: scene = CPU picture, no redraw at rest, the controller)"; exit 1; }
 # the page detector with real pictures of the Key 61 (the host's Q-Link panel over the right edge covers the right marker of the Play tab; the page must still be recognised)
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -DQLINK_FIXTURE=\"shell-mpc/overlay/tests/fixtures/qlink_panel_fixtures.bin\" -o $B/page_detector_host $OVSRC/page_detector_host.cpp || { echo "ACCEPT FAIL: page_detector_host build"; exit 1; }
@@ -188,40 +188,40 @@ $B/stacking_host > $B/stacking-host.log 2>&1 || { grep -E "^FAIL" $B/stacking-ho
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -o $B/panel_key_host $OVSRC/panel_key_host.cpp || { echo "ACCEPT FAIL: panel_key_host build"; exit 1; }
 $B/panel_key_host > $B/panel-key-host.log 2>&1 || { grep -E "^FAIL" $B/panel-key-host.log; echo "ACCEPT FAIL: panel_key_host (the key of the host's Q-Link panel)"; exit 1; }
 # the oscillator UI (shell-mpc/overlay/osc_ui.h: every control wired to its engine parameter, the pages, the Q group, the modulations; also under AddressSanitizer below)
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/osc_ui_host $OVSRC/osc_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: osc_ui_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/osc_ui_host $OVSRC/osc_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: osc_ui_host build"; exit 1; }
 $B/osc_ui_host > $B/osc-ui-host.log 2>&1 || { grep -E "^FAIL" $B/osc-ui-host.log; echo "ACCEPT FAIL: osc_ui_host (the oscillator UI: wiring, pages, Q group, modulations)"; exit 1; }
 # the envelope UI (shell-mpc/overlay/env_ui.h: every control wired to its envN parameter in both units, the handles of the graph, the targets page, the Q groups, the running dots, the Play view's routing between the elements; also under AddressSanitizer below)
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/env_ui_host $OVSRC/env_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: env_ui_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/env_ui_host $OVSRC/env_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: env_ui_host build"; exit 1; }
 $B/env_ui_host > $B/env-ui-host.log 2>&1 || { grep -E "^FAIL" $B/env-ui-host.log; echo "ACCEPT FAIL: env_ui_host (the envelope UI: wiring, graph, targets, Q groups)"; exit 1; }
 # the LFO UI (shell-mpc/overlay/lfo_ui.h: the LFO and the random LFO wired to their parameters, the Q groups, the shape editor; also under AddressSanitizer below)
 mkdir -p $B/ui-images/lfo
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/lfo_ui_host $OVSRC/lfo_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: lfo_ui_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/lfo_ui_host $OVSRC/lfo_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: lfo_ui_host build"; exit 1; }
 LFO_IMAGES=$B/ui-images/lfo $B/lfo_ui_host > $B/lfo-ui-host.log 2>&1 || { grep -E "^FAIL" $B/lfo-ui-host.log; echo "ACCEPT FAIL: lfo_ui_host (the LFO UI: wiring, pages, Q groups, shape editor)"; exit 1; }
 # the filter UI (shell-mpc/overlay/filter_ui.h: every control wired to its engine parameter, the pages, Q groups, Formant pad, dual curves, modulations; also under AddressSanitizer below)
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/filter_ui_host $OVSRC/filter_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: filter_ui_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/filter_ui_host $OVSRC/filter_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: filter_ui_host build"; exit 1; }
 $B/filter_ui_host > $B/filter-ui-host.log 2>&1 || { grep -E "^FAIL" $B/filter-ui-host.log; echo "ACCEPT FAIL: filter_ui_host (the filter UI: wiring, pages, Q groups, modulations)"; exit 1; }
 # the mod matrix and macro UI (shell-mpc/overlay/mod_ui.h, macro_ui.h: matrix, slot details, macros, Q groups; also under AddressSanitizer below)
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/mod_ui_host $OVSRC/mod_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: mod_ui_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/mod_ui_host $OVSRC/mod_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: mod_ui_host build"; exit 1; }
 $B/mod_ui_host > $B/mod-ui-host.log 2>&1 || { grep -E "^FAIL" $B/mod-ui-host.log; echo "ACCEPT FAIL: mod_ui_host (the mod matrix and macro UI: wiring, matrix, detail, macros, Q groups)"; exit 1; }
 # the mixer and FX UI (shell-mpc/overlay/mixer_ui.h, fx_ui.h: channels, faders, meters, destination popup, FX chain bar, slot editor, Q groups)
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/mixfx_ui_host $OVSRC/mixfx_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: mixfx_ui_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/mixfx_ui_host $OVSRC/mixfx_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: mixfx_ui_host build"; exit 1; }
 $B/mixfx_ui_host > $B/mixfx-ui-host.log 2>&1 || { grep -E "^FAIL" $B/mixfx-ui-host.log; echo "ACCEPT FAIL: mixfx_ui_host (the mixer and FX UI: layout, Q groups, parameters)"; exit 1; }
 # the master and voice UI (shell-mpc/overlay/master_ui.h, voice_ui.h: output, pitch, voices, glide, scale, MPE; the step grid, the random, scaling and target blocks, Q groups)
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/mastervoice_ui_host $OVSRC/mastervoice_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: mastervoice_ui_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/mastervoice_ui_host $OVSRC/mastervoice_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: mastervoice_ui_host build"; exit 1; }
 $B/mastervoice_ui_host > $B/mastervoice-ui-host.log 2>&1 || { grep -E "^FAIL" $B/mastervoice-ui-host.log; echo "ACCEPT FAIL: mastervoice_ui_host (the master and voice UI: wiring, grid, Q groups)"; exit 1; }
 # the plugin-drawn pages (shell-mpc/overlay/page_view.h, pages.h: the real layout, the controller opens the element page of the tab, group changes, the blank instance picture, the readout targets)
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/page_view_host $OVSRC/page_view_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: page_view_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/page_view_host $OVSRC/page_view_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: page_view_host build"; exit 1; }
 $B/page_view_host > $B/page-view-host.log 2>&1 || { grep -E "^FAIL" $B/page-view-host.log; echo "ACCEPT FAIL: page_view_host (the plugin-drawn pages: opening, groups, readout targets)"; exit 1; }
 # the Q slots the pages publish (shell-mpc/overlay/q_publish.h: sixteen Q proxies, the active group on Q 1 .. 4, the next groups of the page on 5 .. 16), the idle chips and the device rule (q_device.h)
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/qslots_host $OVSRC/qslots_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: qslots_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/qslots_host $OVSRC/qslots_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: qslots_host build"; exit 1; }
 $B/qslots_host > $B/qslots-host.log 2>&1 || { grep -E "^FAIL" $B/qslots-host.log; echo "ACCEPT FAIL: qslots_host (the Q slots of every page, the chips, the device rule)"; exit 1; }
 # the pages of the OSC tab (shell-mpc/overlay/osc_page.h: the oscillator UI in its page mode with the oscillator's display: the oscillator the tab names, no CLOSE, Q groups, writes, detail pages)
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/osc_page_host $OVSRC/osc_page_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: osc_page_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/osc_page_host $OVSRC/osc_page_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: osc_page_host build"; exit 1; }
 $B/osc_page_host > $B/osc-page-host.log 2>&1 || { grep -E "^FAIL" $B/osc-page-host.log; echo "ACCEPT FAIL: osc_page_host (the pages of the OSC tab)"; exit 1; }
 # the demonstration images of the four elements the same way as the other elements (filter, mod + macros, mixer + fx, master + voice), into $B/ui-images/<element>
 for d in filter mod mixfx mastervoice osc_page; do
     mkdir -p $B/ui-images/$d
-    c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/${d}_ui_demo $OVSRC/${d}_ui_demo.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ${d}_ui_demo build"; exit 1; }
+    c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/${d}_ui_demo $OVSRC/${d}_ui_demo.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ${d}_ui_demo build"; exit 1; }
     $B/${d}_ui_demo $B/ui-images/$d > $B/$d-ui-demo.log 2>&1 || { grep -E "^FAIL" $B/$d-ui-demo.log; echo "ACCEPT FAIL: ${d}_ui_demo (the ${d} pages)"; exit 1; }
 done
 # the cached cells of the scene protocol (gpu/scene.h CellBegin, gpu/cell_plan.h): the hash, the plan of the layers, the damage between two pictures, the part to paint for the age of the back buffer, the CPU reference
@@ -232,11 +232,11 @@ $B/cell_cache_host > $B/cell-cache-host.log 2>&1 || { grep -E "^FAIL" $B/cell-ca
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc/overlay -o $B/gpu_clock_host $OVSRC/gpu_clock_host.cpp || { echo "ACCEPT FAIL: gpu_clock_host build"; exit 1; }
 $B/gpu_clock_host > $B/gpu-clock-host.log 2>&1 || { grep -E "^FAIL" $B/gpu-clock-host.log; echo "ACCEPT FAIL: gpu_clock_host (the GPU clock hint)"; exit 1; }
 # the function tour table of the oscillator UI (the Key 61 script reads it): it must build and list every control
-c++ -std=c++17 -O1 -Wall -Wextra -I core/include -I shell-mpc/overlay -o $B/tour_dump $OVSRC/tour_dump.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: tour_dump build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/tour_dump $OVSRC/tour_dump.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: tour_dump build"; exit 1; }
 [ "$($B/tour_dump | wc -l)" -gt 800 ] || { echo "ACCEPT FAIL: tour_dump lists too few controls"; exit 1; }
 # the controller, the views and the GPU backend once more under AddressSanitizer + UBSan (instances are freed while their page is on screen: no use after free)
 for t in controller_host qlink_panel_host mouse_host views_host gpu_backend_host spectrum_view_host display_host osc_ui_host env_ui_host lfo_ui_host cell_plan_host cell_cache_host filter_ui_host mod_ui_host mixfx_ui_host mastervoice_ui_host page_view_host osc_page_host standby_host coverage_host macro_names_ui_host controller_review_host; do
-    c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/${t}_asan $OVSRC/$t.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
+    c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/${t}_asan $OVSRC/$t.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
     AO=; [ $t = mixfx_ui_host ] && AO=0   # the FX part adds an effect through the static core library (not instrumented): the libc++ container annotation check reports its vector growth falsely (see qslots_host below)
     ASAN_OPTIONS=detect_container_overflow=${AO:-1} $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
@@ -249,23 +249,23 @@ done
 c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I shell-mpc/overlay -DQLINK_FIXTURE=\"shell-mpc/overlay/tests/fixtures/qlink_panel_fixtures.bin\" -o $B/page_detector_host_asan $OVSRC/page_detector_host.cpp || { echo "ACCEPT FAIL: page_detector_host asan build"; exit 1; }
 $B/page_detector_host_asan > $B/page-detector-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/page-detector-asan.log | head; echo "ACCEPT FAIL: page_detector_host under AddressSanitizer / UBSan"; exit 1; }
 # the Q slots test under AddressSanitizer + UBSan too, with the libc++ container annotation check off: the FX part adds an effect through the static core library (not instrumented), which pushes to vectors the annotating libc++ then reports at the next reallocation (a false report of the annotation, the same code in mixfx_ui_host happens to grow its vectors differently)
-c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/qslots_host_asan $OVSRC/qslots_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: qslots_host asan build"; exit 1; }
+c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/qslots_host_asan $OVSRC/qslots_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: qslots_host asan build"; exit 1; }
 ASAN_OPTIONS=detect_container_overflow=0 $B/qslots_host_asan > $B/qslots_host-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/qslots_host-asan.log | head; echo "ACCEPT FAIL: qslots_host under AddressSanitizer / UBSan"; exit 1; }
 # the UI component library (shell-mpc/ui/, header only: the black box components, their interface tests and the demonstration program): the tests under AddressSanitizer + UBSan, the demo
 # renders the oscillator pages and the detail pages into $B/ui-images (PNG, for a human; not compared)
 mkdir -p $B/ui-images
 for t in ui_base_host ui_composite_host ui_screen_host ui_list_host ui_display_host ui_env_host ui_lfo_host ui_time_ruler_host ui_led_host ui_text_entry_host ui_cov_knobs_values_host ui_cov_steppers_lists_host ui_cov_toggles_buttons_host ui_cov_popups_scroll_host ui_cov_composites_panels_host ui_cov_qgroups_chips_host ui_cov_layout_text_host ui_cov_new_parts_host; do   # ui_cov_findings_host is NOT here on purpose: it demonstrates findings (its own header says it is not an acceptance test)
-    c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -o $B/${t}_asan shell-mpc/ui/tests/$t.cpp || { echo "ACCEPT FAIL: $t build"; exit 1; }
+    c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I core/filters-serum/include -o $B/${t}_asan shell-mpc/ui/tests/$t.cpp || { echo "ACCEPT FAIL: $t build"; exit 1; }
     UI_OUT=$B/ui-images $B/${t}_asan > $B/$t.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t.log | head; echo "ACCEPT FAIL: $t (UI components: interface, drawing, Q groups)"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
 done
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -o $B/ui_demo shell-mpc/ui/tests/ui_demo.cpp || { echo "ACCEPT FAIL: ui_demo build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -o $B/ui_demo shell-mpc/ui/tests/ui_demo.cpp || { echo "ACCEPT FAIL: ui_demo build"; exit 1; }
 $B/ui_demo $B/ui-images > $B/ui-demo.log 2>&1 || { grep -E "^FAIL" $B/ui-demo.log; echo "ACCEPT FAIL: ui_demo (the demonstration pages)"; exit 1; }
 # the envelope element: the library parts (ui_env_demo) and the real pages driven by engine parameters (env_ui_demo), into $B/ui-images/env
 mkdir -p $B/ui-images/env
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -o $B/ui_env_demo shell-mpc/ui/tests/ui_env_demo.cpp || { echo "ACCEPT FAIL: ui_env_demo build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -o $B/ui_env_demo shell-mpc/ui/tests/ui_env_demo.cpp || { echo "ACCEPT FAIL: ui_env_demo build"; exit 1; }
 $B/ui_env_demo $B/ui-images/env > $B/ui-env-demo.log 2>&1 || { grep -E "^FAIL" $B/ui-env-demo.log; echo "ACCEPT FAIL: ui_env_demo (the envelope parts)"; exit 1; }
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -o $B/env_ui_demo $OVSRC/env_ui_demo.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: env_ui_demo build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/env_ui_demo $OVSRC/env_ui_demo.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: env_ui_demo build"; exit 1; }
 $B/env_ui_demo $B/ui-images/env > $B/env-ui-demo.log 2>&1 || { grep -E "^FAIL" $B/env-ui-demo.log; echo "ACCEPT FAIL: env_ui_demo (the envelope pages)"; exit 1; }
 $B/stub_host "$OVLON" > $B/stub-ovlon.log 2>&1 || { tail -15 $B/stub-ovlon.log; echo "ACCEPT FAIL: stub_host with the overlay built in"; exit 1; }
 live_build padoff -DSYNTHYBOY_MPC_PAD_PRESSURE=OFF
@@ -289,19 +289,19 @@ done
 $B/lfo_live_host "$OVLON" on overlay > $B/live-ovlon.log 2>&1 || { grep -E "^FAIL" $B/live-ovlon.log; echo "ACCEPT FAIL: lfo_live_host with the overlay built in (one more display parameter, Overlay Instance)"; exit 1; }
 # the display parameter "Overlay Instance" (only in the overlay build): slots of several instances, the debug file, 17 instances, instances created and closed on several threads. The other builds above
 # were checked with exact parameter counts without it (the tests take the word "overlay" for the one build that has the extra parameter and are exact in both cases).
-c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -I $MPC_SDK/framework -o $B/overlay_instance_host shell-mpc/tests/overlay_instance_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: overlay_instance_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework -o $B/overlay_instance_host shell-mpc/tests/overlay_instance_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: overlay_instance_host build"; exit 1; }
 $B/overlay_instance_host "$OVLON" > $B/overlay-instance.log 2>&1 || { grep -E "^FAIL" $B/overlay-instance.log; echo "ACCEPT FAIL: overlay_instance_host (Overlay Instance parameter)"; exit 1; }
 # the Play page's parameters (shell-mpc/play_params.h, docs/MPC.md "Play page"): selectors, proxies, chunk, no feedback loop (the list, the order and the counts are checked there)
-c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -I $MPC_SDK/framework -o $B/play_host shell-mpc/tests/play_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework -o $B/play_host shell-mpc/tests/play_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_host build"; exit 1; }
 $B/play_host "$OVLON" > $B/play.log 2>&1 || { grep -E "^FAIL" $B/play.log; echo "ACCEPT FAIL: play_host (the Play page's parameters)"; exit 1; }
 # the Play page's parameter table is built when the library is loaded, not by the first caller (the host may call getParameter / setParameter from the audio thread)
-c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -o $B/play_params_rt_host shell-mpc/tests/play_params_rt_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_params_rt_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/include -I shell-mpc -o $B/play_params_rt_host shell-mpc/tests/play_params_rt_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_params_rt_host build"; exit 1; }
 $B/play_params_rt_host > $B/play-params-rt.log 2>&1 || { grep -E "^FAIL" $B/play-params-rt.log; echo "ACCEPT FAIL: play_params_rt_host (the table of the Play proxies must exist before the first lookup, no allocation)"; exit 1; }
 # saving and reloading a project with the Play page (docs/MPC.md "Project save and reload"): the load orders a host could use (chunk only, write-back of every parameter before / after the chunk, program re-selection, the order seen on the Key 61), the restore window, the debug log
-c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -I $MPC_SDK/framework -o $B/play_restore_host shell-mpc/tests/play_restore_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_restore_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework -o $B/play_restore_host shell-mpc/tests/play_restore_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: play_restore_host build"; exit 1; }
 $B/play_restore_host "$OVLON" > $B/play-restore.log 2>&1 || { grep -E "^FAIL" $B/play-restore.log | cut -c1-400; echo "ACCEPT FAIL: play_restore_host (project save and reload of the Play page)"; exit 1; }
 # instances created and closed on three threads while the display thread reports (docs/MPC.md "Closing an instance"): the host is never called for an instance whose effClose returned
-c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I shell-mpc -I $MPC_SDK/framework -o $B/close_stress_host shell-mpc/tests/close_stress_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: close_stress_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework -o $B/close_stress_host shell-mpc/tests/close_stress_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: close_stress_host build"; exit 1; }
 $B/close_stress_host "$OVLON" 120 > $B/close-stress.log 2>&1 || { grep -E "^FAIL" $B/close-stress.log; echo "ACCEPT FAIL: close_stress_host (host called after effClose)"; exit 1; }
 # the overlay builds without the parameter must not exist: a build that is not the overlay one has no trace of it (the parameter's name is in the overlay build only)
 for f in "$OVLOFF" "$OVLDEF" "$LIB"; do
@@ -398,7 +398,7 @@ grep -q "^FAIL" $TL/stats.log && { grep "^FAIL" $TL/stats.log; echo "ACCEPT FAIL
 # the overlay thread (the tsan build above has the module in: it runs next to the display thread and the statistics writer) and the controller on a real thread against changing parameters, markers and instances
 TSCORE=$(find $TL/core -name '*.a' | tr '\n' ' ')
 for t in controller_host curve_host gpu_scene_host gpu_backend_host; do
-    c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I shell-mpc/overlay -o $TL/$t shell-mpc/overlay/tests/$t.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan $t build"; exit 1; }
+    c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $TL/$t shell-mpc/overlay/tests/$t.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan $t build"; exit 1; }
     TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/$t > $TL/$t.log 2>&1
     if grep -q "WARNING: ThreadSanitizer" $TL/$t.log; then
         grep -A14 "WARNING: ThreadSanitizer" $TL/$t.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20
@@ -408,18 +408,18 @@ for t in controller_host curve_host gpu_scene_host gpu_backend_host; do
 done
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/lfo_live_host "$TLLIB" on overlay > $TL/live-ovl.log 2>&1
 # instances created, closed and asked for their slot on several threads against the overlay thread, in the plugin under ThreadSanitizer
-c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I shell-mpc -I $MPC_SDK/framework -o $TL/overlay_instance_host shell-mpc/tests/overlay_instance_host.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan overlay_instance_host build"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework -o $TL/overlay_instance_host shell-mpc/tests/overlay_instance_host.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan overlay_instance_host build"; exit 1; }
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/overlay_instance_host "$TLLIB" > $TL/overlay-instance.log 2>&1
 grep -q "WARNING: ThreadSanitizer" $TL/overlay-instance.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/overlay-instance.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races in Overlay Instance (full report: $TL/overlay-instance.log)"; exit 1; }
 grep -q "^FAIL" $TL/overlay-instance.log && { grep "^FAIL" $TL/overlay-instance.log; echo "ACCEPT FAIL: tsan overlay_instance_host"; exit 1; }
 # the Play page's selectors and proxies: host writes, the display thread's reports and the echoing host, under ThreadSanitizer
-c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I shell-mpc -I $MPC_SDK/framework -o $TL/play_host shell-mpc/tests/play_host.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan play_host build"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework -o $TL/play_host shell-mpc/tests/play_host.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan play_host build"; exit 1; }
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/play_host "$TLLIB" > $TL/play.log 2>&1
 grep -q "WARNING: ThreadSanitizer" $TL/play.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/play.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races in the Play page's parameters (full report: $TL/play.log)"; exit 1; }
 grep -q "^FAIL" $TL/play.log && { grep "^FAIL" $TL/play.log; echo "ACCEPT FAIL: tsan play_host"; exit 1; }
 grep -q "WARNING: ThreadSanitizer" $TL/live-ovl.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/live-ovl.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races with the overlay thread in the plugin (full report: $TL/live-ovl.log)"; exit 1; }
 # the same stress test under ThreadSanitizer (the display thread, the overlay thread and the host's threads) and under AddressSanitizer + UndefinedBehaviorSanitizer (a member used after it was destroyed, a leaked or doubly freed instance)
-c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I shell-mpc -I $MPC_SDK/framework -o $TL/close_stress_host shell-mpc/tests/close_stress_host.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan close_stress_host build"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework -o $TL/close_stress_host shell-mpc/tests/close_stress_host.cpp $TSCORE -lpthread || { echo "ACCEPT FAIL: tsan close_stress_host build"; exit 1; }
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/close_stress_host "$TLLIB" 40 > $TL/close-stress.log 2>&1
 grep -q "WARNING: ThreadSanitizer" $TL/close-stress.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/close-stress.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races when instances are closed (full report: $TL/close-stress.log)"; exit 1; }
 grep -q "^FAIL" $TL/close-stress.log && { grep "^FAIL" $TL/close-stress.log; echo "ACCEPT FAIL: tsan close_stress_host"; exit 1; }
@@ -428,7 +428,7 @@ AL=build-mpc-live-asan
 cmake -S . -B $AL -G Ninja $BASE_OPTS -DSYNTHYBOY_MPC_DEBUG_HOOKS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DSYNTHYBOY_MPC_OVERLAY=ON -DMPC_SDK_DIR="$MPC_SDK" "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer -g" "-DCMAKE_MODULE_LINKER_FLAGS=-fsanitize=address,undefined" > $AL.configure.log 2>&1 && cmake --build $AL --target synthyboy_mpc > $AL.build.log 2>&1 || { tail -30 $AL.build.log; echo "ACCEPT FAIL: AddressSanitizer build of the plugin"; exit 1; }
 ALIB="$(find $AL -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
 ASCORE=$(find $AL/core -name '*.a' | tr '\n' ' ')
-c++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I core/include -I shell-mpc -I $MPC_SDK/framework -o $AL/close_stress_host shell-mpc/tests/close_stress_host.cpp $ASCORE -lpthread || { echo "ACCEPT FAIL: asan close_stress_host build"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework -o $AL/close_stress_host shell-mpc/tests/close_stress_host.cpp $ASCORE -lpthread || { echo "ACCEPT FAIL: asan close_stress_host build"; exit 1; }
 ASAN_OPTIONS="detect_leaks=0:halt_on_error=1" UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" $AL/close_stress_host "$ALIB" 40 > $AL/close-stress.log 2>&1 || { tail -30 $AL/close-stress.log; echo "ACCEPT FAIL: asan close_stress_host (memory error when instances are closed)"; exit 1; }
 grep -q "^OK" $AL/close-stress.log || { tail -5 $AL/close-stress.log; echo "ACCEPT FAIL: asan close_stress_host did not finish"; exit 1; }
 # the Q proxies' router (shell-mpc/q_router.h): the logic alone (group, reads, writes, restore window, reports, no allocation), plainly and under ThreadSanitizer (audio, UI and display threads at once)
@@ -439,7 +439,7 @@ TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/q_router_host > $TL/q-router.log 2
 grep -q "WARNING: ThreadSanitizer" $TL/q-router.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/q-router.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races in the Q router (full report: $TL/q-router.log)"; exit 1; }
 grep -q "^FAIL" $TL/q-router.log && { grep "^FAIL" $TL/q-router.log; echo "ACCEPT FAIL: tsan q_router_host"; exit 1; }
 # which parameters the Q proxies drive relatively (q_step_rule.h): the stepped ones and the integer steppers of up to 32 values; the quantised amounts that stay absolute are pinned
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc -o $B/q_step_rule_host shell-mpc/tests/q_step_rule_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: q_step_rule_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc -o $B/q_step_rule_host shell-mpc/tests/q_step_rule_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: q_step_rule_host build"; exit 1; }
 $B/q_step_rule_host > $B/q-step-rule.log 2>&1 || { grep -E "^FAIL" $B/q-step-rule.log; echo "ACCEPT FAIL: q_step_rule_host (which parameters step relatively)"; exit 1; }
 # the robustness review of the router (docs/MPC.md "Stepped targets"): a group change must not leave the old step baseline (R1), and a write must not mix the index of one group with the view of another (R2); -O2, AddressSanitizer + UBSan, ThreadSanitizer
 c++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -I shell-mpc -o $B/q_router_review_host shell-mpc/tests/q_router_review_host.cpp -lpthread || { echo "ACCEPT FAIL: q_router_review_host build"; exit 1; }
@@ -450,7 +450,7 @@ c++ -std=c++17 -O1 -g -fsanitize=thread -I shell-mpc -o $TL/q_router_review_host
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/q_router_review_host > $TL/q-router-review.log 2>&1
 grep -qE "^FAIL|WARNING: ThreadSanitizer" $TL/q-router-review.log && { grep -E "^FAIL|WARNING" $TL/q-router-review.log | head; echo "ACCEPT FAIL: tsan q_router_review_host"; exit 1; }
 # the layout lint of every plugin-drawn page (Init and every factory preset) against its baseline, and its own self test
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui "-DLINT_SOURCE_DIR=\"$PWD\"" -o $B/layout_lint_host $OVSRC/layout_lint_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: layout_lint_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui "-DLINT_SOURCE_DIR=\"$PWD\"" -o $B/layout_lint_host $OVSRC/layout_lint_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: layout_lint_host build"; exit 1; }
 $B/layout_lint_host --self-test > $B/layout-lint-selftest.log 2>&1 || { tail -15 $B/layout-lint-selftest.log; echo "ACCEPT FAIL: layout_lint_host --self-test"; exit 1; }
 $B/layout_lint_host --presets-dir content/presets --baseline $OVSRC/layout_lint_baseline.json --quiet > $B/layout-lint.log 2>&1 || { tail -30 $B/layout-lint.log; echo "ACCEPT FAIL: layout_lint_host (a finding that is not in the baseline, or a baseline entry that is gone)"; exit 1; }
 # the robustness review (docs: .hw-local/mpc-ui-plans/robustness-review.md): the logic alone, plainly and under AddressSanitizer + UBSan (and ThreadSanitizer where threads are the point)
@@ -465,12 +465,12 @@ for t in safe_file_host poll_guard_host play_log_host startup_timing_host log_ho
     grep -qE "^FAIL|WARNING: ThreadSanitizer" $TL/$t.log && { grep -E "^FAIL|WARNING" $TL/$t.log | head; echo "ACCEPT FAIL: tsan $t"; exit 1; }
 done
 for t in host_strings_host chunk_review_host; do
-    c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc -o $B/$t $RT/$t.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: $t build"; exit 1; }
+    c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc -o $B/$t $RT/$t.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: $t build"; exit 1; }
     $B/$t > $B/$t.log 2>&1 || { grep -E "^FAIL" $B/$t.log; echo "ACCEPT FAIL: $t (robustness review)"; exit 1; }
 done
 # the plugin as the host loads it: hostile parameter string buffers, FIFO / huge files at the switch files, the play log, a blocked host callback. The hooks build (ovlon, and the AddressSanitizer build) and the release-like build (ovlrel: hooks OFF,
 # the switch files are not looked at) must both pass; close_hang_host takes --hooks for the hooks builds (the thrown tick of the poll guard)
-c++ -std=c++17 -O1 -g -fsanitize=address,undefined -Wall -Wextra -I core/include -I shell-mpc -I $MPC_SDK/framework -o $AL/plugin_review_host $RT/plugin_review_host.cpp $ASCORE -lpthread -ldl || { echo "ACCEPT FAIL: plugin_review_host build"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=address,undefined -Wall -Wextra -I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework -o $AL/plugin_review_host $RT/plugin_review_host.cpp $ASCORE -lpthread -ldl || { echo "ACCEPT FAIL: plugin_review_host build"; exit 1; }
 c++ -std=c++17 -O1 -g -fsanitize=address,undefined -Wall -Wextra -I shell-mpc -I $MPC_SDK/framework -o $AL/close_hang_host $RT/close_hang_host.cpp -lpthread -ldl || { echo "ACCEPT FAIL: close_hang_host build"; exit 1; }
 for v in "$ALIB" "$OVLON" "$OVLREL"; do
     ASAN_OPTIONS="detect_leaks=0:halt_on_error=1" UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" $AL/plugin_review_host "$v" > $AL/plugin-review.log 2>&1 || { grep -E "^FAIL|ERROR" $AL/plugin-review.log | head; echo "ACCEPT FAIL: plugin_review_host ($v)"; exit 1; }
@@ -479,35 +479,35 @@ for v in "$ALIB:--hooks" "$OVLON:--hooks" "$OVLREL:"; do
     ASAN_OPTIONS="detect_leaks=0:halt_on_error=1" UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1" $AL/close_hang_host "${v%%:*}" ${v#*:} > $AL/close-hang.log 2>&1 || { grep -E "^FAIL|ERROR" $AL/close-hang.log | head; echo "ACCEPT FAIL: close_hang_host (${v%%:*})"; exit 1; }
 done
 # the names of the macros in the chunk and on the Q proxies (docs/ui-design/macro-names.md), plainly and under ThreadSanitizer
-c++ -std=c++17 -O1 -Wall -Wextra -I core/include -I shell-mpc -I $MPC_SDK/framework -o $B/macro_names_chunk_host $RT/macro_names_chunk_host.cpp $OVCORE -lpthread -ldl || { echo "ACCEPT FAIL: macro_names_chunk_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework -o $B/macro_names_chunk_host $RT/macro_names_chunk_host.cpp $OVCORE -lpthread -ldl || { echo "ACCEPT FAIL: macro_names_chunk_host build"; exit 1; }
 $B/macro_names_chunk_host "$OVLON" > $B/macro-names-chunk.log 2>&1 || { grep -E "^FAIL" $B/macro-names-chunk.log; echo "ACCEPT FAIL: macro_names_chunk_host"; exit 1; }
-c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I shell-mpc -I $MPC_SDK/framework -o $TL/macro_names_chunk_host $RT/macro_names_chunk_host.cpp $TSCORE -lpthread -ldl || { echo "ACCEPT FAIL: tsan macro_names_chunk_host build"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=thread -I core/include -I core/filters-serum/include -I shell-mpc -I $MPC_SDK/framework -o $TL/macro_names_chunk_host $RT/macro_names_chunk_host.cpp $TSCORE -lpthread -ldl || { echo "ACCEPT FAIL: tsan macro_names_chunk_host build"; exit 1; }
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/macro_names_chunk_host "$TLLIB" > $TL/macro-names-chunk.log 2>&1
 grep -qE "^FAIL|WARNING: ThreadSanitizer" $TL/macro-names-chunk.log && { grep -E "^FAIL|WARNING" $TL/macro-names-chunk.log | head; echo "ACCEPT FAIL: tsan macro_names_chunk_host"; exit 1; }
 # the release-like overlay build gives the same chunk and the same parameter list as the hooks build
 $B/lfo_live_host "$OVLREL" on overlay > $B/live-ovlrel.log 2>&1 || { grep -E "^FAIL" $B/live-ovlrel.log; echo "ACCEPT FAIL: lfo_live_host with the release-like overlay build"; exit 1; }
 [ "$(grep -h '^chunk ' $B/live-ovlon.log)" = "$(grep -h '^chunk ' $B/live-ovlrel.log)" ] || { echo "ACCEPT FAIL: the state chunk differs between the hooks build and the release-like overlay build"; exit 1; }
 # the quality profile per device (shell-mpc/device_profile.h, docs/MPC.md "Quality profile per device"): the texts, the device table, the overrides; plainly and under AddressSanitizer + UBSan
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -o $B/device_profile_host shell-mpc/tests/device_profile_host.cpp || { echo "ACCEPT FAIL: device_profile_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -o $B/device_profile_host shell-mpc/tests/device_profile_host.cpp || { echo "ACCEPT FAIL: device_profile_host build"; exit 1; }
 $B/device_profile_host > $B/device-profile-host.log 2>&1 || { grep -E "^FAIL" $B/device-profile-host.log; echo "ACCEPT FAIL: device_profile_host (quality profile per device: texts, table, overrides)"; exit 1; }
-c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I core/include -o $B/device_profile_host_asan shell-mpc/tests/device_profile_host.cpp || { echo "ACCEPT FAIL: device_profile_host asan build"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I core/include -I core/filters-serum/include -o $B/device_profile_host_asan shell-mpc/tests/device_profile_host.cpp || { echo "ACCEPT FAIL: device_profile_host asan build"; exit 1; }
 $B/device_profile_host_asan > $B/device-profile-host-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/device-profile-host-asan.log | head; echo "ACCEPT FAIL: device_profile_host under AddressSanitizer / UBSan"; exit 1; }
 # the editors of the FX pages (ui/fx_slot_editor.h, fx_layout.h: the tables of the 16 effects, the splitters), plainly and under AddressSanitizer + UBSan
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/ui_fx_editor_host shell-mpc/ui/tests/ui_fx_editor_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ui_fx_editor_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/ui_fx_editor_host shell-mpc/ui/tests/ui_fx_editor_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ui_fx_editor_host build"; exit 1; }
 UI_OUT=$B/ui-images $B/ui_fx_editor_host > $B/ui-fx-editor-host.log 2>&1 || { grep -E "^FAIL" $B/ui-fx-editor-host.log; echo "ACCEPT FAIL: ui_fx_editor_host (the FX editors)"; exit 1; }
-c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/ui_fx_editor_host_asan shell-mpc/ui/tests/ui_fx_editor_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ui_fx_editor_host asan build"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/ui_fx_editor_host_asan shell-mpc/ui/tests/ui_fx_editor_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ui_fx_editor_host asan build"; exit 1; }
 ASAN_OPTIONS=detect_container_overflow=0 UI_OUT=$B/ui-images $B/ui_fx_editor_host_asan > $B/ui-fx-editor-host-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/ui-fx-editor-host-asan.log | head; echo "ACCEPT FAIL: ui_fx_editor_host under AddressSanitizer / UBSan"; exit 1; }
 # the data of the FX tables is consistent (ui/fx_layout.h against the engine's parameter table), plainly and under AddressSanitizer + UBSan
-c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/ui_fx_tables_host shell-mpc/ui/tests/ui_fx_tables_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ui_fx_tables_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/ui_fx_tables_host shell-mpc/ui/tests/ui_fx_tables_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ui_fx_tables_host build"; exit 1; }
 $B/ui_fx_tables_host > $B/ui-fx-tables-host.log 2>&1 || { grep -E "^FAIL" $B/ui-fx-tables-host.log; echo "ACCEPT FAIL: ui_fx_tables_host (the FX tables)"; exit 1; }
-c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/ui_fx_tables_host_asan shell-mpc/ui/tests/ui_fx_tables_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ui_fx_tables_host asan build"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/ui_fx_tables_host_asan shell-mpc/ui/tests/ui_fx_tables_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ui_fx_tables_host asan build"; exit 1; }
 ASAN_OPTIONS=detect_container_overflow=0 $B/ui_fx_tables_host_asan > $B/ui-fx-tables-host-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/ui-fx-tables-host-asan.log | head; echo "ACCEPT FAIL: ui_fx_tables_host under AddressSanitizer / UBSan"; exit 1; }
 # the tool of the Sounds-browser files loads a program or a chunk into the built plugin (scripts/gen-xpl-presets.py): it must compile and the program of the first factory preset must load
-c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I $MPC_SDK/framework -I shell-mpc -o $B/chunk_load_host shell-mpc/tests/chunk_load_host.cpp -ldl || { echo "ACCEPT FAIL: chunk_load_host build"; exit 1; }
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I core/filters-serum/include -I $MPC_SDK/framework -I shell-mpc -o $B/chunk_load_host shell-mpc/tests/chunk_load_host.cpp -ldl || { echo "ACCEPT FAIL: chunk_load_host build"; exit 1; }
 # the headers of the oscillator pages stand alone (osc_spec_page.h: the spec tables of the pages; osc_marks.h: the marks of the oscillator displays)
 for h in osc_spec_page osc_marks; do
     echo "#include \"$h.h\"" > $B/hdr_$h.cpp
-    c++ -std=c++17 -fsyntax-only -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui $B/hdr_$h.cpp || { echo "ACCEPT FAIL: shell-mpc/overlay/$h.h does not compile on its own"; exit 1; }
+    c++ -std=c++17 -fsyntax-only -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui $B/hdr_$h.cpp || { echo "ACCEPT FAIL: shell-mpc/overlay/$h.h does not compile on its own"; exit 1; }
 done
 # the cross build of the quality profile bench: syntax and usage only (the build itself needs Docker and is run by hand)
 bash -n scripts/build-tier-bench.sh && bash scripts/build-tier-bench.sh --help > $B/tier-bench-help.log 2>&1 || { echo "ACCEPT FAIL: scripts/build-tier-bench.sh (syntax / --help)"; exit 1; }
