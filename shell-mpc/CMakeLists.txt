@@ -207,6 +207,16 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(dump_mpc_chunks PRIVATE cxx_std_17)
     target_compile_options(dump_mpc_chunks PRIVATE -Wall -Wextra)
 
+    # loads a program or a chunk into the built plugin and prints every parameter (the check of the Sounds-browser files, scripts/gen-xpl-presets.py); run by hand
+    add_executable(chunk_load_host EXCLUDE_FROM_ALL tests/chunk_load_host.cpp)
+    target_include_directories(chunk_load_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${MPC_SDK_DIR}/framework"
+        "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(chunk_load_host PRIVATE ${CMAKE_DL_LIBS})
+    target_compile_features(chunk_load_host PRIVATE cxx_std_17)
+    target_compile_options(chunk_load_host PRIVATE -Wall -Wextra)
+
     add_executable(mixfx_ui_host EXCLUDE_FROM_ALL overlay/tests/mixfx_ui_host.cpp)
     target_include_directories(mixfx_ui_host PRIVATE
         "${CMAKE_SOURCE_DIR}/core/include"

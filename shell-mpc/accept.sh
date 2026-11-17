@@ -9,7 +9,7 @@ B=build-mpc
 # configured when the default was 25 a second stayed at 25 and failed the 10 a second checks), so nothing may rest on a default or on what an earlier run left.
 BASE_OPTS="-USYNTHYBOY_MPC_OVERLAY -USYNTHYBOY_MPC_OVERLAY_GPU -DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=10 -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=ON -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=OFF -DSYNTHYBOY_MPC_CALLBACK_STATS=OFF -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=OFF -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=18 -DSYNTHYBOY_MPC_OUTPUT_LIMITER=OFF -DSYNTHYBOY_MPC_PAD_PRESSURE=ON -DSYNTHYBOY_MPC_DEBUG_HOOKS=OFF"
 cmake -S . -B $B -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" > $B.configure.log 2>&1 || { tail -40 $B.configure.log; echo "ACCEPT FAIL: cmake configure"; exit 1; }
-cmake --build $B --target synthyboy_mpc dump_mpc_chunks > $B/build.log 2>&1 || { grep -E "error|Error|undefined|FAILED" -A6 $B/build.log | head -80; echo "ACCEPT FAIL: build"; exit 1; }
+cmake --build $B --target synthyboy_mpc dump_mpc_chunks synthyboy_sound_lab > $B/build.log 2>&1 || { grep -E "error|Error|undefined|FAILED" -A6 $B/build.log | head -80; echo "ACCEPT FAIL: build"; exit 1; }
 grep -n "synthyboy_mpc.cpp.*warning" $B/build.log | head -20 > $B/warn.log; [ -s $B/warn.log ] && { cat $B/warn.log; echo "ACCEPT FAIL: compiler warnings in shell-mpc"; exit 1; }
 LIB=$(find $B -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)
 [ -n "$LIB" ] || { echo "ACCEPT FAIL: built library not found under $B"; exit 1; }
@@ -252,7 +252,7 @@ ASAN_OPTIONS=detect_container_overflow=0 $B/qslots_host_asan > $B/qslots_host-as
 # the UI component library (shell-mpc/ui/, header only: the black box components, their interface tests and the demonstration program): the tests under AddressSanitizer + UBSan, the demo
 # renders the oscillator pages and the detail pages into $B/ui-images (PNG, for a human; not compared)
 mkdir -p $B/ui-images
-for t in ui_base_host ui_composite_host ui_screen_host ui_list_host ui_display_host ui_env_host ui_lfo_host ui_time_ruler_host ui_led_host ui_text_entry_host ui_cov_knobs_values_host ui_cov_steppers_lists_host ui_cov_toggles_buttons_host ui_cov_popups_scroll_host ui_cov_composites_panels_host ui_cov_qgroups_chips_host ui_cov_layout_text_host; do   # ui_cov_findings_host is NOT here on purpose: it demonstrates findings (its own header says it is not an acceptance test)
+for t in ui_base_host ui_composite_host ui_screen_host ui_list_host ui_display_host ui_env_host ui_lfo_host ui_time_ruler_host ui_led_host ui_text_entry_host ui_cov_knobs_values_host ui_cov_steppers_lists_host ui_cov_toggles_buttons_host ui_cov_popups_scroll_host ui_cov_composites_panels_host ui_cov_qgroups_chips_host ui_cov_layout_text_host ui_cov_new_parts_host; do   # ui_cov_findings_host is NOT here on purpose: it demonstrates findings (its own header says it is not an acceptance test)
     c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -o $B/${t}_asan shell-mpc/ui/tests/$t.cpp || { echo "ACCEPT FAIL: $t build"; exit 1; }
     UI_OUT=$B/ui-images $B/${t}_asan > $B/$t.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t.log | head; echo "ACCEPT FAIL: $t (UI components: interface, drawing, Q groups)"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
@@ -494,6 +494,13 @@ c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc
 UI_OUT=$B/ui-images $B/ui_fx_editor_host > $B/ui-fx-editor-host.log 2>&1 || { grep -E "^FAIL" $B/ui-fx-editor-host.log; echo "ACCEPT FAIL: ui_fx_editor_host (the FX editors)"; exit 1; }
 c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/ui_fx_editor_host_asan shell-mpc/ui/tests/ui_fx_editor_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ui_fx_editor_host asan build"; exit 1; }
 ASAN_OPTIONS=detect_container_overflow=0 UI_OUT=$B/ui-images $B/ui_fx_editor_host_asan > $B/ui-fx-editor-host-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/ui-fx-editor-host-asan.log | head; echo "ACCEPT FAIL: ui_fx_editor_host under AddressSanitizer / UBSan"; exit 1; }
+# the data of the FX tables is consistent (ui/fx_layout.h against the engine's parameter table), plainly and under AddressSanitizer + UBSan
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/ui_fx_tables_host shell-mpc/ui/tests/ui_fx_tables_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ui_fx_tables_host build"; exit 1; }
+$B/ui_fx_tables_host > $B/ui-fx-tables-host.log 2>&1 || { grep -E "^FAIL" $B/ui-fx-tables-host.log; echo "ACCEPT FAIL: ui_fx_tables_host (the FX tables)"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/ui_fx_tables_host_asan shell-mpc/ui/tests/ui_fx_tables_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: ui_fx_tables_host asan build"; exit 1; }
+ASAN_OPTIONS=detect_container_overflow=0 $B/ui_fx_tables_host_asan > $B/ui-fx-tables-host-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/ui-fx-tables-host-asan.log | head; echo "ACCEPT FAIL: ui_fx_tables_host under AddressSanitizer / UBSan"; exit 1; }
+# the tool of the Sounds-browser files loads a program or a chunk into the built plugin (scripts/gen-xpl-presets.py): it must compile and the program of the first factory preset must load
+c++ -std=c++17 -O1 -Wall -Wextra -Werror -I core/include -I $MPC_SDK/framework -I shell-mpc -o $B/chunk_load_host shell-mpc/tests/chunk_load_host.cpp -ldl || { echo "ACCEPT FAIL: chunk_load_host build"; exit 1; }
 # the headers of the oscillator pages stand alone (osc_spec_page.h: the spec tables of the pages; osc_marks.h: the marks of the oscillator displays)
 for h in osc_spec_page osc_marks; do
     echo "#include \"$h.h\"" > $B/hdr_$h.cpp
