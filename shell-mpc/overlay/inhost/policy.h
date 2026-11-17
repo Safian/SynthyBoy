@@ -15,6 +15,7 @@ namespace synthyboy_mpc { namespace overlay { namespace inhost {
 struct FallbackLimits
 {
     uint32_t slowUs = 8000;
+    uint32_t hardUs = 12000;   // one hook this long is a fault at once (never a partial frame: the copy always finishes, the plane takes over for the next ones)
     int slowPerWindow = 8;
     int window = 128;
     int unidentifiedRun = 40;
@@ -44,6 +45,8 @@ public:
         }
         if (durUs > lim_.slowUs)
             ++slowInWindow_;
+        if (durUs > lim_.hardUs)
+            return Verdict::Slow;
         idRun_ = identified ? 0 : idRun_ + 1;
         if (slowInWindow_ >= lim_.slowPerWindow)
             return Verdict::Slow;

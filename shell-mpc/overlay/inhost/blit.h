@@ -6,6 +6,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -36,11 +37,25 @@ inline void classifyRows (const uint32_t* pix, int w, int h, uint8_t* kinds) noe
     }
 }
 
-/** Copies `bytes` (a multiple of 4) from cached memory into write-combined memory, in order. On ARM with NEON: the destination is brought to 16 byte alignment, then 64 bytes per round (four q registers,
-    sequential stores, the source prefetched a few lines ahead): the write-combining buffer fills whole lines. Elsewhere memcpy. */
-inline void copyToWc (void* dst, const void* src, size_t bytes) noexcept
+/** The ways to copy a row span into write-combined memory (bytes: a multiple of 4). Chosen at run time (a file, see runtime.h) so the fastest one measured on the device can be selected without a build; the default is
+    plain memcpy, which is what measured 4.5 ms for the page region on the Key 61 (tools/ihbench measures the others). */
+enum class CopyKind : int { Memcpy = 0, Neon64 = 1, Neon64NoPrefetch = 2, Neon128 = 3, U32 = 4, U32Prefetch = 5 };
+inline void copyMemcpy (void* d, const void* s, size_t n) noexcept { std::memcpy (d, s, n); }
+inline void copyU32 (void* dst, const void* src, size_t n, bool prefetch) noexcept
 {
+    uint32_t* d = static_cast<uint32_t*> (dst);
+    const uint32_t* s = static_cast<const uint32_t*> (src);
+    for (size_t i = 0; i < n / 4; ++i)
+    {
+        if (prefetch && (i & 15u) == 0)
+            __builtin_prefetch (s + i + 64);
+        d[i] = s[i];
+    }
+}
 #if defined(__ARM_NEON)
+template <int kBlock, bool kPrefetch>
+inline void copyNeon (void* dst, const void* src, size_t bytes) noexcept
+{
     uint8_t* d = static_cast<uint8_t*> (dst);
     const uint8_t* s = static_cast<const uint8_t*> (src);
     while (bytes >= 4 && (reinterpret_cast<uintptr_t> (d) & 15u) != 0)
@@ -48,23 +63,42 @@ inline void copyToWc (void* dst, const void* src, size_t bytes) noexcept
         std::memcpy (d, s, 4);
         d += 4; s += 4; bytes -= 4;
     }
-    while (bytes >= 64)
+    while (bytes >= static_cast<size_t> (kBlock))
     {
-        __builtin_prefetch (s + 256);
-        const uint32x4_t a = vld1q_u32 (reinterpret_cast<const uint32_t*> (s)), b = vld1q_u32 (reinterpret_cast<const uint32_t*> (s + 16));
-        const uint32x4_t c = vld1q_u32 (reinterpret_cast<const uint32_t*> (s + 32)), e = vld1q_u32 (reinterpret_cast<const uint32_t*> (s + 48));
-        vst1q_u32 (reinterpret_cast<uint32_t*> (d), a);
-        vst1q_u32 (reinterpret_cast<uint32_t*> (d + 16), b);
-        vst1q_u32 (reinterpret_cast<uint32_t*> (d + 32), c);
-        vst1q_u32 (reinterpret_cast<uint32_t*> (d + 48), e);
-        d += 64; s += 64; bytes -= 64;
+        if (kPrefetch)
+            __builtin_prefetch (s + 256);
+        for (int o = 0; o < kBlock; o += 64)
+        {
+            const uint32x4_t a = vld1q_u32 (reinterpret_cast<const uint32_t*> (s + o)), b = vld1q_u32 (reinterpret_cast<const uint32_t*> (s + o + 16));
+            const uint32x4_t c = vld1q_u32 (reinterpret_cast<const uint32_t*> (s + o + 32)), e = vld1q_u32 (reinterpret_cast<const uint32_t*> (s + o + 48));
+            vst1q_u32 (reinterpret_cast<uint32_t*> (d + o), a);
+            vst1q_u32 (reinterpret_cast<uint32_t*> (d + o + 16), b);
+            vst1q_u32 (reinterpret_cast<uint32_t*> (d + o + 32), c);
+            vst1q_u32 (reinterpret_cast<uint32_t*> (d + o + 48), e);
+        }
+        d += kBlock; s += kBlock; bytes -= static_cast<size_t> (kBlock);
     }
     if (bytes != 0)
         std::memcpy (d, s, bytes);
-#else
-    std::memcpy (dst, src, bytes);
-#endif
 }
+#endif
+inline void copyKind (CopyKind k, void* d, const void* s, size_t n) noexcept
+{
+    switch (k)
+    {
+#if defined(__ARM_NEON)
+        case CopyKind::Neon64: copyNeon<64, true> (d, s, n); return;
+        case CopyKind::Neon64NoPrefetch: copyNeon<64, false> (d, s, n); return;
+        case CopyKind::Neon128: copyNeon<128, true> (d, s, n); return;
+#endif
+        case CopyKind::U32: copyU32 (d, s, n, false); return;
+        case CopyKind::U32Prefetch: copyU32 (d, s, n, true); return;
+        default: copyMemcpy (d, s, n); return;
+    }
+}
+/** The variant in use (set once at start by the runtime from the file; read in the hook). */
+inline std::atomic<int>& copyChoice() noexcept { static std::atomic<int> c { 0 }; return c; }
+inline void copyToWc (void* dst, const void* src, size_t bytes) noexcept { copyKind (static_cast<CopyKind> (copyChoice().load (std::memory_order_relaxed)), dst, src, bytes); }
 
 /** Colour scaled by dim256 / 256 (256 = unchanged), alpha kept. */
 inline uint32_t dimPixel (uint32_t px, unsigned dim256) noexcept

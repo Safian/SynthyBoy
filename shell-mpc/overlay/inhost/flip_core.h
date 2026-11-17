@@ -134,8 +134,6 @@ public:
     std::atomic<bool> backlightDim { false };
 
     /** The hook, before the commit. `fbId`: the framebuffer the request puts on the primary plane (0: the request has none). */
-    /** The time the hook may use before the commit; a copy that is not finished by then is stopped (microseconds). */
-    static constexpr uint32_t kBudgetUs = 6000;
     /** Waits for the next vblank (set by the runtime; null: no wait). The writer thread only. */
     void (*waitVblank) (void*) = nullptr;
     void* waitVblankCtx = nullptr;
@@ -180,27 +178,13 @@ public:
             {
                 const uint32_t b0 = clock_();
                 const Rect clip = clipToEdge (hold.pic.panel, plan.rotation(), lk.edge, plan.panelW(), plan.panelH());
-                // bounded: 64 rows at a time, the clock looked at between them; a copy that runs over the budget stops (the rows left are written by the writer thread after the commit)
-                bool whole = true;
-                for (int row = 0; row < hold.pic.h; row += 64)
-                {
-                    blitRows (fb->map, fb->pitch, fb->w, fb->h, hold.pic, clip, lk.dim256, row, std::min (row + 64, hold.pic.h));
-                    if (clock_() - t0 > kBudgetUs && row + 64 < hold.pic.h)
-                    {
-                        whole = false;
-                        break;
-                    }
-                }
+                // a frame that goes out is complete: the whole page area is copied, whatever it costs. The far guard is the policy (policy.h): a hook over 12 ms is a fault, the plane overlay takes over.
+                blitRows (fb->map, fb->pitch, fb->w, fb->h, hold.pic, clip, lk.dim256, 0, hold.pic.h);
                 std::atomic_thread_fence (std::memory_order_seq_cst);   // the write-combined stores are out before the commit
                 const uint32_t b1 = clock_();
-                if (whole)
-                {
-                    pendingLook_.drawnGen = hold.meta.gen;
-                    res.drew = true;
-                    Counters::bump (counters.copied);
-                }
-                else
-                    Counters::bump (counters.aborted);
+                pendingLook_.drawnGen = hold.meta.gen;
+                res.drew = true;
+                Counters::bump (counters.copied);
                 if (lk.edge < PanelKey::kNoKey)
                     Counters::bump (counters.clipped);
                 if (lk.dimmed)

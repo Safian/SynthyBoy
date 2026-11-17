@@ -27,7 +27,7 @@ static void check (bool ok, const std::string& what)
 
 static uint32_t g_clock = 0;
 static uint32_t fakeClock() noexcept { return g_clock += 10; }   // every read advances 10 us
-static uint32_t slowClock() noexcept { return g_clock += 900; }   // every read advances 900 us
+static uint32_t slowClock() noexcept { return g_clock += 3000; }   // every read advances 3 ms
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 // the copy
@@ -530,8 +530,18 @@ static void testBudget()
     slow.afterCommit (0);
     LookRecord L;
     slow.look.load (L);
-    check (! res.drew && slow.counters.aborted.load() == 1 && L.drawnGen == 0, "budget: a copy that runs over the time budget stops and is not counted as drawn (the writer thread finishes it)");
-    check (r.bufA.at (640, 700) != 0xff112233u || true, "budget: rows left are the host's");
+    check (res.drew && L.drawnGen != 0 && res.hookUs > 12000, "budget: a slow hook still finishes the copy (a frame that goes out is complete)");
+    FallbackPolicy p;
+    check (p.onFlip (res.hookUs, true) == FallbackPolicy::Verdict::Slow, "budget: the far guard (12 ms) is a fault: the plane takes over");
+    bool same = true;
+    for (int k = 0; k < 6; ++k)
+    {
+        std::vector<uint8_t> a (4096 + 36), b (4096 + 36);
+        for (size_t i = 0; i < a.size(); ++i) a[i] = static_cast<uint8_t> (i * 7);
+        copyKind (static_cast<CopyKind> (k), b.data() + 8, a.data() + 4, 4096 + 24);
+        same = same && std::memcmp (b.data() + 8, a.data() + 4, 4096 + 24) == 0;
+    }
+    check (same, "copy variants: every one copies the same bytes");
 }
 
 static void testFrontWriter()

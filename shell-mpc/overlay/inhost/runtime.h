@@ -119,6 +119,21 @@ public:
         ownFd_ = ownFd;
         hostFd_ = hostFd;
         vblankPipe_ = vblankPipe;
+        {   // the copy variant (default memcpy): the file holds a name; the bench tool tools/ihbench tells which one is fastest
+            FILE* cf = std::fopen ("/tmp/synthyboy-overlay-inhost-copy", "r");
+            char name[32] = {};
+            if (cf)
+            {
+                if (std::fscanf (cf, "%31s", name) != 1) name[0] = 0;
+                std::fclose (cf);
+            }
+            static const char* const kNames[] = { "memcpy", "neon64", "neon64np", "neon128", "u32", "u32pf" };
+            int pick = 0;
+            for (int i = 0; i < 6; ++i)
+                if (std::strcmp (name, kNames[i]) == 0) pick = i;
+            copyChoice().store (pick);
+            copyName_ = kNames[pick];
+        }
         core_.waitVblank = &Runtime::waitVblankThunk;
         core_.waitVblankCtx = this;
         primary_ = primaryPlane;
@@ -207,13 +222,13 @@ public:
                        "inhost_build: yes\ninhost_state: %s\ninhost_hook_installed: %s\ninhost_install_note: %s\ninhost_fault: %s\n"
                        "inhost_slot: %p -> %p (expected libdrm function %p in %s)\ninhost_slot_protection: %s\ninhost_request_stride: %zu\ninhost_primary_plane: %u (FB_ID property %u)\n"
                        "inhost_hook_entries: %u\ninhost_importers_of_commit: %s\ninhost_fb_prop_source: %s\ninhost_host_fd: %d\ninhost_mapped_buffers: %d\ninhost_flips_seen: %u\ninhost_flips_with_page: %u\ninhost_frames_copied: %u\ninhost_frames_missed: %u\ninhost_copies_clipped: %u\ninhost_copies_dimmed: %u\n"
-                       "inhost_unidentified_flips: %u\ninhost_commits_without_fb: %u\ninhost_read_phase_ms: %.3f (max %.3f)\ninhost_copy_aborted: %u\ninhost_background_fills: %u\ninhost_erased_pictures: %u\ninhost_vblank_waits: %u\ninhost_copy_ms: %.3f (max %.3f)\ninhost_hook_ms: %.3f (max %.3f)\ninhost_hook_over_limit: %u\n"
+                       "inhost_unidentified_flips: %u\ninhost_commits_without_fb: %u\ninhost_read_phase_ms: %.3f (max %.3f)\ninhost_copy_variant: %s\ninhost_background_fills: %u\ninhost_erased_pictures: %u\ninhost_vblank_waits: %u\ninhost_copy_ms: %.3f (max %.3f)\ninhost_hook_ms: %.3f (max %.3f)\ninhost_hook_over_limit: %u\n"
                        "inhost_front_writes: %u\ninhost_front_full_writes: %u\ninhost_front_write_ms: %.3f (max %.3f)\ninhost_front_rows: %u\ninhost_front_retries: %u\n"
                        "inhost_fallbacks: %u\ninhost_hook_installs: %u\ninhost_hook_removals: %u\ninhost_buffer_remaps: %u\ninhost_busy_skips: %u\ninhost_backlight_dim: %s\ninhost_kill_switch: %s\ninhost_ring_readers: %d\n",
                        kStateName[state_.load() & 3], installed_ ? "yes" : "no", installNote_.c_str(), faultReason_.empty() ? "none" : faultReason_.c_str(),
                        slotAddr_, hookAddr_, expectedAddr_, expectedPath_.c_str(), protNote_.c_str(), stride_, primary_, fbProp_.load(),
                        entries_.load(), importers_.c_str(), propSource_.c_str(), hostFd_, fbs_.count(), flips, c.pageFlips.load(), copied, c.missed.load(), c.clipped.load(), c.dimmedCopies.load(),
-                       c.unidentified.load(), c.noFbItem.load(), flips ? c.readUsSum.load() / 1000.0 / flips : 0.0, c.readUsMax.load() / 1000.0, c.aborted.load(), c.bgFills.load(), c.erased.load(), c.vblankWaits.load(), copied ? c.copyUsSum.load() / 1000.0 / copied : 0.0, c.copyUsMax.load() / 1000.0, flips ? c.hookUsSum.load() / 1000.0 / flips : 0.0, c.hookUsMax.load() / 1000.0, c.overLimit.load(),
+                       c.unidentified.load(), c.noFbItem.load(), flips ? c.readUsSum.load() / 1000.0 / flips : 0.0, c.readUsMax.load() / 1000.0, copyName_.c_str(), c.bgFills.load(), c.erased.load(), c.vblankWaits.load(), copied ? c.copyUsSum.load() / 1000.0 / copied : 0.0, c.copyUsMax.load() / 1000.0, flips ? c.hookUsSum.load() / 1000.0 / flips : 0.0, c.hookUsMax.load() / 1000.0, c.overLimit.load(),
                        fw, c.frontFull.load(), fw ? c.frontUsSum.load() / 1000.0 / fw : 0.0, c.frontUsMax.load() / 1000.0, c.frontRows.load(), c.frontRetries.load(),
                        c.fallbacks.load(), c.installs.load(), c.removals.load(), c.fbRemaps.load(), c.busySkips.load(), core_.backlightDim.load() ? "dimmed" : "normal", kill() ? "present" : "absent", ring_.readersNow());
         return b;
@@ -811,7 +826,7 @@ private:
     void* slotAddr_ = nullptr;
     void* hookAddr_ = nullptr;
     void* expectedAddr_ = nullptr;
-    std::string importers_, propSource_, propSourceNow_, expectedPath_, protNote_, installNote_ = "not tried", faultReason_, backlight_, pendingWhy_;
+    std::string copyName_ = "memcpy", importers_, propSource_, propSourceNow_, expectedPath_, protNote_, installNote_ = "not tried", faultReason_, backlight_, pendingWhy_;
     std::vector<Mapping> maps_;
 };
 
