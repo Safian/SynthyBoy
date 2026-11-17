@@ -446,6 +446,18 @@ private:
         const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
         const int kind = kindOfItem (item);
         ui::FxSlotEditor& ed = screen_.slotEditor;
+        ed.notice[0] = '\0';
+        if (kind == synthyboy::kFxTypeConvolve && (inst.missingContent() & (1u << 6)) != 0)   // the impulse of Convolve is not there: the effect is bypassed, the page says which file it wants
+        {
+            std::string nm;
+            const std::shared_ptr<const synthyboy::StateContent> c = inst.content();
+            if (c != nullptr && ! c->impulses.empty())
+                nm = ui::contentname::display (c->impulses[0].name, c->impulses[0].file);
+            if (nm.empty())
+                std::snprintf (ed.notice, sizeof ed.notice, "content missing");
+            else
+                std::snprintf (ed.notice, sizeof ed.notice, "content missing: %s", nm.c_str());
+        }
         ed.setType (kind, true);   // every effect can be removed: a slot of the pool is freed, a module of instance 0 is switched off and leaves its band
         // the state of the effect decides which controls are live (the table of the effect, ui/fx_layout.h): the rows that have nothing live close up
         ed.setState ([&] (const char* key) { return plainOfKey (item, kind, inst, key, 0.0f); });

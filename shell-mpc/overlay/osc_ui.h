@@ -152,6 +152,7 @@ public:
             const bool sample = ti >= 0 && inst.param (ti) >= 0.5f;
             updateNoiseType (sample, inst);
         }
+        updateMissing (inst);
         pull (inst, main_);
         pull (inst, page_);
         updateSpecVisibility (inst);
@@ -256,6 +257,7 @@ public:
     /** What goes on top of the picture in the display rectangle (the full screen button of the compact view). */
     void drawOnDisplay (gpu::SceneBuilder& sb) const
     {
+        drawMissing (sb);
         if (stackDepth_ == 0)
             compact_.full.draw (sb);
         else if (loadShown_)
@@ -1512,6 +1514,67 @@ private:
         }
         return name;
     }
+    // ---- the content the sound needs and does not have (IInstanceView::missingContent: bits 0 .. 2 the file of oscillator 1 .. 3, 3 .. 5 the user wavetable of oscillator 1 .. 3, 6 the impulse of Convolve, 7 the sample of the noise)
+    /** The text "content missing: <name>" for the oscillator on screen ("" when it misses nothing); the name is taken from the state's content reference (the pack's title, else the file name; the reference is there although the file is not). */
+    void updateMissing (const IInstanceView& v)
+    {
+        missingText_.clear();
+        const unsigned bits = v.missingContent();
+        if (bits == 0)
+            return;
+        const int osc = playosc::oscNumber (sel_);
+        bool missing = false;
+        std::string name;
+        const std::shared_ptr<const synthyboy::StateContent> c = v.content();
+        if (sel_ == playosc::kNoise)
+        {
+            missing = (bits & (1u << 7)) != 0;
+            if (missing && c != nullptr)
+                for (const synthyboy::ContentSample& s : c->samples)
+                    if (s.osc == synthyboy::kNoiseSampleOsc)
+                        name = ui::contentname::display (s.ref.name, s.ref.file);
+        }
+        else if (osc >= 1 && osc <= 3)
+        {
+            const bool fileType = typeRaw_ == 1 || typeRaw_ == 2 || typeRaw_ == 3 || typeRaw_ == 4;
+            if (fileType)
+            {
+                missing = (bits & (1u << (osc - 1))) != 0;
+                if (missing)
+                    name = loadedName (v);
+            }
+            else
+            {
+                missing = (bits & (1u << (3 + osc - 1))) != 0;
+                if (missing && c != nullptr)
+                    for (const synthyboy::ContentWavetable& w : c->wavetables)
+                        if (w.osc == osc)
+                            name = ui::contentname::display (w.ref.name, w.ref.file);
+            }
+        }
+        if (missing)
+            missingText_ = name.empty() ? std::string ("content missing") : "content missing: " + name;
+    }
+    const std::string& missingText() const noexcept { return missingText_; }
+    /** The line over the display (in the display rectangle of the state on screen), in the warning colour; a name that does not fit loses its middle. */
+    void drawMissing (gpu::SceneBuilder& sb) const
+    {
+        const ui::Rect r = displayRect();
+        if (missingText_.empty() || r.empty())
+            return;
+        const ui::theme::Look& T = ui::theme::L();
+        const ui::Rect box { r.x + 16, r.y + 12, std::max (0, r.w - 32), 40 };
+        const float size = ui::Pen::fitSize (missingText_.c_str(), static_cast<float> (box.w), static_cast<float> (box.h), T.fLabel + 4.0f, T.fMin);
+        if (size <= 0.0f)
+            return;
+        char fitted[160];
+        ui::contentname::middleFit (missingText_.c_str(), size, static_cast<float> (box.w), fitted, static_cast<int> (sizeof fitted));
+        ui::Cell cell (sb, box);
+        ui::Pen pen (sb, true);
+        pen.textCentered (box, fitted, T.fLabel + 4.0f, pen.c (T.negative, 255), T.fMin);
+    }
+    std::string missingText_;
+
     /** The empty state: a type that plays a file with no file loaded gets one button over its display (the page of the type and the full screen). */
     void updateLoadButton (const IInstanceView& v)
     {

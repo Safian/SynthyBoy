@@ -145,6 +145,18 @@ public:
         content_ = c;
     }
     void setContent (std::shared_ptr<const synthyboy::StateContent> c) { content_ = std::move (c); }
+    /** A sample the state refers to (a pack, a long file name, no title) whose file is not there: the content reference without the data, and the engine's missing_content bit of the oscillator (`missingContent`). */
+    void addMissingSample (int osc, const std::string& file)
+    {
+        auto c = content_ ? std::make_shared<synthyboy::StateContent> (*content_) : std::make_shared<synthyboy::StateContent>();
+        synthyboy::ContentSample cs;
+        cs.osc = osc; cs.ref.pack = "gallery"; cs.ref.file = file;
+        c->samples.push_back (cs);
+        content_ = c;
+        missingBits |= 1u << (osc - 1);
+    }
+    unsigned missingContent() const noexcept override { return missingBits; }
+    unsigned missingBits = 0;
 
     static int idx (const std::string& key)
     {
@@ -529,6 +541,15 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
                         rp.picture (outDir + "/" + state + "_osca_" + t.name + "_" + pg.name + (loaded ? "_loaded" : "") + ".png");
                     }
                 }
+        }
+        // Osc A: a sample type whose file is missing: "content missing: <name>" on the display (the name from the state's reference, underscores as spaces, the middle goes when it is too long)
+        {
+            GalleryInst gm = baseInst;
+            gm.set ("osc1.type", 1.0f);
+            gm.addMissingSample (1, "packs/drums/drum_loop_120bpm_breakbeat_long_file_name_final_take.wav");
+            GalleryRig<OscPageUi> rm (gm, 2);
+            rm.refresh (2);
+            rm.picture (outDir + "/" + state + "_osca_missing_content.png");
         }
         GalleryRig<OscPageUi> rOscSub (baseInst, 1); rOscSub.refresh (2); rOscSub.picture (outDir + "/" + state + "_oscsub.png");
         GalleryRig<OscPageUi> rOscNoise (baseInst, 5); rOscNoise.refresh (2); rOscNoise.picture (outDir + "/" + state + "_oscnoise.png");
