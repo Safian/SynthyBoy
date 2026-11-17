@@ -135,6 +135,8 @@ live_build limitergain0 -DSYNTHYBOY_MPC_OUTPUT_LIMITER=ON -DSYNTHYBOY_MPC_OUTPUT
 live_build ovlon -DSYNTHYBOY_MPC_OVERLAY=ON -DSYNTHYBOY_MPC_DEBUG_HOOKS=ON
 # ovlrel: the overlay build the way the package has it (the debug hooks OFF: no /tmp switch files looked at); the robustness tests run against it too (below)
 live_build ovlrel -DSYNTHYBOY_MPC_OVERLAY=ON -DSYNTHYBOY_MPC_DEBUG_HOOKS=OFF
+# nolog: the release mode (SYNTHYBOY_MPC_DEV_LOG=OFF, what build-mpc.sh --release passes): it must compile, and its binary holds no log strings (docs/ui-components/LOGGING.md, "Release proof")
+live_build nolog -DSYNTHYBOY_MPC_OVERLAY=ON -DSYNTHYBOY_MPC_DEBUG_HOOKS=OFF -DSYNTHYBOY_MPC_DEV_LOG=OFF
 live_build ovloff -DSYNTHYBOY_MPC_OVERLAY=OFF
 # Overlay (SYNTHYBOY_MPC_OVERLAY, default OFF, shell-mpc/overlay/; BASE_OPTS does not name it on purpose: the builds above are the ones "without it", the ovloff variant names OFF): the switched-off build is byte for byte the build that does not name the option (and the same as the build of the commit
 # before the module existed: checked by hand when the module was added); the switched-on build has the module, the other builds have no trace of it. The unit tests run on the Mac with a fake
@@ -511,6 +513,17 @@ done
 bash -n scripts/build-tier-bench.sh && bash scripts/build-tier-bench.sh --help > $B/tier-bench-help.log 2>&1 || { echo "ACCEPT FAIL: scripts/build-tier-bench.sh (syntax / --help)"; exit 1; }
 # the documents of the release (docs/release/*: form, cited commits and lines, numbers) and of the MPC (docs/MPC.md: structure, measured numbers only under the device observations)
 python3 -m unittest scripts/tests/test_docs_release.py scripts/tests/test_docs_mpc.py > $B/docs-test.log 2>&1 || { tail -25 $B/docs-test.log; echo "ACCEPT FAIL: the tests of docs/release and docs/MPC.md"; exit 1; }
+# the release proof: no developer log strings in the DEV_LOG=OFF binary (and the same patterns are found in the default overlay build, so the check can see them)
+NOLOG="$(find build-mpc-live-nolog -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
+LOGPAT="-dev\.log|-log\.conf|mpckit|engine created at|scan factory presets|VSTPluginMain returns"
+strings -a "$NOLOG" | grep -E -e "$LOGPAT" > $B/nolog-strings.txt && { head -5 $B/nolog-strings.txt; echo "ACCEPT FAIL: log strings in the release (DEV_LOG=OFF) build"; exit 1; }
+strings -a "$OVLREL" | grep -qE -e "$LOGPAT" || { echo "ACCEPT FAIL: the developer log is not in the default overlay build (the release proof would see nothing)"; exit 1; }
+# the lock free hand-over of the events between the threads (event_inbox.h): plainly and under ThreadSanitizer
+sh shell-mpc/tests/run_event_inbox_test.sh > $B/event-inbox.log 2>&1 || { tail -15 $B/event-inbox.log; echo "ACCEPT FAIL: event_inbox_host"; exit 1; }
+# the starter template of an MPC plugin (template-mpc/): its pages host test
+c++ -std=c++17 -O1 -Wall -Wextra -I shell-mpc -I shell-mpc/ui -I shell-mpc/overlay -I template-mpc/src -I $MPC_SDK/framework -o $B/mpckit_demo_pages_host template-mpc/tests/pages_host.cpp -lpthread > $B/mpckit-build.log 2>&1 || { tail -15 $B/mpckit-build.log; echo "ACCEPT FAIL: mpckit_demo_pages_host build"; exit 1; }
+$B/mpckit_demo_pages_host > $B/mpckit-pages.log 2>&1 || { tail -8 $B/mpckit-pages.log; echo "ACCEPT FAIL: mpckit_demo_pages_host"; exit 1; }
+tail -1 $B/mpckit-pages.log | grep -q "^OK" || { tail -3 $B/mpckit-pages.log; echo "ACCEPT FAIL: mpckit_demo_pages_host did not end with OK"; exit 1; }
 # the touch decoder and the evdev reader (touch_decoder.h, touch_linux.h; fakes for the syscalls, a capture of the Key 61 as a fixture): plainly with -Werror and under AddressSanitizer + UBSan
 bash shell-mpc/overlay/tests/run_touch_tests.sh > $B/touch.log 2>&1 || { grep -E "FAIL|error" $B/touch.log | head -20; echo "ACCEPT FAIL: touch_host"; exit 1; }
 echo "ACCEPT OK"
