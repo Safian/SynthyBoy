@@ -338,7 +338,8 @@ private:
                     break;
                 if (t >= span || level < 0.03f)
                     break;
-                const float x = xOf (t), h = half * std::max (0.08f, level);
+                const float firstEcho = (delay.style == 2 || delay.style == 3) ? 1.0f : std::max (0.05f, fb);   // the first echo fills the height of the plot, the later ones are drawn against it (the decay is what the feedback says)
+                const float x = xOf (t), h = half * std::clamp (level / firstEcho, 0.08f, 1.0f);
                 p.line (x, midY, x, midY + sign * h, 2.0f, p.c (col, 255));
                 p.disc (x, midY + sign * h, 3.0f, p.c (col, 255));
             }
