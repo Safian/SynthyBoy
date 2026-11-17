@@ -412,12 +412,12 @@ The shell takes the engine's quality from a profile, chosen once per process for
 
 | Device name | Profile | Why |
 |---|---|---|
-| `Akai Professional MPC XL` | `low,unison=16,fx=all,voices=16,warp=4x,morph=full` | the highest step of the bench's ladder inside half of the block (table below) |
+| `Akai Professional MPC XL` | `high,voices=16,control=economy` | the highest step of the bench's ladder inside half of the block with the round-3 engine (tables below) |
 | `Akai Professional MPC Key 61` | `low` | `low` already fills the block on its dearest presets (below): no room for a step up until the engine is cheaper |
 | a name that is not in the table | `low` (`kProfileUnknownDevice`) | not measured |
 | no name readable | `low` (`kProfileNoNameArm64`, `kProfileNoNameArm32`: by the architecture of the build) | not measured |
 
-So on the MPC XL a preset plays 16 voices with up to 16 unison voices, with its reverb, flanger, Hyper / Dimension, Bode and Convolve, the warps 4x oversampled and the morph at the full rate; the Math and Control groups stay on there too (the exact forms cost 7 points of the block for a difference no measurement found, the full control rate doubles the dearest blocks). Raising a device is an edit of its row (and of the check in `shell-mpc/tests/device_profile_host.cpp` that states what the package runs), after a bench run on it.
+So on the MPC XL a preset plays 16 voices with up to 16 unison voices, with its reverb, flanger, Hyper / Dimension, Bode and Convolve, the warps 4x oversampled, the morph at the full rate and the exact math; only the Control group stays on (the full control rate doubles the dearest blocks and is over the budget). Raising a device is an edit of its row (and of the check in `shell-mpc/tests/device_profile_host.cpp` that states what the package runs), after a bench run on it.
 
 The rule a row follows: the highest step of the bench's ladder whose dearest factory preset, held with all notes of the step's polyphony, stays at a 99th percentile block time of at most N percent of the block (2.902 milliseconds) on one audio core (the median of three passes of 30 s, the highest pass within N as well), with no block of a factory preset longer than the block; N = 50 on the XL, 70 on the Key 61.
 
@@ -432,10 +432,18 @@ Measured on the MPC XL on 2026-11-17 (A76 core 6 at 2.4 GHz, governor `performan
 | `low,unison=16,fx=all,voices=12` | 12 | 28.05 (28.04 - 28.07) | 39.01 | Diffusor Cloud Pad | inside |
 | `low,unison=16,fx=all,voices=16` | 16 | 34.30 (34.26 - 34.42) | 48.14 | Diffusor Cloud Pad | inside |
 | `low,unison=16,fx=all,voices=16,warp=4x` | 16 | 47.12 (47.08 - 47.21) | 65.08 | Twin Warp Lead | inside |
-| **`low,unison=16,fx=all,voices=16,warp=4x,morph=full`** | 16 | 46.93 (46.63 - 47.12) | 63.96 | Twin Warp Lead | inside: the XL's row |
+| `low,unison=16,fx=all,voices=16,warp=4x,morph=full` | 16 | 46.93 (46.63 - 47.12) | 63.96 | Twin Warp Lead | inside (the XL's row until the round-3 engine) |
 | `high,voices=16,control=economy` | 16 | 54.32 (54.24 - 54.36) | 73.39 | Twin Warp Lead | over |
 | `high,voices=16` | 16 | 103.16 (103.09 - 103.31) | 118.80 | Twin Warp Lead | over |
 | `high` | 32 | 115.79 (115.61 - 115.89) | 146.01 | Twin Warp Lead | over (525 blocks longer than the block) |
+
+The same ladder with the round-3 engine (NEON warp lanes, the Digital filter NEON loop; the tier bench on A76 core 6, 2.4 GHz governor `performance`, all 112 presets, 16 notes held, one pass, the output of every step equal to the reference: 0 of 30 differ; the files `xl-r3-all.txt` and `xl-r3-all.csv` of the bench results):
+
+| Step | Notes | 99th percentile of the dearest preset, % of the block | Longest block, % | Dearest preset | |
+|---|---|---|---|---|---|
+| `low,unison=16,fx=all,voices=16,warp=4x,morph=full` | 16 | 31.51 | 42.13 | Lush Analog Pad | inside |
+| **`high,voices=16,control=economy`** | 16 | 35.39 | 45.73 | Lush Analog Pad | inside: the XL's row (no block over the block's length) |
+| `high,voices=16` | 16 | 65.80 | 83.03 | Diffusor Cloud Pad | over |
 
 The measurement of the Key 61 (all 112 presets under `low`, the dearest ones at or over the block) is in "Observed on the device" above, as "Quality profile on the Key 61".
 

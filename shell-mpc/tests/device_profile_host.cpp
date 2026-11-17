@@ -129,12 +129,11 @@ int main (int argc, char** argv)
         c = profileFromTable ("", false);
         check (c.source == "table: no device name, 32-bit build", "no name, 32-bit build: the architecture row: " + c.source);
 
-        // WHAT THE PACKAGE RUNS, said on purpose (change it with the table): the MPC XL the profile its bench run of 2026-11-17 allows, every other device, known or not,
+        // WHAT THE PACKAGE RUNS, said on purpose (change it with the table): the MPC XL the profile its bench run of 2026-11-17 (round-3 engine) allows, every other device, known or not,
         // the profile the MPC build has always run.
         const Profile xl = profileFromTable ("Akai Professional MPC XL", true).profile;
-        check (xl.maxVoices == 16 && xl.unison == 16 && xl.fxMask == synthyboy::kFxAll && xl.samples == 0
-               && xl.economy == (synthyboy::kEconomyMath | synthyboy::kEconomyControl),
-               "the MPC XL runs 16 voices, 16 unison voices, all effects, the 4x warps and the full morph rate, with the fast math and the control economy: " + describeProfile (xl));
+        check (xl.maxVoices == 16 && xl.unison == profileHigh().unison && xl.fxMask == synthyboy::kFxAll && xl.samples == 2 && xl.economy == synthyboy::kEconomyControl,
+               "the MPC XL runs 16 voices, the unison of high, all effects, the exact math, the 4x warps, the full morph rate and the high sample interpolation, with the control economy: " + describeProfile (xl));
         check (profileFromTable ("Akai Professional MPC XL", false).profile == xl, "the XL's row does not depend on the architecture of the build");
         bool restLow = true;
         for (const char* m : { "Akai Professional MPC Key 61", "Akai Professional MPC Live III", "" })

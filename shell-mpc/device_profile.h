@@ -176,13 +176,14 @@ struct DeviceProfileRow
 };
 
 /** The measured names of the two devices; the line to edit after a measurement.
-    MPC XL (aarch64, RK3588: 4 x Cortex-A55 + 4 x Cortex-A76, the host's audio workers on the A76 cores 4 - 7), measured 2026-11-17 on A76 core 6 at 2.4 GHz: the highest
-    step of the bench's ladder whose dearest factory preset stays within 50 % of the block at the 99th percentile with 16 notes held (46.9 %, Twin Warp Lead; the next
-    step, the exact math, is at 54.3 %).
+    MPC XL (aarch64, RK3588: 4 x Cortex-A55 + 4 x Cortex-A76, the host's audio workers on the A76 cores 4 - 7), measured 2026-11-17 on A76 core 6 at 2.4 GHz with the round-3 engine (all 112
+    presets, 16 notes held): the highest step of the bench's ladder whose dearest factory preset stays within 50 % of the block at the 99th percentile: "high,voices=16,control=economy"
+    (35.4 %, Lush Analog Pad, longest block 45.7 %, no block over the block's length; the step below, "low,unison=16,fx=all,voices=16,warp=4x,morph=full", is at 31.5 %; the next step,
+    "high,voices=16" with the full control rate, is at 65.8 % and over the budget).
     MPC Key 61 (arm32, Cortex-A17 at 1.6 GHz): "low" already reaches the length of the block on its dearest presets with 8 notes held (99th percentile 100.7 % on core 3
     with the application running, 2026-11-17): no room for a step up until the engine is cheaper. */
 constexpr DeviceProfileRow kDeviceProfiles[] = {
-    { "Akai Professional MPC XL", "low,unison=16,fx=all,voices=16,warp=4x,morph=full" },
+    { "Akai Professional MPC XL", "high,voices=16,control=economy" },
     { "Akai Professional MPC Key 61", "low" },
 };
 /** A device whose name was read and is not in the table. */
