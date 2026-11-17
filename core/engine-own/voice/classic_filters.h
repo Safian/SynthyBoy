@@ -902,6 +902,57 @@ private:
         const float* const gain = fmt.gain;
         const float* const kq = fmt.kq;
         const float* const bpGain = fmt.bpGain;
+#if SB_NEON
+        if (!scalarLoops && n > 0)
+        {
+            // The four resonators are four independent filters fed the same sample: one NEON register holds the four. Svf::step () lane by lane (separate multiply
+            // and add, flushDenormal as a select); the four band outputs are weighted in the lanes and summed one after the other, as the scalar loop sums them.
+            auto four = [] (float a, float b, float c, float d) noexcept { const float t[4] = { a, b, c, d }; return vld1q_f32 (t); };
+            auto flush = [] (float32x4_t v) noexcept { return vbslq_f32 (vcltq_f32 (vabsq_f32 (v), vdupq_n_f32 (1.0e-18f)), vdupq_n_f32 (0.0f), v); };
+            const float32x4_t a1 = four (cf[0].a1, cf[1].a1, cf[2].a1, cf[3].a1), a2 = four (cf[0].a2, cf[1].a2, cf[2].a2, cf[3].a2), a3 = four (cf[0].a3, cf[1].a3, cf[2].a3, cf[3].a3);
+            const float32x4_t vk = vld1q_f32 (kq), vgain = vld1q_f32 (gain), vbpGain = vld1q_f32 (bpGain), two = vdupq_n_f32 (2.0f), eight = vdupq_n_f32 (8.0f);
+            float32x4_t s1 = four (fm[0].s1, fm[1].s1, fm[2].s1, fm[3].s1), s2 = four (fm[0].s2, fm[1].s2, fm[2].s2, fm[3].s2);
+            float32x4_t v1 = vdupq_n_f32 (0.0f), v2 = v1, x = v1;
+            for (int i = 0; i < n; ++i)
+            {
+                x = vdupq_n_f32 (in[i]);
+                const float32x4_t v3 = vsubq_f32 (x, s2);
+                v1 = vaddq_f32 (vmulq_f32 (a1, s1), vmulq_f32 (a2, v3));
+                v2 = vaddq_f32 (vaddq_f32 (s2, vmulq_f32 (a2, s1)), vmulq_f32 (a3, v3));
+                s1 = flush (vsubq_f32 (vmulq_f32 (two, v1), s1));
+                s2 = flush (vsubq_f32 (vmulq_f32 (two, v2), s2));
+                float t[4];
+                vst1q_f32 (t, vmulq_f32 (vmulq_f32 (vmulq_f32 (v1, vgain), vbpGain), eight));
+                float y = 0.0f;
+                y += t[0];
+                y += t[1];
+                y += t[2];
+                y += t[3];
+                if (p.style >= 2)
+                {
+                    tilt += 0.35f * (y - tilt);
+                    y = 0.6f * y + 0.4f * tilt;
+                }
+                out[i] = y;
+            }
+            // the resonators keep what the last step left in them (states and outputs)
+            float ts1[4], ts2[4], tlp[4], tbp[4], thp[4];
+            vst1q_f32 (ts1, s1);
+            vst1q_f32 (ts2, s2);
+            vst1q_f32 (tlp, v2);
+            vst1q_f32 (tbp, v1);
+            vst1q_f32 (thp, vsubq_f32 (vsubq_f32 (x, vmulq_f32 (vk, v1)), v2));
+            for (int k = 0; k < 4; ++k)
+            {
+                fm[k].s1 = ts1[k];
+                fm[k].s2 = ts2[k];
+                fm[k].lp = tlp[k];
+                fm[k].bp = tbp[k];
+                fm[k].hp = thp[k];
+            }
+            return;
+        }
+#endif
         for (int i = 0; i < n; ++i)
         {
             float y = 0.0f;

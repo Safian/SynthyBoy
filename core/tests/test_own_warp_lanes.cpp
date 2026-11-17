@@ -229,3 +229,51 @@ TEST (digital_filter_pair_loop_in_lanes_equals_the_scalar_loop)
     CHECK (true);
 #endif
 }
+
+TEST (formant_model_with_its_four_resonators_in_lanes_equals_the_scalar_loop)
+{
+#if SB_NEON
+    TestRng r (5);
+    long long bad = 0, total = 0;
+    for (int run = 0; run < 300; ++run)
+    {
+        ClassicFilter ref, lane;
+        ref.prepare (44100.0);
+        lane.prepare (44100.0);
+        ref.reset();
+        lane.reset();
+        ref.scalarLoops = true;
+        ClassicParams p;
+        p.model = 5;
+        p.style = run % 3;
+        for (int block = 0; block < 100; ++block)
+        {
+            const ClassicParams before = p;
+            if (block % 9 == 0)
+            {
+                p.fx = r.uni();
+                p.fy = r.uni();
+                p.fres = r.uni();
+                p.fspread = 2.0f * r.uni() - 1.0f;
+                p.ftranspose = 24.0f * r.uni() - 12.0f;
+                p.cutoffHz = 200.0f + 4000.0f * r.uni();
+            }
+            const int n = block % 5 == 0 ? 7 : 32;
+            float in[32], a[32], b[32];
+            const int kind = block % 6;
+            for (int i = 0; i < n; ++i)
+                in[i] = (kind == 0 ? 2.0f : (kind == 1 ? 0.0f : (kind == 2 ? 1.0e-19f : 0.5f))) * (2.0f * r.uni() - 1.0f);
+            if (run == 299 && block == 50)
+                in[3] = std::nanf ("");
+            ref.process (in, a, n, before, p, 0);
+            lane.process (in, b, n, before, p, 0);
+            bad += std::memcmp (a, b, static_cast<size_t> (n) * 4) == 0 ? 0 : 1;
+            total += n;
+        }
+    }
+    std::printf ("    %lld samples in 30000 blocks (three styles, moving vowels, loud, silent, tiny and NaN input): %lld blocks differ\n", total, bad);
+    CHECK_EQ (bad, 0);
+#else
+    CHECK (true);
+#endif
+}

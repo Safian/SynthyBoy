@@ -144,6 +144,9 @@ const char* ownSectionName (int index) noexcept;
 void ownSectionReset() noexcept;
 void ownSectionRead (int index, double& totalMs, unsigned long long& calls) noexcept;
 double ownSectionClockCostNs() noexcept;
+/** The scopes of other sections entered directly inside section `index` since ownSectionReset (). A scope reads the clock twice: about one read lands in its own time and
+    about one in the time of the section around it, so a section with many small sections inside looks dearer than it is by childCalls x half the cost of a scope. */
+unsigned long long ownSectionChildCalls (int index) noexcept;
 
 /** Own engine only: the unison voices per oscillator at tier low (see OwnEngine::setLowTierUnisonCap; 0 = no cap, default 3). False if `engine` is not an own engine. */
 bool setOwnLowTierUnisonCap (IEngine& engine, int voices) noexcept;
