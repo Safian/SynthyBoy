@@ -666,10 +666,10 @@ public:
                     return r;
                 };
 #if SB_NEON
-                // Two warps that only move the phase (Sync, Formant, Bend: the warp presets), with the fast forms, no filter stage: the oversampled samples are made four
+                // Two warps that only move the phase (Sync, Formant, Bend: the warp presets), no filter stage: the oversampled samples are made four
                 // at a time (warpedGroup4: the operations of sampleAt () lane by lane, the same values). The phases and the weights of the second cycle are laid out first,
                 // by the integer steps of the scalar loop.
-                const bool lanes = !tick.scalarWarp && tick.fastMath && !filt0 && !filt1 && lanePhaseWarp (tick.warp[0]) && lanePhaseWarp (tick.warp[1])
+                const bool lanes = !tick.scalarWarp && !filt0 && !filt1 && lanePhaseWarp (tick.warp[0]) && lanePhaseWarp (tick.warp[1])
                                    && std::fabs (tick.warpPhase[0]) < 1000.0f && std::fabs (tick.warpPhase[1]) < 1000.0f;
 #else
                 const bool lanes = false;
@@ -792,25 +792,46 @@ public:
         return type == kWarpNone || type == kWarpSync || type == kWarpSyncVar || type == kWarpFormant || type == kWarpBend || type == kWarpBendBoth || type == kWarpBendPlus
             || type == kWarpBendMinus;
     }
-    /** warpPhase () of warp.h with the fast forms, four phases at once, for the types of lanePhaseWarp (): the same expressions in the same order. */
-    static float32x4_t warpPhase4 (int type, float32x4_t p, float a, float ph, float32x4_t& window) noexcept
+    /** warpPhase () of warp.h, four phases at once, for the types of lanePhaseWarp (): the same expressions in the same order. `fast`: the table sine of the Math
+        economy group (sinCycles4); otherwise the library sine and cosine, called for each lane as the scalar function calls them. */
+    static float32x4_t warpPhase4 (int type, float32x4_t p, float a, float ph, float32x4_t& window, bool fast) noexcept
     {
         const float32x4_t half = vdupq_n_f32 (0.5f), inv2pi = vdupq_n_f32 (1.0f / kTwoPif);
         window = vdupq_n_f32 (1.0f);
         auto frac4 = [] (float32x4_t x) noexcept { return vsubq_f32 (x, ffloor4 (x)); };
+        auto sn4 = [fast] (float32x4_t c) noexcept
+        {
+            if (fast)
+                return sinCycles4 (c);
+            float t[4];
+            vst1q_f32 (t, c);
+            for (float& v : t)
+                v = std::sin (kTwoPif * v);
+            return vld1q_f32 (t);
+        };
+        auto cs4 = [fast] (float32x4_t c) noexcept
+        {
+            if (fast)
+                return sinCycles4 (vaddq_f32 (c, vdupq_n_f32 (0.25f)));
+            float t[4];
+            vst1q_f32 (t, c);
+            for (float& v : t)
+                v = std::cos (kTwoPif * v);
+            return vld1q_f32 (t);
+        };
         switch (type)
         {
             case kWarpSync:    return frac4 (vmulq_f32 (p, vdupq_n_f32 (1.0f + a * 11.0f)));
             case kWarpSyncVar: return frac4 (vaddq_f32 (vmulq_f32 (p, vdupq_n_f32 (1.0f + a * 11.0f)), vdupq_n_f32 (ph)));
             case kWarpFormant:
-                window = vsubq_f32 (half, vmulq_f32 (half, sinCycles4 (vaddq_f32 (p, vdupq_n_f32 (0.25f)))));
+                window = vsubq_f32 (half, vmulq_f32 (half, cs4 (p)));
                 return frac4 (vsubq_f32 (vaddq_f32 (vmulq_f32 (p, vdupq_n_f32 (1.0f + a * 7.0f)), vdupq_n_f32 (ph)), half));
             case kWarpBend: case kWarpBendBoth:
-                return vsubq_f32 (p, vmulq_f32 (vmulq_f32 (vdupq_n_f32 ((a - 0.5f) * 1.9f), sinCycles4 (p)), inv2pi));
+                return vsubq_f32 (p, vmulq_f32 (vmulq_f32 (vdupq_n_f32 ((a - 0.5f) * 1.9f), sn4 (p)), inv2pi));
             case kWarpBendPlus:
-                return vaddq_f32 (p, vmulq_f32 (vmulq_f32 (vdupq_n_f32 (a * 0.95f), sinCycles4 (p)), inv2pi));
+                return vaddq_f32 (p, vmulq_f32 (vmulq_f32 (vdupq_n_f32 (a * 0.95f), sn4 (p)), inv2pi));
             case kWarpBendMinus:
-                return vsubq_f32 (p, vmulq_f32 (vmulq_f32 (vdupq_n_f32 (a * 0.95f), sinCycles4 (p)), inv2pi));
+                return vsubq_f32 (p, vmulq_f32 (vmulq_f32 (vdupq_n_f32 (a * 0.95f), sn4 (p)), inv2pi));
             default: return p;
         }
     }
@@ -821,10 +842,10 @@ public:
         const float32x4_t p = vmulq_f32 (vcvtq_f32_u32 (vshrq_n_u32 (vld1q_u32 (phs), 8)), vdupq_n_f32 (1.0f / 16777216.0f));
         float32x4_t window = vdupq_n_f32 (1.0f), w2 = window, pp = p;
         if (tick.warp[0] != 0)
-            pp = warpPhase4 (tick.warp[0], pp, a0, tick.warpPhase[0], window);
+            pp = warpPhase4 (tick.warp[0], pp, a0, tick.warpPhase[0], window, tick.fastMath);
         if (tick.warp[1] != 0)
         {
-            pp = warpPhase4 (tick.warp[1], pp, a1, tick.warpPhase[1], w2);
+            pp = warpPhase4 (tick.warp[1], pp, a1, tick.warpPhase[1], w2, tick.fastMath);
             window = vmulq_f32 (window, w2);
         }
         const float32x4_t q = vsubq_f32 (pp, ffloor4 (pp));

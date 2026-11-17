@@ -21,9 +21,10 @@ struct WtOscLaneTest
     static float32x4_t floor4 (float32x4_t x) { return WtOsc::ffloor4 (x); }
     static float32x4_t sin4 (float32x4_t x) { return WtOsc::sinCycles4 (x); }
     static bool laneType (int t) { return WtOsc::lanePhaseWarp (t); }
-    static void group (int w0, int w1, float ph0, float ph1, float* dst, const uint32_t* phs, const float* wbs, const float* cA, const float* cB, float fscale, int N, float a0, float a1)
+    static void group (bool fast, int w0, int w1, float ph0, float ph1, float* dst, const uint32_t* phs, const float* wbs, const float* cA, const float* cB, float fscale, int N, float a0, float a1)
     {
         WtOsc osc;
+        osc.tick.fastMath = fast;
         osc.tick.warp[0] = w0;
         osc.tick.warp[1] = w1;
         osc.tick.warpPhase[0] = ph0;
@@ -51,15 +52,15 @@ bool sameBits (float a, float b) { return std::memcmp (&a, &b, 4) == 0; }
 
 #if SB_NEON
 /** sampleAt () of WtOsc::render for two phase warps, no cross signal, no filter stage, the fast forms: the scalar functions of the engine in its order. */
-float scalarSample (uint32_t ph, int w0, int w1, float a0, float a1, float ph0, float ph1, const float* cA, const float* cB, float fscale, int N, float wB)
+float scalarSample (bool fast, uint32_t ph, int w0, int w1, float a0, float a1, float ph0, float ph1, const float* cA, const float* cB, float fscale, int N, float wB)
 {
     const float p = static_cast<float> (ph >> 8) * (1.0f / 16777216.0f);
     float window = 1.0f, w2 = 1.0f, pp = p;
     if (w0 != 0)
-        pp = warpPhase (w0, pp, a0, ph0, 0.0f, window, nullptr, true);
+        pp = warpPhase (w0, pp, a0, ph0, 0.0f, window, nullptr, fast);
     if (w1 != 0)
     {
-        pp = warpPhase (w1, pp, a1, ph1, 0.0f, w2, nullptr, true);
+        pp = warpPhase (w1, pp, a1, ph1, 0.0f, w2, nullptr, fast);
         window *= w2;
     }
     float q = pp;
@@ -73,9 +74,9 @@ float scalarSample (uint32_t ph, int w0, int w1, float a0, float a1, float ph0, 
     float y = r;
     y *= window;
     if (w0 != 0)
-        y = warpSample (w0, y, a0, 0.0f, true);
+        y = warpSample (w0, y, a0, 0.0f, fast);
     if (w1 != 0)
-        y = warpSample (w1, y, a1, 0.0f, true);
+        y = warpSample (w1, y, a1, 0.0f, fast);
     return y;
 }
 #endif
@@ -139,6 +140,7 @@ TEST (four_warped_samples_at_once_equal_four_scalar_samples)
                 continue;
             for (int rep = 0; rep < 1500; ++rep)
             {
+                const bool fast = rep % 4 != 3; // the table sine of the Math group, and every fourth time the library sine and cosine
                 const float a0 = rep % 7 == 0 ? 0.0f : (rep % 11 == 0 ? 1.0f : r.uni()), a1 = rep % 5 == 0 ? 1.0f : r.uni();
                 const float ph0 = rep % 3 == 0 ? 0.5f : 2.0f * r.uni() - 0.5f, ph1 = r.uni();
                 const bool second = rep % 2 == 0;
@@ -154,10 +156,10 @@ TEST (four_warped_samples_at_once_equal_four_scalar_samples)
                 }
                 if (rep % 19 == 0)
                     phs[1] = 0xffffffffu, phs[2] = 0x000000ffu, phs[3] = 0x80000000u;
-                WtOscLaneTest::group (w0, w1, ph0, ph1, out, phs, wbs, cA, second ? cB : nullptr, static_cast<float> (N), N, a0, a1);
+                WtOscLaneTest::group (fast, w0, w1, ph0, ph1, out, phs, wbs, cA, second ? cB : nullptr, static_cast<float> (N), N, a0, a1);
                 for (int l = 0; l < 4; ++l)
                 {
-                    const float ref = scalarSample (phs[l], w0, w1, a0, a1, ph0, ph1, cA, second ? cB : nullptr, static_cast<float> (N), N, wbs[l]);
+                    const float ref = scalarSample (fast, phs[l], w0, w1, a0, a1, ph0, ph1, cA, second ? cB : nullptr, static_cast<float> (N), N, wbs[l]);
                     bad += sameBits (out[l], ref) ? 0 : 1;
                     ++total;
                 }
