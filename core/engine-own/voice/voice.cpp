@@ -835,9 +835,10 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         oscEnv1[o] = P (oi.env1) >= 0.5f;
         const ContentSet* cs = g.content;
         int wtChoice = std::clamp (static_cast<int> (P (oi.wavetable) + 0.5f), 0, kNumWavetableChoices - 1);
-        t.wt = wtChoice == kWavetablePresetTable ? (cs != nullptr ? cs->userTable[o].get() : nullptr) : builtinWavetableIfReady (wtChoice);   // audio thread: only a table that is built (a morph table the background builder has not finished yet reads as null)
+        // audio thread: the engine resolved the table of this block (the chosen one when built, else the one the oscillator had: never a substitute)
+        t.wt = wtChoice == kWavetablePresetTable ? (cs != nullptr ? cs->userTable[o].get() : nullptr) : (g.wtResolved != nullptr ? g.wtResolved[o] : builtinWavetableIfReady (wtChoice));
         if (t.wt == nullptr)
-            t.wt = builtinWavetableIfReady (kWavetableSaw); // the preset table needs its content (a missing file: the saw); a table not built yet: the saw too, until it is (prepare () builds the one cycle tables)
+            t.wt = builtinWavetableIfReady (kWavetableSaw); // the preset table needs its content (a missing file: the saw): the original meaning of the fallback
         // ---- pitch: the coarse term of the pitch mode and the Ratio source
         const bool track = P (oi.pitchTrack) >= 0.5f;
         const bool bendTrack = P (oi.bendTrack) >= 0.5f;

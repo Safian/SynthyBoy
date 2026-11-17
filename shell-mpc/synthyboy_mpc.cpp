@@ -426,6 +426,7 @@ struct PluginInstance
             return inst.engine && inst.engine->copyReadout (out) && out.block != 0; // block 0: the engine wrote no values yet
         }
         double bpm() const noexcept override { return inst.overlayBpm.load (std::memory_order_relaxed); }
+        bool tablesLoading() const noexcept override { return inst.engine && inst.engine->contentPending(); }
         int playSelection (int group) const noexcept override { return group >= 0 && group < synthyboy_mpc::play::kGroups ? inst.playSel[group].load (std::memory_order_relaxed) : 1; }
         void setQGroup (const int* targets, int n) noexcept override { inst.qRouter.setGroup (targets, n, static_cast<int> (synthyboy::paramCount())); }
         void writeParam (int tableIndex, float normalised) noexcept override { inst.uiWrite (tableIndex, normalised); }
@@ -1675,6 +1676,8 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
 {
     const auto* table = synthyboy::paramTable();
     size_t count = synthyboy::paramCount();
+    if (inst->engine)
+        inst->engine->readyContentFor (values.plain, count);   // not the audio thread: the tables the state names are built BEFORE its parameters are set, so index and table take effect together
     for (size_t i = 0; i < count; ++i)
     {
         inst->paramMirror[i].store(values.plain[i], std::memory_order_relaxed);

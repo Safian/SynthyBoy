@@ -122,6 +122,11 @@ public:
     /** Not real time (the host's thread, the display thread; never the audio thread): builds on the calling thread whatever the CURRENT parameter values need and prepare () left to a background thread
         (the own engine: the built-in wavetables the oscillators name). Call it after a state or program was applied. A no-op for an engine that builds everything in prepare (). */
     virtual void readyContent() noexcept {}
+    /** The same for a state that is about to be applied: builds, on the calling thread, the tables the plain values `plain[0 .. count)` (indexed like the parameter table) name, BEFORE the caller sets them,
+        so that the parameters and the tables they name take effect for the audio thread together. A no-op for an engine that builds everything in prepare (). */
+    virtual void readyContentFor (const float* /*plain*/, size_t /*count*/) noexcept {}
+    /** true while a table the current parameter values name is still being built (the plugin-drawn pages show a small "loading" mark); the sound is that of the table the oscillator had until then. Any thread. */
+    virtual bool contentPending() const noexcept { return false; }
     /** Milliseconds this engine has spent building its built-in wavetables (summed over all threads that built them; 0: none or not known): the start-up record of the shell. Any thread. */
     virtual double wavetableBuildMs() const noexcept { return 0.0; }
     /** Milliseconds the last prepare () spent on part `part` of its work: 0 the voice pool, 1 the effects (pool and the three racks); 0.0 for another part or an engine that does not know. Any thread. */

@@ -47,6 +47,8 @@ public:
     virtual double sampleRate() const noexcept = 0;
     /** The tempo of the host (beats per minute) for the synced LFO rates. */
     virtual double bpm() const noexcept { return 120.0; }
+    /** true while a wavetable the current program names is still being built (the sound is the table the oscillator had until then): the plugin-drawn pages show a thin amber bar at the top of the tab. */
+    virtual bool tablesLoading() const noexcept { return false; }
     /** The content of the state (custom LFO shapes, user wavetables, remap curves): a snapshot that stays valid while the pointer is held; changes when the state changes. */
     virtual std::shared_ptr<const synthyboy::StateContent> content() const { return nullptr; }
     virtual const synthyboy::IContentStore* contentStore() const noexcept { return nullptr; }

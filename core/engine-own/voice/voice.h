@@ -67,6 +67,7 @@ struct TickGlobals
     uint32_t* chokeLatest = nullptr;         // [3][256] choke groups of the multisample oscillators (engine wide per slot)
     uint32_t* chokeCounter = nullptr;        // [3]
     const int* switchKey = nullptr;          // [3] last key switch of the multisample instrument of each oscillator, -1 = default
+    const Wavetable* const* wtResolved = nullptr; // [3] the built-in table each oscillator plays in this block (OwnEngine: the chosen one when built, else the one it had); null: the voice looks the choice up itself
     float padPressureToCutoff = 0.0f;        // MPC shell: depth of the pad pressure to Filter 1 cutoff layer, 0 = off, 1 = kPadPressureSemitones at full pressure
 };
 
