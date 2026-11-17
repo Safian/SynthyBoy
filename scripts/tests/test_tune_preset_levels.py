@@ -110,9 +110,10 @@ class TestTuneLevelsRound(unittest.TestCase):
         pinned_set = {"Acid Saw Reso"}  # new_name is NOT in pinned_set
         self._write_preset("Pad", "stretched_glass_choir.sbpreset", new_name, vol=-10.0, attack_ms=3000.0)
 
-        # In old 1 s measure, slow pad had not reached sustain: chord_rms was measured too quiet (-28 dBFS)
+        # In old 1 s measure, slow pad had not reached sustain: chord_rms was measured too quiet (-28 dBFS); the peaks are low enough (-18 dBFS) that the -1.5 dB peak limit does not cap the +8 dB
+        # the quiet RMS asks for (with peaks at -8 dBFS the script rightly stops at +6.5 dB: -3.5, which the fixture had forgotten)
         rows_old = {
-            "stretched_glass_choir.sbpreset": {"category": "Pad", "peak": -8.0, "chord_peak": -8.0, "rms": -30.0, "chord_rms": -28.0}
+            "stretched_glass_choir.sbpreset": {"category": "Pad", "peak": -18.0, "chord_peak": -18.0, "rms": -30.0, "chord_rms": -28.0}
         }
         # In sustain-aware measure (holding until 3.4 s), chord reached sustain (-20.0 dBFS)
         rows_sustain = {

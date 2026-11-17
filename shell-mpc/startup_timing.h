@@ -36,7 +36,10 @@ public:
         kEngineCreate, kContentStore, kScanPresets, kDefaultParams, kMainReturned, kFirstCall, kResume, kPrepared, kFirstAudio,
         kMilestones
     };
-    enum Detail : int { kStartLive, kStartOverlay, kOverlayReadout, kEngineConstruct, kDetails };
+    enum Detail : int { kStartLive, kStartOverlay, kOverlayReadout, kEngineConstruct, kFirstBlock, kDetails };
+    /** The steps of the UI's way to its first frame, stamped once each, as time since time zero (open_ms_at_<name>): the overlay thread started, the 24 views built, a page of ours found on screen,
+        the GPU helper asked for (started), the helper ready, the first frame shown. Not part of the sum of open_ms_total. */
+    enum UiStep : int { kUiThreadStart, kUiViewsBuilt, kUiPageSeen, kUiHelperAsked, kUiHelperReady, kUiFirstFrame, kUiSteps };
     /** The calls of the host whose longest stay in the dispatcher is kept. */
     enum Call : int { kCallOpen, kCallSetProgram, kCallGetProgramName, kCallGetProgramNameIndexed, kCallGetChunk, kCallSetChunk, kCallMains, kCallSampleRate, kCallBlockSize, kCallParamInfo, kCallOther, kCalls };
 
@@ -47,8 +50,13 @@ public:
     }
     static const char* detailName (int d) noexcept
     {
-        static const char* const kNames[kDetails] = { "start_live", "start_overlay", "overlay_readout", "engine_construct" };
+        static const char* const kNames[kDetails] = { "start_live", "start_overlay", "overlay_readout", "engine_construct", "first_block" };
         return d >= 0 && d < kDetails ? kNames[d] : "?";
+    }
+    static const char* uiStepName (int u) noexcept
+    {
+        static const char* const kNames[kUiSteps] = { "overlay_thread_start", "views_built", "page_seen", "helper_asked", "helper_ready", "first_frame" };
+        return u >= 0 && u < kUiSteps ? kNames[u] : "?";
     }
     static const char* callName (int c) noexcept
     {
@@ -84,9 +92,25 @@ public:
     }
     bool reached (Milestone m) const noexcept { return stamp_[m].load (std::memory_order_relaxed) != 0; }
 
+    /** Stamps a step of the UI's way once (overlay thread). */
+    void markUiStep (UiStep u) noexcept
+    {
+        if (u < 0 || u >= kUiSteps || uiStep_[u].load (std::memory_order_relaxed) != 0)
+            return;
+        const int64_t origin = originNs_.load (std::memory_order_acquire);
+        if (origin == 0)
+            return;
+        int64_t d = nowNs() - origin;
+        if (d < 1)
+            d = 1;
+        int64_t expected = 0;
+        uiStep_[u].compare_exchange_strong (expected, d, std::memory_order_acq_rel);
+    }
+
     /** The first frame of our UI that was shown (overlay thread). */
     void markUi() noexcept
     {
+        markUiStep (kUiFirstFrame);
         if (uiStamp_.load (std::memory_order_relaxed) != 0)
             return;
         const int64_t origin = originNs_.load (std::memory_order_acquire);
@@ -111,6 +135,14 @@ public:
     void callDone (Call c, int64_t ns) noexcept
     {
         callCount_[c].fetch_add (1, std::memory_order_relaxed);
+        // our own time inside the host's calls, split by where it falls: before the resume call, and from the resume call to the first audio block (the resume call itself is the engine_prepare step)
+        if (stamp_[kFirstAudio].load (std::memory_order_relaxed) == 0)
+        {
+            if (stamp_[kResume].load (std::memory_order_relaxed) == 0)
+                oursBeforeResumeNs_.fetch_add (ns, std::memory_order_relaxed);
+            else if (c != kCallMains)
+                oursResumeToAudioNs_.fetch_add (ns, std::memory_order_relaxed);
+        }
         callSum_[c].fetch_add (ns, std::memory_order_relaxed);
         int64_t cur = callMax_[c].load (std::memory_order_relaxed);
         while (ns > cur && ! callMax_[c].compare_exchange_weak (cur, ns, std::memory_order_relaxed))
@@ -198,6 +230,33 @@ public:
         else
             std::snprintf (line, sizeof line, "open_ms_total_ui: n/a\n");
         out += line;
+        {
+            const double before = static_cast<double> (oursBeforeResumeNs_.load (std::memory_order_relaxed)) / 1.0e6;
+            const double after = static_cast<double> (oursResumeToAudioNs_.load (std::memory_order_relaxed)) / 1.0e6;
+            const double block = static_cast<double> (detailNs_[kFirstBlock].load (std::memory_order_relaxed)) / 1.0e6;
+            std::snprintf (line, sizeof line, "open_ms_ours_in_calls_before_resume: %.3f\nopen_ms_ours_in_calls_resume_to_first_audio: %.3f\n", before, after);
+            out += line;
+            // host_until_first_audio is the time from the end of our prepare to the end of the first block: ours in it = the calls above (resume call excluded) and the first block itself
+            if (p.reached[kFirstAudio] && p.reached[kPrepared] && p.ms[kFirstAudio] >= 0.0)
+            {
+                double host = p.ms[kFirstAudio] - after - block;
+                if (host < 0.0)
+                    host = 0.0;
+                std::snprintf (line, sizeof line, "open_ms_host_only_until_first_audio: %.3f (of host_until_first_audio %.3f, ours %.3f)\n", host, p.ms[kFirstAudio], p.ms[kFirstAudio] - host);
+            }
+            else
+                std::snprintf (line, sizeof line, "open_ms_host_only_until_first_audio: n/a\n");
+            out += line;
+        }
+        for (int u = 0; u < kUiSteps; ++u)
+        {
+            const int64_t v = u == kUiFirstFrame ? uiStamp_.load (std::memory_order_relaxed) : uiStep_[u].load (std::memory_order_relaxed);
+            if (v != 0)
+                std::snprintf (line, sizeof line, "open_ms_at_%s: %.3f\n", uiStepName (u), static_cast<double> (v) / 1.0e6);
+            else
+                std::snprintf (line, sizeof line, "open_ms_at_%s: n/a\n", uiStepName (u));
+            out += line;
+        }
         for (int d = 0; d < kDetails; ++d)
         {
             std::snprintf (line, sizeof line, "open_ms_detail_%s: %.3f\n", detailName (d), static_cast<double> (detailNs_[d].load (std::memory_order_relaxed)) / 1.0e6);
@@ -222,6 +281,9 @@ public:
         uiStamp_.store (0);
         for (auto& s : stamp_) s.store (0);
         for (auto& d : detailNs_) d.store (0);
+        for (auto& u : uiStep_) u.store (0);
+        oursBeforeResumeNs_.store (0);
+        oursResumeToAudioNs_.store (0);
         for (int c = 0; c < kCalls; ++c) { callCount_[c].store (0); callSum_[c].store (0); callMax_[c].store (0); }
         wavetableMs_.store (0.0);
         voicesMs_.store (0.0);
@@ -230,6 +292,8 @@ public:
 
 private:
     std::atomic<int64_t> originNs_ { 0 }, uiStamp_ { 0 };
+    std::atomic<int64_t> uiStep_[kUiSteps] = {};
+    std::atomic<int64_t> oursBeforeResumeNs_ { 0 }, oursResumeToAudioNs_ { 0 };
     std::atomic<int64_t> stamp_[kMilestones] = {};
     std::atomic<int64_t> detailNs_[kDetails] = {};
     std::atomic<unsigned long> callCount_[kCalls] = {};

@@ -46,6 +46,7 @@
 #include "touch_input.h"
 #include "../safe_file.h"
 #include "../write_files.h"
+#include "../startup_timing.h"
 #include "ui_stack.h"
 #include "vblank_pacer.h"
 #include "view.h"
@@ -85,6 +86,7 @@ struct Timing
     bool followDisplayPace = true;    // once the display is known: the picture gap is the pace grid's (vblanks per picture x the measured period; scenes for the GPU 20 % faster than the grid)
     double switchesEveryMs = 1000.0;  // kill switch, rotation file, status file
     int unreadableLimit = 20;         // checks in a row (2 s) without a readable framebuffer -> disabled
+    bool prewarmGpu = false;          // start the GPU helper as soon as an instance is attached and the display is known, not when the first page is found on screen (the service sets it; the helper then ran in parallel with the host's loading)
 };
 
 class Controller
@@ -124,6 +126,7 @@ public:
             targetCount_[i] = static_cast<int> (targets_.size()) - targetBase_[i];
         }
         detector_ = std::make_unique<PageDetector> (frames_, markers_, numViews_, instanceRects_);
+        startupTimes().markUiStep (StartupTimes::kUiViewsBuilt);
     }
 
     /** The table indices the overlay wants in the engine's readout (IEngine::setReadoutTargets), all views together; view i's targets start at targetBase (i). */
@@ -411,6 +414,18 @@ private:
             return timing_.detectEveryMs;
         }
 
+        if (timing_.prewarmGpu && ! prewarmTried_ && gpu_ && ! noGpu_ && ! killed_)
+        {
+            // The helper's start (EGL, GBM, the first context: 584 ms on the Key 61) in parallel with the host's loading: the overlay thread asks for it now, with no page on screen yet. The helper only
+            // takes the plane when a scene is shown; a failure is handled by the backend (back off, then the CPU path) as for any start.
+            prewarmTried_ = true;
+            if (presenter_.open())
+            {
+                applyPace();
+                startupTimes().markUiStep (StartupTimes::kUiHelperAsked);
+                gpu_->request (nowMs);
+            }
+        }
         if (nowMs >= nextDetectMs_)
         {
             nextDetectMs_ = nowMs + (standby_.busy() ? std::min (timing_.detectEveryMs, kStandbyBusyMs) : timing_.detectEveryMs);
@@ -701,6 +716,7 @@ private:
     /** The picture of the view on screen (current_ >= 0): the GPU scene or the CPU drawing. Returns after how many milliseconds the next step is due. */
     double drawCurrent (double nowMs)
     {
+        startupTimes().markUiStep (StartupTimes::kUiPageSeen);
         {
             std::lock_guard<std::mutex> g (mu_);
             if (! slots_.at (activeSlot_))     // the instance whose page is on screen has closed since the last check
@@ -725,6 +741,7 @@ private:
                 return 1000.0;
             }
             applyPace();
+            startupTimes().markUiStep (StartupTimes::kUiHelperAsked);
             gpu_->request (nowMs);
         }
         const bool wantGpu = gpu_ && gpu_->active() && gpuSkipView_ != current_;
@@ -1637,6 +1654,7 @@ private:
     struct ViewFrames { unsigned long frames = 0, changes = 0; };
     std::vector<ViewFrames> viewFrames_ = std::vector<ViewFrames> (Detection::kMaxViews);
     std::unique_ptr<PageDetector> detector_;
+    bool prewarmTried_ = false;   // the pre-warm of the helper was tried once (Timing::prewarmGpu)
     [[maybe_unused]] bool statusRequested_ = false;   // SYNTHYBOY_MPC_WRITE_FILES 0 only: the request file existed at the last look
     bool viewsBuilt_ = false;   // buildViews () has run (the overlay thread's first tick when the constructor was told to defer)
     std::vector<uint32_t> canvas_;

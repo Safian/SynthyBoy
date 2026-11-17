@@ -154,6 +154,13 @@ private:
 
     /** The files the controller looks at in the shipped plugin. The switches that are features (overlay-off, nogpu, rot, look, detail, fps, gpuclock) and the status file stay; the debug ones (the pointer hot spot, the
         curve dump request) are empty without SYNTHYBOY_MPC_DEBUG_HOOKS, so the plugin does not look at them. */
+    /** The shipped timing: the GPU helper is started as soon as an instance is attached (the overlay thread does it, in parallel with the host's own loading), not when the first page is found on screen. */
+    static Timing shippedTiming()
+    {
+        Timing t;
+        t.prewarmGpu = true;
+        return t;
+    }
     static Paths shippedPaths()
     {
         Paths p;
@@ -192,7 +199,7 @@ private:
         mouse_ = std::make_unique<LinuxMouseReader>();           // the mice: found at run time, hot plug, read only, never grabbed (mouse_linux.h)
         pointer_ = std::make_unique<LinuxPointerSource> (display_);   // the host's pointer plane: where the pointer is (drm_linux.h)
 #endif
-        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, shippedPaths(), Timing(), -1.0, gpu_.get(), touch_.get(), layout::kViews, layout::kNumViews, true);   // true: the views are built by the overlay thread's first tick, not here (the host's thread)
+        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, shippedPaths(), shippedTiming(), -1.0, gpu_.get(), touch_.get(), layout::kViews, layout::kNumViews, true);   // true: the views are built by the overlay thread's first tick, not here (the host's thread)
 #if defined(__linux__)
         controller_->setMouse (mouse_.get(), pointer_.get());
         controller_->setExtraStatus ([this] { return cpuStatus(); });
@@ -239,6 +246,7 @@ private:
     void run()
     {
         useNormalScheduling (0, "sb-overlay");
+        startupTimes().markUiStep (StartupTimes::kUiThreadStart);
         synthyboy_mpc::PlayLog::line ("Service::run entered");
 #if defined(__linux__)
         {
@@ -273,8 +281,13 @@ private:
             const auto tickStart = std::chrono::steady_clock::now();
             double wait = 1000.0;
             gTick.run ([&] { wait = controller_->tick (now); });
-            if (! startupTimes().uiReached() && controller_->framesTotal() > 0)
-                startupTimes().markUi();   // the first frame of our UI that was shown (a relaxed load once it is set)   // Controller::tick catches everything itself; this is the second barrier (and the count)
+            if (! startupTimes().uiReached())
+            {
+                if (gpu_ && gpu_->active())
+                    startupTimes().markUiStep (StartupTimes::kUiHelperReady);
+                if (controller_->framesTotal() > 0)
+                    startupTimes().markUi();
+            }   // the first frame of our UI that was shown (a relaxed load once it is set)   // Controller::tick catches everything itself; this is the second barrier (and the count)
             if (gTick.off)
             {
                 lk.lock();

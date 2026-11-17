@@ -1253,6 +1253,23 @@ In `/tmp/synthyboy-overlay-status.txt` (every build; in a release build with `/t
 
 The same milestones go to the developer log (category `startup`, `docs/ui-components/LOGGING.md`).
 
+### First measurement on the Key 61 (profile low, test project, first instance) and what the new lines split
+
+Status lines of that run (ms): engine_create 14.5, content_store 0.08, scan_presets 13.8 (index), default_params 0.64, vst_main_rest 2.3, host_until_first_call 0.003, host_until_resume 165.7, engine_prepare 186.8 (details: wavetables 8.7, prepare_voices 95.6, prepare_fx 73.6, start_overlay 1.8, overlay_readout 8.9), host_until_first_audio 2401.2, open_ms_total 2785, open_ms_total_ui 3740. The preset index and the lazy tables did what they should (scan 13.8 ms, wavetables 8.7 ms); what is left of ours up to the first audio is about 0.22 s of the numbers above (engine_create to vst_main_rest 31 ms, engine_prepare 187 ms, of which voices 96 and effects 74) plus whatever of `host_until_resume` and `host_until_first_audio` is ours.
+
+`host_until_resume` and `host_until_first_audio` are intervals between two of OUR stamps, so they contain the host's time and every call of the host into us that falls in them (effSetChunk with the project's state, which builds the tables the state names; program and parameter queries; the first effGetChunk). They are therefore not "host time" by themselves. The status file now splits them:
+
+- `open_ms_ours_in_calls_before_resume`: the time we spent inside the host's calls before its resume call (the part of `host_until_resume` that is ours).
+- `open_ms_ours_in_calls_resume_to_first_audio`: the time we spent inside ALL host calls (effMainsChanged excluded: that is `engine_prepare`) from the resume call to the first audio block.
+- `open_ms_detail_first_block`: the first processed block itself.
+- `open_ms_host_only_until_first_audio`: `host_until_first_audio` minus the two lines above that fall into it: the time in which the host calls nothing of ours, written as "(of <interval>, ours <x>)".
+
+Reading: if `open_ms_host_only_until_first_audio` is close to 2401, the 2.4 s is the host's own (loading the project, its other plugins, its audio engine start) and nothing of ours waits in it; `host_call_max_ms_*` names which call of ours was the longest.
+
+### The UI's way to its first frame
+
+`open_ms_at_<step>` (time since time zero, not added up): `overlay_thread_start`, `views_built` (the 24 pages, on the overlay thread), `page_seen` (the page detector found a tab of ours on screen and the first picture was drawn), `helper_asked` (the GPU helper's start was requested), `helper_ready`, `first_frame`. Before this change the helper was started only at `page_seen` (the first picture of a view), so its 584 ms (EGL, GBM, first context) came after the page appeared. Now the overlay thread asks for the helper in its first step after an instance is attached (`Timing::prewarmGpu`, set by the service only; tests keep the old behaviour), so the start runs in parallel with the host's loading and does not touch the host's thread; the helper only takes the plane when a scene is shown (it stays running while hidden, as it already did after a hide). Expected: `first_frame` follows `page_seen` by one scene instead of by the helper's start. To be checked on the device: the plane's zpos is taken (`takeStacking`) at the helper's start now, with nothing shown; the host's pointer must still be above our plane when the first page appears.
+
 ### What the host waits for
 
 Every call of the host is answered on the host's thread. The longest work each can do now:

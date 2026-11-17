@@ -83,6 +83,26 @@ int main()
         check (totalUi > total, "the first UI frame came after the first audio block in this sequence: open_ms_total_ui > open_ms_total");
         check (valueOf (text, "open_ms_detail_start_overlay") == 5.0, "a detail is kept in ms");
         check (valueOf (text, "open_ms_detail_wavetables") == 12.5, "the wavetable time is kept");
+        // our time inside the host's calls is split by where it falls
+        {
+            StartupTimes u;
+            u.begin();
+            u.callDone (StartupTimes::kCallSetChunk, 7000000);          // before the resume call
+            nap(); u.mark (StartupTimes::kResume);
+            u.callDone (StartupTimes::kCallGetChunk, 2000000);          // after it, before the first audio block
+            u.callDone (StartupTimes::kCallMains, 50000000);            // the resume call itself is not counted here (it is engine_prepare)
+            nap(); u.mark (StartupTimes::kPrepared);
+            u.addDetail (StartupTimes::kFirstBlock, 1000000);
+            nap(); u.mark (StartupTimes::kFirstAudio);
+            u.callDone (StartupTimes::kCallSetChunk, 9000000);          // after the first audio: in no sum
+            const std::string t = u.describe();
+            check (valueOf (t, "open_ms_ours_in_calls_before_resume") == 7.0, "our time in calls before the resume call");
+            check (valueOf (t, "open_ms_ours_in_calls_resume_to_first_audio") == 2.0, "our time in calls from the resume call to the first audio block (the resume call itself excluded)");
+            check (t.find ("open_ms_host_only_until_first_audio:") != std::string::npos && valueOf (t, "open_ms_host_only_until_first_audio") >= 0.0, "the host only share is given");
+            u.markUiStep (StartupTimes::kUiHelperAsked);
+            const std::string t2 = u.describe();
+            check (valueOf (t2, "open_ms_at_helper_asked") > 0.0 && valueOf (t2, "open_ms_at_first_frame") == -1.0, "the UI's steps have lines, n/a until reached");
+        }
         check (text.find ("host_call_max_ms_effGetChunk: 3.000 (2 calls, 4.000 ms in all)") != std::string::npos, "the longest stay of a host call and the count are kept");
 
         const StartupTimes::Parts p = t.parts();
