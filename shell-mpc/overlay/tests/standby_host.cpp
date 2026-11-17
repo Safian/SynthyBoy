@@ -1,9 +1,12 @@
 // SynthyBoy - MPC overlay tests: the host's standby dim (standby.h). A fake framebuffer and a fake backlight directory: awake -> dim -> awake with every ordering of the two signals (the host's picture and the
 // backlight) inside the hold window, the Q-Link pop-up that is up while the host dims, a host page (nothing to keep), a page that really goes away while dimmed, no backlight node, the first touch while
 // dimmed, and the drawn picture = the awake picture times the factor. Never a frame in which our picture is missing at a dim or a wake.
+// The XL (gen 2) only blurs its picture while dimmed (no backlight change, no darkening): the blurred-picture evidence (standby.h blurredPicture / measureFactor) is tested against the values measured
+// on the XL (the section "the XL's blur"), against synthetic pictures made by an independent supersampled blur of every view's markers, and end to end through the controller (dim, touch, wake, page change).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <chrono>
+#include <set>
 #include <sys/stat.h>
 
 #include "fakes.h"
@@ -16,6 +19,86 @@ using namespace ovt;
 namespace
 {
 constexpr double kCover = 0.55;   // the share of a marker's contrast that is left after the host's 8 px blur (6 px square: about half in the middle)
+
+// ---- the XL's blur: pictures made by blurring the awake markers (independent of the model in standby.h: 8 x 8 supersampling of the awake picture under the box the XL measured) ----
+struct Src { int x, y, w, h; uint32_t rgb; };
+
+std::vector<Src> viewSources (int view, int slot = 0)
+{
+    const auto& v = legacy::kViews[view];
+    std::vector<Src> s;
+    for (int m = 0; m < 2; ++m)
+        s.push_back ({ v.markers[m].rect.x, v.markers[m].rect.y, v.markers[m].rect.w, v.markers[m].rect.h, v.markers[m].rgb });
+    s.push_back ({ v.instance.x, v.instance.y, v.instance.w, v.instance.h, static_cast<uint32_t> (layout::kInstanceSlotRgb[slot]) });
+    return s;
+}
+
+/** The host's picture around the sources: the awake picture (background 1e1d1e, the sources as solid squares) blurred by a box `width` px wide (0: not blurred) centred 0.25 px to the left / above the pixel
+    centre, times `f`, painted into the fake framebuffer (12 px around every source). */
+void paintPicture (FakeFrame& fr, const std::vector<Src>& srcs, double f, double width, int rot = 90)
+{
+    const int pad = 12;
+    const int sub = 4;   // sub-samples per pixel and axis: the box edges (width 7.5, shift -0.25) lie on this grid
+    auto awakeAt = [&] (double x, double y, double out[3])
+    {
+        uint32_t c = 0x1e1d1eu;
+        for (const Src& s : srcs)
+            if (x >= s.x && x < s.x + s.w && y >= s.y && y < s.y + s.h)
+                c = s.rgb;
+        for (int k = 0; k < 3; ++k)
+            out[k] = static_cast<double> ((c >> (16 - 8 * k)) & 255u);
+    };
+    std::set<std::pair<int, int>> done;
+    for (const Src& s : srcs)
+        for (int y = s.y - pad; y < s.y + s.h + pad; ++y)
+            for (int x = s.x - pad; x < s.x + s.w + pad; ++x)
+            {
+                if (! done.insert ({ x, y }).second)
+                    continue;
+                double acc[3] = { 0, 0, 0 };
+                if (width <= 0.0)
+                    awakeAt (x + 0.5, y + 0.5, acc);
+                else
+                {
+                    const int n = static_cast<int> (std::lround (width * sub));
+                    const double x0 = x + 0.5 - 0.25 - width / 2.0, y0 = y + 0.5 - 0.25 - width / 2.0;
+                    for (int j = 0; j < n; ++j)
+                        for (int i = 0; i < n; ++i)
+                        {
+                            double c[3];
+                            awakeAt (x0 + (i + 0.5) / sub, y0 + (j + 0.5) / sub, c);
+                            for (int k = 0; k < 3; ++k) acc[k] += c[k];
+                        }
+                    for (double& a : acc) a /= static_cast<double> (n * n);
+                }
+                uint32_t rgb = 0;
+                for (int k = 0; k < 3; ++k)
+                    rgb |= static_cast<uint32_t> (std::floor (f * acc[k] + 0.5)) << (16 - 8 * k);
+                int px, py;
+                uiPointToPanel (rot, x, y, fr.panelW, fr.panelH, px, py);
+                fr.setPixel (px, py, rgb);
+            }
+}
+
+/** A PageDetector over the legacy table (the 17 views, their instance rectangles). */
+struct DetRig
+{
+    FakeFrame frame;
+    std::vector<MarkerSpec> marks;
+    std::vector<Rect> insts;
+    std::unique_ptr<PageDetector> det;
+    DetRig()
+    {
+        frame.views = legacy::kViews;
+        for (int v = 0; v < legacy::kNumViews; ++v)
+        {
+            for (int m = 0; m < 2; ++m)
+                marks.push_back ({ { legacy::kViews[v].markers[m].rect.x, legacy::kViews[v].markers[m].rect.y, legacy::kViews[v].markers[m].rect.w, legacy::kViews[v].markers[m].rect.h }, legacy::kViews[v].markers[m].rgb });
+            insts.push_back ({ legacy::kViews[v].instance.x, legacy::kViews[v].instance.y, legacy::kViews[v].instance.w, legacy::kViews[v].instance.h });
+        }
+        det = std::make_unique<PageDetector> (frame, marks.data(), legacy::kNumViews, insts.data());
+    }
+};
 
 struct FakeTouch final : ITouchInput
 {
@@ -494,6 +577,282 @@ int main()
         touchAt (TouchEvent::Up);
         r.run (300);
         check (r.ctl->touchTaken() > taken && r.ctl->uiState (slot).level() == UiStack::Level::full, "the next tap opens the full screen: the controls work again");
+    }
+    // ---- the XL's blur: the model against what the XL's two grabs measured (play page, 1280 x 800 UI orientation, host plane) ----
+    {
+        // the dimmed host picture, sampled: row y = 137, x = 30 .. 54 step 2 (left marker at x 33 .. 38, instance picture at 45 .. 50), and x = 1236 .. 1254 step 2 (right marker at 1241 .. 1246)
+        const uint32_t left[13] = { 0x25201fu, 0x382622u, 0x4b2d26u, 0x543027u, 0x482b25u, 0x342522u, 0x231e2fu, 0x1b1a57u, 0x191882u, 0x181795u, 0x19197au, 0x1b1b4fu, 0x1d1c2bu };
+        const uint32_t right[10] = { 0x1e1d1eu, 0x202524u, 0x273733u, 0x2d4b44u, 0x30534bu, 0x2c4741u, 0x253330u, 0x202323u, 0x1e1d1eu, 0x1e1d1eu };
+        const auto src = viewSources (play1);
+        int worst = 0;
+        auto compare = [&] (int x, uint32_t got)
+        {
+            for (int c = 0; c < 3; ++c)
+            {
+                double want = static_cast<double> ((0x1e1d1eu >> (16 - 8 * c)) & 255u);
+                const double bg = want;
+                for (const Src& q : src)
+                    want += standby::detail::boxCover (x, q.x, q.w) * standby::detail::boxCover (137, q.y, q.h) * (static_cast<double> ((q.rgb >> (16 - 8 * c)) & 255u) - bg);
+                const double g = static_cast<double> ((got >> (16 - 8 * c)) & 255u);
+                const double tol = standby::kBlurTolerance + standby::kBlurRelTolerance * std::fabs (want - bg);
+                worst = std::max (worst, static_cast<int> (std::ceil (std::fabs (g - want) - tol)));
+            }
+        };
+        for (int i = 0; i < 13; ++i) compare (30 + 2 * i, left[i]);
+        for (int i = 0; i < 10; ++i) compare (1236 + 2 * i, right[i]);
+        check (worst <= 0, "the blur model (box 7.5 px) reproduces the 23 measured samples of the XL's dimmed picture within the tolerance (largest excess " + std::to_string (worst) + " levels)");
+        // the measured centres: marker 1 awake (114,58,44) -> dimmed (84,48,39), marker 2 (20,20,216) -> (24,23,149), right (58,114,100) -> (48,83,75); the background (30,29,30) does not change
+        const double cover = standby::detail::boxCover (36, 33, 6) * standby::detail::boxCover (137, 134, 6);
+        check (std::fabs ((84.0 - 30.0) / (114.0 - 30.0) - cover) < 0.03 && std::fabs ((149.0 - 30.0) / (216.0 - 30.0) - cover) < 0.03 && std::fabs ((83.0 - 29.0) / (114.0 - 29.0) - cover) < 0.03,
+               "the three measured centres keep " + std::to_string (cover) + " of their contrast (0.64 measured on all three channels of the three markers)");
+    }
+    // ---- the XL's blur: the picture-alone look, every view, the Key 61's half brightness, and what must be refused ----
+    {
+        std::unique_ptr<DetRig> d = std::make_unique<DetRig>();
+        auto fresh = [&] { d = std::make_unique<DetRig>(); };
+        auto look = [&] (int view, bool panel = false) { return d->det->blurLook (view, 90, 0, panel); };
+        int recognised = 0, factorOk = 0;
+        for (int v = 0; v < legacy::kNumViews; ++v)
+        {
+            fresh();
+            paintPicture (d->frame, viewSources (v), 1.0, 7.5);
+            const auto r = look (v);
+            recognised += r.ok ? 1 : 0;
+            factorOk += r.measured && r.factor == 1.0 ? 1 : 0;
+            if (! r.ok)
+                std::printf ("      (view %s not recognised)\n", legacy::kViews[v].name);
+        }
+        check (recognised == legacy::kNumViews && factorOk == legacy::kNumViews, "blur only (factor 1.0): the blurred markers of every one of the " + std::to_string (legacy::kNumViews) + " views are recognised, the factor measured as 1 (" + std::to_string (recognised) + " / " + std::to_string (factorOk) + ")");
+        int half = 0, halfFactor = 0;
+        for (int v = 0; v < legacy::kNumViews; ++v)
+        {
+            fresh();
+            paintPicture (d->frame, viewSources (v), 0.5, 7.5);
+            const auto r = look (v);
+            half += r.ok ? 1 : 0;
+            if (! r.ok)
+                std::printf ("      (half: view %s not recognised, measured %d factor %.3f)\n", legacy::kViews[v].name, r.measured ? 1 : 0, r.factor);
+            halfFactor += r.measured && r.factor == standby::kDimFactor ? 1 : 0;
+        }
+        check (half == legacy::kNumViews && halfFactor == legacy::kNumViews, "half brightness and blurred (the Key 61): the same code recognises every view and measures the factor 0.5 (" + std::to_string (half) + " / " + std::to_string (halfFactor) + ")");
+        // the box a little narrower and wider than the fit: still recognised
+        int widths = 0;
+        for (double w : { 7.25, 7.4 })
+        {
+            fresh();
+            paintPicture (d->frame, viewSources (play1), 1.0, w);
+            widths += look (play1).ok ? 1 : 0;
+        }
+        check (widths == 2, "a box of 7.25 or 7.4 px instead of 7.5 (the fit's own uncertainty) is recognised too (" + std::to_string (widths) + " / 2)");
+        // the sharp (awake) markers are not a blurred look: the contrast at the centre is 1.0, not 0.64
+        fresh();
+        paintPicture (d->frame, viewSources (play1), 1.0, 0.0);
+        check (! look (play1).ok && look (play1).measured, "the awake (sharp) markers are no blurred look");
+        // another view's markers, blurred, are not the held view's (every view whose marker colours differ by 30 levels or more)
+        int refused = 0, pairs = 0;
+        for (int a = 0; a < legacy::kNumViews; ++a)
+        {
+            fresh();
+            paintPicture (d->frame, viewSources (a), 1.0, 7.5);
+            for (int b = 0; b < legacy::kNumViews; ++b)
+            {
+                int far = 0;
+                for (int m = 0; m < 2; ++m)
+                    for (int c = 0; c < 3; ++c)
+                        far = std::max (far, std::abs (static_cast<int> ((legacy::kViews[a].markers[m].rgb >> (8 * c)) & 255u) - static_cast<int> ((legacy::kViews[b].markers[m].rgb >> (8 * c)) & 255u)));
+                if (a == b || far < 30)
+                    continue;
+                ++pairs;
+                refused += look (b).ok ? 0 : 1;
+            }
+        }
+        check (pairs > 100 && refused == pairs, "the blurred markers of another view (colours 30+ levels apart) are not accepted as the held view (" + std::to_string (refused) + " of " + std::to_string (pairs) + " pairs refused)");
+        // the same view, but another instance's picture (the held slot is 0, the host drew slot 5)
+        fresh();
+        paintPicture (d->frame, viewSources (play1, 5), 1.0, 7.5);
+        check (! d->det->blurLook (play1, 90, 0, false).ok && d->det->blurLook (play1, 90, 5, false).ok, "the blurred picture of another instance's page (slot 5) is not the held slot 0's; slot 5 itself is");
+        // a screen with no markers: plain background, at 1.0 and 0.5, and the fake's default grey
+        for (double f : { 1.0, 0.5 })
+        {
+            fresh();
+            std::vector<Src> none;
+            for (const Src& q : viewSources (play1)) none.push_back ({ q.x, q.y, q.w, q.h, 0x1e1d1eu });
+            paintPicture (d->frame, none, f, 7.5);
+            check (! look (play1).ok, "a screen with no markers (plain background at " + std::to_string (f).substr (0, 3) + "): not accepted");
+        }
+        fresh();
+        check (! look (play1).ok && ! look (play1).measured, "a framebuffer of another colour altogether: not accepted, no factor");
+        // a host pop-up over the page (here: a black box with white text where the left marker was) is no look
+        fresh();
+        paintPicture (d->frame, viewSources (play1), 1.0, 7.5);
+        for (int y = 128; y < 146; ++y)
+            for (int x = 28; x < 56; ++x)
+            {
+                int px, py;
+                uiPointToPanel (90, x, y, d->frame.panelW, d->frame.panelH, px, py);
+                d->frame.setPixel (px, py, (x + y) % 5 == 0 ? 0xffffffu : 0x000000u);
+            }
+        check (! look (play1).ok, "a host pop-up (black with white text) over the markers is not a blurred look");
+        // the Q-Link pop-up over the right marker: allowed only where the caller says the right marker may be under it
+        fresh();
+        auto srcs = viewSources (play1);
+        std::vector<Src> leftOnly = { srcs[0], srcs[2] };
+        paintPicture (d->frame, leftOnly, 1.0, 7.5);
+        for (int y = 122; y < 152; ++y)
+            for (int x = 1226; x < 1260; ++x)
+            {
+                int px, py;
+                uiPointToPanel (90, x, y, d->frame.panelW, d->frame.panelH, px, py);
+                d->frame.setPixel (px, py, 0x1e1d1eu);
+            }
+        check (! look (play1, false).ok && look (play1, true).ok, "the right marker under the Q-Link pop-up (its fill instead): refused without the pop-up flag, accepted with it");
+        // the pop-up flag does not make a missing left marker acceptable
+        fresh();
+        std::vector<Src> rightOnly = { srcs[1] };
+        paintPicture (d->frame, rightOnly, 1.0, 7.5);
+        std::vector<Src> bgLeft = { { srcs[0].x, srcs[0].y, srcs[0].w, srcs[0].h, 0x1e1d1eu }, { srcs[2].x, srcs[2].y, srcs[2].w, srcs[2].h, 0x1e1d1eu } };
+        paintPicture (d->frame, bgLeft, 1.0, 7.5);
+        check (! look (play1, true).ok, "with the pop-up flag: the left marker must still be there");
+    }
+    // ---- the tracker with the picture-alone evidence ----
+    {
+        using standby::Tracker;
+        // XL: the backlight never changes (3, 3), the blurred markers decide, wake = the awake markers
+        Tracker t;
+        double now = 0.0;
+        int hidden = 0;
+        for (int i = 0; i < 300; ++i) { now += 10.0; t.update (now, true, false, true, true, 3, false); }
+        for (int i = 0; i < 200; ++i)
+        {
+            now += 10.0;
+            const standby::Verdict v = t.update (now, false, false, true, true, 3, true);
+            if (! v.hold || ! v.dimmed) ++hidden;
+        }
+        check (hidden == 0 && t.dimmed() && t.dims() == 1 && std::string (t.evidence()) == "picture" && t.hiddenTicks() == 0, "tracker, XL: the blurred markers alone dim it at once, backlight unchanged, evidence picture, 0 hidden");
+        // half-way frames (neither sharp nor blurred) while waking: held, then awake
+        int gone = 0;
+        for (int i = 0; i < 20; ++i) { now += 10.0; if (! t.update (now, false, false, true, true, 3, false).hold) ++gone; }
+        now += 10.0;
+        t.update (now, true, false, true, true, 3, false);
+        check (gone == 0 && ! t.dimmed() && t.wakes() == 1 && std::string (t.evidence()) == "none", "tracker, XL: 200 ms of half-way markers are held, then the sharp markers wake it (evidence none again)");
+        // half-way frames that last longer than the bound: the page is gone, the host left it
+        for (int i = 0; i < 100; ++i) { now += 10.0; t.update (now, false, false, true, true, 3, true); }
+        int held = 0;
+        for (int i = 0; i < 60; ++i) { now += 10.0; if (t.update (now, false, false, true, true, 3, false).hold) ++held; }
+        check (! t.dimmed() && held > 0 && held <= static_cast<int> (standby::kHoldMs / 10.0) + 2, "tracker, XL: neither markers for longer than the hold: the page goes (held " + std::to_string (held) + " ticks)");
+        // Key 61: the backlight and the picture: evidence backlight+picture; the picture alone first (blur look before the backlight follows) is picture, then backlight+picture
+        Tracker k;
+        now = 0.0;
+        for (int i = 0; i < 300; ++i) { now += 10.0; k.update (now, true, false, true, true, 227, false); }
+        for (int i = 0; i < 5; ++i) { now += 10.0; k.update (now, false, true, true, true, 106, false); }
+        check (k.dimmed() && std::string (k.evidence()) == "backlight+picture", "tracker, Key 61: backlight drop + dimmed markers: evidence backlight+picture");
+        // an unrelated screen: no markers, no look: never dimmed
+        Tracker u;
+        now = 0.0;
+        for (int i = 0; i < 300; ++i) { now += 10.0; u.update (now, true, false, true, true, 3, false); }
+        for (int i = 0; i < 100; ++i) { now += 10.0; u.update (now, false, false, true, true, 3, false); }
+        check (! u.dimmed() && u.dims() == 0, "tracker: the page changed to an unrelated screen: no dim state");
+    }
+    // ---- the controller on the XL: backlight 3 -> 3, the picture blurred but not darkened ----
+    {
+        auto paint = [] (Rig& r, int view, double f, double width) { paintPicture (r.frame, viewSources (view), f, width); };
+        Rig r (true, 3);
+        paint (r, filter1, 1.0, 0.0);
+        r.run (2200);
+        r.watching = true;
+        r.watchView = filter1;
+        r.missing = 0;
+        const int disables = r.plane.countOf ("disable");
+        const std::vector<uint32_t> awake = r.plane.shownCopy;
+        check (r.on() && r.ctl->currentIndex() == filter1 && ! awake.empty(), "(XL: the page is on screen awake, backlight 3)");
+        paint (r, filter1, 1.0, 7.5);   // the host blurs its picture: the backlight stays 3
+        r.run (800);
+        std::string st = r.status();
+        check (r.missing == 0 && r.plane.countOf ("disable") == disables && line (st, "dimmed") == "yes" && line (st, "dim_evidence") == "picture" && line (st, "dim_transitions") == "1"
+                   && line (st, "dim_hidden_frames") == "0" && line (st, "backlight_value") == "3" && std::stod (line (st, "dim_factor")) == 1.0,
+               "XL: the blur alone dims it: our picture never missing, the plane never switched off, evidence " + line (st, "dim_evidence") + ", factor " + line (st, "dim_factor") + ", hidden frames " + line (st, "dim_hidden_frames"));
+        check (r.plane.shownCopy == awake, "XL, dimmed: our picture is the awake picture, bit for bit (not darkened, sharp)");
+        // half-way markers (a blur of 3 px: neither sharp nor the dim): held
+        paint (r, filter1, 1.0, 3.0);
+        r.run (150);
+        check (r.missing == 0 && r.on() && line (r.status(), "dimmed") == "yes", "XL: markers half-way between blurred and sharp for 150 ms: our picture stays, no frame missing");
+        // wake
+        paint (r, filter1, 1.0, 0.0);
+        r.run (500);
+        st = r.status();
+        check (r.missing == 0 && line (st, "dimmed") == "no" && line (st, "wake_transitions") == "1" && line (st, "dim_evidence") == "none" && r.plane.shownCopy == awake, "XL: the sharp markers are back: awake, 1 wake, no frame missing, the same picture");
+        // dim again, then the host leaves for another page (another view's markers, blurred): the page goes within the bound
+        paint (r, filter1, 1.0, 7.5);
+        r.run (500);
+        check (line (r.status(), "dimmed") == "yes", "(XL: dimmed again)");
+        {
+            std::vector<Src> gone;   // filter1's markers are gone (the host's background where they were), play1's are there, blurred
+            for (const Src& q : viewSources (filter1)) gone.push_back ({ q.x, q.y, q.w, q.h, 0x1e1d1eu });
+            paintPicture (r.frame, gone, 1.0, 7.5);
+        }
+        paint (r, 14, 1.0, 7.5);   // play1's markers blurred, not filter1's
+        r.watching = false;
+        r.run (700);
+        check (! r.on() && line (r.status(), "dimmed") == "no" && line (r.status(), "dim_hidden_frames") == "0", "XL: while dimmed the host shows another page (its blurred markers): ours goes, not held");
+    }
+    {
+        // a host page that is blurred and has none of our markers: nothing of ours appears
+        Rig r (true, 3);
+        r.frame.setAll (false, 90);
+        std::vector<Src> none;
+        for (const Src& q : viewSources (filter1)) none.push_back ({ q.x, q.y, q.w, q.h, 0x1e1d1eu });
+        paintPicture (r.frame, none, 1.0, 7.5);
+        r.run (1500);
+        check (! r.on() && line (r.status(), "dimmed") == "no" && line (r.status(), "dim_transitions") == "0", "XL: a blurred host page without our markers: nothing of ours appears, no dim state");
+    }
+    // ---- the Key 61 path stays: backlight + picture, the half brightness, the evidence says so ----
+    {
+        Rig r;
+        startAwake (r, filter1);
+        paintPicture (r.frame, viewSources (filter1), 0.5, 7.5);   // the real blurred half-brightness picture, backlight following
+        r.setBl (106);
+        r.run (800);
+        const std::string st = r.status();
+        check (line (st, "dimmed") == "yes" && line (st, "dim_evidence") == "backlight+picture" && std::fabs (std::stod (line (st, "dim_factor")) - 0.5) < 1e-9 && line (st, "dim_hidden_frames") == "0",
+               "Key 61 (blurred half brightness picture + backlight drop): dimmed, evidence " + line (st, "dim_evidence") + ", factor " + line (st, "dim_factor"));
+        Rig r2;
+        startAwake (r2, filter1);
+        dimView (r2, filter1);   // the older fixture: only the marker pixels at half brightness, no measurable background
+        r2.setBl (106);
+        r2.run (800);
+        check (line (r2.status(), "dimmed") == "yes" && line (r2.status(), "dim_evidence") == "backlight+picture" && line (r2.status(), "dim_factor") == "0.5", "Key 61 fixture: evidence backlight+picture, factor 0.5 (the darkening is the same as before)");
+    }
+    // ---- the first touch while dimmed on the XL (no backlight signal) ----
+    {
+        Rig r (true, 3);
+        r.inst.playSel[0].store (2);
+        paintPicture (r.frame, viewSources (play1), 1.0, 0.0);
+        r.run (2200);
+        auto* pv = static_cast<PlayView*> (const_cast<IView*> (r.ctl->viewByName ("play1")));
+        check (pv != nullptr && pv->oscUi() != nullptr && r.ctl->currentIndex() == play1, "(XL: the Play page is on screen)");
+        const synthyboy_mpc::ui::Rect fb = pv->oscUi()->compact().full.rect();
+        const int x = fb.x + fb.w / 2, y = fb.y + fb.h / 2;
+        const int slot = r.ctl->slotOf (&r.inst);
+        auto touchAt = [&] (TouchEvent::Kind k) { TouchEvent e; e.kind = k; e.x = x; e.y = y; e.timeUs = 1; r.touch.queue.push_back (e); };
+        paintPicture (r.frame, viewSources (play1), 1.0, 7.5);
+        r.run (800);
+        check (line (r.status(), "dimmed") == "yes" && line (r.status(), "dim_evidence") == "picture" && r.ctl->currentIndex() == play1, "(XL: dimmed on the Play page by the blur alone)");
+        const unsigned long taken = r.ctl->touchTaken();
+        touchAt (TouchEvent::Down);
+        r.run (40);
+        paintPicture (r.frame, viewSources (play1), 1.0, 0.0);   // the host wakes
+        r.run (300);
+        touchAt (TouchEvent::Move);
+        r.run (40);
+        touchAt (TouchEvent::Up);
+        r.run (1400);
+        check (line (r.status(), "dimmed") == "no" && r.ctl->touchTaken() == taken && r.ctl->uiState (slot).isMain() && ! r.inst.uiFullOpen.load() && std::stoi (line (r.status(), "dim_touch_swallowed")) == 3,
+               "XL: the first touch (no backlight change anywhere) woke the host and changed nothing of ours (swallowed " + line (r.status(), "dim_touch_swallowed") + ")");
+        touchAt (TouchEvent::Down);
+        r.run (60);
+        touchAt (TouchEvent::Up);
+        r.run (300);
+        check (r.ctl->touchTaken() > taken && r.ctl->uiState (slot).level() == UiStack::Level::full, "XL: the next tap opens the full screen: the controls work again");
     }
     // ---- cost of the darkening, and of the blur the host also applies (decides whether a blur is worth it) ----
     {

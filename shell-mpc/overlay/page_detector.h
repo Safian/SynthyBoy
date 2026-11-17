@@ -162,6 +162,43 @@ public:
         return ok;
     }
 
+    /** The picture-alone dim evidence of the held `view` (standby.h rule (b)): `ok` = the blurred markers of the view (both of its pair and the instance picture of `slot` when it is a slot 0 .. 15) are on
+        screen at the measured `factor`; `measured` = the host's background level near the markers gave a factor (valid even when `ok` is false, for darkening our own picture). */
+    struct BlurLook { bool ok = false, measured = false; double factor = 1.0; };
+    BlurLook blurLook (int view, int rotation, int slot, bool rightMayBeUnderPanel)
+    {
+        BlurLook r;
+        if (view < 0 || view >= count_)
+            return r;
+        int w = 0, h = 0;
+        if (! source_.begin (w, h))
+            return r;
+        standby::BlurSource s[3];
+        int n = 2;
+        for (int m = 0; m < 2; ++m)
+        {
+            const Rect& q = markers_[view * 2 + m].rect;
+            s[m].x = q.x; s[m].y = q.y; s[m].w = q.w; s[m].h = q.h; s[m].rgb = markers_[view * 2 + m].rgb; s[m].known = true;
+        }
+        if (instances_ && instances_[view].w > 0)
+        {
+            const Rect& q = instances_[view];
+            s[2].x = q.x; s[2].y = q.y; s[2].w = q.w; s[2].h = q.h;
+            s[2].known = slot >= 0 && slot < layout::kMaxInstances;
+            s[2].rgb = s[2].known ? static_cast<uint32_t> (layout::kInstanceSlotRgb[slot]) : 0u;
+            n = 3;
+        }
+        const double f = standby::measureFactor (source_, s, n, rotation, w, h);
+        if (f > 0.0)
+        {
+            r.measured = true;
+            r.factor = f;
+            r.ok = standby::blurredPicture (source_, s, n, rotation, w, h, f, rightMayBeUnderPanel);
+        }
+        source_.end();
+        return r;
+    }
+
 private:
     /** The panel's signature in the framebuffer: on every sample row the black line (x 1024 and 1025), not black just left of it, the fill colour at three columns right of it. */
     bool qlinkPanelOnScreen (int rotation, int w, int h)

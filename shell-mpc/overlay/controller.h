@@ -532,8 +532,22 @@ private:
         blNow_ = haveBl ? bl : -1;
         const bool awake = d.view >= 0;
         const bool havePage = current_ >= 0 && activeSlot_ >= 0 && rotationKnown() && d.readable;
-        const bool look = ! awake && havePage && detector_->dimLook (current_, rotation_, standby::kDimFactor, keyEdge_ < PanelKey::kNoKey);
-        const standby::Verdict v = standby_.update (nowMs, awake, look, havePage, haveBl, bl);
+        const bool panel = keyEdge_ < PanelKey::kNoKey;
+        const bool look = ! awake && havePage && detector_->dimLook (current_, rotation_, standby::kDimFactor, panel);
+        PageDetector::BlurLook blur;
+        if (! awake && havePage)
+            blur = detector_->blurLook (current_, rotation_, activeSlot_, panel);   // picture-alone evidence (a host that only blurs: the XL) and the host's own brightness
+        const standby::Verdict v = standby_.update (nowMs, awake, look, havePage, haveBl, bl, blur.ok);
+        if (v.dimmed && (look || blur.measured))
+        {
+            // our picture is drawn at the host's brightness: measured from its background near the markers (the Key 61 half, the XL 1.0); with no measurement the half of the backlight evidence
+            const double f = blur.measured ? blur.factor : (look ? standby::kDimFactor : 1.0);
+            if (std::fabs (f - dimFactor_.load()) > 0.004)
+            {
+                dimFactor_.store (f);
+                needFrame_ = true;
+            }
+        }
         if (v.hold && ! awake)
         {
             d.view = current_;
@@ -576,7 +590,7 @@ private:
     {
         std::ostringstream o;
         o << "backlight_node: " << (backlight_.node().empty() ? "none" : backlight_.node()) << "\nbacklight_value: " << blNow_ << "\nbacklight_awake_reference: " << standby_.awakeBacklight()
-          << "\ndimmed: " << (dimmed_.load() ? "yes" : "no") << "\ndim_transitions: " << standby_.dims() << "\nwake_transitions: " << standby_.wakes() << "\ndim_hold_ticks: " << standby_.holdTicks()
+          << "\ndimmed: " << (dimmed_.load() ? "yes" : "no") << "\ndim_evidence: " << standby_.evidence() << "\ndim_factor: " << (dimmed_.load() ? dimFactor_.load() : 1.0) << "\ndim_transitions: " << standby_.dims() << "\nwake_transitions: " << standby_.wakes() << "\ndim_hold_ticks: " << standby_.holdTicks()
           << "\ndim_hidden_frames: " << standby_.hiddenTicks() << "\ndim_touch_swallowed: " << dimTouchSwallowed_ << "\n";
         return o.str();
     }
@@ -958,8 +972,8 @@ private:
             hideGpu (nowMs);
             return;
         }
-        if (dimmed_.load())
-            standby::dimScene (gpuScene_, standby::kDimFactor);   // the host's picture is at half brightness: so is ours
+        if (dimmed_.load() && dimFactor_.load() < kNoDarkening)
+            standby::dimScene (gpuScene_, dimFactor_.load());   // the host's picture is darkened (Key 61: half): so is ours; a host that only blurs (the XL) leaves ours sharp and bright
         const auto t0 = std::chrono::steady_clock::now();
         if (! gpu_->show (ui, panel, rotation_, current_, views_[static_cast<size_t> (current_)]->name(), nowMs) || ! gpu_->submit (gpuScene_, nowMs))
             return;     // the helper failed: the next tick draws with the CPU
@@ -1044,8 +1058,8 @@ private:
         canvas_.resize (static_cast<size_t> (w) * static_cast<size_t> (h));
         const auto t0 = Clock::now();
         view.render (canvas_.data(), w, h);
-        if (dimmed_.load())
-            standby::dimCanvas (canvas_.data(), canvas_.size(), standby::kDimFactor);
+        if (dimmed_.load() && dimFactor_.load() < kNoDarkening)
+            standby::dimCanvas (canvas_.data(), canvas_.size(), dimFactor_.load());
         const auto t1 = Clock::now();
         size_t stride = 0;
         uint32_t* back = presenter_.backBuffer (stride);
@@ -1547,6 +1561,8 @@ private:
     std::function<std::string()> extraStatus_;
     standby::Backlight backlight_ { paths_.backlightDir };
     standby::Tracker standby_;
+    std::atomic<double> dimFactor_ { standby::kDimFactor };   // the brightness of the host's picture while dimmed (measured, standby.h measureFactor)
+    static constexpr double kNoDarkening = 0.98;               // a factor above this: the host's picture is not darkened, ours is drawn as it is
     std::atomic<bool> dimmed_ { false };   // the host's picture is dimmed (standby_): ours is drawn at half brightness, the touch is swallowed
     bool swallowGesture_ = false;
     int blNow_ = -1;

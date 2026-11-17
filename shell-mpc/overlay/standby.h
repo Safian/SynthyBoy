@@ -1,7 +1,20 @@
-// SynthyBoy - MPC overlay: the host's standby dim. After about ten minutes without input the host drops the backlight (Key 61: /sys/class/backlight/<node>/brightness 227 -> 106 in one step) AND repaints its
-// own picture darkened to half and blurred (about 8 px), so the markers of our pages are no longer in the colours the page detector knows. This module lets our picture stay: it finds the backlight
-// node, reads the markers at half brightness, runs the small state machine that holds the page across the two signals (picture and backlight) that do not change in the same frame, and darkens our
-// scene / canvas to the host's half brightness. The numbers are measured: docs/MPC.md "Standby dim".
+// SynthyBoy - MPC overlay: the host's standby dim. After about ten minutes without input the host repaints its own picture BLURRED (an 8 px box), and on the Key 61 (gen 1) also darkened to half and with the
+// backlight dropped (/sys/class/backlight/<node>/brightness 227 -> 106 in one step); on the MPC XL (gen 2) it only blurs (backlight 3 -> 3, background (30,29,30) -> (30,29,30)). So the markers of our pages
+// are no longer in the colours the page detector knows. This module lets our picture stay: it finds the backlight node, reads the blurred markers, runs the small state machine that holds the page across
+// the signals that do not change in the same frame, and darkens our scene / canvas to the host's brightness. The numbers are measured: docs/MPC.md "Standby dim".
+//
+// Two independent kinds of evidence that the page is dimmed:
+//  (a) backlight + picture (Key 61): the backlight is at or below kDropRatio of its awake value AND the held view's markers look dimmed (`markersLookDimmed`: the marker colour lines at the dim
+//      factor, the blur's coverage unknown, 5 samples per marker).
+//  (b) picture alone (XL, and any host that only blurs): `blurredPicture`. The host's background level near the markers gives the factor f (host background / known background; XL 1.00, Key 61 0.49;
+//      accepted 0.35 .. 1.05, snapped to 1 within 0.04 and to kDimFactor within 0.03). Then the picture around ALL markers of the held view (the left marker, the instance picture, the right marker) must
+//      be the sum of their colours blurred by the measured kernel: a box of kBlurWidth = 7.5 px centred kBlurShift = -0.25 px, i.e. pixel = f * (bg + sum_i cover_i(x) * cover_i(y) * (marker_i - bg)).
+//      Measured on the XL (play page, 3 markers, 2 x 35 x 40 px around them): mean error 0.23 levels, largest 7 (with the 4 px blue tail, 0.4 over the tolerance below). 13 samples per marker (centre,
+//      the four sides 3 px outside, the four inset corners, the four sides 6 px outside) must each match within kBlurTolerance + kBlurRelTolerance * |predicted contrast| per channel; so the plain
+//      background (no contrast), a colour area (coverage 1 instead of 0.64), another view's colours (play1 vs filter1: 60 levels apart), a host pop-up and an unrelated screen are all refused, and the
+//      three markers must agree on the same view. A marker whose predicted centre contrast is below kBlurMinContrast cannot be evidence (the view then has no blur look). The right marker may lie under
+//      the host's Q-Link pop-up: then its samples must read the dimmed pop-up fill. Neighbour views differ by 7 levels in a channel (4.5 after the blur): the identity among them is the held view's.
+// The Tracker holds the page while the markers are half-way between sharp and blurred (kHoldMs) so the host skin is never shown for a frame.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -35,6 +48,11 @@ constexpr double kHoldMs = 300.0;
 /** A backlight value that has not changed for this long while the page is on screen awake is the new awake reference (the user may change the brightness; the wake step must not become it). */
 constexpr double kBaselineSettleMs = 1500.0;
 constexpr int kLookTolerance = 3;   // levels per channel, plus a tenth of the marker's contrast
+/** The blur the host paints over its picture while dimmed, fitted to the XL's two grabs (the box width and the shift of its centre in pixels), and the per-sample tolerance of the fit. */
+constexpr double kBlurWidth = 7.5, kBlurShift = -0.25;
+constexpr double kBlurTolerance = 3.5, kBlurRelTolerance = 0.15;   // levels per channel, plus a share of the predicted contrast
+constexpr double kBlurMinContrast = 6.0;                           // levels: a marker that shows less than this at its centre cannot be evidence
+constexpr double kMinFactor = 0.35, kMaxFactor = 1.05;             // the dim factors a host picture may have (XL 1.0, Key 61 0.5)
 constexpr double kMinCoverage = 0.15, kMaxCoverage = 1.35;   // how much of the marker's contrast must be left after the blur (a 6 px square under an 8 px blur keeps about half in its middle)
 
 /** The brightness of the panel: the first readable node under /sys/class/backlight/ (any node name; the XL has another one). The value is read at every call (a sysfs read of a few bytes). */
@@ -182,6 +200,156 @@ bool markersLookDimmed (IFrameSource& src, const Marker* pair, int rotation, int
     return true;
 }
 
+/** A marker or picture the blur test knows: its rectangle (landscape UI pixels), its awake colour, and whether that colour is known (the instance picture's is only when the held slot is). */
+struct BlurSource
+{
+    int x = 0, y = 0, w = 0, h = 0;
+    uint32_t rgb = 0;
+    bool known = true;
+};
+
+namespace detail
+{
+/** The share of the 1-pixel cell `u` that the blur box (kBlurWidth wide, centre at the cell centre + kBlurShift) takes from the span [a0, a0 + len). One axis of the separable blur. */
+inline double boxCover (int u, int a0, int len) noexcept
+{
+    const double l = u + 0.5 + kBlurShift - kBlurWidth / 2.0, h = l + kBlurWidth;
+    const double lo = std::max (l, static_cast<double> (a0)), hi = std::min (h, static_cast<double> (a0 + len));
+    return hi > lo ? (hi - lo) / kBlurWidth : 0.0;
+}
+/** True when pixel (x, y) is so near the span of a source of unknown colour that its blur reaches it. */
+inline bool nearRect (int x, int y, const BlurSource& s) noexcept
+{
+    const double r = kBlurWidth / 2.0 + 1.0;
+    return x > s.x - r && x < s.x + s.w + r && y > s.y - r && y < s.y + s.h + r;
+}
+inline double channelOf (uint32_t c, int ch) noexcept { return static_cast<double> ((c >> (16 - 8 * ch)) & 255u); }
+} // namespace detail
+
+/** The dim factor of the host's picture: its background level on the sides of the markers (9 px beyond the rectangles, outside the blur's reach) against the known background. -1: not measurable
+    (the points disagree: something else is there). Snapped to 1 (the picture is not darkened) and to kDimFactor (the Key 61's half). */
+inline double measureFactor (IFrameSource& src, const BlurSource* s, int n, int rotation, int w, int h, uint32_t background = 0x1e1d1eu)
+{
+    double f[32];
+    int cnt = 0;
+    double nom = 0.0;
+    for (int c = 0; c < 3; ++c)
+        nom += detail::channelOf (background, c);
+    if (nom < 30.0)
+        return -1.0;
+    constexpr int kGap = 9;
+    for (int i = 0; i < n && cnt < 28; ++i)
+    {
+        const BlurSource& r = s[i];
+        const int cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+        const int pts[4][2] = { { r.x - kGap, cy }, { r.x + r.w - 1 + kGap, cy }, { cx, r.y - kGap }, { cx, r.y + r.h - 1 + kGap } };
+        for (const auto& p : pts)
+        {
+            bool inside = false;
+            for (int j = 0; j < n; ++j)   // not near another source of the view
+                if (j != i && p[0] > s[j].x - kGap + 3 && p[0] < s[j].x + s[j].w + kGap - 3 && p[1] > s[j].y - kGap + 3 && p[1] < s[j].y + s[j].h + kGap - 3)
+                    inside = true;
+            int px, py;
+            uint32_t v = 0;
+            if (inside || p[0] < 0 || p[1] < 0)
+                continue;
+            uiPointToPanel (rotation, p[0], p[1], w, h, px, py);
+            if (! src.pixel (px, py, v))
+                continue;
+            f[cnt++] = (detail::channelOf (v, 0) + detail::channelOf (v, 1) + detail::channelOf (v, 2)) / nom;
+        }
+    }
+    if (cnt < 4)
+        return -1.0;
+    std::sort (f, f + cnt);
+    const double med = f[cnt / 2];
+    int agree = 0;
+    for (int i = 0; i < cnt; ++i)
+        if (std::fabs (f[i] - med) <= 0.04)
+            ++agree;
+    if (agree * 3 < cnt * 2 || agree < 4 || med < kMinFactor || med > kMaxFactor)
+        return -1.0;
+    if (std::fabs (med - 1.0) < 0.04)
+        return 1.0;
+    if (std::fabs (med - kDimFactor) < 0.03)
+        return kDimFactor;
+    return med;
+}
+
+/** The blurred-picture test (rule (b) of the header): the held view's markers `s[0]` (left), `s[1]` (right), and `s[2]` (the instance picture) when `n` is 3, as the host's blurred picture at brightness
+    `f` shows them. */
+inline bool blurredPicture (IFrameSource& src, const BlurSource* s, int n, int rotation, int w, int h, double f, bool rightMayBeUnderPanel, uint32_t background = 0x1e1d1eu)
+{
+    if (n < 2)
+        return false;
+    auto predicted = [&] (int x, int y, double out[3])
+    {
+        for (int c = 0; c < 3; ++c)
+            out[c] = detail::channelOf (background, c);
+        for (int i = 0; i < n; ++i)
+        {
+            if (! s[i].known)
+                continue;
+            const double k = detail::boxCover (x, s[i].x, s[i].w) * detail::boxCover (y, s[i].y, s[i].h);
+            for (int c = 0; c < 3; ++c)
+                out[c] += k * (detail::channelOf (s[i].rgb, c) - detail::channelOf (background, c));
+        }
+        for (int c = 0; c < 3; ++c)
+            out[c] *= f;
+    };
+    bool anyEvidence = false;
+    for (int m = 0; m < n; ++m)
+    {
+        if (! s[m].known)
+            continue;
+        const BlurSource& r = s[m];
+        const int cx = r.x + r.w / 2, cy = r.y + r.h / 2, x1 = r.x + r.w - 1, y1 = r.y + r.h - 1;
+        const int ix = r.w > 3 ? 1 : 0, iy = r.h > 3 ? 1 : 0;
+        const int pts[13][2] = { { cx, cy },
+                                 { r.x - 3, cy }, { x1 + 3, cy }, { cx, r.y - 3 }, { cx, y1 + 3 },
+                                 { r.x + ix, r.y + iy }, { x1 - ix, r.y + iy }, { r.x + ix, y1 - iy }, { x1 - ix, y1 - iy },
+                                 { r.x - 6, cy }, { x1 + 6, cy }, { cx, r.y - 6 }, { cx, y1 + 6 } };
+        double centre[3];
+        predicted (cx, cy, centre);
+        double strongest = 0.0;
+        for (int c = 0; c < 3; ++c)
+            strongest = std::max (strongest, std::fabs (centre[c] - f * detail::channelOf (background, c)));
+        if (strongest < kBlurMinContrast)
+            return false;
+        bool markerOk = true, panelOk = m == 1 && rightMayBeUnderPanel;
+        for (const auto& p : pts)
+        {
+            bool skip = false;
+            for (int j = 0; j < n; ++j)
+                if (! s[j].known && detail::nearRect (p[0], p[1], s[j]))
+                    skip = true;
+            if (skip)
+                continue;
+            int px, py;
+            uint32_t v = 0;
+            uiPointToPanel (rotation, p[0], p[1], w, h, px, py);
+            if (p[0] < 0 || p[1] < 0 || ! src.pixel (px, py, v))
+                return false;
+            double want[3];
+            predicted (p[0], p[1], want);
+            for (int c = 0; c < 3; ++c)
+            {
+                const double got = detail::channelOf (v, c);
+                const double tol = kBlurTolerance + kBlurRelTolerance * std::fabs (want[c] - f * detail::channelOf (background, c));
+                if (std::fabs (got - want[c]) > tol)
+                    markerOk = false;
+                if (std::fabs (got - f * detail::channelOf (background, c)) > kLookTolerance)
+                    panelOk = false;
+            }
+        }
+        if (! markerOk && ! panelOk)
+            return false;
+        if (markerOk)
+            anyEvidence = true;
+    }
+    return anyEvidence;
+}
+
 /** What the controller does with a detection tick. */
 struct Verdict
 {
@@ -191,11 +359,13 @@ struct Verdict
 
 /** The state machine. Inputs of one detection tick: `awake` (the awake markers of a view are on screen), `dimLook` (the markers of the held page look dimmed), `havePage` (our picture is on screen),
     the backlight value if there is a node. The awake markers decide first: the picture is the host's and ours then. Without them the dimmed look decides and the backlight confirms it; one signal
-    without the other is held for kHoldMs (they do not change in the same frame), then the page is taken for gone, as it is without this module. With no backlight node the dimmed look alone decides. */
+    without the other is held for kHoldMs (they do not change in the same frame), then the page is taken for gone, as it is without this module. With no backlight node the dimmed look alone decides.
+    `blur` is the picture-alone evidence (blurredPicture: the spatial profile of every marker of the held view matches the host's blur): it decides by itself, with or without a backlight drop (the XL does
+    not change its backlight). The evidence used is reported by `evidence()`. */
 class Tracker
 {
 public:
-    Verdict update (double now, bool awake, bool dimLook, bool havePage, bool haveBl, int bl)
+    Verdict update (double now, bool awake, bool dimLook, bool havePage, bool haveBl, int bl, bool blur = false)
     {
         haveBl_ = haveBl;
         if (haveBl)
@@ -233,10 +403,11 @@ public:
             skewSince_ = -1.0;
             return v;
         }
-        if (dimLook)
+        if (dimLook || blur)
         {
-            if (low_)
+            if (low_ || blur)
             {
+                evidence_ = haveBl && low_ ? 1 : 2;
                 if (mode_ == Awake)
                 {
                     mode_ = Dimmed;
@@ -281,13 +452,15 @@ public:
     unsigned long holdTicks() const noexcept { return holdTicks_; }
     /** Detection ticks at which the page was taken for gone because one of the two signals never followed the other (must stay 0 on the device). */
     unsigned long hiddenTicks() const noexcept { return hiddenTicks_; }
+    /** What the held dim rests on: "backlight+picture" (the backlight dropped and the markers look dimmed), "picture" (the blurred markers alone: the XL, or no backlight node), "none" (not dimmed). */
+    const char* evidence() const noexcept { return mode_ != Dimmed ? "none" : (evidence_ == 1 ? "backlight+picture" : "picture"); }
     int awakeBacklight() const noexcept { return baseline_; }
     bool backlightLow() const noexcept { return low_; }
 
 private:
     enum Mode { Awake, Dimmed };
     Mode mode_ = Awake;
-    int baseline_ = 0, lastBl_ = 0;
+    int baseline_ = 0, lastBl_ = 0, evidence_ = 0;
     bool haveLast_ = false, haveBl_ = false, low_ = false, busy_ = false;
     double blSince_ = 0.0, skewSince_ = -1.0, lastGood_ = 0.0;
     unsigned long dims_ = 0, wakes_ = 0, holdTicks_ = 0, hiddenTicks_ = 0;
