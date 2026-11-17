@@ -141,6 +141,20 @@ float Voice::modulatedSlow (int idx, float b, float d) const noexcept
     return modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), b, d, (gl->economy & kEconomyMath) != 0);
 }
 
+/** A source through its curve; with `glide` (curve.velocity.legato / curve.note.legato) a change of the target after a legato note-on moves to it with the one pole time constant
+    master.portamento.time (coefficient 1 - exp (-dt / time), document 04 section 7); a new note starts at the target. */
+float Voice::curvedSource (float x, const CompiledModCurve* curve, float& state, bool glide, float dt, float portSeconds) noexcept
+{
+    float target = x;
+    if (curve != nullptr && curve->present)
+        target = std::clamp (shapes::ShapeData::evaluateTable (curve->table.data(), curve->table.size(), clamp01 (x)), 0.0f, 1.0f);
+    if (!glide || curveFresh || portSeconds <= 1.0e-4f)
+        state = target;
+    else
+        state += (target - state) * (1.0f - std::exp (-dt / portSeconds));
+    return state;
+}
+
 void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
 {
     active = true;
@@ -154,6 +168,7 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     id = n.noteId;
     noteSerial = n.serial;
     vel = n.velocity;
+    curveFresh = true;
     releaseVel = 0.0f;
     tuneExpr = 0.0f;
     polyPressure = 0.0f;
@@ -436,7 +451,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     }
     const float bend = g.channelBendSemis != nullptr ? g.channelBendSemis[chan & 15] : 0.0f;
     // the tuned note follows the tuning (A4, scale, MTS-ESP) with a 20 ms one pole: a retuned note glides, a new note starts on its value
-    if (g.tunedNotes != nullptr)
+    if (g.tunedNotes != nullptr && !g.tuningNoteOnOnly)
     {
         const float target = g.tunedNotes[keyNum & 127];
         if (target == target)
@@ -492,6 +507,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         s.decay *= vc.envFactor;
         s.release *= vc.envFactor;
     };
+    // the velocity and note sources read through their curves (content.curves); with curve.velocity.legato / curve.note.legato a legato transition glides with master.portamento.time
+    const CompiledModCurve* velCurve = g.lfoContent != nullptr ? &g.lfoContent->velocityCurve : nullptr;
+    const CompiledModCurve* noteCurve = g.lfoContent != nullptr ? &g.lfoContent->noteCurve : nullptr;
+    const bool velGlide = mi.curveVelLegato >= 0 && g.base[mi.curveVelLegato] >= 0.5f, noteGlide = mi.curveNoteLegato >= 0 && g.base[mi.curveNoteLegato] >= 0.5f;
+    const float portSeconds = g.base[mi.portTime] * 0.001f;
     // ---- a note starts with its constant sources already in the matrix (document 03 1.3a, document 04: the interpolation of a voice is reset to the new value at a note
     //      start), so an envelope time that a macro or the velocity modulates is read modulated at the very first period
     if (fresh)
@@ -500,8 +520,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         std::fill (std::begin (src), std::end (src), 0.0f);
         for (int m = 0; m < 8; ++m)
             src[srcMacro (m)] = g.macro[m];
-        src[kSrcVelocity] = vel;
-        src[kSrcNote] = std::clamp ((lastSemis + bend) * (1.0f / 127.0f), 0.0f, 1.0f);
+        src[kSrcVelocity] = curvedSource (vel, velCurve, velCurved, velGlide, fdt, portSeconds);
+        src[kSrcNote] = curvedSource (std::clamp ((lastSemis + bend) * (1.0f / 127.0f), 0.0f, 1.0f), noteCurve, noteCurved, noteGlide, fdt, portSeconds);
         src[kSrcAftertouch] = g.channelAftertouch != nullptr ? g.channelAftertouch[chan & 15] : 0.0f;
         src[kSrcModWheel] = g.channelModWheel != nullptr ? g.channelModWheel[chan & 15] : 0.0f;
         src[kSrcRandom] = randomPerNote;
@@ -632,8 +652,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         src[srcRlfo (r)] = 0.5f + 0.5f * rlfoOut[r];
     for (int m = 0; m < 8; ++m)
         src[srcMacro (m)] = g.macro[m];
-    src[kSrcVelocity] = vel;
-    src[kSrcNote] = std::clamp ((lastSemis + bend) * (1.0f / 127.0f), 0.0f, 1.0f);
+    src[kSrcVelocity] = curvedSource (vel, velCurve, velCurved, velGlide, fdt, portSeconds);
+    src[kSrcNote] = curvedSource (std::clamp ((lastSemis + bend) * (1.0f / 127.0f), 0.0f, 1.0f), noteCurve, noteCurved, noteGlide, fdt, portSeconds);
+    curveFresh = false;
     src[kSrcAftertouch] = g.channelAftertouch != nullptr ? g.channelAftertouch[chan & 15] : 0.0f;
     src[kSrcPitchWheel] = 0.5f + 0.5f * (mi.bendRange >= 0 && g.base[mi.bendRange] > 0.0f && g.channelBendSemis != nullptr ? std::clamp (bend / g.base[mi.bendRange], -1.0f, 1.0f) : 0.0f);
     src[kSrcModWheel] = g.channelModWheel != nullptr ? g.channelModWheel[chan & 15] : 0.0f;
@@ -793,6 +814,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             }
         }
         OscTick& t = oscTick[o];
+        t.jump = g.noSmoothing;
         t.active = oscOn[o];
         if (!oscOn[o])
         {
@@ -973,6 +995,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         const float subGate = (si.mono >= 0 && g.base[static_cast<size_t> (si.mono)] >= 0.5f && tunedKey > g.lowestNote + 0.5f) ? 0.0f : 1.0f;
         subTick.level = subCh.on ? std::max (0.0f, P (si.level) * 0.01f) * subGate : 0.0f;
         subTick.pan = std::clamp (P (si.pan) * 0.01f + (vc.mask[4] ? vc.pan : 0.0f), -1.0f, 1.0f);
+        subTick.jump = g.noSmoothing;
         subTick.voices = 1;
         subTick.spread = 0.0f;
         subTick.blend = 1.0f;
@@ -1049,6 +1072,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
                                 keyNum, vc.cutoffSemis, (g.economy & kEconomyMath) != 0);
             s.scalarOnly = g.scalarFilters;
             filt[f].set (s);
+            if (g.noSmoothing)
+                filt[f].set (s); // the same settings twice: the coefficients do not ramp
             if (fresh)
                 filt[f].reset(); // the smoothers start at the targets of this note, not at the ones of the note this voice played before
             if (filtStale[f])
@@ -1059,7 +1084,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         }
         filtLevelPrev[f] = filtLevel[f];
         filtLevel[f] = dbToGain (P (fi.level));
-        if (fresh)
+        if (fresh || g.noSmoothing)
             filtLevelPrev[f] = filtLevel[f];
     }
     fresh = false;

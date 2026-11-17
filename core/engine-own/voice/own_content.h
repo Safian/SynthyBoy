@@ -48,6 +48,7 @@ struct OwnContent
 {
     std::array<CompiledShape, 10> lfo {};
     std::array<CompiledModCurve, 64> modCurve {};
+    CompiledModCurve velocityCurve, noteCurve;   // content.curves.velocity / .note (the curves the sources `velocity` and `note` read through); absent = identity
 };
 
 /** The hand-over of the content: the message thread publishes, the audio thread reads the latest one with one atomic load. A published object
@@ -81,6 +82,24 @@ public:
             sd.sanitize();
             sd.bake (d.table.data(), d.table.size());
         }
+        auto compileCurve = [] (const std::vector<ContentPoint>& pts, CompiledModCurve& d)
+        {
+            if (pts.size() < 2)
+                return;
+            d.present = true;
+            shapes::ShapeData sd;
+            sd.numPoints = std::min<size_t> (pts.size(), shapes::ShapeData::kMaxPoints);
+            for (size_t i = 0; i < sd.numPoints; ++i)
+            {
+                sd.points[i].x = pts[i].x;
+                sd.points[i].y = pts[i].y;
+                sd.points[i].curve = pts[i].power;
+            }
+            sd.sanitize();
+            sd.bake (d.table.data(), d.table.size());
+        };
+        compileCurve (c.velocityCurve, o->velocityCurve);
+        compileCurve (c.noteCurve, o->noteCurve);
         const size_t slot = next++ % kRing;
         ring[slot] = std::move (o);
         current.store (ring[slot].get(), std::memory_order_release);

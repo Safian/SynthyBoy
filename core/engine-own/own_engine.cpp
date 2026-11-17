@@ -86,7 +86,7 @@ inline float outputLimit (float y) noexcept
 }
 } // namespace
 
-OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable"))), fxOversampleIndex (findParamIndex (hashKey ("quality.oversample_4x")))
+OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable"))), fxOversampleIndex (findParamIndex (hashKey ("quality.oversample_4x"))), noSmoothingIndex (findParamIndex (hashKey ("quality.no_smoothing")))
 {
     for (int k = 0; k < 128; ++k)
         tunedNotes[k] = static_cast<float> (k);
@@ -642,6 +642,7 @@ void OwnEngine::startNote (const Pressed& n, bool fromRecall, const Voice* relea
     // the phases the previous note (the voice that started last, the voice that is retaken included) has now, and whether its key is still held: the phase memory and the phase legato of the wavetable oscillators carry them over
     uint32_t prevPhase[3][Voice::kPhaseCount];
     bool havePrev = false, prevHeld = false;
+    float prevSubPhase = 0.0f;
     {
         const Voice* prev = nullptr;
         for (const auto& v : voices)
@@ -649,6 +650,8 @@ void OwnEngine::startNote (const Pressed& n, bool fromRecall, const Voice* relea
                 prev = v.get();
         havePrev = prev != nullptr;
         prevHeld = havePrev && !prev->isReleased();
+        if (havePrev)
+            prevSubPhase = prev->subPhase();
         for (int o = 0; havePrev && o < 3; ++o)
             prev->oscPhases (o, prevPhase[o]);
     }
@@ -658,6 +661,8 @@ void OwnEngine::startNote (const Pressed& n, bool fromRecall, const Voice* relea
     updateLowestNote();
     chosen->tick (globals, static_cast<int> (std::find_if (voices.begin(), voices.end(), [&] (const auto& p) { return p.get() == chosen; }) - voices.begin()));
     applyPhaseOptions (*chosen, havePrev ? prevPhase : nullptr, prevHeld);
+    if (havePrev && paramIndex().sub.phaseContiguous >= 0 && base[static_cast<size_t> (paramIndex().sub.phaseContiguous)] >= 0.5f)
+        chosen->setSubPhase (prevSubPhase); // sub.phase_contiguous: the new note continues with the phase the previous one has (docs/engine-spec/02-oscillator.md section 9)
     for (int o = 0; o < 3; ++o)
         if (chosen->multisampleZone (o) >= 0)
         {
@@ -1162,7 +1167,10 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     if (blockDirty || base[static_cast<size_t> (pi.master.tuningMts)] >= 0.5f) // a live MTS-ESP source is asked every block
         noteTuning.compute (tunedNotes, static_cast<int> (base[static_cast<size_t> (pi.master.tuningScale)] + 0.5f), base[static_cast<size_t> (pi.master.tuningA4)],
                             base[static_cast<size_t> (pi.master.tuningMts)] >= 0.5f);
+    globals.noSmoothing = noSmoothingIndex >= 0 && base[static_cast<size_t> (noSmoothingIndex)] >= 0.5f;
     globals.tunedNotes = tunedNotes;
+    globals.tuningNoteOnOnly = base[static_cast<size_t> (pi.master.tuningMts)] >= 0.5f && pi.master.tuningMtsNoteOnOnly >= 0 && base[static_cast<size_t> (pi.master.tuningMtsNoteOnOnly)] >= 0.5f
+                               && noteTuning.mtsConnected();
     globals.channelBendSemis = effBend;
     globals.channelModWheel = modWheel;
     globals.channelAftertouch = aftertouch;
@@ -1224,7 +1232,10 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 float db = base[vi];
                 if (gdelta[vi] != 0.0f)
                     db = modulatedValue (paramTable()[vi], destLawOf (vi), db, gdelta[vi]);
-                smoothedGain.setTarget (db > -60.0f ? dbToGain (db) : 0.0f);
+                if (globals.noSmoothing)
+                    smoothedGain.setCurrentAndTarget (db > -60.0f ? dbToGain (db) : 0.0f);
+                else
+                    smoothedGain.setTarget (db > -60.0f ? dbToGain (db) : 0.0f);
                 {
                     // master.stereo_routing (document 01, 8): 100 % leaves the channels alone, 0 % sums them to mono at -3 dB
                     const size_t ri = static_cast<size_t> (mi.stereoRouting);
@@ -1240,6 +1251,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             frame.bpm = globals.bpm;
             frame.period = kControlPeriod;
             frame.lastNote = lastNoteSemis;
+            frame.noteOns = noteCounter;
             frame.songBeats = globals.songBeats;
             frame.content = globals.content;
             frame.realtime = realtimeFlag;
@@ -1273,6 +1285,12 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 busBypass[0] = pi.bus1Bypass >= 0 && base[static_cast<size_t> (pi.bus1Bypass)] >= 0.5f;
                 busBypass[1] = pi.bus2Bypass >= 0 && base[static_cast<size_t> (pi.bus2Bypass)] >= 0.5f;
                 mainBypass = pi.mainBypass >= 0 && base[static_cast<size_t> (pi.mainBypass)] >= 0.5f;
+                if (globals.noSmoothing)
+                {
+                    busGainPrev[1] = busGain[1];
+                    busGainPrev[2] = busGain[2];
+                    directGainPrev = directGain;
+                }
                 mixCached = gnumTouched == 0;
             }
             // the latency of the racks (configuration only) and the delays that line the paths up (document 06, 11): it changes only with the mixer settings or a chain

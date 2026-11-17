@@ -229,6 +229,7 @@ private:
     float lastVelocity = 0.0f;
     const int fxReverbForceIndex;
     const int fxOversampleIndex;
+    const int noSmoothingIndex;
     std::vector<float> scratchRight;
 };
 } // namespace own

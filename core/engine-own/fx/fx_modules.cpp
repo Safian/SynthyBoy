@@ -323,16 +323,37 @@ public:
     {
         model = K ("fxfilter.model"); style = K ("fxfilter.style"); cutoff = K ("fxfilter.cutoff"); res = K ("fxfilter.resonance"); drive = K ("fxfilter.drive");
         blend = K ("fxfilter.blend"); mix = K ("fxfilter.mix"); var = K ("fxfilter.var");
+        keytrack = K ("fxfilter.keytrack"); pan = K ("fxfilter.pan"); combOffset = K ("fxfilter.comb_offset"); formantX = K ("fxfilter.formant.x");
+        formantY = K ("fxfilter.formant.y"); formantRes = K ("fxfilter.formant.resonance"); formantSpread = K ("fxfilter.formant.spread");
+        formantTranspose = K ("fxfilter.formant.transpose"); cleanMode = K ("fxfilter.clean_mode");
     }
     int moduleIndex() const noexcept override { return 5; }
     void prepare (double sr, int) override { fx.prepare (sr); }
     void reset() noexcept override { fx.reset(); }
-    void configure (const FxFrame&, const float* b, const float* d) noexcept override
+    void configure (const FxFrame& f, const float* b, const float* d) noexcept override
     {
         FilterSettings s;
         s.model = choice (b, model);
         s.style = choice (b, style);
         s.cutoffHz = V (b, d, cutoff);
+        // the keys the voice filters have as well (docs/ui-design/13-new-keys 4.11): key tracking follows the last played note (relative to 60), pan moves the two channels'
+        // cutoffs in opposite directions (+-100 % = +-12 semitones), the model settings, clean mode. At their defaults (0, 0, 42, 50, 50, 85, 0, 0, off) nothing changes.
+        const float kt = V (b, d, keytrack);
+        if (kt != 0.0f)
+            s.cutoffHz *= semitonesToRatio ((f.lastNote - 60.0f) * kt * 0.01f);
+        const float panShift = V (b, d, pan) * 0.01f;
+        if (panShift != 0.0f)
+        {
+            s.cutoffHzR = s.cutoffHz * std::exp2 (panShift);
+            s.cutoffHz *= std::exp2 (-panShift);
+        }
+        s.clean = cleanMode >= 0 && b[cleanMode] >= 0.5f;
+        s.combOffset = V (b, d, combOffset);
+        s.formantX = pct (b, d, formantX);
+        s.formantY = pct (b, d, formantY);
+        s.formantRes = pct (b, d, formantRes);
+        s.formantSpread = pct (b, d, formantSpread);
+        s.formantTranspose = V (b, d, formantTranspose);
         s.resonance = pct (b, d, res);
         s.drive = V (b, d, drive) * (1.0f / 20.0f);
         s.blend = pct (b, d, blend);
@@ -355,7 +376,7 @@ public:
 private:
     FilterUnit fx;
     float wetGain = 1.0f;
-    int model, style, cutoff, res, drive, blend, mix, var;
+    int model, style, cutoff, res, drive, blend, mix, var, keytrack, pan, combOffset, formantX, formantY, formantRes, formantSpread, formantTranspose, cleanMode;
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------- flanger
@@ -477,13 +498,25 @@ public:
     HyperModule() : FxModule (K ("hyperdim.level"))
     {
         rate = K ("hyperdim.rate"); unison = K ("hyperdim.unison"); detune = K ("hyperdim.detune"); mix = K ("hyperdim.mix");
-        dimSize = K ("hyperdim.dim_size"); dimMix = K ("hyperdim.dim_mix");
+        dimSize = K ("hyperdim.dim_size"); dimMix = K ("hyperdim.dim_mix"); retrig = K ("hyperdim.retrig");
     }
     int moduleIndex() const noexcept override { return 9; }
     void prepare (double sr, int maxBlock) override { fx.prepare (sr, std::max (maxBlock, kControlPeriod)); }
     void reset() noexcept override { fx.reset(); }
-    void configure (const FxFrame&, const float* b, const float* d) noexcept override
+    void configure (const FxFrame& f, const float* b, const float* d) noexcept override
     {
+        // hyperdim.retrig: every note-on restarts the hyper voices' LFO offsets (document 13-new-keys 4.13); the notes before the module's first block do not count
+        if (!notesSeen)
+        {
+            lastNoteOns = f.noteOns;
+            notesSeen = true;
+        }
+        if (f.noteOns != lastNoteOns)
+        {
+            lastNoteOns = f.noteOns;
+            if (retrig >= 0 && b[retrig] >= 0.5f)
+                fx.retrigger();
+        }
         fx::HyperDimension::Params p;
         p.enabled = true;
         p.hyperRate = V (b, d, rate);
@@ -499,7 +532,9 @@ public:
 
 private:
     fx::HyperDimension fx;
-    int rate, unison, detune, mix, dimSize, dimMix;
+    int rate, unison, detune, mix, dimSize, dimMix, retrig;
+    uint32_t lastNoteOns = 0;
+    bool notesSeen = false;
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------- Utility
@@ -547,12 +582,25 @@ public:
     {
         mono = K ("bode.mono_input"); shift = K ("bode.shift"); range = K ("bode.range"); dir = K ("bode.dir"); width = K ("bode.width"); delay = K ("bode.delay");
         sync = K ("bode.sync"); division = K ("bode.division"); feed = K ("bode.feed"); balance = K ("bode.balance"); blur = K ("bode.blur"); mix = K ("bode.mix");
+        retrig = K ("bode.retrig");
     }
     int moduleIndex() const noexcept override { return 11; }
     void prepare (double sr, int maxBlock) override { fx.prepare (sr, std::max (maxBlock, kControlPeriod)); }
     void reset() noexcept override { fx.reset(); }
     void configure (const FxFrame& f, const float* b, const float* d) noexcept override
     {
+        // bode.retrig: every note-on restarts the carrier phase; the notes before the module's first block do not count
+        if (!notesSeen)
+        {
+            lastNoteOns = f.noteOns;
+            notesSeen = true;
+        }
+        if (f.noteOns != lastNoteOns)
+        {
+            lastNoteOns = f.noteOns;
+            if (retrig >= 0 && b[retrig] >= 0.5f)
+                fx.retrig();
+        }
         fx::Bode::Params p;
         p.monoInput = b[mono] >= 0.5f;
         p.shift = pct (b, d, shift);
@@ -576,7 +624,9 @@ public:
 
 private:
     fx::Bode fx;
-    int mono, shift, range, dir, width, delay, sync, division, feed, balance, blur, mix;
+    int mono, shift, range, dir, width, delay, sync, division, feed, balance, blur, mix, retrig;
+    uint32_t lastNoteOns = 0;
+    bool notesSeen = false;
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------- Convolve

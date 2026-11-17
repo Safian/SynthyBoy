@@ -44,6 +44,8 @@ struct TickGlobals
     const float* lfoPhase = nullptr;      // [10] free running phases in cycles (global instance)
     const float* rlfoValue = nullptr;     // [4] global random LFO values -1 .. 1
     int activeVoices = 0;
+    bool noSmoothing = false;             // quality.no_smoothing (Serum 2 Disable Smoothing): the per period ramps are skipped, values jump at the start of the period
+    bool tuningNoteOnOnly = false;        // master.tuning.mts_note_on_only with an MTS-ESP master connected: a sounding note keeps the tuning it started with
     float lowestNote = 1000.0f;           // sub.mono: the lowest tuned key note of the sounding voices (OwnEngine::updateLowestNote)
     float concertA = 440.0f;
     const OwnContent* lfoContent = nullptr;  // custom LFO shapes, modulation curves
@@ -110,6 +112,8 @@ public:
     float readPosition (int osc) const noexcept { return lib[osc].readPosition(); }
     int readGrains (int osc, float* pos, float* life, int maxN) const noexcept { return lib[osc].readGrains (pos, life, maxN); }
     float subPhase() const noexcept { return sub.firstPhase(); }
+    /** sub.phase_contiguous: the sub oscillator continues with the phase of the previous note. */
+    void setSubPhase (float p) noexcept { sub.setPhase (p); }
     /** The phases of the unison voices of wavetable oscillator o (phase memory, phase legato: OwnEngine::startNote). */
     static constexpr int kPhaseCount = WtOsc::kMaxVoices;
     void oscPhases (int o, uint32_t* out) const noexcept { osc[o].getPhases (out); }
@@ -203,6 +207,9 @@ private:
     void evaluateVoiceControl (const TickGlobals& g) noexcept;
     int32_t id = -1;
     uint32_t noteSerial = 0;
+    float velCurved = 0.0f, noteCurved = 0.0f;   // the velocity and note sources after their curves (content.curves), gliding on a legato transition when curve.*.legato is On
+    bool curveFresh = true;                       // the next tick starts the curved sources at their targets (a new note)
+    float curvedSource (float x, const CompiledModCurve* curve, float& state, bool glide, float dt, float portSeconds) noexcept;
     float vel = 1.0f, releaseVel = 0.0f, tuneExpr = 0.0f, polyPressure = 0.0f, smoothedPressure = 0.0f, padCoefDt = 0.0f, padCoef = 0.0f, slide = 0.0f, exprX = 0.0f;
     float glideOffset = 0.0f, glideTime = 0.0f, glideElapsed = 0.0f, glideSlope = 0.0f; // semitones left, seconds
     float lastSemis = 60.0f;

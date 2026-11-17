@@ -43,7 +43,7 @@ ParamIndex build()
 #undef K
     }
     p.sub = { find ("sub.on"), find ("sub.waveform"), find ("sub.octave"), find ("sub.tune"), find ("sub.level"), find ("sub.pan"),
-              find ("sub.destination"), find ("sub.env1"), find ("sub.phase"), find ("sub.filter_blend"), find ("sub.bus1_send"), find ("sub.bus2_send"), find ("sub.mono") };
+              find ("sub.destination"), find ("sub.env1"), find ("sub.phase"), find ("sub.filter_blend"), find ("sub.bus1_send"), find ("sub.bus2_send"), find ("sub.mono"), find ("sub.phase_contiguous") };
     p.noise = { find ("noise.on"), find ("noise.level"), find ("noise.pan"), find ("noise.destination"), find ("noise.env1"), find ("noise.sample"),
                 find ("noise.stereo"), find ("noise.keytrack"), find ("noise.pitch"), find ("noise.fine"), find ("noise.filter_blend"), find ("noise.bus1_send"), find ("noise.bus2_send"),
                 find ("noise.type"), find ("noise.phase"), find ("noise.random_phase"), find ("noise.loop"), find ("noise.bounce") };
@@ -97,7 +97,7 @@ ParamIndex build()
                  find ("master.scale.key"), find ("master.scale.type"), find ("master.scale.mode"), find ("master.tuning.a4"), find ("master.tuning.scale"),
                  find ("master.tuning.mts_esp"), find ("master.mpe.on"), find ("master.mpe.bend_range"), find ("master.mpe.xyz_macro"),
                  find ("master.mpe.y_modwheel"), find ("master.mpe.bend_to_x"), find ("master.mpe.y_bipolar"), find ("master.stereo_routing"),
-                 find ("curve.velocity.legato"), find ("curve.note.legato"), find ("voice.phase_legato") };
+                 find ("curve.velocity.legato"), find ("curve.note.legato"), find ("voice.phase_legato"), find ("master.tuning.mts_note_on_only") };
     {
         VoiceCtlIdx& v = p.vctl;
         v.length = find ("voicectl.length");

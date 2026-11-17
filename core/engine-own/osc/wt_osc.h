@@ -43,6 +43,7 @@ struct OscTick
     const float* remap = nullptr;         // the drawn remap curve of the oscillator for the warps Remap 1 .. 4 (257 points) or null (identity)
     int morphType = 0;                    // oscN.morph.type
     float morphAmount = 0.0f, morphSpread = 0.0f; // 0 .. 1, -1 .. 1
+    bool jump = false;                    // quality.no_smoothing: the period's values apply at once (no ramp from the previous period)
     bool oversample = false;              // run 4x oversampled even without a warp (ultra quality)
     bool smooth = false;                  // oscN.smooth_interp: blend the neighbouring frames (off: the frame steps, with a short cross-fade)
     bool shareMorph = false;              // tier low only: all unison voices share one morph cycle (no morph spread across them)
@@ -337,7 +338,9 @@ public:
             curInc[i] = curInc[0];
         }
         curFrame = t.frame;
-        if (!havePrev)
+        if (t.jump)
+            prevFrame = curFrame;
+        if (!havePrev || t.jump)
         {
             for (int i = 0; i < kMaxVoices; ++i)
             {

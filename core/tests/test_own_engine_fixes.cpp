@@ -169,12 +169,13 @@ TEST (own_claims_the_keys_the_voice_reads)
             std::printf ("    not supported: %s\n", key);
         CHECK (p != nullptr && e->supportsParam (p->id));
     }
-    // keys that exist in the table but that the own engine does not read are not claimed
-    for (const char* key : { "sub.phase_contiguous", "quality.no_smoothing", "curve.note.legato", "curve.velocity.legato", "fxfilter.keytrack", "master.tuning.mts_note_on_only" })
+    // every key of the table that the own engine reads is claimed (test_own_keys_claimed.cpp measures what each of them does)
+    for (const char* key : { "sub.phase_contiguous", "quality.no_smoothing", "curve.note.legato", "curve.velocity.legato", "fxfilter.keytrack", "fxfilter.pan", "fxfilter.clean_mode",
+                             "fxfilter.comb_offset", "fxfilter.formant.x", "hyperdim.retrig", "bode.retrig", "master.tuning.mts_note_on_only" })
     {
         const ParamInfo* p = findParamByKey (key);
         CHECK (p != nullptr);
-        CHECK (p != nullptr && !e->supportsParam (p->id));
+        CHECK (p != nullptr && e->supportsParam (p->id));
     }
 }
 
