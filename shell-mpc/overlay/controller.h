@@ -90,9 +90,24 @@ class Controller
 public:
     /** `gpu`: the GPU helper (null: the CPU draws everything, as without the helper). Not owned. */
     Controller (IPlaneBackend& backend, IFrameSource& frames, ICurveRenderer& renderer, const Paths& paths, const Timing& timing = Timing(), double fixedComputeCostMs = -1.0,
-                gpu::IGpuOverlay* gpuOverlay = nullptr, ITouchInput* touchInput = nullptr, const layout::View* viewTable = layout::kViews, int numViews = layout::kNumViews)
+                gpu::IGpuOverlay* gpuOverlay = nullptr, ITouchInput* touchInput = nullptr, const layout::View* viewTable = layout::kViews, int numViews = layout::kNumViews, bool deferViews = false)
         : views_tbl_ (viewTable), numViews_ (std::min (numViews, static_cast<int> (Detection::kMaxViews))), backend_ (backend), presenter_ (backend), frames_ (frames), renderer_ (renderer), paths_ (paths), timing_ (timing), fixedCost_ (fixedComputeCostMs), gpu_ (gpuOverlay), touchIn_ (touchInput)
     {
+        if (! deferViews)
+            buildViews();
+        for (int& s : viewSlot_)
+            s = -1;
+        for (int& g : uiGroup_)
+            g = -1;
+    }
+
+    /** Makes the views (the 24 pages' scenes: every layout view is constructed, its region and readout targets are taken) and the page detector. The constructor does it unless `deferViews` was given (the service does:
+        the plugin's calling thread, the host's effOpen path, must not pay for it); then the first tick () of the overlay thread does it. Idempotent. Only the thread that ticks calls it after construction. */
+    void buildViews()
+    {
+        if (viewsBuilt_)
+            return;
+        viewsBuilt_ = true;
         for (int i = 0; i < numViews_; ++i)
         {
             const layout::View& v = views_tbl_[i];
@@ -107,10 +122,6 @@ public:
             targetCount_[i] = static_cast<int> (targets_.size()) - targetBase_[i];
         }
         detector_ = std::make_unique<PageDetector> (frames_, markers_, numViews_, instanceRects_);
-        for (int& s : viewSlot_)
-            s = -1;
-        for (int& g : uiGroup_)
-            g = -1;
     }
 
     /** The table indices the overlay wants in the engine's readout (IEngine::setReadoutTargets), all views together; view i's targets start at targetBase (i). */
@@ -310,6 +321,7 @@ public:
     {
         try
         {
+            buildViews();   // a no-op after the first tick (the service defers it to here: off the host's thread)
             if (nowMs < lastNowMs_)
                 rebaseClock();   // the caller's clock began again (a thread that was started anew): the deadlines of the earlier run would never come
             lastNowMs_ = nowMs;
@@ -1607,6 +1619,7 @@ private:
     struct ViewFrames { unsigned long frames = 0, changes = 0; };
     std::vector<ViewFrames> viewFrames_ = std::vector<ViewFrames> (Detection::kMaxViews);
     std::unique_ptr<PageDetector> detector_;
+    bool viewsBuilt_ = false;   // buildViews () has run (the overlay thread's first tick when the constructor was told to defer)
     std::vector<uint32_t> canvas_;
 
     std::mutex mu_;

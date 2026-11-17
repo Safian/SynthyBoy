@@ -191,7 +191,7 @@ private:
         mouse_ = std::make_unique<LinuxMouseReader>();           // the mice: found at run time, hot plug, read only, never grabbed (mouse_linux.h)
         pointer_ = std::make_unique<LinuxPointerSource> (display_);   // the host's pointer plane: where the pointer is (drm_linux.h)
 #endif
-        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, shippedPaths(), Timing(), -1.0, gpu_.get(), touch_.get());
+        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, shippedPaths(), Timing(), -1.0, gpu_.get(), touch_.get(), layout::kViews, layout::kNumViews, true);   // true: the views are built by the overlay thread's first tick, not here (the host's thread)
 #if defined(__linux__)
         controller_->setMouse (mouse_.get(), pointer_.get());
         controller_->setExtraStatus ([this] { return cpuStatus(); });
