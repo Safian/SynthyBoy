@@ -776,6 +776,40 @@ void testSpecPages()
         check (r.inst.get ("osc1.on") == 0.0f, "MORE: the power switch is a control of the page (osc1.on)");
         check (r.inst.q[0] == Inst::idx ("osc1.on") && r.inst.q[1] == Inst::idx ("osc1.env1") && r.inst.q[3] == Inst::idx ("osc1.pitch_track"), "MORE: the first block is a Q group: ON, ENV 1, SMOOTH, TRACK");
     }
+    // the transpose snap: twelve note cells (a piano: the black notes above), a toggle for bit 12; the mask is the Q member
+    {
+        Rig r;
+        r.refresh();
+        r.openFull();
+        r.tapC (r.ui.full().tune.more);
+        const oscspec::OscSpecPage& pg = r.ui.specPage();
+        int maskIdx = -1, bitIdx = -1;
+        for (int i = 0; i < pg.spec()->numCtls; ++i)
+            if (std::string (pg.spec()->ctls[i].key) == "transpose_snap")
+                (pg.spec()->ctls[i].kind == os::K::Mask ? maskIdx : bitIdx) = i;
+        check (maskIdx >= 0 && bitIdx >= 0, "the options page has the note mask and the toggle for the transpose snap (no knob)");
+        auto* mask = static_cast<ui::NoteMask*> (const_cast<oscspec::OscSpecPage&> (pg).control (maskIdx));
+        bool big = true, above = true;
+        for (int n = 0; n < 12; ++n)
+        {
+            const ui::Rect c = mask->cellRect (n);
+            big = big && c.w >= 56 && c.h >= 56;
+            above = above && (! ui::NoteMask::isBlack (n) || c.y < mask->cellRect (0).y);
+        }
+        check (big && above, "the twelve note cells are at least 56 px and the black notes lie above the white ones");
+        const ui::Rect g = mask->cellRect (7);   // G
+        r.tap (g.x + g.w / 2, g.y + g.h / 2);
+        check (static_cast<int> (r.inst.get ("osc1.transpose_snap")) == (1 << 7), "a tap on G sets bit 7 of osc1.transpose_snap");
+        const ui::Rect cs = mask->cellRect (1);  // C#
+        r.tap (cs.x + cs.w / 2, cs.y + cs.h / 2);
+        check (static_cast<int> (r.inst.get ("osc1.transpose_snap")) == ((1 << 7) | 2), "a tap on C# adds bit 1");
+        r.tapC (*const_cast<oscspec::OscSpecPage&> (pg).control (bitIdx));
+        check (static_cast<int> (r.inst.get ("osc1.transpose_snap")) == ((1 << 7) | 2 | 4096), "the SNAP NOTE toggle sets bit 12 and keeps the notes");
+        r.tap (g.x + g.w / 2, g.y + g.h / 2);
+        check (static_cast<int> (r.inst.get ("osc1.transpose_snap")) == (2 | 4096), "a tap on a lit note clears it and keeps bit 12");
+        r.tapC (*pg.groups[5].member (0));   // the block of the mask (the sixth) becomes the active group
+        check (r.inst.q[0] == Inst::idx ("osc1.transpose_snap") && r.inst.q[1] == -1, "the mask is the Q member of its block (Q 1 = the parameter); the toggle of the same parameter has no Q knob");
+    }
     // hidden states: the loop points exist only while a loop mode is on, the grain divisions only in their mode
     {
         Rig r;
