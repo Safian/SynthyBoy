@@ -396,7 +396,7 @@ protected:
 class MasterScreen : public Composite
 {
 public:
-    static constexpr int kMaxGroups = 10, kBlocks = 7, kHeaderH = 64, kBlockTitleH = 34, kBlockPad = 6, kBlockGap = 8;
+    static constexpr int kMaxGroups = 10, kBlocks = 7, kHeaderH = 64, kBlockTitleH = 38, kBlockPad = 6, kBlockGap = 8;   // the title strip: the name of the block, then the lane of the index chips with a gap to the name
     static constexpr int kTopBlockH = 228, kTopLeftW = 640, kBottomLeftW = 780;   // the first row of MAIN: OUTPUT (the knobs) and PITCH; the second: VOICES (the widest) and GLIDE
     enum Side : int { SideMain = 0, SideTuning = 1 };
 

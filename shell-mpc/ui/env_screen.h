@@ -236,7 +236,7 @@ protected:
             blocks_[i] = { bx, bandY, bw[i], kBottomH };
             bx += bw[i] + kBlockGap;
         }
-        const int kt = KnobPanel::kBlockTitleH, pad = KnobPanel::kBlockPad;
+        const int kt = KnobPanel::kBlockTitleH + 4, pad = KnobPanel::kBlockPad;   // a gap of its own between the name of the block and the lane of the index chips of its first row
         auto inner = [&] (int b, int n, Component** c, int cnt)
         {
             const Rect in { blocks_[b].x + pad, blocks_[b].y + kt, blocks_[b].w - 2 * pad, blocks_[b].h - kt - pad };

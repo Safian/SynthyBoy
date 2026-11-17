@@ -612,6 +612,28 @@ void testMacrosView()
     const int n = r.ui.view().collectLeaves (leaves, 0, 96);
     ui::MacroView& v = r.ui.view();
     check (v.qgroup.rect().contains (v.cards[0].knob.rect()) && v.qgroup.rect().contains (v.cards[3].knob.rect()), "the Q frame holds the four knobs of the bank (" + std::to_string (n) + " leaves)");
+    // the other bank is the next group: its quiet chips (5 .. 8 on a device with sixteen knobs) stand on its four cards
+    for (const bool wide : { true, false })
+    {
+        ui::QGroup::setWideDevice (wide);
+        auto data = std::make_unique<gpu::SceneData>();
+        gpu::SceneBuilder sb (*data);
+        sb.begin (gpu::kKindPlay, 0, 1280, 800);
+        v.draw (sb);
+        std::vector<uint32_t> cv;
+        renderScene (*data, cv);
+        auto drawn = [&] (int card)   // a chip over the plain gradient of a card: some row of the chip's rectangle is not one colour
+        {
+            const ui::Rect c = ui::QGroup::chipRect (v.cards[card].knob.rect(), wide ? 5 + (card - 4) : 1 + (card - 4));
+            for (int y = c.y; y < c.bottom(); ++y)
+                for (int x = c.x; x < c.right(); ++x)
+                    if (cv[static_cast<size_t> (y) * 1280u + static_cast<size_t> (x)] != cv[static_cast<size_t> (y) * 1280u + static_cast<size_t> (c.x)])
+                        return true;
+            return false;
+        };
+        check (drawn (4) && drawn (5) && drawn (6) && drawn (7), std::string (wide ? "16 knob device: " : "4 knob device: ") + "the cards of the other bank carry their quiet chips (" + (wide ? "5 .. 8" : "1 .. 4 of the next bank") + ")");
+    }
+    ui::QGroup::setWideDevice (false);
 }
 
 void setSlot (FakeInst& inst, int slot, int source, int dest, float amount, bool bypass)

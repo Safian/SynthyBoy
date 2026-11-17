@@ -302,6 +302,10 @@ public:
             cards4 = Rect::unite (cards4, cards[o + k].rect());
         const Rect around { cards4.x - 3, cards4.y - 3, cards4.w + 6, cards4.h + 6 };
         qgroup.draw (sb, &around);
+        // the other bank is the next group of the page (on the knobs 5 .. 8 of a device with sixteen, 1 .. 4 of the next bank on one with four): its quiet chips stand on its four cards
+        const int other = (1 - bank_) * 4;
+        const Component* members[4] = { &cards[other].knob, &cards[other + 1].knob, &cards[other + 2].knob, &cards[other + 3].knob };
+        QGroup::drawMappedMembers (sb, 1, members, 4);
     }
 
     Change turnQ (int knobIndex, double delta) { return qgroup.turn (knobIndex, delta); }
