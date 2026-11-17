@@ -307,6 +307,12 @@ int main()
         p.inst.set ("osc2.on", 0.0f);
         upd (nullptr, 2400.0);
         check (v.kind() == synthyboy::OscCycle::Kind::off, "an oscillator that is off: kind off");
+        {
+            double energy = 0.0;
+            for (float x : v.cycle())
+                energy += std::fabs (x);
+            check (energy > 10.0, "an oscillator that is off keeps the cycle of its current table (the page draws it dim with an OFF tag, not an empty display)");
+        }
         // another oscillator's parameters change nothing
         p.inst.set ("osc2.on", 1.0f);
         upd (nullptr, 2700.0);

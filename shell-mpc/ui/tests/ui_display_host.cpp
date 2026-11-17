@@ -181,6 +181,31 @@ int main()
         display::draw (sd.builder(), r, dim, false);
         auto lit = [&] (const Image& im) { long t = 0; for (int y = r.y; y < r.bottom(); ++y) for (int x = r.x; x < r.right(); ++x) t += std::abs (static_cast<int> (im.at (x, y) & 0xffffff) - static_cast<int> (bg & 0xffffff)) > 0x300000; return t; };
         check (different && lit (render (sd)) < lit (pics[0]), "the nine noise colours have nine pictures; switched off the picture stays, fainter (no word OFF)");
+        // a wave, a min / max overview and a spectrum of a source that is switched off: the picture stays under a veil (fainter), with a small OFF tag in the corner, inside the display
+        std::vector<float> cy2, lo2 (512), hi2 (512), sp2 (512);
+        wave (cy2, 0.4f);
+        for (int i = 0; i < 512; ++i) { hi2[static_cast<size_t> (i)] = 0.5f * std::exp (-3.0f * static_cast<float> (i) / 512.0f); lo2[static_cast<size_t> (i)] = -hi2[static_cast<size_t> (i)]; sp2[static_cast<size_t> (i)] = -10.0f - 0.1f * static_cast<float> (i); }
+        for (int kind : { 0, 2, 3 })
+        {
+            display::Data on;
+            on.colour = theme::instanceColour (1);
+            on.n = 512;
+            on.cycle = kind == 0 ? cy2.data() : (kind == 2 ? lo2.data() : sp2.data());
+            on.cycleMax = kind == 2 ? hi2.data() : nullptr;
+            on.kind = kind == 0 ? display::Data::Kind::Wave : (kind == 2 ? display::Data::Kind::MinMax : display::Data::Kind::Spectrum);
+            display::Data off = on;
+            off.dim = true;
+            Scene s1 (620, 320, theme::rgba (theme::L().bg0, 255)), s2 (620, 320, theme::rgba (theme::L().bg0, 255));
+            display::draw (s1.builder(), r, on, false);
+            display::draw (s2.builder(), r, off, false);
+            const Image a = render (s1), b = render (s2);
+            const Rect tag { r.x + 14, r.y + 6, 60, 36 };   // where the OFF tag stands: some text pixels there that the picture of the source in use does not have
+            long tagPixels = 0;
+            for (int y = tag.y; y < tag.bottom(); ++y)
+                for (int x = tag.x; x < tag.right(); ++x)
+                    tagPixels += std::abs (static_cast<int> (b.at (x, y) & 0xffffff) - static_cast<int> (b.at (tag.x - 4, tag.y) & 0xffffff)) > 0x400000;
+            check (! s2.overflow() && drawnOutside (b, r, bg) == 0 && lit (b) < lit (a) && tagPixels > 20, std::string ("a switched off source (kind ") + std::to_string (kind) + "): its picture under a veil, fainter, with the OFF tag, inside the display");
+        }
     }
     // ---- review 2: the filter curve is cut at the frame (no flat stretch along the bottom); the Q frame is ONE frame; the macro frame runs around the cards; the toggle in a row of knobs has the cell of a knob
     {

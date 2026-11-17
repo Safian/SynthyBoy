@@ -388,6 +388,39 @@ int main()
         c.draw (sc2.builder());
         check (! sc2.overflow() && drawnOutside (render (sc2), c.rect(), backgroundPixel()) == 0, "compact: 630 x 1050: draws inside");
     }
+    // ---- LED switches (frameless: a dot and the name, the state is the dot): the toggles of the sub and the noise page, the TRACK of the tune row; named by the function only, at least 56 px, and on the baseline of the controls of their row
+    {
+        auto cy = [] (const Component& c) { return c.rect().y + c.rect().h / 2; };
+        auto isLed = [] (const Component* c, const char* name)
+        {
+            const LedToggle* t = dynamic_cast<const LedToggle*> (c);
+            return t != nullptr && std::strcmp (t->state.label, name) == 0 && t->rect().h >= 56 && t->rect().w >= LedToggle::widthFor (name);
+        };
+        OscillatorFullScreen sub;
+        sub.place (area);
+        sub.setInstance (OscInstance::Sub, OscKind::Wavetable);
+        check (isLed (sub.panel.part (PanelSlot::SubEnv1), "ENV 1") && isLed (sub.panel.part (PanelSlot::SubMono), "MONO") && isLed (sub.panel.part (PanelSlot::SubContig), "FREE RUN"), "sub: ENV 1, MONO and FREE RUN are LED toggles named by the function only (no ON / OFF in the label), 56 px high");
+        const Component *b1 = sub.panel.part (PanelSlot::SubBus1), *b2 = sub.panel.part (PanelSlot::SubBus2);
+        check (b1 != nullptr && b2 != nullptr && std::abs (cy (*sub.panel.part (PanelSlot::SubEnv1)) - cy (*b1)) <= 2 && std::abs (cy (*sub.panel.part (PanelSlot::SubMono)) - cy (*b1)) <= 2 && std::abs (cy (*sub.panel.part (PanelSlot::SubContig)) - cy (*b2)) <= 2,
+               "sub: the switches of the TUNE and PHASE blocks stand on the baseline of the BUS knobs of the ROUTING block");
+        OscillatorFullScreen noise;
+        noise.place (area);
+        noise.setInstance (OscInstance::Noise, OscKind::Wavetable);
+        check (isLed (noise.panel.part (PanelSlot::NoiseEnv1), "ENV 1") && isLed (&noise.tune.track, "KEY TRACK"), "noise: ENV 1 and KEY TRACK are LED toggles");
+        check (noise.panel.part (PanelSlot::NoiseType) != nullptr && noise.panel.part (PanelSlot::NoiseStereo) != nullptr && std::abs (cy (*noise.panel.part (PanelSlot::NoiseType)) - cy (*noise.panel.part (PanelSlot::NoiseEnv1))) <= 2 && std::abs (cy (*noise.panel.part (PanelSlot::NoiseStereo)) - cy (*noise.panel.part (PanelSlot::NoiseEnv1))) <= 2, "noise: KIND, STEREO and ENV 1 are on one line");
+        OscillatorFullScreen wt;
+        wt.place (area);
+        wt.setInstance (OscInstance::A, OscKind::Wavetable);
+        check (isLed (&wt.tune.track, "TRACK"), "oscillator A, B, C: TRACK is a LED toggle");
+        // the five source tabs of the Play page: every cell the same width
+        OscillatorCompact c;
+        c.place ({ 0, 0, 420, 700 });
+        int w0 = c.instances.cell (0).w;
+        bool same = true;
+        for (int i = 1; i < 5; ++i)
+            same = same && std::abs (c.instances.cell (i).w - w0) <= 1;
+        check (same, "the five source tabs SUB A B C NOISE have the same width");
+    }
     // ---- what is drawn is what is touched, for the compact view of every instance and every detail page: a tap on the middle of each enabled leaf reaches it
     {
         auto everyLeaf = [&] (Component& page, const std::string& nm)

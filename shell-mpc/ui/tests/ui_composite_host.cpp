@@ -979,10 +979,48 @@ void testPage()
         writePng (outDir() + "/page_" + cs.file + ".png", render (s), 1);
     }
 }
+
+/** The panel's switches are LED toggles (frameless: a dot and the name, no ON / OFF in the label), the toggle of a panel takes the whole cell, the mixer's sliders and destination dropdown have no box. */
+void testLedParts()
+{
+    KnobPanel p;
+    p.load (presets::kEnvelopeDetail);
+    const ToggleIcon* o = p.toggle (PanelSlot::Override);
+    check (o != nullptr && dynamic_cast<const LedToggle*> (o) != nullptr && ! o->state.showState && std::strcmp (o->state.label, "OVERRIDE") == 0, "a panel toggle is a LedToggle named by its function (no ON / OFF written into the label)");
+    p.load (presets::kNoiseSampleFull);
+    check (p.toggle (PanelSlot::NoiseRand) != nullptr && dynamic_cast<const LedToggle*> (p.toggle (PanelSlot::NoiseRand)) != nullptr && dynamic_cast<const LedToggle*> (p.toggle (PanelSlot::NoiseEnv1)) != nullptr, "the noise sample page: RANDOM, LOOP, BOUNCE and ENV 1 are LED toggles");
+    TuneRow t;
+    check (dynamic_cast<const LedToggle*> (&t.track) != nullptr, "the TRACK of the tune row is a LED toggle");
+    TypeBar tb;
+    tb.load (barpresets::kMultisample);
+    const ToggleNumber* tn = nullptr;
+    for (int i = 0; i < tb.numSlots(); ++i)
+        if (const ToggleNumber* x = dynamic_cast<const ToggleNumber*> (tb.slot (i)))
+            tn = x;
+    check (tn != nullptr && dynamic_cast<const LedToggle*> (&tn->toggle) != nullptr, "VEL TRK of the multisample type bar is a LED toggle");
+    // frameless: nothing is drawn along the left edge of a slider and of the destination dropdown (no box), the dropdown has its hairline
+    SliderBar sl ("PAN", true);
+    sl.place ({ 10, 10, 126, 56 });
+    const Image a = drawComponent (sl, 160, 80);
+    RouteDropdown rd ("Filter 1", MenuButton::Icon::Down);
+    rd.place ({ 10, 10, 126, 56 });
+    const Image b = drawComponent (rd, 160, 80);
+    const uint32_t bg = a.at (2, 2);
+    bool edgesClear = true;
+    for (int y = 16; y < 60; ++y)
+        for (int x = 11; x <= 14; ++x)
+            edgesClear = edgesClear && a.at (x, y) == bg && b.at (x, y) == bg;
+    bool hairline = false;
+    for (int x = 30; x < 110; ++x)
+        hairline = hairline || b.at (x, 66 - 9) != bg;
+    check (edgesClear, "the PAN slider and the destination dropdown of a strip have no box");
+    check (hairline, "the destination dropdown has its hairline under the name");
+}
 } // namespace
 
 int main()
 {
+    testLedParts();
     testTuneRow();
     testTypeBar();
     testRoutePanel();

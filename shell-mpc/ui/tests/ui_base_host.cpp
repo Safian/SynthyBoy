@@ -880,6 +880,16 @@ void testHBarAndSideKnob()
 
 int main()
 {
+    {
+        // the pictures of the tests never go into the working directory (a test run in the source tree committed 79 of them): the default is the temporary directory, an absolute path
+        const char* keep = std::getenv ("UI_OUT");
+        const std::string saved = keep ? keep : "";
+        unsetenv ("UI_OUT");
+        const std::string d = outDir();
+        check (! d.empty() && d != "." && std::filesystem::path (d).is_absolute() && std::filesystem::is_directory (d), "outDir () without UI_OUT is an absolute directory of its own, not the working directory");
+        if (keep)
+            setenv ("UI_OUT", saved.c_str(), 1);
+    }
     testHBarAndSideKnob();
     testKnob();
     testNumberField();
