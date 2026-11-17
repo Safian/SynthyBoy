@@ -34,6 +34,7 @@
 #include "device_profile.h"
 #include "output_peak.h"
 #include "host_strings.h"
+#include "event_inbox.h"
 #include "output_stage.h"
 #include "safe_file.h"
 #include "plugin_paths.h"
@@ -308,7 +309,8 @@ struct PluginInstance
     // Core
     std::unique_ptr<synthyboy::IEngine> engine;
     synthyboy::StateContent content;
-    EventBuffer events;
+    EventBuffer events;                                         // the events of the block being rendered (audio thread only)
+    synthyboy_mpc::EventInbox<synthyboy::Event> eventInbox;     // effProcessEvents pushes here (any thread), processReplacing takes them over at the start of its block
 
     // Transport
     double sampleRate = 44100.0;
@@ -2153,7 +2155,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             synthyboy::Event event;
             if (synthyboy::translateMidiMessage(data, numBytes, deltaFrames, event))
             {
-                inst->events.push(event);
+                inst->eventInbox.push (event, event.type == synthyboy::Event::NoteOff);
             }
         }
         return 1;
@@ -2800,6 +2802,13 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
         }
         // If host returns null, keep previous values
         inst->engine->setTransport(inst->transport);
+    }
+
+    // take over what the host delivered since the last block (events.push keeps its overflow rules)
+    {
+        synthyboy::Event taken;
+        while (inst->events.count < EventBuffer::kCapacity && inst->eventInbox.pop (taken))
+            inst->events.push (taken);
     }
 
     // Clamp event frames to the last frame of the block

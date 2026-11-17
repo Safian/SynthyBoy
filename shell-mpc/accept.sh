@@ -270,6 +270,7 @@ live_build padoff -DSYNTHYBOY_MPC_PAD_PRESSURE=OFF
 # output level (shell-mpc/output_stage.h): the stage alone, then the plugin in both limiter states:
 # 1. limiter OFF (default): make-up gain (18 dB) against gain 0 dB (intact dynamics, peaks over 0 dBFS)
 # 2. limiter ON: make-up gain (18 dB) against gain 0 dB (peaks held at -1 dBFS ceiling)
+sh shell-mpc/tests/run_event_inbox_test.sh > $B/event-inbox.log 2>&1 || { grep -E "^FAIL|error" $B/event-inbox.log | head; echo "ACCEPT FAIL: event inbox test"; exit 1; }
 sh shell-mpc/tests/run_output_stage_test.sh > $B/output-stage.log 2>&1 || { grep -E "^FAIL|error" $B/output-stage.log | head; echo "ACCEPT FAIL: output stage test"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I shell-mpc -I $MPC_SDK/framework -o $B/output_level_host shell-mpc/tests/output_level_host.cpp || { echo "ACCEPT FAIL: output_level_host build"; exit 1; }
 $B/output_level_host "$(find build-mpc-live-on -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" "$(find build-mpc-live-gain0 -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)" 18 off > $B/output-level-off.log 2>&1 || { grep -E "^FAIL|^quiet|^loud|^dynamics" $B/output-level-off.log; echo "ACCEPT FAIL: output_level_host (limiter OFF)"; exit 1; }
