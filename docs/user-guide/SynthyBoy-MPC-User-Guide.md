@@ -238,46 +238,20 @@ screen is quoted in capitals as it appears.
 
 ![Play](img/play.png)
 
-The Play tab has three sub-pages, **Play**, **Play Env** and **Play LFO**. All three show the same picture:
-three live panels side by side, an **oscillator** panel (left), an **envelope** panel (middle) and an **LFO**
-panel (right). The sub-page decides which panel's group is active (yellow frame) for the Q-Links: the
-oscillator on Play, the envelope on Play Env, the LFO on Play LFO.
-This is the place to play and tweak: the big controls of the three most used parts are in one view.
+The Play page now features a unified, streamlined layout:
+- **No tab rows:** Navigation is handled by a single selector in each third of the screen.
+- **Arrows step, tap opens list:** Use the arrows to step, or tap the name to open the full list of options for Sub, Osc A/B/C, Noise, Envelopes 1–6, LFOs 1–10, and R1–R4.
+- **Unified layout:** All three displays have the same height. The table selector, PAN, and LEVEL are consolidated into a single row.
 
-The envelope panel with the ADSR group framed (the yellow frame is on the four envelope knobs):
+### 5.12 Master
 
-![Play Env](img/play-env.png)
+![Master](img/master.png)
 
-The LFO panel with its group (SHAPE, RATE, RISE, SMOOTH) framed:
-
-![Play LFO](img/play-lfo.png)
-
-**Oscillator panel.**
-
-| Control | What it does |
-|---|---|
-| SUB, A, B, C, NOISE buttons | Choose which sound source the panel shows and edits (saved with the project). The five buttons have one width. |
-| Power button and name | Switch the shown source on and off. A source that is off shows its picture dimmed with a small OFF tag (see 5.3). |
-| Route button (F1 / F2 / F12 / M / DIR / BAL / OFF) | Tap: opens the output popup (target, balance, BUS 1, BUS 2) of that oscillator. Sub has no route button here; its routing is on its own page (5.4). |
-| Display + full-screen button | One cycle of the oscillator; the button opens the full-screen oscillator page (chapter 5.3 / 5.4 / 5.5). |
-| Type keys WAVE / MULTI / SAMPLE / GRAIN / SPEC | The oscillator type (wavetable, multisample, sample, granular, spectral). Q 1. |
-| Source stepper and the list button | Wavetable name, or the loaded file. In the compact view the list button for wavetables is dim; the list opens from the full screen. Q 2. |
-| PAN | -100 .. +100 percent (C, L n, R n). Q 3. |
-| LEVEL | 0 .. 100 percent. Q 4. |
-
-Sub and Noise have different controls (waveform, octave; noise colour, filter): see 5.4 and 5.5.
-
-**Envelope panel.** ENV 1 .. ENV 6 buttons (a small dot marks an envelope that modulates something), the
-envelope graph with a full-screen button, and the knobs ATTACK, DECAY, SUSTAIN, RELEASE (Q 1 - 4). The graph
-here is always fitted to the panel; the lock and the time ruler are on the full page. Details in 5.8.
-
-**LFO panel.** The stepper LFO 1 .. LFO 10, RND 1 .. RND 4 (a tap on the name opens the list), the
-shape display with a full-screen button, the SHAPE stepper, the RATE knob with the **HZ / BPM / KEY** list (three
-dots, the lit one is the mode), RISE and SMOOTH (Q 1 - 4). SMOOTH has a LED in front of its name: it is the switch
-of the smoothing and the knob sets its time (the knob is dim while the LED is off). Details in 5.9.
-
-**Full screen.** The full-screen button opens the page of that element over the whole plugin area (the same
-page as the corresponding Osc, Env or LFO tab, with a CLOSE button). Leaving the Play tab closes it.
+The Master page OUTPUT block includes:
+- **LIMIT switch:** The output limiter, off by default. Use it to prevent clipping when pushing the output levels high.
+- **QUALITY:** 
+  - **NO SMOOTHING:** Disables parameter smoothing, causing changes to jump immediately instead of gliding (ideal for hard rhythmic gating). Stored in the preset.
+  - **OVERSAMPLE 4X:** Cleans up high notes of the wavetable oscillator without a warp. Note: Uses more CPU. (2x on the gen 1 profile).
 
 ### 5.2 Macros
 
