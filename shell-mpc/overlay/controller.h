@@ -15,6 +15,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -38,6 +39,7 @@
 #include "mouse_router.h"
 #include "qlink_setting.h"
 #include "presenter.h"
+#include "standby.h"
 #include "renderer.h"
 #include "touch_input.h"
 #include "ui_stack.h"
@@ -63,6 +65,7 @@ struct Paths
     std::string look = "/tmp/synthyboy-overlay-look";   // a number 1 .. 3: the look of the UI (ui/theme.h); without the file look 1
     std::string dumpRequest = "/tmp/synthyboy-overlay-dump";
     std::string dump = "/tmp/synthyboy-overlay-curve.txt";
+    std::string backlightDir = "/sys/class/backlight";   // the panel's backlight nodes (read only): the host's standby dim shows in them (standby.h)
 };
 
 #ifndef SYNTHYBOY_MPC_OVERLAY_GPU_FRAME_MS
@@ -190,6 +193,8 @@ public:
     void touchEvent (const TouchEvent& ev, double nowMs)
     {
         ++touchEvents_;
+        if (swallowTouch (ev))
+            return;   // the host is dimmed (standby): this touch wakes it and nothing else, whole gesture included
         if (keyEdge_ < PanelKey::kNoKey && ev.x >= keyEdge_)
             return;   // the host shows through there (its panel): our controls do not take that touch
         std::lock_guard<std::mutex> g (mu_);
@@ -219,6 +224,11 @@ public:
     void wheelEvent (int x, int y, int notches, double nowMs)
     {
         ++wheelEvents_;
+        if (dimmed_.load())
+        {
+            ++dimTouchSwallowed_;
+            return;   // the host is dimmed (standby): the wheel wakes it and nothing else
+        }
         if (keyEdge_ < PanelKey::kNoKey && x >= keyEdge_)
             return;   // the host shows through there (its panel): our controls do not take it
         std::lock_guard<std::mutex> g (mu_);
@@ -364,7 +374,7 @@ private:
 
         if (nowMs >= nextDetectMs_)
         {
-            nextDetectMs_ = nowMs + timing_.detectEveryMs;
+            nextDetectMs_ = nowMs + (standby_.busy() ? std::min (timing_.detectEveryMs, kStandbyBusyMs) : timing_.detectEveryMs);
             Detection d;
             if (rotationKnown())
                 d = detector_->check (rotation_);
@@ -416,6 +426,7 @@ private:
                 d.qlinkPanel = true;
                 ++keyHolds_;
             }
+            standbyStep (nowMs, d);
             const bool whole = d.view >= 0 && ! d.qlinkPanel;   // both markers seen: nothing of the host over the strip's right marker
             if (whole)
             {
@@ -487,6 +498,64 @@ private:
         return timing_.detectEveryMs;
     }
 
+    /** The host's standby dim (standby.h), once per detection. The awake markers decide first; without them the half brightness markers of the page held on screen and the backlight decide. A page that is held
+        keeps `d` as if its awake markers were on screen (view, slot, panel state): the picture is drawn darkened, the touch is swallowed, the key stays where it was. */
+    void standbyStep (double nowMs, Detection& d)
+    {
+        int bl = 0;
+        const bool haveBl = backlight_.read (nowMs, bl);
+        blNow_ = haveBl ? bl : -1;
+        const bool awake = d.view >= 0;
+        const bool havePage = current_ >= 0 && activeSlot_ >= 0 && rotationKnown() && d.readable;
+        const bool look = ! awake && havePage && detector_->dimLook (current_, rotation_, standby::kDimFactor, keyEdge_ < PanelKey::kNoKey);
+        const standby::Verdict v = standby_.update (nowMs, awake, look, havePage, haveBl, bl);
+        if (v.hold && ! awake)
+        {
+            d.view = current_;
+            d.slot = activeSlot_;
+            d.qlinkPanel = keyEdge_ < PanelKey::kNoKey;
+        }
+        if (v.dimmed != dimmed_.load())
+        {
+            dimmed_.store (v.dimmed);
+            needFrame_ = true;   // the picture is drawn again at the other brightness
+            statusDue_ = true;
+        }
+    }
+
+    /** While the host is dimmed a touch only wakes it: it is not ours, nor is the rest of its gesture (the finger is still down when the picture is awake again). */
+    bool swallowTouch (const TouchEvent& ev)
+    {
+        if (dimmed_.load())
+        {
+            swallowGesture_ = ev.kind != TouchEvent::Up;
+            ++dimTouchSwallowed_;
+            return true;
+        }
+        if (swallowGesture_)
+        {
+            if (ev.kind == TouchEvent::Down)
+                swallowGesture_ = false;   // a new gesture (an Up was lost): it is ours
+            else
+            {
+                if (ev.kind == TouchEvent::Up)
+                    swallowGesture_ = false;
+                ++dimTouchSwallowed_;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    std::string standbyStatus() const
+    {
+        std::ostringstream o;
+        o << "backlight_node: " << (backlight_.node().empty() ? "none" : backlight_.node()) << "\nbacklight_value: " << blNow_ << "\nbacklight_awake_reference: " << standby_.awakeBacklight()
+          << "\ndimmed: " << (dimmed_.load() ? "yes" : "no") << "\ndim_transitions: " << standby_.dims() << "\nwake_transitions: " << standby_.wakes() << "\ndim_hold_ticks: " << standby_.holdTicks()
+          << "\ndim_hidden_frames: " << standby_.hiddenTicks() << "\ndim_touch_swallowed: " << dimTouchSwallowed_ << "\n";
+        return o.str();
+    }
+
     /** The key of the host's Q-Link panel (panel_key.h), one rule for the Play view and every page. The reference (the host's strip under the page) is taken when the page is settled: both markers seen for a while,
         no panel look, no write of the host to a Q proxy lately (a knob turn brings the panel). Every tick while a view is on screen the strip is compared with it and `keyEdge_` is the x the picture is cut at. A band
         that starts at the left end of the strip, or a band while both markers are whole and still, means that the reference is not the picture under us any more: it is taken again. */
@@ -509,6 +578,8 @@ private:
             qWrites_ = writes;
             lastQWriteMs_ = nowMs;
         }
+        if (dimmed_.load())
+            return;   // the host's picture is dimmed, the strip does not look like its reference: the cut stays where it was until the wake
         int edge = PanelKey::kNoKey;
         if (current_ >= 0 && rotationKnown() && qlinkOpt_.keyOn())
         {
@@ -862,6 +933,8 @@ private:
             hideGpu (nowMs);
             return;
         }
+        if (dimmed_.load())
+            standby::dimScene (gpuScene_, standby::kDimFactor);   // the host's picture is at half brightness: so is ours
         const auto t0 = std::chrono::steady_clock::now();
         if (! gpu_->show (ui, panel, rotation_, current_, views_[static_cast<size_t> (current_)]->name(), nowMs) || ! gpu_->submit (gpuScene_, nowMs))
             return;     // the helper failed: the next tick draws with the CPU
@@ -946,6 +1019,8 @@ private:
         canvas_.resize (static_cast<size_t> (w) * static_cast<size_t> (h));
         const auto t0 = Clock::now();
         view.render (canvas_.data(), w, h);
+        if (dimmed_.load())
+            standby::dimCanvas (canvas_.data(), canvas_.size(), standby::kDimFactor);
         const auto t1 = Clock::now();
         size_t stride = 0;
         uint32_t* back = presenter_.backBuffer (stride);
@@ -1296,6 +1371,7 @@ private:
             }
             o << "display_plane_state: " << note << "\ndisplay_plane_losses: " << planeLosses_ << "\ndisplay_plane_refreshes: " << planeRefreshes_ << "\n";
         }
+        o << standbyStatus();
         if (extraStatus_)
             o << extraStatus_();
         writeGpuStatus (o);
@@ -1428,6 +1504,7 @@ private:
         std::rename (tmp.c_str(), path.c_str());
     }
 
+    static constexpr double kStandbyBusyMs = 34.0;   // a dim or a wake is under way (the picture and the backlight do not change together): look at the screen every other vblank
     static constexpr double kTouchPollMs = 12.0;     // the touch screen is read this often while the Play page is on screen
     static constexpr double kMinFrameGapMs = 5.0;    // never faster than this (a present waits for the vblank, 16.7 ms, anyway)
     static constexpr double kSlackMs = 3.0;
@@ -1447,6 +1524,12 @@ private:
     int gpuView_ = -1, gpuRotation_ = 0, gpuSkipView_ = -1;
     unsigned long gpuFramesAtSecond_ = 0, gpuFramesAtShow_ = 0;
     std::function<std::string()> extraStatus_;
+    standby::Backlight backlight_ { paths_.backlightDir };
+    standby::Tracker standby_;
+    std::atomic<bool> dimmed_ { false };   // the host's picture is dimmed (standby_): ours is drawn at half brightness, the touch is swallowed
+    bool swallowGesture_ = false;
+    int blNow_ = -1;
+    unsigned long dimTouchSwallowed_ = 0;
     int rotationOverride_ = -1, rotationFound_ = -1;
     bool rotationAmbiguous_ = false, paceApplied_ = false;
     unsigned planeLosses_ = 0, planeRefreshes_ = 0;

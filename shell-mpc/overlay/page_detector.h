@@ -11,6 +11,7 @@
 #include "drm_interfaces.h"
 #include "instance_slots.h"
 #include "overlay_layout.h"
+#include "standby.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -146,6 +147,19 @@ public:
             r.detection.readable = r.readable;
         }
         return r;
+    }
+
+    /** The host's standby dim (standby.h): the two markers of `view` as the host's half brightness picture shows them. Only for the view that is held on screen; the page identity is the held one. */
+    bool dimLook (int view, int rotation, double factor, bool rightMayBeUnderPanel)
+    {
+        if (view < 0 || view >= count_)
+            return false;
+        int w = 0, h = 0;
+        if (! source_.begin (w, h))
+            return false;
+        const bool ok = standby::markersLookDimmed (source_, markers_ + view * 2, rotation, w, h, factor, rightMayBeUnderPanel);
+        source_.end();
+        return ok;
     }
 
 private:
