@@ -73,7 +73,7 @@ bool fxRemoveSlot (const float* plain, int slot, std::vector<FxWrite>& writes);
 /** Copies the module (the parameters, the power, the rack) into the first free slot, right behind the original. Returns the slot, or -1 (pool full, or a
     splitter, which has no pool type). */
 int fxDuplicate (const float* plain, FxRackItem item, std::vector<FxWrite>& writes);
-/** Moves an item to `rack` (0 .. 2 for a slot, 0 .. 2 for the modules of instance 0 as well) at index `index` of that rack's list (counted without the item;
+/** Moves an item to `rack` (0 .. 2 for a slot of the pool and for a splitter; 0 .. 9 for the other 13 modules of instance 0: a band rack of a splitter, 3 .. 9, takes them too; clamped) at index `index` of that rack's list (counted without the item;
     clamped). Renumbers fx.order and the orders of the slots so that the lists come out as asked. False if nothing changes. */
 bool fxMove (const float* plain, FxRackItem item, int rack, int index, std::vector<FxWrite>& writes);
 /** The power of an item. */

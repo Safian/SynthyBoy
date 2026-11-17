@@ -825,7 +825,7 @@ void testSplitterPages()
         const std::string n = sp.name;
         check (r.ui.numCards() == 1 && ! item.pool && item.index == 13 + (sp.kind - ui::fxl::kKindSplitterLh) && ed.currentType() == sp.kind, n + ": adding it switches the module of the fixed chain on and selects it");
         check (r.ui.screen().chainBar.cards[0].state.type == sp.kind && std::string (r.ui.screen().chainBar.cards[0].state.name) == n, n + ": its card has its own picture and its name");
-        check (ed.numParams() == sp.controls && ed.numRows() >= 1 && ed.hasDisplay() && ed.display.kind == ui::FxDisplay::Kind::Split, n + ": the page has " + std::to_string (sp.controls) + " controls and the display of the bands");
+        check (ed.numParams() == sp.controls && ed.numRows() >= 1 && ed.hasBands() && ed.display.kind == ui::FxDisplay::Kind::None && ed.bands.numBands() == ui::fxl::bandsOfSplitter (sp.kind), n + ": the page has " + std::to_string (sp.controls) + " controls and the lanes of the racks of its bands");
         // every parameter of the splitter is a control that writes it, and is on a Q group
         std::string key = n == "Splitter L/H" ? "splitter_lh." : (n == "Splitter L/M/H" ? "splitter_lmh." : "splitter_ms.");
         int reached = 0, wanted = 0, q = 0;
@@ -848,7 +848,7 @@ void testSplitterPages()
         r.tap (*ed.memberOf (bp));
         check (r.inst.param (r.ui.paramIndexOf (item, bp)) > 0.5f, n + ": a tap on the bypass writes it");
         r.refresh (2);
-        check ((sp.kind == ui::fxl::kKindSplitterMs ? ed.display.split.bypass[0] : ed.display.split.bypass[0]) && ed.toggles[bp].state.on, n + ": the display and the toggle follow the bypass");
+        check (ed.bands.lane[0].tile.state.bypassed && ed.toggles[bp].state.on, n + ": the tile of the first band and the toggle follow the bypass");
         const int lvl = ed.controlOfKey ((key + "level").c_str());
         const ui::Rect k = ed.knobs[lvl].rect();
         const float before = r.inst.param (r.ui.paramIndexOf (item, lvl));
@@ -874,6 +874,240 @@ void testSplitterPages()
     r.inst.set ("splitter_lmh.on", 0.0f);
     r.refresh (2);
     check (r.ui.numCards() == 1 && ! r.ui.screen().chainBar.cards[0].state.on, "switched off in the engine the selected module keeps its card (dim), as the other modules of the fixed chain");
+}
+
+
+// ---- the racks of the bands of the splitters -----------------------------------------------------------------------------------------------------------------
+/** Taps the row of the open + ADD list that holds the effect called `name` (false: not on the list). */
+bool pickFromList (FxRig& r, const char* name)
+{
+    for (int i = 0; i < r.ui.list().state.count; ++i)
+        if (std::string (r.ui.list().state.items[i]) == name)
+        {
+            r.ui.list().state.current = i;
+            r.ui.list().showCurrent();
+            const ui::Rect row = r.ui.list().rowRect (i);
+            r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
+            return true;
+        }
+    return false;
+}
+
+/** The walk main -> splitter -> band -> effect -> back, on the three splitters and every band: the chain of a band is the chain UI of the main chain (cards with icon, power and name; + ADD; reorder; remove; the rack
+    switch; the same table pages and Q groups), and the way back is shown in the title. */
+void testBandRacks()
+{
+    using synthyboy::FxRackItem;
+    namespace fxl = ui::fxl;
+    FxRig r;
+    r.refresh();
+    addKind (r, fxl::kKindSplitterLmh);   // the splitter L/M/H: the module 14, on, at the end of Main
+    ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+    check (r.ui.scope() == 0 && ed.hasBands() && ed.bands.numBands() == 3 && ed.bands.numCards (0) == 0 && ed.bands.numCards (1) == 0, "the page of the splitter L/M/H has three lanes, all empty");
+    check (std::string (ed.bands.lane[0].tile.state.name) == "LOW" && std::string (ed.bands.lane[1].tile.state.name) == "MID" && std::string (ed.bands.lane[2].tile.state.name) == "HIGH", "the lanes are LOW, MID, HIGH");
+    check (std::string (ed.bands.lane[0].tile.state.range) == "below 200 Hz" && std::string (ed.bands.lane[1].tile.state.range) == "200 Hz to 3.0 kHz" && std::string (ed.bands.lane[2].tile.state.range) == "above 3.0 kHz", "the tiles say what each band is");
+    check (std::string (ed.path()) == "MAIN CHAIN", "the title of the splitter's page says where it is: " + std::string (ed.path()));
+    for (int b = 0; b < 3; ++b)
+    {
+        const ui::Rect t = ed.bands.lane[b].tile.rect(), a = ed.bands.lane[b].add.rect();
+        check (t.h >= 56 && a.h >= 56 && a.w >= 64 && ed.bands.lane[b].add.state.isPlus, "lane " + std::to_string (b) + ": the tile and + ADD are touch targets");
+    }
+
+    // + ADD of the MID lane opens the band's chain and the list of the types that are free
+    r.tap (ed.bands.lane[1].add);
+    check (r.ui.scope() == 6 && r.ui.listOpen() && r.ui.list().state.count == 13, "+ ADD of the MID lane opens the band (rack 6) and the list of the 13 free types (no splitters in a band)");
+    check (pickFromList (r, "Delay"), "Delay is on the list");
+    FxRackItem dly { false, 2 };
+    check (r.inst.get ("delay.on") > 0.5f && r.inst.get ("delay.rack") == 6.0f && r.ui.numCards() == 1 && r.ui.cardItem (0) == dly, "the delay module is switched on and moved into rack 6");
+    check (r.ui.screen().chainBar.backShown() && std::string (r.ui.screen().chainBar.backCard.state.name) == "SPLITTER L/M/H" && std::string (r.ui.screen().chainBar.backCard.state.tag) == "MID BAND", "the chain bar starts with the BACK card of the splitter and its band");
+    check (r.ui.screen().slotEditor.currentType() == synthyboy::kFxTypeDelay && std::string (ed.path()) == "MAIN CHAIN  >  SPLITTER L/M/H  >  MID BAND", "the delay's page is the table page of the delay, the title says the place: " + std::string (ed.path()));
+    check (r.ui.screen().chainBar.cards[0].state.rack == 6 && std::string (r.ui.screen().chainBar.cards[0].state.name) == "Delay", "the card is the delay of rack 6");
+    check (r.ui.qTargets()[0] >= 0 && r.ui.qSlotCount() == 16 && r.inst.q[0] == r.ui.paramIndexOf (dly, ed.memberControl (0, 0)), "the Q group of a band effect is a row of the table page on Q 1 .. 4 (as in the main chain)");
+    // the knobs of the effect write the module's own keys
+    {
+        const int fb = ed.controlOfKey ("delay.feedback");
+        const ui::Rect k = ed.knobs[fb].rect();
+        const float before = r.inst.get ("delay.feedback");
+        r.drag (k.x + k.w / 2, k.y + k.h / 2, k.x + k.w / 2, k.y + k.h / 2 - 50, true);
+        check (fb >= 0 && r.inst.get ("delay.feedback") != before, "a knob of the effect in a band writes the engine's key");
+    }
+    // a second effect (the list no longer offers the delay), then the order
+    r.tap (r.ui.screen().chainBar.plusCard);
+    check (r.ui.listOpen() && r.ui.list().state.count == 12, "the list of a band offers the types that are free (12 after the delay)");
+    check (pickFromList (r, "Reverb") && r.ui.numCards() == 2 && r.ui.cardItem (1) == (FxRackItem { false, 8 }) && r.inst.get ("reverb.rack") == 6.0f, "a reverb is added behind the delay in the same band");
+    // drag the reverb in front of the delay
+    {
+        const ui::Rect from = r.ui.screen().chainBar.cards[1].rect(), to = r.ui.screen().chainBar.cards[0].rect();
+        r.drag (from.x + from.w / 2 - 20, from.y + from.h - 8, to.x + 6, from.y + from.h - 8, true);
+        check (r.ui.bandItems (6).size() == 2 && r.ui.bandItems (6)[0] == (FxRackItem { false, 8 }) && r.ui.bandItems (6)[1] == dly, "a drag of a card reorders the chain of the band (the reverb first)");
+        check (r.ui.cardItem (0) == (FxRackItem { false, 8 }) && r.ui.selectedItem() == (FxRackItem { false, 8 }), "the card that was moved stays selected");
+    }
+    // the power of a card
+    {
+        const ui::Rect pr = r.ui.screen().chainBar.cards[0].powerRect();
+        r.tapAt (pr.x + pr.w / 2, pr.y + pr.h / 2);
+        check (r.inst.get ("reverb.on") < 0.5f && r.ui.numCards() == 2 && ! r.ui.screen().chainBar.cards[0].state.on, "the power of a card bypasses the effect, and it stays in its band (dim)");
+        r.tapAt (pr.x + pr.w / 2, pr.y + pr.h / 2);
+        check (r.inst.get ("reverb.on") > 0.5f && r.ui.screen().chainBar.cards[0].state.on, "and switches it on again");
+    }
+    // the rack switch reaches every rack: MAIN, BUS 1, BUS 2 and the seven band racks
+    {
+        r.tap (r.ui.screen().chainBar.cards[1]);   // the delay
+        check (r.ui.screen().slotEditor.rack.state.count == 10, "the rack switch of a module has ten racks");
+        check (r.ui.screen().slotEditor.rack.state.index == 6, "it stands on the band the effect is in (L/M/H MID)");
+        r.tap (r.ui.screen().slotEditor.rack);   // the right half: L/M/H HIGH
+        check (r.inst.get ("delay.rack") == 7.0f && r.ui.scope() == 7 && r.ui.numCards() == 1 && std::string (ed.path()) == "MAIN CHAIN  >  SPLITTER L/M/H  >  HIGH BAND", "the next rack is the HIGH band: the page follows the effect (" + std::string (ed.path()) + ")");
+        check (r.ui.bandItems (6).size() == 1 && r.ui.bandItems (7).size() == 1, "the MID band keeps the reverb, the HIGH band has the delay");
+    }
+    // the way back: the BACK card leads to the splitter's page, where the lanes show the chains
+    r.tap (r.ui.screen().chainBar.backCard);
+    check (r.ui.scope() == 0 && ! r.ui.screen().chainBar.backShown() && r.ui.screen().slotEditor.currentType() == fxl::kKindSplitterLmh, "BACK returns to the page of the splitter");
+    check (ed.bands.numCards (0) == 0 && ed.bands.numCards (1) == 1 && ed.bands.numCards (2) == 1, "its lanes show the chains of the bands (0, 1, 1 cards)");
+    check (std::string (ed.bands.lane[1].tile.state.info) == "1 effect" && std::string (ed.bands.lane[0].tile.state.info) == "no effect", "the tiles count the effects");
+    check (std::string (ed.bands.lane[1].cards[0].state.name) == "Reverb" && ed.bands.lane[1].cards[0].state.type == synthyboy::kFxTypeReverb && ed.bands.lane[1].cards[0].state.on, "a lane card has the picture, the power and the name of its effect");
+    // a tap on a card of a lane opens the band with that effect selected
+    r.tap (ed.bands.lane[2].cards[0]);
+    check (r.ui.scope() == 7 && r.ui.selectedItem() == dly && r.ui.screen().slotEditor.currentType() == synthyboy::kFxTypeDelay, "a tap on a card in a lane opens that band with the effect selected");
+    r.tap (r.ui.screen().chainBar.backCard);
+    // the power of a lane card, the tile of a band
+    {
+        const ui::Rect pr = ed.bands.lane[2].cards[0].powerRect();
+        r.tapAt (pr.x + pr.w / 2, pr.y + pr.h / 2);
+        check (r.inst.get ("delay.on") < 0.5f && ! ed.bands.lane[2].cards[0].state.on && r.ui.scope() == 0, "the power of a card in a lane switches the effect (the page stays)");
+        r.tapAt (pr.x + pr.w / 2, pr.y + pr.h / 2);
+        check (r.inst.get ("delay.on") > 0.5f, "and back on");
+    }
+    r.tap (ed.bands.lane[0].tile);
+    check (r.ui.scope() == 5 && r.ui.numCards() == 0 && r.ui.screen().galleryShown() && ! r.ui.screen().editorShown(), "the tile of an empty band opens it: the gallery of the free types (an empty band has no page)");
+    check (r.ui.screen().gallery.numTypes() == 11 && r.ui.screen().gallery.typeAt (0) == 1, "the gallery offers the 11 free types (no delay, no reverb: they are in bands)");
+    r.tap (r.ui.screen().chainBar.backCard);
+    // the splitter off: the lanes are idle
+    r.inst.set ("splitter_lmh.on", 0.0f);
+    r.refresh (2);
+    check (ed.bands.lane[1].tile.state.idle && std::string (ed.bands.lane[1].tile.state.info) == "SPLITTER OFF", "a splitter that is off says so on its lanes (its bands' effects do nothing)");
+    r.inst.set ("splitter_lmh.on", 1.0f);
+    r.refresh (2);
+
+    // REMOVE takes an effect out of its band and switches it off
+    r.tap (ed.bands.lane[1].cards[0]);
+    check (r.ui.scope() == 6 && r.ui.screen().slotEditor.remove.rect().w >= 56, "the page of a band effect has REMOVE");
+    r.tap (r.ui.screen().slotEditor.remove);
+    check (r.inst.get ("reverb.on") < 0.5f && r.inst.get ("reverb.rack") == 0.0f && r.ui.numCards() == 0 && r.ui.bandItems (6).empty(), "REMOVE switches the effect off and takes it out of the band (rack Main)");
+    check (r.ui.screen().galleryShown() && r.ui.screen().gallery.numTypes() == 12, "the band is empty again and offers 12 types (the reverb is free)");
+
+    // an effect that is on in the main chain is not on the list of a band (a module sits in one place)
+    r.inst.set ("chorus.on", 1.0f);
+    r.refresh (2);
+    r.tap (r.ui.screen().chainBar.plusCard);
+    bool chorusListed = false;
+    for (int i = 0; i < r.ui.list().state.count; ++i)
+        chorusListed = chorusListed || std::string (r.ui.list().state.items[i]) == "Chorus";
+    check (r.ui.listOpen() && ! chorusListed && r.ui.list().state.count == 11, "an effect that is on elsewhere is not offered to a band (11 types)");
+    r.tapAt (20, 130);
+    r.tap (r.ui.screen().chainBar.backCard);
+    r.inst.set ("chorus.on", 0.0f);
+    r.refresh (2);
+    check (r.ui.scope() == 0 && r.ui.screen().slotEditor.currentType() == fxl::kKindSplitterLmh, "back at the splitter");
+}
+
+/** The band racks of the three splitters, all seven racks: an effect parked in a rack (a preset) has its card in the right lane, its page, and every module can be moved into every rack by the rack switch and by the lanes. */
+void testEveryBandRack()
+{
+    namespace fxl = ui::fxl;
+    const int kSplit[3] = { fxl::kKindSplitterLh, fxl::kKindSplitterLmh, fxl::kKindSplitterMs };
+    static const char* const kPre[3] = { "splitter_lh", "splitter_lmh", "splitter_ms" };
+    for (int si = 0; si < 3; ++si)
+        for (int b = 0; b < fxl::bandsOfSplitter (kSplit[si]); ++b)
+        {
+            const int rack = fxl::bandRack (kSplit[si], b);
+            const std::string name = std::string (fxl::layoutOf (kSplit[si]).name) + " " + fxl::bandName (kSplit[si], b);
+            int k2 = 0, b2 = 0;
+            check (fxl::bandOfRack (rack, k2, b2) && k2 == kSplit[si] && b2 == b && std::string (fxl::rackName (rack)).size() > 4, name + ": rack " + std::to_string (rack) + " maps back to its band");
+            // a preset: every module of the 13 sits in this rack, on
+            FxRig r;
+            r.inst.set ((std::string (kPre[si]) + ".on").c_str(), 1.0f);
+            for (int t = 1; t < synthyboy::kNumFxInstanceTypes; ++t)
+            {
+                const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (t);
+                r.inst.setAt (d.onIndex, 1.0f);
+                r.inst.setAt (d.rackIndex, static_cast<float> (rack));
+            }
+            r.refresh (2);
+            // the splitter is the one card of Main (the modules are in the band, not in Main)
+            check (r.ui.numCards() == 1 && r.ui.screen().slotEditor.currentType() == kSplit[si] && r.ui.screen().slotEditor.bands.numCards (b) == 13, name + ": the lane has the 13 modules as cards");
+            for (int other = 0; other < r.ui.screen().slotEditor.bands.numBands(); ++other)
+                if (other != b)
+                    check (r.ui.screen().slotEditor.bands.numCards (other) == 0, name + ": the other lanes are empty");
+            { const ui::Rect cr = r.ui.screen().slotEditor.bands.lane[b].cards[12].rect(); r.tapAt (cr.x + 8, cr.y + cr.h - 10); }   // (the power zone is the top right square)
+            check (r.ui.scope() == rack && r.ui.numCards() == 13 && r.ui.screen().slotEditor.currentType() == synthyboy::kFxTypeConvolve, name + ": its card opens the band: 13 cards, the last one is the convolver");
+            r.tap (r.ui.screen().chainBar.backCard);
+            check (r.ui.scope() == 0 && r.ui.screen().slotEditor.currentType() == kSplit[si], name + ": back at the splitter");
+        }
+    // every rack is reachable by the rack switch (the ten values of the engine) for every one of the 13 modules; it writes the module's own key, and the power of its card writes its own on key
+    for (int m = 0; m < 13; ++m)
+        for (int target = 0; target < fxl::kNumRacks; ++target)
+        {
+            const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (m + 1);
+            const std::string nm = std::string (d.prefix) + " -> " + fxl::rackName (target);
+            FxRig r;
+            r.inst.setAt (d.onIndex, 1.0f);
+            r.inst.set ("splitter_lh.on", 1.0f);
+            r.inst.set ("splitter_lmh.on", 1.0f);
+            r.inst.set ("splitter_ms.on", 1.0f);
+            r.refresh (2);
+            int card = -1;
+            for (int i = 0; i < r.ui.numCards(); ++i)
+                if (r.ui.cardItem (i) == (synthyboy::FxRackItem { false, m }))
+                    card = i;
+            check (card >= 0, nm + ": the module has its card in Main");
+            r.tap (r.ui.screen().chainBar.cards[card]);
+            for (int guard = 0; guard < 12 && r.ui.screen().slotEditor.rack.state.index != target; ++guard)
+                r.tap (r.ui.screen().slotEditor.rack);
+            check (r.inst.param (d.rackIndex) == static_cast<float> (target) && r.ui.screen().slotEditor.rack.state.index == target, nm + ": the rack switch writes the rack key");
+            check (r.ui.scope() == (target >= 3 ? target : 0), nm + ": the page follows the effect");
+            // the power of its card (in the chain bar of its rack) writes the on key
+            int c2 = -1;
+            for (int i = 0; i < r.ui.numCards(); ++i)
+                if (r.ui.cardItem (i) == (synthyboy::FxRackItem { false, m }))
+                    c2 = i;
+            check (c2 >= 0, nm + ": the card is on the page of its rack");
+            const ui::Rect pr = r.ui.screen().chainBar.cards[c2].powerRect();
+            r.tapAt (pr.x + pr.w / 2, pr.y + pr.h / 2);
+            check (r.inst.param (d.onIndex) < 0.5f, nm + ": the power of the card writes the on key");
+        }
+    // the splitters and the slots of the pool stay in the buses: their rack switch has three values
+    {
+        FxRig r;
+        r.refresh();
+        addKind (r, fxl::kKindSplitterMs);
+        check (r.ui.screen().slotEditor.rack.state.count == 3, "a splitter's rack switch has three racks (a splitter cannot sit in a band)");
+        addEffect (r, 2);   // a delay of the pool
+        check (r.ui.screen().slotEditor.rack.state.count == 3 && r.ui.cardItem (r.ui.selectedSlot()).pool, "so has a slot of the pool (its rack key has three values)");
+    }
+}
+
+
+/** A drag inside a lane reorders the chain of that band. */
+void testBandLaneDrag()
+{
+    namespace fxl = ui::fxl;
+    FxRig r;
+    r.inst.set ("splitter_lh.on", 1.0f);
+    r.inst.set ("eq.on", 1.0f);
+    r.inst.set ("eq.rack", 4.0f);
+    r.inst.set ("phaser.on", 1.0f);
+    r.inst.set ("phaser.rack", 4.0f);
+    r.inst.set ("bode.on", 1.0f);
+    r.inst.set ("bode.rack", 4.0f);
+    r.refresh (2);
+    ui::FxBandBoard& bd = r.ui.screen().slotEditor.bands;
+    check (r.ui.scope() == 0 && r.ui.screen().slotEditor.currentType() == fxl::kKindSplitterLh && bd.numBands() == 2 && bd.numCards (0) == 0 && bd.numCards (1) == 3, "the HIGH lane of the L/H splitter has three cards");
+    const auto before = r.ui.bandItems (4);
+    const ui::Rect last = bd.lane[1].cards[2].rect(), first = bd.lane[1].cards[0].rect();
+    r.drag (last.x + 10, last.y + last.h - 8, first.x + 10, first.y + first.h - 8, true);
+    const auto after = r.ui.bandItems (4);
+    check (before.size() == 3 && after.size() == 3 && after[0] == before[2] && after[1] == before[0] && after[2] == before[1], "a drag of the last card of a lane to the first place moves it there; the others keep their order");
+    check (r.ui.scope() == 0, "a drag in a lane does not open the band");
 }
 
 /** The number field of the FX editor: VOICES and UNISON are whole numbers. */
@@ -1032,6 +1266,9 @@ int main()
     testValueText();
     testClosingUpRule();
     testSplitterPages();
+    testBandRacks();
+    testEveryBandRack();
+    testBandLaneDrag();
     testNumberFields();
     testChoiceNames();
     testFxDraw();

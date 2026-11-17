@@ -115,7 +115,7 @@ public:
         full_.rowList.state.index = std::clamp (full_.grid.activeRow, 0, ui::VoiceGrid::kNumRows - 1);
         const float sv = full_.grid.value (full_.grid.activeRow, full_.grid.selectedStep) * 100.0f;
         full_.stepValue.state.value = std::round (sv);
-        ui::VoiceGrid::formatValue (full_.grid.activeRow, full_.grid.value (full_.grid.activeRow, full_.grid.selectedStep), full_.stepValue.state.shown, sizeof full_.stepValue.state.shown);   // one format with the grid cell ("MID", "23R", "+12 c")
+        ui::VoiceGrid::formatValue (full_.grid.activeRow, static_cast<float> (std::round (sv)) / 100.0f, full_.stepValue.state.text, sizeof full_.stepValue.state.text);   // one text for one value: the same as the cell and the strip
         full_.stepValue.setLabel (ui::VoiceGrid::rowName (full_.grid.activeRow));
         inst.setQVirtual (kVirtualStep, static_cast<float> (full_.grid.selectedStep) / 7.0f);
         inst.setQVirtual (kVirtualRow, static_cast<float> (full_.grid.activeRow) / 5.0f);

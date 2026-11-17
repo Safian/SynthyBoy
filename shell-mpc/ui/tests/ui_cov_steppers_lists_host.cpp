@@ -408,6 +408,39 @@ static void test_mod_row_selector()
     check (drawnOutside (im, mrs.rect(), backgroundPixel()) == 0, "ModRowSelector draws strictly inside rect");
 }
 
+// Regression (library finding 7 and 8 of the first coverage round). 7: a pictogram selector whose index is out of range (the options shrank) turns from the nearest valid cell: a step down from index 5 of 3
+// cells is a step down from cell 2, to cell 1 (the first demonstration expected 2: a step that does not move); a step up has nowhere to go and reports nothing. 8: the row selector reports a change only
+// when the row changed, at the first and the last row a further step is silent.
+static void test_pictogram_out_of_range_turn_and_row_selector_boundaries()
+{
+    PictogramSelector ps;
+    ps.setId (70);
+    ps.place ({ 50, 50, 240, 56 });
+    ps.setItem (0, 0, "A");
+    ps.setItem (1, 0, "B");
+    ps.setItem (2, 0, "C");
+    ps.state.index = 5;
+    Change c = ps.turn (1.0);
+    check (! c, "pictogram selector: a step up from an index past the last cell has nowhere to go");
+    c = ps.turn (-1.0);
+    check (c.kind == ChangeKind::Index && c.index == 1, "pictogram selector: a step down from an index past the last cell goes from the last cell, to the one before it");
+    ps.state.index = 1;
+    c = ps.turn (1.0);
+    check (c.kind == ChangeKind::Index && c.index == 2, "pictogram selector: in range a step up is the next cell");
+
+    ModRowSelector mrs;
+    mrs.setId (80);
+    mrs.maxRows = 8;
+    mrs.selected = 0;
+    check (! mrs.turn (-1.0) && mrs.selected == 0, "row selector: a step down at the first row reports nothing");
+    mrs.selected = 7;
+    check (! mrs.turn (1.0) && mrs.selected == 7, "row selector: a step up at the last row reports nothing");
+    mrs.selected = 3;
+    Change d = mrs.turn (1.0);
+    check (d.kind == ChangeKind::Index && d.index == 4 && mrs.selected == 4, "row selector: a step inside the rows reports the new row");
+    check (! mrs.turn (0.0), "row selector: no step, no change");
+}
+
 int main()
 {
     test_stepper_basic_and_clamping();
@@ -422,6 +455,7 @@ int main()
     test_tool_selector();
     test_mod_row_selector();
 
+    test_pictogram_out_of_range_turn_and_row_selector_boundaries();
     std::printf ("ui_cov_steppers_lists_host: %d failure(s)\n", g_fails);
     return g_fails ? 1 : 0;
 }

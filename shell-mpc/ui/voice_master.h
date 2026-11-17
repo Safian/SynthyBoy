@@ -272,7 +272,26 @@ public:
         holdR = std::max (peakR, holdR - fall);
     }
 
+    static constexpr int kNumMarks = 5, kLabelH = 14;
+    /** The boxes of the numbers of the scale (dB 0, -6, -12, -24, -48) and whether each is written: a number whose box would run into the one above it (a short meter: 0 and -6 stand 15 px apart, the box of 0 is held down
+        at the top edge) is left out, its mark stays. */
+    void scaleLabels (Rect (&box)[kNumMarks], bool (&shown)[kNumMarks]) const noexcept
+    {
+        const int m = 4, scaleW = 34;
+        const int barH = rect_.h - 2 * m - 22, barY = rect_.y + m, bottom = barY + barH;
+        int lastBottom = -1000;
+        for (int i = 0; i < kNumMarks; ++i)
+        {
+            const int y = bottom - static_cast<int> (std::lround (kMarks[i].pos * static_cast<float> (barH)));
+            box[i] = { rect_.x + m, std::min (std::max (y - 7, barY), bottom - kLabelH), scaleW - 7, kLabelH };
+            shown[i] = box[i].y >= lastBottom;
+            if (shown[i])
+                lastBottom = box[i].bottom();
+        }
+    }
+
 protected:
+    static constexpr struct Mark { float pos; const char* name; } kMarks[kNumMarks] = { { 1.0f, "0" }, { 0.9f, "-6" }, { 0.8f, "-12" }, { 0.6f, "-24" }, { 0.2f, "-48" } };
     void drawBody (Pen& p) const override
     {
         const theme::Look& T = theme::L();
@@ -290,13 +309,16 @@ protected:
         drawBar (p, lr, peakL, holdL);
         drawBar (p, rr, peakR, holdR);
 
-        // the scale: a mark and a number for 0, -6, -12, -24, -48 dB (0 = -60 dB .. 1 = full scale)
-        static const struct { float pos; const char* name; } kMarks[5] = { { 1.0f, "0" }, { 0.9f, "-6" }, { 0.8f, "-12" }, { 0.6f, "-24" }, { 0.2f, "-48" } };
-        for (const auto& mk : kMarks)
+        // the scale: a mark for 0, -6, -12, -24, -48 dB (0 = -60 dB .. 1 = full scale) and, where the numbers do not run into each other, the number
+        Rect box[kNumMarks];
+        bool shown[kNumMarks];
+        scaleLabels (box, shown);
+        for (int i = 0; i < kNumMarks; ++i)
         {
-            const int y = lr.bottom() - static_cast<int> (std::lround (mk.pos * static_cast<float> (lr.h)));
+            const int y = lr.bottom() - static_cast<int> (std::lround (kMarks[i].pos * static_cast<float> (lr.h)));
             p.line (static_cast<float> (lr.x - 4), static_cast<float> (y), static_cast<float> (lr.x), static_cast<float> (y), 1.0f, p.c (T.textDim, 200));
-            p.textRight ({ rect_.x + m, std::min (std::max (y - 7, barY), lr.bottom() - 14), scaleW - 7, 14 }, mk.name, T.fSmall, p.c (T.textFaint, 255), T.fMin);
+            if (shown[i])
+                p.textRight (box[i], kMarks[i].name, T.fSmall, p.c (T.textFaint, 255), T.fMin);
         }
 
         // the names of the bars under them

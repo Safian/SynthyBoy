@@ -202,6 +202,26 @@ void testMasterGroupsAndMeters()
     r.now += 40.0;
     r.refresh();
     check (m.meters.holdL > m.meters.peakL && m.meters.holdL < 0.8f + 1.0e-6f, "the peak hold falls slowly (hold " + std::to_string (m.meters.holdL) + " over the peak " + std::to_string (m.meters.peakL) + ")");
+    // the numbers of the dB scale never run into each other, on the meter of the page and on a short one
+    for (int h : { m.meters.rect().h, 90, 120, 200, 400 })
+    {
+        ui::PeakMeterDisplay pm;
+        pm.place ({ 10, 10, 90, h });
+        ui::Rect box[ui::PeakMeterDisplay::kNumMarks];
+        bool shown[ui::PeakMeterDisplay::kNumMarks];
+        pm.scaleLabels (box, shown);
+        bool apart = shown[0] && shown[ui::PeakMeterDisplay::kNumMarks - 1], inside = true;
+        int last = -1000, writes = 0;
+        for (int i = 0; i < ui::PeakMeterDisplay::kNumMarks; ++i)
+            if (shown[i])
+            {
+                apart = apart && box[i].y >= last;
+                last = box[i].bottom();
+                inside = inside && pm.rect().contains (box[i]);
+                ++writes;
+            }
+        check (apart && inside && writes >= 3, "the scale numbers of a meter " + std::to_string (h) + " px tall do not overlap and stand inside it (" + std::to_string (writes) + " of 5 written)");
+    }
     // the glide curve follows SLOPE live
     r.inst.set ("master.portamento.slope", 6.0f);
     r.refresh();
@@ -347,6 +367,21 @@ void testVoiceGridDrawing()
         r.refresh();
     }
     check (std::string (vs.stepValue.state.label) == "CUTOFF", "the VALUE field names the row (" + std::string (vs.stepValue.state.label) + ")");
+    // one text for one value: the VALUE field reads as the cell of the grid and the strip do ("MID", "0 c", "40%", "25L")
+    {
+        char want[16], got[16];
+        ui::VoiceGrid::formatValue (2, g.value (2, g.selectedStep), want, sizeof want);
+        ui::NumberField::formatValue (vs.stepValue.state, got);
+        check (std::string (got) == want && std::string (got) != "0" && std::string (got).find ('%') != std::string::npos, "the VALUE field of CUTOFF reads like the strip: " + std::string (got));
+        const int savedRow = g.activeRow;
+        g.activeRow = 0;
+        r.inst.set ("voicectl.s" + std::to_string (g.selectedStep + 1) + ".pan", 0.0f);
+        r.refresh (2);
+        ui::NumberField::formatValue (vs.stepValue.state, got);
+        check (std::string (got) == "MID", "the VALUE field of PAN at the middle reads MID, as the cell does (" + std::string (got) + ")");
+        g.activeRow = savedRow;
+        r.refresh (2);
+    }
     check (vs.length.rect().w >= 160 && vs.stepValue.rect().w >= 180 && vs.qStepSelect.rect().right() <= vs.length.rect().x, "LENGTH and VALUE have the room the ROW stepper left (" + std::to_string (vs.length.rect().w) + ", " + std::to_string (vs.stepValue.rect().w) + " px)");
     check (r.ui.screen().turnQ (1, 1.0).index == 3, "a Q-Link step on Q2 moves the row on (the list)");
     r.refresh();

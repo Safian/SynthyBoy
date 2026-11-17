@@ -752,6 +752,19 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.picture (outDir + "/" + state + "_lfo1_shape_drawn.png");
         }
 
+        // 4.4b The shape with a rise and a delay (the strip before the cycle) and with a phase of 90 degrees (the marker)
+        {
+            GalleryRig<LfoUi> r (baseInst, 1);
+            r.inst.set ("lfo1.fade_in", 800.0f);
+            r.inst.set ("lfo1.delay", 300.0f);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_lfo1_rise_delay.png");
+            GalleryRig<LfoUi> r2 (baseInst, 1);
+            r2.inst.set ("lfo1.phase", 90.0f);
+            r2.refresh (2);
+            r2.picture (outDir + "/" + state + "_lfo1_phase90.png");
+        }
+
         // 4.5 Shape editor page - empty (minimum 2 points: start and end)
         {
             GalleryRig<LfoUi> r (baseInst, 1);
@@ -1106,7 +1119,7 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
                 rVoice.inst.set (paramKey, kStepVals[(s + r) % 8] * 100.0f);
             }
             rVoice.refresh (2);
-            const ui::Rect tr = rVoice.ui.screen().rowList.rowRect (r);   // the ROW list (the old tabs of the grid are gone)
+            const ui::Rect tr = rVoice.ui.screen().rowList.rowRect (r);   // (the row list of the page)
             rVoice.tapAt (tr.x + tr.w / 2, tr.y + tr.h / 2);
             rVoice.ui.screen().grid.selectedStep = r;
             rVoice.refresh (2);
@@ -1152,6 +1165,7 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
 
 int main (int argc, char** argv)
 {
+    ui::QGroup::setWideDevice (true);   // the XL first, as the main gallery host: the idle chips of the mapped groups read 5 .. 16
     std::string outDir;
     std::vector<std::string> presets;
     bool testMode = false;
@@ -1223,6 +1237,8 @@ int main (int argc, char** argv)
             "test_init_lfo1_key.png",
             "test_init_lfo_random.png",
             "test_init_lfo1_shape_drawn.png",
+            "test_init_lfo1_rise_delay.png",
+            "test_init_lfo1_phase90.png",
             "test_init_lfo_editor_empty.png",
             "test_init_lfo_editor_points.png",
             "test_init_lfo_editor_tool_point.png",

@@ -180,7 +180,7 @@ protected:
         if (zone || tap_.up() == 0)
             return Change::none();
         const int row = firstRow() + (y - rect_.y - kPad - headerH()) / kRowH;
-        if (y < rect_.y + kPad + headerH() || row < 0 || row >= state.count || x >= rect_.x + rowRect (0).w + kPad || row >= firstRow() + visibleRows())
+        if (y < rect_.y + kPad + headerH() || row < 0 || row >= state.count || x < rowRect (0).x || x >= rowRect (0).right() || row >= firstRow() + visibleRows())
             return Change::none();
         return Change::indexed (id_, row, row);
     }

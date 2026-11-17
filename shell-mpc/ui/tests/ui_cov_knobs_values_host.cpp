@@ -392,6 +392,47 @@ void testFaderAndSliderBarExpected()
 
 } // namespace
 
+// Regression (library finding 1 and 2 of the first coverage round): the mouse wheel moves a fader and a slider bar by one Q-Link step (1 / 128 of the range, not the whole range), a touch outside the
+// rectangle is not captured, and capturing () tells the truth for both.
+void testFaderAndSliderBarWheelAndCapture()
+{
+    SliderBar sb ("PAN", true);
+    sb.setId (1);
+    sb.place ({ 50, 50, 80, 56 });
+    sb.state.value = 0.5;
+    check (near (sb.wheelUnit(), 1.0 / 128.0), "slider bar: one wheel notch is 1 / 128 of the range");
+    Change c = sb.wheel (1);
+    check (c.kind == ChangeKind::Value && near (c.value, 0.5 + 1.0 / 128.0), "slider bar: one notch moves it by one step, not to the end");
+    sb.touchDown (999, 999, 0.0);
+    check (! sb.capturing(), "slider bar: a touch outside is not captured");
+    sb.touchDown (60, 70, 0.0);
+    check (sb.capturing(), "slider bar: a touch inside is captured (capturing () says so)");
+    sb.touchUp (60, 70);
+    check (! sb.capturing(), "slider bar: the lift releases it");
+
+    Fader f ("LEVEL");
+    f.setId (2);
+    f.place ({ 50, 50, 80, 160 });
+    f.state.value = 0.5;
+    check (near (f.wheelUnit(), 1.0 / 128.0), "fader: one wheel notch is 1 / 128 of the range");
+    c = f.wheel (1);
+    check (c.kind == ChangeKind::Value && near (c.value, 0.5 + 1.0 / 128.0), "fader: one notch moves it by one step, not to the end");
+    f.state.value = 0.5;
+    c = f.wheel (-1);
+    check (c.kind == ChangeKind::Value && near (c.value, 0.5 - 1.0 / 128.0), "fader: the wheel down moves it down by one step");
+    c = f.touchDown (999, 999, 1.0);
+    check (! c && ! f.capturing(), "fader: a touch outside the rectangle is not captured");
+    check (! f.touchMove (999, 900) && ! f.touchUp (999, 900), "fader: and the move and the lift of it change nothing");
+    f.touchDown (90, 120, 2.0);
+    check (f.capturing(), "fader: a touch inside is captured (capturing () says so)");
+    f.setEnabled (false);
+    check (! f.capturing(), "fader: disabling it drops the capture");
+    f.setEnabled (true);
+    f.touchDown (90, 120, 3.0);
+    f.touchUp (90, 120);
+    check (! f.capturing(), "fader: the lift releases it");
+}
+
 int main()
 {
     testKnobWheelAndGestures();
@@ -400,6 +441,7 @@ int main()
     testFilterKnobCoverage();
     testFaderAndSliderBarExpected();
 
+    testFaderAndSliderBarWheelAndCapture();
     std::printf(g_fails ? "ui_cov_knobs_values_host: FAILED (%d)\n" : "ui_cov_knobs_values_host: OK\n", g_fails);
     return g_fails ? 1 : 0;
 }

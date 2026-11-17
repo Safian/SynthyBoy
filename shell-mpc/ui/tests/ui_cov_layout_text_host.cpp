@@ -242,6 +242,24 @@ static void test_pen_text_fitting()
     check (sTooShort == 0.0f, "Insufficient height returns 0.0f");
 }
 
+// Regression (library finding 6 and 9 of the first coverage round): a box too narrow for even the ellipsis gets no text (a centred text would stand over both edges), and setText with no room writes nothing.
+static void test_fit_text_in_a_tiny_box_and_set_text_without_room()
+{
+    char buf[96];
+    const float w = sdf::fitText ("ABCDEFGHIJKLMN", 8.0f, 4.0f, buf, sizeof buf);
+    check (w <= 4.0f && buf[0] == '\0', "fitText: a box narrower than the ellipsis gets the empty text of width 0");
+    const float w2 = sdf::fitText ("ABCDEFGHIJKLMN", 8.0f, 40.0f, buf, sizeof buf);
+    check (w2 <= 40.0f && w2 > 0.0f && std::strlen (buf) > 3, "fitText: a box that holds the ellipsis gets a cut text that fits");
+    check (sdf::fitText ("AB", 8.0f, 100.0f, buf, sizeof buf) <= 100.0f && std::strcmp (buf, "AB") == 0, "fitText: a text that fits is copied whole");
+
+    char b[4] = { 'A', 'B', 'C', '\0' };
+    setText (b, 0, "TEST");
+    check (b[0] == 'A' && b[1] == 'B' && b[2] == 'C', "setText with a capacity of 0 leaves the buffer as it was");
+    setText (b, 1, "TEST");
+    check (b[0] == '\0', "setText with a capacity of 1 writes the terminator only");
+    setText (nullptr, 4, "TEST");   // (no crash)
+}
+
 int main()
 {
     test_rect_math_and_operations();
@@ -251,6 +269,7 @@ int main()
     test_mod_input_and_depth_arc();
     test_pen_text_fitting();
 
+    test_fit_text_in_a_tiny_box_and_set_text_without_room();
     std::printf ("ui_cov_layout_text_host: %d failure(s)\n", g_fails);
     return g_fails ? 1 : 0;
 }

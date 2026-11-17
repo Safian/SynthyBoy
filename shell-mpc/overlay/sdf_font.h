@@ -87,6 +87,11 @@ inline float fitText (const char* s, float size, float maxWidth, char* out, int 
         return full;
     }
     const float ell = (glyph (kEllipsis).advance + tracking) * size;
+    if (ell > maxWidth)   // not even the ellipsis fits: nothing is drawn (a centred text would stand over both edges of the box)
+    {
+        out[0] = '\0';
+        return 0.0f;
+    }
     const char* p = s;
     const char* end = s + n;
     const char* keep = s;

@@ -188,15 +188,54 @@ inline const Layout& layoutOf (int kind) noexcept
             row ("TAIL", c ("convolve.damp"), c ("convolve.ir_gain"), c ("convolve.law")),
             row ("OUTPUT", c ("convolve.mix"), c ("convolve.level")) } },
         // 14: the splitters: the crossover frequencies, the band bypasses, the level
-        Layout { kKindSplitterLh, "Splitter L/H", 1, 240, 1, {
+        Layout { kKindSplitterLh, "Splitter L/H", 1, 206, 1, {
             row ("SPLIT", c ("splitter_lh.freq", "SPLIT FREQUENCY"), c ("splitter_lh.low_bypass", "LOW BYPASS"), c ("splitter_lh.high_bypass", "HIGH BYPASS"), c ("splitter_lh.level", "LEVEL")) } },
-        Layout { kKindSplitterLmh, "Splitter L/M/H", 2, 220, 2, {
+        Layout { kKindSplitterLmh, "Splitter L/M/H", 2, 240, 2, {
             row ("SPLIT", c ("splitter_lmh.freq_low", "LOW SPLIT"), c ("splitter_lmh.freq_high", "HIGH SPLIT"), c ("splitter_lmh.level", "LEVEL")),
             row ("BYPASS", c ("splitter_lmh.low_bypass", "LOW BYPASS"), c ("splitter_lmh.mid_bypass", "MID BYPASS"), c ("splitter_lmh.high_bypass", "HIGH BYPASS")) } },
-        Layout { kKindSplitterMs, "Splitter M/S", 1, 240, 1, {
+        Layout { kKindSplitterMs, "Splitter M/S", 1, 206, 1, {
             row ("MID / SIDE", c ("splitter_ms.mid_bypass", "MID BYPASS"), c ("splitter_ms.side_bypass", "SIDE BYPASS"), c ("splitter_ms.level", "LEVEL")) } },
     };
     return kAll[kind >= 0 && kind < kNumKinds ? kind : 0];
+}
+
+// THE RACKS OF THE BANDS (engine racks 3 .. 9, docs/params.json "FX / Racks"): rack 3 L/H low, 4 L/H high, 5 L/M/H low, 6 mid, 7 high, 8 M/S mid, 9 M/S side. Only the 13 modules of instance 0 that are no splitters sit in
+// them (the slots of the pool and the splitters stay in Main / Bus 1 / Bus 2).
+constexpr int kFirstBandRack = 3, kNumBandRacks = 7, kNumRacks = kFirstBandRack + kNumBandRacks;
+/** The bands of a splitter kind (kKindSplitter*): 2, 3, 2; 0 for any other kind. */
+inline int bandsOfSplitter (int kind) noexcept { return kind == kKindSplitterLmh ? 3 : (kind == kKindSplitterLh || kind == kKindSplitterMs ? 2 : 0); }
+/** The engine rack of band `band` of the splitter `kind`, -1 where there is none. */
+inline int bandRack (int kind, int band) noexcept
+{
+    if (band < 0 || band >= bandsOfSplitter (kind))
+        return -1;
+    return kFirstBandRack + (kind == kKindSplitterLh ? 0 : (kind == kKindSplitterLmh ? 2 : 5)) + band;
+}
+/** The splitter kind and the band of a band rack (3 .. 9); false for the buses. */
+inline bool bandOfRack (int rack, int& kind, int& band) noexcept
+{
+    if (rack < kFirstBandRack || rack >= kNumRacks)
+        return false;
+    const int r = rack - kFirstBandRack;
+    kind = r < 2 ? kKindSplitterLh : (r < 5 ? kKindSplitterLmh : kKindSplitterMs);
+    band = r < 2 ? r : (r < 5 ? r - 2 : r - 5);
+    return true;
+}
+/** The name of a band: LOW / HIGH, LOW / MID / HIGH, MID / SIDE. */
+inline const char* bandName (int kind, int band) noexcept
+{
+    static const char* const kLh[2] = { "LOW", "HIGH" };
+    static const char* const kLmh[3] = { "LOW", "MID", "HIGH" };
+    static const char* const kMs[2] = { "MID", "SIDE" };
+    if (band < 0 || band >= bandsOfSplitter (kind))
+        return "";
+    return kind == kKindSplitterLmh ? kLmh[band] : (kind == kKindSplitterLh ? kLh[band] : kMs[band]);
+}
+/** The name of a rack as the rack switch and the tag of a card show it: MAIN, BUS 1, BUS 2, L/H LOW ... M/S SIDE. */
+inline const char* rackName (int rack) noexcept
+{
+    static const char* const k[kNumRacks] = { "MAIN", "BUS 1", "BUS 2", "L/H LOW", "L/H HIGH", "L/M/H LOW", "L/M/H MID", "L/M/H HIGH", "M/S MID", "M/S SIDE" };
+    return rack >= 0 && rack < kNumRacks ? k[rack] : "";
 }
 
 /** The label of a control: the table's name, else the engine's name for it in capitals without the name of its effect in front ("Delay Time" -> TIME); the laws and types with their own label (choice_names.h). */
