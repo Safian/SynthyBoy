@@ -24,6 +24,10 @@
 
 namespace mpckit {
 
+// the library's namespaces under short names (the kit headers and the pages written with them say ui:: and gpu::)
+namespace ui = synthyboy_mpc::ui;
+namespace gpu = synthyboy_mpc::overlay::gpu;
+
 class Binder
 {
 public:
