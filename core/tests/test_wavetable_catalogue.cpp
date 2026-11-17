@@ -9,12 +9,15 @@
 #include <vector>
 
 #include "synthyboy/content_pack.h"
+#include "synthyboy/engine.h"
 #include "synthyboy/content_store.h"
 #include "synthyboy/params.h"
+#include "synthyboy/state.h"
 #include "synthyboy/user_content.h"
 #include "synthyboy/wavetable_catalogue.h"
 #include "synthyboy/wavetable_file.h"
 #include "test_runner.h"
+#include "test_util.h"
 
 using namespace synthyboy;
 
@@ -334,4 +337,93 @@ TEST (wavetable_catalogue_prepare_reads_bounded_hashes_and_refuses_with_a_reason
     missing.file = "nope.wav";
     CHECK (! prepareWavetableRef (store, missing, frames, reason));
     CHECK_EQ (reason, std::string ("cannot read the file"));
+}
+
+namespace
+{
+void setKey (IEngine& e, const char* key, float v)
+{
+    const ParamInfo* p = findParamByKey (key);
+    CHECK (p != nullptr);
+    if (p != nullptr)
+        e.setParam (p->id, v);
+}
+
+/** Osc 1 plays the "Preset table" with the given store and content (either may be null); returns the audio and the missing_content bits. */
+sbtest::Rendered playTable (const IContentStore* store, const StateContent* content, unsigned& missing, float wavetable = static_cast<float> (kWavetablePresetTable))
+{
+    auto e = createOwnEngine();
+    e->prepare (48000.0, 256, qualityForTier (Tier::high));
+    setKey (*e, "filter1.on", 0);
+    setKey (*e, "master.volume", 0);
+    setKey (*e, "osc1.level", 100);
+    setKey (*e, "osc1.random_phase", 0);
+    setKey (*e, "env1.attack", 1);
+    setKey (*e, "osc1.wavetable", wavetable);
+    if (store != nullptr)
+        e->setContentStore (store);
+    if (content != nullptr)
+        e->setContent (*content);
+    const auto r = sbtest::render (*e, { sbtest::noteOn (0, 60) }, 24000, 256);
+    missing = e->missingContent();
+    return r;
+}
+} // namespace
+
+TEST (wavetable_catalogue_a_user_table_survives_the_state_and_a_missing_file_falls_back)
+{
+    // a table file of the user folder: two frames, a sine and its third harmonic
+    std::vector<float> samples (2 * 2048);
+    for (size_t i = 0; i < 2048; ++i)
+    {
+        samples[i] = 0.5f * static_cast<float> (std::sin (2.0 * 3.14159265358979 * static_cast<double> (i) / 2048.0));
+        samples[2048 + i] = 0.5f * static_cast<float> (std::sin (6.0 * 3.14159265358979 * static_cast<double> (i) / 2048.0));
+    }
+    MemoryContentStore store;
+    store.add (kUserWavetablePack, "Bass/x.wav", encodeWav (samples.data(), nullptr, samples.size(), 44100, 16));
+    ContentFileRef ref;
+    ref.pack = kUserWavetablePack;
+    ref.file = "Bass/x.wav";
+    ref.name = "x";
+    int frames = 0;
+    std::string reason;
+    CHECK (prepareWavetableRef (store, ref, frames, reason));   // the hash is computed at load time
+    CHECK_EQ (frames, 2);
+    StateContent content;
+    attachWavetable (content, 1, ref, "", frames);
+
+    // the state round trip: the reference (pack, path below it, SHA-256, name, frames) comes back as it went
+    ParamValues values = ParamValues::defaults();
+    const std::string text = saveState (values, content);
+    ParamValues values2 = ParamValues::defaults();
+    StateContent back;
+    const LoadResult lr = loadStateWithContent (text.data(), text.size(), values2, back);
+    CHECK (lr.content == ContentStatus::ok);
+    CHECK_EQ (back.wavetables.size(), static_cast<size_t> (1));
+    CHECK (back.wavetables.size() == 1 && back.wavetables[0].osc == 1 && back.wavetables[0].ref.tie() == ref.tie() && back.wavetables[0].frames == 2);
+
+    // the file is there: the table plays and nothing is missing
+    unsigned missing = 0xFFu;
+    const auto withFile = playTable (&store, &back, missing);
+    CHECK_EQ (missing & 8u, 0u);
+    CHECK (sbtest::peak (withFile.left) > 0.05f);
+    // the file is gone on this device: the built-in table plays (the saw), flagged, never silence
+    MemoryContentStore empty;
+    unsigned missing2 = 0;
+    const auto without = playTable (&empty, &back, missing2);
+    CHECK_EQ (missing2 & 8u, 8u);
+    CHECK (sbtest::peak (without.left) > 0.05f);
+    CHECK (without.left != withFile.left);
+    // another file at that path (the hash does not match): the same, flagged
+    MemoryContentStore other;
+    other.add (kUserWavetablePack, "Bass/x.wav", encodeWav (samples.data(), nullptr, samples.size() / 2 + 2048, 44100, 16));
+    unsigned missing3 = 0;
+    (void) playTable (&other, &back, missing3);
+    CHECK_EQ (missing3 & 8u, 8u);
+    // host automation of oscN.wavetable still selects the built-in tables: with the file table in the content a built-in choice plays that table
+    unsigned missing4 = 0;
+    const auto sine = playTable (&store, &back, missing4, static_cast<float> (kWavetableSine));
+    unsigned missing5 = 0;
+    const auto sineNoContent = playTable (nullptr, nullptr, missing5, static_cast<float> (kWavetableSine));
+    CHECK (sine.left == sineNoContent.left);
 }
