@@ -230,8 +230,8 @@ Az alábbi hibaelhárítási pontok szigorúan a `docs/MPC.md` dokumentumban azo
 Copyright (C) 2026 Safian Szabolcs.
 
 A SynthyBoy szabad szoftver, amely a **GNU Affero General Public License 3. verziója, vagy (választása szerint) bármely későbbi verziója** (`AGPL-3.0-or-later`) feltételei szerint került kiadásra.
-- A teljes licencszövegért tekintse meg a tárhely [LICENSE](../../LICENSE) fájlját.
-- A harmadik féltől származó függőségek licencei és nyilatkozatai a [THIRD_PARTY.md](../../THIRD_PARTY.md) és a [NOTICE](../../NOTICE) fájlokban találhatók.
+- A teljes licencszövegért tekintse meg a tárhely [LICENSE](../../../LICENSE) fájlját.
+- A harmadik féltől származó függőségek licencei és nyilatkozatai a [THIRD_PARTY.md](../../../THIRD_PARTY.md) és a [NOTICE](../../../NOTICE) fájlokban találhatók.
 - *Jogi nyilatkozat:* A SynthyBoy egy független fejlesztés, és nem áll kapcsolatban az inMusic Brands vagy az Akai Professional vállalattal, azok nem támogatják és nem hagyták jóvá.
 
 ### Hibák bejelentése
