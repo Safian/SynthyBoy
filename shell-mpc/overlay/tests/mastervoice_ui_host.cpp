@@ -83,7 +83,7 @@ void testMasterSidesAndBlocks()
     filled = filled && m.voiceOverride.rect().bottom() >= m.blockRect (0).bottom() - 90;
     check (inside, "the Q group of OUTPUT, PITCH, VOICES and GLIDE lies in its block and nothing else is in its frame");
     check (filled, "the groups fill their blocks (reaching the lower part: PITCH has LINK under its row, VOICES three rows, GLIDE the two toggles and a curve of the whole height)");
-    check (m.volume.rect().h >= 180 && m.volume.rect().w >= 110, "the knobs of OUTPUT are big (" + std::to_string (m.volume.rect().w) + " x " + std::to_string (m.volume.rect().h) + ")");
+    check (m.volume.rect().h >= 120 && m.volume.rect().w >= 110, "the knobs of OUTPUT are big (the LIMIT and QUALITY row of the strip is under them: " + std::to_string (m.volume.rect().w) + " x " + std::to_string (m.volume.rect().h) + ")");
     // one knob family: the three knobs of OUTPUT are large (one size); TUNE is the medium variant (dial at the left, text beside it); GLIDE and SLOPE the common size
     check (m.volume.state.large && m.spread.state.large && m.stereoRouting.state.large && ! m.tune.state.large && ! m.portaTime.state.large && ! m.portaSlope.state.large, "VOLUME, SPREAD and STEREO are the large knobs, the others are not");
     check (m.volume.rect().w == m.spread.rect().w && std::abs (m.stereoRouting.rect().w - m.spread.rect().w) <= 1 && m.volume.rect().h == m.stereoRouting.rect().h, "the three knobs of OUTPUT share one cell size");
