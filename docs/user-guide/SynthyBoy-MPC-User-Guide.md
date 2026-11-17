@@ -223,7 +223,9 @@ The Play tab has three sub-pages, **Play**, **Play Env** and **Play LFO**. All t
 three live panels side by side, an **oscillator** panel (left), an **envelope** panel (middle) and an **LFO**
 panel (right). The sub-page decides which panel's group is active (yellow frame) for the Q-Links: the
 oscillator on Play, the envelope on Play Env, the LFO on Play LFO.
-The envelope panel with the ADSR group framed:
+This is the place to play and tweak: the big controls of the three most used parts are in one view.
+
+The envelope panel with the ADSR group framed (the yellow frame is on the four envelope knobs):
 
 ![Play Env](img/play-env.png)
 
@@ -235,11 +237,11 @@ The LFO panel with its group (SHAPE, RATE, RISE, SMOOTH) framed:
 
 | Control | What it does |
 |---|---|
-| SUB, A, B, C, NOISE buttons | Choose which oscillator the panel shows and edits (saved with the project). |
-| Power button and name | Switch the shown oscillator on and off. |
-| Route button (F1 / F2 / F12 / M / DIR / BAL / OFF) | Tap: opens the output popup (target, balance, BUS 1, BUS 2) of that oscillator. |
+| SUB, A, B, C, NOISE buttons | Choose which sound source the panel shows and edits (saved with the project). The five buttons have one width. |
+| Power button and name | Switch the shown source on and off. A source that is off shows its picture dimmed with a small OFF tag (see 5.3). |
+| Route button (F1 / F2 / F12 / M / DIR / BAL / OFF) | Tap: opens the output popup (target, balance, BUS 1, BUS 2) of that oscillator. Sub has no route button here; its routing is on its own page (5.4). |
 | Display + full-screen button | One cycle of the oscillator; the button opens the full-screen oscillator page (chapter 5.3 / 5.4 / 5.5). |
-| WAVE / SAMPLE / GRAIN | Oscillator type (wavetable / multisample / granular). Q 1. |
+| Type keys WAVE / MULTI / SAMPLE / GRAIN / SPEC | The oscillator type (wavetable, multisample, sample, granular, spectral). Q 1. |
 | Source stepper and the list button | Wavetable name, or the loaded file. In the compact view the list button for wavetables is dim; the list opens from the full screen. Q 2. |
 | PAN | -100 .. +100 percent (C, L n, R n). Q 3. |
 | LEVEL | 0 .. 100 percent. Q 4. |
@@ -247,12 +249,13 @@ The LFO panel with its group (SHAPE, RATE, RISE, SMOOTH) framed:
 Sub and Noise have different controls (waveform, octave; noise colour, filter): see 5.4 and 5.5.
 
 **Envelope panel.** ENV 1 .. ENV 6 buttons (a small dot marks an envelope that modulates something), the
-envelope graph with a full-screen button, and the knobs ATTACK, DECAY, SUSTAIN, RELEASE (Q 1 - 4). Details
-in 5.8.
+envelope graph with a full-screen button, and the knobs ATTACK, DECAY, SUSTAIN, RELEASE (Q 1 - 4). The graph
+here is always fitted to the panel; the lock and the time ruler are on the full page. Details in 5.8.
 
 **LFO panel.** The stepper LFO 1 .. LFO 10, RND 1 .. RND 4 (a tap on the name opens the list), the
-shape display with a full-screen button, SHAPE stepper, RATE knob with the buttons HZ / BPM / KEY, RISE and SMOOTH
-(Q 1 - 4). Details in 5.9.
+shape display with a full-screen button, the SHAPE stepper, the RATE knob with the **HZ / BPM / KEY** list (three
+dots, the lit one is the mode), RISE and SMOOTH (Q 1 - 4). SMOOTH has a LED in front of its name: it is the switch
+of the smoothing and the knob sets its time (the knob is dim while the LED is off). Details in 5.9.
 
 **Full screen.** The full-screen button opens the page of that element over the whole plugin area (the same
 page as the corresponding Osc, Env or LFO tab, with a CLOSE button). Leaving the Play tab closes it.
@@ -261,14 +264,17 @@ page as the corresponding Osc, Env or LFO tab, with a CLOSE button). Leaving the
 
 ![Macros](img/macros.png)
 
-Eight macros as cards, two rows of four, with the live spectrum of the plugin's output under them.
-Buttons **BANK 1: 1-4** and **BANK 2: 5-8** choose which row is the active Q group.
+Eight macros as cards, two rows of four, with the live spectrum of the plugin's output under them. A macro is one knob
+that moves as many things as you give it as targets: a good way to put a whole sound change on one Q-Link.
+The list **BANK 1: 1-4 / BANK 2: 5-8** (the lit dot is the bank) chooses which row is the active Q group (yellow frame).
 
 - Each card: a knob (name MACRO n, value 0 .. 100 percent, default 0) and chips naming what the macro
   drives. A card without targets says "NO TARGET - TAP TO ADD". A tap on the chips area opens the **targets
   page** of the macro (list of routes with depth, polarity UNI/BI, ON/OFF and remove, and ADD TARGET, see
   chapter 6).
-- Q-Links: Bank 1 = macros 1 - 4, Bank 2 = macros 5 - 8. Each macro has a **name** (up to 16 characters, default "Macro n") that is stored in the preset. A tap on the name on a card opens a keyboard page (OK stores the name, CANCEL or BACK leaves it); a drag that starts on the name still turns the knob. The name is used on the Mod page, in pickers and on the knob displays.
+- Q-Links: Bank 1 = macros 1 - 4, Bank 2 = macros 5 - 8. On the Key 61 the Q-Link button steps between the two rows; on the
+  XL the other row is on knobs 5 - 8 at the same time (chapter 4.3). The other row carries quiet numbered chips (5 - 8 in the picture; the picture is rendered for a 16-knob device).
+- Each macro has a **name** (up to 16 characters, default "Macro n") that is stored in the preset. A tap on the name (it is underlined) on a card opens a keyboard page (OK stores the name, CANCEL or BACK leaves it); a drag that starts on the name still turns the knob. The name is used on the Mod page, in pickers and on the knob displays.
 - **Spectrum** (bottom strip): the spectrum of the plugin's output after the output stage (20 Hz to 20 kHz,
   scale -12 to -48 dB). It is a display only.
 
