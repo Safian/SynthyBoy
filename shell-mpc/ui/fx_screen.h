@@ -39,7 +39,7 @@ public:
     int numGroups() const noexcept { return slotEditor.numRows(); }
     void showEditor (bool s) { show (slotEditor, s); }
     bool editorShown() const noexcept { return editorShown_; }
-    bool galleryShown() const noexcept { return ! editorShown_ && gallery.numTypes() > 0; }
+    bool galleryShown() const noexcept { return ! editorShown_ && gallery.hasContent(); }
     /** The name of the Q group of a row on the page: the name of its block ("LOW BAND", "MODULATION"). */
     const char* groupName (int g) const noexcept { return slotEditor.rowTitle (g); }
 
@@ -56,7 +56,7 @@ public:
     {
         editorShown_ = s;
         show (slotEditor, s);
-        show (gallery, ! s && gallery.numTypes() > 0);
+        show (gallery, ! s && gallery.hasContent());
     }
 
 protected:

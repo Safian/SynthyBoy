@@ -41,6 +41,11 @@ public:
         layout();
     }
     int numTypes() const noexcept { return n_; }
+    /** The line over the cards (the place the effect goes to: "TAP AN EFFECT TO ADD IT TO THE CHAIN" by default), and the note the page shows when there is no type to offer. */
+    void setHeadline (const char* t) { setText (headline_, sizeof headline_, t != nullptr ? t : ""); }
+    void setNote (const char* t) { setText (note_, sizeof note_, t != nullptr ? t : ""); }
+    /** Does the gallery have something to show: cards, or a note. */
+    bool hasContent() const noexcept { return n_ > 0 || note_[0] != '\0'; }
     int typeAt (int i) const noexcept { return i >= 0 && i < n_ ? cards_[i].type : 0; }
     const char* nameAt (int i) const noexcept { return i >= 0 && i < n_ ? cards_[i].name : ""; }
     Rect cardRect (int i) const noexcept { return i >= 0 && i < n_ ? cards_[i].r : Rect {}; }
@@ -71,12 +76,12 @@ public:
 
     void draw (gpu::SceneBuilder& sb) const override
     {
-        if (n_ == 0)
+        if (n_ == 0 && note_[0] == '\0')
             return;
         Pen p (sb, enabled_);
         Cell cell (sb, rect_);
         const theme::Look& T = theme::L();
-        p.textLeft ({ rect_.x + kPad, rect_.y + 4, std::max (0, rect_.w - 2 * kPad), kHeadH - 8 }, "TAP AN EFFECT TO ADD IT TO THE CHAIN", T.fLabel + 2.0f, p.c (T.textDim, 255), T.fMin);
+        p.textLeft ({ rect_.x + kPad, rect_.y + 4, std::max (0, rect_.w - 2 * kPad), kHeadH - 8 }, n_ == 0 ? note_ : headline_, T.fLabel + 2.0f, p.c (T.textDim, 255), T.fMin);
         for (int i = 0; i < n_; ++i)
         {
             const Card& c = cards_[i];
@@ -287,6 +292,7 @@ private:
 
     Card cards_[kMaxTypes];
     int n_ = 0;
+    char headline_[96] = "TAP AN EFFECT TO ADD IT TO THE CHAIN", note_[96] = {};
     int pressed_ = -1;
     TapGesture tap_;
 };

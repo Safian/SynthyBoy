@@ -17,6 +17,7 @@
 #include "base.h"
 #include "composite.h"
 #include "core.h"
+#include "fx_band_board.h"
 #include "fx_display.h"
 #include "fx_layout.h"
 #include "led_list.h"
@@ -40,6 +41,7 @@ public:
     Stepper rack, page;
     MenuButton remove { "REMOVE", MenuButton::Icon::None };
     FxDisplay display;
+    FxBandBoard bands;   // the racks of the bands of a splitter, in the place of the display
     Knob knobs[kMaxParams];
     Stepper steppers[kMaxParams];
     LedList lists[kMaxParams];
@@ -58,6 +60,7 @@ public:
         addKid (page, false);
         addKid (remove);
         addKid (display, false);
+        addKid (bands, false);
         for (int i = 0; i < kMaxParams; ++i)
         {
             knobs[i].state.side = true;   // the dial at the left, the name and the value beside it: the cells are wide
@@ -87,7 +90,13 @@ public:
     int numPages() const noexcept { return std::max (1, (numVis_ + rowsPerPage() - 1) / rowsPerPage()); }
     int pageIndex() const noexcept { return page_; }
     int firstRowOfPage() const noexcept { return page_ * rowsPerPage(); }
-    bool hasDisplay() const noexcept { return display.kind != FxDisplay::Kind::None; }
+    /** Is there a display area (the picture of the effect, or the racks of the bands of a splitter in its place)? */
+    bool hasDisplay() const noexcept { return display.kind != FxDisplay::Kind::None || hasBands(); }
+    /** The page of a splitter shows the racks of its bands (the band board) where other effects have their display. */
+    bool hasBands() const noexcept { return kind_ >= fxl::kKindSplitterLh; }
+    /** The place of the effect in the chain ("MAIN > SPLITTER L/M/H > MID BAND"), the small line over its name. */
+    void setPath (const char* path) { setText (path_, sizeof path_, path != nullptr ? path : ""); }
+    const char* path() const noexcept { return path_; }
     int displayHeight() const noexcept { return lay_->displayH; }
     const fxl::Layout& layoutTable() const noexcept { return *lay_; }
 
@@ -179,6 +188,7 @@ public:
         display.setKindFromType (kind);
         setText (name_, sizeof name_, lay_->name);
         show (display, display.kind != FxDisplay::Kind::None);
+        show (bands, hasBands());
         resolve();
         page_ = 0;
         activeTable_ = -1;
@@ -250,7 +260,7 @@ public:
         page.setId (pageId);
         remove.setId (removeId);
     }
-    Rect displayRect() const noexcept { return display.rect(); }
+    Rect displayRect() const noexcept { return hasBands() ? bands.rect() : display.rect(); }
     Rect knobArea() const noexcept { return knobArea_; }
 
     Change touchDown (int x, int y, double nowMs) override
@@ -319,6 +329,11 @@ protected:
             display.place ({ rect_.x + m, y, rect_.w - 2 * m, lay_->displayH });
             y += lay_->displayH + m;
         }
+        else if (lay_->displayH > 0 && hasBands())
+        {
+            bands.place ({ rect_.x + m, y, rect_.w - 2 * m, lay_->displayH });
+            y += lay_->displayH + m;
+        }
         knobArea_ = { rect_.x + m, y, rect_.w - 2 * m, std::max (0, rect_.bottom() - m - y) };
         const int rows = rowsPerPage(), rowH = knobArea_.h / std::max (1, rows), gapX = 8, cellW = (knobArea_.w - 3 * gapX) / 4, first = firstRowOfPage();
         for (int p = 0; p < kMaxParams; ++p)
@@ -385,7 +400,14 @@ protected:
     void drawExtra (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        p.textLeft ({ rect_.x + 8 + 56 + 14, rect_.y + 8, std::max (0, rack.rect().x - (rect_.x + 8 + 56 + 14) - 8), kHeaderH }, name_, T.fTitle, p.c (T.text, 255), T.fMin);
+        const int tx = rect_.x + 8 + 56 + 14, tw = std::max (0, rack.rect().x - tx - 8);
+        if (path_[0] != '\0')
+        {
+            p.textLeft ({ tx, rect_.y + 8, tw, 18 }, path_, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+            p.textLeft ({ tx, rect_.y + 8 + 14, tw, kHeaderH - 14 }, name_, T.fTitle, p.c (T.text, 255), T.fMin);
+        }
+        else
+            p.textLeft ({ tx, rect_.y + 8, tw, kHeaderH }, name_, T.fTitle, p.c (T.text, 255), T.fMin);
     }
 
 private:
@@ -525,7 +547,7 @@ private:
     int numVis_ = 0;
     int activeTable_ = -1, page_ = 0;
     bool removable_ = false;
-    char name_[24] = {};
+    char name_[24] = {}, path_[72] = {};
     Rect knobArea_;
 };
 

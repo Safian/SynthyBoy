@@ -10,9 +10,14 @@
 // REMOVE (the slots of the pool: the modules of the fixed chain are switched off instead), the display (EQ, compressor, delay, FX filter, distortion) and the knobs in rows of four: one Q group per row.
 // An empty chain has no effect to edit: the page is the GALLERY of the effect types the engine has (ui/fx_gallery.h, a card with a picture per type); one tap on a card adds that effect at the end of the Main
 // rack (the same as + ADD and a row of its list) and selects it, so the page of the new effect replaces the gallery.
+// THE RACKS OF THE BANDS: the page of a splitter shows one lane per band (ui/fx_band_board.h): the chain of the band as cards. A tap on a card, on the tile of the band or on its + ADD OPENS THE BAND (scope_): the chain
+// bar then holds the cards of that band (engine racks 3 .. 9; only the 13 modules of instance 0 that are no splitters sit in them), a BACK card first (the way up to the splitter), and the page of the selected effect
+// is the same table page as in the Main chain; the place stands over the name ("MAIN CHAIN > SPLITTER L/M/H > MID BAND"). + ADD in a band offers the types whose module is free (off and not in a band), moves the module
+// into the band and switches it on; a drag reorders; the rack switch of the page moves the effect to any of the ten racks; REMOVE switches the effect off and takes it out of its band.
 #pragma once
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -51,6 +56,7 @@ public:
     enum IdBase : int
     {
         kChainBase = 3000,
+        kBandBase = 3100,
         kEditorBase = 4000,
         kEditorPower = kEditorBase + 100, kEditorRack, kEditorPage, kEditorRemove,
         kList = 5000,
@@ -63,6 +69,7 @@ public:
         plain_.assign (synthyboy::paramCount(), 0.0f);
         cardItems_.reserve (ui::FxChainBar::kMaxSlots);
         screen_.assignIds (kChainBase, kEditorBase);
+        screen_.slotEditor.bands.assignIds (kBandBase);
         setCanvas (kCanvasW, kCanvasH);
         int galleryTypes[ui::fxl::kNumKinds - 1];
         for (int k = 1; k < ui::fxl::kNumKinds; ++k)
@@ -103,6 +110,11 @@ public:
     int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
     int topPage() const noexcept { return listOpen_ ? kPageList : 0; }
+    /** The chain on the page: 0 the Main / Bus chain, 3 .. 9 the chain of that band rack (fxl::bandOfRack). */
+    int scope() const noexcept { return scope_; }
+    /** The modules of a band rack (3 .. 9) in processing order, as of the last update. */
+    const std::vector<synthyboy::FxRackItem>& bandItems (int rack) const noexcept { return bandItems_[static_cast<size_t> (std::clamp (rack, ui::fxl::kFirstBandRack, ui::fxl::kNumRacks - 1) - ui::fxl::kFirstBandRack)]; }
+    const synthyboy::FxRackItem& selectedItem() const noexcept { return selectedItem_; }
 
     /** Reads the instance: the chain (only when its structure changed), the selected effect with its knobs, display data and Q group. */
     void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
@@ -124,6 +136,7 @@ public:
         }
         pullCards();
         pullEditor (inst);
+        refreshGallery();
         screen_.setEditorShown (! cardItems_.empty());
         inst.setUiFullOpen (true);
         publishQGroup (inst);
@@ -211,7 +224,7 @@ private:
 
     uint32_t structureSignature() const noexcept
     {
-        uint32_t h = 2166136261u;
+        uint32_t h = 2166136261u ^ static_cast<uint32_t> (scope_ * 7919);
         auto mix = [&] (int idx)
         {
             if (idx < 0)
@@ -255,7 +268,13 @@ private:
     {
         const synthyboy::FxRacks racks = synthyboy::fxRacks (plain_.data());
         cardItems_.clear();
-        for (int r = 0; r < synthyboy::kNumPoolRacks && static_cast<int> (cardItems_.size()) < kMaxItems; ++r)
+        for (int r = ui::fxl::kFirstBandRack; r < ui::fxl::kNumRacks; ++r)
+            bandItems_[static_cast<size_t> (r - ui::fxl::kFirstBandRack)] = racks.rack[static_cast<size_t> (r)];
+        if (scope_ != 0)   // the chain of a band: every module that sits in the rack (a bypassed one stays on the page, its power is off)
+            for (const synthyboy::FxRackItem& item : racks.rack[static_cast<size_t> (scope_)])
+                if (static_cast<int> (cardItems_.size()) < kMaxItems)
+                    cardItems_.push_back (item);
+        for (int r = 0; scope_ == 0 && r < synthyboy::kNumPoolRacks && static_cast<int> (cardItems_.size()) < kMaxItems; ++r)
             for (const synthyboy::FxRackItem& item : racks.rack[static_cast<size_t> (r)])
             {
                 if (static_cast<int> (cardItems_.size()) >= kMaxItems)
@@ -287,9 +306,81 @@ private:
         }
     }
 
+    static void upper (char* out, size_t cap, const char* in)
+    {
+        size_t i = 0;
+        for (; in != nullptr && in[i] != '\0' && i + 1 < cap; ++i)
+            out[i] = static_cast<char> (std::toupper (static_cast<unsigned char> (in[i])));
+        out[i] = '\0';
+    }
+
+    /** The types a band can still take: a module of instance 0 that is no splitter, off, and not parked in a band (a module that sits in a band is a card there). */
+    bool moduleFree (int module) const noexcept
+    {
+        const Item item { false, module };
+        return module >= 0 && module < 13 && ! synthyboy::fxItemOn (plain_.data(), item) && synthyboy::fxItemRack (plain_.data(), item) < ui::fxl::kFirstBandRack;
+    }
+    int numFreeModules() const noexcept
+    {
+        int n = 0;
+        for (int m = 0; m < 13; ++m)
+            n += moduleFree (m) ? 1 : 0;
+        return n;
+    }
+    /** The kinds the + ADD list and the gallery offer: every type and splitter in the Main chain, the free types in a band. */
+    int offeredKinds (int* out) const noexcept
+    {
+        int n = 0;
+        for (int k = 1; k < ui::fxl::kNumKinds; ++k)
+            if (scope_ == 0 || (k < ui::fxl::kKindSplitterLh && moduleFree (k - 1)))
+                out[n++] = k;
+        return n;
+    }
+
+    /** The gallery of an empty chain offers what + ADD offers; in a band its headline says where the effect goes. */
+    void refreshGallery()
+    {
+        int kinds[ui::fxl::kNumKinds];
+        const int n = offeredKinds (kinds);
+        uint32_t sig = static_cast<uint32_t> (scope_) * 131u + 7u;
+        for (int i = 0; i < n; ++i)
+            sig = sig * 31u + static_cast<uint32_t> (kinds[i]);
+        if (sig == gallerySig_ && galleryScope_ == scope_)
+            return;
+        gallerySig_ = sig;
+        galleryScope_ = scope_;
+        const char* names[ui::fxl::kNumKinds];
+        for (int i = 0; i < n; ++i)
+            names[i] = typeNames_[kinds[i] - 1];
+        screen_.gallery.setTypes (kinds, names, n);
+        char t[96] = "TAP AN EFFECT TO ADD IT TO THE CHAIN";
+        char note[96] = {};
+        int kind = 0, band = 0;
+        if (scope_ != 0 && ui::fxl::bandOfRack (scope_, kind, band))
+        {
+            char sp[24];
+            upper (sp, sizeof sp, ui::fxl::layoutOf (kind).name);
+            std::snprintf (t, sizeof t, "%s BAND OF %s: TAP AN EFFECT TO ADD IT", ui::fxl::bandName (kind, band), sp);
+            std::snprintf (note, sizeof note, "%s BAND OF %s: EVERY EFFECT IS IN USE (MOVE ONE HERE WITH ITS RACK SWITCH)", ui::fxl::bandName (kind, band), sp);
+        }
+        else
+            std::snprintf (note, sizeof note, "NO EFFECT TO ADD");
+        screen_.gallery.setHeadline (t);
+        screen_.gallery.setNote (note);
+    }
+
     void pullCards()
     {
         const int numActive = static_cast<int> (cardItems_.size());
+        screen_.chainBar.setBackShown (scope_ != 0);
+        if (scope_ != 0)
+        {
+            int kind = 0, band = 0;
+            ui::fxl::bandOfRack (scope_, kind, band);
+            ui::FxSlotCard::State& st = screen_.chainBar.backCard.state;
+            upper (st.name, sizeof st.name, ui::fxl::layoutOf (kind).name);
+            std::snprintf (st.tag, sizeof st.tag, "%s BAND", ui::fxl::bandName (kind, band));
+        }
         screen_.chainBar.setNumActiveSlots (numActive);
         for (int i = 0; i < numActive; ++i)
         {
@@ -307,9 +398,10 @@ private:
             card.setEnabled (true);
         }
         screen_.chainBar.plusCard.state.isPlus = true;
-        screen_.chainBar.plusCard.setEnabled (numActive < ui::FxChainBar::kMaxSlots);
+        const bool canAdd = numActive < ui::FxChainBar::kMaxSlots && (scope_ == 0 || numFreeModules() > 0);
+        screen_.chainBar.plusCard.setEnabled (canAdd);
         for (ui::FxSlotCard& sp : screen_.chainBar.spare)
-            sp.setEnabled (numActive < ui::FxChainBar::kMaxSlots);
+            sp.setEnabled (canAdd);
     }
 
     /** The value (plain) of control p of the item, from the instance: a slot of the pool stores the normalised value of the type's own parameters (fxInstancePlain turns it into the plain value of its source), the other
@@ -340,7 +432,7 @@ private:
         const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
         const int kind = kindOfItem (item);
         ui::FxSlotEditor& ed = screen_.slotEditor;
-        ed.setType (kind, item.pool);
+        ed.setType (kind, true);   // every effect can be removed: a slot of the pool is freed, a module of instance 0 is switched off and leaves its band
         // the state of the effect decides which controls are live (the table of the effect, ui/fx_layout.h): the rows that have nothing live close up
         ed.setState ([&] (const char* key) { return plainOfKey (item, kind, inst, key, 0.0f); });
         for (int p = 0; p < ed.numParams(); ++p)
@@ -402,11 +494,110 @@ private:
         // the power, the rack
         ed.power.state.on = synthyboy::fxItemOn (plain_.data(), item);
         const int rack = synthyboy::fxItemRack (plain_.data(), item);
-        ed.rack.state.count = 3;
-        ed.rack.state.index = std::clamp (rack, 0, 2);
-        static const char* const kRack[3] = { "MAIN", "BUS 1", "BUS 2" };
-        ed.rack.setItem (rack >= 0 && rack < 3 ? kRack[rack] : "SPLITTER");
+        ed.rack.state.count = rackChoices (item);
+        ed.rack.state.index = std::clamp (rack, 0, ed.rack.state.count - 1);
+        ed.rack.setItem (ui::fxl::rackName (rack));
+        pullPath (ed, item, rack);
+        if (ed.hasBands())
+            pullBands (inst, item, kind);
         pullDisplay (inst, item, kind, ed.display);
+    }
+
+    /** The racks an item can be moved to: the ten of the engine for a module of instance 0 that is no splitter (Main, Bus 1, Bus 2 and the seven band racks), else the three buses. */
+    static int rackChoices (const Item& item) noexcept { return ! item.pool && item.index < 13 ? ui::fxl::kNumRacks : synthyboy::kNumPoolRacks; }
+
+    /** The place of the effect over its name: "MAIN CHAIN", "BUS 1 CHAIN", or for an effect of a band "MAIN CHAIN > SPLITTER L/M/H > MID BAND" (the chain the splitter sits in). */
+    void pullPath (ui::FxSlotEditor& ed, const Item& item, int rack)
+    {
+        char path[72];
+        int kind = 0, band = 0;
+        if (rack >= ui::fxl::kFirstBandRack && ui::fxl::bandOfRack (rack, kind, band))
+        {
+            char sp[24];
+            upper (sp, sizeof sp, ui::fxl::layoutOf (kind).name);
+            const int splitterRack = synthyboy::fxItemRack (plain_.data(), { false, 13 + (kind - ui::fxl::kKindSplitterLh) });
+            std::snprintf (path, sizeof path, "%s CHAIN  >  %s  >  %s BAND", ui::fxl::rackName (splitterRack), sp, ui::fxl::bandName (kind, band));
+        }
+        else
+            std::snprintf (path, sizeof path, "%s CHAIN", ui::fxl::rackName (rack));
+        (void) item;
+        ed.setPath (path);
+    }
+
+    /** The lanes of the page of a splitter: per band the tile (name, range, state) and the cards of its rack. */
+    void pullBands (IInstanceView& inst, const Item& item, int kind)
+    {
+        ui::FxBandBoard& board = screen_.slotEditor.bands;
+        const int nb = ui::fxl::bandsOfSplitter (kind);
+        const bool splitterOn = synthyboy::fxItemOn (plain_.data(), item);
+        const char* const pre = kind == ui::fxl::kKindSplitterLh ? "splitter_lh." : (kind == ui::fxl::kKindSplitterLmh ? "splitter_lmh." : "splitter_ms.");
+        auto val = [&] (const char* suffix, float def) { return plainOfKey (item, kind, inst, (std::string (pre) + suffix).c_str(), def); };
+        auto hz = [] (float f, char* out, size_t n)
+        {
+            if (f >= 1000.0f)
+                std::snprintf (out, n, "%.1f kHz", static_cast<double> (f) / 1000.0);
+            else
+                std::snprintf (out, n, "%.0f Hz", static_cast<double> (f));
+        };
+        char f1[16] = {}, f2[16] = {};
+        if (kind == ui::fxl::kKindSplitterLh)
+            hz (val ("freq", 500.0f), f1, sizeof f1);
+        else if (kind == ui::fxl::kKindSplitterLmh)
+        {
+            hz (val ("freq_low", 200.0f), f1, sizeof f1);
+            hz (val ("freq_high", 3000.0f), f2, sizeof f2);
+        }
+        int counts[ui::FxBandBoard::kMaxBands] = {};
+        for (int b = 0; b < nb; ++b)
+        {
+            const int rack = ui::fxl::bandRack (kind, b);
+            const std::vector<Item>& items = bandItems_[static_cast<size_t> (rack - ui::fxl::kFirstBandRack)];
+            const int n = std::min (static_cast<int> (items.size()), ui::FxBandBoard::kMaxCards);
+            counts[b] = n;
+            ui::FxBandBoard::Lane& lane = board.lane[b];
+            for (int i = 0; i < n; ++i)
+            {
+                ui::FxSlotCard& card = lane.cards[i];
+                card.state.slot = i;
+                card.state.type = kindOfItem (items[static_cast<size_t> (i)]);
+                card.state.on = synthyboy::fxItemOn (plain_.data(), items[static_cast<size_t> (i)]);
+                card.state.rack = rack;
+                card.state.selected = false;
+                std::snprintf (card.state.name, sizeof card.state.name, "%.23s", synthyboy::fxItemName (plain_.data(), items[static_cast<size_t> (i)]));
+                card.setEnabled (true);
+            }
+            lane.add.setEnabled (numFreeModules() > 0);
+            ui::FxBandTile::State& t = lane.tile.state;
+            std::snprintf (t.name, sizeof t.name, "%s", ui::fxl::bandName (kind, b));
+            t.idle = ! splitterOn;
+            t.colour = kind == ui::fxl::kKindSplitterMs ? (b == 0 ? 0 : 3) : (b == 0 ? 0 : (b == nb - 1 ? 3 : 1));
+            if (kind == ui::fxl::kKindSplitterMs)
+            {
+                std::snprintf (t.range, sizeof t.range, "%s", b == 0 ? "the centre of the picture" : "what makes it wide");
+                t.bypassed = val (b == 0 ? "mid_bypass" : "side_bypass", 0.0f) > 0.5f;
+            }
+            else
+            {
+                const char* const lowKey = "low_bypass";
+                const char* const midKey = "mid_bypass";
+                const char* const highKey = "high_bypass";
+                const bool low = b == 0, high = b == nb - 1;
+                if (low)
+                    std::snprintf (t.range, sizeof t.range, "below %s", f1);
+                else if (high)
+                    std::snprintf (t.range, sizeof t.range, "above %s", nb == 3 ? f2 : f1);
+                else
+                    std::snprintf (t.range, sizeof t.range, "%s to %s", f1, f2);
+                t.bypassed = val (low ? lowKey : (high ? highKey : midKey), 0.0f) > 0.5f;
+            }
+            if (! splitterOn)
+                std::snprintf (t.info, sizeof t.info, "SPLITTER OFF");
+            else if (n == 0)
+                std::snprintf (t.info, sizeof t.info, "no effect");
+            else
+                std::snprintf (t.info, sizeof t.info, "%d effect%s", n, n == 1 ? "" : "s");
+        }
+        board.setShape (nb, counts);
     }
 
     /** The text of a value: the name of a choice, else the number with the parameter's unit. */
@@ -510,33 +701,6 @@ private:
                     d.dist.inLevel = pk > 0.005f ? std::pow (10.0f, (pk * 60.0f - 60.0f) / 20.0f) : -1.0f;
                 }
                 break;
-            case K::Split:
-            {
-                const char* const pre = type == ui::fxl::kKindSplitterLh ? "splitter_lh." : (type == ui::fxl::kKindSplitterLmh ? "splitter_lmh." : "splitter_ms.");
-                auto key = [&] (const char* suffix) { return std::string (pre) + suffix; };
-                auto val = [&] (const char* suffix, float def) { return plainOfKey (item, type, inst, key (suffix).c_str(), def); };
-                d.split.mode = type == ui::fxl::kKindSplitterLh ? 0 : (type == ui::fxl::kKindSplitterLmh ? 1 : 2);
-                if (d.split.mode == 0)
-                {
-                    d.split.f1 = val ("freq", 500.0f);
-                    d.split.bypass[0] = val ("low_bypass", 0.0f) > 0.5f;
-                    d.split.bypass[2] = val ("high_bypass", 0.0f) > 0.5f;
-                }
-                else if (d.split.mode == 1)
-                {
-                    d.split.f1 = val ("freq_low", 200.0f);
-                    d.split.f2 = val ("freq_high", 3000.0f);
-                    d.split.bypass[0] = val ("low_bypass", 0.0f) > 0.5f;
-                    d.split.bypass[1] = val ("mid_bypass", 0.0f) > 0.5f;
-                    d.split.bypass[2] = val ("high_bypass", 0.0f) > 0.5f;
-                }
-                else
-                {
-                    d.split.bypass[0] = val ("mid_bypass", 0.0f) > 0.5f;
-                    d.split.bypass[1] = val ("side_bypass", 0.0f) > 0.5f;
-                }
-                break;
-            }
             default: break;
         }
     }
@@ -628,18 +792,22 @@ private:
         }
     }
 
-    void openTypeList (UiStack& stack)
+    void openTypeList (UiStack& stack, const ui::Rect& btn)
     {
         listKind_ = ListKind::Type;
         listParam_ = -1;
         listNames_.clear();
-        for (int k = 1; k < ui::fxl::kNumKinds; ++k)
-            listNames_.push_back (typeNames_[k - 1]);
+        int kinds[ui::fxl::kNumKinds];
+        const int offered = offeredKinds (kinds);
+        listKinds_.assign (kinds, kinds + offered);
+        for (int i = 0; i < offered; ++i)
+            listNames_.push_back (typeNames_[kinds[i] - 1]);
+        if (offered == 0)
+            return;
         list_.state.items = listNames_.data();
         list_.state.count = static_cast<int> (listNames_.size());
         list_.state.current = 0;
         const int popW = 300, popH = std::min (9, list_.state.count) * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad;
-        const ui::Rect btn = screen_.chainBar.plusCard.rect();
         const int popX = std::clamp (btn.x - (popW - btn.w) / 2, 10, w_ - popW - 10);
         const int popY = std::clamp (btn.bottom() + 4, kTabY + 10, kTabY + kTabH - popH - 10);
         list_.place ({ popX, popY, popW, popH });
@@ -690,6 +858,8 @@ private:
         if (kind <= synthyboy::kFxTypeNone || kind >= ui::fxl::kNumKinds)
             return false;
         std::vector<synthyboy::FxWrite> writes;
+        if (scope_ != 0)
+            return addToBand (inst, kind);
         if (kind >= ui::fxl::kKindSplitterLh)
         {
             const Item item { false, 13 + (kind - ui::fxl::kKindSplitterLh) };
@@ -716,6 +886,98 @@ private:
         return true;
     }
 
+    /** A new effect of the type `kind` (1 .. 13) at the end of the band rack of the page: the module of instance 0 of that type (it is free: off, in no band) is moved into the rack, switched on and selected. */
+    bool addToBand (IInstanceView& inst, int kind)
+    {
+        if (scope_ == 0 || kind <= synthyboy::kFxTypeNone || kind >= ui::fxl::kKindSplitterLh || ! moduleFree (kind - 1))
+            return false;
+        const Item item { false, kind - 1 };
+        std::vector<synthyboy::FxWrite> writes;
+        synthyboy::fxSetOn (plain_.data(), item, true, writes);
+        synthyboy::fxMove (plain_.data(), item, scope_, static_cast<int> (synthyboy::fxRacks (plain_.data()).rack[static_cast<size_t> (scope_)].size()), writes);
+        applyWrites (inst, writes);
+        selectedItem_ = item;
+        selectionChanged_ = true;
+        return true;
+    }
+
+    /** Opens the chain of a band rack (3 .. 9): the chain bar then holds its cards; `item` is selected (none: the first one). */
+    void enterBand (int rack, const Item& item)
+    {
+        scope_ = rack;
+        selectedItem_ = item;
+        selectedSlot_ = 0;
+        selectionChanged_ = true;
+        screen_.slotEditor.setActiveRow (0);
+        qSlots_.forget();
+    }
+    /** The way up from a band: the chain of the splitter's rack, with the splitter selected (its page shows the lanes). */
+    void leaveBand()
+    {
+        int kind = 0, band = 0;
+        if (! ui::fxl::bandOfRack (scope_, kind, band))
+            return;
+        scope_ = 0;
+        selectedItem_ = { false, 13 + (kind - ui::fxl::kKindSplitterLh) };
+        selectedSlot_ = 0;
+        selectionChanged_ = true;
+        screen_.slotEditor.setActiveRow (0);
+        qSlots_.forget();
+    }
+    /** The highest rack an item can be moved to: the ten racks for a module of instance 0 that is no splitter, else the buses. */
+    static int rackLimit (const Item& item) noexcept { return rackChoices (item) - 1; }
+
+    /** The lane of a band of the splitter page: a tap on a card selects it and opens the band, the power switches it, a drag moves it inside the lane; the tile and + ADD open the band. */
+    void handleBand (const ui::Change& c, int band, int what, UiStack& stack, IInstanceView& inst)
+    {
+        if (cardItems_.empty() || selectedSlot_ < 0 || selectedSlot_ >= static_cast<int> (cardItems_.size()))
+            return;
+        const int splitterKind = kindOfItem (cardItems_[static_cast<size_t> (selectedSlot_)]);
+        const int rack = ui::fxl::bandRack (splitterKind, band);
+        if (rack < 0 || c.kind != ui::ChangeKind::Index)
+            return;
+        const std::vector<Item>& items = bandItems_[static_cast<size_t> (rack - ui::fxl::kFirstBandRack)];
+        ui::FxBandBoard::Lane& lane = screen_.slotEditor.bands.lane[band];
+        if (what == ui::FxBandBoard::kOpenId)
+            enterBand (rack, { false, -1 });
+        else if (what == ui::FxBandBoard::kAddId)
+        {
+            const ui::Rect anchor = lane.add.rect();
+            enterBand (rack, { false, -1 });
+            openTypeList (stack, anchor);
+        }
+        else if (what >= 0 && what < static_cast<int> (items.size()))
+        {
+            const Item item = items[static_cast<size_t> (what)];
+            if (c.index == ui::FxSlotCard::kSelect)
+                enterBand (rack, item);
+            else if (c.index == ui::FxSlotCard::kTogglePower)
+            {
+                std::vector<synthyboy::FxWrite> writes;
+                synthyboy::fxSetOn (plain_.data(), item, c.value >= 0.5, writes);
+                applyWrites (inst, writes);
+            }
+            else if (c.index == ui::FxSlotCard::kMove)
+            {
+                int target = 0;   // the card the finger was released over (the nearest one)
+                int best = 1 << 30;
+                for (int i = 0; i < static_cast<int> (items.size()); ++i)
+                {
+                    const ui::Rect r = lane.cards[i].rect();
+                    const int d = std::abs (static_cast<int> (c.value) - (r.x + r.w / 2));
+                    if (d < best)
+                    {
+                        best = d;
+                        target = i;
+                    }
+                }
+                std::vector<synthyboy::FxWrite> writes;
+                if (synthyboy::fxMove (plain_.data(), item, rack, target, writes)   /* it ends up where the card it was dropped on stood */)
+                    applyWrites (inst, writes);
+            }
+        }
+    }
+
     void handle (const ui::Change& c, UiStack& stack, IInstanceView& inst)
     {
         if (! c)
@@ -726,7 +988,8 @@ private:
         {
             if (listKind_ == ListKind::Type)
             {
-                addEffect (inst, c.index + 1);   // the list holds the kinds 1 .. 16 in order
+                if (c.index >= 0 && c.index < static_cast<int> (listKinds_.size()))
+                    addEffect (inst, listKinds_[static_cast<size_t> (c.index)]);   // the list holds the kinds the page offers (all of them in the Main chain, the free types in a band)
             }
             else if (listKind_ == ListKind::ParamChoice && listParam_ >= 0)
             {
@@ -750,6 +1013,15 @@ private:
             addEffect (inst, c.index);
             return;
         }
+        // the lanes of the bands on the page of a splitter
+        {
+            int band = 0, what = 0;
+            if (screen_.slotEditor.hasBands() && screen_.slotEditor.bands.decode (c.id, band, what))
+            {
+                handleBand (c, band, what, stack, inst);
+                return;
+            }
+        }
         if (c.id == kListBackdrop)
         {
             listParam_ = -1;
@@ -758,13 +1030,19 @@ private:
             return;
         }
         // the chain bar
-        if (c.id >= kChainBase && c.id <= kChainBase + ui::FxChainBar::kMaxSlots)
+        if (c.id >= kChainBase && c.id <= kChainBase + ui::FxChainBar::kMaxSlots + 1)
         {
             const int idx = c.id - kChainBase;
+            if (idx == ui::FxChainBar::kMaxSlots + 1)
+            {
+                if (c.kind == K::Index && c.index == ui::FxSlotCard::kBack)
+                    leaveBand();
+                return;
+            }
             if (idx == ui::FxChainBar::kMaxSlots)
             {
                 if (c.kind == K::Index && c.index == ui::FxSlotCard::kAdd)
-                    openTypeList (stack);
+                    openTypeList (stack, screen_.chainBar.plusCard.rect());
                 return;
             }
             if (idx < 0 || idx >= static_cast<int> (cardItems_.size()) || c.kind != K::Index)
@@ -785,14 +1063,19 @@ private:
             }
             else if (c.index == ui::FxSlotCard::kMove)
             {
-                const int cardW = std::max (1, screen_.chainBar.cards[0].rect().w + 6);
-                const int target = std::clamp ((static_cast<int> (c.value) - screen_.chainBar.rect().x) / cardW, 0, static_cast<int> (cardItems_.size()) - 1);
+                int target = static_cast<int> (cardItems_.size()) - 1;   // the card the finger was released over (a release behind the last card: the last one)
+                for (int i = 0; i < static_cast<int> (cardItems_.size()); ++i)
+                    if (static_cast<int> (c.value) < screen_.chainBar.cards[i].rect().right() + 3)
+                    {
+                        target = i;
+                        break;
+                    }
                 const synthyboy::FxRacks racks = synthyboy::fxRacks (plain_.data());
                 int rackOf = synthyboy::fxItemRack (plain_.data(), item);
                 const Item at = cardItems_[static_cast<size_t> (target)];
                 const int targetRack = synthyboy::fxItemRack (plain_.data(), at);
                 int rackIdx = 0;
-                for (const Item& o : racks.rack[static_cast<size_t> (std::clamp (targetRack, 0, 2))])
+                for (const Item& o : racks.rack[static_cast<size_t> (std::clamp (targetRack, 0, rackLimit (item)))])
                 {
                     if (o == at)
                         break;
@@ -801,7 +1084,7 @@ private:
                 }
                 (void) rackOf;
                 std::vector<synthyboy::FxWrite> writes;
-                if (synthyboy::fxMove (plain_.data(), item, std::clamp (targetRack, 0, 2), rackIdx, writes))
+                if (synthyboy::fxMove (plain_.data(), item, std::clamp (targetRack, 0, rackLimit (item)), rackIdx, writes))
                 {
                     applyWrites (inst, writes);
                     selectedItem_ = item;
@@ -823,7 +1106,7 @@ private:
         else if (c.id == kEditorRack && c.kind == K::Index)
         {
             const synthyboy::FxRacks racks = synthyboy::fxRacks (plain_.data());
-            const int target = std::clamp (c.index, 0, 2);
+            const int target = std::clamp (c.index, 0, rackLimit (item));
             int count = 0;
             for (const Item& o : racks.rack[static_cast<size_t> (target)])
                 count += ! (o == item);
@@ -833,14 +1116,25 @@ private:
                 applyWrites (inst, writes);
                 selectedItem_ = item;
                 selectionChanged_ = true;
+                scope_ = target >= ui::fxl::kFirstBandRack ? target : 0;   // the page follows the effect: into the band it went to, or back to the chain of the buses
             }
         }
         else if (c.id == kEditorPage && c.kind == K::Index)
             screen_.slotEditor.setPage (c.index);
-        else if (c.id == kEditorRemove && c.kind == K::Request && item.pool)
+        else if (c.id == kEditorRemove && c.kind == K::Request)
         {
             std::vector<synthyboy::FxWrite> writes;
-            if (synthyboy::fxRemoveSlot (plain_.data(), item.index, writes))
+            bool removed = false;
+            if (item.pool)
+                removed = synthyboy::fxRemoveSlot (plain_.data(), item.index, writes);
+            else
+            {   // a module of instance 0 is switched off and leaves its band (an off module in a bus is not on the page)
+                synthyboy::fxSetOn (plain_.data(), item, false, writes);
+                if (synthyboy::fxItemRack (plain_.data(), item) >= ui::fxl::kFirstBandRack && item.index < 13)
+                    writes.push_back ({ synthyboy::fxTypeDescriptor (item.index + 1).rackIndex, 0.0f });
+                removed = ! writes.empty();
+            }
+            if (removed)
             {
                 applyWrites (inst, writes);
                 selectedItem_ = { false, -1 };
@@ -883,6 +1177,11 @@ private:
     int selectedSlot_ = 0;
     Item selectedItem_ { false, -1 };
     std::vector<Item> cardItems_;
+    std::vector<Item> bandItems_[ui::fxl::kNumBandRacks];   // the modules of the band racks 3 .. 9 (the lanes of the page of a splitter)
+    int scope_ = 0;                                         // 0: the chain of Main / Bus 1 / Bus 2; 3 .. 9: the chain of a band rack
+    uint32_t gallerySig_ = 0;
+    int galleryScope_ = -1;
+    std::vector<int> listKinds_;                            // the kind each row of the + ADD list adds
     std::vector<float> plain_;
     const synthyboy::LiveValues* live_ = nullptr;   // the readout of the last update (the meters)
     uint32_t chainSig_ = 0;
