@@ -221,18 +221,23 @@ void testTypeSelectorAndKinds()
     Rig r;
     r.openFull();
     const ui::Rect sel = r.ui.full().basic.selector.rect();
-    // three cells: wavetable, multisample, granular
-    r.tap (sel.x + sel.w * 5 / 6, sel.y + sel.h / 2);
-    check (r.inst.get ("osc1.type") == 2.0f, "the third pictogram is Granular (osc1.type = 2)");
+    // five cells: wavetable, multisample, sample, granular, spectral
+    auto cell = [&] (int i) { const ui::Rect q = r.ui.full().basic.selector.rect(); r.tap (q.x + q.w * (2 * i + 1) / 10, q.y + q.h / 2); };
+    cell (3);
+    check (r.inst.get ("osc1.type") == 2.0f, "the fourth pictogram is Granular (osc1.type = 2)");
     r.refresh();
     check (r.ui.full().kind() == ui::OscKind::Granular && r.ui.full().panel.preset() == &ui::presets::kGranularFull, "the full screen switched to the granular layout");
-    const ui::Rect sel2 = r.ui.full().basic.selector.rect();
-    r.tap (sel2.x + sel2.w / 2, sel2.y + sel2.h / 2);
-    check (r.inst.get ("osc1.type") == 4.0f, "the middle pictogram is Multisample (osc1.type = 4)");
-    r.inst.set ("osc1.type", 1.0f);   // Sample: only on the host's pages
+    cell (1);
+    check (r.inst.get ("osc1.type") == 4.0f, "the second pictogram is Multisample (osc1.type = 4)");
+    cell (2);
+    check (r.inst.get ("osc1.type") == 1.0f, "the third pictogram is Sample (osc1.type = 1)");
     r.refresh();
-    check (std::string (r.ui.typeName()) == "Sample" && r.ui.full().panel.preset() == &ui::presets::kEmptyFull && r.ui.full().bar.numSlots() == 0, "type Sample: the type name, an empty type bar and an empty bottom band");
-    check (r.ui.full().basic.selector.state.index == -1, "no pictogram is highlighted for a type the selector does not offer");
+    check (std::string (r.ui.typeName()) == "Sample" && r.ui.full().kind() == ui::OscKind::Sample && r.ui.full().panel.preset() == &ui::presets::kSampleFull && r.ui.full().bar.numSlots() == 4, "type Sample: its own full screen (type bar and panel)");
+    check (r.ui.full().basic.selector.state.index == 2, "the Sample pictogram is highlighted");
+    cell (4);
+    check (r.inst.get ("osc1.type") == 3.0f, "the fifth pictogram is Spectral (osc1.type = 3)");
+    r.refresh();
+    check (r.ui.full().kind() == ui::OscKind::Spectral && r.ui.full().panel.preset() == &ui::presets::kSpectralFull && r.ui.full().basic.selector.state.index == 4, "type Spectral: its own full screen");
 }
 
 void testTuneOctSem()
@@ -269,9 +274,10 @@ void testDisabledControls()
     Rig r;
     r.openFull();
     auto& bar = r.ui.full().bar;
-    const OscUi::Item* mem = r.ui.item (OscUi::kBarSlot + 3);
-    check (mem != nullptr && ! mem->c->enabled() && mem->alwaysOff, "wavetable: the phase memory stepper is disabled (no voice of the own engine reads osc.phase_memory)");
-    check (r.ui.full().panel.warp()->first.hasVar() && ! r.ui.full().panel.warp()->first.var.enabled() && ! r.ui.full().panel.warp()->second.var.enabled(), "WARP Var is drawn disabled (there is no parameter)");
+    const OscUi::Item* map = r.ui.item (OscUi::kBarSlot + 3);
+    check (map != nullptr && map->c->enabled() && map->type == OscUi::T::Inert, "wavetable: the fourth slot of the type bar is the MAP page button (the dead phase memory stepper is gone from the bar)");
+    const OscUi::Item* ph = r.ui.item (OscUi::kWarp1Var);
+    check (r.ui.full().panel.warp()->first.hasVar() && ph != nullptr && ph->param == Inst::idx ("osc1.warp.phase"), "the VAR knob of a warp slot is its PHASE (osc1.warp.phase)");
     const OscUi::Item* drop = r.ui.item (OscUi::kBasic + 2);
     check (drop != nullptr && ! drop->c->enabled(), "the source dropdown of the compact view is disabled (the list opens from the full screen)");
     // the source stepper of multisample is disabled
@@ -466,7 +472,7 @@ void testQGroupFollowsTheActiveGroup()
     r.tapC (*r.ui.full().panel.part (ui::PanelSlot::WtPos));
     check (r.inst.q[0] == Inst::idx ("osc1.frame") && r.inst.q[1] == Inst::idx ("osc1.unison.voices") && r.inst.q[2] == Inst::idx ("osc1.unison.detune") && r.inst.q[3] == Inst::idx ("osc1.unison.blend"), "the Unison group: frame, voices, detune, blend");
     r.tapC (r.ui.full().panel.warp()->first.amount);
-    check (r.inst.q[0] == Inst::idx ("osc1.warp.type") && r.inst.q[1] == Inst::idx ("osc1.warp.amount") && r.inst.q[2] == Inst::idx ("osc1.warp2.type") && r.inst.q[3] == Inst::idx ("osc1.warp2.amount"), "the Warp group");
+    check (r.inst.q[0] == Inst::idx ("osc1.warp.type") && r.inst.q[1] == Inst::idx ("osc1.warp.amount") && r.inst.q[2] == Inst::idx ("osc1.warp.phase") && r.inst.q[3] == -1, "the Warp 1 group: type, amount, phase");
     // on the Env sub-tab the compact view does not own the group
     Rig e;
     const int c0 = e.inst.qCalls;

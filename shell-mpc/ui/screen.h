@@ -117,8 +117,8 @@ public:
             case OscInstance::Sub: bar.load (kEmptyBar); panel.load (presets::kSubFull); break;
             case OscInstance::Noise: bar.load (kEmptyBar); panel.load (presets::kNoiseGenFull); break;
             default:
-                bar.load (kind == OscKind::Wavetable ? barpresets::kWavetable : kind == OscKind::Multisample ? barpresets::kMultisample : barpresets::kGranular);
-                panel.load (kind == OscKind::Wavetable ? presets::kWavetableFull : kind == OscKind::Multisample ? presets::kMultisampleFull : presets::kGranularFull);
+                bar.load (kind == OscKind::Wavetable ? barpresets::kWavetable : kind == OscKind::Multisample ? barpresets::kMultisample : kind == OscKind::Sample ? barpresets::kSample : kind == OscKind::Spectral ? barpresets::kSpectral : barpresets::kGranular);
+                panel.load (kind == OscKind::Wavetable ? presets::kWavetableFull : kind == OscKind::Multisample ? presets::kMultisampleFull : kind == OscKind::Sample ? presets::kSampleFull : kind == OscKind::Spectral ? presets::kSpectralFull : presets::kGranularFull);
                 break;
         }
         tune.setShort (false);
@@ -128,7 +128,7 @@ public:
         buildGroups();
         setActiveGroup (0);
     }
-    /** An oscillator type the library has no full screen for (the engine's Sample and Spectral types, only on the host's own pages): the type bar and the bottom band are empty (the owner draws the
+    /** (kept for the tests of old pages: every type has a full screen now) An oscillator type the library has no full screen for (the engine's Sample and Spectral types, only on the host's own pages): the type bar and the bottom band are empty (the owner draws the
         type name), the other parts stay. Call after `setInstance`. */
     void setUnsupportedType()
     {
@@ -286,8 +286,10 @@ protected:
         if (panel.warp() && nGroups_ < kMaxGroups)
         {
             WarpPair& w = *panel.warp();
-            QGroup& g = next ("Warp");
-            g.set (0, &w.first.type); g.set (1, &w.first.amount); g.set (2, &w.second.type); g.set (3, &w.second.amount);
+            QGroup& g = next ("Warp 1");
+            g.set (0, &w.first.type); g.set (1, &w.first.amount); g.set (2, &w.first.var);
+            QGroup& g2 = next ("Warp 2");
+            g2.set (0, &w.second.type); g2.set (1, &w.second.amount); g2.set (2, &w.second.var);
         }
         active_ = -1;
         setActiveGroup (0);
@@ -317,7 +319,7 @@ protected:
     {
         if (inst_ == OscInstance::Sub) return "SUB";
         if (inst_ == OscInstance::Noise) return "NOISE";
-        return kind_ == OscKind::Wavetable ? "WAVETABLE" : kind_ == OscKind::Multisample ? "MULTISAMPLE" : "GRANULAR";
+        return kind_ == OscKind::Wavetable ? "WAVETABLE" : kind_ == OscKind::Multisample ? "MULTISAMPLE" : kind_ == OscKind::Sample ? "SAMPLE" : kind_ == OscKind::Spectral ? "SPECTRAL" : "GRANULAR";
     }
     Rect display_, barBlock_, tuneBlock_;
     OscInstance inst_ = OscInstance::A;
