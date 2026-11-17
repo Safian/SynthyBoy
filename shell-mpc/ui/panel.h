@@ -1,5 +1,5 @@
-// SynthyBoy - MPC UI component library: KnobPanel (the frame of the lower knob row: one component, three presets given as DATA, not as three hand written layouts) and QGroup (the four
-// values of one Q-Link set: the frame around the group, the index at each member, the routing of the four hardware knobs, the adjacency check).
+// SynthyBoy - MPC UI component library: KnobPanel (the frame of the lower knob row: one component, presets given as DATA, not as hand written layouts) and the detail pages (DetailPage, ModulationsPage).
+// QGroup lives in qgroup.h.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
