@@ -314,7 +314,7 @@ inline std::string slugify (const std::string& s)
 
 void savePlay (const std::string& path, int highlight, GalleryInst& inst,
                int oscSel = 2, int envSel = 1, int lfoSlot = 1,
-               int w = 1280, int h = 800)
+               int w = 1280, int h = 800, const std::function<void (PlayView&, UiStack&)>& act = nullptr)
 {
     const int savedOsc = inst.playSelection (0);
     const int savedEnv = inst.playSelection (1);
@@ -339,6 +339,12 @@ void savePlay (const std::string& path, int highlight, GalleryInst& inst,
     }
     in.nowMs = 1500.0;
     pv.update (in);
+    if (act)   // a touch on the page (the type list opened, ...), then the picture
+    {
+        act (pv, stack);
+        in.nowMs = 1600.0;
+        pv.update (in);
+    }
 
     uit::Image im;
     im.w = w; im.h = h;
@@ -433,6 +439,39 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
     if (shouldRender ("play1.png")) savePlay (outDir + "/" + state + "_play1.png", 1, baseInst);
     if (shouldRender ("play2.png")) savePlay (outDir + "/" + state + "_play2.png", 2, baseInst);
     if (shouldRender ("play3.png")) savePlay (outDir + "/" + state + "_play3.png", 3, baseInst);
+
+    // (a0) the Play page (2026-11-18): oscillator A, Sub and Noise switched off (grey display and controls, the power button red), the selectors (carousels) at the first, a middle and the last entry of each third,
+    // the type drop-down closed (the compact views above) and open for A, Sub and Noise
+    {
+        struct Off { const char* name; const char* key; int sel; };
+        for (const Off& o : { Off { "osca", "osc1.on", playosc::kA }, Off { "sub", "sub.on", playosc::kSub }, Off { "noise", "noise.on", playosc::kNoise } })
+            if (shouldRender (std::string ("play1_off_") + o.name + ".png"))
+            {
+                GalleryInst off = baseInst;
+                off.set (o.key, 0.0f);
+                savePlay (outDir + "/" + state + "_play1_off_" + o.name + ".png", 1, off, o.sel, 1, 1);
+            }
+        const int oscSel[3] = { playosc::kSub, playosc::kB, playosc::kNoise }, envSel[3] = { 1, 3, 6 }, lfoSel[3] = { 1, 5, 14 };
+        const char* const pos[3] = { "first", "middle", "last" };
+        for (int i = 0; i < 3; ++i)
+            if (shouldRender (std::string ("play1_carousel_") + pos[i] + ".png"))
+                savePlay (outDir + "/" + state + "_play1_carousel_" + pos[i] + ".png", 1, baseInst, oscSel[i], envSel[i], lfoSel[i]);
+        struct Ty { const char* name; int sel; };
+        for (const Ty& t : { Ty { "osca", playosc::kA }, Ty { "sub", playosc::kSub }, Ty { "noise", playosc::kNoise } })
+            if (shouldRender (std::string ("play1_type_open_") + t.name + ".png"))
+                savePlay (outDir + "/" + state + "_play1_type_open_" + t.name + ".png", 1, baseInst, t.sel, 1, 1, 1280, 800,
+                          [&baseInst] (PlayView& pv, UiStack& st)
+                          {
+                              OscUi* o = pv.oscUi();
+                              if (o == nullptr) return;
+                              GalleryInst io = baseInst;
+                              const ui::Rect r = o->compact().basic.selector.rect();
+                              TouchEvent d; d.kind = TouchEvent::Down; d.x = r.x + r.w / 2; d.y = r.y + r.h / 2;
+                              TouchEvent u = d; u.kind = TouchEvent::Up;
+                              pv.onTouch (d, st, io, 1550.0);
+                              pv.onTouch (u, st, io, 1590.0);
+                          });
+    }
 
     // (a) Play 1-3 for each of the five oscillator sources, envelope 1 and 6, and LFO 1, 10, R1
     for (int p = 1; p <= 3; ++p)
