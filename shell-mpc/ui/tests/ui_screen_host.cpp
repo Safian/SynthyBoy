@@ -105,6 +105,13 @@ int main()
         const bool isSub = var.inst == OscInstance::Sub;
         if (var.inst == OscInstance::Noise)
         {
+            // the generated noise page is one grid: TUNE and NOISE blocks side by side with the same top and height, the same two rows (PITCH, FINE | KIND, STEREO and KEY TRACK | ENV 1), no hole
+            const Component *kd = s.panel.part (PanelSlot::NoiseType), *st = s.panel.part (PanelSlot::NoiseStereo), *e1 = s.panel.part (PanelSlot::NoiseEnv1);
+            check (kd != nullptr && st != nullptr && e1 != nullptr && s.tuneBlock().y == s.panel.blockRect (0).y && s.tuneBlock().h == s.panel.blockRect (0).h && s.tuneBlock().right() <= s.panel.blockRect (0).x && s.tuneBlock().y >= s.displayRect().bottom(),
+                   nm + ": noise: the TUNE block and the NOISE block stand side by side under the display, same top and same height");
+            check (kd != nullptr && st != nullptr && e1 != nullptr && std::abs (s.tune.crs.rect().y - kd->rect().y) <= 40 && std::abs (cy (s.tune.crs) - cy (*st)) <= 2 && std::abs (cy (s.tune.fin) - cy (*st)) <= 2 && std::abs (cy (s.tune.track) - cy (*e1)) <= 2,
+                   nm + ": noise: the rows are shared: PITCH and FINE on the line of STEREO, KEY TRACK on the line of ENV 1");
+            check (st != nullptr && st->rect().h >= 72 && s.tune.crs.rect().w >= 120, nm + ": noise: the STEREO knob has the common size (>= 72 px) and the fields are wide (no hole)");
             const Stepper* kind = dynamic_cast<const Stepper*> (s.panel.part (PanelSlot::NoiseType));
             check (std::string (s.basic.noiseType.state.caption) == "SOUND" && kind != nullptr && std::string (kind->state.caption) == "KIND", nm + ": the two noise steppers say what they select (SOUND in the header, KIND in the block)");
         }
@@ -113,11 +120,11 @@ int main()
             const WarpPair* w = s.panel.warp();
             check (w != nullptr && std::string (w->first.amount.state.label) == "WARP 1" && std::string (w->second.amount.state.label) == "WARP 2", nm + ": the two warp knobs are named WARP 1 and WARP 2");
         }
-        check (isSub ? s.displayRect().w * 100 / 1264 >= 99 : (s.displayRect().w * 100 / 1264 >= 76 && s.displayRect().w * 100 / 1264 <= 80 && (var.inst == OscInstance::Noise || s.barBlock().w == s.displayRect().w)), nm + ": the display is about 78 percent of the width (the sub oscillator's: all of it)");
+        check (isSub || var.inst == OscInstance::Noise ? s.displayRect().w * 100 / 1264 >= 99 : (s.displayRect().w * 100 / 1264 >= 76 && s.displayRect().w * 100 / 1264 <= 80 && s.barBlock().w == s.displayRect().w), nm + ": the display is about 78 percent of the width (the sub oscillator's and the generated noise's: all of it)");
         check (s.displayRect().h >= 240, nm + ": the display is at least 240 px tall (" + std::to_string (s.displayRect().h) + " px)");
         if (! isSub && var.inst != OscInstance::Noise)
             check (s.displayRect().y == s.barBlock().bottom() + kGap && s.barBlock().x == s.displayRect().x && s.barBlock().contains (s.bar.rect()), nm + ": the type bar (in its titled block) directly under the header and over the display");
-        check ((isSub ? true : s.tune.rect().x > s.displayRect().right()) && s.panel.rect().y >= s.displayRect().bottom() && s.close.rect().x < s.power.rect().x && (isSub ? s.route.rect().empty() : s.route.rect().x > s.basic.rect().right() - 1), nm + ": the tuning row at the right, the bottom band below, the close button at the left, the route button at the right end");
+        check ((isSub ? true : var.inst == OscInstance::Noise ? s.tune.rect().y >= s.displayRect().bottom() : s.tune.rect().x > s.displayRect().right()) && s.panel.rect().y >= s.displayRect().bottom() && s.close.rect().x < s.power.rect().x && (isSub ? s.route.rect().empty() : s.route.rect().x > s.basic.rect().right() - 1), nm + ": the tuning row at the right, the bottom band below, the close button at the left, the route button at the right end");
         check (s.numGroups() >= 2 && s.activeGroup() == 0 && std::string (s.groupName (0)) == "Basic" && s.groups[0].active(), nm + ": the first group is Basic and active (" + std::to_string (s.numGroups()) + " groups)");
         for (int g = 0; g < s.numGroups(); ++g)
         {

@@ -219,6 +219,7 @@ protected:
         route.place (sub ? Rect {} : Rect { r[3].x, top.y + (topH - 64) / 2, r[3].w, 64 });
         const int gap = kGap;
         const int panelY = rect_.bottom() - (isTab ? 0 : m) - bottomH;
+        Rect panelRect { rect_.x + m, panelY, W - 2 * m, bottomH };
         const int leftW = (W - 2 * m) * 78 / 100, rightX = rect_.x + m + leftW + m;
         constexpr int kTitleH = KnobPanel::kBlockTitleH, kPad = KnobPanel::kBlockPad;
         const int barH = 56, barBlockH = isTab ? 70 : (kTitleH + barH + kPad);
@@ -232,6 +233,19 @@ protected:
             bar.place ({});
             tuneBlock_ = {};
             tune.place ({});
+        }
+        else if (noise && panel.preset() != nullptr && panel.preset()->items == presets::kNoiseGenItems)
+        {
+            // the generated noise: ONE clean grid in the bottom band, two blocks of the same height side by side, the same two rows in both: TUNE (PITCH, FINE / KEY TRACK) at the left and NOISE (KIND, STEREO / ENV 1) at the right, the
+            // rows of the two blocks are the same rows (same top, same title strip, same row heights, the lane of the chips between them); the display has the whole width above them, as on the sub oscillator's page
+            const int midY = top.bottom() + gap;
+            display_ = { rect_.x + m, midY, W - 2 * m, std::max (0, panelY - gap - midY) };
+            barBlock_ = {};
+            bar.place ({});
+            const int halfW = (W - 3 * m) / 2;
+            tuneBlock_ = { rect_.x + m, panelY, halfW, bottomH };
+            tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
+            panelRect = { tuneBlock_.right() + m, panelY, W - 2 * m - halfW - m, bottomH };
         }
         else if (noise)
         {
@@ -252,7 +266,7 @@ protected:
             tuneBlock_ = Rect { rightX, barBlock_.y, rect_.right() - m - rightX, std::max (0, display_.bottom() - barBlock_.y) };
             tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
         }
-        panel.place ({ rect_.x + m, panelY, W - 2 * m, bottomH });
+        panel.place (panelRect);
     }
     bool hasPanel() const noexcept { return true; }
     void buildGroups()
