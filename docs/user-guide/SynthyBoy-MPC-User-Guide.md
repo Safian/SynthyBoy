@@ -592,28 +592,34 @@ The style grid is Q 1 and has no stepper of its own: PERLIN, S & H (sample and h
 
 ![Mod matrix](img/mod.png)
 
+The matrix connects sources (envelopes, LFOs, macros, keys and pads) to the parameters they move. The picture shows five routes, the first one selected (yellow frame; its Q numbers 1 - 4 stand over SOURCE, TARGET and AMOUNT).
+
 The page shows the modulation slots (up to 64; the counter at the top reads "5 / 64 SLOTS"). Tabs **ALL**, **BY SOURCE**, **BY DEST** filter the list (BY SOURCE and BY DEST show a stepper to choose the source group or destination module). **+ ADD** makes a new slot in the first unused place (source Env 1, the first destination of the list, amount +50 percent) and opens its slot page (MORE, below), where you change SOURCE and TARGET.
 
-Each row: the number (a tap selects the row), **SOURCE** (a button that opens the list of sources), an arrow, **TARGET** (opens the grouped list of destinations: first the groups, then the parameters), the **AMOUNT** bar (-100 .. +100 percent, horizontal drag, double tap = default 0; the dot is the live value), **POLARITY** (UNI / BI), **STATE** (ON / OFF) and **MORE**.
+Each row: the number (a tap selects the row), **SOURCE** (a button that opens the list of sources), an arrow, **TARGET** (opens the grouped list of destinations: first the groups, then the parameters), the **AMOUNT** bar (-100 .. +100 percent, horizontal drag, double tap = default 0; the dot is the live value), **POLARITY** (a LED: UNI or BI), **STATE** (the power glyph, ON / OFF) and **MORE**.
 
 **Q group:** the selected row: Q 1 = row (steps through the rows), Q 2 = SOURCE, Q 3 = TARGET, Q 4 = AMOUNT.
 
-**MORE** opens the page of the slot (BACK, a title, **DELETE** with a confirmation) with the same row for editing and three blocks:
+**MORE** opens the page of the slot (BACK, a title like "SLOT 01 LFO 1 -> Filter 1 Cutoff", **DELETE** with a confirmation) with the same row for editing and three blocks:
+
+![Mod slot page](img/mod-slot.png)
 
 | Block | Control | Parameter, range |
 |---|---|---|
 | AUXILIARY SOURCE | SOURCE | Aux Source: a second source that multiplies the first |
 | | SCALE | Output Scale 0 .. 200 percent, default 100 |
-| | INVERT | Aux Invert, Off/On |
+| | INVERT | Aux Invert, a LED switch |
 | | CURVE | Aux Curve -10 .. +10 |
 | SHAPE | CURVE | Curve -10 .. +10 |
-| | STEREO | Off/On |
+| | STEREO | LED switch |
 | TIME | RISE | 0 .. 5000 ms |
 | | FALL | 0 .. 5000 ms |
 | | DELAY or BEATS | Delay 0 .. 4000 ms, or 0 .. 8 beats when tempo sync is on |
-| | SYNC | Delay Tempo Sync, Off/On |
+| | SYNC | Delay Tempo Sync, a LED switch |
 
-**With no slot in use** the page shows the **source board** (every one of the 57 sources as a chip, in groups ENVELOPES, LFOS, MACROS, PLAYER, SOUND). Tap a chip, then pick the target. The board disappears when the first slot exists; **+ ADD** is always there.
+**With no slot in use** the page shows the **source board** (every one of the 57 sources as a chip, in groups ENVELOPES, LFOS, MACROS, PLAYER, SOUND, each group with its count, "TAP A SOURCE TO START A MODULATION"). Tap a chip, then pick the target. The board disappears when the first slot exists; **+ ADD** is always there.
+
+The same board opens when you long-press **a control that nothing modulates yet** (the title is the control and its value, "TAP A SOURCE TO MODULATE THIS VALUE", see the picture in 5.3). One tap on a source makes the modulation of that control: you do not have to wade through a stepper of 57 sources. Once the control has modulations the page lists them and keeps a compact add row.
 
 ![Source board](img/mod-board.png)
 
