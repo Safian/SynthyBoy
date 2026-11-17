@@ -15,6 +15,7 @@ enum class PanelSlot : uint8_t { WtPos, Unison, Detune, Blend, Warp, Pan, Level,
                                  NoiseType, NoiseStart, NoiseRand, NoiseLoop, NoiseBounce,
                                  NoiseStereo, NoiseEnv1,
                                  SubCrs, SubEnv1, SubMono, SubPhase, SubContig, SubDest, SubBlend, SubBus1, SubBus2,
+                                 SampleScan, SpecPos, Span,
                                  Count };
 enum class PartKind : uint8_t { Knob, RandPair, Unison, WarpPair, Menu, Stepper, Toggle };
 
@@ -222,9 +223,10 @@ constexpr PanelItem kUnisonGrItems[] = {
     { PartKind::Stepper, PanelSlot::Mode, "MODE", 0, 0, 1, 1, false, 0 }, { PartKind::Stepper, PanelSlot::Stack, "STACK", 1, 0, 1, 1, false, 0 },
     { PartKind::Knob, PanelSlot::Width, "WIDTH", 0, 1, 1, 1, false, 0 }, { PartKind::Knob, PanelSlot::Range, "RANGE", 1, 1, 1, 1, false, 0 },
     { PartKind::Knob, PanelSlot::Start, "START", 0, 0, 1, 1, false, 1 },
+    { PartKind::Knob, PanelSlot::Span, "SPAN", 1, 0, 1, 1, false, 1 },
 };
-constexpr PanelBlock kUnisonGrBlocks[] = { { "UNISON", 0, 0, 2, 1, 2, 2, 64 }, { "VOICE SPREAD", 2, 0, 1, 1, 1, 1 } };
-constexpr QSpec kUnisonGrQ[] = { { { PanelSlot::Mode, PanelSlot::Stack, PanelSlot::Width, PanelSlot::Range } }, { { PanelSlot::Start, PanelSlot::Count, PanelSlot::Count, PanelSlot::Count } } };
+constexpr PanelBlock kUnisonGrBlocks[] = { { "UNISON", 0, 0, 2, 1, 2, 2, 64 }, { "VOICE SPREAD", 2, 0, 2, 1, 2, 1 } };
+constexpr QSpec kUnisonGrQ[] = { { { PanelSlot::Mode, PanelSlot::Stack, PanelSlot::Width, PanelSlot::Range } }, { { PanelSlot::Start, PanelSlot::Span, PanelSlot::Count, PanelSlot::Count } } };
 constexpr PanelItem kEnvelopeItems[] = {
     { PartKind::Knob, PanelSlot::Delay, "DELAY", 0, 0, 1, 1, false, 0 }, { PartKind::Knob, PanelSlot::Attack, "ATTACK", 1, 0, 1, 1, false, 0 },
     { PartKind::Knob, PanelSlot::Hold, "HOLD", 2, 0, 1, 1, false, 0 }, { PartKind::Knob, PanelSlot::Decay, "DECAY", 3, 0, 1, 1, false, 0 },
@@ -234,7 +236,26 @@ constexpr PanelItem kEnvelopeItems[] = {
 constexpr PanelBlock kEnvelopeBlocks[] = { { "TIMES", 0, 0, 1, 1, 4, 1 }, { "SUSTAIN AND RELEASE", 0, 1, 1, 1, 4, 1 } };
 constexpr QSpec kEnvelopeQ[] = { { { PanelSlot::Delay, PanelSlot::Attack, PanelSlot::Hold, PanelSlot::Decay } }, { { PanelSlot::Sustain, PanelSlot::Release, PanelSlot::Override, PanelSlot::Count } } };
 constexpr PanelPreset kUnisonDetailMultisample { "unison details (multisample)", 4, 1, -1, kUnisonMsItems, 6, kUnisonMsQ, 2, kUnisonDisplayH, kUnisonMsBlocks, 2 };
-constexpr PanelPreset kUnisonDetailGranular { "unison details (granular)", 3, 1, -1, kUnisonGrItems, 5, kUnisonGrQ, 2, kUnisonDisplayH, kUnisonGrBlocks, 2 };
+constexpr PanelPreset kUnisonDetailGranular { "unison details (granular)", 4, 1, -1, kUnisonGrItems, 6, kUnisonGrQ, 2, kUnisonDisplayH, kUnisonGrBlocks, 2 };
+// the sample and the spectral type: the knob under the type bar is the scan / position, the rest as the wavetable's
+constexpr PanelItem kSampleFullItems[] = {
+    { PartKind::Knob, PanelSlot::SampleScan, "SCAN", 0, 0, 1, 1, true, 0 },
+    { PartKind::Unison, PanelSlot::Unison, "", 1, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::Detune, "DETUNE", 2, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::Blend, "BLEND", 3, 0, 1, 1, false, 0 },
+    { PartKind::WarpPair, PanelSlot::Warp, "", 0, 0, 1, 1, false, 1 },
+};
+constexpr QSpec kSampleFullQ[] = { { { PanelSlot::SampleScan, PanelSlot::Unison, PanelSlot::Detune, PanelSlot::Blend } } };
+constexpr PanelPreset kSampleFull { "sample (full screen)", 2, 1, -1, kSampleFullItems, 5, kSampleFullQ, 1, 0, kWavetableBlocks, 2 };
+constexpr PanelItem kSpectralFullItems[] = {
+    { PartKind::Knob, PanelSlot::SpecPos, "POSITION", 0, 0, 1, 1, false, 0 },
+    { PartKind::Unison, PanelSlot::Unison, "", 1, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::Detune, "DETUNE", 2, 0, 1, 1, false, 0 },
+    { PartKind::Knob, PanelSlot::Blend, "BLEND", 3, 0, 1, 1, false, 0 },
+    { PartKind::WarpPair, PanelSlot::Warp, "", 0, 0, 1, 1, false, 1 },
+};
+constexpr QSpec kSpectralFullQ[] = { { { PanelSlot::SpecPos, PanelSlot::Unison, PanelSlot::Detune, PanelSlot::Blend } } };
+constexpr PanelPreset kSpectralFull { "spectral (full screen)", 2, 1, -1, kSpectralFullItems, 5, kSpectralFullQ, 1, 0, kWavetableBlocks, 2 };
 constexpr PanelPreset kEnvelopeDetail { "multisample envelope", 1, 2, -1, kEnvelopeItems, 7, kEnvelopeQ, 2, 140, kEnvelopeBlocks, 2 };
 constexpr PanelPreset kUnisonDetail { "unison details", 5, 1, -1, kUnisonDetailItems, 7, kUnisonDetailQ, 2, kUnisonDisplayH, kUnisonDetailBlocks, 2 };
 constexpr PanelPreset kGrainDetail { "grain window", 1, 1, -1, kGrainDetailItems, 5, kGrainDetailQ, 2, 140, kGrainDetailBlocks, 1 };

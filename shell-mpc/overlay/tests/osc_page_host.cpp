@@ -147,6 +147,44 @@ bool leavesNoOverlap (ui::Component& root, std::string& why)
 int main()
 {
     {
+        // the pages of the oscillator types on the OSC tab: BACK from each one returns to the page, the display draws a loaded sample and a non-default spectral setting
+        for (int pageId = 16; pageId <= 22; ++pageId)
+        {
+            Rig r (2);
+            r.inst.set ("osc1.type", pageId == 16 ? 0.0f : (pageId == 18 || pageId == 19 ? 1.0f : (pageId == 20 ? 2.0f : 3.0f)));
+            r.refresh();
+            r.stack.openDetail (pageId);
+            r.refresh();
+            check (r.page.topPage() == pageId, "page " + std::to_string (pageId) + ": it opens over the page of the oscillator");
+            const ui::Rect back = r.page.ui().specPage().back.rect();
+            r.tap (back.x + back.w / 2, back.y + back.h / 2);
+            check (r.page.topPage() == 0 && r.stack.depth() == 1, "page " + std::to_string (pageId) + ": BACK returns to the page");
+        }
+        Rig r (2);
+        r.inst.set ("osc1.type", 1.0f);
+        auto content = std::make_shared<synthyboy::StateContent>();
+        synthyboy::ContentSample cs;
+        cs.osc = 1; cs.ref.pack = "p"; cs.ref.file = "a.wav"; cs.ref.name = "a";
+        content->samples.push_back (cs);
+        r.inst.contentPtr = content;
+        r.refresh();
+        const OscMarks m0 = OscMarks::of (r.inst, 2, 0);
+        r.inst.set ("osc1.sample.start", 25.0f);
+        const OscMarks m1 = OscMarks::of (r.inst, 2, 0);
+        check (m0.region && m1.region && m1.start > m0.start + 0.2f, "the sample page draws the region markers from sample.start / sample.end");
+        r.inst.set ("osc1.type", 0.0f);
+        r.inst.set ("osc1.remap.on", 1.0f);
+        check (OscMarks::of (r.inst, 2, 16).remap && ! OscMarks::of (r.inst, 2, 17).remap, "the map page draws the remap curve, only while the remap is on");
+        // the picture of the page changes when the region does
+        auto hash = [&] (Rig& g) { auto d = std::make_unique<gpu::SceneData>(); gpu::SceneBuilder sb (*d); sb.begin (gpu::kKindPlay, 0, 1280, 800); g.page.draw (sb); return page::sceneHash (*d); };
+        Rig a (2), b (2);
+        a.inst.set ("osc1.type", 1.0f); b.inst.set ("osc1.type", 1.0f);
+        a.inst.contentPtr = content; b.inst.contentPtr = content;
+        b.inst.set ("osc1.sample.start", 40.0f);
+        a.refresh(); b.refresh();
+        check (hash (a) != hash (b), "the picture of a sample page follows the start of the region");
+    }
+    {
         Rig r (2);   // Osc A
         OscUi& u = r.page.ui();
         check (u.isPage() && u.selection() == 2 && r.page.selection() == 2, "the page of Osc A shows oscillator A although the Play selector says B");

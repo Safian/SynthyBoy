@@ -24,7 +24,9 @@
 #include "synthyboy/filter_response.h"
 #include "synthyboy/fx_rack.h"
 #include "synthyboy/fx_types.h"
+#include "synthyboy/content_store.h"
 #include "synthyboy/osc_cycle.h"
+#include "synthyboy/user_content.h"
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/state.h"
@@ -119,6 +121,29 @@ public:
     int playLastSelector() const noexcept override { return 2; }
 
     std::shared_ptr<const synthyboy::StateContent> content() const override { return content_; }
+    const synthyboy::IContentStore* contentStore() const noexcept override { return store_.get(); }
+    /** A sample (a decaying chirp with a second burst, so the picture has some shape) as the content of oscillator `osc` (1 .. 3). */
+    void addSample (int osc)
+    {
+        const int rate = 44100;
+        const size_t n = static_cast<size_t> (rate * 2);
+        std::vector<float> x (n);
+        for (size_t i = 0; i < n; ++i)
+        {
+            const double t = static_cast<double> (i) / rate;
+            const double env = std::exp (-2.2 * std::fmod (t, 1.0)) * (t < 1.0 ? 1.0 : 0.6);
+            x[i] = static_cast<float> (0.8 * env * std::sin (6.283185307179586 * (110.0 + 220.0 * std::fmod (t, 1.0)) * t));
+        }
+        if (! store_)
+            store_ = std::make_shared<synthyboy::MemoryContentStore>();
+        store_->add ("gallery", "s" + std::to_string (osc) + ".wav", synthyboy::encodeWav (x.data(), nullptr, n, rate, 16));
+        auto c = content_ ? std::make_shared<synthyboy::StateContent> (*content_) : std::make_shared<synthyboy::StateContent>();
+        synthyboy::ContentSample cs;
+        cs.osc = osc; cs.ref.pack = "gallery"; cs.ref.file = "s" + std::to_string (osc) + ".wav"; cs.ref.name = "chirp";
+        cs.sampleRate = rate; cs.frames = static_cast<int> (n); cs.channels = 1;
+        c->samples.push_back (cs);
+        content_ = c;
+    }
     void setContent (std::shared_ptr<const synthyboy::StateContent> c) { content_ = std::move (c); }
 
     static int idx (const std::string& key)
@@ -185,6 +210,7 @@ public:
 private:
     float v_[synthyboy::kMaxParams] = {};
     std::shared_ptr<const synthyboy::StateContent> content_;
+    std::shared_ptr<synthyboy::MemoryContentStore> store_;
 };
 
 inline uint32_t lerpRgb (uint32_t c0, uint32_t c1, float t)
@@ -370,6 +396,43 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         // Osc B, C, Sub, Noise
         GalleryRig<OscPageUi> rOscB (baseInst, 3); rOscB.refresh (2); rOscB.picture (outDir + "/" + state + "_oscb.png");
         GalleryRig<OscPageUi> rOscC (baseInst, 4); rOscC.refresh (2); rOscC.picture (outDir + "/" + state + "_oscc.png");
+        // Osc A in each type, empty and with a file loaded, and the detail pages of the types (docs/MPC.md "Oscillator UI", table type -> page -> block -> controls)
+        {
+            struct T { const char* name; int type; };
+            const T types[] = { { "wave", 0 }, { "multi", 4 }, { "sample", 1 }, { "grain", 2 }, { "spec", 3 } };
+            for (const T& t : types)
+                for (int loaded = 0; loaded < (t.type == 0 ? 1 : 2); ++loaded)
+                {
+                    GalleryInst gi = baseInst;
+                    gi.set ("osc1.type", static_cast<float> (t.type));
+                    if (loaded && t.type != 4)
+                        gi.addSample (1);
+                    GalleryRig<OscPageUi> r (gi, 2);
+                    r.refresh (2);
+                    r.picture (outDir + "/" + state + "_osca_type_" + t.name + (loaded ? "_loaded" : "") + ".png");
+                    struct P { int page; const char* name; };
+                    std::vector<P> pages = { { 17, "more" } };
+                    if (t.type == 0) pages.push_back ({ 16, "map" });
+                    if (t.type == 1) { pages.push_back ({ 18, "region" }); pages.push_back ({ 19, "slice" }); }
+                    if (t.type == 2) pages.push_back ({ 20, "grain" });
+                    if (t.type == 3) { pages.push_back ({ 21, "filter" }); pages.push_back ({ 22, "scan" }); }
+                    for (const P& pg : pages)
+                    {
+                        if (pg.page == 17 && loaded) continue;
+                        GalleryInst g2 = gi;
+                        if (pg.page == 18) { g2.set ("osc1.sample.start", 12.0f); g2.set ("osc1.sample.end", 88.0f); g2.set ("osc1.sample.loop_mode", 1.0f); g2.set ("osc1.sample.loop_start", 30.0f); g2.set ("osc1.sample.loop_end", 70.0f); }
+                        if (pg.page == 19) { g2.set ("osc1.sample.slice_mode", 1.0f); g2.set ("osc1.sample.scan_lock_tempo", 1.0f); }
+                        if (pg.page == 20) { g2.set ("osc1.gran.density_mode", 1.0f); g2.set ("osc1.gran.length_mode", 2.0f); }
+                        if (pg.page == 21) { g2.set ("osc1.spec.flt_use", 1.0f); g2.set ("osc1.spec.freq_lo", 200.0f); g2.set ("osc1.spec.freq_hi", 5000.0f); }
+                        if (pg.page == 16) { g2.set ("osc1.remap.on", 1.0f); }
+                        GalleryRig<OscPageUi> rp (g2, 2);
+                        rp.refresh (2);
+                        rp.stack.openDetail (pg.page);
+                        rp.refresh (2);
+                        rp.picture (outDir + "/" + state + "_osca_" + t.name + "_" + pg.name + (loaded ? "_loaded" : "") + ".png");
+                    }
+                }
+        }
         GalleryRig<OscPageUi> rOscSub (baseInst, 1); rOscSub.refresh (2); rOscSub.picture (outDir + "/" + state + "_oscsub.png");
         GalleryRig<OscPageUi> rOscNoise (baseInst, 5); rOscNoise.refresh (2); rOscNoise.picture (outDir + "/" + state + "_oscnoise.png");
     }

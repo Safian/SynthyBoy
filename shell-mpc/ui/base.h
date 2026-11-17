@@ -953,7 +953,7 @@ protected:
     inside a box of about 28 x 24 pixels. */
 namespace pictogram
 {
-enum Id : int { Sine = 0, Wavetable, Granular, Multisample, Noise, HalfSine, Triangle, Saw, Square, Pulse, Count };
+enum Id : int { Sine = 0, Wavetable, Granular, Multisample, Noise, HalfSine, Triangle, Saw, Square, Pulse, Sample, Spectral, Count };
 
 inline float waveAt (int kind, float t) noexcept   // t 0 .. 1 over one cycle
 {
@@ -1021,10 +1021,25 @@ inline void drawTriangle (Pen& p, float cx, float cy, uint32_t col) { static con
 inline void drawSaw (Pen& p, float cx, float cy, uint32_t col) { static const float k[6][2] = { { -14, 8 }, { -1, -8 }, { -1, 8 }, { 1, 8 }, { 1, -8 }, { 14, 8 } }; shape (p, cx, cy, k, 4, col); p.line (cx + 1.0f, cy + 8.0f, cx + 14.0f, cy - 8.0f, 2.0f, col); }
 inline void drawSquare (Pen& p, float cx, float cy, uint32_t col) { static const float k[6][2] = { { -14, 8 }, { -14, -8 }, { 0, -8 }, { 0, 8 }, { 14, 8 }, { 14, -8 } }; shape (p, cx, cy, k, 6, col); }
 inline void drawPulse (Pen& p, float cx, float cy, uint32_t col) { static const float k[7][2] = { { -14, 8 }, { -8, 8 }, { -8, -8 }, { -2, -8 }, { -2, 8 }, { 14, 8 }, { 14, 8 } }; shape (p, cx, cy, k, 6, col); }
+inline void drawSample (Pen& p, float cx, float cy, uint32_t col)   // a recorded waveform between a start and an end marker
+{
+    static const float h[8] = { 2.0f, 7.0f, -9.0f, 8.0f, -5.0f, 9.0f, -3.0f, 1.0f };
+    for (int i = 0; i < 7; ++i)
+        p.line (cx - 10.0f + 3.0f * static_cast<float> (i), cy + h[i], cx - 10.0f + 3.0f * static_cast<float> (i + 1), cy + h[i + 1], 2.0f, col);
+    p.line (cx - 13.0f, cy - 10.0f, cx - 13.0f, cy + 10.0f, 2.0f, col);
+    p.line (cx + 13.0f, cy - 10.0f, cx + 13.0f, cy + 10.0f, 2.0f, col);
+}
+inline void drawSpectral (Pen& p, float cx, float cy, uint32_t col)   // a row of spectrum bars
+{
+    static const float h[7] = { 6.0f, 12.0f, 18.0f, 9.0f, 14.0f, 5.0f, 8.0f };
+    for (int i = 0; i < 7; ++i)
+        p.line (cx - 12.0f + 4.0f * static_cast<float> (i), cy + 9.0f, cx - 12.0f + 4.0f * static_cast<float> (i), cy + 9.0f - h[i], 2.0f, col);
+}
 struct Def { int id; const char* name; void (*draw) (Pen&, float, float, uint32_t); };
 constexpr Def kTable[] = {
     { Sine, "sine", drawSine }, { Wavetable, "wavetable", drawWavetable }, { Granular, "granular", drawGranular }, { Multisample, "multisample", drawMultisample }, { Noise, "noise", drawNoise },
     { HalfSine, "half sine", drawHalfSine }, { Triangle, "triangle", drawTriangle }, { Saw, "saw", drawSaw }, { Square, "square", drawSquare }, { Pulse, "pulse", drawPulse },
+    { Sample, "sample", drawSample }, { Spectral, "spectral", drawSpectral },
 };
 inline const Def* find (int id) noexcept
 {

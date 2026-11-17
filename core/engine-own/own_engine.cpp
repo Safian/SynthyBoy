@@ -617,10 +617,24 @@ void OwnEngine::startNote (const Pressed& n, bool fromRecall, const Voice* relea
                 heldVoice = v.get();
                 break;
             }
+    // the phases the previous note (the voice that started last, the voice that is retaken included) has now, and whether its key is still held: the phase memory and the phase legato of the wavetable oscillators carry them over
+    uint32_t prevPhase[3][Voice::kPhaseCount];
+    bool havePrev = false, prevHeld = false;
+    {
+        const Voice* prev = nullptr;
+        for (const auto& v : voices)
+            if (v->isActive() && !v->killing() && (prev == nullptr || v->serial() > prev->serial()))
+                prev = v.get();
+        havePrev = prev != nullptr;
+        prevHeld = havePrev && !prev->isReleased();
+        for (int o = 0; havePrev && o < 3; ++o)
+            prev->oscPhases (o, prevPhase[o]);
+    }
     chosen->start (ns, chosen->lastL(), chosen->lastR());
     if (heldVoice != nullptr)
         chosen->inheritEnvelopes (*heldVoice);
     chosen->tick (globals, static_cast<int> (std::find_if (voices.begin(), voices.end(), [&] (const auto& p) { return p.get() == chosen; }) - voices.begin()));
+    applyPhaseOptions (*chosen, havePrev ? prevPhase : nullptr, prevHeld);
     for (int o = 0; o < 3; ++o)
         if (chosen->multisampleZone (o) >= 0)
         {
@@ -630,6 +644,39 @@ void OwnEngine::startNote (const Pressed& n, bool fromRecall, const Voice* relea
     lastNoteSemis = ns.tunedNote;
     haveLastNote = true;
     lastVelocity = n.velocity;
+}
+
+/** Phase Memory and Phase Legato of the wavetable oscillators, after the note started (docs/MPC.md "Oscillator UI", Serum 2 manual p.43 and 44). Memory All Voices: the note starts with PHASE and RAND (nothing here). Contiguous: it
+    continues with the phase the previous note has now. Per Voice: it starts with the same phase every time, the one captured from the previous note when this mode was entered (the first note after it, with no previous
+    note, captures its own). Phase Legato (the oscillator's switch or the global voice.phase_legato, memory on All Voices): a note that starts while the key of the previous note is still held takes that note's phases instead of PHASE and RAND (docs/ui-design/13-new-keys.md A86). Arrays: [oscillator][unison voice] or null. */
+void OwnEngine::applyPhaseOptions (Voice& v, const uint32_t (*prev)[Voice::kPhaseCount], bool prevHeld) noexcept
+{
+    for (int o = 0; o < 3; ++o)
+    {
+        const OscIdx& oi = paramIndex().osc[o];
+        const int mode = static_cast<int> (base[static_cast<size_t> (oi.phaseMemory)] + 0.5f);
+        const bool wavetable = base[static_cast<size_t> (oi.type)] < 0.5f;
+        if (mode != 2)
+            memValid[o] = false;   // leaving Per Voice forgets the captured phases: entering it captures again
+        if (!wavetable)
+            continue;
+        if (mode == 1 && prev != nullptr)
+            v.setOscPhases (o, prev[o]);
+        else if (mode == 2)
+        {
+            if (!memValid[o])
+            {
+                if (prev != nullptr)
+                    std::copy (prev[o], prev[o] + Voice::kPhaseCount, memPhase[o]);
+                else
+                    v.oscPhases (o, memPhase[o]);
+                memValid[o] = true;
+            }
+            v.setOscPhases (o, memPhase[o]);
+        }
+        else if (mode == 0 && prev != nullptr && prevHeld && (base[static_cast<size_t> (oi.phaseLegato)] >= 0.5f || base[static_cast<size_t> (paramIndex().master.voicePhaseLegato)] >= 0.5f))
+            v.setOscPhases (o, prev[o]);
+    }
 }
 
 void OwnEngine::noteOn (const Event& e) noexcept

@@ -142,6 +142,7 @@ class TuneRow : public Composite
 public:
     NumberField oct { "OCT", NumberField::Format::IntSigned }, sem { "SEM", NumberField::Format::IntSigned }, fin { "FIN", NumberField::Format::IntSigned }, crs { "CRS", NumberField::Format::Decimal2 };
     ToggleIcon track;
+    DetailButton more { DetailButton::Icon::Gear, "MORE" };   // the full screen of A, B, C: the page of the options the column has no room for
 
     explicit TuneRow (bool shortVariant = false) : short_ (shortVariant)
     {
@@ -152,12 +153,12 @@ public:
         track.state.icon = ToggleIcon::Icon::PitchTrack;
         track.state.on = true;
         track.setLabel ("TRACK");
-        addKid (oct); addKid (sem); addKid (fin); addKid (crs); addKid (track);
+        addKid (oct); addKid (sem); addKid (fin); addKid (crs); addKid (track); addKid (more, false);
         applyVariant();
     }
     void setShort (bool s) { short_ = s; applyVariant(); layout(); }
     /** The vertical variant (the full screen): the fields in two columns (OCT SEM / FIN CRS) and TRACK across the width, three rows that fill the height (short: OCT CRS in one row). */
-    void setVertical (bool v) { vertical_ = v; layout(); }
+    void setVertical (bool v) { vertical_ = v; applyVariant(); layout(); }
     bool isVertical() const noexcept { return vertical_; }
     /** Only CRS (the full screen of the sub oscillator: its OCT is in the top band); vertical variant only. */
     void setCrsOnly (bool b) { crsOnly_ = b; applyVariant(); layout(); }
@@ -187,6 +188,7 @@ protected:
     {
         show (oct, ! crsOnly_ && ! noise_); show (sem, ! short_ && ! crsOnly_ && ! noise_); show (fin, ! short_ && ! crsOnly_);
         show (track, ! short_ && ! crsOnly_);
+        show (more, vertical_ && ! short_ && ! crsOnly_ && ! noise_);
     }
     void layout() override
     {
@@ -200,7 +202,7 @@ protected:
             if (crsOnly_) lines[n++] = { &crs, nullptr };
             else if (noise_) { lines[n++] = { &crs, &fin }; lines[n++] = { &track, nullptr }; }
             else if (short_) lines[n++] = { &oct, &crs };
-            else { lines[n++] = { &oct, &sem }; lines[n++] = { &fin, &crs }; lines[n++] = { &track, nullptr }; }
+            else { lines[n++] = { &oct, &sem }; lines[n++] = { &fin, &crs }; lines[n++] = { &track, &more }; }
             const int H = std::max (n * kRowH, rect_.h - (n - 1) * kQLane);   // the height of the rows together
             const int cw = (rect_.w - kGap) / 2;
             for (int i = 0; i < n; ++i)
@@ -259,17 +261,20 @@ protected:
     filled ones and form ONE Q group (`group`: the filled slots in order; empty slots draw nothing and take no Q-Link). The presets are DATA (a table of BarItem, the same mechanism as the
     KnobPanel's): wavetable (the frame number, the phase, RAND, the phase memory), granular (crossfade, grain window, loop mode, unison), sub (the phase), multisample (VEL TRACK toggle,
     its amount, RAND), noise (STEREO). The ids of the slots are given by the owner (`slot (i)->setId`). The former PhaseRow is the wavetable preset of this component. */
-enum class BarKind : uint8_t { Frame, Phase, Rand, Number, Stepper, GrainWindow, UnisonDetail, Toggle, Envelope, ToggleNumber };
+enum class BarKind : uint8_t { Frame, Phase, Rand, Number, Stepper, GrainWindow, UnisonDetail, Toggle, Envelope, ToggleNumber, Page };   // Page: a button that opens a detail page of the type (its label)
 struct BarItem { BarKind kind; const char* label; uint8_t weight; };
 struct BarPreset { const char* name; const BarItem* items; int numItems; };
 
 namespace barpresets
 {
-constexpr BarItem kWavetableItems[] = { { BarKind::Frame, "FRAME", 2 }, { BarKind::Phase, "PHASE", 2 }, { BarKind::Rand, "RAND", 2 }, { BarKind::Stepper, "MEMORY", 3 } };
-constexpr BarItem kGranularItems[] = { { BarKind::Number, "XFADE", 2 }, { BarKind::GrainWindow, "AMOUNT", 3 }, { BarKind::Stepper, "LOOP", 3 }, { BarKind::UnisonDetail, "UNISON", 3 } };
+constexpr BarItem kWavetableItems[] = { { BarKind::Frame, "FRAME", 2 }, { BarKind::Phase, "PHASE", 2 }, { BarKind::Rand, "RAND", 2 }, { BarKind::Page, "MAP", 3 } };
+constexpr BarItem kGranularItems[] = { { BarKind::Page, "GRAIN", 2 }, { BarKind::GrainWindow, "AMOUNT", 3 }, { BarKind::Stepper, "LOOP", 3 }, { BarKind::UnisonDetail, "UNISON", 3 } };
+constexpr BarItem kSampleItems[] = { { BarKind::Phase, "PHASE", 2 }, { BarKind::Page, "REGION", 3 }, { BarKind::Page, "SLICE", 3 }, { BarKind::UnisonDetail, "UNISON", 3 } };
+constexpr BarItem kSpectralItems[] = { { BarKind::Phase, "PHASE", 2 }, { BarKind::Page, "FILTER", 3 }, { BarKind::Page, "SCAN", 3 }, { BarKind::UnisonDetail, "UNISON", 3 } };
 constexpr BarItem kSubItems[] = { { BarKind::Phase, "PHASE", 1 } };
 constexpr BarItem kMultisampleItems[] = { { BarKind::Envelope, "ENV", 2 }, { BarKind::ToggleNumber, "VEL TRACK", 3 }, { BarKind::Rand, "RAND", 2 } };
 constexpr BarItem kNoiseItems[] = { { BarKind::Number, "STEREO", 3 }, { BarKind::Toggle, "ENV 1", 1 } };
+constexpr BarPreset kSample { "sample", kSampleItems, 4 }, kSpectral { "spectral", kSpectralItems, 4 };
 constexpr BarPreset kWavetable { "wavetable", kWavetableItems, 4 }, kGranular { "granular", kGranularItems, 4 }, kSub { "sub", kSubItems, 1 },
                     kMultisample { "multisample", kMultisampleItems, 3 }, kNoise { "noise", kNoiseItems, 2 };
 }
@@ -339,6 +344,11 @@ public:
                     details[i].state = DetailButton::State {};
                     details[i].state.icon = DetailButton::Icon::Gear; details[i].state.hasValue = true; details[i].state.integer = true;
                     details[i].state.min = 1; details[i].state.max = 16; details[i].state.value = 1; details[i].setLabel (it.label);
+                    c = &details[i];
+                    break;
+                case BarKind::Page:
+                    details[i].state = DetailButton::State {};
+                    details[i].state.icon = DetailButton::Icon::Gear; details[i].setLabel (it.label);
                     c = &details[i];
                     break;
                 case BarKind::Envelope:
@@ -571,7 +581,7 @@ protected:
 // ===============================================================================================================================================================
 /** The five oscillator instances of the synth (engine keys sub, a, b, c, noise) and the types of A, B and C. Sub and Noise are instances with a fixed panel, not types. */
 enum class OscInstance : uint8_t { Sub, A, B, C, Noise };
-enum class OscKind : uint8_t { Wavetable, Multisample, Granular };   // the types of A / B / C: an extensible table (sample, spectral later)
+enum class OscKind : uint8_t { Wavetable, Multisample, Granular, Sample, Spectral };   // the five types of A / B / C (engine oscN.type 0, 4, 2, 1, 3)
 inline const char* instanceName (OscInstance i) noexcept { static const char* const n[5] = { "SUB", "A", "B", "C", "NOISE" }; return n[static_cast<int> (i)]; }
 
 /** BasicControls: the four values of the Q group "Basic" of an oscillator instance, one component for the compact view and for the top band of the full screen, so that both have the same members
@@ -613,9 +623,11 @@ public:
         else if (! noise)
         {
             selector.setItem (0, pictogram::Wavetable, "WAVE");
-            selector.setItem (1, pictogram::Multisample, "SAMPLE");
-            selector.setItem (2, pictogram::Granular, "GRAIN");
-            selector.state.index = kind == OscKind::Wavetable ? 0 : (kind == OscKind::Multisample ? 1 : 2);
+            selector.setItem (1, pictogram::Multisample, "MULTI");
+            selector.setItem (2, pictogram::Sample, "SAMPLE");
+            selector.setItem (3, pictogram::Granular, "GRAIN");
+            selector.setItem (4, pictogram::Spectral, "SPEC");
+            selector.state.index = kind == OscKind::Wavetable ? 0 : kind == OscKind::Multisample ? 1 : kind == OscKind::Sample ? 2 : kind == OscKind::Granular ? 3 : 4;
         }
         show (selector, ! noise); show (noiseType, noise);
         show (source, ! sub && ! noise); show (oct, sub); show (filter, noise);

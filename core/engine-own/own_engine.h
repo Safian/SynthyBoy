@@ -91,6 +91,9 @@ private:
     void writeReadout() noexcept;
     void controlTick() noexcept;
     Voice* allocateVoice (bool legato) noexcept;
+    void applyPhaseOptions (Voice& v, const uint32_t (*prev)[Voice::kPhaseCount], bool prevHeld) noexcept;
+    uint32_t memPhase[3][Voice::kPhaseCount] = {};   // Phase Memory Per Voice: the captured phases of the three oscillators
+    bool memValid[3] = {};
     float readParam (uint32_t id) const noexcept;
     void rebuildContent();
     void publishContent (std::unique_ptr<ContentSet> set);

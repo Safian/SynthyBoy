@@ -7,6 +7,7 @@
 #pragma once
 
 #include "osc_display.h"
+#include "osc_marks.h"
 #include "osc_ui.h"
 #include "page_view.h"
 
@@ -46,6 +47,7 @@ public:
         if (in.targets != nullptr && osc >= 1)
             for (int i = 0; i < 4; ++i)
                 t[(osc - 1) * 4 + i] = in.targets[i];
+        marks_ = OscMarks::of (inst, sel_, osc_.topPage());
         display_.update (inst, sel_, osc >= 1 && in.targets != nullptr ? t : nullptr, in.live, nowMs, counters_);
     }
 
@@ -58,7 +60,10 @@ public:
         {
             display_.draw (sb, r, false);
             display_.draw (sb, r, true);
+            if (marks_.any())
+                marks_.draw (sb, r);
         }
+        osc_.drawOnDisplay (sb);
         osc_.drawPopup (sb);
     }
     bool touch (const TouchEvent& ev, UiStack& stack, IInstanceView& inst, double nowMs) { return osc_.touch (ev, stack, inst, nowMs); }
@@ -80,6 +85,7 @@ public:
 private:
     OscUi osc_;
     OscDisplay display_;
+    OscMarks marks_;
     ViewCounters counters_;
     int sel_ = 0;
 };

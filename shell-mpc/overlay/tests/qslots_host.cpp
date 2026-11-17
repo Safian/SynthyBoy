@@ -182,6 +182,29 @@ void testOscillator()
     check (mappedBlocks == std::min (n - 1, 3), "Osc A: the groups after the active one have their blocks (" + std::to_string (mappedBlocks) + ")");
 }
 
+/** The detail pages of the oscillator types (osc_spec_page.h): the groups are their blocks in reading order, the rule of sixteen slots holds for every page, in the state that shows every block. */
+void testOscillatorTypePages()
+{
+    for (int page = 16; page <= 22; ++page)
+    {
+        demo::Rig<OscPageUi> r (2);
+        auto set = [&] (const char* k, float v) { r.inst.set (k, v); };
+        set ("osc1.type", page == 16 ? 0.0f : (page == 18 || page == 19 ? 1.0f : (page == 20 ? 2.0f : (page == 17 ? 4.0f : 3.0f))));
+        set ("osc1.sample.loop_mode", 1.0f); set ("osc1.sample.slice_mode", 1.0f); set ("osc1.remap.on", 1.0f); set ("osc1.spec.flt_use", 1.0f);
+        r.refresh();
+        r.stack.openDetail (page);
+        r.refresh();
+        oscspec::OscSpecPage& pg = r.ui.ui().specPage();
+        const int n = pg.numGroups();
+        check (n >= 3 || page == 16, "osc page " + std::to_string (page) + ": its blocks are groups (" + std::to_string (n) + ")");
+        checkPage ("Osc page " + std::to_string (page), r, n, [&] (int g) { pg.setActiveGroup (g); r.refresh(); });
+        bool four = true;
+        for (int g = 0; g < n; ++g)
+            four = four && pg.groups[g].numMembers() >= 1 && pg.groups[g].numMembers() <= 4;
+        check (four, "osc page " + std::to_string (page) + ": every group has one to four members");
+    }
+}
+
 void testEnvLfo()
 {
     {
@@ -340,6 +363,7 @@ int main()
     testVoice();
     testFilter();
     testOscillator();
+    testOscillatorTypePages();
     testEnvLfo();
     testModDetail();
     testMacros();

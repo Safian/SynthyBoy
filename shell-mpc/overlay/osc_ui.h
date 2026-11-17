@@ -22,6 +22,7 @@
 
 #include "../ui/ui.h"
 #include "content_browser.h"
+#include "osc_spec_page.h"
 #include "curve_source.h"
 #include "../q_router.h"
 #include "play_osc.h"
@@ -39,14 +40,15 @@ class OscUi
 public:
     // ---- the pages (UiStack ids)
     static constexpr int kElementOsc = 1;                                     // the full screen of the oscillator
-    enum Page { kPageUnison = 10, kPageGrain = 11, kPageEnvelope = 12, kPageRoute = 13, kPageMods = 14, kPageList = 15 };
+    enum Page { kPageUnison = 10, kPageGrain = 11, kPageEnvelope = 12, kPageRoute = 13, kPageMods = 14, kPageList = 15 };   // 16 .. 22: the detail pages of osc_spec_page.h (oscspec::PageId)
 
     // ---- the id spaces of the controls (a Change comes out with the id the owner gave)
     enum Id : int
     {
         kClose = 1, kPower, kRoute, kFullButton, kInstances,
         kBasic = 100,                       // BasicControls::assignIds: selector, source stepper, dropdown, OCT, FILTER, noise type, PAN, LEVEL = 100 .. 107
-        kTuneOct = 110, kTuneSem, kTuneFin, kTuneCrs, kTuneTrack,
+        kTuneOct = 110, kTuneSem, kTuneFin, kTuneCrs, kTuneTrack, kTuneMore,
+        kSpecLoad = 790, kSpec = 800,       // the LOAD button of an empty sample type; 800 + i: the controls of a detail page of osc_spec_page.h
         kBarSlot = 120,                     // 120 .. 123: the slots of the type bar
         kBarToggle = 130,                   // 130 .. 133: the toggle of a toggle + number slot
         kBarAmount = 140,                   // 140 .. 143: its amount
@@ -77,6 +79,9 @@ public:
         DetailNorm,  // a DetailButton with a 0 .. 1 value
         DetailInt,   // a DetailButton with an integer value
         Route,       // the route button: the destination choice
+        List,        // a short choice parameter as a LedList (all options visible)
+        Mask,        // the notes of the transpose snap (NoteMask): bits 0 .. 11 of the parameter
+        SnapBit,     // the toggle for bit 12 of the same parameter (snap the played note, not the transpose)
         Source,      // the source of a granular / multisample oscillator: the name of the file that is loaded; a tap opens the content browser
         Inert        // no value: a button
     };
@@ -113,6 +118,7 @@ public:
         list_.setBackdropId (kListBackdrop);
         list_.setHeaderId (kListHeader);
         detail_.place (tab);
+        spec_.place (tab);
         mods_.place (tab);
     }
 
@@ -144,6 +150,8 @@ public:
         }
         pull (inst, main_);
         pull (inst, page_);
+        updateSpecVisibility (inst);
+        updateLoadButton (inst);
         if (pageTop_ == kPageEnvelope)
             updateEnvelope();
         if (pageTop_ == kPageList && listParam_ >= 0)
@@ -164,6 +172,8 @@ public:
             return compact_.displayRect();
         if (stackDepth_ == 1 || pageTop_ == kPageRoute || pageTop_ == kPageList)
             return full_.displayRect();
+        if (oscspec::isSpecPage (pageTop_))
+            return spec_.displayRect();
         if (pageTop_ == kPageUnison || pageTop_ == kPageGrain)
             return detail_.displayRect();   // the same picture of the oscillator over the page (the fan of the unison voices, the grain window on the sample)
         return {};
@@ -189,6 +199,11 @@ public:
         if (stackDepth_ == 0)
         {
             compact_.draw (sb);
+            return;
+        }
+        if (oscspec::isSpecPage (pageTop_))
+        {
+            spec_.draw (sb);
             return;
         }
         if (pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope)
@@ -221,7 +236,7 @@ public:
     /** The route popup and the list popup (over the page and over the picture). */
     void drawPopup (gpu::SceneBuilder& sb) const
     {
-        if (stackDepth_ == 0 || pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope || pageTop_ == kPageMods)
+        if (stackDepth_ == 0 || pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope || pageTop_ == kPageMods || oscspec::isSpecPage (pageTop_))
             return;
         if (pageTop_ == kPageRoute)
             route_.draw (sb);
@@ -233,7 +248,15 @@ public:
     {
         if (stackDepth_ == 0)
             compact_.full.draw (sb);
+        else if (loadShown_)
+            loadBtn_.draw (sb);
     }
+    /** The empty state of a type that plays a file (sample, grain, spectral, multisample) while no file is loaded: one button over the display that opens the browser. */
+    bool loadButtonShown() const noexcept { return loadShown_; }
+    const ui::MenuButton& loadButton() const noexcept { return loadBtn_; }
+    const oscspec::OscSpecPage& specPage() const noexcept { return spec_; }
+    oscspec::OscSpecPage& specPage() noexcept { return spec_; }
+    const ui::Rect& marksRect() const noexcept { return marksRect_; }
     /** The touch hit this view's drawing (the main state: the oscillator third; any other state: everything). */
     bool covers (int x, int y) const noexcept
     {
@@ -251,6 +274,13 @@ public:
             gesture_ = nullptr;
             if (! covers (ev.x, ev.y) || ! top)
                 return false;
+            if (loadShown_ && loadBtn_.rect().contains (x, y))
+            {
+                loadBtn_.touchDown (x, y, nowMs);
+                gesture_ = &loadBtn_;
+                gestureDown_ = true;
+                return true;
+            }
             gesture_ = top;
             gestureDown_ = true;
             handle (top->touchDown (x, y, nowMs), stack, inst);
@@ -262,6 +292,15 @@ public:
             handle (gesture_->touchMove (x, y), stack, inst);
         else
         {
+            if (gesture_ == &loadBtn_)
+            {
+                const ui::Change c = loadBtn_.touchUp (x, y);
+                if (c.kind == ui::ChangeKind::Request)
+                    openBrowser (stack, inst);
+                gestureDown_ = false;
+                gesture_ = nullptr;
+                return true;
+            }
             handle (gesture_->touchUp (x, y), stack, inst);
             gestureDown_ = false;
             gesture_ = nullptr;
@@ -348,7 +387,7 @@ private:
     // ======================================================================================================================================================================
     // building: the instance (and the type) decides the components, the ids and the bindings
     ui::OscInstance uiInstance() const noexcept { return static_cast<ui::OscInstance> (sel_ - 1); }
-    ui::OscKind kindOfRaw (int raw) const noexcept { return raw == 4 ? ui::OscKind::Multisample : (raw == 2 ? ui::OscKind::Granular : ui::OscKind::Wavetable); }
+    ui::OscKind kindOfRaw (int raw) const noexcept { return raw == 4 ? ui::OscKind::Multisample : raw == 2 ? ui::OscKind::Granular : raw == 1 ? ui::OscKind::Sample : raw == 3 ? ui::OscKind::Spectral : ui::OscKind::Wavetable; }
 
     void bind (std::vector<Item>& list, int id, ui::Component* c, T type, const std::string& suffix, bool alwaysOff = false, const char* second = nullptr)
     {
@@ -372,7 +411,7 @@ private:
         const bool sub = sel == playosc::kSub, noise = sel == playosc::kNoise;
         prefix_ = sub ? "sub." : (noise ? "noise." : std::string ("osc") + std::to_string (playosc::oscNumber (sel)) + ".");
         const ui::OscKind kind = kindOfRaw (raw);
-        const bool otherType = ! sub && ! noise && (raw == 1 || raw == 3);   // Sample, Spectral: only the host's own pages
+        const bool otherType = false;   // every type has its own full screen now (the Sample and Spectral types too)
         const synthyboy::ParamInfo* ti = nullptr;
         const int tp = typeParam (sel);
         if (tp >= 0) ti = &info (tp);
@@ -458,6 +497,7 @@ private:
             bind (main_, kTuneFin, &full_.tune.fin, T::Number, "tune");
             bind (main_, kTuneCrs, &full_.tune.crs, T::Number, "pitch_coarse");
             bind (main_, kTuneTrack, &full_.tune.track, T::Toggle, "pitch_track");
+            bind (main_, kTuneMore, &full_.tune.more, T::Inert, "");
         }
         else if (noise)
         {
@@ -479,8 +519,9 @@ private:
                     if (kind == ui::OscKind::Granular)
                         bind (main_, kBarSlot + i, s, T::StepperLoop, "gran.loop_grains", false, "gran.manual");
                     else
-                        bind (main_, kBarSlot + i, s, T::Stepper, "phase_memory", true);   // read by no voice of the own engine
+                        bind (main_, kBarSlot + i, s, T::Inert, "");
                     break;
+                case ui::BarKind::Page: bind (main_, kBarSlot + i, s, T::Inert, ""); break;
                 case ui::BarKind::Number: bind (main_, kBarSlot + i, s, T::Number, noise ? "stereo" : "sample.loop_xfade"); break;
                 case ui::BarKind::GrainWindow: bind (main_, kBarSlot + i, s, T::DetailNorm, "gran.window_amount"); break;
                 case ui::BarKind::UnisonDetail: bind (main_, kBarSlot + i, s, T::DetailInt, "unison.voices"); break;
@@ -544,10 +585,12 @@ private:
                     w->first.type.listable = w->second.type.listable = true;
                     bind (list, kWarp1Type, &w->first.type, T::Stepper, "warp.type");
                     bind (list, kWarp1Amount, &w->first.amount, T::Knob, "warp.amount");
-                    bind (list, kWarp1Var, &w->first.var, T::Knob, "", true);     // WARP Var: no parameter in the engine
+                    bind (list, kWarp1Var, &w->first.var, T::Knob, "warp.phase");
                     bind (list, kWarp2Type, &w->second.type, T::Stepper, "warp2.type");
                     bind (list, kWarp2Amount, &w->second.amount, T::Knob, "warp2.amount");
-                    bind (list, kWarp2Var, &w->second.var, T::Knob, "", true);
+                    bind (list, kWarp2Var, &w->second.var, T::Knob, "warp2.phase");
+                    w->first.var.setLabel ("PHASE");
+                    w->second.var.setLabel ("PHASE");
                     w->first.setHasVar (true);
                     w->second.setHasVar (true);
                     break;
@@ -636,6 +679,9 @@ private:
             case PanelSlot::SubBlend: return "filter_blend";
             case PanelSlot::SubBus1: return "bus1_send";
             case PanelSlot::SubBus2: return "bus2_send";
+            case PanelSlot::SampleScan: return "sample.scan";
+            case PanelSlot::SpecPos: return "spec.position";
+            case PanelSlot::Span: return "sample.uni_span";
             default: return "";
         }
     }
@@ -745,6 +791,9 @@ private:
                 route_.group.setActive (true);
                 break;
             case kPageMods: loadMods (inst); break;
+            case oscspec::kWtMap: case oscspec::kMore: case oscspec::kSampleRegion: case oscspec::kSampleSlice: case oscspec::kGrain: case oscspec::kSpecFilter: case oscspec::kSpecScan:
+                bindSpec (pageTop_);
+                break;
             case kPageList:
                 if (browseMode_)
                     fillBrowserList();
@@ -762,6 +811,76 @@ private:
         configureNumberRanges (page_);
         modsDirty_ = true;
         qSlots_.forget();
+    }
+    /** A detail page of osc_spec_page.h: its controls are bound to the parameters of this oscillator (ids kSpec + index), the list popup of a long list is the name of the stepper. */
+    void bindSpec (int page)
+    {
+        const oscspec::Spec* sp = oscspec::specOf (page);
+        if (sp == nullptr)
+            return;
+        spec_.loadSpec (*sp);
+        spec_.back.setId (kDetailBack);
+        for (int i = 0; i < sp->numCtls; ++i)
+        {
+            const oscspec::Ctl& c = sp->ctls[i];
+            ui::Component* comp = spec_.control (i);
+            T t = T::Knob;
+            if (c.kind == oscspec::K::Stepper) t = T::Stepper;
+            else if (c.kind == oscspec::K::Toggle) t = std::strcmp (c.key, "transpose_snap") == 0 ? T::SnapBit : T::Toggle;
+            else if (c.kind == oscspec::K::Number) t = T::Number;
+            else if (c.kind == oscspec::K::List) t = T::List;
+            else if (c.kind == oscspec::K::Mask) t = T::Mask;
+            bind (page_, kSpec + i, comp, t, c.key);
+            if (c.kind == oscspec::K::Stepper)
+            {
+                const int pi = indexOfKey (prefix_ + c.key);
+                static_cast<ui::Stepper*> (comp)->listable = pi >= 0 && info (pi).numChoices > 6;
+            }
+            else if (c.kind == oscspec::K::List)
+            {
+                const int pi = indexOfKey (prefix_ + c.key);
+                if (pi >= 0 && info (pi).choices != nullptr)
+                    spec_.setListOptions (i, info (pi).choices, std::min (static_cast<int> (info (pi).numChoices), static_cast<int> (ui::LedList::kMaxOptions)));
+            }
+        }
+        spec_.relayoutNow();
+        specVisible_ = true;
+    }
+    bool condHolds (oscspec::Cond c, const IInstanceView& v) const
+    {
+        auto val = [&] (const char* suffix) { const int i = indexOfKey (prefix_ + suffix); return i >= 0 ? static_cast<int> (std::lround (v.param (i))) : 0; };
+        using C = oscspec::Cond;
+        switch (c)
+        {
+            case C::Always: return true;
+            case C::LoopOn: return val ("sample.loop_mode") != 0;
+            case C::SliceAuto: return val ("sample.slice_mode") == 1;
+            case C::SliceManual: return val ("sample.slice_mode") == 2;
+            case C::SliceAny: return val ("sample.slice_mode") != 0;
+            case C::KeytrackOn: return val ("sample.keytrack") != 0;
+            case C::DensSync: return val ("gran.density_mode") == 1;
+            case C::DensGrains: return val ("gran.density_mode") == 2;
+            case C::LenSync: return val ("gran.length_mode") == 1;
+            case C::LenPercent: return val ("gran.length_mode") == 2;
+            case C::RemapOn: return val ("remap.on") != 0;
+            case C::FltOn: return val ("spec.flt_use") != 0;
+            case C::SpecYAxis: return val ("spec.y_axis") != 0;
+            case C::GranYAxis: return val ("gran.y_axis") != 0;
+            case C::TrackOff: return val ("pitch_track") == 0;
+            case C::TempoLen: return val ("sample.scan_lock_tempo") != 0 || val ("sample.scan_to_bpm") != 0;
+            default: return true;
+        }
+    }
+    /** Which controls of the detail page apply in the state of the parameters (a loop mode of one shot has no loop points ...). */
+    void updateSpecVisibility (const IInstanceView& v)
+    {
+        const oscspec::Spec* sp = spec_.spec();
+        if (sp == nullptr || ! oscspec::isSpecPage (pageTop_))
+            return;
+        bool vis[oscspec::OscSpecPage::kMaxCtl] = {};
+        for (int i = 0; i < sp->numCtls; ++i)
+            vis[i] = condHolds (sp->ctls[i].cond, v);
+        spec_.setVisible (vis);
     }
     void bindDetail()
     {
@@ -999,6 +1118,9 @@ private:
                     break;
                 }
                 case T::Toggle: static_cast<ui::ToggleIcon*> (it.c)->state.on = plain >= 0.5f; break;
+                case T::SnapBit: static_cast<ui::ToggleIcon*> (it.c)->state.on = (static_cast<int> (std::lround (plain)) & 4096) != 0; break;
+                case T::Mask: static_cast<ui::NoteMask*> (it.c)->state.mask = static_cast<int> (std::lround (plain)) & 4095; break;
+                case T::List: static_cast<ui::LedList*> (it.c)->state.index = std::clamp (static_cast<int> (std::lround (plain - pi.min)), 0, std::max (0, static_cast<ui::LedList*> (it.c)->state.count - 1)); break;
                 case T::UpDown:
                 {
                     auto* u = static_cast<ui::UpDownStepper*> (it.c);
@@ -1008,7 +1130,7 @@ private:
                 case T::Picto:
                 {
                     const int raw = static_cast<int> (std::lround (plain));
-                    static_cast<ui::PictogramSelector*> (it.c)->state.index = raw == 0 ? 0 : (raw == 4 ? 1 : (raw == 2 ? 2 : -1));
+                    static_cast<ui::PictogramSelector*> (it.c)->state.index = raw == 0 ? 0 : raw == 4 ? 1 : raw == 1 ? 2 : raw == 2 ? 3 : raw == 3 ? 4 : -1;
                     break;
                 }
                 case T::PictoPlain: static_cast<ui::PictogramSelector*> (it.c)->state.index = static_cast<int> (std::lround (plain)); break;
@@ -1054,10 +1176,10 @@ private:
             if (it.id == kRouteBalance)
                 it.c->setEnabled (routeFilter_);
         }
-        // the WARP Var knob has no parameter: it stays disabled whatever the pair does
+        // the PHASE knob of a warp slot is the warp's phase: dimmed with the slot while its type is off
         for (Item& it : list)
             if (it.id == kWarp1Var || it.id == kWarp2Var)
-                it.c->setEnabled (false);
+                it.c->setEnabled (! warpIsOff (it.id == kWarp1Var ? kWarp1Amount : kWarp2Amount));
 
     }
     /** A value of a parameter as text with its unit: "35%", "+12 ct", "420 Hz", "1.20 s", "-6.0 dB" (at most 15 characters). */
@@ -1068,7 +1190,7 @@ private:
         const int dec = std::min<int> (pi.decimals, 2);
         switch (pi.unit)
         {
-            case Unit::percent: std::snprintf (out, cap, pi.min < 0.0f ? "%+.*f%%" : "%.*f%%", dec, v); break;
+            case Unit::percent: if (std::fabs (v) >= 99.995) std::snprintf (out, cap, pi.min < 0.0f ? "%+.0f%%" : "%.0f%%", v); else std::snprintf (out, cap, pi.min < 0.0f ? "%+.*f%%" : "%.*f%%", dec, v); break;
             case Unit::cents: std::snprintf (out, cap, "%+.0f ct", v); break;
             case Unit::semitone: std::snprintf (out, cap, "%+.*f st", dec, v); break;
             case Unit::Hz: if (v >= 1000.0) std::snprintf (out, cap, "%.2f kHz", v / 1000.0); else std::snprintf (out, cap, "%.0f Hz", v); break;
@@ -1180,6 +1302,8 @@ private:
     {
         if (stackDepth_ == 0)
             return &compact_;
+        if (oscspec::isSpecPage (pageTop_))
+            return &spec_;
         if (pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope)
             return &detail_;
         if (pageTop_ == kPageMods)
@@ -1204,6 +1328,7 @@ private:
             {
                 case kFullButton: stack.openFull (kElementOsc); return;
                 case kClose: case kDetailBack: case kModsBack: case kRouteClose: case kRouteBackdrop: stack.back(); return;
+                case kTuneMore: stack.openDetail (oscspec::kMore); return;
                 case kRoute:
                     if (stack.depth() == 0)
                         stack.openFull (kElementOsc);   // the route popup lies over the full screen: from the compact view that opens first
@@ -1232,7 +1357,9 @@ private:
                 if (bi.kind == ui::BarKind::Envelope) { stack.openDetail (kPageEnvelope); return; }
                 if (bi.kind == ui::BarKind::GrainWindow) { stack.openDetail (kPageGrain); return; }
                 if (bi.kind == ui::BarKind::UnisonDetail) { stack.openDetail (kPageUnison); return; }
+                if (bi.kind == ui::BarKind::Page) { const int pg = pageOfBar (bi.label); if (pg > 0) stack.openDetail (pg); return; }
             }
+            if (it != nullptr && id >= kSpec && id < kSpec + oscspec::OscSpecPage::kMaxCtl) { openList (it, stack); return; }
             if (id == kPanel + static_cast<int> (ui::PanelSlot::WarpMenu) && it != nullptr && it->param >= 0)
             {
                 openList (it, stack);
@@ -1326,6 +1453,38 @@ private:
         write (*it, c, v);
     }
 
+    /** The name of the file the type plays, "" when none is loaded. */
+    std::string loadedName (const IInstanceView& v) const
+    {
+        const int osc = playosc::oscNumber (sel_);
+        const std::shared_ptr<const synthyboy::StateContent> c = v.content();
+        std::string name;
+        if (c != nullptr)
+        {
+            if (typeRaw_ == 4)
+            {
+                for (const synthyboy::ContentInstrument& i : c->instruments)
+                    if (i.osc == osc) name = i.ref.name.empty() ? stemOf (i.ref.file) : i.ref.name;
+            }
+            else
+                for (const synthyboy::ContentSample& s : c->samples)
+                    if (s.osc == osc) name = s.ref.name.empty() ? stemOf (s.ref.file) : s.ref.name;
+        }
+        return name;
+    }
+    /** The empty state: a type that plays a file with no file loaded gets one button over its display (the page of the type and the full screen). */
+    void updateLoadButton (const IInstanceView& v)
+    {
+        const bool fileType = sel_ != playosc::kSub && sel_ != playosc::kNoise && (typeRaw_ == 1 || typeRaw_ == 2 || typeRaw_ == 3 || typeRaw_ == 4);
+        const bool onPage = stackDepth_ >= 1 && (pageTop_ == 0 || oscspec::isSpecPage (pageTop_));
+        const ui::Rect r = onPage ? displayRect() : ui::Rect {};
+        loadShown_ = fileType && onPage && ! r.empty() && v.contentLoad (nullptr) != 1 && loadedName (v).empty();
+        loadBtn_.setLabel (typeRaw_ == 4 ? "LOAD INSTRUMENT" : "LOAD SAMPLE");
+        loadBtn_.place (r.empty() ? ui::Rect {} : ui::Rect { r.x + r.w / 2 - 150, r.y + r.h * 2 / 3 - 8, 300, 64 });
+        loadBtn_.setId (kSpecLoad);
+        marksRect_ = r;
+    }
+
     /** The content browser in the list popup (over the full screen: from the compact view the full screen opens first): the roots the instance offers, the folders, the files. */
     void openBrowser (UiStack& stack, IInstanceView& v)
     {
@@ -1369,6 +1528,17 @@ private:
             return;
         listParam_ = it->param;
         stack.openDetail (kPageList);
+    }
+
+    /** The detail page a PAGE button of the type bar opens (by its label). */
+    static int pageOfBar (const char* label) noexcept
+    {
+        struct E { const char* l; int page; };
+        static const E t[] = { { "MAP", oscspec::kWtMap }, { "REGION", oscspec::kSampleRegion }, { "SLICE", oscspec::kSampleSlice }, { "GRAIN", oscspec::kGrain }, { "FILTER", oscspec::kSpecFilter }, { "SCAN", oscspec::kSpecScan } };
+        for (const E& e : t)
+            if (std::strcmp (e.l, label) == 0)
+                return e.page;
+        return 0;
     }
 
     void addModulation (IInstanceView& v, int source)
@@ -1428,12 +1598,15 @@ private:
                 }
                 break;
             case T::Toggle: if (c.kind == K::Index) writePlain (v, p, c.index != 0 ? 1.0 : 0.0); break;
+            case T::SnapBit: if (c.kind == K::Index) writePlain (v, p, (static_cast<int> (std::lround (v.param (p))) & 4095) | (c.index != 0 ? 4096 : 0)); break;
+            case T::Mask: if (c.kind == K::Index) writePlain (v, p, (static_cast<int> (std::lround (v.param (p))) & 4096) | (c.index & 4095)); break;
+            case T::List: if (c.kind == K::Index) writePlain (v, p, info (p).min + std::clamp (c.index, 0, std::max (0, info (p).numChoices - 1))); break;
             case T::UpDown: if (c.kind == K::Index) writePlain (v, p, c.index); break;
             case T::Picto:
                 if (c.kind == K::Index)
                 {
-                    static const int kRaw[3] = { 0, 4, 2 };
-                    writePlain (v, p, kRaw[std::clamp (c.index, 0, 2)]);
+                    static const int kRaw[5] = { 0, 4, 1, 2, 3 };   // WAVE, MULTI, SAMPLE, GRAIN, SPEC
+                    writePlain (v, p, kRaw[std::clamp (c.index, 0, 4)]);
                 }
                 break;
             case T::PictoPlain: if (c.kind == K::Index) writePlain (v, p, c.index); break;
@@ -1462,8 +1635,8 @@ private:
     {
         if (it.alwaysOff || it.type == T::Inert)
             return -1;
-        if (it.type == T::NumberRead)
-            return -1;
+        if (it.type == T::NumberRead || it.type == T::SnapBit)
+            return -1;   // (SnapBit: bit 12 of the parameter the mask editor of its block already is the Q member of)
         if (it.type == T::NumberOct && it.param >= 0)
             return QRouter::encode (it.param, QRouter::kOct);   // Q 1 of the Tune group: the octaves of the transpose
         if (it.type == T::NumberSem && it.param >= 0)
@@ -1494,6 +1667,13 @@ private:
             ui::QGroup* gs = detail_.groups;
             for (int g = 0; g < ui::DetailPage::kMaxGroups; ++g)
                 gs[g].setBlock (g < detail_.numGroups() ? QRouter::blockOfGroup (detail_.numGroups(), detail_.activeGroup(), g) : -1);
+        }
+        else if (oscspec::isSpecPage (pageTop_))
+        {
+            name = "Page";
+            qSlots_.publish (v, spec_.numGroups(), spec_.activeGroup(), [&] (int g, int* t) { members (spec_.groups[g], t); });
+            for (int g = 0; g < oscspec::OscSpecPage::kMaxBlocks; ++g)
+                spec_.groups[g].setBlock (g < spec_.numGroups() ? QRouter::blockOfGroup (spec_.numGroups(), spec_.activeGroup(), g) : -1);
         }
         else if (pageTop_ == kPageMods)
         {
@@ -1529,6 +1709,10 @@ private:
     ui::ModulationsPage mods_;
     ui::RoutePanel route_;
     ui::ListPopup list_;
+    oscspec::OscSpecPage spec_;
+    ui::MenuButton loadBtn_ { "LOAD SAMPLE", ui::MenuButton::Icon::None };
+    ui::Rect marksRect_;
+    bool loadShown_ = false, specVisible_ = false;
     ContentBrowser browser_;
     std::string browserTitle_;
     bool browseMode_ = false;

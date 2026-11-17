@@ -16,6 +16,7 @@ struct OscIdx
     int uniVoices, uniDetune, uniCurve, uniSpread, uniBlend, uniMode, uniRange, uniLaw, uniBlendShape, uniStack, uniStackRepeat;
     int warpType, warpAmount, warpPhase, warpSpread, warp2Type, warp2Amount, warp2Phase, warp2Spread;
     int keyLow, keyHigh, velLow, velHigh, type;
+    int fixedPitch, transposeSnap, phaseLegato, phaseMemory, keyFold, keyWarp;   // the options of the oscillator options page
     int filterBlend, bus1Send, bus2Send;
 };
 
@@ -58,7 +59,7 @@ struct MasterIdx
     int volume, polyphony, bendRange, velocityTrack, transpose, tune, legato, portTime, portSlope, portAlways, portScaled, bendDownRange, bendDownLink,
         stereoSpread, sameNote, stealPriority, voiceOverride, polyLegato,
         scaleKey, scaleType, scaleMode, tuningA4, tuningScale, tuningMts, mpeOn, mpeBendRange, mpeXyz, mpeYModwheel, mpeBendToX, mpeYBipolar, stereoRouting,
-        curveVelLegato, curveNoteLegato;
+        curveVelLegato, curveNoteLegato, voicePhaseLegato;
 };
 
 /** The per voice panel (docs/ui-design/13-new-keys.md 4.30). */

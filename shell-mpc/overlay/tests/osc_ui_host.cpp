@@ -220,19 +220,23 @@ void testTypeSelectorAndKinds()
 {
     Rig r;
     r.openFull();
-    const ui::Rect sel = r.ui.full().basic.selector.rect();
-    // three cells: wavetable, multisample, granular
-    r.tap (sel.x + sel.w * 5 / 6, sel.y + sel.h / 2);
-    check (r.inst.get ("osc1.type") == 2.0f, "the third pictogram is Granular (osc1.type = 2)");
+    // five cells: wavetable, multisample, sample, granular, spectral
+    auto cell = [&] (int i) { const ui::Rect q = r.ui.full().basic.selector.rect(); r.tap (q.x + q.w * (2 * i + 1) / 10, q.y + q.h / 2); };
+    cell (3);
+    check (r.inst.get ("osc1.type") == 2.0f, "the fourth pictogram is Granular (osc1.type = 2)");
     r.refresh();
     check (r.ui.full().kind() == ui::OscKind::Granular && r.ui.full().panel.preset() == &ui::presets::kGranularFull, "the full screen switched to the granular layout");
-    const ui::Rect sel2 = r.ui.full().basic.selector.rect();
-    r.tap (sel2.x + sel2.w / 2, sel2.y + sel2.h / 2);
-    check (r.inst.get ("osc1.type") == 4.0f, "the middle pictogram is Multisample (osc1.type = 4)");
-    r.inst.set ("osc1.type", 1.0f);   // Sample: only on the host's pages
+    cell (1);
+    check (r.inst.get ("osc1.type") == 4.0f, "the second pictogram is Multisample (osc1.type = 4)");
+    cell (2);
+    check (r.inst.get ("osc1.type") == 1.0f, "the third pictogram is Sample (osc1.type = 1)");
     r.refresh();
-    check (std::string (r.ui.typeName()) == "Sample" && r.ui.full().panel.preset() == &ui::presets::kEmptyFull && r.ui.full().bar.numSlots() == 0, "type Sample: the type name, an empty type bar and an empty bottom band");
-    check (r.ui.full().basic.selector.state.index == -1, "no pictogram is highlighted for a type the selector does not offer");
+    check (std::string (r.ui.typeName()) == "Sample" && r.ui.full().kind() == ui::OscKind::Sample && r.ui.full().panel.preset() == &ui::presets::kSampleFull && r.ui.full().bar.numSlots() == 4, "type Sample: its own full screen (type bar and panel)");
+    check (r.ui.full().basic.selector.state.index == 2, "the Sample pictogram is highlighted");
+    cell (4);
+    check (r.inst.get ("osc1.type") == 3.0f, "the fifth pictogram is Spectral (osc1.type = 3)");
+    r.refresh();
+    check (r.ui.full().kind() == ui::OscKind::Spectral && r.ui.full().panel.preset() == &ui::presets::kSpectralFull && r.ui.full().basic.selector.state.index == 4, "type Spectral: its own full screen");
 }
 
 void testTuneOctSem()
@@ -269,9 +273,10 @@ void testDisabledControls()
     Rig r;
     r.openFull();
     auto& bar = r.ui.full().bar;
-    const OscUi::Item* mem = r.ui.item (OscUi::kBarSlot + 3);
-    check (mem != nullptr && ! mem->c->enabled() && mem->alwaysOff, "wavetable: the phase memory stepper is disabled (no voice of the own engine reads osc.phase_memory)");
-    check (r.ui.full().panel.warp()->first.hasVar() && ! r.ui.full().panel.warp()->first.var.enabled() && ! r.ui.full().panel.warp()->second.var.enabled(), "WARP Var is drawn disabled (there is no parameter)");
+    const OscUi::Item* map = r.ui.item (OscUi::kBarSlot + 3);
+    check (map != nullptr && map->c->enabled() && map->type == OscUi::T::Inert, "wavetable: the fourth slot of the type bar is the MAP page button (the dead phase memory stepper is gone from the bar)");
+    const OscUi::Item* ph = r.ui.item (OscUi::kWarp1Var);
+    check (r.ui.full().panel.warp()->first.hasVar() && ph != nullptr && ph->param == Inst::idx ("osc1.warp.phase"), "the VAR knob of a warp slot is its PHASE (osc1.warp.phase)");
     const OscUi::Item* drop = r.ui.item (OscUi::kBasic + 2);
     check (drop != nullptr && ! drop->c->enabled(), "the source dropdown of the compact view is disabled (the list opens from the full screen)");
     // the source stepper of multisample is disabled
@@ -468,7 +473,7 @@ void testQGroupFollowsTheActiveGroup()
     r.tapC (*r.ui.full().panel.part (ui::PanelSlot::WtPos));
     check (r.inst.q[0] == Inst::idx ("osc1.frame") && r.inst.q[1] == Inst::idx ("osc1.unison.voices") && r.inst.q[2] == Inst::idx ("osc1.unison.detune") && r.inst.q[3] == Inst::idx ("osc1.unison.blend"), "the Unison group: frame, voices, detune, blend");
     r.tapC (r.ui.full().panel.warp()->first.amount);
-    check (r.inst.q[0] == Inst::idx ("osc1.warp.type") && r.inst.q[1] == Inst::idx ("osc1.warp.amount") && r.inst.q[2] == Inst::idx ("osc1.warp2.type") && r.inst.q[3] == Inst::idx ("osc1.warp2.amount"), "the Warp group");
+    check (r.inst.q[0] == Inst::idx ("osc1.warp.type") && r.inst.q[1] == Inst::idx ("osc1.warp.amount") && r.inst.q[2] == Inst::idx ("osc1.warp.phase") && r.inst.q[3] == -1, "the Warp 1 group: type, amount, phase");
     // on the Env sub-tab the compact view does not own the group
     Rig e;
     const int c0 = e.inst.qCalls;
@@ -681,6 +686,186 @@ void testSourceBrowserInTheOscillatorUi()
     check (none.stack.depth() == 0, "an instance without roots: the browser does not open");
 }
 
+
+/** The detail pages of the types (osc_spec_page.h): how each is reached, BACK, the size of the display, every visible control writes its parameter, the hidden states, the Q groups, the empty state. */
+void testSpecPages()
+{
+    namespace os = synthyboy_mpc::overlay::oscspec;
+    struct Case { int type; int slot; int page; const char* name; };
+    // the buttons of the type bars: wavetable MAP, sample REGION / SLICE, granular GRAIN, spectral FILTER / SCAN
+    const Case cases[] = { { 0, 3, os::kWtMap, "wavetable MAP" }, { 1, 1, os::kSampleRegion, "sample REGION" }, { 1, 2, os::kSampleSlice, "sample SLICE" }, { 2, 0, os::kGrain, "granular GRAIN" },
+                           { 3, 1, os::kSpecFilter, "spectral FILTER" }, { 3, 2, os::kSpecScan, "spectral SCAN" } };
+    for (const Case& c : cases)
+    {
+        Rig r;
+        r.inst.set ("osc1.type", static_cast<float> (c.type));
+        r.refresh();
+        r.openFull();
+        const OscUi::Item* b = r.ui.item (OscUi::kBarSlot + c.slot);
+        check (b != nullptr && b->c != nullptr, std::string (c.name) + ": the type bar has the button");
+        if (b == nullptr)
+            continue;
+        r.tapC (*b->c);
+        check (r.stack.top() == c.page, std::string (c.name) + ": the button opens the page");
+        check (r.ui.displayRect().h >= 240, std::string (c.name) + ": the display is at least 240 px tall");
+        // every control that is on the page has its size, none lies over another
+        const oscspec::OscSpecPage& pg = r.ui.specPage();
+        int shown = 0;
+        bool sizes = true, overlap = false;
+        for (int i = 0; i < pg.spec()->numCtls; ++i)
+            if (pg.visible (i))
+            {
+                ++shown;
+                const ui::Component* ci = const_cast<oscspec::OscSpecPage&> (pg).control (i);
+                sizes = sizes && ci->rect().h >= 56 && ci->rect().w >= 56;
+                for (int j = i + 1; j < pg.spec()->numCtls; ++j)
+                    if (pg.visible (j))
+                        overlap = overlap || ci->rect().overlaps (const_cast<oscspec::OscSpecPage&> (pg).control (j)->rect());
+            }
+        check (shown >= 2 && sizes && ! overlap, std::string (c.name) + ": the visible controls are 56 px or more and do not overlap");
+        // each visible control writes its parameter
+        int wrote = 0, tried = 0;
+        for (int i = 0; i < pg.spec()->numCtls; ++i)
+        {
+            if (! pg.visible (i))
+                continue;
+            const OscUi::Item* it = r.ui.item (OscUi::kSpec + i);
+            if (it == nullptr || it->param < 0)
+                continue;
+            ++tried;
+            const float before = r.inst.param (it->param);
+            const ui::Rect q = it->c->rect();
+            if (pg.spec()->ctls[i].kind == os::K::Stepper)
+                r.tap (q.x + q.w - 10, q.y + q.h / 2);
+            else if (pg.spec()->ctls[i].kind == os::K::Knob)
+            {
+                r.drag (q.x + q.w / 2, q.y + q.h / 2, q.x + q.w / 2, q.y + q.h / 2 - 60);
+                if (r.inst.param (it->param) == before)
+                    r.drag (q.x + q.w / 2, q.y + q.h / 2, q.x + q.w / 2, q.y + q.h / 2 + 60);
+            }
+            else if (pg.spec()->ctls[i].kind == os::K::List)
+            {
+                const ui::LedList* ll = static_cast<const ui::LedList*> (it->c);
+                const ui::Rect q2 = ll->rowRect (ll->state.index == 0 ? 1 : 0);
+                r.tap (q2.x + q2.w / 2, q2.y + q2.h / 2);
+            }
+            else
+                r.tapC (*it->c);
+            if (r.inst.param (it->param) != before)
+                ++wrote;
+            if (r.stack.top() != c.page)   // a stepper with a long list may have opened its popup
+                r.stack.back();
+            r.refresh();
+        }
+        check (tried > 0 && wrote >= tried - 1, std::string (c.name) + ": the controls write their parameters (" + std::to_string (wrote) + " of " + std::to_string (tried) + ")");
+        // BACK returns to the full screen
+        r.tapC (r.ui.specPage().back);
+        check (r.stack.depth() == 1 && r.stack.top() == OscUi::kElementOsc, std::string (c.name) + ": BACK returns to the full screen");
+    }
+    // the MORE page from the tune column, for every type; its Q groups
+    for (int type : { 0, 4, 1, 2, 3 })
+    {
+        Rig r;
+        r.inst.set ("osc1.type", static_cast<float> (type));
+        r.refresh();
+        r.openFull();
+        r.tapC (r.ui.full().tune.more);
+        check (r.stack.top() == os::kMore && r.ui.specPage().numGroups() == 7, "type " + std::to_string (type) + ": MORE opens the options page with seven blocks");
+        check (r.ui.displayRect().empty(), "the options page has no display (the room goes to the blocks)");
+        r.tapC (*r.ui.specPage().control (0));   // ON
+        check (r.inst.get ("osc1.on") == 0.0f, "MORE: the power switch is a control of the page (osc1.on)");
+        check (r.inst.q[0] == Inst::idx ("osc1.on") && r.inst.q[1] == Inst::idx ("osc1.env1") && r.inst.q[3] == Inst::idx ("osc1.pitch_track"), "MORE: the first block is a Q group: ON, ENV 1, SMOOTH, TRACK");
+    }
+    // the transpose snap: twelve note cells (a piano: the black notes above), a toggle for bit 12; the mask is the Q member
+    {
+        Rig r;
+        r.refresh();
+        r.openFull();
+        r.tapC (r.ui.full().tune.more);
+        const oscspec::OscSpecPage& pg = r.ui.specPage();
+        int maskIdx = -1, bitIdx = -1;
+        for (int i = 0; i < pg.spec()->numCtls; ++i)
+            if (std::string (pg.spec()->ctls[i].key) == "transpose_snap")
+                (pg.spec()->ctls[i].kind == os::K::Mask ? maskIdx : bitIdx) = i;
+        check (maskIdx >= 0 && bitIdx >= 0, "the options page has the note mask and the toggle for the transpose snap (no knob)");
+        auto* mask = static_cast<ui::NoteMask*> (const_cast<oscspec::OscSpecPage&> (pg).control (maskIdx));
+        bool big = true, above = true;
+        for (int n = 0; n < 12; ++n)
+        {
+            const ui::Rect c = mask->cellRect (n);
+            big = big && c.w >= 56 && c.h >= 56;
+            above = above && (! ui::NoteMask::isBlack (n) || c.y < mask->cellRect (0).y);
+        }
+        check (big && above, "the twelve note cells are at least 56 px and the black notes lie above the white ones");
+        const ui::Rect g = mask->cellRect (7);   // G
+        r.tap (g.x + g.w / 2, g.y + g.h / 2);
+        check (static_cast<int> (r.inst.get ("osc1.transpose_snap")) == (1 << 7), "a tap on G sets bit 7 of osc1.transpose_snap");
+        const ui::Rect cs = mask->cellRect (1);  // C#
+        r.tap (cs.x + cs.w / 2, cs.y + cs.h / 2);
+        check (static_cast<int> (r.inst.get ("osc1.transpose_snap")) == ((1 << 7) | 2), "a tap on C# adds bit 1");
+        r.tapC (*const_cast<oscspec::OscSpecPage&> (pg).control (bitIdx));
+        check (static_cast<int> (r.inst.get ("osc1.transpose_snap")) == ((1 << 7) | 2 | 4096), "the SNAP NOTE toggle sets bit 12 and keeps the notes");
+        r.tap (g.x + g.w / 2, g.y + g.h / 2);
+        check (static_cast<int> (r.inst.get ("osc1.transpose_snap")) == (2 | 4096), "a tap on a lit note clears it and keeps bit 12");
+        r.tapC (*pg.groups[5].member (0));   // the block of the mask (the sixth) becomes the active group
+        check (r.inst.q[0] == Inst::idx ("osc1.transpose_snap") && r.inst.q[1] == -1, "the mask is the Q member of its block (Q 1 = the parameter); the toggle of the same parameter has no Q knob");
+    }
+    // hidden states: the loop points exist only while a loop mode is on, the grain divisions only in their mode
+    {
+        Rig r;
+        r.inst.set ("osc1.type", 1.0f);
+        r.refresh();
+        r.openFull();
+        r.stack.openDetail (os::kSampleRegion);
+        r.refresh();
+        auto vis = [&] (const char* key) { for (int i = 0; i < r.ui.specPage().spec()->numCtls; ++i) if (std::string (r.ui.specPage().spec()->ctls[i].key) == key) return r.ui.specPage().visible (i); return false; };
+        check (! vis ("sample.loop_start") && ! vis ("sample.loop_relative") && vis ("sample.loop_mode"), "sample: one shot hides the loop points and options");
+        const int groups0 = r.ui.specPage().numGroups();
+        r.inst.set ("osc1.sample.loop_mode", 1.0f);
+        r.refresh();
+        check (vis ("sample.loop_start") && vis ("sample.loop_xfade") && r.ui.specPage().numGroups() == groups0 + 1, "sample: a loop mode shows the loop points and the LOOP OPTIONS block appears");
+        r.inst.set ("osc1.sample.keytrack", 0.0f);
+        r.refresh();
+        check (! vis ("sample.root"), "sample: with key tracking off the root note is hidden");
+        r.inst.set ("osc1.type", 2.0f);
+        r.refresh();
+        r.stack.back();
+        r.stack.openDetail (os::kGrain);
+        r.refresh();
+        check (! vis ("gran.density_sync") && ! vis ("gran.density_grains") && ! vis ("gran.length_percent") && ! vis ("gran.xy_y"), "grain: free density and length have no divisions");
+        r.inst.set ("osc1.gran.density_mode", 1.0f); r.inst.set ("osc1.gran.length_mode", 2.0f); r.inst.set ("osc1.gran.y_axis", 3.0f);
+        r.refresh();
+        check (vis ("gran.density_sync") && ! vis ("gran.density_grains") && vis ("gran.length_percent") && ! vis ("gran.length_sync") && vis ("gran.xy_y"), "grain: each mode shows its own value, the Y position follows the axis");
+    }
+    // the empty state: a type that plays a file shows one button that opens the browser; a loaded file takes it away
+    {
+        Rig r;
+        r.inst.roots = { { "LIB", "/tmp" } };
+        r.inst.set ("osc1.type", 1.0f);
+        r.refresh();
+        r.openFull();
+        check (r.ui.loadButtonShown(), "sample without a file: the LOAD button is on the display");
+        r.tapC (r.ui.loadButton());
+        check (r.stack.top() == OscUi::kPageList, "the LOAD button opens the browser in one tap");
+        r.stack.back();
+        r.refresh();
+        r.stack.openDetail (os::kSampleRegion);
+        r.refresh();
+        check (r.ui.loadButtonShown(), "the page of the type has the LOAD button too");
+        auto content = std::make_shared<synthyboy::StateContent>();
+        synthyboy::ContentSample cs;
+        cs.osc = 1; cs.ref.pack = "p"; cs.ref.file = "a.wav"; cs.ref.name = "a";
+        content->samples.push_back (cs);
+        r.inst.contentPtr = content;
+        r.refresh();
+        check (! r.ui.loadButtonShown(), "with a file loaded the button is gone");
+        Rig w;
+        w.refresh();
+        w.openFull();
+        check (! w.ui.loadButtonShown(), "a wavetable never shows it");
+    }
+}
+
 /** Review 2: the values under the knobs, the noise's own controls, the pictures on the detail pages, the labels. */
 void testReview2()
 {
@@ -756,6 +941,7 @@ int main()
     testGranularAndSubAndNoise();
     testSourceAndWarpLists();
     testReview2();
+    testSpecPages();
     for (const std::string& d : g_libraries)
         if (d.compare (0, 11, "/tmp/sbovl-") == 0)
             (void) std::system (("rm -rf '" + d + "'").c_str());
