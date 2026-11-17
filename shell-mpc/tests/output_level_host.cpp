@@ -87,10 +87,12 @@ static double db (double x) { return 20.0 * std::log10 (x > 1e-12 ? x : 1e-12); 
 int main (int argc, char** argv)
 {
     if (argc < 4) { std::fprintf (stderr, "usage: output_level_host <plugin with gain> <plugin with gain 0> <gain dB> [off|on]\n"); return 2; }
+    const bool limiter = (argc >= 5 && std::strcmp (argv[4], "on") == 0);
+    // the limiter is a plugin setting now (default on, Master page "LIMIT"): the environment forces the state this run measures (output_stage.h, outputLimiterForced)
+    ::setenv ("SYNTHYBOY_MPC_OUTPUT_LIMITER", limiter ? "1" : "0", 1);
     AEffect* withGain = load (argv[1]);
     AEffect* plain = load (argv[2]);
     const double gain = std::atof (argv[3]);
-    const bool limiter = (argc >= 5 && std::strcmp (argv[4], "on") == 0);
     const double ceiling = static_cast<double> (synthyboy_mpc::OutputStage::kCeiling);
 
     char name[64] = {};
