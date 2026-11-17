@@ -307,6 +307,15 @@ int main()
             for (int t = 0; t < nt; ++t)
                 big = big && cells[t].h >= 56 && cells[t].w >= 56;
             check (big, nm + ": the touch targets of the source selector are at least 56 px");
+            if (var.inst != OscInstance::Sub && var.inst != OscInstance::Noise)
+            {
+                // the row of the table stepper, PAN and LEVEL: the stepper has the width (no list button) so that the longest built-in table name is written whole at a legible size (never cut with an ellipsis)
+                const Rect sr = c.basic.source.stepper.rect();
+                const float size = Pen::fitSize ("Harmonic Series", static_cast<float> (sr.w - 2 * 28 - 4), static_cast<float> (sr.h - 4), theme::L().fValue, theme::L().fMin);
+                check (c.basic.source.compact() && c.basic.source.dropdown.rect().empty() && sr.w >= 190 && sr.h >= 56 && sr.right() <= c.basic.pan.rect().x && c.basic.pan.rect().right() <= c.basic.level.rect().x && c.basic.pan.rect().y == c.basic.level.rect().y && size >= 12.0f
+                           && sdf::textWidth ("Harmonic Series", size) <= static_cast<float> (sr.w - 2 * 28 - 4) + 0.5f,
+                       nm + ": the table stepper, PAN and LEVEL are one row; the stepper (" + std::to_string (sr.w) + " px) writes 'Harmonic Series' whole at " + std::to_string (static_cast<int> (size)) + " px");
+            }
         }
         Scene sc (420, 700, kBackgroundRgba);
         c.draw (sc.builder());
