@@ -96,6 +96,16 @@ def content_text(content) -> str:
     if not content:
         return ""
     parts = []
+
+    def ref_text(r):
+        return '"pack":%s,"file":%s,"sha256":%s,"name":%s' % (json.dumps(r["pack"]), json.dumps(r["file"]), json.dumps(r["sha256"]), json.dumps(r.get("name", "")))
+
+    # files of the factory content packs (scripts/gen-content-pack.py): pack id + file + SHA-256, in the order of the C++ writer (core/src/state.cpp putContent): wavetables, samples, lfo_shapes, impulses, instruments
+    if content.get("wavetables"):
+        parts.append('"wavetables":[' + ",".join('{"osc":%d,%s,"author":%s,"frames":%d}' % (w["osc"], ref_text(w), json.dumps(w.get("author", "Safian Szabolcs")), w["frames"]) for w in content["wavetables"]) + "]")
+    if content.get("samples"):
+        parts.append('"samples":[' + ",".join('{"osc":%d,%s,"sample_rate":%d,"frames":%d,"channels":%d,"slices":[%s]}' % (
+            m["osc"], ref_text(m), m["sample_rate"], m["frames"], m["channels"], ",".join(format_g9(v) for v in m.get("slices", []))) for m in content["samples"]) + "]")
     shapes = content.get("lfo_shapes", [])
     if shapes:
         items = []
@@ -110,6 +120,10 @@ def content_text(content) -> str:
             item += ',"points":[' + ",".join(point_text(p) for p in s["points"]) + "]}"
             items.append(item)
         parts.append('"lfo_shapes":[' + ",".join(items) + "]")
+    if content.get("impulses"):
+        parts.append('"impulses":[' + ",".join("{%s}" % ref_text(r) for r in content["impulses"]) + "]")
+    if content.get("instruments"):
+        parts.append('"instruments":[' + ",".join('{"osc":%d,%s,"zones":%d}' % (i["osc"], ref_text(i), i["zones"]) for i in content["instruments"]) + "]")
     names = content.get("macro_names")
     if names and any(names):
         parts.append('"macro_names":[' + ",".join(json.dumps(n, ensure_ascii=False) for n in names) + "]")
@@ -604,7 +618,7 @@ assert len(set(p[0] for p in presets) | set(s[0] for s in showcase)) == 112, "pr
 assert len(set(file_name_of(p[0]) for p in presets) | set(file_name_of(s[0]) for s in showcase)) == 112
 
 
-BATCH_FILES = ("factory-presets-batch1.py",)   # the sound set batches after the first hundred and the showcase (scripts/sb_preset_dsl.py is their vocabulary)
+BATCH_FILES = ("factory-presets-batch1.py", "factory-presets-batch2.py")   # the sound set batches after the first hundred and the showcase (scripts/sb_preset_dsl.py is their vocabulary)
 
 
 def load_batches() -> list:

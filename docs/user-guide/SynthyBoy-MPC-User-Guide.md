@@ -48,7 +48,7 @@ SynthyBoy is a synthesizer plugin for Akai MPC hardware (VST2 format, loaded by 
 support). It has three oscillators (A, B, C) that each play wavetables, a multisample instrument, a sample, grains or a spectrum, a sub oscillator, a
 noise generator, two filters, six envelopes, ten LFOs and four random LFOs, eight macros, a 64-slot
 modulation matrix, 16 effects (13 effects and three band splitters), and a master section with tuning, MPE and voice control.
-136 factory presets come with it.
+160 factory presets come with it.
 
 **One package, two hardware generations.** SynthyBoy is one package: the plugin with its own drawn screens (there is no
 second, plainer version). It is built for both generations of standalone MPC hardware, the first generation (32-bit) and
@@ -796,7 +796,7 @@ Knobs show the modulation: a marker at the live (modulated) value, and an arc fr
 
 ## 7. Presets
 
-The plugin offers **137 programs** to the host: "Init" (the default sound, program 0) and 136 factory presets in six categories. The list is sorted by category (alphabetically: Bass, FX, Keys, Lead, Pad, Pluck) and then by name.
+The plugin offers **161 programs** to the host: "Init" (the default sound, program 0) and 160 factory presets in six categories. The list is sorted by category (alphabetically: Bass, FX, Keys, Lead, Pad, Pluck) and then by name.
 
 Each preset is saved as a `.sbpreset` file holding a `synthyboy-state` version 4 document with all 2637 parameter keys explicit, identical in count and state version to the engine's parameter table (`docs/params.json`). In code, the state format version is 5 (`kStateVersion` 5, `core/include/synthyboy/state.h`), which stores the grid settings of drawn LFO shapes (`grid_x` and `grid_y`) with the shape; presets and documents of version 4 load seamlessly with the grid inferred from the points, and version 4 readers safely read version 5 documents.
 
@@ -808,7 +808,7 @@ There are two primary ways to browse and select presets in SynthyBoy:
 
 1. **The PRESET field in the plugin header (VST2 programs, works today):**
    - In Track View or Track Edit mode on a Plugin track, the MPC host header displays the current preset in its **PRESET** field.
-   - Tapping the **PRESET** field opens the host's standard scrollable program list containing all 137 programs (program 0 "Init", followed by the 136 factory presets ordered by category and name).
+   - Tapping the **PRESET** field opens the host's standard scrollable program list containing all 161 programs (program 0 "Init", followed by the 160 factory presets ordered by category and name).
    - Tapping any preset immediately loads that sound into the engine.
    - **The "*" mark:** The plugin appends " *" after the preset name in the header whenever you change a parameter after loading, or when a saved project restores modified settings. Loading a preset again clears the asterisk mark. A project remembers the preset by name and restores it even if a subsequent release updates the program list; if the name is not found, the saved sound is retained without a preset name.
 

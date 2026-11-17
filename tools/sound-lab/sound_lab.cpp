@@ -31,6 +31,7 @@
 
 #include "device_profile.h"
 #include "synthyboy/content_state.h"
+#include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
@@ -150,6 +151,13 @@ bool doJob (const std::vector<std::string>& w)
     }
     std::stable_sort (events.begin(), events.end(), [] (const Timed& a, const Timed& b) { return a.frame < b.frame; });
 
+    // The files a preset names (content.wavetables / samples / impulses / instruments: pack id + file + SHA-256) are read from $SYNTHYBOY_CONTENT_DIR/<pack id>/<file>, the layout of
+    // DirectoryContentStore; without the variable there is no store and a sample oscillator is silent, Convolve absent, a Preset table the saw (scripts/sound-lab.py builds such a folder
+    // of links to content/factory-* itself). The store is declared before the engine: the engine keeps a pointer to it.
+    std::unique_ptr<DirectoryContentStore> contentStore;
+    if (const char* dir = std::getenv ("SYNTHYBOY_CONTENT_DIR"); dir != nullptr && dir[0] != '\0')
+        contentStore = std::make_unique<DirectoryContentStore> (dir);
+
     auto engine = createEngine (EngineKind::own);
     if (engine == nullptr)
         return false;
@@ -158,6 +166,8 @@ bool doJob (const std::vector<std::string>& w)
     engine->prepare (kRate, kBlock, q);
     for (size_t i = 0; i < paramCount(); ++i)
         engine->setParam (paramTable()[i].id, values.plain[i]);
+    if (contentStore != nullptr)
+        engine->setContentStore (contentStore.get());
     engine->setContent (content);
     if (bpm > 0)
     {

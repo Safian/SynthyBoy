@@ -3,7 +3,7 @@
 SynthyBoy for the MPC is a synthesizer plugin (VST2) for standalone Akai MPC hardware, packaged as `Safian - VST - SynthyBoy` with a 32-bit ARMv7 and a 64-bit AArch64 build; it was tried by its author on the MPC Key 61 and the MPC XL only (docs/MPC.md#package-layout, docs/MPC.md#overlay-experimental).
 It runs the project's own sound engine with a quality profile per device: the MPC XL plays 16 voices, up to 16 unison voices and all effects, the MPC Key 61 plays 8 voices, at most 3 unison voices and skips five effects (docs/MPC.md#quality-profile-per-device).
 Its screens are drawn by the plugin itself on an experimental display overlay, and the hardware Q-Link knobs are mapped to the controls of the page on screen (docs/MPC.md#overlay-experimental, docs/MPC.md#q-proxies-and-the-plugin-drawn-pages-overlay-build).
-The instrument has 136 factory presets, 3 oscillators (wavetable, sample, granular, spectral, multisample), a sub oscillator and a noise source, 27 filter models in 12 styles, 6 envelopes, 10 LFOs and 4 random LFOs, a 64-slot modulation matrix and 13 effect types plus 3 band splitters (docs/params.json, docs/MPC.md#filter-ui, docs/MPC.md#mod-matrix-and-macros).
+The instrument has 160 factory presets, 3 oscillators (wavetable, sample, granular, spectral, multisample), a sub oscillator and a noise source, 27 filter models in 12 styles, 6 envelopes, 10 LFOs and 4 random LFOs, a 64-slot modulation matrix and 13 effect types plus 3 band splitters (docs/params.json, docs/MPC.md#filter-ui, docs/MPC.md#mod-matrix-and-macros).
 The same codebase also builds the desktop plugin (VST3, CLAP, Audio Unit); this change log covers the MPC release only (README.md#synthyboy).
 
 ---
@@ -25,13 +25,13 @@ The same codebase also builds the desktop plugin (VST3, CLAP, Audio Unit); this 
 - **Pad pressure integration**: Polyphonic aftertouch (MIDI 0xA0) adds a per-voice cutoff offset to Filter 1 (up to 36 semitones, smoothed with a 12 ms one-pole filter), leaving matrix presets without duplicate effects (docs/MPC.md#pad-pressure, 45_pad_pressure.py, test_own_pad_pressure.cpp).
 
 ### Presets
-- **Factory content**: 136 factory presets in CC0 ContentPack format under `content/presets/` generated deterministically via `scripts/gen-factory-presets.py` (112 initial presets + 24 of sound set batch 1; README.md#factory-content, docs/MPC.md#build, 0a46744f).
+- **Factory content**: 160 factory presets (the first 112 and the 24 each of sound set batches 1 and 2, docs/release/SOUND-SET-BATCH-1.md and SOUND-SET-BATCH-2.md; batch 2 uses the factory content packs `content/factory-wavetables` and `content/factory-samples` made by `scripts/gen-content-pack.py`) in CC0 ContentPack format under `content/presets/` generated deterministically via `scripts/gen-factory-presets.py` (README.md#factory-content, docs/MPC.md#build, 0a46744f).
 - **State format**: Each preset is a `synthyboy-preset` file (format 1) holding a `synthyboy-state` version 4 with all 2637 parameter keys explicit, the same count and state version as the parameter table (`content/presets/Bass/scream_filter_bass.sbpreset`, docs/params.json `count` and `stateVersion`; 038b6538 introduced state v3, since raised).
 - **State version 5**: the writer's state format is version 5, which stores the grid of a drawn LFO shape (GRID X and GRID Y) with the shape; a document of version 4 or older loads with the grid inferred from the points, and a reader of version 4 still reads a version 5 document (docs/MPC.md#f2-the-grid-is-stored-with-the-lfo-state-version-5).
 - **Pad pressure in the presets**: 65 factory presets (all 30 pads, 24 of 26 leads, 8 keys, 2 FX, 1 bass; 66 with pressure routes) carry a route from Poly Aftertouch to Filter 1 Cutoff in their own matrix; the plugin-wide pad-pressure switch is off by default at 35 percent (docs/MPC.md#pad-pressure).
 - **Level normalization**: Presets are calibrated to a chord loudness of -20 dBFS RMS, preserving peak headroom (README.md#factory-content, docs/MPC.md#output-level).
 - **Showcase patches**: Includes 12 specialized showcase presets demonstrating version 3 DSP features, including Scream Filter Bass, Custom Shape Wobble, MPE Pressure Lead, Diffusor Cloud Pad, and Bode Shifter Drone (README.md#factory-content, 0a46744f).
-- **Preset browsing**: 137 programs (Init + 136 factory presets) are exposed directly as VST2 programs in the MPC preset browser (docs/MPC.md#install-on-the-mpc).
+- **Preset browsing**: 161 programs (Init + 160 factory presets) are exposed directly as VST2 programs in the MPC preset browser (docs/MPC.md#install-on-the-mpc).
 - **Project persistence**: Presets and state are saved in MPC project files via VST chunk format with "chunk wins" protection against post-restore host program resets (docs/MPC.md#project-save-and-reload, play_restore_host.cpp).
 
 ### MPC Plugin Shell

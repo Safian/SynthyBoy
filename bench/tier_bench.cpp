@@ -51,6 +51,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -65,6 +66,7 @@
  #include <xmmintrin.h>
 #endif
 
+#include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/preset.h"
@@ -228,6 +230,17 @@ void worstPatch (IEngine& engine)
     slotIfKnown (engine, 8, "lfo3", "osc2.warp.amount", 30.0f);
 }
 
+/** The store for the files a preset names (pack id + file): $SYNTHYBOY_CONTENT_DIR/<pack id>/<file>; null without the variable (then a sample oscillator is silent and Convolve absent, as on a device without content). */
+const IContentStore* benchContentStore()
+{
+    static const std::unique_ptr<DirectoryContentStore> store = []() -> std::unique_ptr<DirectoryContentStore>
+    {
+        const char* dir = std::getenv ("SYNTHYBOY_CONTENT_DIR");
+        return dir != nullptr && dir[0] != '\0' ? std::make_unique<DirectoryContentStore> (dir) : nullptr;
+    }();
+    return store.get();
+}
+
 void applyLoad (IEngine& engine, const Load& load)
 {
     // as the shell: every parameter at its default first (the constructor of the plugin instance), then the program
@@ -242,6 +255,7 @@ void applyLoad (IEngine& engine, const Load& load)
         case Load::preset:
             for (size_t i = 0; i < paramCount(); ++i)
                 engine.setParam (table[i].id, load.data.values.plain[i]);
+            engine.setContentStore (benchContentStore());
             engine.setContent (load.data.content);
             break;
     }

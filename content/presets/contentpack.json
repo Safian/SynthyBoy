@@ -7,7 +7,7 @@
   "attribution": "Safian Szabolcs",
   "kind": "presets",
   "requires_plugin": ">=0.1.0",
-  "description": "136 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
+  "description": "160 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
   "files": [
     {
       "path": "Bass/solid_sub.sbpreset",
@@ -688,6 +688,126 @@
       "path": "FX/breath_of_machines.sbpreset",
       "sha256": "4838a3c0923d1f68cf428bd6d59bd349b0aeea854546c222430e1e4a0f5764cd",
       "size": 50580
+    },
+    {
+      "path": "Pad/chord_cloud_pad.sbpreset",
+      "sha256": "0653ca2e75dcab9eef30569a522abfe698c8f3be33b317fba94a954f60a2086b",
+      "size": 50963
+    },
+    {
+      "path": "Lead/vowel_scrub_choir.sbpreset",
+      "sha256": "a43e8d0fbc63e41f99b9ddc4b4e8285bd850b5006eb2918404a56f366edf2fa7",
+      "size": 51368
+    },
+    {
+      "path": "Pad/frozen_pluck_drone.sbpreset",
+      "sha256": "7ca3c3f932515dc395921339823678cec7fa98b176408384af90f388638cdb52",
+      "size": 51104
+    },
+    {
+      "path": "FX/gong_grain_swarm.sbpreset",
+      "sha256": "3eb0f80992aaacd9a9e1954d307a75ec806ace2e48d74d12170d14dd6e70b1f8",
+      "size": 50935
+    },
+    {
+      "path": "Pluck/stutter_grain_kit.sbpreset",
+      "sha256": "a3d9856d07d7af39b844923c44e6557cc8eb73a8c061ea5df964e0b152089b5f",
+      "size": 50922
+    },
+    {
+      "path": "FX/rising_grain_riser.sbpreset",
+      "sha256": "18e25a9cb1761a51dd8ec6c11fb10d5377d644babafbb7ae0d2030bfb1748c0e",
+      "size": 50929
+    },
+    {
+      "path": "Pluck/nylon_zone_pluck.sbpreset",
+      "sha256": "6fe49fb6ce204681c94468aef11c64122e145a03b1182763b06efe87f008cbd7",
+      "size": 50964
+    },
+    {
+      "path": "Keys/marimba_layer_keys.sbpreset",
+      "sha256": "6fdd497983cd97c86b412a7d2bb2a0f1af0bf98b6ba6da8c988b253a0cbd6860",
+      "size": 51067
+    },
+    {
+      "path": "Keys/glass_zone_bells.sbpreset",
+      "sha256": "208a36b82cf0c23fd77c3cc54a6dbc76a443b1b1542c517943b903ee16171d5c",
+      "size": 51019
+    },
+    {
+      "path": "Keys/dusty_rhodes_keys.sbpreset",
+      "sha256": "e5ccb29e4746044c977e3984ab5f3045798ae5f30266adc231c0b2d15d741c8a",
+      "size": 51275
+    },
+    {
+      "path": "Pluck/glass_ping_pluck.sbpreset",
+      "sha256": "2e46c2f4c44c6fe2ea25a2c4f0bd0cf4c063ae85256b58d8facad96471332d29",
+      "size": 51005
+    },
+    {
+      "path": "Keys/breakbeat_slice_keys.sbpreset",
+      "sha256": "9d29f562c37586320a18a1074873d87f42d9a11bb84b2e619124e771d0453e7d",
+      "size": 51265
+    },
+    {
+      "path": "Pad/bowed_mpe_strings.sbpreset",
+      "sha256": "98f5e4f856b21143ced313a013e122754da0e6515acee321f3cefa3e51e31f19",
+      "size": 51002
+    },
+    {
+      "path": "FX/reverse_gong_swell.sbpreset",
+      "sha256": "f5bcae37a0a2f08b588fc5f96aff9e3caa2fad6796cf5933db698f31c4e5a7db",
+      "size": 51015
+    },
+    {
+      "path": "Lead/breath_flute_lead.sbpreset",
+      "sha256": "267fc541fde88fc1120fc6b452aa6c0795c9b4ec117035ee2fd55b72b4fc9dd4",
+      "size": 50865
+    },
+    {
+      "path": "Pad/spectral_vowel_freeze.sbpreset",
+      "sha256": "cb1af053c3c4fb235b9dac65bbd8243b61eaa5e2689b502b7b1a33b69c6370b1",
+      "size": 50904
+    },
+    {
+      "path": "Lead/spectral_bowed_glass.sbpreset",
+      "sha256": "57788bd1874e819a337ae8e87c0edc5730f3eb492c9fc061bdbe1036c69a21ea",
+      "size": 51162
+    },
+    {
+      "path": "Pad/spectral_gong_pad.sbpreset",
+      "sha256": "aef8643e90cd3651494d1f48a44c0b4fff0985dc72172ff8ea999109cf6791b2",
+      "size": 50911
+    },
+    {
+      "path": "FX/spectral_chord_morph.sbpreset",
+      "sha256": "26fa3e3ce7a473ad034138b95d14b7531ed8d1ba1bbd5835f2f2a3c1b4ce3968",
+      "size": 50910
+    },
+    {
+      "path": "Bass/reese_dual_phase_bass.sbpreset",
+      "sha256": "48f76b55d68178d2508c484a140ffa039dfe3dd37a535993575abd8652428a1a",
+      "size": 51090
+    },
+    {
+      "path": "Lead/vowel_table_lead.sbpreset",
+      "sha256": "7d4ae9d1684225593942ba087dea4a183c98aaff2538362db92b8df7db987163",
+      "size": 50872
+    },
+    {
+      "path": "Keys/drawbar_organ_keys.sbpreset",
+      "sha256": "119aec282b8499af35d29c3610e2afbb197ac201377327b07ac4f5454e1853a8",
+      "size": 50941
+    },
+    {
+      "path": "Pad/throat_singer_drone.sbpreset",
+      "sha256": "9da8ac818af9b648920bf1cf1e39dff9ec529989711a88d843455ceaa3e0e9c2",
+      "size": 50913
+    },
+    {
+      "path": "Bass/ladder_fm_bass.sbpreset",
+      "sha256": "a511f4c3233328d7f16ec274e8a0efb4053335019201c4856366c9e7b7f799d9",
+      "size": 50856
     }
   ]
 }

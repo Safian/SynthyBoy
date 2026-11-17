@@ -42,12 +42,26 @@ def pdb(x, floor=-200.0):
     return 10.0 * math.log10(x) if x > 1e-20 else floor
 
 
+def content_store_dir(work):
+    """The folder the lab binary reads the files of a preset's content from ($SYNTHYBOY_CONTENT_DIR/<pack id>/<file>): links to the factory packs of content/ named by their pack ids."""
+    root = Path(work) / "content-store"
+    root.mkdir(parents=True, exist_ok=True)
+    for pack in sorted((ROOT / "content").glob("factory-*")):
+        manifest = pack / "contentpack.json"
+        if manifest.is_file():
+            link = root / json.loads(manifest.read_text())["id"]
+            if not link.exists():
+                link.symlink_to(pack.resolve())
+    return root
+
+
 class Lab:
     def __init__(self, binary=DEFAULT_BIN, work=None):
         self.bin = str(binary)
         self.work = Path(work or tempfile.mkdtemp(prefix="sblab-"))
         self.work.mkdir(parents=True, exist_ok=True)
         self.jobs = []
+        os.environ.setdefault("SYNTHYBOY_CONTENT_DIR", str(content_store_dir(self.work)))
 
     def job(self, tag, preset, profile, seconds, *items):
         out = self.work / f"{tag}.wav"

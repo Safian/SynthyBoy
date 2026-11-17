@@ -1,0 +1,9 @@
+// SynthyBoy factory instrument: nylon string plucks, six zones, made by scripts/gen-content-pack.py (CC0-1.0)
+<control>
+<group> loop_mode=no_loop ampeg_release=0.35 ampeg_attack=0.0
+<region> sample=samples/pluck_36.wav lokey=24 hikey=40 pitch_keycenter=36
+<region> sample=samples/pluck_45.wav lokey=41 hikey=49 pitch_keycenter=45
+<region> sample=samples/pluck_54.wav lokey=50 hikey=58 pitch_keycenter=54
+<region> sample=samples/pluck_63.wav lokey=59 hikey=67 pitch_keycenter=63
+<region> sample=samples/pluck_72.wav lokey=68 hikey=76 pitch_keycenter=72
+<region> sample=samples/pluck_81.wav lokey=77 hikey=108 pitch_keycenter=81

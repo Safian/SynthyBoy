@@ -285,6 +285,15 @@ if [[ "$xpl_presets" != "off" ]]; then
     fi
 fi
 
+# Copy the factory content packs (wavetables, samples, instruments, impulse responses: scripts/gen-content-pack.py writes them, they are committed) to Content/packs/<pack id>/:
+# that is where the plugin's content store looks for the files a preset names (pack id + file, shell-mpc/synthyboy_mpc.cpp addPackRoot). A pack folder is named by its id.
+rm -rf "$plugin_folder/Content/packs"
+for pack_dir in factory-wavetables factory-samples; do
+    pack_id="$(sed -n 's/^  "id": "\(.*\)",$/\1/p' "$repo_root/content/$pack_dir/contentpack.json")"
+    mkdir -p "$plugin_folder/Content/packs"
+    cp -R "$repo_root/content/$pack_dir" "$plugin_folder/Content/packs/$pack_id"
+done
+
 # Plugin Skins/: the given directory, or generated from the page list
 rm -rf "$plugin_folder/Plugin Skins"
 if [[ -n "$skins_dir" ]]; then
