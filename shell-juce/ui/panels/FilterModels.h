@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+#include "synthyboy/filters/filter_types.h"
+
 namespace synthyboy::ui
 {
 
@@ -77,65 +79,17 @@ inline const char* getFilterModelName (int modelIndex) noexcept
 /** Returns the list of style names for a given model. */
 inline std::vector<std::string> getStylesForModel (int modelIndex)
 {
-    switch (modelIndex)
+    const int count = synthyboy::filters::filterModelStyleCount (modelIndex);
+    const char* const* names = synthyboy::filters::filterModelStyleNames (modelIndex);
+    if (names != nullptr && count > 0)
     {
-        case 0: // Analog
-        case 1: // Dirty
-        case 2: // Ladder
-        case 3: // Digital
-            return { "Style A (12 dB)", "Style B (24 dB)", "Style C (notch swap)", "Style D (dual notch)", "Style E (band peak notch)", "Style F (shelf)" };
-        case 4: // Diode
-            return { "Style A (12 dB)", "Style B (24 dB)" };
-        case 5: // Formant
-            return { "A-O-I-E", "A-I-U-O", "Vocal Tract" };
-        case 6: // Comb
-            return { "Comb", "+Flange", "-Flange", "Low-High Comb", "+Flange Spread", "-Flange Spread" };
-        case 7: // Phaser
-            return { "Positive Feedback", "Negative Feedback" };
-        case 8: // Multi SVF
-            return { "LH", "LB", "LP", "LN", "HB", "HP", "HN", "BP", "BN", "PP", "PN", "NN" };
-        case 9: // Slope
-            return { "MG Low 6", "MG Low 18", "Low 6", "Low 18", "High 6", "High 18" };
-        case 10: // EQ 6 dB
-            return { "Low EQ 6", "Band EQ 6", "High EQ 6" };
-        case 11: // Ring Mod
-            return { "Ring Mod", "Ring Mod x2" };
-        case 12: // Sample Hold
-            return { "SampHold", "SampHold-" };
-        case 13: // Smear
-            return { "Combs", "Allpasses", "Reverb" };
-        case 14: // French LP
-            return { "French LP" };
-        case 15: // Add Bass
-            return { "Add Bass" };
-        case 16: // Scream
-            return { "Scream LP", "Scream BP" };
-        case 17: // New Wsp
-            return { "New Wsp" };
-        case 18: // DJ Mixer
-            return { "DJ Mixer Xfer" };
-        case 19: // Diffusor
-            return { "Diffusor" };
-        case 20: // EMS Ladder
-            return { "EMS Ladder" };
-        case 21: // PZ SVF
-            return { "PZ SVF" };
-        case 22: // Normal (12 styles)
-            return { "MG Low 12", "MG Low 24", "Low 12", "Low 24", "High 12", "High 24",
-                     "Band 12", "Band 24", "Peak 12", "Peak 24", "Notch 12", "Notch 24" };
-        case 23: // Multi Morph (4 styles)
-            return { "LBH", "LPH", "LNH", "BPN" };
-        case 24: // Flanges (9 styles)
-            return { "Cmb L", "Flg L", "Phs L", "Cmb H", "Flg H", "Phs H", "Cmb HL", "Flg HL", "Phs HL" };
-        case 25: // Misc (12 styles)
-            return { "Low EQ 12", "Band EQ 12", "High EQ 12", "German LP",
-                     "Formant-I", "Formant-II", "Formant-III", "Bandreject",
-                     "Dist.Comb 1 LP", "Dist.Comb 1 BP", "Dist.Comb 2 LP", "Dist.Comb 2 BP" };
-        case 26: // New (6 styles)
-            return { "MG Ladder", "Acid Ladder", "MG Dirty", "Comb 2", "Exp MM", "Exp BPF" };
-        default:
-            return { "Default" };
+        std::vector<std::string> res;
+        res.reserve (static_cast<size_t> (count));
+        for (int i = 0; i < count; ++i)
+            res.emplace_back (names[i]);
+        return res;
     }
+    return { "Default" };
 }
 
 /** Returns the blend slider label for the given model and style. */
