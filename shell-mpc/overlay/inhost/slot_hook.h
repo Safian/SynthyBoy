@@ -254,16 +254,25 @@ static constexpr bool kRelIsRela = false;
 #define SYNTHYBOY_ELF_R_TYPE(i) ELF32_R_TYPE (i)
 #endif
 
-inline SlotSearch findMainProgramSlots (const char* name)
+/** `importers` non-null: EVERY loaded object is scanned (not only the main program) and the ones that import the symbol are listed there as "path(count)" (status file: which module's slot a commit goes through). */
+inline SlotSearch findMainProgramSlots (const char* name, std::string* importers = nullptr)
 {
     SlotSearch res;
-    struct Ctx { const char* name; SlotSearch* res; bool first; } ctx { name, &res, true };
+    struct Ctx { const char* name; SlotSearch* res; bool first; std::string* importers; } ctx { name, &res, true, importers };
     dl_iterate_phdr ([] (dl_phdr_info* info, size_t, void* data) -> int
     {
         Ctx& c = *static_cast<Ctx*> (data);
-        if (! c.first)
+        if (! c.first && c.importers == nullptr)
             return 1;
+        const bool isMain = c.first;
         c.first = false;   // the first object is the main program
+        const int before = c.res->count;
+        struct Report { Ctx& c; const dl_phdr_info* i; int before; bool main; ~Report()
+        {
+            if (c.importers != nullptr && c.res->count > before)
+                *c.importers += std::string (main ? "[main] " : "") + (i->dlpi_name && *i->dlpi_name ? i->dlpi_name : "(main program)") + "(" + std::to_string (c.res->count - before) + ") ";
+        } } report { c, info, before, isMain };
+        auto next = [&c] { return c.importers != nullptr ? 0 : 1; };
         const ElfW (Dyn)* dyn = nullptr;
         for (int i = 0; i < info->dlpi_phnum; ++i)
             if (info->dlpi_phdr[i].p_type == PT_DYNAMIC)
@@ -271,7 +280,7 @@ inline SlotSearch findMainProgramSlots (const char* name)
         if (dyn == nullptr)
         {
             c.res->note = "the main program has no dynamic section";
-            return 1;
+            return next();
         }
         uintptr_t jmprel = 0, symtab = 0, strtab = 0, rel = 0;
         size_t pltrelsz = 0, relsz = 0, syment = sizeof (ElfW (Sym));
@@ -298,7 +307,7 @@ inline SlotSearch findMainProgramSlots (const char* name)
         if (symtab == 0 || strtab == 0 || syment != sizeof (ElfW (Sym)))
         {
             c.res->note = "no symbol table in the main program";
-            return 1;
+            return next();
         }
         symtab = fix (symtab);
         strtab = fix (strtab);
@@ -324,7 +333,7 @@ inline SlotSearch findMainProgramSlots (const char* name)
         (void) pltrel;
         scan (jmprel, pltrelsz, kRelIsRela);
         scan (rel, relsz, kRelIsRela);
-        return 1;
+        return next();
     }, &ctx);
     return res;
 }

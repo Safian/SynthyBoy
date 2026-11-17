@@ -58,6 +58,31 @@ inline bool findItem (const void* req, size_t stride, uint32_t obj, uint32_t pro
     return found;
 }
 
+/** The property of object `obj` whose value lies in [lo, hi] (the framebuffer ids around the one the plane shows now: the host turns two with neighbouring ids, learned from the request itself when the property cannot be looked up). false: none or ambiguous. */
+inline bool findPropByValue (const void* req, size_t stride, uint32_t obj, uint64_t lo, uint64_t hi, uint32_t& prop) noexcept
+{
+    ReqHeader h;
+    if ((stride != 24 && stride != 16) || ! readHeader (req, h))
+        return false;
+    int n = 0;
+    for (uint32_t i = 0; i < h.cursor; ++i)
+    {
+        const uint8_t* it = h.items + static_cast<size_t> (i) * stride;
+        uint32_t o, p;
+        uint64_t v;
+        std::memcpy (&o, it, 4);
+        std::memcpy (&p, it + 4, 4);
+        std::memcpy (&v, it + 8, 8);
+        if (o == obj && v >= lo && v <= hi)
+        {
+            if (n == 0 || p != prop)
+                ++n;
+            prop = p;
+        }
+    }
+    return n == 1;
+}
+
 /** The test against libdrm's own request: `req` was built with exactly the items (obj, prop, value) listed. Returns the stride that reads all of them back (24 or 16), 0 when none does. */
 inline size_t detectStride (const void* req, const uint32_t (*items)[2], const uint64_t* values, int n) noexcept
 {

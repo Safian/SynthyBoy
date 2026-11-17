@@ -611,6 +611,11 @@ static void testRequestReader()
     Item24 wrong[3] = { { 0x1234, 0x55, values[0], nullptr }, { 0x9999, 0x56, values[1], nullptr }, { 0x1234, 0x57, values[2], nullptr } };
     FakeReq24 rw { 3, 4, wrong };
     check (detectStride (&rw, items, values, 3) == 0, "self test: a request that does not read back is refused");
+    Item24 pl[4] = { { 33, 5, 37, nullptr }, { 33, 7, 50, nullptr }, { 33, 9, 800u << 16, nullptr }, { 35, 7, 45, nullptr } };
+    FakeReq24 qp { 4, 8, pl };
+    uint32_t learned = 0;
+    check (findPropByValue (&qp, 24, 33, 48, 50, learned) && learned == 7, "request: the framebuffer property is learned from the request (value next to the shown id)");
+    check (! findPropByValue (&qp, 24, 33, 30, 50, learned), "request: two candidate properties are ambiguous: nothing learned");
     FakeReq24 bad { 9000, 4, t24 };
     check (! findItem (&bad, 24, 33, 7, v) && ! findItem (nullptr, 24, 33, 7, v), "request: an implausible header is not read");
 }
