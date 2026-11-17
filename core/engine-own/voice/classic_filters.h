@@ -979,10 +979,15 @@ private:
         const float scale = 1.0f - 0.5f * fb * fb;
         const float loopHz = std::clamp (f * std::exp2 (p.combOffset / 12.0f), 20.0f, static_cast<float> (sr) * 0.45f);
         const float a = OnePole::coefficient (loopHz, sr);
+        // The loop filter delays the signal as well: the phase delay of its one pole at the pitch (about T / 70 at the default offset of 42 semitones, 1.1 % of the period
+        // = 19 cents flat) is taken off the length of the delay line, so the comb resonates at sr / T, the pitch of the cutoff.
+        const float w0 = kTwoPif * std::max (f, 20.0f) / static_cast<float> (sr), bpole = 1.0f - a;
+        const float loopDelay = std::atan2 (bpole * std::sin (w0), 1.0f - bpole * std::cos (w0)) / w0;
+        const float readAt = std::max (T - 1.0f - loopDelay, 0.0f);
         combUsed = true;
         for (int i = 0; i < n; ++i)
         {
-            const float v = scale * in[i] + fb * comb.read (T - 1.0f);
+            const float v = scale * in[i] + fb * comb.read (readAt);
             lpA += a * (v - lpA);
             lpA = flushDenormal (lpA);
             const float w = hardtanh (lpA);
