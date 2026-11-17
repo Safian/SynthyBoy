@@ -34,7 +34,7 @@ constexpr Ctl kWtMapCtls[] = {
     { K::Toggle, "REMAP", "remap.on", Cond::Always, 1 }, { K::Stepper, "CURVE", "remap.slot", Cond::RemapOn, 2 }, { K::Knob, "RISE", "remap.rise", Cond::RemapOn, 1 }, { K::Knob, "FALL", "remap.fall", Cond::RemapOn, 1 },
     { K::Stepper, "TYPE", "morph.type", Cond::Always, 2 }, { K::Knob, "AMOUNT", "morph.amount", Cond::Always, 1 }, { K::Knob, "SPREAD", "morph.spread", Cond::Always, 1 },
 };
-constexpr Block kWtMapBlocks[] = { { "FRAME REMAP", 0, 0, 4 }, { "SPECTRAL MORPH", 0, 4, 3 } };
+constexpr Block kWtMapBlocks[] = { { "FRAME REMAP", 0, 0, 4 }, { "SPECTRAL MORPH", 1, 4, 3 } };
 // ---- every type: MORE (switches, pitch, phase, the key and velocity zone, the unison law)
 constexpr Ctl kMoreCtls[] = {
     { K::Toggle, "ON", "on", Cond::Always, 1 }, { K::Toggle, "ENV 1", "env1", Cond::Always, 1 }, { K::Toggle, "SMOOTH", "smooth_interp", Cond::Always, 1 }, { K::Toggle, "TRACK", "pitch_track", Cond::Always, 1 },
@@ -44,7 +44,7 @@ constexpr Ctl kMoreCtls[] = {
     { K::Number, "LOW", "map.vel_low", Cond::Always, 1 }, { K::Number, "HIGH", "map.vel_high", Cond::Always, 1 }, { K::Toggle, "OVERRIDE", "multi.vel_override", Cond::Always, 1 },
     { K::Knob, "CURVE", "unison.detune_curve", Cond::Always, 1 }, { K::Knob, "SHAPE", "unison.blend_shape", Cond::Always, 1 }, { K::Stepper, "LAW", "unison.law", Cond::Always, 2 }, { K::Stepper, "STACK", "unison.stack_repeat", Cond::Always, 2 },
 };
-constexpr Block kMoreBlocks[] = { { "OSCILLATOR", 0, 0, 4 }, { "PITCH", 0, 4, 4 }, { "PHASE", 0, 8, 3 }, { "KEY ZONE", 1, 11, 4 }, { "VELOCITY ZONE", 1, 15, 3 }, { "UNISON SHAPE", 1, 18, 4 } };
+constexpr Block kMoreBlocks[] = { { "OSCILLATOR", 0, 0, 4 }, { "PITCH", 0, 4, 4 }, { "PHASE", 1, 8, 3 }, { "KEY ZONE", 1, 11, 4 }, { "VELOCITY ZONE", 2, 15, 3 }, { "UNISON SHAPE", 2, 18, 4 } };
 // ---- Sample: REGION (region, loop, edit) and SLICE (slices, playback, scan, tempo)
 constexpr Ctl kSampleRegionCtls[] = {
     { K::Knob, "START", "sample.start", Cond::Always, 1 }, { K::Knob, "END", "sample.end", Cond::Always, 1 }, { K::Number, "ROOT", "sample.root", Cond::KeytrackOn, 1 }, { K::Toggle, "KEY TRACK", "sample.keytrack", Cond::Always, 1 },
@@ -86,8 +86,8 @@ constexpr Block kSpecScanBlocks[] = { { "SCAN", 0, 0, 4 }, { "SPECTRAL MORPH", 0
 
 #define SB_SPEC(arr) arr, static_cast<int> (sizeof arr / sizeof arr[0])
 constexpr Spec kSpecs[] = {
-    { kWtMap, "FRAME MAP", true, SB_SPEC (kWtMapBlocks), SB_SPEC (kWtMapCtls), 1 },
-    { kMore, "OSCILLATOR OPTIONS", false, SB_SPEC (kMoreBlocks), SB_SPEC (kMoreCtls), 2 },
+    { kWtMap, "FRAME MAP", true, SB_SPEC (kWtMapBlocks), SB_SPEC (kWtMapCtls), 2 },
+    { kMore, "OSCILLATOR OPTIONS", false, SB_SPEC (kMoreBlocks), SB_SPEC (kMoreCtls), 3 },
     { kSampleRegion, "SAMPLE REGION", true, SB_SPEC (kSampleRegionBlocks), SB_SPEC (kSampleRegionCtls), 2 },
     { kSampleSlice, "SAMPLE SLICES AND SCAN", true, SB_SPEC (kSampleSliceBlocks), SB_SPEC (kSampleSliceCtls), 2 },
     { kGrain, "GRAIN ENGINE", true, SB_SPEC (kGrainBlocks), SB_SPEC (kGrainCtls), 2 },
@@ -186,12 +186,22 @@ public:
     }
     void draw (gpu::SceneBuilder& sb) const override
     {
-        Composite::draw (sb);
+        // the blocks, the controls, the chips of the Q groups, and the titles last (a chip drawn after a title would count as part of the title's cache cell)
+        ui::Pen pen (sb, enabled_);
+        {
+            ui::Cell cell (sb, rect_);
+            drawUnder (pen);
+        }
+        for (int i = 0; i < n_; ++i)
+            if (shown_[i])
+                kids_[i]->draw (sb);
         for (int i = 0; i < nGroups_; ++i)
             groups[i].draw (sb);
         for (int i = 0; i < nGroups_; ++i)
             if (i != active_)
                 groups[i].drawMapped (sb);
+        ui::Cell cell (sb, rect_);
+        drawExtra (pen);
     }
 
 protected:
@@ -298,33 +308,26 @@ protected:
         for (int k = 0; k < bl.n && n < 8; ++k)
             if (vis_[bl.first + k])
                 idx[n++] = bl.first + k;
-        // one row of controls when it is tall enough only for one; four or more in two rows when the block is tall (the options page)
-        const int cols = n <= 3 || in.h < 2 * 72 + ui::kQLane ? n : (n + 1) / 2, rowsN = (n + cols - 1) / cols;
-        const int ch = std::max (0, (in.h - ui::kQLane * (rowsN - 1)) / rowsN);
-        for (int r = 0; r < rowsN; ++r)
+        // one row of controls per block (a Q group is one row: its chips sit on the lane above the first row), all with the same top
+        const int cols = n;
+        const int ch = in.h;
+        ui::Rect cells[8];
+        int fixed[8] = {}, weight[8] = {};
+        for (int k = 0; k < cols; ++k)
+            weight[k] = spec_->ctls[idx[k]].weight;
+        ui::layoutRow ({ in.x, in.y, in.w, ch }, fixed, weight, cols, ui::kGap, cells);
+        for (int k = 0; k < cols; ++k)
         {
-            const int first = r * cols, cnt = std::min (cols, n - first);
-            ui::Rect cells[8];
-            int fixed[8] = {}, weight[8] = {};
-            for (int k = 0; k < cnt; ++k)
-                weight[k] = spec_->ctls[idx[first + k]].weight;
-            ui::layoutRow ({ in.x, in.y + r * (ch + ui::kQLane), in.w, ch }, fixed, weight, cnt, ui::kGap, cells);
-            for (int k = 0; k < cnt; ++k)
-            {
-                const int ci = idx[first + k];
-                const Ctl& c = spec_->ctls[ci];
-                ui::Rect cr = cells[k];
-                const int cap = c.kind == K::Stepper ? 72 : (c.kind == K::Toggle || c.kind == K::Number ? 96 : 0);
-                if (cap > 0 && cr.h > cap)
-                {
-                    cr.y += (cr.h - cap) / 2;
-                    cr.h = cap;
-                }
-                if (c.kind == K::Knob)
-                    knobs_[ci].state.side = cr.w >= 172;
-                show (*compOf (ci), true);
-                compOf (ci)->place (cr);
-            }
+            const int ci = idx[k];
+            const Ctl& c = spec_->ctls[ci];
+            ui::Rect cr = cells[k];
+            const int cap = c.kind == K::Stepper ? 88 : (c.kind == K::Toggle || c.kind == K::Number ? 110 : 0);
+            if (cap > 0 && cr.h > cap && n > 1)   // a lone control fills its block
+                cr.h = cap;
+            if (c.kind == K::Knob)
+                knobs_[ci].state.side = cr.w >= 172;
+            show (*compOf (ci), true);
+            compOf (ci)->place (cr);
         }
     }
     void drawUnder (ui::Pen& p) const override

@@ -913,11 +913,12 @@ void lintView (Runner& run, const layout::View& v, const LintInst& base)
         {
             sub ("main", [&] { Rig<OscPageUi> r (base, v.index); r.refresh(); lintRig (run, r, pg, "main", { &r.ui.ui().full() }); });
             struct D { const char* n; int page; };
-            const D ds[] = { { "unison", OscUi::kPageUnison }, { "grain", OscUi::kPageGrain }, { "envelope", OscUi::kPageEnvelope }, { "route", OscUi::kPageRoute }, { "mods", OscUi::kPageMods } };
+            const D ds[] = { { "unison", OscUi::kPageUnison }, { "grain", OscUi::kPageGrain }, { "envelope", OscUi::kPageEnvelope }, { "route", OscUi::kPageRoute }, { "mods", OscUi::kPageMods },
+                                { "wt-map", 16 }, { "more", 17 }, { "sample-region", 18 }, { "sample-slice", 19 }, { "grain-engine", 20 }, { "spec-filter", 21 }, { "spec-scan", 22 } };
             for (const D& d : ds)
             {
                 if (v.index == 1 || v.index == 5)   // Sub and Noise have no tuning / unison / grain / envelope detail
-                    if (d.page == OscUi::kPageUnison || d.page == OscUi::kPageGrain || d.page == OscUi::kPageEnvelope)
+                    if (d.page == OscUi::kPageUnison || d.page == OscUi::kPageGrain || d.page == OscUi::kPageEnvelope || d.page >= 16)
                         continue;
                 sub (d.n, [&] {
                     LintInst inst = base;
@@ -932,7 +933,7 @@ void lintView (Runner& run, const layout::View& v, const LintInst& base)
                         r.stack.openDetail (d.page);
                         r.refresh();
                     }
-                    ui::Component* top = d.page == OscUi::kPageMods ? static_cast<ui::Component*> (&r.ui.ui().modsPage()) : (d.page == OscUi::kPageRoute ? static_cast<ui::Component*> (&r.ui.ui().routePanel()) : static_cast<ui::Component*> (&r.ui.ui().detail()));
+                    ui::Component* top = d.page == OscUi::kPageMods ? static_cast<ui::Component*> (&r.ui.ui().modsPage()) : (d.page == OscUi::kPageRoute ? static_cast<ui::Component*> (&r.ui.ui().routePanel()) : d.page >= 16 ? static_cast<ui::Component*> (&r.ui.ui().specPage()) : static_cast<ui::Component*> (&r.ui.ui().detail()));
                     lintRig (run, r, pg, d.n, { top }, d.page == OscUi::kPageRoute);
                 });
             }

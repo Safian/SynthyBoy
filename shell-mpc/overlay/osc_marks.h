@@ -35,7 +35,11 @@ struct OscMarks
         const std::string p = "osc" + std::to_string (osc) + ".";
         auto val = [&] (const char* k, float def) { const synthyboy::ParamInfo* pi = synthyboy::findParamByKey ((p + k).c_str()); return pi != nullptr ? v.param (static_cast<int> (pi - synthyboy::paramTable())) : def; };
         const int type = static_cast<int> (std::lround (val ("type", 0.0f)));
-        if (type == 1 && (page == 0 || page == oscspec::kSampleRegion || page == oscspec::kSampleSlice))
+        bool haveSample = false;
+        if (const std::shared_ptr<const synthyboy::StateContent> c0 = v.content())
+            for (const synthyboy::ContentSample& cs : c0->samples)
+                haveSample = haveSample || cs.osc == osc;
+        if (type == 1 && haveSample && (page == 0 || page == oscspec::kSampleRegion || page == oscspec::kSampleSlice))
         {
             m.region = true;
             m.start = std::clamp (val ("sample.start", 0.0f) / 100.0f, 0.0f, 1.0f);

@@ -114,6 +114,7 @@ public:
         list_.setBackdropId (kListBackdrop);
         list_.setHeaderId (kListHeader);
         detail_.place (tab);
+        spec_.place (tab);
         mods_.place (tab);
     }
 
@@ -1196,7 +1197,7 @@ private:
         const int dec = std::min<int> (pi.decimals, 2);
         switch (pi.unit)
         {
-            case Unit::percent: std::snprintf (out, cap, pi.min < 0.0f ? "%+.*f%%" : "%.*f%%", dec, v); break;
+            case Unit::percent: if (std::fabs (v) >= 99.995) std::snprintf (out, cap, pi.min < 0.0f ? "%+.0f%%" : "%.0f%%", v); else std::snprintf (out, cap, pi.min < 0.0f ? "%+.*f%%" : "%.*f%%", dec, v); break;
             case Unit::cents: std::snprintf (out, cap, "%+.0f ct", v); break;
             case Unit::semitone: std::snprintf (out, cap, "%+.*f st", dec, v); break;
             case Unit::Hz: if (v >= 1000.0) std::snprintf (out, cap, "%.2f kHz", v / 1000.0); else std::snprintf (out, cap, "%.0f Hz", v); break;
@@ -1486,7 +1487,7 @@ private:
         const ui::Rect r = onPage ? displayRect() : ui::Rect {};
         loadShown_ = fileType && onPage && ! r.empty() && v.contentLoad (nullptr) != 1 && loadedName (v).empty();
         loadBtn_.setLabel (typeRaw_ == 4 ? "LOAD INSTRUMENT" : "LOAD SAMPLE");
-        loadBtn_.place (r.empty() ? ui::Rect {} : ui::Rect { r.x + r.w / 2 - 150, r.y + r.h / 2 - 12, 300, 64 });
+        loadBtn_.place (r.empty() ? ui::Rect {} : ui::Rect { r.x + r.w / 2 - 150, r.y + r.h * 2 / 3 - 8, 300, 64 });
         loadBtn_.setId (kSpecLoad);
         marksRect_ = r;
     }
