@@ -315,7 +315,9 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
                 for xf in xpl_files:
                     header, keys, param_keys = TestDecodesLikeDeviceFiles._structure(TestDecodesLikeDeviceFiles._decode_with_dec_py(xf))
                     # (a preset with user content, a wavetable or a sample of its own, has one more member, "content": the only difference allowed)
-                    self.assertEqual((header, [k for k in keys if k != "content"], param_keys), device_structure, f"{xf.name}: structure differs from the device's file")
+                    # (the chunk of this build also has "mpcOutputLimiter", the limiter setting of the Master page, before the pad pressure members: the file the device wrote is older)
+                    self.assertEqual((header, [k for k in keys if k not in ("content", "mpcOutputLimiter")], param_keys), device_structure, f"{xf.name}: structure differs from the device's file")
+                    self.assertIn("mpcOutputLimiter", keys, f"{xf.name}: no limiter setting in the chunk")
                     parsed = gen_mpc_xpl.parse_xpl(xf.read_text(encoding="utf-8"))
                     self.assertEqual(parsed["header"]["num_programs"], 137)
                     self.assertEqual(parsed["header"]["chunk_magic"], b"CcnK")
