@@ -40,7 +40,7 @@ public:
             slot_[slot]->setQ (false, 0);
         slot_[slot] = c;
         if (active_ && c)
-            c->setQ (true, slot + 1);
+            c->setQ (! wideDevice(), slot + 1);
         return true;
     }
     Component* member (int slot) const noexcept { return slot >= 0 && slot < kSlots ? slot_[slot] : nullptr; }
@@ -49,9 +49,10 @@ public:
     void setActive (bool a)
     {
         active_ = a;
+        const bool mark = a && ! wideDevice();   // the 16 knob device: no active group, nobody's labels in the Q colour
         for (int i = 0; i < kSlots; ++i)
             if (slot_[i])
-                slot_[i]->setQ (a, i + 1);
+                slot_[i]->setQ (mark, i + 1);
     }
     void setFrameRect (const Rect& r) noexcept { frameRect_ = r; }
     /** A group whose members lie APART in the layout (the shape grid and the RATE block of the LFO page): no frame (a frame around the union would take in everything between them), the four active chips and the
@@ -73,6 +74,11 @@ public:
         member (kQLane) is left free by the layouts, so the chip covers no content. */
     void draw (gpu::SceneBuilder& sb, const Rect* around = nullptr) const
     {
+        if (wideDevice())   // the 16 knob device (the XL): no frame and no active group; every member of a group that is on the knobs carries its slot number 1 .. 16, all chips in the style of the active ones
+        {
+            drawWide (sb);
+            return;
+        }
         if (! active_)
             return;
         const Rect m = frameRect_.empty() ? rect() : frameRect_;
@@ -101,9 +107,26 @@ public:
         Cell cell (sb, chipRect (member, index));
         pen.qIndex (member, index, idle);
     }
+    /** The chips of a group on the 16 knob device: the slot number block * 4 + i + 1 on every member, in the one style (the yellow Q chip: legible on every ground, the colour that means "a knob is here"); a group with no
+        block (it is not on the knobs) draws nothing; the active group of a page that did not set blocks is block 0. No frame: the frame cell is not emitted. */
+    void drawWide (gpu::SceneBuilder& sb) const
+    {
+        const int block = block_ >= 0 ? block_ : (active_ ? 0 : -1);
+        if (block < 0)
+            return;
+        Pen pen (sb, true, inactive_);
+        for (int i = 0; i < kSlots; ++i)
+            if (const Component* m = slot_[i]; m && ! m->rect().empty())
+                chip (sb, pen, m->rect(), block * kSlots + i + 1, false);
+    }
     /** The quiet index chips of a group that is NOT the active one (a bank that a touch on one of its members, or the page stepper, makes the active one): no frame, the four chips in the keyline colours. */
     void drawIdle (gpu::SceneBuilder& sb) const
     {
+        if (wideDevice())
+        {
+            drawWide (sb);
+            return;
+        }
         if (active_)
             return;
         const Rect u = rect();
@@ -118,13 +141,13 @@ public:
     /** The idle chips of a group that sits on one of the other three blocks of knobs (setBlock 1 .. 3) and nothing for the others: the page shows where the next groups are (the XL: the knobs 5 .. 16, the Key 61: the banks 2 .. 4 as 1 .. 4). */
     void drawMapped (gpu::SceneBuilder& sb) const
     {
-        if (block_ >= 1)
+        if (block_ >= 1 || (wideDevice() && block_ >= 0))
             drawIdle (sb);
     }
     /** The same chips for a group that is not a QGroup of its own: a row of a list whose members are the first `n` (at most 4) of `members` (null: skipped); `block` as setBlock (nothing for a block below 1). */
     static void drawMappedMembers (gpu::SceneBuilder& sb, int block, const Component* const* members, int n)
     {
-        if (block < 1)
+        if (block < 1 && ! (wideDevice() && block == 0))
             return;
         const bool wide = wideDevice();
         Rect u;
@@ -136,7 +159,7 @@ public:
         Pen pen (sb, true, inactive_);
         for (int i = 0; i < n && i < kSlots; ++i)
             if (members[i] && ! members[i]->rect().empty())
-                chip (sb, pen, members[i]->rect(), wide ? block * kSlots + i + 1 : i + 1, true);
+                chip (sb, pen, members[i]->rect(), wide ? block * kSlots + i + 1 : i + 1, ! wide);
     }
     /** The hardware knob `knobIndex` (0 .. 3) turned by delta: routed to the member of that slot; nothing when not active or the slot is empty. */
     Change turn (int knobIndex, double delta)
