@@ -136,7 +136,10 @@ public:
                     s->state.count = p.numChoices > 0 ? p.numChoices : std::max (1, static_cast<int> (std::lround (p.max - p.min)) + 1);
                     s->state.index = std::clamp (static_cast<int> (std::lround (val - p.min)), 0, s->state.count - 1);
                     char text[48];
-                    params.valueText (it.param, val, text, sizeof text);
+                    if (p.numChoices > 0 && p.choices != nullptr)
+                        std::snprintf (text, sizeof text, "%s", p.choices[s->state.index]);   // the NAME of the choice
+                    else
+                        params.valueText (it.param, val, text, sizeof text);
                     s->setItem (text);
                     break;
                 }
