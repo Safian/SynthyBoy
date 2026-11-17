@@ -65,7 +65,7 @@ The spike's description above is kept for orientation only; the plugin is now th
 All three come from the same sources: JUCE builds the VST3 and the AU (the AU wrapper is part of JUCE; target `SynthyBoy_AU`, added only on Apple desktop builds), and
 [clap-juce-extensions](https://github.com/free-audio/clap-juce-extensions) wraps the same
 `juce::AudioProcessor` into a CLAP (`SynthyBoy_CLAP` CMake target, created by `clap_juce_extensions_plugin(...)`).
-The MPC VST2 build (`scripts/build-mpc.sh`, [docs/MPC.md](docs/MPC.md)) is a separate build and does not depend on the AU.
+The MPC VST2 build (`scripts/build-mpc.sh`, [docs/MPC.md](docs/MPC.md); end-user instructions: [MPC Installation Guide](docs/user-guide/INSTALL.md) and [MPC User Guide](docs/user-guide/SynthyBoy-MPC-User-Guide.md)) is a separate build and does not depend on the AU.
 
 ## Repository layout
 
@@ -164,11 +164,13 @@ Copy the bundles to the usual plugin folders:
 | OS | VST3 | CLAP |
 |----|------|------|
 | macOS | `~/Library/Audio/Plug-Ins/VST3/` | `~/Library/Audio/Plug-Ins/CLAP/` |
-
 | Linux | `~/.vst3/` | `~/.clap/` |
 | Windows | `C:\Program Files\Common Files\VST3\` | `C:\Program Files\Common Files\CLAP\` |
+| MPC Standalone OS | (see [INSTALL.md](docs/user-guide/INSTALL.md)) `<Drive>/VST2 Plugins/Safian - VST - SynthyBoy/` | — |
 
 macOS only, the Audio Unit (`SynthyBoy.component`) goes to `~/Library/Audio/Plug-Ins/Components/`; validate it with `auval -v aumu Syby Safn`.
+
+For **Akai MPC Standalone OS** (MPC Key 61, MPC XL, etc. running MPC OS 3.10.1+), copy the `Safian - VST - SynthyBoy` directory to a folder named `VST2 Plugins` on your internal drive, SD card, or USB drive, enable **External Plugin Support** under Preferences > Enhancements, and restart the unit. See the full [MPC Installation Guide](docs/user-guide/INSTALL.md) and [MPC User Guide](docs/user-guide/SynthyBoy-MPC-User-Guide.md).
 
 ## Continuous integration
 
