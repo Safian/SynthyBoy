@@ -761,6 +761,9 @@ public:
 
     /** Phase of the first voice in cycles (for the "osc" sources and the phase legato). */
     float firstPhase() const noexcept { return static_cast<float> (phase[0] >> 8) * (1.0f / 16777216.0f); }
+    /** The 32 bit phases of all the voices (the phase memory and the phase legato carry them from one note to the next). */
+    void getPhases (uint32_t* out) const noexcept { for (int i = 0; i < kMaxVoices; ++i) out[i] = phase[i]; }
+    void setPhases (const uint32_t* in) noexcept { for (int i = 0; i < kMaxVoices; ++i) phase[i] = in[i]; }
     void setPhase (float p) noexcept
     {
         for (auto& x : phase)

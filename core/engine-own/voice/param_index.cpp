@@ -38,6 +38,7 @@ ParamIndex build()
         K (warpType, "warp.type"); K (warpAmount, "warp.amount"); K (warpPhase, "warp.phase"); K (warpSpread, "warp.spread");
         K (warp2Type, "warp2.type"); K (warp2Amount, "warp2.amount"); K (warp2Phase, "warp2.phase"); K (warp2Spread, "warp2.spread");
         K (keyLow, "map.key_low"); K (keyHigh, "map.key_high"); K (velLow, "map.vel_low"); K (velHigh, "map.vel_high"); K (type, "type");
+        K (fixedPitch, "fixed_pitch"); K (transposeSnap, "transpose_snap"); K (phaseLegato, "phase_legato"); K (phaseMemory, "phase_memory"); K (keyFold, "map.key_fold"); K (keyWarp, "map.key_warp");
         K (filterBlend, "filter_blend"); K (bus1Send, "bus1_send"); K (bus2Send, "bus2_send");
 #undef K
     }

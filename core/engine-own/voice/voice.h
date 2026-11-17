@@ -106,6 +106,10 @@ public:
     float readPosition (int osc) const noexcept { return lib[osc].readPosition(); }
     int readGrains (int osc, float* pos, float* life, int maxN) const noexcept { return lib[osc].readGrains (pos, life, maxN); }
     float subPhase() const noexcept { return sub.firstPhase(); }
+    /** The phases of the unison voices of wavetable oscillator o (phase memory, phase legato: OwnEngine::startNote). */
+    static constexpr int kPhaseCount = WtOsc::kMaxVoices;
+    void oscPhases (int o, uint32_t* out) const noexcept { osc[o].getPhases (out); }
+    void setOscPhases (int o, const uint32_t* in) noexcept { osc[o].setPhases (in); }
     /** The step (0 .. 7) of the voice control this voice plays: (the number of the note - 1) modulo the length. */
     int voiceControlStep() const noexcept { return vcStep; }
     float noisePosition() const noexcept { return noiseUseSample ? noiseSv.playheadFraction() : -1.0f; }
@@ -259,6 +263,7 @@ private:
     float oscBlend[3] = {}, oscSend[3][2] = {}, subBlend = 0.0f, subSend[2] = {}, noiseBlend = 0.0f, noiseSend[2] = {}, filtSend[2][2] = {};
     bool oscEnv1[3] = { true, true, true };
     bool oscOn[3] = { true, false, false };
+    bool oscWarpOnly[3] = {};   // out of its key range with Key Warp on: the oscillator runs (its signal warps the others) but is not heard
     FilterUnit filt[2];
     FilterSettings filtSet[2];
     bool filtOn[2] = { true, false };

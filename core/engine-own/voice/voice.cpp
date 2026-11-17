@@ -6,6 +6,7 @@
 #include <cstdint>
 #include "voice.h"
 #include "filter_setup.h"
+#include "osc_options.h"
 #include "../env_lfo/lfo_eval.h"
 #include "../dsp/simd.h"
 #include "../dsp/section_timing.h"
@@ -769,13 +770,27 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         lib[o].setType (type, fresh);
         const bool fadingFromWt = lib[o].fadingFromWavetable();
         oscOn[o] = P (oi.on) >= 0.5f;
+        oscWarpOnly[o] = false;
+        float foldSemis = 0.0f;   // Key Fold: the notes outside the key range are played as the note an octave (or more) away that is inside
         if (oscOn[o])
         {
             const int kl = static_cast<int> (g.base[oi.keyLow] + 0.5f), kh = static_cast<int> (g.base[oi.keyHigh] + 0.5f);
             const int vl = static_cast<int> (g.base[oi.velLow] + 0.5f), vh = static_cast<int> (g.base[oi.velHigh] + 0.5f);
             const int v127 = static_cast<int> (vel * 127.0f + 0.5f);
-            if (keyNum < kl || keyNum > kh || v127 < vl || v127 > vh)
-                oscOn[o] = false;
+            int key = keyNum;
+            if ((key < kl || key > kh) && g.base[oi.keyFold] >= 0.5f)
+            {
+                key = foldKey (key, kl, kh);
+                foldSemis = static_cast<float> (key - keyNum);
+            }
+            if (key < kl || key > kh || v127 < vl || v127 > vh)
+            {
+                // outside the ranges: silent; with Key Warp the oscillator keeps running as the source of the warps of the others (it is not routed, see the sources below)
+                if (g.base[oi.keyWarp] >= 0.5f)
+                    oscWarpOnly[o] = true;
+                else
+                    oscOn[o] = false;
+            }
         }
         OscTick& t = oscTick[o];
         t.active = oscOn[o];
@@ -804,7 +819,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         // ---- pitch: the coarse term of the pitch mode and the Ratio source
         const bool track = P (oi.pitchTrack) >= 0.5f;
         const bool bendTrack = P (oi.bendTrack) >= 0.5f;
-        float base = track ? noteSemis - (bendTrack ? 0.0f : bend) : 60.0f;
+        const float fixedNote = P (oi.fixedPitch);   // Fixed Pitch: the note an oscillator without pitch tracking plays; 0 (the default) is the oscillator's own C3
+        float base = track ? noteSemis + foldSemis - (bendTrack ? 0.0f : bend) : (fixedNote >= 0.5f ? fixedNote : 60.0f);
         const int pmode = static_cast<int> (P (lk.idx[lk_pitchMode]) + 0.5f);
         const float coarse = P (oi.pitchCoarse);
         float coarseSemis = coarse;
@@ -836,7 +852,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             if (ok)
                 base = pitchTap[srcIdx];
         }
-        t.semis = base + P (oi.transpose) + P (oi.tune) * 0.01f + coarseSemis + (vc.mask[o] && track ? vc.detuneSemis : 0.0f);
+        t.semis = base + snapTranspose (static_cast<int> (P (oi.transposeSnap) + 0.5f), base, P (oi.transpose)) + P (oi.tune) * 0.01f + coarseSemis + (vc.mask[o] && track ? vc.detuneSemis : 0.0f);
         pitchTap[o] = t.semis;
         pitchTapOn[o] = true;
         t.frame = clamp01 (P (oi.frame) * 0.01f);
@@ -1163,6 +1179,8 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         }
         simd::halfSum (oscMono[o], oscL[o], oscR[o], n);
         srcLevel[o] = oscMono[o][n - 1];
+        if (oscWarpOnly[o])
+            continue;   // Key Warp: out of its key range the oscillator only warps the others (its signal is in oscMono), it is not routed and not in the mixer strips
         if (out.srcSq != nullptr)
         {
             const float pk = peakOf (oscMono[o], n);

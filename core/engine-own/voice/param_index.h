@@ -16,6 +16,7 @@ struct OscIdx
     int uniVoices, uniDetune, uniCurve, uniSpread, uniBlend, uniMode, uniRange, uniLaw, uniBlendShape, uniStack, uniStackRepeat;
     int warpType, warpAmount, warpPhase, warpSpread, warp2Type, warp2Amount, warp2Phase, warp2Spread;
     int keyLow, keyHigh, velLow, velHigh, type;
+    int fixedPitch, transposeSnap, phaseLegato, phaseMemory, keyFold, keyWarp;   // the options of the oscillator options page
     int filterBlend, bus1Send, bus2Send;
 };
 
