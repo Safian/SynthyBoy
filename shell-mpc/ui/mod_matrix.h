@@ -32,7 +32,7 @@ public:
     char text[8] = {};
 
     ModRowSelector() = default;
-    Size minSize() const override { return { 40, 48 }; }
+    Size minSize() const override { return { 56, 56 }; }
 
     Change turn (double delta) override
     {
@@ -124,8 +124,8 @@ protected:
     {
         const int y = rect_.y + kQLane, h = kCtlH, gap = 6;
         int x = rect_.x + 4;
-        number.place ({ x, y, 40, h });
-        x += 40 + gap;
+        number.place ({ x, y, 56, h });
+        x += 56 + gap;
         // the AMOUNT bar is the widest element of the row (the fields of the source and the target are only as wide as their names need; the bar gets the rest, at least 380 pixels)
         sourceBtn.place ({ x, y, 176, h });
         x += 176 + 26;
