@@ -46,7 +46,7 @@ SynthyBoy is a synthesizer plugin for Akai MPC hardware (VST2 format, loaded by 
 support). It has three oscillators (A, B, C) that each play wavetables, a multisample instrument, a sample, grains or a spectrum, a sub oscillator, a
 noise generator, two filters, six envelopes, ten LFOs and four random LFOs, eight macros, a 64-slot
 modulation matrix, 16 effects (13 effects and three band splitters), and a master section with tuning, MPE and voice control.
-112 factory presets come with it.
+136 factory presets come with it.
 
 **One package, two hardware generations.** SynthyBoy is one package: the plugin with its own drawn screens (there is no
 second, plainer version). It is built for both generations of standalone MPC hardware, the first generation (32-bit) and
@@ -792,7 +792,7 @@ Knobs show the modulation: a marker at the live (modulated) value, and an arc fr
 
 ## 7. Presets
 
-The plugin offers **113 programs** to the host: "Init" (the default sound) and 112 factory presets in six categories. The list is sorted by category (alphabetically: Bass, FX, Keys, Lead, Pad, Pluck) and then by name.
+The plugin offers **137 programs** to the host: "Init" (the default sound) and 136 factory presets in six categories. The list is sorted by category (alphabetically: Bass, FX, Keys, Lead, Pad, Pluck) and then by name.
 
 | Category | Count | Presets |
 |---|---|---|
