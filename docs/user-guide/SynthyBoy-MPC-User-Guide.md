@@ -282,40 +282,49 @@ The list **BANK 1: 1-4 / BANK 2: 5-8** (the lit dot is the bank) chooses which r
 
 ![Osc A](img/osc-a.png)
 
-Three identical wavetable oscillators (Osc A = Osc 1, B = Osc 2, C = Osc 3 in the parameter list). The page is the
-full-screen page of one oscillator.
+Three identical oscillators (Osc A = Osc 1, B = Osc 2, C = Osc 3 in the parameter list). The page is the full-screen page
+of one oscillator. Each oscillator is one of **five types**, chosen with the five keys at the top: **WAVE** (wavetable), **MULTI**
+(multisample instrument), **SAMPLE** (one sample), **GRAIN** (granular) and **SPEC** (spectral). Everything you can set
+on an oscillator is reachable on the page or on one of its detail pages, and from the Q-Links.
 
-**Header** (left to right): the name (OSC A), the power button (Off/On), the type bar **WAVE / SAMPLE /
-GRAIN**, the source stepper with a list button, **PAN**, **LEVEL** and the **route button**.
+The picture is rendered for a 16-knob device: the small numbers are the Q-Link knobs (1 - 4 the yellow group, 5 - 16 the next groups,
+chapter 4.3). On the Key 61 the same page shows 1 - 4 on the idle groups.
+
+**Header** (left to right): the name (OSC A), the power button, the five **type keys**, the source stepper with a list button,
+**PAN**, **LEVEL** and the **route button**.
 
 | Control | Parameter and range | Notes |
 |---|---|---|
-| Power | Osc N On, Off/On | |
+| Power | Osc N On, Off/On | An oscillator that is off shows the picture of its current content (table, sample or spectrum) dimmed under a dark veil with a small **OFF** tag in the corner of the display. It is never an empty display. |
 | WAVE | Osc N Type = Wavetable | |
-| SAMPLE | Osc N Type = Multisample | |
-| GRAIN | Osc N Type = Granular | The engine also has the types Sample and Spectral; they are not selectable from this page, a preset that uses them shows the type name with an empty bar. |
-| Source stepper (Wave type) | Osc N Wavetable, 15 choices: Sine, Saw, Square, Triangle, Pulse 25%, Saw to Square, Sine to Saw, Harmonic Series, Odd Harmonics, Formant Sweep, FM Sweep, PWM Sweep, Bell Partials, Preset table, Saw Down | A tap on the name or the list button opens the list; the outer quarters step. |
+| MULTI | Osc N Type = Multisample | |
+| SAMPLE | Osc N Type = Sample | |
+| GRAIN | Osc N Type = Granular | |
+| SPEC | Osc N Type = Spectral | |
+| Source stepper (WAVE) | Osc N Wavetable, 15 choices: Sine, Saw, Square, Triangle, Pulse 25%, Saw to Square, Sine to Saw, Harmonic Series, Odd Harmonics, Formant Sweep, FM Sweep, PWM Sweep, Bell Partials, Preset table, Saw Down | A tap on the name or the list button opens the list; the outer quarters step. |
+| Source stepper (other types) | the loaded file or instrument | A tap on the name or the list button opens the **content browser** (see below). |
 | PAN | -100 .. 100 percent, default 0 | Q 3 |
 | LEVEL | 0 .. 100 percent, default 50 | Q 4 |
 | Route button | Osc N Destination: F1, F2, F12 (Filters 1+2), M (Effects only), DIR (Direct out), BAL (Filter blend), OFF (None) | Tap opens the output popup: target, balance (Osc N Filter Blend, 0 .. 100 percent, only for Filter blend), BUS 1 and BUS 2 sends (0 .. 100 percent). Default F1. |
 
-**Wavetable bar.** FRAME (the position, read only), PHASE (0 .. 360 degrees), RAND (random phase, 0 .. 100 percent),
-MEMORY (phase memory: All Voices, Contiguous, Per Voice; shown dim, the engine does not use it).
+**Display.** One cycle of what the oscillator produces now, including warp and unison; a faint stack shows the frames of the table
+when they differ. The unison voices are thin lines around the main curve. Sample, grain and spectral oscillators draw their own
+picture (the sample with its region and loop, the grains as bars on it, the spectrum).
 
-**Display.** One cycle of what the oscillator produces now, including warp and unison; a faint stack shows
-the frames of the table when they differ.
+**TUNE block** (right). OCT (whole octaves, -4 .. +4), SEM (-11 .. +11 semitones; the transpose is 12 x OCT + SEM, limited to +-48), FIN
+(fine, -100 .. +100 cents), CRS (coarse, -48 .. +48 semitones, shown with two decimals), **TRACK** (a LED switch: pitch tracking, default on; off
+means the oscillator does not follow the keyboard) and **MORE** (the options page, below).
 
-**TUNE block.** OCT (whole octaves, -4 .. +4), SEM (-11 .. +11 semitones; the transpose is 12 x OCT + SEM, limited to +-48), FIN
-(fine, -100 .. +100 cents), CRS (coarse, -48 .. +48 semitones, shown with two decimals), TRACK (pitch tracking Off/On, default On).
+**UNISON block** (bottom left). The first knob (WT POS for wavetables, TIMBRE for MULTI, SCAN for SAMPLE and GRAIN, POSITION for SPEC),
+VOICES (1 .. 16, tap the upper or lower half), the gear button **MORE** (the unison page), DETUNE (0 .. 100 percent, default 25),
+BLEND (0 .. 100 percent, default 80). More voices make a wider, thicker sound. **How many unison voices you really get depends on the device (chapter 7.1).**
 
-**UNISON block.** WT POS (Osc N Frame, 0 .. 100 percent), VOICES (1 .. 16, up/down by tapping the upper or lower half),
-the gear button **MORE** (opens the unison page), DETUNE (0 .. 100 percent, default 25), BLEND (0 .. 100 percent, default 80).
+**WARP block** (bottom right). Two rows, **WARP 1** and **WARP 2**: a knob for the amount (0 .. 100 percent, default 50), a stepper for the type
+(99 types, "None" is off and the row is drawn dim; a tap on the name opens the list) and a small **PHASE** knob (0 .. 360 degrees, default 180) of that warp.
+Warp bends the wave in time or in level; two warps in a row give far more shapes than one. The warp amount and the type are
+the strongest controls for changing the character.
 
-**WARP block.** Two rows (warp 1, warp 2): a knob for the amount (0 .. 100 percent, default 50), a stepper for the
-type (99 types, "None" is off; a tap on the name opens the list) and a VAR knob that is dim: it has no
-parameter behind it.
-
-**Unison page** (button MORE):
+**Unison page** (button MORE in the unison box):
 
 ![Unison page](img/osc-unison.png)
 
@@ -323,57 +332,119 @@ Block UNISON: MODE (Linear, Super, Exp, Inv, Random), STACK (Unison, Center Drop
 Octaves, Power Chord, Two Power Chords, Major Chord, Minor Chord, Harmonic Series, Odd Harmonics), WIDTH (stereo
 spread, 0 .. 100 percent), RANGE (0 .. 48 semitones, default 2). Block VOICE SPREAD: WT POS, WARP 1, WARP 2 (each
 -100 .. +100 percent: how much the frame and the two warps differ from voice to voice). The picture above the
-blocks is the oscillator picture. BACK returns.
+blocks is the oscillator picture. For SAMPLE, GRAIN and SPEC the page also has START and SPAN (where in the file the voices start and how far apart). BACK returns.
 
-**Modulation page of a control** (long press on a knob or number):
+**Modulation page of a control** (long press on a knob or number field). A control that nothing modulates yet opens the **source board**:
+all 57 sources as chips, one tap makes the modulation of that control. With modulations present the page lists them (source, depth bar,
+UNI/BI, ON/OFF, remove) and keeps a compact add row under them (chapter 6).
 
 ![Modulations of a control](img/osc-mods.png)
 
-The title is the control and its value. ADD: choose a source with the arrows and press ADD; the rows list the
-sources that already modulate that control with the depth bar, UNI/BI, ON/OFF and a remove button (chapter 6).
+**Q groups of the page** (in reading order, each group is four knobs): the header (type, source, PAN, LEVEL), the type's own bar (WAVE: FRAME, PHASE, RAND, MAP), Tune (OCT, SEM, FIN, CRS),
+Unison (the first knob, VOICES, DETUNE, BLEND), then the warp rows.
 
-**Q groups of the page** (in reading order): Basic (type bar, source, PAN, LEVEL), Tune (OCT, SEM, FIN, CRS), Unison
-(WT POS, VOICES, DETUNE, BLEND), Warp. On the XL these are the four sets of knobs 1 - 4, 5 - 8, 9 - 12, 13 - 16 when
-the Basic group is active.
+#### The five types
 
-**The SAMPLE and GRAIN pages.** The code describes them as follows (no rendered picture; see the TODO at the end of this
-chapter).
-- SAMPLE (multisample): the source is a file (SFZ or WAV) chosen in a browser that opens when you tap the name or the
-  list button (roots: SD CARD, USB drives, PLUGIN CONTENT); top controls TIMBRE (-100 .. +100 percent), the unison box, DETUNE,
-  BLEND, the warp pair; VEL TRK switch and AMOUNT (0 .. 100 percent); an ENVELOPE page with DELAY, ATTACK, HOLD, DECAY, SUSTAIN,
-  RELEASE and OVERRIDE (milliseconds, 0 .. 10000; delay 0 .. 2000).
-- GRAIN (granular): source = a file, blocks GRAIN (SCAN 0 .. 100 percent, DENS 0.1 .. 1000 Hz, LENGTH 1 .. 4000 ms, WARP menu),
-  PLAYBACK (OFFSET, DIR 0 .. 100 percent, PITCH 0 .. 24 semitones), RANDOM (LEN RAND, PAN RAND, LVL RAND, 0 .. 100 percent), a grain window
-  page (SHAPE Hann, Welch, Gaussian, Blackman-Harris, Sinc, Tukey, Triangle, Trapezoid, ExpDec, Exp Dec Rev; AMOUNT, RAND, SKEW, RAND),
-  crossfade XFADE (0 .. 1000 ms, steps of 10), loop mode One-shot / Loop grains / Manual.
-TODO(owner): Add device pictures of the SAMPLE and GRAIN pages, and confirm the layout described above; the rendered gallery has only the WAVE page.
+**WAVE (wavetable).** The bar above the display has FRAME (the frame now playing; shown only, you set the frame with WT POS or modulate it), PHASE
+(start phase, 0 .. 360 degrees), RAND (random start phase, 0 .. 100 percent) and **MAP**, which opens the FRAME MAP page.
+
+![FRAME MAP page](img/osc-page-map.png)
+
+*FRAME MAP* (what the picture shows): the block FRAME REMAP has the **REMAP** LED switch, a **CURVE** list (Curve 1 .. Curve 4) and the knobs **RISE** and **FALL**
+(milliseconds, on while the remap is on). The remap curve is drawn over the display (the orange line). The block SPECTRAL MORPH has TYPE (None, Vocode,
+Formant Scale, Harmonic Stretch, Inharmonic Stretch, Smear, Random Amplitudes, Low Pass, High Pass, Phase Disperse, Shepard Tone, Time Skew), AMOUNT and SPREAD.
+Use the remap to change how the frame position runs through the table; use the morph to reshape the harmonics of every frame.
+
+**MULTI (multisample instrument).** The source is an instrument file (SFZ, or a WAV that becomes an instrument of one zone). With no file loaded the display shows
+NO SAMPLE and a **LOAD INSTRUMENT** button that opens the content browser. The bar has **ENV** (opens the multisample envelope page: DELAY, ATTACK, HOLD, DECAY, SUSTAIN, RELEASE
+and the OVERRIDE switch, which lets this envelope replace the instrument's own), the **VEL TRK** LED switch with its AMOUNT (0 .. 100) and RAND (random start phase). The unison box has TIMBRE (-100 .. +100 percent).
+
+![MULTI type](img/osc-type-multi.png)
+
+**SAMPLE (one sample).** The display shows the sample with the START and END marks of the region. The bar has PHASE, **REGION** (opens SAMPLE REGION), **SLICE** (opens SAMPLE SLICES AND SCAN) and the unison count; the
+knob in the unison box is SCAN. With no file loaded a **LOAD SAMPLE** button opens the content browser.
+
+![SAMPLE type](img/osc-type-sample.png)
+
+![SAMPLE REGION page](img/osc-page-region.png)
+
+*SAMPLE REGION*: block REGION (START and END of the part that plays, ROOT note, shown while key tracking is on, and the KEY TRACK switch); block LOOP (MODE: One-shot, Forward loop, Reverse loop, Forward/reverse loop, Tailed; loop START, END and XFADE, shown while a loop mode is on);
+block LOOP OPTIONS (RELATIVE, LINK = link the loop length, EXIT = leave the loop on release; shown while looping); block EDIT (FADE edges: None, 1 ms .. 128 ms; NORMALIZE; REVERSE).
+
+![SAMPLE SLICES AND SCAN page](img/osc-page-slice.png)
+
+*SAMPLE SLICES AND SCAN*: block SLICE (MODE: Off, Auto, Manual; THRESHOLD in Auto; the slice select in Manual); block PLAYBACK (PLAY: Play slice to end or Play single slice, and the slice ROOT; shown when slicing);
+block SCAN (RANGE +-100 %, +-200 %, +-400 %, +-800 % and REVERSE: how far the SCAN knob can move the read position); block TEMPO (LOCK to tempo, TO BPM, and the length in BEATS while one of them is on).
+
+**GRAIN (granular).** The source is a sample that is played as a cloud of short grains. The display shows the file; a frame marks where the grains read. The bar has the
+**GRAIN** button (opens the GRAIN ENGINE page), **AMOUNT** (the grain window amount, with the window icon), the **LOOP** stepper (One-shot, Loop grains, Manual) and the unison count. The bottom blocks are GRAIN (SCAN, DENS = density 0.1 .. 1000 Hz, LENGTH 1 .. 4000 ms, WARP menu), PLAYBACK (OFFSET, DIR, PITCH 0 .. 24 semitones) and RANDOM (LEN RAND, PAN RAND, LVL RAND; random spread of length, pan and level).
+With no file loaded a **LOAD SAMPLE** button opens the content browser.
+
+![GRAIN type](img/osc-type-grain.png)
+
+![GRAIN ENGINE page](img/osc-page-grain.png)
+
+*GRAIN ENGINE*: block DENSITY (MODE Free, BPM Sync, Grains; the DIVISION in BPM Sync; the number of grains in Grains); block LENGTH (MODE Free, BPM Sync, Percent; division, percent);
+block SPAWN (PATTERN Together, Even, Exp, Random; MAX grains; JUMP = jump start; REVERSE); block RANDOM WARP (WARP 1, WARP 2: random amount per grain); block POSITION (MANUAL, KEY TRACK, XFADE); block Y AXIS (AXIS: a parameter you hand to the vertical axis, and its Y position while an axis is set).
+
+**SPEC (spectral).** The oscillator plays the spectrum of a sample or table and lets you filter and scan it. The display is the spectrum. The bar has PHASE, **FILTER** (opens SPECTRAL FILTER), **SCAN** (opens SPECTRAL SCAN) and the unison count; the knob in the unison box is POSITION. With no file loaded a **LOAD SAMPLE** button opens the content browser.
+
+![SPEC type](img/osc-type-spec.png)
+
+![SPECTRAL FILTER page](img/osc-page-specfilter.png)
+
+*SPECTRAL FILTER*: block BAND (LOW and HIGH edge in Hz, SMOOTH edges, AFTER WARP = apply the band after the warps); block FILTER (CUT, MIX, SHIFT = frequency shift in Hz); block FILTER FROM WAVETABLE (the WAVETABLE switch, then TABLE and FRAME that shape the filter).
+
+![SPECTRAL SCAN page](img/osc-page-specscan.png)
+
+*SPECTRAL SCAN*: block SCAN (MANUAL position, KEY TRACK, PHASE LOCK, TRANSIENTS); block SPECTRAL MORPH (TYPE, AMOUNT, SPREAD, as on the wavetable map page); block Y AXIS (AXIS: None, Level, Warp, Warp 2, Spec Flt Cutoff, Spec Flt Wet/Dry, Freq Lo, Freq Hi).
+
+**The content browser.** The source of MULTI, SAMPLE, GRAIN and SPEC is a file. The browser opens as a list: the first row is the folder you are in (tap to go one up), then folders, then files, sorted by name. The roots at the top are
+SD CARD, USB drives (named USB and the drive name) and PLUGIN CONTENT. It opens in the folder of the file loaded last. Only WAV and SFZ files are offered (not FLAC). An SFZ instrument must lie in a folder of its own with its samples below it. A tap on a file loads it; "LOAD FAILED" stays for four seconds if it does not.
+
+#### The oscillator options page (button MORE in the tune block)
+
+![OSCILLATOR OPTIONS page](img/osc-page-options.png)
+
+The page has no display: the room goes to six blocks, each one Q group of four.
+
+- **OSCILLATOR:** ON (the power switch, so it can be reached from the Q-Links), ENV 1 (Env 1 shapes this oscillator), SMOOTH (smooth interpolation), TRACK (pitch tracking).
+- **PITCH:** MODE (Semitones, Harmonics, Ratio, Step), BEND (the oscillator follows the pitch bend, a LED switch), and, while TRACK is off, **FIXED PITCH**: the MIDI note the oscillator plays whatever key you press (0, the default, is the oscillator's own C3).
+- **TRANSPOSE SNAP:** the twelve note cells (C to B, the five black notes in the upper row) are the notes the oscillator may play. Tap a cell to allow or forbid it. The nearest allowed note wins; a tie goes down; with no cell lit the snap is off. The **SNAP NOTE** switch snaps the whole played note instead of the transpose alone. This gives you a scale or a chord from one key. The knob that stands for the mask on the Q-Links sweeps it in coarse steps; the editing is by touch.
+- **PHASE:** MEMORY (All Voices: PHASE and RAND for every note, the default; Contiguous: a note continues with the phases the previous note has now; Per Voice: every note starts with the phases captured from the previous note), LEGATO (a note that starts while the previous key is still held takes that note's phases instead of starting at PHASE and RAND; it is the same switch as the PHASE LEG switch of the Master page) and RATIO source (Base note, Osc 1, Osc 2, Osc 3, Sub).
+- **KEY ZONE:** LOW and HIGH note, **FOLD** (a note outside the zone plays as the note an octave or more away that lies inside; a zone narrower than an octave cannot take it and stays silent) and **WARP** (outside its zone the oscillator keeps running as the source of the other oscillators' warps, but is not heard and not in the mixer strips).
+- **VELOCITY ZONE:** LOW and HIGH velocity and OVERRIDE.
+- **UNISON SHAPE:** CURVE (detune curve) and SHAPE (blend shape), VOICE LAW (Equal power or Fixed gain: how the blend of the voices is weighted) and STACK repeat (1x, 2x, 3x).
+
+Controls that do not apply in the current state are hidden (FIXED PITCH while TRACK is on, for example) and the others take their room.
 
 ### 5.4 Sub
 
 ![Sub](img/osc-sub.png)
 
-The sub oscillator. Header: power (Sub On), the waveform pictograms **SINE, HALF, TRI, SAW, SQR, PULSE** (Sub Waveform:
-Sine, Rounded Rect, Triangle, Saw, Square, Pulse; the pictogram HALF is the choice "Rounded Rect"), **OCT** (-4 .. +4, default -1),
-**PAN** (-100 .. +100 percent), **LEVEL** (0 .. 100 percent, default 50), the route button (M = Effects only by default).
+The sub oscillator: a simple wave for weight under the main oscillators. Header: the power button (Sub On), the six waveform keys **SINE, HALF, TRI, SAW, SQR, PULSE** (Sub Waveform:
+Sine, Rounded Rect, Triangle, Saw, Square, Pulse; the key HALF is the choice "Rounded Rect"), **OCT** (-4 .. +4, default -1),
+**PAN** (-100 .. +100 percent) and **LEVEL** (0 .. 100 percent, default 50). Sub has no route button; its routing is the block ROUTING below.
+In the picture the power button is dim: the Sub is off in the Init sound.
 
 - Display: one cycle of the waveform.
-- TUNE: CRS (Sub Coarse, -48 .. +48 semitones), ENV 1 (switch: Env 1 shapes the Sub), MONO (switch).
-- PHASE: PHASE (0 .. 360 degrees shown, 0 .. 100 percent in the parameter), FREE RUN (switch; the parameter is "Sub Phase Contiguous").
-- ROUTING: DEST (Filter 1, Filter 2, Filters 1+2, Effects only, Direct out, Filter blend, None), BLEND (0 .. 100 percent), BUS 1, BUS 2 (0 .. 100 percent).
-- Q groups: Basic (waveform, OCT, PAN, LEVEL), TUNE, PHASE, ROUTING.
+- TUNE: CRS (Sub Coarse, -48 .. +48 semitones), **ENV 1** and **MONO** (LED switches: Env 1 shapes the Sub; MONO).
+- PHASE: PHASE (0 .. 360 degrees shown), **FREE RUN** (LED switch; the parameter is "Sub Phase Contiguous").
+- ROUTING: DEST (Filter 1, Filter 2, Filters 1+2, Effects only, Direct out, Filter blend, None; default Effects only), BLEND (0 .. 100 percent), BUS 1, BUS 2 (0 .. 100 percent).
+- Q groups: header (waveform, OCT, PAN, LEVEL), TUNE, PHASE, ROUTING.
 
 ### 5.5 Noise
 
 ![Noise](img/osc-noise.png)
 
-The noise generator. Header: power (Noise On), the source stepper (Noise Sample: White Noise, Pink Noise, Brown Noise, Geiger,
+The noise generator. Header: the power button (Noise On), the **SOUND** stepper (Noise Sample: White Noise, Pink Noise, Brown Noise, Geiger,
 Tape Hiss, Vinyl Clicks, Digital Hash, Velvet Noise, Atmosphere), **FILTER** (-100 .. +100 percent), **PAN**, **LEVEL**
-(0 .. 100 percent, default 25), route button.
+(0 .. 100 percent, default 25) and the route button. The display draws the colour of the noise (faint while the noise is off).
 
-- TUNE: PITCH (-48 .. +48 semitones), FINE (-100 .. +100 cents), KEY TRACK (switch).
-- **Two different controls.** The header stepper chooses which of the nine noise sources the generator plays. The **TYPE** stepper in the bottom block (Noise Type: Noise / Sample) chooses whether the source is that generated noise (Noise) or a sample file from the plugin's content (Sample); if no sample file is loaded in Sample mode, the generator plays instead.
-- Bottom: with TYPE = Noise (generated) one block NOISE: TYPE stepper (Noise / Sample), STEREO (0 .. 100 percent), ENV 1.
-  With TYPE = Sample: block SOURCE (TYPE, START = Noise Phase 0 .. 100 percent, STEREO, ENV 1) and block PLAYBACK (RANDOM, LOOP, BOUNCE switches).
+- TUNE: PITCH and FINE (number fields: -48 .. +48 semitones, -100 .. +100 cents), **KEY TRACK** (LED switch).
+- **Two different steppers.** The header stepper SOUND chooses which of the nine noise sources the generator plays. The **KIND** stepper in the bottom block (Noise Type: Noise / Sample) chooses whether the source is that generated noise (Noise) or a sample file from the plugin's content (Sample). If no sample file is loaded in Sample mode, the generated noise plays instead.
+- Bottom, KIND = Noise (as in the picture): one block NOISE with KIND, STEREO (0 .. 100 percent) and the **ENV 1** LED switch.
+  KIND = Sample: block SOURCE (KIND, START = Noise Phase 0 .. 100 percent, STEREO, ENV 1) and block PLAYBACK (RANDOM, LOOP, BOUNCE LED switches).
 - Q groups: header (source, FILTER, PAN, LEVEL), TUNE, the bottom blocks.
 
 ### 5.6 Mixer
