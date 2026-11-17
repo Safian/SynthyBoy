@@ -1121,6 +1121,46 @@
    "Reso",
    "",
    ""
+  ],
+  "Subterranean Duo": [
+   "Bite",
+   "Growl",
+   "Punch",
+   "Sub Weight",
+   "Squeeze",
+   "",
+   "",
+   ""
+  ],
+  "Bend Formant Growl": [
+   "Mouth",
+   "Growl Depth",
+   "Wobble Rate",
+   "Dirt",
+   "Sub",
+   "",
+   "",
+   ""
+  ],
+  "Triple Fold Reese": [
+   "Fold",
+   "Phase Drift",
+   "Open",
+   "Width",
+   "Drive",
+   "",
+   "",
+   ""
+  ],
+  "Pitch Drop 808": [
+   "Drop",
+   "Tail",
+   "Knock",
+   "Grit",
+   "Boom",
+   "",
+   "",
+   ""
   ]
  }
 }

@@ -7,7 +7,7 @@
   "attribution": "Safian Szabolcs",
   "kind": "presets",
   "requires_plugin": ">=0.1.0",
-  "description": "112 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
+  "description": "116 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
   "files": [
     {
       "path": "Bass/solid_sub.sbpreset",
@@ -568,6 +568,26 @@
       "path": "Pad/tri_band_split_texture.sbpreset",
       "sha256": "2951302309d7b86ef847865f3c66a25b5ba269b0806bf8c47e0b886ebd571026",
       "size": 50435
+    },
+    {
+      "path": "Bass/subterranean_duo.sbpreset",
+      "sha256": "d7d79f5b49aab43ebb44aef527d2b25ffc2468a58f366648093597a9cc6aca8e",
+      "size": 50477
+    },
+    {
+      "path": "Bass/bend_formant_growl.sbpreset",
+      "sha256": "d701b90a2721c76f1104e95ad8e02ee32ba391ababcace11bbd8f1316cf02484",
+      "size": 50558
+    },
+    {
+      "path": "Bass/triple_fold_reese.sbpreset",
+      "sha256": "e33923ee0752b0758b24afb888f04d606c5dc4cdee33bf404288520927aaffef",
+      "size": 50560
+    },
+    {
+      "path": "Bass/pitch_drop_808.sbpreset",
+      "sha256": "21f981b4c41c4bc0ea3f6930cc91f4680b53d122204de424b19b60940da47742",
+      "size": 50494
     }
   ]
 }
