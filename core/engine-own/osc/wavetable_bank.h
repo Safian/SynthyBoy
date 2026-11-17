@@ -4,6 +4,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -51,6 +52,8 @@ public:
     /** Builds a table from per frame harmonic spectra: sine[h] and cosine[h] coefficients (h = 1 .. 1024) of  sum a_h cos (h t) + b_h sin (h t),
         every frame normalised to a peak of 1 when `normalizePeak` (the built-in tables; user tables keep their level: the bake of Render OSC Warp relies on it). */
     void build (const std::vector<std::vector<float>>& cosCoeff, const std::vector<std::vector<float>>& sinCoeff, bool normalizePeak = true);
+    /** The same, checking `cancel` between frames: false (and the table unusable: the caller drops it) when it became true. */
+    bool buildCancellable (const std::vector<std::vector<float>>& cosCoeff, const std::vector<std::vector<float>>& sinCoeff, bool normalizePeak, const std::atomic<bool>* cancel);
 
 private:
     int frames = 0;
@@ -60,9 +63,35 @@ private:
 };
 
 /** Shared immutable bank of the built-in tables (index = oscN.wavetable choice; 13 "Preset table" has no entry here: nullptr; index kNumWavetableChoices is the
-    rounded rectangle of the sub oscillator). The first call builds the bank (allocates): call it from prepare (). */
+    rounded rectangle of the sub oscillator). Every table is built once, on first need, by whoever needs it first and is not the audio thread.
+    builtinWavetable (): the table, built on the calling thread when it is not there yet (allocates, FFTs: NOT for the audio thread; tests, tools, the overlay's drawing). */
 constexpr int kRoundedRectTable = 15;
 const Wavetable* builtinWavetable (int choice) noexcept;
+/** The audio thread's read: the table when it is built, nullptr when it is not (yet): no build, no allocation, no lock, one acquire load. The caller NEVER substitutes another table for it: the own engine
+    keeps the table an oscillator had until the new one is ready (OwnEngine, TickGlobals::wtResolved). */
+const Wavetable* builtinWavetableIfReady (int choice) noexcept;
+/** true when `choice` needs no wait: it is built, or it has no built-in table at all ("Preset table"). Any thread. */
+bool builtinWavetableSettled (int choice) noexcept;
+/** Any thread, lock free (an atomic store): oscillator slot `slot` (0 .. 5: osc 1 .. 3 wavetable, osc 1 .. 3 spectral filter table) now wants table `choice`. The background builder takes the latest
+    request of every slot; a table that was passed over (a knob swept past it) is not built. A table is built at most once per process and then kept, so the cost exists only for the first use of each table. */
+void requestBuiltinWavetable (int slot, int choice) noexcept;
+/** Builds, on the calling thread, the tables whose bit (1 << choice) is set in `mask` (waits for a table the background builder is making). Not for the audio thread. */
+void ensureBuiltinWavetables (unsigned mask) noexcept;
+/** The tables of one cycle (sine, saw, square, triangle, pulse, saw down, rounded rectangle): a few milliseconds all together; the eight 64 frame tables are the cost (docs/MPC.md "Start-up time"). */
+void ensureBuiltinSingleCycleTables() noexcept;
+/** All tables, on the calling thread and a few helper threads (the former behaviour of the first call of builtinWavetable (); offline rendering). */
+void ensureAllBuiltinWavetables() noexcept;
+/** An engine that runs lazily (Quality::lazyTables) takes a share of the background builder, a low priority thread that builds the requested tables (the first user starts it). Not for the audio thread. */
+void startBuiltinBankBackground() noexcept;
+/** Gives the share back; when it was the last, the thread is stopped and joined: it checks the stop flag between frames of a table (a frame is a few ms on the Key 61), so the bound is one frame plus
+    the thread's wake up (about 10 ms). A table in the making is dropped (never published, so nothing half built is ever read). The thread holds no pointer to an engine. */
+void stopBuiltinBankBackground() noexcept;
+/** TESTS ONLY. Pauses / resumes the background builder (a table it would build waits); the host-thread builds (ensure...) are not affected. */
+void setBuiltinBuilderPausedForTests (bool paused) noexcept;
+/** TESTS ONLY. Forgets every built table (frees them). Only valid while no engine exists and no builder thread runs. */
+void resetBuiltinBankForTests() noexcept;
+/** Milliseconds spent building tables so far, summed over all threads (the status file: open_ms_detail_wavetables). */
+double builtinBankBuildMs() noexcept;
 
 /** A table from decoded audio: `samples` holds numFrames * 2048 samples (frames one after the other). Not real time (allocates, FFTs). Null for no frames. */
 std::unique_ptr<Wavetable> makeWavetableFromSamples (const float* samples, int numFrames);

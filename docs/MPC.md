@@ -1189,3 +1189,115 @@ The host displays a graphic tile in the Sounds > INSTRUMENTS plugin selector whe
 - **Packaging**: `scripts/mpc-skin-extras/98_tile.py` copies the generated asset into the skin folder during skin generation. `scripts/build-mpc.sh` ensures the file is present in the final package.
 - **Tests**: `scripts/tests/test_mpc_tile.py` checks that the tile exists, matches the 270 x 110 PNG dimensions, contains valid non-empty procedural artwork, and is copied into the skin package.
 
+
+## Start-up time
+
+The first open of the plugin on the Key 61 (32-bit Cortex-A17, 1.6 GHz, slow storage) looked frozen; later program changes were immediate. Where the time goes, from the code (cost classes are estimates for that CPU, `cheap` < 10 ms, `tens` 10 to 100 ms, `hundreds` 100 ms to 1 s, `seconds` > 1 s; the status lines below replace the estimates with numbers).
+
+What the host measured (journal, release build): `dlopen` plus `VSTPluginMain` about 36 ms with the library cached, up to a second on the very first load after boot. The long wait is after "Initialising VST": effOpen and the calls that follow.
+
+| # | When | Thread | What runs | Cost class (before) | Now |
+|---|---|---|---|---|---|
+| 1 | dlopen | host | static initialisers: the oversampling decimator tables (Kaiser design, namespace scope), `OwnEngine` key tables are lazy | tens | unchanged |
+| 2 | `VSTPluginMain`, `PluginInstance()` | host | output stage, `createEngine` (own): parameter tables, `ParamIndex` (resolved once) | tens | unchanged (`engine_create`) |
+| 3 | same | host | content store object + pack root: no scan, no hashing; content files are read and SHA-256 verified only when a state names them (`UserContentStore::readFile`). The 11.5 MB content pack costs nothing at start | cheap | unchanged |
+| 4 | same | host | `scanPrograms`: 136 preset files of about 50 KB each (6.9 MB): every file was read whole (64 KB buffer) to take the name and category from its first 200 bytes. Cold storage: one seek per file plus 13 blocks each | seconds cold, tens warm | first 4 KB per file: hundreds cold (136 seeks), tens warm (`scan_presets`) |
+| 5 | same | host | default parameter values into the engine and the mirror (about 1100 `setParam`) | tens | unchanged (`default_params`) |
+| 6 | `VSTPluginMain` | host | AEffect, `startLive` (a thread), `startOverlay`: before, `Controller::readoutTargets` constructed all 24 pages and `Service::attach` constructed the controller with all 24 views again, then attached | hundreds | slot assignment only; the readout list is built by the display thread after its first report, the views by the overlay thread's first tick (`vst_main_rest`, details `start_live`, `start_overlay`, `overlay_readout`) |
+| 7 | effOpen, effSetSampleRate, effSetBlockSize | host | store only | cheap | unchanged |
+| 8 | program / parameter queries: effGetProgramNameIndexed (137 or 161 times), effGetParamName/Label/Display, effGetParameterProperties, effCanBeAutomated (about 1100 each) | host | table lookups, string copies; names of programs from memory | cheap each, tens together | unchanged |
+| 9 | effGetChunk / effSetChunk / effSetProgram (first) | host | JSON of the state (about 50 KB, 1100 parameters), `applyState`, `setContent` (content files named by the state are read and hashed), then `readyContent` | tens; content files: hundreds per MB read on slow storage | plus: the built-in tables the state names are built here if not built yet (see 11): hundreds each for a morph table, once per process |
+| 10 | effMainsChanged (on), first | host | profile selection (reads `/proc/device-tree/model`, writes the report file once), `engine->prepare` | seconds | see 11 and 12 (`engine_prepare`) |
+| 11 | in prepare | host | the built-in wavetable bank: 16 tables, eight of them 64 frames: about 520 frames x 18 mip levels, one double precision complex FFT each (sizes 256 .. 2048), taper and spectrum copy, 29 MB, up to 3 helper threads | seconds | the 7 one cycle tables (about 20 ms) and the tables the current parameters name; any other table is built when it is first chosen, by a low priority thread (`open_ms_detail_wavetables` is the build time summed over threads) |
+| 12 | in prepare | host | the voice pool (36 voices: 3 wavetable oscillators with 56 KB morph buffers, 3 library oscillators with 80 sample, 16 grain and 4 spectral voices each, filters) and the effects (pool and three racks, every module built per rack: reverb and delay buffers) | hundreds | unchanged: needs the status numbers (`open_ms_detail_prepare_voices`, `_fx`) before it is reduced; a design is below |
+| 13 | overlay thread, first tick | overlay | `buildViews` (24 pages' scenes), page detector, the GPU helper's start (`gpu_helper_startup_ms: 584` measured), font atlas and SDF data (constant tables: no work), first frame | seconds | now off the host's thread already; `open_ms_total_ui` is the time to the first frame |
+| 14 | display thread | display | LFO cursors, spectrum analyser (allocates once), Q / Play proxies, polls every 100 ms idle | cheap | unchanged |
+| 15 | first `processReplacing` | audio | one block; the tables the state names are ready; per block the engine picks each oscillator's table (below) | cheap | unchanged |
+
+### Wavetables: how a table gets to the audio thread
+
+Each of the 16 built-in tables is built at most once per process and then kept (immutable). A build is the expensive part (about 64 frames x 18 mip levels of double precision FFTs for the eight morph tables); the cost therefore exists only for the first use of each table.
+
+- **Program or state load** (effSetProgram, effSetChunk, the first prepare): `applyState` calls `IEngine::readyContentFor (values)` BEFORE it sets the parameters: the tables the incoming values name are built on the host's thread, then the parameters are set. Index and table take effect together: the engine derives each oscillator's table from the same snapshot of the parameters the voices read, once per block (`TickGlobals::wtResolved`), so a voice never sees the new index with a table that does not belong to it. A table another thread is making is waited for, never built twice.
+- **A table index moved live** (knob, Q-Link, automation; tables are not modulatable): `setParam` stores the request in the oscillator's slot (an atomic store, lock free, audio thread safe). A low priority builder thread builds the LATEST request of each of the six slots (osc 1 to 3 wavetable, osc 1 to 3 spectral filter table); a table a knob swept past is not built. Until the table is finished the oscillator KEEPS PLAYING THE TABLE IT HAD (`wtHeld`); there is no substitute and no saw. When the builder has finished, the table is published with one release store and the engine takes it at the start of the next block. The audible behaviour is: the old table continues for the length of the build (the first use of a morph table: a few hundred ms on the Key 61), then the new one starts. There is no cross fade beyond the engine's own per period smoothing.
+- The saw fallback keeps its original meaning only: "Preset table" whose content is missing.
+- **Loading mark:** while `IEngine::contentPending ()` is true the plugin-drawn pages show it, see "Loading mark" below.
+- **Close:** the builder is reference counted by the lazy engines. The destructor of the last one (effClose) sets the stop flag and joins; the builder checks it between two frames of a table and in its 10 ms sleep, so it stops within one frame of the table in the making (a few ms on the Key 61) plus 10 ms. A table in the making is dropped: it is never published, so nothing half built is read. The builder thread holds no pointer to an engine or a plugin instance (the tables live in the process-wide bank, which outlives every instance), so closing while a table is being built touches no freed memory. Test source: `own_lazy_engine_open_close_repeat` (open, change the table, close at once, 20 times).
+- Offline renders and the other shells (`Quality::lazyTables` false) build all tables in `prepare ()` as before.
+
+**Precomputed tables on disk (evaluated, not done).** A package step could write the 16 built tables (all mip levels and spectra) to `Content/tables/*.bin` and the plugin could map them. Reasons against: (1) size: about 33 MB on disk (32.6 MB for the eight morph tables, 63.6 KB per frame), 4 MB to read for one morph table, which on the Key 61's storage costs about what the build costs (the cold read and the FFTs are the same order), so the gain exists only with a warm page cache; (2) byte exactness: the build uses `std::complex<double>` FFTs and `cos`/`sin` from the C library; a tool run on the build machine (or under emulation) does not give bit-identical floats to the device's own build (different libm, fused multiply add on AArch64), and the rendered samples must stay identical; a tool that runs on the device at install time would be the only exact one, and that is the build we already have; (3) real time: a mapped table takes page faults on first touch, a hazard on the audio thread; it would need a read ahead and a touch of every page on the builder thread before the hand over (cost again). If the numbers (`open_ms_detail_wavetables`, and the time of the first use of a table) show the first use is too slow, the exact way to make it faster is to build the frames of a table on two builder threads (the frames are independent), not to cache.
+
+**Voice pool and effect racks (design, not implemented).** The same principle (constructor and prepare short, heavy work on an interruptible background thread, the audio path on what is ready, lock free hand over, the host never waits) applies to the 36 voices and the three racks. Design: `prepare` builds the first `voiceCap + 4` voices (8 + 4 on tier low) and the effect modules of the effect types the program names; a builder thread builds the rest. Per voice and per rack an atomic `ready` flag, set with release after the object is complete; the audio thread allocates a note only to a voice whose flag is set (acquire load), so a note-on that finds no ready voice uses the ready ones (the voice stealing it already does when all voices are busy); a rack whose flag is not set passes the signal through unchanged (the bypass the engine already has), and the rack's module is taken over at a block boundary. The cap can be raised by `setQuality` without a prepare: the builder then builds the missing voices and the cap in force is `min (cap, ready voices)`. Once every voice is ready the output is identical to today's: the voices are the same objects built by the same code, only later. Not implemented because (a) it touches the voice allocation and the voice stealing order, which fix the sample output of every polyphonic test, and a change that must keep every sample identical cannot be verified without running the engine tests (this task writes code without building); (b) the numbers `open_ms_detail_prepare_voices` and `_prepare_fx` decide whether it is needed. Ready for implementation after those numbers, with a test that renders the same notes with all voices ready and compares.
+
+### Loading mark (UI change for review)
+
+While a wavetable the current parameters name is still being built, every plugin-drawn page (`PageView`, `shell-mpc/overlay/page_view.h`) draws a 4 px amber bar (`0xFFB000`) along the top edge of the tab, from the left edge to the Q-Link panel's cut (`edgeX_`), over the page. No text, no touch target, no layout change, nothing moves; it appears and disappears with the table. Plumbing: `IInstanceView::tablesLoading ()` (default false; `OverlayView` answers `engine->contentPending ()`, a relaxed read of the six table parameters and the bank's state), `PageView::update` compares it with the last value and marks the picture changed. The compact Play views, the filter / LFO / envelope views and the host's own widgets show nothing.
+
+### The preset index
+
+`scripts/build-preset-index.py` (run by `scripts/build-mpc.sh` after the presets are copied; usable on `content/presets`) writes `Content/presets/index.json`: a header (`index_version`, `count`, `listing_hash`) and one line per preset (relative path, name, category, browser group from `scripts/factory-preset-categories.json`, size, a FNV-1a 64 hash of the file's bytes as an integrity check (not security), container and state version). At start the plugin reads only this file. Stale-index rule: the index is trusted when (1) it parses, (2) its version is 1, (3) the listing hash in its header matches the hash of its own list, and (4) a directory listing of the folder (names and sizes through readdir and stat, no file is opened) gives exactly the same names and sizes (the same listing hash). Otherwise (missing, unparsable, another version, a file added, removed or changed in size) the plugin falls back to the scan (the first 4 KB of every file) and writes one line to the developer log (`startup`: "N programs from scan (<reason>)"). User presets outside the factory folder are not in the index and keep the scan. The order is one rule, `sortPrograms` (category, name case-insensitive, path), used by the scan and by the index, so the program numbers and the Sounds browser files do not move; Init is program 0 before either. A preset edited in place with the same size is not detected by the listing check: run the script again (the packaging does). Test source: `shell-mpc/tests/preset_index_host.cpp` (index order equals scan order for the repository's presets, stale and damaged index fall back).
+
+### The status lines
+
+In `/tmp/synthyboy-overlay-status.txt` (every build; in a release build with `/tmp/synthyboy-overlay-status-on` present):
+
+- `open_ms_<step>` for `engine_create content_store scan_presets default_params vst_main_rest host_until_first_call host_until_resume engine_prepare host_until_first_audio`: the time from the previous milestone in time to this one; `n/a` = not reached yet. Time zero is the first entry into `VSTPluginMain` of the process (the record describes the first instance).
+- `open_ms_total`: time zero to the end of the first processed audio block; the parts above add up to it. `open_ms_total_ui`: time zero to the first frame of our UI shown.
+- `open_ms_detail_*` (inside the steps, not added): `start_live start_overlay overlay_readout engine_construct wavetables prepare_voices prepare_fx`.
+- `host_call_max_ms_<call>: <longest> (<n> calls, <sum> ms in all)` for effOpen, effSetProgram, effGetProgramName, effGetProgramNameIndexed, effGetChunk, effSetChunk, effMainsChanged, effSetSampleRate, effSetBlockSize, `param_info_calls` and `other` (everything else except effProcessEvents).
+
+The same milestones go to the developer log (category `startup`, `docs/ui-components/LOGGING.md`).
+
+### What the host waits for
+
+Every call of the host is answered on the host's thread. The longest work each can do now:
+
+| Call | Longest work |
+|---|---|
+| `VSTPluginMain` | engine, store, preset names (136 x 4 KB), parameter defaults, two thread starts; no page construction, no helper start |
+| effOpen, effSetSampleRate, effSetBlockSize, effGetVstVersion, effCanDo, effGetEffectName and the other string calls | a copy |
+| effGetProgramName(Indexed), effGetParamName / Label / Display, effGetParameterProperties, effCanBeAutomated | a table lookup and a copy; one short mutex (`programMutex`) for the program name |
+| effSetProgram | read one preset file (about 50 KB), parse, build the built-in tables the state names (`readyContentFor`; a morph table: hundreds of ms, once per process), apply the parameters, `setContent` (reads and hashes the content files the state names) |
+| effSetChunk | the same, from the chunk |
+| effGetChunk | save the state (about 50 KB) under `chunkMutex`; copy into one of four buffers |
+| effMainsChanged (on), first and when the rate or block size changed | the engine's prepare: one cycle tables, the tables the parameters name, the voice pool, the effects. Hundreds of ms to a second or two (numbers: `open_ms_detail_prepare_*`, `host_call_max_ms_effMainsChanged`) |
+| effProcessEvents, processReplacing | the audio thread: no allocation, no lock |
+| effClose | waits for the display thread at most 1500 ms and for the overlay's lock at most 2000 ms (`kLiveJoinMs`, `kDetachWaitMs`); the last instance also waits for the overlay thread to end, at most 2500 ms; normally a few ms |
+
+The display thread's calls into the host (`audioMasterAutomate`, `UpdateDisplay`) are made only after the host has called us once, and never after effClose began.
+
+## Logging in the plugin
+
+Every file the plugin and the GPU helper write, and which thread writes it. "Host / audio" says whether a write can ever block the host's main thread or the audio thread.
+
+### Release build (debug hooks OFF, callback statistics OFF), as built today (`SYNTHYBOY_MPC_DEV_LOG` ON)
+
+| File | When | Size | Thread | Blocks host / audio? |
+|---|---|---|---|---|
+| `/tmp/synthyboy-overlay-status.txt` | about once a second and at view changes (`statusDue_`), replaced atomically (temp file + rename) | 6.9 kB, 182 lines | overlay thread | no / no: the host waits on the overlay thread only in effClose (bounded 2 s) and the write happens outside the controller's lock |
+| `/tmp/synthyboy-mpc-profile.txt` | once, at the first `profileInForce ()` (first effMainsChanged on) | 248 B | host thread, in prepare | the host's thread for the length of one small write; not the audio thread |
+| `/tmp/synthyboy-mpc-status.txt` | only when a poll fails (`PollGuard`), up to 8 lines | < 2 kB | display or overlay thread | no / no |
+| `/tmp/synthyboy-overlay-gpu-egl.txt` | once per helper start | 865 B | the GPU helper process | no / no |
+| `/tmp/synthyboy-overlay-gpu.log` | the helper's stdout and stderr, a few lines per helper start and error; trimmed to 128 KB at each start | 402 B | the GPU helper process | no / no |
+| `/tmp/synthyboy-overlay-gpu-minfreq.orig`, `/tmp/synthyboy-overlay-zpos-rest` | state the plugin needs (GPU clock's original setting, the plane's rest value), written when they change | tens of bytes | overlay thread | no / no (not logging; kept) |
+| `/sys/class/devfreq/...` | the GPU clock raised and put back | - | overlay thread | not logging |
+
+Read every second by the overlay thread (not logging): `/tmp/synthyboy-overlay-off`, `-rot`, `-nogpu`, `-detail`, `-fps`, `-look`, `-gpuclock`.
+
+### Debug-hooks build (`SYNTHYBOY_MPC_DEBUG_HOOKS`), in addition
+
+| File | When | Size | Thread | Blocks? |
+|---|---|---|---|---|
+| `/tmp/synthyboy-play-log.txt` | while `/tmp/synthyboy-play-log` exists; the ring is filled by any thread (the audio thread included: no allocation, no lock), written by the display thread every tick | up to 512 KB | display thread | no / no |
+| `/tmp/synthyboy-play-log-chunk-get.json`, `-chunk-set.json` | a copy of each chunk, written on the next tick | up to 8 MB | the host thread copies (allocates), the display thread writes | the host's thread for a copy; not the audio thread |
+| `/tmp/synthyboy-play-log-dump.txt` | on request file | tens of kB | display thread | no |
+| `/tmp/synthyboy-overlay-curve.txt` | on request file `/tmp/synthyboy-overlay-dump` | kB | overlay thread | no |
+| `/tmp/synthyboy-overlay-gpu-frame.raw` and `.txt` | while `/tmp/synthyboy-overlay-gpu-dump` exists, once a second at most (a readback of the frame) | the frame, 1 to 4 MB | the GPU helper | no |
+
+Option builds: `SYNTHYBOY_MPC_CALLBACK_STATS` writes `/tmp/synthyboy-callback-stats.txt` (and `.2` ..) every 5 s from its own low priority thread; `SYNTHYBOY_MPC_OVERLAY_BENCH` (helper) writes `/tmp/sb-bench-stats.txt`, `/tmp/sb-pace-trace.txt`.
+
+### What a public release should still write, and the option
+
+Proposal: nothing periodically. A status file only on request, through a switch file; no report, probe or error files; no log of the helper; no developer log. Failures stay visible in the host's own log through the plugin's refusal to load, not through `/tmp`.
+
+The single build option is `SYNTHYBOY_MPC_DEV_LOG` (CMake, default ON so that today's builds and the device measurements keep working; `scripts/build-mpc.sh --release` sets it OFF, the release flips the default). OFF: `MPCKIT_DEV_LOG` 0 (no developer log code or strings) and `SYNTHYBOY_MPC_WRITE_FILES` 0 (`shell-mpc/write_files.h`): the periodic status file is written only while `/tmp/synthyboy-overlay-status-on` exists (read once a second with the other switch files, on the overlay thread: the status write was never on a thread the host or the audio thread waits for), the profile report, the helper's probe file and the PollGuard report are not written, the helper's output goes to `/dev/null`. The debug-hooks build is separate (never in a package). The developer log itself is described in `docs/ui-components/LOGGING.md`.

@@ -505,7 +505,14 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
         if (v[lk_fltUse] >= 0.5f && haveSample)
         {
             fltTableChoice = std::clamp (static_cast<int> (v[lk_fltTable] + 0.5f), 0, kNumWavetableChoices - 1);
-            fwt = fltTableChoice == kWavetablePresetTable ? (content != nullptr ? content->userTable[oscIndex].get() : nullptr) : builtinWavetable (fltTableChoice);
+            fwt = fltTableChoice == kWavetablePresetTable ? (content != nullptr ? content->userTable[oscIndex].get() : nullptr) : builtinWavetableIfReady (fltTableChoice);   // audio thread
+            if (fltTableChoice != kWavetablePresetTable)
+            {
+                if (fwt != nullptr)
+                    heldFlt_ = fwt;   // a table not built yet: the one this oscillator's filter had (never a substitute)
+                else
+                    fwt = heldFlt_;
+            }
         }
         if (fwt != nullptr)
         {

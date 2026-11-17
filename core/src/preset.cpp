@@ -506,15 +506,23 @@ std::vector<PresetEntry> scanPresetDirectory (const std::string& directoryPath)
             FILE* f = std::fopen (filePath.c_str(), "rb");
             if (f != nullptr)
             {
+                // The meta object is at the start of the document (the container writes it before the state, which is about 50 KB of parameters): the first 4 KB are read and parsed;
+                // only when they do not hold a complete meta object (a long description, another key order) the first 64 KB are, as before. On a cold slow medium reading the 136 files
+                // of the factory bank whole (6.9 MB) was the biggest part of the first open of the plugin.
                 char buf[65536];
-                const size_t n = std::fread (buf, 1, sizeof buf, f);
-                std::fclose (f);
-                if (n > 0)
+                constexpr size_t kPrefix = 4096;
+                size_t n = std::fread (buf, 1, kPrefix, f);
+                PresetMeta meta;
+                bool ok = n > 0 && readPresetMeta (buf, n, meta);
+                if (! ok && n == kPrefix)
                 {
-                    PresetMeta meta;
-                    if (readPresetMeta (buf, n, meta))
-                        entries.push_back ({ filePath, std::move (meta) });
+                    n += std::fread (buf + n, 1, sizeof buf - n, f);
+                    meta = PresetMeta();
+                    ok = readPresetMeta (buf, n, meta);
                 }
+                std::fclose (f);
+                if (ok)
+                    entries.push_back ({ filePath, std::move (meta) });
             }
         }
     }

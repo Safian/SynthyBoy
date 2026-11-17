@@ -32,6 +32,7 @@
 #include <string>
 
 #include "synthyboy/quality.h"
+#include "write_files.h"
 
 namespace synthyboy_mpc {
 
@@ -291,12 +292,14 @@ inline const ProfileChoice& profileInForce()
         const std::string model = firstLine ("/proc/device-tree/model", 255);
         const std::string filePath = env ("SYNTHYBOY_MPC_PROFILE_FILE", "/tmp/synthyboy-mpc-profile");
         ProfileChoice c = chooseProfile (model, kBuild64, firstLine (filePath, 255), filePath, env ("SYNTHYBOY_MPC_PROFILE", ""), SYNTHYBOY_MPC_PROFILE);
+#if SYNTHYBOY_MPC_WRITE_FILES   // the release build (write_files.h) writes no report file
         if (FILE* f = std::fopen (env ("SYNTHYBOY_MPC_PROFILE_REPORT", "/tmp/synthyboy-mpc-profile.txt").c_str(), "w"))
         {
             const std::string report = profileReport (c, model, kBuild64);
             std::fwrite (report.data(), 1, report.size(), f);
             std::fclose (f);
         }
+#endif
         return c;
     }();
     return choice;

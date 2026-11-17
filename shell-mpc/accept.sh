@@ -453,7 +453,7 @@ $B/layout_lint_host --self-test > $B/layout-lint-selftest.log 2>&1 || { tail -15
 $B/layout_lint_host --presets-dir content/presets --baseline $OVSRC/layout_lint_baseline.json --quiet > $B/layout-lint.log 2>&1 || { tail -30 $B/layout-lint.log; echo "ACCEPT FAIL: layout_lint_host (a finding that is not in the baseline, or a baseline entry that is gone)"; exit 1; }
 # the robustness review (docs: .hw-local/mpc-ui-plans/robustness-review.md): the logic alone, plainly and under AddressSanitizer + UBSan (and ThreadSanitizer where threads are the point)
 RT=shell-mpc/tests
-for t in safe_file_host poll_guard_host play_log_host; do
+for t in safe_file_host poll_guard_host play_log_host startup_timing_host log_host; do
     c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc -o $B/$t $RT/$t.cpp -lpthread || { echo "ACCEPT FAIL: $t build"; exit 1; }
     $B/$t > $B/$t.log 2>&1 || { grep -E "^FAIL" $B/$t.log; echo "ACCEPT FAIL: $t (robustness review)"; exit 1; }
     c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I shell-mpc -o $B/${t}_asan $RT/$t.cpp -lpthread || { echo "ACCEPT FAIL: $t asan build"; exit 1; }

@@ -62,6 +62,11 @@ public:
     void process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept override;
     void setTransport (const TransportInfo& t) noexcept override;
     void setReadoutTargets (const int* idx, int count) noexcept override;
+    void readyContent() noexcept override;
+    void readyContentFor (const float* plain, size_t count) noexcept override;
+    bool contentPending() const noexcept override;
+    double wavetableBuildMs() const noexcept override;
+    double prepareDetailMs (int part) const noexcept override { return part == 0 ? prepareVoicesMs.load (std::memory_order_relaxed) : part == 1 ? prepareFxMs.load (std::memory_order_relaxed) : 0.0; }
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
     bool voiceStats (VoiceStats& out) const noexcept override;
     unsigned missingContent() const noexcept override { return missingMask.load (std::memory_order_relaxed); }
@@ -179,6 +184,11 @@ private:
     FxChain fx[3];                 // the racks Main, Bus 1, Bus 2
     FxPool fxPool;                 // the 16 slots of the effect instance pool
     int fxiTypeIndex[kNumFxInstances] = {};
+    std::atomic<double> prepareVoicesMs { 0.0 }, prepareFxMs { 0.0 };   // what the last prepare () spent on the voice pool and on the effects (the start-up record of the shell)
+    int wtParamIdx[6] = { -1, -1, -1, -1, -1, -1 };   // table positions of osc1..3.wavetable and osc1..3.spec.flt_table: the keys that name a built-in table (set once in the constructor)
+    bool lazyBank = false;                              // prepare () took a share of the background builder (stopped in the destructor)
+    const Wavetable* wtHeld[3] = { nullptr, nullptr, nullptr };   // audio thread: the table each oscillator plays now (the new one when it is ready, else the one it had)
+    unsigned wavetableMaskOfParams() const noexcept;   // bit (1 << choice) for every built-in table the current values of those keys name
     IntDelay dlVoices, dlBusOut[2], dlBusIn[2], dlMainOut, dlDirect;  // latency compensation (document 06, 11)
     std::atomic<int> reportedLatency { 0 };
     void clearLatencyDelays() noexcept;

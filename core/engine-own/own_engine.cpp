@@ -95,6 +95,14 @@ OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.fo
         params[i].store (i < paramCount() ? table[i].def : 0.0f, std::memory_order_relaxed);
     for (int i = 0; i < kNumFxInstances; ++i)
         fxiTypeIndex[i] = fxInstanceKeys (i).type;
+    {
+        static const char* const kWtKeys[6] = { "osc1.wavetable", "osc2.wavetable", "osc3.wavetable", "osc1.spec.flt_table", "osc2.spec.flt_table", "osc3.spec.flt_table" };
+        for (int i = 0; i < 6; ++i)
+        {
+            const ParamInfo* info = findParamByKey (kWtKeys[i]);
+            wtParamIdx[i] = info != nullptr ? findParamIndex (info->id) : -1;
+        }
+    }
     for (auto& k : switchKeyAtomic)
         k.store (-1, std::memory_order_relaxed);
     for (int o = 0; o < 3; ++o)
@@ -135,6 +143,8 @@ OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.fo
 OwnEngine::~OwnEngine()
 {
     stopFxWorker();
+    if (lazyBank)
+        stopBuiltinBankBackground();   // gives the share back; the last one stops and joins the builder thread (bound: one frame of a table and its 10 ms sleep). The thread holds no pointer to this engine.
 }
 
 void OwnEngine::startFxWorker()
@@ -238,6 +248,12 @@ void OwnEngine::setParam (uint32_t id, float plain) noexcept
     const float v = constrainValue (paramTable()[i], plain);
     params[static_cast<size_t> (i)].store (v, std::memory_order_relaxed);
     paramGen.fetch_add (1u, std::memory_order_release);
+    for (int k = 0; k < 6; ++k)
+        if (wtParamIdx[k] == i)
+        {
+            requestBuiltinWavetable (k, std::clamp (static_cast<int> (v + 0.5f), 0, kNumWavetableChoices - 1));   // lock free: the background builder takes the latest request of each slot; until the table is built the oscillator keeps playing the one it had
+            break;
+        }
     for (int s = 0; s < kNumFxInstances; ++s)
         if (fxiTypeIndex[s] == i)
         {
@@ -305,14 +321,34 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
     setQuality (quality);
     scratchRight.assign (static_cast<size_t> (std::max (maxBlockFrames, 4096)), 0.0f);
-    for (int c = 0; c <= kNumWavetableChoices; ++c)
-        builtinWavetable (c); // builds the shared bank (allocates): not on the audio thread
+    // The built-in tables (allocates, FFTs: not on the audio thread). Offline (tests, renders) and every shell that does not ask for lazyTables: all of them here, as always. Lazy (the MPC shell): the one cycle
+    // tables (a few ms) and the tables the current parameters name are built here; any other table is built when it is first chosen, by a low priority thread that takes the latest request of each
+    // oscillator (docs/MPC.md "Start-up time"). Until it is ready the oscillator keeps playing the table it had (see wtHeld, below).
+    if (quality.realtime && quality.lazyTables)
+    {
+        ensureBuiltinSingleCycleTables();
+        ensureBuiltinWavetables (wavetableMaskOfParams());
+        if (! lazyBank)
+        {
+            startBuiltinBankBackground();
+            lazyBank = true;
+        }
+    }
+    else
+        ensureAllBuiltinWavetables();
+    for (int o = 0; o < 3; ++o)   // the tables the oscillators play when the first block comes: the ones the parameters name (built just now)
+    {
+        const int idx = wtParamIdx[o];
+        const int choice = idx >= 0 ? std::clamp (static_cast<int> (params[static_cast<size_t> (idx)].load (std::memory_order_relaxed) + 0.5f), 0, kNumWavetableChoices - 1) : kWavetableSaw;
+        wtHeld[o] = choice == kWavetablePresetTable ? nullptr : builtinWavetableIfReady (choice);
+    }
     // the lazily built tables of the keys (they allocate on first use): build them here
     (void) paramIndex();
     (void) fxIndex();
     (void) destLawOf (0);
     (void) WtOsc::decimatorTaps();
 
+    const auto tVoices0 = std::chrono::steady_clock::now();
     voices.clear();
     heldSrcValid = false;
     for (int i = 0; i < kPoolVoices; ++i)
@@ -328,6 +364,8 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     pdelta.assign (paramCount(), 0.0f);
     ptouched.assign (static_cast<size_t> (kNumModSlots), 0);
     pnumTouched = 0;
+    const auto tFx0 = std::chrono::steady_clock::now();
+    prepareVoicesMs.store (std::chrono::duration<double, std::milli> (tFx0 - tVoices0).count(), std::memory_order_relaxed);
     stopFxWorker();   // no module is built while the pool is prepared again
     realtimeFlag = quality.realtime;
     {
@@ -344,12 +382,51 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
         fx[i].setPool (&fxPool);
         fx[i].prepare (sampleRate, maxBlockFrames);
     }
+    prepareFxMs.store (std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - tFx0).count(), std::memory_order_relaxed);
     smoothedGain.reset (sampleRate, 0.02);
     morphCache.prepare();
     snapValid = false;
     mixCached = latCached = false;
     prepared = true;
     reset();
+}
+
+unsigned OwnEngine::wavetableMaskOfParams() const noexcept
+{
+    unsigned mask = 0;
+    for (int k = 0; k < 6; ++k)
+        if (wtParamIdx[k] >= 0)
+            mask |= 1u << std::clamp (static_cast<int> (params[static_cast<size_t> (wtParamIdx[k])].load (std::memory_order_relaxed) + 0.5f), 0, kNumWavetableChoices - 1);
+    return mask;
+}
+
+void OwnEngine::readyContentFor (const float* plain, size_t count) noexcept
+{
+    if (plain == nullptr)
+        return;
+    unsigned mask = 0;
+    for (int k = 0; k < 6; ++k)
+        if (wtParamIdx[k] >= 0 && static_cast<size_t> (wtParamIdx[k]) < count)
+            mask |= 1u << std::clamp (static_cast<int> (plain[wtParamIdx[k]] + 0.5f), 0, kNumWavetableChoices - 1);
+    ensureBuiltinWavetables (mask);
+}
+
+bool OwnEngine::contentPending() const noexcept
+{
+    for (int k = 0; k < 6; ++k)
+        if (wtParamIdx[k] >= 0 && ! builtinWavetableSettled (std::clamp (static_cast<int> (params[static_cast<size_t> (wtParamIdx[k])].load (std::memory_order_relaxed) + 0.5f), 0, kNumWavetableChoices - 1)))
+            return true;
+    return false;
+}
+
+void OwnEngine::readyContent() noexcept
+{
+    ensureBuiltinWavetables (wavetableMaskOfParams());
+}
+
+double OwnEngine::wavetableBuildMs() const noexcept
+{
+    return builtinBankBuildMs();
 }
 
 void OwnEngine::silence() noexcept
@@ -1225,6 +1302,20 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     for (int o = 0; o < 3; ++o)
         switchKeySnap[o] = switchKeyAtomic[o].load (std::memory_order_relaxed);
     globals.switchKey = switchKeySnap;
+    // The built-in table of each oscillator for this block, from the same snapshot of the parameters the voices read: the table the choice names when it is built, else the one the oscillator had
+    // (never a substitute); the finished table is handed over by the bank's atomic pointer, so a voice sees an index and a table that belong together or the previous pair.
+    for (int o = 0; o < 3; ++o)
+    {
+        const int idx = wtParamIdx[o];
+        if (idx < 0)
+            continue;
+        const int choice = std::clamp (static_cast<int> (base[static_cast<size_t> (idx)] + 0.5f), 0, kNumWavetableChoices - 1);
+        if (choice == kWavetablePresetTable)
+            continue;   // the user table of the content: the voice reads it itself
+        if (const Wavetable* w = builtinWavetableIfReady (choice))
+            wtHeld[o] = w;
+    }
+    globals.wtResolved = wtHeld;
     globals.quality = qualityTier.load (std::memory_order_relaxed);
     globals.economy = economyMask.load (std::memory_order_relaxed);
     globals.scalarFilters = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingVectorFilters) != 0;

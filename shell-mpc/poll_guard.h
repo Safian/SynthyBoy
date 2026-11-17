@@ -17,6 +17,7 @@
 #include <string>
 
 #include "safe_file.h"
+#include "write_files.h"
 
 namespace synthyboy_mpc {
 
@@ -55,7 +56,11 @@ public:
             if (n >= sizeof all)
                 n = sizeof all - 1;
             const char* p = pathBuf()[0] != '\0' ? pathBuf() : defaultPath();
+#if SYNTHYBOY_MPC_WRITE_FILES   // the release build (write_files.h) keeps the count and the lines in memory only
             safefile::writeSmall (p, all, n);
+#else
+            (void) p;
+#endif
         }
         catch (...) {}
     }

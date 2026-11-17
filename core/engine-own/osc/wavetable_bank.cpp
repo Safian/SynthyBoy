@@ -12,6 +12,12 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <chrono>
+#if defined(__linux__)
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
 
 #include "../dsp/util.h"
 #include "synthyboy/params.h"
@@ -258,6 +264,11 @@ int Wavetable::levelFor (float nyquistOverFundamental) noexcept
 
 void Wavetable::build (const std::vector<std::vector<float>>& cosCoeff, const std::vector<std::vector<float>>& sinCoeff, bool normalizePeak)
 {
+    buildCancellable (cosCoeff, sinCoeff, normalizePeak, nullptr);
+}
+
+bool Wavetable::buildCancellable (const std::vector<std::vector<float>>& cosCoeff, const std::vector<std::vector<float>>& sinCoeff, bool normalizePeak, const std::atomic<bool>* cancel)
+{
     frames = static_cast<int> (cosCoeff.size());
     size_t off = 0;
     for (int m = 0; m < kNumLevels; ++m)
@@ -271,6 +282,8 @@ void Wavetable::build (const std::vector<std::vector<float>>& cosCoeff, const st
     std::vector<std::complex<double>> a;
     for (int f = 0; f < frames; ++f)
     {
+        if (cancel != nullptr && cancel->load (std::memory_order_relaxed))
+            return false;   // between two frames: the caller drops the half built table
         double scale = 1.0;
         for (int m = 0; m < kNumLevels; ++m)
         {
@@ -315,6 +328,7 @@ void Wavetable::build (const std::vector<std::vector<float>>& cosCoeff, const st
             sp[kHarmonics + h] = static_cast<float> (sinCoeff[static_cast<size_t> (f)][static_cast<size_t> (h)] * scale);
         }
     }
+    return true;
 }
 
 std::unique_ptr<Wavetable> makeWavetableFromSamples (const float* samples, int numFrames)
@@ -343,53 +357,179 @@ std::unique_ptr<Wavetable> makeWavetableFromSamples (const float* samples, int n
 
 namespace
 {
+constexpr int kBankSlots = kNumWavetableChoices + 1;
+constexpr int kFirstMorph = 5, kLastMorph = 12;   // the eight 64 frame tables (makeFrames); every other table is one cycle
+constexpr int kRequestSlots = 6;                  // osc 1 .. 3 wavetable, osc 1 .. 3 spectral filter table
+
+/** The bank: one slot per table. A table is built once, by whoever claims it first (state 0 -> 1 -> 2); `ready` is published with release after the table is complete, so the audio thread's
+    read (builtinWavetableIfReady) is one acquire load and the hand over is an atomic pointer swap of a finished, immutable table. The tables are independent of each other and every one is computed by
+    the same code on its own data: the result does not depend on who builds it, on how many threads there are or on the order. */
 struct Bank
 {
-    std::array<std::unique_ptr<Wavetable>, kNumWavetableChoices + 1> tables;
+    std::atomic<const Wavetable*> ready[kBankSlots];
+    std::atomic<int> state[kBankSlots];   // 0 not built, 1 being built, 2 built, 3 failed (allocation): never tried again
+    std::unique_ptr<Wavetable> owned[kBankSlots];
+    std::atomic<int> latest[kRequestSlots];   // the table each slot wants now, -1 none
+    std::atomic<long long> buildUs { 0 };
+    std::mutex workerMutex;
+    std::thread worker;
+    int users = 0;                         // engines that run lazily (under workerMutex)
+    std::atomic<bool> stop { false };
+    std::atomic<bool> paused { false };    // tests: the background thread does not build while true
 
-    static void buildOne (Bank& bank, int c)
+    Bank()
+    {
+        for (int c = 0; c < kBankSlots; ++c)
+        {
+            ready[c].store (nullptr, std::memory_order_relaxed);
+            state[c].store (0, std::memory_order_relaxed);
+        }
+        for (auto& l : latest)
+            l.store (-1, std::memory_order_relaxed);
+    }
+    ~Bank()
+    {
+        stop.store (true, std::memory_order_relaxed);
+        if (worker.joinable())
+            worker.join();   // at most one frame of the table it is making
+    }
+
+    static bool buildable (int c) noexcept { return c >= 0 && c < kBankSlots && c != kWavetablePresetTable; }
+
+    /** false when `cancel` stopped the build (nothing is stored). */
+    static bool buildOne (Bank& bank, int c, const std::atomic<bool>* cancel)
     {
         const auto frames = makeFrames (c);
         std::vector<std::vector<float>> cc, ss;
+        cc.reserve (frames.size());
+        ss.reserve (frames.size());
         for (const auto& fr : frames)
         {
             cc.push_back (fr.c);
             ss.push_back (fr.s);
         }
-        bank.tables[static_cast<size_t> (c)] = std::make_unique<Wavetable>();
-        bank.tables[static_cast<size_t> (c)]->build (cc, ss);
+        auto table = std::make_unique<Wavetable>();
+        if (! table->buildCancellable (cc, ss, true, cancel))
+            return false;
+        bank.owned[static_cast<size_t> (c)] = std::move (table);
+        return true;
     }
 
-    /** The tables are independent of each other: they are built on a few helper threads (joined before the constructor returns; prepare () is not
-        the audio thread). Every table is computed by the same code on its own data, so the result does not depend on the number of threads. If a
-        thread cannot be created the calling thread does the rest. */
-    Bank()
+    /** Makes sure table c is built: builds it here, or waits for the thread that is making it. With `cancel` (the background thread) a build can be dropped: the slot goes back to "not built". */
+    void ensure (int c, const std::atomic<bool>* cancel = nullptr) noexcept
+    {
+        if (! buildable (c))
+            return;
+        int expected = 0;
+        if (state[c].compare_exchange_strong (expected, 1, std::memory_order_acq_rel))
+        {
+            const auto t0 = std::chrono::steady_clock::now();
+            int next = 2;
+            try
+            {
+                if (buildOne (*this, c, cancel))
+                    ready[c].store (owned[static_cast<size_t> (c)].get(), std::memory_order_release);
+                else
+                    next = 0;   // cancelled: nothing was stored
+            }
+            catch (...)
+            {
+                next = 3;
+            }
+            state[c].store (next, std::memory_order_release);
+            buildUs.fetch_add (std::chrono::duration_cast<std::chrono::microseconds> (std::chrono::steady_clock::now() - t0).count(), std::memory_order_relaxed);
+            return;
+        }
+        while (state[c].load (std::memory_order_acquire) == 1)
+            std::this_thread::sleep_for (std::chrono::milliseconds (1));
+    }
+
+    /** Every table on this thread and up to three helper threads (joined before it returns). If a thread cannot be created the calling thread does the rest. */
+    void ensureAll() noexcept
     {
         std::atomic<int> next { 0 };
         auto work = [this, &next]
         {
-            for (int c = next.fetch_add (1); c <= kNumWavetableChoices; c = next.fetch_add (1))
-                if (c != kWavetablePresetTable)
-                    buildOne (*this, c);
+            for (int c = next.fetch_add (1); c < kBankSlots; c = next.fetch_add (1))
+                ensure (c);
         };
         const int helpers = static_cast<int> (std::min (3u, std::max (1u, std::thread::hardware_concurrency()) - 1u));
         std::vector<std::thread> threads;
-        for (int i = 0; i < helpers; ++i)
+        try
         {
-            try
-            {
+            for (int i = 0; i < helpers; ++i)
                 threads.emplace_back (work);
-            }
-            catch (...)
-            {
-                break;
-            }
+        }
+        catch (...)
+        {
         }
         work();
         for (auto& t : threads)
             t.join();
     }
+
+    /** The background thread: builds the latest request of every slot that is not built yet, then sleeps. Low priority: it must not take the cores from the audio threads. */
+    void run() noexcept
+    {
+#if defined(__linux__)
+        ::setpriority (PRIO_PROCESS, static_cast<id_t> (::syscall (SYS_gettid)), 10);
+#endif
+        while (! stop.load (std::memory_order_relaxed))
+        {
+            bool worked = false;
+            if (paused.load (std::memory_order_relaxed))
+            {
+                std::this_thread::sleep_for (std::chrono::milliseconds (5));
+                continue;
+            }
+            for (int k = 0; k < kRequestSlots && ! stop.load (std::memory_order_relaxed); ++k)
+            {
+                const int c = latest[k].load (std::memory_order_relaxed);   // read again after every build: a request made meanwhile wins
+                if (buildable (c) && state[c].load (std::memory_order_acquire) == 0)
+                {
+                    ensure (c, &stop);
+                    worked = true;
+                }
+            }
+            if (! worked)
+                std::this_thread::sleep_for (std::chrono::milliseconds (10));
+        }
+    }
+
+    void startBackground() noexcept
+    {
+        std::lock_guard<std::mutex> g (workerMutex);
+        ++users;
+        if (worker.joinable())
+            return;
+        stop.store (false, std::memory_order_relaxed);
+        try
+        {
+            worker = std::thread ([this] { run(); });
+        }
+        catch (...)
+        {
+        }
+    }
+
+    void stopBackground() noexcept
+    {
+        std::thread t;
+        {
+            std::lock_guard<std::mutex> g (workerMutex);
+            if (users > 0)
+                --users;
+            if (users > 0 || ! worker.joinable())
+                return;
+            stop.store (true, std::memory_order_relaxed);
+            t = std::move (worker);
+        }
+        t.join();   // one frame of a table at most, plus the 10 ms sleep
+        stop.store (false, std::memory_order_relaxed);
+    }
 };
+
+Bank g_bank;   // zero cost until a table is built; lives for the library's life (its destructor ends the background thread)
 } // namespace
 
 size_t builtinBankBytes() noexcept
@@ -403,12 +543,81 @@ size_t builtinBankBytes() noexcept
 
 const Wavetable* builtinWavetable (int choice) noexcept
 {
-    static std::once_flag once;
-    static std::unique_ptr<Bank> bank;
-    std::call_once (once, [] { bank = std::make_unique<Bank>(); });
     if (choice < 0 || choice > kNumWavetableChoices)
         return nullptr;
-    return bank->tables[static_cast<size_t> (choice)].get();
+    g_bank.ensure (choice);
+    return g_bank.ready[choice].load (std::memory_order_acquire);
+}
+
+const Wavetable* builtinWavetableIfReady (int choice) noexcept
+{
+    if (choice < 0 || choice > kNumWavetableChoices)
+        return nullptr;
+    return g_bank.ready[choice].load (std::memory_order_acquire);
+}
+
+bool builtinWavetableSettled (int choice) noexcept
+{
+    if (choice < 0 || choice > kNumWavetableChoices || choice == kWavetablePresetTable)
+        return true;
+    return g_bank.ready[choice].load (std::memory_order_acquire) != nullptr || g_bank.state[choice].load (std::memory_order_acquire) == 3;
+}
+
+void requestBuiltinWavetable (int slot, int choice) noexcept
+{
+    if (slot >= 0 && slot < kRequestSlots && choice >= 0 && choice < kBankSlots)
+        g_bank.latest[slot].store (choice, std::memory_order_relaxed);
+}
+
+void ensureBuiltinWavetables (unsigned mask) noexcept
+{
+    for (int c = 0; c < kBankSlots; ++c)
+        if (((mask >> c) & 1u) != 0)
+            g_bank.ensure (c);
+}
+
+void ensureBuiltinSingleCycleTables() noexcept
+{
+    for (int c = 0; c < kBankSlots; ++c)
+        if (c < kFirstMorph || c > kLastMorph)
+            g_bank.ensure (c);
+}
+
+void ensureAllBuiltinWavetables() noexcept
+{
+    g_bank.ensureAll();
+}
+
+void startBuiltinBankBackground() noexcept
+{
+    g_bank.startBackground();
+}
+
+void stopBuiltinBankBackground() noexcept
+{
+    g_bank.stopBackground();
+}
+
+void setBuiltinBuilderPausedForTests (bool paused) noexcept
+{
+    g_bank.paused.store (paused, std::memory_order_relaxed);
+}
+
+void resetBuiltinBankForTests() noexcept
+{
+    for (int c = 0; c < kBankSlots; ++c)
+    {
+        g_bank.ready[c].store (nullptr, std::memory_order_relaxed);
+        g_bank.state[c].store (0, std::memory_order_relaxed);
+        g_bank.owned[static_cast<size_t> (c)].reset();
+    }
+    for (auto& l : g_bank.latest)
+        l.store (-1, std::memory_order_relaxed);
+}
+
+double builtinBankBuildMs() noexcept
+{
+    return static_cast<double> (g_bank.buildUs.load (std::memory_order_relaxed)) / 1000.0;
 }
 } // namespace own
 } // namespace synthyboy

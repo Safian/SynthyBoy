@@ -183,6 +183,7 @@ private:
     std::vector<float> filterGain;
     float lastCut = 1.0e9f, lastMix = 1.0e9f, lastFltPos = -1.0f;
     int lastFltTable = -1;
+    const Wavetable* heldFlt_ = nullptr;   // the built-in table the spectral filter of this oscillator played last (kept while a newly chosen one is being built)
     float fltX[257], fltY[257];
     int lastFilterOsc = -1;
     // Multisample

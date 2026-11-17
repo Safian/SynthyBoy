@@ -110,6 +110,17 @@ else()
     target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_DEBUG_HOOKS=0)
 endif()
 
+# The developer log (shell-mpc/kit/log.h, macro MPCKIT_DEV_LOG) and the files the plugin and its GPU helper write into /tmp for the developer (shell-mpc/write_files.h, macro SYNTHYBOY_MPC_WRITE_FILES).
+# ON (default, today's behaviour: the device measurements need the status file): the log exists (every category off until /tmp/synthyboy-log.conf switches it on) and the files are written as before.
+# OFF (the public release: scripts/build-mpc.sh --release): no log code, no log strings, no log thread; no report / probe / error files; the helper's output goes to /dev/null; the status file only while
+# /tmp/synthyboy-overlay-status-on exists. docs/MPC.md "Logging in the plugin".
+option(SYNTHYBOY_MPC_DEV_LOG "MPC shell: developer log and diagnostic files in /tmp (OFF for the public release)" ON)
+if(SYNTHYBOY_MPC_DEV_LOG)
+    target_compile_definitions(synthyboy_mpc PRIVATE MPCKIT_DEV_LOG=1 SYNTHYBOY_MPC_WRITE_FILES=1)
+else()
+    target_compile_definitions(synthyboy_mpc PRIVATE MPCKIT_DEV_LOG=0 SYNTHYBOY_MPC_WRITE_FILES=0)
+endif()
+
 if(SYNTHYBOY_MPC_OVERLAY)
     if(NOT SYNTHYBOY_MPC_LFO_LIVE)
         message(FATAL_ERROR "SYNTHYBOY_MPC_OVERLAY needs SYNTHYBOY_MPC_LFO_LIVE (the display thread reports the parameter 'Overlay Instance' to the host)")
@@ -442,12 +453,29 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(host_strings_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME host_strings_host COMMAND host_strings_host)
 
+    add_executable(preset_index_host EXCLUDE_FROM_ALL tests/preset_index_host.cpp)
+    target_include_directories(preset_index_host PRIVATE "${CMAKE_SOURCE_DIR}/core/include" "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(preset_index_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(preset_index_host PRIVATE cxx_std_17)
+    target_compile_options(preset_index_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME preset_index_host COMMAND preset_index_host "${CMAKE_SOURCE_DIR}/content/presets" "${CMAKE_SOURCE_DIR}/scripts/build-preset-index.py")
+
     add_executable(poll_guard_host EXCLUDE_FROM_ALL tests/poll_guard_host.cpp)
     target_include_directories(poll_guard_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(poll_guard_host PRIVATE Threads::Threads)
     target_compile_features(poll_guard_host PRIVATE cxx_std_17)
     target_compile_options(poll_guard_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME poll_guard_host COMMAND poll_guard_host)
+
+    # The start-up record and the developer log (kit/log.h): logic only, no plugin needed.
+    foreach(t startup_timing_host log_host log_off_host log_rt_host)
+        add_executable(${t} EXCLUDE_FROM_ALL tests/${t}.cpp)
+        target_include_directories(${t} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+        target_link_libraries(${t} PRIVATE Threads::Threads)
+        target_compile_features(${t} PRIVATE cxx_std_17)
+        target_compile_options(${t} PRIVATE -Wall -Wextra -Wpedantic)
+        add_test(NAME ${t} COMMAND ${t})
+    endforeach()
 
     add_executable(play_log_host EXCLUDE_FROM_ALL tests/play_log_host.cpp)
     target_include_directories(play_log_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")

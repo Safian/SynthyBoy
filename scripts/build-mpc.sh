@@ -4,7 +4,7 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Usage: scripts/build-mpc.sh [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--skin-layout FILE] [--cmake-arg ARG]... [--bench] [--no-validate] [--xpl-presets xl|k61|both|off] [--dump-tool PATH] [--dump-plugin PATH] [--chunks DIR]
+# Usage: scripts/build-mpc.sh [--arch arm32|arm64|all] [--out DIR] [--jobs N] [--build-dir DIR] [--skins DIR] [--skin-layout FILE] [--cmake-arg ARG]... [--bench] [--release] [--no-validate] [--xpl-presets xl|k61|both|off] [--dump-tool PATH] [--dump-plugin PATH] [--chunks DIR]
 #
 #   --arch A         arm32 (VST/synthyboy-arm32.so, "file32"), arm64 (VST/synthyboy-arm64.so, "file64") or all (default: both)
 #   --out DIR        where the finished plugin folder is assembled (default: <repo>/build-mpc)
@@ -20,6 +20,8 @@
 #                    (--build-dir), pass every option of the variant each time. Not applied to the --bench trees.
 #   --bench          also build synthyboy_bench and synthyboy_noteon_bench for each architecture (own CMake tree with SYNTHYBOY_BUILD_TESTS=ON, libstdc++
 #                    linked statically) into <out>/bench-<arch>/; they are measurement tools and not part of the plugin folder
+#   --release        the public release: -DSYNTHYBOY_MPC_DEV_LOG=OFF (no developer log, no diagnostic files in /tmp; the plugin binary holds no log tag: `strings synthyboy-*.so | grep -c "mpckit\|startup"`
+#                    style checks are in docs/ui-components/LOGGING.md). Without it the build is what it always was (log and files on).
 #   --no-validate    skip the SDK validator at the end (for tests without binaries)
 #   --xpl-presets P  preset browser (.xpl) generation: xl, k61, both, or off (default: xl)
 #   --dump-tool P    path to native dump_mpc_chunks tool (default: auto-detected from build-native / build)
@@ -47,6 +49,7 @@ jobs=2
 skins_dir=""
 skin_layout="$repo_root/scripts/mpc-ui-pages.json"
 with_bench=0
+release=0
 validate=1
 cmake_args=()
 xpl_presets="xl"
@@ -86,6 +89,7 @@ while [[ $# -gt 0 ]]; do
             esac
             shift 2 ;;
         --bench) with_bench=1; shift ;;
+        --release) release=1; cmake_args+=("-DSYNTHYBOY_MPC_DEV_LOG=OFF"); shift ;;
         --no-validate) validate=0; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "$me: unknown option: $1 (see --help)" >&2; exit 2 ;;
@@ -184,6 +188,8 @@ mkdir -p "$plugin_folder/Content"
 # Copy factory presets
 rm -rf "$plugin_folder/Content/presets"
 cp -R "$repo_root/content/presets" "$plugin_folder/Content/presets"
+# The preset index (one small file the plugin reads at start instead of scanning 136 files; docs/MPC.md "The preset index")
+python3 "$repo_root/scripts/build-preset-index.py" --presets-dir "$plugin_folder/Content/presets" --categories "$repo_root/scripts/factory-preset-categories.json"
 
 # Generate .xpl presets for the Akai host's Sounds browser (<out>/Safian - VST - SynthyBoy/Presets/)
 # Controlled by --xpl-presets (xl|k61|both|off), default: xl.
