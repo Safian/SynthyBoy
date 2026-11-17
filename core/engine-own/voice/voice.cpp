@@ -907,6 +907,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         t.lowWarp = (g.economy & kEconomyWarp) != 0;
         t.lowMorph = (g.economy & kEconomyMorph) != 0;
         t.fastMath = (g.economy & kEconomyMath) != 0;
+        t.scalarWarp = g.scalarWarp;
         t.shareMorph = g.lowShareMorph;
         t.remap = nullptr;
         if (cs != nullptr)

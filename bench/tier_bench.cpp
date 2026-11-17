@@ -31,6 +31,7 @@
 //                   no block of any of its factory presets, in any pass, was longer than its real time
 //   --no-fx-mute    process an effect whose mix is exactly 0 all the same (the engine before that saving: for a before / after with one binary)
 //   --scalar-filters  run the voice filters' scalar loops also where a vector kernel exists (the same: before / after)
+//   --scalar-warp   make the oversampled samples of a warped oscillator one by one also where the four lane form exists (the same: before / after)
 //   --verify        no timing: every load is rendered twice under every profile, once with the savings (the pair kernels of the filters, the skipped effects with
 //                   mix 0) and once without, offline, 3 s with the chord struck twice, and the samples are compared. They must be the same values (the exit code is
 //                   1 otherwise): this is the check that the vector code of THIS CPU computes what the scalar code computes.
@@ -445,7 +446,7 @@ long currentKhz (int cpu)
 [[noreturn]] void usage (const char* message)
 {
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
-                          "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]\n", message);
+                          "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--scalar-warp] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -477,6 +478,7 @@ int main (int argc, char** argv)
         else if (a == "--verify")      o.verify = true;
         else if (a == "--no-fx-mute")  o.savingsOff |= kOwnSavingFxMute;
         else if (a == "--scalar-filters") o.savingsOff |= kOwnSavingVectorFilters;
+        else if (a == "--scalar-warp") o.savingsOff |= kOwnSavingVectorWarp;
         else if (a == "--budget")      o.budget = std::atof (next());
         else usage (("unknown argument " + a).c_str());
     }
@@ -609,6 +611,8 @@ int main (int argc, char** argv)
     std::printf ("synthyboy_tier_bench: %.0f Hz, block %d frames = %.3f ms, %.1f s measured per run after 1 s of warm-up, retrigger every %.2f s, flush-to-zero %s, %s%s%s\n", o.sampleRate, o.block,
                  budgetMs, o.seconds, o.retrigger, o.ftz ? "on" : "off", o.paced ? "blocks paced at real time" : "blocks back to back",
                  (o.savingsOff & kOwnSavingFxMute) != 0 ? ", effects with mix 0 processed (--no-fx-mute)" : "", (o.savingsOff & kOwnSavingVectorFilters) != 0 ? ", scalar filters (--scalar-filters)" : "");
+    if ((o.savingsOff & kOwnSavingVectorWarp) != 0)
+        std::printf ("scalar warp samples (--scalar-warp)\n");
     std::printf ("device: %s; %s; build %s\n", model.empty() ? "(no device tree name)" : model.c_str(), cpuText.empty() ? "cpu not pinned (not Linux)" : cpuText.c_str(),
 #if defined(__aarch64__)
                  "arm64"
@@ -636,7 +640,7 @@ int main (int argc, char** argv)
 
     if (o.verify)
     {
-        std::printf ("\nverify: every load under every profile, with the savings and without (filters one side after the other, effects with mix 0 processed): the samples must be the same\n");
+        std::printf ("\nverify: every load under every profile, with the savings and without (filters one side after the other, effects with mix 0 processed, warp samples one by one): the samples must be the same\n");
         int failures = 0, runs = 0;
         for (size_t c = 0; c < configs.size(); ++c)
         {
@@ -644,7 +648,7 @@ int main (int argc, char** argv)
             int bad = 0;
             for (const auto& l : loads)
             {
-                const std::vector<float> with = renderForVerify (o, profiles[c], l, notes, 0), without = renderForVerify (o, profiles[c], l, notes, kOwnSavingFxMute | kOwnSavingVectorFilters);
+                const std::vector<float> with = renderForVerify (o, profiles[c], l, notes, 0), without = renderForVerify (o, profiles[c], l, notes, kOwnSavingFxMute | kOwnSavingVectorFilters | kOwnSavingVectorWarp);
                 size_t differ = 0;
                 float worst = 0.0f, peak = 0.0f;
                 for (size_t i = 0; i < with.size(); ++i)
