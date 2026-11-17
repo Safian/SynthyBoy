@@ -1,0 +1,21 @@
+{
+ "gesture_offset_db": {
+  "Bass": 5.313072688974465,
+  "FX": 3.0656378132771493,
+  "Keys": -2.466316625644012,
+  "Lead": 3.099903301991894,
+  "Pad": -1.6217628667449304,
+  "Pluck": -0.9820860257824506
+ },
+ "measure": "fast_max",
+ "note": "loudness of a preset = fast_max (loudest 100 ms, K-weighted LUFS, energy mean over the gesture) + gesture_offset_db[category]; master.volume is set so that it is the target",
+ "reference": {
+  "Bass": -28.313072688974465,
+  "FX": -26.06563781327715,
+  "Keys": -20.533683374355988,
+  "Lead": -26.099903301991894,
+  "Pad": -21.37823713325507,
+  "Pluck": -22.01791397421755
+ },
+ "target": -23.0
+}
