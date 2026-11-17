@@ -734,6 +734,26 @@ void testMissingContentLine()
     check (r.ui.missingText() == "content missing", "a missing wavetable without a reference in the state: the line says content missing");
 }
 
+/** A switched-off oscillator: the inactive (grey) look for the display, the controls under it and the Q frames, the power button red, nothing disabled (the controls stay operable). */
+void testInactiveLook()
+{
+    const uint32_t g = ui::Pen::inactiveGrey (0x2ee6f0ffu);
+    check (((g >> 24) & 255u) == ((g >> 16) & 255u) && ((g >> 16) & 255u) == ((g >> 8) & 255u) && (g & 255u) == 255u && ((g >> 8) & 255u) > 0u, "the inactive look: a colour becomes a grey of its own brightness, the alpha stays");
+    Rig r;
+    r.inst.set ("osc1.on", 1.0f);
+    r.refresh();
+    check (! r.ui.compact().basic.inactive() && ! r.ui.compact().basic.pan.inactive() && ! r.ui.compact().basic.group.inactive() && r.ui.compact().power.state.on, "an oscillator that is on: the controls have the normal look");
+    r.inst.set ("osc1.on", 0.0f);
+    r.refresh();
+    ui::OscillatorCompact& c = r.ui.compact();
+    check (! c.power.state.on && c.power.state.negativeOff && ! c.power.inactive() && ! c.instances.inactive() && ! c.full.inactive(), "switched off: the power button is red (negative colour), the selector and the corner buttons keep their look");
+    check (c.basic.inactive() && c.basic.pan.inactive() && c.basic.level.inactive() && c.basic.selector.inactive() && c.basic.group.inactive() && c.basic.pan.enabled() && c.basic.level.enabled() && c.basic.selector.enabled(), "switched off: the whole Q block is grey and still operable (enabled)");
+    check (r.ui.full().basic.inactive() && r.ui.full().panel.inactive() && r.ui.full().groups[0].inactive() && ! r.ui.full().power.inactive() && ! r.ui.full().close.inactive(), "switched off: the full screen's blocks and groups are grey, its power button and close button are not");
+    r.inst.set ("osc1.on", 1.0f);
+    r.refresh();
+    check (! c.basic.inactive() && ! c.basic.group.inactive() && ! r.ui.full().panel.inactive(), "switched on again: the normal look is back");
+}
+
 /** The detail pages of the types (osc_spec_page.h): how each is reached, BACK, the size of the display, every visible control writes its parameter, the hidden states, the Q groups, the empty state. */
 void testSpecPages()
 {
@@ -1037,6 +1057,7 @@ int main()
     testContentBrowser();
     testSourceBrowserInTheOscillatorUi();
     testMissingContentLine();
+    testInactiveLook();
     testGranularAndSubAndNoise();
     testSourceAndWarpLists();
     testReview2();

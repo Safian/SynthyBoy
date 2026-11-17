@@ -294,12 +294,19 @@ int main()
         }
         check (inside && apart, nm + ": every leaf inside, at least its minimum size, no overlap" + why);
         check (c.route.rect().empty() == subHeader, nm + ": the route button is in the header of every instance but the sub oscillator");
-        check (! c.displayRect().empty() && c.rect().contains (c.displayRect()) && ! c.displayRect().overlaps (c.full.rect()) && c.full.rect().bottom() <= c.displayRect().y && (subHeader || c.full.rect().right() <= c.route.rect().x) && c.full.rect().right() <= c.rect().right() && ! c.full.rect().overlaps (c.power.rect()), nm + ": the display area is reserved, the full screen button stands in the header row (it does not cover the curve)");
+        {   // the buttons in the corners of the display: the full screen button exactly where the envelope graph's and the LFO display's is (top right, 4 px in, 64 x 56), the power button in the top left corner with the same inset
+            const Rect d = c.displayRect(), f = c.full.rect(), w = c.power.rect();
+            EnvCompact ec;
+            ec.place ({ 440, 114, 400, 620 });
+            const Rect ef = ec.full.rect(), eg = ec.graphRect();
+            check (! d.empty() && c.rect().contains (d) && d.contains (f) && d.contains (w) && f.right() == d.right() - 4 && f.y == d.y + 4 && w.x == d.x + 4 && w.y == d.y + 4 && f.w == ef.w && f.h == ef.h && ef.right() == eg.right() - 4 && ef.y == eg.y + 4 && ! f.overlaps (w) && w.w >= 56 && w.h >= 56,
+                   nm + ": the full screen button (top right) and the power button (top left) stand in the corners of the display, 4 px in, the full screen button like the envelope graph's");
+        }
         {
             const Rect hdr = c.instances.rect();
-            const bool row = c.power.rect().y == hdr.y && c.power.rect().h == hdr.h && c.full.rect().y == hdr.y && c.power.rect().right() <= hdr.x && hdr.right() <= c.full.rect().x && (subHeader || c.full.rect().right() <= c.route.rect().x);
-            check (hdr.h >= 56 && hdr.h == playrows::kSelectorH && row && c.power.rect().w >= 56 && c.full.rect().h >= 56 && (subHeader || c.route.rect().h >= 56), nm + ": the top row is the header: power, the source selector, full screen, route, left to right in ONE row of 56 px (no row of tabs)");
-            check (c.instances.rect().bottom() <= c.displayRect().y && c.displayRect().bottom() <= c.basic.rect().y && ! c.displayRect().overlaps (c.basic.rect()) && c.basic.rect().y == playrows::controlsLine (c.rect()), nm + ": header row, display, Basic: top to bottom, Basic at the common controls line");
+            const bool row = c.instances.rect().y == c.rect().y + playrows::kMargin && (subHeader ? c.instances.rect().right() == c.rect().right() - playrows::kMargin : (c.route.rect().y == hdr.y && hdr.right() <= c.route.rect().x));
+            check (hdr.h == playrows::kSelectorH && row && (subHeader || c.route.rect().h >= 56) && c.power.state.negativeOff, nm + ": the top row holds the source selector (and the route button) only, 56 px, like the other two thirds; the power button is red while off");
+            check (c.instances.rect().bottom() <= c.displayRect().y && c.displayRect().bottom() <= c.basic.rect().y && ! c.displayRect().overlaps (c.basic.rect()) && c.basic.rect().y == playrows::controlsLine (c.rect()), nm + ": top row, display, Basic: top to bottom, Basic at the common controls line");
             check (c.displayRect().x == playrows::displayRect (c.rect()).x && c.displayRect().y == playrows::displayRect (c.rect()).y && c.displayRect().h == playrows::displayRect (c.rect()).h, nm + ": the display is the rectangle shared by the three thirds");
             check (c.instances.listable && c.instances.state.count == 5 && c.instances.state.index == static_cast<int> (var.inst) && std::string (c.instances.state.text) == OscillatorCompact::sourceName (var.inst) && c.instances.rect().w >= 120, nm + ": the source selector shows the current source (" + c.instances.state.text + ") and opens a list of five");
             Rect cells[8]; const int nt = c.instances.touchTargets (cells, 8);
@@ -326,7 +333,7 @@ int main()
             for (int y = c.full.rect().y; y < c.full.rect().bottom(); ++y)
                 for (int x = c.full.rect().x; x < c.full.rect().right(); ++x)
                     on += img.at (x, y) != panelPx && img.at (x, y) != backgroundPixel();
-            check (! c.displayRect().overlaps (c.full.rect()) && on > 60 && colourNear (img, static_cast<float> (cx (c.full) - 10), static_cast<float> (cy (c.full) - 10), 2, colour::accent(), 20) && colourNear (img, static_cast<float> (cx (c.full) + 10), static_cast<float> (cy (c.full) + 10), 2, colour::accent(), 20), nm + ": the full screen button is drawn in the header row, clear of the display (" + std::to_string (on) + " button pixels in its rectangle: frame and the expand corners)");
+            check (c.displayRect().contains (c.full.rect()) && on > 60 && colourNear (img, static_cast<float> (cx (c.full) - 10), static_cast<float> (cy (c.full) - 10), 2, colour::accent(), 20) && colourNear (img, static_cast<float> (cx (c.full) + 10), static_cast<float> (cy (c.full) + 10), 2, colour::accent(), 20), nm + ": the full screen button is drawn in the top right corner of the display (" + std::to_string (on) + " button pixels in its rectangle: frame and the expand corners)");
         }
         check (! sc.overflow() && drawnOutside (render (sc), c.rect(), backgroundPixel()) == 0 && c.sizeOk(), nm + ": draws inside, fits one scene (" + std::to_string (sc.numOps()) + " ops)");
         writePng (outDir() + "/compact_" + std::to_string (v) + ".png", render (sc), 1);
