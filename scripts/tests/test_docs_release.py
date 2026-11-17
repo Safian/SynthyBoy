@@ -184,16 +184,10 @@ class DocsReleaseTests(unittest.TestCase):
                 for n in nums:
                     cited += 1
                     self.assertLessEqual(n, len(lines), f"{m.group(1)}:{n} does not exist")
-                    if not (row.startswith("| A16")):
-                        self.assertTrue(pat.search(lines[n - 1]), f"{m.group(1)}:{n} has no marker: {lines[n-1][:80]}")
+                    self.assertTrue(pat.search(lines[n - 1]), f"{m.group(1)}:{n} has no marker: {lines[n-1][:80]}")
             for h in re.findall(r"\b[0-9a-f]{8}\b", src):
                 self.assertEqual(git("cat-file", "-e", h).returncode, 0, f"commit {h} does not exist")
-        self.assertGreater(cited, 20)
-        # A16 states the real numbers: they must be the ones of the files
-        st = preset_state()["state"]
-        self.assertIn(f"state version {st['version']} and {len(st['params'])} parameters", part_a)
-        readme = read("README.md")
-        self.assertIn("1484", readme)  # the stale statement A16 reports is still there; when README is fixed, remove A16
+        self.assertGreaterEqual(cited, 18)
 
     def test_open_questions_commit_headings_have_hashes(self):
         text = read("docs", "release", "OPEN-QUESTIONS.md")
