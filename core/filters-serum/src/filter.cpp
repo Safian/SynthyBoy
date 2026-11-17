@@ -2,16 +2,18 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+// The pair kernels below (processPairT) do, per lane, the operations of the scalar functions one by one. On AArch64 GCC would fuse a * b + c in the scalar functions
+// of this file (and not in the NEON forms), so here, where the kernels are used, nothing is fused: the two paths give the same samples, and the 64 bit build the
+// samples of the 32 bit one (whose FPU has no fused form). Same rule and same pragma as core/engine-own/dsp/simd.h. It stands BEFORE the includes: the scalar
+// functions live in filter_dsp.h, and the pragma acts on what is defined after it.
+#if (defined(__arm__) || (defined(__aarch64__) && defined(__linux__))) && defined(__GNUC__) && !defined(__clang__)
+ #pragma GCC optimize ("fp-contract=off")
+#endif
+
 #include "synthyboy/filters/filter.h"
 #include "filter_dsp.h"
 #include "filter_lanes.h"
 
-// The pair kernels below (processPairT) do, per lane, the operations of the scalar functions one by one. On AArch64 GCC would fuse a * b + c in the scalar functions
-// of this file (and not in the NEON forms), so here, where the kernels are used, nothing is fused: the two paths give the same samples, and the 64 bit build the
-// samples of the 32 bit one (whose FPU has no fused form). Same rule and same pragma as core/engine-own/dsp/simd.h.
-#if (defined(__arm__) || (defined(__aarch64__) && defined(__linux__))) && defined(__GNUC__) && !defined(__clang__)
- #pragma GCC optimize ("fp-contract=off")
-#endif
 
 #include <algorithm>
 #include <array>
