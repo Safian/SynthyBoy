@@ -1012,7 +1012,7 @@ void testLedParts()
             edgesClear = edgesClear && a.at (x, y) == bg && b.at (x, y) == bg;
     bool hairline = false;
     for (int x = 30; x < 110; ++x)
-        hairline = hairline || b.at (x, 66 - 9) != bg;
+        hairline = hairline || b.at (x, 54) != bg;
     check (edgesClear, "the PAN slider and the destination dropdown of a strip have no box");
     check (hairline, "the destination dropdown has its hairline under the name");
 }
