@@ -7,6 +7,7 @@
 #pragma once
 
 #include "base.h"
+#include "led_toggle.h"
 #include "qgroup.h"
 
 namespace synthyboy_mpc { namespace ui {
@@ -141,7 +142,7 @@ class TuneRow : public Composite
 {
 public:
     NumberField oct { "OCT", NumberField::Format::IntSigned }, sem { "SEM", NumberField::Format::IntSigned }, fin { "FIN", NumberField::Format::IntSigned }, crs { "CRS", NumberField::Format::Decimal2 };
-    ToggleIcon track;
+    LedToggle track;   // the pitch tracking (KEY TRACK of the noise): a LED toggle, not a button (it opens no page)
     DetailButton more { DetailButton::Icon::Gear, "MORE" };   // the full screen of A, B, C: the page of the options the column has no room for
 
     explicit TuneRow (bool shortVariant = false) : short_ (shortVariant)
@@ -150,7 +151,6 @@ public:
         sem.state.min = -12; sem.state.max = 12;
         fin.state.min = -100; fin.state.max = 100;
         crs.state.min = -48; crs.state.max = 48; crs.state.step = 0.01; crs.state.pxPerStep = 2;
-        track.state.icon = ToggleIcon::Icon::PitchTrack;
         track.state.on = true;
         track.setLabel ("TRACK");
         addKid (oct); addKid (sem); addKid (fin); addKid (crs); addKid (track); addKid (more, false);
@@ -240,17 +240,17 @@ protected:
 class ToggleNumber : public Composite
 {
 public:
-    ToggleIcon toggle;
+    LedToggle toggle;
     NumberField amount { "AMOUNT", NumberField::Format::IntPlain };
 
-    ToggleNumber() { amount.state.max = 100; toggle.state.showState = false; addKid (toggle); addKid (amount); setPrimary (&amount); }
-    Size minSize() const override { return { 72 + kGap + 80, 56 }; }
+    ToggleNumber() { amount.state.max = 100; addKid (toggle); addKid (amount); setPrimary (&amount); }
+    Size minSize() const override { return { LedToggle::widthFor (toggle.state.label) + kGap + 80, 56 }; }
 
 protected:
     void layout() override
     {
         Rect r[2];
-        const int fixed[2] = { 72, 0 }, weight[2] = { 0, 1 };
+        const int fixed[2] = { LedToggle::widthFor (toggle.state.label), 0 }, weight[2] = { 0, 1 };
         layoutRow (rect_, fixed, weight, 2, kGap, r);
         toggle.place (r[0]); amount.place (r[1]);
     }
@@ -286,7 +286,7 @@ public:
     NumberField numbers[kMaxSlots];
     Stepper steppers[kMaxSlots];
     DetailButton details[kMaxSlots];
-    ToggleIcon toggles[kMaxSlots];
+    LedToggle toggles[kMaxSlots];
     ToggleNumber toggleNumbers[kMaxSlots];
 
     TypeBar() = default;
@@ -369,7 +369,6 @@ public:
                     toggles[i].state = ToggleIcon::State {};
                     toggles[i].state.icon = ToggleIcon::Icon::Generic;
                     toggles[i].setLabel (it.label);
-                    toggles[i].state.showState = true;
                     c = &toggles[i];
                     break;
             }

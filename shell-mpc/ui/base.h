@@ -1196,6 +1196,14 @@ public:
 protected:
     void drawBody (Pen& p) const override
     {
+        // the text cells (no pictogram) share ONE text size: the one the longest name needs to fit its cell (SUB A B C NOISE: the same size in every tab)
+        float textSize = theme::L().fValue;
+        for (int i = 0; i < count(); ++i)
+            if (! pictogram::find (state.items[i].pictogram))
+            {
+                const Rect c = cell (i).inset (2).inset (2);
+                textSize = std::min (textSize, Pen::fitSize (state.items[i].label, static_cast<float> (c.w), static_cast<float> (c.h), theme::L().fValue, theme::L().fMin));
+            }
         for (int i = 0; i < count(); ++i)
         {
             const Item& it = state.items[i];
@@ -1209,7 +1217,7 @@ protected:
             const pictogram::Def* d = pictogram::find (it.pictogram);
             if (! d)   // no pictogram: a text cell
             {
-                p.textCentered (c.inset (2), it.label, T.fValue, p.c (cur ? T.text : T.textDim, it.enabled ? 255 : 60), T.fMin);
+                p.textCentered (c.inset (2), it.label, textSize, p.c (cur ? T.text : T.textDim, it.enabled ? 255 : 60), T.fMin);
                 continue;
             }
             const int labelH = it.label[0] ? 18 : 0;
