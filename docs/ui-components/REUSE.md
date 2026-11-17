@@ -3,9 +3,9 @@
 This file is the basis for a later template project. It says exactly what depends on what. Every statement comes from the `#include` lines of the files named; where a file was not read in full, the line says so.
 
 ## 1. The library headers (`shell-mpc/ui/`)
-All 41 headers are header-only C++17. They include only standard headers, each other, and three files of `shell-mpc/overlay/`: `gpu/scene.h` (the scene ops), `sdf_font.h` with `sdf_font_data.h` (the font) and, for the tests, `scene_cpu.h`. Those three are self-contained (standard headers only).
+The 41 headers (plus the umbrella `ui.h`) are header-only C++17. They include only standard headers, each other, and three files of `shell-mpc/overlay/`: `gpu/scene.h` (the scene ops), `sdf_font.h` with `sdf_font_data.h` (the font) and, for the tests, `scene_cpu.h`. Those three are self-contained (standard headers only).
 
-### Free of SynthyBoy's engine (34 headers)
+### Free of SynthyBoy's engine (34 headers, without `ui.h`)
 `core.h`, `theme.h`, `base.h`, `led_toggle.h`, `led_list.h`, `list.h`, `qgroup.h`, `composite.h`, `panel.h`, `text_entry.h`, `note_mask.h`, `mod_board.h`, `time_ruler.h`, `play_rows.h`, `display.h`, `env_graph.h`, `filter_display.h`, `lfo_display.h`, `lfo_model.h`, `lfo_parts.h`, `shape_editor.h`, `mod_matrix.h`, `mod_detail.h`, `mod_macros.h`, `mod_targets.h`, `mixer_strip.h`, `mixer_screen.h`, `voice_grid.h`, `voice_master.h`, `voice_screen.h`, `screen.h`, `env_screen.h`, `lfo_screen.h`, `choice_names.h`.
 Two groups inside it:
 - GENERIC widgets and mechanisms (reusable as they are): `core.h` (the contract, `Pen`, `Cell`, `TapGesture`), `theme.h`, `base.h` (Knob, NumberField, Stepper, UpDownStepper, ToggleIcon, MenuButton, HBar, DetailButton, RouteButton, PictogramSelector), `led_toggle.h`, `led_list.h`, `list.h`, `qgroup.h`, `text_entry.h`, `note_mask.h`, `mod_board.h`, `time_ruler.h`, the `Composite` base and `layoutRow` of `composite.h`, the `KnobPanel` / `DetailPage` mechanism of `panel.h`.
@@ -22,7 +22,7 @@ Direct includes of `synthyboy/fx_types.h` and / or `synthyboy/params.h` (from `c
 | `fx_slot_editor.h` | `fx_layout.h`, `fx_display.h`, `fx_band_board.h`, `synthyboy/fx_types.h`, `synthyboy/params.h`, ... | `ParamInfo` (name, range, unit, choices, `numChoices`) of the open effect |
 Bound by inclusion: `fx_band_board.h` (includes `fx_chain_bar.h`), `fx_screen.h` (includes `fx_chain_bar.h`, `fx_gallery.h`, `fx_slot_editor.h`).
 What you would replace: the effect type numbers and names; the `layoutOf (kind)` tables (your keys); the lookup of a control's `ParamInfo` (key, min, max, default, unit, decimals, `choices`, `numChoices`); the picture switch of `FxSlotCard` and `FxGallery::drawPicture`; the filter-response source of `FxDisplay`. The mechanism (rows of four cells, live conditions, dim or hide rule, band lanes, drag reorder) is generic.
-NOTE: `core.h` does NOT include `synthyboy/...`; the six names in the original brief (`fx_layout`, `fx_chain_bar`, `fx_display`, `fx_gallery`, `fx_slot_editor`, `core.h`) should be the five above plus `fx_band_board.h` and `fx_screen.h`.
+NOTE: `core.h` does not include `synthyboy/...`: it is generic. The engine-bound set is the five headers above plus `fx_band_board.h` and `fx_screen.h`.
 NOTE: `ui.h` includes `fx_screen.h`, so including `ui.h` pulls in `synthyboy/fx_types.h` and `synthyboy/params.h`. A reuse project includes the single headers, or the library is split (section 5).
 
 ## 2. The overlay runtime (`shell-mpc/overlay/`)
