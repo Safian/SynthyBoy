@@ -739,7 +739,7 @@ protected:
 };
 
 // ===============================================================================================================================
-/** FilterFullScreen: the page of a filter (the plugin draws the whole tab; filter_ui.h). From the top: the power switch, the instance selector F1 | F2 | F1+F2, the model with its list, the style, the CLEAN switch and the
+/** FilterFullScreen: the page of a filter (the plugin draws the whole tab; filter_ui.h). From the top: the power switch, the CURVES list F1 | F2 | F1+F2 (which curves the display draws, and the filter the knobs edit), the model with its list, the style, the CLEAN switch and the
     OUTPUT button (where the filter sends its signal); the display (the real response, or the Formant pad with its five knobs at the right); a row of blocks, ONE Q group each:
       MAIN   CUTOFF  RESO  DRIVE  MIX                  TRACK   KEYTRACK  ENV 1  VAR  COMB                   OUT   LEVEL  PAN  BLEND  ROUTING                  FORMANT (Formant model)  X  Y  TRANSPOSE  SPREAD (+ RESONANCE)
     A tap on a member makes its block the Q group; the four Q-Links then turn its members. Every knob shows its value. */
@@ -748,10 +748,11 @@ class FilterFullScreen : public Composite
 public:
     static constexpr int kMaxGroups = 4;   // MAIN, TRACK, OUT, FORMANT
     static constexpr int kRoutingW = 150;  // the ROUTING list: dot, "Series 1 to 2", padding
+    static constexpr int kCurvesCaptionW = 76, kCurvesCellW = 96;   // the caption CURVES and the three cells of its list (dot, "F1+F2")
     static constexpr int kTopH = 56, kBandH = 214, kBlockTitleH = 34, kBlockPad = 2, kBlockGap = 4, kSlotGap = 0, kBandMargin = 4;   // twelve slots of 100 px (the knobs' minimum) and the ROUTING list in one band: the pads and gaps are as small as they get
     MenuButton close { "CLOSE", MenuButton::Icon::None };
     ToggleIcon power;
-    PictogramSelector instances;
+    LedList instances;   // CURVES: which curves the display draws and which filter the knobs edit: F1, F2, or both with the resultant (F1+F2); not the Filter 1 / Filter 2 tabs of the host, not the ROUTING list below
     Stepper model, style;
     MenuButton modelList { "", MenuButton::Icon::Down };   // the list of the models
     LedToggle clean;                                       // CLEAN MODE (a LED toggle: flat dot + name)
@@ -777,11 +778,11 @@ public:
         env1.setLabel ("ENV 1");
         clean.setLabel ("CLEAN");
 
-        instances.setItem (0, -1, "F1");
-        instances.setItem (1, -1, "F2");
-        instances.setItem (2, -1, "F1+F2");
-        instances.state.count = 3;
-        instances.state.index = 0;
+        {
+            static const char* const names[3] = { "F1", "F2", "F1+F2" };
+            instances.setOptions (names, 3);
+            instances.state.index = 0;
+        }
         model.listable = true;
         style.listable = true;
 
@@ -882,14 +883,15 @@ protected:
     {
         const int m = 8, W = rect_.w;
 
-        // 1. the top bar: CLOSE (a page has none), the power switch, F1 | F2 | F1+F2, the model and its list, the style, CLEAN, OUTPUT
+        // 1. the top bar: CLOSE (a page has none), the power switch, CURVES with the list F1 | F2 | F1+F2 (a LED list of one row, three columns), the model and its list, the style, CLEAN, OUTPUT
         const Rect top { rect_.x + m, rect_.y + m, W - 2 * m, kTopH };
         Rect r[8];
-        const int fixed[8] = { pageMode_ ? 0 : 84, 56, 3 * 84, 0, 56, 0, LedToggle::widthFor ("CLEAN"), 64 + 70 }, weight[8] = { 0, 0, 0, 5, 0, 4, 0, 0 };
+        const int fixed[8] = { pageMode_ ? 0 : 84, 56, kCurvesCaptionW + 3 * kCurvesCellW, 0, 56, 0, LedToggle::widthFor ("CLEAN"), 64 + 70 }, weight[8] = { 0, 0, 0, 5, 0, 4, 0, 0 };
         layoutRow (top, fixed, weight, 8, kGap, r);
         close.place (r[0]);
         power.place (r[1]);
-        instances.place (r[2]);
+        curvesCaption_ = { r[2].x, r[2].y, kCurvesCaptionW, r[2].h };
+        instances.place ({ r[2].x + kCurvesCaptionW, r[2].y, r[2].w - kCurvesCaptionW, r[2].h });
         model.place (r[3]);
         modelList.place (r[4]);
         style.place (r[5]);
@@ -1004,13 +1006,14 @@ protected:
             if (i != 3 || isFormant_)
                 p.textLeft ({ blocks[i].x + kBlockPad + 4, blocks[i].y + 3, std::max (0, blocks[i].w - 2 * kBlockPad - 4), 16 }, groupName (i), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         p.textRight (outCaption_, "OUTPUT", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+        p.textLeft (curvesCaption_, "CURVES", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         // the name of the LED list in the title strip of its block (the list has no title of its own: the three rows use the whole height)
         p.textLeft ({ routing.rect().x + 28, outBlock_.y + 3, std::max (0, routing.rect().w - 28), 16 }, "ROUTING", T.fLabel - 2.0f, p.c (activeGroup_ == 2 ? T.q : T.textDim, 255), T.fMin);
     }
 
     bool isFormant_ = false, pageMode_ = false;
     int activeGroup_ = 0;
-    Rect mainBlock_, trackBlock_, outBlock_, formantBlock_, outCaption_;
+    Rect mainBlock_, trackBlock_, outBlock_, formantBlock_, outCaption_, curvesCaption_;
 };
 
 }} // namespace synthyboy_mpc::ui

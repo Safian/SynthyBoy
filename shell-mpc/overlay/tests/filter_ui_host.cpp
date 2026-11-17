@@ -471,6 +471,13 @@ void testTouchTargetsAndLayoutSizes()
     check (f.modelList.rect().w >= 56 && f.modelList.rect().h >= 56, "the list button of the models >= 56 px");
     check (f.clean.rect().w >= 72 && f.clean.rect().h >= 56 && f.route.rect().w >= 64 && f.route.rect().h >= 56, "CLEAN and OUTPUT >= 56 px");
     check (f.instances.rect().w >= 3 * 56 && f.instances.rect().h >= 56, "F1 | F2 | F1+F2 selector >= 56 px per cell");
+    {   // the CURVES list: a LED list of three in one row, named by what it does (which curves the display draws), not mistaken for ROUTING or for the tabs of the host
+        bool rows = true;
+        for (int i = 0; i < 3; ++i)
+            rows = rows && f.instances.rowRect (i).h >= 56 && f.instances.rowRect (i).w >= 84 && f.instances.rowRect (i).y == f.instances.rect().y;
+        check (f.instances.state.count == 3 && f.instances.columns() == 3 && rows && std::string (f.instances.state.names[0]) == "F1" && std::string (f.instances.state.names[2]) == "F1+F2" && f.instances.sizeOk(), "CURVES: a LED list of F1, F2, F1+F2 in one row, every cell >= 56 x 84 px");
+        check (f.routing.state.count == 3 && f.instances.rect().y < f.routing.rect().y && ! f.instances.rect().overlaps (f.routing.rect()) && f.model.rect().x >= f.instances.rect().right(), "CURVES is in the top bar, apart from the ROUTING list of the output block");
+    }
     ui::Component* leaves[64];
     const int n = f.collectLeaves (leaves, 0, 64);
     int small = 0, leavesOk = 0;
