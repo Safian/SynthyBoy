@@ -1524,7 +1524,12 @@ struct PluginInstance
         {
             MPCKIT_SCOPE ("startup", "scan factory presets");
             if (!contentDir.empty())
-                programs = synthyboy_mpc::scanPrograms (contentDir + "/presets");
+            {
+                // the preset index when it is valid and current (one small file, docs/MPC.md "The preset index"), else the scan; user presets outside this folder are not in the index
+                std::string source;
+                programs = synthyboy_mpc::loadPrograms (contentDir + "/presets", &source);
+                MPCKIT_LOG ("startup", info, "%zu programs from %s", programs.size(), source.c_str());
+            }
         }
         synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kScanPresets);
 

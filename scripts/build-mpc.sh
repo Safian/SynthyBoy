@@ -163,6 +163,8 @@ mkdir -p "$plugin_folder/Content"
 # Copy factory presets
 rm -rf "$plugin_folder/Content/presets"
 cp -R "$repo_root/content/presets" "$plugin_folder/Content/presets"
+# The preset index (one small file the plugin reads at start instead of scanning 136 files; docs/MPC.md "The preset index")
+python3 "$repo_root/scripts/build-preset-index.py" --presets-dir "$plugin_folder/Content/presets" --categories "$repo_root/scripts/factory-preset-categories.json"
 
 # Plugin Skins/: the given directory, or generated from the page list
 rm -rf "$plugin_folder/Plugin Skins"
