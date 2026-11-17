@@ -31,6 +31,7 @@
 //                   no block of any of its factory presets, in any pass, was longer than its real time
 //   --no-fx-mute    process an effect whose mix is exactly 0 all the same (the engine before that saving: for a before / after with one binary)
 //   --scalar-filters  run the voice filters' scalar loops also where a vector kernel exists (the same: before / after)
+//   --scalar-warp   make the oversampled samples of a warped oscillator one by one also where the four lane form exists (the same: before / after)
 //   --verify        no timing: every load is rendered twice under every profile, once with the savings (the pair kernels of the filters, the skipped effects with
 //                   mix 0) and once without, offline, 3 s with the chord struck twice, and the samples are compared. They must be the same values (the exit code is
 //                   1 otherwise): this is the check that the vector code of THIS CPU computes what the scalar code computes.
@@ -254,6 +255,7 @@ struct Result
     double voicesMean = 0.0;  // sounding voices at the end of a block, mean
     int voicesMax = 0;
     std::vector<double> sectionMs; // per block, by section (--sections)
+    std::vector<double> sectionCalls; // scopes entered per block, by section
 };
 
 Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load& load, int notes)
@@ -347,6 +349,7 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
             unsigned long long calls = 0;
             ownSectionRead (i, total, calls);
             r.sectionMs.push_back (total / static_cast<double> (measured));
+            r.sectionCalls.push_back (static_cast<double> (calls) / static_cast<double> (measured));
         }
     }
     return r;
@@ -445,7 +448,7 @@ long currentKhz (int cpu)
 [[noreturn]] void usage (const char* message)
 {
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
-                          "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]\n", message);
+                          "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--scalar-warp] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -477,6 +480,7 @@ int main (int argc, char** argv)
         else if (a == "--verify")      o.verify = true;
         else if (a == "--no-fx-mute")  o.savingsOff |= kOwnSavingFxMute;
         else if (a == "--scalar-filters") o.savingsOff |= kOwnSavingVectorFilters;
+        else if (a == "--scalar-warp") o.savingsOff |= kOwnSavingVectorWarp;
         else if (a == "--budget")      o.budget = std::atof (next());
         else usage (("unknown argument " + a).c_str());
     }
@@ -609,6 +613,8 @@ int main (int argc, char** argv)
     std::printf ("synthyboy_tier_bench: %.0f Hz, block %d frames = %.3f ms, %.1f s measured per run after 1 s of warm-up, retrigger every %.2f s, flush-to-zero %s, %s%s%s\n", o.sampleRate, o.block,
                  budgetMs, o.seconds, o.retrigger, o.ftz ? "on" : "off", o.paced ? "blocks paced at real time" : "blocks back to back",
                  (o.savingsOff & kOwnSavingFxMute) != 0 ? ", effects with mix 0 processed (--no-fx-mute)" : "", (o.savingsOff & kOwnSavingVectorFilters) != 0 ? ", scalar filters (--scalar-filters)" : "");
+    if ((o.savingsOff & kOwnSavingVectorWarp) != 0)
+        std::printf ("scalar warp samples (--scalar-warp)\n");
     std::printf ("device: %s; %s; build %s\n", model.empty() ? "(no device tree name)" : model.c_str(), cpuText.empty() ? "cpu not pinned (not Linux)" : cpuText.c_str(),
 #if defined(__aarch64__)
                  "arm64"
@@ -636,7 +642,7 @@ int main (int argc, char** argv)
 
     if (o.verify)
     {
-        std::printf ("\nverify: every load under every profile, with the savings and without (filters one side after the other, effects with mix 0 processed): the samples must be the same\n");
+        std::printf ("\nverify: every load under every profile, with the savings and without (filters one side after the other, effects with mix 0 processed, warp samples one by one): the samples must be the same\n");
         int failures = 0, runs = 0;
         for (size_t c = 0; c < configs.size(); ++c)
         {
@@ -644,7 +650,7 @@ int main (int argc, char** argv)
             int bad = 0;
             for (const auto& l : loads)
             {
-                const std::vector<float> with = renderForVerify (o, profiles[c], l, notes, 0), without = renderForVerify (o, profiles[c], l, notes, kOwnSavingFxMute | kOwnSavingVectorFilters);
+                const std::vector<float> with = renderForVerify (o, profiles[c], l, notes, 0), without = renderForVerify (o, profiles[c], l, notes, kOwnSavingFxMute | kOwnSavingVectorFilters | kOwnSavingVectorWarp);
                 size_t differ = 0;
                 float worst = 0.0f, peak = 0.0f;
                 for (size_t i = 0; i < with.size(); ++i)
@@ -701,12 +707,23 @@ int main (int argc, char** argv)
                 std::fflush (stdout);
                 if (o.sections)
                 {
-                    double total = 0.0;
-                    for (const double ms : r.sectionMs)
-                        total += ms;
+                    // every scope reads the clock twice, and that time lands in the section (and in its parent): "less clock" takes calls x the measured cost of
+                    // a scope off each section, which the small sections of the voice tick need on a device whose clock costs about a microsecond
+                    const double clockMs = ownSectionClockCostNs() * 1.0e-6;
+                    double total = 0.0, totalLess = 0.0;
+                    for (size_t i = 0; i < r.sectionMs.size(); ++i)
+                    {
+                        total += r.sectionMs[i];
+                        totalLess += std::max (0.0, r.sectionMs[i] - r.sectionCalls[i] * clockMs);
+                    }
+                    std::printf ("    sections: one scope costs about %.0f ns here; sum %.4f ms / block, less the clock %.4f ms / block\n", ownSectionClockCostNs(), total, totalLess);
                     for (size_t i = 0; i < r.sectionMs.size(); ++i)
                         if (r.sectionMs[i] > 0.0)
-                            std::printf ("    section %-52s %8.4f ms / block %6.1f %%\n", ownSectionName (static_cast<int> (i)), r.sectionMs[i], total > 0.0 ? 100.0 * r.sectionMs[i] / total : 0.0);
+                        {
+                            const double less = std::max (0.0, r.sectionMs[i] - r.sectionCalls[i] * clockMs);
+                            std::printf ("    section %-52s %8.4f ms / block %6.1f %%  %7.1f calls / block  less clock %8.4f ms %6.1f %%\n", ownSectionName (static_cast<int> (i)),
+                                         r.sectionMs[i], total > 0.0 ? 100.0 * r.sectionMs[i] / total : 0.0, r.sectionCalls[i], less, totalLess > 0.0 ? 100.0 * less / totalLess : 0.0);
+                        }
                 }
                 if (csv != nullptr)
                 {

@@ -49,6 +49,7 @@ struct OscTick
     bool lowWarp = false;                 // economy group Warp (tier low): a warp runs 2x oversampled with a 32 tap decimator instead of 4x with 128 taps
     bool lowMorph = false;                // economy group Morph (tier low): the spectral morph is rebuilt every 512 samples, from a transform of half the size
     bool fastMath = false;                // economy group Math (tier low): the warps use the cheaper forms of dsp/fastmath.h
+    bool scalarWarp = false;              // measurements (setOwnSavingsOff, kOwnSavingVectorWarp): the oversampled samples one by one also where the four lane form exists
 };
 
 /** True if every field of the two ticks is equal (floats compared as values: a NaN is never equal, which only costs the shortcut). */
@@ -60,7 +61,7 @@ inline bool sameOscTick (const OscTick& a, const OscTick& b) noexcept
         && a.warpSrc[0] == b.warpSrc[0] && a.warpSrc[1] == b.warpSrc[1] && a.warpAmount[0] == b.warpAmount[0] && a.warpAmount[1] == b.warpAmount[1]
         && a.warpPhase[0] == b.warpPhase[0] && a.warpPhase[1] == b.warpPhase[1] && a.warpSpread[0] == b.warpSpread[0] && a.warpSpread[1] == b.warpSpread[1]
         && a.startPhase == b.startPhase && a.active == b.active && a.remap == b.remap && a.morphType == b.morphType && a.morphAmount == b.morphAmount
-        && a.morphSpread == b.morphSpread && a.oversample == b.oversample && a.smooth == b.smooth && a.lowWarp == b.lowWarp && a.lowMorph == b.lowMorph && a.fastMath == b.fastMath && a.shareMorph == b.shareMorph;
+        && a.morphSpread == b.morphSpread && a.oversample == b.oversample && a.smooth == b.smooth && a.lowWarp == b.lowWarp && a.lowMorph == b.lowMorph && a.fastMath == b.fastMath && a.scalarWarp == b.scalarWarp && a.shareMorph == b.shareMorph;
 }
 
 /** Hermite interpolation of the four samples x[-1], x[0], x[1], x[2] at x[0] + f. */
@@ -104,8 +105,12 @@ struct DecimatorTaps
     }
 };
 
+struct WtOscLaneTest; // core/tests/test_own_warp_lanes.cpp
+
 class WtOsc
 {
+    friend struct WtOscLaneTest;
+
 public:
     static constexpr int kMaxVoices = 16;
     static constexpr int kOversample = 4, kTaps = 128;
@@ -660,6 +665,42 @@ public:
                         r = lerp (r, hermite (cB + idx, fr), wBk);
                     return r;
                 };
+#if SB_NEON
+                // Two warps that only move the phase (Sync, Formant, Bend: the warp presets), no filter stage: the oversampled samples are made four
+                // at a time (warpedGroup4: the operations of sampleAt () lane by lane, the same values). The phases and the weights of the second cycle are laid out first,
+                // by the integer steps of the scalar loop.
+                const bool lanes = !tick.scalarWarp && !filt0 && !filt1 && lanePhaseWarp (tick.warp[0]) && lanePhaseWarp (tick.warp[1])
+                                   && std::fabs (tick.warpPhase[0]) < 1000.0f && std::fabs (tick.warpPhase[1]) < 1000.0f;
+#else
+                const bool lanes = false;
+#endif
+                if (lanes)
+                {
+#if SB_NEON
+                    uint32_t phs[kOversample * kControlPeriod + 4];
+                    float wbs[kOversample * kControlPeriod + 4];
+                    int total = 0;
+                    for (int k = 0; k < n; ++k)
+                    {
+                        const float t = static_cast<float> (t0 + k + 1) * invP;
+                        const uint32_t incO = static_cast<uint32_t> (lerp (prevInc[v], curInc[v], t) * (4294967296.0f / static_cast<float> (os)));
+                        const float wBk = cB != nullptr ? lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)) : 0.0f;
+                        for (int j = 0; j < os; ++j)
+                        {
+                            phs[total] = ph;
+                            wbs[total] = wBk;
+                            ++total;
+                            ph += incO;
+                        }
+                    }
+                    int s4 = 0;
+                    for (; s4 + 4 <= total; s4 += 4)
+                        warpedGroup4 (buf + nt - 1 + s4, phs + s4, wbs + s4, cA, cB, fscale, N, a0, a1);
+                    for (; s4 < total; ++s4) // an odd count at 2x: the last two samples one by one
+                        buf[nt - 1 + s4] = sampleAt (phs[s4], s4 / os, static_cast<float> (s4 % os + 1) * (1.0f / static_cast<float> (os)), wbs[s4]);
+#endif
+                }
+                else
                 for (int k = 0; k < n; ++k)
                 {
                     const float t = static_cast<float> (t0 + k + 1) * invP;
@@ -701,6 +742,127 @@ public:
             morphAge += kControlPeriod;
     }
 
+#if SB_NEON
+    /** hermite () of four positions at once: base[lane] + idx[lane] is x[0] of the lane. The operations of the scalar function, lane by lane. */
+    static float32x4_t hermite4 (const float* const base[4], int32x4_t idx, float32x4_t fr) noexcept
+    {
+        // rows: [x[-1], x[0], x[1], x[2]] of each lane's position, transposed into x[-1], x[0], x[1], x[2] vectors
+        int32_t ii[4];
+        vst1q_s32 (ii, idx);
+        const float32x4_t r0 = vld1q_f32 (base[0] + ii[0] - 1), r1 = vld1q_f32 (base[1] + ii[1] - 1), r2 = vld1q_f32 (base[2] + ii[2] - 1), r3 = vld1q_f32 (base[3] + ii[3] - 1);
+        const float32x4x2_t t01 = vtrnq_f32 (r0, r1), t23 = vtrnq_f32 (r2, r3);
+        const float32x4_t xm1 = vcombine_f32 (vget_low_f32 (t01.val[0]), vget_low_f32 (t23.val[0]));
+        const float32x4_t x0 = vcombine_f32 (vget_low_f32 (t01.val[1]), vget_low_f32 (t23.val[1]));
+        const float32x4_t x1 = vcombine_f32 (vget_high_f32 (t01.val[0]), vget_high_f32 (t23.val[0]));
+        const float32x4_t x2 = vcombine_f32 (vget_high_f32 (t01.val[1]), vget_high_f32 (t23.val[1]));
+        const float32x4_t half = vdupq_n_f32 (0.5f);
+        const float32x4_t c1 = vmulq_f32 (half, vsubq_f32 (x1, xm1));
+        float32x4_t c2 = vsubq_f32 (xm1, vmulq_f32 (vdupq_n_f32 (2.5f), x0));
+        c2 = vaddq_f32 (c2, vmulq_f32 (vdupq_n_f32 (2.0f), x1));
+        c2 = vsubq_f32 (c2, vmulq_f32 (half, x2));
+        const float32x4_t c3 = vaddq_f32 (vmulq_f32 (half, vsubq_f32 (x2, xm1)), vmulq_f32 (vdupq_n_f32 (1.5f), vsubq_f32 (x0, x1)));
+        return vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (c3, fr), c2), fr), c1), fr), x0);
+    }
+
+    /** ffloor () of dsp/util.h for |x| < 4194304 (the caller sees to that): the truncation, minus one where it went up. */
+    static float32x4_t ffloor4 (float32x4_t x) noexcept
+    {
+        const int32x4_t i = vcvtq_s32_f32 (x);
+        const uint32x4_t less = vcltq_f32 (x, vcvtq_f32_s32 (i));
+        return vcvtq_f32_s32 (vaddq_s32 (i, vreinterpretq_s32_u32 (less))); // a true lane is all ones: -1
+    }
+    /** fastmath::sinCycles () of four phases: the same truncation, wrap, table position and interpolation. */
+    static float32x4_t sinCycles4 (float32x4_t c) noexcept
+    {
+        float32x4_t w = vsubq_f32 (c, vcvtq_f32_s32 (vcvtq_s32_f32 (c)));
+        w = vbslq_f32 (vcltq_f32 (w, vdupq_n_f32 (0.0f)), vaddq_f32 (w, vdupq_n_f32 (1.0f)), w);
+        const float32x4_t pos = vmulq_f32 (w, vdupq_n_f32 (1024.0f));
+        const int32x4_t i = vminq_s32 (vcvtq_s32_f32 (pos), vdupq_n_s32 (1023));
+        const float32x4_t fr = vsubq_f32 (pos, vcvtq_f32_s32 (i));
+        int32_t ii[4];
+        vst1q_s32 (ii, i);
+        const float lo[4] = { fastmath::kSine.v[ii[0]], fastmath::kSine.v[ii[1]], fastmath::kSine.v[ii[2]], fastmath::kSine.v[ii[3]] };
+        const float hi[4] = { fastmath::kSine.v[ii[0] + 1], fastmath::kSine.v[ii[1] + 1], fastmath::kSine.v[ii[2] + 1], fastmath::kSine.v[ii[3] + 1] };
+        const float32x4_t a = vld1q_f32 (lo);
+        return vaddq_f32 (a, vmulq_f32 (vsubq_f32 (vld1q_f32 (hi), a), fr));
+    }
+    /** The warps that only move the phase (and, Formant, set a window), for which warpPhase4 () has the four lane form. */
+    static bool lanePhaseWarp (int type) noexcept
+    {
+        return type == kWarpNone || type == kWarpSync || type == kWarpSyncVar || type == kWarpFormant || type == kWarpBend || type == kWarpBendBoth || type == kWarpBendPlus
+            || type == kWarpBendMinus;
+    }
+    /** warpPhase () of warp.h, four phases at once, for the types of lanePhaseWarp (): the same expressions in the same order. `fast`: the table sine of the Math
+        economy group (sinCycles4); otherwise the library sine and cosine, called for each lane as the scalar function calls them. */
+    static float32x4_t warpPhase4 (int type, float32x4_t p, float a, float ph, float32x4_t& window, bool fast) noexcept
+    {
+        const float32x4_t half = vdupq_n_f32 (0.5f), inv2pi = vdupq_n_f32 (1.0f / kTwoPif);
+        window = vdupq_n_f32 (1.0f);
+        auto frac4 = [] (float32x4_t x) noexcept { return vsubq_f32 (x, ffloor4 (x)); };
+        auto sn4 = [fast] (float32x4_t c) noexcept
+        {
+            if (fast)
+                return sinCycles4 (c);
+            float t[4];
+            vst1q_f32 (t, c);
+            for (float& v : t)
+                v = std::sin (kTwoPif * v);
+            return vld1q_f32 (t);
+        };
+        auto cs4 = [fast] (float32x4_t c) noexcept
+        {
+            if (fast)
+                return sinCycles4 (vaddq_f32 (c, vdupq_n_f32 (0.25f)));
+            float t[4];
+            vst1q_f32 (t, c);
+            for (float& v : t)
+                v = std::cos (kTwoPif * v);
+            return vld1q_f32 (t);
+        };
+        switch (type)
+        {
+            case kWarpSync:    return frac4 (vmulq_f32 (p, vdupq_n_f32 (1.0f + a * 11.0f)));
+            case kWarpSyncVar: return frac4 (vaddq_f32 (vmulq_f32 (p, vdupq_n_f32 (1.0f + a * 11.0f)), vdupq_n_f32 (ph)));
+            case kWarpFormant:
+                window = vsubq_f32 (half, vmulq_f32 (half, cs4 (p)));
+                return frac4 (vsubq_f32 (vaddq_f32 (vmulq_f32 (p, vdupq_n_f32 (1.0f + a * 7.0f)), vdupq_n_f32 (ph)), half));
+            case kWarpBend: case kWarpBendBoth:
+                return vsubq_f32 (p, vmulq_f32 (vmulq_f32 (vdupq_n_f32 ((a - 0.5f) * 1.9f), sn4 (p)), inv2pi));
+            case kWarpBendPlus:
+                return vaddq_f32 (p, vmulq_f32 (vmulq_f32 (vdupq_n_f32 (a * 0.95f), sn4 (p)), inv2pi));
+            case kWarpBendMinus:
+                return vsubq_f32 (p, vmulq_f32 (vmulq_f32 (vdupq_n_f32 (a * 0.95f), sn4 (p)), inv2pi));
+            default: return p;
+        }
+    }
+    /** Four samples of the oversampled path at the phases phs[0 .. 3] (sampleAt () of render () for two phase warps, no cross signal, no filter stage): the phase
+        through the two warps, the wrap, the table read (and the second cycle with the weights wbs), the window. */
+    void warpedGroup4 (float* dst, const uint32_t* phs, const float* wbs, const float* cA, const float* cB, float fscale, int N, float a0, float a1) const noexcept
+    {
+        const float32x4_t p = vmulq_f32 (vcvtq_f32_u32 (vshrq_n_u32 (vld1q_u32 (phs), 8)), vdupq_n_f32 (1.0f / 16777216.0f));
+        float32x4_t window = vdupq_n_f32 (1.0f), w2 = window, pp = p;
+        if (tick.warp[0] != 0)
+            pp = warpPhase4 (tick.warp[0], pp, a0, tick.warpPhase[0], window, tick.fastMath);
+        if (tick.warp[1] != 0)
+        {
+            pp = warpPhase4 (tick.warp[1], pp, a1, tick.warpPhase[1], w2, tick.fastMath);
+            window = vmulq_f32 (window, w2);
+        }
+        const float32x4_t q = vsubq_f32 (pp, ffloor4 (pp));
+        const float32x4_t pos = vmulq_f32 (q, vdupq_n_f32 (fscale));
+        const int32x4_t idx = vminq_s32 (vmaxq_s32 (vcvtq_s32_f32 (pos), vdupq_n_s32 (0)), vdupq_n_s32 (N));
+        const float32x4_t fr = vsubq_f32 (pos, vcvtq_f32_s32 (idx));
+        const float* const baseA[4] = { cA, cA, cA, cA };
+        float32x4_t r = hermite4 (baseA, idx, fr);
+        if (cB != nullptr)
+        {
+            const float* const baseB[4] = { cB, cB, cB, cB };
+            r = vaddq_f32 (r, vmulq_f32 (vsubq_f32 (hermite4 (baseB, idx, fr), r), vld1q_f32 (wbs)));
+        }
+        vst1q_f32 (dst, vmulq_f32 (r, window));
+    }
+#endif
+
     /** The plain table read of one voice over a chunk (no warp): `n` samples from `ph`, added to L / R. The NEON version does four samples at a time with the operations
         of the scalar loop (the phases come from an integer prefix sum of the increments, the four table reads are four loads transposed into lanes). */
     static void renderPlain (float* L, float* R, int t0, int n, uint32_t& ph, const float* cA, const float* cB, float wB0, float wB1, float fscale, int N, float pg, float cgl,
@@ -712,25 +874,6 @@ public:
         const float32x4_t vpinc = vdupq_n_f32 (pinc), vcinc = vdupq_n_f32 (cinc);
         const float32x4_t vpg = vdupq_n_f32 (pg), vcgl = vdupq_n_f32 (cgl), vpgr = vdupq_n_f32 (pgr), vcgr = vdupq_n_f32 (cgr);
         const int32x4_t vzero = vdupq_n_s32 (0), vN = vdupq_n_s32 (N);
-        auto hermite4 = [] (const float* const base[4], int32x4_t idx, float32x4_t fr)
-        {
-            // rows: [x[-1], x[0], x[1], x[2]] of each lane's position, transposed into x[-1], x[0], x[1], x[2] vectors
-            int32_t ii[4];
-            vst1q_s32 (ii, idx);
-            const float32x4_t r0 = vld1q_f32 (base[0] + ii[0] - 1), r1 = vld1q_f32 (base[1] + ii[1] - 1), r2 = vld1q_f32 (base[2] + ii[2] - 1), r3 = vld1q_f32 (base[3] + ii[3] - 1);
-            const float32x4x2_t t01 = vtrnq_f32 (r0, r1), t23 = vtrnq_f32 (r2, r3);
-            const float32x4_t xm1 = vcombine_f32 (vget_low_f32 (t01.val[0]), vget_low_f32 (t23.val[0]));
-            const float32x4_t x0 = vcombine_f32 (vget_low_f32 (t01.val[1]), vget_low_f32 (t23.val[1]));
-            const float32x4_t x1 = vcombine_f32 (vget_high_f32 (t01.val[0]), vget_high_f32 (t23.val[0]));
-            const float32x4_t x2 = vcombine_f32 (vget_high_f32 (t01.val[1]), vget_high_f32 (t23.val[1]));
-            const float32x4_t half = vdupq_n_f32 (0.5f);
-            const float32x4_t c1 = vmulq_f32 (half, vsubq_f32 (x1, xm1));
-            float32x4_t c2 = vsubq_f32 (xm1, vmulq_f32 (vdupq_n_f32 (2.5f), x0));
-            c2 = vaddq_f32 (c2, vmulq_f32 (vdupq_n_f32 (2.0f), x1));
-            c2 = vsubq_f32 (c2, vmulq_f32 (half, x2));
-            const float32x4_t c3 = vaddq_f32 (vmulq_f32 (half, vsubq_f32 (x2, xm1)), vmulq_f32 (vdupq_n_f32 (1.5f), vsubq_f32 (x0, x1)));
-            return vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (c3, fr), c2), fr), c1), fr), x0);
-        };
         for (; k + 4 <= n; k += 4)
         {
             const float32x4_t t = simd::ramp4 (t0, k, invP);

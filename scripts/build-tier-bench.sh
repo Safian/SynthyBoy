@@ -4,12 +4,15 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Usage: scripts/build-tier-bench.sh [--arch arm32|arm64|all] [--out DIR] [--build-dir DIR] [--jobs N]
+# Usage: scripts/build-tier-bench.sh [--arch arm32|arm64|all] [--out DIR] [--build-dir DIR] [--jobs N] [--sections]
 #
 #   --arch       arm32 (ARMv7 hard-float with NEON: the MPC Key 61), arm64 (AArch64: the MPC XL) or all (default)
 #   --out        output directory (default: <repo>/build-tier-bench/out); the binaries are <out>/tier-bench-arm32/synthyboy_tier_bench and
 #                <out>/tier-bench-arm64/synthyboy_tier_bench
 #   --build-dir  CMake trees (default: <repo>/build-tier-bench), one per architecture
+#   --sections   also build the variant that times the engine by section (-DSYNTHYBOY_SECTION_TIMING=ON, a tree of its own per architecture) into
+#                <out>/tier-bench-<arch>-sections/synthyboy_tier_bench: its --sections option prints where the time of a block goes. Its block times are a
+#                little longer than the plain binary's (every scope reads the clock): use the plain binary for the budget numbers.
 #
 # The same container, toolchain files and compiler flags as scripts/build-mpc.sh --bench (GNU cross compilers of Debian 12, cmake/toolchains/*.cmake, Release, the own
 # engine without Vital), so the DSP code is the code of the packaged plugin; only the link differs (-static). Environment: MPC_BUILD_IMAGE (or ARMV7_IMAGE) names the
@@ -21,6 +24,7 @@ set -euo pipefail
 me="build-tier-bench.sh"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 arch="all"
+sections=0
 out_dir=""
 build_dir=""
 jobs="$( (command -v nproc >/dev/null && nproc) || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
@@ -30,7 +34,8 @@ while [[ $# -gt 0 ]]; do
         --out) out_dir="$2"; shift 2 ;;
         --build-dir) build_dir="$2"; shift 2 ;;
         --jobs) jobs="$2"; shift 2 ;;
-        -h|--help) sed -n '7,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --sections) sections=1; shift ;;
+        -h|--help) sed -n '7,21p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "$me: unknown option $1 (see --help)" >&2; exit 2 ;;
     esac
 done
@@ -46,11 +51,14 @@ command -v docker >/dev/null || { echo "$me: docker not found" >&2; exit 1; }
 mkdir -p "$out_dir"
 out_dir="$(cd "$out_dir" && pwd)"
 
+variants=("")
+[[ "$sections" == 1 ]] && variants+=("-sections")
 for a in "${archs[@]}"; do
-    mkdir -p "$build_dir/$a"
-    tree="$(cd "$build_dir/$a" && pwd)"
-    echo "$me: === $a (image $image) ==="
-    docker run --rm -v "$repo_root":/src:ro -v "$tree":/build -v "$out_dir":/out -e ARCH="$a" -e JOBS="$jobs" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" "$image" bash -c '
+  for variant in "${variants[@]}"; do
+    mkdir -p "$build_dir/$a$variant"
+    tree="$(cd "$build_dir/$a$variant" && pwd)"
+    echo "$me: === $a$variant (image $image) ==="
+    docker run --rm -v "$repo_root":/src:ro -v "$tree":/build -v "$out_dir":/out -e ARCH="$a" -e VARIANT="$variant" -e JOBS="$jobs" -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" "$image" bash -c '
         set -euo pipefail
         case "$ARCH" in
             arm32) TRIPLE=arm-linux-gnueabihf; TOOLCHAIN=/src/cmake/toolchains/armv7-linux-gnueabihf.cmake; PKGS="g++-arm-linux-gnueabihf gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf" ;;
@@ -68,15 +76,16 @@ for a in "${archs[@]}"; do
         "$TRIPLE-g++" --version | head -1
         cmake -S /src -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
             -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_MPC_SHELL=OFF -DSYNTHYBOY_WITH_VITAL=OFF -DSYNTHYBOY_SHELL_ENGINE=own \
-            -DSYNTHYBOY_TIER_BENCH_STATIC=ON
+            -DSYNTHYBOY_TIER_BENCH_STATIC=ON -DSYNTHYBOY_SECTION_TIMING=$( [ -n "$VARIANT" ] && echo ON || echo OFF )
         cmake --build /build --target synthyboy_tier_bench --parallel "$JOBS"
-        rm -rf "/out/tier-bench-$ARCH"
-        mkdir -p "/out/tier-bench-$ARCH"
-        "$TRIPLE-strip" -o "/out/tier-bench-$ARCH/synthyboy_tier_bench" /build/bench/synthyboy_tier_bench
-        desc="$(file "/out/tier-bench-$ARCH/synthyboy_tier_bench")"
+        rm -rf "/out/tier-bench-$ARCH$VARIANT"
+        mkdir -p "/out/tier-bench-$ARCH$VARIANT"
+        "$TRIPLE-strip" -o "/out/tier-bench-$ARCH$VARIANT/synthyboy_tier_bench" /build/bench/synthyboy_tier_bench
+        desc="$(file "/out/tier-bench-$ARCH$VARIANT/synthyboy_tier_bench")"
         echo "$desc"
         echo "$desc" | grep -q "statically linked" || { echo "the binary is not static" >&2; exit 1; }
-        ls -l "/out/tier-bench-$ARCH/synthyboy_tier_bench"
+        ls -l "/out/tier-bench-$ARCH$VARIANT/synthyboy_tier_bench"
     '
-    echo "$me: $out_dir/tier-bench-$a/synthyboy_tier_bench"
+    echo "$me: $out_dir/tier-bench-$a$variant/synthyboy_tier_bench"
+  done
 done

@@ -58,6 +58,17 @@ target_include_directories(synthyboy_test_own_osc_displays PRIVATE "${PROJECT_SO
 synthyboy_add_test(synthyboy_test_own_pad_pressure test_own_pad_pressure.cpp)
 target_include_directories(synthyboy_test_own_pad_pressure PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 target_compile_definitions(synthyboy_test_own_pad_pressure PRIVATE SYNTHYBOY_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+# The four lane form of the warped oscillator samples against the scalar functions: a translation unit of its own with the NEON forms switched on (also on Apple's
+# arm64, where the engine runs the scalar code) and without fused multiply-add, as the ARM builds that use the form are compiled. It links nothing of the engine.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
+    add_executable(synthyboy_test_own_warp_lanes test_own_warp_lanes.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_own_warp_lanes PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own")
+    target_compile_features(synthyboy_test_own_warp_lanes PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_own_warp_lanes PRIVATE SB_TEST_NEON=1)
+    target_compile_options(synthyboy_test_own_warp_lanes PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_own_warp_lanes PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_own_warp_lanes COMMAND synthyboy_test_own_warp_lanes)
+endif()
 synthyboy_add_test(synthyboy_test_own_fx_mute test_own_fx_mute.cpp)   # an effect whose mix is exactly 0 is not processed (economy group Control)
 target_include_directories(synthyboy_test_own_fx_mute PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_profile test_own_profile.cpp)   # the economy groups of a quality (the device profiles of shell-mpc/device_profile.h)
