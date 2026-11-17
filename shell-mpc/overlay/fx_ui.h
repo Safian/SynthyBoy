@@ -293,6 +293,32 @@ private:
             sp.setEnabled (numActive < ui::FxChainBar::kMaxSlots);
     }
 
+    /** Does the parameter `key` of the open effect do anything in the state the effect is in? One table, from the engine's own dependencies: the DIVISION of an effect that is in Free (Hz) sync, the RATE and TIME
+        values while it follows the tempo, the filter values of a distortion without a filter (order None), the comb / formant values of an FX filter in another model, the second middle band of the EQ while it is Off.
+        What does nothing is drawn dim (and takes no touch) so that it cannot be mistaken for a live control. */
+    bool paramIsLive (const Item& item, int type, IInstanceView& inst, const char* key) const
+    {
+        const std::string k = key != nullptr ? key : "";
+        const size_t dot = k.find ('.');
+        if (dot == std::string::npos)
+            return true;
+        const std::string fx = k.substr (0, dot + 1), name = k.substr (dot + 1);
+        const float sync = plainOfKey (item, type, inst, (fx + "sync").c_str(), -1.0f);
+        if (sync >= 0.0f && (name == "division" || name == "division2"))
+            return sync > 0.5f;
+        if (sync >= 0.0f && (name == "rate" || name == "time" || name == "time2"))
+            return sync < 0.5f;
+        if (fx == "distortion." && name.rfind ("filter_", 0) == 0 && name != "filter_order")
+            return plainOfKey (item, type, inst, "distortion.filter_order", 1.0f) > 0.5f;
+        if (fx == "fxfilter." && name == "comb_offset")
+            return std::lround (plainOfKey (item, type, inst, "fxfilter.model", 6.0f)) == 6;
+        if (fx == "fxfilter." && name.rfind ("formant.", 0) == 0)
+            return std::lround (plainOfKey (item, type, inst, "fxfilter.model", 5.0f)) == 5;
+        if (fx == "eq." && name.rfind ("mid2.", 0) == 0 && name != "mid2.mode")
+            return plainOfKey (item, type, inst, "eq.mid2.mode", 1.0f) > 0.5f;
+        return true;
+    }
+
     /** The value of the parameter with the key `key` of the selected effect (plain), or `def` when the effect has no such parameter. */
     float plainOfKey (const Item& item, int type, IInstanceView& inst, const char* key, float def) const
     {
@@ -400,7 +426,7 @@ private:
                     knob.setLabel (name);
                 }
             }
-            const bool live = pi != nullptr && paramIdx >= 0;
+            const bool live = pi != nullptr && paramIdx >= 0 && paramIsLive (item, type, inst, pi->key);
             knob.setEnabled (live && ed.kindOf (p) == ui::FxSlotEditor::Kind::Knob);
             stepper.setEnabled (live && ed.kindOf (p) == ui::FxSlotEditor::Kind::Stepper);
             list.setEnabled (live && ed.kindOf (p) == ui::FxSlotEditor::Kind::List);

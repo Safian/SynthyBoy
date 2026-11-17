@@ -588,6 +588,63 @@ void testValueText()
     check (text ("utility.pan", 0.0f) == "C" && text ("utility.pan", -50.0f) == "L 50" && text ("utility.pan", 50.0f) == "R 50", "a pan reads C / L 50 / R 50 like the mixer (" + text ("utility.pan", 0.0f) + ")");
 }
 
+/** What does nothing in the state of the effect is drawn dim and takes no touch: the DIVISION while the sync is Free (Hz) and the RATE while it follows the tempo (Chorus: one table for the effects with a sync), the filter values of a Distortion without a filter. */
+void testDependentValuesAreDim()
+{
+    auto enabledOf = [] (ui::FxSlotEditor& ed, const char* key) -> int
+    {
+        const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (ed.currentType());
+        const int idx = demo::Inst::idx (key);
+        for (int p = 0; p < d.count; ++p)
+            if (d.source[p] == idx)
+            {
+                const ui::Component* members[4] = { &ed.knobs[p], &ed.steppers[p], &ed.lists[p], &ed.toggles[p] };
+                for (const ui::Component* c : members)
+                    if (c->enabled())
+                        return 1;
+                return 0;
+            }
+        return -1;
+    };
+    // the control of a parameter of the open effect is changed through the editor, as a finger does it (the effect lives in the pool: its values are not the engine's keys)
+    auto choose = [] (FxRig& r, const char* key, int option)
+    {
+        ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+        const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (ed.currentType());
+        const int idx = demo::Inst::idx (key);
+        for (int p = 0; p < d.count; ++p)
+            if (d.source[p] == idx)
+            {
+                const ui::Rect row = ed.lists[p].rowRect (option);
+                r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
+                return true;
+            }
+        return false;
+    };
+    {
+        FxRig r;
+        r.refresh();
+        addEffect (r, 0);   // the first type of the gallery: Chorus
+        ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+        r.refresh();
+        check (enabledOf (ed, "chorus.rate") == 1 && enabledOf (ed, "chorus.division") == 0, "Chorus in Free (Hz) sync: the RATE is live and the DIVISION is dim (" + std::to_string (enabledOf (ed, "chorus.rate")) + ", " + std::to_string (enabledOf (ed, "chorus.division")) + ")");
+        check (choose (r, "chorus.sync", 1), "the SYNC list of the Chorus is there");
+        r.refresh (2);
+        check (enabledOf (ed, "chorus.rate") == 0 && enabledOf (ed, "chorus.division") == 1, "Chorus following the tempo: the DIVISION is live and the RATE is dim");
+    }
+    {
+        FxRig r;
+        r.refresh();
+        addEffect (r, 3);   // Distortion
+        ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
+        r.refresh();
+        check (enabledOf (ed, "distortion.filter_cutoff") == 0 && enabledOf (ed, "distortion.drive") == 1, "Distortion without a filter (order None): the filter values are dim, the drive is live");
+        check (choose (r, "distortion.filter_order", 1), "the filter order of the Distortion is a list");
+        r.refresh (2);
+        check (enabledOf (ed, "distortion.filter_cutoff") == 1, "Distortion with a filter before it: the filter values are live");
+    }
+}
+
 void testFxPagesAndDisplays()
 {
     FxRig r;
@@ -655,6 +712,7 @@ int main()
     testFxEditing();
     testFxPagesAndDisplays();
     testValueText();
+    testDependentValuesAreDim();
     testFxDraw();
     std::printf (g_fails ? "mixfx_ui_host: FAILED (%d failures)\n" : "mixfx_ui_host: OK\n", g_fails);
     return g_fails ? 1 : 0;
