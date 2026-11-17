@@ -695,7 +695,7 @@ protected:
             const int rowH = std::max (th, in.h - lane - th), cw = (in.w - 2 * g) / 3;   // the first row takes the room, the three switches stand at the bottom (no empty strip under them)
             mpeOn.place ({ in.x, in.y, cw, rowH });
             mpeBend.place ({ in.x + cw + g, in.y, cw, rowH });
-            mpeMacro.place ({ in.x + 2 * (cw + g), in.y, in.right() - (in.x + 2 * (cw + g)), rowH });
+            mpeMacro.place ({ in.x + 2 * (cw + g), in.y, in.right() - (in.x + 2 * (cw + g)), std::min (rowH, 2 * th - 8) });   // three options in ONE row (a rectangle under two rows high keeps them side by side)
             const int y2 = in.y + rowH + lane;
             mpeYModwheel.place ({ in.x, y2, cw, th });
             mpeBendToX.place ({ in.x + cw + g, y2, cw, th });
