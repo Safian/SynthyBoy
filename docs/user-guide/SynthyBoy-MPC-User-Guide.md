@@ -103,7 +103,7 @@ assignment until the plugin is inserted again (chapter 8).
 The screen is 1280 x 800 pixels and touch sensitive.
 
 - **Header** (top): track, plugin and preset (the PRESET field). Drawn by the MPC.
-- **Tab bar** (bottom): the function keys of the MPC. Drawn by the MPC.
+- **Tab bar** (bottom): the function keys of the MPC. Drawn by the MPC. In the XL screenshot of chapter 4.3 it shows four tabs at a time (OSC, MIX, FILTER, ENV) with a **<** and a **>** button at its ends, and a row of dots under a tab that has sub-pages.
 - **Plugin area** (between them, 1280 x 628 pixels): drawn by SynthyBoy. All the pictures in this guide
   show this area.
 
@@ -180,7 +180,7 @@ groups leaves the rest of the slots without a function.
 
 **MPC XL (16 knobs).** All 16 knobs are alive at once: knobs 1 - 4 turn the active group, knobs 5 - 16 the next
 groups. The chips 5 - 16 are on the XL's screen: the XL screenshot below shows them on the Osc A page (5 - 8 on the wavetable bar, 9 - 12 on the tune block, 13 - 16 on the unison block; the warp rows are the fifth group and have none until you touch them).
-The XL is not a photograph: it is the host's own screenshot with the plugin's drawn frame laid over it, taken on the MPC XL with an earlier build (in it the TRACK switch is still an arc icon).
+The picture is not a photograph: it is the XL's own screenshot of the host with the plugin's drawn frame laid over it, made with an earlier build (in it the TRACK switch is still an arc icon and the warp rows have a smaller PHASE knob). It also shows the MPC's own header (TRACK, PLUGIN, PRESET) and tab bar.
 
 ![XL screenshot: Osc A](img/xl-osc-a.png)
 
@@ -774,7 +774,7 @@ A **modulation** connects a **source** to a **destination** (a parameter) with a
 1. **From the Mod page.** Tap a source chip on the **source board** (shown when no slot is in use) and pick the destination, or press **+ ADD** (a slot with Env 1 and +50 percent is made and its page opens) and change SOURCE and TARGET. Edit SOURCE, TARGET, AMOUNT, UNI/BI, ON/OFF on the row; MORE has the aux source, curve and time.
 2. **From an envelope or an LFO.** On the Env or LFO page press **TARGETS**, then **ADD TARGET** and pick a group and a parameter. The new route starts at half depth (bipolar if the parameter swings around zero). On that page the target rows have depth, UNI/BI, ON/OFF and remove.
 3. **From a macro.** On the Macros page tap the chips area of the macro card ("NO TARGET - TAP TO ADD"), then ADD TARGET.
-4. **From a control.** **Long press** (0.6 s) a knob or number field anywhere on a plugin page: its modulation page opens. Choose a source with the arrows beside ADD and press ADD; the depth bar, UNI/BI, ON/OFF and the remove button are on each row.
+4. **From a control.** **Long press** (0.6 s) a knob or number field anywhere on a plugin page: its modulation page opens. If nothing modulates the control yet, the page is the **source board**: tap one of the 57 sources and the route is made. If the control already has routes, they are listed with the depth bar, UNI/BI, ON/OFF and the remove button, and a compact add row under them.
 5. **Depth by dragging.** A knob that is modulated by the source selected on the Play page (the last envelope or LFO you touched) has a colored tab at its top left; dragging on the tab changes that depth (200 pixels = the whole -100 .. +100 percent).
 
 Knobs show the modulation: a marker at the live (modulated) value, and an arc from the value over the depth of the selected source. The tab at the top left is colored when the selected source is among the sources of the knob, grey when other sources modulate it, hollow when the selected route is bypassed.
@@ -802,12 +802,36 @@ The presets are CC0 licensed (Safian Szabolcs). The host lists them by name (the
 
 **The "*" mark.** The plugin puts " *" after the preset name when you changed a parameter after loading the preset, or when a project was loaded that held changed settings. Loading a preset again clears the mark. A project remembers the preset by name and finds it again even when a later version has a different preset list; if the name is not found the saved sound is kept without a preset.
 
-The plugin-wide pad-pressure switch is not part of a preset (a preset change leaves it alone). The Play-page selectors (which oscillator, envelope and LFO the Play page shows) are saved with the project.
+The plugin-wide pad-pressure switch (PAD PRESS and PAD %, chapter 5.12) is not part of a preset (a preset change leaves it alone). The Play-page selectors (which oscillator, envelope and LFO the Play page shows) are saved with the project.
+
+**Saving** (Akai manuals): a **project** is saved from the Save window: press **Menu** and tap **Save**, then **Project** or **Project As** (Standalone OS User Guide v3.10.1, "Save Window", p. 67; MPC Live III, MPC XL User Guide, p. 69). The project keeps the plugin's state, so your edited sound comes back with it. To keep a sound as a preset, select the plugin track and tap **Plugin Program** in the same window ("Tap Plugin Program when a plugin track is selected to save the current plugin program"). In the track's plugin page (Standalone OS guide p. 253, XL guide p. 278) the folder icon next to the preset name opens the file browser to load a plugin preset and the disk icon saves a new one; both icons are in the header of the XL screenshot in chapter 4.3. Save often: the manual warns that external plugins are experimental.
+
+### 7.1 Sound quality on each device
+
+The same preset is **compatible** between the two devices: presets and projects store only your settings, never what the device can play, and nothing is changed when a project moves. But the two devices do not have the same processing power, so SynthyBoy runs at a different quality on each, chosen once when the plugin starts. A preset can therefore sound **fuller on the XL**.
+
+| | MPC XL | MPC Key 61 |
+|---|---|---|
+| Voices (notes at once) | 16 | 8 |
+| Unison voices per oscillator | up to 16 | at most 3 |
+| Effects | all 16 | the reverb, flanger, Hyper/Dimension, Bode and Convolve are skipped |
+| Warp | smoother (the wave is calculated at four times the rate) | calculated at two times the rate: extreme warps add a little more aliasing |
+| Spectral morph (wavetable and spectral morph) | updates at the full rate | updates at half the rate: a morph that is moved by an LFO or an envelope lags by up to about 12 ms instead of 6 ms |
+| Maths inside filters, distortion and effects | exact | fast approximations: the level stays the same, the fine shape of the waveform differs slightly |
+
+In plain words:
+- **Voices.** A chord of more than 8 notes (or notes that are still ringing out) steals voices on the Key 61 earlier than on the XL. The POLY control of the Master page cannot raise this above the device's number.
+- **Unison.** A patch that asks for 7 unison voices sounds on the Key 61 like the same patch with 3: the same detune width, stereo spread and blend, but a thinner stack. In a measurement the level stayed within 0.5 dB on a plain saw and within 3 dB over the 14 factory presets that ask for more than 3 voices.
+- **Effects.** On the Key 61 a preset that uses a reverb plays without it. The remaining effects (chorus, compressor, delay, distortion, EQ, FX filter, phaser) run. The reverb page has a **FORCE ON** switch that lets the reverb run anyway; it is stored with the preset and costs processing power.
+- **Heavy sounds.** The busiest factory presets (for example Diffusor Cloud Pad and Scream Filter Bass) use nearly all of the Key 61's processing time when eight notes are held; the XL has room to spare. If a held chord crackles on the Key 61, use fewer notes, fewer unison voices or fewer effects.
+- A device that the plugin does not know is treated like the Key 61.
+
+The XL profile was measured with all 112 factory presets and 16 held notes; the Key 61 profile is the cautious one.
 
 ## 8. Known limitations
 
 - **Key 61: switch off the host's "Q-Link Status" pop-up.** When a Q-Link knob is touched the Key 61 shows a pop-up on the right. The plugin's picture can flicker around it. Switch it off: **Preferences > General > Show Q-Link Status When Touched**, or press and hold the **Q-Link** button to open the Q-Links window and tap **Q-Link Status** (Standalone OS User Guide v3.10.1, section "Q-Links", p. 314: the button enables or disables the pop-up, and the same setting is in Preferences > General). With the pop-up off the picture should be stable (this has not yet been confirmed on a device after the latest rework). The XL has no such pop-up.
-- **Standby.** The plugin's picture disappears while the device is dimmed in standby and comes back when the device wakes. (This is being worked on.)
+- **Standby dim.** When the MPC dims its screen in standby, the plugin darkens its picture with it, and the first touch only wakes the screen (the touch is not passed on to a control). The host's picture is also blurred while dimmed; the plugin's picture is darkened but not blurred. This is handled in the plugin and tested on the Key 61's measured values; the XL's dim values are not measured yet (chapter 11).
 - **Older projects keep their old Q-Link map.** A project saved with an older version of the plugin keeps the old Q-Link assignment of that track until you **insert the plugin on the track again**. Symptom: on the plugin pages the knobs change other parameters than the ones the display shows. A new project does not have this problem.
 - **No limiter, loud output.** The output has a fixed make-up gain of +18 dB and no limiter. Loud presets can exceed full scale. Lower the track level (or put a limiter on the track). The level control of the plugin is Master Volume (default -12 dB).
 - **Q-Link automation.** Recording automation on a Q-Link knob records the host's "Q n" slot, which replays into whatever group is active at that moment. Record automation on the real parameter instead (its own control; on a page where you can reach it, a parameter of the host's list).
@@ -815,7 +839,10 @@ The plugin-wide pad-pressure switch is not part of a preset (a preset change lea
 - **Host pop-ups.** A pop-up of the host over the middle of the plugin's area can hide the picture while it is on screen.
 - **One finger.** Only one finger is followed.
 - **Up to 16 instances.** The 17th and later instances never show the drawn pages.
-- **Controls that are dim.** The wavetable MEMORY stepper, the WARP VAR knobs and the oscillator types Sample and Spectral cannot be set from the plugin pages.
+- **Controls that are dim or missing.** Every oscillator parameter is on the pages. A control that does not apply in the current state is dim (it takes no touch) or, on the effect pages and the oscillator detail pages, hidden with its room used by the others (chapters 5.3 and 5.11).
+- **Sound quality differs between the devices.** The Key 61 plays 8 voices, at most 3 unison voices and skips five effects; the XL plays 16 voices, up to 16 unison voices and all effects (chapter 7.1).
+- **Heavy sounds on the Key 61.** The busiest presets with eight held notes use nearly all of the available processing time (chapter 7.1).
+- **Not supported file types.** The content browser offers WAV and SFZ only (not FLAC). An SFZ instrument must lie in a folder of its own with its samples below it.
 - **Pad pressure** needs the pad's Full Level to be off. The plugin-wide pad-pressure switch ignores channel aftertouch (a Key 61 key); only per-pad polyphonic pressure acts.
 
 ## 9. Troubleshooting
@@ -825,11 +852,14 @@ The plugin-wide pad-pressure switch is not part of a preset (a preset change lea
 | The plugin is not in the browser | The folder must be named `Safian - VST - SynthyBoy` inside `VST2 Plugins` at the root of the drive. MPC OS 3.10.1 or later. In Preferences > Enhancements (Beta) both **Enable Enhancements** and **External Plugin Support** must be on. After copying a plugin, restart the MPC application. |
 | The plugin loads but the pages are plain host pages or dark areas | The display layer disables itself for the rest of the session when the display driver refuses it or no free display plane is left; restart the MPC application. A pop-up of the host over the area also hides it. |
 | The picture flickers or is cut at the right edge (Key 61) | Switch off the Q-Link Status pop-up (chapter 8). Changing the tab (for example Play, Macros, Play) takes a new reference. |
-| The picture disappears when the device dims | Standby: it returns on wake (chapter 8). |
+| The picture is dark or touch does nothing after a pause | The device was dimmed in standby: the first touch only wakes the screen (chapter 8). |
 | The picture is missing on one track | Only the instance whose page is on screen is drawn. More than 16 instances: the extra ones are never drawn. |
 | Q-Link knobs change other parameters than shown | The project has an old Q-Link map (chapter 8): insert the plugin on that track again. |
 | Knob names in the Key 61 pop-up are old | The host updates names when a group changes; touch the knob again (about half a second). |
-| A knob steps a list or switch instead of sweeping | By design: a small turn moves a stepped value by one step. |
+| A knob steps a list or switch instead of sweeping | By design: a small turn (about 6 of the 128 clicks of the knob's travel) moves a stepped value by one step (chapter 4.3). |
+| The sound is thinner than on the other device, or an effect is silent | The Key 61 plays 8 voices, at most 3 unison voices and skips reverb, flanger, Hyper/Dimension, Bode and Convolve (chapter 7.1). |
+| A control I expected is not on the page | It does not apply in the current state (for example FIXED PITCH while TRACK is on): it is hidden or dim (chapters 5.3, 5.11). |
+| The mouse wheel does nothing | The wheel steps the control under the pointer; a button takes no step, and a finger on the screen keeps the wheel from the page (chapter 4.4). |
 | Touch does nothing | Only one finger is followed; lift the first finger. Touch to the right of a host pop-up on the Key 61 is not taken. |
 | No sound | Host side (Akai manuals, "Track Types > Plugin Tracks", mixer chapters): the right track is selected and the track is a plugin track with SynthyBoy loaded; the track is not muted and its level is up; the track's MIDI input port and channel match what you play (MIDI Input Port, MIDI Input Channel); the output level of the MPC is up. Our side: the Mixer page (chapter 5.6): the strip's power is lit and its destination is not None; levels are not at 0; MASTER VOLUME on the Master page is not at its minimum. Pads on the XL: pad pressure only acts with Full Level off, but notes sound either way. |
 | Distortion or clipping | The output has no limiter (chapter 8): lower the track level. |
@@ -898,30 +928,45 @@ All recipes use the Mod page (chapter 5.10). Put the plugin on a plugin track on
 
 ### 10.4 Factory presets that respond to the pads
 
-Searched in the 112 factory presets for routes from Velocity, Release Velocity, Poly Aftertouch, Aftertouch, Slide, Lift, Expression X, Pitch Wheel, Mod Wheel, Note, Random per Note, the Note-On sources and Oct Note (active routes only):
+Searched in the 112 factory presets for routes from Velocity, Release Velocity, Poly Aftertouch, Aftertouch, Slide, Lift, Expression X, Pitch Wheel, Mod Wheel, Note, Random per Note, the Note-On sources and Oct Note (active routes only). Only Poly Aftertouch and Slide have routes:
 
-| Preset | Routes from pad / performance sources |
+| Category | Presets with a route Poly Aftertouch to Filter 1 Cutoff |
 |---|---|
-| Lead / MPE Pressure Lead | **Poly Aftertouch** to Filter 1 Cutoff (+55 percent) and to Osc 1 Unison Detune (+20 percent); **Slide** to Osc 1 Warp Amount (+50 percent; silent from the XL pads) |
+| Pad (23 of 23) | all of them: +40 or +45 percent; Lush Analog Pad and Vintage Brass Pad +70 percent |
+| Lead (20 of 22) | all except Plucked Lead Tone and Staccato Bleep Lead: +30 percent; Hyper Saw Lead +70 percent; MPE Pressure Lead +55 percent (it also routes Poly Aftertouch to Osc 1 Unison Detune at +20 percent, and **Slide** to Osc 1 Warp Amount at +50 percent, which stays silent from the XL pads) |
+| Keys (6 of 17) | Accordion Reed, B3 Drawbar Organ, FM Soft Organ, Glass Organ Tones, Vibraphone Bars (+25 percent), Rotary Rock Organ (+70 percent) |
+| FX (1 of 11) | Bode Shifter Drone (+30 percent) |
+| Bass, Pluck | none |
 
-No other factory preset has a route from these sources in its matrix (most routes use macros, LFOs and envelopes). Velocity acts in every preset through VEL TRACK on the Master page. (Update this table when presets with pressure routes are added.)
+Together 50 presets open their filter when you press a pad harder. For the others, route the pressure yourself (recipe 1) or switch on PAD PRESS (chapter 5.12). Velocity acts in every preset through VEL TRACK on the Master page. (Update this table when presets are added or changed.)
 
-## 11. To update when the UI changes
+## 11. To confirm on the device
 
-These chapters describe the current tree and depend on pages that are being reworked now:
+These points are written from the developer notes, the code or the rendered pictures and have **not** been checked on a device (or not on both devices). Until they are, treat them as the design, not as a promise.
 
-- **5.8 Envelopes:** the graph (zoom steps, lock, handles, the legend bar and value texts). Also 5.1 (the compact envelope panel and the graph in it) and the Env pictures.
-- **5.9 LFOs and the drawn-shape editor:** the editor page (tools, EDIT button, the grid, the EDIT Q group), the grid and shape picker, the KEY FOLLOW block, the HOST and SMOOTH switches. Also 5.1 (the compact LFO panel) and the pictures lfo, lfo-key, lfo-random.
-- **Toggles and option lists** on **5.12 Master / 5.13 Voice** (switch looks and ON/OFF text), **5.7 Filter** (CLEAN, ENV 1, and the model and style lists) and **5.11 FX** (switch cells such as Sync, Mode, Law, Type; the list popups): the pictures filter, master-main, master-tuning, voice, fx-reverb, fx-eq, fx-compressor, fx-chorus, and the control tables.
-- **Standby:** chapter 8 (limitation), chapter 9 (the row about dimming).
-- **Q-Link behaviour** (4.3, the Q-group lists of each chapter): when the Env and LFO pages publish their blocks as separate groups, the Q-Link lines of 5.1, 5.8, 5.9 change.
-- **5.12 Master (pad pressure):** a Master page control for the plugin-wide pad-pressure switch is coming; the text in 5.12 and in chapter 8 must then name it.
-- **Chapter 2:** the plugin window name under which SynthyBoy is listed, once confirmed on the device.
-- **All pictures** in `img/` are rendered with `scripts/render-ui-gallery.py` and must be re-rendered after a UI change.
-- **Chapter 10 (second-generation pads):** the table in 10.1 and the recipes depend on what the MPC sends to a plugin track (re-measure after a firmware update), on the Master page pad-pressure control that is coming, and on the factory presets: update the list in 10.4 whenever presets with pressure or other performance routes are added.
-- **5.2 Macros:** the name entry (keyboard page) and the card titles, once final.
-- **Sound quality settings per device** (polyphony cap, unison cap, which effects run on which device): the guide does not describe them yet; they are being set per device. Chapter 5.12 (POLY), 5.3 (unison VOICES), 5.11 (effects) and chapter 7 (presets) must be re-read when they are final.
-- **Q-Link stepping** (4.3 and the troubleshooting row about knobs that step): the amount of turn per step and how the display follows are being re-calibrated.
-- **5.12 Master, OUTPUT:** the STEREO control (a percentage) is currently drawn as a stepper with arrows; the guide does not describe a gesture for it until the control is final.
-- **4.3 on the XL:** the chips 5 - 16 and the names on the XL's knob displays, once measured on the device. The pictures show the Key 61 numbering on idle chips; re-render with a 16-knob option when the gallery can.
-- **All pictures** were re-rendered on 2026-11-16 from the then-current `feature/mpc-overlay`; re-render again after fixes to pages (for example the title overlap in the oscillator picture, the filter cell highlight, the modulation page of a control).
+**Oscillators**
+- The pictures of the SAMPLE, GRAIN, SPEC and MULTI pages and the seven detail pages are renders with a test sample, not device pictures. Confirm the layout on both devices.
+- What the **AMOUNT** cell (with the window icon) on the GRAIN type bar sets, and whether the grain window page of the earlier design is still opened from it.
+- What the **Y AXIS** choices (Level, Warp, Warp 2, density, ...) do on the grain and spectral pages.
+- The oscillator options (fixed pitch, transpose snap with the note mask, key fold, key warp, phase memory, phase legato) are tested in the engine on the host; they have not been tried by ear on a device. One difference to another synth is known: a stolen voice resets its phase in this engine.
+- The Formant filter page (X, Y, TRANSPOSE, SPREAD and the formant pad) has no picture, and which control sets the formant resonance (30 .. 100 percent) is not described.
+
+**Q-Links, mouse, devices**
+- The 16-knob Q-Link table on the **MPC XL**: the chips 5 - 16 are seen on an XL screenshot of an earlier build; the knob-by-knob mapping, the names on the XL's knob displays and the stepped-target travel (one step per about 6 clicks, set from a trial on the XL) have to be confirmed with the final build.
+- The **mouse on the XL**: the position of the pointer's tip (hot spot) is the default for that rotation and was not measured on the XL; the wheel was not tried there. On the Key 61 the whole mouse chain was tested on the host only.
+- **Key 61 Q-Link Status pop-up**: with the option switched off the picture should be stable; the fix is tested on the host only, and it is not known when the host writes the changed option to its settings file.
+- **Standby dim**: the dimmed picture and the wake-up touch are tested with the Key 61's measured values; the XL's dim values are not measured.
+- The XL tab bar: it shows four tabs and < > buttons in the screenshot; how the ten tabs are reached with them is to be written once seen.
+- Chapter 2: the name of the list or tab under which SynthyBoy appears in the plugin window (the developer notes say "External Plugins"). The manuals do not say.
+
+**Sound**
+- The difference in sound between the XL and the Key 61 on the factory presets has been measured (levels, spectra), not judged by ear.
+- Whether the busiest presets really crackle on the Key 61 with eight held notes (the processing time is at the limit in the bench).
+- What a device that is neither the Key 61 nor the XL gets (it is treated like the Key 61).
+- How the filter opening of PAD PRESS (default 35 percent) sounds on the XL and the Key 61, release velocity from the pads, and the vibrato recipe in 10.3 (recipe 3).
+- The meaning of the BYPASS switches of the splitters in the sound, and the cost of FORCE ON on the Key 61.
+- The one- and two-sentence descriptions of the effects are to be read over by the author.
+
+**To update when the UI changes**
+- All pictures in `img/` are rendered with `scripts/render-ui-gallery.py` (the gallery set `osc-led`, cut to the plugin area; `xl-osc-a.png` is an XL screenshot) and must be re-rendered after a UI change.
+- Chapter 10: the table in 10.1 and the recipes depend on what the MPC sends to a plugin track (re-measure after a firmware update) and on the factory presets (10.4).
