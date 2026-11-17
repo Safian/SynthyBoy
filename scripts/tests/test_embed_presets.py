@@ -47,17 +47,17 @@ class EmbedPresetsTest(unittest.TestCase):
             cpp_text = out_cpp.read_text(encoding="utf-8")
             self.assertIn("kEmbeddedPresets[] = {", cpp_text)
             self.assertIn("p001_json", cpp_text)
-            self.assertIn("p112_json", cpp_text)
-            self.assertNotIn("p113_json", cpp_text)
+            self.assertIn("p136_json", cpp_text)
+            self.assertNotIn("p137_json", cpp_text)
 
-            # Check that 112 entries are in kEmbeddedPresets
+            # Check that 136 entries (112 of the first sets + the 24 of batch 1) are in kEmbeddedPresets
             entry_count = cpp_text.count("sizeof(p")
-            self.assertEqual(entry_count, 112)
+            self.assertEqual(entry_count, 136)
 
     def test_canonical_sort_order(self):
         """Verify sorting: category ascending, name case-insensitively ascending, relative path."""
         files = list(PRESETS_DIR.glob("*/*.sbpreset"))
-        self.assertEqual(len(files), 112)
+        self.assertEqual(len(files), 136)
 
         raw = []
         for p in files:
@@ -92,7 +92,7 @@ class EmbedPresetsTest(unittest.TestCase):
 
             cpp_lines = out_cpp.read_text(encoding="utf-8").splitlines()
             table_lines = [l.strip() for l in cpp_lines if l.strip().startswith('{ "') and "sizeof(p" in l]
-            self.assertEqual(len(table_lines), 112)
+            self.assertEqual(len(table_lines), 136)
 
             for i, (cat, name, _) in enumerate(expected):
                 line = table_lines[i]
@@ -146,7 +146,7 @@ class EmbedPresetsTest(unittest.TestCase):
             self.assertEqual(res.returncode, 0, res.stderr)
             text = out_cpp.read_text(encoding="utf-8")
             arrays = self._arrays(text)
-            self.assertEqual(len(arrays), 112)
+            self.assertEqual(len(arrays), 136)
             embedded = sorted(arrays.values())
             on_disk = sorted(p.read_bytes() for p in PRESETS_DIR.glob("*/*.sbpreset"))
             self.assertEqual(embedded, on_disk)

@@ -93,7 +93,7 @@ the release fills. `check-manifest.py` verifies every declared pack (manifest ag
 Tool: `python3 tools/contentpack/contentpack.py {manifest,verify,build,build-all,split}` (`--help`). A pack larger than one asset is split per instrument with `split`
 (one pack per top level directory, id `<id>-<directory>`), every part is declared in `plugin.json`.
 
-Declared today: `com.safian.synthyboy.factory-presets` (CC0, 112 presets, 0.9 MB).
+Declared today: `com.safian.synthyboy.factory-presets` (CC0, 136 presets, 1.1 MB).
 Not declared, and why: there are no generated factory wavetables (the engine's built-in tables are computed at run time) and the factory multisample instruments
 (4.6 GB, morning question 91) exist only in a user library built from third party Serum factory files, which are not part of this repository and not
 redistributable; see `docs/ui-design/RELEASE-REPORT.md`.

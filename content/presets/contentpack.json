@@ -7,7 +7,7 @@
   "attribution": "Safian Szabolcs",
   "kind": "presets",
   "requires_plugin": ">=0.1.0",
-  "description": "112 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
+  "description": "136 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
   "files": [
     {
       "path": "Bass/solid_sub.sbpreset",
@@ -568,6 +568,126 @@
       "path": "Pad/tri_band_split_texture.sbpreset",
       "sha256": "2951302309d7b86ef847865f3c66a25b5ba269b0806bf8c47e0b886ebd571026",
       "size": 50435
+    },
+    {
+      "path": "Bass/subterranean_duo.sbpreset",
+      "sha256": "d7d79f5b49aab43ebb44aef527d2b25ffc2468a58f366648093597a9cc6aca8e",
+      "size": 50477
+    },
+    {
+      "path": "Bass/bend_formant_growl.sbpreset",
+      "sha256": "d701b90a2721c76f1104e95ad8e02ee32ba391ababcace11bbd8f1316cf02484",
+      "size": 50558
+    },
+    {
+      "path": "Bass/triple_fold_reese.sbpreset",
+      "sha256": "e33923ee0752b0758b24afb888f04d606c5dc4cdee33bf404288520927aaffef",
+      "size": 50560
+    },
+    {
+      "path": "Bass/pitch_drop_808.sbpreset",
+      "sha256": "21f981b4c41c4bc0ea3f6930cc91f4680b53d122204de424b19b60940da47742",
+      "size": 50494
+    },
+    {
+      "path": "FX/bode_barber_riser.sbpreset",
+      "sha256": "265b02152b4fdd46af62f37dfefe1c6b2d494dc05ce6c4d6d122f95380084a61",
+      "size": 50609
+    },
+    {
+      "path": "FX/detonation_tail.sbpreset",
+      "sha256": "e3135e5d3fcc32e29de8500cc060df0ca25ab4edb07355a35306517861fd3b70",
+      "size": 50513
+    },
+    {
+      "path": "Keys/tine_glass_keys.sbpreset",
+      "sha256": "292cd4949d8a3c7d7f4326064da7ad13e2f2df1de8f4504ae196e2a154980078",
+      "size": 50549
+    },
+    {
+      "path": "Pluck/karplus_harp.sbpreset",
+      "sha256": "f5c6d9df7bfe964a5707b1cb8834f67d8836d31721bbc57a47d64c5880e8c591",
+      "size": 50556
+    },
+    {
+      "path": "Pluck/ring_mod_gamelan.sbpreset",
+      "sha256": "095b6c3e2c55f01ec24fd64d3406a9f0a70fec0f830de21c10f8dd3a59d93c27",
+      "size": 50523
+    },
+    {
+      "path": "Pluck/pentatonic_step_pluck.sbpreset",
+      "sha256": "a6306165a28a09c3cd2866800fd17a50e598c223e584adace5be698a65a9583f",
+      "size": 51736
+    },
+    {
+      "path": "Keys/tempo_gate_chords.sbpreset",
+      "sha256": "3744a1a1189e225f8fe9cf01c218e09f72307d3804dede7701054ff66cfcd765",
+      "size": 51519
+    },
+    {
+      "path": "Lead/sync_cry_lead.sbpreset",
+      "sha256": "cac157529002c895662d273e6187424ed9d4f1bebcdbb34f1f85003eebe0a18e",
+      "size": 50510
+    },
+    {
+      "path": "Lead/vowel_whistle_lead.sbpreset",
+      "sha256": "a5cbe033a5b63bf3c22d67e269bb13399f0be3b86f4fd88d382b1fd4c5c51f79",
+      "size": 50528
+    },
+    {
+      "path": "Lead/triple_fifth_lead.sbpreset",
+      "sha256": "f0287783a20e7ddda121439fb964057c714efb7f716f37274b185f57c52eb212",
+      "size": 50569
+    },
+    {
+      "path": "Lead/bell_fm_ripple_lead.sbpreset",
+      "sha256": "b90a67aad164719cf53a565b5d496c899bb50592f797ff1a975444115bed89f6",
+      "size": 50527
+    },
+    {
+      "path": "Pad/stretched_glass_choir.sbpreset",
+      "sha256": "e1925461c958d2501e5c5eef183f8210cc15fca82ec903cdead6e0045599089e",
+      "size": 50508
+    },
+    {
+      "path": "Pad/mid_side_halo.sbpreset",
+      "sha256": "2bb0dfde0a3b1c18a895468dbec6dcbf988c8bfbac437a4009e21e48ef6f6884",
+      "size": 50551
+    },
+    {
+      "path": "Pad/parallel_dusk_pad.sbpreset",
+      "sha256": "1f405dc4578c794415b808e468d9118eeb3805b3eea7a435c2b9567b2e395a51",
+      "size": 50588
+    },
+    {
+      "path": "Pad/brass_swell_ensemble.sbpreset",
+      "sha256": "36aba90ed4e7439aaec1084ccf1e2ef2ac9c0501082187fd58a679be8671057d",
+      "size": 50555
+    },
+    {
+      "path": "Pad/bowed_pressure_strings.sbpreset",
+      "sha256": "72b9d885a1755bdeea0c091806ff0257ddc050ea8ca9b6bd53f4273d58c14b7a",
+      "size": 50591
+    },
+    {
+      "path": "Keys/wah_pressure_clav.sbpreset",
+      "sha256": "e78f55bfa07d9d5ce4b1f0db07b67890d1d9e4aafb84319dfbdbdaee76ed071e",
+      "size": 50548
+    },
+    {
+      "path": "Pad/shepard_ascent.sbpreset",
+      "sha256": "39b6f4bbaacad286cd4a9ec6a17bd023386225dceb42a0f8ea7edd8b27d4364d",
+      "size": 50642
+    },
+    {
+      "path": "Pad/lorenz_garden.sbpreset",
+      "sha256": "39659d9c578a9b7363453d5fee0b45eb1658e5151be4f13713bce5f9c55cdddf",
+      "size": 50630
+    },
+    {
+      "path": "FX/breath_of_machines.sbpreset",
+      "sha256": "4838a3c0923d1f68cf428bd6d59bd349b0aeea854546c222430e1e4a0f5764cd",
+      "size": 50580
     }
   ]
 }

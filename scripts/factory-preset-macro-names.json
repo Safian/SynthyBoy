@@ -1121,6 +1121,246 @@
    "Reso",
    "",
    ""
+  ],
+  "Subterranean Duo": [
+   "Bite",
+   "Growl",
+   "Punch",
+   "Sub Weight",
+   "Squeeze",
+   "",
+   "",
+   ""
+  ],
+  "Bend Formant Growl": [
+   "Mouth",
+   "Growl Depth",
+   "Wobble Rate",
+   "Dirt",
+   "Sub",
+   "",
+   "",
+   ""
+  ],
+  "Triple Fold Reese": [
+   "Fold",
+   "Phase Drift",
+   "Open",
+   "Width",
+   "Drive",
+   "",
+   "",
+   ""
+  ],
+  "Pitch Drop 808": [
+   "Drop",
+   "Tail",
+   "Knock",
+   "Grit",
+   "Boom",
+   "",
+   "",
+   ""
+  ],
+  "Sync Cry Lead": [
+   "Bright",
+   "Cry",
+   "Thick",
+   "Space",
+   "Fifth",
+   "",
+   "",
+   ""
+  ],
+  "Vowel Whistle Lead": [
+   "Vowel",
+   "Reson",
+   "Shape",
+   "Air",
+   "Vibrato Rate",
+   "Space",
+   "",
+   ""
+  ],
+  "Triple Fifth Lead": [
+   "Bright",
+   "Stack",
+   "Spread",
+   "Space",
+   "Edge",
+   "",
+   "",
+   ""
+  ],
+  "Bell FM Ripple Lead": [
+   "Index",
+   "Ring",
+   "Shimmer",
+   "Space",
+   "Ratio",
+   "",
+   "",
+   ""
+  ],
+  "Stretched Glass Choir": [
+   "Bright",
+   "Stretch",
+   "Shimmer",
+   "Space",
+   "Slow",
+   "",
+   "",
+   ""
+  ],
+  "Mid Side Halo": [
+   "Brightness",
+   "Halo",
+   "Colour",
+   "Space",
+   "Weight",
+   "",
+   "",
+   ""
+  ],
+  "Parallel Dusk Pad": [
+   "Left Open",
+   "Comb Colour",
+   "Breath Rate",
+   "Space",
+   "Upper Layer",
+   "",
+   "",
+   ""
+  ],
+  "Brass Swell Ensemble": [
+   "Bright",
+   "Swell Time",
+   "Breath",
+   "Hall",
+   "Section",
+   "",
+   "",
+   ""
+  ],
+  "Tine Glass Keys": [
+   "Bell",
+   "Bark",
+   "Sustain",
+   "Phase",
+   "Mellow",
+   "",
+   "",
+   ""
+  ],
+  "Karplus Harp": [
+   "Brightness",
+   "Ring Tone",
+   "Pick Softness",
+   "Space",
+   "Body",
+   "",
+   "",
+   ""
+  ],
+  "Ring Mod Gamelan": [
+   "Metal",
+   "Inharmonic",
+   "Ring Time",
+   "Space",
+   "Shimmer",
+   "",
+   "",
+   ""
+  ],
+  "Pentatonic Step Pluck": [
+   "Bright",
+   "Hold",
+   "Squelch",
+   "Echo",
+   "Fat",
+   "",
+   "",
+   ""
+  ],
+  "Tempo Gate Chords": [
+   "Smooth",
+   "Pump",
+   "Bright",
+   "Echo",
+   "Fat",
+   "",
+   "",
+   ""
+  ],
+  "Shepard Ascent": [
+   "Bright",
+   "Climb Speed",
+   "Thin",
+   "Space",
+   "Drift",
+   "",
+   "",
+   ""
+  ],
+  "Lorenz Garden": [
+   "Bright",
+   "Wander Speed",
+   "Sparkle",
+   "Echo",
+   "Depth",
+   "",
+   "",
+   ""
+  ],
+  "Breath of Machines": [
+   "Vowel",
+   "Breath Rate",
+   "Hum",
+   "Room",
+   "Stutter",
+   "",
+   "",
+   ""
+  ],
+  "Bode Barber Riser": [
+   "Height",
+   "Spin",
+   "Noise",
+   "Space",
+   "Length",
+   "",
+   "",
+   ""
+  ],
+  "Detonation Tail": [
+   "Impact",
+   "Boom",
+   "Tail",
+   "Crush",
+   "Air",
+   "",
+   "",
+   ""
+  ],
+  "Bowed Pressure Strings": [
+   "Brightness",
+   "Bow Speed",
+   "Rosin",
+   "Vibrato Rate",
+   "Hall",
+   "",
+   "",
+   ""
+  ],
+  "Wah Pressure Clav": [
+   "Wah Range",
+   "Quack",
+   "Pick",
+   "Dirt",
+   "Phase",
+   "",
+   "",
+   ""
   ]
  }
 }
