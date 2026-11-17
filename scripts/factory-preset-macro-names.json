@@ -1161,6 +1161,46 @@
    "",
    "",
    ""
+  ],
+  "Sync Cry Lead": [
+   "Bright",
+   "Cry",
+   "Thick",
+   "Space",
+   "Fifth",
+   "",
+   "",
+   ""
+  ],
+  "Vowel Whistle Lead": [
+   "Vowel",
+   "Reson",
+   "Shape",
+   "Air",
+   "Vibrato Rate",
+   "Space",
+   "",
+   ""
+  ],
+  "Triple Fifth Lead": [
+   "Bright",
+   "Stack",
+   "Spread",
+   "Space",
+   "Edge",
+   "",
+   "",
+   ""
+  ],
+  "Bell FM Ripple Lead": [
+   "Index",
+   "Ring",
+   "Shimmer",
+   "Space",
+   "Ratio",
+   "",
+   "",
+   ""
   ]
  }
 }
