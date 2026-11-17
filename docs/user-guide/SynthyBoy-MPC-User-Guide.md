@@ -32,10 +32,12 @@ Contents
    - 5.13 Voice control
 6. Modulation
 7. Presets
-   - 7.1 Sound quality on each device
+   - 7.1 Browsing presets
+   - 7.2 The factory sounds
+   - 7.3 Sound quality on each device
 8. Known limitations
 9. Troubleshooting
-10. Second-generation pads (MPCe), MPC XL and other gen 2 devices
+10. Second-generation pads (MPCe), MPC XL and other gen 2 devices (see [mpce-pads.md](mpce-pads.md))
 11. To confirm on the device
 
 ---
@@ -59,7 +61,7 @@ details described for the XL are the design and are not yet confirmed on the dev
 **Where the two generations differ** (first generation = MPC Key 61, second generation = MPC XL):
 - Q-Link knobs: 4 knobs and a bank button on the Key 61, 16 knobs on the XL (chapter 4.3).
 - Q-Link Status pop-up: on the Key 61 only; switch it off (chapter 8).
-- Sound quality: 8 voices, at most 3 unison voices, five effects skipped on the Key 61; 16 voices, up to 16 unison voices, all effects on the XL (chapter 7.1).
+- Sound quality: 8 voices, at most 3 unison voices, five effects skipped on the Key 61; 16 voices, up to 16 unison voices, all effects on the XL (chapter 7.3).
 - Pads with pressure: XL only (chapter 10); the Key 61 has keys with aftertouch.
 - The mouse: the pointer position is measured on the Key 61, not yet on the XL (chapters 4.4, 11).
 
@@ -742,8 +744,8 @@ Q groups (in reading order): OUTPUT (VOLUME, SPREAD, STEREO, VOICE OVERRIDE), PI
 - **TUNING:** A4 HZ (400 .. 480 Hz, default 440), TUNING (a LED list: 12-TET, Pythagorean, Just intonation, User file), MTS-ESP switch, NOTE-ON switch (MTS-ESP note-on only).
 - **MPE:** MPE on/off, MPE BEND (1 .. 96 semitones, default 48), XYZ TO MACROS (a LED list: Off, XYZ, YZ; XYZ moves Macro 1, 2, 3 and YZ Macro 1, 2), Y TO WHEEL, BEND TO X, Y BIPOLAR (LED switches).
 
-**Pad pressure (MPC XL pads).** The XL pads send a pressure value for each held pad. There are two ways to use it.
-- **In a preset:** a modulation route from the source **Poly Aftertouch** to a parameter, for example Filter 1 Cutoff. Many factory presets carry this route (chapter 10.4).
+**Pad pressure (MPC XL pads).** The XL pads send a pressure value for each held pad. There are two ways to use it (see also the detailed guide on expressive pads and playing techniques in [mpce-pads.md](mpce-pads.md)).
+- **In a preset:** a modulation route from the source **Poly Aftertouch** to a parameter, for example Filter 1 Cutoff. Many factory presets carry this route (chapter 10.4; [mpce-pads.md](mpce-pads.md)).
 - **For every sound:** the **PAD PRESS** switch (VOICES block of this page, default off) lets the pressure open Filter 1, and **PAD %** (default 35) sets how far: a full pressure at 35 percent opens the cutoff by about one octave, at 100 percent by about three. A voice whose preset already has the route from Poly Aftertouch to Filter 1 Cutoff is not opened twice. The switch and the amount belong to the plugin, not to a preset: a preset change leaves them alone, and the project remembers them.
 
 For any pad pressure to arrive, the pad's **Full Level must be off** (with Full Level on every hit has velocity 127 and sends no pressure). Only per-pad (polyphonic) pressure counts; channel aftertouch is ignored by PAD PRESS.
@@ -794,30 +796,98 @@ Knobs show the modulation: a marker at the live (modulated) value, and an arc fr
 
 ## 7. Presets
 
-The plugin offers **137 programs** to the host: "Init" (the default sound) and 136 factory presets in six categories. The list is sorted by category (alphabetically: Bass, FX, Keys, Lead, Pad, Pluck) and then by name.
+The plugin offers **137 programs** to the host: "Init" (the default sound, program 0) and 136 factory presets in six categories. The list is sorted by category (alphabetically: Bass, FX, Keys, Lead, Pad, Pluck) and then by name.
+
+Each preset is saved as a `.sbpreset` file holding a `synthyboy-state` version 4 document with all 2637 parameter keys explicit, identical in count and state version to the engine's parameter table (`docs/params.json`). In code, the state format version is 5 (`kStateVersion` 5, `core/include/synthyboy/state.h`), which stores the grid settings of drawn LFO shapes (`grid_x` and `grid_y`) with the shape; presets and documents of version 4 load seamlessly with the grid inferred from the points, and version 4 readers safely read version 5 documents.
+
+The presets are CC0 licensed (Safian Szabolcs).
+
+### 7.1 Browsing presets
+
+There are two primary ways to browse and select presets in SynthyBoy:
+
+1. **The PRESET field in the plugin header (VST2 programs, works today):**
+   - In Track View or Track Edit mode on a Plugin track, the MPC host header displays the current preset in its **PRESET** field.
+   - Tapping the **PRESET** field opens the host's standard scrollable program list containing all 137 programs (program 0 "Init", followed by the 136 factory presets ordered by category and name).
+   - Tapping any preset immediately loads that sound into the engine.
+   - **The "*" mark:** The plugin appends " *" after the preset name in the header whenever you change a parameter after loading, or when a saved project restores modified settings. Loading a preset again clears the asterisk mark. A project remembers the preset by name and restores it even if a subsequent release updates the program list; if the name is not found, the saved sound is retained without a preset name.
+
+2. **The Sounds browser (Sounds Mode — being verified on the device):**
+   - Akai MPC hardware provides a dedicated instrument and preset browser known as **Sounds Mode** (Akai MPC Standalone OS User Guide v3.10.1, "Sounds Mode", pp. 147–148; MPC Live III, MPC XL User Guide v3.10.1, "Sounds Mode", pp. 153–154).
+   - **Opening Sounds Mode:** Press the dedicated **Sounds** hardware button (MPC Key 61, MPC Key 37, MPC Live III, MPC XL), press Shift + **Arrange / Sounds** (MPC One G2), or press **Menu** and tap **Sounds**.
+   - **Selecting SynthyBoy:** In Sounds Mode, tap **Instruments** (or `<- Instruments` at top left) to display instrument tiles. The SynthyBoy tile appears with its custom 270×110 graphic artwork (`Plugin Skins/browser_images/soundsmode.png`). Tapping the tile opens the preset browser displaying the factory preset list from the package `Content/presets/` directory (or user `.xpl` Plugin Programs).
+   - **Locate Preset:** Tapping **Locate Preset** at the top of the touchscreen opens the preset list for the currently selected plugin instrument.
+   - **Edit Instrument:** Tapping **Edit Instrument** at the bottom of the touchscreen opens Track Edit Mode, directly revealing SynthyBoy's drawn UI pages.
+   - **Favorites:** Tap the **Favorites** tab at the bottom left (or press Shift + **Sounds** on Key 61 / Live III, or the physical **Favorites** button on the XL) to save and quickly recall your most-used presets during live performances.
+   - *Status:* Note that loading `.sbpreset` files directly via the Sounds tile browser is currently being verified on physical hardware (see Chapter 11).
+
+**Saving presets and projects** (Akai manuals):
+- A **project** is saved from the Save window: press **Menu** and tap **Save**, then **Project** or **Project As** (Standalone OS User Guide v3.10.1, "Save Window", p. 67; MPC Live III, MPC XL User Guide, p. 69). The project keeps the plugin's full state chunk, so your sound comes back exactly as you left it.
+- To export an individual sound as a host-level preset file, select the plugin track and tap **Plugin Program** in the Save window ("Tap Plugin Program when a plugin track is selected to save the current plugin program"). In the track's plugin page (Standalone OS guide p. 253, XL guide p. 278) the folder icon next to the preset name opens the file browser to load an `.xpl` plugin preset, and the disk icon saves a new one.
+- The plugin-wide pad-pressure switch (PAD PRESS and PAD %, chapter 5.12) is not part of a preset (a preset change leaves it alone). The Play-page selectors (which oscillator, envelope and LFO the Play page shows) are saved with the project.
+
+### 7.2 The factory sounds
+
+The factory library contains **136 presets** divided into six categories:
+- **Bass** (27 presets)
+- **FX** (14 presets)
+- **Keys** (20 presets)
+- **Lead** (26 presets)
+- **Pad** (30 presets)
+- **Pluck** (19 presets)
+
+The host lists them by name (the category is not part of the display name):
 
 | Category | Count | Presets |
 |---|---|---|
-| Bass | 23 | 808 Boom; Acid Saw Reso; Click Attack Bass; Comb Metal Bass; Custom Shape Wobble; Diode Saturated Bass; Dirty Distortion Bass; EMS Squelch Bass; Fast Arp Bass; Fat Reese; Formant Vowel Bass; Gritty Square Bass; Harmonic Sine Bass; Moog Ladder Bass; Odd Harmonics Bass; Pulse Width Bass; Punchy Pluck Bass; Scream Filter Bass; Solid Sub; Space Wobble Bass; Sub Duo Octave; Sync Growl Bass; Warm Analog Bass |
-| FX | 11 | Alien Communication; Bode Shifter Drone; Cosmic Teleport; Game Over Zap; Metal Gong Strike; Noise Riser; Sci-Fi Laser Sweep; Sonar Ping; Space Wind Storm; Sub Drop Boom; Vinyl Dust Crackle |
-| Keys | 17 | Accordion Reed; B3 Drawbar Organ; Celesta Bells; Clavinet Funk; Dream Grand Piano; Dyno Electric Piano; FM Soft Organ; Glass Organ Tones; Harpsichord Bar; Just Intonation Keys; Lo-Fi Rhodes; Muted Honky Tonk; Rotary Rock Organ; Utility Width Keys; Vibraphone Bars; Vintage Electric Tine; Warm Toy Piano |
-| Lead | 22 | Bell Chime Lead; Chorused Saw Solo; Cosmic Drift Lead; Diode Bite Lead; Dirty Peak Lead; Dual Octave Hero; FM Digital Lead; Harmonic Shimmer Lead; Hyper Saw Lead; Laser Beam Lead; Metallic Edge Lead; MPE Pressure Lead; Phaser Sweep Lead; Plucked Lead Tone; Pulse Width Mod Lead; Screaming Sync Lead; Solo Square Lead; Staccato Bleep Lead; Tri Soft Solo; Twin Warp Lead; Vocaloid Lead; Warm Vintage Lead |
-| Pad | 23 | Cathedral Choir; Comb Reso Swell; Dark Cinema Drone; Deep Sea Ambient; Diffusor Cloud Pad; Ethereal Glass; Frozen Aurora; Gentle Flute Pad; Golden Dawn Pad; Harmonic Cloud; Hyper Dimension Pad; Infinite Horizon; Lush Analog Pad; Odd Harmonics Pad; Radiant Pulse Pad; Slow Motion Waves; Space Odyssey Pad; Starlight Shimmer; Subtle Tape Drift; Tri-Band Split Texture; Velvet Strings; Vintage Brass Pad; Vowel Choir Pad |
-| Pluck | 16 | Acoustic Style Pluck; Aux Keyscale Pluck; Bell Mallet Pluck; Chime Drop; Comb Zither; Digital Glass Tap; Electric Mute Pluck; Formant Pop Pluck; Harmonic Tine Pluck; Harp Drops; Kalimba Tines; Marimba Synth; Pizzicato Strings; Rubber Bass Pluck; Spruce Guitar; Trance Short Pluck |
+| Bass | 27 | 808 Boom; Acid Saw Reso; Bend Formant Growl; Click Attack Bass; Comb Metal Bass; Custom Shape Wobble; Diode Saturated Bass; Dirty Distortion Bass; EMS Squelch Bass; Fast Arp Bass; Fat Reese; Formant Vowel Bass; Gritty Square Bass; Harmonic Sine Bass; Moog Ladder Bass; Odd Harmonics Bass; Pitch Drop 808; Pulse Width Bass; Punchy Pluck Bass; Scream Filter Bass; Solid Sub; Space Wobble Bass; Sub Duo Octave; Subterranean Duo; Sync Growl Bass; Triple Fold Reese; Warm Analog Bass |
+| FX | 14 | Alien Communication; Bode Barber Riser; Bode Shifter Drone; Breath of Machines; Cosmic Teleport; Detonation Tail; Game Over Zap; Metal Gong Strike; Noise Riser; Sci-Fi Laser Sweep; Sonar Ping; Space Wind Storm; Sub Drop Boom; Vinyl Dust Crackle |
+| Keys | 20 | Accordion Reed; B3 Drawbar Organ; Celesta Bells; Clavinet Funk; Dream Grand Piano; Dyno Electric Piano; FM Soft Organ; Glass Organ Tones; Harpsichord Bar; Just Intonation Keys; Lo-Fi Rhodes; Muted Honky Tonk; Rotary Rock Organ; Tempo Gate Chords; Tine Glass Keys; Utility Width Keys; Vibraphone Bars; Vintage Electric Tine; Wah Pressure Clav; Warm Toy Piano |
+| Lead | 26 | Bell Chime Lead; Bell FM Ripple Lead; Chorused Saw Solo; Cosmic Drift Lead; Diode Bite Lead; Dirty Peak Lead; Dual Octave Hero; FM Digital Lead; Harmonic Shimmer Lead; Hyper Saw Lead; Laser Beam Lead; MPE Pressure Lead; Metallic Edge Lead; Phaser Sweep Lead; Plucked Lead Tone; Pulse Width Mod Lead; Screaming Sync Lead; Solo Square Lead; Staccato Bleep Lead; Sync Cry Lead; Tri Soft Solo; Triple Fifth Lead; Twin Warp Lead; Vocaloid Lead; Vowel Whistle Lead; Warm Vintage Lead |
+| Pad | 30 | Bowed Pressure Strings; Brass Swell Ensemble; Cathedral Choir; Comb Reso Swell; Dark Cinema Drone; Deep Sea Ambient; Diffusor Cloud Pad; Ethereal Glass; Frozen Aurora; Gentle Flute Pad; Golden Dawn Pad; Harmonic Cloud; Hyper Dimension Pad; Infinite Horizon; Lorenz Garden; Lush Analog Pad; Mid Side Halo; Odd Harmonics Pad; Parallel Dusk Pad; Radiant Pulse Pad; Shepard Ascent; Slow Motion Waves; Space Odyssey Pad; Starlight Shimmer; Stretched Glass Choir; Subtle Tape Drift; Tri-Band Split Texture; Velvet Strings; Vintage Brass Pad; Vowel Choir Pad |
+| Pluck | 19 | Acoustic Style Pluck; Aux Keyscale Pluck; Bell Mallet Pluck; Chime Drop; Comb Zither; Digital Glass Tap; Electric Mute Pluck; Formant Pop Pluck; Harmonic Tine Pluck; Harp Drops; Kalimba Tines; Karplus Harp; Marimba Synth; Pentatonic Step Pluck; Pizzicato Strings; Ring Mod Gamelan; Rubber Bass Pluck; Spruce Guitar; Trance Short Pluck |
 
-The presets are CC0 licensed (Safian Szabolcs). The host lists them by name (the category is not part of the name).
+#### The 24 New Presets (Sound Set Batch 1)
 
-**Choosing a preset** (Akai manuals, "Track Types > Plugin Tracks" and "Sounds Mode"):
-- In the plugin track's settings (and when you make the track) use the **Preset** field to choose a preset of the loaded plugin; the host's header shows the current one in its PRESET field.
-- Or use **Sounds Mode**: press **Menu** and tap **Sounds** (or press the **Sounds** button on the Key 61 and the XL), choose the plugin and the preset, and tap **Locate Preset** at the top to open the preset list of the selected plugin instrument. **Edit Instrument** at the bottom opens Track Edit Mode, where the plugin's pages are. Favorites (the first tab at the bottom) saves presets you use most.
+For the 24 presets added in sound set batch 1 (`docs/release/SOUND-SET-BATCH-1.md`), here is what each sound is and how to play it:
 
-**The "*" mark.** The plugin puts " *" after the preset name when you changed a parameter after loading the preset, or when a project was loaded that held changed settings. Loading a preset again clears the mark. A project remembers the preset by name and finds it again even when a later version has a different preset list; if the name is not found the saved sound is kept without a preset.
+**Bass (4 new presets):**
+- **Subterranean Duo (Bass):** Clean sub sine bypassing the filter paired with a snarling key-folded saw growl; play single staccato or held notes C1–B2, lean on the pad for extra cutoff bite, and use the wheel for drive and detune.
+- **Bend Formant Growl (Bass):** Dubstep-style talking bass using Bend warp and a side-by-side Formant filter; play staccato eighth notes C1–G2 while sweeping the wheel to move the vocal vowel and drive.
+- **Triple Fold Reese (Bass):** Heavy three-oscillator Reese with detuned saws, an octave-down square, and envelope-shaped sine-fold distortion; play long fifth chords C1–C2, opening Macro Fold and Drive for an aggressive attack that melts into a smooth body.
+- **Pitch Drop 808 (Bass):** Punchy 808 kick-bass with a fast pitch fall and pulse knock through tube drive; strike single notes C1–G1 hard for a brighter transient knock and deep sub tail.
 
-The plugin-wide pad-pressure switch (PAD PRESS and PAD %, chapter 5.12) is not part of a preset (a preset change leaves it alone). The Play-page selectors (which oscillator, envelope and LFO the Play page shows) are saved with the project.
+**Lead (4 new presets):**
+- **Sync Cry Lead (Lead):** Singing hard-sync lead backed by a wide detuned-saw fifth layer; play expressive legato phrases C3–C5, pressing into the pad to open the sync sweep and raising the wheel for delayed vibrato.
+- **Vowel Whistle Lead (Lead):** Mono vocal lead with Formant warp and peak resonance that speaks like a human voice; play smooth legato lines C4–C6, sweeping the wheel to morph the vowel and pressing for mouth opening.
+- **Triple Fifth Lead (Lead):** Massive power-chord lead stack (saw root, octave pulse, fifth-up triangle) through Multi SVF filtering; play single-note heroic riffs C3–C5 (the stack forms the chord), digging in for filter edge and upper layers.
+- **Bell FM Ripple Lead (Lead):** Glassy sine carrier phase-modulated by an upper twelfth with bell partial shimmers; play slow, dynamic melodies C4–C6 where soft hits ring delicate and hard strikes bark like struck metal.
 
-**Saving** (Akai manuals): a **project** is saved from the Save window: press **Menu** and tap **Save**, then **Project** or **Project As** (Standalone OS User Guide v3.10.1, "Save Window", p. 67; MPC Live III, MPC XL User Guide, p. 69). The project keeps the plugin's state, so your edited sound comes back with it. To keep a sound as a preset, select the plugin track and tap **Plugin Program** in the same window ("Tap Plugin Program when a plugin track is selected to save the current plugin program"). In the track's plugin page (Standalone OS guide p. 253, XL guide p. 278) the folder icon next to the preset name opens the file browser to load a plugin preset and the disk icon saves a new one; both icons are in the header of the XL screenshot in chapter 4.3. Save often: the manual warns that external plugins are experimental.
+**Pad (7 new presets):**
+- **Stretched Glass Choir (Pad):** Ethereal choral pad featuring Harmonic Stretch morph wandering on a random LFO over harmonic partials; hold slow chords C3–C5 for 4+ seconds, using pad pressure to open filter shimmer.
+- **Mid Side Halo (Pad):** Wide, atmospheric pad split into a solid mono-compatible center and swirling chorused/phased side halo; play lush chords C2–C4 with immense stereo width that never cancels in mono.
+- **Parallel Dusk Pad (Pad):** Dark, cinematic pad running parallel analog low-pass (left) and comb filter (right) with opposed cutoff breathing; play slow headphone chords C2–C4 to immerse in the evolving stereo field.
+- **Brass Swell Ensemble (Pad):** Warm 1980s synth brass section with breath noise and a swelling filter attack; play chords C2–C4, striking harder to accelerate the brass bloom and brighten the swell.
+- **Shepard Ascent (Pad):** Hypnotic rising drone cycling an endless upward octave climb via Shepard Tone morph; hold one or two root notes C2–C3, pressing the pad to accelerate the ascent speed.
+- **Lorenz Garden (Pad):** Organic, never-repeating ambient soundscape driven by chaotic Lorenz and Rössler random modulators; hold sustained chords C3–C5 and let the wandering filters and wavetables evolve.
+- **Bowed Pressure Strings (Pad):** Expressive string ensemble that responds intimately to finger weight; play chords C2–C5 with Full Level off, pressing into held pads to dig the bow into the string, open the filter, and bloom delayed vibrato.
 
-### 7.1 Sound quality on each device
+**Pluck (3 new presets):**
+- **Karplus Harp (Pluck):** Physical-modeling style plucked string synthesized from noise bursts through a tuned comb filter; play sparkling arpeggios C3–C6, using the wheel for palm muting and velocity for pick bite.
+- **Ring Mod Gamelan (Pluck):** Metallic inharmonic chime bars synthesized via ring modulation with a 2.76x carrier; play fast pentatonic patterns C3–C6, hitting harder for sharper metallic timbre and longer shimmer.
+- **Pentatonic Step Pluck (Pluck):** Self-playing 16-step minor pentatonic sequencer locked to host tempo with per-step pluck envelopes; hold single root notes C3–C4 to let the rhythmic pattern groove.
+
+**Keys (3 new presets):**
+- **Tine Glass Keys (Keys):** Dynamic FM electric piano blending round low-velocity Rhodes warmth with cutting tine pings on hard velocity; play soulful chords and solos C2–C6, using the wheel for stereo tremolo.
+- **Tempo Gate Chords (Keys):** Rhythmic chopped chords driven by a tempo-synced 16-step rhythmic pattern with filter pumping; hold chords C3–C5 to drive the groove, or dial Macro Smooth up to melt into a pad.
+- **Wah Pressure Clav (Keys):** Funky clavinet with an expressive wah pedal right under your finger; play tight comping chords C2–C4, digging into the pads to sweep the Multi SVF wah filter and bark the diode drive.
+
+**FX (3 new presets):**
+- **Breath of Machines (FX):** Mechanical industrial drone featuring breathing noise through formant and tuned comb resonators; hold low notes C1–C2 for eerie sci-fi atmospheres and rhythmic machine stutter.
+- **Bode Barber Riser (FX):** Dramatic rising tension builder combining upward pitch sweeps with feedback-driven Bode frequency shifting; hold a note C2–C4 for 5–6 seconds up to the drop, leaning into the pad for intense feedback wash.
+- **Detonation Tail (FX):** Thunderous cinematic impact combining an explosive noise hit, deep pitch-dropping sub boom, and cavernous stereo reverb tail; strike a single low key C1–C2 and let the rumble ring out.
+
+### 7.3 Sound quality on each device
 
 The same preset is **compatible** between the two devices: presets and projects store only your settings, never what the device can play, and nothing is changed when a project moves. But the two devices do not have the same processing power, so SynthyBoy runs at a different quality on each, chosen once when the plugin starts. A preset can therefore sound **fuller on the XL**.
 
@@ -837,7 +907,7 @@ In plain words:
 - **Heavy sounds.** The busiest factory presets (for example Diffusor Cloud Pad and Scream Filter Bass) use nearly all of the Key 61's processing time when eight notes are held; the XL has room to spare. If a held chord crackles on the Key 61, use fewer notes, fewer unison voices or fewer effects.
 - A device that the plugin does not know is treated like the Key 61.
 
-The XL profile was measured with all 112 factory presets and 16 held notes; the Key 61 profile is the cautious one.
+The XL profile was measured with the initial 112 factory presets and 16 held notes; the Key 61 profile is the cautious one (the 24 presets of sound set batch 1 were subsequently designed and measured under both profiles, see docs/release/SOUND-SET-BATCH-1.md).
 
 ## 8. Known limitations
 
@@ -851,8 +921,8 @@ The XL profile was measured with all 112 factory presets and 16 held notes; the 
 - **One finger.** Only one finger is followed.
 - **Up to 16 instances.** The 17th and later instances never show the drawn pages.
 - **Controls that are dim or missing.** Every oscillator parameter is on the pages. A control that does not apply in the current state is dim (it takes no touch) or, on the effect pages and the oscillator detail pages, hidden with its room used by the others (chapters 5.3 and 5.11).
-- **Sound quality differs between the devices.** The Key 61 plays 8 voices, at most 3 unison voices and skips five effects; the XL plays 16 voices, up to 16 unison voices and all effects (chapter 7.1).
-- **Heavy sounds on the Key 61.** The busiest presets with eight held notes use nearly all of the available processing time (chapter 7.1).
+- **Sound quality differs between the devices.** The Key 61 plays 8 voices, at most 3 unison voices and skips five effects; the XL plays 16 voices, up to 16 unison voices and all effects (chapter 7.3).
+- **Heavy sounds on the Key 61.** The busiest presets with eight held notes use nearly all of the available processing time (chapter 7.3).
 - **Not supported file types.** The content browser offers WAV and SFZ only (not FLAC). An SFZ instrument must lie in a folder of its own with its samples below it.
 - **Pad pressure** needs the pad's Full Level to be off. The plugin-wide pad-pressure switch ignores channel aftertouch (a Key 61 key); only per-pad polyphonic pressure acts.
 
@@ -878,7 +948,7 @@ The XL profile was measured with all 112 factory presets and 16 held notes; the 
 
 ## 10. Second-generation pads (MPCe): playing SynthyBoy expressively
 
-**Second-generation hardware only (MPC XL and the other gen 2 devices). The first generation, for example the MPC Key 61, does not have these pads.** (The Key 61 has keys; its aftertouch and wheels reach SynthyBoy as ordinary MIDI, see the sources in chapter 6.)
+**Second-generation hardware only (MPC XL and the other gen 2 devices). The first generation, for example the MPC Key 61, does not have these pads.** (The Key 61 has keys; its aftertouch and wheels reach SynthyBoy as ordinary MIDI, see the sources in chapter 6.) For a comprehensive standalone reference on expressive pads, hardware sensor dimensions, host MIDI pipeline reality, and five concrete playing recipes, see the companion guide [mpce-pads.md](mpce-pads.md).
 
 Manual references in this chapter are to the **MPC Live III, MPC XL User Guide v3.10.1** (page numbers are those of that guide) and to the release notes 3.6 and 3.7. Read this chapter with one rule in mind: the manual describes what the pads can do **inside the MPC** (drum tracks, layers, the drum track's own modulation matrix). Only what the MPC sends on to a plugin track can drive SynthyBoy. We measured that on an MPC XL (MPC OS 3.10.1.12).
 
@@ -939,17 +1009,18 @@ All recipes use the Mod page (chapter 5.10). Put the plugin on a plugin track on
 
 ### 10.4 Factory presets that respond to the pads
 
-Searched in the 112 factory presets for routes from Velocity, Release Velocity, Poly Aftertouch, Aftertouch, Slide, Lift, Expression X, Pitch Wheel, Mod Wheel, Note, Random per Note, the Note-On sources and Oct Note (active routes only). Only Poly Aftertouch and Slide have routes:
+Searched in the 136 factory presets for routes from Velocity, Release Velocity, Poly Aftertouch, Aftertouch, Slide, Lift, Expression X, Pitch Wheel, Mod Wheel, Note, Random per Note, the Note-On sources and Oct Note (active routes only). Only Poly Aftertouch and Slide have routes:
 
 | Category | Presets with a route Poly Aftertouch to Filter 1 Cutoff |
 |---|---|
-| Pad (23 of 23) | all of them: +40 or +45 percent; Lush Analog Pad and Vintage Brass Pad +70 percent |
-| Lead (20 of 22) | all except Plucked Lead Tone and Staccato Bleep Lead: +30 percent; Hyper Saw Lead +70 percent; MPE Pressure Lead +55 percent (it also routes Poly Aftertouch to Osc 1 Unison Detune at +20 percent, and **Slide** to Osc 1 Warp Amount at +50 percent, which stays silent from the XL pads) |
-| Keys (6 of 17) | Accordion Reed, B3 Drawbar Organ, FM Soft Organ, Glass Organ Tones, Vibraphone Bars (+25 percent), Rotary Rock Organ (+70 percent) |
-| FX (1 of 11) | Bode Shifter Drone (+30 percent) |
-| Bass, Pluck | none |
+| Pad (30 of 30) | all of them: +40 or +45 percent; Lush Analog Pad and Vintage Brass Pad +70 percent; Bowed Pressure Strings +46 percent; Stretched Glass Choir +42 percent; Shepard Ascent +35 percent; Lorenz Garden, Mid Side Halo, Parallel Dusk Pad +40 percent; Brass Swell Ensemble +45 percent |
+| Lead (24 of 26) | all except Plucked Lead Tone and Staccato Bleep Lead: +30 percent; Hyper Saw Lead +70 percent; MPE Pressure Lead +55 percent (it also routes Poly Aftertouch to Osc 1 Unison Detune at +20 percent, and **Slide** to Osc 1 Warp Amount at +50 percent, which stays silent from the XL pads); Sync Cry Lead +26 percent; Triple Fifth Lead +24 percent; Vowel Whistle Lead +18 percent; Bell FM Ripple Lead +14 percent |
+| Keys (8 of 20) | Accordion Reed, B3 Drawbar Organ, FM Soft Organ, Glass Organ Tones, Vibraphone Bars (+25 percent), Rotary Rock Organ (+70 percent), Tempo Gate Chords (+18 percent), Wah Pressure Clav (+46 percent) |
+| FX (2 of 14) | Bode Shifter Drone (+30 percent), Breath of Machines (+35 percent); in addition, Bode Barber Riser routes Poly Aftertouch to Bode Feedback (+30 percent) and Noise Level (+22 percent) |
+| Bass (1 of 27) | Subterranean Duo (+18 percent) |
+| Pluck | none (0 of 19) |
 
-Together 50 presets open their filter when you press a pad harder. For the others, route the pressure yourself (recipe 1) or switch on PAD PRESS (chapter 5.12). Velocity acts in every preset through VEL TRACK on the Master page. (Update this table when presets are added or changed.)
+Together 65 presets open their filter when you press a pad harder (and 66 presets in total route pad pressure). For the others, route the pressure yourself (recipe 1) or switch on PAD PRESS (chapter 5.12). Velocity acts in every preset through VEL TRACK on the Master page. (Update this table when presets are added or changed.)
 
 ## 11. To confirm on the device
 
@@ -969,6 +1040,9 @@ These points are written from the developer notes, the code or the rendered pict
 - **Standby dim**: the dimmed picture and the wake-up touch are tested with the Key 61's measured values; the XL's dim values are not measured.
 - The XL tab bar: it shows four tabs and < > buttons in the screenshot; how the ten tabs are reached with them is to be written once seen.
 - Chapter 2: the name of the list or tab under which SynthyBoy appears in the plugin window (the developer notes say "External Plugins"). The manuals do not say.
+
+**Presets and Sounds browser**
+- **Sounds Browser (.sbpreset via Sounds Mode):** Browsing and loading presets via the host's Sounds Mode (pressing **Sounds** > **Instruments** > tapping the **SynthyBoy** tile > selecting from the package Presets folder) is currently being verified on physical hardware; browsing via the host header's **PRESET** field (VST2 programs 0..136) works today.
 
 **Sound**
 - The difference in sound between the XL and the Key 61 on the factory presets has been measured (levels, spectra), not judged by ear.

@@ -124,7 +124,7 @@ The Akai MPC host stores instrument preset files in its proprietary Plugin Progr
 ```
 MPC Documents/Plugin Presets/Instruments/Safian - VST - SynthyBoy/
 ```
-(e.g. `/sdcard/MPC Documents/Plugin Presets/Instruments/Safian - VST - SynthyBoy/<Preset Name>.xpl` on internal storage or the equivalent path on external USB/SD drives). While the MPC shell already exposes the 112 factory presets through the VST2 program list, the host's "Load" preset browser only indexes `.xpl` files.
+(e.g. `/sdcard/MPC Documents/Plugin Presets/Instruments/Safian - VST - SynthyBoy/<Preset Name>.xpl` on internal storage or the equivalent path on external USB/SD drives). While the MPC shell already exposes the 136 factory presets through the VST2 program list (137 programs with "Init"), the host's "Load" preset browser only indexes `.xpl` files.
 
 ### Generating .xpl files
 
