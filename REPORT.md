@@ -1,20 +1,20 @@
-# Engine Fixes Review Report
+# Pre-build Review Summary 2026-11-17
 
-Branch: `origin/work/engine-fixes`
-Base Branch: `origin/feature/mpc-overlay`
-Review Date: 2026-11-17
+This worktree contains a read-only pre-build review of the branches `origin/work/open-time`, `origin/work/ui-template`, and `origin/work/engine-fixes` (partial).
 
-## Overview
-The `origin/work/engine-fixes` branch was reviewed against `origin/feature/mpc-overlay`, with a focus on voice diagnostics, `event_inbox.h`, missing content, `smpl` loop, `no_smoothing` completion, standby label, and limiter default.
+The detailed findings are documented in [docs/review/PREBUILD-REVIEW-2026-11-17.md](file:///Users/szabi/Documents/Projects/Safian/SynthyBoyVST/.claude/worktrees/agy-g27b-prebuild-review/docs/review/PREBUILD-REVIEW-2026-11-17.md).
 
-## Findings
+## Summary of Findings
 
-| File | Issue | Confidence |
-| :--- | :--- | :--- |
-| `shell-mpc/event_inbox.h` | Design and implementation are correct for a thread-safe, lock-free ring buffer with a multi-producer spinlock. | Certain |
-| `shell-mpc/overlay/standby.h` | `evidence()` method correctly labels the dimming state ("backlight+picture" or "picture"). | Certain |
-| `shell-mpc/output_stage.h` | `kOutputLimiterDefaultOn` is set to `false`, matching the requirement. | Certain |
-| `core/include/synthyboy/engine.h` | `VoiceStats` structure correctly provides the necessary voice diagnostics. | Certain |
-| `core/engine-own/voice/voice.h` | `noSmoothing` is correctly included in `TickGlobals` to support the required functionality. | Certain |
+- **`origin/work/open-time`**: No critical issues identified.
+- **`origin/work/ui-template`**: No critical issues identified.
+- **`origin/work/engine-fixes`**: No critical issues identified.
 
-No critical issues (crashes, undefined behavior, or major signature mismatches) were identified.
+## Cross-branch Conflicts
+
+- No conflicts identified.
+
+## Status
+- **Review Status**: Complete
+- **Build/Analyze/Test**: Performed static code review.
+- **Open Questions**: None.
