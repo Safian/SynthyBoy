@@ -86,6 +86,10 @@ void startBuiltinBankBackground() noexcept;
 /** Gives the share back; when it was the last, the thread is stopped and joined: it checks the stop flag between frames of a table (a frame is a few ms on the Key 61), so the bound is one frame plus
     the thread's wake up (about 10 ms). A table in the making is dropped (never published, so nothing half built is ever read). The thread holds no pointer to an engine. */
 void stopBuiltinBankBackground() noexcept;
+/** TESTS ONLY. Pauses / resumes the background builder (a table it would build waits); the host-thread builds (ensure...) are not affected. */
+void setBuiltinBuilderPausedForTests (bool paused) noexcept;
+/** TESTS ONLY. Forgets every built table (frees them). Only valid while no engine exists and no builder thread runs. */
+void resetBuiltinBankForTests() noexcept;
 /** Milliseconds spent building tables so far, summed over all threads (the status file: open_ms_detail_wavetables). */
 double builtinBankBuildMs() noexcept;
 

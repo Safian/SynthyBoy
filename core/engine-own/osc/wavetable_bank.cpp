@@ -375,6 +375,7 @@ struct Bank
     std::thread worker;
     int users = 0;                         // engines that run lazily (under workerMutex)
     std::atomic<bool> stop { false };
+    std::atomic<bool> paused { false };    // tests: the background thread does not build while true
 
     Bank()
     {
@@ -476,6 +477,11 @@ struct Bank
         while (! stop.load (std::memory_order_relaxed))
         {
             bool worked = false;
+            if (paused.load (std::memory_order_relaxed))
+            {
+                std::this_thread::sleep_for (std::chrono::milliseconds (5));
+                continue;
+            }
             for (int k = 0; k < kRequestSlots && ! stop.load (std::memory_order_relaxed); ++k)
             {
                 const int c = latest[k].load (std::memory_order_relaxed);   // read again after every build: a request made meanwhile wins
@@ -590,6 +596,23 @@ void startBuiltinBankBackground() noexcept
 void stopBuiltinBankBackground() noexcept
 {
     g_bank.stopBackground();
+}
+
+void setBuiltinBuilderPausedForTests (bool paused) noexcept
+{
+    g_bank.paused.store (paused, std::memory_order_relaxed);
+}
+
+void resetBuiltinBankForTests() noexcept
+{
+    for (int c = 0; c < kBankSlots; ++c)
+    {
+        g_bank.ready[c].store (nullptr, std::memory_order_relaxed);
+        g_bank.state[c].store (0, std::memory_order_relaxed);
+        g_bank.owned[static_cast<size_t> (c)].reset();
+    }
+    for (auto& l : g_bank.latest)
+        l.store (-1, std::memory_order_relaxed);
 }
 
 double builtinBankBuildMs() noexcept
