@@ -5,7 +5,7 @@
 // In: the names (`items`, `count`: the owner's array, not copied: the engine's choice labels), the current index, the box (`place`) and the parent rectangle the dimmed backdrop covers (`setPopup`).
 // Out: a tap on a row is an Index change { id, index = the row, value = the row }; a tap outside the box (on the backdrop) is a Request change with the id of `setBackdropId` (close requested);
 // a vertical drag scrolls by whole rows (the rows drawn are always whole: nothing is cut at the box's edge); `turn (delta)` moves the current item (an Index change, the list follows it).
-// Rows are kRowH pixels high (a touch target); the name is cut to 12 characters (the scene's text limit). A scroll zone (44 px) at the right edge, when the list is longer than the box: the thumb in it is dragged (it follows the finger), a touch on the track above or below it pages by one window.
+// Rows are kRowH pixels high (a touch target); names are fitted to the row box with Pen::textLeft. A scroll zone (44 px) at the right edge, when the list is longer than the box: the thumb in it is dragged (it follows the finger), a touch on the track above or below it pages by one window.
 #pragma once
 
 #include "core.h"

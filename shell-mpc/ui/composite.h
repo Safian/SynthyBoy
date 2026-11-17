@@ -259,7 +259,7 @@ protected:
 // ===============================================================================================================================================================
 /** 9. TypeBar: the strip under the oscillator display, whose content depends on the oscillator type: 1 to 4 slots left to right in a fixed height rectangle. The slots of the preset are the
     filled ones and form ONE Q group (`group`: the filled slots in order; empty slots draw nothing and take no Q-Link). The presets are DATA (a table of BarItem, the same mechanism as the
-    KnobPanel's): wavetable (the frame number, the phase, RAND, the phase memory), granular (crossfade, grain window, loop mode, unison), sub (the phase), multisample (VEL TRACK toggle,
+    KnobPanel's): wavetable (FRAME, PHASE, RAND, MAP), granular (crossfade, grain window, loop mode, unison), sub (the phase), multisample (VEL TRACK toggle,
     its amount, RAND), noise (STEREO). The ids of the slots are given by the owner (`slot (i)->setId`). The former PhaseRow is the wavetable preset of this component. */
 enum class BarKind : uint8_t { Frame, Phase, Rand, Number, Stepper, GrainWindow, UnisonDetail, Toggle, Envelope, ToggleNumber, Page };   // Page: a button that opens a detail page of the type (its label)
 struct BarItem { BarKind kind; const char* label; uint8_t weight; };

@@ -594,7 +594,7 @@ private:
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
-/** The spectrum of the plugin's own output as a smooth filled curve (Serum / EQ analyser style) over the row of the 32 meters of the Macros tab: 256 points on a log axis from 20 Hz to
+/** The spectrum of the plugin's own output as a smooth filled curve (EQ analyser style) over the row of the 32 meters of the Macros tab: 256 points on a log axis from 20 Hz to
     20 kHz, the vertical scale the one of the meters (kSpectrumFloorDb at the bottom, kSpectrumCeilingDb at the top). The data is SpectrumCurve (FFT of the overlay thread from the ring the
     audio thread writes). The picture is an opaque dark background (the meters do not show through), three faint grid lines at 100 Hz, 1 kHz and 10 kHz, a fill with a vertical gradient and a
     2.5 pixel line in the accent colours of the skin. While the curve stands still (silence, or a steady tone) update () says "unchanged": no picture is drawn and no FFT is run for silence. */

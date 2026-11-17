@@ -1141,7 +1141,7 @@ inline const Def* find (int id) noexcept
 }
 }
 
-/** 14. PictogramSelector. In: up to 8 items, each with a pictogram id (pictogram:: table, own line drawings) and a label (<= 6 characters), an enabled flag per item, and the current index.
+/** 14. PictogramSelector. In: up to 10 items, each with a pictogram id (pictogram:: table, own line drawings) and a label (<= 6 characters), an enabled flag per item, and the current index.
     Draw: one cell per item in a row (a column when the rectangle is taller than wide), the pictogram with the label under it, the current one highlighted, a disabled one dim.
     Out: an Index change (the new index) on a tap of an enabled cell (made on the touch up, from the cell the touch went down in); turn (delta) steps through the ENABLED items (no wrap). */
 class PictogramSelector : public Component

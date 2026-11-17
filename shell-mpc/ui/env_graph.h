@@ -3,7 +3,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// The axis (Serum 2 manual, "ruler scaling below the envelope"): the x axis is TIME. LOCKED (the default): the envelope always fills the plot, so a change of the times only changes how much time the ruler under
+// The axis (ruler scaling below the envelope): the x axis is TIME. LOCKED (the default): the envelope always fills the plot, so a change of the times only changes how much time the ruler under
 // the graph stands for (a continuous fit, not steps). A stage of 0 takes no width; a stage with time takes its share of the width on the one common scale, but never less than kMinStageW pixels (so the
 // handles of two short neighbours stay apart); the sustain is a level, a short fixed gap marks it. UNLOCKED: the scale is the zoom the player sets by dragging along the ruler band (the window in
 // time units), the envelope may run past the right edge (the handles beyond it are not offered). The ruler marks are round times (time_ruler.h: ms / s, or beats in BEATS mode), they are also the vertical grid.
