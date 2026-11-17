@@ -8,6 +8,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -16,6 +17,7 @@
 #include <memory>
 #include <mutex>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -30,8 +32,11 @@
 
 #include "mpc_vst2_abi.h"
 #include "output_peak.h"
+#include "host_strings.h"
 #include "output_stage.h"
+#include "safe_file.h"
 #include "plugin_paths.h"
+#include "poll_guard.h"
 #include "program_list.h"
 
 // Live LFO display (docs/MPC.md "LFO pictures"). Compile switch SYNTHYBOY_MPC_LFO_LIVE (CMake option of the same name; the source default is 0:
@@ -114,6 +119,12 @@
 #endif
 
 // Make-up gain of the output stage in dB (CMake cache entry of the same name, docs/MPC.md "Output level"). 0 = no gain. The peak limiter behind it is compiled in only with SYNTHYBOY_MPC_OUTPUT_LIMITER (default off).
+// Debug hooks (CMake option SYNTHYBOY_MPC_DEBUG_HOOKS, default OFF, never in the package; docs/MPC.md "Switches and files"): the /tmp files that only the host tests and the acceptance runs on the device use -
+// /tmp/synthyboy-ui-fake-write, -q-fake-group, -q-fake-write, -overlay-q-step-travel, -overlay-fake-slot, -play-log (+ -dump, the .txt, the chunk copies). Without the option the plugin does not look at them at all.
+#ifndef SYNTHYBOY_MPC_DEBUG_HOOKS
+#define SYNTHYBOY_MPC_DEBUG_HOOKS 0
+#endif
+
 // Live filter curve on a free display plane (docs/MPC.md "Overlay (experimental)"). Compile switch SYNTHYBOY_MPC_OVERLAY (CMake option of the same name; the source default is 0:
 // with 0 nothing below the switch is compiled and the plugin is exactly the one without this code). The module itself is shell-mpc/overlay/; the shell only tells it when an
 // instance exists (attach / detach) and answers its two questions (a parameter value, the live cutoff and resonance of filter 1). Needs a skin made with the overlay layout.
@@ -152,6 +163,9 @@ int stepCountOf (const synthyboy::ParamInfo& p) noexcept
 #ifndef SYNTHYBOY_MPC_OUTPUT_GAIN_DB
 #define SYNTHYBOY_MPC_OUTPUT_GAIN_DB 18.0
 #endif
+
+/** The most a preset file may have (a preset is a few KB; the content folder is on user writable media). */
+static constexpr size_t kMaxPresetFileBytes = 4u * 1024u * 1024u;
 
 // ---------------------------------------------------------------------------
 // Denormal flush helpers (cross-platform)
@@ -326,9 +340,17 @@ struct PluginInstance
 
     // "no program" state = the loaded chunk names a program this package does not have;
     // the sound is the chunk's, the host is given index 0, the saved name is shown
-    // and saved again.  Only the UI thread touches these.
+    // and saved again. Written by effSetProgram / effSetChunk and read by the program name calls and the chunk, which the host may make from different threads (review F13):
+    // programMutex guards both, and is never taken by the audio thread (processReplacing, setParameter and getParameter do not look at them).
+    mutable std::mutex programMutex;
     bool noProgram = false;
     std::string noProgramName;
+    void setNoProgram (bool on, const std::string& name)
+    {
+        std::lock_guard<std::mutex> g (programMutex);
+        noProgram = on;
+        noProgramName = on ? name : std::string();
+    }
 #if SYNTHYBOY_MPC_OVERLAY
     // The host shows a mark ("*") after the program name when the sound is not the program any more, and drops it when it is told to read the program name again (audioMasterUpdateDisplay, which the Q
     // proxies need: docs/MPC.md "Q proxies"). So the plugin keeps the mark itself: programModified is set by a chunk restore or a parameter change, cleared by loading a program, and the name the
@@ -341,8 +363,12 @@ struct PluginInstance
     }
 #endif
 
-    // Chunk buffer: owned by the plugin instance, reused across effGetChunk calls.
-    std::vector<char> chunkBuffer;
+    // Chunk buffers: owned by the plugin instance, reused across effGetChunk calls. The host reads the chunk AFTER the call returned, and may ask from two threads (an autosave worker and the UI): every call fills
+    // the next of kChunkBuffers buffers under chunkMutex, so the pointer one call returned stays valid while the next three calls are made (review F13). Never touched by the audio thread.
+    static constexpr size_t kChunkBuffers = 4;
+    std::mutex chunkMutex;
+    std::vector<char> chunkBuffers[kChunkBuffers];
+    size_t chunkNext = 0;
 
     // User content store (for resolving content references)
     std::unique_ptr<synthyboy::UserContentStore> contentStore;
@@ -357,10 +383,34 @@ struct PluginInstance
     // Only the audio thread calls process(); prepare() runs with the engine's prepare (effMainsChanged, the host is not processing then).
     synthyboy_mpc::OutputStage outputStage;
 
-    // Host callback (for transport queries)
-    audioMasterCallback audioMaster = nullptr;
+    // ---- the life of the instance towards the host (robustness review F5, F12) ----
+    // closing: effClose has begun. From that moment no thread of this instance calls the host (the gate below answers 0 at once), every loop of ours stops at its next look, and nothing new is started.
+    // hostKnows: the host has called the dispatcher at least once, so it holds the AEffect pointer: a callback for an effect the host has not registered yet (before VSTPluginMain returned and the host
+    // stored the pointer) never happens - the display thread waits for this flag before its first callback and keeps every report due.
+    std::atomic<bool> closing { false };
+    std::atomic<bool> hostKnows { false };
+
+    /** The callback into the host, behind the two flags: what the display thread (and anyone) calls is `audioMaster (e, opcode, ...)` as before, but while the instance is closing or the host does not know it yet the call
+        is not made and answers 0. The identification call of VSTPluginMain (audioMasterVersion) is made on the host's own thread before the pointer is returned: the only one that passes before hostKnows. */
+    struct HostGate
+    {
+        audioMasterCallback raw = nullptr;
+        const std::atomic<bool>* closingFlag = nullptr;
+        const std::atomic<bool>* knowsFlag = nullptr;
+        HostGate& operator= (audioMasterCallback cb) noexcept { raw = cb; return *this; }
+        explicit operator bool() const noexcept { return raw != nullptr; }
+        VstIntPtr operator() (AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt) const
+        {
+            if (raw == nullptr)
+                return 0;
+            if (opcode != audioMasterVersion && (closingFlag->load (std::memory_order_acquire) || ! knowsFlag->load (std::memory_order_acquire)))
+                return 0;
+            return raw (e, opcode, index, value, ptr, opt);
+        }
+    };
+    HostGate audioMaster { nullptr, &closing, &hostKnows };   // the host's callback (transport queries, automation reports)
 #if SYNTHYBOY_MPC_CALLBACK_STATS
-    audioMasterCallback hostCallback = nullptr; // the host's own callback; `audioMaster` is the counting one in this build (see countingHostCallback)
+    audioMasterCallback hostCallback = nullptr; // the host's own callback; `audioMaster.raw` is the counting one in this build (see countingHostCallback)
 #endif
     synthyboy::TransportInfo transport { 120.0, 0.0, false };
 
@@ -369,7 +419,7 @@ struct PluginInstance
     struct OverlayView final : synthyboy_mpc::overlay::IInstanceView
     {
         explicit OverlayView (PluginInstance& owner) : inst (owner) {}
-        float param (int tableIndex) const noexcept override { return inst.paramMirror[tableIndex].load (std::memory_order_relaxed); }
+        float param (int tableIndex) const noexcept override { return static_cast<unsigned> (tableIndex) < synthyboy::kMaxParams ? inst.paramMirror[tableIndex].load (std::memory_order_relaxed) : 0.0f; }
         bool live (synthyboy::LiveValues& out) const noexcept override
         {
             return inst.engine && inst.engine->copyReadout (out) && out.block != 0; // block 0: the engine wrote no values yet
@@ -610,17 +660,10 @@ struct PluginInstance
         if (! contentReqPending || ! ok)   // a newer request is already waiting: its own state (loading) stays
             contentLoadStatus.store (ok ? 2 : 3, std::memory_order_relaxed);
     }
-    static bool readWholeFile (const std::string& path, std::vector<uint8_t>& bytes, size_t limit)
+    /** A content file read whole (a sample, an SFZ): a regular file of 1 .. `limit` bytes, read in blocks that stop when the instance is closing (effClose does not wait for a 200 MB sample on a slow stick). */
+    bool readWholeFile (const std::string& path, std::vector<uint8_t>& bytes, size_t limit) const
     {
-        std::ifstream f (path, std::ios::binary | std::ios::ate);
-        if (! f)
-            return false;
-        const std::streamoff n = f.tellg();
-        if (n <= 0 || static_cast<size_t> (n) > limit)
-            return false;
-        bytes.resize (static_cast<size_t> (n));
-        f.seekg (0);
-        return static_cast<bool> (f.read (reinterpret_cast<char*> (bytes.data()), n));
+        return synthyboy_mpc::safefile::readWholeBounded (path.c_str(), bytes, limit, &closing);
     }
     static std::string baseName (const std::string& path) { const size_t s = path.rfind ('/'); return s == std::string::npos ? path : path.substr (s + 1); }
     static std::string dirName (const std::string& path) { const size_t s = path.rfind ('/'); return s == std::string::npos ? std::string() : path.substr (0, s); }
@@ -738,22 +781,33 @@ struct PluginInstance
         return true;
     }
 
-    /** The debug dump (play_log.h): the state of this instance, written when the request file exists. Display thread. */
+#if SYNTHYBOY_MPC_DEBUG_HOOKS
+    /** The debug dump (play_log.h): the state of this instance, written when the request file exists. Display thread. The text is built in memory and written in one go (safe_file.h). */
     void playDump()
     {
         namespace pl = synthyboy_mpc::play;
-        FILE* f = std::fopen (synthyboy_mpc::PlayLog::dumpPath().c_str(), "w");
-        if (f == nullptr)
-            return;
-        std::fprintf (f, "selectors %d %d %d\nprogram %d protected %d window %d\n", playSel[0].load(), playSel[1].load(), playSel[2].load(), currentProgram.load(), protectedProgram.load(), restoreSinceMs.load() >= 0 ? 1 : 0);
+        std::string text;
+        char line[160];
+        std::snprintf (line, sizeof line, "selectors %d %d %d\nprogram %d protected %d window %d\n", playSel[0].load(), playSel[1].load(), playSel[2].load(), currentProgram.load(), protectedProgram.load(), restoreSinceMs.load() >= 0 ? 1 : 0);
+        text += line;
         for (size_t i = 0; i < synthyboy::paramCount(); ++i)
-            std::fprintf (f, "p %zu %s %.9g\n", i, synthyboy::paramTable()[i].key, static_cast<double> (paramMirror[i].load (std::memory_order_relaxed)));
+        {
+            std::snprintf (line, sizeof line, "p %zu %s %.9g\n", i, synthyboy::paramTable()[i].key, static_cast<double> (paramMirror[i].load (std::memory_order_relaxed)));
+            text += line;
+        }
         for (int p = 0; p < pl::kProxies; ++p)
-            std::fprintf (f, "proxy %d %.9g\n", p, static_cast<double> (playProxyValue (p)));
+        {
+            std::snprintf (line, sizeof line, "proxy %d %.9g\n", p, static_cast<double> (playProxyValue (p)));
+            text += line;
+        }
         const std::string chunk = buildStateChunk (this);
-        std::fprintf (f, "chunk %zu\n%s\n", chunk.size(), chunk.c_str());
-        std::fclose (f);
+        std::snprintf (line, sizeof line, "chunk %zu\n", chunk.size());
+        text += line;
+        text += chunk;
+        text += '\n';
+        synthyboy_mpc::safefile::writeSmall (synthyboy_mpc::PlayLog::dumpPath().c_str(), text.data(), text.size());
     }
+#endif
 
     // ---- the writes of the plugin-drawn pages (overlay/osc_ui.h): the same write as the host's own, then the display thread tells the host (audioMasterAutomate), so automation recording and the host's
     // own widgets follow. The overlay thread sets the dirty bit, the display thread reports it (one value per parameter, the latest).
@@ -766,21 +820,26 @@ struct PluginInstance
         writeRealParam (this, static_cast<size_t> (tableIndex), normalised);
         uiDirty[tableIndex >> 6].fetch_or (uint64_t { 1 } << (tableIndex & 63), std::memory_order_release);
     }
-    /** Debug / acceptance hook: while the file /tmp/synthyboy-ui-fake-write exists (SYNTHYBOY_MPC_UI_FAKE_WRITE changes the path) its first line "key plainvalue" is written through uiWrite, the path the
-        plugin-drawn pages use (so the host's reaction can be looked at while ANOTHER page is on screen); the file is deleted. Display thread. */
+#if SYNTHYBOY_MPC_DEBUG_HOOKS
+    /** Debug / acceptance hook (SYNTHYBOY_MPC_DEBUG_HOOKS only): while the file /tmp/synthyboy-ui-fake-write exists (SYNTHYBOY_MPC_UI_FAKE_WRITE changes the path) its first line "key plainvalue" is written through uiWrite, the path the
+        plugin-drawn pages use (so the host's reaction can be looked at while ANOTHER page is on screen); the file is deleted. Display thread. Read with safe_file.h (a FIFO, a symlink or a huge file is ignored). */
     void uiFakeWrite()
     {
         static const std::string path = [] { const char* p = std::getenv ("SYNTHYBOY_MPC_UI_FAKE_WRITE"); return std::string (p != nullptr && *p != '\0' ? p : "/tmp/synthyboy-ui-fake-write"); }();
-        std::ifstream f (path);
-        std::string key;
-        double v = 0.0;
-        if (! f || ! (f >> key >> v))
+        char text[synthyboy_mpc::safefile::kSwitchBytes];
+        if (synthyboy_mpc::safefile::readSmall (path.c_str(), text, sizeof text) <= 0)
             return;
-        f.close();
-        std::remove (path.c_str());
-        if (const synthyboy::ParamInfo* p = synthyboy::findParamByKey (key.c_str()))
+        char key[96] = {};
+        double v = 0.0;
+        if (std::sscanf (text, "%95s %lf", key, &v) != 2)
+            return;
+        ::unlink (path.c_str());
+        if (const synthyboy::ParamInfo* p = synthyboy::findParamByKey (key))
             uiWrite (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, static_cast<float> (v))));
     }
+#else
+    void uiFakeWrite() noexcept {}
+#endif
     void uiPoll (AEffect* e)
     {
         uiFakeWrite();
@@ -807,19 +866,20 @@ struct PluginInstance
     static bool isQParam (VstInt32 index) noexcept { return index >= qBase() && index < qBase() + synthyboy_mpc::QRouter::kCount; }
     /** The normalised value of a real parameter (table index) as the host reads it. */
     float qReadNorm (int tableIndex) const noexcept { return synthyboy::toNormalised (synthyboy::paramTable()[tableIndex], paramMirror[tableIndex].load (std::memory_order_relaxed)); }
-    /** Debug / acceptance hook: while the file /tmp/synthyboy-q-fake-group exists (SYNTHYBOY_MPC_Q_FAKE_FILE changes the path) its first line, up to four table indices (-1: none), is the Q group of this
-        instance; applied when the line changes (the host tests of the Q proxies have no UI to set it). Display thread. */
+#if SYNTHYBOY_MPC_DEBUG_HOOKS
+    /** Debug / acceptance hook (SYNTHYBOY_MPC_DEBUG_HOOKS only): while the file /tmp/synthyboy-q-fake-group exists (SYNTHYBOY_MPC_Q_FAKE_FILE changes the path) its first line, up to sixteen table indices (-1: none), is the Q group of this
+        instance; applied when the line changes (the host tests of the Q proxies have no UI to set it). Display thread. Read with safe_file.h: at most 256 bytes of it, only a regular file. */
     std::string qFakeLast;
     void qFakeGroup()
     {
         static const std::string path = [] { const char* e = std::getenv ("SYNTHYBOY_MPC_Q_FAKE_FILE"); return std::string (e != nullptr && *e != '\0' ? e : "/tmp/synthyboy-q-fake-group"); }();
-        std::ifstream f (path);
-        std::string line;
-        if (! f || ! std::getline (f, line))
+        char text[synthyboy_mpc::safefile::kSwitchBytes];
+        if (! synthyboy_mpc::safefile::readFirstLine (path.c_str(), text, sizeof text))
         {
             qFakeLast.clear();
             return;
         }
+        const std::string line = text;
         if (line == qFakeLast)
             return;
         qFakeLast = line;
@@ -840,29 +900,31 @@ struct PluginInstance
         }
         qRouter.setGroup (targets, n, static_cast<int> (synthyboy::paramCount()));
     }
-    /** Debug / acceptance hook: while the file /tmp/synthyboy-q-fake-write exists (SYNTHYBOY_MPC_Q_FAKE_WRITE changes the path) its first line "q value" (q 1 .. 4, value 0 .. 1) is written to the Q
+    /** Debug / acceptance hook (SYNTHYBOY_MPC_DEBUG_HOOKS only): while the file /tmp/synthyboy-q-fake-write exists (SYNTHYBOY_MPC_Q_FAKE_WRITE changes the path) its first line "q value" (q 1 .. 16, value 0 .. 1) is written to the Q
         proxy through setParameter, as the host does when a Q-Link turns; the file is deleted. There is no way to turn a Q-Link from outside: this proves the path from the Q proxy to the target on
         the device (not the host's mapping of the knob to the proxy). Display thread. */
     void qFakeWrite (AEffect* e)
     {
         static const std::string path = [] { const char* p = std::getenv ("SYNTHYBOY_MPC_Q_FAKE_WRITE"); return std::string (p != nullptr && *p != '\0' ? p : "/tmp/synthyboy-q-fake-write"); }();
-        std::ifstream f (path);
-        int q = 0;
-        double v = 0.0;
-        if (! f || ! (f >> q >> v))
+        double qd = 0.0, v = 0.0;
+        if (! synthyboy_mpc::safefile::readTwoNumbers (path.c_str(), qd, v))
             return;
-        f.close();
-        std::remove (path.c_str());
+        ::unlink (path.c_str());
+        const int q = static_cast<int> (qd);
         if (q >= 1 && q <= synthyboy_mpc::QRouter::kCount && e != nullptr && e->setParameter != nullptr)
             e->setParameter (e, qBase() + q - 1, static_cast<float> (v));
     }
-    /** Debug switch: while the file /tmp/synthyboy-overlay-q-step-travel exists its first number is the travel of a Q proxy per step of a stepped target, in 1/128 host increments (default 3). Display thread. */
+    /** Debug switch (SYNTHYBOY_MPC_DEBUG_HOOKS only): while the file /tmp/synthyboy-overlay-q-step-travel exists its first number is the travel of a Q proxy per step of a stepped target, in 1/128 host increments (default 3). Display thread. */
     void qStepTravelFile()
     {
-        std::ifstream f ("/tmp/synthyboy-overlay-q-step-travel");
         double n = 0.0;
-        qRouter.setStepTravel (f && (f >> n) && n > 0.0 ? static_cast<float> (n / 128.0) : synthyboy_mpc::QRouter::kStepTravelDefault);
+        qRouter.setStepTravel (synthyboy_mpc::safefile::readNumber ("/tmp/synthyboy-overlay-q-step-travel", n) && n > 0.0 && n < 1.0e6 ? static_cast<float> (n / 128.0) : synthyboy_mpc::QRouter::kStepTravelDefault);
     }
+#else
+    void qFakeGroup() noexcept {}
+    void qFakeWrite (AEffect*) noexcept {}
+    void qStepTravelFile() noexcept {}
+#endif
     /** The display thread, every tick: the host is told the Q values after a group change or a change of a target, and the real parameter a Q write changed. */
     void qPoll (AEffect* e)
     {
@@ -924,9 +986,12 @@ struct PluginInstance
         if (! audioMaster)
             return;
         const VstInt32 base = firstParam;
+#if SYNTHYBOY_MPC_DEBUG_HOOKS
         synthyboy_mpc::PlayLog::refresh();
+        synthyboy_mpc::PlayLog::drain();   // the lines the host's threads put into the ring, written here: the only place the play log touches a file
         if (synthyboy_mpc::PlayLog::dumpRequested())
             playDump();
+#endif
         if (! playLastValid)
         {
             for (int p = 0; p < pl::kProxies; ++p)
@@ -974,18 +1039,16 @@ struct PluginInstance
     std::chrono::steady_clock::time_point overlayNextFileCheck {};   // display thread only
     static constexpr const char* kOverlayFakeSlotFile = "/tmp/synthyboy-overlay-fake-slot";
 
-    /** The value for the real slot, or what the debug file says (a number 0 .. 15 = report that slot, any other number or "none" = the none colour, "blank" = frame 0, "stale" = frame 0 until the
+    /** The value for the real slot, or (SYNTHYBOY_MPC_DEBUG_HOOKS only) what the debug file says (a number 0 .. 15 = report that slot, any other number or "none" = the none colour, "blank" = frame 0, "stale" = frame 0 until the
         overlay thread asks for a report and the real slot after that: what a host that shows an old picture until the parameter is reported looks like). Display thread and startOverlay. */
     float overlayWantedValue (bool asked = false)
     {
         const float real = uiFullOpen.load (std::memory_order_relaxed) ? synthyboy_mpc::overlay::fullScreenParamValue() : synthyboy_mpc::overlay::instanceParamValue (overlaySlot.load (std::memory_order_relaxed));
         bool stale = false;
-        if (FILE* f = std::fopen (kOverlayFakeSlotFile, "r"))
+#if SYNTHYBOY_MPC_DEBUG_HOOKS
+        char text[32] = {};
+        if (synthyboy_mpc::safefile::readSmall (kOverlayFakeSlotFile, text, sizeof text) >= 0)   // a regular file only, 31 bytes at most (safe_file.h): a FIFO there is ignored, not waited for
         {
-            char text[32] = {};
-            const size_t n = std::fread (text, 1, sizeof text - 1, f);
-            std::fclose (f);
-            text[n] = '\0';
             if (std::strncmp (text, "blank", 5) == 0)
                 return 0.0f;
             if (std::strncmp (text, "none", 4) == 0)
@@ -1000,6 +1063,7 @@ struct PluginInstance
                     return synthyboy_mpc::overlay::instanceParamValue (static_cast<int> (v));
             }
         }
+#endif
         if (! stale)
         {
             overlayStaleReleased = false;
@@ -1047,13 +1111,19 @@ struct PluginInstance
         overlayReportDue.store (true, std::memory_order_release);   // the first report: the display thread makes it
         overlayAttached = true;
     }
+    /** Set when the overlay thread did not let go of this instance's view in time (Service::detach): the instance must then never be freed. */
+    std::atomic<bool> overlayStuck { false };
     void stopOverlay() noexcept
     {
         if (! overlayAttached)
             return;
         overlayAttached = false;
-        try { synthyboy_mpc::overlay::Service::instance().detach (&overlayView); }
-        catch (...) {}
+        try
+        {
+            if (! synthyboy_mpc::overlay::Service::instance().detach (&overlayView))
+                overlayStuck.store (true, std::memory_order_release);
+        }
+        catch (...) { overlayStuck.store (true, std::memory_order_release); }
     }
 #endif
 
@@ -1061,6 +1131,12 @@ struct PluginInstance
     std::atomic<float> liveValue[synthyboy_mpc::kLfoLiveCount] { { 0.0f }, { 0.0f }, { 0.0f }, { 0.0f } };
     std::atomic<bool> liveStop { false };
     std::thread liveThread;
+    /** What the display thread tells whoever waits for it at effClose (shared, so that it outlives the instance when the thread is abandoned). */
+    struct LiveSync { std::mutex m; std::condition_variable cv; bool done = false; };
+    std::shared_ptr<LiveSync> liveSync = std::make_shared<LiveSync>();
+    /** 0 the instance is deleted by effClose; 1 effClose gave up waiting for the display thread and left the instance to it (reapAfterThread); 2 the display thread has ended and found it so. */
+    std::atomic<int> reapState { 0 };
+    static constexpr int kLiveJoinMs = 1500;   // how long effClose waits for the display thread (a host call, a sample read: both stop at the closing flag)
 #if SYNTHYBOY_MPC_SPECTRUM
     synthyboy_mpc::SpectrumRing spectrumRing;                                  // written by the audio thread, read by the display thread
     std::atomic<double> spectrumRate { 44100.0 };                              // the sample rate for the display thread (sampleRate itself is the host thread's)
@@ -1111,9 +1187,10 @@ struct PluginInstance
     }
 #endif
 
-    void startLive (AEffect* e)
+    /** The display thread's whole life (called by startLive's thread). Every tick of every feature runs inside a PollGuard (poll_guard.h): an exception is caught, counted, written to the status file and, five times in a row, switches that
+        feature off - it never leaves the thread (std::terminate would end the MPC application). */
+    void liveLoop (AEffect* e)
     {
-        liveThread = std::thread ([this, e]
         {
             // Own scheduling, set here (not inherited): normal policy, nice 0, all CPUs. Not lower than normal: this thread holds host locks while it is inside
             // audioMasterAutomate, and a starved holder would make the host's own threads wait for it.
@@ -1134,6 +1211,8 @@ struct PluginInstance
             auto next = start;
             int last[synthyboy_mpc::kLfoLiveCount] = {};
             bool anyActive = false;
+            synthyboy_mpc::PollGuard gLive ("LFO cursors", this), gSpectrum ("spectrum", this), gOverlay ("overlay report", this), gPlay ("Play proxies", this), gQ ("Q proxies", this), gUi ("page writes", this),
+                                     gContent ("content loading", this), gShape ("LFO shape", this), gMacroName ("macro name", this);
 #if SYNTHYBOY_MPC_SPECTRUM
             synthyboy_mpc::SpectrumAnalyser analyser;   // allocates here, once, on this thread
             float specLast[synthyboy_mpc::kSpectrumCount] = {};
@@ -1149,17 +1228,22 @@ struct PluginInstance
                 if (next < now)
                     next = now; // a tick that was late (the host call blocked): no catch-up burst of calls, one tick now and the grid goes on from here
                 std::this_thread::sleep_until (next);
-                if (liveStop.load (std::memory_order_relaxed))
+                if (liveStop.load (std::memory_order_relaxed) || closing.load (std::memory_order_acquire))
                     break;
+                if (! hostKnows.load (std::memory_order_acquire))
+                    continue;   // the host has not called us yet, so it may not hold this effect's pointer: no callback before it does, and no report is taken out of its flag meanwhile (robustness review F12)
 #if SYNTHYBOY_MPC_OVERLAY
-                overlayPoll (e, PluginInstance::overlayParamIndex());   // "Overlay Instance": the first parameter of the overlay block (after the spectrum columns and the pad pressure parameters)
-                playPoll (e, PluginInstance::playBase());               // the Play page: the selectors and the proxies after it
-                qPoll (e);                                              // the Q proxies after them
-                uiPoll (e);                                             // what the plugin-drawn pages wrote
-                contentPoll();                                          // a sample or an instrument the browser asked for
-                lfoShapePoll();                                         // a drawn LFO shape the LFO page wrote
-                macroNamePoll (e);                                      // a name the Macros page gave a macro
+                gOverlay.run ([&] { injectFault ("overlay"); overlayPoll (e, PluginInstance::overlayParamIndex()); });   // "Overlay Instance": the first parameter of the overlay block (after the spectrum columns and the pad pressure parameters)
+                gPlay.run ([&] { injectFault ("play"); playPoll (e, PluginInstance::playBase()); });                     // the Play page: the selectors and the proxies after it
+                gQ.run ([&] { injectFault ("q"); qPoll (e); });                                                          // the Q proxies after them
+                gUi.run ([&] { injectFault ("ui"); uiPoll (e); });                                                       // what the plugin-drawn pages wrote
+                gContent.run ([&] { injectFault ("content"); contentPoll(); });                                          // a sample or an instrument the browser asked for
+                gShape.run ([&] { injectFault ("shape"); lfoShapePoll(); });                                             // a drawn LFO shape the LFO page wrote
+                gMacroName.run ([&] { injectFault ("macro"); macroNamePoll (e); });                                      // a name the Macros page gave a macro
 #endif
+                gLive.run ([&]
+                {
+                injectFault ("lfo");
                 int step[synthyboy_mpc::kLfoLiveCount] = {};
 #if SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
                 const double t = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
@@ -1195,8 +1279,11 @@ struct PluginInstance
                     (void) first;
 #endif
                 }
+                });
 #if SYNTHYBOY_MPC_SPECTRUM
+                gSpectrum.run ([&]
                 {
+                    injectFault ("spectrum");
                     float q[synthyboy_mpc::kSpectrumCount];
 #if SYNTHYBOY_MPC_SPECTRUM_SELFTEST
                     // a wave that runs over the 32 columns, one turn in 4 seconds, 2 crests: every column moves on every tick
@@ -1218,10 +1305,51 @@ struct PluginInstance
                             audioMaster (e, audioMasterAutomate, first + synthyboy_mpc::kLfoLiveCount + k, 0, nullptr, q[k]);
 #endif
                     }
-                }
+                });
 #endif
             }
+        }
+    }
+
+    void startLive (AEffect* e)
+    {
+        std::shared_ptr<LiveSync> sync = liveSync;
+        liveThread = std::thread ([this, e, sync]
+        {
+            try { liveLoop (e); }
+            catch (...) { synthyboy_mpc::PollStatus::report ("display thread", this, 1, true, "an exception reached the top of the thread"); }
+            {
+                std::lock_guard<std::mutex> g (sync->m);
+                sync->done = true;
+            }
+            sync->cv.notify_all();
+            reapAfterThread();   // the last thing this thread does: when effClose gave up waiting, the instance is deleted here
         });
+    }
+
+    /** The display thread has ended. When effClose stopped waiting for it (reapState 1) nobody else will free the instance: this thread does, and touches nothing of it afterwards. */
+    void reapAfterThread() noexcept
+    {
+        if (reapState.exchange (2) == 1)
+        {
+#if SYNTHYBOY_MPC_OVERLAY
+            if (overlayStuck.load (std::memory_order_acquire))
+                return;   // the overlay thread may still use the view: the instance stays
+#endif
+            delete this;
+        }
+    }
+
+    /** Test hook (SYNTHYBOY_MPC_DEBUG_HOOKS only): the environment variable SYNTHYBOY_MPC_TEST_FAULT names a feature of the display thread whose tick then throws on every call. */
+    static void injectFault (const char* feature)
+    {
+#if SYNTHYBOY_MPC_DEBUG_HOOKS
+        const char* const want = std::getenv ("SYNTHYBOY_MPC_TEST_FAULT");   // looked at on every tick: a test sets it after other instances ran
+        if (want != nullptr && std::strcmp (want, feature) == 0)
+            throw std::runtime_error (std::string ("injected fault in ") + feature);
+#else
+        (void) feature;
+#endif
     }
 #endif
 
@@ -1369,27 +1497,48 @@ struct PluginInstance
         }
     }
 
-    /** The end of this instance's life, in the order that keeps everything alive for whoever still uses it (effClose calls it, the destructor again, harmlessly):
-          1. the display thread stops and is JOINED: it is the only thread of ours that calls the host (audioMasterAutomate) or touches the instance's members besides the host's own threads,
-             so after this line no callback to the host happens for this instance, and it is the first thing that goes because it uses the overlay state below;
-          2. the overlay forgets the instance: its slot is freed and the overlay thread no longer holds the view (Service::detach waits for the controller's lock, so a poll that is running
-             has finished when it returns; the plane is off when it was the last instance);
-          3. only then the callback statistics stop and the members are destroyed (the destructor's own order). */
-    void shutdown() noexcept
+    /** The end of this instance's life (effClose calls it, the destructor again, harmlessly), in the order that keeps everything alive for whoever still uses it:
+          0. `closing` is set first: from here no thread of this instance calls the host (the HostGate answers 0), every loop stops at its next look, a sample being read stops at its next block;
+          1. the display thread is told to stop and WAITED FOR for at most kLiveJoinMs. It is the only thread of ours that calls the host (audioMasterAutomate) or touches the instance besides the host's own
+             threads. When it does not end in time (it is inside a host call that does not return, or a disk read of a slow medium) it is DETACHED and the instance is left to it: this function returns
+             false, effClose does not delete the instance, and the thread deletes it itself as the last thing it does (reapAfterThread). Nothing is joined without a limit and nothing is used after it was freed;
+             the host is never held up for longer than the limit;
+          2. the overlay forgets the instance: its slot is freed and the overlay thread no longer holds the view (Service::detach waits for the controller's lock for a limited time; when the overlay thread
+             does not let go, the view could still be used: the instance is then kept alive for good, a few megabytes lost instead of a crash);
+          3. only then the callback statistics stop and the members are destroyed (the destructor's own order).
+        Returns true when the caller may delete the instance now. */
+    bool shutdown() noexcept
     {
+        closing.store (true, std::memory_order_release);
+        bool deletable = true;
 #if SYNTHYBOY_MPC_LFO_LIVE
         liveStop.store (true, std::memory_order_relaxed);
         if (liveThread.joinable())
-            liveThread.join();
+        {
+            std::unique_lock<std::mutex> lk (liveSync->m);
+            const bool ended = liveSync->cv.wait_for (lk, std::chrono::milliseconds (kLiveJoinMs), [this] { return liveSync->done; });
+            lk.unlock();
+            int expected = 0;
+            if (ended || ! reapState.compare_exchange_strong (expected, 1))
+                liveThread.join();   // it has ended (or ends this very moment: it has set `done` or finished already)
+            else
+            {
+                liveThread.detach();   // the thread frees the instance when it ends
+                deletable = false;
+            }
+        }
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
         stopOverlay();
+        if (overlayStuck.load (std::memory_order_acquire))
+            deletable = false;
 #endif
+        return deletable;
     }
 
     ~PluginInstance()
     {
-        shutdown();
+        (void) shutdown();
 #if SYNTHYBOY_MPC_CALLBACK_STATS
         callbackStats.stop(); // writes the file one last time
 #endif
@@ -1425,8 +1574,11 @@ static VstIntPtr countingHostCallback(AEffect* e, VstInt32 opcode, VstInt32 inde
 
 static std::string currentProgramName (PluginInstance* inst)
 {
-    if (inst->noProgram)
-        return inst->noProgramName.empty() ? "Init" : inst->noProgramName;
+    {
+        std::lock_guard<std::mutex> g (inst->programMutex);
+        if (inst->noProgram)
+            return inst->noProgramName.empty() ? "Init" : inst->noProgramName;
+    }
     int prog = static_cast<int> (inst->currentProgram.load (std::memory_order_relaxed));
     if (prog == 0)
         return "Init";
@@ -1525,6 +1677,14 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index, VstIntPtr
 static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
                                    VstIntPtr value, void* ptr, float opt)
 {
+    if (e != nullptr)
+        if (PluginInstance* inst = getInstance (e))
+        {
+            if (opcode != effClose && inst->closing.load (std::memory_order_acquire))
+                return 0;   // effClose has begun: nothing else is served
+            if (! inst->hostKnows.load (std::memory_order_relaxed))
+                inst->hostKnows.store (true, std::memory_order_release);   // the host holds the AEffect pointer now: the display thread may call it back (robustness review F12)
+        }
     try { return dispatch(e, opcode, index, value, ptr, opt); }
     catch (...) { return 0; }
 }
@@ -1594,9 +1754,10 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 #if SYNTHYBOY_MPC_OVERLAY
             synthyboy_mpc::PlayLog::line ("effClose: instance %p", static_cast<void*> (inst));
 #endif
-            inst->shutdown(); // the display thread joined (no host callback after this), the overlay has forgotten the instance and its slot, then the data goes
-            delete inst;
+            const bool deletable = inst->shutdown(); // the display thread has ended (no host callback after this) or was given up on after its limit, the overlay has forgotten the instance and its slot
             e->object = nullptr;
+            if (deletable)
+                delete inst;   // else a thread or the overlay still holds it: it frees itself (display thread) or stays (overlay stuck); see PluginInstance::shutdown
         }
         delete e;
         return 1;
@@ -1623,8 +1784,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (wasProtected)
         {
             inst->currentProgram.store (prog, std::memory_order_relaxed);
-            inst->noProgram = false;
-            inst->noProgramName.clear();
+            inst->setNoProgram (false, std::string());
             return 1;
         }
 
@@ -1640,10 +1800,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         {
             // Program >= 1: load preset file
             const auto& entry = inst->programs[static_cast<size_t> (prog - 1)];
-            std::ifstream in (entry.path, std::ios::binary);
-            if (!in) return 1; // file cannot be read
-            std::string data ((std::istreambuf_iterator<char> (in)), std::istreambuf_iterator<char> ());
-            if (data.empty()) return 1;
+            std::string data;
+            if (! synthyboy_mpc::safefile::readWholeBounded (entry.path.c_str(), data, kMaxPresetFileBytes))
+                return 1; // file cannot be read, is not a regular file or is larger than a preset can be (4 MB; a preset is a few KB)
 
             synthyboy::PresetMeta meta;
             synthyboy::StateContent content;
@@ -1656,8 +1815,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         }
 
         inst->currentProgram.store (prog, std::memory_order_relaxed);
-        inst->noProgram = false;
-        inst->noProgramName.clear();
+        inst->setNoProgram (false, std::string());
 #if SYNTHYBOY_MPC_OVERLAY
         inst->setProgramModified (false);
 #endif
@@ -1711,6 +1869,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (!inst) return 0;
         char* buf = static_cast<char*>(ptr);
         if (!buf || index < 0) return 0;
+        constexpr size_t kCap = synthyboy_mpc::kParamStrBytes;   // the bytes this plugin writes into the host's buffer, NUL included (host_strings.h): nothing else of the buffer is touched
 
 #if SYNTHYBOY_MPC_OVERLAY
         if (PluginInstance::isOverlayParam (index))
@@ -1718,17 +1877,16 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             const int frame = static_cast<int> (inst->overlayValue.load (std::memory_order_relaxed) * static_cast<float> (synthyboy_mpc::overlay::layout::kInstanceSteps) + 0.5f);
             const int slot = synthyboy_mpc::overlay::slotOfInstanceFrame (frame);
             if (opcode == effGetParamName)
-                copyString (buf, 64, "Overlay Instance");
+                synthyboy_mpc::putBounded (buf, kCap, "Overlay Instance");
             else if (opcode == effGetParamLabel)
                 buf[0] = '\0';
             else if (slot == synthyboy_mpc::overlay::kSlotUnknown)
-                copyString (buf, 64, "blank");
+                synthyboy_mpc::putBounded (buf, kCap, "blank");
             else if (slot == synthyboy_mpc::overlay::kSlotNone)
-                copyString (buf, 64, "none");
+                synthyboy_mpc::putBounded (buf, kCap, "none");
             else
-                std::snprintf (buf, 64, "slot %d", slot);
-            buf[63] = '\0';
-            return 1;
+                std::snprintf (buf, kCap, "slot %d", slot);
+                        return 1;
         }
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
@@ -1741,26 +1899,26 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             if (real < 0)
             {
                 if (opcode == effGetParamName)
-                    std::snprintf (buf, 64, "Q %d", q + 1);
+                    std::snprintf (buf, kCap, "Q %d", q + 1);
                 else
                     buf[0] = '\0';
             }
             else if (opcode == effGetParamName)
             {
-                if (! synthyboy_mpc::macroParamName (std::atomic_load (&inst->overlayContent), real, buf, 64))   // a macro: the name it has been given ("Filter Sweep")
-                    std::snprintf (buf, 64, "%s%s", synthyboy::paramTable()[real].name, mode == synthyboy_mpc::QRouter::kOct ? " Oct" : (mode == synthyboy_mpc::QRouter::kSem ? " Sem" : ""));
+                if (! synthyboy_mpc::macroParamName (std::atomic_load (&inst->overlayContent), real, buf, kCap))   // a macro: the name it has been given ("Filter Sweep")
+                    // the target's name, shortened by the same word list as the parameter table's names so that name and suffix fit the bound together
+                    synthyboy_mpc::nameWithSuffix (synthyboy::paramTable()[real].name, mode == synthyboy_mpc::QRouter::kOct ? " Oct" : (mode == synthyboy_mpc::QRouter::kSem ? " Sem" : ""), buf, kCap);
             }
             else if (opcode == effGetParamLabel)
-                copyString (buf, 64, mode == synthyboy_mpc::QRouter::kOct ? "oct" : (mode == synthyboy_mpc::QRouter::kSem ? "st" : synthyboy::unitLabel (synthyboy::paramTable()[real].unit)));
+                synthyboy_mpc::putBounded (buf, kCap, mode == synthyboy_mpc::QRouter::kOct ? "oct" : (mode == synthyboy_mpc::QRouter::kSem ? "st" : synthyboy::unitLabel (synthyboy::paramTable()[real].unit)));
             else if (mode == synthyboy_mpc::QRouter::kOct || mode == synthyboy_mpc::QRouter::kSem)
             {
                 const int t = static_cast<int> (std::lround (inst->paramMirror[real].load (std::memory_order_relaxed)));
-                std::snprintf (buf, 64, "%+d", mode == synthyboy_mpc::QRouter::kOct ? synthyboy_mpc::QRouter::octOfTranspose (t) : synthyboy_mpc::QRouter::semOfTranspose (t));
+                std::snprintf (buf, kCap, "%+d", mode == synthyboy_mpc::QRouter::kOct ? synthyboy_mpc::QRouter::octOfTranspose (t) : synthyboy_mpc::QRouter::semOfTranspose (t));
             }
             else
-                synthyboy::valueToText (synthyboy::paramTable()[real], inst->paramMirror[real].load (std::memory_order_relaxed), buf, 64);
-            buf[63] = '\0';
-            return 1;
+                synthyboy::valueToText (synthyboy::paramTable()[real], inst->paramMirror[real].load (std::memory_order_relaxed), buf, kCap);
+                        return 1;
         }
         if (PluginInstance::isPlayParam (index))
         {
@@ -1769,26 +1927,24 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             {
                 const int g = index - PluginInstance::playBase();
                 if (opcode == effGetParamName)
-                    copyString (buf, 64, pl::selectorName (g));
+                    synthyboy_mpc::putBounded (buf, kCap, pl::selectorName (g));
                 else if (opcode == effGetParamLabel)
                     buf[0] = '\0';
                 else
-                    copyString (buf, 64, pl::selectorText (g, inst->playSel[g].load (std::memory_order_relaxed)).c_str());
-                buf[63] = '\0';
-                return 1;
+                    synthyboy_mpc::putBounded (buf, kCap, pl::selectorText (g, inst->playSel[g].load (std::memory_order_relaxed)).c_str());
+                                return 1;
             }
             const int p = PluginInstance::playProxyOf (index);
             const int real = inst->playRealOf (p);
             if (opcode == effGetParamName)
-                copyString (buf, 64, pl::slots (PluginInstance::playGroupOfProxy (p))[PluginInstance::playSlotOfProxy (p)].proxyName);
+                synthyboy_mpc::putBounded (buf, kCap, pl::slots (PluginInstance::playGroupOfProxy (p))[PluginInstance::playSlotOfProxy (p)].proxyName);
             else if (real < 0)
                 buf[0] = '\0';
             else if (opcode == effGetParamLabel)
-                copyString (buf, 64, synthyboy::unitLabel (synthyboy::paramTable()[real].unit));
+                synthyboy_mpc::putBounded (buf, kCap, synthyboy::unitLabel (synthyboy::paramTable()[real].unit));
             else
-                synthyboy::valueToText (synthyboy::paramTable()[real], inst->paramMirror[real].load (std::memory_order_relaxed), buf, 64);
-            buf[63] = '\0';
-            return 1;
+                synthyboy::valueToText (synthyboy::paramTable()[real], inst->paramMirror[real].load (std::memory_order_relaxed), buf, kCap);
+                        return 1;
         }
 #endif
 #if SYNTHYBOY_MPC_LFO_LIVE
@@ -1801,30 +1957,29 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             if (opcode == effGetParamName)
             {
                 if (n >= synthyboy_mpc::kLfoLiveCount)
-                    std::snprintf (buf, 64, "Spectrum %d", n - synthyboy_mpc::kLfoLiveCount + 1);
+                    std::snprintf (buf, kCap, "Spectrum %d", n - synthyboy_mpc::kLfoLiveCount + 1);
                 else
-                    std::snprintf (buf, 64, "LFO %d Cursor", n + 1);
+                    std::snprintf (buf, kCap, "LFO %d Cursor", n + 1);
             }
             else if (opcode == effGetParamLabel)
                 buf[0] = '\0';
             else if (step == 0)
-                copyString (buf, 64, n < synthyboy_mpc::kLfoLiveCount ? "idle" : "0");
+                synthyboy_mpc::putBounded (buf, kCap, n < synthyboy_mpc::kLfoLiveCount ? "idle" : "0");
             else
-                std::snprintf (buf, 64, "%d/%d", step, steps);
+                std::snprintf (buf, kCap, "%d/%d", step, steps);
 #else
             const int n = index - static_cast<int> (synthyboy::paramCount());
             const int step = static_cast<int> (inst->liveValue[n].load (std::memory_order_relaxed) * static_cast<float> (synthyboy_mpc::kLfoLiveSteps) + 0.5f);
             if (opcode == effGetParamName)
-                std::snprintf (buf, 64, "LFO %d Cursor", n + 1);
+                std::snprintf (buf, kCap, "LFO %d Cursor", n + 1);
             else if (opcode == effGetParamLabel)
                 buf[0] = '\0';
             else if (step == 0)
-                copyString (buf, 64, "idle");
+                synthyboy_mpc::putBounded (buf, kCap, "idle");
             else
-                std::snprintf (buf, 64, "%d/%d", step, synthyboy_mpc::kLfoLiveSteps);
+                std::snprintf (buf, kCap, "%d/%d", step, synthyboy_mpc::kLfoLiveSteps);
 #endif
-            buf[63] = '\0';
-            return 1;
+                        return 1;
         }
 #endif
 #if SYNTHYBOY_MPC_PAD_PRESSURE
@@ -1832,15 +1987,14 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         {
             const bool amount = index == PluginInstance::padPressureBase() + 1;
             if (opcode == effGetParamName)
-                copyString (buf, 64, amount ? "Pad Pressure Amount" : "Pad Pressure");
+                synthyboy_mpc::putBounded (buf, kCap, amount ? "Pad Pressure Amount" : "Pad Pressure");
             else if (opcode == effGetParamLabel)
-                copyString (buf, 64, amount ? "%" : "");
+                synthyboy_mpc::putBounded (buf, kCap, amount ? "%" : "");
             else if (amount)
-                std::snprintf (buf, 64, "%d", static_cast<int> (inst->padPressureAmount.load (std::memory_order_relaxed) + 0.5f));
+                std::snprintf (buf, kCap, "%d", static_cast<int> (inst->padPressureAmount.load (std::memory_order_relaxed) + 0.5f));
             else
-                copyString (buf, 64, inst->padPressure.load (std::memory_order_relaxed) ? "On" : "Off");
-            buf[63] = '\0';
-            return 1;
+                synthyboy_mpc::putBounded (buf, kCap, inst->padPressure.load (std::memory_order_relaxed) ? "On" : "Off");
+                        return 1;
         }
 #endif
         size_t paramCount = synthyboy::paramCount();
@@ -1848,24 +2002,19 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
         const synthyboy::ParamInfo* info = synthyboy::paramTable() + index;
 
-        // Use a generous buffer size (host passes at least 24 bytes for params)
-        constexpr int kMaxParamStr = 64;
-
         if (opcode == effGetParamName)
         {
-            copyString(buf, kMaxParamStr, info->name);
-            buf[kMaxParamStr - 1] = '\0';
+            synthyboy_mpc::shortName (info->name, buf, kCap, synthyboy_mpc::kParamNameChars);   // 38 of the names are longer than the bound: the word list shortens them
         }
         else if (opcode == effGetParamLabel)
         {
             const char* unit = synthyboy::unitLabel(info->unit);
-            copyString(buf, kMaxParamStr, unit);
-            buf[kMaxParamStr - 1] = '\0';
+            synthyboy_mpc::putBounded (buf, kCap, unit);
         }
         else // effGetParamDisplay
         {
             float plain = inst->paramMirror[index].load(std::memory_order_relaxed);
-            synthyboy::valueToText(*info, plain, buf, kMaxParamStr);
+            synthyboy::valueToText(*info, plain, buf, kCap);
         }
         return 1;
     }
@@ -1984,14 +2133,15 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (synthyboy_mpc::PlayLog::enabled())
         {
             synthyboy_mpc::PlayLog::line ("effGetChunk size=%zu hash=%08x", chunk.size(), synthyboy_mpc::PlayLog::hash (chunk.data(), chunk.size()));
-            if (FILE* f = std::fopen ((synthyboy_mpc::PlayLog::path() + "-chunk-get.json").c_str(), "wb")) { std::fwrite (chunk.data(), 1, chunk.size(), f); std::fclose (f); }
+            synthyboy_mpc::PlayLog::offerChunk (true, chunk.data(), chunk.size());   // written by the display thread, not here
         }
 #endif
         // Reuse the plugin-owned chunk buffer (VST2: host does not free chunk memory)
-        inst->chunkBuffer.resize(chunk.size());
-        std::memcpy(inst->chunkBuffer.data(), chunk.data(), chunk.size());
+        std::lock_guard<std::mutex> chunkGuard (inst->chunkMutex);
+        std::vector<char>& buffer = inst->chunkBuffers[inst->chunkNext++ % PluginInstance::kChunkBuffers];
+        buffer.assign (chunk.begin(), chunk.end());
         if (ptr)
-            *static_cast<void**>(ptr) = inst->chunkBuffer.data();
+            *static_cast<void**>(ptr) = buffer.data();
         return static_cast<VstInt32>(chunk.size());
     }
 
@@ -2006,7 +2156,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         {
             synthyboy_mpc::PlayLog::line ("effSetChunk size=%d hash=%08x index=%d", static_cast<int> (size), size > 0 && chunk ? synthyboy_mpc::PlayLog::hash (chunk, static_cast<size_t> (size)) : 0u, static_cast<int> (index));
             if (size > 0 && chunk)
-                if (FILE* f = std::fopen ((synthyboy_mpc::PlayLog::path() + "-chunk-set.json").c_str(), "wb")) { std::fwrite (chunk, 1, static_cast<size_t> (size), f); std::fclose (f); }
+                synthyboy_mpc::PlayLog::offerChunk (false, chunk, static_cast<size_t> (size));   // written by the display thread, not here
         }
 #endif
 
@@ -2064,16 +2214,14 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     if (r >= 0)
                     {
                         inst->currentProgram.store (r, std::memory_order_relaxed);
-                        inst->noProgram = false;
-                        inst->noProgramName.clear();
+                        inst->setNoProgram (false, std::string());
                         inst->protectedProgram.store (r, std::memory_order_relaxed);
                     }
                     else
                     {
                         // Program not found: no-program state
                         inst->currentProgram.store (0, std::memory_order_relaxed);
-                        inst->noProgram = true;
-                        inst->noProgramName = hasName ? name : "";
+                        inst->setNoProgram (true, hasName ? name : std::string());
                         inst->protectedProgram.store (-1, std::memory_order_relaxed);
                     }
                 }
@@ -2197,7 +2345,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (name)
         {
             copyString(name, kVstMaxEffectNameLen + 1, "SynthyBoy");
-            name[kVstMaxEffectNameLen] = '\0';
         }
         return 1;
     }
@@ -2208,7 +2355,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (vendor)
         {
             copyString(vendor, kVstMaxVendorStrLen + 1, "Safian");
-            vendor[kVstMaxVendorStrLen] = '\0';
         }
         return 1;
     }
@@ -2219,7 +2365,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (product)
         {
             copyString(product, kVstMaxProductStrLen + 1, "SynthyBoy");
-            product[kVstMaxProductStrLen] = '\0';
         }
         return 1;
     }
@@ -2286,24 +2431,22 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         VstSpeakerArrangement** inArr = reinterpret_cast<VstSpeakerArrangement**>(ptr);
         VstSpeakerArrangement** outArr = reinterpret_cast<VstSpeakerArrangement**>(value);
 
-        if (inArr)
+        // two const objects, made once (the initialisation of a function-local static is thread safe), never written again: the host's threads may all ask (robustness review F17)
+        static const VstSpeakerArrangement emptyArr = [] { VstSpeakerArrangement a; std::memset (&a, 0, sizeof a); a.type = kSpeakerArrEmpty; a.numChannels = 0; return a; }();
+        static const VstSpeakerArrangement stereoArr = []
         {
-            static VstSpeakerArrangement emptyArr;
-            std::memset(&emptyArr, 0, sizeof(emptyArr));
-            emptyArr.type = kSpeakerArrEmpty;
-            emptyArr.numChannels = 0;
-            *inArr = &emptyArr;
-        }
-        if (outArr)
-        {
-            static VstSpeakerArrangement stereoArr;
-            std::memset(&stereoArr, 0, sizeof(stereoArr));
-            stereoArr.type = kSpeakerArrStereo;
-            stereoArr.numChannels = 2;
+            VstSpeakerArrangement a;
+            std::memset (&a, 0, sizeof a);
+            a.type = kSpeakerArrStereo;
+            a.numChannels = 2;
             for (int i = 0; i < 2; ++i)
-                stereoArr.speakers[i].type = i;
-            *outArr = &stereoArr;
-        }
+                a.speakers[i].type = i;
+            return a;
+        }();
+        if (inArr)
+            *inArr = const_cast<VstSpeakerArrangement*> (&emptyArr);
+        if (outArr)
+            *outArr = const_cast<VstSpeakerArrangement*> (&stereoArr);
         return 1;
     }
 
@@ -2671,7 +2814,7 @@ extern "C"
 #if SYNTHYBOY_MPC_CALLBACK_STATS
         inst->hostCallback = audioMaster;
         inst->audioMaster = audioMaster ? countingHostCallback : nullptr;
-        audioMaster = inst->audioMaster; // the identification call below is counted as well
+        audioMaster = inst->audioMaster.raw; // the identification call below is counted as well
 #else
         inst->audioMaster = audioMaster;
 #endif

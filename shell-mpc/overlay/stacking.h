@@ -28,6 +28,11 @@ public:
     virtual bool readZpos (uint32_t plane, PlaneZpos& out) = 0;
     /** Writes the zpos property of `plane`. false: refused (`error` says why). */
     virtual bool writeZpos (uint32_t plane, uint64_t value, std::string& error) = 0;
+    /** The zpos a plane had at rest, kept outside the process while it is raised (robustness review F15): when the host dies with the plane raised, the next run learns the true rest value from here instead of taking
+        the raised one for the one at rest. The defaults remember nothing (the tests' fake drivers). */
+    virtual bool loadRest (uint32_t /*plane*/, uint64_t& /*value*/) { return false; }
+    virtual void saveRest (uint32_t /*plane*/, uint64_t /*value*/) {}
+    virtual void forgetRest (uint32_t /*plane*/) {}
 };
 
 class StackingGuard
@@ -88,7 +93,12 @@ public:
             return;
         }
         if (! applied_)
+        {
             rest_ = ours.value;      // the value at rest: what the plane had before we touched it
+            uint64_t remembered = 0;
+            if (driver_.loadRest (plane, remembered) && remembered != ours.value && remembered >= ours.min && remembered <= ours.max)
+                rest_ = remembered;  // a run before this one died with the plane raised: the value it had at rest is the one that counts
+        }
         if (unknown || ! havePrimary)
         {
             outcome_ = Outcome::NotPossible;
@@ -107,6 +117,8 @@ public:
             return;
         }
         std::string error;
+        if (! applied_)
+            driver_.saveRest (plane, rest_);   // before the first write: a death after it leaves the rest value behind
         if (! driver_.writeZpos (plane, c.value, error))
         {
             outcome_ = Outcome::Failed;
@@ -138,6 +150,7 @@ public:
             ++restores_;
             restoreFailed_ = false;
             ourZpos_ = rest_;
+            driver_.forgetRest (plane_);
         }
         applied_ = false;
     }
@@ -145,6 +158,8 @@ public:
     /** The plane is not ours any more (taken by another program): forgotten without a write. */
     void drop() noexcept
     {
+        if (applied_)
+            driver_.forgetRest (plane_);   // not our plane any more: what it holds is the other program's
         applied_ = false;
         ++drops_;
     }

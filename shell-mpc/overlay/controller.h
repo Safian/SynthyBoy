@@ -17,6 +17,8 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstring>
+#include <thread>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
@@ -42,6 +44,7 @@
 #include "standby.h"
 #include "renderer.h"
 #include "touch_input.h"
+#include "../safe_file.h"
 #include "ui_stack.h"
 #include "vblank_pacer.h"
 #include "view.h"
@@ -148,6 +151,28 @@ public:
             uiGroup_[slot] = -1;
         }
         return slot;
+    }
+    /** As detach (), but it waits for the lock for at most `limitMs` (a tick of the overlay thread that is stuck must not hold up effClose of the host for ever). True when the instance is detached: after it the overlay thread no
+        longer touches `view`; false when the lock could not be had in time: the overlay thread may still use `view`, the caller must keep the instance alive. `left` is then not set. */
+    bool detachWithin (IInstanceView* view, int limitMs, size_t& left)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds (limitMs);
+        while (! mu_.try_lock())
+        {
+            if (std::chrono::steady_clock::now() >= deadline)
+                return false;
+            std::this_thread::sleep_for (std::chrono::milliseconds (2));
+        }
+        std::lock_guard<std::mutex> g (mu_, std::adopt_lock);
+        const int slot = slots_.slotOf (view);
+        if (slot >= 0)
+        {
+            ui_[slot] = UiStack();
+            uiGroup_[slot] = -1;
+        }
+        slots_.release (view);
+        left = static_cast<size_t> (slots_.total());
+        return true;
     }
     /** Returns the number of instances left. After it returns the overlay thread no longer touches `view` (the same lock guards every use of an instance). */
     size_t detach (IInstanceView* view)
@@ -1096,17 +1121,15 @@ private:
             }
         }
         int over = -1;
-        std::ifstream in (paths_.rotation);
-        int v = 0;
-        if (in && (in >> v) && (v == 0 || v == 90 || v == 180 || v == 270))
-            over = v;
+        long v = 0;
+        if (safefile::readInt (paths_.rotation.c_str(), v) && (v == 0 || v == 90 || v == 180 || v == 270))   // every switch file is read with safe_file.h: a regular file only, a few bytes, never blocking
+            over = static_cast<int> (v);
         rotationOverride_ = over;
         {
             int look = 1;
-            std::ifstream lf (paths_.look);
-            int lv = 0;
-            if (lf && (lf >> lv) && lv >= 1 && lv <= 3)
-                look = lv;
+            long lv = 0;
+            if (safefile::readInt (paths_.look.c_str(), lv) && lv >= 1 && lv <= 3)
+                look = static_cast<int> (lv);
             if (look != look_)
             {
                 look_ = look;
@@ -1116,10 +1139,9 @@ private:
         }
         if (mouse_)
         {
-            std::ifstream hf (paths_.pointerHotSpot);
-            std::string text;
-            if (hf)
-                std::getline (hf, text);
+            char text[safefile::kSwitchBytes];
+            if (! safefile::readFirstLine (paths_.pointerHotSpot.c_str(), text, sizeof text))
+                text[0] = '\0';
             mouse_->setHotSpotOverride (text);
         }
         chooseDetail();
@@ -1136,10 +1158,9 @@ private:
     {
         int want = 0;
         {
-            std::ifstream in (paths_.detail);
-            std::string w;
-            if (in && (in >> w))
-                want = (w == "1" || w == "full") ? 1 : ((w == "2" || w == "reduced") ? 2 : 0);
+            char w[32];
+            if (safefile::readWord (paths_.detail.c_str(), w, sizeof w))
+                want = (! std::strcmp (w, "1") || ! std::strcmp (w, "full")) ? 1 : ((! std::strcmp (w, "2") || ! std::strcmp (w, "reduced")) ? 2 : 0);
         }
         detailSource_ = want != 0 ? "file" : "auto";
         const bool gpuOn = gpu_ != nullptr && usingGpu_ && gpuShown_ && ! noGpu_;
@@ -1182,12 +1203,9 @@ private:
         }
         int want = 0;
         {
-            std::ifstream in (paths_.rate);
-            int v = 0;
-            std::string w;
-            if (in && (in >> w))
-                want = (w == "60") ? 60 : (w == "30" ? 30 : 0);
-            (void) v;
+            char w[32];
+            if (safefile::readWord (paths_.rate.c_str(), w, sizeof w))
+                want = ! std::strcmp (w, "60") ? 60 : (! std::strcmp (w, "30") ? 30 : 0);
         }
         const bool slowGpu = g.glRenderer.compare (0, 6, "Mali-T") == 0 || g.glRenderer.empty();
         if (want == 0)
@@ -1203,7 +1221,7 @@ private:
             rcCount_ = g.render.count;
             rcTotal_ = g.render.totalUs;
             const double meanMs = dCount > 0 ? static_cast<double> (dTotal) / static_cast<double> (dCount) / 1000.0 : 0.0;
-            if (std::ifstream off (paths_.gpuClock); off && [&] { std::string w; return static_cast<bool> (off >> w) && w == "off"; }())
+            if (char w[16]; safefile::readWord (paths_.gpuClock.c_str(), w, sizeof w) && ! std::strcmp (w, "off"))
                 clock_.boost (false);
             else if (fps >= 8.0 && meanMs >= 3.0)
             {
@@ -1494,14 +1512,7 @@ private:
 
     static void writeAtomically (const std::string& path, const std::string& text)
     {
-        const std::string tmp = path + ".tmp";
-        {
-            std::ofstream out (tmp, std::ios::binary | std::ios::trunc);
-            if (! out)
-                return;
-            out << text;
-        }
-        std::rename (tmp.c_str(), path.c_str());
+        safefile::writeReplacing (path.c_str(), text.data(), text.size());   // no symlink followed, mode 0644, one rename
     }
 
     static constexpr double kStandbyBusyMs = 34.0;   // a dim or a wake is under way (the picture and the backlight do not change together): look at the screen every other vblank

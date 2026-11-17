@@ -40,6 +40,7 @@
 #include <drm/drm_mode.h>
 #include <linux/dma-buf.h>
 
+#include "../safe_file.h"
 #include "discovery.h"
 #include "drm_interfaces.h"
 #include "mouse_input.h"
@@ -85,6 +86,8 @@ public:
     {
         if (state_ != 1 || info_.plane() == 0)
             return true;
+        if (! descriptorStillTheSame (why))
+            return false;
         drm_mode_get_plane p;
         std::memset (&p, 0, sizeof p);
         p.plane_id = info_.plane();
@@ -189,6 +192,25 @@ public:
             ids.push_back (p.id);
         return ids;
     }
+    // the rest value of the plane's zpos, outside the process (stacking.h IZposDriver): one small file, "<plane> <value>"; never followed through a symlink (safe_file.h)
+    static constexpr const char* kRestFile = "/tmp/synthyboy-overlay-zpos-rest";
+    bool loadRest (uint32_t plane, uint64_t& value) override
+    {
+        char text[safefile::kSwitchBytes];
+        unsigned long p = 0;
+        unsigned long long v = 0;
+        if (safefile::readSmall (kRestFile, text, sizeof text) <= 0 || std::sscanf (text, "%lu %llu", &p, &v) != 2 || p != plane)
+            return false;
+        value = v;
+        return true;
+    }
+    void saveRest (uint32_t plane, uint64_t value) override
+    {
+        char text[64];
+        const int n = std::snprintf (text, sizeof text, "%u %llu\n", plane, static_cast<unsigned long long> (value));
+        safefile::writeSmall (kRestFile, text, static_cast<size_t> (n));
+    }
+    void forgetRest (uint32_t) override { ::unlink (kRestFile); }
     /** The planes the application has on our CRTC right now (a plane that shows a framebuffer on it), our own plane left out: its pointer may have appeared since the discovery. */
     std::vector<uint32_t> liveAppPlanes()
     {
@@ -231,6 +253,38 @@ public:
 
 private:
     struct Cand { int fd; std::string path; };
+
+    /** The borrowed descriptor is a number found once (robustness review F14). If the host closed and reopened its display device (a display re-initialisation, a mode change) the number may be free or another file: every ioctl
+        would go to the wrong object. Checked once a second with planeStillOurs: the number must still be the same file (device, inode) as when it was found, a /dev/dri/card* device, and still the master's. When it is
+        not, the module disables itself for good (state 2, the reason says why) instead of using it. */
+    bool descriptorStillTheSame (std::string& why)
+    {
+        struct stat st;
+        char target[160];
+        char path[64];
+        std::snprintf (path, sizeof path, "/proc/self/fd/%d", fd_);
+        const ssize_t n = readlink (path, target, sizeof target - 1);
+        bool same = fd_ >= 0 && n > 0 && ::fstat (fd_, &st) == 0 && st.st_dev == fdDev_ && st.st_ino == fdIno_ && st.st_rdev == fdRdev_;
+        if (same)
+        {
+            target[n] = 0;
+            same = std::strncmp (target, "/dev/dri/card", 13) == 0;
+        }
+        if (same)
+        {
+            drm_auth auth;
+            std::memset (&auth, 0, sizeof auth);
+            errno = 0;
+            same = ioctl (fd_, DRM_IOCTL_AUTH_MAGIC, &auth) < 0 && errno == EINVAL;   // still the master's descriptor
+        }
+        if (! same)
+        {
+            state_ = 2;
+            error_ = "the host's display descriptor is not the one that was found (the host reopened its display device)";
+            why = error_;
+        }
+        return same;
+    }
 
     bool discover()
     {
@@ -289,6 +343,15 @@ private:
                 continue;
             }
             fd_ = c.fd;
+            {
+                struct stat fst;
+                if (::fstat (fd_, &fst) == 0)
+                {
+                    fdDev_ = fst.st_dev;
+                    fdIno_ = fst.st_ino;
+                    fdRdev_ = fst.st_rdev;
+                }
+            }
             own_ = own;
             planes_ = snap.planes;
             info_ = d;
@@ -477,6 +540,8 @@ private:
     int state_ = 0;   // 0 not yet, 1 found, 2 failed
     std::string error_;
     int fd_ = -1, own_ = -1;
+    dev_t fdDev_ = 0, fdRdev_ = 0;
+    ino_t fdIno_ = 0;   // what the borrowed descriptor was when it was found (descriptorStillTheSame)
     DisplayInfo info_;
     std::vector<PlaneInfo> planes_;      // the snapshot of the discovery (the properties' ids and ranges)
     PaceParams pace_;

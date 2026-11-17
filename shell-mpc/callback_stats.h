@@ -35,6 +35,7 @@
 #include <thread>
 
 #include "mpc_vst2_abi.h"
+#include "safe_file.h"
 #include "thread_policy.h"
 
 namespace synthyboy_mpc
@@ -201,11 +202,9 @@ public:
     {
         if (resetPath.empty())
             return false;
-        std::FILE* f = std::fopen (resetPath.c_str(), "r");
-        if (! f)
+        if (safefile::regularFileSize (resetPath.c_str()) < 0)   // a regular file only: a FIFO or a symlink there is ignored (never opened)
             return false;
-        std::fclose (f);
-        std::remove (resetPath.c_str());
+        ::unlink (resetPath.c_str());
         resetMidi();
         return true;
     }
@@ -471,17 +470,8 @@ public:
         {
             const std::string tmp = filePath + ".tmp";
             const std::string text = format (buildLine, reason);
-            std::FILE* f = std::fopen (tmp.c_str(), "w");
-            if (! f)
-                return false;
-            const bool ok = std::fwrite (text.data(), 1, text.size(), f) == text.size();
-            const bool closed = std::fclose (f) == 0;
-            if (! ok || ! closed || std::rename (tmp.c_str(), filePath.c_str()) != 0)
-            {
-                std::remove (tmp.c_str());
-                return false;
-            }
-            return true;
+            (void) tmp;
+            return safefile::writeReplacing (filePath.c_str(), text.data(), text.size());
         }
         catch (...) { return false; }
     }
