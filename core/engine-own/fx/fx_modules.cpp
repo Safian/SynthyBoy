@@ -357,6 +357,7 @@ public:
         s.formantTranspose = V (b, d, formantTranspose);
         s.resonance = pct (b, d, res);
         s.drive = V (b, d, drive) * (1.0f / 20.0f);
+        s.driveDb = V (b, d, drive); // the classic models (0 .. 7) read the drive in dB (the voice filters set both); it was left at 0 here, so the drive of the FX filter did nothing for them
         s.blend = pct (b, d, blend);
         s.mix = 1.0f;
         s.var = pct (b, d, var);
