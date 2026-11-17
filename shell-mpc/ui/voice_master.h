@@ -319,7 +319,7 @@ private:
             const uint32_t topCol = norm > 1.0f ? T.negative : T.flow[3];
             const uint32_t ramp[4] = { topCol, T.flow[2], T.flow[1], T.flow[0] };
             p.paintY (static_cast<float> (r.y), static_cast<float> (r.bottom()), ramp, 240);
-            p.rect ({ r.x + 1, fillY, r.w - 2, fillH }, p.c (topCol, 240));
+            p.line (static_cast<float> (r.x) + static_cast<float> (r.w) * 0.5f, static_cast<float> (fillY), static_cast<float> (r.x) + static_cast<float> (r.w) * 0.5f, static_cast<float> (r.bottom()), static_cast<float> (r.w - 2), p.c (topCol, 240));   // a thick line takes the paint (a rect does not, in either renderer)
             p.plain();
 
             // Crisp top peak line

@@ -195,7 +195,7 @@ protected:
                 const uint32_t topCol = pk > 1.0f ? T.negative : T.flow[3];
                 const uint32_t meterRamp[4] = { topCol, T.flow[2], T.flow[1], T.flow[0] };
                 p.paintY (static_cast<float> (g.trackTop), static_cast<float> (g.trackBottom), meterRamp, 240);
-                p.rect ({ g.meterX + 1, fillY, g.meterW - 2, fillH }, p.c (topCol, 240));
+                p.line (static_cast<float> (g.meterX) + static_cast<float> (g.meterW) * 0.5f, static_cast<float> (fillY), static_cast<float> (g.meterX) + static_cast<float> (g.meterW) * 0.5f, static_cast<float> (g.trackBottom), static_cast<float> (g.meterW - 2), p.c (topCol, 240));   // a thick line takes the paint (a rect does not, in either renderer)
                 p.plain();
 
                 // Crisp top peak line
