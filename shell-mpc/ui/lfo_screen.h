@@ -23,7 +23,7 @@ public:
     Stepper shape, style, sync;
     RateControl rate;
     Knob rise { "RISE" }, smoothTime { "SMOOTH" };
-    ToggleIcon stereo;
+    LedToggle stereo;
     QGroup group;
 
     LfoCompact()
@@ -32,8 +32,8 @@ public:
         shape.setCaption ("SHAPE"); shape.listable = true; shape.state.wrap = true;
         style.setCaption ("STYLE"); style.listable = true; style.state.wrap = true;
         sync.setCaption ("SYNC"); sync.listable = true; sync.state.wrap = true;
-        stereo.state.icon = ToggleIcon::Icon::Generic; stereo.setLabel ("STEREO"); stereo.state.showState = true;
-        rise.state.side = smoothTime.state.side = false;
+        stereo.setLabel ("STEREO");
+        smoothTime.state.led = true;   // the switch of the smoothing is the LED on the label of its time
         rate.setShowMode (true);
         addKid (instance); addKid (shape); addKid (style, false); addKid (sync, false); addKid (rate); addKid (rise); addKid (smoothTime); addKid (stereo, false); addKid (full);
         configure (false);
@@ -55,7 +55,7 @@ public:
     bool random() const noexcept { return random_; }
     Rect displayRect() const noexcept { return display_; }
     QGroup& qGroup() noexcept { return group; }
-    static constexpr int kQuadH = 304, kRowH = 56, kRateH = 72;
+    static constexpr int kQuadH = 248, kQuadRandomH = 304, kRowH = 56, kRateH = 72;   // an LFO: SHAPE, RATE, RISE and SMOOTH (the last two as tall as the rate, the same dial size); a random LFO has two more rows
     Size minSize() const override { return { 400, 560 }; }
     void draw (gpu::SceneBuilder& sb) const override
     {
@@ -68,7 +68,7 @@ protected:
     {
         const int m = 6, W = rect_.w - 2 * m;
         instance.place ({ rect_.x + m, rect_.y + m, W, kRowH });
-        const int dy = rect_.y + m + kRowH + 8, qy = rect_.bottom() - m - kQuadH;
+        const int dy = rect_.y + m + kRowH + 8, qy = rect_.bottom() - m - (random_ ? kQuadRandomH : kQuadH);
         display_ = { rect_.x + m, dy, W, std::max (0, qy - 8 - dy) };
         full.place ({ display_.right() - 64 - 4, display_.y + 4, 64, 56 });
         int y = qy + kQLane;
@@ -89,6 +89,7 @@ protected:
         y += kRateH + kQLane;
         const int h = std::max (0, rect_.bottom() - m - y);
         const int cw = (W - kGap) / 2;
+        rise.state.side = smoothTime.state.side = true;   // the dial at the left with its name and value beside it: the same dial as the rate's above
         rise.place ({ rect_.x + m, y, cw, h });
         smoothTime.place ({ rect_.x + m + cw + kGap, y, W - cw - kGap, h });
     }
@@ -98,29 +99,46 @@ protected:
 };
 
 // ===============================================================================================================================================================
+/** LedSwitchProxy: the Q member of the LED on the label of a knob (Knob::state.led): a LED toggle that is not drawn and takes no touch (the knob's own label zone is the touch), placed at the LED so that its Q chip stands there; a Q-Link
+    step on it switches (up on, down off) and the owner writes the switch's parameter. It is no child of any composite. */
+class LedSwitchProxy : public LedToggle
+{
+public:
+    void draw (gpu::SceneBuilder&) const override {}
+    Change touchDown (int, int, double) override { return Change::none(); }
+    int touchTargets (Rect*, int) const override { return 0; }
+    Size minSize() const override { return { 1, 1 }; }
+    bool sizeOk() const noexcept override { return true; }
+    /** Places the proxy beside the top left corner of the knob (inside its rectangle): its Q chip stands in the lane above the knob, right of the knob's own chip. */
+    void follow (const Knob& k) { place ({ k.rect().x + 24, k.rect().y, 20, 16 }); }
+};
+
+// ===============================================================================================================================================================
 class LfoFullScreen : public Composite
 {
 public:
     static constexpr int kMaxGroups = 6, kBandH = 290, kBandRandomH = 196, kTopH = 64, kPickerCols = 5;   // kBandRandomH: the bottom band of a random LFO is lower (the display takes the room)
     MenuButton close { "CLOSE", MenuButton::Icon::None };
     InstanceBar bar;
-    SyncSwitch syncSwitch;
+    SyncSwitch syncSwitch;                                  // the logic of HZ / BPM / KEY (its list `syncSwitch.mode` is the first member of TIMING / RANDOM); TRIP and DOT are `rate.trip` and `rate.dot`
     ToggleIcon monoTop;
     DetailButton targets { DetailButton::Icon::Route, "TARGETS" };
     ShapePicker picker;                                     // the shapes (13) or the styles (5)
-    ToggleIcon smoothPick, hostPick;                        // in the free cells of the picker's last row
+    LedToggle hostPick;                                     // under the picker: HOST (a LED toggle); the SMOOTH switch is the LED on the label of the SMOOTH knob (smoothTime), its Q member `smoothSwitch` (group SHAPE)
+    LedSwitchProxy smoothSwitch;
     MenuButton edit { "EDIT", MenuButton::Icon::None };
     // Q group RATE / RANDOM
     Stepper shape, style;
     RateControl rate;
     Knob rise { "RISE" }, smoothTime { "SMOOTH" };
     // Q group TIMING / TRIGGER
-    Stepper sync, mode;
+    Stepper sync, mode;                                     // `mode` (the trigger: six long names): a stepper with its list
+    LedList modeList;                                       // the trigger of a random LFO (two options): all visible
     Knob phase { "PHASE" }, delay { "DELAY" };
     // Q group MOTION
-    Stepper direction;
+    LedList direction;                                      // Forward / Reverse / Ping pong
     Knob swing { "SWING" }, stereo { "STEREO" };
-    ToggleIcon monoQ, stereoToggle;
+    LedToggle monoQ, stereoToggle;
     // Q group KEY
     NumberField keyTranspose { "TRANSPOSE", NumberField::Format::IntSigned }, keyTune { "TUNE", NumberField::Format::IntSigned };
     QGroup groups[kMaxGroups];
@@ -128,23 +146,27 @@ public:
     LfoFullScreen()
     {
         rate.rate.state.large = true;
+        rate.setTripDot (true);
         monoTop.state.icon = ToggleIcon::Icon::Generic; monoTop.setLabel ("MONO");
-        monoQ.state.icon = ToggleIcon::Icon::Generic; monoQ.setLabel ("MONO"); monoQ.state.showState = true; monoQ.state.knobLike = true;
-        stereoToggle.state.icon = ToggleIcon::Icon::Generic; stereoToggle.setLabel ("STEREO"); stereoToggle.state.showState = true;
-        smoothPick.state.icon = ToggleIcon::Icon::Generic; smoothPick.setLabel ("SMOOTH");
-        hostPick.state.icon = ToggleIcon::Icon::Generic; hostPick.setLabel ("HOST");
+        monoQ.setLabel ("MONO");
+        stereoToggle.setLabel ("STEREO");
+        smoothTime.state.led = true;   // one control: the smoothing time with the switch of the smoothing on its label
+        hostPick.setLabel ("HOST");
         shape.setCaption ("SHAPE"); shape.listable = true; shape.state.wrap = true;
         style.setCaption ("STYLE"); style.listable = true; style.state.wrap = true;
         sync.setCaption ("SYNC"); sync.listable = true; sync.state.wrap = true; sync.minWidth = 140;
         mode.setCaption ("MODE"); mode.listable = true; mode.state.wrap = true; mode.minWidth = 140;
-        direction.setCaption ("DIRECTION"); direction.listable = true; direction.state.wrap = true;
+        static const char* const dirNames[3] = { "Forward", "Reverse", "Ping pong" };
+        direction.setOptions (dirNames, 3); direction.setTitle ("DIRECTION"); direction.state.titleInLane = true;
+        modeList.setTitle ("MODE"); modeList.state.titleInLane = true;
+        syncSwitch.mode.setTitle ("SYNC"); syncSwitch.mode.state.titleInLane = true;
         keyTranspose.state.min = -60; keyTranspose.state.max = 36; keyTranspose.state.pxPerStep = 8; keyTranspose.state.defaultValue = -12;
         keyTune.state.min = -100; keyTune.state.max = 100; keyTune.state.pxPerStep = 3;
         picker.state.cols = kPickerCols;
-        addKid (close); addKid (bar); addKid (syncSwitch); addKid (monoTop); addKid (targets);
-        addKid (picker); addKid (smoothPick); addKid (hostPick); addKid (edit);
+        addKid (close); addKid (bar); addKid (syncSwitch.mode); addKid (monoTop); addKid (targets);
+        addKid (picker); addKid (hostPick); addKid (edit);
         addKid (style, false); addKid (rate); addKid (rise); addKid (smoothTime);
-        addKid (sync, false); addKid (mode); addKid (phase); addKid (delay);
+        addKid (sync, false); addKid (mode); addKid (modeList, false); addKid (phase); addKid (delay);
         addKid (direction); addKid (swing); addKid (stereo); addKid (monoQ, false); addKid (stereoToggle, false);
         addKid (keyTranspose); addKid (keyTune);
         configure (false);
@@ -156,63 +178,44 @@ public:
         random_ = random;
         picker.state.styles = random;
         picker.state.cols = random ? 2 : kPickerCols;
-        show (smoothPick, ! random); show (hostPick, ! random); show (edit, ! random); show (monoTop, false);
-        show (rise, ! random); show (smoothTime, ! random); show (style, random);
+        show (hostPick, ! random); show (edit, ! random); show (monoTop, false);
+        show (rise, ! random); show (smoothTime, ! random); show (style, false);   // the style grid IS the style control (a stepper beside it was the same control twice)
         show (phase, ! random); show (delay, ! random); show (direction, ! random); show (swing, ! random); show (stereo, ! random); show (stereoToggle, random);
-        show (mode, true);
-        show (shape, false); show (sync, false); show (monoQ, ! random);   // the SYNC stepper is gone: the HZ / BPM / KEY row of the top bar IS the sync control (and the Q member), a second one was the same control twice
-        for (QGroup& g : groups)
-        {
-            g.setFrameRect ({});
-            g.setFrameless (false);
-            for (int i = 0; i < 4; ++i)
-                g.set (i, nullptr);
-        }
-        nGroups_ = 0;
-        auto next = [&] (const char* name) -> QGroup& { setText (names_[nGroups_], sizeof names_[0], name); return groups[nGroups_++]; };
-        if (! random)
-        {
-            QGroup& r = next ("Rate");
-            r.set (0, &picker); r.set (1, &rate); r.set (2, &rise); r.set (3, &smoothTime);
-            r.setFrameless (true);   // the shape grid (Q 1) and the RATE block lie apart: one quad is marked by its four chips and the Q colour, not by a frame around everything between them
-            QGroup& t = next ("Timing");
-            t.set (0, &syncSwitch); t.set (1, &mode); t.set (2, &phase); t.set (3, &delay);
-            t.setFrameless (true);   // the HZ / BPM / KEY row is in the top bar, apart from the block: marked by its chips
-            QGroup& mo = next ("Motion");
-            mo.set (0, &direction); mo.set (1, &swing); mo.set (2, &stereo); mo.set (3, &monoQ);
-            keyGroup_ = nGroups_;
-            QGroup& k = next ("Key");
-            k.set (0, &keyTranspose); k.set (1, &keyTune);
-            QGroup& sh = next ("Shape");
-            sh.set (0, &smoothPick); sh.set (1, &hostPick);
-            sh.setFrameless (true);
-        }
-        else
-        {
-            QGroup& r = next ("Random");
-            r.set (0, &style); r.set (1, &rate); r.set (2, &syncSwitch); r.set (3, &stereoToggle);
-            r.setFrameless (true);   // the HZ / BPM / KEY row is in the top bar, apart from the block
-            QGroup& t = next ("Trigger");
-            t.set (0, &mode);
-            keyGroup_ = nGroups_;
-            QGroup& k = next ("Key");
-            k.set (0, &keyTranspose); k.set (1, &keyTune);
-        }
+        show (mode, ! random); show (modeList, random);
+        show (shape, false); show (sync, false); show (monoQ, ! random);   // the HZ / BPM / KEY list is the sync control (and the Q member) of TIMING / RANDOM
+        buildGroups();
         layout();
         active_ = -1;
         setActiveGroup (0);
     }
     bool random() const noexcept { return random_; }
-    /** The key follow sync: only then the KEY block is there (its place goes to the other blocks otherwise: nothing dim and idle on the page). */
+    /** The sync value of the parameter: the HZ / BPM / KEY list and the TRIP / DOT toggles show it. */
+    void setSync (int sync)
+    {
+        syncSwitch.setSync (sync);
+        rate.setSync (sync);
+    }
+    /** The key follow sync: the two numbers TRANSPOSE and TUNE (they set the rate) take the place of the RATE knob in the first block (the knob has nothing to say: it is not on the page, no dead control), as their own Q
+        group right after the first one; the Q groups are built again, the group that was active stays the active one (by its name). */
     void setKeyActive (bool on)
     {
         const bool changed = on != keyActive_;
         keyActive_ = on;
         show (keyTranspose, on); show (keyTune, on);
+        show (rate, ! on);
         keyTranspose.setEnabled (enabled_ && on); keyTune.setEnabled (enabled_ && on);
-        if (! on && active_ == keyGroup())
-            setActiveGroup (0);
-        if (changed && rect_.w > 0)
+        if (! changed)
+            return;
+        char was[sizeof names_[0]] = {};
+        if (active_ >= 0 && active_ < nGroups_)
+            setText (was, sizeof was, names_[active_]);
+        buildGroups();
+        int again = 0;
+        for (int i = 0; i < nGroups_; ++i)
+            if (std::strcmp (names_[i], was) == 0)
+                again = i;
+        setActiveGroup (again);
+        if (rect_.w > 0)
             layout();
     }
     bool keyActive() const noexcept { return keyActive_; }
@@ -236,17 +239,17 @@ public:
     Change touchDown (int x, int y, double nowMs) override
     {
         const Change c = Composite::touchDown (x, y, nowMs);
-        if (picker.rect().contains (x, y))
-            setActiveGroup (0);
-        else if (! random_ && (smoothPick.rect().contains (x, y) || hostPick.rect().contains (x, y)))
-            setActiveGroup (4);
-        else
-            for (int i = 0; i < nBlocks_; ++i)
-                if (blocks_[i].contains (x, y) && ! (i == keyGroup() && ! keyActive_))
-                {
-                    setActiveGroup (i);
-                    break;
-                }
+        int hit = -1;
+        for (int i = 0; i < nGroups_ && hit < 0; ++i)   // a member of a group: that group
+            for (int k = 0; k < QGroup::kSlots; ++k)
+                if (cap_ != nullptr && groups[i].member (k) == cap_)
+                    hit = i;
+        if (hit < 0)   // not a member: the block it is in
+            for (int g = 0; g < nGroups_ && hit < 0; ++g)
+                if (blockOfGroup_[g] >= 0 && blocks_[blockOfGroup_[g]].contains (x, y) && ! (g == keyGroup() && ! keyActive_))
+                    hit = g;
+        if (hit >= 0)
+            setActiveGroup (hit);
         return c;
     }
     void draw (gpu::SceneBuilder& sb) const override
@@ -273,6 +276,60 @@ public:
     int leaves (Component** out, int max) { return collectLeaves (out, 0, max); }
 
 protected:
+    /** The Q groups of the page in reading order (the blocks left to right, the members of a block top to bottom): the shape page RATE, [KEY], TIMING, MOTION, SHAPE; a random LFO RANDOM, [KEY], TRIGGER. The KEY group
+        (TRANSPOSE and TUNE, in the first block where the rate knob is not) is there in the key follow sync only. */
+    void buildGroups()
+    {
+        for (QGroup& g : groups)
+        {
+            g.setFrameRect ({});
+            g.setFrameless (false);
+            for (int i = 0; i < 4; ++i)
+                g.set (i, nullptr);
+        }
+        for (int& b : blockOfGroup_)
+            b = -1;
+        nGroups_ = 0;
+        keyGroup_ = -1;
+        auto next = [&] (const char* name, int block) -> QGroup& { setText (names_[nGroups_], sizeof names_[0], name); blockOfGroup_[nGroups_] = block; return groups[nGroups_++]; };
+        auto key = [&] (int block)
+        {
+            if (! keyActive_)
+                return;
+            keyGroup_ = nGroups_;
+            QGroup& k = next ("Key", block);
+            k.set (0, &keyTranspose); k.set (1, &keyTune);
+            k.setFrameless (true);   // two groups in one block: the chips mark them
+        };
+        if (! random_)
+        {
+            QGroup& r = next ("Rate", 0);
+            r.set (0, &picker); r.set (1, keyActive_ ? nullptr : static_cast<Component*> (&rate)); r.set (2, &rise); r.set (3, &smoothTime);
+            r.setFrameless (true);   // the shape grid (Q 1) and the RATE block lie apart: one quad is marked by its four chips and the Q colour, not by a frame around everything between them
+            key (0);
+            QGroup& t = next ("Timing", 1);
+            t.set (0, &syncSwitch.mode); t.set (1, &phase); t.set (2, &delay); t.set (3, &mode);   // reading order of the block: the list and the knob over it, the stepper under
+            QGroup& mo = next ("Motion", 2);
+            mo.set (0, &direction); mo.set (1, &swing); mo.set (2, &stereo); mo.set (3, &monoQ);
+            QGroup& sh = next ("Shape", -1);
+            sh.set (0, &hostPick); sh.set (1, &smoothSwitch);
+            sh.setFrameless (true);
+        }
+        else
+        {
+            QGroup& r = next ("Random", 0);
+            r.set (0, &picker); r.set (1, keyActive_ ? nullptr : static_cast<Component*> (&rate)); r.set (2, &syncSwitch.mode); r.set (3, &stereoToggle);
+            r.setFrameless (true);   // the style grid (Q 1) lies apart from the block: marked by its chips
+            key (0);
+            QGroup& t = next ("Trigger", 0);
+            t.set (0, &modeList);
+            t.setFrameless (true);   // two groups in one block: the chips mark them
+        }
+        for (int i = 0; i < kMaxGroups; ++i)
+            groups[i].setActive (false);
+        if (rect_.w > 0)
+            layout();
+    }
     void syncKids() override
     {
         Composite::syncKids();
@@ -280,36 +337,33 @@ protected:
     }
     void layout() override
     {
-        const int W = rect_.w, m = 8;
-        const Rect top { rect_.x + m, rect_.y + 2 + kQLane, W - 2 * m, 56 };   // the lane above holds the Q chip of the HZ / BPM / KEY row
-        Rect r[5];
-        const int fixed[5] = { pageMode_ ? 0 : 84, (InstanceBar::kLfoCells + InstanceBar::kRndCells) * InstanceBar::kCellW + kGap, 3 * 56 + 2 * 72 + 2 * kGap, 0, 0 }, weight[5] = { 0, 0, 0, 0, 1 };
-        layoutRow (top, fixed, weight, 5, kGap, r);
-        close.place ({ r[0].x, top.y, r[0].w, 56 });
-        bar.place ({ r[1].x, top.y, r[1].w, 56 });
-        syncSwitch.place ({ r[2].x, top.y, r[2].w, 56 });
+        const int W = rect_.w, m = 8, g = kGap;
+        const Rect top { rect_.x + m, rect_.y + 2 + kQLane, W - 2 * m, 56 };   // the lane above holds nothing now (HZ / BPM / KEY moved into the TIMING / RANDOM block); the bar keeps the place
+        const int closeW = pageMode_ ? 0 : 84, barW = (InstanceBar::kLfoCells + InstanceBar::kRndCells) * InstanceBar::kCellW + g;
+        close.place ({ top.x, top.y, closeW, 56 });
+        bar.place ({ top.x + (closeW > 0 ? closeW + g : 0), top.y, barW, 56 });
+        syncSwitch.mode.place ({});   // placed by the block (below)
         monoTop.place ({});
         sync.place ({});   // gone from the page (see configure)
-        // the open-the-editor button at the top of the button column (the right end of the top bar, over the shape picker), for every shape; the TARGETS button leaves it room
-        const int editW = random_ ? 0 : 104;
-        edit.place (random_ ? Rect {} : Rect { r[4].right() - editW, top.y, editW, 56 });
-        targets.place ({ r[4].x, top.y, std::min (std::max (0, r[4].w - (random_ ? 0 : editW + kGap)), 200), 56 });
+        // the open-the-editor button at the right end of the top bar, over the shape picker, for every shape; the TARGETS button at the very end
+        const int editW = random_ ? 0 : 104, targetsW = 200;
+        targets.place ({ top.right() - targetsW, top.y, targetsW, 56 });
+        edit.place (random_ ? Rect {} : Rect { top.right() - targetsW - g - editW, top.y, editW, 56 });
         const int bandH = random_ ? kBandRandomH : kBandH;
         const int midY = top.bottom() + 15, bandY = rect_.bottom() - m - bandH, midH = std::max (0, bandY - m - midY);
         const int colW = std::min (random_ ? 232 : 304, W / 4);
         display_ = { rect_.x + m, midY, W - 3 * m - colW, midH };
-        // the picker: three rows of cells (the 13 shapes in five columns; the five styles in two columns fill the height); under it, one row of SMOOTH and HOST; EDIT on the corner of the display
+        // the picker: three rows of cells (the 13 shapes in five columns; the five styles in two columns fill the height); under it, HOST
         const int rowsP = random_ ? 1 : 3, pickerH = random_ ? midH : rowsP * 56;
         picker.place ({ rect_.right() - m - colW, midY, colW, pickerH });
         {
-            const int by = midY + pickerH + 15, bh = 56, hw = (colW - kGap) / 2;
-            smoothPick.place ({ picker.rect().x, by, hw, bh });
-            hostPick.place ({ picker.rect().x + hw + kGap, by, colW - hw - kGap, bh });
+            const int by = midY + pickerH + 15, bh = 56;
+            hostPick.place ({ picker.rect().x, by, colW, bh });
         }
         // the blocks of the bottom band
-        const int n = (random_ ? 3 : 4) - (keyActive_ ? 0 : 1);
+        const int n = random_ ? 1 : 3;   // the key follow has no block of its own: its two numbers stand in the RATE block
         nBlocks_ = n;
-        static const int wShape[4] = { 3, 3, 3, 2 }, wRandom[3] = { 4, 2, 2 };   // without the KEY block the others take its place
+        static const int wShape[3] = { 3, 4, 3 }, wRandom[1] = { 1 };
         const int* wt = random_ ? wRandom : wShape;
         int sum = 0;
         for (int i = 0; i < n; ++i) sum += wt[i];
@@ -322,7 +376,7 @@ protected:
             blocks_[i] = { x, bandY, right - x, bandH };
             x = right + m;
         }
-        const int pad = 6, titleH = 22, rowH = 56;
+        const int pad = 6, titleH = 22, th = led::kRowH;
         auto inner = [&] (int i) { return Rect { blocks_[i].x + pad, blocks_[i].y + titleH + kQLane, blocks_[i].w - 2 * pad, blocks_[i].h - titleH - kQLane - pad }; };
         auto stack2 = [&] (const Rect& cell, Component& a, Component& b)   // two fields one above the other, as tall as the block lets them be (at most 96)
         {
@@ -332,83 +386,84 @@ protected:
         };
         if (! random_)
         {
-            // one size for the medium knobs of the page (RISE, SMOOTH, PHASE, DELAY, SWING, STEREO): a cell of kKnobH pixels, the dial at the left with its name and value beside it when the cell is wide enough
-            // (172 px, the minimum of a side knob), over the texts when it is not (the KEY BLOCK narrows the others)
+            // one size for the medium knobs of the page (RISE, SMOOTH, PHASE, DELAY, SWING, STEREO): the dial at the left with its name and value beside it when the cell is wide enough (172 px, the minimum of a side knob),
+            // over the texts when it is not (three knobs in a row of the MOTION block)
             const int kKnobH = 114;
             auto medium = [&] (Knob& k, const Rect& cell) { k.state.side = cell.w >= 172; k.place (cell); };
-            auto mediumPair = [&] (const Rect& cell, Knob& a, Knob& b)
-            {
-                const int cw = (cell.w - kGap) / 2;
-                medium (a, { cell.x, cell.y, cw, cell.h });
-                medium (b, { cell.x + cw + kGap, cell.y, cell.w - cw - kGap, cell.h });
-            };
 
-            // RATE: the RATE knob is large (the whole height of the block, with its value) on the left; RISE and SMOOTH one above the other on the right, medium
+            // RATE: the RATE knob is large (the whole height of the block, with its value) on the left; RISE and SMOOTH one above the other on the right, medium. In the BPM mode the cell of the rate holds the division
+            // and TRIP / DOT under it
             Rect in0 = inner (0);
-            const int rw = in0.w * 45 / 100;
+            const int rw = std::min (in0.w * 45 / 100, in0.w - 172 - kGap);
             rate.place ({ in0.x, in0.y, rw, in0.h });
+            if (keyActive_)   // the key follow: the two numbers that set the rate stand where the rate knob stands
+                stack2 ({ in0.x, in0.y, rw, in0.h }, keyTranspose, keyTune);
             const int sx = in0.x + rw + kGap, sw = in0.w - rw - kGap;
             medium (rise, { sx, in0.y, sw, kKnobH });
             medium (smoothTime, { sx, in0.bottom() - kKnobH, sw, kKnobH });
+            smoothSwitch.follow (smoothTime);
 
-            // TIMING: two steppers at the top (sync, mode), two medium knobs at the bottom (phase, delay)
+            // TIMING: at the left HZ / BPM / KEY (a LED list of three rows) with the trigger MODE (a stepper: six long names) under it; at the right PHASE over DELAY (medium knobs: the same size as RISE and SMOOTH).
+            // The chips read top to bottom: SYNC, PHASE, DELAY, MODE
             {
                 const Rect in = inner (1);
-                const int topH = std::min (96, in.h - kKnobH - kQLane);
-                mode.place ({ in.x, in.y, in.w, topH });   // the sync is the HZ / BPM / KEY row above; MODE takes the whole width
-                mediumPair ({ in.x, in.bottom() - kKnobH, in.w, kKnobH }, phase, delay);
+                const int lw = 150, kx = in.x + lw + g, kw = in.w - lw - g;
+                syncSwitch.mode.place ({ in.x, in.y, lw, 3 * th });
+                mode.place ({ in.x, in.y + 3 * th + kQLane, lw, in.h - 3 * th - kQLane });
+                medium (phase, { kx, in.y, kw, kKnobH });
+                medium (delay, { kx, in.bottom() - kKnobH, kw, kKnobH });
             }
 
-            // MOTION: stepper at the top (direction), three controls at the bottom (swing, stereo, monoQ)
+            // MOTION: at the left the direction (a LED list of three rows) with MONO under it, at the right SWING over STEREO (medium knobs). The chips read top to bottom: DIRECTION, SWING, STEREO, MONO
             {
                 const Rect in = inner (2);
-                const int topH = std::min (96, in.h - kKnobH - kQLane);
-                direction.place ({ in.x, in.y, in.w, topH });
-                const Rect bot { in.x, in.bottom() - kKnobH, in.w, kKnobH };
-                const int cw = (bot.w - 2 * kGap) / 3;
-                medium (swing, { bot.x, bot.y, cw, bot.h });
-                medium (stereo, { bot.x + cw + kGap, bot.y, cw, bot.h });
-                monoQ.place ({ bot.x + 2 * (cw + kGap), bot.y, bot.w - 2 * (cw + kGap), bot.h });
+                const int lw = 120, kx = in.x + lw + g, kw = in.w - lw - g;
+                direction.place ({ in.x, in.y, lw, 3 * th });
+                medium (swing, { kx, in.y, kw, kKnobH });
+                medium (stereo, { kx, in.bottom() - kKnobH, kw, kKnobH });
+                monoQ.place ({ in.x, in.y + 3 * th + kQLane, lw, in.h - 3 * th - kQLane });
             }
 
-            if (keyActive_)
-                stack2 (inner (3), keyTranspose, keyTune);
         }
         else
         {
-            // RANDOM: the RATE knob is large (the whole height of the block) on the left, as on the LFO page; STYLE and SYNC side by side and STEREO under them on the right
+            // RANDOM: the RATE knob is large (the whole height of the block) on the left, as on the LFO page; at its right in ONE row HZ / BPM / KEY (a LED list of three, in one row), STEREO and the trigger (a LED list of two);
+            // the rectangles are as tall as two rows less one (a list keeps its options in one row there) and as wide as the block lets them be, so that the chips of the four members stand on one line
             Rect in = inner (0);
-            const int rw = std::min (220, in.w * 28 / 100);
+            const int rw = std::min (220, in.w * 28 / 100), lh = 2 * th - 8;
             rate.place ({ in.x, in.y, rw, in.h });
-            const Rect right { in.x + rw + kGap, in.y, in.w - rw - kGap, in.h };
-            style.place ({ right.x, right.y, right.w, rowH });
-            stereoToggle.place ({ right.x, right.y + rowH + kQLane, right.w, std::min (rowH, std::max (0, right.h - rowH - kQLane)) });
-            in = inner (1);
-            mode.place ({ in.x, in.y + (in.h - rowH) / 2, in.w, rowH });   // the only control of the block: in the middle of it
             if (keyActive_)
-                stack2 (inner (2), keyTranspose, keyTune);
+                stack2 ({ in.x, in.y, rw, in.h }, keyTranspose, keyTune);
+            const int x0 = in.x + rw + kGap, rest = in.right() - x0 - 2 * kGap;
+            const int syncW = std::max (3 * 84, rest * 40 / 100), stereoW = std::max (112, rest * 18 / 100);
+            syncSwitch.mode.place ({ x0, in.y, syncW, lh });
+            stereoToggle.place ({ x0 + syncW + kGap, in.y, stereoW, lh });
+            modeList.place ({ x0 + syncW + stereoW + 2 * kGap, in.y, in.right() - (x0 + syncW + stereoW + 2 * kGap), lh });
         }
         for (int i = 0; i < kMaxGroups; ++i)
-            groups[i].setFrameRect (i < nBlocks_ && ! groups[i].frameless() ? blocks_[i] : Rect {});
+            groups[i].setFrameRect (i < nGroups_ && blockOfGroup_[i] >= 0 && blockOfGroup_[i] < nBlocks_ && ! groups[i].frameless() ? blocks_[blockOfGroup_[i]] : Rect {});
     }
     void drawUnder (Pen& p) const override
     {
         p.block (display_);
+        const int activeBlock = active_ >= 0 && active_ < nGroups_ ? blockOfGroup_[active_] : -1;
         for (int i = 0; i < nBlocks_; ++i)
-            p.block (blocks_[i], i == active_);
+            p.block (blocks_[i], i == activeBlock);
     }
     void drawExtra (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        static const char* const kShape[4] = { "RATE", "TIMING", "MOTION", "KEY FOLLOW" }, * const kRandom[3] = { "RANDOM", "TRIGGER", "KEY FOLLOW" };
+        static const char* const kShape[3] = { "RATE", "TIMING", "MOTION" }, * const kRandom[1] = { "RANDOM" };
         for (int i = 0; i < nBlocks_; ++i)
         {
-            const bool dim = false;
-            p.textLeft ({ blocks_[i].x + 10, blocks_[i].y + 4, std::max (0, blocks_[i].w - 20), 18 }, random_ ? kRandom[i] : kShape[i], T.fLabel - 2.0f, p.c (T.textDim, dim ? 110 : 255), T.fMin);
+            const char* title = random_ ? kRandom[i] : kShape[i];
+            if (i == 0 && keyActive_)
+                title = random_ ? "RANDOM - RATE FOLLOWS THE KEY" : "RATE - FOLLOWS THE KEY";
+            p.textLeft ({ blocks_[i].x + 10, blocks_[i].y + 4, std::max (0, blocks_[i].w - 20), 18 }, title, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
         }
     }
     Rect display_, blocks_[4];
-    int nBlocks_ = 4, nGroups_ = 0, active_ = -1, keyGroup_ = -1;
+    int nBlocks_ = 3, nGroups_ = 0, active_ = -1, keyGroup_ = -1, blockOfGroup_[kMaxGroups] = {};
     bool random_ = false, keyActive_ = false, pageMode_ = false;
     char names_[kMaxGroups][16] = {};
 };

@@ -199,6 +199,29 @@ public:
                 }
                 break;
             }
+            case synthyboy::kNumFxInstanceTypes:   // splitter Low / High: the two bands side by side
+            case synthyboy::kNumFxInstanceTypes + 1:   // Low / Mid / High
+            {
+                const int zones = type == synthyboy::kNumFxInstanceTypes ? 2 : 3;
+                const int zw = (in.w - (zones - 1) * 8) / zones;
+                for (int z = 0; z < zones; ++z)
+                {
+                    const Rect r { in.x + z * (zw + 8), in.y + in.h / 4, zw, in.h / 2 };
+                    const uint32_t col = z == 0 ? main : (z == zones - 1 ? T.flow[3] : second);
+                    p.rrect (r, 5.0f, p.c (col, 70));
+                    p.rrect (r, 5.0f, p.c (col, 255), 1.4f);
+                }
+                break;
+            }
+            case synthyboy::kNumFxInstanceTypes + 2:   // splitter Mid / Side: two lanes
+            {
+                const Rect a { in.x, in.y + in.h / 8, in.w, in.h / 3 }, b { in.x, in.y + in.h * 9 / 16, in.w, in.h / 3 };
+                p.rrect (a, 5.0f, p.c (main, 70));
+                p.rrect (a, 5.0f, p.c (main, 255), 1.4f);
+                p.rrect (b, 5.0f, p.c (T.flow[3], 70));
+                p.rrect (b, 5.0f, p.c (T.flow[3], 255), 1.4f);
+                break;
+            }
             default:   // a type this build does not know: a flat line
                 curve (main, w, 255, [] (float) { return 0.5f; });
                 break;

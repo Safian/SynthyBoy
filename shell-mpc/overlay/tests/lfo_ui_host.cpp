@@ -233,10 +233,10 @@ void testWrites()
     {
         r.stack.closeAll();
         r.refresh();
-        const ui::PictogramSelector& mc = r.ui.compact().rate.modeCells;
-        r.tap (mc.cell (1).x + 4, mc.cell (1).y + 20);
+        const ui::LedList& mc = r.ui.compact().rate.modeCells;
+        r.tap (mc.rowRect (1).x + 20, mc.rowRect (1).y + 20);
         check (r.inst.get ("lfo1.sync") == 1.0f && r.ui.compact().rate.mode() == ui::lfo::SyncMode::Bpm && r.ui.compact().rate.primary() == &r.ui.compact().rate.division, "the compact view: the BPM cell makes the rate a division");
-        r.tap (mc.cell (0).x + 4, mc.cell (0).y + 20);
+        r.tap (mc.rowRect (0).x + 20, mc.rowRect (0).y + 20);
         check (r.inst.get ("lfo1.sync") == 0.0f, "the compact view: the HZ cell");
     }
     // the switches of the sync
@@ -246,15 +246,17 @@ void testWrites()
     R.refresh();
     R.openFull();
     const ui::SyncSwitch& sw = R.ui.full().syncSwitch;
-    R.tap (sw.mode.cell (1).x + 4, sw.mode.cell (1).y + 20);
+    const ui::RateControl& rc = R.ui.full().rate;
+    R.tap (sw.mode.rowRect (1).x + 20, sw.mode.rowRect (1).y + 20);
     check (R.inst.get ("lfo1.sync") == 1.0f, "the BPM cell: sync = tempo");
-    R.tapC (sw.dot);
+    check (rc.trip.rect().h >= 56 && rc.dot.rect().h >= 56 && ! rc.trip.rect().overlaps (rc.division.rect()), "in the tempo mode TRIP and DOT stand under the division (LED toggles of 56 px)");
+    R.tapC (rc.dot);
     check (R.inst.get ("lfo1.sync") == 2.0f, "DOT: tempo dotted");
-    R.tapC (sw.trip);
+    R.tapC (rc.trip);
     check (R.inst.get ("lfo1.sync") == 3.0f, "TRIP: tempo triplet (it takes DOT off)");
-    R.tap (sw.mode.cell (2).x + 4, sw.mode.cell (2).y + 20);
+    R.tap (sw.mode.rowRect (2).x + 20, sw.mode.rowRect (2).y + 20);
     check (R.inst.get ("lfo1.sync") == 4.0f && R.ui.full().keyActive() && R.ui.full().keyTranspose.enabled(), "the KEY cell: key follow, the KEY block works");
-    R.tap (sw.mode.cell (0).x + 4, sw.mode.cell (0).y + 20);
+    R.tap (sw.mode.rowRect (0).x + 20, sw.mode.rowRect (0).y + 20);
     check (R.inst.get ("lfo1.sync") == 0.0f && ! R.ui.full().keyActive() && ! R.ui.full().keyTranspose.enabled(), "the HZ cell: free; the KEY block is gone");
     // the shape picker of the full screen
     const ui::ShapePicker& pk = R.ui.full().picker;
@@ -268,8 +270,23 @@ void testWrites()
     R.tapC (R.ui.full().hostPick);
     check (R.inst.get ("lfo1.host") == 1.0f, "HOST");
     const float smooth = R.inst.get ("lfo1.smooth");
-    R.tapC (R.ui.full().smoothPick);
-    check (R.inst.get ("lfo1.smooth") != smooth, "SMOOTH");
+    {   // SMOOTH is ONE control: the time knob with the switch as the LED on its label (a tap on the label / the LED switches it, off = the knob is dim and takes only the switch)
+        ui::Knob& k = R.ui.full().smoothTime;
+        const ui::Rect z = k.ledHit();
+        check (k.state.led && k.state.ledOn == (smooth >= 0.5f), "the SMOOTH knob shows the state of the switch on its LED (" + std::to_string (smooth) + ")");
+        R.tap (z.x + z.w - 10, z.y + z.h / 2);   // on the text column, off the dial
+        check (R.inst.get ("lfo1.smooth") != smooth && k.state.ledOn == (R.inst.get ("lfo1.smooth") >= 0.5f), "a tap on the label of SMOOTH switches the smoothing");
+        if (R.inst.get ("lfo1.smooth") >= 0.5f)
+            R.tap (z.x + z.w - 10, z.y + z.h / 2);
+        check (R.inst.get ("lfo1.smooth") < 0.5f && ! k.state.ledOn, "the smoothing is off: the LED is unlit");
+        const float t0 = R.inst.get ("lfo1.smooth_time");
+        R.drag (k.rect().x + 30, k.rect().y + k.rect().h / 2, k.rect().x + 30, k.rect().y + k.rect().h / 2 - 60, true);
+        check (R.inst.get ("lfo1.smooth_time") == t0, "with the smoothing off a drag on the dial changes nothing (the knob is dim)");
+        R.tap (z.x + z.w - 10, z.y + z.h / 2);
+        check (R.inst.get ("lfo1.smooth") >= 0.5f && k.state.ledOn, "a tap on the label switches the smoothing on again");
+        R.drag (k.rect().x + 30, k.rect().y + k.rect().h / 2, k.rect().x + 30, k.rect().y + k.rect().h / 2 - 60, true);
+        check (R.inst.get ("lfo1.smooth_time") != t0, "and the dial sets the time (" + std::to_string (R.inst.get ("lfo1.smooth_time")) + ")");
+    }
 }
 
 void testFullScreen()
@@ -289,7 +306,7 @@ void testFullScreen()
         ui::Component* leaves[160];
         const int nl = r.ui.full().collectLeaves (leaves, 0, 160);
         auto has = [&] (const ui::Component* c) { for (int i = 0; i < nl; ++i) if (leaves[i] == c) return true; return false; };
-        check (! has (&r.ui.full().shape) && ! has (&r.ui.full().sync) && has (&r.ui.full().monoQ) && ! has (&r.ui.full().monoTop) && r.ui.full().groups[1].member (0) == &r.ui.full().syncSwitch, "no SHAPE stepper, no SYNC stepper (the HZ / BPM / KEY row is the Timing group's Q1), MONO in Motion");
+        check (! has (&r.ui.full().shape) && ! has (&r.ui.full().sync) && has (&r.ui.full().monoQ) && ! has (&r.ui.full().monoTop) && r.ui.full().groups[1].member (0) == &r.ui.full().syncSwitch.mode, "no SHAPE stepper, no SYNC stepper (the HZ / BPM / KEY row is the Timing group's Q1), MONO in Motion");
     }
     r.tapC (r.ui.full().swing);
     check (r.ui.activeQ() == 2 && r.inst.q[0] == paramIdx ("lfo1.direction") && r.inst.q[1] == paramIdx ("lfo1.swing") && r.inst.q[2] == paramIdx ("lfo1.stereo") && r.inst.q[3] == paramIdx ("lfo1.mono"),
@@ -298,8 +315,8 @@ void testFullScreen()
     check (r.stack.depth() == 2 && r.ui.list().state.count == 6, "MODE: the list of the six sync types opens");
     r.stack.back();
     r.refresh();
-    check (r.ui.activeQ() == 1 && r.inst.q[0] == paramIdx ("lfo1.sync") && r.inst.q[1] == paramIdx ("lfo1.sync_type") && r.inst.q[2] == paramIdx ("lfo1.phase") && r.inst.q[3] == paramIdx ("lfo1.delay"),
-           "the TIMING group (sync, mode, phase, delay)");
+    check (r.ui.activeQ() == 1 && r.inst.q[0] == paramIdx ("lfo1.sync") && r.inst.q[1] == paramIdx ("lfo1.phase") && r.inst.q[2] == paramIdx ("lfo1.delay") && r.inst.q[3] == paramIdx ("lfo1.sync_type"),
+           "the TIMING group (sync, phase, delay, mode: the reading order of the block)");
     r.tapC (r.ui.full().close);
     check (r.stack.isMain() && ! r.inst.fullOpen, "the close button: main again");
     r.openFull();
@@ -320,7 +337,7 @@ void testFullScreen()
     r.tap (bar.lfoCells.cell (6).x + 4, bar.lfoCells.cell (6).y + 20);
     check (r.inst.sel[2] == 7 && r.ui.selection() == 7 && bar.lfoCells.state.index == 6, "the seventh cell: LFO 7 (no pages: all ten LFOs are in the bar)");
     r.tap (bar.rndCells.cell (1).x + 4, bar.rndCells.cell (1).y + 20);
-    check (r.ui.random() && r.ui.selection() == 2 && r.ui.full().random() && r.ui.full().numGroups() == 3, "RND 2: the random LFO, the full screen of the random LFO");
+    check (r.ui.random() && r.ui.selection() == 2 && r.ui.full().random() && r.ui.full().numGroups() == 2, "RND 2: the random LFO, the full screen of the random LFO");
     check (r.inst.q[0] == paramIdx ("rlfo2.style") && r.inst.q[1] == paramIdx ("rlfo2.rate") && r.inst.q[2] == paramIdx ("rlfo2.sync") && r.inst.q[3] == paramIdx ("rlfo2.stereo"), "random full screen: the RANDOM group");
     r.tap (r.ui.full().picker.cell (3).x + 10, r.ui.full().picker.cell (3).y + 10);
     check (r.inst.get ("rlfo2.style") == 3.0f, "the style picker: Lorenz");
@@ -460,6 +477,59 @@ void testTargets()
     r.centre (r.ui.compact().rate.rate, kx, ky);
     r.tap (kx, ky, 700);
     check (r.stack.depth() == 2 && r.ui.topPage() == LfoUi::kPageMods && r.ui.modsPage().numRows() == 1, "a long press on RATE: the modulations of the control (the page of the matrix, 1 row)");
+    // a control nothing modulates: the page is the board of every source, a tap on a chip makes the modulation
+    Rig q;
+    q.refresh();
+    q.stack.closeAll();
+    q.refresh();
+    q.centre (q.ui.compact().rate.rate, kx, ky);
+    q.tap (kx, ky, 700);
+    ui::ModulationsPage& mp = q.ui.modsPage();
+    check (q.ui.topPage() == LfoUi::kPageMods && mp.numRows() == 0 && mp.boardShown() && mp.board.numSources() == static_cast<int> (synthyboy::modSourceCount()), "a long press on RATE with no modulation: the board of every source");
+    const ui::Rect chip = mp.board.chipRectOfId (uibind::envSource (2));
+    q.tap (chip.x + chip.w / 2, chip.y + chip.h / 2);
+    int found = 0;
+    for (int sl = 0; sl < synthyboy::kNumModSlots; ++sl)
+        found += std::lround (q.inst.get (synthyboy::paramTable()[synthyboy::modSlotParams (sl).source].key)) == uibind::envSource (2);
+    q.refresh();
+    check (found == 1 && mp.numRows() == 1 && ! mp.boardShown(), "a tap on the ENV 2 chip makes the modulation of the RATE: one slot, one row, the board is gone");
+}
+
+/** The key follow sync (point 50 of the whole-UI review): the rate depends on the note, so the display has no time to smooth in: it shows the SHAPE, one clean cycle from the floor at full amplitude, with the smoothing on and off alike. */
+void testKeyFollowCurve()
+{
+    Rig r;
+    r.refresh();
+    r.key ("lfo1.sync", 4.0f);
+    r.key ("lfo1.shape", 0.0f);
+    r.key ("lfo1.phase", 0.0f);
+    r.key ("lfo1.smooth", 1.0f);
+    r.key ("lfo1.smooth_time", 5.0f);
+    r.now += 200.0;
+    r.refresh();
+    const ui::lfodisplay::Data& d = r.ui.displayData();
+    std::vector<float> smoothOn (d.y, d.y + d.n);
+    float lo = 1, hi = -1;
+    for (float y : smoothOn) { lo = std::min (lo, y); hi = std::max (hi, y); }
+    check (lo < -0.97f && hi > 0.97f, "key follow, SMOOTH on: the sine swings the whole height, -1 .. 1 (" + std::to_string (lo) + " .. " + std::to_string (hi) + ")");
+    check (smoothOn[0] < -0.97f && smoothOn[smoothOn.size() - 1] < -0.97f, "key follow, SMOOTH on: one clean cycle from the floor to the floor (" + std::to_string (smoothOn[0]) + " .. " + std::to_string (smoothOn[smoothOn.size() - 1]) + ")");
+    r.key ("lfo1.smooth", 0.0f);
+    r.now += 200.0;
+    r.refresh();
+    float diff = 0.0f;
+    for (int i = 0; i < d.n; ++i)
+        diff = std::max (diff, std::fabs (d.y[i] - smoothOn[static_cast<size_t> (i)]));
+    check (diff < 1.0e-6f, "key follow: the picture is the same with SMOOTH on and off (it shows the shape; " + std::to_string (diff) + ")");
+    // in the free sync the smoothing is in the picture (a fast LFO is rounded by it)
+    r.key ("lfo1.sync", 0.0f);
+    r.key ("lfo1.rate", 200.0f);
+    r.key ("lfo1.smooth", 1.0f);
+    r.key ("lfo1.smooth_time", 5.0f);
+    r.now += 200.0;
+    r.refresh();
+    float lo2 = 1, hi2 = -1;
+    for (int i = 0; i < d.n; ++i) { lo2 = std::min (lo2, d.y[i]); hi2 = std::max (hi2, d.y[i]); }
+    check (hi2 - lo2 < 1.9f, "free sync, a fast rate with SMOOTH: the smoothing is still drawn (" + std::to_string (lo2) + " .. " + std::to_string (hi2) + ")");
 }
 
 void testDisplay()
@@ -748,6 +818,7 @@ int main()
     testEditor();
     testTargets();
     testDisplay();
+    testKeyFollowCurve();
     testTouchAndDraw();
     std::printf ("%s: %d failed\n", uit::g_fails ? "FAIL" : "PASS", uit::g_fails);
     return uit::g_fails ? 1 : 0;

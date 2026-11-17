@@ -13,6 +13,8 @@
 #include "base.h"
 #include "composite.h"
 #include "core.h"
+#include "led_list.h"
+#include "led_toggle.h"
 #include "qgroup.h"
 #include "theme.h"
 
@@ -250,7 +252,7 @@ private:
 };
 
 // ===============================================================================================================================
-/** The peak meters of the output (what leaves the engine, 0 = -60 dB .. 1 = full scale) with the colours of a level (green, yellow, red), a dB scale between the two bars (0, -6, -12, -24, -48) and a peak hold
+/** The peak meters of the output (what leaves the engine, 0 = -60 dB .. 1 = full scale) in the ramp of the library (cyan to magenta, red when clipping), a dB scale in a column of its own at the left (0, -6, -12, -24, -48) and a peak hold
     line that the owner lets fall slowly. The owner gives each bar its level (the engine measures the larger of the two channels: both bars show it). Without a signal: a faint base line and the scale. */
 class PeakMeterDisplay : public Component
 {
@@ -278,23 +280,23 @@ protected:
         p.rrect (rect_, T.rControl, p.c (T.panel1, 200));
         p.rrect (rect_, T.rControl, p.c (T.keyline, 160), 1.0f);
 
-        const int m = 4, scaleW = 28;
-        const int barW = std::max (6, (rect_.w - 2 * m - scaleW) / 2);
+        // the scale has a column of its own at the left (the numbers right aligned, the ticks touching the bar edge); the two bars stand side by side to the right of it
+        const int m = 4, scaleW = 34, barGap = 6;
+        const int barW = std::max (6, (rect_.w - 2 * m - scaleW - barGap) / 2);
         const int barH = rect_.h - 2 * m - 22;
         const int barY = rect_.y + m;
-        const Rect lr { rect_.x + m, barY, barW, barH };
-        const Rect rr { rect_.x + m + barW + scaleW, barY, barW, barH };
+        const Rect lr { rect_.x + m + scaleW, barY, barW, barH };
+        const Rect rr { lr.right() + barGap, barY, barW, barH };
         drawBar (p, lr, peakL, holdL);
         drawBar (p, rr, peakR, holdR);
 
-        // the scale between the bars: a mark and a number for 0, -6, -12, -24, -48 dB (0 = -60 dB .. 1 = full scale)
+        // the scale: a mark and a number for 0, -6, -12, -24, -48 dB (0 = -60 dB .. 1 = full scale)
         static const struct { float pos; const char* name; } kMarks[5] = { { 1.0f, "0" }, { 0.9f, "-6" }, { 0.8f, "-12" }, { 0.6f, "-24" }, { 0.2f, "-48" } };
         for (const auto& mk : kMarks)
         {
             const int y = lr.bottom() - static_cast<int> (std::lround (mk.pos * static_cast<float> (lr.h)));
-            p.line (static_cast<float> (lr.right()), static_cast<float> (y), static_cast<float> (lr.right() + 3), static_cast<float> (y), 1.0f, p.c (T.textDim, 200));
-            p.line (static_cast<float> (rr.x - 3), static_cast<float> (y), static_cast<float> (rr.x), static_cast<float> (y), 1.0f, p.c (T.textDim, 200));
-            p.textCentered ({ lr.right() + 2, std::min (std::max (y - 7, barY), lr.bottom() - 14), scaleW - 4, 14 }, mk.name, T.fSmall, p.c (T.textFaint, 255), T.fMin);
+            p.line (static_cast<float> (lr.x - 4), static_cast<float> (y), static_cast<float> (lr.x), static_cast<float> (y), 1.0f, p.c (T.textDim, 200));
+            p.textRight ({ rect_.x + m, std::min (std::max (y - 7, barY), lr.bottom() - 14), scaleW - 7, 14 }, mk.name, T.fSmall, p.c (T.textFaint, 255), T.fMin);
         }
 
         // the names of the bars under them
@@ -313,9 +315,11 @@ private:
         {
             const int fillH = static_cast<int> (std::lround (std::min (1.0f, norm) * r.h));
             const int fillY = r.bottom() - fillH;
-            const uint32_t topCol = norm > 1.0f ? T.negative : (norm > 0.75f ? T.inst[0] : T.inst[4]);
-            p.paintY2 (static_cast<float> (fillY), static_cast<float> (r.bottom()), topCol, T.inst[4], 255);
-            p.rect (r.x + 1, fillY, r.right() - 1, r.bottom(), p.c (colour::rgba (topCol, 255)));
+            // the ramp of the library (cyan at the bottom to magenta at the top, as the mixer's meters); red only when it clips (the yellow is the Q colour and never means "hot")
+            const uint32_t topCol = norm > 1.0f ? T.negative : T.flow[3];
+            const uint32_t ramp[4] = { topCol, T.flow[2], T.flow[1], T.flow[0] };
+            p.paintY (static_cast<float> (r.y), static_cast<float> (r.bottom()), ramp, 240);
+            p.line (static_cast<float> (r.x) + static_cast<float> (r.w) * 0.5f, static_cast<float> (fillY), static_cast<float> (r.x) + static_cast<float> (r.w) * 0.5f, static_cast<float> (r.bottom()), static_cast<float> (r.w - 2), p.c (topCol, 240));   // a thick line takes the paint (a rect does not, in either renderer)
             p.plain();
 
             // Crisp top peak line
@@ -386,12 +390,14 @@ protected:
 
 // ===============================================================================================================================
 /** MasterScreen: the page of the Master tab (1280 x 628): a header (MASTER, and the two sides MAIN and TUNING & MPE) and the blocks of the side that is on, each ONE Q group (the last two blocks of the second
-    side two):  side MAIN: OUTPUT, PITCH, VOICES, GLIDE (2 x 2 blocks);  side TUNING & MPE: SCALE (with the keyboard), TUNING, MPE (a group of three in each of its two rows).
-    Every block uses its whole height (the knobs are big, with their values), every name is in capitals. */
+    side two):  side MAIN: OUTPUT, PITCH (top row), VOICES, GLIDE (bottom row);  side TUNING & MPE: SCALE (with the keyboard), TUNING, MPE (a group of three in each of its two rows).
+    The switches and the short lists are LED controls (led_toggle.h, led_list.h: a dot and a name, no box, every option of a list visible); the numbers, the knobs and the long lists (SCALE, KEY) keep their cells.
+    The room the LED controls free goes to the knobs, the glide curve and the keyboard. */
 class MasterScreen : public Composite
 {
 public:
-    static constexpr int kMaxGroups = 10, kBlocks = 7, kHeaderH = 64, kBlockTitleH = 34, kBlockPad = 6, kBlockGap = 8;
+    static constexpr int kMaxGroups = 10, kBlocks = 7, kHeaderH = 64, kBlockTitleH = 38, kBlockPad = 6, kBlockGap = 8;   // the title strip: the name of the block, then the lane of the index chips with a gap to the name
+    static constexpr int kTopBlockH = 228, kTopLeftW = 640, kBottomLeftW = 780;   // the first row of MAIN: OUTPUT (the knobs) and PITCH; the second: VOICES (the widest) and GLIDE
     enum Side : int { SideMain = 0, SideTuning = 1 };
 
     MenuButton sideMain { "MAIN", MenuButton::Icon::None };
@@ -401,42 +407,45 @@ public:
     Knob volume { "VOLUME" };
     PeakMeterDisplay meters;
     Knob spread { "SPREAD" };
-    Stepper stereoRouting, voiceOverride;
+    Knob stereoRouting { "STEREO" };   // master.stereo_routing is a continuous percentage: a knob, not a list
+    LedList voiceOverride;
     // PITCH
     Knob tune { "TUNE" };
     NumberField transpose, bendUp, bendDown;
-    ToggleIcon bendLink;
+    LedToggle bendLink;
     // VOICES
     NumberField polyphony;
-    ToggleIcon legato, polyLegato, phaseLegato;
-    Stepper sameNote, stealPriority;
+    LedToggle legato, polyLegato, phaseLegato;
+    LedList sameNote, stealPriority;
     NumberField velocityTrack;
     VoiceMeterDisplay voiceMeter;
-    ToggleIcon padPressure;   // the plugin-wide pad pressure layer (shell parameters, not engine ones: no Q group)
+    LedToggle padPressure;   // the plugin-wide pad pressure layer (shell parameters, not engine ones: no Q group)
     NumberField padAmount;
     // GLIDE
     Knob portaTime { "GLIDE" }, portaSlope { "SLOPE" };
-    ToggleIcon portaAlways, portaScaled;
+    LedToggle portaAlways, portaScaled;
     PortamentoCurveDisplay portaCurve;
     // SCALE
-    Stepper scaleType, scaleKey, scaleMode;
+    Stepper scaleType, scaleKey;   // 20 scales and 12 keys: long lists, they keep the stepper with its list
+    LedList scaleMode;
     MiniKeyboardDisplay keyboard;
     // TUNING
     NumberField tuningA4;
-    Stepper tuningScale;
-    ToggleIcon mtsEsp, mtsNoteOn;
+    LedList tuningScale;
+    LedToggle mtsEsp, mtsNoteOn;
     // MPE
-    ToggleIcon mpeOn;
+    LedToggle mpeOn;
     NumberField mpeBend;
-    Stepper mpeMacro;
-    ToggleIcon mpeYModwheel, mpeBendToX, mpeYBipolar;
+    LedList mpeMacro;
+    LedToggle mpeYModwheel, mpeBendToX, mpeYBipolar;
 
     QGroup groups[kMaxGroups];   // 0 OUTPUT, 1 PITCH, 2 LINK, 3 VOICES, 4 VOICE OPTS, 5 GLIDE, 6 SCALE, 7 TUNING, 8 MPE, 9 MPE Y
 
     MasterScreen()
     {
-        volume.state.large = true; spread.state.large = true;   // the only large knobs of the page; every other knob has the common size (140)
+        volume.state.large = true; spread.state.large = true; stereoRouting.state.large = true;   // the three knobs of OUTPUT are one size; every other knob has the common size
         tune.state.bipolar = true;
+        tune.state.side = true;   // the medium variant: the dial at the left, the name and the value beside it
         portaSlope.state.bipolar = true;
 
         transpose.state.format = NumberField::Format::IntSigned;
@@ -446,41 +455,36 @@ public:
         bendDown.state.format = NumberField::Format::IntPlain;
         bendDown.setLabel ("BEND DOWN");
         bendLink.setLabel ("LINK");
-        bendLink.state.showState = true;
         polyphony.state.format = NumberField::Format::IntPlain;
         polyphony.setLabel ("POLY");
-        legato.setLabel ("LEGATO"); legato.state.showState = true;
-        polyLegato.setLabel ("POLY LEG"); polyLegato.state.showState = true;
-        phaseLegato.setLabel ("PHASE LEG"); phaseLegato.state.showState = true;
-        sameNote.setCaption ("SAME NOTE");
-        sameNote.minWidth = 140;   // a cell of the grid of the VOICES block
-        stealPriority.setCaption ("STEAL");
-        stealPriority.minWidth = 140;
+        legato.setLabel ("LEGATO");
+        polyLegato.setLabel ("POLY LEG");
+        phaseLegato.setLabel ("PHASE LEG");
+        sameNote.setTitle ("SAME NOTE"); sameNote.state.titleInLane = true;
+        stealPriority.setTitle ("STEAL"); stealPriority.state.titleInLane = true;
         velocityTrack.state.format = NumberField::Format::IntSigned;
         velocityTrack.setLabel ("VEL TRACK");
-        padPressure.setLabel ("PAD PRESS"); padPressure.state.showState = true;
+        padPressure.setLabel ("PAD PRESS");
         padAmount.state.format = NumberField::Format::IntPlain;
         padAmount.setLabel ("PAD %");
-        stereoRouting.setCaption ("STEREO");
-        voiceOverride.setCaption ("VOICE OVERRIDE");
-        portaAlways.setLabel ("ALWAYS"); portaAlways.state.showState = true;
-        portaScaled.setLabel ("SCALED"); portaScaled.state.showState = true;
+        voiceOverride.setTitle ("VOICE OVERRIDE"); voiceOverride.state.titleInLane = true;
+        portaAlways.setLabel ("ALWAYS");
+        portaScaled.setLabel ("SCALED");
         scaleType.setCaption ("SCALE");
         scaleKey.setCaption ("KEY");
-        scaleMode.setCaption ("MODE");
+        scaleMode.setTitle ("MODE"); scaleMode.state.titleInLane = true;
         tuningA4.state.format = NumberField::Format::Decimal2;
         tuningA4.setLabel ("A4 HZ");
-        tuningScale.setCaption ("TUNING");
-        mtsEsp.setLabel ("MTS-ESP"); mtsEsp.state.showState = true;
-        mtsNoteOn.setLabel ("NOTE-ON"); mtsNoteOn.state.showState = true;
-        mpeOn.setLabel ("MPE"); mpeOn.state.showState = true;
+        tuningScale.setTitle ("TUNING"); tuningScale.state.titleInLane = true;
+        mtsEsp.setLabel ("MTS-ESP");
+        mtsNoteOn.setLabel ("NOTE-ON");
+        mpeOn.setLabel ("MPE");
         mpeBend.state.format = NumberField::Format::IntPlain;
         mpeBend.setLabel ("MPE BEND");
-        mpeMacro.setCaption ("XYZ MACRO");
-        mpeMacro.minWidth = 140;
-        mpeYModwheel.setLabel ("Y TO WHEEL"); mpeYModwheel.state.showState = true;
-        mpeBendToX.setLabel ("BEND TO X"); mpeBendToX.state.showState = true;
-        mpeYBipolar.setLabel ("Y BIPOLAR"); mpeYBipolar.state.showState = true;
+        mpeMacro.setTitle ("XYZ TO MACROS"); mpeMacro.state.titleInLane = true;
+        mpeYModwheel.setLabel ("Y TO WHEEL");
+        mpeBendToX.setLabel ("BEND TO X");
+        mpeYBipolar.setLabel ("Y BIPOLAR");
 
         addKid (sideMain); addKid (sideTuning);
         for (Component* c : sideMainComponents())
@@ -546,7 +550,7 @@ public:
                 {
                     if (blockRect (0).contains (x, y)) hit = 0;
                     else if (blockRect (1).contains (x, y)) hit = (y < bendLink.rect().y ? 1 : 2);
-                    else if (blockRect (2).contains (x, y)) hit = (y < stealPriority.rect().y ? 3 : 4);
+                    else if (blockRect (2).contains (x, y)) hit = (y < polyphony.rect().bottom() + kQLane ? 3 : 4);
                     else if (blockRect (3).contains (x, y)) hit = 5;
                 }
                 else
@@ -587,8 +591,9 @@ public:
         const int m = kBlockGap, y0 = rect_.y + kHeaderH + 8, h = rect_.bottom() - 8 - y0, w = rect_.w - 2 * m;
         if (b < 4)
         {
-            const int bw = (w - m) / 2, bh = (h - m) / 2;
-            return { rect_.x + m + (b % 2) * (bw + m), y0 + (b / 2) * (bh + m), b % 2 == 1 ? rect_.right() - m - (rect_.x + m + bw + m) : bw, bh };
+            const int topH = kTopBlockH, botH = h - m - topH, lw = b < 2 ? kTopLeftW : kBottomLeftW;
+            const int y = b < 2 ? y0 : y0 + topH + m, bh = b < 2 ? topH : botH;
+            return b % 2 == 0 ? Rect { rect_.x + m, y, lw, bh } : Rect { rect_.x + m + lw + m, y, w - lw - m, bh };
         }
         const int topH = (h - m) * 52 / 100, botH = h - m - topH;
         if (b == 4)
@@ -615,89 +620,86 @@ protected:
 
     void layout() override
     {
-        const int g = kGap, lane = kQLane;
+        const int g = kGap, lane = kQLane, th = led::kRowH;
         sideMain.place ({ rect_.x + 300, rect_.y + 4, 160, 56 });
         sideTuning.place ({ rect_.x + 468, rect_.y + 4, 220, 56 });
 
         // ---- side MAIN
-        {   // OUTPUT: the meters at the left (with their scale), VOLUME and SPREAD big, the two steppers at the right
+        {   // OUTPUT: the meters (the scale in a column of its own) at the left, the three knobs VOLUME, SPREAD, STEREO (one size) and the voice override as a LED list at the right; the group of four stands on one line
             const Rect in = inner (0);
-            const int mw = 84;
+            const int mw = 100;
             meters.place ({ in.x, in.y + 4, mw, in.h - 8 });
-            const int kw = 150;   // the two large knobs of the page (every other knob has the common size)
-            volume.place ({ in.x + mw + 8, in.y, kw, in.h });
-            spread.place ({ in.x + mw + 8 + kw + g, in.y, kw, in.h });
-            const int sx = in.x + mw + 8 + 2 * kw + 2 * g + 4, sw = in.right() - sx, sh = 64, top = in.y + (in.h - 2 * (lane + sh) - g) / 2;
-            stereoRouting.place ({ sx, top + lane, sw, sh });
-            voiceOverride.place ({ sx, top + 2 * lane + sh + g, sw, sh });
+            const int lw = 150, kx = in.x + mw + 8, kw = (in.right() - lw - g - kx - 2 * g) / 3;
+            volume.place ({ kx, in.y, kw, in.h });
+            spread.place ({ kx + kw + g, in.y, kw, in.h });
+            stereoRouting.place ({ kx + 2 * (kw + g), in.y, kw, in.h });
+            voiceOverride.place ({ in.right() - lw, in.y, lw, std::min (in.h, 2 * 64) });
         }
-        {   // PITCH: the cell grid of VOICES (four columns of equal width, the same gaps): one row of four cells of one height (TUNE, TRANSPOSE, BEND UP, BEND DOWN: PITCH 1 Q group), LINK under it across the width (PITCH 2 Q group),
-            // the same toggle as LEGATO and the others
+        {   // PITCH: one row of four cells at one height (TUNE as a medium knob with its text beside it, TRANSPOSE, BEND UP, BEND DOWN: PITCH 1 Q group), LINK as a LED toggle under the two bend fields (PITCH 2 Q group)
             const Rect in = inner (1);
-            const int cw = (in.w - 3 * g) / 4, h0 = 130, linkH = 64;
-            auto col = [&] (int c) { return in.x + c * (cw + g); };
-            const int y0 = in.y + lane, y1 = std::min (in.bottom() - linkH, y0 + h0 + g + lane);
-            tune.place ({ col (0), y0, cw, h0 });
-            transpose.place ({ col (1), y0, cw, h0 });
-            bendUp.place ({ col (2), y0, cw, h0 });
-            bendDown.place ({ col (3), y0, in.right() - col (3), h0 });
-            bendLink.place ({ in.x, y1, in.w, linkH });
+            const int tw = 190, cw = (in.w - tw - 3 * g) / 3, rowH = std::max (th, in.h - lane - th);
+            tune.place ({ in.x, in.y, tw, rowH });
+            transpose.place ({ in.x + tw + g, in.y, cw, rowH });
+            bendUp.place ({ in.x + tw + g + cw + g, in.y, cw, rowH });
+            bendDown.place ({ in.x + tw + g + 2 * (cw + g), in.y, in.right() - (in.x + tw + g + 2 * (cw + g)), rowH });
+            bendLink.place ({ bendUp.rect().x, in.y + rowH + lane, LedToggle::widthFor (bendLink.state.label), th });
         }
-        {   // VOICES: ONE grid of equal cells, rows of 64 pixels: POLY, LEGATO, POLY LEG, SAME NOTE (VOICES 1 Q group, four cells); STEAL (span 2), PHASE LEG (span 1), VEL TRACK (span 1) (VOICES 2 Q group); the voice meter across the width
+        {   // VOICES: row 1 four cells (POLY, LEGATO, POLY LEG, PHASE LEG: VOICES 1 Q group); row 2 VEL TRACK, SAME NOTE, STEAL (VOICES 2): the two lists each as wide as their options need (rows of 56 px under the title in the chip lane);
+            // row 3 the pad pressure layer (PAD PRESS, PAD %) and the voice meter across the rest
             const Rect in = inner (2);
-            const int cw = (in.w - 3 * g) / 4, ch = 64;
-            auto cell = [&] (int col, int row, int span) { return Rect { in.x + col * (cw + g), in.y + lane + row * (ch + g), span * cw + (span - 1) * g, ch }; };
-            polyphony.place (cell (0, 0, 1));
-            legato.place (cell (1, 0, 1));
-            polyLegato.place (cell (2, 0, 1));
-            sameNote.place (cell (3, 0, 1));
-            stealPriority.place (cell (0, 1, 2));
-            phaseLegato.place (cell (2, 1, 1));
-            velocityTrack.place (cell (3, 1, 1));
-            const Rect mc = cell (0, 2, 2);
-            voiceMeter.place ({ mc.x, mc.y, mc.w, std::min (ch, std::max (40, in.bottom() - mc.y)) });
-            padPressure.place (cell (2, 2, 1));
-            padAmount.place (cell (3, 2, 1));
-        }
-        {   // GLIDE: the same grid again: the knobs GLIDE and SLOPE (cells of the height of the row), ALWAYS and SCALED stacked over the two cells at the right (the wide toggle of the page, 56 px, the lane of the chip
-            // between them): the four cells of the Q group; the curve under them across the width
-            const Rect in = inner (3);
-            const int cw = (in.w - 3 * g) / 4, h0 = 130, th = 56;
+            const int cw = (in.w - 3 * g) / 4, r2H = 2 * th;
             auto col = [&] (int c) { return in.x + c * (cw + g); };
-            const int y0 = in.y + lane, y1 = y0 + h0 + g + lane;
-            portaTime.place ({ col (0), y0, cw, h0 });
-            portaSlope.place ({ col (1), y0, cw, h0 });
-            portaAlways.place ({ col (2), y0, in.right() - col (2), th });
-            portaScaled.place ({ col (2), y0 + th + lane, in.right() - col (2), th });
-            portaCurve.place ({ in.x, y1, in.w, std::max (40, in.bottom() - y1) });
+            const int y1 = in.y, y2 = y1 + th + lane, y3 = y2 + r2H + lane;
+            polyphony.place ({ col (0), y1, cw, th });
+            legato.place ({ col (1), y1, cw, th });
+            polyLegato.place ({ col (2), y1, cw, th });
+            phaseLegato.place ({ col (3), y1, in.right() - col (3), th });
+            const int stealW = 345, sameW = in.w - cw - stealW - 2 * g;   // STEAL: five options in three columns of two rows; SAME NOTE: three in two columns
+            velocityTrack.place ({ in.x, y2, cw, r2H });
+            sameNote.place ({ in.x + cw + g, y2, sameW, r2H });
+            stealPriority.place ({ in.right() - stealW, y2, stealW, r2H });
+            padPressure.place ({ col (0), y3, cw, th });
+            padAmount.place ({ col (1), y3, cw, th });
+            voiceMeter.place ({ col (2), y3 + (th - 44) / 2, in.right() - col (2), 44 });
+        }
+        {   // GLIDE: the two knobs over ALWAYS and SCALED (the four cells of the Q group in the left half), the curve display tall at the right
+            const Rect in = inner (3);
+            const int lw = (in.w - g) / 2 - 16, cw = (lw - g) / 2, rowH = std::max (th, in.h - lane - th);
+            portaTime.place ({ in.x, in.y, cw, rowH });
+            portaSlope.place ({ in.x + cw + g, in.y, lw - cw - g, rowH });
+            portaAlways.place ({ in.x, in.y + rowH + lane, cw, th });
+            portaScaled.place ({ in.x + cw + g, in.y + rowH + lane, lw - cw - g, th });
+            portaCurve.place ({ in.x + lw + g, in.y, in.w - lw - g, in.h });
         }
         // ---- side TUNING & MPE
-        {   // SCALE: the three steppers in a row spanning the width, the big keyboard under them
+        {   // SCALE: the two long lists as steppers and MODE as a LED list in a row spanning the width, the big keyboard under them
             const Rect in = inner (4);
-            const int cw = (in.w - 2 * g) / 3;
-            scaleType.place ({ in.x, in.y + lane, cw, 64 });
-            scaleKey.place ({ in.x + cw + g, in.y + lane, cw, 64 });
-            scaleMode.place ({ in.x + 2 * (cw + g), in.y + lane, in.right() - (in.x + 2 * (cw + g)), 64 });
-            const int ky = in.y + lane + 64 + 10;
+            const int rowH = 64, typeW = in.w * 36 / 100, keyW = in.w * 26 / 100;
+            scaleType.place ({ in.x, in.y, typeW, rowH });
+            scaleKey.place ({ in.x + typeW + g, in.y, keyW, rowH });
+            scaleMode.place ({ in.x + typeW + keyW + 2 * g, in.y, in.right() - (in.x + typeW + keyW + 2 * g), rowH });
+            const int ky = in.y + rowH + 10;
             keyboard.place ({ in.x, ky, in.w, std::max (90, in.bottom() - ky) });
         }
-        {   // TUNING: A4, the tuning, the two MTS switches in a 2x2 grid
+        {   // TUNING: A4 and the tuning list (four options, all visible) in the first row, the two MTS switches under them
             const Rect in = inner (5);
-            const int cw = (in.w - g) / 2, ch = 64;
-            tuningA4.place ({ in.x, in.y + lane, cw, ch });
-            tuningScale.place ({ in.x + cw + g, in.y + lane, in.right() - (in.x + cw + g), ch });
-            mtsEsp.place ({ in.x, in.y + 2 * lane + ch + g, cw, ch });
-            mtsNoteOn.place ({ in.x + cw + g, in.y + 2 * lane + ch + g, in.right() - (in.x + cw + g), ch });
+            const int rowH = std::max (2 * th, in.h - lane - th), a4W = 200;
+            tuningA4.place ({ in.x, in.y, a4W, rowH });
+            tuningScale.place ({ in.x + a4W + g, in.y, in.w - a4W - g, rowH });
+            const int cw = (in.w - g) / 2;
+            mtsEsp.place ({ in.x, in.y + rowH + lane, cw, th });
+            mtsNoteOn.place ({ in.x + cw + g, in.y + rowH + lane, in.right() - (in.x + cw + g), th });
         }
-        {   // MPE: MPE, MPE BEND, XYZ MACRO; Y TO WHEEL, BEND TO X, Y BIPOLAR in a 3x2 grid
+        {   // MPE: MPE, MPE BEND, XYZ TO MACROS (three options side by side); Y TO WHEEL, BEND TO X, Y BIPOLAR under them
             const Rect in = inner (6);
-            const int cw = (in.w - 2 * g) / 3, ch = 64;
-            mpeOn.place ({ in.x, in.y + lane, cw, ch });
-            mpeBend.place ({ in.x + cw + g, in.y + lane, cw, ch });
-            mpeMacro.place ({ in.x + 2 * (cw + g), in.y + lane, in.right() - (in.x + 2 * (cw + g)), ch });
-            mpeYModwheel.place ({ in.x, in.y + 2 * lane + ch + g, cw, ch });
-            mpeBendToX.place ({ in.x + cw + g, in.y + 2 * lane + ch + g, cw, ch });
-            mpeYBipolar.place ({ in.x + 2 * (cw + g), in.y + 2 * lane + ch + g, in.right() - (in.x + 2 * (cw + g)), ch });
+            const int rowH = std::max (th, in.h - lane - th), cw = (in.w - 2 * g) / 3;   // the first row takes the room, the three switches stand at the bottom (no empty strip under them)
+            mpeOn.place ({ in.x, in.y, cw, rowH });
+            mpeBend.place ({ in.x + cw + g, in.y, cw, rowH });
+            mpeMacro.place ({ in.x + 2 * (cw + g), in.y, in.right() - (in.x + 2 * (cw + g)), std::min (rowH, 2 * th - 8) });   // three options in ONE row (a rectangle under two rows high keeps them side by side)
+            const int y2 = in.y + rowH + lane;
+            mpeYModwheel.place ({ in.x, y2, cw, th });
+            mpeBendToX.place ({ in.x + cw + g, y2, cw, th });
+            mpeYBipolar.place ({ in.x + 2 * (cw + g), y2, in.right() - (in.x + 2 * (cw + g)), th });
         }
     }
 
@@ -731,8 +733,8 @@ private:
         groups[0].set (0, &volume); groups[0].set (1, &spread); groups[0].set (2, &stereoRouting); groups[0].set (3, &voiceOverride);
         groups[1].set (0, &tune); groups[1].set (1, &transpose); groups[1].set (2, &bendUp); groups[1].set (3, &bendDown);
         groups[2].set (0, &bendLink);
-        groups[3].set (0, &polyphony); groups[3].set (1, &legato); groups[3].set (2, &polyLegato); groups[3].set (3, &sameNote);
-        groups[4].set (0, &stealPriority); groups[4].set (1, &phaseLegato); groups[4].set (2, &velocityTrack);
+        groups[3].set (0, &polyphony); groups[3].set (1, &legato); groups[3].set (2, &polyLegato); groups[3].set (3, &phaseLegato);
+        groups[4].set (0, &velocityTrack); groups[4].set (1, &sameNote); groups[4].set (2, &stealPriority);
         groups[5].set (0, &portaTime); groups[5].set (1, &portaSlope); groups[5].set (2, &portaAlways); groups[5].set (3, &portaScaled);
         groups[6].set (0, &scaleType); groups[6].set (1, &scaleKey); groups[6].set (2, &scaleMode);
         groups[7].set (0, &tuningA4); groups[7].set (1, &tuningScale); groups[7].set (2, &mtsEsp); groups[7].set (3, &mtsNoteOn);

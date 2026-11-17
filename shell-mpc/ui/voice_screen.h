@@ -1,7 +1,8 @@
 // SynthyBoy - MPC UI component library: VoiceScreen, the page of the Voice tab (1280 x 628): the header (VOICE CONTROL, the Q group of the step: the row, the step, the length), the step grid (8 steps, the
 // six rows PAN, DETUNE, CUTOFF, ENV, MOD 1, MOD 2: draw with a finger, the step a voice plays is lit), a strip with ALL the values of the selected step, and three blocks that use their height: RANDOM (the four
 // spreads in a row of large knobs and the 10x DETUNE LED toggle under them), SCALING (the time scale of the envelopes and the LFOs and its mode as a LED list), TARGETS (which sources the voice control acts on: five LED
-// toggles of the same width, two columns). One Q group each (the Targets of the fifth, NOISE, is beside the group).
+// toggles of the same width, two columns). One Q group each (the Targets of the fifth, NOISE, is beside the group). The ROW is a LED list of the six rows (rows of 56 px, two columns of three) at the left of the grid:
+// the member Q2 of the header group, which lies apart in the layout (the group has no frame, its chips mark it).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -25,12 +26,12 @@ namespace synthyboy_mpc { namespace ui {
 class VoiceScreen : public Composite
 {
 public:
-    static constexpr int kMaxGroups = 6, kHeaderH = 80, kGridH = 236, kStripH = 40, kBlockTitleH = 34, kBlockPad = 6, kBlockGap = 8;
+    static constexpr int kMaxGroups = 6, kHeaderH = 80, kGridH = 236, kStripH = 40, kBlockTitleH = 34, kBlockPad = 6, kBlockGap = 8, kRowBlockW = 252;
 
     // Header
     NumberField length;       // voicectl.length (1..8)
     Stepper qStepSelect;      // Q-Link step selector (1..8)
-    Stepper qRowSelect;       // Q-Link row selector (PAN, DETUNE, CUTOFF, ENV, MOD1, MOD2)
+    LedList rowList;          // the row (PAN, DETUNE, CUTOFF, ENV, MOD 1, MOD 2): all six visible, in the block at the left of the grid; Q2 of the header group
     NumberField stepValue;    // the value of the selected step in the selected row (-100 .. +100): the fourth Q-Link of the group STEP
 
     // Step Grid
@@ -62,9 +63,15 @@ public:
         stepValue.state.min = -100; stepValue.state.max = 100; stepValue.state.step = 1; stepValue.state.pxPerStep = 1;
         stepValue.setLabel ("VALUE");
         qStepSelect.setItem ("STEP 1");
-        qRowSelect.setItem ("PAN");
         qStepSelect.setCaption ("STEP");
-        qRowSelect.setCaption ("ROW");
+        {
+            const char* names[VoiceGrid::kNumRows];
+            for (int r = 0; r < VoiceGrid::kNumRows; ++r)
+                names[r] = VoiceGrid::rowName (r);
+            rowList.setOptions (names, VoiceGrid::kNumRows);
+            rowList.setTitle ("ROW");
+            rowList.state.titleInLane = true;
+        }
         scaleLfoMode.setTitle ("LFO TIME MODE");
 
         randDetune10x.setLabel ("10x DETUNE");
@@ -78,9 +85,9 @@ public:
 
         addKid (length);
         addKid (qStepSelect);
-        addKid (qRowSelect);
         addKid (stepValue);
         addKid (grid);
+        addKid (rowList);
         addKid (randPan); addKid (randDetune); addKid (randCutoff); addKid (randEnv); addKid (randDetune10x);
         addKid (scaleEnv); addKid (scaleLfo); addKid (scaleLfoMode);
         addKid (oscA); addKid (oscB); addKid (oscC); addKid (oscSub); addKid (oscNoise);
@@ -110,7 +117,7 @@ public:
     Change touchDown (int x, int y, double nowMs) override
     {
         const Change c = Composite::touchDown (x, y, nowMs);
-        if (grid.rect().contains (x, y) || qStepSelect.rect().contains (x, y) || qRowSelect.rect().contains (x, y) || length.rect().contains (x, y) || stepValue.rect().contains (x, y) || stripRect().contains (x, y))
+        if (grid.rect().contains (x, y) || qStepSelect.rect().contains (x, y) || rowList.rect().contains (x, y) || rowBlockRect().contains (x, y) || length.rect().contains (x, y) || stepValue.rect().contains (x, y) || stripRect().contains (x, y))
         {
             setActiveGroup (0);
         }
@@ -155,6 +162,8 @@ public:
                 groups[i].drawIdle (sb);
     }
 
+    /** The block at the left of the grid with the list of the rows. */
+    Rect rowBlockRect() const noexcept { return { rect_.x + 8, rect_.y + kHeaderH + 4, kRowBlockW, kGridH }; }
     Rect stripRect() const noexcept { return { rect_.x + 8, grid.rect().bottom() + 6, rect_.w - 16, kStripH }; }
     Rect blockRect (int b) const noexcept
     {
@@ -176,11 +185,14 @@ protected:
         const int m = 8, g = kGap, lane = kQLane;
         // the header: the Q group of the step at the right
         const int hy = rect_.y + 20;   // a lane above for the Q index chips
-        stepValue.place ({ rect_.right() - m - 150, hy, 150, 56 });
-        length.place ({ stepValue.rect().x - m - 130, hy, 130, 56 });
-        qRowSelect.place ({ length.rect().x - m - Stepper::kMinW, hy, Stepper::kMinW, 56 });
-        qStepSelect.place ({ qRowSelect.rect().x - m - Stepper::kMinW, hy, Stepper::kMinW, 56 });
-        grid.place ({ rect_.x + m, rect_.y + kHeaderH + 4, rect_.w - 2 * m, kGridH });
+        stepValue.place ({ rect_.right() - m - 200, hy, 200, 56 });   // the ROW left the header: LENGTH and VALUE have its room
+        length.place ({ stepValue.rect().x - m - 180, hy, 180, 56 });
+        qStepSelect.place ({ length.rect().x - m - Stepper::kMinW, hy, Stepper::kMinW, 56 });
+        {   // the row list in a block of its own at the left of the grid (a lane above it for its title and the index chip), the grid at its right
+            const Rect rb = rowBlockRect();
+            rowList.place ({ rb.x + kBlockPad, rb.y + kBlockPad + lane, rb.w - 2 * kBlockPad, rb.h - 2 * kBlockPad - lane });
+            grid.place ({ rb.right() + m, rb.y, rect_.right() - m - (rb.right() + m), kGridH });
+        }
 
         {   // RANDOM: the four spreads as ONE row of large knobs (dial, name and value under it), 10x DETUNE as a LED toggle row across the block under them. The first row starts at the top of the block: the index chips sit in its title strip
             const Rect in = inner (0);
@@ -217,6 +229,7 @@ protected:
     void drawUnder (Pen& p) const override
     {
         const theme::Look& T = theme::L();
+        p.block (rowBlockRect(), false);
         for (int b = 0; b < 3; ++b)
             p.block (blockRect (b), false);
         // the strip with every value of the selected step
@@ -256,9 +269,10 @@ private:
     void buildGroups()
     {
         groups[0].set (0, &qStepSelect);
-        groups[0].set (1, &qRowSelect);
+        groups[0].set (1, &rowList);
         groups[0].set (2, &length);
         groups[0].set (3, &stepValue);
+        groups[0].setFrameless (true);   // the members lie apart (the header and the list at the left of the grid): no frame around everything between them, the four chips and the Q colour mark the quad
 
         groups[1].set (0, &randPan);
         groups[1].set (1, &randDetune);

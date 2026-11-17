@@ -88,7 +88,9 @@ bool LfoDisplay::compute (const ParamValues& values, const StateContent* content
         return 2.0f * own::lfoShapeAt (shape, u, wrap, swing, dir, haveCustom ? &custom : nullptr, src, scratch, 0u) - 1.0f;
     };
 
-    const bool filtered = smooth && half >= 0.0002f && rate > 0.0f;
+    // the smoothing runs in time: the picture of it needs the rate. In the key follow sync (4) the rate is the note's (the engine computes it per voice from the key), so there is no rate the picture could be drawn at:
+    // it shows the SHAPE (the picture used to apply the smoothing at the rate of a made-up note, which rounded a cycle of a few ms into a small shifted wave at 45 % of the height)
+    const bool filtered = smooth && half >= 0.0002f && rate > 0.0f && sync != 4;
     if (!filtered)
     {
         for (int i = 0; i < n; ++i)

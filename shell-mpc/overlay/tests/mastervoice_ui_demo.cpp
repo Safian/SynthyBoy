@@ -68,7 +68,7 @@ void renderAll (const std::string& dir)
         r.refresh (2);
         r.picture (dir, "voice_pan.png");
         r.tapAt (r.ui.screen().grid.columnRect (4).x + 20, r.ui.screen().grid.columnRect (4).y + 100);
-        r.tapAt (r.ui.screen().grid.tabRect (2).x + 10, r.ui.screen().grid.tabRect (2).y + 10);
+        r.tapAt (r.ui.screen().rowList.rowRect (2).x + 10, r.ui.screen().rowList.rowRect (2).y + 10);
         r.picture (dir, "voice_cutoff_step5.png");
         r.tap (r.ui.screen().randPan);
         r.picture (dir, "voice_random_group.png");

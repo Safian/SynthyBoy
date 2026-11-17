@@ -51,7 +51,7 @@ public:
     enum Id : int
     {
         kClose = 1, kFullButton, kInstance, kLfoCells, kRndCells, kSyncMode, kSyncTrip, kSyncDot, kMonoTop, kTargets, kPicker, kSmoothPick, kHostPick, kEdit,
-        kShape = 100, kStyle, kRate, kDivision, kRise, kSmoothTime, kSync, kMode, kPhase, kDelay, kDirection, kSwing, kStereo, kMono, kStereoToggle, kKeyTranspose, kKeyTune,
+        kShape = 100, kStyle, kRate, kDivision, kRise, kSmoothTime, kSync, kMode, kPhase, kDelay, kDirection, kSwing, kStereo, kMono, kStereoToggle, kKeyTranspose, kKeyTune, kModeList,
         kEdBack = 200, kEdTools, kEdUndo, kEdDelete, kEdSnap, kEdLoop, kEdSmooth, kEdCanvas, kEdX, kEdY, kEdCurve, kEdGridX, kEdGridY, kEdPoint,
         kTargetsBack = 300, kTargetsPage, kTargetsAdd, kTargetsRow = 310,   // 310 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kList = 400, kListBackdrop, kListHeader,
@@ -65,6 +65,7 @@ public:
         Number,    // a NumberField in the units of the parameter
         Stepper,   // a choice parameter
         Toggle,
+        List,      // a choice parameter as a LED list (every option visible)
         Picker,    // the shape / style picker: the index is the value of the parameter
         Inert
     };
@@ -404,12 +405,12 @@ private:
         bind (kLfoCells, &full_.bar.lfoCells, T::Inert, "");
         bind (kRndCells, &full_.bar.rndCells, T::Inert, "");
         bind (kSyncMode, &full_.syncSwitch.mode, T::Inert, "");
-        bind (kSyncTrip, &full_.syncSwitch.trip, T::Inert, "");
-        bind (kSyncDot, &full_.syncSwitch.dot, T::Inert, "");
+        bind (kSyncTrip, &full_.rate.trip, T::Inert, "");
+        bind (kSyncDot, &full_.rate.dot, T::Inert, "");
         bind (kMonoTop, &full_.monoTop, T::Inert, "");
         bind (kTargets, &full_.targets, T::Inert, "");
         bind (kPicker, &full_.picker, T::Picker, rnd ? "style" : "shape");
-        bind (kSmoothPick, &full_.smoothPick, T::Toggle, rnd ? "" : "smooth");
+        bind (kSmoothPick, &full_.smoothSwitch, T::Toggle, rnd ? "" : "smooth");   // the Q member of the LED on the label of SMOOTH
         bind (kHostPick, &full_.hostPick, T::Toggle, rnd ? "" : "host");
         bind (kEdit, &full_.edit, T::Inert, "");
         bind (kStyle, &full_.style, T::Stepper, rnd ? "style" : "");
@@ -417,10 +418,11 @@ private:
         bind (kDivision, &full_.rate.division, T::Stepper, "division");
         bind (kRise, &full_.rise, T::Knob, rnd ? "" : "fade_in");
         bind (kSmoothTime, &full_.smoothTime, T::Knob, rnd ? "" : "smooth_time");
-        bind (kMode, &full_.mode, T::Stepper, "sync_type");
+        bind (kMode, &full_.mode, T::Stepper, rnd ? "" : "sync_type");
+        bind (kModeList, &full_.modeList, T::List, rnd ? "sync_type" : "");   // the trigger of a random LFO (two options) is a LED list, the six long names of an LFO a stepper
         bind (kPhase, &full_.phase, T::Knob, rnd ? "" : "phase");
         bind (kDelay, &full_.delay, T::Knob, rnd ? "" : "delay");
-        bind (kDirection, &full_.direction, T::Stepper, rnd ? "" : "direction");
+        bind (kDirection, &full_.direction, T::List, rnd ? "" : "direction");
         bind (kSwing, &full_.swing, T::Knob, rnd ? "" : "swing");
         bind (kStereo, &full_.stereo, T::Knob, rnd ? "" : "stereo");
         bind (kMono, &full_.monoQ, T::Toggle, rnd ? "" : "mono");
@@ -645,6 +647,8 @@ private:
         }
         else
             for (ModRow& r : modRows_) r = {};
+        if (mi.numMods == 0)   // nothing modulates the control yet: the page is the board of every source (ui/mod_board.h), a tap on a chip makes the modulation
+            uibind::fillSourceBoard (mods_.board);
         mods_.load (mi, title);
         mods_.back.setId (kModsBack);
         mods_.addSource.setId (kModsAddStep);
@@ -794,6 +798,13 @@ private:
                 case T::Number: static_cast<ui::NumberField*> (it.c)->state.value = plain; break;
                 case T::Stepper: showStepper (static_cast<ui::Stepper*> (it.c), it.param, plain); break;
                 case T::Toggle: static_cast<ui::ToggleIcon*> (it.c)->state.on = plain >= 0.5f; break;
+                case T::List:
+                {
+                    auto* ll = static_cast<ui::LedList*> (it.c);
+                    ll->setOptions (pi.choices, std::min (static_cast<int> (pi.numChoices), static_cast<int> (ui::LedList::kMaxOptions)));
+                    ll->state.index = std::clamp (static_cast<int> (std::lround (plain - pi.min)), 0, std::max (0, ll->state.count - 1));
+                    break;
+                }
                 case T::Picker: static_cast<ui::ShapePicker*> (it.c)->state.index = std::clamp (static_cast<int> (std::lround (plain)), 0, static_cast<ui::ShapePicker*> (it.c)->count() - 1); break;
                 default: break;
             }
@@ -805,14 +816,15 @@ private:
         const ui::lfo::SyncMode sm = ui::lfo::syncModeOf (sync);
         compact_.rate.setMode (sm);
         full_.rate.setMode (sm);
-        full_.syncSwitch.setSync (sync);
+        full_.setSync (sync);
         full_.setKeyActive (sm == ui::lfo::SyncMode::Key);
         if (sm == ui::lfo::SyncMode::Key)   // the rate does not matter: the key decides
             compact_.rate.rate.state.valueText[0] = full_.rate.rate.state.valueText[0] = '\0';
         const int smoothP = paramOf ("smooth");
         const bool smoothOn = smoothP < 0 || v.param (smoothP) >= 0.5f;
-        compact_.smoothTime.setEnabled (rnd_ == 0 && smoothOn);
-        full_.smoothTime.setEnabled (rnd_ == 0 && smoothOn);
+        compact_.smoothTime.state.ledOn = full_.smoothTime.state.ledOn = smoothOn;   // SMOOTH is ONE control: the time with the LED of the switch on its label (off: the knob is dim and takes only the switch)
+        compact_.smoothTime.setEnabled (rnd_ == 0);
+        full_.smoothTime.setEnabled (rnd_ == 0);
         for (const Item& it : items_)   // the rate knob's own enabled state is the control's (it is dim in the key follow mode)
             if (it.id == kRate && it.c != nullptr)
                 it.c->setEnabled (sm != ui::lfo::SyncMode::Key && it.param >= 0);
@@ -938,6 +950,12 @@ private:
             }
             d.trace = trace_;
             d.traceN = kTracePoints;
+            d.style = static_cast<int> (std::lround (v.param (paramOf ("style"))));
+            if (d.style != styleSeen_)   // the picture of a style at rest changes with the style
+            {
+                styleSeen_ = d.style;
+                changed = true;
+            }
         }
         if (changed)
             displayChangedMs_ = nowMs;
@@ -1300,9 +1318,9 @@ private:
         if ((id == kSyncMode || id == kSyncTrip || id == kSyncDot) && c.kind == K::Index)
         {
             const int p = paramOf ("sync");
-            const ui::Component* from = id == kSyncMode ? static_cast<const ui::Component*> (&full_.syncSwitch.mode) : (id == kSyncTrip ? static_cast<const ui::Component*> (&full_.syncSwitch.trip) : &full_.syncSwitch.dot);
+            const int part = id == kSyncMode ? ui::SyncSwitch::Mode : (id == kSyncTrip ? ui::SyncSwitch::Trip : ui::SyncSwitch::Dot);
             if (p >= 0)
-                uibind::writePlain (v, p, full_.syncSwitch.nextSync (from, c));
+                uibind::writePlain (v, p, full_.syncSwitch.nextSync (part, c));
             return;
         }
         if (id == kTargetsPage && c.kind == K::Index)
@@ -1397,7 +1415,12 @@ private:
         const synthyboy::ParamInfo& pi = uibind::info (p);
         switch (it.type)
         {
-            case T::Knob: if (c.kind == K::Value) uibind::writeNorm (v, p, c.value); break;
+            case T::Knob:
+                if (c.kind == K::Value)
+                    uibind::writeNorm (v, p, c.value);
+                else if (c.kind == K::Index && it.id == kSmoothTime)   // the LED on the label of SMOOTH: the switch of the smoothing, the time is the knob
+                    uibind::writePlain (v, paramOf ("smooth"), c.index != 0 ? 1.0 : 0.0);
+                break;
             case T::Number: if (c.kind == K::Index || c.kind == K::Value) uibind::writePlain (v, p, c.value); break;
             case T::Stepper:
                 if (c.kind == K::Index)
@@ -1410,6 +1433,7 @@ private:
                 }
                 break;
             case T::Toggle: if (c.kind == K::Index) uibind::writePlain (v, p, c.index != 0 ? 1.0 : 0.0); break;
+            case T::List: if (c.kind == K::Index) uibind::writePlain (v, p, pi.min + std::clamp (c.index, 0, std::max (0, pi.numChoices - 1))); break;
             case T::Picker:
                 if (c.kind == K::Index)
                 {
@@ -1428,7 +1452,7 @@ private:
     {
         while (m != nullptr)
         {
-            if (m == &full_.syncSwitch || m == &full_.syncSwitch.mode)
+            if (m == &full_.syncSwitch.mode)
                 return paramOf ("sync");   // the HZ / BPM / KEY row is the member: a knob step moves the selection (the sync values: Free, Tempo, dotted, triplet, Key follow)
             for (const Item& it : items_)
                 if (it.c == m && it.type != T::Inert)
@@ -1524,6 +1548,7 @@ private:
     std::shared_ptr<const synthyboy::StateContent> content_, contentSeen_;
     float curve_[kCurvePoints] = {};
     float trace_[kTracePoints] = {};
+    int styleSeen_ = -1;
     ui::lfodisplay::Data data_;
 };
 

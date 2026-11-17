@@ -136,25 +136,34 @@ void testParts()
     check (sp.count() == 5 && sp.rows() == 3, "shape picker: five styles in two columns");
 
     SyncSwitch sw;
-    sw.place ({ 0, 0, 340, 56 });
-    sw.mode.setId (1); sw.trip.setId (2); sw.dot.setId (3);
-    sw.setSync (1);
-    check (sw.trip.enabled() && sw.dot.enabled(), "sync switch: TRIP and DOT work in the tempo mode");
+    sw.mode.place ({ 0, 0, 252, 56 });
+    sw.mode.setId (1);
+    {   // the logic of HZ / BPM / KEY with TRIP and DOT (the three LED controls are drawn by the screen and the rate control)
+        RateControl sr;
+        sr.setTripDot (true);
+        sr.place ({ 0, 0, 300, 200 });
+        sr.trip.setId (2); sr.dot.setId (3);
+        sr.setMode (lfo::SyncMode::Bpm);
+        check (sr.trip.enabled() && sr.dot.enabled() && sr.trip.rect().h >= 56 && sr.dot.rect().h >= 56 && sr.trip.rect().y >= sr.division.rect().bottom() && sr.trip.rect().right() <= sr.dot.rect().x + 1, "sync switch: TRIP and DOT (LED toggles of 56 px) stand under the division in the tempo mode");
+        sr.setMode (lfo::SyncMode::Hz);
+        check (sr.trip.rect().empty() && sr.rate.rect().h == 200, "sync switch: in the Hz mode the knob has the whole cell, TRIP and DOT are gone");
+    }
     sw.setSync (0);
-    check (! sw.trip.enabled() && ! sw.dot.enabled() && sw.mode.state.index == 0, "sync switch: dim in the Hz mode");
+    check (sw.mode.state.index == 0 && sw.mode.state.count == 3, "sync switch: the list HZ / BPM / KEY, Hz is the first");
     sw.setSync (4);
-    check (sw.mode.state.index == 2, "sync switch: the key follow is the third cell");
+    check (sw.mode.state.index == 2, "sync switch: the key follow is the third option");
     sw.setSync (2);
-    check (sw.dot.state.on && ! sw.trip.state.on && sw.mode.state.index == 1, "sync switch: dotted = BPM with DOT");
+    check (sw.dot() && ! sw.trip() && sw.mode.state.index == 1, "sync switch: dotted = BPM with DOT");
     c = Change::indexed (1, 0, 0);
-    check (sw.nextSync (&sw.mode, c) == 0, "sync switch: the HZ cell gives sync 0");
+    check (sw.nextSync (SyncSwitch::Mode, c) == 0, "sync switch: the HZ option gives sync 0");
     c = Change::indexed (2, 1, 1);
-    check (sw.nextSync (&sw.trip, c) == 3, "sync switch: TRIP on a dotted one: triplet");
+    check (sw.nextSync (SyncSwitch::Trip, c) == 3, "sync switch: TRIP on a dotted one: triplet");
     c = Change::indexed (3, 0, 0);
-    check (sw.nextSync (&sw.dot, c) == 1, "sync switch: DOT off: plain tempo");
+    check (sw.nextSync (SyncSwitch::Dot, c) == 1, "sync switch: DOT off: plain tempo");
     c = Change::indexed (1, 1, 1);
     sw.setSync (0);
-    check (sw.nextSync (&sw.mode, c) == 1, "sync switch: the BPM cell from Hz: tempo");
+    check (sw.nextSync (SyncSwitch::Mode, c) == 1, "sync switch: the BPM option from Hz: tempo");
+    check (sw.mode.turn (1.0).index == 1 && sw.mode.turn (-1.0).kind == ChangeKind::None, "sync switch: a Q-Link step moves the selection (no wrap)");
 
     RateControl rc;
     rc.place ({ 0, 0, 300, 72 });
@@ -167,7 +176,7 @@ void testParts()
     check (rc.childShown (0) && ! rc.rate.enabled() && rc.primary() == &rc.rate, "rate control: the knob dim in the key follow mode");
 
     InstanceBar ib;
-    ib.place ({ 0, 0, 624, 56 });
+    ib.place ({ 0, 0, 844, 56 });
     ib.lfoCells.setId (1); ib.rndCells.setId (2);
     ib.configure (false, 7);
     check (ib.lfoCells.state.index == 6 && ib.rndCells.state.index == -1, "instance bar: LFO 7 is the seventh cell (all ten LFOs are in the bar)");
@@ -241,17 +250,34 @@ void testViews()
         check (c.full.rect().w >= 56 && c.full.rect().h >= 56 && c.displayRect().contains (c.full.rect()), nm + ": the full screen button on the display, a touch target");
         check (c.group.member (1) == &c.rate, nm + ": Q2 is the rate control");
     }
-    for (int variant = 0; variant < 3; ++variant)
+    for (int variant = 0; variant < 4; ++variant)
     {
-        const bool random = variant == 2;
+        const bool random = variant >= 2, keyFollow = variant == 1 || variant == 3;
         LfoFullScreen f;
         f.place ({ 0, 110, 1280, 628 });
         f.configure (random);
-        f.setKeyActive (variant == 1);
-        const std::string nm = std::string ("full screen ") + (random ? "random" : (variant == 1 ? "LFO, key follow" : "LFO"));
+        f.setKeyActive (keyFollow);
+        const std::string nm = std::string ("full screen ") + (random ? (keyFollow ? "random, key follow" : "random") : (keyFollow ? "LFO, key follow" : "LFO"));
         checkView (f, { 0, 110, 1280, 628 }, nm, f.groups, f.numGroups(), 0x0b1026ffu);
         f.setActiveGroup (0);
-        check (f.numGroups() == (random ? 3 : 5) && f.activeGroup() == 0 && f.groups[0].active(), nm + ": " + std::to_string (f.numGroups()) + " groups, the first active");
+        // the groups in reading order: RATE, [KEY], TIMING, MOTION, SHAPE; RANDOM, [KEY], TRIGGER (the KEY group only in the key follow sync: its two numbers stand where the rate knob stands)
+        check (f.numGroups() == (random ? (keyFollow ? 3 : 2) : (keyFollow ? 5 : 4)) && f.activeGroup() == 0 && f.groups[0].active(), nm + ": " + std::to_string (f.numGroups()) + " groups, the first active");
+        check (f.numBlocks() == (random ? 1 : 3), nm + ": " + std::to_string (f.numBlocks()) + " blocks (the key follow has no block of its own)");
+        check (f.keyGroup() == (keyFollow ? 1 : -1) && (! keyFollow || (f.groups[1].member (0) == &f.keyTranspose && f.groups[1].member (1) == &f.keyTune && f.groups[1].numMembers() == 2)), nm + ": the KEY group (TRANSPOSE, TUNE) is the second group in the key follow sync and there only");
+        {
+            bool shownRate = false;
+            for (int c = 0; c < f.numChildren(); ++c)
+                shownRate = shownRate || (f.child (c) == &f.rate && f.childShown (c));
+            check (shownRate == ! keyFollow, nm + ": the rate control is on the page exactly when the rate is not the key's (no dead dial)");
+            if (keyFollow)
+            {
+                const Rect b0 = f.block (0);
+                check (b0.contains (f.keyTranspose.rect()) && b0.contains (f.keyTune.rect()) && f.keyTranspose.rect().h >= 56 && f.keyTune.rect().h >= 56 && ! f.keyTranspose.rect().overlaps (f.keyTune.rect()) && f.keyTranspose.rect().w >= 120,
+                       nm + ": TRANSPOSE and TUNE stand in the first block, one above the other, >= 56 px, apart");
+                if (! random)
+                    check (! f.keyTranspose.rect().overlaps (f.rise.rect()) && ! f.keyTune.rect().overlaps (f.smoothTime.rect()) && f.keyTranspose.rect().right() <= f.rise.rect().x && f.keyTune.rect().right() <= f.smoothTime.rect().x, nm + ": and clear of RISE and SMOOTH");
+            }
+        }
         check (! f.displayRect().empty() && f.displayRect().w > 800 && f.displayRect().h >= 200, nm + ": the display " + std::to_string (f.displayRect().w) + " x " + std::to_string (f.displayRect().h));
         check (f.displayRect().right() <= f.picker.rect().x && f.picker.rect().right() <= 1280, nm + ": the picker at the right of the display");
         for (int b = 0; b < f.numBlocks(); ++b)
@@ -259,17 +285,24 @@ void testViews()
         // the Q frame moves to a tapped group
         if (! random)
         {
-            check (f.groups[0].member (0) == &f.picker && f.groups[0].member (1) == &f.rate &&
+            const int iT = keyFollow ? 2 : 1, iM = iT + 1, iS = iT + 2;   // TIMING, MOTION, SHAPE
+            check (f.groups[0].member (0) == &f.picker && f.groups[0].member (1) == (keyFollow ? nullptr : static_cast<Component*> (&f.rate)) &&
                    f.groups[0].member (2) == &f.rise && f.groups[0].member (3) == &f.smoothTime,
-                   nm + ": group 0 is picker (Q1), rate, rise, smooth");
-            check (f.groups[1].member (0) == &f.syncSwitch && f.groups[1].member (1) == &f.mode &&
-                   f.groups[1].member (2) == &f.phase && f.groups[1].member (3) == &f.delay,
-                   nm + ": group 1 is the HZ / BPM / KEY row, mode, phase, delay (no second SYNC stepper)");
-            check (f.groups[2].member (0) == &f.direction && f.groups[2].member (1) == &f.swing &&
-                   f.groups[2].member (2) == &f.stereo && f.groups[2].member (3) == &f.monoQ,
-                   nm + ": group 2 is direction, swing, stereo, mono");
-            check (f.groups[4].member (0) == &f.smoothPick && f.groups[4].member (1) == &f.hostPick,
-                   nm + ": group 4 is smooth, host");
+                   nm + ": group 0 is picker (Q1), rate (not in the key follow), rise, smooth");
+            check (f.groups[iT].member (0) == &f.syncSwitch.mode && f.groups[iT].member (1) == &f.phase &&
+                   f.groups[iT].member (2) == &f.delay && f.groups[iT].member (3) == &f.mode,
+                   nm + ": group 1 is the HZ / BPM / KEY list, phase, delay, mode (the reading order of the block; no second SYNC stepper)");
+            check (f.syncSwitch.mode.rect().y == f.phase.rect().y && f.phase.rect().y < f.delay.rect().y && f.delay.rect().y < f.mode.rect().y && f.mode.rect().x == f.syncSwitch.mode.rect().x, nm + ": the chips of TIMING read top to bottom: SYNC and PHASE on one line, DELAY, MODE");
+            check (f.direction.rect().y == f.swing.rect().y && f.swing.rect().y < f.stereo.rect().y && f.stereo.rect().y < f.monoQ.rect().y, nm + ": the chips of MOTION read top to bottom: DIRECTION and SWING on one line, STEREO, MONO");
+            check (f.hostPick.rect().h >= 56 && f.hostPick.rect().y > f.picker.rect().bottom() && f.bar.rect().h >= 56 && InstanceBar::kCellW >= 56, nm + ": HOST is a LED toggle under the picker (SMOOTH is the LED on the label of its time knob), the instance cells are 56 px or more");
+            check (f.smoothTime.state.led && f.smoothTime.ledHit().h >= 56 && f.smoothTime.ledHit().w >= 80 && f.rect().contains (f.smoothTime.ledHit()), nm + ": the SMOOTH knob has the LED on its label and a switch zone of at least 56 px");
+            check (f.groups[iM].member (0) == &f.direction && f.groups[iM].member (1) == &f.swing &&
+                   f.groups[iM].member (2) == &f.stereo && f.groups[iM].member (3) == &f.monoQ,
+                   nm + ": group MOTION is direction, swing, stereo, mono");
+            check (f.groups[iS].member (0) == &f.hostPick && f.groups[iS].member (1) == &f.smoothSwitch && f.groups[iS].numMembers() == 2,
+                   nm + ": group SHAPE is host and the Q member of the SMOOTH switch (the LED on the label of the SMOOTH knob, which is a member of the first group)");
+            check (f.smoothSwitch.rect().y >= f.smoothTime.rect().y && f.smoothSwitch.rect().x > f.smoothTime.rect().x && f.smoothTime.rect().contains (f.smoothSwitch.rect()) && f.smoothSwitch.touchDown (f.smoothSwitch.rect().x + 2, f.smoothSwitch.rect().y + 2, 0.0).kind == ChangeKind::None,
+                   nm + ": the switch's Q member stands on the SMOOTH knob and takes no touch (the label is the touch)");
             check (f.rate.rate.state.large, nm + ": rate knob is large");
             check (f.rise.rect().h == f.smoothTime.rect().h && f.rise.rect().h == f.phase.rect().h &&
                    f.rise.rect().h == f.delay.rect().h && f.rise.rect().h == f.swing.rect().h &&
@@ -277,19 +310,19 @@ void testViews()
                    nm + ": one knob size family for rise, smooth, phase, delay, swing, stereo");
             f.touchDown (cx (f.direction), cy (f.direction), 0.0);
             f.touchUp (cx (f.direction), cy (f.direction));
-            check (f.activeGroup() == 2 && f.groups[2].active() && ! f.groups[0].active(), nm + ": a touch on DIRECTION makes MOTION the active group");
+            check (f.activeGroup() == iM && f.groups[iM].active() && ! f.groups[0].active(), nm + ": a touch on DIRECTION makes MOTION the active group");
             // tap on TIMING block background
             f.touchDown (f.block (1).x + 10, f.block (1).y + 10, 0.0);
             f.touchUp (f.block (1).x + 10, f.block (1).y + 10);
-            check (f.activeGroup() == 1 && f.groups[1].active(), nm + ": tap on TIMING block makes it active");
-            // tap on smoothPick activates group 4 (Shape)
-            f.touchDown (cx (f.smoothPick), cy (f.smoothPick), 0.0);
-            f.touchUp (cx (f.smoothPick), cy (f.smoothPick));
-            check (f.activeGroup() == 4 && f.groups[4].active(), nm + ": tap on SMOOTH makes SHAPE active");
+            check (f.activeGroup() == iT && f.groups[iT].active(), nm + ": tap on TIMING block makes it active");
+            // a tap on hostPick activates the SHAPE group
+            f.touchDown (cx (f.hostPick), cy (f.hostPick), 0.0);
+            f.touchUp (cx (f.hostPick), cy (f.hostPick));
+            check (f.activeGroup() == iS && f.groups[iS].active(), nm + ": tap on HOST makes SHAPE active");
             f.touchDown (cx (f.keyTune), cy (f.keyTune), 0.0);
             f.touchUp (cx (f.keyTune), cy (f.keyTune));
-            check ((variant == 1) == (f.activeGroup() == 3), nm + ": the KEY group is only active in the key follow sync");
-            check (f.keyTranspose.enabled() == (variant == 1) && f.numBlocks() == (variant == 1 ? 4 : 3), nm + ": the KEY block is there in the key follow sync only (the others take its place)");
+            check (keyFollow == (f.activeGroup() == 1), nm + ": a touch on TUNE makes KEY the active group in the key follow sync (and is a touch on nothing without it)");
+            check (f.keyTranspose.enabled() == keyFollow, nm + ": the KEY numbers are there in the key follow sync only");
         }
         Change t = f.turnQ (0, 1.0);
         (void) t;
@@ -445,6 +478,33 @@ void testDisplay()
     lfodisplay::draw (s2.builder(), r, rnd);
     lfodisplay::drawLive (s2.builder(), r, rnd);
     check (! s2.overflow(), "display: the trace of a random LFO fits one scene");
+    {   // a random LFO at rest (nothing sounds: a flat trace) shows the dim picture of its style, not a bare line: every style has a path that moves, and the picture differs from the bare line and between styles
+        float flat[192] = {};
+        float lo[5], hi[5];
+        bool bounded = true;
+        for (int st = 0; st < 5; ++st)
+        {
+            lo[st] = 9.0f; hi[st] = -9.0f;
+            for (int i = 0; i <= 64; ++i)
+            {
+                const float y = lfodisplay::restPath (st, static_cast<float> (i) / 64.0f);
+                lo[st] = std::min (lo[st], y); hi[st] = std::max (hi[st], y);
+                bounded = bounded && std::fabs (y) <= 1.0f;
+            }
+        }
+        check (bounded && hi[0] - lo[0] > 0.5f && hi[1] - lo[1] > 0.5f && hi[2] - lo[2] > 0.5f && hi[3] - lo[3] > 0.5f && hi[4] - lo[4] > 0.5f, "display: the rest path of each of the five styles moves over at least a quarter of the height and stays inside it");
+        lfodisplay::Data fl;
+        fl.kind = lfodisplay::Data::Kind::Random;
+        fl.trace = flat; fl.traceN = 192;
+        Scene sa (760, 340, 0x0b1026ffu), sb (760, 340, 0x0b1026ffu), sc2 (760, 340, 0x0b1026ffu);
+        lfodisplay::draw (sa.builder(), r, fl);
+        fl.style = 1;
+        lfodisplay::draw (sb.builder(), r, fl);
+        fl.style = 3;
+        lfodisplay::draw (sc2.builder(), r, fl);
+        const Image ia = render (sa), ib = render (sb), ic = render (sc2);
+        check (ia.px != ib.px && ib.px != ic.px, "display: at rest the picture follows the style (the bare line of no style, S & H, Lorenz differ)");
+    }
     // the reduced tier of detail: less is drawn (no lead-in, no area, two cursors)
     theme::setDetail (2);
     Scene sr (760, 340, 0x0b1026ffu);

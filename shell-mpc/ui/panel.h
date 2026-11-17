@@ -5,6 +5,7 @@
 #pragma once
 
 #include "composite.h"
+#include "mod_board.h"
 
 namespace synthyboy_mpc { namespace ui {
 
@@ -677,6 +678,10 @@ public:
     };
     MenuButton back { "BACK", MenuButton::Icon::None };
     Row rows[kMaxRows];
+    /** While NO modulation exists on the control the page is the BOARD of the sources (every source the engine has as a chip, in groups: ui/mod_board.h), the same as the empty modulation matrix: a tap on a chip makes the
+        modulation of THIS control from that source (an AddRequest with the id of `add` and the source), no stepper to wade through. The owner fills the board before `load` (an empty board: the compact add row below is
+        all there is, as before). With rows present the board is gone and the compact add row stands under the rows. */
+    ModSourceBoard board;
     /** The last row, "add source": the stepper over the sources the owner offers (names of 6 characters; the owner sets `addSource.state` and `sourceIds`) and the add button. */
     Stepper addSource;
     MenuButton add { "ADD", MenuButton::Icon::None };
@@ -688,6 +693,8 @@ public:
     {
         addKid (back);
         addKid (addSource); addKid (add);
+        addKid (board, false);
+        board.setHeadline ("TAP A SOURCE TO MODULATE THIS VALUE");
         for (Row& r : rows)
         {
             r.depth.state.bipolar = true;
@@ -730,8 +737,11 @@ public:
         }
         activeRow_ = nRows_ > 0 ? 0 : -1;
         selectRow (activeRow_);
+        syncBoard();
         layout();
     }
+    /** Is the board of the sources the page now (no modulation yet and the owner has given it its sources)? */
+    bool boardShown() const noexcept { return nRows_ == 0 && board.numSources() > 0; }
     int activeRow() const noexcept { return activeRow_; }
     void selectRow (int i)
     {
@@ -780,7 +790,11 @@ public:
         rows[row].depth.setId (depth); rows[row].polarity.setId (polarity); rows[row].bypass.setId (bypass); rows[row].remove.setId (remove);
     }
     int numRows() const noexcept { return nRows_; }
-    Size minSize() const override { return { std::max (kNameW + 200 + 2 * 72 + 64 + 4 * kGap + 8, kNameW + Stepper::kMinW + 96 + 2 * kGap + 8), kBarH + 8 + (nRows_ + 1) * kRowH }; }
+    Size minSize() const override
+    {
+        const int w = std::max (kNameW + 200 + 2 * 72 + 64 + 4 * kGap + 8, kNameW + Stepper::kMinW + 96 + 2 * kGap + 8);
+        return { w, kBarH + 8 + (boardShown() ? board.minSize().h : (nRows_ + 1) * kRowH) };
+    }
     /** The top of row i (its lane); the controls are the kCtlH under it. */
     int rowY (int i) const noexcept { return rect_.y + kBarH + 8 + i * kRowH; }
     Rect addRowRect() const noexcept { return { rect_.x + 4 + kNameW, rowY (nRows_) + kRowH - kCtlH, rect_.w - 8 - kNameW, kCtlH }; }
@@ -788,13 +802,15 @@ public:
     /** The add button comes out as an AddRequest { id of the button, source id of the current item of the add stepper }, the rest as it is. */
     Change touchUp (int x, int y) override
     {
-        const bool onAdd = cap_ == &add;
+        const bool onAdd = cap_ == &add, onBoard = cap_ == &board;
         const Change c = Composite::touchUp (x, y);
         if (onAdd && c.kind == ChangeKind::Request)
         {
             const int i = std::clamp (addSource.state.index, 0, 7);
             return Change::addRequest (c.id, sourceIds[i]);
         }
+        if (onBoard && c.kind == ChangeKind::Index)   // the chip of a source: the modulation of this control from it
+            return Change::addRequest (add.id(), c.index);
         return c;
     }
 
@@ -814,6 +830,14 @@ protected:
         const int fx[2] = { 0, 96 }, wt[2] = { 1, 0 };
         layoutRow (addRowRect(), fx, wt, 2, kGap, a);
         addSource.place (a[0]); add.place (a[1]);
+        board.place ({ rect_.x + 4, rect_.y + kBarH + 4, std::max (0, rect_.w - 8), std::max (0, rect_.h - kBarH - 8) });
+    }
+    /** The board or the compact add row: the one the state of the page needs. */
+    void syncBoard()
+    {
+        show (board, boardShown());
+        show (addSource, ! boardShown());
+        show (add, ! boardShown());
     }
     void drawExtra (Pen& p) const override
     {
@@ -824,10 +848,11 @@ protected:
         p.textLeft ({ rect_.x + 140, rect_.y + 4, std::max (0, std::min (tw, rect_.w - 150)), kBarH - 8 }, title_, ts, p.c (T.text, 255), T.fMin);
         if (target_[0] != '\0')
             p.textLeft ({ rect_.x + 140 + tw + 16, rect_.y + 4, std::max (0, rect_.w - 160 - tw - 16), kBarH - 8 }, target_, T.fValue, p.c (T.textDim, 255), T.fMin);
-        p.textLeft ({ rect_.x + 8, addRowRect().y, kNameW - 8, kCtlH }, "ADD", T.fValue, p.c (T.textDim, 255), T.fMin);
+        if (! boardShown())
+            p.textLeft ({ rect_.x + 8, addRowRect().y, kNameW - 8, kCtlH }, "ADD", T.fValue, p.c (T.textDim, 255), T.fMin);
         for (int i = 0; i < nRows_; ++i)
             p.textLeft ({ rect_.x + 8, rowY (i) + kRowH - kCtlH, kNameW - 8, kCtlH }, rows[i].name, T.fValue, p.c (theme::sourceColour (rows[i].macro ? "MAC" : rows[i].name), 255), T.fMin);
-        if (nRows_ == 0)
+        if (nRows_ == 0 && ! boardShown())
             p.textLeft ({ rect_.x + 8, addRowRect().bottom() + 12, rect_.w - 16, 40 }, "NOTHING MODULATES THIS VALUE YET: CHOOSE A SOURCE AND PRESS ADD", T.fLabel, p.c (T.textDim, 255), T.fMin);
     }
     char title_[32] = {}, target_[24] = {};

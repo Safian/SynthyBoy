@@ -605,7 +605,7 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         }
     }
 
-    // 9. FX (gallery and each of the 13 effect editors, every page of each)
+    // 9. FX (gallery and each of the 16 effect editors, every page of each)
     {
         // FX Gallery
         GalleryInst emptyFxInst = baseInst;
@@ -621,12 +621,13 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         rGal.picture (outDir + "/" + state + "_fx_gallery.png");
         rGal.picture (outDir + "/" + state + "_fx.png");
 
-        // 13 effect editors
-        static const char* const kFxNames[14] = {
+        // 16 effect editors (the 13 types and the 3 splitters)
+        static const char* const kFxNames[17] = {
             "", "chorus", "compressor", "delay", "distortion", "eq", "filter",
-            "flanger", "phaser", "reverb", "hyperdimension", "utility", "bode", "convolve"
+            "flanger", "phaser", "reverb", "hyperdimension", "utility", "bode", "convolve",
+            "splitter_lh", "splitter_lmh", "splitter_ms"   // the three splitters: modules of the fixed chain, added from the same list
         };
-        for (int t = 1; t <= 13; ++t)
+        for (int t = 1; t <= 16; ++t)
         {
             GalleryRig<FxUi> rFx (baseInst, 1);
             rFx.refresh();
@@ -798,6 +799,7 @@ int main (int argc, char** argv)
     std::vector<std::string> presets;
     bool testMode = false;
     bool listMode = false;
+    int knobs = 16;   // the XL first: the idle chips of the mapped groups read 5 .. 16; `--knobs 4` renders the Key 61 (the chips relative to the bank, 1 .. 4)
 
     for (int i = 1; i < argc; ++i)
     {
@@ -815,6 +817,10 @@ int main (int argc, char** argv)
             while (i + 1 < argc && argv[i + 1][0] != '-')
                 presets.push_back (argv[++i]);
         }
+        else if (arg == "--knobs" && i + 1 < argc)
+        {
+            knobs = std::atoi (argv[++i]) <= 4 ? 4 : 16;
+        }
         else if (arg == "--test")
         {
             testMode = true;
@@ -825,11 +831,12 @@ int main (int argc, char** argv)
         }
         else if (arg == "--help" || arg == "-h")
         {
-            std::printf ("Usage: %s [--out DIR] [--preset FILE ...] [--test] [--list]\n", argv[0]);
+            std::printf ("Usage: %s [--out DIR] [--preset FILE ...] [--knobs 16|4] [--test] [--list]\n", argv[0]);
             return 0;
         }
     }
 
+    ui::QGroup::setWideDevice (knobs == 16);
     if (listMode)
     {
         std::printf ("Views from overlay layout (%d):\n", layout::kNumViews);

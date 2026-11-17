@@ -195,7 +195,7 @@ protected:
                 const uint32_t topCol = pk > 1.0f ? T.negative : T.flow[3];
                 const uint32_t meterRamp[4] = { topCol, T.flow[2], T.flow[1], T.flow[0] };
                 p.paintY (static_cast<float> (g.trackTop), static_cast<float> (g.trackBottom), meterRamp, 240);
-                p.rect ({ g.meterX + 1, fillY, g.meterW - 2, fillH }, p.c (topCol, 240));
+                p.line (static_cast<float> (g.meterX) + static_cast<float> (g.meterW) * 0.5f, static_cast<float> (fillY), static_cast<float> (g.meterX) + static_cast<float> (g.meterW) * 0.5f, static_cast<float> (g.trackBottom), static_cast<float> (g.meterW - 2), p.c (topCol, 240));   // a thick line takes the paint (a rect does not, in either renderer)
                 p.plain();
 
                 // Crisp top peak line
@@ -326,7 +326,7 @@ private:
 };
 
 // ===============================================================================================================================================================
-/** StripPower: Channel strip header power toggle with label.
+/** StripPower: Channel strip header power toggle with label (frameless: the power glyph and the name).
     One uniform layout for all ten strips: power icon above, name under it at one size that fits the longest name. */
 class StripPower : public ToggleIcon
 {
@@ -340,8 +340,7 @@ protected:
     void drawBody (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        const Rect b = rect_.inset (3);
-        p.control (b, qFrame_);
+        const Rect b = rect_.inset (3);   // no box around it: the glyph (lit in the accent colour while the strip is on) and the name are the control, as for every LED control
 
         const int labelH = 16;
         const float cx = static_cast<float> (b.x) + static_cast<float> (b.w) * 0.5f;

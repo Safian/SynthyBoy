@@ -42,7 +42,7 @@ inline void layoutRow (const Rect& r, const int* fixed, const int* weight, int n
 class Composite : public Component
 {
 public:
-    static constexpr int kMaxKids = 128;
+    static constexpr int kMaxKids = 160;
 
     void place (const Rect& r) override { rect_ = r; layout(); }
     void setEnabled (bool e) override { enabled_ = e; cap_ = nullptr; syncKids(); }

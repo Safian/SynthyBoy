@@ -184,6 +184,12 @@ void testInstancesSwitching()
     Rig r;
     check (r.ui.selection() == 1 && r.ui.editFilter() == 1, "initial selection is F1 (filter 1)");
 
+    // the Filter 2 tab opens the page on F2 with the F2 button of the selector lit (the selector follows the page, not only a tap)
+    {
+        Rig f2 (2);
+        check (f2.ui.selection() == 2 && f2.ui.editFilter() == 2 && f2.ui.full().instances.state.index == 1, "the page made for the Filter 2 tab has the F2 cell of the selector selected (index " + std::to_string (f2.ui.full().instances.state.index) + ")");
+    }
+
     // Tap F2 in instances selector
     const ui::Rect selR = r.ui.full().instances.rect();
     r.tap (selR.x + selR.w / 2, selR.y + selR.h / 2);
@@ -407,6 +413,55 @@ void testModulationsPage()
     check (r.ui.topPage() == 0, "tapping BACK closes ModulationsPage");
 }
 
+/** A control that nothing modulates: its modulations page is the BOARD of every source (the same board as the empty modulation matrix), a tap on a chip makes the modulation of THIS control from that source; no stepper, no add row. */
+void testModulationsBoard()
+{
+    Rig r;
+    r.refresh();
+    int x, y;
+    r.centre (r.ui.full().cutoff, x, y);
+    r.tap (x, y, 700);
+    ui::ModulationsPage& mp = r.ui.modsPage();
+    check (r.ui.topPage() == FilterUi::kPageMods && mp.numRows() == 0 && mp.boardShown(), "a long press on CUTOFF with no modulation opens the board of the sources");
+    check (mp.board.numSources() == static_cast<int> (synthyboy::modSourceCount()), "the board has every source of the engine (" + std::to_string (mp.board.numSources()) + ")");
+    check (mp.board.numGroups() == uibind::kSourceGroups, "in the groups envelopes, LFOs, macros, player, sound");
+    bool big = true, inside = true, noRowAdd = true;
+    for (int i = 0; i < mp.board.numSources(); ++i)
+    {
+        const ui::Rect c = mp.board.chipRect (i);
+        big = big && c.h >= 56 && c.w >= 64;
+        inside = inside && mp.rect().contains (c);
+    }
+    for (int c = 0; c < mp.numChildren(); ++c)
+        if ((mp.child (c) == &mp.addSource || mp.child (c) == &mp.add) && mp.childShown (c))
+            noRowAdd = false;
+    check (big && inside && mp.board.fits(), "every chip is >= 56 x 64 px and inside the page, the board fits without squeezing the chips");
+    check (noRowAdd, "the stepper and the ADD button of the compact row are not on the page");
+    const int lfo1 = uibind::lfoSource (1);
+    const ui::Rect chip = mp.board.chipRectOfId (lfo1);
+    check (! chip.empty(), "the board has the LFO 1 chip");
+    r.tap (chip.x + chip.w / 2, chip.y + chip.h / 2);
+    int slot = -1;
+    for (int s = 0; s < synthyboy::kNumModSlots && slot < 0; ++s)
+    {
+        const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (s);
+        if (std::lround (r.inst.get (synthyboy::paramTable()[sp.source].key)) == lfo1)
+            slot = s;
+    }
+    check (slot >= 0 && r.ui.topPage() == FilterUi::kPageMods, "a tap on the chip makes a modulation from LFO 1 and the page stays open");
+    r.refresh();
+    r.refresh();
+    check (mp.numRows() == 1 && ! mp.boardShown(), "with the row present the board is gone: the row and the compact add row");
+    bool addRow = false;
+    for (int c = 0; c < mp.numChildren(); ++c)
+        addRow = addRow || ((mp.child (c) == &mp.add) && mp.childShown (c));
+    check (addRow, "the compact add row is back under the row");
+    r.tapC (mp.rows[0].remove);   // X: the modulation is removed, the board is the page again
+    r.refresh();
+    r.refresh();
+    check (mp.numRows() == 0 && mp.boardShown(), "removing the only row brings the board back");
+}
+
 void testTouchTargetsAndLayoutSizes()
 {
     Rig r;
@@ -416,6 +471,13 @@ void testTouchTargetsAndLayoutSizes()
     check (f.modelList.rect().w >= 56 && f.modelList.rect().h >= 56, "the list button of the models >= 56 px");
     check (f.clean.rect().w >= 72 && f.clean.rect().h >= 56 && f.route.rect().w >= 64 && f.route.rect().h >= 56, "CLEAN and OUTPUT >= 56 px");
     check (f.instances.rect().w >= 3 * 56 && f.instances.rect().h >= 56, "F1 | F2 | F1+F2 selector >= 56 px per cell");
+    {   // the CURVES list: a LED list of three in one row, named by what it does (which curves the display draws), not mistaken for ROUTING or for the tabs of the host
+        bool rows = true;
+        for (int i = 0; i < 3; ++i)
+            rows = rows && f.instances.rowRect (i).h >= 56 && f.instances.rowRect (i).w >= 84 && f.instances.rowRect (i).y == f.instances.rect().y;
+        check (f.instances.state.count == 3 && f.instances.columns() == 3 && rows && std::string (f.instances.state.names[0]) == "F1" && std::string (f.instances.state.names[2]) == "F1+F2" && f.instances.sizeOk(), "CURVES: a LED list of F1, F2, F1+F2 in one row, every cell >= 56 x 84 px");
+        check (f.routing.state.count == 3 && f.instances.rect().y < f.routing.rect().y && ! f.instances.rect().overlaps (f.routing.rect()) && f.model.rect().x >= f.instances.rect().right(), "CURVES is in the top bar, apart from the ROUTING list of the output block");
+    }
     ui::Component* leaves[64];
     const int n = f.collectLeaves (leaves, 0, 64);
     int small = 0, leavesOk = 0;
@@ -578,6 +640,42 @@ void testDrawingAndSceneOps()
         renderScene (*data, cv);
         check (cv.size() == 1280u * 800u, "CPU renderer renders route popup scene");
     }
+}
+
+/** A filter that is switched off is drawn as what switching it on will do, dim and without the fill, with "OFF" in its name: the picture differs from the picture of the same filter when it is on, and the lit curve is brighter. */
+void testSwitchedOffFilterIsDim()
+{
+    auto draw = [] (float on, std::vector<uint32_t>& px)
+    {
+        Rig r (2);
+        r.inst.set ("filter2.on", on);
+        r.inst.set ("filter2.model", 2.0f);
+        r.inst.set ("filter2.cutoff", 3000.0f);
+        r.refresh();
+        check (r.ui.full().display.state.filter2On == (on > 0.5f), "the display knows the filter is " + std::string (on > 0.5f ? "on" : "off"));
+        auto data = std::make_unique<gpu::SceneData>();
+        std::memset (data.get(), 0, sizeof (gpu::SceneData));
+        gpu::SceneBuilder sb (*data);
+        sb.begin (gpu::kKindPlay, 0, 1280, 800);
+        r.ui.draw (sb);
+        renderScene (*data, px);
+    };
+    std::vector<uint32_t> onPx, offPx;
+    draw (1.0f, onPx);
+    draw (0.0f, offPx);
+    // the light of the display region (the curve, its fill and the name): less for the filter that is off
+    auto peak = [] (const std::vector<uint32_t>& px)
+    {
+        uint64_t sum = 0;
+        for (int y = 180; y < 520; ++y)
+            for (int x = 120; x < 1100; ++x)
+            {
+                const uint32_t c = px[static_cast<size_t> (y) * 1280u + static_cast<size_t> (x)];
+                sum += ((c >> 16) & 255u) + ((c >> 8) & 255u) + (c & 255u);
+            }
+        return sum;
+    };
+    check (onPx != offPx && peak (offPx) < peak (onPx), "the response of a switched-off filter is drawn dimmer than the one of the filter when it is on (" + std::to_string (peak (offPx)) + " against " + std::to_string (peak (onPx)) + ")");
 }
 
 void testDualSceneHasThreeCurves()
@@ -805,6 +903,7 @@ int main()
     testRoutePopup();
     testQGroupsAndTurn();
     testModulationsPage();
+    testModulationsBoard();
     testTouchTargetsAndLayoutSizes();
     testQFrameIsOneBlock();
     testEveryKnobShowsItsValue();
@@ -812,6 +911,7 @@ int main()
     testDragShowsValues();
     testRealCurveAndLiveTargets();
     testDrawingAndSceneOps();
+    testSwitchedOffFilterIsDim();
     testDualSceneHasThreeCurves();
     testSerialAndParallelGiveDifferentResultingCurves();
     testResultingCurveEqualsSingleFilterWhenOtherOff();

@@ -373,7 +373,7 @@ void testModulatedKnobsShowTheirSource()
     check (k.state.numMods == 1 && k.state.selected() != nullptr && std::fabs (k.state.selected()->depth - 0.4) < 1.0e-6, "a slot with env1 on env1.release: the RELEASE knob has the depth arc of the selected source (env1)");
     r.refresh();
     check (r.ui.numTargets() == 1, "the envelope counts its targets: 1");
-    check (! r.ui.full().targetsBlock().empty(), "the full screen has the block of the targets when there is one");
+    check (r.ui.full().numTargetLines == 1 && r.ui.full().tagsRect().w >= 200 && r.ui.full().graph.rect().w > 1200, "the full screen lists its target as a tag in the top bar (room " + std::to_string (r.ui.full().tagsRect().w) + " px) and the graph keeps the whole width");
     check (r.ui.compact().instances.hasTargets (0) && ! r.ui.compact().instances.hasTargets (1),
            "compact env tabs: ENV 1 has target dot (hasTargets=true), ENV 2 has no mark (hasTargets=false)");
     check (r.ui.full().instances.hasTargets (0) && ! r.ui.full().instances.hasTargets (1),
@@ -390,12 +390,38 @@ void testModulatedKnobsShowTheirSource()
         Rig q;
         q.openFull();
         q.refresh();
-        check (q.ui.numTargets() == 0 && q.ui.full().targetsBlock().empty() && q.ui.full().graph.rect().w > 1200, "no target: no empty block, the graph takes the whole width (" + std::to_string (q.ui.full().graph.rect().w) + ")");
+        check (q.ui.numTargets() == 0 && q.ui.full().numTargetLines == 0 && q.ui.full().graph.rect().w > 1200, "no target: no tags, the graph takes the whole width (" + std::to_string (q.ui.full().graph.rect().w) + ")");
         check (q.ui.full().instances.targetMask() == 0, "no envelope has targets: targetMask is 0, no dots or marks on any tab");
         for (int i = 0; i < 6; ++i)
             check (! q.ui.full().instances.hasTargets (i) && ! q.ui.compact().instances.hasTargets (i),
                    "env " + std::to_string (i + 1) + " has no target dot");
     }
+}
+
+/** A control nothing modulates: its modulations page is the BOARD of every source; a tap on a chip makes the modulation of that control. */
+void testModulationsBoard()
+{
+    Rig r;
+    r.openFull();
+    r.tapC (r.ui.full().release, 700);   // a long press on RELEASE
+    ui::ModulationsPage& mp = r.ui.modsPage();
+    check (r.ui.topPage() == EnvUi::kPageMods && mp.numRows() == 0 && mp.boardShown() && mp.board.numSources() == static_cast<int> (synthyboy::modSourceCount()), "a long press on RELEASE with no modulation: the board of every source");
+    bool fits = mp.board.fits();
+    for (int i = 0; i < mp.board.numSources(); ++i)
+        fits = fits && mp.board.chipRect (i).h >= 56 && mp.rect().contains (mp.board.chipRect (i));
+    check (fits, "the chips are >= 56 px and inside the page");
+    const ui::Rect chip = mp.board.chipRectOfId (uibind::lfoSource (2));
+    r.tap (chip.x + chip.w / 2, chip.y + chip.h / 2);
+    int found = 0, dest = -1;
+    for (int sl = 0; sl < synthyboy::kNumModSlots; ++sl)
+        if (std::lround (r.inst.get (synthyboy::paramTable()[synthyboy::modSlotParams (sl).source].key)) == uibind::lfoSource (2))
+        {
+            ++found;
+            dest = static_cast<int> (std::lround (r.inst.get (synthyboy::paramTable()[synthyboy::modSlotParams (sl).destination].key)));
+        }
+    check (found == 1 && dest == static_cast<int> (synthyboy::modDestinationChoiceOf (static_cast<size_t> (envIdx (1, "release")))), "a tap on the LFO 2 chip makes the modulation LFO 2 -> env1.release");
+    r.refresh();
+    check (mp.numRows() == 1 && ! mp.boardShown(), "the row is on the page, the board is gone");
 }
 
 void testDotsFromTheVoices()
@@ -604,6 +630,7 @@ int main()
     testCompactGraphDragAndNoOverlapOfFullButton();
     testTargetsPage();
     testModulatedKnobsShowTheirSource();
+    testModulationsBoard();
     testDotsFromTheVoices();
     testDrawing();
     testHashChangesWithTheDots();

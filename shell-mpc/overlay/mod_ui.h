@@ -276,50 +276,12 @@ private:
     }
 
     // ---- the quick-add board: every source the engine has, in groups (ui_bind.h sourceGroup), in the order of the engine's table
-    /** The text of a chip: the engine's name of the source in capitals ("Poly Aftertouch" -> "POLY AFTERTOUCH"; the random LFOs by their short name, "RLFO 2"). */
-    static void boardLabel (int choice, char* out, size_t cap)
-    {
-        const char* key = synthyboy::modSourceTable()[choice - 1].key;
-        if (std::strncmp (key, "rlfo", 4) == 0)   // the random LFOs: the short name of the LFO page's instance bar (RLFO 1), so that the whole LFO family fits one row of the board
-            uibind::shortSourceName (uibind::sourceName (choice), out);
-        else
-            std::snprintf (out, cap, "%s", uibind::sourceName (choice));
-        for (char* c = out; *c != '\0'; ++c)
-            *c = static_cast<char> (std::toupper (static_cast<unsigned char> (*c)));
-    }
-    /** The name that picks the colour of a chip (theme::sourceColour): the short name of the source, the random sources as RND (the colour of the random LFO of the LFO page). */
-    static void boardColourName (int choice, char* out, size_t cap)
-    {
-        const char* key = synthyboy::modSourceTable()[choice - 1].key;
-        if (std::strncmp (key, "rlfo", 4) == 0 || std::strcmp (key, "random") == 0)
-            std::snprintf (out, cap, "RND");
-        else if (uibind::isMacroSource (choice))
-            std::snprintf (out, cap, "MAC");   // whatever the macro is called
-        else
-        {
-            char sn[7];
-            uibind::shortSourceName (uibind::sourceName (choice), sn);
-            std::snprintf (out, cap, "%s", sn);
-        }
-    }
+    /** The text of a chip and the name that picks its colour: the same functions as the board of the page of one control (ui_bind.h). */
+    static void boardLabel (int choice, char* out, size_t cap) { uibind::boardLabel (choice, out, cap); }
+    static void boardColourName (int choice, char* out, size_t cap) { uibind::boardColourName (choice, out, cap); }
     void fillBoard()
     {
-        ui::ModSourceBoard& b = matrix_.board;
-        b.clear();
-        for (int g = 1; g <= uibind::kSourceGroups; ++g)
-            b.setGroupName (g - 1, uibind::sourceGroupName (g));
-        // the order of a group is the engine's, except that the random LFOs come after the ten LFOs (LFO 1 .. 10, then RLFO 1 .. 4: the engine numbers its LFO 9 and 10 after them); display order only, the choice
-        // numbers (the engine's indices) are what the chips carry
-        for (int g = 1; g <= uibind::kSourceGroups; ++g)
-            for (int pass = 0; pass < 2; ++pass)
-                for (int c = 1; c <= static_cast<int> (synthyboy::modSourceCount()); ++c)
-                    if (uibind::sourceGroup (c) == g && (std::strncmp (synthyboy::modSourceTable()[c - 1].key, "rlfo", 4) == 0) == (pass == 1))
-                    {
-                        char label[28], colour[12];
-                        boardLabel (c, label, sizeof label);
-                        boardColourName (c, colour, sizeof colour);
-                        b.add (c, label, colour, g - 1);
-                    }
+        uibind::fillSourceBoard (matrix_.board);
         matrix_.rebuildVisibleList();
     }
 

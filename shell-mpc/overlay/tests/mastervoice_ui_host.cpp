@@ -64,7 +64,7 @@ void testMasterSidesAndBlocks()
     check (m.side() == ui::MasterScreen::SideMain, "the first side is MAIN: OUTPUT, PITCH, VOICES, GLIDE");
     std::string bad;
     std::vector<ui::Component*> main = { &m.volume, &m.spread, &m.stereoRouting, &m.voiceOverride, &m.tune, &m.transpose, &m.bendUp, &m.bendDown, &m.bendLink, &m.polyphony, &m.legato, &m.polyLegato, &m.phaseLegato,
-                                         &m.sameNote, &m.stealPriority, &m.velocityTrack, &m.voiceMeter, &m.portaTime, &m.portaSlope, &m.portaAlways, &m.portaScaled };
+                                         &m.sameNote, &m.stealPriority, &m.velocityTrack, &m.padPressure, &m.padAmount, &m.portaTime, &m.portaSlope, &m.portaAlways, &m.portaScaled };
     check (sizesOk (main, bad), "every control of the side MAIN is >= 56 px high and has its minimum size " + bad);
     // each block holds its group, and the blocks are filled (the controls reach the lower part of the block)
     bool inside = true, filled = true;
@@ -77,30 +77,29 @@ void testMasterSidesAndBlocks()
         const int n = m.collectLeaves (all, 0, 96);
         inside = inside && m.groups[g].check (all, n) == 0;
     }
-    filled = filled && m.voiceMeter.rect().bottom() >= m.blockRect (2).bottom() - 90;
+    filled = filled && m.padAmount.rect().bottom() >= m.blockRect (2).bottom() - 90;
     filled = filled && m.bendLink.rect().bottom() >= m.blockRect (1).bottom() - 40;
-    filled = filled && m.portaCurve.rect().bottom() >= m.blockRect (3).bottom() - 40;
+    filled = filled && m.portaScaled.rect().bottom() >= m.blockRect (3).bottom() - 40 && m.portaCurve.rect().bottom() >= m.blockRect (3).bottom() - 40;
     filled = filled && m.voiceOverride.rect().bottom() >= m.blockRect (0).bottom() - 90;
     check (inside, "the Q group of OUTPUT, PITCH, VOICES and GLIDE lies in its block and nothing else is in its frame");
-    check (filled, "the groups fill their blocks (>= 140 px high, reaching the lower part; PITCH and GLIDE: a row of four cells and LINK / the curve under it)");
-    check (m.volume.rect().h >= 200 && m.volume.rect().w >= 140, "the VOLUME is a big knob (" + std::to_string (m.volume.rect().w) + " x " + std::to_string (m.volume.rect().h) + ")");
-    // one knob family: only VOLUME and SPREAD are large (their cell is taller, so they are drawn larger); PITCH and GLIDE use the cell grid of VOICES (four equal columns), their four Q cells have one height and width,
-    // LINK is the same toggle as LEGATO under the row, and the two blocks reach the right edge and the bottom of their block
-    check (m.volume.state.large && m.spread.state.large && ! m.tune.state.large && ! m.portaTime.state.large && ! m.portaSlope.state.large, "only VOLUME and SPREAD are large knobs");
-    check (m.volume.rect().h >= m.tune.rect().h + 60 && m.spread.rect().h >= m.portaTime.rect().h + 60, "the large knobs have the tall cells (" + std::to_string (m.volume.rect().h) + " against " + std::to_string (m.tune.rect().h) + ")");
+    check (filled, "the groups fill their blocks (reaching the lower part: PITCH has LINK under its row, VOICES three rows, GLIDE the two toggles and a curve of the whole height)");
+    check (m.volume.rect().h >= 180 && m.volume.rect().w >= 110, "the knobs of OUTPUT are big (" + std::to_string (m.volume.rect().w) + " x " + std::to_string (m.volume.rect().h) + ")");
+    // one knob family: the three knobs of OUTPUT are large (one size); TUNE is the medium variant (dial at the left, text beside it); GLIDE and SLOPE the common size
+    check (m.volume.state.large && m.spread.state.large && m.stereoRouting.state.large && ! m.tune.state.large && ! m.portaTime.state.large && ! m.portaSlope.state.large, "VOLUME, SPREAD and STEREO are the large knobs, the others are not");
+    check (m.volume.rect().w == m.spread.rect().w && std::abs (m.stereoRouting.rect().w - m.spread.rect().w) <= 1 && m.volume.rect().h == m.stereoRouting.rect().h, "the three knobs of OUTPUT share one cell size");
     {
-        const int cw = m.polyphony.rect().w;
-        const ui::Rect pi = m.inner (1), gi = m.inner (3);
-        auto near = [] (int a, int b) { return std::abs (a - b) <= 1; };
-        check (near (m.tune.rect().w, cw) && near (m.transpose.rect().w, cw) && near (m.bendUp.rect().w, cw) && near (m.bendDown.rect().w, cw) && near (m.portaTime.rect().w, cw) && near (m.portaSlope.rect().w, cw)
-                   && near (m.portaAlways.rect().w, 2 * cw + m.portaSlope.rect().x - m.portaTime.rect().right()) && m.portaAlways.rect().w == m.portaScaled.rect().w,
-               "PITCH and GLIDE cells are the cells of the VOICES grid (" + std::to_string (cw) + " px)");
-        check (m.tune.rect().h == m.transpose.rect().h && m.transpose.rect().h == m.bendUp.rect().h && m.bendUp.rect().h == m.bendDown.rect().h && m.portaTime.rect().h == m.portaSlope.rect().h && m.portaAlways.rect().h == m.portaScaled.rect().h,
-               "the four cells of the PITCH group have one height (TRANSPOSE is as tall as BEND UP); GLIDE and SLOPE one, ALWAYS and SCALED one (the wide toggle of the page)");
-        check (m.tune.rect().h == m.portaTime.rect().h, "the knobs of PITCH and GLIDE have the same cell");
-        check (m.bendDown.rect().right() == pi.right() && m.portaScaled.rect().right() == gi.right() && m.portaAlways.rect().right() == gi.right() && m.bendLink.rect().w == pi.w && m.bendLink.rect().bottom() <= pi.bottom() && m.portaCurve.rect().bottom() >= gi.bottom() - 2 && m.portaCurve.rect().w == gi.w,
-               "PITCH and GLIDE fill their block across the width; LINK and the curve are under the row of four");
-        check (! m.bendLink.state.knobLike && m.bendLink.rect().h >= 56 && ! m.bendLink.rect().overlaps (m.groups[1].rect()), "LINK is the plain toggle of the page (not a knob cell), outside the Q frame of PITCH");
+        const ui::Rect pi = m.inner (1), gi = m.inner (3), vi = m.inner (2);
+        check (m.tune.state.side && m.tune.rect().h == m.transpose.rect().h && m.transpose.rect().h == m.bendUp.rect().h && m.bendUp.rect().h == m.bendDown.rect().h && m.portaTime.rect().h == m.portaSlope.rect().h && m.portaAlways.rect().h == m.portaScaled.rect().h,
+               "the four cells of the PITCH group have one height (TRANSPOSE is as tall as BEND UP); GLIDE and SLOPE one, ALWAYS and SCALED one");
+        check (m.bendDown.rect().right() == pi.right() && m.bendLink.rect().bottom() <= pi.bottom() && m.bendLink.rect().y >= m.bendUp.rect().bottom() + ui::kQLane && m.portaCurve.rect().right() == gi.right() && m.portaCurve.rect().h == gi.h,
+               "PITCH fills its block across the width with LINK under the bend fields; the curve of GLIDE takes the right half in the whole height");
+        // the LED controls: no box and no second look: every switch of the page is a LedToggle, every short list a LedList (the type says it; the library draws no box for them)
+        check (dynamic_cast<ui::LedToggle*> (&m.legato) && dynamic_cast<ui::LedToggle*> (&m.bendLink) && dynamic_cast<ui::LedToggle*> (&m.portaAlways) && dynamic_cast<ui::LedList*> (&m.sameNote) && dynamic_cast<ui::LedList*> (&m.stealPriority) && dynamic_cast<ui::LedList*> (&m.voiceOverride),
+               "the switches and the short lists of MAIN are LED controls (no box around each of them)");
+        // the chips of one group stand on one line where the members are in one row (the cell is the member: the toggle is drawn inside it)
+        check (m.polyphony.rect().y == m.legato.rect().y && m.legato.rect().y == m.polyLegato.rect().y && m.polyLegato.rect().y == m.phaseLegato.rect().y, "VOICES 1: the four members stand in one row (the chips of the group on one line)");
+        check (m.velocityTrack.rect().y == m.sameNote.rect().y && m.sameNote.rect().y == m.stealPriority.rect().y && m.stealPriority.rect().bottom() <= vi.bottom(), "VOICES 2: VEL TRACK, SAME NOTE and STEAL in one row");
+        check (m.portaTime.rect().y == m.portaSlope.rect().y && m.portaAlways.rect().y == m.portaScaled.rect().y, "GLIDE: the knobs in one row, ALWAYS and SCALED in one row");
     }
     // the second side
     r.tap (m.sideTuning);
@@ -136,8 +135,9 @@ void testMasterValuesAndWrites()
     check (std::string (m.tune.state.valueText).find ("ct") != std::string::npos, "the tune is in cents (" + std::string (m.tune.state.valueText) + ")");
     check (std::string (m.portaTime.state.valueText) == "120 ms", "the glide time is 120 ms (" + std::string (m.portaTime.state.valueText) + ")");
     check (std::string (m.spread.state.valueText).find ("%") != std::string::npos, "the spread is a percent (" + std::string (m.spread.state.valueText) + ")");
-    check (m.voiceOverride.state.caption[0] != '\0' && std::string (m.voiceOverride.state.caption) == "VOICE OVERRIDE" && std::string (m.stereoRouting.state.caption) == "STEREO", "the steppers of OUTPUT have their names (no unlabeled stepper)");
-    check (std::string (m.voiceOverride.state.text) != "" && std::string (m.voiceOverride.state.text) == "Kill", "the voice override is written by name: " + std::string (m.voiceOverride.state.text));
+    check (std::string (m.voiceOverride.state.title) == "VOICE OVERRIDE" && std::string (m.stereoRouting.state.label) == "STEREO", "the list and the knob of OUTPUT have their names (no unlabeled control)");
+    check (m.voiceOverride.state.count == 2 && std::string (m.voiceOverride.state.names[m.voiceOverride.state.index]) == "Kill", "the voice override is a LED list of both options, the lit one written by name: " + std::string (m.voiceOverride.state.names[m.voiceOverride.state.index]));
+    check (m.stereoRouting.state.valueText[0] != '\0' && std::string (m.stereoRouting.state.valueText).find ("%") != std::string::npos, "STEREO is a knob with a percentage (" + std::string (m.stereoRouting.state.valueText) + ")");
 
     const ui::Rect v = m.volume.rect();
     r.drag (v.x + v.w / 2, v.y + v.h / 2, v.x + v.w / 2, v.y + v.h / 2 - 50, true);
@@ -148,12 +148,23 @@ void testMasterValuesAndWrites()
     const ui::Rect t = m.transpose.rect();
     r.drag (t.x + t.w / 2, t.y + t.h / 2, t.x + t.w / 2, t.y + t.h / 2 - 40, true);
     check (r.inst.get ("master.transpose") > 0.0f, "dragging TRANSPOSE writes master.transpose (" + std::to_string (r.inst.get ("master.transpose")) + ")");
-    // a stepper opens its list in the middle
-    r.tap (m.voiceOverride);
-    check (r.ui.topPage() == MasterUi::kPageList && r.ui.list().state.count == static_cast<int> (synthyboy::paramTable()[demo::Inst::idx ("master.voice_override")].numChoices), "a tap on the name of a stepper opens its list");
+    // a LED list: one tap on the row writes the choice, no list pops up
+    {
+        const ui::Rect row = m.voiceOverride.rowRect (1);
+        r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
+        check (r.inst.get ("master.voice_override") == 1.0f && r.ui.topPage() == 0, "a tap on a row of the LED list writes the choice (no pop-up)");
+        const ui::Rect s5 = m.stealPriority.rowRect (4);
+        r.tapAt (s5.x + s5.w / 2, s5.y + s5.h / 2);
+        check (r.inst.get ("master.voice.steal_priority") == 4.0f && m.stealPriority.state.count == 5, "the STEAL list shows its five options and the fifth one is written by a tap");
+    }
+    // a long list stays a stepper and opens its list in the middle
+    r.tap (m.sideTuning);
+    r.tap (m.scaleType);
+    check (r.ui.topPage() == MasterUi::kPageList && r.ui.list().state.count == static_cast<int> (synthyboy::paramTable()[demo::Inst::idx ("master.scale.type")].numChoices), "a tap on the name of a long list (SCALE) opens its list");
     const ui::Rect row = r.ui.list().rowRect (1);
     r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
-    check (r.inst.get ("master.voice_override") == 1.0f && r.ui.topPage() == 0, "a row writes the choice and closes the list");
+    check (r.inst.get ("master.scale.type") == 1.0f && r.ui.topPage() == 0, "a row writes the choice and closes the list");
+    r.tap (m.sideMain);
 }
 
 void testMasterGroupsAndMeters()
@@ -167,7 +178,7 @@ void testMasterGroupsAndMeters()
     r.tap (m.bendLink);
     check (m.activeGroup() == 2 && r.inst.q[0] == demo::Inst::idx ("master.bend_down_link"), "a touch on LINK makes it the Q group");
     r.tap (m.velocityTrack);
-    check (m.activeGroup() == 4 && r.inst.q[2] == demo::Inst::idx ("master.velocity_track"), "a touch on VEL TRACK makes VOICES 2 the Q group");
+    check (m.activeGroup() == 4 && r.inst.q[0] == demo::Inst::idx ("master.velocity_track"), "a touch on VEL TRACK makes VOICES 2 the Q group");
     r.tap (m.sideTuning);
     check (m.activeGroup() == 6, "switching to TUNING restores SCALE default Q group");
     r.tap (m.mpeBendToX);
@@ -257,7 +268,7 @@ void testVoiceLayout()
     ui::VoiceScreen& v = r.ui.screen();
     check (v.rect().w == 1280 && v.rect().h == 628 && r.stack.element() == VoiceUi::kElementPage, "the page has the whole tab and is the element of the Voice tab");
     std::string bad;
-    std::vector<ui::Component*> cs = { &v.length, &v.qStepSelect, &v.qRowSelect, &v.stepValue, &v.randPan, &v.randDetune, &v.randCutoff, &v.randEnv, &v.randDetune10x, &v.scaleEnv, &v.scaleLfo, &v.scaleLfoMode, &v.oscA, &v.oscB, &v.oscC, &v.oscSub, &v.oscNoise };
+    std::vector<ui::Component*> cs = { &v.length, &v.qStepSelect, &v.rowList, &v.stepValue, &v.randPan, &v.randDetune, &v.randCutoff, &v.randEnv, &v.randDetune10x, &v.scaleEnv, &v.scaleLfo, &v.scaleLfoMode, &v.oscA, &v.oscB, &v.oscC, &v.oscSub, &v.oscNoise };
     check (sizesOk (cs, bad), "every control of the Voice page is >= 56 px high and has its minimum size " + bad);
     bool inside = true;
     static const int kVoiceGroupBlock[6] = { -1, 0, 0, 1, 2, 2 };
@@ -312,9 +323,22 @@ void testVoiceGridDrawing()
     r.refresh();
     check (g.value (1, 5) < -0.2f && g.value (2, 5) > 0.3f, "the grid has every row's value of the step");
     check (std::string (g.rowName (0)) == "PAN" && r.ui.screen().stripRect().h >= 40, "the strip under the grid has the room for the values of the step");
-    // a row tab
-    r.tapAt (g.tabRect (2).x + 10, g.tabRect (2).y + 10);
-    check (g.activeRow == 2 && std::string (r.ui.screen().qRowSelect.state.text) == "CUTOFF", "a row tab selects the row");
+    // the row: a LED list of six rows (56 px each), at the left of the grid
+    ui::VoiceScreen& vs = r.ui.screen();
+    check (vs.rowList.state.count == 6 && std::string (vs.rowList.state.names[2]) == "CUTOFF" && std::string (vs.rowList.state.title) == "ROW", "the ROW list has the six rows by name, all visible");
+    bool tall = true;
+    for (int i = 0; i < 6; ++i)
+        tall = tall && vs.rowList.rowRect (i).h >= 56 && vs.rowList.rowRect (i).w >= 96;
+    check (tall && vs.rowList.sizeOk(), "every row of the ROW list is a touch target of at least 56 px (the old tabs were 35 px)");
+    check (vs.rowBlockRect().contains (vs.rowList.rect()) && vs.rowBlockRect().right() <= g.rect().x && ! vs.rowBlockRect().overlaps (g.rect()), "the list stands in a block of its own at the left of the grid, the grid has the rest of the width");
+    const ui::Rect row2 = vs.rowList.rowRect (2);
+    r.tapAt (row2.x + row2.w / 2, row2.y + row2.h / 2);
+    check (g.activeRow == 2 && vs.rowList.state.index == 2 && r.inst.q[1] != -1 && QRouter::indexOf (r.inst.q[1]) == VoiceUi::kVirtualRow, "a tap on CUTOFF selects the row; the list is Q2 of the header group (the virtual row target)");
+    check (vs.groups[0].member (1) == &vs.rowList && vs.groups[0].frameless() && vs.groups[0].numMembers() == 4, "the header group is [STEP, the ROW list, LENGTH, VALUE] and has no frame (its members lie apart)");
+    check (std::string (vs.stepValue.state.label) == "CUTOFF", "the VALUE field names the row (" + std::string (vs.stepValue.state.label) + ")");
+    check (vs.length.rect().w >= 160 && vs.stepValue.rect().w >= 180 && vs.qStepSelect.rect().right() <= vs.length.rect().x, "LENGTH and VALUE have the room the ROW stepper left (" + std::to_string (vs.length.rect().w) + ", " + std::to_string (vs.stepValue.rect().w) + " px)");
+    check (r.ui.screen().turnQ (1, 1.0).index == 3, "a Q-Link step on Q2 moves the row on (the list)");
+    r.refresh();
 }
 
 void testVoiceStepsLitAndQ()

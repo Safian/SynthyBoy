@@ -91,6 +91,7 @@ public:
             started_ = true;
             sel_ = editFilter_ = std::clamp (in.instance, 1, 2);
         }
+        full_.instances.state.index = sel_ - 1;   // the selector follows the filter the page shows (the Filter 2 tab opens on F2), not only a tap on it
         stackDepth_ = stack.depth();
         syncPages (stack);
         envSel_ = inst.playSelection (1);
@@ -483,6 +484,8 @@ private:
             mi = uibind::modsOf (v, activeModParam_, selectedSource_, modRows_);
         else
             for (ModRow& r : modRows_) r = {};
+        if (mi.numMods == 0)   // nothing modulates the control yet: the page is the board of every source (ui/mod_board.h), a tap on a chip makes the modulation
+            uibind::fillSourceBoard (mods_.board);
         mods_.load (mi, title);
         mods_.back.setId (kModsBack);
         mods_.addSource.setId (kModsAddStep);

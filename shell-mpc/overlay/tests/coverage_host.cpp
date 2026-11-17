@@ -28,6 +28,7 @@
 #include "../mod_ui.h"
 #include "../osc_ui.h"
 #include "../scene_cpu.h"
+#include "../../ui/fx_layout.h"
 #include "synthyboy/fx_types.h"
 #include "synthyboy/modulation.h"
 
@@ -613,30 +614,50 @@ Module testFx()
         for (int i = 0; i < count(); ++i)
             if (startsWith (tbl()[i].key, extra))
                 m.params.insert (i);
+    // the states of an effect that make a control live (ui/fx_layout.h: a control that does nothing in the state of the effect is not on the page): the default state and every value of every key a condition of the
+    // effect's table names, one at a time (the room of the reverb in Nitrous, the division in a tempo sync, the formant values in the Formant model ...)
+    struct Variant { std::string key; float value; };
+    auto variantsOf = [] (int kind)
+    {
+        std::vector<Variant> v { { "", 0.0f } };
+        const ui::fxl::Layout& lay = ui::fxl::layoutOf (kind);
+        std::set<std::string> seen;
+        for (int r = 0; r < lay.numRows; ++r)
+            for (int c = 0; c < 4; ++c)
+                for (const ui::fxl::Alt& a : lay.row[r].cell[c].alt)
+                    if (a.key != nullptr && ! a.live.always() && seen.insert (a.live.key).second)
+                        if (const ParamInfo* pi = synthyboy::findParamByKey (a.live.key))
+                            for (int ch = 0; ch < std::max (1, static_cast<int> (pi->numChoices)); ++ch)
+                                v.push_back ({ a.live.key, static_cast<float> (ch) });
+        return v;
+    };
     // modules by their type: switch only that module on (the chain has one card, the editor shows it)
     for (int t = 1; t < synthyboy::kNumFxInstanceTypes; ++t)
     {
         const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (t);
-        auto make = [&] { auto h = std::make_unique<Harness<FxUi>> (FxUi::kElementFx); h->inst.set (tbl()[d.onIndex].key, 1.0f); return h; };
-        {
-            auto h = make();
-            h->refresh();
-            const int rows = h->ui.screen().slotEditor.numRows();
-            for (int pageFirst = 0; pageFirst < std::max (1, rows); ++pageFirst)
-            {
-                h->ui.screen().setActiveGroup (pageFirst);
-                h->refresh();
-                h->addQ (m.qMembers);
-            }
-        }
         std::set<int> own;
         for (int i = 0; i < count(); ++i)
             if (startsWith (tbl()[i].key, std::string (d.prefix) + "."))
                 own.insert (i);
-        for (int row = 0; row < 8; ++row)   // the editor shows two rows of four a page: every row
-            probeControls (own, [&] { auto h = make(); h->refresh(); h->ui.screen().setActiveGroup (row); return h; }, m.controls);
+        for (const Variant& var : variantsOf (t))
+        {
+            auto make = [&] { auto h = std::make_unique<Harness<FxUi>> (FxUi::kElementFx); h->inst.set (tbl()[d.onIndex].key, 1.0f); if (! var.key.empty()) h->inst.set (var.key.c_str(), var.value); return h; };
+            {
+                auto h = make();
+                h->refresh();
+                const int rows = h->ui.screen().slotEditor.numRows();
+                for (int pageFirst = 0; pageFirst < std::max (1, rows); ++pageFirst)
+                {
+                    h->ui.screen().setActiveGroup (pageFirst);
+                    h->refresh();
+                    h->addQ (m.qMembers);
+                }
+            }
+            for (int row = 0; row < 8; ++row)   // every row of every page
+                probeControls (own, [&] { auto h = make(); h->refresh(); h->ui.screen().setActiveGroup (row); return h; }, m.controls);
+        }
     }
-    // the splitters have no editor (they are not in the pool): the chain card is all there is
+    // the splitters are modules of the fixed chain without a type of the pool: their page is the table of the splitter
     for (const char* pre : { "splitter_lh.", "splitter_lmh.", "splitter_ms." })
     {
         std::set<int> own;
@@ -644,30 +665,55 @@ Module testFx()
             if (startsWith (tbl()[i].key, pre))
                 own.insert (i);
         const std::string onKey = std::string (pre) + "on";
-        probeControls (own, [&] { auto h = std::make_unique<Harness<FxUi>> (FxUi::kElementFx); h->inst.set (onKey.c_str(), 1.0f); return h; }, m.controls);
-    }
-    // the pool: a slot of every type; its parameters are the generic p01 .. p24 (the first `count` of them mean something)
-    for (int t = 1; t < synthyboy::kNumFxInstanceTypes; ++t)
-    {
-        const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (t);
-        const synthyboy::FxInstanceKeys& k = synthyboy::fxInstanceKeys (0);
-        auto make = [&] { auto h = std::make_unique<Harness<FxUi>> (FxUi::kElementFx); h->inst.set (tbl()[k.type].key, static_cast<float> (t)); h->inst.set (tbl()[k.on].key, 1.0f); return h; };
+        auto make = [&] { auto h = std::make_unique<Harness<FxUi>> (FxUi::kElementFx); h->inst.set (onKey.c_str(), 1.0f); return h; };
         {
             auto h = make();
             h->refresh();
-            const int rows = h->ui.screen().slotEditor.numRows();
-            for (int r = 0; r < std::max (1, rows); ++r)
+            for (int r = 0; r < std::max (1, h->ui.screen().slotEditor.numRows()); ++r)
             {
                 h->ui.screen().setActiveGroup (r);
                 h->refresh();
                 h->addQ (m.qMembers);
             }
         }
+        for (int row = 0; row < 8; ++row)
+            probeControls (own, [&] { auto h = make(); h->refresh(); h->ui.screen().setActiveGroup (row); return h; }, m.controls);
+    }
+    // the pool: a slot of every type; its parameters are the generic p01 .. p24 (the first `count` of them mean something)
+    for (int t = 1; t < synthyboy::kNumFxInstanceTypes; ++t)
+    {
+        const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (t);
+        const synthyboy::FxInstanceKeys& k = synthyboy::fxInstanceKeys (0);
         std::set<int> own { k.type, k.on, k.rack, k.order };
         for (int p = 0; p < d.count; ++p)
             own.insert (k.p[p]);
-        for (int row = 0; row < 8; ++row)
-            probeControls (own, [&] { auto h = make(); h->refresh(); h->ui.screen().setActiveGroup (row); return h; }, m.controls);
+        for (const Variant& var : variantsOf (t))
+        {
+            auto make = [&]
+            {
+                auto h = std::make_unique<Harness<FxUi>> (FxUi::kElementFx);
+                h->inst.set (tbl()[k.type].key, static_cast<float> (t));
+                h->inst.set (tbl()[k.on].key, 1.0f);
+                if (! var.key.empty())
+                    for (int p = 0; p < d.count; ++p)
+                        if (std::strcmp (tbl()[d.source[p]].key, var.key.c_str()) == 0)
+                            h->inst.set (tbl()[k.p[p]].key, synthyboy::fxInstanceNormalise (t, p, var.value));
+                return h;
+            };
+            {
+                auto h = make();
+                h->refresh();
+                const int rows = h->ui.screen().slotEditor.numRows();
+                for (int r = 0; r < std::max (1, rows); ++r)
+                {
+                    h->ui.screen().setActiveGroup (r);
+                    h->refresh();
+                    h->addQ (m.qMembers);
+                }
+            }
+            for (int row = 0; row < 8; ++row)
+                probeControls (own, [&] { auto h = make(); h->refresh(); h->ui.screen().setActiveGroup (row); return h; }, m.controls);
+        }
     }
     // the pool's slots 2 .. 16 are the same keys at another number: the slot-1 result carries over by position
     {
@@ -779,12 +825,7 @@ void initKnownGaps()
     known()["Filter 2"].notQ = {
         "filter2.on", "filter2.model", "filter2.style", "filter2.formant.resonance", "filter2.clean_mode"
     };
-    // FX noControl: 14
-    known()["FX"].noControl = {
-        "reverb.force_enable", "splitter_lh.freq", "splitter_lh.low_bypass", "splitter_lh.high_bypass", "splitter_lh.level", "splitter_lmh.freq_low",
-        "splitter_lmh.freq_high", "splitter_lmh.low_bypass", "splitter_lmh.mid_bypass", "splitter_lmh.high_bypass", "splitter_lmh.level", "splitter_ms.mid_bypass",
-        "splitter_ms.side_bypass", "splitter_ms.level"
-    };
+    // FX noControl: 0 (the splitters have their pages, the force enable of the reverb stands in its table, every state of the effects is probed)
     // FX notQ: 52
     known()["FX"].notQ = {
         "fxfilter.on", "fx.order.1", "fx.order.2", "fx.order.3", "fx.order.4", "fx.order.5", "fx.order.6", "fx.order.7", "fx.order.8", "fx.order.9", "chorus.on",
@@ -806,12 +847,9 @@ void initKnownGaps()
     known()["Mixer"].notQ = {
         "bus1.destination", "bus2.destination", "bus1.fx_bypass", "bus2.fx_bypass", "main.fx_bypass"
     };
-    // Whole table noControl: 19
+    // Whole table noControl: 5
     known()["Whole table"].noControl = {
-        "curve.velocity.legato", "curve.note.legato", "direct.level", "reverb.force_enable", "splitter_lh.freq",
-        "splitter_lh.low_bypass", "splitter_lh.high_bypass", "splitter_lh.level", "splitter_lmh.freq_low", "splitter_lmh.freq_high",
-        "splitter_lmh.low_bypass", "splitter_lmh.mid_bypass", "splitter_lmh.high_bypass", "splitter_lmh.level", "splitter_ms.mid_bypass",
-        "splitter_ms.side_bypass", "splitter_ms.level", "quality.oversample_4x", "quality.no_smoothing"
+        "curve.velocity.legato", "curve.note.legato", "direct.level", "quality.oversample_4x", "quality.no_smoothing"
     };
 
 }

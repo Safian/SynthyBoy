@@ -1,11 +1,13 @@
 // SynthyBoy - MPC UI component library: the parts of the LFO element that the oscillator did not need: ShapePicker (the 12 built-in shapes and the drawn one, as a grid of cells with the shape drawn in
-// each), SyncSwitch (HZ / BPM / KEY with TRIP and DOT), RateControl (the rate knob or the division stepper, whichever the sync mode says), InstanceBar (the LFO 1 .. 10 cells with the page cell and the
+// each), SyncSwitch (the logic of HZ / BPM / KEY with TRIP and DOT), RateControl (the rate knob or the division stepper, whichever the sync mode says), InstanceBar (the LFO 1 .. 10 cells with the page cell and the
 // RND 1 .. 4 cells) . Everything else is built from the base components (base.h) and the composites of the oscillator.
 // Same contract as every component (core.h): a state and a rectangle in, a drawing and a change { id, value } out.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include "led_list.h"
+#include "led_toggle.h"
 #include "lfo_model.h"
 #include "panel.h"
 
@@ -142,106 +144,104 @@ private:
 };
 
 // ===============================================================================================================================================================
-/** SyncSwitch: the sync of an LFO as the player thinks of it: the mode HZ / BPM / KEY (three cells) and the switches TRIP and DOT (they only work in BPM mode: dim otherwise). In: the sync value of the parameter
-    (0 Free, 1 Tempo, 2 dotted, 3 triplet, 4 Key follow: `setSync`). Out: the changes of the three children (`mode`, `trip`, `dot`) with the ids the owner gave; `nextSync (child, change)` turns such a change into the
-    sync value to write (the mode keeps the switches, a switch exclude the other). turn goes to the mode cells. */
-class SyncSwitch : public Composite
+/** SyncSwitch: the sync of an LFO as the player thinks of it. The mode HZ / BPM / KEY is a LED list of three (`mode`, the Q member of the TIMING block: a knob step moves the selection); the switches TRIP and DOT
+    (`trip`, `dot`, LED toggles that only work in BPM mode) are drawn by the RateControl next to the division, where they act (`RateControl::trip`, `dot`; this class only holds the logic). In: the sync value of
+    the parameter (0 Free, 1 Tempo, 2 dotted, 3 triplet, 4 Key follow: `setSync`). Out: `nextSync (part, change)` turns a change of the list (part Mode) or of one of the two switches into the sync value to write
+    (the mode keeps the switches, a switch excludes the other). It is no component: the screen owns the three controls and adds them as its own children. */
+class SyncSwitch
 {
 public:
-    PictogramSelector mode;
-    ToggleIcon trip, dot;
+    enum Part : int { Mode = 0, Trip = 1, Dot = 2 };
+    LedList mode;
 
     SyncSwitch()
     {
-        mode.setItem (0, -1, "HZ"); mode.setItem (1, -1, "BPM"); mode.setItem (2, -1, "KEY");
-        trip.state.icon = ToggleIcon::Icon::Generic; trip.setLabel ("TRIP");
-        dot.state.icon = ToggleIcon::Icon::Generic; dot.setLabel ("DOT");
-        addKid (mode); addKid (trip); addKid (dot);
-        setPrimary (&mode);
+        static const char* const names[3] = { "HZ", "BPM", "KEY" };
+        mode.setOptions (names, 3);
     }
     void setSync (int sync)
     {
         sync_ = sync;
         mode.state.index = static_cast<int> (lfo::syncModeOf (sync));
-        trip.state.on = lfo::syncTrip (sync);
-        dot.state.on = lfo::syncDot (sync);
-        syncKids();
     }
     int sync() const noexcept { return sync_; }
-    /** The sync value after a change of one of the children (the current one when the change is none of the three). */
-    int nextSync (const Component* child, const Change& c) const noexcept
+    bool trip() const noexcept { return lfo::syncTrip (sync_); }
+    bool dot() const noexcept { return lfo::syncDot (sync_); }
+    /** The sync value after a change of the list (`Mode`) or of a switch (`Trip`, `Dot`); the current one when the change is none of the three. */
+    int nextSync (int part, const Change& c) const noexcept
     {
         using M = lfo::SyncMode;
         M m = lfo::syncModeOf (sync_);
         bool tr = lfo::syncTrip (sync_), dt = lfo::syncDot (sync_);
-        if (child == &mode && c.kind == ChangeKind::Index)
+        if (part == Mode && c.kind == ChangeKind::Index)
             m = static_cast<M> (std::clamp (c.index, 0, 2));
-        else if (child == &trip && c.kind == ChangeKind::Index) { tr = c.index != 0; if (tr) dt = false; }
-        else if (child == &dot && c.kind == ChangeKind::Index) { dt = c.index != 0; if (dt) tr = false; }
+        else if (part == Trip && c.kind == ChangeKind::Index) { tr = c.index != 0; if (tr) dt = false; }
+        else if (part == Dot && c.kind == ChangeKind::Index) { dt = c.index != 0; if (dt) tr = false; }
         return lfo::syncOf (m, tr, dt);
     }
-    Size minSize() const override { return { 3 * 56 + 2 * 72 + 2 * kGap, 56 }; }
 
-protected:
-    void syncKids() override
-    {
-        mode.setEnabled (enabled_);
-        const bool tempo = lfo::syncModeOf (sync_) == lfo::SyncMode::Bpm;
-        trip.setEnabled (enabled_ && tempo);
-        dot.setEnabled (enabled_ && tempo);
-    }
-    void layout() override
-    {
-        Rect r[3];
-        const int fixed[3] = { 0, 72, 72 }, weight[3] = { 1, 0, 0 };
-        layoutRow (rect_, fixed, weight, 3, kGap, r);
-        mode.place (r[0]); trip.place (r[1]); dot.place (r[2]);
-        syncKids();
-    }
+private:
     int sync_ = 0;
 };
 
 // ===============================================================================================================================================================
-/** RateControl: the speed of an LFO. In the Hz mode the knob (RATE, in Hz), in the BPM mode the division stepper (1/4 note, 1/8 note ...), in the KEY mode the knob drawn dim (the rate follows the key: the
-    knob has nothing to say). One component for the compact view and the full screen; the Q group member is the whole control, the hardware knob turns whichever of the two is shown (`primary`). With
-    `setShowMode (true)` (the compact view, which has no sync switch of its own) the three cells HZ / BPM / KEY stand at the right of it: the sync mode is one touch away. */
+/** RateControl: the speed of an LFO. In the Hz mode the knob (RATE, in Hz), in the BPM mode the division stepper (1/4 note, 1/8 note ...) and, when the screen asks for them (`setTripDot`), the two LED toggles
+    TRIP and DOT under it, in the KEY mode the knob drawn dim (the rate follows the key: the knob has nothing to say). One component for the compact view and the full screen; the Q group member is the whole
+    control, the hardware knob turns whichever of the two is shown (`primary`). With `setShowMode (true)` (the compact view, which has no sync list of its own) the LED list HZ / BPM / KEY stands at the right
+    of it: the sync mode is one touch away. */
 class RateControl : public Composite
 {
 public:
     Knob rate { "RATE" };
     Stepper division;
-    PictogramSelector modeCells;
-    static constexpr int kModeW = 3 * 56;
+    LedList modeCells;
+    LedToggle trip, dot;   // in the BPM mode, under the division (full screen only)
+    static constexpr int kModeW = 3 * 70;
 
     RateControl()
     {
         division.setCaption ("DIVISION"); division.state.wrap = false; division.listable = true;
-        modeCells.setItem (0, -1, "HZ"); modeCells.setItem (1, -1, "BPM"); modeCells.setItem (2, -1, "KEY");
-        addKid (rate); addKid (division, false); addKid (modeCells, false);
+        static const char* const names[3] = { "HZ", "BPM", "KEY" };
+        modeCells.setOptions (names, 3);
+        trip.setLabel ("TRIP");
+        dot.setLabel ("DOT");
+        addKid (rate); addKid (division, false); addKid (modeCells, false); addKid (trip, false); addKid (dot, false);
         setPrimary (&rate);
     }
     void setShowMode (bool on) { showMode_ = on; show (modeCells, on); layout(); }
+    /** The full screen: TRIP and DOT under the division in the BPM mode (their state comes with `setSync`). */
+    void setTripDot (bool on) { tripDot_ = on; refreshShown(); layout(); }
+    void setSync (int sync)
+    {
+        trip.state.on = lfo::syncTrip (sync);
+        dot.state.on = lfo::syncDot (sync);
+    }
     void setMode (lfo::SyncMode m)
     {
+        const bool changed = m != mode_;
         mode_ = m;
         show (rate, m != lfo::SyncMode::Bpm);
         show (division, m == lfo::SyncMode::Bpm);
         setPrimary (m == lfo::SyncMode::Bpm ? static_cast<Component*> (&division) : &rate);
         rate.setLabel (m == lfo::SyncMode::Key ? "KEY" : "RATE");
         modeCells.state.index = static_cast<int> (m);
+        refreshShown();
+        if (changed)
+            layout();   // the division moves to the top of the cell in the BPM mode (TRIP and DOT under it)
         syncKids();
     }
     lfo::SyncMode mode() const noexcept { return mode_; }
     Size minSize() const override { return { Stepper::kMinW + (showMode_ ? kGap + kModeW : 0), 72 }; }
 
 protected:
-    void syncKids() override { rate.setEnabled (enabled_ && mode_ != lfo::SyncMode::Key); division.setEnabled (enabled_); modeCells.setEnabled (enabled_); }
+    void refreshShown() { const bool on = tripDot_ && mode_ == lfo::SyncMode::Bpm; show (trip, on); show (dot, on); }
+    void syncKids() override { rate.setEnabled (enabled_ && mode_ != lfo::SyncMode::Key); division.setEnabled (enabled_); modeCells.setEnabled (enabled_); trip.setEnabled (enabled_); dot.setEnabled (enabled_); }
     void layout() override
     {
         Rect main = rect_;
         if (showMode_)
         {
-            const int h = std::min (rect_.h, 56);
+            const int h = std::min (rect_.h, led::kRowH);
             modeCells.place ({ rect_.right() - kModeW, rect_.y + (rect_.h - h) / 2, kModeW, h });
             main = { rect_.x, rect_.y, std::max (0, rect_.w - kModeW - kGap), rect_.h };
         }
@@ -250,12 +250,24 @@ protected:
         else
             rate.state.side = main.h < 108 || main.w >= 2 * main.h;
         rate.place (main);
-        const int h = std::min (main.h, 64);
-        division.place ({ main.x, main.y + (main.h - h) / 2, main.w, h });
-        syncKids();
+        if (tripDot_ && mode_ == lfo::SyncMode::Bpm)
+        {
+            // the division with TRIP and DOT in one row under it (they act on it), the two together in the middle of the cell
+            const int h = std::min (main.h, 64), bh = led::kRowH, bw = (main.w - kGap) / 2, y0 = main.y + std::max (0, (main.h - (h + 12 + bh)) / 2), by = y0 + h + 12;
+            division.place ({ main.x, y0, main.w, h });
+            trip.place ({ main.x, by, bw, bh });
+            dot.place ({ main.x + bw + kGap, by, main.w - bw - kGap, bh });
+        }
+        else
+        {
+            const int h = std::min (main.h, 64);
+            division.place ({ main.x, main.y + (main.h - h) / 2, main.w, h });
+            trip.place ({});
+            dot.place ({});
+        }
     }
     lfo::SyncMode mode_ = lfo::SyncMode::Hz;
-    bool showMode_ = false;
+    bool showMode_ = false, tripDot_ = false;
 };
 
 // ===============================================================================================================================================================
@@ -265,7 +277,7 @@ class InstanceBar : public Composite
 {
 public:
     PictogramSelector lfoCells, rndCells;
-    static constexpr int kLfoCells = 10, kRndCells = 4, kCellW = 42;   // all fourteen in one bar: 1 .. 10 and R1 .. R4, narrow cells (the labels are short)
+    static constexpr int kLfoCells = 10, kRndCells = 4, kCellW = 60;   // all fourteen in one bar: 1 .. 10 and R1 .. R4, cells of the touch size (the labels are short)
 
     InstanceBar()
     {

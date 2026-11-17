@@ -56,7 +56,7 @@ public:
         kList = 700, kListBackdrop = 701
     };
 
-    enum class T : uint8_t { Knob, Number, Toggle, Stepper, Inert };
+    enum class T : uint8_t { Knob, Number, Toggle, Stepper, List, Inert };
 
     struct Item
     {
@@ -222,8 +222,8 @@ private:
         items_.clear();
         bind (kVolume, &full_.volume, T::Knob, "master.volume");
         bind (kSpread, &full_.spread, T::Knob, "master.stereo_spread");
-        bind (kStereoRouting, &full_.stereoRouting, T::Stepper, "master.stereo_routing");
-        bind (kVoiceOverride, &full_.voiceOverride, T::Stepper, "master.voice_override");
+        bind (kStereoRouting, &full_.stereoRouting, T::Knob, "master.stereo_routing");
+        bind (kVoiceOverride, &full_.voiceOverride, T::List, "master.voice_override");
         bind (kTune, &full_.tune, T::Knob, "master.tune");
         bind (kTranspose, &full_.transpose, T::Number, "master.transpose");
         bind (kBendUp, &full_.bendUp, T::Number, "master.bend_range");
@@ -233,8 +233,8 @@ private:
         bind (kLegato, &full_.legato, T::Toggle, "master.legato");
         bind (kPolyLegato, &full_.polyLegato, T::Toggle, "master.poly_legato");
         bind (kPhaseLegato, &full_.phaseLegato, T::Toggle, "voice.phase_legato");
-        bind (kSameNote, &full_.sameNote, T::Stepper, "master.voice.same_note");
-        bind (kStealPriority, &full_.stealPriority, T::Stepper, "master.voice.steal_priority");
+        bind (kSameNote, &full_.sameNote, T::List, "master.voice.same_note");
+        bind (kStealPriority, &full_.stealPriority, T::List, "master.voice.steal_priority");
         bind (kVelocityTrack, &full_.velocityTrack, T::Number, "master.velocity_track");
         bind (kPortaTime, &full_.portaTime, T::Knob, "master.portamento.time");
         bind (kPortaSlope, &full_.portaSlope, T::Knob, "master.portamento.slope");
@@ -243,21 +243,21 @@ private:
         bind (kScaleType, &full_.scaleType, T::Stepper, "master.scale.type");
         bind (kScaleKey, &full_.scaleKey, T::Stepper, "master.scale.key");
         full_.keyboard.setId (kScaleKey);
-        bind (kScaleMode, &full_.scaleMode, T::Stepper, "master.scale.mode");
+        bind (kScaleMode, &full_.scaleMode, T::List, "master.scale.mode");
         bind (kTuningA4, &full_.tuningA4, T::Number, "master.tuning.a4");
-        bind (kTuningScale, &full_.tuningScale, T::Stepper, "master.tuning.scale");
+        bind (kTuningScale, &full_.tuningScale, T::List, "master.tuning.scale");
         bind (kMtsEsp, &full_.mtsEsp, T::Toggle, "master.tuning.mts_esp");
         bind (kMtsNoteOn, &full_.mtsNoteOn, T::Toggle, "master.tuning.mts_note_on_only");
         bind (kMpeOn, &full_.mpeOn, T::Toggle, "master.mpe.on");
         bind (kMpeBend, &full_.mpeBend, T::Number, "master.mpe.bend_range");
-        bind (kMpeMacro, &full_.mpeMacro, T::Stepper, "master.mpe.xyz_macro");
+        bind (kMpeMacro, &full_.mpeMacro, T::List, "master.mpe.xyz_macro");
         bind (kMpeYModwheel, &full_.mpeYModwheel, T::Toggle, "master.mpe.y_modwheel");
         bind (kMpeBendToX, &full_.mpeBendToX, T::Toggle, "master.mpe.bend_to_x");
         bind (kMpeYBipolar, &full_.mpeYBipolar, T::Toggle, "master.mpe.y_bipolar");
         bind (kPadPressure, &full_.padPressure, T::Inert, "");
         bind (kPadAmount, &full_.padAmount, T::Inert, "");
-        for (ui::Stepper* s : { &full_.scaleType, &full_.tuningScale, &full_.sameNote, &full_.stealPriority, &full_.voiceOverride, &full_.scaleKey, &full_.scaleMode, &full_.mpeMacro, &full_.stereoRouting })
-            s->listable = true;   // a tap on the name opens the list of all the choices
+        for (ui::Stepper* s : { &full_.scaleType, &full_.scaleKey })
+            s->listable = true;   // a tap on the name opens the list of all the choices (the two long lists; the short ones are LED lists with every option visible)
         polyphonyIdx_ = uibind::indexOfKey ("master.polyphony");
         slopeIdx_ = uibind::indexOfKey ("master.portamento.slope");
         scaleTypeIdx_ = uibind::indexOfKey ("master.scale.type");
@@ -310,6 +310,18 @@ private:
                         uibind::formatValue (p, val, buf, sizeof buf);
                         st->setItem (buf);
                     }
+                    break;
+                }
+                case T::List:
+                {
+                    ui::LedList* ll = static_cast<ui::LedList*> (it.c);
+                    ll->setOptions (p.choices, p.numChoices > 0 ? p.numChoices : 0);
+                    if (it.id == kMpeMacro && ll->state.count == 3)   // the long names of the engine ("XYZ -> Macro 1, 2, 3") do not fit three side by side: the title says what it is
+                    {
+                        ll->setOption (1, "XYZ");
+                        ll->setOption (2, "YZ");
+                    }
+                    ll->state.index = std::clamp (static_cast<int> (std::lround (val)), 0, std::max (0, ll->state.count - 1));
                     break;
                 }
                 case T::Inert:
@@ -388,8 +400,8 @@ private:
             { "master.volume", "master.stereo_spread", "master.stereo_routing", "master.voice_override" },
             { "master.tune", "master.transpose", "master.bend_range", "master.bend_down_range" },
             { "master.bend_down_link", "", "", "" },
-            { "master.polyphony", "master.legato", "master.poly_legato", "master.voice.same_note" },
-            { "master.voice.steal_priority", "voice.phase_legato", "master.velocity_track", "" },
+            { "master.polyphony", "master.legato", "master.poly_legato", "voice.phase_legato" },
+            { "master.velocity_track", "master.voice.same_note", "master.voice.steal_priority", "" },
             { "master.portamento.time", "master.portamento.slope", "master.portamento.always", "master.portamento.scaled" },
             { "master.scale.type", "master.scale.key", "master.scale.mode", "" },
             { "master.tuning.a4", "master.tuning.scale", "master.tuning.mts_esp", "master.tuning.mts_note_on_only" },

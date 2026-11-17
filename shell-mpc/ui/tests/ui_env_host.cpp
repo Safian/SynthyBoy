@@ -510,7 +510,7 @@ void testFullScreenLayout()
     const Image im = render (s);
     check (! s.overflow() && drawnOutside (im, { 0, 110 - 4, 1280, 628 + 8 }, backgroundPixel()) == 0, "full screen: drawn, and nothing outside the page");
     // without a target the graph has the whole width: the curve has a row for EVERY pixel of it (a curve with fewer rows ends before the right edge)
-    check (f.graph.rect().w > 1200 && f.targetsBlock().empty(), "full screen: no target, no block, the graph takes the whole width");
+    check (f.graph.rect().w > 1200 && f.tagsRect().w >= 200 && f.tagsRect().right() <= f.targets.rect().x, "full screen: the graph takes the whole width with or without target; the tags have their room in the top bar left of TARGETS");
     uint32_t most = 0;
     for (uint32_t k = 0; k < s.data->numOps; ++k)
         if (s.data->ops[k].op == gpu::kOpCurve)

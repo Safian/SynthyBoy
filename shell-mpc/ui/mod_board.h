@@ -21,6 +21,9 @@ public:
 
     ModSourceBoard() = default;
 
+    /** The line over the board ("TAP A SOURCE TO START A MODULATION" until the owner says another: the page of one control says what the tap modulates). */
+    void setHeadline (const char* s) { setText (headline_, sizeof headline_, s); }
+
     /** Forgets the sources and the group captions. */
     void clear()
     {
@@ -89,7 +92,7 @@ protected:
     void drawBody (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        p.textLeft ({ rect_.x + kPad, rect_.y + 4, std::max (0, rect_.w - 2 * kPad), kHeadH - 8 }, "TAP A SOURCE TO START A MODULATION", T.fLabel + 2.0f, p.c (T.textDim, 255), T.fMin);
+        p.textLeft ({ rect_.x + kPad, rect_.y + 4, std::max (0, rect_.w - 2 * kPad), kHeadH - 8 }, headline_, T.fLabel + 2.0f, p.c (T.textDim, 255), T.fMin);
         int lastBottom = -1;
         for (int g = 0; g < kMaxGroups; ++g)
         {
@@ -151,6 +154,7 @@ protected:
     }
 
 private:
+    char headline_[64] = "TAP A SOURCE TO START A MODULATION";
     static constexpr int kChipGap = 6, kRowGap = 8, kGroupGap = 14, kMinRowGap = 6, kMinGroupGap = 8;
     struct Chip
     {

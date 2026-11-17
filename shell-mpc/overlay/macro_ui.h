@@ -47,7 +47,7 @@ public:
 
     enum Id : int
     {
-        kBank1 = 20, kBank2 = 21,
+        kBank = 20,
         kMacroKnobBase = 100,    // 100 .. 107
         kMacroCardBase = 200,    // 200 .. 207: the chips of a card ask for the targets of the macro
         kTargetsBack = 300, kTargetsPage, kTargetsAdd, kTargetsRow = 310,   // 310 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
@@ -246,8 +246,7 @@ private:
 
     void assignIds()
     {
-        view_.bank1Btn.setId (kBank1);
-        view_.bank2Btn.setId (kBank2);
+        view_.bankList.setId (kBank);
         for (int i = 0; i < 8; ++i)
         {
             view_.cards[i].knob.setId (kMacroKnobBase + i);
@@ -269,7 +268,7 @@ private:
             int slots[uibind::kMaxTargetSlots];
             const int total = uibind::slotsOfSource (inst, macroSource_[m], slots, uibind::kMaxTargetSlots);
             const char* names[ui::MacroCard::kMaxChips];
-            char text[ui::MacroCard::kMaxChips][20];
+            char text[ui::MacroCard::kMaxChips][40];
             int shown = 0, count = 0;
             for (int i = 0; i < total; ++i)
             {
@@ -293,7 +292,7 @@ private:
         std::string s = uibind::info (p).name;
         auto strip = [&] (const char* from, const char* to) { const size_t n = std::strlen (from); if (s.compare (0, n, from) == 0) s = std::string (to) + s.substr (n); };
         strip ("Filter 1 ", "F1 "); strip ("Filter 2 ", "F2 "); strip ("Osc 1 ", "A "); strip ("Osc 2 ", "B "); strip ("Osc 3 ", "C ");
-        std::snprintf (out, 20, "%.19s", s.c_str());
+        std::snprintf (out, 40, "%.39s", s.c_str());   // the whole name: the card cuts it with an ellipsis where it does not fit
         return out;
     }
 
@@ -466,8 +465,7 @@ private:
             }
             return;
         }
-        if (id == kBank1) { view_.setBank (0); qSlots_.forget(); return; }
-        if (id == kBank2) { view_.setBank (1); qSlots_.forget(); return; }
+        if (id == kBank && c.kind == K::Index) { view_.setBank (c.index); qSlots_.forget(); return; }
         if (id == kList && c.kind == K::Index)
         {
             if (listGroup_ < 0)

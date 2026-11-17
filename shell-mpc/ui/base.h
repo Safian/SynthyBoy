@@ -28,9 +28,13 @@ public:
         bool bipolar = false, small = false;
         bool large = false;        // a page with room (the slot of a knob is a big cell): the dial may grow to 190 pixels instead of 140
         bool side = false;         // the medium variant: the dial at the left, the name and the value in a column at its right (a row of a block that is not tall enough for the dial over the texts)
+        bool led = false;          // a LED on the label: the knob carries the on / off switch of what it sets (SMOOTH: the smoothing and its time are ONE control). `ledOn`: the switch is on; off = the knob is drawn dim and takes no touch, a tap on the
+                                   // label / the LED (the text column, `ledHit ()`) switches (an Index change 0 / 1 with the knob's id, made on the touch up)
+        bool ledOn = true;
     };
     State state;
     static constexpr double kDragPx = 200.0, kLongPressMs = 600.0;
+    static constexpr int kLedW = 22;   // the room of the LED in front of the name
     static constexpr float kStartAngle = 0.75f * kPi, kSweep = 1.5f * kPi;   // 135 degrees (bottom left) clockwise over 270 degrees to the bottom right
 
     Knob() = default;
@@ -62,8 +66,9 @@ public:
             const int chipH = rect_.h >= 72 ? 20 : 0, labelH = 22, valueH = state.valueText[0] != '\0' ? 32 : 0;
             const int block = labelH + valueH, top = rect_.y + chipH + std::max (0, (rect_.h - chipH - block) / 2);
             g.chip = { tx - 2, rect_.y, tw + 2, rect_.h };
-            g.labelSize = state.label[0] != '\0' ? Pen::fitSize (state.label, static_cast<float> (tw), static_cast<float> (labelH), T.fLabel, T.fMin) : 0.0f;
-            g.labelBox = { tx, top, tw, labelH };
+            const int ledW = state.led ? kLedW : 0;   // the LED stands in front of the name
+            g.labelSize = state.label[0] != '\0' ? Pen::fitSize (state.label, static_cast<float> (std::max (0, tw - ledW)), static_cast<float> (labelH), T.fLabel, T.fMin) : 0.0f;
+            g.labelBox = { tx + ledW, top, std::max (0, tw - ledW), labelH };
             g.valueBox = { tx, top + labelH, tw, valueH };
             g.valueSize = T.fValue;
             return g;
@@ -84,6 +89,11 @@ public:
         g.cy = static_cast<float> (rect_.y) + static_cast<float> (dialH) * 0.5f;
         g.labelBox = { rect_.x + 2, rect_.bottom() - valueH - labelH + 2, rect_.w - 4, std::max (0, labelH - 4) };
         g.valueBox = { rect_.x + 2, rect_.bottom() - valueH, rect_.w - 4, valueH };
+        if (state.led)   // the LED in front of the name: the name is centred in what is left of the row
+        {
+            g.labelBox.x += kLedW / 2;
+            g.labelBox.w = std::max (0, g.labelBox.w - kLedW);
+        }
         if (tabState (state) != TabState::Absent && g.labelBox.h >= 14)
         {
             // the modulation chip lives in the label row, right of the name (a chip over the dial hid the arc and the handle): the name moves left and shrinks to what is left
@@ -114,6 +124,48 @@ public:
         const int w = std::max (56, g.tabBox.w), x = std::max (rect_.x, g.tabBox.right() - w);
         const int y = std::max (rect_.y, g.tabBox.y - 8), b = std::min (rect_.bottom(), g.tabBox.bottom() + 28);
         return { x, y, std::min (w, rect_.right() - x), std::max (0, b - y) };
+    }
+
+    /** The zone of the LED switch: the column of the name and the value (the side variant: from the LED to the right edge, the whole height of the knob), under the dial (the others: the lower 56 px, the name and the value
+        with the room above them); empty without a LED. A touch that starts here is the switch, not a drag. */
+    Rect ledHit() const noexcept
+    {
+        if (! state.led)
+            return {};
+        const Geom g = geom();
+        if (state.side)
+        {
+            const int x = std::max (rect_.x, g.labelBox.x - kLedW - 4);
+            return { x, rect_.y, rect_.right() - x, rect_.h };
+        }
+        const int h = std::min (rect_.h, std::max (56, rect_.bottom() - g.labelBox.y + 8));
+        return { rect_.x, rect_.bottom() - h, rect_.w, h };
+    }
+    /** The centre of the LED dot (where the tests look for it). */
+    void ledPoint (float& x, float& y) const noexcept
+    {
+        const Geom g = geom();
+        x = static_cast<float> (g.labelBox.x) - 12.0f;
+        y = static_cast<float> (g.labelBox.y) + static_cast<float> (g.labelBox.h) * 0.5f;
+        if (! state.side && g.labelSize > 0.0f)   // the centred name: the LED sits at the left of the text
+        {
+            const float tw = Pen::textWidth (state.label, g.labelSize);
+            x = static_cast<float> (g.labelBox.x) + static_cast<float> (g.labelBox.w) * 0.5f - tw * 0.5f - 12.0f;
+        }
+    }
+
+    /** A knob with a switched-off LED is drawn dim all over (as a disabled one) and takes no touch but the switch. */
+    void draw (gpu::SceneBuilder& sb) const override
+    {
+        Pen pen (sb, enabled_ && ! (state.led && ! state.ledOn));
+        Cell cell (sb, rect_);
+        drawBody (pen);
+    }
+    Change touchDown (int x, int y, double nowMs) override
+    {
+        onLed_ = state.led && enabled_ && ledHit().contains (x, y);
+        inert_ = state.led && ! state.ledOn && ! onLed_;
+        return Component::touchDown (x, y, nowMs);
     }
 
 protected:
@@ -183,6 +235,17 @@ protected:
             else
                 p.textCentered (g.valueBox, state.valueText, g.valueSize, p.c (T.text, 255), T.fMin);
         }
+        if (state.led)   // the LED of the switch on the label: lit = a filled disc, unlit = a thin ring (the look of LedToggle: flat, no glow)
+        {
+            float lx, ly;
+            ledPoint (lx, ly);
+            p.style (1.0f, true);
+            if (state.ledOn)
+                p.disc (lx, ly, 6.5f, p.c (T.flow[0], 255));
+            else
+                p.arc (lx, ly, 5.7f, 0.0f, 2.0f * kPi, 1.6f, p.c (qFrame_ ? T.q : T.textFaint, 255));
+            p.plain();
+        }
     }
 
     Change onDown (int x, int y, double now) override
@@ -198,6 +261,8 @@ protected:
     }
     Change onMove (int, int y) override
     {
+        if (onLed_ || inert_)
+            return Change::none();
         if (long_ || ! tap_.move (tap_.startX(), y))   // only the vertical movement matters: a sideways slide is not a drag, a vertical one beyond the tap square is
             return Change::none();
         const double dy = static_cast<double> (tap_.startY() - y);
@@ -211,6 +276,16 @@ protected:
     }
     Change onUp (int, int) override
     {
+        if (onLed_)   // the switch on the label: a tap flips it
+        {
+            onLed_ = false;
+            return tap_.up() != 0 ? Change::indexed (id_, state.ledOn ? 0 : 1, state.ledOn ? 0.0 : 1.0) : Change::none();
+        }
+        if (inert_)
+        {
+            tap_.reset();
+            return Change::none();
+        }
         if (long_)
         {
             tap_.reset();
@@ -218,12 +293,12 @@ protected:
         }
         return tap_.up() == 2 && ! onTab_ ? emit (state.defaultValue) : Change::none();
     }
-    Change onTurn (double delta) override { return emit (state.value + delta); }
+    Change onTurn (double delta) override { return state.led && ! state.ledOn ? Change::none() : emit (state.value + delta); }
 
 public:
     Change tick (double nowMs) override
     {
-        if (! captured_ || ! enabled_ || long_ || tap_.moved() || nowMs - downMs_ < kLongPressMs)
+        if (! captured_ || ! enabled_ || long_ || onLed_ || inert_ || tap_.moved() || nowMs - downMs_ < kLongPressMs)
             return Change::none();
         long_ = true;
         return Change::modsRequest (id_);
@@ -237,7 +312,7 @@ private:
     }
     TapGesture tap_;
     double start_ = 0.0, startDepth_ = 0.0, downMs_ = 0.0;
-    bool onTab_ = false, long_ = false;
+    bool onTab_ = false, long_ = false, onLed_ = false, inert_ = false;
 };
 
 // ===============================================================================================================================================================
@@ -260,6 +335,8 @@ public:
         int pxPerStep = 8;
     };
     State state;
+    /** The size the drawn box is limited to (0: the whole rectangle), at the left of the rectangle and centred in its height: a cell of a page that is far bigger than a number needs holds the field at its left (under the index chip) and the touch zone stays the whole cell. */
+    Size maxBox { 0, 0 };
 
     NumberField() = default;
     NumberField (const char* label, Format f) { setText (state.label, sizeof state.label, label); state.format = f; }
@@ -289,7 +366,14 @@ public:
 
 protected:
     double stepSize() const noexcept { return state.step > 0.0 ? state.step : 1.0; }
-    Rect box() const noexcept { return rect_.inset (2); }
+    Rect box() const noexcept
+    {
+        const Rect r = rect_.inset (2);
+        if (maxBox.w <= 0 || maxBox.h <= 0)
+            return r;
+        const int w = std::min (r.w, maxBox.w), h = std::min (r.h, maxBox.h);
+        return { r.x, r.y + (r.h - h) / 2, w, h };
+    }
 
     void drawBody (Pen& p) const override
     {

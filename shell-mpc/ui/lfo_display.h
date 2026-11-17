@@ -7,6 +7,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include <cmath>
+
 #include <optional>
 
 #include "core.h"
@@ -14,6 +16,20 @@
 namespace synthyboy_mpc { namespace ui { namespace lfodisplay {
 
 constexpr int kMaxCursors = 8, kMaxPoints = 1024;
+
+/** A representative path of a random style at x 0 .. 1 (-1 .. 1): what the style looks like, a fixed picture (the same functions as the style glyphs of the picker, so the picture and the glyph agree). */
+inline float restPath (int style, float t) noexcept
+{
+    const float tau = 6.2832f;
+    switch (style)
+    {
+        case 0: return 0.62f * (0.6f * std::sin (tau * 1.3f * t + 0.5f) + 0.4f * std::sin (tau * 2.9f * t + 1.7f)) + 0.0f;
+        case 1: { static const float lv[8] = { 0.3f, -0.7f, 0.6f, -0.2f, -0.8f, 0.5f, 0.1f, -0.5f }; return 0.8f * lv[std::min (7, static_cast<int> (t * 8.0f))]; }
+        case 2: return 0.8f * std::sin (tau * 3.0f * t) * (0.5f + 0.5f * std::sin (tau * 0.7f * t));
+        case 3: return 0.8f * std::sin (2.0f * tau * t);
+        default: return 0.8f * (0.25f + 0.75f * t) * std::sin (tau * 4.0f * t);
+    }
+}
 
 struct Data
 {
@@ -32,6 +48,7 @@ struct Data
     // Random: the trace (oldest first, n values -1 .. 1) and the style name
     const float* trace = nullptr;
     int traceN = 0;
+    int style = -1;              // Random: the style 0 .. 4 (Perlin, S & H, sine interpolation, Lorenz, Rossler): while the trace is flat (nothing sounds) a dim representative path of the style is drawn instead of a bare line
     const char* label = "";      // the name in the corner (the shape, the style)
     bool dim = false;            // the LFO does nothing (the picture stays, faint)
     bool editing = false;        // the shape editor has the same ground and curve under its handles: no lead-in, no label
@@ -175,13 +192,18 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     else if (d.kind == Data::Kind::Random && d.trace != nullptr && d.traceN >= 2)
     {
         const int n = std::min (d.traceN, kMaxPoints);
+        bool flat = true;
+        for (int i = 0; i < n && flat; ++i)
+            flat = std::fabs (d.trace[i]) < 1.0e-4f;
+        const bool rest = flat && d.style >= 0 && d.style < 5;   // nothing sounds: the picture of the style, dim
         for (int i = 0; i < n; ++i)
-            rows[i] = std::min (bottom + 40.0f, std::max (top - 40.0f, rowOf (plot, d.trace[i])));
+            rows[i] = std::min (bottom + 40.0f, std::max (top - 40.0f, rowOf (plot, rest ? restPath (d.style, static_cast<float> (i) / static_cast<float> (n - 1)) : d.trace[i])));
         if (sb.curve (rows, n, plot.x, plot.w) >= 0)
         {
             if (rich())
                 sb.fillGradient (mid, top, mid, a (T.lfo[0], d.dim ? 25 : 50), a (T.lfo[0], 0));
-            sb.paintX (x0, x1, a (st[0], alpha), a (st[1], alpha), a (st[2], alpha), a (st[3], alpha));
+            const int ra = rest ? alpha * 45 / 100 : alpha;
+            sb.paintX (x0, x1, a (st[0], ra), a (st[1], ra), a (st[2], ra), a (st[3], ra));
             sb.style (1.0f, false);
             sb.stroke (T.curve * 0.5f + 0.15f, 255);
             sb.paintOff();

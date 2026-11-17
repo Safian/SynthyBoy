@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "../q_router.h"
+#include "../ui/choice_names.h"
 #include "../ui/fx_screen.h"
 #include "../ui/list.h"
 #include "../ui/ui.h"
@@ -63,13 +64,13 @@ public:
         cardItems_.reserve (ui::FxChainBar::kMaxSlots);
         screen_.assignIds (kChainBase, kEditorBase);
         setCanvas (kCanvasW, kCanvasH);
-        int galleryTypes[synthyboy::kNumFxInstanceTypes - 1];
-        for (int t = 1; t < synthyboy::kNumFxInstanceTypes; ++t)
+        int galleryTypes[ui::fxl::kNumKinds - 1];
+        for (int k = 1; k < ui::fxl::kNumKinds; ++k)
         {
-            typeNames_[t - 1] = synthyboy::fxTypeDescriptor (t).name;
-            galleryTypes[t - 1] = t;
+            typeNames_[k - 1] = ui::fxl::layoutOf (k).name;   // the 13 types of the pool, then the three splitters
+            galleryTypes[k - 1] = k;
         }
-        screen_.gallery.setTypes (galleryTypes, typeNames_, synthyboy::kNumFxInstanceTypes - 1);
+        screen_.gallery.setTypes (galleryTypes, typeNames_, ui::fxl::kNumKinds - 1);
         screen_.gallery.setId (kGallery);
         screen_.setEditorShown (false);
         for (int i = 0; i < 16; ++i)
@@ -191,13 +192,17 @@ public:
     void turnQ (int knobIndex, double delta, UiStack& stack, IInstanceView& inst) { handle (screen_.turnQ (knobIndex, delta), stack, inst); }
     bool listOpen() const noexcept { return listOpen_; }
 
-    /** The table index of parameter p of the selected effect (-1 none) and its name / unit descriptor (null none). */
+    /** The table index of control p of the effect on the page (-1 none): the parameter of the slot of the pool for a control that is one of the type's own, else the engine's key of the control itself (the splitters,
+        the modules of the fixed chain, the force enable of the reverb). The page is the one of `item` (the selected effect). */
     int paramIndexOf (const synthyboy::FxRackItem& item, int p) const noexcept
     {
-        const synthyboy::FxTypeDescriptor& desc = synthyboy::fxTypeDescriptor (synthyboy::fxItemType (plain_.data(), item));
-        if (p < 0 || p >= desc.count)
+        const synthyboy::ParamInfo* pi = screen_.slotEditor.infoOf (p);
+        if (pi == nullptr)
             return -1;
-        return item.pool ? synthyboy::fxInstanceKeys (item.index).p[p] : desc.source[p];
+        const int kind = kindOfItem (item);
+        if (item.pool && kind < synthyboy::kNumFxInstanceTypes && p < synthyboy::fxTypeDescriptor (kind).count)
+            return synthyboy::fxInstanceKeys (item.index).p[p];
+        return static_cast<int> (pi - synthyboy::paramTable());
     }
 
 private:
@@ -228,7 +233,21 @@ private:
             const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (t);
             mix (d.onIndex); mix (d.rackIndex);
         }
+        for (const char* pre : { "splitter_lh", "splitter_lmh", "splitter_ms" })   // the splitters of the fixed chain: their power and rack decide the chain too
+        {
+            mix (uibind::indexOfKey (std::string (pre) + ".on"));
+            mix (uibind::indexOfKey (std::string (pre) + ".rack"));
+        }
         return h;
+    }
+
+    /** The page of an item: the type of a slot or of a module of the chain, or the kind of a splitter (modules 13 .. 15 of the fixed chain have no type of the pool). */
+    int kindOfItem (const Item& item) const noexcept
+    {
+        const int type = synthyboy::fxItemType (plain_.data(), item);
+        if (type != synthyboy::kFxTypeNone)
+            return type;
+        return ! item.pool && item.index >= 13 && item.index <= 15 ? ui::fxl::kKindSplitterLh + (item.index - 13) : synthyboy::kFxTypeNone;
     }
 
     /** The cards: every effect of the pool, and the modules of the fixed chain that are on (or selected), rack by rack in processing order. */
@@ -243,7 +262,7 @@ private:
                     break;
                 if (item.pool)
                 {
-                    if (synthyboy::fxItemType (plain_.data(), item) != synthyboy::kFxTypeNone)
+                    if (kindOfItem (item) != synthyboy::kFxTypeNone)
                         cardItems_.push_back (item);
                 }
                 else if (synthyboy::fxItemOn (plain_.data(), item) || (selectedItem_.index >= 0 && selectedItem_ == item))
@@ -277,7 +296,7 @@ private:
             ui::FxSlotCard& card = screen_.chainBar.cards[i];
             const Item item = cardItems_[static_cast<size_t> (i)];
             card.state.slot = i;
-            card.state.type = synthyboy::fxItemType (plain_.data(), item);
+            card.state.type = kindOfItem (item);
             card.state.on = synthyboy::fxItemOn (plain_.data(), item);
             card.state.rack = synthyboy::fxItemRack (plain_.data(), item);
             card.state.selected = i == selectedSlot_;
@@ -293,42 +312,25 @@ private:
             sp.setEnabled (numActive < ui::FxChainBar::kMaxSlots);
     }
 
-    /** The value of the parameter with the key `key` of the selected effect (plain), or `def` when the effect has no such parameter. */
-    float plainOfKey (const Item& item, int type, IInstanceView& inst, const char* key, float def) const
+    /** The value (plain) of control p of the item, from the instance: a slot of the pool stores the normalised value of the type's own parameters (fxInstancePlain turns it into the plain value of its source), the other
+        controls (the modules of the fixed chain, the splitters, the force enable of the reverb) are engine keys of their own. */
+    float plainOfControl (const Item& item, IInstanceView& inst, int p) const
     {
-        const int idx = uibind::indexOfKey (key);
-        const synthyboy::FxTypeDescriptor& desc = synthyboy::fxTypeDescriptor (type);
-        for (int p = 0; p < desc.count; ++p)
-            if (desc.source[p] == idx)
-            {
-                if (item.pool)
-                {
-                    const int pi = synthyboy::fxInstanceKeys (item.index).p[p];
-                    return pi >= 0 ? synthyboy::fxInstancePlain (type, p, inst.param (pi)) : def;
-                }
-                return inst.param (idx);
-            }
-        return def;
+        const synthyboy::ParamInfo* pi = screen_.slotEditor.infoOf (p);
+        const int idx = paramIndexOf (item, p);
+        if (pi == nullptr || idx < 0)
+            return 0.0f;
+        const float v = inst.param (idx);
+        const int kind = kindOfItem (item);
+        const bool own = item.pool && kind < synthyboy::kNumFxInstanceTypes && p < synthyboy::fxTypeDescriptor (kind).count;
+        return own ? synthyboy::fxInstancePlain (kind, p, v) : v;
     }
 
-    /** The name of a knob: the parameter's own name without the name of its effect in front ("Delay Time" -> TIME), in capitals. */
-    static void knobName (const char* name, const char* typeName, char* out, size_t cap)
+    /** The value of the parameter with the key `key` of the selected effect (plain), or `def` when the effect has no such control. */
+    float plainOfKey (const Item& item, int, IInstanceView& inst, const char* key, float def) const
     {
-        std::string s = name;
-        const std::string t = typeName;
-        const char* prefixes[] = { t.c_str(), "Compressor", "Distortion", "EQ", "Delay", "Chorus", "Flanger", "Phaser", "Reverb", "Filter", "FX Filter", "Hyper", "Utility", "Bode", "Convolve" };
-        for (const char* pre : prefixes)
-        {
-            const size_t n = std::strlen (pre);
-            if (n > 0 && s.size() > n + 1 && s.compare (0, n, pre) == 0 && s[n] == ' ')
-            {
-                s = s.substr (n + 1);
-                break;
-            }
-        }
-        for (char& c : s)
-            c = static_cast<char> (std::toupper (static_cast<unsigned char> (c)));
-        std::snprintf (out, cap, "%.23s", s.c_str());
+        const int p = screen_.slotEditor.controlOfKey (key);
+        return p >= 0 && paramIndexOf (item, p) >= 0 ? plainOfControl (item, inst, p) : def;
     }
 
     void pullEditor (IInstanceView& inst)
@@ -336,75 +338,66 @@ private:
         if (cardItems_.empty() || selectedSlot_ >= static_cast<int> (cardItems_.size()))
             return;
         const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
-        const int type = synthyboy::fxItemType (plain_.data(), item);
+        const int kind = kindOfItem (item);
         ui::FxSlotEditor& ed = screen_.slotEditor;
-        ed.setType (type, item.pool);
-        const synthyboy::FxTypeDescriptor& desc = synthyboy::fxTypeDescriptor (type);
-        for (int p = 0; p < desc.count && p < ui::FxSlotEditor::kMaxParams; ++p)
+        ed.setType (kind, item.pool);
+        // the state of the effect decides which controls are live (the table of the effect, ui/fx_layout.h): the rows that have nothing live close up
+        ed.setState ([&] (const char* key) { return plainOfKey (item, kind, inst, key, 0.0f); });
+        for (int p = 0; p < ed.numParams(); ++p)
         {
-            int paramIdx = -1;
-            const synthyboy::ParamInfo* pi = nullptr;
-            float norm = 0.0f, plainVal = 0.0f;
-            if (item.pool)
-            {
-                paramIdx = synthyboy::fxInstanceKeys (item.index).p[p];
-                pi = synthyboy::fxInstanceSource (type, p);
-                if (paramIdx >= 0)
-                {
-                    norm = inst.param (paramIdx);
-                    plainVal = synthyboy::fxInstancePlain (type, p, norm);
-                }
-            }
-            else
-            {
-                paramIdx = desc.source[p];
-                if (paramIdx >= 0)
-                {
-                    pi = &synthyboy::paramTable()[paramIdx];
-                    plainVal = inst.param (paramIdx);
-                    norm = static_cast<float> (synthyboy::toNormalised (*pi, plainVal));
-                }
-            }
+            const synthyboy::ParamInfo* pi = ed.infoOf (p);
+            if (pi == nullptr)
+                continue;
+            const float plainVal = plainOfControl (item, inst, p);
+            const float norm = static_cast<float> (synthyboy::toNormalised (*pi, plainVal));
             ui::Knob& knob = ed.knobs[p];
             ui::Stepper& stepper = ed.steppers[p];
             ui::LedList& list = ed.lists[p];
             ui::LedToggle& toggle = ed.toggles[p];
-            const bool isChoiceParam = ed.isChoice (p);
+            ui::NumberField& number = ed.numbers[p];
+            char name[24];
+            ed.nameOf (p, name, sizeof name);
             knob.state.value = knob.state.modValue = norm;
-            if (pi != nullptr)
+            if (ed.isChoice (p))
             {
-                char name[24];
-                knobName (pi->name, desc.name, name, sizeof name);
-                if (isChoiceParam)
-                {
-                    stepper.setCaption (name);
-                    stepper.state.count = pi->numChoices;
-                    const int curIdx = std::clamp (static_cast<int> (std::lround (plainVal)), 0, std::max (0, pi->numChoices - 1));
-                    stepper.state.index = curIdx;
-                    if (pi->choices != nullptr && curIdx >= 0 && curIdx < pi->numChoices)
-                        stepper.setItem (pi->choices[curIdx]);
-                    else
-                        stepper.setItem ("---");
-                    // the same value as a LED list (3 .. 8 values, all visible) and as a LED toggle (Off / On): the editor shows the kind the cell has
-                    list.setTitle (name);
-                    list.setOptions (pi->choices, std::min (static_cast<int> (pi->numChoices), static_cast<int> (ui::LedList::kMaxOptions)));
-                    list.state.index = std::min (curIdx, ui::LedList::kMaxOptions - 1);
-                    toggle.setLabel (name);
-                    toggle.state.on = curIdx == 1;
-                }
+                stepper.setCaption (name);
+                stepper.state.count = pi->numChoices;
+                const int curIdx = std::clamp (static_cast<int> (std::lround (plainVal)), 0, std::max (0, pi->numChoices - 1));
+                stepper.state.index = curIdx;
+                if (pi->choices != nullptr && curIdx >= 0 && curIdx < pi->numChoices)
+                    stepper.setItem (ui::shownChoice (pi->key, curIdx, pi->choices[curIdx]));
                 else
+                    stepper.setItem ("---");
+                // the same value as a LED list (3 .. 8 values, all visible) and as a LED toggle (Off / On): the editor shows the kind the cell has
+                list.setTitle (name);
                 {
-                    knob.state.defaultValue = synthyboy::toNormalised (*pi, pi->def);
-                    knob.state.bipolar = pi->min < 0.0f && pi->max > 0.0f;
-                    paramText (*pi, plainVal, knob.state.valueText, sizeof knob.state.valueText);
-                    knob.setLabel (name);
+                    const char* shown[ui::LedList::kMaxOptions];
+                    const int cnt = std::min (static_cast<int> (pi->numChoices), static_cast<int> (ui::LedList::kMaxOptions));
+                    for (int c = 0; c < cnt; ++c)
+                        shown[c] = ui::shownChoice (pi->key, c, pi->choices[c]);
+                    list.setOptions (shown, cnt);
                 }
+                list.state.index = std::min (curIdx, ui::LedList::kMaxOptions - 1);
+                toggle.setLabel (name);
+                toggle.state.on = curIdx == 1;
             }
-            const bool live = pi != nullptr && paramIdx >= 0;
-            knob.setEnabled (live && ed.kindOf (p) == ui::FxSlotEditor::Kind::Knob);
-            stepper.setEnabled (live && ed.kindOf (p) == ui::FxSlotEditor::Kind::Stepper);
-            list.setEnabled (live && ed.kindOf (p) == ui::FxSlotEditor::Kind::List);
-            toggle.setEnabled (live && ed.kindOf (p) == ui::FxSlotEditor::Kind::Toggle);
+            else if (ed.kindOf (p) == ui::FxSlotEditor::Kind::Number)
+            {
+                // a whole number (VOICES, UNISON): a number field in whole steps, the engine's own range
+                number.setLabel (name);
+                number.state.min = static_cast<double> (pi->min);
+                number.state.max = static_cast<double> (pi->max);
+                number.state.step = 1.0;
+                number.state.defaultValue = static_cast<double> (pi->def);
+                number.state.value = std::clamp (std::round (static_cast<double> (plainVal)), number.state.min, number.state.max);
+            }
+            else
+            {
+                knob.state.defaultValue = synthyboy::toNormalised (*pi, pi->def);
+                knob.state.bipolar = pi->min < 0.0f && pi->max > 0.0f;
+                paramText (*pi, plainVal, knob.state.valueText, sizeof knob.state.valueText);
+                knob.setLabel (name);
+            }
         }
         // the power, the rack
         ed.power.state.on = synthyboy::fxItemOn (plain_.data(), item);
@@ -413,7 +406,7 @@ private:
         ed.rack.state.index = std::clamp (rack, 0, 2);
         static const char* const kRack[3] = { "MAIN", "BUS 1", "BUS 2" };
         ed.rack.setItem (rack >= 0 && rack < 3 ? kRack[rack] : "SPLITTER");
-        pullDisplay (inst, item, type, ed.display);
+        pullDisplay (inst, item, kind, ed.display);
     }
 
     /** The text of a value: the name of a choice, else the number with the parameter's unit. */
@@ -422,7 +415,7 @@ private:
         if (pi.numChoices > 0 && pi.choices != nullptr)
         {
             const int n = std::clamp (static_cast<int> (std::lround (plain)), 0, pi.numChoices - 1);
-            std::snprintf (out, cap, "%.15s", pi.choices[n]);
+            std::snprintf (out, cap, "%.15s", ui::shownChoice (pi.key, n, pi.choices[n]));
             return;
         }
         uibind::formatValue (pi, plain, out, cap);
@@ -484,11 +477,16 @@ private:
                     std::snprintf (key, sizeof key, "compressor.%s.gain", kBand[b]); cb.gainDb = plainOfKey (item, type, inst, key, 0.0f);
                 }
                 d.comp.bands = static_cast<int> (std::lround (plainOfKey (item, type, inst, "compressor.bands", 0.0f)));
-                // the band of the row of knobs that is on screen
-                const int pa = screen_.slotEditor.activeRow() * 4;
-                const int idx = paramIndexOfType (item, type, pa);
-                const char* k = idx >= 0 ? synthyboy::paramTable()[idx].key : "";
-                d.comp.activeBand = std::strstr (k, ".low.") != nullptr ? 0 : (std::strstr (k, ".high.") != nullptr ? 2 : 1);
+                // the band of the row of knobs that is on screen (the first live member of the active row names it)
+                {
+                    const ui::FxSlotEditor& ed = screen_.slotEditor;
+                    const int first = ed.activeRow();
+                    int pm = -1;
+                    for (int c = 0; c < 4 && pm < 0; ++c)
+                        pm = ed.controlInCell (first, c);
+                    const char* k = pm >= 0 && ed.infoOf (pm) != nullptr ? ed.infoOf (pm)->key : "";
+                    d.comp.activeBand = std::strstr (k, ".low.") != nullptr ? 0 : (std::strstr (k, ".high.") != nullptr ? 2 : 1);
+                }
                 break;
             }
             case K::Delay:
@@ -512,18 +510,36 @@ private:
                     d.dist.inLevel = pk > 0.005f ? std::pow (10.0f, (pk * 60.0f - 60.0f) / 20.0f) : -1.0f;
                 }
                 break;
+            case K::Split:
+            {
+                const char* const pre = type == ui::fxl::kKindSplitterLh ? "splitter_lh." : (type == ui::fxl::kKindSplitterLmh ? "splitter_lmh." : "splitter_ms.");
+                auto key = [&] (const char* suffix) { return std::string (pre) + suffix; };
+                auto val = [&] (const char* suffix, float def) { return plainOfKey (item, type, inst, key (suffix).c_str(), def); };
+                d.split.mode = type == ui::fxl::kKindSplitterLh ? 0 : (type == ui::fxl::kKindSplitterLmh ? 1 : 2);
+                if (d.split.mode == 0)
+                {
+                    d.split.f1 = val ("freq", 500.0f);
+                    d.split.bypass[0] = val ("low_bypass", 0.0f) > 0.5f;
+                    d.split.bypass[2] = val ("high_bypass", 0.0f) > 0.5f;
+                }
+                else if (d.split.mode == 1)
+                {
+                    d.split.f1 = val ("freq_low", 200.0f);
+                    d.split.f2 = val ("freq_high", 3000.0f);
+                    d.split.bypass[0] = val ("low_bypass", 0.0f) > 0.5f;
+                    d.split.bypass[1] = val ("mid_bypass", 0.0f) > 0.5f;
+                    d.split.bypass[2] = val ("high_bypass", 0.0f) > 0.5f;
+                }
+                else
+                {
+                    d.split.bypass[0] = val ("mid_bypass", 0.0f) > 0.5f;
+                    d.split.bypass[1] = val ("side_bypass", 0.0f) > 0.5f;
+                }
+                break;
+            }
             default: break;
         }
     }
-    int paramIndexOfType (const Item& item, int type, int p) const noexcept
-    {
-        const synthyboy::FxTypeDescriptor& desc = synthyboy::fxTypeDescriptor (type);
-        if (p < 0 || p >= desc.count)
-            return -1;
-        return desc.source[p] >= 0 ? desc.source[p] : -1;
-        (void) item;
-    }
-
     /** The response of the FX filter: the engine's own filter code on an impulse (FilterResponse), with the parameters of the effect put into the slots of filter 1; computed again only when they changed. */
     void pullFilter (IInstanceView& inst, const Item& item, int type, ui::FxDisplay& d)
     {
@@ -566,7 +582,7 @@ private:
         d.filter.cutoffHz = filterVals_[2];
     }
 
-    /** The groups of the page are the rows of four values of the open effect that are on the page of the editor (the first and the second row, or three rows without a display), in reading order: the active row is
+    /** The groups of the page are the rows (blocks) of the open effect that are on the page of the editor (two to four rows, as the table of the effect says), in reading order: the active row is
         on Q 1 .. 4, the other rows of the page (wrapping) on 5 .. 16. A row the active one is not on the page of (a page change is about to select another) is the only group. */
     void publishQGroup (IInstanceView& inst)
     {
@@ -582,12 +598,19 @@ private:
         else if (selectedSlot_ >= 0 && selectedSlot_ < static_cast<int> (cardItems_.size()))
         {
             const int row = ed.activeRow();
-            name = ui::FxFullScreen::groupName (row);
+            name = ed.rowTitle (row);
             const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
             const int first = ed.firstRowOfPage(), n = std::max (0, std::min (ed.rowsPerPage(), ed.numRows() - first));
             const bool onPage = row >= first && row < first + n;
             const int count = onPage ? n : 1, base = onPage ? first : row, active = onPage ? row - first : 0;
-            qSlots_.publish (inst, count, active, [&] (int k, int* t) { for (int c = 0; c < 4; ++c) t[c] = paramIndexOf (item, (base + k) * 4 + c); });
+            qSlots_.publish (inst, count, active, [&] (int k, int* t)
+            {
+                for (int c = 0; c < 4; ++c)   // the live controls of the row: a dim control has no knob
+                {
+                    const int p = ed.memberControl (base + k, c);
+                    t[c] = p >= 0 ? paramIndexOf (item, p) : -1;
+                }
+            });
             for (int k = 0; k < count; ++k)
                 ed.groups[base + k].setBlock (QRouter::blockOfGroup (count, active, k));
         }
@@ -610,8 +633,8 @@ private:
         listKind_ = ListKind::Type;
         listParam_ = -1;
         listNames_.clear();
-        for (int t = 1; t < synthyboy::kNumFxInstanceTypes; ++t)
-            listNames_.push_back (typeNames_[t - 1]);
+        for (int k = 1; k < ui::fxl::kNumKinds; ++k)
+            listNames_.push_back (typeNames_[k - 1]);
         list_.state.items = listNames_.data();
         list_.state.count = static_cast<int> (listNames_.size());
         list_.state.current = 0;
@@ -630,23 +653,21 @@ private:
         if (cardItems_.empty() || selectedSlot_ >= static_cast<int> (cardItems_.size()))
             return;
         const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
-        const int type = synthyboy::fxItemType (plain_.data(), item);
-        const synthyboy::ParamInfo* pi = synthyboy::fxInstanceSource (type, p);
+        const synthyboy::ParamInfo* pi = screen_.slotEditor.infoOf (p);
         if (pi == nullptr || pi->numChoices <= 0 || pi->choices == nullptr)
             return;
         listKind_ = ListKind::ParamChoice;
         listParam_ = p;
         listNames_.clear();
         for (int i = 0; i < pi->numChoices; ++i)
-            listNames_.push_back (pi->choices[i]);
+            listNames_.push_back (ui::shownChoice (pi->key, i, pi->choices[i]));
         list_.state.items = listNames_.data();
         list_.state.count = pi->numChoices;
         const int idx = paramIndexOf (item, p);
         int curChoice = 0;
         if (idx >= 0)
         {
-            const float plainVal = item.pool ? synthyboy::fxInstancePlain (type, p, inst.param (idx)) : inst.param (idx);
-            curChoice = std::clamp (static_cast<int> (std::lround (plainVal)), 0, pi->numChoices - 1);
+            curChoice = std::clamp (static_cast<int> (std::lround (plainOfControl (item, inst, p))), 0, pi->numChoices - 1);
         }
         list_.state.current = curChoice;
         const int popW = std::clamp (screen_.slotEditor.steppers[p].rect().w, 240, 360);
@@ -662,13 +683,31 @@ private:
         stack.openDetail (kPageList);
     }
 
-    /** A new effect of `type` (synthyboy::FxInstanceType) at the end of the Main rack; it becomes the selected one. false: the pool is full or the type is none. */
-    bool addEffect (IInstanceView& inst, int type)
+    /** A new effect of `kind` (a type of the pool, synthyboy::FxInstanceType, or a splitter, ui::fxl::kKindSplitter*) at the end of the Main rack; it becomes the selected one. A type of the pool takes a free slot
+        (false: the pool is full); a splitter is a module of the fixed chain that is switched on and moved to the end of Main (one that is on already is selected). */
+    bool addEffect (IInstanceView& inst, int kind)
     {
-        if (type <= synthyboy::kFxTypeNone || type >= synthyboy::kNumFxInstanceTypes)
+        if (kind <= synthyboy::kFxTypeNone || kind >= ui::fxl::kNumKinds)
             return false;
         std::vector<synthyboy::FxWrite> writes;
-        const int newSlot = synthyboy::fxAddModule (plain_.data(), type, 0, writes);
+        if (kind >= ui::fxl::kKindSplitterLh)
+        {
+            const Item item { false, 13 + (kind - ui::fxl::kKindSplitterLh) };
+            if (! synthyboy::fxItemOn (plain_.data(), item))
+            {
+                synthyboy::fxSetOn (plain_.data(), item, true, writes);
+                int inMain = 0;
+                const synthyboy::FxRacks racks = synthyboy::fxRacks (plain_.data());
+                for (const Item& o : racks.rack[0])
+                    inMain += ! (o == item);
+                synthyboy::fxMove (plain_.data(), item, 0, inMain, writes);
+                applyWrites (inst, writes);
+            }
+            selectedItem_ = item;
+            selectionChanged_ = true;
+            return true;
+        }
+        const int newSlot = synthyboy::fxAddModule (plain_.data(), kind, 0, writes);
         if (newSlot < 0)
             return false;
         selectedItem_ = { true, newSlot };
@@ -687,21 +726,17 @@ private:
         {
             if (listKind_ == ListKind::Type)
             {
-                addEffect (inst, c.index + 1);
+                addEffect (inst, c.index + 1);   // the list holds the kinds 1 .. 16 in order
             }
             else if (listKind_ == ListKind::ParamChoice && listParam_ >= 0)
             {
                 if (! cardItems_.empty() && selectedSlot_ >= 0 && selectedSlot_ < static_cast<int> (cardItems_.size()))
                 {
                     const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
-                    const int type = synthyboy::fxItemType (plain_.data(), item);
                     const int idx = paramIndexOf (item, listParam_);
-                    const synthyboy::ParamInfo* pi = synthyboy::fxInstanceSource (type, listParam_);
+                    const synthyboy::ParamInfo* pi = screen_.slotEditor.infoOf (listParam_);
                     if (idx >= 0 && pi != nullptr)
-                    {
-                        const float norm = synthyboy::fxInstanceNormalise (type, listParam_, static_cast<float> (c.index));
-                        inst.writeParam (idx, norm);
-                    }
+                        inst.writeParam (idx, static_cast<float> (synthyboy::toNormalised (*pi, static_cast<float> (c.index))));
                 }
                 listParam_ = -1;
             }
@@ -823,12 +858,12 @@ private:
             }
             else if (c.kind == K::Index)
             {
-                const int type = synthyboy::fxItemType (plain_.data(), item);
-                const synthyboy::ParamInfo* pi = synthyboy::fxInstanceSource (type, p);
+                // a choice (c.index) or a number field (c.value, the number itself); the engine takes the normalised value
+                const synthyboy::ParamInfo* pi = screen_.slotEditor.infoOf (p);
                 if (idx >= 0 && pi != nullptr)
                 {
-                    const float norm = synthyboy::fxInstanceNormalise (type, p, static_cast<float> (c.index));
-                    inst.writeParam (idx, norm);
+                    const float plain = screen_.slotEditor.kindOf (p) == ui::FxSlotEditor::Kind::Number ? static_cast<float> (c.value) : static_cast<float> (c.index);
+                    inst.writeParam (idx, static_cast<float> (synthyboy::toNormalised (*pi, plain)));
                 }
             }
             else if (c.kind == K::Request)
@@ -852,7 +887,7 @@ private:
     const synthyboy::LiveValues* live_ = nullptr;   // the readout of the last update (the meters)
     uint32_t chainSig_ = 0;
     int orderIdx_[16] = {};
-    const char* typeNames_[synthyboy::kNumFxInstanceTypes - 1] = {};
+    const char* typeNames_[ui::fxl::kNumKinds - 1] = {};
     std::vector<const char*> listNames_;
 
     // the response of the FX filter

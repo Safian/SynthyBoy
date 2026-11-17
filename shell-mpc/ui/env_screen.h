@@ -9,6 +9,7 @@
 #pragma once
 
 #include "env_graph.h"
+#include "led_toggle.h"
 #include "panel.h"
 
 namespace synthyboy_mpc { namespace ui {
@@ -138,26 +139,22 @@ public:
     Knob attack { "ATTACK" }, decay { "DECAY" }, sustain { "SUSTAIN" }, release { "RELEASE" };
     Knob aCurve { "A CURVE" }, dCurve { "D CURVE" }, rCurve { "R CURVE" };
     Knob delay { "DELAY" }, hold { "HOLD" };
-    ToggleIcon beats, legato;                                      // MS / BEAT (on = beats), LEGATO
+    LedToggle beats, legato;                                       // MS / BEAT (on = beats), LEGATO: LED toggles in the cells of the knobs beside them
     QGroup groups[kMaxGroups];
 
-    /** The what-it-modulates list at the right (the owner writes the lines: "name  +35%"); `numTargets` is the total. */
+    /** What the envelope modulates, as tags in the top bar between the selector and the TARGETS button (the owner writes the lines: "name  +35%"; the first ones that fit are drawn, the others as "+n"); `numTargets` is the
+        total. No side panel: the graph has the whole width with or without targets. */
     struct TargetLine { char text[40] = {}; };
     TargetLine targetLines[3];
     int numTargetLines = 0, numTargets = 0;
-    /** How many targets the envelope has: the list block takes its place at the right of the graph only when there is at least one (the layout is redone when that changes). */
-    void setNumTargets (int n)
-    {
-        const bool had = numTargets > 0;
-        numTargets = n;
-        if (had != (n > 0) && rect_.w > 0)
-            layout();
-    }
+    void setNumTargets (int n) { numTargets = n; }
+    /** The room of the tags in the top bar. */
+    Rect tagsRect() const noexcept { return tags_; }
 
     EnvFullScreen()
     {
-        beats.state.icon = ToggleIcon::Icon::Generic; beats.setLabel ("BEATS"); beats.state.showState = false; beats.state.knobLike = true;   // in the row of the knobs: the cell of a knob, the names in one line
-        legato.state.icon = ToggleIcon::Icon::Generic; legato.setLabel ("LEGATO"); legato.state.knobLike = true;
+        beats.setLabel ("BEATS"); beats.centre = 0.36f;   // in the row of the knobs: the cell of a knob, the LED and the name at the height of the dials beside it
+        legato.setLabel ("LEGATO"); legato.centre = 0.36f;
         for (Knob* k : { &aCurve, &dCurve, &rCurve })
             k->state.bipolar = true;
         addKid (close); addKid (instances); addKid (targets); addKid (graph);
@@ -187,7 +184,6 @@ public:
             layout();
     }
     Rect block (int i) const noexcept { return i >= 0 && i < kMaxGroups ? blocks_[i] : Rect {}; }
-    Rect targetsBlock() const noexcept { return targetsBlock_; }
     Size minSize() const override { return { 1280, 628 }; }
 
     Change touchDown (int x, int y, double nowMs) override
@@ -229,6 +225,7 @@ protected:
         const int selW = std::min (r[1].w, 6 * 120);
         instances.place ({ r[1].x, top.y + (top.h - 56) / 2, selW, 56 });
         targets.place ({ r[2].x, top.y + (top.h - 56) / 2, r[2].w, 56 });
+        tags_ = { instances.rect().right() + 16, top.y + (top.h - 56) / 2, std::max (0, targets.rect().x - 12 - (instances.rect().right() + 16)), 56 };
         // ---- the bottom band: three blocks (a Q group each), in proportion to the members
         const int bandY = rect_.bottom() - m - kBottomH;
         const int unit = (W - 2 * kBlockGap) / 11;
@@ -239,7 +236,7 @@ protected:
             blocks_[i] = { bx, bandY, bw[i], kBottomH };
             bx += bw[i] + kBlockGap;
         }
-        const int kt = KnobPanel::kBlockTitleH, pad = KnobPanel::kBlockPad;
+        const int kt = KnobPanel::kBlockTitleH + 4, pad = KnobPanel::kBlockPad;   // a gap of its own between the name of the block and the lane of the index chips of its first row
         auto inner = [&] (int b, int n, Component** c, int cnt)
         {
             const Rect in { blocks_[b].x + pad, blocks_[b].y + kt, blocks_[b].w - 2 * pad, blocks_[b].h - kt - pad };
@@ -258,39 +255,52 @@ protected:
             groups[i].setFrameRect (blocks_[i]);
         // ---- the middle: the graph (the whole width; a column of the targets at its right only when there are targets)
         const int midY = top.bottom() + m, midH = bandY - m - midY;
-        const int gw = numTargets > 0 ? (W - m) * 70 / 100 : W;
-        graph.place ({ rect_.x + m, midY, gw, std::max (0, midH) });
-        targetsBlock_ = numTargets > 0 ? Rect { rect_.x + m + gw + m, midY, W - gw - m, std::max (0, midH) } : Rect {};
+        graph.place ({ rect_.x + m, midY, W, std::max (0, midH) });
     }
     void drawUnder (Pen& p) const override
     {
         for (int i = 0; i < kMaxGroups; ++i)
             p.block (blocks_[i]);
-        if (! targetsBlock_.empty())
-            p.block (targetsBlock_);
     }
     void drawExtra (Pen& p) const override
     {
         const theme::Look& T = theme::L();
         for (int i = 0; i < kMaxGroups; ++i)
             p.textLeft ({ blocks_[i].x + KnobPanel::kBlockPad + 4, blocks_[i].y + 3, std::max (0, blocks_[i].w - 16), 16 }, groupName (i), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-        // what the envelope modulates: the first lines of the list (the TARGETS button opens all of it)
-        const Rect t = targetsBlock_;
-        if (t.h < 40 || numTargets <= 0)
+        // what the envelope modulates: tags in the top bar (text, no button outline: they are not touch targets; the TARGETS button opens the list), as many as fit, then "+n"
+        const Rect t = tags_;
+        if (t.w < 60 || numTargets <= 0)
             return;
-        char head[32];
-        std::snprintf (head, sizeof head, numTargets == 1 ? "MODULATES %d TARGET" : "MODULATES %d TARGETS", numTargets);
-        p.textLeft ({ t.x + 12, t.y + 4, std::max (0, t.w - 24), 24 }, head, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
-        for (int i = 0; i < numTargetLines; ++i)
+        const float sz = T.fLabel;
+        int x = t.x, drawn = 0;
+        for (int i = 0; i < std::min (numTargetLines, numTargets); ++i)
         {
-            const Rect line { t.x + 12, t.y + 30 + i * 34, std::max (0, t.w - 24), 30 };
-            if (line.bottom() > t.bottom() - 2)
+            char rest[12];
+            std::snprintf (rest, sizeof rest, "+%d", numTargets - (i + 1));
+            const int reserve = numTargets > i + 1 ? static_cast<int> (std::ceil (Pen::textWidth (rest, sz))) + 16 : 0;
+            int w = static_cast<int> (std::ceil (Pen::textWidth (targetLines[i].text, sz))) + 22;
+            if (x + w + reserve > t.right())
+            {
+                if (i > 0)
+                    break;
+                w = t.right() - x - reserve;   // the first one is cut with an ellipsis rather than left out
+            }
+            if (w < 60)
                 break;
-            p.textLeft (line, targetLines[i].text, T.fValue - 2.0f, p.c (T.text, 255), T.fMin);
+            p.disc (static_cast<float> (x + 5), static_cast<float> (t.y + t.h / 2), 3.0f, p.c (T.flow[0], 255));
+            p.textLeft ({ x + 14, t.y, w - 14, t.h }, targetLines[i].text, sz, p.c (T.text, 255), T.fMin);
+            x += w + 6;
+            ++drawn;
+        }
+        if (drawn < numTargets)
+        {
+            char rest[12];
+            std::snprintf (rest, sizeof rest, "+%d", numTargets - drawn);
+            p.textLeft ({ x, t.y, std::max (0, t.right() - x), t.h }, rest, sz, p.c (T.textDim, 255), T.fMin);
         }
     }
     static constexpr int kBlockGap = 8;
-    Rect blocks_[kMaxGroups], targetsBlock_;
+    Rect blocks_[kMaxGroups], tags_;
     int active_ = -1;
     bool pageMode_ = false;
 };
