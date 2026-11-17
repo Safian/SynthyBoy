@@ -268,7 +268,7 @@ void testVoiceLayout()
     ui::VoiceScreen& v = r.ui.screen();
     check (v.rect().w == 1280 && v.rect().h == 628 && r.stack.element() == VoiceUi::kElementPage, "the page has the whole tab and is the element of the Voice tab");
     std::string bad;
-    std::vector<ui::Component*> cs = { &v.length, &v.qStepSelect, &v.qRowSelect, &v.stepValue, &v.randPan, &v.randDetune, &v.randCutoff, &v.randEnv, &v.randDetune10x, &v.scaleEnv, &v.scaleLfo, &v.scaleLfoMode, &v.oscA, &v.oscB, &v.oscC, &v.oscSub, &v.oscNoise };
+    std::vector<ui::Component*> cs = { &v.length, &v.qStepSelect, &v.rowList, &v.stepValue, &v.randPan, &v.randDetune, &v.randCutoff, &v.randEnv, &v.randDetune10x, &v.scaleEnv, &v.scaleLfo, &v.scaleLfoMode, &v.oscA, &v.oscB, &v.oscC, &v.oscSub, &v.oscNoise };
     check (sizesOk (cs, bad), "every control of the Voice page is >= 56 px high and has its minimum size " + bad);
     bool inside = true;
     static const int kVoiceGroupBlock[6] = { -1, 0, 0, 1, 2, 2 };
@@ -323,9 +323,22 @@ void testVoiceGridDrawing()
     r.refresh();
     check (g.value (1, 5) < -0.2f && g.value (2, 5) > 0.3f, "the grid has every row's value of the step");
     check (std::string (g.rowName (0)) == "PAN" && r.ui.screen().stripRect().h >= 40, "the strip under the grid has the room for the values of the step");
-    // a row tab
-    r.tapAt (g.tabRect (2).x + 10, g.tabRect (2).y + 10);
-    check (g.activeRow == 2 && std::string (r.ui.screen().qRowSelect.state.text) == "CUTOFF", "a row tab selects the row");
+    // the row: a LED list of six rows (56 px each), at the left of the grid
+    ui::VoiceScreen& vs = r.ui.screen();
+    check (vs.rowList.state.count == 6 && std::string (vs.rowList.state.names[2]) == "CUTOFF" && std::string (vs.rowList.state.title) == "ROW", "the ROW list has the six rows by name, all visible");
+    bool tall = true;
+    for (int i = 0; i < 6; ++i)
+        tall = tall && vs.rowList.rowRect (i).h >= 56 && vs.rowList.rowRect (i).w >= 96;
+    check (tall && vs.rowList.sizeOk(), "every row of the ROW list is a touch target of at least 56 px (the old tabs were 35 px)");
+    check (vs.rowBlockRect().contains (vs.rowList.rect()) && vs.rowBlockRect().right() <= g.rect().x && ! vs.rowBlockRect().overlaps (g.rect()), "the list stands in a block of its own at the left of the grid, the grid has the rest of the width");
+    const ui::Rect row2 = vs.rowList.rowRect (2);
+    r.tapAt (row2.x + row2.w / 2, row2.y + row2.h / 2);
+    check (g.activeRow == 2 && vs.rowList.state.index == 2 && r.inst.q[1] != -1 && QRouter::indexOf (r.inst.q[1]) == VoiceUi::kVirtualRow, "a tap on CUTOFF selects the row; the list is Q2 of the header group (the virtual row target)");
+    check (vs.groups[0].member (1) == &vs.rowList && vs.groups[0].frameless() && vs.groups[0].numMembers() == 4, "the header group is [STEP, the ROW list, LENGTH, VALUE] and has no frame (its members lie apart)");
+    check (std::string (vs.stepValue.state.label) == "CUTOFF", "the VALUE field names the row (" + std::string (vs.stepValue.state.label) + ")");
+    check (vs.length.rect().w >= 160 && vs.stepValue.rect().w >= 180 && vs.qStepSelect.rect().right() <= vs.length.rect().x, "LENGTH and VALUE have the room the ROW stepper left (" + std::to_string (vs.length.rect().w) + ", " + std::to_string (vs.stepValue.rect().w) + " px)");
+    check (r.ui.screen().turnQ (1, 1.0).index == 3, "a Q-Link step on Q2 moves the row on (the list)");
+    r.refresh();
 }
 
 void testVoiceStepsLitAndQ()

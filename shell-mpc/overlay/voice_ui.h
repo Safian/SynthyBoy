@@ -44,8 +44,6 @@ public:
         kLength = 2, kStepSelect = 3, kRowSelect = 4, kStepValue = 5,
         // Step Grid: 6 rows * 8 steps = 48 values -> 100 .. 147
         kGridBase = 100,
-        // Row tabs: 150 .. 155
-        kRowTabBase = 150,
         kRandPan = 200, kRandDetune, kRandCutoff, kRandEnv, kRandDetune10x,
         kScaleEnv = 210, kScaleLfo, kScaleLfoMode,
         kOscA = 220, kOscB, kOscC, kOscSub, kOscNoise,
@@ -114,9 +112,7 @@ public:
         full_.qStepSelect.state.count = 8;
         full_.qStepSelect.state.index = full_.grid.selectedStep;
         full_.qStepSelect.setItem (stepBuf);
-        full_.qRowSelect.state.count = 6;
-        full_.qRowSelect.state.index = full_.grid.activeRow;
-        full_.qRowSelect.setItem (ui::VoiceGrid::rowName (full_.grid.activeRow));
+        full_.rowList.state.index = std::clamp (full_.grid.activeRow, 0, ui::VoiceGrid::kNumRows - 1);
         const float sv = full_.grid.value (full_.grid.activeRow, full_.grid.selectedStep) * 100.0f;
         full_.stepValue.state.value = std::round (sv);
         full_.stepValue.setLabel (ui::VoiceGrid::rowName (full_.grid.activeRow));
@@ -239,12 +235,11 @@ private:
         items_.clear();
         bind (kLength, &full_.length, T::Number, "voicectl.length");
         bind (kStepSelect, &full_.qStepSelect, T::Inert, "");
-        bind (kRowSelect, &full_.qRowSelect, T::Inert, "");
+        bind (kRowSelect, &full_.rowList, T::Inert, "");
         bind (kStepValue, &full_.stepValue, T::Inert, "");
 
         static const char* const kRows[6] = { "pan", "detune", "cutoff", "env", "mod1", "mod2" };
         full_.grid.baseId = kGridBase;
-        full_.grid.rowTabBaseId = kRowTabBase;
         for (int r = 0; r < 6; ++r)
             for (int s = 0; s < 8; ++s)
                 bind (kGridBase + r * 8 + s, &full_.grid, T::GridStep, "voicectl.s" + std::to_string (s + 1) + "." + kRows[r], r, s);
@@ -334,11 +329,6 @@ private:
             if (listParam_ >= 0)
                 uibind::writePlain (inst, listParam_, ch.index);
             stack.back();
-            return;
-        }
-        if (ch.id >= kRowTabBase && ch.id < kRowTabBase + 6)   // a row tab of the grid
-        {
-            full_.grid.activeRow = ch.id - kRowTabBase;
             return;
         }
         if (ch.id == kStepSelect && ch.kind == ui::ChangeKind::Index)

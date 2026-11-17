@@ -1,6 +1,7 @@
 // SynthyBoy - MPC UI component library: VoiceGrid, the 8-step sequence and per-voice control grid (docs/MPC.md, ui-elem-mastervoice.md).
 // Rows: 6 (PAN, DETUNE, CUTOFF, ENV, MOD 1, MOD 2); Columns: 8 steps.
-// Drag-drawable bipolar vertical bars, row tabs on the left, live active voice step highlighting.
+// Drag-drawable bipolar vertical bars, live active voice step highlighting. The grid shows the row it is told (`activeRow`); the ROW is chosen with the LED list of the screen (voice_screen.h: 56 px rows, a member of the
+// header's Q group), not with tabs of the grid.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -20,7 +21,6 @@ class VoiceGrid : public Component
 public:
     static constexpr int kNumRows = 6;
     static constexpr int kNumSteps = 8;
-    static constexpr int kTabW = 96;
     static constexpr int kPad = 4;
     static constexpr int kColGap = 6;
 
@@ -31,7 +31,6 @@ public:
     float modValues[kNumRows][kNumSteps] = {};
     uint8_t voiceStepMask = 0;    // bit s is 1 if step s has an active sounding voice
     int baseId = 100;             // baseId + row * 8 + col
-    int rowTabBaseId = 150;       // rowTabBaseId + row
 
     static const char* rowName (int r) noexcept
     {
@@ -45,18 +44,9 @@ public:
 
     int stepId (int row, int step) const noexcept { return baseId + row * kNumSteps + step; }
 
-    Rect tabRect (int r) const noexcept
-    {
-        if (r < 0 || r >= kNumRows) return {};
-        const int tabAreaH = rect_.h - 2 * kPad;
-        const int tabH = tabAreaH / kNumRows;
-        return { rect_.x + kPad, rect_.y + kPad + r * tabH, kTabW - kPad, std::max (28, tabH - 3) };
-    }
-
     Rect gridArea() const noexcept
     {
-        const int gx = rect_.x + kTabW + kColGap;
-        return { gx, rect_.y + kPad, std::max (0, rect_.right() - kPad - gx), std::max (0, rect_.h - 2 * kPad) };
+        return { rect_.x + kPad, rect_.y + kPad, std::max (0, rect_.w - 2 * kPad), std::max (0, rect_.h - 2 * kPad) };
     }
 
     Rect columnRect (int s) const noexcept
@@ -87,17 +77,7 @@ public:
         if (! enabled_ || ! rect_.contains (x, y))
             return Change::none();
 
-        // 1. Check row tabs on left
-        for (int r = 0; r < kNumRows; ++r)
-        {
-            if (tabRect (r).contains (x, y))
-            {
-                activeRow = r;
-                return Change::indexed (rowTabBaseId + r, r, r);
-            }
-        }
-
-        // 2. Check grid columns
+        // the grid columns
         const Rect g = gridArea();
         if (g.contains (x, y))
         {
@@ -193,27 +173,7 @@ protected:
         // 1. Draw outer block
         p.block (rect_, false);
 
-        // 2. Draw row tabs on the left
-        for (int r = 0; r < kNumRows; ++r)
-        {
-            const Rect tr = tabRect (r);
-            const bool active = (r == activeRow);
-            if (active)
-            {
-                p.paintY2 (static_cast<float> (tr.y), static_cast<float> (tr.bottom()), T.flow[0], T.flow[1], 255);
-                p.rrect (tr, T.rChip, p.c (colour::rgba (T.flow[0], 255)));
-                p.plain();
-                p.textCentered (tr, rowName (r), T.fLabel, p.c (T.onBright, 255), T.fMin);
-            }
-            else
-            {
-                p.rrect (tr, T.rChip, p.c (T.panel1, 200));
-                p.rrect (tr, T.rChip, p.c (T.keyline, 160), 1.0f);
-                p.textCentered (tr, rowName (r), T.fLabel - 1.0f, p.c (T.textDim, 255), T.fMin);
-            }
-        }
-
-        // 3. Draw step columns
+        // 2. Draw step columns
         for (int s = 0; s < kNumSteps; ++s)
         {
             const Rect cr = columnRect (s);
