@@ -760,7 +760,7 @@ TEST (ownv_chorus_ch1_delayed_burst)
 // ------------------------------------------------------------------------------------------------------------------------------------
 // the mixer graph, the racks, the splitters, Bode
 
-TEST (ownv_direct_skips_the_master_volume_and_the_effects)
+TEST (ownv_direct_skips_the_effects_and_follows_the_master_volume)
 {
     auto level = [&] (int dest, float masterDb)
     {
@@ -772,7 +772,7 @@ TEST (ownv_direct_skips_the_master_volume_and_the_effects)
         return lineAt (o.left, 0.3, 440.0, 2400);
     };
     CHECK (level (3, -60) < 0.01);        // Effects only: silenced by the master volume
-    CHECK (level (4, -60) > 0.9);         // Direct out: past it
+    CHECK (level (4, -60) < 0.01);        // Direct out: under the master volume too (it skips only the effects)
     CHECK (std::fabs (level (4, 0) - level (3, 0)) < 0.02);
     CHECK (level (6, 0) < 1.0e-4);        // None
 }
@@ -794,7 +794,7 @@ TEST (ownv_bus_sends_levels_and_racks)
     CHECK (full > 0.9);
     CHECK (std::fabs (level ({ { "osc1.destination", 6 }, { "osc1.bus1_send", 50 } }) - 0.5 * full) < 0.03);
     CHECK (level ({ { "osc1.destination", 6 }, { "osc1.bus1_send", 100 }, { "bus1.level", -60 } }) < 0.01);
-    CHECK (level ({ { "osc1.destination", 6 }, { "osc1.bus2_send", 100 }, { "bus2.destination", 1 }, { "master.volume", -60 } }) > 0.9); // Bus 2 to Direct
+    CHECK (level ({ { "osc1.destination", 6 }, { "osc1.bus2_send", 100 }, { "bus2.destination", 1 }, { "master.volume", -60 } }) < 0.01); // Bus 2 to Direct: under the master volume
     // Bus 1 to Bus 2 and on to Main
     CHECK (level ({ { "osc1.destination", 6 }, { "osc1.bus1_send", 100 }, { "bus1.destination", 2 } }) > 0.9);
     // the filter blend: 100 % sends the oscillator to Filter 2 only (it is off: silence)

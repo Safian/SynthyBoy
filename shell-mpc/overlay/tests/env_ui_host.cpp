@@ -118,13 +118,13 @@ void testEveryControlHasAParameter()
             int unbound = 0;
             for (const EnvUi::Item& it : r.ui.items())
             {
-                if (it.type == EnvUi::T::Inert || it.type == EnvUi::T::Graph || it.type == EnvUi::T::Select)
+                if (it.type == EnvUi::T::Inert || it.type == EnvUi::T::Graph || it.type == EnvUi::T::Select || it.type == EnvUi::T::Pick)   // Pick: the selector of the compact view (the Play Env selector, no parameter of its own)
                     continue;
                 if (it.active (r.ui.beats()) < 0)
                     ++unbound;
             }
             check (unbound == 0 && r.ui.selection() == env && r.ui.beats() == (units > 0.5f),
-                   "envelope " + std::to_string (env) + (units > 0.5f ? " in beats" : " in ms") + ": every control has a parameter, the selection follows Play Env");
+                   "envelope " + std::to_string (env) + (units > 0.5f ? " in beats" : " in ms") + ": every control has a parameter, the selection follows Play Env (unbound " + std::to_string (unbound) + ", selection " + std::to_string (r.ui.selection()) + ", beats " + std::to_string (r.ui.beats()) + ")");
         }
 }
 
