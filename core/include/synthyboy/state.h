@@ -55,7 +55,7 @@ struct LoadResult
 std::string saveState (const ParamValues& values);
 
 /** The same, followed by the `content` section ("content":{"wavetables":[..],"samples":[..],"lfo_shapes":[..],"curves":{..},
-    "tuning":{..},"impulses":[..],"filter_curves":[..]}, only the non-empty parts, in this order) unless content is empty or fails
+    "tuning":{..},"impulses":[..],"filter_curves":[..],..., "mod_curves":[..],"macro_names":[8 strings], only the non-empty parts, in this order) unless content is empty or fails
     validateContent (). Host state and .sbpreset use this one writer. */
 std::string saveState (const ParamValues& values, const StateContent& content);
 

@@ -91,6 +91,17 @@ public:
     void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
     {
         (void) nowMs;
+        {
+            const auto content = inst.content();   // the names of the macros: in the rows, the board and the pickers
+            if (macroNames_.load (content.get()))
+                namesDirty_ = true;
+        }
+        const NamesScope namesScope (macroNames_);
+        if (namesDirty_)
+        {
+            namesDirty_ = false;
+            fillBoard();
+        }
         pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0;
         if (pageTop_ != kPageDetail && pageTop_ != kPageList && pageTop_ != kPageTargets)
             pageTop_ = 0;
@@ -282,6 +293,8 @@ private:
         const char* key = synthyboy::modSourceTable()[choice - 1].key;
         if (std::strncmp (key, "rlfo", 4) == 0 || std::strcmp (key, "random") == 0)
             std::snprintf (out, cap, "RND");
+        else if (uibind::isMacroSource (choice))
+            std::snprintf (out, cap, "MAC");   // whatever the macro is called
         else
         {
             char sn[7];
@@ -821,6 +834,8 @@ private:
         }
     }
 
+    MacroNames macroNames_;   // the macro names of the instance (loaded in update ()); the board is filled again when they change
+    bool namesDirty_ = false;
     int w_ = kCanvasW, h_ = kCanvasH;
     int pageTop_ = 0, openSlot_ = -1;
     int srcFilter_ = 0, dstFilter_ = 0;

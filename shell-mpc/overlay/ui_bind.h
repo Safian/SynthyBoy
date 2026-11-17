@@ -14,6 +14,7 @@
 
 #include "../ui/ui.h"
 #include "curve_source.h"
+#include "macro_names.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
 
@@ -59,9 +60,17 @@ inline void formatValue (const synthyboy::ParamInfo& pi, float plain, char* out,
 // ---- the modulation matrix
 inline const char* sourceName (int choice) noexcept
 {
+    if (const MacroNames* names = activeMacroNames())   // a macro answers with its own name (macro_names.h)
+    {
+        const int m = macroOfSource (choice);
+        if (m >= 0)
+            return names->full (m);
+    }
     const synthyboy::ModSourceInfo* t = synthyboy::modSourceTable();
     return choice >= 1 && choice <= static_cast<int> (synthyboy::modSourceCount()) ? t[choice - 1].name : "";
 }
+/** True for the sources that are macros (their chips take the colour of the macros whatever the name says). */
+inline bool isMacroSource (int choice) noexcept { return macroOfSource (choice) >= 0; }
 /** The name of a modulation source in at most 6 characters that still says which one it is ("Macro 3" -> "MAC 3", "Random LFO 2" -> "RLFO 2", "Velocity" -> "VEL", the others their first six characters). */
 inline void shortSourceName (const char* full, char out[7])
 {
@@ -78,6 +87,21 @@ inline void shortSourceName (const char* full, char out[7])
     else if (n == "Random per Note") s = "RND";
     else s = n;
     std::snprintf (out, 7, "%.6s", s.c_str());
+}
+/** The short name (at most six bytes) of the source `choice`: a macro answers with the short form of its name ("MAC 3", "Filter"), the others as shortSourceName. */
+inline void shortName (int choice, char out[7])
+{
+    const MacroNames* names = activeMacroNames();
+    const int m = macroOfSource (choice);
+    if (m >= 0)
+    {
+        if (names != nullptr)
+            std::snprintf (out, 7, "%s", names->shortName (m));
+        else
+            std::snprintf (out, 7, "MAC %d", m + 1);   // outside a scope: the default names
+        return;
+    }
+    shortSourceName (sourceName (choice), out);
 }
 /** The modulation source choice value (1 ..) of the macro n (1 .. 8); 0 when the table has none. */
 inline int macroSource (int n) noexcept
@@ -138,8 +162,8 @@ inline ui::ModInput modsOf (const IInstanceView& v, int param, int selected, Mod
         const bool bi = sp.bipolar >= 0 && v.param (sp.bipolar) >= 0.5f;
         const bool by = sp.bypass >= 0 && v.param (sp.bypass) >= 0.5f;
         char name[7];
-        shortSourceName (sourceName (src), name);
-        mi.add (src, name, depth, bi, by);
+        shortName (src, name);
+        mi.add (src, name, depth, bi, by, isMacroSource (src));
         if (rows != nullptr)
             rows[n] = { s, src };
         ++n;

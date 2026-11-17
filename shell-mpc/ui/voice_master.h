@@ -414,6 +414,8 @@ public:
     Stepper sameNote, stealPriority;
     NumberField velocityTrack;
     VoiceMeterDisplay voiceMeter;
+    ToggleIcon padPressure;   // the plugin-wide pad pressure layer (shell parameters, not engine ones: no Q group)
+    NumberField padAmount;
     // GLIDE
     Knob portaTime { "GLIDE" }, portaSlope { "SLOPE" };
     ToggleIcon portaAlways, portaScaled;
@@ -458,6 +460,9 @@ public:
         stealPriority.minWidth = 140;
         velocityTrack.state.format = NumberField::Format::IntSigned;
         velocityTrack.setLabel ("VEL TRACK");
+        padPressure.setLabel ("PAD PRESS"); padPressure.state.showState = true;
+        padAmount.state.format = NumberField::Format::IntPlain;
+        padAmount.setLabel ("PAD %");
         stereoRouting.setCaption ("STEREO");
         voiceOverride.setCaption ("VOICE OVERRIDE");
         portaAlways.setLabel ("ALWAYS"); portaAlways.state.showState = true;
@@ -602,7 +607,7 @@ public:
 protected:
     std::vector<Component*> sideMainComponents()
     {
-        return { &volume, &meters, &spread, &stereoRouting, &voiceOverride, &tune, &transpose, &bendUp, &bendDown, &bendLink, &polyphony, &legato, &polyLegato, &phaseLegato, &sameNote, &stealPriority, &velocityTrack, &voiceMeter,
+        return { &volume, &meters, &spread, &stereoRouting, &voiceOverride, &tune, &transpose, &bendUp, &bendDown, &bendLink, &polyphony, &legato, &polyLegato, &phaseLegato, &sameNote, &stealPriority, &velocityTrack, &voiceMeter, &padPressure, &padAmount,
                  &portaTime, &portaSlope, &portaAlways, &portaScaled, &portaCurve };
     }
     std::vector<Component*> sideTuningComponents()
@@ -651,8 +656,10 @@ protected:
             stealPriority.place (cell (0, 1, 2));
             phaseLegato.place (cell (2, 1, 1));
             velocityTrack.place (cell (3, 1, 1));
-            const Rect mc = cell (0, 2, 4);
+            const Rect mc = cell (0, 2, 2);
             voiceMeter.place ({ mc.x, mc.y, mc.w, std::min (ch, std::max (40, in.bottom() - mc.y)) });
+            padPressure.place (cell (2, 2, 1));
+            padAmount.place (cell (3, 2, 1));
         }
         {   // GLIDE: the same grid again: the knobs GLIDE and SLOPE (cells of the height of the row), ALWAYS and SCALED stacked over the two cells at the right (the wide toggle of the page, 56 px, the lane of the chip
             // between them): the four cells of the Q group; the curve under them across the width

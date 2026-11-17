@@ -126,7 +126,7 @@ protected:
         double dfrom, dto;
         if (depthArc (state, state.value, dfrom, dto))
         {
-            const uint32_t sc = state.selected()->depth < 0.0 ? T.negative : theme::sourceColour (state.selected()->name);
+            const uint32_t sc = state.selected()->depth < 0.0 ? T.negative : state.selected()->colour();
             p.style (1.0f, true);
             p.arc (cx, cy, rm, angleOf (dfrom), angleOf (dto), wm, p.c (sc, 255));
             p.plain();
@@ -143,7 +143,7 @@ protected:
         p.disc (vx, vy, std::max (2.5f, tw * 0.9f), p.c (T.text, 255));
         if (state.small)
             p.disc (cx, cy, std::max (2.0f, R * 0.18f), p.c (T.flow[2], 255));
-        p.modTab (g.chip, tab(), state.selected() ? theme::sourceColour (state.selected()->name) : T.keyline, tabName (state));
+        p.modTab (g.chip, tab(), state.selected() ? state.selected()->colour() : T.keyline, tabName (state));
         if (g.labelSize > 0.0f)
         {
             if (state.side)
@@ -299,7 +299,7 @@ protected:
         formatValue (state, t);
         p.textCentered (valueBox, t, T.fValue, p.c (T.text, 255), T.fMin);
         // the modulation: the tab, and an underline bar instead of an arc: the depth segment of the selected source around the position of the value on the bar
-        p.modTab (rect_, tabState (state), state.selected() ? theme::sourceColour (state.selected()->name) : T.keyline, tabName (state));
+        p.modTab (rect_, tabState (state), state.selected() ? state.selected()->colour() : T.keyline, tabName (state));
         double from, to;
         const double span = state.max - state.min, pos = span > 0.0 ? (state.value - state.min) / span : 0.0;
         if (depthArc (state, pos, from, to))
@@ -307,7 +307,7 @@ protected:
             const Rect bar { in.x + 4, in.bottom() - 4, std::max (0, in.w - 8), 3 };
             p.rrect (bar, 1.5f, p.c (T.track, 255));
             const int x0 = bar.x + static_cast<int> (std::lround (from * bar.w)), x1 = bar.x + static_cast<int> (std::lround (to * bar.w));
-            p.rrect ({ x0, bar.y, std::max (x1, x0 + 2) - x0, bar.h }, 1.5f, p.c (state.selected()->depth < 0.0 ? T.negative : theme::sourceColour (state.selected()->name), 255));
+            p.rrect ({ x0, bar.y, std::max (x1, x0 + 2) - x0, bar.h }, 1.5f, p.c (state.selected()->depth < 0.0 ? T.negative : state.selected()->colour(), 255));
         }
     }
     void drawIcon (Pen& p, const Rect& head) const
@@ -553,7 +553,7 @@ public:
     enum class Icon : uint8_t { Power, PitchTrack, Generic };
     struct State
     {
-        bool on = false; Icon icon = Icon::Generic; char label[16] = {}; bool showState = false;   // label (<= 8 characters, optional): under the icon; showState: " ON" / " OFF" after it
+        bool on = false; Icon icon = Icon::Generic; char label[24] = {}; bool showState = false;   // label (<= 8 characters, optional): under the icon; showState: " ON" / " OFF" after it
         bool knobLike = false;   // in a row of knobs: no box; the icon where the dial is, the name on the line of the knob names, ON / OFF on the line of the values (the cell of a knob, the names in one line)
     };
     State state;

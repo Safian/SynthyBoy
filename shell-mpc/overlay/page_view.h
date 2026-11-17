@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "../ui/theme.h"
+#include "macro_names.h"
 #include "page_detector.h"
 #include "scene_cpu.h"
 #include "ui_stack.h"
@@ -95,6 +96,11 @@ public:
         if (in.io == nullptr || in.ui == nullptr)
             return false;
         bool changed = false;
+        {
+            const auto content = in.io->content();   // the names of the macros the pages show (macro_names.h): the ones of this instance, for everything this view does
+            names_.load (content.get());
+        }
+        const NamesScope scope (names_);
         page::Input pi;
         pi.live = in.live;
         pi.targets = in.targets;
@@ -126,15 +132,16 @@ public:
         ui = { 0, 0, page::kW, page::kH };
         return true;
     }
-    bool onTouch (const TouchEvent& ev, UiStack& stack, IInstanceView& io, double nowMs) override { return ! stack.isMain() && ui_.touch (ev, stack, io, nowMs); }
-    bool onWheel (int x, int y, int notches, UiStack& stack, IInstanceView& io, double nowMs) override { return ! stack.isMain() && ui_.wheel (x, y, notches, stack, io, nowMs); }
-    void onTick (UiStack& stack, IInstanceView& io, double nowMs) override { if (! stack.isMain()) ui_.tick (nowMs, stack, io); }
+    bool onTouch (const TouchEvent& ev, UiStack& stack, IInstanceView& io, double nowMs) override { const NamesScope scope (names_); return ! stack.isMain() && ui_.touch (ev, stack, io, nowMs); }
+    bool onWheel (int x, int y, int notches, UiStack& stack, IInstanceView& io, double nowMs) override { const NamesScope scope (names_); return ! stack.isMain() && ui_.wheel (x, y, notches, stack, io, nowMs); }
+    void onTick (UiStack& stack, IInstanceView& io, double nowMs) override { const NamesScope scope (names_); if (! stack.isMain()) ui_.tick (nowMs, stack, io); }
     void onShown() override { ui_.forgetQGroup(); }
     bool fingerDown() const noexcept override { return ui_.fingerDown(); }
     void dropGesture() noexcept override { ui_.dropGesture(); }
 
     void render (uint32_t* cv, int w, int h) override
     {
+        const NamesScope scope (names_);
         if (! scratch_)
             scratch_ = std::make_unique<gpu::SceneData>();
         gpu::SceneBuilder sb (*scratch_);
@@ -148,6 +155,7 @@ public:
     {
         if (! have_ || w != page::kW || h != page::kH)
             return false;
+        const NamesScope scope (names_);
         sb.begin (gpu::kKindPlay, static_cast<uint32_t> (viewIndex), w, h);
         buildPicture (sb);
         return ! sb.overflow;
@@ -188,6 +196,7 @@ private:
     int instance_;
     std::vector<int> targets_;
     Ui ui_;
+    MacroNames names_;   // the macro names of the instance this view shows, loaded at every update
     std::unique_ptr<gpu::SceneData> scratch_;
     uint32_t hash_ = 0;
     bool have_ = false;

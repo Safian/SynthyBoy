@@ -13,6 +13,7 @@
 #include "../ui/display.h"
 #include "env_ui.h"
 #include "lfo_ui.h"
+#include "macro_names.h"
 #include "osc_display.h"
 #include "osc_ui.h"
 #include "page_detector.h"
@@ -76,6 +77,8 @@ public:
         const int want[play::kPanels] = { std::clamp (in.instance->playSelection (0), 1, play::kOscSelections), std::clamp (in.instance->playSelection (1), 1, play::kEnvs),
                                            std::clamp (in.instance->playSelection (2), 1, play::kLfos) };
         std::shared_ptr<const synthyboy::StateContent> content = in.instance->content();
+        names_.load (content.get());   // the names of the macros the chips of the knobs show (macro_names.h)
+        const NamesScope scope (names_);
         const synthyboy::IContentStore* store = in.instance->contentStore();
         const double bpm = std::round (in.instance->bpm() * 10.0) / 10.0;
         const bool newContent = content != content_ || store != store_;
@@ -214,6 +217,7 @@ public:
     }
     bool onTouch (const TouchEvent& ev, UiStack& stack, IInstanceView& io, double nowMs) override
     {
+        const NamesScope scope (names_);
         // the envelope's pages while its full screen is open or a finger is down on it; else the oscillator's (its third, or its full screen), else the envelope's compact view (its third)
         if (env_ != nullptr && ((! stack.isMain() && stack.element() == EnvUi::kElementEnv) || env_->fingerDown()))
             return env_->touch (ev, stack, io, nowMs);
@@ -228,6 +232,7 @@ public:
     }
     bool onWheel (int x, int y, int notches, UiStack& stack, IInstanceView& io, double nowMs) override
     {
+        const NamesScope scope (names_);
         // the same routing as a touch: the envelope's / LFO's full screens while open, else the three panels in turn
         if (env_ != nullptr && ! stack.isMain() && stack.element() == EnvUi::kElementEnv)
             return env_->wheel (x, y, notches, stack, io, nowMs);
@@ -239,7 +244,7 @@ public:
             return true;
         return lfo_ != nullptr && lfo_->wheel (x, y, notches, stack, io, nowMs);
     }
-    void onTick (UiStack& stack, IInstanceView& io, double nowMs) override { if (osc_ != nullptr) osc_->tick (nowMs, stack, io); if (env_ != nullptr) env_->tick (nowMs, stack, io); if (lfo_ != nullptr) lfo_->tick (nowMs, stack, io); }
+    void onTick (UiStack& stack, IInstanceView& io, double nowMs) override { const NamesScope scope (names_); if (osc_ != nullptr) osc_->tick (nowMs, stack, io); if (env_ != nullptr) env_->tick (nowMs, stack, io); if (lfo_ != nullptr) lfo_->tick (nowMs, stack, io); }
     void onShown() override
     {
         if (osc_)
@@ -277,6 +282,7 @@ public:
     void render (uint32_t* cv, int w, int h) override
     {
         // the CPU draws the same scene the GPU helper gets (scene_cpu.h is the reference of its meaning): transparent where nothing is drawn
+        const NamesScope scope (names_);
         if (! scratch_)
             scratch_ = std::make_unique<gpu::SceneData>();
         gpu::SceneBuilder sb (*scratch_);
@@ -290,6 +296,7 @@ public:
     {
         if (! valid() || w != kW || h != kH)
             return false;
+        const NamesScope scope (names_);
         sb.begin (gpu::kKindPlay, static_cast<uint32_t> (viewIndex), w, h);
         build (sb);
         return ! sb.overflow;
@@ -488,6 +495,7 @@ private:
     bool have_[play::kPanels] = { false, false, false };
     bool forced_[play::kPanels] = { true, true, true };
     std::shared_ptr<const synthyboy::StateContent> content_;
+    MacroNames names_;   // the macro names of the instance on screen, loaded at every update
     const synthyboy::IContentStore* store_ = nullptr;
     double bpm_ = 0.0;
     std::vector<float> envY_, lfoY_;

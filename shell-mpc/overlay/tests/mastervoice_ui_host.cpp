@@ -35,7 +35,7 @@ bool sizesOk (const std::vector<ui::Component*>& cs, std::string& bad)
     for (ui::Component* c : cs)
         if (c->rect().w <= 0 || c->rect().h < 56 || ! c->sizeOk())
         {
-            bad = std::to_string (c->rect().w) + " x " + std::to_string (c->rect().h);
+            bad = std::to_string (c->rect().w) + " x " + std::to_string (c->rect().h) + " min " + std::to_string (c->minSize().w) + " x " + std::to_string (c->minSize().h);
             return false;
         }
     return true;
@@ -263,10 +263,19 @@ void testVoiceLayout()
     check (v.grid.rect().h >= 230 && v.randPan.rect().h >= 72 && v.scaleEnv.rect().h >= 72, "the grid is tall and the knobs of the blocks have the room");
     check (v.stripRect().y >= v.grid.rect().bottom() && v.blockRect (0).y >= v.stripRect().bottom(), "the strip of the step lies between the grid and the blocks");
     check (v.randDetune10x.rect().bottom() <= v.blockRect (0).bottom(), "the blocks hold their controls");
-    check (v.oscA.rect().w == v.oscB.rect().w && v.oscB.rect().w == v.oscC.rect().w &&
-           v.oscC.rect().w == v.oscSub.rect().w && v.oscSub.rect().w == v.oscNoise.rect().w &&
-           v.oscA.rect().h == v.oscNoise.rect().h,
-           "targets are five equal cells in one grid (width " + std::to_string (v.oscA.rect().w) + ", height " + std::to_string (v.oscA.rect().h) + ")");
+    {   // the targets: five LED toggles in two columns, the fifth across the block; none lower than 56 px, none overlapping, all inside the TARGETS block
+        const ui::LedToggle* ts[5] = { &v.oscA, &v.oscB, &v.oscC, &v.oscSub, &v.oscNoise };
+        bool ok = true;
+        for (int i = 0; i < 5; ++i)
+        {
+            ok = ok && ts[i]->rect().h >= 56 && ts[i]->rect().w >= 96 && v.blockRect (2).contains (ts[i]->rect());
+            for (int j = i + 1; j < 5; ++j)
+                ok = ok && ! ts[i]->rect().overlaps (ts[j]->rect());
+        }
+        check (ok && v.oscA.rect().y == v.oscB.rect().y && v.oscC.rect().y == v.oscSub.rect().y && v.oscNoise.rect().y > v.oscC.rect().y && v.oscNoise.rect().w == v.oscA.rect().w && v.oscA.rect().w == v.oscB.rect().w && v.oscB.rect().w == v.oscC.rect().w,
+               "targets are five LED toggles of the same width in two columns (cell " + std::to_string (v.oscA.rect().w) + " x " + std::to_string (v.oscA.rect().h) + "), NOISE in the third row, not spanning");
+        check (v.scaleLfoMode.columns() == 2 && v.scaleLfoMode.rowRect (1).h >= 56 && v.scaleLfoMode.state.count == 2, "the LFO time mode is a LED list of two options side by side, both visible");
+    }
 }
 
 void testVoiceGridDrawing()
@@ -343,8 +352,16 @@ void testVoiceStepsLitAndQ()
     r.ui.forgetQGroup();
     r.refresh();
     check (v.activeGroup() == 0, "forgetQGroup restores group 0");
-    r.tap (v.scaleLfoMode);
-    check (r.ui.topPage() == VoiceUi::kPageList && r.ui.list().state.count > 1, "the mode stepper opens its list");
+    {
+        const ui::Rect row1 = v.scaleLfoMode.rowRect (1);
+        r.tapAt (row1.x + row1.w / 2, row1.y + row1.h / 2);
+        r.refresh();
+        check (r.inst.get ("voicectl.scale.lfo_mode") == 1.0f && v.scaleLfoMode.state.index == 1 && v.activeGroup() == 3, "a tap on the second option of the LFO time mode selects it (parameter, lit dot, group SCALING)");
+        const float before = r.inst.get ("voicectl.osc.a");
+        r.tap (v.oscA);
+        r.refresh();
+        check (r.inst.get ("voicectl.osc.a") != before && v.oscA.state.on == (r.inst.get ("voicectl.osc.a") > 0.5f), "a tap on a target LED toggle flips its parameter and its dot");
+    }
 }
 
 void testVoiceDraw()
@@ -470,6 +487,25 @@ void testFullCoverage()
 }
 } // namespace
 
+// the plugin-wide pad pressure layer: two controls in the VOICES block, shell parameters (no Q group), off by default in the plugin
+void testMasterPadPressure()
+{
+    MRig r;
+    r.refresh();
+    ui::MasterScreen& m = r.ui.screen();
+    check (m.padPressure.enabled() && m.padAmount.enabled() && ! m.padPressure.state.on && m.padAmount.state.value == 35.0, "pad pressure: the two controls show the layer (off, 35 %)");
+    check (m.padPressure.rect().h >= 56 && m.padAmount.rect().h >= 56 && m.padPressure.rect().w >= 56 && m.padAmount.rect().w >= 56 && m.padPressure.sizeOk() && m.padAmount.sizeOk(), "pad pressure: touch targets of at least 56 pixels");
+    check (! m.padPressure.rect().overlaps (m.voiceMeter.rect()) && ! m.padAmount.rect().overlaps (m.voiceMeter.rect()) && ! m.padPressure.rect().overlaps (m.padAmount.rect()) && m.blockRect (2).contains (m.padAmount.rect()) && m.blockRect (2).contains (m.padPressure.rect()), "pad pressure: inside the VOICES block, over nothing");
+    r.tap (m.padPressure);
+    check (r.inst.padOn && r.inst.padWrites == 1, "a tap on PAD PRESS switches the layer on");
+    r.refresh();
+    check (m.padPressure.state.on, "... and the control shows it");
+    const ui::Rect a = m.padAmount.rect();
+    r.drag (a.x + a.w / 2, a.y + a.h / 2, a.x + a.w / 2, a.y + a.h / 2 - 60, true);
+    check (r.inst.padOn && r.inst.padPercent > 35.0f && r.inst.padPercent <= 100.0f, "dragging PAD % sets the amount (" + std::to_string (r.inst.padPercent) + ")");
+    check (! r.ui.item (MasterUi::kPadPressure) || r.ui.item (MasterUi::kPadPressure)->param < 0, "the two are not engine parameters");
+}
+
 int main()
 {
     std::printf ("=== SynthyBoy MPC Overlay: Master & Voice Host Tests ===\n");
@@ -478,6 +514,7 @@ int main()
     testMasterValuesAndWrites();
     testMasterGroupsAndMeters();
     testMasterDraw();
+    testMasterPadPressure();
     testVoiceLayout();
     testVoiceGridDrawing();
     testVoiceStepsLitAndQ();

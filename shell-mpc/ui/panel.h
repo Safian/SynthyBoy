@@ -652,6 +652,7 @@ public:
         MenuButton remove { "X", MenuButton::Icon::None };
         int source = 0;
         char name[7] = {};
+        bool macro = false;   // the source is a macro: its name is the owner's, the colour is the macros'
     };
     MenuButton back { "BACK", MenuButton::Icon::None };
     Row rows[kMaxRows];
@@ -701,6 +702,7 @@ public:
                 const ModEntry& e = m.mods[i];
                 r.source = e.source;
                 setText (r.name, sizeof r.name, e.name);
+                r.macro = e.macro;
                 r.depth.state.value = r.depth.state.modValue = (std::clamp (e.depth, -1.0, 1.0) + 1.0) * 0.5;
                 setRowState (r, e.bidirectional, e.bypassed);
             }
@@ -803,7 +805,7 @@ protected:
             p.textLeft ({ rect_.x + 140 + tw + 16, rect_.y + 4, std::max (0, rect_.w - 160 - tw - 16), kBarH - 8 }, target_, T.fValue, p.c (T.textDim, 255), T.fMin);
         p.textLeft ({ rect_.x + 8, addRowRect().y, kNameW - 8, kCtlH }, "ADD", T.fValue, p.c (T.textDim, 255), T.fMin);
         for (int i = 0; i < nRows_; ++i)
-            p.textLeft ({ rect_.x + 8, rowY (i) + kRowH - kCtlH, kNameW - 8, kCtlH }, rows[i].name, T.fValue, p.c (theme::sourceColour (rows[i].name), 255), T.fMin);
+            p.textLeft ({ rect_.x + 8, rowY (i) + kRowH - kCtlH, kNameW - 8, kCtlH }, rows[i].name, T.fValue, p.c (theme::sourceColour (rows[i].macro ? "MAC" : rows[i].name), 255), T.fMin);
         if (nRows_ == 0)
             p.textLeft ({ rect_.x + 8, addRowRect().bottom() + 12, rect_.w - 16, 40 }, "NOTHING MODULATES THIS VALUE YET: CHOOSE A SOURCE AND PRESS ADD", T.fLabel, p.c (T.textDim, 255), T.fMin);
     }
