@@ -159,10 +159,10 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             sb.rrect (sx0, sTop, sx1, sBot, T.rChip, a (T.keyline, 100), T.hair);
             sb.line (sx0, sBot - 2.0f, dEnd, sBot - 2.0f, T.hair + 0.3f, fc);
             sb.line (dEnd, sBot - 2.0f, sx1, sTop + 2.0f, T.hair + 0.5f, fc);
-            // the caption at the right end of the strip: the name of the LFO that the owner writes into the top left of the block must stay clear of it
+            // the caption near the right end of the strip, clear of the full screen button of the compact view: the name of the LFO that the owner writes into the top left of the block must stay clear of it
             const char* cap = d.delayShare > 0.0f ? "DELAY / RISE" : "RISE";
             const float capW = static_cast<float> (std::strlen (cap)) * (T.fSmall - 1.0f) * 0.62f;
-            sb.text (std::max (sx0 + 6.0f, sx1 - 6.0f - capW), sTop + 13.0f, T.fSmall - 1.0f, cap, a (T.textDim, 180));
+            sb.text (std::max (sx0 + 6.0f, sx1 - 80.0f - capW), sTop + 13.0f, T.fSmall - 1.0f, cap, a (T.textDim, 180));
         }
         const int step = rich() ? 1 : 2;   // the reduced tier: every second point of the curve (the vertical steps of a stepped shape stay: two neighbouring points make them)
         const int n = std::min ((d.n + step - 1) / step, kMaxPoints);

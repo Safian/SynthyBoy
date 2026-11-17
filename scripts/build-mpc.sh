@@ -53,7 +53,7 @@ xpl_presets="xl"
 dump_tool=""
 dump_plugin=""
 chunks_dir=""
-XPL_PATH_MODE="${XPL_PATH_MODE:-device}"
+XPL_PATH_MODE="${XPL_PATH_MODE:-shared}"
 image="${MPC_BUILD_IMAGE:-${ARMV7_IMAGE:-$IMAGE_DEFAULT}}"
 docker_cmd="${MPC_DOCKER:-docker}"
 
@@ -187,8 +187,8 @@ cp -R "$repo_root/content/presets" "$plugin_folder/Content/presets"
 
 # Generate .xpl presets for the Akai host's Sounds browser (<out>/Safian - VST - SynthyBoy/Presets/)
 # Controlled by --xpl-presets (xl|k61|both|off), default: xl.
-# XPL_PATH_MODE="device" writes device-specific paths: XL in package, Key 61 in Presets-k61/.
-# If XPL_PATH_MODE="shared", a single shared path is used.
+# XPL_PATH_MODE="shared" (default): ONE set in the package, written with the XL's plugin path; the Key 61 loads it as it is (checked on the device: the list appears and the presets load, so the
+# <PLUGIN file=...> path need not match the device). XPL_PATH_MODE="device" writes device-specific paths: XL in the package, Key 61 in Presets-k61/ (scripts/mpc-fix-xpl-paths.py rewrites the path).
 if [[ "$xpl_presets" != "off" ]]; then
     have_chunks=0
     actual_chunks=""
@@ -245,7 +245,7 @@ if [[ "$xpl_presets" != "off" ]]; then
         mkdir -p "$presets_folder"
 
         primary_dev="xl"
-        if [[ "$xpl_presets" == "k61" ]]; then
+        if [[ "$xpl_presets" == "k61" && "$XPL_PATH_MODE" == "device" ]]; then
             primary_dev="k61"
         fi
 

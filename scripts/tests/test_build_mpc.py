@@ -326,7 +326,7 @@ class BuildMpcTest(unittest.TestCase):
             except Exception:
                 pass
 
-        r = self.build("--no-validate", "--xpl-presets", "xl", "--chunks", str(mock_chunks))
+        r = self.build("--no-validate", "--xpl-presets", "xl", "--chunks", str(mock_chunks), XPL_PATH_MODE="device")
         self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
 
         presets = self.folder() / "Presets"

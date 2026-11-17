@@ -134,7 +134,7 @@ scripts/build-mpc.sh --xpl-presets xl --dump-tool build-native/shell-mpc/dump_mp
 2. **Device paths**: Each `.xpl` specifies the target plugin binary path via `<PLUGIN file="...">`:
    - MPC XL: `/nvme/VST2 Plugins/Safian - VST - SynthyBoy/VST/synthyboy-arm64.so`
    - MPC Key 61: `/sdcard/VST2 Plugins/Safian - VST - SynthyBoy/VST/synthyboy-arm32.so`
-3. **Dual-device packaging**: Under `XPL_PATH_MODE="device"` (default), the build packages the XL set into `<package>/Presets/` and writes a separate Key 61 set into `<out>/Presets-k61/` next to the package folder.
+3. **One shared set (default)**: `XPL_PATH_MODE="shared"`: the package holds ONE set in `<package>/Presets/`, written with the XL path; the Key 61 loads it as it is (checked on the Key 61: the list appears and the presets load). `XPL_PATH_MODE="device"` writes the XL set into `<package>/Presets/` and a separate Key 61 set into `<out>/Presets-k61/` next to the package folder.
 4. **Path rewriting**: Installers can rewrite the `file=` attribute of all `.xpl` files in a folder to any target device path byte-for-byte (preserving CRLF line endings) using `scripts/mpc-fix-xpl-paths.py`:
    ```bash
    python3 scripts/mpc-fix-xpl-paths.py --dir /path/to/presets --path "/sdcard/VST2 Plugins/Safian - VST - SynthyBoy/VST/synthyboy-arm32.so"
@@ -172,8 +172,7 @@ scripts/build-mpc.sh --xpl-presets xl --dump-tool build-native/shell-mpc/dump_mp
    ```
 
 > [!NOTE]
-> **Open question under live hardware test:**
-> * Whether the MPC host strictly requires the absolute plugin binary path (`file="..."` in `<PLUGIN>`) to match the on-device location, or if the host falls back to matching by UID (`SfSB` / `53665342`) or plugin name. Testing on the Key 61 is underway by the main session. If strict path matching is not required, switching to a single shared set is a one-line change via `XPL_PATH_MODE=shared`.
+> **Checked on the Key 61:** a set written with the XL path (`/nvme/VST2 Plugins/.../synthyboy-arm64.so`) shows its list and loads its presets on the Key 61, so the `file=` path of `<PLUGIN>` need not match the device; one shared set serves both (`XPL_PATH_MODE=shared`, the default). `scripts/mpc-fix-xpl-paths.py` stays as a tool.
 
 
 ## Pins and secrets
