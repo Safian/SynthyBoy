@@ -65,7 +65,8 @@ public:
         group has no block (more than four groups) or the arguments are out of range. Slots 4 * block .. 4 * block + 3 are its four knobs. */
     /** The device has 16 Q-Link knobs (the MPC XL): a page whose groups all fit (at most four) keeps its slots where they are whatever group a touch made the active one: nothing re-orders under the player's hand. The
         probe is the UI library's device flag (ui::QGroup::wideDevice, set once at start; q_publish.h connects the two): the router itself has no state of a device. A page of more than four groups pages as before. */
-    static bool (*&wideProbe() noexcept)() { static bool (*p)() = nullptr; return p; }
+    using Probe = bool (*) ();
+    static Probe& wideProbe() noexcept { static Probe p = nullptr; return p; }
     static bool wide() noexcept { return wideProbe() != nullptr && wideProbe()(); }
     static int blockOfGroup (int nGroups, int active, int group) noexcept
     {
