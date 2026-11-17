@@ -841,6 +841,8 @@ Numerical investigation confirmed:
 
 ## UI components
 
+Developer documentation of the library (one page per component, how a page is put together, reuse in another plugin): [docs/ui-components/README.md](ui-components/README.md); instructions for AI coding agents: `shell-mpc/ui/AGENTS.md`.
+
 The library of the screens of the overlay build: `shell-mpc/ui/` (header only, C++17, namespace `synthyboy_mpc::ui`; `ui.h` includes everything). Every component is a BLACK BOX defined by its interface; what is behind it (the geometry, the gesture state) is private. One place to review incoming code, a fix takes effect everywhere, the parts can be separated. The components draw with the scene ops of `shell-mpc/overlay/gpu/scene.h` (the GPU helper draws them, `shell-mpc/overlay/scene_cpu.h` is the CPU renderer with the same meaning, the fallback and the reference of the tests), in the palette of the overlay views (background 1e1d1e, panel 262527, rest grey 3d3b3e, accent ff2e63 / d31145, light grey and white), with the 5 x 7 font at 2 pixels per font pixel or more (the minimum sizes are chosen so that the longest text fits at that size). The style is the library's own, not the look of any other synth.
 
 **The contract (every component).**
