@@ -1341,6 +1341,26 @@
    "",
    "",
    ""
+  ],
+  "Bowed Pressure Strings": [
+   "Brightness",
+   "Bow Speed",
+   "Rosin",
+   "Vibrato Rate",
+   "Hall",
+   "",
+   "",
+   ""
+  ],
+  "Wah Pressure Clav": [
+   "Wah Range",
+   "Quack",
+   "Pick",
+   "Dirt",
+   "Phase",
+   "",
+   "",
+   ""
   ]
  }
 }
