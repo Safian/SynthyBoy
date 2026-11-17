@@ -349,13 +349,15 @@ private:
                 return false;
             skipWs();
 
-            char val[256];
             if (p < end && *p == '"')
             {
-                if (! parseString (val, sizeof val, truncated))
-                    return false;
+                // A value is kept up to 8 KB (it used to be 255 characters: a longer description was silently dropped); a longer one is still skipped whole.
+                std::string val (std::min<size_t> (static_cast<size_t> (end - p) + 1, 8192u), '\0');
+                if (! parseString (&val[0], val.size(), truncated))
+                    return false;   // also when the buffer ends inside the string: a partial read (the scan's 4 KB prefix) is never taken for a complete meta object
                 if (! truncated)
                 {
+                    val.resize (std::strlen (val.c_str()));
                     if (std::strcmp (key, "name") == 0) meta.name = val;
                     else if (std::strcmp (key, "category") == 0) meta.category = val;
                     else if (std::strcmp (key, "author") == 0) meta.author = val;
