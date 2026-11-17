@@ -126,7 +126,7 @@ TEST (own_sub_mono_keeps_only_the_lowest_note)
         set (*e, "sub.on", 1);
         set (*e, "sub.waveform", 0);
         set (*e, "sub.octave", 0);
-        set (*e, "sub.level", 100);
+        set (*e, "sub.level", 30); // two subs at 100 % reach 2.8 and the output stage's soft limit (linear to 1.8) would bend the lines; at 30 % both stay linear
         set (*e, "sub.mono", mono ? 1.0f : 0.0f);
         return sbtest::render (*e, events, static_cast<int> (0.7 * kSr), 256);
     };

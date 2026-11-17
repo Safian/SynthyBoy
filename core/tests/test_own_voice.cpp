@@ -900,7 +900,7 @@ TEST (ownv_every_new_capability_bit_has_an_audible_probe)
         { "osc_mapping", {}, "osc1.map.key_low", 0, 100, 69 },
         { "pitch_unison", { { "osc1.pitch_track", 0 } }, "osc1.fixed_pitch", 0, 84, 69 },
         { "sub_phase", { { "osc1.on", 0 }, { "sub.on", 1 }, { "sub.level", 100 }, { "sub.octave", 0 }, { "sub.waveform", 0 } }, "sub.phase", 0, 25, 69 },
-        { "quality_options", { { "osc1.wavetable", 1 }, { "osc1.warp.type", 1 }, { "osc1.warp.amount", 80 } }, "quality.oversample_4x", 0, 1, 100 },
+        { "quality_options", { { "osc1.wavetable", 1 } }, "quality.oversample_4x", 0, 1, 100 }, // no warp: a warp (Sync ...) already runs the oversampled path, so the switch cannot differ there
         { "fx_splitters", { { "eq.on", 1 }, { "eq.rack", 4 }, { "eq.high.gain", -24 }, { "eq.high.cutoff", 200 }, { "osc1.wavetable", 2 } }, "splitter_lh.on", 0, 1, 69 },
         { "serum_unison (word 2)", { { "osc1.unison.voices", 3 }, { "osc1.unison.detune", 30 }, { "osc1.wavetable", 2 } }, "osc1.unison.law", 0, 1, 69 },
         { "mod_slew (word 2)", { { "mod01.source", srcChoice ("lfo1") }, { "mod01.destination", dstChoice ("osc1.level") }, { "mod01.amount", 60 }, { "lfo1.rate", 6 } }, "mod01.rise", 0, 300, 69 },

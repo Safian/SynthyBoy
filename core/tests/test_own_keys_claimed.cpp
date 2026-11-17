@@ -12,6 +12,8 @@
 #include <vector>
 
 #include "synthyboy/content_state.h"
+#include "synthyboy/content_store.h"
+#include "synthyboy/user_content.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/tuning.h"
@@ -176,15 +178,18 @@ TEST (own_fxfilter_clean_mode_and_model_settings_change_the_sound)
     const std::vector<Setting> driven = { { "fxfilter.on", 1 }, { "fxfilter.model", 0 }, { "fxfilter.cutoff", 2000 }, { "fxfilter.resonance", 60 }, { "fxfilter.drive", 20 } };
     const auto a = play (plus (base (1), driven), ev, 0.5);
     const auto b = play (plus (plus (base (1), driven), { { "fxfilter.clean_mode", 1 } }), ev, 0.5);
+    std::printf ("    fxfilter clean mode (Analog, drive 20): max difference %.5f of peak %.5f\n", maxDiff (a.left, b.left, 0.2), peakOf (a.left, 0.2));
     CHECK (maxDiff (a.left, b.left, 0.2) > 0.01 * peakOf (a.left, 0.2));
     // comb offset (Comb model), formant X (Formant model)
     const std::vector<Setting> comb = { { "fxfilter.on", 1 }, { "fxfilter.model", 6 }, { "fxfilter.cutoff", 220 }, { "fxfilter.resonance", 80 } };
     const auto c0 = play (plus (plus (base (1), comb), { { "fxfilter.comb_offset", 0 } }), ev, 0.5);
     const auto c1 = play (plus (plus (base (1), comb), { { "fxfilter.comb_offset", 84 } }), ev, 0.5);
+    std::printf ("    fxfilter comb offset 0 vs 84: max difference %.5f of peak %.5f\n", maxDiff (c0.left, c1.left, 0.2), peakOf (c0.left, 0.2));
     CHECK (maxDiff (c0.left, c1.left, 0.2) > 0.01 * peakOf (c0.left, 0.2));
     const std::vector<Setting> fmt = { { "fxfilter.on", 1 }, { "fxfilter.model", 5 } };
     const auto f0 = play (plus (plus (base (1), fmt), { { "fxfilter.formant.x", 0 } }), ev, 0.5);
     const auto f1 = play (plus (plus (base (1), fmt), { { "fxfilter.formant.x", 100 } }), ev, 0.5);
+    std::printf ("    fxfilter formant x 0 vs 100: max difference %.5f of peak %.5f\n", maxDiff (f0.left, f1.left, 0.2), peakOf (f0.left, 0.2));
     CHECK (maxDiff (f0.left, f1.left, 0.2) > 0.01 * peakOf (f0.left, 0.2));
     const auto f2 = play (plus (plus (base (1), fmt), { { "fxfilter.formant.transpose", 7 } }), ev, 0.5);
     CHECK (maxDiff (f0.left, f2.left, 0.2) > 0.01 * peakOf (f0.left, 0.2) || maxDiff (f1.left, f2.left, 0.2) > 0.01 * peakOf (f1.left, 0.2));
@@ -259,7 +264,7 @@ TEST (own_curve_legato_glides_the_curved_velocity)
     };
     const auto jump = run (false), glide = run (true);
     // after the second note (0.3 s): the level of the first 30 ms against the level a second later
-    const double jumpRatio = rms (jump, 0.31, 0.34) / rms (jump, 1.4, 1.5), glideRatio = rms (glide, 0.31, 0.34) / rms (glide, 1.4, 1.5);
+    const double jumpRatio = rms (jump, 0.34, 0.37) / rms (jump, 1.4, 1.5), glideRatio = rms (glide, 0.34, 0.37) / rms (glide, 1.4, 1.5); // from 40 ms after the note: the master gain's own 20 ms smoother has run out
     std::printf ("    curve legato: early / late level without glide %.3f, with glide %.3f\n", jumpRatio, glideRatio);
     CHECK (std::fabs (std::log (jumpRatio)) < 0.12);
     CHECK (std::fabs (std::log (glideRatio)) > 0.15);
@@ -331,6 +336,8 @@ TEST (own_no_smoothing_reaches_the_serum_filters_and_the_fx_filter)
     {
         const double smooth = firstBlock (fx, false), jump = firstBlock (fx, true);
         std::printf ("    %s filter, cutoff 18000 -> 150: first block brightness %.4f with smoothing, %.4f without\n", fx ? "fx" : "voice", smooth, jump);
+        if (!(jump < 0.5 * smooth))
+            std::printf ("    FAIL no_smoothing %s filter: brightness %.5f without the switch, %.5f with it (expected under half)\n", fx ? "fx" : "voice", smooth, jump);
         CHECK (jump < 0.5 * smooth); // the closed filter is there in the first block
     }
 }
@@ -364,6 +371,28 @@ TEST (own_no_smoothing_reaches_every_effect_type)
         std::vector<Setting> st = plus (plus (base (1), { { "quality.no_smoothing", 1 } }), fx.setup);
         st.push_back ({ fx.key, startValue });
         auto e = make (st);
+        // Convolve needs an impulse: a decaying noise burst through the content store (it outlives every engine of the test)
+        static MemoryContentStore store;
+        static StateContent content;
+        static bool built = false;
+        if (!built)
+        {
+            std::vector<float> ir (static_cast<size_t> (0.2 * kSr));
+            sbtest::Rng rng (11);
+            for (size_t i = 0; i < ir.size(); ++i)
+                ir[i] = static_cast<float> (rng.uniform() * 2.0 - 1.0) * 0.3f * std::exp (-static_cast<float> (i) / 3000.0f);
+            store.add ("test.impulses", "ir.wav", encodeWav (ir.data(), nullptr, ir.size(), static_cast<int> (kSr), 16));
+            ContentFileRef ref;
+            ref.pack = "test.impulses";
+            ref.file = "ir.wav";
+            content.impulses.push_back (ref);
+            built = true;
+        }
+        if (std::string (fx.name) == "convolve")
+        {
+            e->setContentStore (&store);
+            e->setContent (content);
+        }
         std::vector<float> l (256), r (256);
         Event ev[1] = { sbtest::noteOn (0, 52) };
         e->process (ev, 1, l.data(), r.data(), 256);

@@ -827,7 +827,7 @@ void OwnEngine::noteOn (const Event& e) noexcept
 
     // a key that is already held
     for (auto& v : voices)
-        if (v->isActive() && !v->isReleased() && v->playedKey() == e.key && v->channel() == n.channel)
+        if (v->isActive() && !v->isReleased() && !v->killing() && v->playedKey() == e.key && v->channel() == n.channel)
         {
             if (sameNote == 2) // Ignore
                 return;

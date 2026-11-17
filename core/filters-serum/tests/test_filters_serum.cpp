@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -507,4 +508,39 @@ TEST (serum_filters_model_style_table_reaches_every_type_exactly_once)
     CHECK_EQ (std::string (filterModelStyleName (6, 0)), "Comb");
     CHECK_EQ (std::string (filterModelStyleName (7, 0)), "Positive Feedback");
     CHECK_EQ (std::string (filterModelStyleName (7, 1)), "Negative Feedback");
+}
+
+// FilterParams::jump (quality.no_smoothing of the own engine): a step of the cutoff applies at once instead of through the one pole smoother
+TEST (serum_filters_jump_skips_the_cutoff_smoother)
+{
+    auto tail = [] (bool jump)
+    {
+        Filter f;
+        f.prepare (48000.0);
+        f.setType (static_cast<int> (FilterType::Low12));
+        FilterParams p;
+        p.cutoff = 18000.0f;
+        p.resonance = 0.1f;
+        f.setParams (p);
+        std::vector<float> in (64), out (64);
+        const float w = 2.0f * kPi * 5000.0f / 48000.0f;
+        for (int k = 0; k < 40; ++k) // settle on the open filter
+            for (int i = 0; i < 64; ++i)
+                f.process (std::sin (w * static_cast<float> (k * 64 + i)));
+        p.cutoff = 200.0f;
+        p.jump = jump;
+        f.setParams (p);
+        float peak = 0.0f;
+        for (int i = 0; i < 64; ++i)
+        {
+            const float y = f.process (std::sin (w * static_cast<float> (2560 + i)));
+            if (i >= 32)
+                peak = std::max (peak, std::fabs (y));
+        }
+        return peak;
+    };
+    const float smooth = tail (false), jumped = tail (true);
+    std::printf ("    5 kHz after a step of the cutoff to 200 Hz: peak %.3f with the smoother, %.3f with jump\n", static_cast<double> (smooth), static_cast<double> (jumped));
+    CHECK (smooth > 0.4f);
+    CHECK (jumped < 0.15f);
 }
