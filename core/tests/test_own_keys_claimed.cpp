@@ -132,14 +132,14 @@ double line (const std::vector<float>& x, double fromSec, double toSec, double h
     return 2.0 * std::sqrt (re * re + im * im) / wsum;
 }
 
-const std::vector<Setting> kFxFilter = { { "fxfilter.on", 1 }, { "fxfilter.model", 3 }, { "fxfilter.cutoff", 500 }, { "fxfilter.resonance", 10 } };
+const std::vector<Setting> kFxFilterOn = { { "fxfilter.on", 1 }, { "fxfilter.model", 3 }, { "fxfilter.cutoff", 500 }, { "fxfilter.resonance", 10 } };
 } // namespace
 
 TEST (own_fxfilter_keys_default_is_unchanged)
 {
     const std::vector<Event> ev = { sbtest::noteOn (0, 69) };
-    const auto plain = play (plus (base (1), kFxFilter), ev, 0.5);
-    const auto written = play (plus (plus (base (1), kFxFilter), { { "fxfilter.keytrack", 0 }, { "fxfilter.pan", 0 }, { "fxfilter.clean_mode", 0 }, { "fxfilter.comb_offset", 42 },
+    const auto plain = play (plus (base (1), kFxFilterOn), ev, 0.5);
+    const auto written = play (plus (plus (base (1), kFxFilterOn), { { "fxfilter.keytrack", 0 }, { "fxfilter.pan", 0 }, { "fxfilter.clean_mode", 0 }, { "fxfilter.comb_offset", 42 },
                                                                   { "fxfilter.formant.x", 50 }, { "fxfilter.formant.y", 50 }, { "fxfilter.formant.resonance", 85 },
                                                                   { "fxfilter.formant.spread", 0 }, { "fxfilter.formant.transpose", 0 } }), ev, 0.5);
     CHECK (identical (plain, written));
@@ -148,21 +148,21 @@ TEST (own_fxfilter_keys_default_is_unchanged)
 TEST (own_fxfilter_keytrack_follows_the_last_note)
 {
     const std::vector<Event> ev = { sbtest::noteOn (0, 84) }; // two octaves above C4: cutoff x4 at 100 %
-    const auto off = play (plus (base (1), kFxFilter), ev, 0.5);
-    const auto on = play (plus (plus (base (1), kFxFilter), { { "fxfilter.keytrack", 100 } }), ev, 0.5);
+    const auto off = play (plus (base (1), kFxFilterOn), ev, 0.5);
+    const auto on = play (plus (plus (base (1), kFxFilterOn), { { "fxfilter.keytrack", 100 } }), ev, 0.5);
     const double b0 = brightness (off.left, 0.2, 0.45), b1 = brightness (on.left, 0.2, 0.45);
     std::printf ("    fxfilter keytrack: brightness %.5f -> %.5f\n", b0, b1);
     CHECK (b1 > 1.3 * b0);
     // note 60 is the reference: no change
     const std::vector<Event> ref = { sbtest::noteOn (0, 60) };
-    CHECK (identical (play (plus (base (1), kFxFilter), ref, 0.3), play (plus (plus (base (1), kFxFilter), { { "fxfilter.keytrack", 100 } }), ref, 0.3)));
+    CHECK (identical (play (plus (base (1), kFxFilterOn), ref, 0.3), play (plus (plus (base (1), kFxFilterOn), { { "fxfilter.keytrack", 100 } }), ref, 0.3)));
 }
 
 TEST (own_fxfilter_pan_moves_the_two_cutoffs_apart)
 {
     const std::vector<Event> ev = { sbtest::noteOn (0, 60) };
-    const auto flat = play (plus (base (1), kFxFilter), ev, 0.5);
-    const auto panned = play (plus (plus (base (1), kFxFilter), { { "fxfilter.pan", 100 } }), ev, 0.5);
+    const auto flat = play (plus (base (1), kFxFilterOn), ev, 0.5);
+    const auto panned = play (plus (plus (base (1), kFxFilterOn), { { "fxfilter.pan", 100 } }), ev, 0.5);
     const double l = brightness (panned.left, 0.2, 0.45), r = brightness (panned.right, 0.2, 0.45), f = brightness (flat.left, 0.2, 0.45);
     std::printf ("    fxfilter pan 100: left %.5f, right %.5f, centre %.5f\n", l, r, f);
     CHECK (r > 1.5 * l); // left 12 semitones down, right 12 up
