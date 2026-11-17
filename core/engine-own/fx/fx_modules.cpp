@@ -333,6 +333,7 @@ public:
     void configure (const FxFrame& f, const float* b, const float* d) noexcept override
     {
         FilterSettings s;
+        s.noSmoothing = f.noSmoothing;
         s.model = choice (b, model);
         s.style = choice (b, style);
         s.cutoffHz = V (b, d, cutoff);

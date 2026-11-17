@@ -1275,6 +1275,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             frame.period = kControlPeriod;
             frame.lastNote = lastNoteSemis;
             frame.noteOns = noteCounter;
+            frame.noSmoothing = globals.noSmoothing;
             frame.songBeats = globals.songBeats;
             frame.content = globals.content;
             frame.realtime = realtimeFlag;

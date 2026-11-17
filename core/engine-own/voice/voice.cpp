@@ -1079,6 +1079,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             fillFilterSettings (s, fi, [this] (int i) { return P (i); }, [this] (int i) { return PR (i); }, fi.cleanMode >= 0 && g.base[fi.cleanMode] >= 0.5f,
                                 keyNum, vc.cutoffSemis, (g.economy & kEconomyMath) != 0);
             s.scalarOnly = g.scalarFilters;
+            s.noSmoothing = g.noSmoothing;
             filt[f].set (s);
             if (g.noSmoothing)
                 filt[f].set (s); // the same settings twice: the coefficients do not ramp

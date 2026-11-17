@@ -19,6 +19,7 @@ struct FilterSettings
     int model = 3, style = 0;
     float cutoffHz = 12000.0f, resonance = 0.2f, drive = 0.0f, blend = 0.0f, mix = 1.0f, var = 0.5f;
     bool clean = false;
+    bool noSmoothing = false;             // quality.no_smoothing: the Serum models' cutoff / resonance smoothing is skipped
     bool fast = false;                    // tier low: cheaper tanh in the classic models
     bool scalarOnly = false;              // measurements (setOwnSavingsOff): the two sides of a Serum model run one after the other also where a pair kernel exists
     float cutoffHzR = -1.0f, level = 1.0f, driveDb = 0.0f, combOffset = 42.0f, formantX = 0.5f, formantY = 0.5f, formantRes = 0.85f, formantSpread = 0.0f, formantTranspose = 0.0f;
@@ -124,6 +125,7 @@ public:
         p.var = clamp01 (morph >= 0.0f ? morph : s.var);
         p.blend = clamp01 (s.blend);
         p.mix = clamp01 (s.mix);
+        p.jump = s.noSmoothing;
         p.coefHold = s.fast ? 4 : 1; // tier low: the coefficients follow the smoothed cutoff every fourth sample (the memo of the transcendental functions then hits)
         left.setParams (p);
         if (s.cutoffHzR > 0.0f)
