@@ -314,7 +314,7 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
                     # (a preset with user content, a wavetable or a sample of its own, has one more member, "content": the only difference allowed)
                     self.assertEqual((header, [k for k in keys if k != "content"], param_keys), device_structure, f"{xf.name}: structure differs from the device's file")
                     parsed = gen_mpc_xpl.parse_xpl(xf.read_text(encoding="utf-8"))
-                    self.assertEqual(parsed["header"]["num_programs"], 113)
+                    self.assertEqual(parsed["header"]["num_programs"], 137)
                     self.assertEqual(parsed["header"]["chunk_magic"], b"CcnK")
                     self.assertEqual(parsed["header"]["fx_magic"], b"FBCh")
                     self.assertGreater(len(parsed["chunk_bytes"]), 1000)
@@ -337,6 +337,32 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
                 xpl_files = list(out_dir.glob("*.xpl"))
                 self.assertGreaterEqual(len(xpl_files), 1)
                 self.assertTrue((out_dir / "Acid Saw Reso.xpl").is_file())
+                # Verify computed num_programs default: 1 fixture + 1 = 2
+                parsed_fixture = gen_mpc_xpl.parse_xpl((out_dir / "Acid Saw Reso.xpl").read_text(encoding="utf-8"))
+                self.assertEqual(parsed_fixture["header"]["num_programs"], 2)
+
+    def test_num_programs_cli_option(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            out_dir = Path(tmp_dir) / "out"
+            tmpl_path = get_example_path("prev_Acid_Saw_Reso.xpl")
+            gen_cmd = [
+                sys.executable,
+                str(SCRIPTS_DIR / "gen-mpc-xpl.py"),
+                "--chunks",
+                str(FIXTURES_DIR),
+                "--template",
+                str(tmpl_path),
+                "--num-programs",
+                "137",
+                "--out",
+                str(out_dir),
+            ]
+            res = subprocess.run(gen_cmd, capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, f"Generator failed: {res.stderr}\n{res.stdout}")
+            f = out_dir / "Acid Saw Reso.xpl"
+            self.assertTrue(f.is_file())
+            parsed = gen_mpc_xpl.parse_xpl(f.read_text(encoding="utf-8"))
+            self.assertEqual(parsed["header"]["num_programs"], 137)
 
 
 class TestDecodesLikeDeviceFiles(unittest.TestCase):

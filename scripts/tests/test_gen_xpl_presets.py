@@ -99,6 +99,17 @@ class TestNaming(unittest.TestCase):
             self.assertIn(b"synthyboy-arm32.so", raw)
             parsed = fmt.parse_xpl(raw.decode("utf-8"))
             self.assertEqual(parsed["chunk_bytes"], chunk)
+            self.assertEqual(parsed["header"]["num_programs"], 2)
+
+    def test_write_set_num_programs_override(self):
+        chunk = b'{"mpcProgram":1,"mpcProgramName":"X"}'
+        rows = [(0, "Bass", "Bass", "X", chunk)]
+        with tempfile.TemporaryDirectory() as t:
+            p = Path(t)
+            gen.write_set(rows, p, gen.DEVICE_PLUGIN_PATHS["xl"], num_programs=137)
+            raw = (p / "000-Bass-X.xpl").read_bytes()
+            parsed = fmt.parse_xpl(raw.decode("utf-8"))
+            self.assertEqual(parsed["header"]["num_programs"], 137)
 
 
 if __name__ == "__main__":

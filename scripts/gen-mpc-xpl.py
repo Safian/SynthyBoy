@@ -277,6 +277,7 @@ def create_xpl_from_chunk(
     template_info: Dict[str, Any],
     plugin_path: Optional[str] = None,
     date_override: Optional[str] = None,
+    num_programs: Optional[int] = None,
 ) -> Tuple[str, str]:
     """Create an .xpl XML string and its safe filename from a raw chunk and template."""
     attrs = dict(template_info["plugin_attrs"])
@@ -288,7 +289,8 @@ def create_xpl_from_chunk(
 
     # Reconstruct bank header from template's header parameters and new chunk size
     tmpl_hdr = template_info.get("header", {})
-    num_programs = tmpl_hdr.get("num_programs", DEFAULT_NUM_PROGRAMS)
+    if num_programs is None:
+        num_programs = tmpl_hdr.get("num_programs", DEFAULT_NUM_PROGRAMS)
     fx_id = tmpl_hdr.get("fx_id", DEFAULT_FX_ID)
     fx_version = tmpl_hdr.get("fx_version", DEFAULT_FX_VERSION)
 
@@ -434,6 +436,12 @@ def main() -> int:
     parser.add_argument("--template", type=Path, help="Template .xpl file to source XML envelope and attributes from")
     parser.add_argument("--plugin-path", type=str, help="Override path to plugin binary on device (<PLUGIN file=...>)")
     parser.add_argument("--date", type=str, help="Override date attribute in <version date=...>")
+    parser.add_argument(
+        "--num-programs",
+        type=int,
+        default=None,
+        help="Number of programs in bank header (default: preset count + 1)",
+    )
     parser.add_argument("--out", type=Path, help="Output directory for generated .xpl files")
     parser.add_argument("--check", type=Path, help="Inspect and verify an existing .xpl file")
 
@@ -462,6 +470,9 @@ def main() -> int:
 
     args.out.mkdir(parents=True, exist_ok=True)
 
+    computed_programs = len(entries) + 1 if entries else DEFAULT_NUM_PROGRAMS
+    target_num_programs = args.num_programs if args.num_programs is not None else computed_programs
+
     # Collision detection for FAT/exFAT filesystem (case-insensitive filename check)
     seen_files: Dict[str, str] = {}
     generated_count = 0
@@ -473,6 +484,7 @@ def main() -> int:
             template_info=template_info,
             plugin_path=args.plugin_path,
             date_override=args.date,
+            num_programs=target_num_programs,
         )
 
         fn_key = filename.lower()
