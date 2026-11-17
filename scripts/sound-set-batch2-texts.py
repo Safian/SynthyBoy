@@ -18,7 +18,7 @@ TEXTS = {
 ),
 "Bowed MPE Strings": dict(
     play="Chords or lines C2 .. C5, long. Set up for an MPE controller (the MPE zone on, bend range 48): slide opens the filter, pressure brings in the rosin noise and a vibrato; on a keyboard without MPE the wheel does what the slide does and the pad's pressure the rest (Full Level OFF). Release a note to hear the bow lift: the sample plays on past the loop end. Macros: Brightness, Rosin, Vibrato Rate, Bow Speed (attack and release), Hall, Saw Layer.",
-    unsure="Whether the loop of the sustain is really smooth by ear: it closes on whole cycles of the vibrato in the file (the loop point mismatch is -60 dB, a 25 ms crossfade is on), but a loop in a sustained tone can show as a periodic swell every two seconds. Whether MPE on does no harm with a plain keyboard: it only widens the bend range of member channels, notes on channel 1 behave as before.",
+    unsure="Whether the loop of the sustain is really smooth by ear: it closes on whole cycles of the vibrato in the file (the mismatch of the last and the first sample of the loop is 54 dB under the signal, a 25 ms crossfade is on), but a loop in a sustained tone can show as a periodic swell every two seconds. Whether MPE on does no harm with a plain keyboard: it only widens the bend range of member channels, notes on channel 1 behave as before.",
 ),
 "Reverse Gong Swell": dict(
     play="Single notes C1 .. C4, held until the strike: the length of the swell follows the key (the sample is four seconds long and tuned to C2: C2 swells for 4 s, C3 for 2 s, C1 for 8 s; it plays backwards at the pitch ratio of the key to C2). Let go after the hit for the plate tail. Macros: Slow Down (to a fifth of the speed: a long, nearly still swell), Shimmer (unison detune), Air (noise), Space, Bright.",
@@ -45,7 +45,7 @@ TEXTS = {
     unsure="Whether the swarm is a metal texture or noise: the grains are 70 ms of an inharmonic spectrum with pitch scatter up to a fifth, which can sound like a bag of bells; the Nitrous reverb at 6 s on bus 2 may smear it.",
 ),
 "Stutter Grain Kit": dict(
-    play="Any key C2 .. C6, played as a sampler: the key chooses where in the two bar break the stutter sits (the first key the start, the highest the end) and transposes it; the grains are sixteenth notes of the host tempo, 1/32 long, so a held key is a rolling stutter on one place. Wheel: scatter of position and pitch (a glitch). Macros: Nudge (the position), Scatter, Snap (the window), Pitch Rand, Dark, Echo.",
+    play="Any key C2 .. C6, played as a sampler: the key chooses where in the two bar break the stutter sits (the play head is the key number over 127: about 28 % into the loop at C2, 45 % at C4, 75 % at C7) and transposes it; the grains start on the sixteenth notes of the host tempo and are 1/32 long, so a held key is a rolling stutter on one place. Wheel: scatter of position and pitch (a glitch). Macros: Nudge (the position), Scatter, Snap (the window), Pitch Rand, Dark, Echo.",
     unsure="Tempo: the grain rate follows the host's tempo, the break does not (it is 120 BPM): at 140 BPM the stutter grains are shorter than the break's own sixteenths. Whether the sub layer (a sine two octaves down, there so that something plays if the sample is missing) belongs there.",
 ),
 "Rising Grain Riser": dict(
@@ -54,7 +54,7 @@ TEXTS = {
 ),
 "Nylon Zone Pluck": dict(
     play="Single notes and arpeggios C1 .. C6. Six recordings of a nylon pluck, one per zone: the zone borders are at E2/F2, C#3/D3, A#3/B3, G4/G#4 and E5/F5 (MIDI 40/41, 49/50, 58/59, 67/68, 76/77; see the SFZ file). Play the same note again and again: the voice control gives every note of eight its own pan, tuning and cutoff, so repeated notes are never the same. Wheel: the strings are doubled (two unison voices that drift apart) and the echo comes up. Macros: Bright, Saw Pluck, Double, Sustain, Echo, Room.",
-    unsure="The zone seams: each zone is one recording shifted by up to four semitones either way, so a seam can be heard as a step in the timbre. Whether the saw pluck under it (it is what plays if the pack is missing) should be there at all at its 16 %.",
+    unsure="The zone seams: each zone is one recording shifted by up to four semitones either way in the middle zones (the outer zones more: down to a whole octave at the bottom, over two octaves at the top), so a seam can be heard as a step in the timbre. Whether the saw pluck under it (it is what plays if the pack is missing) should be there at all at its 16 %.",
 ),
 "Marimba Layer Keys": dict(
     play="Lines and chords C2 .. C6. Velocity below 85 plays the soft recording of the bar, above it the hard one with the knock in front: play the same note at 40 and 120 to hear the change. Wheel: tremolo and more of the octave sine. Macros: Zone Shift, Room, Octave Sine, Mellow, Ring, Chorus.",
@@ -62,7 +62,7 @@ TEXTS = {
 ),
 "Glass Zone Bells": dict(
     play="Any keys: every note is moved to the nearest note of the Hirajoshi scale on D (D, E, F, A, A#), so a hand can lay any chord on the keys. Single notes and slow chords C2 .. C6. Wheel: the zone lookup shifts and the plate gets louder. Macros: Bright (a lowpass at 2.8 kHz opens), Plate, Bell Layer, Echo, Ring, Sub.",
-    unsure="Whether Conform is what you want from a keyboard: with the scale on, the black keys of the chromatic scale are not available (key 'mark only' would show the scale on the pads without moving notes: `master.scale.mode` Mark only). The four zones of glass at C3, C4 and C5 are one recording each, stretched up to seven semitones.",
+    unsure="Whether Conform is what you want from a keyboard: with the scale on, the black keys of the chromatic scale are not available (key 'mark only' would show the scale on the pads without moving notes: `master.scale.mode` Mark only). The four zones of glass (roots C3, C4, C5, C6) are one recording each, stretched by up to six semitones in the middle zones and by two octaves at the ends of the keyboard.",
 ),
 "Spectral Vowel Freeze": dict(
     play="Slow chords C2 .. C4, held for ten seconds and more. A Perlin LFO walks the play head along the voice pad, so the vowel changes by itself; the wheel is a second hand on the same axis (and a frequency shift). Pressure: more added harmonics and a brighter filter. Macros: Vowel, Harmonics, Shift (the frequencies of the whole spectrum up by up to 240 Hz), Hi Cut, Space, Saw Layer.",
@@ -78,7 +78,7 @@ TEXTS = {
 ),
 "Spectral Chord Morph": dict(
     play="One key, held 8 seconds or longer: the file plays once in real time, C major 7, A minor 7, F major 7, G 6 in turn (2 s each), and the oscillator re-synthesises them from their spectrum, so the changes are smooth morphs; other keys transpose all of it. Wheel: a spectral shift warp and a frequency shift (the harmony turns strange). Macros: Slow (to a fifth of the speed), Shift Warp, Freq Shift, Hi Cut, Space, Bright.",
-    unsure="Whether the loop at the end of the file (forward loop over the whole file) is a jump: the file's last chord (G 6) is faded out and the first one faded in, so the loop is a dip. The wheel changes the level a great deal with the warp at 60 % (see the measured table).",
+    unsure="Whether the loop at the end of the file (forward loop over the whole file) is a jump: the file's last chord (G 6) is faded out and the first one faded in, so the loop is a dip. The wheel changes the spectrum a great deal (see the measured line): at the top of its travel the shift warp is at 60 % and the frequency shift 160 Hz.",
 ),
 "Reese Dual Phase Bass": dict(
     play="Long notes on C1 .. C3 (MIDI 24 .. 48), chords of fifths; velocity: harder is brighter and dirtier. Wheel: cutoff and drive. Pressure: the cutoff. Macros: Phase (the table's frame: the distance between the two saws), Cutoff, Growl (tube drive), Dry Cab (the cabinet convolved at 55 %: 0 is the full cabinet), Octave Saw, Movement Rate.",
@@ -94,7 +94,7 @@ TEXTS = {
 ),
 "Throat Singer Drone": dict(
     play="One or two notes C3 .. C4 (they sound an octave lower), held; legato with a long glide (120 ms). The key is moved to the Phrygian dominant scale on D (D, E flat, F sharp, G, A, B flat, C; measured: C sharp plays C, E plays E flat, G sharp plays G). A slow LFO (0.07 Hz) and a Perlin LFO walk the resonance up and down the overtones, so a melody of whistling partials sings over the drone; the wheel speeds the walk up. Macros: Overtone, Walk Speed, Drone (the sub sine two octaves down), Bright, Space, Choir.",
-    unsure="The level (measured at the sustain; an attack of 1.5 s) and whether the overtone resonance is audible as a melody and not just a filter sweep: the narrow resonance (one partial wide) is chosen for it, measured as a 3.7 dB spectral distance between the two ends of the macro at one note.",
+    unsure="The level (measured at the sustain; an attack of 1.5 s) and whether the overtone resonance is audible as a melody and not just a filter sweep: the narrow resonance (one partial wide) is chosen for it; the Overtone macro's two ends differ by the distance in the macro line above.",
 ),
 "Ladder FM Bass": dict(
     play="Single notes C1 .. C3 (MIDI 24 .. 48), short and held. Velocity decides how far the ratio is thrown at the front of the note (a hard key starts on a higher ratio of the FM ladder, with the index rising; it settles into the fundamental in 260 ms). Wheel: the ratio and the drive. Macros: Ratio (the frame: steps through the ratios 1 .. 8, eight frames each), Snap Length, Drive, Sub, Cutoff, Decay.",

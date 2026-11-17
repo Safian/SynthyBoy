@@ -130,7 +130,7 @@ add("Gong Grain Swarm", "FX", "fx,granular,gong,swarm,metal,bus,random,texture",
     content=C(samples=[SMP(1, "gong_metal")]))
 
 add("Stutter Grain Kit", "Pluck", "pluck,rhythm,granular,stutter,drums,tempo-sync,note-position",
-    "A drum loop played as a stutter: the grains are sixteenth notes of the host tempo, ten milliseconds long windows cut into the break, and the key you press chooses where in the two bars the stutter sits (low keys the start, high keys the end), pitched like a sampler",
+    "A drum loop played as a stutter: the grains start on the sixteenth notes of the host tempo and are a thirty-second long, and the key you press chooses where in the two bars the stutter sits (the play head follows the key: about a quarter of the way in at C2, three quarters at C7), pitched like a sampler",
     {
         "master.polyphony": 6,
         "osc1.on": 1, "osc1.type": "Granular", "osc1.level": 72, "osc1.sample.root": 60, "osc1.sample.loop_mode": "Forward loop", "osc1.sample.normalize": 1,
@@ -144,7 +144,7 @@ add("Stutter Grain Kit", "Pluck", "pluck,rhythm,granular,stutter,drums,tempo-syn
         "distortion.on": 1, "distortion.type": "Tube", "distortion.drive": 3, "distortion.mix": 40,
     },
     [
-        R("note", "osc1.gran.position", 92),                                               # the key chooses the place in the loop
+        R("note", "osc1.gran.position", 100),                                               # the key chooses the place in the loop
         R("velocity", "filter1.cutoff", 14), R("velocity", "distortion.drive", 25),
         R("mod_wheel", "osc1.gran.rand_offset", 22), R("mod_wheel", "osc1.gran.rand_pitch", 12),
         R("macro1", "osc1.gran.position", 30),                                             # Nudge

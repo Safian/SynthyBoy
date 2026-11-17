@@ -61,6 +61,15 @@ def census(params, doc):
     return dict(poly=int(g("master.polyphony")), oscs=oscs, filters=flt, fx=fx)
 
 
+def trigger(t):
+    """Which of the thresholds of the audibility rule a measurement passes when its distance is under 3 dB (side, beat, HF, LF, fine structure): written after the numbers."""
+    dist, lev, shift, side, beat, hf, lf, fine = t
+    if dist >= 3 or abs(lev) >= 3 or abs(shift) >= 0.3:
+        return ""
+    hits = [f"{n} {v:+.1f} dB" for n, v, th in (("side", side, 3), ("beat", beat, 1), ("HF", hf, 4), ("LF", lf, 4), ("fine structure", fine, 6)) if abs(v) >= th]
+    return ("; by " + ", ".join(hits)) if hits else ""
+
+
 def macro_dests(entry, doc):
     out = {}
     src_key = {int(s["choice"]): s["key"] for s in doc["modSources"]}
@@ -139,8 +148,10 @@ def main():
       "`master.volume` is tuned to -20.0 on tier `high` (the XL's profile is `high,voices=16,control=economy`; the tier of the renderer has the quality of `high` without the voice and control limits). "
       "As in batch 1 the level is taken at the sustain: for a preset whose envelope 1 attack is over 150 ms the level render is a copy with the attack cut to 5 ms (`LEVEL_OVERRIDES` in the script; for Rising Grain Riser also the filter envelope and the last 28 % of the texture, the top of the build). "
       "The table shows both: the level of the real preset at 1 s and at the sustain.")
+    pks = [(meas[n].get("sustain") or {}).get("high", meas[n]["high"])["chord_peak"] for n in order]
+    PEAK_RANGE = f"{max(pks):.1f} .. {min(pks):.1f} dBFS raw = {max(pks) + 18:.1f} .. {min(pks) + 18:.1f} dBFS"
     w("- **Peak**: the peak of the same four-note chord (velocity 1.0), raw and after the +18 dB of the MPC output stage. This is *not* the eight-note velocity-127 chord of batch 1: that one needs `sound-lab.py`; "
-      "eight notes are about 3 dB higher than four. The conflict between the level and the stage (section 2 of batch 1) is the same: every preset sits at -20 dBFS RMS, so a chord peak of -2 .. -17 dBFS raw is +16 .. +1 at the stage.")
+      "eight notes are about 3 dB higher than four. The conflict between the level and the stage (section 2 of batch 1) is the same: every preset sits at -20 dBFS RMS, so a chord peak of " + PEAK_RANGE + " at the stage.")
     w("- **Stereo, clean**: of the single note (MIDI 60, velocity 0.8, 1.5 s held and its tail; MIDI 36 for a Bass): correlation, mono sum against stereo level and the worst 1/3 octave band, DC, click ratio, spectral centroid and its movement. The tail is the time after the note off until under -90 dBFS.")
     w("- **Response**: for every macro, the single note with the macro at 0 and at 100 (a copy of the preset with the macro's value changed), for the wheel, the pad pressure and the velocity routes the same with the routes re-pointed at an unused macro (the route law is the same: 0 .. 1 of the source times the amount), "
       "as the distance of the two renders (the measures of batch 1: mean difference of the 1/3 octave bands, level, centroid, side level, beat, HF, LF, fine structure; audible when one of: distance >= 3 dB, level >= 3 dB, centroid >= 0.3 oct, side >= 3 dB, beat >= 1 dB, HF or LF >= 4 dB, fine >= 6 dB), "
@@ -150,7 +161,7 @@ def main():
     w("- **Without the content pack**: the same presets rendered with an empty content store. The engine does not fall back to anything: a wavetable that is not there becomes the saw, a Sample / Granular / Spectral / Multisample oscillator is silent and Convolve is bypassed (section 7, item 1). "
       "So every preset that has a Sample-type main oscillator also has a layer of an ordinary wavetable oscillator, and the table shows what remains.")
     w("- **Checked on the way with `synthyboy_sound_lab` (no content needed)**: the voice control lanes (a lane value of 80 on pan: 16 dB to one side, in the pattern of the steps; cutoff +-60: the centroid of a saw moves 767 / 1579 / 2994 Hz over three steps; detune +-80: 249.6 / 261.8 / 273.9 Hz), "
-      "the buses (a delay on Bus 1 with the oscillator's destination None and its send at 100: only the echo is there, 43 dB under the dry level at 0.3 s; with no send: nothing of it) and the scale conform "
+      "the buses (a delay on Bus 1 with the oscillator's destination None and its send at 100: only the echo is there, at the level the dry signal had: -43 dBFS both; with no send: nothing of it) and the scale conform "
       "(Hirajoshi on D maps C, C#, D# ... to A#, D, D, D ...; Phrygian dominant on D maps C# to C, E to Eb, G# to G).")
     w("")
 
@@ -195,7 +206,7 @@ def main():
     w("| File | Seconds | Channels | Bytes | What it is |")
     w("|---|---|---|---|---|")
     sm_text = {"pluck_string": "additive plucked string, tuned to MIDI 60", "mallet_marimba": "a marimba bar (1 : 3.99 : 10.1), MIDI 60", "glass_ping": "a struck glass, MIDI 72, six inharmonic partials and a beating twin",
-               "breath_noise_burst": "a breath: three bands of noise, 1.2 s, unpitched", "bowed_tone": "bowed tone MIDI 60, 5 Hz vibrato; loop 14.3 .. 77.7 % closes on whole vibrato cycles (mismatch -60 dB)",
+               "breath_noise_burst": "a breath: three bands of noise, 1.2 s, unpitched", "bowed_tone": "bowed tone MIDI 60, 5 Hz vibrato; loop 14.3 .. 77.7 % closes on whole vibrato cycles (mismatch 54 dB under the signal)",
                "vowel_pad": "three voices singing A / O, MIDI 60, loop closes like the bowed tone", "vinyl_noise_bed": "hiss, rumble, 50 Hz hum, crackle and pops, stereo, 4 s loop (wraps round)",
                "drum_loop_120bpm": "two bars of 4/4 at 120 BPM: kick, snare, ghost snares, hats, open hats; 32 sixteenths of 0.125 s, the loop wraps", "rising_texture": "noise whose band climbs 250 Hz -> 7 kHz with a harmonic stack gliding two octaves, 6 s",
                "chord_pad_sections": "C maj7, A min7, F maj7, G 6, 2 s each, crossfaded, 8 s", "gong_metal": "13 inharmonic modes, each a close pair, sizzle, tuned to MIDI 36", "voice_sweep_aeiou": "a voice at 130.8 Hz singing A E I O U in 5 s, vibrato, breath, MIDI 48"}
@@ -265,7 +276,7 @@ def main():
       "The command after a rebuild: `SYNTHYBOY_CONTENT_DIR=<store> synthyboy_tier_bench --preset-dir content/presets --repeat 3` (the store: `scripts/sound-lab.py` makes one in its work folder, links named by the pack ids). "
       "**The Spectral oscillator is the dearest voice type in the engine (docs/engine-spec/07 section 7) and the four Spectral presets are the ones to check first, then the Granular ones with the most grains** "
       "(Chord Cloud Pad: 26 grains a second x 180 ms x 2 unison x polyphony 6; Rising Grain Riser: 60 x 150 ms). What was done to keep them cheap: polyphony 1 .. 6 (the heavy ones 1 .. 4: `master.polyphony`), unison 2, "
-      "no warp except one spectral warp (Add Harmonics, Spectral Comb, Add Subharmonics: three of the four Spectral presets) and no morph, only the Analog and Digital filter models (the cheap ones of batch 1: -0.1 and 0), the effects of batch 1's catalogue (0.1 .. 0.8 % each), "
+      "no warp except one spectral warp on each Spectral preset (Add Harmonics, Spectral Comb, Add Subharmonics, Spectral Shift) and no morph, only the Analog and Digital filter models (the cheap ones of batch 1: -0.1 and 0), the effects of batch 1's catalogue (0.1 .. 0.8 % each), "
       "no wavetable warp at all (the 4x warps cost 7 .. 9 % of the XL block per oscillator and per unison voice). The cost of Convolve is not in batch 1's catalogue either; it is bypassed on the Key 61.")
     w("")
     w("| Preset | Polyphony | Oscillators (type x unison voices) | Filter | Effects |")
@@ -314,7 +325,7 @@ def main():
             elif rate_only:
                 parts.append(f"{name} (acts on a rate: not seen by the spectral measure; route {', '.join(f'{d} {a:+g} %' for d, a in md[m])})")
             elif o["macros_audible"].get(str(m)):
-                parts.append(f"{name} (audible: {fmt(tup[0])} dB, {tup[1]:+.1f} dB level, {tup[2]:+.2f} oct)")
+                parts.append(f"{name} (audible: {fmt(tup[0])} dB, {tup[1]:+.1f} dB level, {tup[2]:+.2f} oct{trigger(tup)})")
             else:
                 parts.append(f"{name} (weak in the measure: {fmt(tup[0])} dB, {tup[1]:+.1f} dB level, {tup[2]:+.2f} oct; route {', '.join(f'{d} {a:+g} %' for d, a in md[m])}: a texture or scan control, check by ear)")
         w("*Macros.* " + "; ".join(parts) + ".")
@@ -346,7 +357,7 @@ def main():
     w("1. **A missing content file is not replaced by anything.** `docs/ARCHITECTURE.md` section 6 says the plugin tolerates absence and that a sound is produced either way. Measured with an empty store: "
       "before the presets got their wavetable layers, Frozen Pluck Drone, Gong Grain Swarm, Stutter Grain Kit, Rising Grain Riser, Spectral Chord Morph and Breakbeat Slice Keys were **silent** (chord RMS -180 dBFS: a Sample, Granular, Spectral or Multisample oscillator without its file produces nothing, "
       "docs/engine-spec/07 section 1), Convolve without its impulse does not convolve, a `Preset table` plays the saw. Nothing tells the player: there is no `missing_content` indicator on the MPC. "
-      "Consequence for the set: every batch 2 preset has a plain wavetable layer (level 10 .. 30 % of its oscillator) that is what you hear if the packs are not installed (the table's column \"Without the pack\" shows -17.9 .. -33 dBFS), and "
+      "Consequence for the set: every batch 2 preset has a plain wavetable layer (level 10 .. 30 % of its oscillator) that is what you hear if the packs are not installed (the table's column \"Without the pack\" shows -17.9 .. -32.8 dBFS), and "
       "the `synthyboy_preset_sanity` gate (Vital engine, no store by default) would fail \"silent\" for them; its CMake call now passes `--content-dir` to a store of links to the packs.")
     w("2. **`synthyboy_sound_lab` and `synthyboy_tier_bench` could not load content** (no `setContentStore`), so batch 1 could not show these paths and this batch could not use them for the CPU and the full report; fixed in the sources, needs a rebuild (section 1).")
     w("3. **The root note and the loop points of a WAV (`smpl` chunk) are ignored by the Sample, Granular and Spectral oscillators**: `lib_osc.cpp` pitches by `oscN.sample.root` (default 60) and loops by the oscillator's own `sample.loop_start / loop_end` in percent of the file; "
@@ -361,11 +372,11 @@ def main():
       "they are 12 .. 14 % (macros) and 8 % (wheel) now. Not a defect, a trap: the same holds for `convolve.ir_gain` (64 dB range) and `master.volume`.")
     w("7. **Convolve follows the Vital law's level: the impulse is used as it is** (`convolve.law` 0; with the Serum law the engine normalises the impulse to a peak of 1 and applies `ir_gain`, default -18 dB: `core/fx-serum-b/convolve.cpp`). A file's own level decides the wet level, so the impulses of the pack are scaled to an L2 norm of 1 (wet about equal to dry for noise) and the presets leave `ir_gain` at 0. "
       "A user's impulse straight from a reverb plugin, peak-normalised, would be 20 dB or more louder. The Key 61 (`low`) bypasses Convolve: Dusty Rhodes Keys and Reese Dual Phase Bass are 5 .. 6 dB quieter there (the cabinet's gain is part of their level) and Marimba Layer Keys 3 dB.")
-    w("8. **Spectral oscillator**: the spectral warps all act (distance to no warp at amount 70 on the gong: Spectral Pitch Shift 14.2 dB, Spectral Shift 13.0, Add Subharmonics 11.4, Peak Harmonic Down 9.9, Spectral Spread 8.4, Spectral Gate 7.0, Shepard Narrow 6.0 ... down to Spectral Mirror and Phase Twist 0.9 dB and Spectral Smear 1.0, which are nearly silent changes on this file), "
+    w("8. **Spectral oscillator**: the spectral warps all act (distance to no warp at amount 70 on the gong: Spectral Pitch Shift 14.2 dB, Spectral Shift 13.0, Add Subharmonics 11.4, Peak Harmonic Down 9.9, Spectral Spread 8.4, Spectral Gate 7.0, Shepard Narrow 6.0 ... down to Spectral Mirror and Phase Twist 0.9 dB and Spectral Smear 1.0, which change this file very little), "
       "the spectral filter keys `spec.cut`, `spec.mix` do nothing without `spec.flt_use` (no defect: they belong to the filter's own table), `spec.transients` did not change a smooth sound. The oscillator's level is rate-aware in the own engine (chord level on the Key 61 within 1 dB of the XL for all four).")
     w("9. **`check-presets.py` rule `mod_slot_duplicate`** (batch 1, item 10) hit again (Breath Flute Lead: a vibrato and the wheel's deepening of it on one LFO); worked around with a second LFO of the same rate and macros that move both rates.")
     w("10. **Things that work as documented and were measured, for the record**: the voice control lanes (pan 16 dB at a lane value of 80; cutoff about an octave at 60; detune 0.8 semitone at 80; the pattern follows the note count), the buses (parallel copy, wet-only rack, destination None), "
-      "the scale conform (Hirajoshi, Phrygian dominant), the sample reverse and the scan speed, the slice mode with manual slices (key = slice from `slice_root`), the unison of the Multisample type, the SFZ velocity layers, the 24 bit stereo impulse.")
+      "the scale conform (Hirajoshi, Phrygian dominant), the sample reverse (the gong's level in 0.2 s steps at MIDI 60: -39 -37 -32 -33 -27 dB then falling, forward: -30 -32 -32 -37 ...), the slice mode with manual slices (key = slice from `slice_root`: slice 0 is the kick, 98 % of its energy under 200 Hz; slice 4 the snare, 77 / 14 / 9 % low / mid / high), the SFZ velocity layers (the same note with the two layers' velocity ranges swapped in a temporary copy of the pack: the soft file's first 30 ms has its centroid at 556 Hz, the hard one's at 1016 Hz, 0.07 % against 0.80 % of the energy above 2 kHz), the 24 bit stereo impulse and the SFZ parser (every zone of all three instruments plays).")
     w("11. **MPE was not measurable**: `sound-lab` has no per-channel expression; `master.mpe.on` was checked by reading `own_engine.cpp` (it changes the bend range of channels above 0 to `master.mpe.bend_range` and maps the channel pressure to Poly Aftertouch; the manager channel behaves as before) and by the set-up of Bowed MPE Strings, not by a render. "
       "`master.mpe.y_modwheel` makes the slide act as the mod wheel in the matrix (the preset routes both).")
     w("")
