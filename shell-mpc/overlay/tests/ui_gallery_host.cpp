@@ -697,7 +697,10 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
             // an empty band: the gallery of the free types
             GalleryInst bare = inst;
             for (int t = 1; t < synthyboy::kNumFxInstanceTypes; ++t)
+            {
                 bare.set (std::string (synthyboy::fxTypeDescriptor (t).prefix) + ".rack", 0.0f);
+                bare.set (std::string (synthyboy::fxTypeDescriptor (t).prefix) + ".on", 0.0f);
+            }
             GalleryRig<FxUi> re (bare, 1);
             re.refresh (2);
             re.tap (re.ui.screen().slotEditor.bands.lane[0].tile);
