@@ -83,4 +83,17 @@ TEST (own_filter_styles_above_the_count_repeat_another_style)
     CHECK_EQ (filterModelStyleCount (5), 3);
     CHECK_EQ (filterModelStyleCount (6), 6);
     CHECK_EQ (filterModelStyleCount (7), 2);
+
+    using synthyboy::filters::filterModelStyleName;
+    using synthyboy::filters::filterModelStyleNames;
+    CHECK_EQ (std::string (filterModelStyleName (4, 0)), "Style A (12 dB)");
+    CHECK_EQ (std::string (filterModelStyleName (4, 1)), "Style B (24 dB)");
+    CHECK_EQ (std::string (filterModelStyleName (5, 0)), "A-O-I-E");
+    CHECK_EQ (std::string (filterModelStyleName (5, 1)), "A-I-U-O");
+    CHECK_EQ (std::string (filterModelStyleName (5, 2)), "Vocal Tract");
+    CHECK_EQ (std::string (filterModelStyleName (6, 0)), "Comb");
+    CHECK_EQ (std::string (filterModelStyleName (7, 0)), "Positive Feedback");
+    CHECK_EQ (std::string (filterModelStyleName (7, 1)), "Negative Feedback");
+    CHECK (filterModelStyleNames (6) != nullptr);
+    CHECK_EQ (std::string (filterModelStyleNames (6)[0]), "Comb");
 }

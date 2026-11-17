@@ -467,4 +467,44 @@ TEST (serum_filters_model_style_table_reaches_every_type_exactly_once)
     CHECK (std::string (getFilterTypeName (serumFilterTypeOf (24, 8))) == "Phs HL");
     CHECK (std::string (getFilterTypeName (serumFilterTypeOf (25, 11))) == "Dist.Comb 2 BP");
     CHECK (std::string (getFilterTypeName (serumFilterTypeOf (26, 5))) == "Exp BPF");
+
+    // filterModelStyleNames and filterModelStyleName queries
+    CHECK (filterModelStyleNames (-1) == nullptr);
+    CHECK (filterModelStyleNames (27) == nullptr);
+    CHECK (std::string (filterModelStyleName (-1, 0)).empty());
+    CHECK (std::string (filterModelStyleName (27, 0)).empty());
+
+    for (int model = 0; model <= kLastSerumModel; ++model)
+    {
+        const int cnt = filterModelStyleCount (model);
+        CHECK (cnt > 0);
+        const char* const* names = filterModelStyleNames (model);
+        CHECK (names != nullptr);
+        for (int s = 0; s < cnt; ++s)
+        {
+            CHECK (names[s] != nullptr);
+            const char* name = filterModelStyleName (model, s);
+            CHECK (name != nullptr && name[0] != '\0');
+            CHECK_EQ (std::string (name), std::string (names[s]));
+            if (model >= kFirstSerumModel)
+            {
+                const char* expected = getFilterTypeName (serumFilterTypeOf (model, s));
+                CHECK_EQ (std::string (name), std::string (expected));
+            }
+        }
+        CHECK (std::string (filterModelStyleName (model, -1)).empty());
+        CHECK (std::string (filterModelStyleName (model, cnt)).empty());
+    }
+
+    // Classic model style names verification
+    CHECK_EQ (std::string (filterModelStyleName (0, 0)), "Style A (12 dB)");
+    CHECK_EQ (std::string (filterModelStyleName (0, 5)), "Style F (shelf)");
+    CHECK_EQ (std::string (filterModelStyleName (4, 0)), "Style A (12 dB)");
+    CHECK_EQ (std::string (filterModelStyleName (4, 1)), "Style B (24 dB)");
+    CHECK_EQ (std::string (filterModelStyleName (5, 0)), "A-O-I-E");
+    CHECK_EQ (std::string (filterModelStyleName (5, 1)), "A-I-U-O");
+    CHECK_EQ (std::string (filterModelStyleName (5, 2)), "Vocal Tract");
+    CHECK_EQ (std::string (filterModelStyleName (6, 0)), "Comb");
+    CHECK_EQ (std::string (filterModelStyleName (7, 0)), "Positive Feedback");
+    CHECK_EQ (std::string (filterModelStyleName (7, 1)), "Negative Feedback");
 }

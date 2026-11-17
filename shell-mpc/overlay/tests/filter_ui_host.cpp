@@ -541,7 +541,7 @@ void testStyleListAndModelList()
 {
     Rig r;
     r.tapC (r.ui.full().style);   // the centre of the stepper asks for the list
-    check (r.ui.topPage() == FilterUi::kPageList && r.ui.list().state.count == 12, "tapping the style opens its list (12 styles)");
+    check (r.ui.topPage() == FilterUi::kPageList && r.ui.list().state.count == 6, "tapping the style opens its list (6 styles for model 0 Analog)");
     const ui::Rect row3 = r.ui.list().rowRect (3);
     r.tap (row3.x + row3.w / 2, row3.y + row3.h / 2);
     check (r.inst.get ("filter1.style") == 3.0f && r.ui.topPage() == 0, "a row of the list writes filter1.style");
@@ -875,6 +875,170 @@ void testDisabledControlDimming()
     check (! r.ui.full().clean.enabled(), "CLEAN mode is disabled for Formant model");
 }
 
+void testFilterModelStyles()
+{
+    Rig r;
+    // 1. For every model 0..26, the style selector offers exactly filterModelStyleCount(m) entries
+    for (int m = 0; m < 27; ++m)
+    {
+        r.inst.set ("filter1.model", static_cast<float> (m));
+        r.inst.set ("filter1.style", 0.0f);
+        r.refresh();
+
+        const int expectedCount = synthyboy::filters::filterModelStyleCount (m);
+        check (r.ui.full().style.state.count == expectedCount,
+               "model " + std::to_string (m) + " offers style count " + std::to_string (expectedCount));
+
+        if (expectedCount > 1)
+        {
+            check (! r.ui.full().style.state.dim,
+                   "model " + std::to_string (m) + " (count " + std::to_string (expectedCount) + ") is not dim");
+            check (r.ui.full().style.listable,
+                   "model " + std::to_string (m) + " is listable");
+
+            // Tapping centre opens list popup with the model's styles
+            r.tapC (r.ui.full().style);
+            check (r.ui.topPage() == FilterUi::kPageList,
+                   "tapping style on model " + std::to_string (m) + " opens list popup");
+            check (r.ui.list().state.count == expectedCount,
+                   "style list popup count matches expected count for model " + std::to_string (m));
+
+            bool namesMatch = true;
+            for (int s = 0; s < expectedCount; ++s)
+            {
+                const char* expectedName = synthyboy::filters::filterModelStyleName (m, s);
+                const char* actualName = r.ui.list().state.items[s];
+                if (actualName == nullptr || expectedName == nullptr || std::string (actualName) != expectedName)
+                {
+                    namesMatch = false;
+                    break;
+                }
+            }
+            check (namesMatch, "style list popup item names match filterModelStyleNames for model " + std::to_string (m));
+
+            // Close popup
+            r.tap (20, 130);
+            check (r.ui.topPage() == 0, "popup closed");
+        }
+        else
+        {
+            // One-style rule: a model with one style shows the style control dim / as a plain label
+            check (r.ui.full().style.state.dim,
+                   "one-style rule: model " + std::to_string (m) + " style is dim");
+            check (! r.ui.full().style.listable,
+                   "one-style rule: model " + std::to_string (m) + " style is not listable");
+
+            // Tapping centre does not open list popup
+            r.tapC (r.ui.full().style);
+            check (r.ui.topPage() == 0,
+                   "one-style rule: centre tap does not open list popup for model " + std::to_string (m));
+
+            // Stepper chevrons do not step
+            const ui::Rect sr = r.ui.full().style.rect();
+            r.tap (sr.x + 10, sr.y + sr.h / 2);
+            check (r.inst.get ("filter1.style") == 0.0f,
+                   "one-style rule: left chevron does not step for model " + std::to_string (m));
+            r.tap (sr.right() - 10, sr.y + sr.h / 2);
+            check (r.inst.get ("filter1.style") == 0.0f,
+                   "one-style rule: right chevron does not step for model " + std::to_string (m));
+        }
+    }
+
+    // 2. Clamp on model change (via engine/preset refresh)
+    // Model 8 has 12 styles (indices 0..11)
+    r.inst.set ("filter1.model", 8.0f);
+    r.inst.set ("filter1.style", 11.0f);
+    r.refresh();
+    check (r.inst.get ("filter1.style") == 11.0f && r.ui.full().style.state.index == 11,
+           "model 8 style 11 retained");
+
+    // Switch to Model 9 (6 styles): style must clamp to 5
+    r.inst.set ("filter1.model", 9.0f);
+    r.refresh();
+    check (r.inst.get ("filter1.style") == 5.0f && r.ui.full().style.state.index == 5,
+           "clamp on model change 8->9: style clamped to 5 (last valid style)");
+
+    // Switch to Model 4 (Diode, 2 styles): style must clamp to 1
+    r.inst.set ("filter1.model", 4.0f);
+    r.refresh();
+    check (r.inst.get ("filter1.style") == 1.0f && r.ui.full().style.state.index == 1,
+           "clamp on model change 9->4: style clamped to 1");
+
+    // Switch to Model 6 (Comb, 1 style): style must clamp to 0
+    r.inst.set ("filter1.model", 6.0f);
+    r.refresh();
+    check (r.inst.get ("filter1.style") == 0.0f && r.ui.full().style.state.index == 0,
+           "clamp on model change 4->6: style clamped to 0");
+
+    // Switch back to Model 8 (12 styles): style 0 is valid and remains 0
+    r.inst.set ("filter1.model", 8.0f);
+    r.refresh();
+    check (r.inst.get ("filter1.style") == 0.0f && r.ui.full().style.state.index == 0,
+           "switch 6->8: style 0 remains 0");
+
+    // 3. Clamp on model change via UI interactions
+    // Set Model 8, style 11
+    r.inst.set ("filter1.model", 8.0f);
+    r.inst.set ("filter1.style", 11.0f);
+    r.refresh();
+
+    // Open model list popup and pick model 4 (Diode, 2 styles)
+    r.tapC (r.ui.full().model);
+    check (r.ui.topPage() == FilterUi::kPageList, "model list popup open");
+    const ui::Rect row4 = r.ui.list().rowRect (4);
+    r.tap (row4.x + row4.w / 2, row4.y + row4.h / 2);
+    check (r.ui.topPage() == 0, "model list closed after pick");
+    check (r.inst.get ("filter1.model") == 4.0f, "model list pick set model 4");
+    check (r.inst.get ("filter1.style") == 1.0f && r.ui.full().style.state.index == 1,
+           "model list pick clamped style to 1 (last valid style for model 4)");
+
+    // Model stepper stepping: step from model 4 to model 5 (Formant, 3 styles)
+    const ui::Rect mr = r.ui.full().model.rect();
+    r.tap (mr.right() - 10, mr.y + mr.h / 2); // right chevron of model stepper
+    check (r.inst.get ("filter1.model") == 5.0f, "model stepper stepped to 5");
+    check (r.inst.get ("filter1.style") == 1.0f, "style 1 is valid for model 5 (3 styles)");
+
+    // Step style up to 2 (last valid for model 5)
+    const ui::Rect sr = r.ui.full().style.rect();
+    r.tap (sr.right() - 10, sr.y + sr.h / 2);
+    check (r.inst.get ("filter1.style") == 2.0f, "style stepped to 2");
+
+    // Step model forward to model 6 (Comb, 1 style) -> style must clamp to 0
+    r.tap (mr.right() - 10, mr.y + mr.h / 2);
+    check (r.inst.get ("filter1.model") == 6.0f, "model stepped to 6");
+    check (r.inst.get ("filter1.style") == 0.0f && r.ui.full().style.state.index == 0,
+           "style clamped to 0 on model stepping to 6");
+
+    // 4. Stepper and wheel bounds
+    r.inst.set ("filter1.model", 4.0f); // Diode: 2 styles (0 and 1)
+    r.inst.set ("filter1.style", 0.0f);
+    r.refresh();
+    // Stepping left at 0 stays at 0
+    r.tap (sr.x + 10, sr.y + sr.h / 2);
+    check (r.inst.get ("filter1.style") == 0.0f, "stepping left at lower bound stays at 0");
+    // Stepping right steps to 1
+    r.tap (sr.right() - 10, sr.y + sr.h / 2);
+    check (r.inst.get ("filter1.style") == 1.0f, "stepping right steps to 1");
+    // Stepping right at 1 stays at 1 (no wrap)
+    r.tap (sr.right() - 10, sr.y + sr.h / 2);
+    check (r.inst.get ("filter1.style") == 1.0f, "stepping right at upper bound stays at 1");
+    // Mouse wheel over style stepper at upper bound stays at 1
+    r.ui.wheel (sr.x + 50, sr.y + 10, 1, r.stack, r.inst, r.now);
+    r.refresh();
+    check (r.inst.get ("filter1.style") == 1.0f, "mouse wheel over style stepper stays clamped to 1");
+
+    // 5. Verify Filter 2 also clamps style on model change
+    r.inst.set ("filter2.model", 8.0f);
+    r.inst.set ("filter2.style", 11.0f);
+    Rig r2 (2); // opens on F2
+    check (r2.inst.get ("filter2.style") == 11.0f && r2.ui.full().style.state.index == 11,
+           "filter 2 style 11 retained for model 8");
+    r2.inst.set ("filter2.model", 4.0f); // Diode: 2 styles
+    r2.refresh();
+    check (r2.inst.get ("filter2.style") == 1.0f && r2.ui.full().style.state.index == 1,
+           "filter 2 style clamped to 1 on model change 8->4");
+}
+
 } // namespace
 
 // ENV 1 and CLEAN are LED toggles, ROUTING a LED list of its three options (all visible); a tap writes the parameter, the lit dot follows it
@@ -919,6 +1083,7 @@ int main()
     testQFrameIsOneBlock();
     testEveryKnobShowsItsValue();
     testStyleListAndModelList();
+    testFilterModelStyles();
     testDragShowsValues();
     testRealCurveAndLiveTargets();
     testDrawingAndSceneOps();

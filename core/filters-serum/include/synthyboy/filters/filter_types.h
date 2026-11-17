@@ -124,6 +124,14 @@ int serumModelStyleCount (int model) noexcept;
     0 for a model outside 0 .. 26. The table of what is implemented and what is open: docs/engine-spec/05-filters.md section 13. */
 int filterModelStyleCount (int model) noexcept;
 
+/** The names of the styles of a model (0 .. filterModelStyleCount(model) - 1).
+    Returns an array of filterModelStyleCount(model) C-string pointers, or nullptr for a model outside 0 .. 26. */
+const char* const* filterModelStyleNames (int model) noexcept;
+
+/** The name of a style (0 .. filterModelStyleCount(model) - 1) of model (0 .. 26).
+    Empty string "" for a model or style outside its valid range. */
+const char* filterModelStyleName (int model, int style) noexcept;
+
 /** The FilterType a (model, style) pair of the table selects (the one place of the mapping, used by the engine and the UI). A style beyond the
     model's last clamps to the last, a model outside 8 .. 26 clamps to the nearest; the result is always a valid FilterType index. */
 int serumFilterTypeOf (int model, int style) noexcept;
