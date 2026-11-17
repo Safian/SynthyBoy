@@ -106,7 +106,8 @@ def write_set(rows, out_dir, plugin_path, date=DEFAULT_DATE, file_time="0", by_f
     out_dir.mkdir(parents=True, exist_ok=True)
     seen = set()
     for number, folder, cword, name, chunk in rows:
-        header = gen_mpc_xpl.build_bank_header(chunk_size=len(chunk))
+        # numPrograms of the bank header is what the plugin offers: "Init" and the factory presets of this set (the device-saved template of 113 is from an older list)
+        header = gen_mpc_xpl.build_bank_header(chunk_size=len(chunk), num_programs=len(rows) + 1)
         state = gen_mpc_xpl.encode_juce_base64(header + chunk)
         text = gen_mpc_xpl.render_xpl("1", date, attrs, name, state)
         target = out_dir / folder if by_folders else out_dir

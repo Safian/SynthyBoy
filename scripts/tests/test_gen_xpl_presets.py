@@ -99,6 +99,7 @@ class TestNaming(unittest.TestCase):
             self.assertIn(b"synthyboy-arm32.so", raw)
             parsed = fmt.parse_xpl(raw.decode("utf-8"))
             self.assertEqual(parsed["chunk_bytes"], chunk)
+            self.assertEqual(fmt.parse_bank_header(parsed["state_bytes"][:160])["num_programs"], 2)   # "Init" and the one preset of the set
 
 
 if __name__ == "__main__":
