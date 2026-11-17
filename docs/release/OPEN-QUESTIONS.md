@@ -26,22 +26,19 @@ Part C: commits reachable from `feature/mpc-overlay` whose message matches `not 
 | A13 | Tapping the browser tile to open the preset list | Not measured (the package has no `.xpl` presets) | docs/MPC.md:192 |
 | A14 | That a plugin cannot change the host's page ("it cannot" rests on the SDK documents and the interface, not on a test) | Not measured | docs/MPC.md:962 |
 | A15 | `.xpl` generation: whether the host loads programmatically generated `.xpl` files without a manual save; whether the absolute plugin path in the file must match the device or the host falls back to the UID or name | Not verified on a live MPC | docs/RELEASE.md:156 |
-| A16 | The documentation of the repository is stale on the factory presets: `README.md` says state version 3 and 1484 parameters and 37 filter types; the presets and `docs/params.json` have state version 4 and 2637 parameters, and the filter has 27 models | Open (documentation fix) | README.md:13, README.md:27, README.md:74 |
 | A17 | The envelope graph (fit / lock) and the LFO editor with its grid in the preset | No branch or documentation line found in this tree; the owner has to say what is open before the release | - |
 | A18 | Name clearance for a public release (trademark registers, plugin databases, stores, domains) | Owner / counsel, not done | docs/NAMING.md:29 |
 | A19 | MTS-ESP library licence: believed permissive, not verified | Open | THIRD_PARTY.md:74 |
 
-Not listed because it is fixed: the Key 61 "foreign" Q-Link assignments (a project made with an older layout keeps its Q-Link map per track; a user-side fix, described in docs/MPC.md:911 and in the user guide).
+Not listed because it is fixed:
+- Stale README documentation on factory presets and parameters (former item A16): fixed, `README.md` updated as the project's front page with current numbers from `docs/params.json` (2637 parameters), `content/presets` (112 factory presets), `core/include/synthyboy/state.h` (state format version 5 in code, 4 in presets), `docs/MPC.md`, `core/filters-serum/CATALOGUE.md` (27 filter models), and `shell-mpc/device_profile.h`.
+- The Key 61 "foreign" Q-Link assignments (a project made with an older layout keeps its Q-Link map per track; a user-side fix, described in docs/MPC.md:911 and in the user guide).
 
 ## B. Every matching line (generated)
 
 <!-- BEGIN AUTO-MARKERS -->
-Lines found: 70 in 10 files.
+Lines found: 68 in 9 files.
 
-### README.md
-
-- README.md:12 [still open]: | 2 Vital take-over (DSP import, JUCE removal, ARMv7 NEON) | done; real MPC hardware measurement still open |
-- README.md:15 [not verified]: | 5 UI | in progress: UI kit and all panels with a control for every key, wavetable editor, headless GUI tests; DAW embedding and touch hardware not verified |
 ### THIRD_PARTY.md
 
 - THIRD_PARTY.md:74 [not verified]: library (`libMTSClient`, https://github.com/ODDSound/MTS-ESP) is, as far as we know, published under a permissive licence (believed to be MIT; **not verified...
