@@ -42,7 +42,7 @@ Add a modulation with `state.add (sourceId, "LFO 1", depth, bidirectional, bypas
 A change that does not change the value (end stop, default already set) is not reported. A sideways slide is not a drag.
 
 ## Q-Link
-Can be a Q member (`QGroup::set (slot, &knob)`), one slot. A turn adds `delta` to the normalised value (continuous). In a Q group the label and the arc take the Q colour.
+Can be a Q member (`QGroup::set (slot, &knob)`), one slot. A turn adds `delta` to the normalised value (continuous). In a Q group the label takes the Q colour.
 
 ## Options and variants
 - `side`: dial left, texts right (the chip sits in the text column). Min 172 x 72.
