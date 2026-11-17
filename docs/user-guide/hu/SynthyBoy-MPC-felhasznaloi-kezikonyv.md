@@ -178,37 +178,10 @@ Az alábbi fejezetekben a "tartomány" a `docs/params.json` fájlból származó
 
 ![Play](../img/play.png)
 
-A Play fül három aloldallal rendelkezik: **Play**, **Play Env** és **Play LFO**. Mindhárom ugyanazt a képet mutatja: három élő panelt egymás mellett, egy **oszcillátor** panelt (balra), egy **burkoló (envelope)** panelt (középen) és egy **LFO** panelt (jobbra). Az aloldal dönti el, hogy melyik panel csoportja legyen aktív (sárga keretes) a Q-Linkekhez: az oszcillátor a Play oldalon, a burkoló a Play Env oldalon, az LFO a Play LFO oldalon.
-Ez a felület való a játékra és az azonnali finomhangolásra: a három leggyakrabban használt elem fő vezérlői egyetlen nézetben érhetők el.
-
-A burkoló panel bekeretezett ADSR csoporttal (a sárga keret a négy burkoló potméteren van):
-
-![Play Env](../img/play-env.png)
-
-Az LFO panel bekeretezett csoportjával (SHAPE, RATE, RISE, SMOOTH):
-
-![Play LFO](../img/play-lfo.png)
-
-**Oszcillátor panel.**
-
-| Vezérlő | Mit csinál |
-|---|---|
-| SUB, A, B, C, NOISE gombok | Kiválasztja, melyik hangforrást mutatja és szerkeszti a panel (a projekttel együtt mentődik). Az öt gomb azonos szélességű. |
-| Bekapcsológomb és név | Be- és kikapcsolja a megjelenített forrást. A kikapcsolt forrás képe halványan jelenik meg egy kis OFF felirattal (lásd: 5.3). |
-| Útválasztó gomb (Route button: F1 / F2 / F12 / M / DIR / BAL / OFF) | Koppintás: megnyitja az adott oszcillátor kimeneti felugró ablakát (célpont, balance, BUS 1, BUS 2). A Sub oszcillátornak itt nincs útválasztó gombja; az útválasztása a saját oldalán található (5.4). |
-| Kijelző + teljes képernyő gomb | Az oszcillátor egyetlen ciklusa; a gomb megnyitja a teljes képernyős oszcillátor-oldalt (5.3 / 5.4 / 5.5 fejezet). |
-| Típusgombok: WAVE / MULTI / SAMPLE / GRAIN / SPEC | Az oszcillátor típusa (hullámtábla, multiminta, hangminta, granuláris, spektrális). Q 1. |
-| Forrásléptető és a listagomb | A hullámtábla neve vagy a betöltött fájl. Kompakt nézetben a hullámtáblák listagombja halvány; a lista a teljes képernyőről nyitható meg. Q 2. |
-| PAN (panoráma) | -100 .. +100 százalék (C, L n, R n). Q 3. |
-| LEVEL (szint) | 0 .. 100 százalék. Q 4. |
-
-A Sub és a Noise más vezérlőkkel rendelkezik (hullámforma, oktáv; zaj színe, szűrő): lásd az 5.4 és 5.5 fejezetet.
-
-**Burkoló panel (Envelope panel).** ENV 1 .. ENV 6 gombok (egy kis pont jelöli azt a burkolót, amely modulál valamit), a burkológörbe grafikonja a teljes képernyős gombbal, valamint az ATTACK, DECAY, SUSTAIN, RELEASE potméterek (Q 1 - 4). A grafikon itt mindig a panelhez illeszkedik; a zárolás és az idővonalzó a teljes oldalon található. Részletek az 5.8 fejezetben.
-
-**LFO panel.** Az LFO 1 .. LFO 10, RND 1 .. RND 4 léptető (a névre koppintva megnyílik a lista), a hullámforma-kijelző a teljes képernyős gombbal, a SHAPE léptető, a RATE potméter a **HZ / BPM / KEY** listával (három pont, a világító jelzi az üzemmódot), a RISE és a SMOOTH (Q 1 - 4). A SMOOTH neve előtt egy LED található: ez a simítás kapcsolója, a potméter pedig az idejét állítja be (a gomb halvány, amíg a LED ki van kapcsolva). Részletek az 5.9 fejezetben.
-
-**Teljes képernyő.** A teljes képernyő gomb megnyitja az adott elem oldalát a teljes plugin-területen (ugyanaz az oldal, mint a megfelelő Osc, Env vagy LFO fül, egy CLOSE gombbal). A Play fül elhagyásakor ez bezáródik.
+A Play oldal új, egyszerűsített elrendezéssel rendelkezik:
+- **Nincs fül-sor:** A navigációt egyetlen választó biztosítja a képernyő minden harmadában.
+- **Nyilas léptetés, koppintásra nyíló lista:** Használja a nyilakat a léptetéshez, vagy koppintson a névre a Sub, Osc A/B/C, Noise, Envelopes 1–6, LFOs 1–10 és R1–R4 teljes választási listájának megnyitásához.
+- **Egységes elrendezés:** Mindhárom kijelző azonos magasságú. A táblázatválasztó, a PAN és a LEVEL egyetlen sorba rendezve.
 
 ### 5.2 Macros (Makrók)
 
@@ -596,7 +569,9 @@ Két oldal, amelyek a felül található **MAIN** és **TUNING & MPE** gombokkal
 | OUTPUT | L / R mérők (a motor master csúcsszintmérője tartóvonallal, dB skálával külön oszlopban és színsávval) | |
 | | VOLUME | Master Volume -60 .. +6 dB, alapértelmezett: -12 |
 | | SPREAD | Stereo Spread 0 .. 100 százalék, alapértelmezett: 100 |
-| | STEREO | Stereo Routing 0 .. 100 százalék, alapértelmezett: 100 (potméter, mint a másik kettő) |
+| | STEREO | Stereo Routing 0 .. 100 százalék, alapértelmezett: 100 |
+| | LIMIT | LED kapcsoló (kimeneti limiter, alapértelmezés: ki) |
+| | QUALITY | A NO SMOOTHING (simítás kikapcsolva) és OVERSAMPLE 4X (túlmintavételezés) LED kapcsolópár |
 | | VOICE OVERRIDE | LED lista: Kill / Steal |
 | PITCH | TUNE | -100 .. +100 cent |
 | | TRANSPOSE | -48 .. +48 félhang |
