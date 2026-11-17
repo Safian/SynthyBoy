@@ -1043,26 +1043,38 @@ void testEveryBandRack()
             r.tap (r.ui.screen().chainBar.backCard);
             check (r.ui.scope() == 0 && r.ui.screen().slotEditor.currentType() == kSplit[si], name + ": back at the splitter");
         }
-    // every rack is reachable by the rack switch (the ten values of the engine) and writes the module's own key
-    for (int target = 0; target < fxl::kNumRacks; ++target)
-    {
-        FxRig r;
-        r.inst.set ("flanger.on", 1.0f);
-        r.inst.set ("splitter_lh.on", 1.0f);
-        r.inst.set ("splitter_lmh.on", 1.0f);
-        r.inst.set ("splitter_ms.on", 1.0f);
-        r.refresh (2);
-        int card = -1;
-        for (int i = 0; i < r.ui.numCards(); ++i)
-            if (r.ui.cardItem (i) == (synthyboy::FxRackItem { false, 6 }))
-                card = i;
-        check (card >= 0, "the flanger module has its card");
-        r.tap (r.ui.screen().chainBar.cards[card]);
-        for (int guard = 0; guard < 12 && r.ui.screen().slotEditor.rack.state.index != target; ++guard)
-            r.tap (r.ui.screen().slotEditor.rack);
-        check (r.inst.get ("flanger.rack") == static_cast<float> (target) && r.ui.screen().slotEditor.rack.state.index == target, "the rack switch reaches rack " + std::to_string (target) + " (" + fxl::rackName (target) + ") and writes flanger.rack");
-        check (r.ui.scope() == (target >= 3 ? target : 0) && std::string (r.ui.screen().slotEditor.path()).find (target >= 3 ? "BAND" : "CHAIN") != std::string::npos, "the page follows the effect to rack " + std::to_string (target));
-    }
+    // every rack is reachable by the rack switch (the ten values of the engine) for every one of the 13 modules; it writes the module's own key, and the power of its card writes its own on key
+    for (int m = 0; m < 13; ++m)
+        for (int target = 0; target < fxl::kNumRacks; ++target)
+        {
+            const synthyboy::FxTypeDescriptor& d = synthyboy::fxTypeDescriptor (m + 1);
+            const std::string nm = std::string (d.prefix) + " -> " + fxl::rackName (target);
+            FxRig r;
+            r.inst.setAt (d.onIndex, 1.0f);
+            r.inst.set ("splitter_lh.on", 1.0f);
+            r.inst.set ("splitter_lmh.on", 1.0f);
+            r.inst.set ("splitter_ms.on", 1.0f);
+            r.refresh (2);
+            int card = -1;
+            for (int i = 0; i < r.ui.numCards(); ++i)
+                if (r.ui.cardItem (i) == (synthyboy::FxRackItem { false, m }))
+                    card = i;
+            check (card >= 0, nm + ": the module has its card in Main");
+            r.tap (r.ui.screen().chainBar.cards[card]);
+            for (int guard = 0; guard < 12 && r.ui.screen().slotEditor.rack.state.index != target; ++guard)
+                r.tap (r.ui.screen().slotEditor.rack);
+            check (r.inst.param (d.rackIndex) == static_cast<float> (target) && r.ui.screen().slotEditor.rack.state.index == target, nm + ": the rack switch writes the rack key");
+            check (r.ui.scope() == (target >= 3 ? target : 0), nm + ": the page follows the effect");
+            // the power of its card (in the chain bar of its rack) writes the on key
+            int c2 = -1;
+            for (int i = 0; i < r.ui.numCards(); ++i)
+                if (r.ui.cardItem (i) == (synthyboy::FxRackItem { false, m }))
+                    c2 = i;
+            check (c2 >= 0, nm + ": the card is on the page of its rack");
+            const ui::Rect pr = r.ui.screen().chainBar.cards[c2].powerRect();
+            r.tapAt (pr.x + pr.w / 2, pr.y + pr.h / 2);
+            check (r.inst.param (d.onIndex) < 0.5f, nm + ": the power of the card writes the on key");
+        }
     // the splitters and the slots of the pool stay in the buses: their rack switch has three values
     {
         FxRig r;
