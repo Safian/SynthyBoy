@@ -269,16 +269,23 @@ int main()
         check (c.basic.group.active() && c.basic.group.check (all, n) == 0 && c.basic.group.numMembers() == 4, nm + ": the Basic group is one active frame and adjacent");
         check (chipsCovered (c.basic.group, all, n) == 0, nm + ": the index chips of the Basic group lie on free lanes above their members");
         bool inside = true, apart = true;
+        std::string why;
         const bool subHeader = var.inst == OscInstance::Sub;
         for (int i = 0; i < n; ++i)
         {
             if (all[i]->rect().empty() && all[i] == &c.route && subHeader)
                 continue;   // not shown: the sub oscillator has no route button in the header (its routing is the ROUTING block of its page), the same on the Play page as on the page
-            inside = inside && c.rect().contains (all[i]->rect()) && all[i]->sizeOk();
+            const bool ok1 = c.rect().contains (all[i]->rect()) && all[i]->sizeOk();
+            if (! ok1) why += " [leaf " + std::to_string (i) + " " + std::to_string (all[i]->rect().x) + "," + std::to_string (all[i]->rect().y) + " " + std::to_string (all[i]->rect().w) + "x" + std::to_string (all[i]->rect().h) + " min " + std::to_string (all[i]->minSize().w) + "x" + std::to_string (all[i]->minSize().h) + "]";
+            inside = inside && ok1;
             for (int j = i + 1; j < n; ++j)
-                apart = apart && ! all[i]->rect().overlaps (all[j]->rect());
+            {
+                const bool ov = all[i]->rect().overlaps (all[j]->rect());
+                if (ov) why += " [leaves " + std::to_string (i) + " and " + std::to_string (j) + " overlap]";
+                apart = apart && ! ov;
+            }
         }
-        check (inside && apart, nm + ": every leaf inside, at least its minimum size, no overlap");
+        check (inside && apart, nm + ": every leaf inside, at least its minimum size, no overlap" + why);
         check (c.route.rect().empty() == subHeader, nm + ": the route button is in the header of every instance but the sub oscillator");
         check (! c.displayRect().empty() && c.rect().contains (c.displayRect()) && ! c.displayRect().overlaps (c.full.rect()) && c.full.rect().bottom() <= c.displayRect().y && (subHeader || c.full.rect().right() <= c.route.rect().x) && c.full.rect().right() <= c.rect().right() && ! c.full.rect().overlaps (c.power.rect()), nm + ": the display area is reserved, the full screen button stands in the header row (it does not cover the curve)");
         {
@@ -319,7 +326,7 @@ int main()
             check (ch.kind == ChangeKind::Request && ch.id == 52, nm + ": the route button: id 52");
             ch = c.basic.group.turn (3, 0.25);
             check (ch.kind == ChangeKind::Value && ch.id == 307, nm + ": the Basic group's fourth Q-Link is LEVEL: id 307");
-            check (c.instances.state.count == 5 && c.instances.state.index == 1 && std::string (c.name) == "A", nm + ": five instance cells Sub, A, B, C, Noise, A selected");
+            check (c.instances.state.count == 5 && c.instances.state.index == 1 && std::string (c.instances.state.text) == "Osc A", nm + ": the selector has the five sources Sub, Osc A, Osc B, Osc C, Noise, Osc A selected");
         }
     }
     // the Q frame moves to the tapped group

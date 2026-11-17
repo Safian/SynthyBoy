@@ -67,7 +67,7 @@ protected:
         const int btnW = 64, gap = 8;
         const int hy = rect_.y + m;
         power.place ({ rect_.x + m, hy, rowH, rowH });
-        route.place (sub ? Rect {} : Rect { rect_.right() - m - btnW, hy, btnW, rowH });
+        route.place (sub ? Rect {} : Rect { rect_.right() - m - btnW, hy - (64 - rowH) / 2, btnW, 64 });   // the route button is 64 px tall at least: centred on the row, one pixel row of margin above is enough
         full.place ({ rect_.right() - m - btnW - (sub ? 0 : gap + btnW), hy, btnW, rowH });   // the full screen button stands in the header row, not over the curve of the display
         const int sx = rect_.x + m + rowH + gap, sr = full.rect().x - gap;
         instances.place ({ sx, hy, std::max (0, sr - sx), rowH });
