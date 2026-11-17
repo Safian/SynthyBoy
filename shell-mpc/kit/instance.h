@@ -20,6 +20,8 @@
 #include <cstring>
 #include <string>
 
+#include "param_source.h"
+
 namespace mpckit {
 
 /** One shell-level setting of an instance: not a host parameter, but a switch or a number the player sets on a page and the plugin saves in its chunk (the output limiter of SynthyBoy's Master page,
@@ -52,6 +54,8 @@ public:
     virtual ~IInstance() = default;
 
     // ---- the parameters
+    /** The parameter table of the plugin (static facts: ranges, names, conversions). The same object for every instance. */
+    virtual const IParamSource& params() const noexcept = 0;
     /** The PLAIN value of parameter `index` (IParamSource indices). Out of range: 0. */
     virtual float param (int index) const noexcept = 0;
     /** The page writes a real parameter with a NORMALISED value (0 .. 1): the same write as the host's own (mirror, engine), and the host is told afterwards (the plugin's display thread makes the
