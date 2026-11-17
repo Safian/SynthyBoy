@@ -45,7 +45,7 @@ class TestObservedFile(unittest.TestCase):
         self.assertEqual((chunk["mpcProgram"], chunk["mpcProgramName"]), (20, "Space Wobble Bass"))
 
     def test_header_is_rebuilt_exactly(self):
-        self.assertEqual(fmt.build_bank_header(chunk_size=len(self.decoded) - 160), self.decoded[:160])
+        self.assertEqual(fmt.build_bank_header(chunk_size=len(self.decoded) - 160, num_programs=113), self.decoded[:160])   # the observed file is from the 113 program list
 
     def test_whole_file_is_reproduced_except_preset_name_mark_and_times(self):
         parsed = fmt.parse_xpl(self.text)
@@ -160,7 +160,17 @@ class TestNaming(unittest.TestCase):
             self.assertIn(b"synthyboy-arm32.so", raw)
             parsed = fmt.parse_xpl(raw.decode("utf-8"))
             self.assertEqual(parsed["chunk_bytes"], chunk)
-            self.assertEqual(fmt.parse_bank_header(parsed["state_bytes"][:160])["num_programs"], 2)   # "Init" and the one preset of the set
+            self.assertEqual(parsed["header"]["num_programs"], 2)
+
+    def test_write_set_num_programs_override(self):
+        chunk = b'{"mpcProgram":1,"mpcProgramName":"X"}'
+        rows = [(0, "Bass", "Bass", "X", chunk)]
+        with tempfile.TemporaryDirectory() as t:
+            p = Path(t)
+            gen.write_set(rows, p, gen.DEVICE_PLUGIN_PATHS["xl"], num_programs=137)
+            raw = (p / "000-Bass-X.xpl").read_bytes()
+            parsed = fmt.parse_xpl(raw.decode("utf-8"))
+            self.assertEqual(parsed["header"]["num_programs"], 137)
 
 
 if __name__ == "__main__":

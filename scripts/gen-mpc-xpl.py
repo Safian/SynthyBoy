@@ -453,8 +453,12 @@ def main() -> int:
     parser.add_argument("--template", type=Path, help="Template .xpl file to source XML envelope and attributes from")
     parser.add_argument("--plugin-path", type=str, help="Override path to plugin binary on device (<PLUGIN file=...>)")
     parser.add_argument("--date", type=str, help="Override date attribute in <version date=...>")
-    parser.add_argument("--num-programs", type=int, default=None, help="Override number of programs in VST2 bank header (default: factory presets count + 1 for Init)")
-    parser.add_argument("--presets", type=Path, default=None, help="Directory containing factory presets to derive program count from")
+    parser.add_argument(
+        "--num-programs",
+        type=int,
+        default=None,
+        help="Number of programs in bank header (default: preset count + 1)",
+    )
     parser.add_argument("--out", type=Path, help="Output directory for generated .xpl files")
     parser.add_argument("--check", type=Path, help="Inspect and verify an existing .xpl file")
 
@@ -483,10 +487,12 @@ def main() -> int:
 
     args.out.mkdir(parents=True, exist_ok=True)
 
+    computed_programs = len(entries) + 1 if entries else DEFAULT_NUM_PROGRAMS
+    target_num_programs = args.num_programs if args.num_programs is not None else computed_programs
+
     # Collision detection for FAT/exFAT filesystem (case-insensitive filename check)
     seen_files: Dict[str, str] = {}
     generated_count = 0
-    effective_num_programs = args.num_programs if args.num_programs is not None else default_num_programs(args.presets)
 
     for preset_name, chunk_data in entries:
         filename, xml_content = create_xpl_from_chunk(
@@ -495,7 +501,7 @@ def main() -> int:
             template_info=template_info,
             plugin_path=args.plugin_path,
             date_override=args.date,
-            num_programs=effective_num_programs,
+            num_programs=target_num_programs,
         )
 
         fn_key = filename.lower()

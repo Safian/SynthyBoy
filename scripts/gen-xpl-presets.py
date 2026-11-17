@@ -129,13 +129,13 @@ def plan(chunk_entries, presets_dir, categories_file=CATEGORIES_FILE):
     return [(i, r[2], r[3], r[4], r[5]) for i, r in enumerate(rows)]
 
 
-def write_set(rows, out_dir, plugin_path, date=DEFAULT_DATE, file_time="0", by_folders=False):
+def write_set(rows, out_dir, plugin_path, date=DEFAULT_DATE, file_time="0", by_folders=False, num_programs=None):
     attrs = dict(PLUGIN_ATTRS, file=plugin_path, fileTime=file_time)
     out_dir.mkdir(parents=True, exist_ok=True)
     seen = set()
+    progs = num_programs if num_programs is not None else len(rows) + 1
     for number, folder, cword, name, chunk in rows:
-        # numPrograms of the bank header is what the plugin offers: "Init" and the factory presets of this set (the device-saved template of 113 is from an older list)
-        header = gen_mpc_xpl.build_bank_header(chunk_size=len(chunk), num_programs=len(rows) + 1)
+        header = gen_mpc_xpl.build_bank_header(chunk_size=len(chunk), num_programs=progs)
         state = gen_mpc_xpl.encode_juce_base64(header + chunk)
         text = gen_mpc_xpl.render_xpl("1", date, attrs, name, state)
         target = out_dir / folder if by_folders else out_dir
@@ -159,6 +159,7 @@ def main():
     ap.add_argument("--dump-tool", type=Path, help="the native dump_mpc_chunks tool")
     ap.add_argument("--date", default=DEFAULT_DATE, help="<version date=...> (fixed for deterministic output)")
     ap.add_argument("--file-time", default="0", help="<PLUGIN fileTime=...>")
+    ap.add_argument("--num-programs", type=int, default=None, help="number of programs in VST2 bank header (default: preset count + 1)")
     ap.add_argument("--by-category-folders", action="store_true", help="one sub folder per category")
     ap.add_argument("--categories", type=Path, default=CATEGORIES_FILE, help="path to factory-preset-categories.json")
     a = ap.parse_args()
@@ -173,7 +174,15 @@ def main():
         subprocess.run([str(a.dump_tool), str(a.plugin), str(a.presets), str(chunks)], check=True, stdout=subprocess.DEVNULL)
     entries = gen_mpc_xpl.load_chunk_entries(chunks)   # skips program 0 (Init)
     rows = plan(entries, a.presets, a.categories)
-    n = write_set(rows, a.out, a.plugin_path or DEVICE_PLUGIN_PATHS[a.device], a.date, a.file_time, a.by_category_folders)
+    n = write_set(
+        rows,
+        a.out,
+        a.plugin_path or DEVICE_PLUGIN_PATHS[a.device],
+        a.date,
+        a.file_time,
+        a.by_category_folders,
+        num_programs=a.num_programs,
+    )
     print(f"gen-xpl-presets: {n} files in {a.out}")
 
 

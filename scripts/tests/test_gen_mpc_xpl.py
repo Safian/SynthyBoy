@@ -341,7 +341,7 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
                 self.assertGreaterEqual(len(xpl_files), 1)
                 self.assertTrue((out_dir / "Acid Saw Reso.xpl").is_file())
                 parsed = gen_mpc_xpl.parse_xpl((out_dir / "Acid Saw Reso.xpl").read_text(encoding="utf-8"))
-                self.assertEqual(parsed["header"]["num_programs"], 137)
+                self.assertEqual(parsed["header"]["num_programs"], 2)   # the chunks of the set (1) and Init
 
     def test_create_xpl_derives_137_programs_by_default(self):
         tmpl = gen_mpc_xpl.parse_xpl(get_example_path("prev_Acid_Saw_Reso.xpl").read_text(encoding="utf-8"))
@@ -379,6 +379,29 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
             self.assertTrue(gen_file.is_file())
             parsed = gen_mpc_xpl.parse_xpl(gen_file.read_text(encoding="utf-8"))
             self.assertEqual(parsed["header"]["num_programs"], 150)
+
+    def test_num_programs_cli_option(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            out_dir = Path(tmp_dir) / "out"
+            tmpl_path = get_example_path("prev_Acid_Saw_Reso.xpl")
+            gen_cmd = [
+                sys.executable,
+                str(SCRIPTS_DIR / "gen-mpc-xpl.py"),
+                "--chunks",
+                str(FIXTURES_DIR),
+                "--template",
+                str(tmpl_path),
+                "--num-programs",
+                "137",
+                "--out",
+                str(out_dir),
+            ]
+            res = subprocess.run(gen_cmd, capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, f"Generator failed: {res.stderr}\n{res.stdout}")
+            f = out_dir / "Acid Saw Reso.xpl"
+            self.assertTrue(f.is_file())
+            parsed = gen_mpc_xpl.parse_xpl(f.read_text(encoding="utf-8"))
+            self.assertEqual(parsed["header"]["num_programs"], 137)
 
 
 class TestDecodesLikeDeviceFiles(unittest.TestCase):
