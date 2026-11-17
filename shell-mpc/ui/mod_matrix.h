@@ -165,7 +165,7 @@ public:
     static constexpr int kWindowRows = 8;
     static constexpr int kBarH = 64, kHeaderH = 22;
     static constexpr int kRowH = ModRow::kRowH; // 72
-    static constexpr int kZoneW = 44, kThumbW = 24;
+    static constexpr int kZoneW = 56, kThumbW = 24;
 
     enum FilterMode : uint8_t { FilterAll = 0, FilterSource, FilterDest };
 
