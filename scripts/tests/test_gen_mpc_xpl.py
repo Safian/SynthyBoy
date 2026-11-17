@@ -319,7 +319,7 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
                     self.assertEqual((header, [k for k in keys if k not in ("content", "mpcOutputLimiter")], param_keys), device_structure, f"{xf.name}: structure differs from the device's file")
                     self.assertIn("mpcOutputLimiter", keys, f"{xf.name}: no limiter setting in the chunk")
                     parsed = gen_mpc_xpl.parse_xpl(xf.read_text(encoding="utf-8"))
-                    self.assertEqual(parsed["header"]["num_programs"], 137)
+                    self.assertEqual(parsed["header"]["num_programs"], 161)
                     self.assertEqual(parsed["header"]["chunk_magic"], b"CcnK")
                     self.assertEqual(parsed["header"]["fx_magic"], b"FBCh")
                     self.assertGreater(len(parsed["chunk_bytes"]), 1000)
