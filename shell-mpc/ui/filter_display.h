@@ -191,6 +191,8 @@ protected:
 
     /** The colour of filter f (1, 2): the two ends of the signal gradient. */
     static uint32_t filterColour (int f) noexcept { return f == 2 ? theme::L().flow[3] : theme::L().flow[0]; }
+    /** The colour of the response of a filter that is switched off: the filter's own colour most of the way to the ground. */
+    static uint32_t dimmed (uint32_t c) noexcept { return theme::mix (c, theme::L().panel0, 0.72f); }
 
     void drawFilterCurve (Pen& p, gpu::SceneBuilder& sb, const Rect& in) const
     {
@@ -226,9 +228,9 @@ protected:
         if (state.dual)
         {
             if (state.curve1 && state.numPoints1 >= 2)
-                drawCurvePolyline (sb, in, state.curve1, state.numPoints1, filterColour (1), 0, 1.0f);
+                drawCurvePolyline (sb, in, state.curve1, state.numPoints1, state.filter1On ? filterColour (1) : dimmed (filterColour (1)), 0, 1.0f);
             if (state.curve2 && state.numPoints2 >= 2)
-                drawCurvePolyline (sb, in, state.curve2, state.numPoints2, filterColour (2), 0, 1.0f);
+                drawCurvePolyline (sb, in, state.curve2, state.numPoints2, state.filter2On ? filterColour (2) : dimmed (filterColour (2)), 0, 1.0f);
             if (state.curveResult && state.numPointsResult >= 2)
                 drawCurvePolyline (sb, in, state.curveResult, state.numPointsResult, T.text, 0, 1.8f);
             // the legend of the three lines
@@ -246,10 +248,12 @@ protected:
         {
             const float* cData = state.activeFilter == 2 ? state.curve2 : state.curve1;
             const int cLen = state.activeFilter == 2 ? state.numPoints2 : state.numPoints1;
+            // a filter that is switched off: the response of its parameters (what switching it on will do) drawn dim, without fill, and the name says OFF; never a bright line that contradicts the knobs
+            const bool on = state.activeFilter == 2 ? state.filter2On : state.filter1On;
             if (cData && cLen >= 2)
-                drawCurvePolyline (sb, in, cData, cLen, filterColour (state.activeFilter), 34, 1.8f);
-            std::snprintf (buf, sizeof buf, "FILTER %d", state.activeFilter);
-            p.textLeft ({ in.x + 8, in.y + 3, 120, 16 }, buf, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+                drawCurvePolyline (sb, in, cData, cLen, on ? filterColour (state.activeFilter) : dimmed (filterColour (state.activeFilter)), on ? 34 : 0, on ? 1.8f : 1.2f);
+            std::snprintf (buf, sizeof buf, on ? "FILTER %d" : "FILTER %d  OFF", state.activeFilter);
+            p.textLeft ({ in.x + 8, in.y + 3, 160, 16 }, buf, T.fLabel - 2.0f, p.c (on ? T.textDim : T.textFaint, 255), T.fMin);
         }
 
         // 3. The voices: where each sounding voice has its cutoff (up to 8, faint)

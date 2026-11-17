@@ -184,6 +184,12 @@ void testInstancesSwitching()
     Rig r;
     check (r.ui.selection() == 1 && r.ui.editFilter() == 1, "initial selection is F1 (filter 1)");
 
+    // the Filter 2 tab opens the page on F2 with the F2 button of the selector lit (the selector follows the page, not only a tap)
+    {
+        Rig f2 (2);
+        check (f2.ui.selection() == 2 && f2.ui.editFilter() == 2 && f2.ui.full().instances.state.index == 1, "the page made for the Filter 2 tab has the F2 cell of the selector selected (index " + std::to_string (f2.ui.full().instances.state.index) + ")");
+    }
+
     // Tap F2 in instances selector
     const ui::Rect selR = r.ui.full().instances.rect();
     r.tap (selR.x + selR.w / 2, selR.y + selR.h / 2);
@@ -580,6 +586,42 @@ void testDrawingAndSceneOps()
     }
 }
 
+/** A filter that is switched off is drawn as what switching it on will do, dim and without the fill, with "OFF" in its name: the picture differs from the picture of the same filter when it is on, and the lit curve is brighter. */
+void testSwitchedOffFilterIsDim()
+{
+    auto draw = [] (float on, std::vector<uint32_t>& px)
+    {
+        Rig r (2);
+        r.inst.set ("filter2.on", on);
+        r.inst.set ("filter2.model", 2.0f);
+        r.inst.set ("filter2.cutoff", 3000.0f);
+        r.refresh();
+        check (r.ui.full().display.state.filter2On == (on > 0.5f), "the display knows the filter is " + std::string (on > 0.5f ? "on" : "off"));
+        auto data = std::make_unique<gpu::SceneData>();
+        std::memset (data.get(), 0, sizeof (gpu::SceneData));
+        gpu::SceneBuilder sb (*data);
+        sb.begin (gpu::kKindPlay, 0, 1280, 800);
+        r.ui.draw (sb);
+        renderScene (*data, px);
+    };
+    std::vector<uint32_t> onPx, offPx;
+    draw (1.0f, onPx);
+    draw (0.0f, offPx);
+    // the light of the display region (the curve, its fill and the name): less for the filter that is off
+    auto peak = [] (const std::vector<uint32_t>& px)
+    {
+        uint64_t sum = 0;
+        for (int y = 180; y < 520; ++y)
+            for (int x = 120; x < 1100; ++x)
+            {
+                const uint32_t c = px[static_cast<size_t> (y) * 1280u + static_cast<size_t> (x)];
+                sum += ((c >> 16) & 255u) + ((c >> 8) & 255u) + (c & 255u);
+            }
+        return sum;
+    };
+    check (onPx != offPx && peak (offPx) < peak (onPx), "the response of a switched-off filter is drawn dimmer than the one of the filter when it is on (" + std::to_string (peak (offPx)) + " against " + std::to_string (peak (onPx)) + ")");
+}
+
 void testDualSceneHasThreeCurves()
 {
     Rig r;
@@ -812,6 +854,7 @@ int main()
     testDragShowsValues();
     testRealCurveAndLiveTargets();
     testDrawingAndSceneOps();
+    testSwitchedOffFilterIsDim();
     testDualSceneHasThreeCurves();
     testSerialAndParallelGiveDifferentResultingCurves();
     testResultingCurveEqualsSingleFilterWhenOtherOff();

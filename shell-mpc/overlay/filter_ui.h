@@ -91,6 +91,7 @@ public:
             started_ = true;
             sel_ = editFilter_ = std::clamp (in.instance, 1, 2);
         }
+        full_.instances.state.index = sel_ - 1;   // the selector follows the filter the page shows (the Filter 2 tab opens on F2), not only a tap on it
         stackDepth_ = stack.depth();
         syncPages (stack);
         envSel_ = inst.playSelection (1);
