@@ -1389,7 +1389,7 @@ Dependencies in one line: WP0 -> {WP1, WP4, WP5, WP6, WP8}; WP1 -> {WP2, WP3}; W
 | A13 | Sample scan / loop / unison numbers (speed law, ranges, 120 BPM lock reference, crossfade in ms) |
 | A14 | Slice selection as a modulation target deferred |
 | A15 | Warp order: warp, warp 2, morph; warp 2 uses the same type list as warp |
-| A16 | Mixer graph: send taps, blend law (equal power), Direct skips racks and `master.volume`, bus loop guard |
+| A16 | Mixer graph: send taps, blend law (equal power), Direct skips the racks (and is scaled by `direct.level`) but not `master.volume`: the master volume applies to everything that reaches the output (changed from "skips master.volume" after a measurement: a Direct source ignored `master.volume` and could not be levelled), bus loop guard |
 | A17 | Filter pan = +-12 semitones per channel at +-100 % |
 | A18 | Only the 37 missing types are implemented, not the Var functions of types mapped to existing models |
 | A19 | One instance per effect type; racks are an assignment key `<fx>.rack`; splitters only in Main / Bus racks |

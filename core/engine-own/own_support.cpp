@@ -33,16 +33,16 @@ bool implementedKey (const std::string& k)
         return inList (rest, { "volume", "polyphony", "bend_range", "bend_down_range", "bend_down_link", "velocity_track", "transpose", "tune", "legato",
                                "portamento.time", "portamento.slope", "portamento.always", "portamento.scaled", "stereo_spread", "voice.same_note",
                                "voice.steal_priority", "poly_legato", "stereo_routing", "voice_override", "scale.key", "scale.type", "scale.mode",
-                               "tuning.a4", "tuning.scale", "tuning.mts_esp", "tuning.mts_note_on_only", "mpe.on", "mpe.bend_range", "mpe.xyz_macro",
+                               "tuning.a4", "tuning.scale", "tuning.mts_esp", "mpe.on", "mpe.bend_range", "mpe.xyz_macro",
                                "mpe.y_modwheel", "mpe.bend_to_x", "mpe.y_bipolar" });
     if (head == "osc1" || head == "osc2" || head == "osc3")
     {
         if (rest.rfind ("unison.", 0) == 0)
-            return inList (rest.substr (7), { "voices", "detune", "detune_curve", "spread", "blend", "mode", "range", "law" });
+            return inList (rest.substr (7), { "voices", "detune", "detune_curve", "spread", "blend", "mode", "range", "law", "blend_shape", "stack", "stack_repeat" });
         if (rest.rfind ("warp.", 0) == 0 || rest.rfind ("warp2.", 0) == 0)
             return true;
         if (rest.rfind ("map.", 0) == 0)
-            return inList (rest.substr (4), { "key_low", "key_high", "vel_low", "vel_high" });
+            return inList (rest.substr (4), { "key_low", "key_high", "vel_low", "vel_high", "key_fold", "key_warp" });
         if (rest.rfind ("morph.", 0) == 0)
             return inList (rest.substr (6), { "type", "amount", "spread" });
         if (rest.rfind ("sample.", 0) == 0)
@@ -54,10 +54,11 @@ bool implementedKey (const std::string& k)
         if (rest.rfind ("multi.", 0) == 0)
             return true;
         return inList (rest, { "on", "level", "pan", "transpose", "tune", "wavetable", "frame", "frame_spread", "phase", "random_phase", "destination", "env1",
-                               "pitch_coarse", "pitch_track", "pitch_bend_track", "type", "pitch_mode", "ratio_src", "smooth_interp", "remap.on", "remap.slot", "remap.rise", "remap.fall", "filter_blend", "bus1_send", "bus2_send" });
+                               "pitch_coarse", "pitch_track", "pitch_bend_track", "type", "pitch_mode", "ratio_src", "smooth_interp", "remap.on", "remap.slot", "remap.rise", "remap.fall", "filter_blend", "bus1_send", "bus2_send",
+                               "fixed_pitch", "transpose_snap", "phase_legato", "phase_memory" });
     }
     if (head == "sub")
-        return inList (rest, { "on", "waveform", "octave", "tune", "level", "pan", "destination", "env1", "phase", "filter_blend", "bus1_send", "bus2_send" });
+        return inList (rest, { "on", "waveform", "octave", "tune", "level", "pan", "destination", "env1", "phase", "filter_blend", "bus1_send", "bus2_send", "mono" });
     if (head == "noise")
         return inList (rest, { "on", "level", "pan", "destination", "env1", "sample", "stereo", "type", "pitch", "fine", "keytrack", "phase", "random_phase", "loop", "bounce", "filter", "filter_blend", "bus1_send", "bus2_send" });
     if (head == "filter1" || head == "filter2")
@@ -79,6 +80,10 @@ bool implementedKey (const std::string& k)
         return inList (rest, { "on", "mid_bypass", "side_bypass", "level", "rack" });
     if (head == "filter")
         return rest == "routing";
+    if (head == "voice")
+        return rest == "phase_legato"; // read by OwnEngine::startNote (voice.phase_legato); the curve.* legato keys and sub.phase_contiguous are not read
+    if (head == "quality")
+        return rest == "oversample_4x"; // quality.no_smoothing is not read
     if (head == "voicectl")
         return true;
     if (head.size() == 4 && head.rfind ("env", 0) == 0 && head[3] >= '1' && head[3] <= '6')
@@ -145,7 +150,7 @@ EngineCapsMask ownCapabilities() noexcept
     return kCapEventContract | kCapMacros58 | kCapLfo910 | kCapModSourcesExtra | kCapAuxSource | kCapSubOsc | kCapEnv1Toggle | kCapVoiceSteal
          | kCapBendDownRange | kCapStereoSpread | kCapWarp2 | kCapWarpDist | kCapWarpFm | kCapWarpPdAm | kCapFilterModels | kCapFilterModels2
          | kCapModSources2 | kCapWavetableSawDown
-         | kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats | kCapLfoOptions | kCapLfoSwing | kCapModAmount | kCapCustomLfoShape | kCapVoiceControl | kCapVoiceSources | kCapFilterExtras | kCapCleanMode | kCapFxDelayExtras | kCapFxDelayOffsetLeft | kCapMixerGraph | kCapFxRacks | kCapFxBode | kCapFxSplitters | kCapSampleOsc | kCapUserWavetable | kCapOscExtras2 | kCapWarpAlt | kCapWarpFilter | kCapNoiseSample | kCapWarpSources | kCapNoiseExtras | kCapNoiseColour | kCapWtRemap
+         | kCapKeyScale | kCapTuning | kCapMpe | kCapMpeRouting | kCapPolyLegato | kCapEnvBeats | kCapLfoOptions | kCapLfoSwing | kCapModAmount | kCapCustomLfoShape | kCapVoiceControl | kCapVoiceSources | kCapFilterExtras | kCapCleanMode | kCapFxDelayExtras | kCapFxDelayOffsetLeft | kCapMixerGraph | kCapFxRacks | kCapFxBode | kCapFxSplitters | kCapSampleOsc | kCapUserWavetable | kCapOscMapping | kCapPitchUnison | kCapSubPhase | kCapQualityOptions | kCapOscExtras2 | kCapWarpAlt | kCapWarpFilter | kCapNoiseSample | kCapWarpSources | kCapNoiseExtras | kCapNoiseColour | kCapWtRemap
          | kCapFxLevel | kCapFxUtility | kCapFxHyperDimension | kCapFxCompressorLimit | kCapFxDistortionExtras
          | kCapFxConvolve | kCapFxInstances | kCapFxPhaserDepth2 | kCapFxReverbAlgos | kCapReverbForce | kCapReverbFeedback;
 }

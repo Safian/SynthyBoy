@@ -44,6 +44,7 @@ struct TickGlobals
     const float* lfoPhase = nullptr;      // [10] free running phases in cycles (global instance)
     const float* rlfoValue = nullptr;     // [4] global random LFO values -1 .. 1
     int activeVoices = 0;
+    float lowestNote = 1000.0f;           // sub.mono: the lowest tuned key note of the sounding voices (OwnEngine::updateLowestNote)
     float concertA = 440.0f;
     const OwnContent* lfoContent = nullptr;  // custom LFO shapes, modulation curves
     const LfoCore* monoCore = nullptr;    // [10] the shared instance of the mono LFOs (sync types 2 .. 5)

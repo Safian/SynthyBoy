@@ -968,7 +968,10 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         static const int kSubTable[6] = { 0, kRoundedRectTable, 3, 1, 2, 4 };
         subTick.wt = builtinWavetable (kSubTable[std::clamp (static_cast<int> (P (si.waveform) + 0.5f), 0, 5)]);
         subTick.semis = noteSemis + std::round (P (si.octave)) * 12.0f + P (si.tune) + (vc.mask[4] ? vc.detuneSemis : 0.0f);
-        subTick.level = subCh.on ? std::max (0.0f, P (si.level) * 0.01f) : 0.0f;
+        // sub.mono (document 02, 9): only the voice with the lowest note of the sounding voices (within half a semitone) carries the sub; the gate moves the level, which the
+        // oscillator ramps across the period
+        const float subGate = (si.mono >= 0 && g.base[static_cast<size_t> (si.mono)] >= 0.5f && tunedKey > g.lowestNote + 0.5f) ? 0.0f : 1.0f;
+        subTick.level = subCh.on ? std::max (0.0f, P (si.level) * 0.01f) * subGate : 0.0f;
         subTick.pan = std::clamp (P (si.pan) * 0.01f + (vc.mask[4] ? vc.pan : 0.0f), -1.0f, 1.0f);
         subTick.voices = 1;
         subTick.spread = 0.0f;

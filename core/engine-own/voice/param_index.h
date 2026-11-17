@@ -24,6 +24,7 @@ struct SubIdx
 {
     int on, waveform, octave, tune, level, pan, destination, env1, phase;
     int filterBlend, bus1Send, bus2Send;
+    int mono;
 };
 
 struct NoiseIdx

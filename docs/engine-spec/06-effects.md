@@ -338,7 +338,7 @@ Reading the table for the two things that were reported as different in the own 
 ## 10. Chain order law (one more time)
 
 The order of modules in a rack is the permutation `fx.order`; two modules never share a position (a repeated choice is repaired: the lowest free module takes the position). Modules whose `*.rack` is not Main belong to the other racks of the structure of `08-effects.md`.
-The **Direct out** destination bypasses the racks, the buses and their effects (it is added after the racks). `main.fx_bypass` / `busN.fx_bypass` mute the effects of a rack (the dry bus passes). Level trims come last in each module.
+The **Direct out** destination bypasses the racks, the buses and their effects (it is added after the racks, scaled by `direct.level`). `master.volume` still applies to it: the master gain scales the sum of Main and Direct, so everything that reaches the output follows the master volume (the own engine; `own_direct_follows_master_volume`). `main.fx_bypass` / `busN.fx_bypass` mute the effects of a rack (the dry bus passes). Level trims come last in each module.
 
 ## 11. Latency and its compensation across the buses
 
