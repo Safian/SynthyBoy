@@ -136,25 +136,34 @@ void testParts()
     check (sp.count() == 5 && sp.rows() == 3, "shape picker: five styles in two columns");
 
     SyncSwitch sw;
-    sw.place ({ 0, 0, 340, 56 });
-    sw.mode.setId (1); sw.trip.setId (2); sw.dot.setId (3);
-    sw.setSync (1);
-    check (sw.trip.enabled() && sw.dot.enabled(), "sync switch: TRIP and DOT work in the tempo mode");
+    sw.mode.place ({ 0, 0, 252, 56 });
+    sw.mode.setId (1);
+    {   // the logic of HZ / BPM / KEY with TRIP and DOT (the three LED controls are drawn by the screen and the rate control)
+        RateControl sr;
+        sr.setTripDot (true);
+        sr.place ({ 0, 0, 300, 200 });
+        sr.trip.setId (2); sr.dot.setId (3);
+        sr.setMode (lfo::SyncMode::Bpm);
+        check (sr.trip.enabled() && sr.dot.enabled() && sr.trip.rect().h >= 56 && sr.dot.rect().h >= 56 && sr.trip.rect().y >= sr.division.rect().bottom() && sr.trip.rect().right() <= sr.dot.rect().x + 1, "sync switch: TRIP and DOT (LED toggles of 56 px) stand under the division in the tempo mode");
+        sr.setMode (lfo::SyncMode::Hz);
+        check (sr.trip.rect().empty() && sr.rate.rect().h == 200, "sync switch: in the Hz mode the knob has the whole cell, TRIP and DOT are gone");
+    }
     sw.setSync (0);
-    check (! sw.trip.enabled() && ! sw.dot.enabled() && sw.mode.state.index == 0, "sync switch: dim in the Hz mode");
+    check (sw.mode.state.index == 0 && sw.mode.state.count == 3, "sync switch: the list HZ / BPM / KEY, Hz is the first");
     sw.setSync (4);
-    check (sw.mode.state.index == 2, "sync switch: the key follow is the third cell");
+    check (sw.mode.state.index == 2, "sync switch: the key follow is the third option");
     sw.setSync (2);
-    check (sw.dot.state.on && ! sw.trip.state.on && sw.mode.state.index == 1, "sync switch: dotted = BPM with DOT");
+    check (sw.dot() && ! sw.trip() && sw.mode.state.index == 1, "sync switch: dotted = BPM with DOT");
     c = Change::indexed (1, 0, 0);
-    check (sw.nextSync (&sw.mode, c) == 0, "sync switch: the HZ cell gives sync 0");
+    check (sw.nextSync (SyncSwitch::Mode, c) == 0, "sync switch: the HZ option gives sync 0");
     c = Change::indexed (2, 1, 1);
-    check (sw.nextSync (&sw.trip, c) == 3, "sync switch: TRIP on a dotted one: triplet");
+    check (sw.nextSync (SyncSwitch::Trip, c) == 3, "sync switch: TRIP on a dotted one: triplet");
     c = Change::indexed (3, 0, 0);
-    check (sw.nextSync (&sw.dot, c) == 1, "sync switch: DOT off: plain tempo");
+    check (sw.nextSync (SyncSwitch::Dot, c) == 1, "sync switch: DOT off: plain tempo");
     c = Change::indexed (1, 1, 1);
     sw.setSync (0);
-    check (sw.nextSync (&sw.mode, c) == 1, "sync switch: the BPM cell from Hz: tempo");
+    check (sw.nextSync (SyncSwitch::Mode, c) == 1, "sync switch: the BPM option from Hz: tempo");
+    check (sw.mode.turn (1.0).index == 1 && sw.mode.turn (-1.0).kind == ChangeKind::None, "sync switch: a Q-Link step moves the selection (no wrap)");
 
     RateControl rc;
     rc.place ({ 0, 0, 300, 72 });
@@ -167,7 +176,7 @@ void testParts()
     check (rc.childShown (0) && ! rc.rate.enabled() && rc.primary() == &rc.rate, "rate control: the knob dim in the key follow mode");
 
     InstanceBar ib;
-    ib.place ({ 0, 0, 624, 56 });
+    ib.place ({ 0, 0, 844, 56 });
     ib.lfoCells.setId (1); ib.rndCells.setId (2);
     ib.configure (false, 7);
     check (ib.lfoCells.state.index == 6 && ib.rndCells.state.index == -1, "instance bar: LFO 7 is the seventh cell (all ten LFOs are in the bar)");
@@ -262,9 +271,12 @@ void testViews()
             check (f.groups[0].member (0) == &f.picker && f.groups[0].member (1) == &f.rate &&
                    f.groups[0].member (2) == &f.rise && f.groups[0].member (3) == &f.smoothTime,
                    nm + ": group 0 is picker (Q1), rate, rise, smooth");
-            check (f.groups[1].member (0) == &f.syncSwitch && f.groups[1].member (1) == &f.mode &&
-                   f.groups[1].member (2) == &f.phase && f.groups[1].member (3) == &f.delay,
-                   nm + ": group 1 is the HZ / BPM / KEY row, mode, phase, delay (no second SYNC stepper)");
+            check (f.groups[1].member (0) == &f.syncSwitch.mode && f.groups[1].member (1) == &f.phase &&
+                   f.groups[1].member (2) == &f.delay && f.groups[1].member (3) == &f.mode,
+                   nm + ": group 1 is the HZ / BPM / KEY list, phase, delay, mode (the reading order of the block; no second SYNC stepper)");
+            check (f.syncSwitch.mode.rect().y == f.phase.rect().y && f.phase.rect().y < f.delay.rect().y && f.delay.rect().y < f.mode.rect().y && f.mode.rect().x == f.syncSwitch.mode.rect().x, nm + ": the chips of TIMING read top to bottom: SYNC and PHASE on one line, DELAY, MODE");
+            check (f.direction.rect().y == f.swing.rect().y && f.swing.rect().y < f.stereo.rect().y && f.stereo.rect().y < f.monoQ.rect().y, nm + ": the chips of MOTION read top to bottom: DIRECTION and SWING on one line, STEREO, MONO");
+            check (f.smoothPick.rect().y == f.hostPick.rect().y && f.smoothPick.rect().h >= 56 && f.hostPick.rect().h >= 56 && f.bar.rect().h >= 56 && InstanceBar::kCellW >= 56, nm + ": SMOOTH and HOST are LED toggles in one row, the instance cells are 56 px or more");
             check (f.groups[2].member (0) == &f.direction && f.groups[2].member (1) == &f.swing &&
                    f.groups[2].member (2) == &f.stereo && f.groups[2].member (3) == &f.monoQ,
                    nm + ": group 2 is direction, swing, stereo, mono");

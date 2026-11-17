@@ -233,10 +233,10 @@ void testWrites()
     {
         r.stack.closeAll();
         r.refresh();
-        const ui::PictogramSelector& mc = r.ui.compact().rate.modeCells;
-        r.tap (mc.cell (1).x + 4, mc.cell (1).y + 20);
+        const ui::LedList& mc = r.ui.compact().rate.modeCells;
+        r.tap (mc.rowRect (1).x + 20, mc.rowRect (1).y + 20);
         check (r.inst.get ("lfo1.sync") == 1.0f && r.ui.compact().rate.mode() == ui::lfo::SyncMode::Bpm && r.ui.compact().rate.primary() == &r.ui.compact().rate.division, "the compact view: the BPM cell makes the rate a division");
-        r.tap (mc.cell (0).x + 4, mc.cell (0).y + 20);
+        r.tap (mc.rowRect (0).x + 20, mc.rowRect (0).y + 20);
         check (r.inst.get ("lfo1.sync") == 0.0f, "the compact view: the HZ cell");
     }
     // the switches of the sync
@@ -246,15 +246,17 @@ void testWrites()
     R.refresh();
     R.openFull();
     const ui::SyncSwitch& sw = R.ui.full().syncSwitch;
-    R.tap (sw.mode.cell (1).x + 4, sw.mode.cell (1).y + 20);
+    const ui::RateControl& rc = R.ui.full().rate;
+    R.tap (sw.mode.rowRect (1).x + 20, sw.mode.rowRect (1).y + 20);
     check (R.inst.get ("lfo1.sync") == 1.0f, "the BPM cell: sync = tempo");
-    R.tapC (sw.dot);
+    check (rc.trip.rect().h >= 56 && rc.dot.rect().h >= 56 && ! rc.trip.rect().overlaps (rc.division.rect()), "in the tempo mode TRIP and DOT stand under the division (LED toggles of 56 px)");
+    R.tapC (rc.dot);
     check (R.inst.get ("lfo1.sync") == 2.0f, "DOT: tempo dotted");
-    R.tapC (sw.trip);
+    R.tapC (rc.trip);
     check (R.inst.get ("lfo1.sync") == 3.0f, "TRIP: tempo triplet (it takes DOT off)");
-    R.tap (sw.mode.cell (2).x + 4, sw.mode.cell (2).y + 20);
+    R.tap (sw.mode.rowRect (2).x + 20, sw.mode.rowRect (2).y + 20);
     check (R.inst.get ("lfo1.sync") == 4.0f && R.ui.full().keyActive() && R.ui.full().keyTranspose.enabled(), "the KEY cell: key follow, the KEY block works");
-    R.tap (sw.mode.cell (0).x + 4, sw.mode.cell (0).y + 20);
+    R.tap (sw.mode.rowRect (0).x + 20, sw.mode.rowRect (0).y + 20);
     check (R.inst.get ("lfo1.sync") == 0.0f && ! R.ui.full().keyActive() && ! R.ui.full().keyTranspose.enabled(), "the HZ cell: free; the KEY block is gone");
     // the shape picker of the full screen
     const ui::ShapePicker& pk = R.ui.full().picker;
@@ -289,7 +291,7 @@ void testFullScreen()
         ui::Component* leaves[160];
         const int nl = r.ui.full().collectLeaves (leaves, 0, 160);
         auto has = [&] (const ui::Component* c) { for (int i = 0; i < nl; ++i) if (leaves[i] == c) return true; return false; };
-        check (! has (&r.ui.full().shape) && ! has (&r.ui.full().sync) && has (&r.ui.full().monoQ) && ! has (&r.ui.full().monoTop) && r.ui.full().groups[1].member (0) == &r.ui.full().syncSwitch, "no SHAPE stepper, no SYNC stepper (the HZ / BPM / KEY row is the Timing group's Q1), MONO in Motion");
+        check (! has (&r.ui.full().shape) && ! has (&r.ui.full().sync) && has (&r.ui.full().monoQ) && ! has (&r.ui.full().monoTop) && r.ui.full().groups[1].member (0) == &r.ui.full().syncSwitch.mode, "no SHAPE stepper, no SYNC stepper (the HZ / BPM / KEY row is the Timing group's Q1), MONO in Motion");
     }
     r.tapC (r.ui.full().swing);
     check (r.ui.activeQ() == 2 && r.inst.q[0] == paramIdx ("lfo1.direction") && r.inst.q[1] == paramIdx ("lfo1.swing") && r.inst.q[2] == paramIdx ("lfo1.stereo") && r.inst.q[3] == paramIdx ("lfo1.mono"),
@@ -298,8 +300,8 @@ void testFullScreen()
     check (r.stack.depth() == 2 && r.ui.list().state.count == 6, "MODE: the list of the six sync types opens");
     r.stack.back();
     r.refresh();
-    check (r.ui.activeQ() == 1 && r.inst.q[0] == paramIdx ("lfo1.sync") && r.inst.q[1] == paramIdx ("lfo1.sync_type") && r.inst.q[2] == paramIdx ("lfo1.phase") && r.inst.q[3] == paramIdx ("lfo1.delay"),
-           "the TIMING group (sync, mode, phase, delay)");
+    check (r.ui.activeQ() == 1 && r.inst.q[0] == paramIdx ("lfo1.sync") && r.inst.q[1] == paramIdx ("lfo1.phase") && r.inst.q[2] == paramIdx ("lfo1.delay") && r.inst.q[3] == paramIdx ("lfo1.sync_type"),
+           "the TIMING group (sync, phase, delay, mode: the reading order of the block)");
     r.tapC (r.ui.full().close);
     check (r.stack.isMain() && ! r.inst.fullOpen, "the close button: main again");
     r.openFull();
