@@ -79,6 +79,9 @@ public:
         DetailNorm,  // a DetailButton with a 0 .. 1 value
         DetailInt,   // a DetailButton with an integer value
         Route,       // the route button: the destination choice
+        List,        // a short choice parameter as a LedList (all options visible)
+        Mask,        // the notes of the transpose snap (NoteMask): bits 0 .. 11 of the parameter
+        SnapBit,     // the toggle for bit 12 of the same parameter (snap the played note, not the transpose)
         Source,      // the source of a granular / multisample oscillator: the name of the file that is loaded; a tap opens the content browser
         Inert        // no value: a button
     };
@@ -823,15 +826,24 @@ private:
             ui::Component* comp = spec_.control (i);
             T t = T::Knob;
             if (c.kind == oscspec::K::Stepper) t = T::Stepper;
-            else if (c.kind == oscspec::K::Toggle) t = T::Toggle;
+            else if (c.kind == oscspec::K::Toggle) t = std::strcmp (c.key, "transpose_snap") == 0 ? T::SnapBit : T::Toggle;
             else if (c.kind == oscspec::K::Number) t = T::Number;
+            else if (c.kind == oscspec::K::List) t = T::List;
+            else if (c.kind == oscspec::K::Mask) t = T::Mask;
             bind (page_, kSpec + i, comp, t, c.key);
             if (c.kind == oscspec::K::Stepper)
             {
                 const int pi = indexOfKey (prefix_ + c.key);
                 static_cast<ui::Stepper*> (comp)->listable = pi >= 0 && info (pi).numChoices > 6;
             }
+            else if (c.kind == oscspec::K::List)
+            {
+                const int pi = indexOfKey (prefix_ + c.key);
+                if (pi >= 0 && info (pi).choices != nullptr)
+                    spec_.setListOptions (i, info (pi).choices, std::min (static_cast<int> (info (pi).numChoices), static_cast<int> (ui::LedList::kMaxOptions)));
+            }
         }
+        spec_.relayoutNow();
         specVisible_ = true;
     }
     bool condHolds (oscspec::Cond c, const IInstanceView& v) const
@@ -1106,6 +1118,9 @@ private:
                     break;
                 }
                 case T::Toggle: static_cast<ui::ToggleIcon*> (it.c)->state.on = plain >= 0.5f; break;
+                case T::SnapBit: static_cast<ui::ToggleIcon*> (it.c)->state.on = (static_cast<int> (std::lround (plain)) & 4096) != 0; break;
+                case T::Mask: static_cast<ui::NoteMask*> (it.c)->state.mask = static_cast<int> (std::lround (plain)) & 4095; break;
+                case T::List: static_cast<ui::LedList*> (it.c)->state.index = std::clamp (static_cast<int> (std::lround (plain - pi.min)), 0, std::max (0, static_cast<ui::LedList*> (it.c)->state.count - 1)); break;
                 case T::UpDown:
                 {
                     auto* u = static_cast<ui::UpDownStepper*> (it.c);
@@ -1583,6 +1598,9 @@ private:
                 }
                 break;
             case T::Toggle: if (c.kind == K::Index) writePlain (v, p, c.index != 0 ? 1.0 : 0.0); break;
+            case T::SnapBit: if (c.kind == K::Index) writePlain (v, p, (static_cast<int> (std::lround (v.param (p))) & 4095) | (c.index != 0 ? 4096 : 0)); break;
+            case T::Mask: if (c.kind == K::Index) writePlain (v, p, (static_cast<int> (std::lround (v.param (p))) & 4096) | (c.index & 4095)); break;
+            case T::List: if (c.kind == K::Index) writePlain (v, p, info (p).min + std::clamp (c.index, 0, std::max (0, info (p).numChoices - 1))); break;
             case T::UpDown: if (c.kind == K::Index) writePlain (v, p, c.index); break;
             case T::Picto:
                 if (c.kind == K::Index)
@@ -1617,8 +1635,8 @@ private:
     {
         if (it.alwaysOff || it.type == T::Inert)
             return -1;
-        if (it.type == T::NumberRead)
-            return -1;
+        if (it.type == T::NumberRead || it.type == T::SnapBit)
+            return -1;   // (SnapBit: bit 12 of the parameter the mask editor of its block already is the Q member of)
         if (it.type == T::NumberOct && it.param >= 0)
             return QRouter::encode (it.param, QRouter::kOct);   // Q 1 of the Tune group: the octaves of the transpose
         if (it.type == T::NumberSem && it.param >= 0)

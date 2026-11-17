@@ -743,6 +743,12 @@ void testSpecPages()
                 if (r.inst.param (it->param) == before)
                     r.drag (q.x + q.w / 2, q.y + q.h / 2, q.x + q.w / 2, q.y + q.h / 2 + 60);
             }
+            else if (pg.spec()->ctls[i].kind == os::K::List)
+            {
+                const ui::LedList* ll = static_cast<const ui::LedList*> (it->c);
+                const ui::Rect q2 = ll->rowRect (ll->state.index == 0 ? 1 : 0);
+                r.tap (q2.x + q2.w / 2, q2.y + q2.h / 2);
+            }
             else
                 r.tapC (*it->c);
             if (r.inst.param (it->param) != before)
@@ -764,7 +770,7 @@ void testSpecPages()
         r.refresh();
         r.openFull();
         r.tapC (r.ui.full().tune.more);
-        check (r.stack.top() == os::kMore && r.ui.specPage().numGroups() == 6, "type " + std::to_string (type) + ": MORE opens the options page with six blocks");
+        check (r.stack.top() == os::kMore && r.ui.specPage().numGroups() == 7, "type " + std::to_string (type) + ": MORE opens the options page with seven blocks");
         check (r.ui.displayRect().empty(), "the options page has no display (the room goes to the blocks)");
         r.tapC (*r.ui.specPage().control (0));   // ON
         check (r.inst.get ("osc1.on") == 0.0f, "MORE: the power switch is a control of the page (osc1.on)");

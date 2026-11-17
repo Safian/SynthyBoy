@@ -12,7 +12,7 @@
 
 namespace synthyboy_mpc { namespace overlay { namespace oscspec {
 
-enum class K : uint8_t { Knob, Stepper, Toggle, Number };
+enum class K : uint8_t { Knob, Stepper, Toggle, Number, List, Mask };   // List: a LedList (a short list, all options visible); Mask: the twelve notes of the transpose snap (NoteMask)
 /** The state a control is shown in (Always: every state); the owner evaluates them from the parameters of the oscillator. */
 enum class Cond : uint8_t { Always, LoopOn, SliceAuto, SliceManual, SliceAny, KeytrackOn, DensSync, DensGrains, LenSync, LenPercent, RemapOn, FltOn, SpecYAxis, GranYAxis, TrackOff, TempoLen, Count };
 struct Ctl { K kind; const char* label; const char* key; Cond cond; uint8_t weight; };
@@ -31,20 +31,21 @@ enum PageId { kWtMap = 16, kMore = 17, kSampleRegion = 18, kSampleSlice = 19, kG
 
 // ---- Wavetable: MAP (the remap curve of the frame position and the spectral morph)
 constexpr Ctl kWtMapCtls[] = {
-    { K::Toggle, "REMAP", "remap.on", Cond::Always, 1 }, { K::Stepper, "CURVE", "remap.slot", Cond::RemapOn, 2 }, { K::Knob, "RISE", "remap.rise", Cond::RemapOn, 1 }, { K::Knob, "FALL", "remap.fall", Cond::RemapOn, 1 },
+    { K::Toggle, "REMAP", "remap.on", Cond::Always, 1 }, { K::List, "CURVE", "remap.slot", Cond::RemapOn, 3 }, { K::Knob, "RISE", "remap.rise", Cond::RemapOn, 1 }, { K::Knob, "FALL", "remap.fall", Cond::RemapOn, 1 },
     { K::Stepper, "TYPE", "morph.type", Cond::Always, 2 }, { K::Knob, "AMOUNT", "morph.amount", Cond::Always, 1 }, { K::Knob, "SPREAD", "morph.spread", Cond::Always, 1 },
 };
 constexpr Block kWtMapBlocks[] = { { "FRAME REMAP", 0, 0, 4 }, { "SPECTRAL MORPH", 1, 4, 3 } };
 // ---- every type: MORE (switches, pitch, phase, the key and velocity zone, the unison law)
 constexpr Ctl kMoreCtls[] = {
     { K::Toggle, "ON", "on", Cond::Always, 1 }, { K::Toggle, "ENV 1", "env1", Cond::Always, 1 }, { K::Toggle, "SMOOTH", "smooth_interp", Cond::Always, 1 }, { K::Toggle, "TRACK", "pitch_track", Cond::Always, 1 },
-    { K::Stepper, "MODE", "pitch_mode", Cond::Always, 2 }, { K::Toggle, "BEND", "pitch_bend_track", Cond::Always, 1 }, { K::Knob, "FIXED", "fixed_pitch", Cond::TrackOff, 1 }, { K::Knob, "SNAP", "transpose_snap", Cond::Always, 1 },
-    { K::Stepper, "MEMORY", "phase_memory", Cond::Always, 2 }, { K::Toggle, "LEGATO", "phase_legato", Cond::Always, 1 }, { K::Stepper, "RATIO", "ratio_src", Cond::Always, 2 },
+    { K::List, "MODE", "pitch_mode", Cond::Always, 3 }, { K::Toggle, "BEND", "pitch_bend_track", Cond::Always, 1 }, { K::Knob, "FIXED", "fixed_pitch", Cond::TrackOff, 1 },
+    { K::List, "MEMORY", "phase_memory", Cond::Always, 3 }, { K::Toggle, "LEGATO", "phase_legato", Cond::Always, 1 }, { K::List, "RATIO", "ratio_src", Cond::Always, 4 },
     { K::Number, "LOW", "map.key_low", Cond::Always, 1 }, { K::Number, "HIGH", "map.key_high", Cond::Always, 1 }, { K::Toggle, "FOLD", "map.key_fold", Cond::Always, 1 }, { K::Toggle, "WARP", "map.key_warp", Cond::Always, 1 },
     { K::Number, "LOW", "map.vel_low", Cond::Always, 1 }, { K::Number, "HIGH", "map.vel_high", Cond::Always, 1 }, { K::Toggle, "OVERRIDE", "multi.vel_override", Cond::Always, 1 },
-    { K::Knob, "CURVE", "unison.detune_curve", Cond::Always, 1 }, { K::Knob, "SHAPE", "unison.blend_shape", Cond::Always, 1 }, { K::Stepper, "LAW", "unison.law", Cond::Always, 2 }, { K::Stepper, "STACK", "unison.stack_repeat", Cond::Always, 2 },
+    { K::Mask, "NOTES", "transpose_snap", Cond::Always, 7 }, { K::Toggle, "SNAP NOTE", "transpose_snap", Cond::Always, 2 },
+    { K::Knob, "CURVE", "unison.detune_curve", Cond::Always, 2 }, { K::Knob, "SHAPE", "unison.blend_shape", Cond::Always, 2 }, { K::List, "LAW", "unison.law", Cond::Always, 3 }, { K::List, "STACK", "unison.stack_repeat", Cond::Always, 3 },
 };
-constexpr Block kMoreBlocks[] = { { "OSCILLATOR", 0, 0, 4 }, { "PITCH", 0, 4, 4 }, { "PHASE", 1, 8, 3 }, { "KEY ZONE", 1, 11, 4 }, { "VELOCITY ZONE", 2, 15, 3 }, { "UNISON SHAPE", 2, 18, 4 } };
+constexpr Block kMoreBlocks[] = { { "OSCILLATOR", 0, 0, 4 }, { "PITCH", 0, 4, 3 }, { "PHASE", 1, 7, 3 }, { "KEY ZONE", 1, 10, 4 }, { "VELOCITY ZONE", 1, 14, 3 }, { "TRANSPOSE SNAP", 2, 17, 2 }, { "UNISON SHAPE", 2, 19, 4 } };
 // ---- Sample: REGION (region, loop, edit) and SLICE (slices, playback, scan, tempo)
 constexpr Ctl kSampleRegionCtls[] = {
     { K::Knob, "START", "sample.start", Cond::Always, 1 }, { K::Knob, "END", "sample.end", Cond::Always, 1 }, { K::Number, "ROOT", "sample.root", Cond::KeytrackOn, 1 }, { K::Toggle, "KEY TRACK", "sample.keytrack", Cond::Always, 1 },
@@ -54,17 +55,17 @@ constexpr Ctl kSampleRegionCtls[] = {
 };
 constexpr Block kSampleRegionBlocks[] = { { "REGION", 0, 0, 4 }, { "LOOP", 0, 4, 4 }, { "LOOP OPTIONS", 1, 8, 3 }, { "EDIT", 1, 11, 3 } };
 constexpr Ctl kSampleSliceCtls[] = {
-    { K::Stepper, "MODE", "sample.slice_mode", Cond::Always, 2 }, { K::Knob, "THRESHOLD", "sample.slice_threshold", Cond::SliceAuto, 1 }, { K::Knob, "SLICE", "sample.slice", Cond::SliceManual, 1 },
+    { K::List, "MODE", "sample.slice_mode", Cond::Always, 3 }, { K::Knob, "THRESHOLD", "sample.slice_threshold", Cond::SliceAuto, 1 }, { K::Knob, "SLICE", "sample.slice", Cond::SliceManual, 1 },
     { K::Stepper, "PLAY", "sample.slice_play", Cond::SliceAny, 2 }, { K::Number, "ROOT", "sample.slice_root", Cond::SliceAny, 1 },
-    { K::Stepper, "RANGE", "sample.scan_range", Cond::Always, 2 }, { K::Toggle, "REVERSE", "sample.scan_reverse", Cond::Always, 1 },
+    { K::List, "RANGE", "sample.scan_range", Cond::Always, 3 }, { K::Toggle, "REVERSE", "sample.scan_reverse", Cond::Always, 1 },
     { K::Toggle, "LOCK", "sample.scan_lock_tempo", Cond::Always, 1 }, { K::Toggle, "TO BPM", "sample.scan_to_bpm", Cond::Always, 1 }, { K::Knob, "BEATS", "sample.length_beats", Cond::TempoLen, 1 },
 };
 constexpr Block kSampleSliceBlocks[] = { { "SLICE", 0, 0, 3 }, { "PLAYBACK", 0, 3, 2 }, { "SCAN", 1, 5, 2 }, { "TEMPO", 1, 7, 3 } };
 // ---- Granular: GRAIN (density, length, spawn, random warp, position, y axis)
 constexpr Ctl kGrainCtls[] = {
-    { K::Stepper, "MODE", "gran.density_mode", Cond::Always, 2 }, { K::Stepper, "DIVISION", "gran.density_sync", Cond::DensSync, 2 }, { K::Knob, "GRAINS", "gran.density_grains", Cond::DensGrains, 1 },
-    { K::Stepper, "MODE", "gran.length_mode", Cond::Always, 2 }, { K::Stepper, "DIVISION", "gran.length_sync", Cond::LenSync, 2 }, { K::Knob, "PERCENT", "gran.length_percent", Cond::LenPercent, 1 },
-    { K::Stepper, "PATTERN", "gran.spawn_pattern", Cond::Always, 2 }, { K::Knob, "MAX", "gran.max_grains", Cond::Always, 1 }, { K::Toggle, "JUMP", "gran.jump_start", Cond::Always, 1 }, { K::Toggle, "REVERSE", "gran.reverse_grains", Cond::Always, 1 },
+    { K::List, "MODE", "gran.density_mode", Cond::Always, 3 }, { K::Stepper, "DIVISION", "gran.density_sync", Cond::DensSync, 2 }, { K::Knob, "GRAINS", "gran.density_grains", Cond::DensGrains, 1 },
+    { K::List, "MODE", "gran.length_mode", Cond::Always, 3 }, { K::Stepper, "DIVISION", "gran.length_sync", Cond::LenSync, 2 }, { K::Knob, "PERCENT", "gran.length_percent", Cond::LenPercent, 1 },
+    { K::List, "PATTERN", "gran.spawn_pattern", Cond::Always, 3 }, { K::Knob, "MAX", "gran.max_grains", Cond::Always, 1 }, { K::Toggle, "JUMP", "gran.jump_start", Cond::Always, 1 }, { K::Toggle, "REVERSE", "gran.reverse_grains", Cond::Always, 1 },
     { K::Knob, "WARP 1", "gran.rand_warp", Cond::Always, 1 }, { K::Knob, "WARP 2", "gran.rand_warp2", Cond::Always, 1 },
     { K::Toggle, "MANUAL", "gran.manual", Cond::Always, 1 }, { K::Toggle, "KEY TRACK", "gran.scan_keytrack", Cond::Always, 1 }, { K::Knob, "XFADE", "sample.loop_xfade", Cond::Always, 1 },
     { K::Stepper, "AXIS", "gran.y_axis", Cond::Always, 2 }, { K::Knob, "Y", "gran.xy_y", Cond::GranYAxis, 1 },
@@ -102,7 +103,7 @@ inline bool isSpecPage (int page) noexcept { return specOf (page) != nullptr; }
 class OscSpecPage : public ui::Composite
 {
 public:
-    static constexpr int kBarH = 64, kDisplayH = 244, kMaxCtl = 24, kMaxBlocks = 8, kBlockGap = 8, kBlockPad = 6, kTitleH = 34;
+    static constexpr int kBarH = 64, kDisplayH = 244, kMaxCtl = 24, kMaxBlocks = 8, kBlockGap = 8, kBlockPad = 4, kTitleH = 32, kMaxExtra = 60;
     ui::MenuButton back { "BACK", ui::MenuButton::Icon::None };
     ui::MenuButton load { "LOAD SAMPLE", ui::MenuButton::Icon::None };   // the empty state of a type with a file: one tap to the browser (the owner shows it, places it over the display)
     ui::QGroup groups[kMaxBlocks];
@@ -128,13 +129,25 @@ public:
             {
                 case K::Knob: { ui::Knob& k = knobs_[i]; k.state = ui::Knob::State {}; k.setLabel (c.label); break; }
                 case K::Stepper: { ui::Stepper& st = steppers_[i]; st.state = ui::Stepper::State {}; st.setCaption (c.label); st.setItem (c.label); st.minWidth = 100; break; }
-                case K::Toggle: { ui::ToggleIcon& t = toggles_[i]; t.state = ui::ToggleIcon::State {}; t.state.showState = true; t.setLabel (c.label); break; }
+                case K::Toggle: { ui::LedToggle& t = toggles_[i]; t.state = ui::ToggleIcon::State {}; t.state.icon = ui::ToggleIcon::Icon::Generic; t.setLabel (c.label); break; }
+                case K::List: { ui::LedList& l = lists_[i]; l.state = ui::LedList::State {}; l.setTitle (c.label); l.state.titleInLane = true; break; }
+                case K::Mask: { ui::NoteMask& m = masks_[i]; m.state = ui::NoteMask::State {}; m.setLabel (c.label); break; }
                 case K::Number: { ui::NumberField& n = numbers_[i]; n.state = ui::NumberField::State {}; n.state.format = ui::NumberField::Format::IntPlain; n.setLabel (c.label); break; }
             }
         }
         relayout();
     }
     const Spec* spec() const noexcept { return spec_; }
+    /** The options of a List control (names, at most 8); the page lays out again with them (the lines of a list decide the height of its block). */
+    void setListOptions (int i, const char* const* names, int n)
+    {
+        if (spec_ != nullptr && i >= 0 && i < spec_->numCtls && spec_->ctls[i].kind == K::List)
+        {
+            lists_[i].setOptions (names, n);
+            lists_[i].state.index = std::clamp (lists_[i].state.index, 0, std::max (0, n - 1));
+        }
+    }
+    void relayoutNow() { layout(); }
     ui::Component* control (int i) noexcept { return i >= 0 && spec_ != nullptr && i < spec_->numCtls ? compOf (i) : nullptr; }
     bool visible (int i) const noexcept { return spec_ != nullptr && i >= 0 && i < spec_->numCtls && vis_[i]; }
     /** The owner says which controls apply now; the page is laid out again when the set changed. */
@@ -215,6 +228,8 @@ protected:
                 case K::Stepper: return &steppers_[i];
                 case K::Toggle: return &toggles_[i];
                 case K::Number: return &numbers_[i];
+                case K::List: return &lists_[i];
+                case K::Mask: return &masks_[i];
             }
         return &knobs_[i];
     }
@@ -246,14 +261,12 @@ protected:
                 if (spec_->blocks[b].row == r && nvis[b] > 0) { usedRow[r] = 1; break; }
         for (int r = 0; r < rows && r < 4; ++r)
             nUsedRows += usedRow[r];
-        const int rowH = nUsedRows > 0 ? (bottom - top - kBlockGap * (nUsedRows - 1)) / nUsedRows : 0;
-        int rowIndex = 0;
+        // pass 1: the x and width of every block of a row, and what height its controls need (a short list needs a row of 56 px per line of options)
+        int rowNeed[4] = {}, rowTop[4] = {}, rowHeight[4] = {};
         for (int r = 0; r < rows && r < 4; ++r)
         {
             if (! usedRow[r])
                 continue;
-            const int y0 = top + rowIndex * (rowH + kBlockGap);
-            ++rowIndex;
             int total = 0, count = 0;
             for (int b = 0; b < spec_->numBlocks; ++b)
                 if (spec_->blocks[b].row == r && nvis[b] > 0) { total += std::max (2, wsum[b]) + 1; ++count; }
@@ -266,11 +279,33 @@ protected:
                 const int before = avail * used / total;
                 used += std::max (2, wsum[b]) + 1;
                 const int w = avail * used / total - before;
-                blockRect_[b] = { x, y0, w, rowH };
+                blockRect_[b] = { x, 0, w, 0 };
                 x += w + kBlockGap;
-                layoutBlock (b);
+                rowNeed[r] = std::max (rowNeed[r], needOf (b, w) + kTitleH + kBlockPad);
             }
         }
+        int sumNeed = 0;
+        for (int r = 0; r < rows && r < 4; ++r)
+            sumNeed += usedRow[r] ? rowNeed[r] : 0;
+        const int surplus = std::max (0, bottom - top - sumNeed - kBlockGap * std::max (0, nUsedRows - 1));
+        const int extra = nUsedRows > 0 ? std::min (surplus / nUsedRows, kMaxExtra) : 0;
+        int yy = top;
+        for (int r = 0; r < rows && r < 4; ++r)
+            if (usedRow[r])
+            {
+                rowTop[r] = yy;
+                rowHeight[r] = rowNeed[r] + extra;
+                yy += rowHeight[r] + kBlockGap;
+            }
+        // pass 2: the blocks get their height and place their controls
+        for (int b = 0; b < spec_->numBlocks && b < kMaxBlocks; ++b)
+            if (nvis[b] > 0)
+            {
+                const int r = std::min<int> (spec_->blocks[b].row, 3);
+                blockRect_[b].y = rowTop[r];
+                blockRect_[b].h = rowHeight[r];
+                layoutBlock (b);
+            }
         // the Q groups: one per block on the page, the visible controls in reading order
         for (ui::QGroup& g : groups)
             for (int i = 0; i < 4; ++i)
@@ -299,29 +334,80 @@ protected:
                 return true;
         return false;
     }
-    void layoutBlock (int b)
+    /** The columns a short list of n options takes in a cell of width w (the most that keep the columns as wide as the longest name needs) and so the lines it has. */
+    static int listColumns (const ui::LedList& l, int n, int w) noexcept
+    {
+        int best = 1;
+        for (int c = 2; c <= std::min (ui::LedList::kMaxColumns, n); ++c)
+            if (w / c >= l.columnNeed())
+                best = c;
+        return best;
+    }
+    /** The cells of the visible controls of block b (indices in idx, n of them) in a block of width w. */
+    void cellsOf (int b, int w, int* idx, int& n, ui::Rect* cells) const
     {
         const Block& bl = spec_->blocks[b];
-        const ui::Rect br = blockRect_[b];
-        const ui::Rect in { br.x + kBlockPad, br.y + kTitleH, std::max (0, br.w - 2 * kBlockPad), std::max (0, br.h - kTitleH - kBlockPad) };
-        int idx[8], n = 0;
+        n = 0;
         for (int k = 0; k < bl.n && n < 8; ++k)
             if (vis_[bl.first + k])
                 idx[n++] = bl.first + k;
-        // one row of controls per block (a Q group is one row: its chips sit on the lane above the first row), all with the same top
-        const int cols = n;
-        const int ch = in.h;
-        ui::Rect cells[8];
         int fixed[8] = {}, weight[8] = {};
-        for (int k = 0; k < cols; ++k)
+        for (int k = 0; k < n; ++k)
             weight[k] = spec_->ctls[idx[k]].weight;
-        ui::layoutRow ({ in.x, in.y, in.w, ch }, fixed, weight, cols, ui::kGap, cells);
-        for (int k = 0; k < cols; ++k)
+        ui::layoutRow ({ 0, 0, std::max (0, w - 2 * kBlockPad), 100 }, fixed, weight, n, ui::kGap, cells);
+    }
+    int needOf (int b, int w) const
+    {
+        int idx[8], n;
+        ui::Rect cells[8];
+        cellsOf (b, w, idx, n, cells);
+        int need = 0;
+        for (int k = 0; k < n; ++k)
+        {
+            const int ci = idx[k];
+            switch (spec_->ctls[ci].kind)
+            {
+                case K::Knob: need = std::max (need, 84); break;
+                case K::Stepper: case K::Number: need = std::max (need, 64); break;
+                case K::Toggle: need = std::max (need, 56); break;
+                case K::Mask: need = std::max (need, 120); break;
+                case K::List:
+                {
+                    const int cnt = std::max (1, lists_[ci].state.count), c = listColumns (lists_[ci], cnt, cells[k].w);
+                    need = std::max (need, ui::led::kRowH * ((cnt + c - 1) / c));
+                    break;
+                }
+            }
+        }
+        return need;
+    }
+    void layoutBlock (int b)
+    {
+        const ui::Rect br = blockRect_[b];
+        const ui::Rect in { br.x + kBlockPad, br.y + kTitleH, std::max (0, br.w - 2 * kBlockPad), std::max (0, br.h - kTitleH - kBlockPad) };
+        int idx[8], n;
+        ui::Rect cells[8];
+        cellsOf (b, br.w, idx, n, cells);
+        // one row of controls per block (a Q group is one row: its chips sit on the lane above the first row), all with the same top
+        for (int k = 0; k < n; ++k)
         {
             const int ci = idx[k];
             const Ctl& c = spec_->ctls[ci];
             ui::Rect cr = cells[k];
-            const int cap = c.kind == K::Stepper ? 88 : (c.kind == K::Toggle || c.kind == K::Number ? 110 : 0);
+            cr.x += in.x; cr.y = in.y; cr.h = in.h;
+            int cap = 0;
+            switch (c.kind)
+            {
+                case K::Stepper: case K::Number: cap = 88; break;
+                case K::Mask: cap = 120; break;
+                case K::List:
+                {
+                    const int cnt = std::max (1, lists_[ci].state.count), cols = listColumns (lists_[ci], cnt, cr.w);
+                    cap = ui::led::kRowH * ((cnt + cols - 1) / cols);
+                    break;
+                }
+                default: break;
+            }
             if (cap > 0 && cr.h > cap && n > 1)   // a lone control fills its block
                 cr.h = cap;
             if (c.kind == K::Knob)
@@ -353,7 +439,9 @@ protected:
     const Spec* spec_ = nullptr;
     ui::Knob knobs_[kMaxCtl];
     ui::Stepper steppers_[kMaxCtl];
-    ui::ToggleIcon toggles_[kMaxCtl];
+    ui::LedToggle toggles_[kMaxCtl];
+    ui::LedList lists_[kMaxCtl];
+    ui::NoteMask masks_[kMaxCtl];
     ui::NumberField numbers_[kMaxCtl];
     bool vis_[kMaxCtl] = {};
     ui::Rect display_, blockRect_[kMaxBlocks];
