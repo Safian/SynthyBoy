@@ -348,6 +348,21 @@ void setupEffectNonDefault (GalleryInst& inst, int type)
 {
     switch (type)
     {
+        case 14: // splitter low / high
+            inst.set ("splitter_lh.on", 1.0f);
+            inst.set ("splitter_lh.freq", 800.0f);
+            inst.set ("splitter_lh.high_bypass", 1.0f);
+            break;
+        case 15: // splitter low / mid / high
+            inst.set ("splitter_lmh.on", 1.0f);
+            inst.set ("splitter_lmh.freq_low", 150.0f);
+            inst.set ("splitter_lmh.freq_high", 5000.0f);
+            inst.set ("splitter_lmh.mid_bypass", 1.0f);
+            break;
+        case 16: // splitter mid / side
+            inst.set ("splitter_ms.on", 1.0f);
+            inst.set ("splitter_ms.side_bypass", 1.0f);
+            break;
         case 1: // chorus
             inst.set ("chorus.on", 1.0f);
             inst.set ("chorus.depth", 75.0f);
@@ -965,11 +980,12 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
     // =========================================================================
     {
         // 8.1 Every effect type on each page with effect switched on & non-default values
-        static const char* const kFxNames[14] = {
+        static const char* const kFxNames[17] = {
             "", "chorus", "compressor", "delay", "distortion", "eq", "filter",
-            "flanger", "phaser", "reverb", "hyperdimension", "utility", "bode", "convolve"
+            "flanger", "phaser", "reverb", "hyperdimension", "utility", "bode", "convolve",
+            "splitter_lh", "splitter_lmh", "splitter_ms"   // the three splitters: modules of the fixed chain, added from the same list
         };
-        for (int t = 1; t <= 13; ++t)
+        for (int t = 1; t <= 16; ++t)
         {
             GalleryRig<FxUi> r (baseInst, 1);
             setupEffectNonDefault (r.inst, t);

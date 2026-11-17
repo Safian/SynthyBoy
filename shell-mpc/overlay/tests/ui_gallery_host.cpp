@@ -542,7 +542,7 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         }
     }
 
-    // 9. FX (gallery and each of the 13 effect editors, every page of each)
+    // 9. FX (gallery and each of the 16 effect editors, every page of each)
     {
         // FX Gallery
         GalleryInst emptyFxInst = baseInst;
@@ -558,12 +558,13 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         rGal.picture (outDir + "/" + state + "_fx_gallery.png");
         rGal.picture (outDir + "/" + state + "_fx.png");
 
-        // 13 effect editors
-        static const char* const kFxNames[14] = {
+        // 16 effect editors (the 13 types and the 3 splitters)
+        static const char* const kFxNames[17] = {
             "", "chorus", "compressor", "delay", "distortion", "eq", "filter",
-            "flanger", "phaser", "reverb", "hyperdimension", "utility", "bode", "convolve"
+            "flanger", "phaser", "reverb", "hyperdimension", "utility", "bode", "convolve",
+            "splitter_lh", "splitter_lmh", "splitter_ms"   // the three splitters: modules of the fixed chain, added from the same list
         };
-        for (int t = 1; t <= 13; ++t)
+        for (int t = 1; t <= 16; ++t)
         {
             GalleryRig<FxUi> rFx (baseInst, 1);
             rFx.refresh();
