@@ -713,7 +713,7 @@ int main()
         std::ostringstream o;
         v.writeStatus (o);
         const std::string st = o.str();
-        check (st.find ("play_view: play2") != std::string::npos && st.find ("play_highlight: 2") != std::string::npos && st.find ("play_osc: 5") != std::string::npos && st.find ("play_env: 1") != std::string::npos
+        check (st.find ("play_view: play1") != std::string::npos && st.find ("play_highlight: 2") != std::string::npos && st.find ("play_osc: 5") != std::string::npos && st.find ("play_env: 1") != std::string::npos
                && st.find ("play_lfo: 10") != std::string::npos && st.find ("play_env_hash:") != std::string::npos, "the status lines name the view, the highlight and the three selected instances, with a hash per panel");
         // Sub draws its waveform (analytic, kind wavetable), Noise the noise display; A, B and C read their own oscillator's parameters and live readout
         inst.playSel[0] = 1; step();

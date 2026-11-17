@@ -437,8 +437,7 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
 
     // 1. Play 1-3
     if (shouldRender ("play1.png")) savePlay (outDir + "/" + state + "_play1.png", 1, baseInst);
-    if (shouldRender ("play2.png")) savePlay (outDir + "/" + state + "_play2.png", 2, baseInst);
-    if (shouldRender ("play3.png")) savePlay (outDir + "/" + state + "_play3.png", 3, baseInst);
+    // (one Play page since 2026-11-18: the play2 / play3 states are gone)
 
     // (a0) the Play page (2026-11-18): oscillator A, Sub and Noise switched off (grey display and controls, the power button red), the selectors (carousels) at the first, a middle and the last entry of each third,
     // the type drop-down closed (the compact views above) and open for A, Sub and Noise
@@ -474,7 +473,7 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
     }
 
     // (a) Play 1-3 for each of the five oscillator sources, envelope 1 and 6, and LFO 1, 10, R1
-    for (int p = 1; p <= 3; ++p)
+    for (int p = 1; p <= 1; ++p)   // the one Play page
     {
         const std::string pstr = std::to_string (p);
         // Oscillator sources: Sub, Osc A, Osc B, Osc C, Noise

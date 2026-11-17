@@ -20,7 +20,7 @@ constexpr int kInstanceSteps = 32;   // the parameter's value of frame f is f / 
 constexpr unsigned kInstanceSlotRgb[kMaxInstances] = { 0x1414d8, 0x3e14d8, 0x6814d8, 0x9214d8, 0x143ed8, 0x3e3ed8, 0x683ed8, 0x923ed8, 0x1468d8, 0x3e68d8, 0x6868d8, 0x9268d8, 0x1492d8, 0x3e92d8, 0x6892d8, 0x9292d8 };
 constexpr unsigned kInstanceNoneRgb = 0xc814d8;    // frame 17: an instance without a slot
 constexpr unsigned kInstanceBlankRgb = 0x14c8d8;   // frame 0 (nothing reported yet) and the frames after 17
-constexpr int kNumViews = 24;
+constexpr int kNumViews = 22;
 constexpr View kViews[kNumViews] = {
     { "filter1", 6, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x103a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a1064, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Filter 1"
     { "filter2", 6, 2, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x173a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a1764, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Filter 2"
@@ -34,8 +34,6 @@ constexpr View kViews[kNumViews] = {
     { "env4", 13, 4, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x643a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a6464, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Env 4"
     { "macros", 10, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x6b3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a6b64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Macros"
     { "play1", 5, 1, { 23, 124, 1234, 190 }, true, { { { 33, 134, 6, 6 }, 0x723a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a7264, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Play"
-    { "play2", 5, 2, { 23, 124, 1234, 190 }, true, { { { 33, 134, 6, 6 }, 0x793a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a7964, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Play Env"
-    { "play3", 5, 3, { 23, 124, 1234, 190 }, true, { { { 33, 134, 6, 6 }, 0x803a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a8064, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Play LFO"
     { "mixer", 7, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x873a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a8764, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Mixer"
     { "fx", 8, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x8e3a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a8e64, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "FX"
     { "mod", 9, 1, { 0, 110, 1280, 628 }, true, { { { 33, 134, 6, 6 }, 0x953a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a9564, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Mod"

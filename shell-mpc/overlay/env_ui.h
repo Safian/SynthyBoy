@@ -1037,6 +1037,9 @@ private:
 
     // ======================================================================================================================================================================
     // the Q group: the four targets the hardware knobs are mapped to
+    /** The four targets of the ADSR group of the compact view and its block of knobs (the Play view maps the groups of the three thirds together). */
+    void compactTargets (int* t) const noexcept { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (compact_.group.member (i)); }
+    void setCompactBlock (int block) noexcept { compact_.group.setBlock (block); }
     int paramOfMember (const ui::Component* m) const noexcept
     {
         while (m != nullptr)
@@ -1060,9 +1063,7 @@ private:
         {
             name = "ADSR";
             compact_.group.setActive (highlight_ == 2);
-            if (highlight_ != 2)
-                return;   // another sub-tab: its element owns the group
-            qSlots_.publish (v, 1, 0, [&] (int, int* t) { members (compact_.group, t); });
+            return;   // the main state: the Play view publishes the three groups of the page together (PlayView::publishQ)
         }
         else if (pageTop_ == kPageTargets || pageTop_ == kPageMods)
         {

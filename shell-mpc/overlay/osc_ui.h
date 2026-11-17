@@ -1803,6 +1803,9 @@ private:
     // the Q group: the four targets the hardware knobs are mapped to
     void resolveQ (IInstanceView&) {}
     /** The table index behind a member of a Q group (a composite: its primary child); -1 when there is none. */
+    /** The four targets of the Basic group of the compact view (table indices, -1 none) and its block of knobs (the Play view maps the groups of the three thirds together). */
+    void compactTargets (int* t) const noexcept { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (compact_.basic.group.member (i)); }
+    void setCompactBlock (int block) noexcept { compact_.basic.group.setBlock (block); }
     int paramOfMember (const ui::Component* m) const noexcept
     {
         while (m != nullptr)
@@ -1835,12 +1838,8 @@ private:
         {
             name = "Basic";
             compact_.basic.group.setActive (highlight_ == 1);
-            if (highlight_ != 1)
-            {
-                qActive_ = 0;
-                return;   // the Env / LFO sub-tab: the view of the Env / LFO owns the group (EnvUi / LfoUi)
-            }
-            qSlots_.publish (v, 1, 0, [&] (int, int* t) { members (compact_.basic.group, t); });
+            qActive_ = 0;
+            return;   // the main state: the Play view publishes the three groups of the page together (PlayView::publishQ), the oscillator's is the first
         }
         else if (pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope)
         {
