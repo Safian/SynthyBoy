@@ -57,6 +57,7 @@ struct Options
     std::string tier = "all";
     bool summaryOnly = false;
     bool velocity = false;
+    bool sustainAware = false;
     std::string wavDir;
     std::string filter;
     double sampleRate = 48000.0;
@@ -268,6 +269,7 @@ int main (int argc, char** argv)
         else if (a == "--tier") o.tier = next();
         else if (a == "--summary-only") o.summaryOnly = true;
         else if (a == "--velocity") o.velocity = true;
+        else if (a == "--sustain-aware") o.sustainAware = true;
         else if (a == "--wav") o.wavDir = next();
         else if (a == "--filter") o.filter = next();
         else if (a == "--sr") o.sampleRate = std::atof (next().c_str());
@@ -367,7 +369,21 @@ int main (int argc, char** argv)
             const std::vector<int> chord { keys[0], keys[0] + 4, keys[0] + 7, keys[0] + 12 };
             const bool wav = ! o.wavDir.empty();
             const Render s = render (o, q, p, keys, 0.8f, kHoldSingle, true, wav);
-            const Render c = render (o, q, p, chord, 1.0f, kHoldChord, false, false);
+
+            double chordHold = kHoldChord;
+            if (o.sustainAware)
+            {
+                float att = 5.0f, del = 0.0f;
+                const auto* pAtt = findParamByKey ("env1.attack");
+                const auto* pDel = findParamByKey ("env1.delay");
+                const int attIdx = pAtt != nullptr ? findParamIndex (pAtt->id) : -1;
+                const int delIdx = pDel != nullptr ? findParamIndex (pDel->id) : -1;
+                if (attIdx >= 0) att = p.values.plain[static_cast<size_t> (attIdx)];
+                if (delIdx >= 0) del = p.values.plain[static_cast<size_t> (delIdx)];
+                const double attSec = (std::max (0.0f, att) + std::max (0.0f, del)) / 1000.0;
+                chordHold = std::min (5.0, std::max (1.0, 0.4 + attSec));
+            }
+            const Render c = render (o, q, p, chord, 1.0f, chordHold, false, false);
 
             std::vector<std::string> problems;
             if (! s.finite || ! c.finite)
