@@ -229,8 +229,51 @@ private:
             }
     }
 
+    /** The multiband compressor: one transfer plot per band side by side (LOW, MID, HIGH in their colours), each with its thresholds as dots on its curve and the numbers under its name, filling the block. */
+    void drawCompressorBands (Pen& p, gpu::SceneBuilder& sb, const Rect& plot) const
+    {
+        const theme::Look& T = theme::L();
+        const float lo = -72.0f, hi = 0.0f;
+        static const char* const kName[3] = { "LOW", "MID", "HIGH" };
+        const uint32_t kCol[3] = { T.flow[0], T.flow[1], T.flow[3] };
+        const int gap = 24, labelH = 22, axisH = 20;
+        const int cellW = (plot.w - 2 * gap) / 3, side = std::max (40, std::min (cellW - 40, plot.h - labelH - axisH));
+        for (int b = 0; b < 3; ++b)
+        {
+            const int cx = plot.x + b * (cellW + gap) + (cellW - side) / 2;
+            const Rect sq { cx, plot.y + labelH, side, side };
+            auto xOf = [&] (float db) { return static_cast<float> (sq.x) + std::clamp ((db - lo) / (hi - lo), 0.0f, 1.0f) * static_cast<float> (sq.w); };
+            auto yOf = [&] (float db) { return static_cast<float> (sq.bottom()) - std::clamp ((db - lo) / (hi - lo), 0.0f, 1.0f) * static_cast<float> (sq.h); };
+            for (int k = 0; k <= 3; ++k)
+            {
+                const float db = lo + 18.0f * static_cast<float> (k);
+                p.line (xOf (db), static_cast<float> (sq.y), xOf (db), static_cast<float> (sq.bottom()), 1.0f, p.c (T.grid, 255));
+                p.line (static_cast<float> (sq.x), yOf (db), static_cast<float> (sq.right()), yOf (db), 1.0f, p.c (T.grid, 255));
+                char t[8];
+                std::snprintf (t, sizeof t, "%.0f", db);
+                p.textCentered ({ static_cast<int> (xOf (db)) - 24, sq.bottom() + 2, 48, 16 }, t, T.fSmall, p.c (T.textFaint, 255), T.fMin);
+            }
+            p.line (static_cast<float> (sq.x), static_cast<float> (sq.bottom()), static_cast<float> (sq.right()), static_cast<float> (sq.y), 1.0f, p.c (T.textFaint, 120));
+            char head[56];
+            std::snprintf (head, sizeof head, "%s   %.0f / %.0f dB", kName[b], static_cast<double> (comp.band[b].lowerThr), static_cast<double> (comp.band[b].upperThr));
+            p.textLeft ({ sq.x, plot.y + 1, std::max (0, cellW), labelH }, head, T.fLabel - 1.0f, p.c (kCol[b], 255), T.fMin);
+            float rows[kPoints];
+            for (int i = 0; i < kPoints; ++i)
+                rows[i] = yOf (compOut (comp.band[b], lo + (hi - lo) * static_cast<float> (i) / static_cast<float> (kPoints - 1)));
+            sb.curve (rows, kPoints, sq.x, sq.w);
+            sb.stroke (b == comp.activeBand ? 1.0f : 0.8f, colour::rgba (kCol[b], 255));
+            p.disc (xOf (comp.band[b].upperThr), yOf (compOut (comp.band[b], comp.band[b].upperThr)), 3.5f, p.c (kCol[b], 255));
+            p.disc (xOf (comp.band[b].lowerThr), yOf (compOut (comp.band[b], comp.band[b].lowerThr)), 3.5f, p.c (kCol[b], 255));
+        }
+    }
+
     void drawCompressor (Pen& p, gpu::SceneBuilder& sb, const Rect& plot) const
     {
+        if (comp.bands == 0 && plot.w >= 3 * 150)
+        {
+            drawCompressorBands (p, sb, plot);
+            return;
+        }
         const theme::Look& T = theme::L();
         const float lo = -72.0f, hi = 0.0f;   // the input axis; the output axis is the same range
         const Rect sq { plot.x + std::max (0, (plot.w - plot.h) / 2), plot.y, std::min (plot.w, plot.h), plot.h };
