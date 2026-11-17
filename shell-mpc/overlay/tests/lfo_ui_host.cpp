@@ -270,8 +270,23 @@ void testWrites()
     R.tapC (R.ui.full().hostPick);
     check (R.inst.get ("lfo1.host") == 1.0f, "HOST");
     const float smooth = R.inst.get ("lfo1.smooth");
-    R.tapC (R.ui.full().smoothPick);
-    check (R.inst.get ("lfo1.smooth") != smooth, "SMOOTH");
+    {   // SMOOTH is ONE control: the time knob with the switch as the LED on its label (a tap on the label / the LED switches it, off = the knob is dim and takes only the switch)
+        ui::Knob& k = R.ui.full().smoothTime;
+        const ui::Rect z = k.ledHit();
+        check (k.state.led && k.state.ledOn == (smooth >= 0.5f), "the SMOOTH knob shows the state of the switch on its LED (" + std::to_string (smooth) + ")");
+        R.tap (z.x + z.w - 10, z.y + z.h / 2);   // on the text column, off the dial
+        check (R.inst.get ("lfo1.smooth") != smooth && k.state.ledOn == (R.inst.get ("lfo1.smooth") >= 0.5f), "a tap on the label of SMOOTH switches the smoothing");
+        if (R.inst.get ("lfo1.smooth") >= 0.5f)
+            R.tap (z.x + z.w - 10, z.y + z.h / 2);
+        check (R.inst.get ("lfo1.smooth") < 0.5f && ! k.state.ledOn, "the smoothing is off: the LED is unlit");
+        const float t0 = R.inst.get ("lfo1.smooth_time");
+        R.drag (k.rect().x + 30, k.rect().y + k.rect().h / 2, k.rect().x + 30, k.rect().y + k.rect().h / 2 - 60, true);
+        check (R.inst.get ("lfo1.smooth_time") == t0, "with the smoothing off a drag on the dial changes nothing (the knob is dim)");
+        R.tap (z.x + z.w - 10, z.y + z.h / 2);
+        check (R.inst.get ("lfo1.smooth") >= 0.5f && k.state.ledOn, "a tap on the label switches the smoothing on again");
+        R.drag (k.rect().x + 30, k.rect().y + k.rect().h / 2, k.rect().x + 30, k.rect().y + k.rect().h / 2 - 60, true);
+        check (R.inst.get ("lfo1.smooth_time") != t0, "and the dial sets the time (" + std::to_string (R.inst.get ("lfo1.smooth_time")) + ")");
+    }
 }
 
 void testFullScreen()

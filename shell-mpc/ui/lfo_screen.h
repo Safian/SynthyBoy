@@ -33,6 +33,7 @@ public:
         style.setCaption ("STYLE"); style.listable = true; style.state.wrap = true;
         sync.setCaption ("SYNC"); sync.listable = true; sync.state.wrap = true;
         stereo.setLabel ("STEREO");
+        smoothTime.state.led = true;   // the switch of the smoothing is the LED on the label of its time
         rate.setShowMode (true);
         addKid (instance); addKid (shape); addKid (style, false); addKid (sync, false); addKid (rate); addKid (rise); addKid (smoothTime); addKid (stereo, false); addKid (full);
         configure (false);
@@ -98,6 +99,21 @@ protected:
 };
 
 // ===============================================================================================================================================================
+/** LedSwitchProxy: the Q member of the LED on the label of a knob (Knob::state.led): a LED toggle that is not drawn and takes no touch (the knob's own label zone is the touch), placed at the LED so that its Q chip stands there; a Q-Link
+    step on it switches (up on, down off) and the owner writes the switch's parameter. It is no child of any composite. */
+class LedSwitchProxy : public LedToggle
+{
+public:
+    void draw (gpu::SceneBuilder&) const override {}
+    Change touchDown (int, int, double) override { return Change::none(); }
+    int touchTargets (Rect*, int) const override { return 0; }
+    Size minSize() const override { return { 1, 1 }; }
+    bool sizeOk() const noexcept override { return true; }
+    /** Places the proxy beside the top left corner of the knob (inside its rectangle): its Q chip stands in the lane above the knob, right of the knob's own chip. */
+    void follow (const Knob& k) { place ({ k.rect().x + 24, k.rect().y, 20, 16 }); }
+};
+
+// ===============================================================================================================================================================
 class LfoFullScreen : public Composite
 {
 public:
@@ -108,7 +124,8 @@ public:
     ToggleIcon monoTop;
     DetailButton targets { DetailButton::Icon::Route, "TARGETS" };
     ShapePicker picker;                                     // the shapes (13) or the styles (5)
-    LedToggle smoothPick, hostPick;                         // under the picker: SMOOTH and HOST (LED toggles, one row)
+    LedToggle hostPick;                                     // under the picker: HOST (a LED toggle); the SMOOTH switch is the LED on the label of the SMOOTH knob (smoothTime), its Q member `smoothSwitch` (group SHAPE)
+    LedSwitchProxy smoothSwitch;
     MenuButton edit { "EDIT", MenuButton::Icon::None };
     // Q group RATE / RANDOM
     Stepper shape, style;
@@ -133,7 +150,7 @@ public:
         monoTop.state.icon = ToggleIcon::Icon::Generic; monoTop.setLabel ("MONO");
         monoQ.setLabel ("MONO");
         stereoToggle.setLabel ("STEREO");
-        smoothPick.setLabel ("SMOOTH");
+        smoothTime.state.led = true;   // one control: the smoothing time with the switch of the smoothing on its label
         hostPick.setLabel ("HOST");
         shape.setCaption ("SHAPE"); shape.listable = true; shape.state.wrap = true;
         style.setCaption ("STYLE"); style.listable = true; style.state.wrap = true;
@@ -147,7 +164,7 @@ public:
         keyTune.state.min = -100; keyTune.state.max = 100; keyTune.state.pxPerStep = 3;
         picker.state.cols = kPickerCols;
         addKid (close); addKid (bar); addKid (syncSwitch.mode); addKid (monoTop); addKid (targets);
-        addKid (picker); addKid (smoothPick); addKid (hostPick); addKid (edit);
+        addKid (picker); addKid (hostPick); addKid (edit);
         addKid (style, false); addKid (rate); addKid (rise); addKid (smoothTime);
         addKid (sync, false); addKid (mode); addKid (modeList, false); addKid (phase); addKid (delay);
         addKid (direction); addKid (swing); addKid (stereo); addKid (monoQ, false); addKid (stereoToggle, false);
@@ -161,7 +178,7 @@ public:
         random_ = random;
         picker.state.styles = random;
         picker.state.cols = random ? 2 : kPickerCols;
-        show (smoothPick, ! random); show (hostPick, ! random); show (edit, ! random); show (monoTop, false);
+        show (hostPick, ! random); show (edit, ! random); show (monoTop, false);
         show (rise, ! random); show (smoothTime, ! random); show (style, false);   // the style grid IS the style control (a stepper beside it was the same control twice)
         show (phase, ! random); show (delay, ! random); show (direction, ! random); show (swing, ! random); show (stereo, ! random); show (stereoToggle, random);
         show (mode, ! random); show (modeList, random);
@@ -295,7 +312,7 @@ protected:
             QGroup& mo = next ("Motion", 2);
             mo.set (0, &direction); mo.set (1, &swing); mo.set (2, &stereo); mo.set (3, &monoQ);
             QGroup& sh = next ("Shape", -1);
-            sh.set (0, &smoothPick); sh.set (1, &hostPick);
+            sh.set (0, &hostPick); sh.set (1, &smoothSwitch);
             sh.setFrameless (true);
         }
         else
@@ -336,13 +353,12 @@ protected:
         const int midY = top.bottom() + 15, bandY = rect_.bottom() - m - bandH, midH = std::max (0, bandY - m - midY);
         const int colW = std::min (random_ ? 232 : 304, W / 4);
         display_ = { rect_.x + m, midY, W - 3 * m - colW, midH };
-        // the picker: three rows of cells (the 13 shapes in five columns; the five styles in two columns fill the height); under it, one row of SMOOTH and HOST
+        // the picker: three rows of cells (the 13 shapes in five columns; the five styles in two columns fill the height); under it, HOST
         const int rowsP = random_ ? 1 : 3, pickerH = random_ ? midH : rowsP * 56;
         picker.place ({ rect_.right() - m - colW, midY, colW, pickerH });
         {
-            const int by = midY + pickerH + 15, bh = 56, hw = (colW - kGap) / 2;
-            smoothPick.place ({ picker.rect().x, by, hw, bh });
-            hostPick.place ({ picker.rect().x + hw + kGap, by, colW - hw - kGap, bh });
+            const int by = midY + pickerH + 15, bh = 56;
+            hostPick.place ({ picker.rect().x, by, colW, bh });
         }
         // the blocks of the bottom band
         const int n = random_ ? 1 : 3;   // the key follow has no block of its own: its two numbers stand in the RATE block
@@ -385,6 +401,7 @@ protected:
             const int sx = in0.x + rw + kGap, sw = in0.w - rw - kGap;
             medium (rise, { sx, in0.y, sw, kKnobH });
             medium (smoothTime, { sx, in0.bottom() - kKnobH, sw, kKnobH });
+            smoothSwitch.follow (smoothTime);
 
             // TIMING: at the left HZ / BPM / KEY (a LED list of three rows) with the trigger MODE (a stepper: six long names) under it; at the right PHASE over DELAY (medium knobs: the same size as RISE and SMOOTH).
             // The chips read top to bottom: SYNC, PHASE, DELAY, MODE

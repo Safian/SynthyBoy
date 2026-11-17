@@ -294,12 +294,15 @@ void testViews()
                    nm + ": group 1 is the HZ / BPM / KEY list, phase, delay, mode (the reading order of the block; no second SYNC stepper)");
             check (f.syncSwitch.mode.rect().y == f.phase.rect().y && f.phase.rect().y < f.delay.rect().y && f.delay.rect().y < f.mode.rect().y && f.mode.rect().x == f.syncSwitch.mode.rect().x, nm + ": the chips of TIMING read top to bottom: SYNC and PHASE on one line, DELAY, MODE");
             check (f.direction.rect().y == f.swing.rect().y && f.swing.rect().y < f.stereo.rect().y && f.stereo.rect().y < f.monoQ.rect().y, nm + ": the chips of MOTION read top to bottom: DIRECTION and SWING on one line, STEREO, MONO");
-            check (f.smoothPick.rect().y == f.hostPick.rect().y && f.smoothPick.rect().h >= 56 && f.hostPick.rect().h >= 56 && f.bar.rect().h >= 56 && InstanceBar::kCellW >= 56, nm + ": SMOOTH and HOST are LED toggles in one row, the instance cells are 56 px or more");
+            check (f.hostPick.rect().h >= 56 && f.hostPick.rect().y > f.picker.rect().bottom() && f.bar.rect().h >= 56 && InstanceBar::kCellW >= 56, nm + ": HOST is a LED toggle under the picker (SMOOTH is the LED on the label of its time knob), the instance cells are 56 px or more");
+            check (f.smoothTime.state.led && f.smoothTime.ledHit().h >= 56 && f.smoothTime.ledHit().w >= 80 && f.rect().contains (f.smoothTime.ledHit()), nm + ": the SMOOTH knob has the LED on its label and a switch zone of at least 56 px");
             check (f.groups[iM].member (0) == &f.direction && f.groups[iM].member (1) == &f.swing &&
                    f.groups[iM].member (2) == &f.stereo && f.groups[iM].member (3) == &f.monoQ,
                    nm + ": group MOTION is direction, swing, stereo, mono");
-            check (f.groups[iS].member (0) == &f.smoothPick && f.groups[iS].member (1) == &f.hostPick,
-                   nm + ": group SHAPE is smooth, host");
+            check (f.groups[iS].member (0) == &f.hostPick && f.groups[iS].member (1) == &f.smoothSwitch && f.groups[iS].numMembers() == 2,
+                   nm + ": group SHAPE is host and the Q member of the SMOOTH switch (the LED on the label of the SMOOTH knob, which is a member of the first group)");
+            check (f.smoothSwitch.rect().y >= f.smoothTime.rect().y && f.smoothSwitch.rect().x > f.smoothTime.rect().x && f.smoothTime.rect().contains (f.smoothSwitch.rect()) && f.smoothSwitch.touchDown (f.smoothSwitch.rect().x + 2, f.smoothSwitch.rect().y + 2, 0.0).kind == ChangeKind::None,
+                   nm + ": the switch's Q member stands on the SMOOTH knob and takes no touch (the label is the touch)");
             check (f.rate.rate.state.large, nm + ": rate knob is large");
             check (f.rise.rect().h == f.smoothTime.rect().h && f.rise.rect().h == f.phase.rect().h &&
                    f.rise.rect().h == f.delay.rect().h && f.rise.rect().h == f.swing.rect().h &&
@@ -312,10 +315,10 @@ void testViews()
             f.touchDown (f.block (1).x + 10, f.block (1).y + 10, 0.0);
             f.touchUp (f.block (1).x + 10, f.block (1).y + 10);
             check (f.activeGroup() == iT && f.groups[iT].active(), nm + ": tap on TIMING block makes it active");
-            // tap on smoothPick activates the SHAPE group
-            f.touchDown (cx (f.smoothPick), cy (f.smoothPick), 0.0);
-            f.touchUp (cx (f.smoothPick), cy (f.smoothPick));
-            check (f.activeGroup() == iS && f.groups[iS].active(), nm + ": tap on SMOOTH makes SHAPE active");
+            // a tap on hostPick activates the SHAPE group
+            f.touchDown (cx (f.hostPick), cy (f.hostPick), 0.0);
+            f.touchUp (cx (f.hostPick), cy (f.hostPick));
+            check (f.activeGroup() == iS && f.groups[iS].active(), nm + ": tap on HOST makes SHAPE active");
             f.touchDown (cx (f.keyTune), cy (f.keyTune), 0.0);
             f.touchUp (cx (f.keyTune), cy (f.keyTune));
             check (keyFollow == (f.activeGroup() == 1), nm + ": a touch on TUNE makes KEY the active group in the key follow sync (and is a touch on nothing without it)");

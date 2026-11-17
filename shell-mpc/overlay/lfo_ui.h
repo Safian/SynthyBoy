@@ -410,7 +410,7 @@ private:
         bind (kMonoTop, &full_.monoTop, T::Inert, "");
         bind (kTargets, &full_.targets, T::Inert, "");
         bind (kPicker, &full_.picker, T::Picker, rnd ? "style" : "shape");
-        bind (kSmoothPick, &full_.smoothPick, T::Toggle, rnd ? "" : "smooth");
+        bind (kSmoothPick, &full_.smoothSwitch, T::Toggle, rnd ? "" : "smooth");   // the Q member of the LED on the label of SMOOTH
         bind (kHostPick, &full_.hostPick, T::Toggle, rnd ? "" : "host");
         bind (kEdit, &full_.edit, T::Inert, "");
         bind (kStyle, &full_.style, T::Stepper, rnd ? "style" : "");
@@ -822,8 +822,9 @@ private:
             compact_.rate.rate.state.valueText[0] = full_.rate.rate.state.valueText[0] = '\0';
         const int smoothP = paramOf ("smooth");
         const bool smoothOn = smoothP < 0 || v.param (smoothP) >= 0.5f;
-        compact_.smoothTime.setEnabled (rnd_ == 0 && smoothOn);
-        full_.smoothTime.setEnabled (rnd_ == 0 && smoothOn);
+        compact_.smoothTime.state.ledOn = full_.smoothTime.state.ledOn = smoothOn;   // SMOOTH is ONE control: the time with the LED of the switch on its label (off: the knob is dim and takes only the switch)
+        compact_.smoothTime.setEnabled (rnd_ == 0);
+        full_.smoothTime.setEnabled (rnd_ == 0);
         for (const Item& it : items_)   // the rate knob's own enabled state is the control's (it is dim in the key follow mode)
             if (it.id == kRate && it.c != nullptr)
                 it.c->setEnabled (sm != ui::lfo::SyncMode::Key && it.param >= 0);
@@ -1414,7 +1415,12 @@ private:
         const synthyboy::ParamInfo& pi = uibind::info (p);
         switch (it.type)
         {
-            case T::Knob: if (c.kind == K::Value) uibind::writeNorm (v, p, c.value); break;
+            case T::Knob:
+                if (c.kind == K::Value)
+                    uibind::writeNorm (v, p, c.value);
+                else if (c.kind == K::Index && it.id == kSmoothTime)   // the LED on the label of SMOOTH: the switch of the smoothing, the time is the knob
+                    uibind::writePlain (v, paramOf ("smooth"), c.index != 0 ? 1.0 : 0.0);
+                break;
             case T::Number: if (c.kind == K::Index || c.kind == K::Value) uibind::writePlain (v, p, c.value); break;
             case T::Stepper:
                 if (c.kind == K::Index)
