@@ -331,8 +331,9 @@ $B/pad_pressure_host "$(pp_lib off)" own 0 > $B/pad-pressure-nodisplay.log 2>&1 
 $B/pad_pressure_host "$LIB" vital > $B/pad-pressure-vital.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-vital.log; echo "ACCEPT FAIL: pad_pressure_host (Vital engine)"; exit 1; }
 $B/pad_pressure_host "$(pp_lib padoff)" own off > $B/pad-pressure-off.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-off.log; echo "ACCEPT FAIL: pad_pressure_host (switched off)"; exit 1; }
 $B/pad_pressure_host "$OVLON" own overlay > $B/pad-pressure-ovlon.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-ovlon.log; echo "ACCEPT FAIL: pad_pressure_host with the overlay built in (Overlay Instance after the pad pressure parameters)"; exit 1; }
-grep -q "Pad Pressure Amount" "$(pp_lib on)" || { echo "ACCEPT FAIL: the pad pressure build has no pad pressure code"; exit 1; }
-grep -q "Pad Pressure Amount" "$(pp_lib padoff)" && { echo "ACCEPT FAIL: trace of the pad pressure in the build with SYNTHYBOY_MPC_PAD_PRESSURE=OFF"; exit 1; }
+# (the names are asked of the built plugin: the compiler may fold the literal into the copy, so no string of the binary says it)
+$B/host_sim "$(pp_lib on)" dump 2>/dev/null | grep -q "Pad Pressure Amount" || { echo "ACCEPT FAIL: the pad pressure build has no pad pressure code"; exit 1; }
+$B/host_sim "$(pp_lib padoff)" dump 2>/dev/null | grep -q "Pad Pressure Amount" && { echo "ACCEPT FAIL: trace of the pad pressure in the build with SYNTHYBOY_MPC_PAD_PRESSURE=OFF"; exit 1; }
 # callback statistics (SYNTHYBOY_MPC_CALLBACK_STATS, diagnostics): off in the default build (no trace of it in the module), on in the stats variant
 STATSLIB="$(find build-mpc-live-stats -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
 grep -q "dispatcher_opcodes:" "$STATSLIB" || { echo "ACCEPT FAIL: the stats variant has no host statistics (format 2)"; exit 1; }
