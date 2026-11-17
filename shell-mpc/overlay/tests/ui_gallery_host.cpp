@@ -323,7 +323,7 @@ void savePlay (const std::string& path, int highlight, GalleryInst& inst,
     pv.update (in);
     if (lfoSlot >= 10 && pv.lfoUi() != nullptr)
     {
-        pv.lfoUi()->selectSlot (lfoSlot, inst);
+        pv.lfoUi()->select (lfoSlot, inst);
     }
     in.nowMs = 1500.0;
     pv.update (in);
@@ -968,6 +968,7 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
             const int kind = ui::fxl::kKindSplitterLh + si;
             const int rack = ui::fxl::bandRack (kind, 0);
 
+            static const char* const kFxNames[14] = { "", "chorus", "compressor", "delay", "distortion", "eq", "filter", "flanger", "phaser", "reverb", "hyperdimension", "utility", "bode", "convolve" };
             for (int t = 1; t <= 13; ++t)
             {
                 const std::string baseName = "fx_" + std::string (kFxNames[t]) + "_" + kSplitKinds[si];
@@ -993,7 +994,7 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
                 GalleryRig<FxUi> rFx (inst, 1);
                 rFx.refresh (2);
 
-                if (! rFx.ui.screen().slotEditor.bands.lane[0].cards.empty())
+                if (! rFx.ui.screen().slotEditor.bands.lane[0].cards[0].rect().empty())
                 {
                     rFx.tap (rFx.ui.screen().slotEditor.bands.lane[0].cards[0]);
                     rFx.refresh (2);

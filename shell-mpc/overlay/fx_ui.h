@@ -907,7 +907,6 @@ private:
             }
             list_.state.current = curChoice;
         }
-        list_.state.current = curChoice;
         const int popW = std::clamp (screen_.slotEditor.steppers[p].rect().w, 240, 360);
         const int popH = std::min (9, list_.state.count) * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad;
         const ui::Rect btn = screen_.slotEditor.steppers[p].rect();

@@ -42,6 +42,8 @@ namespace synthyboy_mpc { namespace overlay {
 class LfoUi
 {
 public:
+    /** Selects LFO 1 .. 10 or RND 1 .. 4 (0 .. 13) without a touch: the gallery and the tests. */
+    void select (int s, IInstanceView& v) { selectSlot (s, v); }
     // ---- the pages (UiStack ids)
     static constexpr int kElementPage = 3;                                    // the page of an LFO tab is the full screen of the element (page_view.h)
     static constexpr int kElementLfo = 3;                                     // the full screen of the LFO (the oscillator is 1, the envelope 2)

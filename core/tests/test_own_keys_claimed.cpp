@@ -334,3 +334,72 @@ TEST (own_no_smoothing_reaches_the_serum_filters_and_the_fx_filter)
         CHECK (jump < 0.5 * smooth); // the closed filter is there in the first block
     }
 }
+
+// quality.no_smoothing on ALL sixteen effect types (the thirteen modules and the three splitters of the chain): one parameter of each is stepped after a held note has run for a while, and the change has to
+// show in the FIRST block. R = (first block after the step - first block without the step) / (first block of an engine that had the new value from the start - first block without the step): 1 when the new
+// value is there at once, near 0 when a smoother still ramps. An effect whose step is inaudible in this setup is reported as "inconclusive" and not checked. Every effect that still smooths is named in the output.
+TEST (own_no_smoothing_reaches_every_effect_type)
+{
+    struct Fx { const char* name; std::vector<Setting> setup; const char* key; float from, to; };
+    const std::vector<Fx> fxs = {
+        { "chorus", { { "chorus.on", 1 }, { "chorus.depth", 100 } }, "chorus.mix", 0, 100 },
+        { "compressor", { { "compressor.on", 1 }, { "compressor.low.lower_threshold", -60 }, { "compressor.low.upper_threshold", -50 }, { "compressor.low.lower_ratio", 0 }, { "compressor.low.upper_ratio", 100 } }, "compressor.mix", 0, 100 },
+        { "delay", { { "delay.on", 1 }, { "delay.sync", 0 }, { "delay.time", 3 }, { "delay.time2", 3 }, { "delay.feedback", 0 } }, "delay.mix", 0, 100 },
+        { "distortion", { { "distortion.on", 1 }, { "distortion.type", 1 }, { "distortion.drive", 24 } }, "distortion.mix", 0, 100 },
+        { "eq", { { "eq.on", 1 }, { "eq.low.cutoff", 400 } }, "eq.low.gain", 0, 24 },
+        { "fxfilter", { { "fxfilter.on", 1 }, { "fxfilter.model", 3 }, { "fxfilter.cutoff", 18000 } }, "fxfilter.cutoff", 18000, 150 },
+        { "flanger", { { "flanger.on", 1 }, { "flanger.feedback", 70 } }, "flanger.mix", 0, 100 },
+        { "phaser", { { "phaser.on", 1 }, { "phaser.feedback", 70 } }, "phaser.mix", 0, 100 },
+        { "reverb", { { "reverb.on", 1 }, { "reverb.decay", 800 } }, "reverb.mix", 0, 100 },
+        { "hyperdim", { { "hyperdim.on", 1 }, { "hyperdim.detune", 100 } }, "hyperdim.mix", 0, 100 },
+        { "utility", { { "utility.on", 1 } }, "utility.hpf", 20, 3000 },
+        { "bode", { { "bode.on", 1 }, { "bode.range", 400 } }, "bode.shift", 0, 100 },
+        { "convolve", { { "convolve.on", 1 } }, "convolve.tone", 0, 100 },
+        { "splitter_lh", { { "splitter_lh.on", 1 }, { "splitter_lh.freq", 600 } }, "splitter_lh.low_bypass", 0, 1 },
+        { "splitter_lmh", { { "splitter_lmh.on", 1 } }, "splitter_lmh.mid_bypass", 0, 1 },
+        { "splitter_ms", { { "splitter_ms.on", 1 } }, "splitter_ms.side_bypass", 0, 1 },
+    };
+    auto firstBlock = [] (const Fx& fx, float startValue, bool step)
+    {
+        std::vector<Setting> st = plus (plus (base (1), { { "quality.no_smoothing", 1 } }), fx.setup);
+        st.push_back ({ fx.key, startValue });
+        auto e = make (st);
+        std::vector<float> l (256), r (256);
+        Event ev[1] = { sbtest::noteOn (0, 52) };
+        e->process (ev, 1, l.data(), r.data(), 256);
+        for (int k = 0; k < 12; ++k)
+            e->process (nullptr, 0, l.data(), r.data(), 256);
+        if (step)
+            e->setParam (findParamByKey (fx.key)->id, fx.to);
+        e->process (nullptr, 0, l.data(), r.data(), 256);
+        return l;
+    };
+    auto rmsDiff = [] (const std::vector<float>& a, const std::vector<float>& b)
+    {
+        double acc = 0.0;
+        for (size_t i = 0; i < a.size(); ++i)
+            acc += (static_cast<double> (a[i]) - b[i]) * (static_cast<double> (a[i]) - b[i]);
+        return std::sqrt (acc / static_cast<double> (a.size()));
+    };
+    std::string smoothing;
+    for (const Fx& fx : fxs)
+    {
+        if (findParamByKey (fx.key) == nullptr) { CHECK (false); continue; }
+        const auto stepped = firstBlock (fx, fx.from, true), held = firstBlock (fx, fx.from, false), fromStart = firstBlock (fx, fx.to, false);
+        double level = 1.0e-9;
+        for (float v : held) level = std::max (level, static_cast<double> (std::fabs (v)));
+        const double target = rmsDiff (fromStart, held), got = rmsDiff (stepped, held);
+        if (target < 0.01 * level)
+        {
+            std::printf ("    %-12s %s %g -> %g: inconclusive (the step changes the first block by %.4f of the peak)\n", fx.name, fx.key, fx.from, fx.to, target / level);
+            continue;
+        }
+        const double ratio = got / target;
+        std::printf ("    %-12s %s %g -> %g: the new value is %.0f %% there in the first block\n", fx.name, fx.key, fx.from, fx.to, 100.0 * ratio);
+        if (ratio < 0.5)
+            smoothing += std::string (smoothing.empty() ? "" : ", ") + fx.name;
+        CHECK (ratio >= 0.5);
+    }
+    if (! smoothing.empty())
+        std::printf ("    STILL SMOOTHING with quality.no_smoothing on: %s\n", smoothing.c_str());
+}
