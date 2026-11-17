@@ -1291,6 +1291,36 @@
    "",
    "",
    ""
+  ],
+  "Shepard Ascent": [
+   "Bright",
+   "Climb Speed",
+   "Thin",
+   "Space",
+   "Drift",
+   "",
+   "",
+   ""
+  ],
+  "Lorenz Garden": [
+   "Bright",
+   "Wander Speed",
+   "Sparkle",
+   "Echo",
+   "Depth",
+   "",
+   "",
+   ""
+  ],
+  "Breath of Machines": [
+   "Vowel",
+   "Breath Rate",
+   "Hum",
+   "Room",
+   "Stutter",
+   "",
+   "",
+   ""
   ]
  }
 }
