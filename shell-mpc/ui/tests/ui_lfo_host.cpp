@@ -457,6 +457,33 @@ void testDisplay()
     lfodisplay::draw (s2.builder(), r, rnd);
     lfodisplay::drawLive (s2.builder(), r, rnd);
     check (! s2.overflow(), "display: the trace of a random LFO fits one scene");
+    {   // a random LFO at rest (nothing sounds: a flat trace) shows the dim picture of its style, not a bare line: every style has a path that moves, and the picture differs from the bare line and between styles
+        float flat[192] = {};
+        float lo[5], hi[5];
+        bool bounded = true;
+        for (int st = 0; st < 5; ++st)
+        {
+            lo[st] = 9.0f; hi[st] = -9.0f;
+            for (int i = 0; i <= 64; ++i)
+            {
+                const float y = lfodisplay::restPath (st, static_cast<float> (i) / 64.0f);
+                lo[st] = std::min (lo[st], y); hi[st] = std::max (hi[st], y);
+                bounded = bounded && std::fabs (y) <= 1.0f;
+            }
+        }
+        check (bounded && hi[0] - lo[0] > 0.5f && hi[1] - lo[1] > 0.5f && hi[2] - lo[2] > 0.5f && hi[3] - lo[3] > 0.5f && hi[4] - lo[4] > 0.5f, "display: the rest path of each of the five styles moves over at least a quarter of the height and stays inside it");
+        lfodisplay::Data fl;
+        fl.kind = lfodisplay::Data::Kind::Random;
+        fl.trace = flat; fl.traceN = 192;
+        Scene sa (760, 340, 0x0b1026ffu), sb (760, 340, 0x0b1026ffu), sc2 (760, 340, 0x0b1026ffu);
+        lfodisplay::draw (sa.builder(), r, fl);
+        fl.style = 1;
+        lfodisplay::draw (sb.builder(), r, fl);
+        fl.style = 3;
+        lfodisplay::draw (sc2.builder(), r, fl);
+        const Image ia = render (sa), ib = render (sb), ic = render (sc2);
+        check (ia.px != ib.px && ib.px != ic.px, "display: at rest the picture follows the style (the bare line of no style, S & H, Lorenz differ)");
+    }
     // the reduced tier of detail: less is drawn (no lead-in, no area, two cursors)
     theme::setDetail (2);
     Scene sr (760, 340, 0x0b1026ffu);

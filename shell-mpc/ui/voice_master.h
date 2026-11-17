@@ -692,7 +692,7 @@ protected:
         }
         {   // MPE: MPE, MPE BEND, XYZ TO MACROS (three options side by side); Y TO WHEEL, BEND TO X, Y BIPOLAR under them
             const Rect in = inner (6);
-            const int rowH = std::max (th, std::min (96, in.h - lane - th)), cw = (in.w - 2 * g) / 3;
+            const int rowH = std::max (th, in.h - lane - th), cw = (in.w - 2 * g) / 3;   // the first row takes the room, the three switches stand at the bottom (no empty strip under them)
             mpeOn.place ({ in.x, in.y, cw, rowH });
             mpeBend.place ({ in.x + cw + g, in.y, cw, rowH });
             mpeMacro.place ({ in.x + 2 * (cw + g), in.y, in.right() - (in.x + 2 * (cw + g)), rowH });

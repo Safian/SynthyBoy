@@ -947,6 +947,12 @@ private:
             }
             d.trace = trace_;
             d.traceN = kTracePoints;
+            d.style = static_cast<int> (std::lround (v.param (paramOf ("style"))));
+            if (d.style != styleSeen_)   // the picture of a style at rest changes with the style
+            {
+                styleSeen_ = d.style;
+                changed = true;
+            }
         }
         if (changed)
             displayChangedMs_ = nowMs;
@@ -1534,6 +1540,7 @@ private:
     std::shared_ptr<const synthyboy::StateContent> content_, contentSeen_;
     float curve_[kCurvePoints] = {};
     float trace_[kTracePoints] = {};
+    int styleSeen_ = -1;
     ui::lfodisplay::Data data_;
 };
 
