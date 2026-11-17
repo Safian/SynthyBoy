@@ -121,16 +121,16 @@ class TestNaming(unittest.TestCase):
             ]
         )
 
-    def test_all_136_factory_presets_planned_with_valid_browser_categories(self):
+    def test_all_160_factory_presets_planned_with_valid_browser_categories(self):
         presets_dir = REPO / "content" / "presets"
         cats = gen.preset_categories(presets_dir)
-        self.assertEqual(len(cats), 136)
+        self.assertEqual(len(cats), 160)
         chunks = [(name, b"{}") for name in sorted(cats.keys())]
         rows = gen.plan(chunks, presets_dir, categories_file=gen.CATEGORIES_FILE)
-        self.assertEqual(len(rows), 136)
+        self.assertEqual(len(rows), 160)
 
-        # Check sequential numbering 000..135
-        self.assertEqual([r[0] for r in rows], list(range(136)))
+        # Check sequential numbering 000..159
+        self.assertEqual([r[0] for r in rows], list(range(160)))
 
         # Check that no category word contains slash and all match valid group names
         for number, folder, cword, name, chunk in rows:

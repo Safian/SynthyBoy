@@ -71,6 +71,10 @@
       "group": "Texture",
       "why": "Slow metallic feedback drone through Bode frequency shifter"
     },
+    "Bowed MPE Strings": {
+      "group": "Strings+Brass",
+      "why": "Expressive bowed string ensemble with pad pressure vibrato"
+    },
     "Bowed Pressure Strings": {
       "group": "Strings+Brass",
       "why": "Expressive bowed string ensemble with pad pressure vibrato"
@@ -78,6 +82,14 @@
     "Brass Swell Ensemble": {
       "group": "Strings+Brass",
       "why": "3-oscillator swelling brass ensemble with filter dynamics"
+    },
+    "Breakbeat Slice Keys": {
+      "group": "Keys",
+      "why": "Breakbeat-sliced sample keys with parallel crush"
+    },
+    "Breath Flute Lead": {
+      "group": "Lead Synth",
+      "why": "Breath-based flute lead using sample oscillator"
     },
     "Breath of Machines": {
       "group": "Texture",
@@ -94,6 +106,10 @@
     "Chime Drop": {
       "group": "Bells+Mallets",
       "why": "Delicate falling metallic glass chime cluster"
+    },
+    "Chord Cloud Pad": {
+      "group": "Pad Evolving",
+      "why": "Granular cloud pad with four-chord progression drift"
     },
     "Chorused Saw Solo": {
       "group": "Lead Synth",
@@ -167,6 +183,10 @@
       "group": "Lead Synth",
       "why": "Distorted resonant peak filter industrial synth lead"
     },
+    "Drawbar Organ Keys": {
+      "group": "Keys",
+      "why": "Drawbar organ emulation using wavetable oscillator"
+    },
     "Dream Grand Piano": {
       "group": "Keys",
       "why": "Acoustic grand piano style dynamic keyboard"
@@ -174,6 +194,10 @@
     "Dual Octave Hero": {
       "group": "Lead Synth",
       "why": "Heroic stacked octave dual sawtooth anthem lead"
+    },
+    "Dusty Rhodes Keys": {
+      "group": "Keys",
+      "why": "Dusty keys emulation with sampled Rhodes"
     },
     "Dyno Electric Piano": {
       "group": "Keys",
@@ -219,6 +243,10 @@
       "group": "Pad Evolving",
       "why": "Cold crystalline northern lights atmospheric soundscape"
     },
+    "Frozen Pluck Drone": {
+      "group": "Pad Evolving",
+      "why": "Frozen granular pluck drone"
+    },
     "Game Over Zap": {
       "group": "FX",
       "why": "Retro 8-bit arcade explosion zap one-shot"
@@ -231,9 +259,21 @@
       "group": "Keys",
       "why": "Crystalline cathedral glass church organ"
     },
+    "Glass Ping Pluck": {
+      "group": "Pluck",
+      "why": "Glassy plucked sound using sampled glass"
+    },
+    "Glass Zone Bells": {
+      "group": "Bells+Mallets",
+      "why": "Struck glass bell multisample with Hirajoshi scale"
+    },
     "Golden Dawn Pad": {
       "group": "Pad Warm",
       "why": "Peaceful warm morning dawn analog pad"
+    },
+    "Gong Grain Swarm": {
+      "group": "FX",
+      "why": "Inharmonic metallic grain swarm effect"
     },
     "Gritty Square Bass": {
       "group": "Bass Synth",
@@ -287,6 +327,10 @@
       "group": "Pluck",
       "why": "Karplus-Strong physical string model excited by noise burst"
     },
+    "Ladder FM Bass": {
+      "group": "Bass Synth",
+      "why": "FM bass with ladder filter"
+    },
     "Laser Beam Lead": {
       "group": "Lead Sync+FM",
       "why": "Futuristic cutting sync and warp modulation laser lead"
@@ -303,9 +347,9 @@
       "group": "Pad Warm",
       "why": "Warm enveloping classic analog string/synth pad"
     },
-    "MPE Pressure Lead": {
-      "group": "Lead Synth",
-      "why": "Expressive MPE solo lead with per-note pressure filter modulation"
+    "Marimba Layer Keys": {
+      "group": "Bells+Mallets",
+      "why": "Multisampled marimba layers"
     },
     "Marimba Synth": {
       "group": "Bells+Mallets",
@@ -327,6 +371,10 @@
       "group": "Bass Synth",
       "why": "Vintage analog ladder filter round bass"
     },
+    "MPE Pressure Lead": {
+      "group": "Lead Synth",
+      "why": "Expressive MPE solo lead with per-note pressure filter modulation"
+    },
     "Muted Honky Tonk": {
       "group": "Keys",
       "why": "Saloon-style upright piano with detuned unison tines"
@@ -334,6 +382,10 @@
     "Noise Riser": {
       "group": "FX",
       "why": "Filtered white noise transitional build-up riser"
+    },
+    "Nylon Zone Pluck": {
+      "group": "Pluck",
+      "why": "Nylon plucked multisample"
     },
     "Odd Harmonics Bass": {
       "group": "Bass Synth",
@@ -364,7 +416,7 @@
       "why": "Orchestral string section short plucked pizzicato"
     },
     "Plucked Lead Tone": {
-      "group": "Pluck",
+      "group": "Lead Synth",
       "why": "Hybrid fast pluck transient with sustained body"
     },
     "Pulse Width Bass": {
@@ -383,9 +435,21 @@
       "group": "Sequence",
       "why": "Pulsing rhythmic pad with tempo-synced chord pulse"
     },
+    "Reese Dual Phase Bass": {
+      "group": "Bass Reese",
+      "why": "Dual-phase reese bass using wavetables"
+    },
+    "Reverse Gong Swell": {
+      "group": "FX",
+      "why": "Reversed gong swell effect"
+    },
     "Ring Mod Gamelan": {
       "group": "Bells+Mallets",
       "why": "Inharmonic metallic gamelan bar strike with ring modulation"
+    },
+    "Rising Grain Riser": {
+      "group": "FX",
+      "why": "Rising granular riser effect"
     },
     "Rotary Rock Organ": {
       "group": "Keys",
@@ -439,6 +503,22 @@
       "group": "Bass Reese",
       "why": "Dub-style wobble bass with LFO-modulated lowpass cutoff"
     },
+    "Spectral Bowed Glass": {
+      "group": "Lead Synth",
+      "why": "Spectral bowed glass lead"
+    },
+    "Spectral Chord Morph": {
+      "group": "FX",
+      "why": "Spectral chord morphing effect"
+    },
+    "Spectral Gong Pad": {
+      "group": "Pad Evolving",
+      "why": "Spectral gong pad"
+    },
+    "Spectral Vowel Freeze": {
+      "group": "Pad Evolving",
+      "why": "Spectral vowel freezing pad"
+    },
     "Spruce Guitar": {
       "group": "Pluck",
       "why": "Clean acoustic guitar pluck with warm spruce resonance"
@@ -454,6 +534,10 @@
     "Stretched Glass Choir": {
       "group": "Pad Evolving",
       "why": "Spectral-stretched partials drifting across random LFOs"
+    },
+    "Stutter Grain Kit": {
+      "group": "Pluck",
+      "why": "Stutter grain drum kit"
     },
     "Sub Drop Boom": {
       "group": "FX",
@@ -482,6 +566,10 @@
     "Tempo Gate Chords": {
       "group": "Sequence",
       "why": "Chords rhythmic chopped by a 16-step tempo-synced gate LFO"
+    },
+    "Throat Singer Drone": {
+      "group": "Pad Evolving",
+      "why": "Throat singer drone"
     },
     "Tine Glass Keys": {
       "group": "Keys",
@@ -542,6 +630,14 @@
     "Vowel Choir Pad": {
       "group": "Pad Warm",
       "why": "Synthetic choral pad with warm formant vowel blending"
+    },
+    "Vowel Scrub Choir": {
+      "group": "Lead Synth",
+      "why": "Formant-scrubbing choir lead"
+    },
+    "Vowel Table Lead": {
+      "group": "Lead Synth",
+      "why": "Vocal vowel lead using wavetables"
     },
     "Vowel Whistle Lead": {
       "group": "Lead Synth",

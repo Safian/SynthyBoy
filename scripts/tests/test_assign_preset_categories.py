@@ -34,7 +34,7 @@ class TestCheckRealData(unittest.TestCase):
         groups = data.get("groups", [])
         presets = data.get("presets", {})
         self.assertLessEqual(len(groups), apc.MAX_GROUPS)
-        self.assertEqual(len(presets), 136)
+        self.assertEqual(len(presets), 160)
 
         counts = {g: 0 for g in groups}
         for name, entry in presets.items():
@@ -172,7 +172,7 @@ class TestCommandLineInterface(unittest.TestCase):
             text=True,
         )
         self.assertEqual(res.returncode, 0)
-        self.assertIn("Category suggestions for 136 presets:", res.stdout)
+        self.assertIn("Category suggestions for 160 presets:", res.stdout)
 
 
 if __name__ == "__main__":

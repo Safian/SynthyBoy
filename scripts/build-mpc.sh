@@ -23,10 +23,6 @@
 #   --release        the public release: -DSYNTHYBOY_MPC_DEV_LOG=OFF (no developer log, no diagnostic files in /tmp; the plugin binary holds no log tag: `strings synthyboy-*.so | grep -c "mpckit\|startup"`
 #                    style checks are in docs/ui-components/LOGGING.md). Without it the build is what it always was (log and files on).
 #   --no-validate    skip the SDK validator at the end (for tests without binaries)
-#   --xpl-presets P  preset browser (.xpl) generation: xl, k61, both, or off (default: xl)
-#   --dump-tool P    path to native dump_mpc_chunks tool (default: auto-detected from build-native / build)
-#   --dump-plugin P  path to native synthyboy_mpc library for the dump tool (default: auto-detected)
-#   --chunks DIR     path to directory of pre-dumped preset chunks (bypasses dump-tool)
 #
 # Environment: MPC_SDK (required: path to the MPC plugin SDK), MPC_BUILD_IMAGE or ARMV7_IMAGE (the Docker image; default: the pinned Debian 12 image below;
 # an image that already has the cross compilers skips the apt-get step), MPC_DOCKER (the docker command, default: docker).
@@ -52,11 +48,6 @@ with_bench=0
 release=0
 validate=1
 cmake_args=()
-xpl_presets="xl"
-dump_tool=""
-dump_plugin=""
-chunks_dir=""
-XPL_PATH_MODE="${XPL_PATH_MODE:-shared}"
 image="${MPC_BUILD_IMAGE:-${ARMV7_IMAGE:-$IMAGE_DEFAULT}}"
 docker_cmd="${MPC_DOCKER:-docker}"
 
@@ -64,7 +55,7 @@ usage() { sed -n '/^# Usage/,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; 
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --arch|--out|--jobs|--build-dir|--skins|--skin-layout|--cmake-arg|--xpl-presets|--dump-tool|--dump-plugin|--chunks)
+        --arch|--out|--jobs|--build-dir|--skins|--skin-layout|--cmake-arg)
             [[ $# -ge 2 ]] || { echo "$me: $1 needs a value" >&2; exit 2; }
             case "$1" in
                 --arch) arch="$2" ;;
@@ -73,10 +64,6 @@ while [[ $# -gt 0 ]]; do
                 --build-dir) build_dir="$2" ;;
                 --skins) skins_dir="$2" ;;
                 --skin-layout) skin_layout="$2" ;;
-                --xpl-presets) xpl_presets="$2" ;;
-                --dump-tool) dump_tool="$2" ;;
-                --dump-plugin) dump_plugin="$2" ;;
-                --chunks) chunks_dir="$2" ;;
                 --cmake-arg)
                     case "$2" in
                         -D?*|-U?*|-G?*|-T?*|-A?*) ;;
@@ -102,18 +89,6 @@ case "$arch" in
     all) archs=(arm32 arm64) ;;
     *) echo "$me: --arch must be arm32, arm64 or all (got: $arch)" >&2; exit 2 ;;
 esac
-case "$xpl_presets" in
-    xl|k61|both|off) ;;
-    *) echo "$me: --xpl-presets must be xl, k61, both or off (got: $xpl_presets)" >&2; exit 2 ;;
-esac
-if [[ -n "$dump_tool" && ! -f "$dump_tool" ]]; then
-    echo "$me: --dump-tool: file not found: $dump_tool" >&2
-    exit 2
-fi
-if [[ -n "$chunks_dir" && ! -d "$chunks_dir" ]]; then
-    echo "$me: --chunks: directory not found: $chunks_dir" >&2
-    exit 2
-fi
 if [[ -n "$skins_dir" && ! -d "$skins_dir" ]]; then echo "$me: --skins: not a directory: $skins_dir" >&2; exit 2; fi
 [[ "$jobs" =~ ^[0-9]+$ && "$jobs" -ge 1 ]] || { echo "$me: --jobs needs a positive number" >&2; exit 2; }
 
