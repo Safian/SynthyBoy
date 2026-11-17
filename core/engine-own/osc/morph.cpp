@@ -173,7 +173,9 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
         }
         case kMorphSmear:
         {
-            const float mp = 1.0f - (1.0f - m) * (1.0f - m) * (1.0f - m);
+            // m' = 1 at the end of the range leaves no memory of the input at all (a = A (1 - m') = 0 for ever: silence): the leak is capped at 0.999 so that the
+            // top of the range is the strongest smear, not nothing (still a heavy low-pass-like smear, about -28 dB under the dry saw at 64 harmonics)
+            const float mp = std::min (1.0f - (1.0f - m) * (1.0f - m) * (1.0f - m), 0.999f);
             float acc = 0.0f;
             for (int i = 1; i <= K; ++i)
             {
@@ -193,15 +195,51 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
             const int j = std::min (static_cast<int> (q), 14);
             const float t = q - static_cast<float> (j);
             const Twiddles& T = tw();
-            for (int i = 1; i <= K; ++i)
+            auto gain = [&] (int i) noexcept
             {
                 const float g0 = (1.0f + q) * std::max(1.0f - q - q * T.rnd[j][i], 0.0f);
                 const float g1 = (1.0f + q) * std::max(1.0f - q - q * T.rnd[j + 1][i], 0.0f);
-                const float g = lerp (g0, g1, t);
+                return lerp (g0, g1, t);
+            };
+            // The deletion is random per harmonic, so on a table with few partials the level jumped from -73 dB (every partial deleted) to +6 dB from one step of the amount
+            // to the next. The morph changes the spectrum, not the loudness: the energy of the harmonics 1 .. K is kept at the dry value, and if the draw deletes every
+            // partial the strongest one is kept (q = 0, no deletion yet: the gains are 1 and the samples are those of the plain table).
+            float scale = 1.0f;
+            int keep = 0;
+            if (q > 0.0f)
+            {
+                float eIn = 0.0f, eOut = 0.0f, best = 0.0f;
+                for (int i = 1; i <= K; ++i)
+                {
+                    float c, s;
+                    src (i, c, s);
+                    const float e = c * c + s * s;
+                    const float ao = std::min (gain (i) * std::sqrt (e), 1024.0f);
+                    eIn += e;
+                    eOut += ao * ao;
+                    if (e > best)
+                    {
+                        best = e;
+                        keep = i;
+                    }
+                }
+                if (eOut > 1.0e-12f * eIn)
+                {
+                    scale = std::sqrt (eIn / eOut);
+                    keep = 0;
+                }
+                else if (best > 0.0f)
+                    scale = std::sqrt (eIn / best); // only `keep` survives, with gain 1
+                else
+                    keep = 0;
+            }
+            for (int i = 1; i <= K; ++i)
+            {
+                const float g = keep != 0 ? (i == keep ? 1.0f : 0.0f) : gain (i);
                 float c, s;
                 src (i, c, s);
                 const float amp = std::sqrt (c * c + s * s);
-                const float lim = amp > 1.0e-12f ? std::min (g * amp, 1024.0f) / amp : 0.0f;
+                const float lim = amp > 1.0e-12f ? std::min (g * scale * amp, 1024.0f) / amp : 0.0f;
                 put (i, c * lim, s * lim);
             }
             break;
@@ -210,7 +248,11 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
         case kMorphHighPass:
         {
             const bool hp = type == kMorphHighPass;
-            const float cut = std::exp2 (10.0f * m) * (hp ? 1025.0f / 1024.0f : 1.0f) + (hp ? 0.0f : 1.0f);
+            float cut = std::exp2 (10.0f * m) * (hp ? 1025.0f / 1024.0f : 1.0f) + (hp ? 0.0f : 1.0f);
+            // a high pass cutoff above the band limit of the voice (64 harmonics at 60 % is above the 42nd harmonic of a note above C5) removes every harmonic the note
+            // has: silence. The cutoff stops at the band limit K, so the top harmonic of the voice always remains (full gain at i = K)
+            if (hp)
+                cut = std::min (cut, static_cast<float> (std::max (K, 1)));
             const int fl = static_cast<int> (cut);
             const float fr = cut - static_cast<float> (fl);
             for (int i = 1; i <= K; ++i)

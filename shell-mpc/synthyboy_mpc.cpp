@@ -372,7 +372,15 @@ struct PluginInstance
 
     // Output stage: the make-up gain of the MPC shell (SYNTHYBOY_MPC_OUTPUT_GAIN_DB, set once in the constructor) and, only when built with SYNTHYBOY_MPC_OUTPUT_LIMITER, the peak limiter behind it.
     // Only the audio thread calls process(); prepare() runs with the engine's prepare (effMainsChanged, the host is not processing then).
-    synthyboy_mpc::OutputStage outputStage;
+    synthyboy_mpc::SwitchableOutputStage outputStage;
+    // The output limiter as a plugin setting (Master page, OUTPUT block, "LIMIT"; saved in the chunk as "mpcOutputLimiter"; docs/MPC.md "Output limiter"). Not an engine parameter and not a host
+    // parameter (the host's parameter count does not change). SYNTHYBOY_MPC_OUTPUT_LIMITER in the environment (or a build with it ON) forces the state for tests (output_stage.h).
+    std::atomic<bool> outputLimiter { synthyboy_mpc::kOutputLimiterDefaultOn };
+    void applyOutputLimiter() noexcept
+    {
+        const int forced = synthyboy_mpc::outputLimiterForced();
+        outputStage.setLimiter (forced >= 0 ? forced == 1 : outputLimiter.load (std::memory_order_relaxed));
+    }
 
     // ---- the life of the instance towards the host (robustness review F5, F12) ----
     // closing: effClose has begun. From that moment no thread of this instance calls the host (the gate below answers 0 at once), every loop of ours stops at its next look, and nothing new is started.
@@ -433,6 +441,16 @@ struct PluginInstance
         int contentLoad (std::string* message) const override { return inst.contentLoadState (message); }
         void setLfoShape (int lfo, const synthyboy::ContentLfoShape& shape) override { inst.requestLfoShape (lfo, shape); }
         void setMacroName (int macro, const std::string& name) override { inst.macroNameQueue.post (macro, name); }
+        bool outputLimiter (bool& on) const noexcept override
+        {
+            on = inst.outputStage.limiter();   // what the stage runs (the setting, or the state the environment forces)
+            return true;
+        }
+        void setOutputLimiter (bool on) noexcept override
+        {
+            inst.outputLimiter.store (on, std::memory_order_relaxed);
+            inst.applyOutputLimiter();
+        }
 #if SYNTHYBOY_MPC_PAD_PRESSURE
         bool padPressure (bool& on, float& percent) const noexcept override
         {
@@ -1439,6 +1457,7 @@ struct PluginInstance
         outputStage.prepare (sampleRate > 0.0 ? sampleRate : 44100.0);
         outputStage.setGainDb (static_cast<float> (SYNTHYBOY_MPC_OUTPUT_GAIN_DB));
         outputStage.reset();
+        applyOutputLimiter();
         // Create engine based on SYNTHYBOY_MPC_ENGINE_VITAL (from CMake) && SYNTHYBOY_HAS_VITAL (from core)
 #if SYNTHYBOY_MPC_ENGINE_VITAL && SYNTHYBOY_HAS_VITAL
         engine = synthyboy::createEngine(synthyboy::EngineKind::vital);
@@ -1604,6 +1623,7 @@ static std::string buildStateChunk (PluginInstance* inst)
         chunk = synthyboy_mpc::play::chunkWithPlay (std::move (chunk), sel);
     }
 #endif
+    chunk = synthyboy_mpc::chunkWithOutputLimiter (std::move (chunk), inst->outputLimiter.load (std::memory_order_relaxed));   // before the pad pressure members, which are read from the very end
 #if SYNTHYBOY_MPC_PAD_PRESSURE
     chunk = synthyboy_mpc::chunkWithPadPressure (std::move (chunk), inst->padPressure.load (std::memory_order_relaxed), inst->padPressureAmount.load (std::memory_order_relaxed));
 #endif
@@ -2180,6 +2200,15 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                             inst->playSetSelector (g, sel[g]);
                 }
 #endif
+                {
+                    // the output limiter setting rides in the chunk; a chunk without it (an older one) leaves the setting as it is (the default is on)
+                    bool limiterOn = inst->outputLimiter.load (std::memory_order_relaxed);
+                    if (synthyboy_mpc::outputLimiterFromChunk (chunk, static_cast<size_t>(size), limiterOn))
+                    {
+                        inst->outputLimiter.store (limiterOn, std::memory_order_relaxed);
+                        inst->applyOutputLimiter();
+                    }
+                }
 #if SYNTHYBOY_MPC_PAD_PRESSURE
                 {
                     // the player's pad setting rides in the chunk; a chunk without it (an older one) leaves the setting as it is

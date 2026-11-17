@@ -24,6 +24,7 @@ struct FxFrame
     double bpm = 120.0;
     int period = kControlPeriod;
     float lastNote = 60.0f;
+    uint32_t noteOns = 0;                // the number of notes started so far (Hyper and Bode retrigger on a change of it)
     double songBeats = 0.0;
     const ContentSet* content = nullptr; // the set this block reads (Convolve takes its impulse from it)
     bool lowCost = false;                // tier low: the cheaper forms of dsp/fastmath.h in the per sample code

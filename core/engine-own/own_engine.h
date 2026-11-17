@@ -90,6 +90,8 @@ private:
     Voice* pickVictim (bool includeKilling) noexcept;
     void applyAxes (int channel, int axis, float value) noexcept;
     void killExcess() noexcept;
+    /** sub.mono: the lowest tuned key note of the sounding voices (globals.lowestNote), read by the voices when they tick. */
+    void updateLowestNote() noexcept;
     void writeReadout() noexcept;
     void controlTick() noexcept;
     Voice* allocateVoice (bool legato) noexcept;
@@ -145,6 +147,8 @@ private:
     std::unique_ptr<spectral::Scratch> spectralScratch;
 
     std::vector<std::unique_ptr<Voice>> voices;
+    float heldSrc[kNumSourceIds] = {};   // the source values of the voice the global modulation read last (the held values while no voice sounds, document 04, 3.1)
+    bool heldSrcValid = false;
     std::vector<uint8_t> sustainPending;
     std::vector<float> base;       // snapshot of all parameters for the block
     // The snapshot, the compiled matrix and the tuning table are rebuilt only when something they read changed: every writer (setParam, content, tuning source) bumps
@@ -225,6 +229,7 @@ private:
     float lastVelocity = 0.0f;
     const int fxReverbForceIndex;
     const int fxOversampleIndex;
+    const int noSmoothingIndex;
     std::vector<float> scratchRight;
 };
 } // namespace own

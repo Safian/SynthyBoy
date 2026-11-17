@@ -41,7 +41,7 @@ routed to a filter whose `filterN.on` is 0 is added to the effects path instead 
 blend" splits the source between the two filters with an equal-power law, `g1 = cos(b pi/2)`, `g2 = sin(b pi/2)`, `b` = the source's
 `filter_blend` (0..1), ramped per chunk; a source whose blended filter is off passes its share to Effects. The bus sends
 (`bus1_send`, `bus2_send`, linear gain 0..1 ramped per chunk) tap the source after its level and pan whatever its destination is.
-Direct out bypasses the whole effect rack except what the rack puts behind (document 6). The `env1` button of a source (state
+Direct out bypasses the whole effect rack except what the rack puts behind (document 6); the master volume still scales it (document 6, section 10). The `env1` button of a source (state
 version 3) set to Off removes the amplitude multiplication for that source and routes it through a separate path that is multiplied
 by V*G squared only (no envelope), and keeps the voice alive until the longest enabled envelope has ended; with every button on
 (default) the baseline above holds exactly.

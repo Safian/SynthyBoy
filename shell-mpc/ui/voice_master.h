@@ -431,6 +431,7 @@ public:
     Knob spread { "SPREAD" };
     Knob stereoRouting { "STEREO" };   // master.stereo_routing is a continuous percentage: a knob, not a list
     LedList voiceOverride;
+    LedToggle outputLimiter;   // the output limiter of the plugin (a shell setting, not an engine parameter: no Q group); under the voice override
     // PITCH
     Knob tune { "TUNE" };
     NumberField transpose, bendUp, bendDown;
@@ -486,6 +487,7 @@ public:
         stealPriority.setTitle ("STEAL"); stealPriority.state.titleInLane = true;
         velocityTrack.state.format = NumberField::Format::IntSigned;
         velocityTrack.setLabel ("VEL TRACK");
+        outputLimiter.setLabel ("LIMIT");
         padPressure.setLabel ("PAD PRESS");
         padAmount.state.format = NumberField::Format::IntPlain;
         padAmount.setLabel ("PAD %");
@@ -632,7 +634,7 @@ public:
 protected:
     std::vector<Component*> sideMainComponents()
     {
-        return { &volume, &meters, &spread, &stereoRouting, &voiceOverride, &tune, &transpose, &bendUp, &bendDown, &bendLink, &polyphony, &legato, &polyLegato, &phaseLegato, &sameNote, &stealPriority, &velocityTrack, &voiceMeter, &padPressure, &padAmount,
+        return { &volume, &meters, &spread, &stereoRouting, &voiceOverride, &outputLimiter, &tune, &transpose, &bendUp, &bendDown, &bendLink, &polyphony, &legato, &polyLegato, &phaseLegato, &sameNote, &stealPriority, &velocityTrack, &voiceMeter, &padPressure, &padAmount,
                  &portaTime, &portaSlope, &portaAlways, &portaScaled, &portaCurve };
     }
     std::vector<Component*> sideTuningComponents()
@@ -656,6 +658,7 @@ protected:
             spread.place ({ kx + kw + g, in.y, kw, in.h });
             stereoRouting.place ({ kx + 2 * (kw + g), in.y, kw, in.h });
             voiceOverride.place ({ in.right() - lw, in.y, lw, std::min (in.h, 2 * 64) });
+            outputLimiter.place ({ in.right() - lw, in.y + std::max (std::min (in.h, 2 * 64), in.h - th), lw, th });   // LIMIT: under the voice override, at the bottom of the block (touch only: no Q slot)
         }
         {   // PITCH: one row of four cells at one height (TUNE as a medium knob with its text beside it, TRANSPOSE, BEND UP, BEND DOWN: PITCH 1 Q group), LINK as a LED toggle under the two bend fields (PITCH 2 Q group)
             const Rect in = inner (1);

@@ -336,6 +336,11 @@ Interpolation "of coefficients" means complex linear interpolation of `A P`.
 
 For all types, harmonic numbers above `K` are zero and the result goes through the usual inverse transform and 7 ms cross-fade.
 
+**Where the own engine departs from the table above (a range must not end in silence, measured: Smear at 100 %, High Pass from 60 % on a note above C5, Random Amplitudes -73 dB .. +6 dB):**
+* *Smear*: `m'` is capped at 0.999 (at `m' = 1` the input never enters `a`: silence). The top of the range is the heaviest smear, about -28 dB under the dry saw.
+* *High Pass*: the cutoff stops at the band limit `K` of the voice, so the top harmonic of the note always remains (a cutoff above `K` removes every harmonic: silence, by definition of a high pass; the range ends before it).
+* *Random Amplitudes*: the energy of the harmonics `1 .. K` is kept at the dry value for every `q > 0` (a gain `sqrt(E_in / E_out)`), and if the draw deletes every harmonic the strongest one is kept. The morph changes the spectrum, not the level; `q = 0` is the plain table. Test `own_morph_*` (`core/tests/test_own_morph_range.cpp`).
+
 **Better:** the morph types are the expensive part of this engine because they need an inverse DFT per rebuild per unison voice; with
 morph off the own engine can use precomputed mips.
 

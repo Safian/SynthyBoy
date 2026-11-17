@@ -52,7 +52,7 @@ public:
         // MPE
         kMpeOn = 150, kMpeBend, kMpeMacro, kMpeYModwheel, kMpeBendToX, kMpeYBipolar,
         // the plugin-wide pad pressure layer (shell parameters of the plugin, not of the engine: no Q group)
-        kPadPressure = 160, kPadAmount,
+        kPadPressure = 160, kPadAmount, kLimiter,
         kList = 700, kListBackdrop = 701
     };
 
@@ -98,6 +98,12 @@ public:
         full_.meters.peakR = pk;
         full_.meters.updateHold (lastMs_ > 0.0 ? static_cast<float> (nowMs - lastMs_) * 0.001f : 0.0f);
         lastMs_ = nowMs;
+        {   // the output limiter of the plugin (docs/MPC.md "Output limiter"): a shell setting, shown on or off as the stage runs it
+            bool on = false;
+            const bool have = inst.outputLimiter (on);
+            full_.outputLimiter.setEnabled (have);
+            full_.outputLimiter.state.on = on;
+        }
         {   // the pad pressure layer of the plugin (docs/MPC.md "Pad pressure"): off by default, the presets carry their own route
             bool on = false;
             float percent = 35.0f;
@@ -254,6 +260,7 @@ private:
         bind (kMpeYModwheel, &full_.mpeYModwheel, T::Toggle, "master.mpe.y_modwheel");
         bind (kMpeBendToX, &full_.mpeBendToX, T::Toggle, "master.mpe.bend_to_x");
         bind (kMpeYBipolar, &full_.mpeYBipolar, T::Toggle, "master.mpe.y_bipolar");
+        bind (kLimiter, &full_.outputLimiter, T::Inert, "");
         bind (kPadPressure, &full_.padPressure, T::Inert, "");
         bind (kPadAmount, &full_.padAmount, T::Inert, "");
         for (ui::Stepper* s : { &full_.scaleType, &full_.scaleKey })
@@ -344,6 +351,13 @@ private:
             if (listParam_ >= 0)
                 uibind::writePlain (inst, listParam_, ch.index);
             stack.back();
+            return;
+        }
+        if (ch.id == kLimiter)
+        {
+            bool on = false;
+            if (inst.outputLimiter (on) && ch.kind == ui::ChangeKind::Index)
+                inst.setOutputLimiter (ch.index != 0);
             return;
         }
         if (ch.id == kPadPressure || ch.id == kPadAmount)

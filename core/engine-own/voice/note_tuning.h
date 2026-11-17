@@ -84,6 +84,13 @@ public:
     /** Any thread. */
     void setSource (const tuning::ITuningSource* s) noexcept { source.store (s, std::memory_order_release); }
 
+    /** True while an MTS-ESP master is connected (any thread). */
+    bool mtsConnected() const noexcept
+    {
+        const tuning::ITuningSource* s = source.load (std::memory_order_acquire);
+        return s != nullptr && s->isConnected();
+    }
+
     /** Audio thread: fills `out[128]`. scaleChoice: 0 12-TET, 1 Pythagorean, 2 Just intonation, 3 User file. */
     void compute (float* out, int scaleChoice, float a4Hz, bool useMts) noexcept
     {

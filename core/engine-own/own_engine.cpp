@@ -86,7 +86,7 @@ inline float outputLimit (float y) noexcept
 }
 } // namespace
 
-OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable"))), fxOversampleIndex (findParamIndex (hashKey ("quality.oversample_4x")))
+OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable"))), fxOversampleIndex (findParamIndex (hashKey ("quality.oversample_4x"))), noSmoothingIndex (findParamIndex (hashKey ("quality.no_smoothing")))
 {
     for (int k = 0; k < 128; ++k)
         tunedNotes[k] = static_cast<float> (k);
@@ -314,6 +314,7 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     (void) WtOsc::decimatorTaps();
 
     voices.clear();
+    heldSrcValid = false;
     for (int i = 0; i < kPoolVoices; ++i)
     {
         voices.push_back (std::make_unique<Voice>());
@@ -387,6 +388,7 @@ void OwnEngine::reset()
         f.reset();
     clearLatencyDelays();
     mixCached = latCached = false;
+    heldSrcValid = false;
     for (int c = 0; c < numChannels; ++c)
     {
         bendSemis[c] = modWheel[c] = aftertouch[c] = 0.0f;
@@ -539,6 +541,15 @@ void OwnEngine::addGhosts (int n) noexcept
     }
 }
 
+void OwnEngine::updateLowestNote() noexcept
+{
+    float lowest = 1000.0f;
+    for (const auto& v : voices)
+        if (v->isActive() && !v->killing())
+            lowest = std::min (lowest, v->tunedKeyNote());
+    globals.lowestNote = lowest;
+}
+
 void OwnEngine::killExcess() noexcept
 {
     const int P = polyphonyLimit();
@@ -631,6 +642,7 @@ void OwnEngine::startNote (const Pressed& n, bool fromRecall, const Voice* relea
     // the phases the previous note (the voice that started last, the voice that is retaken included) has now, and whether its key is still held: the phase memory and the phase legato of the wavetable oscillators carry them over
     uint32_t prevPhase[3][Voice::kPhaseCount];
     bool havePrev = false, prevHeld = false;
+    float prevSubPhase = 0.0f;
     {
         const Voice* prev = nullptr;
         for (const auto& v : voices)
@@ -638,14 +650,19 @@ void OwnEngine::startNote (const Pressed& n, bool fromRecall, const Voice* relea
                 prev = v.get();
         havePrev = prev != nullptr;
         prevHeld = havePrev && !prev->isReleased();
+        if (havePrev)
+            prevSubPhase = prev->subPhase();
         for (int o = 0; havePrev && o < 3; ++o)
             prev->oscPhases (o, prevPhase[o]);
     }
     chosen->start (ns, chosen->lastL(), chosen->lastR());
     if (heldVoice != nullptr)
         chosen->inheritEnvelopes (*heldVoice);
+    updateLowestNote();
     chosen->tick (globals, static_cast<int> (std::find_if (voices.begin(), voices.end(), [&] (const auto& p) { return p.get() == chosen; }) - voices.begin()));
     applyPhaseOptions (*chosen, havePrev ? prevPhase : nullptr, prevHeld);
+    if (havePrev && paramIndex().sub.phaseContiguous >= 0 && base[static_cast<size_t> (paramIndex().sub.phaseContiguous)] >= 0.5f)
+        chosen->setSubPhase (prevSubPhase); // sub.phase_contiguous: the new note continues with the phase the previous one has (docs/engine-spec/02-oscillator.md section 9)
     for (int o = 0; o < 3; ++o)
         if (chosen->multisampleZone (o) >= 0)
         {
@@ -964,6 +981,7 @@ void OwnEngine::controlTick() noexcept
             effBend[c] = bendSemis[c] + (mpe && c > 0 ? bendSemis[0] : 0.0f);
     }
     globals.activeVoices = activeCount.load (std::memory_order_relaxed);
+    updateLowestNote();
     for (size_t i = 0; i < voices.size(); ++i)
         if (voices[i]->isActive())
             voices[i]->tick (globals, static_cast<int> (i));
@@ -1008,7 +1026,33 @@ void OwnEngine::controlTick() noexcept
     gsrc[kSrcFixed] = 1.0f;
     {
         EvalContext ctx;
-        ctx.src = newest != nullptr ? newest->sourceValues() : gsrc;
+        // A voice source on a global destination reads the most recently started active voice (a released voice that still sounds counts); with no active voice the voice
+        // sources keep the values of the last voice (document 04, 3.1: the connection keeps its last value until the next note), while the sources that have a value without a
+        // voice (macros, wheels, aftertouch, velocity, note, active voices, fixed, the random LFOs and the free running LFOs a global slot reads) are the current ones.
+        float held[kNumSourceIds];
+        if (newest != nullptr)
+        {
+            std::copy (newest->sourceValues(), newest->sourceValues() + kNumSourceIds, heldSrc);
+            heldSrcValid = true;
+            ctx.src = newest->sourceValues();
+        }
+        else if (heldSrcValid)
+        {
+            std::copy (heldSrc, heldSrc + kNumSourceIds, held);
+            for (int m = 0; m < 8; ++m)
+                held[srcMacro (m)] = gsrc[srcMacro (m)];
+            for (int l = 0; l < 10; ++l)
+                if (((matrix.globalSourceMask() >> srcLfo (l)) & 1u) != 0)
+                    held[srcLfo (l)] = gsrc[srcLfo (l)];
+            for (int r = 0; r < 4; ++r)
+                held[srcRlfo (r)] = gsrc[srcRlfo (r)];
+            for (int id : { static_cast<int> (kSrcModWheel), static_cast<int> (kSrcAftertouch), static_cast<int> (kSrcPitchWheel), static_cast<int> (kSrcVelocity), static_cast<int> (kSrcNote),
+                            static_cast<int> (kSrcActiveVoices), static_cast<int> (kSrcFixed) })
+                held[id] = gsrc[id];
+            ctx.src = held;
+        }
+        else
+            ctx.src = gsrc;
         ctx.global = true;
         ctx.delta = gdelta.data();
         ctx.deltaRight = gdeltaR.data();
@@ -1123,7 +1167,10 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     if (blockDirty || base[static_cast<size_t> (pi.master.tuningMts)] >= 0.5f) // a live MTS-ESP source is asked every block
         noteTuning.compute (tunedNotes, static_cast<int> (base[static_cast<size_t> (pi.master.tuningScale)] + 0.5f), base[static_cast<size_t> (pi.master.tuningA4)],
                             base[static_cast<size_t> (pi.master.tuningMts)] >= 0.5f);
+    globals.noSmoothing = noSmoothingIndex >= 0 && base[static_cast<size_t> (noSmoothingIndex)] >= 0.5f;
     globals.tunedNotes = tunedNotes;
+    globals.tuningNoteOnOnly = base[static_cast<size_t> (pi.master.tuningMts)] >= 0.5f && pi.master.tuningMtsNoteOnOnly >= 0 && base[static_cast<size_t> (pi.master.tuningMtsNoteOnOnly)] >= 0.5f
+                               && noteTuning.mtsConnected();
     globals.channelBendSemis = effBend;
     globals.channelModWheel = modWheel;
     globals.channelAftertouch = aftertouch;
@@ -1185,7 +1232,10 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 float db = base[vi];
                 if (gdelta[vi] != 0.0f)
                     db = modulatedValue (paramTable()[vi], destLawOf (vi), db, gdelta[vi]);
-                smoothedGain.setTarget (db > -60.0f ? dbToGain (db) : 0.0f);
+                if (globals.noSmoothing)
+                    smoothedGain.setCurrentAndTarget (db > -60.0f ? dbToGain (db) : 0.0f);
+                else
+                    smoothedGain.setTarget (db > -60.0f ? dbToGain (db) : 0.0f);
                 {
                     // master.stereo_routing (document 01, 8): 100 % leaves the channels alone, 0 % sums them to mono at -3 dB
                     const size_t ri = static_cast<size_t> (mi.stereoRouting);
@@ -1201,6 +1251,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             frame.bpm = globals.bpm;
             frame.period = kControlPeriod;
             frame.lastNote = lastNoteSemis;
+            frame.noteOns = noteCounter;
             frame.songBeats = globals.songBeats;
             frame.content = globals.content;
             frame.realtime = realtimeFlag;
@@ -1234,6 +1285,12 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 busBypass[0] = pi.bus1Bypass >= 0 && base[static_cast<size_t> (pi.bus1Bypass)] >= 0.5f;
                 busBypass[1] = pi.bus2Bypass >= 0 && base[static_cast<size_t> (pi.bus2Bypass)] >= 0.5f;
                 mainBypass = pi.mainBypass >= 0 && base[static_cast<size_t> (pi.mainBypass)] >= 0.5f;
+                if (globals.noSmoothing)
+                {
+                    busGainPrev[1] = busGain[1];
+                    busGainPrev[2] = busGain[2];
+                    directGainPrev = directGain;
+                }
                 mixCached = gnumTouched == 0;
             }
             // the latency of the racks (configuration only) and the delays that line the paths up (document 06, 11): it changes only with the mixer settings or a chain
@@ -1348,10 +1405,11 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 left[i] = l0 * routeCos + r0 * routeSin;
                 rightOut[i] = r0 * routeCos + l0 * routeSin;
             }
-            // Direct: past every rack and the master volume, scaled by its own level; the sum goes through the safety stage
+            // Direct: past every rack (and the stereo routing), scaled by its own level; the master volume applies to everything that reaches the output, the Direct sum
+            // included (it did not before: a Direct source ignored master.volume); the sum goes through the safety stage
             const float dg = lerp (directGainPrev, directGain, static_cast<float> (controlPos + (i - pos) + 1) * (1.0f / static_cast<float> (kControlPeriod)));
-            left[i] = outputLimit (left[i] * g + mixL[3][i - pos] * dg);
-            rightOut[i] = outputLimit (rightOut[i] * g + mixR[3][i - pos] * dg);
+            left[i] = outputLimit ((left[i] + mixL[3][i - pos] * dg) * g);
+            rightOut[i] = outputLimit ((rightOut[i] + mixR[3][i - pos] * dg) * g);
             stripBlockPeak[9] = std::max (stripBlockPeak[9], std::max (std::fabs (left[i]), std::fabs (rightOut[i])));   // Master: what leaves the engine
         }
         controlPos = (controlPos + n) % kControlPeriod;

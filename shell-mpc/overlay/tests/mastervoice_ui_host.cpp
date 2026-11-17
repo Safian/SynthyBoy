@@ -63,7 +63,7 @@ void testMasterSidesAndBlocks()
     check (m.rect().w == 1280 && m.rect().h == 628 && r.stack.element() == MasterUi::kElementPage, "the page has the whole tab and is the element of the Master tab");
     check (m.side() == ui::MasterScreen::SideMain, "the first side is MAIN: OUTPUT, PITCH, VOICES, GLIDE");
     std::string bad;
-    std::vector<ui::Component*> main = { &m.volume, &m.spread, &m.stereoRouting, &m.voiceOverride, &m.tune, &m.transpose, &m.bendUp, &m.bendDown, &m.bendLink, &m.polyphony, &m.legato, &m.polyLegato, &m.phaseLegato,
+    std::vector<ui::Component*> main = { &m.volume, &m.spread, &m.stereoRouting, &m.voiceOverride, &m.outputLimiter, &m.tune, &m.transpose, &m.bendUp, &m.bendDown, &m.bendLink, &m.polyphony, &m.legato, &m.polyLegato, &m.phaseLegato,
                                          &m.sameNote, &m.stealPriority, &m.velocityTrack, &m.padPressure, &m.padAmount, &m.portaTime, &m.portaSlope, &m.portaAlways, &m.portaScaled };
     check (sizesOk (main, bad), "every control of the side MAIN is >= 56 px high and has its minimum size " + bad);
     // each block holds its group, and the blocks are filled (the controls reach the lower part of the block)
@@ -586,6 +586,26 @@ void testMasterPadPressure()
     check (! r.ui.item (MasterUi::kPadPressure) || r.ui.item (MasterUi::kPadPressure)->param < 0, "the two are not engine parameters");
 }
 
+// the output limiter: one LED toggle "LIMIT" in the OUTPUT block (a shell setting, no Q group), on by default in the plugin
+void testMasterOutputLimiter()
+{
+    MRig r;
+    r.refresh();
+    ui::MasterScreen& m = r.ui.screen();
+    check (m.outputLimiter.enabled() && m.outputLimiter.state.on, "output limiter: LIMIT shows the setting (on by default)");
+    check (m.outputLimiter.rect().h >= 56 && m.outputLimiter.rect().w >= 56 && m.outputLimiter.sizeOk(), "output limiter: touch target of at least 56 pixels");
+    check (m.blockRect (0).contains (m.outputLimiter.rect()) && ! m.outputLimiter.rect().overlaps (m.voiceOverride.rect()) && ! m.outputLimiter.rect().overlaps (m.stereoRouting.rect())
+               && ! m.outputLimiter.rect().overlaps (m.spread.rect()) && ! m.outputLimiter.rect().overlaps (m.volume.rect()) && ! m.outputLimiter.rect().overlaps (m.meters.rect()),
+           "output limiter: inside the OUTPUT block, over nothing");
+    r.tap (m.outputLimiter);
+    check (! r.inst.limiterOn && r.inst.limiterWrites == 1, "a tap on LIMIT switches the limiter off");
+    r.refresh();
+    check (! m.outputLimiter.state.on, "... and the control shows it");
+    r.tap (m.outputLimiter);
+    check (r.inst.limiterOn && r.inst.limiterWrites == 2, "a second tap switches it on again");
+    check (! r.ui.item (MasterUi::kLimiter) || r.ui.item (MasterUi::kLimiter)->param < 0, "the switch is not an engine parameter");
+}
+
 int main()
 {
     std::printf ("=== SynthyBoy MPC Overlay: Master & Voice Host Tests ===\n");
@@ -595,6 +615,7 @@ int main()
     testMasterGroupsAndMeters();
     testMasterDraw();
     testMasterPadPressure();
+    testMasterOutputLimiter();
     testVoiceLayout();
     testVoiceGridDrawing();
     testVoiceStepsLitAndQ();
