@@ -268,7 +268,7 @@ Buttons **BANK 1: 1-4** and **BANK 2: 5-8** choose which row is the active Q gro
   drives. A card without targets says "NO TARGET - TAP TO ADD". A tap on the chips area opens the **targets
   page** of the macro (list of routes with depth, polarity UNI/BI, ON/OFF and remove, and ADD TARGET, see
   chapter 6).
-- Q-Links: Bank 1 = macros 1 - 4, Bank 2 = macros 5 - 8. The macro names are fixed.
+- Q-Links: Bank 1 = macros 1 - 4, Bank 2 = macros 5 - 8. Each macro has a **name** (up to 16 characters, default "Macro n") that is stored in the preset. A tap on the name on a card opens a keyboard page (OK stores the name, CANCEL or BACK leaves it); a drag that starts on the name still turns the knob. The name is used on the Mod page, in pickers and on the knob displays.
 - **Spectrum** (bottom strip): the spectrum of the plugin's output after the output stage (20 Hz to 20 kHz,
   scale -12 to -48 dB). It is a display only.
 
@@ -776,6 +776,7 @@ These chapters describe the current tree and depend on pages that are being rewo
 - **Chapter 2:** the plugin window name under which SynthyBoy is listed, once confirmed on the device.
 - **All pictures** in `img/` are rendered with `scripts/render-ui-gallery.py` and must be re-rendered after a UI change.
 - **Chapter 10 (second-generation pads):** the table in 10.1 and the recipes depend on what the MPC sends to a plugin track (re-measure after a firmware update), on the Master page pad-pressure control that is coming, and on the factory presets: update the list in 10.4 whenever presets with pressure or other performance routes are added.
+- **5.2 Macros:** the name entry (keyboard page) and the card titles, once final.
 - **Sound quality settings per device** (polyphony cap, unison cap, which effects run on which device): the guide does not describe them yet; they are being set per device. Chapter 5.12 (POLY), 5.3 (unison VOICES), 5.11 (effects) and chapter 7 (presets) must be re-read when they are final.
 - **Q-Link stepping** (4.3 and the troubleshooting row about knobs that step): the amount of turn per step and how the display follows are being re-calibrated.
 - **5.12 Master, OUTPUT:** the STEREO control (a percentage) is currently drawn as a stepper with arrows; the guide does not describe a gesture for it until the control is final.
