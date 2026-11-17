@@ -30,6 +30,7 @@
 #include "ui_bind.h"
 #include "ui_stack.h"
 #include "synthyboy/filter_response.h"
+#include "synthyboy/filters/filter_types.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
 #include "synthyboy/readout.h"
@@ -124,7 +125,19 @@ public:
             modsDirty_ = false;
         }
         if (pageTop_ == kPageList && listParam_ >= 0)
-            list_.state.current = static_cast<int> (std::lround (inst.param (listParam_)));
+        {
+            if (listParam_ == paramForId (kStyle, editFilter_))
+            {
+                const int mIdx = paramForId (kModel, editFilter_);
+                const int model = mIdx >= 0 ? static_cast<int> (std::lround (inst.param (mIdx))) : 0;
+                const int count = synthyboy::filters::filterModelStyleCount (model);
+                list_.state.items = synthyboy::filters::filterModelStyleNames (model);
+                list_.state.count = count;
+                list_.state.current = std::clamp (static_cast<int> (std::lround (inst.param (listParam_))), 0, std::max (0, count - 1));
+            }
+            else
+                list_.state.current = static_cast<int> (std::lround (inst.param (listParam_)));
+        }
         inst.setUiFullOpen (true);
         publishQGroup (inst);
     }
@@ -419,7 +432,22 @@ private:
         if (c.id == kList && c.kind == K::Index)
         {
             if (listParam_ >= 0)
+            {
                 uibind::writePlain (inst, listParam_, c.index);
+                if (listParam_ == paramForId (kModel, editFilter_))
+                {
+                    const int newModel = c.index;
+                    const int styleCount = synthyboy::filters::filterModelStyleCount (newModel);
+                    const int sIdx = paramForId (kStyle, editFilter_);
+                    if (sIdx >= 0 && styleCount > 0)
+                    {
+                        const int curStyle = static_cast<int> (std::lround (inst.param (sIdx)));
+                        if (curStyle >= styleCount)
+                            uibind::writePlain (inst, sIdx, styleCount - 1);
+                    }
+                    lastModel_[editFilter_] = newModel;
+                }
+            }
             stack.back();
             syncPages (stack);
             return;
@@ -453,7 +481,22 @@ private:
         if (c.kind == K::Value)
             uibind::writeNorm (inst, p, c.value);
         else if (c.kind == K::Index)
+        {
             uibind::writePlain (inst, p, c.index);
+            if (p == paramForId (kModel, editFilter_))
+            {
+                const int newModel = c.index;
+                const int styleCount = synthyboy::filters::filterModelStyleCount (newModel);
+                const int sIdx = paramForId (kStyle, editFilter_);
+                if (sIdx >= 0 && styleCount > 0)
+                {
+                    const int curStyle = static_cast<int> (std::lround (inst.param (sIdx)));
+                    if (curStyle >= styleCount)
+                        uibind::writePlain (inst, sIdx, styleCount - 1);
+                }
+                lastModel_[editFilter_] = newModel;
+            }
+        }
     }
 
     /** The parameter of a control of the page (a knob, a stepper, a switch). */
@@ -464,6 +507,21 @@ private:
         listParam_ = paramForId (id, editFilter_);
         if (listParam_ < 0)
             return;
+        if (id == kStyle)
+        {
+            const int mIdx = paramForId (kModel, editFilter_);
+            const int model = mIdx >= 0 ? static_cast<int> (std::lround (inst.param (mIdx))) : 0;
+            const int count = synthyboy::filters::filterModelStyleCount (model);
+            // One-style rule: a model with one style has no list popup
+            if (count <= 1)
+                return;
+            list_.state.items = synthyboy::filters::filterModelStyleNames (model);
+            list_.state.count = count;
+            list_.state.current = std::clamp (static_cast<int> (std::lround (inst.param (listParam_))), 0, std::max (0, count - 1));
+            list_.showCurrent();
+            stack.openDetail (kPageList);
+            return;
+        }
         const synthyboy::ParamInfo& pi = info (listParam_);
         list_.state.items = pi.choices;
         list_.state.count = pi.numChoices;
@@ -747,7 +805,51 @@ private:
         if (full_.formantMode() != formant)
             full_.setFormantMode (formant);
         pullStepper (inst, full_.model, kModel);
-        pullStepper (inst, full_.style, kStyle);
+
+        const int sIdx = paramForId (kStyle, f);
+        const int styleCount = synthyboy::filters::filterModelStyleCount (model);
+        const char* const* styleNames = synthyboy::filters::filterModelStyleNames (model);
+        if (sIdx >= 0)
+        {
+            int curStyle = static_cast<int> (std::lround (inst.param (sIdx)));
+            if (model != lastModel_[f])
+            {
+                lastModel_[f] = model;
+                // when the model changes and current style index is above the new count,
+                // clamp and write the parameter once through the same path a user change uses
+                if (styleCount > 0 && curStyle >= styleCount)
+                {
+                    curStyle = styleCount - 1;
+                    uibind::writePlain (inst, sIdx, curStyle);
+                }
+            }
+            else if (styleCount > 0 && curStyle >= styleCount)
+            {
+                curStyle = styleCount - 1;
+                uibind::writePlain (inst, sIdx, curStyle);
+            }
+            const int n = std::clamp (curStyle, 0, std::max (0, styleCount - 1));
+            full_.style.setEnabled (true);
+            full_.style.state.count = styleCount;
+            full_.style.state.index = n;
+            full_.style.setItem (styleNames != nullptr && n < styleCount ? styleNames[n] : "");
+
+            // One-style rule: a model with one style shows the style control dim / as a plain label
+            if (styleCount <= 1)
+            {
+                full_.style.state.dim = true;
+                full_.style.listable = false;
+            }
+            else
+            {
+                full_.style.state.dim = false;
+                full_.style.listable = true;
+            }
+        }
+        else
+        {
+            full_.style.setEnabled (false);
+        }
         pullToggle (inst, full_.power, kPower);
         pullToggle (inst, full_.clean, kClean);
         pullToggle (inst, full_.env1, kEnv1);
@@ -864,6 +966,7 @@ private:
 
     int envSel_ = 1, lfoSel_ = 1, selectedSource_ = ui::kNoSource;
     int listParam_ = -1;
+    int lastModel_[3] = { -1, -1, -1 };
 
     QSlots qSlots_;
     char qName_[20] = {};
