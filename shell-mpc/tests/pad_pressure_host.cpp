@@ -208,8 +208,8 @@ int main (int argc, char** argv)
     check (text (e, effGetParamLabel, pp + 1) == "%" && text (e, effGetParamLabel, pp).empty(), "labels");
 
     // ---- defaults, writes, display text
-    check (e->getParameter (e, pp) == 1.0f && std::fabs (e->getParameter (e, pp + 1) - 0.35f) < 1e-6f, "defaults: on, 35 %");
-    check (text (e, effGetParamDisplay, pp) == "On" && text (e, effGetParamDisplay, pp + 1) == "35", "display text: On, 35");
+    check (e->getParameter (e, pp) == 0.0f && std::fabs (e->getParameter (e, pp + 1) - 0.35f) < 1e-6f, "defaults: OFF (pressure is the preset's business), 35 %");
+    check (text (e, effGetParamDisplay, pp) == "Off" && text (e, effGetParamDisplay, pp + 1) == "35", "display text: Off, 35");
     VstParameterProperties props;
     check (e->dispatcher (e, effCanBeAutomated, pp, 0, nullptr, 0.0f) == 1 && e->dispatcher (e, effCanBeAutomated, pp + 1, 0, nullptr, 0.0f) == 1, "both are automatable");
     check (e->dispatcher (e, effGetParameterProperties, pp, 0, &props, 0.0f) == 1 && (props.flags & kVstParameterIsSwitch) != 0
@@ -228,7 +228,7 @@ int main (int argc, char** argv)
     const std::string c1 = getChunk (e);
     const std::string tail = "\"mpcPadPressure\":0,\"mpcPadPressureAmount\":80.00}";
     check (c1.size() > tail.size() && c1.compare (c1.size() - tail.size(), tail.size(), tail) == 0, "chunk: the settings are saved at the end");
-    check (initial.find ("\"mpcPadPressure\":1,\"mpcPadPressureAmount\":35.00}") != std::string::npos, "chunk: the default is saved too");
+    check (initial.find ("\"mpcPadPressure\":0,\"mpcPadPressureAmount\":35.00}") != std::string::npos, "chunk: the default is saved too");
     e->setParameter (e, pp, 1.0f);
     e->setParameter (e, pp + 1, 0.1f);
     check (setChunk (e, c1) && e->getParameter (e, pp) == 0.0f && std::fabs (e->getParameter (e, pp + 1) - 0.8f) < 1e-6f, "chunk: the settings come back");

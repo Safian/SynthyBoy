@@ -51,6 +51,8 @@ public:
         kScaleType = 140, kScaleKey, kScaleMode, kTuningA4, kTuningScale, kMtsEsp, kMtsNoteOn,
         // MPE
         kMpeOn = 150, kMpeBend, kMpeMacro, kMpeYModwheel, kMpeBendToX, kMpeYBipolar,
+        // the plugin-wide pad pressure layer (shell parameters of the plugin, not of the engine: no Q group)
+        kPadPressure = 160, kPadAmount,
         kList = 700, kListBackdrop = 701
     };
 
@@ -96,6 +98,17 @@ public:
         full_.meters.peakR = pk;
         full_.meters.updateHold (lastMs_ > 0.0 ? static_cast<float> (nowMs - lastMs_) * 0.001f : 0.0f);
         lastMs_ = nowMs;
+        {   // the pad pressure layer of the plugin (docs/MPC.md "Pad pressure"): off by default, the presets carry their own route
+            bool on = false;
+            float percent = 35.0f;
+            const bool have = inst.padPressure (on, percent);
+            full_.padPressure.setEnabled (have);
+            full_.padAmount.setEnabled (have);
+            full_.padPressure.state.on = on;
+            full_.padAmount.state.min = 0.0; full_.padAmount.state.max = 100.0; full_.padAmount.state.step = 1.0; full_.padAmount.state.pxPerStep = 3;
+            full_.padAmount.state.defaultValue = 35.0;
+            full_.padAmount.state.value = std::round (percent);
+        }
         full_.portaCurve.slope = inst.param (slopeIdx_);
         full_.keyboard.scaleType = static_cast<int> (std::lround (inst.param (scaleTypeIdx_)));
         full_.keyboard.scaleKey = static_cast<int> (std::lround (inst.param (scaleKeyIdx_)));
@@ -241,6 +254,8 @@ private:
         bind (kMpeYModwheel, &full_.mpeYModwheel, T::Toggle, "master.mpe.y_modwheel");
         bind (kMpeBendToX, &full_.mpeBendToX, T::Toggle, "master.mpe.bend_to_x");
         bind (kMpeYBipolar, &full_.mpeYBipolar, T::Toggle, "master.mpe.y_bipolar");
+        bind (kPadPressure, &full_.padPressure, T::Inert, "");
+        bind (kPadAmount, &full_.padAmount, T::Inert, "");
         for (ui::Stepper* s : { &full_.scaleType, &full_.tuningScale, &full_.sameNote, &full_.stealPriority, &full_.voiceOverride, &full_.scaleKey, &full_.scaleMode, &full_.mpeMacro, &full_.stereoRouting })
             s->listable = true;   // a tap on the name opens the list of all the choices
         polyphonyIdx_ = uibind::indexOfKey ("master.polyphony");
@@ -317,6 +332,18 @@ private:
             if (listParam_ >= 0)
                 uibind::writePlain (inst, listParam_, ch.index);
             stack.back();
+            return;
+        }
+        if (ch.id == kPadPressure || ch.id == kPadAmount)
+        {
+            bool on = false;
+            float percent = 35.0f;
+            if (! inst.padPressure (on, percent))
+                return;
+            if (ch.id == kPadPressure && ch.kind == ui::ChangeKind::Index)
+                inst.setPadPressure (ch.index != 0, percent);
+            else if (ch.id == kPadAmount && (ch.kind == ui::ChangeKind::Value || ch.kind == ui::ChangeKind::Index))
+                inst.setPadPressure (on, static_cast<float> (ch.value));
             return;
         }
         const Item* it = item (ch.id);

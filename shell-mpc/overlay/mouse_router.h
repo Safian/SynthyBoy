@@ -71,9 +71,19 @@ public:
                 case MouseEvent::Down: onDown (m, touch); break;
                 case MouseEvent::Up: onUp (m, touch); break;
                 case MouseEvent::Wheel: onWheel (m, wheel); break;
-                case MouseEvent::Move: moved = true; break;
+                case MouseEvent::Move: if (! down_ || m.device == owner_) moved = true; break;
             }
         });
+        if (moved && ! down_)
+            readPending_ = true;
+        if (readPending_ && ! down_ && nowMs - lastReadMs_ >= pictureMs)
+        {
+            readPending_ = false;
+            // the mouse moves with no button down: the position is read for the status file (pointer_ui_xy follows the pointer, at most once per picture while it moves; nothing is sent to the pages)
+            lastReadMs_ = nowMs;
+            int x = 0, y = 0;
+            position (x, y);
+        }
         if (down_ && (moved || movePending_))
         {
             movePending_ = true;
@@ -144,15 +154,16 @@ private:
         return true;
     }
 
-    void onDown (const MouseEvent&, const TouchSink& touch)
+    void onDown (const MouseEvent& m, const TouchSink& touch)
     {
         ++downs_;
         if (down_)
-            return;
+            return;                // one gesture at a time: a button of ANOTHER mouse does not start one (and its Up does not end this one: owner_)
         int x = 0, y = 0;
         if (! position (x, y))
             return;                // no pointer on the screen: no touch (the click goes to the host alone)
         down_ = true;
+        owner_ = m.device;
         lastX_ = x;
         lastY_ = y;
         lastMoveMs_ = -1.0e9;
@@ -162,11 +173,11 @@ private:
         ev.y = y;
         touch (ev);
     }
-    void onUp (const MouseEvent&, const TouchSink& touch)
+    void onUp (const MouseEvent& m, const TouchSink& touch)
     {
         ++ups_;
-        if (! down_)
-            return;
+        if (! down_ || m.device != owner_)
+            return;                // the gesture belongs to the mouse that began it
         int x = lastX_, y = lastY_;
         position (x, y);           // where the button went up; the last position when the pointer cannot be read
         down_ = false;
@@ -189,8 +200,11 @@ private:
     IMouseInput& mouse_;
     IPointerSource& pointer_;
     int panelW_ = 800, panelH_ = 1280, rotation_ = 90;
+    int owner_ = 0;   // the mouse that holds the gesture (MouseEvent::device)
     bool down_ = false, movePending_ = false, override_ = false, planeSeen_ = false;
     int overrideX_ = 0, overrideY_ = 0, lastX_ = 0, lastY_ = 0, uiX_ = 0, uiY_ = 0;
+    double lastReadMs_ = -1000.0;
+    bool readPending_ = false;   // the mouse moved with no button down: the position is read for the status file at the next picture time
     double lastMoveMs_ = -1.0e9;
     HotSpot hot_;
     PointerPlane lastPlane_;

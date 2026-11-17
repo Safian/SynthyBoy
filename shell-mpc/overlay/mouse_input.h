@@ -37,7 +37,7 @@ public:
     bool buttonDown() const noexcept { return down_; }
     void reset() noexcept { down_ = false; moved_ = false; wheel_ = 0; }
 
-    /** One evdev event. Handler gets a MouseEvent per button change, one Move per report in which the pointer moved with the button held, and one Wheel per report with the notches summed. */
+    /** One evdev event. Handler gets a MouseEvent per button change, one Move per report in which the pointer moved (with or without a button: the router reads the pointer's position for the status when no button is down), and one Wheel per report with the notches summed. */
     template <class Handler>
     void feed (uint16_t type, uint16_t code, int32_t value, uint64_t timeUs, int device, Handler&& handler)
     {
@@ -72,7 +72,7 @@ public:
                 ev.notches = wheel_;
                 handler (ev);
             }
-            if (moved_ && down_)
+            if (moved_)
             {
                 ev.kind = MouseEvent::Move;
                 ev.notches = 0;

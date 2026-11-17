@@ -33,6 +33,7 @@ class FakeSys final : public ITouchSyscalls
 public:
     struct Node
     {
+        uint64_t stampGen = 0;
         bool exists = false, rel = false, relX = false, relY = false, key = false, btnLeft = false, abs = false;
         std::vector<uint8_t> stream;
         size_t off = 0;
@@ -72,6 +73,7 @@ public:
         return 100 + i;
     }
     int close (int fd) override { ++closes; (void) fd; return 0; }
+    bool nodeStamp (const char* path, uint64_t& stamp) override { int i = -1; if (std::sscanf (path, "/dev/input/event%d", &i) != 1 || i < 0 || i >= 32 || ! nodes[i].exists) return false; stamp = 1000u + static_cast<uint64_t> (i) + nodes[i].stampGen; return true; }
     ssize_t read (int fd, void* buf, size_t count) override
     {
         Node& n = nodes[fd - 100];
@@ -166,17 +168,17 @@ int main()
         feed (kKey, kBtnLeft, 0);
         check (s.v.size() == 3 && s.v[2].kind == MouseEvent::Up && ! d.buttonDown(), "BTN_LEFT up: an Up");
         feed (kRel, kRelX, 4); feed (kSyn, kReport, 0);
-        check (s.v.size() == 3, "movement with no button: nothing (the host moves its pointer, the pages do not care)");
+        check (s.v.size() == 4 && s.v[3].kind == MouseEvent::Move, "movement with no button: a Move too (the router only reads the pointer's position for the status; the pages get nothing)");
         feed (kKey, kBtnRight, 1);
-        check (s.v.size() == 3, "another button: not ours");
+        check (s.v.size() == 4, "another button: not ours");
         feed (kRel, kWheel, 1); feed (kRel, kWheel, 2); feed (kSyn, kReport, 0);
-        check (s.v.size() == 4 && s.v[3].kind == MouseEvent::Wheel && s.v[3].notches == 3, "wheel notches of one report are summed (3)");
+        check (s.v.size() == 5 && s.v[4].kind == MouseEvent::Wheel && s.v[4].notches == 3, "wheel notches of one report are summed (3)");
         feed (kRel, kWheel, -1); feed (kSyn, kReport, 0);
-        check (s.v.size() == 5 && s.v[4].notches == -1, "wheel the other way: -1");
+        check (s.v.size() == 6 && s.v[5].notches == -1, "wheel the other way: -1");
         feed (kRel, kWheel, 1); feed (kSyn, MouseDecoder::kSynDropped, 0); feed (kSyn, kReport, 0);
-        check (s.v.size() == 5, "SYN_DROPPED: the half-done report is thrown away");
+        check (s.v.size() == 6, "SYN_DROPPED: the half-done report is thrown away");
         feed (kKey, kBtnLeft, 1); feed (kRel, kRelX, 1); feed (kRel, kWheel, 1); feed (kSyn, kReport, 0);
-        check (s.v.size() == 8 && s.v[5].kind == MouseEvent::Down && s.v[6].kind == MouseEvent::Wheel && s.v[7].kind == MouseEvent::Move, "a report with the wheel and a drag: both, the wheel first");
+        check (s.v.size() == 9 && s.v[6].kind == MouseEvent::Down && s.v[7].kind == MouseEvent::Wheel && s.v[8].kind == MouseEvent::Move, "a report with the wheel and a drag: both, the wheel first");
     }
     // ---- the reader ----
     {
@@ -194,6 +196,15 @@ int main()
         sys.push (3, { { kKey, kBtnLeft, 1 }, { kSyn, kReport, 0 }, { kRel, kWheel, 2 }, { kSyn, kReport, 0 }, { kKey, kBtnLeft, 0 }, { kSyn, kReport, 0 } });
         poll();
         check (s.v.size() == 3 && s.v[0].kind == MouseEvent::Down && s.v[1].kind == MouseEvent::Wheel && s.v[1].notches == 2 && s.v[2].kind == MouseEvent::Up, "the events of the node come through (down, wheel 2, up)");
+        {   // follow-up 7: a node that is no mouse is opened once; the next scans do one stat and nothing else, until the node changes
+            const int opens0 = sys.opens;
+            sys.clock += 2500; poll();
+            sys.clock += 2500; poll();
+            check (sys.opens == opens0, "the nodes known not to be mice are not opened again (opens " + std::to_string (sys.opens - opens0) + " in two scans)");
+            sys.nodes[5].stampGen += 1;   // the node changed (something else was plugged in under that number)
+            sys.clock += 2500; poll();
+            check (sys.opens == opens0 + 1, "a node whose stamp changed is looked at again");
+        }
         // hot plug: a second mouse appears
         sys.addMouse (9);
         sys.clock += 500;
@@ -317,6 +328,41 @@ int main()
         r.poll (135.0, 33.0, sinkT, sinkW);
         const std::string d = r.describe();
         check (d.find ("pointer_plane: 40") != std::string::npos && d.find ("pointer_hotspot: 0,63 (measured)") != std::string::npos && d.find ("pointer_ui_xy:") != std::string::npos && d.find ("mouse_wheel_notches: 0") != std::string::npos, "the status lines have the plane, the mapped UI position and the hot spot");
+        {   // the pointer moves with no button down: pointer_ui_xy follows it (at most once per picture), nothing reaches the pages
+            const size_t t0 = touches.size();
+            place (420, 260);
+            m.move();
+            r.poll (200.0, 33.0, sinkT, sinkW);
+            int mx, my;
+            pointerToUi (p.p, defaultHotSpot (90, 64, 64), 90, 800, 1280, mx, my);
+            check (r.describe().find ("pointer_ui_xy: " + std::to_string (mx) + "," + std::to_string (my) + "\n") != std::string::npos && touches.size() == t0, "a move without a button: the status has the pointer's position, no touch is sent");
+            const int reads = p.reads;
+            place (440, 280);
+            m.move();
+            r.poll (210.0, 33.0, sinkT, sinkW);
+            check (p.reads == reads, "a second move within a picture's time is not read at once (cheap while the mouse moves)");
+            r.poll (240.0, 33.0, sinkT, sinkW);
+            check (p.reads == reads + 1, "... it is read at the next picture time, so the last position shows");
+        }
+        {   // two mice: the button of the second one does not end the drag of the first (follow-up 3 of the review)
+            FakeMouse m2;
+            FakePointer p2;
+            MouseRouter r2 (m2, p2);
+            r2.configure (800, 1280, 90);
+            std::vector<TouchEvent> t2;
+            auto sT = [&] (const TouchEvent& e) { t2.push_back (e); };
+            auto sW = [&] (int, int, int) {};
+            p2.p.valid = true; p2.p.id = 40; p2.p.w = p2.p.h = 64; p2.p.x = 100; p2.p.y = 100;
+            auto ev = [&] (MouseEvent::Kind k, int dev) { MouseEvent e; e.kind = k; e.device = dev; m2.queue.push_back (e); };
+            ev (MouseEvent::Down, 0);
+            r2.poll (0.0, 33.0, sT, sW);
+            ev (MouseEvent::Down, 1); ev (MouseEvent::Up, 1);
+            r2.poll (10.0, 33.0, sT, sW);
+            check (r2.buttonDown() && t2.size() == 1, "mouse B pressing and releasing while mouse A holds its button: A's drag goes on, B sends nothing");
+            ev (MouseEvent::Up, 0);
+            r2.poll (20.0, 33.0, sT, sW);
+            check (! r2.buttonDown() && t2.size() == 2 && t2[1].kind == TouchEvent::Up, "A's own Up ends it");
+        }
         // the debug override of the hot spot: the tip is somewhere else in the picture
         place (500, 300);
         r.setHotSpotOverride ("10 50");

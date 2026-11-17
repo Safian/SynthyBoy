@@ -12,6 +12,9 @@
 #include <string>
 
 #include <sys/stat.h>
+#include <unistd.h>
+
+#include "../safe_file.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -78,13 +81,14 @@ public:
         size_ = size;
         ++reads_;
         std::string text;
-        if (FILE* f = std::fopen (path_.c_str(), "rb"))
+        const int fd = safefile::openRegularFollowing (path_.c_str());   // never blocks, a regular file only
+        if (fd >= 0)
         {
             char buf[8192];
-            size_t n;
-            while ((n = std::fread (buf, 1, sizeof buf, f)) > 0 && text.size() < (4u << 20))
-                text.append (buf, n);
-            std::fclose (f);
+            ssize_t n;
+            while ((n = ::read (fd, buf, sizeof buf)) > 0 && text.size() < (4u << 20))
+                text.append (buf, static_cast<size_t> (n));
+            ::close (fd);
         }
         const QLinkSetting v = parseQLinkStatusSetting (text);
         const bool changed = v != value_;

@@ -79,6 +79,8 @@ inline bool frameLayoutReadable (uint32_t width, uint32_t height, uint32_t pitch
         return false;
     if (static_cast<uint64_t> (pitch) < static_cast<uint64_t> (width) * 4)
         return false;
+    if (((pitch | offset) & 3u) != 0)
+        return false;   // a 4 byte read of device memory at an odd address is a bus error on ARM (robustness review F20)
     return static_cast<uint64_t> (offset) + static_cast<uint64_t> (pitch) * height <= kMaxBytes;
 }
 /** The byte position of pixel (px, py) in a mapping of `mappedBytes`: false when the pixel is outside the picture, the layout is not readable, or the 4 bytes of the pixel are not all inside the

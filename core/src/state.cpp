@@ -107,6 +107,9 @@ void migrateV3ToV4 (Parsed& p) noexcept
     fxPoolMigrateFromV3 (p.value, p.has, p.derived);
 }
 
+/** Version 4 -> 5: only content.lfo_shapes[].grid_x / grid_y are new (optional); nothing to convert, an older document has no grid and the editor takes its default. */
+void migrateV4ToV5 (Parsed&) noexcept {}
+
 /** A migration upgrades `Parsed` from version `from` to `from + 1` (rename keys, rescale values, ...). Later versions
     append entries here. */
 using MigrateFn = void (*) (Parsed&) noexcept;
@@ -115,7 +118,7 @@ struct Migration
     int from;
     MigrateFn apply;
 };
-constexpr std::array<Migration, 3> kMigrations { { { 1, migrateV1ToV2 }, { 2, migrateV2ToV3 }, { 3, migrateV3ToV4 } } };
+constexpr std::array<Migration, 4> kMigrations { { { 1, migrateV1ToV2 }, { 2, migrateV2ToV3 }, { 3, migrateV3ToV4 }, { 4, migrateV4ToV5 } } };
 
 void migrate (Parsed& parsed) noexcept
 {
@@ -750,6 +753,16 @@ private:
                         if (std::strcmp (k, "name") == 0) return readText (l.name, kMaxContentStringBytes, vd);
                         if (std::strcmp (k, "smooth") == 0) return readBool (l.smooth, vd);
                         if (std::strcmp (k, "loop_point") == 0) return readInt (l.loopPoint, vd);
+                        if (std::strcmp (k, "grid_x") == 0 || std::strcmp (k, "grid_y") == 0)
+                        {
+                            int g = 0;
+                            if (! readInt (g, vd))
+                                return false;
+                            if (g < kMinLfoGrid || g > kMaxLfoGrid)
+                                g = 0;   // not a grid the editor has: as if it was not stored (the section stays valid)
+                            (k[5] == 'x' ? l.gridX : l.gridY) = g;
+                            return true;
+                        }
                         if (std::strcmp (k, "points") == 0) return readPoints (l.points, static_cast<size_t> (kMaxLfoShapePoints), vd, true);
                         h = false;
                         return true;
@@ -877,9 +890,46 @@ private:
                         return true;
                     });
                 });
+            if (std::strcmp (key, "macro_names") == 0)
+                return readMacroNames (c, d);
             handled = false;
             return true;
         });
+    }
+
+    /** "macro_names": an array of up to eight strings (entry i = macro i + 1). Never marks the section bad: a name is cleaned and cut (sanitizeMacroName), an entry that is not a string is the default
+        name, entries beyond the eighth are ignored, a value that is not an array is ignored, so a hand-edited name can never cost the rest of the content. */
+    bool readMacroNames (StateContent& c, int depth)
+    {
+        if (depth > kMaxDepth)
+            return false;
+        if (p >= end || *p != '[')
+            return skipValue (depth);
+        ++p;
+        skipWs();
+        if (consume (']'))
+            return true;
+        for (int i = 0;; ++i)
+        {
+            skipWs();
+            if (p < end && *p == '"')
+            {
+                std::string raw;
+                bool tooLong = false;
+                if (! parseStringInto (raw, 4 * kMaxMacroNameBytes, tooLong))   // a longer text is cut here, then cleaned and cut again
+                    return false;
+                if (i < kNumMacros)
+                    c.macroNames[i] = sanitizeMacroName (raw, i);
+            }
+            else if (! skipValue (depth + 1))
+            {
+                return false;
+            }
+            skipWs();
+            if (consume (','))
+                continue;
+            return consume (']');
+        }
     }
 
     bool parseContentSection (Parsed& out)
@@ -1172,6 +1222,18 @@ void putContent (std::string& s, const StateContent& c)
                 putKey (s, "loop_point");
                 putJsonInt (s, l.loopPoint);
             }
+            if (l.gridX >= kMinLfoGrid && l.gridX <= kMaxLfoGrid)
+            {
+                s += ',';
+                putKey (s, "grid_x");
+                putJsonInt (s, l.gridX);
+            }
+            if (l.gridY >= kMinLfoGrid && l.gridY <= kMaxLfoGrid)
+            {
+                s += ',';
+                putKey (s, "grid_y");
+                putJsonInt (s, l.gridY);
+            }
             s += ',';
             putKey (s, "points");
             putPoints (s, l.points);
@@ -1336,6 +1398,18 @@ void putContent (std::string& s, const StateContent& c)
         }
         s += ']';
     }
+    if (! c.noMacroNames())
+    {
+        section ("macro_names");
+        s += '[';
+        for (int i = 0; i < kNumMacros; ++i)
+        {
+            if (i > 0)
+                s += ',';
+            putJsonString (s, sanitizeMacroName (c.macroNames[i], i));
+        }
+        s += ']';
+    }
     s += '}';
 }
 } // namespace
@@ -1365,7 +1439,22 @@ std::string saveState (const ParamValues& values, const StateContent& content)
     }
     s += '}';
     if (! content.empty() && validateContent (content))
-        putContent (s, content);
+    {
+        // the names are written in their clean form whatever the caller put there (they are the only part of the content that may hold free text from a keyboard)
+        bool clean = true;
+        for (int i = 0; i < kNumMacros; ++i)
+            clean = clean && sanitizeMacroName (content.macroNames[i], i) == content.macroNames[i];
+        if (clean)
+            putContent (s, content);
+        else
+        {
+            StateContent cleaned = content;
+            for (int i = 0; i < kNumMacros; ++i)
+                cleaned.macroNames[i] = sanitizeMacroName (content.macroNames[i], i);
+            if (! cleaned.empty())
+                putContent (s, cleaned);
+        }
+    }
     s += '}';
     return s;
 }

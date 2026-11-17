@@ -598,7 +598,7 @@ void testMacrosView()
     r.refresh();
     check (r.inst.get ("macro.5") > 20.0f, "turning Q1 in Bank 2 increases macro.5");
     // a tap on the knob of the first row makes it the group again
-    r.tapC (r.ui.view().cards[2].knob);
+    r.tap (static_cast<int> (r.ui.view().cards[2].knob.geom().cx), static_cast<int> (r.ui.view().cards[2].knob.geom().cy));   // the dial (the name beside it is a button of its own now: a tap there opens the keyboard page)
     check (r.ui.bank() == 0, "a tap on a card of the top row makes bank 1 the Q group");
     // a bank left from an earlier visit does not survive the arrival: the page shows BANK 1 and the knobs write macro 1 .. 4 (the group and the picture cannot disagree)
     r.tapC (r.ui.view().bank2Btn);

@@ -541,6 +541,11 @@ void analyse (Capture& cap, Sink& sink)
                 }
             for (const FRect& c : cap.cells)
             {
+                bool isChip = false;   // the cell of a Q chip (QGroup::chip) is a chip, not content of the block
+                for (const Chip& ch : cap.chips)
+                    isChip = isChip || (std::fabs (ch.r.x0 - c.x0) < 0.6f && std::fabs (ch.r.y0 - c.y0) < 0.6f && std::fabs (ch.r.x1 - c.x1) < 0.6f && std::fabs (ch.r.y1 - c.y1) < 0.6f);
+                if (isChip)
+                    continue;
                 const ui::Rect cr { static_cast<int> (std::lround (c.x0)), static_cast<int> (std::lround (c.y0)), static_cast<int> (std::lround (c.w())), static_cast<int> (std::lround (c.h())) };
                 bool comp = false;
                 for (const ui::Rect& k : compRects)

@@ -13,6 +13,7 @@
 #include "../env_ui.h"
 #include "../filter_ui.h"
 #include "../fx_ui.h"
+#include "../lfo_ui.h"
 #include "../macro_ui.h"
 #include "../master_ui.h"
 #include "../mixer_ui.h"
@@ -204,6 +205,46 @@ void testOscillatorTypePages()
     }
 }
 
+void testEnvLfo()
+{
+    {
+        demo::Rig<EnvUi> r;
+        r.refresh();
+        ui::EnvFullScreen& f = r.ui.full();
+        checkPage ("Env page", r, 3, [&] (int g) { f.setActiveGroup (g); r.refresh(); });
+        f.setActiveGroup (0);
+        r.refresh();
+        const int atk = demo::Inst::idx ("env1.attack"), dly = demo::Inst::idx ("env1.delay"), ac = demo::Inst::idx ("env1.attack_curve");
+        check (r.inst.q[0] == atk && r.inst.q[4] == ac && r.inst.q[8] == dly && r.inst.q[12] == -1, "Env page, ADSR active: Q 1 attack, Q 5 the SHAPE group (A CURVE), Q 9 the TIME group (DELAY), Q 13 .. 16 empty");
+        int mapped = 0;
+        for (int g = 0; g < 3; ++g)
+            mapped += f.groups[g].block() >= 1;
+        check (mapped == 2 && f.groups[0].block() == 0, "Env page: the two other groups have their blocks (idle chips 5 .. 12 on the XL)");
+        f.setActiveGroup (2);
+        r.refresh();
+        check (r.inst.q[0] == dly && r.inst.q[4] == atk && r.inst.q[8] == ac, "Env page, TIME active: Q 1 DELAY, then ADSR, then SHAPE (wrapping)");
+    }
+    // a shape LFO (the random LFOs share the code of the groups)
+    {
+        demo::Rig<LfoUi> r;
+        r.refresh();
+
+        ui::LfoFullScreen& f = r.ui.full();
+        int n = 0, ids[ui::LfoFullScreen::kMaxGroups];
+        for (int g = 0; g < f.numGroups(); ++g)
+            if (f.groups[g].numMembers() > 0 && ! (g == f.keyGroup() && ! f.keyActive()))
+                ids[n++] = g;
+        check (n >= 2, std::string ("LFO page (") + (f.random() ? "random" : "shape") + "): several groups (" + std::to_string (n) + ")");
+        checkPage (f.random() ? "LFO page, random" : "LFO page", r, n, [&] (int g) { f.setActiveGroup (ids[g]); r.refresh(); });
+        f.setActiveGroup (ids[0]);
+        r.refresh();
+        int mapped = 0;
+        for (int g = 0; g < n; ++g)
+            mapped += f.groups[ids[g]].block() >= 1;
+        check (mapped == std::min (n - 1, 3), "LFO page: the groups after the active one have their blocks (" + std::to_string (mapped) + ")");
+    }
+}
+
 void testModDetail()
 {
     demo::Rig<ModUi> r;
@@ -279,7 +320,8 @@ void testStatusSlotCount()
 {
     MixerUi mixer;
     EnvUi env;
-    check (page::QSlotCount<MixerUi>::of (mixer) == 16 && page::QSlotCount<EnvUi>::of (env) == 4, "the status file lists 16 slots for a page that publishes them (page_q_slots) and 4 for one that still publishes one group");
+    LfoUi lfo;
+    check (page::QSlotCount<MixerUi>::of (mixer) == 16 && page::QSlotCount<EnvUi>::of (env) == 16 && page::QSlotCount<LfoUi>::of (lfo) == 16, "the status file lists 16 slots for every page that publishes them (page_q_slots): Env and LFO now too");
 }
 
 void testDeviceRule()
@@ -322,6 +364,7 @@ int main()
     testFilter();
     testOscillator();
     testOscillatorTypePages();
+    testEnvLfo();
     testModDetail();
     testMacros();
     testFx();

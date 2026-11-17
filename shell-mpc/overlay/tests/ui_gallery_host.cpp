@@ -144,6 +144,7 @@ public:
         c->samples.push_back (cs);
         content_ = c;
     }
+    void setContent (std::shared_ptr<const synthyboy::StateContent> c) { content_ = std::move (c); }
 
     static int idx (const std::string& key)
     {
@@ -294,6 +295,7 @@ struct GalleryRig
     UiStack stack;
     page::Input in;
     double now = 1000.0;
+    MacroNames names;   // the macro names of the instance, active for everything the rig does (as the page view does)
 
     explicit GalleryRig (const GalleryInst& baseInst, int instance = 1)
         : inst (baseInst)
@@ -304,6 +306,8 @@ struct GalleryRig
 
     void refresh (int times = 2)
     {
+        names.load (inst.content().get());
+        const NamesScope scope (names);
         for (int i = 0; i < times; ++i)
         {
             now += 150.0;
@@ -314,11 +318,13 @@ struct GalleryRig
 
     void picture (const std::string& path)
     {
+        const NamesScope scope (names);
         saveScene (path, [this] (gpu::SceneBuilder& sb) { ui.draw (sb); });
     }
 
     void tapAt (int x, int y, int holdMs = 40)
     {
+        const NamesScope scope (names);
         TouchEvent e; e.kind = TouchEvent::Down; e.x = x; e.y = y;
         ui.touch (e, stack, inst, now);
         ui.tick (now + holdMs, stack, inst);
@@ -447,6 +453,14 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         rFlt1.in.targets = live1;
         rFlt1.refresh (2);
         rFlt1.picture (outDir + "/" + state + "_filter1.png");
+        {   // the OUTPUT popup of the filter (destination, buses, level, pan)
+            GalleryRig<FilterUi> rOut (baseInst, 1);
+            rOut.in.targets = live1;
+            rOut.refresh (2);
+            rOut.stack.openDetail (FilterUi::kPageRoute);
+            rOut.refresh (2);
+            rOut.picture (outDir + "/" + state + "_filter1_output.png");
+        }
 
         GalleryRig<FilterUi> rFlt2 (baseInst, 2);
         synthyboy::FilterResponse::readoutIndices (2, idx);
@@ -509,6 +523,43 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         rLfoRnd.refresh (2);
         rLfoRnd.picture (outDir + "/" + state + "_lfo_random.png");
 
+        // the LFO Editor (opened by the EDIT button at the top of the button column, for every shape): empty (a drawn shape without points), a preset shape taken over as points, a drawn shape, each tool
+        {
+            auto openEditor = [&] (float shape) -> std::unique_ptr<GalleryRig<LfoUi>>
+            {
+                GalleryInst gi = baseInst;
+                gi.set ("lfo1.shape", shape);
+                auto r = std::make_unique<GalleryRig<LfoUi>> (gi, 1);
+                r->refresh (2);
+                r->tap (r->ui.full().edit);
+                r->refresh (2);
+                return r;
+            };
+            auto at = [] (GalleryRig<LfoUi>& r, float fx, float fy) { r.tapAt (static_cast<int> (r.ui.editor().canvas.xOf (fx)), static_cast<int> (r.ui.editor().canvas.yOf (fy))); };
+            auto tool = [] (GalleryRig<LfoUi>& r, int t) { const ui::Rect c = r.ui.editor().tools.cell (t); r.tapAt (c.x + c.w / 2, c.y + c.h / 2); };
+            openEditor (12.0f)->picture (outDir + "/" + state + "_lfo_editor_empty.png");
+            openEditor (0.0f)->picture (outDir + "/" + state + "_lfo_editor_sine.png");
+            openEditor (4.0f)->picture (outDir + "/" + state + "_lfo_editor_square.png");
+            auto drawn = [&] (const char* name, int toolIndex)
+            {
+                auto r = openEditor (12.0f);
+                r->ui.editor().canvas.state.gridX = 8;   // a coarse grid the picture shows well: 8 columns, 4 rows
+                r->ui.editor().canvas.state.gridY = 4;
+                at (*r, 0.25f, 0.9f); at (*r, 0.5f, 0.2f); at (*r, 0.75f, 0.7f);
+                at (*r, 0.5f, 0.2f);   // select the middle point: the fields show it
+                if (toolIndex == 1) { tool (*r, 1); at (*r, 0.6f, 0.5f); }
+                if (toolIndex == 2) { tool (*r, 2); at (*r, 0.6f, 0.3f); }
+                if (toolIndex == 3) { tool (*r, 3); at (*r, 0.6f, 0.8f); }
+                if (toolIndex == 0) tool (*r, 0);
+                r->refresh (2);
+                r->picture (outDir + "/" + state + "_lfo_editor_" + name + ".png");
+            };
+            drawn ("tool_point", 0);
+            drawn ("tool_flat", 1);
+            drawn ("tool_rampup", 2);
+            drawn ("tool_rampdown", 3);
+        }
+
         GalleryRig<LfoUi> rLfo2 (baseInst, 2); rLfo2.refresh (2); rLfo2.picture (outDir + "/" + state + "_lfo2.png");
         GalleryRig<LfoUi> rLfo3 (baseInst, 3); rLfo3.refresh (2); rLfo3.picture (outDir + "/" + state + "_lfo3.png");
         GalleryRig<LfoUi> rLfo4 (baseInst, 4); rLfo4.refresh (2); rLfo4.picture (outDir + "/" + state + "_lfo4.png");
@@ -545,6 +596,13 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         rModRows.refresh (2);
         rModRows.picture (outDir + "/" + state + "_mod_rows.png");
         rModRows.picture (outDir + "/" + state + "_mod.png");
+        {   // the page of one modulation slot (the first row of the list)
+            GalleryRig<ModUi> rSlot (modRowsInst, 1);
+            rSlot.refresh (2);
+            rSlot.ui.openSlotDetail (0, rSlot.stack);
+            rSlot.refresh (2);
+            rSlot.picture (outDir + "/" + state + "_mod_slot.png");
+        }
     }
 
     // 9. FX (gallery and each of the 13 effect editors, every page of each)
@@ -654,9 +712,85 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
             }
         }
     }
+    // 16 knob device (the MPC XL): the idle chips of the other groups show the knob numbers 5 .. 16 (QGroup::setWideDevice, as overlay/service.h does on the XL); pictures named *_wide16_*
+    {
+        ui::QGroup::setWideDevice (true);
+        GalleryRig<EnvUi> rW1 (baseInst, 1); rW1.refresh (2); rW1.picture (outDir + "/" + state + "_wide16_env1.png");
+        GalleryRig<LfoUi> rW2 (baseInst, 1); rW2.refresh (2); rW2.picture (outDir + "/" + state + "_wide16_lfo1.png");
+        GalleryRig<FilterUi> rW3 (baseInst, 1); rW3.refresh (2); rW3.picture (outDir + "/" + state + "_wide16_filter1.png");
+        GalleryRig<MasterUi> rW4 (baseInst, 1); rW4.refresh (2); rW4.picture (outDir + "/" + state + "_wide16_master.png");
+        GalleryRig<MixerUi> rW5 (baseInst, 1); rW5.refresh (2); rW5.picture (outDir + "/" + state + "_wide16_mixer.png");
+        GalleryRig<OscPageUi> rW6 (baseInst, 2); rW6.refresh (2); rW6.picture (outDir + "/" + state + "_wide16_osca.png");
+        ui::QGroup::setWideDevice (false);
+    }
 }
 
 } // namespace
+
+/** The names of the macros (docs/ui-design/macro-names.md): the pages with named macros, and the keyboard page in its states. */
+void renderNames (const std::string& outDir)
+{
+    auto content = std::make_shared<synthyboy::StateContent>();
+    const char* const names[8] = { "Filter Sweep", "Drive + Warp", "Cutoff", "Detune + Chorus", "", "Reso", "WWWWWWWWWWWWWWWW", "Reverb + Chorus" };
+    for (int i = 0; i < 8; ++i)
+        content->macroNames[i] = names[i];
+    GalleryInst inst;
+    inst.setContent (content);
+    renderState (outDir, "Named", inst);   // no slot in use: the Mod page shows the board of the sources
+
+    // macros that drive knobs: the chips of the knobs, the rows of the Mod page, the targets pages
+    GalleryInst driven = inst;
+    driven.mod (1, uibind::macroSource (1), "filter1.cutoff", 45.0f);
+    driven.mod (2, uibind::macroSource (3), "filter1.cutoff", 30.0f);
+    driven.mod (3, uibind::macroSource (6), "filter1.resonance", 30.0f);
+    driven.mod (4, uibind::macroSource (2), "distortion.drive", 35.0f);
+    driven.mod (5, uibind::macroSource (7), "osc1.level", 20.0f);
+    driven.mod (6, uibind::macroSource (4), "osc1.unison.detune", 25.0f);
+    driven.mod (7, uibind::macroSource (8), "reverb.mix", 50.0f);
+    driven.mod (8, uibind::macroSource (5), "osc1.pan", 20.0f);
+    renderState (outDir, "NamedMods", driven);
+    {
+        GalleryRig<MacroUi> r (driven, 1);
+        r.refresh();
+        r.tapAt (r.ui.view().cards[0].chipsRect().x + 20, r.ui.view().cards[0].chipsRect().y + 20);
+        r.refresh();
+        r.picture (outDir + "/NamedMods_macro_targets.png");
+    }
+
+    // the keyboard page of an unnamed macro: empty, with text, caps lock, the second layer, the limit
+    GalleryRig<MacroUi> r (inst, 1);
+    r.refresh();
+    const auto tapKey = [&] (int k) { const ui::Rect b = r.ui.keyboard().key (k).r; r.tapAt (b.x + b.w / 2, b.y + b.h / 2); };
+    const auto typeText = [&] (const char* text)
+    {
+        for (const char* c = text; *c != '\0'; ++c)
+            tapKey (*c == ' ' ? r.ui.keyboard().keyOfKind (ui::TextEntry::Space) : r.ui.keyboard().keyOf (*c));
+    };
+    const ui::Rect nameBox = r.ui.view().cards[4].nameRect();
+    r.tapAt (nameBox.x + nameBox.w / 2, nameBox.y + nameBox.h / 2);
+    r.picture (outDir + "/Named_keyboard_empty.png");
+    typeText ("Filter ");
+    tapKey (r.ui.keyboard().keyOfKind (ui::TextEntry::ShiftKey));
+    typeText ("Sweep");
+    r.picture (outDir + "/Named_keyboard_text.png");
+    tapKey (r.ui.keyboard().keyOfKind (ui::TextEntry::ShiftKey));
+    tapKey (r.ui.keyboard().keyOfKind (ui::TextEntry::ShiftKey));
+    typeText ("ab");
+    r.picture (outDir + "/Named_keyboard_caps.png");
+    tapKey (r.ui.keyboard().keyOfKind (ui::TextEntry::LayerKey));
+    typeText ("7+&");
+    r.picture (outDir + "/Named_keyboard_symbols.png");
+    tapKey (r.ui.keyboard().keyOfKind (ui::TextEntry::LayerKey));
+    tapKey (r.ui.keyboard().keyOfKind (ui::TextEntry::Clear));
+    typeText ("wwwwwwwwwwwwwwwwww");
+    r.picture (outDir + "/Named_keyboard_full.png");
+    // a macro that has a name: the field starts with it
+    GalleryRig<MacroUi> r2 (inst, 1);
+    r2.refresh();
+    const ui::Rect nb = r2.ui.view().cards[1].nameRect();
+    r2.tapAt (nb.x + nb.w / 2, nb.y + nb.h / 2);
+    r2.picture (outDir + "/Named_keyboard_rename.png");
+}
 
 int main (int argc, char** argv)
 {
@@ -743,6 +877,8 @@ int main (int argc, char** argv)
         GalleryInst initInst;
         renderState (outDir, "Init", initInst);
     }
+
+    renderNames (outDir);
 
     // Default presets if none specified
     if (presets.empty())

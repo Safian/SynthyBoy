@@ -403,7 +403,9 @@ void testModulations()
     r.inst.lastSel = 2;
     r.ui.update (r.inst, 1, r.stack, r.now += 500, 3, 2);
     const ui::Rect kr = lv.rect();
-    const int tx = kr.x + 8, ty = kr.y + 6;
+    (void) kr;
+    const ui::Rect th = lv.tabHit();   // the chip is in the label row, right of the name
+    const int tx = th.x + th.w / 2, ty = th.y + th.h / 2;
     r.drag (tx, ty, tx, ty - 40);
     check (r.inst.get ("mod04.amount") > 40.0f, "dragging the modulation tab changes mod04.amount (" + std::to_string (r.inst.get ("mod04.amount")) + ")");
     // the long press opens the modulations page

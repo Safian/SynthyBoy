@@ -1959,14 +1959,17 @@ private:
         ages_[probed_++] = ok ? age : -2;
         if (probed_ == 24)
         {
-            if (FILE* f = std::fopen ("/tmp/synthyboy-overlay-gpu-egl.txt", "w"))
             {
+                // one diagnostic file, written once: through the bounded writer (no symlink followed, mode 0644)
+                char text[4096];
                 const char* ext = api_.eglQueryString (dpy_, 0x3055 /* EGL_EXTENSIONS */);
-                std::fprintf (f, "extensions: %s\nbuffer age of pictures 1..24:", ext != nullptr ? ext : "(none)");
-                for (int i = 0; i < 24; ++i)
-                    std::fprintf (f, " %d", ages_[i]);
-                std::fprintf (f, "\n");
-                std::fclose (f);
+                int n = std::snprintf (text, sizeof text, "extensions: %s\nbuffer age of pictures 1..24:", ext != nullptr ? ext : "(none)");
+                for (int i = 0; i < 24 && n > 0 && static_cast<size_t> (n) < sizeof text - 16; ++i)
+                    n += std::snprintf (text + n, sizeof text - static_cast<size_t> (n), " %d", ages_[i]);
+                if (n > 0 && static_cast<size_t> (n) < sizeof text - 2)
+                    text[n++] = '\n';
+                if (n > 0)
+                    synthyboy_mpc::safefile::writeSmall ("/tmp/synthyboy-overlay-gpu-egl.txt", text, static_cast<size_t> (n < static_cast<int> (sizeof text) ? n : static_cast<int> (sizeof text) - 1));
             }
         }
     }

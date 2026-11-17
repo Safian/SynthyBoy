@@ -139,7 +139,7 @@ inline DisplayInfo discoverDisplay (const DrmSnapshot& snap)
             continue;
         if (! p.hasArgb())
             continue;
-        if (p.hasZpos && appZpos && p.zpos <= appTop && ! d.appPlanes.empty())   // it would go UNDER a plane of the application
+        if (p.hasZpos && ! p.zposMutable && appZpos && p.zpos <= appTop && ! d.appPlanes.empty())   // it would go UNDER a plane of the application (a plane whose zpos can be written gets the order from the stacking rule when it is taken: its value now, a leftover of an earlier run, says nothing)
             continue;
         d.candidates.push_back (p.id);
     }

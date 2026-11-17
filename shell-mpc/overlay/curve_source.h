@@ -85,12 +85,23 @@ public:
         thread (the engine gets the new content, the chunk keeps it, content () shows it a moment later); a newer request for the same LFO replaces an older one that was not applied yet. Called from the overlay
         thread; it only stores the request. */
     virtual void setLfoShape (int /*lfo*/, const synthyboy::ContentLfoShape& /*shape*/) {}
+    /** The plugin-wide pad pressure layer (shell parameters "Pad Pressure" and "Pad Pressure Amount", docs/MPC.md "Pad pressure"): fills `on` and `percent` (0 .. 100) and returns true, false when this instance has none
+        (the Master page then shows the two controls disabled). Lock free. */
+    virtual bool padPressure (bool& /*on*/, float& /*percent*/) const noexcept { return false; }
+    /** The Master page sets the layer (the instance applies it to its settings and to the engine, the chunk keeps it). Lock free. */
+    virtual void setPadPressure (bool /*on*/, float /*percent*/) noexcept {}
+    /** The plugin-drawn Macros page names macro `macro` (0 .. 7): `name` is cleaned and cut (synthyboy::sanitizeMacroName), "" is the default name. A request, applied by the plugin's display thread
+        (the state's content, the chunk and content () show it a moment later; the host is told the names of the Q proxies changed); a newer request for the same macro replaces an older one that was
+        not applied yet. Called from the overlay thread; it only stores the request. */
+    virtual void setMacroName (int /*macro*/, const std::string& /*name*/) {}
     /** The VIRTUAL Q targets (q_router.h): a Q knob that is not a parameter (the values of the shape editor). The page tells the router the value (0 .. 1) a virtual target has now; the host's write to the
         Q proxy comes back through takeQVirtual (the latest written value; false when there is none since the last call). Lock free. */
     virtual void setQVirtual (int /*id*/, float /*normalised*/) noexcept {}
     virtual bool takeQVirtual (int /*id*/, float& /*normalised*/) noexcept { return false; }
     /** How many times the host wrote one of the Q proxies so far (a hardware knob was turned: the host draws its Q-Link panel over the right edge a moment later). Lock free. */
     virtual unsigned long qWriteCount() const noexcept { return 0; }
+    /** "key: value" lines about the Q proxies of this instance (the stepping of stepped targets: the travel per step, and per knob the raw value, the delta and the travel: q_router.h describe ()) for the status file. */
+    virtual void qStatus (std::string& /*out*/) const {}
 };
 
 class CurveSource

@@ -207,7 +207,7 @@ private:
         posix_spawn_file_actions_init (&fa);
         posix_spawnattr_init (&at);
         posix_spawn_file_actions_addopen (&fa, 0, "/dev/null", O_RDONLY, 0);
-        posix_spawn_file_actions_addopen (&fa, 1, log_.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
+        posix_spawn_file_actions_addopen (&fa, 1, log_.c_str(), O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW, 0644);
         posix_spawn_file_actions_adddup2 (&fa, 1, 2);
         // the socket end: onto descriptor 3 (dup2 clears the close-on-exec flag of the copy); a source that already is 3 would keep the flag, so move it first
         int child = sv[1];

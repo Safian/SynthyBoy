@@ -4,6 +4,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "demo_page.h"
+#include "../../overlay/gpu/cell_plan.h"
 
 using namespace uit;
 
@@ -680,6 +681,199 @@ void testPanels()
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The Q chips and the frame in cache cells: the helper repaints a cell by its rectangle, so every op of a chip and of the frame must lie inside a cell that covers it (one cell per chip, one for the frame).
+struct CellInfo { float x0, y0, x1, y1; uint32_t hash; };
+bool sameRectCell (const CellInfo& a, float x0, float y0, float x1, float y1) { return std::fabs (a.x0 - x0) < 0.01f && std::fabs (a.y0 - y0) < 0.01f && std::fabs (a.x1 - x1) < 0.01f && std::fabs (a.y1 - y1) < 0.01f; }
+
+/** The cells of a scene; `bad` counts the drawing ops that are outside a cell or leave the cell they are in. */
+std::vector<CellInfo> sceneCells (const gpu::SceneData& d, int& bad, int& ops)
+{
+    std::vector<CellInfo> cells;
+    bool in = false;
+    CellInfo cur {};
+    bad = 0;
+    ops = 0;
+    for (uint32_t i = 0; i < d.numOps; ++i)
+    {
+        const gpu::SceneOp& o = d.ops[i];
+        if (o.op == gpu::kOpCellBegin) { in = true; cur = { o.f[0], o.f[1], o.f[2], o.f[3], o.rgba }; cells.push_back (cur); continue; }
+        if (o.op == gpu::kOpCellEnd) { in = false; continue; }
+        float x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+        switch (o.op)
+        {
+            case gpu::kOpRect: case gpu::kOpRRect: case gpu::kOpFrame: x0 = o.f[0]; y0 = o.f[1]; x1 = o.f[2]; y1 = o.f[3]; break;
+            case gpu::kOpText:
+            {
+                const size_t off = static_cast<size_t> (o.f[3]), len = static_cast<size_t> (o.f[4]);
+                const float w = sdf::textWidth (d.text + off, static_cast<int> (len), o.f[2], gpu::bitsFloat (o.rgba2));
+                x0 = o.f[0]; x1 = o.f[0] + w; y0 = o.f[1] - sdf::capHeight (o.f[2]); y1 = o.f[1] + 0.2f * o.f[2];
+                break;
+            }
+            case gpu::kOpStyle: case gpu::kOpPaint: case gpu::kOpNone: continue;
+            default: ++bad; continue;   // an op this test does not know
+        }
+        ++ops;
+        if (! in || x0 < cur.x0 || y0 < cur.y0 || x1 > cur.x1 || y1 > cur.y1)
+            ++bad;
+    }
+    return cells;
+}
+
+struct GroupRig
+{
+    Knob k[4];
+    QGroup g;
+    Rect m[4];
+    Rect frame;
+    GroupRig (const Rect r[4], bool frameless)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            m[i] = r[i];
+            k[i].place (r[i]);
+            g.set (i, &k[i]);
+        }
+        g.setFrameless (frameless);
+        frame = g.rect();
+    }
+    GroupRig (const GroupRig&) = delete;
+    GroupRig& operator= (const GroupRig&) = delete;
+};
+
+void drawGroups (Scene& sc, const GroupRig* const* rigs, int n)
+{
+    for (int i = 0; i < n; ++i)
+    {
+        if (rigs[i]->g.active())
+            rigs[i]->g.draw (sc.builder());
+        else
+            rigs[i]->g.drawIdle (sc.builder());
+    }
+}
+
+void testQGroupCells()
+{
+    struct Shape { const char* name; Rect r[4]; bool frameless; };
+    const Shape shapes[] = {
+        { "row", { { 20, 60, 140, 100 }, { 170, 60, 140, 100 }, { 320, 60, 140, 100 }, { 470, 60, 140, 100 } }, false },
+        { "column", { { 20, 40, 140, 80 }, { 20, 140, 140, 80 }, { 20, 240, 140, 80 }, { 20, 340, 140, 80 } }, false },
+        { "2x2", { { 20, 40, 140, 100 }, { 170, 40, 140, 100 }, { 20, 160, 140, 100 }, { 170, 160, 140, 100 } }, false },
+        { "split frameless", { { 20, 40, 140, 100 }, { 260, 40, 140, 100 }, { 20, 330, 140, 100 }, { 260, 330, 140, 100 } }, true },
+    };
+    for (const Shape& sh : shapes)
+    {
+        const std::string nm = std::string ("q group cells (") + sh.name + "): ";
+        Rect rb[4];
+        for (int i = 0; i < 4; ++i)
+            rb[i] = { sh.r[i].x + 640, sh.r[i].y, sh.r[i].w, sh.r[i].h };
+        GroupRig a (sh.r, sh.frameless), b (rb, sh.frameless);
+        const GroupRig* both[2] = { &a, &b };
+        const int nChips = 4;
+
+        // idle: one cell per chip, each op inside its cell
+        Scene s0 (1280, 720);
+        drawGroups (s0, both, 2);
+        int bad = 0, ops = 0;
+        const std::vector<CellInfo> idle = sceneCells (*s0.data, bad, ops);
+        check (bad == 0 && ops > 0, nm + "idle: every op of the chips lies inside its cell (" + std::to_string (bad) + " outside)");
+        check (static_cast<int> (idle.size()) == 2 * nChips, nm + "idle: one cell per chip (" + std::to_string (idle.size()) + " cells for 8 chips)");
+
+        // A active: the frame in a cell of its own, the chips one cell each
+        a.g.setActive (true);
+        Scene s1 (1280, 720);
+        drawGroups (s1, both, 2);
+        const std::vector<CellInfo> actA = sceneCells (*s1.data, bad, ops);
+        check (bad == 0 && ops > 0, nm + "active: every op of the frame and the chips lies inside its cell (" + std::to_string (bad) + " outside)");
+        const int wantA = nChips + (sh.frameless ? 0 : 1) + nChips;
+        check (static_cast<int> (actA.size()) == wantA, nm + "active: " + std::to_string (wantA) + " cells (frame " + (sh.frameless ? "none" : "1") + ", chips of both groups), got " + std::to_string (actA.size()));
+        bool frameCell = false;
+        for (const CellInfo& c : actA)
+            frameCell = frameCell || sameRectCell (c, static_cast<float> (a.frame.x - 2), static_cast<float> (a.frame.y - 2), static_cast<float> (a.frame.right() + 2), static_cast<float> (a.frame.bottom() + 2));
+        check (frameCell == ! sh.frameless, nm + "the frame has the cell of its rectangle, a frameless group none");
+
+        // the cells that changed between two scenes (rectangle + hash), as rectangles
+        auto changed = [] (const std::vector<CellInfo>& p, const std::vector<CellInfo>& q)
+        {
+            // what layerDamage (cell_plan.h) takes as damage, before it merges the overlapping boxes: the cells of one scene that are not in the other (rectangle and hash), as the set of their rectangles
+            std::vector<ov::gpu::CellKey> kp, kq;
+            for (const CellInfo& c : p) kp.push_back ({ static_cast<int> (c.x0), static_cast<int> (c.y0), static_cast<int> (c.x1), static_cast<int> (c.y1), c.hash });
+            for (const CellInfo& c : q) kq.push_back ({ static_cast<int> (c.x0), static_cast<int> (c.y0), static_cast<int> (c.x1), static_cast<int> (c.y1), c.hash });
+            std::vector<Rect> out;
+            auto add = [&out] (const ov::gpu::CellKey& k)
+            {
+                const Rect r { k.x0, k.y0, k.x1 - k.x0, k.y1 - k.y0 };
+                for (const Rect& o : out)
+                    if (o == r)
+                        return;
+                out.push_back (r);
+            };
+            for (const auto& k : kq) { bool f = false; for (const auto& o : kp) f = f || o == k; if (! f) add (k); }
+            for (const auto& k : kp) { bool f = false; for (const auto& o : kq) f = f || o == k; if (! f) add (k); }
+            std::vector<ov::gpu::DamageRect> dmg;   // and the real function agrees that something is damaged
+            ov::gpu::layerDamage (kp, kq, dmg, 1000);
+            if (out.empty() != dmg.empty())
+                out.push_back ({ -1, -1, 0, 0 });
+            return out;
+        };
+        auto expectChanged = [&] (const std::vector<Rect>& got, const GroupRig* const* rigs, int n, const std::string& what)
+        {
+            std::vector<Rect> want;
+            for (int r = 0; r < n; ++r)
+            {
+                if (! sh.frameless)
+                    want.push_back ({ rigs[r]->frame.x - 2, rigs[r]->frame.y - 2, rigs[r]->frame.w + 4, rigs[r]->frame.h + 4 });
+                for (int i = 0; i < 4; ++i)
+                {
+                    const Rect c = QGroup::chipRect (rigs[r]->m[i], i + 1);
+                    want.push_back ({ c.x - 2, c.y - 2, c.w + 4, c.h + 4 });
+                }
+            }
+            bool same = got.size() == want.size();
+            for (const Rect& w : want)
+            {
+                bool in = false;
+                for (const Rect& g : got)
+                    in = in || g == w;
+                same = same && in;
+            }
+            check (same, nm + what + ": exactly the cells of the frame and the chips of the group(s) concerned changed (" + std::to_string (got.size()) + " cells, expected " + std::to_string (want.size()) + ")");
+        };
+        const GroupRig* justA[1] = { &a };
+        expectChanged (changed (idle, actA), justA, 1, "activating a group");
+
+        // B instead of A
+        a.g.setActive (false);
+        b.g.setActive (true);
+        Scene s2 (1280, 720);
+        drawGroups (s2, both, 2);
+        const std::vector<CellInfo> actB = sceneCells (*s2.data, bad, ops);
+        check (bad == 0, nm + "the other group active: every op inside its cell");
+        expectChanged (changed (actA, actB), both, 2, "moving the active group to the other quad");
+
+        // deactivating
+        b.g.setActive (false);
+        Scene s3 (1280, 720);
+        drawGroups (s3, both, 2);
+        const std::vector<CellInfo> idle2 = sceneCells (*s3.data, bad, ops);
+        const GroupRig* justB[1] = { &b };
+        expectChanged (changed (actB, idle2), justB, 1, "deactivating a group");
+        check (idle2.size() == idle.size() && changed (idle, idle2).empty(), nm + "after deactivating, the scene is the idle scene again (same cells)");
+    }
+    // the chips of a mapped row (a list row that is not a QGroup)
+    {
+        Knob k[3];
+        const Rect r[3] = { { 20, 100, 100, 60 }, { 20, 200, 100, 60 }, { 400, 100, 100, 60 } };
+        const Component* mm[3];
+        for (int i = 0; i < 3; ++i) { k[i].place (r[i]); mm[i] = &k[i]; }
+        Scene s (1280, 720);
+        QGroup::drawMappedMembers (s.builder(), 1, mm, 3);
+        int bad = 0, ops = 0;
+        const std::vector<CellInfo> c = sceneCells (*s.data, bad, ops);
+        check (bad == 0 && c.size() == 3, "q group cells (mapped row members): one cell per chip, every op inside (" + std::to_string (c.size()) + " cells, " + std::to_string (bad) + " outside)");
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 void testQGroup()
 {
     OscPage pg;
@@ -800,6 +994,7 @@ int main()
     testRandPair();
     testPanels();
     testQGroup();
+    testQGroupCells();
     testPage();
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;

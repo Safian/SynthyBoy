@@ -24,6 +24,7 @@
 #endif
 #include "../output_peak.h"
 #include "../play_log.h"
+#include "../poll_guard.h"
 #include "../thread_policy.h"
 #include "controller.h"
 #include "cpu_plan_linux.h"
@@ -95,13 +96,25 @@ public:
     int attach (IInstanceView* view)
     {
         std::lock_guard<std::mutex> g (lifeMu_);
+        if (stuck_)
+            return -1;   // the overlay thread of an earlier run never ended (it is stuck in a call that does not return): no second thread on the same controller, this instance shows no overlay
         ensureController();
         const int slot = controller_->attach (view);
         synthyboy_mpc::PlayLog::line ("Service::attach slot %d, thread joinable %d", slot, thread_.joinable() ? 1 : 0);
         if (! thread_.joinable())
         {
             stop_.store (false);
-            thread_ = std::thread ([this] { run(); });
+            runDone_ = false;
+            thread_ = std::thread ([this]
+            {
+                try { run(); }
+                catch (...) { PollStatus::report ("overlay thread", this, 1, true, "an exception reached the top of the thread"); }
+                {
+                    std::lock_guard<std::mutex> g (wakeMu_);
+                    runDone_ = true;
+                }
+                wake_.notify_all();
+            });
             synthyboy_mpc::PlayLog::line ("Service::attach started the overlay thread");
         }
         if (! atexitRegistered_)
@@ -112,20 +125,44 @@ public:
         return slot;
     }
 
-    void detach (IInstanceView* view)
+    /** True when the instance is detached: the overlay thread no longer touches `view`. False when the overlay thread did not let go of the controller's lock within kDetachWaitMs (a tick that does not return): the view
+        may still be used, the caller must not free the instance. effClose of the host is held up for at most that long (robustness review F5). */
+    bool detach (IInstanceView* view)
     {
         std::lock_guard<std::mutex> g (lifeMu_);
         if (! controller_)
-            return;
-        const size_t left = controller_->detach (view);
+            return true;
+        size_t left = 0;
+        if (! controller_->detachWithin (view, kDetachWaitMs, left))
+        {
+            synthyboy_mpc::PlayLog::line ("Service::detach: the overlay thread did not let go in %d ms", kDetachWaitMs);
+            return false;
+        }
         synthyboy_mpc::PlayLog::line ("Service::detach, %zu instances left", left);
         if (left == 0)
             stopThread();
+        return true;
     }
 
 private:
+    static constexpr int kDetachWaitMs = 2000;   // detach: the controller's lock
+    static constexpr int kStopWaitMs = 2500;     // stopThread: the overlay thread to end (a vblank wait is bounded by the kernel at 3 s, the helper's kill at 2 s)
     Service() = default;
     const std::chrono::steady_clock::time_point epoch_ = std::chrono::steady_clock::now();
+
+    /** The files the controller looks at in the shipped plugin. The switches that are features (overlay-off, nogpu, rot, look, detail, fps, gpuclock) and the status file stay; the debug ones (the pointer hot spot, the
+        curve dump request) are empty without SYNTHYBOY_MPC_DEBUG_HOOKS, so the plugin does not look at them. */
+    static Paths shippedPaths()
+    {
+        Paths p;
+#if defined(SYNTHYBOY_MPC_DEBUG_HOOKS) && SYNTHYBOY_MPC_DEBUG_HOOKS
+#else
+        p.pointerHotSpot.clear();
+        p.dumpRequest.clear();
+        p.dump.clear();
+#endif
+        return p;
+    }
 
     void ensureController()
     {
@@ -153,7 +190,7 @@ private:
         mouse_ = std::make_unique<LinuxMouseReader>();           // the mice: found at run time, hot plug, read only, never grabbed (mouse_linux.h)
         pointer_ = std::make_unique<LinuxPointerSource> (display_);   // the host's pointer plane: where the pointer is (drm_linux.h)
 #endif
-        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, Paths(), Timing(), -1.0, gpu_.get(), touch_.get());
+        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, shippedPaths(), Timing(), -1.0, gpu_.get(), touch_.get());
 #if defined(__linux__)
         controller_->setMouse (mouse_.get(), pointer_.get());
         controller_->setExtraStatus ([this] { return cpuStatus(); });
@@ -168,13 +205,29 @@ private:
         }
         wake_.notify_all();
         if (thread_.joinable() && thread_.get_id() != std::this_thread::get_id())
+        {
+            std::unique_lock<std::mutex> lk (wakeMu_);
+            const bool ended = wake_.wait_for (lk, std::chrono::milliseconds (kStopWaitMs), [this] { return runDone_; });
+            lk.unlock();
+            if (! ended)
+            {
+                // The thread does not come back (a call into the display or the helper that does not return). It is left running (detached): it holds nothing but the service, which lives for the whole process.
+                // The controller is not shut down from here (that would wait for the lock the thread holds) and no second overlay thread is started on it.
+                thread_.detach();
+                stuck_ = true;
+                PollStatus::report ("overlay thread", this, 1, true, "did not end within the limit when the last instance closed; left running");
+                return;
+            }
             thread_.join();
+        }
         controller_->shutdown();
     }
 
     void shutdownAtExit()
     {
         std::lock_guard<std::mutex> g (lifeMu_);
+        if (stuck_)
+            return;   // the overlay thread is stuck inside the controller: nothing is touched from the exit handler either
         if (controller_ && thread_.joinable())
             stopThread();
         else if (controller_)
@@ -186,7 +239,10 @@ private:
         useNormalScheduling (0, "sb-overlay");
         synthyboy_mpc::PlayLog::line ("Service::run entered");
 #if defined(__linux__)
-        applyCpus (true);
+        {
+            PollGuard first ("CPU plan (first)", this);
+            first.run ([&] { applyCpus (true); });
+        }
 #endif
         controller_->setCpuClock ([]
         {
@@ -198,6 +254,7 @@ private:
         // instrument was replaced, another project was loaded): the controller still holds the deadlines of the earlier run, which would lie minutes in the future of a new clock, and nothing
         // would be detected, shown or written until the new clock caught up. The epoch is that of the service, set once.
         const auto start = epoch_;
+        PollGuard gTick ("overlay tick", this), gCpu ("CPU plan", this);
         std::unique_lock<std::mutex> lk (wakeMu_);
         while (! stop_.load())
         {
@@ -205,10 +262,20 @@ private:
             const double now = std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - start).count() + 1.0;
 #if defined(__linux__)
             if (nowSteadyMs() >= nextCpuScanMs_)
-                applyCpus (false);
+            {
+                gCpu.run ([&] { applyCpus (false); });   // allocates (strings, vectors): a failure is counted, five in a row switch the CPU plan off
+                if (gCpu.streak > 0)
+                    nextCpuScanMs_ = nowSteadyMs() + 10000.0;
+            }
 #endif
             const auto tickStart = std::chrono::steady_clock::now();
-            const double wait = controller_->tick (now);
+            double wait = 1000.0;
+            gTick.run ([&] { wait = controller_->tick (now); });   // Controller::tick catches everything itself; this is the second barrier (and the count)
+            if (gTick.off)
+            {
+                lk.lock();
+                break;   // the overlay is off for good: the thread ends, the plane is taken down by the last detach
+            }
             if (wait > 1500.0 || wait < 0.0) synthyboy_mpc::PlayLog::line ("Service::run: tick asks for a wait of %.1f ms", wait);
             lk.lock();
             if (stop_.load())
@@ -272,6 +339,8 @@ private:
     std::mutex lifeMu_, wakeMu_;
     std::condition_variable wake_;
     std::atomic<bool> stop_ { false };
+    bool runDone_ = false;   // under wakeMu_: run () has returned
+    bool stuck_ = false;     // under lifeMu_: a thread was given up on; the overlay stays off for the rest of the process
     std::thread thread_;
     bool atexitRegistered_ = false;
 #if defined(__linux__)

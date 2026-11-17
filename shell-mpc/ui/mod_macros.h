@@ -117,20 +117,51 @@ public:
     }
 
     Rect chipsRect() const noexcept { return { rect_.x + 6, rect_.bottom() - 6 - kChipsH, rect_.w - 12, kChipsH }; }
+    /** The name beside the dial is a button when `nameId` is set: a tap on it asks for the keyboard page that renames the macro (Request nameId). The touch target is 56 pixels high around the name's line. */
+    int nameId = 0;
+    Rect nameRect() const noexcept
+    {
+        const Knob::Geom g = knob.geom();
+        const int bottom = g.labelBox.y + g.labelBox.h + 6, top = std::max (rect_.y + kQLane, bottom - 56);   // 56 pixels high, ending just under the name: the value text under it stays the knob's
+        return { g.labelBox.x - 4, top, std::min (g.labelBox.w + 8, rect_.right() - g.labelBox.x + 4), std::min (bottom, rect_.bottom()) - top };
+    }
 
     Change touchDown (int x, int y, double nowMs) override
     {
-        tapCard_ = false;
+        tapCard_ = tapName_ = false;
         if (enabled_ && chipsRect().contains (x, y))
         {
             tapCard_ = true;
             return Change::none();
         }
+        if (enabled_ && nameId != 0 && nameRect().contains (x, y))   // a tap is the name's; a drag that starts here is the knob's (replayed from where it began)
+        {
+            tapName_ = true;
+            nameTap_.down (x, y, nowMs);
+            nameDownMs_ = nowMs;
+            return Change::none();
+        }
         return Composite::touchDown (x, y, nowMs);
     }
-    Change touchMove (int x, int y) override { return tapCard_ ? Change::none() : Composite::touchMove (x, y); }
+    Change touchMove (int x, int y) override
+    {
+        if (tapName_)
+        {
+            if (! nameTap_.move (x, y))
+                return Change::none();
+            tapName_ = false;
+            Composite::touchDown (nameTap_.startX(), nameTap_.startY(), nameDownMs_);
+            return Composite::touchMove (x, y);
+        }
+        return tapCard_ ? Change::none() : Composite::touchMove (x, y);
+    }
     Change touchUp (int x, int y) override
     {
+        if (tapName_)
+        {
+            tapName_ = false;
+            return nameRect().contains (x, y) ? Change::request (nameId) : Change::none();
+        }
         if (tapCard_)
         {
             tapCard_ = false;
@@ -151,6 +182,16 @@ protected:
     void drawExtra (Pen& p) const override
     {
         const theme::Look& T = theme::L();
+        if (nameId != 0)   // the name is a button: a line under it says so
+        {
+            const Knob::Geom g = knob.geom();
+            if (g.labelSize > 0.0f)
+            {
+                const float w = std::min (Pen::textWidth (knob.state.label, g.labelSize), static_cast<float> (g.labelBox.w));
+                const float y = static_cast<float> (g.labelBox.y + g.labelBox.h) - 1.0f;
+                p.line (static_cast<float> (g.labelBox.x), y, static_cast<float> (g.labelBox.x) + w, y, 1.0f, p.c (T.keylineHi, 255));
+            }
+        }
         const Rect cr = chipsRect();
         p.rrect (cr, T.rControl, p.c (T.keyline, 120), 1.0f);
         if (numChips == 0)
@@ -183,7 +224,9 @@ protected:
     }
 
 private:
-    bool tapCard_ = false;
+    bool tapCard_ = false, tapName_ = false;
+    TapGesture nameTap_;
+    double nameDownMs_ = 0.0;
     int totalDests_ = 0;
 };
 

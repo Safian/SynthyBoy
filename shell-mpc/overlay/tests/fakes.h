@@ -359,6 +359,17 @@ public:
     std::atomic<int> reportRequests { 0 };
     std::shared_ptr<const synthyboy::StateContent> content() const override { std::lock_guard<std::mutex> g (cmu); return contentPtr; }
     void setContent (std::shared_ptr<const synthyboy::StateContent> c) { std::lock_guard<std::mutex> g (cmu); contentPtr = std::move (c); }
+    /** The renames of the Macros page: kept, and applied to content () at once like the plugin's display thread does a moment later (the names are cleaned the same way). */
+    void setMacroName (int macro, const std::string& name) override
+    {
+        std::lock_guard<std::mutex> g (cmu);
+        macroRenames.emplace_back (macro, name);
+        auto next = contentPtr != nullptr ? std::make_shared<synthyboy::StateContent> (*contentPtr) : std::make_shared<synthyboy::StateContent>();
+        if (macro >= 0 && macro < synthyboy::kNumMacros)
+            next->macroNames[macro] = synthyboy::sanitizeMacroName (name, macro);
+        contentPtr = std::move (next);
+    }
+    std::vector<std::pair<int, std::string>> macroRenames;
     float lt_[2] = {};
     std::atomic<int> voices { 0 };
     std::atomic<double> bpmValue { 120.0 };

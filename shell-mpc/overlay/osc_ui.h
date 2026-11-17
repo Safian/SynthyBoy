@@ -27,6 +27,7 @@
 #include "../q_router.h"
 #include "play_osc.h"
 #include "q_publish.h"
+#include "ui_bind.h"
 #include "touch_decoder.h"
 #include "ui_stack.h"
 #include "synthyboy/modulation.h"
@@ -922,31 +923,8 @@ private:
         mods_.setTargetValue (t);
     }
     int modsTargetParam_ = -1, modsAddOffer_ = 0, savedGroup_ = -1;
-    static const char* sourceName (int choice) noexcept
-    {
-        const synthyboy::ModSourceInfo* t = synthyboy::modSourceTable();
-        return choice >= 1 && choice <= static_cast<int> (synthyboy::modSourceCount()) ? t[choice - 1].name : "";
-    }
+    static const char* sourceName (int choice) noexcept { return uibind::sourceName (choice); }   // a macro answers with its name (macro_names.h)
     static void setSourceText (ui::Stepper& s, int choice) { s.setItem (sourceName (choice)); }
-    /** The name of a modulation source in at most 6 characters that still says which one it is (the chip of a knob, the row of the modulations page): "Macro 3" -> "MAC 3", "Random LFO 2" -> "RLFO 2",
-        "Velocity" -> "VEL", the others their first six characters. The prefixes are the ones theme::sourceColour knows. */
-    static void shortSourceName (const char* full, char out[7])
-    {
-        const std::string n = full;
-        auto number = [&] { const size_t sp = n.rfind (' '); return sp == std::string::npos ? std::string() : n.substr (sp); };
-        std::string s;
-        if (n.compare (0, 6, "Macro ") == 0) s = "MAC" + number();
-        else if (n.compare (0, 11, "Random LFO ") == 0) s = "RLFO" + number();
-        else if (n == "Velocity") s = "VEL";
-        else if (n == "Aftertouch") s = "AT";
-        else if (n == "Poly Aftertouch") s = "PAT";
-        else if (n == "Mod Wheel") s = "MOD WH";
-        else if (n == "Pitch Wheel") s = "PITCH";
-        else if (n == "Random per Note") s = "RND";
-        else s = n;
-        std::snprintf (out, 7, "%.6s", s.c_str());
-    }
-
     /** The modulations of the parameter `param`: a scan of the 64 slots of the matrix (the slots whose destination is this parameter). `rows` (may be null) gets the slot of every entry. */
     static ui::ModInput modsOf (const IInstanceView& v, int param, int selected, ModRow* rows)
     {
@@ -968,8 +946,8 @@ private:
             const bool bi = sp.bipolar >= 0 && v.param (sp.bipolar) >= 0.5f;
             const bool by = sp.bypass >= 0 && v.param (sp.bypass) >= 0.5f;
             char name[7];
-            shortSourceName (sourceName (src), name);
-            mi.add (src, name, depth, bi, by);
+            uibind::shortName (src, name);   // the short name of the source (a macro: the short form of its name)
+            mi.add (src, name, depth, bi, by, uibind::isMacroSource (src));
             if (rows != nullptr)
                 rows[n] = { s, src };
             ++n;

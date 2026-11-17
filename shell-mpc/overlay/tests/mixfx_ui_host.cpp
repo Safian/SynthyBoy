@@ -49,22 +49,27 @@ void testMixerLayout()
     r.refresh();
     ui::MixerFullScreen& m = r.ui.screen();
     check (m.rect().w == 1280 && m.rect().h == 628 && r.stack.element() == MixerUi::kElementPage, "the page has the whole tab and is the element of the Mixer tab");
-    bool targets = true, family = true, inside = true;
+    bool targets = true, family = true, inside = true, uniformHeader = true;
     for (int s = 0; s < 10; ++s)
     {
         const ui::MixerStrip& st = m.strips[s];
-        targets = targets && st.power.rect().h >= 56 && st.destButton.rect().h >= 56 && st.pan.rect().h >= 56 && st.send1.rect().h >= 56 && st.send2.rect().h >= 56 && st.fader.rect().h >= 150 && st.sizeOk();
-        family = family && st.pan.rect().w == m.strips[0].pan.rect().w && st.fader.rect().h == m.strips[0].fader.rect().h;
-        inside = inside && st.rect().contains (st.pan.rect()) && st.rect().contains (st.fader.rect());
-        ui::Component* leaves[16];
+        targets = targets && st.power.rect().h >= 56 && st.destButton.rect().h >= 56 && st.fader.rect().h >= 150 && st.sizeOk();
+        if (st.hasPan())
+            targets = targets && st.pan.rect().h >= 56 && st.send1.rect().h >= 56 && st.send2.rect().h >= 56;
+        if (s < 7)
+            family = family && st.pan.rect().w == m.strips[0].pan.rect().w && st.fader.rect().h == m.strips[0].fader.rect().h;
+        else
+            family = family && st.fader.rect().h >= 380; // BUS 1, BUS 2 and MASTER have full-height faders
+        inside = inside && (! st.hasPan() || st.rect().contains (st.pan.rect())) && st.rect().contains (st.fader.rect());
         ui::Component* all[64];
         const int n = m.collectLeaves (all, 0, 64);
-        (void) leaves;
         inside = inside && m.groups[s].check (all, n) == 0 && st.rect().contains (m.groups[s].rect());
+        uniformHeader = uniformHeader && st.power.rect().h == 56 && st.destButton.rect().h == 56;
     }
     check (targets, "every cell of every strip is >= 56 px high, the fader >= 150 px, and the strip has its minimum size");
-    check (family, "all strips are one family (the same pan and fader size)");
+    check (family, "all strips are one family (standard fader and full-height fader families)");
     check (inside, "the Q group of every strip lies in its strip and nothing else is in its frame");
+    check (uniformHeader, "all ten strips have uniform 56 px header and route button heights");
     check (m.strips[0].pan.rect().w >= 96 && m.strips[0].pan.rect().h == 56, "the PAN is a 56 px slider cell, not a speck (" + std::to_string (m.strips[0].pan.rect().w) + " x " + std::to_string (m.strips[0].pan.rect().h) + ")");
 }
 
@@ -82,6 +87,8 @@ void testMixerValuesAndWrites()
     check (std::string (m.strips[5].fader.state.valueText).find ("dB") != std::string::npos, "the level of F1 is in dB (" + std::string (m.strips[5].fader.state.valueText) + ")");
     check (std::string (m.strips[7].fader.state.valueText).find ("dB") != std::string::npos, "the level of BUS 1 is in dB (" + std::string (m.strips[7].fader.state.valueText) + ")");
     check (m.strips[1].fader.state.numTicks == 5 && std::string (m.strips[1].fader.state.tickText[4]) == "100" && std::string (m.strips[5].fader.state.tickText[0]) == "0", "the faders have their scale: 0 .. 100 for a percent, 0 / -12 / -24 / -48 for a dB level");
+    check (m.strips[7].fader.state.isFine && m.strips[7].fader.state.numTicks == 8, "BUS 1 fader has a finer dB scale with 8 marks (+6 to -48 dB)");
+    check (m.strips[9].fader.state.isFine && m.strips[9].fader.state.numTicks == 8, "MASTER fader has a finer dB scale with 8 marks (+6 to -48 dB)");
     check (m.strips[1].fader.rect().y < m.strips[1].pan.rect().y && m.strips[1].pan.rect().y < m.strips[1].send1.rect().y && m.strips[1].send1.rect().y < m.strips[1].send2.rect().y, "the strip reads top down in the order of its Q numbers: LEVEL 1, PAN 2, B1 3, B2 4");
     check (std::string (m.strips[1].pan.state.valueText) == "L 35", "the pan is L 35 (" + std::string (m.strips[1].pan.state.valueText) + ")");
     check (std::string (m.strips[1].send1.state.valueText) == "40.0%", "the send is 40.0% (" + std::string (m.strips[1].send1.state.valueText) + ")");
@@ -128,6 +135,8 @@ void testMixerGroupsAndList()
     r.inst.liveValues.stripPeak[9] = 0.94f;
     r.refresh();
     check (std::fabs (m.strips[0].fader.state.peak - 0.82f) < 0.001f && std::fabs (m.strips[9].fader.state.peak - 0.94f) < 0.001f && m.strips[3].fader.state.peak == 0.0f, "the meters follow the engine's strip peaks");
+    check (m.strips[9].fader.state.hasPeakHold && m.strips[9].fader.state.peakHold >= 0.94f, "MASTER meter has peak hold matching engine peak");
+    check (! m.strips[0].fader.state.hasPeakHold, "strip 0 meter has no peak hold");
 }
 
 // Every strip is a Q group of its own: Q1 LEVEL, Q2 PAN, Q3 B1, Q4 B2 of the strip that was touched. A member the engine has no parameter for (BUS 1, BUS 2 and MASTER have a level only) is left out:
@@ -160,7 +169,7 @@ void testMixerQPerStrip()
                     return false;
         return true;
     };
-    const ui::Rect pan0 = m.strips[0].pan.rect(), s1Pan = m.strips[7].pan.rect();
+    const ui::Rect pan0 = m.strips[0].pan.rect();
     for (int s = 0; s < 10; ++s)
     {
         ui::MixerStrip& st = m.strips[s];
@@ -197,8 +206,16 @@ void testMixerQPerStrip()
             if (g != s && m.strips[g].rect().overlaps (fr))
                 fail (s, "the frame reaches another strip");
         // the left-out controls: same places as everywhere, not touchable, not among the leaves
-        if (st.pan.rect().y != pan0.y || st.pan.rect().h != pan0.h || st.rect().h != m.strips[0].rect().h)
-            fail (s, "the strip or its controls moved");
+        if (s < 7)
+        {
+            if (st.pan.rect().y != pan0.y || st.pan.rect().h != pan0.h || st.rect().h != m.strips[0].rect().h)
+                fail (s, "the strip or its controls moved");
+        }
+        else
+        {
+            if (st.fader.rect().h < 380 || st.fader.rect().bottom() < st.rect().bottom() - 10)
+                fail (s, "the bus fader does not run the full height");
+        }
         ui::Component* leaves[64];
         const int n = st.collectLeaves (leaves, 0, 64);
         for (int i = 0; i < n; ++i)
@@ -207,7 +224,7 @@ void testMixerQPerStrip()
     }
     check (all, "selecting each of the ten strips publishes its Q targets (LEVEL, PAN, B1, B2; fewer where the engine has none), moves the frame and the routing line, no chip without a target" + why);
 
-    // the bus strips: PAN, B1 and B2 are not drawn at all (the ground of the strip shows) and a tap there does nothing
+    // the bus strips: the fader and meter run the full height of the strip, PAN / B1 / B2 are not present
     r.tapAt (m.strips[7].fader.rect().x + 6, m.strips[7].fader.rect().y + 6);
     auto data = std::make_unique<gpu::SceneData>();
     gpu::SceneBuilder sb (*data);
@@ -216,11 +233,10 @@ void testMixerQPerStrip()
     std::vector<uint32_t> cv;
     renderScene (*data, cv);
     const ui::MixerStrip& bus = m.strips[7];
-    const ui::Rect below { bus.rect().x + 10, s1Pan.y - ui::kQLane + 4, bus.rect().w - 20, bus.rect().bottom() - (s1Pan.y - ui::kQLane + 4) - 10 };   // inside the strip's own border and the frame of the fader
-    check (flat (cv, below), "BUS 1: the space where PAN, B1 and B2 sit on the other strips is empty (no greyed control, no chip, no frame)");
+    check (bus.fader.rect().h >= 380 && bus.fader.rect().bottom() >= bus.rect().bottom() - 10, "BUS 1: the fader and meter run the full height of the strip (longer throw, no empty space at bottom)");
     check (! flat (cv, { m.strips[1].pan.rect().x + 2, m.strips[1].pan.rect().y + 2, m.strips[1].pan.rect().w - 4, m.strips[1].pan.rect().h - 4 }), "the same place on strip A is drawn (the check sees a control)");
     const int writesBefore = r.inst.writes;
-    r.tapAt (s1Pan.x + s1Pan.w / 2, s1Pan.y + s1Pan.h / 2);
+    r.tapAt (bus.rect().x + bus.rect().w / 2, pan0.y + pan0.h / 2);
     check (r.inst.writes == writesBefore && m.activeGroup() == 7, "a tap where the left-out PAN would be writes nothing and keeps BUS 1 selected");
     // the strips with all four members are still all four: a strip that was selected before is not left changed
     r.tapAt (m.strips[3].fader.rect().x + 6, m.strips[3].fader.rect().y + 6);
@@ -361,70 +377,86 @@ void testEveryEffectType()
             const int lastParam = std::min (ed.numParams(), firstParam + ed.rowsPerPage() * 4);
             const int expectedOnPage = lastParam - firstParam;
 
-            int shownKnobs = 0, shownSteppers = 0;
+            int shownKnobs = 0, shownSteppers = 0, shownLists = 0, shownToggles = 0, fallbacks = 0;
             int withValue = 0, withName = 0, small = 0;
-            bool noEnumAsKnob = true;
+            bool kindsOk = true, overlap = false, inside = true;
+            std::vector<const ui::Component*> shownNow;
 
             for (int i = 0; i < ui::FxSlotEditor::kMaxParams; ++i)
             {
                 const bool onThisPage = (i >= firstParam && i < lastParam);
                 const bool choice = ed.isChoice (i);
-
-                bool knobShown = false;
-                for (int c = 0; c < ed.numChildren(); ++c)
-                    if (ed.child (c) == &ed.knobs[i] && ed.childShown (c))
-                        knobShown = true;
-
-                bool stepperShown = false;
-                for (int c = 0; c < ed.numChildren(); ++c)
-                    if (ed.child (c) == &ed.steppers[i] && ed.childShown (c))
-                        stepperShown = true;
-
-                // An enumerated parameter must NEVER be laid out as a knob
-                if (choice && knobShown)
-                    noEnumAsKnob = false;
-                // A continuous parameter must never be laid out as a stepper
-                if (! choice && stepperShown)
-                    noEnumAsKnob = false;
-
-                if (onThisPage)
+                const ui::Component* members[4] = { &ed.knobs[i], &ed.steppers[i], &ed.lists[i], &ed.toggles[i] };
+                bool shownKind[4] = { false, false, false, false };
+                for (int k = 0; k < 4; ++k)
+                    shownKind[k] = isShown (ed, members[k]);
+                const int nShown = shownKind[0] + shownKind[1] + shownKind[2] + shownKind[3];
+                if (! onThisPage)
                 {
-                    if (choice)
-                    {
-                        if (stepperShown && ! knobShown)
-                        {
-                            ++shownSteppers;
-                            withName += ed.steppers[i].state.caption[0] != '\0';
-                            withValue += ed.steppers[i].state.text[0] != '\0';
-                            small += ed.steppers[i].rect().w < 100 || ed.steppers[i].rect().h < 56;
-                        }
-                    }
-                    else
-                    {
-                        if (knobShown && ! stepperShown)
-                        {
-                            ++shownKnobs;
-                            withName += ed.knobs[i].state.label[0] != '\0';
-                            withValue += ed.knobs[i].state.valueText[0] != '\0';
-                            small += ed.knobs[i].rect().w < 100 || ed.knobs[i].rect().h < 72;
-                        }
-                    }
+                    kindsOk = kindsOk && nShown == 0;
+                    continue;
                 }
-                else
+                const ui::FxSlotEditor::Kind kind = ed.kindOf (i);
+                const synthyboy::ParamInfo* pi = synthyboy::fxInstanceSource (t, i);
+                // exactly one control is shown, of the kind the cell has; an enumerated parameter is never a knob, a continuous one is always a knob
+                kindsOk = kindsOk && nShown == 1 && shownKind[static_cast<int> (kind)] && (kind == ui::FxSlotEditor::Kind::Knob) == ! choice;
+                // a list of up to 8 values is a LED list (a toggle for Off / On), a longer one a stepper; a short one that is a stepper is a fallback: none is expected (every list fits its cell)
+                // a short list is a stepper only where its list does not fit the cell (the display and the rows keep their size)
+                if (choice && pi->numChoices <= 8 && kind == ui::FxSlotEditor::Kind::Stepper && ed.listFits (i, ed.steppers[i].rect().w, ed.steppers[i].rect().h) && ed.baseKind (i) == ui::FxSlotEditor::Kind::List)
+                    ++fallbacks;
+                if (choice && pi->numChoices <= 8 && kind == ui::FxSlotEditor::Kind::List)
+                    kindsOk = kindsOk && ed.listFits (i, ed.lists[i].rect().w, ed.lists[i].rect().h);
+                if (choice && pi->numChoices > 8)
+                    kindsOk = kindsOk && kind == ui::FxSlotEditor::Kind::Stepper;
+                const ui::Component* c = members[static_cast<int> (kind)];
+                small += c->rect().h < 56 || ! c->sizeOk();
+                for (const ui::Component* o : shownNow)
+                    overlap = overlap || o->rect().overlaps (c->rect());
+                shownNow.push_back (c);
+                inside = inside && ed.rect().contains (c->rect());
+                switch (kind)
                 {
-                    if (knobShown || stepperShown)
-                        noEnumAsKnob = false;
+                    case ui::FxSlotEditor::Kind::Knob:
+                        ++shownKnobs; withName += ed.knobs[i].state.label[0] != '\0'; withValue += ed.knobs[i].state.valueText[0] != '\0'; break;
+                    case ui::FxSlotEditor::Kind::Stepper:
+                        ++shownSteppers; withName += ed.steppers[i].state.caption[0] != '\0'; withValue += ed.steppers[i].state.text[0] != '\0'; break;
+                    case ui::FxSlotEditor::Kind::List:
+                        ++shownLists; withName += ed.lists[i].state.title[0] != '\0'; withValue += ed.lists[i].state.count == pi->numChoices && ed.lists[i].state.index >= 0; break;
+                    case ui::FxSlotEditor::Kind::Toggle:
+                        ++shownToggles; withName += ed.toggles[i].state.label[0] != '\0'; ++withValue; break;
                 }
             }
 
-            const int totalShown = shownKnobs + shownSteppers;
-            check (noEnumAsKnob && totalShown == expectedOnPage && withName == totalShown && withValue == totalShown && small == 0,
-                   std::string (d.name) + " page " + std::to_string (pg + 1) + " of " + std::to_string (ed.numPages()) + ": " + std::to_string (shownKnobs) + " knobs and " + std::to_string (shownSteppers) + " steppers (no enumerated param is a knob)");
+            // the display keeps its height, the knobs of the page have one size, every cell of a row is the same rectangle (the chips stand in one line), the rows have the standard height
+            bool uniform = ! ed.hasDisplay() || ed.displayRect().h == ui::FxSlotEditor::kDisplayH;
+            int knobH = -1;
+            for (int i = firstParam; i < lastParam; ++i)
+            {
+                const ui::Rect cell = ed.memberOf (i)->rect();
+                uniform = uniform && cell.h <= (ed.knobArea().h / ed.rowsPerPage());
+                if (ed.kindOf (i) == ui::FxSlotEditor::Kind::Knob)
+                {
+                    knobH = knobH < 0 ? cell.h : knobH;
+                    uniform = uniform && cell.h == knobH;
+                }
+                const int first = (i / 4) * 4;
+                uniform = uniform && cell.y == ed.memberOf (first)->rect().y;
+            }
+            check (uniform, std::string (d.name) + " page " + std::to_string (pg + 1) + ": the display keeps its height, one knob size, the chips of a row stand in one line");
+            const int totalShown = shownKnobs + shownSteppers + shownLists + shownToggles;
+            if (fallbacks > 0 || overlap || ! inside || small > 0)
+            {
+                std::printf ("  editor %d,%d %dx%d display %d,%d %dx%d knobArea %d,%d %dx%d\n", ed.rect().x, ed.rect().y, ed.rect().w, ed.rect().h, ed.displayRect().x, ed.displayRect().y, ed.displayRect().w, ed.displayRect().h, ed.knobArea().x, ed.knobArea().y, ed.knobArea().w, ed.knobArea().h);
+                for (int i = firstParam; i < lastParam; ++i)
+                    std::printf ("  p%d kind %d rect %d,%d %dx%d\n", i, static_cast<int> (ed.kindOf (i)), ed.memberOf (i)->rect().x, ed.memberOf (i)->rect().y, ed.memberOf (i)->rect().w, ed.memberOf (i)->rect().h);
+            }
+            check (kindsOk && ! overlap && inside && totalShown == expectedOnPage && withName == totalShown && withValue == totalShown && small == 0 && fallbacks == 0,
+                   std::string (d.name) + " page " + std::to_string (pg + 1) + " of " + std::to_string (ed.numPages()) + ": " + std::to_string (shownKnobs) + " knobs, " + std::to_string (shownSteppers) + " steppers, " + std::to_string (shownLists) + " lists, " + std::to_string (shownToggles) + " toggles (one control per cell, no list turned into a stepper, nothing overlaps, every control >= 56 px)");
 
             // the controls fill the page: the lowest control ends near the bottom of the page
             int bottom = 0;
             for (int i = firstParam; i < lastParam; ++i)
-                bottom = std::max (bottom, ed.isChoice (i) ? ed.steppers[i].rect().bottom() : ed.knobs[i].rect().bottom());
+                bottom = std::max (bottom, ed.memberOf (i)->rect().bottom());
             const int rowsUsed = (expectedOnPage + 3) / 4;
             check (rowsUsed < ed.rowsPerPage() || bottom >= ed.knobArea().bottom() - ed.knobArea().h / ed.rowsPerPage(),
                    std::string (d.name) + " page " + std::to_string (pg + 1) + ": controls use the page (the last row ends at " + std::to_string (bottom) + " of " + std::to_string (ed.knobArea().bottom()) + ")");
@@ -470,8 +502,18 @@ void testFxEditing()
                "Distortion FILTER ORDER is a stepper with caption 'FILTER ORDER' and value 'None'");
         check (isShown (ed, &ed.steppers[0]) && ! isShown (ed, &ed.knobs[0]),
                "Distortion TYPE stepper is shown, knob is hidden");
-        check (isShown (ed, &ed.steppers[3]) && ! isShown (ed, &ed.knobs[3]),
-               "Distortion FILTER ORDER stepper is shown, knob is hidden");
+        check (isShown (ed, &ed.lists[3]) && ! isShown (ed, &ed.knobs[3]) && ! isShown (ed, &ed.steppers[3]) && ed.kindOf (3) == ui::FxSlotEditor::Kind::List,
+               "Distortion FILTER ORDER (3 values) is a LED list, not a knob and not a stepper");
+        check (std::string (ed.lists[3].state.title) == "FILTER ORDER" && ed.lists[3].state.count == 3 && ed.lists[3].state.index == 0 && std::string (ed.lists[3].state.names[2]) == "Post" && ed.lists[3].rect().h >= 56 * ed.lists[3].rows(),
+               "the list has its title, all three values and the lit first one");
+        {
+            const ui::Rect row2 = ed.lists[3].rowRect (2);
+            r.tapAt (row2.x + row2.w / 2, row2.y + row2.h / 2);
+            r.refresh();
+            const int orderIdx = synthyboy::fxInstanceKeys (r.ui.cardItem (0).index).p[3];
+            check (r.inst.param (orderIdx) == synthyboy::fxInstanceNormalise (synthyboy::kFxTypeDistortion, 3, 2.0f) && ed.lists[3].state.index == 2, "a tap on 'Post' writes the parameter and lights its dot");
+            check (ed.activeRow() == 0 && ed.groups[0].member (3) == &ed.lists[3], "the list is the fourth member of the first row group and the tap made that group active");
+        }
 
         // Q-Link turning steps through choices
         const int slot = r.ui.cardItem (0).index;
@@ -505,7 +547,7 @@ void testFxEditing()
         addEffect (r, 4);   // EQ: row 4 in type list
         ui::FxSlotEditor& ed = r.ui.screen().slotEditor;
         r.refresh();
-        check (ed.isChoice (0) && ! ed.isChoice (1), "EQ LOW MODE is a choice stepper, LOW CUTOFF is a continuous knob");
+        check (ed.isChoice (0) && ! ed.isChoice (1) && ed.kindOf (0) == ui::FxSlotEditor::Kind::List && ed.lists[0].state.count == 2, "EQ LOW MODE is a LED list of its two values, LOW CUTOFF is a continuous knob");
         check (std::string (ed.steppers[0].state.caption) == "LOW MODE" && std::string (ed.knobs[1].state.label) == "LOW CUTOFF",
                "the controls have the descriptor's names without the name of the effect (" + std::string (ed.knobs[1].state.label) + ")");
         check (std::string (ed.steppers[0].state.text) == "Shelf" && std::string (ed.knobs[1].state.valueText).find ("Hz") != std::string::npos,

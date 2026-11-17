@@ -3,10 +3,12 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// The axis. The whole envelope always fills the plot ("zoom locked": the six handles are always on the screen). The width of a time stage is the NORMALISED value of its parameter (0 .. 1, the position of the
-// knob: the same law as the knobs have, a skewed time) plus a fixed minimum, so a stage of 0 ms keeps its own slot (dim) and two neighbouring handles are never on top of each other; the sustain segment
-// has a fixed width. It is a schematic of the shape, not a ruler: the numbers are on the handles. A dragged time handle follows the finger exactly (the picture fits the plot again at every step: the rest of the
-// curve gives way, the closed form is in onMove), up to the longest time the parameter has.
+// The axis (Serum 2 manual, "ruler scaling below the envelope"): the x axis is TIME. LOCKED (the default): the envelope always fills the plot, so a change of the times only changes how much time the ruler under
+// the graph stands for (a continuous fit, not steps). A stage of 0 takes no width; a stage with time takes its share of the width on the one common scale, but never less than kMinStageW pixels (so the
+// handles of two short neighbours stay apart); the sustain is a level, a short fixed gap marks it. UNLOCKED: the scale is the zoom the player sets by dragging along the ruler band (the window in
+// time units), the envelope may run past the right edge (the handles beyond it are not offered). The ruler marks are round times (time_ruler.h: ms / s, or beats in BEATS mode), they are also the vertical grid.
+// A dragged time handle follows the finger (the picture fits the plot again at every step: the value that puts the handle under the finger is found on the refitted picture); the release handle and
+// everything in the unlocked state move by the distance of the finger at the scale the drag started with.
 // Handles (touch targets of at least 56 x 56): the ends of delay, attack, hold, decay (two dimensions: its time and the sustain level at once) and release, and one small curve handle on the middle of
 // attack, decay and release (a vertical drag bends the stage: the handle follows the finger).
 // In:  State { shape (normalised times, sustain level 0 .. 1, curves -20 .. 20), defaults (a double tap on a handle), the ghost shape (envelope 1 behind another one), the dots of the voices (engine fine
@@ -16,6 +18,7 @@
 #pragma once
 
 #include "core.h"
+#include "time_ruler.h"
 
 namespace synthyboy_mpc { namespace ui {
 
@@ -32,44 +35,42 @@ struct Shape
     double curve[3] = { 0.0, -3.0, -3.0 };
 };
 
-constexpr double kMinStage = 1.0, kSustainWidth = 1.4;   // natural widths: a stage is kMinStage + its normalised time wide, the sustain segment kSustainWidth
+constexpr double kSustainWidth = 1.4;
+constexpr double kMinStageW = 14.0;   // pixels: a stage with time is at least this wide, so the 13 pixel handles at its two ends never overlap
 
 inline double maxTimeMs (int stage) noexcept
 {
     return (stage == 0 || stage == 2) ? 4000.0 : 10000.0;
 }
+/** The longest time a stage has, in ms or in beats (the parameters env.delay / hold: 4000 ms or 8 beats, the others 10000 ms or 16 beats). */
+inline double maxTime (int stage, bool beats) noexcept
+{
+    return beats ? ((stage == 0 || stage == 2) ? 8.0 : 16.0) : maxTimeMs (stage);
+}
 inline double skewOf (int stage) noexcept
 {
     return (stage == 0 || stage == 2) ? 0.4 : 0.3;
 }
-inline double timeMsFromNorm (int stage, double norm) noexcept
+inline double timeFromNorm (int stage, double norm, bool beats) noexcept
 {
     norm = std::clamp (norm, 0.0, 1.0);
     if (norm <= 0.0) return 0.0;
-    return maxTimeMs (stage) * std::pow (norm, 1.0 / skewOf (stage));
+    return maxTime (stage, beats) * std::pow (norm, 1.0 / skewOf (stage));
 }
-inline double normFromTimeMs (int stage, double ms) noexcept
+inline double normFromTime (int stage, double t, bool beats) noexcept
 {
-    if (ms <= 0.0) return 0.0;
-    return std::clamp (std::pow (std::min (ms, maxTimeMs (stage)) / maxTimeMs (stage), skewOf (stage)), 0.0, 1.0);
+    if (t <= 0.0) return 0.0;
+    return std::clamp (std::pow (std::min (t, maxTime (stage, beats)) / maxTime (stage, beats), skewOf (stage)), 0.0, 1.0);
 }
-inline double stageTimeMs (const Shape& s, int stage) noexcept
+inline double timeMsFromNorm (int stage, double norm) noexcept { return timeFromNorm (stage, norm, false); }
+inline double normFromTimeMs (int stage, double ms) noexcept { return normFromTime (stage, ms, false); }
+/** The time of a stage 0 .. 4 (delay, attack, hold, decay, release) in the unit of the axis: ms, or beats. */
+inline double stageTime (const Shape& s, int stage, bool beats) noexcept
 {
     if (stage < 0 || stage >= 5) return 0.0;
-    return timeMsFromNorm (stage, s.t[stage]);
+    return timeFromNorm (stage, s.t[stage], beats);
 }
-constexpr double kZoomStepsMs[] = {
-    100.0, 200.0, 500.0,
-    1000.0, 2000.0, 5000.0,
-    10000.0, 20000.0, 50000.0
-};
-inline double steppedZoomMs (double totalTimeMs) noexcept
-{
-    for (double step : kZoomStepsMs)
-        if (totalTimeMs <= step)
-            return step;
-    return kZoomStepsMs[sizeof (kZoomStepsMs) / sizeof (kZoomStepsMs[0]) - 1];
-}
+inline double stageTimeMs (const Shape& s, int stage) noexcept { return stageTime (s, stage, false); }
 
 /** The curve function of the engine (own::powerShape): 0 = straight, negative = fast start, positive = slow start. */
 inline double powerShape (double x, double power) noexcept
@@ -91,11 +92,6 @@ inline double levelAt (const Shape& s, int stage, double f) noexcept
         case 4: return s.sustain;
         default: return s.sustain * (1.0 - powerShape (f, s.curve[2]));
     }
-}
-/** The natural widths of the six stages (delay, attack, hold, decay, sustain, release). */
-inline void naturalWidths (const Shape& s, double w[6]) noexcept
-{
-    w[0] = kMinStage + s.t[0]; w[1] = kMinStage + s.t[1]; w[2] = kMinStage + s.t[2]; w[3] = kMinStage + s.t[3]; w[4] = kSustainWidth; w[5] = kMinStage + s.t[4];
 }
 /** The curve parameter that puts the middle of a stage at the level `level` of its range (the closed form: powerShape (0.5, p) = 1 / (1 + e^(p / 2))); `q` = how far the middle is from the start of the stage, 0 .. 1. */
 inline double curveForMiddle (double q) noexcept
@@ -122,11 +118,14 @@ public:
         char decayTime[16] = {}, sustainText[16] = {};       // the labels under the axis: the decay TIME alone under the decay segment, the sustain LEVEL under the sustain segment (empty: the Decay handle's text / no label)
         uint32_t colour = 0;                                 // 0xRRGGBB of the curve; 0 = the envelope colours of the look
         int selected = envgraph::None;                       // the handle whose value is written on the graph (a tap selects, the drag selects)
-        bool beats = false;                                  // the units of the times: ms or beats (the caption of the axis)
+        bool beats = false;                                  // the units of the times: ms or beats (the ruler's labels, the axis unit)
+        bool locked = true;                                  // LOCKED: the envelope fills the plot, the ruler changes; UNLOCKED: the zoom below
+        double zoom = 0.0;                                   // unlocked: the time (ms or beats) the plot's width stands for; 0 = what the envelope needs now (taken when it is unlocked)
     };
     State state;
     /** What the last Change was. `handle` = the handle; t = the new normalised time (Delay .. Release, Decay), level = the new sustain level (Decay), curve = the new curve parameter (CurveA .. CurveR). */
-    struct Edit { int handle = envgraph::None; double t = 0.0, level = 0.0, curve = 0.0; bool reset = false; };
+    struct Edit { int handle = envgraph::None; double t = 0.0, level = 0.0, curve = 0.0; bool reset = false; };   // handle kLock / kZoom: the lock was toggled / the zoom was dragged (view state, no parameter)
+    static constexpr int kLock = 100, kZoom = 101;
 
     EnvGraph() = default;
     Size minSize() const override { return { 300, 160 }; }
@@ -134,26 +133,59 @@ public:
     Rect plot() const noexcept
     {
         const bool c = compactChrome();
-        return { rect_.x + (c ? 18 : 24), rect_.y + (c ? 30 : 38), std::max (0, rect_.w - (c ? 36 : 48)), std::max (0, rect_.h - (c ? 30 : 38) - (c ? 22 : 30)) };
+        return { rect_.x + (c ? 18 : 24), rect_.y + (c ? 30 : 38), std::max (0, rect_.w - (c ? 36 : 48)), std::max (0, rect_.h - (c ? 30 : 38) - (c ? 22 : 40)) };
     }
+    /** The LOCK button (the full chrome only: the compact graph is always locked) and the zoom band under the plot (the ruler's row: a horizontal drag there zooms while unlocked). */
+    Rect lockRect() const noexcept { return compactChrome() ? Rect {} : Rect { rect_.x + 6, rect_.y + 2, 76, 34 }; }
+    Rect zoomRect() const noexcept { const Rect p = plot(); return compactChrome() || state.locked ? Rect {} : Rect { p.x, p.bottom() + 2, p.w, std::max (0, rect_.bottom() - p.bottom() - 2) }; }
     const Edit& edit() const noexcept { return edit_; }
     bool dragging() const noexcept { return drag_ != envgraph::None; }
     int draggedHandle() const noexcept { return drag_; }
 
-    /** The geometry the drawing and the touch use: x[0] = the left end of the curve, x[1 .. 6] = the ends of the six stages (delay, attack, hold, decay, sustain, release), the rows of level 1 and 0. */
+    /** The geometry the drawing and the touch use: x[0] = the left end of the curve, x[1 .. 6] = the ends of the six stages (delay, attack, hold, decay, sustain, release), the rows of level 1 and 0; cu[k] = the
+        time (units of the axis) at x[k] (the sustain has none); pxPerUnit = the plain scale (width of the window / its time; the stages that are narrower than kMinStageW are widened); window = the time the plot stands for. */
     struct Geom
     {
         double x[7];
-        double zoomMs = 1000.0;
-        double pxPerMs = 1.0;
+        double cu[7];
+        double window = 1000.0;
+        double pxPerUnit = 1.0;
         double sustainGap = 16.0;
-        double scale = 1.0;
         double yTop = 0.0, yBot = 0.0;
+        bool locked = true;
     };
     Geom geom() const noexcept { return geomFor (state.shape); }
     static double levelRow (const Geom& g, double level) noexcept { return g.yBot - (g.yBot - g.yTop) * std::clamp (level, 0.0, 1.0); }
+    /** The x of time t (units) on the axis: inside a stage by interpolation, a time after the decay is in the release (the sustain gap is between). */
+    static double xAtTime (const Geom& g, double t) noexcept
+    {
+        if (t <= 0.0) return g.x[0];
+        static const int kFrom[5] = { 0, 1, 2, 3, 5 };
+        for (int k = 0; k < 5; ++k)
+        {
+            const int a = kFrom[k], b = k == 4 ? 6 : k + 1;
+            if (t <= g.cu[b] + 1.0e-9 || k == 4)
+            {
+                const double span = g.cu[b] - g.cu[a];
+                return span > 1.0e-12 ? g.x[a] + (g.x[b] - g.x[a]) * std::clamp ((t - g.cu[a]) / span, 0.0, 1.0) : g.x[b];
+            }
+        }
+        return g.x[6];
+    }
     /** The centre of a handle (canvas pixels). */
     void handlePoint (int h, double& px, double& py) const noexcept { handlePointOf (geom(), state.shape, h, px, py); }
+    /** Is the handle offered (drawn, touchable)? The curve handle of a stage needs room beside the end handles; a handle past the right edge of the plot (unlocked, zoomed in) is not offered. */
+    bool handleOffered (const Geom& g, int h) const noexcept
+    {
+        const Rect pl = plot();
+        if (h == envgraph::CurveA && g.x[2] - g.x[1] < kCurveRoom) return false;
+        if (h == envgraph::CurveD && g.x[4] - g.x[3] < kCurveRoom) return false;
+        if (h == envgraph::CurveR && g.x[6] - g.x[5] < kCurveRoom) return false;
+        double px, py;
+        handlePointOf (g, state.shape, h, px, py);
+        return px <= pl.right() + 1.0;
+    }
+    static constexpr double kCurveRoom = 30.0;   // pixels a stage needs for its curve handle to lie clear of both end handles
     /** The handle a touch at (x, y) would take: the nearest one inside its square target (the curve handles only when no end handle is nearer); None when there is none. */
     int handleAt (int x, int y) const noexcept
     {
@@ -162,9 +194,7 @@ public:
         double bestD = 1.0e9;
         for (int h = 0; h < envgraph::kNumHandles; ++h)
         {
-            if (h == envgraph::CurveA && g.x[2] <= g.x[1]) continue;
-            if (h == envgraph::CurveD && g.x[4] <= g.x[3]) continue;
-            if (h == envgraph::CurveR && g.x[6] <= g.x[5]) continue;
+            if (! handleOffered (g, h)) continue;
 
             double px, py;
             handlePointOf (g, state.shape, h, px, py);
@@ -173,8 +203,9 @@ public:
             double d = std::hypot (px - x, py - y) + (h >= envgraph::CurveA ? 3.0 : 0.0);
             if (g.x[3] <= g.x[2] + 1.0e-3)
             {
-                if (h == envgraph::Hold && x > g.x[2]) d -= 2.0;
-                if (h == envgraph::Attack && x <= g.x[2]) d -= 2.0;
+                // attack and a zero-length hold end at the same point: a touch on the joint or up to 3 pixels right of it takes the attack, further right the hold (drag right = give it time)
+                if (h == envgraph::Hold && x > g.x[2] + 3.0) d -= 2.0;
+                if (h == envgraph::Attack && x <= g.x[2] + 3.0) d -= 2.0;
             }
             if (d < bestD)
             {
@@ -190,9 +221,7 @@ public:
         int n = 0;
         for (int h = 0; h < envgraph::kNumHandles && n < max; ++h)
         {
-            if (h == envgraph::CurveA && g.x[2] <= g.x[1]) continue;
-            if (h == envgraph::CurveD && g.x[4] <= g.x[3]) continue;
-            if (h == envgraph::CurveR && g.x[6] <= g.x[5]) continue;
+            if (! handleOffered (g, h)) continue;
             double px, py;
             handlePointOf (g, state.shape, h, px, py);
             out[n++] = { static_cast<int> (std::lround (px)) - kHit / 2, static_cast<int> (std::lround (py)) - kHit / 2, kHit, kHit };
@@ -224,7 +253,7 @@ public:
                 continue;
             const int st = d.stage - 1;
             const double f = st == 4 ? 0.5 : std::clamp (static_cast<double> (d.fraction), 0.0, 1.0);
-            const double px = g.x[st] + (g.x[st + 1] - g.x[st]) * f, py = levelRow (g, envgraph::levelAt (state.shape, st, f));
+            const double px = std::min (g.x[st] + (g.x[st + 1] - g.x[st]) * f, static_cast<double> (plot().right())), py = levelRow (g, envgraph::levelAt (state.shape, st, f));
             if (i == 0)
             {
                 sb.disc (static_cast<float> (px), static_cast<float> (py), 4.6f, theme::rgba (c1, 255));
@@ -239,53 +268,78 @@ protected:
     void drawBody (Pen&) const override {}
     bool compactChrome() const noexcept { return rect_.w < 520 || rect_.h < 260; }
 
-    Geom geomFor (const Shape& s) const noexcept
+    /** Widths of the five time stages for a plot of `availW` pixels: a stage of 0 has none; the others share the width in proportion to their time, none below kMinStageW (the scale is the one that makes the sum
+        exactly `availW`: found by bisection, the sum is steadily growing with the scale). With `px` > 0 the scale is given (the unlocked state, the ghost). Returns the scale. */
+    static double solveWidths (const double* u, double availW, double px, double* w) noexcept
+    {
+        int n = 0;
+        double total = 0.0;
+        for (int i = 0; i < 5; ++i)
+            if (u[i] > 0.0) { ++n; total += u[i]; }
+        if (px <= 0.0)
+        {
+            if (n == 0) { for (int i = 0; i < 5; ++i) w[i] = 0.0; return 0.0; }
+            if (n * envgraph::kMinStageW >= availW)
+            {
+                for (int i = 0; i < 5; ++i) w[i] = u[i] > 0.0 ? availW / n : 0.0;
+                return 0.0;
+            }
+            double lo = 0.0, hi = availW / std::min (total, 1.0e12) * 1.0;   // the scale at which the plain widths already fill it
+            double minU = 1.0e300;
+            for (int i = 0; i < 5; ++i) if (u[i] > 0.0) minU = std::min (minU, u[i]);
+            hi = std::max (hi, availW / minU);
+            for (int it = 0; it < 60; ++it)
+            {
+                const double mid = 0.5 * (lo + hi);
+                double sum = 0.0;
+                for (int i = 0; i < 5; ++i) if (u[i] > 0.0) sum += std::max (envgraph::kMinStageW, u[i] * mid);
+                (sum < availW ? lo : hi) = mid;
+            }
+            px = hi;
+        }
+        for (int i = 0; i < 5; ++i)
+            w[i] = u[i] > 0.0 ? std::max (envgraph::kMinStageW, u[i] * px) : 0.0;
+        return px;
+    }
+    /** `fixedPx` > 0: that scale instead of the fit (the ghost envelope on the axis of the one in front). */
+    Geom geomFor (const Shape& s, double fixedPx = 0.0) const noexcept
     {
         const Rect p = plot();
         Geom g {};
         g.yTop = static_cast<double> (p.y);
         g.yBot = static_cast<double> (p.bottom());
         g.x[0] = static_cast<double> (p.x);
-
-        double ms[5];
-        double totalMs = 0.0;
-        for (int i = 0; i < 5; ++i)
-        {
-            ms[i] = envgraph::stageTimeMs (s, i);
-            totalMs += ms[i];
-        }
-
-        g.zoomMs = envgraph::steppedZoomMs (totalMs);
-        const bool comp = compactChrome();
-        g.sustainGap = comp ? 12.0 : 16.0;
+        g.locked = state.locked;
+        g.sustainGap = compactChrome() ? 12.0 : 16.0;
         const double availW = std::max (20.0, static_cast<double> (p.w) - g.sustainGap);
-        g.pxPerMs = availW / g.zoomMs;
-        g.scale = g.pxPerMs;
-
-        double w[5];
-        double sumW = 0.0;
+        double u[5], total = 0.0;
         for (int i = 0; i < 5; ++i)
         {
-            if (ms[i] <= 0.0)
-                w[i] = 0.0;
-            else
-                w[i] = std::max (6.0, ms[i] * g.pxPerMs);
-            sumW += w[i];
+            u[i] = envgraph::stageTime (s, i, state.beats);
+            total += u[i];
         }
-
-        if (sumW > availW)
+        const double rest = state.beats ? 4.0 : 1000.0;   // the time an envelope of all zeros stands for (a handle dragged out of the origin has a scale to start with)
+        double px = fixedPx;
+        if (px <= 0.0 && ! state.locked)
         {
-            const double sc = availW / sumW;
-            for (int i = 0; i < 5; ++i)
-                w[i] *= sc;
+            const double win = state.zoom > 0.0 ? state.zoom : std::max (total * 1.25, rest * 0.1);
+            px = availW / win;
         }
-
+        double w[5];
+        double used = solveWidths (u, availW, px, w);
+        if (state.locked && fixedPx <= 0.0 && total <= 0.0)
+            used = availW / rest;
+        g.pxPerUnit = used > 0.0 ? used : (total > 0.0 ? availW / total : availW / rest);
+        g.window = state.locked && fixedPx <= 0.0 ? (total > 0.0 ? total : rest) : availW / g.pxPerUnit;
         g.x[1] = g.x[0] + w[0];
         g.x[2] = g.x[1] + w[1];
         g.x[3] = g.x[2] + w[2];
         g.x[4] = g.x[3] + w[3];
         g.x[5] = g.x[4] + g.sustainGap;
         g.x[6] = g.x[5] + w[4];
+        g.cu[0] = 0.0;
+        g.cu[1] = u[0]; g.cu[2] = g.cu[1] + u[1]; g.cu[3] = g.cu[2] + u[2]; g.cu[4] = g.cu[3] + u[3];
+        g.cu[5] = g.cu[4]; g.cu[6] = g.cu[4] + u[4];
         return g;
     }
     static void handlePointOf (const Geom& g, const Shape& s, int h, double& px, double& py) noexcept
@@ -342,32 +396,44 @@ protected:
             sb.line (px0, y, px1, y, T.hair, theme::rgba (T.grid, k == 0 ? 255 : 150));
         }
 
-        // ---- vertical time grid: lines at round times with small labels
-        if (! reduced)
+        // ---- the time ruler under the plot (round ms / s, or beats): its marks are also the vertical grid
+        if (! reduced || ! comp)
         {
-            double gridStepMs = 100.0;
-            if (g.zoomMs <= 100.0) gridStepMs = 25.0;
-            else if (g.zoomMs <= 200.0) gridStepMs = 50.0;
-            else if (g.zoomMs <= 500.0) gridStepMs = 100.0;
-            else if (g.zoomMs <= 1000.0) gridStepMs = 200.0;
-            else if (g.zoomMs <= 2000.0) gridStepMs = 500.0;
-            else if (g.zoomMs <= 5000.0) gridStepMs = 1000.0;
-            else if (g.zoomMs <= 10000.0) gridStepMs = 2000.0;
-            else if (g.zoomMs <= 20000.0) gridStepMs = 5000.0;
-            else gridStepMs = 10000.0;
-
-            for (double t = gridStepMs; t < g.zoomMs; t += gridStepMs)
+            const double unitScale = state.beats ? 1000.0 : 1.0;   // time_ruler.h counts in ms; beats are labelled as such below
+            const double availW = g.window * g.pxPerUnit;
+            const TimeRuler ruler = makeTimeRuler (g.window * unitScale, 0.0f, static_cast<float> (std::max (1.0, availW)), comp ? 56.0f : 84.0f);
+            for (int i = 0; i < ruler.count; ++i)
             {
-                const float gx = static_cast<float> (g.x[0] + t * g.pxPerMs + (t * g.pxPerMs > (g.x[4] - g.x[0]) ? g.sustainGap : 0.0));
-                if (gx < px0 || gx > px1)
+                const double t = ruler.ticks[i].ms / unitScale;
+                const float gx = static_cast<float> (xAtTime (g, t));
+                if (gx < px0 - 0.5f || gx > px1 + 0.5f)
                     continue;
-                sb.line (gx, static_cast<float> (g.yTop), gx, static_cast<float> (g.yBot), T.hair, theme::rgba (T.grid, 110));
-                char lbl[16];
-                if (t >= 1000.0)
-                    std::snprintf (lbl, sizeof lbl, "%g s", t / 1000.0);
+                char lbl[24];
+                if (state.beats)
+                    std::snprintf (lbl, sizeof lbl, "%g b", ruler.ticks[i].ms / 1000.0);
                 else
-                    std::snprintf (lbl, sizeof lbl, "%.0f ms", t);
-                p.textCentered ({ static_cast<int> (std::lround (gx)) - 24, static_cast<int> (std::lround (g.yBot)) + 2, 48, 12 }, lbl, T.fSmall - 1.0f, p.c (T.textFaint, 180), 8.0f);
+                    std::snprintf (lbl, sizeof lbl, "%s", ruler.ticks[i].label);
+                if (t > 0.0 && ! reduced)
+                    sb.line (gx, static_cast<float> (g.yTop), gx, static_cast<float> (g.yBot), T.hair, theme::rgba (T.grid, 110));
+                if (i == 0 && ruler.count > 1)
+                    std::snprintf (lbl, sizeof lbl, "0");
+                const int lw = comp ? 44 : 56;
+                p.textCentered ({ static_cast<int> (std::lround (gx)) - lw / 2, static_cast<int> (std::lround (g.yBot)) + 3, lw, comp ? 12 : 14 }, lbl, T.fSmall - 1.0f, p.c (T.textFaint, 200), 8.0f);
+            }
+        }
+        if (! comp)
+        {
+            // the LOCK button and, unlocked, the zoom band's hint
+            const Rect lk = lockRect();
+            const bool lockedNow = state.locked;
+            const uint32_t lc = cs[1];
+            p.rrect (lk.inset (2), T.rChip, p.c (T.bg1, 255));
+            p.rrect (lk.inset (2), T.rChip, p.c (lockedNow ? lc : T.keyline, 255), 1.4f);
+            p.textCentered (lk.inset (2), lockedNow ? "LOCKED" : "FREE", T.fSmall, p.c (lockedNow ? T.text : T.textDim, 255), T.fMin);
+            if (! lockedNow)
+            {
+                const Rect zr = zoomRect();
+                p.textRight ({ zr.x, zr.y + zr.h - 16, zr.w, 14 }, "DRAG ALONG THE RULER TO ZOOM", T.fSmall - 1.0f, p.c (T.textFaint, 160));
             }
         }
 
@@ -377,7 +443,7 @@ protected:
         const int n = std::min (pl.w, kMaxN);
         if (state.ghost && ! reduced)
         {
-            curveRows (state.ghostShape, geomFor (state.ghostShape), rowsGhost, n);
+            curveRows (state.ghostShape, geomFor (state.ghostShape, g.pxPerUnit), rowsGhost, n);   // on the axis of the envelope in front: the same scale, the same time
             sb.curve (rowsGhost, n, pl.x, n);
             sb.paintOff();
             sb.style (1.0f, false);
@@ -413,13 +479,8 @@ protected:
         for (int h = 0; h < envgraph::kNumHandles; ++h)
         {
             const bool curveH = h >= envgraph::CurveA;
-            if (curveH)
-            {
-                if ((h == envgraph::CurveA && g.x[2] <= g.x[1]) ||
-                    (h == envgraph::CurveD && g.x[4] <= g.x[3]) ||
-                    (h == envgraph::CurveR && g.x[6] <= g.x[5]))
-                    continue;
-            }
+            if (! handleOffered (g, h))
+                continue;
             double hx, hy;
             handlePointOf (g, state.shape, h, hx, hy);
             const bool sel = h == state.selected || h == drag_;
@@ -470,13 +531,26 @@ protected:
     Change onDown (int x, int y, double now) override
     {
         tap_.down (x, y, now);
+        zone_ = Zone::None;
         downHandle_ = handleAt (x, y);
         drag_ = envgraph::None;
         start_ = state.shape;
+        startGeom_ = geomFor (start_);
+        if (downHandle_ == envgraph::None)
+        {
+            if (lockRect().contains (x, y))
+                zone_ = Zone::Lock;
+            else if (zoomRect().contains (x, y))
+            {
+                zone_ = Zone::Zoom;
+                zoomStart_ = state.zoom > 0.0 ? state.zoom : startGeom_.window;
+                zoomAtX_ = x;
+            }
+        }
         if (downHandle_ != envgraph::None)
         {
             double hy;
-            handlePointOf (geomFor (start_), start_, downHandle_, downX_, hy);
+            handlePointOf (startGeom_, start_, downHandle_, downX_, hy);
         }
         if (downHandle_ != envgraph::None)
             state.selected = downHandle_;
@@ -484,10 +558,31 @@ protected:
     }
     Change onMove (int x, int y) override
     {
+        if (zone_ == Zone::Zoom)
+        {
+            if (! tap_.move (x, y) && ! zoomDragging_)
+                return Change::none();
+            zoomDragging_ = true;
+            // a drag to the right zooms in (the same time takes more room), to the left out: one e-fold per 160 pixels
+            const double lo = state.beats ? 0.05 : 20.0, hi = state.beats ? 400.0 : 120000.0;
+            const double z = std::clamp (zoomStart_ * std::exp (-static_cast<double> (x - zoomAtX_) / 160.0), lo, hi);
+            if (std::fabs (z - state.zoom) < 1.0e-9 * z)
+                return Change::none();
+            state.zoom = z;
+            edit_ = Edit {};
+            edit_.handle = kZoom;
+            edit_.level = z;
+            return Change::request (id_);
+        }
+        if (zone_ == Zone::Lock)
+        {
+            tap_.move (x, y);
+            return Change::none();
+        }
         if (downHandle_ == envgraph::None || ! tap_.move (x, y))
             return Change::none();
         drag_ = downHandle_;
-        const Geom g0 = geomFor (start_);
+        const Geom& g0 = startGeom_;
         Edit e;
         e.handle = drag_;
         const double dyPx = static_cast<double> (y - tap_.startY());
@@ -495,10 +590,37 @@ protected:
         if (drag_ <= envgraph::Release)
         {
             const int stage = drag_ == envgraph::Release ? 4 : drag_;
-            const double t0Ms = envgraph::stageTimeMs (start_, stage);
-            const double deltaMs = dxPx / std::max (1.0e-3, g0.pxPerMs);
-            const double newMs = std::max (0.0, t0Ms + deltaMs);
-            e.t = envgraph::normFromTimeMs (stage, newMs);
+            const double t0 = envgraph::stageTime (start_, stage, state.beats);
+            double newT = std::max (0.0, t0 + dxPx / std::max (1.0e-9, g0.pxPerUnit));   // the distance of the finger at the scale the drag began with
+            if (state.locked && drag_ != envgraph::Release)
+            {
+                // LOCKED: the picture refits at every step, so the time that puts the handle's end under the finger is looked for on the refitted picture (bisection: the end of the stage only moves to the right
+                // when the time grows). When the stage cannot move its own end (it is all of the picture) the plain distance above stays.
+                const double target = downX_ + dxPx, hi = envgraph::maxTime (stage, state.beats);
+                const auto endX = [&] (double t)
+                {
+                    Shape sh = start_;
+                    sh.t[stage] = envgraph::normFromTime (stage, t, state.beats);
+                    return geomFor (sh).x[stage + 1];
+                };
+                const double x0 = endX (0.0), x1 = endX (hi);
+                if (x1 - x0 > 2.0)
+                {
+                    if (target <= x0) newT = 0.0;
+                    else if (target >= x1) newT = hi;
+                    else
+                    {
+                        double lo = 0.0, up = hi;
+                        for (int it = 0; it < 40; ++it)
+                        {
+                            const double mid = 0.5 * (lo + up);
+                            (endX (mid) < target ? lo : up) = mid;
+                        }
+                        newT = 0.5 * (lo + up);
+                    }
+                }
+            }
+            e.t = envgraph::normFromTime (stage, newT, state.beats);
             if (drag_ == envgraph::Decay)
                 e.level = std::clamp (start_.sustain - dyPx / std::max (1.0, g0.yBot - g0.yTop), 0.0, 1.0);
         }
@@ -526,9 +648,25 @@ protected:
     Change onUp (int, int) override
     {
         const int h = downHandle_, kind = tap_.up();
+        const Zone zone = zone_;
+        zone_ = Zone::None;
         downHandle_ = envgraph::None;
-        const bool wasDrag = drag_ != envgraph::None;
+        const bool wasDrag = drag_ != envgraph::None, wasZoom = zoomDragging_;
+        zoomDragging_ = false;
         drag_ = envgraph::None;
+        if (zone == Zone::Lock && kind != 0)
+        {
+            // a tap on LOCK: the next state; unlocked starts from the zoom the envelope has now, so the picture does not jump
+            if (state.locked)
+                state.zoom = startGeom_.window;
+            state.locked = ! state.locked;
+            edit_ = Edit {};
+            edit_.handle = kLock;
+            edit_.level = state.locked ? 1.0 : 0.0;
+            return Change::request (id_);
+        }
+        if (zone == Zone::Zoom || wasZoom)
+            return Change::none();
         if (wasDrag || h == envgraph::None || kind != 2)
             return Change::none();
         Edit e;
@@ -557,7 +695,13 @@ private:
         }
         return std::fabs (e.curve - state.shape.curve[e.handle - envgraph::CurveA]) > 1.0e-4;
     }
+    enum class Zone { None, Lock, Zoom };
     TapGesture tap_;
+    Zone zone_ = Zone::None;
+    Geom startGeom_ {};
+    double zoomStart_ = 0.0;
+    int zoomAtX_ = 0;
+    bool zoomDragging_ = false;
     Shape start_;
     Edit edit_;
     int downHandle_ = envgraph::None, drag_ = envgraph::None;

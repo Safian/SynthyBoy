@@ -367,6 +367,8 @@ private:
             }
             ui::Knob& knob = ed.knobs[p];
             ui::Stepper& stepper = ed.steppers[p];
+            ui::LedList& list = ed.lists[p];
+            ui::LedToggle& toggle = ed.toggles[p];
             const bool isChoiceParam = ed.isChoice (p);
             knob.state.value = knob.state.modValue = norm;
             if (pi != nullptr)
@@ -383,6 +385,12 @@ private:
                         stepper.setItem (pi->choices[curIdx]);
                     else
                         stepper.setItem ("---");
+                    // the same value as a LED list (3 .. 8 values, all visible) and as a LED toggle (Off / On): the editor shows the kind the cell has
+                    list.setTitle (name);
+                    list.setOptions (pi->choices, std::min (static_cast<int> (pi->numChoices), static_cast<int> (ui::LedList::kMaxOptions)));
+                    list.state.index = std::min (curIdx, ui::LedList::kMaxOptions - 1);
+                    toggle.setLabel (name);
+                    toggle.state.on = curIdx == 1;
                 }
                 else
                 {
@@ -392,8 +400,11 @@ private:
                     knob.setLabel (name);
                 }
             }
-            knob.setEnabled (pi != nullptr && paramIdx >= 0 && ! isChoiceParam);
-            stepper.setEnabled (pi != nullptr && paramIdx >= 0 && isChoiceParam);
+            const bool live = pi != nullptr && paramIdx >= 0;
+            knob.setEnabled (live && ed.kindOf (p) == ui::FxSlotEditor::Kind::Knob);
+            stepper.setEnabled (live && ed.kindOf (p) == ui::FxSlotEditor::Kind::Stepper);
+            list.setEnabled (live && ed.kindOf (p) == ui::FxSlotEditor::Kind::List);
+            toggle.setEnabled (live && ed.kindOf (p) == ui::FxSlotEditor::Kind::Toggle);
         }
         // the power, the rack
         ed.power.state.on = synthyboy::fxItemOn (plain_.data(), item);

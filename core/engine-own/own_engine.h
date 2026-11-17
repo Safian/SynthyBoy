@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <array>
 #include <atomic>
+#include <thread>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -175,6 +176,14 @@ private:
     void ghostKill (Voice& v) noexcept;
     void addGhosts (int n) noexcept;
     bool realtimeFlag = false;
+    // The FX type parameters: setParam may be called by the host on its audio thread, and a new module is built with new / prepare (allocation). In a live (realtime) run setParam only records the wanted type here
+    // and a small worker thread builds the module and hands it to the pool (FxPool::typeChanged, the same code as before); the sound is the same, the module is there a few milliseconds later. An offline run (tests,
+    // renders: quality.realtime false) builds it at once on the calling thread, as it always did.
+    std::atomic<int> fxWant[kNumFxInstances];
+    std::atomic<bool> fxWorkDue { false }, fxWorkerStop { false };
+    std::thread fxWorker;
+    void startFxWorker();
+    void stopFxWorker() noexcept;
     float mixL[4][kControlPeriod] = {}, mixR[4][kControlPeriod] = {}; // Main, Bus 1, Bus 2, Direct of the current period
     // the level meters of the mixer (LiveValues::stripPeak, audio thread only until writeReadout publishes them): per strip (Sub, A, B, C, Noise, Filter 1, Filter 2, Bus 1, Bus 2, Master) the peak of this block and the
     // shown level (the peak with a slow release); stripSq collects the power sums of the voices' sources of one control period (MixOut::srcSq)

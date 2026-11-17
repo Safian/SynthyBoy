@@ -7,6 +7,8 @@
 #include <memory>
 #include <mutex>
 #include "own_engine.h"
+
+#include <chrono>
 #include "dsp/section_timing.h"
 
 #include <algorithm>
@@ -121,7 +123,45 @@ OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.fo
     publishContent (ContentSet::build (StateContent {}, nullptr));
 }
 
-OwnEngine::~OwnEngine() = default;
+OwnEngine::~OwnEngine()
+{
+    stopFxWorker();
+}
+
+void OwnEngine::startFxWorker()
+{
+    if (fxWorker.joinable())
+        return;
+    for (auto& w : fxWant)
+        w.store (-1, std::memory_order_relaxed);
+    fxWorkDue.store (false, std::memory_order_relaxed);
+    fxWorkerStop.store (false, std::memory_order_relaxed);
+    fxWorker = std::thread ([this]
+    {
+        while (! fxWorkerStop.load (std::memory_order_acquire))
+        {
+            std::this_thread::sleep_for (std::chrono::milliseconds (2));
+            if (! fxWorkDue.exchange (false, std::memory_order_acq_rel))
+                continue;
+            for (int s = 0; s < kNumFxInstances; ++s)
+            {
+                const int want = fxWant[s].exchange (-1, std::memory_order_acq_rel);
+                if (want < 0)
+                    continue;
+                try { fxPool.typeChanged (s, want); }
+                catch (...) {}
+            }
+        }
+    });
+}
+
+void OwnEngine::stopFxWorker() noexcept
+{
+    if (! fxWorker.joinable())
+        return;
+    fxWorkerStop.store (true, std::memory_order_release);
+    fxWorker.join();
+}
 
 void OwnEngine::publishContent (std::unique_ptr<ContentSet> set)
 {
@@ -194,7 +234,14 @@ void OwnEngine::setParam (uint32_t id, float plain) noexcept
         {
             try
             {
-                fxPool.typeChanged (s, static_cast<int> (v + 0.5f)); // creates the module of the slot off the audio thread
+                if (fxWorker.joinable())
+                {
+                    // live run: no allocation on this thread (it may be the host's audio thread); the worker builds the module
+                    fxWant[s].store (static_cast<int> (v + 0.5f), std::memory_order_release);
+                    fxWorkDue.store (true, std::memory_order_release);
+                }
+                else
+                    fxPool.typeChanged (s, static_cast<int> (v + 0.5f)); // offline: at once
             }
             catch (...)
             {
@@ -269,6 +316,7 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     pdelta.assign (paramCount(), 0.0f);
     ptouched.assign (static_cast<size_t> (kNumModSlots), 0);
     pnumTouched = 0;
+    stopFxWorker();   // no module is built while the pool is prepared again
     realtimeFlag = quality.realtime;
     {
         int types[kNumFxInstances];
@@ -276,6 +324,8 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
             types[s] = static_cast<int> (params[static_cast<size_t> (fxiTypeIndex[s])].load (std::memory_order_relaxed) + 0.5f);
         fxPool.prepare (sampleRate, maxBlockFrames, types);
     }
+    if (realtimeFlag)
+        startFxWorker();
     for (int i = 0; i < 3; ++i)
     {
         fx[i].setRack (i);

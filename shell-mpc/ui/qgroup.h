@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 
 #include "core.h"
@@ -76,14 +77,26 @@ public:
             return;
         // `around`: the rectangle of the frame when the members lie inside cards (a macro card, a block): the ONE frame then runs around the cards, never through them; the chips stay at the members
         const Rect u = around && ! around->empty() ? Rect::unite (*around, m) : m;
-        const Rect total = Rect::unite (u, rect());
         Pen pen (sb, true);
-        Cell cell (sb, { total.x, total.y - 17, total.w, total.h + 17 });   // the chips sit on the members
         if (! frameless_)
+        {
+            Cell cell (sb, u);   // the frame lies inside the rectangle of the frame: the cell is repainted when the group becomes active / idle or moves, nothing else is
             pen.rrect (u, theme::L().rControl, pen.c (theme::L().q, 255), 2.0f);
+        }
         for (int i = 0; i < kSlots; ++i)
-            if (const Component* m = slot_[i])
-                pen.qIndex (m->rect(), i + 1);
+            if (const Component* c = slot_[i]; c && ! c->rect().empty())
+                chip (sb, pen, c->rect(), i + 1, false);
+    }
+    /** The rectangle of the index chip of a member (the same as Pen::qIndex draws): the cell of the chip. */
+    static Rect chipRect (const Rect& member, int index) noexcept { return { member.x + 4, std::max (0, member.y - 15), index > 9 ? 26 : 18, 17 }; }
+    /** ONE chip in a cell of its own (the helper repaints a cell by its rectangle: the chips of a group in a column or in two rows are far apart, a cell over the union of the members would be big and a cell over the
+        first member would not hold the others). */
+    static void chip (gpu::SceneBuilder& sb, Pen& pen, const Rect& member, int index, bool idle)
+    {
+        if (index < 1 || index > 16)
+            return;
+        Cell cell (sb, chipRect (member, index));
+        pen.qIndex (member, index, idle);
     }
     /** The quiet index chips of a group that is NOT the active one (a bank that a touch on one of its members, or the page stepper, makes the active one): no frame, the four chips in the keyline colours. */
     void drawIdle (gpu::SceneBuilder& sb) const
@@ -95,10 +108,9 @@ public:
         if (u.empty() || (wide && block_ < 1))
             return;
         Pen pen (sb, true);
-        Cell cell (sb, { u.x, u.y - 17, u.w, 19 });
         for (int i = 0; i < kSlots; ++i)
             if (const Component* m = slot_[i]; m && ! m->rect().empty())
-                pen.qIndex (m->rect(), wide ? block_ * kSlots + i + 1 : i + 1, true);
+                chip (sb, pen, m->rect(), wide ? block_ * kSlots + i + 1 : i + 1, true);
     }
     /** The idle chips of a group that sits on one of the other three blocks of knobs (setBlock 1 .. 3) and nothing for the others: the page shows where the next groups are (the XL: the knobs 5 .. 16, the Key 61: the banks 2 .. 4 as 1 .. 4). */
     void drawMapped (gpu::SceneBuilder& sb) const
@@ -119,10 +131,9 @@ public:
         if (u.empty())
             return;
         Pen pen (sb, true);
-        Cell cell (sb, { u.x, u.y - 17, u.w, 19 });
         for (int i = 0; i < n && i < kSlots; ++i)
             if (members[i] && ! members[i]->rect().empty())
-                pen.qIndex (members[i]->rect(), wide ? block * kSlots + i + 1 : i + 1, true);
+                chip (sb, pen, members[i]->rect(), wide ? block * kSlots + i + 1 : i + 1, true);
     }
     /** The hardware knob `knobIndex` (0 .. 3) turned by delta: routed to the member of that slot; nothing when not active or the slot is empty. */
     Change turn (int knobIndex, double delta)

@@ -97,7 +97,7 @@ int indexOfKey (const char* key)
 std::string asVersion2 (const std::string& v3)
 {
     std::string s = v3;
-    const size_t v = s.find ("\"version\":4");
+    const size_t v = s.find ("\"version\":5");
     s.replace (v, 11, "\"version\":2");
     const size_t cut = s.find (",\"macro.5\":");
     s.erase (cut);
@@ -312,7 +312,7 @@ TEST (content_round_trip_is_exact_and_byte_stable)
     const auto v = randomValues (rng);
     const auto text = stateText (content, v);
     CHECK (text.find ("\"content\":{\"wavetables\":[{\"osc\":2,") != std::string::npos);
-    CHECK (text.find ("\"version\":4") != std::string::npos);
+    CHECK (text.find ("\"version\":5") != std::string::npos);
     CHECK (text.size() < kMaxStateBytes);
 
     auto loaded = ParamValues::defaults();
@@ -364,13 +364,13 @@ TEST (content_section_belongs_to_version_3_and_later)
     auto v = ParamValues::defaults();
 
     std::string asV2 = base;
-    asV2.replace (asV2.find ("\"version\":4"), 11, "\"version\":2");
+    asV2.replace (asV2.find ("\"version\":5"), 11, "\"version\":2");
     const auto r2 = loadStateWithContent (asV2.data(), asV2.size(), v, got);
     CHECK (r2.status == LoadStatus::ok && r2.content == ContentStatus::absent && got.empty());
 
-    std::string asV4 = base;
-    asV4.replace (asV4.find ("\"version\":4"), 11, "\"version\":5");
-    const auto r4 = loadStateWithContent (asV4.data(), asV4.size(), v, got);
+    std::string asNewer = base;
+    asNewer.replace (asNewer.find ("\"version\":5"), 11, "\"version\":6");
+    const auto r4 = loadStateWithContent (asNewer.data(), asNewer.size(), v, got);
     CHECK (r4.status == LoadStatus::newer_version && r4.content == ContentStatus::ok && got == fullContent());
 
     // the key order of the document is free: version after content
@@ -693,7 +693,8 @@ TEST (preset_with_content_round_trips_and_factory_presets_of_version_2_still_loa
             PresetMeta m;
             const auto fr = loadPreset (doc.data(), doc.size(), m, garbage, c);
             const bool hasContent = doc.find ("\"content\":") != std::string::npos;
-            const bool ok = CHECK (fr.status == LoadStatus::ok) && CHECK_EQ (fr.version, kStateVersion) && CHECK_EQ (fr.applied, static_cast<int> (paramCount()))
+                // the factory presets carry the version of their last regeneration (4: macro names); state version 5 only added the optional LFO grid keys, which no factory preset has
+            const bool ok = CHECK (fr.status == LoadStatus::ok) && CHECK (fr.version >= 4 && fr.version <= kStateVersion) && CHECK_EQ (fr.applied, static_cast<int> (paramCount()))
                          && CHECK (hasContent ? fr.content == ContentStatus::ok : (fr.content == ContentStatus::absent && c.empty())) && CHECK (! m.name.empty());
             if (! ok)
                 std::printf ("    %s\n", entry.path().string().c_str());
@@ -708,7 +709,7 @@ TEST (preset_with_content_round_trips_and_factory_presets_of_version_2_still_loa
             {
                 v2.erase (cut - 1);
                 v2 += "}}}";
-                const size_t versionAt = v2.find ("\"version\":4");
+                const size_t versionAt = v2.find ("\"version\":4");   // the factory presets are still documents of version 4
                 if (CHECK (versionAt != std::string::npos))
                     v2[versionAt + 10] = '2';
                 auto old = randomValues (rng);
