@@ -462,6 +462,22 @@ void testTargets()
     r.centre (r.ui.compact().rate.rate, kx, ky);
     r.tap (kx, ky, 700);
     check (r.stack.depth() == 2 && r.ui.topPage() == LfoUi::kPageMods && r.ui.modsPage().numRows() == 1, "a long press on RATE: the modulations of the control (the page of the matrix, 1 row)");
+    // a control nothing modulates: the page is the board of every source, a tap on a chip makes the modulation
+    Rig q;
+    q.refresh();
+    q.stack.closeAll();
+    q.refresh();
+    q.centre (q.ui.compact().rate.rate, kx, ky);
+    q.tap (kx, ky, 700);
+    ui::ModulationsPage& mp = q.ui.modsPage();
+    check (q.ui.topPage() == LfoUi::kPageMods && mp.numRows() == 0 && mp.boardShown() && mp.board.numSources() == static_cast<int> (synthyboy::modSourceCount()), "a long press on RATE with no modulation: the board of every source");
+    const ui::Rect chip = mp.board.chipRectOfId (uibind::envSource (2));
+    q.tap (chip.x + chip.w / 2, chip.y + chip.h / 2);
+    int found = 0;
+    for (int sl = 0; sl < synthyboy::kNumModSlots; ++sl)
+        found += std::lround (q.inst.get (synthyboy::paramTable()[synthyboy::modSlotParams (sl).source].key)) == uibind::envSource (2);
+    q.refresh();
+    check (found == 1 && mp.numRows() == 1 && ! mp.boardShown(), "a tap on the ENV 2 chip makes the modulation of the RATE: one slot, one row, the board is gone");
 }
 
 void testDisplay()

@@ -413,6 +413,55 @@ void testModulationsPage()
     check (r.ui.topPage() == 0, "tapping BACK closes ModulationsPage");
 }
 
+/** A control that nothing modulates: its modulations page is the BOARD of every source (the same board as the empty modulation matrix), a tap on a chip makes the modulation of THIS control from that source; no stepper, no add row. */
+void testModulationsBoard()
+{
+    Rig r;
+    r.refresh();
+    int x, y;
+    r.centre (r.ui.full().cutoff, x, y);
+    r.tap (x, y, 700);
+    ui::ModulationsPage& mp = r.ui.modsPage();
+    check (r.ui.topPage() == FilterUi::kPageMods && mp.numRows() == 0 && mp.boardShown(), "a long press on CUTOFF with no modulation opens the board of the sources");
+    check (mp.board.numSources() == static_cast<int> (synthyboy::modSourceCount()), "the board has every source of the engine (" + std::to_string (mp.board.numSources()) + ")");
+    check (mp.board.numGroups() == uibind::kSourceGroups, "in the groups envelopes, LFOs, macros, player, sound");
+    bool big = true, inside = true, noRowAdd = true;
+    for (int i = 0; i < mp.board.numSources(); ++i)
+    {
+        const ui::Rect c = mp.board.chipRect (i);
+        big = big && c.h >= 56 && c.w >= 64;
+        inside = inside && mp.rect().contains (c);
+    }
+    for (int c = 0; c < mp.numChildren(); ++c)
+        if ((mp.child (c) == &mp.addSource || mp.child (c) == &mp.add) && mp.childShown (c))
+            noRowAdd = false;
+    check (big && inside && mp.board.fits(), "every chip is >= 56 x 64 px and inside the page, the board fits without squeezing the chips");
+    check (noRowAdd, "the stepper and the ADD button of the compact row are not on the page");
+    const int lfo1 = uibind::lfoSource (1);
+    const ui::Rect chip = mp.board.chipRectOfId (lfo1);
+    check (! chip.empty(), "the board has the LFO 1 chip");
+    r.tap (chip.x + chip.w / 2, chip.y + chip.h / 2);
+    int slot = -1;
+    for (int s = 0; s < synthyboy::kNumModSlots && slot < 0; ++s)
+    {
+        const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (s);
+        if (std::lround (r.inst.get (synthyboy::paramTable()[sp.source].key)) == lfo1)
+            slot = s;
+    }
+    check (slot >= 0 && r.ui.topPage() == FilterUi::kPageMods, "a tap on the chip makes a modulation from LFO 1 and the page stays open");
+    r.refresh();
+    r.refresh();
+    check (mp.numRows() == 1 && ! mp.boardShown(), "with the row present the board is gone: the row and the compact add row");
+    bool addRow = false;
+    for (int c = 0; c < mp.numChildren(); ++c)
+        addRow = addRow || ((mp.child (c) == &mp.add) && mp.childShown (c));
+    check (addRow, "the compact add row is back under the row");
+    r.tapC (mp.rows[0].remove);   // X: the modulation is removed, the board is the page again
+    r.refresh();
+    r.refresh();
+    check (mp.numRows() == 0 && mp.boardShown(), "removing the only row brings the board back");
+}
+
 void testTouchTargetsAndLayoutSizes()
 {
     Rig r;
@@ -847,6 +896,7 @@ int main()
     testRoutePopup();
     testQGroupsAndTurn();
     testModulationsPage();
+    testModulationsBoard();
     testTouchTargetsAndLayoutSizes();
     testQFrameIsOneBlock();
     testEveryKnobShowsItsValue();

@@ -398,6 +398,32 @@ void testModulatedKnobsShowTheirSource()
     }
 }
 
+/** A control nothing modulates: its modulations page is the BOARD of every source; a tap on a chip makes the modulation of that control. */
+void testModulationsBoard()
+{
+    Rig r;
+    r.openFull();
+    r.tapC (r.ui.full().release, 700);   // a long press on RELEASE
+    ui::ModulationsPage& mp = r.ui.modsPage();
+    check (r.ui.topPage() == EnvUi::kPageMods && mp.numRows() == 0 && mp.boardShown() && mp.board.numSources() == static_cast<int> (synthyboy::modSourceCount()), "a long press on RELEASE with no modulation: the board of every source");
+    bool fits = mp.board.fits();
+    for (int i = 0; i < mp.board.numSources(); ++i)
+        fits = fits && mp.board.chipRect (i).h >= 56 && mp.rect().contains (mp.board.chipRect (i));
+    check (fits, "the chips are >= 56 px and inside the page");
+    const ui::Rect chip = mp.board.chipRectOfId (uibind::lfoSource (2));
+    r.tap (chip.x + chip.w / 2, chip.y + chip.h / 2);
+    int found = 0, dest = -1;
+    for (int sl = 0; sl < synthyboy::kNumModSlots; ++sl)
+        if (std::lround (r.inst.get (synthyboy::paramTable()[synthyboy::modSlotParams (sl).source].key)) == uibind::lfoSource (2))
+        {
+            ++found;
+            dest = static_cast<int> (std::lround (r.inst.get (synthyboy::paramTable()[synthyboy::modSlotParams (sl).destination].key)));
+        }
+    check (found == 1 && dest == static_cast<int> (synthyboy::modDestinationChoiceOf (static_cast<size_t> (envIdx (1, "release")))), "a tap on the LFO 2 chip makes the modulation LFO 2 -> env1.release");
+    r.refresh();
+    check (mp.numRows() == 1 && ! mp.boardShown(), "the row is on the page, the board is gone");
+}
+
 void testDotsFromTheVoices()
 {
     Rig r;
@@ -604,6 +630,7 @@ int main()
     testCompactGraphDragAndNoOverlapOfFullButton();
     testTargetsPage();
     testModulatedKnobsShowTheirSource();
+    testModulationsBoard();
     testDotsFromTheVoices();
     testDrawing();
     testHashChangesWithTheDots();

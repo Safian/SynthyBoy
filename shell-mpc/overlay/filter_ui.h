@@ -484,6 +484,8 @@ private:
             mi = uibind::modsOf (v, activeModParam_, selectedSource_, modRows_);
         else
             for (ModRow& r : modRows_) r = {};
+        if (mi.numMods == 0)   // nothing modulates the control yet: the page is the board of every source (ui/mod_board.h), a tap on a chip makes the modulation
+            uibind::fillSourceBoard (mods_.board);
         mods_.load (mi, title);
         mods_.back.setId (kModsBack);
         mods_.addSource.setId (kModsAddStep);
