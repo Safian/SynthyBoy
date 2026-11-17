@@ -47,6 +47,7 @@ CATEGORIES = [
     ("Pad", "Pad"),
     ("Pluck", "Pluck"),
 ]
+CATEGORIES_FILE = HERE / "factory-preset-categories.json"
 
 # <PLUGIN> attributes as the host wrote them for SynthyBoy (device-observed/xpl/synthyboy-host-saved-*).
 PLUGIN_ATTRS = {
@@ -86,19 +87,46 @@ def file_stem(number, category_word, name):
     return f"{number:03d}-{safe}"
 
 
-def plan(chunk_entries, presets_dir):
-    """[(number, folder, category word, name, chunk bytes)] in numbering order: category order, then name
-    (case-insensitive, the order of the plugin's own program list)."""
+def load_categories_map(categories_path=CATEGORIES_FILE):
+    """Loads (groups_list, {preset_name: group_name}). Returns ([], {}) if file is missing."""
+    if not categories_path or not Path(categories_path).is_file():
+        return [], {}
+    try:
+        data = json.loads(Path(categories_path).read_text(encoding="utf-8"))
+        groups = data.get("groups", [])
+        presets = {}
+        for name, entry in data.get("presets", {}).items():
+            if isinstance(entry, dict):
+                presets[name] = entry.get("group", "")
+            elif isinstance(entry, str):
+                presets[name] = entry
+        return groups, presets
+    except Exception:
+        return [], {}
+
+
+def plan(chunk_entries, presets_dir, categories_file=CATEGORIES_FILE):
+    """[(number, folder, category word, name, chunk bytes)] in numbering order:
+    groups stay together in the group list's order, and names sort alphabetically inside a group.
+    Falls back to folder mapping when categories_file is missing or a preset has no entry."""
     cats = preset_categories(presets_dir)
-    word = dict(CATEGORIES)
-    order = {c: i for i, (c, _) in enumerate(CATEGORIES)}
+    folder_order = {c: i for i, (c, _) in enumerate(CATEGORIES)}
+    groups, cat_map = load_categories_map(categories_file)
+    group_order = {g: i for i, g in enumerate(groups)}
+
     rows = []
     for name, chunk in chunk_entries:
         if name not in cats:
             raise SystemExit(f"program '{name}' is not a factory preset of {presets_dir}")
-        rows.append((order[cats[name]], name.lower(), cats[name], name, chunk))
+        folder = cats[name]
+        cword = cat_map.get(name, folder)
+        if cword in group_order:
+            rank = group_order[cword]
+        else:
+            rank = len(groups) + folder_order.get(folder, 0)
+        rows.append((rank, name.lower(), folder, cword, name, chunk))
     rows.sort(key=lambda r: (r[0], r[1]))
-    return [(i, r[2], word[r[2]], r[3], r[4]) for i, r in enumerate(rows)]
+    return [(i, r[2], r[3], r[4], r[5]) for i, r in enumerate(rows)]
 
 
 def write_set(rows, out_dir, plugin_path, date=DEFAULT_DATE, file_time="0", by_folders=False):
@@ -132,6 +160,7 @@ def main():
     ap.add_argument("--date", default=DEFAULT_DATE, help="<version date=...> (fixed for deterministic output)")
     ap.add_argument("--file-time", default="0", help="<PLUGIN fileTime=...>")
     ap.add_argument("--by-category-folders", action="store_true", help="one sub folder per category")
+    ap.add_argument("--categories", type=Path, default=CATEGORIES_FILE, help="path to factory-preset-categories.json")
     a = ap.parse_args()
 
     tmp = None
@@ -143,7 +172,7 @@ def main():
         chunks = Path(tmp.name)
         subprocess.run([str(a.dump_tool), str(a.plugin), str(a.presets), str(chunks)], check=True, stdout=subprocess.DEVNULL)
     entries = gen_mpc_xpl.load_chunk_entries(chunks)   # skips program 0 (Init)
-    rows = plan(entries, a.presets)
+    rows = plan(entries, a.presets, a.categories)
     n = write_set(rows, a.out, a.plugin_path or DEVICE_PLUGIN_PATHS[a.device], a.date, a.file_time, a.by_category_folders)
     print(f"gen-xpl-presets: {n} files in {a.out}")
 
