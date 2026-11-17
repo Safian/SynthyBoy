@@ -294,6 +294,7 @@ def main():
     parser.add_argument("--host-bin", default="", help="Path to ui_gallery_host binary")
     parser.add_argument("--build-dir", default="", help="Build directory")
     parser.add_argument("--list", action="store_true", help="Print STATE\\tPAGE\\tFILE lines (sorted by state, then page)")
+    parser.add_argument("--knobs", type=int, default=16, choices=[4, 16], help="Q-Link knobs of the device: 16 (MPC XL, the default: idle chips 5..16) or 4 (Key 61)")
     parser.add_argument("--only", default="", help="Comma-separated list of page-name beginnings to include in --list and contact sheet")
     args = parser.parse_args()
 
@@ -334,7 +335,7 @@ def main():
     states = ["Init"] + [Path(p).stem for p in preset_paths]
 
     # Run ui_gallery_host
-    cmd = [str(host_bin), "--out", str(out_dir)]
+    cmd = [str(host_bin), "--out", str(out_dir), "--knobs", str(args.knobs)]
     if preset_paths:
         cmd.append("--presets")
         cmd.extend(preset_paths)

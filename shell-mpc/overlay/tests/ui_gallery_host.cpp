@@ -735,6 +735,7 @@ int main (int argc, char** argv)
     std::vector<std::string> presets;
     bool testMode = false;
     bool listMode = false;
+    int knobs = 16;   // the XL first: the idle chips of the mapped groups read 5 .. 16; `--knobs 4` renders the Key 61 (the chips relative to the bank, 1 .. 4)
 
     for (int i = 1; i < argc; ++i)
     {
@@ -752,6 +753,10 @@ int main (int argc, char** argv)
             while (i + 1 < argc && argv[i + 1][0] != '-')
                 presets.push_back (argv[++i]);
         }
+        else if (arg == "--knobs" && i + 1 < argc)
+        {
+            knobs = std::atoi (argv[++i]) <= 4 ? 4 : 16;
+        }
         else if (arg == "--test")
         {
             testMode = true;
@@ -762,11 +767,12 @@ int main (int argc, char** argv)
         }
         else if (arg == "--help" || arg == "-h")
         {
-            std::printf ("Usage: %s [--out DIR] [--preset FILE ...] [--test] [--list]\n", argv[0]);
+            std::printf ("Usage: %s [--out DIR] [--preset FILE ...] [--knobs 16|4] [--test] [--list]\n", argv[0]);
             return 0;
         }
     }
 
+    ui::QGroup::setWideDevice (knobs == 16);
     if (listMode)
     {
         std::printf ("Views from overlay layout (%d):\n", layout::kNumViews);
