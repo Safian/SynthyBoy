@@ -369,24 +369,31 @@ TEST (own_osc_phase_memory_per_voice_starts_every_note_with_the_same_phase)
     CHECK (corr (all[0], all[1]) < 0.9 && corr (all[1], all[2]) < 0.9);   // the random start phases differ from note to note
 }
 
-TEST (own_osc_phase_legato_makes_a_poly_legato_note_continue_the_phase_of_the_held_voice)
+TEST (own_osc_phase_legato_makes_a_note_continue_the_phase_of_the_previous_note_while_its_key_is_held)
 {
     const int t2 = 256 * 20;
-    auto pair = [&] (bool polyLegato, bool phaseLegato) {
+    // oscillator switch, global switch (voice.phase_legato), previous key held or released
+    auto pair = [&] (bool polyLegato, bool oscLegato, bool voiceLegato, bool firstReleased) {
         Rig r;
         r.set ("master.poly_legato", polyLegato ? 1.0f : 0.0f);
-        r.set ("osc1.phase_legato", phaseLegato ? 1.0f : 0.0f);
+        r.set ("osc1.phase_legato", oscLegato ? 1.0f : 0.0f);
+        r.set ("voice.phase_legato", voiceLegato ? 1.0f : 0.0f);
         r.set ("osc1.random_phase", 0.0f);
-        return r.render ({ { 0, -1, 60 }, { t2, -1, 72 } }, 8192);
+        r.set ("env1.release", 2000.0f);   // the released first note still sounds (a voice that is active but whose key is up)
+        return r.render ({ { 0, firstReleased ? t2 - 256 : -1, 60 }, { t2, -1, 72 } }, 8192);
     };
-    const Out off = pair (true, false), on = pair (true, true);
-    CHECK (maxDiff (off, on, 0, static_cast<size_t> (t2)) == 0.0);                               // the first note is the same
-    CHECK (maxDiff (off, on, static_cast<size_t> (t2), 8192) > 0.1);                              // the second one starts at another phase
-    // without poly legato there is no held voice to continue: nothing changes
-    CHECK (maxDiff (pair (false, false), pair (false, true), 0, 8192) == 0.0);
-    // with the option on, the second note starts at the phase the first has reached: the pair is a smooth continuation of a sine of 261.6 Hz into one of 523.3 Hz
-    // (the sum of the two voices: the first keeps sounding), the second note's phase at its start equals the first's: the envelope-inherited sum starts at twice the first note's value
+    const Out off = pair (false, false, false, false);
+    const Out osc = pair (false, true, false, false), global = pair (false, false, true, false);
+    CHECK (maxDiff (off, osc, 0, static_cast<size_t> (t2)) == 0.0);                    // the first note is the same
+    CHECK (maxDiff (off, osc, static_cast<size_t> (t2), 8192) > 0.1);                  // the second one starts at another phase
+    CHECK (maxDiff (osc, global, 0, 8192) == 0.0);                                     // the global switch is the same as the switch of the oscillator
+    // the key of the first note is up: nothing to continue
+    CHECK (maxDiff (pair (false, false, false, true), pair (false, true, true, true), 0, 8192) == 0.0);
+    // the continued phase is the one the first note has reached: the sum starts as twice the first voice's value (both voices in phase, the same level)
     const size_t i = static_cast<size_t> (t2);
-    const double firstAlone = pair (true, true).l[i - 1];
-    CHECK (std::fabs (static_cast<double> (on.l[i]) - 2.0 * firstAlone) < 0.15 * std::max (0.2, std::fabs (firstAlone)) + 0.05);
+    const double firstAlone = off.l[i - 1];
+    CHECK (std::fabs (static_cast<double> (osc.l[i]) - 2.0 * firstAlone) < 0.15 * std::max (0.2, std::fabs (firstAlone)) + 0.05);
+    // with poly legato (the envelopes continue) the same holds
+    const Out polyOff = pair (true, false, false, false), polyOn = pair (true, true, false, false);
+    CHECK (maxDiff (polyOff, polyOn, static_cast<size_t> (t2), 8192) > 0.1);
 }

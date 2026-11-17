@@ -617,28 +617,24 @@ void OwnEngine::startNote (const Pressed& n, bool fromRecall, const Voice* relea
                 heldVoice = v.get();
                 break;
             }
-    // the phases the previous note has now (the voice that started last, the voice that is retaken included) and those of the held voice: the phase memory and the phase legato of the wavetable oscillators carry them over
-    uint32_t prevPhase[3][Voice::kPhaseCount], heldPhase[3][Voice::kPhaseCount];
-    bool havePrev = false, haveHeld = heldVoice != nullptr;
+    // the phases the previous note (the voice that started last, the voice that is retaken included) has now, and whether its key is still held: the phase memory and the phase legato of the wavetable oscillators carry them over
+    uint32_t prevPhase[3][Voice::kPhaseCount];
+    bool havePrev = false, prevHeld = false;
     {
         const Voice* prev = nullptr;
         for (const auto& v : voices)
             if (v->isActive() && !v->killing() && (prev == nullptr || v->serial() > prev->serial()))
                 prev = v.get();
         havePrev = prev != nullptr;
-        for (int o = 0; o < 3; ++o)
-        {
-            if (havePrev)
-                prev->oscPhases (o, prevPhase[o]);
-            if (haveHeld)
-                heldVoice->oscPhases (o, heldPhase[o]);
-        }
+        prevHeld = havePrev && !prev->isReleased();
+        for (int o = 0; havePrev && o < 3; ++o)
+            prev->oscPhases (o, prevPhase[o]);
     }
     chosen->start (ns, chosen->lastL(), chosen->lastR());
     if (heldVoice != nullptr)
         chosen->inheritEnvelopes (*heldVoice);
     chosen->tick (globals, static_cast<int> (std::find_if (voices.begin(), voices.end(), [&] (const auto& p) { return p.get() == chosen; }) - voices.begin()));
-    applyPhaseOptions (*chosen, havePrev ? prevPhase : nullptr, haveHeld ? heldPhase : nullptr);
+    applyPhaseOptions (*chosen, havePrev ? prevPhase : nullptr, prevHeld);
     for (int o = 0; o < 3; ++o)
         if (chosen->multisampleZone (o) >= 0)
         {
@@ -652,8 +648,8 @@ void OwnEngine::startNote (const Pressed& n, bool fromRecall, const Voice* relea
 
 /** Phase Memory and Phase Legato of the wavetable oscillators, after the note started (docs/MPC.md "Oscillator UI", Serum 2 manual p.43 and 44). Memory All Voices: the note starts with PHASE and RAND (nothing here). Contiguous: it
     continues with the phase the previous note has now. Per Voice: it starts with the same phase every time, the one captured from the previous note when this mode was entered (the first note after it, with no previous
-    note, captures its own). Phase Legato (with the memory on All Voices): a note that continues a held voice's envelopes (poly legato) also continues its phases instead of starting at PHASE and RAND. Arrays: [oscillator][unison voice] or null. */
-void OwnEngine::applyPhaseOptions (Voice& v, const uint32_t (*prev)[Voice::kPhaseCount], const uint32_t (*held)[Voice::kPhaseCount]) noexcept
+    note, captures its own). Phase Legato (the oscillator's switch or the global voice.phase_legato, memory on All Voices): a note that starts while the key of the previous note is still held takes that note's phases instead of PHASE and RAND (docs/ui-design/13-new-keys.md A86). Arrays: [oscillator][unison voice] or null. */
+void OwnEngine::applyPhaseOptions (Voice& v, const uint32_t (*prev)[Voice::kPhaseCount], bool prevHeld) noexcept
 {
     for (int o = 0; o < 3; ++o)
     {
@@ -678,8 +674,8 @@ void OwnEngine::applyPhaseOptions (Voice& v, const uint32_t (*prev)[Voice::kPhas
             }
             v.setOscPhases (o, memPhase[o]);
         }
-        else if (mode == 0 && held != nullptr && base[static_cast<size_t> (oi.phaseLegato)] >= 0.5f)
-            v.setOscPhases (o, held[o]);
+        else if (mode == 0 && prev != nullptr && prevHeld && (base[static_cast<size_t> (oi.phaseLegato)] >= 0.5f || base[static_cast<size_t> (paramIndex().master.voicePhaseLegato)] >= 0.5f))
+            v.setOscPhases (o, prev[o]);
     }
 }
 

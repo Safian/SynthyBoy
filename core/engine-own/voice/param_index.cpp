@@ -97,7 +97,7 @@ ParamIndex build()
                  find ("master.scale.key"), find ("master.scale.type"), find ("master.scale.mode"), find ("master.tuning.a4"), find ("master.tuning.scale"),
                  find ("master.tuning.mts_esp"), find ("master.mpe.on"), find ("master.mpe.bend_range"), find ("master.mpe.xyz_macro"),
                  find ("master.mpe.y_modwheel"), find ("master.mpe.bend_to_x"), find ("master.mpe.y_bipolar"), find ("master.stereo_routing"),
-                 find ("curve.velocity.legato"), find ("curve.note.legato") };
+                 find ("curve.velocity.legato"), find ("curve.note.legato"), find ("voice.phase_legato") };
     {
         VoiceCtlIdx& v = p.vctl;
         v.length = find ("voicectl.length");

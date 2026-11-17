@@ -59,7 +59,7 @@ struct MasterIdx
     int volume, polyphony, bendRange, velocityTrack, transpose, tune, legato, portTime, portSlope, portAlways, portScaled, bendDownRange, bendDownLink,
         stereoSpread, sameNote, stealPriority, voiceOverride, polyLegato,
         scaleKey, scaleType, scaleMode, tuningA4, tuningScale, tuningMts, mpeOn, mpeBendRange, mpeXyz, mpeYModwheel, mpeBendToX, mpeYBipolar, stereoRouting,
-        curveVelLegato, curveNoteLegato;
+        curveVelLegato, curveNoteLegato, voicePhaseLegato;
 };
 
 /** The per voice panel (docs/ui-design/13-new-keys.md 4.30). */
