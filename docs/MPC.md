@@ -383,7 +383,34 @@ Changes that do not alter the sound at any tier (they compute the same samples w
 
 ## Quality profile per device
 
-PROFILE_SECTION_PLACEHOLDER
+The shell takes the engine's quality from a profile, chosen once per process for the device it runs on (`shell-mpc/device_profile.h`). A profile is a text, a base and changes to it:
+
+`low | medium | high [, voices=1..32] [, unison=1..16] [, warp=2x|4x] [, morph=half|full] [, math=fast|exact] [, control=economy|full] [, fx=low|all] [, samples=low|medium|high]`
+
+- `low` is the quality the MPC build always had: 8 voices, 3 unison voices per oscillator, the four economy groups on (`warp=2x`, `morph=half`, `math=fast`, `control=economy`), the heavy effects bypassed (`fx=low`: no reverb, flanger, Hyper / Dimension, Bode, Convolve), the cheapest interpolation of the sample oscillators. `medium` and `high` are the tiers of `quality.h` (16 voices / 8 unison, 32 / 16; no economy group; all effects).
+- Each key changes one setting; what a setting changes in the sound is the list in "Sound differences at tier low". Example: `low,unison=7,fx=all` keeps the cheap forms and gives seven unison voices and all effects.
+- In the engine the settings are `Quality::maxVoices`, `maxUnison`, `fxMask`, the interpolation tier and `Quality::economy` (`EconomyFlags` in `core/include/synthyboy/quality.h`: Warp, Morph, Math, Control). A quality without explicit groups behaves as the three tiers always did; the three tiers render the same samples as before the groups existed (all 112 factory presets at the three tiers, compared file by file).
+
+**Which device gets which profile.** The table `kDeviceProfiles` in `device_profile.h`, keyed by the exact name in `/proc/device-tree/model`: `Akai Professional MPC XL` and `Akai Professional MPC Key 61` (the two names read from the devices). A name that is not in the table gets `kProfileUnknownDevice`; when the name cannot be read the architecture of the build decides (`kProfileNoNameArm64`, `kProfileNoNameArm32`). **Every row is `low` today**: no device has been measured with the profile bench yet, and a setting that makes the audio crackle is worse than a lower one. Raising a device is an edit of its row (and of the check in `shell-mpc/tests/device_profile_host.cpp` that states what the package runs).
+
+**Overrides**, the first that holds a valid profile wins; one that does not parse is skipped and named in the report:
+
+1. the first line of the file `/tmp/synthyboy-mpc-profile` (`SYNTHYBOY_MPC_PROFILE_FILE` names another file): trials on the device without a rebuild; the app has to be restarted, see below;
+2. the environment variable `SYNTHYBOY_MPC_PROFILE`;
+3. the CMake cache entry `SYNTHYBOY_MPC_PROFILE` (empty by default; a trial package that runs one profile on every device);
+4. the table.
+
+**Fixed for the life of the process.** The profile is resolved when the first engine is prepared and never again: every instance runs the same profile and it does not change while notes sound. A change while a note sounds would be heard: the warp decimator's history would be read at the other rate for one filter length and the warped oscillator would move by 8 samples against the others, the morph cycles would be rebuilt at once, a lowered voice cap would release notes. (The engine itself survives such a change, `core/tests/test_own_profile.cpp`; the shell just never does it.)
+
+**What is in force** is written to `/tmp/synthyboy-mpc-profile.txt` (`SYNTHYBOY_MPC_PROFILE_REPORT` names another file) when it is resolved: `profile`, `profile_settings` (every setting spelled out), `profile_source` (table row, file, environment or build option), `profile_skipped`, `device_model`, `build`. The overlay build also has the line `quality_profile:` in its status file.
+
+**Projects move between devices unchanged.** The saved state is the parameter values the host and the player set, the content, the program and the shell's own members (`buildStateChunk` in `synthyboy_mpc.cpp`); nothing of the profile is in it and the engine never writes a value back (tested: the same patch played at `low` and at `high` saves the same bytes). The patch parameters that touch quality (`quality.oversample_4x`, `quality.no_smoothing`, `reverb.force_enable`, `master.polyphony`) are ordinary stored values that act the same way on every device: `reverb.force_enable` lets the reverb run even with `fx=low`, and a preset's `master.polyphony` caps the voices below the profile's (the factory presets say 16 or less, so `voices` above 16 changes nothing for them).
+
+**How far the sound of one state moves between profiles** (measured, `core/tests/test_own_profile.cpp` and `bench/profile_compare.cpp`; not derived from the per function bounds above, which do not add up to a bound for a whole voice): Math alone on a saw through the resonant ladder -138 dB relative to the signal, on a patch with distortion, compressor, phaser and modulated filters the level stays within 0.01 dB and the waveform drifts (-26 dB); Control alone with notes on the control grid and no stolen voice: the same samples; Morph on a static morph -137 dB; the warp at 2x against 4x: the same level, the 4x signal 8 samples later, the rest (aliasing) -25 dB; the unison cap: level within 0.5 dB on a plain saw, another waveform; the effects of `fx=all`: the level moves with their mix (-2 dB on the bench's heavy patch).
+
+**Choosing a profile: the bench.** `synthyboy_tier_bench` (`bench/tier_bench.cpp`) plays loads through the engine the way the shell does (44.1 kHz, 128 frames, the parameters by `setParam` and then the content, a real-time quality, flush-to-zero), pinned to one core (`--core N`), under a list of profiles, and prints the time of a block as a share of the block's real time (minimum, median, 99th percentile, maximum), the frequency of the core after every run, and per profile its dearest factory preset. `--set settings` changes one setting at a time over `low`; `--set ladder` runs the candidate profiles from the cheapest to the dearest, each with the notes of its polyphony; `--all-presets` measures every factory preset; `--repeat N` repeats the list and shows the spread; `--budget PCT` marks each profile as inside or over; `--paced` starts each block at its real time. `scripts/build-tier-bench.sh` builds it fully static for both MPC architectures (`build-tier-bench/out/tier-bench-arm32/` and `tier-bench-arm64/`), so it needs nothing of the device but the kernel and a copy of `content/presets`. `synthyboy_profile_compare` (`bench/profile_compare.cpp`) renders every factory preset under two profiles and prints the level and third octave spectrum differences: what a step is worth to the ear.
+
+**Tests.** `core/tests/test_own_profile.cpp` (the groups, bit equality with the tiers, the same state at every profile and the measured bounds), `shell-mpc/tests/device_profile_host.cpp` (the profile texts, the table, the overrides and their order, the report, the choice of the process; CTest `device_profile_host`).
 
 ## Benchmark switches
 
