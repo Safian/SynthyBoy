@@ -768,6 +768,7 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
     }
     // 16 knob device (the MPC XL): the idle chips of the other groups show the knob numbers 5 .. 16 (QGroup::setWideDevice, as overlay/service.h does on the XL); pictures named *_wide16_*
     {
+        const bool wasWide = ui::QGroup::wideDevice();   // (the device of the run: the XL by default; the rest of the run, the next states included, keeps it)
         ui::QGroup::setWideDevice (true);
         GalleryRig<EnvUi> rW1 (baseInst, 1); rW1.refresh (2); rW1.picture (outDir + "/" + state + "_wide16_env1.png");
         GalleryRig<LfoUi> rW2 (baseInst, 1); rW2.refresh (2); rW2.picture (outDir + "/" + state + "_wide16_lfo1.png");
@@ -775,7 +776,7 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         GalleryRig<MasterUi> rW4 (baseInst, 1); rW4.refresh (2); rW4.picture (outDir + "/" + state + "_wide16_master.png");
         GalleryRig<MixerUi> rW5 (baseInst, 1); rW5.refresh (2); rW5.picture (outDir + "/" + state + "_wide16_mixer.png");
         GalleryRig<OscPageUi> rW6 (baseInst, 2); rW6.refresh (2); rW6.picture (outDir + "/" + state + "_wide16_osca.png");
-        ui::QGroup::setWideDevice (false);
+        ui::QGroup::setWideDevice (wasWide);
     }
 }
 

@@ -1165,6 +1165,7 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
 
 int main (int argc, char** argv)
 {
+    ui::QGroup::setWideDevice (true);   // the XL first, as the main gallery host: the idle chips of the mapped groups read 5 .. 16
     std::string outDir;
     std::vector<std::string> presets;
     bool testMode = false;
