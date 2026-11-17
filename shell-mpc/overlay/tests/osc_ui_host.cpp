@@ -55,8 +55,16 @@ public:
     void setUiFullOpen (bool o) noexcept override { fullOpen = o; }
     void contentRoots (std::vector<ContentRoot>& out) const override { out = roots; }
     void requestContent (int osc, int kind, const std::string& path) override { requests.push_back ({ osc, kind, path }); loadState = 1; }
-    int contentLoad (std::string*) const override { return loadState; }
+    int contentLoad (std::string* m) const override { if (m != nullptr) *m = loadMessage; return loadState; }
+    void wavetableSources (synthyboy::CatalogueSources& out) const override { out = sources; }
+    void requestWavetable (int osc, const synthyboy::ContentFileRef& ref) override { wtRequests.push_back ({ osc, ref }); loadState = 1; }
+    int takeWavetableSteps (int) noexcept override { const int n = wtSteps; wtSteps = 0; return n; }
     std::shared_ptr<const synthyboy::StateContent> content() const override { return contentPtr; }
+    struct WtRequest { int osc; synthyboy::ContentFileRef ref; };
+    std::vector<WtRequest> wtRequests;
+    synthyboy::CatalogueSources sources;
+    std::string loadMessage;
+    int wtSteps = 0;
     unsigned missingContent() const noexcept override { return missingBits; }
     unsigned missingBits = 0;   // the engine's missing_content bits
     struct Request { int osc, kind; std::string path; };
@@ -297,7 +305,7 @@ void testDisabledControls()
     const OscUi::Item* ph = r.ui.item (OscUi::kWarp1Var);
     check (r.ui.full().panel.warp()->first.hasVar() && ph != nullptr && ph->param == Inst::idx ("osc1.warp.phase"), "the VAR knob of a warp slot is its PHASE (osc1.warp.phase)");
     const OscUi::Item* drop = r.ui.item (OscUi::kBasic + 2);
-    check (drop != nullptr && ! drop->c->enabled(), "the source dropdown of the compact view is disabled (the list opens from the full screen)");
+    check (drop != nullptr && drop->c->enabled() && r.ui.compact().basic.source.stepper.listable, "the table of the compact view opens the wavetable browser (its name is listable; the full screen opens first)");
     // the source stepper of multisample is disabled
     r.inst.set ("osc1.type", 4.0f);
     r.refresh();
@@ -505,18 +513,18 @@ void testSourceAndWarpLists()
 {
     Rig r;
     r.openFull();
-    // the source dropdown opens the list of the wavetables; the stepper's name does too, its outer quarters step
+    // the source dropdown opens the wavetable browser (the category of the current table, Saw is in Basic); the stepper's name does too, its outer quarters step
     ui::MenuButton& drop = r.ui.full().basic.source.dropdown;
-    check (drop.enabled() && ! r.ui.compact().basic.source.dropdown.enabled(), "the source dropdown is enabled on the full screen (wavetable type), not on the compact view");
+    check (drop.enabled() && r.ui.compact().basic.source.dropdown.enabled(), "the table dropdown is enabled on the full screen and on the compact view (wavetable type)");
     r.tapC (drop);
-    check (r.stack.top() == OscUi::kPageList && r.ui.list().state.count == 15, "the dropdown opens the list of the 15 wavetables");
+    check (r.stack.top() == OscUi::kPageList && r.ui.list().state.count == 6 && std::string (r.ui.list().state.header) == "Basic" && r.ui.list().state.headerBack, "the dropdown opens the browser in the category of the current table: the six one cycle tables, the header is the way up");
     const ui::Rect row = r.ui.list().rowRect (r.ui.list().firstRow());
     r.tap (row.x + 30, row.y + 20);
     check (r.inst.get ("osc1.wavetable") == static_cast<float> (r.ui.list().firstRow()) && r.stack.depth() == 1, "a tap on a row writes osc1.wavetable");
     ui::Stepper& st = r.ui.full().basic.source.stepper;
     const ui::Rect sr = st.rect();
     r.tap (sr.x + sr.w / 2, sr.y + sr.h / 2);
-    check (r.stack.top() == OscUi::kPageList, "a tap on the name of the source stepper opens the list as well");
+    check (r.stack.top() == OscUi::kPageList && r.ui.list().state.current == 0, "a tap on the name of the table stepper opens the browser as well, the current table (Sine, the first row) marked");
     r.tap (20, 130);
     const float w0 = r.inst.get ("osc1.wavetable");
     r.tap (sr.x + sr.w - 8, sr.y + sr.h / 2);
@@ -1070,6 +1078,155 @@ void testFollowUps()
     check (clean, "no oscillator page shows 'Vital' or 'Serum'" + (clean ? std::string() : " (" + where + ")"));
 }
 
+
+/** A machine with wavetable files: a pack with a category folder (Analog) and a root file, the player's folder SynthyBoy/Wavetables with a category (Bass: x, y, z, and a 17 MB file and an empty one) and a loose file. */
+std::string makeWavetableLibrary (synthyboy::CatalogueSources& sources)
+{
+    char tmpl[] = "/tmp/sbovl-XXXXXX";
+    const char* dir = ::mkdtemp (tmpl);
+    const std::string root = dir != nullptr ? dir : "/tmp";
+    if (dir != nullptr)
+        g_libraries.push_back (root);
+    auto make = [&] (const std::string& rel) { ::mkdir ((root + "/" + rel).c_str(), 0755); };
+    auto touch = [&] (const std::string& rel, const char* text = "x") { std::ofstream (root + "/" + rel) << text; };
+    make ("packs"); make ("packs/com.t.pack"); make ("packs/com.t.pack/Analog");
+    touch ("packs/com.t.pack/Analog/warm.wav");
+    const std::string sha (64, 'a');
+    touch ("packs/com.t.pack/contentpack.json", ("{\"schemaVersion\":1,\"id\":\"com.t.pack\",\"name\":\"T\",\"version\":\"1.0.0\",\"license\":\"CC0-1.0\",\"attribution\":\"t\",\"kind\":\"wavetables\",\"requires_plugin\":\">=0.1.0\","
+                                                  "\"files\":[{\"path\":\"Analog/warm.wav\",\"sha256\":\"" + sha + "\",\"size\":4096,\"title\":\"Warm Saw\"}]}").c_str());
+    make ("SynthyBoy"); make ("SynthyBoy/Wavetables"); make ("SynthyBoy/Wavetables/Bass");
+    touch ("SynthyBoy/Wavetables/Bass/x.wav"); touch ("SynthyBoy/Wavetables/Bass/y.wav"); touch ("SynthyBoy/Wavetables/Bass/z.wav");
+    touch ("SynthyBoy/Wavetables/Bass/empty.wav", "");
+    { std::ofstream f (root + "/SynthyBoy/Wavetables/Bass/big.wav"); f << "x"; }
+    (void) ::truncate ((root + "/SynthyBoy/Wavetables/Bass/big.wav").c_str(), 17 * 1024 * 1024);   // a sparse file: 17 MB on paper, nothing on disk
+    touch ("SynthyBoy/Wavetables/loose.wav");
+    sources.packDirs = { root + "/packs" };
+    sources.userRoots = { root };
+    return root;
+}
+
+void testWavetableBrowser()
+{
+    synthyboy::CatalogueSources sources;
+    makeWavetableLibrary (sources);
+    Rig r;
+    r.inst.sources = sources;
+    r.openFull();
+    // opening: the category of the current table (Saw: Basic), the header is the way up, the current table is marked
+    r.tapC (r.ui.full().basic.source.dropdown);
+    check (r.stack.top() == OscUi::kPageList && std::string (r.ui.list().state.header) == "Basic" && r.ui.list().state.headerBack && r.ui.list().state.count == 6 && r.ui.list().state.current == 1, "browser: it opens in the category of the current table (Basic), Saw marked");
+    // the way up: the categories (Basic, Morph, the pack's, the player's, User)
+    {
+        const ui::Rect h = r.ui.list().headerRect();
+        r.tap (h.x + 20, h.y + h.h / 2);
+    }
+    check (std::string (r.ui.list().state.header) == "WAVETABLES" && ! r.ui.list().state.headerBack && r.ui.list().state.count == 5, "browser: the way up shows the five categories (" + std::to_string (r.ui.list().state.count) + ")");
+    check (std::string (r.ui.list().state.items[0]) == "Basic \xe2\x96\xb6" && std::string (r.ui.list().state.items[2]) == "Analog \xe2\x96\xb6" && std::string (r.ui.list().state.items[3]) == "Bass \xe2\x96\xb6" && std::string (r.ui.list().state.items[4]) == "User \xe2\x96\xb6", "browser: Basic, Morph, then the others by name, User last");
+    auto row = [&] (int i) { const ui::Rect q = r.ui.list().rowRect (i); r.tap (q.x + 30, q.y + q.h / 2); };
+    row (3);   // Bass
+    check (std::string (r.ui.list().state.header) == "Bass" && r.ui.list().state.count == 5 && r.stack.top() == OscUi::kPageList, "browser: a category shows its tables (big, empty, x, y, z)");
+    // the two files that cannot be loaded say why; a tap on one changes nothing
+    check (std::string (r.ui.list().state.items[0]).find ("too large") != std::string::npos && std::string (r.ui.list().state.items[1]).find ("empty") != std::string::npos, "browser: a file above the limit and an empty file say why in their row");
+    row (0);
+    check (r.inst.wtRequests.empty() && r.stack.top() == OscUi::kPageList, "browser: a tap on a refused file loads nothing and the list stays");
+    // a file: the request carries the user pack, the path below it, no hash (it is computed when the file is loaded); the browser closes
+    row (3);   // y
+    check (r.inst.wtRequests.size() == 1 && r.inst.wtRequests[0].osc == 1 && r.inst.wtRequests[0].ref.pack == "SynthyBoy/Wavetables" && r.inst.wtRequests[0].ref.file == "Bass/y.wav" && r.inst.wtRequests[0].ref.sha256.empty() && r.stack.depth() == 1, "browser: a tap on a file asks the instance to load Bass/y.wav of the user pack and closes the list");
+    // what the instance does next: the content names the file, the oscillator is on "Preset table"
+    auto showFile = [&] (const std::string& file, const std::string& name)
+    {
+        auto c = std::make_shared<synthyboy::StateContent>();
+        synthyboy::ContentWavetable w;
+        w.osc = 1; w.ref.pack = "SynthyBoy/Wavetables"; w.ref.file = file; w.ref.name = name; w.frames = 2;
+        c->wavetables.push_back (w);
+        r.inst.contentPtr = c;
+        r.inst.set ("osc1.wavetable", 13.0f);
+        r.inst.loadState = 2;
+        r.refresh();
+    };
+    showFile ("Bass/y.wav", "y");
+    ui::Stepper& st = r.ui.full().basic.source.stepper;
+    check (std::string (st.state.text) == "y" && st.state.count == 3 && st.state.index == 1, "table: the selector shows the title of the file; y is in the middle of x, y, z (both arrows lit)");
+    const ui::Rect sr = st.rect();
+    r.tap (sr.x + sr.w - 8, sr.y + sr.h / 2);   // next: z
+    check (r.inst.wtRequests.size() == 2 && r.inst.wtRequests[1].ref.file == "Bass/z.wav" && r.inst.get ("osc1.wavetable") == 13.0f, "table: the right arrow loads the next FILE of the category (z), the parameter stays Preset table");
+    showFile ("Bass/z.wav", "z");
+    check (st.state.index == 2 && st.state.count == 3, "table: z is the last file: the next arrow is dimmed");
+    const size_t n = r.inst.wtRequests.size();
+    r.tap (sr.x + sr.w - 8, sr.y + sr.h / 2);
+    check (r.inst.wtRequests.size() == n && r.inst.get ("osc1.wavetable") == 13.0f, "table: at the last file nothing happens (no wrap, no built-in table)");
+    r.tap (sr.x + 8, sr.y + sr.h / 2);   // previous: y
+    check (r.inst.wtRequests.size() == n + 1 && r.inst.wtRequests.back().ref.file == "Bass/y.wav", "table: the left arrow loads the previous file (y; the refused big and empty files are skipped at the other end)");
+    showFile ("Bass/x.wav", "x");
+    check (st.state.index == 0, "table: x is the first loadable file: the previous arrow is dimmed");
+    r.tap (sr.x + 8, sr.y + sr.h / 2);
+    check (r.inst.wtRequests.size() == n + 1, "table: at the first file nothing happens");
+    // the Q knob: the plugin leaves steps (the parameter stays), the page loads the neighbour file
+    r.inst.wtSteps = 1;
+    r.refresh();
+    check (r.inst.wtRequests.size() == n + 2 && r.inst.wtRequests.back().ref.file == "Bass/y.wav", "table: a Q knob step moves to the next file as the arrow does");
+    // a built-in table from the browser: the parameter is written as always
+    showFile ("Bass/y.wav", "y");
+    r.tapC (r.ui.full().basic.source.dropdown);
+    check (std::string (r.ui.list().state.header) == "Bass" && r.ui.list().state.current >= 0 && std::string (r.ui.list().state.items[r.ui.list().state.current]) == "y", "browser: with a file table it opens in its category with the file marked");
+    {
+        const ui::Rect h = r.ui.list().headerRect();
+        r.tap (h.x + 20, h.y + h.h / 2);
+    }
+    row (1);   // Morph
+    row (0);   // Saw to Square
+    check (r.inst.get ("osc1.wavetable") == 5.0f && r.stack.depth() == 1, "browser: a built-in table of Morph writes oscN.wavetable (Saw to Square), the list closes");
+    check (r.inst.wtRequests.size() == n + 2, "browser: choosing a built-in table loads no file");
+    // the built-in stepping skips "Preset table" while the oscillator has no file table; the ends do not wrap
+    r.inst.contentPtr = nullptr;
+    r.inst.set ("osc1.wavetable", 12.0f);
+    r.refresh();
+    r.tap (sr.x + sr.w - 8, sr.y + sr.h / 2);
+    check (r.inst.get ("osc1.wavetable") == 14.0f, "table: from Bell Partials the next table is Saw Down (Preset table, which would play the saw, is skipped without a file)");
+    r.tap (sr.x + 8, sr.y + sr.h / 2);
+    check (r.inst.get ("osc1.wavetable") == 12.0f, "table: and back");
+}
+
+void testWavetableRefusedFileAndCompactView()
+{
+    synthyboy::CatalogueSources sources;
+    makeWavetableLibrary (sources);
+    Rig r;
+    r.inst.sources = sources;
+    // the compact view (Play page): the name of the table opens the full screen and the browser over it
+    r.tapC (r.ui.compact().basic.source.stepper);
+    check (r.stack.depth() == 2 && r.stack.top() == OscUi::kPageList && std::string (r.ui.list().state.header) == "Basic", "compact view: the table's name opens the full screen and the wavetable browser");
+    r.tap (20, 130);
+    check (r.stack.depth() == 1, "compact view: the backdrop closes the browser");
+    // a pack file: the request names the pack's folder, the manifest's path and the SHA-256 of the manifest
+    r.tapC (r.ui.full().basic.source.dropdown);
+    {
+        const ui::Rect h = r.ui.list().headerRect();
+        r.tap (h.x + 20, h.y + h.h / 2);
+    }
+    auto row = [&] (int i) { const ui::Rect q = r.ui.list().rowRect (i); r.tap (q.x + 30, q.y + q.h / 2); };
+    row (2);   // Analog
+    check (r.ui.list().state.count == 1 && std::string (r.ui.list().state.items[0]) == "Warm Saw", "pack: a manifest title is the name of the row");
+    row (0);
+    check (r.inst.wtRequests.size() == 1 && r.inst.wtRequests[0].ref.pack == "com.t.pack" && r.inst.wtRequests[0].ref.file == "Analog/warm.wav" && r.inst.wtRequests[0].ref.sha256 == std::string (64, 'a'), "pack: the request carries the pack folder, the path and the manifest's SHA-256");
+    // the load is refused: the display says it, and the row of that file says why the next time
+    r.inst.loadState = 3;
+    r.inst.loadMessage = "not a wavetable file: damaged or truncated audio data";
+    r.refresh();
+    check (r.ui.missingText() == "not a wavetable file: damaged or truncated audio data", "refused: the line over the display says why");
+    r.inst.loadState = 0;
+    r.refresh();
+    r.tapC (r.ui.full().basic.source.dropdown);
+    {
+        const ui::Rect h = r.ui.list().headerRect();
+        r.tap (h.x + 20, h.y + h.h / 2);
+    }
+    row (2);
+    check (std::string (r.ui.list().state.items[0]).find ("damaged or truncated audio data") != std::string::npos, "refused: the row of the file says why (" + std::string (r.ui.list().state.items[0]) + ")");
+    row (0);
+    check (r.inst.wtRequests.size() == 1, "refused: a tap on it asks for nothing more");
+}
+
 int main()
 {
     testSteepEdgeNoLongLine();
@@ -1095,6 +1252,8 @@ int main()
     testTypeDropdown();
     testGranularAndSubAndNoise();
     testSourceAndWarpLists();
+    testWavetableBrowser();
+    testWavetableRefusedFileAndCompactView();
     testReview2();
     testSpecPages();
     testFollowUps();
