@@ -336,10 +336,18 @@ def make_manifest(directory, args):
         if value is not None:
             meta[key] = value
     meta.setdefault("requires_plugin", ">=0.1.0")
+    # the display texts of the wavetable browser ("category", "title") are written by hand in the manifest: regenerating the list keeps them
+    kept = {}
+    if existing.exists():
+        for old in read_manifest(directory).get("files", []):
+            if isinstance(old, dict) and isinstance(old.get("path"), str):
+                kept[old["path"]] = {k: old[k] for k in ("category", "title") if isinstance(old.get(k), str)}
     files = []
     for path in list_pack_files(directory):
         full = directory / path
-        files.append({"path": path, "sha256": sha256_file(full), "size": full.stat().st_size})
+        entry = {"path": path, "sha256": sha256_file(full), "size": full.stat().st_size}
+        entry.update(kept.get(path, {}))
+        files.append(entry)
     meta["files"] = files
     errors = check_manifest_content(meta, "contentpack(%s)" % directory.name)
     if errors:

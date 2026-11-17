@@ -206,6 +206,13 @@ const char* UserContentStore::directoryOfUserPack (const std::string& pack) noex
 
 bool UserContentStore::readFile (const ContentFileRef& ref, std::vector<uint8_t>& bytes) const
 {
+    return readFileBounded (ref, bytes, kMaxContentFileBytes, nullptr);
+}
+
+bool UserContentStore::readFileBounded (const ContentFileRef& ref, std::vector<uint8_t>& bytes, size_t maxBytes, bool* tooLarge) const
+{
+    if (tooLarge != nullptr)
+        *tooLarge = false;
     if (root_.empty() || ! safeRelative (ref.file) || (! ref.pack.empty() && ! safeRelative (ref.pack)))
         return false;
     const std::string dir = directoryOfUserPack (ref.pack);
@@ -213,13 +220,19 @@ bool UserContentStore::readFile (const ContentFileRef& ref, std::vector<uint8_t>
     {
         ContentFileRef inner = ref;
         inner.pack.clear();
-        return DirectoryContentStore ((fs::path (root_) / dir).string()).readFile (inner, bytes);
+        return DirectoryContentStore ((fs::path (root_) / dir).string()).readFileBounded (inner, bytes, maxBytes, tooLarge);
     }
-    if (DirectoryContentStore (root_).readFile (ref, bytes))
+    if (DirectoryContentStore (root_).readFileBounded (ref, bytes, maxBytes, tooLarge))
         return true;
+    if (tooLarge != nullptr && *tooLarge)
+        return false;   // the file is there and too large: another root does not make it smaller
     for (const std::string& extra : extraRoots_)
-        if (DirectoryContentStore (extra).readFile (ref, bytes))
+    {
+        if (DirectoryContentStore (extra).readFileBounded (ref, bytes, maxBytes, tooLarge))
             return true;
+        if (tooLarge != nullptr && *tooLarge)
+            return false;
+    }
     return false;
 }
 

@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "../dsp/util.h"
+#include "synthyboy/wavetable_file.h"
 
 namespace synthyboy
 {
@@ -65,20 +66,14 @@ std::unique_ptr<ContentSet> ContentSet::build (const StateContent& content, cons
     std::vector<uint8_t> bytes;
     for (const ContentWavetable& w : content.wavetables)
     {
-        if (w.osc < 1 || w.osc > 3 || !store->readFile (w.ref, bytes))
+        // one set of rules for every wavetable file (wavetable_file.h): the frame conventions, the `clm ` chunk, a single cycle of any length, the size limits; a file that follows the
+        // convention (2048 samples per frame) decodes to the same samples as it always did. A refused file is a missing table: the saw plays (docs/MPC.md "Wavetable browser").
+        if (w.osc < 1 || w.osc > 3 || !store->readFileBounded (w.ref, bytes, kMaxWavetableFileBytes, nullptr))
             continue;
-        std::vector<float> l, r;
-        sampleosc::WavInfo info;
-        if (!sampleosc::readWav (bytes.data(), bytes.size(), l, r, info, nullptr) || l.empty())
+        const WavetableParse parsed = parseWavetableWav (bytes.data(), bytes.size());
+        if (!parsed.ok)
             continue;
-        int frames = static_cast<int> (l.size() / Wavetable::kCycle);
-        if (frames < 1)
-        {
-            l.resize (Wavetable::kCycle, 0.0f); // a short file is one frame, zero padded
-            frames = 1;
-        }
-        frames = std::min (frames, 256);
-        set->userTable[w.osc - 1] = makeWavetableFromSamples (l.data(), frames);
+        set->userTable[w.osc - 1] = makeWavetableFromSamples (parsed.data.samples.data(), parsed.data.frames);
         if (set->userTable[w.osc - 1])
             set->bytes += set->userTable[w.osc - 1]->memoryBytes();
     }

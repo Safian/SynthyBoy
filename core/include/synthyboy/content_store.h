@@ -25,6 +25,24 @@ public:
     /** Reads the file a reference names. Returns false if it is missing, unreadable, or (when ref.sha256 is not empty) its SHA-256
         does not match. Not real-time. */
     virtual bool readFile (const ContentFileRef& ref, std::vector<uint8_t>& bytes) const = 0;
+
+    /** As readFile, but a file larger than `maxBytes` is not read to its end: the stores that read a file from a disk stop at the limit. Returns false for a missing file, a hash that does not
+        match, and a file above the limit; `tooLarge` (when not null) is set true only for the last. The default reads the whole file and checks its size afterwards. Not real-time. */
+    virtual bool readFileBounded (const ContentFileRef& ref, std::vector<uint8_t>& bytes, size_t maxBytes, bool* tooLarge) const
+    {
+        if (tooLarge != nullptr)
+            *tooLarge = false;
+        if (! readFile (ref, bytes))
+            return false;
+        if (bytes.size() > maxBytes)
+        {
+            bytes.clear();
+            if (tooLarge != nullptr)
+                *tooLarge = true;
+            return false;
+        }
+        return true;
+    }
 };
 
 /** Files held in memory, keyed by "<pack>/<file>". */
@@ -44,6 +62,7 @@ class DirectoryContentStore final : public IContentStore
 public:
     explicit DirectoryContentStore (std::string rootDirectory) : root_ (std::move (rootDirectory)) {}
     bool readFile (const ContentFileRef& ref, std::vector<uint8_t>& bytes) const override;
+    bool readFileBounded (const ContentFileRef& ref, std::vector<uint8_t>& bytes, size_t maxBytes, bool* tooLarge) const override;
 
 private:
     std::string root_;

@@ -73,6 +73,8 @@ public:
     /** The user packs map to their directories, every other pack is a directory below the root (or below an extra root). The SHA-256 of the
         reference is verified when it has one. */
     bool readFile (const ContentFileRef& ref, std::vector<uint8_t>& bytes) const override;
+    /** The same lookup, reading a file from disk only up to `maxBytes` (a wavetable file: wavetable_file.h). */
+    bool readFileBounded (const ContentFileRef& ref, std::vector<uint8_t>& bytes, size_t maxBytes, bool* tooLarge) const override;
     bool contains (const ContentFileRef& ref) const;
 
     /** Writes `bytes` as `<pack dir>/<sha12>/<stem of fileName>.wav` (content addressed: the same bytes are stored once) and fills `ref` with the
