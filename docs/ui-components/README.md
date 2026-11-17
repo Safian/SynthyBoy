@@ -1,0 +1,107 @@
+# The UI component library of the SynthyBoy MPC plugin
+
+For developers and AI coding agents who want to build their own plugin-drawn pages (and later their own Akai MPC plugin UI) from these components. Start here; the details are one page per component.
+
+## What it is
+`shell-mpc/ui/` is a header-only C++17 library, namespace `synthyboy_mpc::ui`. `ui.h` includes most of it (41 headers and the umbrella `ui.h`). It draws with the scene ops of `shell-mpc/overlay/gpu/scene.h` (a GPU helper draws them on the MPC's display plane; `shell-mpc/overlay/scene_cpu.h` is the CPU renderer with the same meaning, the fallback and the test reference). Pictures of every page: `docs/user-guide/img/*.png`. The design record is docs/MPC.md "UI components". Licence: AGPL-3.0-or-later ([REUSE.md](REUSE.md)).
+
+## The one contract every component follows
+1. State in: a plain struct (`component.state`) holds what it shows. The component never stores the truth.
+2. A rectangle in: `place (Rect)`. The component draws only inside it.
+3. Draw: `draw (gpu::SceneBuilder&)` emits scene ops. No allocation, no locks, no I/O; the same state gives the same ops.
+4. Input in: `touchDown (x, y, nowMs)`, `touchMove (x, y)`, `touchUp (x, y)`, `tick (nowMs)` (call it while a finger is down), `turn (delta)` (a hardware knob), `wheel (notches)`. Single finger, pixels. A gesture that went down inside the rectangle is kept until the touch up.
+5. Change out: every call returns `Change { kind, id, value, index }`. `kind` `None` means nothing happened. Kinds: `Value` (0 to 1), `Index` (a whole number: list position, switch 0 / 1, steps of a number field), `Request` (open a menu, page or popup), `Depth`, `ModsRequest`, `AddRequest` (modulation).
+6. The owner writes values back. You write the parameter, and on the next update you put the new value into `state`. A change that would not change the value is not reported.
+7. `id` is an opaque integer you gave with `setId`. The component never knows what a parameter is.
+8. Touch targets are at least 56 px in the smaller direction. `minSize()` is the smallest legible size; the layout must give at least that (`sizeOk()`).
+9. Q groups and chips: up to four members form a `QGroup`; it draws ONE frame and the chips 1 to 4 on its members. `setQ (frame, index)` marks a member. Yellow is only for Q frames and chips. Details: [qgroup.md](qgroup.md).
+10. The theme: every colour, size and line width comes from `theme::L()` ([theme.md](theme.md)); never write a colour or a size literal in a component.
+11. Rules of the look: frameless LED controls instead of boxed toggles, one control per value, text must fit its box, no third-party product names in shown text.
+
+## A knob on a page
+```cpp
+#include "shell-mpc/ui/ui.h"
+using namespace synthyboy_mpc::ui;
+
+class MyPage
+{
+public:
+    enum Id { kCutoff = 1 };
+    double written = 0.5;                                    // stands for the parameter (the truth)
+
+    MyPage()
+    {
+        cutoff.setId (kCutoff);                              // declare: an opaque id
+        cutoff.state.defaultValue = 0.5;                     // a double tap sets this
+        cutoff.place ({ 100, 120, 120, 160 });               // place: the rectangle (>= minSize 100 x 72)
+    }
+    void update()                                            // set state: every update, from the parameter
+    {
+        cutoff.state.value = cutoff.state.modValue = written;
+        std::snprintf (cutoff.state.valueText, sizeof cutoff.state.valueText, "%.0f%%", written * 100.0);
+    }
+    void draw (gpu::SceneBuilder& sb) const { cutoff.draw (sb); }          // draw
+    void down (int x, int y, double nowMs) { handle (cutoff.touchDown (x, y, nowMs)); }   // route touch
+    void move (int x, int y)               { handle (cutoff.touchMove (x, y)); }
+    void up   (int x, int y)               { handle (cutoff.touchUp (x, y)); }
+    void tick (double nowMs)               { handle (cutoff.tick (nowMs)); }
+
+private:
+    void handle (const Change& c)                            // handle the Change
+    {
+        if (c.kind == ChangeKind::Value && c.id == kCutoff)
+            written = c.value;                               // write the parameter; update() shows it
+    }
+    Knob cutoff { "CUTOFF" };
+};
+```
+A scene is built with `gpu::SceneData data;` (heap: about 336 KB) and `gpu::SceneBuilder sb (data); sb.begin (gpu::kKindUi, 0, 1280, 800);` as in `shell-mpc/ui/tests/ui_test.h`. On the device the overlay does that for you ([PAGES.md](PAGES.md)).
+
+## Which component for which job
+| Job | Use | Page |
+|---|---|---|
+| on / off | `LedToggle` | [toggle.md](toggle.md) |
+| 2 to 8 named choices, all visible | `LedList` | [led-list.md](led-list.md) |
+| more than 8 choices, or no room | `Stepper` with `listable` + `ListPopup` | [stepper.md](stepper.md), [list-popup.md](list-popup.md) |
+| choice that is better seen than read | `PictogramSelector` | [pictogram-selector.md](pictogram-selector.md) |
+| continuous value 0 to 1 | `Knob` | [knob.md](knob.md) |
+| continuous value in a row or cell | `SliderBar`, `HBar` | [bars.md](bars.md) |
+| level with a peak meter | `Fader` | [bars.md](bars.md) |
+| whole number, or decimal with a step | `NumberField` | [number-field.md](number-field.md) |
+| small integer (voices 1 to 16) | `UpDownStepper` | [stepper.md](stepper.md) |
+| set of notes of an octave | `NoteMask` | [note-mask.md](note-mask.md) |
+| open a page or a popup | `MenuButton`, `DetailButton` | [buttons.md](buttons.md) |
+| name something | `TextEntry` | [text-entry.md](text-entry.md) |
+| pick a modulation source | `ModSourceBoard` | [mod-source-board.md](mod-source-board.md) |
+| the modulations of one control | `ModulationsPage` | [modulations-page.md](modulations-page.md) |
+| the targets of one source | `ModTargetsPage` | [modulations-page.md](modulations-page.md) |
+| four values on four hardware knobs | `QGroup` | [qgroup.md](qgroup.md) |
+| a grid of knobs from a table | `KnobPanel` | [knob-panel.md](knob-panel.md) |
+| a page of details with a picture | `DetailPage` | [knob-panel.md](knob-panel.md) |
+| an envelope you edit by touch | `EnvGraph` | [env-graph.md](env-graph.md) |
+| a drawn LFO shape | `ShapeEditorPage` | [shape-editor.md](shape-editor.md) |
+| a filter response with a handle | `FilterDisplay` | [filter-display.md](filter-display.md) |
+| an oscillator or LFO picture | `display::draw`, `lfodisplay::draw` | [display.md](display.md) |
+| a chain of effects | `FxChainBar`, `FxSlotEditor` | [fx-chain.md](fx-chain.md), [fx-editor.md](fx-editor.md) |
+| your own widget | derive from `Component` / `Composite` | [core.md](core.md), [composites.md](composites.md) |
+
+## The components
+**Basic controls**: [Knob](knob.md), [NumberField](number-field.md), [Stepper and UpDownStepper](stepper.md), [LedToggle and ToggleIcon](toggle.md), [LedList](led-list.md), [MenuButton, DetailButton, RouteButton, RouteDropdown](buttons.md), [HBar, SliderBar, Fader](bars.md), [PictogramSelector](pictogram-selector.md), [NoteMask](note-mask.md).
+
+**Lists and pop-ups**: [ListPopup](list-popup.md), [TextEntry](text-entry.md), [ModSourceBoard](mod-source-board.md), [FxGallery](fx-gallery.md) (engine-bound), [ModulationsPage and ModTargetsPage](modulations-page.md).
+
+**Displays**: [display::draw and lfodisplay::draw](display.md), [EnvGraph](env-graph.md), [FilterDisplay](filter-display.md), [FxDisplay](fx-display.md) (engine-bound), [Master and Voice displays](voice-displays.md), SpectrumStrip in [macros.md](macros.md), the shape canvas in [shape-editor.md](shape-editor.md).
+
+**Composite components and Q groups**: [Composite and the small composites](composites.md), [TypeBar, TuneRow, BasicControls](type-bar.md), [KnobPanel and DetailPage](knob-panel.md), [QGroup](qgroup.md), [ShapePicker, SyncSwitch, RateControl, InstanceBar](lfo-parts.md), [FxSlotCard, FxChainBar, FxBandBoard](fx-chain.md) (engine-bound).
+
+**Composite screens**: [OscillatorCompact and OscillatorFullScreen](osc-screens.md), [EnvCompact and EnvFullScreen](env-screens.md), [LfoCompact and LfoFullScreen](lfo-screens.md), [FilterFullScreen](filter-screens.md), [MixerFullScreen](mixer.md), [ModMatrixView and ModSlotDetail](mod-screens.md), [MacroView](macros.md), [MasterScreen](master-screen.md), [VoiceScreen and VoiceGrid](voice-screen.md), [ShapeEditorPage](shape-editor.md), [FxFullScreen and FxSlotEditor](fx-editor.md) (engine-bound).
+
+**Helpers**: [core.h (Rect, Change, Component, Pen, Cell, TapGesture)](core.md), [theme.h](theme.md), [choice_names.h, play_rows.h, time_ruler.h, lfo_model.h, layoutRow, ui.h](helpers.md).
+
+## Guides
+- [PAGES.md](PAGES.md): how a page is put together: `PageView`, the Ui class, binding to parameters, Q groups and the 16 slots, the stack, live drawing, cached cells, the layout lint, checklists for a new page and a new control.
+- [REUSE.md](REUSE.md): what to lift into another plugin, what is bound to SynthyBoy, the overlay runtime, the licence, and what is not yet a template.
+- `shell-mpc/ui/AGENTS.md`: instructions for AI coding agents working on this library.
+
+## Tests and verification
+`shell-mpc/ui/tests/` (`ui_base_host.cpp`, `ui_composite_host.cpp`, `ui_screen_host.cpp`, the `ui_cov_*` files, the per-screen host tests, `ui_demo.cpp`, `demo_page.h`; inventory in `shell-mpc/ui/tests/COVERAGE.md`) and `shell-mpc/overlay/tests/` (page host tests, `coverage_host.cpp`, `qslots_host.cpp`, `layout_lint_host.cpp`, the gallery renderers). Built and run by the integration session (`shell-mpc/accept.sh`, under AddressSanitizer and UBSan), not by an individual worker.
