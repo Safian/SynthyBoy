@@ -179,17 +179,18 @@ void testBindings()
 
 void testCompactQGroup()
 {
+    auto ctq = [] (Rig& x, int i) { int t[4]; x.ui.compactTargets (t); return t[i]; };   // the main state's group is published by the Play view: the LFO's compact group is what it asks for
     Rig r;
-    check (r.inst.q[0] == paramIdx ("lfo1.shape") && r.inst.q[1] == paramIdx ("lfo1.rate") && r.inst.q[2] == paramIdx ("lfo1.fade_in") && r.inst.q[3] == paramIdx ("lfo1.smooth_time"),
+    check (ctq (r, 0) == paramIdx ("lfo1.shape") && ctq (r, 1) == paramIdx ("lfo1.rate") && ctq (r, 2) == paramIdx ("lfo1.fade_in") && ctq (r, 3) == paramIdx ("lfo1.smooth_time"),
            "compact: the Q group is SHAPE, RATE, RISE, SMOOTH time of lfo1");
     check (r.ui.compact().group.active(), "compact: its frame is on (the LFO sub-tab)");
     r.key ("lfo1.sync", 1.0f);
-    check (r.inst.q[1] == paramIdx ("lfo1.division"), "compact: tempo sync: Q2 is the division");
+    check (ctq (r, 1) == paramIdx ("lfo1.division"), "compact: tempo sync: Q2 is the division");
     r.key ("lfo1.sync", 4.0f);
-    check (r.inst.q[1] == paramIdx ("lfo1.rate") && ! r.ui.compact().rate.rate.enabled(), "compact: key follow: Q2 stays the rate, the knob is dim");
+    check (ctq (r, 1) == paramIdx ("lfo1.rate") && ! r.ui.compact().rate.rate.enabled(), "compact: key follow: Q2 stays the rate, the knob is dim");
     r.inst.sel[2] = 7;
     r.refresh();
-    check (r.inst.q[0] == paramIdx ("lfo7.shape"), "compact: the group follows the Play LFO selector (lfo7)");
+    check (ctq (r, 0) == paramIdx ("lfo7.shape"), "compact: the group follows the Play LFO selector (lfo7)");
     // another sub-tab: the group is not ours
     Rig o;
     const int before = o.inst.qCalls;
@@ -205,7 +206,7 @@ void testCompactQGroup()
     for (int i = 0; i < 11; ++i)
         q.tap (c.x + c.w - 14, c.y + c.h / 2);
     check (q.ui.random() && q.ui.selection() == 2, "the stepper goes on from LFO 10 to RND 1 and RND 2");
-    check (q.inst.q[0] == paramIdx ("rlfo2.style") && q.inst.q[1] == paramIdx ("rlfo2.rate") && q.inst.q[2] == paramIdx ("rlfo2.sync") && q.inst.q[3] == paramIdx ("rlfo2.stereo"), "random compact: STYLE, RATE, SYNC, STEREO of rlfo2");
+    check (ctq (q, 0) == paramIdx ("rlfo2.style") && ctq (q, 1) == paramIdx ("rlfo2.rate") && ctq (q, 2) == paramIdx ("rlfo2.sync") && ctq (q, 3) == paramIdx ("rlfo2.stereo"), "random compact: STYLE, RATE, SYNC, STEREO of rlfo2");
     // a tap on the name opens the list of all 14 entries over the third (no page of the stack), a tap on a row chooses
     {
         Rig l;

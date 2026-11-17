@@ -151,14 +151,18 @@ void testSelectorWritesPlayEnv()
     check (r.inst.env == 5, "tap on the fifth row of the list: Play Env = 5");
     r.refresh();
     check (r.ui.selection() == 5, "the UI follows the selector");
-    check (r.inst.q[0] == envIdx (5, "attack") && r.inst.q[1] == envIdx (5, "decay") && r.inst.q[2] == envIdx (5, "sustain") && r.inst.q[3] == envIdx (5, "release"),
+    int ct[4];
+    r.ui.compactTargets (ct);   // the Play view publishes the main state's groups (PlayView::publishQ): the envelope's compact group is what it asks for
+    check (ct[0] == envIdx (5, "attack") && ct[1] == envIdx (5, "decay") && ct[2] == envIdx (5, "sustain") && ct[3] == envIdx (5, "release"),
            "the ADSR group follows the envelope: attack, decay, sustain, release of env5");
 }
 
 void testCompactQGroupOnlyOnTheEnvSubTab()
 {
     Rig r;
-    check (r.inst.q[0] == envIdx (1, "attack") && r.inst.q[3] == envIdx (1, "release"), "sub tab Env: the ADSR group of env1 is the group");
+    int ct[4];
+    r.ui.compactTargets (ct);
+    check (ct[0] == envIdx (1, "attack") && ct[3] == envIdx (1, "release"), "sub tab Env: the ADSR group of env1 is the group");
     Rig o;
     o.inst.qCalls = 0;
     o.refresh (1);
@@ -166,7 +170,8 @@ void testCompactQGroupOnlyOnTheEnvSubTab()
     Rig m;
     m.inst.set ("env1.units", 1.0f);
     m.refresh();
-    check (m.inst.q[0] == envIdx (1, "attack_beats") && m.inst.q[1] == envIdx (1, "decay_beats") && m.inst.q[2] == envIdx (1, "sustain") && m.inst.q[3] == envIdx (1, "release_beats"),
+    m.ui.compactTargets (ct);
+    check (ct[0] == envIdx (1, "attack_beats") && ct[1] == envIdx (1, "decay_beats") && ct[2] == envIdx (1, "sustain") && ct[3] == envIdx (1, "release_beats"),
            "in beats the group is attack_beats, decay_beats, sustain, release_beats");
 }
 
@@ -596,7 +601,7 @@ void testPlayPageQSlots()
     {
         ui::QGroup::setWideDevice (wide);
         ovt::FakeInstance inst;
-        inst.playSel[0] = 2; inst.playSel[1] = 3; inst.playSel[2] = 1;
+        inst.playSel[0] = 2; inst.playSel[1] = 3; inst.playSel[2] = 1;   // 2 = Osc A (osc1), Env 3, LFO 1
         synthyboy::LiveValues lv;
         PlayView pv (1, 10.0);
         UiStack st;
@@ -607,7 +612,7 @@ void testPlayPageQSlots()
         pv.update (in);
         const std::string dev = wide ? "16 knob device: " : "4 knob device: ";
         check (std::string (pv.name()) == "play1", dev + "the one Play view is named play1");
-        check (inst.qGroup[0] == inst.index ("osc2.type") && inst.qGroup[2] == inst.index ("osc2.pan") && inst.qGroup[3] == inst.index ("osc2.level") && inst.qGroup[4] == inst.index ("env3.attack") && inst.qGroup[7] == inst.index ("env3.release")
+        check (inst.qGroup[0] == inst.index ("osc1.type") && inst.qGroup[2] == inst.index ("osc1.pan") && inst.qGroup[3] == inst.index ("osc1.level") && inst.qGroup[4] == inst.index ("env3.attack") && inst.qGroup[7] == inst.index ("env3.release")
                    && inst.qGroup[8] == inst.index ("lfo1.shape") && inst.qGroup[12] == -1 && inst.qGroup[15] == -1,
                dev + "the oscillator's group on Q 1 .. 4, the envelope's on 5 .. 8, the LFO's on 9 .. 12, nothing on 13 .. 16");
         auto touch = [&] (TouchEvent::Kind k, int x, int y) { TouchEvent e; e.kind = k; e.x = x; e.y = y; in.nowMs += 60.0; return pv.onTouch (e, st, inst, in.nowMs); };
@@ -617,15 +622,15 @@ void testPlayPageQSlots()
         pv.update (in);
         check (pv.highlight() == 3, dev + "a touch in the LFO's third makes its group the active one");
         if (wide)
-            check (inst.qGroup[0] == inst.index ("osc2.type") && inst.qGroup[4] == inst.index ("env3.attack") && inst.qGroup[8] == inst.index ("lfo1.shape"), dev + "the slots stay where they are under a touch");
+            check (inst.qGroup[0] == inst.index ("osc1.type") && inst.qGroup[4] == inst.index ("env3.attack") && inst.qGroup[8] == inst.index ("lfo1.shape"), dev + "the slots stay where they are under a touch");
         else
-            check (inst.qGroup[0] == inst.index ("lfo1.shape") && inst.qGroup[4] == inst.index ("osc2.type") && inst.qGroup[8] == inst.index ("env3.attack"), dev + "the LFO's group is on Q 1 .. 4, the oscillator's and the envelope's follow in reading order");
+            check (inst.qGroup[0] == inst.index ("lfo1.shape") && inst.qGroup[4] == inst.index ("osc1.type") && inst.qGroup[8] == inst.index ("env3.attack"), dev + "the LFO's group is on Q 1 .. 4, the oscillator's and the envelope's follow in reading order");
         touch (TouchEvent::Down, 640, 330);   // the envelope's third
         touch (TouchEvent::Up, 640, 330);
         in.nowMs += 200.0;
         pv.update (in);
         if (! wide)
-            check (pv.highlight() == 2 && inst.qGroup[0] == inst.index ("env3.attack") && inst.qGroup[4] == inst.index ("lfo1.shape") && inst.qGroup[8] == inst.index ("osc2.type"), dev + "the envelope touched: its group on Q 1 .. 4, then the LFO's, then the oscillator's");
+            check (pv.highlight() == 2 && inst.qGroup[0] == inst.index ("env3.attack") && inst.qGroup[4] == inst.index ("lfo1.shape") && inst.qGroup[8] == inst.index ("osc1.type"), dev + "the envelope touched: its group on Q 1 .. 4, then the LFO's, then the oscillator's");
     }
     ui::QGroup::setWideDevice (false);
 }
