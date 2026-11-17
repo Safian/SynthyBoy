@@ -169,7 +169,7 @@ constexpr PanelPreset kSubFull { "sub (full screen)", 4, 1, -1, kSubFullItems, 9
 
 // the noise: when type is Noise (generated): TYPE stepper, STEREO knob, ENV 1 toggle in one NOISE block taking the full width
 constexpr PanelItem kNoiseGenItems[] = {
-    { PartKind::Stepper, PanelSlot::NoiseType, "TYPE", 0, 0, 1, 1, false, 0 },
+    { PartKind::Stepper, PanelSlot::NoiseType, "KIND", 0, 0, 1, 1, false, 0 },
     { PartKind::Knob, PanelSlot::NoiseStereo, "STEREO", 1, 0, 1, 1, false, 0 },
     { PartKind::Toggle, PanelSlot::NoiseEnv1, "ENV 1", 2, 0, 1, 1, false, 0 },
 };
@@ -179,7 +179,7 @@ constexpr PanelPreset kNoiseGenFull { "noise (full screen, generated)", 3, 1, -1
 
 // the noise: when type is Sample: SOURCE block (TYPE, START, STEREO, ENV 1) and PLAYBACK block (RANDOM, LOOP, BOUNCE)
 constexpr PanelItem kNoiseSampleItems[] = {
-    { PartKind::Stepper, PanelSlot::NoiseType, "TYPE", 0, 0, 1, 1, false, 0 },
+    { PartKind::Stepper, PanelSlot::NoiseType, "KIND", 0, 0, 1, 1, false, 0 },
     { PartKind::Knob, PanelSlot::NoiseStart, "START", 1, 0, 1, 1, false, 0 },
     { PartKind::Knob, PanelSlot::NoiseStereo, "STEREO", 2, 0, 1, 1, false, 0 },
     { PartKind::Toggle, PanelSlot::NoiseEnv1, "ENV 1", 3, 0, 1, 1, false, 0 },
@@ -195,7 +195,7 @@ constexpr PanelPreset kNoiseSampleFull { "noise (full screen, sample)", 7, 1, -1
 // Legacy / default noise preset alias
 constexpr PanelPreset kNoiseFull = kNoiseGenFull;
 constexpr PanelItem kNoiseFullItems[] = {
-    { PartKind::Stepper, PanelSlot::NoiseType, "TYPE", 0, 0, 1, 1, false, 0 },
+    { PartKind::Stepper, PanelSlot::NoiseType, "KIND", 0, 0, 1, 1, false, 0 },
     { PartKind::Knob, PanelSlot::NoiseStereo, "STEREO", 1, 0, 1, 1, false, 0 },
     { PartKind::Toggle, PanelSlot::NoiseEnv1, "ENV 1", 2, 0, 1, 1, false, 0 },
 };
@@ -356,7 +356,7 @@ public:
     /** The rectangle of block i (the titled outline of a Q group; empty without blocks). */
     Rect blockRect (int i) const noexcept { return i >= 0 && i < numBlocks() && i < kMaxBlocks ? blocks_[i] : Rect {}; }
     const char* blockTitle (int i) const noexcept { return i >= 0 && i < numBlocks() ? preset_->blocks[i].title : ""; }
-    static constexpr int kMaxBlocks = 4, kBlockTitleH = 38, kBlockPad = 6, kBlockGap = 8, kMaxStepperH = 72, kMaxToggleH = 96;   // the title strip of a block also holds the Q index chips of its first row (38: a two digit chip does not touch the title)
+    static constexpr int kMaxBlocks = 4, kBlockTitleH = 38, kBlockPad = 6, kBlockGap = 8, kMaxStepperH = 72, kMaxToggleH = 96, kOneRowH = 80;   // the title strip of a block also holds the Q index chips of its first row (38: a two digit chip does not touch the title)
     int numParts() const noexcept { return nItems_; }
 
     /** The part of a slot (null when the preset has none). */
@@ -495,7 +495,9 @@ protected:
                 const int r0 = std::min<int> (it.row, 3), r1 = std::min<int> (it.row + it.rowSpan - 1, 3);
                 const int ix0 = in.x + it.col * (icw + kGap), ix1 = in.x + (it.col + it.colSpan - 1) * (icw + kGap) + icw;
                 int iy0 = ry[r0], iy1 = ry[r1] + rh[r1];
-                const int cap = it.kind == PartKind::Stepper || it.kind == PartKind::Menu ? kMaxStepperH : (it.kind == PartKind::Toggle ? kMaxToggleH : 0);
+                // a block of ONE row that holds a stepper or a toggle: every control of the row has the same height (kOneRowH), so that their tops, their index chips and their middles are on one line
+                const bool oneRow = bl.innerRows == 1 && blockHasCapped (b);
+                const int cap = oneRow ? kOneRowH : (it.kind == PartKind::Stepper || it.kind == PartKind::Menu ? kMaxStepperH : (it.kind == PartKind::Toggle ? kMaxToggleH : 0));
                 if (cap > 0 && iy1 - iy0 > cap)
                 {
                     const int mid = (iy0 + iy1) / 2;
@@ -507,6 +509,14 @@ protected:
                 items_[i].comp->place ({ ix0, iy0, ix1 - ix0, iy1 - iy0 });
             }
         }
+    }
+    /** Does block `b` hold a stepper, a menu or a toggle (a control with a height of its own)? */
+    bool blockHasCapped (int b) const noexcept
+    {
+        for (int i = 0; i < nItems_; ++i)
+            if (items_[i].def->block == b && items_[i].comp && (items_[i].def->kind == PartKind::Stepper || items_[i].def->kind == PartKind::Menu || items_[i].def->kind == PartKind::Toggle))
+                return true;
+        return false;
     }
     Size blockMinSize() const
     {
@@ -636,7 +646,9 @@ protected:
     void layout() override
     {
         back.place ({ rect_.x + 4, rect_.y + 4, 120, kBarH - 8 });
-        const int dh = display_h();
+        int dh = display_h();
+        if (dh > 0)   // the picture takes the room the blocks do not need (their minimum and a little air), never less than the preset says
+            dh = std::max (dh, rect_.h - kBarH - 8 - panel.minSize().h - 24);
         display_ = dh > 0 ? Rect { rect_.x + 4, rect_.y + kBarH + 4, rect_.w - 8, dh } : Rect {};
         const int top = rect_.y + kBarH + (dh > 0 ? dh + 8 : 0);
         panel.place ({ rect_.x, top, rect_.w, std::max (0, rect_.bottom() - top) });

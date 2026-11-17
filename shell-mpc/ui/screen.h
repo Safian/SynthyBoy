@@ -61,11 +61,11 @@ protected:
         const int hy = rect_.y + m + 56 + 8;
         power.place ({ rect_.x + m, hy, 64, 64 });
         route.place ({ rect_.right() - m - 64, hy, 64, 64 });
-        nameBox_ = { rect_.x + m + 64 + 12, hy, std::max (0, W - 2 * 64 - 24), 64 };
+        full.place ({ rect_.right() - m - 64 - 8 - 64, hy + 4, 64, 56 });   // the full screen button stands in the header row, not over the curve of the display
+        nameBox_ = { rect_.x + m + 64 + 12, hy, std::max (0, W - 3 * 64 - 32), 64 };
         const int dy = hy + 64 + 8;
         const int by = rect_.bottom() - m - basicH;
         display_ = { rect_.x + m, dy, W, std::max (0, by - kQLane - 4 - dy) };   // kQLane: the index chip of the first member of the Q frame sits on its top edge
-        full.place ({ display_.right() - 64 - 4, display_.y + 4, 64, 56 });
         basic.place ({ rect_.x + m, by, W, basicH });
     }
     void drawUnder (Pen& p) const override   // the display area under the buttons that sit on it
@@ -204,12 +204,12 @@ protected:
         const int lane = isTab ? 22 : (m + kQLane + 2);
         const Rect top { rect_.x + m, rect_.y + lane, W - 2 * m, topH };
         Rect r[4];
-        const int fixed[4] = { 84, 64, 0, 72 }, weight[4] = { 0, 0, 1, 0 };
+        const int fixed[4] = { 84, 64, 0, sub ? 0 : 72 }, weight[4] = { 0, 0, 1, 0 };   // the sub oscillator has its routing in the ROUTING block: no second route button in the header
         layoutRow (top, fixed, weight, 4, kGap, r);
         close.place ({ r[0].x, top.y + (topH - 56) / 2, r[0].w, 56 });
         power.place ({ r[1].x, top.y + (topH - 56) / 2, r[1].w, 56 });
         basic.place (r[2]);
-        route.place ({ r[3].x, top.y + (topH - 64) / 2, r[3].w, 64 });
+        route.place (sub ? Rect {} : Rect { r[3].x, top.y + (topH - 64) / 2, r[3].w, 64 });
         const int gap = kGap;
         const int panelY = rect_.bottom() - (isTab ? 0 : m) - bottomH;
         const int leftW = (W - 2 * m) * 78 / 100, rightX = rect_.x + m + leftW + m;

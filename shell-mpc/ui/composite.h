@@ -495,7 +495,7 @@ class WarpPair : public Composite
 public:
     WarpSlot first { false }, second { true };
 
-    WarpPair() { addKid (first); addKid (second); }
+    WarpPair() { first.amount.setLabel ("WARP 1"); second.amount.setLabel ("WARP 2"); addKid (first); addKid (second); }   // the two knobs name their slot
     /** The stacked variant (inside a titled block of the full screen: the block's title says WARP): the first slot over the second, no caption. */
     void setStacked (bool s) { stacked_ = s; second.setMirrored (! s); layout(); }
     bool stacked() const noexcept { return stacked_; }
@@ -603,6 +603,7 @@ public:
         oct.state.min = -4; oct.state.max = 4;
         pan.state.bipolar = true; pan.state.defaultValue = 0.5; pan.state.value = pan.state.modValue = 0.5;
         pan.state.side = level.state.side = filter.state.side = true;
+        noiseType.setCaption ("SOUND");   // which noise (white, pink ...) or which sample the noise plays; the KIND stepper of the block says noise or sample
         addKid (selector); addKid (noiseType, false); addKid (source); addKid (oct, false); addKid (filter, false); addKid (pan); addKid (level);
         configure (OscInstance::A, OscKind::Wavetable);
     }

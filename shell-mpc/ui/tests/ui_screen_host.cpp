@@ -70,6 +70,8 @@ int main()
         bool inside = true, apart = true;
         for (int i = 0; i < n; ++i)
         {
+            if (all[i]->rect().empty())
+                continue;   // not shown (the sub oscillator has no route button in the header: its routing is the ROUTING block)
             inside = inside && area.contains (all[i]->rect()) && all[i]->sizeOk();
             for (int j = i + 1; j < n; ++j)
                 apart = apart && ! all[i]->rect().overlaps (all[j]->rect());
@@ -82,7 +84,7 @@ int main()
             std::string which;
             for (int i = 0; i < n; ++i)
             {
-                if (! all[i]->enabled())
+                if (! all[i]->enabled() || all[i]->rect().empty())
                     continue;
                 const int px = all[i]->rect().x + all[i]->rect().w / 2, py = all[i]->rect().y + all[i]->rect().h / 2;
                 s.touchDown (px, py, 0.0);
@@ -98,11 +100,21 @@ int main()
         }
         check (! s.displayRect().empty() && area.contains (s.displayRect()) && ! s.displayRect().overlaps (s.bar.rect()) && ! s.displayRect().overlaps (s.panel.rect()) && ! s.displayRect().overlaps (s.tune.rect()), nm + ": the display area is reserved, and nothing else is on it");
         const bool isSub = var.inst == OscInstance::Sub;
+        if (var.inst == OscInstance::Noise)
+        {
+            const Stepper* kind = dynamic_cast<const Stepper*> (s.panel.part (PanelSlot::NoiseType));
+            check (std::string (s.basic.noiseType.state.caption) == "SOUND" && kind != nullptr && std::string (kind->state.caption) == "KIND", nm + ": the two noise steppers say what they select (SOUND in the header, KIND in the block)");
+        }
+        if (var.inst == OscInstance::A)
+        {
+            const WarpPair* w = s.panel.warp();
+            check (w != nullptr && std::string (w->first.amount.state.label) == "WARP 1" && std::string (w->second.amount.state.label) == "WARP 2", nm + ": the two warp knobs are named WARP 1 and WARP 2");
+        }
         check (isSub ? s.displayRect().w * 100 / 1264 >= 99 : (s.displayRect().w * 100 / 1264 >= 76 && s.displayRect().w * 100 / 1264 <= 80 && (var.inst == OscInstance::Noise || s.barBlock().w == s.displayRect().w)), nm + ": the display is about 78 percent of the width (the sub oscillator's: all of it)");
         check (s.displayRect().h >= 240, nm + ": the display is at least 240 px tall (" + std::to_string (s.displayRect().h) + " px)");
         if (! isSub && var.inst != OscInstance::Noise)
             check (s.displayRect().y == s.barBlock().bottom() + kGap && s.barBlock().x == s.displayRect().x && s.barBlock().contains (s.bar.rect()), nm + ": the type bar (in its titled block) directly under the header and over the display");
-        check ((isSub ? true : s.tune.rect().x > s.displayRect().right()) && s.panel.rect().y >= s.displayRect().bottom() && s.close.rect().x < s.power.rect().x && s.route.rect().x > s.basic.rect().right() - 1, nm + ": the tuning row at the right, the bottom band below, the close button at the left, the route button at the right end");
+        check ((isSub ? true : s.tune.rect().x > s.displayRect().right()) && s.panel.rect().y >= s.displayRect().bottom() && s.close.rect().x < s.power.rect().x && (isSub ? s.route.rect().empty() : s.route.rect().x > s.basic.rect().right() - 1), nm + ": the tuning row at the right, the bottom band below, the close button at the left, the route button at the right end");
         check (s.numGroups() >= 2 && s.activeGroup() == 0 && std::string (s.groupName (0)) == "Basic" && s.groups[0].active(), nm + ": the first group is Basic and active (" + std::to_string (s.numGroups()) + " groups)");
         for (int g = 0; g < s.numGroups(); ++g)
         {
@@ -113,12 +125,14 @@ int main()
         }
         const Rect top[4] = { s.close.rect(), s.power.rect(), s.basic.rect(), s.route.rect() };
         if (v == 0)
+            check (top[0] == s.close.rect() && s.route.rect().empty(), nm + ": the sub oscillator has no route button in the header (its routing is the ROUTING block)");
+        else if (v == 1)
             for (int i = 0; i < 4; ++i) refTop[i] = top[i];
         else
         {
             bool same = true;
             for (int i = 0; i < 4; ++i) same = same && top[i] == refTop[i];
-            check (same, nm + ": the top band is where it was for the sub oscillator");
+            check (same, nm + ": the top band is where it was for the first oscillator");
         }
         if (v == 1)
         {
@@ -259,7 +273,7 @@ int main()
                 apart = apart && ! all[i]->rect().overlaps (all[j]->rect());
         }
         check (inside && apart, nm + ": every leaf inside, at least its minimum size, no overlap");
-        check (! c.displayRect().empty() && c.rect().contains (c.displayRect()) && c.displayRect().contains (c.full.rect()) && c.full.rect().right() <= c.displayRect().right() && c.full.rect().y - c.displayRect().y <= 8, nm + ": the display area is reserved, the full screen button in its top right corner");
+        check (! c.displayRect().empty() && c.rect().contains (c.displayRect()) && ! c.displayRect().overlaps (c.full.rect()) && c.full.rect().bottom() <= c.displayRect().y && c.full.rect().right() <= c.route.rect().x && ! c.full.rect().overlaps (c.power.rect()), nm + ": the display area is reserved, the full screen button stands in the header row (it does not cover the curve)");
         check (c.displayRect().bottom() <= c.basic.rect().y && c.instances.rect().bottom() <= c.power.rect().y && ! c.displayRect().overlaps (c.basic.rect()), nm + ": instance selector, header, display, Basic: top to bottom");
         Scene sc (420, 700, kBackgroundRgba);
         c.draw (sc.builder());
@@ -270,7 +284,7 @@ int main()
             for (int y = c.full.rect().y; y < c.full.rect().bottom(); ++y)
                 for (int x = c.full.rect().x; x < c.full.rect().right(); ++x)
                     on += img.at (x, y) != panelPx && img.at (x, y) != backgroundPixel();
-            check (c.displayRect().contains (c.full.rect()) && on > 60 && colourNear (img, static_cast<float> (cx (c.full) - 10), static_cast<float> (cy (c.full) - 10), 2, colour::accent(), 20) && colourNear (img, static_cast<float> (cx (c.full) + 10), static_cast<float> (cy (c.full) + 10), 2, colour::accent(), 20), nm + ": the full screen button is drawn over the display area (" + std::to_string (on) + " button pixels in its rectangle: frame and the expand corners)");
+            check (! c.displayRect().overlaps (c.full.rect()) && on > 60 && colourNear (img, static_cast<float> (cx (c.full) - 10), static_cast<float> (cy (c.full) - 10), 2, colour::accent(), 20) && colourNear (img, static_cast<float> (cx (c.full) + 10), static_cast<float> (cy (c.full) + 10), 2, colour::accent(), 20), nm + ": the full screen button is drawn in the header row, clear of the display (" + std::to_string (on) + " button pixels in its rectangle: frame and the expand corners)");
         }
         check (! sc.overflow() && drawnOutside (render (sc), c.rect(), backgroundPixel()) == 0 && c.sizeOk(), nm + ": draws inside, fits one scene (" + std::to_string (sc.numOps()) + " ops)");
         writePng (outDir() + "/compact_" + std::to_string (v) + ".png", render (sc), 1);
