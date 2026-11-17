@@ -97,3 +97,5 @@ target_include_directories(synthyboy_test_own_morph_range PRIVATE "${PROJECT_SOU
 synthyboy_add_test(synthyboy_test_own_comb_pitch test_own_comb_pitch.cpp)
 target_include_directories(synthyboy_test_own_comb_pitch PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_engine_fixes test_own_engine_fixes.cpp)
+synthyboy_add_test(synthyboy_test_own_filter_styles test_own_filter_styles.cpp)
+target_include_directories(synthyboy_test_own_filter_styles PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/core/filters-serum/include")

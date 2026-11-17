@@ -168,6 +168,14 @@ int serumModelStyleCount (int model) noexcept
     return model >= kFirstSerumModel && model <= kLastSerumModel ? kModels[model - kFirstSerumModel].count : 0;
 }
 
+int filterModelStyleCount (int model) noexcept
+{
+    static constexpr int kClassic[kFirstSerumModel] = { 6, 6, 6, 6, 2, 3, 1, 2 }; // Analog, Dirty, Ladder, Digital, Diode, Formant, Comb, Phaser
+    if (model >= 0 && model < kFirstSerumModel)
+        return kClassic[model];
+    return serumModelStyleCount (model);
+}
+
 int serumFilterTypeOf (int model, int style) noexcept
 {
     const int index = model < kFirstSerumModel ? 0 : (model > kLastSerumModel ? kLastSerumModel - kFirstSerumModel : model - kFirstSerumModel);

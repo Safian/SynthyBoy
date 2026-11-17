@@ -325,3 +325,35 @@ Same method and columns as the table above (125 Hz .. 16 kHz). Tolerance +-1 dB.
 * The original uses a table-lookup warped coefficient and a one-sample-delay approximation of the ladder feedback; a zero-delay-feedback solver (one Newton iteration) would be more accurate at high cutoffs and resonances and is allowed where the measured responses stay within tolerance.
 * The decimator is not linear phase and the Digital filter's cutoff is clamped to ~0.4535 sr_i; both are fine.
 * The effect-rack filter runs at the oversampled rate; a base-rate instance is enough.
+
+## 13. Which styles a model really has (the own engine; audit of 2026-11-17)
+
+`filterN.style` has twelve slots (A .. L) for every model, but a model defines only the styles of its own list. The query `filters::filterModelStyleCount (model)` (`core/filters-serum/include/synthyboy/filters/filter_types.h`) returns the count; the UI offers `0 .. count - 1` and hides the rest. A slot above the count is not a style of its own: it repeats another one (table), bit for bit where the test `own_filter_styles_above_the_count_repeat_another_style` says so. For the Serum models 8 .. 26 the repeat is by definition (13-new-keys.md 4.11: a style beyond the model's own count clamps to the last).
+
+| Model | Styles offered | Implemented | Slots above the count |
+|-------|---------------:|-------------|-----------------------|
+| 0 Analog | 6 | A 12 dB, B 24 dB, C notch/pass swap, D dual notch/band, E band/peak/notch, F (the 24 dB structure with the plain weights, section 2.1) | G .. L: fall back to B |
+| 1 Dirty | 6 | as Analog | G .. L: fall back to B (with the high-pass trim of C .. F) |
+| 2 Ladder | 6 | A 12 dB, B 24 dB, C, D, E tap sets (section 5); F = A | G .. L: fall back to A (with the resonance law of the other styles) |
+| 3 Digital | 6 | A .. E as Analog; F = the shelf, **an identity at the 0 dB gain of a voice filter** (section 2.1: defined, no audible effect) | G .. L: fall back to B |
+| 4 Diode | 2 | A 12 dB, B 24 dB (the high pass in front) | C .. L: fall back to B |
+| 5 Formant | 3 | A (A I U O), B (A O I E), C (vocal tract) | D .. L: fall back to C |
+| 6 Comb | 1 | the plain comb only | B .. L: fall back to A. **Open:** section 8 defines six styles (positive flange, negative flange, and the band loop filter for each); none of them is built, the style is not read |
+| 7 Phaser | 2 | A, B (inverted feedback and output) | C .. L: fall back to A |
+| 8 Multi SVF | 12 | LH .. NN | (none) |
+| 9 Slope | 6 | MG Low 6, MG Low 18, Low 6, Low 18, High 6, High 18 | G .. L: fall back to the last |
+| 10 EQ 6 dB | 3 | Low / Band / High EQ 6; **the gain is the Var knob (`filterN.var`, 50 % = 0 dB = flat)**: with the default 50 % the model does nothing, which is what a noise test at the defaults shows. Not a defect | D .. L: fall back to the last |
+| 11 Ring Mod | 2 | Ring Mod, Ring Mod x2 | |
+| 12 Sample Hold | 2 | SampHold, SampHold- | |
+| 13 Smear | 3 | Combs, Allpasses, Reverb | |
+| 14 French LP, 15 Add Bass, 17 New Wsp, 18 DJ Mixer, 19 Diffusor, 20 EMS Ladder, 21 PZ SVF | 1 each | the one type of the model | B .. L: the same type |
+| 16 Scream | 2 | Scream LP, Scream BP | |
+| 22 Normal | 12 | MG Low 12 / 24, Low 12 / 24, High 12 / 24, Band 12 / 24, Peak 12 / 24, Notch 12 / 24 | (none) |
+| 23 Multi Morph | 4 | LBH, LPH, LNH, BPN | E .. L: fall back to BPN |
+| 24 Flanges | 9 | Cmb / Flg / Phs L, H, HL | J .. L: fall back to Phs HL |
+| 25 Misc | 12 | Low EQ 12, Band EQ 12, High EQ 12 (**again the Var knob is the gain: flat at 50 %**), German LP, Formant I / II / III, Bandreject, Dist.Comb 1 / 2 LP / BP | (none) |
+| 26 New | 6 | MG Ladder, Acid Ladder, MG Dirty, Comb 2, Exp MM, Exp BPF | G .. L: fall back to Exp BPF |
+
+All 80 types of the Serum collection have a case in the DSP (`core/filters-serum/src/filter.cpp`); none is a pass-through. **DJ Mixer (18)** is a DJ crossfader filter by design, not a plain low or high pass: the cutoff knob is the position of the sweep, a low pass below about 550 Hz (`log10 (cutoff / 20) / 3 < 0.48`), flat between about 550 and 725 Hz, a high pass above (measured: low pass below about 600 Hz, high pass above about 800 Hz).
+
+No style index is unwired and no table is off by one: what the survey found as "twelve identical styles" are the slots above the count of the table, and `EQ 6 dB` / `Misc` 0 .. 2 sit at 0 dB until Var moves. **Open (not built, not invented):** the Comb styles B .. F of section 8; styles G .. L of Analog, Dirty, Ladder and Digital, C .. L of Diode, D .. L of Formant, C .. L of Phaser exist only as repeats. `FilterUnit::typeFor` (`core/engine-own/voice/filter_unit.h`) maps the classic models 5 .. 7 onto the Flange / Formant types, but the classic models never reach it (they run in `classic_filters.h`).
