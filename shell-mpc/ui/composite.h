@@ -438,7 +438,7 @@ public:
     Stepper type;
     Knob var { "VAR", false };
 
-    explicit WarpSlot (bool mirrored = false) : mirrored_ (mirrored) { amount.state.side = true; addKid (amount); addKid (type); addKid (var, false); setPrimary (&amount); }
+    explicit WarpSlot (bool mirrored = false) : mirrored_ (mirrored) { amount.state.side = true; var.state.small = true; var.state.side = true; var.state.dialMax = kVarDial; addKid (amount); addKid (type); addKid (var, false); setPrimary (&amount); }
     void setTypeOff (bool off) { typeOff_ = off; type.state.dim = off; syncKids(); }
     void setHasVar (bool has) { hasVar_ = has; show (var, has); layout(); }
     void setMirrored (bool m) { mirrored_ = m; layout(); }
@@ -447,7 +447,7 @@ public:
     bool mirrored() const noexcept { return mirrored_; }
     Size minSize() const override { return { kAmountW + kGap + Stepper::kMinW + (hasVar_ ? kGap + kVarW : 0), 72 }; }
     // the knob (the medium size: the dial at the left, the name and the value at its right), the name field and the VAR knob; the slot is centred in the room it gets
-    static constexpr int kAmountW = 184, kStepperMaxW = 300, kVarW = 88;
+    static constexpr int kAmountW = 184, kStepperMaxW = 300, kVarW = 136, kVarDial = 52;   // the PHASE knob: a small dial with its name and value at the right, in the lines of the name and value of the amount knob
 
 protected:
     void syncKids() override { amount.setEnabled (enabled_ && ! typeOff_); var.setEnabled (enabled_ && ! typeOff_); type.setEnabled (enabled_); }
@@ -482,7 +482,7 @@ protected:
         amount.place (kr);
         type.place ({ sr.x, sr.y + (sr.h - sh) / 2, sr.w, sh });
         if (hasVar_)
-            var.place ({ vr.x, vr.y + std::max (0, (vr.h - 96) / 2), vr.w, std::min (vr.h, 96) });
+            var.place (vr);   // the whole height of the slot like the amount knob: the name and the value of both stand on the same two lines
         syncKids();
     }
     bool mirrored_, typeOff_ = false, hasVar_ = false;

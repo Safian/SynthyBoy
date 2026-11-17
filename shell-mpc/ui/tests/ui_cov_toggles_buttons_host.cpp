@@ -272,7 +272,7 @@ static void test_toggle_number()
     ToggleNumber tn;
     tn.place ({ 50, 50, 180, 56 });
 
-    check (tn.minSize().w == 72 + kGap + 80 && tn.minSize().h == 56, "ToggleNumber minSize");
+    check (tn.minSize().w == LedToggle::widthFor (tn.toggle.state.label) + kGap + 80 && tn.minSize().h == 56 && dynamic_cast<const LedToggle*> (&tn.toggle) != nullptr, "ToggleNumber minSize (its switch is a LED toggle: as wide as its name needs)");
     check (tn.rect().contains (tn.toggle.rect()), "ToggleNumber toggle is inside rect");
     check (tn.rect().contains (tn.amount.rect()), "ToggleNumber amount is inside rect");
     check (tn.toggle.rect().right() < tn.amount.rect().x, "ToggleNumber kids do not overlap");
