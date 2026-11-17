@@ -174,22 +174,25 @@ For quick jamming without editing the modulation matrix, SynthyBoy includes a bu
 
 ## 6. How Factory Presets Use Pad Pressure
 
-Of the 112 factory presets included with SynthyBoy, **49 presets** carry an integrated `Poly Aftertouch -> Filter 1 Cutoff` route in their modulation matrix ([scripts/factory-preset-pad-pressure.json](../../scripts/factory-preset-pad-pressure.json); [docs/MPC.md](../MPC.md)):
+Of the 136 factory presets included with SynthyBoy (112 initial presets plus 24 from sound set batch 1), **65 presets** carry an integrated `Poly Aftertouch -> Filter 1 Cutoff` route in their modulation matrix (and 66 presets in total route Poly Aftertouch; [scripts/factory-preset-pad-pressure.json](../../scripts/factory-preset-pad-pressure.json); [docs/MPC.md](../MPC.md)):
 
 ### Preset Categories and Calibration Amounts
 
 1. **Drones & Ambient Textures (30% to 45%):**
-   - *Bode Shifter Drone* (30%), *Dark Cinema Drone* (45%), *Deep Sea Ambient* (45%), *Frozen Aurora* (45%), *Harmonic Cloud* (45%), *Infinite Horizon* (45%), *Slow Motion Waves* (45%), *Space Odyssey Pad* (45%).
+   - *Bode Shifter Drone* (30%), *Dark Cinema Drone* (45%), *Deep Sea Ambient* (45%), *Frozen Aurora* (45%), *Harmonic Cloud* (45%), *Infinite Horizon* (45%), *Slow Motion Waves* (45%), *Space Odyssey Pad* (45%), *Shepard Ascent* (35%), *Lorenz Garden* (40%), *Breath of Machines* (35%).
    - *Behavior:* Sustained drone beds begin dark and atmospheric; digging into a pad opens upper harmonics and sweeps the frequency spectrum without re-triggering attack envelopes.
-2. **Organs & Keys (25% to 70%):**
-   - *Accordion Reed* (25%), *B3 Drawbar Organ* (25%), *FM Soft Organ* (25%), *Glass Organ Tones* (25%), *Vibraphone Bars* (25%), *Rotary Rock Organ* (70%).
+2. **Organs & Keys (18% to 70%):**
+   - *Accordion Reed* (25%), *B3 Drawbar Organ* (25%), *FM Soft Organ* (25%), *Glass Organ Tones* (25%), *Vibraphone Bars* (25%), *Rotary Rock Organ* (70%), *Tempo Gate Chords* (18%), *Wah Pressure Clav* (46%).
    - *Behavior:* Simulates swell pedals or keybed pressure, driving organ drawbar overtones and emulating rotary speaker saturation.
-3. **Leads & Solos (30% to 70%):**
-   - *Bell Chime Lead* (30%), *Chorused Saw Solo* (30%), *Cosmic Drift Lead* (30%), *Diode Bite Lead* (30%), *Dirty Peak Lead* (30%), *Dual Octave Hero* (30%), *FM Digital Lead* (30%), *Harmonic Shimmer Lead* (30%), *Hyper Saw Lead* (70%), *Laser Beam Lead* (30%), *Metallic Edge Lead* (30%), *Phaser Sweep Lead* (30%), *Pulse Width Mod Lead* (30%), *Screaming Sync Lead* (30%), *Solo Square Lead* (30%), *Tri Soft Solo* (30%), *Twin Warp Lead* (30%), *Vocaloid Lead* (30%), *Warm Vintage Lead* (30%), *MPE Pressure Lead* (55% Cutoff, +35% Unison Detune).
+3. **Leads & Solos (14% to 70%):**
+   - *Bell Chime Lead* (30%), *Chorused Saw Solo* (30%), *Cosmic Drift Lead* (30%), *Diode Bite Lead* (30%), *Dirty Peak Lead* (30%), *Dual Octave Hero* (30%), *FM Digital Lead* (30%), *Harmonic Shimmer Lead* (30%), *Hyper Saw Lead* (70%), *Laser Beam Lead* (30%), *Metallic Edge Lead* (30%), *Phaser Sweep Lead* (30%), *Pulse Width Mod Lead* (30%), *Screaming Sync Lead* (30%), *Solo Square Lead* (30%), *Tri Soft Solo* (30%), *Twin Warp Lead* (30%), *Vocaloid Lead* (30%), *Warm Vintage Lead* (30%), *MPE Pressure Lead* (55% Cutoff, +20% Unison Detune), *Sync Cry Lead* (26%), *Triple Fifth Lead* (24%), *Vowel Whistle Lead* (18%), *Bell FM Ripple Lead* (14%).
    - *Behavior:* Solo melodies can be dynamically accented note-by-note; pressing hard expands filter brightness and increases supersaw detuning on sustained apex notes.
 4. **Pads, Strings & Choirs (40% to 70%):**
-   - *Cathedral Choir* (45%), *Comb Reso Swell* (45%), *Diffusor Cloud Pad* (40%), *Ethereal Glass* (45%), *Gentle Flute Pad* (40%), *Golden Dawn Pad* (45%), *Hyper Dimension Pad* (40%), *Lush Analog Pad* (70%), *Odd Harmonics Pad* (40%), *Radiant Pulse Pad* (40%), *Starlight Shimmer* (40%), *Subtle Tape Drift* (40%), *Tri-Band Split Texture* (40%), *Velvet Strings* (40%), *Vintage Brass Pad* (70%), *Vowel Choir Pad* (45%).
+   - *Cathedral Choir* (45%), *Comb Reso Swell* (45%), *Diffusor Cloud Pad* (40%), *Ethereal Glass* (45%), *Gentle Flute Pad* (40%), *Golden Dawn Pad* (45%), *Harmonic Cloud* (45%), *Hyper Dimension Pad* (40%), *Lush Analog Pad* (70%), *Odd Harmonics Pad* (40%), *Radiant Pulse Pad* (40%), *Starlight Shimmer* (40%), *Subtle Tape Drift* (40%), *Tri-Band Split Texture* (40%), *Velvet Strings* (40%), *Vintage Brass Pad* (70%), *Vowel Choir Pad* (45%), *Bowed Pressure Strings* (46%), *Brass Swell Ensemble* (45%), *Mid Side Halo* (40%), *Parallel Dusk Pad* (40%), *Stretched Glass Choir* (42%).
    - *Behavior:* Warm string and choir swells expand naturally in volume and presence under finger pressure, breathing with the performer's touch.
+5. **Bass (18%):**
+   - *Subterranean Duo* (18%).
+   - *Behavior:* Sustained sub bass holds solid at the bottom while finger pressure opens upper saw bite and filter presence on held notes.
 
 ---
 
