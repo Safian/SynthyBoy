@@ -27,6 +27,7 @@ public:
         double value = 0.0, modValue = 0.0, defaultValue = 0.0;
         bool bipolar = false, small = false;
         bool large = false;        // a page with room (the slot of a knob is a big cell): the dial may grow to 190 pixels instead of 140
+        int dialMax = 0;           // the side variant: the largest dial in pixels (0: as large as the row allows, 120); a small knob that has to share a row with the name and the value of a bigger one (the PHASE of a warp slot)
         bool side = false;         // the medium variant: the dial at the left, the name and the value in a column at its right (a row of a block that is not tall enough for the dial over the texts)
         bool led = false;          // a LED on the label: the knob carries the on / off switch of what it sets (SMOOTH: the smoothing and its time are ONE control). `ledOn`: the switch is on; off = the knob is drawn dim and takes no touch, a tap on the
                                    // label / the LED (the text column, `ledHit ()`) switches (an Index change 0 / 1 with the knob's id, made on the touch up)
@@ -56,7 +57,7 @@ public:
         g.labelLeft = state.side;
         if (state.side)
         {
-            const float d = std::max (6.0f, std::min (static_cast<float> (rect_.h - 8), 120.0f));
+            const float d = std::max (6.0f, std::min (static_cast<float> (rect_.h - 8), state.dialMax > 0 ? static_cast<float> (state.dialMax) : 120.0f));
             g.stroke = std::max (2.4f, d * T.arcValue);
             g.track = std::max (2.0f, d * T.arcTrack);
             g.radius = d * 0.5f - g.stroke * 0.5f - 3.0f;
@@ -1196,6 +1197,14 @@ public:
 protected:
     void drawBody (Pen& p) const override
     {
+        // the text cells (no pictogram) share ONE text size: the one the longest name needs to fit its cell (SUB A B C NOISE: the same size in every tab)
+        float textSize = theme::L().fValue;
+        for (int i = 0; i < count(); ++i)
+            if (! pictogram::find (state.items[i].pictogram))
+            {
+                const Rect c = cell (i).inset (2).inset (2);
+                textSize = std::min (textSize, Pen::fitSize (state.items[i].label, static_cast<float> (c.w), static_cast<float> (c.h), theme::L().fValue, theme::L().fMin));
+            }
         for (int i = 0; i < count(); ++i)
         {
             const Item& it = state.items[i];
@@ -1209,7 +1218,7 @@ protected:
             const pictogram::Def* d = pictogram::find (it.pictogram);
             if (! d)   // no pictogram: a text cell
             {
-                p.textCentered (c.inset (2), it.label, T.fValue, p.c (cur ? T.text : T.textDim, it.enabled ? 255 : 60), T.fMin);
+                p.textCentered (c.inset (2), it.label, textSize, p.c (cur ? T.text : T.textDim, it.enabled ? 255 : 60), T.fMin);
                 continue;
             }
             const int labelH = it.label[0] ? 18 : 0;

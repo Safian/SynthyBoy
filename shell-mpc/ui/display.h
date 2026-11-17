@@ -47,7 +47,8 @@ struct Data
     int numSpectrum = 0;
     uint32_t colour = 0x2ee6f0;      // the instance colour (0xRRGGBB)
     const char* message = "";
-    // Noise: the picture of the noise colour (0 white .. 8 atmosphere, the order of the engine's noise sources); `dim`: the source is switched off (the picture stays, faint)
+    // Noise: the picture of the noise colour (0 white .. 8 atmosphere, the order of the engine's noise sources); `dim`: the source is switched off (the picture stays, faint; every kind: a veil over the
+    // picture and a small OFF tag in its corner)
     int noiseColour = 0;
     bool dim = false;
 };
@@ -403,6 +404,12 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     }
     sb.style (1.0f, false);
     sb.paintOff();
+    if (d.dim && d.kind != Data::Kind::Noise && d.kind != Data::Kind::Message)   // a switched off source: the picture of its current content under a dark veil and a small OFF tag (the noise dims itself)
+    {
+        sb.rect (static_cast<float> (r.x + 2), static_cast<float> (r.y + 2), static_cast<float> (r.right() - 2), static_cast<float> (r.bottom() - 2), dt::a (T.panel0, 165));
+        const float size = 20.0f;
+        sb.text (x0 + 6.0f, sdf::baselineForCentre (static_cast<float> (r.y) + 24.0f, size), size, "OFF", dt::a (T.textDim, 255));
+    }
 }
 
 /** The live read-outs of the engine over the picture (not cached: they move): the grains that sound (where each reads and how far it has run: the brightness follows the window), a line per read head (the newest

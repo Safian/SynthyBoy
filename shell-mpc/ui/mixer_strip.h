@@ -294,8 +294,7 @@ protected:
     void drawBody (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        const Rect b = rect_.inset (2);
-        p.control (b, qFrame_);
+        const Rect b = rect_.inset (2);   // no box around it (the strip is the block): the name, the value and the track are the control, as for every LED control
         p.textLeft ({ b.x + 8, b.y + 3, b.w / 2 - 8, 22 }, state.label, T.fLabel, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
         p.textRight ({ b.x + b.w / 2, b.y + 3, b.w / 2 - 8, 22 }, state.valueText, T.fLabel, p.c (T.text, 255), T.fMin);
         const Rect t = track();
@@ -379,8 +378,8 @@ protected:
     void drawBody (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        const Rect b = rect_.inset (3);
-        p.control (b, qFrame_);
+        const Rect b = rect_.inset (3);   // no box: the name with its chevron over a hairline (the look of the PLUGIN and PRESET fields of the host's header), the touch rectangle is the whole 56 px cell
+        p.rect (b.x + 6, b.bottom() - 9, b.right() - 6, b.bottom() - 8, p.c (qFrame_ ? T.q : T.keyline, qFrame_ ? 255 : 220));
         if (state.label[0] != '\0')
         {
             const int iw = state.icon == Icon::None ? 0 : 20;

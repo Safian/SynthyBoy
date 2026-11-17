@@ -120,6 +120,23 @@ public:
                 displayPoints_ = wt ? synthyboy::OscCycle::kSamples : kDisplayPoints;
                 res_ = oc_->computeDisplay (group_->values(), req, cycle_.data(), cycleMax_.data(), displayPoints_);
                 kind_ = res_.kind;
+                // an oscillator that is switched off: the picture of its current content (the table, the sample), drawn dim with a small OFF tag, not an empty display (`kind ()` stays off)
+                ghost_ = synthyboy::OscCycle::Kind::off;
+                if (kind_ == synthyboy::OscCycle::Kind::off && osc >= 1 && osc <= kOscs)
+                {
+                    const synthyboy::ParamInfo* on = synthyboy::findParamByKey ((std::string ("osc") + std::to_string (osc) + ".on").c_str());
+                    if (on != nullptr)
+                    {
+                        synthyboy::ParamValues shown = group_->values();
+                        shown.plain[synthyboy::findParamIndex (on->id)] = 1.0f;
+                        const synthyboy::OscCycle::Result g = oc_->computeDisplay (shown, req, cycle_.data(), cycleMax_.data(), displayPoints_);
+                        if (g.kind == synthyboy::OscCycle::Kind::wavetable || g.kind == synthyboy::OscCycle::Kind::sample || g.kind == synthyboy::OscCycle::Kind::multisample || g.kind == synthyboy::OscCycle::Kind::granular || g.kind == synthyboy::OscCycle::Kind::spectral)
+                        {
+                            res_ = g;
+                            ghost_ = g.kind;
+                        }
+                    }
+                }
                 // the wavetable's frames behind the current one (fixed positions along the table) and a faint spectrum of the cycle
                 stackN_ = 0;
                 if (wt && kind_ == synthyboy::OscCycle::Kind::wavetable)
@@ -209,10 +226,12 @@ public:
     {
         using K = synthyboy::OscCycle::Kind;
         ui::display::Data d;
+        d.dim = kind_ == K::off && ghost_ != K::off;   // switched off, with the picture of its content under a veil
+        const K kind = d.dim ? ghost_ : kind_;
         d.colour = ui::theme::instanceColour (sel_ - 1);
         d.n = std::min (displayPoints_, static_cast<int> (cycle_.size()));
         d.cycle = cycle_.data();
-        if (kind_ == K::wavetable)
+        if (kind == K::wavetable)
         {
             d.kind = ui::display::Data::Kind::Wave;
             if (sel_ != playosc::kSub)
@@ -232,7 +251,7 @@ public:
                 for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)   // the sub oscillator: the phase of every voice on the wave
                     d.phases[v] = live_.phases[v];
         }
-        else if (kind_ == K::sample || kind_ == K::multisample || kind_ == K::granular)
+        else if (kind == K::sample || kind == K::multisample || kind == K::granular)
         {
             d.kind = ui::display::Data::Kind::MinMax;
             d.cycle = cycle_.data();
@@ -240,7 +259,7 @@ public:
             d.loopOn = res_.loopOn;
             d.loopStart = res_.loopStart;
             d.loopEnd = res_.loopEnd;
-            d.grain = kind_ == K::granular && res_.grainSize > 0.0f;
+            d.grain = kind == K::granular && res_.grainSize > 0.0f;
             d.grainPos = res_.grainPosition;
             d.grainSize = res_.grainSize;
             for (int v = 0; v < ui::display::Data::kMaxHeads; ++v)   // live: where the newest voices read their file (the grains that sound and the scan of a cloud included)
@@ -252,9 +271,9 @@ public:
                 d.liveGrainLife[g] = live_.grainLife[g];
             }
         }
-        else if (kind_ == K::spectral)
+        else if (kind == K::spectral)
             d.kind = ui::display::Data::Kind::Spectrum;
-        else if (sel_ == playosc::kNoise && (kind_ == K::noise || kind_ == K::off))
+        else if (sel_ == playosc::kNoise && (kind == K::noise || kind == K::off))
         {
             // the noise: the picture of its colour (faint while the source is switched off), never the word OFF
             d.kind = ui::display::Data::Kind::Noise;
@@ -265,7 +284,7 @@ public:
         {
             d.kind = ui::display::Data::Kind::Message;
             d.noiseHead = live_.noise;
-            d.message = kind_ == K::noise ? "NOISE" : (kind_ == K::noSample ? "NO SAMPLE" : (kind_ == K::off ? "OFF" : ""));
+            d.message = kind == K::noise ? "NOISE" : (kind == K::noSample ? "NO SAMPLE" : (kind == K::off ? "OFF" : ""));
         }
         if (live)
             ui::display::drawLive (sb, r, d);
@@ -350,7 +369,7 @@ private:
     int stackN_ = 0, detailSeen_ = 1;
     int displayPoints_ = synthyboy::OscCycle::kSamples;
     synthyboy::OscCycle::Result res_;
-    synthyboy::OscCycle::Kind kind_ = synthyboy::OscCycle::Kind::other;
+    synthyboy::OscCycle::Kind kind_ = synthyboy::OscCycle::Kind::other, ghost_ = synthyboy::OscCycle::Kind::off;   // ghost_: the kind of the content an oscillator that is off still shows (off: none)
     float lastTargets_[4] = { -1, -1, -1, -1 };
     Live live_;
 };

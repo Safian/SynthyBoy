@@ -326,9 +326,9 @@ public:
                 case PartKind::Toggle:
                     if (nt < kMaxToggles)
                     {
-                        ToggleIcon& t = toggles_[nt++];
+                        LedToggle& t = toggles_[nt++];
                         t.state = ToggleIcon::State {};
-                        t.state.showState = true;
+                        t.state.icon = ToggleIcon::Icon::Generic;
                         t.setLabel (it.label);
                         m.comp = &t;
                     }
@@ -356,7 +356,7 @@ public:
     /** The rectangle of block i (the titled outline of a Q group; empty without blocks). */
     Rect blockRect (int i) const noexcept { return i >= 0 && i < numBlocks() && i < kMaxBlocks ? blocks_[i] : Rect {}; }
     const char* blockTitle (int i) const noexcept { return i >= 0 && i < numBlocks() ? preset_->blocks[i].title : ""; }
-    static constexpr int kMaxBlocks = 4, kBlockTitleH = 38, kBlockPad = 6, kBlockGap = 8, kMaxStepperH = 72, kMaxToggleH = 96, kOneRowH = 128;   // the title strip of a block also holds the Q index chips of its first row (38: a two digit chip does not touch the title)
+    static constexpr int kMaxBlocks = 4, kBlockTitleH = 38, kBlockPad = 6, kBlockGap = 8, kMaxStepperH = 72, kOneRowH = 128;   // the title strip of a block also holds the Q index chips of its first row (38: a two digit chip does not touch the title)
     int numParts() const noexcept { return nItems_; }
 
     /** The part of a slot (null when the preset has none). */
@@ -470,8 +470,8 @@ protected:
             yy += h[r] + gap;
         }
     }
-    /** The blocks: the outer grid (cols x rows) of the preset holds the titled blocks with kBlockGap between them; inside a block the items use the block's inner grid. A stepper and a toggle keep a
-        sensible height (a stepper at most kMaxStepperH, a toggle kMaxToggleH) and are centred in their cell. */
+    /** The blocks: the outer grid (cols x rows) of the preset holds the titled blocks with kBlockGap between them; inside a block the items use the block's inner grid. A stepper keeps a
+        sensible height (at most kMaxStepperH) and is centred in its cell; a LED toggle takes its whole cell. */
     void layoutBlocks()
     {
         const PanelPreset& p = *preset_;
@@ -497,7 +497,7 @@ protected:
                 int iy0 = ry[r0], iy1 = ry[r1] + rh[r1];
                 // a block of ONE row that holds a stepper or a toggle: every control of the row has the same height (kOneRowH), so that their tops, their index chips and their middles are on one line
                 const bool oneRow = bl.innerRows == 1 && blockHasCapped (b);
-                const int cap = oneRow ? kOneRowH : (it.kind == PartKind::Stepper || it.kind == PartKind::Menu ? kMaxStepperH : (it.kind == PartKind::Toggle ? kMaxToggleH : 0));
+                const int cap = oneRow ? kOneRowH : (it.kind == PartKind::Stepper || it.kind == PartKind::Menu ? kMaxStepperH : 0);   // a LED toggle takes the whole cell of its slot (the chip of its Q index stands where the neighbours' chips stand, the dot and the name at the height of the dials)
                 if (cap > 0 && iy1 - iy0 > cap)
                 {
                     const int mid = (iy0 + iy1) / 2;
@@ -576,7 +576,7 @@ protected:
     Rect blocks_[kMaxBlocks];
     Knob knobs_[kMaxKnobs];
     Stepper steppers_[kMaxSteppers];
-    ToggleIcon toggles_[kMaxToggles];
+    LedToggle toggles_[kMaxToggles];
     KnobRandPair pairs_[kMaxPairs];
     UnisonBox unison_;
     WarpPair warp_;

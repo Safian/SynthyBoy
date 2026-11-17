@@ -36,6 +36,7 @@ public:
     }
     void setInstance (OscInstance i, OscKind k)
     {
+        inst_ = i;
         instances.state.index = static_cast<int> (i);
         setText (name, sizeof name, instanceName (i));
         basic.configure (i, k);
@@ -60,9 +61,10 @@ protected:
         instances.place ({ rect_.x + m, rect_.y + m, W, 56 });
         const int hy = rect_.y + m + 56 + 8;
         power.place ({ rect_.x + m, hy, 64, 64 });
-        route.place ({ rect_.right() - m - 64, hy, 64, 64 });
-        full.place ({ rect_.right() - m - 64 - 8 - 64, hy + 4, 64, 56 });   // the full screen button stands in the header row, not over the curve of the display
-        nameBox_ = { rect_.x + m + 64 + 12, hy, std::max (0, W - 3 * 64 - 32), 64 };
+        const bool sub = inst_ == OscInstance::Sub;   // the sub oscillator's routing is the ROUTING block of its page: no route button in its header (as on the page)
+        route.place (sub ? Rect {} : Rect { rect_.right() - m - 64, hy, 64, 64 });
+        full.place ({ rect_.right() - m - 64 - (sub ? 0 : 8 + 64), hy + 4, 64, 56 });   // the full screen button stands in the header row, not over the curve of the display
+        nameBox_ = { rect_.x + m + 64 + 12, hy, std::max (0, W - (sub ? 2 : 3) * 64 - 32), 64 };
         const int dy = hy + 64 + 8;
         const int by = rect_.bottom() - m - basicH;
         display_ = { rect_.x + m, dy, W, std::max (0, by - kQLane - 4 - dy) };   // kQLane: the index chip of the first member of the Q frame sits on its top edge
@@ -74,6 +76,7 @@ protected:
     }
     void drawExtra (Pen& p) const override { p.textLeft (nameBox_, name, theme::L().fTitle, p.c (theme::L().text, 255), theme::L().fMin); }
     Rect display_, nameBox_;
+    OscInstance inst_ = OscInstance::A;
 };
 
 // ===============================================================================================================================================================
