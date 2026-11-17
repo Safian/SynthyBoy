@@ -4,7 +4,7 @@ Minden preset a PRESET választó sorrendjében (Init, utána kategóriánként,
 A `*`-gal jelölt 24 preset a második adag: ezek csak az ov31 csomagtól vannak a gépen (az ov29-ben még nincsenek).
 A felületről (UI) és minden másról a fájl végén, az "Általános / UI" részben írhatsz.
 
-Gép és csomag, amin hallgattad (pl. XL ov31): 
+Gép és csomag, amin hallgattad (pl. XL ov31): XL, ov29 (Bass és FX kategória, 2026-11-17)
 
 ## Presetek
 
