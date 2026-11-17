@@ -127,7 +127,7 @@ page that is on the screen.
 
 | Function tab | Pages (in stepping order) | Chapter |
 |---|---|---|
-| Play | Play, Play Env, Play LFO | 5.1 |
+| Play | Play | 5.1 |
 | Macros | Macros | 5.2 |
 | Osc | Osc A, Osc B, Osc C, Sub, Noise | 5.3, 5.4, 5.5 |
 | Mix | Mixer | 5.6 |
@@ -238,17 +238,14 @@ screen is quoted in capitals as it appears.
 
 ![Play](img/play.png)
 
-The Play tab has three sub-pages, **Play**, **Play Env** and **Play LFO**. All three show the same picture:
-three live panels side by side, an **oscillator** panel (left), an **envelope** panel (middle) and an **LFO**
-panel (right). The sub-page decides which panel's group is active (yellow frame) for the Q-Links: the
-oscillator on Play, the envelope on Play Env, the LFO on Play LFO.
+The Play tab is ONE page: three live panels side by side, an **oscillator** panel (left), an **envelope** panel (middle) and an **LFO** panel (right). The first four Q-Links (knobs) belong to the oscillator panel (type, table or OCT, PAN, LEVEL), the next four to the envelope (ATTACK, DECAY, SUSTAIN, RELEASE) and the next four to the LFO (SHAPE, RATE, RISE, SMOOTH). On the MPC XL all twelve are on the knobs at once and every control carries the number of its knob. On the Key 61 the yellow frame marks the four knobs at the moment; touch a control of another panel to bring its group to the four knobs (the others follow), and use the Q-Link bank buttons for the rest. At the top of each panel is a selector: the current entry in the middle, its neighbours at the sides (tap one to step to it, or drag across), and a tap on the name opens the list. A switched-off oscillator is drawn grey (the power button is red).
 This is the place to play and tweak: the big controls of the three most used parts are in one view.
 
-The envelope panel with the ADSR group framed (the yellow frame is on the four envelope knobs):
+The envelope panel with its ADSR group (Q-Links 5 to 8 on the XL; with the Key 61 the frame is on it while it is the active group):
 
 ![Play Env](img/play-env.png)
 
-The LFO panel with its group (SHAPE, RATE, RISE, SMOOTH) framed:
+The LFO panel with its group (SHAPE, RATE, RISE, SMOOTH: Q-Links 9 to 12 on the XL):
 
 ![Play LFO](img/play-lfo.png)
 

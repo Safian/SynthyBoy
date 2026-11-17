@@ -15,7 +15,7 @@ The four values one set of hardware knobs (Q-Link) controls at once. It draws ON
 | `setFrameRect (Rect)`, `frameRect()` | a frame rectangle other than the union of the members |
 | `setFrameless (bool)` | members lie apart (no frame, the chips and the Q colour mark the quad; no adjacency check) |
 | `setBlock (int)`, `block()` | which block of four knobs the group has when it is NOT active: 0 active, 1 to 3 the next groups of the page, -1 none |
-| `static setWideDevice (bool)`, `wideDevice()` | process wide: the device has 16 knobs (idle chips show 5 to 16), set once by the overlay |
+| `static setWideDevice (bool)`, `wideDevice()` | process wide: the device has 16 knobs (the MPC XL), set once by the overlay. On the wide device NO group is "active": no frame is drawn, every member of a mapped group carries its slot number 1 to 16 as a chip in one style (the yellow Q chip), labels keep their normal colours, and the page keeps its slots under a touch (`QRouter::wide`, pages of at most four groups); on the 4 knob device the active four have the frame and the chips 1 to 4 |
 | `rect()` | the union of the members' rectangles |
 
 ## Size
