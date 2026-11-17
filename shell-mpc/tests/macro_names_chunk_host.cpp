@@ -186,7 +186,7 @@ int main (int argc, char** argv)
         wide += "\"]}}";
         check (setChunk (a, wide), "a chunk with a name of 20 three byte characters loads");
         writeGroup (std::to_string (macroIdx[0]) + " -1 -1 -1");
-        check (waitFor (2000, [&] { return text (a, effGetParamName, q0).size() == 48; }), "the name is cut to 16 characters (48 bytes), whole characters, inside the 64 byte buffer of the host");
+        check (waitFor (2000, [&] { return text (a, effGetParamName, q0).size() == 30; }), "the name is cut to 10 characters (30 bytes), whole characters, inside the 32 byte buffer the plugin writes into (host_strings.h kParamStrBytes)");
     }
 
     // ---- a factory program of the package (the library inside a plugin folder with Content/presets, argv[2]): its names come with it, the next program has its own
