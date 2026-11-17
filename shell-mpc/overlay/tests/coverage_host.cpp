@@ -276,10 +276,11 @@ Module testOscillator (const char* name, int sel, const char* prefix)
     m.params = withPrefix ({ prefix });
     const bool sub = sel == 1, noise = sel == 5;
     std::vector<int> types = sub || noise ? std::vector<int> { 0 } : std::vector<int> { 0, 1, 2, 3, 4 };
-    const int pages[] = { 0, OscUi::kPageUnison, OscUi::kPageGrain, OscUi::kPageEnvelope, OscUi::kPageRoute };
+    const int pages[] = { 0, OscUi::kPageUnison, OscUi::kPageGrain, OscUi::kPageEnvelope, OscUi::kPageRoute, 16, 17, 18, 19, 20, 21, 22 };   // 16 .. 22: the spec pages (osc_spec_page.h)
     for (int type : types)
         for (int nt = 0; nt < (noise ? 2 : 1); ++nt)
             for (int page : pages)
+                if (page < 16 || (! sub && ! noise))   // the detail pages 16 .. 22 belong to A, B, C
                 for (int loop = 0; loop < 3 + (page == OscUi::kPageRoute ? 7 : 0); ++loop)
                 {
                     FakeInstance inst;
@@ -293,6 +294,13 @@ Module testOscillator (const char* name, int sel, const char* prefix)
                     const std::string op = sub ? "sub." : (noise ? "noise." : "osc" + std::to_string (sel - 1) + ".");
                     if (type == 2)   // the granular loop modes show other controls
                         inst.set ((op + "gran.loop_grains").c_str(), static_cast<float> (loop == 1));
+                    if (loop >= 1 && ! sub && ! noise)   // the states that show the controls hidden in the default state (loop points, slices, the grain divisions, the remap, the spectral mask ...)
+                    {
+                        auto set = [&] (const char* k, float v) { inst.set ((op + k).c_str(), v); };
+                        set ("sample.loop_mode", 1.0f); set ("sample.slice_mode", loop == 1 ? 1.0f : 2.0f); set ("gran.density_mode", loop); set ("gran.length_mode", loop);
+                        set ("remap.on", 1.0f); set ("spec.flt_use", 1.0f); set ("spec.y_axis", 1.0f); set ("gran.y_axis", 1.0f); set ("pitch_track", 0.0f);
+                        set ("sample.scan_lock_tempo", 1.0f);
+                    }
                     if (loop >= 1)   // another variant of every state: effects on (the warp amounts, the unison and the route controls are disabled while the effect is off)
                     {
                         for (const char* k : { "warp.type", "warp2.type" })
@@ -323,7 +331,7 @@ Module testOscillator (const char* name, int sel, const char* prefix)
                             }
                     for (const OscUi::Item& it : ui.pageItems())
                         for (int p : { it.param, it.param2 })
-                            if (p >= 0 && m.params.count (p) && it.type != OscUi::T::Inert)
+                            if (p >= 0 && m.params.count (p) && it.type != OscUi::T::Inert && (page < 16 || ui.specPage().visible (it.id - OscUi::kSpec)))
                             {
                                 if (it.c->enabled() && ! it.alwaysOff) m.controls.insert (p);
                                 else m.disabled.insert (p);
@@ -343,6 +351,13 @@ Module testOscillator (const char* name, int sel, const char* prefix)
                         for (int g = 0; g < ui.full().numGroups(); ++g)
                         {
                             ui.full().setActiveGroup (g);
+                            refresh();
+                            addQ();
+                        }
+                    else if (page >= 16)
+                        for (int g = 0; g < ui.specPage().numGroups(); ++g)
+                        {
+                            ui.specPage().setActiveGroup (g);
                             refresh();
                             addQ();
                         }
@@ -744,30 +759,10 @@ int main()
 // disabled: a control that is drawn disabled in every state (nothing behind it in the engine). "Whole table": the parameters on no page at all.
 void initKnownGaps()
 {
-    // Osc noControl: 84
-    known()["Osc"].noControl = {
-        "oscN.unison.detune_curve", "oscN.morph.type", "oscN.morph.amount", "oscN.morph.spread", "oscN.warp.phase", "oscN.map.key_low", "oscN.map.key_high",
-        "oscN.map.vel_low", "oscN.map.vel_high", "oscN.map.key_fold", "oscN.map.key_warp", "oscN.sample.start", "oscN.sample.end", "oscN.sample.root",
-        "oscN.sample.keytrack", "oscN.sample.loop_mode", "oscN.sample.loop_start", "oscN.sample.loop_end", "oscN.sample.loop_relative", "oscN.sample.loop_link",
-        "oscN.sample.loop_exit", "oscN.sample.fade_edges", "oscN.sample.normalize", "oscN.sample.reverse", "oscN.sample.slice_mode", "oscN.sample.slice_threshold",
-        "oscN.sample.slice_play", "oscN.sample.slice_root", "oscN.sample.scan", "oscN.sample.scan_range", "oscN.sample.scan_reverse", "oscN.sample.scan_lock_tempo",
-        "oscN.sample.scan_to_bpm", "oscN.sample.length_beats", "oscN.sample.uni_span", "oscN.warp2.phase", "oscN.remap.on", "oscN.remap.slot", "oscN.remap.rise",
-        "oscN.remap.fall", "oscN.pitch_mode", "oscN.pitch_bend_track", "oscN.fixed_pitch", "oscN.transpose_snap", "oscN.unison.blend_shape", "oscN.unison.stack_repeat",
-        "oscN.phase_legato", "oscN.env1", "oscN.ratio_src", "oscN.smooth_interp", "oscN.sample.slice", "oscN.gran.density_mode", "oscN.gran.density_sync",
-        "oscN.gran.density_grains", "oscN.gran.length_mode", "oscN.gran.length_sync", "oscN.gran.length_percent", "oscN.gran.jump_start", "oscN.gran.max_grains",
-        "oscN.gran.scan_keytrack", "oscN.gran.reverse_grains", "oscN.gran.rand_warp", "oscN.gran.rand_warp2", "oscN.gran.spawn_pattern", "oscN.gran.y_axis",
-        "oscN.gran.xy_y", "oscN.spec.freq_lo", "oscN.spec.freq_hi", "oscN.spec.lohi_smooth", "oscN.spec.lohi_post_warp", "oscN.spec.cut", "oscN.spec.mix",
-        "oscN.spec.freq_shift", "oscN.spec.manual", "oscN.spec.position", "oscN.spec.scan_keytrack", "oscN.spec.phase_lock", "oscN.spec.transients", "oscN.spec.y_axis",
-        "oscN.spec.xy_y", "oscN.spec.flt_use", "oscN.spec.flt_table", "oscN.spec.flt_frame", "oscN.unison.law"
-    };
-    // Osc notQ: 4
-    known()["Osc"].notQ = {
-        "oscN.on", "oscN.pitch_track", "oscN.gran.manual", "oscN.multi.vel_override"
-    };
-    // Osc disabled: 1
-    known()["Osc"].disabled = {
-        "oscN.phase_memory"
-    };
+    // Osc: no gap left (every one of the 143 parameters has a control and is a Q member; the pages are in osc_spec_page.h, docs/MPC.md "Oscillator UI")
+    known()["Osc"].noControl = {};
+    known()["Osc"].notQ = {};
+    known()["Osc"].disabled = {};
     // Sub notQ: 1
     known()["Sub"].notQ = {
         "sub.on"
@@ -811,24 +806,12 @@ void initKnownGaps()
     known()["Mixer"].notQ = {
         "bus1.destination", "bus2.destination", "bus1.fx_bypass", "bus2.fx_bypass", "main.fx_bypass"
     };
-    // Whole table noControl: 104
+    // Whole table noControl: 19
     known()["Whole table"].noControl = {
-        "oscN.unison.detune_curve", "oscN.morph.type", "oscN.morph.amount", "oscN.morph.spread", "oscN.warp.phase", "curve.velocity.legato", "curve.note.legato",
-        "oscN.map.key_low", "oscN.map.key_high", "oscN.map.vel_low", "oscN.map.vel_high", "oscN.map.key_fold", "oscN.map.key_warp", "oscN.sample.start",
-        "oscN.sample.end", "oscN.sample.root", "oscN.sample.keytrack", "oscN.sample.loop_mode", "oscN.sample.loop_start", "oscN.sample.loop_end",
-        "oscN.sample.loop_relative", "oscN.sample.loop_link", "oscN.sample.loop_exit", "oscN.sample.fade_edges", "oscN.sample.normalize", "oscN.sample.reverse",
-        "oscN.sample.slice_mode", "oscN.sample.slice_threshold", "oscN.sample.slice_play", "oscN.sample.slice_root", "oscN.sample.scan", "oscN.sample.scan_range",
-        "oscN.sample.scan_reverse", "oscN.sample.scan_lock_tempo", "oscN.sample.scan_to_bpm", "oscN.sample.length_beats", "oscN.sample.uni_span", "oscN.warp2.phase",
-        "direct.level", "reverb.force_enable", "splitter_lh.freq", "splitter_lh.low_bypass", "splitter_lh.high_bypass", "splitter_lh.level", "splitter_lmh.freq_low",
-        "splitter_lmh.freq_high", "splitter_lmh.low_bypass", "splitter_lmh.mid_bypass", "splitter_lmh.high_bypass", "splitter_lmh.level", "splitter_ms.mid_bypass",
-        "splitter_ms.side_bypass", "splitter_ms.level", "oscN.remap.on", "oscN.remap.slot", "oscN.remap.rise", "oscN.remap.fall", "oscN.pitch_mode",
-        "oscN.pitch_bend_track", "oscN.fixed_pitch", "oscN.transpose_snap", "oscN.unison.blend_shape", "oscN.unison.stack_repeat", "oscN.phase_legato",
-        "quality.oversample_4x", "quality.no_smoothing", "oscN.env1", "oscN.ratio_src", "oscN.smooth_interp", "oscN.sample.slice",
-        "oscN.gran.density_mode", "oscN.gran.density_sync", "oscN.gran.density_grains", "oscN.gran.length_mode", "oscN.gran.length_sync", "oscN.gran.length_percent",
-        "oscN.gran.jump_start", "oscN.gran.max_grains", "oscN.gran.scan_keytrack", "oscN.gran.reverse_grains", "oscN.gran.rand_warp", "oscN.gran.rand_warp2",
-        "oscN.gran.spawn_pattern", "oscN.gran.y_axis", "oscN.gran.xy_y", "oscN.spec.freq_lo", "oscN.spec.freq_hi", "oscN.spec.lohi_smooth", "oscN.spec.lohi_post_warp",
-        "oscN.spec.cut", "oscN.spec.mix", "oscN.spec.freq_shift", "oscN.spec.manual", "oscN.spec.position", "oscN.spec.scan_keytrack", "oscN.spec.phase_lock",
-        "oscN.spec.transients", "oscN.spec.y_axis", "oscN.spec.xy_y", "oscN.spec.flt_use", "oscN.spec.flt_table", "oscN.spec.flt_frame", "oscN.unison.law"
+        "curve.velocity.legato", "curve.note.legato", "direct.level", "reverb.force_enable", "splitter_lh.freq",
+        "splitter_lh.low_bypass", "splitter_lh.high_bypass", "splitter_lh.level", "splitter_lmh.freq_low", "splitter_lmh.freq_high",
+        "splitter_lmh.low_bypass", "splitter_lmh.mid_bypass", "splitter_lmh.high_bypass", "splitter_lmh.level", "splitter_ms.mid_bypass",
+        "splitter_ms.side_bypass", "splitter_ms.level", "quality.oversample_4x", "quality.no_smoothing"
     };
 
 }
