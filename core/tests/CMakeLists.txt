@@ -90,3 +90,5 @@ target_include_directories(synthyboy_test_user_content PRIVATE "${PROJECT_SOURCE
 synthyboy_add_test(synthyboy_test_clap_content test_clap_content.cpp LINK synthyboy_static ${CMAKE_DL_LIBS})
 # GROUPD (WP-14 / 15 / 16): sample -> wavetable, frame <-> LFO shape, WAV of a render, the offline render driver on the own engine
 synthyboy_add_test(synthyboy_test_wave_convert test_wave_convert.cpp)
+synthyboy_add_test(synthyboy_test_own_ladder_range test_own_ladder_range.cpp)
+target_include_directories(synthyboy_test_own_ladder_range PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")

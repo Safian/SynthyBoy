@@ -616,7 +616,7 @@ private:
         const float c0 = z.c[0], c1 = z.c[1], c2 = z.c[2], c3 = z.c[3], c4 = z.c[4];
         for (int i = 0; i < n; ++i)
         {
-            const float S = G * G * G * s[0] + G * G * s[1] + G * s[2] + s[3];
+            const float S = (1.0f - G) * (G * G * G * s[0] + G * G * s[1] + G * s[2] + s[3]); // what the four stages add to the input's share G^4 u (y = G x + (1 - G) s per stage)
             const float u = th ((fastMath ? (pre * in[i] - k * S) * z.invDen : (pre * in[i] - k * S) / (1.0f + k * G * G * G * G)) * 0.9f) * 1.1f;
             float x = u, st[4];
             for (int j = 0; j < 4; ++j)
@@ -718,8 +718,8 @@ public:
     {
         for (int i = 0; i < n; ++i)
         {
-            const float Sa = za.G * za.G * za.G * A.s[0] + za.G * za.G * A.s[1] + za.G * A.s[2] + A.s[3];
-            const float Sb = zb.G * zb.G * zb.G * B.s[0] + zb.G * zb.G * B.s[1] + zb.G * B.s[2] + B.s[3];
+            const float Sa = (1.0f - za.G) * (za.G * za.G * za.G * A.s[0] + za.G * za.G * A.s[1] + za.G * A.s[2] + A.s[3]);
+            const float Sb = (1.0f - zb.G) * (zb.G * zb.G * zb.G * B.s[0] + zb.G * zb.G * B.s[1] + zb.G * B.s[2] + B.s[3]);
             const float ua = A.th ((A.fastMath ? (za.pre * inA[i] - za.k * Sa) * za.invDen : (za.pre * inA[i] - za.k * Sa) / (1.0f + za.k * za.G * za.G * za.G * za.G)) * 0.9f) * 1.1f;
             const float ub = B.th ((B.fastMath ? (zb.pre * inB[i] - zb.k * Sb) * zb.invDen : (zb.pre * inB[i] - zb.k * Sb) / (1.0f + zb.k * zb.G * zb.G * zb.G * zb.G)) * 0.9f) * 1.1f;
             float xa = ua, xb = ub, sta[4], stb[4];
