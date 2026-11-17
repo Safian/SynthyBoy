@@ -333,6 +333,7 @@ public:
         Format format = Format::IntSigned;
         bool notSet = false, readOnly = false;
         int pxPerStep = 8;
+        char text[16] = {};   // the text of the value when the owner has a better one than the format ("MID", "0 c": the same text as the other places that show this value); empty: the format
     };
     State state;
     /** The size the drawn box is limited to (0: the whole rectangle), at the left of the rectangle and centred in its height: a cell of a page that is far bigger than a number needs holds the field at its left (under the index chip) and the touch zone stays the whole cell. */
@@ -350,6 +351,11 @@ public:
         if (s.notSet)
         {
             std::snprintf (out, 16, "-");
+            return;
+        }
+        if (s.text[0] != '\0')
+        {
+            std::snprintf (out, 16, "%s", s.text);
             return;
         }
         const double v = s.value;
