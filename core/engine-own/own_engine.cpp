@@ -634,6 +634,9 @@ void OwnEngine::startNote (const Pressed& n, bool fromRecall, const Voice* relea
                         : allocateVoice (legato);
     if (chosen == nullptr)
         return;
+    for (size_t i = 0; i < voices.size(); ++i)
+        if (voices[i].get() == chosen)
+            sustainPending[i] = 0; // a pedal hold that belonged to the voice's previous note does not carry over to the new one
     // poly legato: a note played while another is held continues that voice's envelopes instead of attacking again
     const Voice* heldVoice = nullptr;
     if (base[static_cast<size_t> (mi.polyLegato)] >= 0.5f && !legato)
@@ -997,6 +1000,9 @@ void OwnEngine::controlTick() noexcept
             ? clamp01 (modulatedValue (paramTable()[static_cast<size_t> (idx)], destLawOf (static_cast<size_t> (idx)), base[static_cast<size_t> (idx)], gdelta[static_cast<size_t> (idx)]) * 0.01f)
             : knob;
     }
+    for (size_t i = 0; i < voices.size(); ++i)
+        if (sustainPending[i] != 0 && (!voices[i]->isActive() || voices[i]->killing()))
+            sustainPending[i] = 0; // a voice that was stolen or killed keeps no pending pedal release
     killExcess();
     {
         const bool mpe = base[static_cast<size_t> (pi.master.mpeOn)] >= 0.5f;

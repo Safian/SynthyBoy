@@ -220,3 +220,33 @@ TEST (own_all_sound_off_silences_at_once)
         CHECK_EQ (s.heldKeys, 0);
     }
 }
+
+// a pedal hold of a voice that was stolen does not carry over to the next note on that voice: the held key keeps sounding when the pedal goes up
+TEST (own_stale_pedal_hold_does_not_release_a_held_key)
+{
+    for (Tier tier : { Tier::low, Tier::high })
+        for (int poly : { 1, 2 })
+        {
+            Rig rig (tier, poly, 0, 0);
+            Event down = sbtest::noteOn (0, 0, 1.0f);
+            down.type = Event::SustainPedal;
+            down.channel = -1;
+            rig.send (down);
+            for (int i = 0; i < 6; ++i)
+            {
+                rig.send (sbtest::noteOn (0, 50 + i, 0.8f));
+                rig.send (sbtest::noteOff (0, 50 + i)); // held by the pedal only
+                rig.run (0.05);
+            }
+            rig.send (sbtest::noteOn (0, 80, 0.8f)); // a key that stays down
+            rig.run (0.1);
+            Event up = down;
+            up.value = 0.0f;
+            rig.send (up);
+            rig.run (0.1);
+            VoiceStats s;
+            rig.e->voiceStats (s);
+            CHECK (s.sustaining >= 1); // the voice of key 80 is not released by a pedal hold it never had
+            CHECK_EQ (s.orphans, 0);
+        }
+}
