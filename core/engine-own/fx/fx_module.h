@@ -28,6 +28,7 @@ struct FxFrame
     const ContentSet* content = nullptr; // the set this block reads (Convolve takes its impulse from it)
     bool lowCost = false;                // tier low: the cheaper forms of dsp/fastmath.h in the per sample code
     bool realtime = false;               // Quality::realtime: the audio thread never waits for a helper thread
+    bool muteSkip = false;               // economy group Control: a module whose mix is exactly 0 is not processed (FxModule::process)
 };
 
 /** One helper thread for the slow work of the effects that must not run on the audio thread (the partitioning of a Convolve impulse). A job is a function and a
@@ -98,14 +99,58 @@ public:
             levelPrev = levelGain;
             levelSeen = true;
         }
+        float mixBefore = mixNow;
+        mixNow = -1.0f;
+        probing = false;
         configure (f, base, delta);
+        if (!mixSeen)
+        {
+            mixBefore = mixNow; // the first period of the module's life: there was no mix before it
+            mixSeen = true;
+        }
+        // Muted: the mix (after its modulation) is exactly 0 in this control period and was in the one before, so nothing of the module reaches its output in this period
+        // (every module that reports its mix applies it as one value per period, dry * 1 + wet * 0). Only for a module without latency (a skipped lookahead would move the dry signal).
+        muted = f.muteSkip && mixNow == 0.0f && mixBefore == 0.0f && latency() == 0;
+        if (muted && !clean)
+        {
+            // its state still holds a tail: it is flushed, run on silence with the mix opened so that the tail can be watched (process ()); the keys are read once more for that
+            probing = true;
+            configure (f, base, delta);
+            mixNow = 0.0f;
+        }
+        quietNeeded = static_cast<int> (flushSeconds() * 44100.0f);
     }
-    /** The module and its output trim (ramped across the period); t0 = position of this call in the period, period = its length. */
+    /** The module and its output trim (ramped across the period); t0 = position of this call in the period, period = its length.
+        A muted module (update ()) is not run: its output is its input. While its state is clean (never fed since it was made, or flushed) that costs nothing but the
+        advance of its free running phase. A muted module with a tail in its state is flushed first: it runs on silence, mix opened, into a scratch buffer, until what
+        comes out has stayed below -120 dBFS for flushSeconds (); the signal passes untouched meanwhile. So when the mix is opened again the module starts from silence:
+        it plays what is fed from then on, without the tail of the notes before (the unmuted engine would have had it), and without a click. */
     void process (float* l, float* r, int n, int t0, int period) noexcept
     {
         t0Now = t0;
         periodNow = period;
-        run (l, r, n);
+        if (muted && n <= kControlPeriod)
+        {
+            if (clean)
+                idleAdvance (n);
+            else
+            {
+                float zl[kControlPeriod] = {}, zr[kControlPeriod] = {};
+                run (zl, zr, n);
+                float peak = 0.0f;
+                for (int i = 0; i < n; ++i)
+                    peak = std::max (peak, std::max (std::fabs (zl[i]), std::fabs (zr[i])));
+                quietRun = peak < 1.0e-6f ? quietRun + n : 0; // (a non finite sample is not below the threshold: the module stays in the flush)
+                if (quietRun >= quietNeeded)
+                    clean = true;
+            }
+        }
+        else
+        {
+            run (l, r, n);
+            clean = false;
+            quietRun = 0;
+        }
         if (levelGain != 1.0f || levelPrev != 1.0f)
         {
             const float invP = 1.0f / static_cast<float> (std::max (period, 1));
@@ -118,9 +163,26 @@ public:
         }
     }
     void clearLevel() noexcept { levelSeen = false; }
+    /** The module is muted and skipped in this control period (tests, statistics). */
+    bool skippedNow() const noexcept { return muted && clean; }
+
+protected:
+    /** A module that can be muted passes its mix (0 .. 1, after modulation) through this in configure (): the value is noted, and while the module is flushed the
+        mix it runs with is 1. A module that never calls it is never muted. */
+    float wetMix (float configured) noexcept
+    {
+        mixNow = configured;
+        return probing ? 1.0f : configured;
+    }
+    /** How long the flushed output has to stay below -120 dBFS before the state counts as silent: longer than the longest gap between two echoes of the module. */
+    virtual float flushSeconds() const noexcept { return 1.0f; }
 
 private:
     int levelIdx;
+    float mixNow = -1.0f;     // the mix of this period as the module reported it (-1: not reported)
+    bool muted = false, probing = false, mixSeen = false;
+    bool clean = true;        // nothing was fed since the module was made, or it was flushed
+    int quietRun = 0, quietNeeded = 44100;
     int t0Now = 0, periodNow = kControlPeriod;
     float levelGain = 1.0f, levelPrev = 1.0f;
     bool levelSeen = false;

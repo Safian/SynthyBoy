@@ -2,8 +2,18 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+// The pair kernels below (processPairT) do, per lane, the operations of the scalar functions one by one. On AArch64 GCC would fuse a * b + c in the scalar functions
+// of this file (and not in the NEON forms), so here, where the kernels are used, nothing is fused: the two paths give the same samples, and the 64 bit build the
+// samples of the 32 bit one (whose FPU has no fused form). Same rule and same pragma as core/engine-own/dsp/simd.h. It stands BEFORE the includes: the scalar
+// functions live in filter_dsp.h, and the pragma acts on what is defined after it.
+#if (defined(__arm__) || (defined(__aarch64__) && defined(__linux__))) && defined(__GNUC__) && !defined(__clang__)
+ #pragma GCC optimize ("fp-contract=off")
+#endif
+
 #include "synthyboy/filters/filter.h"
 #include "filter_dsp.h"
+#include "filter_lanes.h"
+
 
 #include <algorithm>
 #include <array>
@@ -135,6 +145,7 @@ public:
         const auto srFloat = static_cast<float> (sampleRate_);
         const float smoothCoeff = std::min (0.05f, 180.0f / srFloat);
         const int hold = params_.coefHold;
+        int holdCount = 0; // i % hold without the integer division, which 32 bit ARM makes through a library call, once per sample
 
         for (int i = 0; i < numSamples; ++i)
         {
@@ -150,15 +161,284 @@ public:
 
             smoothedCutoff_ += smoothCoeff * (targetCutoff - smoothedCutoff_);
             smoothedRes_ += smoothCoeff * (targetRes - smoothedRes_);
-            if (hold <= 1 || (i % hold) == 0)
+            if (hold <= 1 || holdCount == 0)
             {
                 heldCutoff_ = smoothedCutoff_;
                 heldRes_ = smoothedRes_;
             }
+            if (++holdCount >= hold)
+                holdCount = 0;
 
             const float sampleIn = sanitize (in[i]);
             out[i] = sanitize (processInternal (sampleIn, hold <= 1 ? smoothedCutoff_ : heldCutoff_, hold <= 1 ? smoothedRes_ : heldRes_));
         }
+    }
+
+    /** The two filters of a pair in one pass (Filter::processPair). V is a lane type of filter_lanes.h. Everything that processBlock () and processInternal () compute
+        per sample from values that do not change within the call is computed once, with the same expressions; the coefficients that follow the (held) cutoff are
+        redone when it changes, through the same memos; the rest runs in the two lanes. */
+    template <class V>
+    static bool processPairT (FilterImpl& fa, FilterImpl& fb, const float* inA, float* outA, const float* inB, float* outB, int numSamples) noexcept
+    {
+        FilterImpl* const f[2] = { &fa, &fb };
+        const FilterType type = fa.type_;
+        const bool scream = type == FilterType::ScreamLP || type == FilterType::ScreamBP;
+        const bool ladder = type == FilterType::EMSLadder || type == FilterType::MGLadder;
+        const bool diffusor = type == FilterType::Diffusor;
+        if (fb.type_ != type || !(scream || ladder || diffusor) || fa.sampleRate_ != fb.sampleRate_ || fa.params_.coefHold != fb.params_.coefHold)
+            return false;
+
+        const auto srFloat = static_cast<float> (fa.sampleRate_);
+        const float smoothCoeff = std::min (0.05f, 180.0f / srFloat);
+        const int hold = fa.params_.coefHold;
+
+        // per lane, what processBlock () and processInternal () take from the parameters
+        float targetCutoff[2], targetRes[2], drive[2], var[2], mix[2];
+        for (int l = 0; l < 2; ++l)
+        {
+            const FilterParams& p = f[l]->params_;
+            targetCutoff[l] = std::max (20.0f, std::min (p.cutoff, srFloat * 0.49f));
+            targetRes[l] = std::max (0.0f, std::min (p.resonance, 1.0f));
+            drive[l] = std::max (0.0f, std::min (p.drive, 1.0f));
+            var[l] = std::max (0.0f, std::min (p.var, 1.0f));
+            mix[l] = std::max (0.0f, std::min (p.mix, 1.0f));
+        }
+        int stages = 0;
+        if (diffusor)
+        {
+            stages = std::max (1, std::min (static_cast<int> (1.0f + 7.0f * var[0]), 8));
+            if (std::max (1, std::min (static_cast<int> (1.0f + 7.0f * var[1]), 8)) != stages)
+                return false;
+            for (int l = 0; l < 2; ++l)
+                for (int i = 0; i < stages; ++i)
+                    if (f[l]->diffuserDelays_[i].empty())
+                        return false;
+        }
+
+        const V vTargetCutoff = V::set (targetCutoff[0], targetCutoff[1]), vTargetRes = V::set (targetRes[0], targetRes[1]);
+        const V vSmooth = V::all (smoothCoeff);
+        const V vDriveGain = V::set (1.0f + 2.5f * drive[0], 1.0f + 2.5f * drive[1]);
+        const V vMix = V::set (mix[0], mix[1]), vOneMinusMix = V::set (1.0f - mix[0], 1.0f - mix[1]);
+        const V vOne = V::all (1.0f);
+
+        // Scream: the factor of the second cutoff and the gain of the loop (functions of var and drive)
+        float screamFactor[2] = { 1.0f, 1.0f }, screamGain[2] = { 1.0f, 1.0f }, screamG[2] = { 0.0f, 0.0f };
+        if (scream)
+            for (int l = 0; l < 2; ++l)
+            {
+                screamFactor[l] = f[l]->pow2M ((var[l] - 0.5f) * 4.0f);
+                if (drive[l] > 0.5f)
+                    screamGain[l] += 12.0f * (drive[l] - 0.5f) * (drive[l] - 0.5f);
+            }
+        const V vScreamGain = V::set (screamGain[0], screamGain[1]);
+        // the ladders: EMS runs with FAT 0.3 and its drive raised by 0.2, MG with neither
+        const float fat = type == FilterType::EMSLadder ? 0.3f : 0.0f;
+        float ladderDrive[2] = { drive[0], drive[1] };
+        if (type == FilterType::EMSLadder)
+        {
+            ladderDrive[0] = drive[0] + 0.2f;
+            ladderDrive[1] = drive[1] + 0.2f;
+        }
+        const V vLadderDriveGain = V::set (1.0f + 2.0f * ladderDrive[0], 1.0f + 2.0f * ladderDrive[1]);
+        const V vTwoFat = V::all (2.0f * fat);
+
+        V smoothedCutoff = V::set (fa.smoothedCutoff_, fb.smoothedCutoff_), smoothedRes = V::set (fa.smoothedRes_, fb.smoothedRes_);
+        V heldCutoff = V::set (fa.heldCutoff_, fb.heldCutoff_), heldRes = V::set (fa.heldRes_, fb.heldRes_);
+
+        // the states, sanitized as every scalar module does at the start of its call (they are stored sanitized, so once is the same as every sample)
+        V s1 = V::sanitized (V::set (fa.svf1_.s1, fb.svf1_.s1)), s2 = V::sanitized (V::set (fa.svf1_.s2, fb.svf1_.s2));
+        V ps = V::sanitized (V::set (fa.onePole1_.s, fb.onePole1_.s));
+        V ls[4];
+        for (int k = 0; k < 4; ++k)
+            ls[k] = V::sanitized (V::set (fa.ladder_.s[k], fb.ladder_.s[k]));
+
+        // what follows the cutoff of a lane; redone when that cutoff changes
+        float lastCutoff[2] = { 0.0f, 0.0f }, g[2] = { 0.0f, 0.0f };
+        bool haveCutoff[2] = { false, false };
+        DelayLine::Tap taps[2][8];
+        V vGSafe = V::all (0.0f), vScreamCoef = V::all (0.0f);
+        V vLG = V::all (0.0f), vLG0 = V::all (0.0f), vLG2 = V::all (0.0f), vLG3 = V::all (0.0f), vLG4 = V::all (0.0f);
+        float lastR[2] = { 0.0f, 0.0f };
+        bool haveR[2] = { false, false };
+        V vDEff = V::all (0.0f);
+
+        int holdCount = 0;
+        for (int i = 0; i < numSamples; ++i)
+        {
+            smoothedCutoff = smoothedCutoff + vSmooth * (vTargetCutoff - smoothedCutoff);
+            smoothedRes = smoothedRes + vSmooth * (vTargetRes - smoothedRes);
+            if (hold <= 1 || holdCount == 0) // (i % hold) == 0
+            {
+                heldCutoff = smoothedCutoff;
+                heldRes = smoothedRes;
+            }
+            if (++holdCount >= hold)
+                holdCount = 0;
+            const V cutoff = hold <= 1 ? smoothedCutoff : heldCutoff, res = hold <= 1 ? smoothedRes : heldRes;
+            const V in = V::sanitized (V::set (inA[i], inB[i]));
+
+            bool cutoffChanged = false;
+            for (int l = 0; l < 2; ++l)
+            {
+                const float c = cutoff.get (l);
+                if (haveCutoff[l] && c == lastCutoff[l])
+                    continue;
+                lastCutoff[l] = c;
+                haveCutoff[l] = true;
+                cutoffChanged = true;
+                g[l] = f[l]->tanM (kPi * c / srFloat);
+                if (scream)
+                {
+                    const float screamFreq = std::max (20.0f, std::min (c * screamFactor[l], srFloat * 0.49f));
+                    screamG[l] = f[l]->tanM (kPi * screamFreq / srFloat);
+                    OnePoleTPT& op = f[l]->onePole1_;
+                    if (!(op.haveCoef && screamG[l] == op.lastG))
+                    {
+                        op.lastCoef = screamG[l] / (1.0f + screamG[l]);
+                        op.lastG = screamG[l];
+                        op.haveCoef = true;
+                    }
+                    haveR[l] = false; // the division of the state variable filter depends on g as well
+                }
+                else if (ladder)
+                {
+                    Ladder4Pole& ld = f[l]->ladder_;
+                    if (!(ld.haveG && g[l] == ld.lastG))
+                    {
+                        const float gSafe = std::max (1e-5f, std::min (g[l], 0.95f));
+                        ld.cG = gSafe / (1.0f + gSafe);
+                        ld.cG0 = 1.0f / (1.0f + gSafe);
+                        ld.cG2 = ld.cG * ld.cG;
+                        ld.cG3 = ld.cG2 * ld.cG;
+                        ld.cG4 = ld.cG3 * ld.cG;
+                        ld.lastG = g[l];
+                        ld.haveG = true;
+                    }
+                }
+                else
+                {
+                    const float perCycle = srFloat / std::max (20.0f, c);
+                    for (int k = 0; k < stages; ++k)
+                        taps[l][k] = f[l]->diffuserDelays_[k].tapFor (std::max (2.0f, perCycle * (0.2f + 0.15f * static_cast<float> (k))));
+                }
+            }
+            if (cutoffChanged)
+            {
+                if (scream)
+                {
+                    vGSafe = V::set (std::max (1e-5f, std::min (g[0], 50.0f)), std::max (1e-5f, std::min (g[1], 50.0f)));
+                    vScreamCoef = V::set (fa.onePole1_.lastCoef, fb.onePole1_.lastCoef);
+                }
+                else if (ladder)
+                {
+                    vLG = V::set (fa.ladder_.cG, fb.ladder_.cG);
+                    vLG0 = V::set (fa.ladder_.cG0, fb.ladder_.cG0);
+                    vLG2 = V::set (fa.ladder_.cG2, fb.ladder_.cG2);
+                    vLG3 = V::set (fa.ladder_.cG3, fb.ladder_.cG3);
+                    vLG4 = V::set (fa.ladder_.cG4, fb.ladder_.cG4);
+                }
+            }
+
+            const V drivenIn = V::softClipped (vDriveGain * in);
+            V rawOut = drivenIn;
+            if (scream)
+            {
+                // SVFTPT::process without FAT: the damping is 2 R, its division is redone when g or R change
+                const V R = vOne - V::all (0.96f) * res;
+                const V damping = V::all (2.0f) * R * vOne;
+                bool dChanged = false;
+                for (int l = 0; l < 2; ++l)
+                {
+                    const float Rl = R.get (l);
+                    if (haveR[l] && Rl == lastR[l])
+                        continue;
+                    lastR[l] = Rl;
+                    haveR[l] = true;
+                    dChanged = true;
+                    SVFTPT& sv = f[l]->svf1_;
+                    const float gSafe = vGSafe.get (l), dampingL = damping.get (l);
+                    if (!(sv.haveD && gSafe == sv.dG && Rl == sv.dR))
+                    {
+                        sv.dCached = 1.0f / (1.0f + dampingL * gSafe + gSafe * gSafe);
+                        sv.dG = gSafe;
+                        sv.dR = Rl;
+                        sv.haveD = true;
+                    }
+                }
+                if (dChanged)
+                    vDEff = V::set (fa.svf1_.dCached, fb.svf1_.dCached);
+                const V hp = (drivenIn - (damping + vGSafe) * s1 - s2) * vDEff;
+                const V v1 = vGSafe * hp;
+                const V bp = v1 + s1;
+                s1 = V::sanitized (v1 + bp);
+                const V v2 = vGSafe * bp;
+                const V lp = v2 + s2;
+                s2 = V::sanitized (v2 + lp);
+                const V primary = type == FilterType::ScreamBP ? bp : lp;
+                // OnePoleTPT::processLP at the second cutoff
+                const V pv = vScreamCoef * (primary - ps);
+                const V screamLP = pv + ps;
+                ps = V::sanitized (pv + screamLP);
+                rawOut = V::softClipped (primary + V::softClipped (vScreamGain * res * screamLP));
+            }
+            else if (ladder)
+            {
+                // Ladder4Pole::process
+                const V S = vLG0 * (vLG3 * ls[0] + vLG2 * ls[1] + vLG * ls[2] + ls[3]);
+                const V k = V::all (3.85f) * res * (vOne - V::all (0.05f) * res);
+                V fbk = V::softClipped (S);
+                if (fat > 0.001f)
+                    fbk = fbk / (vOne + vTwoFat * (S * S));
+                const V u = V::softClipped ((vLadderDriveGain * drivenIn - k * fbk) / (vOne + k * vLG4));
+                V y = u;
+                for (int st = 0; st < 4; ++st)
+                {
+                    const V v = vLG * (y - ls[st]);
+                    y = v + ls[st];
+                    ls[st] = V::sanitized (v + y);
+                }
+                rawOut = y;
+            }
+            else
+            {
+                // the all-pass chain of the Diffusor: the two lines of a stage are read and written one after the other, the stage's arithmetic is side by side
+                V ap = drivenIn;
+                const V gDiff = V::all (0.5f) + V::all (0.45f) * res;
+                for (int k = 0; k < stages; ++k)
+                {
+                    DelayLine& da = fa.diffuserDelays_[k];
+                    DelayLine& db = fb.diffuserDelays_[k];
+                    const V delayed = V::set (da.readTap (taps[0][k]), db.readTap (taps[1][k]));
+                    const V x = ap - gDiff * delayed;
+                    ap = delayed + gDiff * x;
+                    da.write (x.get (0));
+                    db.write (x.get (1));
+                }
+                rawOut = ap;
+            }
+
+            const V out = V::sanitized (vOneMinusMix * in + vMix * rawOut);
+            outA[i] = out.get (0);
+            outB[i] = out.get (1);
+        }
+
+        for (int l = 0; l < 2; ++l)
+        {
+            f[l]->smoothedCutoff_ = smoothedCutoff.get (l);
+            f[l]->smoothedRes_ = smoothedRes.get (l);
+            f[l]->heldCutoff_ = heldCutoff.get (l);
+            f[l]->heldRes_ = heldRes.get (l);
+            if (scream)
+            {
+                f[l]->svf1_.s1 = s1.get (l);
+                f[l]->svf1_.s2 = s2.get (l);
+                f[l]->onePole1_.s = ps.get (l);
+            }
+            else if (ladder)
+                for (int k = 0; k < 4; ++k)
+                    f[l]->ladder_.s[k] = ls[k].get (l);
+        }
+        return true;
     }
 
 private:
@@ -1113,6 +1393,26 @@ void Filter::process (const float* in, float* out, int numSamples,
                       const float* cutoffMod, const float* resMod) noexcept
 {
     impl_->processBlock (in, out, numSamples, cutoffMod, resMod);
+}
+
+bool Filter::processPair (Filter& a, Filter& b, const float* inA, float* outA, const float* inB, float* outB, int numSamples) noexcept
+{
+#if SYNTHYBOY_FILTER_NEON
+    return FilterImpl::processPairT<NeonLanes> (*a.impl_, *b.impl_, inA, outA, inB, outB, numSamples);
+#else
+    (void) a; (void) b; (void) inA; (void) outA; (void) inB; (void) outB; (void) numSamples;
+    return false;
+#endif
+}
+
+bool Filter::processPairReference (Filter& a, Filter& b, const float* inA, float* outA, const float* inB, float* outB, int numSamples) noexcept
+{
+    return FilterImpl::processPairT<ScalarLanes> (*a.impl_, *b.impl_, inA, outA, inB, outB, numSamples);
+}
+
+bool Filter::pairKernelAvailable() noexcept
+{
+    return SYNTHYBOY_FILTER_NEON != 0;
 }
 
 } // namespace synthyboy::filters

@@ -35,6 +35,15 @@ bool setOwnLowTierKillFade (IEngine& engine, float seconds) noexcept
     return true;
 }
 
+bool setOwnSavingsOff (IEngine& engine, uint32_t off) noexcept
+{
+    auto* own = dynamic_cast<own::OwnEngine*> (&engine);
+    if (own == nullptr)
+        return false;
+    own->setSavingsOff (off);
+    return true;
+}
+
 bool setOwnLowTierMorphSpread (IEngine& engine, bool keep) noexcept
 {
     auto* own = dynamic_cast<own::OwnEngine*> (&engine);
@@ -279,6 +288,8 @@ void OwnEngine::setQuality (const Quality& q) noexcept
     voiceCap.store (std::clamp (q.maxVoices, 1, kMaxVoices), std::memory_order_relaxed);
     unisonCap.store (std::clamp (q.maxUnison, 1, kMaxUnisonVoices), std::memory_order_relaxed);
     qualityTier.store (q.oversampling <= 1 ? 0 : (q.interpolation == Interpolation::spectral ? 2 : 1), std::memory_order_relaxed);
+    economyMask.store (economyOf (q), std::memory_order_relaxed);
+    tierLowCap.store (q.economy < 0 && q.oversampling <= 1, std::memory_order_relaxed);
     fxMask.store (q.fxMask, std::memory_order_relaxed);
 }
 
@@ -539,7 +550,7 @@ void OwnEngine::killExcess() noexcept
         Voice* v = pickVictim (false);
         if (v == nullptr)
             break;
-        if (qualityTier.load (std::memory_order_relaxed) == 0)
+        if ((economyMask.load (std::memory_order_relaxed) & kEconomyControl) != 0)
             ghostKill (*v); // tier low: the voice stops, a ramp of its last output fades on the buses
         else
             v->startKill(); // the envelopes fade to zero in 50 ms
@@ -777,7 +788,7 @@ void OwnEngine::noteOff (const Event& e) noexcept
                 startNote (n, true, &v);
                 if (base[static_cast<size_t> (mi.voiceOverride)] < 0.5f && base[static_cast<size_t> (mi.legato)] < 0.5f)
                 {
-                    if (qualityTier.load (std::memory_order_relaxed) == 0)
+                    if ((economyMask.load (std::memory_order_relaxed) & kEconomyControl) != 0)
                         ghostKill (v);
                     else
                         v.startKill(); // Kill mode: the released voice fades out, a fresh voice plays the recalled note
@@ -1121,7 +1132,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     {
         int mu = unisonCap.load (std::memory_order_relaxed);
         const int lowCap = lowUnisonCap.load (std::memory_order_relaxed);
-        if (qualityTier.load (std::memory_order_relaxed) == 0 && lowCap > 0)
+        if (tierLowCap.load (std::memory_order_relaxed) && lowCap > 0)
             mu = std::min (mu, lowCap);
         globals.maxUnison = mu;
     }
@@ -1139,9 +1150,11 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         switchKeySnap[o] = switchKeyAtomic[o].load (std::memory_order_relaxed);
     globals.switchKey = switchKeySnap;
     globals.quality = qualityTier.load (std::memory_order_relaxed);
+    globals.economy = economyMask.load (std::memory_order_relaxed);
+    globals.scalarFilters = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingVectorFilters) != 0;
     globals.usedSources = matrix.sourceMask();
     globals.morphCache = &morphCache;
-    globals.killSeconds = qualityTier.load (std::memory_order_relaxed) == 0 ? lowKillSeconds.load (std::memory_order_relaxed) : 0.05f;
+    globals.killSeconds = (globals.economy & kEconomyControl) != 0 ? lowKillSeconds.load (std::memory_order_relaxed) : 0.05f;
     globals.lowShareMorph = !lowKeepMorphSpread.load (std::memory_order_relaxed);
     globals.baseEpoch = baseEpoch;
     globals.oversample = ultraRender.load (std::memory_order_relaxed) || (fxOversampleIndex >= 0 && base[static_cast<size_t> (fxOversampleIndex)] >= 0.5f);
@@ -1153,7 +1166,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     const MasterIdx& mi = pi.master;
     const int fxReverbForce = fxReverbForceIndex;
     int pos = 0, ei = 0;
-    const bool eventGrid = qualityTier.load (std::memory_order_relaxed) == 0;
+    const bool eventGrid = (globals.economy & kEconomyControl) != 0;
     while (pos < numFrames)
     {
         if (controlPos == 0)
@@ -1190,10 +1203,11 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             frame.songBeats = globals.songBeats;
             frame.content = globals.content;
             frame.realtime = realtimeFlag;
-            frame.lowCost = globals.quality == 0;
+            frame.lowCost = (globals.economy & kEconomyMath) != 0;
+            frame.muteSkip = (globals.economy & kEconomyControl) != 0 && (savingsOff.load (std::memory_order_relaxed) & kOwnSavingFxMute) == 0;
             for (auto& f : fx)
             {
-                f.setLowCost (globals.quality == 0);
+                f.setLowCost ((globals.economy & kEconomyControl) != 0);
                 f.update (base.data(), gdelta.data(), frame, mask, inputsSame);
             }
             // the mixer: the levels of the buses and of the Direct output, their destinations and the rack bypasses

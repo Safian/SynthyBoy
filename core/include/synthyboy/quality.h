@@ -57,6 +57,18 @@ constexpr uint32_t effectiveFxMask (uint32_t tierMask, bool reverbForceEnable) n
     return reverbForceEnable ? (tierMask | kFxReverb) : tierMask;
 }
 
+/** The cheaper forms of the own engine's DSP, one bit per group (Quality::economy). A tier with oversampling 1 (low) runs all of them, the other tiers none;
+    a device profile (profileQuality below) may switch the groups one by one. What each group changes in the sound, with its error bounds, is listed in
+    docs/MPC.md "Sound differences at tier low". The groups never touch a stored parameter value. */
+enum EconomyFlags : uint32_t
+{
+    kEconomyWarp    = 1u << 0, // a warped oscillator runs 2x oversampled with a 32 tap decimator (not 4x with 128 taps); its table band limit is 1.0 (not 3.2) times the host rate
+    kEconomyMorph   = 1u << 1, // the spectral morph cycle is rebuilt every 512 samples (not 256) from a transform of half the size
+    kEconomyMath    = 1u << 2, // table / rational / polynomial forms of tanh, sin, cos, exp, pow, log2; interpolated filter setups, held filter / chorus / phaser coefficients, the cheaper noise draw
+    kEconomyControl = 1u << 3, // unread modulators stepped every fourth control period, events on the 32 sample grid, a stolen voice faded by a short ramp, an effect rack on silence and an effect with mix 0 not processed
+    kEconomyAll     = (1u << 4) - 1u
+};
+
 /**
  * Per-instance quality settings (never a global). A tier only CAPS what a preset asks for (voices, unison voices,
  * oversampling) or bypasses heavy effects; it never changes the stored parameter values, so a preset has the same shape
@@ -74,7 +86,16 @@ struct Quality
         handed over at a fixed block boundary: the audio thread waits for it, so the output never depends on thread timing and an offline
         bounce equals itself. true: live playback, the audio thread never waits (the new convolver is taken over when it is ready). */
     bool realtime = false;
+    /** The economy groups of the own engine (EconomyFlags). Negative (default): by the tier, all groups when `oversampling` is 1 and none otherwise, which is what the
+        three tiers always did. 0 .. kEconomyAll: exactly these groups, whatever the oversampling says. */
+    int economy = -1;
 };
+
+/** The economy groups a quality runs with (see Quality::economy). */
+constexpr uint32_t economyOf (const Quality& q) noexcept
+{
+    return q.economy < 0 ? (q.oversampling <= 1 ? static_cast<uint32_t> (kEconomyAll) : 0u) : (static_cast<uint32_t> (q.economy) & static_cast<uint32_t> (kEconomyAll));
+}
 
 constexpr Quality qualityForTier (Tier tier) noexcept
 {

@@ -159,6 +159,15 @@ if(SYNTHYBOY_MPC_PAD_PRESSURE)
     target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_PAD_PRESSURE=1)
 endif()
 
+# Quality profile (docs/MPC.md "Quality profile per device", shell-mpc/device_profile.h): empty (default) = the device table of device_profile.h decides at start-up.
+# A profile text ("low", "medium", "high", or a base with changes such as "low,unison=7,warp=4x") makes this build run that profile on every device
+# (the debug file and the environment variable still override it). For trial packages; the production package is built with the empty default.
+set(SYNTHYBOY_MPC_PROFILE "" CACHE STRING "MPC shell: quality profile of this build on every device (empty = the device table)")
+if(NOT SYNTHYBOY_MPC_PROFILE MATCHES "^[a-z0-9=, ]*$")
+    message(FATAL_ERROR "SYNTHYBOY_MPC_PROFILE must be a profile text such as 'low,unison=7,warp=4x', not '${SYNTHYBOY_MPC_PROFILE}'")
+endif()
+target_compile_definitions(synthyboy_mpc PRIVATE "SYNTHYBOY_MPC_PROFILE=\"${SYNTHYBOY_MPC_PROFILE}\"")
+
 # macOS: use export list + dead_strip to remove unreferenced symbols
 # Mach-O symbols have a leading underscore
 if(APPLE)
@@ -494,5 +503,12 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(ui_gallery_extra_host PRIVATE cxx_std_17)
     target_compile_options(ui_gallery_extra_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME ui_gallery_extra_host COMMAND ui_gallery_extra_host --test)
+
+    # The quality profile per device (device_profile.h): the profile texts, the device table, the overrides
+    add_executable(device_profile_host tests/device_profile_host.cpp)
+    target_include_directories(device_profile_host PRIVATE "${CMAKE_SOURCE_DIR}/core/include")
+    target_compile_features(device_profile_host PRIVATE cxx_std_17)
+    target_compile_options(device_profile_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME device_profile_host COMMAND device_profile_host)
 endif()
 
