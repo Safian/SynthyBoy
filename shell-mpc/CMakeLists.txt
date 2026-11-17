@@ -521,5 +521,15 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(device_profile_host PRIVATE cxx_std_17)
     target_compile_options(device_profile_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME device_profile_host COMMAND device_profile_host)
+
+    # UI component library coverage: new parts host tests (NoteMask, FxBandBoard, Knob LED/dialMax, NumberField maxBox/text, LedList 2-digit chips)
+    add_executable(ui_cov_new_parts_host ui/tests/ui_cov_new_parts_host.cpp)
+    target_include_directories(ui_cov_new_parts_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_compile_features(ui_cov_new_parts_host PRIVATE cxx_std_17)
+    target_compile_options(ui_cov_new_parts_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME ui_cov_new_parts_host COMMAND ui_cov_new_parts_host)
 endif()
 
