@@ -687,56 +687,63 @@ The picture shows the BACK card, the three effects of the band (FX Filter select
 
 ![Master main](img/master-main.png)
 
-Two sides, chosen by the buttons **MAIN** and **TUNING & MPE** at the top.
+Two sides, chosen by the buttons **MAIN** and **TUNING & MPE** at the top. The picture is rendered for a 16-knob device: all ten Q groups of the page (four on the first row, two on the second...) get their numbers. On the Key 61 the idle groups show 1 - 4 and the Q-Link button steps to them.
 
 **MAIN side** (four blocks):
 
 | Block | Control | Parameter, range |
 |---|---|---|
-| OUTPUT | meters L / R (the engine's master peak, with hold line) | |
+| OUTPUT | meters L / R (the engine's master peak, with hold line, a dB scale in its own column and the colour ramp) | |
 | | VOLUME | Master Volume -60 .. +6 dB, default -12 |
 | | SPREAD | Stereo Spread 0 .. 100 percent, default 100 |
-| | STEREO | Stereo Routing 0 .. 100 percent, default 100 |
-| | VOICE OVERRIDE | Kill / Steal |
+| | STEREO | Stereo Routing 0 .. 100 percent, default 100 (a knob like the other two) |
+| | VOICE OVERRIDE | a LED list: Kill / Steal |
 | PITCH | TUNE | -100 .. +100 cents |
 | | TRANSPOSE | -48 .. +48 semitones |
-| | BEND UP, BEND DOWN | 0 .. 24 semitones, default 2; **LINK ON** makes the down range follow the up range |
-| VOICES | POLY | Polyphony 1 .. 32, default 16 |
-| | LEGATO, POLY LEG, PHASE LEG | switches (Master Legato, Master Poly Legato, Voice Phase Legato) |
-| | SAME NOTE | Steal, Stack, Ignore |
-| | STEAL | Newest, Oldest, Highest, Lowest, Velocity |
+| | BEND UP, BEND DOWN | 0 .. 24 semitones, default 2; the **LINK** LED switch makes the down range follow the up range |
+| VOICES | POLY | Polyphony 1 .. 32, default 16 (see the note below) |
+| | LEGATO, POLY LEG, PHASE LEG | LED switches (Master Legato, Master Poly Legato, Voice Phase Legato) |
 | | VEL TRACK | -100 .. +100 percent, default 100 |
-| | voice bar | sounding voices / polyphony |
+| | SAME NOTE | a LED list: Steal, Stack, Ignore |
+| | STEAL | a LED list: Newest, Oldest, Highest, Lowest, Velocity |
+| | PAD PRESS, PAD % | the plugin-wide pad-pressure switch and its amount (default off, 35 percent; see below). PAD % is dim while the switch is off |
+| | voice bar | sounding voices / polyphony, for example "4 / 16 VOICES" |
 | GLIDE | GLIDE | Portamento Time 0 .. 8000 ms |
-| | SLOPE | -8 .. +8; the glide curve is drawn below |
-| | ALWAYS | Portamento Always, Off/On |
-| | SCALED | Portamento Scaled By Interval, Off/On |
+| | SLOPE | -8 .. +8; the glide curve is drawn at the right |
+| | ALWAYS | Portamento Always, a LED switch |
+| | SCALED | Portamento Scaled By Interval, a LED switch |
 
-Q groups: OUTPUT (VOLUME, SPREAD, STEREO, VOICE OVERRIDE), PITCH, VOICES (POLY ... SAME NOTE) and the second VOICES row, GLIDE.
+**POLY and the device.** The page lets you set up to 32 voices, but the number you really get is capped by the device: **8 on the Key 61, 16 on the XL** (chapter 7.1). A preset saved with more simply plays with the device's number.
+
+Q groups (in reading order): OUTPUT (VOLUME, SPREAD, STEREO, VOICE OVERRIDE), PITCH (TUNE, TRANSPOSE, BEND UP, BEND DOWN), LINK, VOICES (POLY, LEGATO, POLY LEG, PHASE LEG), the second row of VOICES (VEL TRACK, SAME NOTE, STEAL), GLIDE.
 
 ![Master tuning and MPE](img/master-tuning.png)
 
 **TUNING & MPE side:**
 
-- **SCALE:** SCALE (Chromatic (off), Major, Natural Minor, Harmonic Minor, Melodic Minor, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Major Pentatonic, Minor Pentatonic, Blues, Whole Tone, Diminished (H-W), Diminished (W-H), Phrygian Dominant, Hungarian Minor, Double Harmonic, Hirajoshi), KEY (C ... B; the keyboard drawing below sets the key when you tap or drag a key), MODE (Conform, Mark only). The keyboard shows the notes of the scale.
-- **TUNING:** A4 HZ (400 .. 480 Hz, default 440), TUNING (12-TET, Pythagorean, Just intonation, User file), MTS-ESP switch, NOTE-ON switch (MTS-ESP note-on only).
-- **MPE:** MPE on/off, MPE BEND (1 .. 96 semitones, default 48), XYZ MACRO (Off, XYZ -> Macro 1, 2, 3, YZ -> Macro 1, 2), Y TO WHEEL, BEND TO X, Y BIPOLAR (switches).
+- **SCALE:** SCALE (Chromatic (off), Major, Natural Minor, Harmonic Minor, Melodic Minor, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Major Pentatonic, Minor Pentatonic, Blues, Whole Tone, Diminished (H-W), Diminished (W-H), Phrygian Dominant, Hungarian Minor, Double Harmonic, Hirajoshi), KEY (C ... B; the keyboard drawing below sets the key when you tap or drag a key), MODE (a LED list: Conform, Mark only). The dark keyboard shows the notes of the scale (white keys C to B, the notes of the scale brighter); the title over it reads "ALL 12 NOTES" while the scale is off.
+- **TUNING:** A4 HZ (400 .. 480 Hz, default 440), TUNING (a LED list: 12-TET, Pythagorean, Just intonation, User file), MTS-ESP switch, NOTE-ON switch (MTS-ESP note-on only).
+- **MPE:** MPE on/off, MPE BEND (1 .. 96 semitones, default 48), XYZ TO MACROS (a LED list: Off, XYZ, YZ; XYZ moves Macro 1, 2, 3 and YZ Macro 1, 2), Y TO WHEEL, BEND TO X, Y BIPOLAR (LED switches).
 
-**Pad pressure (MPC XL pads).** The XL pads send a pressure value for each held pad. A preset uses it through the modulation matrix: a route from the source **Poly Aftertouch** to a parameter, for example Filter 1 Cutoff (the preset "MPE Pressure Lead" does this). The plugin also has a plugin-wide pad-pressure switch for the Filter 1 cutoff; it is **off** by default. For any pad pressure to arrive, the pad's **Full Level must be off** (with Full Level on every hit has velocity 127 and sends no pressure). Only per-pad (polyphonic) pressure counts; channel aftertouch is ignored by that switch.
+**Pad pressure (MPC XL pads).** The XL pads send a pressure value for each held pad. There are two ways to use it.
+- **In a preset:** a modulation route from the source **Poly Aftertouch** to a parameter, for example Filter 1 Cutoff. Many factory presets carry this route (chapter 10.4).
+- **For every sound:** the **PAD PRESS** switch (VOICES block of this page, default off) lets the pressure open Filter 1, and **PAD %** (default 35) sets how far: a full pressure at 35 percent opens the cutoff by about one octave, at 100 percent by about three. A voice whose preset already has the route from Poly Aftertouch to Filter 1 Cutoff is not opened twice. The switch and the amount belong to the plugin, not to a preset: a preset change leaves them alone, and the project remembers them.
+
+For any pad pressure to arrive, the pad's **Full Level must be off** (with Full Level on every hit has velocity 127 and sends no pressure). Only per-pad (polyphonic) pressure counts; channel aftertouch is ignored by PAD PRESS.
 
 ### 5.13 Voice control
 
 ![Voice control](img/voice.png)
 
-A sequencer of per-voice offsets: eight steps and six rows.
+A sequencer of per-voice offsets: eight steps and six rows. Every new note takes the next step, so a chord or a run of notes gets slightly different pan, tuning, filter or envelope times for each voice. It is what makes a pad or a unison sound alive instead of identical copies.
 
-- **Header** (Q group STEP): STEP (1 .. 8: which step the Q-Link edits), ROW (PAN, DETUNE, CUTOFF, ENV, MOD 1, MOD 2), LENGTH (1 .. 8 steps), and the value of the selected step in that row.
-- **Grid:** the row buttons on the left choose the row. Touching a column sets that step to the height of your finger; dragging across columns draws through them (fast strokes fill the columns between). The middle line is zero. The step a sounding voice plays is lit (cyan, with a dot).
+- **Header** (Q group STEP): **STEP** (a stepper, 1 .. 8: which step the Q-Link edits), **ROW** (a LED list at the left of the grid: PAN, DETUNE, CUTOFF, ENV, MOD 1, MOD 2; it is Q 2), **LENGTH** (1 .. 8 steps) and the value of the selected step in that row (here PAN, MID).
+- **Grid:** eight columns. Touching a column sets that step to the height of your finger; dragging across columns draws through them (fast strokes fill the columns between). The middle line is zero (MID). The step a sounding voice plays is lit (cyan, with a dot). The picture shows steps 3 and 4 lit.
   Ranges: PAN -100 .. +100 percent, DETUNE -100 .. +100 cents, CUTOFF -100 .. +100 percent, ENV (envelope time) -100 .. +100 percent, MOD 1 and MOD 2 -100 .. +100 percent.
 - **Strip** under the grid: all six values of the selected step (STEP n: PAN, DETUNE, CUTOFF, ENV, MOD 1, MOD 2).
-- **RANDOM:** PAN 0 .. 100 percent, DETUNE 0 .. 100 cents, CUTOFF 0 .. 100 percent, ENV 0 .. 100 percent, and a switch **10x DETUNE**.
-- **SCALING:** ENV TIME and LFO TIME 25 .. 400 percent (default 100), LFO TIME MODE (Percent / Rate).
-- **TARGETS:** switches OSC A, OSC B, OSC C, SUB, NOISE (all on by default): which sound sources the voice control acts on.
+- **RANDOM:** PAN 0 .. 100 percent, DETUNE 0 .. 100 cents, CUTOFF 0 .. 100 percent, ENV 0 .. 100 percent, and a LED switch **10x DETUNE**.
+- **SCALING:** ENV TIME and LFO TIME 25 .. 400 percent (default 100), LFO TIME MODE (a LED list: Percent, Rate).
+- **TARGETS:** LED switches OSC A, OSC B, OSC C, SUB, NOISE (all on by default): which sound sources the voice control acts on.
 - Q groups: STEP, RANDOM, 10x DETUNE, SCALING, TARGETS, NOISE.
 
 **How the steps are used.** Every new note takes the next step, and the sequence goes round after LENGTH steps (note 1 plays step 1, note 2 step 2 ... note LENGTH+1 step 1 again). A chord takes one step per note. The count is not reset by a new chord or by stopping the transport; it starts again from step 1 only when the plugin's audio is started again (for example a project load).
