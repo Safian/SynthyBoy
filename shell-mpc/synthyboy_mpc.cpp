@@ -801,7 +801,8 @@ struct PluginInstance
             why = "no content store";
             return false;
         }
-        ensureUserWavetableRoots();
+        ensureUserWavetableRoots();   // takes contentMutex itself: before the lock below
+        std::lock_guard<std::mutex> g (contentMutex);   // the store's roots change under this mutex: the file is read (bounded, parsed, hashed) under it too
         int frames = 0;
         std::string reason;
         if (! synthyboy::prepareWavetableRef (*contentStore, ref, frames, reason))
@@ -809,7 +810,6 @@ struct PluginInstance
             why = synthyboy::wavetableRefusalText (reason);
             return false;
         }
-        std::lock_guard<std::mutex> g (contentMutex);
         synthyboy::StateContent next = content;
         synthyboy::attachWavetable (next, osc, ref, std::string(), frames);
         if (! synthyboy::validateContent (next))

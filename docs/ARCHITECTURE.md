@@ -309,9 +309,11 @@ A **ContentPack** is a directory/zip with `contentpack.json` + data files, descr
 ```
 { "id": "com.safian.synthyboy.factory-wavetables", "version": "1.0.0",
   "schemaVersion": 1, "license": "CC0-1.0", "attribution": "...",
-  "size": 12345678, "sha256": "…", "files": [{ "path": "...", "sha256": "..." }],
+  "size": 12345678, "sha256": "…", "files": [{ "path": "...", "sha256": "...", "category": "optional", "title": "optional" }],
   "kind": "wavetables" | "presets" | "samples", "requires_plugin": ">=0.2.0" }
 ```
+
+A wavetable pack (`kind` `wavetables`) is listed by the plugin's wavetable browser: the optional `category` and `title` of a `files` entry name the category the table is listed under and the name it is shown with (default: the first folder of `path`, else the pack's `name`; the file name without its extension; at most 63 bytes each). A manifest without them reads as before. The player's own tables need no pack: `.wav` files in `SynthyBoy/Wavetables/<Category>/` on the SD card, a USB drive or the plugin's `Content` folder are listed too (docs/MPC.md "The wavetable browser").
 
 Rules: the plugin never downloads anything; it **looks up** installed packs (location from the host via the CLAP preset-discovery/`state` context or a standard per-platform folder; Kick passes the path explicitly in the static case) and **tolerates absence** (built-in minimal wavetables, built-in "Init" preset, `missing_content` flag). Delete / restore is a file operation owned by the host. Packs are versioned independently from the plugin; the loader checks `requires_plugin` and `schemaVersion` and ignores incompatible packs with a log message rather than failing. A pack is verified by SHA-256 before use (the host verifies the signature; the plugin only checks hashes of what it loads). Factory content is built from `content/` sources in this repo by `tools/`, in CI, into release assets (GitHub assets are limited to 2 GiB each; packs are separate from binaries).
 

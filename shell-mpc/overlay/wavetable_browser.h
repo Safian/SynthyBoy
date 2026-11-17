@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "synthyboy/wavetable_catalogue.h"
+#include "synthyboy/wavetable_file.h"
 
 namespace synthyboy_mpc { namespace overlay {
 

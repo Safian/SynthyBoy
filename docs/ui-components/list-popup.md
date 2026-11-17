@@ -37,7 +37,7 @@ Setup: `place (box)`, `setPopup (parentRect)` (the rectangle the dimmed backdrop
 Not a Q member. A turn moves the current item and the list follows it.
 
 ## Options and variants
-Header with back arrow (content browser); dots (the envelopes that have targets); scrolling zone.
+Header with back arrow (content browser; the wavetable browser: "WAVETABLES" over the categories, the category name over its tables, `WavetableBrowser` in `shell-mpc/overlay/wavetable_browser.h`); dots (the envelopes that have targets); scrolling zone.
 
 ## Minimal example
 ```cpp
