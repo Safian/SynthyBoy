@@ -1201,6 +1201,46 @@
    "",
    "",
    ""
+  ],
+  "Stretched Glass Choir": [
+   "Bright",
+   "Stretch",
+   "Shimmer",
+   "Space",
+   "Slow",
+   "",
+   "",
+   ""
+  ],
+  "Mid Side Halo": [
+   "Brightness",
+   "Halo",
+   "Colour",
+   "Space",
+   "Weight",
+   "",
+   "",
+   ""
+  ],
+  "Parallel Dusk Pad": [
+   "Left Open",
+   "Comb Colour",
+   "Breath Rate",
+   "Space",
+   "Upper Layer",
+   "",
+   "",
+   ""
+  ],
+  "Brass Swell Ensemble": [
+   "Bright",
+   "Swell Time",
+   "Breath",
+   "Hall",
+   "Section",
+   "",
+   "",
+   ""
   ]
  }
 }

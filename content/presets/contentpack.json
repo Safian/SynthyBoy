@@ -7,7 +7,7 @@
   "attribution": "Safian Szabolcs",
   "kind": "presets",
   "requires_plugin": ">=0.1.0",
-  "description": "120 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
+  "description": "124 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
   "files": [
     {
       "path": "Bass/solid_sub.sbpreset",
@@ -608,6 +608,26 @@
       "path": "Lead/bell_fm_ripple_lead.sbpreset",
       "sha256": "b90a67aad164719cf53a565b5d496c899bb50592f797ff1a975444115bed89f6",
       "size": 50527
+    },
+    {
+      "path": "Pad/stretched_glass_choir.sbpreset",
+      "sha256": "e1925461c958d2501e5c5eef183f8210cc15fca82ec903cdead6e0045599089e",
+      "size": 50508
+    },
+    {
+      "path": "Pad/mid_side_halo.sbpreset",
+      "sha256": "2bb0dfde0a3b1c18a895468dbec6dcbf988c8bfbac437a4009e21e48ef6f6884",
+      "size": 50551
+    },
+    {
+      "path": "Pad/parallel_dusk_pad.sbpreset",
+      "sha256": "1f405dc4578c794415b808e468d9118eeb3805b3eea7a435c2b9567b2e395a51",
+      "size": 50588
+    },
+    {
+      "path": "Pad/brass_swell_ensemble.sbpreset",
+      "sha256": "36aba90ed4e7439aaec1084ccf1e2ef2ac9c0501082187fd58a679be8671057d",
+      "size": 50555
     }
   ]
 }
