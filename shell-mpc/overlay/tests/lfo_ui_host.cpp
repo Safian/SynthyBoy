@@ -206,6 +206,20 @@ void testCompactQGroup()
         q.tap (c.x + c.w - 14, c.y + c.h / 2);
     check (q.ui.random() && q.ui.selection() == 2, "the stepper goes on from LFO 10 to RND 1 and RND 2");
     check (q.inst.q[0] == paramIdx ("rlfo2.style") && q.inst.q[1] == paramIdx ("rlfo2.rate") && q.inst.q[2] == paramIdx ("rlfo2.sync") && q.inst.q[3] == paramIdx ("rlfo2.stereo"), "random compact: STYLE, RATE, SYNC, STEREO of rlfo2");
+    // a tap on the name opens the list of all 14 entries over the third (no page of the stack), a tap on a row chooses
+    {
+        Rig l;
+        l.inst.sel[2] = 1;
+        l.refresh();
+        const ui::Rect s = l.ui.compact().instance.rect();
+        l.tap (s.x + s.w / 2, s.y + s.h / 2);
+        const ui::ListPopup& lp = l.ui.list();
+        check (l.stack.isMain() && lp.state.count == 14 && lp.rowRect (0).h >= 56 && std::string (lp.state.items[0]) == "LFO 1" && std::string (lp.state.items[13]) == "RND 4" && lp.scrolls(),
+               "LFO selector: a tap on the name opens the list of the 14 entries (rows >= 56 px, it scrolls), over the third");
+        const ui::Rect row = lp.rowRect (3);
+        l.tap (row.x + row.w / 2, row.y + row.h / 2);
+        check (l.inst.sel[2] == 4 && l.stack.isMain(), "a tap on the fourth row: LFO 4");
+    }
 }
 
 void testWrites()

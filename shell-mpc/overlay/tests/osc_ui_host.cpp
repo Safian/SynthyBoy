@@ -160,12 +160,28 @@ void testBasicGroupsAndSelection()
     r.inst.sel = 4;
     r.refresh();
     check (r.inst.q[0] == Inst::idx ("osc3.type") && r.inst.q[2] == Inst::idx ("osc3.pan"), "C is osc3");
-    // the compact view's instance selector writes the Play Osc selector
+    // the compact view's source selector (the one selector of the three thirds: a stepper with a list) writes the Play Osc selector
     r.inst.sel = 2;
     r.refresh();
     const ui::Rect c = r.ui.compact().instances.rect();
-    r.tap (c.x + c.w * 4 / 5 + 4, c.y + c.h / 2);
-    check (r.inst.sel == 5, "tap on the fifth cell of the selector: Play Osc = Noise");
+    check (c.h >= 56 && std::string (r.ui.compact().instances.state.text) == "Osc A" && r.ui.compact().instances.listable, "the selector shows the current source in the owner's wording (Osc A) and has a list");
+    r.tap (c.x + c.w * 7 / 8, c.y + c.h / 2);   // the right arrow: the next source
+    check (r.inst.sel == 3, "tap on the right arrow of the selector: Play Osc = B (the next source)");
+    r.refresh();
+    r.tap (c.x + c.w / 2, c.y + c.h / 2);   // the name: the list of the five sources
+    {
+        const ui::ListPopup& l = r.ui.list();
+        const char* const want[5] = { "Sub", "Osc A", "Osc B", "Osc C", "Noise" };
+        bool names = l.state.count == 5 && l.state.current == 2;
+        for (int i = 0; i < 5 && names; ++i)
+            names = std::string (l.state.items[i]) == want[i] && l.rowRect (i).h >= 56;
+        check (r.stack.isMain() && names, "a tap on the name opens the list: Sub, Osc A, Osc B, Osc C, Noise (rows >= 56 px), B is the current one, no page of the stack opened");
+    }
+    {
+        const ui::Rect row = r.ui.list().rowRect (4);
+        r.tap (row.x + row.w / 2, row.y + row.h / 2);
+    }
+    check (r.inst.sel == 5, "tap on the fifth row of the list: Play Osc = Noise");
     r.refresh();
     check (r.ui.selection() == 5, "the UI follows the selector");
 }

@@ -1,8 +1,8 @@
 // SynthyBoy - MPC UI component library: the two views of an oscillator INSTANCE (owner approved; drawn for 1280 x 800, other sizes scale in proportion). The synth has five instances: Sub, A, B,
 // C and Noise; Sub and Noise have a fixed panel, A, B and C have a type (OscKind: wavetable, multisample, granular). Both views are layout presets built only from library components, and
 // both contain the Q group "Basic" (BasicControls: the same members and, with assignIds, the same ids).
-//  - OscillatorCompact: the third of the width on the main page (about 420 x 700): the instance selector, the header (on / off, name, route button), the display area with the "full screen"
-//    button in its top right corner, and the Basic group in one frame at the bottom. No tuning row and no type bar.
+//  - OscillatorCompact: the third of the width on the main page (about 420 x 700): the header row (on / off, the source selector Sub / Osc A / Osc B / Osc C / Noise as a stepper with a list, the "full screen" button, the route button), the display
+//    area (the same rectangle as the envelope's and the LFO's, play_rows.h), and the Basic group in one frame at the bottom: the type cells and ONE row (table stepper / OCT, PAN, LEVEL). No tuning row and no type bar.
 //  - OscillatorFullScreen: the top band (close, on / off, Basic, route at the right end), below left the display area with the type bar under it, below right the tuning row (vertical),
 //    the bottom band = the knob panel of the type; the full screen has no instance selector. `setInstance` swaps only the type bar, the tuning row, the bottom band and the groups.
 // Copyright (C) 2026 Safian Szabolcs
@@ -10,6 +10,7 @@
 #pragma once
 
 #include "panel.h"
+#include "play_rows.h"
 
 namespace synthyboy_mpc { namespace ui {
 
@@ -17,35 +18,38 @@ namespace synthyboy_mpc { namespace ui {
 class OscillatorCompact : public Composite
 {
 public:
-    PictogramSelector instances;
+    Stepper instances;   // the source: Sub, Osc A, Osc B, Osc C, Noise: the ONE selector of the three thirds (a Stepper: the arrows step, a tap on the name opens the list of the five)
     ToggleIcon power;
-    char name[9] = {};
     RouteButton route { "M" };
     MenuButton full { "", MenuButton::Icon::Expand };   // the "full screen" button: four corner brackets
     BasicControls basic;
 
-    /** Outputs: the new instance index (an Index change of `instances`), "full screen requested" (the Request of `full`), the changes of the Basic group's parts, the route button's Request. */
+    /** Outputs: the new instance index (an Index change of `instances`; a Request when its name is tapped: the owner opens the list of `instanceName (i)`), "full screen requested" (the Request of `full`), the changes of the Basic group's parts, the route button's Request. */
     OscillatorCompact()
     {
-        for (int i = 0; i < 5; ++i)
-            instances.setItem (i, -1, instanceName (static_cast<OscInstance> (i)));   // text cells
+        instances.state.count = 5;
+        instances.state.wrap = true;
+        instances.listable = true;
+        instances.minWidth = 120;   // the room between the power button and the buttons at the right of the header row: about 200 px of a third
         power.state.icon = ToggleIcon::Icon::Power;
         basic.setStacked (true);
         addKid (instances); addKid (power); addKid (route); addKid (basic); addKid (full);
         setInstance (OscInstance::A, OscKind::Wavetable);
     }
+    /** The names of the five entries of the selector and of its list (the wording of the owner). */
+    static const char* sourceName (OscInstance i) noexcept { static const char* const n[5] = { "Sub", "Osc A", "Osc B", "Osc C", "Noise" }; return n[static_cast<int> (i)]; }
+    static const char* sourceName (int i) noexcept { return sourceName (static_cast<OscInstance> (std::clamp (i, 0, 4))); }
     void setInstance (OscInstance i, OscKind k)
     {
         inst_ = i;
         instances.state.index = static_cast<int> (i);
-        setText (name, sizeof name, instanceName (i));
+        instances.setItem (sourceName (i));
         basic.configure (i, k);
         basic.group.setActive (true);
         layout();
     }
     Rect displayRect() const noexcept { return display_; }
     QGroup& group() noexcept { return basic.group; }
-    static constexpr int kKnobH = 124;
     Size minSize() const override { return { 420, 700 }; }
     void draw (gpu::SceneBuilder& sb) const override
     {
@@ -54,28 +58,28 @@ public:
     }
 
 protected:
+    // top to bottom (play_rows.h): the header row (power, the source selector, the full screen button, the route button: 56 px, the same row as the selector of the other two thirds), the display (the rectangle of the three thirds),
+    // and from the controls line the Basic group in one frame: the type cells, then ONE row (the table stepper / OCT / the noise's knobs, PAN, LEVEL)
     void layout() override
     {
-        const int m = 6, W = rect_.w - 2 * m;
-        const int basicH = basic.minSize().h - basic.pan.minSize().h + kKnobH;   // the two knobs get the room a third of the width allows (kKnobH), with their value under them
-        instances.place ({ rect_.x + m, rect_.y + m, W, 56 });
-        const int hy = rect_.y + m + 56 + 8;
-        power.place ({ rect_.x + m, hy, 64, 64 });
+        const int m = playrows::kMargin, W = rect_.w - 2 * m, rowH = playrows::kSelectorH;
         const bool sub = inst_ == OscInstance::Sub;   // the sub oscillator's routing is the ROUTING block of its page: no route button in its header (as on the page)
-        route.place (sub ? Rect {} : Rect { rect_.right() - m - 64, hy, 64, 64 });
-        full.place ({ rect_.right() - m - 64 - (sub ? 0 : 8 + 64), hy + 4, 64, 56 });   // the full screen button stands in the header row, not over the curve of the display
-        nameBox_ = { rect_.x + m + 64 + 12, hy, std::max (0, W - (sub ? 2 : 3) * 64 - 32), 64 };
-        const int dy = hy + 64 + 8;
-        const int by = rect_.bottom() - m - basicH;
-        display_ = { rect_.x + m, dy, W, std::max (0, by - kQLane - 4 - dy) };   // kQLane: the index chip of the first member of the Q frame sits on its top edge
-        basic.place ({ rect_.x + m, by, W, basicH });
+        const int btnW = 64, gap = 8;
+        const int hy = rect_.y + m;
+        power.place ({ rect_.x + m, hy, rowH, rowH });
+        route.place (sub ? Rect {} : Rect { rect_.right() - m - btnW, hy, btnW, rowH });
+        full.place ({ rect_.right() - m - btnW - (sub ? 0 : gap + btnW), hy, btnW, rowH });   // the full screen button stands in the header row, not over the curve of the display
+        const int sx = rect_.x + m + rowH + gap, sr = full.rect().x - gap;
+        instances.place ({ sx, hy, std::max (0, sr - sx), rowH });
+        display_ = playrows::displayRect (rect_);
+        const int by = playrows::controlsLine (rect_);
+        basic.place ({ rect_.x + m, by, W, std::max (0, rect_.bottom() - m - by) });
     }
     void drawUnder (Pen& p) const override   // the display area under the buttons that sit on it
     {
         p.block (display_);
     }
-    void drawExtra (Pen& p) const override { p.textLeft (nameBox_, name, theme::L().fTitle, p.c (theme::L().text, 255), theme::L().fMin); }
-    Rect display_, nameBox_;
+    Rect display_;
     OscInstance inst_ = OscInstance::A;
 };
 

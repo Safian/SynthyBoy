@@ -6,6 +6,9 @@
 #include <typeinfo>
 
 #include "ui_test.h"
+#include "../env_screen.h"
+#include "../lfo_screen.h"
+#include "../play_rows.h"
 
 using namespace uit;
 
@@ -278,7 +281,19 @@ int main()
         check (inside && apart, nm + ": every leaf inside, at least its minimum size, no overlap");
         check (c.route.rect().empty() == subHeader, nm + ": the route button is in the header of every instance but the sub oscillator");
         check (! c.displayRect().empty() && c.rect().contains (c.displayRect()) && ! c.displayRect().overlaps (c.full.rect()) && c.full.rect().bottom() <= c.displayRect().y && (subHeader || c.full.rect().right() <= c.route.rect().x) && c.full.rect().right() <= c.rect().right() && ! c.full.rect().overlaps (c.power.rect()), nm + ": the display area is reserved, the full screen button stands in the header row (it does not cover the curve)");
-        check (c.displayRect().bottom() <= c.basic.rect().y && c.instances.rect().bottom() <= c.power.rect().y && ! c.displayRect().overlaps (c.basic.rect()), nm + ": instance selector, header, display, Basic: top to bottom");
+        {
+            const Rect hdr = c.instances.rect();
+            const bool row = c.power.rect().y == hdr.y && c.power.rect().h == hdr.h && c.full.rect().y == hdr.y && c.power.rect().right() <= hdr.x && hdr.right() <= c.full.rect().x && (subHeader || c.full.rect().right() <= c.route.rect().x);
+            check (hdr.h >= 56 && hdr.h == playrows::kSelectorH && row && c.power.rect().w >= 56 && c.full.rect().h >= 56 && (subHeader || c.route.rect().h >= 56), nm + ": the top row is the header: power, the source selector, full screen, route, left to right in ONE row of 56 px (no row of tabs)");
+            check (c.instances.rect().bottom() <= c.displayRect().y && c.displayRect().bottom() <= c.basic.rect().y && ! c.displayRect().overlaps (c.basic.rect()) && c.basic.rect().y == playrows::controlsLine (c.rect()), nm + ": header row, display, Basic: top to bottom, Basic at the common controls line");
+            check (c.displayRect().x == playrows::displayRect (c.rect()).x && c.displayRect().y == playrows::displayRect (c.rect()).y && c.displayRect().h == playrows::displayRect (c.rect()).h, nm + ": the display is the rectangle shared by the three thirds");
+            check (c.instances.listable && c.instances.state.count == 5 && c.instances.state.index == static_cast<int> (var.inst) && std::string (c.instances.state.text) == OscillatorCompact::sourceName (var.inst) && c.instances.rect().w >= 120, nm + ": the source selector shows the current source (" + c.instances.state.text + ") and opens a list of five");
+            Rect cells[8]; const int nt = c.instances.touchTargets (cells, 8);
+            bool big = nt >= 2;
+            for (int t = 0; t < nt; ++t)
+                big = big && cells[t].h >= 56 && cells[t].w >= 56;
+            check (big, nm + ": the touch targets of the source selector are at least 56 px");
+        }
         Scene sc (420, 700, kBackgroundRgba);
         c.draw (sc.builder());
         {
@@ -294,8 +309,10 @@ int main()
         writePng (outDir() + "/compact_" + std::to_string (v) + ".png", render (sc), 1);
         if (v == 1)
         {
-            Change ch = tap (c, cx (c.instances), cy (c.instances), 0.0);   // a tap on the middle cell: instance B (index 2)
-            check (ch.kind == ChangeKind::Index && ch.id == 50 && ch.index == 2, nm + ": a tap on the instance selector: { id 50, the new instance index }");
+            Change ch = tap (c, c.instances.rect().right() - 14, cy (c.instances), 0.0);   // a tap on the right arrow: the next source, B (index 2)
+            check (ch.kind == ChangeKind::Index && ch.id == 50 && ch.index == 2, nm + ": a tap on the right arrow of the source selector: { id 50, the new instance index }");
+            ch = tap (c, cx (c.instances), cy (c.instances), 50.0);   // a tap on the name: the list is asked for
+            check (ch.kind == ChangeKind::Request && ch.id == 50, nm + ": a tap on the name of the source selector: Request { id 50 } (the owner opens the list)");
             ch = tap (c, cx (c.full), cy (c.full), 100.0);
             check (ch.kind == ChangeKind::Request && ch.id == 53, nm + ": full screen requested: id 53");
             ch = tap (c, cx (c.route), cy (c.route), 200.0);
@@ -412,14 +429,25 @@ int main()
         wt.place (area);
         wt.setInstance (OscInstance::A, OscKind::Wavetable);
         check (isLed (&wt.tune.track, "TRACK"), "oscillator A, B, C: TRACK is a LED toggle");
-        // the five source tabs of the Play page: every cell the same width
+        // the source selector of the Play page (replaces the five tabs SUB A B C NOISE): the closed selector says each source in the owner's wording, the list entries are those five names
         OscillatorCompact c;
         c.place ({ 0, 0, 420, 700 });
-        int w0 = c.instances.cell (0).w;
-        bool same = true;
-        for (int i = 1; i < 5; ++i)
-            same = same && std::abs (c.instances.cell (i).w - w0) <= 1;
-        check (same, "the five source tabs SUB A B C NOISE have the same width");
+        const char* const want[5] = { "Sub", "Osc A", "Osc B", "Osc C", "Noise" };
+        bool names = true;
+        for (int i = 0; i < 5; ++i)
+        {
+            c.setInstance (static_cast<OscInstance> (i), OscKind::Wavetable);
+            names = names && std::string (c.instances.state.text) == want[i] && std::string (OscillatorCompact::sourceName (i)) == want[i] && c.instances.state.index == i;
+        }
+        check (names, "the source selector: Sub, Osc A, Osc B, Osc C, Noise, the closed selector shows the current one");
+        ListPopup lp;
+        lp.place ({ 6, 62, 408, 5 * ListPopup::kRowH + 2 * ListPopup::kPad });
+        static const char* const items[5] = { "Sub", "Osc A", "Osc B", "Osc C", "Noise" };
+        lp.state.items = items; lp.state.count = 5; lp.state.current = 1;
+        bool rows = true;
+        for (int i = 0; i < 5; ++i)
+            rows = rows && lp.rowRect (i).h >= 56;
+        check (rows && ! lp.scrolls(), "the list of the source selector: five rows of at least 56 px, no scrolling");
     }
     // ---- what is drawn is what is touched, for the compact view of every instance and every detail page: a tap on the middle of each enabled leaf reaches it
     {
@@ -469,6 +497,30 @@ int main()
             mp.place ({ 0, 110, 1280, 628 });
             everyLeaf (mp, "modulations page");
         }
+    }
+    // ---- the three displays of the Play pages (oscillator wave, envelope graph, LFO curve): the same top and the same height for each of the five oscillator sources, the controls below start on one line, the top rows are 56 px
+    {
+        const OscInstance insts[5] = { OscInstance::Sub, OscInstance::A, OscInstance::B, OscInstance::C, OscInstance::Noise };
+        for (OscInstance i : insts)
+            for (int page = 1; page <= 3; ++page)   // Play 1 / 2 / 3: the same thirds, the Q frame on the oscillator, the envelope or the LFO third
+            {
+                OscillatorCompact oc;
+                EnvCompact ec;
+                LfoCompact lc;
+                oc.place ({ 8, 114, 420, 620 });
+                ec.place ({ 440, 114, 400, 620 });
+                lc.place ({ 858, 114, 408, 620 });
+                oc.setInstance (i, OscKind::Wavetable);
+                oc.basic.group.setActive (page == 1);
+                ec.group.setActive (page == 2);
+                lc.group.setActive (page == 3);
+                const std::string nm = std::string ("Play ") + std::to_string (page) + ", source " + OscillatorCompact::sourceName (i);
+                const Rect w = oc.displayRect(), e = ec.graphRect(), l = lc.displayRect();
+                check (w.y == e.y && e.y == l.y && w.h == e.h && e.h == l.h && w.h > 0, nm + ": the wave display, the envelope graph and the LFO curve have the same top y (" + std::to_string (w.y) + ") and the same height (" + std::to_string (w.h) + ")");
+                check (w.bottom() == e.bottom() && e.bottom() == l.bottom(), nm + ": the three displays end on the same line");
+                check (oc.instances.rect().y == ec.instances.rect().y && ec.instances.rect().y == lc.instance.rect().y && oc.instances.rect().h == ec.instances.rect().h && ec.instances.rect().h == lc.instance.rect().h && oc.instances.rect().h == 56, nm + ": the selector of the three thirds is in the same top row, 56 px high");
+                check (oc.basic.rect().y == ec.attack.rect().y && ec.attack.rect().y == lc.shape.rect().y, nm + ": the controls under the displays start on one line (Basic, ATTACK, SHAPE)");
+            }
     }
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;
