@@ -37,6 +37,7 @@
 #include "ui_bind.h"
 #include "ui_stack.h"
 #include "synthyboy/filter_response.h"
+#include "synthyboy/filters/filter_types.h"
 #include "synthyboy/fx_rack.h"
 #include "synthyboy/fx_types.h"
 #include "synthyboy/params.h"
@@ -127,6 +128,19 @@ public:
         const bool openNow = stack.depth() >= 2 && stack.top() == kPageList;
         if (! openNow && listOpen_)
             listOpen_ = false;
+        if (openNow && listKind_ == ListKind::ParamChoice && listParam_ >= 0 && ! cardItems_.empty() && selectedSlot_ < static_cast<int> (cardItems_.size()))
+        {
+            const Item item = cardItems_[static_cast<size_t> (selectedSlot_)];
+            const synthyboy::ParamInfo* pi = screen_.slotEditor.infoOf (listParam_);
+            if (pi != nullptr && std::strcmp (pi->key, "fxfilter.style") == 0)
+            {
+                const int kind = kindOfItem (item);
+                const int model = static_cast<int> (std::lround (plainOfKey (item, kind, inst, "fxfilter.model", 0.0f)));
+                const int count = synthyboy::filters::filterModelStyleCount (model);
+                list_.state.count = count;
+                list_.state.current = std::clamp (static_cast<int> (std::lround (plainOfControl (item, inst, listParam_))), 0, std::max (0, count - 1));
+            }
+        }
         const uint32_t sig = structureSignature();
         if (sig != chainSig_ || selectionChanged_)
         {
@@ -453,20 +467,57 @@ private:
             if (ed.isChoice (p))
             {
                 stepper.setCaption (name);
-                stepper.state.count = pi->numChoices;
-                const int curIdx = std::clamp (static_cast<int> (std::lround (plainVal)), 0, std::max (0, pi->numChoices - 1));
+                const bool isFilterStyle = (std::strcmp (pi->key, "fxfilter.style") == 0);
+                int choiceCount = pi->numChoices;
+                const char* const* customChoices = nullptr;
+                if (isFilterStyle)
+                {
+                    const int model = static_cast<int> (std::lround (plainOfKey (item, kind, inst, "fxfilter.model", 0.0f)));
+                    choiceCount = synthyboy::filters::filterModelStyleCount (model);
+                    customChoices = synthyboy::filters::filterModelStyleNames (model);
+                    if (choiceCount > 0 && static_cast<int> (std::lround (plainVal)) >= choiceCount)
+                    {
+                        const int clamped = choiceCount - 1;
+                        const int idx = paramIndexOf (item, p);
+                        if (idx >= 0)
+                            inst.writeParam (idx, static_cast<float> (synthyboy::toNormalised (*pi, static_cast<float> (clamped))));
+                    }
+                }
+                stepper.state.count = choiceCount;
+                const int curIdx = std::clamp (static_cast<int> (std::lround (plainVal)), 0, std::max (0, choiceCount - 1));
                 stepper.state.index = curIdx;
-                if (pi->choices != nullptr && curIdx >= 0 && curIdx < pi->numChoices)
-                    stepper.setItem (ui::shownChoice (pi->key, curIdx, pi->choices[curIdx]));
+                if (isFilterStyle)
+                {
+                    if (customChoices != nullptr && curIdx >= 0 && curIdx < choiceCount)
+                        stepper.setItem (customChoices[curIdx]);
+                    else
+                        stepper.setItem ("---");
+                    // One-style rule: a model with one style shows the style control dim / as a plain label
+                    if (choiceCount <= 1)
+                    {
+                        stepper.state.dim = true;
+                        stepper.listable = false;
+                    }
+                    else
+                    {
+                        stepper.state.dim = false;
+                        stepper.listable = true;
+                    }
+                }
                 else
-                    stepper.setItem ("---");
+                {
+                    if (pi->choices != nullptr && curIdx >= 0 && curIdx < pi->numChoices)
+                        stepper.setItem (ui::shownChoice (pi->key, curIdx, pi->choices[curIdx]));
+                    else
+                        stepper.setItem ("---");
+                }
                 // the same value as a LED list (3 .. 8 values, all visible) and as a LED toggle (Off / On): the editor shows the kind the cell has
                 list.setTitle (name);
                 {
                     const char* shown[ui::LedList::kMaxOptions];
-                    const int cnt = std::min (static_cast<int> (pi->numChoices), static_cast<int> (ui::LedList::kMaxOptions));
+                    const int cnt = std::min (static_cast<int> (choiceCount), static_cast<int> (ui::LedList::kMaxOptions));
                     for (int c = 0; c < cnt; ++c)
-                        shown[c] = ui::shownChoice (pi->key, c, pi->choices[c]);
+                        shown[c] = isFilterStyle ? (customChoices != nullptr && c < choiceCount ? customChoices[c] : "") : ui::shownChoice (pi->key, c, pi->choices[c]);
                     list.setOptions (shown, cnt);
                 }
                 list.state.index = std::min (curIdx, ui::LedList::kMaxOptions - 1);
@@ -827,15 +878,34 @@ private:
         listKind_ = ListKind::ParamChoice;
         listParam_ = p;
         listNames_.clear();
-        for (int i = 0; i < pi->numChoices; ++i)
-            listNames_.push_back (ui::shownChoice (pi->key, i, pi->choices[i]));
-        list_.state.items = listNames_.data();
-        list_.state.count = pi->numChoices;
-        const int idx = paramIndexOf (item, p);
-        int curChoice = 0;
-        if (idx >= 0)
+        if (std::strcmp (pi->key, "fxfilter.style") == 0)
         {
-            curChoice = std::clamp (static_cast<int> (std::lround (plainOfControl (item, inst, p))), 0, pi->numChoices - 1);
+            const int kind = kindOfItem (item);
+            const int model = static_cast<int> (std::lround (plainOfKey (item, kind, inst, "fxfilter.model", 0.0f)));
+            const int count = synthyboy::filters::filterModelStyleCount (model);
+            if (count <= 1)
+                return; // One-style rule: a model with one style has no list popup
+            const char* const* styleNames = synthyboy::filters::filterModelStyleNames (model);
+            for (int i = 0; i < count; ++i)
+                listNames_.push_back (styleNames != nullptr && styleNames[i] != nullptr ? styleNames[i] : "");
+            list_.state.items = listNames_.data();
+            list_.state.count = count;
+            const int curChoice = std::clamp (static_cast<int> (std::lround (plainOfControl (item, inst, p))), 0, std::max (0, count - 1));
+            list_.state.current = curChoice;
+        }
+        else
+        {
+            for (int i = 0; i < pi->numChoices; ++i)
+                listNames_.push_back (ui::shownChoice (pi->key, i, pi->choices[i]));
+            list_.state.items = listNames_.data();
+            list_.state.count = pi->numChoices;
+            const int idx = paramIndexOf (item, p);
+            int curChoice = 0;
+            if (idx >= 0)
+            {
+                curChoice = std::clamp (static_cast<int> (std::lround (plainOfControl (item, inst, p))), 0, pi->numChoices - 1);
+            }
+            list_.state.current = curChoice;
         }
         list_.state.current = curChoice;
         const int popW = std::clamp (screen_.slotEditor.steppers[p].rect().w, 240, 360);
@@ -999,7 +1069,26 @@ private:
                     const int idx = paramIndexOf (item, listParam_);
                     const synthyboy::ParamInfo* pi = screen_.slotEditor.infoOf (listParam_);
                     if (idx >= 0 && pi != nullptr)
+                    {
                         inst.writeParam (idx, static_cast<float> (synthyboy::toNormalised (*pi, static_cast<float> (c.index))));
+                        if (std::strcmp (pi->key, "fxfilter.model") == 0)
+                        {
+                            const int newModel = c.index;
+                            const int count = synthyboy::filters::filterModelStyleCount (newModel);
+                            const int styleP = screen_.slotEditor.controlOfKey ("fxfilter.style");
+                            const int styleIdx = styleP >= 0 ? paramIndexOf (item, styleP) : -1;
+                            if (styleIdx >= 0 && count > 0)
+                            {
+                                const float curStyle = plainOfControl (item, inst, styleP);
+                                if (static_cast<int> (std::lround (curStyle)) >= count)
+                                {
+                                    const synthyboy::ParamInfo* spi = screen_.slotEditor.infoOf (styleP);
+                                    if (spi != nullptr)
+                                        inst.writeParam (styleIdx, static_cast<float> (synthyboy::toNormalised (*spi, static_cast<float> (count - 1))));
+                                }
+                            }
+                        }
+                    }
                 }
                 listParam_ = -1;
             }
@@ -1158,6 +1247,23 @@ private:
                 {
                     const float plain = screen_.slotEditor.kindOf (p) == ui::FxSlotEditor::Kind::Number ? static_cast<float> (c.value) : static_cast<float> (c.index);
                     inst.writeParam (idx, static_cast<float> (synthyboy::toNormalised (*pi, plain)));
+                    if (std::strcmp (pi->key, "fxfilter.model") == 0)
+                    {
+                        const int newModel = static_cast<int> (std::lround (plain));
+                        const int count = synthyboy::filters::filterModelStyleCount (newModel);
+                        const int styleP = screen_.slotEditor.controlOfKey ("fxfilter.style");
+                        const int styleIdx = styleP >= 0 ? paramIndexOf (item, styleP) : -1;
+                        if (styleIdx >= 0 && count > 0)
+                        {
+                            const float curStyle = plainOfControl (item, inst, styleP);
+                            if (static_cast<int> (std::lround (curStyle)) >= count)
+                            {
+                                const synthyboy::ParamInfo* spi = screen_.slotEditor.infoOf (styleP);
+                                if (spi != nullptr)
+                                    inst.writeParam (styleIdx, static_cast<float> (synthyboy::toNormalised (*spi, static_cast<float> (count - 1))));
+                            }
+                        }
+                    }
                 }
             }
             else if (c.kind == K::Request)
