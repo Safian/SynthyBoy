@@ -21,10 +21,10 @@ constexpr int kMinSampleRate = 1000, kMaxSampleRate = 384000;   // what the shar
 uint16_t u16 (const uint8_t* p) noexcept { return static_cast<uint16_t> (p[0] | (p[1] << 8)); }
 uint32_t u32 (const uint8_t* p) noexcept { return static_cast<uint32_t> (p[0]) | (static_cast<uint32_t> (p[1]) << 8) | (static_cast<uint32_t> (p[2]) << 16) | (static_cast<uint32_t> (p[3]) << 24); }
 
-std::string megabytes (size_t bytes)
+std::string megabytes (double bytes)
 {
     char b[48];
-    std::snprintf (b, sizeof b, "%.1f MB", static_cast<double> (bytes) / (1024.0 * 1024.0));
+    std::snprintf (b, sizeof b, "%.1f MB", bytes / (1024.0 * 1024.0));
     return b;
 }
 
@@ -103,7 +103,7 @@ std::string wavetableSizeRefusal (uint64_t bytes)
     if (bytes == 0)
         return "empty file";
     if (bytes > kMaxWavetableFileBytes)
-        return "file too large (" + megabytes (static_cast<size_t> (std::min<uint64_t> (bytes, 0x7FFFFFFFFFFFull))) + ", the limit is " + megabytes (kMaxWavetableFileBytes) + ")";
+        return "file too large (" + megabytes (static_cast<double> (bytes)) + ", the limit is " + megabytes (static_cast<double> (kMaxWavetableFileBytes)) + ")";
     return {};
 }
 
