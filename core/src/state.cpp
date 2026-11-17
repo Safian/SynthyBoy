@@ -107,6 +107,9 @@ void migrateV3ToV4 (Parsed& p) noexcept
     fxPoolMigrateFromV3 (p.value, p.has, p.derived);
 }
 
+/** Version 4 -> 5: only content.lfo_shapes[].grid_x / grid_y are new (optional); nothing to convert, an older document has no grid and the editor takes its default. */
+void migrateV4ToV5 (Parsed&) noexcept {}
+
 /** A migration upgrades `Parsed` from version `from` to `from + 1` (rename keys, rescale values, ...). Later versions
     append entries here. */
 using MigrateFn = void (*) (Parsed&) noexcept;
@@ -115,7 +118,7 @@ struct Migration
     int from;
     MigrateFn apply;
 };
-constexpr std::array<Migration, 3> kMigrations { { { 1, migrateV1ToV2 }, { 2, migrateV2ToV3 }, { 3, migrateV3ToV4 } } };
+constexpr std::array<Migration, 4> kMigrations { { { 1, migrateV1ToV2 }, { 2, migrateV2ToV3 }, { 3, migrateV3ToV4 }, { 4, migrateV4ToV5 } } };
 
 void migrate (Parsed& parsed) noexcept
 {
@@ -750,6 +753,16 @@ private:
                         if (std::strcmp (k, "name") == 0) return readText (l.name, kMaxContentStringBytes, vd);
                         if (std::strcmp (k, "smooth") == 0) return readBool (l.smooth, vd);
                         if (std::strcmp (k, "loop_point") == 0) return readInt (l.loopPoint, vd);
+                        if (std::strcmp (k, "grid_x") == 0 || std::strcmp (k, "grid_y") == 0)
+                        {
+                            int g = 0;
+                            if (! readInt (g, vd))
+                                return false;
+                            if (g < kMinLfoGrid || g > kMaxLfoGrid)
+                                g = 0;   // not a grid the editor has: as if it was not stored (the section stays valid)
+                            (k[5] == 'x' ? l.gridX : l.gridY) = g;
+                            return true;
+                        }
                         if (std::strcmp (k, "points") == 0) return readPoints (l.points, static_cast<size_t> (kMaxLfoShapePoints), vd, true);
                         h = false;
                         return true;
@@ -1208,6 +1221,18 @@ void putContent (std::string& s, const StateContent& c)
                 s += ',';
                 putKey (s, "loop_point");
                 putJsonInt (s, l.loopPoint);
+            }
+            if (l.gridX >= kMinLfoGrid && l.gridX <= kMaxLfoGrid)
+            {
+                s += ',';
+                putKey (s, "grid_x");
+                putJsonInt (s, l.gridX);
+            }
+            if (l.gridY >= kMinLfoGrid && l.gridY <= kMaxLfoGrid)
+            {
+                s += ',';
+                putKey (s, "grid_y");
+                putJsonInt (s, l.gridY);
             }
             s += ',';
             putKey (s, "points");

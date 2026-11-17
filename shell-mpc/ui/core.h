@@ -364,7 +364,13 @@ public:
     {
         if (st == TabState::Absent)
             return;
-        const Rect t = tabRect (r, name);
+        modTabBox (tabRect (r, name), st, srcColour, name);
+    }
+    /** The same chip in an exact rectangle (a knob puts it in its label row, right of the name: it never covers the dial). */
+    void modTabBox (const Rect& t, TabState st, uint32_t srcColour, const char* name = "")
+    {
+        if (st == TabState::Absent)
+            return;
         if (t.w < 12 || t.h < 10)
             return;
         const theme::Look& T = theme::L();

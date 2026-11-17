@@ -307,7 +307,14 @@ protected:
         if (pageTitle_[0] != '\0')
             p.textCentered (close.rect(), pageTitle_, T.fTitle, p.c (T.text, 255), T.fMin);
         if (bar_shown_)
-            p.textLeft ({ barBlock_.x + KnobPanel::kBlockPad + 4, barBlock_.y + 3, std::max (0, barBlock_.w - 16), 16 }, barTitle (), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+        {
+            // the title row of a low block is the row of the Q chips of its members: the title goes to the right end, the chips keep the left (a title under a chip lost its first letter)
+            const Rect tr { barBlock_.x + KnobPanel::kBlockPad + 4, barBlock_.y + 3, std::max (0, barBlock_.w - 2 * KnobPanel::kBlockPad - 8), 16 };
+            if (barBlock_.h < 80)
+                p.textRight (tr, barTitle(), T.fLabel - 2.0f, p.c (T.textDim, 255));
+            else
+                p.textLeft (tr, barTitle(), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
+        }
         if (tune_shown_)
         {
             p.textLeft ({ tuneBlock_.x + KnobPanel::kBlockPad + 4, tuneBlock_.y + 3, std::max (0, tuneBlock_.w - 16), 16 }, "TUNE", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);

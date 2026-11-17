@@ -100,6 +100,8 @@ public:
     virtual bool takeQVirtual (int /*id*/, float& /*normalised*/) noexcept { return false; }
     /** How many times the host wrote one of the Q proxies so far (a hardware knob was turned: the host draws its Q-Link panel over the right edge a moment later). Lock free. */
     virtual unsigned long qWriteCount() const noexcept { return 0; }
+    /** "key: value" lines about the Q proxies of this instance (the stepping of stepped targets: the travel per step, and per knob the raw value, the delta and the travel: q_router.h describe ()) for the status file. */
+    virtual void qStatus (std::string& /*out*/) const {}
 };
 
 class CurveSource

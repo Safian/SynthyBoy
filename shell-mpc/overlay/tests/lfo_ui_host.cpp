@@ -40,7 +40,7 @@ public:
     int playSelection (int g) const noexcept override { return sel[std::clamp (g, 0, 2)]; }
     void setQGroup (const int* t, int n) noexcept override
     {
-        for (int i = 0; i < 4; ++i) q[i] = i < n ? t[i] : -1;
+        for (int i = 0; i < 16; ++i) q[i] = i < n ? t[i] : -1;
         router.setGroup (t, n, static_cast<int> (synthyboy::paramCount()));
         ++qCalls;
     }
@@ -78,7 +78,7 @@ public:
         return router.hostWrite (q, value, false, [this] (int t) noexcept { return synthyboy::toNormalised (synthyboy::paramTable()[t], v_[t]); },
                                  [this] (int t, float n) { writeParam (t, n); });
     }
-    int sel[3] = { 2, 1, 1 }, lastSel = 0, q[4] = { -1, -1, -1, -1 }, qCalls = 0, writes = 0, lastWritten = -1, selWrites = 0, shapeWrites = 0;
+    int sel[3] = { 2, 1, 1 }, lastSel = 0, q[16] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 }, qCalls = 0, writes = 0, lastWritten = -1, selWrites = 0, shapeWrites = 0;
     bool fullOpen = false;
     std::shared_ptr<const synthyboy::StateContent> contentPtr;
     QRouter router;
@@ -289,7 +289,7 @@ void testFullScreen()
         ui::Component* leaves[160];
         const int nl = r.ui.full().collectLeaves (leaves, 0, 160);
         auto has = [&] (const ui::Component* c) { for (int i = 0; i < nl; ++i) if (leaves[i] == c) return true; return false; };
-        check (! has (&r.ui.full().shape) && has (&r.ui.full().sync) && has (&r.ui.full().monoQ) && ! has (&r.ui.full().monoTop), "no SHAPE stepper, SYNC stepper in Timing, MONO in Motion");
+        check (! has (&r.ui.full().shape) && ! has (&r.ui.full().sync) && has (&r.ui.full().monoQ) && ! has (&r.ui.full().monoTop) && r.ui.full().groups[1].member (0) == &r.ui.full().syncSwitch, "no SHAPE stepper, no SYNC stepper (the HZ / BPM / KEY row is the Timing group's Q1), MONO in Motion");
     }
     r.tapC (r.ui.full().swing);
     check (r.ui.activeQ() == 2 && r.inst.q[0] == paramIdx ("lfo1.direction") && r.inst.q[1] == paramIdx ("lfo1.swing") && r.inst.q[2] == paramIdx ("lfo1.stereo") && r.inst.q[3] == paramIdx ("lfo1.mono"),
@@ -338,11 +338,12 @@ void testEditor()
     check (r.stack.depth() == 2 && r.ui.topPage() == LfoUi::kPageEditor, "EDIT opens the shape editor");
     check (r.inst.get ("lfo1.shape") == 12.0f && r.inst.shapeWrites == 1 && r.inst.contentPtr->lfoShapes.size() == 1, "a built-in shape becomes the drawn one: the parameter is Custom, the content has the points");
     check (r.inst.contentPtr->lfoShapes[0].points.size() == 4 && r.inst.contentPtr->lfoShapes[0].points[2].x == 0.5f && r.inst.contentPtr->lfoShapes[0].points[2].y == 0.0f, "the square's points: (0 1) (.5 1) (.5 0) (1 0)");
-    check (r.ui.editor().canvas.state.grid == 4 || r.ui.editor().canvas.state.grid == 8, "the grid is the one the shape was drawn on (" + std::to_string (r.ui.editor().canvas.state.grid) + ")");
-    check (r.inst.q[0] == QRouter::encode (0, QRouter::kVirtual) && r.inst.q[3] == QRouter::encode (3, QRouter::kVirtual), "the Q group of the editor is the four virtual targets");
+    check ((r.ui.editor().canvas.state.gridX == 4 || r.ui.editor().canvas.state.gridX == 8) && r.ui.editor().canvas.state.gridX == r.ui.editor().canvas.state.gridY, "the grid is the one the shape was drawn on, the same both ways (" + std::to_string (r.ui.editor().canvas.state.gridX) + ")");
+    check (r.inst.q[0] == QRouter::encode (0, QRouter::kVirtual) && r.inst.q[3] == QRouter::encode (3, QRouter::kVirtual) && r.inst.q[4] == QRouter::encode (4, QRouter::kVirtual) && r.inst.q[6] == QRouter::encode (6, QRouter::kVirtual) && r.inst.q[7] == -1,
+           "the Q groups of the editor: EDIT = POINT, X, Y, CURVE on Q1 .. Q4 (virtual 0 .. 3), GRID = GRID X, GRID Y, SNAP on Q5 .. Q7 (virtual 4 .. 6)");
     // add a point with the point tool
     ui::ShapeCanvas& cv = r.ui.editor().canvas;
-    r.ui.editor().canvas.state.grid = 8;
+    r.ui.editor().canvas.state.gridX = r.ui.editor().canvas.state.gridY = 8;
     const int w0 = r.inst.shapeWrites;
     const int px = static_cast<int> (cv.xOf (0.25f)), py = static_cast<int> (cv.yOf (0.5f));
     r.tap (px, py);
@@ -350,15 +351,24 @@ void testEditor()
     check (r.inst.shapeWrites > w0 && r.inst.contentPtr->lfoShapes[0].points.size() == 5, "at the end of the gesture the shape goes to the content");
     // the virtual Q: the model's values, then the host's write
     float v;
-    check (std::fabs (r.inst.router.value (0, [] (int) { return 0.0f; }) - 0.25f) < 1.0e-4f && std::fabs (r.inst.router.value (1, [] (int) { return 0.0f; }) - 0.5f) < 1.0e-4f, "the router holds the virtual values of the selected point (x 0.25, y 0.5)");
-    check (r.inst.hostQ (1, 0.875f) == QRouter::Write::written, "the host turns Q2: written to the virtual target");
+    check (std::fabs (r.inst.router.value (1, [] (int) { return 0.0f; }) - 0.25f) < 1.0e-4f && std::fabs (r.inst.router.value (2, [] (int) { return 0.0f; }) - 0.5f) < 1.0e-4f && std::fabs (r.inst.router.value (0, [] (int) { return 0.0f; }) - 0.25f) < 1.0e-4f,
+           "the router holds the virtual values of the selected point (POINT 2 of 5 = 0.25, x 0.25, y 0.5)");
+    check (r.inst.hostQ (2, 0.875f) == QRouter::Write::written, "the host turns Q3 (Y): written to the virtual target");
     r.refresh();
     check (std::fabs (r.ui.editor().model.p[1].y - 0.875f) < 1.0e-4f && r.inst.contentPtr->lfoShapes[0].points[1].y == 0.875f, "the Y of the selected point follows the Q-Link (and the content)");
-    check (! r.inst.takeQVirtual (1, v), "the host's write was taken once");
-    check (r.inst.hostQ (3, 1.0f) == QRouter::Write::written, "the host turns Q4 to the end: the grid");
+    check (! r.inst.takeQVirtual (2, v), "the host's write was taken once");
+    check (r.inst.hostQ (4, 1.0f) == QRouter::Write::written, "the host turns Q5 to the end: GRID X (the GRID group is on Q5 .. Q7)");
+    check (r.inst.hostQ (5, 0.0f) == QRouter::Write::written, "... and Q6 to the start: GRID Y");
     r.refresh();
-    check (r.ui.editor().canvas.state.grid == 32 && r.ui.gridOf (1) == 32, "GRID 32 (kept for this LFO)");
-    check (r.inst.hostQ (2, 1.0f) == QRouter::Write::written, "the host turns Q3: CURVE");
+    check (r.ui.editor().canvas.state.gridX == 32 && r.ui.gridXOf (1) == 32 && r.ui.editor().canvas.state.gridY == 2 && r.ui.gridYOf (1) == 2, "GRID X 32 and GRID Y 2 (the two grids are independent, kept for this LFO)");
+    check (r.inst.contentPtr->lfoShapes[0].gridX == 32 && r.inst.contentPtr->lfoShapes[0].gridY == 2, "the grid goes to the content with the shape (stored with the LFO: state version 5)");
+    check (r.inst.hostQ (6, 0.0f) == QRouter::Write::written, "the host turns Q7: SNAP off");
+    r.refresh();
+    check (! r.ui.editor().canvas.state.snap, "SNAP is off (a toggle as a Q member)");
+    r.inst.hostQ (6, 1.0f);
+    r.refresh();
+    check (r.ui.editor().canvas.state.snap, "... and on again");
+    check (r.inst.hostQ (3, 1.0f) == QRouter::Write::written, "the host turns Q4: CURVE");
     r.refresh();
     check (std::fabs (r.ui.editor().model.p[1].power - 20.0f) < 1.0e-3f, "CURVE of the selected segment is +20");
     // undo
@@ -377,7 +387,7 @@ void testEditor()
     // back: the shape is in the content and the page closes
     r.tapC (r.ui.editor().back);
     check (r.stack.depth() == 1 && r.ui.topPage() == 0, "BACK is the full screen");
-    check (r.ui.gridOf (1) == 32, "the grid stays");
+    check (r.ui.gridXOf (1) == 32 && r.ui.gridYOf (1) == 2, "the grid stays");
     // open again: the drawn shape comes from the content
     r.tapC (r.ui.full().edit);
     check (r.ui.editor().model.n == static_cast<int> (r.inst.contentPtr->lfoShapes[0].points.size()), "the editor opens with the points of the content");

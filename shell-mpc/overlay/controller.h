@@ -1390,6 +1390,16 @@ private:
             o << "display_plane_state: " << note << "\ndisplay_plane_losses: " << planeLosses_ << "\ndisplay_plane_refreshes: " << planeRefreshes_ << "\n";
         }
         o << standbyStatus();
+        {
+            std::string qs;
+            {
+                std::lock_guard<std::mutex> g (mu_);
+                if (activeSlot_ >= 0)
+                    if (IInstanceView* v = slots_.at (activeSlot_))
+                        v->qStatus (qs);
+            }
+            o << qs;   // the stepping of the Q proxies of the instance on screen: q_step_travel and q_knob_n (raw value, delta, travel)
+        }
         if (extraStatus_)
             o << extraStatus_();
         writeGpuStatus (o);

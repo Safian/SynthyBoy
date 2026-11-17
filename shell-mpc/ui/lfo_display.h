@@ -23,7 +23,7 @@ struct Data
     int n = 0;
     // the lead-in in front of the cycle: the shares 0 .. 1 of a cycle's time that the DELAY and the RISE take (the owner computes them from the rate; the display only draws them, at most 30 % of the width)
     float delayShare = 0.0f, riseShare = 0.0f;
-    int grid = 0;                // lines of the grid of the shape editor (2 .. 32); 0 = quarters
+    int gridX = 0, gridY = 0;    // divisions of the cycle (vertical lines) and of the height (horizontal lines) of the grid of the shape editor (2 .. 32); gridX 0 = quarters, gridY 0 = no horizontal lines
     float loopX = -1.0f;         // x 0 .. 1 of the loop point of an envelope type, < 0 = none
     float phase = 0.0f;          // start phase 0 .. 1 (0 .. 360 degrees)
     bool envelope = false;       // the picture is the whole run of an envelope type (no repeat)
@@ -101,13 +101,16 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
         sb.paintOff();
         sb.rrect (static_cast<float> (r.x), static_cast<float> (r.y), static_cast<float> (r.right()), static_cast<float> (r.bottom()), T.rBlock, a (T.keyline, 255), T.frame);
         const uint32_t g0 = a (T.grid, 255), g1 = a (theme::mix (T.grid, T.keyline, 0.5f), 255);
-        const int div = d.grid >= 2 ? d.grid : 4;
-        for (int k = 1; k < div; ++k)
+        const int divX = d.gridX >= 2 ? d.gridX : 4;
+        for (int k = 1; k < divX; ++k)   // the vertical lines of the time axis (the editor's snap columns)
         {
-            const float f = static_cast<float> (k) / static_cast<float> (div);
-            sb.line (x0 + (x1 - x0) * f, top, x0 + (x1 - x0) * f, bottom, T.hair, g1);
-            if (d.grid >= 2)
-                sb.line (x0, top + (bottom - top) * f, x1, top + (bottom - top) * f, T.hair, g1);
+            const float gx = colOf (plot, static_cast<float> (k) / static_cast<float> (divX));
+            sb.line (gx, top, gx, bottom, T.hair, g1);
+        }
+        for (int k = 1; d.gridY >= 2 && k < d.gridY; ++k)   // the horizontal lines at the heights the editor snaps to (the same rows as the points: rowOf)
+        {
+            const float gy = rowOf (plot, 2.0f * static_cast<float> (k) / static_cast<float> (d.gridY) - 1.0f);
+            sb.line (x0, gy, x1, gy, T.hair, g1);
         }
         sb.line (x0, mid, x1, mid, T.hair, g0);
         sb.line (x0, top, x0, bottom, T.hair, g0);

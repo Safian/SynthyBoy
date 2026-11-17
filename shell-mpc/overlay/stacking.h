@@ -144,14 +144,12 @@ public:
             error_ = error;
             ++failures_;
             restoreFailed_ = true;
+            return;   // the value at rest is KEPT (and our hold with it): the next release () tries again, and a take () does not mistake the value we set for the one at rest
         }
-        else
-        {
-            ++restores_;
-            restoreFailed_ = false;
-            ourZpos_ = rest_;
-            driver_.forgetRest (plane_);
-        }
+        ++restores_;
+        restoreFailed_ = false;
+        ourZpos_ = rest_;
+        driver_.forgetRest (plane_);
         applied_ = false;
     }
 
@@ -204,6 +202,51 @@ private:
     std::vector<PlaneInfo> others_;
     std::string error_;
     unsigned takes_ = 0, sets_ = 0, restores_ = 0, failures_ = 0, drops_ = 0;
+};
+
+/** Who holds the stacking of our plane. The plane is shown by the CPU path (the presenter) or by the GPU helper; both ask for the order of the plane when they take it and give it back when they are done.
+    The guard's one stored value must not be put back while the OTHER holder still shows the plane: the presenter's hide () when the helper takes over from the CPU picture used to restore the zpos the
+    helper's start had just set (measured on the MPC XL: takes 2, sets 1, restores 1, and the pointer lay under our picture). Each holder releases only its own hold; the value goes back when the last one
+    lets go. `leave` (the plane is given up: it is free, or another program has it) ends both holds. */
+class StackingHolds
+{
+public:
+    enum Holder { Cpu = 0, Gpu = 1 };
+    explicit StackingHolds (IZposDriver& driver) : guard_ (driver) {}
+    void take (Holder h, uint32_t plane, uint32_t primary, const std::vector<uint32_t>& appPlanes)
+    {
+        held_[h] = true;
+        guard_.take (plane, primary, appPlanes);
+    }
+    /** Re-checks the order of the plane for a holder that shows it (a read, and a write only when the order is not the rule's). */
+    void verify (Holder h, uint32_t plane, uint32_t primary, const std::vector<uint32_t>& appPlanes)
+    {
+        if (held_[h])
+            guard_.take (plane, primary, appPlanes);
+    }
+    void release (Holder h)
+    {
+        held_[h] = false;
+        if (! held_[Cpu] && ! held_[Gpu])
+            guard_.release();
+    }
+    void releaseAll()
+    {
+        held_[Cpu] = held_[Gpu] = false;
+        guard_.release();
+    }
+    void dropAll() noexcept
+    {
+        held_[Cpu] = held_[Gpu] = false;
+        guard_.drop();
+    }
+    bool held (Holder h) const noexcept { return held_[h]; }
+    const StackingGuard& guard() const noexcept { return guard_; }
+    void describe (std::string& out) const { guard_.describe (out); }
+
+private:
+    StackingGuard guard_;
+    bool held_[2] = { false, false };
 };
 
 }} // namespace synthyboy_mpc::overlay

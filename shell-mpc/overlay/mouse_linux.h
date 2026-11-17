@@ -96,12 +96,18 @@ private:
                 continue;
             char path[64];
             std::snprintf (path, sizeof path, "/dev/input/event%d", i);
+            uint64_t stamp = 0;
+            const bool stamped = sys_.nodeStamp (path, stamp);
+            if (stamped && notMouse_[i] == stamp)
+                continue;                  // known not to be a mouse and unchanged (one stat instead of an open and three ioctls every two seconds)
             const int fd = sys_.open (path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);   // read only, never grabbed
             if (fd < 0)
                 continue;
             if (! isMouse (fd))
             {
                 sys_.close (fd);
+                if (stamped)
+                    notMouse_[i] = stamp;
                 continue;
             }
             Dev d;
@@ -171,6 +177,7 @@ private:
     ITouchSyscalls& sys_;
     std::vector<Dev> devs_;
     uint64_t lastScanMs_ = 0;
+    uint64_t notMouse_[32] = {};   // the stamp of every node that was looked at and is no mouse
     bool scanned_ = false;
     int nextId_ = 0;
     unsigned long scans_ = 0, events_ = 0, added_ = 0, dropped_ = 0;

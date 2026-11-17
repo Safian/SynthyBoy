@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <linux/input.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
 #include <ctime>
@@ -105,6 +106,8 @@ public:
     virtual int ioctl (int fd, unsigned long request, void* arg) = 0;
     virtual int poll (struct pollfd* fds, nfds_t nfds, int timeoutMs) = 0;
     virtual uint64_t nowMs() = 0;
+    /** A stamp of the device node (its device number and change time): false when it cannot be read (then every scan opens the node). One stat instead of an open and three ioctls for a node known not to be a mouse. */
+    virtual bool nodeStamp (const char* /*path*/, uint64_t& /*stamp*/) { return false; }
 };
 
 #if defined(__linux__)
@@ -134,6 +137,15 @@ public:
     int poll (struct pollfd* fds, nfds_t nfds, int timeoutMs) override
     {
         return ::poll (fds, nfds, timeoutMs);
+    }
+
+    bool nodeStamp (const char* path, uint64_t& stamp) override
+    {
+        struct stat st;
+        if (::stat (path, &st) != 0)
+            return false;
+        stamp = (static_cast<uint64_t> (st.st_rdev) << 32) ^ static_cast<uint64_t> (st.st_ctime) ^ 0x9e3779b97f4a7c15ull;
+        return true;
     }
 
     uint64_t nowMs() override

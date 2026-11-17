@@ -531,19 +531,30 @@ int main (int argc, char** argv)
                 (void) tgt;
             };
             const float l0 = plain (tList);
-            knob (0, tList, 1); knob (0, tList, 1);
+            for (int i = 0; i < 5; ++i) knob (0, tList, 1);   // five increments: one short of a step (6 / 128 of travel)
             const bool notYet = plain (tList) == l0;
-            knob (0, tList, 1); knob (0, tList, 1);
+            knob (0, tList, 1);
             const float l1 = plain (tList);
             knob (0, tList, -3); knob (0, tList, -3);
             const float l2 = plain (tList);
             (void) li;
-            check (notYet && l1 == l0 + 1.0f && l2 == l0, "VOICE OVERRIDE (a two value list) steps after 3 increments of travel (not before) and back (the host keeps its own value here)");
+            check (notYet && l1 == l0 + 1.0f && l2 == l0, "VOICE OVERRIDE (a two value list) steps after 6 increments of travel (not before) and back (the host keeps its own value here)");
             const float t0 = plain (tTog);
-            knob (1, tTog, 3);
+            knob (1, tTog, 6);
             const float t1 = plain (tTog);
-            knob (1, tTog, -3);
-            check (t1 != t0 && plain (tTog) == t0, "a toggle flips after about 3 increments and flips back");
+            knob (1, tTog, -6);
+            check (t1 != t0 && plain (tTog) == t0, "a toggle flips after 6 increments and flips back");
+        }
+        // a stepped target (here a two value list and a toggle) shows the host a plain knob: no integer range, a step of 1/128 (the host's own integer stepping made lists of 5 jump four entries for six increments on the Key 61)
+        {
+            const int tList = idx ("master.voice_override");
+            writeGroup (std::to_string (tList) + " " + std::to_string (idx ("master.polyphony")) + " " + std::to_string (tLevel) + " -1");
+            sleepMs (700);
+            VstParameterProperties pl{}, pp{}, pc{};
+            const bool got = qa->dispatcher (qa, effGetParameterProperties, q0, 0, &pl, 0.0f) == 1 && qa->dispatcher (qa, effGetParameterProperties, q0 + 1, 0, &pp, 0.0f) == 1 && qa->dispatcher (qa, effGetParameterProperties, q0 + 2, 0, &pc, 0.0f) == 1;
+            check (got && (pl.flags & kVstParameterUsesIntegerMinMax) == 0 && pl.stepInteger == 0 && std::fabs (pl.stepFloat - 1.0f / 128.0f) < 1e-7f && (pp.flags & kVstParameterUsesIntegerMinMax) == 0 && std::fabs (pp.stepFloat - 1.0f / 128.0f) < 1e-7f,
+                   "the Q of a list and the Q of an integer stepper (VOICE OVERRIDE, polyphony) are plain knobs of 1/128 for the host");
+            check (got && std::fabs (pc.stepFloat - 1.0f / 128.0f) > 1e-7f, "the Q of a continuous target keeps its target's step");
         }
         // all sixteen slots: Q 5 .. Q 16 are proxies of the next groups; names, units, values and writes like Q 1 .. Q 4
         {

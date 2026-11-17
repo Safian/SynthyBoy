@@ -189,6 +189,11 @@ public:
             return fail (now, "the helper did not become ready in time");
         if (state_ == State::Running)
         {
+            if (shown_ && now - stackingCheckedAt_ >= kStackingCheckMs)
+            {
+                stackingCheckedAt_ = now;
+                plane_.takeStacking();   // the order of the plane is checked while the helper shows it (reads only; a write when something else changed the zpos)
+            }
             if (unacked_ && now - unackedSince_ > cfg_.ackTimeoutMs)
                 return fail (now, "the helper did not acknowledge a picture in time");
             if (hiding_ && now - hideAt_ > cfg_.hideTimeoutMs)
@@ -384,6 +389,7 @@ private:
                 {
                     state_ = State::Running;
                     runningSince_ = now;
+                    stackingCheckedAt_ = now;
                     startupMs_ = m.a;
                     glRenderer_.assign (m.text, strnlen (m.text, sizeof m.text));
                     if (wantStride_ > 0)
@@ -548,6 +554,8 @@ private:
     GpuConfig cfg_;
     State state_ = State::Idle;
     uint32_t lastRefreshes_ = 0;
+    static constexpr double kStackingCheckMs = 2000.0;
+    double stackingCheckedAt_ = 0.0;
     bool forceCpu_ = false, shown_ = false, hiding_ = false, unacked_ = false, keepPlane_ = false, paceKnown_ = false;
     PaceBlock pace_ {};
     RenderBlock render_ {};

@@ -141,21 +141,11 @@
 #include "play_params.h"
 #include "q_router.h"
 #include "macro_names.h"
+#include "q_step_rule.h"
 
 namespace
 {
-/** The number of values of a stepped parameter (a toggle 2, a list its entries, an integer stepper its range), 0 for a continuous one: what the Q proxies drive relatively (q_router.h). */
-int stepCountOf (const synthyboy::ParamInfo& p) noexcept
-{
-    if (p.scale == synthyboy::Scale::stepped)
-        return static_cast<int> (std::lround (p.max - p.min)) + 1;
-    if (p.interval > 0.0f && p.max > p.min)
-    {
-        const int n = static_cast<int> (std::lround ((p.max - p.min) / p.interval)) + 1;
-        return n <= 64 ? n : 0;
-    }
-    return 0;
-}
+using synthyboy_mpc::stepCountOf;   // the rule of the relative Q proxies: q_step_rule.h
 } // namespace
 #include "synthyboy/readout.h"
 #endif
@@ -459,6 +449,7 @@ struct PluginInstance
         void setQVirtual (int id, float normalised) noexcept override { inst.qRouter.setVirtualValue (id, normalised); }
         bool takeQVirtual (int id, float& normalised) noexcept override { return inst.qRouter.takeVirtual (id, normalised); }
         unsigned long qWriteCount() const noexcept override { return inst.qRouter.writeCount(); }
+        void qStatus (std::string& out) const override { inst.qRouter.describe (out); }
         double sampleRate() const noexcept override { return inst.overlayRate.load (std::memory_order_relaxed); }
         void requestOverlayReport() noexcept override
         {
@@ -914,9 +905,13 @@ struct PluginInstance
         if (q >= 1 && q <= synthyboy_mpc::QRouter::kCount && e != nullptr && e->setParameter != nullptr)
             e->setParameter (e, qBase() + q - 1, static_cast<float> (v));
     }
-    /** Debug switch (SYNTHYBOY_MPC_DEBUG_HOOKS only): while the file /tmp/synthyboy-overlay-q-step-travel exists its first number is the travel of a Q proxy per step of a stepped target, in 1/128 host increments (default 3). Display thread. */
+    /** Debug switch (SYNTHYBOY_MPC_DEBUG_HOOKS only): while the file /tmp/synthyboy-overlay-q-step-travel exists its first number is the travel of a Q proxy per step of a stepped target, in 1/128 host increments (default 6). Display thread. */
     void qStepTravelFile()
     {
+        const long long nowMs = steadyMs();   // once a second
+        if (nowMs - qStepFileAtMs < 1000)
+            return;
+        qStepFileAtMs = nowMs;
         double n = 0.0;
         qRouter.setStepTravel (synthyboy_mpc::safefile::readNumber ("/tmp/synthyboy-overlay-q-step-travel", n) && n > 0.0 && n < 1.0e6 ? static_cast<float> (n / 128.0) : synthyboy_mpc::QRouter::kStepTravelDefault);
     }
@@ -1037,6 +1032,7 @@ struct PluginInstance
     std::atomic<bool> overlayAsked { false };                  // set by the overlay thread only (requestOverlayReport): the debug mode "stale" ends with it
     bool overlayStaleReleased = false;                         // display thread only
     std::chrono::steady_clock::time_point overlayNextFileCheck {};   // display thread only
+    long long qStepFileAtMs = -100000;   // display thread only: when the Q step travel file was read last
     static constexpr const char* kOverlayFakeSlotFile = "/tmp/synthyboy-overlay-fake-slot";
 
     /** The value for the real slot, or (SYNTHYBOY_MPC_DEBUG_HOOKS only) what the debug file says (a number 0 .. 15 = report that slot, any other number or "none" = the none colour, "blank" = frame 0, "stale" = frame 0 until the
@@ -2264,6 +2260,15 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             if (real >= 0)
             {
                 fillParameterProperties (synthyboy::paramTable()[real], props);
+                if (stepCountOf (synthyboy::paramTable()[real]) >= 2)
+                {
+                    // a stepped target (a toggle, a list, an integer stepper) is driven by the router in steps of its own (6 increments each, q_router.h), so the host must see a plain knob: with the target's integer range
+                    // (stepInteger / UsesIntegerMinMax) the host quantised its increments itself (a list of 5 jumped four entries for six increments, a list of 20 did not move for fourteen single increments; Key 61, 2026-11-16)
+                    props->flags = kVstParameterCanRamp;
+                    props->minInteger = props->maxInteger = props->stepInteger = 0;
+                    props->stepFloat = props->smallStepFloat = 1.0f / 128.0f;
+                    props->largeStepFloat = 1.0f / 16.0f;
+                }
                 return 1;
             }
             std::memset (props, 0, sizeof (*props));
@@ -2517,7 +2522,18 @@ static void writeRealParam (PluginInstance* inst, size_t index, float parameter)
 
     // Call engine directly (IEngine::setParam is lock-free, any thread)
     if (inst->engine)
+    {
         inst->engine->setParam(info->id, plain);
+        // two writers of one parameter (the host's thread, the overlay's touch, the display thread, a state) can interleave the mirror and the engine: the last store of the mirror wins in both places
+        for (int again = 0; again < 2; ++again)
+        {
+            const float mirrored = inst->paramMirror[index].load(std::memory_order_relaxed);
+            if (mirrored == plain)
+                break;
+            plain = mirrored;
+            inst->engine->setParam(info->id, plain);
+        }
+    }
 }
 
 static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)

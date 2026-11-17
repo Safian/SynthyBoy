@@ -262,9 +262,9 @@ void testViews()
             check (f.groups[0].member (0) == &f.picker && f.groups[0].member (1) == &f.rate &&
                    f.groups[0].member (2) == &f.rise && f.groups[0].member (3) == &f.smoothTime,
                    nm + ": group 0 is picker (Q1), rate, rise, smooth");
-            check (f.groups[1].member (0) == &f.sync && f.groups[1].member (1) == &f.mode &&
+            check (f.groups[1].member (0) == &f.syncSwitch && f.groups[1].member (1) == &f.mode &&
                    f.groups[1].member (2) == &f.phase && f.groups[1].member (3) == &f.delay,
-                   nm + ": group 1 is sync, mode, phase, delay");
+                   nm + ": group 1 is the HZ / BPM / KEY row, mode, phase, delay (no second SYNC stepper)");
             check (f.groups[2].member (0) == &f.direction && f.groups[2].member (1) == &f.swing &&
                    f.groups[2].member (2) == &f.stereo && f.groups[2].member (3) == &f.monoQ,
                    nm + ": group 2 is direction, swing, stereo, mono");
@@ -303,7 +303,7 @@ void testEditor()
     pg.place ({ 0, 110, 1280, 628 });
     pg.canvas.setId (7); pg.tools.setId (8); pg.fx.setId (9);
     pg.model = lfo::ShapeModel::fromBuiltin (1);   // a triangle: (0, 0) (0.5, 1) (1, 0)
-    pg.canvas.state.grid = 8;
+    pg.canvas.state.gridX = 8; pg.canvas.state.gridY = 8;
     pg.sync();
     Component* all[40];
     const int n = pg.collectLeaves (all, 0, 40);
@@ -317,7 +317,20 @@ void testEditor()
     }
     check (inside && size && apart, "editor page: " + std::to_string (n) + " leaves inside, at least their minimum size, apart");
     const Component* off = nullptr;
-    check (pg.group.check (all, n, &off) == 0 && chipsCovered (pg.group, all, n) == 0, "editor page: the EDIT group is adjacent, free lanes for the chips");
+    check (pg.groups[0].check (all, n, &off) == 0 && chipsCovered (pg.groups[0], all, n) == 0, "editor page: the EDIT group (POINT, X, Y, CURVE) is adjacent, free lanes for the chips");
+    check (pg.groups[1].check (all, n, &off) == 0 && chipsCovered (pg.groups[1], all, n) == 0 && pg.groups[1].member (0) == &pg.fgx && pg.groups[1].member (1) == &pg.fgy && pg.groups[1].member (2) == &pg.snap,
+           "editor page: the GRID group (GRID X, GRID Y, SNAP) is adjacent, free lanes for the chips");
+    {
+        bool big = true;
+        for (const Component* c : std::initializer_list<const Component*> { &pg.fpoint, &pg.fx, &pg.fy, &pg.fcurve, &pg.fgx, &pg.fgy, &pg.snap, &pg.undoButton, &pg.del, &pg.loop, &pg.smooth, &pg.back })
+            big = big && c->rect().h >= 56 && c->rect().w >= 56;
+        check (big, "editor page: every control is at least 56 x 56 (touch targets)");
+        bool once = true;   // no control twice: SNAP is only in the GRID group, not in a bar as well
+        for (int i = 0; i < n; ++i)
+            for (int j = i + 1; j < n; ++j)
+                once = once && all[i] != all[j];
+        check (once && pg.tools.rect().y == pg.back.rect().y, "editor page: no control twice, the tools in the top bar");
+    }
     check (pg.canvas.rect().w > 900 && pg.canvas.rect().h > 380, "editor page: the canvas is big (" + std::to_string (pg.canvas.rect().w) + " x " + std::to_string (pg.canvas.rect().h) + ")");
     Scene sc (1290, 740, 0x0b1026ffu);
     pg.draw (sc.builder());

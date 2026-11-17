@@ -138,10 +138,10 @@ public:
             kr.white[i] = { x0, kbY, x1 - x0, kbH };
         }
         static const struct { int note; float pos; } kBlacks[5] = {
-            { 1, 0.96f }, { 3, 2.04f }, { 6, 3.95f }, { 8, 5.00f }, { 10, 6.05f }
+            { 1, 0.877f }, { 3, 2.040f }, { 6, 3.790f }, { 8, 4.950f }, { 10, 6.120f }   // the centres of a piano's black keys in white key widths from the left of the C (23.5 mm whites, 13.7 mm blacks)
         };
-        const float bkW = std::round (wkW * 0.58f);
-        const int bkH = static_cast<int> (std::round (kbH * 0.60f));
+        const float bkW = std::round (wkW * 0.40f);   // narrow: a black key is under 0.6 of a white one on a piano, and these white keys are wide and short, so it is narrower still to read as a key
+        const int bkH = static_cast<int> (std::round (kbH * 0.62f));
         for (int i = 0; i < 5; ++i)
         {
             kr.blackNote[i] = kBlacks[i].note;
@@ -237,12 +237,10 @@ protected:
             const bool in = isScaleNote (scaleType, scaleKey, note);
             const bool isRoot = (note == scaleKey);
             const Rect br = kr.black[i];
-            p.rect (br, p.c (T.bg0, 255));
-            if (in)
-                p.rect (br, p.c (T.flow[0], 40));
+            p.rect (br, p.c (T.bg0, 255));   // dark, thin outline: the notes of the scale are the outline (accent for the root) and a small bar, not a coloured block
             p.rrect (br, 3.0f, p.c (in ? (isRoot ? T.flow[0] : T.keylineHi) : T.keyline, 255), isRoot ? 1.5f : 1.0f);
-            if (isRoot)
-                p.rect (br.x + 6, br.bottom() - 7, br.right() - 6, br.bottom() - 3, p.c (T.flow[0], 255));
+            if (in)
+                p.rect (br.x + 5, br.bottom() - 7, br.right() - 5, br.bottom() - 4, p.c (isRoot ? T.flow[0] : T.keylineHi, isRoot ? 255 : 200));
         }
     }
 

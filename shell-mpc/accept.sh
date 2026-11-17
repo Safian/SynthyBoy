@@ -4,9 +4,10 @@ set -u
 : "${MPC_SDK:?MPC_SDK must point at mpc-plugin-builder-sdk}"
 cd "$(dirname "$0")/.." || exit 1
 B=build-mpc
+# -USYNTHYBOY_MPC_OVERLAY*: the overlay options are the one place the builds do NOT name (the default is the build without the module), so a cache entry an earlier overlay build left in the directory is dropped.
 # Every build below names every option of the display and the statistics itself: a build directory keeps the options of earlier runs in its CMake cache (a tree that was
 # configured when the default was 25 a second stayed at 25 and failed the 10 a second checks), so nothing may rest on a default or on what an earlier run left.
-BASE_OPTS="-DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=10 -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=ON -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=OFF -DSYNTHYBOY_MPC_CALLBACK_STATS=OFF -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=OFF -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=18 -DSYNTHYBOY_MPC_OUTPUT_LIMITER=OFF -DSYNTHYBOY_MPC_PAD_PRESSURE=ON"
+BASE_OPTS="-USYNTHYBOY_MPC_OVERLAY -USYNTHYBOY_MPC_OVERLAY_GPU -DSYNTHYBOY_MPC_LFO_LIVE=ON -DSYNTHYBOY_MPC_LFO_LIVE_HZ=10 -DSYNTHYBOY_MPC_LFO_LIVE_NOTIFY=ON -DSYNTHYBOY_MPC_LFO_LIVE_SELFTEST=OFF -DSYNTHYBOY_MPC_CALLBACK_STATS=OFF -DSYNTHYBOY_MPC_SPECTRUM=ON -DSYNTHYBOY_MPC_SPECTRUM_SELFTEST=OFF -DSYNTHYBOY_MPC_OUTPUT_GAIN_DB=18 -DSYNTHYBOY_MPC_OUTPUT_LIMITER=OFF -DSYNTHYBOY_MPC_PAD_PRESSURE=ON"
 cmake -S . -B $B -G Ninja $BASE_OPTS -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK" > $B.configure.log 2>&1 || { tail -40 $B.configure.log; echo "ACCEPT FAIL: cmake configure"; exit 1; }
 cmake --build $B --target synthyboy_mpc dump_mpc_chunks > $B/build.log 2>&1 || { grep -E "error|Error|undefined|FAILED" -A6 $B/build.log | head -80; echo "ACCEPT FAIL: build"; exit 1; }
 grep -n "synthyboy_mpc.cpp.*warning" $B/build.log | head -20 > $B/warn.log; [ -s $B/warn.log ] && { cat $B/warn.log; echo "ACCEPT FAIL: compiler warnings in shell-mpc"; exit 1; }
@@ -231,13 +232,20 @@ for t in controller_host qlink_panel_host mouse_host views_host gpu_backend_host
     $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t-asan.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
 done
+# the four host tests of the pointer / pop-up work that had no sanitizer run (review of 2026-11-16): the setting file, the plane order, the key of the pop-up, the detector on the captured pictures
+for t in qlink_setting_host stacking_host panel_key_host; do
+    c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I shell-mpc/overlay -o $B/${t}_asan $OVSRC/$t.cpp || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
+    $B/${t}_asan > $B/$t-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t-asan.log | head; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
+done
+c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I shell-mpc/overlay -DQLINK_FIXTURE=\"shell-mpc/overlay/tests/fixtures/qlink_panel_fixtures.bin\" -o $B/page_detector_host_asan $OVSRC/page_detector_host.cpp || { echo "ACCEPT FAIL: page_detector_host asan build"; exit 1; }
+$B/page_detector_host_asan > $B/page-detector-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/page-detector-asan.log | head; echo "ACCEPT FAIL: page_detector_host under AddressSanitizer / UBSan"; exit 1; }
 # the Q slots test under AddressSanitizer + UBSan too, with the libc++ container annotation check off: the FX part adds an effect through the static core library (not instrumented), which pushes to vectors the annotating libc++ then reports at the next reallocation (a false report of the annotation, the same code in mixfx_ui_host happens to grow its vectors differently)
 c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/qslots_host_asan $OVSRC/qslots_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: qslots_host asan build"; exit 1; }
 ASAN_OPTIONS=detect_container_overflow=0 $B/qslots_host_asan > $B/qslots_host-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/qslots_host-asan.log | head; echo "ACCEPT FAIL: qslots_host under AddressSanitizer / UBSan"; exit 1; }
 # the UI component library (shell-mpc/ui/, header only: the black box components, their interface tests and the demonstration program): the tests under AddressSanitizer + UBSan, the demo
 # renders the oscillator pages and the detail pages into $B/ui-images (PNG, for a human; not compared)
 mkdir -p $B/ui-images
-for t in ui_base_host ui_composite_host ui_screen_host ui_list_host ui_display_host ui_env_host ui_lfo_host; do
+for t in ui_base_host ui_composite_host ui_screen_host ui_list_host ui_display_host ui_env_host ui_lfo_host ui_time_ruler_host; do
     c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -o $B/${t}_asan shell-mpc/ui/tests/$t.cpp || { echo "ACCEPT FAIL: $t build"; exit 1; }
     UI_OUT=$B/ui-images $B/${t}_asan > $B/$t.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/$t.log | head; echo "ACCEPT FAIL: $t (UI components: interface, drawing, Q groups)"; exit 1; }
     grep -qE "ERROR: AddressSanitizer|runtime error" $B/$t.log && { grep -E "ERROR: AddressSanitizer|runtime error" $B/$t.log | head -5; echo "ACCEPT FAIL: $t under AddressSanitizer / UBSan"; exit 1; }
@@ -419,6 +427,17 @@ c++ -std=c++17 -O1 -g -fsanitize=thread -I shell-mpc -o $TL/q_router_host shell-
 TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/q_router_host > $TL/q-router.log 2>&1
 grep -q "WARNING: ThreadSanitizer" $TL/q-router.log && { grep -A14 "WARNING: ThreadSanitizer" $TL/q-router.log | grep -E "#[0-1] " | sed 's/ (.*//' | sort | uniq -c | sort -rn | head -20; echo "ACCEPT FAIL: data races in the Q router (full report: $TL/q-router.log)"; exit 1; }
 grep -q "^FAIL" $TL/q-router.log && { grep "^FAIL" $TL/q-router.log; echo "ACCEPT FAIL: tsan q_router_host"; exit 1; }
+# which parameters the Q proxies drive relatively (q_step_rule.h): the stepped ones and the integer steppers of up to 32 values; the quantised amounts that stay absolute are pinned
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I shell-mpc -o $B/q_step_rule_host shell-mpc/tests/q_step_rule_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: q_step_rule_host build"; exit 1; }
+$B/q_step_rule_host > $B/q-step-rule.log 2>&1 || { grep -E "^FAIL" $B/q-step-rule.log; echo "ACCEPT FAIL: q_step_rule_host (which parameters step relatively)"; exit 1; }
+# the robustness review of the router (docs/MPC.md "Stepped targets"): a group change must not leave the old step baseline (R1), and a write must not mix the index of one group with the view of another (R2); -O2, AddressSanitizer + UBSan, ThreadSanitizer
+c++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -I shell-mpc -o $B/q_router_review_host shell-mpc/tests/q_router_review_host.cpp -lpthread || { echo "ACCEPT FAIL: q_router_review_host build"; exit 1; }
+$B/q_router_review_host > $B/q-router-review.log 2>&1 || { grep -E "^FAIL" $B/q-router-review.log; echo "ACCEPT FAIL: q_router_review_host (O2)"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I shell-mpc -o $B/q_router_review_asan shell-mpc/tests/q_router_review_host.cpp -lpthread || { echo "ACCEPT FAIL: q_router_review_host asan build"; exit 1; }
+$B/q_router_review_asan > $B/q-router-review-asan.log 2>&1 || { grep -E "^FAIL|ERROR|runtime error" $B/q-router-review-asan.log | head; echo "ACCEPT FAIL: q_router_review_host under AddressSanitizer / UBSan"; exit 1; }
+c++ -std=c++17 -O1 -g -fsanitize=thread -I shell-mpc -o $TL/q_router_review_host shell-mpc/tests/q_router_review_host.cpp -lpthread || { echo "ACCEPT FAIL: tsan q_router_review_host build"; exit 1; }
+TSAN_OPTIONS="halt_on_error=0 exitcode=0" $TL/q_router_review_host > $TL/q-router-review.log 2>&1
+grep -qE "^FAIL|WARNING: ThreadSanitizer" $TL/q-router-review.log && { grep -E "^FAIL|WARNING" $TL/q-router-review.log | head; echo "ACCEPT FAIL: tsan q_router_review_host"; exit 1; }
 # the touch decoder and the evdev reader (touch_decoder.h, touch_linux.h; fakes for the syscalls, a capture of the Key 61 as a fixture): plainly with -Werror and under AddressSanitizer + UBSan
 bash shell-mpc/overlay/tests/run_touch_tests.sh > $B/touch.log 2>&1 || { grep -E "FAIL|error" $B/touch.log | head -20; echo "ACCEPT FAIL: touch_host"; exit 1; }
 echo "ACCEPT OK"

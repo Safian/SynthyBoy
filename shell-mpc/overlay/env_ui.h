@@ -24,6 +24,7 @@
 #include "../ui/list.h"
 #include "../ui/mod_targets.h"
 #include "../q_router.h"
+#include "q_publish.h"
 #include "curve_source.h"
 #include "touch_decoder.h"
 #include "page_view.h"
@@ -143,7 +144,8 @@ public:
     bool beats() const noexcept { return beats_; }
     int topPage() const noexcept { return pageTop_; }
     int activeQ() const noexcept { return full_.activeGroup(); }
-    const int* qTargets() const noexcept { return qTargets_; }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
+    int qSlotCount() const noexcept { return QRouter::kCount; }
     const char* qGroupName() const noexcept { return qName_; }
 
     // ---- the drawing (a picture is one scene of cached cells, then the live parts, then the popups)
@@ -269,7 +271,7 @@ public:
 
     bool fingerDown() const noexcept { return gestureDown_; }
     /** Another element's full screen opened or closed: the Q group is published again at the next update (the router keeps what the last page set). */
-    void forgetQGroup() noexcept { qSet_ = false; }
+    void forgetQGroup() noexcept { qSlots_.forget(); }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
 
     // ---- access for the tests
@@ -349,8 +351,8 @@ private:
         pageTop_ = 0;
         underList_ = 0;
         modsDirty_ = true;
-        std::memset (qTargets_, 0xff, sizeof qTargets_);
-        qSet_ = false;
+        qSlots_.clear();
+        qSlots_.forget();
         gesture_ = nullptr; gestureDown_ = false;
         compact_.group.setActive (highlight_ == 2);
         full_.setActiveGroup (0);
@@ -483,8 +485,20 @@ private:
             if (sel_ != 1)
             {
                 ui::envgraph::Shape gs;
-                if (shapeOf (v, 1, false, gs, nullptr))
+                const int unitsIdx = uibind::indexOfKey ("env1.units");
+                const bool gb = unitsIdx >= 0 && v.param (unitsIdx) >= 0.5f;   // ENV 1 in beats or in ms: its own switch
+                if (shapeOf (v, 1, gb, gs, nullptr))
                 {
+                    if (gb != beats_)
+                    {
+                        // on the axis of the envelope in front: the times are converted with the tempo (a beat is 60000 / bpm ms)
+                        const double bpm = std::max (1.0, v.bpm());
+                        for (int i = 0; i < 5; ++i)
+                        {
+                            const double u = ui::envgraph::timeFromNorm (i, gs.t[i], gb);
+                            gs.t[i] = ui::envgraph::normFromTime (i, gb ? u * 60000.0 / bpm : u * bpm / 60000.0, beats_);
+                        }
+                    }
                     st.ghost = true;
                     st.ghostShape = gs;
                 }
@@ -610,7 +624,7 @@ private:
         pageTop_ = top;
         pageSig_ = sig;
         modsDirty_ = true;
-        qSet_ = false;
+        qSlots_.forget();
         switch (top)
         {
             case kPageTargets: targetsPageIndex_ = 0; loadTargets (inst, true); break;
@@ -976,47 +990,46 @@ private:
         }
         return -1;
     }
+    /** The groups of the page in reading order, published to the sixteen Q slots (q_publish.h): the compact view has ADSR; the full screen ADSR, SHAPE, TIME (the active one on Q 1 .. 4, the next on 5 .. 16); the
+        targets and modulation pages one group per row. */
     void publishQGroup (IInstanceView& v)
     {
         if (otherOpen_)
             return;   // the Q group belongs to the page of another element
-        int t[4] = { -1, -1, -1, -1 };
-        const ui::QGroup* g = nullptr;
         const char* name = "";
+        auto members = [this] (const ui::QGroup& g, int* t) { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (g.member (i)); };
         if (stackDepth_ == 0)
         {
-            g = &compact_.group;
             name = "ADSR";
             compact_.group.setActive (highlight_ == 2);
             if (highlight_ != 2)
                 return;   // another sub-tab: its element owns the group
+            qSlots_.publish (v, 1, 0, [&] (int, int* t) { members (compact_.group, t); });
         }
         else if (pageTop_ == kPageTargets || pageTop_ == kPageMods)
         {
-            name = pageTop_ == kPageTargets ? "Targets" : "Mods";
-            const int row = pageTop_ == kPageTargets ? targets_.activeRow() : mods_.activeRow();
-            const ModRow* rows = pageTop_ == kPageTargets ? targetRows_ : modRows_;
-            if (row >= 0 && row < ui::ModulationsPage::kMaxRows && rows[row].slot >= 0)
-            {
-                const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (rows[row].slot);
-                t[0] = sp.amount; t[1] = sp.bipolar; t[2] = sp.bypass;
-            }
+            const bool tg = pageTop_ == kPageTargets;
+            name = tg ? "Targets" : "Mods";
+            const ModRow* rows = tg ? targetRows_ : modRows_;
+            const int n = tg ? targets_.numRows() : mods_.numRows(), act = tg ? targets_.activeRow() : mods_.activeRow();
+            qSlots_.publish (v, n, act, [&] (int row, int* t) { modRowTargets (row >= 0 && row < ui::ModulationsPage::kMaxRows ? rows[row].slot : -1, t); });
+            if (tg)
+                setRowBlocks (targets_, ui::ModTargetsPage::kPerPage, n, act);
+            else
+                setRowBlocks (mods_, ui::ModulationsPage::kMaxRows, n, act);
         }
         else if (pageTop_ == kPageList)
+        {
             name = "List";
+            qSlots_.publish (v, 0, 0, [] (int, int*) {});
+        }
         else
         {
-            g = full_.activeGroup() >= 0 ? &full_.groups[full_.activeGroup()] : nullptr;
             name = ui::EnvFullScreen::groupName (full_.activeGroup());
-        }
-        if (g != nullptr)
-            for (int i = 0; i < 4; ++i)
-                t[i] = paramOfMember (g->member (i));
-        if (! qSet_ || std::memcmp (t, qTargets_, sizeof t) != 0)
-        {
-            std::memcpy (qTargets_, t, sizeof t);
-            v.setQGroup (t, 4);
-            qSet_ = true;
+            int ids[ui::EnvFullScreen::kMaxGroups], pos = -1;
+            const int used = usedGroups (full_.groups, ui::EnvFullScreen::kMaxGroups, full_.activeGroup(), ids, pos);
+            qSlots_.publish (v, used, pos, [&] (int k, int* t) { members (full_.groups[ids[k]], t); });
+            setBlocks (full_.groups, ui::EnvFullScreen::kMaxGroups, ids, used, pos);
         }
         ui::setText (qName_, sizeof qName_, name);
     }
@@ -1032,14 +1045,14 @@ private:
     ui::Component* gesture_ = nullptr;
     bool page_ = false;                  // the page of an Env tab
     int pageSel_ = 1;                    // the envelope that page shows
-    bool gestureDown_ = false, otherOpen_ = false, configured_ = false, modsDirty_ = true, qSet_ = false, beats_ = false;
+    bool gestureDown_ = false, otherOpen_ = false, configured_ = false, modsDirty_ = true, beats_ = false;
     int w_ = 1280, h_ = 800, sel_ = 1, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = 0, underList_ = 0, selectedSource_ = ui::kNoSource, numTargets_ = 0, targetsPageIndex_ = 0;
     int timeMs_[5] = { -1, -1, -1, -1, -1 }, timeBeats_[5] = { -1, -1, -1, -1, -1 }, sustainP_ = -1, curveP_[3] = { -1, -1, -1 };
     int scratchSlots_[uibind::kMaxTargetSlots] = {};
     double modsAtMs_ = -1000.0;
     std::string prefix_ = "env1.";
     char qName_[16] = {};
-    int qTargets_[4] = { -1, -1, -1, -1 };
+    QSlots qSlots_;
 };
 
 }} // namespace synthyboy_mpc::overlay

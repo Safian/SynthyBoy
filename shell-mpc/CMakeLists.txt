@@ -255,6 +255,24 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(ui_env_host PRIVATE cxx_std_17)
     target_compile_options(ui_env_host PRIVATE -Wall -Wextra -Wpedantic)
 
+    add_executable(q_router_review_host EXCLUDE_FROM_ALL tests/q_router_review_host.cpp)
+    target_include_directories(q_router_review_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(q_router_review_host PRIVATE Threads::Threads)
+    target_compile_features(q_router_review_host PRIVATE cxx_std_17)
+    target_compile_options(q_router_review_host PRIVATE -Wall -Wextra)
+    add_test(NAME q_router_review_host COMMAND q_router_review_host)
+
+    add_executable(q_step_rule_host EXCLUDE_FROM_ALL tests/q_step_rule_host.cpp)
+    target_include_directories(q_step_rule_host PRIVATE "${CMAKE_SOURCE_DIR}/core/include" "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(q_step_rule_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(q_step_rule_host PRIVATE cxx_std_17)
+    add_test(NAME q_step_rule_host COMMAND q_step_rule_host)
+
+    add_executable(ui_time_ruler_host EXCLUDE_FROM_ALL ui/tests/ui_time_ruler_host.cpp)
+    target_include_directories(ui_time_ruler_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_compile_features(ui_time_ruler_host PRIVATE cxx_std_17)
+    target_compile_options(ui_time_ruler_host PRIVATE -Wall -Wextra -Wpedantic)
+
     add_executable(ui_lfo_host EXCLUDE_FROM_ALL ui/tests/ui_lfo_host.cpp)
     target_include_directories(ui_lfo_host PRIVATE
         "${CMAKE_SOURCE_DIR}/core/include"
@@ -267,6 +285,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_test(NAME lfo_ui_host COMMAND lfo_ui_host)
     add_test(NAME ui_env_host COMMAND ui_env_host)
     add_test(NAME ui_lfo_host COMMAND ui_lfo_host)
+    add_test(NAME ui_time_ruler_host COMMAND ui_time_ruler_host)
 
     add_test(NAME mod_ui_host COMMAND mod_ui_host)
     add_test(NAME mixfx_ui_host COMMAND mixfx_ui_host)
@@ -415,12 +434,6 @@ if(NOT CMAKE_CROSSCOMPILING)
     if(SYNTHYBOY_MPC_OVERLAY)
         add_test(NAME close_hang_host COMMAND close_hang_host $<TARGET_FILE:synthyboy_mpc> $<$<BOOL:${SYNTHYBOY_MPC_DEBUG_HOOKS}>:--hooks>)
     endif()
-
-    add_executable(q_router_review_host EXCLUDE_FROM_ALL tests/q_router_review_host.cpp)
-    target_include_directories(q_router_review_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(q_router_review_host PRIVATE Threads::Threads)
-    target_compile_features(q_router_review_host PRIVATE cxx_std_17)
-    target_compile_options(q_router_review_host PRIVATE -Wall -Wextra)
 
     add_executable(controller_review_host EXCLUDE_FROM_ALL overlay/tests/controller_review_host.cpp)
     target_include_directories(controller_review_host PRIVATE

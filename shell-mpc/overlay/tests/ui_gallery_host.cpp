@@ -460,6 +460,43 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         rLfoRnd.refresh (2);
         rLfoRnd.picture (outDir + "/" + state + "_lfo_random.png");
 
+        // the LFO Editor (opened by the EDIT button at the top of the button column, for every shape): empty (a drawn shape without points), a preset shape taken over as points, a drawn shape, each tool
+        {
+            auto openEditor = [&] (float shape) -> std::unique_ptr<GalleryRig<LfoUi>>
+            {
+                GalleryInst gi = baseInst;
+                gi.set ("lfo1.shape", shape);
+                auto r = std::make_unique<GalleryRig<LfoUi>> (gi, 1);
+                r->refresh (2);
+                r->tap (r->ui.full().edit);
+                r->refresh (2);
+                return r;
+            };
+            auto at = [] (GalleryRig<LfoUi>& r, float fx, float fy) { r.tapAt (static_cast<int> (r.ui.editor().canvas.xOf (fx)), static_cast<int> (r.ui.editor().canvas.yOf (fy))); };
+            auto tool = [] (GalleryRig<LfoUi>& r, int t) { const ui::Rect c = r.ui.editor().tools.cell (t); r.tapAt (c.x + c.w / 2, c.y + c.h / 2); };
+            openEditor (12.0f)->picture (outDir + "/" + state + "_lfo_editor_empty.png");
+            openEditor (0.0f)->picture (outDir + "/" + state + "_lfo_editor_sine.png");
+            openEditor (4.0f)->picture (outDir + "/" + state + "_lfo_editor_square.png");
+            auto drawn = [&] (const char* name, int toolIndex)
+            {
+                auto r = openEditor (12.0f);
+                r->ui.editor().canvas.state.gridX = 8;   // a coarse grid the picture shows well: 8 columns, 4 rows
+                r->ui.editor().canvas.state.gridY = 4;
+                at (*r, 0.25f, 0.9f); at (*r, 0.5f, 0.2f); at (*r, 0.75f, 0.7f);
+                at (*r, 0.5f, 0.2f);   // select the middle point: the fields show it
+                if (toolIndex == 1) { tool (*r, 1); at (*r, 0.6f, 0.5f); }
+                if (toolIndex == 2) { tool (*r, 2); at (*r, 0.6f, 0.3f); }
+                if (toolIndex == 3) { tool (*r, 3); at (*r, 0.6f, 0.8f); }
+                if (toolIndex == 0) tool (*r, 0);
+                r->refresh (2);
+                r->picture (outDir + "/" + state + "_lfo_editor_" + name + ".png");
+            };
+            drawn ("tool_point", 0);
+            drawn ("tool_flat", 1);
+            drawn ("tool_rampup", 2);
+            drawn ("tool_rampdown", 3);
+        }
+
         GalleryRig<LfoUi> rLfo2 (baseInst, 2); rLfo2.refresh (2); rLfo2.picture (outDir + "/" + state + "_lfo2.png");
         GalleryRig<LfoUi> rLfo3 (baseInst, 3); rLfo3.refresh (2); rLfo3.picture (outDir + "/" + state + "_lfo3.png");
         GalleryRig<LfoUi> rLfo4 (baseInst, 4); rLfo4.refresh (2); rLfo4.picture (outDir + "/" + state + "_lfo4.png");
@@ -611,6 +648,17 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
                 }
             }
         }
+    }
+    // 16 knob device (the MPC XL): the idle chips of the other groups show the knob numbers 5 .. 16 (QGroup::setWideDevice, as overlay/service.h does on the XL); pictures named *_wide16_*
+    {
+        ui::QGroup::setWideDevice (true);
+        GalleryRig<EnvUi> rW1 (baseInst, 1); rW1.refresh (2); rW1.picture (outDir + "/" + state + "_wide16_env1.png");
+        GalleryRig<LfoUi> rW2 (baseInst, 1); rW2.refresh (2); rW2.picture (outDir + "/" + state + "_wide16_lfo1.png");
+        GalleryRig<FilterUi> rW3 (baseInst, 1); rW3.refresh (2); rW3.picture (outDir + "/" + state + "_wide16_filter1.png");
+        GalleryRig<MasterUi> rW4 (baseInst, 1); rW4.refresh (2); rW4.picture (outDir + "/" + state + "_wide16_master.png");
+        GalleryRig<MixerUi> rW5 (baseInst, 1); rW5.refresh (2); rW5.picture (outDir + "/" + state + "_wide16_mixer.png");
+        GalleryRig<OscPageUi> rW6 (baseInst, 2); rW6.refresh (2); rW6.picture (outDir + "/" + state + "_wide16_osca.png");
+        ui::QGroup::setWideDevice (false);
     }
 }
 

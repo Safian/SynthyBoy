@@ -213,6 +213,16 @@ void testMasterGroupsAndMeters()
     for (int i = 0; i < 7; ++i) if (kr.white[i].w < 56) allKeysWide = false;
     for (int i = 0; i < 5; ++i) if (kr.black[i].w < 56) allKeysWide = false;
     check (allKeysWide, "every key of the keyboard is at least 56 px wide (touch target)");
+    {   // N2: the black keys are narrower than the white ones (under 0.5) and sit at the piano's positions (centres 0.877, 2.04, 3.79, 4.95, 6.12 white widths from the C)
+        const double wk = kr.white[0].w, x0 = kr.white[0].x, std5[5] = { 0.877, 2.040, 3.790, 4.950, 6.120 };
+        bool pos = true, narrow = true;
+        for (int i = 0; i < 5; ++i)
+        {
+            pos = pos && std::fabs ((kr.black[i].x + kr.black[i].w * 0.5 - x0) / wk - std5[i]) < 0.03;
+            narrow = narrow && kr.black[i].w < 0.5 * wk && kr.black[i].h < kr.white[0].h;
+        }
+        check (pos && narrow, "the black keys are narrow (under half a white key) and at the standard positions");
+    }
     // tap on black key F# (black key index 2, note 6)
     r.tapAt (kr.black[2].x + kr.black[2].w / 2, kr.black[2].y + kr.black[2].h / 2);
     check (r.inst.get ("master.scale.key") == 6.0f, "tap on F# black key sets scale key to 6 (F#)");
