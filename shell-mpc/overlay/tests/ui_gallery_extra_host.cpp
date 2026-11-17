@@ -928,7 +928,7 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
         {
             GalleryRig<MacroUi> r (baseInst, 1);
             r.refresh (2);
-            r.tap (r.ui.view().bank2Btn);
+            r.tapAt (r.ui.view().bankList.rowRect (1).x + 30, r.ui.view().bankList.rowRect (1).y + 28);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_macros_bank2.png");
         }

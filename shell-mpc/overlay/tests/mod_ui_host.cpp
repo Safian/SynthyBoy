@@ -589,7 +589,7 @@ void testMacrosView()
 
     check (r.ui.bank() == 0, "default bank is Bank 1 (1-4)");
     check (r.inst.q[0] == FakeInst::idx ("macro.1") && r.inst.q[3] == FakeInst::idx ("macro.4"), "Bank 1 Q targets are macro.1 .. macro.4");
-    r.tapC (r.ui.view().bank2Btn);
+    r.tap (r.ui.view().bankList.rowRect (1).x + 30, r.ui.view().bankList.rowRect (1).y + 28);
     check (r.ui.bank() == 1, "active bank is now Bank 2 (5-8)");
     check (r.inst.q[0] == FakeInst::idx ("macro.5") && r.inst.q[3] == FakeInst::idx ("macro.8"), "Bank 2 Q targets are macro.5 .. macro.8");
     r.inst.set ("macro.5", 20.0f);
@@ -601,7 +601,7 @@ void testMacrosView()
     r.tap (static_cast<int> (r.ui.view().cards[2].knob.geom().cx), static_cast<int> (r.ui.view().cards[2].knob.geom().cy));   // the dial (the name beside it is a button of its own now: a tap there opens the keyboard page)
     check (r.ui.bank() == 0, "a tap on a card of the top row makes bank 1 the Q group");
     // a bank left from an earlier visit does not survive the arrival: the page shows BANK 1 and the knobs write macro 1 .. 4 (the group and the picture cannot disagree)
-    r.tapC (r.ui.view().bank2Btn);
+    r.tap (r.ui.view().bankList.rowRect (1).x + 30, r.ui.view().bankList.rowRect (1).y + 28);
     r.refresh();
     check (r.ui.bank() == 1 && r.inst.q[0] == FakeInst::idx ("macro.5"), "the bank is set to 2 before the page is left");
     r.ui.forgetQGroup();   // the page is shown again (PageView::onShown)
@@ -636,6 +636,17 @@ void testMacroTargets()
     ui::MacroView& v = r.ui.view();
     check (v.cards[0].numChips == 2 && v.cards[0].extraDestCount == 0, "Macro 1 shows the 2 targets of its active slots as chips");
     check (v.cards[1].numChips == 0, "Macro 2 has no chip");
+    {   // a long target name is kept whole (the card cuts it with an ellipsis where it does not fit); the bank selector is a LED list of two rows of 56 px or more
+        setSlot (r.inst, 3, m1, synthyboy::modDestinationChoiceOf (static_cast<size_t> (FakeInst::idx ("osc1.unison.spread"))), 50.0f, false);
+        r.refresh();
+        bool whole = false;
+        for (int i = 0; i < v.cards[0].numChips; ++i)
+            whole = whole || std::strlen (v.cards[0].chips[i].text) > 19;
+        check (whole, "a target name longer than 19 characters is not cut by the chip buffer");
+        check (v.bankList.state.count == 2 && v.bankList.rowRect (0).h >= 56 && v.bankList.rowRect (1).h >= 56 && v.bankList.sizeOk(), "BANK 1 / BANK 2 are a LED list with rows of 56 px or more");
+        setSlot (r.inst, 3, 0, 0, 0.0f, false);
+        r.refresh();
+    }
 
     // the chips row asks for the targets page of the macro: the same page as the envelope's and the LFO's
     r.tap (v.cards[0].rect().x + 20, v.cards[0].chipsRect().y + 10);

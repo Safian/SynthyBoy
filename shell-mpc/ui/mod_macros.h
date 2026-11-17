@@ -11,6 +11,7 @@
 #include "base.h"
 #include "composite.h"
 #include "core.h"
+#include "led_list.h"
 #include "qgroup.h"
 #include "theme.h"
 
@@ -83,7 +84,7 @@ public:
     int macroIndex = 0; // 0 .. 7
     Knob knob;
 
-    struct Chip { char text[20] = {}; };
+    struct Chip { char text[40] = {}; };
     Chip chips[kMaxChips];
     int numChips = 0;
     int extraDestCount = 0;
@@ -199,27 +200,27 @@ protected:
             p.textCentered (cr, "NO TARGET - TAP TO ADD", T.fLabel - 2.0f, p.c (T.textFaint, 255), T.fMin);
             return;
         }
-        int cx = cr.x + 6;
-        const int right = cr.right() - 6 - (extraDestCount > 0 ? 44 : 0);
+        // the targets as tags: a dot in the colour of the macros and the name (cut with an ellipsis where it does not fit); no button outline, the whole area is the one touch target
+        int cx = cr.x + 12;
+        const int right = cr.right() - 8 - (extraDestCount > 0 ? 48 : 0);
         for (int i = 0; i < numChips; ++i)
         {
             const float tw = sdf::textWidth (chips[i].text, T.fLabel - 3.0f);
-            const int chipW = std::clamp (static_cast<int> (std::ceil (tw)) + 14, 44, 110);
-            if (cx + chipW > right)
+            const int tagW = std::clamp (static_cast<int> (std::ceil (tw)) + 24, 60, 150);
+            if (cx + tagW > right && i > 0)
                 break;
-            const Rect box { cx, cr.y + 8, chipW, cr.h - 16 };
-            p.rrect (box, T.rChip, p.c (T.panel0, 255));
-            p.rrect (box, T.rChip, p.c (theme::sourceColour ("MAC"), 255), 1.0f);
-            p.textCentered (box, chips[i].text, T.fLabel - 3.0f, p.c (T.text, 255), T.fMin);
-            cx += chipW + 6;
+            const int w = std::min (tagW, right - cx);
+            if (w < 40)
+                break;
+            p.disc (static_cast<float> (cx + 4), static_cast<float> (cr.y + cr.h / 2), 3.0f, p.c (theme::sourceColour ("MAC"), 255));
+            p.textLeft ({ cx + 12, cr.y, w - 12, cr.h }, chips[i].text, T.fLabel - 3.0f, p.c (T.text, 255), T.fMin);
+            cx += w + 8;
         }
         if (extraDestCount > 0)
         {
             char buf[12];
             std::snprintf (buf, sizeof buf, "+%d", extraDestCount);
-            const Rect more { cr.right() - 6 - 38, cr.y + 8, 38, cr.h - 16 };
-            p.rrect (more, T.rChip, p.c (T.flow[0], 255));
-            p.textCentered (more, buf, T.fLabel - 3.0f, p.c (T.onBright, 255), T.fMin);
+            p.textRight ({ cr.right() - 8 - 44, cr.y, 44, cr.h }, buf, T.fLabel - 2.0f, p.c (T.flow[0], 255), T.fMin);
         }
     }
 
@@ -238,8 +239,7 @@ class MacroView : public Composite
 public:
     static constexpr int kBarH = 64, kNumMacros = 8, kSpectrumH = 140;
 
-    MenuButton bank1Btn { "BANK 1: 1-4", MenuButton::Icon::None };
-    MenuButton bank2Btn { "BANK 2: 5-8", MenuButton::Icon::None };
+    LedList bankList;   // BANK 1: 1-4 / BANK 2: 5-8: both visible, one lit (a LED list in the bar, no boxes)
 
     MacroCard cards[kNumMacros];
     SpectrumStrip spectrum;
@@ -247,8 +247,9 @@ public:
 
     MacroView()
     {
-        addKid (bank1Btn);
-        addKid (bank2Btn);
+        static const char* const kBanks[2] = { "BANK 1: 1-4", "BANK 2: 5-8" };
+        bankList.setOptions (kBanks, 2);
+        addKid (bankList);
         for (int i = 0; i < kNumMacros; ++i)
         {
             cards[i].setMacro (i, nullptr);
@@ -263,6 +264,7 @@ public:
     void setBank (int b)
     {
         bank_ = (b == 1 ? 1 : 0);
+        bankList.state.index = bank_;
         updateQGroup();
     }
     int bank() const noexcept { return bank_; }
@@ -290,16 +292,6 @@ public:
         return c;
     }
 
-    Change touchUp (int x, int y) override
-    {
-        const bool onBank1 = (cap_ == &bank1Btn);
-        const bool onBank2 = (cap_ == &bank2Btn);
-        const Change c = Composite::touchUp (x, y);
-        if (onBank1) { setBank (0); return Change::none(); }
-        if (onBank2) { setBank (1); return Change::none(); }
-        return c;
-    }
-
     void draw (gpu::SceneBuilder& sb) const override
     {
         Composite::draw (sb);
@@ -319,8 +311,7 @@ protected:
     void layout() override
     {
         const int m = 8;
-        bank1Btn.place ({ rect_.x + 300, rect_.y + 4, 170, 56 });
-        bank2Btn.place ({ rect_.x + 478, rect_.y + 4, 170, 56 });
+        bankList.place ({ rect_.x + 300, rect_.y + 4, 2 * 190, 56 });
 
         spectrum.place ({ rect_.x + m, rect_.bottom() - m - kSpectrumH, rect_.w - 2 * m, kSpectrumH });
         // 2 rows x 4 columns
@@ -340,8 +331,6 @@ protected:
     {
         const theme::Look& T = theme::L();
         p.textLeft ({ rect_.x + 14, rect_.y + 4, 260, 56 }, "MACROS", T.fTitle, p.c (T.text, 255), T.fMin);
-        const MenuButton* activeBtn = (bank_ == 0 ? &bank1Btn : &bank2Btn);
-        p.rrect (activeBtn->rect(), T.rControl, p.c (T.flow[0], 255), 1.6f);
     }
 
 private:
