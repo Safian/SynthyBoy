@@ -80,7 +80,7 @@ void testTables()
                 all = all && ed.infoOf (p) == &synthyboy::paramTable()[d.source[p]];
             check (all, name + ": control p is parameter p of the type (every parameter of the type has its control)");
         }
-        check (lay.rowsPerPage >= 2 && lay.rowsPerPage <= fxl::kMaxPageRows && lay.numRows <= fxl::kMaxRows, name + ": rows per page and rows of the table are in range");
+        check (lay.rowsPerPage >= 1 && lay.rowsPerPage <= fxl::kMaxPageRows && lay.numRows <= fxl::kMaxRows, name + ": rows per page and rows of the table are in range");
     }
 }
 

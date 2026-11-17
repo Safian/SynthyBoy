@@ -520,7 +520,7 @@ void testEveryEffectType()
             why += " (a key of the table is not an engine parameter: " + std::to_string (controls) + " of " + std::to_string (cells) + ")";
         }
         check (table, name + ": the table has a control for every parameter of the effect, each once" + why);
-        check (lay.numRows <= ui::fxl::kMaxRows && lay.rowsPerPage >= 2 && lay.rowsPerPage <= ui::fxl::kMaxPageRows, name + ": the table fits the page");
+        check (lay.numRows <= ui::fxl::kMaxRows && lay.rowsPerPage >= 1 && lay.rowsPerPage <= ui::fxl::kMaxPageRows, name + ": the table fits the page");
 
         // every state the conditions of the table can make: the pages, and no page with fewer than three live members unless the effect has fewer than three in that state
         std::string defWhy;

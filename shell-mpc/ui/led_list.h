@@ -137,7 +137,8 @@ protected:
     {
         const theme::Look& T = theme::L();
         if (state.title[0] != '\0' && state.titleInLane)
-            p.textLeft ({ rect_.x + 30, rect_.y - 16, std::max (0, rect_.w - 32), 16 }, state.title, T.fLabel - 3.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
+            // right of the chip: the chip of two digits (5 .. 16 on a device with sixteen knobs) is 26 px wide and ends at x + 30
+            p.textLeft ({ rect_.x + 34, rect_.y - 16, std::max (0, rect_.w - 36), 16 }, state.title, T.fLabel - 3.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
         else if (state.title[0] != '\0')
             p.textLeft ({ rect_.x + 4, rect_.y + 4, std::max (0, rect_.w - 8), kTitleH - 6 }, state.title, T.fLabel - 2.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
         const int n = std::min (state.count, kMaxOptions);

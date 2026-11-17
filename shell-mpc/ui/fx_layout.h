@@ -188,12 +188,12 @@ inline const Layout& layoutOf (int kind) noexcept
             row ("TAIL", c ("convolve.damp"), c ("convolve.ir_gain"), c ("convolve.law")),
             row ("OUTPUT", c ("convolve.mix"), c ("convolve.level")) } },
         // 14: the splitters: the crossover frequencies, the band bypasses, the level
-        Layout { kKindSplitterLh, "Splitter L/H", 2, 270, 1, {
+        Layout { kKindSplitterLh, "Splitter L/H", 1, 240, 1, {
             row ("SPLIT", c ("splitter_lh.freq", "SPLIT FREQUENCY"), c ("splitter_lh.low_bypass", "LOW BYPASS"), c ("splitter_lh.high_bypass", "HIGH BYPASS"), c ("splitter_lh.level", "LEVEL")) } },
         Layout { kKindSplitterLmh, "Splitter L/M/H", 2, 220, 2, {
             row ("SPLIT", c ("splitter_lmh.freq_low", "LOW SPLIT"), c ("splitter_lmh.freq_high", "HIGH SPLIT"), c ("splitter_lmh.level", "LEVEL")),
             row ("BYPASS", c ("splitter_lmh.low_bypass", "LOW BYPASS"), c ("splitter_lmh.mid_bypass", "MID BYPASS"), c ("splitter_lmh.high_bypass", "HIGH BYPASS")) } },
-        Layout { kKindSplitterMs, "Splitter M/S", 2, 270, 1, {
+        Layout { kKindSplitterMs, "Splitter M/S", 1, 240, 1, {
             row ("MID / SIDE", c ("splitter_ms.mid_bypass", "MID BYPASS"), c ("splitter_ms.side_bypass", "SIDE BYPASS"), c ("splitter_ms.level", "LEVEL")) } },
     };
     return kAll[kind >= 0 && kind < kNumKinds ? kind : 0];
