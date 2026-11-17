@@ -652,6 +652,59 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         }
     }
 
+    // 9b. The racks of the bands of the three splitters: the splitter page with its lanes (effects parked in the bands), the page of a band with its first effect, the empty band
+    {
+        static const char* const kSplitNames[3] = { "splitter_lh", "splitter_lmh", "splitter_ms" };
+        for (int si = 0; si < 3; ++si)
+        {
+            const int kind = ui::fxl::kKindSplitterLh + si;
+            GalleryInst inst = baseInst;
+            for (int t = 1; t < synthyboy::kNumFxInstanceTypes; ++t)
+            {
+                inst.set (std::string (synthyboy::fxTypeDescriptor (t).prefix) + ".on", 0.0f);
+                inst.set (std::string (synthyboy::fxTypeDescriptor (t).prefix) + ".rack", 0.0f);
+            }
+            for (int i = 1; i <= 16; ++i)
+            {
+                char k[24]; std::snprintf (k, sizeof k, "fxi%02d.type", i); inst.set (k, 0.0f);
+            }
+            static const int kBandTypes[7][3] = { { synthyboy::kFxTypeCompressor, synthyboy::kFxTypeDistortion, 0 }, { synthyboy::kFxTypeEq, synthyboy::kFxTypeChorus, synthyboy::kFxTypeReverb },
+                                                  { synthyboy::kFxTypeUtility, synthyboy::kFxTypeCompressor, 0 }, { synthyboy::kFxTypeFilter, synthyboy::kFxTypePhaser, synthyboy::kFxTypeDelay },
+                                                  { synthyboy::kFxTypeEq, synthyboy::kFxTypeFlanger, 0 }, { synthyboy::kFxTypeUtility, 0, 0 }, { synthyboy::kFxTypeBode, synthyboy::kFxTypeHyperDimension, 0 } };
+            bool used[synthyboy::kNumFxInstanceTypes] = {};
+            for (int b = 0; b < ui::fxl::bandsOfSplitter (kind); ++b)
+            {
+                const int rack = ui::fxl::bandRack (kind, b);
+                for (int t : kBandTypes[rack - ui::fxl::kFirstBandRack])
+                    if (t > 0 && ! used[t])
+                    {
+                        used[t] = true;
+                        inst.set (std::string (synthyboy::fxTypeDescriptor (t).prefix) + ".on", b == 1 && t == synthyboy::kFxTypeChorus ? 0.0f : 1.0f);
+                        inst.set (std::string (synthyboy::fxTypeDescriptor (t).prefix) + ".rack", static_cast<float> (rack));
+                    }
+            }
+            inst.set (std::string (kSplitNames[si]) + ".on", 1.0f);
+            GalleryRig<FxUi> rs (inst, 1);
+            rs.refresh (2);
+            rs.picture (outDir + "/" + state + "_fx_" + kSplitNames[si] + "_lanes.png");
+            const int nb = ui::fxl::bandsOfSplitter (kind);
+            for (int b = 0; b < nb; ++b)
+            {
+                rs.tap (rs.ui.screen().slotEditor.bands.lane[b].tile);
+                rs.picture (outDir + "/" + state + "_fx_" + kSplitNames[si] + "_band" + std::to_string (b + 1) + ".png");
+                rs.tap (rs.ui.screen().chainBar.backCard);
+            }
+            // an empty band: the gallery of the free types
+            GalleryInst bare = inst;
+            for (int t = 1; t < synthyboy::kNumFxInstanceTypes; ++t)
+                bare.set (std::string (synthyboy::fxTypeDescriptor (t).prefix) + ".rack", 0.0f);
+            GalleryRig<FxUi> re (bare, 1);
+            re.refresh (2);
+            re.tap (re.ui.screen().slotEditor.bands.lane[0].tile);
+            re.picture (outDir + "/" + state + "_fx_" + kSplitNames[si] + "_band1_empty.png");
+        }
+    }
+
     // 10. Master (both sub-pages)
     {
         GalleryRig<MasterUi> rMasterMain (baseInst, 1);

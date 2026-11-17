@@ -1088,6 +1088,40 @@ void lintView (Runner& run, const layout::View& v, const LintInst& base)
                         lintRig (run, r, pg, std::string (kNames[t]) + "-p" + std::to_string (p + 1), { &r.ui.screen() });
                     }
                 });
+            // the three splitters: the page with its lanes (two effects in every band), the page of every band with its first effect, and the empty band (the gallery of the free types)
+            static const char* const kSplit[3] = { "splitter-lh", "splitter-lmh", "splitter-ms" };
+            for (int si = 0; si < 3; ++si)
+                sub (kSplit[si], [&] {
+                    const int kind = ui::fxl::kKindSplitterLh + si;
+                    LintInst inst = base;
+                    for (int t = 1; t < synthyboy::kNumFxInstanceTypes; ++t)   // a clean chain: every module off and in Main, the pool empty
+                    {
+                        inst.set (std::string (synthyboy::fxTypeDescriptor (t).prefix) + ".on", 0.0f);
+                        inst.set (std::string (synthyboy::fxTypeDescriptor (t).prefix) + ".rack", 0.0f);
+                    }
+                    for (int i = 1; i <= 16; ++i)
+                    {
+                        char k[24]; std::snprintf (k, sizeof k, "fxi%02d.type", i); inst.set (k, 0.0f);
+                    }
+                    int next = 1;
+                    for (int b = 0; b < ui::fxl::bandsOfSplitter (kind); ++b)
+                        for (int n = 0; n < 2 + b; ++n, ++next)   // 2, 3, 4 effects in the bands
+                        {
+                            const std::string pre = synthyboy::fxTypeDescriptor (next).prefix;
+                            inst.set (pre + ".on", 1.0f);
+                            inst.set (pre + ".rack", static_cast<float> (ui::fxl::bandRack (kind, b)));
+                        }
+                    inst.set (std::string (si == 0 ? "splitter_lh" : (si == 1 ? "splitter_lmh" : "splitter_ms")) + ".on", 1.0f);
+                    Rig<FxUi> r (inst, v.index);
+                    r.refresh (2);
+                    lintRig (run, r, pg, std::string (kSplit[si]) + "-lanes", { &r.ui.screen() });
+                    for (int b = 0; b < ui::fxl::bandsOfSplitter (kind); ++b)
+                    {
+                        r.tap (r.ui.screen().slotEditor.bands.lane[b].tile);
+                        lintRig (run, r, pg, std::string (kSplit[si]) + "-band" + std::to_string (b + 1), { &r.ui.screen() });
+                        r.tap (r.ui.screen().chainBar.backCard);
+                    }
+                });
             break;
         }
         case layout::kKindMaster:
