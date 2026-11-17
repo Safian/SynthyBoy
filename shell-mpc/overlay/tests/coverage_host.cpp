@@ -826,7 +826,7 @@ void initKnownGaps()
         "filter2.on", "filter2.model", "filter2.style", "filter2.formant.resonance", "filter2.clean_mode"
     };
     // FX noControl: 0 (the splitters have their pages, the force enable of the reverb stands in its table, every state of the effects is probed)
-    // FX notQ: 52
+    // FX notQ: 112 (the chain-level keys: on, rack, order, type of the modules and of the 16 slots; operated by the cards' power, the rack switch (ten racks: Main, Bus 1, Bus 2 and the seven band racks of the splitters), the drag of a card, + ADD and REMOVE; mixfx_ui_host walks every module to every rack)
     known()["FX"].notQ = {
         "fxfilter.on", "fx.order.1", "fx.order.2", "fx.order.3", "fx.order.4", "fx.order.5", "fx.order.6", "fx.order.7", "fx.order.8", "fx.order.9", "chorus.on",
         "compressor.on", "delay.on", "distortion.on", "eq.on", "flanger.on", "phaser.on", "reverb.on", "fx.order.10", "fx.order.11", "fx.order.12", "fx.order.13",

@@ -228,11 +228,11 @@ protected:
         if (state.dual)
         {
             if (state.curve1 && state.numPoints1 >= 2)
-                drawCurvePolyline (sb, in, state.curve1, state.numPoints1, state.filter1On ? filterColour (1) : dimmed (filterColour (1)), 0, 1.0f);
+                drawCurvePolyline (sb, in, state.curve1, state.numPoints1, state.filter1On ? filterColour (1) : dimmed (filterColour (1)), 0, 0.6f);
             if (state.curve2 && state.numPoints2 >= 2)
-                drawCurvePolyline (sb, in, state.curve2, state.numPoints2, state.filter2On ? filterColour (2) : dimmed (filterColour (2)), 0, 1.0f);
+                drawCurvePolyline (sb, in, state.curve2, state.numPoints2, state.filter2On ? filterColour (2) : dimmed (filterColour (2)), 0, 0.6f);
             if (state.curveResult && state.numPointsResult >= 2)
-                drawCurvePolyline (sb, in, state.curveResult, state.numPointsResult, T.text, 0, 1.8f);
+                drawCurvePolyline (sb, in, state.curveResult, state.numPointsResult, T.text, 0, 1.0f);
             // the legend of the three lines
             const struct { const char* name; uint32_t col; } kLegend[3] = { { "F1", filterColour (1) }, { "F2", filterColour (2) }, { "F1+F2", T.text } };
             int lx = in.x + 8;
@@ -251,7 +251,7 @@ protected:
             // a filter that is switched off: the response of its parameters (what switching it on will do) drawn dim, without fill, and the name says OFF; never a bright line that contradicts the knobs
             const bool on = state.activeFilter == 2 ? state.filter2On : state.filter1On;
             if (cData && cLen >= 2)
-                drawCurvePolyline (sb, in, cData, cLen, on ? filterColour (state.activeFilter) : dimmed (filterColour (state.activeFilter)), on ? 34 : 0, on ? 1.8f : 1.2f);
+                drawCurvePolyline (sb, in, cData, cLen, on ? filterColour (state.activeFilter) : dimmed (filterColour (state.activeFilter)), on ? 34 : 0, on ? 1.0f : 0.7f);   // (`stroke` takes the half width: the line is 2 px, as the curves of the LFO and the FX displays)
             std::snprintf (buf, sizeof buf, on ? "FILTER %d" : "FILTER %d  OFF", state.activeFilter);
             p.textLeft ({ in.x + 8, in.y + 3, 160, 16 }, buf, T.fLabel - 2.0f, p.c (on ? T.textDim : T.textFaint, 255), T.fMin);
         }
@@ -398,7 +398,7 @@ protected:
 
     /** The curve cut at the frame: every stretch of the curve inside the plot (-48 .. +30 dB) is drawn as a line of its own that ends exactly on the edge it leaves through, so a deep notch or a fall below the
         floor runs out of the picture instead of lying along its bottom. The fill under a stretch goes down to the bottom of the plot. */
-    static void drawCurvePolyline (gpu::SceneBuilder& sb, const Rect& in, const float* dbData, int nPoints, uint32_t col, int fillAlpha, float strokeWidth)
+    static void drawCurvePolyline (gpu::SceneBuilder& sb, const Rect& in, const float* dbData, int nPoints, uint32_t col, int fillAlpha, float strokeWidth)   // the half width of the line, in pixels
     {
         if (nPoints < 2 || in.w < 4)
             return;

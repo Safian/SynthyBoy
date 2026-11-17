@@ -610,6 +610,17 @@ void testDrawingAndSceneOps()
         std::vector<uint32_t> cv;
         renderScene (*data, cv);
         check (cv.size() == 1280u * 800u, "CPU renderer renders full screen view scene");
+        // the response line is a thin crisp line like the curves of the LFO and the FX displays (2 px), not a 4 px band: on the flat part of the curve (column at the left of the cutoff) count the bright pixels
+        const ui::Rect dr = r.ui.displayRect();
+        const int cx = dr.x + 260;
+        int run = 0;
+        for (int y = dr.y; y < dr.bottom(); ++y)
+        {
+            const uint32_t px = cv[static_cast<size_t> (y) * 1280u + static_cast<size_t> (cx)];
+            const int cr = static_cast<int> ((px >> 16) & 255u), cg = static_cast<int> ((px >> 8) & 255u), cb = static_cast<int> (px & 255u);
+            run += cg > 190 && cb > 190 && cr < 150 ? 1 : 0;
+        }
+        check (run >= 1 && run <= 3, "the response line of the filter display is 2 px thin (" + std::to_string (run) + " bright pixels in a column of the flat part)");
     }
 
     // 3. Draw Formant view
