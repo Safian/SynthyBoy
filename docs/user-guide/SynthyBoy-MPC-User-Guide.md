@@ -13,7 +13,7 @@ The pictures are rendered for a wide device: the small numbers 5 .. 16 are the Q
 Contents
 
 1. What it is
-2. Install and first start
+2. Install and first start (see dedicated [INSTALL.md](INSTALL.md))
 3. The screen
 4. Controls
 5. The pages
@@ -70,6 +70,8 @@ so a firmware update or an unusual host situation (for example a pop-up of the h
 device dimming in standby) can make the plugin's picture disappear or flicker. The sound is not affected.
 
 ## 2. Install and first start
+
+> For full details on package contents, hardware compatibility, updating in-place warnings, and troubleshooting, see the dedicated installation guide: [INSTALL.md](INSTALL.md).
 
 The Akai manuals describe the host side. Where this guide names a manual, it means the **MPC Standalone OS User
 Guide v3.10.1** (MPC Key 61 and the other first-generation devices) and the **MPC Live III, MPC XL User Guide v3.10.1**
