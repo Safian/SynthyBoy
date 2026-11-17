@@ -209,6 +209,10 @@ A Sub és a Noise más vezérlőkkel rendelkezik (hullámforma, oktáv; zaj szí
 **LFO panel.** Az LFO 1 .. LFO 10, RND 1 .. RND 4 léptető (a névre koppintva megnyílik a lista), a hullámforma-kijelző a teljes képernyős gombbal, a SHAPE léptető, a RATE potméter a **HZ / BPM / KEY** listával (három pont, a világító jelzi az üzemmódot), a RISE és a SMOOTH (Q 1 - 4). A SMOOTH neve előtt egy LED található: ez a simítás kapcsolója, a potméter pedig az idejét állítja be (a gomb halvány, amíg a LED ki van kapcsolva). Részletek az 5.9 fejezetben.
 
 **Teljes képernyő.** A teljes képernyő gomb megnyitja az adott elem oldalát a teljes plugin-területen (ugyanaz az oldal, mint a megfelelő Osc, Env vagy LFO fül, egy CLOSE gombbal). A Play fül elhagyásakor ez bezáródik.
+A Play oldal új, egyszerűsített elrendezéssel rendelkezik:
+- **Nincs fül-sor:** A navigációt egyetlen választó biztosítja a képernyő minden harmadában.
+- **Nyilas léptetés, koppintásra nyíló lista:** Használja a nyilakat a léptetéshez, vagy koppintson a névre a Sub, Osc A/B/C, Noise, Envelopes 1–6, LFOs 1–10 és R1–R4 teljes választási listájának megnyitásához.
+- **Egységes elrendezés:** Mindhárom kijelző azonos magasságú. A táblázatválasztó, a PAN és a LEVEL egyetlen sorba rendezve.
 
 ### 5.2 Macros (Makrók)
 
@@ -596,7 +600,9 @@ Két oldal, amelyek a felül található **MAIN** és **TUNING & MPE** gombokkal
 | OUTPUT | L / R mérők (a motor master csúcsszintmérője tartóvonallal, dB skálával külön oszlopban és színsávval) | |
 | | VOLUME | Master Volume -60 .. +6 dB, alapértelmezett: -12 |
 | | SPREAD | Stereo Spread 0 .. 100 százalék, alapértelmezett: 100 |
-| | STEREO | Stereo Routing 0 .. 100 százalék, alapértelmezett: 100 (potméter, mint a másik kettő) |
+| | STEREO | Stereo Routing 0 .. 100 százalék, alapértelmezett: 100 |
+| | LIMIT | LED kapcsoló (kimeneti limiter, alapértelmezés: ki) |
+| | QUALITY | A NO SMOOTHING (simítás kikapcsolva) és OVERSAMPLE 4X (túlmintavételezés) LED kapcsolópár |
 | | VOICE OVERRIDE | LED lista: Kill / Steal |
 | PITCH | TUNE | -100 .. +100 cent |
 | | TRANSPOSE | -48 .. +48 félhang |

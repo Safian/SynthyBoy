@@ -242,8 +242,14 @@ The Play tab is ONE page: three live panels side by side, an **oscillator** pane
 This is the place to play and tweak: the big controls of the three most used parts are in one view.
 
 The envelope panel with its ADSR group (Q-Links 5 to 8 on the XL; with the Key 61 the frame is on it while it is the active group):
+The Play page now features a unified, streamlined layout:
+- **No tab rows:** Navigation is handled by a single selector in each third of the screen.
+- **Arrows step, tap opens list:** Use the arrows to step, or tap the name to open the full list of options for Sub, Osc A/B/C, Noise, Envelopes 1–6, LFOs 1–10, and R1–R4.
+- **Unified layout:** All three displays have the same height. The table selector, PAN, and LEVEL are consolidated into a single row.
 
-![Play Env](img/play-env.png)
+### 5.12 Master
+
+![Master](img/master.png)
 
 The LFO panel with its group (SHAPE, RATE, RISE, SMOOTH: Q-Links 9 to 12 on the XL):
 
@@ -275,6 +281,11 @@ of the smoothing and the knob sets its time (the knob is dim while the LED is of
 
 **Full screen.** The full-screen button opens the page of that element over the whole plugin area (the same
 page as the corresponding Osc, Env or LFO tab, with a CLOSE button). Leaving the Play tab closes it.
+The Master page OUTPUT block includes:
+- **LIMIT switch:** The output limiter, off by default. Use it to prevent clipping when pushing the output levels high.
+- **QUALITY:** 
+  - **NO SMOOTHING:** Disables parameter smoothing, causing changes to jump immediately instead of gliding (ideal for hard rhythmic gating). Stored in the preset.
+  - **OVERSAMPLE 4X:** Cleans up high notes of the wavetable oscillator without a warp. Note: Uses more CPU. (2x on the gen 1 profile).
 
 ### 5.2 Macros
 
