@@ -468,15 +468,16 @@ struct PluginInstance
             inst.updateEnginePadPressure();
         }
 #endif
+        unsigned missingContent() const noexcept override { return inst.engine != nullptr ? inst.engine->missingContent() : 0u; }
         void voiceStatus (std::string& out) const override
         {
             synthyboy::VoiceStats s;
             if (inst.engine == nullptr || ! inst.engine->voiceStats (s))
                 return;
             char b[480];
-            std::snprintf (b, sizeof b, "voices_active: %d\nvoices_released: %d\nvoices_sustaining: %d\nheld_keys: %d\nheld_lowest: %d\nheld_highest: %d\norphan_voices: %d\nnote_ons: %u\nnote_offs: %u\nnote_offs_unmatched: %u\nvoices_stolen: %u\nsustain_pedal: %d\nsound_off_requests: %u\n",
+            std::snprintf (b, sizeof b, "voices_active: %d\nvoices_released: %d\nvoices_sustaining: %d\nheld_keys: %d\nheld_lowest: %d\nheld_highest: %d\norphan_voices: %d\nnote_ons: %u\nnote_offs: %u\nnote_offs_unmatched: %u\nvoices_stolen: %u\nsustain_pedal: %d\nsound_off_requests: %u\nmissing_content: %u\n",
                            s.active, s.released, s.sustaining, s.heldKeys, s.lowestHeld, s.highestHeld, s.orphans, s.noteOns, s.noteOffs, s.unmatchedNoteOffs, s.stolen, s.sustainPedal ? 1 : 0,
-                           inst.soundOffRequests.load (std::memory_order_relaxed));
+                           inst.soundOffRequests.load (std::memory_order_relaxed), inst.engine->missingContent());
             out += b;
         }
         void setQVirtual (int id, float normalised) noexcept override { inst.qRouter.setVirtualValue (id, normalised); }
@@ -715,6 +716,7 @@ struct PluginInstance
         synthyboy::StateContent next = content;
         synthyboy::ContentFileRef ref;
         int rootNote = -1;
+        synthyboy::SampleLoopSettings loop;
         if (kind == 2 && sfz)
         {
             const std::string folder = dirName (path), pack = baseName (folder), root = dirName (folder);
@@ -743,6 +745,7 @@ struct PluginInstance
                 return false;
             }
             rootNote = facts.rootNote;
+            loop = synthyboy::sampleLoopSettings (facts);
             if (kind == 1)
             {
                 if (! contentStore->addFile (synthyboy::ContentKind::sample, name, bytes, ref))
@@ -771,6 +774,15 @@ struct PluginInstance
         if (rootNote >= 0 && kind == 1)
             if (const synthyboy::ParamInfo* p = synthyboy::findParamByKey (("osc" + std::to_string (osc) + ".sample.root").c_str()))
                 uiWrite (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, static_cast<float> (rootNote))));
+        if (loop.valid && kind == 1)
+        {
+            // the loop of the WAV 'smpl' chunk becomes the oscillator's loop settings, once, at load time (the same path as the root note)
+            const std::string o = "osc" + std::to_string (osc);
+            const std::pair<const char*, float> writes[3] = { { ".sample.loop_mode", static_cast<float> (loop.mode) }, { ".sample.loop_start", loop.startPercent }, { ".sample.loop_end", loop.endPercent } };
+            for (const auto& w : writes)
+                if (const synthyboy::ParamInfo* p = synthyboy::findParamByKey ((o + w.first).c_str()))
+                    uiWrite (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, w.second)));
+        }
         return true;
     }
     bool overlayAttached = false;

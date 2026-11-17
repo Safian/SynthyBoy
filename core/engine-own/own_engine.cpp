@@ -1459,10 +1459,12 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
 void OwnEngine::publishStats() noexcept
 {
     int active = 0, released = 0, sustaining = 0, orphans = 0;
+    unsigned miss = 0;
     for (const auto& v : voices)
     {
         if (!v->isActive())
             continue;
+        miss |= v->missingMask();
         ++active;
         if (v->isReleased() || v->killing())
         {
@@ -1476,6 +1478,19 @@ void OwnEngine::publishStats() noexcept
         if (!held)
             ++orphans;
     }
+    {
+        // the content that no voice needs yet but the patch asks for: a user table that is not there, the impulse of Convolve, the sample of the noise source
+        const ParamIndex& pi = paramIndex();
+        const ContentSet* cs = globals.content;
+        for (int o = 0; o < 3; ++o)
+            if (base[static_cast<size_t> (pi.osc[o].on)] >= 0.5f && base[static_cast<size_t> (pi.osc[o].type)] < 0.5f
+                && static_cast<int> (base[static_cast<size_t> (pi.osc[o].wavetable)] + 0.5f) == kWavetablePresetTable && (cs == nullptr || cs->userTable[o] == nullptr))
+                miss |= 8u << o;
+        static const int convolveOn = findParamIndex (hashKey ("convolve.on"));
+        if (convolveOn >= 0 && base[static_cast<size_t> (convolveOn)] >= 0.5f && (cs == nullptr || cs->impulse == nullptr))
+            miss |= 64u;
+    }
+    missingMask.store (miss, std::memory_order_relaxed);
     int lo = -1, hi = -1;
     for (int i = 0; i < numPressed; ++i)
     {

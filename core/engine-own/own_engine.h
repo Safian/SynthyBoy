@@ -64,6 +64,7 @@ public:
     void setReadoutTargets (const int* idx, int count) noexcept override;
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
     bool voiceStats (VoiceStats& out) const noexcept override;
+    unsigned missingContent() const noexcept override { return missingMask.load (std::memory_order_relaxed); }
     int latencySamples() const noexcept override { return reportedLatency.load (std::memory_order_relaxed); }
     void setTuningSource (const tuning::ITuningSource* s) noexcept override { noteTuning.setSource (s); paramGen.fetch_add (1u, std::memory_order_release); }
     EngineCapsMask capabilities() const noexcept override;
@@ -116,6 +117,7 @@ private:
     std::atomic<int> stIntegers[8] = {};   // active, released, sustaining, heldKeys, lowestHeld, highestHeld, orphans, pedal
     std::atomic<unsigned> stCounters[4] = {};
     void publishStats() noexcept;
+    std::atomic<unsigned> missingMask { 0 };
     // transport (set from any thread by the shell between blocks; read by the audio thread)
     std::atomic<double> tpBpm { 120.0 }, tpPos { 0.0 };
     std::atomic<bool> tpPlaying { false };
