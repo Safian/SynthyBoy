@@ -101,12 +101,14 @@ def plan(chunk_entries, presets_dir):
     return [(i, r[2], word[r[2]], r[3], r[4]) for i, r in enumerate(rows)]
 
 
-def write_set(rows, out_dir, plugin_path, date=DEFAULT_DATE, file_time="0", by_folders=False):
+def write_set(rows, out_dir, plugin_path, date=DEFAULT_DATE, file_time="0", by_folders=False, num_programs=None):
+    if num_programs is None:
+        num_programs = gen_mpc_xpl.default_num_programs()
     attrs = dict(PLUGIN_ATTRS, file=plugin_path, fileTime=file_time)
     out_dir.mkdir(parents=True, exist_ok=True)
     seen = set()
     for number, folder, cword, name, chunk in rows:
-        header = gen_mpc_xpl.build_bank_header(chunk_size=len(chunk))
+        header = gen_mpc_xpl.build_bank_header(chunk_size=len(chunk), num_programs=num_programs)
         state = gen_mpc_xpl.encode_juce_base64(header + chunk)
         text = gen_mpc_xpl.render_xpl("1", date, attrs, name, state)
         target = out_dir / folder if by_folders else out_dir
@@ -125,6 +127,7 @@ def main():
     ap.add_argument("--device", choices=sorted(DEVICE_PLUGIN_PATHS), default="xl")
     ap.add_argument("--plugin-path", help="the <PLUGIN file=...> value (default: by --device)")
     ap.add_argument("--presets", type=Path, default=REPO / "content" / "presets")
+    ap.add_argument("--num-programs", type=int, default=None, help="override number of programs in VST2 bank header")
     ap.add_argument("--chunks", type=Path, help="a dump_mpc_chunks output directory (else --plugin and --dump-tool run it)")
     ap.add_argument("--plugin", type=Path, help="a native synthyboy_mpc library")
     ap.add_argument("--dump-tool", type=Path, help="the native dump_mpc_chunks tool")
@@ -143,7 +146,8 @@ def main():
         subprocess.run([str(a.dump_tool), str(a.plugin), str(a.presets), str(chunks)], check=True, stdout=subprocess.DEVNULL)
     entries = gen_mpc_xpl.load_chunk_entries(chunks)   # skips program 0 (Init)
     rows = plan(entries, a.presets)
-    n = write_set(rows, a.out, a.plugin_path or DEVICE_PLUGIN_PATHS[a.device], a.date, a.file_time, a.by_category_folders)
+    num_programs = a.num_programs if a.num_programs is not None else gen_mpc_xpl.default_num_programs(a.presets)
+    n = write_set(rows, a.out, a.plugin_path or DEVICE_PLUGIN_PATHS[a.device], a.date, a.file_time, a.by_category_folders, num_programs=num_programs)
     print(f"gen-xpl-presets: {n} files in {a.out}")
 
 

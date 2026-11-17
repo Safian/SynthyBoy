@@ -45,7 +45,12 @@ class TestObservedFile(unittest.TestCase):
         self.assertEqual((chunk["mpcProgram"], chunk["mpcProgramName"]), (20, "Space Wobble Bass"))
 
     def test_header_is_rebuilt_exactly(self):
-        self.assertEqual(fmt.build_bank_header(chunk_size=len(self.decoded) - 160), self.decoded[:160])
+        self.assertEqual(fmt.build_bank_header(chunk_size=len(self.decoded) - 160, num_programs=113), self.decoded[:160])
+
+    def test_header_defaults_to_factory_derived_programs(self):
+        hdr = fmt.build_bank_header(chunk_size=100)
+        parsed = fmt.parse_bank_header(hdr)
+        self.assertEqual(parsed["num_programs"], 137)
 
     def test_whole_file_is_reproduced_except_preset_name_mark_and_times(self):
         parsed = fmt.parse_xpl(self.text)
@@ -99,6 +104,46 @@ class TestNaming(unittest.TestCase):
             self.assertIn(b"synthyboy-arm32.so", raw)
             parsed = fmt.parse_xpl(raw.decode("utf-8"))
             self.assertEqual(parsed["chunk_bytes"], chunk)
+            self.assertEqual(parsed["header"]["num_programs"], 137)
+
+    def test_write_set_accepts_num_programs_override(self):
+        chunk = b'{"mpcProgram":1,"mpcProgramName":"X"}'
+        rows = [(0, "Bass", "Bass", "X", chunk)]
+        with tempfile.TemporaryDirectory() as t:
+            out_dir = Path(t)
+            gen.write_set(rows, out_dir, gen.DEVICE_PLUGIN_PATHS["xl"], num_programs=200)
+            f = out_dir / "000-Bass-X.xpl"
+            self.assertTrue(f.is_file())
+            parsed = fmt.parse_xpl(f.read_text(encoding="utf-8"))
+            self.assertEqual(parsed["header"]["num_programs"], 200)
+
+    def test_main_cli_num_programs_override(self):
+        import subprocess
+        import sys
+        chunk = b'{"mpcProgram":1,"mpcProgramName":"X"}'
+        with tempfile.TemporaryDirectory() as t:
+            p = Path(t)
+            chunks_dir = p / "chunks"
+            chunks_dir.mkdir()
+            (chunks_dir / "001-Bass-X.chunk").write_bytes(chunk)
+            presets_dir = p / "presets"
+            (presets_dir / "Bass").mkdir(parents=True)
+            (presets_dir / "Bass" / "x.sbpreset").write_text(json.dumps({"meta": {"name": "X"}}))
+            out_dir = p / "out"
+            cmd = [
+                sys.executable,
+                str(SCRIPTS / "gen-xpl-presets.py"),
+                "--chunks", str(chunks_dir),
+                "--presets", str(presets_dir),
+                "--out", str(out_dir),
+                "--num-programs", "250",
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            files = list(out_dir.glob("*.xpl"))
+            self.assertEqual(len(files), 1)
+            parsed = fmt.parse_xpl(files[0].read_text(encoding="utf-8"))
+            self.assertEqual(parsed["header"]["num_programs"], 250)
 
 
 if __name__ == "__main__":
