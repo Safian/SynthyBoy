@@ -356,7 +356,7 @@ public:
     /** The rectangle of block i (the titled outline of a Q group; empty without blocks). */
     Rect blockRect (int i) const noexcept { return i >= 0 && i < numBlocks() && i < kMaxBlocks ? blocks_[i] : Rect {}; }
     const char* blockTitle (int i) const noexcept { return i >= 0 && i < numBlocks() ? preset_->blocks[i].title : ""; }
-    static constexpr int kMaxBlocks = 4, kBlockTitleH = 34, kBlockPad = 6, kBlockGap = 8, kMaxStepperH = 72, kMaxToggleH = 96;   // the title strip of a block also holds the Q index chips of its first row
+    static constexpr int kMaxBlocks = 4, kBlockTitleH = 38, kBlockPad = 6, kBlockGap = 8, kMaxStepperH = 72, kMaxToggleH = 96;   // the title strip of a block also holds the Q index chips of its first row (38: a two digit chip does not touch the title)
     int numParts() const noexcept { return nItems_; }
 
     /** The part of a slot (null when the preset has none). */

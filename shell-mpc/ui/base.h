@@ -333,6 +333,7 @@ public:
         Format format = Format::IntSigned;
         bool notSet = false, readOnly = false;
         int pxPerStep = 8;
+        char shown[16] = {};   // not empty: this text stands for the value in the box (the owner has a format of its own, the same as the grid cell's: "MID", "23R")
     };
     State state;
     /** The size the drawn box is limited to (0: the whole rectangle), at the left of the rectangle and centred in its height: a cell of a page that is far bigger than a number needs holds the field at its left (under the index chip) and the touch zone stays the whole cell. */
@@ -350,6 +351,11 @@ public:
         if (s.notSet)
         {
             std::snprintf (out, 16, "-");
+            return;
+        }
+        if (s.shown[0] != '\0')
+        {
+            std::snprintf (out, 16, "%s", s.shown);
             return;
         }
         const double v = s.value;

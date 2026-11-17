@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "../ui/ui.h"
+#include "../ui/choice_names.h"
 #include "content_browser.h"
 #include "osc_spec_page.h"
 #include "curve_source.h"
@@ -800,7 +801,10 @@ private:
                 else if (listParam_ >= 0)
                 {
                     list_.state.header = nullptr;
-                    list_.state.items = info (listParam_).choices;
+                    listShown_.clear();   // the names by what the choice does, never the working name of another product (ui/choice_names.h)
+                    for (int c = 0; c < info (listParam_).numChoices; ++c)
+                        listShown_.push_back (ui::shownChoice (info (listParam_).key, c, info (listParam_).choices[c]));
+                    list_.state.items = listShown_.data();
                     list_.state.count = info (listParam_).numChoices;
                     list_.state.current = static_cast<int> (std::lround (inst.param (listParam_)));
                     list_.showCurrent();
@@ -840,7 +844,15 @@ private:
             {
                 const int pi = indexOfKey (prefix_ + c.key);
                 if (pi >= 0 && info (pi).choices != nullptr)
-                    spec_.setListOptions (i, info (pi).choices, std::min (static_cast<int> (info (pi).numChoices), static_cast<int> (ui::LedList::kMaxOptions)));
+                {
+                    const int n = std::min (static_cast<int> (info (pi).numChoices), static_cast<int> (ui::LedList::kMaxOptions));
+                    const char* shown[ui::LedList::kMaxOptions];
+                    for (int o = 0; o < n; ++o)
+                        shown[o] = ui::shownChoice (info (pi).key, o, info (pi).choices[o]);
+                    spec_.setListOptions (i, shown, n);
+                    if (const char* lab = ui::shownLabel (info (pi).key))
+                        spec_.setListTitle (i, lab);
+                }
             }
         }
         spec_.relayoutNow();
@@ -892,6 +904,7 @@ private:
     // ---- the modulations page
     struct ModRow { int slot = -1; int source = 0; };
     ModRow modRows_[ui::ModulationsPage::kMaxRows];
+    std::vector<const char*> listShown_;   // the names of the list page (shown names)
     int modsTarget_ = 0;     // the id of the control whose modulations the page shows
     void loadMods (const IInstanceView& inst)
     {
@@ -905,6 +918,8 @@ private:
         }
         else
             for (ModRow& r : modRows_) r = {};
+        if (mi.numMods == 0)   // nothing modulates the control yet: the page is the board of every source (ui/mod_board.h), a tap on a chip makes the modulation (the same as the other pages)
+            uibind::fillSourceBoard (mods_.board);
         mods_.load (mi, title);
         mods_.back.setId (kModsBack);
         for (int r = 0; r < ui::ModulationsPage::kMaxRows; ++r)
@@ -1281,7 +1296,7 @@ private:
         st->state.index = idx;
         st->state.wrap = pi.numChoices <= 12;
         if (pi.choices != nullptr && idx < pi.numChoices)
-            st->setItem (pi.choices[idx]);
+            st->setItem (ui::shownChoice (pi.key, idx, pi.choices[idx]));
         else
         {
             char t[13];

@@ -147,6 +147,12 @@ public:
             lists_[i].state.index = std::clamp (lists_[i].state.index, 0, std::max (0, n - 1));
         }
     }
+    /** The title of a List control (where the shown label differs from the table's). */
+    void setListTitle (int i, const char* t)
+    {
+        if (spec_ != nullptr && i >= 0 && i < spec_->numCtls && spec_->ctls[i].kind == K::List)
+            lists_[i].setTitle (t);
+    }
     void relayoutNow() { layout(); }
     ui::Component* control (int i) noexcept { return i >= 0 && spec_ != nullptr && i < spec_->numCtls ? compOf (i) : nullptr; }
     bool visible (int i) const noexcept { return spec_ != nullptr && i >= 0 && i < spec_->numCtls && vis_[i]; }
