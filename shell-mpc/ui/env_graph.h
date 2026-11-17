@@ -468,13 +468,6 @@ protected:
         sb.paintOff();
         sb.style (1.0f, false);
 
-        // ---- stage names only as a legend that does not pretend to be the axis
-        if (! comp && ! reduced)
-        {
-            static const char* const kLegend = "DELAY   ATTACK   HOLD   DECAY   SUSTAIN   RELEASE";
-            p.textRight ({ pl.x, rect_.y + 8, pl.w, 16 }, kLegend, T.fSmall - 1.0f, p.c (T.textFaint, 180));
-        }
-
         // ---- the handles
         for (int h = 0; h < envgraph::kNumHandles; ++h)
         {

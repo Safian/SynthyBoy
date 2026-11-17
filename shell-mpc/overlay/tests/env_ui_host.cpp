@@ -373,7 +373,7 @@ void testModulatedKnobsShowTheirSource()
     check (k.state.numMods == 1 && k.state.selected() != nullptr && std::fabs (k.state.selected()->depth - 0.4) < 1.0e-6, "a slot with env1 on env1.release: the RELEASE knob has the depth arc of the selected source (env1)");
     r.refresh();
     check (r.ui.numTargets() == 1, "the envelope counts its targets: 1");
-    check (! r.ui.full().targetsBlock().empty(), "the full screen has the block of the targets when there is one");
+    check (r.ui.full().numTargetLines == 1 && r.ui.full().tagsRect().w >= 200 && r.ui.full().graph.rect().w > 1200, "the full screen lists its target as a tag in the top bar (room " + std::to_string (r.ui.full().tagsRect().w) + " px) and the graph keeps the whole width");
     check (r.ui.compact().instances.hasTargets (0) && ! r.ui.compact().instances.hasTargets (1),
            "compact env tabs: ENV 1 has target dot (hasTargets=true), ENV 2 has no mark (hasTargets=false)");
     check (r.ui.full().instances.hasTargets (0) && ! r.ui.full().instances.hasTargets (1),
@@ -390,7 +390,7 @@ void testModulatedKnobsShowTheirSource()
         Rig q;
         q.openFull();
         q.refresh();
-        check (q.ui.numTargets() == 0 && q.ui.full().targetsBlock().empty() && q.ui.full().graph.rect().w > 1200, "no target: no empty block, the graph takes the whole width (" + std::to_string (q.ui.full().graph.rect().w) + ")");
+        check (q.ui.numTargets() == 0 && q.ui.full().numTargetLines == 0 && q.ui.full().graph.rect().w > 1200, "no target: no tags, the graph takes the whole width (" + std::to_string (q.ui.full().graph.rect().w) + ")");
         check (q.ui.full().instances.targetMask() == 0, "no envelope has targets: targetMask is 0, no dots or marks on any tab");
         for (int i = 0; i < 6; ++i)
             check (! q.ui.full().instances.hasTargets (i) && ! q.ui.compact().instances.hasTargets (i),

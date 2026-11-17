@@ -33,7 +33,6 @@ public:
         style.setCaption ("STYLE"); style.listable = true; style.state.wrap = true;
         sync.setCaption ("SYNC"); sync.listable = true; sync.state.wrap = true;
         stereo.setLabel ("STEREO");
-        rise.state.side = smoothTime.state.side = false;
         rate.setShowMode (true);
         addKid (instance); addKid (shape); addKid (style, false); addKid (sync, false); addKid (rate); addKid (rise); addKid (smoothTime); addKid (stereo, false); addKid (full);
         configure (false);
@@ -55,7 +54,7 @@ public:
     bool random() const noexcept { return random_; }
     Rect displayRect() const noexcept { return display_; }
     QGroup& qGroup() noexcept { return group; }
-    static constexpr int kQuadH = 304, kRowH = 56, kRateH = 72;
+    static constexpr int kQuadH = 248, kQuadRandomH = 304, kRowH = 56, kRateH = 72;   // an LFO: SHAPE, RATE, RISE and SMOOTH (the last two as tall as the rate, the same dial size); a random LFO has two more rows
     Size minSize() const override { return { 400, 560 }; }
     void draw (gpu::SceneBuilder& sb) const override
     {
@@ -68,7 +67,7 @@ protected:
     {
         const int m = 6, W = rect_.w - 2 * m;
         instance.place ({ rect_.x + m, rect_.y + m, W, kRowH });
-        const int dy = rect_.y + m + kRowH + 8, qy = rect_.bottom() - m - kQuadH;
+        const int dy = rect_.y + m + kRowH + 8, qy = rect_.bottom() - m - (random_ ? kQuadRandomH : kQuadH);
         display_ = { rect_.x + m, dy, W, std::max (0, qy - 8 - dy) };
         full.place ({ display_.right() - 64 - 4, display_.y + 4, 64, 56 });
         int y = qy + kQLane;
@@ -89,6 +88,7 @@ protected:
         y += kRateH + kQLane;
         const int h = std::max (0, rect_.bottom() - m - y);
         const int cw = (W - kGap) / 2;
+        rise.state.side = smoothTime.state.side = true;   // the dial at the left with its name and value beside it: the same dial as the rate's above
         rise.place ({ rect_.x + m, y, cw, h });
         smoothTime.place ({ rect_.x + m + cw + kGap, y, W - cw - kGap, h });
     }
