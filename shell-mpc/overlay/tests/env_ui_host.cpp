@@ -693,6 +693,7 @@ int main()
     testDrawing();
     testHashChangesWithTheDots();
     testPlayViewRoutesTheElements();
+    testPlayPageQSlots();
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;
 }
