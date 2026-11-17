@@ -92,9 +92,9 @@ In the MPC Sounds browser and standard preset menus, presets are organized into 
 | **Gritty Square Bass \*** | Raw edgy lo-fi square wave synth bass with warm harmonic grit | Chiptune, electro, or French-touch basslines C1–C2 | Cutoff (Macro 1) / Drive (Macro 2) | \* |
 | **Moog Ladder Bass \*** | Vintage Moog ladder filter round bass with warm, fat analog low-end punch | Soul, funk, or disco basslines C1–C3; smooth legato transitions | Cutoff (Macro 1) | \* |
 | **Odd Harmonics Bass \*** | Hollow funk bass driven by odd harmonic series for a woody, round tone | Funky syncopated comping C1–A2; great for walking basslines | Cutoff (Macro 1) | \* |
-| **Pulse Width Bass \*** | PWM modulated pulse wave electro bass with animated harmonic movement | Rolling 80s synth-pop or electro basslines C1–G2; wheel sweeps pulse width | Cutoff (Macro 1) | \* |
-| **Punchy Pluck Bass \*** | Tight transient bass with short percussive decay for driving club grooves | Fast staccato bass arps C1–C3; velocity controls envelope bite | Cutoff (Macro 1) | \* |
-| **Warm Analog Bass \*** | Classic deep house warm analog lowpass bass with gentle round low-end | Deep house, garage, or neo-soul chords/runs C1–F2 | Cutoff (Macro 1) | \* |
+| **Pulse Width Bass \*** | PWM modulated pulse wave electro bass with animated harmonic movement | Rolling 80s synth-pop or electro basslines C3–G4 (sounds two octaves below the keys); wheel sweeps pulse width | Cutoff (Macro 1) | \* |
+| **Punchy Pluck Bass \*** | Tight transient bass with short percussive decay for driving club grooves | Fast staccato bass arps C0–C2 (sounds an octave above the keys); velocity controls envelope bite | Cutoff (Macro 1) | \* |
+| **Warm Analog Bass \*** | Classic deep house warm analog lowpass bass with gentle round low-end | Deep house, garage, or neo-soul chords/runs C3–F4 (sounds two octaves below the keys) | Cutoff (Macro 1) | \* |
 
 ---
 
@@ -264,7 +264,7 @@ In the MPC Sounds browser and standard preset menus, presets are organized into 
 
 | Preset Name | What It Is | What to Play | Macro to Try First | Status |
 |---|---|---|---|:---:|
-| **Fast Arp Bass \*** | Fast sequenced trance arpeggio bassline with snappy filter envelope | Hold single root notes C1–C2 to drive rolling trance and techno basslines | Cutoff (Macro 1) | \* |
+| **Fast Arp Bass \*** | Tempo-synced trance arpeggio bass: a held key plays root, minor third, fifth and octave in sixteenth notes at the host tempo, every step plucked | Hold single root notes C1–C2 (with the transport running) to drive rolling trance and techno basslines | Cutoff (Macro 1) | \* |
 | **Pentatonic Step Pluck** | Self-playing 16-step pentatonic arpeggio sequence with synced LFO and per-step plucks | Hold single root notes C3–C4 to let the rhythmic minor pentatonic groove play | Pattern (Macro 1: sequence variations and filter shape) | |
 | **Radiant Pulse Pad \*** | Pulsing rhythmic pad with tempo-synced 1.0 Hz chord pulse and chorus | Hold sustained chords C2–C4; the pad rhythmically pulses in sync with the beat | Cutoff + Reso (Macro 1) | \* |
 | **Tempo Gate Chords** | Chords rhythmically chopped by a 16-step tempo-synced gate LFO with filter pumping | Hold chords C3–C5 to drive the groove; dial Macro Smooth up to melt into a pad | Gate (Macro 1: gate chop depth vs smooth sustain) | |
@@ -283,7 +283,7 @@ In the MPC Sounds browser and standard preset menus, presets are organized into 
 | **Breath of Machines** | Breathing industrial atmosphere with formant noise, tuned combs, and Lorenz LFO | Hold low notes C1–C2 for eerie sci-fi atmospheres and rhythmic machine stutter | Breathe (Macro 1: machine breathing depth and resonance) | |
 | **Dark Cinema Drone \*** | Low suspenseful cinematic atmospheric drone with sub-octave layers and reverb | Hold low octave roots C1–C2 for dark thriller, horror, or drama film cues | Cutoff + Reso (Macro 1) | \* |
 | **Shepard Ascent** | Endless ascending Shepard tone drone cycling upward via Shepard Tone morph | Hold one or two root notes C2–C3; pressing the pad accelerates the ascent | Ascent (Macro 1: sets the ascending climb rate) | |
-| **Space Wind Storm \*** | Howling ambient cosmic wind noise soundscape with sweeping resonant filter | Hold keys C2–C4 to generate stormy cosmic wind atmospheres | FX Filter (Macro 1) | \* |
+| **Space Wind Storm \*** | Howling ambient cosmic wind noise soundscape with sweeping resonant filter | Hold keys C4–C6 to generate stormy cosmic wind atmospheres (sounds two octaves below the keys) | FX Filter (Macro 1) | \* |
 | **Tri-Band Split Texture \*** | Multiband three-way split texture (distortion on low, wide utility mid, chorus high) | Hold rich chords C2–C4; each frequency register receives tailored processing | Cutoff + Reso (Macro 1) | \* |
 | **Vinyl Dust Crackle \*** | Continuous vintage vinyl record dust, rumble, and crackle generator | Hold any key C2–C4 to inject continuous vintage record hiss and pops under tracks | FX Filter (Macro 1) | \* |
 
@@ -296,14 +296,14 @@ In the MPC Sounds browser and standard preset menus, presets are organized into 
 | Preset Name | What It Is | What to Play | Macro to Try First | Status |
 |---|---|---|---|:---:|
 | **Bode Barber Riser** | Rising saw and noise build with recursive Bode frequency shifter and flanger | Hold note C2–C4 for 5–6 seconds leading up to a drop; lean on pad for feedback | Rise (Macro 1: pitch climb and riser build intensity) | |
-| **Cosmic Teleport \*** | Ascending pitch sweep dimensional teleport effect with fast LFO and delay | Strike single keys C2–C4 for sci-fi dimensional warp transitions | FX Filter (Macro 1) | \* |
-| **Detonation Tail** | Thunderous cinematic impact hit with explosive noise, pitch drop sub, and cavernous tail | Strike single low key C1–C2 on downbeats; let the massive sub rumble ring out | Blast (Macro 1: initial explosion punch and sub weight) | |
+| **Cosmic Teleport \*** | Ascending pitch sweep dimensional teleport effect with fast LFO and delay | Strike single keys C4–C6 for sci-fi dimensional warp transitions (sounds two octaves below the keys) | FX Filter (Macro 1) | \* |
+| **Detonation Tail** | Thunderous cinematic impact hit with explosive noise, pitch drop sub, and cavernous tail | Strike single key C3–C4 on downbeats (sounds two octaves below the keys); let the massive sub rumble ring out | Blast (Macro 1: initial explosion punch and sub weight) | |
 | **Game Over Zap \*** | Retro 8-bit arcade explosion zap one-shot with waveshaper distortion | Hit single keys C2–C4 for classic arcade game-over explosions and laser zaps | FX Filter (Macro 1) | \* |
 | **Metal Gong Strike \*** | Physical resonant metallic gong strike percussion using tuned comb filter | Hit low notes C1–C3; long reverberant metallic decay | FX Filter (Macro 1) | \* |
 | **Noise Riser \*** | Filtered white noise transitional build-up riser with sweeping cutoff | Hold key C2–C4 for 4 to 8 bars to build tension before beat drops | FX Filter (Macro 1) | \* |
 | **Sci-Fi Laser Sweep \*** | Downward pitch-modulated sci-fi laser burst with snappy envelope | Fast staccato hits C4–C6 for laser gun sound effects | FX Filter (Macro 1) | \* |
 | **Sonar Ping \*** | Deep ocean submarine acoustic sonar ping with long reverberant delay | Single isolated strikes C4–C5 spaced several seconds apart | FX Filter (Macro 1) | \* |
-| **Sub Drop Boom \*** | Subwoofer-testing downward pitch drop boom impact for club transitions | Trigger C1 on drop downbeats; massive bass boom rattles subwoofers | FX Filter (Macro 1) | \* |
+| **Sub Drop Boom \*** | Subwoofer-testing downward pitch drop boom impact for club transitions | Trigger C0 on drop downbeats (sounds an octave above the key); massive bass boom rattles subwoofers | FX Filter (Macro 1) | \* |
 
 ---
 
