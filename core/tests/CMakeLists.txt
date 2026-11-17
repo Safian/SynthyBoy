@@ -92,3 +92,5 @@ synthyboy_add_test(synthyboy_test_clap_content test_clap_content.cpp LINK synthy
 synthyboy_add_test(synthyboy_test_wave_convert test_wave_convert.cpp)
 synthyboy_add_test(synthyboy_test_own_ladder_range test_own_ladder_range.cpp)
 target_include_directories(synthyboy_test_own_ladder_range PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_morph_range test_own_morph_range.cpp)
+target_include_directories(synthyboy_test_own_morph_range PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
