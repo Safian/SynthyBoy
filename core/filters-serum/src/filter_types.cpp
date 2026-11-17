@@ -170,7 +170,7 @@ int serumModelStyleCount (int model) noexcept
 
 int filterModelStyleCount (int model) noexcept
 {
-    static constexpr int kClassic[kFirstSerumModel] = { 6, 6, 6, 6, 2, 3, 1, 2 }; // Analog, Dirty, Ladder, Digital, Diode, Formant, Comb, Phaser
+    static constexpr int kClassic[kFirstSerumModel] = { 6, 6, 6, 6, 2, 3, 6, 2 }; // Analog, Dirty, Ladder, Digital, Diode, Formant, Comb, Phaser
     if (model >= 0 && model < kFirstSerumModel)
         return kClassic[model];
     return serumModelStyleCount (model);

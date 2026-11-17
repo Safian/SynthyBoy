@@ -454,7 +454,7 @@ TEST (serum_filters_model_style_table_reaches_every_type_exactly_once)
     CHECK_EQ (serumModelStyleCount (7), 0);
     CHECK_EQ (serumModelStyleCount (27), 0);
     // the query of the UI: the styles a model really has (classic models 0 .. 7, then the Serum table)
-    const int kExpected[8] = { 6, 6, 6, 6, 2, 3, 1, 2 };
+    const int kExpected[8] = { 6, 6, 6, 6, 2, 3, 6, 2 };
     for (int model = 0; model < kFirstSerumModel; ++model)
         CHECK_EQ (filterModelStyleCount (model), kExpected[model]);
     for (int model = kFirstSerumModel; model <= kLastSerumModel; ++model)

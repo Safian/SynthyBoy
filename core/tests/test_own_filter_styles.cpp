@@ -58,9 +58,13 @@ TEST (own_filter_styles_above_the_count_repeat_another_style)
             CHECK (same (run (5, 2, bl), run (5, s, bl)));
         CHECK (!same (run (5, 0, bl), run (5, 1, bl)));
         CHECK (!same (run (5, 1, bl), run (5, 2, bl)));
-        // Comb: the plain comb, the style is not read
-        for (int s = 1; s < 12; ++s)
-            CHECK (same (run (6, 0, bl), run (6, s, bl)));
+        // Comb: six styles (comb / positive flange / negative flange, each with the blend filter or the band filter), a slot above 5 is style 5
+        for (int s = 6; s < 12; ++s)
+            CHECK (same (run (6, 5, bl), run (6, s, bl)));
+        for (int s = 1; s < 6; ++s)
+            CHECK (!same (run (6, 0, bl), run (6, s, bl)));
+        CHECK (!same (run (6, 1, bl), run (6, 2, bl)));
+        CHECK (!same (run (6, 1, bl), run (6, 4, bl)));
         // Phaser: 0 and 1 (inverted); the rest is 0
         for (int s = 2; s < 12; ++s)
             CHECK (same (run (7, 0, bl), run (7, s, bl)));
@@ -77,6 +81,6 @@ TEST (own_filter_styles_above_the_count_repeat_another_style)
     // the counts the UI reads
     CHECK_EQ (filterModelStyleCount (4), 2);
     CHECK_EQ (filterModelStyleCount (5), 3);
-    CHECK_EQ (filterModelStyleCount (6), 1);
+    CHECK_EQ (filterModelStyleCount (6), 6);
     CHECK_EQ (filterModelStyleCount (7), 2);
 }

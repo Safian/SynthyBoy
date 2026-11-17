@@ -243,6 +243,12 @@ A delay line with a fractional delay (Catmull-Rom read) of `T = sr_i/f` samples 
 * The delay time follows the cutoff per sample (pitch-synchronous resonator: set the cutoff to a note and the comb rings at that pitch); keytrack applies.
 * Latency: the comb's first echo arrives after T samples; there is no look-ahead.
 
+### 8.1 The Comb in the own engine (styles, tuning, level)
+
+* **Style 0** (A) is the plain comb of old: the loop filter is the one pole low pass at the comb offset; `blend` and the extra high pass are not read (kept so that every preset sounds as it did). **Styles 1 .. 5** follow this section: `feedback_style = style mod 3` (0 comb, 1 positive flange, 2 negative flange), `filter_style = style div 3` (0 blend filter, 1 band filter). Blend filter: one pole split at `n_cut + comb_offset` with the low gain `clamp(2 - b_raw, 0, 1)` and the high gain `clamp(b_raw, 0, 1)`, then a one pole high pass at `n_cut - 48` semitones. Band filter: a high pass at `fc 2^-w` and a low pass at `fc 2^w`, `fc = n_cut + comb_offset`, `w = 4 blend` octaves. Corners are limited to `[1 Hz, sr/2.1]`. Flanges: `fb = min(r, 0.98)`; the line holds `x/sqrt2 + hardtanh(+-fb F(delay))`; output `x/sqrt2/(1 + fb) +- F(delay)` (negative: minus, and the read at `T/2`).
+* **Tuning.** In every style the phase delay of the loop filter at the pitch (complex response of the one poles at `n_cut`) is taken off the delay line, so the comb rings at `sr / T`, the pitch of the cutoff: within 2 cents over C1 .. C6 (tests `own_comb_resonates_at_its_cutoff`, `own_comb_styles_resonate_at_their_cutoff`). Before this the plain comb was 1.1 % (19 cents) flat. For the band styles the filter has to pass the pitch: with `comb_offset` 0 and blend about 50 % the band is centred on it; at the default offset 42 the band is 3.5 octaves above the pitch and the comb rings at the harmonics inside it.
+* **Level law.** A sine at the resonance comes out at `scale / (1 - fb |H|)` with `scale = 1 - fb^2/2`: about +26.7 dB at resonance 100 %. White noise that is fed for a long time gains about +8 dB in power. A short burst puts only the energy that falls into the peaks (a few Hz wide) into the ring, so a pluck made of a 16 ms burst is 30 dB or more under the burst: the nature of the excitation, not a defect (test `own_comb_level_law_at_the_resonance`). The make-up belongs in the patch (the five factory comb presets are unchanged).
+
 ## 9. Formant (model 5)
 
 Four parallel band-pass SVFs (the Digital SVF in band-pass mode, blend 1) whose centre frequencies (MIDI notes), resonances and gains (dB) are the bilinear interpolation, over the XY pad `formant.x`, `formant.y`, of four vowels:
@@ -340,7 +346,7 @@ Same method and columns as the table above (125 Hz .. 16 kHz). Tolerance +-1 dB.
 | 3 Digital | 6 | A .. E as Analog; F = the shelf, **an identity at the 0 dB gain of a voice filter** (section 2.1: defined, no audible effect) | G .. L: fall back to B |
 | 4 Diode | 2 | A 12 dB, B 24 dB (the high pass in front) | C .. L: fall back to B |
 | 5 Formant | 3 | A (A I U O), B (A O I E), C (vocal tract) | D .. L: fall back to C |
-| 6 Comb | 1 | the plain comb only | B .. L: fall back to A. **Open:** section 8 defines six styles (positive flange, negative flange, and the band loop filter for each); none of them is built, the style is not read |
+| 6 Comb | 6 | A plain comb; B positive flange; C negative flange; D band comb; E band positive flange; F band negative flange (section 8, section 8.1 below) | G .. L: fall back to F |
 | 7 Phaser | 2 | A, B (inverted feedback and output) | C .. L: fall back to A |
 | 8 Multi SVF | 12 | LH .. NN | (none) |
 | 9 Slope | 6 | MG Low 6, MG Low 18, Low 6, Low 18, High 6, High 18 | G .. L: fall back to the last |
@@ -358,4 +364,4 @@ Same method and columns as the table above (125 Hz .. 16 kHz). Tolerance +-1 dB.
 
 All 80 types of the Serum collection have a case in the DSP (`core/filters-serum/src/filter.cpp`); none is a pass-through. **DJ Mixer (18)** is a DJ crossfader filter by design, not a plain low or high pass: the cutoff knob is the position of the sweep, a low pass below about 550 Hz (`log10 (cutoff / 20) / 3 < 0.48`), flat between about 550 and 725 Hz, a high pass above (measured: low pass below about 600 Hz, high pass above about 800 Hz).
 
-No style index is unwired and no table is off by one: what the survey found as "twelve identical styles" are the slots above the count of the table, and `EQ 6 dB` / `Misc` 0 .. 2 sit at 0 dB until Var moves. **Open (not built, not invented):** the Comb styles B .. F of section 8; styles G .. L of Analog, Dirty, Ladder and Digital, C .. L of Diode, D .. L of Formant, C .. L of Phaser exist only as repeats. `FilterUnit::typeFor` (`core/engine-own/voice/filter_unit.h`) maps the classic models 5 .. 7 onto the Flange / Formant types, but the classic models never reach it (they run in `classic_filters.h`).
+No style index is unwired and no table is off by one: what the survey found as "twelve identical styles" are the slots above the count of the table, and `EQ 6 dB` / `Misc` 0 .. 2 sit at 0 dB until Var moves. **Open (not built, not invented):** styles G .. L of Analog, Dirty, Ladder and Digital, C .. L of Diode, D .. L of Formant, C .. L of Phaser exist only as repeats. `FilterUnit::typeFor` (`core/engine-own/voice/filter_unit.h`) maps the classic models 5 .. 7 onto the Flange / Formant types, but the classic models never reach it (they run in `classic_filters.h`).

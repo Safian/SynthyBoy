@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <vector>
 
 #include "../dsp/util.h"
@@ -970,7 +971,101 @@ private:
         }
     }
 
+    /** The Comb model (document 05, 8): style 0 is the plain comb (the one-pole loop filter at the comb offset; blend and style are not read), styles 1 .. 5 are
+        `style = feedback_style + 3 * filter_style` (feedback_style 0 comb, 1 positive flange, 2 negative flange; filter_style 0 low / high blend, 1 band); a style above 5 is 5. */
     void combFilter (const float* in, float* out, int n, float f, float r, const ClassicParams& p) noexcept
+    {
+        const int st = std::clamp (p.style, 0, 5);
+        if (st == 0)
+            combPlain (in, out, n, f, r, p);
+        else
+            combStyled (in, out, n, f, r, p, st);
+    }
+
+    void combStyled (const float* in, float* out, int n, float f, float r, const ClassicParams& p, int st) noexcept
+    {
+        const int fbStyle = st % 3;
+        const bool band = st >= 3;
+        const float srf = static_cast<float> (sr), fe = std::max (f, 20.0f);
+        const float T = std::clamp (srf / fe, 2.0f, srf * 0.09f);
+        const float fc = fe * std::exp2 (p.combOffset / 12.0f);
+        const float edge = srf / 2.1f;
+        float aA, aB, lowGain = 1.0f, highGain = 0.0f;
+        if (!band)
+        {
+            // a low / high blend around the corner n_cut + comb_offset (one pole split), then a second one pole high pass at n_cut - 48 semitones
+            aA = OnePole::coefficient (std::clamp (fc, 1.0f, edge), sr);
+            lowGain = std::clamp (2.0f - p.blendRaw, 0.0f, 1.0f);
+            highGain = std::clamp (p.blendRaw, 0.0f, 1.0f);
+            aB = OnePole::coefficient (std::clamp (fe * 0.0625f, 1.0f, edge), sr);
+        }
+        else
+        {
+            // a band around n_cut + comb_offset whose half width is blend * 4 octaves: a high pass at the lower corner, a low pass at the upper one
+            const float octaves = clamp01 (p.blendRaw * 0.5f) * 4.0f;
+            aA = OnePole::coefficient (std::clamp (fc * std::exp2 (octaves), 1.0f, edge), sr);
+            aB = OnePole::coefficient (std::clamp (fc * std::exp2 (-octaves), 1.0f, edge), sr);
+        }
+        // the loop filter delays the signal at the pitch: its phase delay is taken off the delay line (as for the plain comb), so the comb rings at sr / T
+        using Cx = std::complex<float>;
+        const float w0 = kTwoPif * fe / srf;
+        const Cx zi = std::polar (1.0f, -w0);
+        auto onePole = [&] (float a) { return Cx (a) / (Cx (1.0f) - Cx (1.0f - a) * zi); };
+        Cx H;
+        if (!band)
+        {
+            const Cx lp = onePole (aA);
+            H = (lowGain * lp + highGain * (Cx (1.0f) - lp)) * (Cx (1.0f) - onePole (aB));
+        }
+        else
+            H = (Cx (1.0f) - onePole (aB)) * onePole (aA);
+        const float loopDelay = -std::arg (H) / w0;
+        const float lineT = fbStyle == 2 ? 0.5f * T : T;
+        const float readAt = std::max (lineT - 1.0f - loopDelay, 0.0f);
+        auto filtered = [&] (float x) noexcept
+        {
+            if (!band)
+            {
+                lpA = flushDenormal (lpA + aA * (x - lpA));
+                const float sp = lowGain * lpA + highGain * (x - lpA);
+                lpB = flushDenormal (lpB + aB * (sp - lpB));
+                return sp - lpB;
+            }
+            lpB = flushDenormal (lpB + aB * (x - lpB));
+            const float h = x - lpB;
+            lpA = flushDenormal (lpA + aA * (h - lpA));
+            return lpA;
+        };
+        combUsed = true;
+        if (fbStyle == 0)
+        {
+            float fb = lerp (-1.0f, 1.0f, r);
+            fb = fb / std::sqrt (std::fabs (fb) + 1.0e-5f);
+            fb = std::clamp (fb, -0.98f, 0.98f);
+            const float scale = 1.0f - 0.5f * fb * fb;
+            for (int i = 0; i < n; ++i)
+            {
+                const float w = hardtanh (filtered (scale * in[i] + fb * comb.read (readAt)));
+                comb.push (w);
+                out[i] = w;
+            }
+            return;
+        }
+        // flanges: the delay line holds x / sqrt (2) + hardtanh (fb filtered (delay)); the output is x / sqrt (2) scale + filtered (negative: the feedback and the output term
+        // inverted, the read at T / 2)
+        const float fb = std::min (clamp01 (r), 0.98f);
+        const float sgn = fbStyle == 2 ? -1.0f : 1.0f;
+        const float scale = 1.0f / (1.0f + fb);
+        const float inGain = 0.70710678f;
+        for (int i = 0; i < n; ++i)
+        {
+            const float fd = filtered (comb.read (readAt));
+            comb.push (inGain * in[i] + hardtanh (sgn * fb * fd));
+            out[i] = inGain * in[i] * scale + sgn * fd;
+        }
+    }
+
+    void combPlain (const float* in, float* out, int n, float f, float r, const ClassicParams& p) noexcept
     {
         const float T = std::clamp (static_cast<float> (sr) / std::max (f, 20.0f), 2.0f, static_cast<float> (sr) * 0.09f);
         float fb = lerp (-1.0f, 1.0f, r);

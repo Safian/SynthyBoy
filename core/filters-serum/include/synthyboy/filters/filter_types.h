@@ -120,7 +120,7 @@ constexpr int kLastSerumModel = 26;
 int serumModelStyleCount (int model) noexcept;
 
 /** The number of styles that filterN.model (0 .. 26) really has: the style slots from this count up to the twelve of filterN.style repeat another style of the model (the
-    classic models: Analog, Dirty, Ladder, Digital 6, Diode 2, Formant 3, Comb 1, Phaser 2; the Serum models: serumModelStyleCount ()), so a UI offers only 0 .. count - 1.
+    classic models: Analog, Dirty, Ladder, Digital 6, Diode 2, Formant 3, Comb 6, Phaser 2; the Serum models: serumModelStyleCount ()), so a UI offers only 0 .. count - 1.
     0 for a model outside 0 .. 26. The table of what is implemented and what is open: docs/engine-spec/05-filters.md section 13. */
 int filterModelStyleCount (int model) noexcept;
 
