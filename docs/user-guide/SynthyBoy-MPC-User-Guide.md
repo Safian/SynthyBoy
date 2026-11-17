@@ -514,13 +514,21 @@ Controls that do not apply to the current model are dimmed, including their valu
 ![Envelope](img/env.png)
 
 The pages Env 1 - Env 4 each show one envelope full screen; the buttons **ENV 1 .. ENV 6** at the top switch the page to another envelope (a dot under the button marks an envelope that modulates something).
-The tab only decides which envelope is shown first.
+The tab only decides which envelope is shown first. An envelope shapes a value over the time of a note: Env 1 is the amplitude envelope in the Init sound, the others are free for the filter, the pitch or anything else you route them to (chapter 6).
 
-- **Graph.** Time axis (auto-zoom 100 ms .. 50 s), the handles of DELAY, ATTACK, HOLD, DECAY, SUSTAIN, RELEASE (stage names on top). Drag a time handle to change the time; the DECAY handle changes decay time and sustain level at once; the small handle in the middle of attack, decay and release bends the curve; double tap on a handle = its default. A dot and a soft line follow the playing voice(s).
-- **TARGETS** (top right, with the number of targets): opens the list of what the envelope modulates, with depth, UNI/BI, ON/OFF, remove, and ADD TARGET (chapter 6). The panel right of the graph ("MODULATES n TARGET(S)") lists the targets and their depth.
+- **Graph.** The graph has the whole width. The handles of DELAY, ATTACK, HOLD, DECAY, SUSTAIN, RELEASE are on the curve. Drag a time handle to change the time; the DECAY handle changes decay time and sustain level at once; the small handle in the middle of attack, decay and release bends the curve; double tap on a handle = its default. The name and value of the handle in your hand are written over it. A dot and a soft line follow the playing voice(s); Env 1 lies faintly behind the other envelopes on the same time axis.
+- **LOCKED / FREE** (the button at the top left of the graph). **LOCKED** (the default): the envelope always fills the graph, so when you change the times the **time ruler** under the graph changes, not the picture. **FREE**: a horizontal drag along the ruler zooms the time axis (to the right in, to the left out); the envelope may then run past the right edge and the handles beyond it cannot be touched. Switching to FREE keeps the picture as it is; switching back fits again. The compact graph on the Play page is always locked and has no button.
+- **Time ruler.** Round marks in ms or s under the graph (in beats when BEATS is on); the marks are also the vertical grid lines.
+- A stage of 0 ms takes no width in the graph: drag its handle to the right to give it time.
+- **Targets.** What the envelope modulates is written as small tags between the envelope buttons and TARGETS: a dot, the name and the signed depth, for example "Filter 1 Cutoff +45%", as many as fit and then "+n". The tags are text, not buttons. The **TARGETS** button (top right, with the number of targets) opens the list of routes with depth, UNI/BI, ON/OFF, remove and ADD TARGET (chapter 6).
+
+![Envelope with one target](img/env-targets.png)
+
+The three blocks under the graph are one Q group each (in the picture: ADSR yellow, SHAPE 5 - 7, TIME 9 - 12):
+
 - **ADSR** (Q 1 - 4): ATTACK 0 .. 10000 ms (default 5), DECAY 0 .. 10000 ms (400), SUSTAIN 0 .. 100 percent (100), RELEASE 0 .. 10000 ms (200).
-- **SHAPE:** A CURVE, D CURVE, R CURVE: -20 .. +20, defaults 0, -3, -3.
-- **TIME:** DELAY 0 .. 4000 ms, HOLD 0 .. 4000 ms, **BEATS** (switch: times in beats instead of milliseconds: delay 0 .. 8, attack 0 .. 16, hold 0 .. 8, decay 0 .. 16, release 0 .. 16 beats), **LEGATO** (the parameter is "Legato Inverted", Off/On). With the main LEGATO switch on the Master page, a note played while another is held takes over the sounding voice and the envelopes do not start again. Switching LEGATO on for an envelope here makes **that envelope** restart on every note, even in that situation (it restarts from its current level, not from zero). It has no effect while the main LEGATO is off.
+- **SHAPE:** A CURVE, D CURVE, R CURVE: -20 .. +20, defaults 0, -3, -3. Negative values make the stage fast at first and slow at the end.
+- **TIME:** DELAY 0 .. 4000 ms, HOLD 0 .. 4000 ms, **BEATS** (a LED switch: times in beats instead of milliseconds: delay 0 .. 8, attack 0 .. 16, hold 0 .. 8, decay 0 .. 16, release 0 .. 16 beats), **LEGATO** (a LED switch; the parameter is "Legato Inverted"). With the main LEGATO switch on the Master page, a note played while another is held takes over the sounding voice and the envelopes do not start again. Switching LEGATO on for an envelope here makes **that envelope** restart on every note, even in that situation (it restarts from its current level, not from zero). It has no effect while the main LEGATO is off.
 
 ### 5.9 LFOs and the drawn-shape editor
 
