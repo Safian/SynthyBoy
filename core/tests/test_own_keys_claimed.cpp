@@ -305,3 +305,32 @@ TEST (own_mts_note_on_only_keeps_the_started_tuning)
     CHECK (line (live, 0.25, 0.31, f1) > 3.0 * line (live, 0.25, 0.31, f0));
     CHECK (line (held, 0.25, 0.31, f0) > 3.0 * line (held, 0.25, 0.31, f1));
 }
+
+// quality.no_smoothing reaches the Serum-collection filters (model 22, Normal) and the FX filter: a step of the cutoff applies at once instead of over the 30 Hz smoother
+TEST (own_no_smoothing_reaches_the_serum_filters_and_the_fx_filter)
+{
+    auto firstBlock = [] (bool fx, bool noSmoothing)
+    {
+        std::vector<Setting> s = plus (base (1), { { "quality.no_smoothing", noSmoothing ? 1.0f : 0.0f } });
+        if (fx)
+            s = plus (s, { { "fxfilter.on", 1 }, { "fxfilter.model", 22 }, { "fxfilter.cutoff", 18000 } });
+        else
+            s = plus (s, { { "filter1.on", 1 }, { "filter1.model", 22 }, { "filter1.cutoff", 18000 } });
+        auto e = make (s);
+        std::vector<float> l (256), r (256);
+        Event ev[1] = { sbtest::noteOn (0, 48) };
+        e->process (ev, 1, l.data(), r.data(), 256);
+        for (int k = 0; k < 8; ++k)
+            e->process (nullptr, 0, l.data(), r.data(), 256);
+        const ParamInfo* p = findParamByKey (fx ? "fxfilter.cutoff" : "filter1.cutoff");
+        e->setParam (p->id, 150.0f); // from open to a very low cutoff
+        e->process (nullptr, 0, l.data(), r.data(), 256);
+        return brightness (l, 0.0, 256.0 / kSr);
+    };
+    for (bool fx : { false, true })
+    {
+        const double smooth = firstBlock (fx, false), jump = firstBlock (fx, true);
+        std::printf ("    %s filter, cutoff 18000 -> 150: first block brightness %.4f with smoothing, %.4f without\n", fx ? "fx" : "voice", smooth, jump);
+        CHECK (jump < 0.5 * smooth); // the closed filter is there in the first block
+    }
+}

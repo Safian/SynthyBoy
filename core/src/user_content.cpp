@@ -562,7 +562,24 @@ bool probeSampleWav (const std::vector<uint8_t>& wav, const std::string& fileNam
     const int fromName = sampleosc::parseRootNoteFromFilename (fileName.c_str());
     facts.rootFromName = fromName >= 0;
     facts.rootNote = fromName >= 0 ? fromName : wavChunkRoot (wav);
+    facts.hasLoop = info.hasSmplLoop && info.loopStart >= 0 && info.loopEnd > info.loopStart;
+    facts.loopStart = info.loopStart;
+    facts.loopEnd = info.loopEnd;
+    facts.loopType = info.loopType;
     return true;
+}
+
+SampleLoopSettings sampleLoopSettings (const SampleFacts& facts) noexcept
+{
+    SampleLoopSettings s;
+    if (!facts.hasLoop || facts.frames < 2 || facts.loopStart < 0 || facts.loopEnd <= facts.loopStart)
+        return s;
+    const double frames = static_cast<double> (facts.frames);
+    s.valid = true;
+    s.mode = facts.loopType == 1 ? 3 : (facts.loopType == 2 ? 2 : 1);
+    s.startPercent = static_cast<float> (100.0 * std::min (1.0, static_cast<double> (facts.loopStart) / frames));
+    s.endPercent = static_cast<float> (100.0 * std::min (1.0, static_cast<double> (facts.loopEnd + 1) / frames));
+    return s;
 }
 
 bool wavetableFromWav (const std::vector<uint8_t>& wav, const std::string& name, wtedit::Wavetable& out)

@@ -99,6 +99,11 @@ public:
         (the state's content, the chunk and content () show it a moment later; the host is told the names of the Q proxies changed); a newer request for the same macro replaces an older one that was
         not applied yet. Called from the overlay thread; it only stores the request. */
     virtual void setMacroName (int /*macro*/, const std::string& /*name*/) {}
+    /** Appends the voice and held key diagnostics of the instance to the status file (voices_active, voices_released, voices_sustaining, held_keys, held_lowest, held_highest, orphan_voices,
+        note_ons, note_offs, note_offs_unmatched, voices_stolen, sustain_pedal, sound_off_requests): atomics the audio thread updates, no lock; nothing when the engine has none. */
+    virtual void voiceStatus (std::string& /*out*/) const {}
+    /** The content the sound of this instance needs and does not have (IEngine::missingContent () bits; 0 = nothing missing). The oscillator page shows "content missing: ..." from it (the text is the page's). Lock free. */
+    virtual unsigned missingContent() const noexcept { return 0; }
     /** The VIRTUAL Q targets (q_router.h): a Q knob that is not a parameter (the values of the shape editor). The page tells the router the value (0 .. 1) a virtual target has now; the host's write to the
         Q proxy comes back through takeQVirtual (the latest written value; false when there is none since the last call). Lock free. */
     virtual void setQVirtual (int /*id*/, float /*normalised*/) noexcept {}

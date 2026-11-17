@@ -42,6 +42,8 @@ namespace synthyboy_mpc { namespace overlay { namespace standby {
 constexpr double kDimFactor = 0.5;
 /** "Dimmed" = the backlight is at or below this share of the value seen while awake (Key 61: 106 / 227 = 0.47; another driver has other numbers, only the drop counts). */
 constexpr double kDropRatio = 0.75;
+/** ... and at least this many levels lower: on a panel with a tiny scale (the XL reads 3) a step of one level (4 -> 3) is the ratio 0.75 but no dimming; only a drop of this size counts as backlight evidence. */
+constexpr int kMinDropLevels = 4;
 /** How long the picture and the backlight may disagree (one already dim, the other not yet) before the page is taken for gone. Measured on the Key 61: the dim shows in both in the same 20 ms
     sample; on waking the host's picture is back first and the backlight 50 ms later (sampled every 20 ms). Three times the larger skew plus one detector tick of 100 ms. */
 constexpr double kHoldMs = 300.0;
@@ -382,7 +384,7 @@ public:
                     baseline_ = bl;
             }
         }
-        low_ = haveBl ? (baseline_ > 0 && static_cast<double> (bl) <= static_cast<double> (baseline_) * kDropRatio) : dimLook;
+        low_ = haveBl ? (baseline_ > 0 && static_cast<double> (bl) <= static_cast<double> (baseline_) * kDropRatio && baseline_ - bl >= kMinDropLevels) : dimLook;
         Verdict v;
         busy_ = false;
         if (awake)

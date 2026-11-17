@@ -24,6 +24,7 @@ struct FxFrame
     double bpm = 120.0;
     int period = kControlPeriod;
     float lastNote = 60.0f;
+    bool noSmoothing = false;            // quality.no_smoothing: the module's settings apply at once (configure () runs twice, the level trim does not ramp)
     uint32_t noteOns = 0;                // the number of notes started so far (Hyper and Bode retrigger on a change of it)
     double songBeats = 0.0;
     const ContentSet* content = nullptr; // the set this block reads (Convolve takes its impulse from it)
@@ -104,6 +105,11 @@ public:
         mixNow = -1.0f;
         probing = false;
         configure (f, base, delta);
+        if (f.noSmoothing)
+        {
+            configure (f, base, delta); // the same settings twice: a module that ramps from its previous to its new settings finds them equal
+            levelPrev = levelGain;
+        }
         if (!mixSeen)
         {
             mixBefore = mixNow; // the first period of the module's life: there was no mix before it

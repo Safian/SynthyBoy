@@ -34,6 +34,7 @@
 #include "device_profile.h"
 #include "output_peak.h"
 #include "host_strings.h"
+#include "event_inbox.h"
 #include "output_stage.h"
 #include "safe_file.h"
 #include "plugin_paths.h"
@@ -308,7 +309,8 @@ struct PluginInstance
     // Core
     std::unique_ptr<synthyboy::IEngine> engine;
     synthyboy::StateContent content;
-    EventBuffer events;
+    EventBuffer events;                                         // the events of the block being rendered (audio thread only)
+    synthyboy_mpc::EventInbox<synthyboy::Event> eventInbox;     // effProcessEvents pushes here (any thread), processReplacing takes them over at the start of its block
 
     // Transport
     double sampleRate = 44100.0;
@@ -373,6 +375,9 @@ struct PluginInstance
     // Output stage: the make-up gain of the MPC shell (SYNTHYBOY_MPC_OUTPUT_GAIN_DB, set once in the constructor) and, only when built with SYNTHYBOY_MPC_OUTPUT_LIMITER, the peak limiter behind it.
     // Only the audio thread calls process(); prepare() runs with the engine's prepare (effMainsChanged, the host is not processing then).
     synthyboy_mpc::SwitchableOutputStage outputStage;
+    // All Sound Off requests of the host side (effStopProcess, effMainsChanged (0)): the audio thread puts one event at the front of its next block (processReplacing).
+    std::atomic<bool> soundOffPending { false };
+    std::atomic<unsigned> soundOffRequests { 0 };
     // The output limiter as a plugin setting (Master page, OUTPUT block, "LIMIT"; saved in the chunk as "mpcOutputLimiter"; docs/MPC.md "Output limiter"). Not an engine parameter and not a host
     // parameter (the host's parameter count does not change). SYNTHYBOY_MPC_OUTPUT_LIMITER in the environment (or a build with it ON) forces the state for tests (output_stage.h).
     std::atomic<bool> outputLimiter { synthyboy_mpc::kOutputLimiterDefaultOn };
@@ -465,6 +470,18 @@ struct PluginInstance
             inst.updateEnginePadPressure();
         }
 #endif
+        unsigned missingContent() const noexcept override { return inst.engine != nullptr ? inst.engine->missingContent() : 0u; }
+        void voiceStatus (std::string& out) const override
+        {
+            synthyboy::VoiceStats s;
+            if (inst.engine == nullptr || ! inst.engine->voiceStats (s))
+                return;
+            char b[480];
+            std::snprintf (b, sizeof b, "voices_active: %d\nvoices_released: %d\nvoices_sustaining: %d\nheld_keys: %d\nheld_lowest: %d\nheld_highest: %d\norphan_voices: %d\nnote_ons: %u\nnote_offs: %u\nnote_offs_unmatched: %u\nvoices_stolen: %u\nsustain_pedal: %d\nsound_off_requests: %u\nmissing_content: %u\n",
+                           s.active, s.released, s.sustaining, s.heldKeys, s.lowestHeld, s.highestHeld, s.orphans, s.noteOns, s.noteOffs, s.unmatchedNoteOffs, s.stolen, s.sustainPedal ? 1 : 0,
+                           inst.soundOffRequests.load (std::memory_order_relaxed), inst.engine->missingContent());
+            out += b;
+        }
         void setQVirtual (int id, float normalised) noexcept override { inst.qRouter.setVirtualValue (id, normalised); }
         bool takeQVirtual (int id, float& normalised) noexcept override { return inst.qRouter.takeVirtual (id, normalised); }
         unsigned long qWriteCount() const noexcept override { return inst.qRouter.writeCount(); }
@@ -701,6 +718,7 @@ struct PluginInstance
         synthyboy::StateContent next = content;
         synthyboy::ContentFileRef ref;
         int rootNote = -1;
+        synthyboy::SampleLoopSettings loop;
         if (kind == 2 && sfz)
         {
             const std::string folder = dirName (path), pack = baseName (folder), root = dirName (folder);
@@ -729,6 +747,7 @@ struct PluginInstance
                 return false;
             }
             rootNote = facts.rootNote;
+            loop = synthyboy::sampleLoopSettings (facts);
             if (kind == 1)
             {
                 if (! contentStore->addFile (synthyboy::ContentKind::sample, name, bytes, ref))
@@ -757,6 +776,15 @@ struct PluginInstance
         if (rootNote >= 0 && kind == 1)
             if (const synthyboy::ParamInfo* p = synthyboy::findParamByKey (("osc" + std::to_string (osc) + ".sample.root").c_str()))
                 uiWrite (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, static_cast<float> (rootNote))));
+        if (loop.valid && kind == 1)
+        {
+            // the loop of the WAV 'smpl' chunk becomes the oscillator's loop settings, once, at load time (the same path as the root note)
+            const std::string o = "osc" + std::to_string (osc);
+            const std::pair<const char*, float> writes[3] = { { ".sample.loop_mode", static_cast<float> (loop.mode) }, { ".sample.loop_start", loop.startPercent }, { ".sample.loop_end", loop.endPercent } };
+            for (const auto& w : writes)
+                if (const synthyboy::ParamInfo* p = synthyboy::findParamByKey ((o + w.first).c_str()))
+                    uiWrite (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, w.second)));
+        }
         return true;
     }
     bool overlayAttached = false;
@@ -2065,6 +2093,11 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     {
         if (!inst) return 0;
         inst->mainsOn = (value != 0);
+        if (value == 0)
+        {
+            inst->soundOffRequests.fetch_add (1u, std::memory_order_relaxed);
+            inst->soundOffPending.store (true, std::memory_order_release);
+        }
 #if SYNTHYBOY_MPC_CALLBACK_STATS
         inst->callbackStats.restartGaps();
 #endif
@@ -2122,7 +2155,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             synthyboy::Event event;
             if (synthyboy::translateMidiMessage(data, numBytes, deltaFrames, event))
             {
-                inst->events.push(event);
+                inst->eventInbox.push (event, event.type == synthyboy::Event::NoteOff);
             }
         }
         return 1;
@@ -2201,7 +2234,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 }
 #endif
                 {
-                    // the output limiter setting rides in the chunk; a chunk without it (an older one) leaves the setting as it is (the default is on)
+                    // the output limiter setting rides in the chunk; a chunk without it (an older one) leaves the setting as it is (the default is off)
                     bool limiterOn = inst->outputLimiter.load (std::memory_order_relaxed);
                     if (synthyboy_mpc::outputLimiterFromChunk (chunk, static_cast<size_t>(size), limiterOn))
                     {
@@ -2506,6 +2539,11 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
     case effStopProcess:
     {
+        if (inst)
+        {
+            inst->soundOffRequests.fetch_add (1u, std::memory_order_relaxed);
+            inst->soundOffPending.store (true, std::memory_order_release);   // the voices stop at the next block (CC 120 for the engine): nothing keeps sounding after the host stopped processing
+        }
         return 1;
     }
 
@@ -2766,11 +2804,33 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
         inst->engine->setTransport(inst->transport);
     }
 
+    // take over what the host delivered since the last block (events.push keeps its overflow rules)
+    {
+        synthyboy::Event taken;
+        while (inst->events.count < EventBuffer::kCapacity && inst->eventInbox.pop (taken))
+            inst->events.push (taken);
+    }
+
     // Clamp event frames to the last frame of the block
     for (size_t i = 0; i < inst->events.count; ++i)
     {
         if (static_cast<int32_t>(inst->events.slots[i].frame) >= sampleFrames)
             inst->events.slots[i].frame = sampleFrames - 1;
+    }
+
+    // All Sound Off (stop / mains off): one event at the front of the block, the same as CC 120 from the keyboard
+    if (inst->soundOffPending.exchange (false, std::memory_order_acquire))
+    {
+        synthyboy::Event off;
+        off.type = synthyboy::Event::AllNotesOff;
+        off.channel = -1;
+        off.value = 1.0f;
+        off.frame = 0;
+        const size_t keep = std::min (inst->events.count, EventBuffer::kCapacity - 1);
+        for (size_t i = keep; i > 0; --i)
+            inst->events.slots[i] = inst->events.slots[i - 1];
+        inst->events.slots[0] = off;
+        inst->events.count = keep + 1;
     }
 
     float* out0 = (e->numOutputs > 0) ? outputs[0] : nullptr;

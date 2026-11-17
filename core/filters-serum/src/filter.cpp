@@ -114,6 +114,13 @@ public:
     void setParams (const FilterParams& params) noexcept
     {
         params_ = params;
+        if (params.jump)
+        {
+            smoothedCutoff_ = std::max (20.0f, std::min (params.cutoff, static_cast<float> (sampleRate_ * 0.49)));
+            smoothedRes_ = std::max (0.0f, std::min (params.resonance, 1.0f));
+            heldCutoff_ = smoothedCutoff_;
+            heldRes_ = smoothedRes_;
+        }
     }
 
     const FilterParams& getParams() const noexcept

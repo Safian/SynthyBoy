@@ -119,6 +119,8 @@ public:
     void oscPhases (int o, uint32_t* out) const noexcept { osc[o].getPhases (out); }
     void setOscPhases (int o, const uint32_t* in) noexcept { osc[o].setPhases (in); }
     /** The step (0 .. 7) of the voice control this voice plays: (the number of the note - 1) modulo the length. */
+    /** Bit o: oscillator o (on) is a Sample / Granular / Spectral / Multisample oscillator without its file (the instance shows "content missing"). */
+    uint32_t missingMask() const noexcept { return missingBits; }
     int voiceControlStep() const noexcept { return vcStep; }
     float noisePosition() const noexcept { return noiseUseSample ? noiseSv.playheadFraction() : -1.0f; }
 
@@ -274,6 +276,7 @@ private:
     float oscBlend[3] = {}, oscSend[3][2] = {}, subBlend = 0.0f, subSend[2] = {}, noiseBlend = 0.0f, noiseSend[2] = {}, filtSend[2][2] = {};
     bool oscEnv1[3] = { true, true, true };
     bool oscOn[3] = { true, false, false };
+    uint32_t missingBits = 0;   // bit o: oscillator o is of a file type and has no file (it plays its built-in wavetable)
     bool oscWarpOnly[3] = {};   // out of its key range with Key Warp on: the oscillator runs (its signal warps the others) but is not heard
     FilterUnit filt[2];
     FilterSettings filtSet[2];
