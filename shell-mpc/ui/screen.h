@@ -59,19 +59,19 @@ public:
     }
 
 protected:
-    // top to bottom (play_rows.h): the top row (the source selector, and the route button), the display (the rectangle of the three thirds; the power button in its top left corner and the full screen button in its top right
+    // top to bottom (play_rows.h): the top row (the source selector), the display (the rectangle of the three thirds; the power button in its top left corner, the full screen button in its top right and the route button in its bottom right
     // corner, 4 px from the edges, 64 x 56: the full screen button is placed exactly as the envelope graph's and the LFO display's), and from the controls line the Basic group in one frame
     void layout() override
     {
         const int m = playrows::kMargin, W = rect_.w - 2 * m, rowH = playrows::kSelectorH;
         const bool sub = inst_ == OscInstance::Sub;   // the sub oscillator's routing is the ROUTING block of its page: no route button (as on the page)
-        const int btnW = 64, gap = 8, inset = 4;
+        const int btnW = 64, inset = 4;
         const int hy = rect_.y + m;
         display_ = playrows::displayRect (rect_);
         power.place ({ display_.x + inset, display_.y + inset, btnW, rowH });
         full.place ({ display_.right() - btnW - inset, display_.y + inset, btnW, rowH });
-        route.place (sub ? Rect {} : Rect { rect_.right() - m - btnW, hy, btnW, rowH });
-        instances.place ({ rect_.x + m, hy, std::max (0, W - (sub ? 0 : btnW + gap)), rowH });
+        route.place (sub ? Rect {} : Rect { display_.right() - btnW - inset, display_.bottom() - rowH - inset, btnW, rowH });   // the route button (F1 ...): the bottom right corner of the display, 56 px high
+        instances.place ({ rect_.x + m, hy, W, rowH });
         const int by = playrows::controlsLine (rect_);
         basic.place ({ rect_.x + m, by, W, std::max (0, rect_.bottom() - m - by) });
     }

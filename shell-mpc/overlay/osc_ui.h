@@ -262,7 +262,8 @@ public:
         if (stackDepth_ == 0)
         {
             compact_.full.draw (sb);
-            compact_.power.draw (sb);   // the buttons that stand in the corners of the display lie over its picture
+            compact_.power.draw (sb);
+            compact_.route.draw (sb);   // the buttons that stand in the corners of the display lie over its picture
         }
         else if (loadShown_)
             loadBtn_.draw (sb);
