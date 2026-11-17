@@ -5,7 +5,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 //   synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets]
-//                        [--seconds 30] [--notes K] [--retrigger 1] [--paced] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]
+//                        [--seconds 30] [--repeat N] [--budget PCT] [--notes K] [--retrigger 1] [--paced] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz]
+//                        [--sections] [--list]
 //
 //   --core N        pin the process to CPU N (Linux: sched_setaffinity; elsewhere the option is refused). Nothing else of the machine is touched: no scheduling class,
 //                   no priority, no frequency governor. The CPU the run really was on, its part number and its frequency settings are printed.
@@ -24,6 +25,10 @@
 //                     any other    a factory preset by its name ("Hyper Saw Lead") or file path
 //   --all-presets   every .sbpreset below DIR instead of the default loads (the table of cost per preset per profile)
 //   --seconds S     measured audio per run (default 30; the first second of every run is played and not measured)
+//   --repeat N      run the whole list N times, one pass after the other (default 1). The summary then takes, per preset, the MEDIAN of the passes' 99th
+//                   percentiles and prints the lowest and highest pass next to it (the spread).
+//   --budget PCT    add a verdict to the summary: a profile is "inside" when the 99th percentile of its dearest factory preset is at most PCT % of the block and
+//                   no block of any of its factory presets, in any pass, was longer than its real time
 //   --notes K       hold K notes instead of the profile's polyphony (the notes over the polyphony of the profile or of the preset steal voices)
 //   --paced         start every block at its real time (a run then takes its audio time): the caches and the frequency governor see what they see under the host. Without it
 //                   the blocks follow each other at once (the usual, fast way).
@@ -142,6 +147,8 @@ struct Options
     bool ftz = true;
     bool sections = false;
     bool list = false;
+    int repeat = 1;
+    double budget = 0.0;
 };
 
 struct PresetData
@@ -386,7 +393,7 @@ long currentKhz (int cpu)
 [[noreturn]] void usage (const char* message)
 {
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
-                          "[--notes K] [--retrigger 1] [--paced] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]\n", message);
+                          "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -414,9 +421,11 @@ int main (int argc, char** argv)
         else if (a == "--no-ftz")      o.ftz = false;
         else if (a == "--sections")    o.sections = true;
         else if (a == "--list")        o.list = true;
+        else if (a == "--repeat")      o.repeat = std::atoi (next());
+        else if (a == "--budget")      o.budget = std::atof (next());
         else usage (("unknown argument " + a).c_str());
     }
-    if (o.seconds <= 0.0 || o.block < 1 || o.block > 8192 || o.notes < 0 || o.notes > kMaxVoices || o.sampleRate < 8000.0 || o.retrigger <= 0.0)
+    if (o.seconds <= 0.0 || o.block < 1 || o.block > 8192 || o.notes < 0 || o.notes > kMaxVoices || o.sampleRate < 8000.0 || o.retrigger <= 0.0 || o.repeat < 1 || o.repeat > 99 || o.budget < 0.0)
         usage ("argument out of range");
     if (o.sections && ! ownSectionTimingAvailable())
         usage ("--sections needs a build with -DSYNTHYBOY_SECTION_TIMING=ON");
@@ -564,7 +573,8 @@ int main (int argc, char** argv)
             std::printf ("profile %-64s = %s\n", configs[c].c_str(), synthyboy_mpc::describeProfile (profiles[c]).c_str());
         for (const auto& l : loads)
             std::printf ("load    %-40s (%s)\n", l.name.c_str(), l.group.c_str());
-        std::printf ("%zu runs, %.0f s of measured audio\n", configs.size() * loads.size(), static_cast<double> (configs.size() * loads.size()) * (o.seconds + 1.0));
+        std::printf ("%zu runs, %.0f s of audio (a run takes its audio time multiplied by the load it measures)\n", configs.size() * loads.size() * static_cast<size_t> (o.repeat),
+                     static_cast<double> (configs.size() * loads.size()) * (o.seconds + 1.0) * o.repeat);
         return 0;
     }
 
@@ -575,64 +585,95 @@ int main (int argc, char** argv)
         return 1;
     }
     if (csv != nullptr)
-        std::fprintf (csv, "device,cpu,cpu_info,profile,settings,load,group,notes,voices_mean,voices_max,sr,block,blocks,min_pct,median_pct,p99_pct,max_pct,mean_pct,min_ms,median_ms,p99_ms,max_ms,mean_ms,blocks_over_100pct,cpu_khz_after_run\n");
+        std::fprintf (csv, "device,cpu,cpu_info,profile,settings,load,group,notes,voices_mean,voices_max,sr,block,blocks,min_pct,median_pct,p99_pct,max_pct,mean_pct,min_ms,median_ms,p99_ms,max_ms,mean_ms,blocks_over_100pct,cpu_khz_after_run,pass\n");
 
     std::printf ("\nshare of the block's real time (%.3f ms = 100 %%) spent in process(), one core:\n", budgetMs);
-    std::printf ("%-58s %-24s %5s %6s | %7s %7s %7s %7s %7s | %5s %8s\n", "profile", "load", "notes", "voices", "min %", "median%", "p99 %", "max %", "mean %", "over", "cpu MHz");
-    struct Summary { std::string preset; double p99 = -1.0, max = -1.0; double worstP99 = -1.0; };
-    std::vector<Summary> summaries (configs.size());
-    for (size_t c = 0; c < configs.size(); ++c)
-    {
-        const int notes = o.notes > 0 ? o.notes : profiles[c].maxVoices;
-        for (const auto& l : loads)
+    std::printf ("%-58s %-24s %5s %6s | %7s %7s %7s %7s %7s | %5s %8s %4s\n", "profile", "load", "notes", "voices", "min %", "median%", "p99 %", "max %", "mean %", "over", "cpu MHz", "pass");
+    // per profile and load: the 99th percentile and the longest block of every pass
+    struct Cell { std::vector<double> p99, max; };
+    std::vector<std::vector<Cell>> cells (configs.size(), std::vector<Cell> (loads.size()));
+    for (int pass = 1; pass <= o.repeat; ++pass)
+        for (size_t c = 0; c < configs.size(); ++c)
         {
-            const Result r = run (o, profiles[c], l, notes);
-            const double k = 100.0 / budgetMs;
-            const long khz = currentKhz (cpu);
-            std::printf ("%-58s %-24.24s %5d %6.1f | %7.2f %7.2f %7.2f %7.2f %7.2f | %5lld %8ld\n", configs[c].c_str(), l.name.c_str(), notes, r.voicesMean, r.minMs * k, r.medianMs * k, r.p99Ms * k,
-                         r.maxMs * k, r.meanMs * k, r.over, khz / 1000);
-            std::fflush (stdout);
-            if (o.sections)
+            const int notes = o.notes > 0 ? o.notes : profiles[c].maxVoices;
+            for (size_t li = 0; li < loads.size(); ++li)
             {
-                double total = 0.0;
-                for (const double ms : r.sectionMs)
-                    total += ms;
-                for (size_t i = 0; i < r.sectionMs.size(); ++i)
-                    if (r.sectionMs[i] > 0.0)
-                        std::printf ("    section %-52s %8.4f ms / block %6.1f %%\n", ownSectionName (static_cast<int> (i)), r.sectionMs[i], total > 0.0 ? 100.0 * r.sectionMs[i] / total : 0.0);
+                const Load& l = loads[li];
+                const Result r = run (o, profiles[c], l, notes);
+                const double k = 100.0 / budgetMs;
+                const long khz = currentKhz (cpu);
+                std::printf ("%-58s %-24.24s %5d %6.1f | %7.2f %7.2f %7.2f %7.2f %7.2f | %5lld %8ld %4d\n", configs[c].c_str(), l.name.c_str(), notes, r.voicesMean, r.minMs * k, r.medianMs * k,
+                             r.p99Ms * k, r.maxMs * k, r.meanMs * k, r.over, khz / 1000, pass);
+                std::fflush (stdout);
+                if (o.sections)
+                {
+                    double total = 0.0;
+                    for (const double ms : r.sectionMs)
+                        total += ms;
+                    for (size_t i = 0; i < r.sectionMs.size(); ++i)
+                        if (r.sectionMs[i] > 0.0)
+                            std::printf ("    section %-52s %8.4f ms / block %6.1f %%\n", ownSectionName (static_cast<int> (i)), r.sectionMs[i], total > 0.0 ? 100.0 * r.sectionMs[i] / total : 0.0);
+                }
+                if (csv != nullptr)
+                {
+                    std::fprintf (csv, "\"%s\",%d,\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%d,%.2f,%d,%.0f,%d,%lld,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%.5f,%.5f,%.5f,%lld,%ld,%d\n", model.c_str(), cpu,
+                                  cpuText.c_str(), configs[c].c_str(), synthyboy_mpc::describeProfile (profiles[c]).c_str(), l.name.c_str(), l.group.c_str(), notes, r.voicesMean, r.voicesMax,
+                                  o.sampleRate, o.block, r.blocks, r.minMs * k, r.medianMs * k, r.p99Ms * k, r.maxMs * k, r.meanMs * k, r.minMs, r.medianMs, r.p99Ms, r.maxMs, r.meanMs, r.over, khz, pass);
+                    std::fflush (csv);
+                }
+                cells[c][li].p99.push_back (r.p99Ms * k);
+                cells[c][li].max.push_back (r.maxMs * k);
             }
-            if (csv != nullptr)
-            {
-                std::fprintf (csv, "\"%s\",%d,\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%d,%.2f,%d,%.0f,%d,%lld,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%.5f,%.5f,%.5f,%lld,%ld\n", model.c_str(), cpu, cpuText.c_str(),
-                              configs[c].c_str(), synthyboy_mpc::describeProfile (profiles[c]).c_str(), l.name.c_str(), l.group.c_str(), notes, r.voicesMean, r.voicesMax, o.sampleRate, o.block,
-                              r.blocks, r.minMs * k, r.medianMs * k, r.p99Ms * k, r.maxMs * k, r.meanMs * k, r.minMs, r.medianMs, r.p99Ms, r.maxMs, r.meanMs, r.over, khz);
-                std::fflush (csv);
-            }
-            if (l.kind == Load::preset && r.p99Ms * k > summaries[c].p99)
-            {
-                summaries[c].p99 = r.p99Ms * k;
-                summaries[c].max = r.maxMs * k;
-                summaries[c].preset = l.name;
-            }
-            if (l.kind == Load::worst)
-                summaries[c].worstP99 = r.p99Ms * k;
         }
-    }
     if (csv != nullptr)
         std::fclose (csv);
 
-    std::printf ("\nper profile: the dearest factory preset of this run by the 99th percentile (the number the budget rule reads), and the synthetic worst case\n");
-    std::printf ("%-58s %5s | %7s %7s  %-24s | %9s\n", "profile", "notes", "p99 %", "max %", "preset", "worst p99");
+    // The number the budget rule reads: per profile, the factory preset with the highest 99th percentile, where a preset's 99th percentile is the MEDIAN of its passes;
+    // next to it the lowest and highest pass (the spread) and the longest single block of any pass.
+    auto median = [] (std::vector<double> v) { std::sort (v.begin(), v.end()); return v[v.size() / 2]; };
+    std::printf ("\nper profile: the dearest factory preset of this run (99th percentile: the median of %d pass%s, with the lowest and highest pass; max: the longest block of any pass), and the synthetic worst case\n",
+                 o.repeat, o.repeat == 1 ? "" : "es");
+    std::printf ("%-58s %5s | %7s %15s %7s  %-24s | %9s%s\n", "profile", "notes", "p99 %", "(passes)", "max %", "preset", "worst p99", o.budget > 0.0 ? " | budget" : "");
     for (size_t c = 0; c < configs.size(); ++c)
     {
         const int notes = o.notes > 0 ? o.notes : profiles[c].maxVoices;
+        int best = -1;
+        double bestP99 = -1.0, worstP99 = -1.0;
+        for (size_t li = 0; li < loads.size(); ++li)
+        {
+            const double m = median (cells[c][li].p99);
+            if (loads[li].kind == Load::preset && m > bestP99)
+            {
+                bestP99 = m;
+                best = static_cast<int> (li);
+            }
+            if (loads[li].kind == Load::worst)
+                worstP99 = m;
+        }
         char worst[32] = "-";
-        if (summaries[c].worstP99 >= 0.0)
-            std::snprintf (worst, sizeof worst, "%.2f", summaries[c].worstP99);
-        if (summaries[c].p99 >= 0.0)
-            std::printf ("%-58s %5d | %7.2f %7.2f  %-24.24s | %9s\n", configs[c].c_str(), notes, summaries[c].p99, summaries[c].max, summaries[c].preset.c_str(), worst);
+        if (worstP99 >= 0.0)
+            std::snprintf (worst, sizeof worst, "%.2f", worstP99);
+        if (best >= 0)
+        {
+            const Cell& cell = cells[c][static_cast<size_t> (best)];
+            const double lo = *std::min_element (cell.p99.begin(), cell.p99.end()), hi = *std::max_element (cell.p99.begin(), cell.p99.end());
+            const double longest = *std::max_element (cell.max.begin(), cell.max.end());
+            char range[40];
+            std::snprintf (range, sizeof range, "(%.2f - %.2f)", lo, hi);
+            std::printf ("%-58s %5d | %7.2f %15s %7.2f  %-24.24s | %9s", configs[c].c_str(), notes, bestP99, range, longest, loads[static_cast<size_t> (best)].name.c_str(), worst);
+            if (o.budget > 0.0)
+            {
+                // the longest block of ANY preset of the profile, not only of the dearest one
+                double longestAll = 0.0;
+                for (size_t li = 0; li < loads.size(); ++li)
+                    if (loads[li].kind == Load::preset)
+                        longestAll = std::max (longestAll, *std::max_element (cells[c][li].max.begin(), cells[c][li].max.end()));
+                std::printf (" | %s", bestP99 <= o.budget && longestAll <= 100.0 ? "inside" : (bestP99 <= o.budget ? "OVER (a block longer than its real time)" : "OVER"));
+            }
+            std::printf ("\n");
+        }
         else
-            std::printf ("%-58s %5d | %7s %7s  %-24s | %9s\n", configs[c].c_str(), notes, "-", "-", "(no preset in this run)", worst);
+            std::printf ("%-58s %5d | %7s %15s %7s  %-24s | %9s\n", configs[c].c_str(), notes, "-", "", "-", "(no preset in this run)", worst);
     }
     return 0;
 }
