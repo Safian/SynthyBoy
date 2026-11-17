@@ -654,7 +654,7 @@ void testSourceBrowserInTheOscillatorUi()
     check (src != nullptr && src->c->enabled() && r.ui.compact().basic.source.stepper.listable && r.ui.compact().basic.source.dropdown.enabled(), "granular: the source of the compact view is enabled (a tap opens the browser)");
     check (std::string (r.ui.compact().basic.source.stepper.state.text) == "NO SAMPLE", "granular: no sample loaded: the source says NO SAMPLE");
     // from the compact view the dropdown opens the full screen and the list over it
-    r.tapC (r.ui.compact().basic.source.dropdown);
+    r.tapC (r.ui.compact().basic.source.stepper);   // the name of the source is the list / the browser (the compact row has no list button)
     check (r.stack.depth() == 2 && r.stack.top() == OscUi::kPageList && r.ui.list().state.count == 1 && std::string (r.ui.list().state.header) == "SOURCES" && ! r.ui.list().state.headerBack && std::string (r.ui.list().state.items[0]) == "LIBRARY \xe2\x96\xb6", "granular: the dropdown opens the full screen and the list of the sources (the header is the title, no way up at the roots)");
     // LIBRARY, then Drums, then the sample
     auto row = [&] (int i) { const ui::Rect q = r.ui.list().rowRect (i); r.tap (q.x + 30, q.y + q.h / 2); };
@@ -699,7 +699,7 @@ void testSourceBrowserInTheOscillatorUi()
     Rig none;
     none.inst.set ("osc1.type", 4.0f);
     none.refresh();
-    none.tapC (none.ui.compact().basic.source.dropdown);
+    none.tapC (none.ui.compact().basic.source.stepper);
     check (none.stack.depth() == 0, "an instance without roots: the browser does not open");
 }
 

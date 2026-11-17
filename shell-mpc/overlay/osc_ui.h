@@ -490,6 +490,7 @@ private:
                 const bool listOk = (b == &full_.basic && kind == ui::OscKind::Wavetable && ! otherType) || contentType;   // wavetable: the list of all sources, on the full screen; the content types: the browser, from both views
                 bind (main_, kBasic + 2, &b->source.dropdown, T::Inert, "", ! listOk);
                 b->source.stepper.listable = listOk;
+                b->source.stepper.contentName = contentType;   // a file name: the middle goes when it does not fit (content_name.h), the lint accepts that
             }
             if (sub)
                 bind (main_, kBasic + 3, &b->oct, T::Number, "octave");
@@ -1281,11 +1282,11 @@ private:
             if (typeRaw_ == 4)
             {
                 for (const synthyboy::ContentInstrument& i : c->instruments)
-                    if (i.osc == osc) name = i.ref.name.empty() ? stemOf (i.ref.file) : i.ref.name;
+                    if (i.osc == osc) name = ui::contentname::display (i.ref.name, i.ref.file);
             }
             else
                 for (const synthyboy::ContentSample& s : c->samples)
-                    if (s.osc == osc) name = s.ref.name.empty() ? stemOf (s.ref.file) : s.ref.name;
+                    if (s.osc == osc) name = ui::contentname::display (s.ref.name, s.ref.file);
         }
         st->setItem (name.empty() ? "NO SAMPLE" : name.c_str());
     }
@@ -1503,11 +1504,11 @@ private:
             if (typeRaw_ == 4)
             {
                 for (const synthyboy::ContentInstrument& i : c->instruments)
-                    if (i.osc == osc) name = i.ref.name.empty() ? stemOf (i.ref.file) : i.ref.name;
+                    if (i.osc == osc) name = ui::contentname::display (i.ref.name, i.ref.file);
             }
             else
                 for (const synthyboy::ContentSample& s : c->samples)
-                    if (s.osc == osc) name = s.ref.name.empty() ? stemOf (s.ref.file) : s.ref.name;
+                    if (s.osc == osc) name = ui::contentname::display (s.ref.name, s.ref.file);
         }
         return name;
     }

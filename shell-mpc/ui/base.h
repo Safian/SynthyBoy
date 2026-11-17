@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include "content_name.h"
 #include "core.h"
 
 namespace synthyboy_mpc { namespace ui {
@@ -520,6 +521,7 @@ public:
     State state;
 
     Size minSize() const override { return { std::min (kMinW, minWidth), 56 }; }
+    bool contentName = false;   // the text is the name of a piece of content (a file): too long for its box it loses its middle, not its end (content_name.h); the layout lint accepts that
     int minWidth = kMinW;   // a stepper in a grid of cells with short choices (SAME NOTE) may be narrower than the usual 208
     void setCaption (const char* s) { setText (state.caption, sizeof state.caption, s); }
     static constexpr int kMinW = 208;   // two 28 px zones, a text of about 14 characters at 22 pixels and the frame
@@ -546,13 +548,26 @@ protected:
         p.chevron (static_cast<float> (b.x + kZone / 2), cy, 12.0f, 0, 2.0f, p.c (T.textDim, canPrev ? 255 : 60));   // one colour for both arrows: the colour of a label (the gradient means position and value only)
         p.chevron (static_cast<float> (b.right() - kZone / 2), cy, 12.0f, 1, 2.0f, p.c (T.textDim, canNext ? 255 : 60));
         p.plain();
+        char fitted[96];
+        auto shown = [&] (const Rect& zone) -> const char*
+        {
+            if (! contentName)
+                return state.text;
+            const float size = Pen::fitSize (state.text, static_cast<float> (zone.w), static_cast<float> (zone.h), T.fValue, T.fMin);
+            if (size <= 0.0f)
+                return state.text;
+            contentname::middleFit (state.text, size, static_cast<float> (zone.w), fitted, static_cast<int> (sizeof fitted));   // a name too long for its box loses its middle, never its end
+            return fitted;
+        };
         if (state.caption[0] != '\0')
         {
+            const Rect zone { b.x + kZone, b.y + 19, std::max (0, b.w - 2 * kZone), std::max (0, b.h - 22) };
             p.textCentered ({ b.x + kZone, b.y + 3, std::max (0, b.w - 2 * kZone), 17 }, state.caption, T.fLabel - 2.0f, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
-            p.textCentered ({ b.x + kZone, b.y + 19, std::max (0, b.w - 2 * kZone), std::max (0, b.h - 22) }, state.text, T.fValue, p.c (T.text, state.dim ? 90 : 255), T.fMin);
+            p.textCentered (zone, shown (zone), T.fValue, p.c (T.text, state.dim ? 90 : 255), T.fMin);
             return;
         }
-        p.textCentered ({ b.x + kZone, b.y + 2, std::max (0, b.w - 2 * kZone), std::max (0, b.h - 4) }, state.text, T.fValue, p.c (T.text, state.dim ? 90 : 255), T.fMin);
+        const Rect zone { b.x + kZone, b.y + 2, std::max (0, b.w - 2 * kZone), std::max (0, b.h - 4) };
+        p.textCentered (zone, shown (zone), T.fValue, p.c (T.text, state.dim ? 90 : 255), T.fMin);
     }
     Change onDown (int x, int y, double now) override
     {

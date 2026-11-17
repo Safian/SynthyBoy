@@ -565,11 +565,21 @@ public:
     MenuButton dropdown { "", MenuButton::Icon::Down };
 
     SourcePicker() { addKid (stepper); addKid (dropdown); setPrimary (&stepper); }
-    Size minSize() const override { return { stepper.minSize().w + kGap + 56, 56 }; }   // the stepper's own minimum (a narrower one in the compact row of the Play page)
+    Size minSize() const override { return { stepper.minSize().w + (compact_ ? 0 : kGap + 56), 56 }; }   // the stepper's own minimum (a narrower one in the compact row of the Play page)
+    /** The compact variant (the row of the Play page, where PAN and LEVEL stand beside it): no list button, the stepper has the whole width so that a table name has the room it needs; a tap on the name (`listable`) is the list / the browser. */
+    void setCompact (bool c) { compact_ = c; show (dropdown, ! c); layout(); }
+    bool compact() const noexcept { return compact_; }
 
 protected:
+    bool compact_ = false;
     void layout() override
     {
+        if (compact_)
+        {
+            stepper.place (rect_);
+            dropdown.place ({});
+            return;
+        }
         Rect r[2];
         const int fixed[2] = { 0, 56 }, weight[2] = { 1, 0 };
         layoutRow (rect_, fixed, weight, 2, kGap, r);
@@ -646,7 +656,8 @@ public:
     {
         stacked_ = s;
         pan.state.side = level.state.side = filter.state.side = ! s;
-        source.stepper.minWidth = s ? 120 : Stepper::kMinW;   // the compact row holds the table stepper, PAN and LEVEL side by side: the stepper may be narrower there (its text is fitted)
+        source.stepper.minWidth = s ? 150 : Stepper::kMinW;   // the compact row holds the table stepper, PAN and LEVEL side by side: about 200 px for the stepper alone (no list button: the name is the list), 140 px of text
+        source.setCompact (s);
         layout();
     }
     bool stacked() const noexcept { return stacked_; }
