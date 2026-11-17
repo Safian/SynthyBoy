@@ -576,6 +576,18 @@ void testFxEditing()
     }
 }
 
+/** The text of a value (ui_bind.h formatValue): a rate under 1 Hz keeps its decimals (the Chorus and the Reverb chorus rates read "0.40 Hz" and "0.25 Hz", not "0 Hz"), a value that rounds to zero has no sign, a pan reads like the mixer's. */
+void testValueText()
+{
+    auto text = [] (const char* key, float v) { char b[32]; uibind::formatValue (uibind::info (uibind::indexOfKey (key)), v, b, sizeof b); return std::string (b); };
+    check (text ("chorus.rate", 0.4f) == "0.40 Hz" && text ("reverb.chorus_rate", 0.25f) == "0.25 Hz", "a rate under 1 Hz keeps two decimals (" + text ("chorus.rate", 0.4f) + ", " + text ("reverb.chorus_rate", 0.25f) + ")");
+    check (text ("chorus.rate", 3.2f) == "3.20 Hz", "two decimals under 10 Hz");
+    check (text ("chorus.rate", 33.5f) == "33.5 Hz", "one decimal under 100 Hz (" + text ("chorus.rate", 33.5f) + ")");
+    check (text ("chorus.rate", 420.0f) == "420 Hz", "none from 100 Hz (" + text ("chorus.rate", 420.0f) + ")");
+    check (text ("master.volume", -0.02f) == "+0.0 dB" && text ("master.volume", -6.0f) == "-6.0 dB", "a level that rounds to zero is +0.0 dB, never -0.0 (" + text ("master.volume", -0.02f) + ")");
+    check (text ("utility.pan", 0.0f) == "C" && text ("utility.pan", -50.0f) == "L 50" && text ("utility.pan", 50.0f) == "R 50", "a pan reads C / L 50 / R 50 like the mixer (" + text ("utility.pan", 0.0f) + ")");
+}
+
 void testFxPagesAndDisplays()
 {
     FxRig r;
@@ -642,6 +654,7 @@ int main()
     testEveryEffectType();
     testFxEditing();
     testFxPagesAndDisplays();
+    testValueText();
     testFxDraw();
     std::printf (g_fails ? "mixfx_ui_host: FAILED (%d failures)\n" : "mixfx_ui_host: OK\n", g_fails);
     return g_fails ? 1 : 0;
