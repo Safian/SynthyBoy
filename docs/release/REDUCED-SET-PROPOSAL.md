@@ -37,14 +37,15 @@
 | Aux Keyscale Pluck | Pluck | WAVE |
 
 
-# Audition List
 
-| Name | Gap Closed | Reason |
-|---|---|---|
-| Spectral Chord Morph | SPEC Oscillator Type | Current set lacks checked SPEC items |
-| Reverse Gong Swell | Convolve Effect Family | Only one checked Convolve item needed |
-| Reese Dual Phase Bass | MULTI Content Kind | Additional multisample coverage |
-| ... | ... | ... |
+# Effect on Preset Counting Files
+
+The follow scripts rely on the hardcoded factory set count of 160:
+- `scripts/gen-factory-presets.py`: This script generates the factory presets. It needs a mechanism to load a subset of presets based on a list file (e.g., `scripts/release/reduced-set-list.txt`).
+- `scripts/gen-xpl-presets.py`: Used in tests for xpl generation.
+
+Mechanism to ship a subset:
+Introduce a `scripts/release/reduced-set-list.txt` file containing the names of the 30 included presets. The generation scripts (`gen-factory-presets.py`, `gen-xpl-presets.py`) should be modified to check for this list file and, if present, generate only the presets listed.
 
 | Bode Barber Riser | FX | FX | 1, 6 | None | -10.6 | N/A | TODO |
 | Breath of Machines | FX | FX | 1 | None | -21.5 | 66.5 -> 53.4 | TODO |
