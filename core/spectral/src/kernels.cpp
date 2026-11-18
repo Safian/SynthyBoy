@@ -236,8 +236,8 @@ float wrapPhase (float x) noexcept
         return wrapPiF (std::fmod (x, kTwoPiF)); // NaN, infinity or beyond any phase the voice reaches: the library's way
     constexpr double c = static_cast<double> (kTwoPiF);
     const double a = static_cast<double> (ax);
-    const double n = static_cast<double> (static_cast<int64_t> (a * (1.0 / c)));
-    double r = a - n * c;                // n * c is exact (n has at most 30 bits and c 24), and so is the difference: it is the remainder itself, which a float holds
+    const double n = static_cast<double> (static_cast<int> (a * (1.0 / c))); // (32 bit integers: a 64 bit conversion of a double is a library call on 32 bit ARM)
+    double r = a - n * c;                // n * c is exact (n has at most 28 bits and c 24), and so is the difference: it is the remainder itself, which a float holds
     if (r >= c) r -= c;                  // the estimate of n was one short
     else if (r < 0.0) r += c;            // or one too many
     const float f = static_cast<float> (r);

@@ -160,14 +160,12 @@ inline void readSampleStereo (const SampleView& sample, double pos, double stepR
 // Everything that does not change inside one call (the region and loop bounds, the pan gains, the mip level and its blend, the table of the tier) is computed once per call
 // instead of once per sample; the per sample arithmetic is the reference's (renderFrame), expression by expression, so the output is the same bits.
 
-/** floor () of a position known to be >= 0 and below 2^53. */
-inline int64_t floorPos (double pos) noexcept { return static_cast<int64_t> (pos); }
 
 template <QualityTier Tier>
-inline float interpBlock (const float* buf, int64_t numFrames, double pos, const float* table) noexcept
+inline float interpBlock (const float* buf, int numFrames, double pos, const float* table) noexcept
 {
     pos = std::max (0.0, std::min (static_cast<double> (numFrames - 1), pos));
-    const int64_t i = floorPos (pos);
+    const int i = static_cast<int> (pos); // pos >= 0: the truncation is the floor
     const double frac = pos - static_cast<double> (i);
     const int p = std::max (0, std::min (SincTables::kPhases - 1, static_cast<int> (frac * SincTables::kPhases)));
     if (Tier == QualityTier::low)
@@ -177,7 +175,7 @@ inline float interpBlock (const float* buf, int64_t numFrames, double pos, const
             return c[0] * buf[i - 1] + c[1] * buf[i] + c[2] * buf[i + 1] + c[3] * buf[i + 2];
         float sum = 0.0f;
         for (int k = 0; k < 4; ++k)
-            sum += c[k] * buf[std::max<int64_t> (0, std::min<int64_t> (numFrames - 1, i - 1 + k))];
+            sum += c[k] * buf[std::max (0, std::min (numFrames - 1, i - 1 + k))];
         return sum;
     }
     else if (Tier == QualityTier::medium)
@@ -189,7 +187,7 @@ inline float interpBlock (const float* buf, int64_t numFrames, double pos, const
                 sum += c[k] * buf[i - 3 + k];
         else
             for (int k = 0; k < 8; ++k)
-                sum += c[k] * buf[std::max<int64_t> (0, std::min<int64_t> (numFrames - 1, i - 3 + k))];
+                sum += c[k] * buf[std::max (0, std::min (numFrames - 1, i - 3 + k))];
         return sum;
     }
     else
@@ -201,7 +199,7 @@ inline float interpBlock (const float* buf, int64_t numFrames, double pos, const
                 sum += c[k] * buf[i - 7 + k];
         else
             for (int k = 0; k < 16; ++k)
-                sum += c[k] * buf[std::max<int64_t> (0, std::min<int64_t> (numFrames - 1, i - 7 + k))];
+                sum += c[k] * buf[std::max (0, std::min (numFrames - 1, i - 7 + k))];
         return sum;
     }
 }
@@ -212,10 +210,10 @@ struct ReadPlan
     enum Kind { direct, oneLevel, blend } kind = direct;
     bool stereo = false;
     const float* a[2] = { nullptr, nullptr };   // level 0 (direct), the level of oneLevel, the lower level of blend
-    int64_t na = 0;
+    int na = 0;
     double invScale0 = 1.0;                     // 1 / 2^level: a division by a power of two is exact, so pos * inv is pos / scale
     const float* b[2] = { nullptr, nullptr };   // the upper level of blend
-    int64_t nb = 0;
+    int nb = 0;
     double invScale1 = 1.0;
     bool useUpper = false;
     double alpha = 0.0, oneMinusAlpha = 1.0;
@@ -230,7 +228,7 @@ inline ReadPlan makePlan (const SampleView& sample, double stepRatio, QualityTie
         r.kind = ReadPlan::direct;
         r.a[0] = sample.channelData[0];
         r.a[1] = r.stereo ? sample.channelData[1] : nullptr;
-        r.na = sample.numFrames;
+        r.na = static_cast<int> (sample.numFrames);
         return r;
     }
     const double rho = std::log2 (stepRatio);
@@ -243,7 +241,7 @@ inline ReadPlan makePlan (const SampleView& sample, double stepRatio, QualityTie
         r.kind = ReadPlan::blend;
         r.a[0] = l0.channels[0];
         r.a[1] = r.stereo ? l0.channels[1] : nullptr;
-        r.na = l0.numFrames;
+        r.na = static_cast<int> (l0.numFrames);
         r.invScale0 = 1.0 / static_cast<double> (1 << m0);
         r.useUpper = m1 > m0 && alpha > 0.0;
         if (r.useUpper)
@@ -251,7 +249,7 @@ inline ReadPlan makePlan (const SampleView& sample, double stepRatio, QualityTie
             const auto& l1 = sample.mipLevels[m1];
             r.b[0] = l1.channels[0];
             r.b[1] = r.stereo ? l1.channels[1] : nullptr;
-            r.nb = l1.numFrames;
+            r.nb = static_cast<int> (l1.numFrames);
             r.invScale1 = 1.0 / static_cast<double> (1 << m1);
             r.alpha = alpha;
             r.oneMinusAlpha = 1.0 - alpha;
@@ -263,7 +261,7 @@ inline ReadPlan makePlan (const SampleView& sample, double stepRatio, QualityTie
     r.kind = ReadPlan::oneLevel;
     r.a[0] = lvl.channels[0];
     r.a[1] = r.stereo ? lvl.channels[1] : nullptr;
-    r.na = lvl.numFrames;
+    r.na = static_cast<int> (lvl.numFrames);
     r.invScale0 = 1.0 / static_cast<double> (1 << m);
     return r;
 }
@@ -512,7 +510,7 @@ void SampleVoice::processModulated (float* outLeft, float* outRight, int numFram
 {
     if (outLeft == nullptr || numFrames <= 0)
         return;
-    if (! reference_)
+    if (useKernel())
     {
         renderBlock (outLeft, outRight, numFrames, rateMod, false);
         return;
@@ -735,7 +733,7 @@ void SampleVoice::process (float* outLeft, float* outRight, int numFrames) noexc
 {
     if (outLeft == nullptr || numFrames <= 0)
         return;
-    if (! reference_)
+    if (useKernel())
     {
         renderBlock (outLeft, outRight, numFrames, nullptr, false);
         return;
@@ -754,7 +752,7 @@ void SampleVoice::processAdd (float* outLeft, float* outRight, int numFrames) no
 {
     if (outLeft == nullptr || numFrames <= 0)
         return;
-    if (! reference_)
+    if (useKernel())
     {
         renderBlock (outLeft, outRight, numFrames, nullptr, true);
         return;

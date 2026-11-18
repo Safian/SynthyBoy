@@ -100,9 +100,9 @@ void readSample (const SampleView& s, double pos, double rate, float& l, float& 
 // the per sample arithmetic is the reference loop's, expression by expression.
 
 /** hermite () with the four taps read directly where they all lie inside the data (the same bits). */
-inline float hermiteFast (const float* d, int64_t n, double pos) noexcept
+inline float hermiteFast (const float* d, int n, double pos) noexcept
 {
-    int64_t i = static_cast<int64_t> (pos);
+    int i = static_cast<int> (pos); // 32 bit integers: a 64 bit conversion of a double is a library call on 32 bit ARM
     if (static_cast<double> (i) > pos)
         --i; // floor () of a negative position
     const float t = static_cast<float> (pos - static_cast<double> (i));
@@ -113,7 +113,7 @@ inline float hermiteFast (const float* d, int64_t n, double pos) noexcept
     }
     else
     {
-        const auto at = [&] (int64_t k) { return k >= 0 && k < n ? d[k] : 0.0f; };
+        const auto at = [&] (int k) { return k >= 0 && k < n ? d[k] : 0.0f; };
         y0 = at (i - 1); y1 = at (i); y2 = at (i + 1); y3 = at (i + 2);
     }
     const float c1 = 0.5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3, c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
@@ -124,7 +124,7 @@ inline float hermiteFast (const float* d, int64_t n, double pos) noexcept
 struct GrainRead
 {
     const float* ch[2] = { nullptr, nullptr };
-    int64_t n = 0;
+    int n = 0;
     double invScale = 1.0;
     bool stereo = false;
     bool scaled = false;
@@ -136,7 +136,7 @@ struct GrainRead
             const auto& lvl = s.mipLevels[m];
             ch[0] = lvl.channels[0];
             ch[1] = stereo ? lvl.channels[1] : nullptr;
-            n = lvl.numFrames;
+            n = static_cast<int> (lvl.numFrames);
             invScale = 1.0 / static_cast<double> (1 << m); // a power of two: pos * invScale is pos / scale
             scaled = true;
         }
@@ -144,7 +144,7 @@ struct GrainRead
         {
             ch[0] = s.channelData[0];
             ch[1] = stereo ? s.channelData[1] : nullptr;
-            n = s.numFrames;
+            n = static_cast<int> (s.numFrames);
             invScale = 1.0;
             scaled = false;
         }
@@ -556,7 +556,7 @@ void GranularVoice::process (const GrainParams& p, float* left, float* right, in
     }
 
     bool any;
-    if (reference_)
+    if (reference_ || sample_->numFrames > (int64_t { 1 } << 29))   // (the kernel counts frames with 32 bit integers)
         any = renderGrainsReference (p, left, right, numFrames, rateMod);
     else
         any = renderGrains (p, left, right, numFrames, rateMod);

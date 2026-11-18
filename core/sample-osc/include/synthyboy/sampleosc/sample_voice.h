@@ -152,6 +152,8 @@ private:
     float unisonPan_ = 0.0f;
     float unisonLevel_ = 1.0f;
 
+    /** The block kernel counts frames with 32 bit integers (a 64 bit conversion of a double is a library call on 32 bit ARM): a sample of more than 2^30 frames plays through the reference. */
+    bool useKernel() const noexcept { return ! reference_ && (sample_ == nullptr || sample_->numFrames <= (int64_t { 1 } << 30)); }
     bool reference_ = false;
     // the pitch ratio of the last updatePitchRatio (2^(semitones / 12) is the dear part, and the semitones rarely change from one control period to the next)
     float cachedSemitones_ = std::numeric_limits<float>::quiet_NaN();
