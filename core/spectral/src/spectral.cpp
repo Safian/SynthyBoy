@@ -934,6 +934,68 @@ void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame
         c.ring[(ola_ + n) & (kFftSize - 1)] += re_[n] * hannAt (n) * kOutputScale;
 }
 
+/** advancePhases () followed by the phase lock, for the bins that the lock does not overwrite only. The lock's peaks depend on the magnitudes only: with them found first, the phases that are advanced and
+    then overwritten at once (bin 1 .. first peak - 1, peak + 1 .. the midpoint to the next peak, everything after the last peak) are not advanced. What stays: bin 0, every peak, and the half of a
+    region between the midpoint and the next peak. Those bins are gathered into `tmpPhase` / `tmpStep` (kBins - 1 values each at most), advanced by the very kernel (the same bits per bin: no
+    lane depends on its neighbours), and put back; then the lock's loops run on the peaks. With no peak the lock does nothing and every bin is advanced. */
+static void advanceAndLock (float* phase, const float* step, const float* om, const float* oth, float* tmpPhase, float* tmpStep, bool neon) noexcept
+{
+    uint16_t peaks[kBins];
+    int numPeaks = 0;
+    for (int j = 1; j < kBins - 1; ++j)
+        if (om[j] > om[j - 1] && om[j] >= om[j + 1] && om[j] > 1.0e-6f)
+            peaks[numPeaks++] = static_cast<uint16_t> (j);
+    if (numPeaks == 0)
+    {
+        kernels::advancePhases (phase, step, kBins, neon);
+        return;
+    }
+    // the runs of bins that keep their advanced value: [0], [peak 0], and ((peak k - 1 + peak k) / 2 + 1 .. peak k) for k >= 1
+    int n = 0;
+    const auto gather = [&] (int from, int count)   // (two arrays in one loop: no library call for a run of two or three bins)
+    {
+        for (int i = 0; i < count; ++i)
+        {
+            tmpPhase[n + i] = phase[from + i];
+            tmpStep[n + i] = step[from + i];
+        }
+        n += count;
+    };
+    gather (0, 1);
+    gather (peaks[0], 1);
+    for (int k = 1; k < numPeaks; ++k)
+    {
+        const int from = (peaks[k - 1] + peaks[k]) / 2 + 1;
+        gather (from, peaks[k] - from + 1);
+    }
+    kernels::advancePhases (tmpPhase, tmpStep, n, neon);
+    n = 0;
+    const auto scatter = [&] (int from, int count)
+    {
+        for (int i = 0; i < count; ++i)
+            phase[from + i] = tmpPhase[n + i];
+        n += count;
+    };
+    scatter (0, 1);
+    scatter (peaks[0], 1);
+    for (int k = 1; k < numPeaks; ++k)
+    {
+        const int from = (peaks[k - 1] + peaks[k]) / 2 + 1;
+        scatter (from, peaks[k] - from + 1);
+    }
+    // the lock (as in renderChannelFast: the bins around each peak follow it)
+    for (int q = 1; q < peaks[0]; ++q)
+        phase[q] = phase[peaks[0]] + (oth[q] - oth[peaks[0]]);
+    for (int k = 1; k < numPeaks; ++k)
+    {
+        const int peak = peaks[k - 1], from = (peak + peaks[k]) / 2 + 1;
+        for (int q = peak + 1; q < from; ++q)
+            phase[q] = phase[peak] + (oth[q] - oth[peak]);
+    }
+    for (int q = peaks[numPeaks - 1] + 1; q < kBins; ++q)
+        phase[q] = phase[peaks[numPeaks - 1]] + (oth[q] - oth[peaks[numPeaks - 1]]);
+}
+
 void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double frame, bool transientHit, bool reuseShape, float* twistState) noexcept
 {
     const Analysis& an = *analysis_;
@@ -952,18 +1014,23 @@ void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double f
     }
 
     // phases: advance by the frequency of the partial; after a transient (Transients) restart from the phases of the analysis; Phase Lock ties the bins around a peak to it
-    bool fusedAdvance = false;
+    bool fusedAdvance = false, locked = false;
     if ((transientHit && p.transients) || ! phaseInit_[ch])
     {
         phaseInit_[ch] = true;
         for (int j = 0; j < kBins; ++j)
             c.synthPhase[j] = oth_[j];
     }
+    else if (p.phaseLock && ! legacyLock_)
+    {
+        advanceAndLock (c.synthPhase, of_, om_, oth_, scratch.zr, scratch.zi, neon);   // (zr, zi are free until the transform below)
+        locked = true;
+    }
     else if (p.phaseLock || twist != 0.0f)
         kernels::advancePhases (c.synthPhase, of_, kBins, neon);
     else
         fusedAdvance = true;   // phase update, sine and cosine and the bins in one pass below
-    if (p.phaseLock)
+    if (p.phaseLock && ! locked)
     {
         int peak = -1;
         for (int j = 1; j < kBins - 1; ++j)
@@ -1173,9 +1240,15 @@ void SpectralVoice::startPhases (const SpectralParams& p, int ch, int j, float* 
                     x = wrapPi (std::fmod (x, kTwoPi));
                 out[k] = x;
             }
+        else if (p.phaseLock && ! legacyLock_)
+            advanceAndLock (out, of_, om_, oth_, scratch.zr, scratch.zi, neon);
         else
+        {
             kernels::advancePhases (out, of_, kBins, neon);
-        if (p.phaseLock)
+            if (p.phaseLock)
+                lock();
+        }
+        if (reference_ && p.phaseLock)
             lock();
     }
     if (j > phaseFrame_[ch])

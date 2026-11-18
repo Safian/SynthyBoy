@@ -1297,3 +1297,68 @@ TEST (spectral_the_start_schedule_from_the_table_is_the_loop_of_cosines)
     }
     std::printf ("    startSchedule: %.3f us per note start now, %.3f us before (this Mac; %d)\n", us[0], us[1], sink & 1);
 }
+
+// SP5: with Phase Lock the voice advances only the bins that the lock does not overwrite (bin 0, the peaks, the halves of the regions next to the next peak). The output is the output of the voice that
+// advances every bin and then lets the lock overwrite about half of them (`setLegacyPhaseLock`), bit for bit: the clean tone (few peaks), a rich tone, noise (a peak every few bins), a stereo sample,
+// silence (no peak: every bin advances), at every start offset, frozen and scanning, with a pitch ratio, over 24000 samples (many frames carrying the phases on).
+TEST (spectral_phase_lock_that_advances_only_the_kept_bins_is_the_old_phase_lock)
+{
+    std::vector<float> noise (static_cast<size_t> (1.2 * kSr)), l (noise.size()), r (noise.size()), silence (noise.size(), 0.0f);
+    uint32_t seed = 99u;
+    for (size_t i = 0; i < noise.size(); ++i)
+    {
+        seed = seed * 1664525u + 1013904223u;
+        noise[i] = 0.3f * (static_cast<float> (seed >> 8) * (1.0f / 8388608.0f) - 1.0f);
+        l[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 311.0 * static_cast<double> (i) / kSr));
+        r[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 477.0 * static_cast<double> (i) / kSr) + 0.1 * noise[i]);
+    }
+    Tone clean (sine (440.0, 1.2)), rich1 (rich (196.0, 1.2)), noisy (noise), quiet (silence);
+    SampleData stereoData;
+    stereoData.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), kSr);
+    Analysis stereo;
+    stereo.build (stereoData.view());
+    const Analysis* analyses[5] = { &clean.analysis, &rich1.analysis, &noisy.analysis, &stereo, &quiet.analysis };
+    int runs = 0, different = 0;
+    for (const Analysis* an : analyses)
+        for (int variant = 0; variant < 3; ++variant)
+            for (int k = 0; k < kStartSteps; ++k)
+            {
+                SpectralParams p = frozen (0.3f);
+                p.manual = variant != 1;
+                p.scanSpeed = 0.6f;
+                p.phaseLock = true;
+                p.pitchRatio = variant == 2 ? 1.5f : 1.0f;
+                p.transients = variant == 2;
+                SpectralVoice a, b;
+                a.prepare (kSr);
+                b.prepare (kSr);
+                b.setLegacyPhaseLock (true);
+                a.noteOn (an, p, 0.0f, k * kStartStep);
+                b.noteOn (an, p, 0.0f, k * kStartStep);
+                std::vector<float> ra, rb;
+                const auto la = render (a, p, 24000, 128, &ra);
+                const auto lb = render (b, p, 24000, 128, &rb);
+                ++runs;
+                if (std::memcmp (la.data(), lb.data(), la.size() * sizeof (float)) != 0 || std::memcmp (ra.data(), rb.data(), ra.size() * sizeof (float)) != 0)
+                    ++different;
+            }
+    CHECK_EQ (runs, 60);
+    CHECK_EQ (different, 0);
+    // Mac timing of one frame with Phase Lock (synthesis of one hop, 8 voices of a chord worth of frames)
+    double us[2] = {};
+    for (int legacy = 0; legacy < 2; ++legacy)
+    {
+        SpectralParams p = frozen (0.3f);
+        p.phaseLock = true;
+        SpectralVoice v;
+        v.prepare (kSr);
+        v.setLegacyPhaseLock (legacy != 0);
+        v.noteOn (&rich1.analysis, p, 0.0f, 0);
+        std::vector<float> lo (kHop), ro (kHop);
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 2000; ++i)
+            v.process (p, lo.data(), ro.data(), kHop);
+        us[legacy] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / 2000.0;
+    }
+    std::printf ("    one frame with Phase Lock (a hop, rich tone): %.2f us now, %.2f us before (this Mac)\n", us[0], us[1]);
+}
