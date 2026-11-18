@@ -1,7 +1,8 @@
 // SynthyBoy - MPC UI component library tests: the LFO element (ui/lfo_model.h, lfo_display.h, lfo_parts.h, lfo_screen.h, shape_editor.h). The shape model against the engine's evaluator (the built-in shapes as
 // points give the engine's values), the editing operations (insert, move, remove, flat and ramp cells, undo, the grid a shape was drawn on), the sync value, both views for the LFO and the random LFO (every
 // leaf inside the screen, at least its minimum size, nothing overlaps, a tap on the middle reaches the leaf, every Q group adjacent with free lanes for the index chips, the pictures fit one scene), the
-// parts (shape picker, sync switch, rate control, instance bar) and the gestures of the shape editor's canvas.
+// parts (shape picker, sync switch, rate control, instance bar) and the gestures of the shape editor's canvas: the quick delete (a double tap), the step drawing of one gesture with no gap, the selection (rectangle, taps,
+// moving, scaling, the soft and the bend tools), the marker, flip / shift / bend of the whole shape, the modulation of points, the page with its three Q groups and the page of the point modulation.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "ui_test.h"
@@ -444,6 +445,526 @@ void testEditor()
     check (! pg.fx.enabled() && ! pg.fy.enabled() && ! pg.loop.enabled(), "editor page: nothing selected: the fields are dim");
 }
 
+// a shape of five points on a grid of quarters: (0, 0) (0.25, 0.5) (0.5, 1) (0.75, 0.5) (1, 0)
+lfo::ShapeModel fivePoints()
+{
+    lfo::ShapeModel m;
+    m.n = 5;
+    m.p[0] = lfo::Point (0.0f, 0.0f); m.p[1] = lfo::Point (0.25f, 0.5f); m.p[2] = lfo::Point (0.5f, 1.0f); m.p[3] = lfo::Point (0.75f, 0.5f); m.p[4] = lfo::Point (1.0f, 0.0f);
+    return m;
+}
+bool sameShape (const lfo::ShapeModel& a, const lfo::ShapeModel& b, float tol, int samples = 97)
+{
+    for (int i = 0; i < samples; ++i)
+    {
+        const float x = (static_cast<float> (i) + 0.5f) / static_cast<float> (samples);
+        if (std::fabs (a.eval (x) - b.eval (x)) > tol)
+            return false;
+    }
+    return true;
+}
+
+void testSelectionModel()
+{
+    // the point set follows an insert and a removal
+    lfo::PointSet s;
+    s.add (1); s.add (3);
+    check (s.count() == 2 && s.has (1) && s.has (3) && ! s.has (2) && s.first() == 1 && s.last() == 3, "point set: add, has, count, first, last");
+    s.onInsert (2);
+    check (s.has (1) && ! s.has (2) && s.has (4) && ! s.has (3), "point set: an insert at 2 moves point 3 to 4");
+    s.onRemove (1);
+    check (! s.has (1) && s.has (3) && s.count() == 1, "point set: removing point 1 moves point 4 to 3");
+    // moving a group: one move for all, clamped as a whole (the form of the selection stays, the order of the points stays)
+    lfo::ShapeModel m = fivePoints();
+    lfo::PointSet g;
+    g.add (1); g.add (2);
+    float dx = 0.5f, dy = 0.3f;
+    check (m.moveSet (g, dx, dy) && near (dx, 0.25f) && near (dy, 0.0f) && near (m.p[1].x, 0.5f) && near (m.p[2].x, 0.75f) && near (m.p[1].y, 0.5f) && near (m.p[2].y, 1.0f), "moveSet: x is limited by the neighbour that stays, y by the highest point (the form stays)");
+    m = fivePoints();
+    dx = -0.1f; dy = -0.3f;
+    check (m.moveSet (g, dx, dy) && near (m.p[1].x, 0.15f) && near (m.p[2].x, 0.4f) && near (m.p[1].y, 0.2f) && near (m.p[2].y, 0.7f), "moveSet: both points move by the same amount");
+    lfo::PointSet ends;
+    ends.add (0); ends.add (4);
+    m = fivePoints();
+    dx = 0.2f; dy = 0.3f;
+    check (m.moveSet (ends, dx, dy) && near (dx, 0.0f) && near (m.p[0].x, 0.0f) && near (m.p[4].x, 1.0f) && near (m.p[0].y, 0.3f) && near (m.p[4].y, 0.3f), "moveSet: the end points move only up and down");
+    // scaling a group around its centre
+    m = fivePoints();
+    lfo::PointSet mid;
+    mid.add (1); mid.add (2); mid.add (3);
+    check (m.scaleSetY (mid, 0.25f) && near (m.p[1].y, 0.625f) && near (m.p[2].y, 0.875f) && near (m.p[3].y, 0.625f), "scaleSetY: the height 0.5 becomes 0.25 around the centre 0.75");
+    m = fivePoints();
+    lfo::PointSet level;
+    level.add (1); level.add (3);
+    check (! m.scaleSetY (level, 0.9f), "scaleSetY: a selection that has no height cannot be scaled");
+    // removing a selection: the loop point follows
+    m = fivePoints();
+    m.loop = 3;
+    lfo::PointSet del;
+    del.add (1); del.add (2); del.add (0);
+    check (m.removeSet (del) == 2 && m.n == 3 && m.loop == 1 && near (m.p[1].x, 0.75f), "removeSet: the inner points go, the end point stays, the loop point is still the same point");
+    // a double removal of the ends does nothing
+    del = lfo::PointSet {};
+    del.add (0); del.add (m.n - 1);
+    check (m.removeSet (del) == 0 && m.n == 3, "removeSet: the end points never go");
+    // falloff
+    m = fivePoints();
+    float w[lfo::kMaxPoints];
+    check (m.falloffWeights (2, nullptr, 0.25f, w) == 1 && near (w[2], 1.0f) && near (w[1], 0.0f), "falloff: nothing within a radius that reaches no neighbour but the anchor");
+    check (m.falloffWeights (2, nullptr, 0.5f, w) == 3 && near (w[1], 0.5f) && near (w[3], 0.5f) && near (w[0], 0.0f), "falloff: the neighbours at half the radius follow with half");
+    lfo::PointSet three;
+    three.add (1); three.add (2); three.add (3);
+    check (m.falloffWeights (2, &three, 0.25f, w) == 3 && near (w[2], 1.0f) && near (w[1], 0.2f) && near (w[0], 0.0f) && near (w[4], 0.0f), "falloff: a selection: only the selected points, the farthest one with 0.2");
+    m.moveWeighted (w, 0.0f, -0.25f);
+    check (near (m.p[2].y, 0.75f) && near (m.p[1].y, 0.45f) && near (m.p[3].y, 0.45f) && near (m.p[0].y, 0.0f), "moveWeighted: the points move by their share");
+    // a time move that would cross the neighbour is repaired: the order stays
+    m = fivePoints();
+    for (int i = 0; i < 5; ++i) w[i] = i == 1 ? 1.0f : (i == 2 ? 0.1f : 0.0f);
+    m.moveWeighted (w, 0.6f, 0.0f);
+    check (m.p[1].x <= m.p[2].x + 1.0e-6f && m.p[2].x <= m.p[3].x + 1.0e-6f, "moveWeighted: the order of the points is kept");
+}
+
+void testWholeShapeModel()
+{
+    // flip in time: the shape mirrors, the curves with it; twice is the identity
+    lfo::ShapeModel m;
+    m.n = 3;
+    m.p[0] = lfo::Point (0.0f, 0.0f, 4.0f); m.p[1] = lfo::Point (0.25f, 1.0f, -2.0f); m.p[2] = lfo::Point (1.0f, 0.5f, 0.0f);
+    m.loop = 0;
+    const lfo::ShapeModel orig = m;
+    lfo::ShapeModel f = m;
+    f.flipH();
+    bool mirror = true;
+    for (int i = 0; i < 97; ++i)
+    {
+        const float x = (static_cast<float> (i) + 0.5f) / 97.0f;
+        mirror = mirror && std::fabs (f.eval (x) - orig.eval (1.0f - x)) < 1.0e-4f;
+    }
+    check (mirror && f.loop == 2 && near (f.p[0].x, 0.0f) && near (f.p[2].x, 1.0f) && near (f.p[0].power, 2.0f) && near (f.p[1].power, -4.0f), "flipH: the shape and its curves are mirrored (power changes sign, the loop point is the mirrored point)");
+    f.flipH();
+    check (f == orig, "flipH twice is the identity");
+    lfo::ShapeModel v = orig;
+    v.flipV();
+    bool inverse = true;
+    for (int i = 0; i < 97; ++i)
+    {
+        const float x = (static_cast<float> (i) + 0.5f) / 97.0f;
+        inverse = inverse && std::fabs (v.eval (x) - (1.0f - orig.eval (x))) < 1.0e-4f;
+    }
+    check (inverse, "flipV: every level is 1 - y, the curves stay");
+    v.flipV();
+    check (v == orig, "flipV twice is the identity");
+    // the modulation of a point is part of the shape and follows the flips
+    lfo::ShapeModel mm = orig;
+    lfo::PointSet one;
+    one.add (1);
+    mm.setMod (one, 1, 7, 0.5f);
+    check (mm.p[1].my.source == 7 && near (mm.p[1].my.amount, 0.5f) && ! (mm == orig), "setMod: the level of the point is modulated by source 7 with 0.5");
+    mm.flipV();
+    check (near (mm.p[1].my.amount, -0.5f), "flipV: the modulation of the level changes sign");
+    mm.setMod (one, 1, 0, 0.0f);
+    mm.flipV();
+    check (mm == orig, "setMod with no source removes the modulation");
+    // shift: the shape turns, nothing is lost, the curves of the cut segment are those of the original
+    lfo::ShapeModel c;
+    c.n = 3;
+    c.p[0] = lfo::Point (0.0f, 0.0f, 3.0f); c.p[1] = lfo::Point (0.5f, 1.0f, -2.0f); c.p[2] = lfo::Point (1.0f, 0.0f, 0.0f);
+    for (float d : { 0.25f, 0.7f, 0.5f, 0.125f })
+    {
+        lfo::ShapeModel t = c;
+        bool ok = t.shift (d) && t.n >= 3 && t.n <= lfo::kMaxPoints && near (t.p[0].x, 0.0f) && near (t.p[t.n - 1].x, 1.0f);
+        bool same = true;
+        for (int i = 0; i < 197; ++i)
+        {
+            const float x = (static_cast<float> (i) + 0.5f) / 197.0f;
+            float src = x - d;
+            src -= std::floor (src);
+            same = same && std::fabs (t.eval (x) - c.eval (src)) < 3.0e-3f;
+        }
+        check (ok && same, "shift by " + std::to_string (d) + ": the shape is the same turned (" + std::to_string (t.n) + " points)");
+    }
+    lfo::ShapeModel sq = lfo::ShapeModel::fromBuiltin (4);   // (0, 1) (0.5, 1) (0.5, 0) (1, 0): the step is at the cut
+    check (sq.shift (0.5f) && near (sq.eval (0.25f), 0.0f) && near (sq.eval (0.75f), 1.0f) && near (sq.p[0].x, 0.0f) && near (sq.p[sq.n - 1].x, 1.0f), "shift: a vertical step at the cut makes the shape start and end with the halves");
+    lfo::ShapeModel z = c;
+    check (! z.shift (0.0f) && ! z.shift (1.0f) && z == c, "shift by a whole cycle is no shift");
+    lfo::ShapeModel loopShape = c;
+    loopShape.loop = 1;
+    loopShape.shift (0.25f);
+    check (loopShape.loop >= 0 && near (loopShape.p[loopShape.loop].y, 1.0f), "shift: the loop point stays on its point (the peak)");
+    // bending all curves
+    lfo::ShapeModel b;
+    b.n = 4;
+    b.p[0] = lfo::Point (0.0f, 0.0f, 2.0f); b.p[1] = lfo::Point (0.3f, 1.0f, -4.0f); b.p[2] = lfo::Point (0.6f, 1.0f, 7.0f); b.p[3] = lfo::Point (1.0f, 0.0f);
+    check (near (b.meanCurve(), 4.5f) && b.bendable (0) && ! b.bendable (1) && b.bendable (2), "meanCurve: the mean of the segments that can be bent (the flat one has no curve and does not count)");
+    check (b.bendAll (3.0f) && near (b.p[0].power, 5.0f) && near (b.p[1].power, -4.0f) && near (b.p[2].power, 10.0f), "bendAll: every bendable curve moves by the same amount, the flat segment stays");
+    check (b.bendAll (100.0f) && near (b.p[0].power, 20.0f) && near (b.p[2].power, 20.0f) && near (b.p[1].power, -4.0f), "bendAll: limited to 20");
+    check (b.resetCurves() && near (b.p[0].power, 0.0f) && near (b.p[1].power, 0.0f) && near (b.p[2].power, 0.0f) && ! b.resetCurves(), "resetCurves: every segment straight");
+    check (b.nearestByX (0.62f) == 2 && b.nearestByX (0.1f) == 0, "nearestByX");
+}
+
+// the canvas on its page: the gestures
+struct CanvasRig
+{
+    ShapeEditorPage pg;
+    ShapeCanvas& cv = pg.canvas;
+    double t = 0.0;
+    CanvasRig()
+    {
+        pg.place ({ 0, 110, 1280, 628 });
+        pg.canvas.setId (7);
+        pg.model = fivePoints();
+        cv.state.gridX = cv.state.gridY = 8;
+        cv.state.snap = false;
+        pg.sync();
+    }
+    int X (float f) const { return static_cast<int> (std::lround (cv.xOf (f))); }
+    int Y (float f) const { return static_cast<int> (std::lround (cv.yOf (f))); }
+    Change tapAt (int x, int y, double gapMs = 100.0)
+    {
+        t += gapMs;
+        cv.touchDown (x, y, t);
+        t += 40.0;
+        return cv.touchUp (x, y);
+    }
+    Change dragTo (int x0, int y0, int x1, int y1, int steps = 4)
+    {
+        t += 500.0;
+        Change last = cv.touchDown (x0, y0, t);
+        for (int i = 1; i <= steps; ++i)
+        {
+            t += 16.0;
+            const Change c = cv.touchMove (x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps);
+            if (c) last = c;
+        }
+        const Change u = cv.touchUp (x1, y1);
+        return u ? u : last;
+    }
+};
+
+void testCanvasQuickDelete()
+{
+    CanvasRig r;
+    r.cv.state.tool = ToolSelector::Point;
+    const lfo::ShapeModel start = r.pg.model;
+    // a double tap on an inner point deletes it: ONE undo state, the loop point follows
+    r.pg.model.loop = 3;
+    const lfo::ShapeModel withLoop = r.pg.model;
+    r.tapAt (r.X (0.25f), r.Y (0.5f));
+    check (r.pg.model.n == 5 && r.cv.state.selected == 1, "double tap: the first tap only selects the point");
+    const Change c = r.tapAt (r.X (0.25f), r.Y (0.5f), 150.0);
+    check (c.kind == ChangeKind::Index && c.index == ShapeCanvas::Edited && r.pg.model.n == 4 && near (r.pg.model.p[1].x, 0.5f) && r.pg.model.loop == 2 && r.cv.state.selected == -1, "double tap: the second tap deletes the point and the loop point is still on its point");
+    check (r.pg.undo.depth() == 1, "double tap: one undo state");
+    lfo::ShapeModel back;
+    check (r.pg.undo.pop (back) && back == withLoop, "double tap: undo restores the shape and the loop point exactly");
+    // the end points are never deleted
+    r.pg.model = start;
+    r.tapAt (r.X (0.0f), r.Y (0.0f));
+    r.tapAt (r.X (0.0f), r.Y (0.0f), 150.0);
+    r.tapAt (r.X (1.0f), r.Y (0.0f), 1000.0);
+    r.tapAt (r.X (1.0f), r.Y (0.0f), 150.0);
+    check (r.pg.model == start, "double tap: the end points stay");
+    // two slow taps are no double tap
+    r.tapAt (r.X (0.25f), r.Y (0.5f), 1000.0);
+    r.tapAt (r.X (0.25f), r.Y (0.5f), 1000.0);
+    check (r.pg.model.n == 5, "two taps a second apart do not delete");
+    // a double tap on empty ground: the first tap adds a point, the second keeps it (no delete of the point just added)
+    r.pg.model = start;
+    r.pg.undo.clear();
+    r.tapAt (r.X (0.375f), r.Y (0.9f), 1000.0);
+    const int nAfterFirst = r.pg.model.n;
+    r.tapAt (r.X (0.375f), r.Y (0.9f), 120.0);
+    check (nAfterFirst == 6 && r.pg.model.n == 6, "double tap on empty ground: one point is added and it stays");
+    // a double tap on a curve handle sets the curve straight
+    r.pg.model = lfo::ShapeModel::fromBuiltin (2);
+    r.pg.model.p[0].power = 5.0f;
+    r.pg.undo.clear();
+    float hx, hy;
+    check (r.cv.midHandle (0, hx, hy), "the segment has a handle");
+    r.tapAt (static_cast<int> (hx), static_cast<int> (hy), 1000.0);
+    check (near (r.pg.model.p[0].power, 5.0f) && r.cv.state.selectedSeg == 0, "a single tap on the handle selects the segment");
+    const Change d = r.tapAt (static_cast<int> (hx), static_cast<int> (hy), 120.0);
+    check (d.index == ShapeCanvas::Edited && near (r.pg.model.p[0].power, 0.0f) && r.pg.undo.depth() == 1, "a double tap on the curve handle resets the curve (one undo state)");
+    // a disabled canvas does nothing
+    r.pg.model = start;
+    r.cv.setEnabled (false);
+    r.tapAt (r.X (0.375f), r.Y (0.9f), 1000.0);
+    check (r.pg.model == start, "a disabled canvas changes nothing");
+}
+
+void testCanvasStepDrawing()
+{
+    CanvasRig r;
+    r.cv.state.snap = true;
+    r.cv.state.tool = ToolSelector::Flat;
+    r.pg.model.initLinear();
+    // ONE move from column 0 to column 5: every column in between is drawn at the interpolated height, snapped to the rows
+    r.t = 100.0;
+    r.cv.touchDown (r.X (0.0625f), r.Y (0.5f), r.t);
+    r.cv.touchMove (r.X (5.5f / 8.0f), r.Y (0.75f));
+    r.cv.touchUp (0, 0);
+    bool all = true;
+    std::string got;
+    for (int col = 0; col <= 5; ++col)
+    {
+        const float want = lfo::snapTo (0.5f + 0.25f * static_cast<float> (col) / 5.0f, 8);
+        const float at = r.pg.model.eval ((static_cast<float> (col) + 0.5f) / 8.0f);
+        all = all && near (at, want, 0.02f);
+        got += std::to_string (at).substr (0, 4) + " ";
+    }
+    check (all, "flat tool, one fast move: all six columns are drawn, none skipped (" + got + ")");
+    check (r.pg.undo.depth() == 1, "flat tool: the whole gesture is one undo state");
+    lfo::ShapeModel back;
+    lfo::ShapeModel line;
+    line.initLinear();
+    check (r.pg.undo.pop (back) && back == line, "flat tool: undo gives the shape before the gesture");
+    // the finger back to the left in one move: the columns it crosses are drawn again
+    r.pg.model.initLinear();
+    r.pg.undo.clear();
+    r.cv.touchDown (r.X (0.4375f), r.Y (0.25f), 200.0);
+    r.cv.touchMove (r.X (0.0625f), r.Y (0.25f));
+    r.cv.touchUp (0, 0);
+    bool left = true;
+    for (int col = 0; col <= 3; ++col)
+        left = left && near (r.pg.model.eval ((static_cast<float> (col) + 0.5f) / 8.0f), 0.25f, 0.02f);
+    check (left, "flat tool, a fast move to the left: no gap");
+    // the height changes inside one column: the piece follows the finger
+    r.pg.model.initLinear();
+    r.cv.touchDown (r.X (0.0625f), r.Y (0.25f), 300.0);
+    r.cv.touchMove (r.X (0.0625f), r.Y (0.75f));
+    r.cv.touchUp (0, 0);
+    check (near (r.pg.model.eval (0.06f), 0.75f, 0.02f), "flat tool: moving up inside the column raises the piece");
+    // without SNAP the height is the finger's
+    r.cv.state.snap = false;
+    r.pg.model.initLinear();
+    r.cv.touchDown (r.X (0.0625f), r.Y (0.6f), 400.0);
+    r.cv.touchUp (0, 0);
+    check (near (r.pg.model.eval (0.06f), 0.6f, 0.01f), "flat tool without SNAP: the height of the finger");
+    // ramps: a saw tooth over four columns in one move
+    r.cv.state.snap = true;
+    r.cv.state.tool = ToolSelector::RampUp;
+    r.pg.model.initLinear();
+    r.pg.undo.clear();
+    r.cv.touchDown (r.X (0.0625f), r.Y (0.3f), 500.0);
+    r.cv.touchMove (r.X (3.5f / 8.0f), r.Y (0.3f));
+    r.cv.touchUp (0, 0);
+    bool saw = true;
+    for (int col = 0; col <= 3; ++col)
+        saw = saw && near (r.pg.model.eval ((static_cast<float> (col) + 0.01f) / 8.0f), 0.25f, 0.02f) && near (r.pg.model.eval ((static_cast<float> (col) + 0.99f) / 8.0f), 0.375f, 0.02f);
+    check (saw && r.pg.undo.depth() == 1, "ramp tool, one fast move: four ramps of the same row, one undo state");
+    // 128 points are the limit: the drawing stops, nothing breaks
+    r.pg.model.initLinear();
+    for (int i = 1; i < 127; ++i) r.pg.model.insert (static_cast<float> (i) / 127.0f, (i % 2) != 0 ? 0.2f : 0.8f);
+    check (r.pg.model.n == lfo::kMaxPoints, "the shape is full");
+    const lfo::ShapeModel full = r.pg.model;
+    r.cv.state.tool = ToolSelector::Flat;
+    r.tapAt (r.X (0.5f), r.Y (0.5f), 1000.0);
+    check (r.pg.model.n <= lfo::kMaxPoints && (r.pg.model == full || r.pg.model.n < lfo::kMaxPoints), "a full shape: the cell tool never goes above 128 points");
+}
+
+void testCanvasSelection()
+{
+    CanvasRig r;
+    r.pg.model = fivePoints();
+    r.pg.model.insert (0.125f, 0.2f);   // six points: 0, 0.125, 0.25, 0.5, 0.75, 1
+    r.cv.state.tool = ToolSelector::Select;
+    // a rectangle over the points 1 and 2 (x 0.125 and 0.25)
+    r.dragTo (r.X (0.06f), r.Y (0.05f), r.X (0.30f), r.Y (0.75f), 6);
+    lfo::PointSet s = r.cv.selection();
+    check (s.count() == 2 && s.has (1) && s.has (2) && r.cv.state.marks.count() == 2, "SELECT: a rectangle selects the points inside it");
+    r.pg.sync();
+    check (std::strcmp (r.pg.fpoint.state.text, "2 SEL") == 0 && ! r.pg.fpoint.state.notSet && r.pg.del.enabled() && r.pg.fcurve.state.label[0] == 'S' && r.pg.modButton.enabled(), "the page: the POINT field shows the count, the third field is SCALE, DELETE and MOD are on");
+    check (near (static_cast<float> (r.pg.fx.state.value), 0.1875f) && near (static_cast<float> (r.pg.fcurve.state.value), 0.3f, 1.0e-3f), "the page: X is the centre of the selection in time");
+    // a tap on another point adds it, a tap on a selected one removes it
+    r.tapAt (r.X (0.5f), r.Y (1.0f), 1000.0);
+    s = r.cv.selection();
+    check (s.count() == 3 && s.has (3), "SELECT: a tap on a point adds it to the selection");
+    r.tapAt (r.X (0.125f), r.Y (0.2f), 1000.0);
+    s = r.cv.selection();
+    check (s.count() == 2 && ! s.has (1) && s.has (2) && s.has (3), "SELECT: a tap on a selected point takes it out");
+    r.tapAt (r.X (0.5f), r.Y (1.0f), 1000.0);
+    s = r.cv.selection();
+    check (s.count() == 1 && s.has (2) && r.cv.state.selected == 2 && ! r.cv.state.marks.any(), "SELECT: with one point left the selection is that point");
+    // a tap on empty ground clears
+    r.tapAt (r.X (0.9f), r.Y (0.9f), 1000.0);
+    check (! r.cv.selection().any() && r.cv.state.selected == -1, "SELECT: a tap on empty ground clears the selection");
+    // select all by the owner's call
+    r.cv.selectAll();
+    check (r.cv.selection().count() == 6, "selectAll: every point");
+    // moving the selection by dragging one of its points (tool POINT too): all move by the same amount, one undo state
+    r.pg.undo.clear();
+    r.cv.selectOnly (-1);
+    r.cv.state.marks.add (1);
+    r.cv.state.marks.add (2);
+    r.cv.state.selected = 1;
+    r.cv.state.tool = ToolSelector::Point;
+    const lfo::ShapeModel before = r.pg.model;
+    const Change c = r.dragTo (r.X (0.125f), r.Y (0.2f), r.X (0.125f), r.Y (0.5f), 5);
+    check (c.index == ShapeCanvas::Edited && near (r.pg.model.p[1].y - before.p[1].y, r.pg.model.p[2].y - before.p[2].y, 0.01f) && r.pg.model.p[1].y > before.p[1].y + 0.2f && near (r.pg.model.p[3].y, before.p[3].y), "dragging a selected point moves the whole selection by the same amount");
+    check (r.pg.undo.depth() == 1 && r.cv.selection().count() == 2, "the group move is one undo state and keeps the selection");
+    lfo::ShapeModel back;
+    check (r.pg.undo.pop (back) && back == before, "undo restores the group move exactly");
+    // the DELETE of the page works on the selection (the owner's call: removeSet)
+    lfo::ShapeModel d = r.pg.model;
+    check (d.removeSet (r.cv.selection()) == 2 && d.n == 4, "the selection deletes in one call");
+}
+
+void testCanvasSoftAndBend()
+{
+    CanvasRig r;
+    r.pg.model.n = 6;
+    for (int i = 0; i < 6; ++i)
+        r.pg.model.p[i] = lfo::Point (static_cast<float> (i) * 0.2f, 0.3f);
+    r.cv.state.tool = ToolSelector::Soft;
+    r.pg.undo.clear();
+    const lfo::ShapeModel before = r.pg.model;
+    const Change c = r.dragTo (r.X (0.4f), r.Y (0.3f), r.X (0.4f), r.Y (0.7f), 5);
+    const float d2 = r.pg.model.p[2].y - before.p[2].y, d1 = r.pg.model.p[1].y - before.p[1].y, d3 = r.pg.model.p[3].y - before.p[3].y, d0 = r.pg.model.p[0].y - before.p[0].y;
+    check (c.index == ShapeCanvas::Edited && d2 > 0.3f && d1 > 0.0f && d1 < d2 && d3 > 0.0f && d3 < d2 && near (d0, 0.0f), "SOFT: the neighbours follow, the nearer the more, the far ones stay (" + std::to_string (d1) + " " + std::to_string (d2) + ")");
+    check (r.pg.undo.depth() == 1, "SOFT: one undo state");
+    // a selection of three: only they follow
+    r.pg.model = before;
+    r.cv.state.marks.clear();
+    r.cv.state.marks.add (1); r.cv.state.marks.add (2); r.cv.state.marks.add (3);
+    r.cv.state.selected = 2;
+    r.dragTo (r.X (0.4f), r.Y (0.3f), r.X (0.4f), r.Y (0.6f), 5);
+    check (r.pg.model.p[2].y > 0.5f && r.pg.model.p[1].y > 0.3f && near (r.pg.model.p[4].y, 0.3f) && near (r.pg.model.p[0].y, 0.3f), "SOFT with a selection: only the selected points follow");
+    // BEND: all curves by the same amount
+    r.cv.state.marks.clear();
+    r.cv.selectOnly (-1);
+    r.pg.model.n = 4;
+    r.pg.model.p[0] = lfo::Point (0.0f, 0.0f, 2.0f); r.pg.model.p[1] = lfo::Point (0.3f, 1.0f, -3.0f); r.pg.model.p[2] = lfo::Point (0.6f, 0.2f, 0.0f); r.pg.model.p[3] = lfo::Point (1.0f, 0.9f, 0.0f);
+    r.pg.undo.clear();
+    r.cv.state.tool = ToolSelector::Bend;
+    float hx, hy;
+    check (r.cv.midHandle (0, hx, hy), "segment 0 has a handle");
+    const lfo::ShapeModel b0 = r.pg.model;
+    r.dragTo (static_cast<int> (hx), static_cast<int> (hy), static_cast<int> (hx), static_cast<int> (hy) + 60, 4);
+    const float delta = r.pg.model.p[0].power - b0.p[0].power;
+    check (std::fabs (delta) > 0.5f && near (r.pg.model.p[1].power - b0.p[1].power, delta, 1.0e-3f) && near (r.pg.model.p[2].power - b0.p[2].power, delta, 1.0e-3f), "BEND: every curve moves by the amount of the one that was dragged (" + std::to_string (delta) + ")");
+    check (r.pg.undo.depth() == 1, "BEND: one undo state");
+    // a touch on empty ground with SOFT or BEND adds nothing
+    const lfo::ShapeModel kept = r.pg.model;
+    r.tapAt (r.X (0.9f), r.Y (0.5f), 1000.0);
+    r.cv.state.tool = ToolSelector::Soft;
+    r.tapAt (r.X (0.8f), r.Y (0.8f), 1000.0);
+    check (r.pg.model == kept, "BEND and SOFT: empty ground adds no point");
+}
+
+void testCanvasMarker()
+{
+    CanvasRig r;
+    r.pg.model.n = 4;
+    r.pg.model.p[0] = lfo::Point (0.0f, 0.0f); r.pg.model.p[1] = lfo::Point (0.5f, 0.2f); r.pg.model.p[2] = lfo::Point (0.75f, 0.2f); r.pg.model.p[3] = lfo::Point (1.0f, 0.0f);
+    r.cv.state.tool = ToolSelector::Point;
+    r.cv.state.markerKind = ShapeCanvas::MarkerLoop;
+    r.cv.state.markerX = 0.5f;
+    const Rect zone = r.cv.markerZone();
+    check (zone.w >= 56 && zone.h >= 56 && zone.contains (r.X (0.5f), r.cv.plot().y + 20), "the marker has a handle of at least 56 px at the top of its line");
+    const Change c = r.dragTo (r.X (0.5f), r.cv.plot().y + 20, r.X (0.72f), r.cv.plot().y + 20, 5);
+    check (c.kind == ChangeKind::Index && c.index == ShapeCanvas::Marker && near (static_cast<float> (c.value), 0.75f, 1.0e-3f) && near (r.cv.state.markerX, 0.75f, 1.0e-3f), "LOOP marker: dragging it snaps to the nearest point (0.75)");
+    check (r.pg.model.loop == 2 && r.pg.undo.depth() == 1 && r.pg.model.n == 4, "LOOP marker: the loop point of the model is that point, one undo state, no point added");
+    lfo::ShapeModel back;
+    check (r.pg.undo.pop (back) && back.loop == -1, "LOOP marker: undo gives the old loop point back");
+    // the START marker is free between the points (a point within 14 px takes it)
+    r.cv.state.markerKind = ShapeCanvas::MarkerStart;
+    r.cv.state.markerX = 0.5f;
+    r.pg.undo.clear();
+    const Change s = r.dragTo (r.X (0.5f), r.cv.plot().y + 20, r.X (0.4f), r.cv.plot().y + 20, 5);
+    check (s.index == ShapeCanvas::Marker && near (static_cast<float> (s.value), 0.4f, 0.01f) && r.pg.model.loop == -1 && r.pg.undo.depth() == 0, "START marker: free between points, the model untouched");
+    const Change s2 = r.dragTo (r.X (0.4f), r.cv.plot().y + 20, r.X (0.505f), r.cv.plot().y + 20, 5);
+    check (near (static_cast<float> (s2.value), 0.5f, 1.0e-3f), "START marker: sticks to a point within 14 px");
+    // a dimmed marker is no handle: a touch there is a touch on the canvas
+    r.cv.state.markerKind = ShapeCanvas::MarkerDim;
+    r.cv.state.markerX = 0.3f;
+    const Change dm = r.tapAt (r.X (0.3f), r.cv.plot().y + 20, 1000.0);
+    check (dm.index != ShapeCanvas::Marker, "a dimmed marker cannot be dragged");
+    // the marker is drawn inside the canvas
+    Scene sc (1290, 740, 0x0b1026ffu);
+    r.cv.state.markerKind = ShapeCanvas::MarkerLoop;
+    r.cv.state.markerX = 0.0f;
+    r.pg.draw (sc.builder());
+    check (! sc.overflow(), "the page with the marker at the left edge fits one scene");
+}
+
+void testEditorPageAndPointMod()
+{
+    ShapeEditorPage pg;
+    pg.place ({ 0, 110, 1280, 628 });
+    pg.canvas.setId (7);
+    pg.model = fivePoints();
+    pg.setTrigger (4, "Loop at point", 6, 90.0);
+    pg.sync();
+    Component* all[40];
+    const int n = pg.collectLeaves (all, 0, 40);
+    bool inside = true, size = true, apart = true, big = true;
+    for (int i = 0; i < n; ++i)
+    {
+        inside = inside && Rect { 0, 110, 1280, 628 }.contains (all[i]->rect());
+        size = size && all[i]->sizeOk();
+        big = big && all[i]->rect().h >= 56 && all[i]->rect().w >= 56;
+        for (int j = i + 1; j < n; ++j)
+            apart = apart && ! all[i]->rect().overlaps (all[j]->rect());
+    }
+    check (n == 20 && inside && size && apart && big, "editor page: " + std::to_string (n) + " leaves inside, at least their minimum size, 56 px, apart");
+    const Component* off = nullptr;
+    for (int g = 0; g < ShapeEditorPage::kGroups; ++g)
+        check (pg.groups[g].check (all, n, &off) == 0 && chipsCovered (pg.groups[g], all, n) == 0, "editor page: Q group " + std::to_string (g) + " is adjacent with free lanes for the chips");
+    check (pg.groups[2].member (0) == &pg.mode && pg.groups[2].member (1) == &pg.fphase && pg.groups[2].member (2) == &pg.fbend && pg.groups[2].numMembers() == 3, "editor page: TRIGGER = MODE, PHASE, BEND ALL");
+    // reading order: the groups of the column run from the top down
+    check (pg.groups[0].rect().y < pg.groups[1].rect().y && pg.groups[1].rect().y < pg.groups[2].rect().y && pg.loop.rect().y > pg.groups[2].rect().bottom() - 1, "editor page: the groups are in reading order, LOOP and SMOOTH under them");
+    check (pg.canvas.rect().w >= 956 && pg.canvas.rect().h >= 540, "editor page: the canvas is not smaller than before (" + std::to_string (pg.canvas.rect().w) + " x " + std::to_string (pg.canvas.rect().h) + ")");
+    check (pg.tools.rect().y == pg.back.rect().y && pg.shapes.rect().y == pg.back.rect().y && pg.more.rect().y == pg.back.rect().y && pg.undoButton.rect().y == pg.back.rect().y && pg.del.rect().y == pg.back.rect().y && pg.modButton.rect().y == pg.back.rect().y, "editor page: the top bar holds BACK, the tools, SHAPES, MORE, UNDO, DELETE, MOD");
+    // the trigger: the marker is the PHASE in the loop modes, the stepper shows the mode
+    check (pg.canvas.state.markerKind == ShapeCanvas::MarkerLoop && near (pg.canvas.state.markerX, 0.25f) && pg.mode.state.index == 4 && std::strcmp (pg.mode.state.text, "Loop at point") == 0 && near (static_cast<float> (pg.fphase.state.value), 90.0f), "setTrigger: mode 4 shows the LOOP marker at the phase");
+    for (int st = 0; st < 6; ++st)
+        check (ShapeEditorPage::markerKindOf (st) == (st == 1 ? ShapeCanvas::MarkerDim : (st >= 3 ? ShapeCanvas::MarkerLoop : ShapeCanvas::MarkerStart)), "the marker kind of the trigger mode " + std::to_string (st));
+    // the bend field is the mean curve
+    pg.model.p[1].power = 4.0f;
+    pg.sync();
+    check (pg.fbend.enabled() && near (static_cast<float> (pg.fbend.state.value), 1.0f, 0.51f), "BEND ALL shows the mean curve");
+    // one point selected: the fields show it, CURVE is the curve
+    pg.canvas.selectOnly (1);
+    pg.sync();
+    check (std::strcmp (pg.fcurve.state.label, "CURVE") == 0 && pg.fpoint.state.text[0] == '\0' && pg.loop.enabled() && pg.modButton.enabled(), "one point selected: the usual fields");
+    pg.canvas.selectOnly (-1);
+    pg.sync();
+    check (! pg.modButton.enabled() && ! pg.del.enabled() && ! pg.loop.enabled(), "nothing selected: MOD, DELETE and LOOP are off");
+    Scene sc (1290, 740, 0x0b1026ffu);
+    pg.draw (sc.builder());
+    check (! sc.overflow(), "editor page: the picture fits one scene (" + std::to_string (sc.numOps()) + " ops)");
+
+    // the page of the modulation of points
+    PointModPage mp;
+    mp.place ({ 0, 110, 1280, 628 });
+    mp.back.setId (1); mp.target.setId (2); mp.amount.setId (3); mp.remove.setId (4); mp.board.setId (5);
+    mp.board.add (7, "LFO 1", "LFO", 0);
+    mp.board.add (9, "ENV 2", "ENV", 0);
+    mp.load (1, "", 0.0, 3, 1);
+    Component* leaves[40];
+    const int m = mp.collectLeaves (leaves, 0, 40);
+    bool ok = true;
+    for (int i = 0; i < m; ++i)
+    {
+        ok = ok && Rect { 0, 110, 1280, 628 }.contains (leaves[i]->rect()) && leaves[i]->sizeOk();
+        for (int j = i + 1; j < m; ++j)
+            ok = ok && ! leaves[i]->rect().overlaps (leaves[j]->rect());
+    }
+    check (ok, "point modulation page: " + std::to_string (m) + " leaves inside, big enough, apart");
+    check (! mp.amount.enabled() && ! mp.remove.enabled(), "point modulation page: AMOUNT and REMOVE are off while nothing modulates");
+    mp.load (1, "LFO 1", 50.0, 1, 2);
+    check (mp.amount.enabled() && mp.remove.enabled() && near (static_cast<float> (mp.amount.state.value), 50.0f) && mp.target.state.index == 1, "point modulation page: with a source the amount and REMOVE work");
+    const Rect chip = mp.board.chipRectOfId (9);
+    Change bc = mp.touchDown (chip.x + chip.w / 2, chip.y + chip.h / 2, 0.0);
+    const Change bu = mp.touchUp (chip.x + chip.w / 2, chip.y + chip.h / 2);
+    if (bu) bc = bu;
+    check (bc.kind == ChangeKind::Index && bc.id == 5 && bc.index == 9, "point modulation page: a tap on a source gives its id");
+    Change tg = tap (mp.target, cx (mp.target) + mp.target.rect().w / 2 - 10, cy (mp.target), 0.0);
+    check (tg.kind == ChangeKind::Index && tg.id == 2 && tg.index == 2, "point modulation page: the stepper goes from LEVEL to CURVE");
+    Scene sc2 (1290, 740, 0x0b1026ffu);
+    mp.draw (sc2.builder());
+    check (! sc2.overflow(), "point modulation page: the picture fits one scene");
+}
+
 void testDisplay()
 {
     float y[256];
@@ -550,6 +1071,14 @@ int main()
     testParts();
     testViews();
     testEditor();
+    testSelectionModel();
+    testWholeShapeModel();
+    testCanvasQuickDelete();
+    testCanvasStepDrawing();
+    testCanvasSelection();
+    testCanvasSoftAndBend();
+    testCanvasMarker();
+    testEditorPageAndPointMod();
     testDisplay();
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;

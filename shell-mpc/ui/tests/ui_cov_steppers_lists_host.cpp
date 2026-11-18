@@ -354,13 +354,14 @@ static void test_tool_selector()
 {
     ToolSelector ts;
     ts.setId (109);
-    ts.place ({ 50, 50, 288, 56 });
+    ts.place ({ 50, 50, 504, 56 });
 
-    check (ts.minSize().w == 4 * 72 && ts.minSize().h == 56, "ToolSelector minSize is 288x56");
+    check (ts.minSize().w == 7 * 72 && ts.minSize().h == 56, "ToolSelector minSize is 504x56 (seven tools)");
     check (std::strcmp (ToolSelector::name (0), "POINT") == 0, "Tool 0 is POINT");
     check (std::strcmp (ToolSelector::name (1), "FLAT") == 0, "Tool 1 is FLAT");
     check (std::strcmp (ToolSelector::name (2), "RAMP+") == 0, "Tool 2 is RAMP+");
     check (std::strcmp (ToolSelector::name (3), "RAMP-") == 0, "Tool 3 is RAMP-");
+    check (std::strcmp (ToolSelector::name (4), "SELECT") == 0 && std::strcmp (ToolSelector::name (5), "SOFT") == 0 && std::strcmp (ToolSelector::name (6), "BEND") == 0, "Tools 4, 5, 6 are SELECT, SOFT, BEND");
 
     // Tap tool 2
     Rect c2 = ts.cell (2);

@@ -242,25 +242,32 @@ private:
         struct stat st;
         return ::stat (p.c_str(), &st) == 0 && S_ISDIR (st.st_mode);
     }
-    /** The folder shapes are written to: the first root that has the folder, else the first root where it can be made (`make`; the root itself must be there). "" when there is none. */
-    std::string saveDir (bool make) const
+    std::string saveDir (bool make) const { return folderFor (kFolder, make); }
+
+public:
+    /** The folder `folder` ("SynthyBoy/LFO Shapes", "SynthyBoy/Wavetables": two levels below a root) that things are written to: the first root that has it, else the first root where it can be made (`make`; the root itself
+        must be there; false: only say where it would be). "" when there is no root. */
+    std::string folderFor (const char* folder, bool make) const
     {
         for (const std::string& root : roots_)
-            if (! root.empty() && isDir (joinPath (root, kFolder)))
-                return joinPath (root, kFolder);
+            if (! root.empty() && isDir (joinPath (root, folder)))
+                return joinPath (root, folder);
         for (const std::string& root : roots_)
         {
             if (root.empty() || ! isDir (root))
                 continue;
-            const std::string a = joinPath (root, "SynthyBoy"), b = joinPath (root, kFolder);
+            const std::string full = joinPath (root, folder);
             if (! make)
-                return b;
-            if ((isDir (a) || ::mkdir (a.c_str(), 0755) == 0) && (isDir (b) || ::mkdir (b.c_str(), 0755) == 0))
-                return b;
+                return full;
+            const size_t cut = std::string (folder).find ('/');
+            const std::string first = cut == std::string::npos ? full : joinPath (root, std::string (folder).substr (0, cut));
+            if ((isDir (first) || ::mkdir (first.c_str(), 0755) == 0) && (isDir (full) || ::mkdir (full.c_str(), 0755) == 0))
+                return full;
         }
         return {};
     }
 
+private:
     std::vector<std::string> roots_;
     std::vector<Item> items_;
     std::string error_;
