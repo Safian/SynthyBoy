@@ -197,6 +197,37 @@ private:
     float modulatedSlow (int idx, float base, float delta) const noexcept;
     void clearMod() noexcept;
     float lfoValue (int l, const TickGlobals& g, float& valueRight, int steps = 1) noexcept;
+    float lfoValueReference (int l, const TickGlobals& g, float& valueRight, int steps = 1) noexcept;   // as before the settings cache (TickGlobals::referenceControl)
+    /** What an LFO derives from its keys, the tempo, the voice control and the sample rate (CPU-REVIEW-VOICE-MOD.md V3): kept per voice and LFO while those are the same and no slot touched a
+        key of the LFO (the key follow rate, sync 4, reads the pitch of the voice and is computed every time from the kept keys). */
+    struct LfoSettings
+    {
+        int shape = 0, sync = 0, syncType = 0, division = 0, dir = 0;
+        float rateKnob = 0.0f, keyTranspose = 0.0f, keyTune = 0.0f, rate = 0.0f;   // rate: vc.lfoFactor * lfoRateHz (...) for sync != 4
+        float knob = 0.0f, delay = 0.0f, fade = 0.0f, stereo = 0.0f, swing = 0.0f, half = 0.0f;
+        bool mono = false, host = false, smooth = false;
+        float dt[2] = {}, coef[2] = {};   // the period of 1 and of 4 control periods (the decimated LFOs of tier low) and 1 - exp2 (-dt / half)
+        const CompiledShape* custom = nullptr;
+        // the key
+        bool ok = false;
+        uint32_t epoch = 0, factorBits = 0, concertABits = 0;
+        double bpm = 0.0, sampleRate = 0.0;
+        const OwnContent* content = nullptr;
+        const LfoCore* monoCore = nullptr;
+    };
+    LfoSettings lfoSet[10];
+    /** The same for a random LFO: its keys and the rate (except the key follow rate). */
+    struct RlfoSettings
+    {
+        int syncType = 0, sync = 0, division = 0, style = 0;
+        float rateKnob = 0.0f, keyTranspose = 0.0f, keyTune = 0.0f, rate = 0.0f;
+        bool stereo = false;
+        bool ok = false;
+        uint32_t epoch = 0, factorBits = 0, concertABits = 0;
+        double bpm = 0.0;
+    };
+    RlfoSettings rlfoSet[4];
+    uint32_t lastTouchedGroups = 0;   // touchedGroups () of the last period, as the envelopes and LFOs read it (before this period's matrix)
     float customShape (const CompiledShape& cs, float u) noexcept;
 
     const TickGlobals* gl = nullptr;

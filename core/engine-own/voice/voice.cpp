@@ -282,6 +282,10 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     vcCacheValid = false;
     for (bool& ok : envSetOk)
         ok = false;
+    for (auto& ls : lfoSet)
+        ls.ok = false;
+    for (auto& rs : rlfoSet)
+        rs.ok = false;
     ampPrev = ampCur = 0.0f;
     velGainPrev = velGain = 0.0f;
     std::fill (std::begin (srcLevel), std::end (srcLevel), 0.0f);
@@ -354,6 +358,144 @@ float Voice::customShape (const CompiledShape& cs, float u) noexcept
 }
 
 float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps) noexcept
+{
+    // V3: the code of lfoValueReference () with the settings of the LFO kept while their inputs are the same (the same expressions of the same values)
+    LfoSettings& st = lfoSet[l];
+    uint32_t factorBits, concertABits;
+    std::memcpy (&factorBits, &vc.lfoFactor, 4);
+    std::memcpy (&concertABits, &g.concertA, 4);
+    if (!(st.ok && g.baseEpoch != 0 && st.epoch == g.baseEpoch && (lastTouchedGroups & (1u << (kGroupLfo + l))) == 0 && st.bpm == g.bpm && st.factorBits == factorBits
+          && st.concertABits == concertABits && st.sampleRate == g.sampleRate && st.content == g.lfoContent && st.monoCore == g.monoCore))
+    {
+        const LfoIdx& li = paramIndex().lfo[l];
+        st.shape = static_cast<int> (P (li.shape) + 0.5f);
+        st.sync = static_cast<int> (P (li.sync) + 0.5f);
+        st.syncType = std::clamp (static_cast<int> (P (li.syncType) + 0.5f), 0, 5);
+        st.rateKnob = P (li.rate);
+        st.division = static_cast<int> (P (li.division) + 0.5f);
+        st.keyTranspose = P (li.keyTranspose);
+        st.keyTune = P (li.keyTune);
+        st.rate = vc.lfoFactor * lfoRateHz (st.sync, st.rateKnob, st.division, g.bpm, g.concertA, lastSemis, st.keyTranspose, st.keyTune);
+        st.knob = P (li.phase) * (1.0f / 360.0f);
+        st.delay = P (li.delay) * 0.001f;
+        st.fade = P (li.fadeIn) * 0.001f;
+        st.stereo = P (li.stereo) * (1.0f / 720.0f);
+        st.mono = st.syncType >= 2 && li.mono >= 0 && g.base[li.mono] >= 0.5f && g.monoCore != nullptr;
+        st.host = li.host >= 0 && g.base[li.host] >= 0.5f;
+        st.smooth = P (li.smooth) >= 0.5f;
+        st.swing = li.swing >= 0 ? clamp01 (P (li.swing) * 0.01f) : 0.0f;
+        st.dir = static_cast<int> (P (li.direction) + 0.5f);
+        st.custom = (st.shape == 12 && g.lfoContent != nullptr && g.lfoContent->lfo[static_cast<size_t> (l)].present) ? &g.lfoContent->lfo[static_cast<size_t> (l)] : nullptr;
+        st.half = st.smooth ? 0.2f * P (li.smoothTime) * 0.001f : 0.0f; // half life of the one pole (document 03, 3.4)
+        for (int k = 0; k < 2; ++k)
+        {
+            st.dt[k] = static_cast<float> ((k == 0 ? 1 : 4) * kControlPeriod / g.sampleRate);
+            st.coef[k] = st.smooth && st.half >= 0.0002f ? 1.0f - std::exp2 (-st.dt[k] / st.half) : 0.0f;
+        }
+        st.ok = !g.referenceControl && (lastTouchedGroups & (1u << (kGroupLfo + l))) == 0;
+        st.epoch = g.baseEpoch;
+        st.bpm = g.bpm;
+        st.factorBits = factorBits;
+        st.concertABits = concertABits;
+        st.sampleRate = g.sampleRate;
+        st.content = g.lfoContent;
+        st.monoCore = g.monoCore;
+    }
+    const int ki = steps == 4 ? 1 : 0;
+    const float dt = steps == 1 || steps == 4 ? st.dt[ki] : static_cast<float> (steps * kControlPeriod / g.sampleRate);
+    const int shape = st.shape;
+    const int sync = st.sync;
+    const int syncType = st.syncType;
+    const float rate = sync == 4 ? vc.lfoFactor * lfoRateHz (sync, st.rateKnob, st.division, g.bpm, g.concertA, lastSemis, st.keyTranspose, st.keyTune) : st.rate;
+    const float knob = st.knob;
+    const float delay = st.delay, fade = st.fade;
+    const float stereo = st.stereo;
+    const bool mono = st.mono;
+    const bool host = st.host;
+
+    float pos, pos0;
+    if (syncType == 1)
+    {
+        // free-run: every voice reads the same clock (the engine's, or the host song position with the HOST lock)
+        float clock;
+        if (host && g.playing && sync != 4)
+        {
+            const double c = static_cast<double> (rate) * g.songSeconds;
+            clock = static_cast<float> (c - std::floor (c));
+        }
+        else if (sync == 4)
+        {
+            lfoCore[l].advance (0, 0.0f, rate, 0.0f, dt, true);
+            clock = lfoCore[l].offset;
+        }
+        else
+            clock = g.lfoPhase != nullptr ? g.lfoPhase[l] : lfoCore[l].offset;
+        pos = clock + knob;
+        pos -= ffloor (pos);
+        pos0 = pos;
+        lfoReadPos[l] = clock; // display only: the free-running clock (the offset of the core does not move for it)
+    }
+    else
+    {
+        if (mono)
+        {
+            pos = g.monoCore[l].position (syncType, knob);
+        }
+        else
+        {
+            lfoCore[l].advance (syncType, knob, rate, delay, dt, !released);
+            pos = lfoCore[l].position (syncType, knob);
+        }
+        pos0 = syncType == 0 ? knob - ffloor (knob) : (syncType == 2 ? std::min (knob, 1.0f) : 0.0f);
+        lfoReadPos[l] = mono ? g.monoCore[l].offset : lfoCore[l].offset; // display only
+    }
+    lfoAge[l] += dt;
+    const bool smooth = st.smooth;
+    float fadeAmount = 1.0f;
+    if (!smooth)
+    {
+        if (lfoAge[l] < delay)
+            fadeAmount = 0.0f;
+        else if (fade > 0.0f)
+            fadeAmount = clamp01 ((lfoAge[l] - delay) / fade);
+    }
+    const float swing = st.swing;
+    const int dir = st.dir;
+    const CompiledShape* custom = st.custom;
+    auto shapeAt = [&] (float u, bool wrap) -> float // 0 .. 1
+    {
+        return lfoShapeAt (shape, u, wrap, swing, dir, custom, src, scratchShape, noteSerial + static_cast<uint32_t> (l));
+    };
+    const bool wrap = syncType <= 1;
+    const bool smoothStep = smooth && st.half >= 0.0002f;
+    const float coef = steps == 1 || steps == 4 ? st.coef[ki] : (smoothStep ? 1.0f - std::exp2 (-dt / st.half) : 0.0f);
+    auto lane = [&] (float sign, float& smoothed) -> float
+    {
+        const float s = shapeAt (pos + sign * stereo, wrap);
+        float out = s;
+        if (fadeAmount < 1.0f)
+            out = lerp (shapeAt (pos0 + sign * stereo, wrap), s, fadeAmount);
+        float v = 2.0f * out - 1.0f;
+        if (smooth)
+        {
+            if (smoothStep)
+                smoothed += (v - smoothed) * coef;
+            else
+                smoothed = v;
+            v = smoothed;
+        }
+        else
+            smoothed = v;
+        return v;
+    };
+    const float left = lane (1.0f, lfoSmoothL[l]);
+    valueRight = stereo != 0.0f ? lane (-1.0f, lfoSmoothR[l]) : left;
+    if (stereo == 0.0f)
+        lfoSmoothR[l] = lfoSmoothL[l];
+    return left;
+}
+
+float Voice::lfoValueReference (int l, const TickGlobals& g, float& valueRight, int steps) noexcept
 {
     const LfoIdx& li = paramIndex().lfo[l];
     const float dt = static_cast<float> (steps * kControlPeriod / g.sampleRate);
@@ -627,7 +769,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     // V1: an envelope none of whose keys a slot touched keeps the settings it derived from the parameters alone (the keys of the other groups may be modulated). The test of
     // envFromCache above stays as it was: its key has no note sequence, so after a legato note it keeps the envelope factor of the step before (test_own_voice_legato_env.cpp);
     // the per envelope cache below is used only where envFromCache is not, and is keyed on the factor itself, so every settings value is the one the code before computed.
-    const uint32_t envTouched = g.referenceControl ? ~0u : touchedGroups();
+    lastTouchedGroups = g.referenceControl ? ~0u : touchedGroups();
+    const uint32_t envTouched = lastTouchedGroups;
     uint32_t envFactorBits;
     std::memcpy (&envFactorBits, &vc.envFactor, 4);
     for (int e = 0; e < 6; ++e)
@@ -691,10 +834,10 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         {
             if (((tickCount + static_cast<uint32_t> (l)) & 3u) != 0u)
                 continue; // lfoOut / lfoOutR keep their last values
-            lfoOut[l] = lfoValue (l, g, lfoOutR[l], 4);
+            lfoOut[l] = g.referenceControl ? lfoValueReference (l, g, lfoOutR[l], 4) : lfoValue (l, g, lfoOutR[l], 4);
             continue;
         }
-        lfoOut[l] = lfoValue (l, g, lfoOutR[l]);
+        lfoOut[l] = g.referenceControl ? lfoValueReference (l, g, lfoOutR[l]) : lfoValue (l, g, lfoOutR[l]);
     }
     for (int r = 0; r < 4; ++r)
     {
@@ -708,17 +851,53 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         }
         const float fdtS = fdt * static_cast<float> (steps);
         const RlfoIdx& ri = pi.rlfo[r];
-        const int syncType = static_cast<int> (P (ri.syncType) + 0.5f);
-        if (syncType == 1 && g.rlfoValue != nullptr)
+        if (g.referenceControl)
+        {
+            const int syncType = static_cast<int> (P (ri.syncType) + 0.5f);
+            if (syncType == 1 && g.rlfoValue != nullptr)
+                rlfoOut[r] = rlfoOutR[r] = g.rlfoValue[r];
+            else
+            {
+                const int sync = static_cast<int> (P (ri.sync) + 0.5f);
+                const float rate = vc.lfoFactor * lfoRateHz (sync, P (ri.rate), static_cast<int> (P (ri.division) + 0.5f), g.bpm, g.concertA, lastSemis, P (ri.keyTranspose), P (ri.keyTune));
+                const int style = static_cast<int> (P (ri.style) + 0.5f);
+                rlfoOut[r] = rlfo[r].advance (style, rate * fdtS);
+                // stereo: the right lane has random numbers of its own
+                rlfoOutR[r] = (ri.stereo >= 0 && g.base[ri.stereo] >= 0.5f) ? rlfoR[r].advance (style, rate * fdtS) : rlfoOut[r];
+            }
+            continue;
+        }
+        // V3: the same with the keys and the rate of the random LFO kept while their inputs are the same and no slot touched its keys
+        RlfoSettings& rs = rlfoSet[r];
+        uint32_t factorBits, concertABits;
+        std::memcpy (&factorBits, &vc.lfoFactor, 4);
+        std::memcpy (&concertABits, &g.concertA, 4);
+        const bool untouched = (lastTouchedGroups & (1u << (kGroupRlfo + r))) == 0;
+        if (!(rs.ok && untouched && g.baseEpoch != 0 && rs.epoch == g.baseEpoch && rs.bpm == g.bpm && rs.factorBits == factorBits && rs.concertABits == concertABits))
+        {
+            rs.syncType = static_cast<int> (P (ri.syncType) + 0.5f);
+            rs.sync = static_cast<int> (P (ri.sync) + 0.5f);
+            rs.rateKnob = P (ri.rate);
+            rs.division = static_cast<int> (P (ri.division) + 0.5f);
+            rs.keyTranspose = P (ri.keyTranspose);
+            rs.keyTune = P (ri.keyTune);
+            rs.rate = vc.lfoFactor * lfoRateHz (rs.sync, rs.rateKnob, rs.division, g.bpm, g.concertA, lastSemis, rs.keyTranspose, rs.keyTune);
+            rs.style = static_cast<int> (P (ri.style) + 0.5f);
+            rs.stereo = ri.stereo >= 0 && g.base[ri.stereo] >= 0.5f;
+            rs.ok = untouched;
+            rs.epoch = g.baseEpoch;
+            rs.bpm = g.bpm;
+            rs.factorBits = factorBits;
+            rs.concertABits = concertABits;
+        }
+        if (rs.syncType == 1 && g.rlfoValue != nullptr)
             rlfoOut[r] = rlfoOutR[r] = g.rlfoValue[r];
         else
         {
-            const int sync = static_cast<int> (P (ri.sync) + 0.5f);
-            const float rate = vc.lfoFactor * lfoRateHz (sync, P (ri.rate), static_cast<int> (P (ri.division) + 0.5f), g.bpm, g.concertA, lastSemis, P (ri.keyTranspose), P (ri.keyTune));
-            const int style = static_cast<int> (P (ri.style) + 0.5f);
-            rlfoOut[r] = rlfo[r].advance (style, rate * fdtS);
+            const float rate = rs.sync == 4 ? vc.lfoFactor * lfoRateHz (rs.sync, rs.rateKnob, rs.division, g.bpm, g.concertA, lastSemis, rs.keyTranspose, rs.keyTune) : rs.rate;
+            rlfoOut[r] = rlfo[r].advance (rs.style, rate * fdtS);
             // stereo: the right lane has random numbers of its own
-            rlfoOutR[r] = (ri.stereo >= 0 && g.base[ri.stereo] >= 0.5f) ? rlfoR[r].advance (style, rate * fdtS) : rlfoOut[r];
+            rlfoOutR[r] = rs.stereo ? rlfoR[r].advance (rs.style, rate * fdtS) : rlfoOut[r];
         }
     }
 
