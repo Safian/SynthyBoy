@@ -978,6 +978,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             lp.serial = noteSerial;
             lp.switchKey = g.switchKey != nullptr ? g.switchKey[o] : -1;
             lp.scratch = g.spectralScratch;
+            lp.referenceKernels = g.scalarContent;
             lp.chokeLatest = g.chokeLatest != nullptr ? g.chokeLatest + o * 256 : nullptr;
             lp.chokeCounter = g.chokeCounter != nullptr ? g.chokeCounter + o : nullptr;
             SB_SECTION (sections::tickOscUpdate);

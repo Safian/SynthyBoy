@@ -32,6 +32,7 @@
 //   --no-fx-mute    process an effect whose mix is exactly 0 all the same (the engine before that saving: for a before / after with one binary)
 //   --scalar-filters  run the voice filters' scalar loops also where a vector kernel exists (the same: before / after)
 //   --scalar-warp   make the oversampled samples of a warped oscillator one by one also where the four lane form exists (the same: before / after)
+//   --scalar-content  the Sample / Granular / Spectral / Multisample oscillators run their per sample (per frame) reference code, not the block kernels (the same: before / after)
 //   --verify        no timing: every load is rendered twice under every profile, once with the savings (the pair kernels of the filters, the skipped effects with
 //                   mix 0) and once without, offline, 3 s with the chord struck twice, and the samples are compared. They must be the same values (the exit code is
 //                   1 otherwise): this is the check that the vector code of THIS CPU computes what the scalar code computes.
@@ -498,6 +499,7 @@ int main (int argc, char** argv)
         else if (a == "--no-fx-mute")  o.savingsOff |= kOwnSavingFxMute;
         else if (a == "--scalar-filters") o.savingsOff |= kOwnSavingVectorFilters;
         else if (a == "--scalar-warp") o.savingsOff |= kOwnSavingVectorWarp;
+        else if (a == "--scalar-content") o.savingsOff |= kOwnSavingContentKernels;
         else if (a == "--budget")      o.budget = std::atof (next());
         else usage (("unknown argument " + a).c_str());
     }
@@ -632,6 +634,8 @@ int main (int argc, char** argv)
                  (o.savingsOff & kOwnSavingFxMute) != 0 ? ", effects with mix 0 processed (--no-fx-mute)" : "", (o.savingsOff & kOwnSavingVectorFilters) != 0 ? ", scalar filters (--scalar-filters)" : "");
     if ((o.savingsOff & kOwnSavingVectorWarp) != 0)
         std::printf ("scalar warp samples (--scalar-warp)\n");
+    if ((o.savingsOff & kOwnSavingContentKernels) != 0)
+        std::printf ("reference code of the Sample / Granular / Spectral / Multisample oscillators (--scalar-content)\n");
     std::printf ("device: %s; %s; build %s\n", model.empty() ? "(no device tree name)" : model.c_str(), cpuText.empty() ? "cpu not pinned (not Linux)" : cpuText.c_str(),
 #if defined(__aarch64__)
                  "arm64"
@@ -667,7 +671,7 @@ int main (int argc, char** argv)
             int bad = 0;
             for (const auto& l : loads)
             {
-                const std::vector<float> with = renderForVerify (o, profiles[c], l, notes, 0), without = renderForVerify (o, profiles[c], l, notes, kOwnSavingFxMute | kOwnSavingVectorFilters | kOwnSavingVectorWarp);
+                const std::vector<float> with = renderForVerify (o, profiles[c], l, notes, 0), without = renderForVerify (o, profiles[c], l, notes, kOwnSavingFxMute | kOwnSavingVectorFilters | kOwnSavingVectorWarp | kOwnSavingContentKernels);
                 size_t differ = 0;
                 float worst = 0.0f, peak = 0.0f;
                 for (size_t i = 0; i < with.size(); ++i)

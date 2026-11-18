@@ -827,6 +827,7 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
                     headFrac_ = -1.0f;
                 continue;
             }
+            sv.setReferenceKernels (lp.referenceKernels);
             sv.processModulated (a, b, n, rm);
             if (u == 0)
                 headFrac_ = sampleFrames_ > 1.0 ? static_cast<float> (std::min (1.0, std::max (0.0, sv.getPlayheadPosition() / sampleFrames_))) : -1.0f;
@@ -853,6 +854,7 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
                 continue;
             granular::GrainParams gp = gparams;
             gp.pitchRatio = semitonesToRatio (uni[u].semis);
+            gv.setReferenceKernels (lp.referenceKernels);
             gv.process (gp, a, b, n, rm);
             for (int k = 0; k < n; ++k)
             {
@@ -905,6 +907,7 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
                 else
                     st += (lp.bendTrack ? lp.noteSemis - lp.noteRaw : 0.0f);
                 st += uni[u].det;
+                l.voice.setReferenceKernels (lp.referenceKernels);
                 l.voice.processAdd (L, R, a, b, n, st, nullptr, lerp (uni[u].gPrevL, uni[u].gL, t), lerp (uni[u].gPrevR, uni[u].gR, t));
             }
     }

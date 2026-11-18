@@ -79,6 +79,7 @@ struct LibParams
     int switchKey = -1;         // the last key switch of the instrument
     float fixedSemis = 0.0f;
     spectral::Scratch* scratch = nullptr;
+    bool referenceKernels = false;     // measurements (kOwnSavingContentKernels): the per sample reference code of the library oscillators
     uint32_t* chokeLatest = nullptr;   // [256] of this oscillator slot: the latest note sequence that started a zone of each group (engine wide for the slot)
     uint32_t* chokeCounter = nullptr;  // notes started on this slot
 };
