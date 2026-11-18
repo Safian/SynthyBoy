@@ -69,6 +69,19 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
     target_link_libraries(synthyboy_test_own_warp_lanes PRIVATE Threads::Threads)
     add_test(NAME synthyboy_test_own_warp_lanes COMMAND synthyboy_test_own_warp_lanes)
 endif()
+# The NEON inverse transform of the spectral morph cycle against its scalar loops: morph.cpp and the wavetable it needs compiled into the test with the NEON form on (also on Apple's arm64) and
+# without fused multiply-add; it links nothing else of the engine.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
+    add_executable(synthyboy_test_own_morph_transform test_own_morph_transform.cpp "${PROJECT_SOURCE_DIR}/core/engine-own/osc/morph.cpp"
+        "${PROJECT_SOURCE_DIR}/core/engine-own/osc/wavetable_bank.cpp" "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_own_morph_transform PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own"
+        "${PROJECT_SOURCE_DIR}/core/src")
+    target_compile_features(synthyboy_test_own_morph_transform PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_own_morph_transform PRIVATE SB_TEST_NEON=1)
+    target_compile_options(synthyboy_test_own_morph_transform PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_own_morph_transform PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_own_morph_transform COMMAND synthyboy_test_own_morph_transform)
+endif()
 synthyboy_add_test(synthyboy_test_own_fx_mute test_own_fx_mute.cpp)   # an effect whose mix is exactly 0 is not processed (economy group Control)
 target_include_directories(synthyboy_test_own_fx_mute PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_profile test_own_profile.cpp)   # the economy groups of a quality (the device profiles of shell-mpc/device_profile.h)
@@ -104,3 +117,4 @@ target_include_directories(synthyboy_test_own_filter_styles PRIVATE "${PROJECT_S
 synthyboy_add_test(synthyboy_test_own_keys_claimed test_own_keys_claimed.cpp)
 synthyboy_add_test(synthyboy_test_own_note_storm test_own_note_storm.cpp)
 synthyboy_add_test(synthyboy_test_own_content_policy test_own_content_policy.cpp)
+synthyboy_add_test(synthyboy_test_own_convolve_bypass test_own_convolve_bypass.cpp)   # Convolve is bypassed at tier low (quality.h) also with an impulse loaded

@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 //   synthyboy_preset_render --presets DIR [--engine vital|own] [--tier low|medium|high|all] [--summary-only] [--velocity]
-//                           [--wav OUTDIR] [--filter SUBSTRING] [--sr 48000] [--content-dir DIR]
+//                           [--wav OUTDIR] [--filter SUBSTRING] [--sr 48000] [--content-dir DIR] [--scalar-content] [--hold SECONDS]
+//   --scalar-content  the own engine runs the reference code of the Sample / Granular / Spectral / Multisample oscillators (setOwnSavingsOff, kOwnSavingContentKernels): render once with and once
+//                     without it to compare the two (scripts/content-kernel-compare.py)
 //
 // Per preset and tier (a fresh engine each, the state loaded the way the shell loads it: every parameter, then the content):
 //   single   one note (C1 for the category Bass, else C3), velocity 0.8, held 1.5 s, then released until the output is silent
@@ -62,6 +64,8 @@ struct Options
     std::string filter;
     double sampleRate = 48000.0;
     const IContentStore* contentStore = nullptr;
+    bool scalarContent = false; // --scalar-content
+    double hold = 0.0;          // --hold SECONDS: the held time of the single note and of the chord (default 1.5 s / 1 s)
     std::string contentDir; // root of the content packs the presets reference (<root>/<pack>/<file>); default: PRESETS/content when it exists
 };
 
@@ -92,6 +96,8 @@ std::unique_ptr<IEngine> makeEngine (const Options& o, const Quality& q, const L
     auto engine = createEngine (o.engine);
     if (engine == nullptr)
         return engine;
+    if (o.scalarContent)
+        setOwnSavingsOff (*engine, kOwnSavingContentKernels);
     engine->prepare (o.sampleRate, kBlock, q);
     // without the store a "Preset table" falls back to the saw and a "Sample" to silence: imported presets would not be rendered as they sound
     engine->setContentStore (o.contentStore);
@@ -274,6 +280,8 @@ int main (int argc, char** argv)
         else if (a == "--filter") o.filter = next();
         else if (a == "--sr") o.sampleRate = std::atof (next().c_str());
         else if (a == "--content-dir") o.contentDir = next();
+        else if (a == "--scalar-content") o.scalarContent = true;
+        else if (a == "--hold") o.hold = std::atof (next().c_str());
         else
         {
             std::fprintf (stderr, "preset-render: unknown argument %s\n", a.c_str());
@@ -368,7 +376,7 @@ int main (int argc, char** argv)
             const std::vector<int> keys { p.meta.category == "Bass" ? 24 + 12 : 60 };
             const std::vector<int> chord { keys[0], keys[0] + 4, keys[0] + 7, keys[0] + 12 };
             const bool wav = ! o.wavDir.empty();
-            const Render s = render (o, q, p, keys, 0.8f, kHoldSingle, true, wav);
+            const Render s = render (o, q, p, keys, 0.8f, o.hold > 0.0 ? o.hold : kHoldSingle, true, wav);
 
             double chordHold = kHoldChord;
             if (o.sustainAware)
@@ -383,6 +391,8 @@ int main (int argc, char** argv)
                 const double attSec = (std::max (0.0f, att) + std::max (0.0f, del)) / 1000.0;
                 chordHold = std::min (5.0, std::max (1.0, 0.4 + attSec));
             }
+            if (o.hold > 0.0)
+                chordHold = o.hold;
             const Render c = render (o, q, p, chord, 1.0f, chordHold, false, false);
 
             std::vector<std::string> problems;

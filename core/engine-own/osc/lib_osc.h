@@ -79,6 +79,7 @@ struct LibParams
     int switchKey = -1;         // the last key switch of the instrument
     float fixedSemis = 0.0f;
     spectral::Scratch* scratch = nullptr;
+    bool referenceKernels = false;     // measurements (kOwnSavingContentKernels): the per sample reference code of the library oscillators
     uint32_t* chokeLatest = nullptr;   // [256] of this oscillator slot: the latest note sequence that started a zone of each group (engine wide for the slot)
     uint32_t* chokeCounter = nullptr;  // notes started on this slot
 };
@@ -154,6 +155,7 @@ private:
     float modulator (int warpType, int slot, const float* const* cross, int k, float& m) const noexcept;
 
     double sr = 48000.0;
+    float spectralGain_ = 1.0f;   // kSpectralGain scaled to the host rate (prepare ())
     int cur = 0, from = -1;
     int fadePos = 0, fadeTotal = 480;
     bool anyPlaying = false;

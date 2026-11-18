@@ -93,6 +93,11 @@ public:
     /** Renders `numFrames` samples into left / right (overwritten). `rateMod` (optional) multiplies the grain read rate per sample (FM). */
     void process (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept;
 
+    /** Measurements only (the bench's --scalar-content): the grains run through the per sample reference loop instead of the kernel (the same bits, see core/granular/tests). */
+    void setReferenceKernels (bool on) noexcept { reference_ = on; }
+    /** Tests: false runs the kernel with its scalar form only (the vector form, four samples of a grain at a time on ARM with NEON, gives the same bits). */
+    void setVectorKernels (bool on) noexcept { vectors_ = on; }
+
     bool isActive() const noexcept { return active_; }
     int activeGrains() const noexcept;
     double playhead() const noexcept { return head_; }
@@ -110,14 +115,22 @@ private:
         float gl = 1.0f, gr = 1.0f;
         float windowAmount = 0.5f, windowSkew = 0.0f;
         float warpAmount[2] = { 0.0f, 0.0f };
+        // what the kernel needs of a grain that does not change while it plays, made once at the spawn (the window's peak and slopes, 1 / length, the mip level of the read)
+        float winPeak = 0.5f, winK1 = 1.0f, winK2 = 1.0f, winAmount = 0.5f, invLength = 1.0f;
+        int mip = 0;
     };
 
     void spawn (const GrainParams& p, int delay, int age, double headFraction) noexcept;
+    /** Renders the playing grains of the block into left / right (added). Returns true if any grain was playing. The kernel and the reference loop give the same bits. */
+    bool renderGrains (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept;
+    bool renderGrainsReference (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept;
     void advanceHead (const GrainParams& p) noexcept;
     float random01() noexcept;
 
     const SampleView* sample_ = nullptr;
     double sampleRate_ = 44100.0;
+    bool reference_ = false;
+    bool vectors_ = true;
     bool active_ = false, released_ = false, headDone_ = false;
     double head_ = 0.0;         // play head, fraction of the file
     int headDirection_ = 1;     // ping pong state

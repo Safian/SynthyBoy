@@ -3,12 +3,22 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include "synthyboy/spectral/spectral.h"
+#include "synthyboy/spectral/kernels.h"
 #include "synthyboy/sampleosc/sample_data.h"
 
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 #include <vector>
 
 #include "test_runner.h"
+
+// (the reference loops of the kernel tests below must not be fused either: the kernels are compiled without fused multiply-add)
+#if defined(__clang__)
+ #pragma clang fp contract(off)
+#elif defined(__GNUC__)
+ #pragma GCC optimize ("fp-contract=off")
+#endif
 
 using namespace synthyboy::spectral;
 using synthyboy::sampleosc::SampleData;
@@ -464,4 +474,359 @@ TEST (spectral_display_spectrum_is_what_the_voice_synthesizes)
             std::printf ("  case '%s': the display's spectrum is not the voice's\n", c.name);
         CHECK (same);
     }
+}
+
+// ---- the kernels of a frame (synthyboy/spectral/kernels.h) -------------------------------------------------------------------------------
+
+namespace
+{
+struct KRng
+{
+    uint32_t s;
+    explicit KRng (uint32_t seed) : s (seed * 2654435761u + 17u) {}
+    uint32_t next() { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return s; }
+    float uni() { return static_cast<float> (next() >> 8) * (1.0f / 16777216.0f); }
+    float bi() { return uni() * 2.0f - 1.0f; }
+};
+bool sameBits (const float* a, const float* b, size_t n) { return std::memcmp (a, b, n * sizeof (float)) == 0; }
+}
+
+TEST (spectral_real_inverse_transform_matches_the_full_transform_and_the_vector_form_matches_the_scalar_form)
+{
+    using namespace synthyboy::spectral::kernels;
+    KRng rng (3);
+    for (int round = 0; round < 20; ++round)
+    {
+        std::vector<float> xr (kBins), xi (kBins);
+        for (int k = 0; k < kBins; ++k)
+        {
+            const float scale = round % 3 == 0 ? 1.0f : (round % 3 == 1 ? 1.0f / (1.0f + static_cast<float> (k)) : (k % 37 == 0 ? 50.0f : 0.001f));
+            xr[static_cast<size_t> (k)] = rng.bi() * scale;
+            xi[static_cast<size_t> (k)] = k == 0 || k == kBins - 1 ? 0.0f : rng.bi() * scale;
+        }
+        // the full transform of the mirrored spectrum
+        std::vector<float> re (kFftSize), im (kFftSize);
+        for (int k = 0; k < kBins; ++k)
+        {
+            re[static_cast<size_t> (k)] = xr[static_cast<size_t> (k)];
+            im[static_cast<size_t> (k)] = xi[static_cast<size_t> (k)];
+        }
+        for (int j = 1; j < kFftSize / 2; ++j)
+        {
+            re[static_cast<size_t> (kFftSize - j)] = re[static_cast<size_t> (j)];
+            im[static_cast<size_t> (kFftSize - j)] = -im[static_cast<size_t> (j)];
+        }
+        Fft::instance().inverse (re.data(), im.data());
+        std::vector<float> zr (kFftSize / 2), zi (kFftSize / 2), nr (kFftSize / 2), ni (kFftSize / 2);
+        RealIfft::instance().inverse (xr.data(), xi.data(), zr.data(), zi.data(), false);
+        double peak = 0.0, worst = 0.0;
+        for (int n = 0; n < kFftSize; ++n)
+        {
+            const float mine = (n % 2 == 0 ? zr[static_cast<size_t> (n / 2)] : zi[static_cast<size_t> (n / 2)]) * (1.0f / kFftSize);
+            peak = std::max (peak, static_cast<double> (std::fabs (re[static_cast<size_t> (n)])));
+            worst = std::max (worst, static_cast<double> (std::fabs (mine - re[static_cast<size_t> (n)])));
+        }
+        CHECK (worst <= 3.0e-6 * peak);
+        if (haveNeon())
+        {
+            RealIfft::instance().inverse (xr.data(), xi.data(), nr.data(), ni.data(), true);
+            CHECK (sameBits (zr.data(), nr.data(), zr.size()) && sameBits (zi.data(), ni.data(), zi.size()));
+        }
+    }
+}
+
+TEST (spectral_sine_cosine_are_accurate_and_the_vector_form_matches_the_scalar_form)
+{
+    using namespace synthyboy::spectral::kernels;
+    KRng rng (5);
+    std::vector<float> a (4099), s (4099), c (4099), sv (4099), cv (4099);
+    for (size_t i = 0; i < a.size(); ++i)
+        a[i] = i < 2000 ? rng.bi() * 1000.0f : (i < 3000 ? rng.bi() * 7.0f : rng.bi() * 300.0f);
+    a[0] = 0.0f; a[1] = 3.14159265f; a[2] = -3.14159265f; a[3] = 1.5707963f; a[4] = 100.0f; a[5] = -100.0f;
+    sincosBlock (a.data(), s.data(), c.data(), static_cast<int> (a.size()), false);
+    double worst = 0.0;
+    for (size_t i = 0; i < a.size(); ++i)
+    {
+        worst = std::max (worst, std::fabs (static_cast<double> (s[i]) - std::sin (static_cast<double> (a[i]))));
+        worst = std::max (worst, std::fabs (static_cast<double> (c[i]) - std::cos (static_cast<double> (a[i]))));
+    }
+    CHECK (worst < 2.0e-7);
+    if (haveNeon())
+    {
+        sincosBlock (a.data(), sv.data(), cv.data(), static_cast<int> (a.size()), true);
+        CHECK (sameBits (s.data(), sv.data(), a.size()) && sameBits (c.data(), cv.data(), a.size()));
+    }
+}
+
+TEST (spectral_phase_wrap_is_the_old_fmod_exactly_and_the_single_precision_wrap_within_rounding)
+{
+    using namespace synthyboy::spectral::kernels;
+    const auto old = [] (float x)
+    {
+        constexpr float kTwoPi = 6.28318530717958647692f;
+        x = std::fmod (x, kTwoPi);
+        while (x > 3.14159265f) x -= kTwoPi;
+        while (x < -3.14159265f) x += kTwoPi;
+        return x;
+    };
+    KRng rng (9);
+    int bad = 0, n = 0;
+    double worstFloat = 0.0;
+    int notExact = 0;
+    for (int i = 0; i < 400000; ++i)
+    {
+        const float range = i % 4 == 0 ? 120.0f : (i % 4 == 1 ? 2000.0f : (i % 4 == 2 ? 60000.0f : 300.0f));
+        float x = rng.bi() * range;
+        if (i % 50 == 0)
+            x = std::copysign (6.28318530717958647692f * static_cast<float> (1 + i % 900), x);   // exact multiples of the float 2 pi
+        if (i % 50 == 1)
+            x = std::copysign (3.14159265f * static_cast<float> (1 + i % 900), x);
+        ++n;
+        const float a = old (x), b = wrapPhase (x), c = wrapPhaseFloat (x);
+        if (! (a == b))
+            ++bad;
+        // the single precision wrap (rounding errors of its differences kept): the same value, bit for bit
+        if (! (a == c))
+            ++notExact;
+        worstFloat = std::max (worstFloat, std::fabs (static_cast<double> (a) - c));
+    }
+    CHECK (n > 0);
+    CHECK_EQ (bad, 0);
+    CHECK_EQ (notExact, 0);
+    CHECK (worstFloat == 0.0);
+    // the phase update loop: the scalar form is wrapPhaseFloat (), the vector form gives its bits; both the old loop's values
+    std::vector<float> phase (kBins), step (kBins), expect (kBins), oldResult (kBins), vec (kBins);
+    for (int k = 0; k < kBins; ++k)
+    {
+        phase[static_cast<size_t> (k)] = rng.bi() * 3.2f;
+        step[static_cast<size_t> (k)] = rng.bi() * 0.2f * static_cast<float> (k % 40);
+        float x = phase[static_cast<size_t> (k)] + step[static_cast<size_t> (k)] * kHop;
+        oldResult[static_cast<size_t> (k)] = x;
+        if (x > 100.0f || x < -100.0f)
+            oldResult[static_cast<size_t> (k)] = old (x);
+        float y = x;
+        if (y > 100.0f || y < -100.0f)
+            y = wrapPhaseFloat (y);
+        expect[static_cast<size_t> (k)] = y;
+    }
+    vec = phase;
+    const std::vector<float> start = phase;
+    advancePhases (phase.data(), step.data(), kBins, false);
+    CHECK (sameBits (phase.data(), expect.data(), phase.size()));
+    if (haveNeon())
+    {
+        advancePhases (vec.data(), step.data(), kBins, true);
+        CHECK (sameBits (vec.data(), expect.data(), vec.size()));
+    }
+    // the fused kernel (phase update, sine and cosine, the bins) gives the bits of the separate ones, in both forms
+    {
+        std::vector<float> mag (kBins), re1 (kBins), im1 (kBins), re2 (kBins), im2 (kBins), ph1 = start, ph2 = start, ph3 = start;
+        for (auto& m : mag)
+            m = rng.uni();
+        advancePhases (ph1.data(), step.data(), kBins, false);
+        spectrumFromAngles (ph1.data(), mag.data(), re1.data(), im1.data(), kBins, false);
+        advanceToSpectrum (ph2.data(), step.data(), mag.data(), re2.data(), im2.data(), kBins, false);
+        CHECK (sameBits (ph1.data(), ph2.data(), ph1.size()) && sameBits (re1.data(), re2.data(), re1.size()) && sameBits (im1.data(), im2.data(), im1.size()));
+        if (haveNeon())
+        {
+            std::vector<float> re3 (kBins), im3 (kBins);
+            advanceToSpectrum (ph3.data(), step.data(), mag.data(), re3.data(), im3.data(), kBins, true);
+            CHECK (sameBits (ph1.data(), ph3.data(), ph1.size()) && sameBits (re1.data(), re3.data(), re1.size()) && sameBits (im1.data(), im3.data(), im1.size()));
+            std::vector<float> re4 (kBins), im4 (kBins);
+            spectrumFromAngles (ph1.data(), mag.data(), re4.data(), im4.data(), kBins, true);
+            CHECK (sameBits (re1.data(), re4.data(), re1.size()) && sameBits (im1.data(), im4.data(), im1.size()));
+        }
+    }
+    double worst = 0.0;
+    for (size_t k = 0; k < phase.size(); ++k)
+    {
+        double d = std::fabs (static_cast<double> (oldResult[k]) - phase[k]);
+        d = std::min (d, std::fabs (d - 6.283185307179586));
+        worst = std::max (worst, d);
+    }
+    CHECK (worst == 0.0);
+}
+
+TEST (spectral_overlap_add_vector_form_matches_the_scalar_form)
+{
+    using namespace synthyboy::spectral::kernels;
+    if (! haveNeon())
+        return;
+    KRng rng (11);
+    std::vector<float> zr (kFftSize / 2), zi (kFftSize / 2);
+    for (auto& v : zr) v = rng.bi();
+    for (auto& v : zi) v = rng.bi();
+    for (int at : { 0, 512, 1024, 1536 })
+    {
+        std::vector<float> a (kFftSize), b (kFftSize);
+        for (size_t i = 0; i < a.size(); ++i) a[i] = b[i] = rng.bi();
+        overlapAdd (a.data(), at, zr.data(), zi.data(), 1.0f / 1.5f, false);
+        overlapAdd (b.data(), at, zr.data(), zi.data(), 1.0f / 1.5f, true);
+        CHECK (sameBits (a.data(), b.data(), a.size()));
+    }
+}
+
+// The voice with the block kernels against the voice with the reference code (setReferenceKernels): the frames agree to rounding. The first 2 s of every warp, with a mono and a stereo
+// sample, Phase Lock, Transients and a moving head are compared; the difference is relative to the largest sample.
+TEST (spectral_block_kernels_agree_with_the_reference_voice_to_rounding)
+{
+    Tone tone (rich (220.0, 1.5));
+    std::vector<float> l (static_cast<size_t> (1.5 * kSr)), r (l.size());
+    for (size_t i = 0; i < l.size(); ++i)
+    {
+        l[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 311.0 * static_cast<double> (i) / kSr) + 0.1 * std::sin (0.01 * static_cast<double> (i * i % 1000)));
+        r[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 477.0 * static_cast<double> (i) / kSr));
+    }
+    SampleData stereoData;
+    stereoData.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), kSr);
+    Analysis stereo;
+    stereo.build (stereoData.view());
+    std::vector<float> external (kBins, 0.0f);
+    for (int k = 0; k < kBins; ++k)
+        external[static_cast<size_t> (k)] = k < 200 ? 100.0f : 1.0f;
+    double worstRelative = 0.0;
+    int runs = 0;
+    for (int variant = 0; variant < 3; ++variant)
+        for (int w = -1; w < kNumSpectralWarps; ++w)
+        {
+            static Scratch scratchA, scratchB;
+            SpectralParams p = frozen();
+            p.manual = variant == 0;
+            p.scanSpeed = 0.4f;
+            p.phaseLock = variant == 1;
+            p.transients = variant == 2;
+            p.warpType[0] = w;
+            p.warpAmount[0] = 0.7f;
+            p.warpVar[0] = 0.4f;
+            p.pitchRatio = variant == 2 ? 1.7f : 0.8f;
+            p.freqShiftHz = variant == 1 ? 30.0f : 0.0f;
+            for (auto& e : p.external)
+                e = external.data();
+            SpectralVoice fast, reference;
+            fast.prepare (kSr);
+            reference.prepare (kSr);
+            reference.setReferenceKernels (true);
+            SpectralParams pa = p, pb = p;
+            pa.scratch = &scratchA;
+            pb.scratch = &scratchB;
+            const Analysis* an = variant == 2 ? &stereo : &tone.analysis;
+            fast.noteOn (an, pa, 0.0f);
+            reference.noteOn (an, pb, 0.0f);
+            const auto a = render (fast, pa, 24000), b = render (reference, pb, 24000);
+            double peak = 0.0, worst = 0.0;
+            for (size_t i = 0; i < a.size(); ++i)
+            {
+                peak = std::max (peak, static_cast<double> (std::fabs (b[i])));
+                worst = std::max (worst, static_cast<double> (std::fabs (a[i] - b[i])));
+            }
+            ++runs;
+            worstRelative = std::max (worstRelative, worst / std::max (peak, 1.0e-9));
+            if (! CHECK (worst <= 2.0e-5 * peak))
+                std::printf ("    variant %d warp %d: largest difference %g (peak %g)\n", variant, w, worst, peak);
+        }
+    CHECK (runs > 60);
+    std::printf ("    block kernels against the reference: largest difference over %d runs %.3g of the peak\n", runs, worstRelative);
+}
+
+// The per bin loops of the frame shaping: the vector forms give the bits of the scalar forms (peaks of random spectra with ties and flat parts, the max, the lerp, the products and the placing
+// of regions with every offset).
+TEST (spectral_per_bin_kernels_vector_forms_match_the_scalar_forms)
+{
+    using namespace synthyboy::spectral::kernels;
+    if (! haveNeon())
+        return;
+    KRng rng (21);
+    for (int round = 0; round < 200; ++round)
+    {
+        std::vector<float> m (kBins), a (kBins), b (kBins), o1 (kBins), o2 (kBins);
+        for (int k = 0; k < kBins; ++k)
+        {
+            m[static_cast<size_t> (k)] = round % 3 == 0 ? std::floor (rng.uni() * 6.0f) * 0.25f : (round % 3 == 1 ? rng.uni() : (k % 5 == 0 ? rng.uni() * 100.0f : rng.uni() * 1.0e-6f));
+            a[static_cast<size_t> (k)] = rng.bi();
+            b[static_cast<size_t> (k)] = rng.bi();
+        }
+        const float top = maxBins (m.data(), kBins, false);
+        CHECK (top == maxBins (m.data(), kBins, true));
+        for (int cap : { 512, 7, 1 })
+        {
+            int p1[512], p2[512];
+            const int n1 = findPeaks (m.data(), kBins, top, p1, cap, false), n2 = findPeaks (m.data(), kBins, top, p2, cap, true);
+            bool same = n1 == n2;
+            for (int i = 0; same && i < n1; ++i)
+                same = p1[i] == p2[i];
+            CHECK (same);
+        }
+        const float t = rng.uni();
+        lerpBins (o1.data(), a.data(), b.data(), t, kBins - round % 5, false);
+        lerpBins (o2.data(), a.data(), b.data(), t, kBins - round % 5, true);
+        CHECK (sameBits (o1.data(), o2.data(), o1.size()));
+        o1 = a;
+        o2 = a;
+        mulBins (o1.data(), b.data(), kBins - round % 7, false);
+        mulBins (o2.data(), b.data(), kBins - round % 7, true);
+        CHECK (sameBits (o1.data(), o2.data(), o1.size()));
+        std::vector<float> om1 (kBins, 0.0f), of1 (kBins, 0.0f), oth1 (kBins, 0.0f);
+        std::vector<float> om2 = om1, of2 = of1, oth2 = oth1;
+        for (int r = 0; r < 20; ++r)
+        {
+            const int from = 1 + static_cast<int> (rng.uni() * 900.0f), len = static_cast<int> (rng.uni() * 60.0f), offset = static_cast<int> (rng.bi() * 40.0f);
+            placeRegion (m.data(), a.data(), b.data(), om1.data(), of1.data(), oth1.data(), from, std::min (from + len, kBins - 1), offset, 1.37f, 0.02f, kBins, false);
+            placeRegion (m.data(), a.data(), b.data(), om2.data(), of2.data(), oth2.data(), from, std::min (from + len, kBins - 1), offset, 1.37f, 0.02f, kBins, true);
+        }
+        CHECK (sameBits (om1.data(), om2.data(), om1.size()) && sameBits (of1.data(), of2.data(), of1.size()) && sameBits (oth1.data(), oth2.data(), oth1.size()));
+    }
+}
+
+// placeAll () against the loop of the reference (std::lround, one bin at a time): the same bins, for dense and sparse peaks, shifts in both directions and ratios from 1 / 32 to 32.
+TEST (spectral_place_all_equals_the_reference_loop)
+{
+    using namespace synthyboy::spectral::kernels;
+    KRng rng (33);
+    int bad = 0, runs = 0;
+    for (int round = 0; round < 300; ++round)
+    {
+        std::vector<float> mag (kBins), freq (kBins), theta (kBins);
+        for (int k = 0; k < kBins; ++k)
+        {
+            mag[static_cast<size_t> (k)] = rng.uni();
+            freq[static_cast<size_t> (k)] = rng.bi() * 3.0f;
+            theta[static_cast<size_t> (k)] = rng.bi() * 3.14f;
+        }
+        int peaks[512];
+        const int numPeaks = findPeaks (mag.data(), kBins, 1.0f, peaks, 512, false);
+        const double r = std::exp2 (static_cast<double> (rng.bi()) * 5.0);
+        const double shiftBins = round % 3 == 0 ? 0.0 : static_cast<double> (rng.bi()) * 120.0;
+        const float shiftRad = rng.bi() * 0.1f;
+        std::vector<float> om1 (kBins, 0.0f), of1 (kBins, 0.0f), oth1 (kBins, 0.0f), om2 = om1, of2 = of1, oth2 = oth1, om3 = om1, of3 = of1, oth3 = oth1;
+        for (int i = 0; i < numPeaks; ++i)
+        {
+            const int centre = peaks[i];
+            const int from = i == 0 ? 1 : (peaks[i - 1] + centre + 1) / 2;
+            const int to = i + 1 == numPeaks ? kBins - 1 : (centre + peaks[i + 1]) / 2;
+            const int offset = static_cast<int> (std::lround (static_cast<double> (centre) * r + shiftBins)) - centre;
+            for (int k = from; k <= to; ++k)
+            {
+                const int j = k + offset;
+                if (j >= 1 && j < kBins && mag[static_cast<size_t> (k)] > om1[static_cast<size_t> (j)])
+                {
+                    om1[static_cast<size_t> (j)] = mag[static_cast<size_t> (k)];
+                    of1[static_cast<size_t> (j)] = freq[static_cast<size_t> (k)] * static_cast<float> (r) + shiftRad;
+                    oth1[static_cast<size_t> (j)] = theta[static_cast<size_t> (k)];
+                }
+            }
+        }
+        placeAll (mag.data(), freq.data(), theta.data(), om2.data(), of2.data(), oth2.data(), peaks, numPeaks, r, shiftBins, shiftRad, kBins, false);
+        placeAll (mag.data(), freq.data(), theta.data(), om3.data(), of3.data(), oth3.data(), peaks, numPeaks, r, shiftBins, shiftRad, kBins, true);
+        ++runs;
+        if (! (sameBits (om1.data(), om2.data(), om1.size()) && sameBits (of1.data(), of2.data(), of1.size()) && sameBits (oth1.data(), oth2.data(), oth1.size())
+               && sameBits (om1.data(), om3.data(), om1.size()) && sameBits (of1.data(), of3.data(), of1.size()) && sameBits (oth1.data(), oth3.data(), oth1.size())))
+        {
+            if (bad++ < 3)
+                std::printf ("    placeAll differs: round %d peaks %d r %g shift %g scalar form %d vector form %d\n", round, numPeaks, r, shiftBins,
+                             sameBits (om1.data(), om2.data(), om1.size()) && sameBits (of1.data(), of2.data(), of1.size()) && sameBits (oth1.data(), oth2.data(), oth1.size()) ? 1 : 0,
+                             sameBits (om1.data(), om3.data(), om1.size()) && sameBits (of1.data(), of3.data(), of1.size()) && sameBits (oth1.data(), oth3.data(), oth1.size()) ? 1 : 0);
+        }
+    }
+    CHECK (runs == 300);
+    CHECK_EQ (bad, 0);
 }

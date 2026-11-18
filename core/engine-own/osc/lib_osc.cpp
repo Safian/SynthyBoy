@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <vector>
 #include "lib_osc.h"
+#include "../dsp/section_timing.h"
 
 #include <cstdio>
 
@@ -80,6 +81,7 @@ LibOsc& LibOsc::operator= (LibOsc&&) noexcept = default;
 void LibOsc::prepare (double sampleRate)
 {
     sr = sampleRate;
+    spectralGain_ = kSpectralGain * std::pow (static_cast<float> (sr / 48000.0), 1.457f);
     sampleVoices.assign (kMaxU, sampleosc::SampleVoice());
     grainVoices.assign (kMaxU, granular::GranularVoice());
     specVoices.assign (kSpecU, spectral::SpectralVoice());
@@ -123,7 +125,10 @@ void LibOsc::resetForNote() noexcept
     // The players (up to 68 per slot, the spectral ones with tens of KB of buffers each) are reset only if a library type has run on
     // this slot since the last reset: a slot that plays wavetables never touches them, and a reset of an idle player is a no-op.
     if (playersUsed)
+    {
+        SB_SECTION (sections::libReset);
         stopAll();
+    }
     for (auto& s : noteStarted)
         s = false;
     cur = 0;
@@ -314,7 +319,7 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
     const float norm = 1.0f / std::sqrt (std::max (sumSq, 1.0e-9f));
     // the spectral voice's raw level depends on the rate it runs at; the spec's factor 5.3703 is for 96 kHz, the level target is the 2x value (docs/engine-spec/07 7a.1):
     // 0.2601 RMS at 48 kHz and 0.0948 at 96 kHz fit raw ~ rate^-1.457, so the factor for the host rate is kSpectralGain * (rate / 48 kHz)^1.457
-    const float spectralGain = kSpectralGain * std::pow (static_cast<float> (sr / 48000.0), 1.457f);
+    const float spectralGain = spectralGain_;   // (made in prepare (): a power per control period and oscillator was a library call each)
     const float typeGain = type == kOscTypeGranular ? kGranularGain : (type == kOscTypeSpectral ? spectralGain : 1.0f);
     float gNorm = yLevel;
     if (type != kOscTypeMultisample && v[lk_sNormalize] >= 0.5f && haveSample)
@@ -567,7 +572,10 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
         noteStarted[type] = true;
         rng.seed (lp.serial * 977u + static_cast<uint32_t> (oscIndex) * 31u + static_cast<uint32_t> (type));
         randomPerNote = rng.uni();
-        beginType (type);
+        {
+            SB_SECTION (sections::libNoteStart);
+            beginType (type);
+        }
     }
     if (type == kOscTypeSample)
     {
@@ -662,6 +670,7 @@ void LibOsc::beginType (int type) noexcept
         for (int u = 0; u < U; ++u)
         {
             specVoices[static_cast<size_t> (u)].reset();
+            specVoices[static_cast<size_t> (u)].setReferenceKernels (lp.referenceKernels);
             specParams.pitchRatio = semitonesToRatio (uni[u].semis);
             specVoices[static_cast<size_t> (u)].noteOn (&smp->analysis, specParams, startFraction (u));
         }
@@ -827,6 +836,7 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
                     headFrac_ = -1.0f;
                 continue;
             }
+            sv.setReferenceKernels (lp.referenceKernels);
             sv.processModulated (a, b, n, rm);
             if (u == 0)
                 headFrac_ = sampleFrames_ > 1.0 ? static_cast<float> (std::min (1.0, std::max (0.0, sv.getPlayheadPosition() / sampleFrames_))) : -1.0f;
@@ -853,6 +863,7 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
                 continue;
             granular::GrainParams gp = gparams;
             gp.pitchRatio = semitonesToRatio (uni[u].semis);
+            gv.setReferenceKernels (lp.referenceKernels);
             gv.process (gp, a, b, n, rm);
             for (int k = 0; k < n; ++k)
             {
@@ -878,6 +889,7 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
                 continue;
             spectral::SpectralParams sp = specParams;
             sp.pitchRatio = semitonesToRatio (uni[u].semis);
+            sv.setReferenceKernels (lp.referenceKernels);
             sv.process (sp, a, b, n);
             for (int k = 0; k < n; ++k)
             {
@@ -905,6 +917,7 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
                 else
                     st += (lp.bendTrack ? lp.noteSemis - lp.noteRaw : 0.0f);
                 st += uni[u].det;
+                l.voice.setReferenceKernels (lp.referenceKernels);
                 l.voice.processAdd (L, R, a, b, n, st, nullptr, lerp (uni[u].gPrevL, uni[u].gL, t), lerp (uni[u].gPrevR, uni[u].gR, t));
             }
     }

@@ -140,6 +140,8 @@ public:
     void noteOn (const Instrument& instrument, int zoneIndex, int key, int velocity, const EnvelopeSettings* envelope, float velTrackPercent, uint32_t startSequence,
                  sampleosc::QualityTier quality) noexcept;
     void seekFraction (double fraction) noexcept { voice_.seekFraction (fraction); }
+    /** Measurements only: the sample voice renders with its per sample reference (the same bits). */
+    void setReferenceKernels (bool on) noexcept { voice_.setReferenceKernels (on); }
     /** Note off: a one shot zone plays on, loop_sustain leaves its loop, every zone releases (`fast`: the 10 ms of off_mode=fast). */
     void noteOff (bool fast) noexcept;
     bool isActive() const noexcept { return active_; }

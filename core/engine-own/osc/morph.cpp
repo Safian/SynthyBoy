@@ -6,6 +6,7 @@
 
 #include <cmath>
 
+#include "../dsp/simd.h"
 #include "../dsp/util.h"
 
 namespace synthyboy
@@ -21,6 +22,7 @@ struct Twiddles
 {
     float cs[kN / 2], sn[kN / 2];
     uint16_t rev[kN];
+    float stageC[kN], stageS[kN]; // the twiddles of each stage side by side: stage of length len (half = len / 2) at offset half - 1, the very values cs[k * step], sn[k * step] of the strided read
     float rnd[16][kH + 1]; // the fixed table of the Random Amplitudes stage
     Twiddles()
     {
@@ -36,6 +38,12 @@ struct Twiddles
                 r |= ((i >> b) & 1) << (10 - b);
             rev[i] = static_cast<uint16_t> (r);
         }
+        for (int len = 2; len <= kN; len <<= 1)
+            for (int k = 0; k < len / 2; ++k)
+            {
+                stageC[len / 2 - 1 + k] = cs[k * (kN / len)];
+                stageS[len / 2 - 1 + k] = sn[k * (kN / len)];
+            }
         Rng rng;
         rng.seed (0x5EEDu);
         for (auto& row : rnd)
@@ -51,7 +59,7 @@ const Twiddles& tw()
 }
 
 /** Unscaled inverse transform (positive exponent) of n complex points (2048, or 1024 for the half size transform of the real signal), in place. */
-void inverseFft (float* re, float* im, int n = kN) noexcept
+void inverseFft (float* re, float* im, int n = kN, bool scalarOnly = false) noexcept
 {
     const Twiddles& t = tw();
     const int shift = n == kN ? 0 : 1; // the 10 bit reversal of i < 1024 is the 11 bit one shifted down
@@ -68,7 +76,31 @@ void inverseFft (float* re, float* im, int n = kN) noexcept
     {
         const int half = len >> 1, step = kN / len;
         for (int i = 0; i < n; i += len)
-            for (int k = 0; k < half; ++k)
+        {
+            int k = 0;
+#if SB_NEON
+            // four butterflies at a time with the operations of the scalar loop below in the same order (the twiddles are the same values, read side by side): the same bits
+            if (! scalarOnly && half >= 4)
+            {
+                const float* wr4 = t.stageC + (half - 1);
+                const float* wi4 = t.stageS + (half - 1);
+                for (; k < half; k += 4)
+                {
+                    const int a = i + k, b = a + half;
+                    const float32x4_t wr = vld1q_f32 (wr4 + k), wi = vld1q_f32 (wi4 + k);
+                    const float32x4_t rb = vld1q_f32 (re + b), ib = vld1q_f32 (im + b);
+                    const float32x4_t xr = vsubq_f32 (vmulq_f32 (rb, wr), vmulq_f32 (ib, wi)), xi = vaddq_f32 (vmulq_f32 (rb, wi), vmulq_f32 (ib, wr));
+                    const float32x4_t ra = vld1q_f32 (re + a), ia = vld1q_f32 (im + a);
+                    vst1q_f32 (re + b, vsubq_f32 (ra, xr));
+                    vst1q_f32 (im + b, vsubq_f32 (ia, xi));
+                    vst1q_f32 (re + a, vaddq_f32 (ra, xr));
+                    vst1q_f32 (im + a, vaddq_f32 (ia, xi));
+                }
+            }
+#else
+            (void) scalarOnly;
+#endif
+            for (; k < half; ++k)
             {
                 const float wr = t.cs[k * step], wi = t.sn[k * step];
                 const int a = i + k, b = a + half;
@@ -78,12 +110,13 @@ void inverseFft (float* re, float* im, int n = kN) noexcept
                 re[a] += xr;
                 im[a] += xi;
             }
+        }
     }
 }
 } // namespace
 
 void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int type, float m, int maxHarmonic, float phaseInc, double hostRate, float* out,
-                      MorphScratch& sc, bool fast) noexcept
+                      MorphScratch& sc, bool fast, bool scalarTransform) noexcept
 {
     const int frames = wt.numFrames();
     const int f0 = std::clamp (static_cast<int> (framePos), 0, std::max (frames - 1, 0));
@@ -343,7 +376,7 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
             zr[k] = er - oi; // E + j O
             zi[k] = ei + orr;
         }
-        inverseFft (zr, zi, kM);
+        inverseFft (zr, zi, kM, scalarTransform);
         for (int m = 0; m < kM; ++m)
         {
             dst[2 * m] = zr[m];
@@ -352,7 +385,7 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
     }
     else
     {
-        inverseFft (sc.re, sc.im);
+        inverseFft (sc.re, sc.im, kN, scalarTransform);
         for (int i = 0; i < kN; ++i)
             dst[i] = sc.re[i];
     }

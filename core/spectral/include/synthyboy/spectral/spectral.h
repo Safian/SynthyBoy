@@ -90,6 +90,16 @@ struct Scratch
     float mag[kBins], freq[kBins], theta[kBins];
     float om[kBins], of[kBins], oth[kBins];
     float tm[kBins], tf[kBins];
+    // the block kernels of a frame (SpectralVoice::renderChannelFast): the angles (with a phase twist), the half length transform's output
+    float angle[kBins];
+    float zr[kFftSize / 2], zi[kFftSize / 2];
+    // the gains of the band limit (shapeFrame): they depend on the settings only, so they are kept until the settings change
+    float bandGain[kBins];
+    float combGain[kBins];
+    float combA = -1.0f, combV = -1.0f;
+    float bandLo = -1.0f, bandHi = -1.0f;
+    double bandBinHz = -1.0;
+    bool bandSmooth = false;
 };
 
 /** The per block settings of a voice. */
@@ -139,6 +149,9 @@ public:
         that the note starts at full level. */
     void noteOn (const Analysis* analysis, const SpectralParams& p, float startFraction) noexcept;
     void releaseLoop() noexcept { released_ = true; }
+    /** Measurements only (the bench's --scalar-content): synthesise the frames with the reference code (the full length transform of the mirrored spectrum, std::sin / std::cos / std::fmod per
+        bin, one product per sample of the overlap add) instead of the block kernels of kernels.h. The two agree to rounding (a few 1e-7 of the largest sample, tests/test_spectral.cpp). */
+    void setReferenceKernels (bool on) noexcept { reference_ = on; }
     /** Renders numFrames samples into left / right (overwritten). */
     void process (const SpectralParams& p, float* left, float* right, int numFrames) noexcept;
 
@@ -149,9 +162,13 @@ private:
     void synthesizeHop (const SpectralParams& p, bool advance) noexcept;
     void advanceHead (const SpectralParams& p) noexcept;
     void renderChannel (const SpectralParams& p, int ch, double frame, bool transientHit) noexcept;
+    /** `reuseShape`: the shaped bins (scratch.om / of / oth) and `twist` are those of the previous call for this channel, nothing has touched them since (the priming of a note). */
+    void renderChannelFast (const SpectralParams& p, int ch, double frame, bool transientHit, bool reuseShape = false, float* twistState = nullptr) noexcept;
+    void primeFast (const SpectralParams& p) noexcept;
 
     const Analysis* analysis_ = nullptr;
     double hostRate_ = 48000.0;
+    bool reference_ = false;
     bool active_ = false, released_ = false, headDone_ = false;
     double head_ = 0.0;
     int headDirection_ = 1;
