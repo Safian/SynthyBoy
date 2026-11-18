@@ -606,3 +606,127 @@ TEST (voice_opt_voice_state_is_bit_identical)
     std::printf ("%d voice patches, %d differ, %.1f s\n", patches, failed, std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count());
     CHECK_EQ (failed, 0);
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// V4: the zero skip of the matrix, every combination of the special values of what one () reads
+
+namespace
+{
+struct SlotGridResult
+{
+    long long cases = 0, skipped = 0, failed = 0;
+};
+
+/** One slot (slot 1: macro 1, aux macro 2, on `dest`), or with `viaAmount` that slot on the amount of slot 2 (slot 2: Fixed -> osc1.tune at 50 %); every source / aux value of `values`
+    in both lanes; the reference evaluation against the one with the skip, delta, deltaRight, the touched list and the slot state compared bit for bit. */
+void slotGrid (SlotGridResult& res, float power, bool bipolar, float rise, bool withAux, float auxPower, float auxOut, float amount, float delayMs, bool viaAmount)
+{
+    std::vector<float> base (kMaxParams, 0.0f);
+    for (size_t i = 0; i < paramCount(); ++i)
+        base[i] = paramTable()[i].def;
+    const ModSlotParams& sp = paramIndex().slot[0];
+    const int tune = idxOf ("osc1.tune");
+    base[static_cast<size_t> (sp.source)] = static_cast<float> (kSrcMacro1);
+    base[static_cast<size_t> (sp.destination)] = static_cast<float> (modDestinationChoiceOf (static_cast<size_t> (viaAmount ? paramIndex().slot[1].amount : tune)));
+    base[static_cast<size_t> (sp.amount)] = amount * 100.0f;
+    base[static_cast<size_t> (sp.power)] = power;
+    base[static_cast<size_t> (sp.bipolar)] = bipolar ? 1.0f : 0.0f;
+    base[static_cast<size_t> (sp.auxSource)] = withAux ? static_cast<float> (kSrcMacro1 + 1) : 0.0f;
+    base[static_cast<size_t> (sp.auxPower)] = auxPower;
+    base[static_cast<size_t> (sp.auxOutput)] = auxOut * 100.0f;
+    base[static_cast<size_t> (sp.rise)] = rise;
+    base[static_cast<size_t> (sp.delay)] = delayMs;
+    if (viaAmount)
+    {
+        const ModSlotParams& s2 = paramIndex().slot[1];
+        base[static_cast<size_t> (s2.source)] = static_cast<float> (kSrcFixed);
+        base[static_cast<size_t> (s2.destination)] = static_cast<float> (modDestinationChoiceOf (static_cast<size_t> (tune)));
+        base[static_cast<size_t> (s2.amount)] = 50.0f;
+    }
+    ModMatrix m;
+    m.compile (base.data());
+    static const float kValues[] = { 0.0f, -0.0f, -1.0e-40f, -0.5f, -INFINITY, NAN, 1.0e-40f, 0.25f, 1.0f, 2.0f, INFINITY };
+    static const float kAux[] = { 0.0f, NAN, 0.5f, 1.0f, INFINITY, -1.0f };
+    std::vector<float> dL[2], dR[2];
+    for (int k = 0; k < 2; ++k)
+    {
+        dL[k].assign (paramCount(), 0.0f);
+        dR[k].assign (paramCount(), 0.0f);
+    }
+    const std::vector<float> auxSet = withAux ? std::vector<float> (std::begin (kAux), std::end (kAux)) : std::vector<float> { 0.0f };
+    for (float xl : kValues)
+        for (float xr : kValues)
+            for (float al : auxSet)
+                for (float ar : auxSet)
+                {
+                    float srcL[kNumSourceIds] = {}, srcRv[kNumSourceIds] = {};
+                    srcL[kSrcMacro1] = xl;
+                    srcRv[kSrcMacro1] = xr;
+                    srcL[kSrcMacro1 + 1] = al;
+                    srcRv[kSrcMacro1 + 1] = ar;
+                    srcL[kSrcFixed] = srcRv[kSrcFixed] = 1.0f;
+                    int touched[2][kNumModSlots] = {}, num[2] = {};
+                    SlotState state[2][kNumModSlots];
+                    for (int k = 0; k < 2; ++k)
+                    {
+                        EvalContext ctx;
+                        ctx.src = srcL;
+                        ctx.srcR = srcRv;
+                        ctx.delta = dL[k].data();
+                        ctx.deltaRight = dR[k].data();
+                        ctx.touched = touched[k];
+                        ctx.numTouched = &num[k];
+                        ctx.maxTouched = kNumModSlots;
+                        ctx.state = state[k];
+                        ctx.dt = 32.0f / 44100.0f;
+                        ctx.voiceAge = 0.01f;
+                        ctx.reference = k == 0;
+                        m.evaluate (ctx);
+                    }
+                    ++res.cases;
+                    const bool predicted = !bipolar && !(rise > 0.0f) && std::isfinite (power) && xl <= 0.0f && xr <= 0.0f && amount == amount
+                                           && (!withAux || (std::isfinite (auxPower) && std::fabs (auxPower) <= 80.0f && std::isfinite (auxOut) && al == al && ar == ar));
+                    res.skipped += predicted ? 1 : 0;
+                    bool same = num[0] == num[1] && std::memcmp (touched[0], touched[1], sizeof touched[0]) == 0
+                                && std::memcmp (dL[0].data(), dL[1].data(), dL[0].size() * 4) == 0 && std::memcmp (dR[0].data(), dR[1].data(), dR[0].size() * 4) == 0;
+                    for (int q = 0; q < kNumModSlots && same; ++q)
+                        same = std::memcmp (&state[0][q].heldL, &state[1][q].heldL, 4) == 0 && std::memcmp (&state[0][q].heldR, &state[1][q].heldR, 4) == 0 && state[0][q].init == state[1][q].init;
+                    if (!same)
+                    {
+                        if (res.failed < 5)
+                            std::printf ("matrix slot: differs for power %g bipolar %d rise %g aux %d (power %g, out %g) amount %g delay %g via amount %d, source %g / %g, aux %g / %g\n",
+                                         static_cast<double> (power), bipolar ? 1 : 0, static_cast<double> (rise), withAux ? 1 : 0, static_cast<double> (auxPower), static_cast<double> (auxOut),
+                                         static_cast<double> (amount), static_cast<double> (delayMs), viaAmount ? 1 : 0, static_cast<double> (xl), static_cast<double> (xr),
+                                         static_cast<double> (al), static_cast<double> (ar));
+                        ++res.failed;
+                    }
+                    for (int k = 0; k < 2; ++k)
+                        for (int q = 0; q < num[k]; ++q)
+                            dL[k][static_cast<size_t> (touched[k][q])] = dR[k][static_cast<size_t> (touched[k][q])] = 0.0f;
+                }
+}
+} // namespace
+
+TEST (matrix_zero_skip_gives_the_same_deltas_for_every_special_value)
+{
+    SlotGridResult res;
+    const auto t0 = std::chrono::steady_clock::now();
+    for (float power : { 0.0f, 5.0e-5f, 1.0f, -12.0f, 100.0f, -100.0f, INFINITY, NAN })
+        for (bool bipolar : { false, true })
+            for (float rise : { 0.0f, 5.0f, NAN })
+                for (float amount : { 0.5f, -1.0f, -0.0f, NAN, 1.0e-40f })
+                    for (float delayMs : { 0.0f, 50.0f })
+                        for (bool viaAmount : { false, true })
+                        {
+                            if ((bipolar || rise != 0.0f) && power != 0.0f && power != 100.0f)
+                                continue; // (a bipolar or slewed slot is never skipped: two powers of them are enough)
+                            slotGrid (res, power, bipolar, rise, false, 0.0f, 1.0f, amount, delayMs, viaAmount);
+                            for (float auxPower : { 0.0f, 2.0f, -85.0f, -95.0f, 95.0f, 80.0f, INFINITY, NAN })
+                                for (float auxOut : { 1.0f, 0.0f, INFINITY })
+                                    slotGrid (res, power, bipolar, rise, true, auxPower, auxOut, amount, delayMs, viaAmount);
+                        }
+    std::printf ("%lld slot evaluations, %lld with the skip, %lld differ, %.1f s\n", res.cases, res.skipped, res.failed,
+                 std::chrono::duration<double> (std::chrono::steady_clock::now() - t0).count());
+    CHECK (res.skipped > 100000);
+    CHECK_EQ (res.failed, 0);
+}

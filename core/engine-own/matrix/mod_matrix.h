@@ -63,6 +63,10 @@ struct CompiledSlot
     float delayMs = 0.0f, delayBeats = 0.0f;
     bool delaySync = false;
     const CompiledModCurve* curve = nullptr;
+    /** A source <= 0 in both lanes gives an output of +-0 (CPU-REVIEW-VOICE-MOD.md V4): no curve, not bipolar, no slew, a finite power and width, and an aux transform that gives a finite
+        value for every aux value that is not NaN (finite aux power of at most 80 in size, finite aux output). ModMatrix::evaluate then skips the slot; the conditions and why they suffice:
+        mod_matrix.cpp, test_own_voice_opt.cpp (matrix_zero_skip_...). */
+    bool zeroSkip = false;
 };
 
 /** The per voice state of the slots (slew, delay timer): reset at a note start. */

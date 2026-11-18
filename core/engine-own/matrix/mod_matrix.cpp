@@ -299,6 +299,14 @@ void ModMatrix::compile (const float* base) noexcept
             c.amountSlot = owner - 100;
         }
         c.curve = (content != nullptr && content->modCurve[static_cast<size_t> (s)].present) ? &content->modCurve[static_cast<size_t> (s)] : nullptr;
+        // V4: with a source x <= 0 (+-0, negative, -inf; not NaN) in a lane, one () computes clamp01 (x) = +-0 (no curve, no slew: the test of one () itself), law = copysign
+        // (powerShape (|+-0|, -power), +-0): +0 for |power| < 1e-4, else expm1 (+-0) / expm1 (-power) = +-0 for every finite power (expm1 of a finite value is finite, -1 or +inf, and not 0
+        // for |power| >= 1e-4); not bipolar (2x - 1 would be -1). Then +-0 * amount * width * aux * gate is +-0 when the other factors are finite: the amount (checked per evaluation:
+        // not NaN, it is clamped), the width, the gate (0 or 1) and the aux factor: clamp01 (a) of an aux value a that is not NaN is in [0, 1] (or -0), powerShape (v, -auxPower) of it
+        // is finite for a finite |auxPower| <= 80 (expm1 (p v) <= expm1 (80) for v <= 1, and the denominator is not 0), 1 - v is finite, and so is v * auxOut for a finite auxOut. The
+        // output +-0 of both lanes is then skipped by the tests after one () anyway (dl == 0 && dr == 0; in the amount loop a +-0 added to a sum that started at +0 changes nothing).
+        c.zeroSkip = c.curve == nullptr && !c.bipolar && !(c.riseMs > 0.0f || c.fallMs > 0.0f) && std::isfinite (c.power) && std::isfinite (c.width)
+                     && (aux == 0 || (std::isfinite (c.auxPower) && std::fabs (c.auxPower) <= 80.0f && std::isfinite (c.auxOut)));
         const uint64_t bits = (uint64_t (1) << src) | (aux != 0 ? uint64_t (1) << aux : uint64_t (0));
         srcMask |= bits;
         if (c.global)
@@ -333,6 +341,12 @@ void ModMatrix::evaluate (const EvalContext& ctx) const noexcept
     {
         const uint64_t bits = (uint64_t (1) << c.source) | (c.aux != 0 ? uint64_t (1) << c.aux : uint64_t (0));
         return (bits & ~ctx.sourceMask) == 0;
+    };
+    // V4: a slot whose output is +-0 in both lanes (CompiledSlot::zeroSkip, the source <= 0 in both lanes, finite amounts, an aux source that is not NaN) adds nothing: not evaluated
+    auto zeroOut = [&] (const CompiledSlot& c, float amL, float amR)
+    {
+        return !ctx.reference && c.zeroSkip && ctx.src[c.source] <= 0.0f && srcR[c.source] <= 0.0f && amL == amL && amR == amR
+               && (c.aux == 0 || (ctx.src[c.aux] == ctx.src[c.aux] && srcR[c.aux] == srcR[c.aux]));
     };
     auto one = [&] (const CompiledSlot& c, float amountL, float amountR, float& outL, float& outR)
     {
@@ -401,7 +415,7 @@ void ModMatrix::evaluate (const EvalContext& ctx) const noexcept
         for (int i = 0; i < count; ++i)
         {
             const CompiledSlot& c = slots[i];
-            if (!c.amountDest || c.amount == 0.0f || !allowed (c))
+            if (!c.amountDest || c.amount == 0.0f || !allowed (c) || zeroOut (c, c.amount, c.amount))
                 continue;
             float dl, dr;
             one (c, c.amount, c.amount, dl, dr);
@@ -422,7 +436,7 @@ void ModMatrix::evaluate (const EvalContext& ctx) const noexcept
             amL = std::clamp (amL + amountDeltaL[c.index], -1.0f, 1.0f);
             amR = std::clamp (amR + amountDeltaR[c.index], -1.0f, 1.0f);
         }
-        if (amL == 0.0f && amR == 0.0f)
+        if ((amL == 0.0f && amR == 0.0f) || zeroOut (c, amL, amR))
             continue;
         float dl, dr;
         one (c, amL, amR, dl, dr);
