@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 //   synthyboy_preset_render --presets DIR [--engine vital|own] [--tier low|medium|high|all] [--summary-only] [--velocity]
-//                           [--wav OUTDIR] [--filter SUBSTRING] [--sr 48000] [--content-dir DIR] [--scalar-content]
+//                           [--wav OUTDIR] [--filter SUBSTRING] [--sr 48000] [--content-dir DIR] [--scalar-content] [--hold SECONDS]
 //   --scalar-content  the own engine runs the reference code of the Sample / Granular / Spectral / Multisample oscillators (setOwnSavingsOff, kOwnSavingContentKernels): render once with and once
 //                     without it to compare the two (scripts/content-kernel-compare.py)
 //
@@ -65,6 +65,7 @@ struct Options
     double sampleRate = 48000.0;
     const IContentStore* contentStore = nullptr;
     bool scalarContent = false; // --scalar-content
+    double hold = 0.0;          // --hold SECONDS: the held time of the single note and of the chord (default 1.5 s / 1 s)
     std::string contentDir; // root of the content packs the presets reference (<root>/<pack>/<file>); default: PRESETS/content when it exists
 };
 
@@ -280,6 +281,7 @@ int main (int argc, char** argv)
         else if (a == "--sr") o.sampleRate = std::atof (next().c_str());
         else if (a == "--content-dir") o.contentDir = next();
         else if (a == "--scalar-content") o.scalarContent = true;
+        else if (a == "--hold") o.hold = std::atof (next().c_str());
         else
         {
             std::fprintf (stderr, "preset-render: unknown argument %s\n", a.c_str());
@@ -374,7 +376,7 @@ int main (int argc, char** argv)
             const std::vector<int> keys { p.meta.category == "Bass" ? 24 + 12 : 60 };
             const std::vector<int> chord { keys[0], keys[0] + 4, keys[0] + 7, keys[0] + 12 };
             const bool wav = ! o.wavDir.empty();
-            const Render s = render (o, q, p, keys, 0.8f, kHoldSingle, true, wav);
+            const Render s = render (o, q, p, keys, 0.8f, o.hold > 0.0 ? o.hold : kHoldSingle, true, wav);
 
             double chordHold = kHoldChord;
             if (o.sustainAware)
@@ -389,6 +391,8 @@ int main (int argc, char** argv)
                 const double attSec = (std::max (0.0f, att) + std::max (0.0f, del)) / 1000.0;
                 chordHold = std::min (5.0, std::max (1.0, 0.4 + attSec));
             }
+            if (o.hold > 0.0)
+                chordHold = o.hold;
             const Render c = render (o, q, p, chord, 1.0f, chordHold, false, false);
 
             std::vector<std::string> problems;
