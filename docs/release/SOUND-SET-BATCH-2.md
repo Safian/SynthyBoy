@@ -35,28 +35,84 @@ What was measured instead (`scripts/measure-batch2.py`, which runs `synthyboy_pr
 - `content/factory-wavetables/` = pack `com.safian.synthyboy.factory-wavetables`, kind wavetables.
 - `content/factory-samples/` = pack `com.safian.synthyboy.factory-samples`, kind samples: `samples/` (12 files), `instruments/<name>/<name>.sfz` with `samples/` below it (3 instruments), `impulses/` (3 files).
 
-**Size: 11.5 MB (11492500 bytes) for 54 files** (wavetables 3.8 MB, samples, instruments and impulses 7.7 MB), under the 12 MB target. They are committed (the convention of `content/presets`) and `scripts/build-mpc.sh` copies them to `Content/packs/<pack id>/` next to `Content/presets`, where the plugin's content store (`UserContentStore`, `addPackRoot (Content/packs)`) looks for the files a preset names. `plugin.json` does not declare them yet (a release decision: `contentpack.py build-all` would then build two more zips); the desktop shells have no pack root, so the batch 2 presets that need files are for the MPC build today.
+**Size: 26.2 MB (26188945 bytes) for 110 files** (wavetables 18.5 MB, samples, instruments and impulses 7.7 MB), the wavetables under the 25 MB line. They are committed (the convention of `content/presets`) and `scripts/build-mpc.sh` copies them to `Content/packs/<pack id>/` next to `Content/presets`, where the plugin's content store (`UserContentStore`, `addPackRoot (Content/packs)`) looks for the files a preset names. `plugin.json` does not declare them yet (a release decision: `contentpack.py build-all` would then build two more zips); the desktop shells have no pack root, so the batch 2 presets that need files are for the MPC build today.
 
-**Wavetables (16, mono 16 bit WAV, 2048 samples per frame, the format `core/engine-own/osc/content_set.cpp` reads: a file of N x 2048 samples is a table of N frames):**
+**Wavetables (72, mono 16 bit WAV, 2048 samples per frame, the format `core/engine-own/osc/content_set.cpp` reads: a file of N x 2048 samples is a table of N frames):**
 
 | File | Frames | Bytes | What it is |
 |---|---|---|---|
-| `additive_bell_strike.wav` | 64 | 262188 | harmonic bell partials, the high ones fading as the frames go on |
-| `additive_glass_harmonica.wav` | 48 | 196652 | a sparse set of partials that opens one by one |
-| `choir_singers_shift.wav` | 48 | 196652 | A, O, U through a male, female and child's vocal tract and back |
-| `fm_feedback_saw.wav` | 64 | 262188 | one operator with feedback 0 -> 1.9 (sine to saw) |
-| `fm_index_sweep.wav` | 64 | 262188 | 2:1 FM, index 0 -> 9 |
-| `fm_ratio_ladder.wav` | 64 | 262188 | FM ratios 1 .. 8, eight frames each, the index rising in each |
-| `formant_sweep_aeiou.wav` | 64 | 262188 | the vowels A E I O U through the formants of a voice at 220 Hz |
-| `harmonic_sieve.wav` | 32 | 131116 | a saw with only every n-th harmonic, n = 1 .. 16 |
-| `metal_comb_sweep.wav` | 64 | 262188 | a comb sweeping through a saw's spectrum |
-| `organ_drawbars_16.wav` | 31 | 127020 | sixteen drawbar registrations (the cycle is the 16 foot fundamental: transpose +12) |
-| `overtone_throat_sweep.wav` | 64 | 262188 | one narrow resonance walking up and down the 4th .. 20th partial |
-| `pwm_dual_phase.wav` | 64 | 262188 | two opposite saws whose distance breathes 8 -> 50 -> 8 % |
-| `pwm_saw_blend.wav` | 64 | 262188 | a pulse sweeping 50 -> 4 % while a saw fades in |
-| `pwm_triple_stack.wav` | 64 | 262188 | three pulse waves with widths walking apart |
-| `ring_mod_ladder.wav` | 64 | 262188 | ring modulation with the integer ratios 2 .. 17 |
-| `sine_fold_sweep.wav` | 64 | 262188 | a sine through a wave folder, gain 0.4 -> 14 |
+| `Analog/octave_saw_stack.wav` | 64 | 262188 | A saw to which a saw an octave up and one two octaves up are added (the 2x weight 0 to 1, the 4x weight 0 to 0.8): the layered octaves of an organ-like analog stack; transpose down for a sub-octave blend. |
+| `Analog/pulse_width_sweep.wav` | 64 | 262188 | A plain pulse whose width narrows from 50 % (square) to 5 % (thin reedy pulse). |
+| `Analog/pwm_dual_phase.wav` | 64 | 262188 | Two opposite saws, the second a variable distance behind: the distance breathes 8 % to 50 % to 8 %, pulse to thin comb. |
+| `Analog/pwm_saw_blend.wav` | 64 | 262188 | A pulse whose width sweeps 50 % to 4 % while a saw fades in under it: the width modulated saw of string machines. |
+| `Analog/pwm_triple_stack.wav` | 64 | 262188 | Three pulse waves stacked, their widths walking apart from 50 % towards 6 % and 94 %: a PWM unison in one table. |
+| `Analog/saw_filter_sweep.wav` | 64 | 262188 | A saw through a resonant 4 pole low pass: the cutoff opens from the 2nd to the 150th harmonic (slow start, fast end), resonance peak riding on it. |
+| `Analog/saw_soft_clip.wav` | 64 | 262188 | A saw driven into a tanh soft clipper, the drive rising 0.5 to 14: saw to a rounded square-like overdrive. |
+| `Analog/saw_stack_spread.wav` | 64 | 262188 | Seven saws whose phases fan out from together to +-0.45 cycle: a single saw thins into a staircase and a comb, the supersaw look frozen in one cycle. |
+| `Analog/sync_saw_sweep.wav` | 64 | 262188 | Hard sync with a saw slave, ratio 1 to 7: a rougher, brighter sweep than the sine slave. |
+| `Analog/sync_sine_sweep.wav` | 64 | 262188 | Hard sync: a sine slave resets every cycle and its ratio rises 1 to 9; the classic searing formant sweep. |
+| `Analog/triangle_fold.wav` | 64 | 262188 | A triangle through a folder, the gain 1 to 7.5: triangle, then folded humps appear (the west coast fold on a smooth source). |
+| `Analog/triangle_to_saw.wav` | 64 | 262188 | A cross fade, level matched, from a pure triangle (frame 0) to a saw (frame 63): the odd-only soft tone grows the even partials. |
+| `Digital/bit_reduced_sine.wav` | 64 | 262188 | A sine with a little saw, quantised to fewer and fewer bits (about 10 down to 1.8): smooth tone to a stepped, gritty one. |
+| `Digital/fm_chain_123.wav` | 64 | 262188 | A three operator chain: carrier 1, modulator 2 (index 0 to 3) itself modulated by an operator at 3 (index 0 to 2.5): the sweep passes through brass-like and bell-like colours. |
+| `Digital/fm_feedback_saw.wav` | 64 | 262188 | One operator with feedback 0 to 1.9: sine, saw, noisy saw. |
+| `Digital/fm_index_sweep.wav` | 64 | 262188 | 2:1 FM, the index rising 0 to 9: sine, brass, metal. |
+| `Digital/fm_ratio_ladder.wav` | 64 | 262188 | Modulator ratios 1 to 8, eight frames each, the index rising 1 to 5 inside each step: the character jumps at every step and sweeps inside it. |
+| `Digital/fm_triple_index.wav` | 64 | 262188 | FM with the modulator at 3 times the carrier, the index rising 0 to 8 (slow start): sine, hollow odd-ish tone, bright glassy FM. |
+| `Digital/gauss_formant_sweep.wav` | 64 | 262188 | A gaussian windowed cosine burst once per cycle (a digital formant), its centre frequency swept 1.5 to 26 harmonics: a hard, nasal, vowel-less formant sweep. |
+| `Digital/pd_knee.wav` | 64 | 262188 | A cosine whose phase has a knee moved from the middle (0.5) to 0.04 of the cycle: sine to a pulse-like pinched wave. |
+| `Digital/pd_resonance.wav` | 64 | 262188 | A sine with a falling window whose frequency is swept 1 to 16 cycles per period: the resonant filter sweep of phase distortion synthesis. |
+| `Digital/sine_fold_sweep.wav` | 64 | 262188 | A sine through a wave folder, the gain 0.4 to 14: sine, triangle, dense folded metal. |
+| `Digital/sine_to_square_shaper.wav` | 64 | 262188 | A sine pushed through a power-law shaper, the exponent falling 1.0 to 0.06: sine, rounded square, hard square. |
+| `Digital/step_sequence_morph.wav` | 64 | 262188 | Eight levels per cycle read like a step sequencer pattern that morphs through five random patterns (slewed corners): wave sequencing staircases. |
+| `Metallic/bell_pitch_walk.wav` | 64 | 262188 | A church-bell family of twelve partials (hum 0.5, prime, tierce 1.18, quint 1.5, nominal 2 ...) whose prime walks from the 2nd to the 12th harmonic: the bell grows from a dull clang to a bright shimmer. |
+| `Metallic/bowl_beating_pairs.wav` | 64 | 262188 | Singing bowl modes (1, 2.7, 5.2, 8.4 ...) each split into a close pair whose spacing opens from 0 to 1.4 harmonics: the slow beating of a rubbed bowl becomes a wide chorus. |
+| `Metallic/cymbal_cloud.wav` | 64 | 262188 | Thirty-six partials scattered between the 6th and the 160th harmonic (seeded), each wobbling by up to 6 harmonics once over the scan: a shimmering, never repeating metal cloud. |
+| `Metallic/drum_membrane_modes.wav` | 64 | 262188 | The modes of an ideal circular membrane (1, 1.59, 2.14, 2.30, 2.65 ...) with the fundamental walking from harmonic 2 to 10: a tom to a metallic tambourine-like drum. |
+| `Metallic/free_bar_modes.wav` | 64 | 262188 | The modes of a free bar (1, 2.756, 5.404, 8.933, 13.34, 18.64 ...) with the fundamental walking from harmonic 1 to 6: vibraphone and marimba bar colours from soft to bright. |
+| `Metallic/gong_modes_swell.wav` | 64 | 262188 | The thirteen modes of the factory gong sample around the 3rd harmonic; the upper modes swell from 45 % to full weight (bright^n): the bloom of a struck gong. |
+| `Metallic/metal_comb_sweep.wav` | 64 | 262188 | A comb sweeps through a saw's spectrum (spacing 3 to 16 harmonics): ringing metal. |
+| `Metallic/random_metal_morph.wav` | 64 | 262188 | Six seeded random sets of 14 inharmonic partials (5th to 150th harmonic) cross faded one into the next: an anvil, a pipe, a can, each blending into the following. |
+| `Metallic/resonant_comb_metal.wav` | 64 | 262188 | A falling saw spectrum through a resonant (feedback) comb, delay 0.03 to 0.4 of the cycle, feedback 0.9, phases scattered: sharp ringing peaks that drift like a flanged cymbal. |
+| `Metallic/ring_mod_glide.wav` | 64 | 262188 | A sine with its octave, ring modulated by a sine whose ratio glides continuously from 1 to 9.5: the sum and difference lines slide through the spectrum (non-integer ratios give inharmonic clang). |
+| `Metallic/ring_mod_ladder.wav` | 64 | 262188 | Ring modulation of two sines at the integer ratios 2 to 17, four frames each, the depth rising inside a step. |
+| `Metallic/ring_mod_saw_glide.wav` | 64 | 262188 | A 24 harmonic saw ring modulated by a sine gliding 0.5 to 12.5 harmonics (with a quarter of the dry saw kept): dense, inharmonic metal that resolves at the integer ratios. |
+| `Noise/breath_air_bumps.wav` | 64 | 262188 | Noise through two broad resonances (like the chiff and tube of a flute): the lower rises from the 18th to the 60th harmonic, the upper from the 70th to the 190th. |
+| `Noise/colour_tilt_sweep.wav` | 64 | 262188 | One frozen noise spectrum whose tilt moves from -1 (blue, hissy) through white and pink to 2.2 (brown, rumbling): the colour of noise as a scan. |
+| `Noise/crackle_pulses.wav` | 64 | 262188 | Three clicks per cycle growing to 64 clicks (seeded positions, signs and a short decay tail): a few ticks become a crackling, then a dense rattle. |
+| `Noise/frozen_noise_variations.wav` | 64 | 262188 | Four different frozen noises (seeds 11 to 14) cross faded one into the next: the texture changes character while the colour stays the same. |
+| `Noise/noise_band_sweep.wav` | 64 | 262188 | Frozen white noise with one narrow band (a quarter octave) lifted 30 dB, its centre rising from the 3rd to the 300th harmonic: whistling wind sweeping up. |
+| `Noise/noise_burst_widening.wav` | 64 | 262188 | A gaussian burst of noise once per cycle that widens from 6 % to the whole cycle: a click, a puff, a steady noise (the scan is the duty cycle of a noise gate). |
+| `Noise/noise_notch_sweep.wav` | 64 | 262188 | Frozen noise (slightly dark) with a deep notch (34 dB) sweeping from the 4th to the 250th harmonic: the phaser-on-noise sound. |
+| `Noise/noise_to_saw.wav` | 64 | 262188 | A level matched cross fade from frozen noise to a 200 harmonic saw: noise that gathers into a buzzing tone. |
+| `Noise/noise_to_sine.wav` | 64 | 262188 | A level matched cross fade from frozen noise to a pure sine: a breath that condenses into a tone. |
+| `Noise/pink_lowpass_sweep.wav` | 64 | 262188 | Frozen pink noise through a resonant 4 pole low pass whose cutoff falls from the 300th to the 2nd harmonic (quickly at first): a filter closing on noise. |
+| `Noise/rumble_to_hiss.wav` | 64 | 262188 | A cross fade, level matched, from low rumble (noise below the 14th harmonic) to bright hiss (noise above the 120th): the energy moves from the bottom to the top. |
+| `Noise/sparse_spectrum_fill.wav` | 64 | 262188 | A noise spectrum with only 2 % of the harmonics present, filling to 100 %: a few ringing lines, a crackling comb, then full noise. |
+| `Spectral/additive_bell_strike.wav` | 64 | 262188 | Additive bell partials (a hum, a prime, a tierce, a nominal cluster) whose high members fade as the frames go on. |
+| `Spectral/additive_glass_harmonica.wav` | 48 | 196652 | A sparse set of partials (1 3 5 7 ...) that opens one by one and closes again. |
+| `Spectral/bore_odd_to_even.wav` | 64 | 262188 | A cross fade from odd harmonics only (a cylindrical reed) to the full series (a conical bore), level matched: clarinet colour to saxophone colour. |
+| `Spectral/comb_spectrum_slide.wav` | 64 | 262188 | A comb of period 6 harmonics, depth 90 %, slides across the spectrum of a gently falling series by one full period: the notches walk through the partials. |
+| `Spectral/dispersion_sweep.wav` | 64 | 262188 | A flat 1/n spectrum whose partial phases rotate with n squared: the magnitudes never change, the waveform sweeps from a saw through chirps to noise-like ripples (a phase-only scan). |
+| `Spectral/even_harmonic_ladder.wav` | 64 | 262188 | The fundamental plus even harmonics only (octave, 4th, 6th ...) up to the 60th: a sine grows an octave-stacked, reedy tone. |
+| `Spectral/harmonic_band_sweep.wav` | 64 | 262188 | A 1/n series with one band of harmonics lifted 24 dB, its centre rising from the 1.5th to the 120th partial (accelerating): a swept bandpass written into the cycle. |
+| `Spectral/harmonic_sieve.wav` | 32 | 131116 | A saw with only every n-th harmonic kept, n = 1 to 16, two frames each: octaves, fifths, ghost chords. |
+| `Spectral/odd_harmonic_ladder.wav` | 64 | 262188 | Odd harmonics (1/n) are added one after the other, 1 up to the 60th: a pure sine grows into a hollow square-like tone. |
+| `Spectral/organ_drawbars_16.wav` | 31 | 127020 | Sixteen drawbar registrations of a tonewheel organ with an interpolated frame between each (31 frames); the cycle is the 16 foot fundamental: transpose +12. |
+| `Spectral/prime_harmonics.wav` | 64 | 262188 | Only prime-numbered harmonics (2 3 5 7 11 ...) plus the fundamental, more of them as the frames go on: an irregular, bell-ish spectrum that is still a pitch. |
+| `Spectral/spectral_tilt_sweep.wav` | 64 | 262188 | The harmonic roll-off steepens from 0.3 (buzzy) to 2.6 (almost a sine): the brightness control as a table. |
+| `Vocal/breathy_to_pressed.wav` | 64 | 262188 | One vowel (ah, men, 150 Hz) with the voice source changing: steep tilt, boosted fundamental and noise (breathy) to a flat tilt (pressed, shouted). |
+| `Vocal/choir_blend.wav` | 64 | 262188 | Men, women and children sing the vowel sequence ah, aw, oo, eh, ee, ah together (scattered phases, level matched mix) at 175 Hz. |
+| `Vocal/choir_singers_shift.wav` | 48 | 196652 | The vowels A, O, U through a male, a female and a child's vocal tract and back: a choir whose singers change (48 frames). |
+| `Vocal/diphthong_series.wav` | 64 | 262188 | Eight diphthongs of eight frames each (ah-ih, ah-oo, aw-ih, eh-ih, ee-oo, oo-ah, ae-aw, eh-ah), each gliding from its first to its second vowel; a stepped table, the jump between diphthongs is intended. |
+| `Vocal/formant_sweep_aeiou.wav` | 64 | 262188 | The vowels A E I O U in turn through the formants of a voice at 220 Hz (best range A2 to A4). |
+| `Vocal/overtone_duet.wav` | 64 | 262188 | Two narrow resonances over the same drone cross in opposite directions: one climbs from the 4th to the 20th partial while the other falls from the 20th to the 4th. |
+| `Vocal/overtone_throat_sweep.wav` | 64 | 262188 | A narrow resonance walks up the harmonic series from the 4th to the 20th partial and back over a fixed drone. |
+| `Vocal/tract_length_sweep.wav` | 64 | 262188 | The vowel ah with all formants scaled 0.6 to 1.7: a giant to a chipmunk (the vocal tract length), pitch fixed at 150 Hz. |
+| `Vocal/vowel_cycle_children.wav` | 64 | 262188 | The vowel triangle walked in eight steps (ee, ih, eh, ae, ah, aw, uh-oo, oo) with the average formants of children (Peterson and Barney 1952), voice at 262 Hz; best range about an octave around that pitch. |
+| `Vocal/vowel_cycle_men.wav` | 64 | 262188 | The vowel triangle walked in eight steps (ee, ih, eh, ae, ah, aw, uh-oo, oo) with the average formants of men (Peterson and Barney 1952), voice at 130 Hz; best range about an octave around that pitch. |
+| `Vocal/vowel_cycle_women.wav` | 64 | 262188 | The vowel triangle walked in eight steps (ee, ih, eh, ae, ah, aw, uh-oo, oo) with the average formants of women (Peterson and Barney 1952), voice at 220 Hz; best range about an octave around that pitch. |
+| `Vocal/whisper_to_voiced.wav` | 64 | 262188 | The vowel ah (men, 150 Hz): frame 0 is a whisper (formant shaped noise: random phases and amplitudes), the last frame the voiced pulse train; a level matched cross fade. |
 
 **Samples (12, 44.1 kHz, 16 bit, peak -1 dBFS; pitched ones tuned to MIDI 60 except where the name says; a `smpl` chunk with the root and the loop where there is one; for the loop and the root the engine reads the preset's own parameters, section 7 item 3):**
 
