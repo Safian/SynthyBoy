@@ -1,4 +1,4 @@
-> Forrás: docs/user-guide/INSTALL.md (commit: 74d2181ef1f72d8c1bebcf755e8696ae94c438c6)
+> Forrás: docs/user-guide/INSTALL.md (commit: 048ddfc383fba7c9b4ebb7775c7d0b7cf392d555)
 
 # SynthyBoy Akai MPC-hez — Telepítés és első lépések
 
@@ -250,3 +250,4 @@ Az alábbi pontok a `docs/MPC.md` fejlesztői mérésein, tesztkörnyezeteken va
 1. **Egyéb MPC hardvermodellek**: A működés és a termikus stabilitás a még nem tesztelt hardvermodelleken (MPC Live I/II, MPC One/One+, MPC X/X SE, MPC Key 37, MPC Live III) nem lett tesztelve, és fizikai eszközökön kell megerősíteni.
 2. **A beállítások kiírásának időzítése (Flush Timing)**: Az eszközön szükséges megerősíteni, hogy a "Show Q-Link Status When Touched" beállítás átkapcsolása a Preferences menüben azonnal kiírja-e a `/data/Settings/MPC/MPC.settings` fájlt a háttértárra, vagy megvárja az alkalmazásból való kilépést / leállítást.
 3. **A Sounds böngésző preset-navigációja**: Fizikai hardveren ellenőrizendő, hogy a grafikus csempe megérintése Sounds módban helyesen listázza-e a `Presets/` mappában lévő `.xpl` preseteket az MPC OS 3.10.1+ összes firmware-verzióján.
+4. **Működés jövőbeli firmware-verziókon**: Az Akai a külső pluginek támogatását kísérleti bővítményként ("External Plugin Support") jelöli; a 3.10.1.12 verzión túli jövőbeli firmware-kiadások megváltoztathatják a mappák beolvasását, a memóriakorlátokat vagy a DRM sík kiosztását.

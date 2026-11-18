@@ -46,7 +46,7 @@ Tartalomjegyzék
 ## 1. Mi ez
 
 A SynthyBoy egy szoftverszintetizátor-plugin Akai MPC hardverekhez (VST2 formátum, amelyet az MPC külső plugin-támogatása tölt be). Három oszcillátorral (A, B, C) rendelkezik, amelyek mindegyike hullámtáblákat (wavetable), multimintás hangszert (multisample), egyetlen hangmintát (sample), szemcséket (grains) vagy spektrumot képes megszólaltatni; ezen kívül tartalmaz egy szuboszcillátort (sub oscillator), egy zajgenerátort (noise generator), két szűrőt (filter), hat burkológörbét (envelope), tíz LFO-t és négy véletlenszerű LFO-t (random LFO), nyolc makrót (macro), egy 64 férőhelyes modulációs mátrixot (mod matrix), 16 effeket (13 effekt és három sávosztó splitter), valamint egy master szekciót hangolással (tuning), MPE támogatással és hangvezérléssel (voice control).
-A hangszerhez 136 gyári preset, valamint egy 72 gyári hullámtáblát (hat kategóriában) tartalmazó gyári tartalomcsomag tartozik.
+A hangszerhez 160 gyári preset, valamint egy 72 gyári hullámtáblát (hat kategóriában) tartalmazó gyári tartalomcsomag tartozik.
 
 **Egyetlen csomag, két hardvergeneráció.** A SynthyBoy egyetlen csomag: a plugin a saját maga által rajzolt képernyőivel fut (nincs második, egyszerűbb változat). A standalone MPC hardverek mindkét generációjára le van fordítva: az első generációra (32 bites) és a második generációra (64 bites); az MPC a hardverhez illeszkedő buildet tölti be.
 
@@ -714,6 +714,12 @@ Két oldal, amelyek a felül található **MAIN** és **TUNING & MPE** gombokkal
 | | ALWAYS | Portamento Always, LED kapcsoló |
 | | SCALED | Portamento Scaled By Interval, LED kapcsoló |
 
+A Master oldal OUTPUT blokkja a következőket tartalmazza:
+- **LIMIT kapcsoló:** A kimeneti limiter, alapértelmezés szerint ki van kapcsolva. Használja a túlvezérlés (clipping) megelőzésére, amikor a kimeneti szinteket magasra állítja.
+- **QUALITY:** 
+  - **NO SMOOTHING:** Kikapcsolja a paraméterek simítását, így a módosítások azonnal ugranak az átúszás helyett (ideális feszes ritmikus kapuzáshoz / gatinghez). A presettel együtt mentődik.
+  - **OVERSAMPLE 4X:** Megtisztítja a hullámtábla-oszcillátor magas hangjait warp nélkül. Megjegyzés: Több processzorkapacitást használ (2x az 1. generációs profilon).
+
 **POLY és az eszköz.** Az oldal lehetővé teszi akár 32 hang beállítását is, de a valóságban megszólaló hangok számát korlátozza az eszköz: **8 a Key 61-en, 16 az XL-en** (7.1 fejezet). A több hanggal elmentett preset egyszerűen az eszköz által megengedett hangszámmal szólal meg.
 
 Q csoportok (olvasási sorrendben): OUTPUT (VOLUME, SPREAD, STEREO, VOICE OVERRIDE), PITCH (TUNE, TRANSPOSE, BEND UP, BEND DOWN), LINK, VOICES (POLY, LEGATO, POLY LEG, PHASE LEG), a VOICES második sora (VEL TRACK, SAME NOTE, STEAL), GLIDE.
@@ -778,7 +784,7 @@ A potméterek jelzik a modulációt: egy jelölő mutatja az élő (modulált) �
 
 ## 7. Presetek és gyári tartalom
 
-A plugin **137 programot** kínál a gazdarendszer felé: az "Init"-et (az alapértelmezett hangszín, 0. program) és 136 gyári presetet hat kategóriában. A lista kategóriák szerint (ábécérendben: Bass, FX, Keys, Lead, Pad, Pluck), azon belül pedig név szerint van rendezve.
+A plugin **161 programot** kínál a gazdarendszer felé: az "Init"-et (az alapértelmezett hangszín, 0. program) és 160 gyári presetet hat kategóriában. A lista kategóriák szerint (ábécérendben: Bass, FX, Keys, Lead, Pad, Pluck), azon belül pedig név szerint van rendezve.
 
 Minden preset `.sbpreset` fájlként van elmentve, amely egy 4-es verziójú `synthyboy-state` dokumentumot tartalmaz, mind a 2637 paraméterkulcsot explicit módon megadva, darabszámban és állapotverzióban megegyezve a motor paramétertáblájával (`docs/params.json`). A forráskódban az állapotformátum verziója 5 (`kStateVersion` 5, `core/include/synthyboy/state.h`), amely a rajzolt LFO formák rácsbeállításait (`grid_x` és `grid_y`) a formával együtt tárolja; a 4-es verziójú presetek és dokumentumok zökkenőmentesen töltődnek be úgy, hogy a rács a pontokból kerül kiszámításra, a 4-es verziójú olvasók pedig biztonságosan olvassák az 5-ös verziójú dokumentumokat.
 
@@ -790,7 +796,7 @@ A SynthyBoy-ban két fő módja van a presetek böngészésének és kiválaszt�
 
 1. **A PRESET mező a plugin fejlécében (VST2 programok, azonnal működik):**
    - Track View vagy Track Edit módban egy Plugin sávon az MPC fejlécében látható az aktuális preset a **PRESET** mezőben.
-   - A **PRESET** mező megérintése megnyitja a gazdarendszer szabványos görgethető programlistáját, amely mind a 137 programot tartalmazza (a 0. "Init" programot, majd a 136 gyári presetet kategória és név szerint rendezve).
+   - A **PRESET** mező megérintése megnyitja a gazdarendszer szabványos görgethető programlistáját, amely mind a 161 programot tartalmazza (a 0. "Init" programot, majd a 160 gyári presetet kategória és név szerint rendezve).
    - Bármelyik presetet megérintve az azonnal betöltődik a motorba.
    - **A "*" jelölés:** A plugin egy " *" jelet fűz a preset neve mögé a fejlécben, valahányszor módosítunk egy paramétert a betöltés után, vagy ha egy elmentett projekt módosított beállításokat állít vissza. A preset újbóli betöltése törli a csillag jelölést. A projekt név szerint jegyzi meg a presetet, és akkor is visszaállítja, ha egy későbbi kiadás frissíti a programlistát; ha a név nem található, az elmentett hangszín presetnév nélkül marad meg.
 
