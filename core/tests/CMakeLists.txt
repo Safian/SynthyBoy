@@ -68,6 +68,13 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
     target_compile_options(synthyboy_test_own_warp_lanes PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
     target_link_libraries(synthyboy_test_own_warp_lanes PRIVATE Threads::Threads)
     add_test(NAME synthyboy_test_own_warp_lanes COMMAND synthyboy_test_own_warp_lanes)
+    # The integer NEON compares (dsp/neon_cmp.h) against the float compares on every bit pattern; header only, links nothing of the engine.
+    add_executable(synthyboy_test_neon_cmp test_neon_cmp.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_neon_cmp PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/engine-own")
+    target_compile_features(synthyboy_test_neon_cmp PRIVATE cxx_std_17)
+    target_compile_options(synthyboy_test_neon_cmp PRIVATE -Wall -Wextra -Wpedantic)
+    target_link_libraries(synthyboy_test_neon_cmp PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_neon_cmp COMMAND synthyboy_test_neon_cmp)
 endif()
 # The NEON inverse transform of the spectral morph cycle against its scalar loops: morph.cpp and the wavetable it needs compiled into the test with the NEON form on (also on Apple's arm64) and
 # without fused multiply-add; it links nothing else of the engine.

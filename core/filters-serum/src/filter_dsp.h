@@ -366,6 +366,16 @@ public:
         if (++writeIndex_ == buffer_.size())
             writeIndex_ = 0;
     }
+    /** write () of a value the caller has sanitized already (the pair kernels sanitize in the lanes): the same store without the scalar compares. */
+    void writeSanitized (float in) noexcept
+    {
+        if (buffer_.empty())
+            return;
+        written_ = true;
+        buffer_[writeIndex_] = in;
+        if (++writeIndex_ == buffer_.size())
+            writeIndex_ = 0;
+    }
 
     /** Where a delay of `delaySamples` reads: the whole samples and the fraction, as read () works them out. A caller that reads the same delay sample after sample
         keeps the tap (pair kernels of filter.cpp). The line must not be empty. */

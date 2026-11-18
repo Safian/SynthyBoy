@@ -248,6 +248,7 @@ public:
         }
         const V vLadderDriveGain = V::set (1.0f + 2.0f * ladderDrive[0], 1.0f + 2.0f * ladderDrive[1]);
         const V vTwoFat = V::all (2.0f * fat);
+        const bool fatOn = fat > 0.001f; // (a per call constant: tested once, not per sample)
 
         V smoothedCutoff = V::set (fa.smoothedCutoff_, fb.smoothedCutoff_), smoothedRes = V::set (fa.smoothedRes_, fb.smoothedRes_);
         V heldCutoff = V::set (fa.heldCutoff_, fb.heldCutoff_), heldRes = V::set (fa.heldRes_, fb.heldRes_);
@@ -274,7 +275,10 @@ public:
         {
             smoothedCutoff = smoothedCutoff + vSmooth * (vTargetCutoff - smoothedCutoff);
             smoothedRes = smoothedRes + vSmooth * (vTargetRes - smoothedRes);
-            if (hold <= 1 || holdCount == 0) // (i % hold) == 0
+            // the held cutoff and resonance are new only on the first sample of a hold (every sample without a hold): only there can the coefficients that follow
+            // them change, so only there are the lanes' values compared with the last ones (the other samples would find them equal and skip the same work)
+            const bool newHold = hold <= 1 || holdCount == 0;
+            if (newHold) // (i % hold) == 0
             {
                 heldCutoff = smoothedCutoff;
                 heldRes = smoothedRes;
@@ -285,7 +289,7 @@ public:
             const V in = V::sanitized (V::set (inA[i], inB[i]));
 
             bool cutoffChanged = false;
-            for (int l = 0; l < 2; ++l)
+            for (int l = 0; l < 2 && newHold; ++l)
             {
                 const float c = cutoff.get (l);
                 if (haveCutoff[l] && c == lastCutoff[l])
@@ -354,7 +358,7 @@ public:
                 const V R = vOne - V::all (0.96f) * res;
                 const V damping = V::all (2.0f) * R * vOne;
                 bool dChanged = false;
-                for (int l = 0; l < 2; ++l)
+                for (int l = 0; l < 2 && newHold; ++l)
                 {
                     const float Rl = R.get (l);
                     if (haveR[l] && Rl == lastR[l])
@@ -394,7 +398,7 @@ public:
                 const V S = vLG0 * (vLG3 * ls[0] + vLG2 * ls[1] + vLG * ls[2] + ls[3]);
                 const V k = V::all (3.85f) * res * (vOne - V::all (0.05f) * res);
                 V fbk = V::softClipped (S);
-                if (fat > 0.001f)
+                if (fatOn)
                     fbk = fbk / (vOne + vTwoFat * (S * S));
                 const V u = V::softClipped ((vLadderDriveGain * drivenIn - k * fbk) / (vOne + k * vLG4));
                 V y = u;
@@ -418,8 +422,10 @@ public:
                     const V delayed = V::set (da.readTap (taps[0][k]), db.readTap (taps[1][k]));
                     const V x = ap - gDiff * delayed;
                     ap = delayed + gDiff * x;
-                    da.write (x.get (0));
-                    db.write (x.get (1));
+                    // write () stores sanitize (x): the same value made in the lanes (sanitize gives what it is given for a sanitized value)
+                    const V xs = V::sanitized (x);
+                    da.writeSanitized (xs.get (0));
+                    db.writeSanitized (xs.get (1));
                 }
                 rawOut = ap;
             }

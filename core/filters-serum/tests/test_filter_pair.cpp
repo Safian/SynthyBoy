@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "synthyboy/filters/filter.h"
+#include "filter_lanes.h"
 #include "test_runner.h"
 
 using namespace synthyboy::filters;
@@ -40,7 +41,12 @@ FilterParams randomParams (Rng& r, int hold, bool extreme)
 {
     FilterParams p;
     p.cutoff = 20.0f * std::pow (1000.0f, r.uni());            // 20 Hz .. 20 kHz
-    p.resonance = extreme ? (r.uni() < 0.5f ? 1.0f : 0.97f) : r.uni();
+    if (extreme)
+    {
+        static const float kEdges[] = { 20.0f, 20000.0f, 19999.0f, 20.5f, 21609.0f /* = 0.49 sr, the clamp */, 30000.0f /* above the clamp */ };
+        p.cutoff = kEdges[r.next() % 6u];
+    }
+    p.resonance = extreme ? (r.uni() < 0.5f ? 1.0f : (r.uni() < 0.5f ? 0.97f : 0.0f)) : r.uni();
     p.drive = extreme ? 1.0f : r.uni();
     p.var = r.uni();
     p.blend = r.uni();
@@ -61,6 +67,11 @@ void fillInput (Rng& r, float* x, int n, int block)
         else if (kind == 5) v = 0.0f;
         else if (kind == 6) v *= 1.0e-19f;
         else if (kind == 7) v *= 0.05f;
+        else if (kind == 8)
+        {
+            uint32_t sub = r.next() & 0x807fffffu; // a subnormal (or a zero) of either sign
+            std::memcpy (&v, &sub, 4);
+        }
         const uint32_t dice = r.next() % 997u;
         if (dice == 0) v = std::numeric_limits<float>::quiet_NaN();
         else if (dice == 1) v = std::numeric_limits<float>::infinity();
@@ -74,7 +85,7 @@ bool sameBits (const float* a, const float* b, int n) { return std::memcmp (a, b
 
 /** Two pairs of filters with the same history: one pair runs process () twice per block, the other the kernel (or, in the blocks `mixedMono` picks, process () as
     well: the kernel must leave the state exactly as two calls leave it). Returns the number of blocks whose samples differ, or -1 if the kernel refused a block. */
-int compare (PairFn fn, FilterType type, int hold, uint32_t seed, bool sameCutoff, bool extreme, bool mixedMono, long long* samples)
+int compare (PairFn fn, FilterType type, int hold, uint32_t seed, bool sameCutoff, bool extreme, bool mixedMono, long long* samples, bool sweep = false)
 {
     Filter monoL, monoR, pairL, pairR;
     for (Filter* f : { &monoL, &monoR, &pairL, &pairR })
@@ -94,6 +105,13 @@ int compare (PairFn fn, FilterType type, int hold, uint32_t seed, bool sameCutof
             pr = pl;
             if (! sameCutoff)
                 pr.cutoff = 20.0f * std::pow (1000.0f, r.uni());
+        }
+        else if (sweep)
+        {
+            // a sweep across the whole range, a new cutoff every block (up by a fifth of an octave per block, back to 20 Hz above 20 kHz)
+            pl.cutoff = pl.cutoff * 1.15f > 20000.0f ? 20.0f : pl.cutoff * 1.15f;
+            pr.cutoff = sameCutoff ? pl.cutoff : (pr.cutoff * 1.12f > 20000.0f ? 20.0f : pr.cutoff * 1.12f);
+            pl.resonance = pr.resonance = std::min (1.0f, std::max (0.0f, pl.resonance + 0.05f * r.bi()));
         }
         else if (block % 5 == 0)
         {
@@ -145,17 +163,49 @@ TEST (pair_kernels_give_the_samples_of_two_process_calls_to_the_last_bit)
                 for (uint32_t seed = 1; seed <= 6; ++seed)
                     for (const bool sameCutoff : { true, false })
                     {
-                        const bool extreme = seed == 5, mixed = seed % 2 == 0;
-                        const int r = compare (form.fn, kTypes[t], hold, seed * 131u + static_cast<uint32_t> (t), sameCutoff, extreme, mixed, &samples);
+                        const bool extreme = seed == 5, mixed = seed % 2 == 0, sweep = seed == 3;
+                        const int r = compare (form.fn, kTypes[t], hold, seed * 131u + static_cast<uint32_t> (t), sameCutoff, extreme, mixed, &samples, sweep);
                         ++runs;
                         if (r < 0) ++refused;
                         else bad += r;
                     }
-            std::printf ("    %-16s %-10s %d runs, %lld samples: %d blocks differ, %d runs refused\n", form.name, kTypeNames[t], runs, samples, bad, refused);
+            std::printf ("    %-16s %-12s %d runs, %lld samples: %d blocks differ, %d runs refused\n", form.name, kTypeNames[t], runs, samples, bad, refused);
             CHECK_EQ (bad, 0);
             CHECK_EQ (refused, 0);
         }
     }
+}
+
+TEST (lane_sanitize_and_soft_clip_equal_the_scalar_functions_on_every_bit_pattern)
+{
+#if SYNTHYBOY_FILTER_NEON
+    // NeonLanes::sanitized and ::softClipped make their tests with the integer compares of dsp/neon_cmp.h: every one of the 2^32 inputs against sanitize () and
+    // softClip () of filter_dsp.h (NaNs, infinities, zeros and subnormals included)
+    long long badSan = 0, badClip = 0;
+    for (uint64_t u = 0; u < (1ull << 32); u += 2)
+    {
+        const uint32_t b[2] = { static_cast<uint32_t> (u), static_cast<uint32_t> (u + 1) };
+        float x[2], s[2], c[2];
+        std::memcpy (x, b, 8);
+        const NeonLanes v = NeonLanes::set (x[0], x[1]);
+        const NeonLanes vs = NeonLanes::sanitized (v), vc = NeonLanes::softClipped (v);
+        for (int l = 0; l < 2; ++l)
+        {
+            s[l] = vs.get (l);
+            c[l] = vc.get (l);
+            const float ws = sanitize (x[l]), wc = softClip (x[l]);
+            badSan += std::memcmp (&s[l], &ws, 4) != 0 ? 1 : 0;
+            // softClip of a NaN is a NaN in both (its payload is the hardware's): compared as "both NaN"
+            badClip += (std::isnan (wc) ? ! std::isnan (c[l]) : std::memcmp (&c[l], &wc, 4) != 0) ? 1 : 0;
+        }
+    }
+    std::printf ("    all 2^32 inputs: sanitized differs in %lld, softClipped in %lld\n", badSan, badClip);
+    CHECK_EQ (badSan, 0);
+    CHECK_EQ (badClip, 0);
+#else
+    std::printf ("    no NEON lanes in this build\n");
+    CHECK (true);
+#endif
 }
 
 TEST (pair_kernel_refuses_what_it_has_no_form_for_and_leaves_the_filters_alone)
@@ -272,7 +322,7 @@ TEST (pair_kernel_speed_for_information)
             if (sink == 1234.5f)
                 std::puts ("");
         }
-        std::printf ("    %-10s ns per stereo sample (with the input noise): two calls %.1f, reference lanes %.1f, NEON lanes %.1f\n", kTypeNames[t], ns[0], ns[1], ns[2]);
+        std::printf ("    %-12s ns per stereo sample (with the input noise): two calls %.1f, reference lanes %.1f, NEON lanes %.1f\n", kTypeNames[t], ns[0], ns[1], ns[2]);
     }
     CHECK (true);
 }

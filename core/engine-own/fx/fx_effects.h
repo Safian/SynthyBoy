@@ -6,6 +6,7 @@
 
 #include "../dsp/fastmath.h"
 #include "../dsp/simd.h"
+#include "../dsp/neon_cmp.h"
 #include <algorithm>
 #include <cmath>
 #include <array>
@@ -353,12 +354,12 @@ private:
         float32x4_t x = vaddq_f32 (vld1q_f32 (inArr), vmulq_f32 (vdupq_n_f32 (fb), rd));
         x = vmulq_f32 (vminq_f32 (vmaxq_f32 (vmulq_f32 (x, vdupq_n_f32 (0.125f)), vdupq_n_f32 (-1.0f)), one), vdupq_n_f32 (8.0f));
         // the band pass
-        const float32x4_t aHi = vdupq_n_f32 (coefBand.aHi), aLo = vdupq_n_f32 (coefBand.aLo), gain = vdupq_n_f32 (coefBand.gain), tiny = vdupq_n_f32 (1.0e-18f), zero = vdupq_n_f32 (0.0f);
+        const float32x4_t aHi = vdupq_n_f32 (coefBand.aHi), aLo = vdupq_n_f32 (coefBand.aLo), gain = vdupq_n_f32 (coefBand.gain);
         float32x4_t hi = vld1q_f32 (hiY + k0), lo = vld1q_f32 (loY + k0);
         hi = vaddq_f32 (hi, vmulq_f32 (aHi, vsubq_f32 (vmulq_f32 (x, gain), hi)));
-        hi = vbslq_f32 (vcltq_f32 (vabsq_f32 (hi), tiny), zero, hi);
+        hi = neoncmp::flushTiny (hi); // flushDenormal () on the bit patterns (dsp/neon_cmp.h: a float compare is made lane by lane through the VFP flags on 32 bit ARM)
         lo = vaddq_f32 (lo, vmulq_f32 (aLo, vsubq_f32 (hi, lo)));
-        lo = vbslq_f32 (vcltq_f32 (vabsq_f32 (lo), tiny), zero, lo);
+        lo = neoncmp::flushTiny (lo);
         vst1q_f32 (hiY + k0, hi);
         vst1q_f32 (loY + k0, lo);
         // the write: lane j into the line of tap k0 + j at the next position
@@ -375,13 +376,13 @@ private:
     void bandGroup (int k0, float* x, const LoopBand& cf) noexcept
     {
 #if SB_NEON
-        const float32x4_t aHi = vdupq_n_f32 (cf.aHi), aLo = vdupq_n_f32 (cf.aLo), gain = vdupq_n_f32 (cf.gain), tiny = vdupq_n_f32 (1.0e-18f), zero = vdupq_n_f32 (0.0f);
+        const float32x4_t aHi = vdupq_n_f32 (cf.aHi), aLo = vdupq_n_f32 (cf.aLo), gain = vdupq_n_f32 (cf.gain);
         float32x4_t hi = vld1q_f32 (hiY + k0), lo = vld1q_f32 (loY + k0);
         const float32x4_t xg = vmulq_f32 (vld1q_f32 (x), gain);
         hi = vaddq_f32 (hi, vmulq_f32 (aHi, vsubq_f32 (xg, hi)));
-        hi = vbslq_f32 (vcltq_f32 (vabsq_f32 (hi), tiny), zero, hi); // flushDenormal
+        hi = neoncmp::flushTiny (hi); // flushDenormal (dsp/neon_cmp.h)
         lo = vaddq_f32 (lo, vmulq_f32 (aLo, vsubq_f32 (hi, lo)));
-        lo = vbslq_f32 (vcltq_f32 (vabsq_f32 (lo), tiny), zero, lo);
+        lo = neoncmp::flushTiny (lo);
         vst1q_f32 (hiY + k0, hi);
         vst1q_f32 (loY + k0, lo);
         vst1q_f32 (x, vsubq_f32 (hi, lo));

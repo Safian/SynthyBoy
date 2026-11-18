@@ -12,6 +12,7 @@
 #include "../dsp/util.h"
 #include "../dsp/simd.h"
 #include "../dsp/fastmath.h"
+#include "../dsp/neon_cmp.h"
 #include "../fx/fx_dsp.h"
 
 #ifndef SB_MID_SAT
@@ -225,25 +226,30 @@ public:
         hardtanh () as the scalar function itself for a lane above its knee (below it the value passes: the common case costs a compare). The same samples. */
     static void svfPairLoopDigitalNeon (ClassicFilter& A, ClassicFilter& B, const SvfSetup& za, const SvfSetup& zb, const float* inA, float* outA, const float* inB, float* outB, int n) noexcept
     {
-        auto pair = [] (float a, float b) noexcept { const float t[2] = { a, b }; return vld1_f32 (t); };
+        // the lanes are written as the S halves of the D register (GCC's vector subscript; a float t[2] went through the stack on 32 bit ARM), and the compares are
+        // the integer forms of dsp/neon_cmp.h (GCC makes a float compare on 32 bit ARM lane by lane through the VFP flags): the same masks for every input
+        auto pair = [] (float a, float b) noexcept { float32x2_t r = vdup_n_f32 (a); r[1] = b; return r; };
         auto divide = [] (float32x2_t a, float32x2_t b) noexcept
         {
  #if defined(__aarch64__)
             return vdiv_f32 (a, b);
  #else
-            const float t[2] = { vget_lane_f32 (a, 0) / vget_lane_f32 (b, 0), vget_lane_f32 (a, 1) / vget_lane_f32 (b, 1) };
-            return vld1_f32 (t);
+            float32x2_t r = a;
+            r[0] = a[0] / b[0];
+            r[1] = a[1] / b[1];
+            return r;
  #endif
         };
-        auto flush = [] (float32x2_t v) noexcept { return vbsl_f32 (vclt_f32 (vabs_f32 (v), vdup_n_f32 (1.0e-18f)), vdup_n_f32 (0.0f), v); };
+        auto flush = [] (float32x2_t v) noexcept { return neoncmp::flushTiny (v); };
         auto limit = [&A, &B] (float32x2_t v) noexcept
         {
             // hardtanh (): a <= 0.66 ? v : ...; the comparison of the scalar function, per lane (a NaN is not <= 0.66 and goes through the function, as there)
-            const uint32x2_t below = vcle_f32 (vabs_f32 (v), vdup_n_f32 (0.66f));
+            const uint32x2_t below = neoncmp::absLe (v, 0.66f);
             if ((vget_lane_u32 (below, 0) & vget_lane_u32 (below, 1)) != 0u)
                 return v;
-            const float t[2] = { A.hardtanh (vget_lane_f32 (v, 0)), B.hardtanh (vget_lane_f32 (v, 1)) };
-            return vld1_f32 (t);
+            float32x2_t r = vdup_n_f32 (A.hardtanh (vget_lane_f32 (v, 0)));
+            r[1] = B.hardtanh (vget_lane_f32 (v, 1));
+            return r;
         };
         const bool two = za.two;
         const float32x2_t g = pair (za.g, zb.g), R = pair (za.R, zb.R), dEff = pair (za.dEff, zb.dEff), post = pair (za.post, zb.post);
@@ -909,7 +915,7 @@ private:
             // The four resonators are four independent filters fed the same sample: one NEON register holds the four. Svf::step () lane by lane (separate multiply
             // and add, flushDenormal as a select); the four band outputs are weighted in the lanes and summed one after the other, as the scalar loop sums them.
             auto four = [] (float a, float b, float c, float d) noexcept { const float t[4] = { a, b, c, d }; return vld1q_f32 (t); };
-            auto flush = [] (float32x4_t v) noexcept { return vbslq_f32 (vcltq_f32 (vabsq_f32 (v), vdupq_n_f32 (1.0e-18f)), vdupq_n_f32 (0.0f), v); };
+            auto flush = [] (float32x4_t v) noexcept { return neoncmp::flushTiny (v); }; // flushDenormal () on the bit patterns (dsp/neon_cmp.h)
             const float32x4_t a1 = four (cf[0].a1, cf[1].a1, cf[2].a1, cf[3].a1), a2 = four (cf[0].a2, cf[1].a2, cf[2].a2, cf[3].a2), a3 = four (cf[0].a3, cf[1].a3, cf[2].a3, cf[3].a3);
             const float32x4_t vk = vld1q_f32 (kq), vgain = vld1q_f32 (gain), vbpGain = vld1q_f32 (bpGain), two = vdupq_n_f32 (2.0f), eight = vdupq_n_f32 (8.0f);
             float32x4_t s1 = four (fm[0].s1, fm[1].s1, fm[2].s1, fm[3].s1), s2 = four (fm[0].s2, fm[1].s2, fm[2].s2, fm[3].s2);
