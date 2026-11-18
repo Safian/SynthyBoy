@@ -487,6 +487,14 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(poll_guard_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME poll_guard_host COMMAND poll_guard_host)
 
+    # The kit's display thread (kit/display_thread.h): the features in order, guarded, busy / idle, stop. Logic only, no plugin needed.
+    add_executable(display_thread_host EXCLUDE_FROM_ALL tests/display_thread_host.cpp)
+    target_include_directories(display_thread_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(display_thread_host PRIVATE Threads::Threads)
+    target_compile_features(display_thread_host PRIVATE cxx_std_17)
+    target_compile_options(display_thread_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME display_thread_host COMMAND display_thread_host)
+
     # The start-up record and the developer log (kit/log.h): logic only, no plugin needed.
     foreach(t startup_timing_host log_host log_off_host log_rt_host)
         add_executable(${t} EXCLUDE_FROM_ALL tests/${t}.cpp)

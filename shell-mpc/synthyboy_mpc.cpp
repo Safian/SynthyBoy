@@ -141,6 +141,8 @@
 #if !SYNTHYBOY_MPC_LFO_LIVE
 #error "SYNTHYBOY_MPC_OVERLAY needs SYNTHYBOY_MPC_LFO_LIVE (the display thread reports the display parameter 'Overlay Instance' to the host)"
 #endif
+#include "kit/display_thread.h"
+#include "kit/q_targets.h"
 #include "kit/synthyboy_adapter.h"
 #include "overlay/pages.h"
 #include "overlay/service.h"
@@ -437,7 +439,7 @@ struct PluginInstance
         double bpm() const noexcept override { return inst.overlayBpm.load (std::memory_order_relaxed); }
         bool tablesLoading() const noexcept override { return (inst.engine && inst.engine->contentPending()) || inst.wtLoading.load (std::memory_order_relaxed); }   // a built-in table in the making, or a wavetable file the display thread is loading
         int playSelection (int group) const noexcept override { return group >= 0 && group < synthyboy_mpc::play::kGroups ? inst.playSel[group].load (std::memory_order_relaxed) : 1; }
-        void setQGroup (const int* targets, int n) noexcept override { inst.qRouter.setGroup (targets, n, static_cast<int> (synthyboy::paramCount())); }
+        void setQGroup (const int* targets, int n) noexcept override { inst.qBank.setGroup (targets, n); }
         void writeParam (int tableIndex, float normalised) noexcept override { inst.uiWrite (tableIndex, normalised); }
         void setPlaySelection (int group, int instance) noexcept override { if (group >= 0 && group < synthyboy_mpc::play::kGroups) inst.playSetSelector (group, instance); }
         int playLastSelector() const noexcept override { return inst.playLastSel.load (std::memory_order_relaxed); }
@@ -492,10 +494,10 @@ struct PluginInstance
                            inst.soundOffRequests.load (std::memory_order_relaxed), inst.engine->missingContent());
             out += b;
         }
-        void setQVirtual (int id, float normalised) noexcept override { inst.qRouter.setVirtualValue (id, normalised); }
-        bool takeQVirtual (int id, float& normalised) noexcept override { return inst.qRouter.takeVirtual (id, normalised); }
-        unsigned long qWriteCount() const noexcept override { return inst.qRouter.writeCount(); }
-        void qStatus (std::string& out) const override { inst.qRouter.describe (out); }
+        void setQVirtual (int id, float normalised) noexcept override { inst.qBank.setVirtual (id, normalised); }
+        bool takeQVirtual (int id, float& normalised) noexcept override { return inst.qBank.takeVirtual (id, normalised); }
+        unsigned long qWriteCount() const noexcept override { return inst.qBank.writeCount(); }
+        void qStatus (std::string& out) const override { inst.qBank.describe (out); }
         double sampleRate() const noexcept override { return inst.overlayRate.load (std::memory_order_relaxed); }
         void requestOverlayReport() noexcept override
         {
@@ -1041,11 +1043,12 @@ struct PluginInstance
     }
 
     // ---- the Q proxies (q_router.h, docs/MPC.md "Q proxies"): "Q 1" .. "Q 4" after the last Play proxy; what the four knobs of the plugin's own full-screen pages are mapped to ----
-    synthyboy_mpc::QRouter qRouter;
+    /** The sixteen proxies: the kit's bank over SynthyBoy's parameter table (kit/q_targets.h; migration step 11 of docs/ui-components/TEMPLATE.md). It reads the values through the overlay view (the parameter mirror). */
+    mpckit::QProxyBank qBank { mpckit::synthyboy_adapter::Params::get() };
     static VstInt32 qBase() noexcept { return playBase() + synthyboy_mpc::play::kParams; }
     static bool isQParam (VstInt32 index) noexcept { return index >= qBase() && index < qBase() + synthyboy_mpc::QRouter::kCount; }
     /** The normalised value of a real parameter (table index) as the host reads it. */
-    float qReadNorm (int tableIndex) const noexcept { return synthyboy::toNormalised (synthyboy::paramTable()[tableIndex], paramMirror[tableIndex].load (std::memory_order_relaxed)); }
+    float qReadNorm (int tableIndex) const noexcept { return qBank.readNorm (tableIndex); }
 #if SYNTHYBOY_MPC_DEBUG_HOOKS
     /** Debug / acceptance hook (SYNTHYBOY_MPC_DEBUG_HOOKS only): while the file /tmp/synthyboy-q-fake-group exists (SYNTHYBOY_MPC_Q_FAKE_FILE changes the path) its first line, up to sixteen table indices (-1: none), is the Q group of this
         instance; applied when the line changes (the host tests of the Q proxies have no UI to set it). Display thread. Read with safe_file.h: at most 256 bytes of it, only a regular file. */
@@ -1078,7 +1081,7 @@ struct PluginInstance
                 break;
             at = next;
         }
-        qRouter.setGroup (targets, n, static_cast<int> (synthyboy::paramCount()));
+        qBank.setGroup (targets, n);
     }
     /** Debug / acceptance hook (SYNTHYBOY_MPC_DEBUG_HOOKS only): while the file /tmp/synthyboy-q-fake-write exists (SYNTHYBOY_MPC_Q_FAKE_WRITE changes the path) its first line "q value" (q 1 .. 16, value 0 .. 1) is written to the Q
         proxy through setParameter, as the host does when a Q-Link turns; the file is deleted. There is no way to turn a Q-Link from outside: this proves the path from the Q proxy to the target on
@@ -1102,7 +1105,7 @@ struct PluginInstance
             return;
         qStepFileAtMs = nowMs;
         double n = 0.0;
-        qRouter.setStepTravel (synthyboy_mpc::safefile::readNumber ("/tmp/synthyboy-overlay-q-step-travel", n) && n > 0.0 && n < 1.0e6 ? static_cast<float> (n / 128.0) : synthyboy_mpc::QRouter::kStepTravelDefault);
+        qBank.router().setStepTravel (synthyboy_mpc::safefile::readNumber ("/tmp/synthyboy-overlay-q-step-travel", n) && n > 0.0 && n < 1.0e6 ? static_cast<float> (n / 128.0) : synthyboy_mpc::QRouter::kStepTravelDefault);
     }
 #else
     void qFakeGroup() noexcept {}
@@ -1120,10 +1123,9 @@ struct PluginInstance
         if (programMarkDue.exchange (false, std::memory_order_acq_rel))
             audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);   // the program name has or has no mark now
         const VstInt32 base = qBase();
-        qRouter.poll ([this] (int t) noexcept { return qReadNorm (t); },
-                      [&] (int q, float v) { audioMaster (e, audioMasterAutomate, base + q, 0, nullptr, v); },
-                      [&] (int real) { audioMaster (e, audioMasterAutomate, real, 0, nullptr, qReadNorm (real)); },
-                      [&] { qNotifyGroup (e); });
+        qBank.poll ([&] (int q, float v) { audioMaster (e, audioMasterAutomate, base + q, 0, nullptr, v); },
+                    [&] (int real) { audioMaster (e, audioMasterAutomate, real, 0, nullptr, qReadNorm (real)); },
+                    [&] { qNotifyGroup (e); });
     }
     /** The group changed: the names, units and value texts of the Q proxies are other now. The host keeps what it read for good unless it is told (measured on the Key 61, docs/MPC.md "Q proxies and the
         plugin-drawn pages"): audioMasterUpdateDisplay makes it read them again, audioMasterIOChanged does not. */
@@ -1387,138 +1389,128 @@ struct PluginInstance
     }
 #endif
 
-    /** The display thread's whole life (called by startLive's thread). Every tick of every feature runs inside a PollGuard (poll_guard.h): an exception is caught, counted, written to the status file and, five times in a row, switches that
-        feature off - it never leaves the thread (std::terminate would end the MPC application). */
+    /** The display thread's whole life (called by startLive's thread). The thread is the kit's (kit/display_thread.h, migration step 11 of docs/ui-components/TEMPLATE.md): SynthyBoy REGISTERS its features below, in the
+        order they run each tick, and the class does the rest - every feature inside a PollGuard (poll_guard.h: an exception is caught, counted, written to the status file and, five times in a row, switches that feature
+        off - it never leaves the thread: std::terminate would end the MPC application), the grid of ticks (a short period while a cursor or a spectrum column moves, a long one otherwise) and the scheduling of the
+        thread (normal policy, nice 0, all CPUs: not lower than normal, this thread holds host locks while it is inside audioMasterAutomate, and a starved holder would make the host's own threads wait for it). */
     void liveLoop (AEffect* e)
     {
+        const int first = static_cast<int> (synthyboy::paramCount());
+        int syncIdx[synthyboy_mpc::kLfoLiveCount], phaseIdx[synthyboy_mpc::kLfoLiveCount];
+        for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
         {
-            // Own scheduling, set here (not inherited): normal policy, nice 0, all CPUs. Not lower than normal: this thread holds host locks while it is inside
-            // audioMasterAutomate, and a starved holder would make the host's own threads wait for it.
-            synthyboy_mpc::useNormalScheduling (0, "sb-lfo-display");
-            const int first = static_cast<int> (synthyboy::paramCount());
-            int syncIdx[synthyboy_mpc::kLfoLiveCount], phaseIdx[synthyboy_mpc::kLfoLiveCount];
+            const std::string n = std::to_string (l + 1);
+            const synthyboy::ParamInfo* sync = synthyboy::findParamByKey (("lfo" + n + ".sync_type").c_str());
+            const synthyboy::ParamInfo* phase = synthyboy::findParamByKey (("lfo" + n + ".phase").c_str());
+            syncIdx[l] = sync ? synthyboy::findParamIndex (sync->id) : -1;
+            phaseIdx[l] = phase ? synthyboy::findParamIndex (phase->id) : -1;
+        }
+        const std::chrono::milliseconds active (1000 / (SYNTHYBOY_MPC_LFO_LIVE_HZ > 0 ? SYNTHYBOY_MPC_LFO_LIVE_HZ : 1));
+        const std::chrono::milliseconds idle (100);   // nothing sounds: a look ten times a second, no call to the host
+        const auto start = std::chrono::steady_clock::now();
+        int last[synthyboy_mpc::kLfoLiveCount] = {};
+        mpckit::DisplayThread display (this, "sb-lfo-display", { active, idle });
+        display.setAlwaysActive (SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
+#if SYNTHYBOY_MPC_SPECTRUM
+                                 || SYNTHYBOY_MPC_SPECTRUM_SELFTEST
+#endif
+                                 );   // (the measurements sweep the cursors without a voice)
+#if SYNTHYBOY_MPC_SPECTRUM
+        synthyboy_mpc::SpectrumAnalyser analyser;   // allocates here, once, on this thread
+        float specLast[synthyboy_mpc::kSpectrumCount] = {};
+#endif
+#if SYNTHYBOY_MPC_OVERLAY
+        bool readoutPublished = false;
+        display.add ("overlay report", [&] { injectFault ("overlay"); overlayPoll (e, PluginInstance::overlayParamIndex()); });   // "Overlay Instance": the first parameter of the overlay block (after the spectrum columns and the pad pressure parameters)
+        display.add ("Play proxies", [&] { injectFault ("play"); playPoll (e, PluginInstance::playBase()); });                     // the Play page: the selectors and the proxies after it
+        display.add ("Q proxies", [&] { injectFault ("q"); qPoll (e); });                                                          // the Q proxies after them
+        display.add ("page writes", [&] { injectFault ("ui"); uiPoll (e); });                                                      // what the plugin-drawn pages wrote
+        display.add ("content loading", [&] { injectFault ("content"); contentPoll(); });                                          // a sample or an instrument the browser asked for
+        display.add ("LFO shape", [&] { injectFault ("shape"); lfoShapePoll(); });                                                 // a drawn LFO shape the LFO page wrote
+        display.add ("macro name", [&] { injectFault ("macro"); macroNamePoll (e); });                                             // a name the Macros page gave a macro
+        display.addUnguarded ([&]
+        {
+            if (! readoutPublished)   // once, after the first report of the overlay slot above (see publishReadoutTargets)
+            {
+                readoutPublished = true;
+                try { publishReadoutTargets(); } catch (...) {}
+            }
+            if (engine)
+                synthyboy_mpc::startupTimes().setWavetableMs (engine->wavetableBuildMs());   // the background builder goes on after prepare: the status shows its running total
+        });
+#endif
+        display.add ("LFO cursors", [&]
+        {
+            injectFault ("lfo");
+            int step[synthyboy_mpc::kLfoLiveCount] = {};
+#if SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
+            const double t = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
             for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
             {
-                const std::string n = std::to_string (l + 1);
-                const synthyboy::ParamInfo* sync = synthyboy::findParamByKey (("lfo" + n + ".sync_type").c_str());
-                const synthyboy::ParamInfo* phase = synthyboy::findParamByKey (("lfo" + n + ".phase").c_str());
-                syncIdx[l] = sync ? synthyboy::findParamIndex (sync->id) : -1;
-                phaseIdx[l] = phase ? synthyboy::findParamIndex (phase->id) : -1;
+                const double cycles = t * 0.25 * static_cast<double> (1 << l);
+                step[l] = 1 + static_cast<int> ((cycles - std::floor (cycles)) * synthyboy_mpc::kLfoLiveSteps);
             }
-            const auto active = std::chrono::milliseconds (1000 / (SYNTHYBOY_MPC_LFO_LIVE_HZ > 0 ? SYNTHYBOY_MPC_LFO_LIVE_HZ : 1));
-            const auto idle = std::chrono::milliseconds (100); // nothing sounds: a look ten times a second, no call to the host
-            const auto start = std::chrono::steady_clock::now();
-            auto next = start;
-            int last[synthyboy_mpc::kLfoLiveCount] = {};
+#else
+            synthyboy::LiveValues live;
+            if (engine && engine->copyReadout (live) && live.block != 0) // block 0: the engine wrote no values yet (they read 0, not -1)
+                for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
+                {
+                    const int sync = syncIdx[l] >= 0 ? static_cast<int> (paramMirror[syncIdx[l]].load (std::memory_order_relaxed) + 0.5f) : 0;
+                    const float phase = phaseIdx[l] >= 0 ? paramMirror[phaseIdx[l]].load (std::memory_order_relaxed) : 0.0f;
+                    step[l] = synthyboy_mpc::lfoLiveStep (live.lfoPhase[l], sync, phase);
+                }
+#endif
             bool anyActive = false;
-            synthyboy_mpc::PollGuard gLive ("LFO cursors", this), gSpectrum ("spectrum", this), gOverlay ("overlay report", this), gPlay ("Play proxies", this), gQ ("Q proxies", this), gUi ("page writes", this),
-                                     gContent ("content loading", this), gShape ("LFO shape", this), gMacroName ("macro name", this);
-#if SYNTHYBOY_MPC_SPECTRUM
-            synthyboy_mpc::SpectrumAnalyser analyser;   // allocates here, once, on this thread
-            float specLast[synthyboy_mpc::kSpectrumCount] = {};
-#endif
-#if SYNTHYBOY_MPC_OVERLAY
-            bool readoutPublished = false;
-#endif
-            while (!liveStop.load (std::memory_order_relaxed))
+            for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
             {
-#if SYNTHYBOY_MPC_SPECTRUM
-                next += SYNTHYBOY_MPC_LFO_LIVE_SELFTEST || SYNTHYBOY_MPC_SPECTRUM_SELFTEST || anyActive ? active : idle;
-#else
-                next += SYNTHYBOY_MPC_LFO_LIVE_SELFTEST || anyActive ? active : idle;
-#endif
-                const auto now = std::chrono::steady_clock::now();
-                if (next < now)
-                    next = now; // a tick that was late (the host call blocked): no catch-up burst of calls, one tick now and the grid goes on from here
-                std::this_thread::sleep_until (next);
-                if (liveStop.load (std::memory_order_relaxed) || closing.load (std::memory_order_acquire))
-                    break;
-                if (! hostKnows.load (std::memory_order_acquire))
-                    continue;   // the host has not called us yet, so it may not hold this effect's pointer: no callback before it does, and no report is taken out of its flag meanwhile (robustness review F12)
-#if SYNTHYBOY_MPC_OVERLAY
-                gOverlay.run ([&] { injectFault ("overlay"); overlayPoll (e, PluginInstance::overlayParamIndex()); });   // "Overlay Instance": the first parameter of the overlay block (after the spectrum columns and the pad pressure parameters)
-                gPlay.run ([&] { injectFault ("play"); playPoll (e, PluginInstance::playBase()); });                     // the Play page: the selectors and the proxies after it
-                gQ.run ([&] { injectFault ("q"); qPoll (e); });                                                          // the Q proxies after them
-                gUi.run ([&] { injectFault ("ui"); uiPoll (e); });                                                       // what the plugin-drawn pages wrote
-                gContent.run ([&] { injectFault ("content"); contentPoll(); });                                          // a sample or an instrument the browser asked for
-                gShape.run ([&] { injectFault ("shape"); lfoShapePoll(); });                                             // a drawn LFO shape the LFO page wrote
-                gMacroName.run ([&] { injectFault ("macro"); macroNamePoll (e); });                                      // a name the Macros page gave a macro
-                if (! readoutPublished)   // once, after the first report of the overlay slot above (see publishReadoutTargets)
-                {
-                    readoutPublished = true;
-                    try { publishReadoutTargets(); } catch (...) {}
-                }
-                if (engine)
-                    synthyboy_mpc::startupTimes().setWavetableMs (engine->wavetableBuildMs());   // the background builder goes on after prepare: the status shows its running total
-#endif
-                gLive.run ([&]
-                {
-                injectFault ("lfo");
-                int step[synthyboy_mpc::kLfoLiveCount] = {};
-#if SYNTHYBOY_MPC_LFO_LIVE_SELFTEST
-                const double t = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
-                for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
-                {
-                    const double cycles = t * 0.25 * static_cast<double> (1 << l);
-                    step[l] = 1 + static_cast<int> ((cycles - std::floor (cycles)) * synthyboy_mpc::kLfoLiveSteps);
-                }
-#else
-                synthyboy::LiveValues live;
-                if (engine && engine->copyReadout (live) && live.block != 0) // block 0: the engine wrote no values yet (they read 0, not -1)
-                    for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
-                    {
-                        const int sync = syncIdx[l] >= 0 ? static_cast<int> (paramMirror[syncIdx[l]].load (std::memory_order_relaxed) + 0.5f) : 0;
-                        const float phase = phaseIdx[l] >= 0 ? paramMirror[phaseIdx[l]].load (std::memory_order_relaxed) : 0.0f;
-                        step[l] = synthyboy_mpc::lfoLiveStep (live.lfoPhase[l], sync, phase);
-                    }
-#endif
-                anyActive = false;
-                for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
-                {
-                    anyActive = anyActive || step[l] != 0;
-                    if (step[l] == last[l])
-                        continue;
-                    last[l] = step[l];
-                    const float v = synthyboy_mpc::lfoLiveValue (step[l]);
-                    liveValue[l].store (v, std::memory_order_relaxed);
+                anyActive = anyActive || step[l] != 0;
+                if (step[l] == last[l])
+                    continue;
+                last[l] = step[l];
+                const float v = synthyboy_mpc::lfoLiveValue (step[l]);
+                liveValue[l].store (v, std::memory_order_relaxed);
 #if SYNTHYBOY_MPC_LFO_LIVE_NOTIFY
-                    if (audioMaster)
-                        audioMaster (e, audioMasterAutomate, first + l, 0, nullptr, v);
+                if (audioMaster)
+                    audioMaster (e, audioMasterAutomate, first + l, 0, nullptr, v);
 #else
-                    (void) e;
-                    (void) first;
-#endif
-                }
-                });
-#if SYNTHYBOY_MPC_SPECTRUM
-                gSpectrum.run ([&]
-                {
-                    injectFault ("spectrum");
-                    float q[synthyboy_mpc::kSpectrumCount];
-#if SYNTHYBOY_MPC_SPECTRUM_SELFTEST
-                    // a wave that runs over the 32 columns, one turn in 4 seconds, 2 crests: every column moves on every tick
-                    const double ts = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
-                    for (int k = 0; k < synthyboy_mpc::kSpectrumCount; ++k)
-                        q[k] = synthyboy_mpc::spectrumQuantize (static_cast<float> (0.5 + 0.5 * std::sin (6.283185307179586 * (0.25 * ts - 2.0 * k / synthyboy_mpc::kSpectrumCount))));
-#else
-                    analyser.tick (spectrumRing, spectrumRate.load (std::memory_order_relaxed), q);
-#endif
-                    for (int k = 0; k < synthyboy_mpc::kSpectrumCount; ++k)
-                    {
-                        anyActive = anyActive || q[k] != 0.0f;
-                        if (q[k] == specLast[k])
-                            continue;
-                        specLast[k] = q[k];
-                        spectrumValue[k].store (q[k], std::memory_order_relaxed);
-#if SYNTHYBOY_MPC_LFO_LIVE_NOTIFY
-                        if (audioMaster)
-                            audioMaster (e, audioMasterAutomate, first + synthyboy_mpc::kLfoLiveCount + k, 0, nullptr, q[k]);
-#endif
-                    }
-                });
+                (void) e;
+                (void) first;
 #endif
             }
-        }
+            display.setBusy (anyActive);   // the grid of the next tick: the short period while a cursor moves (the spectrum below may add to it)
+        });
+#if SYNTHYBOY_MPC_SPECTRUM
+        display.add ("spectrum", [&]
+        {
+            injectFault ("spectrum");
+            float q[synthyboy_mpc::kSpectrumCount];
+#if SYNTHYBOY_MPC_SPECTRUM_SELFTEST
+            // a wave that runs over the 32 columns, one turn in 4 seconds, 2 crests: every column moves on every tick
+            const double ts = std::chrono::duration<double> (std::chrono::steady_clock::now() - start).count();
+            for (int k = 0; k < synthyboy_mpc::kSpectrumCount; ++k)
+                q[k] = synthyboy_mpc::spectrumQuantize (static_cast<float> (0.5 + 0.5 * std::sin (6.283185307179586 * (0.25 * ts - 2.0 * k / synthyboy_mpc::kSpectrumCount))));
+#else
+            analyser.tick (spectrumRing, spectrumRate.load (std::memory_order_relaxed), q);
+#endif
+            bool anyActive = display.busy();
+            for (int k = 0; k < synthyboy_mpc::kSpectrumCount; ++k)
+            {
+                anyActive = anyActive || q[k] != 0.0f;
+                if (q[k] == specLast[k])
+                    continue;
+                specLast[k] = q[k];
+                spectrumValue[k].store (q[k], std::memory_order_relaxed);
+#if SYNTHYBOY_MPC_LFO_LIVE_NOTIFY
+                if (audioMaster)
+                    audioMaster (e, audioMasterAutomate, first + synthyboy_mpc::kLfoLiveCount + k, 0, nullptr, q[k]);
+#endif
+            }
+            display.setBusy (anyActive);
+        });
+#endif
+        (void) start;
+        display.run ([this] { return liveStop.load (std::memory_order_relaxed) || closing.load (std::memory_order_acquire); },
+                     [this] { return hostKnows.load (std::memory_order_acquire); });   // not ready: the host has not called us yet, so it may not hold this effect's pointer: no callback before it does, and no report is taken out of its flag meanwhile (robustness review F12)
     }
 
     void startLive (AEffect* e)
@@ -1648,6 +1640,7 @@ struct PluginInstance
     {
 #if SYNTHYBOY_MPC_OVERLAY
         synthyboy_mpc::PlayLog::refresh();   // the debug log of the host's calls (play_log.h) is on from the first call when its switch file is there
+        qBank.bind (&overlayView);   // the proxies read the values of the targets through the overlay view (the parameter mirror)
 #endif
         outputStage.prepare (sampleRate > 0.0 ? sampleRate : 44100.0);
         outputStage.setGainDb (static_cast<float> (SYNTHYBOY_MPC_OUTPUT_GAIN_DB));
@@ -2145,32 +2138,19 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 #if SYNTHYBOY_MPC_OVERLAY
         if (PluginInstance::isQParam (index))
         {
-            // the proxy reports the CURRENT target: its name (a transpose that is split in two knobs says Oct / Sem), its unit and its value text; "Q n" while it has none (or a virtual one)
+            // the proxy reports the CURRENT target: its name (a transpose that is split in two knobs says Oct / Sem), its unit and its value text; "Q n" while it has none (or a virtual one): the kit's bank
+            // (kit/q_targets.h) answers; a macro keeps the name it has been given ("Filter Sweep"), which only SynthyBoy knows
             const int q = index - PluginInstance::qBase();
-            const int real = inst->qRouter.target (q);
-            const int mode = inst->qRouter.mode (q);
-            if (real < 0)
+            const int real = inst->qBank.target (q);
+            if (opcode == effGetParamName)
             {
-                if (opcode == effGetParamName)
-                    std::snprintf (buf, kCap, "Q %d", q + 1);
-                else
-                    buf[0] = '\0';
-            }
-            else if (opcode == effGetParamName)
-            {
-                if (! synthyboy_mpc::macroParamName (std::atomic_load (&inst->overlayContent), real, buf, kCap))   // a macro: the name it has been given ("Filter Sweep")
-                    // the target's name, shortened by the same word list as the parameter table's names so that name and suffix fit the bound together
-                    synthyboy_mpc::nameWithSuffix (synthyboy::paramTable()[real].name, mode == synthyboy_mpc::QRouter::kOct ? " Oct" : (mode == synthyboy_mpc::QRouter::kSem ? " Sem" : ""), buf, kCap);
+                if (real < 0 || ! synthyboy_mpc::macroParamName (std::atomic_load (&inst->overlayContent), real, buf, kCap))
+                    inst->qBank.proxyName (q, buf, kCap);   // the target's name, shortened by the same word list as the parameter table's names so that name and suffix fit the bound together
             }
             else if (opcode == effGetParamLabel)
-                synthyboy_mpc::putBounded (buf, kCap, mode == synthyboy_mpc::QRouter::kOct ? "oct" : (mode == synthyboy_mpc::QRouter::kSem ? "st" : synthyboy::unitLabel (synthyboy::paramTable()[real].unit)));
-            else if (mode == synthyboy_mpc::QRouter::kOct || mode == synthyboy_mpc::QRouter::kSem)
-            {
-                const int t = static_cast<int> (std::lround (inst->paramMirror[real].load (std::memory_order_relaxed)));
-                std::snprintf (buf, kCap, "%+d", mode == synthyboy_mpc::QRouter::kOct ? synthyboy_mpc::QRouter::octOfTranspose (t) : synthyboy_mpc::QRouter::semOfTranspose (t));
-            }
+                inst->qBank.proxyLabel (q, buf, kCap);
             else
-                synthyboy::valueToText (synthyboy::paramTable()[real], inst->paramMirror[real].load (std::memory_order_relaxed), buf, kCap);
+                inst->qBank.proxyDisplay (q, buf, kCap);
                         return 1;
         }
         if (PluginInstance::isPlayParam (index))
@@ -2536,7 +2516,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (PluginInstance::isQParam (index))
         {
             // a Q proxy has the properties of its target; with none a plain 0 .. 1 knob
-            const int real = inst->qRouter.target (index - PluginInstance::qBase());
+            const int real = inst->qBank.target (index - PluginInstance::qBase());
             if (real >= 0)
             {
                 fillParameterProperties (synthyboy::paramTable()[real], props);
@@ -2835,13 +2815,11 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
         if (PluginInstance::isQParam (index))
         {
             const int q = index - PluginInstance::qBase();
-            const synthyboy_mpc::QRouter::Write w = inst->qRouter.hostWrite (q, parameter, restoring, [inst] (int t) noexcept { return inst->qReadNorm (t); },
-                                                                              [inst] (int t, float v) { inst->qWrite (t, v); },
-                                                                              [] (int t) noexcept { return stepCountOf (synthyboy::paramTable()[t]); });
+            const synthyboy_mpc::QRouter::Write w = inst->qBank.hostWrite (q, parameter, restoring, [inst] (int t, float v) { inst->qWrite (t, v); });
             if (logging)
             {
                 static const char* const kOutcome[] = { "no target", "echo, nothing changed", "ignored (restore window)", "written" };
-                synthyboy_mpc::PlayLog::line ("setParameter %d (Q %d, real %d) %.9g -> %s", static_cast<int> (index), q + 1, inst->qRouter.target (q), static_cast<double> (parameter), kOutcome[static_cast<int> (w)]);
+                synthyboy_mpc::PlayLog::line ("setParameter %d (Q %d, real %d) %.9g -> %s", static_cast<int> (index), q + 1, inst->qBank.target (q), static_cast<double> (parameter), kOutcome[static_cast<int> (w)]);
             }
             return;
         }
@@ -2930,7 +2908,7 @@ static float pluginGetParameter(AEffect* e, VstInt32 index)
     if (PluginInstance::isOverlayParam (index))
         return inst->overlayValue.load (std::memory_order_relaxed);
     if (PluginInstance::isQParam (index))
-        return inst->qRouter.value (index - PluginInstance::qBase(), [inst] (int t) noexcept { return inst->qReadNorm (t); });
+        return inst->qBank.value (index - PluginInstance::qBase());
     if (PluginInstance::isPlayParam (index))
     {
         if (PluginInstance::isPlaySelector (index))

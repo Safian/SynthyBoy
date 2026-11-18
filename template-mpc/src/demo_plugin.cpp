@@ -27,6 +27,7 @@
 #include "log_compat.h"
 #include "overlay_hook.h"
 #include "../../shell-mpc/host_strings.h"
+#include "../../shell-mpc/kit/display_thread.h"
 
 namespace {
 
@@ -54,19 +55,17 @@ Plugin* pluginOf (AEffect* e) noexcept { return e != nullptr ? static_cast<Plugi
 
 bool isQ (VstInt32 i) noexcept { return i >= kQBase && i < kTotalParams; }
 
-/** The display thread: every 50 ms tells the host what changed. */
+/** The display thread (the kit's, shell-mpc/kit/display_thread.h): every 50 ms it runs the features registered here, each inside a guard (an exception in one is caught and counted, five in a row switch it off:
+    the thread never ends the host), and tells the host what changed. */
 void displayLoop (Plugin* p)
 {
     MPCKIT_SCOPE ("display", "display thread");
+    DemoInstance& inst = p->inst;
+    auto automate = [p] (VstInt32 index, float value) { p->master (p->effect, audioMasterAutomate, index, 0, nullptr, value); };
     float lastOverlay = -1.0f;
-    while (! p->stop.load (std::memory_order_acquire))
+    mpckit::DisplayThread display (p, "mpckit-display", { std::chrono::milliseconds (50), std::chrono::milliseconds (50) });
+    display.add ("overlay report", [&]
     {
-        std::this_thread::sleep_for (std::chrono::milliseconds (50));
-        if (p->stop.load (std::memory_order_acquire) || ! p->hostKnows.load (std::memory_order_acquire) || p->master == nullptr)
-            continue;
-        DemoInstance& inst = p->inst;
-        auto automate = [&] (VstInt32 index, float value) { p->master (p->effect, audioMasterAutomate, index, 0, nullptr, value); };
-
         const bool due = inst.reportDue.exchange (false, std::memory_order_acq_rel);
         const float ov = inst.overlayValue();
         if (due || ov != lastOverlay)
@@ -74,15 +73,23 @@ void displayLoop (Plugin* p)
             lastOverlay = ov;
             automate (kOverlayIndex, ov);
         }
-        for (uint32_t bits = inst.takeDirty(); bits != 0; bits &= bits - 1)   // the parameters a page wrote
+    });
+    display.add ("page writes", [&]   // the parameters a page wrote
+    {
+        for (uint32_t bits = inst.takeDirty(); bits != 0; bits &= bits - 1)
         {
             const int i = __builtin_ctz (bits);
             automate (i, inst.normalised (i));
         }
+    });
+    display.add ("Q proxies", [&]
+    {
         inst.q.poll ([&] (int q, float v) { automate (kQBase + q, v); },
                      [&] (int real) { automate (real, inst.normalised (real)); },
                      [&] { p->master (p->effect, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f); });   // the names of the Q proxies are other now
-    }
+    });
+    display.run ([p] { return p->stop.load (std::memory_order_acquire); },
+                 [p] { return p->hostKnows.load (std::memory_order_acquire) && p->master != nullptr; });   // the host has not called us yet: no callback into it
 }
 
 std::string buildChunk (const DemoInstance& inst)
