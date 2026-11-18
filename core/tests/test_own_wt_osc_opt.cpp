@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <vector>
@@ -23,28 +24,54 @@ struct WtOscOptTest
 {
     static constexpr int kMorphStride = WtOsc::kMorphStride;
     /** True if every piece of state that the audio depends on is bit for bit the same (the caches of the optimisations are not state). */
-    static bool sameState (const WtOsc& a, const WtOsc& b)
+    /** 0 if every piece of state that the audio depends on is bit for bit the same (the caches of the optimisations are not state), else the number of the first field that differs. */
+    static int stateDiff (const WtOsc& a, const WtOsc& b)
     {
         auto eq = [] (const void* x, const void* y, size_t n) { return std::memcmp (x, y, n) == 0; };
-        bool ok = eq (a.phase, b.phase, sizeof a.phase) && eq (a.prevInc, b.prevInc, sizeof a.prevInc) && eq (a.curInc, b.curInc, sizeof a.curInc)
-               && eq (a.prevGainL, b.prevGainL, sizeof a.prevGainL) && eq (a.curGainL, b.curGainL, sizeof a.curGainL) && eq (a.prevGainR, b.prevGainR, sizeof a.prevGainR)
-               && eq (a.curGainR, b.curGainR, sizeof a.curGainR) && eq (a.curFrameOf, b.curFrameOf, sizeof a.curFrameOf) && eq (a.frameIdx, b.frameIdx, sizeof a.frameIdx)
-               && eq (a.filterState, b.filterState, sizeof a.filterState) && eq (a.lastCross, b.lastCross, sizeof a.lastCross) && a.curCount == b.curCount && a.prevCount == b.prevCount
-               && a.havePrev == b.havePrev && a.morphAge == b.morphAge && a.morphGroups == b.morphGroups && a.morphActive == b.morphActive && a.prevFrame == b.prevFrame
-               && a.curFrame == b.curFrame && a.historyDirty == b.historyDirty;
-        ok = ok && a.history.size() == b.history.size() && (a.history.empty() || eq (a.history.data(), b.history.data(), a.history.size() * sizeof (float)));
+        if (!eq (a.phase, b.phase, sizeof a.phase)) return 1;
+        if (!eq (a.prevInc, b.prevInc, sizeof a.prevInc)) return 2;
+        if (!eq (a.curInc, b.curInc, sizeof a.curInc)) return 3;
+        // The gains are compared as values: the old shortcut of update () treats +0 and -0 of the tick as equal, so after a run of silent ticks (level +0 / -0) a gain can be -0 where
+        // the optimised oscillator, which applies the last silent tick instead of skipping by value, has +0. That cannot reach the output: pg + (cg - pg) * t is +0 for every
+        // sign of zero of pg and cg and equals cg * t for a non zero cg (and the render tests compare the output bit for bit).
+        for (int i = 0; i < 16; ++i)
+            if (a.prevGainL[i] != b.prevGainL[i] || a.prevGainR[i] != b.prevGainR[i] || a.curGainL[i] != b.curGainL[i] || a.curGainR[i] != b.curGainR[i])
+                return 4;
+        // (the frame of a lane beyond both counts is never read)
+        for (int i = 0; i < std::max (a.curCount, a.prevCount); ++i)
+            if (std::memcmp (&a.curFrameOf[i], &b.curFrameOf[i], 4) != 0)
+                return 6;
+        if (!eq (a.frameIdx, b.frameIdx, sizeof a.frameIdx)) return 7;
+        if (!eq (a.filterState, b.filterState, sizeof a.filterState)) return 8;
+        if (!eq (a.lastCross, b.lastCross, sizeof a.lastCross)) return 9;
+        if (a.curCount != b.curCount || a.prevCount != b.prevCount) return 10;
+        if (a.havePrev != b.havePrev) return 11;
+        if (a.morphAge != b.morphAge) return 12;
+        if (a.morphGroups != b.morphGroups) return 13;
+        if (a.morphActive != b.morphActive) return 14;
+        if (a.prevFrame != b.prevFrame || a.curFrame != b.curFrame) return 15;
+        if (a.historyDirty != b.historyDirty) return 16;
+        if (a.history.size() != b.history.size() || (!a.history.empty() && !eq (a.history.data(), b.history.data(), a.history.size() * sizeof (float)))) return 17;
         // the two cycles of each group by role (the optimised oscillator swaps the two buffers instead of copying)
-        ok = ok && a.morphBuf.size() == b.morphBuf.size();
-        if (ok && ! a.morphBuf.empty())
+        if (a.morphBuf.size() != b.morphBuf.size()) return 18;
+        if (!a.morphBuf.empty())
             for (int g = 0; g < 2; ++g)
             {
                 WtOsc& x = const_cast<WtOsc&> (a);
                 WtOsc& y = const_cast<WtOsc&> (b);
-                ok = ok && eq (x.morphOld (g) - 1, y.morphOld (g) - 1, kMorphStride * sizeof (float)) && eq (x.morphNew (g) - 1, y.morphNew (g) - 1, kMorphStride * sizeof (float));
+                if (!eq (x.morphOld (g) - 1, y.morphOld (g) - 1, kMorphStride * sizeof (float)) || !eq (x.morphNew (g) - 1, y.morphNew (g) - 1, kMorphStride * sizeof (float))) return 19;
             }
-        return ok;
+        return 0;
+    }
+    static bool sameState (const WtOsc& a, const WtOsc& b)
+    {
+        const int d = stateDiff (a, b);
+        if (d != 0)
+            std::printf ("state differs in field %d\n", d);
+        return d == 0;
     }
     static const OscTick& tickOf (const WtOsc& o) { return o.tick; }
+    static bool pending (const WtOsc& o) { return o.pending; }
 };
 } // namespace own
 } // namespace synthyboy
@@ -183,7 +210,7 @@ struct Run
     MorphCache cacheRef, cacheOpt;
     Rng rngRef, rngOpt;
     float cross[6][32];
-    int periods = 0, mismatches = 0, stateMismatches = 0, plain = 0, warped = 0, morphing = 0, nonZero = 0, fmOnly = 0, filtered = 0;
+    int periods = 0, mismatches = 0, stateMismatches = 0, plain = 0, warped = 0, morphing = 0, nonZero = 0, fmOnly = 0, filtered = 0, deferredPeriods = 0;
     Run()
     {
         ref.setReference (true);
@@ -199,8 +226,10 @@ float peak (const float* x, int n) { float m = 0.0f; for (int i = 0; i < n; ++i)
 
 TEST (own_wt_osc_optimised_equals_the_reference_on_random_patches)
 {
-    int totalPeriods = 0, totalMismatch = 0, totalState = 0, plain = 0, warped = 0, morphing = 0, loud = 0, fmOnly = 0, filtered = 0;
-    for (int seed = 1; seed <= 60; ++seed)
+    int totalPeriods = 0, totalMismatch = 0, totalState = 0, plain = 0, warped = 0, morphing = 0, loud = 0, fmOnly = 0, filtered = 0, deferredTotal = 0;
+    const char* seedsEnv = std::getenv ("SB_TEST_SEEDS"); // more seeds for a long run: SB_TEST_SEEDS=600
+    const int seeds = seedsEnv != nullptr ? std::max (60, std::atoi (seedsEnv)) : 60;
+    for (int seed = 1; seed <= seeds; ++seed)
     {
         TestRng r (static_cast<uint64_t> (seed));
         const auto tables = makeTables (r);
@@ -214,6 +243,7 @@ TEST (own_wt_osc_optimised_equals_the_reference_on_random_patches)
         run.ref.start (t.startPhase, 0.5f, run.rngRef);
         run.opt.start (t.startPhase, 0.5f, run.rngOpt);
         bool first = true;
+        int streak = 0;
         for (int per = 0; per < 140; ++per)
         {
             if (!first)
@@ -225,19 +255,47 @@ TEST (own_wt_osc_optimised_equals_the_reference_on_random_patches)
             if (r.chance (15))
                 cr[r.range (0, 5)] = nullptr;
             const bool anyCross = !r.chance (10);
+            ++run.periods;
             if (!first && r.chance (3)) // a new note on the same oscillator
             {
                 run.ref.start (t.startPhase, 0.5f, run.rngRef);
                 run.opt.start (t.startPhase, 0.5f, run.rngOpt);
                 first = true;
             }
-            run.ref.update (t, rate, run.rngRef);
-            run.opt.update (t, rate, run.rngOpt);
-            run.ref.updateMorph (rate, first, &run.cacheRef);
-            run.opt.updateMorph (rate, first, &run.cacheOpt);
-            first = false;
-            if (!WtOscOptTest::sameState (run.ref, run.opt))
+            // the period as the voice drives it: silent streaks (level 0), off oscillators (update only, no render), and the deferral of the update of a silent period
+            if (streak == 0 && r.chance (4))
+                streak = r.range (1, 7);
+            OscTick tp = t;
+            const bool off = streak == 0 ? r.chance (3) : false;
+            if (streak > 0 || off)
+                tp.level = 0.0f;
+            if (streak > 0)
+                --streak;
+            bool deferred = false;
+            if (off)
+            {
+                run.ref.update (tp, rate, run.rngRef);
+                deferred = run.opt.deferSilent (tp, rate, false, false);
+                if (!deferred)
+                    run.opt.update (tp, rate, run.rngOpt);
+            }
+            else
+            {
+                run.ref.update (tp, rate, run.rngRef);
+                run.ref.updateMorph (rate, first, &run.cacheRef);
+                deferred = run.opt.deferSilent (tp, rate, true, first);
+                if (!deferred)
+                {
+                    run.opt.update (tp, rate, run.rngOpt);
+                    run.opt.updateMorph (rate, first, &run.cacheOpt);
+                }
+                first = false;
+            }
+            run.deferredPeriods += deferred ? 1 : 0;
+            if (!WtOscOptTest::pending (run.opt) && !WtOscOptTest::pending (run.ref) && !WtOscOptTest::sameState (run.ref, run.opt))
                 ++run.stateMismatches;
+            if (off)
+                continue; // an oscillator that is off is not rendered
             int t0 = 0;
             while (t0 < kControlPeriod)
             {
@@ -251,11 +309,10 @@ TEST (own_wt_osc_optimised_equals_the_reference_on_random_patches)
                     ++run.mismatches;
                 if (peak (Lr, n) > 0.0f || peak (Rr, n) > 0.0f)
                     ++run.nonZero;
-                if (!WtOscOptTest::sameState (run.ref, run.opt))
+                if (!WtOscOptTest::pending (run.opt) && !WtOscOptTest::sameState (run.ref, run.opt))
                     ++run.stateMismatches;
                 t0 += n;
             }
-            ++run.periods;
             const OscTick& tk = WtOscOptTest::tickOf (run.opt);
             const bool w = tk.oversample || warpNeedsOversampling (tk.warp[0]) || warpNeedsOversampling (tk.warp[1]);
             (w ? run.warped : (tk.morphType != 0 ? run.morphing : run.plain))++;
@@ -274,11 +331,12 @@ TEST (own_wt_osc_optimised_equals_the_reference_on_random_patches)
         loud += run.nonZero;
         fmOnly += run.fmOnly;
         filtered += run.filtered;
+        deferredTotal += run.deferredPeriods;
     }
-    std::printf ("wt_osc opt: %d periods (plain %d, warped %d, morph %d, of them FM only %d, filter warps %d), %d loud chunks, %d output mismatches, %d state mismatches\n", totalPeriods, plain, warped, morphing,
-                 fmOnly, filtered, loud, totalMismatch, totalState);
-    CHECK_EQ (totalPeriods, 60 * 140);
-    CHECK (plain > 500 && warped > 500 && morphing > 500 && loud > 2000 && fmOnly > 150 && filtered > 100);
+    std::printf ("wt_osc opt: %d periods (plain %d, warped %d, morph %d, of them FM only %d, filter warps %d), %d silent periods put off, %d loud chunks, %d output mismatches, %d state mismatches\n", totalPeriods, plain, warped, morphing,
+                 fmOnly, filtered, deferredTotal, loud, totalMismatch, totalState);
+    CHECK_EQ (totalPeriods, seeds * 140);
+    CHECK (plain > 500 && warped > 500 && morphing > 500 && loud > 2000 && fmOnly > 150 && filtered > 100 && deferredTotal > 400);
     CHECK_EQ (totalMismatch, 0);
     CHECK_EQ (totalState, 0);
 }
@@ -288,7 +346,7 @@ namespace
 /** One preset like Lorenz Garden's three oscillators (3, 2, 1 unison lanes) plus the sub, run for `blocks` blocks of 4 periods: the time of the three calls of the oscillator, in us per block. */
 struct Timing { double update = 0.0, morph = 0.0, render = 0.0; };
 
-Timing timeConfig (bool reference, int voices, int morphType, int warp, int blocks, bool modulate, bool smooth = false)
+Timing timeConfig (bool reference, int voices, int morphType, int warp, int blocks, bool modulate, bool zeroLevel = false)
 {
     TestRng r (4242);
     const auto tables = makeTables (r);
@@ -315,7 +373,6 @@ Timing timeConfig (bool reference, int voices, int morphType, int warp, int bloc
     t.lowWarp = t.lowMorph = t.fastMath = true;
     t.warp[0] = warp;
     t.warpAmount[0] = 0.5f;
-    t.smooth = smooth;
     t.active = true;
     osc.start (0.0f, 0.5f, rng);
     float L[32], R[32], cb[6][32];
@@ -337,10 +394,15 @@ Timing timeConfig (bool reference, int voices, int morphType, int warp, int bloc
                 t.panRight = t.pan;
                 t.morphAmount = r.uni();
             }
+            if (zeroLevel && !first)
+                t.level = 0.0f;
             const auto a0 = clk::now();
-            osc.update (t, 44100.0, rng);
+            const bool deferred = osc.deferSilent (t, 44100.0, true, first);
+            if (!deferred)
+                osc.update (t, 44100.0, rng);
             const auto a1 = clk::now();
-            osc.updateMorph (44100.0, first, &cache);
+            if (!deferred)
+                osc.updateMorph (44100.0, first, &cache);
             first = false;
             const auto a2 = clk::now();
             osc.render (0, 32, L, R, cr, 44100.0);
@@ -358,19 +420,19 @@ Timing timeConfig (bool reference, int voices, int morphType, int warp, int bloc
 
 TEST (own_wt_osc_timing_report)
 {
-    struct Cfg { const char* name; int voices, morph, warp; bool modulate; };
-    const Cfg cfgs[] = { { "3 lanes plain, frame/level/pan modulated", 3, 0, 0, true }, { "3 lanes plain, held", 3, 0, 0, false }, { "1 lane morph (Harmonic Stretch), modulated", 1, kMorphHarmonicStretch, 0, true },
-                         { "3 lanes morph (Shepard), modulated", 3, kMorphShepard, 0, true }, { "2 lanes Sync warp, modulated", 2, 0, kWarpSync, true }, { "1 lane FM A warp, modulated", 1, 0, kWarpFmA, true }, { "1 lane Filter LPF warp, modulated", 1, 0, kWarpFilterLpf, true } };
+    struct Cfg { const char* name; int voices, morph, warp; bool modulate, zero; };
+    const Cfg cfgs[] = { { "3 lanes plain, frame/level/pan modulated", 3, 0, 0, true, false }, { "3 lanes plain, held", 3, 0, 0, false, false }, { "1 lane morph (Harmonic Stretch), modulated", 1, kMorphHarmonicStretch, 0, true, false },
+                         { "3 lanes morph (Shepard), modulated", 3, kMorphShepard, 0, true, false }, { "2 lanes Sync warp, modulated", 2, 0, kWarpSync, true, false }, { "1 lane FM A warp, modulated", 1, 0, kWarpFmA, true, false }, { "1 lane Filter LPF warp, modulated", 1, 0, kWarpFilterLpf, true, false }, { "3 lanes plain, level 0 (silent)", 3, 0, 0, true, true }, { "3 lanes morph (Shepard), level 0 (silent)", 3, kMorphShepard, 0, true, true } };
     for (const Cfg& c : cfgs)
     {
         // warm up, then the median of 5 runs
         Timing best[2];
         for (int mode = 0; mode < 2; ++mode)
         {
-            timeConfig (mode == 0, c.voices, c.morph, c.warp, 200, c.modulate);
+            timeConfig (mode == 0, c.voices, c.morph, c.warp, 200, c.modulate, c.zero);
             Timing runs[5];
             for (auto& x : runs)
-                x = timeConfig (mode == 0, c.voices, c.morph, c.warp, 1500, c.modulate);
+                x = timeConfig (mode == 0, c.voices, c.morph, c.warp, 1500, c.modulate, c.zero);
             for (int i = 0; i < 5; ++i)
                 for (int j = i + 1; j < 5; ++j)
                     if (runs[j].update + runs[j].morph + runs[j].render < runs[i].update + runs[i].morph + runs[i].render)
@@ -439,4 +501,71 @@ TEST (own_noise_coefficients_cache_equals_computing_them)
                  std::chrono::duration<double, std::nano> (t2 - t1).count() / 200000.0, static_cast<double> (acc));
     CHECK_EQ (calls, 20000);
     CHECK_EQ (differ, 0);
+}
+
+// A directed case of the early-out of a silent oscillator: the level is 0 for the first periods of a note (pitch, frame and pan keep moving, the morph age would reach the rebuild period in
+// the middle of the run) and rises later. The silent periods are put off; the output is exactly zero in them, and from the first audible period on it is the very output of the oscillator
+// that applied every update.
+TEST (own_wt_osc_silent_oscillator_early_out_is_bit_identical_when_the_level_rises_later)
+{
+    TestRng r (31);
+    const auto tables = makeTables (r);
+    int mismatches = 0, silentPeriods = 0, deferredPeriods = 0, audibleChunks = 0;
+    for (int morphType : { 0, static_cast<int> (kMorphShepard), static_cast<int> (kMorphHarmonicStretch) })
+        for (int lead : { 1, 3, 17, 40 })      // silent periods before the level rises
+            for (int lowMorph = 0; lowMorph < 2; ++lowMorph)
+            {
+                WtOsc ref, opt;
+                ref.setReference (true);
+                ref.prepareMorph();
+                opt.prepareMorph();
+                MorphCache cr, co;
+                cr.prepare();
+                co.prepare();
+                Rng a, b;
+                ref.start (0.0f, 0.5f, a);
+                opt.start (0.0f, 0.5f, b);
+                OscTick t;
+                t.wt = tables[2].get();
+                t.voices = 3;
+                t.detuneSemis = 0.2f;
+                t.morphType = morphType;
+                t.lowMorph = lowMorph != 0;
+                t.active = true;
+                bool first = true;
+                for (int per = 0; per < lead + 80; ++per)
+                {
+                    t.semis = 55.0f + 0.05f * static_cast<float> (per);
+                    t.frame = std::fmod (0.013f * static_cast<float> (per), 1.0f);
+                    t.pan = 0.01f * static_cast<float> (per % 50) - 0.2f;
+                    t.morphAmount = std::fmod (0.031f * static_cast<float> (per), 1.0f);
+                    t.level = per < lead ? 0.0f : 0.6f + 0.001f * static_cast<float> (per);
+                    ref.update (t, 44100.0, a);
+                    ref.updateMorph (44100.0, first, &cr);
+                    const bool d = opt.deferSilent (t, 44100.0, true, first);
+                    if (!d)
+                    {
+                        opt.update (t, 44100.0, b);
+                        opt.updateMorph (44100.0, first, &co);
+                    }
+                    first = false;
+                    deferredPeriods += d ? 1 : 0;
+                    silentPeriods += per < lead ? 1 : 0;
+                    float Lr[32], Rr[32], Lo[32], Ro[32];
+                    ref.render (0, 32, Lr, Rr, nullptr, 44100.0);
+                    opt.render (0, 32, Lo, Ro, nullptr, 44100.0);
+                    mismatches += (std::memcmp (Lr, Lo, sizeof Lr) != 0 || std::memcmp (Rr, Ro, sizeof Rr) != 0) ? 1 : 0;
+                    if (per < lead)
+                        for (int k = 0; k < 32; ++k)
+                            mismatches += (Lo[k] != 0.0f || Ro[k] != 0.0f) ? 1 : 0;
+                    else
+                        audibleChunks += peak (Lo, 32) > 0.0f ? 1 : 0;
+                    if (!WtOscOptTest::pending (opt) && WtOscOptTest::stateDiff (ref, opt) != 0)
+                        ++mismatches;
+                }
+            }
+    std::printf ("silent early-out: %d silent periods, %d put off, %d audible chunks afterwards, %d mismatches\n", silentPeriods, deferredPeriods, audibleChunks, mismatches);
+    CHECK_EQ (mismatches, 0);
+    CHECK (deferredPeriods > 0 && audibleChunks > 100);
+    CHECK (deferredPeriods >= silentPeriods - 3 * 2 * 4 * 2); // all but the note start (and the first periods after it) are put off
 }

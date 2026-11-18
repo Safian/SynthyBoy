@@ -830,7 +830,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             t.level = 0.0f;
             {
                 SB_SECTION (sections::tickOscUpdate);
-                osc[o].update (t, g.sampleRate, rng);
+                // (a silent tick is applied with the next one that is not: WtOsc::deferSilent)
+                if (!osc[o].deferSilent (t, g.sampleRate, false, false))
+                    osc[o].update (t, g.sampleRate, rng);
                 pitchTapOn[o] = false;
                 lib[o].updateOff (g.content);
             }
@@ -952,8 +954,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         {
             // the cross modulation entries of the list name the other two oscillators in order
             SB_SECTION (sections::tickOscUpdate);
-            osc[o].update (t, g.sampleRate, rng);
-            osc[o].updateMorph (g.sampleRate, fresh, g.morphCache);
+            if (!osc[o].deferSilent (t, g.sampleRate, true, fresh)) // level 0 of this period: the render is exactly zero, the update waits for the next period that is not
+            {
+                osc[o].update (t, g.sampleRate, rng);
+                osc[o].updateMorph (g.sampleRate, fresh, g.morphCache);
+            }
         }
         else
         {
@@ -1010,7 +1015,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         subTick.spread = 0.0f;
         subTick.blend = 1.0f;
         subTick.frame = 0.0f;
-        sub.update (subTick, g.sampleRate, rng);
+        if (!sub.deferSilent (subTick, g.sampleRate, false, false))
+            sub.update (subTick, g.sampleRate, rng);
         pitchTap[3] = subTick.semis;
         pitchTapOn[3] = subCh.on;
     }

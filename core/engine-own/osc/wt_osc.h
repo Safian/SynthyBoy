@@ -183,6 +183,7 @@ public:
 
     void start (float startPhase, float randomPhase, Rng& rng) noexcept
     {
+        flushPending(); // the updates of the silent periods before the note come first, as they did
         for (int i = 0; i < kMaxVoices; ++i)
         {
             const float p = startPhase + randomPhase * rng.uni();
@@ -210,6 +211,7 @@ public:
         P (t, curve) of the outermost range, sharp and flat alternate, amplitudes by the blend law with power normalisation, then the stereo spread. */
     void update (const OscTick& t, double sampleRate, Rng& rng) noexcept
     {
+        flushPending();
         prevCount = curCount;
         for (int i = 0; i < kMaxVoices; ++i)
         {
@@ -435,6 +437,37 @@ public:
         (void) rng;
     }
 
+    /** The update of a silent period, put off. The caller (Voice::tick) calls this before update () / updateMorph () for an oscillator whose level of the period is 0 (or that is
+        off); true = it was put off and the caller must not call them, false = the caller does as before.
+        What a silent period does in the old code: render () returns at once for a level <= 0 (zeros, no phase, no morph age, no cross memory), so the output is exactly zero; the
+        only things that change are what update () and updateMorph () compute from the tick, and there the last tick wins: the prev arrays of the next period are the cur arrays of
+        the last silent tick, and cur is a function of the tick alone (the caches are keyed on their inputs), so replaying the LAST silent tick (update () and, for the oscillators
+        that call it, updateMorph ()) before the next live update gives the very state the whole run of silent periods would have. The one side effect that a silent period has
+        and that a later one does not overwrite is morphAge = 0 of an inactive morph, which is done here at once. A period that would build a morph cycle (a new note, or an age that
+        reached the rebuild period) is not put off, so every build happens when it did and with its own tick. `withMorph`: the caller calls updateMorph () after update (). */
+    bool deferSilent (const OscTick& t, double sampleRate, bool withMorph, bool firstOfNote) noexcept
+    {
+        if (reference_ || !(t.level <= 0.0f))
+            return false;
+        if (withMorph)
+        {
+            if (firstOfNote)
+                return false;
+            if (t.morphType != kMorphNone && t.wt != nullptr && !morphBuf.empty())
+            {
+                if (morphAge >= (t.lowMorph ? 2 * kMorphRebuild : kMorphRebuild))
+                    return false;
+            }
+            else
+                morphAge = 0; // updateMorph () of an inactive morph
+        }
+        pendingTick = t;
+        pendingRate = sampleRate;
+        pendingMorph = withMorph;
+        pending = true;
+        return true;
+    }
+
     /** Semitone offset of the stack style (pair index based, document 01, 9.3). */
     static float stackRatioSemis (int style, int pair, int repeat) noexcept
     {
@@ -573,7 +606,7 @@ public:
     {
         std::fill (L, L + n, 0.0f);
         std::fill (R, R + n, 0.0f);
-        if (tick.wt == nullptr || tick.level <= 0.0f)
+        if (pending || tick.wt == nullptr || tick.level <= 0.0f) // pending: the last tick (not yet applied) is silent
             return;
         const Wavetable& wt = *tick.wt;
         const int frames = wt.numFrames();
@@ -1179,6 +1212,21 @@ private:
     float lastCross[6] = {};
     int curCount = 1, prevCount = 1;
     bool havePrev = false;
+    // a silent tick that update () has not yet applied (see deferSilent ())
+    bool pending = false, pendingMorph = false;
+    double pendingRate = 0.0;
+    OscTick pendingTick;
+    void flushPending() noexcept
+    {
+        if (!pending)
+            return;
+        pending = false;
+        const OscTick t = pendingTick;
+        Rng unused;
+        update (t, pendingRate, unused);
+        if (pendingMorph)
+            updateMorph (pendingRate, false, nullptr);
+    }
     // the results of the sines and of the detune curve of the last full update (keyed on their inputs: the same values as computing them again); see update ()
     bool reference_ = false;
     static bool sameBits (float a, float b) noexcept { uint32_t x, y; std::memcpy (&x, &a, 4); std::memcpy (&y, &b, 4); return x == y; }
