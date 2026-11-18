@@ -72,7 +72,7 @@ protected:
         display_ = playrows::displayRect (rect_);
         power.place ({ display_.x + inset, display_.y + inset, btnW, rowH });
         full.place ({ display_.right() - btnW - inset, display_.y + inset, btnW, rowH });
-        route.place (sub ? Rect {} : Rect { display_.right() - btnW - inset, display_.bottom() - rowH - inset, btnW, rowH });   // the route button (F1 ...): the bottom right corner of the display, 56 px high
+        route.place (sub ? Rect {} : Rect { display_.right() - btnW - inset, display_.bottom() - 64 - inset, btnW, 64 });   // 64 px tall at least (RouteButton::minSize)   // the route button (F1 ...): the bottom right corner of the display, 56 px high
         instances.place ({ rect_.x + m, hy, W, rowH });
         const int by = playrows::controlsLine (rect_);
         basic.place ({ rect_.x + m, by, W, std::max (0, rect_.bottom() - m - by) });

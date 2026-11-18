@@ -320,11 +320,15 @@ int main()
                 // table name is written whole at a legible size and the two selectors are NOT stacked), row 2 PAN and LEVEL as the side knobs of the envelope third
                 EnvCompact ec;
                 ec.place ({ 440, 114, 400, 620 });
-                const Component* sec = var.inst == OscInstance::Sub ? static_cast<const Component*> (&c.basic.oct) : static_cast<const Component*> (&c.basic.source);
-                const Rect tr = c.basic.selector.rect(), sr = sec->rect();
-                const bool rows = c.basic.selector.dropdown && tr.y == sr.y && tr.h == sr.h && tr.right() <= sr.x && sr.right() <= c.basic.rect().right() && tr.h >= 56 && sr.h >= 56 && tr.bottom() <= c.basic.pan.rect().y && sr.bottom() <= c.basic.level.rect().y;
-                const bool knobs = c.basic.pan.state.side && c.basic.level.state.side && c.basic.pan.rect().y == ec.sustain.rect().y && c.basic.level.rect().y == ec.release.rect().y && c.basic.pan.rect().h == ec.sustain.rect().h
-                                   && c.basic.pan.state.dialMax == ec.sustain.state.dialMax && c.basic.pan.rect().w >= 172 && c.basic.level.rect().w >= 172 && c.basic.pan.rect().y == c.basic.level.rect().y;
+                OscillatorCompact co;   // the same rectangle as the envelope third: the rows are compared where the Play page puts the two thirds
+                co.place ({ 0, 114, 400, 620 });
+                co.setInstance (var.inst, var.kind);
+                co.basic.assignIds (300);
+                const Component* sec = var.inst == OscInstance::Sub ? static_cast<const Component*> (&co.basic.oct) : static_cast<const Component*> (&co.basic.source);
+                const Rect tr = co.basic.selector.rect(), sr = sec->rect();
+                const bool rows = co.basic.selector.dropdown && tr.y == sr.y && tr.h == sr.h && tr.right() <= sr.x && sr.right() <= co.basic.rect().right() && tr.h >= 56 && sr.h >= 56 && tr.bottom() <= co.basic.pan.rect().y && sr.bottom() <= co.basic.level.rect().y;
+                const bool knobs = co.basic.pan.state.side && co.basic.level.state.side && co.basic.pan.rect().y == ec.sustain.rect().y && co.basic.level.rect().y == ec.release.rect().y && co.basic.pan.rect().h == ec.sustain.rect().h
+                                   && co.basic.pan.state.dialMax == ec.sustain.state.dialMax && co.basic.pan.rect().w >= 172 && co.basic.level.rect().w >= 172 && co.basic.pan.rect().y == co.basic.level.rect().y;
                 check (rows && knobs, nm + ": row 1 = the type drop-down and the " + (var.inst == OscInstance::Sub ? "OCT field" : "table stepper") + " side by side, row 2 = PAN and LEVEL: the side knobs of the envelope third, same rows and size");
                 if (var.inst != OscInstance::Sub)
                 {
