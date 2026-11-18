@@ -863,3 +863,58 @@ TEST (voice_opt_engine_with_flush_to_zero_is_bit_identical)
     std::printf ("%d runs with flush-to-zero, %d differ\n", runs, failed);
     CHECK_EQ (failed, 0);
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// V13: an envelope with the curve denominators given (and the decay to a sustain of 1 without its shape) against the same envelope without them
+
+TEST (envelope_with_curve_denominators_is_bit_identical)
+{
+    Rand r (4242u);
+    const float curves[] = { 0.0f, 5.0e-5f, -5.0e-5f, 1.0f, -3.0f, 3.0f, 10.0f, -10.0f, 79.0f, -79.0f, 80.0f, 85.0f, -85.0f, 95.0f, -95.0f, 200.0f, INFINITY, -INFINITY, NAN };
+    const float sustains[] = { 1.0f, 1.0f, 0.0f, 0.5f, 0.999999f, -0.0f };
+    long long steps = 0, failed = 0;
+    for (int run = 0; run < 20000; ++run)
+    {
+        EnvSettings a;
+        a.delay = r.chance (0.7f) ? 0.0f : 0.05f * r.uni();
+        a.attack = r.chance (0.2f) ? 0.0f : 0.5f * r.uni();
+        a.hold = r.chance (0.6f) ? 0.0f : 0.1f * r.uni();
+        a.decay = r.chance (0.1f) ? 0.0f : (r.chance (0.05f) ? INFINITY : 2.0f * r.uni());
+        a.sustain = r.chance (0.5f) ? sustains[r.range (0, 5)] : r.uni();
+        a.release = r.chance (0.1f) ? 0.0f : 1.0f * r.uni();
+        a.attackCurve = curves[r.range (0, static_cast<int> (sizeof curves / sizeof curves[0]) - 1)];
+        a.decayCurve = curves[r.range (0, static_cast<int> (sizeof curves / sizeof curves[0]) - 1)];
+        a.releaseCurve = curves[r.range (0, static_cast<int> (sizeof curves / sizeof curves[0]) - 1)];
+        EnvSettings b = a;
+        b.fillDens();
+        Envelope x, y;
+        const float start = r.chance (0.5f) ? 0.0f : r.uni();
+        x.noteOn (start);
+        y.noteOn (start);
+        const int n = r.range (10, 400);
+        const int off = r.range (0, n);
+        for (int t = 0; t < n; ++t)
+        {
+            if (t == off)
+            {
+                x.noteOff();
+                y.noteOff();
+            }
+            const double dt = r.chance (0.2f) ? 4.0 * 32.0 / 44100.0 : (r.chance (0.02f) ? 0.0 : 32.0 / 44100.0);
+            const float vx = x.advance (a, dt), vy = y.advance (b, dt);
+            const double px = x.stageSeconds(), py = y.stageSeconds();
+            const float fx = x.fineFraction (0.37f), fy = y.fineFraction (0.37f);
+            ++steps;
+            if (std::memcmp (&vx, &vy, 4) != 0 || x.fineStage() != y.fineStage() || std::memcmp (&px, &py, 8) != 0 || std::memcmp (&fx, &fy, 4) != 0)
+            {
+                if (failed < 5)
+                    std::printf ("envelope run %d step %d: %.9g against %.9g (curves %g %g %g, sustain %g)\n", run, t, static_cast<double> (vx), static_cast<double> (vy),
+                                 static_cast<double> (a.attackCurve), static_cast<double> (a.decayCurve), static_cast<double> (a.releaseCurve), static_cast<double> (a.sustain));
+                ++failed;
+                break;
+            }
+        }
+    }
+    std::printf ("%lld envelope steps, %lld runs differ\n", steps, failed);
+    CHECK_EQ (failed, 0);
+}

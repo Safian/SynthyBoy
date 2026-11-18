@@ -813,8 +813,10 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             else
             {
                 envSettings (e, s, true);
-                envCache[e] = s;
                 envSetOk[e] = !fresh && envUntouched;
+                if (envSetOk[e])
+                    s.fillDens(); // V13: settings that are kept get the denominators of their curves once
+                envCache[e] = s;
                 envSetEpoch[e] = g.baseEpoch;
                 envSetBpm[e] = g.bpm;
                 envSetFactor[e] = vc.envFactor;
