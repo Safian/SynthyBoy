@@ -662,6 +662,7 @@ void LibOsc::beginType (int type) noexcept
         for (int u = 0; u < U; ++u)
         {
             specVoices[static_cast<size_t> (u)].reset();
+            specVoices[static_cast<size_t> (u)].setReferenceKernels (lp.referenceKernels);
             specParams.pitchRatio = semitonesToRatio (uni[u].semis);
             specVoices[static_cast<size_t> (u)].noteOn (&smp->analysis, specParams, startFraction (u));
         }
@@ -880,6 +881,7 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
                 continue;
             spectral::SpectralParams sp = specParams;
             sp.pitchRatio = semitonesToRatio (uni[u].semis);
+            sv.setReferenceKernels (lp.referenceKernels);
             sv.process (sp, a, b, n);
             for (int k = 0; k < n; ++k)
             {
