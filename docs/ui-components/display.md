@@ -55,7 +55,7 @@ lfodisplay::draw (sb, lfoRect, l);
 ```
 
 ## Used on
-`shell-mpc/overlay/osc_display.h` (builds `display::Data` from the engine's cycle), `osc_ui.h`, `play_view.h`, `env_ui.h` and `lfo_ui.h` (`lfodisplay::Data`). The picture sits in `OscillatorCompact::displayRect()`, `OscillatorFullScreen::displayRect()`, `LfoCompact::displayRect()`. Pictures: `docs/user-guide/img/osc-a.png`, `osc-type-sample.png`, `lfo.png`.
+`shell-mpc/overlay/osc_display.h` (builds `display::Data` from the engine's cycle), `osc_ui.h`, `play_view.h` and `lfo_ui.h` (`lfodisplay::Data`). The picture sits in `OscillatorCompact::displayRect()`, `OscillatorFullScreen::displayRect()`, `LfoCompact::displayRect()`, `LfoFullScreen::displayRect()`. Pictures: `docs/user-guide/img/osc-a.png`, `osc-type-sample.png`, `lfo.png`.
 
 ## Limits and pitfalls
 - The pointers in `Data` are the owner's: they must stay valid during `draw`.
