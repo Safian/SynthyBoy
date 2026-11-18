@@ -1,7 +1,7 @@
 # ListPopup
 
 ## What it is
-A popup list of choices with a dimmed backdrop: a box of rows of 56 px; tap a row to choose, tap outside to close. Scrolls when the list is longer than the box. Use it as the list behind a [Stepper](stepper.md) with `listable` (its `Request`), a dropdown button, or a file list (a header with a back arrow). Not for 2 to 8 values (use [LedList](led-list.md)).
+A popup list of choices with a dimmed backdrop: a box of rows of 56 px whose height follows the rows (a list of three rows is a box of three rows, not a fixed tall box); tap a row to choose, tap outside to close. Scrolls when the list is longer than the box. Use it as the list behind a [Stepper](stepper.md) with `listable` (its `Request`), a dropdown button, or a file list (a header with a back arrow). Not for 2 to 8 values (use [LedList](led-list.md)).
 
 ## Header and types
 `shell-mpc/ui/list.h`: `ListPopup`, `ListPopup::State`.
@@ -21,13 +21,17 @@ A popup list of choices with a dimmed backdrop: a box of rows of 56 px; tap a ro
 Setup: `place (box)`, `setPopup (parentRect)` (the rectangle the dimmed backdrop covers), `setBackdropId (id)`, `setHeaderId (id)`. `showCurrent()` scrolls the current item into the window (call it when opening).
 
 ## Size
-`minSize()` = 240 x (3 x 56 + 8). `kRowH` 56, `kPad` 4, `kZoneW` 44, `kBarW` 10. Typical: 600 x (8 rows) as in `VoiceUi::setCanvas`. Whole rows only: nothing is cut at the box edge. `visibleRows()` says how many fit.
+`minSize()` = 240 x (56 + 8): one row. `kRowH` 56, `kPad` 4, `kZoneW` 44, `kBarW` 10. `place (box)` gives the LARGEST box and the anchor (its top left); typical: 600 x (9 rows) as in `LfoUi::setCanvas`. The drawn box is `box()` (also what `rect()` returns for a `ListPopup`), ONE function for drawing, touch, the wheel, the rows and the scroll zone:
+- height = header (56 when there is one) + `count` rows + 2 x `kPad` (`contentHeight()`), never taller than the placed box (a longer list scrolls inside it as before), never shorter than one row (also with `count` 0); the width is the placed width;
+- the top left stays where it was placed (no owner centres a popup vertically: the anchor is the top edge; a popup that an owner positions itself, as the stepper pop-ups of the effects and the mixer, gives the exact height and is unchanged);
+- the box is moved back inside the screen (1280 x 800) and inside the dimmed parent (`setPopup`) when it would stick out and fits there; a box larger than the screen is cut to it.
+The owner may change `state.count` / `state.header` after `place` (the list that is reused for several choices): the box follows at the next draw and touch. Whole rows only: nothing is cut at the box edge. `visibleRows()` says how many fit.
 
 ## Touch and knob behaviour
 | Gesture | Change |
 |---|---|
 | tap on a row | `Index`: `index` = `value` = the row |
-| tap on the backdrop (inside `parent`, outside the box) | `Request` with `setBackdropId` id (close requested) |
+| tap on the backdrop (inside `parent`, outside the box: also the empty part below a short list) | `Request` with `setBackdropId` id (close requested) |
 | tap on the header (`headerBack`) | `Request` with `setHeaderId` id |
 | vertical drag | scrolls by whole rows (no change out) |
 | touch in the scroll zone (44 px at the right edge, when the list is longer than the box) | the thumb follows the finger; a touch on the track pages by a window less one row; nothing selects a row |
@@ -43,7 +47,7 @@ Header with back arrow (content browser; the wavetable browser: "WAVETABLES" ove
 ## Minimal example
 ```cpp
 ListPopup list;
-list.place ({ 340, 130, 600, 8 * ListPopup::kRowH + 2 * ListPopup::kPad });
+list.place ({ 340, 130, 600, 8 * ListPopup::kRowH + 2 * ListPopup::kPad });   // the largest box; with 3 items it is 3 rows high
 list.setPopup ({ 0, 110, 1280, 628 });        // the tab: dimmed behind the box
 list.setId (700);
 list.setBackdropId (701);
