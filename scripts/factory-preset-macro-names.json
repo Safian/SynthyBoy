@@ -1761,6 +1761,86 @@
    "Surface Ticks",
    "",
    ""
+  ],
+  "Acoustic Bore Reed": [
+   "Bore Morph",
+   "Dark",
+   "Vibrato Rate",
+   "Grit",
+   "Echo",
+   "Room",
+   "",
+   ""
+  ],
+  "Harmonic Wah Bass": [
+   "Wah Position",
+   "Wah Rate",
+   "Tube Drive",
+   "Sub",
+   "Dark",
+   "Resonance",
+   "",
+   ""
+  ],
+  "Cathedral Bell Ring": [
+   "Bell Bright",
+   "Ring Length",
+   "Dampen",
+   "Hall",
+   "Strike Length",
+   "Beating",
+   "",
+   ""
+  ],
+  "Dispersion Phase Pad": [
+   "Phase Swirl",
+   "Swirl Speed",
+   "Dark",
+   "Space",
+   "Clip Drive",
+   "Width",
+   "",
+   ""
+  ],
+  "Soprano Vowel Pad": [
+   "Vowel",
+   "Vowel Speed",
+   "Choir",
+   "Space",
+   "Dark",
+   "Chest",
+   "",
+   ""
+  ],
+  "Talk Box Baritone": [
+   "Mouth",
+   "Tube Drive",
+   "Dark",
+   "Echo",
+   "Vibrato Rate",
+   "Double",
+   "",
+   ""
+  ],
+  "Choir Swell Ensemble": [
+   "Vowel Blend",
+   "Attack Time",
+   "High Voices",
+   "Hall",
+   "Dark",
+   "Width",
+   "",
+   ""
+  ],
+  "Diphthong Morph Vox": [
+   "Diphthong",
+   "Word Speed",
+   "Dark",
+   "Echo Space",
+   "Vibrato Rate",
+   "Double",
+   "",
+   ""
   ]
  }
 }

@@ -7,7 +7,7 @@
   "attribution": "Safian Szabolcs",
   "kind": "presets",
   "requires_plugin": ">=0.1.0",
-  "description": "176 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
+  "description": "184 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
   "files": [
     {
       "path": "Bass/solid_sub.sbpreset",
@@ -888,6 +888,46 @@
       "path": "FX/vinyl_crackle_bed.sbpreset",
       "sha256": "3a62d5b2d31bb50e7625b382e4aaae8b52bd9e96af385fcc98a00ce8338d8505",
       "size": 51052
+    },
+    {
+      "path": "Lead/acoustic_bore_reed.sbpreset",
+      "sha256": "6af73622cc8af7c894d33f4a7b08a57487a319d5f4ac742305abc0efc5ca1d53",
+      "size": 51018
+    },
+    {
+      "path": "Bass/harmonic_wah_bass.sbpreset",
+      "sha256": "6415d370f31fb62fda455847ec4b70e3ae94cb14bdf9527741b01f2a159d0abe",
+      "size": 50945
+    },
+    {
+      "path": "Keys/cathedral_bell_ring.sbpreset",
+      "sha256": "7aa9e8087afc68f4102b1c180a91c807a49e34111c170df96ac4f2f20987304b",
+      "size": 50955
+    },
+    {
+      "path": "Pad/dispersion_phase_pad.sbpreset",
+      "sha256": "c37293484e38dd27eab3c5aa2a7833178093ed86c9c5d28160fb2165438483c8",
+      "size": 51163
+    },
+    {
+      "path": "Pad/soprano_vowel_pad.sbpreset",
+      "sha256": "2baeeded1a201cf641ec427b0524b81abaf237bbeb8565069ecf79b09203842b",
+      "size": 50939
+    },
+    {
+      "path": "Lead/talk_box_baritone.sbpreset",
+      "sha256": "be02df3083f1d6c4d1cc15dfa8a359a6985bf93c24ea4c559e333192a13e995c",
+      "size": 50977
+    },
+    {
+      "path": "Pad/choir_swell_ensemble.sbpreset",
+      "sha256": "08eb502115159c28ba9846be976a6e7a6d879703ff0a9249cf47fb4612375713",
+      "size": 50975
+    },
+    {
+      "path": "Lead/diphthong_morph_vox.sbpreset",
+      "sha256": "9566240fe8172b72dde3f4f9df0143ef70d9ebd81f6e599c47b12f8c5329c830",
+      "size": 51023
     }
   ]
 }
