@@ -13,33 +13,33 @@ Gép és csomag, amin hallgatod:
 ### 1/a Átírt oktáv (te kérted; hasonlítsd az "ok" basszusokhoz, pl. 808 Boom, Solid Sub)
 
 [Bass Synth] Pulse Width Bass: 
-    (korábban: ez szerintme vagy 2oktávval magasabban szól mint kéne meg 2-3db halkabban; hangerő -1.2 dB; két oktávval lejjebb)
+    (korábban: ez szerintme vagy 2oktávval magasabban szól mint kéne meg 2-3db halkabban; hangerő -1.2 dB; két oktávval lejjebb) jó lett
 
 [Bass Synth] Punchy Pluck Bass: 
-    (korábban: egy okávval lentebb van mint kéne; hangerő -5.4 dB; egy oktávval feljebb)
+    (korábban: egy okávval lentebb van mint kéne; hangerő -5.4 dB; egy oktávval feljebb) - még mindig magas a hangja még egy de lehet inkább 2 oktávval tlod lentebb 
 
 [Bass Synth] Warm Analog Bass: 
-    (korábban: két oktávval magasabban van mint kéne; hangerő +3.5 dB; két oktávval lejjebb)
+    (korábban: két oktávval magasabban van mint kéne; hangerő +3.5 dB; két oktávval lejjebb) - jó lett
 
 [FX] Cosmic Teleport: 
-    (korábban: -9 db vel halkabb meg két oktávval magasabb kb; hangerő +5.7 dB; két oktávval lejjebb)
+    (korábban: -9 db vel halkabb meg két oktávval magasabb kb; hangerő +5.7 dB; két oktávval lejjebb) - kicsit mély lett -2 oktáv kéne
 
 [FX] Detonation Tail: 
-    (korábban: két oktávval magasabb; hangerő -15.0 dB; két oktávval lejjebb)
+    (korábban: két oktávval magasabb; hangerő -15.0 dB; két oktávval lejjebb) - jó lett
 
 [Texture] Space Wind Storm: 
-    (korábban: 2 oktávval magasabb; hangerő -3.4 dB; két oktávval lejjebb)
+    (korábban: 2 oktávval magasabb; hangerő -3.4 dB; két oktávval lejjebb) - jó lett
 
 [FX] Sub Drop Boom: 
-    (korábban: 1 oktával alcsonyabb 3 dbvel halkabb; hangerő -1.1 dB; egy oktávval FELJEBB került; ha lejjebb kérted, írd ide)
+    (korábban: 1 oktával alcsonyabb 3 dbvel halkabb; hangerő -1.1 dB; egy oktávval FELJEBB került; ha lejjebb kérted, írd ide) - egy oktávval legyen mélyebb
 
 ### 1/b Hangerő-megjegyzéseid (újraszintezve; jó-e most a többihez képest?)
 
 [Bass Acid] Dirty Distortion Bass: 
-    (korábban: +6 decibellel hangosabb amúgy ok ok; hangerő -9.4 dB)
+    (korábban: +6 decibellel hangosabb amúgy ok ok; hangerő -9.4 dB)  két db vel legyen hangosabb
 
 [Bass Acid] EMS Squelch Bass: 
-    (korábban: +6db, ok.; hangerő -4.7 dB)
+    (korábban: +6db, ok.; hangerő -4.7 dB) - +2 db kell neki
 
 [Bass Synth] Gritty Square Bass: 
     (korábban: +6db kb, amúgy ok; hangerő -6.4 dB)
