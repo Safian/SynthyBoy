@@ -10,6 +10,7 @@ namespace synthyboy_mpc { namespace ui {
 
 struct LoadBarData {
     uint32_t percent; // 0..100
+    uint32_t total;   // 0 = unknown
     bool active;
     uint32_t label_id; // id into owner-supplied table
 };
@@ -29,7 +30,7 @@ public:
         // Amber color from page_view.h
         uint32_t amber = 0xFFB000;
         
-        if (state.percent == 0) {
+        if (state.total == 0) {
             // Compact form: solid amber bar
             p.rrect(rect_, 2.0f, theme::rgba(amber));
         } else {
