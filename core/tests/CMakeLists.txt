@@ -71,6 +71,16 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
     target_link_libraries(synthyboy_test_own_warp_lanes PRIVATE Threads::Threads)
     add_test(NAME synthyboy_test_own_warp_lanes COMMAND synthyboy_test_own_warp_lanes)
 endif()
+# The lane mix of the library players (LibOsc::mixLane: simd::rampLerp + simd::mulAddTo) against the scalar loop, with the NEON forms on (also on Apple's arm64) and without fused multiply-add.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
+    add_executable(synthyboy_test_own_mix_lanes test_own_mix_lanes.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_own_mix_lanes PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own")
+    target_compile_features(synthyboy_test_own_mix_lanes PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_own_mix_lanes PRIVATE SB_TEST_NEON=1)
+    target_compile_options(synthyboy_test_own_mix_lanes PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_own_mix_lanes PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_own_mix_lanes COMMAND synthyboy_test_own_mix_lanes)
+endif()
 # The NEON inverse transform of the spectral morph cycle against its scalar loops: morph.cpp and the wavetable it needs compiled into the test with the NEON form on (also on Apple's arm64) and
 # without fused multiply-add; it links nothing else of the engine.
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)

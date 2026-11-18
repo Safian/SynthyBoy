@@ -36,6 +36,10 @@ using ShapeFn = float (*) (int type, float x, float amount);
     1 the full shape; `skew` (-1 .. 1) moves the peak of the shape towards the start (< 0) or the end (> 0). Never NaN, in 0 .. 1. */
 float windowValue (WindowShape shape, float x, float amount, float skew) noexcept;
 
+/** a[i] = isfinite (a[i]) ? max (-16, min (16, a[i])) : 0 for i < n: the output stage of the voice. `neon`: four at a time, the same operations in every lane (a non finite value is masked to 0 as the scalar
+    test does): the same bits for every normal sample (NEON on 32 bit ARM flushes subnormals, as the other vector forms of the engine do). */
+void clampFinite (float* a, int n, bool neon) noexcept;
+
 /** The settings of a cloud. The oscillator fills the struct once per block (from the keys and the modulation) and hands it to process (). */
 struct GrainParams
 {
@@ -100,6 +104,8 @@ public:
 
     /** Tests only: reset() as it was before (the `active` flag of all grains written on every call). */
     void setLegacyReset (bool on) noexcept { legacyReset_ = on; }
+    /** Tests only: the output stage runs the scalar form (as before SP10) instead of the NEON form. */
+    void setLegacyOutput (bool on) noexcept { legacyOutput_ = on; }
     /** Tests only: the scanning head advances with the two divisions and the loop bounds of every sample (as before GR1) instead of constants made once per call. */
     void setLegacyHead (bool on) noexcept { legacyHead_ = on; }
 
@@ -145,6 +151,7 @@ private:
     bool reference_ = false;
     bool vectors_ = true;
     bool legacyReset_ = false;
+    bool legacyOutput_ = false;
     bool legacyHead_ = false;
     bool grainsLive_ = false;   // a grain may be active (set by spawn, cleared by reset): reset has nothing to clear while it is false
     bool active_ = false, released_ = false, headDone_ = false;

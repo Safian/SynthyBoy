@@ -636,3 +636,53 @@ TEST (granular_the_scanning_head_with_constants_made_once_is_the_head_of_every_s
     }
     std::printf ("    scanning cloud (%d grains live), 128 samples: %.2f us now, %.2f us before (this Mac)\n", live, us[0], us[1]);
 }
+
+// SP10: the output stage of the cloud (mask of non finite values, clamp to +-16) in NEON lanes: the kernel against the scalar loop on values of every kind, and the voice against the voice with the scalar stage.
+TEST (granular_the_output_stage_in_lanes_is_the_per_sample_stage)
+{
+    const float inf = std::numeric_limits<float>::infinity(), nan = std::numeric_limits<float>::quiet_NaN();
+    std::vector<float> special = { 0.0f, -0.0f, 1.0f, -1.0f, 16.0f, -16.0f, 16.0001f, -16.0001f, 15.9999f, 1.0e30f, -1.0e30f, 3.4e38f, -3.4e38f, inf, -inf, nan, -nan, 1.0e-30f, 1.0e-39f, -1.0e-39f, 0.5f };
+    uint32_t seed = 77u;
+    for (int i = 0; i < 500; ++i)
+    {
+        seed = seed * 1664525u + 1013904223u;
+        special.push_back (40.0f * (static_cast<float> (seed >> 8) * (1.0f / 8388608.0f) - 1.0f));
+    }
+    for (int n : { 0, 1, 3, 4, 5, 8, 17, static_cast<int> (special.size()) })
+        for (int neon = 0; neon < 2; ++neon)
+        {
+            std::vector<float> a (special.begin(), special.end()), ref (special.begin(), special.end());
+            clampFinite (a.data(), n, neon != 0);
+            for (int i = 0; i < n; ++i)
+                ref[static_cast<size_t> (i)] = std::isfinite (ref[static_cast<size_t> (i)]) ? std::max (-16.0f, std::min (16.0f, ref[static_cast<size_t> (i)])) : 0.0f;
+            CHECK (std::memcmp (a.data(), ref.data(), a.size() * sizeof (float)) == 0);   // (the values after n are untouched)
+        }
+    Tone tone (330.0, 1.5);
+    const auto view = tone.data.view();
+    int blocks = 0, different = 0;
+    for (int jump = 0; jump < 2; ++jump)
+    {
+        GrainParams p;
+        p.densityHz = 400.0f;   // many grains: the sum goes past 16 and the clamp works
+        p.lengthSec = 0.2f;
+        p.maxGrains = kMaxGrains;
+        GranularVoice a, b;
+        a.prepare (44100.0);
+        b.prepare (44100.0);
+        b.setLegacyOutput (true);
+        a.noteOn (&view, p, 3u, 0.0f, jump != 0, 0.0f);
+        b.noteOn (&view, p, 3u, 0.0f, jump != 0, 0.0f);
+        for (int block = 0; block < 100; ++block)
+        {
+            const int n = block % 4 == 0 ? 1 : (block % 4 == 1 ? 33 : 128);
+            std::vector<float> aL (static_cast<size_t> (n)), aR (aL), bL (aL), bR (aL);
+            a.process (p, aL.data(), aR.data(), n, nullptr);
+            b.process (p, bL.data(), bR.data(), n, nullptr);
+            ++blocks;
+            if (std::memcmp (aL.data(), bL.data(), sizeof (float) * static_cast<size_t> (n)) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * static_cast<size_t> (n)) != 0)
+                ++different;
+        }
+    }
+    CHECK_EQ (blocks, 200);
+    CHECK_EQ (different, 0);
+}

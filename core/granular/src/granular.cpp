@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #if defined(__ARM_NEON) && ! defined(SB_NO_NEON)
  #include <arm_neon.h>
@@ -759,6 +760,28 @@ bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* righ
     return any;
 }
 
+void clampFinite (float* a, int n, bool neon) noexcept
+{
+    int i = 0;
+#if SB_GRAIN_NEON
+    if (neon)
+    {
+        const float32x4_t vhi = vdupq_n_f32 (16.0f), vlo = vdupq_n_f32 (-16.0f), vinf = vdupq_n_f32 (std::numeric_limits<float>::infinity());
+        for (; i + 4 <= n; i += 4)
+        {
+            const float32x4_t x = vld1q_f32 (a + i);
+            const uint32x4_t finite = vcltq_f32 (vabsq_f32 (x), vinf);   // false for infinity and NaN
+            const float32x4_t c = vminq_f32 (vmaxq_f32 (x, vlo), vhi);
+            vst1q_f32 (a + i, vreinterpretq_f32_u32 (vandq_u32 (vreinterpretq_u32_f32 (c), finite)));
+        }
+    }
+#else
+    (void) neon;
+#endif
+    for (; i < n; ++i)
+        a[i] = std::isfinite (a[i]) ? std::max (-16.0f, std::min (16.0f, a[i])) : 0.0f;
+}
+
 void GranularVoice::process (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept
 {
     std::fill (left, left + numFrames, 0.0f);
@@ -820,11 +843,8 @@ void GranularVoice::process (const GrainParams& p, float* left, float* right, in
     else
         any = renderGrains (p, left, right, numFrames, rateMod);
 
-    for (int i = 0; i < numFrames; ++i)
-    {
-        left[i] = std::isfinite (left[i]) ? std::max (-16.0f, std::min (16.0f, left[i])) : 0.0f;
-        right[i] = std::isfinite (right[i]) ? std::max (-16.0f, std::min (16.0f, right[i])) : 0.0f;
-    }
+    clampFinite (left, numFrames, ! legacyOutput_ && SB_GRAIN_NEON != 0);
+    clampFinite (right, numFrames, ! legacyOutput_ && SB_GRAIN_NEON != 0);
     if (! any && headDone_ && ! p.manual)
         active_ = false;
 }

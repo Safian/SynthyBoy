@@ -8,6 +8,7 @@
 #include <vector>
 #include "lib_osc.h"
 #include "../dsp/section_timing.h"
+#include "../dsp/simd.h"
 
 #include <cstdio>
 
@@ -44,6 +45,23 @@ float divisionBeats (int idx) noexcept
 
 std::atomic<bool> gLegacyCaches { false };
 bool legacyCaches() noexcept { return gLegacyCaches.load (std::memory_order_relaxed); }
+
+/** d[k] += a[k] * lerp (g0, g1, (t0 + k + 1) * invP) for k < n (n <= kControlPeriod): the lane mix of a library player into the slot. With NEON (the ARM builds) four samples at a time, the same operations in
+    every lane (simd.h: separate multiply and add), so the same bits; elsewhere the scalar loop as it always was. */
+inline void mixLane (float* d, const float* a, float g0, float g1, int t0, int n, float invP) noexcept
+{
+#if SB_NEON
+    if (n <= kControlPeriod)
+    {
+        float gk[kControlPeriod];
+        simd::rampLerp (gk, g0, g1, t0, n, invP);
+        simd::mulAddTo (d, a, gk, n);
+        return;
+    }
+#endif
+    for (int k = 0; k < n; ++k)
+        d[k] += a[k] * lerp (g0, g1, static_cast<float> (t0 + k + 1) * invP);
+}
 
 void panLaw (float p, float& l, float& r) noexcept
 {
@@ -883,15 +901,18 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
             sv.processModulated (a, b, n, rm);
             if (u == 0)
                 headFrac_ = sampleFrames_ > 1.0 ? static_cast<float> (std::min (1.0, std::max (0.0, sv.getPlayheadPosition() / sampleFrames_))) : -1.0f;
+            if (! (anyPost && pointwiseOnVoice))
+            {
+                mixLane (L, a, uni[u].gPrevL, uni[u].gL, t0, n, invP);
+                mixLane (R, b, uni[u].gPrevR, uni[u].gR, t0, n, invP);
+                continue;
+            }
             for (int k = 0; k < n; ++k)
             {
                 const float t = static_cast<float> (t0 + k + 1) * invP;
                 float sl = a[k], sr2 = b[k];
-                if (anyPost && pointwiseOnVoice)
-                {
-                    sl = postWarp (sl, k);
-                    sr2 = postWarp (sr2, k);
-                }
+                sl = postWarp (sl, k);
+                sr2 = postWarp (sr2, k);
                 L[k] += sl * lerp (uni[u].gPrevL, uni[u].gL, t);
                 R[k] += sr2 * lerp (uni[u].gPrevR, uni[u].gR, t);
             }
@@ -908,16 +929,18 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
             gp.pitchRatio = ratioOf (uni[u]);
             gv.setReferenceKernels (lp.referenceKernels);
             gv.process (gp, a, b, n, rm);
+            const bool postWarped = tick.warp[0] == kWarpRmA || tick.warp[0] == kWarpRmB || tick.warp[0] == kWarpAmA || tick.warp[0] == kWarpAmB || tick.warp[1] == kWarpRmA
+                                    || tick.warp[1] == kWarpRmB || tick.warp[1] == kWarpAmA || tick.warp[1] == kWarpAmB;
+            if (! postWarped)
+            {
+                mixLane (L, a, uni[u].gPrevL, uni[u].gL, t0, n, invP);
+                mixLane (R, b, uni[u].gPrevR, uni[u].gR, t0, n, invP);
+                continue;
+            }
             for (int k = 0; k < n; ++k)
             {
                 const float t = static_cast<float> (t0 + k + 1) * invP;
-                float sl = a[k], sr2 = b[k];
-                if (tick.warp[0] == kWarpRmA || tick.warp[0] == kWarpRmB || tick.warp[0] == kWarpAmA || tick.warp[0] == kWarpAmB || tick.warp[1] == kWarpRmA
-                    || tick.warp[1] == kWarpRmB || tick.warp[1] == kWarpAmA || tick.warp[1] == kWarpAmB)
-                {
-                    sl = postWarp (sl, k);
-                    sr2 = postWarp (sr2, k);
-                }
+                const float sl = postWarp (a[k], k), sr2 = postWarp (b[k], k);
                 L[k] += sl * lerp (uni[u].gPrevL, uni[u].gL, t);
                 R[k] += sr2 * lerp (uni[u].gPrevR, uni[u].gR, t);
             }
@@ -934,12 +957,8 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
             sp.pitchRatio = ratioOf (uni[u]);
             sv.setReferenceKernels (lp.referenceKernels);
             sv.process (sp, a, b, n);
-            for (int k = 0; k < n; ++k)
-            {
-                const float t = static_cast<float> (t0 + k + 1) * invP;
-                L[k] += a[k] * lerp (uni[u].gPrevL, uni[u].gL, t);
-                R[k] += b[k] * lerp (uni[u].gPrevR, uni[u].gR, t);
-            }
+            mixLane (L, a, uni[u].gPrevL, uni[u].gL, t0, n, invP);
+            mixLane (R, b, uni[u].gPrevR, uni[u].gR, t0, n, invP);
         }
     }
     else if (type == kOscTypeMultisample && boundSet != nullptr && boundSet->instrument[oscIdx] != nullptr)

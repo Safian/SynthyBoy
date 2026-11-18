@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <limits>
 #include <cstring>
 
 #if SB_SPECTRAL_NEON
@@ -525,6 +526,31 @@ const float* windowTable() noexcept
     return table.w;
 }
 } // namespace
+
+void gainClamp (float* out, const float* in, float gain, int n, bool neon) noexcept
+{
+    int i = 0;
+#if SB_SPECTRAL_NEON
+    if (neon)
+    {
+        const float32x4_t vg = vdupq_n_f32 (gain), vhi = vdupq_n_f32 (16.0f), vlo = vdupq_n_f32 (-16.0f), vinf = vdupq_n_f32 (std::numeric_limits<float>::infinity());
+        for (; i + 4 <= n; i += 4)
+        {
+            const float32x4_t x = vmulq_f32 (vld1q_f32 (in + i), vg);
+            const uint32x4_t finite = vcltq_f32 (vabsq_f32 (x), vinf);   // false for infinity and NaN
+            const float32x4_t c = vminq_f32 (vmaxq_f32 (x, vlo), vhi);
+            vst1q_f32 (out + i, vreinterpretq_f32_u32 (vandq_u32 (vreinterpretq_u32_f32 (c), finite)));
+        }
+    }
+#else
+    (void) neon;
+#endif
+    for (; i < n; ++i)
+    {
+        const float x = in[i] * gain;
+        out[i] = std::isfinite (x) ? std::max (-16.0f, std::min (16.0f, x)) : 0.0f;
+    }
+}
 
 void warmTables() noexcept
 {

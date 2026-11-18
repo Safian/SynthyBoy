@@ -152,6 +152,8 @@ public:
     void reset() noexcept;
     /** Tests only: reset() as it was before (every buffer of both channels cleared), and a fill of all buffers with a pattern to start notes on dirty memory. */
     void setLegacyReset (bool on) noexcept { legacyReset_ = on; }
+    /** Tests only: the output stage runs the scalar form (as before SP10) instead of the NEON form. */
+    void setLegacyOutput (bool on) noexcept { legacyOutput_ = on; }
     /** Tests only: the priming frames go through the 8 KB temporary and a scalar add loop (as before SP6). */
     void setLegacyStartOla (bool on) noexcept { legacyStartOla_ = on; }
     /** Tests only: with Phase Lock every bin is advanced and then the lock overwrites about half of them (as before SP5), instead of advancing only the bins the lock keeps. */
@@ -209,6 +211,7 @@ private:
     bool primed_ = false;
     bool legacyStart_ = false;
     bool legacyReset_ = false;
+    bool legacyOutput_ = false;
     bool legacyStartOla_ = false;
     bool legacyLock_ = false;
     bool startActive_ = false;   // the first hop (the output samples 0 .. kHop - startSkip_) is being read from the ring, normalised by the windows of the frames made so far

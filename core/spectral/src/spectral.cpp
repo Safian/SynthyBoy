@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <limits>
 #include <cstring>
 
 // The reference loops here and the block kernels of kernels.cpp must compute the same bits where they do the same thing: no fused multiply-add in either, on any compiler / CPU.
@@ -1477,7 +1478,8 @@ void SpectralVoice::process (const SpectralParams& p, float* left, float* right,
     if (! active_ || analysis_ == nullptr || p.scratch == nullptr)
         return;
     const bool stereo = analysis_->channels() > 1;
-    for (int i = 0; i < numFrames; ++i)
+    int i = 0;
+    while (i < numFrames)
     {
         if (startActive_)
         {
@@ -1508,10 +1510,16 @@ void SpectralVoice::process (const SpectralParams& p, float* left, float* right,
             if (! active_)
                 return;
         }
-        const float l = channel_[0].finished[outPos_] * p.gain, r = (stereo ? channel_[1].finished[outPos_] : channel_[0].finished[outPos_]) * p.gain;
-        left[i] = std::isfinite (l) ? std::max (-16.0f, std::min (16.0f, l)) : 0.0f;
-        right[i] = std::isfinite (r) ? std::max (-16.0f, std::min (16.0f, r)) : 0.0f;
-        ++outPos_;
+        // the samples up to the next event (the end of the hop, the next frame of the start that is due) read the finished hop as it is: one run through the output stage
+        int run = std::min (numFrames - i, kHop - outPos_);
+        if (startActive_)
+            for (int j = 0; j < 3; ++j)
+                if (startJoin_[j] > outPos_)
+                    run = std::min (run, startJoin_[j] - outPos_);
+        kernels::gainClamp (left + i, channel_[0].finished + outPos_, p.gain, run, ! legacyOutput_ && kernels::haveNeon());
+        kernels::gainClamp (right + i, (stereo ? channel_[1].finished : channel_[0].finished) + outPos_, p.gain, run, ! legacyOutput_ && kernels::haveNeon());
+        outPos_ += run;
+        i += run;
     }
 }
 

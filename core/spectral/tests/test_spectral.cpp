@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <limits>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -1448,4 +1449,103 @@ TEST (spectral_the_priming_overlap_add_straight_into_the_ring_is_the_old_one)
         us[legacy] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / 100.0;
     }
     std::printf ("    8 note starts: %.1f us now, %.1f us before (this Mac, warm)\n", us[0], us[1]);
+}
+
+// SP10: the output stage of the voice (gain, mask of non finite values, clamp to +-16) in NEON lanes. The kernel against the scalar loop on values of every kind (NaN, infinities, signed zeros, the limits,
+// subnormals, random), several gains and lengths; the voice that reads the finished hop in runs up to the next event against the voice that tests every sample (`setLegacyOutput`), for every start offset, the
+// deferred frames of the start, mono and stereo, in blocks of every length.
+TEST (spectral_the_output_stage_in_lanes_is_the_per_sample_stage)
+{
+    const float inf = std::numeric_limits<float>::infinity(), nan = std::numeric_limits<float>::quiet_NaN();
+    std::vector<float> special = { 0.0f, -0.0f, 1.0f, -1.0f, 16.0f, -16.0f, 16.0001f, -16.0001f, 15.9999f, 1.0e30f, -1.0e30f, 3.4e38f, -3.4e38f, inf, -inf, nan, -nan, 1.0e-30f, -1.0e-30f, 1.0e-39f, -1.0e-39f, 0.5f, 7.25f };
+    uint32_t seed = 31u;
+    for (int i = 0; i < 500; ++i)
+    {
+        seed = seed * 1664525u + 1013904223u;
+        special.push_back (40.0f * (static_cast<float> (seed >> 8) * (1.0f / 8388608.0f) - 1.0f));
+    }
+    int checks = 0;
+    for (float gain : { 1.0f, 0.37f, 5.5f, -2.0f, 0.0f })
+        for (int n : { 0, 1, 3, 4, 5, 8, 17, static_cast<int> (special.size()) })
+        {
+            std::vector<float> a (static_cast<size_t> (n) + 1, 7.0f), b (static_cast<size_t> (n) + 1, 7.0f);
+            kernels::gainClamp (a.data(), special.data(), gain, n, true);
+            kernels::gainClamp (b.data(), special.data(), gain, n, false);
+            std::vector<float> ref (static_cast<size_t> (n) + 1, 7.0f);
+            for (int i = 0; i < n; ++i)
+            {
+                const float x = special[static_cast<size_t> (i)] * gain;
+                ref[static_cast<size_t> (i)] = std::isfinite (x) ? std::max (-16.0f, std::min (16.0f, x)) : 0.0f;
+            }
+            ++checks;
+            CHECK (std::memcmp (a.data(), ref.data(), a.size() * sizeof (float)) == 0);   // (the guard element after n is untouched)
+            CHECK (std::memcmp (b.data(), ref.data(), b.size() * sizeof (float)) == 0);
+        }
+    CHECK_EQ (checks, 40);
+    Tone tone (rich (220.0, 1.2));
+    std::vector<float> l (static_cast<size_t> (1.2 * kSr)), r (l.size());
+    for (size_t i = 0; i < l.size(); ++i)
+    {
+        l[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 311.0 * static_cast<double> (i) / kSr));
+        r[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 477.0 * static_cast<double> (i) / kSr));
+    }
+    SampleData stereoData;
+    stereoData.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), kSr);
+    Analysis stereo;
+    stereo.build (stereoData.view());
+    int runs = 0, different = 0;
+    for (const Analysis* an : { &tone.analysis, &stereo })
+        for (int block : { 1, 7, 64, 128, 300, 511, 512, 1000 })
+            for (int k = 0; k < kStartSteps; ++k)
+                for (int smear = 0; smear < 2; ++smear)
+                {
+                    SpectralParams p = frozen (0.4f);
+                    p.manual = false;
+                    p.scanSpeed = 0.5f;
+                    p.gain = 3.0f;   // loud enough that the clamp works
+                    p.warpType[0] = smear != 0 ? static_cast<int> (Warp::smear) : -1;
+                    p.warpAmount[0] = 0.8f;
+                    SpectralVoice a, b;
+                    a.prepare (kSr);
+                    b.prepare (kSr);
+                    b.setLegacyOutput (true);
+                    a.noteOn (an, p, 0.0f, k * kStartStep);
+                    b.noteOn (an, p, 0.0f, k * kStartStep);
+                    std::vector<float> ra, rb;
+                    const int total = 6000;
+                    std::vector<float> la, lb;
+                    for (int done = 0; done < total; done += block)
+                    {
+                        std::vector<float> xl (static_cast<size_t> (block)), xr (xl), yl (xl), yr (xl);
+                        a.process (p, xl.data(), xr.data(), block);
+                        b.process (p, yl.data(), yr.data(), block);
+                        la.insert (la.end(), xl.begin(), xl.end());
+                        lb.insert (lb.end(), yl.begin(), yl.end());
+                        ra.insert (ra.end(), xr.begin(), xr.end());
+                        rb.insert (rb.end(), yr.begin(), yr.end());
+                    }
+                    ++runs;
+                    if (std::memcmp (la.data(), lb.data(), la.size() * sizeof (float)) != 0 || std::memcmp (ra.data(), rb.data(), ra.size() * sizeof (float)) != 0)
+                        ++different;
+                }
+    CHECK_EQ (runs, 2 * 8 * 4 * 2);
+    CHECK_EQ (different, 0);
+    // Mac timing: the output stage over the 128 samples of a block of a voice that is in its steady state (the frames of the hop are the same work in both)
+    double us[2] = {};
+    for (int legacy = 0; legacy < 2; ++legacy)
+    {
+        SpectralParams p = frozen (0.4f);
+        SpectralVoice v;
+        v.prepare (kSr);
+        v.setLegacyOutput (legacy != 0);
+        v.noteOn (&tone.analysis, p, 0.0f, 0);
+        std::vector<float> xl (128), xr (128);
+        for (int i = 0; i < 40; ++i)
+            v.process (p, xl.data(), xr.data(), 128);
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 4000; ++i)
+            v.process (p, xl.data(), xr.data(), 128);
+        us[legacy] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / 4000.0;
+    }
+    std::printf ("    128 samples of a voice (frames included): %.2f us now, %.2f us before (this Mac; the frame work dominates there)\n", us[0], us[1]);
 }
