@@ -3,7 +3,7 @@
 For developers and AI coding agents who want to build their own plugin-drawn pages (and later their own Akai MPC plugin UI) from these components. Start here; the details are one page per component.
 
 ## What it is
-`shell-mpc/ui/` is a header-only C++17 library, namespace `synthyboy_mpc::ui`. `ui.h` includes most of it (41 headers and the umbrella `ui.h`). It draws with the scene ops of `shell-mpc/overlay/gpu/scene.h` (a GPU helper draws them on the MPC's display plane; `shell-mpc/overlay/scene_cpu.h` is the CPU renderer with the same meaning, the fallback and the test reference). Pictures of every page: `docs/user-guide/img/*.png`. The design record is docs/MPC.md "UI components". Licence: AGPL-3.0-or-later ([REUSE.md](REUSE.md)).
+`shell-mpc/ui/` is a header-only C++17 library, namespace `synthyboy_mpc::ui`. `ui.h` includes most of it (43 headers and the umbrella `ui.h`). It draws with the scene ops of `shell-mpc/overlay/gpu/scene.h` (a GPU helper draws them on the MPC's display plane; `shell-mpc/overlay/scene_cpu.h` is the CPU renderer with the same meaning, the fallback and the test reference). Pictures of every page: `docs/user-guide/img/*.png`. The design record is docs/MPC.md "UI components". Licence: AGPL-3.0-or-later ([REUSE.md](REUSE.md)).
 
 ## The one contract every component follows
 1. State in: a plain struct (`component.state`) holds what it shows. The component never stores the truth.
