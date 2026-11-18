@@ -573,28 +573,109 @@ Alatta a **HOST** LED kapcsoló. A **HOST** csak akkor számít, ha az LFO MODE 
 
 A stílusválasztó rács a Q 1, és nincs külön léptetője: PERLIN, S & H (mintavételezés és tartás [sample and hold]), SINE INT (szinusz-interpolált), LORENZ, ROSSLER. A kijelző a kimenet nyomvonala. A RANDOM blokk egyetlen sor: a RATE potméter (0.01 .. 200 Hz, alapértelmezett: 2), a HZ / BPM / KEY lista, a STEREO LED kapcsoló és az indítási MODE (kétágú lista: Retrigger, Free-run). KEY követésben a TRANSPOSE és TUNE blokk veszi át a frekvencia helyét a fentiek szerint. A véletlen LFO-knak nincs EDIT gombjuk.
 
-**A rajzolt hullámforma-szerkesztő (The drawn-shape editor).** A jobb felső sarokban lévő **EDIT** gomb megnyitja a szerkesztő oldalt az oldal felett (a BACK visszalép). Ha egy beépített formánál nyomjuk meg az EDIT gombot, a forma átmásolódik pontokká, és rajzolt formává alakul (az LFO formája ekkor DRAWN lesz); az eredeti forma egyetlen koppintással elérhető a választóban. A választóban a DRAWN cella kiválasztása csupán átállítja a formát rajzoltra (egy háromszögre, ha még nincsenek pontjai); magát a szerkesztőt nem nyitja meg.
+**A rajzolt hullámforma-szerkesztő (The drawn-shape editor).** Az LFO oldal jobb felső sarkában lévő **EDIT** gomb megnyitja a szerkesztőoldalt az aktuális nézet felett (a visszatéréshez koppints a **BACK** gombra). Ha beépített forma kiválasztásakor nyomod meg az **EDIT** gombot, a forma szerkeszthető pontokká alakul át, és egyedi rajzolt formává válik (az LFO formája ekkor DRAWN lesz). Az LFO oldal formaválasztójával bármikor visszaválthatsz bármelyik gyári formára. A formaválasztóban a DRAWN cella kiválasztása átvált az egyedi formára (egy háromszögre, ha még nincsenek pontjai), de nem nyitja meg a szerkesztőt.
 
 ![LFO szerkesztő](../img/lfo-editor.png)
 
-- **Felső sáv:** **BACK**, a hét **eszköz**, **SHAPES** (a kártyán lévő és a gyári formák), **MORE** (tükrözés, eltolás, rácselőbeállítások, másolások), **UNDO**, **DELETE** és **MOD** (a kijelölt pontok modulációja). Minden módosítás EGY visszavonási lépés, bármilyen hosszú is a mozdulat.
-- **Eszközök (Tools)** (hetes sor): **POINT**, **FLAT**, **RAMP+**, **RAMP-**, **SELECT**, **SOFT**, **BEND**. A szerkesztőhöz nem kellenek egérgombok: amit számítógépen egy módosítóbillentyű tesz, az itt eszköz, kapcsoló vagy listaelem.
-  - POINT: üres felületre koppintva új pont adható hozzá (rácshoz illesztve, ha a SNAP be van kapcsolva), húzással mozgatható; egy pont megérintése kijelöli és húzza azt (a két végpontot csak fel és le); egy szakasz közepén lévő kis fogóponttal a görbülete húzható (értéke -20 .. +20). **Gyors törlés:** egy pont **dupla koppintása** törli azt (végpontot nem; üres felületen a dupla koppintás egy pontot ad hozzá), egy görbefogó dupla koppintása egyenessé teszi a görbét; egy pont hosszú megnyomása is törli, a **DELETE** pedig minden kijelölt pontot töröl.
-  - FLAT / RAMP+ / RAMP-: a rács egy cellájának megérintése vízszintes szakaszt, emelkedő vagy lejtős rámpát rajzol a cella oszlopára az ujj magasságában (a SNAP bekapcsolva rácsvonalon). **Egyetlen húzás az oszlopokon át az egész lépcsőt vagy fűrészfogat megrajzolja** - a gyors ujj nem hagy hézagot, és a húzás egy visszavonási lépés.
-  - SELECT: üres felületen téglalapot húzva kijelölhetők a benne lévő pontok; egy pontra koppintva hozzáadható, vagy (ha ki van jelölve) kivehető; üres felületre koppintva a kijelölés megszűnik. Egy kijelölt pontot húzva mindegyik együtt mozog (a sorrendjük és az alakjuk megmarad). Több kijelölt pontnál az **X** és az **Y** a kijelölés közepe, a harmadik mező **SCALE** lesz (a kijelölés magassága), a POINT mező pedig a kijelölt pontok számát mutatja.
-  - SOFT: egy pontot húzva a kijelölt pontok (vagy ha nincs kijelölés, a ciklus egynegyedén belüli pontok) követik, minél közelebb, annál jobban; a szivárványszínek mutatják, ki mennyire követi.
-  - BEND: egy görbe fogópontját húzva minden görbe ugyanannyival hajlik el (a **BEND ALL** ugyanez mezőként és potméterként).
-- A rajzfelület sarka mutatja, hány pontból áll az alakzat (akár 128 pontig).
-- **SELECTED POINT** (Q 1 - 4): POINT (melyik pont van kijelölve), X (az ideje), Y (a szintje), CURVE (a mögötte lévő szakasz görbülete). Kijelölt pont nélkül kötőjelet mutatnak.
-- **GRID (Rács)** (Q 5 - 7 egy 16 potméteres eszközön): **GRID X** (a ciklus oszlopai, 2 .. 32), **GRID Y** (a magasság sorai, 2 .. 32) és **SNAP** (LED kapcsoló: a pontok a rácsvonalakhoz illeszkednek). A rács megjelenik a vásznon, és használja a SNAP valamint a cellaeszközök (FLAT, RAMP+, RAMP-). **A rács a hullámformával együtt tárolódik a presetben** (5-ös állapotverzió): a preset megőrzi a rácsát a betöltéskor. Egy korábban mentett preset nem tartalmaz tárolt rácsot; a szerkesztő ekkor a legdurvábbat veszi a 4, 8, 12, 16, 24, 32 értékek közül, amelynek vonalain minden pont rajta fekszik, egyébként 8-at.
-- **TRIGGER** (Q 9 - 11 egy 16 potméteres eszközön): **MODE** (hogyan indul az LFO: Retrigger, Free-run, Envelope, Sustain envelope, Loop at point, Loop and hold; a névre koppintva megnyílik a lista), **PHASE** (0 .. 360 fok) és **BEND ALL**.
-- **A jelölő (marker).** Egy függőleges vonal, tetején kerek fogóponttal, mutatja az LFO PHASE értékét a formán; a fogópontot húzva mozgatható. Retrigger és Envelope módban ez a **START** (ahol a ciklus kezdődik); Sustain envelope, Loop at point és Loop and hold módban a **LOOP** pozíció (a lefutás ott vár, oda ugrik vissza, vagy odáig ismétlődik), és a fogópont a legközelebbi ponthoz tapad, amely a forma hurokpontja lesz; Free-run módban a jelölő halvány (a PHASE csak eltolja a ciklust). A **LOOP** kapcsoló a kijelölt pontot teszi hurokponttá.
-- LED kapcsolók: **LOOP** és **SMOOTH** (a smooth koszinuszos S-görbét képez minden szakaszon). Egy formának egy hurokpontja és egy smooth jelzője lehet.
-- **SHAPES:** **FACTORY SHAPES** (a tizenkét beépített forma szerkeszthető pontokként), **MY SHAPES** (az általunk mentett formák), **SAVE AS ...** (a képernyő-billentyűzettel nevet kér), **REPLACE / RENAME / DELETE A SAVED SHAPE** (a csere és a törlés egyszer rákérdez). A forma betöltése egy visszavonási lépésben váltja le a szerkesztőben lévőt. A mentett formák `SynthyBoy/LFO Shapes/<név>.lfoshape.json` fájlok az SD-kártyán, egy USB-meghajtón vagy a plugin Content mappájában (ugyanott, ahol a saját hullámtábláink); a formátum az, amelyet az asztali változat is olvas, így az egyik eszközön mentett forma a másikon is betölthető. A pontok modulációja nem kerül a fájlba (a szerkesztő szól, ha ilyen formát mentünk).
-- **MORE:** **EDIT** (SELECT ALL, FLIP HORIZONTAL, FLIP VERTICAL, SHIFT LEFT / RIGHT egy rácsoszloppal, körbefordulva, RESET ALL CURVES, CLEAR LOOP POINT), **GRID** (4, 8, 12, 16, 32 mindkét irányban, HALVE, DOUBLE, THE GRID FOLLOWS THE POINTS), **COPY** (COPY TO LFO ...: a forma egy másik LFO-ra kerül, és az az LFO azt játssza; OSC A / B / C CYCLE TO THIS LFO: egy oszcillátor egy ciklusa lesz a forma; THIS SHAPE TO OSC A / B / C: a forma az adott oszcillátor hullámtáblája lesz, egy WAV fájl a `SynthyBoy/Wavetables/` mappában).
-- **MOD:** a kijelölt pontok **TIME** (idő), **LEVEL** (szint) vagy **CURVE** (görbe) értékének modulációs oldala: egy forrásra koppintva az az érték megkapja, az AMOUNT (-100 .. 100 százalék) állítható, a REMOVE elveszi. A modulált pont mellett sáv mutatja, mekkorát mozdul az érték.
-- A pontok nélküli rajzolt forma egyenes vonalként kerül beolvasásra.
-- A beépített formák pontos pontokká alakulnak (szinusz = 3 pont + smooth); az EXP UP, EXP DN és HALF 16 rövid szakasszá alakul, így csak szorosan követi az eredetit.
+A szerkesztő egy nagy rajzfelületet kínál a ciklus megrajzolására és átformálására. A rajzfelület 2 és 128 közötti pontot jelenít meg. A jobb felső sarok mutatja a darabszámot (például: "9 / 128 POINTS"). A belső pontok nélküli forma egyenes vonalként értékelődik ki. A bal felső sarok három másodpercig állapotüzenetet jelenít meg forma mentésekor, betöltésekor vagy másolásakor.
+
+**Felső sáv.** A képernyő tetején végigfutó sáv a navigációt, a rajzeszközöket és a műveleti menüket tartalmazza:
+
+- **BACK:** Visszatér az LFO oldalra.
+- **Eszközök:** Hét eszköz egy sorban (**POINT**, **FLAT**, **RAMP+**, **RAMP-**, **SELECT**, **SOFT**, **BEND**). Minden érintési gesztus egy visszavonási lépés.
+- **SHAPES:** Megnyitja a forma preset menüt (gyári formák, mentett formák, mentés, csere, átnevezés és törlés).
+- **MORE:** Megnyitja a segédeszközök menüjét (**EDIT**, **GRID** és **COPY** műveletek).
+- **UNDO:** Visszavonja az előző módosítást (32 visszavonási lépés mélységig). A gomb halvány, ha a visszavonási lista üres.
+- **DELETE:** Egyszerre törli az összes kijelölt belső pontot. A gomb halvány, ha nincs kijelölve törölhető pont.
+- **MOD:** Megnyitja a kijelölt pontok pontmodulációs oldalát. Akkor aktív, ha legalább egy pont ki van jelölve.
+
+**A hét eszköz.** Mindegyik eszköz egy adott szerkesztési feladatra szabja az érintési gesztusokat:
+
+| Eszköz | Egyetlen érintési kézmozdulat |
+|---|---|
+| **POINT** | Koppints egy üres területre új pont hozzáadásához (bekapcsolt **SNAP** mellett rácshoz illesztve), majd húzd el. Érints meg egy meglévő pontot a kijelöléséhez és mozgatásához. A két végpont kizárólag függőlegesen mozog. Érintsd meg egy szakasz kerek középső fogópontját a görbületének húzásához (-20 és +20 között). Koppints duplán egy belső pontra a törléséhez (végpontra soha). Koppints duplán egy görbefogóra a görbe egyenessé tételéhez. Egy belső pont hosszú megnyomása (0,6 másodperc elmozdulás nélkül) szintén törli azt. |
+| **FLAT** | Érints meg egy rácscellát, hogy vízszintes szakaszt rajzolj az adott oszlopon keresztül ujjmagasságban (bekapcsolt **SNAP** mellett a rácsvonalhoz igazítva), felülírva az oszlopban lévő pontokat. Oszlopokon át húzva az ujjat minden érintett oszlop kitöltődik az interpolált ujjmagassággal. |
+| **RAMP+** | Érints meg egy rácscellát, hogy emelkedő rámpát rajzolj a cella alsó rácsvonalától a felső rácsvonaláig az adott oszlopban. Oszlopokon át húzva az ujjat emelkedő fűrészfogakat rajzol az összes érintett oszlopban. |
+| **RAMP-** | Érints meg egy rácscellát, hogy lejtő rámpát rajzolj a cella felső rácsvonalától az alsó rácsvonaláig az adott oszlopban. Oszlopokon át húzva az ujjat lejtő fűrészfogakat rajzol az összes érintett oszlopban. |
+| **SELECT** | Húzz egy téglalapot üres területen a benne lévő pontok kijelöléséhez. Koppints egy pontra a kijelöléshez adásához, vagy ha már egy többszörös kijelölés része, koppints rá az eltávolításához. Koppints üres felületre a kijelölés törléséhez. Húzz el bármelyik kijelölt pontot az összes kijelölt pont együttes mozgatásához, megtartva egymáshoz viszonyított távolságukat és alakjukat. |
+| **SOFT** | Húzz egy pontot a többi pont lineáris elhalkulással (falloff) történő mozgatásához. A közelebbi pontok jobban elmozdulnak, amit a súlyozás szerinti szivárványszínek jeleznek. Két vagy több pont kijelölése esetén az elhalkulás a kijelölésre érvényesül. Kijelölés nélkül vagy egyetlen kijelölt pont esetén a ciklus 25 százalékán belüli összes pont követi az elhúzott pontot. |
+| **BEND** | Húzd el bármely görbült szakasz görbefogóját a forma összes hajlítható görbéjének azonos mértékű hajlításához. |
+
+![Eszközök használat közben](../img/lfo-editor-tools.png)
+
+**Jobb oldali oszlop.** A jobb oldali oszlop három címmel ellátott Q csoportot és két alsó LED kapcsolót tartalmaz:
+
+- **SELECTED POINT** (Q 1–4):
+  - Egyetlen pont kijelölésekor: **POINT** (Q 1) mutatja a pont sorszámát (1-től n-ig). **X** (Q 2) beállítja az időpozíciót (0.00 és 1.00 között; végpontokon inaktív). **Y** (Q 3) beállítja a szintet (0.00 és 1.00 között). **CURVE** (Q 4) beállítja a pont utáni szakasz görbületét (-20 és +20 között).
+  - Két vagy több pont kijelölésekor: **POINT** (Q 1) mutatja a kijelölt pontok számát (például: "3 SEL"). **X** (Q 2) mozgatja a kijelölés vízszintes középpontját, időben eltolva a pontokat a sorrendjük megőrzése mellett. **Y** (Q 3) függőlegesen mozgatja a kijelölés középpontját fel vagy le. **SCALE** (Q 4, felváltja a CURVE mezőt) méretezi a kijelölés magasságát (0.01 és 1.00 között) a függőleges középpont körül.
+  - Ha nincs kijelölt pont, ezek a mezők kötőjelet mutatnak.
+- **GRID** (Q 5–7 egy 16 potméteres eszközön):
+  - **GRID X** (Q 5): Vízszintes ciklusosztások száma (2 és 32 oszlop között, alapértelmezett: 8).
+  - **GRID Y** (Q 6): Függőleges magassági osztások száma (2 és 32 sor között, alapértelmezett: 8).
+  - **SNAP** (Q 7): LED kapcsoló. Ha be van kapcsolva, a pontok hozzáadása, húzása, a jelölő mozgatása és a cellaeszközök rajzolása a rácsmetszetekhez igazodik.
+  - A rács a hullámformával együtt mentődik a presetben. Rács nélkül mentett preset betöltésekor a szerkesztő automatikusan a legdurvább illeszkedő rácsot választja ki a 4, 8, 12, 16, 24, 32 értékek közül, vagy alapértelmezésként 8-at választ.
+- **TRIGGER** (Q 9–11 egy 16 potméteres eszközön):
+  - **MODE** (Q 9): Léptető a hat LFO indítási módhoz: Retrigger, Free-run, Envelope, Sustain envelope, Loop at point, Loop and hold. Koppints a névre a teljes választólista megnyitásához.
+  - **PHASE** (Q 10): Fázisszög (0 és 360 fok között).
+  - **BEND ALL** (Q 11): Az összes hajlítható szakasz átlagos görbülete (-20 és +20 között). Elforgatása minden ívelt szakaszt egyszerre hajlít meg.
+- **LOOP** (LED kapcsoló): Átváltja a hurokpont jelzőt a kijelölt ponton. Halvány, ha nincs kijelölt pont.
+- **SMOOTH** (LED kapcsoló): Bekapcsolja a koszinuszos S-görbe simítást a forma összes szakaszán.
+
+A 16 potméteres MPC XL-en mind a tizenegy vezérlő egyszerre aktív az 1–11 potmétereken (a 8-as és a 12–16-os hely nincs használatban). A 4 potméteres MPC Key 61-en az aktív csoport sárga kerettel rendelkezik. Koppints egy csoportra vagy nyomd meg a Q-Link bank gombot a SELECTED POINT, GRID és TRIGGER közötti váltáshoz.
+
+**A START / LOOP jelölő.** Egy függőleges vonal tetején elhelyezkedő kerek érintési fogópont jelzi a fázispozíciót a rajzfelületen. Húzd el a fogópontot az elmozgatásához. A jelölő közvetlenül hozzá van rendelve a motor **PHASE** paraméteréhez: a jelölő mozgatása frissíti a **PHASE** értéket, a **PHASE** potméter elforgatása pedig mozgatja a jelölőt. A jelölő jelentése az indítási **MODE** beállítástól függ:
+
+- **Retrigger** és **Envelope** módban a jelölő felirata **START**. Ez határozza meg a ciklus kezdőpozícióját egy billentyű leütésekor. Folyamatosan húzható, és 14 pixelen belül lévő pontokhoz, illetve bekapcsolt **SNAP** esetén a rácshoz igazodik.
+- **Sustain envelope**, **Loop at point** és **Loop and hold** módban a jelölő felirata **LOOP**. A meglévő pontokhoz igazodik, és ahhoz a ponthoz köti a forma hurokpontját. Sustain envelope módban az LFO ezen a ponton várakozik a billentyű nyomva tartása alatt. Loop at point módban az LFO lefut a forma végéig, majd visszaugrik erre a pontra. Loop and hold módban az LFO a kezdőpont és e pont között ismétlődik a billentyű kitartása közben, majd felengedéskor kifut a forma végéig.
+- **Free-run** módban a jelölő halvány, a rajzfelület alján pedig megjelenik a "FREE-RUN: PHASE SHIFTS THE CYCLE" tájékoztató felirat. Free-run módban az LFO folyamatos közös órajelen fut, a **PHASE** pedig eltolja a ciklus időzítését.
+
+**Pontmoduláció (a MOD oldal).** Koppints a felső sávban lévő **MOD** gombra, amikor egy vagy több pont ki van jelölve, hogy megnyisd a pontmodulációs oldalt:
+
+![Pontmoduláció](../img/lfo-editor-pointmod.png)
+
+- **BACK:** Visszatér a szerkesztő rajzfelületére.
+- **MODULATE** (léptető): Kiválasztja a modulálandó célértéket: **TIME**, **LEVEL** vagy **CURVE**.
+- **AMOUNT:** Modulációs mélység -100 és +100 százalék között.
+- **REMOVE:** Eltávolítja a modulációs hozzárendelést a kiválasztott célpontról.
+- **Összegzés:** Megjeleníti az állapotot a tábla felett (például: "POINT 3: LEVEL BY LFO 2, +45 PERCENT" vagy "3 POINTS: TIME NOT MODULATED").
+- **Forrástábla:** Kategóriacsoportokba rendezve felsorolja a motor mind az 57 modulációs forrását. Érints meg bármelyik forrást a táblán, hogy hozzárendeld a választott célponthoz az összes aktuálisan kijelölt ponton.
+
+A szerkesztő rajzfelületén a modulált idejű vagy szintű pont mellett egy színes sáv jelenik meg, amely a modulációs mozgástartományát jelzi. A modulált görbületű pont esetén egy színes gyűrű látható a szakasza görbefogója körül.
+
+**A SHAPES lista.** Koppints a felső sáv **SHAPES** gombjára a kétszintű formaválasztó felugró ablak megnyitásához:
+
+![Shapes menü](../img/lfo-editor-shapes.png)
+
+- **FACTORY SHAPES:** Felsorolja a tizenkét beépített gyári formát (Sine, Triangle, Saw Up, Saw Down, Square, Pulse, Step Up, Step Down, Random Steps, Exp Up, Exp Down, Half Sine) szerkeszthető pontokká alakítva. A Sine forma 3 ponttá alakul bekapcsolt simítással. A lépcsős formák pontos függőleges lépcsőkké válnak. Az ívelt formák 16 mintavételezett szakasszá alakulnak át. Egy gyári forma betöltése egyetlen visszavonási lépésben felülírja a rajzfelületet.
+- **MY SHAPES:** Betűrendben felsorolja az összes felhasználó által mentett formát. Koppints egy formanévre a szerkesztőbe való betöltéséhez.
+- **SAVE AS ...:** Megnyitja a képernyő-billentyűzetet név megadásához és a forma elmentéséhez.
+- **REPLACE A SAVED SHAPE ...:** Felsorolja a mentett formáidat. Egyiket kiválasztva megerősítést kér ("REPLACE <név>?"), majd felülírja azt.
+- **RENAME A SAVED SHAPE ...:** Felsorolja a mentett formáidat. Egyiket kiválasztva megnyitja a billentyűzetet az új név megadásához.
+- **DELETE A SAVED SHAPE ...:** Felsorolja a mentett formáidat. Egyiket kiválasztva megerősítést kér ("DELETE <név>?"), majd törli a fájlt.
+
+A mentett formák `<név>.lfoshape.json` nevű fájlokként tárolódnak a `SynthyBoy/LFO Shapes/` mappában. Ez a mappa az SD-kártyán, egy csatlakoztatott USB-meghajtón vagy a plugin saját Content mappájában jön létre (ugyanazokon a tárolóhelyeken, mint a felhasználói hullámtáblák). A fájlformátum megegyezik az asztali változat által írt JSON formátummal. Bármely számítógépről a `SynthyBoy/LFO Shapes/` mappába másolt szabványos JSON formafájlt a rendszer automatikusan felismeri és listázza. A pontmoduláció nem tárolódik a `.lfoshape.json` fájlban. Modulált pontokkal rendelkező forma mentésekor megjelenik a `(POINT MODULATION NOT STORED)` állapotfigyelmeztetés.
+
+**A MORE lista.** Koppints a felső sáv **MORE** gombjára a műveletek felugró ablakának megnyitásához, amely három csoportba van rendezve:
+
+![More menü](../img/lfo-editor-more.png)
+
+- **EDIT:**
+  - **SELECT ALL:** Kijelöli a forma minden pontját.
+  - **FLIP HORIZONTAL:** Időben megfordítja a formát. Az első pontból lesz az utolsó, a görbék előjele megfordul, és a hurokpont is tükröződik.
+  - **FLIP VERTICAL:** Fejjel lefelé megfordítja az összes pont szintjét (az y szintből 1 - y lesz).
+  - **SHIFT LEFT:** Balra tolja a formát egy rácsoszloppal, körbefordulással.
+  - **SHIFT RIGHT:** Jobbra tolja a formát egy rácsoszloppal, körbefordulással.
+  - **RESET ALL CURVES:** Egyenessé teszi az összes szakasz görbéjét 0 meredekséggel.
+  - **CLEAR LOOP POINT:** Eltávolítja a hurokpont jelölést a formából.
+- **GRID:**
+  - **GRID 4 x 4**, **GRID 8 x 8**, **GRID 12 x 12**, **GRID 16 x 16**, **GRID 32 x 32:** Gyors felbontás-előbeállítások az oszlopokhoz és sorokhoz.
+  - **HALVE THE GRID:** Megfelezi mindkét rácsfelbontást (legfeljebb a 2-es minimumig).
+  - **DOUBLE THE GRID:** Megkettőzi mindkét rácsfelbontást (legfeljebb a 32-es maximumig).
+  - **GRID FOLLOWS THE POINTS:** A legdurvább olyan felbontásra állítja a rácsot a 4, 8, 12, 16, 24, 32 értékek közül, amelynek vonalain az összes pont rajta fekszik.
+- **COPY:**
+  - **COPY TO LFO ...:** Megnyitja az LFO-k listáját (az LFO 1–10 között az aktuális kivételével). Átmásolja a formát és a rácsot a kiválasztott LFO-ra, és annak formáját DRAWN értékre állítja.
+  - **OSC A CYCLE TO THIS LFO**, **OSC B CYCLE TO THIS LFO**, **OSC C CYCLE TO THIS LFO:** A kiválasztott oszcillátor egyetlen ciklusát legfeljebb 128 ponttá alakítja át ezen az LFO-n.
+  - **THIS SHAPE TO OSC A**, **THIS SHAPE TO OSC B**, **THIS SHAPE TO OSC C:** Exportálja a formát egyetlen képkockás hullámtábla WAV fájlként a `SynthyBoy/Wavetables/` mappába, és betölti azt a kiválasztott oszcillátorba.
 
 ### 5.10 Mod matrix (Modulációs mátrix)
 
