@@ -675,6 +675,13 @@ private:
 
     // A small cache of the transcendental functions of the coefficients (the same argument gives the same result: nothing changes in the output). Cutoff and resonance move
     // slowly or not at all, so most samples ask for the arguments of the sample before.
+    // (Inlined into processInternal (): with the pair kernels calling them as well, GCC stopped inlining them there, and the scalar path of the Multi SVF types
+    // ran about 6 % more instructions on 32 bit ARM, which would also have inflated the --scalar-filters "before" of the bench. The same operations either way.)
+#if defined(__GNUC__)
+ #define SYNTHYBOY_FILTER_INLINE inline __attribute__ ((always_inline))
+#else
+ #define SYNTHYBOY_FILTER_INLINE inline
+#endif
     struct MemoEntry { float x = 0.0f, y = 0.0f; bool valid = false; };
     static constexpr int kMemo = 16;
     MemoEntry tanMemo_[kMemo], pow2Memo_[kMemo], pow10Memo_[kMemo];
@@ -684,7 +691,7 @@ private:
         std::memcpy (&u, &x, 4);
         return static_cast<int> ((u ^ (u >> 11) ^ (u >> 19)) % kMemo);
     }
-    float tanM (float x) noexcept
+    SYNTHYBOY_FILTER_INLINE float tanM (float x) noexcept
     {
         MemoEntry& e = tanMemo_[memoSlot (x)];
         if (!(e.valid && e.x == x))
@@ -695,7 +702,7 @@ private:
         }
         return e.y;
     }
-    float pow2M (float x) noexcept
+    SYNTHYBOY_FILTER_INLINE float pow2M (float x) noexcept
     {
         MemoEntry& e = pow2Memo_[memoSlot (x)];
         if (!(e.valid && e.x == x))
@@ -706,7 +713,7 @@ private:
         }
         return e.y;
     }
-    float pow10M (float x) noexcept
+    SYNTHYBOY_FILTER_INLINE float pow10M (float x) noexcept
     {
         MemoEntry& e = pow10Memo_[memoSlot (x)];
         if (!(e.valid && e.x == x))
