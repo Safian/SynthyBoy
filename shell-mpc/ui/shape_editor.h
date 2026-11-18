@@ -271,8 +271,8 @@ public:
             const uint32_t col = live ? pen.c (T.env[0], 255) : pen.c (T.textFaint, 160);
             pen.style (1.0f, true);
             pen.line (mx, static_cast<float> (pl.y), mx, static_cast<float> (pl.bottom()), live ? 1.6f : 1.0f, col);
-            pen.disc (mx, static_cast<float> (pl.y) + 16.0f, 11.0f, col);
-            pen.disc (mx, static_cast<float> (pl.y) + 16.0f, 5.0f, pen.c (T.panel1, 255));
+            pen.disc (mx, static_cast<float> (pl.y) + 16.0f, 10.0f, col);   // at most 2 px outside the canvas at the edge (the cache pad)
+            pen.disc (mx, static_cast<float> (pl.y) + 16.0f, 4.5f, pen.c (T.panel1, 255));
             pen.plain();
             if (live)
             {
