@@ -550,7 +550,7 @@ void SpectralVoice::reset() noexcept
     }
 }
 
-void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, float startFraction) noexcept
+void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, float startFraction, int hopOffset) noexcept
 {
     reset();
     if (analysis == nullptr || ! analysis->valid() || p.scratch == nullptr)
@@ -564,6 +564,9 @@ void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, f
     outPos_ = kHop;
     ola_ = 0;
     primed_ = false;
+    framePrimed_ = false;
+    startSkip_ = std::max (0, std::min (kHop - 1, hopOffset));
+    firstAdvance_ = static_cast<double> (kHop - startSkip_) / kHop;
     lastTransientFrame_ = -1;
     drain_ = 0;
     phaseInit_[0] = phaseInit_[1] = false;
@@ -576,7 +579,7 @@ void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, f
     head_ = std::max (static_cast<double> (lo), std::min (static_cast<double> (hi), head_));
     if (p.manual)
         head_ = lo + (hi - lo) * clamp01 (p.position);
-    // prime: three frames at the start position, so that the first output hop is the sum of four frames
+    // prime: three frames at the start position, so that the first output hop is the sum of four frames (the fourth is the frame of the hop itself)
     if (reference_)
         for (int i = 0; i < 3; ++i)
             synthesizeHop (p, false);
@@ -586,12 +589,12 @@ void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, f
     outPos_ = kHop;
 }
 
-void SpectralVoice::advanceHead (const SpectralParams& p) noexcept
+void SpectralVoice::advanceHead (const SpectralParams& p, double fraction) noexcept
 {
     if (headDone_ || analysis_ == nullptr)
         return;
     const double fileSeconds = static_cast<double> (analysis_->fileFrames()) / analysis_->fileRate();
-    double step = static_cast<double> (p.scanSpeed) * (static_cast<double> (kHop) / hostRate_) / fileSeconds;
+    double step = static_cast<double> (p.scanSpeed) * (static_cast<double> (kHop) / hostRate_) / fileSeconds * fraction;
     const double lo = std::min (p.regionLo, p.regionHi), hi = std::max (p.regionLo, p.regionHi);
     const bool looping = p.loopMode != LoopMode::none && ! (p.loopMode == LoopMode::tailed && released_);
     if (! looping)
@@ -925,9 +928,12 @@ void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double f
     kernels::overlapAdd (c.ring, ola_, scratch.zr, scratch.zi, kOutputScale, neon);
 }
 
-/** The three frames of the start of a note (synthesizeHop (p, false) three times), one channel after the other: the frames are at the same position of the analysis with the same settings, so
-    the shaped bins are the same for all three and are made once per channel (the phases differ and are advanced for each). Only the smear warp keeps a memory that each call changes: a note
-    with it shapes every frame. The ring of the overlap add ends up exactly where the three hops would leave it. */
+/** The four frames of the start of a note (the three of synthesizeHop (p, false) and the one that the first synthesizeHop (p, true) makes), one channel after the other: the frames are at the
+    same position of the analysis with the same settings, so the shaped bins are the same for all four and are made once per channel (the phases differ and are advanced for each). Only the
+    smear warp keeps a memory that each call changes: a note with it shapes every frame, as the four calls did. The frame of the fourth hop stays in the ring (the first synthesizeHop reads the
+    hop and does not synthesise again: `framePrimed_`), the ring of the overlap add ends up exactly where the three hops and the fourth frame would leave it.
+    The first real frame is the fourth: it carries the phases that the voice goes on from (the analysis phase advanced three times by the bin frequencies, wrapped as always), so that
+    everything after the priming is what the voice has always played. (A circular shift of one frame cannot stand in for the earlier three: see docs/engine-spec/07 section 8.) */
 void SpectralVoice::primeFast (const SpectralParams& p) noexcept
 {
     if (analysis_ == nullptr)
@@ -947,10 +953,12 @@ void SpectralVoice::primeFast (const SpectralParams& p) noexcept
     {
         Channel& c = channel_[ch];
         float twist = 0.0f;
-        for (int hop = 0; hop < 3; ++hop)
+        for (int hop = 0; hop < 4; ++hop)
         {
             ola_ = hop * kHop;
             renderChannelFast (p, ch, frame, hop == 0 && transientHit, hop > 0 && ! smears, &twist);
+            if (hop == 3)
+                break;
             for (int n = 0; n < kHop; ++n)
             {
                 const int at = (ola_ + n) & (kFftSize - 1);
@@ -960,6 +968,7 @@ void SpectralVoice::primeFast (const SpectralParams& p) noexcept
         }
     }
     ola_ = (3 * kHop) & (kFftSize - 1);
+    framePrimed_ = true;
 }
 
 void SpectralVoice::synthesizeHop (const SpectralParams& p, bool advance) noexcept
@@ -979,6 +988,8 @@ void SpectralVoice::synthesizeHop (const SpectralParams& p, bool advance) noexce
         transientHit = true;
     lastTransientFrame_ = index;
 
+    const bool rendered = framePrimed_;   // primeFast made the frame of this hop (the first one of the note)
+    framePrimed_ = false;
     if (headDone_ && advance)
     {
         // the play head ran out: the overlap buffer drains for four hops, then the voice ends
@@ -988,12 +999,16 @@ void SpectralVoice::synthesizeHop (const SpectralParams& p, bool advance) noexce
             return;
         }
     }
-    else
+    else if (! rendered)
+    {
         for (int ch = 0; ch < channels; ++ch)
+        {
             if (reference_)
                 renderChannel (p, ch, frame, transientHit);
             else
                 renderChannelFast (p, ch, frame, transientHit);
+        }
+    }
 
     for (int ch = 0; ch < channels; ++ch)
     {
@@ -1007,7 +1022,10 @@ void SpectralVoice::synthesizeHop (const SpectralParams& p, bool advance) noexce
     }
     ola_ = (ola_ + kHop) & (kFftSize - 1);
     if (advance && ! p.manual)
-        advanceHead (p);
+    {
+        advanceHead (p, firstAdvance_);
+        firstAdvance_ = 1.0;
+    }
 }
 
 void SpectralVoice::process (const SpectralParams& p, float* left, float* right, int numFrames) noexcept
@@ -1022,7 +1040,8 @@ void SpectralVoice::process (const SpectralParams& p, float* left, float* right,
         if (outPos_ >= kHop)
         {
             synthesizeHop (p, true);
-            outPos_ = 0;
+            outPos_ = startSkip_;   // the first hop of a note is read from its offset on
+            startSkip_ = 0;
             if (! active_)
                 return;
         }

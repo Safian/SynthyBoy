@@ -672,7 +672,11 @@ void LibOsc::beginType (int type) noexcept
             specVoices[static_cast<size_t> (u)].reset();
             specVoices[static_cast<size_t> (u)].setReferenceKernels (lp.referenceKernels);
             specParams.pitchRatio = semitonesToRatio (uni[u].semis);
-            specVoices[static_cast<size_t> (u)].noteOn (&smp->analysis, specParams, startFraction (u));
+            // the frames of a voice come every kHop samples: the voices of a chord and of the unison start at different offsets inside their hop (a quarter of a hop apart), so that in the steady
+            // state every block carries about a quarter of their frames and not all of them every fourth block. The note serial counts the notes of the engine (the same for a render and its
+            // repetition), the unison voice and the oscillator move the start on, so notes struck together and their voices fall on different quarters.
+            const uint32_t quarter = (lp.serial * static_cast<uint32_t> (U) + static_cast<uint32_t> (u) + 2u * static_cast<uint32_t> (oi)) % static_cast<uint32_t> (spectral::kStartSteps);
+            specVoices[static_cast<size_t> (u)].noteOn (&smp->analysis, specParams, startFraction (u), static_cast<int> (quarter) * spectral::kStartStep);
         }
     }
     else if (type == kOscTypeMultisample && cs != nullptr && cs->instrument[oi] != nullptr)

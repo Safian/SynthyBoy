@@ -830,3 +830,151 @@ TEST (spectral_place_all_equals_the_reference_loop)
     CHECK (runs == 300);
     CHECK_EQ (bad, 0);
 }
+
+// ---- the start of a voice: the four priming frames in one pass (shared shaping, the frame of the first hop made by noteOn) and the start offset inside the hop -----------------------------------
+
+namespace
+{
+double dbOf (double a, double b) { return 20.0 * std::log10 (std::max (a, 1.0e-12) / std::max (b, 1.0e-12)); }
+} // namespace
+
+// The voice with a start offset d is the voice without one, d samples later in its rendering: for a frozen head every frame has the same bins, the frames of the offset voice are the frames of the
+// other, so sample t of the one is sample t + d of the other. Smear, Phase Lock, a phase twist, a transient restart and a stereo sample go through the same path (the smear memory and the phase
+// state are those of the frames in the same order).
+TEST (spectral_a_start_offset_renders_the_same_note_shifted_by_the_offset)
+{
+    Tone tone (rich (220.0, 1.5));
+    std::vector<float> l (static_cast<size_t> (1.5 * kSr)), r (l.size());
+    for (size_t i = 0; i < l.size(); ++i)
+    {
+        l[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 311.0 * static_cast<double> (i) / kSr) + 0.1 * std::sin (0.01 * static_cast<double> (i * i % 1000)));
+        r[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 477.0 * static_cast<double> (i) / kSr));
+    }
+    SampleData stereoData;
+    stereoData.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), kSr);
+    Analysis stereo;
+    stereo.build (stereoData.view());
+    double worstRelative = 0.0;
+    int runs = 0;
+    for (int variant = 0; variant < 4; ++variant)
+        for (int w : { -1, static_cast<int> (Warp::smear), static_cast<int> (Warp::phaseTwist), static_cast<int> (Warp::addHarmonics) })
+        {
+            SpectralParams p = frozen (0.4f);
+            p.phaseLock = variant == 1;
+            p.transients = variant == 2;
+            p.pitchRatio = variant == 3 ? 1.37f : 1.0f;
+            p.warpType[0] = w;
+            p.warpAmount[0] = 0.8f;
+            const Analysis* an = variant == 2 ? &stereo : &tone.analysis;
+            SpectralVoice base;
+            base.prepare (kSr);
+            base.noteOn (an, p, 0.0f, 0);
+            std::vector<float> baseRight;
+            const auto reference = render (base, p, 12288, 128, &baseRight);
+            for (int k = 1; k < kStartSteps; ++k)
+            {
+                const int d = k * kStartStep;
+                SpectralVoice v;
+                v.prepare (kSr);
+                v.noteOn (an, p, 0.0f, d);
+                std::vector<float> right;
+                const auto out = render (v, p, 12288 - d, 128, &right);
+                double peak = 1.0e-9, worst = 0.0;
+                for (size_t t = 0; t + static_cast<size_t> (d) < reference.size() && t < out.size(); ++t)
+                {
+                    peak = std::max (peak, static_cast<double> (std::fabs (reference[t + static_cast<size_t> (d)])));
+                    worst = std::max (worst, static_cast<double> (std::fabs (out[t] - reference[t + static_cast<size_t> (d)])));
+                    worst = std::max (worst, static_cast<double> (std::fabs (right[t] - baseRight[t + static_cast<size_t> (d)])));
+                }
+                ++runs;
+                worstRelative = std::max (worstRelative, worst / peak);
+                if (! CHECK (worst <= 1.0e-6 * peak))
+                    std::printf ("    variant %d warp %d offset %d: difference %g (peak %g)\n", variant, w, d, worst, peak);
+            }
+        }
+    CHECK_EQ (runs, 48);
+    std::printf ("    offset voice against the shifted voice: largest difference over %d runs %.3g of the peak\n", runs, worstRelative);
+}
+
+// The first hop of a note is the full sum of four frames for every offset: the level of its first samples is the level of the rest of the note.
+TEST (spectral_every_start_offset_begins_at_the_level_of_the_note_and_keeps_pitch)
+{
+    struct Case { double hz; int window; };
+    for (const Case c : { Case { 1125.0, 512 }, Case { 1000.0, 480 } })
+    {
+        Tone tone (sine (c.hz, 2.0, 0.5f));
+        const double expected = 0.5 / std::sqrt (2.0);
+        double levels[kStartSteps] = {}, freqs[kStartSteps] = {};
+        for (int k = 0; k < kStartSteps; ++k)
+        {
+            SpectralVoice v;
+            v.prepare (kSr);
+            SpectralParams p = frozen();
+            v.noteOn (&tone.analysis, p, 0.0f, k * kStartStep);
+            const auto out = render (v, p, 24000, 128);
+            const double first = rms (out, 0, static_cast<size_t> (c.window)), later = rms (out, 4000, 20000);
+            levels[k] = later;
+            freqs[k] = crossingHz (out, 4000, 20000);
+            CHECK_NEAR (dbOf (first, later), 0.0, 0.1);          // the first hop within 0.1 dB of the rest
+            CHECK_NEAR (dbOf (later, expected), 0.0, 0.5);
+            CHECK_NEAR (freqs[k], c.hz, 15.0);
+            // and the whole of the first two hops, window by window of one block
+            for (size_t from = 0; from + 128 <= 1024; from += 128)
+                CHECK (rms (out, from, from + 128) > 0.8 * later);
+        }
+        for (int k = 1; k < kStartSteps; ++k)
+        {
+            CHECK_NEAR (dbOf (levels[k], levels[0]), 0.0, 0.02);
+            CHECK_NEAR (freqs[k], freqs[0], 2.0);   // one zero crossing more or less in 16000 samples is 1.5 Hz
+        }
+    }
+}
+
+// The play head runs on the true time: a voice with an offset reaches the same position at the same time, within one hop of the scan, and the same pitch while it scans.
+TEST (spectral_a_start_offset_keeps_the_scan_speed_and_the_scan_position)
+{
+    std::vector<float> two = sine (300.0, 1.0);
+    const auto second = sine (900.0, 1.0);
+    two.insert (two.end(), second.begin(), second.end());
+    Tone tone (two);
+    SpectralParams p;
+    p.scratch = &gScratch;
+    p.hostRate = kSr;
+    p.scanSpeed = 1.0f;
+    p.regionLo = 0.1f;   // (the very start of a file is no stationary frame: the first analysis frame is half empty)
+    const double hopOfScan = static_cast<double> (kHop) / kSr / 2.0;   // a hop of the scan in fractions of the 2 s file
+    SpectralVoice base;
+    base.prepare (kSr);
+    base.noteOn (&tone.analysis, p, 0.0f, 0);
+    std::vector<double> baseHead;
+    std::vector<float> baseOut;
+    for (int b = 0; b < 600; ++b)
+    {
+        float l[128], r[128];
+        base.process (p, l, r, 128);
+        baseOut.insert (baseOut.end(), l, l + 128);
+        baseHead.push_back (base.playhead());
+    }
+    for (int k = 1; k < kStartSteps; ++k)
+    {
+        SpectralVoice v;
+        v.prepare (kSr);
+        v.noteOn (&tone.analysis, p, 0.0f, k * kStartStep);
+        std::vector<float> out;
+        double worst = 0.0;
+        for (int b = 0; b < 600; ++b)
+        {
+            float l[128], r[128];
+            v.process (p, l, r, 128);
+            out.insert (out.end(), l, l + 128);
+            worst = std::max (worst, std::fabs (v.playhead() - baseHead[static_cast<size_t> (b)]));
+        }
+        CHECK (worst <= hopOfScan * 1.0001);
+        // the same source reaches the same tone at the same time
+        CHECK_NEAR (crossingHz (out, 12000, 36000), 300.0, 20.0);
+        CHECK_NEAR (crossingHz (out, 60000, 74000), 900.0, 45.0);
+        CHECK_NEAR (dbOf (rms (out, 12000, 36000), rms (baseOut, 12000, 36000)), 0.0, 0.3);
+        CHECK_NEAR (dbOf (rms (out, 60000, 74000), rms (baseOut, 60000, 74000)), 0.0, 0.3);
+        std::printf ("    offset %d: largest play head difference %.2f hops of the scan\n", k * kStartStep, worst / hopOfScan);
+    }
+}

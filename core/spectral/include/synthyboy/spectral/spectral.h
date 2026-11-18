@@ -25,6 +25,9 @@ constexpr int kHop = 512;
 constexpr int kBins = kFftSize / 2 + 1;
 constexpr int kMaxAnalysisFrames = 1536;     // per channel: about 16.4 s at 48 kHz are analysed, a longer file is cut (Analysis::truncated)
 constexpr int kMaxCurvePoints = 64;
+/** The start offsets of a voice inside its hop (SpectralVoice::noteOn): voices started together take different ones, so that their frames fall into different blocks. */
+constexpr int kStartSteps = 4;
+constexpr int kStartStep = kHop / kStartSteps;   // 128 samples: one block of the engine
 
 /** The spectral warp modes (the entries 76 .. 98 of the warp lists, 13-new-keys.md 4.38). Index 0 is the entry kFirstSpectralWarp (76) of the lists. */
 enum class Warp : int
@@ -146,8 +149,12 @@ public:
     void reset() noexcept;
 
     /** Starts the voice on `analysis` (null: silent). `startFraction` moves the play head by that share of the region (unison start / span). The overlap buffer is primed so
-        that the note starts at full level. */
-    void noteOn (const Analysis* analysis, const SpectralParams& p, float startFraction) noexcept;
+        that the note starts at full level: four frames are synthesised at once (the three before the first output hop and the first one of the hop itself).
+        `hopOffset` (0 .. kHop - 1, a multiple of kStartStep in the engine): the output starts that many samples into the first hop, so the voice's next frame is due after kHop - hopOffset
+        samples instead of kHop. Voices started in the same block with different offsets spread their frames over the four blocks of a hop instead of all landing in every fourth block.
+        The note is the same rendering shifted by the offset (frozen: sample for sample the output of offset 0 from sample `hopOffset` on); the play head runs on the true time, the first
+        step is (kHop - hopOffset) / kHop of a hop. */
+    void noteOn (const Analysis* analysis, const SpectralParams& p, float startFraction, int hopOffset = 0) noexcept;
     void releaseLoop() noexcept { released_ = true; }
     /** Measurements only (the bench's --scalar-content): synthesise the frames with the reference code (the full length transform of the mirrored spectrum, std::sin / std::cos / std::fmod per
         bin, one product per sample of the overlap add) instead of the block kernels of kernels.h. The two agree to rounding (a few 1e-7 of the largest sample, tests/test_spectral.cpp). */
@@ -160,7 +167,7 @@ public:
 
 private:
     void synthesizeHop (const SpectralParams& p, bool advance) noexcept;
-    void advanceHead (const SpectralParams& p) noexcept;
+    void advanceHead (const SpectralParams& p, double fraction = 1.0) noexcept;
     void renderChannel (const SpectralParams& p, int ch, double frame, bool transientHit) noexcept;
     /** `reuseShape`: the shaped bins (scratch.om / of / oth) and `twist` are those of the previous call for this channel, nothing has touched them since (the priming of a note). */
     void renderChannelFast (const SpectralParams& p, int ch, double frame, bool transientHit, bool reuseShape = false, float* twistState = nullptr) noexcept;
@@ -175,6 +182,9 @@ private:
     int outPos_ = kHop;          // next unread sample of the finished hop
     int ola_ = 0;                // write position of the overlap buffer (start of the hop to write)
     bool primed_ = false;
+    bool framePrimed_ = false;   // the frame of the first output hop was synthesised by primeFast (the first synthesizeHop only reads the hop)
+    int startSkip_ = 0;          // the output starts this many samples into the first hop (noteOn's hopOffset)
+    double firstAdvance_ = 1.0;  // the first step of the play head, as a share of a hop
     int lastTransientFrame_ = -1, drain_ = 0;
     bool phaseInit_[2] = { false, false };
 
