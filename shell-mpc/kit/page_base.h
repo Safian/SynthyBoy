@@ -4,9 +4,10 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// A PageBase satisfies the contract PageView<Ui> (shell-mpc/overlay/page_view.h) expects of an element:
+// A PageBase satisfies the contract of the page view (shell-mpc/overlay/page_view_base.h BasicPageView<Ui, NoHooks>) expects of an element:
 //   static constexpr int kElementPage  (the derived class defines it)      update / draw / touch / wheel / tick / fingerDown / dropGesture / forgetQGroup / topPage / qTargets / qSlotCount
-// so after the migration step "PageView over IInstance" (docs/ui-components/TEMPLATE.md) `PageView<MyPage>` is the whole view. Until then the pages are driven directly (template-mpc/tests).
+// so `mpckit::PageView<MyPage>` (kit/overlay.h) is the whole view of the page on the device; the pages are driven directly in the host tests (template-mpc/tests). The Q slots are published with the runtime's own
+// QSlots (overlay/q_publish.h), as every page of SynthyBoy does.
 //
 // THE PAGE GEOMETRY: the canvas is the screen, 1280 x 800 pixels; the tab is the rectangle { 0, 110, 1280, 628 }. Leave 16 pixels (ui::kQLane) above every member of a Q group: the index chip
 // of the member (1 .. 4, or 5 .. 16 on the XL) is drawn there.
@@ -20,6 +21,7 @@
 #include <initializer_list>
 #include <vector>
 
+#include "../overlay/q_publish.h"
 #include "../overlay/touch_decoder.h"
 #include "../overlay/ui_stack.h"
 #include "../q_router.h"
@@ -48,10 +50,7 @@ public:
     static constexpr int kListPage = 15;                         // the id of the detail page of the list popup on the UiStack
     static constexpr int kListId = 700, kListBackdrop = 701;     // the ids the popup reports with (keep the ids of your components below 700)
 
-    PageBase()
-    {
-        std::memset (target_, 0xff, sizeof target_);   // -1 everywhere
-    }
+    PageBase() = default;
     virtual ~PageBase() = default;
     PageBase (const PageBase&) = delete;
     PageBase& operator= (const PageBase&) = delete;
@@ -138,9 +137,9 @@ public:
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
     /** The page comes on screen again: the first group is the active one and the Q slots are published again. */
-    void forgetQGroup() noexcept { active_ = 0; published_ = false; }
+    void forgetQGroup() noexcept { active_ = 0; qSlots_.forget(); }
     int topPage() const noexcept { return pageTop_; }
-    const int* qTargets() const noexcept { return target_; }
+    const int* qTargets() const noexcept { return qSlots_.data(); }
     int qSlotCount() const noexcept { return synthyboy_mpc::QRouter::kCount; }
 
     // ---- access for tests
@@ -262,42 +261,34 @@ private:
         stack.openDetail (kListPage);
         pageTop_ = kListPage;
     }
-    /** The Q slots: the groups that have members, the active one first (QRouter::mapGroups), the other mapped groups get their block of knobs (QGroup::setBlock). The instance is told only when something changed. */
+    /** The Q slots: the groups that have members, the active one first (QRouter::mapGroups), the other mapped groups get their block of knobs (QGroup::setBlock). The instance is told only when something changed.
+        The mapping and the bookkeeping are the runtime's (overlay/q_publish.h: usedGroups, QSlots, setBlocks): the same code as every page of SynthyBoy (migration step 13 of docs/ui-components/TEMPLATE.md). */
     void publishQ (IInstance& inst)
     {
+        namespace ov = synthyboy_mpc::overlay;
         int ids[kMaxGroups];
-        int used = 0, activePos = -1;
-        for (int g = 0; g < numGroups_; ++g)
-            if (groups_[g].numMembers() > 0)
-            {
-                if (g == active_)
-                    activePos = used;
-                ids[used++] = g;
-            }
-        int t[synthyboy_mpc::QRouter::kCount];
+        int activePos = -1;
+        const int used = ov::usedGroups (groups_, numGroups_, active_, ids, activePos);
         const bool list = modalComponent() != nullptr;
         if (list || used == 0)
-            for (int& v : t)
+        {
+            int none[synthyboy_mpc::QRouter::kCount];
+            for (int& v : none)
                 v = synthyboy_mpc::QRouter::kNone;
+            qSlots_.publishRaw (inst, none);
+        }
         else
-            synthyboy_mpc::QRouter::mapGroups (used, activePos < 0 ? 0 : activePos, [&] (int k, int* four)
+            qSlots_.publish (inst, used, activePos < 0 ? 0 : activePos, [&] (int k, int* four)
             {
                 for (int i = 0; i < ui::QGroup::kSlots; ++i)
                     four[i] = binder_.paramOf (groups_[ids[k]].member (i));
-            }, t);
-        if (! published_ || std::memcmp (t, target_, sizeof target_) != 0)
-        {
-            std::memcpy (target_, t, sizeof target_);
-            inst.setQGroup (t, synthyboy_mpc::QRouter::kCount);
-            published_ = true;
-        }
+            });
         for (int g = 0; g < numGroups_; ++g)
-        {
-            groups_[g].setBlock (-1);
             groups_[g].setActive (! list && g == active_);
-        }
-        for (int k = 0; k < used; ++k)
-            groups_[ids[k]].setBlock (list ? -1 : synthyboy_mpc::QRouter::blockOfGroup (used, activePos < 0 ? 0 : activePos, k));
+        if (list)
+            ov::setBlocks (groups_, numGroups_, ids, 0, 0);   // (no group has a block while a popup is up)
+        else
+            ov::setBlocks (groups_, numGroups_, ids, used, activePos < 0 ? 0 : activePos);
     }
 
     Binder binder_;
@@ -308,8 +299,7 @@ private:
     int listParam_ = -1, pageTop_ = 0;
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false;
-    int target_[synthyboy_mpc::QRouter::kCount];
-    bool published_ = false;
+    synthyboy_mpc::overlay::QSlots qSlots_;   // the sixteen slots of the page and what was published of them
 };
 
 } // namespace mpckit
