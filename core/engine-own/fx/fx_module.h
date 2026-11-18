@@ -12,6 +12,7 @@
 #include <mutex>
 #include <thread>
 
+#include "../dsp/helper_thread.h"
 #include "../dsp/util.h"
 #include "../matrix/mod_matrix.h"
 #include "../osc/content_set.h"
@@ -55,8 +56,7 @@ private:
     struct Job { std::atomic<int> state { 0 }; Fn fn = nullptr; void* ctx = nullptr; };
     static constexpr int kJobs = 64;
     Job jobs[kJobs];
-    std::mutex mutex;
-    std::condition_variable cv;
+    WakeSignal wake;   // no timeout: submit () and the destructor notify (dsp/helper_thread.h)
     std::atomic<bool> stop { false };
     std::thread thread;
 };

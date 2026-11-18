@@ -34,7 +34,7 @@ FxWorker::FxWorker() : thread ([this] { loop(); }) {}
 FxWorker::~FxWorker()
 {
     stop.store (true);
-    cv.notify_all();
+    wake.notify();
     if (thread.joinable())
         thread.join();
 }
@@ -49,7 +49,7 @@ bool FxWorker::submit (Fn fn, void* ctx) noexcept
             j.fn = fn;
             j.ctx = ctx;
             j.state.store (2, std::memory_order_release);
-            cv.notify_one();
+            wake.notify();
             return true;
         }
     }
@@ -58,21 +58,19 @@ bool FxWorker::submit (Fn fn, void* ctx) noexcept
 
 void FxWorker::loop()
 {
+    runHelperThreadStartHook ("sb-fx-job");   // the shell's scheduling class and cores, not those of the thread that first used a Convolve (dsp/helper_thread.h)
     while (!stop.load())
     {
-        bool any = false;
+        // a submit () that comes while the jobs are being run sets the flag again, so the wait below returns at once: no wake-up is lost, and nothing wakes the thread when there is no work
         for (auto& j : jobs)
             if (j.state.load (std::memory_order_acquire) == 2)
             {
                 j.fn (j.ctx);
                 j.state.store (0, std::memory_order_release);
-                any = true;
             }
-        if (!any)
-        {
-            std::unique_lock<std::mutex> lock (mutex);
-            cv.wait_for (lock, std::chrono::milliseconds (2));
-        }
+        if (stop.load())
+            break;
+        wake.wait();
     }
 }
 

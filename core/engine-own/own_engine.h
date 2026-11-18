@@ -11,6 +11,7 @@
 #include <mutex>
 #include <vector>
 
+#include "dsp/helper_thread.h"
 #include "dsp/util.h"
 #include "matrix/mod_matrix.h"
 #include "osc/content_set.h"
@@ -209,6 +210,7 @@ private:
     std::atomic<int> fxWant[kNumFxInstances];
     std::atomic<bool> fxWorkDue { false }, fxWorkerStop { false };
     std::thread fxWorker;
+    WakeSignal fxWake;             // wakes fxWorker: a type key was set, or stop
     void startFxWorker();
     void stopFxWorker() noexcept;
     float mixL[4][kControlPeriod] = {}, mixR[4][kControlPeriod] = {}; // Main, Bus 1, Bus 2, Direct of the current period

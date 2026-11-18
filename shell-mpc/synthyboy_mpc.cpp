@@ -24,6 +24,7 @@
 #include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/events.h"
+#include "synthyboy/helper_thread_hook.h"
 #include "synthyboy/midi_events.h"
 #include "synthyboy/params.h"
 #include "synthyboy/quality.h"
@@ -33,6 +34,10 @@
 #include "synthyboy/wavetable_file.h"
 
 #include "mpc_vst2_abi.h"
+#include "thread_policy.h"
+#if defined(__linux__)
+#include "overlay/cpu_plan_linux.h"   // the plan of the cores (standalone; also used by the engine helper threads below)
+#endif
 #include "device_profile.h"
 #include "output_peak.h"
 #include "startup_timing.h"
@@ -3130,11 +3135,34 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     #define MPC_PLUGIN_EXPORT
 #endif
 
+namespace
+{
+/** The policy of the engine's helper threads (the effect module builder, the Convolve job thread; engine-own/dsp/helper_thread.h): a normal scheduling class, nice 0, and the cores the overlay
+    thread uses (not the isolated cores and not the cores the audio threads are pinned to, overlay/discovery.h planCpus), instead of what they inherit from the thread that happened to
+    create them (the host's loader, a thread of any policy). Runs on the helper thread, once at its start; best effort, never throws. */
+void engineHelperThreadPolicy (const char* name) noexcept
+{
+    try
+    {
+        synthyboy_mpc::useNormalScheduling (0, name);
+#if defined(__linux__)
+        const synthyboy_mpc::overlay::CpuState st = synthyboy_mpc::overlay::planOwnCpus();
+        if (st.plan.changed)
+            synthyboy_mpc::overlay::setAffinity (0, st.plan.allowed);
+#endif
+    }
+    catch (...)
+    {
+    }
+}
+} // namespace
+
 extern "C"
 {
     MPC_PLUGIN_EXPORT AEffect* VSTPluginMain(audioMasterCallback audioMaster)
     {
         synthyboy_mpc::startupTimes().begin();   // the start-up record (startup_timing.h): time zero is the first entry here
+        synthyboy::setHelperThreadStartHook (&engineHelperThreadPolicy);   // before any engine exists: its helper threads get the policy above
         try { MPCKIT_LOG_START ("synthyboy"); } catch (...) {}   // dev builds only: the developer log (kit/log.h), off until /tmp/synthyboy-log.conf switches a category on
         // Create the plugin instance. No exception may reach the host: a failure here means "no plugin".
         PluginInstance* inst = nullptr;
