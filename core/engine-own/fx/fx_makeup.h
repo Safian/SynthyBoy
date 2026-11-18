@@ -42,7 +42,7 @@ bool irBandSpectrum (const float* irL, const float* irR, int frames, double samp
 constexpr float kReverbLoudness = 0.4f;
 constexpr float kFlangerLoudness = 1.0f;
 constexpr float kHyperLoudness = 1.0f;
-constexpr float kBodeLoudness = 1.0f;
+constexpr float kBodeLoudness = 1.4f;
 
 /** The keys of the reverb as the model reads them (plain values of the keys; mix in percent too). */
 struct ReverbIn

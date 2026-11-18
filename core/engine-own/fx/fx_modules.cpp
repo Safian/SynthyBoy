@@ -830,7 +830,6 @@ public:
             c.serum = sh.serumLaw;
             c.rate = sampleRate;
         }
-        if (std::getenv ("SB_MAKEUP_DEBUG") != nullptr) std::fprintf (stderr, "convolve makeup: mix %.3f P %.3f valid %d gen %u\n", mixNow, c.result, specLive.valid ? 1 : 0, specGeneration);
         return c.result;
     }
     void run (float* l, float* r, int n) noexcept override

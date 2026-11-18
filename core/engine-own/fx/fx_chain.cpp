@@ -8,9 +8,7 @@
 #include "../dsp/section_timing.h"
 
 #include <algorithm>
-#include <cstdio>
-#include <cstdlib>
-static int dbgCount = 0;
+
 #include <cstdarg>
 #include <cstdio>
 
@@ -415,7 +413,6 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
         if (bypassed[m])
         {
             stepMakeup (inst[m]->makeupGain (frame, base, delta), makeupSeen[m], makeupPrev[m], makeupNow[m], frame);
-            if (std::getenv ("SB_MAKEUP_DEBUG") != nullptr && (dbgCount++ % 200) == 0) std::fprintf (stderr, "chain: module %d rack %d prev %.3f now %.3f\n", m, rackId, makeupPrev[m], makeupNow[m]);
             active = true;
         }
         else
