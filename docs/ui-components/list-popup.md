@@ -14,6 +14,7 @@ A popup list of choices with a dimmed backdrop: a box of rows of 56 px; tap a ro
 | `current` | `int` | the current item (highlighted) | 0 |
 | `header` | `const char*` | a bar of its own above the rows (a path); null = none | null |
 | `headerBack` | `bool` | the header is also the way up: back arrow and a `Request` on tap | false |
+| `icons` | `const int*` | pictogram id (`pictogram::Id`) of each row (< 0 or null = none) | null |
 | `dotMask` | `unsigned` | bit i set: a small dot at the right end of row i | 0 |
 | `dotColours` | `const uint32_t*` | colour of the dot of each row (rgb); null = accent | null |
 
@@ -52,6 +53,7 @@ list.state.current = current;
 list.showCurrent();
 // route the events of the page to it while it is open:
 Change c = list.touchDown (x, y, nowMs);
+c = list.touchUp (x, y);
 if (c.id == 700 && c.kind == ChangeKind::Index) { /* write c.index; close */ }
 else if (c.id == 701) { /* close */ }
 ```
@@ -63,4 +65,4 @@ Every `*_ui.h` that has a stepper with a list: `shell-mpc/overlay/voice_ui.h` (`
 ## Limits and pitfalls
 - `items` is a pointer to the owner's array: it must outlive the popup.
 - A popup is drawn over everything: draw it last. It is not a `Composite` child of the page.
-- Item text is fitted to the row with an ellipsis (the header comment says "cut to 12 characters", the code fits to the box width).
+- Item text is fitted to the row box with `Pen::textLeft` (with an ellipsis when it does not fit).

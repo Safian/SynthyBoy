@@ -22,7 +22,7 @@ Public members of `FxDisplay`:
 Set the kind with `setKind (kind, name)` or `setKindFromType (fxType)` (uses `kindOfType`). Static helpers: `bandDb (band, EqBand, f)`, `compOut (CompBand, x)`, `shape (type, driveDb, x)`; `kPoints` 192.
 
 ## Size
-No fixed minimum in the table; the editor gives it `kDisplayH` = 176 px (`fxl::Layout::displayH`) under the header. Larger: more plot room.
+`minSize()` 200 x 120; the editor gives it `fxl::Layout::displayH` (160, 176 or 220 px; `FxSlotEditor::kDisplayH` = 176) under the header. Larger: more plot room.
 
 ## Touch and knob behaviour
 None (a state in, a picture out). The knobs around it edit the values.
