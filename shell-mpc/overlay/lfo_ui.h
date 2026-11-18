@@ -560,8 +560,8 @@ private:
         {
             case kPageTargets: targetsPageIndex_ = 0; loadTargets (inst, true); break;
             case kPageMods: loadMods (inst); break;
-            case kPageEditor: syncEditor (inst); break;
-            case kPagePointMod: loadPointMod (inst, true); break;
+            case kPageEditor: setIds(); syncEditor (inst); break;
+            case kPagePointMod: setIds(); loadPointMod (inst, true); break;
             case kPageKeyboard: beginKeyboard(); break;
             default: break;
         }
