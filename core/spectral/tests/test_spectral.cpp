@@ -591,8 +591,6 @@ TEST (spectral_phase_wrap_is_the_old_fmod_exactly_and_the_single_precision_wrap_
     {
         phase[static_cast<size_t> (k)] = rng.bi() * 3.2f;
         step[static_cast<size_t> (k)] = rng.bi() * 0.2f * static_cast<float> (k % 40);
-        if (k % 301 == 7)
-            step[static_cast<size_t> (k)] = 1.0e6f;   // beyond the single precision range: the scalar wrap
         float x = phase[static_cast<size_t> (k)] + step[static_cast<size_t> (k)] * kHop;
         oldResult[static_cast<size_t> (k)] = x;
         if (x > 100.0f || x < -100.0f)
@@ -603,12 +601,32 @@ TEST (spectral_phase_wrap_is_the_old_fmod_exactly_and_the_single_precision_wrap_
         expect[static_cast<size_t> (k)] = y;
     }
     vec = phase;
+    const std::vector<float> start = phase;
     advancePhases (phase.data(), step.data(), kBins, false);
     CHECK (sameBits (phase.data(), expect.data(), phase.size()));
     if (haveNeon())
     {
         advancePhases (vec.data(), step.data(), kBins, true);
         CHECK (sameBits (vec.data(), expect.data(), vec.size()));
+    }
+    // the fused kernel (phase update, sine and cosine, the bins) gives the bits of the separate ones, in both forms
+    {
+        std::vector<float> mag (kBins), re1 (kBins), im1 (kBins), re2 (kBins), im2 (kBins), ph1 = start, ph2 = start, ph3 = start;
+        for (auto& m : mag)
+            m = rng.uni();
+        advancePhases (ph1.data(), step.data(), kBins, false);
+        spectrumFromAngles (ph1.data(), mag.data(), re1.data(), im1.data(), kBins, false);
+        advanceToSpectrum (ph2.data(), step.data(), mag.data(), re2.data(), im2.data(), kBins, false);
+        CHECK (sameBits (ph1.data(), ph2.data(), ph1.size()) && sameBits (re1.data(), re2.data(), re1.size()) && sameBits (im1.data(), im2.data(), im1.size()));
+        if (haveNeon())
+        {
+            std::vector<float> re3 (kBins), im3 (kBins);
+            advanceToSpectrum (ph3.data(), step.data(), mag.data(), re3.data(), im3.data(), kBins, true);
+            CHECK (sameBits (ph1.data(), ph3.data(), ph1.size()) && sameBits (re1.data(), re3.data(), re1.size()) && sameBits (im1.data(), im3.data(), im1.size()));
+            std::vector<float> re4 (kBins), im4 (kBins);
+            spectrumFromAngles (ph1.data(), mag.data(), re4.data(), im4.data(), kBins, true);
+            CHECK (sameBits (re1.data(), re4.data(), re1.size()) && sameBits (im1.data(), im4.data(), im1.size()));
+        }
     }
     double worst = 0.0;
     for (size_t k = 0; k < phase.size(); ++k)
@@ -699,4 +717,53 @@ TEST (spectral_block_kernels_agree_with_the_reference_voice_to_rounding)
         }
     CHECK (runs > 60);
     std::printf ("    block kernels against the reference: largest difference over %d runs %.3g of the peak\n", runs, worstRelative);
+}
+
+// The per bin loops of the frame shaping: the vector forms give the bits of the scalar forms (peaks of random spectra with ties and flat parts, the max, the lerp, the products and the placing
+// of regions with every offset).
+TEST (spectral_per_bin_kernels_vector_forms_match_the_scalar_forms)
+{
+    using namespace synthyboy::spectral::kernels;
+    if (! haveNeon())
+        return;
+    KRng rng (21);
+    for (int round = 0; round < 200; ++round)
+    {
+        std::vector<float> m (kBins), a (kBins), b (kBins), o1 (kBins), o2 (kBins);
+        for (int k = 0; k < kBins; ++k)
+        {
+            m[static_cast<size_t> (k)] = round % 3 == 0 ? std::floor (rng.uni() * 6.0f) * 0.25f : (round % 3 == 1 ? rng.uni() : (k % 5 == 0 ? rng.uni() * 100.0f : rng.uni() * 1.0e-6f));
+            a[static_cast<size_t> (k)] = rng.bi();
+            b[static_cast<size_t> (k)] = rng.bi();
+        }
+        const float top = maxBins (m.data(), kBins, false);
+        CHECK (top == maxBins (m.data(), kBins, true));
+        for (int cap : { 512, 7, 1 })
+        {
+            int p1[512], p2[512];
+            const int n1 = findPeaks (m.data(), kBins, top, p1, cap, false), n2 = findPeaks (m.data(), kBins, top, p2, cap, true);
+            bool same = n1 == n2;
+            for (int i = 0; same && i < n1; ++i)
+                same = p1[i] == p2[i];
+            CHECK (same);
+        }
+        const float t = rng.uni();
+        lerpBins (o1.data(), a.data(), b.data(), t, kBins - round % 5, false);
+        lerpBins (o2.data(), a.data(), b.data(), t, kBins - round % 5, true);
+        CHECK (sameBits (o1.data(), o2.data(), o1.size()));
+        o1 = a;
+        o2 = a;
+        mulBins (o1.data(), b.data(), kBins - round % 7, false);
+        mulBins (o2.data(), b.data(), kBins - round % 7, true);
+        CHECK (sameBits (o1.data(), o2.data(), o1.size()));
+        std::vector<float> om1 (kBins, 0.0f), of1 (kBins, 0.0f), oth1 (kBins, 0.0f);
+        std::vector<float> om2 = om1, of2 = of1, oth2 = oth1;
+        for (int r = 0; r < 20; ++r)
+        {
+            const int from = 1 + static_cast<int> (rng.uni() * 900.0f), len = static_cast<int> (rng.uni() * 60.0f), offset = static_cast<int> (rng.bi() * 40.0f);
+            placeRegion (m.data(), a.data(), b.data(), om1.data(), of1.data(), oth1.data(), from, std::min (from + len, kBins - 1), offset, 1.37f, 0.02f, kBins, false);
+            placeRegion (m.data(), a.data(), b.data(), om2.data(), of2.data(), oth2.data(), from, std::min (from + len, kBins - 1), offset, 1.37f, 0.02f, kBins, true);
+        }
+        CHECK (sameBits (om1.data(), om2.data(), om1.size()) && sameBits (of1.data(), of2.data(), of1.size()) && sameBits (oth1.data(), oth2.data(), oth1.size()));
+    }
 }

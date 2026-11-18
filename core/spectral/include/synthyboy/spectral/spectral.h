@@ -90,8 +90,8 @@ struct Scratch
     float mag[kBins], freq[kBins], theta[kBins];
     float om[kBins], of[kBins], oth[kBins];
     float tm[kBins], tf[kBins];
-    // the block kernels of a frame (SpectralVoice::renderChannelFast): the angles, their sine and cosine, the half length transform's output
-    float angle[kBins], sn[kBins], cs[kBins];
+    // the block kernels of a frame (SpectralVoice::renderChannelFast): the angles (with a phase twist), the half length transform's output
+    float angle[kBins];
     float zr[kFftSize / 2], zi[kFftSize / 2];
     // the gains of the band limit (shapeFrame): they depend on the settings only, so they are kept until the settings change
     float bandGain[kBins];

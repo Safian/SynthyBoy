@@ -56,8 +56,14 @@ void sincosBlock (const float* a, float* s, float* c, int n, bool neon) noexcept
 /** What the voice has always done to a bin phase that left +-100 radians: wrapPi (fmodf (x, 2 pi)), bit for bit, without the library's slow fmodf (the remainder in double precision, where
     n * 2 pi is exact for any phase the voice can reach; the result is the exact remainder fmodf returns). */
 float wrapPhase (float x) noexcept;
+/** re[k] = mag[k] cos (angle[k]), im[k] = mag[k] sin (angle[k]) (sincosPoly (); the vector form gives the same bits). */
+void spectrumFromAngles (const float* angle, const float* mag, float* re, float* im, int n, bool neon) noexcept;
+/** advancePhases () and spectrumFromAngles () in one pass over the bins (the data stay in registers; the same bits as the two calls): phase[k] advanced and wrapped, then re / im of mag[k] at that
+    phase. */
+void advanceToSpectrum (float* phase, const float* step, const float* mag, float* re, float* im, int n, bool neon) noexcept;
 /** wrapPhase () in single precision: the remainder by three part constants of 2 pi (n * 2 pi is exact in float for n < 2^16), within 3e-7 radians of wrapPhase () (the rounding of the last
-    subtraction). For |x| below 1e5; beyond that (and for a NaN) wrapPhase () runs. The vector form of advancePhases () does exactly these operations. */
+    subtraction). For |x| below 1e5; beyond that (and for a NaN) wrapPhase () runs. The vector form of advancePhases () does exactly these operations below 1e5 (no phase of the voice goes beyond
+    5.2e4: the step is at most pi * 32 * kHop and the sum is wrapped every hop); above that it returns some finite value. */
 float wrapPhaseFloat (float x) noexcept;
 /** phase[k] = wrapped (phase[k] + step[k] * kHop) where the sum is beyond +-100, else the sum: the phase update of the voice. Wrapped by wrapPhaseFloat () (`neon`: four at a time, the same bits). */
 void advancePhases (float* phase, const float* step, int n, bool neon) noexcept;

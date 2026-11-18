@@ -862,14 +862,17 @@ void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double f
     shapeFrame (p, an, std::min (ch, an.channels() - 1), frame, hostRate_, scratch, c.smear, twist, true);
 
     // phases: advance by the frequency of the partial; after a transient (Transients) restart from the phases of the analysis; Phase Lock ties the bins around a peak to it
+    bool fusedAdvance = false;
     if ((transientHit && p.transients) || ! phaseInit_[ch])
     {
         phaseInit_[ch] = true;
         for (int j = 0; j < kBins; ++j)
             c.synthPhase[j] = oth_[j];
     }
-    else
+    else if (p.phaseLock || twist != 0.0f)
         kernels::advancePhases (c.synthPhase, of_, kBins, neon);
+    else
+        fusedAdvance = true;   // phase update, sine and cosine and the bins in one pass below
     if (p.phaseLock)
     {
         int peak = -1;
@@ -892,20 +895,22 @@ void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double f
     }
 
     // the bins of the frame: magnitude * (cos, sin) of the phase (bin 0 silent, the Nyquist bin real), then the transform of the real signal and the overlap add
-    const float* angle = c.synthPhase;
-    if (twist != 0.0f)
+    if (fusedAdvance)
+        kernels::advanceToSpectrum (c.synthPhase, of_, om_, re_, im_, kBins, neon);
+    else
     {
-        for (int j = 0; j < kBins; ++j)
-            scratch.angle[j] = c.synthPhase[j] + twist * kTwoPi * static_cast<float> (j) * static_cast<float> (j) * 0.05f / kBins;
-        angle = scratch.angle;
+        const float* angle = c.synthPhase;
+        if (twist != 0.0f)
+        {
+            for (int j = 0; j < kBins; ++j)
+                scratch.angle[j] = c.synthPhase[j] + twist * kTwoPi * static_cast<float> (j) * static_cast<float> (j) * 0.05f / kBins;
+            angle = scratch.angle;
+        }
+        kernels::spectrumFromAngles (angle, om_, re_, im_, kBins, neon);
     }
-    kernels::sincosBlock (angle, scratch.sn, scratch.cs, kBins, neon);
-    for (int j = 0; j < kBins; ++j)
-    {
-        const float magnitude = j == 0 ? 0.0f : om_[j];
-        re_[j] = magnitude * scratch.cs[j];
-        im_[j] = j == kBins - 1 ? 0.0f : magnitude * scratch.sn[j];
-    }
+    re_[0] = 0.0f;               // bin 0 is silent, and the Nyquist bin is real
+    im_[0] = 0.0f;
+    im_[kBins - 1] = 0.0f;
     kernels::RealIfft::instance().inverse (re_, im_, scratch.zr, scratch.zi, neon);
     kernels::overlapAdd (c.ring, ola_, scratch.zr, scratch.zi, kOutputScale, neon);
 }
