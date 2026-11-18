@@ -1620,7 +1620,7 @@ private:
         const float size = ui::Pen::fitSize (missingText_.c_str(), static_cast<float> (box.w), static_cast<float> (box.h), T.fLabel + 4.0f, T.fMin);
         if (size <= 0.0f)
             return;
-        char fitted[160];
+        char fitted[96];   // the size of the pen's own buffer: middleFit cuts a name that would not go into it
         ui::contentname::middleFit (missingText_.c_str(), size, static_cast<float> (box.w), fitted, static_cast<int> (sizeof fitted));
         ui::Cell cell (sb, box);
         ui::Pen pen (sb, true);

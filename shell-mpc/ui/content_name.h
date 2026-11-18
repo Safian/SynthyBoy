@@ -33,12 +33,13 @@ inline std::string display (const std::string& title, const std::string& file)
     return s;
 }
 
-/** Writes `s` into out[cap]: whole when it is not wider than maxW at `size` (pixels per em), else the longest start and end that fit together with the ellipsis between them (the start one character longer than the end when
+/** Writes `s` into out[cap]: whole when it is not wider than maxW at `size` (pixels per em) and goes into cap, else the longest start and end that fit together with the ellipsis between them (the start one character longer than the end when
     the number of kept characters is odd). Cuts only at the beginning of a UTF-8 character. */
 inline void middleFit (const char* s, float size, float maxW, char* out, int cap)
 {
     const int n = static_cast<int> (std::strlen (s));
-    if (cap < 8 || overlay::sdf::textWidth (s, n, size) <= maxW)
+    // whole when it fits the room AND the buffer of the pen (96 bytes: Pen::text* cut what does not go into it, at the end, without a sign): a long name is cut in its middle for either reason
+    if (cap < 8 || (n < cap && overlay::sdf::textWidth (s, n, size) <= maxW))
     {
         const int c = std::min (n, std::max (0, cap - 1));
         std::memcpy (out, s, static_cast<size_t> (c));

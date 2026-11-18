@@ -518,17 +518,6 @@ lfo::ShapeModel fivePoints()
     m.p[0] = lfo::Point (0.0f, 0.0f); m.p[1] = lfo::Point (0.25f, 0.5f); m.p[2] = lfo::Point (0.5f, 1.0f); m.p[3] = lfo::Point (0.75f, 0.5f); m.p[4] = lfo::Point (1.0f, 0.0f);
     return m;
 }
-bool sameShape (const lfo::ShapeModel& a, const lfo::ShapeModel& b, float tol, int samples = 97)
-{
-    for (int i = 0; i < samples; ++i)
-    {
-        const float x = (static_cast<float> (i) + 0.5f) / static_cast<float> (samples);
-        if (std::fabs (a.eval (x) - b.eval (x)) > tol)
-            return false;
-    }
-    return true;
-}
-
 void testSelectionModel()
 {
     // the point set follows an insert and a removal
@@ -930,6 +919,7 @@ void testCanvasMarker()
     check (r.pg.model.loop == 2 && r.pg.undo.depth() == 1 && r.pg.model.n == 4, "LOOP marker: the loop point of the model is that point, one undo state, no point added");
     lfo::ShapeModel back;
     check (r.pg.undo.pop (back) && back.loop == -1, "LOOP marker: undo gives the old loop point back");
+    r.pg.model = back;   // popping hands the old state to the caller; the page puts it back (the START drag below starts from the unlooped model)
     // the START marker is free between the points (a point within 14 px takes it)
     r.cv.state.markerKind = ShapeCanvas::MarkerStart;
     r.cv.state.markerX = 0.5f;

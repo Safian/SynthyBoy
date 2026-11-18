@@ -545,6 +545,16 @@ void testShortNamesAndContentNames()
            "a content name that is too wide loses its middle (start and end stay), and then fits (" + cut + ")");
     ui::contentname::middleFit ("short", 20.0f, 400.0f, out, sizeof out);
     check (std::string (out) == "short", "a name that fits stays whole");
+    {
+        // a name that fits the room but not the buffer (the pen's own buffer is 96 bytes) loses its middle too, never its end
+        std::string longName (120, 'a');
+        longName.replace (0, 3, "abc");
+        longName.replace (117, 3, "xyz");
+        ui::contentname::middleFit (longName.c_str(), 8.0f, 100000.0f, out, sizeof out);
+        const std::string c2 = out;
+        const size_t at2 = c2.find ("\xE2\x80\xA6");
+        check (at2 != std::string::npos && c2.size() < sizeof out && c2.compare (0, 3, "abc") == 0 && c2.compare (c2.size() - 3, 3, "xyz") == 0, "a name wider than the buffer loses its middle although the room is wide enough (" + c2 + ")");
+    }
 }
 
 } // namespace

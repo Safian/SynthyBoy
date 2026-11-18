@@ -417,7 +417,7 @@ protected:
             const float size = Pen::fitSize (notice, static_cast<float> (box.w), static_cast<float> (box.h), T.fLabel + 2.0f, T.fMin);
             if (size > 0.0f)
             {
-                char fitted[160];
+                char fitted[96];   // the size of the pen's own buffer: middleFit cuts a name that would not go into it
                 contentname::middleFit (notice, size, static_cast<float> (box.w), fitted, static_cast<int> (sizeof fitted));
                 p.textRight (box, fitted, size, p.c (T.negative, 255), T.fMin);   // at the size the middle cut was made for (a larger maximum would let the pen cut the end of the cut text again)
             }
