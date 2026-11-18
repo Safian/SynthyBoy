@@ -196,7 +196,7 @@ class PackTests(unittest.TestCase):
         out = self.tmp / "all"
         code, text, _ = run_quiet(["build-all", "--manifest", str(ROOT / "plugin.json"), "--out", str(out)])
         self.assertEqual(code, 0, text)
-        self.assertEqual(sorted(p.name for p in out.glob("*.zip")), ["com.safian.synthyboy.factory-presets-1.2.0.zip"])
+        self.assertEqual(sorted(p.name for p in out.glob("*.zip")), ["com.safian.synthyboy.factory-presets-0.1.0.zip"])
         # a plugin.json that names another version than the pack holds is refused
         plugin = json.loads((ROOT / "plugin.json").read_text(encoding="utf-8"))
         plugin["contentPacks"][0]["version"] = "9.9.9"
