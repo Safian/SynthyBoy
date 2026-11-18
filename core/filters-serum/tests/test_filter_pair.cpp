@@ -34,8 +34,8 @@ using PairFn = bool (*) (Filter&, Filter&, const float*, float*, const float*, f
 struct KernelForm { const char* name; PairFn fn; bool available; };
 const KernelForm kForms[] = { { "reference lanes", &Filter::processPairReference, true }, { "NEON lanes", &Filter::processPair, Filter::pairKernelAvailable() } };
 
-const FilterType kTypes[] = { FilterType::ScreamLP, FilterType::ScreamBP, FilterType::EMSLadder, FilterType::MGLadder, FilterType::Diffusor };
-const char* const kTypeNames[] = { "Scream LP", "Scream BP", "EMS Ladder", "MG Ladder", "Diffusor" };
+const FilterType kTypes[] = { FilterType::ScreamLP, FilterType::ScreamBP, FilterType::EMSLadder, FilterType::MGLadder, FilterType::Diffusor, FilterType::Allpasses };
+const char* const kTypeNames[] = { "Scream LP", "Scream BP", "EMS Ladder", "MG Ladder", "Diffusor", "Allpasses" };
 
 FilterParams randomParams (Rng& r, int hold, bool extreme)
 {

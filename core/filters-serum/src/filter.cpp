@@ -192,7 +192,9 @@ public:
         const bool scream = type == FilterType::ScreamLP || type == FilterType::ScreamBP;
         const bool ladder = type == FilterType::EMSLadder || type == FilterType::MGLadder;
         const bool diffusor = type == FilterType::Diffusor;
-        if (fb.type_ != type || !(scream || ladder || diffusor) || fa.sampleRate_ != fb.sampleRate_ || fa.params_.coefHold != fb.params_.coefHold)
+        const bool allpasses = type == FilterType::Allpasses; // Smear / Allpasses: the all-pass chain of the Diffusor with 6 stages, its own taps and gain
+        const bool chain = diffusor || allpasses;
+        if (fb.type_ != type || !(scream || ladder || chain) || fa.sampleRate_ != fb.sampleRate_ || fa.params_.coefHold != fb.params_.coefHold)
             return false;
 
         const auto srFloat = static_cast<float> (fa.sampleRate_);
@@ -216,11 +218,14 @@ public:
             stages = std::max (1, std::min (static_cast<int> (1.0f + 7.0f * var[0]), 8));
             if (std::max (1, std::min (static_cast<int> (1.0f + 7.0f * var[1]), 8)) != stages)
                 return false;
+        }
+        else if (allpasses)
+            stages = 6;
+        if (chain)
             for (int l = 0; l < 2; ++l)
                 for (int i = 0; i < stages; ++i)
                     if (f[l]->diffuserDelays_[i].empty())
                         return false;
-        }
 
         const V vTargetCutoff = V::set (targetCutoff[0], targetCutoff[1]), vTargetRes = V::set (targetRes[0], targetRes[1]);
         const V vSmooth = V::all (smoothCoeff);
@@ -297,7 +302,8 @@ public:
                 lastCutoff[l] = c;
                 haveCutoff[l] = true;
                 cutoffChanged = true;
-                g[l] = f[l]->tanM (kPi * c / srFloat);
+                if (!chain) // (the all-pass chains do not use g: processInternal () computes it for them through the memo, which changes nothing but the memo)
+                    g[l] = f[l]->tanM (kPi * c / srFloat);
                 if (scream)
                 {
                     const float screamFreq = std::max (20.0f, std::min (c * screamFactor[l], srFloat * 0.49f));
@@ -328,9 +334,10 @@ public:
                 }
                 else
                 {
+                    // the delay of each stage as processInternal () computes it: max (2, (sr / max (20, cutoff)) * factor), then read ()'s clamp in tapFor ()
                     const float perCycle = srFloat / std::max (20.0f, c);
                     for (int k = 0; k < stages; ++k)
-                        taps[l][k] = f[l]->diffuserDelays_[k].tapFor (std::max (2.0f, perCycle * (0.2f + 0.15f * static_cast<float> (k))));
+                        taps[l][k] = f[l]->diffuserDelays_[k].tapFor (std::max (2.0f, perCycle * (diffusor ? 0.2f + 0.15f * static_cast<float> (k) : 0.3f + 0.2f * static_cast<float> (k))));
                 }
             }
             if (cutoffChanged)
@@ -412,9 +419,10 @@ public:
             }
             else
             {
-                // the all-pass chain of the Diffusor: the two lines of a stage are read and written one after the other, the stage's arithmetic is side by side
+                // the all-pass chain of the Diffusor (gain 0.5 + 0.45 res) or of Smear / Allpasses (gain 0.6 res): the two lines of a stage are read and written one
+                // after the other, the stage's arithmetic is side by side
                 V ap = drivenIn;
-                const V gDiff = V::all (0.5f) + V::all (0.45f) * res;
+                const V gDiff = diffusor ? V::all (0.5f) + V::all (0.45f) * res : V::all (0.6f) * res;
                 for (int k = 0; k < stages; ++k)
                 {
                     DelayLine& da = fa.diffuserDelays_[k];
