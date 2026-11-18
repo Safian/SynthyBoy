@@ -6,7 +6,9 @@
 #include "synthyboy/spectral/kernels.h"
 #include "synthyboy/sampleosc/sample_data.h"
 
+#include <chrono>
 #include <cmath>
+#include <limits>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -111,6 +113,28 @@ std::vector<float> spectrumOf (const std::vector<float>& x, size_t from)
     return m;
 }
 } // namespace
+
+// SP3: prepare() builds the four tables that were built at the first Spectral note (the real inverse transform, the overlap-add window, the start gains, the start schedule); a note of every kind then
+// builds none. (Placed first: the tables are shared by the process, so this is meaningful only before another test has made a voice. Run alone: `synthyboy_test_spectral spectral_prepare_builds`.)
+TEST (spectral_prepare_builds_the_tables_and_a_note_builds_none)
+{
+    SpectralVoice v;
+    v.prepare (kSr);
+    const int built = SpectralVoice::tablesBuiltForTest();
+    CHECK_EQ (built, 4);
+    Tone tone (rich (220.0, 0.5));
+    for (int variant = 0; variant < 3; ++variant)
+        for (int k = 0; k < kStartSteps; ++k)
+        {
+            SpectralParams p = frozen (0.4f);
+            p.phaseLock = variant == 1;
+            p.warpType[0] = variant == 2 ? static_cast<int> (Warp::smear) : -1;
+            p.warpAmount[0] = 0.8f;
+            v.noteOn (&tone.analysis, p, 0.0f, k * kStartStep);
+            render (v, p, 4096, 128);
+        }
+    CHECK_EQ (SpectralVoice::tablesBuiltForTest(), built);
+}
 
 TEST (spectral_fft_round_trip_and_a_sine_lands_in_its_bin)
 {
@@ -1156,4 +1180,372 @@ TEST (spectral_the_deferred_frames_are_made_in_time_and_the_output_does_not_depe
                     CHECK (out == first);
             }
         }
+}
+
+// SP1 (docs/release/CPU-REVIEW-CONTENT.md): reset() only clears the flags. A note started on dirty buffers (every buffer of both channels filled with a pattern, and a note of other settings played
+// before) is bit for bit the note started on fully cleared ones (the old reset, `setLegacyReset`) and the note of a fresh voice: nothing downstream reads stale data. Frozen and scanning, Smear,
+// Phase Lock, Add Harmonics, the deferred and the legacy start, every start offset, a mono and a stereo sample (a stereo note before a mono one leaves the second channel dirty).
+TEST (spectral_a_note_started_on_dirty_buffers_is_the_note_started_on_cleared_ones)
+{
+    Tone tone (rich (220.0, 1.5));
+    std::vector<float> l (static_cast<size_t> (1.5 * kSr)), r (l.size());
+    for (size_t i = 0; i < l.size(); ++i)
+    {
+        l[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 311.0 * static_cast<double> (i) / kSr) + 0.1 * std::sin (0.01 * static_cast<double> (i * i % 1000)));
+        r[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 477.0 * static_cast<double> (i) / kSr));
+    }
+    SampleData stereoData;
+    stereoData.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), kSr);
+    Analysis stereo;
+    stereo.build (stereoData.view());
+    int runs = 0, identical = 0;
+    for (int variant = 0; variant < 5; ++variant)
+        for (int w : { -1, static_cast<int> (Warp::smear), static_cast<int> (Warp::addHarmonics) })
+            for (int legacyStart = 0; legacyStart < 2; ++legacyStart)
+                for (int k = 0; k < kStartSteps; ++k)
+                {
+                    SpectralParams p = frozen (0.4f);
+                    p.manual = variant != 4;
+                    p.scanSpeed = 0.7f;
+                    p.phaseLock = variant == 1;
+                    p.transients = variant == 2;
+                    p.pitchRatio = variant == 3 ? 1.37f : 1.0f;
+                    p.warpType[0] = w;
+                    p.warpAmount[0] = 0.8f;
+                    const Analysis* an = variant == 2 ? &tone.analysis : &stereo;   // (variant 2: a mono note after a stereo one)
+                    SpectralParams before = frozen (0.8f);
+                    before.warpType[0] = static_cast<int> (Warp::smear);
+                    before.warpAmount[0] = 0.5f;
+                    const int d = k * kStartStep;
+                    SpectralVoice fresh, dirty, old;
+                    for (SpectralVoice* v : { &fresh, &dirty, &old })
+                    {
+                        v->prepare (kSr);
+                        v->setLegacyStart (legacyStart != 0);
+                    }
+                    old.setLegacyReset (true);
+                    // the history of the two voices that are reset: a stereo note of other settings, played for a while
+                    for (SpectralVoice* v : { &dirty, &old })
+                    {
+                        v->noteOn (&stereo, before, 0.0f, 0);
+                        render (*v, before, 4096, 128);
+                        v->scribbleBuffersForTest (variant % 2 == 0 ? 0.7f : -0.3f);
+                        v->reset();
+                    }
+                    fresh.noteOn (an, p, 0.0f, d);
+                    dirty.noteOn (an, p, 0.0f, d);
+                    old.noteOn (an, p, 0.0f, d);
+                    std::vector<float> rf, rd, ro;
+                    const auto lf = render (fresh, p, 6144, 128, &rf);
+                    const auto ld = render (dirty, p, 6144, 128, &rd);
+                    const auto lo = render (old, p, 6144, 128, &ro);
+                    ++runs;
+                    const bool same = std::memcmp (lf.data(), ld.data(), lf.size() * sizeof (float)) == 0 && std::memcmp (rf.data(), rd.data(), rf.size() * sizeof (float)) == 0
+                                      && std::memcmp (lf.data(), lo.data(), lf.size() * sizeof (float)) == 0 && std::memcmp (rf.data(), ro.data(), rf.size() * sizeof (float)) == 0;
+                    identical += same ? 1 : 0;
+                    if (! CHECK (same))
+                        std::printf ("    variant %d warp %d legacyStart %d offset %d differs\n", variant, w, legacyStart, d);
+                }
+    CHECK_EQ (runs, identical);
+    std::printf ("    %d note starts on dirty buffers: all bit identical to the cleared start\n", runs);
+    // Mac timing of the reset of the 4 players of an oscillator slot (the cost of every note start before)
+    SpectralVoice slot[4];
+    double us[2] = {};
+    for (int legacy = 0; legacy < 2; ++legacy)
+    {
+        for (SpectralVoice& v : slot)
+            v.setLegacyReset (legacy != 0);
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 20000; ++i)
+            for (SpectralVoice& v : slot)
+                v.reset();
+        us[legacy] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / 20000.0;
+    }
+    std::printf ("    reset of 4 spectral voices: %.3f us now, %.3f us before (this Mac, warm)\n", us[0], us[1]);
+}
+
+// SP2: the start schedule from the table is the schedule of the loop of double cosines, for every start offset (also outside 0 .. kHop - 1, which are clamped) with and without Smear.
+TEST (spectral_the_start_schedule_from_the_table_is_the_loop_of_cosines)
+{
+    int compared = 0;
+    for (int offset = -3; offset < kHop + 3; ++offset)
+        for (int smears = 0; smears < 2; ++smears)
+        {
+            int a[3], b[3];
+            SpectralVoice::startSchedule (offset, smears != 0, a);
+            SpectralVoice::startScheduleReference (offset, smears != 0, b);
+            ++compared;
+            if (! CHECK (a[0] == b[0] && a[1] == b[1] && a[2] == b[2]))
+                std::printf ("    offset %d smears %d: %d %d %d against %d %d %d\n", offset, smears, a[0], a[1], a[2], b[0], b[1], b[2]);
+        }
+    CHECK_EQ (compared, (kHop + 6) * 2);
+    double us[2] = {};
+    int sink = 0;
+    for (int ref = 0; ref < 2; ++ref)
+    {
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 2000; ++i)
+            for (int k = 0; k < kStartSteps; ++k)
+            {
+                int j[3];
+                if (ref != 0)
+                    SpectralVoice::startScheduleReference (k * kStartStep, false, j);
+                else
+                    SpectralVoice::startSchedule (k * kStartStep, false, j);
+                sink += j[0] + j[1] + j[2];
+            }
+        us[ref] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / (2000.0 * kStartSteps);
+    }
+    std::printf ("    startSchedule: %.3f us per note start now, %.3f us before (this Mac; %d)\n", us[0], us[1], sink & 1);
+}
+
+// SP5: with Phase Lock the voice advances only the bins that the lock does not overwrite (bin 0, the peaks, the halves of the regions next to the next peak). The output is the output of the voice that
+// advances every bin and then lets the lock overwrite about half of them (`setLegacyPhaseLock`), bit for bit: the clean tone (few peaks), a rich tone, noise (a peak every few bins), a stereo sample,
+// silence (no peak: every bin advances), at every start offset, frozen and scanning, with a pitch ratio, over 24000 samples (many frames carrying the phases on).
+TEST (spectral_phase_lock_that_advances_only_the_kept_bins_is_the_old_phase_lock)
+{
+    std::vector<float> noise (static_cast<size_t> (1.2 * kSr)), l (noise.size()), r (noise.size()), silence (noise.size(), 0.0f);
+    uint32_t seed = 99u;
+    for (size_t i = 0; i < noise.size(); ++i)
+    {
+        seed = seed * 1664525u + 1013904223u;
+        noise[i] = 0.3f * (static_cast<float> (seed >> 8) * (1.0f / 8388608.0f) - 1.0f);
+        l[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 311.0 * static_cast<double> (i) / kSr));
+        r[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 477.0 * static_cast<double> (i) / kSr) + 0.1 * noise[i]);
+    }
+    Tone clean (sine (440.0, 1.2)), rich1 (rich (196.0, 1.2)), noisy (noise), quiet (silence);
+    SampleData stereoData;
+    stereoData.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), kSr);
+    Analysis stereo;
+    stereo.build (stereoData.view());
+    const Analysis* analyses[5] = { &clean.analysis, &rich1.analysis, &noisy.analysis, &stereo, &quiet.analysis };
+    int runs = 0, different = 0;
+    for (const Analysis* an : analyses)
+        for (int variant = 0; variant < 3; ++variant)
+            for (int k = 0; k < kStartSteps; ++k)
+            {
+                SpectralParams p = frozen (0.3f);
+                p.manual = variant != 1;
+                p.scanSpeed = 0.6f;
+                p.phaseLock = true;
+                p.pitchRatio = variant == 2 ? 1.5f : 1.0f;
+                p.transients = variant == 2;
+                SpectralVoice a, b;
+                a.prepare (kSr);
+                b.prepare (kSr);
+                b.setLegacyPhaseLock (true);
+                a.noteOn (an, p, 0.0f, k * kStartStep);
+                b.noteOn (an, p, 0.0f, k * kStartStep);
+                std::vector<float> ra, rb;
+                const auto la = render (a, p, 24000, 128, &ra);
+                const auto lb = render (b, p, 24000, 128, &rb);
+                ++runs;
+                if (std::memcmp (la.data(), lb.data(), la.size() * sizeof (float)) != 0 || std::memcmp (ra.data(), rb.data(), ra.size() * sizeof (float)) != 0)
+                    ++different;
+            }
+    CHECK_EQ (runs, 60);
+    CHECK_EQ (different, 0);
+    // Mac timing of one frame with Phase Lock (synthesis of one hop, 8 voices of a chord worth of frames)
+    double us[2] = {};
+    for (int legacy = 0; legacy < 2; ++legacy)
+    {
+        SpectralParams p = frozen (0.3f);
+        p.phaseLock = true;
+        SpectralVoice v;
+        v.prepare (kSr);
+        v.setLegacyPhaseLock (legacy != 0);
+        v.noteOn (&rich1.analysis, p, 0.0f, 0);
+        std::vector<float> lo (kHop), ro (kHop);
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 2000; ++i)
+            v.process (p, lo.data(), ro.data(), kHop);
+        us[legacy] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / 2000.0;
+    }
+    std::printf ("    one frame with Phase Lock (a hop, rich tone): %.2f us now, %.2f us before (this Mac)\n", us[0], us[1]);
+}
+
+// SP6: a priming frame is overlap-added straight into the ring from its first kept sample. The kernel equals the old add through a zeroed temporary and a loop (arbitrary ring contents, every start that
+// the priming uses, both forms), and the notes (every start offset, the deferred frames, smear, stereo) are bit for bit the notes of the old priming (`setLegacyStartOla`).
+TEST (spectral_the_priming_overlap_add_straight_into_the_ring_is_the_old_one)
+{
+    uint32_t seed = 5u;
+    const auto next = [&] { seed = seed * 1664525u + 1013904223u; return static_cast<float> (seed >> 8) * (1.0f / 8388608.0f) - 1.0f; };
+    int kernelChecks = 0;
+    for (int neon = 0; neon < 2; ++neon)
+        for (int j = 1; j <= 3; ++j)
+            for (int rep = 0; rep < 20; ++rep)
+            {
+                std::vector<float> zr (kFftSize / 2), zi (kFftSize / 2), ring (kFftSize), ref (kFftSize), tmp (kFftSize, 0.0f);
+                for (auto& v : zr) v = 300.0f * next();
+                for (auto& v : zi) v = 300.0f * next();
+                for (auto& v : ring) v = next();
+                ref = ring;
+                const int at = (j * kHop) & (kFftSize - 1);
+                kernels::overlapAdd (tmp.data(), 0, zr.data(), zi.data(), 0.7f, neon != 0);
+                for (int n = (3 - j) * kHop; n < kFftSize; ++n)
+                    ref[static_cast<size_t> ((at + n) & (kFftSize - 1))] += tmp[static_cast<size_t> (n)];
+                kernels::overlapAdd (ring.data(), at, zr.data(), zi.data(), 0.7f, neon != 0, (3 - j) * kHop);
+                ++kernelChecks;
+                CHECK (std::memcmp (ring.data(), ref.data(), sizeof (float) * kFftSize) == 0);
+            }
+    CHECK_EQ (kernelChecks, 120);
+    Tone tone (rich (220.0, 1.2));
+    std::vector<float> l (static_cast<size_t> (1.2 * kSr)), r (l.size());
+    for (size_t i = 0; i < l.size(); ++i)
+    {
+        l[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 311.0 * static_cast<double> (i) / kSr) + 0.1 * std::sin (0.01 * static_cast<double> (i * i % 1000)));
+        r[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 477.0 * static_cast<double> (i) / kSr));
+    }
+    SampleData stereoData;
+    stereoData.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), kSr);
+    Analysis stereo;
+    stereo.build (stereoData.view());
+    int runs = 0, different = 0;
+    for (int variant = 0; variant < 4; ++variant)
+        for (int w : { -1, static_cast<int> (Warp::smear), static_cast<int> (Warp::addHarmonics) })
+            for (int k = 0; k < kStartSteps; ++k)
+            {
+                SpectralParams p = frozen (0.4f);
+                p.manual = variant != 1;
+                p.scanSpeed = 0.7f;
+                p.phaseLock = variant == 2;
+                p.pitchRatio = variant == 3 ? 1.37f : 1.0f;
+                p.warpType[0] = w;
+                p.warpAmount[0] = 0.8f;
+                const Analysis* an = variant >= 2 ? &stereo : &tone.analysis;
+                SpectralVoice a, b;
+                a.prepare (kSr);
+                b.prepare (kSr);
+                b.setLegacyStartOla (true);
+                a.noteOn (an, p, 0.0f, k * kStartStep);
+                b.noteOn (an, p, 0.0f, k * kStartStep);
+                std::vector<float> ra, rb;
+                const auto la = render (a, p, 8192, 128, &ra);
+                const auto lb = render (b, p, 8192, 128, &rb);
+                ++runs;
+                if (std::memcmp (la.data(), lb.data(), la.size() * sizeof (float)) != 0 || std::memcmp (ra.data(), rb.data(), ra.size() * sizeof (float)) != 0)
+                    ++different;
+            }
+    CHECK_EQ (runs, 48);
+    CHECK_EQ (different, 0);
+    // Mac timing of eight note starts (offset 0 / 128 / 256 / 384, two lanes each)
+    double us[2] = {};
+    for (int legacy = 0; legacy < 2; ++legacy)
+    {
+        SpectralParams p = frozen (0.4f);
+        SpectralVoice v[8];
+        for (SpectralVoice& x : v)
+        {
+            x.prepare (kSr);
+            x.setLegacyStartOla (legacy != 0);
+        }
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 100; ++i)
+            for (int n = 0; n < 8; ++n)
+            {
+                v[n].reset();
+                v[n].noteOn (&tone.analysis, p, 0.0f, (n % 4) * kStartStep);
+            }
+        us[legacy] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / 100.0;
+    }
+    std::printf ("    8 note starts: %.1f us now, %.1f us before (this Mac, warm)\n", us[0], us[1]);
+}
+
+// SP10: the output stage of the voice (gain, mask of non finite values, clamp to +-16) in NEON lanes. The kernel against the scalar loop on values of every kind (NaN, infinities, signed zeros, the limits,
+// subnormals, random), several gains and lengths; the voice that reads the finished hop in runs up to the next event against the voice that tests every sample (`setLegacyOutput`), for every start offset, the
+// deferred frames of the start, mono and stereo, in blocks of every length.
+TEST (spectral_the_output_stage_in_lanes_is_the_per_sample_stage)
+{
+    const float inf = std::numeric_limits<float>::infinity(), nan = std::numeric_limits<float>::quiet_NaN();
+    std::vector<float> special = { 0.0f, -0.0f, 1.0f, -1.0f, 16.0f, -16.0f, 16.0001f, -16.0001f, 15.9999f, 1.0e30f, -1.0e30f, 3.4e38f, -3.4e38f, inf, -inf, nan, -nan, 1.0e-30f, -1.0e-30f, 1.0e-39f, -1.0e-39f, 0.5f, 7.25f };
+    uint32_t seed = 31u;
+    for (int i = 0; i < 500; ++i)
+    {
+        seed = seed * 1664525u + 1013904223u;
+        special.push_back (40.0f * (static_cast<float> (seed >> 8) * (1.0f / 8388608.0f) - 1.0f));
+    }
+    int checks = 0;
+    for (float gain : { 1.0f, 0.37f, 5.5f, -2.0f, 0.0f })
+        for (int n : { 0, 1, 3, 4, 5, 8, 17, static_cast<int> (special.size()) })
+        {
+            std::vector<float> a (static_cast<size_t> (n) + 1, 7.0f), b (static_cast<size_t> (n) + 1, 7.0f);
+            kernels::gainClamp (a.data(), special.data(), gain, n, true);
+            kernels::gainClamp (b.data(), special.data(), gain, n, false);
+            std::vector<float> ref (static_cast<size_t> (n) + 1, 7.0f);
+            for (int i = 0; i < n; ++i)
+            {
+                const float x = special[static_cast<size_t> (i)] * gain;
+                ref[static_cast<size_t> (i)] = std::isfinite (x) ? std::max (-16.0f, std::min (16.0f, x)) : 0.0f;
+            }
+            ++checks;
+            CHECK (std::memcmp (a.data(), ref.data(), a.size() * sizeof (float)) == 0);   // (the guard element after n is untouched)
+            CHECK (std::memcmp (b.data(), ref.data(), b.size() * sizeof (float)) == 0);
+        }
+    CHECK_EQ (checks, 40);
+    Tone tone (rich (220.0, 1.2));
+    std::vector<float> l (static_cast<size_t> (1.2 * kSr)), r (l.size());
+    for (size_t i = 0; i < l.size(); ++i)
+    {
+        l[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 311.0 * static_cast<double> (i) / kSr));
+        r[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 477.0 * static_cast<double> (i) / kSr));
+    }
+    SampleData stereoData;
+    stereoData.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), kSr);
+    Analysis stereo;
+    stereo.build (stereoData.view());
+    int runs = 0, different = 0;
+    for (const Analysis* an : { &tone.analysis, &stereo })
+        for (int block : { 1, 7, 64, 128, 300, 511, 512, 1000 })
+            for (int k = 0; k < kStartSteps; ++k)
+                for (int smear = 0; smear < 2; ++smear)
+                {
+                    SpectralParams p = frozen (0.4f);
+                    p.manual = false;
+                    p.scanSpeed = 0.5f;
+                    p.gain = 3.0f;   // loud enough that the clamp works
+                    p.warpType[0] = smear != 0 ? static_cast<int> (Warp::smear) : -1;
+                    p.warpAmount[0] = 0.8f;
+                    SpectralVoice a, b;
+                    a.prepare (kSr);
+                    b.prepare (kSr);
+                    b.setLegacyOutput (true);
+                    a.noteOn (an, p, 0.0f, k * kStartStep);
+                    b.noteOn (an, p, 0.0f, k * kStartStep);
+                    std::vector<float> ra, rb;
+                    const int total = 6000;
+                    std::vector<float> la, lb;
+                    for (int done = 0; done < total; done += block)
+                    {
+                        std::vector<float> xl (static_cast<size_t> (block)), xr (xl), yl (xl), yr (xl);
+                        a.process (p, xl.data(), xr.data(), block);
+                        b.process (p, yl.data(), yr.data(), block);
+                        la.insert (la.end(), xl.begin(), xl.end());
+                        lb.insert (lb.end(), yl.begin(), yl.end());
+                        ra.insert (ra.end(), xr.begin(), xr.end());
+                        rb.insert (rb.end(), yr.begin(), yr.end());
+                    }
+                    ++runs;
+                    if (std::memcmp (la.data(), lb.data(), la.size() * sizeof (float)) != 0 || std::memcmp (ra.data(), rb.data(), ra.size() * sizeof (float)) != 0)
+                        ++different;
+                }
+    CHECK_EQ (runs, 2 * 8 * 4 * 2);
+    CHECK_EQ (different, 0);
+    // Mac timing: the output stage over the 128 samples of a block of a voice that is in its steady state (the frames of the hop are the same work in both)
+    double us[2] = {};
+    for (int legacy = 0; legacy < 2; ++legacy)
+    {
+        SpectralParams p = frozen (0.4f);
+        SpectralVoice v;
+        v.prepare (kSr);
+        v.setLegacyOutput (legacy != 0);
+        v.noteOn (&tone.analysis, p, 0.0f, 0);
+        std::vector<float> xl (128), xr (128);
+        for (int i = 0; i < 40; ++i)
+            v.process (p, xl.data(), xr.data(), 128);
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 4000; ++i)
+            v.process (p, xl.data(), xr.data(), 128);
+        us[legacy] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / 4000.0;
+    }
+    std::printf ("    128 samples of a voice (frames included): %.2f us now, %.2f us before (this Mac; the frame work dominates there)\n", us[0], us[1]);
 }

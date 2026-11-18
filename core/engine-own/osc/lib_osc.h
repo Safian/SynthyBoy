@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -90,6 +91,8 @@ public:
     static constexpr int kMaxU = WtOsc::kMaxVoices;
     static constexpr int kSpecU = 4;
     static constexpr int kSlots = multisample::kMaxLayerSlots;
+    /** Tests only (process wide): update () computes the pan law, the detune curve, the spread pan and the pitch ratios on every call, as before they were cached by their inputs. */
+    static void setLegacyCachesForTest (bool on) noexcept;
 
     LibOsc();
     ~LibOsc();
@@ -149,7 +152,19 @@ private:
     {
         float semis = 0.0f, det = 0.0f;
         float gPrevL = 0, gPrevR = 0, gL = 0, gR = 0;
+        float ratioSemis = std::numeric_limits<float>::quiet_NaN(), ratio = 1.0f;   // semitonesToRatio (semis), made again only when `semis` changes
     };
+    /** The libm results of update () by the inputs they were made for (a NaN input never matches): the pan law of the two channels, the detune curve and the spread pan of the lanes. Bit identical. */
+    struct UpdateCache
+    {
+        bool pan = false, shape = false, spread = false;
+        float panIn = 0.0f, panRightIn = 0.0f, panL = 1.0f, panR = 1.0f;
+        int shapeU = 0;
+        float shapeCurve = 0.0f, shape_[kMaxU] = {};
+        int spreadU = 0;
+        float spreadIn = 0.0f, spreadL[kMaxU] = {}, spreadR[kMaxU] = {};
+    };
+    float ratioOf (Unison& un) const noexcept;
     void beginType (int type) noexcept;
     void renderType (int type, int t0, int n, float* L, float* R, const float* const* cross) noexcept;
     float modulator (int warpType, int slot, const float* const* cross, int k, float& m) const noexcept;
@@ -166,6 +181,7 @@ private:
     LibParams lp;
     int U = 1;
     Unison uni[kMaxU];
+    UpdateCache cache_;
     float tapSemis = 60.0f;
     Rng rng;
     float randomPerNote = 0.0f;

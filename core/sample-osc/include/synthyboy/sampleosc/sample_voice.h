@@ -103,6 +103,8 @@ public:
     void setReferenceKernels (bool on) noexcept { reference_ = on; }
     /** Tests: false runs the block kernel with its scalar form only (the vector form, four samples at a time on ARM with NEON, gives the same bits). */
     void setVectorKernels (bool on) noexcept { vectors_ = on; }
+    /** Tests only: the block kernel computes the log2 of the pitch ratio and the pan gains on every call, as before they were cached by their inputs. */
+    void setLegacyCaches (bool on) noexcept { legacyCaches_ = on; }
 
     // --- Status queries ---
     bool isActive() const noexcept { return active_; }
@@ -158,6 +160,10 @@ private:
     bool useKernel() const noexcept { return ! reference_ && (sample_ == nullptr || sample_->numFrames <= (int64_t { 1 } << 30)); }
     bool reference_ = false;
     bool vectors_ = true;
+    bool legacyCaches_ = false;
+    // the block kernel's per call libm results and what they were made for (a NaN key never matches)
+    double cachedLogKey_ = std::numeric_limits<double>::quiet_NaN(), cachedLog_ = 0.0;
+    float cachedPanKey_ = std::numeric_limits<float>::quiet_NaN(), cachedGainL_ = 1.0f, cachedGainR_ = 0.0f;
     // the pitch ratio of the last updatePitchRatio (2^(semitones / 12) is the dear part, and the semitones rarely change from one control period to the next)
     float cachedSemitones_ = std::numeric_limits<float>::quiet_NaN();
     double cachedSpeedFromPitch_ = 1.0;

@@ -4,6 +4,7 @@
 #include "fx_makeup.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <vector>
 
@@ -17,6 +18,14 @@ namespace own
 {
 namespace makeup
 {
+namespace
+{
+std::atomic<bool> gLegacyCaches { false };
+} // namespace
+
+void setLegacyCachesForTest (bool on) noexcept { gLegacyCaches.store (on, std::memory_order_relaxed); }
+bool legacyCaches() noexcept { return gLegacyCaches.load (std::memory_order_relaxed); }
+
 namespace
 {
 constexpr double kLowestHz = 30.0;
@@ -113,6 +122,7 @@ void ProgramMeter::prepare (double sampleRate) noexcept
     sr = sampleRate;
     for (int i = 0; i < 4; ++i)
         coef[i] = static_cast<float> (1.0 - std::exp (-kTwoPi * kMeterCornerHz[i] / sampleRate));
+    constPeriod = -1;
     reset();
 }
 
@@ -157,17 +167,25 @@ void ProgramMeter::endPeriod (int periodSamples) noexcept
     double total = sumSide;
     for (int i = 0; i < kMeterBands; ++i)
         total += sum[i];
+    if (constPeriod != periodSamples || legacyCaches())
+    {
+        // (the constants depend on the period and the sample rate only: made again when either changes)
+        kSlowC = 1.0 - std::exp (-static_cast<double> (periodSamples) / (1.0 * sr));
+        kHoldC = std::exp (-static_cast<double> (periodSamples) / (4.0 * sr));
+        kFastC = 1.0 - std::exp (-static_cast<double> (periodSamples) / (0.1 * sr));
+        constPeriod = periodSamples;
+    }
     {
         // the steadiness: a slow mean (a second) against the held peak of the loudest 100 ms (silence counts: a pluck line leaves gaps)
-        const double kSlow = 1.0 - std::exp (-static_cast<double> (periodSamples) / (1.0 * sr)), kHold = std::exp (-static_cast<double> (periodSamples) / (4.0 * sr));
+        const double kSlow = kSlowC, kHold = kHoldC;
         const double inst = total / static_cast<double> (count);
         slow += (inst - slow) * kSlow;
-        fast += (inst - fast) * (1.0 - std::exp (-static_cast<double> (periodSamples) / (0.1 * sr)));
+        fast += (inst - fast) * kFastC;
         peak = std::max (fast, peak * kHold);
     }
     if (total > 1.0e-12 * static_cast<double> (count))
     {
-        const double k = seen ? 1.0 - std::exp (-static_cast<double> (periodSamples) / (0.1 * sr)) : 1.0;
+        const double k = seen ? kFastC : 1.0;   // (the same expression as the smoothing of `fast`)
         for (int i = 0; i < kMeterBands; ++i)
             energy[i] += (sum[i] / static_cast<double> (count) - energy[i]) * k;
         energySide += (sumSide / static_cast<double> (count) - energySide) * k;
@@ -492,6 +510,69 @@ static float weightedMean (const float (&v)[kBands], const ProgramDesc& d) noexc
 
 float convolvePower (const float (&bandPower)[kBands], const ProgramDesc& d) noexcept { return std::max (weightedMean (bandPower, d), 1.0e-6f); }
 float convolveCoherent (const float (&coherent)[kBands], const ProgramDesc& d) noexcept { return weightedMean (coherent, d); }
+
+namespace
+{
+/** What the weights need of the band table: the meter band of every band and the (floored) weight of every meter band, made once. */
+struct MeterMap
+{
+    int meterBand[kBands];
+    double inBand[kMeterBands];
+    MeterMap()
+    {
+        for (auto& v : inBand) v = 0.0;
+        const Table& t = table();
+        for (int b = 0; b < kBands; ++b)
+        {
+            meterBand[b] = meterBandOf (t.freq[b]);
+            inBand[meterBand[b]] += t.weight[b];
+        }
+        for (auto& v : inBand) v = std::max (v, 1.0e-30);
+    }
+};
+const MeterMap& meterMap() noexcept
+{
+    static const MeterMap m;
+    return m;
+}
+
+float weightedMeanW (const float (&v)[kBands], const BandWeights& w) noexcept
+{
+    double total = 0.0;
+    for (int b = 0; b < kBands; ++b)
+        total += static_cast<double> (w.w[b]) * v[b];
+    return static_cast<float> (total);
+}
+} // namespace
+
+void updateWeights (BandWeights& out, const ProgramDesc& d) noexcept
+{
+    if (out.built && out.valid == d.valid && ! legacyCaches())
+    {
+        bool same = true;
+        for (int i = 0; i < kMeterBands && same; ++i)
+            same = out.share[i] == d.share[i];
+        if (same || ! d.valid)
+            return;
+    }
+    const Table& t = table();
+    if (d.valid)
+    {
+        const MeterMap& m = meterMap();
+        for (int b = 0; b < kBands; ++b)
+            out.w[b] = static_cast<float> (d.share[m.meterBand[b]] * t.weight[b] / m.inBand[m.meterBand[b]]);
+    }
+    else
+        for (int b = 0; b < kBands; ++b)
+            out.w[b] = t.weight[b];
+    out.valid = d.valid;
+    for (int i = 0; i < kMeterBands; ++i)
+        out.share[i] = d.share[i];
+    out.built = true;
+}
+
+float convolvePower (const float (&bandPower)[kBands], const BandWeights& weights) noexcept { return std::max (weightedMeanW (bandPower, weights), 1.0e-6f); }
+float convolveCoherent (const float (&coherent)[kBands], const BandWeights& weights) noexcept { return weightedMeanW (coherent, weights); }
 } // namespace makeup
 } // namespace own
 } // namespace synthyboy

@@ -129,6 +129,9 @@ private:
     void runMakeup (float prev, float now, float* l, float* r, int n, int t0, makeup::ProgramMeter& meter) noexcept;
     /** One step of the smoothing of a makeup gain towards its target (immediately when `first` or `noSmoothing`). */
     void stepMakeup (float target, bool& seen, float& prev, float& now, const FxFrame& frame) const noexcept;
+    mutable int smoothPeriod = -1;       // the smoothing constant of stepMakeup and what it was made for
+    mutable double smoothRate = -1.0;
+    mutable float smoothStep = 0.0f;
     bool slotRuns (int s) const noexcept;
 
     double sr = 48000.0;

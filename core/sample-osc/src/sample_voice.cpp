@@ -226,7 +226,8 @@ struct ReadPlan
     double alpha = 0.0, oneMinusAlpha = 1.0;
 };
 
-inline ReadPlan makePlan (const SampleView& sample, double stepRatio, QualityTier tier) noexcept
+/** `rho` = std::log2 (stepRatio), handed in by the caller (it caches it; only read when the sample has mip levels and the ratio is above 1). */
+inline ReadPlan makePlan (const SampleView& sample, double stepRatio, QualityTier tier, double rho) noexcept
 {
     ReadPlan r;
     r.stereo = sample.numChannels == 2;
@@ -238,7 +239,6 @@ inline ReadPlan makePlan (const SampleView& sample, double stepRatio, QualityTie
         r.na = static_cast<int> (sample.numFrames);
         return r;
     }
-    const double rho = std::log2 (stepRatio);
     if (tier == QualityTier::high)
     {
         const int m0 = std::max (0, std::min (sample.numMipLevels - 1, static_cast<int> (rho)));
@@ -911,7 +911,18 @@ void SampleVoice::renderBlockT (float* outLeft, float* outRight, int numFrames, 
 
     const auto& tables = SincTables::instance();
     const float* const table = Tier == QualityTier::low ? tables.low : (Tier == QualityTier::medium ? tables.med : tables.high);
-    const ReadPlan plan = makePlan (*sample_, pitchRatio_, Tier);
+    // (the logarithm of the ratio and the pan gains are functions of values that rarely change from one block to the next: made again only when those change)
+    double rho = 0.0;
+    if (sample_->numMipLevels > 1 && pitchRatio_ > 1.0)
+    {
+        if (! (pitchRatio_ == cachedLogKey_) || legacyCaches_)
+        {
+            cachedLog_ = std::log2 (pitchRatio_);
+            cachedLogKey_ = pitchRatio_;
+        }
+        rho = cachedLog_;
+    }
+    const ReadPlan plan = makePlan (*sample_, pitchRatio_, Tier, rho);
 
     const LoopMode mode = params_.loopMode == LoopMode::tailed ? LoopMode::forward : params_.loopMode;
     const double xLen = (mode == LoopMode::forward && lLen > 2.0)
@@ -919,9 +930,15 @@ void SampleVoice::renderBlockT (float* outLeft, float* outRight, int numFrames, 
         : 0.0;
 
     const float pan = std::max (-1.0f, std::min (1.0f, params_.pan + unisonPan_));
-    const float theta = (pan + 1.0f) * static_cast<float> (kPi * 0.25);
-    const float gainL = std::cos (theta);
-    const float gainR = std::sin (theta);
+    if (! (pan == cachedPanKey_) || legacyCaches_)
+    {
+        const float theta = (pan + 1.0f) * static_cast<float> (kPi * 0.25);
+        cachedGainL_ = std::cos (theta);
+        cachedGainR_ = std::sin (theta);
+        cachedPanKey_ = pan;
+    }
+    const float gainL = cachedGainL_;
+    const float gainR = cachedGainR_;
     const bool fadeEdges = params_.edgeFadeMs > 0.0f;
     const double fadeFrames = fadeEdges ? std::max (1.0, static_cast<double> (params_.edgeFadeMs) * 0.001 * sample_->sampleRate) : 1.0;
     const float levelPart = std::max (0.0f, params_.level) * std::max (0.0f, unisonLevel_) * velocity_;

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #if defined(__ARM_NEON) && ! defined(SB_NO_NEON)
  #include <arm_neon.h>
@@ -199,8 +200,11 @@ void GranularVoice::reset() noexcept
 {
     active_ = false;
     sample_ = nullptr;
+    if (! grainsLive_ && ! legacyReset_)
+        return;   // no grain was spawned since the last reset: every `active` is false already
     for (Grain& g : grains_)
         g.active = false;
+    grainsLive_ = false;
 }
 
 int GranularVoice::activeGrains() const noexcept
@@ -326,6 +330,7 @@ void GranularVoice::spawn (const GrainParams& p, int delay, int age, double head
     g.invLength = 1.0f / static_cast<float> (g.length);
     g.mip = mipFor (*sample_, std::fabs (g.inc));
     g.active = true;
+    grainsLive_ = true;
 }
 
 void GranularVoice::advanceHead (const GrainParams& p) noexcept
@@ -359,6 +364,62 @@ void GranularVoice::advanceHead (const GrainParams& p) noexcept
         return;
     }
     if (p.loopMode == LoopMode::pingPong)
+    {
+        if (head_ >= l1) { head_ = l1 - (head_ - l1); headDirection_ = -headDirection_; }
+        else if (head_ <= l0) { head_ = l0 + (l0 - head_); headDirection_ = -headDirection_; }
+        head_ = std::max (l0, std::min (l1, head_));
+        return;
+    }
+    if (step > 0.0 && head_ >= l1)
+        head_ = l0 + std::fmod (head_ - l1, l1 - l0);
+    else if (step < 0.0 && head_ <= l0)
+        head_ = l1 - std::fmod (l0 - head_, l1 - l0);
+}
+
+GranularVoice::HeadStep GranularVoice::headStep (const GrainParams& p) const noexcept
+{
+    HeadStep h;
+    const double fileSeconds = static_cast<double> (sample_->numFrames) / sample_->sampleRate;
+    h.step = static_cast<double> (p.scanSpeed) / (fileSeconds * sampleRate_);
+    h.lo = std::min (p.regionLo, p.regionHi);
+    h.hi = std::max (p.regionLo, p.regionHi);
+    h.looping = p.loopMode != LoopMode::none && ! (p.loopMode == LoopMode::tailed && released_);
+    if (h.looping)
+    {
+        if (p.loopHi < p.loopLo)
+            h.step = -h.step;
+        if (p.loopMode == LoopMode::reverse)
+            h.step = -h.step;
+        h.pingPong = p.loopMode == LoopMode::pingPong;
+        h.l0 = std::max (h.lo, std::min (static_cast<double> (p.loopLo), static_cast<double> (p.loopHi)));
+        h.l1 = std::min (h.hi, std::max (static_cast<double> (p.loopLo), static_cast<double> (p.loopHi)));
+    }
+    return h;
+}
+
+/** advanceHead with the constants of the call made once: the same operations on the same values in the same order. */
+void GranularVoice::advanceHead (const GrainParams&, const HeadStep& h) noexcept
+{
+    if (headDone_)
+        return;
+    double step = h.step;
+    if (! h.looping)
+    {
+        head_ += step;
+        if (head_ >= h.hi && step > 0.0) { head_ = h.hi; headDone_ = true; }
+        else if (head_ <= h.lo && step < 0.0) { head_ = h.lo; headDone_ = true; }
+        return;
+    }
+    if (h.pingPong)
+        step *= static_cast<double> (headDirection_);
+    const double l0 = h.l0, l1 = h.l1;
+    head_ += step;
+    if (l1 - l0 < 1.0e-6)
+    {
+        head_ = l0;
+        return;
+    }
+    if (h.pingPong)
     {
         if (head_ >= l1) { head_ = l1 - (head_ - l1); headDirection_ = -headDirection_; }
         else if (head_ <= l0) { head_ = l0 + (l0 - head_); headDirection_ = -headDirection_; }
@@ -699,6 +760,28 @@ bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* righ
     return any;
 }
 
+void clampFinite (float* a, int n, bool neon) noexcept
+{
+    int i = 0;
+#if SB_GRAIN_NEON
+    if (neon)
+    {
+        const float32x4_t vhi = vdupq_n_f32 (16.0f), vlo = vdupq_n_f32 (-16.0f), vinf = vdupq_n_f32 (std::numeric_limits<float>::infinity());
+        for (; i + 4 <= n; i += 4)
+        {
+            const float32x4_t x = vld1q_f32 (a + i);
+            const uint32x4_t finite = vcltq_f32 (vabsq_f32 (x), vinf);   // false for infinity and NaN
+            const float32x4_t c = vminq_f32 (vmaxq_f32 (x, vlo), vhi);
+            vst1q_f32 (a + i, vreinterpretq_f32_u32 (vandq_u32 (vreinterpretq_u32_f32 (c), finite)));
+        }
+    }
+#else
+    (void) neon;
+#endif
+    for (; i < n; ++i)
+        a[i] = std::isfinite (a[i]) ? std::max (-16.0f, std::min (16.0f, a[i])) : 0.0f;
+}
+
 void GranularVoice::process (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept
 {
     std::fill (left, left + numFrames, 0.0f);
@@ -731,12 +814,18 @@ void GranularVoice::process (const GrainParams& p, float* left, float* right, in
         }
     }
     else
+    {
+        HeadStep hs;   // (nothing it reads changes while the block runs)
+        if (! p.manual)
+            hs = headStep (p);
         for (int i = 0; i < numFrames; ++i)
         {
             if (p.manual)
                 head_ = std::min (p.regionLo, p.regionHi) + std::fabs (static_cast<double> (p.regionHi) - static_cast<double> (p.regionLo)) * clamp01 (p.position);
-            else
+            else if (legacyHead_)
                 advanceHead (p);
+            else
+                advanceHead (p, hs);
             if (headDone_ && ! p.manual)
                 continue;
             spawnTimer_ -= 1.0;
@@ -746,6 +835,7 @@ void GranularVoice::process (const GrainParams& p, float* left, float* right, in
                 spawnTimer_ += period;
             }
         }
+    }
 
     bool any;
     if (reference_ || sample_->numFrames > (int64_t { 1 } << 29))   // (the kernel counts frames with 32 bit integers)
@@ -753,11 +843,8 @@ void GranularVoice::process (const GrainParams& p, float* left, float* right, in
     else
         any = renderGrains (p, left, right, numFrames, rateMod);
 
-    for (int i = 0; i < numFrames; ++i)
-    {
-        left[i] = std::isfinite (left[i]) ? std::max (-16.0f, std::min (16.0f, left[i])) : 0.0f;
-        right[i] = std::isfinite (right[i]) ? std::max (-16.0f, std::min (16.0f, right[i])) : 0.0f;
-    }
+    clampFinite (left, numFrames, ! legacyOutput_ && SB_GRAIN_NEON != 0);
+    clampFinite (right, numFrames, ! legacyOutput_ && SB_GRAIN_NEON != 0);
     if (! any && headDone_ && ! p.manual)
         active_ = false;
 }

@@ -311,7 +311,16 @@ void FxChain::stepMakeup (float target, bool& seen, float& prev, float& now, con
     else if (frame.noSmoothing)
         prev = now = target;
     else
-        now += (target - now) * (1.0f - std::exp (-static_cast<float> (frame.period) / (0.02f * static_cast<float> (sr)))); // 20 ms: a knob that moves the model's inputs, the build of an impulse that comes in late
+    {
+        // 20 ms: a knob that moves the model's inputs, the build of an impulse that comes in late (the constant is made again only when the period or the rate changes)
+        if (smoothPeriod != frame.period || smoothRate != sr || makeup::legacyCaches())
+        {
+            smoothStep = 1.0f - std::exp (-static_cast<float> (frame.period) / (0.02f * static_cast<float> (sr)));
+            smoothPeriod = frame.period;
+            smoothRate = sr;
+        }
+        now += (target - now) * smoothStep;
+    }
 }
 
 void FxChain::buildPlan (const float*) noexcept

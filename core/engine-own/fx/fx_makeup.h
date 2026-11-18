@@ -82,6 +82,9 @@ private:
     double energy[kMeterBands] = {}, energySide = 0.0;
     double slow = 0.0, fast = 0.0, peak = 0.0; // the energy over about a second, and the held loudest 100 ms (decaying over 4 s)
     bool seen = false;
+    // the smoothing constants of endPeriod, made again only when the period length or the sample rate changes (prepare)
+    int constPeriod = -1;
+    double kSlowC = 0.0, kHoldC = 0.0, kFastC = 0.0;
 };
 
 /** The loudness factors of the models: the share of the steady state power of the wet path that the loudest 100 ms of a played note carries (a reverb tail builds up and falls, a
@@ -132,6 +135,23 @@ void convolveBandPowers (const BandSpectrum& spec, const WetShaping& shaping, fl
     The program weighted mean of the band powers: the weight of a band is the share of its meter band of `d`, spread by the standard program (the standard program when `d` is not valid). */
 float convolvePower (const float (&bandPower)[kBands], const ProgramDesc& d) noexcept;
 float convolveCoherent (const float (&coherent)[kBands], const ProgramDesc& d) noexcept;
+
+/** The weights of the means above for one program: they depend on the shares of `d` only, so the module keeps them and `updateWeights` rebuilds them only when the shares (or `valid`) change; the power and the
+    coherent mean of a period then share one set. The two overloads give the bits of the two functions above. */
+struct BandWeights
+{
+    bool built = false;
+    bool valid = false;
+    float share[kMeterBands] = {};
+    float w[kBands] = {};
+};
+void updateWeights (BandWeights& weights, const ProgramDesc& d) noexcept;
+float convolvePower (const float (&bandPower)[kBands], const BandWeights& weights) noexcept;
+float convolveCoherent (const float (&coherent)[kBands], const BandWeights& weights) noexcept;
+
+/** Tests only: the models and the meter compute everything per call, as before the caches (the constants of the meter, the weights, the key of Convolve, the level gains). Process wide. */
+void setLegacyCachesForTest (bool on) noexcept;
+bool legacyCaches() noexcept;
 } // namespace makeup
 } // namespace own
 } // namespace synthyboy

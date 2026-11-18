@@ -32,6 +32,11 @@ constexpr bool findPeaksVector() noexcept { return false; }
 constexpr bool findPeaksVector() noexcept { return SB_SPECTRAL_NEON != 0; }
 #endif
 
+/** Builds the tables of the inverse transform (RealIfft) and of the overlap add (the window), which are otherwise built at their first use: call it from prepare, outside the audio thread. */
+void warmTables() noexcept;
+/** How many of the tables of this file have been built (tests: a note must not build one). */
+int tablesBuilt() noexcept;
+
 /** The inverse transform of the spectrum of a real signal: the bins 0 .. kFftSize / 2 (xr, xi: kBins values each; xi[0] and xi[kFftSize / 2] must be 0) to the kFftSize real samples
     x[n] = sum_k X[k] e^(+2 pi i k n / kFftSize) over the full Hermitian spectrum (NOT divided by kFftSize: overlapAdd () applies that factor, which is a power of two and so exact), returned as the kFftSize / 2 complex values z[m] = x[2 m] + i x[2 m + 1] (zr, zi).
     One complex transform of half the length instead of the full one that Fft::inverse () runs on the mirrored arrays: about 2.5 times less work; the result differs from Fft::inverse ()
@@ -75,8 +80,12 @@ float wrapPhaseFloat (float x) noexcept;
 void advancePhases (float* phase, const float* step, int n, bool neon) noexcept;
 
 /** ring[(at + n) & (kFftSize - 1)] += x[n] * w[n] * scale for n < kFftSize, where x[2 m] = zr[m], x[2 m + 1] = zi[m] and w is the Hann window times 1 / kFftSize (exact): the
-    overlap add of a frame of the voice (the product is the voice's old (x / kFftSize * hann) * scale with the exact power of two moved into the table). `at` is a multiple of 4. The order of the products is the voice's: (x * w) * scale. */
-void overlapAdd (float* ring, int at, const float* zr, const float* zi, float scale, bool neon) noexcept;
+    overlap add of a frame of the voice (the product is the voice's old (x / kFftSize * hann) * scale with the exact power of two moved into the table). `at` is a multiple of 4. The order of the products is the voice's: (x * w) * scale. `first` (a multiple of 8, default 0): the sum starts at n = first, the samples before it are left out (a frame whose first part lies in the past). */
+/** out[i] = isfinite (x) ? max (-16, min (16, x)) : 0 for x = in[i] * gain, i < n: the output stage of the voice. `neon`: four at a time, the same operations in every lane (a non finite value is masked to 0
+    as the scalar test does): the same bits for every sample whose operand and product are normal numbers (NEON on 32 bit ARM flushes subnormals, as the other vector forms do). */
+void gainClamp (float* out, const float* in, float gain, int n, bool neon) noexcept;
+
+void overlapAdd (float* ring, int at, const float* zr, const float* zi, float scale, bool neon, int first = 0) noexcept;
 
 // ---- the per bin loops of shapeFrame () (the same values as the scalar loops of the reference, bit for bit) ----------------------------------------------
 

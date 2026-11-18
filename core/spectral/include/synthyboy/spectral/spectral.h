@@ -148,7 +148,19 @@ class SpectralVoice
 public:
     SpectralVoice() = default;
     void prepare (double hostSampleRate) noexcept;
+    /** Stops the voice. Only the flags: the buffers (phases, smear, ring, finished hop) are not cleared, a note start (noteOn) clears or writes everything it reads. */
     void reset() noexcept;
+    /** Tests only: reset() as it was before (every buffer of both channels cleared), and a fill of all buffers with a pattern to start notes on dirty memory. */
+    void setLegacyReset (bool on) noexcept { legacyReset_ = on; }
+    /** Tests only: the output stage runs the scalar form (as before SP10) instead of the NEON form. */
+    void setLegacyOutput (bool on) noexcept { legacyOutput_ = on; }
+    /** Tests only: the priming frames go through the 8 KB temporary and a scalar add loop (as before SP6). */
+    void setLegacyStartOla (bool on) noexcept { legacyStartOla_ = on; }
+    /** Tests only: with Phase Lock every bin is advanced and then the lock overwrites about half of them (as before SP5), instead of advancing only the bins the lock keeps. */
+    void setLegacyPhaseLock (bool on) noexcept { legacyLock_ = on; }
+    void scribbleBuffersForTest (float value) noexcept;
+    /** Tests only: how many of the lazily built tables (transform, overlap-add window, start gains, start schedule) exist. prepare() builds all of them. */
+    static int tablesBuiltForTest() noexcept;
 
     /** Starts the voice on `analysis` (null: silent). `startFraction` moves the play head by that share of the region (unison start / span). The overlap buffer is primed so
         that the note starts at full level: four frames are synthesised at once (the three before the first output hop and the first one of the hop itself).
@@ -164,6 +176,8 @@ public:
     /** The sample of the first hop (the voice's output sample, 0 .. kHop) at which frame 1 .. 3 of the priming is made for a start offset: `join[j - 1] <= offset` means in noteOn. Every frame
         is made before the squared window it would have in the sum exceeds 0.5 (and at the latest at kHop, the first regular frame), at a multiple of kStartStep. With the Smear warp all at once. */
     static void startSchedule (int offset, bool smears, int join[3]) noexcept;
+    /** Tests only: startSchedule as it was (the loop of double cosines at every call). */
+    static void startScheduleReference (int offset, bool smears, int join[3]) noexcept;
     /** Measurements and tests only: the start of a note as before round 10 (the four frames of the priming made at once, the first hop their plain sum) instead of the start with the deferred frames
         (section 4a of docs/engine-spec/07). From the sample kHop of the voice (the first regular frame) on the two give the same samples. */
     void setLegacyStart (bool on) noexcept { legacyStart_ = on; }
@@ -196,6 +210,10 @@ private:
     int ola_ = 0;                // write position of the overlap buffer (start of the hop to write)
     bool primed_ = false;
     bool legacyStart_ = false;
+    bool legacyReset_ = false;
+    bool legacyOutput_ = false;
+    bool legacyStartOla_ = false;
+    bool legacyLock_ = false;
     bool startActive_ = false;   // the first hop (the output samples 0 .. kHop - startSkip_) is being read from the ring, normalised by the windows of the frames made so far
     int startMask_ = 0;          // bit j - 1: frame j (1 .. 3) of the priming has been made
     int startJoin_[3] = { -1, -1, -1 };   // the sample of the first hop at which frame 1 .. 3 is made (-1: made)

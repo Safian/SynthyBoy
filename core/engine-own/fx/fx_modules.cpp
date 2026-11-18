@@ -752,6 +752,8 @@ public:
         specLive = makeup::BandSpectrum();
         specBuiltKey = Key();
         specCache = SpecCache();
+        weights = makeup::BandWeights();
+        keyCache = KeyCache();
         delete ready.exchange (nullptr);
         delete active;
         active = nullptr;
@@ -855,11 +857,19 @@ public:
             c.serum = sh.serumLaw;
             c.rate = sampleRate;
         }
-        return makeup::convolvePower (c.bands, program);
+        if (makeup::legacyCaches())
+            return makeup::convolvePower (c.bands, program);
+        makeup::updateWeights (weights, program);   // (the weights of the program are made again only when its shares change)
+        return makeup::convolvePower (c.bands, weights);
     }
     float makeupCoherent (const FxFrame&, const float*, const float*, const makeup::ProgramDesc& program) noexcept override
     {
-        return specLive.valid && specCache.valid ? makeup::convolveCoherent (specCache.coherent, program) : 1.0f; // (the weighted mean of the coherent amplitudes; makeupPower has just filled the cache)
+        if (!(specLive.valid && specCache.valid))
+            return 1.0f;
+        if (makeup::legacyCaches())
+            return makeup::convolveCoherent (specCache.coherent, program);   // (the weighted mean of the coherent amplitudes; makeupPower has just filled the cache)
+        makeup::updateWeights (weights, program);
+        return makeup::convolveCoherent (specCache.coherent, weights);
     }
     void run (float* l, float* r, int n) noexcept override
     {
@@ -891,6 +901,29 @@ private:
     /** The key of the impulse the parameters ask for (configure () and the loudness model of a bypassed module build the same one). */
     void makeKey (const FxFrame& f, const float* b, const float* d, Key& k) const noexcept
     {
+        // the key is a function of these values: while they are the same as at the last call the key is too (two powf and five roundf less per call)
+        KeyInputs in;
+        in.impulse = f.content->impulse.get();
+        in.law = choice (b, law);
+        in.phiMin = phiMin >= 0 && b[phiMin] >= 0.5f;
+        in.size = V (b, d, size);
+        in.attack = V (b, d, attack);
+        in.decay = V (b, d, decay);
+        in.damp = pct (b, d, damp);
+        in.irGain = V (b, d, irGain);
+        in.length = static_cast<float> (f.content->impulse->frames / f.content->impulse->rate);
+        if (keyCache.valid && keyCache.in == in && !makeup::legacyCaches())
+        {
+            k = keyCache.key;
+            return;
+        }
+        makeKeyUncached (f, b, d, k);
+        keyCache.in = in;
+        keyCache.key = k;
+        keyCache.valid = true;
+    }
+    void makeKeyUncached (const FxFrame& f, const float* b, const float* d, Key& k) const noexcept
+    {
         const bool serum = choice (b, law) == 1;
         k.impulse = f.content->impulse.get();
         k.serum = serum;
@@ -912,6 +945,25 @@ private:
         k.damp = std::round (k.damp * 100.0f) / 100.0f;
         k.irGain = std::round (k.irGain * 10.0f) / 10.0f;
     }
+    struct KeyInputs
+    {
+        const ContentSet::Impulse* impulse = nullptr;
+        int law = 0;
+        bool phiMin = false;
+        float size = 0, attack = 0, decay = 0, damp = 0, irGain = 0, length = 0;
+        bool operator== (const KeyInputs& o) const noexcept
+        {
+            return impulse == o.impulse && law == o.law && phiMin == o.phiMin && size == o.size && attack == o.attack && decay == o.decay && damp == o.damp && irGain == o.irGain && length == o.length;
+        }
+    };
+    struct KeyCache
+    {
+        bool valid = false;
+        KeyInputs in;
+        Key key;
+    };
+    mutable KeyCache keyCache;
+    makeup::BandWeights weights;   // the weights of the program of the bypassed module's loudness model
     struct Job
     {
         ConvolveModule* self = nullptr;
