@@ -40,6 +40,7 @@ TOPICS = {
     "f2e133c7": "key 61", "397c0654": "pointer plane", "94f5e3dd": "quality profile", "77f74d2e": "led", "76ffa60f": "led",
     "331af461": "macro names", "5c470640": "standby", "389944b1": "q router", "2b3555b7": "stepped", "f9b1310f": "string",
     "f5b13a93": "in-host drawing", "a7a0034d": "q-link",
+    "08e70caf": "power and full screen", "0e9e4dd9": "wavetable pack docs", "16df7e89": "wavetable files", "18d19d6b": "wavetable browser", "308dd896": "wavetable browser", "3482d198": "limiter", "34cc1053": "drop-down", "3acdaf1b": "output limiter", "43304c10": "factory wavetables", "53dd6ff2": "register of seven", "5b0aa592": "carousel", "8b5a6ad1": "play page", "ae4c563b": "one play page", "c7ef2d29": "perceptual levelling", "db8d0b3d": "wavetable lab", "ef1ef5bd": "play and master",
 }
 
 
