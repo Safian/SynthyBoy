@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -41,6 +42,9 @@ float divisionBeats (int idx) noexcept
     return whole * (m == 1 ? 2.0f / 3.0f : (m == 2 ? 1.5f : 1.0f));
 }
 
+std::atomic<bool> gLegacyCaches { false };
+bool legacyCaches() noexcept { return gLegacyCaches.load (std::memory_order_relaxed); }
+
 void panLaw (float p, float& l, float& r) noexcept
 {
     p = std::clamp (p, -1.0f, 1.0f);
@@ -48,6 +52,18 @@ void panLaw (float p, float& l, float& r) noexcept
     r = 1.41421356f * std::sin (kPif * 0.25f * (1.0f + p));
 }
 } // namespace
+
+void LibOsc::setLegacyCachesForTest (bool on) noexcept { gLegacyCaches.store (on, std::memory_order_relaxed); }
+
+float LibOsc::ratioOf (Unison& un) const noexcept
+{
+    if (! (un.semis == un.ratioSemis) || legacyCaches())
+    {
+        un.ratio = semitonesToRatio (un.semis);
+        un.ratioSemis = un.semis;
+    }
+    return un.ratio;
+}
 
 const LibKeys& libKeys (int osc) noexcept
 {
@@ -299,12 +315,19 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
     // ---- unison
     const int maxU = type == kOscTypeSpectral ? kSpecU : kMaxU;
     U = std::clamp (tick.voices, 1, maxU);
-    float panL, panR, panL2, panR2;
-    panLaw (tick.pan, panL, panL2);
-    panLaw (tick.panRight, panR2, panR);
-    // the left lane drives the left channel, the right lane the right channel (as in the wavetable oscillator)
-    (void) panL2;
-    (void) panR2;
+    if (! cache_.pan || ! (tick.pan == cache_.panIn) || ! (tick.panRight == cache_.panRightIn) || legacyCaches())
+    {
+        float panL2, panR2;
+        panLaw (tick.pan, cache_.panL, panL2);
+        panLaw (tick.panRight, panR2, cache_.panR);
+        // the left lane drives the left channel, the right lane the right channel (as in the wavetable oscillator)
+        (void) panL2;
+        (void) panR2;
+        cache_.panIn = tick.pan;
+        cache_.panRightIn = tick.panRight;
+        cache_.pan = true;
+    }
+    const float panL = cache_.panL, panR = cache_.panR;
     const float blend = clamp01 (tick.blend);
     const float centreW = 1.0f - 0.5f * blend, detunedW = std::max (0.25f, 1.0f - (1.0f - blend) * (1.0f - blend));
     float sumSq = 0.0f;
@@ -325,16 +348,32 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
     float gNorm = yLevel;
     if (type != kOscTypeMultisample && v[lk_sNormalize] >= 0.5f && haveSample)
         gNorm *= smp->data.normalizeGain();
+    // (tt depends on U only: the detune curve and the spread pan of the lanes are made again only when U or their key changes)
+    if (! cache_.shape || cache_.shapeU != U || ! (cache_.shapeCurve == tick.curve) || legacyCaches())
+    {
+        for (int u = 0; u < U; ++u)
+            cache_.shape_[u] = (tt[u] < 0.0f ? -1.0f : 1.0f) * powerShape (std::fabs (tt[u]), tick.curve);
+        cache_.shapeU = U;
+        cache_.shapeCurve = tick.curve;
+        cache_.shape = true;
+    }
+    if (! cache_.spread || cache_.spreadU != U || ! (cache_.spreadIn == tick.spread) || legacyCaches())
+    {
+        for (int u = 0; u < U; ++u)
+            panLaw (tt[u] * clamp01 (tick.spread), cache_.spreadL[u], cache_.spreadR[u]);
+        cache_.spreadU = U;
+        cache_.spreadIn = tick.spread;
+        cache_.spread = true;
+    }
     for (int u = 0; u < U; ++u)
     {
         Unison& un = uni[u];
         un.gPrevL = un.gL;
         un.gPrevR = un.gR;
-        const float sh = (tt[u] < 0.0f ? -1.0f : 1.0f) * powerShape (std::fabs (tt[u]), tick.curve);
+        const float sh = cache_.shape_[u];
         un.det = sh * tick.detuneSemis;
         un.semis = semis + un.det;
-        float pl, pr;
-        panLaw (tt[u] * clamp01 (tick.spread), pl, pr);
+        const float pl = cache_.spreadL[u], pr = cache_.spreadR[u];
         un.gL = w[u] * norm * pl * panL * tick.level * typeGain * gNorm;
         un.gR = w[u] * norm * pr * panR * tick.level * typeGain * gNorm;
         if (!anyPlaying)
@@ -661,7 +700,7 @@ void LibOsc::beginType (int type) noexcept
             else if (pattern == 3)
                 spawn = rng.uni();
             grainVoices[static_cast<size_t> (u)].reset();
-            gparams.pitchRatio = semitonesToRatio (uni[u].semis);
+            gparams.pitchRatio = ratioOf (uni[u]);
             grainVoices[static_cast<size_t> (u)].noteOn (&smp->view, gparams, lp.serial * 131u + static_cast<uint32_t> (u) * 17u + static_cast<uint32_t> (oi), spawn,
                                                          v[lk_gJumpStart] >= 0.5f, startFraction (u));
         }
@@ -671,7 +710,7 @@ void LibOsc::beginType (int type) noexcept
         for (int u = 0; u < U; ++u)
         {
             specVoices[static_cast<size_t> (u)].setReferenceKernels (lp.referenceKernels);
-            specParams.pitchRatio = semitonesToRatio (uni[u].semis);
+            specParams.pitchRatio = ratioOf (uni[u]);
             // the frames of a voice come every kHop samples: the voices of a chord and of the unison start at different offsets inside their hop (a quarter of a hop apart), so that in the steady
             // state every block carries about a quarter of their frames and not all of them every fourth block. The note serial counts the notes of the engine (the same for a render and its
             // repetition), the unison voice and the oscillator move the start on, so notes struck together and their voices fall on different quarters.
@@ -866,7 +905,7 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
             if (!gv.isActive())
                 continue;
             granular::GrainParams gp = gparams;
-            gp.pitchRatio = semitonesToRatio (uni[u].semis);
+            gp.pitchRatio = ratioOf (uni[u]);
             gv.setReferenceKernels (lp.referenceKernels);
             gv.process (gp, a, b, n, rm);
             for (int k = 0; k < n; ++k)
@@ -892,7 +931,7 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
             if (!sv.isActive() || specParams.scratch == nullptr)
                 continue;
             spectral::SpectralParams sp = specParams;
-            sp.pitchRatio = semitonesToRatio (uni[u].semis);
+            sp.pitchRatio = ratioOf (uni[u]);
             sv.setReferenceKernels (lp.referenceKernels);
             sv.process (sp, a, b, n);
             for (int k = 0; k < n; ++k)
