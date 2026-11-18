@@ -26,12 +26,12 @@
     },
     {
       "path": "Bass/punchy_pluck_bass.sbpreset",
-      "sha256": "4614f1dfb2c861feb3faff3bc5e78713d1a5d9558274e7589898481dad8e7e75",
-      "size": 50355
+      "sha256": "ec033f6e6cb698887d725659c5e5ec33b79d5910565fc56f0e7b4e00219a88c5",
+      "size": 50354
     },
     {
       "path": "Bass/dirty_distortion_bass.sbpreset",
-      "sha256": "2cd04b6d83ad0d755a22d2f326c5373fbf49a6670f85af085e0336af6a39e992",
+      "sha256": "d27f790a055ab5441095f9ef80690cc184cb949bce5df2874bc22c8c7152e623",
       "size": 50359
     },
     {
@@ -521,7 +521,7 @@
     },
     {
       "path": "Bass/ems_squelch_bass.sbpreset",
-      "sha256": "bd5fb2ca97983c742bd927c769434369339632954f84c86c163ff9515ada5af2",
+      "sha256": "293374b42db2ca380b5a1119218a6e0cbfbf8ddd3bb51dce5681f45d77983064",
       "size": 50377
     },
     {
@@ -721,8 +721,8 @@
     },
     {
       "path": "Pluck/nylon_zone_pluck.sbpreset",
-      "sha256": "ca466dd4501e1012e72e0e2b958448659ef2a146d547834d1659c79dbd4a1b68",
-      "size": 50966
+      "sha256": "ec508511f2fd229f858ad4e4c53a7c3869f32e02b24c958c4f41627005ae506b",
+      "size": 50964
     },
     {
       "path": "Keys/marimba_layer_keys.sbpreset",

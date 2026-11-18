@@ -191,7 +191,7 @@ bass_names = [
     ("Solid Sub", "sub,clean,deep", "Pure sub bass for electronic foundation", {"osc1.wavetable": 0, "filter1.on": 1, "filter1.cutoff": 120, "master.volume": -6}),
     ("Acid Saw Reso", "acid,reso,tb303", "Classic 303-style resonant sawtooth acid line", {"osc1.wavetable": 1, "filter1.on": 1, "filter1.model": 2, "filter1.cutoff": 450, "filter1.resonance": 78, "env2.decay": 280, "env2.sustain": 0}),
     ("Fat Reese", "reese,detune,dnb", "Dual detuned saws reese bass for DnB", {"osc1.wavetable": 1, "osc1.unison.voices": 5, "osc1.unison.detune": 22, "osc2.on": 1, "osc2.wavetable": 1, "osc2.transpose": -12, "filter1.cutoff": 800}),
-    ("Punchy Pluck Bass", "pluck,punch,edm", "Tight transient bass with short envelope decay", {"master.transpose": 12, "osc1.wavetable": 2, "filter1.cutoff": 300, "env1.decay": 180, "env1.sustain": 10, "env1.release": 50}),
+    ("Punchy Pluck Bass", "pluck,punch,edm", "Tight transient bass with short envelope decay", {"master.transpose": -12, "osc1.wavetable": 2, "filter1.cutoff": 300, "env1.decay": 180, "env1.sustain": 10, "env1.release": 50}),
     ("Dirty Distortion Bass", "dirty,drive,industrial", "Overdriven bass using dirty filter model", {"osc1.wavetable": 4, "filter1.model": 1, "filter1.cutoff": 650, "filter1.drive": 65, "distortion.on": 1, "distortion.drive": 12}),
     ("808 Boom", "808,hiphop,trap", "Pitch-gliding sine 808 boom bass", {"osc1.wavetable": 0, "env1.decay": 850, "env1.sustain": 0, "env1.release": 400, "master.volume": -5}),
     ("Formant Vowel Bass", "formant,vowel,dubstep", "Formant sweeping vowel bass", {"osc1.wavetable": 9, "filter1.model": 5, "filter1.cutoff": 950, "filter1.resonance": 60}),
