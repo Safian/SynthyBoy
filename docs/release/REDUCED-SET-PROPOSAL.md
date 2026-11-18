@@ -207,3 +207,7 @@ Introduce a `scripts/release/reduced-set-list.txt` file containing the names of 
 | Harpsichord Bar | Keys | Keys | 4 | None | -7.3 | N/A | TODO |
 | Celesta Bells | Keys | Keys | 12 | None | -8.9 | N/A | TODO |
 | Wah Pressure Clav | Keys | Keys | 4, 1 | None | -12.3 | 73.2 -> 39.7 | TODO |
+
+# Release Notes
+
+We are proud to introduce a refined selection of factory presets for the first release. This carefully curated set ensures optimal performance and covers a broad range of sonic textures. Each preset in this collection has been thoroughly auditioned to meet our high quality standards. You will find a wide variety of sounds including basses, pads, keys, and effects to jumpstart your music production. This reduced set offers a more streamlined browsing experience while maintaining full creative versatility. We hope you enjoy exploring these high quality sounds in your projects.
