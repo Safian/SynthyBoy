@@ -47,6 +47,14 @@ target_include_directories(synthyboy_test_own_fx PRIVATE "${PROJECT_SOURCE_DIR}/
 synthyboy_add_test(synthyboy_test_own_osc_options test_own_osc_options.cpp)
 synthyboy_add_test(synthyboy_test_own_content_opt test_own_content_opt.cpp)   # the CPU optimisations of the library oscillators change no output sample
 target_include_directories(synthyboy_test_own_content_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_compressor_opt test_own_compressor_opt.cpp)   # the CPU optimisation of the Compressor limiter changes no output sample
+target_include_directories(synthyboy_test_own_compressor_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_preset_render_output test_preset_render_output.cpp LINK synthyboy_fx_serum_b)   # the files of synthyboy_preset_render --float32 / --hash
+target_include_directories(synthyboy_test_preset_render_output PRIVATE "${PROJECT_SOURCE_DIR}/tools/preset-render" "${PROJECT_SOURCE_DIR}/core/fx-serum-b")
+synthyboy_add_test(synthyboy_test_own_helper_thread test_own_helper_thread.cpp)   # the wake-up flag and the helper threads of the engine
+target_include_directories(synthyboy_test_own_helper_thread PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_libkeys_warm test_own_libkeys_warm.cpp)   # libKeys () is built in prepare (), not on the audio thread (a process of its own: built once per process)
+target_include_directories(synthyboy_test_own_libkeys_warm PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_osc_types test_own_osc_types.cpp)
 target_include_directories(synthyboy_test_own_osc_types PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_unison_cap test_own_unison_cap.cpp)

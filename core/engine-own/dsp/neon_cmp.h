@@ -103,6 +103,18 @@ inline uint32x4_t leConst (float32x4_t x, float c) noexcept
     const uint32_t lo = bitsOf (c);
     return vcleq_u32 (vsubq_u32 (vreinterpretq_u32_f32 (x), vdupq_n_u32 (lo)), vdupq_n_u32 ((0x80000000u | kInfBits) - lo));
 }
+/** x > c (c > 0 normal): the bits of x, unsigned, lie in [bits (c) + 1, bits (+infinity)]; a negative x, -0 and a NaN lie outside. */
+inline uint32x4_t gtConst (float32x4_t x, float c) noexcept
+{
+    const uint32_t lo = bitsOf (c) + 1u;
+    return vcleq_u32 (vsubq_u32 (vreinterpretq_u32_f32 (x), vdupq_n_u32 (lo)), vdupq_n_u32 (kInfBits - lo));
+}
+/** c <= |x| < +infinity (c > 0 normal): the magnitude bits lie in [bits (c), bits (+infinity)); false for a NaN, an infinity and anything below c (zeros and subnormals included). */
+inline uint32x4_t absGeConstFinite (float32x4_t x, float c) noexcept
+{
+    const uint32_t lo = bitsOf (c);
+    return vcltq_u32 (vsubq_u32 (vandq_u32 (vreinterpretq_u32_f32 (x), vdupq_n_u32 (kAbsMask)), vdupq_n_u32 (lo)), vdupq_n_u32 (kInfBits - lo));
+}
 inline int32x4_t orderKey (float32x4_t x) noexcept
 {
     const int32x4_t b = vreinterpretq_s32_f32 (x);

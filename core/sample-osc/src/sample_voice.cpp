@@ -9,6 +9,7 @@
 
 #if defined(__ARM_NEON) && ! defined(SB_NO_NEON)
  #include <arm_neon.h>
+ #include "../../engine-own/dsp/neon_cmp.h"
  #define SB_SAMPLE_NEON 1
 #else
  #define SB_SAMPLE_NEON 0
@@ -364,7 +365,7 @@ inline float32x4_t interp4 (const float* buf, const int32_t* idx, const int32_t*
 inline void equalPower4 (float32x4_t theta, float32x4_t& wOut, float32x4_t& wIn) noexcept
 {
     const float32x4_t halfPi = vdupq_n_f32 (1.57079632679f);
-    const uint32x4_t upper = vcgtq_f32 (theta, vdupq_n_f32 (0.78539816339f));
+    const uint32x4_t upper = neoncmp::gtConst (theta, 0.78539816339f);   // theta > pi / 4 on the bit patterns (the float compare is scalar code on 32 bit ARM, neon_cmp.h)
     const float32x4_t r = vbslq_f32 (upper, vsubq_f32 (halfPi, theta), theta);
     const float32x4_t z = vmulq_f32 (r, r);
     float32x4_t ps = vaddq_f32 (vmulq_f32 (vdupq_n_f32 (-1.9515295891e-4f), z), vdupq_n_f32 (8.3321608736e-3f));
@@ -381,7 +382,7 @@ inline void equalPower4 (float32x4_t theta, float32x4_t& wOut, float32x4_t& wIn)
 inline float32x4_t sanitize4 (float32x4_t v) noexcept
 {
     const float32x4_t a = vabsq_f32 (v);
-    const uint32x4_t keep = vandq_u32 (vcgeq_f32 (a, vdupq_n_f32 (1.0e-18f)), vcltq_f32 (a, vdupq_n_f32 (INFINITY)));
+    const uint32x4_t keep = neoncmp::absGeConstFinite (a, 1.0e-18f);   // 1e-18 <= |v| < infinity (false for a NaN) on the bit patterns
     return vreinterpretq_f32_u32 (vandq_u32 (vreinterpretq_u32_f32 (v), keep));
 }
 #endif

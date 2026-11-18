@@ -7,7 +7,12 @@
 #include <algorithm>
 #include <cmath>
 #include <array>
+#include <cstdint>
+#include <cstring>
 #include <vector>
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+ #include <arm_neon.h>
+#endif
 
 #include "fx_dsp.h"
 
@@ -71,6 +76,8 @@ public:
             ap[c][3].copyCoefficients (lr[c][6]);
         }
     }
+    /** Test only: run the limiter as it was before the CPU review item M1. */
+    void setReferenceLimiter (bool on) noexcept { for (auto& b : lim) b.reference = on; }
     int latencySamples() const noexcept { return p.mode == 1 ? lookAhead : 0; }
 
     void process (float* l, float* r, int n) noexcept
@@ -195,6 +202,7 @@ public:
     }
 
 private:
+    friend struct CompressorOptTest;
     /** The look-ahead brickwall limiter of one band: min filter of the required gain over the look-ahead, release, a box filter of the look-ahead length. */
     struct Limiter
     {
@@ -217,10 +225,17 @@ private:
             std::fill (req.begin(), req.end(), 1.0f);
             std::fill (g1.begin(), g1.end(), 1.0f);
             pos = 0;
+            oddLeft = 0;
             relGain = 1.0f;
             prevL = prevR = prev2L = prev2R = 0.0f;
         }
-        void process (float inL, float inR, float ceilAmp, float relCoef, int la, float& outL, float& outR) noexcept
+        /** True: the code as it was before the CPU review item M1 (a `%` per index), kept for the comparison test only. */
+        bool reference = false;
+        /** Samples for which the window may still hold a value the NEON min does not treat like std::min (a NaN, an infinity, a subnormal or a negative zero). */
+        int oddLeft = 0;
+
+        /** The old process (): the same arithmetic in the same order, kept as the reference and for a look-ahead that is not below the capacity. */
+        void processReference (float inL, float inR, float ceilAmp, float relCoef, int la, float& outL, float& outR) noexcept
         {
             // the required gain of this sample: the peak of the stereo pair with an estimate between the samples
             const float mL = -0.125f * prev2L + 0.75f * prevL + 0.375f * inL, mR = -0.125f * prev2R + 0.75f * prevR + 0.375f * inR;
@@ -244,6 +259,86 @@ private:
             const size_t di = static_cast<size_t> ((pos - la + cap * 4) % cap);
             outL = xl[di] * gSm;
             outR = xr[di] * gSm;
+        }
+
+        /** True for a value that is not a normal number and not +0: the NEON min (flush to zero, the sign of a zero) could differ from std::min on it. */
+        static bool oddValue (float v) noexcept
+        {
+            uint32_t u;
+            std::memcpy (&u, &v, 4);
+            const uint32_t e = (u >> 23) & 0xffu;
+            return (e == 0xffu || e == 0u) && u != 0u;
+        }
+
+        void process (float inL, float inR, float ceilAmp, float relCoef, int la, float& outL, float& outR) noexcept
+        {
+            // the old code wrapped with `% cap` (a library call on 32 bit ARM); for la >= cap it wrapped several times, which only the reference reproduces (never reached: cap = la + 8)
+            if (reference || la >= cap || la < 0)
+            {
+                oddLeft = cap; // conservative if the fast path runs again later
+                processReference (inL, inR, ceilAmp, relCoef, la, outL, outR);
+                return;
+            }
+            const float mL = -0.125f * prev2L + 0.75f * prevL + 0.375f * inL, mR = -0.125f * prev2R + 0.75f * prevR + 0.375f * inR;
+            const float pk = std::max ({ std::fabs (inL), std::fabs (inR), std::fabs (mL), std::fabs (mR) });
+            prev2L = prevL; prev2R = prevR; prevL = inL; prevR = inR;
+            const float r = pk > ceilAmp ? ceilAmp / pk : 1.0f;
+            pos = pos + 1 == cap ? 0 : pos + 1;
+            xl[static_cast<size_t> (pos)] = inL;
+            xr[static_cast<size_t> (pos)] = inR;
+            req[static_cast<size_t> (pos)] = r;
+            if (oddValue (r))
+                oddLeft = cap;
+            // the window (this sample and the la before it) is at most two contiguous runs of the ring: [lo1, pos] and, when it wraps, [cap - wrapped, cap - 1]
+            const int lo1 = pos - la < 0 ? 0 : pos - la;
+            const int wrapped = pos - la < 0 ? la - pos : 0;
+            float m = 1.0f;
+            if (oddLeft > 0)
+            {
+                --oddLeft;
+                for (int j = pos; j >= lo1; --j)
+                    m = std::min (m, req[static_cast<size_t> (j)]);
+                for (int j = cap - 1; j >= cap - wrapped; --j)
+                    m = std::min (m, req[static_cast<size_t> (j)]);
+            }
+            else
+            {
+                // every value is a normal number or +0: the minimum is the same bits in any order
+                m = minRun (req.data() + lo1, pos - lo1 + 1, m);
+                if (wrapped > 0)
+                    m = minRun (req.data() + (cap - wrapped), wrapped, m);
+            }
+            relGain = std::min (m, relGain + (1.0f - relGain) * relCoef);
+            g1[static_cast<size_t> (pos)] = relGain;
+            float sum = 0.0f; // the same order as before: k = 0 .. la, that is the indices pos down to 0, then cap - 1 down
+            for (int j = pos; j >= lo1; --j)
+                sum += g1[static_cast<size_t> (j)];
+            for (int j = cap - 1; j >= cap - wrapped; --j)
+                sum += g1[static_cast<size_t> (j)];
+            const float gSm = sum / static_cast<float> (la + 1);
+            const int di = pos - la < 0 ? pos - la + cap : pos - la;
+            outL = xl[static_cast<size_t> (di)] * gSm;
+            outR = xr[static_cast<size_t> (di)] * gSm;
+        }
+
+        /** std::min (m, v[0]), then v[1] ... of a run of normal numbers and +0 (any order gives the same bits). */
+        static float minRun (const float* v, int n, float m) noexcept
+        {
+            int i = 0;
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+            if (n >= 4)
+            {
+                float32x4_t acc = vdupq_n_f32 (m);
+                for (; i + 4 <= n; i += 4)
+                    acc = vminq_f32 (acc, vld1q_f32 (v + i));
+                const float32x2_t h = vmin_f32 (vget_low_f32 (acc), vget_high_f32 (acc));
+                const float32x2_t f = vpmin_f32 (h, h);
+                m = vget_lane_f32 (f, 0);
+            }
+#endif
+            for (; i < n; ++i)
+                m = std::min (m, v[i]);
+            return m;
         }
     };
 

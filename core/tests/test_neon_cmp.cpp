@@ -266,3 +266,54 @@ TEST (runaway_test_and_limit_of_the_serum_filter_unit_equal_the_scalar_loops)
     CHECK_EQ (badTest, 0);
     CHECK_EQ (badClamp, 0);
 }
+
+// CPU review N1, the sites of the sample oscillator (the equal power crossfade: theta > pi / 4; sanitize4: 1e-18 <= |v| < infinity): all 2^32 bit patterns against the scalar compare, as it is and
+// with x flushed to zero; and the whole sanitize4 expression (the helper and the vabs / mask / and of the site) against the scalar sanitizeFloat rule on the special values.
+TEST (n1_greater_than_and_absolute_range_compares_equal_the_float_compares_on_every_bit_pattern)
+{
+#if SYNTHYBOY_NEON_CMP
+    using namespace synthyboy::neoncmp;
+    {
+        long long badIeee = 0, badFtz = 0;
+        sweep (badIeee, badFtz, 0.78539816339f, [] (float32x4_t x, float c) { return gtConst (x, c); }, [] (float x, float c) { return x > c; });
+        std::printf ("    x > pi/4  all 2^32 inputs: %lld differ from the IEEE compare, %lld from the flush-to-zero compare\n", badIeee, badFtz);
+        CHECK_EQ (badIeee, 0);
+        CHECK_EQ (badFtz, 0);
+    }
+    for (float c : { 1.0e-18f, 0.5f, 3.0f })
+    {
+        long long badIeee = 0, badFtz = 0;
+        sweep (badIeee, badFtz, c, [] (float32x4_t x, float cc) { return absGeConstFinite (x, cc); }, [] (float x, float cc) { return std::fabs (x) >= cc && std::fabs (x) < INFINITY; });
+        std::printf ("    %g <= |x| < inf  all 2^32 inputs: %lld differ from the IEEE compare, %lld from the flush-to-zero compare\n", static_cast<double> (c), badIeee, badFtz);
+        CHECK_EQ (badIeee, 0);
+        CHECK_EQ (badFtz, 0);
+    }
+    // sanitize4 as written in sample_voice.cpp against sanitizeFloat (a NaN, an infinity and |v| < 1e-18 become +0), lane by lane on the special values and on random patterns
+    std::vector<float> vals = specialValues();
+    Rng r (9);
+    for (int i = 0; i < 100000; ++i)
+        vals.push_back (fromBits (r.next()));
+    while (vals.size() % 4 != 0)
+        vals.push_back (0.0f);
+    long long bad = 0;
+    for (size_t i = 0; i < vals.size(); i += 4)
+    {
+        const float32x4_t v = vld1q_f32 (&vals[i]);
+        const float32x4_t a = vabsq_f32 (v);
+        const uint32x4_t keep = absGeConstFinite (a, 1.0e-18f);
+        float out[4];
+        vst1q_f32 (out, vreinterpretq_f32_u32 (vandq_u32 (vreinterpretq_u32_f32 (v), keep)));
+        for (int l = 0; l < 4; ++l)
+        {
+            const float x = vals[i + static_cast<size_t> (l)];
+            const float ref = (std::isfinite (x) && std::fabs (x) >= 1.0e-18f) ? x : 0.0f;
+            bad += std::memcmp (&out[l], &ref, 4) != 0 ? 1 : 0;
+        }
+    }
+    std::printf("    sanitize4 on %zu values: %lld differ\n", vals.size(), bad);
+    CHECK_EQ (bad, 0);
+#else
+    std::printf ("    no NEON in this build\n");
+    CHECK (true);
+#endif
+}

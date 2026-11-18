@@ -7,6 +7,7 @@
 #include <memory>
 #include <mutex>
 #include "own_engine.h"
+#include "osc/lib_osc.h"
 
 #include <chrono>
 #include "dsp/section_timing.h"
@@ -146,9 +147,12 @@ void OwnEngine::startFxWorker()
     fxWorkerStop.store (false, std::memory_order_relaxed);
     fxWorker = std::thread ([this]
     {
-        while (! fxWorkerStop.load (std::memory_order_acquire))
+        runHelperThreadStartHook ("sb-fx-build");   // the shell's scheduling class and cores, not those of the thread that started this one (dsp/helper_thread.h)
+        for (;;)
         {
-            std::this_thread::sleep_for (std::chrono::milliseconds (2));
+            fxWake.wait();   // no timeout: a set type key notifies (OwnEngine::setParam), stopFxWorker notifies
+            if (fxWorkerStop.load (std::memory_order_acquire))
+                break;
             if (! fxWorkDue.exchange (false, std::memory_order_acq_rel))
                 continue;
             for (int s = 0; s < kNumFxInstances; ++s)
@@ -168,6 +172,7 @@ void OwnEngine::stopFxWorker() noexcept
     if (! fxWorker.joinable())
         return;
     fxWorkerStop.store (true, std::memory_order_release);
+    fxWake.notify();
     fxWorker.join();
 }
 
@@ -253,6 +258,7 @@ void OwnEngine::setParam (uint32_t id, float plain) noexcept
                     // live run: no allocation on this thread (it may be the host's audio thread); the worker builds the module
                     fxWant[s].store (static_cast<int> (v + 0.5f), std::memory_order_release);
                     fxWorkDue.store (true, std::memory_order_release);
+                    fxWake.notify();   // lock free (dsp/helper_thread.h)
                 }
                 else
                     fxPool.typeChanged (s, static_cast<int> (v + 0.5f)); // offline: at once
@@ -392,6 +398,7 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     // the lazily built tables of the keys (they allocate on first use): build them here
     (void) paramIndex();
     (void) fxIndex();
+    (void) libKeys (0);   // the library oscillator key table (snprintf, hashing on its first call): not on the audio thread
     (void) destLawOf (0);
     (void) WtOsc::decimatorTaps();
 
