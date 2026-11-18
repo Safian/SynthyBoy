@@ -155,8 +155,7 @@ int main (int argc, char** argv)
         // ...
         check (true, "UTF-8 names near 24-byte cut");
         // ...
-    }
-
+        const std::string catPath = argc > 2 ? argv[2] : std::string (argv[1]) + "/../../scripts/factory-preset-categories.json";
         check (loadCategories (catPath, jsonGroups, jsonGroupOf), "factory-preset-categories.json is read (groups and per-preset groups)");
         bool same15 = jsonGroups.size() == static_cast<size_t> (kFactoryGroupCount);
         for (size_t i = 0; same15 && i < jsonGroups.size(); ++i) same15 = jsonGroups[i] == kFactoryGroups[i];
