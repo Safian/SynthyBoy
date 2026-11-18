@@ -34,46 +34,40 @@
 #include "synthyboy/state.h"
 #include "synthyboy/wavetable_catalogue.h"
 
+#include "../kit/instance.h"
+#include "../kit/synthyboy_params.h"
+
 namespace synthyboy_mpc { namespace overlay {
 
-/** One plugin instance as the overlay sees it. Both methods are called from the overlay thread while the instance is registered; they must be lock free. */
-class IInstanceView
+/** One plugin instance as the overlay sees it: the generic half is mpckit::IInstance (kit/instance.h: param, writeParam, sampleRate, bpm, setQGroup, setQVirtual, takeQVirtual, qWriteCount, qStatus, setUiFullOpen,
+    requestOverlayReport: the same signatures as before, documented there), this class adds what is SynthyBoy's (live values, content, spectrum, the Play selectors, pad pressure, ...). All methods are called from the overlay
+    thread while the instance is registered; they must be lock free. */
+class IInstanceView : public mpckit::IInstance
 {
 public:
-    virtual ~IInstanceView() = default;
-    virtual float param (int tableIndex) const noexcept = 0;
+    /** The parameter table of SynthyBoy as the kit's IParamSource (the same object for every instance). */
+    const mpckit::IParamSource& params() const noexcept override { return mpckit::synthyboy_adapter::Params::get(); }
+    /** The page-facing generic writes keep their old defaults (do nothing) for the instances that have no host to tell (tools, tests): the kit's interface has them pure. */
+    void writeParam (int /*tableIndex*/, float /*normalised*/) noexcept override {}
+    void setQGroup (const int* /*targets*/, int /*n*/) noexcept override {}
+    /** The kit's opaque live block is SynthyBoy's LiveValues. */
+    bool readLive (void* out, size_t bytes) const noexcept override { return out != nullptr && bytes == sizeof (synthyboy::LiveValues) && live (*static_cast<synthyboy::LiveValues*> (out)); }
     /** The live values of the engine (readout of the targets the overlay subscribed, the LFO phases, the envelope stages ...). false: the engine has not written any yet. */
     virtual bool live (synthyboy::LiveValues& out) const noexcept = 0;
-    /** The sample rate of the instance (Hz). */
-    virtual double sampleRate() const noexcept = 0;
-    /** The tempo of the host (beats per minute) for the synced LFO rates. */
-    virtual double bpm() const noexcept { return 120.0; }
     /** true while a wavetable the current program names is still being built (the sound is the table the oscillator had until then): the plugin-drawn pages show a thin amber bar at the top of the tab. */
     virtual bool tablesLoading() const noexcept { return false; }
     /** The content of the state (custom LFO shapes, user wavetables, remap curves): a snapshot that stays valid while the pointer is held; changes when the state changes. */
     virtual std::shared_ptr<const synthyboy::StateContent> content() const { return nullptr; }
     virtual const synthyboy::IContentStore* contentStore() const noexcept { return nullptr; }
-    /** Asks the instance to report its display parameter "Overlay Instance" to the host again (audioMasterAutomate) soon. Called from the overlay thread while the instance is registered; it must only
-        set a flag (the instance's display thread makes the call, never the audio thread and never this one). */
-    virtual void requestOverlayReport() noexcept {}
     /** The ring of the instance's output (the audio thread writes it, the spectrum view reads it). null: this instance has none (the build without the spectrum): the spectrum view has no data
         and the plane stays off, the 32 meters of the skin stay visible. */
     virtual const SpectrumRing* spectrumRing() const noexcept { return nullptr; }
     /** The instance the Play page shows in panel `group` (0 oscillator 1 .. 5: Sub, A, B, C, Noise (play_osc.h), 1 envelope 1 .. 6, 2 LFO 1 .. 10): the plugin parameters "Play Osc", "Play Env", "Play LFO". 1 when the instance has none. */
     virtual int playSelection (int /*group*/) const noexcept { return 1; }
-    /** The plugin-drawn pages set the targets of the sixteen Q proxies ("Q 1" .. "Q 16", q_router.h): the first `n` (at most 16) of `targets`, each a parameter table index or -1 (none). Slots 1 .. 4 are the active group of the page, 5 .. 8 / 9 .. 12 / 13 .. 16
-        the next groups in reading order (overlay/q_publish.h); a page that only knows one group passes n = 4 and the other slots have no target. Called from the overlay
-        thread while the instance is registered; it must be lock free (the plugin's display thread tells the host the new values). */
-    virtual void setQGroup (const int* /*targets*/, int /*n*/) noexcept {}
-    /** The plugin-drawn pages write a real parameter (table index) with a NORMALISED value (0 .. 1): the same write as the host's own (mirror, protection, engine), and the host is told afterwards
-        (the instance's display thread makes the call, audioMasterAutomate), so automation and the host's own widgets follow. Called from the overlay thread; lock free. */
-    virtual void writeParam (int /*tableIndex*/, float /*normalised*/) noexcept {}
     /** The plugin-drawn compact view sets the oscillator selector of the Play page (1 .. 5: Sub, A, B, C, Noise) like the host's own widget (saved in the chunk, the proxies and the host follow). */
     virtual void setPlaySelection (int /*group*/, int /*instance*/) noexcept {}
     /** Which of the Play page's envelope / LFO selectors was touched last: 0 none yet, 1 envelope, 2 LFO (the modulation source the plugin-drawn pages treat as "selected"). */
     virtual int playLastSelector() const noexcept { return 0; }
-    /** A plugin-drawn full screen page is open for this instance: the plugin hides the host widgets of the Play page (the display parameter "Overlay Instance" takes a frame the skin hides them at). */
-    virtual void setUiFullOpen (bool /*open*/) noexcept {}
     /** The places the content browser of the oscillator UI starts from (label, absolute folder): the plugin offers the ones that exist on this machine (the SD card, its own content folder, the USB drives).
         Fills `out` (cleared first). Empty: this instance cannot load content. */
     struct ContentRoot { std::string label, path; };
@@ -117,14 +111,6 @@ public:
     virtual void voiceStatus (std::string& /*out*/) const {}
     /** The content the sound of this instance needs and does not have (IEngine::missingContent () bits; 0 = nothing missing). The oscillator page shows "content missing: ..." from it (the text is the page's). Lock free. */
     virtual unsigned missingContent() const noexcept { return 0; }
-    /** The VIRTUAL Q targets (q_router.h): a Q knob that is not a parameter (the values of the shape editor). The page tells the router the value (0 .. 1) a virtual target has now; the host's write to the
-        Q proxy comes back through takeQVirtual (the latest written value; false when there is none since the last call). Lock free. */
-    virtual void setQVirtual (int /*id*/, float /*normalised*/) noexcept {}
-    virtual bool takeQVirtual (int /*id*/, float& /*normalised*/) noexcept { return false; }
-    /** How many times the host wrote one of the Q proxies so far (a hardware knob was turned: the host draws its Q-Link panel over the right edge a moment later). Lock free. */
-    virtual unsigned long qWriteCount() const noexcept { return 0; }
-    /** "key: value" lines about the Q proxies of this instance (the stepping of stepped targets: the travel per step, and per knob the raw value, the delta and the travel: q_router.h describe ()) for the status file. */
-    virtual void qStatus (std::string& /*out*/) const {}
 };
 
 class CurveSource
