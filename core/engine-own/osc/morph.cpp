@@ -116,7 +116,7 @@ void inverseFft (float* re, float* im, int n = kN, bool scalarOnly = false) noex
 } // namespace
 
 void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int type, float m, int maxHarmonic, float phaseInc, double hostRate, float* out,
-                      MorphScratch& sc, bool fast, bool scalarTransform) noexcept
+                      MorphScratch& sc, bool fast, bool scalarTransform, bool referenceBuild) noexcept
 {
     const int frames = wt.numFrames();
     const int f0 = std::clamp (static_cast<int> (framePos), 0, std::max (frames - 1, 0));
@@ -136,8 +136,29 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
     sc_c[kH] = sc_s[kH] = sc_c[kH + 1] = sc_s[kH + 1] = 0.0f;
     const int K = std::clamp (maxHarmonic, 0, kH - 1);
     m = clamp01 (m);
-    std::fill (sc.re, sc.re + kN, 0.0f);
-    std::fill (sc.im, sc.im + kN, 0.0f);
+    // The half size transform (fast) reads only bins 0 .. K, kM - K .. kM + K and kN - K .. kN - 1 (see the pre-twiddle below), so only these are cleared; the other
+    // bins of the scratch hold stale values that nothing reads. The full clear stays for the full transform and for the reference build of the tests.
+    if (fast && !referenceBuild)
+    {
+        constexpr int kMh = kN / 2;
+        auto clear = [&] (int from, int to) noexcept // [from, to)
+        {
+            if (to > from)
+            {
+                std::fill (sc.re + from, sc.re + to, 0.0f);
+                std::fill (sc.im + from, sc.im + to, 0.0f);
+            }
+        };
+        const int K1 = std::clamp (maxHarmonic, 0, kH - 1);
+        clear (0, K1 + 1);
+        clear (kMh - K1, kMh + K1 + 1);
+        clear (kN - K1, kN);
+    }
+    else
+    {
+        std::fill (sc.re, sc.re + kN, 0.0f);
+        std::fill (sc.im, sc.im + kN, 0.0f);
+    }
     auto put = [&] (int i, float c, float s) noexcept
     {
         if (i < 1 || i > K || i >= kH)
@@ -368,14 +389,25 @@ void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int
         constexpr int kM = kN / 2;
         const Twiddles& t = tw();
         float zr[kM], zi[kM];
-        for (int k = 0; k < kM; ++k)
+        auto twiddle = [&] (int k) noexcept
         {
             const float er = sc.re[k] + sc.re[k + kM], ei = sc.im[k] + sc.im[k + kM];
             const float dr = sc.re[k] - sc.re[k + kM], di = sc.im[k] - sc.im[k + kM];
             const float orr = dr * t.cs[k] - di * t.sn[k], oi = dr * t.sn[k] + di * t.cs[k];
             zr[k] = er - oi; // E + j O
             zi[k] = ei + orr;
+        };
+        // For K < k < kM - K both X[k] and X[k + kM] are +0, and the loop gives zr = +0 - (+-0) = +0 and zi = +0 + (+-0) = +0 (round to nearest): the same bits as writing +0.
+        const int lo = referenceBuild ? kM : std::min (K + 1, kM), hi = referenceBuild ? kM : std::max (kM - K, lo);
+        for (int k = 0; k < lo; ++k)
+            twiddle (k);
+        if (hi > lo)
+        {
+            std::fill (zr + lo, zr + hi, 0.0f);
+            std::fill (zi + lo, zi + hi, 0.0f);
         }
+        for (int k = hi; k < kM; ++k)
+            twiddle (k);
         inverseFft (zr, zi, kM, scalarTransform);
         for (int m = 0; m < kM; ++m)
         {
