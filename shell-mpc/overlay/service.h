@@ -95,7 +95,7 @@ public:
     }
 
     /** Returns the slot of the instance (0 .. 15, kept until detach; -1: more than 16 instances, this one never shows the overlay). */
-    int attach (IInstanceView* view)
+    int attach (mpckit::IInstance* view)
     {
         std::lock_guard<std::mutex> g (lifeMu_);
         if (stuck_)
@@ -129,7 +129,7 @@ public:
 
     /** True when the instance is detached: the overlay thread no longer touches `view`. False when the overlay thread did not let go of the controller's lock within kDetachWaitMs (a tick that does not return): the view
         may still be used, the caller must not free the instance. effClose of the host is held up for at most that long (robustness review F5). */
-    bool detach (IInstanceView* view)
+    bool detach (mpckit::IInstance* view)
     {
         std::lock_guard<std::mutex> g (lifeMu_);
         if (! controller_)

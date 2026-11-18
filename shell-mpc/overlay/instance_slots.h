@@ -8,11 +8,10 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include "../kit/instance.h"
 #include "overlay_layout.h"
 
 namespace synthyboy_mpc { namespace overlay {
-
-class IInstanceView;
 
 constexpr int kSlotNone = layout::kMaxInstances;   // what the colour says for an instance beyond the 16 slots (not an index of the table)
 constexpr int kSlotUnknown = -1;                   // the colour is blank (nothing reported yet) or none of the table's: it cannot be told
@@ -62,7 +61,7 @@ class InstanceSlots
 {
 public:
     /** The slot given (0 .. 15), or -1 when all 16 are taken (the instance is then registered without one). */
-    int acquire (IInstanceView* v)
+    int acquire (mpckit::IInstance* v)
     {
         for (int s = 0; s < layout::kMaxInstances; ++s)
             if (! slot_[s])
@@ -76,7 +75,7 @@ public:
         return -1;
     }
     /** true: the instance was registered (with or without a slot). */
-    bool release (const IInstanceView* v) noexcept
+    bool release (const mpckit::IInstance* v) noexcept
     {
         for (int s = 0; s < layout::kMaxInstances; ++s)
             if (slot_[s] == v)
@@ -95,8 +94,8 @@ public:
     /** How many instances have been given this slot so far (0 = never): a number that changes with every new holder, so that what was cached for the earlier instance of a slot is
         recognised as stale when the slot is reused (the slot number alone is the same). */
     unsigned long generation (int slot) const noexcept { return slot >= 0 && slot < layout::kMaxInstances ? generation_[slot] : 0; }
-    IInstanceView* at (int slot) const noexcept { return slot >= 0 && slot < layout::kMaxInstances ? slot_[slot] : nullptr; }
-    int slotOf (const IInstanceView* v) const noexcept
+    mpckit::IInstance* at (int slot) const noexcept { return slot >= 0 && slot < layout::kMaxInstances ? slot_[slot] : nullptr; }
+    int slotOf (const mpckit::IInstance* v) const noexcept
     {
         for (int s = 0; s < layout::kMaxInstances; ++s)
             if (slot_[s] == v)
@@ -110,9 +109,9 @@ public:
 
 private:
     static constexpr int kMaxOverflow = 256;   // instances beyond the 16: only their number matters
-    IInstanceView* slot_[layout::kMaxInstances] = {};
+    mpckit::IInstance* slot_[layout::kMaxInstances] = {};
     unsigned long generation_[layout::kMaxInstances] = {};
-    const IInstanceView* overflowList_[kMaxOverflow] = {};
+    const mpckit::IInstance* overflowList_[kMaxOverflow] = {};
     int overflow_ = 0;
 };
 

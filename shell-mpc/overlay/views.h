@@ -21,6 +21,7 @@
 #include "synthyboy/lfo_display.h"
 #include "synthyboy/osc_cycle.h"
 #include "view.h"
+#include "view_cast.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -56,7 +57,7 @@ public:
             fresh_ = true;
         }
         const unsigned long before = curve_->stats().fullComputes;
-        bool changed = curve_->update (*in.instance, in.targets, in.nowMs);
+        bool changed = curve_->update (instanceOf (in), in.targets, in.nowMs);
         ++counters_.updates;
         counters_.recomputes += curve_->stats().fullComputes - before;
         counters_.lastComputeMs = curve_->stats().lastComputeMs;
@@ -200,17 +201,19 @@ public:
     {
         ++counters_.updates;
         bool changed = false;
-        std::shared_ptr<const synthyboy::StateContent> content = in.instance->content();
-        const double bpm = std::round (in.instance->bpm() * 10.0) / 10.0;
-        bool dataChanged = group_.read (*in.instance) || content != content_ || bpm != bpm_;
+        const IInstanceView& inst = instanceOf (in);
+        const synthyboy::LiveValues* live = liveOf (in);
+        std::shared_ptr<const synthyboy::StateContent> content = inst.content();
+        const double bpm = std::round (inst.bpm() * 10.0) / 10.0;
+        bool dataChanged = group_.read (inst) || content != content_ || bpm != bpm_;
         // the sources a custom shape's points follow (point modulation): only that shape reads them
         float sources[kSourceSlots] = {};
         bool sourcesChanged = false;
-        if (static_cast<int> (group_.value ((name_ + ".shape").c_str()) + 0.5f) == 12 && in.live != nullptr)
+        if (static_cast<int> (group_.value ((name_ + ".shape").c_str()) + 0.5f) == 12 && live != nullptr)
         {
             for (int id = 1; id < kSourceSlots && id - 1 < synthyboy::LiveValues::kMaxSources; ++id)
             {
-                const float v = in.live->source[id - 1];
+                const float v = live->source[id - 1];
                 const bool bipolar = (id >= 7 && id <= 14) || (id >= 15 && id <= 18) || id == 33 || id == 34;
                 sources[id] = bipolar ? 0.5f + 0.5f * v : v;
             }
@@ -222,7 +225,7 @@ public:
             synthyboy::LfoDisplay::Request req;
             req.lfo = lfo_;
             req.bpm = bpm;
-            req.sources = in.live != nullptr ? sources : nullptr;
+            req.sources = live != nullptr ? sources : nullptr;
             synthyboy::LfoDisplay::compute (group_.values(), content.get(), req, shape_.data(), kPoints);
             budget_.spent (in.nowMs, msSince (t0));
             counters_.lastComputeMs = budget_.costMs;
@@ -235,7 +238,7 @@ public:
             baseDirty_ = true;
             changed = true;
         }
-        const float x = in.live != nullptr ? synthyboy::LfoDisplay::cursorX (in.live->lfoPhase[lfo_ - 1]) : -1.0f;
+        const float x = live != nullptr ? synthyboy::LfoDisplay::cursorX (live->lfoPhase[lfo_ - 1]) : -1.0f;
         const int px = x < 0.0f ? -1 : static_cast<int> (std::lround (x * 599.0f));
         if (px != cursorPx_)
         {
@@ -359,16 +362,16 @@ public:
     bool update (const ViewInput& in) override
     {
         ++counters_.updates;
-        group_.read (*in.instance);   // the knob values (what the widget draws), not the modulated ones
+        group_.read (instanceOf (in));   // the knob values (what the widget draws), not the modulated ones
         group_.accept();
         bool changed = ! have_;
         have_ = true;
         stage_ = 0;
         fraction_ = 0.0f;
-        if (in.live != nullptr)
+        if (const synthyboy::LiveValues* live = liveOf (in))
         {
-            stage_ = static_cast<int> (in.live->envFineStage[env_ - 1] + 0.5f);
-            fraction_ = in.live->envFineFraction[env_ - 1];
+            stage_ = static_cast<int> (live->envFineStage[env_ - 1] + 0.5f);
+            fraction_ = live->envFineFraction[env_ - 1];
         }
         const envgeom::Norm norm = normOf();
         envgeom::Point p = envgeom::dotFor (norm, stage_, static_cast<double> (fraction_));
@@ -615,7 +618,7 @@ public:
     bool update (const ViewInput& in) override
     {
         ++counters_.updates;
-        const SpectrumRing* ring = in.instance != nullptr ? in.instance->spectrumRing() : nullptr;
+        const SpectrumRing* ring = in.instance != nullptr ? instanceOf (in).spectrumRing() : nullptr;
         if (ring == nullptr)
         {
             have_ = false;

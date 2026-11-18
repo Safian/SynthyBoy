@@ -21,6 +21,7 @@
 #include "scene_cpu.h"
 #include "ui_stack.h"
 #include "view.h"
+#include "view_cast.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -96,22 +97,23 @@ public:
         if (in.io == nullptr || in.ui == nullptr)
             return false;
         bool changed = false;
-        const bool loading = in.io->tablesLoading();   // a wavetable of the program is still being built: the bar below
+        IInstanceView& io = *ioOf (in);   // (the generic ViewInput of view.h: view_cast.h)
+        const bool loading = io.tablesLoading();   // a wavetable of the program is still being built: the bar below
         if (loading != loading_)
         {
             loading_ = loading;
             changed = true;
         }
         {
-            const auto content = in.io->content();   // the names of the macros the pages show (macro_names.h): the ones of this instance, for everything this view does
+            const auto content = io.content();   // the names of the macros the pages show (macro_names.h): the ones of this instance, for everything this view does
             names_.load (content.get());
         }
         const NamesScope scope (names_);
         page::Input pi;
-        pi.live = in.live;
+        pi.live = liveOf (in);
         pi.targets = in.targets;
         pi.instance = instance_;
-        ui_.update (*in.io, *in.ui, in.nowMs, pi);
+        ui_.update (io, *in.ui, in.nowMs, pi);
         if (in.panelEdgeX != edgeX_)
         {
             edgeX_ = in.panelEdgeX;
@@ -138,9 +140,9 @@ public:
         ui = { 0, 0, page::kW, page::kH };
         return true;
     }
-    bool onTouch (const TouchEvent& ev, UiStack& stack, IInstanceView& io, double nowMs) override { const NamesScope scope (names_); return ! stack.isMain() && ui_.touch (ev, stack, io, nowMs); }
-    bool onWheel (int x, int y, int notches, UiStack& stack, IInstanceView& io, double nowMs) override { const NamesScope scope (names_); return ! stack.isMain() && ui_.wheel (x, y, notches, stack, io, nowMs); }
-    void onTick (UiStack& stack, IInstanceView& io, double nowMs) override { const NamesScope scope (names_); if (! stack.isMain()) ui_.tick (nowMs, stack, io); }
+    bool onTouch (const TouchEvent& ev, UiStack& stack, mpckit::IInstance& io, double nowMs) override { const NamesScope scope (names_); return ! stack.isMain() && ui_.touch (ev, stack, static_cast<IInstanceView&> (io), nowMs); }   // (every instance of SynthyBoy is an IInstanceView)
+    bool onWheel (int x, int y, int notches, UiStack& stack, mpckit::IInstance& io, double nowMs) override { const NamesScope scope (names_); return ! stack.isMain() && ui_.wheel (x, y, notches, stack, static_cast<IInstanceView&> (io), nowMs); }
+    void onTick (UiStack& stack, mpckit::IInstance& io, double nowMs) override { const NamesScope scope (names_); if (! stack.isMain()) ui_.tick (nowMs, stack, static_cast<IInstanceView&> (io)); }
     void onShown() override { ui_.forgetQGroup(); }
     bool fingerDown() const noexcept override { return ui_.fingerDown(); }
     void dropGesture() noexcept override { ui_.dropGesture(); }

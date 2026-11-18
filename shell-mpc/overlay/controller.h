@@ -1,5 +1,5 @@
 // SynthyBoy - MPC overlay: the controller. One tick () of the overlay thread: switches, instance count, page detection (which VIEW is on screen), view update, drawing, presenting, status file.
-// Everything it touches from outside is behind an interface (IPlaneBackend, IFrameSource, ICurveRenderer, IInstanceView) and time is a parameter, so the tests drive it with
+// Everything it touches from outside is behind an interface (IPlaneBackend, IFrameSource, ICurveRenderer, mpckit::IInstance) and time is a parameter, so the tests drive it with
 // fakes and a fake clock; the thread and the real backends are in service.h / drm_linux.h.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -157,7 +157,7 @@ public:
 
     // ---- instances (host threads; the lock is also held while the overlay thread uses an instance) ----
     /** Registers an instance and returns its slot (0 .. 15: the lowest free one, kept until detach). -1: all 16 slots are taken; such an instance never shows the overlay. */
-    int attach (IInstanceView* view)
+    int attach (mpckit::IInstance* view)
     {
         std::lock_guard<std::mutex> g (mu_);
         const int slot = slots_.acquire (view);
@@ -170,7 +170,7 @@ public:
     }
     /** As detach (), but it waits for the lock for at most `limitMs` (a tick of the overlay thread that is stuck must not hold up effClose of the host for ever). True when the instance is detached: after it the overlay thread no
         longer touches `view`; false when the lock could not be had in time: the overlay thread may still use `view`, the caller must keep the instance alive. `left` is then not set. */
-    bool detachWithin (IInstanceView* view, int limitMs, size_t& left)
+    bool detachWithin (mpckit::IInstance* view, int limitMs, size_t& left)
     {
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds (limitMs);
         while (! mu_.try_lock())
@@ -191,7 +191,7 @@ public:
         return true;
     }
     /** Returns the number of instances left. After it returns the overlay thread no longer touches `view` (the same lock guards every use of an instance). */
-    size_t detach (IInstanceView* view)
+    size_t detach (mpckit::IInstance* view)
     {
         std::lock_guard<std::mutex> g (mu_);
         const int slot = slots_.slotOf (view);
@@ -204,7 +204,7 @@ public:
         return static_cast<size_t> (slots_.total());
     }
     /** The slot of a registered instance, -1 when it has none (tests). */
-    int slotOf (const IInstanceView* view)
+    int slotOf (const mpckit::IInstance* view)
     {
         std::lock_guard<std::mutex> g (mu_);
         return slots_.slotOf (view);
@@ -241,7 +241,7 @@ public:
         std::lock_guard<std::mutex> g (mu_);
         if (current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0)
             return;
-        IInstanceView* v = slots_.at (activeSlot_);
+        mpckit::IInstance* v = slots_.at (activeSlot_);
         if (v == nullptr)
             return;
         if (views_[static_cast<size_t> (current_)]->onTouch (ev, ui_[activeSlot_], *v, nowMs))
@@ -275,7 +275,7 @@ public:
         std::lock_guard<std::mutex> g (mu_);
         if (current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0)
             return;
-        IInstanceView* v = slots_.at (activeSlot_);
+        mpckit::IInstance* v = slots_.at (activeSlot_);
         if (v == nullptr)
             return;
         if (views_[static_cast<size_t> (current_)]->onWheel (x, y, notches, ui_[activeSlot_], *v, nowMs))
@@ -633,7 +633,7 @@ private:
         {
             std::lock_guard<std::mutex> g (mu_);
             if (activeSlot_ >= 0)
-                if (IInstanceView* v = slots_.at (activeSlot_))
+                if (mpckit::IInstance* v = slots_.at (activeSlot_))
                     writes = v->qWriteCount();
         }
         if (activeSlot_ != qWriteSlot_)
@@ -821,7 +821,7 @@ private:
             if (s != keep && ui_[s].closeAll())
             {
                 ++uiAutoCloses_;
-                if (IInstanceView* v = slots_.at (s))
+                if (mpckit::IInstance* v = slots_.at (s))
                     v->setUiFullOpen (false);   // the host widgets of that instance's Play page come back (the instance stops reporting the frame they are hidden at)
             }
     }
@@ -832,7 +832,7 @@ private:
         if (nowMs < nextReportMs_)
             return;
         for (int s = 0; s < layout::kMaxInstances; ++s)
-            if (IInstanceView* v = slots_.at (s))
+            if (mpckit::IInstance* v = slots_.at (s))
             {
                 v->setUiFullOpen (! ui_[s].isMain());   // what the controller knows is the truth: a stack that is closed never keeps the host widgets hidden
                 v->requestOverlayReport();
@@ -868,7 +868,7 @@ private:
         touchIn_->configure (presenter_.panelWidth(), presenter_.panelHeight(), rotation_);
         touchIn_->poll ([this, nowMs] (const TouchEvent& ev) { touchEvent (ev, nowMs); });
         std::lock_guard<std::mutex> g (mu_);
-        IInstanceView* v = slots_.at (activeSlot_);
+        mpckit::IInstance* v = slots_.at (activeSlot_);
         if (v != nullptr && views_[static_cast<size_t> (current_)]->fingerDown())
         {
             views_[static_cast<size_t> (current_)]->onTick (ui_[activeSlot_], *v, nowMs);
@@ -890,7 +890,7 @@ private:
         mouse_->poll (nowMs, timing_.frameEveryMs, [this, nowMs] (const TouchEvent& ev) { touchEvent (ev, nowMs); },
                       [this, nowMs] (int x, int y, int notches) { wheelEvent (x, y, notches, nowMs); });
         std::lock_guard<std::mutex> g (mu_);
-        IInstanceView* v = slots_.at (activeSlot_);
+        mpckit::IInstance* v = slots_.at (activeSlot_);
         if (v != nullptr && mouse_->buttonDown() && views_[static_cast<size_t> (current_)]->fingerDown())
         {
             views_[static_cast<size_t> (current_)]->onTick (ui_[activeSlot_], *v, nowMs);   // the clock of a long press
@@ -903,7 +903,7 @@ private:
     {
         changed = false;
         std::lock_guard<std::mutex> g (mu_);
-        IInstanceView* v = slots_.at (activeSlot_);
+        mpckit::IInstance* v = slots_.at (activeSlot_);
         if (! v)
             return false;
         if (viewSlot_[current_] != activeSlot_ || viewGeneration_[current_] != slots_.generation (activeSlot_))
@@ -928,7 +928,7 @@ private:
             view.onShown();   // another view was on screen: this one sets its shared state (the Q group) again
         }
         synthyboy::LiveValues lv;
-        const bool haveLive = v->live (lv);
+        const bool haveLive = v->readLive (&lv, sizeof lv);   // (the instance's live block: the kit's opaque call, SynthyBoy's LiveValues)
         ViewInput in;
         in.instance = v;
         in.live = haveLive ? &lv : nullptr;
@@ -1447,7 +1447,7 @@ private:
             {
                 std::lock_guard<std::mutex> g (mu_);
                 if (activeSlot_ >= 0)
-                    if (IInstanceView* v = slots_.at (activeSlot_))
+                    if (mpckit::IInstance* v = slots_.at (activeSlot_))
                         v->qStatus (qs);
             }
             o << qs;
@@ -1455,8 +1455,8 @@ private:
             {
                 std::lock_guard<std::mutex> g (mu_);
                 if (activeSlot_ >= 0)
-                    if (IInstanceView* v = slots_.at (activeSlot_))
-                        v->voiceStatus (vs);
+                    if (mpckit::IInstance* v = slots_.at (activeSlot_))
+                        static_cast<IInstanceView*> (v)->voiceStatus (vs);   // (SynthyBoy's diagnostic: every instance the controller holds here is an IInstanceView)
             }
             o << vs;   // the voices and the keys the engine believes are held (a stuck note shows as orphan_voices > 0 or held_keys > 0 with no key down)
             // the stepping of the Q proxies of the instance on screen: q_step_travel and q_knob_n (raw value, delta, travel)
