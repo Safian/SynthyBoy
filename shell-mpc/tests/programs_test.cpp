@@ -353,8 +353,8 @@ int main (int argc, char** argv)
             const ProgramView v = buildProgramView (mix, GroupMode::headers);
             std::vector<std::string> seq;
             for (int n = 1; n < v.numPrograms(); ++n) seq.push_back (v.items[static_cast<size_t> (n)].baseName);
-            const std::vector<std::string> want = { "-- BASS SUB+808 --", "Alpha", "-- FX --", "Beta", "-- KEYS --", "Mine", "-- LEAD --", "My Lead", "-- PAD --", "Zed" };
-            check (seq == want, "[headers] entries without a browser group sort after the factory groups, by folder category, under their folder as the group");
+            const std::vector<std::string> want = { "-- BASS SUB+808 --", "Alpha", "-- KEYS --", "Mine", "-- FX --", "Beta", "-- LEAD --", "My Lead", "-- PAD --", "Zed" };
+            check (seq == want, "[headers] entries without a browser group join the factory group of their folder name (Keys, FX) or sort after the factory groups, by folder");
             const ProgramView ps = buildProgramView (mix, GroupMode::prefixShort);
             check (ps.label (ps.legacyToNumber[1]) == "Pad: Zed" && ps.label (ps.legacyToNumber[2]) == "Bass: Alpha", "[prefix-short] the prefix is the folder category");
             ProgramEntry big; big.name = "Bowed Pressure Strings"; big.category = "Pluck"; big.path = "p"; big.group = "Strings+Brass";
