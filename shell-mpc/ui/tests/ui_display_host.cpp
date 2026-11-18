@@ -235,6 +235,50 @@ int main()
         check (FilterDisplay::kDbBottom == -48.0, "filter display: the bottom of the plot is -48 dB");
     }
     {
+        // NEVER STORE THE TRUTH: a touch gives the finger as two changes (X, then Y with takePending) and leaves `state` and the picture alone; only the owner's write shows
+        theme::setLook (1);
+        FilterDisplay fd;
+        fd.assignIds (150, 152, 151, 153);
+        fd.place ({ 0, 0, 1000, 400 });
+        float flat[200];
+        for (int i = 0; i < 200; ++i) flat[i] = -6.0f;
+        fd.state.curve1 = flat; fd.state.numPoints1 = 200; fd.state.curve2 = flat; fd.state.numPoints2 = 200;
+        fd.state.cutoffHz = fd.state.cutoffHz1 = 500.0; fd.state.resonancePct = fd.state.resonancePct1 = 10.0;
+        fd.state.cutoffHz2 = 6000.0; fd.state.resonancePct2 = 45.0;
+        const Image before = drawComponent (fd, 1000, 400);
+        const Rect pl = fd.plot();
+        const int x = pl.x + pl.w * 3 / 4, y = pl.y + pl.h / 4;
+        Change cx = fd.touchDown (x, y, 0.0), cy;
+        const bool haveY = fd.takePending (cy);
+        check (cx.kind == ChangeKind::Value && cx.id == 150 && haveY && cy.kind == ChangeKind::Value && cy.id == 152 && ! fd.takePending (cy), "filter display: a finger down gives X (the cutoff id) and then Y (the resonance id, taken once)");
+        check (std::fabs (FilterDisplay::hzOfNorm (cx.value) - 20.0 * std::pow (10.0, 3.0 * 0.75)) < 60.0 && cy.value > 0.6 && cy.value < 0.8 && cx.index == 1 && cy.index == 1, "filter display: X is the position on the log axis (hzOfNorm gives the Hz), Y is 0 .. 1, the index is the filter (1)");
+        Change m = fd.touchMove (x, y);
+        check (m.kind == ChangeKind::None && ! fd.takePending (cy), "filter display: a move that stays on the same pixel reports nothing");
+        m = fd.touchMove (x, y + 20);
+        check (m.kind == ChangeKind::Value && m.id == 152 && ! fd.takePending (cy), "filter display: a move that changes only the height reports only the resonance");
+        m = fd.touchMove (x + 30, y + 20);
+        check (m.kind == ChangeKind::Value && m.id == 150 && ! fd.takePending (cy), "filter display: a move that changes only the frequency reports only the cutoff");
+        check (fd.state.cutoffHz == 500.0 && fd.state.resonancePct == 10.0 && fd.state.cutoffHz1 == 500.0 && fd.state.resonancePct1 == 10.0 && fd.state.activeFilter == 1 && fd.state.formantX == 50.0, "filter display: after the gesture with no write back `state` is as the owner left it");
+        check (drawComponent (fd, 1000, 400).px != before.px, "filter display: (the bubble of the dragged values is drawn while the finger is down)");
+        fd.touchUp (x, y);
+        check (drawComponent (fd, 1000, 400).px == before.px, "filter display: with the finger lifted the picture is the same as before the touch");
+        fd.state.cutoffHz = fd.state.cutoffHz1 = FilterDisplay::hzOfNorm (cx.value); fd.state.resonancePct = fd.state.resonancePct1 = cy.value * 100.0;   // the owner wrote the parameters and sets the state
+        check (drawComponent (fd, 1000, 400).px != before.px, "filter display: with the owner writing back the handle is drawn where the finger was");
+        // dual: the finger holds the nearer handle, whatever `state.activeFilter` says
+        fd.state.dual = true; fd.state.activeFilter = 1;
+        float h2x = 0.0f, h2y = 0.0f;
+        fd.handlePointFor (2, h2x, h2y);
+        cx = fd.touchDown (static_cast<int> (h2x), static_cast<int> (h2y), 100.0);
+        check (cx.index == 2 && fd.takePending (cy) && cy.index == 2 && fd.state.activeFilter == 1, "filter display: dual mode: a finger on the handle of filter 2 reports index 2 and leaves `state.activeFilter` to the owner");
+        fd.touchUp (static_cast<int> (h2x), static_cast<int> (h2y));
+        // the formant pad
+        fd.state.dual = false; fd.state.isFormant = true;
+        const Rect fp = fd.plot();
+        cx = fd.touchDown (fp.x + fp.w / 4, fp.bottom() - fp.h / 4, 200.0);
+        check (cx.id == 151 && fd.takePending (cy) && cy.id == 153 && cx.value < 0.3 && cy.value < 0.3 && fd.state.formantX == 50.0 && fd.state.formantY == 50.0, "filter display: the formant pad gives X (151) and Y (153) and stores neither");
+        fd.touchUp (fp.x, fp.y);
+    }
+    {
         // a member of a Q group never draws a yellow keyline of its own: the picture of an active member is the one of an inactive one
         NumberField a, b;
         a.place ({ 20, 20, 160, 64 }); b.place ({ 20, 20, 160, 64 });

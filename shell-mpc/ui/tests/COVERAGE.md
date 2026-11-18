@@ -318,7 +318,7 @@ For each component class, it records what it does in one line, its public behavi
 
 | Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
 | :--- | :--- | :--- |
-| **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | not tested |
+| **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | `ui_display_host.cpp`: "filter display: ..." (X then Y by `takePending`, the dual handle, dead band, no write to `state`, the picture unchanged); `filter_ui_host.cpp`: the owner writes both axes and the display follows under the finger |
 | **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | not tested |
 | **Wheel** | Mouse wheel input via `wheel()` and `wheelOver()` (`wheelUnit()`) | not tested |
 | **Value Text** | Value/parameter readout formatting, units, precision, caption | not tested |

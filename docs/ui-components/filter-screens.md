@@ -15,7 +15,7 @@ The page of a filter (the whole tab): a top bar (close, power, the CURVES list F
 `FilterFullScreen::minSize()` 1280 x 628. The bottom band holds twelve slots of 100 px (the knobs' minimum) and the ROUTING list.
 
 ## Touch and knob behaviour
-Children keep their changes. The display's cutoff and resonance (or formant) come from the `FilterDisplay` (see its page for the way the second axis is read). The route popup: a tap on the backdrop is `Request` with the `setBackdropId` id. A touch on a control of a group makes it the active group.
+Children keep their changes. The display's cutoff and resonance (or formant X and Y) come from the `FilterDisplay` as two changes (the second with `display.takePending`: see its page). The route popup: a tap on the backdrop is `Request` with the `setBackdropId` id. A touch on a control of a group makes it the active group.
 
 ## Q-Link
 Groups MAIN [CUTOFF, RESO, DRIVE, MIX], TRACK, OUT, FORMANT (with the formant model; VAR and COMB have no meaning there). The route popup is one group.
@@ -38,7 +38,7 @@ if (c.kind == ChangeKind::Value && c.id == 160) writeCutoff (c.value);
 ```
 
 ## Used on
-`shell-mpc/overlay/filter_ui.h` (`FilterUi`, `kElementPage` = `kElementFilter`; ids `kDisplayCutoff` 150 and following; the filter curves from `synthyboy::FilterResponse`). Picture: `docs/user-guide/img/filter.png`.
+`shell-mpc/overlay/filter_ui.h` (`FilterUi`, `kElementPage` = `kElementFilter`; ids `kDisplayCutoff` 150, `kDisplayFormant`, `kDisplayReso`, `kDisplayFormantY`; the filter curves from `synthyboy::FilterResponse`). Picture: `docs/user-guide/img/filter.png`.
 
 ## Limits and pitfalls
 - The filter-1 / filter-2 tab and the CURVES list are not the same thing: the tab names the instance, the list names which curves are drawn. Keep `instances.state.index` in step with the instance in `update` (a past defect: the list showed F1 on the Filter 2 page).
