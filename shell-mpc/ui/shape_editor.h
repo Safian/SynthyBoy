@@ -277,7 +277,7 @@ public:
             if (live)
             {
                 const bool right = mx + 100.0f > static_cast<float> (pl.right());
-                const Rect box { static_cast<int> (right ? mx - 100.0f : mx + 16.0f), pl.y + 4, 84, 24 };
+                const Rect box { static_cast<int> (right ? mx - 100.0f : mx + 14.0f), pl.y + 24, 84, 22 };   // below the handle and the line of text at the top right of the canvas
                 if (right) pen.textRight (box, markerCaption (state.markerKind), T.fLabel - 3.0f, col, T.fMin); else pen.textLeft (box, markerCaption (state.markerKind), T.fLabel - 3.0f, col, T.fMin);
             }
             else if (markerHint (state.markerKind)[0] != '\0')
