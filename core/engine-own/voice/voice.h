@@ -52,6 +52,7 @@ struct TickGlobals
     const LfoCore* monoCore = nullptr;    // [10] the shared instance of the mono LFOs (sync types 2 .. 5)
     double songSeconds = 0.0;             // the host song position in seconds (the clock of the HOST lock)
     int maxUnison = kMaxUnisonVoices;
+    const float* unisonMakeup = nullptr;  // Quality::fxMakeup with a unison cap in force: the gain of an oscillator by the unison voices its preset asks for (index 1 .. 16), see OwnEngine; null: none
     const ContentSet* content = nullptr;     // decoded content of the state (user tables, samples, instruments, curves); never null once the engine runs
     int quality = 2;                         // 0 low, 1 medium, 2 high: the interpolation tier of the sample types
     bool scalarWarp = false;                 // measurements (kOwnSavingVectorWarp): no four lane form of the oversampled oscillator samples

@@ -201,6 +201,24 @@ TEST (tier_makeup_bus_copy_of_main)
     CHECK (std::fabs (fixed - full) < std::fabs (off - full));
 }
 
+void unison6 (IEngine& e)
+{
+    bench::ownSet (e, "master.polyphony", 8.0f);
+    bench::ownSet (e, "osc1.unison.voices", 6.0f);
+    bench::ownSet (e, "osc1.unison.detune", 25.0f);
+}
+
+TEST (tier_makeup_unison_cap)
+{
+    // a cap under the voices of the preset gives the oscillator the gain (wanted / cap) ^ 0.15 (0.9 dB for 6 voices under a cap of 3); a cap that takes nothing away changes nothing
+    const double capOn = rmsDb (render (unison6, quality (kFxAll, true, 3)));
+    const double capOff = rmsDb (render (unison6, quality (kFxAll, false, 3)));
+    std::printf ("    unison 6 under a cap of 3: %.3f dB with the makeup, %.3f dB without (%+.3f, expected %+.3f)\n", capOn, capOff, capOn - capOff, 20.0 * 0.15 * std::log10 (2.0));
+    CHECK (std::fabs ((capOn - capOff) - 20.0 * 0.15 * std::log10 (2.0)) < 0.05);
+    CHECK (same (render (unison6, quality (kFxAll, true, 6)), render (unison6, quality (kFxAll, false, 6))));
+    CHECK (same (render (unison6, quality (kFxAll, true, 16)), render (unison6, quality (kFxAll, false, 16))));
+}
+
 TEST (tier_makeup_leaves_the_loudness_of_the_bypassed_effect)
 {
     struct Case { Patch patch; uint32_t bit; const char* name; double tol; };

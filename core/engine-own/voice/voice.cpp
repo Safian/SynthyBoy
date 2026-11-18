@@ -892,7 +892,10 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         const float vcPan = vc.mask[o] ? vc.pan : 0.0f;
         t.pan = std::clamp (P (oi.pan) * 0.01f + vcPan, -1.0f, 1.0f);
         t.panRight = std::clamp (PR (oi.pan) * 0.01f + vcPan, -1.0f, 1.0f);
-        t.voices = std::clamp (static_cast<int> (P (oi.uniVoices) + 0.5f), 1, std::max (1, g.maxUnison));
+        const int wantedVoices = static_cast<int> (P (oi.uniVoices) + 0.5f);
+        t.voices = std::clamp (wantedVoices, 1, std::max (1, g.maxUnison));
+        if (g.unisonMakeup != nullptr && wantedVoices > t.voices)
+            t.level *= g.unisonMakeup[std::min (wantedVoices, kMaxUnisonVoices)]; // the cap took voices away: the loudness they gave comes back as a gain (docs/release/TIER-LEVEL-COMPENSATION.md section 10)
         const float detune = clamp01 (P (oi.uniDetune) * 0.01f);
         t.detuneSemis = detune * std::max (P (oi.uniRange), 0.0f);
         t.curve = P (oi.uniCurve);
