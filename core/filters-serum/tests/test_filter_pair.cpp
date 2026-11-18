@@ -38,10 +38,10 @@ const FilterType kTypes[] = { FilterType::ScreamLP, FilterType::ScreamBP, Filter
                               FilterType::LH, FilterType::LB, FilterType::LP, FilterType::LN, FilterType::HB, FilterType::HP, FilterType::HN, FilterType::BP, FilterType::BN,
                               FilterType::PP, FilterType::PN, FilterType::NN,
                               FilterType::CmbL, FilterType::FlgL, FilterType::PhsL, FilterType::CmbH, FilterType::FlgH, FilterType::PhsH, FilterType::CmbHL,
-                              FilterType::FlgHL, FilterType::PhsHL };
+                              FilterType::FlgHL, FilterType::PhsHL, FilterType::RingMod, FilterType::RingModX2 };
 const char* const kTypeNames[] = { "Scream LP", "Scream BP", "EMS Ladder", "MG Ladder", "Diffusor", "Allpasses",
                                    "Multi LH", "Multi LB", "Multi LP", "Multi LN", "Multi HB", "Multi HP", "Multi HN", "Multi BP", "Multi BN", "Multi PP", "Multi PN", "Multi NN",
-                                   "Cmb L", "Flg L", "Phs L", "Cmb H", "Flg H", "Phs H", "Cmb HL", "Flg HL", "Phs HL" };
+                                   "Cmb L", "Flg L", "Phs L", "Cmb H", "Flg H", "Phs H", "Cmb HL", "Flg HL", "Phs HL", "Ring Mod", "Ring Mod x2" };
 
 FilterParams randomParams (Rng& r, int hold, bool extreme)
 {

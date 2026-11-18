@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstring>
 
 #include "filter_dsp.h"
 
@@ -40,6 +41,10 @@ struct ScalarLanes
     static ScalarLanes sanitized (ScalarLanes a) noexcept { return { { sanitize (a.v[0]), sanitize (a.v[1]) } }; }
     /** softClip () of filter_dsp.h per lane. */
     static ScalarLanes softClipped (ScalarLanes a) noexcept { return { { softClip (a.v[0]), softClip (a.v[1]) } }; }
+    /** x >= c ? x - c : x per lane (the wrap of a phase; c > 0). */
+    static ScalarLanes wrapped (ScalarLanes a, float c) noexcept { return { { a.v[0] >= c ? a.v[0] - c : a.v[0], a.v[1] >= c ? a.v[1] - c : a.v[1] } }; }
+    /** The two lanes hold the same bits. */
+    bool lanesEqual() const noexcept { return std::memcmp (&v[0], &v[1], 4) == 0; }
 };
 
 #if SYNTHYBOY_FILTER_NEON
@@ -96,6 +101,14 @@ struct NeonLanes
         r = vbsl_f32 (neoncmp::geConst (x, 3.0f), vdup_n_f32 (1.0f), r);
         r = vbsl_f32 (neoncmp::leConst (x, -3.0f), vdup_n_f32 (-1.0f), r); // the scalar function tests this one first: it wins where both could hold (never)
         return { r };
+    }
+    /** x >= c ? x - c : x per lane (c > 0 normal): the test is the integer form of x >= c (dsp/neon_cmp.h), the subtraction the scalar one. */
+    static NeonLanes wrapped (NeonLanes a, float c) noexcept { return { vbsl_f32 (neoncmp::geConst (a.v, c), vsub_f32 (a.v, vdup_n_f32 (c)), a.v) }; }
+    /** The two lanes hold the same bits. */
+    bool lanesEqual() const noexcept
+    {
+        const uint32x2_t b = vreinterpret_u32_f32 (v);
+        return vget_lane_u32 (b, 0) == vget_lane_u32 (b, 1);
     }
 };
 #endif

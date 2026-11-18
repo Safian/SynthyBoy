@@ -218,7 +218,9 @@ public:
         const bool fbLow = type == FilterType::CmbL || type == FilterType::FlgL || type == FilterType::PhsL;   // the feedback filter of a Flanges type: L, H or HL
         const bool fbHigh = type == FilterType::CmbH || type == FilterType::FlgH || type == FilterType::PhsH;
         const bool fbBand = flanges && !fbLow && !fbHigh;
-        if (fb.type_ != type || !(scream || ladder || chain || multi || flanges) || fa.sampleRate_ != fb.sampleRate_ || fa.params_.coefHold != fb.params_.coefHold)
+        const bool ring2 = type == FilterType::RingModX2;
+        const bool ring = type == FilterType::RingMod || ring2; // Ring Mod: the carrier of the two sides is made once when their phases are the same
+        if (fb.type_ != type || !(scream || ladder || chain || multi || flanges || ring) || fa.sampleRate_ != fb.sampleRate_ || fa.params_.coefHold != fb.params_.coefHold)
             return false;
         if (comb && (fa.combDelay1_.empty() || fb.combDelay1_.empty()))
             return false;
@@ -317,6 +319,16 @@ public:
         else if (fbHigh)
             vFbHP = V::set (fa.combFeedbackHP_.lastCoef, fb.combFeedbackHP_.lastCoef);
 
+        // Ring Mod x2: the factor of the second carrier (SPREAD), a per call constant
+        float ringFactor[2] = { 1.0f, 1.0f };
+        if (ring2)
+            for (int l = 0; l < 2; ++l)
+                ringFactor[l] = f[l]->pow2M ((var[l] - 0.5f) * 4.0f);
+        const float twoPi = 2.0f * kPi;
+        V ringPhase1 = V::set (fa.ringModPhase1_, fb.ringModPhase1_), ringPhase2 = V::set (fa.ringModPhase2_, fb.ringModPhase2_);
+        float ringInc1[2] = { 0.0f, 0.0f }, ringInc2[2] = { 0.0f, 0.0f };
+        V vRingInc1 = V::all (0.0f), vRingInc2 = V::all (0.0f);
+
         V smoothedCutoff = V::set (fa.smoothedCutoff_, fb.smoothedCutoff_), smoothedRes = V::set (fa.smoothedRes_, fb.smoothedRes_);
         V heldCutoff = V::set (fa.heldCutoff_, fb.heldCutoff_), heldRes = V::set (fa.heldRes_, fb.heldRes_);
 
@@ -369,9 +381,9 @@ public:
                 lastCutoff[l] = c;
                 haveCutoff[l] = true;
                 cutoffChanged = true;
-                // g of processInternal (); the all-pass chains, the combs and the flangers do not use it (processInternal () computes it for them through the
+                // g of processInternal (); the all-pass chains, the combs, the flangers and the ring modulators do not use it (processInternal () computes it for them through the
                 // memo, which changes nothing but the memo)
-                if (!chain && !comb)
+                if (!chain && !comb && !ring)
                     g[l] = f[l]->tanM (kPi * c / srFloat);
                 if (scream)
                 {
@@ -399,6 +411,16 @@ public:
                         ld.cG4 = ld.cG3 * ld.cG;
                         ld.lastG = g[l];
                         ld.haveG = true;
+                    }
+                }
+                else if (ring)
+                {
+                    // the phase steps of processInternal (): 2 pi cutoff / sr, and 2 pi fc2 / sr with fc2 = clamp (cutoff * factor, 20, 0.49 sr)
+                    ringInc1[l] = 2.0f * kPi * c / srFloat;
+                    if (ring2)
+                    {
+                        const float fc2 = std::max (20.0f, std::min (c * ringFactor[l], srFloat * 0.49f));
+                        ringInc2[l] = 2.0f * kPi * fc2 / srFloat;
                     }
                 }
                 else if (chain)
@@ -454,6 +476,11 @@ public:
                     vLG2 = V::set (fa.ladder_.cG2, fb.ladder_.cG2);
                     vLG3 = V::set (fa.ladder_.cG3, fb.ladder_.cG3);
                     vLG4 = V::set (fa.ladder_.cG4, fb.ladder_.cG4);
+                }
+                else if (ring)
+                {
+                    vRingInc1 = V::set (ringInc1[0], ringInc1[1]);
+                    vRingInc2 = V::set (ringInc2[0], ringInc2[1]);
                 }
                 else if (flanges)
                 {
@@ -549,6 +576,28 @@ public:
                 }
                 rawOut = y;
             }
+            else if (ring)
+            {
+                // the Ring Mod cases of processInternal (): the phases step and wrap in the lanes; the sine of a phase is made once when the two lanes hold the same
+                // phase (both sides at the same cutoff, as with the filter pan at 0: the same samples, one sinf instead of two)
+                ringPhase1 = V::wrapped (ringPhase1 + vRingInc1, twoPi);
+                float c0, c1;
+                if (!ring2)
+                {
+                    c0 = std::sin (ringPhase1.get (0));
+                    c1 = ringPhase1.lanesEqual() ? c0 : std::sin (ringPhase1.get (1));
+                }
+                else
+                {
+                    ringPhase2 = V::wrapped (ringPhase2 + vRingInc2, twoPi);
+                    const float s10 = std::sin (ringPhase1.get (0)), s20 = std::sin (ringPhase2.get (0));
+                    const float s11 = ringPhase1.lanesEqual() ? s10 : std::sin (ringPhase1.get (1));
+                    const float s21 = ringPhase2.lanesEqual() ? s20 : std::sin (ringPhase2.get (1));
+                    c0 = 0.5f * (s10 + s20);
+                    c1 = 0.5f * (s11 + s21);
+                }
+                rawOut = drivenIn * V::set (c0, c1);
+            }
             else if (chain)
             {
                 // the all-pass chain of the Diffusor (gain 0.5 + 0.45 res) or of Smear / Allpasses (gain 0.6 res): the two lines of a stage are read and written one
@@ -638,6 +687,12 @@ public:
             else if (ladder)
                 for (int k = 0; k < 4; ++k)
                     f[l]->ladder_.s[k] = ls[k].get (l);
+            else if (ring)
+            {
+                f[l]->ringModPhase1_ = ringPhase1.get (l);
+                if (ring2)
+                    f[l]->ringModPhase2_ = ringPhase2.get (l);
+            }
             else if (flanges)
             {
                 if (fbLow || fbBand)

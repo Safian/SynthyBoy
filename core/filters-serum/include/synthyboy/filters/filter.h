@@ -85,7 +85,7 @@ public:
      * The two filters of a stereo pair in one pass: the same samples as `a.process (inA, outA, n); b.process (inB, outB, n);` to the last bit, with the arithmetic
      * of the two done side by side (NEON on ARM). Returns false, having done nothing, when there is no pair kernel for the case: a build without NEON, a type
      * other than Scream LP / BP, EMS Ladder, MG Ladder, Diffusor, Allpasses (Smear), the twelve Multi SVF types (LH .. NN) and the nine Flanges types (Cmb, Flg,
-     * Phs L / H / HL), two filters of different type or sample rate or coefficient hold, or a Diffusor whose two sides run a different number of stages; the
+     * Phs L / H / HL) and Ring Mod / Ring Mod x2, two filters of different type or sample rate or coefficient hold, or a Diffusor whose two sides run a different number of stages; the
      * caller then calls process () twice. The four buffers must not overlap, except in with its own out.
      */
     static bool processPair (Filter& a, Filter& b, const float* inA, float* outA, const float* inB, float* outB, int numSamples) noexcept;
