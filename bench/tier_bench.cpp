@@ -58,6 +58,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #if defined(__linux__)
@@ -343,6 +344,8 @@ struct Result
     int voicesMax = 0;
     std::vector<double> sectionMs; // per block, by section (--sections)
     std::vector<double> sectionCalls; // scopes entered per block, by section
+    std::vector<double> slowSectionMs; // the sections of the longest block (--sections)
+    double slowBlockMs = 0.0;
     std::vector<double> sectionReads; // clock reads that land in the section's time per block (own scopes + scopes directly inside)
 };
 
@@ -363,6 +366,8 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
     const long long retrigger = std::max<long long> (1, static_cast<long long> (o.retrigger * o.sampleRate / o.block));
     std::vector<double> times;
     times.reserve (static_cast<size_t> (measured));
+    std::vector<double> sectionSum, sectionCalls, sectionReads, slowSections;
+    double slowBlock = 0.0;
     double voiceSum = 0.0;
     int voiceMax = 0;
     float sink = 0.0f;
@@ -394,11 +399,37 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
         }
         if (o.paced)
             std::this_thread::sleep_until (start + std::chrono::duration_cast<std::chrono::steady_clock::duration> (blockTime * static_cast<double> (b)));
-        if (b == warmup && o.sections)
-            ownSectionReset();
+        if (o.sections)
+            ownSectionReset();   // per block: the totals are summed below (the same numbers as one reset at the start), and the longest block keeps its own
         const auto t0 = std::chrono::steady_clock::now();
         engine->process (events.data(), static_cast<int> (events.size()), left.data(), right.data(), o.block);
         const auto t1 = std::chrono::steady_clock::now();
+        if (o.sections && b >= warmup)
+        {
+            const int count = ownSectionCount();
+            if (sectionSum.empty())
+            {
+                sectionSum.assign (static_cast<size_t> (count), 0.0);
+                sectionCalls.assign (static_cast<size_t> (count), 0.0);
+                sectionReads.assign (static_cast<size_t> (count), 0.0);
+                slowSections.assign (static_cast<size_t> (count), 0.0);
+            }
+            const double thisBlock = std::chrono::duration<double> (t1 - t0).count();
+            const bool slowest = thisBlock > slowBlock;
+            if (slowest)
+                slowBlock = thisBlock;
+            for (int i = 0; i < count; ++i)
+            {
+                double total = 0.0;
+                unsigned long long calls = 0;
+                ownSectionRead (i, total, calls);
+                sectionSum[static_cast<size_t> (i)] += total;
+                sectionCalls[static_cast<size_t> (i)] += static_cast<double> (calls);
+                sectionReads[static_cast<size_t> (i)] += static_cast<double> (calls + ownSectionChildCalls (i));
+                if (slowest)
+                    slowSections[static_cast<size_t> (i)] = total;
+            }
+        }
         sink += left[static_cast<size_t> (o.block / 2)];
         if (b >= warmup)
         {
@@ -430,17 +461,15 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
     r.voicesMax = voiceMax;
     if (o.sections)
     {
-        const int count = ownSectionCount();
-        for (int i = 0; i < count; ++i)
+        // the clock reads that land in a section: one of the two of each of its own scopes, and one of each scope entered directly inside it
+        for (size_t i = 0; i < sectionSum.size(); ++i)
         {
-            double total = 0.0;
-            unsigned long long calls = 0;
-            ownSectionRead (i, total, calls);
-            r.sectionMs.push_back (total / static_cast<double> (measured));
-            // the clock reads that land in this section: one of the two of each of its own scopes, and one of each scope entered directly inside it
-            r.sectionCalls.push_back (static_cast<double> (calls) / static_cast<double> (measured));
-            r.sectionReads.push_back (static_cast<double> (calls + ownSectionChildCalls (i)) / static_cast<double> (measured));
+            r.sectionMs.push_back (sectionSum[i] / static_cast<double> (measured));
+            r.sectionCalls.push_back (sectionCalls[i] / static_cast<double> (measured));
+            r.sectionReads.push_back (sectionReads[i] / static_cast<double> (measured));
+            r.slowSectionMs.push_back (slowSections[i]);
         }
+        r.slowBlockMs = 1000.0 * slowBlock;
     }
     return r;
 }
@@ -836,6 +865,16 @@ int main (int argc, char** argv)
                             std::printf ("    section %-52s %8.4f ms / block %6.1f %%  %7.1f calls / block %7.1f clock reads  less clock %8.4f ms %6.1f %%\n", ownSectionName (static_cast<int> (i)),
                                          r.sectionMs[i], total > 0.0 ? 100.0 * r.sectionMs[i] / total : 0.0, r.sectionCalls[i], r.sectionReads[i], less, totalLess > 0.0 ? 100.0 * less / totalLess : 0.0);
                         }
+                    // the longest block of the run (with the clock of its scopes in it: a little longer than the plain run's longest): where its time went
+                    std::printf ("    the longest block took %.4f ms; its sections (ms):", r.slowBlockMs);
+                    std::vector<std::pair<double, size_t>> order;
+                    for (size_t i = 0; i < r.slowSectionMs.size(); ++i)
+                        if (r.slowSectionMs[i] > 0.0)
+                            order.push_back ({ r.slowSectionMs[i], i });
+                    std::sort (order.begin(), order.end(), [] (const auto& x, const auto& y) { return x.first > y.first; });
+                    for (size_t q = 0; q < order.size() && q < 6; ++q)
+                        std::printf ("  %s %.4f;", ownSectionName (static_cast<int> (order[q].second)), order[q].first * 1000.0);
+                    std::printf ("\n");
                 }
                 if (csv != nullptr)
                 {
