@@ -950,7 +950,10 @@ protected:
 // ===============================================================================================================================================================
 /** PointModPage: the modulation of the time (TIME), the level (LEVEL) or the curve (CURVE) of the selected point(s): the page above the editor. `back`, `target` (a stepper: TIME, LEVEL, CURVE), `amount` (-100 .. 100
     percent), `remove` (the modulation of the chosen value goes), the summary line (the owner writes it: "POINT 3: LEVEL BY LFO 2, +45 PERCENT") and the board of the modulation sources (the owner fills it, `board.add`): a tap on a
-    source asks the owner to give the value that source (Index change of `board`: index = the id of the source). Same contract as every component; no Q group (the amount is the field). */
+    source asks the owner to give the value that source (Index change of `board`: index = the id of the source). Same contract as every component. One Q group, `group` = [MODULATE (the stepper), AMOUNT]: the owner
+    publishes the two knobs (Q 1 and Q 2 of the page, the group is always the active one; on the 16 knob device the chips 1 and 2 and no frame) and handles their turns (virtual targets: the page is the owner's, a turn is
+    a write of the host to the Q proxy, not a Change of the component); AMOUNT is off (disabled: its knob does nothing) while the chosen value has no modulation. The controls stand one lane (kQLane) lower than
+    the top of the page so that the index chips lie inside it. */
 class PointModPage : public Composite
 {
 public:
@@ -958,6 +961,7 @@ public:
     Stepper target;
     NumberField amount { "AMOUNT", NumberField::Format::IntSigned };
     ModSourceBoard board;
+    QGroup group;   // MODULATE, AMOUNT
 
     PointModPage()
     {
@@ -969,6 +973,9 @@ public:
         amount.state.min = -100.0; amount.state.max = 100.0; amount.state.step = 1.0; amount.state.pxPerStep = 3; amount.state.defaultValue = 50.0;
         board.setHeadline ("TAP A SOURCE TO MODULATE THE VALUE");
         addKid (back); addKid (target); addKid (amount); addKid (remove); addKid (board);
+        group.set (0, &target);
+        group.set (1, &amount);
+        group.setActive (true);
     }
     static const char* targetName (int i) noexcept { static const char* const n[3] = { "TIME", "LEVEL", "CURVE" }; return n[std::clamp (i, 0, 2)]; }
     /** The value being edited (0 time, 1 level, 2 curve) and how it stands: the source (its name; "" = none), the amount -1 .. 1 and the number of points the edit goes to. */
@@ -985,19 +992,25 @@ public:
         else
             std::snprintf (summary_, sizeof summary_, "POINT %d: %s %s", firstPoint + 1, targetName (which), has ? sourceName : "NOT MODULATED");
     }
-    Size minSize() const override { return { 1000, 520 }; }
+    Size minSize() const override { return { 1000, 520 + kQLane }; }
+    void draw (gpu::SceneBuilder& sb) const override
+    {
+        Composite::draw (sb);
+        group.draw (sb);   // the frame (4 knob device) or the chips (16 knob device) of the two knobs
+    }
 
 protected:
     void layout() override
     {
         const int m = 8;
-        const int y = rect_.y + m;
+        const int y = rect_.y + m + kQLane;   // the lane above the members is for the index chips of the group
         back.place ({ rect_.x + m, y, 96, 56 });
         target.place ({ rect_.x + 112, y, 220, 56 });
         amount.place ({ rect_.x + 340, y, 160, 56 });
         remove.place ({ rect_.x + 508, y, 120, 56 });
         summaryBox_ = { rect_.x + 640, y, rect_.w - 640 - m, 56 };
         board.place ({ rect_.x + m, y + 56 + m, rect_.w - 2 * m, rect_.bottom() - m - (y + 56 + m) });
+        group.setFrameRect (group.rect());
     }
     void drawExtra (Pen& p) const override
     {

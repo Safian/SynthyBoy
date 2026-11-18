@@ -88,10 +88,10 @@ public:
         return i >= 0 ? v_[i] : 0.0f;
     }
 
-    void setQVirtual (int id, float v) noexcept override { if (id >= 0 && id < 8) qVirtual[id] = v; }
+    void setQVirtual (int id, float v) noexcept override { if (id >= 0 && id < kVirtualSlots) qVirtual[id] = v; }
     bool takeQVirtual (int id, float& v) noexcept override
     {
-        if (id < 0 || id >= 8 || ! qVirtualDue[id])
+        if (id < 0 || id >= kVirtualSlots || ! qVirtualDue[id])
             return false;
         qVirtualDue[id] = false;
         v = qVirtualIn[id];
@@ -99,8 +99,9 @@ public:
     }
     const synthyboy_mpc::SpectrumRing* spectrumRing() const noexcept override { return ring; }
 
-    float qVirtual[8] = {}, qVirtualIn[8] = {};
-    bool qVirtualDue[8] = {};
+    static constexpr int kVirtualSlots = 10;   // QRouter::kNumVirtual
+    float qVirtual[kVirtualSlots] = {}, qVirtualIn[kVirtualSlots] = {};
+    bool qVirtualDue[kVirtualSlots] = {};
     const synthyboy_mpc::SpectrumRing* ring = nullptr;
     int q[4] = { -1, -1, -1, -1 };
     int qCalls = 0;

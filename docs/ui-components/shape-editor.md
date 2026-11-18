@@ -9,7 +9,7 @@ The editor of a drawn LFO shape; everything the reference editor can do (the tab
 ## State
 `ShapeCanvas::State`: `shape` (`lfo::ShapeModel*`, the owner's model, edited in place BY DESIGN), `undo` (`lfo::Undo*`: the canvas pushes the state before the first change of a gesture, so one gesture is one undo state), `tool`, `gridX` 8, `gridY` 8, `snap` true, `selected` -1 (the point the fields show), `selectedSeg` -1, `marks` (`lfo::PointSet`: the selection when it has points of its own; empty: the selection is the point `selected`), `markerX` (0 .. 1, < 0 none) and `markerKind` (both from the owner: the marker is the PHASE of the LFO). `kHitR` 28, `kMidR` 22, `kLongPressMs` 600, `kMarkerR` 28, `kMarkerZone` 56, `kSoftRadiusPercent` 25. Helpers `plot()`, `pointAt`, `segAt`, `midHandle`, `xOf`, `yOf`, `xFrom`, `yFrom`, `selection()` (the selection as a set), `selectOnly (i)`, `selectAll()`, `markerZone()`.
 `ShapeEditorPage` members: `back`, `tools`, `shapes`, `more`, `undoButton`, `del`, `modButton` (`MenuButton`), `snap`, `loop`, `smooth` (`LedToggle`), `canvas`, `fpoint`, `fx`, `fy`, `fcurve`, `fgx`, `fgy`, `fphase`, `fbend` (`NumberField`), `mode` (`Stepper`, listable), `groups[3]`, `model`, `undo`; `activeGroup()`, `setActiveGroup (i)`, `turnQ`, `sync()` (refresh the fields from the model and canvas state after every change), `setTrigger (syncType, modeName, modeCount, phaseDegrees)` (the stepper, the field and the marker; `markerKindOf (syncType)`), `setStatus (text)`, `canvasRect()`. `kBarH` 72, `kColW` 300.
-`PointModPage` members: `back`, `target` (stepper TIME / LEVEL / CURVE), `amount` (-100 .. 100 percent), `remove`, `board` (`ModSourceBoard`, filled by the owner); `load (which, sourceName, amountPercent, points, firstPoint)`.
+`PointModPage` members: `back`, `target` (stepper TIME / LEVEL / CURVE), `amount` (-100 .. 100 percent), `remove`, `board` (`ModSourceBoard`, filled by the owner), `group` (one `QGroup`: [`target`, `amount`] on Q 1 and Q 2, always the active group; frame on the 4 knob device, chips 1 and 2 on the 16 knob device); `load (which, sourceName, amountPercent, points, firstPoint)`. The controls stand one `kQLane` below the top of the page (the lane of the chips). The knobs are the owner's virtual targets 8 (MODULATE) and 9 (AMOUNT): a turn is a write of the host to the Q proxy that `LfoUi::updatePointMod` takes, not a `Change` of the component.
 
 ## Size
 `ShapeCanvas::minSize()` 400 x 240; the page fills a tab (1280 x 628): the canvas is 956 x 540, the column at the right 300 wide.
@@ -23,7 +23,7 @@ Marker: the vertical line at the PHASE with a 56 px handle at its top (tools POI
 Change: `Index`, `id` of the canvas, `index` = `Op`: `Edited` (the model changed: write it to your content state), `Selected` (only the selection moved) or `Marker` (`value` = the new position 0 .. 1: write the PHASE; the model's loop point may have changed too).
 
 ## Q-Link
-EDIT [POINT, X, Y, CURVE / SCALE], GRID [GRID X, GRID Y, SNAP] and TRIGGER [MODE, PHASE, BEND ALL]; `turnQ` goes to the active group. 8 virtual targets (0 to 7) and two real parameters (`lfoN.sync_type`, `lfoN.phase`), 11 of the 16 slots (see the design table).
+EDIT [POINT, X, Y, CURVE / SCALE], GRID [GRID X, GRID Y, SNAP] and TRIGGER [MODE, PHASE, BEND ALL]; `turnQ` goes to the active group. 10 virtual targets (0 to 7 the editor, 8 and 9 the point modulation page) and two real parameters (`lfoN.sync_type`, `lfoN.phase`), 11 of the 16 slots (see the design table).
 
 ## Options and variants
 Snap on or off, grid sizes, loop point, smoothing, the seven tools; the actions that are not values (flip, shift, reset curves, select all, grid presets, copies, the saved shapes) are lists the owner opens from SHAPES and MORE.
@@ -54,4 +54,4 @@ else if (c.id == 500 && c.index == ShapeCanvas::Marker)
 - At most 128 points (`lfo::kMaxPoints`), 32 undo states.
 - The canvas reports `Edited` after every change of a drag: throttle storing if it is expensive (`LfoUi` coalesces at 90 ms and at the end of the gesture).
 - The loop point is a bookmark: the voice reads the PHASE (the marker), not the stored index (`docs/ui-design/lfo-editor-capabilities.md` section 1).
-- The router has 8 virtual targets: a new knob value needs a real parameter or a bigger `QRouter::kNumVirtual`.
+- The router has 10 virtual targets (0 to 7 the editor, 8 MODULATE and 9 AMOUNT of `PointModPage`): a new knob value needs a real parameter or a bigger `QRouter::kNumVirtual` (and every mock of the instance that sizes its virtual arrays: `demo_common.h`, `mod_ui_host.cpp`, `ui_gallery_extra_host.cpp`).

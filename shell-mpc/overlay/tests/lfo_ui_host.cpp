@@ -1013,6 +1013,143 @@ void testEditorPointModulationStored()
     check (m == square && ! m.p[1].my.on(), "one UNDO takes shape and modulation back together");
 }
 
+/** The page of the point modulation on a rig: the editor of a triangle with one inner point, that point selected, MOD open, the source LFO 1 on its level (half depth). */
+void openPointModPage (Rig& r, bool all)
+{
+    openEditorOn (r, triangleWith ({ { 0.25f, 0.5f } }));
+    ui::ShapeCanvas& cv = r.ui.editor().canvas;
+    if (all)
+    {
+        r.tap (r.ui.editor().tools.cell (4).x + 10, r.ui.editor().tools.cell (4).y + 10);
+        cv.selectAll();
+        r.refresh();
+    }
+    else
+        r.tap (static_cast<int> (cv.xOf (0.25f)), static_cast<int> (cv.yOf (0.5f)));
+    r.tapC (r.ui.editor().modButton);
+    const ui::Rect chip = r.ui.pointModPage().board.chipRectOfId (7);   // LFO 1
+    r.tap (chip.x + chip.w / 2, chip.y + chip.h / 2);
+}
+
+void testPointModulationQKnobs()
+{
+    const float noRead = 0.0f;
+    auto val = [&] (Rig& r, int q) { return r.inst.router.value (q, [noRead] (int) noexcept { return noRead; }); };
+    // ---- 4 knob device (the default): MODULATE and AMOUNT are Q 1 and Q 2 of the page
+    {
+        Rig r;
+        openPointModPage (r, false);
+        ui::PointModPage& pm = r.ui.pointModPage();
+        ui::lfo::ShapeModel& m = r.ui.editor().model;
+        check (r.ui.topPage() == LfoUi::kPagePointMod && m.p[1].my.source == 7 && std::fabs (m.p[1].my.amount - 0.5f) < 1.0e-6f, "the page is open on a point whose level is modulated by LFO 1 at 50 percent");
+        check (r.inst.q[0] == QRouter::encode (LfoUi::kVirtPmTarget, QRouter::kVirtual) && r.inst.q[1] == QRouter::encode (LfoUi::kVirtPmAmount, QRouter::kVirtual) && r.inst.q[2] == -1 && r.inst.q[3] == -1 && r.inst.q[4] == -1,
+               "Q1 = MODULATE and Q2 = AMOUNT (virtual 8 and 9), nothing else: one group");
+        check (pm.target.qFrame() && pm.target.qIndex() == 1 && pm.amount.qFrame() && pm.amount.qIndex() == 2 && pm.group.active() && pm.group.block() == 0, "the group is the active one: the frame and the chips 1 and 2 (4 knob device)");
+        check (std::fabs (val (r, 0) - 0.5f) < 1.0e-6f && std::fabs (val (r, 1) - 0.75f) < 1.0e-6f, "the router holds the knob values: LEVEL = 0.5, 50 percent = 0.75");
+        // one continuous turn of AMOUNT: every tick changes the amount, the whole turn is ONE undo state
+        const int undo0 = r.ui.editor().undo.depth(), writes0 = r.inst.shapeWrites;
+        check (r.inst.hostQ (1, 0.9f) == QRouter::Write::written, "the host turns Q2");
+        r.refresh();
+        check (std::fabs (m.p[1].my.amount - 0.8f) < 1.0e-6f && std::fabs (static_cast<float> (pm.amount.state.value) - 80.0f) < 1.0e-3f, "AMOUNT is 80 percent in the model and in the field the touch control is (the same value text)");
+        r.inst.hostQ (1, 0.95f); r.refresh();
+        r.inst.hostQ (1, 1.0f); r.refresh();
+        check (std::fabs (m.p[1].my.amount - 1.0f) < 1.0e-6f && r.ui.editor().undo.depth() == undo0 + 1, "three ticks of one turn: 100 percent, one undo state (" + std::to_string (r.ui.editor().undo.depth() - undo0) + ")");
+        check (r.inst.shapeWrites > writes0 && std::fabs (r.inst.contentPtr->lfoShapes[0].points[1].modY.amount - 1.0f) < 1.0e-6f, "the content follows");
+        check (std::fabs (val (r, 1) - 1.0f) < 1.0e-6f, "the router says the new value");
+        // a pause starts a new turn: a new undo state
+        r.now += 2000.0;
+        r.inst.hostQ (1, 0.25f); r.refresh();
+        check (std::fabs (m.p[1].my.amount + 0.5f) < 1.0e-6f && r.ui.editor().undo.depth() == undo0 + 2, "after a pause the next turn is a new undo state (-50 percent)");
+        // a tick that changes nothing (a value that rounds to the same percent) pushes no state and writes nothing
+        const int undo1 = r.ui.editor().undo.depth(), writes1 = r.inst.shapeWrites;
+        r.now += 2000.0;
+        r.inst.hostQ (1, 0.2505f); r.refresh();
+        check (std::fabs (m.p[1].my.amount + 0.5f) < 1.0e-6f && r.ui.editor().undo.depth() == undo1 && r.inst.shapeWrites == writes1, "a turn that changes nothing: no undo state, no write");
+        // a touch (a tap on another source of the board) ends the run of ticks: the next knob tick is a new undo state
+        const int undo2 = r.ui.editor().undo.depth();
+        r.inst.hostQ (1, 0.3f); r.refresh();
+        const ui::Rect chip9 = pm.board.chipRectOfId (9);
+        r.tap (chip9.x + chip9.w / 2, chip9.y + chip9.h / 2);
+        r.inst.hostQ (1, 0.1f); r.refresh();
+        check (m.p[1].my.source == 9 && std::fabs (m.p[1].my.amount + 0.8f) < 1.0e-6f && r.ui.editor().undo.depth() == undo2 + 3, "a knob tick, a touch on the board and another knob tick: three undo states (" + std::to_string (r.ui.editor().undo.depth() - undo2) + ")");
+        // MODULATE chooses the value: TIME / LEVEL / CURVE as 0 / 0.5 / 1; no model change, no undo state
+        const ui::lfo::ShapeModel beforeT = m;
+        const int undo3 = r.ui.editor().undo.depth();
+        check (r.inst.hostQ (0, 1.0f) == QRouter::Write::written, "the host turns Q1 to the end");
+        r.refresh();
+        check (pm.target.state.index == 2 && m == beforeT && r.ui.editor().undo.depth() == undo3, "MODULATE = CURVE: the stepper follows, the model and the undo stack are untouched");
+        // inactive: nothing modulates the curve of the point, the AMOUNT knob is off and does nothing
+        check (! pm.amount.enabled() && std::fabs (val (r, 1) - 0.5f) < 1.0e-6f, "no modulation on CURVE: AMOUNT is off (disabled look) and its knob reads the middle");
+        r.inst.hostQ (1, 0.9f); r.refresh();
+        check (m == beforeT && ! m.p[1].mc.on() && r.ui.editor().undo.depth() == undo3, "a turn of the inactive AMOUNT knob does nothing: no modulation appears, no undo state");
+        r.inst.hostQ (0, 0.0f); r.refresh();
+        check (pm.target.state.index == 0 && ! pm.amount.enabled(), "MODULATE = TIME: nothing modulates it either");
+        r.inst.hostQ (0, 0.5f); r.refresh();
+        check (pm.target.state.index == 1 && pm.amount.enabled(), "MODULATE = LEVEL: AMOUNT is on again");
+        // the touch control and the knob are one value: REMOVE through touch makes the knob inactive
+        r.tapC (pm.remove);
+        check (! m.p[1].my.on() && ! pm.amount.enabled(), "REMOVE (touch): the knob is inactive");
+        // back to the editor: its own Q controls are published again and work
+        r.tapC (pm.back);
+        check (r.ui.topPage() == LfoUi::kPageEditor && r.inst.q[0] == QRouter::encode (0, QRouter::kVirtual) && r.inst.q[3] == QRouter::encode (3, QRouter::kVirtual) && r.inst.q[4] == QRouter::encode (4, QRouter::kVirtual) && r.inst.q[6] == QRouter::encode (6, QRouter::kVirtual),
+               "BACK: the editor's own Q controls (EDIT, GRID) are published again");
+        check (r.inst.hostQ (2, 0.875f) == QRouter::Write::written, "the host turns Q3 (Y) of the editor");
+        r.refresh();
+        check (std::fabs (m.p[1].y - 0.875f) < 1.0e-4f, "... and the editor's Y follows (the knobs of the point modulation page were not left behind)");
+        // the write to the knob of the other page while the editor is shown does nothing to the modulation
+        check (! m.p[1].mx.on() && ! m.p[1].my.on() && ! m.p[1].mc.on(), "the editor's turns did not touch the modulation");
+    }
+    // ---- several points selected: a turn sets the amount of EVERY selected point
+    {
+        Rig r;
+        openPointModPage (r, true);
+        ui::lfo::ShapeModel& m = r.ui.editor().model;
+        bool all = m.n >= 3;
+        for (int i = 0; i < m.n; ++i)
+            all = all && m.p[i].my.source == 7;
+        check (all, "every point of the selection has LFO 1 on its level");
+        const int undo0 = r.ui.editor().undo.depth();
+        r.inst.hostQ (1, 0.1f); r.refresh();
+        for (int i = 0; i < m.n; ++i)
+            all = all && std::fabs (m.p[i].my.amount + 0.8f) < 1.0e-6f;
+        check (all && r.ui.editor().undo.depth() == undo0 + 1, "the knob sets the amount of every selected point (-80 percent) in one undo state");
+        r.tapC (r.ui.pointModPage().back);
+        r.tapC (r.ui.editor().undoButton);
+        bool restored = true;
+        for (int i = 0; i < m.n; ++i)
+            restored = restored && std::fabs (m.p[i].my.amount - 0.5f) < 1.0e-6f;
+        check (restored, "UNDO in the editor takes the whole turn back: every point at 50 percent again");
+    }
+    // ---- 16 knob device: the same two knobs, the chips 1 and 2, no frame and no active group
+    {
+        ui::QGroup::setWideDevice (true);
+        Rig r;
+        openPointModPage (r, false);
+        ui::PointModPage& pm = r.ui.pointModPage();
+        check (r.inst.q[0] == QRouter::encode (LfoUi::kVirtPmTarget, QRouter::kVirtual) && r.inst.q[1] == QRouter::encode (LfoUi::kVirtPmAmount, QRouter::kVirtual) && r.inst.q[2] == -1 && r.inst.q[4] == -1,
+               "16 knob device: the same slots, Q1 and Q2");
+        check (! pm.target.qFrame() && ! pm.amount.qFrame() && pm.group.block() == 0, "16 knob device: no active group look, the group has block 0 (chips 1 and 2)");
+        r.inst.hostQ (1, 0.9f); r.refresh();
+        check (std::fabs (r.ui.editor().model.p[1].my.amount - 0.8f) < 1.0e-6f, "16 knob device: the knob works the same");
+        uit::Scene sc (1280, 800, uit::kBackgroundRgba);
+        pm.draw (sc.builder());
+        const uit::Image im = uit::render (sc);
+        check (! sc.overflow() && uit::drawnOutside (im, pm.rect(), uit::backgroundPixel()) == 0, "16 knob device: the page with its chips draws inside its rectangle");
+        ui::QGroup::setWideDevice (false);
+        Rig r4;
+        openPointModPage (r4, false);
+        uit::Scene sc4 (1280, 800, uit::kBackgroundRgba);
+        r4.ui.pointModPage().draw (sc4.builder());
+        const uit::Image im4 = uit::render (sc4);
+        check (! sc4.overflow() && uit::drawnOutside (im4, r4.ui.pointModPage().rect(), uit::backgroundPixel()) == 0, "4 knob device: the page with its frame and chips draws inside its rectangle");
+        const ui::Rect fr = r4.ui.pointModPage().group.frameRect();
+        check (r4.ui.pointModPage().group.rect().w > 0 && fr.y >= r4.ui.pointModPage().rect().y + ui::kQLane && r4.ui.pointModPage().target.rect().y - ui::kQLane >= r4.ui.pointModPage().rect().y, "the lane for the chips is inside the page");
+        ui::Component* leaves[64];
+        const int nl = r4.ui.pointModPage().collectLeaves (leaves, 0, 64);
+        check (r4.ui.pointModPage().group.check (leaves, nl) == 0, "QGroup::check: no other control lies in the frame of the group");
+    }
+}
+
 void testTargets()
 {
     Rig r;
@@ -1423,6 +1560,7 @@ int main()
     testEditorActions();
     testEditorPointModulation();
     testEditorPointModulationStored();
+    testPointModulationQKnobs();
     testTargets();
     testDisplay();
     testKeyFollowCurve();

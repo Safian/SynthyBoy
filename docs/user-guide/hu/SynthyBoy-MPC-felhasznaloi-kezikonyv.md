@@ -632,9 +632,10 @@ A 16 potméteres MPC XL-en mind a tizenegy vezérlő egyszerre aktív az 1–11 
 ![Pontmoduláció](../img/lfo-editor-pointmod.png)
 
 - **BACK:** Visszatér a szerkesztő rajzfelületére.
-- **MODULATE** (léptető): Kiválasztja a modulálandó célértéket: **TIME**, **LEVEL** vagy **CURVE**.
-- **AMOUNT:** Modulációs mélység -100 és +100 százalék között.
+- **MODULATE** (léptető, **Q 1**): Kiválasztja a modulálandó célértéket: **TIME**, **LEVEL** vagy **CURVE**. A gombon a három érték a forgatási tartomány elején, közepén és végén van.
+- **AMOUNT** (**Q 2**): Modulációs mélység -100 és +100 százalék között, egész százalékokban; a gombbal ugyanúgy, mint érintéssel (ugyanaz a szám látszik). A kijelölt pontok mindegyikének mélységét állítja. Amíg a kiválasztott értéket semmi sem modulálja, a mező halvány, és a gomb nem csinál semmit. A gomb egy folyamatos tekerése egy visszavonási lépés.
 - **REMOVE:** Eltávolítja a modulációs hozzárendelést a kiválasztott célpontról.
+- **Q-Link gombok:** az oldalnak egy két gombos Q csoportja van, Q 1 (MODULATE) és Q 2 (AMOUNT); amíg az oldal nyitva van, felváltja a szerkesztő saját Q vezérlőit, a **BACK** megérintésekor azok visszatérnek. A 16 gombos eszközön az 1-es és a 2-es címke áll a léptető és a mező felett (keret nélkül); a 4 gombos eszközön a csoport keretezett.
 - **Összegzés:** Megjeleníti az állapotot a tábla felett (például: "POINT 3: LEVEL BY LFO 2, +45 PERCENT" vagy "3 POINTS: TIME NOT MODULATED").
 - **Forrástábla:** Kategóriacsoportokba rendezve felsorolja a motor mind az 57 modulációs forrását. Érints meg bármelyik forrást a táblán, hogy hozzárendeld a választott célponthoz az összes aktuálisan kijelölt ponton.
 
