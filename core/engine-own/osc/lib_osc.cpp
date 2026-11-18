@@ -83,6 +83,13 @@ float LibOsc::ratioOf (Unison& un) const noexcept
     return un.ratio;
 }
 
+namespace
+{
+std::atomic<bool> gLibKeysBuilt { false };
+}
+
+bool libKeysBuilt() noexcept { return gLibKeysBuilt.load (std::memory_order_acquire); }
+
 const LibKeys& libKeys (int osc) noexcept
 {
     static const struct All
@@ -102,6 +109,7 @@ const LibKeys& libKeys (int osc) noexcept
                     std::snprintf (key, sizeof key, "osc%d.%s", o + 1, names[i]);
                     k[o].idx[i] = findParamIndex (hashKey (key));
                 }
+            gLibKeysBuilt.store (true, std::memory_order_release);
         }
     } all;
     return all.k[std::clamp (osc, 0, 2)];

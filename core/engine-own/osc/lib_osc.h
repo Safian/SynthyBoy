@@ -61,6 +61,8 @@ struct LibKeys
 
 /** Index of the keys of oscillator `osc` (0 .. 2). */
 const LibKeys& libKeys (int osc) noexcept;
+/** True once libKeys () has built its table (its first call runs snprintf and hashing: OwnEngine::prepare () makes it, so the audio thread never does). For the test. */
+bool libKeysBuilt() noexcept;
 
 /** Values of the keys of one oscillator at the end of a control period, read by the voice. */
 struct LibParams

@@ -7,6 +7,7 @@
 #include <memory>
 #include <mutex>
 #include "own_engine.h"
+#include "osc/lib_osc.h"
 
 #include <chrono>
 #include "dsp/section_timing.h"
@@ -408,6 +409,7 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     // the lazily built tables of the keys (they allocate on first use): build them here
     (void) paramIndex();
     (void) fxIndex();
+    (void) libKeys (0);   // the library oscillator key table (snprintf, hashing on its first call): not on the audio thread
     (void) destLawOf (0);
     (void) WtOsc::decimatorTaps();
 

@@ -53,6 +53,8 @@ synthyboy_add_test(synthyboy_test_preset_render_output test_preset_render_output
 target_include_directories(synthyboy_test_preset_render_output PRIVATE "${PROJECT_SOURCE_DIR}/tools/preset-render" "${PROJECT_SOURCE_DIR}/core/fx-serum-b")
 synthyboy_add_test(synthyboy_test_own_helper_thread test_own_helper_thread.cpp)   # the wake-up flag and the helper threads of the engine
 target_include_directories(synthyboy_test_own_helper_thread PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_libkeys_warm test_own_libkeys_warm.cpp)   # libKeys () is built in prepare (), not on the audio thread (a process of its own: built once per process)
+target_include_directories(synthyboy_test_own_libkeys_warm PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_osc_types test_own_osc_types.cpp)
 target_include_directories(synthyboy_test_own_osc_types PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_unison_cap test_own_unison_cap.cpp)
