@@ -632,9 +632,10 @@ A 16 potméteres MPC XL-en mind a tizenegy vezérlő egyszerre aktív az 1–11 
 ![Pontmoduláció](../img/lfo-editor-pointmod.png)
 
 - **BACK:** Visszatér a szerkesztő rajzfelületére.
-- **MODULATE** (léptető): Kiválasztja a modulálandó célértéket: **TIME**, **LEVEL** vagy **CURVE**.
-- **AMOUNT:** Modulációs mélység -100 és +100 százalék között.
+- **MODULATE** (léptető, **Q 1**): Kiválasztja a modulálandó célértéket: **TIME**, **LEVEL** vagy **CURVE**. A gombon a három érték a forgatási tartomány elején, közepén és végén van.
+- **AMOUNT** (**Q 2**): Modulációs mélység -100 és +100 százalék között, egész százalékokban; a gombbal ugyanúgy, mint érintéssel (ugyanaz a szám látszik). A kijelölt pontok mindegyikének mélységét állítja. Amíg a kiválasztott értéket semmi sem modulálja, a mező halvány, és a gomb nem csinál semmit. A gomb egy folyamatos tekerése egy visszavonási lépés.
 - **REMOVE:** Eltávolítja a modulációs hozzárendelést a kiválasztott célpontról.
+- **Q-Link gombok:** az oldalnak egy két gombos Q csoportja van, Q 1 (MODULATE) és Q 2 (AMOUNT); amíg az oldal nyitva van, felváltja a szerkesztő saját Q vezérlőit, a **BACK** megérintésekor azok visszatérnek. A 16 gombos eszközön az 1-es és a 2-es címke áll a léptető és a mező felett (keret nélkül); a 4 gombos eszközön a csoport keretezett.
 - **Összegzés:** Megjeleníti az állapotot a tábla felett (például: "POINT 3: LEVEL BY LFO 2, +45 PERCENT" vagy "3 POINTS: TIME NOT MODULATED").
 - **Forrástábla:** Kategóriacsoportokba rendezve felsorolja a motor mind az 57 modulációs forrását. Érints meg bármelyik forrást a táblán, hogy hozzárendeld a választott célponthoz az összes aktuálisan kijelölt ponton.
 
@@ -651,7 +652,7 @@ A szerkesztő rajzfelületén a modulált idejű vagy szintű pont mellett egy s
 - **RENAME A SAVED SHAPE ...:** Felsorolja a mentett formáidat. Egyiket kiválasztva megnyitja a billentyűzetet az új név megadásához.
 - **DELETE A SAVED SHAPE ...:** Felsorolja a mentett formáidat. Egyiket kiválasztva megerősítést kér ("DELETE <név>?"), majd törli a fájlt.
 
-A mentett formák `<név>.lfoshape.json` nevű fájlokként tárolódnak a `SynthyBoy/LFO Shapes/` mappában. Ez a mappa az SD-kártyán, egy csatlakoztatott USB-meghajtón vagy a plugin saját Content mappájában jön létre (ugyanazokon a tárolóhelyeken, mint a felhasználói hullámtáblák). A fájlformátum megegyezik az asztali változat által írt JSON formátummal. Bármely számítógépről a `SynthyBoy/LFO Shapes/` mappába másolt szabványos JSON formafájlt a rendszer automatikusan felismeri és listázza. A pontmoduláció nem tárolódik a `.lfoshape.json` fájlban. Modulált pontokkal rendelkező forma mentésekor megjelenik a `(POINT MODULATION NOT STORED)` állapotfigyelmeztetés.
+A mentett formák `<név>.lfoshape.json` nevű fájlokként tárolódnak a `SynthyBoy/LFO Shapes/` mappában. Ez a mappa az SD-kártyán, egy csatlakoztatott USB-meghajtón vagy a plugin saját Content mappájában jön létre (ugyanazokon a tárolóhelyeken, mint a felhasználói hullámtáblák). A fájlformátum megegyezik az asztali változat által írt JSON formátummal. Bármely számítógépről a `SynthyBoy/LFO Shapes/` mappába másolt szabványos JSON formafájlt a rendszer automatikusan felismeri és listázza. A pontmoduláció ugyanebben a fájlban tárolódik (egy opcionális `point_mod` lista, amely minden modulációs forrást a szöveges azonosítójával nevez meg, például `lfo2`); a mentett forma betöltése a pontmodulációt is visszahozza, ugyanabban a visszavonási lépésben. A lista nélküli fájl, például az asztali változat által írt, pontmoduláció nélkül töltődik be, az asztali változat pedig figyelmen kívül hagyja a listát.
 
 **A MORE lista.** Koppints a felső sáv **MORE** gombjára a műveletek felugró ablakának megnyitásához, amely három csoportba van rendezve:
 

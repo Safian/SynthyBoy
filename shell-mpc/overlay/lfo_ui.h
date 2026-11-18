@@ -58,6 +58,9 @@ public:
     static constexpr int kElementPage = 3;                                    // the page of an LFO tab is the full screen of the element (page_view.h)
     static constexpr int kElementLfo = 3;                                     // the full screen of the LFO (the oscillator is 1, the envelope 2)
     enum Page { kPageEditor = 40, kPageTargets = 41, kPageList = 42, kPageMods = 43, kPagePointMod = 44, kPageKeyboard = 45 };
+    /** The virtual Q targets of the router (QRouter::kNumVirtual = 10) this page uses: 0 .. 7 are the editor's (POINT, X, Y, CURVE, GRID X, GRID Y, SNAP, BEND ALL), 8 and 9 belong to the page of the point modulation (MODULATE, AMOUNT). */
+    static constexpr int kVirtEditorCount = 8, kVirtPmTarget = 8, kVirtPmAmount = 9;
+    static_assert (kVirtPmAmount < QRouter::kNumVirtual, "the router must have a virtual target for every Q knob of the page");
 
     // ---- the id spaces of the controls (a Change comes out with the id the owner gave)
     enum Id : int
@@ -146,8 +149,13 @@ public:
         updateDisplay (inst, live, nowMs);
         if (stackDepth_ > 0 && pageTop_ == kPageEditor)
             updateEditor (inst, nowMs);
-        else if (shapeDirty_)
-            flushShape (inst, nowMs);
+        else
+        {
+            if (stackDepth_ > 0 && pageTop_ == kPagePointMod)
+                updatePointMod (inst, nowMs);
+            if (shapeDirty_)
+                flushShape (inst, nowMs);
+        }
         if (open)
             inst.setUiFullOpen (true);
         else if (stack.isMain())
@@ -1274,7 +1282,7 @@ private:
     }
     void updateEditor (IInstanceView& v, double nowMs)
     {
-        for (int id = 0; id < QRouter::kNumVirtual; ++id)
+        for (int id = 0; id < kVirtEditorCount; ++id)
         {
             float x;
             if (v.takeQVirtual (id, x))
@@ -1286,7 +1294,7 @@ private:
             statusUntilMs_ = 0.0;
         }
         syncEditor (v);
-        for (int id = 0; id < QRouter::kNumVirtual; ++id)
+        for (int id = 0; id < kVirtEditorCount; ++id)
             v.setQVirtual (id, virtualValue (id));
         if (shapeDirty_ && (nowMs - shapeSentMs_ >= kShapeSendMs || ! gestureDown_))
             flushShape (v, nowMs);
@@ -1632,9 +1640,8 @@ private:
     }
     void doSave (const std::string& name, bool overwrite)
     {
-        bool lost = false;
-        if (lib_.save (name, editor_.model, overwrite, &lost))
-            setStatusText ("SAVED " + name + (lost ? " (POINT MODULATION NOT STORED)" : ""));
+        if (lib_.save (name, editor_.model, overwrite))
+            setStatusText ("SAVED " + name);
         else
             setStatusText (lib_.error());
     }
@@ -1923,6 +1930,7 @@ private:
         {
             uibind::fillSourceBoard (pointMod_.board);
             pmTarget_ = 1;
+            pmTurnUntilMs_ = 0.0;
         }
         if (first < 0)
         {
@@ -1932,6 +1940,67 @@ private:
         const ui::lfo::PointMod& pm = pmTarget_ == 0 ? m.p[first].mx : (pmTarget_ == 1 ? m.p[first].my : m.p[first].mc);
         pointMod_.load (pmTarget_, pm.on() ? uibind::sourceName (pm.source) : "", static_cast<double> (pm.amount) * 100.0, set.count(), first);
     }
+    /** The modulation of the chosen value (pmTarget_) of the first selected point: none when no point is selected. */
+    ui::lfo::PointMod pointModOfFirst() const noexcept
+    {
+        const ui::lfo::ShapeModel& m = editor_.model;
+        const int first = editor_.canvas.selection().first();
+        if (first < 0 || first >= m.n)
+            return {};
+        return pmTarget_ == 0 ? m.p[first].mx : (pmTarget_ == 1 ? m.p[first].my : m.p[first].mc);
+    }
+    /** The two knobs of the page, as 0 .. 1: MODULATE (TIME, LEVEL, CURVE: 0, 0.5, 1) and AMOUNT (-100 .. +100 percent; 0.5 while nothing modulates the chosen value: the knob is off then). */
+    float pointModVirtualValue (int id) const noexcept
+    {
+        if (id == kVirtPmTarget)
+            return static_cast<float> (pmTarget_) * 0.5f;
+        const ui::lfo::PointMod pm = pointModOfFirst();
+        return pm.on() ? std::clamp (0.5f + 0.5f * pm.amount, 0.0f, 1.0f) : 0.5f;
+    }
+    /** A write of the host to one of the two knobs. MODULATE chooses the value (no undo state: it is a choice of the page, like the stepper). AMOUNT sets the amount of the chosen value of EVERY selected point, in whole
+        percent like the touch field, and only when that value is modulated (the knob is off otherwise). A turn that changes nothing leaves no undo state; one continuous turn is ONE undo state (the ticks of a turn
+        that follow each other within kTurnGapMs share the state pushed by the first: a touch, another knob or a pause starts a new one). */
+    void applyPointModVirtual (int id, float x, double nowMs)
+    {
+        ui::lfo::ShapeModel& m = editor_.model;
+        const ui::lfo::PointSet set = editor_.canvas.selection();
+        if (set.first() < 0)
+            return;
+        if (id == kVirtPmTarget)
+        {
+            const int t = std::clamp (static_cast<int> (std::lround (x * 2.0f)), 0, 2);
+            if (t != pmTarget_)
+            {
+                pmTarget_ = t;
+                pmTurnUntilMs_ = 0.0;
+            }
+            return;
+        }
+        const ui::lfo::PointMod cur = pointModOfFirst();
+        if (! cur.on())
+            return;
+        const ui::lfo::ShapeModel before = m;
+        m.setMod (set, pmTarget_, cur.source, std::round ((x * 2.0f - 1.0f) * 100.0f) / 100.0f);
+        if (m == before)
+            return;
+        if (nowMs > pmTurnUntilMs_)
+            editor_.undo.push (before);
+        pmTurnUntilMs_ = nowMs + kTurnGapMs;
+        markDirty();
+    }
+    void updatePointMod (IInstanceView& v, double nowMs)
+    {
+        for (int id = kVirtPmTarget; id <= kVirtPmAmount; ++id)
+        {
+            float x;
+            if (v.takeQVirtual (id, x))
+                applyPointModVirtual (id, x, nowMs);
+        }
+        loadPointMod (v, false);
+        editor_.sync();
+        for (int id = kVirtPmTarget; id <= kVirtPmAmount; ++id)
+            v.setQVirtual (id, pointModVirtualValue (id));
+    }
     void pointModChange (const ui::Change& c, UiStack& stack, IInstanceView& v)
     {
         using K = ui::ChangeKind;
@@ -1940,6 +2009,7 @@ private:
         const int first = set.first();
         if (first < 0 && c.id != kMpBack)
             return;
+        pmTurnUntilMs_ = 0.0;   // a touch ends the run of knob ticks that shared one undo state
         const ui::lfo::ShapeModel before = m;
         const ui::lfo::PointMod cur = first < 0 ? ui::lfo::PointMod {} : (pmTarget_ == 0 ? m.p[first].mx : (pmTarget_ == 1 ? m.p[first].my : m.p[first].mc));
         switch (c.id)
@@ -2296,9 +2366,22 @@ private:
             int ids[ui::ShapeEditorPage::kGroups] = { 0, 1, 2 };
             setBlocks (editor_.groups, ui::ShapeEditorPage::kGroups, ids, ui::ShapeEditorPage::kGroups, act);
         }
-        else if (pageTop_ == kPagePointMod || pageTop_ == kPageKeyboard)
+        else if (pageTop_ == kPagePointMod)
         {
-            name = pageTop_ == kPageKeyboard ? "Name" : "Modulation";
+            name = "Modulation";
+            // ONE group, always the active one: Q 1 = MODULATE (virtual 8), Q 2 = AMOUNT (virtual 9); the editor's own targets come back with the editor page (the slots are published again at the first update there)
+            qSlots_.publish (v, 1, 0, [] (int, int* t)
+            {
+                t[0] = QRouter::encode (kVirtPmTarget, QRouter::kVirtual);
+                t[1] = QRouter::encode (kVirtPmAmount, QRouter::kVirtual);
+                t[2] = t[3] = -1;
+            });
+            int ids[1] = { 0 };
+            setBlocks (&pointMod_.group, 1, ids, 1, 0);
+        }
+        else if (pageTop_ == kPageKeyboard)
+        {
+            name = "Name";
             qSlots_.publish (v, 0, 0, [] (int, int*) {});
         }
         else if (pageTop_ == kPageTargets || pageTop_ == kPageMods)
@@ -2355,12 +2438,13 @@ private:
     Pending pending_ = Pending::SaveOver;
     Kb kbPurpose_ = Kb::SaveAs;
     int edGroup_ = -1, pendingItem_ = -1, pmTarget_ = 1;
+    double pmTurnUntilMs_ = 0.0;   // the knob ticks of AMOUNT up to this time share the undo state pushed by the first (applyPointModVirtual)
     std::string pendingName_, edHeader_, edYes_, kbInitial_;
     std::vector<std::string> edRows_;
     std::vector<int> edMap_;
     bool phaseBound_ = false;   // the PHASE and the loop point of the model say the same (loop modes): a change of the shape moves the PHASE
     double statusUntilMs_ = 0.0;
-    static constexpr double kStatusMs = 3500.0;
+    static constexpr double kStatusMs = 3500.0, kTurnGapMs = 600.0;
     static constexpr int kMaxShapeName = 40;
     bool page_ = false;   // the page of an LFO tab
     int w_ = 1280, h_ = 800, lfoNum_ = 1, rnd_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = -1;

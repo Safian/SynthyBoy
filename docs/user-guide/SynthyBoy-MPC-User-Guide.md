@@ -647,9 +647,10 @@ On the 16-knob MPC XL, all eleven controls are active at once on knobs 1 to 11 (
 ![Point modulation](img/lfo-editor-pointmod.png)
 
 - **BACK:** Returns to the editor canvas.
-- **MODULATE** (stepper): Selects the target value to modulate: **TIME**, **LEVEL** or **CURVE**.
-- **AMOUNT:** Modulation depth from -100 to +100 percent.
+- **MODULATE** (stepper, **Q 1**): Selects the target value to modulate: **TIME**, **LEVEL** or **CURVE**. On the knob the three values lie at the start, the middle and the end of the travel.
+- **AMOUNT** (**Q 2**): Modulation depth from -100 to +100 percent in whole percent, on the knob as by touch (the same number is shown). It sets the amount of every selected point. While nothing modulates the chosen value the field is dimmed and the knob does nothing. One continuous turn of the knob is one undo step.
 - **REMOVE:** Removes the modulation assignment from the chosen target.
+- **Q-Link knobs:** the page has one Q group of two knobs, Q 1 (MODULATE) and Q 2 (AMOUNT); the page replaces the editor's own Q controls while it is open and they return when you tap **BACK**. On the 16-knob device the two chips 1 and 2 stand over the stepper and the field (no frame); on the 4-knob device the group is framed.
 - **Summary:** Displays the status above the board (for example "POINT 3: LEVEL BY LFO 2, +45 PERCENT" or "3 POINTS: TIME NOT MODULATED").
 - **Source board:** Lists all 57 modulation sources of the engine in category groups. Tap any source on the board to assign it to the chosen target on all currently selected points.
 
@@ -666,7 +667,7 @@ On the editor canvas, a point with modulated time or level displays a colored ba
 - **RENAME A SAVED SHAPE ...:** Lists your saved shapes; choosing one opens the keyboard to enter a new name.
 - **DELETE A SAVED SHAPE ...:** Lists your saved shapes; choosing one asks for confirmation ("DELETE <name>?") and deletes the file.
 
-Saved shapes are stored as files named `<name>.lfoshape.json` inside folder `SynthyBoy/LFO Shapes/`. The folder is created on your SD card, a connected USB drive, or the plugin's own Content folder (the same storage locations used for user wavetables). The file format is the same JSON the desktop version writes. Any standard JSON shape file copied from a computer into `SynthyBoy/LFO Shapes/` is recognized and listed automatically. Point modulation is not stored in `.lfoshape.json`; saving a shape with modulated points displays the status warning `(POINT MODULATION NOT STORED)`.
+Saved shapes are stored as files named `<name>.lfoshape.json` inside folder `SynthyBoy/LFO Shapes/`. The folder is created on your SD card, a connected USB drive, or the plugin's own Content folder (the same storage locations used for user wavetables). The file format is the same JSON the desktop version writes. Any standard JSON shape file copied from a computer into `SynthyBoy/LFO Shapes/` is recognized and listed automatically. Point modulation is stored in the same file (an optional `point_mod` list that names each modulation source by its text id, for example `lfo2`); loading a saved shape brings its point modulation back in the same undo step. A file without that list, for example one written by the desktop version, loads without point modulation, and the desktop version ignores the list.
 
 **The MORE list.** Tap **MORE** in the top bar to open the actions popup, arranged in three groups:
 

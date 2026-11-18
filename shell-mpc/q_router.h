@@ -36,9 +36,9 @@ public:
     // (Q 1 of the Tune group), kSem: what is left inside the octave (Q 2). transpose = 12 * oct + sem; the two knobs no longer do the same thing.
     static constexpr int kModeShift = 16, kIndexMask = 0xffff;
     static constexpr int kPlain = 0, kOct = 1, kSem = 2;
-    /** kVirtual: the target is no parameter but a VIRTUAL value of the plugin-drawn page (the index is its id 0 .. kNumVirtual - 1: the values of the LFO shape editor). The page tells the router the value the target has
+    /** kVirtual: the target is no parameter but a VIRTUAL value of the plugin-drawn page (the index is its id 0 .. kNumVirtual - 1: the values of the LFO shape editor and of its point modulation page). The page tells the router the value the target has
         now (setVirtualValue); a write of the host to the Q proxy is kept for the page (takeVirtual) and not written to any parameter. target (q) is none for it: every table index code ignores it. */
-    static constexpr int kVirtual = 3, kNumVirtual = 8;
+    static constexpr int kVirtual = 3, kNumVirtual = 10;   // 0 .. 7 the LFO editor page (LfoUi::kVirt*), 8 and 9 its point modulation page; the other pages use 0 and 1
     static constexpr int encode (int tableIndex, int mode) noexcept { return tableIndex < 0 ? kNone : (tableIndex | (mode << kModeShift)); }
     static int indexOf (int encoded) noexcept { return encoded < 0 ? kNone : (encoded & kIndexMask); }
     static int modeOf (int encoded) noexcept { return encoded < 0 ? kPlain : (encoded >> kModeShift); }

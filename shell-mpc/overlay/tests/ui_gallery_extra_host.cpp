@@ -140,13 +140,13 @@ public:
 
     void setQVirtual (int id, float v) noexcept override
     {
-        if (id >= 0 && id < 8)
+        if (id >= 0 && id < kVirtualSlots)
             virtualOut[id] = v;
     }
 
     bool takeQVirtual (int id, float& v) noexcept override
     {
-        if (id < 0 || id >= 8 || ! virtualDue[id])
+        if (id < 0 || id >= kVirtualSlots || ! virtualDue[id])
             return false;
         virtualDue[id] = false;
         v = virtualIn[id];
@@ -240,8 +240,9 @@ public:
     bool fullOpen = false;
     bool haveLive = true;
     synthyboy::LiveValues liveValues;
-    float virtualOut[8] = {}, virtualIn[8] = {};
-    bool virtualDue[8] = {};
+    static constexpr int kVirtualSlots = 10;   // QRouter::kNumVirtual
+    float virtualOut[kVirtualSlots] = {}, virtualIn[kVirtualSlots] = {};
+    bool virtualDue[kVirtualSlots] = {};
 
     bool padPressure (bool& on, float& percent) const noexcept override
     {
