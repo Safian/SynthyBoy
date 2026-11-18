@@ -417,7 +417,7 @@ TEST (wavetable_catalogue_a_user_table_survives_the_state_and_a_missing_file_fal
     CHECK (without.left != withFile.left);
     // another file at that path (the hash does not match): the same, flagged
     MemoryContentStore other;
-    other.add (kUserWavetablePack, "Bass/x.wav", encodeWav (samples.data(), nullptr, samples.size() / 2 + 2048, 44100, 16));
+    other.add (kUserWavetablePack, "Bass/x.wav", encodeWav (samples.data(), nullptr, samples.size() / 2, 44100, 16));   // one frame instead of two: not the file the reference names
     unsigned missing3 = 0;
     (void) playTable (&other, &back, missing3);
     CHECK_EQ (missing3 & 8u, 8u);
