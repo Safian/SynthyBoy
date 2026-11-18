@@ -10,6 +10,7 @@
 
 #if defined(__ARM_NEON) && ! defined(SB_NO_NEON)
  #include <arm_neon.h>
+ #include "../../engine-own/dsp/neon_cmp.h"
  #define SB_GRAIN_NEON 1
 #else
  #define SB_GRAIN_NEON 0
@@ -539,7 +540,7 @@ inline void windowKernelN (const GrainWindow& g, int age, float32x4_t* out) noex
     for (int u = 0; u < U; ++u) x[u] = vmulq_f32 (vcvtq_f32_s32 (vaddq_s32 (vdupq_n_s32 (age + 4 * u), vld1q_s32 (kIota))), vdupq_n_f32 (g.invLength));
     for (int u = 0; u < U; ++u)
     {
-        const uint32x4_t first = vcltq_f32 (x[u], peak);
+        const uint32x4_t first = neoncmp::lt (x[u], peak);   // the IEEE compare on the bit patterns (neon_cmp.h; the float compare is scalar code on 32 bit ARM)
         const float32x4_t u1 = vmulq_f32 (x[u], vdupq_n_f32 (g.k1));
         const float32x4_t u2 = vaddq_f32 (vdupq_n_f32 (0.5f), vmulq_f32 (vsubq_f32 (x[u], peak), vdupq_n_f32 (g.k2)));
         f[u] = vmulq_f32 (vbslq_f32 (first, u1, u2), vdupq_n_f32 (static_cast<float> (kTableSize)));
@@ -766,11 +767,11 @@ void clampFinite (float* a, int n, bool neon) noexcept
 #if SB_GRAIN_NEON
     if (neon)
     {
-        const float32x4_t vhi = vdupq_n_f32 (16.0f), vlo = vdupq_n_f32 (-16.0f), vinf = vdupq_n_f32 (std::numeric_limits<float>::infinity());
+        const float32x4_t vhi = vdupq_n_f32 (16.0f), vlo = vdupq_n_f32 (-16.0f);
         for (; i + 4 <= n; i += 4)
         {
             const float32x4_t x = vld1q_f32 (a + i);
-            const uint32x4_t finite = vcltq_f32 (vabsq_f32 (x), vinf);   // false for infinity and NaN
+            const uint32x4_t finite = neoncmp::absLt (x, std::numeric_limits<float>::infinity());   // false for infinity and NaN
             const float32x4_t c = vminq_f32 (vmaxq_f32 (x, vlo), vhi);
             vst1q_f32 (a + i, vreinterpretq_f32_u32 (vandq_u32 (vreinterpretq_u32_f32 (c), finite)));
         }
