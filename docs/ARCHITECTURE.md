@@ -307,7 +307,7 @@ and the plugin GUI show the same string.
 A **ContentPack** is a directory/zip with `contentpack.json` + data files, described in the plugin manifest (§7):
 
 ```
-{ "id": "com.safian.synthyboy.factory-wavetables", "version": "1.0.0",
+{ "id": "com.safian.synthyboy.factory-wavetables", "version": "0.1.0",
   "schemaVersion": 1, "license": "CC0-1.0", "attribution": "...",
   "size": 12345678, "sha256": "…", "files": [{ "path": "...", "sha256": "...", "category": "optional", "title": "optional" }],
   "kind": "wavetables" | "presets" | "samples", "requires_plugin": ">=0.2.0" }
