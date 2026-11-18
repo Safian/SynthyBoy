@@ -313,7 +313,10 @@ void testOneGroupPage()
     int used = 0;
     for (int i = 0; i < 16; ++i)
         used += inst.q[i] != -1;
-    check (inst.qN == 16 && used >= 1 && used <= 4 && inst.q[4] == -1 && inst.q[8] == -1 && inst.q[15] == -1, "the compact oscillator view (one group): only the first four slots can have a target (" + std::to_string (used) + " set)");
+    // in the main state the Play view publishes the groups of the three thirds together (PlayView::publishQ, tested in env_ui_host): the oscillator alone publishes nothing, and its compact group has four targets
+    int ct[4];
+    ui.compactTargets (ct);
+    check (used == 0 && ct[0] >= 0 && ct[1] >= 0 && ct[2] >= 0 && ct[3] >= 0, "the compact oscillator view (one group): the Play view publishes it; its four targets are the compact group's (" + std::to_string (used) + " set by the oscillator itself)");
 }
 
 void testStatusSlotCount()
