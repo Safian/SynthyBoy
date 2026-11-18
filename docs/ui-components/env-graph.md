@@ -31,7 +31,7 @@ The picture of a DAHDSR envelope (delay, attack, hold, decay, sustain, release a
 | vertical drag on a small curve handle in the middle of attack, decay, release | bends the stage, `edit().curve` |
 | double tap on a handle | the default; `edit().reset` true |
 | tap on LOCK (full chrome) | `Request`; `edit().handle` is `kLock` (100) |
-| drag along the ruler band while unlocked | zoom; no change out; `edit().handle` is `kZoom` (101) |
+| drag along the ruler band while unlocked | `Request`; `edit().handle` is `kZoom` (101), `edit().level` is the new zoom |
 
 Read `edit()` after each `Change`. The owner writes the parameters and gives the new shape back with the next state.
 
