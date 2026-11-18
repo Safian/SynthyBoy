@@ -1400,7 +1400,7 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             rVoice.refresh (2);
             const ui::Rect tr = rVoice.ui.screen().rowList.rowRect (r);   // (the row list of the page)
             rVoice.tapAt (tr.x + tr.w / 2, tr.y + tr.h / 2);
-            rVoice.ui.screen().grid.selectedStep = r;
+            rVoice.ui.screen().grid.state.selectedStep = r;
             rVoice.refresh (2);
             rVoice.picture (outDir + "/" + state + "_voice_row_" + kVoiceRows[r] + ".png");
         }

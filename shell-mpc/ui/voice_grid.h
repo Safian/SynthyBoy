@@ -1,7 +1,8 @@
 // SynthyBoy - MPC UI component library: VoiceGrid, the 8-step sequence and per-voice control grid (docs/MPC.md, ui-elem-mastervoice.md).
 // Rows: 6 (PAN, DETUNE, CUTOFF, ENV, MOD 1, MOD 2); Columns: 8 steps.
-// Drag-drawable bipolar vertical bars, live active voice step highlighting. The grid shows the row it is told (`activeRow`); the ROW is chosen with the LED list of the screen (voice_screen.h: 56 px rows, a member of the
-// header's Q group), not with tabs of the grid.
+// Drag-drawable bipolar vertical bars, live active voice step highlighting. The grid shows the row it is told (`state.activeRow`); the ROW is chosen with the LED list of the screen (voice_screen.h: 56 px rows, a member of the
+// header's Q group), not with tabs of the grid. NEVER STORE THE TRUTH: the grid draws only `state` (the owner sets it on every update) and never writes it: a gesture returns the changes (the id of a change is
+// `stepId (row, col)`: the owner reads the selected step from it, writes the parameter, and the next update shows both). Private and transient: the column and the value of the last report of the stroke.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -24,12 +25,16 @@ public:
     static constexpr int kPad = 4;
     static constexpr int kColGap = 6;
 
-    int length = 8;               // voicectl.length (1 .. 8)
-    int activeRow = 0;            // 0..5 (PAN, DETUNE, CUTOFF, ENV, MOD 1, MOD 2)
-    int selectedStep = 0;         // 0..7
-    float values[kNumRows][kNumSteps] = {};     // -1.0 .. +1.0
-    float modValues[kNumRows][kNumSteps] = {};
-    uint8_t voiceStepMask = 0;    // bit s is 1 if step s has an active sounding voice
+    struct State
+    {
+        int length = 8;               // voicectl.length (1 .. 8)
+        int activeRow = 0;            // 0..5 (PAN, DETUNE, CUTOFF, ENV, MOD 1, MOD 2)
+        int selectedStep = 0;         // 0..7
+        float values[kNumRows][kNumSteps] = {};     // -1.0 .. +1.0
+        float modValues[kNumRows][kNumSteps] = {};
+        uint8_t voiceStepMask = 0;    // bit s is 1 if step s has an active sounding voice
+    };
+    State state;
     int baseId = 100;             // baseId + row * 8 + col
 
     static const char* rowName (int r) noexcept
@@ -58,15 +63,16 @@ public:
         return { g.x + s * (colW + kColGap), g.y, colW, g.h };
     }
 
+    /** For the owner: sets one value of `state` (-1 .. +1). */
     void setValue (int row, int step, float v) noexcept
     {
         if (row >= 0 && row < kNumRows && step >= 0 && step < kNumSteps)
-            values[row][step] = std::clamp (v, -1.0f, 1.0f);
+            state.values[row][step] = std::clamp (v, -1.0f, 1.0f);
     }
 
     float value (int row, int step) const noexcept
     {
-        return (row >= 0 && row < kNumRows && step >= 0 && step < kNumSteps) ? values[row][step] : 0.0f;
+        return (row >= 0 && row < kNumRows && step >= 0 && step < kNumSteps) ? state.values[row][step] : 0.0f;
     }
 
     Change touchDown (int x, int y, double nowMs) override
@@ -84,12 +90,12 @@ public:
             const int s = findColumn (x);
             if (s >= 0 && s < kNumSteps)
             {
-                selectedStep = s;
+                // a finger down always reports (its id carries the step: the owner selects it), whatever the value is
                 dragging_ = true;
                 lastCol_ = s;
                 const float val = valueFromY (s, y);
-                values[activeRow][s] = val;
-                return Change::normalised (stepId (activeRow, s), val);
+                lastVal_ = val;
+                return Change::normalised (stepId (state.activeRow, s), val);
             }
         }
         return Change::none();
@@ -103,29 +109,27 @@ public:
         const int s = findColumn (x);
         if (s >= 0 && s < kNumSteps)
         {
-            selectedStep = s;
             const float val = valueFromY (s, y);
-            if (s != lastCol_ || std::fabs (val - values[activeRow][s]) > 0.01f)
+            if (s != lastCol_ || std::fabs (val - lastVal_) > 0.01f)
             {
                 // a fast stroke skips columns: the columns between the last one and this one get the values on the line between them (drawn through, not left out); the owner takes them with takePending ()
                 numPending_ = 0;
                 if (lastCol_ >= 0 && std::abs (s - lastCol_) > 1)
                 {
                     const int dir = s > lastCol_ ? 1 : -1;
-                    const float v0 = values[activeRow][lastCol_];
+                    const float v0 = lastVal_;
                     for (int c = lastCol_ + dir; c != s && numPending_ < kNumSteps; c += dir)
                     {
                         const float t = static_cast<float> (c - lastCol_) / static_cast<float> (s - lastCol_);
                         float v = v0 + (val - v0) * t;
                         if (std::fabs (v) < 0.035f)
                             v = 0.0f;
-                        values[activeRow][c] = v;
-                        pending_[numPending_++] = Change::normalised (stepId (activeRow, c), v);
+                        pending_[numPending_++] = Change::normalised (stepId (state.activeRow, c), v);
                     }
                 }
-                values[activeRow][s] = val;
                 lastCol_ = s;
-                return Change::normalised (stepId (activeRow, s), val);
+                lastVal_ = val;
+                return Change::normalised (stepId (state.activeRow, s), val);
             }
         }
         return Change::none();
@@ -149,13 +153,15 @@ public:
 
     Change turn (double delta) override
     {
-        if (selectedStep < 0 || selectedStep >= kNumSteps)
+        if (state.selectedStep < 0 || state.selectedStep >= kNumSteps || state.activeRow < 0 || state.activeRow >= kNumRows)
             return Change::none();
-        float val = std::clamp (values[activeRow][selectedStep] + static_cast<float> (delta * 0.05), -1.0f, 1.0f);
+        const float cur = state.values[state.activeRow][state.selectedStep];
+        float val = std::clamp (cur + static_cast<float> (delta * 0.05), -1.0f, 1.0f);
         if (std::fabs (val) < 0.02f)
             val = 0.0f;
-        values[activeRow][selectedStep] = val;
-        return Change::normalised (stepId (activeRow, selectedStep), val);
+        if (val == cur)   // at the end of the range, or a step that rounds back: nothing changes, nothing is reported
+            return Change::none();
+        return Change::normalised (stepId (state.activeRow, state.selectedStep), val);
     }
 
     void draw (gpu::SceneBuilder& sb) const override
@@ -177,9 +183,9 @@ protected:
         for (int s = 0; s < kNumSteps; ++s)
         {
             const Rect cr = columnRect (s);
-            const bool activeStep = (s < length);
-            const bool isSelected = (s == selectedStep);
-            const bool isSounding = (voiceStepMask & (1 << s)) != 0;
+            const bool activeStep = (s < state.length);
+            const bool isSelected = (s == state.selectedStep);
+            const bool isSounding = (state.voiceStepMask & (1 << s)) != 0;
 
             // Column background box
             p.rrect (cr, T.rControl, p.c (activeStep ? T.panel0 : T.bg1, activeStep ? 180 : 120));
@@ -217,7 +223,7 @@ protected:
                     1.2f, p.c (T.keylineHi, activeStep ? 220 : 120));
 
             // Bar fill
-            const float val = values[activeRow][s];
+            const float val = state.values[state.activeRow][s];
             if (std::fabs (val) > 0.005f)
             {
                 const int extent = static_cast<int> (std::lround (std::fabs (val) * (barH * 0.47f)));
@@ -259,7 +265,7 @@ protected:
             // Value text area below bar
             const Rect valBox { cr.x + 2, barBottom + 4, cr.w - 4, 22 };
             char valStr[24];
-            formatValue (activeRow, val, valStr, sizeof valStr);
+            formatValue (state.activeRow, val, valStr, sizeof valStr);
             p.textCentered (valBox, valStr, T.fLabel, p.c (activeStep ? (isSelected ? T.q : T.text) : T.textDim, 255), T.fMin);
         }
     }
@@ -267,6 +273,7 @@ protected:
 private:
     bool dragging_ = false;
     int lastCol_ = -1;
+    float lastVal_ = 0.0f;   // the value of the last report of the stroke (gesture data: the start of the line between two columns, the dead band of a move)
     Change pending_[kNumSteps];
     int numPending_ = 0;
 
