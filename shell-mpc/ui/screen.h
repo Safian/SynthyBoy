@@ -214,7 +214,7 @@ protected:
         const bool noise = inst_ == OscInstance::Noise;
         const bool isTab = H <= 650;
         const int topH = isTab ? 78 : 88;   // 78: the dial of the Basic knobs is as big as the dial of the warp slots (70 px, one size on the page)
-        const int bottomH = isTab ? 216 : kBottomH;
+        const int bottomH = noise ? KnobPanel::kBlockTitleH + KnobPanel::kOneRowH + KnobPanel::kBlockPad : (isTab ? 216 : kBottomH);   // the noise's blocks are ONE row each: the title strip, a row at its maximum height (kOneRowH) and the padding; the room that frees goes to the display
         const int lane = isTab ? 22 : (m + kQLane + 2);
         const Rect top { rect_.x + m, rect_.y + lane, W - 2 * m, topH };
         Rect r[4];
@@ -243,25 +243,28 @@ protected:
         }
         else if (noise && panel.preset() != nullptr && panel.preset()->items == presets::kNoiseGenItems)
         {
-            // the generated noise: ONE clean grid in the bottom band, two blocks of the same height side by side, the same two rows in both: TUNE (PITCH, FINE / KEY TRACK) at the left and NOISE (KIND, STEREO / ENV 1) at the right, the
-            // rows of the two blocks are the same rows (same top, same title strip, same row heights, the lane of the chips between them); the display has the whole width above them, as on the sub oscillator's page
+            // the generated noise: the display has the whole width above ONE row of two blocks of the same height side by side, TUNE (PITCH, FINE, KEY TRACK) at the left and NOISE (KIND, STEREO, ENV 1) at the right: three cells in each, the same
+            // row (same top, same height), so that the chips 5, 6, 7 and 9, 10, 11 stand on one line; the row is at its maximum height and the freed room is the display's
             const int midY = top.bottom() + gap;
             display_ = { rect_.x + m, midY, W - 2 * m, std::max (0, panelY - gap - midY) };
             barBlock_ = {};
             bar.place ({});
             const int halfW = (W - 3 * m) / 2;
             tuneBlock_ = { rect_.x + m, panelY, halfW, bottomH };
+            tune.setNoiseRow (true);
             tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
             panelRect = { tuneBlock_.right() + m, panelY, W - 2 * m - halfW - m, bottomH };
         }
         else if (noise)
         {
+            // the noise that plays a sample: the display at the left, the TUNE column at its right (PITCH, FINE, KEY TRACK in three rows that fill its height), the blocks SOURCE and PLAYBACK in ONE row under them
             const int midY = top.bottom() + gap;
             const int midH = std::max (0, panelY - gap - midY);
             display_ = { rect_.x + m, midY, leftW, midH };
             barBlock_ = {};
             bar.place ({});
             tuneBlock_ = { rightX, midY, rect_.right() - m - rightX, midH };
+            tune.setNoiseRow (false);
             tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
         }
         else

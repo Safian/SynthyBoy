@@ -106,13 +106,31 @@ int main()
         const bool isSub = var.inst == OscInstance::Sub;
         if (var.inst == OscInstance::Noise)
         {
-            // the generated noise page is one grid: TUNE and NOISE blocks side by side with the same top and height, the same two rows (PITCH, FINE | KIND, STEREO and KEY TRACK | ENV 1), no hole
+            // the generated noise page: the display has the whole width, under it ONE row of two blocks side by side with the same top and height, TUNE (PITCH, FINE, KEY TRACK) and NOISE (KIND, STEREO, ENV 1), three cells each in the same row; the
+            // row is at its maximum height (KnobPanel::kOneRowH) and what that frees is the display's; no block is less than half covered (lint rule g)
             const Component *kd = s.panel.part (PanelSlot::NoiseType), *st = s.panel.part (PanelSlot::NoiseStereo), *e1 = s.panel.part (PanelSlot::NoiseEnv1);
             check (kd != nullptr && st != nullptr && e1 != nullptr && s.tuneBlock().y == s.panel.blockRect (0).y && s.tuneBlock().h == s.panel.blockRect (0).h && s.tuneBlock().right() <= s.panel.blockRect (0).x && s.tuneBlock().y >= s.displayRect().bottom(),
                    nm + ": noise: the TUNE block and the NOISE block stand side by side under the display, same top and same height");
-            check (kd != nullptr && st != nullptr && e1 != nullptr && std::abs (s.tune.crs.rect().y - kd->rect().y) <= 40 && std::abs (cy (s.tune.crs) - cy (*st)) <= 2 && std::abs (cy (s.tune.fin) - cy (*st)) <= 2 && std::abs (cy (s.tune.track) - cy (*e1)) <= 2,
-                   nm + ": noise: the rows are shared: PITCH and FINE on the line of STEREO, KEY TRACK on the line of ENV 1");
-            check (st != nullptr && st->rect().h >= 72 && s.tune.crs.rect().w >= 120, nm + ": noise: the STEREO knob has the common size (>= 72 px) and the fields are wide (no hole)");
+            check (kd != nullptr && st != nullptr && e1 != nullptr && s.tune.crs.rect().y == kd->rect().y && s.tune.fin.rect().y == kd->rect().y && s.tune.track.rect().y == kd->rect().y && st->rect().y == kd->rect().y && e1->rect().y == kd->rect().y
+                       && s.tune.crs.rect().h == KnobPanel::kOneRowH && s.tune.fin.rect().h == KnobPanel::kOneRowH && s.tune.track.rect().h == KnobPanel::kOneRowH && kd->rect().h == KnobPanel::kOneRowH && st->rect().h == KnobPanel::kOneRowH && e1->rect().h == KnobPanel::kOneRowH
+                       && s.tune.isNoiseRow() && s.tuneBlock().h == KnobPanel::kBlockTitleH + KnobPanel::kOneRowH + KnobPanel::kBlockPad,
+                   nm + ": noise: PITCH, FINE, KEY TRACK, KIND, STEREO and ENV 1 are ONE row (same top, the row's maximum height), the block is the title strip, that row and the padding");
+            check (st != nullptr && st->rect().h >= 72 && s.tune.crs.rect().w >= 160 && st->rect().w >= 172 && e1->rect().w >= 160, nm + ": noise: the STEREO knob has the common size (>= 72 px, the dial beside its name) and the cells are wide (no hole)");
+            {
+                const Rect blocks[2] = { s.tuneBlock(), s.panel.blockRect (0) };
+                const Component* cells[2][3] = { { &s.tune.crs, &s.tune.fin, &s.tune.track }, { kd, st, e1 } };
+                for (int b = 0; b < 2; ++b)
+                {
+                    long covered = 0;
+                    for (const Component* c : cells[b])
+                        covered += static_cast<long> (c->rect().w) * c->rect().h;   // the three cells do not overlap (checked above)
+                    check (covered * 2 >= static_cast<long> (blocks[b].w) * blocks[b].h && blocks[b].contains (cells[b][0]->rect()) && blocks[b].contains (cells[b][2]->rect()), nm + ": noise: block " + std::to_string (b) + " is covered by its cells for at least half its area (" + std::to_string (covered * 100 / (static_cast<long> (blocks[b].w) * blocks[b].h)) + " percent)");
+                }
+            }
+            check (s.numGroups() == 3 && std::string (s.groupName (1)) == "Tune" && std::string (s.groupName (2)) == "Noise" && s.groups[1].member (0) == &s.tune.crs && s.groups[1].member (1) == &s.tune.fin && s.groups[1].member (2) == &s.tune.track && s.groups[1].member (3) == nullptr
+                       && s.groups[2].member (0) == kd && s.groups[2].member (1) == st && s.groups[2].member (2) == e1 && s.groups[2].member (3) == nullptr,
+                   nm + ": noise: the Q slots keep their order: Basic 1 to 4, Tune PITCH, FINE, KEY TRACK (5 to 7), Noise KIND, STEREO, ENV 1 (9 to 11), each group in reading order");
+            check (s.displayRect().h >= 330 && s.displayRect().bottom() + kGap <= s.tuneBlock().y, nm + ": noise: the freed room is the display's (" + std::to_string (s.displayRect().h) + " px tall)");
             const Stepper* kind = dynamic_cast<const Stepper*> (s.panel.part (PanelSlot::NoiseType));
             check (std::string (s.basic.noiseType.state.caption) == "SOUND" && kind != nullptr && std::string (kind->state.caption) == "KIND", nm + ": the two noise steppers say what they select (SOUND in the header, KIND in the block)");
         }
@@ -479,8 +497,9 @@ int main()
         check (isLed (noise.panel.part (PanelSlot::NoiseEnv1), "ENV 1") && isLed (&noise.tune.track, "KEY TRACK"), "noise: ENV 1 and KEY TRACK are LED toggles");
         check (noise.panel.part (PanelSlot::NoiseType) != nullptr && noise.panel.part (PanelSlot::NoiseStereo) != nullptr &&
                std::abs (cy (*noise.panel.part (PanelSlot::NoiseType)) - cy (*noise.panel.part (PanelSlot::NoiseStereo))) <= 2 &&
-               cy (*noise.panel.part (PanelSlot::NoiseEnv1)) > cy (*noise.panel.part (PanelSlot::NoiseType)),
-               "noise: KIND and STEREO share baseline in row 0, ENV 1 is in row 1");
+               std::abs (cy (*noise.panel.part (PanelSlot::NoiseEnv1)) - cy (*noise.panel.part (PanelSlot::NoiseType))) <= 2 &&
+               cx (*noise.panel.part (PanelSlot::NoiseType)) < cx (*noise.panel.part (PanelSlot::NoiseStereo)) && cx (*noise.panel.part (PanelSlot::NoiseStereo)) < cx (*noise.panel.part (PanelSlot::NoiseEnv1)),
+               "noise: KIND, STEREO and ENV 1 share one row, left to right");
         OscillatorFullScreen wt;
         wt.place (area);
         wt.setInstance (OscInstance::A, OscKind::Wavetable);

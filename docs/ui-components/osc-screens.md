@@ -23,7 +23,7 @@ Changes of the children come out with the ids the owner gave: `instances` `Index
 Groups of the full screen: Basic, Type (the type bar), Tune, then the groups of the panel (wavetable and multisample: Unison, Warp; granular: Grain, Playback, Random). Compact: one group, Basic. `turnQ (knobIndex, delta)` routes to the active group.
 
 ## Options and variants
-Type: `OscKind { Wavetable, Multisample, Granular, Sample, Spectral }`. Sub: waveform pictograms, CRS only; Noise: no type bar, `kNoiseGenFull` panel.
+Type: `OscKind { Wavetable, Multisample, Granular, Sample, Spectral }`. Sub: waveform pictograms, CRS only; Noise: no type bar, `kNoiseGenFull` panel. The Noise page's blocks are ONE row each at the maximum row height (`KnobPanel::kOneRowH`; the bottom band is `kBlockTitleH + kOneRowH + kBlockPad` = 172 px) and the room that frees goes to the display. Generated noise: the display over the full width, under it TUNE (PITCH, FINE, KEY TRACK: `tune.setNoiseRow (true)`) and NOISE (`kNoiseGenFull`: KIND, STEREO, ENV 1) side by side, three cells each in one row. Sample noise: the display at the left, the TUNE column (three rows) at its right, SOURCE and PLAYBACK (`kNoiseSampleFull`) in one row under them. Q slot order unchanged.
 
 ## Minimal example
 ```cpp

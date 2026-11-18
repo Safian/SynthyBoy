@@ -167,13 +167,13 @@ constexpr QSpec kSubFullQ[] = {
 };
 constexpr PanelPreset kSubFull { "sub (full screen)", 6, 1, -1, kSubFullItems, 9, kSubFullQ, 3, 0, kSubBlocks, 3 };
 
-// the noise: when type is Noise (generated): KIND stepper and STEREO knob in row 0, ENV 1 toggle in row 1
+// the noise: when type is Noise (generated): the NOISE block is ONE row of three cells, KIND stepper, STEREO knob and the ENV 1 toggle (the TUNE block beside it, OscillatorFullScreen, is the same row)
 constexpr PanelItem kNoiseGenItems[] = {
     { PartKind::Stepper, PanelSlot::NoiseType, "KIND", 0, 0, 1, 1, false, 0 },
     { PartKind::Knob, PanelSlot::NoiseStereo, "STEREO", 1, 0, 1, 1, false, 0 },
-    { PartKind::Toggle, PanelSlot::NoiseEnv1, "ENV 1", 0, 1, 2, 1, false, 0 },
+    { PartKind::Toggle, PanelSlot::NoiseEnv1, "ENV 1", 2, 0, 1, 1, false, 0 },
 };
-constexpr PanelBlock kNoiseGenBlocks[] = { { "NOISE", 0, 0, 1, 1, 2, 2 } };
+constexpr PanelBlock kNoiseGenBlocks[] = { { "NOISE", 0, 0, 1, 1, 3, 1 } };
 constexpr QSpec kNoiseGenQ[] = { { { PanelSlot::NoiseType, PanelSlot::NoiseStereo, PanelSlot::NoiseEnv1, PanelSlot::Count } } };
 constexpr PanelPreset kNoiseGenFull { "noise (full screen, generated)", 1, 1, -1, kNoiseGenItems, 3, kNoiseGenQ, 1, 0, kNoiseGenBlocks, 1 };
 

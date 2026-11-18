@@ -11,7 +11,7 @@ Three oscillator-oriented composites.
 
 ## State
 `TypeBar`: `numbers[4]`, `steppers[4]`, `details[4]`, `toggles[4]`, `toggleNumbers[4]` (slot i uses the kind of its preset item), `slot (i)`, `numSlots()`, `preset()`, `load (preset)` (slot components return to their defaults; the ids are 0: give them with `slot (i)->setId`). `BarKind`: `Frame` (read-only number), `Phase` (degrees, phase icon), `Rand`, `Number`, `Stepper`, `GrainWindow`, `UnisonDetail`, `Toggle`, `Envelope`, `ToggleNumber`, `Page`. A preset is DATA: a new preset is a new table row.
-`TuneRow`: `oct`, `sem`, `fin`, `crs` (`NumberField`), `track` (`LedToggle`), `more` (`DetailButton`, hidden by default); ranges OCT -4..4, SEM -12..12, FIN -100..100, CRS -48..48 (step 0.01); `setShort`, `setVertical`, `setCrsOnly`, `setNoise` (labels PITCH, FINE, KEY TRACK), `kRowH` 56.
+`TuneRow`: `oct`, `sem`, `fin`, `crs` (`NumberField`), `track` (`LedToggle`), `more` (`DetailButton`, hidden by default); ranges OCT -4..4, SEM -12..12, FIN -100..100, CRS -48..48 (step 0.01); `setShort`, `setVertical`, `setCrsOnly`, `setNoise` (labels PITCH, FINE, KEY TRACK: three rows one above the other), `setNoiseRow (bool)` (the noise's three fields in ONE row of three equal cells, minimum 3 x 80 + 2 gaps by 56), `kRowH` 56.
 `BasicControls`: `selector` (`TypeSelector`), `noiseType` (`Stepper`), `source` (`SourcePicker`), `oct` (`NumberField`), `filter`, `pan`, `level` (`Knob`), `group` (`QGroup`); `configure (OscInstance, OscKind)`, `setStacked (bool)`, `assignIds (base)` (selector, source stepper, dropdown, OCT, FILTER, noise type, PAN, LEVEL = base .. base + 7: the same call in every view gives the same ids).
 
 ## Size
