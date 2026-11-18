@@ -77,9 +77,9 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
     target_compile_options(synthyboy_test_neon_cmp PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
     target_link_libraries(synthyboy_test_neon_cmp PRIVATE Threads::Threads)
     add_test(NAME synthyboy_test_neon_cmp COMMAND synthyboy_test_neon_cmp)
-    # The voice filter (FilterUnit) with its vector forms against its scalar loops (the --scalar-filters switch): the filters-serum sources compiled into the test with
-    # the pair kernels and the NEON loops on, without fused multiply-add.
-    add_executable(synthyboy_test_own_filter_unit_lanes test_own_filter_unit_lanes.cpp "${PROJECT_SOURCE_DIR}/core/filters-serum/src/filter.cpp"
+    # The voice filter (FilterUnit) and the chorus with their vector forms against their scalar loops (the --scalar-filters switch): the filters-serum sources compiled
+    # into the test with the pair kernels and the NEON loops on, without fused multiply-add.
+    add_executable(synthyboy_test_own_filter_unit_lanes test_own_filter_unit_lanes.cpp test_own_chorus_lanes.cpp "${PROJECT_SOURCE_DIR}/core/filters-serum/src/filter.cpp"
         "${PROJECT_SOURCE_DIR}/core/filters-serum/src/filter_types.cpp" "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
     target_include_directories(synthyboy_test_own_filter_unit_lanes PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own"
         "${PROJECT_SOURCE_DIR}/core/filters-serum/include" "${PROJECT_SOURCE_DIR}/core/filters-serum/src")

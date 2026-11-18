@@ -148,6 +148,7 @@ public:
         p.cutoff = V (b, d, cutoff);
         p.spread = clamp01 (pct (b, d, spread));
         fx.fast = f.lowCost;
+        fx.scalarLoops = f.scalarLoops;
         fx.set (p);
     }
     void idleAdvance (int n) noexcept override { fx.idle (n); }
