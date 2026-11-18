@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <vector>
 
 #include "test_runner.h"
@@ -829,4 +830,330 @@ TEST (spectral_place_all_equals_the_reference_loop)
     }
     CHECK (runs == 300);
     CHECK_EQ (bad, 0);
+}
+
+// ---- the start of a voice: the four priming frames in one pass (shared shaping, the frame of the first hop made by noteOn) and the start offset inside the hop -----------------------------------
+
+namespace
+{
+double dbOf (double a, double b) { return 20.0 * std::log10 (std::max (a, 1.0e-12) / std::max (b, 1.0e-12)); }
+} // namespace
+
+// From the first regular frame on (output sample kHop - d of a voice with offset d) a voice is the voice of the start before round 10 (four frames made at once, `setLegacyStart`), sample for
+// sample: the frames 1 .. 3 of the priming are the same (positions, bins, phases, in the same order; Smear shapes frame 0 first and all frames at once, so its memory is the same; the phase
+// lock of frame 0 is applied to the analysis phase before the first advance), the ring holds the same sums. Frozen and scanning, Smear, Phase Lock, a phase twist, a transient restart, a stereo
+// sample. Before that sample the first hop differs only by the frame 0 it leaves out and the frames not yet made, renormalised: its error is reported, and bounded for the clean tone.
+TEST (spectral_the_start_with_deferred_frames_is_the_old_start_from_the_first_regular_frame_on)
+{
+    Tone tone (rich (220.0, 1.5));
+    std::vector<float> l (static_cast<size_t> (1.5 * kSr)), r (l.size());
+    for (size_t i = 0; i < l.size(); ++i)
+    {
+        l[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 311.0 * static_cast<double> (i) / kSr) + 0.1 * std::sin (0.01 * static_cast<double> (i * i % 1000)));
+        r[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 477.0 * static_cast<double> (i) / kSr));
+    }
+    SampleData stereoData;
+    stereoData.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), kSr);
+    Analysis stereo;
+    stereo.build (stereoData.view());
+    double worstRelative = 0.0, worstFirst = 0.0;
+    int runs = 0;
+    for (int variant = 0; variant < 5; ++variant)
+        for (int w : { -1, static_cast<int> (Warp::smear), static_cast<int> (Warp::phaseTwist), static_cast<int> (Warp::addHarmonics) })
+            for (int k = 0; k < kStartSteps; ++k)
+            {
+                SpectralParams p = frozen (0.4f);
+                p.manual = variant != 4;
+                p.scanSpeed = 0.7f;
+                p.phaseLock = variant == 1;
+                p.transients = variant == 2;
+                p.pitchRatio = variant == 3 ? 1.37f : 1.0f;
+                p.warpType[0] = w;
+                p.warpAmount[0] = 0.8f;
+                const Analysis* an = variant == 2 ? &stereo : &tone.analysis;
+                const int d = k * kStartStep;
+                static Scratch scratchLegacy;
+                SpectralParams pl = p;
+                pl.scratch = &scratchLegacy;
+                SpectralVoice legacy, v;
+                legacy.prepare (kSr);
+                legacy.setLegacyStart (true);
+                legacy.noteOn (an, pl, 0.0f, d);
+                v.prepare (kSr);
+                v.noteOn (an, p, 0.0f, d);
+                std::vector<float> legacyRight, right;
+                const auto old = render (legacy, pl, 12288, 128, &legacyRight);
+                const auto out = render (v, p, 12288, 128, &right);
+                double peak = 1.0e-9, worst = 0.0, first = 0.0;
+                for (size_t t = 0; t < out.size(); ++t)
+                {
+                    peak = std::max (peak, static_cast<double> (std::fabs (old[t])));
+                    const double diff = std::max (std::fabs (static_cast<double> (out[t]) - old[t]), std::fabs (static_cast<double> (right[t]) - legacyRight[t]));
+                    if (t >= static_cast<size_t> (kHop - d))
+                        worst = std::max (worst, diff);
+                    else
+                        first = std::max (first, diff);
+                }
+                ++runs;
+                worstRelative = std::max (worstRelative, worst / peak);
+                worstFirst = std::max (worstFirst, first / peak);
+                if (! CHECK (worst <= 2.0e-6 * peak))
+                    std::printf ("    variant %d warp %d offset %d: difference %g (peak %g)\n", variant, w, d, worst, peak);
+            }
+    CHECK_EQ (runs, 80);
+    std::printf ("    new start against the old one from the first regular frame on: largest difference over %d runs %.3g of the peak (the first hop alone: up to %.3g)\n", runs, worstRelative, worstFirst);
+}
+
+// The first hop of a note is the full sum of four frames for every offset: the level of its first samples is the level of the rest of the note.
+TEST (spectral_every_start_offset_begins_at_the_level_of_the_note_and_keeps_pitch)
+{
+    struct Case { double hz; int window; };
+    for (const Case c : { Case { 1125.0, 512 }, Case { 1000.0, 480 } })
+    {
+        Tone tone (sine (c.hz, 2.0, 0.5f));
+        const double expected = 0.5 / std::sqrt (2.0);
+        double levels[kStartSteps] = {}, freqs[kStartSteps] = {};
+        for (int k = 0; k < kStartSteps; ++k)
+        {
+            SpectralVoice v;
+            v.prepare (kSr);
+            SpectralParams p = frozen();
+            v.noteOn (&tone.analysis, p, 0.0f, k * kStartStep);
+            const auto out = render (v, p, 24000, 128);
+            const double first = rms (out, 0, static_cast<size_t> (c.window)), later = rms (out, 4000, 20000);
+            levels[k] = later;
+            freqs[k] = crossingHz (out, 4000, 20000);
+            CHECK_NEAR (dbOf (first, later), 0.0, 0.1);          // the first hop within 0.1 dB of the rest
+            CHECK_NEAR (dbOf (later, expected), 0.0, 0.5);
+            CHECK_NEAR (freqs[k], c.hz, 15.0);
+            // and the whole of the first two hops, window by window of one block
+            for (size_t from = 0; from + 128 <= 1024; from += 128)
+                CHECK (rms (out, from, from + 128) > 0.8 * later);
+        }
+        for (int k = 1; k < kStartSteps; ++k)
+        {
+            CHECK_NEAR (dbOf (levels[k], levels[0]), 0.0, 0.02);
+            CHECK_NEAR (freqs[k], freqs[0], 2.0);   // one zero crossing more or less in 16000 samples is 1.5 Hz
+        }
+    }
+}
+
+// The play head of a voice with an offset is at most one hop of the scan ahead of the other's (the same note d samples earlier), and the same source plays the same tones at the same times.
+TEST (spectral_a_start_offset_keeps_the_scan_speed_and_the_scan_position)
+{
+    std::vector<float> two = sine (300.0, 1.0);
+    const auto second = sine (900.0, 1.0);
+    two.insert (two.end(), second.begin(), second.end());
+    Tone tone (two);
+    SpectralParams p;
+    p.scratch = &gScratch;
+    p.hostRate = kSr;
+    p.scanSpeed = 1.0f;
+    p.regionLo = 0.1f;   // (the very start of a file is no stationary frame: the first analysis frame is half empty)
+    const double hopOfScan = static_cast<double> (kHop) / kSr / 2.0;   // a hop of the scan in fractions of the 2 s file
+    SpectralVoice base;
+    base.prepare (kSr);
+    base.noteOn (&tone.analysis, p, 0.0f, 0);
+    std::vector<double> baseHead;
+    std::vector<float> baseOut;
+    for (int b = 0; b < 600; ++b)
+    {
+        float l[128], r[128];
+        base.process (p, l, r, 128);
+        baseOut.insert (baseOut.end(), l, l + 128);
+        baseHead.push_back (base.playhead());
+    }
+    for (int k = 1; k < kStartSteps; ++k)
+    {
+        SpectralVoice v;
+        v.prepare (kSr);
+        v.noteOn (&tone.analysis, p, 0.0f, k * kStartStep);
+        std::vector<float> out;
+        double worst = 0.0;
+        for (int b = 0; b < 600; ++b)
+        {
+            float l[128], r[128];
+            v.process (p, l, r, 128);
+            out.insert (out.end(), l, l + 128);
+            worst = std::max (worst, std::fabs (v.playhead() - baseHead[static_cast<size_t> (b)]));
+        }
+        CHECK (worst <= hopOfScan * 1.0001);
+        for (size_t t = static_cast<size_t> (kHop - k * kStartStep); t + static_cast<size_t> (k * kStartStep) < baseOut.size() && t < out.size(); ++t)
+            if (out[t] != baseOut[t + static_cast<size_t> (k * kStartStep)])
+            {
+                CHECK (false);
+                break;
+            }
+        // the same source reaches the same tone at the same time
+        CHECK_NEAR (crossingHz (out, 12000, 36000), 300.0, 20.0);
+        CHECK_NEAR (crossingHz (out, 60000, 74000), 900.0, 45.0);
+        CHECK_NEAR (dbOf (rms (out, 12000, 36000), rms (baseOut, 12000, 36000)), 0.0, 0.3);
+        CHECK_NEAR (dbOf (rms (out, 60000, 74000), rms (baseOut, 60000, 74000)), 0.0, 0.3);
+        std::printf ("    offset %d: largest play head difference %.2f hops of the scan\n", k * kStartStep, worst / hopOfScan);
+    }
+}
+
+namespace
+{
+struct StartPair
+{
+    std::vector<float> now, old;
+};
+
+/** The note rendered with the start with deferred frames and with the old start, the same settings, offset d. */
+StartPair renderBoth (const Analysis& an, const SpectralParams& p, int d, int frames, int block = 128)
+{
+    static Scratch scratchOld;
+    SpectralParams pl = p;
+    pl.scratch = &scratchOld;
+    SpectralVoice a, b;
+    a.prepare (p.hostRate);
+    b.prepare (p.hostRate);
+    b.setLegacyStart (true);
+    a.noteOn (&an, p, 0.0f, d);
+    b.noteOn (&an, pl, 0.0f, d);
+    return { render (a, p, frames, block), render (b, pl, frames, block) };
+}
+
+double rmsDiff (const std::vector<float>& a, const std::vector<float>& b, size_t from, size_t to)
+{
+    double s = 0.0;
+    for (size_t i = from; i < to; ++i)
+        s += (static_cast<double> (a[i]) - b[i]) * (static_cast<double> (a[i]) - b[i]);
+    return std::sqrt (s / static_cast<double> (to - from));
+}
+} // namespace
+
+// Clean partials (a sine on a bin centre, a sine between bins, a harmonic tone): the frames of the priming are the analysis window times one stationary signal, so the sum of the frames that
+// exist divided by their squared windows is the sum of all four: the first hop has the level of the note (0.1 dB) and is the old first hop to a small error, for every offset.
+TEST (spectral_the_first_hop_of_clean_partials_is_at_the_level_of_the_note_and_the_old_first_hop)
+{
+    struct Case { const char* name; std::vector<float> data; double maxError; };
+    const Case cases[] = { { "bin centred 1125 Hz", sine (1125.0, 2.0, 0.5f), 1.0e-3 }, { "between bins 1000 Hz", sine (1000.0, 2.0, 0.5f), 1.0e-3 }, { "harmonic 220 Hz", rich (220.0, 2.0), 3.0e-3 } };
+    for (const Case& c : cases)
+    {
+        Tone tone (c.data);
+        for (int k = 0; k < kStartSteps; ++k)
+        {
+            const int d = k * kStartStep;
+            SpectralParams p = frozen();
+            const StartPair pair = renderBoth (tone.analysis, p, d, 24000);
+            const size_t end = static_cast<size_t> (kHop - d);
+            const double firstNew = rms (pair.now, 0, end), firstOld = rms (pair.old, 0, end), later = rms (pair.now, 4000, 20000);
+            const double error = rmsDiff (pair.now, pair.old, 0, end) / std::max (firstOld, 1.0e-9);
+            if (! CHECK (std::fabs (dbOf (firstNew, firstOld)) < 0.1) || ! CHECK (error < c.maxError))
+                std::printf ("    %s offset %d: level against the old start %+.3f dB, error %.3g of the old rms\n", c.name, d, dbOf (firstNew, firstOld), error);
+            if (c.data.size() > 0 && std::string (c.name).find ("harmonic") == std::string::npos && end >= 128)
+                CHECK (std::fabs (dbOf (firstNew, later)) < 0.1);
+        }
+    }
+}
+
+// Noise: the frames are not one stationary signal times a window, so the renormalised start is another rendering of the first hop, 0.5 to 0.7 dB lower in level (1.5 dB over the 128 samples of offset 384) and no step at the hand-over to the
+// regular frames: the largest sample to sample difference there is within the signal's own statistics (4 times the RMS of its sample to sample difference).
+TEST (spectral_the_first_hop_of_a_noise_burst_keeps_the_level_within_a_dB_and_hands_over_without_a_click)
+{
+    std::vector<float> noise (96000);
+    unsigned seed = 12345u;
+    for (auto& v : noise)
+    {
+        seed = seed * 1664525u + 1013904223u;
+        v = 0.3f * (static_cast<float> (seed >> 8) / 8388608.0f - 1.0f);
+    }
+    Tone tone (noise);
+    double worstLevel = 0.0, worstStep = 0.0;
+    for (int k = 0; k < kStartSteps; ++k)
+        for (float position : { 0.3f, 0.6f })
+        {
+            const int d = k * kStartStep;
+            SpectralParams p = frozen (position);
+            const StartPair pair = renderBoth (tone.analysis, p, d, 24000);
+            const size_t end = static_cast<size_t> (kHop - d);
+            const double level = dbOf (rms (pair.now, 0, end), rms (pair.old, 0, end));
+            double stepSquares = 0.0;
+            for (size_t i = 4000; i < 20000; ++i)
+                stepSquares += (static_cast<double> (pair.now[i]) - pair.now[i - 1]) * (static_cast<double> (pair.now[i]) - pair.now[i - 1]);
+            const double stepRms = std::sqrt (stepSquares / 16000.0);
+            double step = 0.0;
+            for (size_t i = end - 2; i <= end + 2; ++i)
+                step = std::max (step, std::fabs (static_cast<double> (pair.now[i]) - pair.now[i - 1]));
+            worstLevel = std::max (worstLevel, std::fabs (level));
+            worstStep = std::max (worstStep, step / stepRms);
+            CHECK (std::fabs (level) < (d == 3 * kStartStep ? 2.0 : 1.0));   // 0.5 .. 0.7 dB low over 384 .. 512 samples, up to 1.5 dB over the 128 samples of offset 384
+            CHECK (step < 4.0 * stepRms);
+        }
+    std::printf ("    noise burst: first hop level against the old start at most %.2f dB, hand-over step at most %.2f times the RMS step\n", worstLevel, worstStep);
+}
+
+// The schedule: every frame is made before its squared window would exceed 0.5, at a multiple of kStartStep and not after the first regular frame; the output does not depend on the size of the
+// blocks the host asks for (64 .. 512) nor on the sample rate's name (48 kHz and 44.1 kHz: the schedule is in samples); and the work is spread over the first blocks.
+TEST (spectral_the_deferred_frames_are_made_in_time_and_the_output_does_not_depend_on_the_block_size)
+{
+    int frames[8][8] = {};   // [offset quarter][block]: frames made by the voice in its first blocks, counting the regular frame
+    for (int k = 0; k < kStartSteps; ++k)
+    {
+        const int d = k * kStartStep;
+        int join[3];
+        SpectralVoice::startSchedule (d, false, join);
+        for (int j = 1; j <= 3; ++j)
+        {
+            CHECK (join[j - 1] >= d && join[j - 1] <= kHop && join[j - 1] % kStartStep == 0);
+            for (int q = d; q < join[j - 1]; ++q)
+            {
+                const double w = 0.5 - 0.5 * std::cos (2.0 * kPi * (q + (3 - j) * kHop) / kFftSize);
+                if (! CHECK (w * w <= 0.5 + 1.0e-9))
+                    std::printf ("    offset %d frame %d is late at sample %d\n", d, j, q);
+            }
+            ++frames[k][(join[j - 1] - d) / kStartStep];
+        }
+        ++frames[k][(kHop - d) / kStartStep];
+        for (int s = 0; s < 3; ++s)
+            join[s] = -1;
+        int smear[3];
+        SpectralVoice::startSchedule (d, true, smear);
+        CHECK (smear[0] == d && smear[1] == d && smear[2] == d);
+    }
+    std::printf ("    frames of a voice by block since its start (offset 0 / 128 / 256 / 384): ");
+    for (int k = 0; k < kStartSteps; ++k)
+    {
+        std::printf ("[");
+        for (int b = 0; b < 6; ++b)
+            std::printf ("%d%s", frames[k][b], b < 5 ? " " : "");
+        std::printf ("] ");
+    }
+    int total[6] = {};
+    for (int k = 0; k < kStartSteps; ++k)
+        for (int b = 0; b < 6; ++b)
+            total[b] += 2 * frames[k][b] + (b >= 1 ? 0 : 0);
+    std::printf ("\n    8 voices (two of each offset) started in one block, frames made in the first 6 blocks (the later regular frames not counted): ");
+    for (int b = 0; b < 6; ++b)
+        std::printf ("%d ", total[b]);
+    std::printf ("\n");
+
+    Tone tone (rich (220.0, 1.5));
+    for (double rate : { 48000.0, 44100.0 })
+        for (int k = 0; k < kStartSteps; ++k)
+        {
+            SpectralParams p = frozen (0.4f);
+            p.hostRate = rate;
+            std::vector<float> first;
+            for (int block : { 32, 64, 128, 256, 512 })
+            {
+                SpectralVoice v;
+                v.prepare (rate);
+                v.noteOn (&tone.analysis, p, 0.0f, k * kStartStep);
+                std::vector<float> out;
+                std::vector<float> l (static_cast<size_t> (block)), r (l.size());
+                for (int done = 0; done < 8192; done += block)
+                {
+                    v.process (p, l.data(), r.data(), block);
+                    out.insert (out.end(), l.begin(), l.end());
+                }
+                out.resize (8192);
+                if (first.empty())
+                    first = out;
+                else
+                    CHECK (out == first);
+            }
+        }
 }
