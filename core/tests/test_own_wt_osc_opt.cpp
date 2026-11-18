@@ -148,14 +148,19 @@ struct Patcher
     }
     void mutate (OscTick& t)
     {
-        switch (r.range (0, 5))
+        switch (r.range (0, 6))
         {
             case 0: break; // unchanged: the shortcut of update ()
             case 1: field (t, 2); field (t, 4); field (t, 5); field (t, 22); break; // frame, level, pan, morph amount move
             case 2: field (t, 1); break;
             case 3: field (t, r.range (0, 31)); break;
             case 4: for (int i = 0; i < kFields; ++i) if (r.chance (12)) field (t, i); break;
-            default: field (t, 4); field (t, 6); break;
+            case 5: field (t, 4); field (t, 6); break;
+            default: // the sign of a zero: equal as values, different as bytes
+                for (float* f : { &t.pan, &t.panRight, &t.level, &t.frameSpread, &t.detuneSemis, &t.curve, &t.blendShape, &t.spread, &t.frame })
+                    if (*f == 0.0f || r.chance (10))
+                        *f = r.chance (50) ? 0.0f : -0.0f;
+                break;
         }
         if (t.wt == nullptr && r.chance (70))
             t.wt = tables[0].get();

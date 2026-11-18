@@ -24,7 +24,10 @@ namespace own
 /** The effective (modulated) values of an oscillator at the end of a control period. */
 struct OscTick
 {
+    // The fields are ordered so that the struct has no padding bytes (pointers, then the 4 byte fields, then the bools and explicit padding): a byte compare of two ticks then
+    // compares exactly their fields (WtOsc::update ()).
     const Wavetable* wt = nullptr;
+    const float* remap = nullptr;         // the drawn remap curve of the oscillator for the warps Remap 1 .. 4 (257 points) or null (identity)
     float semis = 69.0f;                  // pitch in MIDI semitones (fractional) without the unison offsets
     float frame = 0.0f, frameSpread = 0.0f; // 0 .. 1, -1 .. 1
     float level = 0.0f, pan = 0.0f, panRight = 0.0f; // amplitude (linear), -1 .. 1 (left lane, right lane of the pan)
@@ -40,10 +43,9 @@ struct OscTick
     int warpSrc[2] = { -1, -1 };          // index in the cross list of the modulator of each slot (set by update ())
     float warpAmount[2] = { 0, 0 }, warpPhase[2] = { 0, 0 }, warpSpread[2] = { 0, 0 };
     float startPhase = 0.0f;              // only used when a note starts
-    bool active = false;
-    const float* remap = nullptr;         // the drawn remap curve of the oscillator for the warps Remap 1 .. 4 (257 points) or null (identity)
     int morphType = 0;                    // oscN.morph.type
     float morphAmount = 0.0f, morphSpread = 0.0f; // 0 .. 1, -1 .. 1
+    bool active = false;
     bool jump = false;                    // quality.no_smoothing: the period's values apply at once (no ramp from the previous period)
     bool oversample = false;              // run 4x oversampled even without a warp (ultra quality)
     bool smooth = false;                  // oscN.smooth_interp: blend the neighbouring frames (off: the frame steps, with a short cross-fade)
@@ -52,7 +54,9 @@ struct OscTick
     bool lowMorph = false;                // economy group Morph (tier low): the spectral morph is rebuilt every 512 samples, from a transform of half the size
     bool fastMath = false;                // economy group Math (tier low): the warps use the cheaper forms of dsp/fastmath.h
     bool scalarWarp = false;              // measurements (setOwnSavingsOff, kOwnSavingVectorWarp): the oversampled samples one by one also where the four lane form exists
+    bool padding[7] = {};                 // explicit: 9 bools + 7 = 16 bytes, so that the size is the sum of the fields on 32 and 64 bit
 };
+static_assert (sizeof (OscTick) == 2 * sizeof (void*) + 30 * 4 + 16, "OscTick must not have padding bytes (WtOsc::update compares ticks as bytes)");
 
 /** True if every field of the two ticks is equal (floats compared as values: a NaN is never equal, which only costs the shortcut). */
 inline bool sameOscTick (const OscTick& a, const OscTick& b) noexcept
@@ -213,7 +217,8 @@ public:
         }
         prevFrame = curFrame;
         // the same inputs as the previous period (the usual case of a held note): the voices below would be computed again to the same values
-        if (haveLast && lastRate == sampleRate && sameOscTick (t, lastT))
+        // (equal bytes are the common case and cost one compare; ticks that differ in bytes only by the sign of a zero still take the field by field compare, as before)
+        if (haveLast && lastRate == sampleRate && ((!reference_ && std::memcmp (&t, &lastT, sizeof (OscTick)) == 0) || sameOscTick (t, lastT)))
             return;
         lastT = t;
         lastRate = sampleRate;
