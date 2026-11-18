@@ -3,6 +3,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "ui_test.h"
+#include "../play_rows.h"
 
 using namespace uit;
 
@@ -261,6 +262,66 @@ int main()
         Scene st (100, 160);
         t.draw (st.builder());
         check (! st.overflow() && drawnOutside (render (st), { 0, 0, 100, 160 }, 0) == 0, "ToggleIcon in a row of knobs: the picture stays in its cell");
+    }
+    // ---- the compact view's display (the Play page's third): the picture lies in the plot area below the header band; nothing of a curve, a fill, a grid line or a marker reaches into the band, so none runs under the power, route or full screen button,
+    //      for every kind of picture, for a switched off source and for the live read-outs
+    for (int look = 1; look <= 3; ++look)
+    {
+        theme::setLook (look);
+        const std::string nm = "compact display, look " + std::to_string (look) + ": ";
+        std::vector<float> saw (512), cyc, st[7], mn (512), mx (512), sp (512, -30.0f);   // sp: the dB values of the spectrum kind (512 points); the faint spectrum under a wave uses its first 64
+        for (int i = 0; i < 512; ++i)
+        {
+            saw[static_cast<size_t> (i)] = 2.0f * static_cast<float> (i) / 511.0f - 1.0f;   // the saw: its peak is at the top right, where the full screen button stands
+            mx[static_cast<size_t> (i)] = 1.0f - 0.9f * static_cast<float> (i) / 512.0f;
+            mn[static_cast<size_t> (i)] = -mx[static_cast<size_t> (i)];
+        }
+        wave (cyc, 0.4f);
+        for (int k = 0; k < 7; ++k)
+            wave (st[k], static_cast<float> (k) / 6.0f);
+        const Rect r { 14, 190, 408, 292 };   // the display rectangle of a third (playrows::displayRect of a 420 x 628 third)
+        const Rect area = playrows::plotRect (r), band = playrows::bandRect (r);
+        const Rect buttons[3] = { playrows::powerRect (r), playrows::routeRect (r), playrows::fullRect (r) };
+        check (! area.empty() && area.y >= band.bottom() && area.x >= r.x && area.right() <= r.right() && area.bottom() <= r.bottom() && ! area.overlaps (band), nm + "the plot area lies below the band, inside the display");
+        const uint32_t bg = ov::sceneColour (theme::rgba (theme::L().bg0, 255));
+        struct Case { const char* name; int kind; bool dim; };
+        const Case cases[] = { { "saw wave", 0, false }, { "saw wave, switched off", 0, true }, { "wavetable stack with unison", 1, false }, { "min / max with loop, grain and playhead", 2, false },
+                               { "spectrum", 3, false }, { "message", 4, false }, { "noise", 5, false }, { "noise, switched off", 5, true } };
+        for (const Case& cs : cases)
+        {
+            display::Data d;
+            d.colour = theme::instanceColour (1);
+            d.n = 512;
+            d.cycle = saw.data();
+            d.area = area;
+            d.dim = cs.dim;
+            d.kind = cs.kind <= 1 ? display::Data::Kind::Wave : cs.kind == 2 ? display::Data::Kind::MinMax : cs.kind == 3 ? display::Data::Kind::Spectrum : cs.kind == 4 ? display::Data::Kind::Message : display::Data::Kind::Noise;
+            d.message = "NO SAMPLE";
+            if (cs.kind == 1)
+            {
+                d.cycle = cyc.data();
+                d.numStack = 7;
+                for (int k = 0; k < 7; ++k) d.stack[k] = st[static_cast<size_t> (k)].data();
+                d.voices = 7; d.detune = 1.0f; d.blend = 1.0f; d.spectrum = sp.data(); d.numSpectrum = 64; d.pos = 0.4f;
+            }
+            if (cs.kind == 2) { d.cycle = mn.data(); d.cycleMax = mx.data(); d.loopOn = true; d.loopStart = 0.2f; d.loopEnd = 0.7f; d.grain = true; d.grainPos = 0.3f; d.grainSize = 0.1f; d.playhead = 0.5f; d.numGrainsLive = 2; d.liveGrainPos[0] = 0.1f; d.liveGrainPos[1] = 0.9f; d.liveGrainLife[0] = 0.5f; d.liveGrainLife[1] = 0.5f; d.heads[0] = 0.95f; }
+            if (cs.kind == 3) d.cycle = sp.data();
+            if (cs.kind <= 1) { d.phases[0] = 0.99f; d.phases[1] = 0.0f; }
+            Scene s (440, 520, theme::rgba (theme::L().bg0, 255));
+            display::draw (s.builder(), r, d, false);
+            display::drawLive (s.builder(), r, d);
+            const Image im = render (s);
+            check (! s.overflow() && drawnOutside (im, r, bg) == 0, nm + cs.name + ": drawn inside the display");
+            check (dataOpsInto (s, band) == 0, nm + cs.name + ": no curve, fill, grid line or marker reaches into the header band (" + std::to_string (dataOpsInto (s, band)) + ")");
+            for (int b = 0; b < 3; ++b)
+                check (dataOpsInto (s, buttons[b]) == 0, nm + cs.name + ": nothing of the picture lies under the " + (b == 0 ? "power" : b == 1 ? "route" : "full screen") + " button");
+            display::Data whole = d;   // the same picture without a plot area (the pages): it reaches up into the band, so the test above can fail
+            whole.area = Rect {};
+            Scene sw (440, 520, theme::rgba (theme::L().bg0, 255));
+            display::draw (sw.builder(), r, whole, false);
+            if (cs.kind <= 1 && ! cs.dim)
+                check (dataOpsInto (sw, band) > 0, nm + cs.name + ": (control) without a plot area the same picture does reach into the band");
+        }
     }
     theme::setLook (1);
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);

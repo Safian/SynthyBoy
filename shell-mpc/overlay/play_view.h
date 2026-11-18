@@ -458,11 +458,11 @@ private:
         osc_->drawPage (sb);
         const ui::Rect r = osc_->displayRect();
         if (! r.empty())
-            osd_.draw (sb, r, false);
+            osd_.draw (sb, r, false, osc_->plotArea());
         if (osc_ == nullptr || osc_->isMain())
             paintPanels (sb, true);
         if (! r.empty())
-            osd_.draw (sb, r, true);
+            osd_.draw (sb, r, true, osc_->plotArea());
         osc_->drawOnDisplay (sb);
         osc_->drawPopup (sb);   // the popups lie over the picture
     }

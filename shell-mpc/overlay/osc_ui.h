@@ -189,6 +189,8 @@ public:
             return detail_.displayRect();   // the same picture of the oscillator over the page (the fan of the unison voices, the grain window on the sample)
         return {};
     }
+    /** The rectangle the picture is drawn in: the plot area of the compact view (below the header band with the buttons, ui::playrows::plotRect); empty in every other state (the picture has its display rectangle). */
+    ui::Rect plotArea() const noexcept { return stackDepth_ == 0 ? compact_.plotRect() : ui::Rect {}; }
     bool isMain() const noexcept { return stackDepth_ == 0; }
     /** The instance (1 Sub .. 5 Noise) and the type of the oscillator it shows (0 wavetable, 1 sample, 2 granular, 3 spectral, 4 multisample; -1 for Sub and Noise). */
     int selection() const noexcept { return sel_; }
@@ -1606,14 +1608,15 @@ private:
 public:
     const std::string& missingText() const noexcept { return missingText_; }
 private:
-    /** The line over the display (in the display rectangle of the state on screen), in the warning colour; a name that does not fit loses its middle. */
+    /** The line over the display (in the header band of the compact view, else at the top of the display rectangle of the state on screen), in the warning colour; a name that does not fit loses its middle. */
     void drawMissing (gpu::SceneBuilder& sb) const
     {
         const ui::Rect r = displayRect();
         if (missingText_.empty() || r.empty())
             return;
         const ui::theme::Look& T = ui::theme::L();
-        const ui::Rect box { r.x + 4 + 64 + 8, r.y + 8, std::max (0, r.w - 2 * (4 + 64 + 8)), 48 };   // between the power button (top left) and the full screen button (top right) of the display
+        // the compact view: the band of the display between the power button and the route / full screen button; the other states: between the corners of the display
+        const ui::Rect box = stackDepth_ == 0 ? compact_.labelRect() : ui::Rect { r.x + 4 + 64 + 8, r.y + 8, std::max (0, r.w - 2 * (4 + 64 + 8)), 48 };
         const float size = ui::Pen::fitSize (missingText_.c_str(), static_cast<float> (box.w), static_cast<float> (box.h), T.fLabel + 4.0f, T.fMin);
         if (size <= 0.0f)
             return;
@@ -1621,7 +1624,7 @@ private:
         ui::contentname::middleFit (missingText_.c_str(), size, static_cast<float> (box.w), fitted, static_cast<int> (sizeof fitted));
         ui::Cell cell (sb, box);
         ui::Pen pen (sb, true);
-        pen.textCentered (box, fitted, T.fLabel + 4.0f, pen.c (T.negative, 255), T.fMin);
+        pen.textCentered (box, fitted, size, pen.c (T.negative, 255), T.fMin);   // at the size the middle cut was made for (a larger maximum would let the pen cut the end of the cut text again)
     }
     std::string missingText_;
 

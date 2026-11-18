@@ -419,7 +419,7 @@ protected:
             {
                 char fitted[160];
                 contentname::middleFit (notice, size, static_cast<float> (box.w), fitted, static_cast<int> (sizeof fitted));
-                p.textRight (box, fitted, T.fLabel + 2.0f, p.c (T.negative, 255), T.fMin);
+                p.textRight (box, fitted, size, p.c (T.negative, 255), T.fMin);   // at the size the middle cut was made for (a larger maximum would let the pen cut the end of the cut text again)
             }
         }
     }

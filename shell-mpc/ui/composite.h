@@ -164,7 +164,7 @@ public:
     /** Only CRS (the full screen of the sub oscillator: its OCT is in the top band); vertical variant only. */
     void setCrsOnly (bool b) { crsOnly_ = b; applyVariant(); layout(); }
     bool isCrsOnly() const noexcept { return crsOnly_; }
-    /** The noise: PITCH (the CRS field under another name), FINE and the key tracking (three rows that fill the height); vertical variant only. */
+    /** The noise: PITCH (the CRS field under another name), FINE and the key tracking (three rows that fill the height, or one row of three: setNoiseRow); vertical variant only. */
     void setNoise (bool n)
     {
         noise_ = n;
@@ -175,12 +175,15 @@ public:
         layout();
     }
     bool isNoise() const noexcept { return noise_; }
+    /** The noise's three fields side by side in ONE row (PITCH, FINE, KEY TRACK: the generated noise's TUNE block at the bottom, the same row as its NOISE block); false (the default): three rows one above the other (the TUNE column beside the display of the sample noise). Noise only. */
+    void setNoiseRow (bool b) { noiseRow_ = b; layout(); }
+    bool isNoiseRow() const noexcept { return noiseRow_; }
     static constexpr int kRowH = 56;
     bool isShort() const noexcept { return short_; }
     Size minSize() const override
     {
         if (vertical_)
-            return crsOnly_ ? Size { 80, kRowH } : noise_ ? Size { 2 * 80 + kGap, 2 * kRowH + kQLane } : short_ ? Size { 2 * 80 + kGap, kRowH } : Size { 2 * 80 + kGap, 3 * kRowH + 2 * kQLane };
+            return crsOnly_ ? Size { 80, kRowH } : noise_ ? (noiseRow_ ? Size { 3 * 80 + 2 * kGap, kRowH } : Size { 80, 3 * kRowH + 2 * kQLane }) : short_ ? Size { 2 * 80 + kGap, kRowH } : Size { 2 * 80 + kGap, 3 * kRowH + 2 * kQLane };
         return short_ ? Size { 2 * 80 + kGap, 56 } : Size { 4 * 80 + 72 + 4 * kGap, 56 };
     }
 
@@ -197,11 +200,20 @@ protected:
         if (vertical_)
         {
             // two columns: rows of two fields (OCT SEM, FIN CRS; noise: PITCH FINE) and the switch across the width; the lane of the Q index chips (kQLane) between the rows; the rows fill the height
+            if (noise_ && noiseRow_)
+            {
+                // the noise in one row: three equal cells side by side, as tall as the row (the controls of one row have one height, so that their tops and index chips stand on one line)
+                const int w3 = std::max (0, (rect_.w - 2 * kGap) / 3);
+                crs.place ({ rect_.x, rect_.y, w3, rect_.h });
+                fin.place ({ rect_.x + w3 + kGap, rect_.y, w3, rect_.h });
+                track.place ({ rect_.x + 2 * (w3 + kGap), rect_.y, std::max (0, rect_.w - 2 * (w3 + kGap)), rect_.h });
+                return;
+            }
             struct Line { Component* a; Component* b; };
             Line lines[3];
             int n = 0;
             if (crsOnly_) lines[n++] = { &crs, nullptr };
-            else if (noise_) { lines[n++] = { &crs, &fin }; lines[n++] = { &track, nullptr }; }
+            else if (noise_) { lines[n++] = { &crs, nullptr }; lines[n++] = { &fin, nullptr }; lines[n++] = { &track, nullptr }; }
             else if (short_) lines[n++] = { &oct, &crs };
             else { lines[n++] = { &oct, &sem }; lines[n++] = { &fin, &crs }; lines[n++] = { &track, &more }; }
             const int H = std::max (n * kRowH, rect_.h - (n - 1) * kQLane);   // the height of the rows together
@@ -233,7 +245,7 @@ protected:
         }
     }
     bool short_;
-    bool vertical_ = false, crsOnly_ = false, noise_ = false;
+    bool vertical_ = false, crsOnly_ = false, noise_ = false, noiseRow_ = false;
 };
 
 // ===============================================================================================================================================================

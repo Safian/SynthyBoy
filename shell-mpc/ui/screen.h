@@ -1,8 +1,8 @@
 // SynthyBoy - MPC UI component library: the two views of an oscillator INSTANCE (owner approved; drawn for 1280 x 800, other sizes scale in proportion). The synth has five instances: Sub, A, B,
 // C and Noise; Sub and Noise have a fixed panel, A, B and C have a type (OscKind: wavetable, multisample, granular). Both views are layout presets built only from library components, and
 // both contain the Q group "Basic" (BasicControls: the same members and, with assignIds, the same ids).
-//  - OscillatorCompact: the third of the width on the main page (about 420 x 700): the header row (on / off, the source selector Sub / Osc A / Osc B / Osc C / Noise as a stepper with a list, the "full screen" button, the route button), the display
-//    area (the same rectangle as the envelope's and the LFO's, play_rows.h), and the Basic group in one frame at the bottom: the type cells and ONE row (table stepper / OCT, PAN, LEVEL). No tuning row and no type bar.
+//  - OscillatorCompact: the third of the width on the main page (about 420 x 700): the header row (the source selector Sub / Osc A / Osc B / Osc C / Noise: a carousel with a list), the display
+//    area (the same rectangle as the envelope's and the LFO's, play_rows.h) with its header band (the power button, the route button, the "full screen" button) and the plot area under the band, and the Basic group in one frame at the bottom: the type cells and ONE row (table stepper / OCT, PAN, LEVEL). No tuning row and no type bar.
 //  - OscillatorFullScreen: the top band (close, on / off, Basic, route at the right end), below left the display area with the type bar under it, below right the tuning row (vertical),
 //    the bottom band = the knob panel of the type; the full screen has no instance selector. `setInstance` swaps only the type bar, the tuning row, the bottom band and the groups.
 // Copyright (C) 2026 Safian Szabolcs
@@ -52,6 +52,10 @@ public:
         layout();
     }
     Rect displayRect() const noexcept { return display_; }
+    /** The plot area of the picture (below the header band, playrows::plotRect): where the wave is drawn. */
+    Rect plotRect() const noexcept { return playrows::plotRect (display_); }
+    /** The room of the label text in the band (between the power button and the route button or, for the sub oscillator, the full screen button). */
+    Rect labelRect() const noexcept { return playrows::labelRect (display_, true, inst_ != OscInstance::Sub); }
     QGroup& group() noexcept { return basic.group; }
     Size minSize() const override { return { 420, 700 }; }
     void draw (gpu::SceneBuilder& sb) const override
@@ -61,18 +65,18 @@ public:
     }
 
 protected:
-    // top to bottom (play_rows.h): the top row (the source selector), the display (the rectangle of the three thirds; the power button in its top left corner, the full screen button in its top right and the route button in its bottom right
-    // corner, 4 px from the edges, 64 x 56: the full screen button is placed exactly as the envelope graph's and the LFO display's), and from the controls line the Basic group in one frame
+    // top to bottom (play_rows.h): the top row (the source selector), the display (the rectangle of the three thirds) with its header band at the top (the power button at the left, the route button and the full screen button at the right end,
+    // the full screen button placed exactly as the envelope graph's and the LFO display's; the label text of the display lies between them) and the plot area under the band (the wave never runs under a button), and from the controls line the
+    // Basic group in one frame
     void layout() override
     {
         const int m = playrows::kMargin, W = rect_.w - 2 * m, rowH = playrows::kSelectorH;
         const bool sub = inst_ == OscInstance::Sub;   // the sub oscillator's routing is the ROUTING block of its page: no route button (as on the page)
-        const int btnW = 64, inset = 4;
         const int hy = rect_.y + m;
         display_ = playrows::displayRect (rect_);
-        power.place ({ display_.x + inset, display_.y + inset, btnW, rowH });
-        full.place ({ display_.right() - btnW - inset, display_.y + inset, btnW, rowH });
-        route.place (sub ? Rect {} : Rect { display_.right() - btnW - inset, display_.bottom() - 64 - inset, btnW, 64 });   // 64 px tall at least (RouteButton::minSize)   // the route button (F1 ...): the bottom right corner of the display, 56 px high
+        power.place (playrows::powerRect (display_));
+        full.place (playrows::fullRect (display_));
+        route.place (sub ? Rect {} : playrows::routeRect (display_));   // the route button (F1 ...): 64 x 64 (RouteButton::minSize), left of the full screen button
         instances.place ({ rect_.x + m, hy, W, rowH });
         const int by = playrows::controlsLine (rect_);
         basic.place ({ rect_.x + m, by, W, std::max (0, rect_.bottom() - m - by) });
@@ -210,7 +214,7 @@ protected:
         const bool noise = inst_ == OscInstance::Noise;
         const bool isTab = H <= 650;
         const int topH = isTab ? 78 : 88;   // 78: the dial of the Basic knobs is as big as the dial of the warp slots (70 px, one size on the page)
-        const int bottomH = isTab ? 216 : kBottomH;
+        const int bottomH = noise ? KnobPanel::kBlockTitleH + KnobPanel::kOneRowH + KnobPanel::kBlockPad : (isTab ? 216 : kBottomH);   // the noise's blocks are ONE row each: the title strip, a row at its maximum height (kOneRowH) and the padding; the room that frees goes to the display
         const int lane = isTab ? 22 : (m + kQLane + 2);
         const Rect top { rect_.x + m, rect_.y + lane, W - 2 * m, topH };
         Rect r[4];
@@ -239,25 +243,28 @@ protected:
         }
         else if (noise && panel.preset() != nullptr && panel.preset()->items == presets::kNoiseGenItems)
         {
-            // the generated noise: ONE clean grid in the bottom band, two blocks of the same height side by side, the same two rows in both: TUNE (PITCH, FINE / KEY TRACK) at the left and NOISE (KIND, STEREO / ENV 1) at the right, the
-            // rows of the two blocks are the same rows (same top, same title strip, same row heights, the lane of the chips between them); the display has the whole width above them, as on the sub oscillator's page
+            // the generated noise: the display has the whole width above ONE row of two blocks of the same height side by side, TUNE (PITCH, FINE, KEY TRACK) at the left and NOISE (KIND, STEREO, ENV 1) at the right: three cells in each, the same
+            // row (same top, same height), so that the chips 5, 6, 7 and 9, 10, 11 stand on one line; the row is at its maximum height and the freed room is the display's
             const int midY = top.bottom() + gap;
             display_ = { rect_.x + m, midY, W - 2 * m, std::max (0, panelY - gap - midY) };
             barBlock_ = {};
             bar.place ({});
             const int halfW = (W - 3 * m) / 2;
             tuneBlock_ = { rect_.x + m, panelY, halfW, bottomH };
+            tune.setNoiseRow (true);
             tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
             panelRect = { tuneBlock_.right() + m, panelY, W - 2 * m - halfW - m, bottomH };
         }
         else if (noise)
         {
+            // the noise that plays a sample: the display at the left, the TUNE column at its right (PITCH, FINE, KEY TRACK in three rows that fill its height), the blocks SOURCE and PLAYBACK in ONE row under them
             const int midY = top.bottom() + gap;
             const int midH = std::max (0, panelY - gap - midY);
             display_ = { rect_.x + m, midY, leftW, midH };
             barBlock_ = {};
             bar.place ({});
             tuneBlock_ = { rightX, midY, rect_.right() - m - rightX, midH };
+            tune.setNoiseRow (false);
             tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
         }
         else

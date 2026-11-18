@@ -209,7 +209,10 @@ void testFullScreenOpensAndCloses()
     r.openFull();
     check (r.stack.depth() == 1 && r.inst.fullOpen, "the full-screen button opens the full screen and tells the plugin");
     check (r.ui.displayRect().w > 500, "the full screen has a display rectangle");
+    check (r.ui.plotArea().empty(), "the full screen's picture has no plot area (it fills its display rectangle)");
     r.tapC (r.ui.full().close);
+    check (r.stack.isMain() && r.ui.plotArea() == ui::playrows::plotRect (r.ui.displayRect()) && r.ui.plotArea().y >= ui::playrows::bandRect (r.ui.displayRect()).bottom() && ! r.ui.plotArea().overlaps (r.ui.compact().full.rect()) && ! r.ui.plotArea().overlaps (r.ui.compact().power.rect()) && (r.ui.compact().route.rect().empty() || ! r.ui.plotArea().overlaps (r.ui.compact().route.rect())),
+           "the compact view: the picture's plot area is the common one, under the header band; the buttons (power, route, full screen) stand in the band");
     check (r.stack.isMain() && ! r.inst.fullOpen, "the close button is back (main again, the plugin is told)");
     // navigating away
     r.openFull();
@@ -746,6 +749,39 @@ void testMissingContentLine()
     r.inst.missingBits = 1u << 3;   // the user wavetable of A
     r.refresh();
     check (r.ui.missingText() == "content missing", "a missing wavetable without a reference in the state: the line says content missing");
+    // a name too long for its room loses its MIDDLE once: the text is drawn at the size the cut was made for, so the pen does not cut the end of it again (one ellipsis, not at the end), in the compact view's band and on the full screen
+    r.inst.set ("osc1.type", 1.0f);
+    content->samples[0].ref.name = "";
+    content->samples[0].ref.file = "drums/an_extremely_long_sample_file_name_that_can_not_fit_into_the_band_of_the_display_at_any_size_final_take_07.wav";
+    r.inst.missingBits = 1u << 0;
+    r.refresh();
+    for (int state = 0; state < 2; ++state)
+    {
+        if (state == 1)
+            r.openFull();
+        auto data = std::make_unique<gpu::SceneData>();
+        std::memset (data.get(), 0, sizeof (gpu::SceneData));
+        gpu::SceneBuilder sb (*data);
+        r.ui.drawOnDisplay (sb);
+        int lines = 0, bad = 0;
+        for (uint32_t k = 0; k < data->numOps; ++k)
+            if (data->ops[k].op == gpu::kOpText)
+            {
+                const std::string t = gpu::textString (*data, data->ops[k]);
+                if (t.rfind ("content missing", 0) != 0)
+                    continue;
+                ++lines;
+                size_t n = 0, last = 0;
+                for (size_t at = t.find ("\xE2\x80\xA6"); at != std::string::npos; at = t.find ("\xE2\x80\xA6", at + 3))
+                {
+                    ++n;
+                    last = at;
+                }
+                if (n != 1 || last + 3 >= t.size() || t.compare (0, 15, "content missing") != 0 || t.compare (t.size() - 2, 2, "07") != 0)
+                    ++bad;
+            }
+        check (lines == 1 && bad == 0, std::string ("the long name of the missing content loses its middle once (") + (state == 0 ? "compact view" : "full screen") + "): one ellipsis, not at the end, the end of the name stays");
+    }
 }
 
 /** The type drop-down of the compact view: closed it shows the current type, a tap opens the list of the types with their pictograms (rows >= 56 px), a row chooses (the same write the cells made). */
@@ -1012,12 +1048,51 @@ void testReview2()
         const OscUi::Item* fine = r.ui.item (OscUi::kTuneFin);
         const OscUi::Item* key = r.ui.item (OscUi::kTuneTrack);
         check (pitch != nullptr && pitch->param == Inst::idx ("noise.pitch") && fine != nullptr && fine->param == Inst::idx ("noise.fine") && key != nullptr && key->param == Inst::idx ("noise.keytrack"), "noise: the tuning column is PITCH, FINE and KEY TRACK");
+        {   // the generated noise: the whole tab, the display over ONE row of two blocks (TUNE, NOISE) of three cells each, no block under half covered
+            ui::OscillatorFullScreen& f = r.ui.full();
+            const ui::Component* tuneCells[3] = { &f.tune.crs, &f.tune.fin, &f.tune.track };
+            const ui::Component* noiseCells[3] = { f.panel.part (ui::PanelSlot::NoiseType), f.panel.part (ui::PanelSlot::NoiseStereo), f.panel.part (ui::PanelSlot::NoiseEnv1) };
+            bool oneRow = true, covered = true, order = true;
+            for (int b = 0; b < 2; ++b)
+            {
+                const ui::Component* const* cells = b == 0 ? tuneCells : noiseCells;
+                const ui::Rect blk = b == 0 ? f.tuneBlock() : f.panel.blockRect (0);
+                long area = 0;
+                for (int i = 0; i < 3; ++i)
+                {
+                    oneRow = oneRow && cells[i] != nullptr && cells[i]->rect().y == tuneCells[0]->rect().y && cells[i]->rect().h == ui::KnobPanel::kOneRowH && blk.contains (cells[i]->rect());
+                    area += cells[i] != nullptr ? static_cast<long> (cells[i]->rect().w) * cells[i]->rect().h : 0;
+                    order = order && (i == 0 || (cells[i] != nullptr && cells[i - 1] != nullptr && cells[i - 1]->rect().right() <= cells[i]->rect().x));
+                }
+                covered = covered && area * 2 >= static_cast<long> (blk.w) * blk.h;
+            }
+            check (oneRow && covered && order, "noise (generated): PITCH, FINE, KEY TRACK and KIND, STEREO, ENV 1 are one row of two blocks, each at least half covered");
+            check (f.displayRect().w >= 1200 && f.displayRect().bottom() < f.tuneBlock().y && f.displayRect().h >= 300 && f.tuneBlock().h == f.panel.blockRect (0).h && f.tuneBlock().bottom() <= r.ui.full().rect().bottom(), "noise (generated): the display has the whole width and the room the one row frees");
+        }
         r.inst.set ("noise.type", 1.0f);
         r.refresh();
         const OscUi::Item* st = r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseStart));
         check (st != nullptr && st->c->enabled() && r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseLoop))->c->enabled(), "noise: with the type Sample the sample controls are live");
         const OscUi::Item* env = r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseEnv1));
         check (env != nullptr && env->param == Inst::idx ("noise.env1"), "noise: ENV 1 is on the panel");
+        {   // the noise that plays a sample: the display at the left, the TUNE column (three rows) at its right, SOURCE and PLAYBACK as ONE row under them, every block covered for at least half
+            ui::OscillatorFullScreen& f = r.ui.full();
+            const ui::Rect t = f.tuneBlock(), d = f.displayRect(), b0 = f.panel.blockRect (0), b1 = f.panel.blockRect (1);
+            check (f.panel.numBlocks() == 2 && std::string (f.panel.blockTitle (0)) == "SOURCE" && std::string (f.panel.blockTitle (1)) == "PLAYBACK" && b0.y == b1.y && b0.h == b1.h && b0.h == ui::KnobPanel::kBlockTitleH + ui::KnobPanel::kOneRowH + ui::KnobPanel::kBlockPad,
+                   "noise (sample): the blocks SOURCE and PLAYBACK are one row of the same height, the title strip, the row at its maximum height and the padding");
+            check (t.x >= d.right() && t.y == d.y && t.h == d.h && t.bottom() < b0.y && f.tune.crs.rect().y < f.tune.fin.rect().y && f.tune.fin.rect().y < f.tune.track.rect().y && f.tune.crs.rect().w == f.tune.track.rect().w && f.tune.crs.rect().h >= 56 && t.contains (f.tune.track.rect()) && d.h >= 300,
+                   "noise (sample): the TUNE column beside the display holds PITCH, FINE and KEY TRACK in three rows, and the display has the room the one row frees");
+            for (int b = 0; b < f.panel.numBlocks(); ++b)
+            {
+                long area = 0;
+                ui::Component* leaves[16];
+                const int n = f.panel.collectLeaves (leaves, 0, 16);
+                for (int i = 0; i < n; ++i)
+                    if (f.panel.blockRect (b).contains (leaves[i]->rect()))
+                        area += static_cast<long> (leaves[i]->rect().w) * leaves[i]->rect().h;
+                check (area * 2 >= static_cast<long> (f.panel.blockRect (b).w) * f.panel.blockRect (b).h, std::string ("noise (sample): the block ") + f.panel.blockTitle (b) + " is covered by its controls for at least half its area");
+            }
+        }
         r.tapC (*static_cast<ui::Component*> (&r.ui.full().tune.track));
         check (r.inst.get ("noise.keytrack") == 1.0f, "noise: KEY TRACK writes noise.keytrack");
     }

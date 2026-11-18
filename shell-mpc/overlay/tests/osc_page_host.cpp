@@ -298,7 +298,7 @@ int main()
                "Noise header Basic Q group stays intact");
 
         // Tuning column stays intact
-        check (r.page.ui().full().tuneBlock().w >= 200 && r.page.ui().full().tuneBlock().h >= 200, "Noise tune block is present");
+        check (r.page.ui().full().tuneBlock().w >= 200 && r.page.ui().full().tuneBlock().h >= 150, "Noise tune block is present");
         check (r.page.ui().full().barBlock().empty(), "Noise bar block is eliminated");
 
         // Generated noise mode: 1 NOISE block, no PLAYBACK block

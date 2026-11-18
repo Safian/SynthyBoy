@@ -1,7 +1,7 @@
 // SynthyBoy - MPC UI component library: the two views of the LFO ELEMENT (owner approved plan; drawn for the Play tab of 1280 x 628, other sizes scale in proportion): LfoCompact (the third of the width on
 // the main page, about 408 x 620) and LfoFullScreen (the whole tab). The element has two types: an LFO (LFO 1 .. 10: a shape of one cycle) and a RANDOM LFO (RND 1 .. 4: a style); `configure (random)`
 // swaps the parts and the Q groups, the places stay.
-//  - LfoCompact: the instance stepper (the 14 LFOs, a tap on its name opens the list; the same selector as the envelope's and the oscillator's, top row of the third) with the full screen button on the display, the display, and under it the Q group RATE: [SHAPE, RATE or DIVISION, RISE,
+//  - LfoCompact: the instance stepper (the 14 LFOs, a tap on its name opens the list; the same selector as the envelope's and the oscillator's, top row of the third) the display (with a header band at its top: its label and the full screen button; the curve lies below the band), and under it the Q group RATE: [SHAPE, RATE or DIVISION, RISE,
 //    SMOOTH time] (a random LFO: [STYLE, RATE or DIVISION, SYNC, STEREO]), one frame around the four.
 //  - LfoFullScreen: the top bar (close, the instance cells, HZ / BPM / KEY with TRIP and DOT, MONO, the targets button), in the middle the display at the left and the picker of the shapes (the free cells of
 //    last row hold SMOOTH and HOST; EDIT is on the corner of the display) or of the styles at the right, and the bottom band of titled blocks, one Q group each: RATE, TIMING, MOTION, KEY (the KEY block works in the key follow sync
@@ -21,7 +21,7 @@ class LfoCompact : public Composite
 {
 public:
     Carousel instance;                                      // LFO 1 .. 10, RND 1 .. 4: the selector of the three thirds (neighbours step, the name opens the list)
-    MenuButton full { "", MenuButton::Icon::Expand };      // the full screen button, on the display
+    MenuButton full { "", MenuButton::Icon::Expand };      // the full screen button, at the right end of the header band of the display
     Stepper shape, style, sync;
     RateControl rate;
     Knob rise { "RISE" }, smoothTime { "SMOOTH" };
@@ -81,7 +81,7 @@ protected:
             display_ = playrows::displayRect (rect_);
             qy = display_.bottom() + 4;
         }
-        full.place ({ display_.right() - 64 - 4, display_.y + 4, 64, 56 });
+        full.place (playrows::fullRect (display_));   // in the header band of the display, the same place as the oscillator's and the envelope graph's; the curve lies below the band (lfodisplay::plotRect of a compact display)
         int y = qy + kQLane;
         if (random_)
         {

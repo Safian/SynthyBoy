@@ -51,6 +51,9 @@ struct Data
     // picture and a small OFF tag in its corner)
     int noiseColour = 0;
     bool dim = false;
+    // The plot area (the compact view of the Play page: playrows::plotRect, below the header band that holds the buttons): when it is not empty the picture (grid, curves, fills, the live read-outs) is drawn inside it, edge to edge,
+    // and nothing of it lies in the band; empty = the whole display rectangle with its inner margin (the full screens and the pages).
+    Rect area;
 };
 
 /** The four gradient stops of a line of the instance colour: a light start, the colour, a step towards the end colour of the look, the end. */
@@ -164,6 +167,11 @@ inline void glowLine (gpu::SceneBuilder& sb, float x0, float x1, const uint32_t 
 }
 }
 
+/** The rectangle the picture is drawn in: the plot area of the compact view (Data::area) or the display rectangle with its inner margin of 8 px. */
+inline Rect plotOf (const Rect& r, const Data& d) noexcept { return d.area.empty() ? r.inset (8) : d.area; }
+/** The height the amplitude of a wave is scaled by (42 percent of it each way): the display's height, or the height of the plot area plus the margin the display has (the wave has the same size at the same room). */
+inline int refHeight (const Rect& r, const Data& d) noexcept { return d.area.empty() ? r.h : d.area.h + 16; }
+
 /** Draws the picture inside `r` (the display rectangle): the block (the ground: a gradient, the keyline, the grid) as a cached cell of its own, then the data (the curves, the fills, the light). `cached`: the data
     is one cached cell too (it is drawn again only when the data changes; the live read-outs come after it, drawLive); false: the data is drawn with the picture every time (a display whose data changes every
     picture, a knob dragged along a wavetable: nothing gains by caching it, and it would draw the layers under it again each time). */
@@ -173,9 +181,10 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     const theme::Look& T = theme::L();
     if (r.w < 60 || r.h < 40)
         return;
-    const Rect in = r.inset (8);
+    const Rect in = plotOf (r, d);
+    const float pad = d.area.empty() ? 6.0f : 0.0f;   // the plot area has its own padding
     const float x0 = static_cast<float> (in.x), x1 = static_cast<float> (in.right());
-    const float top = static_cast<float> (in.y) + 6.0f, bottom = static_cast<float> (in.bottom()) - 6.0f, mid = 0.5f * (top + bottom), amp = 0.5f * (bottom - top);
+    const float top = static_cast<float> (in.y) + pad, bottom = static_cast<float> (in.bottom()) - pad, mid = 0.5f * (top + bottom), amp = 0.5f * (bottom - top);
     uint32_t st[4];
     stopsOf (d.colour, st);
     const int ix = in.x, iw = in.w;
@@ -219,7 +228,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             peak = std::max (peak, std::fabs (mainRows[i]));
 
         // Scale wave so that from its own peak it spans at least 80 % of display height
-        const float targetAmp = static_cast<float> (r.h) * 0.42f;
+        const float targetAmp = static_cast<float> (refHeight (r, d)) * 0.42f;
         const float waveScale = targetAmp / peak;
 
         // the stack of the table's frames only when the table has frames that differ (a single cycle table has none to show); all of them over the same x range as the main curve, a little higher
@@ -408,7 +417,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     {
         sb.rect (static_cast<float> (r.x + 2), static_cast<float> (r.y + 2), static_cast<float> (r.right() - 2), static_cast<float> (r.bottom() - 2), dt::a (T.panel0, 165));
         const float size = 20.0f;
-        sb.text (x0 + 76.0f, sdf::baselineForCentre (static_cast<float> (r.y) + 32.0f, size), size, "OFF", dt::a (T.textDim, 255));   // right of the power button in the top left corner of the display (4 px + 64 px)
+        sb.text (static_cast<float> (r.x + 84), sdf::baselineForCentre (static_cast<float> (r.y) + (d.area.empty() ? 32.0f : 36.0f), size), size, "OFF", dt::a (T.textDim, 255));   // right of the power button in the top left corner of the display (4 px + 64 px; with a plot area: the middle of the header band)
     }
 }
 
@@ -420,9 +429,10 @@ inline void drawLive (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
     const theme::Look& T = theme::L();
     if (r.w < 60 || r.h < 40 || d.kind == Data::Kind::None)
         return;
-    const Rect in = r.inset (8);
+    const Rect in = plotOf (r, d);
+    const float pad = d.area.empty() ? 6.0f : 0.0f;
     const float x0 = static_cast<float> (in.x), x1 = static_cast<float> (in.right());
-    const float top = static_cast<float> (in.y) + 6.0f, bottom = static_cast<float> (in.bottom()) - 6.0f, mid = 0.5f * (top + bottom);
+    const float top = static_cast<float> (in.y) + pad, bottom = static_cast<float> (in.bottom()) - pad, mid = 0.5f * (top + bottom);
     const int iw = in.w;
     const int n = std::min (d.n, static_cast<int> (kMaxPoints));
     const bool minmax = d.kind == Data::Kind::MinMax;
@@ -436,7 +446,7 @@ inline void drawLive (gpu::SceneBuilder& sb, const Rect& r, const Data& d)
         float livePeak = 0.001f;
         for (int i = 0; i < m; ++i)
             livePeak = std::max (livePeak, std::fabs (sm[i]));
-        const float liveWaveScale = (static_cast<float> (r.h) * 0.42f) / livePeak;
+        const float liveWaveScale = (static_cast<float> (refHeight (r, d)) * 0.42f) / livePeak;
         for (int v = 0; v < Data::kMaxHeads; ++v)
             if (d.phases[v] >= 0.0f)
             {

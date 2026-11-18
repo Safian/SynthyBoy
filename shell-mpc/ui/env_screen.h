@@ -1,6 +1,6 @@
 // SynthyBoy - MPC UI component library: the two views of the ENVELOPE element (ENV 1 .. 6), layout presets built from library components (owner approved plan "ui-elem-envelope-lfo.md"; drawn for 1280 x 800,
 // the Play page's tab is 1280 x 628 at y 110). Same contract as every component (core.h).
-//  - EnvCompact: the third of the width (400 x 620) in the middle of the Play page: the instance selector (ENV 1 .. 6: the ONE selector of the three thirds, a Stepper with the list of its entries; the colour of the envelope and the dot "it has targets" stand in it), the envelope graph with the "full screen" button in its top right corner (the handles
+//  - EnvCompact: the third of the width (400 x 620) in the middle of the Play page: the instance selector (ENV 1 .. 6: the ONE selector of the three thirds, a Stepper with the list of its entries; the colour of the envelope and the dot "it has targets" stand in it), the envelope graph with a header band at its top (the "full screen" button at its right end: nothing of the graph lies under it; the handles
 //    can be dragged here too), and under it the ADSR Q group (ATTACK, DECAY, SUSTAIN, RELEASE) in one frame.
 //  - EnvFullScreen: the top bar (close, the instance selector, the targets button), the big graph (the whole width; the times stand under it and on the knobs, so there are no second boxes for them), the
 //    list of what the envelope modulates at its right (only when it modulates something: otherwise the TARGETS button is enough), and the bottom band of three Q groups, each a titled block: ADSR [ATTACK, DECAY, SUSTAIN, RELEASE], SHAPE [A CURVE, D CURVE, R CURVE], TIME [DELAY, HOLD, BEATS, LEGATO].
@@ -148,7 +148,8 @@ protected:
         // the display is the one of the three thirds (play_rows.h); the knobs start at the common controls line (their Q chip lane lies above it) and share what is left of the third
         const Rect gr = playrows::displayRect (rect_);
         graph.place (gr);
-        full.place ({ graph.rect().right() - 64 - 4, graph.rect().y + 4, 64, 56 });
+        graph.plotArea = playrows::plotRect (gr);   // the curve and the handles lie below the header band; the full screen button stands in the band, the same place as the oscillator's and the LFO's
+        full.place (playrows::fullRect (gr));
         const int by = playrows::controlsLine (rect_), kh = std::max (kKnobH, (rect_.bottom() - kMargin - by - kQLane) / 2);
         const int cw = (W - kGap) / 2;
         attack.place ({ rect_.x + kMargin, by, cw, kh });

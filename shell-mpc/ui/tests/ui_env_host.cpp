@@ -6,6 +6,7 @@
 #include "ui_test.h"
 #include "../env_screen.h"
 #include "../mod_targets.h"
+#include "../play_rows.h"
 
 using namespace uit;
 
@@ -463,6 +464,58 @@ void testCompactLayout()
     check (! s.overflow() && drawnOutside (im, { 440 - 4, 114 - 4, 408, 628 }, backgroundPixel()) == 0, "compact: drawn, and nothing outside its rectangle");
 }
 
+/** The compact graph (the Play page's third): the header band at the top of the display holds the full screen button; the plot area is the common one (playrows::plotRect), the grid, the curve, the fill and the handles lie in it, in every state (short and
+    long times, no times at all, a selected handle with its value bubble, the running dots), so nothing of the curve is drawn under the button. The full screen page's graph has no plot area and keeps its margins. */
+void testCompactPlot()
+{
+    EnvCompact c;
+    c.place ({ 440, 114, 400, 620 });
+    const Rect disp = playrows::displayRect (c.rect()), area = playrows::plotRect (disp), band = playrows::bandRect (disp);
+    check (c.graph.rect() == disp && c.graph.plot() == area && c.graph.plotArea == area, "compact graph: the plot is the common plot area of the three thirds (playrows::plotRect of the display)");
+    check (area.y >= band.bottom() && area.bottom() <= disp.bottom() && area.x > disp.x && area.right() < disp.right(), "compact graph: the plot area lies below the header band, inside the display");
+    check (c.full.rect() == playrows::fullRect (disp) && c.full.rect().w >= 56 && c.full.rect().h >= 56 && band.contains (c.full.rect()), "compact graph: the full screen button stands in the band (rightmost, 56 px at least)");
+    EnvGraph full;
+    full.place ({ 0, 110, 1280, 628 });
+    check (full.plotArea.empty() && full.plot().y == 110 + 38 && full.plot().x == 24, "full screen graph: no plot area, the margins of the page are unchanged");
+    struct Case { const char* name; double ms[5]; double sustain; bool select; bool beats; };
+    const Case cases[] = { { "default times", { 0.0, 100.0, 0.0, 400.0, 200.0 }, 1.0, false, false },
+                           { "long times", { 2000.0, 6000.0, 3000.0, 10000.0, 10000.0 }, 0.5, true, false },
+                           { "no times", { 0.0, 0.0, 0.0, 0.0, 0.0 }, 0.0, false, false },
+                           { "peak held to the right edge (hold, no decay, no release)", { 0.0, 5.0, 4000.0, 0.0, 0.0 }, 1.0, true, false },
+                           { "beats", { 1.0, 2.0, 1.0, 4.0, 4.0 }, 0.7, true, true } };
+    for (const Case& cs : cases)
+    {
+        c.graph.state.beats = cs.beats;
+        for (int i = 0; i < 5; ++i)
+        {
+            c.graph.state.shape.timeMs[i] = cs.ms[i];
+            c.graph.state.shape.t[i] = cs.beats ? envgraph::normFromTime (i, cs.ms[i], true) : envgraph::normFromTimeMs (i, cs.ms[i]);
+        }
+        c.graph.state.shape.sustain = cs.sustain;
+        c.graph.state.ghost = true;
+        c.graph.state.ghostShape = EnvGraph::Shape();
+        c.graph.state.numDots = 2;
+        c.graph.state.dots[0] = { 2, 0.5f };
+        c.graph.state.dots[1] = { 4, 0.2f };
+        for (int sel : { static_cast<int> (envgraph::None), static_cast<int> (envgraph::Attack), static_cast<int> (envgraph::Hold), static_cast<int> (envgraph::Decay), static_cast<int> (envgraph::CurveA) })
+        {
+            c.graph.state.selected = cs.select ? sel : static_cast<int> (envgraph::None);
+            std::snprintf (c.graph.state.text[envgraph::Attack], sizeof c.graph.state.text[0], "%.0f ms", cs.ms[1]);
+            std::snprintf (c.graph.state.text[envgraph::Hold], sizeof c.graph.state.text[0], "%.0f ms", cs.ms[2]);
+            std::snprintf (c.graph.state.text[envgraph::Decay], sizeof c.graph.state.text[0], "%.0f ms 50%%", cs.ms[3]);
+            std::snprintf (c.graph.state.text[envgraph::CurveA], sizeof c.graph.state.text[0], "-3.0");
+            Scene s (1280, 800, kBackgroundRgba);
+            c.graph.draw (s.builder());
+            c.graph.drawLive (s.builder());
+            const std::string nm = std::string ("compact graph, ") + cs.name + (cs.select ? ", handle " + std::to_string (c.graph.state.selected) + " selected" : "") + ": ";
+            check (! s.overflow(), nm + "fits one scene");
+            check (dataOpsInto (s, c.full.rect()) == 0, nm + "no curve, fill, grid line or handle lies under the full screen button");
+            check (dataOpsInto (s, band) == 0, nm + "nothing of the graph is drawn in the header band");
+        }
+    }
+    check (c.graph.plot().y - c.graph.rect().y >= playrows::kBandH + playrows::kPlotPadTop, "compact graph: the plot starts at least a band and its padding under the top of the display");
+}
+
 void testFullScreenLayout()
 {
     EnvFullScreen f;
@@ -563,6 +616,7 @@ int main()
     testDoubleTapResets();
     testDrawing();
     testCompactLayout();
+    testCompactPlot();
     testFullScreenLayout();
     testTargetsPage();
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
