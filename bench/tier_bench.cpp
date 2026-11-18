@@ -873,7 +873,7 @@ int main (int argc, char** argv)
                             order.push_back ({ r.slowSectionMs[i], i });
                     std::sort (order.begin(), order.end(), [] (const auto& x, const auto& y) { return x.first > y.first; });
                     for (size_t q = 0; q < order.size() && q < 6; ++q)
-                        std::printf ("  %s %.4f;", ownSectionName (static_cast<int> (order[q].second)), order[q].first * 1000.0);
+                        std::printf ("  %s %.4f;", ownSectionName (static_cast<int> (order[q].second)), order[q].first);
                     std::printf ("\n");
                 }
                 if (csv != nullptr)
