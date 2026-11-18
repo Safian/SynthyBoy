@@ -241,15 +241,10 @@ screen is quoted in capitals as it appears.
 The Play tab is ONE page: three live panels side by side, an **oscillator** panel (left), an **envelope** panel (middle) and an **LFO** panel (right). The first four Q-Links (knobs) belong to the oscillator panel (type, table or OCT, PAN, LEVEL), the next four to the envelope (ATTACK, DECAY, SUSTAIN, RELEASE) and the next four to the LFO (SHAPE, RATE, RISE, SMOOTH). On the MPC XL all twelve are on the knobs at once and every control carries the number of its knob. On the Key 61 the yellow frame marks the four knobs at the moment; touch a control of another panel to bring its group to the four knobs (the others follow), and use the Q-Link bank buttons for the rest. At the top of each panel is a selector: the current entry in the middle, its neighbours at the sides (tap one to step to it, or drag across), and a tap on the name opens the list. A switched-off oscillator is drawn grey (the power button is red).
 This is the place to play and tweak: the big controls of the three most used parts are in one view.
 
-The envelope panel with its ADSR group (Q-Links 5 to 8 on the XL; with the Key 61 the frame is on it while it is the active group):
-The Play page now features a unified, streamlined layout:
+The Play page layout:
 - **No tab rows:** Navigation is handled by a single selector in each third of the screen.
 - **Arrows step, tap opens list:** Use the arrows to step, or tap the name to open the full list of options for Sub, Osc A/B/C, Noise, Envelopes 1–6, LFOs 1–10, and R1–R4.
-- **Unified layout:** All three displays have the same height. The table selector, PAN, and LEVEL are consolidated into a single row.
-
-### 5.12 Master
-
-![Master](img/master.png)
+- **Unified display height:** All three displays share the same height and top alignment. Each display has a header band with its title and buttons (power, route, full-screen); the plot area sits below the band.
 
 The LFO panel with its group (SHAPE, RATE, RISE, SMOOTH: Q-Links 9 to 12 on the XL):
 
@@ -259,33 +254,22 @@ The LFO panel with its group (SHAPE, RATE, RISE, SMOOTH: Q-Links 9 to 12 on the 
 
 | Control | What it does |
 |---|---|
-| SUB, A, B, C, NOISE buttons | Choose which sound source the panel shows and edits (saved with the project). The five buttons have one width. |
-| Power button and name | Switch the shown source on and off. A source that is off shows its picture dimmed with a small OFF tag (see 5.3). |
-| Route button (F1 / F2 / F12 / M / DIR / BAL / OFF) | Tap: opens the output popup (target, balance, BUS 1, BUS 2) of that oscillator. Sub has no route button here; its routing is on its own page (5.4). |
-| Display + full-screen button | One cycle of the oscillator; the button opens the full-screen oscillator page (chapter 5.3 / 5.4 / 5.5). |
-| Type keys WAVE / MULTI / SAMPLE / GRAIN / SPEC | The oscillator type (wavetable, multisample, sample, granular, spectral). Q 1. |
+| Source selector (Sub, Osc A, Osc B, Osc C, Noise) | Choose which sound source the panel shows and edits (saved with the project). Arrows step, tap opens the list of five. |
+| Power button and name | Switch the shown source on and off; sits at the left of the display header band. A source that is off shows its picture dimmed with a small OFF tag (see 5.3). |
+| Route button (F1 / F2 / F12 / M / DIR / BAL / OFF) | Tap opens the output popup (target, balance, BUS 1, BUS 2) of that oscillator; sits in the display header band to the left of the full-screen button. Sub has no route button here; its routing is on its own page (5.4). |
+| Display + full-screen button | The display has a header band with the power button, source name, route button, and full-screen button (four corner brackets); one cycle of the oscillator is plotted below the band. The full-screen button opens the full-screen oscillator page (chapter 5.3 / 5.4 / 5.5). |
+| Type keys WAVE / MULTI / SAMPLE / GRAIN / SPEC | The oscillator type (wavetable, multisample, sample, granular, spectral), stacked under the display. Q 1. |
 | Source stepper and the list button | Wavetable name (the title of the file for a table from a file), or the loaded file. Both open the wavetable browser (or the content browser); from the compact view the full screen opens first. Q 2. |
 | PAN | -100 .. +100 percent (C, L n, R n). Q 3. |
 | LEVEL | 0 .. 100 percent. Q 4. |
 
 Sub and Noise have different controls (waveform, octave; noise colour, filter): see 5.4 and 5.5.
 
-**Envelope panel.** ENV 1 .. ENV 6 buttons (a small dot marks an envelope that modulates something), the
-envelope graph with a full-screen button, and the knobs ATTACK, DECAY, SUSTAIN, RELEASE (Q 1 - 4). The graph
-here is always fitted to the panel; the lock and the time ruler are on the full page. Details in 5.8.
+**Envelope panel.** The selector at the top chooses **Env 1 .. Env 6** (arrows step, tap opens the list). The display has a header band with the envelope name and the full-screen button at the right; the envelope graph is plotted below the band. Under the display are the knobs ATTACK, DECAY, SUSTAIN, RELEASE (Q 5 - 8 on the XL). The graph here is always fitted to the panel; the lock and the time ruler are on the full page. Details in 5.8.
 
-**LFO panel.** The stepper LFO 1 .. LFO 10, RND 1 .. RND 4 (a tap on the name opens the list), the
-shape display with a full-screen button, the SHAPE stepper, the RATE knob with the **HZ / BPM / KEY** list (three
-dots, the lit one is the mode), RISE and SMOOTH (Q 1 - 4). SMOOTH has a LED in front of its name: it is the switch
-of the smoothing and the knob sets its time (the knob is dim while the LED is off). Details in 5.9.
+**LFO panel.** The selector at the top chooses **LFO 1 .. LFO 10** or **RND 1 .. RND 4** (arrows step, tap opens the list). The display has a header band with the name and the full-screen button at the right; the LFO curve is plotted below the band. Under the display are the SHAPE stepper, the RATE knob with the **HZ / BPM / KEY** list (three dots, the lit one is the mode), RISE and SMOOTH (Q 9 - 12 on the XL). SMOOTH has a LED in front of its name: it is the switch of the smoothing and the knob sets its time (the knob is dim while the LED is off). Details in 5.9.
 
-**Full screen.** The full-screen button opens the page of that element over the whole plugin area (the same
-page as the corresponding Osc, Env or LFO tab, with a CLOSE button). Leaving the Play tab closes it.
-The Master page OUTPUT block includes:
-- **LIMIT switch:** The output limiter, off by default. Use it to prevent clipping when pushing the output levels high.
-- **QUALITY:** 
-  - **NO SMOOTHING:** Disables parameter smoothing, causing changes to jump immediately instead of gliding (ideal for hard rhythmic gating). Stored in the preset.
-  - **OVERSAMPLE 4X:** Cleans up high notes of the wavetable oscillator without a warp. Note: Uses more CPU. (2x on the gen 1 profile).
+**Full screen.** The full-screen button opens the page of that element over the whole plugin area (the same page as the corresponding Osc, Env or LFO tab, with a CLOSE button). Leaving the Play tab closes it.
 
 ### 5.2 Macros
 
@@ -468,11 +452,12 @@ The noise generator. Header: the power button (Noise On), the **SOUND** stepper 
 Tape Hiss, Vinyl Clicks, Digital Hash, Velvet Noise, Atmosphere), **FILTER** (-100 .. +100 percent), **PAN**, **LEVEL**
 (0 .. 100 percent, default 25) and the route button. The display draws the colour of the noise (faint while the noise is off).
 
-- TUNE: PITCH and FINE (number fields: -48 .. +48 semitones, -100 .. +100 cents), **KEY TRACK** (LED switch).
+- **TUNE:** PITCH and FINE (number fields: -48 .. +48 semitones, -100 .. +100 cents), **KEY TRACK** (LED switch).
 - **Two different steppers.** The header stepper SOUND chooses which of the nine noise sources the generator plays. The **KIND** stepper in the bottom block (Noise Type: Noise / Sample) chooses whether the source is that generated noise (Noise) or a sample file from the plugin's content (Sample). If no sample file is loaded in Sample mode, the generated noise plays instead.
-- Bottom, KIND = Noise (as in the picture): one block NOISE with KIND, STEREO (0 .. 100 percent) and the **ENV 1** LED switch.
-  KIND = Sample: block SOURCE (KIND, START = Noise Phase 0 .. 100 percent, STEREO, ENV 1) and block PLAYBACK (RANDOM, LOOP, BOUNCE LED switches).
-- Q groups: header (source, FILTER, PAN, LEVEL), TUNE, the bottom blocks.
+- **Layout variants:**
+  - With **KIND = Noise** (generated noise, as in the picture): the display spans the full width; under the display sits one row of two blocks side by side: **TUNE** on the left (PITCH, FINE, KEY TRACK) and **NOISE** on the right (KIND, STEREO 0 .. 100 percent, and the **ENV 1** LED switch).
+  - With **KIND = Sample**: the display is on the left with the **TUNE** column on its right; the bottom row holds blocks **SOURCE** (KIND, START = Noise Phase 0 .. 100 percent, STEREO, ENV 1) and **PLAYBACK** (RANDOM, LOOP, BOUNCE LED switches).
+- Q groups: header (SOUND, FILTER, PAN, LEVEL), TUNE, and the bottom blocks.
 
 ### 5.6 Mixer
 
@@ -815,6 +800,8 @@ Two sides, chosen by the buttons **MAIN** and **TUNING & MPE** at the top. The p
 | | SPREAD | Stereo Spread 0 .. 100 percent, default 100 |
 | | STEREO | Stereo Routing 0 .. 100 percent, default 100 (a knob like the other two) |
 | | VOICE OVERRIDE | a LED list: Kill / Steal |
+| | LIMIT | Output Limiter LED switch, default off (prevents clipping when pushing output levels high) |
+| | QUALITY | NO SMOOTHING (disables parameter smoothing, making changes jump immediately instead of gliding; stored in preset); OVERSAMPLE 4X (cleans up high notes of the wavetable oscillator without a warp; uses more CPU; 2x on the gen 1 profile) |
 | PITCH | TUNE | -100 .. +100 cents |
 | | TRANSPOSE | -48 .. +48 semitones |
 | | BEND UP, BEND DOWN | 0 .. 24 semitones, default 2; the **LINK** LED switch makes the down range follow the up range |
