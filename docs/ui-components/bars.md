@@ -50,9 +50,8 @@ if (c.kind == ChangeKind::Value && c.id == 60) norm = c.value;
 ```
 
 ## Used on
-`MixerStrip::fader`, `pan`, `send1`, `send2` (the five strips on `docs/user-guide/img/mixer.png`); `HBar` in `ModRow::amountBar` (`mod_matrix.h`), `ModulationsPage::Row::depth` (`panel.h`), `ModTargetsPage::Row::depth` (`mod_targets.h`).
+`MixerStrip::fader`, `pan`, `send1`, `send2` (the ten strips on `docs/user-guide/img/mixer.png`); `HBar` in `ModRow::amountBar` (`mod_matrix.h`), `ModulationsPage::Row::depth` (`panel.h`), `ModTargetsPage::Row::depth` (`mod_targets.h`).
 
 ## Limits and pitfalls
-- `Fader::state.peak` is a live value: draw it every picture, or it stops moving (see `drawLive` use in `shell-mpc/overlay/mixer_ui.h`).
-- The header comment of `mixer_strip.h` names a "SendBar"; the class is `SliderBar`.
+- `Fader::state.peak` is a live value: update it every picture, or it stops moving (see `MixerUi::update` in `shell-mpc/overlay/mixer_ui.h`).
 - `HBar` needs 200 px: in a narrower cell use a `SliderBar`.
