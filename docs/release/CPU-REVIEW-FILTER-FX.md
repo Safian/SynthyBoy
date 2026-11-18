@@ -5,6 +5,9 @@ Read only review of `feature/mpc-overlay` at 152b4a45 (2026-11-18). No source fi
 
 ## 0. Status on `work/opt-filters` (2026-11-18)
 
+Device result (round 12, all three branches merged in d7cbc890, tree proved bit identical to 152b4a45 on all 160 presets x 3 tiers; `.hw-local/mpc-perf/round12/`, summary in the round 12 entry of `docs/MPC.md`): Key 61 `--sections`: Lorenz Garden filter 1 0.989 -> 0.330 ms, Parallel Dusk Pad filter 2 1.153 -> 0.303 ms, Ring Mod Gamelan filters 1.337 -> 0.557 ms, Triple Fifth Lead filter 1 0.914 -> 0.399 ms, chorus 0.05 ms cheaper on every preset that has it; `--verify` with and without the vector filter code gives identical samples on both devices (Scream, EMS, MG, Diffusor, Smear, Multi SVF, Flanger, Ring Mod loads).
+
+
 Implemented on `work/opt-filters` (from `feature/mpc-overlay` 152b4a45), every change bit identical and tested against the scalar reference (the tests, the harnesses and the measurement method are in the commit messages). "Instructions" are executed instructions per stereo sample of the filter (both channels) on 32 bit ARM, GCC 12 with the bench flags, counted under qemu (hold 4, a cutoff that moves every block); the Key 61 estimate weights them with the model of section 1 (a `vmrs` 2 to 8 extra cycles, a division 14; a fit to the measured shares of Multi SVF, Flanges and Allpasses puts the `vmrs` near the low end) and applies the fraction to the measured share. The device bench decides (section 10).
 
 | ID | Status | Commit | Instructions (vmrs) before -> after | Key 61 estimate |

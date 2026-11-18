@@ -13,6 +13,9 @@ One block = 128 frames at 44.1 kHz = 2.902 ms = about 4.67 million cycles at 1.6
 
 ## 0. Status of the work on branch `work/opt-osc` (bit identical items)
 
+Device result (round 12, all three branches merged in d7cbc890, tree proved bit identical to 152b4a45 on all 160 presets x 3 tiers; `.hw-local/mpc-perf/round12/`, summary in the round 12 entry of `docs/MPC.md`): the Key 61 `--sections` runs show the wavetable read 0.02 to 0.05 ms cheaper and the morph cycle build 0.049 ms cheaper (Stretched Glass Choir 0.180 -> 0.131 ms), oscillator update -0.013 to -0.021 ms; the sums of the blocks are in `k61-r12-sections-tables.md`.
+
+
 Every item below keeps the output bit for bit: `WtOsc::setReference (true)` / `buildMorphCycle (..., referenceBuild = true)` run the old code, and `core/tests/test_own_wt_osc_opt.cpp` (random patches, two oscillators in step, output and state compared; `SB_TEST_SEEDS=1500` for 210000 periods) and `core/tests/test_own_morph_transform.cpp` (random morph builds with a poisoned scratch) prove it. End to end: all 160 factory presets (note and chord files) rendered with `synthyboy_preset_render --tier low|medium|high --wav` on the base commit 152b4a45 and on this branch are byte for byte the same files. Mac timings (Apple arm64, out of order, so small): `test_own_wt_osc_opt` prints a table; the device numbers are for the integration runner.
 
 | finding | status | commit | note |

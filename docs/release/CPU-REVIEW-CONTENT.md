@@ -4,6 +4,9 @@ Status: review only. No source file changed, nothing built, nothing measured, no
 
 ## Status of the optimisation round (work/opt-content)
 
+Device result (round 12, all three branches merged in d7cbc890, tree proved bit identical to 152b4a45 on all 160 presets x 3 tiers; `.hw-local/mpc-perf/round12/`, summary in the round 12 entry of `docs/MPC.md`): Spectral Vowel Freeze sample / granular / spectral section 0.456 -> 0.429 ms, priming 0.018 -> 0.014 ms, library reset 0.002 -> 0.001 ms (Key 61 `--sections`); no content preset is slower than at 152b4a45 on the Key 61 or the XL (interleaved run of both binaries); `--verify` still shows the 9e-8 .. 1.8e-7 content kernel difference of round 10 on two of twelve loads, within `--tolerance 3e-5`.
+
+
 Findings done, each bit identical with a test that keeps the old path selectable; the commit is on `work/opt-content`. Skipped findings say why. (The review text below is unchanged.)
 
 | finding | state | commit |
