@@ -21,7 +21,8 @@ Implemented on `work/opt-filters` (from `feature/mpc-overlay` 152b4a45), every c
 | F5a | done (with the Ring Mod case in the kernel: the phase steps per held cutoff) | 318705f6 | Ring Mod, pan 0: 598 (44) -> 265 (1); sides apart 598 -> 332 | 61 to 70 %: Ring Mod Gamelan F1 9 to 10.5 points |
 | F12 | done (both steps of the first part; the interleaved store of the second part not done) | 26a424d5 | chorus 1470 (59) -> 1248 with F2 and the hoisted quotient -> 1120 (3) with the lane refresh | 29 to 41 % of the chorus: 1.9 to 2.7 points on the chorus presets |
 | F11 | skipped | (none) | measured: in all six presets the Bus 1 and Bus 2 racks already take the existing early exit (12 full updates in 8264 periods); Main is active every period, so no early exit applies; the work is the Main rack's own update, the caching sub-items (2) to (4), not in this round | none from an early exit |
-| F5b, F8 to F10, F13 to F20 | not in this round | | | |
+| F10 | done on `work/opt-shell` (`dsp/peak.h`: `peakAbs` / `peakAbsPair`; the strip, bus, master and effect chain peaks; the NaN semantics are those of the old `std::max` loops, not of `vmaxq_f32`: a NaN is passed over, tested on all special values in `core/tests/test_own_peak.cpp`) | 62e404f6 | scalar compare loop with a `vmrs` per sample -> one vector max per four samples | with PROFILE S3 (eb5e24e8) the source peaks are not run at all while the Mixer page is closed |
+| F5b, F8, F9, F13 to F20 | not in this round | | | |
 
 ## 1. Sources, method, constants
 
@@ -245,7 +246,8 @@ Savings are shares of the 2.902 ms block on Key 61 `low`. "Bit identical" means 
 - **Where.** `peakOf` `voice.cpp:1107-1113`, called at `:1229, 1243, 1311, 1341`; similar loops in `own_engine.cpp:1535-1541` (bus peaks) and `:1602` (master peak).
 - **What it does.** `max (m, fabs (x))` with a loop carried `vcmp`, `vmrs`, `vmovgt` (disassembly offset 0xd2e2 of `Voice::render`).
 - **Loop level.** Per period x voice x source (each oscillator on, sub, noise, both filters).
-- **Consequence.** Audio bit identical; the displayed peak differs only when a sample is NaN (`vmaxq_f32` propagates it).
+- **Status.** Done in 62e404f6 (`work/opt-shell`). The displayed peak does not differ even for a NaN: the vector form masks a NaN lane to 0 with an integer compare on the magnitude bits before `vmaxq_f32`, which gives the maximum of the same numbers the `std::max` loop took (a NaN never entered it); the two channel form drops a sample whose left value is NaN, as `std::max (|l|, |r|)` did. Tested bit for bit over every special value, every length, unaligned starts, default and flush-to-zero mode.
+- **Consequence.** Audio bit identical; the displayed peak is identical too (the first draft of this finding said it differs for a NaN: it does not, see Status).
 - **Estimated saving.** 195 to 325 cycles per call. Triple Fifth Lead (3 oscillators + 2 filters, 32 voice periods = 160 calls): 160 x 195 / 46.7 k = 0.7 %; 160 x 325 / 46.7 k = 1.1 %, **0.7 to 1.1 %**; Lorenz Garden (144 calls) **0.6 to 1.0 %**; Ring Mod Gamelan, Stretched Glass Choir **0.5 to 0.9 %**; Parallel Dusk Pad **0.4 to 0.7 %**; Shepard Ascent **0.3 to 0.4 %**. The filter share of it is 2 of the calls per voice period.
 - **Change sketch.** `simd::peakAbs (const float*, int)`: `vmaxq_f32 (acc, vabsq_f32 (x))` over 4 lanes, `vpmax` reduction; scalar tail as now.
 

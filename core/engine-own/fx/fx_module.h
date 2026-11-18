@@ -13,6 +13,7 @@
 #include <thread>
 
 #include "../dsp/util.h"
+#include "../dsp/peak.h"
 #include "../matrix/mod_matrix.h"
 #include "../osc/content_set.h"
 #include "fx_makeup.h"
@@ -173,10 +174,8 @@ public:
             {
                 float zl[kControlPeriod] = {}, zr[kControlPeriod] = {};
                 run (zl, zr, n);
-                float peak = 0.0f;
-                for (int i = 0; i < n; ++i)
-                    peak = std::max (peak, std::max (std::fabs (zl[i]), std::fabs (zr[i])));
-                quietRun = peak < 1.0e-6f ? quietRun + n : 0; // (a non finite sample is not below the threshold: the module stays in the flush)
+                const float zp = own::peak::peakAbsPair (zl, zr, n);
+                quietRun = zp < 1.0e-6f ? quietRun + n : 0; // (a non finite sample is not below the threshold: the module stays in the flush)
                 if (quietRun >= quietNeeded)
                     clean = true;
             }

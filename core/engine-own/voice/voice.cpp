@@ -9,6 +9,7 @@
 #include "osc_options.h"
 #include "../env_lfo/lfo_eval.h"
 #include "../dsp/simd.h"
+#include "../dsp/peak.h"
 #include "../dsp/section_timing.h"
 
 #include <cstring>
@@ -1112,10 +1113,7 @@ namespace
 /** The largest magnitude of n samples. */
 inline float peakOf (const float* x, int n) noexcept
 {
-    float m = 0.0f;
-    for (int k = 0; k < n; ++k)
-        m = std::max (m, std::fabs (x[k]));
-    return m;
+    return peak::peakAbs (x, n);   // NEON where built (dsp/peak.h): the same float as the scalar loop it replaced, NaN passed over
 }
 } // namespace
 

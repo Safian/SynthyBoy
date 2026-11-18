@@ -75,6 +75,7 @@ public:
     EngineCapsMask capabilities() const noexcept override;
     EngineCaps2Mask capabilities2() const noexcept override;
     bool copyReadout (LiveValues& out) const noexcept override;
+    void requestMeters() noexcept override { meterHold.store (kMeterHoldBlocks, std::memory_order_relaxed); }
     void silence() noexcept override;
     void setUltraRender (bool on) noexcept override { ultraRender.store (on, std::memory_order_relaxed); }
     void setContent (const StateContent& content) override;
@@ -214,6 +215,10 @@ private:
     float mixL[4][kControlPeriod] = {}, mixR[4][kControlPeriod] = {}; // Main, Bus 1, Bus 2, Direct of the current period
     // the level meters of the mixer (LiveValues::stripPeak, audio thread only until writeReadout publishes them): per strip (Sub, A, B, C, Noise, Filter 1, Filter 2, Bus 1, Bus 2, Master) the peak of this block and the
     // shown level (the peak with a slow release); stripSq collects the power sums of the voices' sources of one control period (MixOut::srcSq)
+    // the source strips (0 .. 6) are measured while meterHold > 0: requestMeters () sets it, every measured block takes one off (a request that arrives meanwhile is not overwritten: compare and exchange)
+    static constexpr int kMeterHoldBlocks = 256;
+    std::atomic<int> meterHold { 0 };
+    bool sourceMeters = false;   // this block measures the source strips (audio thread)
     float stripSq[7] = {}, stripBlockPeak[LiveValues::kMaxStrips] = {}, stripShown[LiveValues::kMaxStrips] = {};
     int lastBlockFrames = 0;   // the frames of the block that writeReadout publishes
     // the makeup of the bypassed effects of a bus (docs/release/TIER-LEVEL-COMPENSATION.md section 9): the powers of Main, of the bus input and their cross term, smoothed over 100 ms, and the gain

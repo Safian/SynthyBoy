@@ -130,6 +130,10 @@ public:
     /** The knobs whose modulated value the display wants (GROUPA2 WP-17): table indices, at most LiveValues::kMaxTargets (the rest is ignored). Any thread, lock free;
         the audio thread takes the list over at the end of its next block. */
     virtual void setReadoutTargets (const int* /*paramIndices*/, int /*count*/) noexcept {}
+    /** The display shows the level meters of the SOURCE strips (LiveValues::stripPeak[0 .. 6]: Sub, A, B, C, Noise, Filter 1, Filter 2): call it at least every few frames while they are on screen. The own engine measures the
+        sources (a peak per voice, source and control period) only for a while (about 0.7 s of blocks) after the last call, and the strips 0 .. 6 read 0 in between; the bus and master strips (7 .. 9) are always
+        measured. Any thread, lock free; a no-op for an engine without these meters. */
+    virtual void requestMeters() noexcept {}
     /** Copies the live values of the last blocks (readout.h). Any thread, lock free; false (nothing written) for an engine that has none. */
     virtual bool copyReadout (LiveValues& /*out*/) const noexcept { return false; }
 

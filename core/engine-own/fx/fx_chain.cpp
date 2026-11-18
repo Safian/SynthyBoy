@@ -6,6 +6,7 @@
 #include <memory>
 #include "fx_chain.h"
 #include "../dsp/section_timing.h"
+#include "../dsp/peak.h"
 
 #include <algorithm>
 
@@ -762,9 +763,7 @@ void FxChain::process (float* l, float* r, int n, int t0) noexcept
         runRack (rackId, l, r, n, t0, 0);
         return;
     }
-    float peakIn = 0.0f;
-    for (int i = 0; i < n; ++i)
-        peakIn = std::max (peakIn, std::max (std::fabs (l[i]), std::fabs (r[i])));
+    const float peakIn = peak::peakAbsPair (l, r, n);
     bool settling = false; // a crossfade of a slot or a fade in of a module in progress needs every block
     for (int m = 0; m < 16 && !settling; ++m)
         settling = fadeIn[m];
@@ -777,9 +776,7 @@ void FxChain::process (float* l, float* r, int n, int t0) noexcept
         return;
     }
     runRack (rackId, l, r, n, t0, 0);
-    float peakOut = 0.0f;
-    for (int i = 0; i < n; ++i)
-        peakOut = std::max (peakOut, std::max (std::fabs (l[i]), std::fabs (r[i])));
+    const float peakOut = peak::peakAbsPair (l, r, n);
     quietRun = (peakIn == 0.0f && peakOut < 1.0e-6f) ? std::min (quietRun + n, holdSamples + kControlPeriod) : 0;
 }
 } // namespace own

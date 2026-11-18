@@ -10,6 +10,8 @@
 
 #include <chrono>
 #include "dsp/section_timing.h"
+#include "dsp/peak.h"
+#include "dsp/master_stage.h"
 
 #include <algorithm>
 #include <cmath>
@@ -73,19 +75,6 @@ bool setOwnPadPressureToCutoff (IEngine& engine, float amount01) noexcept
 
 namespace own
 {
-namespace
-{
-/** The output safety stage: the identity up to +-1.8 (a loud patch with a boosting warp or filter passes unchanged, like the headroom of engine-vital), above it a smooth knee that
-    approaches +-2 (any patch stays bounded). A knee that starts at 1 distorts a signal with peaks of 1.5 and aliases the distortion (a high-pass warp measured -58 dB). */
-inline float outputLimit (float y) noexcept
-{
-    const float a = std::fabs (y);
-    if (!(a > 1.8f))
-        return y == y ? y : 0.0f;
-    return std::copysign (1.8f + 0.2f * std::tanh ((a - 1.8f) * 5.0f), y);
-}
-} // namespace
-
 OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable"))), fxOversampleIndex (findParamIndex (hashKey ("quality.oversample_4x"))), noSmoothingIndex (findParamIndex (hashKey ("quality.no_smoothing")))
 {
     for (int k = 0; k < 128; ++k)
@@ -1285,6 +1274,12 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     std::fill (rightOut, rightOut + numFrames, 0.0f);
     std::fill (std::begin (stripBlockPeak), std::end (stripBlockPeak), 0.0f);   // the meters of this block start from nothing
     lastBlockFrames = numFrames;
+    {
+        int h = meterHold.load (std::memory_order_relaxed);
+        sourceMeters = h > 0;
+        if (sourceMeters)
+            meterHold.compare_exchange_strong (h, h - 1, std::memory_order_relaxed);   // (a request made since the load stays whole)
+    }
 
     // ---- block snapshot
     const uint32_t gen = paramGen.load (std::memory_order_acquire);
@@ -1526,18 +1521,17 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             mo.r[t] = mixR[t];
         }
         std::fill (std::begin (stripSq), std::end (stripSq), 0.0f);
-        mo.srcSq = stripSq;
+        mo.srcSq = sourceMeters ? stripSq : nullptr;   // the voices measure their sources only while the display shows the source strips (requestMeters)
         for (auto& v : voices)
             if (v->isActive())
                 v->render (mo, n, controlPos);
         addGhosts (n);
-        for (int s = 0; s < 7; ++s)   // Sub, A, B, C, Noise, Filter 1, Filter 2: the power sum of the voices of this period
-            stripBlockPeak[s] = std::max (stripBlockPeak[s], std::sqrt (stripSq[s]));
+        if (sourceMeters)
+            for (int s = 0; s < 7; ++s)   // Sub, A, B, C, Noise, Filter 1, Filter 2: the power sum of the voices of this period
+                stripBlockPeak[s] = std::max (stripBlockPeak[s], std::sqrt (stripSq[s]));
         for (int b = 1; b <= 2; ++b)   // Bus 1, Bus 2: what the voices send into them, before the rack of the bus
         {
-            float pk = 0.0f;
-            for (int i = 0; i < n; ++i)
-                pk = std::max (pk, std::max (std::fabs (mixL[b][i]), std::fabs (mixR[b][i])));
+            const float pk = peak::peakAbsPair (mixL[b], mixR[b], n);
             stripBlockPeak[6 + b] = std::max (stripBlockPeak[6 + b], pk);
         }
         dlVoices.process (mixL[0], mixR[0], n);
@@ -1586,22 +1580,18 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         dlMainOut.process (mixL[0], mixR[0], n);
         std::copy (mixL[0], mixL[0] + n, left + pos);
         std::copy (mixR[0], mixR[0] + n, rightOut + pos);
-        for (int i = pos; i < end; ++i)
         {
-            const float g = smoothedGain.next();
-            if (routeSin != 0.0f)
-            {
-                const float l0 = left[i], r0 = rightOut[i];
-                left[i] = l0 * routeCos + r0 * routeSin;
-                rightOut[i] = r0 * routeCos + l0 * routeSin;
-            }
-            // Direct: past every rack (and the stereo routing), scaled by its own level; the master volume applies to everything that reaches the output, the Direct sum
-            // included (it did not before: a Direct source ignored master.volume); the sum goes through the safety stage
-            const float dg = lerp (directGainPrev, directGain, static_cast<float> (controlPos + (i - pos) + 1) * (1.0f / static_cast<float> (kControlPeriod)));
-            left[i] = outputLimit ((left[i] + mixL[3][i - pos] * dg) * g);
-            rightOut[i] = outputLimit ((rightOut[i] + mixR[3][i - pos] * dg) * g);
-            stripBlockPeak[9] = std::max (stripBlockPeak[9], std::max (std::fabs (left[i]), std::fabs (rightOut[i])));   // Master: what leaves the engine
+            // master volume (smoothed), stereo routing, Direct (past every rack and the routing, scaled by its own level), the master volume on everything that reaches the output, the Direct sum included
+            // (it did not before: a Direct source ignored master.volume), and the safety stage: dsp/master_stage.h (the same samples as the per sample loop it replaced)
+            master::Params mp;
+            mp.routeCos = routeCos;
+            mp.routeSin = routeSin;
+            mp.directPrev = directGainPrev;
+            mp.directNow = directGain;
+            mp.controlPos = controlPos;
+            master::stage (left + pos, rightOut + pos, mixL[3], mixR[3], end - pos, mp, smoothedGain);
         }
+        stripBlockPeak[9] = std::max (stripBlockPeak[9], peak::peakAbsPair (left + pos, rightOut + pos, end - pos));   // Master: what leaves the engine
         controlPos = (controlPos + n) % kControlPeriod;
         pos = end;
     }
@@ -1763,6 +1753,12 @@ void OwnEngine::writeReadout() noexcept
         const float release = std::exp (-static_cast<float> (std::max (lastBlockFrames, 1)) / static_cast<float> (std::max (sampleRate, 1.0) * 0.3));
         for (int s = 0; s < LiveValues::kMaxStrips; ++s)
         {
+            if (s < 7 && ! sourceMeters)   // not measured this block: nothing to show (the memory of the release starts again at the next measured block)
+            {
+                stripShown[s] = 0.0f;
+                liveStripPeak[s].store (0.0f, std::memory_order_relaxed);
+                continue;
+            }
             const float pk = stripBlockPeak[s];
             const float level = pk > 1.0e-3f ? std::clamp (1.0f + 20.0f * std::log10 (pk) / 60.0f, 0.0f, 1.0f) : 0.0f;
             stripShown[s] = std::max (level, stripShown[s] * release);
