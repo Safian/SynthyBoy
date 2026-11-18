@@ -6,7 +6,7 @@ Licence: AGPL-3.0-or-later (the file headers).
 
 ## 1. Summary
 
-- **Dependency map** (section 2): the UI library is nearly engine free (18 of 42 headers GENERIC, the rest are SynthyBoy pages). The overlay runtime is generic except its **instance interface** (`IInstanceView`, 24 methods), its **view table** (`overlay_layout.h`, generated for 24 SynthyBoy views), its **view factory** (`pages.h`, `Controller::makeView`) and a few names (`/tmp/synthyboy-*`, the helper file name).
+- **Dependency map** (section 2): the UI library is nearly engine free (20 of 44 headers GENERIC, the rest are SynthyBoy pages). The overlay runtime is generic except its **instance interface** (`IInstanceView`, 30 methods), its **view table** (`overlay_layout.h`, generated for 24 SynthyBoy views), its **view factory** (`pages.h`, `Controller::makeView`) and a few names (`/tmp/synthyboy-*`, the helper file name).
 - **The adapter** (section 3): `shell-mpc/kit/` (namespace `mpckit`, header only, C++17, no engine include): `IParamSource`, `IInstance` (+ `IInstanceState`), `IQTargets` / `QProxyBank`, `IPageSet` / `IPageFactory`, `IContentSource`, and the page helpers `Binder` and `PageBase`. `kit/synthyboy_adapter.h` and `kit/synthyboy_params.h` implement them over SynthyBoy's existing code.
 - **Migration plan** (section 4): 13 steps, each keeps SynthyBoy's behaviour bit for bit; **step 1 is done** (`q_publish.h`), the rest waits until the current UI changes have landed.
 - **Template** (section 5): `template-mpc/`, complete as a plugin; its pages are built on the kit and compile against the generic files only.
@@ -16,7 +16,7 @@ Licence: AGPL-3.0-or-later (the file headers).
 
 Verdicts: **GENERIC** = no SynthyBoy knowledge (the engine, its parameter table, its content or its names); **ADAPTER** = generic once a small interface replaces N named dependencies (named in the last column); **SPECIFIC** = a SynthyBoy page or feature. "Depends on" lists what comes from SynthyBoy's engine / core (`synthyboy/...`) or from SynthyBoy's own layout; includes of other generic files are shown only where they explain the closure. The include closure of the GENERIC components (`core.h` <- `base.h`, `composite.h`, `qgroup.h`, `led_*.h`, `list.h`, `env_graph.h`, `mixer_strip.h`, ...) is: the ui headers, `overlay/gpu/scene.h`, `overlay/sdf_font.h(+_data.h)`; nothing else.
 
-### 2.1 `shell-mpc/ui/` (42 headers: 18 GENERIC, 1 ADAPTER, 23 SPECIFIC)
+### 2.1 `shell-mpc/ui/` (44 headers: 20 GENERIC, 1 ADAPTER, 23 SPECIFIC)
 
 
 | File | Classes / what | Depends on (SynthyBoy knowledge) | Verdict | What the adapter must supply / note |
@@ -24,6 +24,8 @@ Verdicts: **GENERIC** = no SynthyBoy knowledge (the engine, its parameter table,
 | `core.h` | Rect, Change, Pen, Cell, TapGesture, Component | overlay/gpu/scene.h, overlay/sdf_font.h, theme.h (all generic) | **GENERIC** | - |
 | `theme.h` | Look (3 looks), Detail, colours | none | **GENERIC** | a plugin may add a Look |
 | `base.h` | Knob, NumberField, Stepper, UpDownStepper, ToggleIcon, MenuButton, HBar, DetailButton, RouteButton, PictogramSelector | core.h | **GENERIC** | - |
+| `carousel.h` | Carousel | base.h | **GENERIC** | - |
+| `content_name.h` | contentname:: (display, fitMiddle) | overlay/sdf_font.h | **GENERIC** | - |
 | `qgroup.h` | QGroup | core.h | **GENERIC** | - |
 | `led_toggle.h` | LedToggle | base.h | **GENERIC** | - |
 | `led_list.h` | LedList | led_toggle.h | **GENERIC** | - |
@@ -65,7 +67,7 @@ Verdicts: **GENERIC** = no SynthyBoy knowledge (the engine, its parameter table,
 | `choice_names.h` | names of the engine choices on the screen | none (names of SynthyBoy choices) | **SPECIFIC** | - |
 
 
-Notes. `choice_names.h` and the `fx_*` headers are the only ui headers that include engine headers (`synthyboy/fx_types.h`, `params.h`). `ui.h` is the only ADAPTER: including it pulls `fx_screen.h` and with it the engine. The oscillator composites in `composite.h` and the oscillator `display.h` are generic CODE with a synth vocabulary; a plugin without oscillators simply does not use them.
+Notes. The `fx_*` headers are the only ui headers that include engine headers (`synthyboy/fx_types.h`, `params.h`); `choice_names.h` includes no engine header. `ui.h` is the only ADAPTER: including it pulls `fx_screen.h` and with it the engine. The oscillator composites in `composite.h` and the oscillator `display.h` are generic CODE with a synth vocabulary; a plugin without oscillators simply does not use them.
 
 ### 2.2 `shell-mpc/overlay/` (the runtime and the pages; about 35 GENERIC, 12 ADAPTER, 19 SPECIFIC files)
 
@@ -99,7 +101,7 @@ Notes. `choice_names.h` and the `fx_*` headers are the only ui headers that incl
 | `q_device.h` | 16 or 4 Q-Link knobs (model name, SYNTHYBOY_MPC_Q_KNOBS) | none | **GENERIC** | Branding: env variable name |
 | `content_browser.h` | file browser state | none | **GENERIC** | - |
 | `spectrum_curve.h` | spectrum drawing data | ../spectrum*.h | **GENERIC** | - |
-| `curve_source.h` | IInstanceView (24 methods) + CurveSource (filter curve) | synthyboy/content_state.h, content_store.h, filter_response.h, params.h, readout.h, state.h; ../spectrum.h | **ADAPTER** | IInstanceView = IInstance (kit) + engine methods; CurveSource stays specific (split, step 7) |
+| `curve_source.h` | IInstanceView (30 methods) + CurveSource (filter curve) | synthyboy/content_state.h, content_store.h, filter_response.h, params.h, readout.h, state.h; ../spectrum.h | **ADAPTER** | IInstanceView = IInstance (kit) + engine methods; CurveSource stays specific (split, step 7) |
 | `view.h` | IView, ViewInput, ViewCounters | curve_source.h (IInstanceView), synthyboy/readout.h (LiveValues), overlay_layout.h | **ADAPTER** | instance as mpckit::IInstance; live as an opaque block through IInstance::readLive (step 5) |
 | `page_view.h` | PageView<Ui>, page::Input, page::ground | macro_names.h (MacroNames, NamesScope: the macro names of the instance), page_detector.h, view.h; IInstanceView::content () | **ADAPTER** | a Hooks template parameter replaces the macro-name scope; page::Input derives from mpckit::PageInput (step 6) |
 | `pages.h` | the factory pages::make, filterTargets () | all SynthyBoy page headers, synthyboy::FilterResponse::readoutIndices | **ADAPTER** | IPageFactory (kit/page_set.h): SynthyBoyPageFactory (step 10) |
@@ -123,7 +125,7 @@ What the IInstanceView members are (`overlay/curve_source.h`), and where they go
 | --- | --- | --- |
 | `param`, `writeParam`, `sampleRate`, `bpm`, `setQGroup`, `setQVirtual`, `takeQVirtual`, `qWriteCount`, `qStatus`, `setUiFullOpen`, `requestOverlayReport` | `mpckit::IInstance` (same signatures) | every page needs them |
 | `live (LiveValues&)` | `mpckit::IInstance::readLive (void*, size_t)` (opaque block) + stays in IInstanceView | the Controller reads the engine's readout per view |
-| `content`, `contentStore`, `contentRoots`, `requestContent`, `contentLoad`, `setLfoShape`, `setMacroName` | stay in IInstanceView | SynthyBoy content and names (SPECIFIC) |
+| `content`, `contentStore`, `contentRoots`, `requestContent`, `contentLoad`, `setLfoShape`, `setMacroName`, `tablesLoading`, `voiceStatus`, `missingContent` | stay in IInstanceView | SynthyBoy content, names and diagnostics (SPECIFIC) |
 | `spectrumRing` | stays | the Macros page (could move to IInstance as a generic optional) |
 | `playSelection`, `setPlaySelection`, `playLastSelector` | stay | the Play page |
 | `padPressure`, `setPadPressure`, `outputLimiter`, `setOutputLimiter` | stay in IInstanceView; the kit's generic form is `IInstanceState` (`kit/instance.h`), `synthyboy_adapter::State` maps them | shell-level settings |
@@ -145,7 +147,8 @@ What the IInstanceView members are (`overlay/curve_source.h`), and where they go
 | `q_step_rule.h` | stepCountOf (ParamInfo) | synthyboy/params.h (ParamInfo, Scale) | **ADAPTER** | IParamSource::stepCount (kit: the same rule; synthyboy_params.h forwards to this one) |
 | `device_profile.h` | engine quality profile per device | synthyboy/quality.h | **SPECIFIC** | - |
 | `lfo_live.h, pad_pressure.h, play_params.h, program_list.h, macro_names.h` | LFO cursors, pad pressure, Play proxies, program list, macro names of the shell | synthyboy/params.h, preset.h, content_state.h | **SPECIFIC** | - |
-| `synthyboy_mpc.cpp` | the VST2 shell (2889 lines) | the engine, state, presets, content; extractable generic blocks listed below | **SPECIFIC** | see "Blocks of synthyboy_mpc.cpp" |
+| `event_inbox.h, startup_timing.h, write_files.h` | MIDI event ring, start-up milestones, compile switch for diagnostic files | none | **GENERIC** | - |
+| `synthyboy_mpc.cpp` | the VST2 shell (3031 lines) | the engine, state, presets, content; extractable generic blocks listed below | **SPECIFIC** | see "Blocks of synthyboy_mpc.cpp" |
 
 
 ### 2.4 Blocks of `synthyboy_mpc.cpp` that the kit needs in generic form
@@ -186,6 +189,7 @@ Header only, C++17, namespace `mpckit`, standard library only (plus the generic 
 | `content_source.h` | `IContentSource`, `StaticContent` | optional list: `title`, `count`, `name (i)`, `selected`, `select (i)`. |
 | `binder.h` | `Binder` | binds components to parameter keys: `bind (id, component, Type, key)`, `resolve`, `pull`, `apply (Change)`, `item`, `paramOf`; types Knob, Number, Toggle, Stepper, List, Fader, Inert. |
 | `page_base.h` | `PageBase`, `PageInput` | the page contract of `PageView<Ui>`: `update`, `draw`, `touch`, `wheel`, `tick`, `fingerDown`, `dropGesture`, `forgetQGroup`, `topPage`, `qTargets`, `qSlotCount`; for the page author: `bind`, `addPart`, `group`, `relayout`, `layout`, `pullExtra`, `onChange`, `drawOver`, `modal`. |
+| `log.h` | `Level`, `devlog::Logger`, `devlog::Settings`, `devlog::Scope`, `MPCKIT_LOG`, `MPCKIT_SCOPE`, `MPCKIT_LOG_START` | developer log (`MPCKIT_DEV_LOG`, default 0 = compiled out). |
 | `synthyboy_params.h`, `synthyboy_adapter.h` | `synthyboy_adapter::Params`, `descOf`, `State`, `Instance`, `PageSet` | SynthyBoy's implementations: forward to `paramTable ()`, `IInstanceView`, `layout::kViews`; every value is the old direct call's value (`valueText` = `uibind::formatValue`, `hostText` = `valueToText`, `stepCount` = `stepCountOf`). Not part of the kit proper. |
 
 Which SynthyBoy dependency each interface replaces:
