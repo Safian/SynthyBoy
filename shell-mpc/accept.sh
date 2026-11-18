@@ -154,7 +154,7 @@ for f in "$OVLOFF" "$OVLDEF" "$LIB"; do
 done
 OVCORE=$(find $B/core -name '*.a' | tr '\n' ' ')
 OVSRC=shell-mpc/overlay/tests
-c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I shell-mpc/overlay -o $B/geometry_render_host $OVSRC/geometry_render_host.cpp || { echo "ACCEPT FAIL: geometry_render_host build"; exit 1; }
+c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/geometry_render_host $OVSRC/geometry_render_host.cpp || { echo "ACCEPT FAIL: geometry_render_host build"; exit 1; }
 $B/geometry_render_host > $B/geometry-render.log 2>&1 || { grep -E "^FAIL|ERROR" $B/geometry-render.log | head; echo "ACCEPT FAIL: geometry_render_host (rotation mapping, renderer)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/curve_host $OVSRC/curve_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: curve_host build"; exit 1; }
 $B/curve_host > $B/curve-host.log 2>&1 || { grep -E "^FAIL" $B/curve-host.log; echo "ACCEPT FAIL: curve_host (curve source)"; exit 1; }
