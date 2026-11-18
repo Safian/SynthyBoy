@@ -1299,8 +1299,87 @@ TEST (spectral_the_start_schedule_from_the_table_is_the_loop_of_cosines)
     std::printf ("    startSchedule: %.3f us per note start now, %.3f us before (this Mac; %d)\n", us[0], us[1], sink & 1);
 }
 
-// SP5: with Phase Lock the voice advances only the bins that the lock does not overwrite (bin 0, the peaks, the halves of the regions next to the next peak). The output is the output of the voice that
-// advances every bin and then lets the lock overwrite about half of them (`setLegacyPhaseLock`), bit for bit: the clean tone (few peaks), a rich tone, noise (a peak every few bins), a stereo sample,
+// Round 13: identity phase locking (Laroche / Dolson). After the lock every bin of a peak's region (centred on the peak, its boundaries at the midpoints between neighbouring peaks) has the peak's
+// synthesis phase plus its analysis phase difference to the peak, synth[q] - synth[peak] = oth[q] - oth[peak] (mod 2 pi), in BOTH halves of every region. Until round 13 the half left of every
+// peak after the first kept its own advanced phase (the defect of docs/release/CPU-REVIEW-CONTENT.md SP5). A harmonic tone (24 partials of 196 Hz: many peaks with regions between them), frozen
+// and scanning, pitch ratio 1 and 1.5 (the placed regions), the fast path, the legacy lock path (every bin advanced, then the lock) and the reference kernels, checked after every frame of 40 hops
+// (the two of the priming left out: the scratch of a hop there may hold a frame of the start).
+TEST (spectral_phase_lock_locks_both_halves_of_every_peak_region)
+{
+    Tone tone (rich (196.0, 1.2));
+    int frames = 0, minPeaks = kBins;
+    long leftBins = 0, rightBins = 0, badLeft = 0, badRight = 0;
+    double worstLeft = 0.0, worstRight = 0.0;
+    for (int path = 0; path < 3; ++path)
+        for (int variant = 0; variant < 4; ++variant)
+        {
+            SpectralParams p = frozen (0.3f);
+            p.manual = (variant & 1) == 0;
+            p.scanSpeed = 0.6f;
+            p.pitchRatio = (variant & 2) != 0 ? 1.5f : 1.0f;
+            p.phaseLock = true;
+            SpectralVoice v;
+            v.prepare (kSr);
+            v.setLegacyPhaseLock (path == 1);
+            v.setReferenceKernels (path == 2);
+            v.noteOn (&tone.analysis, p, 0.0f, 0);
+            std::vector<float> l (kHop), r (kHop);
+            for (int hop = 0; hop < 40; ++hop)
+            {
+                v.process (p, l.data(), r.data(), kHop);
+                if (hop < 2)
+                    continue;
+                ++frames;
+                const float* ph = v.synthPhaseForTest (0);
+                const float* om = gScratch.om;
+                const float* oth = gScratch.oth;
+                std::vector<int> peaks;
+                for (int j = 1; j < kBins - 1; ++j)
+                    if (om[j] > om[j - 1] && om[j] >= om[j + 1] && om[j] > 1.0e-6f)
+                        peaks.push_back (j);
+                minPeaks = std::min (minPeaks, static_cast<int> (peaks.size()));
+                const auto owner = [&] (int q)
+                {
+                    size_t i = 0;
+                    while (i + 1 < peaks.size() && q > (peaks[i] + peaks[i + 1]) / 2)
+                        ++i;
+                    return peaks[i];
+                };
+                for (int q = 1; q < kBins && ! peaks.empty(); ++q)
+                {
+                    const int pk = owner (q);
+                    if (q == pk)
+                        continue;
+                    double d = (static_cast<double> (ph[q]) - ph[pk]) - (static_cast<double> (oth[q]) - oth[pk]);
+                    d -= 2.0 * kPi * std::round (d / (2.0 * kPi));
+                    const bool bad = std::fabs (d) > 1.0e-3;
+                    if (q < pk)
+                    {
+                        ++leftBins;
+                        badLeft += bad ? 1 : 0;
+                        worstLeft = std::max (worstLeft, std::fabs (d));
+                    }
+                    else
+                    {
+                        ++rightBins;
+                        badRight += bad ? 1 : 0;
+                        worstRight = std::max (worstRight, std::fabs (d));
+                    }
+                }
+            }
+        }
+    std::printf ("    identity lock: %d frames, at least %d peaks a frame; left of the peak %ld bins, %ld off (worst %.2e rad); right %ld bins, %ld off (worst %.2e rad)\n", frames, minPeaks,
+                 leftBins, badLeft, worstLeft, rightBins, badRight, worstRight);
+    CHECK_EQ (frames, 3 * 4 * 38);
+    CHECK (minPeaks >= 10);
+    CHECK (leftBins > 1000);
+    CHECK (rightBins > 1000);
+    CHECK_EQ (badLeft, 0L);
+    CHECK_EQ (badRight, 0L);
+}
+
+// SP5: with Phase Lock the voice advances only the bins that the lock does not overwrite (bin 0 and the peaks, since round 13). The output is the output of the voice that
+// advances every bin and then lets the lock overwrite all the others (`setLegacyPhaseLock`), bit for bit: the clean tone (few peaks), a rich tone, noise (a peak every few bins), a stereo sample,
 // silence (no peak: every bin advances), at every start offset, frozen and scanning, with a pitch ratio, over 24000 samples (many frames carrying the phases on).
 TEST (spectral_phase_lock_that_advances_only_the_kept_bins_is_the_old_phase_lock)
 {
@@ -1345,23 +1424,29 @@ TEST (spectral_phase_lock_that_advances_only_the_kept_bins_is_the_old_phase_lock
             }
     CHECK_EQ (runs, 60);
     CHECK_EQ (different, 0);
-    // Mac timing of one frame with Phase Lock (synthesis of one hop, 8 voices of a chord worth of frames)
-    double us[2] = {};
-    for (int legacy = 0; legacy < 2; ++legacy)
+    // Mac timing of one frame with Phase Lock (synthesis of one hop), a rich tone (few peaks) and noise (a peak every few bins); the best of 5 runs of 2000 frames
+    const Analysis* timed[2] = { &rich1.analysis, &noisy.analysis };
+    const char* timedName[2] = { "rich tone", "noise" };
+    for (int t = 0; t < 2; ++t)
     {
-        SpectralParams p = frozen (0.3f);
-        p.phaseLock = true;
-        SpectralVoice v;
-        v.prepare (kSr);
-        v.setLegacyPhaseLock (legacy != 0);
-        v.noteOn (&rich1.analysis, p, 0.0f, 0);
-        std::vector<float> lo (kHop), ro (kHop);
-        const auto t0 = std::chrono::steady_clock::now();
-        for (int i = 0; i < 2000; ++i)
-            v.process (p, lo.data(), ro.data(), kHop);
-        us[legacy] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / 2000.0;
+        double us[2] = { 1.0e9, 1.0e9 };
+        for (int run = 0; run < 5; ++run)
+            for (int legacy = 0; legacy < 2; ++legacy)
+            {
+                SpectralParams p = frozen (0.3f);
+                p.phaseLock = true;
+                SpectralVoice v;
+                v.prepare (kSr);
+                v.setLegacyPhaseLock (legacy != 0);
+                v.noteOn (timed[t], p, 0.0f, 0);
+                std::vector<float> lo (kHop), ro (kHop);
+                const auto t0 = std::chrono::steady_clock::now();
+                for (int i = 0; i < 2000; ++i)
+                    v.process (p, lo.data(), ro.data(), kHop);
+                us[legacy] = std::min (us[legacy], std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / 2000.0);
+            }
+        std::printf ("    one frame with Phase Lock (a hop, %s): %.2f us now, %.2f us with every bin advanced (this Mac)\n", timedName[t], us[0], us[1]);
     }
-    std::printf ("    one frame with Phase Lock (a hop, rich tone): %.2f us now, %.2f us before (this Mac)\n", us[0], us[1]);
 }
 
 // SP6: a priming frame is overlap-added straight into the ring from its first kept sample. The kernel equals the old add through a zeroed temporary and a loop (arbitrary ring contents, every start that

@@ -870,6 +870,36 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
         band (om_, hostBinHz);
 }
 
+/** The peaks of the phase lock: the bins j in 1 .. kBins - 2 with om[j] > om[j - 1], om[j] >= om[j + 1] and om[j] > 1e-6, in order. Returns their number. */
+static int lockPeaks (const float* om, uint16_t* peaks) noexcept
+{
+    int numPeaks = 0;
+    for (int j = 1; j < kBins - 1; ++j)
+        if (om[j] > om[j - 1] && om[j] >= om[j + 1] && om[j] > 1.0e-6f)
+            peaks[numPeaks++] = static_cast<uint16_t> (j);
+    return numPeaks;
+}
+
+/** Identity phase locking (Laroche and Dolson, "Improved phase vocoder time-scale modification of audio", 1999): every bin of a peak's region of influence takes the peak's synthesis phase plus
+    its analysis phase difference to the peak, phase[q] = phase[peak] + (oth[q] - oth[peak]). The regions are centred on the peaks with their boundaries at the midpoints: between the peaks a and b
+    the bins a + 1 .. (a + b) / 2 follow a and (a + b) / 2 + 1 .. b - 1 follow b; bins 1 .. first peak - 1 follow the first peak, last peak + 1 .. kBins - 1 the last one. (The same midpoints
+    as the regions the pitch shift moves together, shapeFrame ().) Only bin 0 and the peaks keep their own phase. Until round 13 the bins (a + b) / 2 + 1 .. b - 1 were left out (the half of
+    every region left of its peak, after the first one, kept its own advanced phase). No peak: nothing. */
+static void lockToPeaks (float* phase, const float* oth, const uint16_t* peaks, int numPeaks, bool neon) noexcept
+{
+    if (numPeaks == 0)
+        return;
+    kernels::lockRun (phase, oth, 1, peaks[0] - 1, phase[peaks[0]], oth[peaks[0]], neon);
+    for (int k = 1; k < numPeaks; ++k)
+    {
+        const int a = peaks[k - 1], b = peaks[k], mid = (a + b) / 2;
+        kernels::lockRun (phase, oth, a + 1, mid, phase[a], oth[a], neon);
+        kernels::lockRun (phase, oth, mid + 1, b - 1, phase[b], oth[b], neon);
+    }
+    const int last = peaks[numPeaks - 1];
+    kernels::lockRun (phase, oth, last + 1, kBins - 1, phase[last], oth[last], neon);
+}
+
 void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame, bool transientHit) noexcept
 {
     const Analysis& an = *analysis_;
@@ -896,24 +926,9 @@ void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame
         }
     if (p.phaseLock)
     {
-        int peak = -1;
-        for (int j = 1; j < kBins - 1; ++j)
-        {
-            if (! (om_[j] > om_[j - 1] && om_[j] >= om_[j + 1] && om_[j] > 1.0e-6f))
-                continue;
-            // the region of the previous peak ends in the middle between the two
-            const int from = peak < 0 ? 1 : (peak + j) / 2 + 1;
-            if (peak >= 0)
-                for (int q = peak + 1; q < from; ++q)
-                    c.synthPhase[q] = c.synthPhase[peak] + (oth_[q] - oth_[peak]);
-            else
-                for (int q = 1; q < j; ++q)
-                    c.synthPhase[q] = c.synthPhase[j] + (oth_[q] - oth_[j]);
-            peak = j;
-        }
-        if (peak >= 0)
-            for (int q = peak + 1; q < kBins; ++q)
-                c.synthPhase[q] = c.synthPhase[peak] + (oth_[q] - oth_[peak]);
+        uint16_t peaks[kBins];
+        const int numPeaks = lockPeaks (om_, peaks);
+        lockToPeaks (c.synthPhase, oth_, peaks, numPeaks, false);
     }
 
     for (int j = 0; j < kBins; ++j)
@@ -935,66 +950,31 @@ void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame
         c.ring[(ola_ + n) & (kFftSize - 1)] += re_[n] * hannAt (n) * kOutputScale;
 }
 
-/** advancePhases () followed by the phase lock, for the bins that the lock does not overwrite only. The lock's peaks depend on the magnitudes only: with them found first, the phases that are advanced and
-    then overwritten at once (bin 1 .. first peak - 1, peak + 1 .. the midpoint to the next peak, everything after the last peak) are not advanced. What stays: bin 0, every peak, and the half of a
-    region between the midpoint and the next peak. Those bins are gathered into `tmpPhase` / `tmpStep` (kBins - 1 values each at most), advanced by the very kernel (the same bits per bin: no
-    lane depends on its neighbours), and put back; then the lock's loops run on the peaks. With no peak the lock does nothing and every bin is advanced. */
+/** advancePhases () followed by the phase lock, for the bins that the lock does not overwrite only. The lock's peaks depend on the magnitudes only: with them found first, only the phases
+    that the lock keeps are advanced: bin 0 and every peak (lockToPeaks () overwrites every other bin). They are gathered into `tmpPhase` / `tmpStep` (1 + the number of peaks values), advanced
+    by the very kernel (the same bits per bin: no lane depends on its neighbours), and put back; then the lock runs on the peaks. With no peak the lock does nothing and every bin is advanced.
+    The same bits as advancePhases () of every bin followed by the lock (setLegacyPhaseLock). */
 static void advanceAndLock (float* phase, const float* step, const float* om, const float* oth, float* tmpPhase, float* tmpStep, bool neon) noexcept
 {
     uint16_t peaks[kBins];
-    int numPeaks = 0;
-    for (int j = 1; j < kBins - 1; ++j)
-        if (om[j] > om[j - 1] && om[j] >= om[j + 1] && om[j] > 1.0e-6f)
-            peaks[numPeaks++] = static_cast<uint16_t> (j);
+    const int numPeaks = lockPeaks (om, peaks);
     if (numPeaks == 0)
     {
         kernels::advancePhases (phase, step, kBins, neon);
         return;
     }
-    // the runs of bins that keep their advanced value: [0], [peak 0], and ((peak k - 1 + peak k) / 2 + 1 .. peak k) for k >= 1
-    int n = 0;
-    const auto gather = [&] (int from, int count)   // (two arrays in one loop: no library call for a run of two or three bins)
+    tmpPhase[0] = phase[0];
+    tmpStep[0] = step[0];
+    for (int k = 0; k < numPeaks; ++k)
     {
-        for (int i = 0; i < count; ++i)
-        {
-            tmpPhase[n + i] = phase[from + i];
-            tmpStep[n + i] = step[from + i];
-        }
-        n += count;
-    };
-    gather (0, 1);
-    gather (peaks[0], 1);
-    for (int k = 1; k < numPeaks; ++k)
-    {
-        const int from = (peaks[k - 1] + peaks[k]) / 2 + 1;
-        gather (from, peaks[k] - from + 1);
+        tmpPhase[k + 1] = phase[peaks[k]];
+        tmpStep[k + 1] = step[peaks[k]];
     }
-    kernels::advancePhases (tmpPhase, tmpStep, n, neon);
-    n = 0;
-    const auto scatter = [&] (int from, int count)
-    {
-        for (int i = 0; i < count; ++i)
-            phase[from + i] = tmpPhase[n + i];
-        n += count;
-    };
-    scatter (0, 1);
-    scatter (peaks[0], 1);
-    for (int k = 1; k < numPeaks; ++k)
-    {
-        const int from = (peaks[k - 1] + peaks[k]) / 2 + 1;
-        scatter (from, peaks[k] - from + 1);
-    }
-    // the lock (as in renderChannelFast: the bins around each peak follow it)
-    for (int q = 1; q < peaks[0]; ++q)
-        phase[q] = phase[peaks[0]] + (oth[q] - oth[peaks[0]]);
-    for (int k = 1; k < numPeaks; ++k)
-    {
-        const int peak = peaks[k - 1], from = (peak + peaks[k]) / 2 + 1;
-        for (int q = peak + 1; q < from; ++q)
-            phase[q] = phase[peak] + (oth[q] - oth[peak]);
-    }
-    for (int q = peaks[numPeaks - 1] + 1; q < kBins; ++q)
-        phase[q] = phase[peaks[numPeaks - 1]] + (oth[q] - oth[peaks[numPeaks - 1]]);
+    kernels::advancePhases (tmpPhase, tmpStep, numPeaks + 1, neon);
+    phase[0] = tmpPhase[0];
+    for (int k = 0; k < numPeaks; ++k)
+        phase[peaks[k]] = tmpPhase[k + 1];
+    lockToPeaks (phase, oth, peaks, numPeaks, neon);
 }
 
 void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double frame, bool transientHit, bool reuseShape, float* twistState) noexcept
@@ -1033,23 +1013,9 @@ void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double f
         fusedAdvance = true;   // phase update, sine and cosine and the bins in one pass below
     if (p.phaseLock && ! locked)
     {
-        int peak = -1;
-        for (int j = 1; j < kBins - 1; ++j)
-        {
-            if (! (om_[j] > om_[j - 1] && om_[j] >= om_[j + 1] && om_[j] > 1.0e-6f))
-                continue;
-            const int from = peak < 0 ? 1 : (peak + j) / 2 + 1;
-            if (peak >= 0)
-                for (int q = peak + 1; q < from; ++q)
-                    c.synthPhase[q] = c.synthPhase[peak] + (oth_[q] - oth_[peak]);
-            else
-                for (int q = 1; q < j; ++q)
-                    c.synthPhase[q] = c.synthPhase[j] + (oth_[q] - oth_[j]);
-            peak = j;
-        }
-        if (peak >= 0)
-            for (int q = peak + 1; q < kBins; ++q)
-                c.synthPhase[q] = c.synthPhase[peak] + (oth_[q] - oth_[peak]);
+        uint16_t peaks[kBins];
+        const int numPeaks = lockPeaks (om_, peaks);
+        lockToPeaks (c.synthPhase, oth_, peaks, numPeaks, neon);
     }
 
     // the bins of the frame: magnitude * (cos, sin) of the phase (bin 0 silent, the Nyquist bin real), then the transform of the real signal and the overlap add
@@ -1200,23 +1166,9 @@ void SpectralVoice::startPhases (const SpectralParams& p, int ch, int j, float* 
     const float* const of_ = scratch.of; const float* const oth_ = scratch.oth; const float* const om_ = scratch.om;
     const auto lock = [&]
     {
-        int peak = -1;
-        for (int q = 1; q < kBins - 1; ++q)
-        {
-            if (! (om_[q] > om_[q - 1] && om_[q] >= om_[q + 1] && om_[q] > 1.0e-6f))
-                continue;
-            const int from = peak < 0 ? 1 : (peak + q) / 2 + 1;
-            if (peak >= 0)
-                for (int r = peak + 1; r < from; ++r)
-                    out[r] = out[peak] + (oth_[r] - oth_[peak]);
-            else
-                for (int r = 1; r < q; ++r)
-                    out[r] = out[q] + (oth_[r] - oth_[q]);
-            peak = q;
-        }
-        if (peak >= 0)
-            for (int r = peak + 1; r < kBins; ++r)
-                out[r] = out[peak] + (oth_[r] - oth_[peak]);
+        uint16_t peaks[kBins];
+        const int numPeaks = lockPeaks (om_, peaks);
+        lockToPeaks (out, oth_, peaks, numPeaks, neon && ! reference_);
     };
     int steps;
     if (phaseFrame_[ch] >= 1 && phaseFrame_[ch] <= j)

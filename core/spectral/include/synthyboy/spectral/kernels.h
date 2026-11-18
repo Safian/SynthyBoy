@@ -93,6 +93,8 @@ void overlapAdd (float* ring, int at, const float* zr, const float* zi, float sc
 void lerpBins (float* out, const float* a, const float* b, float t, int n, bool neon) noexcept;
 /** a[k] *= g[k], k < n. */
 void mulBins (float* a, const float* g, int n, bool neon) noexcept;
+/** One run of the identity phase lock: phase[q] = phase0 + (oth[q] - oth0) for q = from .. to (inclusive; nothing when to < from). `neon`: four at a time, the same bits. */
+void lockRun (float* phase, const float* oth, int from, int to, float phase0, float oth0, bool neon) noexcept;
 /** The largest of a[k], k < n (0 for n <= 0, as the loop of the voice starts from 0). */
 float maxBins (const float* a, int n, bool neon) noexcept;
 /** The peaks of a magnitude spectrum: the bins k in 1 .. n - 2 with m[k] > m[k - 1], m[k] >= m[k + 1] and m[k] > 1e-5 top, in order, at most maxPeaks of them. Returns their number. */

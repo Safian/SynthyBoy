@@ -621,6 +621,23 @@ void mulBins (float* a, const float* g, int n, bool neon) noexcept
         a[k] *= g[k];
 }
 
+void lockRun (float* phase, const float* oth, int from, int to, float phase0, float oth0, bool neon) noexcept
+{
+    int q = from;
+#if SB_SPECTRAL_NEON
+    if (neon)
+    {
+        const float32x4_t vp = vdupq_n_f32 (phase0), vo = vdupq_n_f32 (oth0);
+        for (; q + 4 <= to + 1; q += 4)
+            vst1q_f32 (phase + q, vaddq_f32 (vp, vsubq_f32 (vld1q_f32 (oth + q), vo)));
+    }
+#else
+    (void) neon;
+#endif
+    for (; q <= to; ++q)
+        phase[q] = phase0 + (oth[q] - oth0);
+}
+
 float maxBins (const float* a, int n, bool neon) noexcept
 {
     float top = 0.0f;
