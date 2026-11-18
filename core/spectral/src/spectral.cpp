@@ -889,15 +889,24 @@ static void lockToPeaks (float* phase, const float* oth, const uint16_t* peaks, 
 {
     if (numPeaks == 0)
         return;
-    kernels::lockRun (phase, oth, 1, peaks[0] - 1, phase[peaks[0]], oth[peaks[0]], neon);
+    // a recorded sound has a peak every three to four bins: most runs are one or two bins long and are written here, the longer ones by the kernel (the same expression, the same bits)
+    const auto run = [&] (int from, int to, int peak)
+    {
+        const float p0 = phase[peak], o0 = oth[peak];
+        if (to - from < 4)
+            for (int q = from; q <= to; ++q)
+                phase[q] = p0 + (oth[q] - o0);
+        else
+            kernels::lockRun (phase, oth, from, to, p0, o0, neon);
+    };
+    run (1, peaks[0] - 1, peaks[0]);
     for (int k = 1; k < numPeaks; ++k)
     {
         const int a = peaks[k - 1], b = peaks[k], mid = (a + b) / 2;
-        kernels::lockRun (phase, oth, a + 1, mid, phase[a], oth[a], neon);
-        kernels::lockRun (phase, oth, mid + 1, b - 1, phase[b], oth[b], neon);
+        run (a + 1, mid, a);
+        run (mid + 1, b - 1, b);
     }
-    const int last = peaks[numPeaks - 1];
-    kernels::lockRun (phase, oth, last + 1, kBins - 1, phase[last], oth[last], neon);
+    run (peaks[numPeaks - 1] + 1, kBins - 1, peaks[numPeaks - 1]);
 }
 
 void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame, bool transientHit) noexcept
