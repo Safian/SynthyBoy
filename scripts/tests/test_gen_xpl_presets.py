@@ -45,7 +45,7 @@ class TestObservedFile(unittest.TestCase):
         self.assertEqual((chunk["mpcProgram"], chunk["mpcProgramName"]), (20, "Space Wobble Bass"))
 
     def test_header_is_rebuilt_exactly(self):
-        self.assertEqual(fmt.build_bank_header(chunk_size=len(self.decoded) - 160, num_programs=113), self.decoded[:160])   # the observed file is from the 113 program list
+        self.assertEqual(fmt.build_bank_header(chunk_size=len(self.decoded) - 160, num_programs=113, fx_version=1000), self.decoded[:160])   # the observed file is from the 113 program list
 
     def test_whole_file_is_reproduced_except_preset_name_mark_and_times(self):
         parsed = fmt.parse_xpl(self.text)
@@ -55,8 +55,9 @@ class TestObservedFile(unittest.TestCase):
 
     def test_descriptor_defaults_match_the_host_written_one(self):
         attrs = fmt.parse_xpl(self.text)["plugin_attrs"]
-        for key in ("name", "format", "category", "manufacturer", "version", "uid", "isInstrument", "numInputs", "numOutputs", "isShell"):
+        for key in ("name", "format", "category", "manufacturer", "uid", "isInstrument", "numInputs", "numOutputs", "isShell"):
             self.assertEqual(gen.PLUGIN_ATTRS[key], attrs[key], key)
+        self.assertEqual(gen.PLUGIN_ATTRS["version"], "0.1.0.1")
         self.assertEqual(gen.DEVICE_PLUGIN_PATHS["xl"], attrs["file"])
 
 

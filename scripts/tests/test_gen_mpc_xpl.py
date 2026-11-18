@@ -343,7 +343,7 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
                 self.assertGreaterEqual(len(xpl_files), 1)
                 self.assertTrue((out_dir / "Acid Saw Reso.xpl").is_file())
                 parsed = gen_mpc_xpl.parse_xpl((out_dir / "Acid Saw Reso.xpl").read_text(encoding="utf-8"))
-                self.assertEqual(parsed["header"]["num_programs"], 2)   # the chunks of the set (1) and Init
+                self.assertEqual(parsed["header"]["num_programs"], 3)   # the chunks of the set (2) and Init
 
     def test_create_xpl_derives_137_programs_by_default(self):
         tmpl = gen_mpc_xpl.parse_xpl(get_example_path("prev_Acid_Saw_Reso.xpl").read_text(encoding="utf-8"))

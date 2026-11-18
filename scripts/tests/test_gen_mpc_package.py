@@ -86,7 +86,7 @@ class PluginDirTests(unittest.TestCase):
             parts = x.findtext("version").split(".")
             self.assertEqual(len(parts), 4)
             self.assertEqual(".".join(parts[:3]), root_version)
-            self.assertEqual(parts[3], "0")
+            self.assertEqual(parts[3], "1")
             self.assertIsNone(x.find("uiversion"), "no skins: no uiversion element")
 
     def test_version_xml_with_skins(self):

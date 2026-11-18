@@ -293,9 +293,9 @@ class HostSimPluginFieldsTests(unittest.TestCase):
         self.assertEqual(self.hostsim["uidInt"], expected)
 
     def test_plugin_version_field(self):
-        """params-hostsim.json should have 'version' field = 1000."""
+        """params-hostsim.json should have 'version' field = 101."""
         self.assertIn("version", self.hostsim)
-        self.assertEqual(self.hostsim["version"], 1000)
+        self.assertEqual(self.hostsim["version"], 101)
 
     def test_plugin_is_instrument_field(self):
         """params-hostsim.json should have 'isInstrument' field = true."""

@@ -88,6 +88,7 @@ class GenerateTests(unittest.TestCase):
     def test_version_from_root_manifest(self):
         mpc = gen_mpc.generate(PLUGIN)
         self.assertEqual(mpc["version"], PLUGIN["version"])
+        self.assertEqual(mpc["build"], PLUGIN["build"])
 
     def test_description_is_the_mpc_one(self):
         mpc = gen_mpc.generate(PLUGIN)
@@ -200,6 +201,7 @@ class CommandLineTests(unittest.TestCase):
             self.assertEqual(data["name"], "SynthyBoy")
             self.assertEqual(data["manufacturer"], "Safian")
             self.assertEqual(data["version"], PLUGIN["version"])
+            self.assertEqual(data["build"], PLUGIN["build"])
 
     def test_custom_manifest(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -212,6 +214,7 @@ class CommandLineTests(unittest.TestCase):
             out_path = tmp_path / "plugin.json"
             data = json.loads(out_path.read_text(encoding="utf-8"))
             self.assertEqual(data["version"], PLUGIN["version"])
+            self.assertEqual(data["build"], PLUGIN["build"])
 
     def test_no_args_fails(self):
         with self.assertRaises(SystemExit) as ctx:
