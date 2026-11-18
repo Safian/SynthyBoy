@@ -44,4 +44,4 @@ if (c.kind == ChangeKind::Value && c.id == 1015) writeLevel (1, c.value);   // s
 ## Limits and pitfalls
 - The destination of a strip stays a dropdown (a list of 3 to 5 rows would take the height of the fader); the strip power stays a glyph with the name.
 - `MixerRoutingBar` is declared but the strip destinations must be given by the owner with `setDestination`.
-- The header comment of `mixer_strip.h` says "SendBar"; the class is `SliderBar`.
+- `Fader` writes `state.value` inside `touchMove`, `touchUp` and `turn`: write the parameter value back to `state.value` on every update so it does not drift.
