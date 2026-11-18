@@ -8,7 +8,7 @@
 #include <cmath>
 
 // the NEON form (same condition as output_stage.h)
-#if ((defined(__arm__) || (defined(__aarch64__) && defined(__linux__))) && defined(__ARM_NEON) || defined(SB_TEST_NEON)) && ! defined(SB_NO_NEON)
+#if (((defined(__arm__) || (defined(__aarch64__) && defined(__linux__))) && defined(__ARM_NEON)) || defined(SB_TEST_NEON)) && ! defined(SB_NO_NEON)
  #include <arm_neon.h>
  #define SYNTHYBOY_PEAK_NEON 1
 #else
