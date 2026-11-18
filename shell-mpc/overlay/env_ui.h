@@ -280,6 +280,8 @@ public:
     /** Another element's full screen opened or closed: the Q group is published again at the next update (the router keeps what the last page set). */
     void forgetQGroup() noexcept { qSlots_.forget(); }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
+    /** The page went off the screen: the open list of the compact view closes. */
+    void closePopups() { if (instPopup_) closeInstanceList(); }
 
     // ---- access for the tests
     ui::EnvCompact& compact() noexcept { return compact_; }

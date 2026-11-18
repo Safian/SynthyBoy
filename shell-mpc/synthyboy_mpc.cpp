@@ -1405,6 +1405,12 @@ struct PluginInstance
             // Own scheduling, set here (not inherited): normal policy, nice 0, all CPUs. Not lower than normal: this thread holds host locks while it is inside
             // audioMasterAutomate, and a starved holder would make the host's own threads wait for it.
             synthyboy_mpc::useNormalScheduling (0, "sb-lfo-display");
+#if SYNTHYBOY_MPC_OVERLAY && defined(__linux__)
+            // the display thread polls and calls the host like the overlay thread: the same cores (the overlay's CPU plan keeps off the isolated ones and the ones the host's audio threads are pinned to).
+            // The plan is made by the overlay thread (and re-read every 10 s): applied at the start when it exists, else (and on every change) on the passes of the loop below.
+            unsigned cpuPlanSeen = 0;
+            synthyboy_mpc::overlay::Service::applyCpusToThisThread (cpuPlanSeen);
+#endif
             const int first = static_cast<int> (synthyboy::paramCount());
             int syncIdx[synthyboy_mpc::kLfoLiveCount], phaseIdx[synthyboy_mpc::kLfoLiveCount];
             for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
@@ -1443,6 +1449,9 @@ struct PluginInstance
                 std::this_thread::sleep_until (next);
                 if (liveStop.load (std::memory_order_relaxed) || closing.load (std::memory_order_acquire))
                     break;
+#if SYNTHYBOY_MPC_OVERLAY && defined(__linux__)
+                synthyboy_mpc::overlay::Service::applyCpusToThisThread (cpuPlanSeen);   // one atomic load while the plan is the same
+#endif
                 if (! hostKnows.load (std::memory_order_acquire))
                     continue;   // the host has not called us yet, so it may not hold this effect's pointer: no callback before it does, and no report is taken out of its flag meanwhile (robustness review F12)
 #if SYNTHYBOY_MPC_OVERLAY

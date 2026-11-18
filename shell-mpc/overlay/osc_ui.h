@@ -355,6 +355,9 @@ public:
     bool fingerDown() const noexcept { return gestureDown_; }
     /** The stack changed behind the UI's back (the page left, another instance): the gesture is dropped. */
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
+    /** The page went off the screen (a host dialog over it): the open list of the compact view closes, so it is not still there when the page comes back. */
+    void closePopups() { if (srcPopup_) closeSourceList(); }
+    bool popupOpen() const noexcept { return srcPopup_; }
     /** Another element's page opened or closed: the Q group is published again at the next update (the router keeps what the last page set). */
     void forgetQGroup() noexcept { qSlots_.forget(); }
 

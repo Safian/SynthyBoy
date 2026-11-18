@@ -234,6 +234,17 @@ public:
     void touchEvent (const TouchEvent& ev, double nowMs)
     {
         ++touchEvents_;
+        if (hostGesture_)
+        {
+            if (ev.kind == TouchEvent::Down)
+                hostGesture_ = false;   // a new gesture (an Up was lost): it is ours
+            else
+            {
+                if (ev.kind == TouchEvent::Up)
+                    hostGesture_ = false;
+                return;   // the rest of a gesture that went down on the host's own screen
+            }
+        }
         if (swallowTouch (ev))
             return;   // the host is dimmed (standby): this touch wakes it and nothing else, whole gesture included
         if (keyEdge_ < PanelKey::kNoKey && ev.x >= keyEdge_)
@@ -367,7 +378,7 @@ private:
         }
         if (gpu_)
             gpu_->poll (nowMs);
-        pollTouch (nowMs);
+        readTouch (nowMs);   // read now, delivered after the page check below (a touch is judged by the check of its own step)
         // a GPU picture is on the plane: the next scene goes FIRST, before any call that can wait for the display's locks (the page detection below reads the CRTC, which waits while the helper's
         // plane update holds them for a vblank): the scenes then come at the rhythm of the pace grid, whatever the rest of the step takes
         double early = 0.0;
@@ -406,6 +417,7 @@ private:
         else if (count == 0)    hiddenReason = "no instance";
         if (! hiddenReason.empty())
         {
+            hideCurrentView();
             presenter_.hide();
             hideGpu (nowMs);
             current_ = shownView_ = -1;
@@ -525,6 +537,7 @@ private:
             {
                 if (current_ >= 0 && view < 0)
                     ++viewHides_;   // the page went off the screen (a blink when the panel comes or goes)
+                hideCurrentView();   // the view that was on screen is not any more: its pop-up lists close, its gesture ends
                 if (view >= 0 && view != current_)
                 {
                     keys_[view].forget();   // another tab or sub-tab: the host's picture under us is another one, the reference is taken again
@@ -542,6 +555,7 @@ private:
                 setState ("hidden: " + why);
             }
         }
+        deliverTouch (nowMs);
         updateKey (nowMs);
         if (current_ >= 0)
         {
@@ -859,14 +873,63 @@ private:
         }
     }
 
-    /** The touch screen: only while a view of the Play page is on screen (the plugin-drawn pages are there); the events go to the view, a running finger gets the clock for the long press. */
-    void pollTouch (double nowMs)
+    /** The touch screen is read for the plugin-drawn pages only while a view of the Play page is on screen (by what the last page check said). */
+    bool touchEligible() const noexcept { return current_ >= 0 && isUiPage (current_) && activeSlot_ >= 0 && presenter_.opened(); }
+
+    /** A touch event that is not ours (nothing of ours on screen): the host's. A finger that went down on the host is the host's until it is up, also when our page is on screen again meanwhile. */
+    void noteHostTouch (const TouchEvent& ev) noexcept
+    {
+        if (ev.kind == TouchEvent::Down)
+            hostGesture_ = true;
+        else if (ev.kind == TouchEvent::Up)
+            hostGesture_ = false;
+    }
+
+    /** First part of the touch step, before the page check: while our page is on screen (as far as the last check knows) the events are read and kept; with no page they are read and thrown away (they must not
+        arrive later, when a page is on screen again: the taps of the host's dialogs). A finger going down asks for a page check in this very step: the touch is delivered after it (deliverTouch). */
+    void readTouch (double nowMs)
+    {
+        for (const TouchEvent& ev : pendingTouch_)   // left over from a step that ended before its delivery: not ours
+            noteHostTouch (ev);
+        pendingTouch_.clear();
+        if (touchIn_ == nullptr)
+            return;
+        if (touchEligible())
+        {
+            touchIn_->configure (presenter_.panelWidth(), presenter_.panelHeight(), rotation_);
+            bool down = false;
+            touchIn_->poll ([this, &down] (const TouchEvent& ev)
+            {
+                if (ev.kind == TouchEvent::Down)
+                    down = true;
+                if (pendingTouch_.size() < kMaxPendingTouch || ev.kind != TouchEvent::Move)
+                    pendingTouch_.push_back (ev);
+            });
+            if (down)
+                nextDetectMs_ = nowMs;
+        }
+        else
+            touchIn_->poll ([this] (const TouchEvent& ev) { noteHostTouch (ev); });
+    }
+
+    /** Second part, after the page check of this step (current_ is what the check found, the one source of the touch and of the picture): the kept events go to the view on screen, or are the host's. A running
+        finger gets the clock for the long press. */
+    void deliverTouch (double nowMs)
     {
         pollMouse (nowMs);
-        if (touchIn_ == nullptr || current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0 || ! presenter_.opened())
+        if (touchIn_ == nullptr)
             return;
-        touchIn_->configure (presenter_.panelWidth(), presenter_.panelHeight(), rotation_);
-        touchIn_->poll ([this, nowMs] (const TouchEvent& ev) { touchEvent (ev, nowMs); });
+        const bool ours = touchEligible();
+        for (const TouchEvent& ev : pendingTouch_)
+        {
+            if (ours)
+                touchEvent (ev, nowMs);
+            else
+                noteHostTouch (ev);
+        }
+        pendingTouch_.clear();
+        if (! ours)
+            return;
         std::lock_guard<std::mutex> g (mu_);
         IInstanceView* v = slots_.at (activeSlot_);
         if (v != nullptr && views_[static_cast<size_t> (current_)]->fingerDown())
@@ -874,6 +937,17 @@ private:
             views_[static_cast<size_t> (current_)]->onTick (ui_[activeSlot_], *v, nowMs);
             needFrame_ = true;
         }
+    }
+
+    /** The view on screen goes off it (or is replaced): its gesture ends and its pop-up lists close, so a list opened by a touch that came before the check noticed the host's dialog is not open when the page
+        comes back. */
+    void hideCurrentView()
+    {
+        if (current_ < 0)
+            return;
+        std::lock_guard<std::mutex> g (mu_);
+        views_[static_cast<size_t> (current_)]->onHidden();
+        needFrame_ = true;
     }
 
     /** The mouse: like the touch screen only while a plugin-drawn page is on screen (the events of other times are read and thrown away: they must not arrive later). Left button = a finger, the wheel = steps. */
@@ -1645,6 +1719,9 @@ private:
     unsigned long detailFrames_ = 0;
     const char* detailSource_ = "auto";
     int look_ = 1;
+    std::vector<TouchEvent> pendingTouch_;   // read at the start of the step, delivered after its page check
+    bool hostGesture_ = false;               // a finger is down that went down while no page of ours was on screen
+    static constexpr size_t kMaxPendingTouch = 256;
     unsigned long touchEvents_ = 0, touchTaken_ = 0, wheelEvents_ = 0, wheelTaken_ = 0;
     Rect instanceRects_[Detection::kMaxViews];
     int targetBase_[Detection::kMaxViews] = {};

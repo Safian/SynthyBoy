@@ -261,6 +261,13 @@ public:
     }
     bool fingerDown() const noexcept override { return (osc_ != nullptr && osc_->fingerDown()) || (env_ != nullptr && env_->fingerDown()) || (lfo_ != nullptr && lfo_->fingerDown()); }
     void dropGesture() noexcept override { if (osc_ != nullptr) osc_->dropGesture(); if (env_ != nullptr) env_->dropGesture(); if (lfo_ != nullptr) lfo_->dropGesture(); }
+    void onHidden() override
+    {
+        dropGesture();
+        if (osc_ != nullptr) osc_->closePopups();
+        if (env_ != nullptr) env_->closePopups();
+        if (lfo_ != nullptr) lfo_->closePopups();
+    }
     OscUi* oscUi() noexcept { return osc_.get(); }
     EnvUi* envUi() noexcept { return env_.get(); }
     LfoUi* lfoUi() noexcept { return lfo_.get(); }

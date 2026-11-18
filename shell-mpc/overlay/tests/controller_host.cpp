@@ -801,6 +801,79 @@ int main()
         check (r.ctl->uiState (slot).isMain() && r.ctl->touchTaken() == taken, "another tab: the stack is closed and a touch is not taken by the plugin's pages");
         check (! r.inst.uiFullOpen.load(), "the stack closed by the page leaving: the instance is told at once (it stops reporting the frame the host widgets are hidden at: coming back finds them)");
     }
+    // ---- a hidden overlay takes no touch (a host dialog over the page): the page check of the SAME step judges a touch; the host's gesture is the host's; a pop-up never stays open under a hidden page ----
+    {
+        struct FakeTouch final : ITouchInput
+        {
+            std::vector<TouchEvent> queue;
+            void configure (int, int, int) override {}
+            int poll (const std::function<void (const TouchEvent&)>& h) override { for (const TouchEvent& e : queue) h (e); const int n = static_cast<int> (queue.size()); queue.clear(); return n; }
+        } touch;
+        const int play1 = 14;
+        Rig r (true, 10.0, &touch);
+        r.inst.playSel[0].store (2);
+        r.frame.setView (play1, true, 90);
+        check (r.until ([&] { return r.on() && r.ctl->currentIndex() == play1; }, 800) >= 0, "(hidden touch: the Play page is on screen)");
+        r.run (300);
+        auto* pv = static_cast<PlayView*> (const_cast<IView*> (r.ctl->viewByName ("play1")));
+        const synthyboy_mpc::ui::Rect sel = pv->oscUi()->compact().instances.rect();
+        const int cx = sel.x + sel.w / 2, cy = sel.y + sel.h / 2;
+        auto ev = [&] (TouchEvent::Kind k) { TouchEvent e; e.kind = k; e.x = cx; e.y = cy; e.timeUs = 1; touch.queue.push_back (e); };
+        auto tap = [&] { ev (TouchEvent::Down); ev (TouchEvent::Up); r.run (30); r.run (200); };
+        // (b) the same tap while visible is taken and opens the list
+        const unsigned long taken0 = r.ctl->touchTaken();
+        tap();
+        check (r.ctl->touchTaken() > taken0 && pv->oscUi()->popupOpen(), "(b) visible: the tap is taken and opens the selector list");
+        r.ctl->closeAll (r.ctl->slotOf (&r.inst));
+        pv->oscUi()->closePopups();
+        // (a) a host dialog hides the view; the check has seen it: a tap takes nothing, opens nothing, writes nothing
+        r.frame.setView (play1, false, 90);
+        check (r.until ([&] { return r.ctl->currentIndex() < 0; }, 600) >= 0, "(a) the host dialog hides the view");
+        const unsigned long taken1 = r.ctl->touchTaken(), events1 = r.ctl->touchEvents();
+        const auto writes1 = r.inst.uiWrites.load();
+        const int selBefore = r.inst.playSel[0].load();
+        tap();
+        tap();
+        check (r.ctl->touchTaken() == taken1 && r.ctl->touchEvents() == events1 && ! pv->oscUi()->popupOpen() && r.inst.uiWrites.load() == writes1 && r.inst.playSel[0].load() == selBefore, "(a) hidden: the taps are not taken, not counted, open no list and change no state");
+        // the taps of the host's dialog are thrown away, not kept for later: the page comes back and nothing of them arrives
+        r.frame.setView (play1, true, 90);
+        r.run (300);
+        check (r.ctl->currentIndex() == play1 && r.ctl->touchTaken() == taken1 && ! pv->oscUi()->popupOpen(), "(a) the page is back: nothing of the host's taps was kept and replayed");
+        // a finger that went down on the host and is still down when the page is back is the host's until it is up
+        r.frame.setView (play1, false, 90);
+        r.until ([&] { return r.ctl->currentIndex() < 0; }, 600);
+        ev (TouchEvent::Down);
+        r.run (150);
+        r.frame.setView (play1, true, 90);
+        r.until ([&] { return r.ctl->currentIndex() == play1; }, 600);
+        ev (TouchEvent::Up);
+        r.run (100);
+        check (r.ctl->touchTaken() == taken1 && ! pv->oscUi()->popupOpen(), "(a) the rest of a gesture that began on the host is not ours");
+        // (c) the touch comes in the very step in which the host dialog appears: the page check of that step runs before the touch is judged
+        r.run (300);   // the detector is idle until the next check is due: the touch must not wait for it
+        r.frame.setView (play1, false, 90);
+        ev (TouchEvent::Down);
+        ev (TouchEvent::Up);
+        r.run (10);
+        check (r.ctl->currentIndex() < 0 && r.ctl->touchTaken() == taken1 && ! pv->oscUi()->popupOpen(), "(c) a tap in the first step after the dialog appeared: the touch itself forces the page check, which hides the view first");
+        r.frame.setView (play1, true, 90);
+        r.until ([&] { return r.ctl->currentIndex() == play1; }, 600);
+        r.run (300);
+        // (c) what the code cannot know (the dialog and the tap in one frame): the list that tap opened closes when the view hides
+        tap();
+        check (pv->oscUi()->popupOpen(), "(c) (the list is open again)");
+        r.frame.setView (play1, false, 90);
+        r.until ([&] { return r.ctl->currentIndex() < 0; }, 600);
+        check (! pv->oscUi()->popupOpen(), "(c) the view hides: the open list is closed, it is not open when the page comes back");
+        r.frame.setView (play1, true, 90);
+        r.until ([&] { return r.ctl->currentIndex() == play1; }, 600);
+        check (! pv->oscUi()->popupOpen(), "(c) the page is back with no list open");
+        // (d) a touch is judged by the state that draws: the page is on screen exactly when a touch is taken
+        const unsigned long t2 = r.ctl->touchTaken();
+        r.run (300);
+        tap();
+        check (r.ctl->currentIndex() == play1 && r.ctl->touchTaken() > t2 && r.plane.planeOn, "(d) the page drawn is the page that takes the touch (one source: the page check of the step)");
+    }
     // ---- the Q group a page sets reaches the instance (IInstanceView::setQGroup); the interface default does nothing ----
     {
         FakeInstance f;
