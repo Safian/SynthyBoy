@@ -36,9 +36,12 @@ const KernelForm kForms[] = { { "reference lanes", &Filter::processPairReference
 
 const FilterType kTypes[] = { FilterType::ScreamLP, FilterType::ScreamBP, FilterType::EMSLadder, FilterType::MGLadder, FilterType::Diffusor, FilterType::Allpasses,
                               FilterType::LH, FilterType::LB, FilterType::LP, FilterType::LN, FilterType::HB, FilterType::HP, FilterType::HN, FilterType::BP, FilterType::BN,
-                              FilterType::PP, FilterType::PN, FilterType::NN };
+                              FilterType::PP, FilterType::PN, FilterType::NN,
+                              FilterType::CmbL, FilterType::FlgL, FilterType::PhsL, FilterType::CmbH, FilterType::FlgH, FilterType::PhsH, FilterType::CmbHL,
+                              FilterType::FlgHL, FilterType::PhsHL };
 const char* const kTypeNames[] = { "Scream LP", "Scream BP", "EMS Ladder", "MG Ladder", "Diffusor", "Allpasses",
-                                   "Multi LH", "Multi LB", "Multi LP", "Multi LN", "Multi HB", "Multi HP", "Multi HN", "Multi BP", "Multi BN", "Multi PP", "Multi PN", "Multi NN" };
+                                   "Multi LH", "Multi LB", "Multi LP", "Multi LN", "Multi HB", "Multi HP", "Multi HN", "Multi BP", "Multi BN", "Multi PP", "Multi PN", "Multi NN",
+                                   "Cmb L", "Flg L", "Phs L", "Cmb H", "Flg H", "Phs H", "Cmb HL", "Flg HL", "Phs HL" };
 
 FilterParams randomParams (Rng& r, int hold, bool extreme)
 {
@@ -275,8 +278,9 @@ TEST (pair_kernel_refuses_what_it_has_no_form_for_and_leaves_the_filters_alone)
 
 TEST (pair_kernel_speed_for_information)
 {
-    // no assertion: the time of a stereo sample through two process () calls and through each form of the kernel, on the machine of the test (a settled cutoff, hold 4:
-    // the case of a held note at the MPC's profile)
+    // no assertion: the time of a stereo sample through two process () calls and through each form of the kernel, on the machine of the test (hold 4, the MPC's
+    // profile): a settled cutoff (a held note), and a cutoff that a modulator moves every block (left and right apart, as with a filter pan)
+    for (const bool moving : { false, true })
     for (size_t t = 0; t < sizeof kTypes / sizeof kTypes[0]; ++t)
     {
         double ns[3] = { 0.0, 0.0, 0.0 };
@@ -304,6 +308,14 @@ TEST (pair_kernel_speed_for_information)
             const auto t0 = std::chrono::steady_clock::now();
             for (int b = 0; b < blocks; ++b)
             {
+                if (moving)
+                {
+                    FilterParams p = l.getParams();
+                    p.cutoff = 1800.0f * (1.0f + 0.5f * std::sin (0.013f * static_cast<float> (b)));
+                    l.setParams (p);
+                    p.cutoff *= 1.3f;
+                    r.setParams (p);
+                }
                 for (int i = 0; i < 32; ++i)
                 {
                     inL[i] = 0.5f * rng.bi();
@@ -325,7 +337,7 @@ TEST (pair_kernel_speed_for_information)
             if (sink == 1234.5f)
                 std::puts ("");
         }
-        std::printf ("    %-12s ns per stereo sample (with the input noise): two calls %.1f, reference lanes %.1f, NEON lanes %.1f\n", kTypeNames[t], ns[0], ns[1], ns[2]);
+        std::printf ("    %-12s %s ns per stereo sample (with the input noise): two calls %.1f, reference lanes %.1f, NEON lanes %.1f\n", kTypeNames[t], moving ? "moving " : "settled", ns[0], ns[1], ns[2]);
     }
     CHECK (true);
 }

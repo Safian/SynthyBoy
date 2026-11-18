@@ -195,7 +195,16 @@ public:
         const bool allpasses = type == FilterType::Allpasses; // Smear / Allpasses: the all-pass chain of the Diffusor with 6 stages, its own taps and gain
         const bool chain = diffusor || allpasses;
         const bool multi = type >= FilterType::LH && type <= FilterType::NN; // Multi SVF: two state variable filters in series, the second at a cutoff shifted by var
-        if (fb.type_ != type || !(scream || ladder || chain || multi) || fa.sampleRate_ != fb.sampleRate_ || fa.params_.coefHold != fb.params_.coefHold)
+        const bool flanges = type >= FilterType::CmbL && type <= FilterType::PhsHL;
+        const bool phaser = type == FilterType::PhsL || type == FilterType::PhsH || type == FilterType::PhsHL;
+        const bool flg = type == FilterType::FlgL || type == FilterType::FlgH || type == FilterType::FlgHL;
+        const bool comb = flanges && !phaser;                                  // Cmb and Flg: a delay line with a filtered feedback
+        const bool fbLow = type == FilterType::CmbL || type == FilterType::FlgL || type == FilterType::PhsL;   // the feedback filter of a Flanges type: L, H or HL
+        const bool fbHigh = type == FilterType::CmbH || type == FilterType::FlgH || type == FilterType::PhsH;
+        const bool fbBand = flanges && !fbLow && !fbHigh;
+        if (fb.type_ != type || !(scream || ladder || chain || multi || flanges) || fa.sampleRate_ != fb.sampleRate_ || fa.params_.coefHold != fb.params_.coefHold)
+            return false;
+        if (comb && (fa.combDelay1_.empty() || fb.combDelay1_.empty()))
             return false;
 
         const auto srFloat = static_cast<float> (fa.sampleRate_);
@@ -269,6 +278,28 @@ public:
         const int sel2 = (type == FilterType::LB || type == FilterType::HB) ? 1
                          : (type == FilterType::LP || type == FilterType::HP || type == FilterType::BP || type == FilterType::PP) ? 2
                          : (type == FilterType::LN || type == FilterType::HN || type == FilterType::BN || type == FilterType::PN || type == FilterType::NN) ? 3 : 0;
+        // Flanges: the feedback filters of the L and H types follow var only (one coefficient per call), those of the HL types the cutoff (see the cutoff block)
+        float bwFactor[2] = { 0.0f, 0.0f };
+        V vFbLP = V::all (0.0f), vFbHP = V::all (0.0f);
+        if (flanges)
+            for (int l = 0; l < 2; ++l)
+            {
+                bwFactor[l] = 0.1f + 1.8f * var[l];
+                if (fbLow)
+                {
+                    const float fLP = 50.0f + 18000.0f * var[l];
+                    onePoleCoef (f[l]->combFeedbackLP_, f[l]->tanM (kPi * std::min (fLP, srFloat * 0.49f) / srFloat));
+                }
+                else if (fbHigh)
+                {
+                    const float fHP = 20.0f + 12000.0f * var[l];
+                    onePoleCoef (f[l]->combFeedbackHP_, f[l]->tanM (kPi * std::min (fHP, srFloat * 0.49f) / srFloat));
+                }
+            }
+        if (fbLow)
+            vFbLP = V::set (fa.combFeedbackLP_.lastCoef, fb.combFeedbackLP_.lastCoef);
+        else if (fbHigh)
+            vFbHP = V::set (fa.combFeedbackHP_.lastCoef, fb.combFeedbackHP_.lastCoef);
 
         V smoothedCutoff = V::set (fa.smoothedCutoff_, fb.smoothedCutoff_), smoothedRes = V::set (fa.smoothedRes_, fb.smoothedRes_);
         V heldCutoff = V::set (fa.heldCutoff_, fb.heldCutoff_), heldRes = V::set (fa.heldRes_, fb.heldRes_);
@@ -280,12 +311,16 @@ public:
         V ls[4];
         for (int k = 0; k < 4; ++k)
             ls[k] = V::sanitized (V::set (fa.ladder_.s[k], fb.ladder_.s[k]));
+        V fbLPs = V::sanitized (V::set (fa.combFeedbackLP_.s, fb.combFeedbackLP_.s)), fbHPs = V::sanitized (V::set (fa.combFeedbackHP_.s, fb.combFeedbackHP_.s));
+        V aps[6];
+        for (int k = 0; k < 6; ++k)
+            aps[k] = V::sanitized (V::set (fa.phaserAP_[k].s, fb.phaserAP_[k].s));
 
         // what follows the cutoff of a lane; redone when that cutoff changes
         float lastCutoff[2] = { 0.0f, 0.0f }, g[2] = { 0.0f, 0.0f }, g2[2] = { 0.0f, 0.0f };
         bool haveCutoff[2] = { false, false };
         DelayLine::Tap taps[2][8];
-        V vGSafe = V::all (0.0f), vGSafe2 = V::all (0.0f), vScreamCoef = V::all (0.0f);
+        V vGSafe = V::all (0.0f), vGSafe2 = V::all (0.0f), vScreamCoef = V::all (0.0f), vPhCoef = V::all (0.0f);
         V vLG = V::all (0.0f), vLG0 = V::all (0.0f), vLG2 = V::all (0.0f), vLG3 = V::all (0.0f), vLG4 = V::all (0.0f);
         float lastR[2] = { 0.0f, 0.0f };
         bool haveR[2] = { false, false };
@@ -318,7 +353,9 @@ public:
                 lastCutoff[l] = c;
                 haveCutoff[l] = true;
                 cutoffChanged = true;
-                if (!chain) // (the all-pass chains do not use g: processInternal () computes it for them through the memo, which changes nothing but the memo)
+                // g of processInternal (); the all-pass chains, the combs and the flangers do not use it (processInternal () computes it for them through the
+                // memo, which changes nothing but the memo)
+                if (!chain && !comb)
                     g[l] = f[l]->tanM (kPi * c / srFloat);
                 if (scream)
                 {
@@ -348,12 +385,38 @@ public:
                         ld.haveG = true;
                     }
                 }
-                else
+                else if (chain)
                 {
                     // the delay of each stage as processInternal () computes it: max (2, (sr / max (20, cutoff)) * factor), then read ()'s clamp in tapFor ()
                     const float perCycle = srFloat / std::max (20.0f, c);
                     for (int k = 0; k < stages; ++k)
                         taps[l][k] = f[l]->diffuserDelays_[k].tapFor (std::max (2.0f, perCycle * (diffusor ? 0.2f + 0.15f * static_cast<float> (k) : 0.3f + 0.2f * static_cast<float> (k))));
+                }
+                else
+                {
+                    // Flanges: the delay of the comb or the flanger (processInternal () computes it, with its log10, every sample) and the HL feedback filters
+                    if (comb)
+                    {
+                        float delaySamples = srFloat / std::max (20.0f, c);
+                        if (flg)
+                        {
+                            const float delaySec = 0.0002f + 0.0098f * (1.0f - std::log10 (std::max (20.0f, c) / 20.0f) / 3.0f);
+                            delaySamples = std::max (2.0f, delaySec * srFloat);
+                        }
+                        taps[l][0] = f[l]->combDelay1_.tapFor (delaySamples);
+                    }
+                    else
+                        for (int k = 0; k < 6; ++k)
+                            onePoleCoef (f[l]->phaserAP_[k], g[l]);
+                    if (fbBand)
+                    {
+                        const float fLP = std::min (c * (1.0f + bwFactor[l]), srFloat * 0.49f);
+                        const float fHP = std::max (20.0f, c / (1.0f + bwFactor[l]));
+                        const float gLP = f[l]->tanM (kPi * fLP / srFloat);
+                        const float gHP = f[l]->tanM (kPi * fHP / srFloat);
+                        onePoleCoef (f[l]->combFeedbackLP_, gLP);
+                        onePoleCoef (f[l]->combFeedbackHP_, gHP);
+                    }
                 }
             }
             if (cutoffChanged)
@@ -375,6 +438,16 @@ public:
                     vLG2 = V::set (fa.ladder_.cG2, fb.ladder_.cG2);
                     vLG3 = V::set (fa.ladder_.cG3, fb.ladder_.cG3);
                     vLG4 = V::set (fa.ladder_.cG4, fb.ladder_.cG4);
+                }
+                else if (flanges)
+                {
+                    if (phaser)
+                        vPhCoef = V::set (fa.phaserAP_[0].lastCoef, fb.phaserAP_[0].lastCoef);
+                    if (fbBand)
+                    {
+                        vFbLP = V::set (fa.combFeedbackLP_.lastCoef, fb.combFeedbackLP_.lastCoef);
+                        vFbHP = V::set (fa.combFeedbackHP_.lastCoef, fb.combFeedbackHP_.lastCoef);
+                    }
                 }
             }
 
@@ -460,7 +533,7 @@ public:
                 }
                 rawOut = y;
             }
-            else
+            else if (chain)
             {
                 // the all-pass chain of the Diffusor (gain 0.5 + 0.45 res) or of Smear / Allpasses (gain 0.6 res): the two lines of a stage are read and written one
                 // after the other, the stage's arithmetic is side by side
@@ -479,6 +552,48 @@ public:
                     db.writeSanitized (xs.get (1));
                 }
                 rawOut = ap;
+            }
+            else
+            {
+                // the Flanges case of processInternal ()
+                V x = drivenIn, delayed = drivenIn;
+                if (comb)
+                    x = delayed = V::set (fa.combDelay1_.readTap (taps[0][0]), fb.combDelay1_.readTap (taps[1][0]));
+                else
+                    for (int k = 0; k < 6; ++k)
+                    {
+                        // phaserAP_[k].processLP (ap, g, lp, hp); ap = lp - hp
+                        const V pv = vPhCoef * (x - aps[k]);
+                        const V lp = pv + aps[k];
+                        aps[k] = V::sanitized (pv + lp);
+                        const V hp = x - lp;
+                        x = lp - hp;
+                    }
+                // the feedback filter: combFeedbackLP_.processLPOnly, combFeedbackHP_.processHPOnly, or the second after the first
+                V fbFiltered = x;
+                if (fbLow || fbBand)
+                {
+                    const V pv = vFbLP * (fbFiltered - fbLPs);
+                    const V lp = pv + fbLPs;
+                    fbLPs = V::sanitized (pv + lp);
+                    fbFiltered = lp;
+                }
+                if (fbHigh || fbBand)
+                {
+                    const V pv = vFbHP * (fbFiltered - fbHPs);
+                    const V lp = pv + fbHPs;
+                    fbHPs = V::sanitized (pv + lp);
+                    fbFiltered = fbFiltered - lp;
+                }
+                if (comb)
+                {
+                    const V toWrite = V::sanitized (drivenIn + V::softClipped (V::all (0.97f) * res * fbFiltered)); // write () stores sanitize (toWrite)
+                    fa.combDelay1_.writeSanitized (toWrite.get (0));
+                    fb.combDelay1_.writeSanitized (toWrite.get (1));
+                    rawOut = V::all (0.5f) * (drivenIn + delayed);
+                }
+                else
+                    rawOut = V::all (0.5f) * (drivenIn + V::softClipped (fbFiltered * (vOne + res)));
             }
 
             const V out = V::sanitized (vOneMinusMix * in + vMix * rawOut);
@@ -507,6 +622,16 @@ public:
             else if (ladder)
                 for (int k = 0; k < 4; ++k)
                     f[l]->ladder_.s[k] = ls[k].get (l);
+            else if (flanges)
+            {
+                if (fbLow || fbBand)
+                    f[l]->combFeedbackLP_.s = fbLPs.get (l);
+                if (fbHigh || fbBand)
+                    f[l]->combFeedbackHP_.s = fbHPs.get (l);
+                if (phaser)
+                    for (int k = 0; k < 6; ++k)
+                        f[l]->phaserAP_[k].s = aps[k].get (l);
+            }
         }
         return true;
     }
