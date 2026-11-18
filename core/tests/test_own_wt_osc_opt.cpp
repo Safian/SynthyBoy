@@ -3,6 +3,7 @@
 // NEON forms on (also on Apple's arm64) and without fused multiply-add, with the morph and wavetable sources (core/tests/CMakeLists.txt); it links nothing else of the engine.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -72,6 +73,7 @@ struct WtOscOptTest
     }
     static const OscTick& tickOf (const WtOsc& o) { return o.tick; }
     static bool pending (const WtOsc& o) { return o.pending; }
+    static int morphAge (const WtOsc& o) { return o.morphAge; }
 };
 } // namespace own
 } // namespace synthyboy
@@ -568,4 +570,290 @@ TEST (own_wt_osc_silent_oscillator_early_out_is_bit_identical_when_the_level_ris
     CHECK_EQ (mismatches, 0);
     CHECK (deferredPeriods > 0 && audibleChunks > 100);
     CHECK (deferredPeriods >= silentPeriods - 3 * 2 * 4 * 2); // all but the note start (and the first periods after it) are put off
+}
+
+// ---- round 13: the stagger of the morph rebuilds (docs/release/CPU-REVIEW-OSC.md F1, WtOsc::setMorphStagger) -------------------------------------------------------------------------------
+namespace
+{
+/** One voice's oscillator with a morph, driven period by period as Voice::tick and Voice::render do; `builds` counts the morph cycle builds (a build sets the age back). */
+struct StaggerVoice
+{
+    WtOsc osc;
+    MorphCache cache;
+    Rng rng;
+    bool first = true;
+    StaggerVoice() { osc.prepareMorph(); cache.prepare(); }
+    void start (uint32_t n)
+    {
+        osc.start (0.0f, 0.0f, rng);
+        osc.setMorphStagger (n);
+        first = true;
+    }
+    /** One control period; true if it built a morph cycle. */
+    bool period (const OscTick& t, float* L, float* R)
+    {
+        osc.update (t, 44100.0, rng);
+        const int before = WtOscOptTest::morphAge (osc);
+        osc.updateMorph (44100.0, first, &cache);
+        const bool built = first || WtOscOptTest::morphAge (osc) < before;
+        first = false;
+        osc.render (0, 32, L, R, nullptr, 44100.0);
+        return built;
+    }
+};
+
+OscTick morphTick (const Wavetable* wt, int morphType, bool low, int voices)
+{
+    OscTick t;
+    t.wt = wt;
+    t.semis = 57.0f;
+    t.voices = voices;
+    t.detuneSemis = 0.2f;
+    t.spread = 0.5f;
+    t.blend = 0.7f;
+    t.level = 0.7f;
+    t.frame = 0.4f;
+    t.morphType = morphType;
+    t.morphAmount = 0.3f;
+    t.lowMorph = t.lowWarp = t.fastMath = low;
+    t.active = true;
+    return t;
+}
+} // namespace
+
+// The slot: the 8 evenly spaced periods k P / 8 in the order 0, 2, 4, 6, 1, 3, 5, 7 of the seed mod 8; any 8 consecutive seeds take all 8 of them.
+TEST (own_wt_osc_morph_stagger_slots_are_evenly_spaced)
+{
+    const int expect16[8] = { 0, 4, 8, 12, 2, 6, 10, 14 };
+    for (uint32_t n = 0; n < 32; ++n)
+    {
+        CHECK_EQ (WtOsc::morphStaggerSlot (n, 16), expect16[n & 7u]);
+        CHECK_EQ (WtOsc::morphStaggerSlot (n, 8), expect16[n & 7u] / 2);
+    }
+    for (int P : { 8, 16 })
+        for (uint32_t from = 0; from < 40; ++from)
+        {
+            int seen = 0;
+            for (uint32_t n = from; n < from + 8u; ++n)
+                seen |= 1 << WtOsc::morphStaggerSlot (n, P);
+            int expect = 0;
+            for (int k = 0; k < 8; ++k)
+                expect |= 1 << (k * P / 8);
+            CHECK_EQ (seen, expect);
+        }
+    CHECK_EQ (WtOsc::morphStaggerSeed (10, 0), 10u);
+    CHECK_EQ (WtOsc::morphStaggerSeed (10, 1), 14u);
+}
+
+// (c) The schedule. The voices of a chord start in the same control period (any of the 4 periods of a 128 sample block); serials consecutive from any first serial; 8 voices x 1 morph
+// oscillator (Stretched Glass Choir) and 4 voices x 2 (Shepard Ascent: oscillators 0 and 1), tier low (a build every 16 periods) and full (every 8). Counted: the builds in each of the 8 blocks
+// after the block of the start (the start block holds the builds of the note start, which are not moved). Flat: max - min <= 1 in every case (the old schedule: all in one block of 4).
+// Restarts and voice stealing (a voice restarted at a random period with a new serial, 2000 periods, 8 voices): the first build is in the period of the start and no voice ever goes longer
+// than one rebuild period between two builds.
+TEST (own_wt_osc_morph_stagger_spreads_a_chord_flat_and_never_skips_a_rebuild)
+{
+    TestRng r (777);
+    const auto tables = makeTables (r);
+    float L[32], R[32];
+    int cases = 0, flat = 0, worstSpread = 0, oldWorstSpread = 0;
+    for (int low = 0; low < 2; ++low)
+        for (int layout = 0; layout < 2; ++layout)
+            for (int stagger = 0; stagger < 2; ++stagger)
+                for (uint32_t serial0 = 0; serial0 < 16; ++serial0)
+                    for (int phase = 0; phase < 4; ++phase)
+                    {
+                        const int notes = layout == 0 ? 8 : 4, oscs = layout == 0 ? 1 : 2;
+                        std::vector<std::unique_ptr<StaggerVoice>> v;
+                        for (int i = 0; i < notes * oscs; ++i)
+                            v.push_back (std::make_unique<StaggerVoice>());
+                        const OscTick t = morphTick (tables[2].get(), layout == 0 ? kMorphHarmonicStretch : kMorphShepard, low != 0, 1);
+                        int perBlock[10] = {};
+                        for (int per = 0; per < 4 * 10; ++per)
+                        {
+                            const int rel = per - phase;   // the chord starts in period `phase` of block 0
+                            for (int i = 0; i < notes * oscs; ++i)
+                            {
+                                if (rel < 0)
+                                    continue;
+                                if (rel == 0)
+                                    v[static_cast<size_t> (i)]->start (stagger != 0 ? WtOsc::morphStaggerSeed (serial0 + static_cast<uint32_t> (i / oscs), i % oscs) : 0u);
+                                if (v[static_cast<size_t> (i)]->period (t, L, R) && per >= 4)
+                                    ++perBlock[per / 4];
+                            }
+                        }
+                        int mx = 0, mn = 1 << 20;
+                        for (int b = 1; b <= 8; ++b)
+                        {
+                            mx = std::max (mx, perBlock[b]);
+                            mn = std::min (mn, perBlock[b]);
+                        }
+                        if (stagger != 0)
+                        {
+                            ++cases;
+                            flat += mx - mn <= 1 ? 1 : 0;
+                            worstSpread = std::max (worstSpread, mx - mn);
+                        }
+                        else
+                            oldWorstSpread = std::max (oldWorstSpread, mx - mn);
+                    }
+    std::printf ("    chords started in one block: %d cases, %d flat (builds per block max - min <= 1, worst %d); without the stagger the worst is %d\n", cases, flat, worstSpread, oldWorstSpread);
+    CHECK_EQ (cases, 2 * 2 * 16 * 4);
+    CHECK_EQ (flat, cases);
+    CHECK (oldWorstSpread >= 4);
+    // a chord of 4 notes with one morph oscillator (not exact for every first serial: at most 2 builds apart in a block of 4 periods, tier low, against 4 without the stagger)
+    int worst4 = 0;
+    for (uint32_t serial0 = 0; serial0 < 16; ++serial0)
+        for (int phase = 0; phase < 4; ++phase)
+        {
+            std::vector<std::unique_ptr<StaggerVoice>> v;
+            for (int i = 0; i < 4; ++i)
+                v.push_back (std::make_unique<StaggerVoice>());
+            const OscTick t = morphTick (tables[2].get(), kMorphHarmonicStretch, true, 1);
+            int perBlock[10] = {};
+            for (int per = phase; per < 40; ++per)
+                for (int i = 0; i < 4; ++i)
+                {
+                    if (per == phase)
+                        v[static_cast<size_t> (i)]->start (WtOsc::morphStaggerSeed (serial0 + static_cast<uint32_t> (i), 0));
+                    if (v[static_cast<size_t> (i)]->period (t, L, R) && per >= 4)
+                        ++perBlock[per / 4];
+                }
+            int mx = 0, mn = 1 << 20;
+            for (int b = 1; b <= 8; ++b)
+            {
+                mx = std::max (mx, perBlock[b]);
+                mn = std::min (mn, perBlock[b]);
+            }
+            worst4 = std::max (worst4, mx - mn);
+        }
+    std::printf ("    a chord of 4 notes, one morph oscillator, tier low: builds per block max - min at most %d (every first serial and start period)\n", worst4);
+    CHECK (worst4 <= 2);
+
+    // restarts and stealing
+    int longestGap[2] = {}, starts = 0, firstBuildAtStart = 0;
+    for (int low = 0; low < 2; ++low)
+    {
+        const int P = low != 0 ? 16 : 8;
+        std::vector<std::unique_ptr<StaggerVoice>> v;
+        std::vector<int> last (8, -1);
+        for (int i = 0; i < 8; ++i)
+            v.push_back (std::make_unique<StaggerVoice>());
+        OscTick t = morphTick (tables[3].get(), kMorphShepard, low != 0, 2);
+        uint32_t serial = 5;
+        for (int per = 0; per < 2000; ++per)
+        {
+            t.morphAmount = 0.5f + 0.4f * std::sin (0.01f * static_cast<float> (per));   // a moving morph
+            for (int i = 0; i < 8; ++i)
+            {
+                const bool restart = per == 0 || r.chance (2);
+                if (restart)
+                {
+                    v[static_cast<size_t> (i)]->start (WtOsc::morphStaggerSeed (serial++, i & 1));
+                    ++starts;
+                }
+                const bool built = v[static_cast<size_t> (i)]->period (t, L, R);
+                if (restart)
+                {
+                    firstBuildAtStart += built ? 1 : 0;
+                    last[static_cast<size_t> (i)] = per;
+                }
+                else if (built)
+                {
+                    longestGap[low] = std::max (longestGap[low], per - last[static_cast<size_t> (i)]);
+                    last[static_cast<size_t> (i)] = per;
+                }
+                else
+                    CHECK (per - last[static_cast<size_t> (i)] < P);   // the build is due at most P periods after the last
+            }
+        }
+    }
+    std::printf ("    restarts: %d note starts, every one built in its first period: %s; longest gap between two builds of a voice: %d periods (low, P = 16), %d (full, P = 8)\n", starts,
+                 firstBuildAtStart == starts ? "yes" : "no", longestGap[1], longestGap[0]);
+    CHECK_EQ (firstBuildAtStart, starts);
+    CHECK (longestGap[1] <= 16);
+    CHECK (longestGap[0] <= 8);
+}
+
+// (a) A held static morph (nothing moves: the tick is the same every period) gives the very bits whatever the stagger: every build of it is the same cycle (the build is deterministic, a cache
+// hit has the samples of a build), and between two equal cycles the cross-fade is exact (a + (b - a) w = a for b = a). Tier low and full, unison 1 and 3, morph spread 0 and 0.6, several morph types,
+// stagger 0 (the old schedule) against every slot.
+TEST (own_wt_osc_morph_stagger_keeps_a_held_static_morph_bit_identical)
+{
+    TestRng r (31);
+    const auto tables = makeTables (r);
+    int runs = 0, different = 0;
+    for (int low = 0; low < 2; ++low)
+        for (int voices : { 1, 3 })
+            for (int type : { static_cast<int> (kMorphHarmonicStretch), static_cast<int> (kMorphShepard), 1, 2 })
+                for (float spread : { 0.0f, 0.6f })
+                    for (uint32_t n = 1; n < 16; n += 2)
+                    {
+                        OscTick t = morphTick (tables[2].get(), type, low != 0, voices);
+                        t.morphSpread = spread;
+                        StaggerVoice a, b;
+                        a.start (0);
+                        b.start (n);
+                        std::vector<float> oa, ob;
+                        float La[32], Ra[32], Lb[32], Rb[32];
+                        for (int per = 0; per < 80; ++per)
+                        {
+                            a.period (t, La, Ra);
+                            b.period (t, Lb, Rb);
+                            oa.insert (oa.end(), La, La + 32);
+                            oa.insert (oa.end(), Ra, Ra + 32);
+                            ob.insert (ob.end(), Lb, Lb + 32);
+                            ob.insert (ob.end(), Rb, Rb + 32);
+                        }
+                        ++runs;
+                        if (std::memcmp (oa.data(), ob.data(), oa.size() * sizeof (float)) != 0)
+                            ++different;
+                    }
+    std::printf ("    held static morph: %d runs, %d differ from the unstaggered oscillator\n", runs, different);
+    CHECK_EQ (runs, 2 * 2 * 4 * 2 * 8);
+    CHECK_EQ (different, 0);
+}
+
+// Mac timing of the per block cost: 8 voices of Stretched Glass Choir's morph (Harmonic Stretch, 1 lane, tier low, a moving morph amount), started in one block, 64 blocks of 4 periods; the
+// longest block and the median block in us, without and with the stagger (the best of 5 runs).
+TEST (own_wt_osc_morph_stagger_timing_of_the_worst_block)
+{
+    TestRng r (99);
+    const auto tables = makeTables (r);
+    float L[32], R[32];
+    for (int layout = 0; layout < 2; ++layout)
+    {
+        double worst[2] = { 1.0e9, 1.0e9 }, median[2] = { 1.0e9, 1.0e9 };
+        for (int run = 0; run < 5; ++run)
+            for (int stagger = 0; stagger < 2; ++stagger)
+            {
+                const int notes = layout == 0 ? 8 : 4, oscs = layout == 0 ? 1 : 2;
+                std::vector<std::unique_ptr<StaggerVoice>> v;
+                for (int i = 0; i < notes * oscs; ++i)
+                    v.push_back (std::make_unique<StaggerVoice>());
+                OscTick t = morphTick (tables[2].get(), layout == 0 ? kMorphHarmonicStretch : kMorphShepard, true, 1);
+                std::vector<double> blocks;
+                for (int b = 0; b < 65; ++b)
+                {
+                    const auto t0 = std::chrono::steady_clock::now();
+                    for (int per = 0; per < 4; ++per)
+                    {
+                        t.morphAmount = 0.3f + 0.2f * std::sin (0.05f * static_cast<float> (b * 4 + per));
+                        for (int i = 0; i < notes * oscs; ++i)
+                        {
+                            if (b == 0 && per == 0)
+                                v[static_cast<size_t> (i)]->start (stagger != 0 ? WtOsc::morphStaggerSeed (40u + static_cast<uint32_t> (i / oscs), i % oscs) : 0u);
+                            v[static_cast<size_t> (i)]->period (t, L, R);
+                        }
+                    }
+                    if (b > 0)
+                        blocks.push_back (std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count());
+                }
+                std::sort (blocks.begin(), blocks.end());
+                worst[stagger] = std::min (worst[stagger], blocks.back());
+                median[stagger] = std::min (median[stagger], blocks[blocks.size() / 2]);
+            }
+        std::printf ("timing %s (tier low, moving morph), blocks after the start: longest %.1f us, median %.1f us without the stagger; longest %.1f us, median %.1f us with it (this Mac)\n",
+                     layout == 0 ? "8 voices x Harmonic Stretch" : "4 voices x 2 Shepard", worst[0], median[0], worst[1], median[1]);
+    }
+    CHECK (true);
 }
