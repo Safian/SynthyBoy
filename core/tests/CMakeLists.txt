@@ -79,6 +79,14 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
     target_compile_options(synthyboy_test_neon_cmp PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
     target_link_libraries(synthyboy_test_neon_cmp PRIVATE Threads::Threads)
     add_test(NAME synthyboy_test_neon_cmp COMMAND synthyboy_test_neon_cmp)
+    # The NEON block peak (dsp/peak.h: strip, bus, master and effect chain peaks) against the scalar loops it replaced, on every special value, default and flush-to-zero float mode; header only.
+    add_executable(synthyboy_test_own_peak test_own_peak.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_own_peak PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/engine-own")
+    target_compile_features(synthyboy_test_own_peak PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_own_peak PRIVATE SB_TEST_NEON=1)
+    target_compile_options(synthyboy_test_own_peak PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_own_peak PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_own_peak COMMAND synthyboy_test_own_peak)
     # The voice filter (FilterUnit) and the chorus with their vector forms against their scalar loops (the --scalar-filters switch): the filters-serum sources compiled
     # into the test with the pair kernels and the NEON loops on, without fused multiply-add.
     add_executable(synthyboy_test_own_filter_unit_lanes test_own_filter_unit_lanes.cpp test_own_chorus_lanes.cpp "${PROJECT_SOURCE_DIR}/core/filters-serum/src/filter.cpp"

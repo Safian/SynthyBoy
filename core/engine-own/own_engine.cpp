@@ -10,6 +10,7 @@
 
 #include <chrono>
 #include "dsp/section_timing.h"
+#include "dsp/peak.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1535,9 +1536,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             stripBlockPeak[s] = std::max (stripBlockPeak[s], std::sqrt (stripSq[s]));
         for (int b = 1; b <= 2; ++b)   // Bus 1, Bus 2: what the voices send into them, before the rack of the bus
         {
-            float pk = 0.0f;
-            for (int i = 0; i < n; ++i)
-                pk = std::max (pk, std::max (std::fabs (mixL[b][i]), std::fabs (mixR[b][i])));
+            const float pk = peak::peakAbsPair (mixL[b], mixR[b], n);
             stripBlockPeak[6 + b] = std::max (stripBlockPeak[6 + b], pk);
         }
         dlVoices.process (mixL[0], mixR[0], n);
@@ -1600,8 +1599,8 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             const float dg = lerp (directGainPrev, directGain, static_cast<float> (controlPos + (i - pos) + 1) * (1.0f / static_cast<float> (kControlPeriod)));
             left[i] = outputLimit ((left[i] + mixL[3][i - pos] * dg) * g);
             rightOut[i] = outputLimit ((rightOut[i] + mixR[3][i - pos] * dg) * g);
-            stripBlockPeak[9] = std::max (stripBlockPeak[9], std::max (std::fabs (left[i]), std::fabs (rightOut[i])));   // Master: what leaves the engine
         }
+        stripBlockPeak[9] = std::max (stripBlockPeak[9], peak::peakAbsPair (left + pos, rightOut + pos, end - pos));   // Master: what leaves the engine
         controlPos = (controlPos + n) % kControlPeriod;
         pos = end;
     }
