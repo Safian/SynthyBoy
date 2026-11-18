@@ -21,7 +21,7 @@
 `FxSlotCard` changes are `Index` with `id` = the card's id and `index` = the ACTION:
 | Gesture | `index` | `value` |
 |---|---|---|
-| touch down on the power zone | `kTogglePower` | 1.0 on, 0.0 off (the card flips its own `state.on`) |
+| touch down on the power zone | `kTogglePower` | the value it asks for: 1.0 on, 0.0 off (the opposite of `state.on`; the card does not flip `state.on`) |
 | tap on the card | `kSelect` | 0 |
 | tap on a "+" card | `kAdd` | 0 |
 | tap on the back card | `kBack` | 0 |
@@ -53,6 +53,6 @@ if (c.kind == ChangeKind::Index && c.id >= 3000 && c.id < 3016)
 `FxFullScreen::chainBar` and `slotEditor.bands`, `shell-mpc/overlay/fx_ui.h` (`kChainBase` 3000, `kBandBase` 3100). Pictures: `docs/user-guide/img/fx-chorus.png`, `fx-splitter.png`, `fx-band.png`.
 
 ## Limits and pitfalls
-- A power touch on a card acts on touch DOWN and flips `state.on` inside the card: write the real value back next update or it drifts.
+- A power touch on a card acts on touch DOWN. The card stores nothing (`state.on` is not flipped): write the effect and set `state.on` from it on the next update, or the card keeps showing the old state.
 - A reorder is the owner's job: the card only reports the x.
 - At most 16 cards, 13 per band.
