@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <cstdlib>
 
 // The reference loops here and the block kernels of kernels.cpp must compute the same bits where they do the same thing: no fused multiply-add in either, on any compiler / CPU.
 #if defined(__clang__)
@@ -854,8 +855,10 @@ void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame
         c.ring[(ola_ + n) & (kFftSize - 1)] += re_[n] * hannAt (n) * kOutputScale;
 }
 
+static int dbgOpt (const char* n) { const char* v = std::getenv (n); return v != nullptr ? std::atoi (v) : 0; }
 void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double frame, bool transientHit, bool reuseShape, float* twistState) noexcept
 {
+    static const int dShape = dbgOpt ("SBX_SHAPE"), dSpec = dbgOpt ("SBX_SPEC"), dFft = dbgOpt ("SBX_FFT");
     const Analysis& an = *analysis_;
     Channel& c = channel_[ch];
     Scratch& scratch = *p.scratch;
@@ -866,7 +869,7 @@ void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double f
         twist = *twistState;
     else
     {
-        shapeFrame (p, an, std::min (ch, an.channels() - 1), frame, hostRate_, scratch, c.smear, twist, true);
+        shapeFrame (p, an, std::min (ch, an.channels() - 1), frame, hostRate_, scratch, c.smear, twist, dShape == 0);
         if (twistState != nullptr)
             *twistState = twist;
     }
@@ -905,7 +908,13 @@ void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double f
     }
 
     // the bins of the frame: magnitude * (cos, sin) of the phase (bin 0 silent, the Nyquist bin real), then the transform of the real signal and the overlap add
-    if (fusedAdvance)
+    if (dSpec != 0)
+    {
+        if (fusedAdvance)
+            for (int j = 0; j < kBins; ++j) { float x = c.synthPhase[j] + of_[j] * kHop; if (x > 100.0f || x < -100.0f) x = wrapPi (std::fmod (x, kTwoPi)); c.synthPhase[j] = x; }
+        for (int j = 0; j < kBins; ++j) { float angle = c.synthPhase[j]; if (twist != 0.0f) angle += twist * kTwoPi * static_cast<float> (j) * static_cast<float> (j) * 0.05f / kBins; const float magnitude = j == 0 ? 0.0f : om_[j]; re_[j] = magnitude * std::cos (angle); im_[j] = j == kBins - 1 ? 0.0f : magnitude * std::sin (angle); }
+    }
+    else if (fusedAdvance)
         kernels::advanceToSpectrum (c.synthPhase, of_, om_, re_, im_, kBins, neon);
     else
     {
@@ -921,6 +930,13 @@ void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double f
     re_[0] = 0.0f;               // bin 0 is silent, and the Nyquist bin is real
     im_[0] = 0.0f;
     im_[kBins - 1] = 0.0f;
+    if (dFft != 0)
+    {
+        for (int j = 1; j < kFftSize / 2; ++j) { re_[kFftSize - j] = re_[j]; im_[kFftSize - j] = -im_[j]; }
+        Fft::instance().inverse (re_, im_);
+        for (int n = 0; n < kFftSize; ++n) c.ring[(ola_ + n) & (kFftSize - 1)] += re_[n] * hannAt (n) * kOutputScale;
+        return;
+    }
     kernels::RealIfft::instance().inverse (re_, im_, scratch.zr, scratch.zi, neon);
     kernels::overlapAdd (c.ring, ola_, scratch.zr, scratch.zi, kOutputScale, neon);
 }
