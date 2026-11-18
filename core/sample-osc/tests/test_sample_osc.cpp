@@ -724,3 +724,96 @@ TEST (sampleosc_quality_tiers)
     }
 }
 
+
+// The block kernel (SampleVoice::renderBlock) against the per sample reference (setReferenceKernels (true)): the same bits for every tier, mono and stereo, every loop mode, the mip
+// levels (a pitch ratio above 1), edge fades, a rate modulation, a released voice and the three render calls.
+TEST (sampleosc_block_kernel_equals_reference)
+{
+    constexpr int kFrames = 3000;
+    std::vector<float> left (kFrames), right (kFrames);
+    sbtest::Rng rng (7);
+    for (int i = 0; i < kFrames; ++i)
+    {
+        left[static_cast<size_t> (i)] = static_cast<float> (0.6 * std::sin (2.0 * kPi * 330.0 * i / 44100.0) + 0.3 * (rng.uniform() * 2.0 - 1.0));
+        right[static_cast<size_t> (i)] = static_cast<float> (0.5 * std::sin (2.0 * kPi * 523.0 * i / 44100.0));
+    }
+    SampleData mono, stereo;
+    CHECK (mono.loadFromFrames (left.data(), nullptr, kFrames, 44100.0, 60));
+    CHECK (stereo.loadFromFrames (left.data(), right.data(), kFrames, 44100.0, 60));
+    const SampleView views[2] = { mono.view(), stereo.view() };
+
+    const QualityTier tiers[3] = { QualityTier::low, QualityTier::medium, QualityTier::high };
+    const LoopMode modes[5] = { LoopMode::none, LoopMode::forward, LoopMode::pingPong, LoopMode::reverse, LoopMode::tailed };
+    const float semis[4] = { 0.0f, 7.3f, 19.0f, -5.0f };
+    int configs = 0, different = 0;
+    for (const SampleView& view : views)
+        for (QualityTier tier : tiers)
+            for (LoopMode mode : modes)
+                for (float st : semis)
+                    for (int variant = 0; variant < 3; ++variant)
+                    {
+                        SampleOscParams p;
+                        p.quality = tier;
+                        p.loopMode = mode;
+                        p.loopStart = 0.2f;
+                        p.loopEnd = 0.8f;
+                        p.loopCrossfade = variant == 1 ? 0.3f : 0.0f;
+                        p.edgeFadeMs = variant == 2 ? 5.0f : 0.0f;
+                        p.reverse = variant == 2 && mode == LoopMode::none;
+                        p.pan = -0.3f;
+                        p.level = 0.8f;
+                        SampleVoice kernel, reference;
+                        kernel.prepare (44100.0, 128);
+                        reference.prepare (44100.0, 128);
+                        reference.setReferenceKernels (true);
+                        for (SampleVoice* v : { &kernel, &reference })
+                        {
+                            v->setUnisonPan (0.4f);
+                            v->setUnisonLevel (0.7f);
+                            v->setUnisonPitchRatio (1.003f);
+                            v->setUnisonStartOffset (0.1f);
+                            v->noteOn (64, 0.9f, &view, p);
+                            v->setSemitoneOffset (st);
+                        }
+                        std::vector<float> rate (128);
+                        for (int i = 0; i < 128; ++i)
+                            rate[static_cast<size_t> (i)] = 1.0f + 0.2f * static_cast<float> (std::sin (0.1 * i));
+                        for (int block = 0; block < 40; ++block)
+                        {
+                            if (block == 30)
+                            {
+                                kernel.noteOff();
+                                reference.noteOff();
+                            }
+                            const int n = block % 3 == 0 ? 128 : (block % 3 == 1 ? 77 : 1);
+                            std::vector<float> aL (128, 0.5f), aR (128, 0.5f), bL (128, 0.5f), bR (128, 0.5f);
+                            const int call = block % 4;
+                            if (call == 0)
+                            {
+                                kernel.process (aL.data(), aR.data(), n);
+                                reference.process (bL.data(), bR.data(), n);
+                            }
+                            else if (call == 1)
+                            {
+                                kernel.processAdd (aL.data(), aR.data(), n);
+                                reference.processAdd (bL.data(), bR.data(), n);
+                            }
+                            else if (call == 2)
+                            {
+                                kernel.processModulated (aL.data(), aR.data(), n, rate.data());
+                                reference.processModulated (bL.data(), bR.data(), n, rate.data());
+                            }
+                            else
+                            {
+                                kernel.process (aL.data(), nullptr, n);
+                                reference.process (bL.data(), nullptr, n);
+                            }
+                            ++configs;
+                            if (std::memcmp (aL.data(), bL.data(), sizeof (float) * 128) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * 128) != 0
+                                || kernel.isActive() != reference.isActive() || kernel.getPlayheadPosition() != reference.getPlayheadPosition())
+                                ++different;
+                        }
+                    }
+    CHECK (configs > 1000);
+    CHECK_EQ (different, 0);
+}

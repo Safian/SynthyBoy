@@ -98,6 +98,10 @@ public:
     /** Sets the read head to a fraction (0..1) of the playback region right now (uni start / start phase of the host oscillator). */
     void seekFraction (double fraction) noexcept;
 
+    /** Measurements only (the bench's --scalar-content): render with the per sample reference (renderFrame) instead of the block kernel. Both give the same bits; the
+        kernel only does once per block what the reference does for every sample. */
+    void setReferenceKernels (bool on) noexcept { reference_ = on; }
+
     // --- Status queries ---
     bool isActive() const noexcept { return active_; }
     bool isReleasing() const noexcept { return stopping_; }
@@ -122,6 +126,10 @@ private:
     void updatePitchRatio() noexcept;
     void renderFrame (float& outL, float& outR) noexcept;
     void renderFrame (float& outL, float& outR, double rateMult) noexcept;
+    /** The block kernel: `numFrames` samples written (add == false; outRight may be null) or added to the buffers (add == true), the same bits as numFrames calls of renderFrame. */
+    void renderBlock (float* outLeft, float* outRight, int numFrames, const float* rateMod, bool add) noexcept;
+    template <QualityTier Tier, bool Add>
+    void renderBlockT (float* outLeft, float* outRight, int numFrames, const float* rateMod) noexcept;
 
     double hostSampleRate_ = 44100.0;
     const SampleView* sample_ = nullptr;
@@ -143,6 +151,11 @@ private:
     float unisonStartOffset_ = 0.0f;
     float unisonPan_ = 0.0f;
     float unisonLevel_ = 1.0f;
+
+    bool reference_ = false;
+    // the pitch ratio of the last updatePitchRatio (2^(semitones / 12) is the dear part, and the semitones rarely change from one control period to the next)
+    float cachedSemitones_ = std::numeric_limits<float>::quiet_NaN();
+    double cachedSpeedFromPitch_ = 1.0;
 
     // Anti-click envelope
     float antiClickGain_ = 0.0f;
