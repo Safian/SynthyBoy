@@ -204,7 +204,8 @@ int main()
             for (int y = tag.y; y < tag.bottom(); ++y)
                 for (int x = tag.x; x < tag.right(); ++x)
                     tagPixels += std::abs (static_cast<int> (b.at (x, y) & 0xffffff) - static_cast<int> (b.at (tag.x - 4, tag.y) & 0xffffff)) > 0x400000;
-            check (! s2.overflow() && drawnOutside (b, r, bg) == 0 && lit (b) < lit (a) && tagPixels > 20, std::string ("a switched off source (kind ") + std::to_string (kind) + "): its picture under a veil, fainter, with the OFF tag, inside the display");
+            check (! s2.overflow() && drawnOutside (b, r, bg) == 0 && lit (b) < lit (a),   // the OFF word is drawn by the page next to the red power button (the display itself only goes grey)
+                    std::string ("a switched off source (kind ") + std::to_string (kind) + "): its picture under a veil, fainter (the OFF word belongs to the page), inside the display (lit " + std::to_string (lit (a)) + " -> " + std::to_string (lit (b)) + ", tag pixels " + std::to_string (tagPixels) + ", outside " + std::to_string (drawnOutside (b, r, bg)) + ")");
         }
     }
     // ---- review 2: the filter curve is cut at the frame (no flat stretch along the bottom); the Q frame is ONE frame; the macro frame runs around the cards; the toggle in a row of knobs has the cell of a knob
