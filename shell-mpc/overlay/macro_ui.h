@@ -24,7 +24,7 @@
 #include "../ui/mod_macros.h"
 #include "../ui/mod_targets.h"
 #include "../ui/text_entry.h"
-#include "curve_source.h"
+#include "instance_view.h"
 #include "macro_names.h"
 #include "page_view.h"
 #include "q_publish.h"

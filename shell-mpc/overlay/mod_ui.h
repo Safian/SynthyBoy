@@ -26,7 +26,7 @@
 #include "../ui/mod_detail.h"
 #include "../ui/mod_matrix.h"
 #include "../ui/mod_targets.h"
-#include "curve_source.h"
+#include "instance_view.h"
 #include "page_view.h"
 #include "q_publish.h"
 #include "q_publish_mod.h"

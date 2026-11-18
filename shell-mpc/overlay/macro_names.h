@@ -14,7 +14,7 @@
 #include <string>
 
 #include "../kit/instance.h"
-#include "curve_source.h"
+#include "instance_view.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/modulation.h"
 

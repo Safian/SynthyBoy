@@ -10,7 +10,7 @@
 
 #include "synthyboy/params.h"
 
-#include "../overlay/curve_source.h"
+#include "../overlay/instance_view.h"
 #include "../overlay/overlay_layout.h"
 #include "instance.h"
 #include "page_set.h"

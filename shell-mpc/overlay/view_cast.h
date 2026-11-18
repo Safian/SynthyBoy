@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
-#include "curve_source.h"
+#include "instance_view.h"
 #include "synthyboy/readout.h"
 #include "view.h"
 

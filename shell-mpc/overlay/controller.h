@@ -30,7 +30,7 @@
 #include <unistd.h>
 #include <vector>
 
-#include "curve_source.h"
+#include "instance_view.h"
 #include "drm_interfaces.h"
 #include "gpu/gpu_overlay.h"
 #include "gpu_clock.h"

@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "../ui/ui.h"
-#include "curve_source.h"
+#include "instance_view.h"
 #include "osc_spec_page.h"
 #include "play_osc.h"
 #include "synthyboy/params.h"

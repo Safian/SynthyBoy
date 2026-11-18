@@ -16,7 +16,7 @@
 #include "../kit/param_source.h"
 #include "../kit/synthyboy_params.h"
 #include "../ui/ui.h"
-#include "curve_source.h"
+#include "instance_view.h"
 #include "macro_names.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"

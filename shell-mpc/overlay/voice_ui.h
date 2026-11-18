@@ -20,7 +20,7 @@
 #include "../ui/list.h"
 #include "../ui/theme.h"
 #include "../ui/voice_screen.h"
-#include "curve_source.h"
+#include "instance_view.h"
 #include "page_view.h"
 #include "q_publish.h"
 #include "touch_decoder.h"

@@ -26,7 +26,7 @@
 #include "content_browser.h"
 #include "wavetable_browser.h"
 #include "osc_spec_page.h"
-#include "curve_source.h"
+#include "instance_view.h"
 #include "../q_router.h"
 #include "play_osc.h"
 #include "q_publish.h"
