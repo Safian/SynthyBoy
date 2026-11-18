@@ -79,6 +79,11 @@
 #include "synthyboy/modulation.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/state.h"
+#include "synthyboy/granular/granular.h"
+#include "synthyboy/sampleosc/sample_data.h"
+#include "synthyboy/sampleosc/sample_voice.h"
+#include "synthyboy/spectral/kernels.h"
+#include "synthyboy/spectral/spectral.h"
 
 #include "device_profile.h"
 #include "own_heavy_patch.h"
@@ -232,6 +237,7 @@ struct Options
     int repeat = 1;
     double budget = 0.0;
     bool verify = false;
+    bool micro = false;      // --micro
     double tolerance = 0.0;  // --verify: a sample may differ by this share of the load's largest sample (default 0: the same values)
     std::string profilePath; // --profile
     uint32_t savingsOff = 0; // --no-fx-mute, --scalar-filters: OwnSaving bits switched off (before / after measurements with one binary)
@@ -572,6 +578,165 @@ long currentKhz (int cpu)
 }
 } // namespace
 
+/** --micro: the content kernels one by one, in microseconds per call (the median of the repetitions), on this machine: where the time of a frame of the Spectral oscillator, of a block of
+    grains or of a block of the sample voice goes. Pinned by --core like the rest. */
+template <class F>
+double microTime (const char* name, int reps, F f)
+{
+    std::vector<double> t;
+    for (int i = 0; i < 10; ++i)
+        f();
+    for (int i = 0; i < reps; ++i)
+    {
+        const auto a = std::chrono::steady_clock::now();
+        f();
+        const auto c = std::chrono::steady_clock::now();
+        t.push_back (std::chrono::duration<double, std::micro> (c - a).count());
+    }
+    std::sort (t.begin(), t.end());
+    std::printf ("%-44s %9.2f us   (min %.2f)\n", name, t[t.size() / 2], t.front());
+    std::fflush (stdout);
+    return t[t.size() / 2];
+}
+
+void runMicro()
+{
+    using namespace synthyboy::spectral;
+    namespace k = synthyboy::spectral::kernels;
+    std::vector<float> a (kBins), b (kBins), c (kBins), d (kBins), xr (kBins), xi (kBins), zr (kFftSize / 2), zi (kFftSize / 2), ring (kFftSize), phase (kBins), step (kBins);
+    uint32_t s = 12345u;
+    const auto rnd = [&] { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return static_cast<float> (s >> 8) * (1.0f / 16777216.0f); };
+    for (int i = 0; i < kBins; ++i)
+    {
+        a[static_cast<size_t> (i)] = (rnd() - 0.5f) * 20.0f;
+        b[static_cast<size_t> (i)] = rnd();
+        xr[static_cast<size_t> (i)] = rnd() - 0.5f;
+        xi[static_cast<size_t> (i)] = i == 0 || i == kBins - 1 ? 0.0f : rnd() - 0.5f;
+        phase[static_cast<size_t> (i)] = (rnd() - 0.5f) * 6.0f;
+        step[static_cast<size_t> (i)] = rnd() * 3.0f;
+    }
+    int peaks[512];
+    const int reps = 400;
+    std::printf ("spectral kernels, one frame of %d bins (kernels.h; vector forms where the CPU has them: %s)\n", kBins, k::haveNeon() ? "yes" : "no");
+    microTime ("sincosBlock", reps, [&] { k::sincosBlock (a.data(), c.data(), d.data(), kBins, true); });
+    microTime ("sincosBlock scalar", reps, [&] { k::sincosBlock (a.data(), c.data(), d.data(), kBins, false); });
+    microTime ("RealIfft::inverse", reps, [&] { k::RealIfft::instance().inverse (xr.data(), xi.data(), zr.data(), zi.data(), true); });
+    microTime ("RealIfft::inverse scalar", reps, [&] { k::RealIfft::instance().inverse (xr.data(), xi.data(), zr.data(), zi.data(), false); });
+    microTime ("Fft::inverse (the full length, the reference)", reps, [&] { std::vector<float> re (kFftSize, 0.1f), im (kFftSize, 0.2f); Fft::instance().inverse (re.data(), im.data()); });
+    microTime ("overlapAdd", reps, [&] { k::overlapAdd (ring.data(), 512, zr.data(), zi.data(), 0.66f, true); });
+    microTime ("advancePhases", reps, [&] { k::advancePhases (phase.data(), step.data(), kBins, true); });
+    microTime ("advancePhases scalar", reps, [&] { k::advancePhases (phase.data(), step.data(), kBins, false); });
+    microTime ("wrapPhase (double) 1025 values", reps, [&] { float t = 0; for (int i = 0; i < kBins; ++i) t += k::wrapPhase (phase[static_cast<size_t> (i)] * 100.0f); phase[0] = phase[0] + t * 1.0e-20f; });
+    microTime ("findPeaks", reps, [&] { k::findPeaks (b.data(), kBins, 1.0f, peaks, 512, true); });
+    microTime ("findPeaks scalar", reps, [&] { k::findPeaks (b.data(), kBins, 1.0f, peaks, 512, false); });
+    microTime ("maxBins", reps, [&] { volatile float t = k::maxBins (b.data(), kBins, true); (void) t; });
+    microTime ("lerpBins", reps, [&] { k::lerpBins (c.data(), a.data(), b.data(), 0.3f, kBins, true); });
+    microTime ("mulBins", reps, [&] { k::mulBins (c.data(), b.data(), kBins, true); });
+    microTime ("placeRegion x 32 regions of 30 bins", reps, [&] { for (int r = 0; r < 32; ++r) k::placeRegion (a.data(), b.data(), c.data(), d.data(), xr.data(), xi.data(), 1 + r * 30, 30 + r * 30, 3, 1.1f, 0.0f, kBins, true); });
+    microTime ("memcpy 4 KB", reps, [&] { std::memcpy (c.data(), a.data(), sizeof (float) * kBins); });
+    microTime ("memset 4 KB", reps, [&] { std::memset (c.data(), 0, sizeof (float) * kBins); });
+    microTime ("a loop of 1025 scalar mul + add", reps, [&] { for (int i = 0; i < kBins; ++i) c[static_cast<size_t> (i)] = a[static_cast<size_t> (i)] * b[static_cast<size_t> (i)] + 1.0f; });
+
+    // a Spectral voice on a synthetic sample: the four frames of a note start, and a hop
+    std::vector<float> tone (66150);
+    for (size_t i = 0; i < tone.size(); ++i)
+    {
+        float v = 0.0f;
+        for (int h = 1; h <= 20; ++h)
+            v += 0.3f / static_cast<float> (h) * static_cast<float> (std::sin (6.2831853 * 220.0 * h * static_cast<double> (i) / 44100.0 + 0.3 * h));
+        tone[i] = v;
+    }
+    synthyboy::sampleosc::SampleData data;
+    data.loadFromFrames (tone.data(), nullptr, static_cast<int64_t> (tone.size()), 44100.0);
+    static Scratch scratch;
+    Analysis analysis;
+    analysis.build (data.view());
+    for (int variant = 0; variant < 2; ++variant)
+    {
+        SpectralParams p;
+        p.scratch = &scratch;
+        p.hostRate = 44100.0;
+        p.manual = true;
+        p.position = 0.4f;
+        p.pitchRatio = 1.3f;
+        if (variant == 1)
+        {
+            p.warpType[0] = static_cast<int> (Warp::addHarmonics);
+            p.warpAmount[0] = 0.6f;
+        }
+        for (int reference = 0; reference < 2; ++reference)
+        {
+            SpectralVoice v;
+            v.prepare (44100.0);
+            v.setReferenceKernels (reference != 0);
+            char name[96];
+            std::snprintf (name, sizeof name, "SpectralVoice::noteOn (4 frames)%s%s", variant == 1 ? " + Add Harmonics" : "", reference != 0 ? " reference" : "");
+            microTime (name, 100, [&] { v.noteOn (&analysis, p, 0.0f); });
+            std::snprintf (name, sizeof name, "SpectralVoice::process 512 (1 frame)%s%s", variant == 1 ? " + Add Harmonics" : "", reference != 0 ? " reference" : "");
+            float l[512], r[512];
+            microTime (name, 100, [&] { v.process (p, l, r, 512); });
+        }
+    }
+
+    // a cloud of grains: the plain read, 14 grains alive
+    {
+        std::printf ("granular\n");
+        synthyboy::granular::GrainParams gp;
+        gp.manual = true;
+        gp.position = 0.3f;
+        gp.densityHz = 42.0f;
+        gp.lengthSec = 0.11f * 3.0f;
+        gp.maxGrains = 16;
+        gp.randPan = 0.5f;
+        gp.pitchRatio = 1.2f;
+        const auto view = data.view();
+        for (int mode = 0; mode < 3; ++mode)
+        {
+            synthyboy::granular::GranularVoice g;
+            g.prepare (44100.0);
+            g.setReferenceKernels (mode == 2);
+            g.setVectorKernels (mode == 0);
+            g.noteOn (&view, gp, 7u, 0.0f, true, 0.0f);
+            float l[128], r[128];
+            for (int i = 0; i < 100; ++i)
+                g.process (gp, l, r, 128, nullptr);
+            char name[96];
+            std::snprintf (name, sizeof name, "GranularVoice::process 128 (%d grains) %s", g.activeGrains(), mode == 0 ? "vector kernel" : (mode == 1 ? "scalar kernel" : "reference"));
+            microTime (name, 600, [&] { g.process (gp, l, r, 128, nullptr); });
+            std::snprintf (name, sizeof name, "GranularVoice::process 4 x 32 (control periods)  %s", mode == 0 ? "vector kernel" : (mode == 1 ? "scalar kernel" : "reference"));
+            microTime (name, 600, [&] { for (int q = 0; q < 4; ++q) g.process (gp, l, r, 32, nullptr); });
+        }
+    }
+    // the sample voice: a looped read with a crossfade, a pitch up (a mip level), 128 samples in four control periods of 32
+    {
+        std::printf ("sample voice\n");
+        const auto view = data.view();
+        for (int mode = 0; mode < 3; ++mode)
+        {
+            synthyboy::sampleosc::SampleVoice sv;
+            sv.prepare (44100.0, 128);
+            sv.setReferenceKernels (mode == 2);
+            sv.setVectorKernels (mode == 0);
+            synthyboy::sampleosc::SampleOscParams sp;
+            sp.loopMode = synthyboy::sampleosc::LoopMode::forward;
+            sp.loopStart = 0.14f;
+            sp.loopEnd = 0.78f;
+            sp.loopCrossfade = 0.0125f;
+            sp.quality = synthyboy::sampleosc::QualityTier::low;
+            sv.noteOn (64, 0.9f, &view, sp);
+            sv.setSemitoneOffset (7.0f);
+            float l[128], r[128];
+            for (int i = 0; i < 300; ++i)
+                sv.process (l, r, 128);
+            char name[96];
+            std::snprintf (name, sizeof name, "SampleVoice::process 128 %s", mode == 0 ? "vector kernel" : (mode == 1 ? "scalar kernel" : "reference"));
+            microTime (name, 600, [&] { sv.process (l, r, 128); });
+            std::snprintf (name, sizeof name, "SampleVoice::process 4 x 32 %s", mode == 0 ? "vector kernel" : (mode == 1 ? "scalar kernel" : "reference"));
+            microTime (name, 600, [&] { for (int q = 0; q < 4; ++q) sv.process (l + 32 * q, r + 32 * q, 32); });
+        }
+    }
+}
+
 int main (int argc, char** argv)
 {
     Options o;
@@ -597,6 +762,7 @@ int main (int argc, char** argv)
         else if (a == "--list")        o.list = true;
         else if (a == "--repeat")      o.repeat = std::atoi (next());
         else if (a == "--verify")      o.verify = true;
+        else if (a == "--micro")       o.micro = true;
         else if (a == "--tolerance")   o.tolerance = std::atof (next());
         else if (a == "--profile")     o.profilePath = next();
         else if (a == "--no-fx-mute")  o.savingsOff |= kOwnSavingFxMute;
@@ -608,6 +774,29 @@ int main (int argc, char** argv)
     }
     if (o.seconds <= 0.0 || o.block < 1 || o.block > 8192 || o.notes < 0 || o.notes > kMaxVoices || o.sampleRate < 8000.0 || o.retrigger <= 0.0 || o.repeat < 1 || o.repeat > 99 || o.budget < 0.0)
         usage ("argument out of range");
+    if (o.micro)
+    {
+#if defined(__linux__)
+        if (o.core >= 0)
+        {
+            cpu_set_t set;
+            CPU_ZERO (&set);
+            CPU_SET (static_cast<unsigned> (o.core), &set);
+            if (sched_setaffinity (0, sizeof set, &set) != 0)
+            {
+                std::perror ("tier_bench: sched_setaffinity");
+                return 1;
+            }
+        }
+#endif
+        if (o.ftz)
+            flushDenormalsOn();
+        int cpu0 = -1;
+        const std::string cpuText0 = describeCpu (cpu0);
+        std::printf ("%s\n", cpuText0.c_str());
+        runMicro();
+        return 0;
+    }
     if (o.sections && ! ownSectionTimingAvailable())
         usage ("--sections needs a build with -DSYNTHYBOY_SECTION_TIMING=ON");
 

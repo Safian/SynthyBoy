@@ -80,6 +80,7 @@ LibOsc& LibOsc::operator= (LibOsc&&) noexcept = default;
 void LibOsc::prepare (double sampleRate)
 {
     sr = sampleRate;
+    spectralGain_ = kSpectralGain * std::pow (static_cast<float> (sr / 48000.0), 1.457f);
     sampleVoices.assign (kMaxU, sampleosc::SampleVoice());
     grainVoices.assign (kMaxU, granular::GranularVoice());
     specVoices.assign (kSpecU, spectral::SpectralVoice());
@@ -314,7 +315,7 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
     const float norm = 1.0f / std::sqrt (std::max (sumSq, 1.0e-9f));
     // the spectral voice's raw level depends on the rate it runs at; the spec's factor 5.3703 is for 96 kHz, the level target is the 2x value (docs/engine-spec/07 7a.1):
     // 0.2601 RMS at 48 kHz and 0.0948 at 96 kHz fit raw ~ rate^-1.457, so the factor for the host rate is kSpectralGain * (rate / 48 kHz)^1.457
-    const float spectralGain = kSpectralGain * std::pow (static_cast<float> (sr / 48000.0), 1.457f);
+    const float spectralGain = spectralGain_;   // (made in prepare (): a power per control period and oscillator was a library call each)
     const float typeGain = type == kOscTypeGranular ? kGranularGain : (type == kOscTypeSpectral ? spectralGain : 1.0f);
     float gNorm = yLevel;
     if (type != kOscTypeMultisample && v[lk_sNormalize] >= 0.5f && haveSample)

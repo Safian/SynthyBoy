@@ -155,6 +155,7 @@ private:
     float modulator (int warpType, int slot, const float* const* cross, int k, float& m) const noexcept;
 
     double sr = 48000.0;
+    float spectralGain_ = 1.0f;   // kSpectralGain scaled to the host rate (prepare ())
     int cur = 0, from = -1;
     int fadePos = 0, fadeTotal = 480;
     bool anyPlaying = false;
