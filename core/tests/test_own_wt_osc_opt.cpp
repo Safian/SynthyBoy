@@ -182,7 +182,7 @@ struct Run
     MorphCache cacheRef, cacheOpt;
     Rng rngRef, rngOpt;
     float cross[6][32];
-    int periods = 0, mismatches = 0, stateMismatches = 0, plain = 0, warped = 0, morphing = 0, nonZero = 0;
+    int periods = 0, mismatches = 0, stateMismatches = 0, plain = 0, warped = 0, morphing = 0, nonZero = 0, fmOnly = 0;
     Run()
     {
         ref.setReference (true);
@@ -198,7 +198,7 @@ float peak (const float* x, int n) { float m = 0.0f; for (int i = 0; i < n; ++i)
 
 TEST (own_wt_osc_optimised_equals_the_reference_on_random_patches)
 {
-    int totalPeriods = 0, totalMismatch = 0, totalState = 0, plain = 0, warped = 0, morphing = 0, loud = 0;
+    int totalPeriods = 0, totalMismatch = 0, totalState = 0, plain = 0, warped = 0, morphing = 0, loud = 0, fmOnly = 0;
     for (int seed = 1; seed <= 60; ++seed)
     {
         TestRng r (static_cast<uint64_t> (seed));
@@ -258,6 +258,9 @@ TEST (own_wt_osc_optimised_equals_the_reference_on_random_patches)
             const OscTick& tk = WtOscOptTest::tickOf (run.opt);
             const bool w = tk.oversample || warpNeedsOversampling (tk.warp[0]) || warpNeedsOversampling (tk.warp[1]);
             (w ? run.warped : (tk.morphType != 0 ? run.morphing : run.plain))++;
+            const int w0 = tk.warp[0];
+            if (tk.warp[1] == 0 && (w0 == kWarpFmA || w0 == kWarpFmB || w0 == kWarpFmTzA || w0 == kWarpFmTzB || w0 == kWarpFmLinA || w0 == kWarpFmLinB) && tk.level > 0.0f && tk.wt != nullptr)
+                ++run.fmOnly;
         }
         totalPeriods += run.periods;
         totalMismatch += run.mismatches;
@@ -266,11 +269,12 @@ TEST (own_wt_osc_optimised_equals_the_reference_on_random_patches)
         warped += run.warped;
         morphing += run.morphing;
         loud += run.nonZero;
+        fmOnly += run.fmOnly;
     }
-    std::printf ("wt_osc opt: %d periods (plain %d, warped %d, morph %d), %d loud chunks, %d output mismatches, %d state mismatches\n", totalPeriods, plain, warped, morphing, loud, totalMismatch,
-                 totalState);
+    std::printf ("wt_osc opt: %d periods (plain %d, warped %d, morph %d, of them FM only %d), %d loud chunks, %d output mismatches, %d state mismatches\n", totalPeriods, plain, warped, morphing,
+                 fmOnly, loud, totalMismatch, totalState);
     CHECK_EQ (totalPeriods, 60 * 140);
-    CHECK (plain > 500 && warped > 500 && morphing > 500 && loud > 2000);
+    CHECK (plain > 500 && warped > 500 && morphing > 500 && loud > 2000 && fmOnly > 150);
     CHECK_EQ (totalMismatch, 0);
     CHECK_EQ (totalState, 0);
 }
@@ -310,7 +314,11 @@ Timing timeConfig (bool reference, int voices, int morphType, int warp, int bloc
     t.smooth = smooth;
     t.active = true;
     osc.start (0.0f, 0.5f, rng);
-    float L[32], R[32];
+    float L[32], R[32], cb[6][32];
+    for (auto& c : cb)
+        for (float& x : c)
+            x = r.bi();
+    const float* cr[6] = { cb[0], cb[1], cb[2], cb[3], cb[4], cb[5] };
     Timing tm;
     using clk = std::chrono::steady_clock;
     bool first = true;
@@ -331,7 +339,7 @@ Timing timeConfig (bool reference, int voices, int morphType, int warp, int bloc
             osc.updateMorph (44100.0, first, &cache);
             first = false;
             const auto a2 = clk::now();
-            osc.render (0, 32, L, R, nullptr, 44100.0);
+            osc.render (0, 32, L, R, cr, 44100.0);
             const auto a3 = clk::now();
             tm.update += std::chrono::duration<double, std::micro> (a1 - a0).count();
             tm.morph += std::chrono::duration<double, std::micro> (a2 - a1).count();
@@ -348,7 +356,7 @@ TEST (own_wt_osc_timing_report)
 {
     struct Cfg { const char* name; int voices, morph, warp; bool modulate; };
     const Cfg cfgs[] = { { "3 lanes plain, frame/level/pan modulated", 3, 0, 0, true }, { "3 lanes plain, held", 3, 0, 0, false }, { "1 lane morph (Harmonic Stretch), modulated", 1, kMorphHarmonicStretch, 0, true },
-                         { "3 lanes morph (Shepard), modulated", 3, kMorphShepard, 0, true }, { "2 lanes Sync warp, modulated", 2, 0, kWarpSync, true } };
+                         { "3 lanes morph (Shepard), modulated", 3, kMorphShepard, 0, true }, { "2 lanes Sync warp, modulated", 2, 0, kWarpSync, true }, { "1 lane FM A warp, modulated", 1, 0, kWarpFmA, true } };
     for (const Cfg& c : cfgs)
     {
         // warm up, then the median of 5 runs

@@ -784,6 +784,28 @@ public:
                         r = lerp (r, hermite (cB + idx, fr), wBk);
                     return r;
                 };
+                // FM A / B, Thru-Zero and Linear alone (no second warp, no filter stage): the phase is p + m * a * 0.3, wrapped; no window, and the sample stage of these warps does
+                // nothing. The same arithmetic as sampleAt () for this case, read in place; m is the other oscillator's signal interpolated as in sampleAt ()
+                const bool fmOnly = !reference_ && tick.warp[1] == 0
+                                    && (tick.warp[0] == kWarpFmA || tick.warp[0] == kWarpFmB || tick.warp[0] == kWarpFmTzA || tick.warp[0] == kWarpFmTzB || tick.warp[0] == kWarpFmLinA
+                                        || tick.warp[0] == kWarpFmLinB);
+                const float* fmCross = cs0 >= 0 && cross != nullptr ? cross[cs0] : nullptr;
+                const float fmPrev = cs0 >= 0 ? lastCross[cs0] : 0.0f;
+                auto fmSample = [&] (uint32_t phx, int k, float fk, float wBk) noexcept
+                {
+                    const float p = static_cast<float> (phx >> 8) * (1.0f / 16777216.0f);
+                    const float m = fmCross != nullptr ? lerp (k > 0 ? fmCross[k - 1] : fmPrev, fmCross[k], fk) : 0.0f;
+                    const float x = p + m * a0 * 0.3f;
+                    float q = x - ffloor (x); // warpPhase (): frac
+                    q -= ffloor (q);          // the read of the table wraps once more
+                    const float pos = q * fscale;
+                    const int idx = std::clamp (static_cast<int> (pos), 0, N);
+                    const float fr = pos - static_cast<float> (idx);
+                    float r = hermite (cA + idx, fr);
+                    if (cB != nullptr)
+                        r = lerp (r, hermite (cB + idx, fr), wBk);
+                    return r;
+                };
 #if SB_NEON
                 // Two warps that only move the phase (Sync, Formant, Bend: the warp presets), no filter stage: the oversampled samples are made four
                 // at a time (warpedGroup4: the operations of sampleAt () lane by lane, the same values). The phases and the weights of the second cycle are laid out first,
@@ -828,7 +850,8 @@ public:
                     for (int j = 0; j < os; ++j)
                     {
                         buf[nt - 1 + k * os + j] = syncOnly ? syncSample (ph, wBk)
-                                                            : sampleAt (ph, k, static_cast<float> (j + 1) * (1.0f / static_cast<float> (os)), wBk);
+                                                            : (fmOnly ? fmSample (ph, k, static_cast<float> (j + 1) * (1.0f / static_cast<float> (os)), wBk)
+                                                                      : sampleAt (ph, k, static_cast<float> (j + 1) * (1.0f / static_cast<float> (os)), wBk));
                         ph += incO;
                     }
                 }
