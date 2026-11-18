@@ -57,11 +57,11 @@ void unison5 (IEngine& e)
     bench::ownSet (e, "osc1.unison.detune", 25.0f);
 }
 
-Quality quality (uint32_t fx, bool makeup)
+Quality quality (uint32_t fx, bool makeup, int unisonCap = 16)
 {
     Quality q;
     q.maxVoices = 8;
-    q.maxUnison = 16;
+    q.maxUnison = unisonCap;
     q.oversampling = 2;
     q.fxMask = fx;
     q.fxMakeup = makeup;
@@ -150,7 +150,7 @@ void base (IEngine& e)
     bench::ownSet (e, "osc1.unison.detune", 20.0f);
 }
 void withReverb (IEngine& e) { base (e); bench::ownSet (e, "reverb.on", 1.0f); bench::ownSet (e, "reverb.mix", 70.0f); }
-void withFlanger (IEngine& e) { base (e); bench::ownSet (e, "flanger.on", 1.0f); bench::ownSet (e, "flanger.mix", 80.0f); bench::ownSet (e, "flanger.feedback", 70.0f); }
+void withFlanger (IEngine& e) { base (e); bench::ownSet (e, "flanger.on", 1.0f); bench::ownSet (e, "flanger.mix", 50.0f); bench::ownSet (e, "flanger.feedback", 25.0f); }
 void withHyper (IEngine& e)
 {
     base (e);

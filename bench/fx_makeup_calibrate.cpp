@@ -9,7 +9,7 @@
 // The module runs on 10 s of the calibration program (noise with the power per Hz falling with f^-1.5 from 30 Hz to 12 kHz, 0.1 RMS, the same for every job; `stereo` (default): the
 // channels share 70 % of their power, `indep`: independent channels, `mono`: the same in both; `chord`: a triad of sawtooth waves instead) in control periods; the output is
 // the power gain of the last 6 s in dB, and the correlation of the output with the input (the mean of both channels), one line per job:
-//   MODULE GAIN_DB CORRELATION MODEL_DB
+//   MODULE GAIN_DB CORRELATION MODEL_DB STEADY WIDE   (the last two: the program descriptor of the meter, input power weighted)
 // MODEL_DB is the power gain that the engine's makeup model (core/engine-own/fx/fx_makeup.h, FxModule::makeupPower, fed by a ProgramMeter on the same input) predicts, input power weighted
 // over the measured window, 0 for a module without a model. `input=FILE` plays a raw 32 bit float stereo render (interleaved, looped) instead of a synthetic program.
 
@@ -209,7 +209,7 @@ int main()
         const float rho = mono ? 1.0f : corr; // the channels are sqrt (rho) of one common program and the rest of their own
         const long periods = static_cast<long> (10.0 * kSr / kControlPeriod);
         const long skip = static_cast<long> (4.0 * kSr / kControlPeriod);
-        double pIn = 0, pOut = 0, cross = 0, predNum = 0, predDen = 0;
+        double pIn = 0, pOut = 0, cross = 0, predNum = 0, predDen = 0, steadySum = 0, wideSum = 0;
         makeup::ProgramMeter meter;
         meter.prepare (kSr);
         std::vector<float> dIn, dOut;
@@ -252,6 +252,8 @@ int main()
                 for (int i = 0; i < kControlPeriod; ++i) e += 0.5 * (il[i] * il[i] + ir[i] * ir[i]);
                 predNum += e * fx->makeupPower (frame, base.data(), delta.data(), meter.desc());
                 predDen += e;
+                steadySum += e * meter.desc().steady;
+                wideSum += e * meter.desc().wide;
             }
             fx->process (l, r, kControlPeriod, 0, kControlPeriod);
             if (! dump.empty())
@@ -269,7 +271,7 @@ int main()
             std::FILE* f = std::fopen ((dump + ".in").c_str(), "wb"); std::fwrite (dIn.data(), 4, dIn.size(), f); std::fclose (f);
             f = std::fopen ((dump + ".out").c_str(), "wb"); std::fwrite (dOut.data(), 4, dOut.size(), f); std::fclose (f);
         }
-        std::printf ("%s %.3f %.4f %.3f\n", name.c_str(), 10.0 * std::log10 (pOut / pIn), cross / std::sqrt (pIn * pOut), predDen > 0 ? 10.0 * std::log10 (predNum / predDen + 1e-12) : 0.0);
+        std::printf ("%s %.3f %.4f %.3f %.3f %.3f\n", name.c_str(), 10.0 * std::log10 (pOut / pIn), cross / std::sqrt (pIn * pOut), predDen > 0 ? 10.0 * std::log10 (predNum / predDen + 1e-12) : 0.0, predDen > 0 ? steadySum / predDen : 0.0, predDen > 0 ? wideSum / predDen : 0.0);
     }
     return 0;
 }

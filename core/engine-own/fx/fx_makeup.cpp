@@ -265,7 +265,7 @@ float reverbWetDb (const ReverbIn& in) noexcept
 
 float reverbPower (float mixPct, float wetDb, const ProgramDesc& d) noexcept
 {
-    const float kappa = kReverbLoudnessPluck + (kReverbLoudnessHeld - kReverbLoudnessPluck) * clamp01 (d.steady);
+    const float kappa = kReverbLoudnessPluck + (kReverbLoudnessHeld - kReverbLoudnessPluck) * std::pow (clamp01 (d.steady), kReverbSteadyPower);
     return equalPowerMix (mixPct * 0.01f, kappa * fromDb (wetDb));
 }
 

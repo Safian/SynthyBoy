@@ -86,10 +86,11 @@ private:
 
 /** The loudness factors of the models: the share of the steady state power of the wet path that the loudest 100 ms of a played note carries (a reverb tail builds up and falls, a
     swelling pad is ahead of its reverb), measured against the engine's own loudness figure (scripts/tier-makeup-population.py, docs/release/TIER-LEVEL-COMPENSATION.md section 4). */
-constexpr float kReverbLoudnessPluck = 0.25f;   // the share of the steady state wet power in the loudest 100 ms of a program with steadiness 0 ...
-constexpr float kReverbLoudnessHeld = 1.0f;     // ... and 1 (a held note: the reverb has its steady state)
+constexpr float kReverbLoudnessPluck = 0.4f;    // the share of the steady state wet power in the loudest 100 ms of a program with steadiness 0 (measured on the factory presets: 0.4 whatever the steadiness of their gestures) ...
+constexpr float kReverbLoudnessHeld = 1.0f;     // ... and 1 (a held note: the reverb has its steady state; steady 4 below)
+constexpr float kReverbSteadyPower = 4.0f;      // the steepness: the gestures of 24 factory presets have a steadiness of 0.12 to 0.66 (median 0.47), one of 0.95 (a held saw chord): only a really held sound goes towards 1
 constexpr float kFlangerLoudness = 1.0f;
-constexpr float kHyperLoudness = 1.0f;
+constexpr float kHyperLoudness = 0.91f; // the bias of the band model over 36 programs (+0.43 dB loudest 100 ms): section 8
 constexpr float kBodeLoudness = 1.0f;
 
 /** The keys of the reverb as the model reads them (plain values of the keys; mix in percent too). */

@@ -535,9 +535,9 @@ public:
                               feedback >= 0 ? V (b, d, feedback) : 50.0f, static_cast<float> (choice (b, type)), static_cast<float> (choice (b, room)), 0.0f };
         if (!cache.same (k))
         {
-        makeup::ReverbIn in;
-        in.mix = k[0]; in.size = k[1]; in.decayMs = k[2]; in.lowCutHz = k[3]; in.highCutHz = k[4]; in.highShelfDb = k[5]; in.highShelfHz = k[6]; in.lowShelfDb = k[7];
-        in.widthPct = k[8]; in.feedbackPct = k[9]; in.type = static_cast<int> (k[10]); in.room = static_cast<int> (k[11]);
+            makeup::ReverbIn in;
+            in.mix = k[0]; in.size = k[1]; in.decayMs = k[2]; in.lowCutHz = k[3]; in.highCutHz = k[4]; in.highShelfDb = k[5]; in.highShelfHz = k[6]; in.lowShelfDb = k[7];
+            in.widthPct = k[8]; in.feedbackPct = k[9]; in.type = static_cast<int> (k[10]); in.room = static_cast<int> (k[11]);
             wetDb = makeup::reverbWetDb (in);
             cache.store (k, 1.0f);
         }
