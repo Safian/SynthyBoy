@@ -124,8 +124,8 @@ Az érintőképernyő **egyetlen ujjat** követ: amíg egy ujj le van téve, a m
 | **Húzás fel / le (Drag up / down)** egy potméteren vagy számmezőn | Módosítja az értéket (fel = több). Egy potméter a teljes tartományát 200 pixelnyi húzással járja be. Egy számmező a saját pixelszámának megfelelő lépésenként vált értéket. |
 | **Vízszintes húzás** egy sávon (modulációs mélységsávok) | Módosítja az értéket; a teljes sáv a teljes tartományt fedi le. |
 | **Függőleges húzás** egy fédereken (Mixer) | Állítja a hangerőszintet. |
-| **Dupla koppintás (Double tap)** (két koppintás 0,4 másodpercen és 30 pixelen belül) | Visszaállítja a potmétert, számmezőt, fédert vagy mélységsávot az alapértelmezett értékére; egy burkológörbe fogópontján visszaállítja az adott pont alapértelmezését. |
-| **Hosszú nyomás (Long press)** (0,6 másodperc elmozdulás nélkül) egy potméteren vagy számmezőn | Megnyitja az adott vezérlő modulációs oldalát (6. fejezet). A rajzolt hullámforma-szerkesztőben: törli az adott pontot (a pont dupla koppintása gyorsabb). |
+| **Dupla koppintás (Double tap)** (két koppintás 0,4 másodpercen és 30 pixelen belül) | Visszaállítja a potmétert, számmezőt, fédert vagy mélységsávot az alapértelmezett értékére; egy burkológörbe fogópontján visszaállítja az adott pont alapértelmezését; a rajzolt hullámforma-szerkesztőben törli a belső pontot, vagy egyenesre állítja a görbefogót. |
+| **Hosszú nyomás (Long press)** (0,6 másodperc elmozdulás nélkül) egy potméteren vagy számmezőn | Megnyitja az adott vezérlő modulációs oldalát (6. fejezet). A rajzolt hullámforma-szerkesztő rajzfelületén: törli a belső pontot (a pont dupla koppintása gyorsabb). |
 | **Húzás a színes fülön** a modulált potméter bal felső sarkán | Módosítja a kiválasztott forrás modulációs mélységét (6. fejezet). |
 | **Koppintás egy piktogramon vagy cellán** | Kijelöli azt (oszcillátortípus, LFO hullámforma, Sub hullámforma, ...). |
 
@@ -184,11 +184,12 @@ Az alábbi fejezetekben a "tartomány" a `docs/params.json` fájlból származó
 A Play fül EGY oldal: három élő panel egymás mellett, egy **oszcillátor** panel (balra), egy **burkoló (envelope)** panel (középen) és egy **LFO** panel (jobbra). Az első négy Q-Link (potméter) az oszcillátor panelé (típus, tábla vagy OCT, PAN, LEVEL), a következő négy a burkolóé (ATTACK, DECAY, SUSTAIN, RELEASE), a következő négy az LFO-é (SHAPE, RATE, RISE, SMOOTH). Az MPC XL-en mind a tizenkettő egyszerre a potméterekön van, és minden vezérlő a saját potméterének számát viseli. A Key 61-en a sárga keret jelöli az éppen aktív négy potmétert; egy másik panel vezérlőjének megérintése hozza a csoportját a négy potméterre (a többi sorban követi), a többihez a Q-Link bank gombok szolgálnak. Minden panel tetején egy választó van: középen az aktuális elem, két oldalán a szomszédai (egy érintéssel lépünk rá, vagy végighúzással), a névre koppintva megnyílik a lista. A kikapcsolt oszcillátor szürkén látszik (a bekapcsoló gomb piros).
 Ez a felület való a játékra és az azonnali finomhangolásra: a három leggyakrabban használt elem fő vezérlői egyetlen nézetben érhetők el.
 
-A burkoló panel az ADSR csoportjával (XL-en az 5-8. Q-Link; a Key 61-en a keret rajta van, amíg ő az aktív csoport):
+A Play oldal elrendezése:
+- **Nincsenek fül-sorok:** A navigációt egyetlen választó biztosítja a képernyő mindegyik harmadában.
+- **Nyilas léptetés, koppintásra nyíló lista:** Használd a nyilakat a léptetéshez, vagy koppints a névre a Sub, Osc A/B/C, Noise, Envelopes 1–6, LFOs 1–10 és R1–R4 teljes választási listájának megnyitásához.
+- **Egységes kijelzőmagasság:** Mindhárom kijelző azonos magasságú és felül igazított. Mindegyik kijelző rendelkezik egy fejlécsávval a címével és gombjaival (bekapcsolás, útválasztás, teljes képernyő); a rajzolt tartomány a sáv alatt helyezkedik el.
 
-![Play Env](../img/play-env.png)
-
-Az LFO panel csoportja (SHAPE, RATE, RISE, SMOOTH: XL-en a 9-12. Q-Link):
+Az LFO panel a csoportjával (SHAPE, RATE, RISE, SMOOTH: XL-en a 9–12. Q-Link):
 
 ![Play LFO](../img/play-lfo.png)
 
@@ -196,26 +197,22 @@ Az LFO panel csoportja (SHAPE, RATE, RISE, SMOOTH: XL-en a 9-12. Q-Link):
 
 | Vezérlő | Mit csinál |
 |---|---|
-| SUB, A, B, C, NOISE gombok | Kiválasztja, melyik hangforrást mutatja és szerkeszti a panel (a projekttel együtt mentődik). Az öt gomb azonos szélességű. |
-| Bekapcsológomb és név | Be- és kikapcsolja a megjelenített forrást. A kikapcsolt forrás képe halványan jelenik meg egy kis OFF felirattal (lásd: 5.3). |
-| Útválasztó gomb (Route button: F1 / F2 / F12 / M / DIR / BAL / OFF) | Koppintás: megnyitja az adott oszcillátor kimeneti felugró ablakát (célpont, balance, BUS 1, BUS 2). A Sub oszcillátornak itt nincs útválasztó gombja; az útválasztása a saját oldalán található (5.4). |
-| Kijelző + teljes képernyő gomb | Az oszcillátor egyetlen ciklusa; a gomb megnyitja a teljes képernyős oszcillátor-oldalt (5.3 / 5.4 / 5.5 fejezet). |
-| Típusgombok: WAVE / MULTI / SAMPLE / GRAIN / SPEC | Az oszcillátor típusa (hullámtábla, multiminta, hangminta, granuláris, spektrális). Q 1. |
-| Forrásléptető és a listagomb | A hullámtábla neve (fájlból betöltött táblánál a fájl címe) vagy a betöltött fájl neve. A névre vagy a listagombra koppintva megnyílik a **wavetable-böngésző** (WAVE típusnál) vagy a **tartalomböngésző** (egyéb típusoknál); kompakt nézetből ilyenkor először a teljes képernyős nézet tárul fel. Q 2. |
-| PAN (panoráma) | -100 .. +100 százalék (C, L n, R n). Q 3. |
-| LEVEL (szint) | 0 .. 100 százalék. Q 4. |
+| Forrásválasztó (Sub, Osc A, Osc B, Osc C, Noise) | Kiválasztja, melyik hangforrást mutatja és szerkeszti a panel (a projekttel együtt mentődik). A nyilak léptetnek, koppintásra megnyílik az ötös lista. |
+| Bekapcsológomb és név | Be- és kikapcsolja a megjelenített forrást; a kijelző fejlécsávjának bal szélén található. A kikapcsolt forrás képe halványan jelenik meg egy kis OFF felirattal (lásd: 5.3). |
+| Útválasztó gomb (Route button: F1 / F2 / F12 / M / DIR / BAL / OFF) | Koppintásra megnyitja az adott oszcillátor kimeneti felugró ablakát (célpont, balance, BUS 1, BUS 2); a kijelző fejlécsávjában található a teljes képernyő gomb bal oldalán. A Sub oszcillátornak itt nincs útválasztó gombja; az útválasztása a saját oldalán található (5.4). |
+| Kijelző + teljes képernyő gomb | A kijelző rendelkezik egy fejlécsávval a bekapcsológombbal, a forrás nevével, az útválasztó gombbal és a teljes képernyő gombbal (négy sarokzárójel); az oszcillátor egyetlen ciklusa a sáv alatt jelenik meg. A teljes képernyő gomb megnyitja a teljes képernyős oszcillátor-oldalt (5.3 / 5.4 / 5.5 fejezet). |
+| Típusgombok: WAVE / MULTI / SAMPLE / GRAIN / SPEC | Az oszcillátor típusa (hullámtábla, multiminta, hangminta, granuláris, spektrális), a kijelző alá rendezve. Q 1. |
+| Forrásléptető és a listagomb | A hullámtábla neve (fájlból betöltött táblánál a fájl címe) vagy a betöltött fájl neve. Mindkettő megnyitja a hullámtábla-böngészőt (vagy a tartalomböngészőt); kompakt nézetből először a teljes képernyő nyílik meg. Q 2. |
+| PAN | -100 .. +100 százalék (C, L n, R n). Q 3. |
+| LEVEL | 0 .. 100 százalék. Q 4. |
 
 A Sub és a Noise más vezérlőkkel rendelkezik (hullámforma, oktáv; zaj színe, szűrő): lásd az 5.4 és 5.5 fejezetet.
 
-**Burkoló panel (Envelope panel).** ENV 1 .. ENV 6 gombok (egy kis pont jelöli azt a burkolót, amely modulál valamit), a burkológörbe grafikonja a teljes képernyős gombbal, valamint az ATTACK, DECAY, SUSTAIN, RELEASE potméterek (Q 1 - 4). A grafikon itt mindig a panelhez illeszkedik; a zárolás és az idővonalzó a teljes oldalon található. Részletek az 5.8 fejezetben.
+**Burkoló panel (Envelope panel).** A felső választó az **Env 1 .. Env 6** közötti burkolót választja ki (a nyilak léptetnek, koppintásra megnyílik a lista). A kijelző fejlécsávval rendelkezik a burkoló nevével és a jobb oldalon lévő teljes képernyő gombbal; a burkológörbe grafikonja a sáv alatt jelenik meg. A kijelző alatt találhatók az ATTACK, DECAY, SUSTAIN, RELEASE potméterek (az XL-en a Q 5–8). A grafikon itt mindig a panelhez illeszkedik; a zárolás és az idővonalzó a teljes oldalon található. Részletek az 5.8 fejezetben.
 
-**LFO panel.** Az LFO 1 .. LFO 10, RND 1 .. RND 4 léptető (a névre koppintva megnyílik a lista), a hullámforma-kijelző a teljes képernyős gombbal, a SHAPE léptető, a RATE potméter a **HZ / BPM / KEY** listával (három pont, a világító jelzi az üzemmódot), a RISE és a SMOOTH (Q 1 - 4). A SMOOTH neve előtt egy LED található: ez a simítás kapcsolója, a potméter pedig az idejét állítja be (a gomb halvány, amíg a LED ki van kapcsolva). Részletek az 5.9 fejezetben.
+**LFO panel.** A felső választó az **LFO 1 .. LFO 10** vagy **RND 1 .. RND 4** elemet választja ki (a nyilak léptetnek, koppintásra megnyílik a lista). A kijelző fejlécsávval rendelkezik a névvel és a jobb oldalon lévő teljes képernyő gombbal; az LFO görbéje a sáv alatt jelenik meg. A kijelző alatt található a SHAPE léptető, a RATE potméter a **HZ / BPM / KEY** listával (három pont, a világító jelzi az üzemmódot), a RISE és a SMOOTH (az XL-en a Q 9–12; az első harmadban az LFO képe mutatja a hullámformát és a pozíciót). A SMOOTH neve előtt egy LED található: ez a simítás kapcsolója, a potméter pedig az idejét állítja be (a potméter halvány, amíg a LED ki van kapcsolva). Részletek az 5.9 fejezetben.
 
 **Teljes képernyő.** A teljes képernyő gomb megnyitja az adott elem oldalát a teljes plugin-területen (ugyanaz az oldal, mint a megfelelő Osc, Env vagy LFO fül, egy CLOSE gombbal). A Play fül elhagyásakor ez bezáródik.
-A Play oldal új, egyszerűsített elrendezéssel rendelkezik:
-- **Nincs fül-sor:** A navigációt egyetlen választó biztosítja a képernyő minden harmadában.
-- **Nyilas léptetés, koppintásra nyíló lista:** Használja a nyilakat a léptetéshez, vagy koppintson a névre a Sub, Osc A/B/C, Noise, Envelopes 1–6, LFOs 1–10 és R1–R4 teljes választási listájának megnyitásához.
-- **Egységes elrendezés:** Mindhárom kijelző azonos magasságú. A táblázatválasztó, a PAN és a LEVEL egyetlen sorba rendezve.
 
 ### 5.2 Macros (Makrók)
 
@@ -449,11 +446,12 @@ A képen a bekapcsológomb halvány: a Sub ki van kapcsolva az Init hangszínben
 
 A zajgenerátor. Fejléc: bekapcsológomb (Noise On), a **SOUND** léptető (Noise Sample: White Noise, Pink Noise, Brown Noise, Geiger, Tape Hiss, Vinyl Clicks, Digital Hash, Velvet Noise, Atmosphere), **FILTER** (-100 .. +100 százalék), **PAN**, **LEVEL** (0 .. 100 százalék, alapértelmezett: 25) és az útválasztó gomb. A kijelző kirajzolja a zaj színét (halvány, amíg a zaj ki van kapcsolva).
 
-- TUNE: PITCH és FINE (számmezők: -48 .. +48 félhang, -100 .. +100 cent), **KEY TRACK** (LED kapcsoló).
-- **Két különböző léptető.** A fejléc SOUND léptetője kiválasztja, hogy a kilenc zajforrás közül melyiket szólaltassa meg a generátor. Az alsó blokkban lévő **KIND** léptető (Noise Type: Noise / Sample) azt választja ki, hogy a forrás a generált zaj (Noise) vagy egy minta fájl a plugin tartalmából (Sample). Ha Sample módban nincs minta betöltve, a generált zaj szólal meg helyette.
-- Lent, KIND = Noise (mint a képen): egy NOISE blokk a KIND, STEREO (0 .. 100 százalék) és az **ENV 1** LED kapcsolóval.
-  KIND = Sample: SOURCE blokk (KIND, START = Noise Phase 0 .. 100 százalék, STEREO, ENV 1) és PLAYBACK blokk (RANDOM, LOOP, BOUNCE LED kapcsolók).
-- Q csoportok: fejléc (forrás, FILTER, PAN, LEVEL), TUNE, az alsó blokkok.
+- **TUNE:** PITCH és FINE (számmezők: -48 .. +48 félhang, -100 .. +100 cent), **KEY TRACK** (LED kapcsoló).
+- **Két különböző léptető.** A fejléc SOUND léptetője kiválasztja, hogy a kilenc zajforrás közül melyiket szólaltassa meg a generátor. Az alsó blokkban lévő **KIND** léptető (Noise Type: Noise / Sample) azt választja ki, hogy a forrás a generált zaj (Noise) vagy egy mintafájl a plugin tartalmából (Sample). Ha Sample módban nincs mintafájl betöltve, a generált zaj szólal meg helyette.
+- **Elrendezési változatok:**
+  - **KIND = Noise** esetén (generált zaj, mint a képen): a kijelző a teljes szélességet kitölti. A kijelző alatt két blokk helyezkedik el egymás mellett: a **TUNE** a bal oldalon (PITCH, FINE, KEY TRACK) és a **NOISE** a jobb oldalon (KIND, STEREO 0 .. 100 százalék, valamint az **ENV 1** LED kapcsoló).
+  - **KIND = Sample** esetén: a kijelző a bal oldalon található, mellette jobbra a **TUNE** oszlopával. Az alsó sor a **SOURCE** (KIND, START = Noise Phase 0 .. 100 százalék, STEREO, ENV 1) és a **PLAYBACK** (RANDOM, LOOP, BOUNCE LED kapcsolók) blokkokat tartalmazza.
+- Q csoportok: fejléc (SOUND, FILTER, PAN, LEVEL), TUNE, valamint az alsó blokkok.
 
 ### 5.6 Mixer (Keverő)
 
@@ -785,10 +783,10 @@ Két oldal, amelyek a felül található **MAIN** és **TUNING & MPE** gombokkal
 | OUTPUT | L / R mérők (a motor master csúcsszintmérője tartóvonallal, dB skálával külön oszlopban és színsávval) | |
 | | VOLUME | Master Volume -60 .. +6 dB, alapértelmezett: -12 |
 | | SPREAD | Stereo Spread 0 .. 100 százalék, alapértelmezett: 100 |
-| | STEREO | Stereo Routing 0 .. 100 százalék, alapértelmezett: 100 |
-| | LIMIT | LED kapcsoló (kimeneti limiter, alapértelmezés: ki) |
-| | QUALITY | A NO SMOOTHING (simítás kikapcsolva) és OVERSAMPLE 4X (túlmintavételezés) LED kapcsolópár |
+| | STEREO | Stereo Routing 0 .. 100 százalék, alapértelmezett: 100 (potméter, mint a másik kettő) |
 | | VOICE OVERRIDE | LED lista: Kill / Steal |
+| | LIMIT | Kimeneti limiter LED kapcsoló, alapértelmezés szerint ki (megelőzi a túlvezérlést a kimeneti szintek magasra állításakor) |
+| | QUALITY | NO SMOOTHING (kikapcsolja a paramétersimítást, így a változások azonnal ugranak az átúszás helyett; a presetben tárolódik); OVERSAMPLE 4X (megtisztítja a hullámtábla-oszcillátor magas hangjait torzítás nélkül; több processzort használ; az 1. generációs profilon 2x) |
 | PITCH | TUNE | -100 .. +100 cent |
 | | TRANSPOSE | -48 .. +48 félhang |
 | | BEND UP, BEND DOWN | 0 .. 24 félhang, alapértelmezett: 2; a **LINK** LED kapcsoló a lefelé hajlítás tartományát a felfelé hajlításéhoz köti |
@@ -803,12 +801,6 @@ Két oldal, amelyek a felül található **MAIN** és **TUNING & MPE** gombokkal
 | | SLOPE | -8 .. +8; a glide görbe jobbra van kirajzolva |
 | | ALWAYS | Portamento Always, LED kapcsoló |
 | | SCALED | Portamento Scaled By Interval, LED kapcsoló |
-
-A Master oldal OUTPUT blokkja a következőket tartalmazza:
-- **LIMIT kapcsoló:** A kimeneti limiter, alapértelmezés szerint ki van kapcsolva. Használja a túlvezérlés (clipping) megelőzésére, amikor a kimeneti szinteket magasra állítja.
-- **QUALITY:** 
-  - **NO SMOOTHING:** Kikapcsolja a paraméterek simítását, így a módosítások azonnal ugranak az átúszás helyett (ideális feszes ritmikus kapuzáshoz / gatinghez). A presettel együtt mentődik.
-  - **OVERSAMPLE 4X:** Megtisztítja a hullámtábla-oszcillátor magas hangjait warp nélkül. Megjegyzés: Több processzorkapacitást használ (2x az 1. generációs profilon).
 
 **POLY és az eszköz.** Az oldal lehetővé teszi akár 32 hang beállítását is, de a valóságban megszólaló hangok számát korlátozza az eszköz: **8 a Key 61-en, 16 az XL-en** (7.1 fejezet). A több hanggal elmentett preset egyszerűen az eszköz által megengedett hangszámmal szólal meg.
 
