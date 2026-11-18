@@ -43,6 +43,11 @@ public:
     /** The calls of the host whose longest stay in the dispatcher is kept. */
     enum Call : int { kCallOpen, kCallSetProgram, kCallGetProgramName, kCallGetProgramNameIndexed, kCallGetChunk, kCallSetChunk, kCallMains, kCallSampleRate, kCallBlockSize, kCallParamInfo, kCallOther, kCalls };
 
+    /** The calls of the host about the program list, counted for the status file (program_calls_*): does the host ask for program categories at all, and with which category value? */
+    enum ProgramCall : int { kPcSetProgram, kPcGetProgram, kPcGetProgramName, kPcGetProgramNameIndexed, kPcNumCategories, kProgramCalls };
+    /** Buckets of the category value (effGetProgramNameIndexed's `value`, effGetNumProgramCategories': the `value` seen): -1, 0 .. 30, anything else. */
+    static constexpr int kCategoryBuckets = 33;
+
     static const char* milestoneName (int m) noexcept
     {
         static const char* const kNames[kMilestones] = { "engine_create", "content_store", "scan_presets", "default_params", "vst_main_rest", "host_until_first_call", "host_until_resume", "engine_prepare", "host_until_first_audio" };
@@ -58,6 +63,29 @@ public:
         static const char* const kNames[kUiSteps] = { "overlay_thread_start", "views_built", "page_seen", "helper_asked", "helper_ready", "first_frame" };
         return u >= 0 && u < kUiSteps ? kNames[u] : "?";
     }
+    static const char* programCallName (int c) noexcept
+    {
+        static const char* const kNames[kProgramCalls] = { "effSetProgram", "effGetProgram", "effGetProgramName", "effGetProgramNameIndexed", "effGetNumProgramCategories" };
+        return c >= 0 && c < kProgramCalls ? kNames[c] : "?";
+    }
+
+    /** The mode of the program list and its length (set once at start; the pointer is a string literal). */
+    void setProgramMode (const char* mode, int numPrograms) noexcept
+    {
+        programMode_.store (mode, std::memory_order_relaxed);
+        programCount_.store (numPrograms, std::memory_order_relaxed);
+    }
+    /** One call of the host about the program list. `category` is the `value` argument; only the two category calls (effGetProgramNameIndexed, effGetNumProgramCategories) are counted per value. Any thread. */
+    void noteProgramCall (ProgramCall c, int category) noexcept
+    {
+        if (c < 0 || c >= kProgramCalls)
+            return;
+        const int b = category == -1 ? 0 : (category >= 0 && category < kCategoryBuckets - 2) ? category + 1 : kCategoryBuckets - 1;
+        programCalls_[c].fetch_add (1, std::memory_order_relaxed);
+        if (c == kPcGetProgramNameIndexed || c == kPcNumCategories)
+            programCategory_[c][b].fetch_add (1, std::memory_order_relaxed);
+    }
+
     static const char* callName (int c) noexcept
     {
         static const char* const kNames[kCalls] = { "effOpen", "effSetProgram", "effGetProgramName", "effGetProgramNameIndexed", "effGetChunk", "effSetChunk", "effMainsChanged", "effSetSampleRate", "effSetBlockSize", "param_info_calls", "other" };
@@ -264,6 +292,31 @@ public:
         }
         std::snprintf (line, sizeof line, "open_ms_detail_wavetables: %.3f\nopen_ms_detail_prepare_voices: %.3f\nopen_ms_detail_prepare_fx: %.3f\n", wavetableMs_.load (std::memory_order_relaxed), voicesMs_.load (std::memory_order_relaxed), fxMs_.load (std::memory_order_relaxed));
         out += line;
+        {
+            const char* mode = programMode_.load (std::memory_order_relaxed);
+            std::snprintf (line, sizeof line, "program_groups_mode: %s\nprogram_list_length: %d\n", mode != nullptr ? mode : "n/a", programCount_.load (std::memory_order_relaxed));
+            out += line;
+            for (int c = 0; c < kProgramCalls; ++c)
+            {
+                std::snprintf (line, sizeof line, "program_calls_%s: %lu\n", programCallName (c), programCalls_[c].load (std::memory_order_relaxed));
+                out += line;
+                if (c != kPcGetProgramNameIndexed && c != kPcNumCategories)
+                    continue;
+                for (int b = 0; b < kCategoryBuckets; ++b)
+                {
+                    const unsigned long n = programCategory_[c][b].load (std::memory_order_relaxed);
+                    if (n == 0)
+                        continue;
+                    if (b == 0)
+                        std::snprintf (line, sizeof line, "program_calls_%s_category_-1: %lu\n", programCallName (c), n);
+                    else if (b == kCategoryBuckets - 1)
+                        std::snprintf (line, sizeof line, "program_calls_%s_category_other: %lu\n", programCallName (c), n);
+                    else
+                        std::snprintf (line, sizeof line, "program_calls_%s_category_%d: %lu\n", programCallName (c), b - 1, n);
+                    out += line;
+                }
+            }
+        }
         for (int c = 0; c < kCalls; ++c)
         {
             const unsigned long n = callCount_[c].load (std::memory_order_relaxed);
@@ -285,6 +338,13 @@ public:
         oursBeforeResumeNs_.store (0);
         oursResumeToAudioNs_.store (0);
         for (int c = 0; c < kCalls; ++c) { callCount_[c].store (0); callSum_[c].store (0); callMax_[c].store (0); }
+        for (int c = 0; c < kProgramCalls; ++c)
+        {
+            programCalls_[c].store (0);
+            for (int b = 0; b < kCategoryBuckets; ++b) programCategory_[c][b].store (0);
+        }
+        programMode_.store (nullptr);
+        programCount_.store (0);
         wavetableMs_.store (0.0);
         voicesMs_.store (0.0);
         fxMs_.store (0.0);
@@ -297,6 +357,10 @@ private:
     std::atomic<int64_t> stamp_[kMilestones] = {};
     std::atomic<int64_t> detailNs_[kDetails] = {};
     std::atomic<unsigned long> callCount_[kCalls] = {};
+    std::atomic<unsigned long> programCalls_[kProgramCalls] = {};
+    std::atomic<unsigned long> programCategory_[kProgramCalls][kCategoryBuckets] = {};
+    std::atomic<const char*> programMode_ { nullptr };
+    std::atomic<int> programCount_ { 0 };
     std::atomic<int64_t> callSum_[kCalls] = {}, callMax_[kCalls] = {};
     std::atomic<double> wavetableMs_ { 0.0 }, voicesMs_ { 0.0 }, fxMs_ { 0.0 };
 };

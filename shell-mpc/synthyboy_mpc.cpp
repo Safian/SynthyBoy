@@ -61,6 +61,12 @@
 #define SYNTHYBOY_MPC_LFO_LIVE 0
 #endif
 #if SYNTHYBOY_MPC_LFO_LIVE
+// SYNTHYBOY_MPC_PROGRAM_GROUPS (CMake option of the same name, a string): how the program list of the host is grouped (program_list.h, docs/MPC.md "Preset list of a plugin track"); the number is the
+// GroupMode: 0 off (default, the flat list as ever), 1 prefix-short, 2 prefix-group, 3 headers, 4 vst-categories.
+#ifndef SYNTHYBOY_MPC_PROGRAM_GROUPS
+#define SYNTHYBOY_MPC_PROGRAM_GROUPS 0
+#endif
+
 #ifndef SYNTHYBOY_MPC_LFO_LIVE_HZ
 #define SYNTHYBOY_MPC_LFO_LIVE_HZ 10
 #endif
@@ -326,6 +332,9 @@ struct PluginInstance
 
     // Programs
     std::vector<synthyboy_mpc::ProgramEntry> programs;
+    // The program list as the host sees it (built once at start, never changed afterwards: no lock): program number -> item (Init, header, preset). currentProgram is always a preset or Init.
+    synthyboy_mpc::ProgramView view;
+    std::atomic<bool> hostAskedCategories { false };   // the host has called effGetNumProgramCategories (mode vst-categories answers by category only after that)
     std::atomic<int> currentProgram {0};
     // The "chunk wins" protection: the MPC saves the program number in the project
     // and may select that program again right after restoring the chunk; that selection
@@ -1603,6 +1612,7 @@ struct PluginInstance
 #else
         b += "LFO_LIVE=OFF";
 #endif
+        b += std::string (" PROGRAM_GROUPS=") + synthyboy_mpc::groupModeName (static_cast<synthyboy_mpc::GroupMode> (SYNTHYBOY_MPC_PROGRAM_GROUPS));
 #if SYNTHYBOY_MPC_PAD_PRESSURE
         extraParams += synthyboy_mpc::kPadPressureParams;
         b += " PAD_PRESSURE=ON";
@@ -1697,6 +1707,8 @@ struct PluginInstance
                 MPCKIT_LOG ("startup", info, "%zu programs from %s", programs.size(), source.c_str());
             }
         }
+        view = synthyboy_mpc::buildProgramView (programs, static_cast<synthyboy_mpc::GroupMode> (SYNTHYBOY_MPC_PROGRAM_GROUPS));
+        synthyboy_mpc::startupTimes().setProgramMode (synthyboy_mpc::groupModeName (view.mode), view.numPrograms());
         synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kScanPresets);
 
         // Apply default values to engine and mirror
@@ -1799,10 +1811,22 @@ static std::string currentProgramName (PluginInstance* inst)
             return inst->noProgramName.empty() ? "Init" : inst->noProgramName;
     }
     int prog = static_cast<int> (inst->currentProgram.load (std::memory_order_relaxed));
-    if (prog == 0)
-        return "Init";
-    if (prog >= 1 && prog <= static_cast<int> (inst->programs.size()))
-        return inst->programs[static_cast<size_t> (prog - 1)].name;
+    if (prog >= 1 && prog < inst->view.numPrograms() && ! inst->view.isHeader (prog))
+        return inst->view.items[static_cast<size_t> (prog)].baseName;
+    return "Init";
+}
+
+/** The name of the current program as the host's list shows it (the label of the mode); in the "no program" state the saved name. */
+static std::string currentProgramLabel (PluginInstance* inst)
+{
+    {
+        std::lock_guard<std::mutex> g (inst->programMutex);
+        if (inst->noProgram)
+            return inst->noProgramName.empty() ? "Init" : inst->noProgramName;
+    }
+    const int prog = static_cast<int> (inst->currentProgram.load (std::memory_order_relaxed));
+    if (prog >= 1 && prog < inst->view.numPrograms() && ! inst->view.isHeader (prog))
+        return inst->view.label (prog);
     return "Init";
 }
 
@@ -2019,12 +2043,20 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 #if SYNTHYBOY_MPC_OVERLAY
         synthyboy_mpc::PlayLog::line ("effSetProgram %d (protected %d, window %d)", prog, inst->protectedProgram.load (std::memory_order_relaxed), inst->restoreSinceMs.load (std::memory_order_relaxed) >= 0 ? 1 : 0);
 #endif
-        int numProgs = static_cast<int> (inst->programs.size()) + 1;
+        synthyboy_mpc::startupTimes().noteProgramCall (synthyboy_mpc::StartupTimes::kPcSetProgram, prog);
+        int numProgs = inst->view.numPrograms();
         // Out of range: do nothing
         if (prog < 0 || prog >= numProgs) return 1;
 
         // Check if protection is armed for this index BEFORE disarming
         bool wasProtected = (inst->protectedProgram.load (std::memory_order_relaxed) == prog);
+        // A header of the list (mode headers) loads a preset of its group (program_list.h effectiveProgram)
+        if (inst->view.isHeader (prog))
+        {
+            prog = synthyboy_mpc::effectiveProgram (inst->view, prog, inst->currentProgram.load (std::memory_order_relaxed));
+            if (prog < 0) return 1;
+            wasProtected = false;
+        }
         // Disarm protection (any effSetProgram disarms it)
         inst->protectedProgram.store (-1, std::memory_order_relaxed);
 
@@ -2047,7 +2079,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         else
         {
             // Program >= 1: load preset file
-            const auto& entry = inst->programs[static_cast<size_t> (prog - 1)];
+            const auto& entry = inst->programs[static_cast<size_t> (inst->view.items[static_cast<size_t> (prog)].preset)];
             std::string data;
             if (! synthyboy_mpc::safefile::readWholeBounded (entry.path.c_str(), data, kMaxPresetFileBytes))
                 return 1; // file cannot be read, is not a regular file or is larger than a preset can be (4 MB; a preset is a few KB)
@@ -2076,6 +2108,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     case effGetProgram:
     {
         if (!inst) return 0;
+        synthyboy_mpc::startupTimes().noteProgramCall (synthyboy_mpc::StartupTimes::kPcGetProgram, 0);
         return inst->currentProgram.load (std::memory_order_relaxed);
     }
 
@@ -2090,24 +2123,38 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (!inst) return 0;
         char* name = static_cast<char*>(ptr);
         if (!name) return 0;
-        std::string progName = currentProgramName (inst);
+        synthyboy_mpc::startupTimes().noteProgramCall (synthyboy_mpc::StartupTimes::kPcGetProgramName, 0);
+        std::string progName = currentProgramLabel (inst);
 #if SYNTHYBOY_MPC_OVERLAY
         if (inst->programModified.load (std::memory_order_relaxed))
             progName += " *";
 #endif
-        copyString(name, kVstMaxProgNameLen + 1, progName.c_str());
+        copyString(name, kVstMaxProgNameLen + 1, synthyboy_mpc::truncateUtf8 (progName, synthyboy_mpc::kProgramNameMax).c_str());
         return 1;
     }
 
     case effGetProgramNameIndexed:
     {
         char* name = static_cast<char*>(ptr);
+        if (inst)
+            synthyboy_mpc::startupTimes().noteProgramCall (synthyboy_mpc::StartupTimes::kPcGetProgramNameIndexed, static_cast<int> (value));
         if (!inst || !name || index < 0) return 0;
-        int numProgs = static_cast<int> (inst->programs.size()) + 1;
-        if (index >= numProgs) return 0;
-        const std::string& progName = (index == 0) ? std::string ("Init") : inst->programs[static_cast<size_t> (index - 1)].name;
-        copyString(name, kVstMaxProgNameLen + 1, progName.c_str());
+        // value = the VST2 category (-1: no category); only the mode vst-categories looks at it. The buffer is char[kVstMaxProgNameLen + 1]: the label is cut to what fits.
+        const int n = synthyboy_mpc::programOfIndexed (inst->view, index, static_cast<int> (value), inst->hostAskedCategories.load (std::memory_order_relaxed));
+        if (n < 0) return 0;
+        copyString(name, kVstMaxProgNameLen + 1, synthyboy_mpc::truncateUtf8 (inst->view.label (n), synthyboy_mpc::kProgramNameMax).c_str());
         return 1;
+    }
+
+    case effGetNumProgramCategories_Deprecated:
+    {
+        // VST2 program categories: the number of categories (0 = no categories, a flat list). Only the mode vst-categories has any.
+        if (!inst) return 0;
+        synthyboy_mpc::startupTimes().noteProgramCall (synthyboy_mpc::StartupTimes::kPcNumCategories, static_cast<int> (value));
+        const int n = synthyboy_mpc::numProgramCategories (inst->view);
+        if (n > 0)
+            inst->hostAskedCategories.store (true, std::memory_order_relaxed);
+        return n;
     }
 
     case effGetParamName:
@@ -2480,7 +2527,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     // Has a program number: try to read the name
                     std::string name;
                     bool hasName = synthyboy_mpc::programNameFromChunk(chunk, static_cast<size_t>(size), name);
-                    int r = synthyboy_mpc::resolveProgram (inst->programs, idx, hasName, name);
+                    int r = synthyboy_mpc::resolveProgramInView (inst->view, inst->programs, idx, hasName, name);
 
                     if (r >= 0)
                     {
@@ -3108,7 +3155,7 @@ extern "C"
         effect->processReplacing = pluginProcessReplacing;
         effect->setParameter = pluginSetParameter;
         effect->getParameter = pluginGetParameter;
-        effect->numPrograms = static_cast<VstInt32>(inst->programs.size()) + 1;
+        effect->numPrograms = static_cast<VstInt32>(inst->view.numPrograms());
         effect->numParams = static_cast<VstInt32>(synthyboy::paramCount());
 #if SYNTHYBOY_MPC_LFO_LIVE
 #if SYNTHYBOY_MPC_SPECTRUM
