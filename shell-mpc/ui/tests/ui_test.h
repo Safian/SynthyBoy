@@ -79,6 +79,64 @@ inline int drawnInside (const Image& im, const Rect& r, uint32_t background)
     return n;
 }
 
+/** The data ops of a scene that reach into the rectangle `r`: a polyline of more than two vertices with the fills that follow it (down to their base row), a band, a line, a vertical line, a disc. The ground rectangles (the two point curves
+    of a gradient rectangle, rectangles, rounded rectangles) and text are not counted: this is "something of a curve, a grid or a marker is drawn there". Draw the picture alone (without the buttons of its view) when `r` is a button. */
+inline int dataOpsInto (const Scene& s, const Rect& r)
+{
+    const gpu::SceneData& d = *s.data;
+    auto hit = [&] (float x0, float y0, float x1, float y1) { return x1 > static_cast<float> (r.x) && x0 < static_cast<float> (r.right()) && y1 > static_cast<float> (r.y) && y0 < static_cast<float> (r.bottom()); };
+    auto span = [&] (int first, int n, float& lo, float& hi)
+    {
+        lo = 1.0e9f; hi = -1.0e9f;
+        for (int i = 0; i < n; ++i) { lo = std::min (lo, d.y[first + i]); hi = std::max (hi, d.y[first + i]); }
+    };
+    int hits = 0;
+    bool data = false;
+    float cx0 = 0.0f, cx1 = 0.0f, cy0 = 0.0f, cy1 = 0.0f;
+    for (uint32_t k = 0; k < d.numOps; ++k)
+    {
+        const gpu::SceneOp& o = d.ops[k];
+        switch (o.op)
+        {
+            case gpu::kOpCurve:
+                data = o.f[1] > 2.0f;
+                if (data)
+                {
+                    cx0 = o.f[2]; cx1 = o.f[2] + o.f[3];
+                    span (static_cast<int> (o.f[0]), static_cast<int> (o.f[1]), cy0, cy1);
+                    hits += hit (cx0, cy0, cx1, cy1);
+                }
+                break;
+            case gpu::kOpFill: case gpu::kOpFillGradient:
+                if (data)
+                    hits += hit (cx0, std::min (cy0, o.f[0]), cx1, std::max (cy1, o.f[0]));
+                break;
+            case gpu::kOpBand:
+            {
+                float a0, a1, b0, b1;
+                span (static_cast<int> (o.f[0]), static_cast<int> (o.f[1]), a0, a1);
+                span (static_cast<int> (o.f[4]), static_cast<int> (o.f[1]), b0, b1);
+                hits += hit (o.f[2], std::min (a0, b0), o.f[2] + o.f[3], std::max (a1, b1));
+                break;
+            }
+            case gpu::kOpLine:
+            {
+                const float h = 0.5f * o.f[4];
+                hits += hit (std::min (o.f[0], o.f[2]) - h, std::min (o.f[1], o.f[3]) - h, std::max (o.f[0], o.f[2]) + h, std::max (o.f[1], o.f[3]) + h);
+                break;
+            }
+            case gpu::kOpVLine:
+                hits += hit (o.f[0] - 0.5f * o.f[3], std::min (o.f[1], o.f[2]), o.f[0] + 0.5f * o.f[3], std::max (o.f[1], o.f[2]));
+                break;
+            case gpu::kOpDisc:
+                hits += hit (o.f[0] - o.f[2], o.f[1] - o.f[2], o.f[0] + o.f[2], o.f[1] + o.f[2]);
+                break;
+            default: break;
+        }
+    }
+    return hits;
+}
+
 /** The colour (RGB, 0xRRGGBB) of the pixel, composed over black (the canvases of the tests are drawn over the background colour). */
 inline uint32_t rgbAt (const Image& im, int x, int y) { return im.at (x, y) & 0xffffffu; }
 inline int channelDistance (uint32_t a, uint32_t b)

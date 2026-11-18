@@ -13,6 +13,7 @@
 #include <optional>
 
 #include "core.h"
+#include "play_rows.h"
 
 namespace synthyboy_mpc { namespace ui { namespace lfodisplay {
 
@@ -50,7 +51,7 @@ struct Data
     const float* trace = nullptr;
     int traceN = 0;
     int style = -1;              // Random: the style 0 .. 4 (Perlin, S & H, sine interpolation, Lorenz, Rossler): while the trace is flat (nothing sounds) a dim representative path of the style is drawn instead of a bare line
-    const char* label = "";      // the name in the corner (the shape, the style)
+    const char* label = "";      // the name in the corner (the shape, the style); the compact view writes it in its header band
     bool dim = false;            // the LFO does nothing (the picture stays, faint)
     bool editing = false;        // the shape editor has the same ground and curve under its handles: no lead-in, no label
 };
@@ -70,16 +71,32 @@ inline bool hasLeadStrip (const Data& d) noexcept
 {
     return d.kind == Data::Kind::Shape && ! d.editing && (d.delayShare > 0.0f || d.riseShare > 0.0f);
 }
+/** The compact view (the third of the Play page, playrows.h): a display narrower than this (the full page's and the shape editor's are over 800 px wide). It has a header band at its top that holds the full screen button and the label,
+    and the plot area below the band (playrows::plotRect: the same for the oscillator wave, the envelope graph and the LFO curve). */
+constexpr int kCompactMaxW = 520;
+inline bool isCompact (const Rect& r, const Data& d) noexcept { return ! d.editing && r.w < kCompactMaxW; }
 inline Rect stripRect (const Rect& r, const Data& d) noexcept
 {
     if (! hasLeadStrip (d))
         return {};
+    if (isCompact (r, d))
+    {
+        const Rect area = playrows::plotRect (r);   // the strip is the top of the plot area: under the band, clear of the buttons
+        return { area.x, area.y, area.w, 18 };
+    }
     const Rect in = r.inset (8);
     return { in.x, in.y + 2, in.w, 18 };
 }
-/** The rectangle of the curve inside the block: the shape graph is one clean cycle. With delay or rise > 0 a small separate strip sits above the graph. */
+/** The rectangle of the curve inside the block: the shape graph is one clean cycle. With delay or rise > 0 a small separate strip sits above the graph. The compact view: inside playrows::plotRect (below the header band), the
+    strip at its top; the other views (the full page, the shape editor) as before. */
 inline Rect plotRect (const Rect& r, const Data& d) noexcept
 {
+    if (isCompact (r, d))
+    {
+        const Rect area = playrows::plotRect (r);
+        const int stripH = hasLeadStrip (d) ? 24 : 0;
+        return { area.x, area.y + stripH, area.w, std::max (0, area.h - stripH) };
+    }
     const Rect in = r.inset (8);
     const int topPad = hasLeadStrip (d) ? 24 : 6;
     return { in.x, in.y + topPad, in.w, std::max (0, in.h - topPad - 6) };
@@ -216,7 +233,15 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
     sb.style (1.0f, false);
     sb.paintOff();
     if (d.label[0] != '\0' && ! d.editing)
-        sb.text (static_cast<float> (r.x + 14), static_cast<float> (r.y + 24), T.fLabel, d.label, a (T.textDim, 220));
+    {
+        if (isCompact (r, d))
+        {
+            Pen pen (sb, true);   // the label lies in the header band, left of the full screen button (the text is fitted to that room)
+            pen.textLeft (playrows::labelRect (r, false, false), d.label, T.fLabel, a (T.textDim, 220), T.fMin);
+        }
+        else
+            sb.text (static_cast<float> (r.x + 14), static_cast<float> (r.y + 24), T.fLabel, d.label, a (T.textDim, 220));
+    }
 }
 
 /** What moves: the cursors of the voices (a hairline over the plot and a dot on the shape), the dot at the newest value of a trace. */

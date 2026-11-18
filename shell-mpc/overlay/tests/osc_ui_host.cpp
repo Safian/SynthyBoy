@@ -209,7 +209,10 @@ void testFullScreenOpensAndCloses()
     r.openFull();
     check (r.stack.depth() == 1 && r.inst.fullOpen, "the full-screen button opens the full screen and tells the plugin");
     check (r.ui.displayRect().w > 500, "the full screen has a display rectangle");
+    check (r.ui.plotArea().empty(), "the full screen's picture has no plot area (it fills its display rectangle)");
     r.tapC (r.ui.full().close);
+    check (r.stack.isMain() && r.ui.plotArea() == ui::playrows::plotRect (r.ui.displayRect()) && r.ui.plotArea().y >= ui::playrows::bandRect (r.ui.displayRect()).bottom() && ! r.ui.plotArea().overlaps (r.ui.compact().full.rect()) && ! r.ui.plotArea().overlaps (r.ui.compact().power.rect()) && (r.ui.compact().route.rect().empty() || ! r.ui.plotArea().overlaps (r.ui.compact().route.rect())),
+           "the compact view: the picture's plot area is the common one, under the header band; the buttons (power, route, full screen) stand in the band");
     check (r.stack.isMain() && ! r.inst.fullOpen, "the close button is back (main again, the plugin is told)");
     // navigating away
     r.openFull();

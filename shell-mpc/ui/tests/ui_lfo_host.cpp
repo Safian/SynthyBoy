@@ -6,6 +6,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include "ui_test.h"
 #include "../lfo_screen.h"
+#include "../play_rows.h"
 #include "../shape_editor.h"
 
 using namespace uit;
@@ -234,6 +235,67 @@ void checkView (View& s, const Rect& area, const std::string& nm, QGroup* groups
     Scene sc (area.right() + 10, area.bottom() + 10, bgRgba);
     s.draw (sc.builder());
     check (! sc.overflow(), nm + ": the picture fits one scene (" + std::to_string (sc.numOps()) + " ops)");
+}
+
+/** The compact LFO display (the Play page's third): the header band at its top holds the label and the full screen button, the curve lies in the plot area below it (the common one, playrows::plotRect; the lead-in strip of a delay / rise is the top of that
+    area), for every shape of data (a cycle with and without a lead strip, an envelope type with a loop point and a phase marker, a random trace, a dim LFO), with the cursors; nothing is drawn under the button. The full page and the shape editor keep their rectangle. */
+void testCompactPlot()
+{
+    LfoCompact c;
+    c.place ({ 858, 114, 408, 620 });
+    const Rect disp = c.displayRect(), area = playrows::plotRect (disp), band = playrows::bandRect (disp), fb = c.full.rect();
+    check (disp == playrows::displayRect (c.rect()) && fb == playrows::fullRect (disp) && band.contains (fb) && fb.w >= 56 && fb.h >= 56, "compact LFO display: the full screen button stands in the header band, the same place as the oscillator's and the envelope's");
+    float y[256], tr[192];
+    for (int i = 0; i < 256; ++i)
+        y[i] = i < 128 ? 1.0f : -1.0f;   // a square wave: its full height, the steps run up to the plot's top and bottom
+    float tri[256];
+    for (int i = 0; i < 256; ++i)
+        tri[i] = 2.0f * std::fabs (2.0f * (static_cast<float> (i) / 255.0f - 0.5f)) - 1.0f;
+    for (int i = 0; i < 192; ++i)
+        tr[i] = std::sin (static_cast<float> (i) * 0.3f);
+    struct Case { const char* name; bool random; bool lead; bool envelope; bool dim; };
+    const Case cases[] = { { "square, no lead strip", false, false, false, false }, { "triangle with delay and rise (lead strip)", false, true, false, false }, { "envelope type with loop point and phase", false, false, true, false },
+                           { "dim LFO", false, true, false, true }, { "random trace", true, false, false, false } };
+    for (const Case& cs : cases)
+    {
+        lfodisplay::Data d;
+        d.kind = cs.random ? lfodisplay::Data::Kind::Random : lfodisplay::Data::Kind::Shape;
+        d.y = cs.lead ? tri : y;
+        d.n = 256;
+        d.trace = tr; d.traceN = 192;
+        d.delayShare = cs.lead ? 0.3f : 0.0f; d.riseShare = cs.lead ? 0.4f : 0.0f;
+        d.envelope = cs.envelope; d.loopX = cs.envelope ? 0.6f : -1.0f; d.phase = cs.envelope ? 0.25f : 0.0f;
+        d.numCursors = 2; d.cx[0] = 0.0f; d.cy[0] = 1.0f; d.cx[1] = 1.0f; d.cy[1] = -1.0f;
+        d.dim = cs.dim;
+        d.label = "LFO 1 - A LONG SHAPE NAME THAT NEEDS ITS ROOM";
+        const std::string nm = std::string ("compact LFO display, ") + cs.name + ": ";
+        const Rect pl = lfodisplay::plotRect (disp, d);
+        check (! pl.empty() && area.contains (pl) && pl.y >= band.bottom() && (cs.lead ? pl.y - area.y == 24 : pl == area), nm + "the curve's rectangle is the common plot area (under the lead strip, if any)");
+        if (cs.lead)
+            check (area.contains (lfodisplay::stripRect (disp, d)) && lfodisplay::stripRect (disp, d).y == area.y, nm + "the lead-in strip is the top of the plot area, under the band");
+        Scene s (1280, 800, 0x0b1026ffu);
+        lfodisplay::draw (s.builder(), disp, d);
+        lfodisplay::drawLive (s.builder(), disp, d);
+        check (! s.overflow() && dataOpsInto (s, fb) == 0 && dataOpsInto (s, band) == 0, nm + "no curve, fill, grid line, marker or cursor lies in the header band or under the full screen button (" + std::to_string (dataOpsInto (s, band)) + ")");
+        // the label is written in the band, left of the button: its text ops start inside the label's room and stay clear of the button
+        const Rect room = playrows::labelRect (disp, false, false);
+        bool label = false, clear = true;
+        for (uint32_t k = 0; k < s.data->numOps; ++k)
+            if (s.data->ops[k].op == gpu::kOpText && gpu::textString (*s.data, s.data->ops[k]).find ("LFO 1") == 0)
+            {
+                const float x = s.data->ops[k].f[0];
+                label = true;
+                clear = clear && x >= static_cast<float> (room.x) - 0.5f && x < static_cast<float> (room.right());
+            }
+        check (label && clear && room.right() <= fb.x, nm + "the label starts in its room of the band, left of the full screen button");
+    }
+    // the full page and the shape editor keep their rectangle (the compact rule is for the narrow display of the third only)
+    lfodisplay::Data d;
+    d.kind = lfodisplay::Data::Kind::Shape; d.y = y; d.n = 256;
+    const Rect wide { 20, 20, 700, 300 };
+    check (lfodisplay::plotRect (wide, d) == Rect { wide.x + 8, wide.y + 8 + 6, wide.w - 16, wide.h - 16 - 12 }, "full page display: the curve's rectangle is unchanged (inset 8, 6 px padding)");
+    d.editing = true;
+    check (lfodisplay::plotRect (Rect { 20, 20, 400, 300 }, d) == Rect { 28, 34, 384, 284 - 12 }, "shape editor canvas (editing): the curve's rectangle is unchanged even in a narrow canvas");
 }
 
 void testViews()
@@ -549,6 +611,7 @@ int main()
     testModel();
     testParts();
     testViews();
+    testCompactPlot();
     testEditor();
     testDisplay();
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);

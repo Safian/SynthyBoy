@@ -2,7 +2,7 @@
 
 ## What it is
 The two views of the LFO element. The element has two types: an LFO (LFO 1 to 10, a shape of one cycle) and a RANDOM LFO (R1 to R4, a style); `configure (random)` swaps the parts and the Q groups, the places stay.
-- `LfoCompact`: one third (about 408 x 620): the instance carousel, the full-screen button on the display, the display, and the Q group RATE under it.
+- `LfoCompact`: one third (about 408 x 620): the instance carousel, the display (a header band at its top with the label and the full-screen button at its right end; the curve lies in the plot area below the band), and the Q group RATE under it.
 - `LfoFullScreen`: top bar (close, the 14 instance cells, HZ / BPM / KEY with TRIP and DOT, MONO, targets), display at the left, shape or style picker at the right, and a bottom band of titled blocks, one Q group each.
 
 ## Header and types

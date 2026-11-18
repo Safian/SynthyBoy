@@ -20,12 +20,13 @@ The pictures of an oscillator (a wave, a wavetable stack, unison voices, a sampl
 | `colour` | the instance colour `0xRRGGBB` | `0x2ee6f0` |
 | `message` | text for `Kind::Message` | "" |
 | `noiseColour`, `dim` | noise picture 0 (white) to 8; `dim` = source switched off (a veil and an OFF tag) | 0, false |
+| `area` | the plot area the picture is drawn in, edge to edge (the compact view of the Play page: `playrows::plotRect (display)`, below the header band that holds the power, route and full screen buttons); empty = the display rectangle with its 8 px margin (the full screens and pages) | empty |
 
 `display::Module`: `rect`, `plot`, `env` (true = envelope), `highlighted`, `title`, `v` (n values 0 to 1), `n`, `dot` (< 0 = none).
-`lfodisplay::Data`: `kind { None, Shape, Random }`, `y`, `n` (one cycle, -1 to 1), `delayShare`, `riseShare`, `gridX`, `gridY`, `loopX`, `phase`, `envelope`, `numCursors`, `cx[]`, `cy[]`, `trace`, `traceN`, `style` (0 to 4), `label`, `dim`, `editing`.
+`lfodisplay::Data`: `kind { None, Shape, Random }`, `y`, `n` (one cycle, -1 to 1), `delayShare`, `riseShare`, `gridX`, `gridY`, `loopX`, `phase`, `envelope`, `numCursors`, `cx[]`, `cy[]`, `trace`, `traceN`, `style` (0 to 4), `label`, `dim`, `editing`. A display narrower than `lfodisplay::kCompactMaxW` (520 px, `isCompact`: the Play page's third) is the compact view: `plotRect` is `playrows::plotRect (display)` (the lead-in strip is the top of it), `stripRect` lies in it and the label is written in the header band (`playrows::labelRect`); the full page and the shape editor (`editing`) keep their rectangle.
 
 ## Size
-The functions take the rectangle: `display::draw (sb, rect, data, cached = true)`. No minimum is enforced; the pages give them the display rectangle (`playrows::displayRect (third)`, 292 px high on the Play page).
+The Play page's displays have a header band at the top (`playrows::bandRect`, 72 px) with the buttons in it; the picture is drawn below it (`display::Data::area`, `lfodisplay::plotRect` of the compact view, `EnvGraph::plotArea`), so no curve runs under a button. The functions take the rectangle: `display::draw (sb, rect, data, cached = true)`. No minimum is enforced; the pages give them the display rectangle (`playrows::displayRect (third)`, 292 px high on the Play page).
 
 ## Touch and knob behaviour
 None. Interaction comes from the controls around it.

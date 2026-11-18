@@ -1,8 +1,8 @@
 // SynthyBoy - MPC UI component library: the two views of an oscillator INSTANCE (owner approved; drawn for 1280 x 800, other sizes scale in proportion). The synth has five instances: Sub, A, B,
 // C and Noise; Sub and Noise have a fixed panel, A, B and C have a type (OscKind: wavetable, multisample, granular). Both views are layout presets built only from library components, and
 // both contain the Q group "Basic" (BasicControls: the same members and, with assignIds, the same ids).
-//  - OscillatorCompact: the third of the width on the main page (about 420 x 700): the header row (on / off, the source selector Sub / Osc A / Osc B / Osc C / Noise as a stepper with a list, the "full screen" button, the route button), the display
-//    area (the same rectangle as the envelope's and the LFO's, play_rows.h), and the Basic group in one frame at the bottom: the type cells and ONE row (table stepper / OCT, PAN, LEVEL). No tuning row and no type bar.
+//  - OscillatorCompact: the third of the width on the main page (about 420 x 700): the header row (the source selector Sub / Osc A / Osc B / Osc C / Noise: a carousel with a list), the display
+//    area (the same rectangle as the envelope's and the LFO's, play_rows.h) with its header band (the power button, the route button, the "full screen" button) and the plot area under the band, and the Basic group in one frame at the bottom: the type cells and ONE row (table stepper / OCT, PAN, LEVEL). No tuning row and no type bar.
 //  - OscillatorFullScreen: the top band (close, on / off, Basic, route at the right end), below left the display area with the type bar under it, below right the tuning row (vertical),
 //    the bottom band = the knob panel of the type; the full screen has no instance selector. `setInstance` swaps only the type bar, the tuning row, the bottom band and the groups.
 // Copyright (C) 2026 Safian Szabolcs
@@ -52,6 +52,10 @@ public:
         layout();
     }
     Rect displayRect() const noexcept { return display_; }
+    /** The plot area of the picture (below the header band, playrows::plotRect): where the wave is drawn. */
+    Rect plotRect() const noexcept { return playrows::plotRect (display_); }
+    /** The room of the label text in the band (between the power button and the route button or, for the sub oscillator, the full screen button). */
+    Rect labelRect() const noexcept { return playrows::labelRect (display_, true, inst_ != OscInstance::Sub); }
     QGroup& group() noexcept { return basic.group; }
     Size minSize() const override { return { 420, 700 }; }
     void draw (gpu::SceneBuilder& sb) const override
@@ -61,18 +65,18 @@ public:
     }
 
 protected:
-    // top to bottom (play_rows.h): the top row (the source selector), the display (the rectangle of the three thirds; the power button in its top left corner, the full screen button in its top right and the route button in its bottom right
-    // corner, 4 px from the edges, 64 x 56: the full screen button is placed exactly as the envelope graph's and the LFO display's), and from the controls line the Basic group in one frame
+    // top to bottom (play_rows.h): the top row (the source selector), the display (the rectangle of the three thirds) with its header band at the top (the power button at the left, the route button and the full screen button at the right end,
+    // the full screen button placed exactly as the envelope graph's and the LFO display's; the label text of the display lies between them) and the plot area under the band (the wave never runs under a button), and from the controls line the
+    // Basic group in one frame
     void layout() override
     {
         const int m = playrows::kMargin, W = rect_.w - 2 * m, rowH = playrows::kSelectorH;
         const bool sub = inst_ == OscInstance::Sub;   // the sub oscillator's routing is the ROUTING block of its page: no route button (as on the page)
-        const int btnW = 64, inset = 4;
         const int hy = rect_.y + m;
         display_ = playrows::displayRect (rect_);
-        power.place ({ display_.x + inset, display_.y + inset, btnW, rowH });
-        full.place ({ display_.right() - btnW - inset, display_.y + inset, btnW, rowH });
-        route.place (sub ? Rect {} : Rect { display_.right() - btnW - inset, display_.bottom() - 64 - inset, btnW, 64 });   // 64 px tall at least (RouteButton::minSize)   // the route button (F1 ...): the bottom right corner of the display, 56 px high
+        power.place (playrows::powerRect (display_));
+        full.place (playrows::fullRect (display_));
+        route.place (sub ? Rect {} : playrows::routeRect (display_));   // the route button (F1 ...): 64 x 64 (RouteButton::minSize), left of the full screen button
         instances.place ({ rect_.x + m, hy, W, rowH });
         const int by = playrows::controlsLine (rect_);
         basic.place ({ rect_.x + m, by, W, std::max (0, rect_.bottom() - m - by) });

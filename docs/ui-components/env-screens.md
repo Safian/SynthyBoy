@@ -2,7 +2,7 @@
 
 ## What it is
 The two views of the envelope element ENV 1 to 6.
-- `EnvCompact`: one third (400 x 620) in the middle of the Play page: the instance stepper, the [EnvGraph](env-graph.md) with a full-screen button in its top right corner, and the ADSR Q group in one frame.
+- `EnvCompact`: one third (400 x 620) in the middle of the Play page: the instance stepper, the [EnvGraph](env-graph.md) with a header band at its top (the full-screen button at its right end; the curve lies in the plot area below the band, `playrows::plotRect`), and the ADSR Q group in one frame.
 - `EnvFullScreen`: top bar (close or selector, targets button, target tags), the big graph, and the bottom band of three Q groups: ADSR, SHAPE, TIME.
 `EnvCarousel`: a [Carousel](carousel.md) of the six envelopes with a dot for the ones that have targets. `EnvSelector`: the row of six cells in the top bar of `EnvFullScreen` (a `PictogramSelector`).
 

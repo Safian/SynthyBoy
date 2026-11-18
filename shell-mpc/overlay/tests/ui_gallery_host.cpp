@@ -472,6 +472,23 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
                           });
     }
 
+    // (a1) the header band of the displays (2026-11-18): an envelope with long times (the curve runs to the right edge and up to the top under the band), an LFO with a lead strip (delay and rise: the strip is the top of the plot area),
+    // an oscillator A and a Noise whose picture lies below the band with the buttons in it (power, route F1, full screen), the Sub without a route button
+    {
+        if (shouldRender ("play1_env_long.png"))
+        {
+            GalleryInst g = baseInst;
+            g.set ("env1.attack", 3000.0f); g.set ("env1.decay", 8000.0f); g.set ("env1.release", 9000.0f);
+            savePlay (outDir + "/" + state + "_play1_env_long.png", 1, g, playosc::kA, 1, 1);
+        }
+        if (shouldRender ("play1_lfo_lead.png"))
+        {
+            GalleryInst g = baseInst;
+            g.set ("lfo1.delay", 400.0f); g.set ("lfo1.fade_in", 600.0f);
+            savePlay (outDir + "/" + state + "_play1_lfo_lead.png", 1, g, playosc::kA, 1, 1);
+        }
+    }
+
     // (a) Play 1-3 for each of the five oscillator sources, envelope 1 and 6, and LFO 1, 10, R1
     for (int p = 1; p <= 1; ++p)   // the one Play page
     {

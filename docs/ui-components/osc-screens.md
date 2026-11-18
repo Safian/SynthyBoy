@@ -2,7 +2,7 @@
 
 ## What it is
 The two views of one oscillator instance (Sub, A, B, C, Noise), built only from library components and layout presets, drawn for 1280 x 800 (other sizes scale in proportion).
-- `OscillatorCompact`: one third of the width on the Play page (about 420 x 620): header row (power, source selector, route, full-screen button), the display area, and the Basic group.
+- `OscillatorCompact`: one third of the width on the Play page (about 420 x 620): header row (the source selector), the display area with its header band (power button at the left, the route button and the full-screen button at the right end; `playrows::bandRect`) and the plot area under the band (`plotRect()`: the wave never runs under a button; `labelRect()` is the room of the "OFF" tag and of the "content missing" line), and the Basic group.
 - `OscillatorFullScreen`: the whole tab: top band, display area with the type bar under it, the tuning column at the right, and the knob panel of the oscillator type at the bottom.
 Use them as the reference for a screen that is a layout preset over a set of components.
 
@@ -10,7 +10,7 @@ Use them as the reference for a screen that is a layout preset over a set of com
 `shell-mpc/ui/screen.h`: `OscillatorCompact`, `OscillatorFullScreen` (both `Composite`). Uses `OscInstance`, `OscKind`, `Carousel`, `BasicControls`, `TypeBar`, `TuneRow`, `KnobPanel`, `playrows`.
 
 ## State
-`OscillatorCompact` members: `instances` (`Carousel`: Sub, Osc A, Osc B, Osc C, Noise; `listable`, wraps), `power` (`ToggleIcon`, `Power`), `route` (`RouteButton`), `full` (`MenuButton`, `Expand`), `basic` (`BasicControls`, stacked). API: `setInstance (OscInstance, OscKind)`, `displayRect()` (the rectangle shared by the three thirds, reserved and reported: the owner draws the picture), `group()`, static `sourceName (i)`.
+`OscillatorCompact` members: `instances` (`Carousel`: Sub, Osc A, Osc B, Osc C, Noise; `listable`, wraps), `power` (`ToggleIcon`, `Power`), `route` (`RouteButton`), `full` (`MenuButton`, `Expand`), `basic` (`BasicControls`, stacked). API: `setInstance (OscInstance, OscKind)`, `displayRect()` (the rectangle shared by the three thirds, reserved and reported: the owner draws the picture), `plotRect()` (the plot area under the header band: where the picture is drawn), `labelRect()` (the room of the text in the band between the power button and the route / full screen button), `group()`, static `sourceName (i)`.
 `OscillatorFullScreen` members: `close`, `power`, `basic`, `route`, `bar` (`TypeBar`), `tune` (`TuneRow`, vertical), `panel` (`KnobPanel`), `groups[kMaxGroups = 8]`. API: `setInstance (inst, kind)` (swaps only the type bar, tuning row, bottom band and groups; the active group goes back to Basic), `instance()`, `kind()`, `displayRect()`, `barBlock()`, `tuneBlock()`, `numGroups()`, `groupName (i)`, `activeGroup()`, `turnQ (knobIndex, delta)`, `rebuildGroups()`, `leaves (out, max)`, `kBottomH` 220.
 
 ## Size

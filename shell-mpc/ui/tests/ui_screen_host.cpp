@@ -7,6 +7,7 @@
 
 #include "ui_test.h"
 #include "../env_screen.h"
+#include "../lfo_display.h"
 #include "../lfo_screen.h"
 #include "../play_rows.h"
 
@@ -294,18 +295,19 @@ int main()
         }
         check (inside && apart, nm + ": every leaf inside, at least its minimum size, no overlap" + why);
         check (c.route.rect().empty() == subHeader, nm + ": the route button is in the header of every instance but the sub oscillator");
-        {   // the buttons in the corners of the display: the full screen button exactly where the envelope graph's and the LFO display's is (top right, 4 px in, 64 x 56), the power button in the top left corner with the same inset
-            const Rect d = c.displayRect(), f = c.full.rect(), w = c.power.rect();
+        {   // the buttons of the display stand in its header band (playrows.h): the power button at the left, the route button and the full screen button at the right end; the full screen button exactly where the envelope graph's and the LFO display's is
+            const Rect d = c.displayRect(), f = c.full.rect(), w = c.power.rect(), band = playrows::bandRect (d);
             EnvCompact ec;
             ec.place ({ 440, 114, 400, 620 });
             const Rect ef = ec.full.rect(), eg = ec.graphRect();
-            check (! d.empty() && c.rect().contains (d) && d.contains (f) && d.contains (w) && f.right() == d.right() - 4 && f.y == d.y + 4 && w.x == d.x + 4 && w.y == d.y + 4 && f.w == ef.w && f.h == ef.h && ef.right() == eg.right() - 4 && ef.y == eg.y + 4 && ! f.overlaps (w) && w.w >= 56 && w.h >= 56,
-                   nm + ": the full screen button (top right) and the power button (top left) stand in the corners of the display, 4 px in, the full screen button like the envelope graph's");
+            check (! d.empty() && c.rect().contains (d) && band.contains (f) && band.contains (w) && f == playrows::fullRect (d) && w == playrows::powerRect (d) && f.right() == d.right() - 4 && f.w == ef.w && f.h == ef.h && ef == playrows::fullRect (eg) && ! f.overlaps (w) && w.w >= 56 && w.h >= 56 && f.h >= 56,
+                   nm + ": the full screen button (right end) and the power button (left end) stand in the header band of the display, the full screen button like the envelope graph's");
         }
         {
             const Rect hdr = c.instances.rect();
             const bool row = c.instances.rect().y == c.rect().y + playrows::kMargin && c.instances.rect().right() == c.rect().right() - playrows::kMargin;
-            check (hdr.h == playrows::kSelectorH && row && (subHeader || (c.route.rect().h >= 56 && c.displayRect().contains (c.route.rect()) && c.route.rect().right() == c.displayRect().right() - 4 && c.route.rect().bottom() == c.displayRect().bottom() - 4 && ! c.route.rect().overlaps (c.full.rect()))) && c.power.state.negativeOff, nm + ": the top row holds the source selector only (the route button is in the bottom right corner of the display), 56 px, like the other two thirds; the power button is red while off");
+            check (hdr.h == playrows::kSelectorH && row && (subHeader || (c.route.rect().h >= 56 && c.route.rect() == playrows::routeRect (c.displayRect()) && playrows::bandRect (c.displayRect()).contains (c.route.rect()) && c.route.rect().right() <= c.full.rect().x && ! c.route.rect().overlaps (c.full.rect()) && ! c.route.rect().overlaps (c.power.rect()))) && c.power.state.negativeOff, nm + ": the top row holds the source selector only (the route button is in the header band of the display, left of the full screen button), 56 px, like the other two thirds; the power button is red while off");
+            check (c.plotRect() == playrows::plotRect (c.displayRect()) && c.plotRect().y >= playrows::bandRect (c.displayRect()).bottom() && c.displayRect().contains (c.plotRect()) && (subHeader ? c.labelRect().right() <= c.full.rect().x : c.labelRect().right() <= c.route.rect().x) && c.labelRect().x >= c.power.rect().right(), nm + ": the plot area is under the band and the label's room lies between the power button and the route / full screen button");
             check (c.instances.rect().bottom() <= c.displayRect().y && c.displayRect().bottom() <= c.basic.rect().y && ! c.displayRect().overlaps (c.basic.rect()) && c.basic.rect().y == playrows::controlsLine (c.rect()), nm + ": top row, display, Basic: top to bottom, Basic at the common controls line");
             check (c.displayRect().x == playrows::displayRect (c.rect()).x && c.displayRect().y == playrows::displayRect (c.rect()).y && c.displayRect().h == playrows::displayRect (c.rect()).h, nm + ": the display is the rectangle shared by the three thirds");
             check (c.instances.listable && c.instances.state.count == 5 && c.instances.state.index == static_cast<int> (var.inst) && std::string (c.instances.state.text) == OscillatorCompact::sourceName (var.inst) && c.instances.rect().w >= 120, nm + ": the source selector shows the current source (" + c.instances.state.text + ") and opens a list of five");
@@ -574,6 +576,18 @@ int main()
                 check (w.bottom() == e.bottom() && e.bottom() == l.bottom(), nm + ": the three displays end on the same line");
                 check (oc.instances.rect().y == ec.instances.rect().y && ec.instances.rect().y == lc.instance.rect().y && oc.instances.rect().h == ec.instances.rect().h && ec.instances.rect().h == lc.instance.rect().h && oc.instances.rect().h == 56, nm + ": the selector of the three thirds is in the same top row, 56 px high");
                 check (oc.basic.rect().y == ec.attack.rect().y && ec.attack.rect().y == lc.shape.rect().y, nm + ": the controls under the displays start on one line (Basic, ATTACK, SHAPE)");
+                // (a) the plot areas: the same top, bottom and height (and the same x range) in the three thirds
+                lfodisplay::Data ld;
+                ld.kind = lfodisplay::Data::Kind::Shape;
+                const Rect pw = oc.plotRect(), pe = ec.graph.plot(), pl = lfodisplay::plotRect (lc.displayRect(), ld);
+                check (pw.y == pe.y && pe.y == pl.y && pw.h == pe.h && pe.h == pl.h && pw.bottom() == pe.bottom() && pe.bottom() == pl.bottom() && pw.h > 100 && pw == playrows::plotRect (w) && pe == playrows::plotRect (e) && pl == playrows::plotRect (l),
+                       nm + ": the wave, the envelope curve and the LFO curve have the same plot area top (" + std::to_string (pw.y) + "), bottom and height (" + std::to_string (pw.h) + "), below the header band");
+                // (c) the touch targets of the buttons are 56 px at least and inside the display; (d) the full screen button is at the same place in the three thirds, the rightmost of its band
+                const Rect fo = oc.full.rect(), fe = ec.full.rect(), fl = lc.full.rect();
+                check (fo.w >= 56 && fo.h >= 56 && fe.w >= 56 && fe.h >= 56 && fl.w >= 56 && fl.h >= 56 && w.contains (fo) && e.contains (fe) && l.contains (fl) && w.contains (oc.power.rect()) && (i == OscInstance::Sub || (w.contains (oc.route.rect()) && oc.route.rect().h >= 56 && oc.route.rect().w >= 56)),
+                       nm + ": the touch targets of the buttons are 56 px at least and inside their display");
+                check (fo.x - w.x == fe.x - e.x && fe.x - e.x == fl.x - l.x && fo.y - w.y == fe.y - e.y && fe.y - e.y == fl.y - l.y && fo.right() == w.right() - 4 && (i == OscInstance::Sub || (oc.route.rect().right() <= fo.x && oc.power.rect().right() <= oc.route.rect().x)),
+                       nm + ": the full screen button is at the same place in the three displays (rightmost); the route button is left of it, the power button at the left end");
             }
     }
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
