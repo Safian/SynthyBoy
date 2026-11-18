@@ -711,7 +711,7 @@ def manifest_text(entries) -> str:
         "schemaVersion": 1,
         "id": "com.safian.synthyboy.factory-presets",
         "name": "Factory Presets",
-        "version": "1.2.0",
+        "version": "0.1.0",
         "license": "CC0-1.0",
         "attribution": "Safian Szabolcs",
         "kind": "presets",

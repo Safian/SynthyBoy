@@ -151,7 +151,7 @@ TEST (content_pack_manifest_parse_and_verify)
       "schemaVersion": 1,
       "id": "com.safian.synthyboy.test-pack",
       "name": "Test Preset Pack",
-      "version": "1.0.0",
+      "version": "0.1.0",
       "license": "CC0-1.0",
       "attribution": "Safian Szabolcs",
       "kind": "presets",
@@ -239,7 +239,7 @@ TEST (preset_directory_scanning_and_pack_verify)
     ContentPackInfo pack;
     pack.schemaVersion = 1;
     pack.id = "com.safian.synthyboy.temp-pack";
-    pack.version = "1.0.0";
+    pack.version = "0.1.0";
     pack.license = "CC0-1.0";
     pack.attribution = "Safian Szabolcs";
     pack.kind = "presets";

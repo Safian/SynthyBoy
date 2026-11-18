@@ -419,7 +419,7 @@ std::string serializeContentPackManifest (const ContentPackInfo& info)
         escapeJsonString (info.name, s);
     }
     s += ",\n  \"version\": ";
-    escapeJsonString (info.version.empty() ? "1.0.0" : info.version, s);
+    escapeJsonString (info.version.empty() ? "0.1.0" : info.version, s);
     s += ",\n  \"license\": ";
     escapeJsonString (info.license.empty() ? "user-supplied" : info.license, s);
     s += ",\n  \"attribution\": ";

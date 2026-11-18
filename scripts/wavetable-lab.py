@@ -802,7 +802,7 @@ def cmd_promote(a):
         pj = os.path.join(base, "pack.json")
         if not os.path.isfile(pj):
             with open(pj, "w", encoding="utf-8") as f:
-                json.dump({"id": a.pack, "name": a.pack_name or pdir_name, "version": "1.0.0", "description": f"Wavetables made with the SynthyBoy wavetable lab, CC0-1.0."}, f, indent=1)
+                json.dump({"id": a.pack, "name": a.pack_name or pdir_name, "version": "0.1.0", "description": f"Wavetables made with the SynthyBoy wavetable lab, CC0-1.0."}, f, indent=1)
                 f.write("\n")
         root = base
     else:
