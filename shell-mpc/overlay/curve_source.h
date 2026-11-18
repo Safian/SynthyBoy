@@ -44,6 +44,8 @@ public:
     virtual float param (int tableIndex) const noexcept = 0;
     /** The live values of the engine (readout of the targets the overlay subscribed, the LFO phases, the envelope stages ...). false: the engine has not written any yet. */
     virtual bool live (synthyboy::LiveValues& out) const noexcept = 0;
+    /** The Mixer page is on screen: the engine measures the source strips (LiveValues::stripPeak[0 .. 6]) for the next moments (IEngine::requestMeters). Called every update of that page; lock free. */
+    virtual void requestMeters() noexcept {}
     /** The sample rate of the instance (Hz). */
     virtual double sampleRate() const noexcept = 0;
     /** The tempo of the host (beats per minute) for the synced LFO rates. */

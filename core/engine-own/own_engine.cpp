@@ -1286,6 +1286,12 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     std::fill (rightOut, rightOut + numFrames, 0.0f);
     std::fill (std::begin (stripBlockPeak), std::end (stripBlockPeak), 0.0f);   // the meters of this block start from nothing
     lastBlockFrames = numFrames;
+    {
+        int h = meterHold.load (std::memory_order_relaxed);
+        sourceMeters = h > 0;
+        if (sourceMeters)
+            meterHold.compare_exchange_strong (h, h - 1, std::memory_order_relaxed);   // (a request made since the load stays whole)
+    }
 
     // ---- block snapshot
     const uint32_t gen = paramGen.load (std::memory_order_acquire);
@@ -1527,13 +1533,14 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             mo.r[t] = mixR[t];
         }
         std::fill (std::begin (stripSq), std::end (stripSq), 0.0f);
-        mo.srcSq = stripSq;
+        mo.srcSq = sourceMeters ? stripSq : nullptr;   // the voices measure their sources only while the display shows the source strips (requestMeters)
         for (auto& v : voices)
             if (v->isActive())
                 v->render (mo, n, controlPos);
         addGhosts (n);
-        for (int s = 0; s < 7; ++s)   // Sub, A, B, C, Noise, Filter 1, Filter 2: the power sum of the voices of this period
-            stripBlockPeak[s] = std::max (stripBlockPeak[s], std::sqrt (stripSq[s]));
+        if (sourceMeters)
+            for (int s = 0; s < 7; ++s)   // Sub, A, B, C, Noise, Filter 1, Filter 2: the power sum of the voices of this period
+                stripBlockPeak[s] = std::max (stripBlockPeak[s], std::sqrt (stripSq[s]));
         for (int b = 1; b <= 2; ++b)   // Bus 1, Bus 2: what the voices send into them, before the rack of the bus
         {
             const float pk = peak::peakAbsPair (mixL[b], mixR[b], n);
@@ -1762,6 +1769,12 @@ void OwnEngine::writeReadout() noexcept
         const float release = std::exp (-static_cast<float> (std::max (lastBlockFrames, 1)) / static_cast<float> (std::max (sampleRate, 1.0) * 0.3));
         for (int s = 0; s < LiveValues::kMaxStrips; ++s)
         {
+            if (s < 7 && ! sourceMeters)   // not measured this block: nothing to show (the memory of the release starts again at the next measured block)
+            {
+                stripShown[s] = 0.0f;
+                liveStripPeak[s].store (0.0f, std::memory_order_relaxed);
+                continue;
+            }
             const float pk = stripBlockPeak[s];
             const float level = pk > 1.0e-3f ? std::clamp (1.0f + 20.0f * std::log10 (pk) / 60.0f, 0.0f, 1.0f) : 0.0f;
             stripShown[s] = std::max (level, stripShown[s] * release);
