@@ -117,3 +117,4 @@ target_include_directories(synthyboy_test_own_filter_styles PRIVATE "${PROJECT_S
 synthyboy_add_test(synthyboy_test_own_keys_claimed test_own_keys_claimed.cpp)
 synthyboy_add_test(synthyboy_test_own_note_storm test_own_note_storm.cpp)
 synthyboy_add_test(synthyboy_test_own_content_policy test_own_content_policy.cpp)
+synthyboy_add_test(synthyboy_test_own_convolve_bypass test_own_convolve_bypass.cpp)   # Convolve is bypassed at tier low (quality.h) also with an impulse loaded
