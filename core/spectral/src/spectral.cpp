@@ -772,18 +772,18 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
                 oth_[j] = theta_[k];
             }
         };
-        for (int i = 0; i < numPeaks; ++i)
-        {
-            const int centre = peaks[i];
-            const int from = i == 0 ? 1 : (peaks[i - 1] + centre + 1) / 2;
-            const int to = i + 1 == numPeaks ? kBins - 1 : (centre + peaks[i + 1]) / 2;
-            const int offset = static_cast<int> (std::lround (static_cast<double> (centre) * r + shiftBins)) - centre;
-            if (fast)
-                kernels::placeRegion (mag_, freq_, theta_, om_, of_, oth_, from, to, offset, static_cast<float> (r), shiftRad, kBins, neon);
-            else
+        if (fast)
+            kernels::placeAll (mag_, freq_, theta_, om_, of_, oth_, peaks, numPeaks, r, shiftBins, shiftRad, kBins, neon);
+        else
+            for (int i = 0; i < numPeaks; ++i)
+            {
+                const int centre = peaks[i];
+                const int from = i == 0 ? 1 : (peaks[i - 1] + centre + 1) / 2;
+                const int to = i + 1 == numPeaks ? kBins - 1 : (centre + peaks[i + 1]) / 2;
+                const int offset = static_cast<int> (std::lround (static_cast<double> (centre) * r + shiftBins)) - centre;
                 for (int k = from; k <= to; ++k)
                     place (k, offset);
-        }
+            }
     }
     if (p.bandPostWarp)
         band (om_, hostBinHz);

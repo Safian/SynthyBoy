@@ -85,6 +85,11 @@ int findPeaks (const float* m, int n, float top, int* peaks, int maxPeaks, bool 
 /** The bins from .. to (inclusive) move by `offset` to the output bins (kept to 1 .. n - 1): where the magnitude is above what the output bin holds it replaces it, with the frequency
     scaled by r (+ shiftRad) and the phase: the placing of one peak region in shapeFrame (). */
 void placeRegion (const float* mag, const float* freq, const float* theta, float* om, float* of, float* oth, int from, int to, int offset, float r, float shiftRad, int n, bool neon) noexcept;
+/** The placing of every peak region of a frame (the loop of shapeFrame () over the peaks): region i runs from the middle between the previous peak and this one to the middle between this one and
+    the next (the first from bin 1, the last to bin n - 1) and moves by lround (peak * r + shiftBins) - peak bins (placeRegion ()). The rounding is lround's (half away from zero) without the
+    library call. */
+void placeAll (const float* mag, const float* freq, const float* theta, float* om, float* of, float* oth, const int* peaks, int numPeaks, double r, double shiftBins, float shiftRad, int n,
+               bool neon) noexcept;
 } // namespace kernels
 } // namespace spectral
 } // namespace synthyboy

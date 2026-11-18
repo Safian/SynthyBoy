@@ -644,7 +644,7 @@ void runMicro()
         float v = 0.0f;
         for (int h = 1; h <= 20; ++h)
             v += 0.3f / static_cast<float> (h) * static_cast<float> (std::sin (6.2831853 * 220.0 * h * static_cast<double> (i) / 44100.0 + 0.3 * h));
-        tone[i] = v;
+        tone[i] = v + 0.03f * (static_cast<float> (rand()) / static_cast<float> (RAND_MAX) - 0.5f);   // a noise floor: the spectrum has a peak every few bins, as a recorded sample does
     }
     synthyboy::sampleosc::SampleData data;
     data.loadFromFrames (tone.data(), nullptr, static_cast<int64_t> (tone.size()), 44100.0);
@@ -676,6 +676,43 @@ void runMicro()
             float l[512], r[512];
             microTime (name, 100, [&] { v.process (p, l, r, 512); });
         }
+    }
+
+    // a chord struck: eight Spectral voices started one after the other, warm and with the caches emptied before (what a strike after a second of other work finds)
+    {
+        std::vector<synthyboy::spectral::SpectralVoice> voices (8);
+        SpectralParams p;
+        p.scratch = &scratch;
+        p.hostRate = 44100.0;
+        p.manual = true;
+        p.position = 0.4f;
+        for (auto& v : voices)
+            v.prepare (44100.0);
+        std::vector<char> flush (16u << 20, 1);
+        volatile char sink = 0;
+        for (int cold = 0; cold < 2; ++cold)
+            for (int reference = 0; reference < 2; ++reference)
+            {
+                for (auto& v : voices)
+                    v.setReferenceKernels (reference != 0);
+                std::vector<double> t;
+                for (int rep = 0; rep < 40; ++rep)
+                {
+                    if (cold != 0)
+                        for (size_t i = 0; i < flush.size(); i += 32)
+                            sink = static_cast<char> (sink + flush[i]++);
+                    const auto a = std::chrono::steady_clock::now();
+                    for (size_t i = 0; i < voices.size(); ++i)
+                    {
+                        p.pitchRatio = 0.7f + 0.15f * static_cast<float> (i);
+                        voices[i].noteOn (&analysis, p, 0.0f);
+                    }
+                    const auto c = std::chrono::steady_clock::now();
+                    t.push_back (std::chrono::duration<double, std::milli> (c - a).count());
+                }
+                std::sort (t.begin(), t.end());
+                std::printf ("8 x SpectralVoice::noteOn %s%s %9.3f ms   (min %.3f)\n", cold != 0 ? "after the caches were emptied" : "warm", reference != 0 ? ", reference" : "", t[t.size() / 2], t.front());
+            }
     }
 
     // a cloud of grains: the plain read, 14 grains alive

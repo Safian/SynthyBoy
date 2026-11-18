@@ -13,6 +13,13 @@
 
 #include "test_runner.h"
 
+// (the reference loops of the kernel tests below must not be fused either: the kernels are compiled without fused multiply-add)
+#if defined(__clang__)
+ #pragma clang fp contract(off)
+#elif defined(__GNUC__)
+ #pragma GCC optimize ("fp-contract=off")
+#endif
+
 using namespace synthyboy::spectral;
 using synthyboy::sampleosc::SampleData;
 
@@ -766,4 +773,58 @@ TEST (spectral_per_bin_kernels_vector_forms_match_the_scalar_forms)
         }
         CHECK (sameBits (om1.data(), om2.data(), om1.size()) && sameBits (of1.data(), of2.data(), of1.size()) && sameBits (oth1.data(), oth2.data(), oth1.size()));
     }
+}
+
+// placeAll () against the loop of the reference (std::lround, one bin at a time): the same bins, for dense and sparse peaks, shifts in both directions and ratios from 1 / 32 to 32.
+TEST (spectral_place_all_equals_the_reference_loop)
+{
+    using namespace synthyboy::spectral::kernels;
+    KRng rng (33);
+    int bad = 0, runs = 0;
+    for (int round = 0; round < 300; ++round)
+    {
+        std::vector<float> mag (kBins), freq (kBins), theta (kBins);
+        for (int k = 0; k < kBins; ++k)
+        {
+            mag[static_cast<size_t> (k)] = rng.uni();
+            freq[static_cast<size_t> (k)] = rng.bi() * 3.0f;
+            theta[static_cast<size_t> (k)] = rng.bi() * 3.14f;
+        }
+        int peaks[512];
+        const int numPeaks = findPeaks (mag.data(), kBins, 1.0f, peaks, 512, false);
+        const double r = std::exp2 (static_cast<double> (rng.bi()) * 5.0);
+        const double shiftBins = round % 3 == 0 ? 0.0 : static_cast<double> (rng.bi()) * 120.0;
+        const float shiftRad = rng.bi() * 0.1f;
+        std::vector<float> om1 (kBins, 0.0f), of1 (kBins, 0.0f), oth1 (kBins, 0.0f), om2 = om1, of2 = of1, oth2 = oth1, om3 = om1, of3 = of1, oth3 = oth1;
+        for (int i = 0; i < numPeaks; ++i)
+        {
+            const int centre = peaks[i];
+            const int from = i == 0 ? 1 : (peaks[i - 1] + centre + 1) / 2;
+            const int to = i + 1 == numPeaks ? kBins - 1 : (centre + peaks[i + 1]) / 2;
+            const int offset = static_cast<int> (std::lround (static_cast<double> (centre) * r + shiftBins)) - centre;
+            for (int k = from; k <= to; ++k)
+            {
+                const int j = k + offset;
+                if (j >= 1 && j < kBins && mag[static_cast<size_t> (k)] > om1[static_cast<size_t> (j)])
+                {
+                    om1[static_cast<size_t> (j)] = mag[static_cast<size_t> (k)];
+                    of1[static_cast<size_t> (j)] = freq[static_cast<size_t> (k)] * static_cast<float> (r) + shiftRad;
+                    oth1[static_cast<size_t> (j)] = theta[static_cast<size_t> (k)];
+                }
+            }
+        }
+        placeAll (mag.data(), freq.data(), theta.data(), om2.data(), of2.data(), oth2.data(), peaks, numPeaks, r, shiftBins, shiftRad, kBins, false);
+        placeAll (mag.data(), freq.data(), theta.data(), om3.data(), of3.data(), oth3.data(), peaks, numPeaks, r, shiftBins, shiftRad, kBins, true);
+        ++runs;
+        if (! (sameBits (om1.data(), om2.data(), om1.size()) && sameBits (of1.data(), of2.data(), of1.size()) && sameBits (oth1.data(), oth2.data(), oth1.size())
+               && sameBits (om1.data(), om3.data(), om1.size()) && sameBits (of1.data(), of3.data(), of1.size()) && sameBits (oth1.data(), oth3.data(), oth1.size())))
+        {
+            if (bad++ < 3)
+                std::printf ("    placeAll differs: round %d peaks %d r %g shift %g scalar form %d vector form %d\n", round, numPeaks, r, shiftBins,
+                             sameBits (om1.data(), om2.data(), om1.size()) && sameBits (of1.data(), of2.data(), of1.size()) && sameBits (oth1.data(), oth2.data(), oth1.size()) ? 1 : 0,
+                             sameBits (om1.data(), om3.data(), om1.size()) && sameBits (of1.data(), of3.data(), of1.size()) && sameBits (oth1.data(), oth3.data(), oth1.size()) ? 1 : 0);
+        }
+    }
+    CHECK (runs == 300);
+    CHECK_EQ (bad, 0);
 }

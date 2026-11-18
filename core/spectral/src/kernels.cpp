@@ -601,6 +601,43 @@ void placeRegion (const float* mag, const float* freq, const float* theta, float
         }
     }
 }
+
+void placeAll (const float* mag, const float* freq, const float* theta, float* om, float* of, float* oth, const int* peaks, int numPeaks, double r, double shiftBins, float shiftRad, int n,
+               bool neon) noexcept
+{
+    const float rf = static_cast<float> (r);
+    for (int i = 0; i < numPeaks; ++i)
+    {
+        const int centre = peaks[i];
+        const int from = i == 0 ? 1 : (peaks[i - 1] + centre + 1) / 2;
+        const int to = i + 1 == numPeaks ? n - 1 : (centre + peaks[i + 1]) / 2;
+        const double target = static_cast<double> (centre) * r + shiftBins;
+        // lround (target) without the library call for the usual target >= 0: the truncation and the exact remainder (half rounds up, as lround rounds half away from zero)
+        int rounded;
+        if (target >= 0.0)
+        {
+            const int t = static_cast<int> (target);
+            rounded = t + (target - static_cast<double> (t) >= 0.5 ? 1 : 0);
+        }
+        else
+            rounded = static_cast<int> (std::lround (target));
+        const int offset = rounded - centre;
+        const int lo = std::max (from, 1 - offset), hi = std::min (to, n - 1 - offset);
+        if (hi - lo >= 7)
+            placeRegion (mag, freq, theta, om, of, oth, lo, hi, offset, rf, shiftRad, n, neon);
+        else
+            for (int k = lo; k <= hi; ++k)
+            {
+                const int j = k + offset;
+                if (mag[k] > om[j])
+                {
+                    om[j] = mag[k];
+                    of[j] = freq[k] * rf + shiftRad;
+                    oth[j] = theta[k];
+                }
+            }
+    }
+}
 } // namespace kernels
 } // namespace spectral
 } // namespace synthyboy
