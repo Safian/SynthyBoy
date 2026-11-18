@@ -36,6 +36,7 @@
 #include "gpu_clock.h"
 #include "instance_slots.h"
 #include "overlay_layout.h"
+#include "../kit/synthyboy_adapter.h"
 #include "page_detector.h"
 #include "panel_key.h"
 #include "mouse_router.h"
@@ -129,21 +130,11 @@ public:
         startupTimes().markUiStep (StartupTimes::kUiViewsBuilt);
     }
 
-    /** The table indices the overlay wants in the engine's readout (IEngine::setReadoutTargets), all views together; view i's targets start at targetBase (i). */
+    /** The table indices the overlay wants in the engine's readout (IEngine::setReadoutTargets), all views together; view i's targets start at targetBase (i). (SynthyBoy's page factory knows them: pages.h.) */
     static void readoutTargets (std::vector<int>& out)
     {
-        out.clear();
         FilterRendererStub stub;
-        for (int i = 0; i < layout::kNumViews; ++i)
-        {
-            const layout::View& v = layout::kViews[i];
-            if (v.kind == layout::kKindFilter)
-                FilterView (v.index, stub, -1.0).targets (out);
-            else if (v.kind == layout::kKindPlay)
-                PlayView (v.index, -1.0).targets (out);
-            else if (layout::isPageKind (v.kind))
-                pages::make (v)->targets (out);
-        }
+        SynthyBoyPageFactory (stub, -1.0).readoutTargets (out);
     }
 
     /** The readout values of a view whose targets start at `base` in the engine's list and number `count`: the pointer into `lv` only when ALL of them are in what the engine delivered
@@ -844,19 +835,7 @@ private:
 
     std::unique_ptr<IView> makeView (int i)
     {
-        const layout::View& v = views_tbl_[i];
-        switch (v.kind)
-        {
-            case layout::kKindFilter: return std::make_unique<FilterView> (v.index, renderer_, fixedCost_);
-            case layout::kKindLfo: return std::make_unique<LfoView> (v.index, fixedCost_);
-            case layout::kKindEnv: return std::make_unique<EnvView> (v.index, v);
-            case layout::kKindSpectrum: return std::make_unique<SpectrumView>();
-            case layout::kKindPlay: return std::make_unique<PlayView> (v.index, fixedCost_);
-            default:
-                if (layout::isPageKind (v.kind))
-                    return pages::make (v);
-                return std::make_unique<NullView> (v.name);
-        }
+        return SynthyBoyPageFactory (renderer_, fixedCost_).make (mpckit::synthyboy_adapter::pageDefOf (views_tbl_[i]));   // (pages.h: the switch over the view kinds)
     }
 
     /** The touch screen: only while a view of the Play page is on screen (the plugin-drawn pages are there); the events go to the view, a running finger gets the clock for the long press. */

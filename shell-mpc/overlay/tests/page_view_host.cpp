@@ -214,6 +214,29 @@ int main()
         // the SynthyBoy hooks are the default: the same view over a SynthyBoy page still loads the macro names and shows the loading bar
         static_assert (std::is_same<PageView<FilterUi>, PageView<FilterUi, MacroNameHooks>>::value, "the default hooks of a page view are SynthyBoy's");
     }
+    // ---- the view factory of SynthyBoy (migration step 10): the view behind every page of the page set, and the readout targets all of them want
+    {
+        CpuCurveRenderer renderer;
+        SynthyBoyPageFactory factory (renderer, 10.0);
+        const mpckit::IPageSet& set = mpckit::synthyboy_adapter::PageSet::get();
+        bool all = set.numPages() == layout::kNumViews, names = true, elements = true;
+        for (int i = 0; i < set.numPages() && all; ++i)
+        {
+            const mpckit::PageDef& d = set.page (i);
+            const std::unique_ptr<IView> v = factory.make (d);
+            all = all && v != nullptr;
+            if (v)
+            {
+                names = names && std::string (v->name()) == std::string (d.name);
+                elements = elements && ((d.kind == layout::kKindPlay) == (v->pageElement() < 0)) && (! layout::isPageKind (d.kind) || d.kind == layout::kKindPlay || v->pageElement() >= 0);
+            }
+        }
+        check (all && names && elements, "the page factory makes a view for every page of the set: its name is the page's, a page of an element names its element, the Play view none");
+        std::vector<int> a, b;
+        factory.readoutTargets (a);
+        Controller::readoutTargets (b);
+        check (! a.empty() && a == b, "the readout targets of the factory are the ones the controller reports (" + std::to_string (a.size()) + ")");
+    }
     std::printf (g_fails ? "page_view_host: FAILED (%d)\n" : "page_view_host: OK\n", g_fails);
     return g_fails ? 1 : 0;
 }

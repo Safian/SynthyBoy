@@ -88,6 +88,18 @@ private:
     State state_;
 };
 
+/** The PageDef of one entry of a generated table (overlay_layout.h; the tests have tables of their own). The table has no separate tab name: `tab` is the view's name. */
+inline PageDef pageDefOf (const synthyboy_mpc::overlay::layout::View& v) noexcept
+{
+    PageDef d;
+    d.name = v.name; d.tab = v.name; d.kind = v.kind; d.index = v.index; d.opaque = v.opaque;
+    d.region = { v.region.x, v.region.y, v.region.w, v.region.h };
+    d.instance = { v.instance.x, v.instance.y, v.instance.w, v.instance.h };
+    for (int m = 0; m < 2; ++m)
+        d.markers[m] = { { v.markers[m].rect.x, v.markers[m].rect.y, v.markers[m].rect.w, v.markers[m].rect.h }, v.markers[m].rgb, v.markers[m].cover };
+    return d;
+}
+
 /** IPageSet over the generated table synthyboy_mpc::overlay::layout::kViews (overlay_layout.h). The table has no separate tab name: `tab` is the view's name. */
 class PageSet final : public IPageSet
 {
@@ -108,13 +120,7 @@ private:
         defs_.resize (L::kNumViews);
         for (int i = 0; i < L::kNumViews; ++i)
         {
-            const L::View& v = L::kViews[i];
-            PageDef& d = defs_[static_cast<size_t> (i)];
-            d.name = v.name; d.tab = v.name; d.kind = v.kind; d.index = v.index; d.opaque = v.opaque;
-            d.region = { v.region.x, v.region.y, v.region.w, v.region.h };
-            d.instance = { v.instance.x, v.instance.y, v.instance.w, v.instance.h };
-            for (int m = 0; m < 2; ++m)
-                d.markers[m] = { { v.markers[m].rect.x, v.markers[m].rect.y, v.markers[m].rect.w, v.markers[m].rect.h }, v.markers[m].rgb, v.markers[m].cover };
+            defs_[static_cast<size_t> (i)] = pageDefOf (L::kViews[i]);
         }
         for (int s = 0; s < L::kMaxInstances; ++s)
             colours_.slot[s] = L::kInstanceSlotRgb[s];
