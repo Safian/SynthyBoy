@@ -7,6 +7,13 @@
 #include <algorithm>
 #include <cmath>
 
+// The grain kernel and the reference grain loop must compute the same bits: no fused multiply-add in either, on any compiler / CPU.
+#if defined(__clang__)
+ #pragma clang fp contract(off)
+#elif defined(__GNUC__)
+ #pragma GCC optimize ("fp-contract=off")
+#endif
+
 namespace synthyboy
 {
 namespace granular
@@ -87,6 +94,75 @@ void readSample (const SampleView& s, double pos, double rate, float& l, float& 
     }
     l = hermite (s.channelData[0], s.numFrames, pos);
     r = s.numChannels > 1 ? hermite (s.channelData[1], s.numFrames, pos) : l;
+}
+// ---- the grain kernel --------------------------------------------------------------------------------------------------------------
+// What does not change while a grain plays inside one block is computed once per grain and block (the window's peak and amount, the mip level of the read, the table of the shape);
+// the per sample arithmetic is the reference loop's, expression by expression.
+
+/** hermite () with the four taps read directly where they all lie inside the data (the same bits). */
+inline float hermiteFast (const float* d, int64_t n, double pos) noexcept
+{
+    int64_t i = static_cast<int64_t> (pos);
+    if (static_cast<double> (i) > pos)
+        --i; // floor () of a negative position
+    const float t = static_cast<float> (pos - static_cast<double> (i));
+    float y0, y1, y2, y3;
+    if (i >= 1 && i + 2 < n)
+    {
+        y0 = d[i - 1]; y1 = d[i]; y2 = d[i + 1]; y3 = d[i + 2];
+    }
+    else
+    {
+        const auto at = [&] (int64_t k) { return k >= 0 && k < n ? d[k] : 0.0f; };
+        y0 = at (i - 1); y1 = at (i); y2 = at (i + 1); y3 = at (i + 2);
+    }
+    const float c1 = 0.5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3, c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
+    return ((c3 * t + c2) * t + c1) * t + y1;
+}
+
+/** Where a grain reads for one mip level (readSample () of the reference picks the level from the rate, for every sample). */
+struct GrainRead
+{
+    const float* ch[2] = { nullptr, nullptr };
+    int64_t n = 0;
+    double invScale = 1.0;
+    bool stereo = false;
+    bool scaled = false;
+    void set (const SampleView& s, int m) noexcept
+    {
+        stereo = s.numChannels > 1;
+        if (m > 0 && s.mipLevels != nullptr)
+        {
+            const auto& lvl = s.mipLevels[m];
+            ch[0] = lvl.channels[0];
+            ch[1] = stereo ? lvl.channels[1] : nullptr;
+            n = lvl.numFrames;
+            invScale = 1.0 / static_cast<double> (1 << m); // a power of two: pos * invScale is pos / scale
+            scaled = true;
+        }
+        else
+        {
+            ch[0] = s.channelData[0];
+            ch[1] = stereo ? s.channelData[1] : nullptr;
+            n = s.numFrames;
+            invScale = 1.0;
+            scaled = false;
+        }
+    }
+    inline void read (double pos, float& l, float& r) const noexcept
+    {
+        const double p = scaled ? pos * invScale : pos;
+        l = hermiteFast (ch[0], n, p);
+        r = stereo ? hermiteFast (ch[1], n, p) : l;
+    }
+};
+
+/** The mip level the reference picks for a read at `rate` (frames per output sample, > 0). */
+inline int mipFor (const SampleView& s, double rate) noexcept
+{
+    if (rate > 1.0 && s.numMipLevels > 1)
+        return std::min (s.numMipLevels - 1, static_cast<int> (std::floor (std::log2 (rate))));
+    return 0;
 }
 } // namespace
 
@@ -280,33 +356,8 @@ void GranularVoice::advanceHead (const GrainParams& p) noexcept
         head_ = l1 - std::fmod (l0 - head_, l1 - l0);
 }
 
-void GranularVoice::process (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept
+bool GranularVoice::renderGrainsReference (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept
 {
-    std::fill (left, left + numFrames, 0.0f);
-    std::fill (right, right + numFrames, 0.0f);
-    if (! active_ || sample_ == nullptr || ! sample_->isValid())
-    {
-        active_ = false;
-        return;
-    }
-
-    const double period = std::max (1.0, sampleRate_ / std::max (0.01, static_cast<double> (p.densityHz)));
-    for (int i = 0; i < numFrames; ++i)
-    {
-        if (p.manual)
-            head_ = std::min (p.regionLo, p.regionHi) + std::fabs (static_cast<double> (p.regionHi) - static_cast<double> (p.regionLo)) * clamp01 (p.position);
-        else
-            advanceHead (p);
-        if (headDone_ && ! p.manual)
-            continue;
-        spawnTimer_ -= 1.0;
-        if (spawnTimer_ <= 0.0)
-        {
-            spawn (p, i, 0, head_);
-            spawnTimer_ += period;
-        }
-    }
-
     // loop markers for the grains (Loop Grains)
     const double fileFrames = static_cast<double> (sample_->numFrames);
     const double lg0 = std::min (p.loopLo, p.loopHi) * fileFrames, lg1 = std::max (p.loopLo, p.loopHi) * fileFrames;
@@ -375,6 +426,140 @@ void GranularVoice::process (const GrainParams& p, float* left, float* right, in
         if (g.age >= g.length)
             g.active = false;
     }
+    return any;
+}
+
+bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept
+{
+    // loop markers for the grains (Loop Grains)
+    const double fileFrames = static_cast<double> (sample_->numFrames);
+    const double lg0 = std::min (p.loopLo, p.loopHi) * fileFrames, lg1 = std::max (p.loopLo, p.loopHi) * fileFrames;
+    const double loopLen = lg1 - lg0;
+    const bool wrap = p.loopGrains && loopLen > 8.0;
+    const double xfade = wrap ? std::min (0.5, static_cast<double> (clamp01 (p.loopCrossfade))) * loopLen : 0.0;
+    const SampleView& smp = *sample_;
+    const float* const table = windows().table[static_cast<int> (p.shape) < kNumWindowShapes ? static_cast<int> (p.shape) : 0];
+    const bool shaped = p.shapeFn != nullptr;
+
+    bool any = false;
+    for (Grain& g : grains_)
+    {
+        if (! g.active)
+            continue;
+        any = true;
+        const int start = std::max (0, g.delay);
+        g.delay = 0;
+
+        // the window of this grain: windowValue () with its clamps, the peak and its complement taken out of the sample loop
+        const float amount = clamp01 (g.windowAmount);
+        const float skew = std::max (-1.0f, std::min (1.0f, g.windowSkew == g.windowSkew ? g.windowSkew : 0.0f));
+        const float peak = 0.5f + 0.45f * skew;
+        const float restOfPeak = 1.0f - peak;
+        const float lengthF = static_cast<float> (g.length);
+
+        // the read: one mip level for the whole block unless the rate modulation changes the rate per sample
+        const double rate0 = std::fabs (g.inc);
+        GrainRead read;
+        if (rateMod == nullptr)
+            read.set (smp, mipFor (smp, rate0));
+
+        for (int i = start; i < numFrames; ++i)
+        {
+            if (g.age >= g.length)
+            {
+                g.active = false;
+                break;
+            }
+            const float x = static_cast<float> (g.age) / lengthF;
+            float w;
+            {
+                const float u = x < peak ? 0.5f * x / peak : 0.5f + 0.5f * (x - peak) / restOfPeak;
+                const float f = u * kTableSize;
+                const int k = std::min (kTableSize - 1, static_cast<int> (f));
+                const float w0 = table[k] + (table[k + 1] - table[k]) * (f - static_cast<float> (k));
+                const float wa = 1.0f + (w0 - 1.0f) * amount;
+                const float ramp = std::min (1.0f, std::min (64.0f * x, 64.0f * (1.0f - x)));
+                w = wa * ramp;
+            }
+            double step = g.inc;
+            double rate = rate0;
+            if (rateMod != nullptr)
+            {
+                const double m = std::max (-4.0, std::min (4.0, static_cast<double> (rateMod[i])));
+                step *= m;
+                rate *= std::fabs (m);
+                read.set (smp, mipFor (smp, rate));
+            }
+            if (wrap)
+            {
+                while (g.pos >= lg1) g.pos -= loopLen;
+                while (g.pos < lg0) g.pos += loopLen;
+            }
+            float sl, sr;
+            read.read (g.pos, sl, sr);
+            if (wrap && xfade > 1.0)
+            {
+                const double toEnd = lg1 - g.pos;
+                if (toEnd < xfade && step > 0.0)
+                {
+                    const float t = static_cast<float> (1.0 - toEnd / xfade);
+                    float al, ar;
+                    read.read (g.pos - loopLen, al, ar);
+                    const float a = std::cos (t * 1.5707963f), b = std::sin (t * 1.5707963f);
+                    sl = sl * a + al * b;
+                    sr = sr * a + ar * b;
+                }
+            }
+            if (shaped)
+                for (int sIdx = 0; sIdx < 2; ++sIdx)
+                    if (p.shapeType[sIdx] >= 0 && p.shapeAmount[sIdx] > 0.0f)
+                    {
+                        sl = p.shapeFn (p.shapeType[sIdx], sl, g.warpAmount[sIdx]);
+                        sr = p.shapeFn (p.shapeType[sIdx], sr, g.warpAmount[sIdx]);
+                    }
+            left[i] += sl * w * g.gl;
+            right[i] += sr * w * g.gr;
+            g.pos += step;
+            ++g.age;
+        }
+        if (g.age >= g.length)
+            g.active = false;
+    }
+    return any;
+}
+
+void GranularVoice::process (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept
+{
+    std::fill (left, left + numFrames, 0.0f);
+    std::fill (right, right + numFrames, 0.0f);
+    if (! active_ || sample_ == nullptr || ! sample_->isValid())
+    {
+        active_ = false;
+        return;
+    }
+
+    const double period = std::max (1.0, sampleRate_ / std::max (0.01, static_cast<double> (p.densityHz)));
+    for (int i = 0; i < numFrames; ++i)
+    {
+        if (p.manual)
+            head_ = std::min (p.regionLo, p.regionHi) + std::fabs (static_cast<double> (p.regionHi) - static_cast<double> (p.regionLo)) * clamp01 (p.position);
+        else
+            advanceHead (p);
+        if (headDone_ && ! p.manual)
+            continue;
+        spawnTimer_ -= 1.0;
+        if (spawnTimer_ <= 0.0)
+        {
+            spawn (p, i, 0, head_);
+            spawnTimer_ += period;
+        }
+    }
+
+    bool any;
+    if (reference_)
+        any = renderGrainsReference (p, left, right, numFrames, rateMod);
+    else
+        any = renderGrains (p, left, right, numFrames, rateMod);
 
     for (int i = 0; i < numFrames; ++i)
     {

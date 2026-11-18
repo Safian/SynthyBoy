@@ -6,6 +6,7 @@
 #include "synthyboy/sampleosc/sample_data.h"
 
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 #include "test_runner.h"
@@ -367,4 +368,86 @@ TEST (granular_block_size_does_not_change_the_sound)
     for (size_t i = 0; i < a.size(); ++i)
         worst = std::max (worst, static_cast<double> (std::fabs (a[i] - b[i])));
     CHECK (worst < 1.0e-4);
+}
+
+// The grain kernel against the per sample reference loop (setReferenceKernels (true)): the same bits over every window shape, pitch ratios that use the mip levels, loop grains with
+// the crossfade, reversed and randomised grains, pointwise warps, a rate modulation, and stereo.
+namespace
+{
+float testShape (int type, float x, float amount) { return type == 0 ? std::tanh (x * (1.0f + 4.0f * amount)) : std::round (x * (2.0f + 30.0f * amount)) / (2.0f + 30.0f * amount); }
+}
+TEST (granular_kernel_equals_the_reference_loop)
+{
+    Tone mono (220.0, 1.5);
+    SampleData stereo;
+    {
+        std::vector<float> l (66000), r (66000);
+        for (size_t i = 0; i < l.size(); ++i)
+        {
+            l[i] = static_cast<float> (0.5 * std::sin (2.0 * kPi * 330.0 * static_cast<double> (i) / 44100.0));
+            r[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 551.0 * static_cast<double> (i) / 44100.0) + 0.1 * std::sin (0.37 * static_cast<double> (i)));
+        }
+        stereo.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), 44100.0);
+    }
+    int blocks = 0, different = 0;
+    for (int variant = 0; variant < 4; ++variant)
+        for (int shape = 0; shape < kNumWindowShapes; ++shape)
+            for (float pitch : { 0.7f, 1.0f, 2.9f, 9.5f })
+            {
+                const auto view = variant % 2 == 0 ? mono.data.view() : stereo.view();
+                GrainParams p;
+                p.shape = static_cast<WindowShape> (shape);
+                p.windowAmount = 0.8f;
+                p.windowSkew = variant == 1 ? 0.6f : -0.3f;
+                p.pitchRatio = pitch;
+                p.densityHz = 70.0f;
+                p.lengthSec = 0.09f;
+                p.maxGrains = 24;
+                p.scanSpeed = 0.5f;
+                p.loopMode = variant >= 2 ? LoopMode::forward : LoopMode::none;
+                p.loopLo = 0.2f;
+                p.loopHi = 0.7f;
+                p.loopGrains = variant >= 2;
+                p.loopCrossfade = 0.3f;
+                p.randOffset = 0.3f;
+                p.randDir = variant == 3 ? 0.5f : 0.0f;
+                p.randPitch = 2.0f;
+                p.randLength = 0.3f;
+                p.randPan = 0.6f;
+                p.randGain = 0.3f;
+                p.randWindow = 0.2f;
+                p.randSkew = 0.2f;
+                if (variant == 1 || variant == 3)
+                {
+                    p.shapeFn = &testShape;
+                    p.shapeType[0] = 0;
+                    p.shapeType[1] = 1;
+                    p.shapeAmount[0] = 0.5f;
+                    p.shapeAmount[1] = 0.4f;
+                    p.randWarp[0] = 0.2f;
+                }
+                GranularVoice kernel, reference;
+                kernel.prepare (44100.0);
+                reference.prepare (44100.0);
+                reference.setReferenceKernels (true);
+                kernel.noteOn (&view, p, 99u + static_cast<uint32_t> (shape), 0.3f, true, 0.1f);
+                reference.noteOn (&view, p, 99u + static_cast<uint32_t> (shape), 0.3f, true, 0.1f);
+                std::vector<float> rate (128);
+                for (size_t i = 0; i < 128; ++i)
+                    rate[i] = 1.0f + 0.5f * static_cast<float> (std::sin (0.2 * static_cast<double> (i)));
+                for (int block = 0; block < 60; ++block)
+                {
+                    const int n = block % 2 == 0 ? 128 : 53;
+                    std::vector<float> aL (128), aR (128), bL (128), bR (128);
+                    const float* rm = variant == 2 && block % 3 == 0 ? rate.data() : nullptr;
+                    kernel.process (p, aL.data(), aR.data(), n, rm);
+                    reference.process (p, bL.data(), bR.data(), n, rm);
+                    ++blocks;
+                    if (std::memcmp (aL.data(), bL.data(), sizeof (float) * 128) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * 128) != 0
+                        || kernel.activeGrains() != reference.activeGrains())
+                        ++different;
+                }
+            }
+    CHECK (blocks > 1000);
+    CHECK_EQ (different, 0);
 }
