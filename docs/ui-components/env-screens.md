@@ -4,7 +4,7 @@
 The two views of the envelope element ENV 1 to 6.
 - `EnvCompact`: one third (400 x 620) in the middle of the Play page: the instance stepper, the [EnvGraph](env-graph.md) with a full-screen button in its top right corner, and the ADSR Q group in one frame.
 - `EnvFullScreen`: top bar (close or selector, targets button, target tags), the big graph, and the bottom band of three Q groups: ADSR, SHAPE, TIME.
-`EnvCarousel`: a [Carousel](carousel.md) of the six envelopes with a dot for the ones that have targets. `EnvSelector`: the same as a `PictogramSelector` (not used by the current pages).
+`EnvCarousel`: a [Carousel](carousel.md) of the six envelopes with a dot for the ones that have targets. `EnvSelector`: the row of six cells in the top bar of `EnvFullScreen` (a `PictogramSelector`).
 
 ## Header and types
 `shell-mpc/ui/env_screen.h`: `EnvCarousel : Carousel`, `EnvSelector : PictogramSelector`, `EnvCompact : Composite`, `EnvFullScreen : Composite`, `kNumEnvs`.
@@ -44,6 +44,6 @@ env.numTargetLines = 1;
 `shell-mpc/overlay/env_ui.h` (`EnvUi`, `kElementPage` = `kElementEnv`; `T::Knob, Field, Toggle, Select, Pick, Graph, Inert`), `play_view.h`. Pictures: `docs/user-guide/img/env.png`, `play-env.png`, `env-targets.png`.
 
 ## Limits and pitfalls
-- `EnvFullScreen::instances` is an `EnvSelector`; the compact view and the Play thirds use `EnvStepper` (the one selector of all three thirds).
+- `EnvFullScreen::instances` is an `EnvSelector`; the compact view uses `EnvCarousel` (`Carousel` is the selector of all three Play thirds).
 - Call `drawLive` after `draw` or the running dots do not move.
 - Target tags are strings the owner builds, at most 3 lines.
