@@ -37,7 +37,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 ANNOTATIONS = {"$schema", "$id", "$defs", "title", "description", "default", "examples", "$comment"}
 SUPPORTED = {"type", "required", "enum", "const", "pattern", "properties", "additionalProperties", "items",
-             "minimum", "minLength", "minItems", "$ref"}
+             "minimum", "minLength", "maxLength", "minItems", "$ref"}
 
 
 def type_ok(value, name):
@@ -95,6 +95,8 @@ def validate(value, schema, root, path, errors):
             errors.append("%s: %r does not match %s" % (path, value, schema["pattern"]))
         if "minLength" in schema and len(value) < schema["minLength"]:
             errors.append("%s: shorter than %d" % (path, schema["minLength"]))
+        if "maxLength" in schema and len(value) > schema["maxLength"]:
+            errors.append("%s: longer than %d" % (path, schema["maxLength"]))
 
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         if "minimum" in schema and value < schema["minimum"]:
