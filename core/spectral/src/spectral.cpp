@@ -6,6 +6,7 @@
 #include "synthyboy/spectral/kernels.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 
@@ -1006,28 +1007,41 @@ void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double f
 
 /** The gains of the first hop for each set of made frames: 1.5 over the sum of the squared synthesis windows of the frames 1 .. 3 that are in the ring (bit j - 1: frame j), at the sample q of the
     first hop (frame j is at n = q + (3 - j) kHop there). With all four frames the sum is 1.5 and the gain 1; without the others it renormalises the output to the level of the frames that exist. */
+namespace
+{
+std::atomic<int> gStartTablesBuilt { 0 };
+}
+
+struct StartGainTable
+{
+    float g[8][kHop];
+    StartGainTable()
+    {
+        gStartTablesBuilt.fetch_add (1);
+        for (int m = 0; m < 8; ++m)
+            for (int q = 0; q < kHop; ++q)
+            {
+                double sum = 0.0;
+                for (int j = 1; j <= 3; ++j)
+                    if (m & (1 << (j - 1)))
+                    {
+                        const double w = 0.5 - 0.5 * std::cos (2.0 * kPi * (q + (3 - j) * kHop) / kFftSize);
+                        sum += w * w;
+                    }
+                g[m][q] = static_cast<float> (1.5 / std::max (sum, 0.02));
+            }
+    }
+};
+
+static const StartGainTable& startGainTable() noexcept
+{
+    static const StartGainTable table;
+    return table;
+}
+
 static const float* startGain (int mask) noexcept
 {
-    static const struct Table
-    {
-        float g[8][kHop];
-        Table()
-        {
-            for (int m = 0; m < 8; ++m)
-                for (int q = 0; q < kHop; ++q)
-                {
-                    double sum = 0.0;
-                    for (int j = 1; j <= 3; ++j)
-                        if (m & (1 << (j - 1)))
-                        {
-                            const double w = 0.5 - 0.5 * std::cos (2.0 * kPi * (q + (3 - j) * kHop) / kFftSize);
-                            sum += w * w;
-                        }
-                    g[m][q] = static_cast<float> (1.5 / std::max (sum, 0.02));
-                }
-        }
-    } table;
-    return table.g[mask & 7];
+    return startGainTable().g[mask & 7];
 }
 
 /** The most that a frame left out may weigh (the squared window of its own sample) at any sample of the first hop: it is made at the last block boundary before it would weigh more. */
@@ -1046,6 +1060,7 @@ struct ScheduleTable
     int latest[3][kHop + 1];
     ScheduleTable()
     {
+        gStartTablesBuilt.fetch_add (1);
         for (int j = 1; j <= 3; ++j)
         {
             latest[j - 1][kHop] = kHop;
@@ -1063,7 +1078,14 @@ static const ScheduleTable& scheduleTable() noexcept
 
 static void warmStartTables() noexcept
 {
+    kernels::warmTables();
+    startGainTable();
     scheduleTable();
+}
+
+int SpectralVoice::tablesBuiltForTest() noexcept
+{
+    return kernels::tablesBuilt() + gStartTablesBuilt.load();
 }
 
 void SpectralVoice::startSchedule (int offset, bool smears, int join[3]) noexcept

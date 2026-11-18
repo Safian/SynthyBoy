@@ -5,6 +5,7 @@
 #include "synthyboy/spectral/kernels.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 
@@ -39,10 +40,18 @@ float wrapPiF (float x) noexcept
 }
 } // namespace
 
+namespace
+{
+std::atomic<int> gTablesBuilt { 0 };
+}
+
+int tablesBuilt() noexcept { return gTablesBuilt.load(); }
+
 // ---- the inverse transform of a real signal -----------------------------------------------------------------------------------------
 
 RealIfft::RealIfft()
 {
+    gTablesBuilt.fetch_add (1);
     for (int i = 0; i < kM; ++i)
     {
         int r = 0;
@@ -508,6 +517,7 @@ const float* windowTable() noexcept
         float w[kFftSize];
         Table()
         {
+            gTablesBuilt.fetch_add (1);
             for (int i = 0; i < kFftSize; ++i)
                 w[i] = static_cast<float> (0.5 - 0.5 * std::cos (2.0 * kPi * i / kFftSize)) * (1.0f / kFftSize); // the exact power of two
         }
@@ -515,6 +525,12 @@ const float* windowTable() noexcept
     return table.w;
 }
 } // namespace
+
+void warmTables() noexcept
+{
+    RealIfft::instance();
+    windowTable();
+}
 
 void overlapAdd (float* ring, int at, const float* zr, const float* zi, float scale, bool neon) noexcept
 {

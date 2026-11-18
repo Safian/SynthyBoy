@@ -113,6 +113,28 @@ std::vector<float> spectrumOf (const std::vector<float>& x, size_t from)
 }
 } // namespace
 
+// SP3: prepare() builds the four tables that were built at the first Spectral note (the real inverse transform, the overlap-add window, the start gains, the start schedule); a note of every kind then
+// builds none. (Placed first: the tables are shared by the process, so this is meaningful only before another test has made a voice. Run alone: `synthyboy_test_spectral spectral_prepare_builds`.)
+TEST (spectral_prepare_builds_the_tables_and_a_note_builds_none)
+{
+    SpectralVoice v;
+    v.prepare (kSr);
+    const int built = SpectralVoice::tablesBuiltForTest();
+    CHECK_EQ (built, 4);
+    Tone tone (rich (220.0, 0.5));
+    for (int variant = 0; variant < 3; ++variant)
+        for (int k = 0; k < kStartSteps; ++k)
+        {
+            SpectralParams p = frozen (0.4f);
+            p.phaseLock = variant == 1;
+            p.warpType[0] = variant == 2 ? static_cast<int> (Warp::smear) : -1;
+            p.warpAmount[0] = 0.8f;
+            v.noteOn (&tone.analysis, p, 0.0f, k * kStartStep);
+            render (v, p, 4096, 128);
+        }
+    CHECK_EQ (SpectralVoice::tablesBuiltForTest(), built);
+}
+
 TEST (spectral_fft_round_trip_and_a_sine_lands_in_its_bin)
 {
     std::vector<float> re (kFftSize), im (kFftSize, 0.0f), original;

@@ -32,6 +32,11 @@ constexpr bool findPeaksVector() noexcept { return false; }
 constexpr bool findPeaksVector() noexcept { return SB_SPECTRAL_NEON != 0; }
 #endif
 
+/** Builds the tables of the inverse transform (RealIfft) and of the overlap add (the window), which are otherwise built at their first use: call it from prepare, outside the audio thread. */
+void warmTables() noexcept;
+/** How many of the tables of this file have been built (tests: a note must not build one). */
+int tablesBuilt() noexcept;
+
 /** The inverse transform of the spectrum of a real signal: the bins 0 .. kFftSize / 2 (xr, xi: kBins values each; xi[0] and xi[kFftSize / 2] must be 0) to the kFftSize real samples
     x[n] = sum_k X[k] e^(+2 pi i k n / kFftSize) over the full Hermitian spectrum (NOT divided by kFftSize: overlapAdd () applies that factor, which is a power of two and so exact), returned as the kFftSize / 2 complex values z[m] = x[2 m] + i x[2 m + 1] (zr, zi).
     One complex transform of half the length instead of the full one that Fft::inverse () runs on the mirrored arrays: about 2.5 times less work; the result differs from Fft::inverse ()

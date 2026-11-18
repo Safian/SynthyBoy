@@ -153,6 +153,8 @@ public:
     /** Tests only: reset() as it was before (every buffer of both channels cleared), and a fill of all buffers with a pattern to start notes on dirty memory. */
     void setLegacyReset (bool on) noexcept { legacyReset_ = on; }
     void scribbleBuffersForTest (float value) noexcept;
+    /** Tests only: how many of the lazily built tables (transform, overlap-add window, start gains, start schedule) exist. prepare() builds all of them. */
+    static int tablesBuiltForTest() noexcept;
 
     /** Starts the voice on `analysis` (null: silent). `startFraction` moves the play head by that share of the region (unison start / span). The overlap buffer is primed so
         that the note starts at full level: four frames are synthesised at once (the three before the first output hop and the first one of the hop itself).
