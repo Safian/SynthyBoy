@@ -41,11 +41,12 @@ void set (IEngine& e, const char* key, float v)
         e.setParam (p->id, v);
 }
 
-sbtest::Rendered play (Tier tier, bool convolveOn, const IContentStore* store)
+sbtest::Rendered play (Tier tier, bool convolveOn, const IContentStore* store, bool makeup = true)
 {
     auto e = createOwnEngine();
     Quality q = qualityForTier (tier);
     q.realtime = false;
+    q.fxMakeup = makeup;
     e->prepare (48000.0, 256, q);
     set (*e, "master.volume", 0);
     set (*e, "osc1.level", 100);
@@ -78,8 +79,19 @@ TEST (own_convolve_is_bypassed_at_tier_low)
     for (size_t i = 0; i < ir.size(); ++i)
         ir[i] = (i % 97 == 0 ? 0.6f : 0.0f) * std::exp (-static_cast<float> (i) / 1500.0f);
     const OneFileStore store (encodeWav (ir.data(), ir.data(), ir.size(), 48000, 16));
-    const auto lowOn = play (Tier::low, true, &store), lowOff = play (Tier::low, false, &store);
+    // the bypass itself: with the level makeup off the renders with Convolve on and off are the same samples
+    const auto lowOn = play (Tier::low, true, &store, false), lowOff = play (Tier::low, false, &store, false);
     CHECK (same (lowOn, lowOff));
+    // with the level makeup (the default, tier-makeup branch) the bypassed Convolve puts a gain in its place: not the same samples, but
+    // the impulse is still not convolved, so the signal is the dry note at another level (energy within a factor 4 either way)
+    const auto lowMk = play (Tier::low, true, &store, true);
+    double eMk = 0.0, eOff = 0.0;
+    for (size_t i = 0; i < lowMk.left.size(); ++i)
+    {
+        eMk += static_cast<double> (lowMk.left[i]) * lowMk.left[i];
+        eOff += static_cast<double> (lowOff.left[i]) * lowOff.left[i];
+    }
+    CHECK (eMk > 0.25 * eOff && eMk < 4.0 * eOff);
     double energy = 0.0;
     for (float v : lowOn.left)
         energy += static_cast<double> (v) * v;
