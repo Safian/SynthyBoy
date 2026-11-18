@@ -51,7 +51,7 @@ constexpr char kPluginId[] = "com.safian.synthyboy";
 constexpr char kPluginName[] = "SynthyBoy";
 constexpr char kPluginVendor[] = "Safian";
 constexpr char kPluginUrl[] = "https://github.com/Safian/SynthyBoy";
-constexpr char kPluginVersion[] = "0.1.0";
+constexpr char kPluginVersion[] = SYNTHYBOY_VERSION_STRING;
 constexpr char kPluginDescription[] = "Synthesizer plugin (VST3 + CLAP)";
 
 const char* const kPluginFeatures[] = {
