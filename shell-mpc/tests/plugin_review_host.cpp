@@ -296,16 +296,31 @@ int main (int argc, char** argv)
         if (s0 < 0)
             s0 = 0;   // a build without the debug hooks never writes the log
         const int idx = 5;
-        const double t0 = nowSec();
         const int calls = 500;
-        for (int i = 0; i < calls; ++i)
-            e->setParameter (e, idx, (i & 1) ? 0.25f : 0.75f);
-        const double span = nowSec() - t0;
-        const double us = span * 1e6 / calls;
-        struct stat st;
-        const long long s1 = ::stat (out.c_str(), &st) == 0 ? static_cast<long long> (st.st_size) : 0;
-        const bool wrote = span < 0.08 && s1 != s0;   // a write inside the window of a few milliseconds can only be the calling thread's
-        std::printf ("INFO  %d setParameter calls: %.1f us each, log file %lld -> %lld bytes (window %.0f ms)\n", calls, us, s0, s1, span * 1000.0);
+        // The display thread also appends to the file once a tick, and a tick can land inside the few tenths of a millisecond the calls take (it did, once in four runs). A setParameter that
+        // does file I/O writes on every attempt; a tick only on some. So the calls are repeated, the size of the file is read right before and right after each batch, and the
+        // verdict is "wrote" only when EVERY batch changed the file.
+        int batchesThatWrote = 0;
+        const int batches = 6;
+        double us = 0.0, span = 0.0;
+        long long s1 = 0;
+        for (int b = 0; b < batches; ++b)
+        {
+            struct stat stBefore;
+            s0 = ::stat (out.c_str(), &stBefore) == 0 ? static_cast<long long> (stBefore.st_size) : 0;
+            const double t0 = nowSec();
+            for (int i = 0; i < calls; ++i)
+                e->setParameter (e, idx, (i & 1) ? 0.25f : 0.75f);
+            span = nowSec() - t0;
+            us = span * 1e6 / calls;
+            struct stat st;
+            s1 = ::stat (out.c_str(), &st) == 0 ? static_cast<long long> (st.st_size) : 0;
+            if (span < 0.08 && s1 != s0)   // a write inside the window of a few milliseconds is the calling thread's, or a tick of the display thread
+                ++batchesThatWrote;
+            std::this_thread::sleep_for (std::chrono::milliseconds (30));
+        }
+        const bool wrote = batchesThatWrote == batches;
+        std::printf ("INFO  %d setParameter calls: %.1f us each, log file %lld -> %lld bytes (window %.0f ms), %d of %d batches changed the file\n", calls, us, s0, s1, span * 1000.0, batchesThatWrote, batches);
         e->dispatcher (e, effClose, 0, 0, nullptr, 0.0f);
         std::remove (out.c_str());
         std::remove (sw.c_str());
