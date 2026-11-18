@@ -434,15 +434,22 @@ public:
     void idleAdvance (int n) noexcept override { fx.idle (n); }
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
     bool hasMakeup() const noexcept override { return true; }
-    float makeupPower (const FxFrame&, const float* b, const float* d) noexcept override
+    float makeupPower (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc& program) noexcept override
     {
-        const float k[3] = { V (b, d, mix), V (b, d, feedback), V (b, d, center) };
-        return cache.same (k) ? cache.result : cache.store (k, makeup::flangerPower (k[0], k[1], k[2]));
+        const float k[2] = { V (b, d, feedback), V (b, d, center) };
+        if (!cache.same (k))
+        {
+            gains = makeup::flangerBandGains (k[0], k[1]);
+            cache.store (k, 1.0f);
+        }
+        return makeup::flangerPower (V (b, d, mix), gains, program);
     }
+    float makeupCoherent (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc&) noexcept override { return std::cos (clamp01 (pct (b, d, mix)) * 1.5707963f); }
 
 private:
     Flanger fx;
-    MakeupCache<3> cache;
+    MakeupCache<2> cache;
+    makeup::BandGains gains {};
     int mix, feedback, rate, sync, division, depth, center, phase;
 };
 
@@ -522,21 +529,25 @@ public:
     }
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
     bool hasMakeup() const noexcept override { return true; }
-    float makeupPower (const FxFrame&, const float* b, const float* d) noexcept override
+    float makeupPower (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc& program) noexcept override
     {
-        const float k[13] = { V (b, d, mix), V (b, d, size), V (b, d, decay), V (b, d, lowCut), V (b, d, highCut), V (b, d, hsGain), V (b, d, hsCut), V (b, d, lsGain), V (b, d, width),
+        const float k[13] = { 0.0f, V (b, d, size), V (b, d, decay), V (b, d, lowCut), V (b, d, highCut), V (b, d, hsGain), V (b, d, hsCut), V (b, d, lsGain), V (b, d, width),
                               feedback >= 0 ? V (b, d, feedback) : 50.0f, static_cast<float> (choice (b, type)), static_cast<float> (choice (b, room)), 0.0f };
-        if (cache.same (k))
-            return cache.result;
+        if (!cache.same (k))
+        {
         makeup::ReverbIn in;
         in.mix = k[0]; in.size = k[1]; in.decayMs = k[2]; in.lowCutHz = k[3]; in.highCutHz = k[4]; in.highShelfDb = k[5]; in.highShelfHz = k[6]; in.lowShelfDb = k[7];
         in.widthPct = k[8]; in.feedbackPct = k[9]; in.type = static_cast<int> (k[10]); in.room = static_cast<int> (k[11]);
-        return cache.store (k, makeup::reverbPower (in));
+            wetDb = makeup::reverbWetDb (in);
+            cache.store (k, 1.0f);
+        }
+        return makeup::reverbPower (V (b, d, mix), wetDb, program);
     }
 
 private:
     Reverb fx;
     MakeupCache<13> cache;
+    float wetDb = 0.0f;
     int mix, size, decay, pre, lowCut, highCut, hsCut, hsGain, lsCut, lsGain, chAmount, chRate, type, width, diffA, diffB, room, er, feedback;
 };
 
@@ -579,14 +590,21 @@ public:
     }
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
     bool hasMakeup() const noexcept override { return true; }
-    float makeupPower (const FxFrame&, const float* b, const float* d) noexcept override
+    float makeupPower (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc& program) noexcept override
     {
         const float k[3] = { static_cast<float> (choice (b, unison)), V (b, d, mix), V (b, d, dimMix) };
-        return cache.same (k) ? cache.result : cache.store (k, makeup::hyperPower (static_cast<int> (k[0]), k[1], k[2]));
+        if (!cache.same (k))
+        {
+            gains = makeup::hyperBandGains (static_cast<int> (k[0]), k[1], k[2]);
+            cache.store (k, 1.0f);
+        }
+        return makeup::hyperPower (gains, program);
     }
+    float makeupCoherent (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc&) noexcept override { return 1.0f - clamp01 (pct (b, d, mix)); }
 
 private:
     MakeupCache<3> cache;
+    makeup::BandGains gains {};
     fx::HyperDimension fx;
     int rate, unison, detune, mix, dimSize, dimMix, retrig;
     uint32_t lastNoteOns = 0;
@@ -678,16 +696,23 @@ public:
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
     int latency() const noexcept override { return fx.latency(); }
     bool hasMakeup() const noexcept override { return true; }
-    float makeupPower (const FxFrame&, const float* b, const float* d) noexcept override
+    float makeupPower (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc& program) noexcept override
     {
         // the shift in Hz is the shift (percent) of the range: Bode::process, deltaFreq = shift x range
         const float shiftHz = std::fabs (std::clamp (pct (b, d, shift), -1.0f, 1.0f) * std::clamp (V (b, d, range), 0.0f, 5000.0f));
-        const float k[4] = { V (b, d, mix), V (b, d, feed), shiftHz, b[mono] >= 0.5f ? 1.0f : 0.0f };
-        return cache.same (k) ? cache.result : cache.store (k, makeup::bodePower (k[0], k[1], k[2], k[3] != 0.0f));
+        const float k[3] = { V (b, d, mix), V (b, d, feed), shiftHz };
+        if (!cache.same (k))
+        {
+            gains = makeup::bodeBandGains (k[0], k[1], k[2]);
+            cache.store (k, 1.0f);
+        }
+        return makeup::bodePower (gains, b[mono] >= 0.5f, program);
     }
+    float makeupCoherent (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc&) noexcept override { return 1.0f - clamp01 (pct (b, d, mix)); }
 
 private:
-    MakeupCache<4> cache;
+    MakeupCache<3> cache;
+    makeup::BandGains gains {};
     fx::Bode fx;
     int mono, shift, range, dir, width, delay, sync, division, feed, balance, blur, mix, retrig;
     uint32_t lastNoteOns = 0;
@@ -781,7 +806,7 @@ public:
     /** The loudness of the module for a tier that bypasses it: the program power of dry x cos + wet x sin with the wet path of the impulse as it would be built (its spectrum, computed
         on the helper thread from the same key as the real build, so a bypassed module never builds a convolver), the tone and the pre delay on it (fx_makeup.h convolvePower). Until
         the spectrum of the first key is there (a live render) the module counts as 1. */
-    float makeupPower (const FxFrame& f, const float* b, const float* d) noexcept override
+    float makeupPower (const FxFrame& f, const float* b, const float* d, const makeup::ProgramDesc& program) noexcept override
     {
         if (!(ir >= 0 && b[ir] >= 0.5f && f.content != nullptr && f.content->impulse != nullptr))
             return 1.0f; // no impulse: the active module does nothing either
@@ -820,7 +845,7 @@ public:
         SpecCache& c = specCache;
         if (!(c.valid && c.generation == specGeneration && c.mix == mixNow && c.tone == sh.tone && c.delay == sh.delaySeconds && c.corner == sh.serumCornerHz && c.serum == sh.serumLaw && c.rate == sampleRate))
         {
-            c.result = makeup::convolvePower (specLive, sh, mixNow, sampleRate);
+            makeup::convolveBandPowers (specLive, sh, mixNow, sampleRate, c.bands, c.coherent);
             c.valid = true;
             c.generation = specGeneration;
             c.mix = mixNow;
@@ -830,7 +855,11 @@ public:
             c.serum = sh.serumLaw;
             c.rate = sampleRate;
         }
-        return c.result;
+        return makeup::convolvePower (c.bands, program);
+    }
+    float makeupCoherent (const FxFrame&, const float*, const float*, const makeup::ProgramDesc& program) noexcept override
+    {
+        return specLive.valid && specCache.valid ? makeup::convolveCoherent (specCache.coherent, program) : 1.0f; // (the weighted mean of the coherent amplitudes; makeupPower has just filled the cache)
     }
     void run (float* l, float* r, int n) noexcept override
     {
@@ -988,7 +1017,8 @@ private:
     {
         bool valid = false, serum = false;
         unsigned generation = 0;
-        float mix = 0, tone = 0, delay = 0, corner = 0, result = 1.0f;
+        float mix = 0, tone = 0, delay = 0, corner = 0;
+        float bands[makeup::kBands] = {}, coherent[makeup::kBands] = {};
         double rate = 0;
     };
     // the loudness model of a bypassed module (makeupPower)

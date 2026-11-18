@@ -13,6 +13,7 @@
 #include "../dsp/util.h"
 #include "../matrix/mod_matrix.h"
 #include "../osc/content_set.h"
+#include "fx_makeup.h"
 
 namespace synthyboy
 {
@@ -91,15 +92,27 @@ public:
     virtual int moduleIndex() const noexcept = 0;
     /** true: the module has a model of its loudness (makeupPower), so that a tier that bypasses it can leave that loudness behind (core/engine-own/fx/fx_makeup.h). */
     virtual bool hasMakeup() const noexcept { return false; }
-    /** The power the module gives the program, against the bypassed module (1 = the same level), from the module's own keys (`base` / `delta` as configure () reads them). Called by
+    /** The power the module gives the program, against the bypassed module (1 = the same level), from the module's own keys (`base` / `delta` as configure () reads them) and the program the chain's meter sees at the module's place (`program`). Called by
         the chain for a module that is on in the preset but bypassed by the quality mask, once per control period, on the audio thread: it must be cheap (the models cache their result
         while the keys are the same) and may start work on the helper thread but never wait for it. The level trim of the module is not in it (makeupGain). */
-    virtual float makeupPower (const FxFrame& /*f*/, const float* /*base*/, const float* /*delta*/) noexcept { return 1.0f; }
-    /** The gain at the place of the bypassed module: the trim of its Level key and the square root of makeupPower (). */
-    float makeupGain (const FxFrame& f, const float* base, const float* delta) noexcept
+    virtual float makeupPower (const FxFrame& /*f*/, const float* /*base*/, const float* /*delta*/, const makeup::ProgramDesc& /*program*/) noexcept { return 1.0f; }
+    /** The amplitude with which a copy of the input of the module on another path adds up with the module's output (the part of the output that is coherent with the input, per unit of
+        input): the dry part of the mix by default of the models; Convolve adds the real part of its impulse response. Used where a bypassed effect sits on a bus (FxChain::busMakeup). */
+    virtual float makeupCoherent (const FxFrame& /*f*/, const float* /*base*/, const float* /*delta*/, const makeup::ProgramDesc& /*program*/) noexcept { return 0.0f; }
+    /** The gain at the place of the bypassed module, its power (with the level trim) and its coherent amplitude (with the level trim). */
+    void makeup (const FxFrame& f, const float* base, const float* delta, const makeup::ProgramDesc& program, float& gain, float& power, float& coherent) noexcept
     {
         const float level = levelIdx >= 0 ? dbToGain (fxValue (base, delta, levelIdx)) : 1.0f;
-        return level * std::sqrt (std::max (makeupPower (f, base, delta), 1.0e-4f));
+        const float p = std::max (makeupPower (f, base, delta, program), 1.0e-4f);
+        gain = level * std::sqrt (p);
+        power = level * level * p;
+        coherent = level * makeupCoherent (f, base, delta, program);
+    }
+    /** The gain at the place of the bypassed module: the trim of its Level key and the square root of makeupPower (). */
+    float makeupGain (const FxFrame& f, const float* base, const float* delta, const makeup::ProgramDesc& program) noexcept
+    {
+        const float level = levelIdx >= 0 ? dbToGain (fxValue (base, delta, levelIdx)) : 1.0f;
+        return level * std::sqrt (std::max (makeupPower (f, base, delta, program), 1.0e-4f));
     }
     /** Position of the current call inside the control period (set by process ()). */
     int callOffset() const noexcept { return t0Now; }

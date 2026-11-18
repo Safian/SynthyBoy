@@ -65,6 +65,144 @@ float linearMix (float mix, float wetPower, float cross) noexcept
 
 namespace
 {
+constexpr float kMeterCornerHz[4] = { 120.0f, 480.0f, 1900.0f, 7600.0f };
+constexpr float kMeterKWeight[kMeterBands] = { 1.0f, 1.0f, 1.0f, 1.35f, 2.1f }; // the shelf of the K weighting above 1.7 kHz, as a gain of the energy of a band (scripts/tier-makeup-regress.py)
+
+int meterBandOf (float hz) noexcept
+{
+    int b = 0;
+    while (b < 4 && hz > kMeterCornerHz[b])
+        ++b;
+    return b;
+}
+} // namespace
+
+ProgramDesc standardProgram() noexcept
+{
+    static const ProgramDesc d = []
+    {
+        ProgramDesc out;
+        double e[kMeterBands] = {}, total = 0.0;
+        for (int b = 0; b < kBands; ++b)
+            e[meterBandOf (bandFreq (b))] += bandWeight (b);
+        for (int i = 0; i < kMeterBands; ++i)
+        {
+            e[i] *= kMeterKWeight[i];
+            total += e[i];
+        }
+        for (int i = 0; i < kMeterBands; ++i)
+            out.share[i] = static_cast<float> (e[i] / total);
+        out.wide = 0.3f;
+        out.valid = false;
+        return out;
+    }();
+    return d;
+}
+
+float applyBands (const ProgramDesc& in, const BandGains& g) noexcept
+{
+    const ProgramDesc d = in.valid ? in : standardProgram();
+    float p = 0.0f;
+    for (int i = 0; i < kMeterBands; ++i)
+        p += d.share[i] * ((1.0f - d.wide) * g.mono[i] + d.wide * g.wide[i]);
+    return p;
+}
+
+void ProgramMeter::prepare (double sampleRate) noexcept
+{
+    sr = sampleRate;
+    for (int i = 0; i < 4; ++i)
+        coef[i] = static_cast<float> (1.0 - std::exp (-kTwoPi * kMeterCornerHz[i] / sampleRate));
+    reset();
+}
+
+void ProgramMeter::reset() noexcept
+{
+    for (auto& v : lp) v = 0.0f;
+    for (auto& v : sum) v = 0.0;
+    sumSide = 0.0;
+    count = 0;
+    for (auto& v : energy) v = 0.0;
+    energySide = 0.0;
+    slow = peak = fast = 0.0;
+    seen = false;
+}
+
+void ProgramMeter::accumulate (const float* l, const float* r, int n) noexcept
+{
+    float a[kMeterBands] = {};
+    float side = 0.0f;
+    for (int i = 0; i < n; ++i)
+    {
+        const float m = 0.5f * (l[i] + r[i]), sd = 0.5f * (l[i] - r[i]);
+        side += sd * sd;
+        lp[0] += coef[0] * (m - lp[0]);
+        lp[1] += coef[1] * (m - lp[1]);
+        lp[2] += coef[2] * (m - lp[2]);
+        lp[3] += coef[3] * (m - lp[3]);
+        const float b0 = lp[0], b1 = lp[1] - lp[0], b2 = lp[2] - lp[1], b3 = lp[3] - lp[2], b4 = m - lp[3];
+        a[0] += b0 * b0; a[1] += b1 * b1; a[2] += b2 * b2; a[3] += b3 * b3; a[4] += b4 * b4;
+    }
+    for (int i = 0; i < kMeterBands; ++i)
+        sum[i] += a[i];
+    sumSide += side;
+    count += n;
+    for (auto& v : lp) v = flushDenormal (v);
+}
+
+void ProgramMeter::endPeriod (int periodSamples) noexcept
+{
+    if (count <= 0)
+        return;
+    double total = sumSide;
+    for (int i = 0; i < kMeterBands; ++i)
+        total += sum[i];
+    {
+        // the steadiness: a slow mean (a second) against the held peak of the loudest 100 ms (silence counts: a pluck line leaves gaps)
+        const double kSlow = 1.0 - std::exp (-static_cast<double> (periodSamples) / (1.0 * sr)), kHold = std::exp (-static_cast<double> (periodSamples) / (4.0 * sr));
+        const double inst = total / static_cast<double> (count);
+        slow += (inst - slow) * kSlow;
+        fast += (inst - fast) * (1.0 - std::exp (-static_cast<double> (periodSamples) / (0.1 * sr)));
+        peak = std::max (fast, peak * kHold);
+    }
+    if (total > 1.0e-12 * static_cast<double> (count))
+    {
+        const double k = seen ? 1.0 - std::exp (-static_cast<double> (periodSamples) / (0.1 * sr)) : 1.0;
+        for (int i = 0; i < kMeterBands; ++i)
+            energy[i] += (sum[i] / static_cast<double> (count) - energy[i]) * k;
+        energySide += (sumSide / static_cast<double> (count) - energySide) * k;
+        seen = true;
+    }
+    for (auto& v : sum) v = 0.0;
+    sumSide = 0.0;
+    count = 0;
+}
+
+ProgramDesc ProgramMeter::desc() const noexcept
+{
+    ProgramDesc d;
+    if (!seen)
+        return d;
+    double total = 0.0, raw = energySide;
+    double w[kMeterBands];
+    for (int i = 0; i < kMeterBands; ++i)
+    {
+        w[i] = energy[i] * kMeterKWeight[i];
+        total += w[i];
+        raw += energy[i];
+    }
+    if (total <= 0.0)
+        return d;
+    for (int i = 0; i < kMeterBands; ++i)
+        d.share[i] = static_cast<float> (w[i] / total);
+    d.wide = static_cast<float> (std::min (1.0, 2.0 * energySide / std::max (raw, 1.0e-30)));
+    d.steady = peak > 1.0e-18 ? static_cast<float> (std::clamp (slow / peak, 0.0, 1.0)) : 0.4f;
+    d.valid = true;
+    return d;
+}
+
+namespace
+{
 /** Linear interpolation of ys over xs (ascending), clamped at both ends. */
 float interp (const float* xs, const float* ys, int n, float x) noexcept
 {
@@ -125,28 +263,57 @@ float reverbWetDb (const ReverbIn& in) noexcept
     return db;
 }
 
-float reverbPower (const ReverbIn& in) noexcept
+float reverbPower (float mixPct, float wetDb, const ProgramDesc& d) noexcept
 {
-    return equalPowerMix (in.mix * 0.01f, kReverbLoudness * fromDb (reverbWetDb (in)));
+    const float kappa = kReverbLoudnessPluck + (kReverbLoudnessHeld - kReverbLoudnessPluck) * clamp01 (d.steady);
+    return equalPowerMix (mixPct * 0.01f, kappa * fromDb (wetDb));
 }
 
-float flangerPower (float mixPct, float feedbackPct, float centreHz) noexcept
+namespace
+{
+/** One cell of a band table (dB, mono five then wide five) as gains in power. */
+BandGains fromCell (const float* cell) noexcept
+{
+    BandGains g;
+    for (int i = 0; i < kMeterBands; ++i)
+    {
+        g.mono[i] = fromDb (cell[i]);
+        g.wide[i] = fromDb (cell[kMeterBands + i]);
+    }
+    return g;
+}
+BandGains mixGains (const BandGains& a, const BandGains& b, float t) noexcept
+{
+    BandGains g;
+    for (int i = 0; i < kMeterBands; ++i)
+    {
+        g.mono[i] = a.mono[i] + (b.mono[i] - a.mono[i]) * t;
+        g.wide[i] = a.wide[i] + (b.wide[i] - a.wide[i]) * t;
+    }
+    return g;
+}
+} // namespace
+
+BandGains flangerBandGains (float feedbackPct, float centreHz) noexcept
 {
     using namespace tables;
     int i, j;
     float fi, fj;
     locate (kFlangerFbPct, kFlangerFb, std::clamp (feedbackPct, -100.0f, 100.0f), i, fi);
-    // the centre grid is logarithmic: interpolate in log frequency
     float lg[kFlangerCentre];
     for (int k = 0; k < kFlangerCentre; ++k)
         lg[k] = std::log (kFlangerCentreHz[k]);
     locate (lg, kFlangerCentre, std::clamp (std::log (std::max (centreHz, 20.0f)), lg[0], lg[kFlangerCentre - 1]), j, fj);
-    const auto at = [&] (int a, int b) { return kFlangerDb[a][b]; };
-    const float db = (1.0f - fi) * ((1.0f - fj) * at (i, j) + fj * at (i, j + 1)) + fi * ((1.0f - fj) * at (i + 1, j) + fj * at (i + 1, j + 1));
-    return equalPowerMix (mixPct * 0.01f, kFlangerLoudness * fromDb (db));
+    return mixGains (mixGains (fromCell (kFlangerBands[i][j]), fromCell (kFlangerBands[i][j + 1]), fj),
+                     mixGains (fromCell (kFlangerBands[i + 1][j]), fromCell (kFlangerBands[i + 1][j + 1]), fj), fi);
 }
 
-float hyperPower (int unison, float hyperMixPct, float dimMixPct) noexcept
+float flangerPower (float mixPct, const BandGains& wet, const ProgramDesc& d) noexcept
+{
+    return equalPowerMix (mixPct * 0.01f, kFlangerLoudness * applyBands (d, wet));
+}
+
+BandGains hyperBandGains (int unison, float hyperMixPct, float dimMixPct) noexcept
 {
     using namespace tables;
     const int u = std::clamp (unison, 0, kHyperUnison - 1);
@@ -154,25 +321,41 @@ float hyperPower (int unison, float hyperMixPct, float dimMixPct) noexcept
     float fi, fj;
     locate (kHyperMixPct, kHyperMix, std::clamp (hyperMixPct, 0.0f, 100.0f), i, fi);
     locate (kHyperDimPct, kHyperDim, std::clamp (dimMixPct, 0.0f, 100.0f), j, fj);
-    const auto at = [&] (int a, int b) { return kHyperDb[u][a][b]; };
-    const float db = (1.0f - fi) * ((1.0f - fj) * at (i, j) + fj * at (i, j + 1)) + fi * ((1.0f - fj) * at (i + 1, j) + fj * at (i + 1, j + 1));
-    return fromDb (std::max (db, -40.0f)) * kHyperLoudness;
+    return mixGains (mixGains (fromCell (kHyperBands[u][i][j]), fromCell (kHyperBands[u][i][j + 1]), fj),
+                     mixGains (fromCell (kHyperBands[u][i + 1][j]), fromCell (kHyperBands[u][i + 1][j + 1]), fj), fi);
 }
 
-float bodePower (float mixPct, float feedPct, float shiftHz, bool monoInput) noexcept
+float hyperPower (const BandGains& whole, const ProgramDesc& d) noexcept
+{
+    return std::max (applyBands (d, whole), 1.0e-4f) * kHyperLoudness;
+}
+
+BandGains bodeBandGains (float mixPct, float feedPct, float shiftHz) noexcept
 {
     using namespace tables;
     const float m = clamp01 (mixPct * 0.01f);
-    const float feed = std::clamp (feedPct, 0.0f, 100.0f);
-    const float wShifted = fromDb (interp (kBodeFeedPct, kBodeDb[0], kBodeFeed, feed)) * kBodeLoudness;
-    const float wPlain = fromDb (interp (kBodeFeedPct, kBodeDb[1], kBodeFeed, feed));
-    // a shift under a few Hz leaves the wet path coherent with the dry one (the wet path is a comb of the program), over 20 Hz the two are unrelated
+    int i;
+    float f;
+    locate (kBodeFeedPct, kBodeFeed, std::clamp (feedPct, 0.0f, 100.0f), i, f);
+    const BandGains ws = mixGains (fromCell (kBodeBands[0][i]), fromCell (kBodeBands[0][i + 1]), f);
+    const BandGains wp = mixGains (fromCell (kBodeBands[1][i]), fromCell (kBodeBands[1][i + 1]), f);
+    // a shift under a few Hz leaves the wet path coherent with the dry one (the wet path is a comb of the program, power gain W: amplitude sqrt (W) in phase), over 20 Hz the two are unrelated
     const float t = clamp01 ((shiftHz - 2.0f) / 18.0f);
-    const float coherent = (1.0f - m) + m * std::sqrt (wPlain);
-    const float incoherent = (1.0f - m) * (1.0f - m) + m * m * wShifted;
-    float p = (1.0f - t) * coherent * coherent + t * incoherent;
+    BandGains g;
+    for (int k = 0; k < kMeterBands; ++k)
+    {
+        const float cm = (1.0f - m) + m * std::sqrt (wp.mono[k]), cw = (1.0f - m) + m * std::sqrt (wp.wide[k]);
+        g.mono[k] = (1.0f - t) * cm * cm + t * ((1.0f - m) * (1.0f - m) + m * m * ws.mono[k]);
+        g.wide[k] = (1.0f - t) * cw * cw + t * ((1.0f - m) * (1.0f - m) + m * m * ws.wide[k]);
+    }
+    return g;
+}
+
+float bodePower (const BandGains& whole, bool monoInput, const ProgramDesc& d) noexcept
+{
+    float p = applyBands (d, whole) * kBodeLoudness;
     if (monoInput)
-        p *= 0.85f; // the channels of the program share 70 % of their power: the mono sum (L + R) / 2 has (1 + 0.7) / 2 of it, dry and wet alike
+        p *= 1.0f - 0.5f * (d.valid ? d.wide : standardProgram().wide); // the mono sum (L + R) / 2 keeps the mid and drops the side, dry and wet alike
     return p;
 }
 
@@ -228,16 +411,19 @@ bool irBandSpectrum (const float* irL, const float* irR, int frames, double samp
     return true;
 }
 
-float convolvePower (const BandSpectrum& spec, const WetShaping& sh, float mix, double sampleRate) noexcept
+void convolveBandPowers (const BandSpectrum& spec, const WetShaping& sh, float mix, double sampleRate, float (&out)[kBands], float (&coherent)[kBands]) noexcept
 {
     if (!spec.valid)
-        return 1.0f;
+    {
+        for (auto& v : out) v = 1.0f;
+        for (auto& v : coherent) v = 1.0f;
+        return;
+    }
     const float a = clamp01 (mix) * (kPif * 0.5f);
     const float c = std::cos (a), s = std::sin (a);
     const bool tone = sh.tone != 0.0f;
     const float lowGain = std::pow (10.0f, -sh.tone * 6.0f / 20.0f), highGain = std::pow (10.0f, sh.tone * 6.0f / 20.0f);
     const double alpha = 1.0 - std::exp (-kTwoPi * (sh.serumLaw ? std::max (sh.serumCornerHz, 1.0f) : 1000.0f) / sampleRate);
-    double total = 0.0;
     for (int b = 0; b < kBands; ++b)
     {
         const double w = kTwoPi * table().freq[b] / sampleRate; // rad per sample
@@ -276,10 +462,36 @@ float convolvePower (const BandSpectrum& spec, const WetShaping& sh, float mix, 
             hr = nr;
             hi = ni;
         }
-        total += static_cast<double> (table().weight[b]) * (static_cast<double> (c) * c + 2.0 * c * s * hr + static_cast<double> (s) * s * pw);
+        coherent[b] = static_cast<float> (c + s * hr);
+        out[b] = static_cast<float> (std::max (static_cast<double> (c) * c + 2.0 * c * s * hr + static_cast<double> (s) * s * pw, 0.0));
     }
-    return static_cast<float> (std::max (total, 1.0e-6));
 }
+
+static float weightedMean (const float (&v)[kBands], const ProgramDesc& d) noexcept
+{
+    float weight[kBands];
+    if (d.valid)
+    {
+        double inBand[kMeterBands] = {};
+        for (int b = 0; b < kBands; ++b)
+            inBand[meterBandOf (bandFreq (b))] += table().weight[b];
+        for (int b = 0; b < kBands; ++b)
+        {
+            const int mb = meterBandOf (bandFreq (b));
+            weight[b] = static_cast<float> (d.share[mb] * table().weight[b] / std::max (inBand[mb], 1.0e-30));
+        }
+    }
+    else
+        for (int b = 0; b < kBands; ++b)
+            weight[b] = table().weight[b];
+    double total = 0.0;
+    for (int b = 0; b < kBands; ++b)
+        total += static_cast<double> (weight[b]) * v[b];
+    return static_cast<float> (total);
+}
+
+float convolvePower (const float (&bandPower)[kBands], const ProgramDesc& d) noexcept { return std::max (weightedMean (bandPower, d), 1.0e-6f); }
+float convolveCoherent (const float (&coherent)[kBands], const ProgramDesc& d) noexcept { return weightedMean (coherent, d); }
 } // namespace makeup
 } // namespace own
 } // namespace synthyboy

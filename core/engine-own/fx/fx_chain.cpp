@@ -178,6 +178,8 @@ void FxChain::prepare (double sampleRate, int maxBlk)
     splitLmh.prepare (sr, std::max (maxBlk, kControlPeriod));
     splitMs.prepare (sr, std::max (maxBlk, kControlPeriod));
     vbase.assign (paramCount(), 0.0f);
+    for (auto& m : meter) m.prepare (sr);
+    for (auto& m : slotMeter) m.prepare (sr);
     reset();
 }
 
@@ -202,7 +204,10 @@ void FxChain::reset() noexcept
     {
         slotBypassed[s] = slotMakeupSeen[s] = false;
         slotMakeupNow[s] = slotMakeupPrev[s] = 1.0f;
+        slotMeter[s].reset();
     }
+    for (auto& m : meter)
+        m.reset();
     for (auto& m : inst)
         if (m != nullptr)
             m->clearLevel();
@@ -279,7 +284,12 @@ void FxChain::configureSlot (int s, const float* base, const float* delta, const
         else
         {
             slotMakeupPrev[s] = slotMakeupNow[s];
-            stepMakeup (sl.cur->makeupGain (frame, vbase.data(), nullptr), slotMakeupSeen[s], slotMakeupPrev[s], slotMakeupNow[s], frame);
+            slotMeter[s].endPeriod (frame.period);
+            float g, pw, co;
+            sl.cur->makeup (frame, vbase.data(), nullptr, slotMeter[s].desc(), g, pw, co);
+            slotMakeupPow[s] = pw;
+            slotMakeupCoh[s] = co;
+            stepMakeup (g, slotMakeupSeen[s], slotMakeupPrev[s], slotMakeupNow[s], frame);
         }
     }
     if (!bypass)
@@ -412,11 +422,18 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
         makeupPrev[m] = makeupNow[m];
         if (bypassed[m])
         {
-            stepMakeup (inst[m]->makeupGain (frame, base, delta), makeupSeen[m], makeupPrev[m], makeupNow[m], frame);
+            meter[m].endPeriod (frame.period);
+            float g, pw, co;
+            inst[m]->makeup (frame, base, delta, meter[m].desc(), g, pw, co);
+            makeupPow[m] = pw;
+            makeupCoh[m] = co;
+            stepMakeup (g, makeupSeen[m], makeupPrev[m], makeupNow[m], frame);
             active = true;
         }
         else
         {
+            if (makeupSeen[m])
+                meter[m].reset();
             makeupSeen[m] = false;
             makeupPrev[m] = makeupNow[m] = 1.0f;
         }
@@ -595,8 +612,27 @@ void FxChain::runModule (int m, float* l, float* r, int n, int t0, int depth) no
     }
 }
 
-void FxChain::runMakeup (float prev, float now, float* l, float* r, int n, int t0) noexcept
+bool FxChain::busMakeup (float& power, float& coherent, float& amplitude) const noexcept
 {
+    const Plan& p = plan[static_cast<size_t> (rackId)];
+    bool any = false;
+    power = coherent = amplitude = 1.0f;
+    for (int i = 0; i < p.count; ++i)
+    {
+        const Item& it = p.item[static_cast<size_t> (i)];
+        if (!it.bypass)
+            continue;
+        any = true;
+        power *= it.pool ? slotMakeupPow[it.index] : makeupPow[it.index];
+        coherent *= it.pool ? slotMakeupCoh[it.index] : makeupCoh[it.index];
+        amplitude *= it.pool ? slotMakeupNow[it.index] : makeupNow[it.index];
+    }
+    return any;
+}
+
+void FxChain::runMakeup (float prev, float now, float* l, float* r, int n, int t0, makeup::ProgramMeter& meter) noexcept
+{
+    meter.accumulate (l, r, n); // the input of the gain: the program the effect would have seen
     if (prev == 1.0f && now == 1.0f)
         return;
     const float invP = 1.0f / static_cast<float> (period);
@@ -669,10 +705,11 @@ void FxChain::runRack (int rack, float* l, float* r, int n, int t0, int depth) n
         const Item& it = p.item[static_cast<size_t> (i)];
         if (it.bypass)
         {
+            const bool defer = busDeferred && rack == rackId && depth == 0; // the engine applies the gain of a bus rack (busMakeup)
             if (it.pool)
-                runMakeup (slotMakeupPrev[it.index], slotMakeupNow[it.index], l, r, n, t0);
+                runMakeup (defer ? 1.0f : slotMakeupPrev[it.index], defer ? 1.0f : slotMakeupNow[it.index], l, r, n, t0, slotMeter[it.index]);
             else
-                runMakeup (makeupPrev[it.index], makeupNow[it.index], l, r, n, t0);
+                runMakeup (defer ? 1.0f : makeupPrev[it.index], defer ? 1.0f : makeupNow[it.index], l, r, n, t0, meter[it.index]);
         }
         else if (it.pool)
             runSlot (it.index, l, r, n, t0);

@@ -37,12 +37,60 @@ struct BandSpectrum
     long; the program weight is the one above. Not real time (an FFT of the length of the impulse). */
 bool irBandSpectrum (const float* irL, const float* irR, int frames, double sampleRate, BandSpectrum& out);
 
+/** What the models know about the program at the place of the bypassed effect: the K-weighted shares of the energy in five bands (corners 120, 480, 1900, 7600 Hz) of the mid signal, and
+    how wide the signal is (0 mono, 1 independent channels), taken from the input of the module over the last 100 ms by a ProgramMeter. `valid` false: no signal seen yet, the models
+    use the standard program (power per Hz falling with f^-1.5, channels sharing 70 % of their power). */
+constexpr int kMeterBands = 5;
+struct ProgramDesc
+{
+    float share[kMeterBands] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+    float wide = 0.3f;
+    /** How sustained the program is: its energy over the last second against the loudest 100 ms of the last few seconds (1 a held note or a pad, near 0 a pluck or a hit); the reverb
+        reaches its steady state power only for a sustained program. 0.4 for the standard program. */
+    float steady = 0.4f;
+    bool valid = false;
+};
+/** The standard program as a descriptor. */
+ProgramDesc standardProgram() noexcept;
+
+/** Gains of a wet or whole path per meter band, power, for a mono and for a wide input. */
+struct BandGains
+{
+    float mono[kMeterBands], wide[kMeterBands];
+};
+/** The power gain of a path with `g` on the program `d`. */
+float applyBands (const ProgramDesc& d, const BandGains& g) noexcept;
+
+/** The control rate meter of the program at the place of a bypassed effect (the one control rate follower of the makeup): per sample it takes the mid signal through four one pole splits
+    and sums the squares of the five bands and of the side (about 30 operations); once per control period `endPeriod` folds the sums into energies smoothed with a time constant of 100 ms
+    (an effect that sees silence keeps what it knew). Audio thread only. */
+class ProgramMeter
+{
+public:
+    void prepare (double sampleRate) noexcept;
+    void reset() noexcept;
+    void accumulate (const float* l, const float* r, int n) noexcept;
+    void endPeriod (int periodSamples) noexcept;
+    ProgramDesc desc() const noexcept;
+
+private:
+    double sr = 44100.0;
+    float coef[4] = {};
+    float lp[4] = {};
+    double sum[kMeterBands] = {}, sumSide = 0.0;
+    long count = 0;
+    double energy[kMeterBands] = {}, energySide = 0.0;
+    double slow = 0.0, fast = 0.0, peak = 0.0; // the energy over about a second, and the held loudest 100 ms (decaying over 4 s)
+    bool seen = false;
+};
+
 /** The loudness factors of the models: the share of the steady state power of the wet path that the loudest 100 ms of a played note carries (a reverb tail builds up and falls, a
     swelling pad is ahead of its reverb), measured against the engine's own loudness figure (scripts/tier-makeup-population.py, docs/release/TIER-LEVEL-COMPENSATION.md section 4). */
-constexpr float kReverbLoudness = 0.4f;
+constexpr float kReverbLoudnessPluck = 0.25f;   // the share of the steady state wet power in the loudest 100 ms of a program with steadiness 0 ...
+constexpr float kReverbLoudnessHeld = 1.0f;     // ... and 1 (a held note: the reverb has its steady state)
 constexpr float kFlangerLoudness = 1.0f;
 constexpr float kHyperLoudness = 1.0f;
-constexpr float kBodeLoudness = 1.4f;
+constexpr float kBodeLoudness = 1.0f;
 
 /** The keys of the reverb as the model reads them (plain values of the keys; mix in percent too). */
 struct ReverbIn
@@ -54,14 +102,17 @@ struct ReverbIn
     the low cut, high cut, shelves and width; the `reverbLoudness` factor of the time smear of the loudest 100 ms is not in it. */
 float reverbWetDb (const ReverbIn& in) noexcept;
 /** Program power of the reverb (equal power crossfade, wet and dry uncorrelated, the wet power scaled by kReverbLoudness). */
-float reverbPower (const ReverbIn& in) noexcept;
+float reverbPower (float mixPct, float wetDb, const ProgramDesc& d) noexcept;
 
 /** Flanger: equal power crossfade, wet power by feedback (percent) and centre frequency (Hz). */
-float flangerPower (float mixPct, float feedbackPct, float centreHz) noexcept;
+BandGains flangerBandGains (float feedbackPct, float centreHz) noexcept;
+float flangerPower (float mixPct, const BandGains& wet, const ProgramDesc& d) noexcept;
 /** Hyper / Dimension: the power of the whole module by unison choice (0 .. 7), hyper mix and dim mix (percent). */
-float hyperPower (int unison, float hyperMixPct, float dimMixPct) noexcept;
+BandGains hyperBandGains (int unison, float hyperMixPct, float dimMixPct) noexcept;
+float hyperPower (const BandGains& whole, const ProgramDesc& d) noexcept;
 /** Bode: linear crossfade; the wet power by feed (percent), shifted or not (the shift in Hz is |shift x range|); `monoInput` sums the input to mono first. */
-float bodePower (float mixPct, float feedPct, float shiftHz, bool monoInput) noexcept;
+BandGains bodeBandGains (float mixPct, float feedPct, float shiftHz) noexcept;
+float bodePower (const BandGains& whole, bool monoInput, const ProgramDesc& d) noexcept;
 
 /** The tone and pre delay of Convolve on the wet path: the tilt of the engine's law (`serumLaw` false: +-6 dB around 1 kHz, a one pole split) or the first order low / high pass of the
     Serum law (corner `serumCornerHz`), and `delaySeconds` of pre delay. */
@@ -75,7 +126,11 @@ struct WetShaping
 
 /** Program power of dry x cos(a) + wet x sin(a) with the wet path `spec` shaped by `shaping`, dry and wet added with their phases (a coherent sum per band), against the dry x alone.
     `mix` 0 .. 1 is the knob of the equal power law. */
-float convolvePower (const BandSpectrum& spec, const WetShaping& shaping, float mix, double sampleRate) noexcept;
+void convolveBandPowers (const BandSpectrum& spec, const WetShaping& shaping, float mix, double sampleRate, float (&out)[kBands], float (&coherent)[kBands]) noexcept;
+/** (`coherent` of convolveBandPowers is the amplitude with which the signal itself reaches the output per band, cos a + sin a Re H: what a copy of the signal on another path adds up with.)
+    The program weighted mean of the band powers: the weight of a band is the share of its meter band of `d`, spread by the standard program (the standard program when `d` is not valid). */
+float convolvePower (const float (&bandPower)[kBands], const ProgramDesc& d) noexcept;
+float convolveCoherent (const float (&coherent)[kBands], const ProgramDesc& d) noexcept;
 } // namespace makeup
 } // namespace own
 } // namespace synthyboy

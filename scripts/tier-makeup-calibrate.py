@@ -9,14 +9,20 @@
 # the last 6 s measured) on the grids below and writes the tables as a C++ header. The grids hold ONE effect parameter set at a time; the secondary parameters are corrected in
 # core/engine-own/fx/fx_makeup.cpp by the curves at the end of this file (measured once, in docs/release/TIER-LEVEL-COMPENSATION.md).
 #   reverb  W (power of the wet path alone, mix 100) by type (room for type 4), decay (the feedback key scales it for types 4 and 5) and size
-#   flanger W by feedback and centre frequency
-#   hyper   P (the power of the whole module) by unison, mix and dim mix
-#   bode    W by feed, for a shifted wet path (|shift x range| >= 20 Hz) and an unshifted one
+#   flanger, hyper, bode: the gains per band of the program meter (ten per cell: mono five, wide five) by regression on 27 programs, flanger by feedback and centre, hyper by unison, mix and
+#           dim mix, bode by feed for a shifted wet path (shift x range = 100 Hz) and an unshifted one
 
 import argparse
+import importlib.util
 import json
 import subprocess
 import sys
+from multiprocessing import Pool
+from pathlib import Path
+
+_spec = importlib.util.spec_from_file_location("regress", Path(__file__).resolve().parent / "tier-makeup-regress.py")
+regress = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(regress)
 
 REVERB_T = [100, 200, 400, 800, 1600, 3200, 6400, 12800]
 REVERB_SIZE = [0, 25, 50, 75, 100]
@@ -40,6 +46,10 @@ def run(binary, jobs):
     return out
 
 
+def fit_one(binary, module, settings):
+    return regress.fit_cell(binary, module, settings)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", required=True)
@@ -57,26 +67,45 @@ def main():
             rev[f"{t}_{room}"] = [vals[i * len(REVERB_SIZE):(i + 1) * len(REVERB_SIZE)] for i in range(len(REVERB_T))]
     tab["reverb"] = rev
 
-    jobs = [f"flanger stereo flanger.mix=100 flanger.feedback={fb} flanger.center={c}" for fb in FLANGER_FB for c in FLANGER_CENTRE]
-    v = run(a.bin, jobs)
-    tab["flanger"] = [v[i * len(FLANGER_CENTRE):(i + 1) * len(FLANGER_CENTRE)] for i in range(len(FLANGER_FB))]
-
-    # hyper: the module's whole power (hyper mix is a linear crossfade and Dimension adds to it, so the table is the power of the module, not of the wet path)
-    jobs = [f"hyperdim stereo hyperdim.unison={u} hyperdim.mix={m} hyperdim.dim_mix={d}" for u in HYPER_UNISON for m in HYPER_MIX for d in HYPER_DIM]
-    v = run(a.bin, jobs)
+    # flanger, hyper and bode: the gains per band of the program meter, by non negative regression on 27 programs (scripts/tier-makeup-regress.py fit_cell), at mix 100 for the equal power
+    # effects (flanger: the wet path alone; Bode: the wet path alone, shifted or not) and for the whole module of Hyper (its mix is linear and Dimension adds, so the cells run over mix and dim mix)
+    cells = []
+    for fb in FLANGER_FB:
+        for c in FLANGER_CENTRE:
+            cells.append(("flanger", f"flanger.mix=100 flanger.feedback={fb} flanger.center={c}"))
+    for u in HYPER_UNISON:
+        for m in HYPER_MIX:
+            for d in HYPER_DIM:
+                cells.append(("hyperdim", f"hyperdim.unison={u} hyperdim.mix={m} hyperdim.dim_mix={d}"))
+    for f in BODE_FEED:
+        cells.append(("bode", f"bode.mix=100 bode.shift=25 bode.range=400 bode.feed={f}"))
+    for f in BODE_FEED:
+        cells.append(("bode", f"bode.mix=100 bode.shift=0 bode.feed={f}"))
+    with Pool(2) as pool:
+        fits = pool.starmap(fit_one, [(a.bin, mod, st) for mod, st in cells])
+    worst = max(f[2] for f in fits)
+    sys.stderr.write(f"band fits: {len(fits)} cells, worst max error {worst:.2f} dB, mean rms {sum(f[1] for f in fits) / len(fits):.2f} dB\n")
     k = 0
+    fl = []
+    for fb in FLANGER_FB:
+        row = []
+        for c in FLANGER_CENTRE:
+            row.append(fits[k][0].tolist()); k += 1
+        fl.append(row)
     hy = []
     for u in HYPER_UNISON:
         row = []
         for m in HYPER_MIX:
-            row.append(v[k:k + len(HYPER_DIM)])
-            k += len(HYPER_DIM)
+            r2 = []
+            for d in HYPER_DIM:
+                r2.append(fits[k][0].tolist()); k += 1
+            row.append(r2)
         hy.append(row)
-    tab["hyper"] = hy
-
-    jobs = [f"bode stereo bode.mix=100 bode.shift=25 bode.range=400 bode.feed={f}" for f in BODE_FEED] + [f"bode stereo bode.mix=100 bode.shift=0 bode.feed={f}" for f in BODE_FEED]
-    v = run(a.bin, jobs)
-    tab["bode"] = [v[:len(BODE_FEED)], v[len(BODE_FEED):]]
+    bo = [[], []]
+    for t in (0, 1):
+        for f in BODE_FEED:
+            bo[t].append(fits[k][0].tolist()); k += 1
+    tab["flanger"], tab["hyper"], tab["bode"] = fl, hy, bo
 
     if a.json:
         json.dump(tab, open(a.json, "w"), indent=1)
@@ -104,17 +133,17 @@ def main():
     h.append(f"constexpr int kFlangerFb = {len(FLANGER_FB)}, kFlangerCentre = {len(FLANGER_CENTRE)};")
     h.append("constexpr float kFlangerFbPct[kFlangerFb] = " + arr(FLANGER_FB, "{:.0f}.0f") + ";")
     h.append("constexpr float kFlangerCentreHz[kFlangerCentre] = " + arr(FLANGER_CENTRE, "{:.0f}.0f") + ";")
-    h.append("// the wet power in dB of the flanger at mix 100 [feedback][centre]")
-    h.append("constexpr float kFlangerDb[kFlangerFb][kFlangerCentre] = " + arr(tab["flanger"]) + ";")
+    h.append("// the wet power of the flanger at mix 100 in dB per meter band, mono five then wide five [feedback][centre][10]")
+    h.append("constexpr float kFlangerBands[kFlangerFb][kFlangerCentre][10] = " + arr(tab["flanger"]) + ";")
     h.append(f"constexpr int kHyperUnison = {len(HYPER_UNISON)}, kHyperMix = {len(HYPER_MIX)}, kHyperDim = {len(HYPER_DIM)};")
     h.append("constexpr float kHyperMixPct[kHyperMix] = " + arr(HYPER_MIX, "{:.0f}.0f") + ";")
     h.append("constexpr float kHyperDimPct[kHyperDim] = " + arr(HYPER_DIM, "{:.0f}.0f") + ";")
-    h.append("// the power of the whole module in dB [unison choice][hyper mix][dim mix]")
-    h.append("constexpr float kHyperDb[kHyperUnison][kHyperMix][kHyperDim] = " + arr(hy) + ";")
+    h.append("// the power of the whole module in dB per meter band [unison choice][hyper mix][dim mix][10]")
+    h.append("constexpr float kHyperBands[kHyperUnison][kHyperMix][kHyperDim][10] = " + arr(tab["hyper"]) + ";")
     h.append(f"constexpr int kBodeFeed = {len(BODE_FEED)};")
     h.append("constexpr float kBodeFeedPct[kBodeFeed] = " + arr(BODE_FEED, "{:.0f}.0f") + ";")
-    h.append("// the wet power in dB of Bode at mix 100 [shifted, unshifted][feed]")
-    h.append("constexpr float kBodeDb[2][kBodeFeed] = " + arr(tab["bode"]) + ";")
+    h.append("// the wet power of Bode at mix 100 in dB per meter band [shifted, unshifted][feed][10]")
+    h.append("constexpr float kBodeBands[2][kBodeFeed][10] = " + arr(tab["bode"]) + ";")
     h.append("}}}} // namespace synthyboy::own::makeup::tables")
     open(a.out, "w").write("\n".join(h) + "\n")
 

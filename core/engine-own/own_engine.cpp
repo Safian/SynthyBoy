@@ -310,6 +310,63 @@ void OwnEngine::setQuality (const Quality& q) noexcept
     fxMakeup.store (q.fxMakeup, std::memory_order_relaxed);
 }
 
+/** The gain of the bypassed effects of bus `b` for this block (`prev` -> `now`, 1 when the bus rack bypasses nothing that has a model). With nothing shared between Main and the bus it is the product
+    of the gains of the effects, as inside any rack. A bus whose input is a copy of what Main carries (a source with a send to the bus and its own way to Main) adds up with Main in amplitude when
+    its effects are bypassed, but not (or less) when they are active: the gain G then solves  Pm + G^2 Pb + 2 G C = Pm + Pb Pmod + 2 A C  for the powers of Main (Pm), the bus input (Pb), their
+    cross term (C, all measured before the racks, smoothed over 100 ms) and the power gain Pmod and coherent amplitude A of the bypassed effects. */
+void OwnEngine::makeupOfBus (int b, int n, float& prev, float& now) noexcept
+{
+    float pw, co, amp;
+    prev = now = 1.0f;
+    if (!fx[b].busMakeup (pw, co, amp))
+    {
+        busMkSeen[b] = false;
+        busMkPrev[b] = busMkNow[b] = 1.0f;
+        return;
+    }
+    double sm = 0.0, sb = 0.0, sc = 0.0;
+    for (int i = 0; i < n; ++i)
+    {
+        sm += static_cast<double> (mixL[0][i]) * mixL[0][i] + static_cast<double> (mixR[0][i]) * mixR[0][i];
+        sb += static_cast<double> (mixL[b][i]) * mixL[b][i] + static_cast<double> (mixR[b][i]) * mixR[b][i];
+        sc += static_cast<double> (mixL[0][i]) * mixL[b][i] + static_cast<double> (mixR[0][i]) * mixR[b][i];
+    }
+    double* st = busStat[b];
+    if (sm + sb > 1.0e-12 * static_cast<double> (n))
+    {
+        const double k = busMkSeen[b] ? 1.0 - std::exp (-static_cast<double> (n) / (0.1 * sampleRate)) : 1.0;
+        st[0] += (sm / n - st[0]) * k;
+        st[1] += (sb / n - st[1]) * k;
+        st[2] += (sc / n - st[2]) * k;
+    }
+    float target = amp;
+    const double pm = st[0], pb = st[1], c = st[2];
+    if (fxMakeup.load (std::memory_order_relaxed) && pb > 1.0e-12 && pm > 1.0e-12)
+    {
+        const double disc = c * c + pb * (pb * pw + 2.0 * co * c);
+        if (disc > 0.0)
+        {
+            const double g = (-c + std::sqrt (disc)) / pb;
+            if (g > 0.0)
+                target = static_cast<float> (g);
+        }
+    }
+    target = std::clamp (target, 0.03f, 16.0f);
+    if (!busMkSeen[b])
+    {
+        busMkPrev[b] = 1.0f;
+        busMkNow[b] = target;
+        busMkSeen[b] = true;
+    }
+    else
+    {
+        busMkPrev[b] = busMkNow[b];
+        busMkNow[b] += (target - busMkNow[b]) * (1.0f - std::exp (-static_cast<float> (n) / (0.02f * static_cast<float> (sampleRate))));
+    }
+    prev = busMkPrev[b];
+    now = busMkNow[b];
+}
+
 void OwnEngine::setTransport (const TransportInfo& t) noexcept
 {
     tpBpm.store (t.bpm > 0.0 ? t.bpm : 120.0, std::memory_order_relaxed);
@@ -381,6 +438,7 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
     {
         fx[i].setRack (i);
         fx[i].setPool (&fxPool);
+        fx[i].setBusDeferred (i != 0);
         fx[i].prepare (sampleRate, maxBlockFrames);
     }
     prepareFxMs.store (std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - tFx0).count(), std::memory_order_relaxed);
@@ -1486,14 +1544,21 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         dlBusIn[1].process (mixL[2], mixR[2], n);
         auto runBus = [&] (int b) // b = 1, 2
         {
+            // the makeup of the bypassed effects of this bus (Quality::fxMakeup): the gain that makes what the bus adds to Main as loud as the active effects would have, given how much
+            // of the bus input is a copy of what Main carries (a send of a source that also plays in Main): see makeupOfBus
+            float mkGain = 1.0f, mkPrev = 1.0f;
             if (!busBypass[b - 1])
+            {
+                makeupOfBus (b, n, mkPrev, mkGain);
                 fx[b].process (mixL[b], mixR[b], n, controlPos);
+            }
             float outL[kControlPeriod], outR[kControlPeriod];
             for (int i = 0; i < n; ++i)
             {
                 const float g = lerp (busGainPrev[b], busGain[b], static_cast<float> (controlPos + i + 1) * (1.0f / static_cast<float> (kControlPeriod)));
-                outL[i] = mixL[b][i] * g;
-                outR[i] = mixR[b][i] * g;
+                const float mk = mkGain == 1.0f && mkPrev == 1.0f ? 1.0f : lerp (mkPrev, mkGain, static_cast<float> (i + 1) / static_cast<float> (n));
+                outL[i] = mixL[b][i] * g * mk;
+                outR[i] = mixR[b][i] * g * mk;
             }
             dlBusOut[b - 1].process (outL, outR, n);
             const int dest = busDest[b - 1] == 2 && b == 2 && busDest[0] == 2 ? 0 : busDest[b - 1]; // both choose Other bus: bus 2 acts as Main (no feedback)

@@ -216,10 +216,15 @@ private:
     // shown level (the peak with a slow release); stripSq collects the power sums of the voices' sources of one control period (MixOut::srcSq)
     float stripSq[7] = {}, stripBlockPeak[LiveValues::kMaxStrips] = {}, stripShown[LiveValues::kMaxStrips] = {};
     int lastBlockFrames = 0;   // the frames of the block that writeReadout publishes
+    // the makeup of the bypassed effects of a bus (docs/release/TIER-LEVEL-COMPENSATION.md section 9): the powers of Main, of the bus input and their cross term, smoothed over 100 ms, and the gain
+    double busStat[3][3] = {};
+    float busMkNow[3] = { 1.0f, 1.0f, 1.0f }, busMkPrev[3] = { 1.0f, 1.0f, 1.0f };
+    bool busMkSeen[3] = {};
     float busGain[3] = { 1.0f, 1.0f, 1.0f }, busGainPrev[3] = { 1.0f, 1.0f, 1.0f }, directGain = 1.0f, directGainPrev = 1.0f;
     int busDest[2] = {}, mainBypass = 0, busBypass[2] = {};
     std::atomic<uint32_t> fxMask { kFxAll };
     std::atomic<bool> fxMakeup { true };
+    void makeupOfBus (int b, int n, float& prev, float& now) noexcept;
     MorphCache morphCache;
     TickGlobals globals;
     NoteTuning noteTuning;
