@@ -21,11 +21,13 @@ class LoadBar : public Component {
 public:
     LoadBarData state;
 
-    void draw(gpu::SceneBuilder& sb) const override {
+    Size minSize() const override { return {40, 12}; }
+
+protected:
+    void drawBody(Pen& p) const override {
         if (!state.active) return;
 
         const theme::Look& T = theme::L();
-        Pen p(sb, enabled_, inactive_);
         
         // Amber color from page_view.h
         uint32_t amber = 0xFFB000;
