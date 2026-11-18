@@ -244,7 +244,7 @@ A kép 16 potméteres eszközhöz van renderelve: a kis számok a Q-Link potmét
 | SAMPLE | Osc N Type = Sample | |
 | GRAIN | Osc N Type = Granular | |
 | SPEC | Osc N Type = Spectral | |
-| Forrásléptető (WAVE) | Osc N Wavetable, 15 választás: Sine, Saw, Square, Triangle, Pulse 25%, Saw to Square, Sine to Saw, Harmonic Series, Odd Harmonics, Formant Sweep, FM Sweep, PWM Sweep, Bell Partials, Preset table, Saw Down | A névre vagy a listagombra koppintva megnyílik a lista; a külső negyedek léptetnek. |
+| Forrásléptető (WAVE) | Osc N Wavetable, 15 választás: Sine, Saw, Square, Triangle, Pulse 25%, Saw to Square, Sine to Saw, Harmonic Series, Odd Harmonics, Formant Sweep, FM Sweep, PWM Sweep, Bell Partials, Preset table, Saw Down | A névre vagy a listagombra koppintva megnyílik a **wavetable-böngésző**: kategóriák (Basic, Morph, a telepített csomagok kategóriái, a saját mappáid, User) és a táblák, az aktuális megjelölve. A külső negyedek (és a Q-gomb) a beépített táblákat léptetik; ha a tábla fájlból való, akkor a kategóriája előző / következő táblájára lépnek (a végén nem történik semmi). Saját táblákhoz másolj WAV fájlokat az SD-kártya, egy USB-meghajtó vagy a plugin Content mappájának `SynthyBoy/Wavetables/<Kategória>/` mappájába (lásd angolul: `factory-content.md`, "Adding your own wavetables"). A fájl mono WAV (16, 24, 32 bit vagy 32 bites float), legfeljebb 16 MB, 2048 mintás képkockák egymás után; hiányzó fájlnál a preset fűrészt játszik. |
 | Forrásléptető (egyéb típusok) | a betöltött fájl vagy hangszer | A névre vagy a listagombra koppintva megnyílik a **tartalomböngésző (content browser)** (lásd lentebb). |
 | PAN | -100 .. 100 százalék, alapértelmezett: 0 | Q 3 |
 | LEVEL | 0 .. 100 százalék, alapértelmezett: 50 | Q 4 |

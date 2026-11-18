@@ -264,7 +264,7 @@ The LFO panel with its group (SHAPE, RATE, RISE, SMOOTH: Q-Links 9 to 12 on the 
 | Route button (F1 / F2 / F12 / M / DIR / BAL / OFF) | Tap: opens the output popup (target, balance, BUS 1, BUS 2) of that oscillator. Sub has no route button here; its routing is on its own page (5.4). |
 | Display + full-screen button | One cycle of the oscillator; the button opens the full-screen oscillator page (chapter 5.3 / 5.4 / 5.5). |
 | Type keys WAVE / MULTI / SAMPLE / GRAIN / SPEC | The oscillator type (wavetable, multisample, sample, granular, spectral). Q 1. |
-| Source stepper and the list button | Wavetable name, or the loaded file. In the compact view the list button for wavetables is dim; the list opens from the full screen. Q 2. |
+| Source stepper and the list button | Wavetable name (the title of the file for a table from a file), or the loaded file. Both open the wavetable browser (or the content browser); from the compact view the full screen opens first. Q 2. |
 | PAN | -100 .. +100 percent (C, L n, R n). Q 3. |
 | LEVEL | 0 .. 100 percent. Q 4. |
 
@@ -328,7 +328,7 @@ chapter 4.3). On the Key 61 the same page shows 1 - 4 on the idle groups.
 | SAMPLE | Osc N Type = Sample | |
 | GRAIN | Osc N Type = Granular | |
 | SPEC | Osc N Type = Spectral | |
-| Source stepper (WAVE) | Osc N Wavetable, 15 choices: Sine, Saw, Square, Triangle, Pulse 25%, Saw to Square, Sine to Saw, Harmonic Series, Odd Harmonics, Formant Sweep, FM Sweep, PWM Sweep, Bell Partials, Preset table, Saw Down | A tap on the name or the list button opens the list; the outer quarters step. |
+| Source stepper (WAVE) | Osc N Wavetable, 15 choices: Sine, Saw, Square, Triangle, Pulse 25%, Saw to Square, Sine to Saw, Harmonic Series, Odd Harmonics, Formant Sweep, FM Sweep, PWM Sweep, Bell Partials, Preset table, Saw Down; or the title of a table from a file | A tap on the name or the list button opens the **wavetable browser**: categories (Basic, Morph, the categories of the installed packs, your own folders, User) and their tables, the current one marked. The outer quarters (and the Q knob) step the built-in tables, or, when the table is a file, the previous / next table of its category (nothing at the ends). To add your own tables copy WAV files to `SynthyBoy/Wavetables/<Category>/` on the SD card, a USB drive or the plugin's Content folder (see `factory-content.md`, "Adding your own wavetables"). |
 | Source stepper (other types) | the loaded file or instrument | A tap on the name or the list button opens the **content browser** (see below). |
 | PAN | -100 .. 100 percent, default 0 | Q 3 |
 | LEVEL | 0 .. 100 percent, default 50 | Q 4 |

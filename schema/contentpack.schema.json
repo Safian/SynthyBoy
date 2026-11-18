@@ -25,10 +25,10 @@
         "additionalProperties": false,
         "properties": {
           "path": { "type": "string", "minLength": 1 },
-          "category": { "type": "string", "minLength": 1, "description": "optional: the browser category of a wavetable (default: the sub folder name)" },
-          "title": { "type": "string", "minLength": 1, "description": "optional: the human name shown in the browser (default: the file stem)" },
           "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-          "size": { "type": "integer", "minimum": 0 }
+          "size": { "type": "integer", "minimum": 0 },
+          "category": { "type": "string", "minLength": 1, "maxLength": 63, "description": "The category the wavetable browser lists the file under. Default: the first folder of path (the pack name for a file in the root of the pack)." },
+          "title": { "type": "string", "minLength": 1, "maxLength": 63, "description": "The name the wavetable browser shows. Default: the file name without its extension." }
         }
       }
     }

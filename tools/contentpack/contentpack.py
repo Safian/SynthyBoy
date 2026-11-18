@@ -333,7 +333,7 @@ def make_manifest(directory, args):
         meta = {k: v for k, v in old.items() if k != "files"}
         for e in old.get("files", []) if isinstance(old, dict) else []:
             if isinstance(e, dict) and isinstance(e.get("path"), str):
-                labels[e["path"]] = {k: e[k] for k in ("category", "title") if k in e}
+                labels[e["path"]] = {k: e[k] for k in ("category", "title") if isinstance(e.get(k), str)}
     meta.setdefault("schemaVersion", 1)
     for arg, key in (("id", "id"), ("name", "name"), ("version", "version"), ("kind", "kind"), ("license", "license"),
                      ("attribution", "attribution"), ("requires_plugin", "requires_plugin"), ("description", "description")):

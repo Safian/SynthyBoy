@@ -18,6 +18,8 @@ add_library(synthyboy_core STATIC
     src/content_pack.cpp
     src/content_store.cpp
     src/user_content.cpp
+    src/wavetable_file.cpp
+    src/wavetable_catalogue.cpp
     src/user_library.cpp
     src/library_items.cpp
     src/kick_pages.cpp

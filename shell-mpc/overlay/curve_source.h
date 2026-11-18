@@ -32,6 +32,7 @@
 #include "synthyboy/params.h"
 #include "synthyboy/readout.h"
 #include "synthyboy/state.h"
+#include "synthyboy/wavetable_catalogue.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -83,6 +84,16 @@ public:
     virtual void requestContent (int /*osc*/, int /*kind*/, const std::string& /*path*/) {}
     /** The state of the last load: 0 none yet, 1 loading, 2 done, 3 failed (`message` gets the reason when it is not null). */
     virtual int contentLoad (std::string* /*message*/) const { return 0; }
+    /** The wavetable browser (overlay/wavetable_browser.h): where the catalogue looks for tables, the installed packs and the roots that may hold SynthyBoy/Wavetables (wavetable_catalogue.h). Called from the overlay thread when the
+        browser opens. Empty (the default): the browser lists the built-in tables only. */
+    virtual void wavetableSources (synthyboy::CatalogueSources& out) const { out = synthyboy::CatalogueSources {}; }
+    /** Asks the instance to load the wavetable FILE `ref` (pack, file; the SHA-256 is computed by the instance) as the table of oscillator `osc` (1 .. 3): the display thread reads and checks the file, puts the reference into the content,
+        gives it to the engine and then sets oscN.wavetable to "Preset table"; the old table plays until the new one is built. The latest request wins. The result is `contentLoad` (3 = refused, with "not a wavetable file: <reason>") and
+        content () of a later moment. Called from the overlay thread; it only stores the request. */
+    virtual void requestWavetable (int /*osc*/, const synthyboy::ContentFileRef& /*ref*/) {}
+    /** The steps the Q knob of oscillator `osc` made while its table is a file (-1 / +1 summed since the last call; the Q knob of the stepper does not move the parameter then): the overlay loads the previous / next file of the
+        category for them. Lock free, 0 when there are none. */
+    virtual int takeWavetableSteps(int /*osc*/) noexcept { return 0; }
     /** The plugin-drawn LFO page writes the DRAWN shape of LFO `lfo` (1 .. 10) into the content of the state (a shape with 2 .. 128 points, the loop point, the smooth flag): a request, applied by the plugin's display
         thread (the engine gets the new content, the chunk keeps it, content () shows it a moment later); a newer request for the same LFO replaces an older one that was not applied yet. Called from the overlay
         thread; it only stores the request. */

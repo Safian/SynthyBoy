@@ -29,6 +29,8 @@
 #include "synthyboy/quality.h"
 #include "synthyboy/state.h"
 #include "synthyboy/user_content.h"
+#include "synthyboy/wavetable_catalogue.h"
+#include "synthyboy/wavetable_file.h"
 
 #include "mpc_vst2_abi.h"
 #include "device_profile.h"
@@ -431,7 +433,7 @@ struct PluginInstance
             return inst.engine && inst.engine->copyReadout (out) && out.block != 0; // block 0: the engine wrote no values yet
         }
         double bpm() const noexcept override { return inst.overlayBpm.load (std::memory_order_relaxed); }
-        bool tablesLoading() const noexcept override { return inst.engine && inst.engine->contentPending(); }
+        bool tablesLoading() const noexcept override { return (inst.engine && inst.engine->contentPending()) || inst.wtLoading.load (std::memory_order_relaxed); }   // a built-in table in the making, or a wavetable file the display thread is loading
         int playSelection (int group) const noexcept override { return group >= 0 && group < synthyboy_mpc::play::kGroups ? inst.playSel[group].load (std::memory_order_relaxed) : 1; }
         void setQGroup (const int* targets, int n) noexcept override { inst.qRouter.setGroup (targets, n, static_cast<int> (synthyboy::paramCount())); }
         void writeParam (int tableIndex, float normalised) noexcept override { inst.uiWrite (tableIndex, normalised); }
@@ -447,6 +449,9 @@ struct PluginInstance
         void contentRoots (std::vector<ContentRoot>& out) const override { inst.contentRootsOf (out); }
         void requestContent (int osc, int kind, const std::string& path) override { inst.requestContentLoad (osc, kind, path); }
         int contentLoad (std::string* message) const override { return inst.contentLoadState (message); }
+        void wavetableSources (synthyboy::CatalogueSources& out) const override { inst.wavetableSourcesOf (out); }
+        void requestWavetable (int osc, const synthyboy::ContentFileRef& ref) override { inst.requestWavetableLoad (osc, ref); }
+        int takeWavetableSteps (int osc) noexcept override { return osc >= 1 && osc <= 3 ? inst.wtStepMail[osc - 1].exchange (0, std::memory_order_relaxed) : 0; }
         void setLfoShape (int lfo, const synthyboy::ContentLfoShape& shape) override { inst.requestLfoShape (lfo, shape); }
         void setMacroName (int macro, const std::string& name) override { inst.macroNameQueue.post (macro, name); }
         bool outputLimiter (bool& on) const noexcept override
@@ -504,7 +509,17 @@ struct PluginInstance
     std::atomic<double> overlayRate { 44100.0 };   // sampleRate for the overlay thread (sampleRate itself is the host thread's)
     std::atomic<double> overlayBpm { 120.0 };      // the host's tempo for the overlay thread (the synced LFO rates)
     std::shared_ptr<const synthyboy::StateContent> overlayContent;   // a copy of `content` for the overlay thread (std::atomic_load / atomic_store): custom LFO shapes, user wavetables
-    void publishOverlayContent() { std::atomic_store (&overlayContent, std::make_shared<const synthyboy::StateContent> (content)); }
+    void publishOverlayContent()
+    {
+        std::atomic_store (&overlayContent, std::make_shared<const synthyboy::StateContent> (content));
+        for (int o = 0; o < 3; ++o)   // the Q knob of a table stepper reads these (qWrite): a file table is loaded for the oscillator
+        {
+            bool has = false;
+            for (const synthyboy::ContentWavetable& w : content.wavetables)
+                has = has || w.osc == o + 1;
+            wtFileLoaded[o].store (has, std::memory_order_relaxed);
+        }
+    }
 
     // ---- the content the plugin-drawn pages load (the sample / instrument browser of the oscillator UI, overlay/content_browser.h): the overlay thread posts a request, the display thread loads it (reads the
     // file, decodes the header, puts it into the content store, sets the engine's content). `contentMutex` serialises every change of `content` (the host thread's setChunk, this load) and the chunk's copy of it.
@@ -516,6 +531,36 @@ struct PluginInstance
     std::atomic<int> contentLoadStatus { 0 };                 // 0 none, 1 loading, 2 done, 3 failed
     std::atomic<long long> contentLoadFailedMs { 0 };         // when the last load failed (the failure is shown for a few seconds)
     std::set<std::string> contentPackRoots;                    // the directories added as pack roots (once each)
+
+    // ---- the wavetable browser (overlay/wavetable_browser.h, docs/MPC.md "Wavetable browser"): the overlay thread posts the wavetable FILE to load (the latest request wins), the display thread reads, checks and hashes it (off the audio
+    // thread), puts the reference into the content, gives the content to the engine (the new table is built there; the old one plays until it is swapped in) and only then sets oscN.wavetable to "Preset table".
+    bool wtReqPending = false;                                 // under contentReqMutex
+    int wtReqOsc = 0;
+    synthyboy::ContentFileRef wtReqRef;
+    std::atomic<bool> wtLoading { false };                     // a wavetable file is waiting to be loaded or is being loaded: the amber bar of the pages
+    std::atomic<int> wtStepMail[3] {};                         // the Q knob of an oscillator whose table is a file: steps (-1 / +1, summed) the overlay turns into "the previous / next file of the category"
+    std::atomic<bool> wtFileLoaded[3] {};                      // the content has a wavetable file for oscillator 1 .. 3 (set by publishOverlayContent)
+    static int keyIndex (const char* key) noexcept { const synthyboy::ParamInfo* p = synthyboy::findParamByKey (key); return p != nullptr ? static_cast<int> (p - synthyboy::paramTable()) : -1; }
+    int wtParam[3] = { keyIndex ("osc1.wavetable"), keyIndex ("osc2.wavetable"), keyIndex ("osc3.wavetable") };
+    /** The Q knob's write of a table index. A stepped Q knob on oscN.wavetable while the oscillator plays a FILE table (the parameter is "Preset table" and the content has the file) does not move the parameter
+        to the neighbouring built-in table: it leaves one step for the overlay, which loads the previous / next file of the category (wavetable_catalogue.h). Atomics only (the host's thread or the audio thread). */
+    void qWrite (int t, float normalised) noexcept
+    {
+        for (int o = 0; o < 3; ++o)
+            if (t == wtParam[o] && t >= 0 && wtFileLoaded[o].load (std::memory_order_relaxed))
+            {
+                const synthyboy::ParamInfo& info = synthyboy::paramTable()[t];
+                const float plain = synthyboy::constrainValue (info, synthyboy::fromNormalised (info, normalised));
+                const float old = paramMirror[t].load (std::memory_order_relaxed);
+                if (static_cast<int> (std::lround (old)) == synthyboy::kWavetablePresetTable)
+                {
+                    if (plain != old)
+                        wtStepMail[o].fetch_add (plain > old ? 1 : -1, std::memory_order_relaxed);
+                    return;
+                }
+            }
+        writeRealParam (this, static_cast<size_t> (t), normalised);
+    }
 
     /** The places the browser starts from: the SD card of the MPC, the plugin's own content folder, every USB drive that is mounted under /media (the internal partitions are not offered). Only those that exist. */
     void contentRootsOf (std::vector<synthyboy_mpc::overlay::IInstanceView::ContentRoot>& out) const
@@ -550,6 +595,49 @@ struct PluginInstance
         contentReqKind = kind;
         contentReqPath = path;
         contentLoadStatus.store (1, std::memory_order_relaxed);
+    }
+    /** Where the wavetable catalogue looks: the installed packs (Content/packs) and the roots that may hold SynthyBoy/Wavetables (the SD card, the USB drives, the plugin's Content folder). */
+    void wavetableSourcesOf (synthyboy::CatalogueSources& out) const
+    {
+        out = synthyboy::CatalogueSources {};
+        if (! contentDirPath.empty())
+            out.packDirs.push_back (contentDirPath + "/packs");
+        std::vector<synthyboy_mpc::overlay::IInstanceView::ContentRoot> roots;
+        contentRootsOf (roots);
+        for (const auto& r : roots)
+            out.userRoots.push_back (r.path);
+    }
+    void requestWavetableLoad (int osc, const synthyboy::ContentFileRef& ref)
+    {
+        std::lock_guard<std::mutex> g (contentReqMutex);
+        wtReqPending = true;
+        wtReqOsc = osc;
+        wtReqRef = ref;
+        wtLoading.store (true, std::memory_order_relaxed);
+        contentLoadStatus.store (1, std::memory_order_relaxed);
+    }
+    /** The drives (and the SD card) are pack roots of the content store for the files of SynthyBoy/Wavetables: a reference "SynthyBoy/Wavetables" + "Bass/x.wav" is read from whichever root has it. Added once each, under
+        contentMutex (the store is read under it). The plugin's own Content folder is the store's first root already. */
+    void ensureUserWavetableRoots()
+    {
+        if (! contentStore)
+            return;
+        std::vector<synthyboy_mpc::overlay::IInstanceView::ContentRoot> roots;
+        contentRootsOf (roots);
+        std::lock_guard<std::mutex> g (contentMutex);
+        for (const auto& r : roots)
+            if (r.path != contentDirPath && contentPackRoots.insert (r.path).second)
+                contentStore->addPackRoot (r.path);
+    }
+    /** State loading: a content section that names a file of the user folders needs the roots before the engine reads it. Not under contentMutex. */
+    void ensureUserWavetableRootsFor (const synthyboy::StateContent& c)
+    {
+        for (const synthyboy::ContentWavetable& w : c.wavetables)
+            if (w.ref.pack == synthyboy::kUserWavetablePack)
+            {
+                ensureUserWavetableRoots();
+                return;
+            }
     }
     int contentLoadState (std::string* message) const
     {
@@ -671,24 +759,73 @@ struct PluginInstance
     {
         int osc = 0, kind = 0;
         std::string path;
+        synthyboy::ContentFileRef wtRef;
+        bool wavetable = false;
         {
             std::lock_guard<std::mutex> g (contentReqMutex);
-            if (! contentReqPending)
+            if (wtReqPending)
+            {
+                wtReqPending = false;
+                wavetable = true;
+                osc = wtReqOsc;
+                wtRef = wtReqRef;
+            }
+            else if (! contentReqPending)
                 return;
-            contentReqPending = false;
-            osc = contentReqOsc;
-            kind = contentReqKind;
-            path = contentReqPath;
+            else
+            {
+                contentReqPending = false;
+                osc = contentReqOsc;
+                kind = contentReqKind;
+                path = contentReqPath;
+            }
         }
         std::string why;
         bool ok = false;
-        try { ok = loadContentFile (osc, kind, path, why); }
-        catch (...) { why = "unexpected error"; }
+        try { ok = wavetable ? loadWavetableFile (osc, wtRef, why) : loadContentFile (osc, kind, path, why); }
+        catch (...) { why = wavetable ? "not a wavetable file: unexpected error" : "unexpected error"; }
         std::lock_guard<std::mutex> g (contentReqMutex);
         contentLoadMessage = why;
         contentLoadFailedMs.store (steadyMs(), std::memory_order_relaxed);
-        if (! contentReqPending || ! ok)   // a newer request is already waiting: its own state (loading) stays
+        if (! wtReqPending)
+            wtLoading.store (false, std::memory_order_relaxed);
+        if ((! contentReqPending && ! wtReqPending) || ! ok)   // a newer request is already waiting: its own state (loading) stays
             contentLoadStatus.store (ok ? 2 : 3, std::memory_order_relaxed);
+    }
+    /** A wavetable file the browser chose (the pack's file, or a file of a user folder): read bounded, parsed by the rules of wavetable_file.h, its SHA-256 computed now, the reference put into the content of the oscillator,
+        the engine given the content (the table is built there while the oscillator keeps playing the one it had), and only then oscN.wavetable = "Preset table". A refused file leaves everything as it was and says why. */
+    bool loadWavetableFile (int osc, synthyboy::ContentFileRef ref, std::string& why)
+    {
+        if (osc < 1 || osc > synthyboy::kMaxContentWavetables || ! contentStore || ! engine)
+        {
+            why = "no content store";
+            return false;
+        }
+        ensureUserWavetableRoots();   // takes contentMutex itself: before the lock below
+        std::lock_guard<std::mutex> g (contentMutex);   // the store's roots change under this mutex: the file is read (bounded, parsed, hashed) under it too
+        int frames = 0;
+        std::string reason;
+        if (! synthyboy::prepareWavetableRef (*contentStore, ref, frames, reason))
+        {
+            why = synthyboy::wavetableRefusalText (reason);
+            return false;
+        }
+        synthyboy::StateContent next = content;
+        synthyboy::attachWavetable (next, osc, ref, std::string(), frames);
+        if (! synthyboy::validateContent (next))
+        {
+            why = synthyboy::wavetableRefusalText ("the name cannot be kept in the state");
+            return false;
+        }
+        content = std::move (next);
+        engine->setContent (content);
+        publishOverlayContent();
+        if (wtParam[osc - 1] >= 0)
+        {
+            const synthyboy::ParamInfo& p = synthyboy::paramTable()[wtParam[osc - 1]];
+            uiWrite (wtParam[osc - 1], synthyboy::toNormalised (p, synthyboy::constrainValue (p, static_cast<float> (synthyboy::kWavetablePresetTable))));
+        }
+        return true;
     }
     /** A content file read whole (a sample, an SFZ): a regular file of 1 .. `limit` bytes, read in blocks that stop when the instance is closing (effClose does not wait for a 200 MB sample on a slow stick). */
     bool readWholeFile (const std::string& path, std::vector<uint8_t>& bytes, size_t limit) const
@@ -1716,6 +1853,7 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
             inst->engine->setParam(table[i].id, values.plain[i]);
     }
 #if SYNTHYBOY_MPC_OVERLAY
+    inst->ensureUserWavetableRootsFor (content);   // a file of the user wavetable folders: the drives are pack roots before the engine reads the reference (the lock below is not held yet)
     std::lock_guard<std::mutex> contentGuard (inst->contentMutex);
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
@@ -2693,7 +2831,7 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
         {
             const int q = index - PluginInstance::qBase();
             const synthyboy_mpc::QRouter::Write w = inst->qRouter.hostWrite (q, parameter, restoring, [inst] (int t) noexcept { return inst->qReadNorm (t); },
-                                                                              [inst] (int t, float v) { writeRealParam (inst, static_cast<size_t> (t), v); },
+                                                                              [inst] (int t, float v) { inst->qWrite (t, v); },
                                                                               [] (int t) noexcept { return stepCountOf (synthyboy::paramTable()[t]); });
             if (logging)
             {

@@ -47,3 +47,4 @@ c = osc.turnQ (2, +0.01);                     // hardware knob 3 of the active g
 - The display picture is not part of the component: the owner draws it into `displayRect()`.
 - After `setInstance` the ids and states of the swapped parts are the owner's again.
 - The wavetable bar preset list in docs/MPC.md is older than `barpresets::kWavetableItems`.
+- The table selector of a wavetable oscillator is `OscUi::T::Table` (a `Stepper` with `listable` and `contentName`; its dropdown is enabled on the full screen and on the compact view): the name opens the wavetable browser (`docs/MPC.md` "The wavetable browser"). With a table FILE the stepper has three places (first, middle, last file of the category: the arrows dim at the ends) or one (a category of one file); the owner writes nothing for it but the request of the neighbouring file. No new component: the browser is the `ListPopup` with a header.

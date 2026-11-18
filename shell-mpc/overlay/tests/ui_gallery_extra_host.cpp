@@ -156,6 +156,9 @@ public:
     std::shared_ptr<const synthyboy::StateContent> content() const override { return content_; }
 
     void setContent (std::shared_ptr<const synthyboy::StateContent> c) { content_ = std::move (c); }
+    /** The wavetable browser's catalogue sources (wavetable_catalogue.h): empty = the built-in tables only. */
+    void wavetableSources (synthyboy::CatalogueSources& out) const override { out = wtSources; }
+    synthyboy::CatalogueSources wtSources;
 
     void setLfoShape (int lfo, const synthyboy::ContentLfoShape& shape) override
     {
@@ -477,6 +480,33 @@ void setupEffectNonDefault (GalleryInst& inst, int type)
     }
 }
 
+/** A small wavetable library for the browser states: a pack with two categories and the player's folder with a category and a loose file (the files are placeholders: the browser lists names and sizes only). */
+void makeWavetableGalleryLibrary (synthyboy::CatalogueSources& src)
+{
+    const fs::path root = fs::temp_directory_path() / "synthyboy_gallery_wavetables";
+    std::error_code ec;
+    fs::remove_all (root, ec);
+    const std::string pack = "com.gallery.wavetables";
+    fs::create_directories (root / "packs" / pack / "Analog", ec);
+    fs::create_directories (root / "packs" / pack / "Vocal", ec);
+    const char* const files[][2] = { { "Analog/warm_saw_stack.wav", "Warm Saw Stack" }, { "Analog/thin_pulse_sweep.wav", "Thin Pulse Sweep" }, { "Analog/sync_lead.wav", "Sync Lead" },
+                                     { "Vocal/choir_ah.wav", "Choir Ah" }, { "Vocal/formant_sweep.wav", "Formant Sweep" } };
+    std::string list;
+    for (const auto& f : files)
+    {
+        std::ofstream (root / "packs" / pack / f[0]) << "placeholder";
+        list += std::string (list.empty() ? "" : ",") + "{\"path\":\"" + f[0] + "\",\"sha256\":\"" + std::string (64, 'b') + "\",\"size\":4096,\"title\":\"" + f[1] + "\"}";
+    }
+    std::ofstream (root / "packs" / pack / "contentpack.json") << "{\"schemaVersion\":1,\"id\":\"" << pack << "\",\"name\":\"Gallery Wavetables\",\"version\":\"1.0.0\",\"license\":\"CC0-1.0\",\"attribution\":\"t\","
+                                                                  "\"kind\":\"wavetables\",\"requires_plugin\":\">=0.1.0\",\"files\":[" << list << "]}";
+    fs::create_directories (root / "SynthyBoy" / "Wavetables" / "Bass", ec);
+    for (const char* n : { "sub_grind.wav", "reese_move.wav" })
+        std::ofstream (root / "SynthyBoy" / "Wavetables" / "Bass" / n) << "placeholder";
+    std::ofstream (root / "SynthyBoy" / "Wavetables" / "my_loose_table.wav") << "placeholder";
+    src.packDirs = { (root / "packs").string() };
+    src.userRoots = { root.string() };
+}
+
 void renderExtraStates (const std::string& outDir, const std::string& state, GalleryInst& baseInst)
 {
     std::printf ("Rendering extra states for: %s ...\n", state.c_str());
@@ -544,6 +574,46 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.refresh (2);
             r.tap (r.ui.ui().full().basic.source.dropdown);
             r.picture (outDir + "/" + state + "_osca_wavetable_list.png");
+        }
+
+        // 1.5b Wavetable browser with a pack and the player's folders: the categories, and a category with the file table that is loaded marked
+        {
+            synthyboy::CatalogueSources src;
+            makeWavetableGalleryLibrary (src);
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.inst.wtSources = src;
+            r.inst.set ("osc1.type", 0.0f);
+            r.refresh (2);
+            r.tap (r.ui.ui().full().basic.source.dropdown);
+            const ui::Rect h = r.ui.ui().list().headerRect();
+            r.tapAt (h.x + 20, h.y + h.h / 2);   // the way up: the categories
+            r.picture (outDir + "/" + state + "_osca_wavetable_categories.png");
+            const ui::Rect row = r.ui.ui().list().rowRect (2);
+            r.tapAt (row.x + 30, row.y + row.h / 2);   // the third category: the first of the pack's
+            r.picture (outDir + "/" + state + "_osca_wavetable_category.png");
+        }
+        {
+            synthyboy::CatalogueSources src;
+            makeWavetableGalleryLibrary (src);
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.inst.wtSources = src;
+            auto c = std::make_shared<synthyboy::StateContent>();
+            if (r.inst.content())
+                *c = *r.inst.content();
+            synthyboy::ContentWavetable w;
+            w.osc = 1;
+            w.ref.pack = "com.gallery.wavetables";
+            w.ref.file = "Analog/warm_saw_stack.wav";
+            w.ref.name = "Warm Saw Stack";
+            w.frames = 64;
+            c->wavetables.push_back (w);
+            r.inst.setContent (c);
+            r.inst.set ("osc1.type", 0.0f);
+            r.inst.set ("osc1.wavetable", static_cast<float> (synthyboy::kWavetablePresetTable));
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_osca_wavetable_file_selector.png");
+            r.tap (r.ui.ui().full().basic.source.dropdown);
+            r.picture (outDir + "/" + state + "_osca_wavetable_file_marked.png");
         }
 
         // 1.6 Warp type list popup
@@ -1274,6 +1344,10 @@ int main (int argc, char** argv)
             "test_init_osca_grain_empty.png",
             "test_init_osca_grain_loaded.png",
             "test_init_osca_wavetable_list.png",
+            "test_init_osca_wavetable_categories.png",
+            "test_init_osca_wavetable_category.png",
+            "test_init_osca_wavetable_file_selector.png",
+            "test_init_osca_wavetable_file_marked.png",
             "test_init_osca_warp_list.png",
             "test_init_osca_route.png",
             "test_init_osca_unison.png",

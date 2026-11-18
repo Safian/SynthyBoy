@@ -192,11 +192,24 @@ The **Convolve** effect slot incorporates zero-latency partition convolution. Al
 
 SynthyBoy provides a unified **Content Browser** accessible directly from the touchscreen UI (overlay build) on the **Osc A**, **Osc B**, and **Osc C** pages.
 
-### Loading Wavetables (Wavetable Oscillator)
-1. Select the oscillator tab (**Osc A**, **Osc B**, or **Osc C**) and set the type to **WAVE** (Type 0).
-2. Tap the **WAVETABLE** stepper or the dropdown button in the oscillator type bar.
-3. A full-screen list popup opens showing the built-in and the factory wavetables. Tap any wavetable name to load it instantly.
-4. The 2D/3D waveform display immediately renders the wavetable's single-cycle frames.
+### Loading Wavetables (Wavetable Oscillator): the wavetable browser
+1. Select the oscillator tab (**Osc A**, **Osc B**, or **Osc C**) and set the type to **WAVE**.
+2. Tap the name in the table selector (or its list button). It works on the Osc A / B / C pages and on the oscillator third of the Play page (which opens the full screen first).
+3. The wavetable browser opens as a list over the screen. It opens in the **category** of the table you are playing, with that table marked. The bar at the top is the category name with a back arrow: tap it to see all categories (**Basic**, **Morph**, the categories of the installed packs such as Analog or Vocal, the folders you made yourself, **User**), tap a category to see its tables.
+4. Tap a table to play it. A built-in table is selected at once. A table from a pack or from your own files is read from the card or the drive, and the amber bar at the top of the page shows while that happens; the old table keeps playing until the new one is ready. The selector then shows the name of the table.
+5. A table is made of **frames**; scan through them with **WT POS** (the frame position). Tables with one frame are single cycles.
+6. **Stepping**: with a built-in table the arrows of the selector (and the Q knob that is on it) step through the 15 built-in tables. With a table from a file the arrows and the knob step to the **previous / next table of the same category**, so you can audition a whole category with the knob. At the first and the last table of the category nothing happens (no wrap). To go back to the built-in tables, open the browser.
+7. A file that cannot be used (too large, empty, not a table) says why in its row ("not a wavetable file: ...") and the display shows the same for a few seconds; the sound does not change.
+
+### Adding your own wavetables
+Copy WAV files to the folder **`SynthyBoy/Wavetables/`** at the top level of the **SD card** (`/sdcard/SynthyBoy/Wavetables/`), of a **USB drive** (`<drive>/SynthyBoy/Wavetables/`), or inside the plugin's own **`Content`** folder (`Content/SynthyBoy/Wavetables/` next to the VST folder; the way to add files on a machine without a card). Create the folders if they are not there.
+
+- A file directly in `SynthyBoy/Wavetables/` is listed in the category **User**.
+- A folder inside it is a **category** named like the folder, and its WAV files are the tables of it (one folder level; files in deeper folders are not listed). The same folder name on the card and on a drive is one category.
+- There is no index to build and no restart: the browser lists what is there **each time it opens**.
+- A preset that uses one of your files remembers it by folder and name (and a checksum). On another device the same file under the same folder name makes it sound the same; without the file the oscillator plays a **saw** and the display says "content missing: <name>".
+- Which files work: WAV, **mono** (a stereo file uses its left channel), 16, 24 or 32 bit integer or 32 bit float, up to **16 MB**. The usual "wavetable WAV" is **N frames of 2048 samples one after the other** (up to 256 frames; more are cut off). A file with a `clm` chunk (the Serum style "<!>1024 ..." chunk) uses the frame size in the chunk (1024, 4096 and so on are resampled to 2048). A file of 16 to 4096 samples whose length is not a multiple of 2048 is one **single cycle** and is stretched to one frame. Anything else (a long recording, 8 bit, compressed WAV, FLAC, MP3) is not a table and is refused with a reason.
+- A **pack** (folder with a `contentpack.json` of kind `wavetables` in `Content/packs/<pack>/`) is listed too: the files are grouped by the `category` of the manifest entry or, without one, by the folder they are in; `title` gives the shown name.
 
 ### Loading Samples, Grains, and Spectra (Sample, Granular, Spectral Oscillators)
 1. Set the oscillator type to **SAMPLE** (Type 1), **GRAIN** (Type 2), or **SPEC** (Type 3).
