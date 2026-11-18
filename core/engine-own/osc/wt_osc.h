@@ -464,7 +464,7 @@ public:
                     if (cache == nullptr || !cache->fetch (key, b - 1))
                     {
                         SB_SECTION (sections::oscMorphBuild);
-                        buildMorphCycle (wt, framePos, true, tick.morphType, key.m, K, incMax, sampleRate, b, *morphScratch, tick.lowMorph);
+                        buildMorphCycle (wt, framePos, true, tick.morphType, key.m, K, incMax, sampleRate, b, *morphScratch, tick.lowMorph, tick.scalarWarp);
                         if (cache != nullptr)
                             cache->store (key, b - 1);
                     }
