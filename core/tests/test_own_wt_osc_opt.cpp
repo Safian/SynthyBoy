@@ -182,7 +182,7 @@ struct Run
     MorphCache cacheRef, cacheOpt;
     Rng rngRef, rngOpt;
     float cross[6][32];
-    int periods = 0, mismatches = 0, stateMismatches = 0, plain = 0, warped = 0, morphing = 0, nonZero = 0, fmOnly = 0;
+    int periods = 0, mismatches = 0, stateMismatches = 0, plain = 0, warped = 0, morphing = 0, nonZero = 0, fmOnly = 0, filtered = 0;
     Run()
     {
         ref.setReference (true);
@@ -198,7 +198,7 @@ float peak (const float* x, int n) { float m = 0.0f; for (int i = 0; i < n; ++i)
 
 TEST (own_wt_osc_optimised_equals_the_reference_on_random_patches)
 {
-    int totalPeriods = 0, totalMismatch = 0, totalState = 0, plain = 0, warped = 0, morphing = 0, loud = 0, fmOnly = 0;
+    int totalPeriods = 0, totalMismatch = 0, totalState = 0, plain = 0, warped = 0, morphing = 0, loud = 0, fmOnly = 0, filtered = 0;
     for (int seed = 1; seed <= 60; ++seed)
     {
         TestRng r (static_cast<uint64_t> (seed));
@@ -261,6 +261,8 @@ TEST (own_wt_osc_optimised_equals_the_reference_on_random_patches)
             const int w0 = tk.warp[0];
             if (tk.warp[1] == 0 && (w0 == kWarpFmA || w0 == kWarpFmB || w0 == kWarpFmTzA || w0 == kWarpFmTzB || w0 == kWarpFmLinA || w0 == kWarpFmLinB) && tk.level > 0.0f && tk.wt != nullptr)
                 ++run.fmOnly;
+            if ((w0 == kWarpFilterLpf || w0 == kWarpFilterHpf || tk.warp[1] == kWarpFilterLpf || tk.warp[1] == kWarpFilterHpf) && tk.level > 0.0f && tk.wt != nullptr)
+                ++run.filtered;
         }
         totalPeriods += run.periods;
         totalMismatch += run.mismatches;
@@ -270,11 +272,12 @@ TEST (own_wt_osc_optimised_equals_the_reference_on_random_patches)
         morphing += run.morphing;
         loud += run.nonZero;
         fmOnly += run.fmOnly;
+        filtered += run.filtered;
     }
-    std::printf ("wt_osc opt: %d periods (plain %d, warped %d, morph %d, of them FM only %d), %d loud chunks, %d output mismatches, %d state mismatches\n", totalPeriods, plain, warped, morphing,
-                 fmOnly, loud, totalMismatch, totalState);
+    std::printf ("wt_osc opt: %d periods (plain %d, warped %d, morph %d, of them FM only %d, filter warps %d), %d loud chunks, %d output mismatches, %d state mismatches\n", totalPeriods, plain, warped, morphing,
+                 fmOnly, filtered, loud, totalMismatch, totalState);
     CHECK_EQ (totalPeriods, 60 * 140);
-    CHECK (plain > 500 && warped > 500 && morphing > 500 && loud > 2000 && fmOnly > 150);
+    CHECK (plain > 500 && warped > 500 && morphing > 500 && loud > 2000 && fmOnly > 150 && filtered > 100);
     CHECK_EQ (totalMismatch, 0);
     CHECK_EQ (totalState, 0);
 }
@@ -356,7 +359,7 @@ TEST (own_wt_osc_timing_report)
 {
     struct Cfg { const char* name; int voices, morph, warp; bool modulate; };
     const Cfg cfgs[] = { { "3 lanes plain, frame/level/pan modulated", 3, 0, 0, true }, { "3 lanes plain, held", 3, 0, 0, false }, { "1 lane morph (Harmonic Stretch), modulated", 1, kMorphHarmonicStretch, 0, true },
-                         { "3 lanes morph (Shepard), modulated", 3, kMorphShepard, 0, true }, { "2 lanes Sync warp, modulated", 2, 0, kWarpSync, true }, { "1 lane FM A warp, modulated", 1, 0, kWarpFmA, true } };
+                         { "3 lanes morph (Shepard), modulated", 3, kMorphShepard, 0, true }, { "2 lanes Sync warp, modulated", 2, 0, kWarpSync, true }, { "1 lane FM A warp, modulated", 1, 0, kWarpFmA, true }, { "1 lane Filter LPF warp, modulated", 1, 0, kWarpFilterLpf, true } };
     for (const Cfg& c : cfgs)
     {
         // warm up, then the median of 5 runs

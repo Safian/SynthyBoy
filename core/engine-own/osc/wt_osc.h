@@ -675,11 +675,18 @@ public:
             const bool filt1 = tick.warp[1] == kWarpFilterLpf || tick.warp[1] == kWarpFilterHpf;
             float* fz = filterState[v];
             // the one pole filters of the Filter LPF / HPF warps: two cascaded poles at ratio * f0
-            auto filterStage = [&] (int slot, int type, float amount, float y) noexcept
+            // the pole gain of a filter slot: constant during this call (type, amount, f0Hz and the rate do not change inside it), so it is computed once per lane (the reference
+            // path computes it per sample as before)
+            auto filterGain = [&] (int type, float amount) noexcept
             {
                 const float ratio = (type == kWarpFilterLpf ? 1.0f : 0.5f) * std::exp2 (7.0f * amount);
                 const float x = std::min (kTwoPif * ratio * f0Hz / static_cast<float> (rateI), 8.0f);
-                const float g = x / (1.0f + x);
+                return x / (1.0f + x);
+            };
+            const float gain0 = filt0 && !reference_ ? filterGain (tick.warp[0], a0) : 0.0f, gain1 = filt1 && !reference_ ? filterGain (tick.warp[1], a1) : 0.0f;
+            auto filterStage = [&] (int slot, int type, float amount, float y) noexcept
+            {
+                const float g = reference_ ? filterGain (type, amount) : (slot == 0 ? gain0 : gain1);
                 float* z = fz + slot * 2;
                 if (type == kWarpFilterLpf)
                 {
