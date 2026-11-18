@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 //   synthyboy_preset_render --presets DIR [--engine vital|own] [--tier low|medium|high|all] [--summary-only] [--velocity]
-//                           [--wav OUTDIR] [--filter SUBSTRING] [--sr 48000] [--content-dir DIR] [--scalar-content] [--hold SECONDS]
+//                           [--wav OUTDIR] [--chord-wav OUTDIR] [--filter SUBSTRING] [--sr 48000] [--content-dir DIR] [--scalar-content] [--hold SECONDS]
 //   --scalar-content  the own engine runs the reference code of the Sample / Granular / Spectral / Multisample oscillators (setOwnSavingsOff, kOwnSavingContentKernels): render once with and once
 //                     without it to compare the two (scripts/content-kernel-compare.py)
 //
@@ -60,7 +60,7 @@ struct Options
     bool summaryOnly = false;
     bool velocity = false;
     bool sustainAware = false;
-    std::string wavDir;
+    std::string wavDir, chordWavDir;
     std::string filter;
     double sampleRate = 48000.0;
     const IContentStore* contentStore = nullptr;
@@ -277,6 +277,7 @@ int main (int argc, char** argv)
         else if (a == "--velocity") o.velocity = true;
         else if (a == "--sustain-aware") o.sustainAware = true;
         else if (a == "--wav") o.wavDir = next();
+        else if (a == "--chord-wav") o.chordWavDir = next();
         else if (a == "--filter") o.filter = next();
         else if (a == "--sr") o.sampleRate = std::atof (next().c_str());
         else if (a == "--content-dir") o.contentDir = next();
@@ -291,7 +292,7 @@ int main (int argc, char** argv)
     if (o.presets.empty() || ! isEngineAvailable (o.engine))
     {
         std::fprintf (stderr, "usage: synthyboy_preset_render --presets DIR [--engine vital|own] [--tier low|medium|high|all] [--summary-only] [--velocity] "
-                              "[--wav OUTDIR] [--filter TEXT] [--sr 48000] [--content-dir DIR]  (the engine must be built in)\n");
+                              "[--wav OUTDIR] [--chord-wav OUTDIR] [--filter TEXT] [--sr 48000] [--content-dir DIR]  (the engine must be built in)\n");
         return 2;
     }
 
@@ -393,7 +394,7 @@ int main (int argc, char** argv)
             }
             if (o.hold > 0.0)
                 chordHold = o.hold;
-            const Render c = render (o, q, p, chord, 1.0f, chordHold, false, false);
+            const Render c = render (o, q, p, chord, 1.0f, chordHold, false, ! o.chordWavDir.empty());
 
             std::vector<std::string> problems;
             if (! s.finite || ! c.finite)
@@ -426,6 +427,24 @@ int main (int argc, char** argv)
                 if (fx::writeWav (bytes, inter.data(), static_cast<int> (s.left.size()), 2, static_cast<int> (o.sampleRate), 24, false))
                 {
                     std::ofstream out (std::filesystem::path (o.wavDir) / t.name / (std::filesystem::path (p.file).stem().string() + ".wav"), std::ios::binary);
+                    out.write (reinterpret_cast<const char*> (bytes.data()), static_cast<std::streamsize> (bytes.size()));
+                }
+            }
+
+            if (! o.chordWavDir.empty() && c.finite && ! c.left.empty())
+            {
+                // the chord render (four notes at the start of one block: the notes get the serials 0 .. 3 of a fresh engine) as a wav, to compare two builds
+                std::filesystem::create_directories (std::filesystem::path (o.chordWavDir) / t.name, ec);
+                std::vector<float> inter (c.left.size() * 2);
+                for (size_t i = 0; i < c.left.size(); ++i)
+                {
+                    inter[2 * i] = c.left[i];
+                    inter[2 * i + 1] = c.right[i];
+                }
+                std::vector<uint8_t> bytes;
+                if (fx::writeWav (bytes, inter.data(), static_cast<int> (c.left.size()), 2, static_cast<int> (o.sampleRate), 24, false))
+                {
+                    std::ofstream out (std::filesystem::path (o.chordWavDir) / t.name / (std::filesystem::path (p.file).stem().string() + ".wav"), std::ios::binary);
                     out.write (reinterpret_cast<const char*> (bytes.data()), static_cast<std::streamsize> (bytes.size()));
                 }
             }
