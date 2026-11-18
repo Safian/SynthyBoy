@@ -19,7 +19,7 @@ A letöltött és kicsomagolt SynthyBoy MPC kiadási zip archívumban egyetlen g
 Safian - VST - SynthyBoy
 ```
 
-Ez az önálló könyvtár tartalmazza az összes olyan bináris fájlt, felületi elemet és tartalmat, amely a 32 bites és 64 bites standalone MPC hardvereken történő futtatáshoz szükséges. A mappán belül az alábbi fájlok találhatók:
+Ez az önálló könyvtár tartalmazza az összes olyan bináris fájlt, felületi elemet és tartalmat, amely a 32 bites és 64 bites standalone MPC hardvereken történő futtatáshoz szükséges (a teljes csomag mérete kb. 55 MB). A mappán belül az alábbi fájlok találhatók:
 
 - `plugin.json` — Az MPC plugin manifesztfájlja. Ez regisztrálja a plugint az MPC OS gazdarendszerben, és megadja a belépési pontként szolgáló megosztott függvénykönyvtárat mindkét processzorarchitektúrához: a `file32` a `VST/synthyboy-arm32.so` fájlra, a `file64` a `VST/synthyboy-arm64.so` fájlra mutat.
 - `version.xml` — XML verziómanifeszt, amely deklarálja a csomag tartalomverzióját és az érintőképernyős felület skin-verzióját (`uiversion`). Az MPC OS ezt a fájlt ellenőrzi a beolvasás (scanning) során.
@@ -31,8 +31,12 @@ Ez az önálló könyvtár tartalmazza az összes olyan bináris fájlt, felüle
   - `TUI.json`: Meghatározza a képernyőfüleket, alfüleket, grafikus vezérlőket (widgets), vizuális stílusokat és elrendezési elemeket az MPC érintőkijelzőjén.
   - `Q-Links.json`: Hozzárendeli a hardveres, kapacitív Q-Link forgópotmétereket a plugin paramétereihez a különböző funkcióbankokon keresztül.
   - `browser_images/soundsmode.png`: Egy pontosan 270 × 110 pixeles PNG grafikus ikon/csempe, amely a hangszerkiválasztó képernyőn jelenik meg a **Sounds > INSTRUMENTS** (Hangok > Hangszerek) módban.
-- `Content/presets/` — A 112 gyári preset (előre beállított hangszín) gyűjteménye kategóriákba rendezve (`Bass/`, `Lead/`, `Pad/`, `Pluck/`, `Keys/`, `FX/`). A plugin ezeket a fájlokat a `plugin.json` helyéhez képest relatívan oldja fel, és VST programként teszi elérhetővé őket.
-- `Presets/` *(ha jelen van a kiadásban)* — Standalone MPC preset fájlok (`.xpl`), amelyek lehetővé teszik a hangszínek közvetlen betöltését az MPC OS Sounds (Hangok) böngészőjén keresztül.
+- `Presets/` — 160 önálló MPC preset fájl (`.xpl`), amelyek lehetővé teszik a hangszínek közvetlen böngészését és betöltését az MPC OS Sounds (Hangok) böngészőjén keresztül.
+- `Content/` — Telepített tartalomcsomagok és gyári presetek (kb. 33 MB, 274 fájl):
+  - `Content/packs/`: Gyári hang- és wavetable-csomagok:
+    - `com.safian.synthyboy.factory-wavetables/<Kategória>/`: 72 gyári wavetable 6 kategóriába rendezve (`Analog`, `Digital`, `Metallic`, `Noise`, `Spectral`, `Vocal`, kategóriánként 12 tábla).
+    - `com.safian.synthyboy.factory-samples/`: 12 hangminta, 3 multisample SFZ hangszer (`instruments/`) és 3 Convolve impulzusválasz (`impulses/`).
+  - `Content/presets/`: 160 gyári preset kategóriákba rendezve (`Bass/`, `FX/`, `Keys/`, `Lead/`, `Pad/`, `Pluck/`). A plugin ezeket a fájlokat a `plugin.json` helyéhez képest relatívan oldja fel, és közvetlenül VST programként teszi elérhetővé őket.
 
 ---
 
@@ -61,8 +65,28 @@ Ahhoz, hogy a plugin láthatóvá váljon az MPC OS számára, másoljuk be a te
         ├── version.xml
         ├── VST/
         ├── Plugin Skins/
+        ├── Presets/
         └── Content/
 ```
+
+### Felhasználói tartalommappák az SD kártyán és USB tárolókon
+
+A felhasználó által készített egyéni hanganyagok és LFO-alakzatok a plugin csomagmappáján kívül tárolódnak, így a plugin frissítésekor érintetlenek maradnak, nem íródnak felül:
+
+- **Felhasználói wavetable-ök:** `SynthyBoy/Wavetables/<Kategória>/` — Monó 2048-mintás WAV fájlok (16/24/32 bites egész vagy 32 bites lebegőpontos). A közvetlenül a `SynthyBoy/Wavetables/` mappába helyezett WAV fájlok a wavetable böngészőben a **User** kategória alatt jelennek meg, míg az almappákba rendezett fájlok az adott almappa neve szerinti kategóriában (`<Kategória>`).
+- **Felhasználói LFO-alakzatok:** `SynthyBoy/LFO Shapes/` — Saját mentett LFO-alakzatfájlok (`<név>.lfoshape.json` vagy szabványos `.json`).
+
+#### Tárolási keresési és mentési sorrend
+
+A plugin az alábbi pontos tárolási hierarchia szerint oldja fel és menti a felhasználói fájlokat (ahogyan azt a `shell-mpc/synthyboy_mpc.cpp` és `shell-mpc/overlay/lfo_shape_files.h` kódja megvalósítja):
+
+1. **SD kártya:** `/sdcard` (hardveres SD kártya csatolási pont)
+2. **Plugin Content:** `<pluginKönyvtár>/Content` (a plugin saját belső `Content` mappája, amely SD kártya nélküli eszközökön biztosít tárolási lehetőséget)
+3. **USB tárolók:** `/media/*` (bármely külső USB flash meghajtó vagy merevlemez a `/media` alatt, pl. `/media/<meghajtó>`)
+
+**Beolvasás és böngészés:** A wavetable böngésző és az LFO alakzatkönyvtár a fenti sorrendben vizsgálja át az egyes gyökereket. Ha egy wavetable kategória vagy LFO alakzat fájlneve több helyen is szerepel, a keresési sorrendben előrébb lévő gyökérből származó bejegyzés élvez elsőbbséget.
+
+**LFO-alakzatok mentése:** Amikor saját LFO-alakzatot mentünk az LFO-szerkesztőben (**SAVE AS**), a fájl az első olyan gyökérbe íródik a hierarchiában, amelyben a `SynthyBoy/LFO Shapes` mappa már létezik. Ha a mappa még egyetlen gyökérben sem létezik, a plugin automatikusan létrehozza a `SynthyBoy/LFO Shapes/` könyvtárat az első elérhető gyökérben (`/sdcard`, majd `Content`, majd USB).
 
 ### Támogatott tárolóhelyek
 
@@ -120,8 +144,8 @@ Miután a külső plugin-támogatás engedélyezve van és az eszközt újraind�
 
 ### Preset (hangszín) kiválasztása
 
-- Main Mode-ban vagy a Track View (Sávnézet) felületen érintsük meg a **Preset** mezőt a plugin sávon a 112 gyári preset (VST program) böngészéséhez és kiválasztásához.
-- Ha az önálló `.xpl` presetek telepítve vannak a `Presets/` mappába, a hangszínek a **Sounds** (Hangok) mód böngészőjén keresztül is kereshetők.
+- Main Mode-ban vagy a Track View (Sávnézet) felületen érintsük meg a **Preset** mezőt a plugin sávon a 160 gyári preset (VST program) böngészéséhez és kiválasztásához.
+- A `Presets/` mappában lévő 160 önálló `.xpl` preset lehetővé teszi a hangszínek böngészését a **Sounds** (Hangok) mód böngészőjén keresztül is.
 
 ### Projekt mentése
 
@@ -152,8 +176,9 @@ Ha saját hangszínünket egyedi presetfájlként szeretnénk exportálni, hogy 
 A SynthyBoy frissítésekor:
 
 1. Csatlakoztassuk a meghajtót a számítógéphez, vagy kapcsoljuk az MPC-t USB Storage / Controller (USB tárhely / vezérlő) módba.
-2. Cseréljük le a `VST2 Plugins/` mappában lévő `Safian - VST - SynthyBoy` mappát az új mappára.
-3. Válasszuk le/távolítsuk el biztonságosan a meghajtót, és **indítsuk újra az MPC alkalmazást vagy a hardvert**.
+2. Cseréljük le a `VST2 Plugins/` mappában lévő `Safian - VST - SynthyBoy` mappát az új mappára. A frissítés a teljes csomagmappát lecseréli (beleértve a `Content/`, `Presets/`, `VST/` és `Plugin Skins/` könyvtárakat is).
+3. A felhasználói mappák (`SynthyBoy/Wavetables/` és `SynthyBoy/LFO Shapes/` az SD kártyán vagy USB meghajtón) a csomag könyvtárán kívül találhatók, így a frissítés **nem érinti** őket. *(Megjegyzés: Ha korábban egyéni fájlokat másoltunk közvetlenül a plugin belső `Content/SynthyBoy/` mappájába, azokat a csomagmappa cseréje előtt mentsük le).*
+4. Válasszuk le/távolítsuk el biztonságosan a meghajtót, és **indítsuk újra az MPC alkalmazást vagy a hardvert**.
 
 ### Miért tilos a futó plugint közvetlenül felülírni?
 
