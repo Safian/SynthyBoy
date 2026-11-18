@@ -162,7 +162,9 @@ private:
     void synthesizeHop (const SpectralParams& p, bool advance) noexcept;
     void advanceHead (const SpectralParams& p) noexcept;
     void renderChannel (const SpectralParams& p, int ch, double frame, bool transientHit) noexcept;
-    void renderChannelFast (const SpectralParams& p, int ch, double frame, bool transientHit) noexcept;
+    /** `reuseShape`: the shaped bins (scratch.om / of / oth) and `twist` are those of the previous call for this channel, nothing has touched them since (the priming of a note). */
+    void renderChannelFast (const SpectralParams& p, int ch, double frame, bool transientHit, bool reuseShape = false, float* twistState = nullptr) noexcept;
+    void primeFast (const SpectralParams& p) noexcept;
 
     const Analysis* analysis_ = nullptr;
     double hostRate_ = 48000.0;

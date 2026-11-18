@@ -577,8 +577,11 @@ void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, f
     if (p.manual)
         head_ = lo + (hi - lo) * clamp01 (p.position);
     // prime: three frames at the start position, so that the first output hop is the sum of four frames
-    for (int i = 0; i < 3; ++i)
-        synthesizeHop (p, false);
+    if (reference_)
+        for (int i = 0; i < 3; ++i)
+            synthesizeHop (p, false);
+    else
+        primeFast (p);
     primed_ = true;
     outPos_ = kHop;
 }
@@ -851,7 +854,7 @@ void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame
         c.ring[(ola_ + n) & (kFftSize - 1)] += re_[n] * hannAt (n) * kOutputScale;
 }
 
-void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double frame, bool transientHit) noexcept
+void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double frame, bool transientHit, bool reuseShape, float* twistState) noexcept
 {
     const Analysis& an = *analysis_;
     Channel& c = channel_[ch];
@@ -859,7 +862,14 @@ void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double f
     float* const re_ = scratch.re; float* const im_ = scratch.im; float* const om_ = scratch.om; float* const of_ = scratch.of; float* const oth_ = scratch.oth;
     const bool neon = kernels::haveNeon();
     float twist = 0.0f;
-    shapeFrame (p, an, std::min (ch, an.channels() - 1), frame, hostRate_, scratch, c.smear, twist, true);
+    if (reuseShape && twistState != nullptr)
+        twist = *twistState;
+    else
+    {
+        shapeFrame (p, an, std::min (ch, an.channels() - 1), frame, hostRate_, scratch, c.smear, twist, true);
+        if (twistState != nullptr)
+            *twistState = twist;
+    }
 
     // phases: advance by the frequency of the partial; after a transient (Transients) restart from the phases of the analysis; Phase Lock ties the bins around a peak to it
     bool fusedAdvance = false;
@@ -913,6 +923,43 @@ void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double f
     im_[kBins - 1] = 0.0f;
     kernels::RealIfft::instance().inverse (re_, im_, scratch.zr, scratch.zi, neon);
     kernels::overlapAdd (c.ring, ola_, scratch.zr, scratch.zi, kOutputScale, neon);
+}
+
+/** The three frames of the start of a note (synthesizeHop (p, false) three times), one channel after the other: the frames are at the same position of the analysis with the same settings, so
+    the shaped bins are the same for all three and are made once per channel (the phases differ and are advanced for each). Only the smear warp keeps a memory that each call changes: a note
+    with it shapes every frame. The ring of the overlap add ends up exactly where the three hops would leave it. */
+void SpectralVoice::primeFast (const SpectralParams& p) noexcept
+{
+    if (analysis_ == nullptr)
+        return;
+    const int channels = analysis_->channels() > 1 ? 2 : 1;
+    const double fileFrames = static_cast<double> (analysis_->fileFrames());
+    if (p.manual)
+        head_ = std::min (p.regionLo, p.regionHi) + std::fabs (static_cast<double> (p.regionHi) - static_cast<double> (p.regionLo)) * clamp01 (p.position);
+    const double frame = head_ * fileFrames / kHop;
+    const int index = static_cast<int> (std::lround (frame));
+    const bool transientHit = analysis_->transient (index) && index != lastTransientFrame_;
+    lastTransientFrame_ = index;
+    bool smears = false;
+    for (int w = 0; w < 2; ++w)
+        smears = smears || (p.warpType[w] == static_cast<int> (Warp::smear) && p.warpAmount[w] > 0.0f);
+    for (int ch = 0; ch < channels; ++ch)
+    {
+        Channel& c = channel_[ch];
+        float twist = 0.0f;
+        for (int hop = 0; hop < 3; ++hop)
+        {
+            ola_ = hop * kHop;
+            renderChannelFast (p, ch, frame, hop == 0 && transientHit, hop > 0 && ! smears, &twist);
+            for (int n = 0; n < kHop; ++n)
+            {
+                const int at = (ola_ + n) & (kFftSize - 1);
+                c.finished[n] = c.ring[at];
+                c.ring[at] = 0.0f;
+            }
+        }
+    }
+    ola_ = (3 * kHop) & (kFftSize - 1);
 }
 
 void SpectralVoice::synthesizeHop (const SpectralParams& p, bool advance) noexcept
