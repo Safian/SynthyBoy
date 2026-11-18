@@ -518,7 +518,8 @@ bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* righ
     const double xfade = wrap ? std::min (0.5, static_cast<double> (clamp01 (p.loopCrossfade))) * loopLen : 0.0;
     const SampleView& smp = *sample_;
     const float* const table = windows().table[static_cast<int> (p.shape) < kNumWindowShapes ? static_cast<int> (p.shape) : 0];
-    const bool shaped = p.shapeFn != nullptr;
+    // a pointwise warp plays only where a slot has a type and an amount (the engine hands the function over always)
+    const bool shaped = p.shapeFn != nullptr && ((p.shapeType[0] >= 0 && p.shapeAmount[0] > 0.0f) || (p.shapeType[1] >= 0 && p.shapeAmount[1] > 0.0f));
 #if SB_GRAIN_NEON
     // four samples of a grain at a time where nothing but the plain read plays: no rate modulation, no loop wrap, no pointwise warp
     const bool vectorOk = vectors_ && rateMod == nullptr && ! wrap && ! shaped;

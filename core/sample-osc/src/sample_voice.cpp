@@ -335,6 +335,25 @@ inline float32x4_t interp4 (const float* buf, const int32_t* idx, const int32_t*
     return sum; // (0 + c0 b0 is c0 b0 exactly: the scalar low form starts with the product, the others with 0 +)
 }
 
+
+/** cos (theta) and sin (theta) for theta in [0, pi / 2] in float lanes (the weights of the loop crossfade): the minimax polynomials on [0, pi / 4] and the complement beyond. Within 1.5e-7 of the
+    library functions. */
+inline void equalPower4 (float32x4_t theta, float32x4_t& wOut, float32x4_t& wIn) noexcept
+{
+    const float32x4_t halfPi = vdupq_n_f32 (1.57079632679f);
+    const uint32x4_t upper = vcgtq_f32 (theta, vdupq_n_f32 (0.78539816339f));
+    const float32x4_t r = vbslq_f32 (upper, vsubq_f32 (halfPi, theta), theta);
+    const float32x4_t z = vmulq_f32 (r, r);
+    float32x4_t ps = vaddq_f32 (vmulq_f32 (vdupq_n_f32 (-1.9515295891e-4f), z), vdupq_n_f32 (8.3321608736e-3f));
+    ps = vaddq_f32 (vmulq_f32 (ps, z), vdupq_n_f32 (-1.6666654611e-1f));
+    const float32x4_t sn = vaddq_f32 (vmulq_f32 (vmulq_f32 (ps, z), r), r);
+    float32x4_t pc = vaddq_f32 (vmulq_f32 (vdupq_n_f32 (2.443315711809948e-5f), z), vdupq_n_f32 (-1.388731625493765e-3f));
+    pc = vaddq_f32 (vmulq_f32 (pc, z), vdupq_n_f32 (4.166664568298827e-2f));
+    const float32x4_t cs = vaddq_f32 (vsubq_f32 (vmulq_f32 (vmulq_f32 (pc, z), z), vmulq_f32 (vdupq_n_f32 (0.5f), z)), vdupq_n_f32 (1.0f));
+    wOut = vbslq_f32 (upper, sn, cs);   // cos (theta): cos (r) below pi / 4, sin (pi / 2 - theta) above
+    wIn = vbslq_f32 (upper, cs, sn);
+}
+
 /** sanitizeFloat () of four lanes: a NaN, an infinity and a value below 1e-18 in magnitude (denormals, zeros) become +0. */
 inline float32x4_t sanitize4 (float32x4_t v) noexcept
 {
@@ -890,6 +909,8 @@ void SampleVoice::renderBlockT (float* outLeft, float* outRight, int numFrames, 
     const bool runOk = vectors_ && rateMod == nullptr && ! fadeEdges && plan.kind != ReadPlan::blend && ! plan.useUpper;
     // the interval of positions (of the playhead) inside which no event can happen and every tap of the read lies inside the data
     double runLo = boundLo, runHi = boundHi;
+    bool xfadeRunOk = false;
+    double xfadeLo = 0.0, xfadeHi = 0.0;
     if (mode == LoopMode::forward || mode == LoopMode::pingPong || mode == LoopMode::reverse)
     {
         runLo = lStart;
@@ -900,6 +921,10 @@ void SampleVoice::renderBlockT (float* outLeft, float* outRight, int numFrames, 
         const double marginLo = static_cast<double> (kTaps / 2 - 1) + 1.0, marginHi = static_cast<double> (kTaps / 2) + 1.0;
         runLo = std::max (runLo, marginLo / inv);
         runHi = std::min (runHi, (static_cast<double> (plan.na) - marginHi) / inv);
+        // the loop crossfade zone [lEnd - xLen, lEnd): the playhead reads there and the wrapped position lStart .. lStart + xLen; both must lie in the safe part of the data
+        xfadeRunOk = runOk && mode == LoopMode::forward && xLen > 1.0 && lStart >= marginLo / inv && lStart + xLen <= (static_cast<double> (plan.na) - marginHi) / inv;
+        xfadeLo = std::max (lEnd - xLen, marginLo / inv);
+        xfadeHi = std::min (lEnd, (static_cast<double> (plan.na) - marginHi) / inv);
     }
 #endif
     int i = 0;
@@ -909,7 +934,71 @@ void SampleVoice::renderBlockT (float* outLeft, float* outRight, int numFrames, 
             break;
 #if SB_SAMPLE_NEON
         const double runStep = pitchRatio_ * speed_ * 1.0 * direction_; // (the direction changes at a ping pong turn)
-        if (runOk && ! stopping_ && antiClickGain_ >= 1.0f && i + 4 <= numFrames && runStep != 0.0 && playhead_ > runLo && playhead_ < runHi)
+        const bool runNow = runOk && ! stopping_ && antiClickGain_ >= 1.0f && i + 4 <= numFrames && runStep != 0.0;
+        if (runNow && xfadeRunOk && playhead_ > xfadeLo && playhead_ < xfadeHi)
+        {
+            // inside the loop crossfade: two reads per sample and the equal power weights, four samples at a time (the weights in float: within 2e-7 of the library's cos and sin)
+            const double room = runStep > 0.0 ? (xfadeHi - playhead_) / runStep : (xfadeLo - playhead_) / runStep;
+            const int fit = static_cast<int> (std::min (room, 1.0e6)) - 2;
+            const int n = std::min (fit, numFrames - i) & ~3;
+            if (n >= 4)
+            {
+                const double inv = plan.kind == ReadPlan::oneLevel ? plan.invScale0 : 1.0;
+                const float32x4_t gL = vdupq_n_f32 (gainL), gR = vdupq_n_f32 (gainR), total = vdupq_n_f32 (levelPart * antiClickGain_ * 1.0f);
+                const double zoneStart = lEnd - xLen, invXLen = 1.0 / xLen;
+                for (int done = 0; done < n; done += 4)
+                {
+                    double pos[4];
+                    pos[0] = playhead_;
+                    pos[1] = pos[0] + runStep;
+                    pos[2] = pos[1] + runStep;
+                    pos[3] = pos[2] + runStep;
+                    int32_t idx1[4], ph1[4], idx2[4], ph2[4];
+                    float32x4_t theta = vdupq_n_f32 (0.0f);
+                    for (int k = 0; k < 4; ++k)
+                    {
+                        const double t = (pos[k] - zoneStart) * invXLen;
+                        const double wrapPos = lStart + t * xLen;
+                        const double q1 = plan.kind == ReadPlan::oneLevel ? pos[k] * inv : pos[k];
+                        const double q2 = plan.kind == ReadPlan::oneLevel ? wrapPos * inv : wrapPos;
+                        idx1[k] = static_cast<int> (q1);
+                        ph1[k] = static_cast<int> ((q1 - static_cast<double> (idx1[k])) * SincTables::kPhases);
+                        idx2[k] = static_cast<int> (q2);
+                        ph2[k] = static_cast<int> ((q2 - static_cast<double> (idx2[k])) * SincTables::kPhases);
+                        theta = k == 0 ? vsetq_lane_f32 (static_cast<float> (t * 0.5 * kPi), theta, 0) : (k == 1 ? vsetq_lane_f32 (static_cast<float> (t * 0.5 * kPi), theta, 1)
+                              : (k == 2 ? vsetq_lane_f32 (static_cast<float> (t * 0.5 * kPi), theta, 2) : vsetq_lane_f32 (static_cast<float> (t * 0.5 * kPi), theta, 3)));
+                    }
+                    float32x4_t wOut, wIn;
+                    equalPower4 (theta, wOut, wIn);
+                    const float32x4_t aL = interp4<Tier> (plan.a[0], idx1, ph1, table), bL = interp4<Tier> (plan.a[0], idx2, ph2, table);
+                    const float32x4_t xL = vaddq_f32 (vmulq_f32 (wOut, aL), vmulq_f32 (wIn, bL));
+                    float32x4_t xR = xL;
+                    if (plan.stereo)
+                    {
+                        const float32x4_t aR = interp4<Tier> (plan.a[1], idx1, ph1, table), bR = interp4<Tier> (plan.a[1], idx2, ph2, table);
+                        xR = vaddq_f32 (vmulq_f32 (wOut, aR), vmulq_f32 (wIn, bR));
+                    }
+                    const float32x4_t l = sanitize4 (vmulq_f32 (vmulq_f32 (xL, gL), total));
+                    const float32x4_t r = sanitize4 (vmulq_f32 (vmulq_f32 (xR, gR), total));
+                    if (Add)
+                    {
+                        vst1q_f32 (outLeft + i + done, vaddq_f32 (vld1q_f32 (outLeft + i + done), l));
+                        if (outRight != nullptr)
+                            vst1q_f32 (outRight + i + done, vaddq_f32 (vld1q_f32 (outRight + i + done), r));
+                    }
+                    else
+                    {
+                        vst1q_f32 (outLeft + i + done, l);
+                        if (outRight != nullptr)
+                            vst1q_f32 (outRight + i + done, r);
+                    }
+                    playhead_ = pos[3] + runStep;
+                }
+                i += n - 1;
+                continue;
+            }
+        }
+        if (runNow && playhead_ > runLo && playhead_ < runHi)
         {
             // whole samples that keep the playhead (and the next one) strictly inside the interval, with two samples of margin for the rounding of the repeated additions
             const double room = runStep > 0.0 ? (runHi - playhead_) / runStep : (runLo - playhead_) / runStep;

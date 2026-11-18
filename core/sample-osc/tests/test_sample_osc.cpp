@@ -809,7 +809,16 @@ TEST (sampleosc_block_kernel_equals_reference)
                                 reference.process (bL.data(), nullptr, n);
                             }
                             ++configs;
-                            if (std::memcmp (aL.data(), bL.data(), sizeof (float) * 128) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * 128) != 0
+                            // the loop crossfade weights are computed in float lanes (the reference calls the library's double cos and sin): within 3e-6 of the reference there, every other path the same bits
+                            bool bitsDiffer = std::memcmp (aL.data(), bL.data(), sizeof (float) * 128) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * 128) != 0;
+                            if (bitsDiffer && p.loopCrossfade > 0.0f)
+                            {
+                                bitsDiffer = false;
+                                for (size_t q = 0; q < 128; ++q)
+                                    if (std::fabs (aL[q] - bL[q]) > 3.0e-6f || std::fabs (aR[q] - bR[q]) > 3.0e-6f)
+                                        bitsDiffer = true;
+                            }
+                            if (bitsDiffer
                                 || kernel.isActive() != reference.isActive() || kernel.getPlayheadPosition() != reference.getPlayheadPosition())
                             {
                                 if (different++ < 5)
