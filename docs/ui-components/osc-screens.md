@@ -7,10 +7,10 @@ The two views of one oscillator instance (Sub, A, B, C, Noise), built only from 
 Use them as the reference for a screen that is a layout preset over a set of components.
 
 ## Header and types
-`shell-mpc/ui/screen.h`: `OscillatorCompact`, `OscillatorFullScreen` (both `Composite`). Uses `OscInstance`, `OscKind`, `BasicControls`, `TypeBar`, `TuneRow`, `KnobPanel`, `playrows`.
+`shell-mpc/ui/screen.h`: `OscillatorCompact`, `OscillatorFullScreen` (both `Composite`). Uses `OscInstance`, `OscKind`, `Carousel`, `BasicControls`, `TypeBar`, `TuneRow`, `KnobPanel`, `playrows`.
 
 ## State
-`OscillatorCompact` members: `instances` (`Stepper`: Sub, Osc A, Osc B, Osc C, Noise; `listable`, wraps, `minWidth` 120), `power` (`ToggleIcon`, `Power`), `route` (`RouteButton`), `full` (`MenuButton`, `Expand`), `basic` (`BasicControls`, stacked). API: `setInstance (OscInstance, OscKind)`, `displayRect()` (the rectangle shared by the three thirds, reserved and reported: the owner draws the picture), `group()`, static `sourceName (i)`.
+`OscillatorCompact` members: `instances` (`Carousel`: Sub, Osc A, Osc B, Osc C, Noise; `listable`, wraps), `power` (`ToggleIcon`, `Power`), `route` (`RouteButton`), `full` (`MenuButton`, `Expand`), `basic` (`BasicControls`, stacked). API: `setInstance (OscInstance, OscKind)`, `displayRect()` (the rectangle shared by the three thirds, reserved and reported: the owner draws the picture), `group()`, static `sourceName (i)`.
 `OscillatorFullScreen` members: `close`, `power`, `basic`, `route`, `bar` (`TypeBar`), `tune` (`TuneRow`, vertical), `panel` (`KnobPanel`), `groups[kMaxGroups = 8]`. API: `setInstance (inst, kind)` (swaps only the type bar, tuning row, bottom band and groups; the active group goes back to Basic), `instance()`, `kind()`, `displayRect()`, `barBlock()`, `tuneBlock()`, `numGroups()`, `groupName (i)`, `activeGroup()`, `turnQ (knobIndex, delta)`, `rebuildGroups()`, `leaves (out, max)`, `kBottomH` 220.
 
 ## Size
