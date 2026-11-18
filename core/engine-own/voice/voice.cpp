@@ -830,7 +830,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             t.level = 0.0f;
             {
                 SB_SECTION (sections::tickOscUpdate);
-                osc[o].update (t, g.sampleRate, rng);
+                // (a silent tick is applied with the next one that is not: WtOsc::deferSilent)
+                if (!osc[o].deferSilent (t, g.sampleRate, false, false))
+                    osc[o].update (t, g.sampleRate, rng);
                 pitchTapOn[o] = false;
                 lib[o].updateOff (g.content);
             }
@@ -952,8 +954,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         {
             // the cross modulation entries of the list name the other two oscillators in order
             SB_SECTION (sections::tickOscUpdate);
-            osc[o].update (t, g.sampleRate, rng);
-            osc[o].updateMorph (g.sampleRate, fresh, g.morphCache);
+            if (!osc[o].deferSilent (t, g.sampleRate, true, fresh)) // level 0 of this period: the render is exactly zero, the update waits for the next period that is not
+            {
+                osc[o].update (t, g.sampleRate, rng);
+                osc[o].updateMorph (g.sampleRate, fresh, g.morphCache);
+            }
         }
         else
         {
@@ -1010,7 +1015,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         subTick.spread = 0.0f;
         subTick.blend = 1.0f;
         subTick.frame = 0.0f;
-        sub.update (subTick, g.sampleRate, rng);
+        if (!sub.deferSilent (subTick, g.sampleRate, false, false))
+            sub.update (subTick, g.sampleRate, rng);
         pitchTap[3] = subTick.semis;
         pitchTapOn[3] = subCh.on;
     }
@@ -1198,12 +1204,17 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         {
             osc[o].render (t0, n, oscL[o], oscR[o], cross, gl->sampleRate);
             if (w0 != 1.0f || w1 != 1.0f)
+            {
+                // (k + 1) / n = (k + 1) * (1 / n) exactly when n is a power of two (see WtOsc::render)
+                const bool nPow2 = (n & (n - 1)) == 0;
+                const float invN = 1.0f / static_cast<float> (n);
                 for (int k = 0; k < n; ++k)
                 {
-                    const float g = lerp (w0, w1, static_cast<float> (k + 1) / static_cast<float> (n));
+                    const float g = lerp (w0, w1, nPow2 ? static_cast<float> (k + 1) * invN : static_cast<float> (k + 1) / static_cast<float> (n));
                     oscL[o][k] *= g;
                     oscR[o][k] *= g;
                 }
+            }
         }
         else
         {
@@ -1249,13 +1260,9 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     {
         SB_SECTION (sections::noise);
         // noise.pitch: the generator played at another rate (down: the band shrinks, up: white but quieter) and noise.filter (docs/engine-spec/02 section 10)
-        const float rate = std::exp2 (noisePitchSemis * (1.0f / 12.0f));
-        const float oct = std::log2 (std::max (rate, 1.0e-3f));
-        const float pitchGain = oct <= 0.0f ? 1.0f : (oct <= 1.0f ? lerp (1.0f, 0.757f, oct) : (oct <= 2.0f ? lerp (0.757f, 0.628f, oct - 1.0f) : 0.628f * std::pow (0.83f, oct - 2.0f)));
-        const float lpC = rate < 0.999f ? 1.0f - std::exp (-kTwoPif * std::min (0.45f, 0.4f * rate) * 1.0f) : 1.0f;
+        const NoiseCoeffs& nc = noiseCoeffs.get (noisePitchSemis, noiseFilterAmount, gl->sampleRate);
+        const float pitchGain = nc.pitchGain, lpC = nc.lpC, fC = nc.fC;
         const float fa = noiseFilterAmount;
-        const float fHz = fa < 0.0f ? 20000.0f * std::pow (0.002f, -fa) : 20.0f * std::pow (800.0f, std::max (fa, 0.0f));
-        const float fC = std::min (0.99f, 1.0f - std::exp (-kTwoPif * std::min (fHz, 0.45f * static_cast<float> (gl->sampleRate)) / static_cast<float> (gl->sampleRate)));
         auto shapeNoiseCh = [&] (int ch, float x) noexcept
         {
             float* lp = noiseLp[ch];

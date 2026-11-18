@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <vector>
 
@@ -23,7 +24,10 @@ namespace own
 /** The effective (modulated) values of an oscillator at the end of a control period. */
 struct OscTick
 {
+    // The fields are ordered so that the struct has no padding bytes (pointers, then the 4 byte fields, then the bools and explicit padding): a byte compare of two ticks then
+    // compares exactly their fields (WtOsc::update ()).
     const Wavetable* wt = nullptr;
+    const float* remap = nullptr;         // the drawn remap curve of the oscillator for the warps Remap 1 .. 4 (257 points) or null (identity)
     float semis = 69.0f;                  // pitch in MIDI semitones (fractional) without the unison offsets
     float frame = 0.0f, frameSpread = 0.0f; // 0 .. 1, -1 .. 1
     float level = 0.0f, pan = 0.0f, panRight = 0.0f; // amplitude (linear), -1 .. 1 (left lane, right lane of the pan)
@@ -39,10 +43,9 @@ struct OscTick
     int warpSrc[2] = { -1, -1 };          // index in the cross list of the modulator of each slot (set by update ())
     float warpAmount[2] = { 0, 0 }, warpPhase[2] = { 0, 0 }, warpSpread[2] = { 0, 0 };
     float startPhase = 0.0f;              // only used when a note starts
-    bool active = false;
-    const float* remap = nullptr;         // the drawn remap curve of the oscillator for the warps Remap 1 .. 4 (257 points) or null (identity)
     int morphType = 0;                    // oscN.morph.type
     float morphAmount = 0.0f, morphSpread = 0.0f; // 0 .. 1, -1 .. 1
+    bool active = false;
     bool jump = false;                    // quality.no_smoothing: the period's values apply at once (no ramp from the previous period)
     bool oversample = false;              // run 4x oversampled even without a warp (ultra quality)
     bool smooth = false;                  // oscN.smooth_interp: blend the neighbouring frames (off: the frame steps, with a short cross-fade)
@@ -51,7 +54,9 @@ struct OscTick
     bool lowMorph = false;                // economy group Morph (tier low): the spectral morph is rebuilt every 512 samples, from a transform of half the size
     bool fastMath = false;                // economy group Math (tier low): the warps use the cheaper forms of dsp/fastmath.h
     bool scalarWarp = false;              // measurements (setOwnSavingsOff, kOwnSavingVectorWarp): the oversampled samples one by one also where the four lane form exists
+    bool padding[7] = {};                 // explicit: 9 bools + 7 = 16 bytes, so that the size is the sum of the fields on 32 and 64 bit
 };
+static_assert (sizeof (OscTick) == 2 * sizeof (void*) + 30 * 4 + 16, "OscTick must not have padding bytes (WtOsc::update compares ticks as bytes)");
 
 /** True if every field of the two ticks is equal (floats compared as values: a NaN is never equal, which only costs the shortcut). */
 inline bool sameOscTick (const OscTick& a, const OscTick& b) noexcept
@@ -107,13 +112,17 @@ struct DecimatorTaps
 };
 
 struct WtOscLaneTest; // core/tests/test_own_warp_lanes.cpp
+struct WtOscOptTest;  // core/tests/test_own_wt_osc_opt.cpp
 
 class WtOsc
 {
     friend struct WtOscLaneTest;
+    friend struct WtOscOptTest; // core/tests/test_own_wt_osc_opt.cpp
 
 public:
     static constexpr int kMaxVoices = 16;
+    /** Tests only: run the code as it was before the optimisations of docs/release/CPU-REVIEW-OSC.md (the same output, slower). */
+    void setReference (bool on) noexcept { reference_ = on; }
     static constexpr int kOversample = 4, kTaps = 128;
     static constexpr int kOversampleLow = 2, kTapsLow = 32;
     static inline const DecimatorTaps<128> kDecimator4 { 0.105, 7.5 }; // cycles per sample of the 4x signal
@@ -174,6 +183,7 @@ public:
 
     void start (float startPhase, float randomPhase, Rng& rng) noexcept
     {
+        flushPending(); // the updates of the silent periods before the note come first, as they did
         for (int i = 0; i < kMaxVoices; ++i)
         {
             const float p = startPhase + randomPhase * rng.uni();
@@ -182,6 +192,8 @@ public:
         havePrev = false;
         haveLast = false;
         morphAge = kMorphRebuild;
+        for (auto& k : morphKeyOk)
+            k = false;
         for (auto& f : frameIdx)
             f = -1;
         for (auto& fs : filterState)
@@ -199,6 +211,7 @@ public:
         P (t, curve) of the outermost range, sharp and flat alternate, amplitudes by the blend law with power normalisation, then the stereo spread. */
     void update (const OscTick& t, double sampleRate, Rng& rng) noexcept
     {
+        flushPending();
         prevCount = curCount;
         for (int i = 0; i < kMaxVoices; ++i)
         {
@@ -208,7 +221,8 @@ public:
         }
         prevFrame = curFrame;
         // the same inputs as the previous period (the usual case of a held note): the voices below would be computed again to the same values
-        if (haveLast && lastRate == sampleRate && sameOscTick (t, lastT))
+        // (equal bytes are the common case and cost one compare; ticks that differ in bytes only by the sign of a zero still take the field by field compare, as before)
+        if (haveLast && lastRate == sampleRate && ((!reference_ && std::memcmp (&t, &lastT, sizeof (OscTick)) == 0) || sameOscTick (t, lastT)))
             return;
         lastT = t;
         lastRate = sampleRate;
@@ -236,7 +250,25 @@ public:
         }
         // stereo spread: own channel a, other channel b (equal power)
         const float w = clamp01 (t.spread);
-        float sa = std::sin (kPif * 0.5f * (0.5f + 0.5f * w)), sb = std::sin (kPif * 0.5f * (1.5f + 0.5f * w));
+        // the two sines depend on the spread only, and the Serum law below overwrites them: they are computed (and kept for the next full update) only when they are used
+        float sa = 0.0f, sb = 0.0f;
+        if (reference_)
+        {
+            sa = std::sin (kPif * 0.5f * (0.5f + 0.5f * w));
+            sb = std::sin (kPif * 0.5f * (1.5f + 0.5f * w));
+        }
+        else if (t.law != 1)
+        {
+            if (!(spreadOk && sameBits (spreadW, w)))
+            {
+                spreadSa = std::sin (kPif * 0.5f * (0.5f + 0.5f * w));
+                spreadSb = std::sin (kPif * 0.5f * (1.5f + 0.5f * w));
+                spreadW = w;
+                spreadOk = true;
+            }
+            sa = spreadSa;
+            sb = spreadSb;
+        }
         if (t.law == 1)
         {
             // the Serum law (document 01, 9.6): a measured gain per voice count, centre and outer gains on the blend axis, the own / other channel gains of the spread
@@ -274,26 +306,70 @@ public:
         // oscillator pan, constant power with 0 dB at the centre
         const float pan = std::clamp (t.pan, -1.0f, 1.0f);
         const float panRt = std::clamp (t.panRight, -1.0f, 1.0f);
-        const float panL = 1.41421356f * std::sin (kPif * 0.25f * (1.0f - pan)), panR = 1.41421356f * std::sin (kPif * 0.25f * (1.0f + panRt));
+        float panL, panR;
+        if (reference_)
+        {
+            panL = 1.41421356f * std::sin (kPif * 0.25f * (1.0f - pan));
+            panR = 1.41421356f * std::sin (kPif * 0.25f * (1.0f + panRt));
+        }
+        else
+        {
+            if (!(panLOk && sameBits (panKeyL, pan)))
+            {
+                panLValue = 1.41421356f * std::sin (kPif * 0.25f * (1.0f - pan));
+                panKeyL = pan;
+                panLOk = true;
+            }
+            if (!(panROk && sameBits (panKeyR, panRt)))
+            {
+                panRValue = 1.41421356f * std::sin (kPif * 0.25f * (1.0f + panRt));
+                panKeyR = panRt;
+                panROk = true;
+            }
+            panL = panLValue;
+            panR = panRValue;
+        }
         const int bump = odd ? 0 : 1;
         const float divisor = static_cast<float> (std::max (1, U - 1));
+        // the detune offset of each pair depends on the voice count, the mode, the curve and the range only (not on pitch, frame, level or pan)
+        const bool offHit = !reference_ && offOk && offU == U && offMode == t.mode && sameBits (offCurve, t.curve) && sameBits (offRange, t.detuneSemis);
+        if (!offHit)
+        {
+            offU = U;
+            offMode = t.mode;
+            offCurve = t.curve;
+            offRange = t.detuneSemis;
+            offOk = !reference_;
+        }
         int n = 0;
         auto addVoice = [&] (float semis, float amp, float gainL, float gainR, float framePos) noexcept
         {
             double f;
-            if (n < kMaxVoices && haveFreq[n] && freqSemis[n] == semis)
+            float inc;
+            if (!reference_ && n < kMaxVoices && haveFreq[n] && freqSemis[n] == semis)
+            {
                 f = freqHz[n]; // the same pitch as this voice had in the previous full update: the same double
+                if (!(incRate[n] == sampleRate)) // (the increment also depends on the rate; both are kept together)
+                {
+                    freqInc[n] = static_cast<float> (std::min (f, nyq) / sampleRate);
+                    incRate[n] = sampleRate;
+                }
+                inc = freqInc[n];
+            }
             else
             {
                 f = 440.0 * std::exp2 ((static_cast<double> (semis) - 69.0) / 12.0);
+                inc = static_cast<float> (std::min (f, nyq) / sampleRate);
                 if (n < kMaxVoices)
                 {
                     freqSemis[n] = semis;
                     freqHz[n] = f;
+                    freqInc[n] = inc;
+                    incRate[n] = sampleRate;
                     haveFreq[n] = true;
                 }
             }
-            curInc[n] = static_cast<float> (std::min (f, nyq) / sampleRate);
+            curInc[n] = inc;
             curGainL[n] = amp * gainL * panL * t.level;
             curGainR[n] = amp * gainR * panR * t.level;
             curFrameOf[n] = std::clamp (t.frame + t.frameSpread * framePos, 0.0f, 1.0f);
@@ -324,7 +400,14 @@ public:
                 }
                 default: break;
             }
-            const float semisOff = powerShape (tt, t.curve) * t.detuneSemis;
+            float semisOff;
+            if (offHit)
+                semisOff = offValue[i];
+            else
+            {
+                semisOff = powerShape (tt, t.curve) * t.detuneSemis;
+                offValue[i] = semisOff;
+            }
             const bool leftFlat = (i % 2) == 0;
             const float leftSemis = leftFlat ? -semisOff : semisOff;
             const float pos = divisor > 0.0f ? (static_cast<float> (2 * i + bump)) / divisor : 0.0f;
@@ -352,6 +435,37 @@ public:
             havePrev = true;
         }
         (void) rng;
+    }
+
+    /** The update of a silent period, put off. The caller (Voice::tick) calls this before update () / updateMorph () for an oscillator whose level of the period is 0 (or that is
+        off); true = it was put off and the caller must not call them, false = the caller does as before.
+        What a silent period does in the old code: render () returns at once for a level <= 0 (zeros, no phase, no morph age, no cross memory), so the output is exactly zero; the
+        only things that change are what update () and updateMorph () compute from the tick, and there the last tick wins: the prev arrays of the next period are the cur arrays of
+        the last silent tick, and cur is a function of the tick alone (the caches are keyed on their inputs), so replaying the LAST silent tick (update () and, for the oscillators
+        that call it, updateMorph ()) before the next live update gives the very state the whole run of silent periods would have. The one side effect that a silent period has
+        and that a later one does not overwrite is morphAge = 0 of an inactive morph, which is done here at once. A period that would build a morph cycle (a new note, or an age that
+        reached the rebuild period) is not put off, so every build happens when it did and with its own tick. `withMorph`: the caller calls updateMorph () after update (). */
+    bool deferSilent (const OscTick& t, double sampleRate, bool withMorph, bool firstOfNote) noexcept
+    {
+        if (reference_ || !(t.level <= 0.0f))
+            return false;
+        if (withMorph)
+        {
+            if (firstOfNote)
+                return false;
+            if (t.morphType != kMorphNone && t.wt != nullptr && !morphBuf.empty())
+            {
+                if (morphAge >= (t.lowMorph ? 2 * kMorphRebuild : kMorphRebuild))
+                    return false;
+            }
+            else
+                morphAge = 0; // updateMorph () of an inactive morph
+        }
+        pendingTick = t;
+        pendingRate = sampleRate;
+        pendingMorph = withMorph;
+        pending = true;
+        return true;
     }
 
     /** Semitone offset of the stack style (pair index based, document 01, 9.3). */
@@ -438,16 +552,21 @@ public:
             const int K = std::min (Wavetable::kHarmonics - 1, static_cast<int> (nyq / fmax));
             for (int g = 0; g < groups; ++g)
             {
-                float* a = morphBuf.data() + (static_cast<size_t> (g) * 2) * kMorphStride + 1;
-                float* b = a + kMorphStride;
                 if (!firstOfNote)
-                    std::copy (b - 1, b - 1 + kMorphStride, a - 1); // the previous "new" buffer becomes the old one
+                {
+                    if (reference_)
+                        std::copy (morphNew (g) - 1, morphNew (g) - 1 + kMorphStride, morphOld (g) - 1); // the previous "new" buffer becomes the old one
+                    else
+                        morphNewSlot[g] ^= 1; // the same without the copy: the two buffers swap roles, and the new one is written in full below
+                }
+                float* a = morphOld (g);
+                float* b = morphNew (g);
                 const float spreadShift = groups > 1 ? tick.morphSpread * 2.0f * static_cast<float> (g) / static_cast<float> (groups - 1) : 0.0f;
                 const float framePos = tick.frame * static_cast<float> (std::max (wt.numFrames() - 1, 0));
                 if (g > 0 && spreadShift == 0.0f)
                 {
                     // no morph spread: every group asks for the same cycle, so the first one is copied (the same samples, built once)
-                    const float* first = morphBuf.data() + kMorphStride + 1;
+                    const float* first = morphNew (0);
                     std::copy (first - 1, first - 1 + kMorphStride, b - 1);
                 }
                 else
@@ -461,11 +580,17 @@ public:
                     key.maxHarmonic = K;
                     key.hostRate = sampleRate;
                     key.fast = tick.lowMorph;
+                    // a morph that moves (this build asks for another frame or amount than the last one of this oscillator) never asks for the same cycle again: only a cycle of a
+                    // held morph is stored for the other voices of a chord (the cache only saves time: a hit has the samples of a build)
+                    const bool moving = morphKeyOk[g] && (!sameBits (morphKeyFrame[g], framePos) || !sameBits (morphKeyM[g], key.m));
+                    morphKeyOk[g] = true;
+                    morphKeyFrame[g] = framePos;
+                    morphKeyM[g] = key.m;
                     if (cache == nullptr || !cache->fetch (key, b - 1))
                     {
                         SB_SECTION (sections::oscMorphBuild);
-                        buildMorphCycle (wt, framePos, true, tick.morphType, key.m, K, incMax, sampleRate, b, *morphScratch, tick.lowMorph, tick.scalarWarp);
-                        if (cache != nullptr)
+                        buildMorphCycle (wt, framePos, true, tick.morphType, key.m, K, incMax, sampleRate, b, *morphScratch, tick.lowMorph, tick.scalarWarp, reference_);
+                        if (cache != nullptr && (reference_ || !moving))
                             cache->store (key, b - 1);
                     }
                 }
@@ -481,7 +606,7 @@ public:
     {
         std::fill (L, L + n, 0.0f);
         std::fill (R, R + n, 0.0f);
-        if (tick.wt == nullptr || tick.level <= 0.0f)
+        if (pending || tick.wt == nullptr || tick.level <= 0.0f) // pending: the last tick (not yet applied) is silent
             return;
         const Wavetable& wt = *tick.wt;
         const int frames = wt.numFrames();
@@ -495,6 +620,17 @@ public:
         const bool morphing = morphActive;
         SB_SECTION (warped ? sections::oscWarp : (morphing ? sections::oscMorph : sections::oscTable));
         const int morphPairs = std::max (1, (curCount + 1) / 2);
+        // (k + 1) / n of the weight of the second cycle: for a power of two n (the 32 sample chunks) the quotient is exactly (k + 1) * (1 / n) (both are exact scalings by 2^-m of an
+        // integer below 2^24), so the divide is made once; for any other n the division stays
+        const bool nPow2 = !reference_ && n > 0 && (n & (n - 1)) == 0;
+        const float invN = 1.0f / static_cast<float> (n);
+        auto stepFrac = [&] (int i) noexcept { return nPow2 ? static_cast<float> (i) * invN : static_cast<float> (i) / static_cast<float> (n); };
+        // the same for every lane of this call
+        float bw = 1.0f;
+        for (int w = 0; w < 2; ++w)
+            bw = std::max (bw, warpBandwidthFactor (tick.warp[w], tick.warpAmount[w]));
+        const int os = tick.lowWarp ? kOversampleLow : kOversample, nt = tick.lowWarp ? kTapsLow : kTaps;
+        const double rateI = sampleRate * (warped ? os : 1);
         for (int v = 0; v < count; ++v)
         {
             if (curGainL[v] == 0.0f && curGainR[v] == 0.0f && prevGainL[v] == 0.0f && prevGainR[v] == 0.0f)
@@ -508,15 +644,25 @@ public:
                 }
                 continue;
             }
-            float bw = 1.0f;
-            for (int w = 0; w < 2; ++w)
-                bw = std::max (bw, warpBandwidthFactor (tick.warp[w], tick.warpAmount[w]));
             const float fmax = std::max (curInc[v], prevInc[v]) * static_cast<float> (sampleRate) * bw;
-            const int os = tick.lowWarp ? kOversampleLow : kOversample, nt = tick.lowWarp ? kTapsLow : kTaps;
-            const double rateI = sampleRate * (warped ? os : 1);
-            // band limit: the coarsest level that keeps the highest harmonic below Nyquist (of the rate the oscillator runs at)
-            const int level = Wavetable::levelFor (static_cast<float> (warped ? (tick.lowWarp ? 1.0 : 3.2) * sampleRate : nyq) / std::max (fmax, 1.0f));
-            int N = Wavetable::size (level);
+            // band limit: the coarsest level that keeps the highest harmonic below Nyquist (of the rate the oscillator runs at); levelFor () and size () are functions of this one
+            // number, so the lane keeps the last answer for it
+            const float ratio = static_cast<float> (warped ? (tick.lowWarp ? 1.0 : 3.2) * sampleRate : nyq) / std::max (fmax, 1.0f);
+            int level, N;
+            if (!reference_ && laneRatioOk[v] && sameBits (laneRatio[v], ratio))
+            {
+                level = laneLevel[v];
+                N = laneSize[v];
+            }
+            else
+            {
+                level = Wavetable::levelFor (ratio);
+                N = Wavetable::size (level);
+                laneRatio[v] = ratio;
+                laneLevel[v] = level;
+                laneSize[v] = N;
+                laneRatioOk[v] = true;
+            }
             // two cycles and the weight of the second one at the start / end of this chunk
             const float* cA = nullptr;
             const float* cB = nullptr;
@@ -525,8 +671,8 @@ public:
             if (morphing)
             {
                 const int g = std::min (morphGroups - 1, (v / 2) * morphGroups / morphPairs);
-                cA = morphBuf.data() + (static_cast<size_t> (g) * 2) * kMorphStride + 1;
-                cB = cA + kMorphStride;
+                cA = morphOld (g);
+                cB = morphNew (g);
                 const float len = static_cast<float> (kMorphRebuild);
                 wB0 = std::min (1.0f, (static_cast<float> (morphAge) + tStart * kControlPeriod) / len);
                 wB1 = std::min (1.0f, (static_cast<float> (morphAge) + tEnd * kControlPeriod) / len);
@@ -562,11 +708,18 @@ public:
             const bool filt1 = tick.warp[1] == kWarpFilterLpf || tick.warp[1] == kWarpFilterHpf;
             float* fz = filterState[v];
             // the one pole filters of the Filter LPF / HPF warps: two cascaded poles at ratio * f0
-            auto filterStage = [&] (int slot, int type, float amount, float y) noexcept
+            // the pole gain of a filter slot: constant during this call (type, amount, f0Hz and the rate do not change inside it), so it is computed once per lane (the reference
+            // path computes it per sample as before)
+            auto filterGain = [&] (int type, float amount) noexcept
             {
                 const float ratio = (type == kWarpFilterLpf ? 1.0f : 0.5f) * std::exp2 (7.0f * amount);
                 const float x = std::min (kTwoPif * ratio * f0Hz / static_cast<float> (rateI), 8.0f);
-                const float g = x / (1.0f + x);
+                return x / (1.0f + x);
+            };
+            const float gain0 = filt0 && !reference_ ? filterGain (tick.warp[0], a0) : 0.0f, gain1 = filt1 && !reference_ ? filterGain (tick.warp[1], a1) : 0.0f;
+            auto filterStage = [&] (int slot, int type, float amount, float y) noexcept
+            {
+                const float g = reference_ ? filterGain (type, amount) : (slot == 0 ? gain0 : gain1);
                 float* z = fz + slot * 2;
                 if (type == kWarpFilterLpf)
                 {
@@ -630,14 +783,17 @@ public:
             {
                 // the plain table read (no warp, no cross signal, no filter stage): the general sampleAt () below with its branches removed. p < 1, so the wrap of the
                 // phase (q -= floor (q)) and the window factor 1 change nothing; the weight of the second cycle is only needed where there is one.
-                renderPlain (L, R, t0, n, ph, cA, cB, wB0, wB1, fscale, N, prevGainL[v], curGainL[v], prevGainR[v], curGainR[v], prevInc[v], curInc[v], invP);
+                if (reference_)
+                    renderPlainReference (L, R, t0, n, ph, cA, cB, wB0, wB1, fscale, N, prevGainL[v], curGainL[v], prevGainR[v], curGainR[v], prevInc[v], curInc[v], invP);
+                else
+                    renderPlain (L, R, t0, n, ph, cA, cB, wB0, wB1, fscale, N, prevGainL[v], curGainL[v], prevGainR[v], curGainR[v], prevInc[v], curInc[v], invP, nPow2 ? invN : 0.0f);
             }
             else if (!warped)
             {
                 for (int k = 0; k < n; ++k)
                 {
                     const float t = static_cast<float> (t0 + k + 1) * invP;
-                    const float y = sampleAt (ph, k, 1.0f, lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)));
+                    const float y = sampleAt (ph, k, 1.0f, lerp (wB0, wB1, stepFrac (k + 1)));
                     L[k] += y * lerp (prevGainL[v], curGainL[v], t);
                     R[k] += y * lerp (prevGainR[v], curGainR[v], t);
                     ph += static_cast<uint32_t> (lerp (prevInc[v], curInc[v], t) * 4294967296.0f);
@@ -668,6 +824,28 @@ public:
                         r = lerp (r, hermite (cB + idx, fr), wBk);
                     return r;
                 };
+                // FM A / B, Thru-Zero and Linear alone (no second warp, no filter stage): the phase is p + m * a * 0.3, wrapped; no window, and the sample stage of these warps does
+                // nothing. The same arithmetic as sampleAt () for this case, read in place; m is the other oscillator's signal interpolated as in sampleAt ()
+                const bool fmOnly = !reference_ && tick.warp[1] == 0
+                                    && (tick.warp[0] == kWarpFmA || tick.warp[0] == kWarpFmB || tick.warp[0] == kWarpFmTzA || tick.warp[0] == kWarpFmTzB || tick.warp[0] == kWarpFmLinA
+                                        || tick.warp[0] == kWarpFmLinB);
+                const float* fmCross = cs0 >= 0 && cross != nullptr ? cross[cs0] : nullptr;
+                const float fmPrev = cs0 >= 0 ? lastCross[cs0] : 0.0f;
+                auto fmSample = [&] (uint32_t phx, int k, float fk, float wBk) noexcept
+                {
+                    const float p = static_cast<float> (phx >> 8) * (1.0f / 16777216.0f);
+                    const float m = fmCross != nullptr ? lerp (k > 0 ? fmCross[k - 1] : fmPrev, fmCross[k], fk) : 0.0f;
+                    const float x = p + m * a0 * 0.3f;
+                    float q = x - ffloor (x); // warpPhase (): frac
+                    q -= ffloor (q);          // the read of the table wraps once more
+                    const float pos = q * fscale;
+                    const int idx = std::clamp (static_cast<int> (pos), 0, N);
+                    const float fr = pos - static_cast<float> (idx);
+                    float r = hermite (cA + idx, fr);
+                    if (cB != nullptr)
+                        r = lerp (r, hermite (cB + idx, fr), wBk);
+                    return r;
+                };
 #if SB_NEON
                 // Two warps that only move the phase (Sync, Formant, Bend: the warp presets), no filter stage: the oversampled samples are made four
                 // at a time (warpedGroup4: the operations of sampleAt () lane by lane, the same values). The phases and the weights of the second cycle are laid out first,
@@ -687,7 +865,7 @@ public:
                     {
                         const float t = static_cast<float> (t0 + k + 1) * invP;
                         const uint32_t incO = static_cast<uint32_t> (lerp (prevInc[v], curInc[v], t) * (4294967296.0f / static_cast<float> (os)));
-                        const float wBk = cB != nullptr ? lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)) : 0.0f;
+                        const float wBk = cB != nullptr ? lerp (wB0, wB1, stepFrac (k + 1)) : 0.0f;
                         for (int j = 0; j < os; ++j)
                         {
                             phs[total] = ph;
@@ -708,11 +886,12 @@ public:
                 {
                     const float t = static_cast<float> (t0 + k + 1) * invP;
                     const uint32_t incO = static_cast<uint32_t> (lerp (prevInc[v], curInc[v], t) * (4294967296.0f / static_cast<float> (os)));
-                    const float wBk = cB != nullptr ? lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)) : 0.0f; // only a second cycle has a weight
+                    const float wBk = cB != nullptr ? lerp (wB0, wB1, stepFrac (k + 1)) : 0.0f; // only a second cycle has a weight
                     for (int j = 0; j < os; ++j)
                     {
                         buf[nt - 1 + k * os + j] = syncOnly ? syncSample (ph, wBk)
-                                                            : sampleAt (ph, k, static_cast<float> (j + 1) * (1.0f / static_cast<float> (os)), wBk);
+                                                            : (fmOnly ? fmSample (ph, k, static_cast<float> (j + 1) * (1.0f / static_cast<float> (os)), wBk)
+                                                                      : sampleAt (ph, k, static_cast<float> (j + 1) * (1.0f / static_cast<float> (os)), wBk));
                         ph += incO;
                     }
                 }
@@ -761,7 +940,7 @@ public:
         const float32x4_t half = vdupq_n_f32 (0.5f);
         const float32x4_t c1 = vmulq_f32 (half, vsubq_f32 (x1, xm1));
         float32x4_t c2 = vsubq_f32 (xm1, vmulq_f32 (vdupq_n_f32 (2.5f), x0));
-        c2 = vaddq_f32 (c2, vmulq_f32 (vdupq_n_f32 (2.0f), x1));
+        c2 = vaddq_f32 (c2, vaddq_f32 (x1, x1)); // 2 x1: the sum is exactly the product
         c2 = vsubq_f32 (c2, vmulq_f32 (half, x2));
         const float32x4_t c3 = vaddq_f32 (vmulq_f32 (half, vsubq_f32 (x2, xm1)), vmulq_f32 (vdupq_n_f32 (1.5f), vsubq_f32 (x0, x1)));
         return vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (c3, fr), c2), fr), c1), fr), x0);
@@ -867,8 +1046,82 @@ public:
 #endif
 
     /** The plain table read of one voice over a chunk (no warp): `n` samples from `ph`, added to L / R. The NEON version does four samples at a time with the operations
-        of the scalar loop (the phases come from an integer prefix sum of the increments, the four table reads are four loads transposed into lanes). */
+        of the scalar loop (the phases come from an integer prefix sum of the increments, kept in registers, the four table reads are four loads transposed into lanes). */
     static void renderPlain (float* L, float* R, int t0, int n, uint32_t& ph, const float* cA, const float* cB, float wB0, float wB1, float fscale, int N, float pg, float cgl,
+                             float pgr, float cgr, float pinc, float cinc, float invP, float invN) noexcept
+    {
+        // invN: 1 / n when n is a power of two (then (k + 1) / n = (k + 1) * invN exactly), else 0 and the weights are divided
+        int k = 0;
+#if SB_NEON
+        const float32x4_t vwb0 = vdupq_n_f32 (wB0), vdwb = vdupq_n_f32 (wB1 - wB0), vinvN = vdupq_n_f32 (invN);
+        const int32_t kfirst[4] = { 1, 2, 3, 4 };
+        int32x4_t vk = vld1q_s32 (kfirst); // k + j + 1
+        const float32x4_t vinv = vdupq_n_f32 (1.0f / 16777216.0f), vscale = vdupq_n_f32 (fscale), vtwo32 = vdupq_n_f32 (4294967296.0f), vinvP = vdupq_n_f32 (invP);
+        // lerp4 (a, b, t) = a + (b - a) * t with the difference formed once
+        const float32x4_t vpinc = vdupq_n_f32 (pinc), vdinc = vsubq_f32 (vdupq_n_f32 (cinc), vpinc);
+        const float32x4_t vpg = vdupq_n_f32 (pg), vdgl = vsubq_f32 (vdupq_n_f32 (cgl), vpg), vpgr = vdupq_n_f32 (pgr), vdgr = vsubq_f32 (vdupq_n_f32 (cgr), vpgr);
+        const int32x4_t vzero = vdupq_n_s32 (0), vN = vdupq_n_s32 (N), vfour = vdupq_n_s32 (4);
+        const uint32x4_t uzero = vdupq_n_u32 (0);
+        const int32_t first[4] = { t0 + 1, t0 + 2, t0 + 3, t0 + 4 };
+        int32x4_t vidx = vld1q_s32 (first); // t0 + k + 1 + lane (simd::ramp4 (t0, k, invP) = this times invP)
+        uint32x4_t vph = vdupq_n_u32 (ph);
+        for (; k + 4 <= n; k += 4)
+        {
+            const float32x4_t t = vmulq_f32 (vcvtq_f32_s32 (vidx), vinvP);
+            vidx = vaddq_s32 (vidx, vfour);
+            // the increments of the four samples, the phase before each of them (an exclusive prefix sum modulo 2^32) and the phase after the last
+            const uint32x4_t inc = vcvtq_u32_f32 (vmulq_f32 (vaddq_f32 (vpinc, vmulq_f32 (vdinc, t)), vtwo32));
+            const uint32x4_t s1 = vaddq_u32 (inc, vextq_u32 (uzero, inc, 3));
+            const uint32x4_t s2 = vaddq_u32 (s1, vextq_u32 (uzero, s1, 2));
+            const uint32x4_t phs = vaddq_u32 (vph, vextq_u32 (uzero, s2, 3));
+            vph = vaddq_u32 (vph, vdupq_lane_u32 (vget_high_u32 (s2), 1));
+            const float32x4_t p = vmulq_f32 (vcvtq_f32_u32 (vshrq_n_u32 (phs, 8)), vinv);
+            const float32x4_t pos = vmulq_f32 (p, vscale);
+            const int32x4_t idx = vminq_s32 (vmaxq_s32 (vcvtq_s32_f32 (pos), vzero), vN);
+            const float32x4_t fr = vsubq_f32 (pos, vcvtq_f32_s32 (idx));
+            const float* const bA[4] = { cA, cA, cA, cA };
+            float32x4_t y = hermite4 (bA, idx, fr);
+            if (cB != nullptr)
+            {
+                const float* const bB[4] = { cB, cB, cB, cB };
+                const float32x4_t yB = hermite4 (bB, idx, fr);
+                float32x4_t wkv;
+                if (invN > 0.0f)
+                    wkv = vaddq_f32 (vwb0, vmulq_f32 (vdwb, vmulq_f32 (vcvtq_f32_s32 (vk), vinvN))); // lerp (wB0, wB1, (k + j + 1) / n)
+                else
+                {
+                    float wk[4];
+                    for (int j = 0; j < 4; ++j)
+                        wk[j] = lerp (wB0, wB1, static_cast<float> (k + j + 1) / static_cast<float> (n));
+                    wkv = vld1q_f32 (wk);
+                }
+                y = simd::lerp4 (y, yB, wkv);
+            }
+            vk = vaddq_s32 (vk, vfour);
+            vst1q_f32 (L + k, vaddq_f32 (vld1q_f32 (L + k), vmulq_f32 (y, vaddq_f32 (vpg, vmulq_f32 (vdgl, t)))));
+            vst1q_f32 (R + k, vaddq_f32 (vld1q_f32 (R + k), vmulq_f32 (y, vaddq_f32 (vpgr, vmulq_f32 (vdgr, t)))));
+        }
+        ph = vgetq_lane_u32 (vph, 0);
+#endif
+        for (; k < n; ++k)
+        {
+            const float t = static_cast<float> (t0 + k + 1) * invP;
+            const float p = static_cast<float> (ph >> 8) * (1.0f / 16777216.0f);
+            const float pos = p * fscale;
+            const int idx = std::clamp (static_cast<int> (pos), 0, N);
+            const float fr = pos - static_cast<float> (idx);
+            float y = hermite (cA + idx, fr);
+            if (cB != nullptr)
+                y = lerp (y, hermite (cB + idx, fr), lerp (wB0, wB1, invN > 0.0f ? static_cast<float> (k + 1) * invN : static_cast<float> (k + 1) / static_cast<float> (n)));
+            L[k] += y * lerp (pg, cgl, t);
+            R[k] += y * lerp (pgr, cgr, t);
+            ph += static_cast<uint32_t> (lerp (pinc, cinc, t) * 4294967296.0f); // x * 2^32 is exact in float: the same integer as the double product
+        }
+    }
+
+    /** The plain table read as it was before the work of docs/release/CPU-REVIEW-OSC.md (kept for the tests): one voice over a chunk (no warp): `n` samples from `ph`, added to L / R. The NEON version does four samples at a time with the operations
+        of the scalar loop (the phases come from an integer prefix sum of the increments, the four table reads are four loads transposed into lanes). */
+    static void renderPlainReference (float* L, float* R, int t0, int n, uint32_t& ph, const float* cA, const float* cB, float wB0, float wB1, float fscale, int N, float pg, float cgl,
                              float pgr, float cgr, float pinc, float cinc, float invP) noexcept
     {
         int k = 0;
@@ -939,7 +1192,12 @@ public:
 private:
     static constexpr int kMorphGroups = 2, kMorphStride = Wavetable::kCycle + 4, kMorphRebuild = 256;
     OscTick tick;
-    std::vector<float> morphBuf;                 // [group][old, new][kMorphStride]
+    std::vector<float> morphBuf;                 // [group][two buffers][kMorphStride]: the old and the new cycle of a group, by morphNewSlot (the roles swap at a rebuild)
+    int morphNewSlot[kMorphGroups] = { 1, 1 };
+    bool morphKeyOk[kMorphGroups] = { false, false };
+    float morphKeyFrame[kMorphGroups] = {}, morphKeyM[kMorphGroups] = {};
+    float* morphOld (int g) noexcept { return morphBuf.data() + (static_cast<size_t> (g) * 2 + static_cast<size_t> (morphNewSlot[g] ^ 1)) * kMorphStride + 1; }
+    float* morphNew (int g) noexcept { return morphBuf.data() + (static_cast<size_t> (g) * 2 + static_cast<size_t> (morphNewSlot[g])) * kMorphStride + 1; }
     std::unique_ptr<MorphScratch> morphScratch;
     int morphAge = 0, morphGroups = 1;
     bool morphActive = false;
@@ -954,6 +1212,33 @@ private:
     float lastCross[6] = {};
     int curCount = 1, prevCount = 1;
     bool havePrev = false;
+    // a silent tick that update () has not yet applied (see deferSilent ())
+    bool pending = false, pendingMorph = false;
+    double pendingRate = 0.0;
+    OscTick pendingTick;
+    void flushPending() noexcept
+    {
+        if (!pending)
+            return;
+        pending = false;
+        const OscTick t = pendingTick;
+        Rng unused;
+        update (t, pendingRate, unused);
+        if (pendingMorph)
+            updateMorph (pendingRate, false, nullptr);
+    }
+    // the results of the sines and of the detune curve of the last full update (keyed on their inputs: the same values as computing them again); see update ()
+    bool reference_ = false;
+    static bool sameBits (float a, float b) noexcept { uint32_t x, y; std::memcpy (&x, &a, 4); std::memcpy (&y, &b, 4); return x == y; }
+    bool spreadOk = false, panLOk = false, panROk = false, offOk = false;
+    float spreadW = 0.0f, spreadSa = 0.0f, spreadSb = 0.0f, panKeyL = 0.0f, panLValue = 0.0f, panKeyR = 0.0f, panRValue = 0.0f;
+    int offU = 0, offMode = 0;
+    float offCurve = 0.0f, offRange = 0.0f, offValue[kMaxVoices] = {};
+    float freqInc[kMaxVoices] = {};
+    float laneRatio[kMaxVoices] = {};      // the argument of Wavetable::levelFor () of each lane at its last render and the answers
+    int laneLevel[kMaxVoices] = {}, laneSize[kMaxVoices] = {};
+    bool laneRatioOk[kMaxVoices] = {};
+    double incRate[kMaxVoices] = {};
     float freqSemis[kMaxVoices] = {};   // the pitch of every voice at its last full update () and its frequency in Hz (the double exp2 is not repeated for a held pitch)
     double freqHz[kMaxVoices] = {};
     bool haveFreq[kMaxVoices] = {};
