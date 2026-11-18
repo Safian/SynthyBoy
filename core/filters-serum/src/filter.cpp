@@ -194,7 +194,8 @@ public:
         const bool diffusor = type == FilterType::Diffusor;
         const bool allpasses = type == FilterType::Allpasses; // Smear / Allpasses: the all-pass chain of the Diffusor with 6 stages, its own taps and gain
         const bool chain = diffusor || allpasses;
-        if (fb.type_ != type || !(scream || ladder || chain) || fa.sampleRate_ != fb.sampleRate_ || fa.params_.coefHold != fb.params_.coefHold)
+        const bool multi = type >= FilterType::LH && type <= FilterType::NN; // Multi SVF: two state variable filters in series, the second at a cutoff shifted by var
+        if (fb.type_ != type || !(scream || ladder || chain || multi) || fa.sampleRate_ != fb.sampleRate_ || fa.params_.coefHold != fb.params_.coefHold)
             return false;
 
         const auto srFloat = static_cast<float> (fa.sampleRate_);
@@ -202,7 +203,7 @@ public:
         const int hold = fa.params_.coefHold;
 
         // per lane, what processBlock () and processInternal () take from the parameters
-        float targetCutoff[2], targetRes[2], drive[2], var[2], mix[2];
+        float targetCutoff[2], targetRes[2], drive[2], var[2], blend[2], mix[2];
         for (int l = 0; l < 2; ++l)
         {
             const FilterParams& p = f[l]->params_;
@@ -210,6 +211,7 @@ public:
             targetRes[l] = std::max (0.0f, std::min (p.resonance, 1.0f));
             drive[l] = std::max (0.0f, std::min (p.drive, 1.0f));
             var[l] = std::max (0.0f, std::min (p.var, 1.0f));
+            blend[l] = std::max (0.0f, std::min (p.blend, 1.0f));
             mix[l] = std::max (0.0f, std::min (p.mix, 1.0f));
         }
         int stages = 0;
@@ -254,26 +256,40 @@ public:
         const V vLadderDriveGain = V::set (1.0f + 2.0f * ladderDrive[0], 1.0f + 2.0f * ladderDrive[1]);
         const V vTwoFat = V::all (2.0f * fat);
         const bool fatOn = fat > 0.001f; // (a per call constant: tested once, not per sample)
+        // Multi SVF: the factor of the second cutoff (FREQ, -4 to +4 octaves), the blend of the two stages, and which output each stage gives (per call constants)
+        float multiFactor[2] = { 1.0f, 1.0f };
+        if (multi)
+            for (int l = 0; l < 2; ++l)
+                multiFactor[l] = f[l]->pow2M ((var[l] - 0.5f) * 8.0f);
+        const V vBlendOut2 = V::set (1.0f - 0.5f * blend[0], 1.0f - 0.5f * blend[1]), vBlendOut1 = V::set (0.5f * blend[0], 0.5f * blend[1]);
+        // stage 1: 0 low pass (LH LB LP LN), 1 high pass (HB HP HN), 2 band pass (BP BN), 3 peak (PP PN), 4 notch (NN)
+        const int sel1 = (type == FilterType::HB || type == FilterType::HP || type == FilterType::HN) ? 1
+                         : (type == FilterType::BP || type == FilterType::BN) ? 2 : (type == FilterType::PP || type == FilterType::PN) ? 3 : type == FilterType::NN ? 4 : 0;
+        // stage 2: 0 high pass (LH), 1 band pass (LB HB), 2 peak (LP HP BP PP), 3 notch (LN HN BN PN NN)
+        const int sel2 = (type == FilterType::LB || type == FilterType::HB) ? 1
+                         : (type == FilterType::LP || type == FilterType::HP || type == FilterType::BP || type == FilterType::PP) ? 2
+                         : (type == FilterType::LN || type == FilterType::HN || type == FilterType::BN || type == FilterType::PN || type == FilterType::NN) ? 3 : 0;
 
         V smoothedCutoff = V::set (fa.smoothedCutoff_, fb.smoothedCutoff_), smoothedRes = V::set (fa.smoothedRes_, fb.smoothedRes_);
         V heldCutoff = V::set (fa.heldCutoff_, fb.heldCutoff_), heldRes = V::set (fa.heldRes_, fb.heldRes_);
 
         // the states, sanitized as every scalar module does at the start of its call (they are stored sanitized, so once is the same as every sample)
         V s1 = V::sanitized (V::set (fa.svf1_.s1, fb.svf1_.s1)), s2 = V::sanitized (V::set (fa.svf1_.s2, fb.svf1_.s2));
+        V t1 = V::sanitized (V::set (fa.svf2_.s1, fb.svf2_.s1)), t2 = V::sanitized (V::set (fa.svf2_.s2, fb.svf2_.s2));
         V ps = V::sanitized (V::set (fa.onePole1_.s, fb.onePole1_.s));
         V ls[4];
         for (int k = 0; k < 4; ++k)
             ls[k] = V::sanitized (V::set (fa.ladder_.s[k], fb.ladder_.s[k]));
 
         // what follows the cutoff of a lane; redone when that cutoff changes
-        float lastCutoff[2] = { 0.0f, 0.0f }, g[2] = { 0.0f, 0.0f };
+        float lastCutoff[2] = { 0.0f, 0.0f }, g[2] = { 0.0f, 0.0f }, g2[2] = { 0.0f, 0.0f };
         bool haveCutoff[2] = { false, false };
         DelayLine::Tap taps[2][8];
-        V vGSafe = V::all (0.0f), vScreamCoef = V::all (0.0f);
+        V vGSafe = V::all (0.0f), vGSafe2 = V::all (0.0f), vScreamCoef = V::all (0.0f);
         V vLG = V::all (0.0f), vLG0 = V::all (0.0f), vLG2 = V::all (0.0f), vLG3 = V::all (0.0f), vLG4 = V::all (0.0f);
         float lastR[2] = { 0.0f, 0.0f };
         bool haveR[2] = { false, false };
-        V vDEff = V::all (0.0f);
+        V vDEff = V::all (0.0f), vDEff2 = V::all (0.0f);
 
         int holdCount = 0;
         for (int i = 0; i < numSamples; ++i)
@@ -308,14 +324,14 @@ public:
                 {
                     const float screamFreq = std::max (20.0f, std::min (c * screamFactor[l], srFloat * 0.49f));
                     screamG[l] = f[l]->tanM (kPi * screamFreq / srFloat);
-                    OnePoleTPT& op = f[l]->onePole1_;
-                    if (!(op.haveCoef && screamG[l] == op.lastG))
-                    {
-                        op.lastCoef = screamG[l] / (1.0f + screamG[l]);
-                        op.lastG = screamG[l];
-                        op.haveCoef = true;
-                    }
+                    onePoleCoef (f[l]->onePole1_, screamG[l]);
                     haveR[l] = false; // the division of the state variable filter depends on g as well
+                }
+                else if (multi)
+                {
+                    const float fc2 = std::max (20.0f, std::min (c * multiFactor[l], srFloat * 0.49f));
+                    g2[l] = f[l]->tanM (kPi * fc2 / srFloat);
+                    haveR[l] = false; // the divisions of both state variable filters depend on their g as well
                 }
                 else if (ladder)
                 {
@@ -347,6 +363,11 @@ public:
                     vGSafe = V::set (std::max (1e-5f, std::min (g[0], 50.0f)), std::max (1e-5f, std::min (g[1], 50.0f)));
                     vScreamCoef = V::set (fa.onePole1_.lastCoef, fb.onePole1_.lastCoef);
                 }
+                else if (multi)
+                {
+                    vGSafe = V::set (std::max (1e-5f, std::min (g[0], 50.0f)), std::max (1e-5f, std::min (g[1], 50.0f)));
+                    vGSafe2 = V::set (std::max (1e-5f, std::min (g2[0], 50.0f)), std::max (1e-5f, std::min (g2[1], 50.0f)));
+                }
                 else if (ladder)
                 {
                     vLG = V::set (fa.ladder_.cG, fb.ladder_.cG);
@@ -359,7 +380,7 @@ public:
 
             const V drivenIn = V::softClipped (vDriveGain * in);
             V rawOut = drivenIn;
-            if (scream)
+            if (scream || multi)
             {
                 // SVFTPT::process without FAT: the damping is 2 R, its division is redone when g or R change
                 const V R = vOne - V::all (0.96f) * res;
@@ -373,31 +394,53 @@ public:
                     lastR[l] = Rl;
                     haveR[l] = true;
                     dChanged = true;
-                    SVFTPT& sv = f[l]->svf1_;
-                    const float gSafe = vGSafe.get (l), dampingL = damping.get (l);
-                    if (!(sv.haveD && gSafe == sv.dG && Rl == sv.dR))
-                    {
-                        sv.dCached = 1.0f / (1.0f + dampingL * gSafe + gSafe * gSafe);
-                        sv.dG = gSafe;
-                        sv.dR = Rl;
-                        sv.haveD = true;
-                    }
+                    svfDivision (f[l]->svf1_, vGSafe.get (l), Rl, damping.get (l));
+                    if (multi)
+                        svfDivision (f[l]->svf2_, vGSafe2.get (l), Rl, damping.get (l));
                 }
                 if (dChanged)
+                {
                     vDEff = V::set (fa.svf1_.dCached, fb.svf1_.dCached);
-                const V hp = (drivenIn - (damping + vGSafe) * s1 - s2) * vDEff;
-                const V v1 = vGSafe * hp;
-                const V bp = v1 + s1;
-                s1 = V::sanitized (v1 + bp);
-                const V v2 = vGSafe * bp;
-                const V lp = v2 + s2;
-                s2 = V::sanitized (v2 + lp);
-                const V primary = type == FilterType::ScreamBP ? bp : lp;
-                // OnePoleTPT::processLP at the second cutoff
-                const V pv = vScreamCoef * (primary - ps);
-                const V screamLP = pv + ps;
-                ps = V::sanitized (pv + screamLP);
-                rawOut = V::softClipped (primary + V::softClipped (vScreamGain * res * screamLP));
+                    if (multi)
+                        vDEff2 = V::set (fa.svf2_.dCached, fb.svf2_.dCached);
+                }
+                V lp, bp, hp;
+                svfStep (drivenIn, damping, vGSafe, vDEff, s1, s2, lp, bp, hp);
+                if (scream)
+                {
+                    const V primary = type == FilterType::ScreamBP ? bp : lp;
+                    // OnePoleTPT::processLP at the second cutoff
+                    const V pv = vScreamCoef * (primary - ps);
+                    const V screamLP = pv + ps;
+                    ps = V::sanitized (pv + screamLP);
+                    rawOut = V::softClipped (primary + V::softClipped (vScreamGain * res * screamLP));
+                }
+                else
+                {
+                    // the Multi SVF case of processInternal (): the output of stage 1 by type, clipped, through stage 2 at the second cutoff, its output by type,
+                    // clipped, and the blend of the two
+                    V out1 = lp;
+                    if (sel1 == 1)
+                        out1 = hp;
+                    else if (sel1 == 2)
+                        out1 = bp;
+                    else if (sel1 == 3)
+                        out1 = V::softClipped (drivenIn + (vOne + V::all (1.5f) * res) * bp);
+                    else if (sel1 == 4)
+                        out1 = hp + lp;
+                    out1 = V::softClipped (out1);
+                    V lp2, bp2, hp2;
+                    svfStep (out1, damping, vGSafe2, vDEff2, t1, t2, lp2, bp2, hp2);
+                    V out2 = hp2;
+                    if (sel2 == 1)
+                        out2 = bp2;
+                    else if (sel2 == 2)
+                        out2 = V::softClipped (out1 + (vOne + V::all (1.5f) * res) * bp2);
+                    else if (sel2 == 3)
+                        out2 = hp2 + lp2;
+                    out2 = V::softClipped (out2);
+                    rawOut = vBlendOut2 * out2 + vBlendOut1 * out1;
+                }
             }
             else if (ladder)
             {
@@ -449,11 +492,17 @@ public:
             f[l]->smoothedRes_ = smoothedRes.get (l);
             f[l]->heldCutoff_ = heldCutoff.get (l);
             f[l]->heldRes_ = heldRes.get (l);
-            if (scream)
+            if (scream || multi)
             {
                 f[l]->svf1_.s1 = s1.get (l);
                 f[l]->svf1_.s2 = s2.get (l);
+            }
+            if (scream)
                 f[l]->onePole1_.s = ps.get (l);
+            else if (multi)
+            {
+                f[l]->svf2_.s1 = t1.get (l);
+                f[l]->svf2_.s2 = t2.get (l);
             }
             else if (ladder)
                 for (int k = 0; k < 4; ++k)
@@ -463,6 +512,40 @@ public:
     }
 
 private:
+    /** The coefficient memo of OnePoleTPT::processLP (): g / (1 + g), redone when g differs from the last one. */
+    static void onePoleCoef (OnePoleTPT& op, float g) noexcept
+    {
+        if (!(op.haveCoef && g == op.lastG))
+        {
+            op.lastCoef = g / (1.0f + g);
+            op.lastG = g;
+            op.haveCoef = true;
+        }
+    }
+    /** The kept division of SVFTPT::process () without FAT, redone when gSafe or R differ from the last ones. */
+    static void svfDivision (SVFTPT& sv, float gSafe, float R, float damping) noexcept
+    {
+        if (!(sv.haveD && gSafe == sv.dG && R == sv.dR))
+        {
+            sv.dCached = 1.0f / (1.0f + damping * gSafe + gSafe * gSafe);
+            sv.dG = gSafe;
+            sv.dR = R;
+            sv.haveD = true;
+        }
+    }
+    /** One sample of SVFTPT::process () without FAT in the lanes (its operations one by one): the low, band and high pass outputs; notch = hp + lp. */
+    template <class V>
+    static void svfStep (const V& x, const V& damping, const V& gSafe, const V& dEff, V& a1, V& a2, V& lp, V& bp, V& hp) noexcept
+    {
+        hp = (x - (damping + gSafe) * a1 - a2) * dEff;
+        const V v1 = gSafe * hp;
+        bp = v1 + a1;
+        a1 = V::sanitized (v1 + bp);
+        const V v2 = gSafe * bp;
+        lp = v2 + a2;
+        a2 = V::sanitized (v2 + lp);
+    }
+
     float processInternal (float in, float cutoff, float res) noexcept;
 
     // A small cache of the transcendental functions of the coefficients (the same argument gives the same result: nothing changes in the output). Cutoff and resonance move

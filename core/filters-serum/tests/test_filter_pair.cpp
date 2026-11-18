@@ -34,8 +34,11 @@ using PairFn = bool (*) (Filter&, Filter&, const float*, float*, const float*, f
 struct KernelForm { const char* name; PairFn fn; bool available; };
 const KernelForm kForms[] = { { "reference lanes", &Filter::processPairReference, true }, { "NEON lanes", &Filter::processPair, Filter::pairKernelAvailable() } };
 
-const FilterType kTypes[] = { FilterType::ScreamLP, FilterType::ScreamBP, FilterType::EMSLadder, FilterType::MGLadder, FilterType::Diffusor, FilterType::Allpasses };
-const char* const kTypeNames[] = { "Scream LP", "Scream BP", "EMS Ladder", "MG Ladder", "Diffusor", "Allpasses" };
+const FilterType kTypes[] = { FilterType::ScreamLP, FilterType::ScreamBP, FilterType::EMSLadder, FilterType::MGLadder, FilterType::Diffusor, FilterType::Allpasses,
+                              FilterType::LH, FilterType::LB, FilterType::LP, FilterType::LN, FilterType::HB, FilterType::HP, FilterType::HN, FilterType::BP, FilterType::BN,
+                              FilterType::PP, FilterType::PN, FilterType::NN };
+const char* const kTypeNames[] = { "Scream LP", "Scream BP", "EMS Ladder", "MG Ladder", "Diffusor", "Allpasses",
+                                   "Multi LH", "Multi LB", "Multi LP", "Multi LN", "Multi HB", "Multi HP", "Multi HN", "Multi BP", "Multi BN", "Multi PP", "Multi PN", "Multi NN" };
 
 FilterParams randomParams (Rng& r, int hold, bool extreme)
 {
