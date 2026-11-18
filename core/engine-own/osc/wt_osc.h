@@ -523,7 +523,27 @@ public:
             history.assign (static_cast<size_t> (kMaxVoices) * (kTaps - 1), 0.0f);
     }
 
-    /** Called once per control period (after update ()): rebuilds the morphed cycles every kMorphRebuild samples. */
+    /** The stagger of the morph rebuilds (round 13, docs/release/CPU-REVIEW-OSC.md F1): `n` = morphStaggerSeed (note serial, oscillator index) (Voice::tick, at the note start). The voices of a
+        chord start in the same control period; without a stagger all of them rebuild their morph cycle in the same period (one block in four at tier low carried every build). The build of
+        the first period of a note is unchanged; after it the morph age starts at `morphStaggerSlot (n, P) * kControlPeriod` instead of 0 (P = the rebuild period in control periods: 16 at
+        tier low, 8 otherwise), so the voice's next build comes that many periods earlier and from then on every P periods as before. 0 (the default) is the old schedule. */
+    void setMorphStagger (uint32_t n) noexcept { morphStagger = n; }
+    /** The stagger seed of oscillator `osc` (0 .. 2) of the note with serial `serial` (the engine's note counter: the notes of a chord have consecutive serials): serial + 4 osc. The notes of a
+        chord give consecutive seeds on each oscillator; a chord of 8 notes with one morph oscillator, or of 4 notes with two (oscillators 1 and 2: seeds s .. s + 7), gives 8 consecutive seeds. */
+    static uint32_t morphStaggerSeed (uint32_t serial, int osc) noexcept { return serial + 4u * static_cast<uint32_t> (osc); }
+    /** The slot (0 .. P - 1, P = 8 or 16) of seed `n`: one of the 8 evenly spaced periods k P / 8, in the order k = 0, 2, 4, 6, 1, 3, 5, 7 of n mod 8 (n mod 4 picks the quarter of the
+        rebuild period, n / 4 mod 2 half a quarter later). Any 8 consecutive seeds take all 8 slots, so the 8 voices of a chord rebuild in every second period at tier low (every period
+        otherwise): the same number of builds in every block of 2, 4 or 8 periods (64, 128, 256 samples), wherever the chord starts inside a block. 4 consecutive seeds that begin at a
+        multiple of 4 take the four quarters; other runs are spread less evenly (4 notes from another seed: at most 2 builds in a block of 4 periods against 4 without the stagger). No
+        mapping can be flat for every run length and every start (a block of 4 periods holds the same count at every alignment only if the slots are whole residue classes mod 4), so it
+        is made exact for the chord of 8. */
+    static int morphStaggerSlot (uint32_t n, int P) noexcept
+    {
+        static constexpr int kOrder[8] = { 0, 2, 4, 6, 1, 3, 5, 7 };
+        return kOrder[n & 7u] * (P / 8);
+    }
+
+    /** Called once per control period (after update ()): rebuilds the morphed cycles every kMorphRebuild samples (2 kMorphRebuild at tier low), staggered per voice (setMorphStagger ()). */
     void updateMorph (double sampleRate, bool firstOfNote, MorphCache* cache = nullptr) noexcept
     {
         morphActive = tick.morphType != kMorphNone && tick.wt != nullptr && !morphBuf.empty();
@@ -597,7 +617,9 @@ public:
                 if (firstOfNote)
                     std::copy (b - 1, b - 1 + kMorphStride, a - 1);
             }
-            morphAge = 0;
+            // after the build of the first period the old and the new cycle are the same (the weight of the cross-fade does not matter): the age starts at the voice's slot, so its next build
+            // comes that many periods earlier, and the builds of a chord's voices fall in different periods
+            morphAge = firstOfNote ? morphStaggerSlot (morphStagger, rebuildEvery / kControlPeriod) * kControlPeriod : 0;
         }
     }
 
@@ -1200,6 +1222,7 @@ private:
     float* morphNew (int g) noexcept { return morphBuf.data() + (static_cast<size_t> (g) * 2 + static_cast<size_t> (morphNewSlot[g])) * kMorphStride + 1; }
     std::unique_ptr<MorphScratch> morphScratch;
     int morphAge = 0, morphGroups = 1;
+    uint32_t morphStagger = 0;                   // setMorphStagger ()
     bool morphActive = false;
     int frameIdx[kMaxVoices] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
     float filterState[kMaxVoices][4] = {};

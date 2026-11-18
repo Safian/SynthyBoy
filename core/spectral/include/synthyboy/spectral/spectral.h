@@ -156,8 +156,10 @@ public:
     void setLegacyOutput (bool on) noexcept { legacyOutput_ = on; }
     /** Tests only: the priming frames go through the 8 KB temporary and a scalar add loop (as before SP6). */
     void setLegacyStartOla (bool on) noexcept { legacyStartOla_ = on; }
-    /** Tests only: with Phase Lock every bin is advanced and then the lock overwrites about half of them (as before SP5), instead of advancing only the bins the lock keeps. */
+    /** Tests only: with Phase Lock every bin is advanced and then the lock overwrites all but bin 0 and the peaks (as before SP5), instead of advancing only the bins the lock keeps. */
     void setLegacyPhaseLock (bool on) noexcept { legacyLock_ = on; }
+    /** Tests only: the synthesis phases of channel `ch` (kBins values) of the last frame. */
+    const float* synthPhaseForTest (int ch) const noexcept { return channel_[ch].synthPhase; }
     void scribbleBuffersForTest (float value) noexcept;
     /** Tests only: how many of the lazily built tables (transform, overlap-add window, start gains, start schedule) exist. prepare() builds all of them. */
     static int tablesBuiltForTest() noexcept;

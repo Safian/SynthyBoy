@@ -779,7 +779,10 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     if (fresh)
     {
         for (int o = 0; o < 3; ++o)
+        {
             osc[o].start (P (pi.osc[o].phase) * (1.0f / 360.0f), clamp01 (P (pi.osc[o].randomPhase) * 0.01f), rng);
+            osc[o].setMorphStagger (WtOsc::morphStaggerSeed (noteSerial, o)); // the morph rebuilds of a chord's voices fall in different periods (WtOsc::setMorphStagger)
+        }
         sub.start (P (pi.sub.phase) * 0.01f, 0.0f, rng);
     }
     // a content set that replaced the one a sample-type player reads stops that player

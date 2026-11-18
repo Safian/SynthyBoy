@@ -766,8 +766,8 @@
     },
     {
       "path": "Pad/spectral_vowel_freeze.sbpreset",
-      "sha256": "841ab91b2f2c245021ab2d1b5917221ef74feb030d756888da1112c137e74ceb",
-      "size": 50904
+      "sha256": "c98bb859f815065608a46ea36d88e9cf16a93ed11911020f22d2d1d2415a41ae",
+      "size": 50902
     },
     {
       "path": "Lead/spectral_bowed_glass.sbpreset",
@@ -776,7 +776,7 @@
     },
     {
       "path": "Pad/spectral_gong_pad.sbpreset",
-      "sha256": "57d410665545903dc50a866db53f00e77635e594c95567a9cf923f1bf61c9d31",
+      "sha256": "046102f69d651b192a5971fee269a2c5e7a4f28ea99c61b968d13cae255faf25",
       "size": 50911
     },
     {
