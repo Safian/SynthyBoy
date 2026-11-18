@@ -520,7 +520,8 @@ python3 -m unittest scripts/tests/test_docs_release.py scripts/tests/test_docs_m
 # the release proof: no developer log strings in the DEV_LOG=OFF binary (and the same patterns are found in the default overlay build, so the check can see them)
 NOLOG="$(find build-mpc-live-nolog -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
 LOGPAT="-dev\.log|-log\.conf|mpckit|engine created at|scan factory presets|VSTPluginMain returns"
-strings -a "$NOLOG" | grep -E -e "$LOGPAT" > $B/nolog-strings.txt && { head -5 $B/nolog-strings.txt; echo "ACCEPT FAIL: log strings in the release (DEV_LOG=OFF) build"; exit 1; }
+strings -a "$NOLOG" | grep -E -e "$LOGPAT" | grep -v -E "^N[0-9]+mpckit[0-9]" > $B/nolog-strings.txt &&   # (the RTTI type names of the kit classes, N6mpckit9IInstanceE, are not log strings: the kit holds classes now, not only the log)
+ { head -5 $B/nolog-strings.txt; echo "ACCEPT FAIL: log strings in the release (DEV_LOG=OFF) build"; exit 1; }
 strings -a "$OVLREL" | grep -qE -e "$LOGPAT" || { echo "ACCEPT FAIL: the developer log is not in the default overlay build (the release proof would see nothing)"; exit 1; }
 # the lock free hand-over of the events between the threads (event_inbox.h): plainly and under ThreadSanitizer
 sh shell-mpc/tests/run_event_inbox_test.sh > $B/event-inbox.log 2>&1 || { tail -15 $B/event-inbox.log; echo "ACCEPT FAIL: event_inbox_host"; exit 1; }
