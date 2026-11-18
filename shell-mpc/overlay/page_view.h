@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "../kit/page_base.h"
 #include "../ui/theme.h"
 #include "macro_names.h"
 #include "page_detector.h"
@@ -29,12 +30,11 @@ namespace page
 {
 constexpr int kW = 1280, kH = 800, kTabY = 110, kTabH = 628;   // the screen, and the tab (the host's top bar above it, its function key bar below it)
 
-/** What the controller hands an element besides the instance: the live values, the readout targets of this view (IView::targets order) and the instance number the tab names (Env 3, LFO 2, Filter 2: 3, 2, 2; 1 for the others). */
-struct Input
+/** What the controller hands an element besides the instance: the readout targets of this view (IView::targets order) and the instance number the tab names (Env 3, LFO 2, Filter 2: 3, 2, 2; 1 for the others) are
+    the kit's PageInput; SynthyBoy's pages get the live values of the engine as well. */
+struct Input : mpckit::PageInput
 {
     const synthyboy::LiveValues* live = nullptr;
-    const float* targets = nullptr;
-    int instance = 1;
 };
 
 /** The opaque ground of the tab (a gradient: a cached cell). */
@@ -74,14 +74,27 @@ template <class Ui>
 struct QSlotCount<Ui, decltype (void (std::declval<const Ui&>().qSlotCount()))> { static int of (const Ui& u) noexcept { return u.qSlotCount(); } };
 } // namespace page
 
+/** The hooks of a page view for a page that needs nothing of the plugin around it (a page of the kit: mpckit::PageBase over mpckit::IInstance): no names to load, no loading bar. A plugin with its own
+    names, or a loading state, writes a class like MacroNameHooks (macro_names.h): `Instance`, `update (IInstance&)`, `scope ()`, `loading (const IInstance&)`. */
+struct NoHooks
+{
+    using Instance = mpckit::IInstance;
+    struct Scope { Scope() noexcept {} ~Scope() {} };   // (user provided: a local of it is never "unused")
+    void update (mpckit::IInstance&) noexcept {}
+    Scope scope() const noexcept { return Scope(); }
+    bool loading (const mpckit::IInstance&) const noexcept { return false; }
+};
+
 /** The elements a page can show are classes with:
       static constexpr int kElementPage   the UiStack id of the element's full page
-      void update (IInstanceView&, const UiStack&, double nowMs, const page::Input&)
+      void update (Hooks::Instance&, const UiStack&, double nowMs, const page::Input&)   (Hooks::Instance: IInstanceView for the pages of SynthyBoy, mpckit::IInstance for a kit page)
       void draw (gpu::SceneBuilder&) const        the picture of the page: ground excluded, popups and live parts included
-      bool touch (const TouchEvent&, UiStack&, IInstanceView&, double nowMs);  void tick (double, UiStack&, IInstanceView&)
+      bool touch (const TouchEvent&, UiStack&, Hooks::Instance&, double nowMs);  void tick (double, UiStack&, Hooks::Instance&)
       bool fingerDown() const noexcept;  void dropGesture() noexcept;  void forgetQGroup() noexcept
       int topPage() const noexcept   (the status file) */
-template <class Ui>
+/** `Hooks` (default: SynthyBoy's MacroNameHooks, macro_names.h; `NoHooks` for the pages of the kit) is what the view does around the page that is the plugin's: the instance type the page takes, the names that are active while the
+    page updates, draws and handles input, and the loading bar. */
+template <class Ui, class Hooks = MacroNameHooks>
 class PageView final : public IView
 {
 public:
@@ -97,20 +110,17 @@ public:
         if (in.io == nullptr || in.ui == nullptr)
             return false;
         bool changed = false;
-        IInstanceView& io = *ioOf (in);   // (the generic ViewInput of view.h: view_cast.h)
-        const bool loading = io.tablesLoading();   // a wavetable of the program is still being built: the bar below
+        typename Hooks::Instance& io = static_cast<typename Hooks::Instance&> (*in.io);   // (the generic ViewInput of view.h: the page takes the instance type of its plugin)
+        const bool loading = hooks_.loading (io);   // a wavetable of the program is still being built: the bar below
         if (loading != loading_)
         {
             loading_ = loading;
             changed = true;
         }
-        {
-            const auto content = io.content();   // the names of the macros the pages show (macro_names.h): the ones of this instance, for everything this view does
-            names_.load (content.get());
-        }
-        const NamesScope scope (names_);
+        hooks_.update (io);   // (SynthyBoy: the names of the macros the pages show, macro_names.h: the ones of this instance, for everything this view does)
+        const auto scope = hooks_.scope();
         page::Input pi;
-        pi.live = liveOf (in);
+        pi.live = static_cast<const synthyboy::LiveValues*> (in.live);
         pi.targets = in.targets;
         pi.instance = instance_;
         ui_.update (io, *in.ui, in.nowMs, pi);
@@ -140,16 +150,16 @@ public:
         ui = { 0, 0, page::kW, page::kH };
         return true;
     }
-    bool onTouch (const TouchEvent& ev, UiStack& stack, mpckit::IInstance& io, double nowMs) override { const NamesScope scope (names_); return ! stack.isMain() && ui_.touch (ev, stack, static_cast<IInstanceView&> (io), nowMs); }   // (every instance of SynthyBoy is an IInstanceView)
-    bool onWheel (int x, int y, int notches, UiStack& stack, mpckit::IInstance& io, double nowMs) override { const NamesScope scope (names_); return ! stack.isMain() && ui_.wheel (x, y, notches, stack, static_cast<IInstanceView&> (io), nowMs); }
-    void onTick (UiStack& stack, mpckit::IInstance& io, double nowMs) override { const NamesScope scope (names_); if (! stack.isMain()) ui_.tick (nowMs, stack, static_cast<IInstanceView&> (io)); }
+    bool onTouch (const TouchEvent& ev, UiStack& stack, mpckit::IInstance& io, double nowMs) override { const auto scope = hooks_.scope(); return ! stack.isMain() && ui_.touch (ev, stack, static_cast<typename Hooks::Instance&> (io), nowMs); }
+    bool onWheel (int x, int y, int notches, UiStack& stack, mpckit::IInstance& io, double nowMs) override { const auto scope = hooks_.scope(); return ! stack.isMain() && ui_.wheel (x, y, notches, stack, static_cast<typename Hooks::Instance&> (io), nowMs); }
+    void onTick (UiStack& stack, mpckit::IInstance& io, double nowMs) override { const auto scope = hooks_.scope(); if (! stack.isMain()) ui_.tick (nowMs, stack, static_cast<typename Hooks::Instance&> (io)); }
     void onShown() override { ui_.forgetQGroup(); }
     bool fingerDown() const noexcept override { return ui_.fingerDown(); }
     void dropGesture() noexcept override { ui_.dropGesture(); }
 
     void render (uint32_t* cv, int w, int h) override
     {
-        const NamesScope scope (names_);
+        const auto scope = hooks_.scope();
         if (! scratch_)
             scratch_ = std::make_unique<gpu::SceneData>();
         gpu::SceneBuilder sb (*scratch_);
@@ -163,7 +173,7 @@ public:
     {
         if (! have_ || w != page::kW || h != page::kH)
             return false;
-        const NamesScope scope (names_);
+        const auto scope = hooks_.scope();
         sb.begin (gpu::kKindPlay, static_cast<uint32_t> (viewIndex), w, h);
         buildPicture (sb);
         return ! sb.overflow;
@@ -209,11 +219,11 @@ private:
     int instance_;
     std::vector<int> targets_;
     Ui ui_;
-    MacroNames names_;   // the macro names of the instance this view shows, loaded at every update
+    Hooks hooks_;   // what the view does around the page: the macro names of the instance this view shows (SynthyBoy), loaded at every update
     std::unique_ptr<gpu::SceneData> scratch_;
     uint32_t hash_ = 0;
     bool have_ = false;
-    bool loading_ = false;   // IInstanceView::tablesLoading () at the last update
+    bool loading_ = false;   // Hooks::loading () (SynthyBoy: IInstanceView::tablesLoading ()) at the last update
     int edgeX_ = 1280;   // the key (ViewInput::panelEdgeX)
 };
 

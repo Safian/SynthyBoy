@@ -3,8 +3,10 @@
 // hands the readout targets to the filter pages, and the pictures of all of them fit the scene.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <cmath>
 #include <cstdio>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "fakes.h"
@@ -13,6 +15,26 @@ using namespace ovt;
 
 namespace
 {
+/** A page of the KIT (mpckit::PageBase over mpckit::IInstance): one knob bound to a parameter by its key. It is the whole page; the view around it is PageView<KitPage, NoHooks>. */
+class KitPage : public mpckit::PageBase
+{
+public:
+    static constexpr int kElementPage = 2;
+    KitPage() : cutoff_ ("Cutoff")
+    {
+        bind (1, cutoff_, mpckit::Binder::Type::Knob, "filter1.cutoff");
+        group ({ &cutoff_ });
+        relayout();
+    }
+    const synthyboy_mpc::ui::Knob& knob() const noexcept { return cutoff_; }
+
+protected:
+    void layout (const synthyboy_mpc::ui::Rect& tab) override { cutoff_.place ({ 100, tab.y + 100, 300, 200 }); }
+
+private:
+    synthyboy_mpc::ui::Knob cutoff_;
+};
+
 struct Rig
 {
     TempDir dir;
@@ -162,6 +184,35 @@ int main()
             expect += k == layout::kKindFilterUi ? 4 : (k == layout::kKindOscUi ? static_cast<int> (OscPageUi::targetsOf (layout::kViews[i].index).size()) : (k == layout::kKindPlay ? 12 : 0));
         }
         check (filterPages == 2 && static_cast<int> (t.size()) == expect && expect <= synthyboy::LiveValues::kMaxTargets, "readout targets: " + std::to_string (t.size()) + " (the filter pages 4 each, the oscillator pages A, B, C 4 each, the Play views 12 each), within the engine's " + std::to_string (synthyboy::LiveValues::kMaxTargets));
+    }
+    // ---- a page of the KIT over the page view (migration step 6): PageView<KitPage, NoHooks> takes mpckit::IInstance, loads no macro names and has no loading bar
+    {
+        FakeInstance inst;
+        inst.set ("filter1.cutoff", 3000.0f);
+        UiStack stack;
+        stack.openFull (KitPage::kElementPage);
+        PageView<KitPage, NoHooks> pv ("kit", 1);
+        ViewInput in;
+        in.instance = &inst; in.io = &inst; in.ui = &stack; in.nowMs = 1000.0;
+        check (pv.update (in) && pv.valid() && pv.pageElement() == KitPage::kElementPage, "a kit page in the page view: the first update has a picture, the element is the page's");
+        const int idx = inst.index ("filter1.cutoff");
+        check (std::fabs (pv.ui().knob().state.value - mpckit::synthyboy_adapter::Params::get().toNormalised (idx, 3000.0f)) < 1.0e-6, "... the knob shows the parameter the key names (through the kit's parameter source)");
+        check (inst.uiFullOpen.load(), "... and the page told the instance a full screen page is up (IInstance::setUiFullOpen)");
+        const auto knobRect = pv.ui().knob().rect();
+        const int x = knobRect.x + knobRect.w / 2, y = knobRect.y + knobRect.h / 2;
+        TouchEvent d; d.kind = TouchEvent::Down; d.x = x; d.y = y;
+        TouchEvent m; m.kind = TouchEvent::Move; m.x = x; m.y = y - 60;
+        TouchEvent u; u.kind = TouchEvent::Up; u.x = x; u.y = y - 60;
+        const float before = inst.get ("filter1.cutoff");
+        const bool took = pv.onTouch (d, stack, inst, 1100.0);
+        pv.onTouch (m, stack, inst, 1116.0);
+        pv.onTouch (u, stack, inst, 1140.0);
+        check (took && inst.get ("filter1.cutoff") > before, "... a drag of the knob writes the parameter through the instance (" + std::to_string (before) + " -> " + std::to_string (inst.get ("filter1.cutoff")) + " Hz)");
+        in.nowMs = 1200.0;
+        pv.update (in);
+        check (std::fabs (pv.ui().knob().state.value - mpckit::synthyboy_adapter::Params::get().toNormalised (idx, inst.get ("filter1.cutoff"))) < 1.0e-6, "... and the next update shows it");
+        // the SynthyBoy hooks are the default: the same view over a SynthyBoy page still loads the macro names and shows the loading bar
+        static_assert (std::is_same<PageView<FilterUi>, PageView<FilterUi, MacroNameHooks>>::value, "the default hooks of a page view are SynthyBoy's");
     }
     std::printf (g_fails ? "page_view_host: FAILED (%d)\n" : "page_view_host: OK\n", g_fails);
     return g_fails ? 1 : 0;
