@@ -6,6 +6,7 @@
 
 #include "../dsp/fastmath.h"
 #include "../dsp/simd.h"
+#include "../dsp/neon_cmp.h"
 #include <algorithm>
 #include <cmath>
 #include <array>
@@ -157,6 +158,7 @@ class Chorus
 {
 public:
     bool fast = false; // tier low: tanh, sin, exp, exp2 and pow by the cheaper forms of dsp/fastmath.h
+    bool scalarLoops = false; // measurements (setOwnSavingsOff, kOwnSavingVectorFilters): the LFO refresh of the taps one by one also where the four lane form exists
     struct Params { float mix = 0.5f, rate = 0.4f, depth = 0.5f, feedback = 0.4f, delay1 = 0.002f, delay2 = 0.008f, cutoff = 260.0f, spread = 1.0f; int voices = 4; };
     static constexpr int kMaxPairs = 4;
     void prepare (double sr)
@@ -182,9 +184,10 @@ public:
     void idle (int n) noexcept
     {
         const float sr = static_cast<float> (sampleRate);
+        const float inc = p.rate / sr; // (the same quotient every sample: computed once)
         for (int s = 0; s < n; ++s)
         {
-            phase += p.rate / sr;
+            phase += inc;
             phase -= ffloor (phase);
         }
     }
@@ -211,13 +214,25 @@ public:
         baseOf[0] = p.delay1;
         baseOf[1] = p.delay2;
         float period[kMaxPairs * 4] = {}; // the delay of every tap in samples; tier low holds it for four samples (the LFO moves it by a few thousandths of a sample in that time)
+        // the phase step: the same quotient every sample (p is a member: written through l and r as far as the compiler knows, so it divided every sample)
+        const float inc = p.rate / sr;
+        const float depth = p.depth;
+#if SB_NEON
+        const bool laneRefresh = fast && !scalarLoops; // tier low: the four taps of a voice pair in one register (refreshFour)
+#endif
         for (int s = 0; s < n; ++s)
         {
-            phase += p.rate / sr;
+            phase += inc;
             phase -= ffloor (phase);
             const float in[2] = { l[s], r[s] };
             float acc[2] = { 0.0f, 0.0f };
             const bool refresh = !fast || (s & 3) == 0;
+#if SB_NEON
+            if (refresh && laneRefresh)
+                for (int i = 0; i < V; ++i)
+                    refreshFour (period + i * 4, phase, phOff[i], baseOf, avg, tOf[i], depth, sr);
+            else
+#endif
             if (refresh)
                 for (int i = 0; i < V; ++i)
                     for (int vi = 0; vi < 2; ++vi)
@@ -226,7 +241,7 @@ public:
                             float ph = phase + (c == 1 ? 0.25f : 0.0f) + (vi == 1 ? 0.5f : 0.0f) + phOff[i];
                             ph -= ffloor (ph);
                             const float mod = 1.0f + 0.5f * (fast ? fastmath::sinCycles (ph) : std::sin (kTwoPif * ph));
-                            const float delay = mod * 0.03f * p.depth + lerp (baseOf[vi], avg, tOf[i]);
+                            const float delay = mod * 0.03f * depth + lerp (baseOf[vi], avg, tOf[i]);
                             period[((i * 2 + vi) * 2) + c] = std::clamp (delay * sr, 3.0f, 0.08f * sr);
                         }
             // the four taps of a voice pair (left / right of delay 1, left / right of delay 2) are one group: read the cubic, add the feedback, limit, band pass, write.
@@ -256,6 +271,83 @@ public:
             r[s] = mg.apply (in[1], 0.53f * acc[1]);
         }
     }
+
+#if SB_NEON
+    // (public for core/tests/test_own_chorus_lanes.cpp)
+    /** ffloor () (dsp/util.h) of four values: truncation and the correction of a negative fraction, with the integer compare of dsp/neon_cmp.h. A lane that ffloor ()
+        sends to std::floor (|x| not below 2^22, NaN, a zero) or that is subnormal (where a flush-to-zero compare could differ from the IEEE one) makes the four go
+        through ffloor () itself: the same value for every input. */
+    static float32x4_t ffloorFour (float32x4_t x) noexcept
+    {
+        const uint32x4_t mag = vandq_u32 (vreinterpretq_u32_f32 (x), vdupq_n_u32 (neoncmp::kAbsMask));
+        const uint32x4_t plain = vandq_u32 (neoncmp::absLt (x, 4194304.0f), vcgeq_u32 (mag, vdupq_n_u32 (0x00800000u))); // normal and below 2^22
+        const uint32x2_t both = vand_u32 (vget_low_u32 (plain), vget_high_u32 (plain));
+        if ((vget_lane_u32 (both, 0) & vget_lane_u32 (both, 1)) == 0u)
+        {
+            float t[4];
+            vst1q_f32 (t, x);
+            for (float& v : t)
+                v = ffloor (v);
+            return vld1q_f32 (t);
+        }
+        const int32x4_t i = vcvtq_s32_f32 (x);
+        const uint32x4_t less = neoncmp::lt (x, vcvtq_f32_s32 (i));
+        return vcvtq_f32_s32 (vaddq_s32 (i, vreinterpretq_s32_u32 (less))); // a true lane is all ones: -1
+    }
+    /** fastmath::sinCycles () of four phases: the same truncation, wrap, table position and interpolation (the wrap test w < 0 as the integer compare). A subnormal
+        phase sends the four through sinCycles () itself: NEON on 32 bit ARM flushes it to zero, the VFP code does so only in flush-to-zero mode. For a normal
+        phase no step makes a subnormal (w is the phase itself or a multiple of its ulp), so the lanes compute what the scalar code computes in either mode. */
+    static float32x4_t sinCyclesFour (float32x4_t c) noexcept
+    {
+        const uint32x4_t mag = vandq_u32 (vreinterpretq_u32_f32 (c), vdupq_n_u32 (neoncmp::kAbsMask));
+        const uint32x4_t sub = vcltq_u32 (vsubq_u32 (mag, vdupq_n_u32 (1u)), vdupq_n_u32 (0x007fffffu)); // 0 < magnitude < the smallest normal
+        const uint32x2_t anySub = vorr_u32 (vget_low_u32 (sub), vget_high_u32 (sub));
+        if ((vget_lane_u32 (anySub, 0) | vget_lane_u32 (anySub, 1)) != 0u)
+        {
+            float t[4];
+            vst1q_f32 (t, c);
+            for (float& v : t)
+                v = fastmath::sinCycles (v);
+            return vld1q_f32 (t);
+        }
+        float32x4_t w = vsubq_f32 (c, vcvtq_f32_s32 (vcvtq_s32_f32 (c)));
+        w = vbslq_f32 (neoncmp::lt (w, vdupq_n_f32 (0.0f)), vaddq_f32 (w, vdupq_n_f32 (1.0f)), w);
+        const float32x4_t pos = vmulq_f32 (w, vdupq_n_f32 (1024.0f));
+        const int32x4_t i = vminq_s32 (vcvtq_s32_f32 (pos), vdupq_n_s32 (1023));
+        const float32x4_t fr = vsubq_f32 (pos, vcvtq_f32_s32 (i));
+        const float* const tab = fastmath::kSine.v;
+        float32x4_t lo = vdupq_n_f32 (0.0f), hi = lo;
+        lo = vld1q_lane_f32 (tab + vgetq_lane_s32 (i, 0), lo, 0);
+        lo = vld1q_lane_f32 (tab + vgetq_lane_s32 (i, 1), lo, 1);
+        lo = vld1q_lane_f32 (tab + vgetq_lane_s32 (i, 2), lo, 2);
+        lo = vld1q_lane_f32 (tab + vgetq_lane_s32 (i, 3), lo, 3);
+        hi = vld1q_lane_f32 (tab + vgetq_lane_s32 (i, 0) + 1, hi, 0);
+        hi = vld1q_lane_f32 (tab + vgetq_lane_s32 (i, 1) + 1, hi, 1);
+        hi = vld1q_lane_f32 (tab + vgetq_lane_s32 (i, 2) + 1, hi, 2);
+        hi = vld1q_lane_f32 (tab + vgetq_lane_s32 (i, 3) + 1, hi, 3);
+        return vaddq_f32 (lo, vmulq_f32 (vsubq_f32 (hi, lo), fr));
+    }
+    /** The LFO refresh of the four taps of voice pair i (tier low, the table sine) in one register: lane j is tap (vi, c) = (j / 2, j % 2), and every lane does the
+        operations of the scalar loop in its order: ph = phase + c offset + vi offset + phOff, ph -= ffloor (ph), mod = 1 + 0.5 sinCycles (ph),
+        delay = mod * 0.03 * depth + lerp (base of vi, avg, t), period = clamp (delay * sr, 3, 0.08 sr) (the clamp with the integer compares: std::clamp's result
+        for every value, NaN included). */
+    static void refreshFour (float* period, float phase, float phOff, const float* baseOf, float avg, float t, float depth, float sr) noexcept
+    {
+        static const float kCOff[4] = { 0.0f, 0.25f, 0.0f, 0.25f }, kViOff[4] = { 0.0f, 0.0f, 0.5f, 0.5f };
+        float32x4_t ph = vaddq_f32 (vaddq_f32 (vaddq_f32 (vdupq_n_f32 (phase), vld1q_f32 (kCOff)), vld1q_f32 (kViOff)), vdupq_n_f32 (phOff));
+        ph = vsubq_f32 (ph, ffloorFour (ph));
+        const float32x4_t mod = vaddq_f32 (vdupq_n_f32 (1.0f), vmulq_f32 (vdupq_n_f32 (0.5f), sinCyclesFour (ph)));
+        const float base[4] = { baseOf[0], baseOf[0], baseOf[1], baseOf[1] };
+        const float32x4_t a = vld1q_f32 (base);
+        const float32x4_t lerpV = vaddq_f32 (a, vmulq_f32 (vsubq_f32 (vdupq_n_f32 (avg), a), vdupq_n_f32 (t)));
+        const float32x4_t delay = vaddq_f32 (vmulq_f32 (vmulq_f32 (mod, vdupq_n_f32 (0.03f)), vdupq_n_f32 (depth)), lerpV);
+        const float32x4_t v = vmulq_f32 (delay, vdupq_n_f32 (sr));
+        const float32x4_t lo = vdupq_n_f32 (3.0f), hi = vdupq_n_f32 (0.08f * sr);
+        // std::clamp (v, lo, hi): v < lo ? lo : (hi < v ? hi : v)
+        const float32x4_t upper = vbslq_f32 (neoncmp::lt (hi, v), hi, v);
+        vst1q_f32 (period, vbslq_f32 (neoncmp::lt (v, lo), lo, upper));
+    }
+#endif
 
 private:
     /** The cubic (Catmull-Rom) read of four taps, `d` samples back from the newest sample (the arithmetic of DelayLine::readCubic, lane by lane). */
@@ -353,12 +445,12 @@ private:
         float32x4_t x = vaddq_f32 (vld1q_f32 (inArr), vmulq_f32 (vdupq_n_f32 (fb), rd));
         x = vmulq_f32 (vminq_f32 (vmaxq_f32 (vmulq_f32 (x, vdupq_n_f32 (0.125f)), vdupq_n_f32 (-1.0f)), one), vdupq_n_f32 (8.0f));
         // the band pass
-        const float32x4_t aHi = vdupq_n_f32 (coefBand.aHi), aLo = vdupq_n_f32 (coefBand.aLo), gain = vdupq_n_f32 (coefBand.gain), tiny = vdupq_n_f32 (1.0e-18f), zero = vdupq_n_f32 (0.0f);
+        const float32x4_t aHi = vdupq_n_f32 (coefBand.aHi), aLo = vdupq_n_f32 (coefBand.aLo), gain = vdupq_n_f32 (coefBand.gain);
         float32x4_t hi = vld1q_f32 (hiY + k0), lo = vld1q_f32 (loY + k0);
         hi = vaddq_f32 (hi, vmulq_f32 (aHi, vsubq_f32 (vmulq_f32 (x, gain), hi)));
-        hi = vbslq_f32 (vcltq_f32 (vabsq_f32 (hi), tiny), zero, hi);
+        hi = neoncmp::flushTiny (hi); // flushDenormal () on the bit patterns (dsp/neon_cmp.h: a float compare is made lane by lane through the VFP flags on 32 bit ARM)
         lo = vaddq_f32 (lo, vmulq_f32 (aLo, vsubq_f32 (hi, lo)));
-        lo = vbslq_f32 (vcltq_f32 (vabsq_f32 (lo), tiny), zero, lo);
+        lo = neoncmp::flushTiny (lo);
         vst1q_f32 (hiY + k0, hi);
         vst1q_f32 (loY + k0, lo);
         // the write: lane j into the line of tap k0 + j at the next position
@@ -375,13 +467,13 @@ private:
     void bandGroup (int k0, float* x, const LoopBand& cf) noexcept
     {
 #if SB_NEON
-        const float32x4_t aHi = vdupq_n_f32 (cf.aHi), aLo = vdupq_n_f32 (cf.aLo), gain = vdupq_n_f32 (cf.gain), tiny = vdupq_n_f32 (1.0e-18f), zero = vdupq_n_f32 (0.0f);
+        const float32x4_t aHi = vdupq_n_f32 (cf.aHi), aLo = vdupq_n_f32 (cf.aLo), gain = vdupq_n_f32 (cf.gain);
         float32x4_t hi = vld1q_f32 (hiY + k0), lo = vld1q_f32 (loY + k0);
         const float32x4_t xg = vmulq_f32 (vld1q_f32 (x), gain);
         hi = vaddq_f32 (hi, vmulq_f32 (aHi, vsubq_f32 (xg, hi)));
-        hi = vbslq_f32 (vcltq_f32 (vabsq_f32 (hi), tiny), zero, hi); // flushDenormal
+        hi = neoncmp::flushTiny (hi); // flushDenormal (dsp/neon_cmp.h)
         lo = vaddq_f32 (lo, vmulq_f32 (aLo, vsubq_f32 (hi, lo)));
-        lo = vbslq_f32 (vcltq_f32 (vabsq_f32 (lo), tiny), zero, lo);
+        lo = neoncmp::flushTiny (lo);
         vst1q_f32 (hiY + k0, hi);
         vst1q_f32 (loY + k0, lo);
         vst1q_f32 (x, vsubq_f32 (hi, lo));

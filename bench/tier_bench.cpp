@@ -30,7 +30,7 @@
 //   --budget PCT    add a verdict to the summary: a profile is "inside" when the 99th percentile of its dearest factory preset is at most PCT % of the block and
 //                   no block of any of its factory presets, in any pass, was longer than its real time
 //   --no-fx-mute    process an effect whose mix is exactly 0 all the same (the engine before that saving: for a before / after with one binary)
-//   --scalar-filters  run the voice filters' scalar loops also where a vector kernel exists (the same: before / after)
+//   --scalar-filters  run the voice filters' scalar loops also where a vector kernel exists, and the chorus LFO refresh tap by tap (the same: before / after)
 //   --scalar-warp   make the oversampled samples of a warped oscillator one by one also where the four lane form exists (the same: before / after)
 //   --profile FILE  a sampling profile of the audio thread (a timer signal every 250 us on Linux ARM): the program counters, one per line, for scripts/bench-profile.py to map to functions
 //   --tolerance X   with --verify: a sample may differ by X times the largest sample of the load (the vector forms of the Spectral oscillator differ by rounding, 3e-6 is the stated bound)

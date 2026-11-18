@@ -233,25 +233,45 @@ public:
                 }
             }
         }
-        bool runaway = false;
-        for (int k = 0; k < n; ++k)
-            runaway = runaway || !(std::fabs (outL[k]) < 200.0f) || !(std::fabs (outR[k]) < 200.0f);
-        if (runaway)
+        if (scalarOnly || trim != 1.0f)
         {
-            left.reset();
-            right.reset();
-            std::fill (outL, outL + n, 0.0f);
-            std::fill (outR, outR + n, 0.0f);
+            // the loops as they were (measurements: setOwnSavingsOff, kOwnSavingVectorFilters), and the general form for a trim other than 1
+            bool runaway = false;
+            for (int k = 0; k < n; ++k)
+                runaway = runaway || !(std::fabs (outL[k]) < 200.0f) || !(std::fabs (outR[k]) < 200.0f);
+            if (runaway)
+            {
+                runaway_ (outL, outR, n);
+                return;
+            }
+            for (int k = 0; k < n; ++k)
+            {
+                outL[k] = std::clamp (outL[k] * trim, -16.0f, 16.0f);
+                outR[k] = std::clamp (outR[k] * trim, -16.0f, 16.0f);
+            }
             return;
         }
-        for (int k = 0; k < n; ++k)
+        // the same in vector form (CPU review F6): the runaway test on the bit patterns (the decision of the loop above for every input), then the limit. After the
+        // test every value is finite and below 200 in magnitude, where vmax / vmin give what std::clamp gives (signed zero included), and x * 1 is x.
+        if (!simd::allAbsBelow (outL, outR, n, 200.0f))
         {
-            outL[k] = std::clamp (outL[k] * trim, -16.0f, 16.0f);
-            outR[k] = std::clamp (outR[k] * trim, -16.0f, 16.0f);
+            runaway_ (outL, outR, n);
+            return;
         }
+        simd::clampTo (outL, -16.0f, 16.0f, n);
+        simd::clampTo (outR, -16.0f, 16.0f, n);
     }
 
 private:
+    /** A runaway (a value not finite or beyond 200): the filters are reset and the block is silence. */
+    void runaway_ (float* outL, float* outR, int n) noexcept
+    {
+        left.reset();
+        right.reset();
+        std::fill (outL, outL + n, 0.0f);
+        std::fill (outR, outR + n, 0.0f);
+    }
+
     filters::Filter left, right;
     ClassicFilter cl[2];
     ClassicParams prevP, curP, prevPR, curPR;

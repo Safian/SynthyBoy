@@ -192,7 +192,8 @@ bool setOwnLowTierKillFade (IEngine& engine, float seconds) noexcept;
     (bench/tier_bench.cpp --no-fx-mute, --scalar-filters). Bits of `off`: kOwnSavingFxMute = an effect whose mix is exactly 0 is processed all the same (FxModule::process),
     kOwnSavingVectorFilters = the voice filters run their scalar loops also where a vector kernel exists, kOwnSavingVectorWarp = the oversampled samples of a
     warped oscillator are made one by one also where the four lane form exists (--scalar-warp), kOwnSavingContentKernels = the Sample / Granular / Spectral / Multisample oscillators run their
-    per sample (or per frame) reference code instead of the block kernels (--scalar-content; the same samples, or the stated tolerance for the spectral kernels). Default 0 (every saving on). False if `engine` is not an own engine. */
+    per sample (or per frame) reference code instead of the block kernels (--scalar-content; the same samples, or the stated tolerance for the spectral kernels). kOwnSavingVectorFilters also covers the
+    four lane LFO refresh of the chorus. Default 0 (every saving on). False if `engine` is not an own engine. */
 enum OwnSaving : uint32_t { kOwnSavingFxMute = 1u << 0, kOwnSavingVectorFilters = 1u << 1, kOwnSavingVectorWarp = 1u << 2, kOwnSavingContentKernels = 1u << 3 };
 bool setOwnSavingsOff (IEngine& engine, uint32_t off) noexcept;
 

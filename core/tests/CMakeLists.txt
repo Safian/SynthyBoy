@@ -70,6 +70,26 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
     target_compile_options(synthyboy_test_own_warp_lanes PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
     target_link_libraries(synthyboy_test_own_warp_lanes PRIVATE Threads::Threads)
     add_test(NAME synthyboy_test_own_warp_lanes COMMAND synthyboy_test_own_warp_lanes)
+    # The integer NEON compares (dsp/neon_cmp.h) against the float compares on every bit pattern, and the simd.h loops built on them (NEON forms on, no fused
+    # multiply-add); header only, links nothing of the engine.
+    add_executable(synthyboy_test_neon_cmp test_neon_cmp.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_neon_cmp PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/engine-own")
+    target_compile_features(synthyboy_test_neon_cmp PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_neon_cmp PRIVATE SB_TEST_NEON=1)
+    target_compile_options(synthyboy_test_neon_cmp PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_neon_cmp PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_neon_cmp COMMAND synthyboy_test_neon_cmp)
+    # The voice filter (FilterUnit) and the chorus with their vector forms against their scalar loops (the --scalar-filters switch): the filters-serum sources compiled
+    # into the test with the pair kernels and the NEON loops on, without fused multiply-add.
+    add_executable(synthyboy_test_own_filter_unit_lanes test_own_filter_unit_lanes.cpp test_own_chorus_lanes.cpp "${PROJECT_SOURCE_DIR}/core/filters-serum/src/filter.cpp"
+        "${PROJECT_SOURCE_DIR}/core/filters-serum/src/filter_types.cpp" "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_own_filter_unit_lanes PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own"
+        "${PROJECT_SOURCE_DIR}/core/filters-serum/include" "${PROJECT_SOURCE_DIR}/core/filters-serum/src")
+    target_compile_features(synthyboy_test_own_filter_unit_lanes PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_own_filter_unit_lanes PRIVATE SB_TEST_NEON=1 SYNTHYBOY_FILTER_TEST_NEON=1)
+    target_compile_options(synthyboy_test_own_filter_unit_lanes PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_own_filter_unit_lanes PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_own_filter_unit_lanes COMMAND synthyboy_test_own_filter_unit_lanes)
 endif()
 # The lane mix of the library players (LibOsc::mixLane: simd::rampLerp + simd::mulAddTo) against the scalar loop, with the NEON forms on (also on Apple's arm64) and without fused multiply-add.
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)

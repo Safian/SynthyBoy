@@ -35,6 +35,7 @@ struct FxFrame
     bool realtime = false;               // Quality::realtime: the audio thread never waits for a helper thread
     bool muteSkip = false;               // economy group Control: a module whose mix is exactly 0 is not processed (FxModule::process)
     bool makeup = true;                  // Quality::fxMakeup: a bypassed effect that is on in the preset leaves its loudness as a gain (FxChain, FxModule::makeupGain)
+    bool scalarLoops = false;            // measurements (setOwnSavingsOff, kOwnSavingVectorFilters): the scalar loops also where a vector form exists (the chorus LFO refresh)
 };
 
 /** One helper thread for the slow work of the effects that must not run on the audio thread (the partitioning of a Convolve impulse). A job is a function and a
