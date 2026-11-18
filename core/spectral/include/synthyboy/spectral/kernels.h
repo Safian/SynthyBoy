@@ -25,6 +25,12 @@ namespace kernels
 {
 /** True if this build has the vector forms. */
 constexpr bool haveNeon() noexcept { return SB_SPECTRAL_NEON != 0; }
+/** Whether the voice runs the vector form of findPeaks (): not on 32 bit ARM, where the scalar loop is faster (the MPC Key 61's Cortex-A17: 10.8 us against 18.7 us for a frame; both give the same peaks). */
+#if defined(__arm__) && ! defined(__aarch64__)
+constexpr bool findPeaksVector() noexcept { return false; }
+#else
+constexpr bool findPeaksVector() noexcept { return SB_SPECTRAL_NEON != 0; }
+#endif
 
 /** The inverse transform of the spectrum of a real signal: the bins 0 .. kFftSize / 2 (xr, xi: kBins values each; xi[0] and xi[kFftSize / 2] must be 0) to the kFftSize real samples
     x[n] = sum_k X[k] e^(+2 pi i k n / kFftSize) over the full Hermitian spectrum (NOT divided by kFftSize: overlapAdd () applies that factor, which is a power of two and so exact), returned as the kFftSize / 2 complex values z[m] = x[2 m] + i x[2 m + 1] (zr, zi).

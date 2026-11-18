@@ -611,6 +611,23 @@ void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, f
                 strike |= 1 << j;
                 startJoin_[j] = -1;
             }
+        if (strike == 0)
+        {
+            // (never with the schedule: the frame that weighs most at the first sample has a squared window above 0.5)
+            int best = 0;
+            double bestWeight = -1.0;
+            for (int j = 1; j <= 3; ++j)
+            {
+                const double w = 0.5 - 0.5 * std::cos (2.0 * kPi * (startSkip_ + (3 - j) * kHop) / kFftSize);
+                if (w > bestWeight)
+                {
+                    bestWeight = w;
+                    best = j;
+                }
+            }
+            strike = 1 << (best - 1);
+            startJoin_[best - 1] = -1;
+        }
         startFrames (p, strike, smears);
         startMask_ = strike;
         startActive_ = true;
@@ -790,7 +807,7 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
         if (fast)
         {
             top = kernels::maxBins (mag_, kBins, neon);
-            numPeaks = kernels::findPeaks (mag_, kBins, top, peaks, kBins / 2, neon);
+            numPeaks = kernels::findPeaks (mag_, kBins, top, peaks, kBins / 2, kernels::findPeaksVector());
         }
         else
         {
