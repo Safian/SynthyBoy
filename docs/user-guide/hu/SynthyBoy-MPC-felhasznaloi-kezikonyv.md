@@ -124,8 +124,8 @@ Az érintőképernyő **egyetlen ujjat** követ: amíg egy ujj le van téve, a m
 | **Húzás fel / le (Drag up / down)** egy potméteren vagy számmezőn | Módosítja az értéket (fel = több). Egy potméter a teljes tartományát 200 pixelnyi húzással járja be. Egy számmező a saját pixelszámának megfelelő lépésenként vált értéket. |
 | **Vízszintes húzás** egy sávon (modulációs mélységsávok) | Módosítja az értéket; a teljes sáv a teljes tartományt fedi le. |
 | **Függőleges húzás** egy fédereken (Mixer) | Állítja a hangerőszintet. |
-| **Dupla koppintás (Double tap)** (két koppintás 0,4 másodpercen és 30 pixelen belül) | Visszaállítja a potmétert, számmezőt, fédert vagy mélységsávot az alapértelmezett értékére; egy burkológörbe fogópontján visszaállítja az adott pont alapértelmezését. |
-| **Hosszú nyomás (Long press)** (0,6 másodperc elmozdulás nélkül) egy potméteren vagy számmezőn | Megnyitja az adott vezérlő modulációs oldalát (6. fejezet). A rajzolt hullámforma-szerkesztőben: törli az adott pontot (a pont dupla koppintása gyorsabb). |
+| **Dupla koppintás (Double tap)** (két koppintás 0,4 másodpercen és 30 pixelen belül) | Visszaállítja a potmétert, számmezőt, fédert vagy mélységsávot az alapértelmezett értékére; egy burkológörbe fogópontján visszaállítja az adott pont alapértelmezését; a rajzolt hullámforma-szerkesztőben törli a belső pontot, vagy egyenesre állítja a görbefogót. |
+| **Hosszú nyomás (Long press)** (0,6 másodperc elmozdulás nélkül) egy potméteren vagy számmezőn | Megnyitja az adott vezérlő modulációs oldalát (6. fejezet). A rajzolt hullámforma-szerkesztő rajzfelületén: törli a belső pontot (a pont dupla koppintása gyorsabb). |
 | **Húzás a színes fülön** a modulált potméter bal felső sarkán | Módosítja a kiválasztott forrás modulációs mélységét (6. fejezet). |
 | **Koppintás egy piktogramon vagy cellán** | Kijelöli azt (oszcillátortípus, LFO hullámforma, Sub hullámforma, ...). |
 
@@ -184,11 +184,12 @@ Az alábbi fejezetekben a "tartomány" a `docs/params.json` fájlból származó
 A Play fül EGY oldal: három élő panel egymás mellett, egy **oszcillátor** panel (balra), egy **burkoló (envelope)** panel (középen) és egy **LFO** panel (jobbra). Az első négy Q-Link (potméter) az oszcillátor panelé (típus, tábla vagy OCT, PAN, LEVEL), a következő négy a burkolóé (ATTACK, DECAY, SUSTAIN, RELEASE), a következő négy az LFO-é (SHAPE, RATE, RISE, SMOOTH). Az MPC XL-en mind a tizenkettő egyszerre a potméterekön van, és minden vezérlő a saját potméterének számát viseli. A Key 61-en a sárga keret jelöli az éppen aktív négy potmétert; egy másik panel vezérlőjének megérintése hozza a csoportját a négy potméterre (a többi sorban követi), a többihez a Q-Link bank gombok szolgálnak. Minden panel tetején egy választó van: középen az aktuális elem, két oldalán a szomszédai (egy érintéssel lépünk rá, vagy végighúzással), a névre koppintva megnyílik a lista. A kikapcsolt oszcillátor szürkén látszik (a bekapcsoló gomb piros).
 Ez a felület való a játékra és az azonnali finomhangolásra: a három leggyakrabban használt elem fő vezérlői egyetlen nézetben érhetők el.
 
-A burkoló panel az ADSR csoportjával (XL-en az 5-8. Q-Link; a Key 61-en a keret rajta van, amíg ő az aktív csoport):
+A Play oldal elrendezése:
+- **Nincsenek fül-sorok:** A navigációt egyetlen választó biztosítja a képernyő mindegyik harmadában.
+- **Nyilas léptetés, koppintásra nyíló lista:** Használd a nyilakat a léptetéshez, vagy koppints a névre a Sub, Osc A/B/C, Noise, Envelopes 1–6, LFOs 1–10 és R1–R4 teljes választási listájának megnyitásához.
+- **Egységes kijelzőmagasság:** Mindhárom kijelző azonos magasságú és felül igazított. Mindegyik kijelző rendelkezik egy fejlécsávval a címével és gombjaival (bekapcsolás, útválasztás, teljes képernyő); a rajzolt tartomány a sáv alatt helyezkedik el.
 
-![Play Env](../img/play-env.png)
-
-Az LFO panel csoportja (SHAPE, RATE, RISE, SMOOTH: XL-en a 9-12. Q-Link):
+Az LFO panel a csoportjával (SHAPE, RATE, RISE, SMOOTH: XL-en a 9–12. Q-Link):
 
 ![Play LFO](../img/play-lfo.png)
 
@@ -196,26 +197,22 @@ Az LFO panel csoportja (SHAPE, RATE, RISE, SMOOTH: XL-en a 9-12. Q-Link):
 
 | Vezérlő | Mit csinál |
 |---|---|
-| SUB, A, B, C, NOISE gombok | Kiválasztja, melyik hangforrást mutatja és szerkeszti a panel (a projekttel együtt mentődik). Az öt gomb azonos szélességű. |
-| Bekapcsológomb és név | Be- és kikapcsolja a megjelenített forrást. A kikapcsolt forrás képe halványan jelenik meg egy kis OFF felirattal (lásd: 5.3). |
-| Útválasztó gomb (Route button: F1 / F2 / F12 / M / DIR / BAL / OFF) | Koppintás: megnyitja az adott oszcillátor kimeneti felugró ablakát (célpont, balance, BUS 1, BUS 2). A Sub oszcillátornak itt nincs útválasztó gombja; az útválasztása a saját oldalán található (5.4). |
-| Kijelző + teljes képernyő gomb | Az oszcillátor egyetlen ciklusa; a gomb megnyitja a teljes képernyős oszcillátor-oldalt (5.3 / 5.4 / 5.5 fejezet). |
-| Típusgombok: WAVE / MULTI / SAMPLE / GRAIN / SPEC | Az oszcillátor típusa (hullámtábla, multiminta, hangminta, granuláris, spektrális). Q 1. |
-| Forrásléptető és a listagomb | A hullámtábla neve (fájlból betöltött táblánál a fájl címe) vagy a betöltött fájl neve. A névre vagy a listagombra koppintva megnyílik a **wavetable-böngésző** (WAVE típusnál) vagy a **tartalomböngésző** (egyéb típusoknál); kompakt nézetből ilyenkor először a teljes képernyős nézet tárul fel. Q 2. |
-| PAN (panoráma) | -100 .. +100 százalék (C, L n, R n). Q 3. |
-| LEVEL (szint) | 0 .. 100 százalék. Q 4. |
+| Forrásválasztó (Sub, Osc A, Osc B, Osc C, Noise) | Kiválasztja, melyik hangforrást mutatja és szerkeszti a panel (a projekttel együtt mentődik). A nyilak léptetnek, koppintásra megnyílik az ötös lista. |
+| Bekapcsológomb és név | Be- és kikapcsolja a megjelenített forrást; a kijelző fejlécsávjának bal szélén található. A kikapcsolt forrás képe halványan jelenik meg egy kis OFF felirattal (lásd: 5.3). |
+| Útválasztó gomb (Route button: F1 / F2 / F12 / M / DIR / BAL / OFF) | Koppintásra megnyitja az adott oszcillátor kimeneti felugró ablakát (célpont, balance, BUS 1, BUS 2); a kijelző fejlécsávjában található a teljes képernyő gomb bal oldalán. A Sub oszcillátornak itt nincs útválasztó gombja; az útválasztása a saját oldalán található (5.4). |
+| Kijelző + teljes képernyő gomb | A kijelző rendelkezik egy fejlécsávval a bekapcsológombbal, a forrás nevével, az útválasztó gombbal és a teljes képernyő gombbal (négy sarokzárójel); az oszcillátor egyetlen ciklusa a sáv alatt jelenik meg. A teljes képernyő gomb megnyitja a teljes képernyős oszcillátor-oldalt (5.3 / 5.4 / 5.5 fejezet). |
+| Típusgombok: WAVE / MULTI / SAMPLE / GRAIN / SPEC | Az oszcillátor típusa (hullámtábla, multiminta, hangminta, granuláris, spektrális), a kijelző alá rendezve. Q 1. |
+| Forrásléptető és a listagomb | A hullámtábla neve (fájlból betöltött táblánál a fájl címe) vagy a betöltött fájl neve. Mindkettő megnyitja a hullámtábla-böngészőt (vagy a tartalomböngészőt); kompakt nézetből először a teljes képernyő nyílik meg. Q 2. |
+| PAN | -100 .. +100 százalék (C, L n, R n). Q 3. |
+| LEVEL | 0 .. 100 százalék. Q 4. |
 
 A Sub és a Noise más vezérlőkkel rendelkezik (hullámforma, oktáv; zaj színe, szűrő): lásd az 5.4 és 5.5 fejezetet.
 
-**Burkoló panel (Envelope panel).** ENV 1 .. ENV 6 gombok (egy kis pont jelöli azt a burkolót, amely modulál valamit), a burkológörbe grafikonja a teljes képernyős gombbal, valamint az ATTACK, DECAY, SUSTAIN, RELEASE potméterek (Q 1 - 4). A grafikon itt mindig a panelhez illeszkedik; a zárolás és az idővonalzó a teljes oldalon található. Részletek az 5.8 fejezetben.
+**Burkoló panel (Envelope panel).** A felső választó az **Env 1 .. Env 6** közötti burkolót választja ki (a nyilak léptetnek, koppintásra megnyílik a lista). A kijelző fejlécsávval rendelkezik a burkoló nevével és a jobb oldalon lévő teljes képernyő gombbal; a burkológörbe grafikonja a sáv alatt jelenik meg. A kijelző alatt találhatók az ATTACK, DECAY, SUSTAIN, RELEASE potméterek (az XL-en a Q 5–8). A grafikon itt mindig a panelhez illeszkedik; a zárolás és az idővonalzó a teljes oldalon található. Részletek az 5.8 fejezetben.
 
-**LFO panel.** Az LFO 1 .. LFO 10, RND 1 .. RND 4 léptető (a névre koppintva megnyílik a lista), a hullámforma-kijelző a teljes képernyős gombbal, a SHAPE léptető, a RATE potméter a **HZ / BPM / KEY** listával (három pont, a világító jelzi az üzemmódot), a RISE és a SMOOTH (Q 1 - 4). A SMOOTH neve előtt egy LED található: ez a simítás kapcsolója, a potméter pedig az idejét állítja be (a gomb halvány, amíg a LED ki van kapcsolva). Részletek az 5.9 fejezetben.
+**LFO panel.** A felső választó az **LFO 1 .. LFO 10** vagy **RND 1 .. RND 4** elemet választja ki (a nyilak léptetnek, koppintásra megnyílik a lista). A kijelző fejlécsávval rendelkezik a névvel és a jobb oldalon lévő teljes képernyő gombbal; az LFO görbéje a sáv alatt jelenik meg. A kijelző alatt található a SHAPE léptető, a RATE potméter a **HZ / BPM / KEY** listával (három pont, a világító jelzi az üzemmódot), a RISE és a SMOOTH (az XL-en a Q 9–12; az első harmadban az LFO képe mutatja a hullámformát és a pozíciót). A SMOOTH neve előtt egy LED található: ez a simítás kapcsolója, a potméter pedig az idejét állítja be (a potméter halvány, amíg a LED ki van kapcsolva). Részletek az 5.9 fejezetben.
 
 **Teljes képernyő.** A teljes képernyő gomb megnyitja az adott elem oldalát a teljes plugin-területen (ugyanaz az oldal, mint a megfelelő Osc, Env vagy LFO fül, egy CLOSE gombbal). A Play fül elhagyásakor ez bezáródik.
-A Play oldal új, egyszerűsített elrendezéssel rendelkezik:
-- **Nincs fül-sor:** A navigációt egyetlen választó biztosítja a képernyő minden harmadában.
-- **Nyilas léptetés, koppintásra nyíló lista:** Használja a nyilakat a léptetéshez, vagy koppintson a névre a Sub, Osc A/B/C, Noise, Envelopes 1–6, LFOs 1–10 és R1–R4 teljes választási listájának megnyitásához.
-- **Egységes elrendezés:** Mindhárom kijelző azonos magasságú. A táblázatválasztó, a PAN és a LEVEL egyetlen sorba rendezve.
 
 ### 5.2 Macros (Makrók)
 
@@ -449,11 +446,12 @@ A képen a bekapcsológomb halvány: a Sub ki van kapcsolva az Init hangszínben
 
 A zajgenerátor. Fejléc: bekapcsológomb (Noise On), a **SOUND** léptető (Noise Sample: White Noise, Pink Noise, Brown Noise, Geiger, Tape Hiss, Vinyl Clicks, Digital Hash, Velvet Noise, Atmosphere), **FILTER** (-100 .. +100 százalék), **PAN**, **LEVEL** (0 .. 100 százalék, alapértelmezett: 25) és az útválasztó gomb. A kijelző kirajzolja a zaj színét (halvány, amíg a zaj ki van kapcsolva).
 
-- TUNE: PITCH és FINE (számmezők: -48 .. +48 félhang, -100 .. +100 cent), **KEY TRACK** (LED kapcsoló).
-- **Két különböző léptető.** A fejléc SOUND léptetője kiválasztja, hogy a kilenc zajforrás közül melyiket szólaltassa meg a generátor. Az alsó blokkban lévő **KIND** léptető (Noise Type: Noise / Sample) azt választja ki, hogy a forrás a generált zaj (Noise) vagy egy minta fájl a plugin tartalmából (Sample). Ha Sample módban nincs minta betöltve, a generált zaj szólal meg helyette.
-- Lent, KIND = Noise (mint a képen): egy NOISE blokk a KIND, STEREO (0 .. 100 százalék) és az **ENV 1** LED kapcsolóval.
-  KIND = Sample: SOURCE blokk (KIND, START = Noise Phase 0 .. 100 százalék, STEREO, ENV 1) és PLAYBACK blokk (RANDOM, LOOP, BOUNCE LED kapcsolók).
-- Q csoportok: fejléc (forrás, FILTER, PAN, LEVEL), TUNE, az alsó blokkok.
+- **TUNE:** PITCH és FINE (számmezők: -48 .. +48 félhang, -100 .. +100 cent), **KEY TRACK** (LED kapcsoló).
+- **Két különböző léptető.** A fejléc SOUND léptetője kiválasztja, hogy a kilenc zajforrás közül melyiket szólaltassa meg a generátor. Az alsó blokkban lévő **KIND** léptető (Noise Type: Noise / Sample) azt választja ki, hogy a forrás a generált zaj (Noise) vagy egy mintafájl a plugin tartalmából (Sample). Ha Sample módban nincs mintafájl betöltve, a generált zaj szólal meg helyette.
+- **Elrendezési változatok:**
+  - **KIND = Noise** esetén (generált zaj, mint a képen): a kijelző a teljes szélességet kitölti. A kijelző alatt két blokk helyezkedik el egymás mellett: a **TUNE** a bal oldalon (PITCH, FINE, KEY TRACK) és a **NOISE** a jobb oldalon (KIND, STEREO 0 .. 100 százalék, valamint az **ENV 1** LED kapcsoló).
+  - **KIND = Sample** esetén: a kijelző a bal oldalon található, mellette jobbra a **TUNE** oszlopával. Az alsó sor a **SOURCE** (KIND, START = Noise Phase 0 .. 100 százalék, STEREO, ENV 1) és a **PLAYBACK** (RANDOM, LOOP, BOUNCE LED kapcsolók) blokkokat tartalmazza.
+- Q csoportok: fejléc (SOUND, FILTER, PAN, LEVEL), TUNE, valamint az alsó blokkok.
 
 ### 5.6 Mixer (Keverő)
 
@@ -573,28 +571,109 @@ Alatta a **HOST** LED kapcsoló. A **HOST** csak akkor számít, ha az LFO MODE 
 
 A stílusválasztó rács a Q 1, és nincs külön léptetője: PERLIN, S & H (mintavételezés és tartás [sample and hold]), SINE INT (szinusz-interpolált), LORENZ, ROSSLER. A kijelző a kimenet nyomvonala. A RANDOM blokk egyetlen sor: a RATE potméter (0.01 .. 200 Hz, alapértelmezett: 2), a HZ / BPM / KEY lista, a STEREO LED kapcsoló és az indítási MODE (kétágú lista: Retrigger, Free-run). KEY követésben a TRANSPOSE és TUNE blokk veszi át a frekvencia helyét a fentiek szerint. A véletlen LFO-knak nincs EDIT gombjuk.
 
-**A rajzolt hullámforma-szerkesztő (The drawn-shape editor).** A jobb felső sarokban lévő **EDIT** gomb megnyitja a szerkesztő oldalt az oldal felett (a BACK visszalép). Ha egy beépített formánál nyomjuk meg az EDIT gombot, a forma átmásolódik pontokká, és rajzolt formává alakul (az LFO formája ekkor DRAWN lesz); az eredeti forma egyetlen koppintással elérhető a választóban. A választóban a DRAWN cella kiválasztása csupán átállítja a formát rajzoltra (egy háromszögre, ha még nincsenek pontjai); magát a szerkesztőt nem nyitja meg.
+**A rajzolt hullámforma-szerkesztő (The drawn-shape editor).** Az LFO oldal jobb felső sarkában lévő **EDIT** gomb megnyitja a szerkesztőoldalt az aktuális nézet felett (a visszatéréshez koppints a **BACK** gombra). Ha beépített forma kiválasztásakor nyomod meg az **EDIT** gombot, a forma szerkeszthető pontokká alakul át, és egyedi rajzolt formává válik (az LFO formája ekkor DRAWN lesz). Az LFO oldal formaválasztójával bármikor visszaválthatsz bármelyik gyári formára. A formaválasztóban a DRAWN cella kiválasztása átvált az egyedi formára (egy háromszögre, ha még nincsenek pontjai), de nem nyitja meg a szerkesztőt.
 
 ![LFO szerkesztő](../img/lfo-editor.png)
 
-- **Felső sáv:** **BACK**, a hét **eszköz**, **SHAPES** (a kártyán lévő és a gyári formák), **MORE** (tükrözés, eltolás, rácselőbeállítások, másolások), **UNDO**, **DELETE** és **MOD** (a kijelölt pontok modulációja). Minden módosítás EGY visszavonási lépés, bármilyen hosszú is a mozdulat.
-- **Eszközök (Tools)** (hetes sor): **POINT**, **FLAT**, **RAMP+**, **RAMP-**, **SELECT**, **SOFT**, **BEND**. A szerkesztőhöz nem kellenek egérgombok: amit számítógépen egy módosítóbillentyű tesz, az itt eszköz, kapcsoló vagy listaelem.
-  - POINT: üres felületre koppintva új pont adható hozzá (rácshoz illesztve, ha a SNAP be van kapcsolva), húzással mozgatható; egy pont megérintése kijelöli és húzza azt (a két végpontot csak fel és le); egy szakasz közepén lévő kis fogóponttal a görbülete húzható (értéke -20 .. +20). **Gyors törlés:** egy pont **dupla koppintása** törli azt (végpontot nem; üres felületen a dupla koppintás egy pontot ad hozzá), egy görbefogó dupla koppintása egyenessé teszi a görbét; egy pont hosszú megnyomása is törli, a **DELETE** pedig minden kijelölt pontot töröl.
-  - FLAT / RAMP+ / RAMP-: a rács egy cellájának megérintése vízszintes szakaszt, emelkedő vagy lejtős rámpát rajzol a cella oszlopára az ujj magasságában (a SNAP bekapcsolva rácsvonalon). **Egyetlen húzás az oszlopokon át az egész lépcsőt vagy fűrészfogat megrajzolja** - a gyors ujj nem hagy hézagot, és a húzás egy visszavonási lépés.
-  - SELECT: üres felületen téglalapot húzva kijelölhetők a benne lévő pontok; egy pontra koppintva hozzáadható, vagy (ha ki van jelölve) kivehető; üres felületre koppintva a kijelölés megszűnik. Egy kijelölt pontot húzva mindegyik együtt mozog (a sorrendjük és az alakjuk megmarad). Több kijelölt pontnál az **X** és az **Y** a kijelölés közepe, a harmadik mező **SCALE** lesz (a kijelölés magassága), a POINT mező pedig a kijelölt pontok számát mutatja.
-  - SOFT: egy pontot húzva a kijelölt pontok (vagy ha nincs kijelölés, a ciklus egynegyedén belüli pontok) követik, minél közelebb, annál jobban; a szivárványszínek mutatják, ki mennyire követi.
-  - BEND: egy görbe fogópontját húzva minden görbe ugyanannyival hajlik el (a **BEND ALL** ugyanez mezőként és potméterként).
-- A rajzfelület sarka mutatja, hány pontból áll az alakzat (akár 128 pontig).
-- **SELECTED POINT** (Q 1 - 4): POINT (melyik pont van kijelölve), X (az ideje), Y (a szintje), CURVE (a mögötte lévő szakasz görbülete). Kijelölt pont nélkül kötőjelet mutatnak.
-- **GRID (Rács)** (Q 5 - 7 egy 16 potméteres eszközön): **GRID X** (a ciklus oszlopai, 2 .. 32), **GRID Y** (a magasság sorai, 2 .. 32) és **SNAP** (LED kapcsoló: a pontok a rácsvonalakhoz illeszkednek). A rács megjelenik a vásznon, és használja a SNAP valamint a cellaeszközök (FLAT, RAMP+, RAMP-). **A rács a hullámformával együtt tárolódik a presetben** (5-ös állapotverzió): a preset megőrzi a rácsát a betöltéskor. Egy korábban mentett preset nem tartalmaz tárolt rácsot; a szerkesztő ekkor a legdurvábbat veszi a 4, 8, 12, 16, 24, 32 értékek közül, amelynek vonalain minden pont rajta fekszik, egyébként 8-at.
-- **TRIGGER** (Q 9 - 11 egy 16 potméteres eszközön): **MODE** (hogyan indul az LFO: Retrigger, Free-run, Envelope, Sustain envelope, Loop at point, Loop and hold; a névre koppintva megnyílik a lista), **PHASE** (0 .. 360 fok) és **BEND ALL**.
-- **A jelölő (marker).** Egy függőleges vonal, tetején kerek fogóponttal, mutatja az LFO PHASE értékét a formán; a fogópontot húzva mozgatható. Retrigger és Envelope módban ez a **START** (ahol a ciklus kezdődik); Sustain envelope, Loop at point és Loop and hold módban a **LOOP** pozíció (a lefutás ott vár, oda ugrik vissza, vagy odáig ismétlődik), és a fogópont a legközelebbi ponthoz tapad, amely a forma hurokpontja lesz; Free-run módban a jelölő halvány (a PHASE csak eltolja a ciklust). A **LOOP** kapcsoló a kijelölt pontot teszi hurokponttá.
-- LED kapcsolók: **LOOP** és **SMOOTH** (a smooth koszinuszos S-görbét képez minden szakaszon). Egy formának egy hurokpontja és egy smooth jelzője lehet.
-- **SHAPES:** **FACTORY SHAPES** (a tizenkét beépített forma szerkeszthető pontokként), **MY SHAPES** (az általunk mentett formák), **SAVE AS ...** (a képernyő-billentyűzettel nevet kér), **REPLACE / RENAME / DELETE A SAVED SHAPE** (a csere és a törlés egyszer rákérdez). A forma betöltése egy visszavonási lépésben váltja le a szerkesztőben lévőt. A mentett formák `SynthyBoy/LFO Shapes/<név>.lfoshape.json` fájlok az SD-kártyán, egy USB-meghajtón vagy a plugin Content mappájában (ugyanott, ahol a saját hullámtábláink); a formátum az, amelyet az asztali változat is olvas, így az egyik eszközön mentett forma a másikon is betölthető. A pontok modulációja nem kerül a fájlba (a szerkesztő szól, ha ilyen formát mentünk).
-- **MORE:** **EDIT** (SELECT ALL, FLIP HORIZONTAL, FLIP VERTICAL, SHIFT LEFT / RIGHT egy rácsoszloppal, körbefordulva, RESET ALL CURVES, CLEAR LOOP POINT), **GRID** (4, 8, 12, 16, 32 mindkét irányban, HALVE, DOUBLE, THE GRID FOLLOWS THE POINTS), **COPY** (COPY TO LFO ...: a forma egy másik LFO-ra kerül, és az az LFO azt játssza; OSC A / B / C CYCLE TO THIS LFO: egy oszcillátor egy ciklusa lesz a forma; THIS SHAPE TO OSC A / B / C: a forma az adott oszcillátor hullámtáblája lesz, egy WAV fájl a `SynthyBoy/Wavetables/` mappában).
-- **MOD:** a kijelölt pontok **TIME** (idő), **LEVEL** (szint) vagy **CURVE** (görbe) értékének modulációs oldala: egy forrásra koppintva az az érték megkapja, az AMOUNT (-100 .. 100 százalék) állítható, a REMOVE elveszi. A modulált pont mellett sáv mutatja, mekkorát mozdul az érték.
-- A pontok nélküli rajzolt forma egyenes vonalként kerül beolvasásra.
-- A beépített formák pontos pontokká alakulnak (szinusz = 3 pont + smooth); az EXP UP, EXP DN és HALF 16 rövid szakasszá alakul, így csak szorosan követi az eredetit.
+A szerkesztő egy nagy rajzfelületet kínál a ciklus megrajzolására és átformálására. A rajzfelület 2 és 128 közötti pontot jelenít meg. A jobb felső sarok mutatja a darabszámot (például: "9 / 128 POINTS"). A belső pontok nélküli forma egyenes vonalként értékelődik ki. A bal felső sarok három másodpercig állapotüzenetet jelenít meg forma mentésekor, betöltésekor vagy másolásakor.
+
+**Felső sáv.** A képernyő tetején végigfutó sáv a navigációt, a rajzeszközöket és a műveleti menüket tartalmazza:
+
+- **BACK:** Visszatér az LFO oldalra.
+- **Eszközök:** Hét eszköz egy sorban (**POINT**, **FLAT**, **RAMP+**, **RAMP-**, **SELECT**, **SOFT**, **BEND**). Minden érintési gesztus egy visszavonási lépés.
+- **SHAPES:** Megnyitja a forma preset menüt (gyári formák, mentett formák, mentés, csere, átnevezés és törlés).
+- **MORE:** Megnyitja a segédeszközök menüjét (**EDIT**, **GRID** és **COPY** műveletek).
+- **UNDO:** Visszavonja az előző módosítást (32 visszavonási lépés mélységig). A gomb halvány, ha a visszavonási lista üres.
+- **DELETE:** Egyszerre törli az összes kijelölt belső pontot. A gomb halvány, ha nincs kijelölve törölhető pont.
+- **MOD:** Megnyitja a kijelölt pontok pontmodulációs oldalát. Akkor aktív, ha legalább egy pont ki van jelölve.
+
+**A hét eszköz.** Mindegyik eszköz egy adott szerkesztési feladatra szabja az érintési gesztusokat:
+
+| Eszköz | Egyetlen érintési kézmozdulat |
+|---|---|
+| **POINT** | Koppints egy üres területre új pont hozzáadásához (bekapcsolt **SNAP** mellett rácshoz illesztve), majd húzd el. Érints meg egy meglévő pontot a kijelöléséhez és mozgatásához. A két végpont kizárólag függőlegesen mozog. Érintsd meg egy szakasz kerek középső fogópontját a görbületének húzásához (-20 és +20 között). Koppints duplán egy belső pontra a törléséhez (végpontra soha). Koppints duplán egy görbefogóra a görbe egyenessé tételéhez. Egy belső pont hosszú megnyomása (0,6 másodperc elmozdulás nélkül) szintén törli azt. |
+| **FLAT** | Érints meg egy rácscellát, hogy vízszintes szakaszt rajzolj az adott oszlopon keresztül ujjmagasságban (bekapcsolt **SNAP** mellett a rácsvonalhoz igazítva), felülírva az oszlopban lévő pontokat. Oszlopokon át húzva az ujjat minden érintett oszlop kitöltődik az interpolált ujjmagassággal. |
+| **RAMP+** | Érints meg egy rácscellát, hogy emelkedő rámpát rajzolj a cella alsó rácsvonalától a felső rácsvonaláig az adott oszlopban. Oszlopokon át húzva az ujjat emelkedő fűrészfogakat rajzol az összes érintett oszlopban. |
+| **RAMP-** | Érints meg egy rácscellát, hogy lejtő rámpát rajzolj a cella felső rácsvonalától az alsó rácsvonaláig az adott oszlopban. Oszlopokon át húzva az ujjat lejtő fűrészfogakat rajzol az összes érintett oszlopban. |
+| **SELECT** | Húzz egy téglalapot üres területen a benne lévő pontok kijelöléséhez. Koppints egy pontra a kijelöléshez adásához, vagy ha már egy többszörös kijelölés része, koppints rá az eltávolításához. Koppints üres felületre a kijelölés törléséhez. Húzz el bármelyik kijelölt pontot az összes kijelölt pont együttes mozgatásához, megtartva egymáshoz viszonyított távolságukat és alakjukat. |
+| **SOFT** | Húzz egy pontot a többi pont lineáris elhalkulással (falloff) történő mozgatásához. A közelebbi pontok jobban elmozdulnak, amit a súlyozás szerinti szivárványszínek jeleznek. Két vagy több pont kijelölése esetén az elhalkulás a kijelölésre érvényesül. Kijelölés nélkül vagy egyetlen kijelölt pont esetén a ciklus 25 százalékán belüli összes pont követi az elhúzott pontot. |
+| **BEND** | Húzd el bármely görbült szakasz görbefogóját a forma összes hajlítható görbéjének azonos mértékű hajlításához. |
+
+![Eszközök használat közben](../img/lfo-editor-tools.png)
+
+**Jobb oldali oszlop.** A jobb oldali oszlop három címmel ellátott Q csoportot és két alsó LED kapcsolót tartalmaz:
+
+- **SELECTED POINT** (Q 1–4):
+  - Egyetlen pont kijelölésekor: **POINT** (Q 1) mutatja a pont sorszámát (1-től n-ig). **X** (Q 2) beállítja az időpozíciót (0.00 és 1.00 között; végpontokon inaktív). **Y** (Q 3) beállítja a szintet (0.00 és 1.00 között). **CURVE** (Q 4) beállítja a pont utáni szakasz görbületét (-20 és +20 között).
+  - Két vagy több pont kijelölésekor: **POINT** (Q 1) mutatja a kijelölt pontok számát (például: "3 SEL"). **X** (Q 2) mozgatja a kijelölés vízszintes középpontját, időben eltolva a pontokat a sorrendjük megőrzése mellett. **Y** (Q 3) függőlegesen mozgatja a kijelölés középpontját fel vagy le. **SCALE** (Q 4, felváltja a CURVE mezőt) méretezi a kijelölés magasságát (0.01 és 1.00 között) a függőleges középpont körül.
+  - Ha nincs kijelölt pont, ezek a mezők kötőjelet mutatnak.
+- **GRID** (Q 5–7 egy 16 potméteres eszközön):
+  - **GRID X** (Q 5): Vízszintes ciklusosztások száma (2 és 32 oszlop között, alapértelmezett: 8).
+  - **GRID Y** (Q 6): Függőleges magassági osztások száma (2 és 32 sor között, alapértelmezett: 8).
+  - **SNAP** (Q 7): LED kapcsoló. Ha be van kapcsolva, a pontok hozzáadása, húzása, a jelölő mozgatása és a cellaeszközök rajzolása a rácsmetszetekhez igazodik.
+  - A rács a hullámformával együtt mentődik a presetben. Rács nélkül mentett preset betöltésekor a szerkesztő automatikusan a legdurvább illeszkedő rácsot választja ki a 4, 8, 12, 16, 24, 32 értékek közül, vagy alapértelmezésként 8-at választ.
+- **TRIGGER** (Q 9–11 egy 16 potméteres eszközön):
+  - **MODE** (Q 9): Léptető a hat LFO indítási módhoz: Retrigger, Free-run, Envelope, Sustain envelope, Loop at point, Loop and hold. Koppints a névre a teljes választólista megnyitásához.
+  - **PHASE** (Q 10): Fázisszög (0 és 360 fok között).
+  - **BEND ALL** (Q 11): Az összes hajlítható szakasz átlagos görbülete (-20 és +20 között). Elforgatása minden ívelt szakaszt egyszerre hajlít meg.
+- **LOOP** (LED kapcsoló): Átváltja a hurokpont jelzőt a kijelölt ponton. Halvány, ha nincs kijelölt pont.
+- **SMOOTH** (LED kapcsoló): Bekapcsolja a koszinuszos S-görbe simítást a forma összes szakaszán.
+
+A 16 potméteres MPC XL-en mind a tizenegy vezérlő egyszerre aktív az 1–11 potmétereken (a 8-as és a 12–16-os hely nincs használatban). A 4 potméteres MPC Key 61-en az aktív csoport sárga kerettel rendelkezik. Koppints egy csoportra vagy nyomd meg a Q-Link bank gombot a SELECTED POINT, GRID és TRIGGER közötti váltáshoz.
+
+**A START / LOOP jelölő.** Egy függőleges vonal tetején elhelyezkedő kerek érintési fogópont jelzi a fázispozíciót a rajzfelületen. Húzd el a fogópontot az elmozgatásához. A jelölő közvetlenül hozzá van rendelve a motor **PHASE** paraméteréhez: a jelölő mozgatása frissíti a **PHASE** értéket, a **PHASE** potméter elforgatása pedig mozgatja a jelölőt. A jelölő jelentése az indítási **MODE** beállítástól függ:
+
+- **Retrigger** és **Envelope** módban a jelölő felirata **START**. Ez határozza meg a ciklus kezdőpozícióját egy billentyű leütésekor. Folyamatosan húzható, és 14 pixelen belül lévő pontokhoz, illetve bekapcsolt **SNAP** esetén a rácshoz igazodik.
+- **Sustain envelope**, **Loop at point** és **Loop and hold** módban a jelölő felirata **LOOP**. A meglévő pontokhoz igazodik, és ahhoz a ponthoz köti a forma hurokpontját. Sustain envelope módban az LFO ezen a ponton várakozik a billentyű nyomva tartása alatt. Loop at point módban az LFO lefut a forma végéig, majd visszaugrik erre a pontra. Loop and hold módban az LFO a kezdőpont és e pont között ismétlődik a billentyű kitartása közben, majd felengedéskor kifut a forma végéig.
+- **Free-run** módban a jelölő halvány, a rajzfelület alján pedig megjelenik a "FREE-RUN: PHASE SHIFTS THE CYCLE" tájékoztató felirat. Free-run módban az LFO folyamatos közös órajelen fut, a **PHASE** pedig eltolja a ciklus időzítését.
+
+**Pontmoduláció (a MOD oldal).** Koppints a felső sávban lévő **MOD** gombra, amikor egy vagy több pont ki van jelölve, hogy megnyisd a pontmodulációs oldalt:
+
+![Pontmoduláció](../img/lfo-editor-pointmod.png)
+
+- **BACK:** Visszatér a szerkesztő rajzfelületére.
+- **MODULATE** (léptető): Kiválasztja a modulálandó célértéket: **TIME**, **LEVEL** vagy **CURVE**.
+- **AMOUNT:** Modulációs mélység -100 és +100 százalék között.
+- **REMOVE:** Eltávolítja a modulációs hozzárendelést a kiválasztott célpontról.
+- **Összegzés:** Megjeleníti az állapotot a tábla felett (például: "POINT 3: LEVEL BY LFO 2, +45 PERCENT" vagy "3 POINTS: TIME NOT MODULATED").
+- **Forrástábla:** Kategóriacsoportokba rendezve felsorolja a motor mind az 57 modulációs forrását. Érints meg bármelyik forrást a táblán, hogy hozzárendeld a választott célponthoz az összes aktuálisan kijelölt ponton.
+
+A szerkesztő rajzfelületén a modulált idejű vagy szintű pont mellett egy színes sáv jelenik meg, amely a modulációs mozgástartományát jelzi. A modulált görbületű pont esetén egy színes gyűrű látható a szakasza görbefogója körül.
+
+**A SHAPES lista.** Koppints a felső sáv **SHAPES** gombjára a kétszintű formaválasztó felugró ablak megnyitásához:
+
+![Shapes menü](../img/lfo-editor-shapes.png)
+
+- **FACTORY SHAPES:** Felsorolja a tizenkét beépített gyári formát (Sine, Triangle, Saw Up, Saw Down, Square, Pulse, Step Up, Step Down, Random Steps, Exp Up, Exp Down, Half Sine) szerkeszthető pontokká alakítva. A Sine forma 3 ponttá alakul bekapcsolt simítással. A lépcsős formák pontos függőleges lépcsőkké válnak. Az ívelt formák 16 mintavételezett szakasszá alakulnak át. Egy gyári forma betöltése egyetlen visszavonási lépésben felülírja a rajzfelületet.
+- **MY SHAPES:** Betűrendben felsorolja az összes felhasználó által mentett formát. Koppints egy formanévre a szerkesztőbe való betöltéséhez.
+- **SAVE AS ...:** Megnyitja a képernyő-billentyűzetet név megadásához és a forma elmentéséhez.
+- **REPLACE A SAVED SHAPE ...:** Felsorolja a mentett formáidat. Egyiket kiválasztva megerősítést kér ("REPLACE <név>?"), majd felülírja azt.
+- **RENAME A SAVED SHAPE ...:** Felsorolja a mentett formáidat. Egyiket kiválasztva megnyitja a billentyűzetet az új név megadásához.
+- **DELETE A SAVED SHAPE ...:** Felsorolja a mentett formáidat. Egyiket kiválasztva megerősítést kér ("DELETE <név>?"), majd törli a fájlt.
+
+A mentett formák `<név>.lfoshape.json` nevű fájlokként tárolódnak a `SynthyBoy/LFO Shapes/` mappában. Ez a mappa az SD-kártyán, egy csatlakoztatott USB-meghajtón vagy a plugin saját Content mappájában jön létre (ugyanazokon a tárolóhelyeken, mint a felhasználói hullámtáblák). A fájlformátum megegyezik az asztali változat által írt JSON formátummal. Bármely számítógépről a `SynthyBoy/LFO Shapes/` mappába másolt szabványos JSON formafájlt a rendszer automatikusan felismeri és listázza. A pontmoduláció nem tárolódik a `.lfoshape.json` fájlban. Modulált pontokkal rendelkező forma mentésekor megjelenik a `(POINT MODULATION NOT STORED)` állapotfigyelmeztetés.
+
+**A MORE lista.** Koppints a felső sáv **MORE** gombjára a műveletek felugró ablakának megnyitásához, amely három csoportba van rendezve:
+
+![More menü](../img/lfo-editor-more.png)
+
+- **EDIT:**
+  - **SELECT ALL:** Kijelöli a forma minden pontját.
+  - **FLIP HORIZONTAL:** Időben megfordítja a formát. Az első pontból lesz az utolsó, a görbék előjele megfordul, és a hurokpont is tükröződik.
+  - **FLIP VERTICAL:** Fejjel lefelé megfordítja az összes pont szintjét (az y szintből 1 - y lesz).
+  - **SHIFT LEFT:** Balra tolja a formát egy rácsoszloppal, körbefordulással.
+  - **SHIFT RIGHT:** Jobbra tolja a formát egy rácsoszloppal, körbefordulással.
+  - **RESET ALL CURVES:** Egyenessé teszi az összes szakasz görbéjét 0 meredekséggel.
+  - **CLEAR LOOP POINT:** Eltávolítja a hurokpont jelölést a formából.
+- **GRID:**
+  - **GRID 4 x 4**, **GRID 8 x 8**, **GRID 12 x 12**, **GRID 16 x 16**, **GRID 32 x 32:** Gyors felbontás-előbeállítások az oszlopokhoz és sorokhoz.
+  - **HALVE THE GRID:** Megfelezi mindkét rácsfelbontást (legfeljebb a 2-es minimumig).
+  - **DOUBLE THE GRID:** Megkettőzi mindkét rácsfelbontást (legfeljebb a 32-es maximumig).
+  - **GRID FOLLOWS THE POINTS:** A legdurvább olyan felbontásra állítja a rácsot a 4, 8, 12, 16, 24, 32 értékek közül, amelynek vonalain az összes pont rajta fekszik.
+- **COPY:**
+  - **COPY TO LFO ...:** Megnyitja az LFO-k listáját (az LFO 1–10 között az aktuális kivételével). Átmásolja a formát és a rácsot a kiválasztott LFO-ra, és annak formáját DRAWN értékre állítja.
+  - **OSC A CYCLE TO THIS LFO**, **OSC B CYCLE TO THIS LFO**, **OSC C CYCLE TO THIS LFO:** A kiválasztott oszcillátor egyetlen ciklusát legfeljebb 128 ponttá alakítja át ezen az LFO-n.
+  - **THIS SHAPE TO OSC A**, **THIS SHAPE TO OSC B**, **THIS SHAPE TO OSC C:** Exportálja a formát egyetlen képkockás hullámtábla WAV fájlként a `SynthyBoy/Wavetables/` mappába, és betölti azt a kiválasztott oszcillátorba.
 
 ### 5.10 Mod matrix (Modulációs mátrix)
 
@@ -704,10 +783,10 @@ Két oldal, amelyek a felül található **MAIN** és **TUNING & MPE** gombokkal
 | OUTPUT | L / R mérők (a motor master csúcsszintmérője tartóvonallal, dB skálával külön oszlopban és színsávval) | |
 | | VOLUME | Master Volume -60 .. +6 dB, alapértelmezett: -12 |
 | | SPREAD | Stereo Spread 0 .. 100 százalék, alapértelmezett: 100 |
-| | STEREO | Stereo Routing 0 .. 100 százalék, alapértelmezett: 100 |
-| | LIMIT | LED kapcsoló (kimeneti limiter, alapértelmezés: ki) |
-| | QUALITY | A NO SMOOTHING (simítás kikapcsolva) és OVERSAMPLE 4X (túlmintavételezés) LED kapcsolópár |
+| | STEREO | Stereo Routing 0 .. 100 százalék, alapértelmezett: 100 (potméter, mint a másik kettő) |
 | | VOICE OVERRIDE | LED lista: Kill / Steal |
+| | LIMIT | Kimeneti limiter LED kapcsoló, alapértelmezés szerint ki (megelőzi a túlvezérlést a kimeneti szintek magasra állításakor) |
+| | QUALITY | NO SMOOTHING (kikapcsolja a paramétersimítást, így a változások azonnal ugranak az átúszás helyett; a presetben tárolódik); OVERSAMPLE 4X (megtisztítja a hullámtábla-oszcillátor magas hangjait torzítás nélkül; több processzort használ; az 1. generációs profilon 2x) |
 | PITCH | TUNE | -100 .. +100 cent |
 | | TRANSPOSE | -48 .. +48 félhang |
 | | BEND UP, BEND DOWN | 0 .. 24 félhang, alapértelmezett: 2; a **LINK** LED kapcsoló a lefelé hajlítás tartományát a felfelé hajlításéhoz köti |
@@ -722,12 +801,6 @@ Két oldal, amelyek a felül található **MAIN** és **TUNING & MPE** gombokkal
 | | SLOPE | -8 .. +8; a glide görbe jobbra van kirajzolva |
 | | ALWAYS | Portamento Always, LED kapcsoló |
 | | SCALED | Portamento Scaled By Interval, LED kapcsoló |
-
-A Master oldal OUTPUT blokkja a következőket tartalmazza:
-- **LIMIT kapcsoló:** A kimeneti limiter, alapértelmezés szerint ki van kapcsolva. Használja a túlvezérlés (clipping) megelőzésére, amikor a kimeneti szinteket magasra állítja.
-- **QUALITY:** 
-  - **NO SMOOTHING:** Kikapcsolja a paraméterek simítását, így a módosítások azonnal ugranak az átúszás helyett (ideális feszes ritmikus kapuzáshoz / gatinghez). A presettel együtt mentődik.
-  - **OVERSAMPLE 4X:** Megtisztítja a hullámtábla-oszcillátor magas hangjait warp nélkül. Megjegyzés: Több processzorkapacitást használ (2x az 1. generációs profilon).
 
 **POLY és az eszköz.** Az oldal lehetővé teszi akár 32 hang beállítását is, de a valóságban megszólaló hangok számát korlátozza az eszköz: **8 a Key 61-en, 16 az XL-en** (7.1 fejezet). A több hanggal elmentett preset egyszerűen az eszköz által megengedett hangszámmal szólal meg.
 
