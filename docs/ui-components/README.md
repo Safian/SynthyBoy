@@ -91,7 +91,7 @@ A scene is built with `gpu::SceneData data;` (heap: about 336 KB) and `gpu::Scen
 
 **Lists and pop-ups**: [ListPopup](list-popup.md), [TextEntry](text-entry.md), [ModSourceBoard](mod-source-board.md), [FxGallery](fx-gallery.md) (engine-bound), [ModulationsPage and ModTargetsPage](modulations-page.md).
 
-**Displays**: [display::draw and lfodisplay::draw](display.md), [EnvGraph](env-graph.md), [FilterDisplay](filter-display.md), [FxDisplay](fx-display.md) (engine-bound), [Master and Voice displays](voice-displays.md), SpectrumStrip in [macros.md](macros.md), the shape canvas in [shape-editor.md](shape-editor.md).
+**Displays**: [display::draw and lfodisplay::draw](display.md), [EnvGraph](env-graph.md), [FilterDisplay](filter-display.md), [FxDisplay](fx-display.md) (engine-bound), [Master and Voice displays](voice-displays.md), SpectrumStrip in [macros.md](macros.md), the shape canvas in [shape-editor.md](shape-editor.md), [LoadBar](load-bar.md).
 
 **Composite components and Q groups**: [Composite and the small composites](composites.md), [TypeBar, TuneRow, BasicControls](type-bar.md), [KnobPanel and DetailPage](knob-panel.md), [QGroup](qgroup.md), [ShapePicker, SyncSwitch, RateControl, InstanceBar](lfo-parts.md), [FxSlotCard, FxChainBar, FxBandBoard](fx-chain.md) (engine-bound).
 
