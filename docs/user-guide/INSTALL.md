@@ -17,7 +17,7 @@ When you download and extract the SynthyBoy MPC release zip, you receive a singl
 Safian - VST - SynthyBoy
 ```
 
-This self-contained directory contains all binaries, interfaces, and content necessary to run on both 32-bit and 64-bit standalone MPC hardware. Inside this folder, you will find:
+This self-contained directory contains all binaries, interfaces, and content necessary to run on both 32-bit and 64-bit standalone MPC hardware (the entire package is about 55 MB). Inside this folder, you will find:
 
 - `plugin.json` — The MPC plugin manifest file. It registers the plugin with the MPC OS host and specifies the entry point shared library for each CPU architecture: `file32` points to `VST/synthyboy-arm32.so` and `file64` points to `VST/synthyboy-arm64.so`.
 - `version.xml` — The XML version manifest declaring the package content version and the Touch User Interface skin version (`uiversion`). MPC OS validates this file during scanning.
@@ -29,8 +29,12 @@ This self-contained directory contains all binaries, interfaces, and content nec
   - `TUI.json`: Defines the screen tabs, sub-tabs, widgets, visual styles, and layout elements shown on the MPC touchscreen.
   - `Q-Links.json`: Maps the hardware capacitive Q-Link rotary encoders to plugin parameters across function banks.
   - `browser_images/soundsmode.png`: An exact 270 × 110 pixel PNG graphic tile displayed on the instrument selection screen in **Sounds > INSTRUMENTS** mode.
-- `Content/presets/` — The collection of 112 factory presets arranged in categories (`Bass/`, `Lead/`, `Pad/`, `Pluck/`, `Keys/`, `FX/`). The plugin resolves these files relative to its `plugin.json` location and exposes them as VST programs.
-- `Presets/` *(if present in the release)* — Standalone MPC preset files (`.xpl`) that allow presets to be loaded directly through the MPC OS Sounds browser.
+- `Presets/` — 160 standalone MPC preset files (`.xpl`) that allow presets to be browsed and loaded directly through the MPC OS Sounds browser.
+- `Content/` — Installed content packs and factory presets (about 33 MB, 274 files):
+  - `Content/packs/`: Factory sound and wavetable packs:
+    - `com.safian.synthyboy.factory-wavetables/<Category>/`: 72 factory wavetables organized across six categories (`Analog`, `Digital`, `Metallic`, `Noise`, `Spectral`, `Vocal`, 12 tables each).
+    - `com.safian.synthyboy.factory-samples/`: 12 audio samples, 3 multisample SFZ instruments (`instruments/`), and 3 Convolve impulse responses (`impulses/`).
+  - `Content/presets/`: 160 factory presets arranged in categories (`Bass/`, `FX/`, `Keys/`, `Lead/`, `Pad/`, `Pluck/`). The plugin resolves these files relative to its `plugin.json` location and exposes them directly as VST programs.
 
 ---
 
@@ -59,8 +63,28 @@ To make the plugin visible to MPC OS, copy the entire folder `Safian - VST - Syn
         ├── version.xml
         ├── VST/
         ├── Plugin Skins/
+        ├── Presets/
         └── Content/
 ```
+
+### User Content Folders on SD Card and USB Storage
+
+User-created sound content and custom shapes are stored outside the plugin package directory so they persist across plugin updates without being overwritten:
+
+- **User Wavetables:** `SynthyBoy/Wavetables/<Category>/` — Mono 2048-sample WAV files (16/24/32-bit int, 32-bit float). WAV files placed directly inside `SynthyBoy/Wavetables/` appear in the wavetable browser under the **User** category, while files placed inside subfolders appear under that folder's category name (`<Category>`).
+- **User LFO Shapes:** `SynthyBoy/LFO Shapes/` — Custom LFO shape files (`<name>.lfoshape.json` or standard `.json`).
+
+#### Storage Search and Save Order
+
+The plugin resolves and writes user files using the following exact storage hierarchy (as implemented in `shell-mpc/synthyboy_mpc.cpp` and `shell-mpc/overlay/lfo_shape_files.h`):
+
+1. **SD Card:** `/sdcard` (hardware SD card mount)
+2. **Plugin Content:** `<pluginDir>/Content` (the plugin's own internal `Content` folder, providing user storage on units without an external card)
+3. **USB Storage:** `/media/*` (any external USB drive or thumb stick mounted under `/media`, e.g. `/media/<drive>`)
+
+**Cataloguing and Reading:** The wavetable browser and LFO shape library scan each root in the order above. If a user wavetable category or LFO shape filename exists in multiple locations, the first matching root in the search order takes precedence.
+
+**Saving LFO Shapes:** When saving a custom LFO shape in the LFO editor (**SAVE AS**), the file is written to the first root in the hierarchy that already contains the `SynthyBoy/LFO Shapes` folder. If the folder does not exist on any root, the plugin automatically creates `SynthyBoy/LFO Shapes/` on the first available root (`/sdcard`, then `Content`, then USB).
 
 ### Supported Storage Locations
 
@@ -118,8 +142,8 @@ Once external plugin support is enabled and the unit has been restarted, follow 
 
 ### Selecting a Preset
 
-- In Main Mode or Track View, tap the **Preset** field on the plugin track to browse and select from the 112 factory presets (VST programs).
-- If standalone `.xpl` presets are installed in `Presets/`, presets can also be browsed through the **Sounds** mode browser.
+- In Main Mode or Track View, tap the **Preset** field on the plugin track to browse and select from the 160 factory presets (VST programs).
+- Standalone `.xpl` presets (160 files in `Presets/`) allow presets to also be browsed through the **Sounds** mode browser.
 
 ### Saving a Project
 
@@ -150,8 +174,9 @@ To export your custom sound design as an individual preset file reusable across 
 When updating SynthyBoy:
 
 1. Connect your drive to your computer or switch the MPC to USB Storage / Controller mode.
-2. Replace the existing `Safian - VST - SynthyBoy` folder inside `VST2 Plugins/` with the new folder.
-3. Eject/disconnect cleanly and **restart the MPC application or reboot the hardware**.
+2. Replace the existing `Safian - VST - SynthyBoy` folder inside `VST2 Plugins/` with the new folder. An update replaces the entire package folder (including `Content/`, `Presets/`, `VST/`, and `Plugin Skins/`).
+3. User content folders (`SynthyBoy/Wavetables/` and `SynthyBoy/LFO Shapes/` on the SD card or USB drive) reside outside the package folder and are **not touched** by updates. *(Note: If you placed custom files directly into the plugin's internal `Content/SynthyBoy/` folder, back them up before replacing the package folder).*
+4. Eject/disconnect cleanly and **restart the MPC application or reboot the hardware**.
 
 ### Why You Must Never Overwrite a Running Plugin In-Place
 
