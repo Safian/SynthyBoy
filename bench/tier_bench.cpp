@@ -32,6 +32,8 @@
 //   --no-fx-mute    process an effect whose mix is exactly 0 all the same (the engine before that saving: for a before / after with one binary)
 //   --scalar-filters  run the voice filters' scalar loops also where a vector kernel exists (the same: before / after)
 //   --scalar-warp   make the oversampled samples of a warped oscillator one by one also where the four lane form exists (the same: before / after)
+//   --profile FILE  a sampling profile of the audio thread (a timer signal every 250 us on Linux ARM): the program counters, one per line, for scripts/bench-profile.py to map to functions
+//   --tolerance X   with --verify: a sample may differ by X times the largest sample of the load (the vector forms of the Spectral oscillator differ by rounding, 3e-6 is the stated bound)
 //   --scalar-content  the Sample / Granular / Spectral / Multisample oscillators run their per sample (per frame) reference code, not the block kernels (the same: before / after)
 //   --verify        no timing: every load is rendered twice under every profile, once with the savings (the pair kernels of the filters, the skipped effects with
 //                   mix 0) and once without, offline, 3 s with the chord struck twice, and the samples are compared. They must be the same values (the exit code is
@@ -59,7 +61,11 @@
 #include <vector>
 
 #if defined(__linux__)
+ #include <csignal>
+ #include <ctime>
  #include <sched.h>
+ #include <sys/syscall.h>
+ #include <ucontext.h>
  #include <unistd.h>
 #endif
 #if defined(__x86_64__) || defined(__i386__)
@@ -80,6 +86,70 @@ using namespace synthyboy;
 
 namespace
 {
+#if defined(__linux__) && (defined(__arm__) || defined(__aarch64__))
+/** --profile FILE: a sampling profile of the audio thread by the program counter (a timer signal every 250 microseconds of real time, aimed at the calling thread). The addresses are written as
+    text, one per line, and map to functions with the symbol table of the unstripped binary (scripts/bench-profile.py). Nothing but the benchmark uses it. */
+struct PcProfiler
+{
+    static constexpr size_t kMax = 400000;
+    static inline uintptr_t pcs[kMax];
+    static inline volatile size_t count = 0;
+    timer_t timer {};
+    bool running = false;
+    static void handler (int, siginfo_t*, void* ctx)
+    {
+        const ucontext_t* uc = static_cast<const ucontext_t*> (ctx);
+ #if defined(__arm__)
+        const uintptr_t pc = uc->uc_mcontext.arm_pc;
+ #else
+        const uintptr_t pc = static_cast<uintptr_t> (uc->uc_mcontext.pc);
+ #endif
+        const size_t i = count;
+        if (i < kMax)
+        {
+            pcs[i] = pc;
+            count = i + 1;
+        }
+    }
+    bool start()
+    {
+        struct sigaction sa {};
+        sa.sa_sigaction = &PcProfiler::handler;
+        sa.sa_flags = SA_SIGINFO | SA_RESTART;
+        sigemptyset (&sa.sa_mask);
+        if (sigaction (SIGPROF, &sa, nullptr) != 0)
+            return false;
+        struct sigevent sev {};
+        sev.sigev_notify = SIGEV_THREAD_ID;
+        sev.sigev_signo = SIGPROF;
+        sev._sigev_un._tid = static_cast<pid_t> (syscall (SYS_gettid));
+        if (timer_create (CLOCK_MONOTONIC, &sev, &timer) != 0)
+            return false;
+        struct itimerspec its {};
+        its.it_interval.tv_nsec = 250000;
+        its.it_value.tv_nsec = 250000;
+        running = timer_settime (timer, 0, &its, nullptr) == 0;
+        return running;
+    }
+    void stopAndWrite (const char* path)
+    {
+        if (running)
+        {
+            struct itimerspec off {};
+            timer_settime (timer, 0, &off, nullptr);
+            timer_delete (timer);
+            running = false;
+        }
+        FILE* f = std::fopen (path, "w");
+        if (f == nullptr)
+            return;
+        for (size_t i = 0; i < count; ++i)
+            std::fprintf (f, "%lx\n", static_cast<unsigned long> (pcs[i]));
+        std::fclose (f);
+        std::printf ("profile: %zu samples written to %s\n", static_cast<size_t> (count), path);
+    }
+};
+#endif
 // The candidate profiles from the cheapest to the dearest. The order is the audible gain per cost found with bench/profile_compare.cpp and this bench on the
 // development machine: first the unison voices (14 factory presets ask for more than 3; the texture of the detuned voices, levels within 3 dB), then the effects that low bypasses
 // (31 factory presets sound through them), then the polyphony, then the 4x warps (7 presets, a small difference) and the full morph rate; then the exact math and
@@ -161,6 +231,8 @@ struct Options
     int repeat = 1;
     double budget = 0.0;
     bool verify = false;
+    double tolerance = 0.0;  // --verify: a sample may differ by this share of the load's largest sample (default 0: the same values)
+    std::string profilePath; // --profile
     uint32_t savingsOff = 0; // --no-fx-mute, --scalar-filters: OwnSaving bits switched off (before / after measurements with one binary)
 };
 
@@ -496,6 +568,8 @@ int main (int argc, char** argv)
         else if (a == "--list")        o.list = true;
         else if (a == "--repeat")      o.repeat = std::atoi (next());
         else if (a == "--verify")      o.verify = true;
+        else if (a == "--tolerance")   o.tolerance = std::atof (next());
+        else if (a == "--profile")     o.profilePath = next();
         else if (a == "--no-fx-mute")  o.savingsOff |= kOwnSavingFxMute;
         else if (a == "--scalar-filters") o.savingsOff |= kOwnSavingVectorFilters;
         else if (a == "--scalar-warp") o.savingsOff |= kOwnSavingVectorWarp;
@@ -675,15 +749,23 @@ int main (int argc, char** argv)
                 size_t differ = 0;
                 float worst = 0.0f, peak = 0.0f;
                 for (size_t i = 0; i < with.size(); ++i)
-                {
                     peak = std::max (peak, std::fabs (with[i]));
+                for (size_t i = 0; i < with.size(); ++i)
                     if (! (with[i] == without[i])) // values: +0 and -0 are the same sample; a NaN on either side counts as a difference
                     {
+                        const float d = std::fabs (with[i] - without[i]);
+                        if (d <= static_cast<float> (o.tolerance) * peak) // --tolerance: rounding level differences of the vector forms that are stated as such
+                        {
+                            worst = std::max (worst, d);
+                            continue;
+                        }
                         ++differ;
-                        worst = std::max (worst, std::fabs (with[i] - without[i]));
+                        worst = std::max (worst, d);
                     }
-                }
                 ++runs;
+                if (differ == 0 && worst > 0.0f)
+                    std::printf ("within the tolerance  %-58s %-24.24s largest difference %.3g = %.3g of the peak %.3f\n", configs[c].c_str(), l.name.c_str(), static_cast<double> (worst),
+                                 static_cast<double> (worst / std::max (peak, 1.0e-30f)), static_cast<double> (peak));
                 if (differ != 0)
                 {
                     ++bad;
@@ -693,7 +775,7 @@ int main (int argc, char** argv)
                 std::fflush (stdout);
             }
             failures += bad;
-            std::printf ("%-58s %zu loads: %s\n", configs[c].c_str(), loads.size(), bad == 0 ? "the same samples" : "DIFFERENCES (above)");
+            std::printf ("%-58s %zu loads: %s\n", configs[c].c_str(), loads.size(), bad == 0 ? (o.tolerance > 0.0 ? "within the tolerance" : "the same samples") : "DIFFERENCES (above)");
         }
         std::printf ("verify: %d of %d renders differ\n", failures, runs);
         return failures == 0 ? 0 : 1;
@@ -713,6 +795,14 @@ int main (int argc, char** argv)
     // per profile and load: the 99th percentile and the longest block of every pass
     struct Cell { std::vector<double> p99, max; };
     std::vector<std::vector<Cell>> cells (configs.size(), std::vector<Cell> (loads.size()));
+#if defined(__linux__) && (defined(__arm__) || defined(__aarch64__))
+    PcProfiler profiler;
+    if (! o.profilePath.empty() && ! profiler.start())
+        std::printf ("--profile: the sampling timer could not be started\n");
+#else
+    if (! o.profilePath.empty())
+        usage ("--profile needs a Linux ARM build");
+#endif
     for (int pass = 1; pass <= o.repeat; ++pass)
         for (size_t c = 0; c < configs.size(); ++c)
         {
@@ -764,6 +854,10 @@ int main (int argc, char** argv)
     // The number the budget rule reads: per profile, the factory preset with the highest 99th percentile, where a preset's 99th percentile is the MEDIAN of its passes;
     // next to it the lowest and highest pass (the spread) and the longest single block of any pass.
     auto median = [] (std::vector<double> v) { std::sort (v.begin(), v.end()); return v[v.size() / 2]; };
+#if defined(__linux__) && (defined(__arm__) || defined(__aarch64__))
+    if (! o.profilePath.empty())
+        profiler.stopAndWrite (o.profilePath.c_str());
+#endif
     std::printf ("\nper profile: the dearest factory preset of this run (99th percentile: the median of %d pass%s, with the lowest and highest pass; max: the longest block of any pass), and the synthetic worst case\n",
                  o.repeat, o.repeat == 1 ? "" : "es");
     std::printf ("%-58s %5s | %7s %15s %7s  %-24s | %9s%s\n", "profile", "notes", "p99 %", "(passes)", "max %", "preset", "worst p99", o.budget > 0.0 ? " | budget" : "");
