@@ -608,9 +608,10 @@ void testDisplayStoresNoTruth()
     r.inst.set ("filter1.formant.x", 50.0f);
     r.inst.set ("filter1.formant.y", 50.0f);
     r.refresh();
-    r.ui.touch (ev (TouchEvent::Down, dr.x + dr.w / 5, dr.bottom() - dr.h / 5), r.stack, r.inst, r.now);
+    const ui::Rect fr = d.rect();   // the formant layout has its own display rectangle (the rectangle of the response curve is not the pad's)
+    r.ui.touch (ev (TouchEvent::Down, fr.x + fr.w / 5, fr.bottom() - fr.h / 5), r.stack, r.inst, r.now);
     check (r.inst.get ("filter1.formant.x") < 30.0f && r.inst.get ("filter1.formant.y") < 30.0f, "a finger down on the formant pad writes X and Y (" + std::to_string (r.inst.get ("filter1.formant.x")) + ", " + std::to_string (r.inst.get ("filter1.formant.y")) + ")");
-    r.ui.touch (ev (TouchEvent::Up, dr.x + dr.w / 5, dr.bottom() - dr.h / 5), r.stack, r.inst, r.now + 40.0);
+    r.ui.touch (ev (TouchEvent::Up, fr.x + fr.w / 5, fr.bottom() - fr.h / 5), r.stack, r.inst, r.now + 40.0);
 }
 
 void testRealCurveAndLiveTargets()
