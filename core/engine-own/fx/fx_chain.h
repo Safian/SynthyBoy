@@ -111,13 +111,17 @@ public:
     int rackLatency (int rack, bool reported) const noexcept;
 
 private:
-    struct Item { bool pool; int index; int key; };
+    struct Item { bool pool; int index; int key; bool bypass = false; }; // bypass: the item is the makeup gain of a bypassed effect (fx_makeup.h), not the effect
     struct Plan { std::array<Item, 32> item; int count = 0; };
     void buildPlan (const float* base) noexcept;
     void configureSlot (int s, const float* base, const float* delta, const FxFrame& frame, uint32_t fxMask) noexcept;
     void runRack (int rack, float* l, float* r, int n, int t0, int depth) noexcept;
     void runModule (int m, float* l, float* r, int n, int t0, int depth) noexcept;
     void runSlot (int s, float* l, float* r, int n, int t0) noexcept;
+    /** The gain that stands in for a bypassed effect (Quality::fxMakeup): ramped across the control period from the previous gain to the current one. */
+    void runMakeup (float prev, float now, float* l, float* r, int n, int t0) noexcept;
+    /** One step of the smoothing of a makeup gain towards its target (immediately when `first` or `noSmoothing`). */
+    void stepMakeup (float target, bool& seen, float& prev, float& now, const FxFrame& frame) const noexcept;
     bool slotRuns (int s) const noexcept;
 
     double sr = 48000.0;
@@ -136,6 +140,11 @@ private:
     int rackId = 0;
     int moduleRack[16] = {};
     float levelGain[16] = {}, levelGainPrev[16] = {};
+    // the effects that are on in the preset but bypassed by the quality mask, and the gain that stands in for them (module 0 .. 12; the slots of the pool)
+    bool bypassed[16] = {}, makeupSeen[16] = {};
+    float makeupNow[16] = {}, makeupPrev[16] = {};
+    bool slotBypassed[FxPool::kSlots] = {}, slotMakeupSeen[FxPool::kSlots] = {};
+    float slotMakeupNow[FxPool::kSlots] = {}, slotMakeupPrev[FxPool::kSlots] = {};
     FxPool* pool = nullptr;
     bool slotOn[FxPool::kSlots] = {};
     int slotRack[FxPool::kSlots] = {}, slotOrder[FxPool::kSlots] = {}, slotType[FxPool::kSlots] = {};

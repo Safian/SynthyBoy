@@ -147,6 +147,18 @@ bool Convolve::loadIr (const float* data, int frames, int channels, double irRat
     return true;
 }
 
+int Convolve::shapedIr (const float* data, int frames, int channels, double irRate, std::vector<float>& irL, std::vector<float>& irR)
+{
+    if (data == nullptr || frames <= 0 || (channels != 1 && channels != 2) || irRate <= 0.0)
+        return 0;
+    const int clampedFrames = std::min (frames, kMaxIrFrames);
+    m_rawIr.assign (data, data + static_cast<size_t> (clampedFrames * channels));
+    m_rawFrames = clampedFrames;
+    m_rawChannels = channels;
+    m_rawIrRate = irRate;
+    return shapeIr (irL, irR);
+}
+
 void Convolve::convertToMinimumPhase (std::vector<float>& ir, const Radix2FFT& fft)
 {
     const int N = fft.size();
@@ -241,22 +253,9 @@ double serumDampGainDb (double knob) noexcept
 }
 } // namespace
 
-void Convolve::rebuildPartitions()
+/** Steps 0 .. 6 of the impulse: the stretched, shaped, gain scaled impulse (what the partitions are cut from). */
+int Convolve::shapeIr (std::vector<float>& irL, std::vector<float>& irR) const
 {
-    if (m_rawIr.empty() || m_rawFrames <= 0)
-    {
-        m_headL.assign (static_cast<size_t> (kPartitionSize), 0.0f);
-        m_headR.assign (static_cast<size_t> (kPartitionSize), 0.0f);
-        m_headL[0] = 1.0f;
-        m_headR[0] = 1.0f;
-        m_numTailPartitions = 1;
-        m_tailSpectraL.assign (1, std::vector<Complex> (static_cast<size_t> (kFftSize), Complex (0.0f, 0.0f)));
-        m_tailSpectraR.assign (1, std::vector<Complex> (static_cast<size_t> (kFftSize), Complex (0.0f, 0.0f)));
-        m_tailFftHistL.assign (1, std::vector<Complex> (static_cast<size_t> (kFftSize), Complex (0.0f, 0.0f)));
-        m_tailFftHistR.assign (1, std::vector<Complex> (static_cast<size_t> (kFftSize), Complex (0.0f, 0.0f)));
-        return;
-    }
-
     // 0. The Serum law: the impulse is normalised to the peak 1 over both channels (measured: the level of the wet signal is the level of the convolution with the peak
     //    normalised impulse times IR GAIN, whatever the level of the file; the default IR GAIN of Serum is -18 dB)
     float normalise = 1.0f;
@@ -279,8 +278,8 @@ void Convolve::rebuildPartitions()
                                          1,
                                          kMaxIrFrames);
 
-    std::vector<float> irL (static_cast<size_t> (targetFrames), 0.0f);
-    std::vector<float> irR (static_cast<size_t> (targetFrames), 0.0f);
+    irL.assign (static_cast<size_t> (targetFrames), 0.0f);
+    irR.assign (static_cast<size_t> (targetFrames), 0.0f);
 
     if (m_rawChannels == 1)
     {
@@ -413,6 +412,28 @@ void Convolve::rebuildPartitions()
         irR[static_cast<size_t> (i)] *= irGainFactor;
     }
 
+    return targetFrames;
+}
+
+void Convolve::rebuildPartitions()
+{
+    if (m_rawIr.empty() || m_rawFrames <= 0)
+    {
+        m_headL.assign (static_cast<size_t> (kPartitionSize), 0.0f);
+        m_headR.assign (static_cast<size_t> (kPartitionSize), 0.0f);
+        m_headL[0] = 1.0f;
+        m_headR[0] = 1.0f;
+        m_numTailPartitions = 1;
+        m_tailSpectraL.assign (1, std::vector<Complex> (static_cast<size_t> (kFftSize), Complex (0.0f, 0.0f)));
+        m_tailSpectraR.assign (1, std::vector<Complex> (static_cast<size_t> (kFftSize), Complex (0.0f, 0.0f)));
+        m_tailFftHistL.assign (1, std::vector<Complex> (static_cast<size_t> (kFftSize), Complex (0.0f, 0.0f)));
+        m_tailFftHistR.assign (1, std::vector<Complex> (static_cast<size_t> (kFftSize), Complex (0.0f, 0.0f)));
+        return;
+    }
+
+    std::vector<float> irL, irR;
+    const int targetFrames = shapeIr (irL, irR);
+
     // 7. Partition into Head (first kPartitionSize samples) and Tail (remaining partitions)
     m_headL.assign (static_cast<size_t> (kPartitionSize), 0.0f);
     m_headR.assign (static_cast<size_t> (kPartitionSize), 0.0f);
@@ -530,6 +551,8 @@ double serumToneCorner (double toneKnob) noexcept
     return std::pow (10.0, kLog[7]);
 }
 } // namespace
+
+double Convolve::serumToneCornerHz (double toneKnob) noexcept { return serumToneCorner (toneKnob); }
 
 void Convolve::process (float* l, float* r, int n) noexcept
 {

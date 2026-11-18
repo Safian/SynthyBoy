@@ -307,6 +307,7 @@ void OwnEngine::setQuality (const Quality& q) noexcept
     economyMask.store (economyOf (q), std::memory_order_relaxed);
     tierLowCap.store (q.economy < 0 && q.oversampling <= 1, std::memory_order_relaxed);
     fxMask.store (q.fxMask, std::memory_order_relaxed);
+    fxMakeup.store (q.fxMakeup, std::memory_order_relaxed);
 }
 
 void OwnEngine::setTransport (const TransportInfo& t) noexcept
@@ -1376,6 +1377,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             frame.songBeats = globals.songBeats;
             frame.content = globals.content;
             frame.realtime = realtimeFlag;
+            frame.makeup = fxMakeup.load (std::memory_order_relaxed);
             frame.lowCost = (globals.economy & kEconomyMath) != 0;
             frame.muteSkip = (globals.economy & kEconomyControl) != 0 && (savingsOff.load (std::memory_order_relaxed) & kOwnSavingFxMute) == 0;
             for (auto& f : fx)

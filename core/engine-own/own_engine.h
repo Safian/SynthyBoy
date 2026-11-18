@@ -219,6 +219,7 @@ private:
     float busGain[3] = { 1.0f, 1.0f, 1.0f }, busGainPrev[3] = { 1.0f, 1.0f, 1.0f }, directGain = 1.0f, directGainPrev = 1.0f;
     int busDest[2] = {}, mainBypass = 0, busBypass[2] = {};
     std::atomic<uint32_t> fxMask { kFxAll };
+    std::atomic<bool> fxMakeup { true };
     MorphCache morphCache;
     TickGlobals globals;
     NoteTuning noteTuning;

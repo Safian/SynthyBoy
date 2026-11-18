@@ -35,6 +35,7 @@ add_library(synthyboy_core STATIC
     engine-own/own_support.cpp
     engine-own/fx/fx_chain.cpp
     engine-own/fx/fx_modules.cpp
+    engine-own/fx/fx_makeup.cpp
     engine-own/osc/wavetable_bank.cpp
     engine-own/osc/morph.cpp
     engine-own/osc/content_set.cpp

@@ -75,6 +75,13 @@ public:
     /** Loads and partitions an impulse response. Channels: 1 (mono) or 2 (interleaved stereo). (non-RT) */
     bool loadIr (const float* data, int frames, int channels, double irRate);
 
+    /** The impulse as loadIr () would cut it into partitions (stretched by `size`, shaped by attack, decay, damp and phi MIN, scaled by IR GAIN and the Serum law), without the partitions:
+        `params` as set, the raw impulse as given. Returns the number of frames of both channels. (non-RT) For the loudness model of a bypassed Convolve (fx_makeup.h). */
+    int shapedIr (const float* data, int frames, int channels, double irRate, std::vector<float>& irL, std::vector<float>& irR);
+
+    /** The corner (Hz) of the first order TONE filter of the Serum law for a knob of -100 .. 100. */
+    static double serumToneCornerHz (double toneKnob) noexcept;
+
 private:
     double m_sampleRate = 48000.0;
     int m_maxBlock = 512;
@@ -133,6 +140,7 @@ private:
     float m_toneStateL = 0.0f;
     float m_toneStateR = 0.0f;
 
+    int shapeIr (std::vector<float>& irL, std::vector<float>& irR) const;
     void rebuildPartitions();
     void computeTailFftBlock() noexcept;
     static void convertToMinimumPhase (std::vector<float>& ir, const Radix2FFT& fft);
