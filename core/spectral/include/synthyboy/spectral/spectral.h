@@ -95,6 +95,8 @@ struct Scratch
     float zr[kFftSize / 2], zi[kFftSize / 2];
     // the gains of the band limit (shapeFrame): they depend on the settings only, so they are kept until the settings change
     float bandGain[kBins];
+    float combGain[kBins];
+    float combA = -1.0f, combV = -1.0f;
     float bandLo = -1.0f, bandHi = -1.0f;
     double bandBinHz = -1.0;
     bool bandSmooth = false;

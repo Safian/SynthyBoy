@@ -54,12 +54,29 @@ void sincosBlock (const float* a, float* s, float* c, int n, bool neon) noexcept
 /** What the voice has always done to a bin phase that left +-100 radians: wrapPi (fmodf (x, 2 pi)), bit for bit, without the library's slow fmodf (the remainder in double precision, where
     n * 2 pi is exact for any phase the voice can reach; the result is the exact remainder fmodf returns). */
 float wrapPhase (float x) noexcept;
-/** phase[k] = wrapped (phase[k] + step[k] * kHop) where the sum is beyond +-100, else the sum: the phase update of the voice (the old code's loop), bit for bit. */
-void advancePhases (float* phase, const float* step, int n) noexcept;
+/** wrapPhase () in single precision: the remainder by three part constants of 2 pi (n * 2 pi is exact in float for n < 2^16), within 3e-7 radians of wrapPhase () (the rounding of the last
+    subtraction). For |x| below 1e5; beyond that (and for a NaN) wrapPhase () runs. The vector form of advancePhases () does exactly these operations. */
+float wrapPhaseFloat (float x) noexcept;
+/** phase[k] = wrapped (phase[k] + step[k] * kHop) where the sum is beyond +-100, else the sum: the phase update of the voice. Wrapped by wrapPhaseFloat () (`neon`: four at a time, the same bits). */
+void advancePhases (float* phase, const float* step, int n, bool neon) noexcept;
 
 /** ring[(at + n) & (kFftSize - 1)] += x[n] * w[n] * scale for n < kFftSize, where x[2 m] = zr[m], x[2 m + 1] = zi[m] and w is the Hann window times 1 / kFftSize (exact): the
     overlap add of a frame of the voice (the product is the voice's old (x / kFftSize * hann) * scale with the exact power of two moved into the table). `at` is a multiple of 4. The order of the products is the voice's: (x * w) * scale. */
 void overlapAdd (float* ring, int at, const float* zr, const float* zi, float scale, bool neon) noexcept;
+
+// ---- the per bin loops of shapeFrame () (the same values as the scalar loops of the reference, bit for bit) ----------------------------------------------
+
+/** out[k] = a[k] + (b[k] - a[k]) * t, k < n. */
+void lerpBins (float* out, const float* a, const float* b, float t, int n, bool neon) noexcept;
+/** a[k] *= g[k], k < n. */
+void mulBins (float* a, const float* g, int n, bool neon) noexcept;
+/** The largest of a[k], k < n (0 for n <= 0, as the loop of the voice starts from 0). */
+float maxBins (const float* a, int n, bool neon) noexcept;
+/** The peaks of a magnitude spectrum: the bins k in 1 .. n - 2 with m[k] > m[k - 1], m[k] >= m[k + 1] and m[k] > 1e-5 top, in order, at most maxPeaks of them. Returns their number. */
+int findPeaks (const float* m, int n, float top, int* peaks, int maxPeaks, bool neon) noexcept;
+/** The bins from .. to (inclusive) move by `offset` to the output bins (kept to 1 .. n - 1): where the magnitude is above what the output bin holds it replaces it, with the frequency
+    scaled by r (+ shiftRad) and the phase: the placing of one peak region in shapeFrame (). */
+void placeRegion (const float* mag, const float* freq, const float* theta, float* om, float* of, float* oth, int from, int to, int offset, float r, float shiftRad, int n, bool neon) noexcept;
 } // namespace kernels
 } // namespace spectral
 } // namespace synthyboy

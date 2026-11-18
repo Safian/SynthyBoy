@@ -551,7 +551,7 @@ TEST (spectral_sine_cosine_are_accurate_and_the_vector_form_matches_the_scalar_f
     }
 }
 
-TEST (spectral_phase_wrap_is_the_old_fmod_bit_for_bit)
+TEST (spectral_phase_wrap_is_the_old_fmod_exactly_and_the_single_precision_wrap_within_rounding)
 {
     using namespace synthyboy::spectral::kernels;
     const auto old = [] (float x)
@@ -564,6 +564,7 @@ TEST (spectral_phase_wrap_is_the_old_fmod_bit_for_bit)
     };
     KRng rng (9);
     int bad = 0, n = 0;
+    double worstFloat = 0.0;
     for (int i = 0; i < 400000; ++i)
     {
         const float range = i % 4 == 0 ? 120.0f : (i % 4 == 1 ? 2000.0f : (i % 4 == 2 ? 60000.0f : 300.0f));
@@ -573,25 +574,50 @@ TEST (spectral_phase_wrap_is_the_old_fmod_bit_for_bit)
         if (i % 50 == 1)
             x = std::copysign (3.14159265f * static_cast<float> (1 + i % 900), x);
         ++n;
-        const float a = old (x), b = wrapPhase (x);
+        const float a = old (x), b = wrapPhase (x), c = wrapPhaseFloat (x);
         if (! (a == b))
             ++bad;
+        // the single precision wrap: the same value to rounding (a result near +-pi may sit on the other side of the wrap, that is the same phase)
+        double d = std::fabs (static_cast<double> (a) - c);
+        d = std::min (d, std::fabs (d - 6.283185307179586));
+        worstFloat = std::max (worstFloat, d);
     }
     CHECK (n > 0);
     CHECK_EQ (bad, 0);
-    // the phase update loop
-    std::vector<float> phase (kBins), step (kBins), expect (kBins);
+    CHECK (worstFloat < 4.0e-7);
+    // the phase update loop: the scalar form is wrapPhaseFloat (), the vector form gives its bits; both within rounding of the old loop
+    std::vector<float> phase (kBins), step (kBins), expect (kBins), oldResult (kBins), vec (kBins);
     for (int k = 0; k < kBins; ++k)
     {
         phase[static_cast<size_t> (k)] = rng.bi() * 3.2f;
         step[static_cast<size_t> (k)] = rng.bi() * 0.2f * static_cast<float> (k % 40);
+        if (k % 301 == 7)
+            step[static_cast<size_t> (k)] = 1.0e6f;   // beyond the single precision range: the scalar wrap
         float x = phase[static_cast<size_t> (k)] + step[static_cast<size_t> (k)] * kHop;
+        oldResult[static_cast<size_t> (k)] = x;
         if (x > 100.0f || x < -100.0f)
-            x = old (x);
-        expect[static_cast<size_t> (k)] = x;
+            oldResult[static_cast<size_t> (k)] = old (x);
+        float y = x;
+        if (y > 100.0f || y < -100.0f)
+            y = wrapPhaseFloat (y);
+        expect[static_cast<size_t> (k)] = y;
     }
-    advancePhases (phase.data(), step.data(), kBins);
+    vec = phase;
+    advancePhases (phase.data(), step.data(), kBins, false);
     CHECK (sameBits (phase.data(), expect.data(), phase.size()));
+    if (haveNeon())
+    {
+        advancePhases (vec.data(), step.data(), kBins, true);
+        CHECK (sameBits (vec.data(), expect.data(), vec.size()));
+    }
+    double worst = 0.0;
+    for (size_t k = 0; k < phase.size(); ++k)
+    {
+        double d = std::fabs (static_cast<double> (oldResult[k]) - phase[k]);
+        d = std::min (d, std::fabs (d - 6.283185307179586));
+        worst = std::max (worst, d);
+    }
+    CHECK (worst < 4.0e-7);
 }
 
 TEST (spectral_overlap_add_vector_form_matches_the_scalar_form)

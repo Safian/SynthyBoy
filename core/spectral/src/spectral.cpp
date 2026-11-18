@@ -9,6 +9,13 @@
 #include <cmath>
 #include <cstring>
 
+// The reference loops here and the block kernels of kernels.cpp must compute the same bits where they do the same thing: no fused multiply-add in either, on any compiler / CPU.
+#if defined(__clang__)
+ #pragma clang fp contract(off)
+#elif defined(__GNUC__)
+ #pragma GCC optimize ("fp-contract=off")
+#endif
+
 namespace synthyboy
 {
 namespace spectral
@@ -249,7 +256,7 @@ void buildFilterGains (float* gains, const float* x, const float* y, int numPoin
 namespace
 {
 /** One spectral warp on the magnitudes m and the frequencies f (radians per file sample) of a frame. Returns an extra pitch ratio (1 = none). `twist` receives the phase twist. */
-float applyWarp (int w, float a, float v, float* m, float* f, float* tm, float* tf, const float* external, float* smear, float& twist) noexcept
+float applyWarp (int w, float a, float v, float* m, float* f, float* tm, float* tf, const float* external, float* smear, float& twist, Scratch* cache) noexcept
 {
     a = clamp01 (a);
     v = clamp01 (v);
@@ -278,6 +285,19 @@ float applyWarp (int w, float a, float v, float* m, float* f, float* tm, float* 
         case Warp::comb:
         {
             const float period = 2.0f + (1.0f - v) * 60.0f;
+            if (cache != nullptr)
+            {
+                // the gain of every bin depends on the amount and the variation only: made when they change, not for every frame of every voice
+                if (cache->combA != a || cache->combV != v)
+                {
+                    for (int k = 0; k < kBins; ++k)
+                        cache->combGain[k] = (1.0f - a) + a * (0.5f + 0.5f * std::cos (kTwoPi * static_cast<float> (k) / period));
+                    cache->combA = a;
+                    cache->combV = v;
+                }
+                kernels::mulBins (m, cache->combGain, kBins, kernels::haveNeon());
+                break;
+            }
             for (int k = 0; k < kBins; ++k)
                 m[k] *= (1.0f - a) + a * (0.5f + 0.5f * std::cos (kTwoPi * static_cast<float> (k) / period));
             break;
@@ -303,6 +323,23 @@ float applyWarp (int w, float a, float v, float* m, float* f, float* tm, float* 
         {
             const int n = 1 + static_cast<int> (v * 3.99f);
             copyOut();
+            if (cache != nullptr)
+            {
+                // the multiples of each target in the order of the loop below (k = t h rises with h), without a division or a remainder per bin
+                for (int h = 2; h <= n + 1; ++h)
+                    for (int t = 1; t * h < kBins; ++t)
+                    {
+                        const int k = t * h;
+                        const float value = a * m[k] * 0.7f;
+                        if (value > tm[t])
+                        {
+                            tm[t] = value;
+                            tf[t] = f[k] / static_cast<float> (h);
+                        }
+                    }
+                copyBack();
+                break;
+            }
             for (int k = 2; k < kBins; ++k)
                 for (int h = 2; h <= n + 1; ++h)
                     if (k % h == 0)
@@ -607,12 +644,20 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
     const double fileRate = an.fileRate();
     const double fileBinHz = fileRate / kFftSize, hostBinHz = hostRate / kFftSize;
 
-    for (int k = 0; k < kBins; ++k)
+    const bool neon = kernels::haveNeon();
+    if (fast)
     {
-        mag_[k] = m0[k] + (m1[k] - m0[k]) * fr;
-        freq_[k] = fq[k];
-        theta_[k] = ph[k];
+        kernels::lerpBins (mag_, m0, m1, fr, kBins, neon);
+        std::memcpy (freq_, fq, sizeof (float) * kBins);
+        std::memcpy (theta_, ph, sizeof (float) * kBins);
     }
+    else
+        for (int k = 0; k < kBins; ++k)
+        {
+            mag_[k] = m0[k] + (m1[k] - m0[k]) * fr;
+            freq_[k] = fq[k];
+            theta_[k] = ph[k];
+        }
     const auto band = [&] (float* m, double binHz)
     {
         const float lo = std::max (1.0f, p.freqLoHz), hi = std::max (lo, p.freqHiHz);
@@ -645,8 +690,7 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
                 scratch.bandBinHz = binHz;
                 scratch.bandSmooth = p.bandSmooth;
             }
-            for (int k = 0; k < kBins; ++k)
-                m[k] *= scratch.bandGain[k];
+            kernels::mulBins (m, scratch.bandGain, kBins, neon);
             return;
         }
         for (int k = 0; k < kBins; ++k)
@@ -670,8 +714,13 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
         }
     };
     if (p.filterGain != nullptr)
-        for (int k = 0; k < kBins; ++k)
-            mag_[k] *= p.filterGain[k];
+    {
+        if (fast)
+            kernels::mulBins (mag_, p.filterGain, kBins, neon);
+        else
+            for (int k = 0; k < kBins; ++k)
+                mag_[k] *= p.filterGain[k];
+    }
     if (! p.bandPostWarp)
         band (mag_, fileBinHz);
 
@@ -681,7 +730,7 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
         if (p.warpType[w] >= 0 && p.warpType[w] < kNumSpectralWarps && p.warpAmount[w] > 0.0f)
         {
             const float* ext = isExternalWarp (p.warpType[w]) ? p.external[externalSource (p.warpType[w])] : nullptr;
-            extra *= applyWarp (p.warpType[w], p.warpAmount[w], p.warpVar[w], mag_, freq_, tm_, tf_, ext, smear, twist);
+            extra *= applyWarp (p.warpType[w], p.warpAmount[w], p.warpVar[w], mag_, freq_, tm_, tf_, ext, smear, twist, fast ? &scratch : nullptr);
         }
 
     // the pitch: bin k goes to bin k * r (+ the frequency shift) with its frequency scaled the same way
@@ -697,11 +746,19 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
         int peaks[kBins / 2];
         int numPeaks = 0;
         float top = 0.0f;
-        for (int k = 0; k < kBins; ++k)
-            top = std::max (top, mag_[k]);
-        for (int k = 1; k < kBins - 1 && numPeaks < kBins / 2; ++k)
-            if (mag_[k] > mag_[k - 1] && mag_[k] >= mag_[k + 1] && mag_[k] > 1.0e-5f * top)
-                peaks[numPeaks++] = k;
+        if (fast)
+        {
+            top = kernels::maxBins (mag_, kBins, neon);
+            numPeaks = kernels::findPeaks (mag_, kBins, top, peaks, kBins / 2, neon);
+        }
+        else
+        {
+            for (int k = 0; k < kBins; ++k)
+                top = std::max (top, mag_[k]);
+            for (int k = 1; k < kBins - 1 && numPeaks < kBins / 2; ++k)
+                if (mag_[k] > mag_[k - 1] && mag_[k] >= mag_[k + 1] && mag_[k] > 1.0e-5f * top)
+                    peaks[numPeaks++] = k;
+        }
         const auto place = [&] (int k, int offset)
         {
             const int j = k + offset;
@@ -718,8 +775,11 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
             const int from = i == 0 ? 1 : (peaks[i - 1] + centre + 1) / 2;
             const int to = i + 1 == numPeaks ? kBins - 1 : (centre + peaks[i + 1]) / 2;
             const int offset = static_cast<int> (std::lround (static_cast<double> (centre) * r + shiftBins)) - centre;
-            for (int k = from; k <= to; ++k)
-                place (k, offset);
+            if (fast)
+                kernels::placeRegion (mag_, freq_, theta_, om_, of_, oth_, from, to, offset, static_cast<float> (r), shiftRad, kBins, neon);
+            else
+                for (int k = from; k <= to; ++k)
+                    place (k, offset);
         }
     }
     if (p.bandPostWarp)
@@ -809,7 +869,7 @@ void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double f
             c.synthPhase[j] = oth_[j];
     }
     else
-        kernels::advancePhases (c.synthPhase, of_, kBins);
+        kernels::advancePhases (c.synthPhase, of_, kBins, neon);
     if (p.phaseLock)
     {
         int peak = -1;
