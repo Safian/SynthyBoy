@@ -94,6 +94,26 @@ public:
         return *s;
     }
 
+#if defined(__linux__)
+    /** The CPU rule of the overlay for ANOTHER thread of the shell that renders or polls (the display thread; the engine helper threads through the hook of helper_thread_hook.h, once that is merged: its hook calls
+        this too): the calling thread gets the cores of the plan (coresForOwnThreads). `seen` is the plan the thread applied last (start with 0): the call does nothing while the plan is the same, and while the overlay
+        thread has not made its first plan (false: ask again later), so it is cheap enough to call on every pass of a loop. True: the cores were set now. */
+    static bool applyCpusToThisThread (unsigned& seen)
+    {
+        Service& s = instance();
+        const unsigned gen = s.cpuGen_.load (std::memory_order_acquire);
+        if (gen == 0 || gen == seen)
+            return false;
+        std::vector<int> cpus;
+        {
+            std::lock_guard<std::mutex> g (s.cpuMu_);
+            cpus = coresForOwnThreads (s.cpu_.plan, s.cpu_.online);
+        }
+        seen = gen;
+        return setAffinity (0, cpus);
+    }
+#endif
+
     /** Returns the slot of the instance (0 .. 15, kept until detach; -1: more than 16 instances, this one never shows the overlay). */
     int attach (IInstanceView* view)
     {
@@ -312,6 +332,8 @@ private:
         nextCpuScanMs_ = nowSteadyMs() + 10000.0;
         const bool changed = first || st.plan.allowed != cpu_.plan.allowed;
         cpu_ = st;
+        if (changed)
+            cpuGen_.fetch_add (1, std::memory_order_release);   // the other threads of the shell (applyCpusToThisThread) follow
         if (st.plan.changed && changed)
             setAffinity (0, st.plan.allowed);
         if (gpu_ && st.plan.changed)
@@ -348,6 +370,7 @@ private:
 
     std::mutex cpuMu_;
     CpuState cpu_;
+    std::atomic<unsigned> cpuGen_ { 0 };   // counts the plans that changed the cores (0: none made yet)
     double nextCpuScanMs_ = 0.0;
     int helperPidSet_ = 0;
     std::string threadAffinity_ = "unknown", helperAffinity_ = "no helper";

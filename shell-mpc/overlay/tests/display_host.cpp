@@ -189,6 +189,11 @@ int main()
         // names are matched without regard to the case, other threads never count
         const CpuPlan cs = planCpus (on, {}, { { "AUDIOWORKER9", { 6 } }, { "audio thread", { 7 } }, { "FileIO", { 0, 1, 2, 3 } } });
         check (cs.allowed == std::vector<int> ({ 0, 1, 2, 3, 4, 5 }), "thread names match 'audio' in any case; a pinned FileIO thread does not take cores away");
+        // the rule for every thread of the shell that renders or polls (the display thread too): the plan's cores as a mask, all online cores when the plan changes nothing
+        check (cpuMask (coresForOwnThreads (p, on)) == 0x0full, "XL: the cores of the shell's threads are the mask 0x0f (0-3), not 0xff");
+        check (cpuMask (coresForOwnThreads (k61, k4)) == 0x03ull, "Key 61: the mask is 0x03 (0-1)");
+        check (cpuMask (coresForOwnThreads (free, k4)) == 0x0full && cpuMask (coresForOwnThreads (all, k4)) == 0x0full, "a plan that changes nothing: every online core (a thread held back by an earlier plan is released)");
+        check (cpuMask ({ 0, 7, 63, 64, -1 }) == ((1ull << 0) | (1ull << 7) | (1ull << 63)) && cpuMask ({}) == 0ull, "cpuMask: cores outside 0..63 are left out, the empty set is 0");
     }
 
     // ================= the pace grid =================
