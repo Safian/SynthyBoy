@@ -175,7 +175,7 @@ public:
         const float len = st == 2 ? envLen[e][4] : (st == 3 ? envLen[e][1] : (st == 4 ? envLen[e][2] : (st == 6 ? envLen[e][3] : 0.0f)));
         fraction = env[e].fineFraction (len);
     }
-    float lfoReadout (int l) const noexcept { return lfoReadPos[l] - std::floor (lfoReadPos[l]); }
+    float lfoReadout (int l) const noexcept { return lfoReadPos[l] - ffloor (lfoReadPos[l]); }
     float modulatedParam (int idx) const noexcept { return gl != nullptr ? P (idx) : 0.0f; }
 
     /** Advances envelopes, LFOs and the matrix by one control period and computes the parameters of the period. */

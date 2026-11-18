@@ -1112,7 +1112,7 @@ void OwnEngine::controlTick() noexcept
         const float rate = lfoRateHz (sync, base[static_cast<size_t> (li.rate)], static_cast<int> (base[static_cast<size_t> (li.division)] + 0.5f), globals.bpm, 440.0f, lastNoteSemis,
                                       base[static_cast<size_t> (li.keyTranspose)], base[static_cast<size_t> (li.keyTune)]);
         lfoPhase[l] += rate * fdt;
-        lfoPhase[l] -= std::floor (lfoPhase[l]);
+        lfoPhase[l] -= ffloor (lfoPhase[l]);   // (ffloor: std::floor for every float, without the libm call; CPU-REVIEW-VOICE-MOD.md V12)
         const int syncType = static_cast<int> (base[static_cast<size_t> (li.syncType)] + 0.5f);
         if (syncType >= 2 && li.mono >= 0 && base[static_cast<size_t> (li.mono)] >= 0.5f)
             monoCore[l].advance (syncType, base[static_cast<size_t> (li.phase)] * (1.0f / 360.0f), rate, base[static_cast<size_t> (li.delay)] * 0.001f, fdt, anyDown);

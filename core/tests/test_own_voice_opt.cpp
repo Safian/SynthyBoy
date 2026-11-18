@@ -750,3 +750,116 @@ TEST (voice_param_read_zero_test_on_the_bits_is_the_float_compare_for_every_patt
     CHECK_EQ (zeros, uint64_t (2));
     CHECK_EQ (mismatches, uint64_t (0));
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// V12: ffloorBits and ffloor against std::floor and against the form they replaced, for all 2^32 bit patterns (signed zeros, denormals, infinities, every NaN)
+
+namespace
+{
+float ffloorBefore (float x) noexcept
+{
+    if (!(std::fabs (x) < 4194304.0f) || x == 0.0f)
+        return std::floor (x);
+    const int i = static_cast<int> (x);
+    return static_cast<float> (i - (x < static_cast<float> (i) ? 1 : 0));
+}
+} // namespace
+
+namespace
+{
+/** Flush-to-zero on (the MPC audio thread and the bench run with it): denormal inputs of the float arithmetic and compares count as zero, denormal results become zero. */
+struct FlushToZero
+{
+#if defined(__aarch64__) || defined(__arm64__)
+    uint64_t saved = 0;
+    FlushToZero() { __asm__ __volatile__ ("mrs %0, fpcr" : "=r"(saved)); const uint64_t on = saved | (uint64_t (1) << 24); __asm__ __volatile__ ("msr fpcr, %0" : : "r"(on)); }
+    ~FlushToZero() { __asm__ __volatile__ ("msr fpcr, %0" : : "r"(saved)); }
+    static constexpr bool available = true;
+#elif defined(__x86_64__) || defined(__i386__)
+    unsigned saved = 0;
+    FlushToZero() { saved = __builtin_ia32_stmxcsr(); __builtin_ia32_ldmxcsr (saved | 0x8040u); }
+    ~FlushToZero() { __builtin_ia32_ldmxcsr (saved); }
+    static constexpr bool available = true;
+#else
+    static constexpr bool available = false;
+#endif
+};
+} // namespace
+
+TEST (ffloor_on_the_bits_is_the_form_before_for_every_pattern_with_flush_to_zero)
+{
+    // with flush-to-zero the form before sent a denormal to std::floor (its compare with 0 was true): the new one does the same; every other pattern is unaffected by the mode
+    if (!FlushToZero::available)
+        return;
+    FlushToZero ftz;
+    uint64_t differBefore = 0;
+    for (uint64_t i = 0; i <= 0xffffffffull; ++i)
+    {
+        const uint32_t u = static_cast<uint32_t> (i);
+        float x;
+        std::memcpy (&x, &u, 4);
+        volatile float vx = x;
+        const float a = ffloorBits (vx), c = ffloorBefore (vx), d = ffloor (vx);
+        differBefore += std::memcmp (&a, &c, 4) != 0 || std::memcmp (&d, &c, 4) != 0 ? 1 : 0;
+    }
+    CHECK_EQ (differBefore, uint64_t (0));
+}
+
+TEST (ffloor_on_the_bits_is_std_floor_for_every_pattern)
+{
+    uint64_t differFloor = 0, differBefore = 0, nans = 0;
+    for (uint64_t i = 0; i <= 0xffffffffull; ++i)
+    {
+        const uint32_t u = static_cast<uint32_t> (i);
+        float x;
+        std::memcpy (&x, &u, 4);
+        volatile float vx = x;
+        const float a = ffloorBits (vx), b = std::floor (vx), c = ffloorBefore (vx), d = ffloor (vx);
+        uint32_t ua, ub, uc;
+        std::memcpy (&ua, &a, 4);
+        std::memcpy (&ub, &b, 4);
+        std::memcpy (&uc, &c, 4);
+        nans += x != x ? 1 : 0;
+        differFloor += ua != ub ? 1 : 0;
+        differBefore += ua != uc || std::memcmp (&d, &c, 4) != 0 ? 1 : 0;
+    }
+    std::printf ("ffloor: 2^32 patterns (%llu NaN), %llu differ from std::floor, %llu from the form before\n", static_cast<unsigned long long> (nans),
+                 static_cast<unsigned long long> (differFloor), static_cast<unsigned long long> (differBefore));
+    CHECK_EQ (differFloor, uint64_t (0));
+    CHECK_EQ (differBefore, uint64_t (0));
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The engine comparisons again with flush-to-zero on, as the MPC audio thread and the bench run (the compares and the arithmetic treat denormals as zero there)
+
+TEST (voice_opt_engine_with_flush_to_zero_is_bit_identical)
+{
+    if (!FlushToZero::available)
+        return;
+    ensureAllBuiltinWavetables();
+    const std::vector<std::vector<float>> presets = factoryPresets();
+    FlushToZero ftz;
+    int failed = 0, runs = 0;
+    for (int s = 0; s < (sbtest::instrumented() ? 6 : 40); ++s)
+    {
+        Rand r (static_cast<uint32_t> (9000 + s));
+        const std::vector<float> plain = randomPatch (r, nullptr, 0.25f);
+        EnginePair p (plain, s % 3 == 0 ? Tier::high : Tier::low, r);
+        char what[64];
+        std::snprintf (what, sizeof what, "flush-to-zero random patch %d", s);
+        ++runs;
+        failed += playAndCompare (p, r, 400, what) ? 0 : 1;
+    }
+    for (size_t i = 0; i < presets.size(); i += sbtest::instrumented() ? 16 : 4)
+    {
+        Rand r (static_cast<uint32_t> (300 + i));
+        const std::vector<float> plain = randomPatch (r, &presets[i], 0.03f);
+        EnginePair p (plain, Tier::low, r);
+        char what[64];
+        std::snprintf (what, sizeof what, "flush-to-zero factory preset %zu (edited)", i);
+        ++runs;
+        failed += playAndCompare (p, r, 300, what) ? 0 : 1;
+    }
+    std::printf ("%d runs with flush-to-zero, %d differ\n", runs, failed);
+    CHECK_EQ (failed, 0);
+}
