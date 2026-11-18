@@ -95,6 +95,8 @@ public:
 
     /** Measurements only (the bench's --scalar-content): the grains run through the per sample reference loop instead of the kernel (the same bits, see core/granular/tests). */
     void setReferenceKernels (bool on) noexcept { reference_ = on; }
+    /** Tests: false runs the kernel with its scalar form only (the vector form, four samples of a grain at a time on ARM with NEON, gives the same bits). */
+    void setVectorKernels (bool on) noexcept { vectors_ = on; }
 
     bool isActive() const noexcept { return active_; }
     int activeGrains() const noexcept;
@@ -125,6 +127,7 @@ private:
     const SampleView* sample_ = nullptr;
     double sampleRate_ = 44100.0;
     bool reference_ = false;
+    bool vectors_ = true;
     bool active_ = false, released_ = false, headDone_ = false;
     double head_ = 0.0;         // play head, fraction of the file
     int headDirection_ = 1;     // ping pong state

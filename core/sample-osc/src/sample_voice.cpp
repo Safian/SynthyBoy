@@ -7,6 +7,13 @@
 #include <algorithm>
 #include <cmath>
 
+#if defined(__ARM_NEON) && ! defined(SB_NO_NEON)
+ #include <arm_neon.h>
+ #define SB_SAMPLE_NEON 1
+#else
+ #define SB_SAMPLE_NEON 0
+#endif
+
 // The block kernel below and the per sample reference (renderFrame) must compute the same bits: no fused multiply-add in either, on any compiler / CPU (AArch64 always has it
 // and GCC / clang contract a * b + c by default).
 #if defined(__clang__)
@@ -300,6 +307,43 @@ inline void readPlanned (const ReadPlan& r, const float* table, double pos, floa
         }
     }
 }
+#if SB_SAMPLE_NEON
+/** Four consecutive samples of one channel: the interpolation of interpBlock () with the four sample positions in the four lanes (the taps of every lane are summed in the same order as the
+    scalar sum, so the bits are the same). `idx`: the integer positions, `ph`: the phase of the coefficient set. Every tap lies inside the data (the caller checked). */
+template <QualityTier Tier>
+inline float32x4_t interp4 (const float* buf, const int32_t* idx, const int32_t* ph, const float* table) noexcept
+{
+    constexpr int kTaps = Tier == QualityTier::low ? 4 : (Tier == QualityTier::medium ? 8 : 16);
+    constexpr int kBefore = kTaps / 2 - 1;   // taps before the position: i - 1 (4), i - 3 (8), i - 7 (16)
+    float32x4_t sum = vdupq_n_f32 (0.0f);
+    for (int g = 0; g < kTaps / 4; ++g)
+    {
+        float32x4_t c[4], b[4];
+        for (int k = 0; k < 4; ++k)
+        {
+            c[k] = vld1q_f32 (table + ph[k] * kTaps + 4 * g);
+            b[k] = vld1q_f32 (buf + idx[k] - kBefore + 4 * g);
+        }
+        const float32x4x2_t c01 = vtrnq_f32 (c[0], c[1]), c23 = vtrnq_f32 (c[2], c[3]), b01 = vtrnq_f32 (b[0], b[1]), b23 = vtrnq_f32 (b[2], b[3]);
+        const float32x4_t cc[4] = { vcombine_f32 (vget_low_f32 (c01.val[0]), vget_low_f32 (c23.val[0])), vcombine_f32 (vget_low_f32 (c01.val[1]), vget_low_f32 (c23.val[1])),
+                                    vcombine_f32 (vget_high_f32 (c01.val[0]), vget_high_f32 (c23.val[0])), vcombine_f32 (vget_high_f32 (c01.val[1]), vget_high_f32 (c23.val[1])) };
+        const float32x4_t bb[4] = { vcombine_f32 (vget_low_f32 (b01.val[0]), vget_low_f32 (b23.val[0])), vcombine_f32 (vget_low_f32 (b01.val[1]), vget_low_f32 (b23.val[1])),
+                                    vcombine_f32 (vget_high_f32 (b01.val[0]), vget_high_f32 (b23.val[0])), vcombine_f32 (vget_high_f32 (b01.val[1]), vget_high_f32 (b23.val[1])) };
+        for (int j = 0; j < 4; ++j)
+            sum = vaddq_f32 (sum, vmulq_f32 (cc[j], bb[j]));
+    }
+    return sum; // (0 + c0 b0 is c0 b0 exactly: the scalar low form starts with the product, the others with 0 +)
+}
+
+/** sanitizeFloat () of four lanes: a NaN, an infinity and a value below 1e-18 in magnitude (denormals, zeros) become +0. */
+inline float32x4_t sanitize4 (float32x4_t v) noexcept
+{
+    const float32x4_t a = vabsq_f32 (v);
+    const uint32x4_t keep = vandq_u32 (vcgeq_f32 (a, vdupq_n_f32 (1.0e-18f)), vcltq_f32 (a, vdupq_n_f32 (INFINITY)));
+    return vreinterpretq_f32_u32 (vandq_u32 (vreinterpretq_u32_f32 (v), keep));
+}
+#endif
+
 } // namespace
 
 void SincTables::init() noexcept
@@ -840,11 +884,78 @@ void SampleVoice::renderBlockT (float* outLeft, float* outRight, int numFrames, 
     const double fadeFrames = fadeEdges ? std::max (1.0, static_cast<double> (params_.edgeFadeMs) * 0.001 * sample_->sampleRate) : 1.0;
     const float levelPart = std::max (0.0f, params_.level) * std::max (0.0f, unisonLevel_) * velocity_;
 
+#if SB_SAMPLE_NEON
+    // a run of samples in which nothing but the plain read happens (no fade, no release, no rate modulation, no loop event, no crossfade, no mip blend): four at a time
+    constexpr int kTaps = Tier == QualityTier::low ? 4 : (Tier == QualityTier::medium ? 8 : 16);
+    const bool runOk = vectors_ && rateMod == nullptr && ! fadeEdges && plan.kind != ReadPlan::blend && ! plan.useUpper;
+    // the interval of positions (of the playhead) inside which no event can happen and every tap of the read lies inside the data
+    double runLo = boundLo, runHi = boundHi;
+    if (mode == LoopMode::forward || mode == LoopMode::pingPong || mode == LoopMode::reverse)
+    {
+        runLo = lStart;
+        runHi = (mode == LoopMode::forward && xLen > 1.0) ? lEnd - xLen : lEnd;
+    }
+    {
+        const double inv = plan.kind == ReadPlan::oneLevel ? plan.invScale0 : 1.0;
+        const double marginLo = static_cast<double> (kTaps / 2 - 1) + 1.0, marginHi = static_cast<double> (kTaps / 2) + 1.0;
+        runLo = std::max (runLo, marginLo / inv);
+        runHi = std::min (runHi, (static_cast<double> (plan.na) - marginHi) / inv);
+    }
+#endif
     int i = 0;
     for (; i < numFrames; ++i)
     {
         if (! active_)
             break;
+#if SB_SAMPLE_NEON
+        const double runStep = pitchRatio_ * speed_ * 1.0 * direction_; // (the direction changes at a ping pong turn)
+        if (runOk && ! stopping_ && antiClickGain_ >= 1.0f && i + 4 <= numFrames && runStep != 0.0 && playhead_ > runLo && playhead_ < runHi)
+        {
+            // whole samples that keep the playhead (and the next one) strictly inside the interval, with two samples of margin for the rounding of the repeated additions
+            const double room = runStep > 0.0 ? (runHi - playhead_) / runStep : (runLo - playhead_) / runStep;
+            const int fit = static_cast<int> (std::min (room, 1.0e6)) - 2;
+            int n = std::min (fit, numFrames - i) & ~3;
+            if (n >= 4)
+            {
+                const double inv = plan.kind == ReadPlan::oneLevel ? plan.invScale0 : 1.0;
+                const float32x4_t gL = vdupq_n_f32 (gainL), gR = vdupq_n_f32 (gainR), total = vdupq_n_f32 (levelPart * antiClickGain_ * 1.0f);
+                for (int done = 0; done < n; done += 4)
+                {
+                    double pos[4];
+                    pos[0] = playhead_;
+                    pos[1] = pos[0] + runStep;
+                    pos[2] = pos[1] + runStep;
+                    pos[3] = pos[2] + runStep;
+                    int32_t idx[4], ph[4];
+                    for (int k = 0; k < 4; ++k)
+                    {
+                        const double q = plan.kind == ReadPlan::oneLevel ? pos[k] * inv : pos[k];
+                        idx[k] = static_cast<int> (q);
+                        ph[k] = static_cast<int> ((q - static_cast<double> (idx[k])) * SincTables::kPhases);
+                    }
+                    const float32x4_t sL = interp4<Tier> (plan.a[0], idx, ph, table);
+                    const float32x4_t sR = plan.stereo ? interp4<Tier> (plan.a[1], idx, ph, table) : sL;
+                    const float32x4_t l = sanitize4 (vmulq_f32 (vmulq_f32 (sL, gL), total));
+                    const float32x4_t r = sanitize4 (vmulq_f32 (vmulq_f32 (sR, gR), total));
+                    if (Add)
+                    {
+                        vst1q_f32 (outLeft + i + done, vaddq_f32 (vld1q_f32 (outLeft + i + done), l));
+                        if (outRight != nullptr)
+                            vst1q_f32 (outRight + i + done, vaddq_f32 (vld1q_f32 (outRight + i + done), r));
+                    }
+                    else
+                    {
+                        vst1q_f32 (outLeft + i + done, l);
+                        if (outRight != nullptr)
+                            vst1q_f32 (outRight + i + done, r);
+                    }
+                    playhead_ = pos[3] + runStep;
+                }
+                i += n - 1; // (the loop's own increment follows)
+                continue;
+            }
+        }
+#endif
         float sL = 0.0f;
         float sR = 0.0f;
         if (xLen > 1.0 && playhead_ >= lEnd - xLen && playhead_ < lEnd)

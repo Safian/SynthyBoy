@@ -811,7 +811,11 @@ TEST (sampleosc_block_kernel_equals_reference)
                             ++configs;
                             if (std::memcmp (aL.data(), bL.data(), sizeof (float) * 128) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * 128) != 0
                                 || kernel.isActive() != reference.isActive() || kernel.getPlayheadPosition() != reference.getPlayheadPosition())
-                                ++different;
+                            {
+                                if (different++ < 5)
+                                    std::printf ("    differs: channels %d tier %d loop %d semitones %g variant %d block %d (call %d, %d frames)\n", view.numChannels, static_cast<int> (tier), static_cast<int> (mode),
+                                                 static_cast<double> (st), variant, block, call, n);
+                            }
                         }
                     }
     CHECK (configs > 1000);

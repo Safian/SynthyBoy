@@ -101,6 +101,8 @@ public:
     /** Measurements only (the bench's --scalar-content): render with the per sample reference (renderFrame) instead of the block kernel. Both give the same bits; the
         kernel only does once per block what the reference does for every sample. */
     void setReferenceKernels (bool on) noexcept { reference_ = on; }
+    /** Tests: false runs the block kernel with its scalar form only (the vector form, four samples at a time on ARM with NEON, gives the same bits). */
+    void setVectorKernels (bool on) noexcept { vectors_ = on; }
 
     // --- Status queries ---
     bool isActive() const noexcept { return active_; }
@@ -155,6 +157,7 @@ private:
     /** The block kernel counts frames with 32 bit integers (a 64 bit conversion of a double is a library call on 32 bit ARM): a sample of more than 2^30 frames plays through the reference. */
     bool useKernel() const noexcept { return ! reference_ && (sample_ == nullptr || sample_->numFrames <= (int64_t { 1 } << 30)); }
     bool reference_ = false;
+    bool vectors_ = true;
     // the pitch ratio of the last updatePitchRatio (2^(semitones / 12) is the dear part, and the semitones rarely change from one control period to the next)
     float cachedSemitones_ = std::numeric_limits<float>::quiet_NaN();
     double cachedSpeedFromPitch_ = 1.0;

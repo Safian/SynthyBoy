@@ -7,7 +7,14 @@
 #include <algorithm>
 #include <cmath>
 
-// The grain kernel and the reference grain loop must compute the same bits: no fused multiply-add in either, on any compiler / CPU.
+#if defined(__ARM_NEON) && ! defined(SB_NO_NEON)
+ #include <arm_neon.h>
+ #define SB_GRAIN_NEON 1
+#else
+ #define SB_GRAIN_NEON 0
+#endif
+
+// The scalar kernel and the vector kernel must compute the same bits: no fused multiply-add in either, on any compiler / CPU.
 #if defined(__clang__)
  #pragma clang fp contract(off)
 #elif defined(__GNUC__)
@@ -429,6 +436,72 @@ bool GranularVoice::renderGrainsReference (const GrainParams& p, float* left, fl
     return any;
 }
 
+namespace
+{
+// The window of a grain in the form the kernels use: no division per sample (the grain's x is age * (1 / length), the two slopes of the skewed window are constants of the grain), so the
+// values differ from windowValue () by a rounding (about 1e-7); the scalar and the vector forms below do the same operations and give the same bits.
+struct GrainWindow
+{
+    const float* table = nullptr;
+    float peak = 0.5f, k1 = 1.0f, k2 = 1.0f, amount = 0.5f, invLength = 1.0f;
+};
+
+inline float windowKernel (const GrainWindow& g, float x) noexcept
+{
+    const float u = x < g.peak ? x * g.k1 : 0.5f + (x - g.peak) * g.k2;
+    const float f = u * static_cast<float> (kTableSize);
+    const int i = std::min (kTableSize - 1, static_cast<int> (f));
+    const float w0 = g.table[i] + (g.table[i + 1] - g.table[i]) * (f - static_cast<float> (i));
+    const float wa = 1.0f + (w0 - 1.0f) * g.amount;
+    const float ramp = std::min (1.0f, std::min (64.0f * x, 64.0f * (1.0f - x)));
+    return wa * ramp;
+}
+
+#if SB_GRAIN_NEON
+/** windowKernel () of the ages age .. age + 3. */
+inline float32x4_t windowKernel4 (const GrainWindow& g, int age) noexcept
+{
+    const int32_t ages[4] = { age, age + 1, age + 2, age + 3 };
+    const float32x4_t x = vmulq_f32 (vcvtq_f32_s32 (vld1q_s32 (ages)), vdupq_n_f32 (g.invLength));
+    const float32x4_t peak = vdupq_n_f32 (g.peak);
+    const uint32x4_t first = vcltq_f32 (x, peak);
+    const float32x4_t u1 = vmulq_f32 (x, vdupq_n_f32 (g.k1));
+    const float32x4_t u2 = vaddq_f32 (vdupq_n_f32 (0.5f), vmulq_f32 (vsubq_f32 (x, peak), vdupq_n_f32 (g.k2)));
+    const float32x4_t f = vmulq_f32 (vbslq_f32 (first, u1, u2), vdupq_n_f32 (static_cast<float> (kTableSize)));
+    int32_t idx[4];
+    vst1q_s32 (idx, vminq_s32 (vcvtq_s32_f32 (f), vdupq_n_s32 (kTableSize - 1)));
+    const float lo[4] = { g.table[idx[0]], g.table[idx[1]], g.table[idx[2]], g.table[idx[3]] };
+    const float hi[4] = { g.table[idx[0] + 1], g.table[idx[1] + 1], g.table[idx[2] + 1], g.table[idx[3] + 1] };
+    const float32x4_t a = vld1q_f32 (lo);
+    const float32x4_t fr = vsubq_f32 (f, vcvtq_f32_s32 (vld1q_s32 (idx)));
+    const float32x4_t w0 = vaddq_f32 (a, vmulq_f32 (vsubq_f32 (vld1q_f32 (hi), a), fr));
+    const float32x4_t one = vdupq_n_f32 (1.0f);
+    const float32x4_t wa = vaddq_f32 (one, vmulq_f32 (vsubq_f32 (w0, one), vdupq_n_f32 (g.amount)));
+    const float32x4_t sixtyFour = vdupq_n_f32 (64.0f);
+    const float32x4_t ramp = vminq_f32 (one, vminq_f32 (vmulq_f32 (sixtyFour, x), vmulq_f32 (sixtyFour, vsubq_f32 (one, x))));
+    return vmulq_f32 (wa, ramp);
+}
+
+/** hermiteFast () at four positions (i[k], t[k]) of one channel; every tap lies inside the data (the caller checked). */
+inline float32x4_t hermite4 (const float* d, const int32_t* i, float32x4_t t) noexcept
+{
+    const float32x4_t r0 = vld1q_f32 (d + i[0] - 1), r1 = vld1q_f32 (d + i[1] - 1), r2 = vld1q_f32 (d + i[2] - 1), r3 = vld1q_f32 (d + i[3] - 1);
+    const float32x4x2_t t01 = vtrnq_f32 (r0, r1), t23 = vtrnq_f32 (r2, r3);
+    const float32x4_t y0 = vcombine_f32 (vget_low_f32 (t01.val[0]), vget_low_f32 (t23.val[0]));
+    const float32x4_t y1 = vcombine_f32 (vget_low_f32 (t01.val[1]), vget_low_f32 (t23.val[1]));
+    const float32x4_t y2 = vcombine_f32 (vget_high_f32 (t01.val[0]), vget_high_f32 (t23.val[0]));
+    const float32x4_t y3 = vcombine_f32 (vget_high_f32 (t01.val[1]), vget_high_f32 (t23.val[1]));
+    const float32x4_t half = vdupq_n_f32 (0.5f);
+    const float32x4_t c1 = vmulq_f32 (half, vsubq_f32 (y2, y0));
+    float32x4_t c2 = vsubq_f32 (y0, vmulq_f32 (vdupq_n_f32 (2.5f), y1));
+    c2 = vaddq_f32 (c2, vmulq_f32 (vdupq_n_f32 (2.0f), y2));
+    c2 = vsubq_f32 (c2, vmulq_f32 (half, y3));
+    const float32x4_t c3 = vaddq_f32 (vmulq_f32 (half, vsubq_f32 (y3, y0)), vmulq_f32 (vdupq_n_f32 (1.5f), vsubq_f32 (y1, y2)));
+    return vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (c3, t), c2), t), c1), t), y1);
+}
+#endif
+} // namespace
+
 bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept
 {
     // loop markers for the grains (Loop Grains)
@@ -440,6 +513,10 @@ bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* righ
     const SampleView& smp = *sample_;
     const float* const table = windows().table[static_cast<int> (p.shape) < kNumWindowShapes ? static_cast<int> (p.shape) : 0];
     const bool shaped = p.shapeFn != nullptr;
+#if SB_GRAIN_NEON
+    // four samples of a grain at a time where nothing but the plain read plays: no rate modulation, no loop wrap, no pointwise warp
+    const bool vectorOk = vectors_ && rateMod == nullptr && ! wrap && ! shaped;
+#endif
 
     bool any = false;
     for (Grain& g : grains_)
@@ -447,40 +524,71 @@ bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* righ
         if (! g.active)
             continue;
         any = true;
-        const int start = std::max (0, g.delay);
+        int i = std::max (0, g.delay);
         g.delay = 0;
 
-        // the window of this grain: windowValue () with its clamps, the peak and its complement taken out of the sample loop
-        const float amount = clamp01 (g.windowAmount);
+        // the window of this grain
+        GrainWindow win;
+        win.table = table;
+        win.amount = clamp01 (g.windowAmount);
         const float skew = std::max (-1.0f, std::min (1.0f, g.windowSkew == g.windowSkew ? g.windowSkew : 0.0f));
-        const float peak = 0.5f + 0.45f * skew;
-        const float restOfPeak = 1.0f - peak;
-        const float lengthF = static_cast<float> (g.length);
+        win.peak = 0.5f + 0.45f * skew;
+        win.k1 = 0.5f / win.peak;
+        win.k2 = 0.5f / (1.0f - win.peak);
+        win.invLength = 1.0f / static_cast<float> (g.length);
 
         // the read: one mip level for the whole block unless the rate modulation changes the rate per sample
         const double rate0 = std::fabs (g.inc);
         GrainRead read;
         if (rateMod == nullptr)
             read.set (smp, mipFor (smp, rate0));
+        const double step0 = g.inc;
+        const int nRead = read.n;
 
-        for (int i = start; i < numFrames; ++i)
+        while (i < numFrames)
         {
             if (g.age >= g.length)
             {
                 g.active = false;
                 break;
             }
-            const float x = static_cast<float> (g.age) / lengthF;
-            float w;
+#if SB_GRAIN_NEON
+            if (vectorOk && i + 4 <= numFrames && g.age + 4 <= g.length)
             {
-                const float u = x < peak ? 0.5f * x / peak : 0.5f + 0.5f * (x - peak) / restOfPeak;
-                const float f = u * kTableSize;
-                const int k = std::min (kTableSize - 1, static_cast<int> (f));
-                const float w0 = table[k] + (table[k + 1] - table[k]) * (f - static_cast<float> (k));
-                const float wa = 1.0f + (w0 - 1.0f) * amount;
-                const float ramp = std::min (1.0f, std::min (64.0f * x, 64.0f * (1.0f - x)));
-                w = wa * ramp;
+                // the four positions the sample loop would visit (the same additions in the same order), and whether every tap of them lies inside the data
+                double pos[4];
+                pos[0] = g.pos;
+                pos[1] = pos[0] + step0;
+                pos[2] = pos[1] + step0;
+                pos[3] = pos[2] + step0;
+                double scaled[4];
+                for (int k = 0; k < 4; ++k)
+                    scaled[k] = read.scaled ? pos[k] * read.invScale : pos[k];
+                const double lowest = std::min (scaled[0], scaled[3]), highest = std::max (scaled[0], scaled[3]);
+                if (lowest >= 1.0 && highest + 3.0 < static_cast<double> (nRead))
+                {
+                    int32_t idx[4];
+                    float frac[4];
+                    for (int k = 0; k < 4; ++k)
+                    {
+                        idx[k] = static_cast<int> (scaled[k]);
+                        frac[k] = static_cast<float> (scaled[k] - static_cast<double> (idx[k]));
+                    }
+                    const float32x4_t t = vld1q_f32 (frac);
+                    const float32x4_t w = windowKernel4 (win, g.age);
+                    const float32x4_t sl = hermite4 (read.ch[0], idx, t);
+                    const float32x4_t sr = read.stereo ? hermite4 (read.ch[1], idx, t) : sl;
+                    vst1q_f32 (left + i, vaddq_f32 (vld1q_f32 (left + i), vmulq_f32 (vmulq_f32 (sl, w), vdupq_n_f32 (g.gl))));
+                    vst1q_f32 (right + i, vaddq_f32 (vld1q_f32 (right + i), vmulq_f32 (vmulq_f32 (sr, w), vdupq_n_f32 (g.gr))));
+                    g.pos = pos[3] + step0;
+                    g.age += 4;
+                    i += 4;
+                    continue;
+                }
             }
+#endif
+            const float x = static_cast<float> (g.age) * win.invLength;
+            const float w = windowKernel (win, x);
             double step = g.inc;
             double rate = rate0;
             if (rateMod != nullptr)
@@ -521,6 +629,7 @@ bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* righ
             right[i] += sr * w * g.gr;
             g.pos += step;
             ++g.age;
+            ++i;
         }
         if (g.age >= g.length)
             g.active = false;
