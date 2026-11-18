@@ -191,6 +191,8 @@ public:
         havePrev = false;
         haveLast = false;
         morphAge = kMorphRebuild;
+        for (auto& k : morphKeyOk)
+            k = false;
         for (auto& f : frameIdx)
             f = -1;
         for (auto& fs : filterState)
@@ -517,16 +519,21 @@ public:
             const int K = std::min (Wavetable::kHarmonics - 1, static_cast<int> (nyq / fmax));
             for (int g = 0; g < groups; ++g)
             {
-                float* a = morphBuf.data() + (static_cast<size_t> (g) * 2) * kMorphStride + 1;
-                float* b = a + kMorphStride;
                 if (!firstOfNote)
-                    std::copy (b - 1, b - 1 + kMorphStride, a - 1); // the previous "new" buffer becomes the old one
+                {
+                    if (reference_)
+                        std::copy (morphNew (g) - 1, morphNew (g) - 1 + kMorphStride, morphOld (g) - 1); // the previous "new" buffer becomes the old one
+                    else
+                        morphNewSlot[g] ^= 1; // the same without the copy: the two buffers swap roles, and the new one is written in full below
+                }
+                float* a = morphOld (g);
+                float* b = morphNew (g);
                 const float spreadShift = groups > 1 ? tick.morphSpread * 2.0f * static_cast<float> (g) / static_cast<float> (groups - 1) : 0.0f;
                 const float framePos = tick.frame * static_cast<float> (std::max (wt.numFrames() - 1, 0));
                 if (g > 0 && spreadShift == 0.0f)
                 {
                     // no morph spread: every group asks for the same cycle, so the first one is copied (the same samples, built once)
-                    const float* first = morphBuf.data() + kMorphStride + 1;
+                    const float* first = morphNew (0);
                     std::copy (first - 1, first - 1 + kMorphStride, b - 1);
                 }
                 else
@@ -540,11 +547,17 @@ public:
                     key.maxHarmonic = K;
                     key.hostRate = sampleRate;
                     key.fast = tick.lowMorph;
+                    // a morph that moves (this build asks for another frame or amount than the last one of this oscillator) never asks for the same cycle again: only a cycle of a
+                    // held morph is stored for the other voices of a chord (the cache only saves time: a hit has the samples of a build)
+                    const bool moving = morphKeyOk[g] && (!sameBits (morphKeyFrame[g], framePos) || !sameBits (morphKeyM[g], key.m));
+                    morphKeyOk[g] = true;
+                    morphKeyFrame[g] = framePos;
+                    morphKeyM[g] = key.m;
                     if (cache == nullptr || !cache->fetch (key, b - 1))
                     {
                         SB_SECTION (sections::oscMorphBuild);
                         buildMorphCycle (wt, framePos, true, tick.morphType, key.m, K, incMax, sampleRate, b, *morphScratch, tick.lowMorph, tick.scalarWarp, reference_);
-                        if (cache != nullptr)
+                        if (cache != nullptr && (reference_ || !moving))
                             cache->store (key, b - 1);
                     }
                 }
@@ -625,8 +638,8 @@ public:
             if (morphing)
             {
                 const int g = std::min (morphGroups - 1, (v / 2) * morphGroups / morphPairs);
-                cA = morphBuf.data() + (static_cast<size_t> (g) * 2) * kMorphStride + 1;
-                cB = cA + kMorphStride;
+                cA = morphOld (g);
+                cB = morphNew (g);
                 const float len = static_cast<float> (kMorphRebuild);
                 wB0 = std::min (1.0f, (static_cast<float> (morphAge) + tStart * kControlPeriod) / len);
                 wB1 = std::min (1.0f, (static_cast<float> (morphAge) + tEnd * kControlPeriod) / len);
@@ -1116,7 +1129,12 @@ public:
 private:
     static constexpr int kMorphGroups = 2, kMorphStride = Wavetable::kCycle + 4, kMorphRebuild = 256;
     OscTick tick;
-    std::vector<float> morphBuf;                 // [group][old, new][kMorphStride]
+    std::vector<float> morphBuf;                 // [group][two buffers][kMorphStride]: the old and the new cycle of a group, by morphNewSlot (the roles swap at a rebuild)
+    int morphNewSlot[kMorphGroups] = { 1, 1 };
+    bool morphKeyOk[kMorphGroups] = { false, false };
+    float morphKeyFrame[kMorphGroups] = {}, morphKeyM[kMorphGroups] = {};
+    float* morphOld (int g) noexcept { return morphBuf.data() + (static_cast<size_t> (g) * 2 + static_cast<size_t> (morphNewSlot[g] ^ 1)) * kMorphStride + 1; }
+    float* morphNew (int g) noexcept { return morphBuf.data() + (static_cast<size_t> (g) * 2 + static_cast<size_t> (morphNewSlot[g])) * kMorphStride + 1; }
     std::unique_ptr<MorphScratch> morphScratch;
     int morphAge = 0, morphGroups = 1;
     bool morphActive = false;

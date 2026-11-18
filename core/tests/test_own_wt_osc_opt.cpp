@@ -20,6 +20,7 @@ namespace own
 {
 struct WtOscOptTest
 {
+    static constexpr int kMorphStride = WtOsc::kMorphStride;
     /** True if every piece of state that the audio depends on is bit for bit the same (the caches of the optimisations are not state). */
     static bool sameState (const WtOsc& a, const WtOsc& b)
     {
@@ -31,7 +32,15 @@ struct WtOscOptTest
                && a.havePrev == b.havePrev && a.morphAge == b.morphAge && a.morphGroups == b.morphGroups && a.morphActive == b.morphActive && a.prevFrame == b.prevFrame
                && a.curFrame == b.curFrame && a.historyDirty == b.historyDirty;
         ok = ok && a.history.size() == b.history.size() && (a.history.empty() || eq (a.history.data(), b.history.data(), a.history.size() * sizeof (float)));
-        ok = ok && a.morphBuf.size() == b.morphBuf.size() && (a.morphBuf.empty() || eq (a.morphBuf.data(), b.morphBuf.data(), a.morphBuf.size() * sizeof (float)));
+        // the two cycles of each group by role (the optimised oscillator swaps the two buffers instead of copying)
+        ok = ok && a.morphBuf.size() == b.morphBuf.size();
+        if (ok && ! a.morphBuf.empty())
+            for (int g = 0; g < 2; ++g)
+            {
+                WtOsc& x = const_cast<WtOsc&> (a);
+                WtOsc& y = const_cast<WtOsc&> (b);
+                ok = ok && eq (x.morphOld (g) - 1, y.morphOld (g) - 1, kMorphStride * sizeof (float)) && eq (x.morphNew (g) - 1, y.morphNew (g) - 1, kMorphStride * sizeof (float));
+            }
         return ok;
     }
     static const OscTick& tickOf (const WtOsc& o) { return o.tick; }
@@ -215,6 +224,12 @@ TEST (own_wt_osc_optimised_equals_the_reference_on_random_patches)
             if (r.chance (15))
                 cr[r.range (0, 5)] = nullptr;
             const bool anyCross = !r.chance (10);
+            if (!first && r.chance (3)) // a new note on the same oscillator
+            {
+                run.ref.start (t.startPhase, 0.5f, run.rngRef);
+                run.opt.start (t.startPhase, 0.5f, run.rngOpt);
+                first = true;
+            }
             run.ref.update (t, rate, run.rngRef);
             run.opt.update (t, rate, run.rngOpt);
             run.ref.updateMorph (rate, first, &run.cacheRef);
