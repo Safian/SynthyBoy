@@ -3,7 +3,7 @@
 A page is a class that owns a library screen (or a few components), reads the instance, binds controls to parameters, routes touch, and publishes its Q groups. `shell-mpc/overlay/voice_ui.h` (`VoiceUi`) is the smallest complete example; read it next to this file. The other pages (`mixer_ui.h`, `master_ui.h`, `macro_ui.h`, `fx_ui.h`, `filter_ui.h`, `env_ui.h`, `lfo_ui.h`, `mod_ui.h`, `osc_ui.h`) follow the same pattern.
 
 ## 1. PageView and the Ui class
-`shell-mpc/overlay/page_view.h`: `template <class Ui> class PageView final : public IView`. It draws the ground of the tab (`page::ground`), keeps a hash of the scene to know when the picture changed, clips the strip of the host's Q-Link panel (`ViewInput::panelEdgeX`), and calls your class. Constants `page::kW` 1280, `kH` 800, `kTabY` 110, `kTabH` 628 (the tab is 1280 x 628 at y 110). `page::Input { live, targets, instance }` is what the controller hands the page besides the instance.
+`shell-mpc/overlay/page_view.h`: `template <class Ui> using PageView = BasicPageView<Ui, MacroNameHooks>` over the generic `BasicPageView<Ui, Hooks> final : public IView` of `page_view_base.h` (a page of the kit, `mpckit::PageBase`, is `mpckit::PageView<MyPage>` with `NoHooks`: `kit/overlay.h`). It draws the ground of the tab (`page::ground`), keeps a hash of the scene to know when the picture changed, clips the strip of the host's Q-Link panel (`ViewInput::panelEdgeX`), and calls your class. Constants `page::kW` 1280, `kH` 800, `kTabY` 110, `kTabH` 628 (the tab is 1280 x 628 at y 110). `page::Input { live, targets, instance }` is what the controller hands the page besides the instance.
 Your `Ui` class must have (copy `VoiceUi`):
 | Member | Meaning |
 |---|---|
