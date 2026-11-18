@@ -12,13 +12,13 @@ Three oscillator-oriented composites.
 ## State
 `TypeBar`: `numbers[4]`, `steppers[4]`, `details[4]`, `toggles[4]`, `toggleNumbers[4]` (slot i uses the kind of its preset item), `slot (i)`, `numSlots()`, `preset()`, `load (preset)` (slot components return to their defaults; the ids are 0: give them with `slot (i)->setId`). `BarKind`: `Frame` (read-only number), `Phase` (degrees, phase icon), `Rand`, `Number`, `Stepper`, `GrainWindow`, `UnisonDetail`, `Toggle`, `Envelope`, `ToggleNumber`, `Page`. A preset is DATA: a new preset is a new table row.
 `TuneRow`: `oct`, `sem`, `fin`, `crs` (`NumberField`), `track` (`LedToggle`), `more` (`DetailButton`, hidden by default); ranges OCT -4..4, SEM -12..12, FIN -100..100, CRS -48..48 (step 0.01); `setShort`, `setVertical`, `setCrsOnly`, `setNoise` (labels PITCH, FINE, KEY TRACK), `kRowH` 56.
-`BasicControls`: `selector` (`PictogramSelector`), `noiseType` (`Stepper`), `source` (`SourcePicker`), `oct` (`NumberField`), `filter`, `pan`, `level` (`Knob`), `group` (`QGroup`); `configure (OscInstance, OscKind)`, `setStacked (bool)`, `assignIds (base)` (selector, source stepper, dropdown, OCT, FILTER, noise type, PAN, LEVEL = base .. base + 7: the same call in every view gives the same ids).
+`BasicControls`: `selector` (`TypeSelector`), `noiseType` (`Stepper`), `source` (`SourcePicker`), `oct` (`NumberField`), `filter`, `pan`, `level` (`Knob`), `group` (`QGroup`); `configure (OscInstance, OscKind)`, `setStacked (bool)`, `assignIds (base)` (selector, source stepper, dropdown, OCT, FILTER, noise type, PAN, LEVEL = base .. base + 7: the same call in every view gives the same ids).
 
 ## Size
-`TypeBar` has no fixed minimum in the table (a strip of the owner's height); `TuneRow::minSize()` follows its variant; `BasicControls::minSize()` follows `stacked` and the instance (computed from its children).
+`TypeBar::minSize()` is the sum of the slots' minimum widths (plus gaps) by 56 px; `TuneRow::minSize()` follows its variant; `BasicControls::minSize()` follows `stacked` and the instance (computed from its children).
 
 ## Touch and knob behaviour
-Changes come out with the child's id: number fields `Index`, steppers `Index`, detail buttons `Request` (a `UnisonDetail` or `GrainWindow` button with a main value also `Value` / `Index` on drag), toggles `Index`, `PictogramSelector` `Index`. `turn` goes to the primary child.
+Changes come out with the child's id: number fields `Index`, steppers `Index`, detail buttons `Request` (a `UnisonDetail` or `GrainWindow` button with a main value also `Value` / `Index` on drag), toggles `Index`, `TypeSelector` `Index` (or `Request` when `dropdown` is set). `turn` goes to the primary child.
 
 ## Q-Link
 `BasicControls::group` is the Basic group of four: [type pictograms (or waveform / noise type), source (or OCT / FILTER), PAN, LEVEL]. `TypeBar`: the filled slots are ONE group (`fillGroup`); empty slots take no Q-Link. `TuneRow` is a block on the full screen (`OscillatorFullScreen`).

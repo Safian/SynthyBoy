@@ -4,7 +4,7 @@
 A row (or column) of cells, each a small drawn picture with a short label under it; one is highlighted. Use it for a choice whose values are better seen than read: the oscillator type (wavetable, sample, granular ...), the sub waveform, the LFO or envelope instance numbers. For plain text choices use [LedList](led-list.md).
 
 ## Header and types
-`shell-mpc/ui/base.h`: `PictogramSelector`, `PictogramSelector::Item`, `PictogramSelector::State`, namespace `pictogram` (`Id`, `Def`, `kTable`). Derived: `EnvSelector` (`env_screen.h`).
+`shell-mpc/ui/base.h`: `PictogramSelector`, `PictogramSelector::Item`, `PictogramSelector::State`, namespace `pictogram` (`Id`, `Def`, `kTable`). Derived: `TypeSelector` (`base.h`), `EnvSelector` (`env_screen.h`).
 
 ## State fields
 `PictogramSelector::State`: `count` (0), `index` (0), `items[kMaxItems]` (`kMaxItems` = 10).
@@ -43,7 +43,7 @@ if (c.kind == ChangeKind::Index && c.id == 70) current = c.index;
 ```
 
 ## Used on
-`BasicControls::selector` (oscillator type, sub waveform), `InstanceBar::lfoCells` and `rndCells`, `EnvSelector` (not instantiated by the current pages, they use `EnvCarousel`). `TypeSelector` (base.h): a `PictogramSelector` with `dropdown`: one box with the current item's pictogram and name and a chevron; a tap is a `Request`, the turn and the Index change are the selector's; the compact oscillator view uses it with a `ListPopup` whose `icons` carry the pictograms. Pictures: `docs/user-guide/img/osc-a.png`, `osc-sub.png`, `lfo.png`.
+`BasicControls::selector` (oscillator type, sub waveform), `InstanceBar::lfoCells` and `rndCells`, `EnvFullScreen::instances` (`EnvSelector`; `EnvCompact::instances` uses `EnvCarousel`). `TypeSelector` (base.h): a `PictogramSelector` with `dropdown`: one box with the current item's pictogram and name and a chevron; a tap is a `Request`, the turn and the Index change are the selector's; the compact oscillator view uses it with a `ListPopup` whose `icons` carry the pictograms. Pictures: `docs/user-guide/img/osc-a.png`, `osc-sub.png`, `lfo.png`.
 
 ## Limits and pitfalls
 - More than 10 items are dropped. The MPC.md section says "up to 8 items"; the header says 10.

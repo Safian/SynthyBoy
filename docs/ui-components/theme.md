@@ -9,6 +9,7 @@ ONE table (`struct Look`) with every colour, gradient, line width, type size, ra
 ## State fields (struct Look)
 | Group | Fields |
 |---|---|
+| name | `name` (`const char*`: `"neon"`, `"aurora"`, `"plasma"`) |
 | surfaces | `bg0`, `bg1` (ground top, bottom), `panel0`, `panel1` (block fill), `keyline`, `keylineHi`, `track`, `grid` |
 | ink | `text`, `textDim`, `textFaint`, `onBright`, `q` (the Q-Link group colour, yellow `0xffc23d` in all looks) |
 | gradients and colours | `flow[4]` (the main signal gradient), `inst[5]` (Sub, A, B, C, Noise), `src[kNumSources = 8]` (env, lfo, velocity, key, wheel, pressure, macro, random), `env[2]`, `lfo[2]`, `filter[2]`, `negative` |
