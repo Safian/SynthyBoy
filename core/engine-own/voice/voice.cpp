@@ -144,6 +144,12 @@ void Voice::prepare (double sampleRate)
 {
     sr = sampleRate;
     groupOf = paramGroups();
+    pidx = &paramIndex();
+    for (int o = 0; o < 3; ++o)
+        libk[o] = &libKeys (o);
+    laws = &destLawOf (0);
+    infos = paramTable();
+    noiseFilterKey = findParamIndex (hashKey ("noise.filter"));
     mod.assign (paramCount(), 0.0f);
     modR.assign (paramCount(), 0.0f);
     modP = mod.data();
@@ -193,7 +199,7 @@ void Voice::clearMod() noexcept
 
 float Voice::modulatedSlow (int idx, float b, float d) const noexcept
 {
-    return modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), b, d, (gl->economy & kEconomyMath) != 0);
+    return modulatedValue (infos[idx], laws[idx], b, d, (gl->economy & kEconomyMath) != 0);
 }
 
 /** A source through its curve; with `glide` (curve.velocity.legato / curve.note.legato) a change of the target after a legato note-on moves to it with the one pole time constant
@@ -338,7 +344,7 @@ void Voice::release (float velocity) noexcept
         e.noteOff();
     if (gl != nullptr)
         for (int o = 0; o < 3; ++o)
-            lib[o].noteOff (P (libKeys (o).idx[lk_sLoopExit]) >= 0.5f);
+            lib[o].noteOff (P (libk[o]->idx[lk_sLoopExit]) >= 0.5f);
 }
 
 void Voice::kill() noexcept
@@ -367,7 +373,7 @@ float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps
     if (!(st.ok && g.baseEpoch != 0 && st.epoch == g.baseEpoch && (lastTouchedGroups & (1u << (kGroupLfo + l))) == 0 && st.bpm == g.bpm && st.factorBits == factorBits
           && st.concertABits == concertABits && st.sampleRate == g.sampleRate && st.content == g.lfoContent && st.monoCore == g.monoCore))
     {
-        const LfoIdx& li = paramIndex().lfo[l];
+        const LfoIdx& li = pidx->lfo[l];
         st.shape = static_cast<int> (P (li.shape) + 0.5f);
         st.sync = static_cast<int> (P (li.sync) + 0.5f);
         st.syncType = std::clamp (static_cast<int> (P (li.syncType) + 0.5f), 0, 5);
@@ -592,7 +598,7 @@ float Voice::lfoValueReference (int l, const TickGlobals& g, float& valueRight, 
 
 void Voice::evaluateVoiceControl (const TickGlobals& g) noexcept
 {
-    const VoiceCtlIdx& v = paramIndex().vctl;
+    const VoiceCtlIdx& v = pidx->vctl;
     if (v.length < 0)
         return;
     const int length = std::clamp (static_cast<int> (g.base[v.length] + 0.5f), 1, 8);
@@ -621,7 +627,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     SB_SECTION (sections::tickOther);
     gl = &g;
     index = voiceIndex;
-    const ParamIndex& pi = paramIndex();
+    const ParamIndex& pi = *pidx;
     const double dt = kControlPeriod / g.sampleRate;
     const float fdt = static_cast<float> (dt);
     // the parameter reads of this function with the snapshot and the delta arrays in locals (CPU-REVIEW-VOICE-MOD.md V5): a call between two reads (modulatedSlow, an oscillator
@@ -1056,7 +1062,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     {
         SB_SECTION (sections::tickOscParams);
         const OscIdx& oi = pi.osc[o];
-        const LibKeys& lk = libKeys (o);
+        const LibKeys& lk = *libk[o];
         const int declaredType = std::clamp (static_cast<int> (P (oi.type) + 0.5f), 0, 4);
         // docs/ARCHITECTURE.md section 6: the plugin tolerates absence of content (built-in tables) and flags it. A Sample, Granular, Spectral or Multisample oscillator whose file is
         // not there plays its built-in wavetable (oscN.wavetable) instead of silence; missingMask () tells the instance view (bit o: oscillator o has no file). Content present: the type as set.
@@ -1140,11 +1146,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             {
                 if (hops >= 4)
                     ok = false;
-                else if (g.base[libKeys (s).idx[lk_pitchMode]] < 1.5f)
+                else if (g.base[libk[s]->idx[lk_pitchMode]] < 1.5f)
                     break; // the chain ends at a source that plays its own note
                 else
                 {
-                    const int next = static_cast<int> (g.base[libKeys (s).idx[lk_ratioSrc]] + 0.5f) - 1;
+                    const int next = static_cast<int> (g.base[libk[s]->idx[lk_ratioSrc]] + 0.5f) - 1;
                     if (next < 0 || next >= 4)
                         break;
                     if (next == o)
@@ -1309,8 +1315,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         noisePan = std::clamp (P (ni.pan) * 0.01f + (vc.mask[3] ? vc.pan : 0.0f), -1.0f, 1.0f);
         noiseStereo = clamp01 (P (ni.stereo) * 0.01f);
         noiseColour = std::clamp (static_cast<int> (P (ni.sample) + 0.5f), 0, 8);
-        static const int kNoiseFilterKey = findParamIndex (hashKey ("noise.filter"));
-        noiseFilterAmount = kNoiseFilterKey >= 0 ? clamp01 (std::fabs (P (kNoiseFilterKey) * 0.01f)) * (P (kNoiseFilterKey) < 0.0f ? -1.0f : 1.0f) : 0.0f;
+        noiseFilterAmount = noiseFilterKey >= 0 ? clamp01 (std::fabs (P (noiseFilterKey) * 0.01f)) * (P (noiseFilterKey) < 0.0f ? -1.0f : 1.0f) : 0.0f;
         noisePitchSemis = P (ni.pitch) + P (ni.fine) * 0.01f + (P (ni.keytrack) >= 0.5f ? noteSemis - 60.0f : 0.0f);
         // noise.type = Sample: a content sample is the source (a missing file plays the generator)
         const ContentSet* ncs = g.content;

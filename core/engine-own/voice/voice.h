@@ -232,6 +232,13 @@ private:
     float customShape (const CompiledShape& cs, float u) noexcept;
 
     const TickGlobals* gl = nullptr;
+    // the tables of the keys, looked up once in prepare () (CPU-REVIEW-VOICE-MOD.md V11): paramIndex (), libKeys (), destLawOf () and paramTable () are function local statics whose guard
+    // check (a load and a barrier on ARM) every call paid on the audio thread
+    const ParamIndex* pidx = nullptr;
+    const LibKeys* libk[3] = {};
+    const DestLaw* laws = nullptr;       // destLawOf (i) == laws[i] for every table index
+    const ParamInfo* infos = nullptr;
+    int noiseFilterKey = -1;             // noise.filter
     double sr = 48000.0;
     bool active = false, released = false;
     int keyNum = 60, chan = 0, played = 60;
