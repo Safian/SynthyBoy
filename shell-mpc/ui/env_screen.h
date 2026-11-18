@@ -92,10 +92,9 @@ public:
     /** The colours of the six envelopes (the list rows use them for their dots). */
     static const uint32_t* colours() noexcept
     {
-        static uint32_t c[kNumEnvs];
-        for (int i = 0; i < kNumEnvs; ++i)
-            c[i] = envColour (i);
-        return c;
+        struct Table { uint32_t c[kNumEnvs]; Table() { for (int i = 0; i < kNumEnvs; ++i) c[i] = envColour (i); } };
+        static const Table t;   // built once, thread safely (a table filled at every call was a data race between the threads that create the pages)
+        return t.c;
     }
 };
 
