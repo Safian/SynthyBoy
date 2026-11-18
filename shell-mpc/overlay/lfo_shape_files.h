@@ -129,15 +129,23 @@ public:
         if (! load (index, m, fs))
             return false;
         const Item old = items_[static_cast<size_t> (index)];
-        const std::string dir = old.path.substr (0, old.path.rfind ('/'));
-        const std::string path = joinPath (dir, synthyboy::sanitizeFileStem (shown) + kSuffix);
+        const size_t slash = old.path.rfind ('/');
+        const std::string dir = slash != std::string::npos ? old.path.substr (0, slash) : std::string (".");
+        const std::string path = slash != std::string::npos ? joinPath (dir, synthyboy::sanitizeFileStem (shown) + kSuffix) : synthyboy::sanitizeFileStem (shown) + kSuffix;
         const std::string text = toText (shown, m);
         if (! safefile::writeReplacing (path.c_str(), text.data(), text.size()))
             return fail ("CANNOT WRITE THE FILE");
-        if (path != old.path && std::remove (old.path.c_str()) != 0)
+        // the old file goes unless it is the file just written: on a file system that does not tell letter cases apart (FAT / exFAT cards, the Mac) a rename that only changes the case names the SAME file
+        if (path != old.path && ! sameFile (path, old.path) && std::remove (old.path.c_str()) != 0)
             return fail ("CANNOT REMOVE THE OLD FILE");
-        refresh();
+        refresh (fs);
         return true;
+    }
+    /** Both names are the same file on disk (the same device and inode). */
+    static bool sameFile (const std::string& a, const std::string& b)
+    {
+        struct stat sa, sb;
+        return ::stat (a.c_str(), &sa) == 0 && ::stat (b.c_str(), &sb) == 0 && sa.st_dev == sb.st_dev && sa.st_ino == sb.st_ino;
     }
     /** Deletes the file of shape `index`. */
     bool remove (int index)

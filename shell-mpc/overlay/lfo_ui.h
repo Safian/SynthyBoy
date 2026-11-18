@@ -1262,12 +1262,15 @@ private:
         const int sel = cs.selected;
         if (! (sel >= 0 && sel < m.n))
             return;
-        editor_.undo.push (m);
         if (id == 1) m.move (sel, x, m.p[sel].y);
         else if (id == 2) m.move (sel, m.p[sel].x, x);
         else if (sel + 1 < m.n) m.setPower (sel, std::round (x * 2.0f * ui::lfo::kMaxPower - ui::lfo::kMaxPower));
-        markDirty();
-        alignPhase (v, false);
+        if (! (m == before))   // a turn that changes nothing (CURVE on the last point, a value already there) leaves no undo state and writes nothing
+        {
+            editor_.undo.push (before);
+            markDirty();
+            alignPhase (v, false);
+        }
     }
     void updateEditor (IInstanceView& v, double nowMs)
     {

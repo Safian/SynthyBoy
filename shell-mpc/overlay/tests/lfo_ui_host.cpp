@@ -614,6 +614,17 @@ void testShapeLibrary()
     check (lib.save ("Alpha", m, false) && lib.count() == 2 && lib.items()[0].name == "Alpha", "the list is sorted by name");
     check (lib.rename (0, "Beta") && lib.count() == 2 && lib.find ("Beta") >= 0 && lib.find ("Alpha") < 0 && lib.load (lib.find ("Beta"), back) && back == m, "rename: the file and the shape in it");
     check (! lib.rename (0, "wobble") && lib.error() == "THAT NAME IS TAKEN", "rename to a taken name is refused");
+    // a rename that changes only the letter case: on a file system that does not tell the cases apart (the Mac, FAT / exFAT cards) the new file IS the old one, and it must not be removed
+    check (lib.rename (lib.find ("Beta"), "BETA") && lib.count() == 2 && lib.find ("BETA") >= 0 && lib.load (lib.find ("BETA"), back) && back == m, "rename that only changes the letter case keeps the shape (the file is not lost; which case the card then shows is up to its file system)");
+    // a name that holds the loop key's own text does not confuse the reader (the quotes inside a name are escaped in the file)
+    {
+        ui::lfo::ShapeModel tricky = m;
+        tricky.loop = -1;
+        ui::lfo::ShapeModel got;
+        check (LfoShapeLibrary::fromText (LfoShapeLibrary::toText ("a \"loop_point\":3 b", tricky), got) && got.loop == -1, "a name with the text of the loop key: the shape has no loop point");
+        tricky.loop = 1;
+        check (LfoShapeLibrary::fromText (LfoShapeLibrary::toText ("a \"loop_point\":3 b", tricky), got) && got.loop == 1, "a name with the text of the loop key: the real loop point is read");
+    }
     check (lib.remove (lib.find ("Beta")) && lib.count() == 1 && ! std::filesystem::exists (tmp.path + "/SynthyBoy/LFO Shapes/Beta.lfoshape.json"), "delete removes the file");
     check (! lib.save ("   ", m, true) && lib.error() == "THE NAME IS EMPTY", "an empty name is refused");
     // a shape of the full 128 points
