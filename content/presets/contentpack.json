@@ -7,7 +7,7 @@
   "attribution": "Safian Szabolcs",
   "kind": "presets",
   "requires_plugin": ">=0.1.0",
-  "description": "160 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
+  "description": "164 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
   "files": [
     {
       "path": "Bass/solid_sub.sbpreset",
@@ -808,6 +808,26 @@
       "path": "Bass/ladder_fm_bass.sbpreset",
       "sha256": "23c26f5d735ae1dd6d9afe2f53263a64aa5170ec1e4121c7375f28786b582644",
       "size": 50864
+    },
+    {
+      "path": "Bass/analog_sweep_bass.sbpreset",
+      "sha256": "dd27ea1274bc5622c73bb0d0b974885633e6fa8153134868cc77910fc598d7b6",
+      "size": 50893
+    },
+    {
+      "path": "Lead/trance_stack_lead.sbpreset",
+      "sha256": "a933cf441ec3629bcd14dfae1bfddc6dce8d33094243ba7217d88ae9a8ae58b1",
+      "size": 50853
+    },
+    {
+      "path": "Lead/sync_sine_screamer.sbpreset",
+      "sha256": "eff8b64ccbcf12415f6e139d577c57cbbc2223483c399c84885830d45eb217bf",
+      "size": 50862
+    },
+    {
+      "path": "Bass/sync_saw_raw_bass.sbpreset",
+      "sha256": "715f3a2f28b812a87d40b23ee980d96dc1f23eab5f6b2f46c86b469b82e7f15e",
+      "size": 50847
     }
   ]
 }

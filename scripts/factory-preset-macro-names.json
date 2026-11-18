@@ -1601,6 +1601,46 @@
    "Decay",
    "",
    ""
+  ],
+  "Analog Sweep Bass": [
+   "Sweep",
+   "Bark Length",
+   "Drive",
+   "Sub",
+   "Cutoff",
+   "Resonance",
+   "",
+   ""
+  ],
+  "Trance Stack Lead": [
+   "Spread",
+   "Cutoff",
+   "Fifth",
+   "Space",
+   "Detune",
+   "Breath Rate",
+   "",
+   ""
+  ],
+  "Sync Sine Screamer": [
+   "Sync",
+   "Scream Length",
+   "Tube Drive",
+   "Octave Down",
+   "Cutoff",
+   "Vibrato Rate",
+   "",
+   ""
+  ],
+  "Sync Saw Raw Bass": [
+   "Sync Ratio",
+   "Tear Length",
+   "Clip Drive",
+   "Sub",
+   "Cutoff",
+   "Resonance",
+   "",
+   ""
   ]
  }
 }
