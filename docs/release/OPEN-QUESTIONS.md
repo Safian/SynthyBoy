@@ -11,20 +11,20 @@ Part C: commits reachable from `feature/mpc-overlay` whose message matches `not 
 
 | # | Item | State | Source |
 |---|---|---|---|
-| A1 | Key 61: the plugin's picture flickered around the host's Q-Link Status pop-up. The cause was found (three faults of the key) and fixed in the code; verified by host tests only | **Open until seen on the device**; user-side workaround if it comes back: switch the host's pop-up off; not confirmed fixed on the device | docs/MPC.md:1036, b0b8cc69 |
-| A2 | Stepped Q targets (toggles, lists) driven by accumulated travel: the host's write behaviour is measured on the Key 61 (play log); the increments of a quarter turn of a knob and the MPC XL are not | Not measured on the XL; the quarter turn is to be read from the status file (`turned`) on a device | docs/MPC.md:973, 01ac74a3 |
-| A3 | Q-Link behaviour on the MPC XL: 16 knobs at once, the chips 5 .. 16, the names on the XL's displays | Not measured | docs/MPC.md:977 |
-| A4 | Device rule (4 or 16 knobs): fallback by the architecture of the build when the device name is unreadable | A GUESS, not measured on any device (the XL's name rule is measured) | docs/MPC.md:975, ecb776ad |
-| A5 | USB mouse: the XL's pointer plane (hot spot) was not measured; the whole chain (reader, click, wheel on a page) was not run on the Key 61 | Not verified on a device | docs/MPC.md:1020 |
-| A6 | Plane order under the host's pointer: the rule (our plane under the pointer plane where `zpos` is mutable) | Not verified on a device (the XL's plane table was measured, the rule was tested with that table and a fake driver) | docs/MPC.md:701, 397c0654 |
-| A7 | Pad pressure: how the opening of the filter sounds from a pad, whether the default amount is right on either device, the CPU of the layer with a full pad bank | Not measured on a device | docs/MPC.md:660 |
-| A8 | MPCe Q-Link mode from a drum track to plugin parameters, 16 Levels, Note Repeat, pad lighting from a plugin | Not measured | docs/MPC.md:643 |
-| A9 | Host side of programs and chunk: in which order the host restores program and chunk; the CPU load during playback in the MPC app; the sound of the build at the time (`17d6e11`) | Not observed / not verified | docs/MPC.md:331, 338, 319 |
+| A1 | Key 61: the plugin's picture flickered around the host's Q-Link Status pop-up. The cause was found (three faults of the key) and fixed in the code; verified by host tests only | **Open until seen on the device**; user-side workaround if it comes back: switch the host's pop-up off; not confirmed fixed on the device | docs/MPC.md:1056, b0b8cc69 |
+| A2 | Stepped Q targets (toggles, lists) driven by accumulated travel: the host's write behaviour is measured on the Key 61 (play log); the increments of a quarter turn of a knob and the MPC XL are not | Not measured on the XL; the quarter turn is to be read from the status file (`turned`) on a device | docs/MPC.md:993, 01ac74a3 |
+| A3 | Q-Link behaviour on the MPC XL: 16 knobs at once, the chips 5 .. 16, the names on the XL's displays | Not measured | docs/MPC.md:997 |
+| A4 | Device rule (4 or 16 knobs): fallback by the architecture of the build when the device name is unreadable | A GUESS, not measured on any device (the XL's name rule is measured) | docs/MPC.md:995, ecb776ad |
+| A5 | USB mouse: the XL's pointer plane (hot spot) was not measured; the whole chain (reader, click, wheel on a page) was not run on the Key 61 | Not verified on a device | docs/MPC.md:1040 |
+| A6 | Plane order under the host's pointer: the rule (our plane under the pointer plane where `zpos` is mutable) | Not verified on a device (the XL's plane table was measured, the rule was tested with that table and a fake driver) | docs/MPC.md:721, 397c0654 |
+| A7 | Pad pressure: how the opening of the filter sounds from a pad, whether the default amount is right on either device, the CPU of the layer with a full pad bank | Not measured on a device | docs/MPC.md:680 |
+| A8 | MPCe Q-Link mode from a drum track to plugin parameters, 16 Levels, Note Repeat, pad lighting from a plugin | Not measured | docs/MPC.md:663 |
+| A9 | Host side of programs and chunk: in which order the host restores program and chunk; the CPU load during playback in the MPC app; the sound of the build at the time (`17d6e11`) | Not observed / not verified | docs/MPC.md:334, 341, 319 |
 | A10 | The MPC XL (the stride 1 trial, the arm64 helper), the hardware Q-Link buttons, the sound of a loaded sample or instrument | Not verified (later XL measurements exist in other lines of the same file; this line is the old statement) | docs/MPC.md:319 |
-| A11 | Two plugin instances on two real tracks on a device | The test with fakes exists; the device test is open | docs/MPC.md:751 |
-| A12 | Whether the drawn envelope curvature follows the engine's curve exactly | Not verified on the device | docs/MPC.md:376 |
+| A11 | Two plugin instances on two real tracks on a device | The test with fakes exists; the device test is open | docs/MPC.md:771 |
+| A12 | Whether the drawn envelope curvature follows the engine's curve exactly | Not verified on the device | docs/MPC.md:379 |
 | A13 | Tapping the browser tile to open the preset list | Not measured (the package has no `.xpl` presets) | docs/MPC.md:195 |
-| A14 | That a plugin cannot change the host's page ("it cannot" rests on the SDK documents and the interface, not on a test) | Not measured | docs/MPC.md:983 |
+| A14 | That a plugin cannot change the host's page ("it cannot" rests on the SDK documents and the interface, not on a test) | Not measured | docs/MPC.md:1003 |
 | A15 | `.xpl` generation: the shared set (XL plugin path) loads on the Key 61; the same set on the MPC XL itself after a package install | Verified on the Key 61 (the list appears, the presets load, the path need not match the device); not verified on the XL | docs/RELEASE.md:176 |
 | A17 | The envelope graph (fit / lock) and the LFO editor with its grid in the preset | No branch or documentation line found in this tree; the owner has to say what is open before the release | - |
 | A18 | Name clearance for a public release (trademark registers, plugin databases, stores, domains) | Owner / counsel, not done | docs/NAMING.md:29 |
@@ -32,7 +32,7 @@ Part C: commits reachable from `feature/mpc-overlay` whose message matches `not 
 
 Not listed because it is fixed:
 - Stale README documentation on factory presets and parameters (former item A16): fixed, `README.md` updated as the project's front page with current numbers from `docs/params.json` (2637 parameters), `content/presets` (112 factory presets), `core/include/synthyboy/state.h` (state format version 5 in code, 4 in presets), `docs/MPC.md`, `core/filters-serum/CATALOGUE.md` (27 filter models), and `shell-mpc/device_profile.h`.
-- The Key 61 "foreign" Q-Link assignments (a project made with an older layout keeps its Q-Link map per track; a user-side fix, described in docs/MPC.md:911 and in the user guide).
+- The Key 61 "foreign" Q-Link assignments (a project made with an older layout keeps its Q-Link map per track; a user-side fix, described in docs/MPC.md:931 and in the user guide).
 
 ## B. Every matching line (generated)
 
