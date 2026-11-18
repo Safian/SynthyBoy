@@ -71,6 +71,8 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
 endif()
 synthyboy_add_test(synthyboy_test_own_fx_mute test_own_fx_mute.cpp)   # an effect whose mix is exactly 0 is not processed (economy group Control)
 target_include_directories(synthyboy_test_own_fx_mute PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_fx_makeup test_own_fx_makeup.cpp)   # the tier level makeup of the bypassed effects
+target_include_directories(synthyboy_test_own_fx_makeup PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 synthyboy_add_test(synthyboy_test_own_profile test_own_profile.cpp)   # the economy groups of a quality (the device profiles of shell-mpc/device_profile.h)
 target_include_directories(synthyboy_test_own_profile PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 synthyboy_add_test(synthyboy_test_rt         test_rt_alloc.cpp)   # replaces global operator new/delete
