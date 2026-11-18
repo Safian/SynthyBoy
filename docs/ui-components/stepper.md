@@ -18,12 +18,12 @@
 | `wrap` | `bool` | the list goes round at the ends | false |
 | `caption` | `char[16]` | small name of the value at the top (MODE, STACK) | empty |
 
-Members: `bool listable = false`, `int minWidth = kMinW` (208). Helpers `setItem (text)`, `setCaption (text)`.
+Members: `bool listable = false`, `bool contentName = false`, `int minWidth = kMinW` (208). Helpers `setItem (text)`, `setCaption (text)`.
 
 `UpDownStepper::State`: `value`, `min`, `max` (ints, all 0 by default), `caption` (`char[12]`).
 
 ## Size
-`Stepper::minSize()` = { min (208, `minWidth`), 56 }. Typical 208 x 56 to 300 x 64. A short-choice stepper in a grid may set `minWidth` lower (the oscillator source selector uses 120). Larger: the name gets more room.
+`Stepper::minSize()` = { min (208, `minWidth`), 56 }. Typical 208 x 56 to 300 x 64. A short-choice stepper in a grid may set `minWidth` lower (the compact oscillator's `source.stepper` uses 150, `FxSlotEditor::steppers` 100). Larger: the name gets more room.
 `UpDownStepper::minSize()` = 72 x 112.
 
 ## Touch and knob behaviour
@@ -42,7 +42,7 @@ Nothing at an end without `wrap`, nothing when `count <= 1`. Arrows are dim wher
 Both can be Q members, one slot. A turn is stepped. The mouse wheel is one step per notch.
 
 ## Options and variants
-`wrap`, `dim`, `caption`, `listable`, `minWidth`. The Play pages' three top selectors (source, envelope, LFO) are [Carousels](carousel.md), not Steppers.
+`wrap`, `dim`, `caption`, `listable`, `contentName`, `minWidth`. The Play pages' three top selectors (source, envelope, LFO) are [Carousels](carousel.md), not Steppers.
 
 ## Minimal example
 ```cpp
