@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <vector>
 #include "lib_osc.h"
+#include "../dsp/section_timing.h"
 
 #include <cstdio>
 
@@ -124,7 +125,10 @@ void LibOsc::resetForNote() noexcept
     // The players (up to 68 per slot, the spectral ones with tens of KB of buffers each) are reset only if a library type has run on
     // this slot since the last reset: a slot that plays wavetables never touches them, and a reset of an idle player is a no-op.
     if (playersUsed)
+    {
+        SB_SECTION (sections::libReset);
         stopAll();
+    }
     for (auto& s : noteStarted)
         s = false;
     cur = 0;
@@ -568,7 +572,10 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
         noteStarted[type] = true;
         rng.seed (lp.serial * 977u + static_cast<uint32_t> (oscIndex) * 31u + static_cast<uint32_t> (type));
         randomPerNote = rng.uni();
-        beginType (type);
+        {
+            SB_SECTION (sections::libNoteStart);
+            beginType (type);
+        }
     }
     if (type == kOscTypeSample)
     {
