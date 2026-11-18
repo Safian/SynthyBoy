@@ -233,35 +233,67 @@ void sincosPoly (float a, float& s, float& c) noexcept
     c = rc;
 }
 
+namespace
+{
+// 2 pi (the float) in three parts of 8 bits each: their sum is the float exactly, and n times a part is exact for n < 2^16
+constexpr float kW1 = 6.28125f, kW2 = 0.00193023681640625f, kW3 = 5.245208740234375e-06f;
+constexpr float kInvTwoPiLow = 0.15915494f * (1.0f - 1.0f / 4194304.0f);   // 1 / 2 pi a little low: the quotient never rounds up past a whole number, n is at most one short
+constexpr float kReachable = 1.0e5f;
+}
+
 #if SB_SPECTRAL_NEON
 namespace
 {
-/** sincosPoly () of four values. */
-inline void sincos4 (float32x4_t x, float32x4_t& rs, float32x4_t& rc) noexcept
+/** sincosPoly () of U groups of four values, the operations of the groups interleaved (every statement of the polynomial for all groups before the next): the vector unit of the Key 61's
+    core issues in order, so the chain of one group (about 25 dependent operations of 4 to 6 cycles each) idles it; with two groups in flight the second one fills the gaps. */
+template <int U>
+inline void sincosN (const float32x4_t* x, float32x4_t* rs, float32x4_t* rc) noexcept
 {
-    const uint32x4_t negIn = vcltq_f32 (x, vdupq_n_f32 (0.0f));
-    const float32x4_t half = vbslq_f32 (negIn, vdupq_n_f32 (-0.5f), vdupq_n_f32 (0.5f));
-    const int32x4_t j = vcvtq_s32_f32 (vaddq_f32 (vmulq_f32 (x, vdupq_n_f32 (kTwoOverPi)), half));
-    const float32x4_t y = vcvtq_f32_s32 (j);
-    float32x4_t r = vsubq_f32 (x, vmulq_f32 (y, vdupq_n_f32 (kC1)));
-    r = vsubq_f32 (r, vmulq_f32 (y, vdupq_n_f32 (kC2)));
-    r = vsubq_f32 (r, vmulq_f32 (y, vdupq_n_f32 (kC3)));
-    const float32x4_t z = vmulq_f32 (r, r);
-    float32x4_t ps = vaddq_f32 (vmulq_f32 (vdupq_n_f32 (kS0), z), vdupq_n_f32 (kS1));
-    ps = vaddq_f32 (vmulq_f32 (ps, z), vdupq_n_f32 (kS2));
-    const float32x4_t sn = vaddq_f32 (vmulq_f32 (vmulq_f32 (ps, z), r), r);
-    float32x4_t pc = vaddq_f32 (vmulq_f32 (vdupq_n_f32 (kK0), z), vdupq_n_f32 (kK1));
-    pc = vaddq_f32 (vmulq_f32 (pc, z), vdupq_n_f32 (kK2));
-    const float32x4_t zz = vmulq_f32 (pc, z);
-    const float32x4_t cs = vaddq_f32 (vsubq_f32 (vmulq_f32 (zz, z), vmulq_f32 (vdupq_n_f32 (0.5f), z)), vdupq_n_f32 (1.0f));
+    float32x4_t half[U], r[U], y[U], z[U], ps[U], pc[U], sn[U], cs[U], os[U], oc[U];
+    int32x4_t j[U], b0[U], b1[U];
+    uint32x4_t swap[U], negS[U], negC[U];
     const int32x4_t one = vdupq_n_s32 (1);
-    const uint32x4_t swap = vceqq_s32 (vandq_s32 (j, one), one);
-    const int32x4_t b0 = vandq_s32 (j, one), b1 = vandq_s32 (vshrq_n_s32 (j, 1), one);
-    const uint32x4_t negS = vceqq_s32 (b1, one), negC = vceqq_s32 (veorq_s32 (b0, b1), one);
-    float32x4_t os = vbslq_f32 (swap, cs, sn), oc = vbslq_f32 (swap, sn, cs);
     const uint32x4_t sign = vdupq_n_u32 (0x80000000u);
-    rs = vreinterpretq_f32_u32 (veorq_u32 (vreinterpretq_u32_f32 (os), vandq_u32 (negS, sign)));
-    rc = vreinterpretq_f32_u32 (veorq_u32 (vreinterpretq_u32_f32 (oc), vandq_u32 (negC, sign)));
+    for (int u = 0; u < U; ++u) half[u] = vbslq_f32 (vcltq_f32 (x[u], vdupq_n_f32 (0.0f)), vdupq_n_f32 (-0.5f), vdupq_n_f32 (0.5f));
+    for (int u = 0; u < U; ++u) j[u] = vcvtq_s32_f32 (vaddq_f32 (vmulq_f32 (x[u], vdupq_n_f32 (kTwoOverPi)), half[u]));
+    for (int u = 0; u < U; ++u) y[u] = vcvtq_f32_s32 (j[u]);
+    for (int u = 0; u < U; ++u) r[u] = vsubq_f32 (x[u], vmulq_f32 (y[u], vdupq_n_f32 (kC1)));
+    for (int u = 0; u < U; ++u) r[u] = vsubq_f32 (r[u], vmulq_f32 (y[u], vdupq_n_f32 (kC2)));
+    for (int u = 0; u < U; ++u) r[u] = vsubq_f32 (r[u], vmulq_f32 (y[u], vdupq_n_f32 (kC3)));
+    for (int u = 0; u < U; ++u) z[u] = vmulq_f32 (r[u], r[u]);
+    for (int u = 0; u < U; ++u) ps[u] = vaddq_f32 (vmulq_f32 (vdupq_n_f32 (kS0), z[u]), vdupq_n_f32 (kS1));
+    for (int u = 0; u < U; ++u) pc[u] = vaddq_f32 (vmulq_f32 (vdupq_n_f32 (kK0), z[u]), vdupq_n_f32 (kK1));
+    for (int u = 0; u < U; ++u) ps[u] = vaddq_f32 (vmulq_f32 (ps[u], z[u]), vdupq_n_f32 (kS2));
+    for (int u = 0; u < U; ++u) pc[u] = vaddq_f32 (vmulq_f32 (pc[u], z[u]), vdupq_n_f32 (kK2));
+    for (int u = 0; u < U; ++u) sn[u] = vaddq_f32 (vmulq_f32 (vmulq_f32 (ps[u], z[u]), r[u]), r[u]);
+    for (int u = 0; u < U; ++u) cs[u] = vaddq_f32 (vsubq_f32 (vmulq_f32 (vmulq_f32 (pc[u], z[u]), z[u]), vmulq_f32 (vdupq_n_f32 (0.5f), z[u])), vdupq_n_f32 (1.0f));
+    for (int u = 0; u < U; ++u) { b0[u] = vandq_s32 (j[u], one); b1[u] = vandq_s32 (vshrq_n_s32 (j[u], 1), one); }
+    for (int u = 0; u < U; ++u) { swap[u] = vceqq_s32 (b0[u], one); negS[u] = vceqq_s32 (b1[u], one); negC[u] = vceqq_s32 (veorq_s32 (b0[u], b1[u]), one); }
+    for (int u = 0; u < U; ++u) { os[u] = vbslq_f32 (swap[u], cs[u], sn[u]); oc[u] = vbslq_f32 (swap[u], sn[u], cs[u]); }
+    for (int u = 0; u < U; ++u)
+    {
+        rs[u] = vreinterpretq_f32_u32 (veorq_u32 (vreinterpretq_u32_f32 (os[u]), vandq_u32 (negS[u], sign)));
+        rc[u] = vreinterpretq_f32_u32 (veorq_u32 (vreinterpretq_u32_f32 (oc[u]), vandq_u32 (negC[u], sign)));
+    }
+}
+
+/** advance4 () of U groups: the phase sum and its wrap, interleaved the same way. */
+template <int U>
+inline void wrapN (const float32x4_t* x, float32x4_t* out) noexcept
+{
+    const float32x4_t hundred = vdupq_n_f32 (100.0f), two = vdupq_n_f32 (kTwoPiF), zero = vdupq_n_f32 (0.0f);
+    float32x4_t ax[U], nf[U], r[U];
+    uint32x4_t wrapIt[U];
+    for (int u = 0; u < U; ++u) ax[u] = vabsq_f32 (x[u]);
+    for (int u = 0; u < U; ++u) wrapIt[u] = vcgtq_f32 (ax[u], hundred);
+    for (int u = 0; u < U; ++u) nf[u] = vcvtq_f32_s32 (vcvtq_s32_f32 (vmulq_f32 (ax[u], vdupq_n_f32 (kInvTwoPiLow))));
+    for (int u = 0; u < U; ++u) r[u] = vsubq_f32 (ax[u], vmulq_f32 (nf[u], vdupq_n_f32 (kW1)));
+    for (int u = 0; u < U; ++u) r[u] = vsubq_f32 (r[u], vmulq_f32 (nf[u], vdupq_n_f32 (kW2)));
+    for (int u = 0; u < U; ++u) r[u] = vsubq_f32 (r[u], vmulq_f32 (nf[u], vdupq_n_f32 (kW3)));
+    for (int u = 0; u < U; ++u) r[u] = vbslq_f32 (vcgeq_f32 (r[u], two), vsubq_f32 (r[u], two), r[u]);
+    for (int u = 0; u < U; ++u) r[u] = vbslq_f32 (vcltq_f32 (r[u], zero), vaddq_f32 (r[u], two), r[u]);
+    for (int u = 0; u < U; ++u) r[u] = vbslq_f32 (vcgtq_f32 (r[u], vdupq_n_f32 (kPiF)), vsubq_f32 (r[u], two), r[u]);
+    for (int u = 0; u < U; ++u) out[u] = vbslq_f32 (wrapIt[u], vbslq_f32 (vcltq_f32 (x[u], zero), vnegq_f32 (r[u]), r[u]), x[u]);
 }
 } // namespace
 #endif
@@ -271,13 +303,26 @@ void sincosBlock (const float* a, float* s, float* c, int n, bool neon) noexcept
     int k = 0;
 #if SB_SPECTRAL_NEON
     if (neon)
+    {
+        for (; k + 8 <= n; k += 8)
+        {
+            const float32x4_t x[2] = { vld1q_f32 (a + k), vld1q_f32 (a + k + 4) };
+            float32x4_t rs[2], rc[2];
+            sincosN<2> (x, rs, rc);
+            vst1q_f32 (s + k, rs[0]);
+            vst1q_f32 (c + k, rc[0]);
+            vst1q_f32 (s + k + 4, rs[1]);
+            vst1q_f32 (c + k + 4, rc[1]);
+        }
         for (; k + 4 <= n; k += 4)
         {
-            float32x4_t rs, rc;
-            sincos4 (vld1q_f32 (a + k), rs, rc);
-            vst1q_f32 (s + k, rs);
-            vst1q_f32 (c + k, rc);
+            const float32x4_t x[1] = { vld1q_f32 (a + k) };
+            float32x4_t rs[1], rc[1];
+            sincosN<1> (x, rs, rc);
+            vst1q_f32 (s + k, rs[0]);
+            vst1q_f32 (c + k, rc[0]);
         }
+    }
 #else
     (void) neon;
 #endif
@@ -290,14 +335,28 @@ void spectrumFromAngles (const float* angle, const float* mag, float* re, float*
     int k = 0;
 #if SB_SPECTRAL_NEON
     if (neon)
+    {
+        for (; k + 8 <= n; k += 8)
+        {
+            const float32x4_t x[2] = { vld1q_f32 (angle + k), vld1q_f32 (angle + k + 4) };
+            float32x4_t rs[2], rc[2];
+            sincosN<2> (x, rs, rc);
+            const float32x4_t m0 = vld1q_f32 (mag + k), m1 = vld1q_f32 (mag + k + 4);
+            vst1q_f32 (re + k, vmulq_f32 (m0, rc[0]));
+            vst1q_f32 (im + k, vmulq_f32 (m0, rs[0]));
+            vst1q_f32 (re + k + 4, vmulq_f32 (m1, rc[1]));
+            vst1q_f32 (im + k + 4, vmulq_f32 (m1, rs[1]));
+        }
         for (; k + 4 <= n; k += 4)
         {
-            float32x4_t rs, rc;
-            sincos4 (vld1q_f32 (angle + k), rs, rc);
+            const float32x4_t x[1] = { vld1q_f32 (angle + k) };
+            float32x4_t rs[1], rc[1];
+            sincosN<1> (x, rs, rc);
             const float32x4_t m = vld1q_f32 (mag + k);
-            vst1q_f32 (re + k, vmulq_f32 (m, rc));
-            vst1q_f32 (im + k, vmulq_f32 (m, rs));
+            vst1q_f32 (re + k, vmulq_f32 (m, rc[0]));
+            vst1q_f32 (im + k, vmulq_f32 (m, rs[0]));
         }
+    }
 #else
     (void) neon;
 #endif
@@ -327,13 +386,6 @@ float wrapPhase (float x) noexcept
     return wrapPiF (x < 0.0f ? -f : f);
 }
 
-namespace
-{
-// 2 pi (the float) in three parts of 8 bits each: their sum is the float exactly, and n times a part is exact for n < 2^16
-constexpr float kW1 = 6.28125f, kW2 = 0.00193023681640625f, kW3 = 5.245208740234375e-06f;
-constexpr float kInvTwoPiLow = 0.15915494f * (1.0f - 1.0f / 4194304.0f);   // 1 / 2 pi a little low: the quotient never rounds up past a whole number, n is at most one short
-constexpr float kReachable = 1.0e5f;
-}
 
 float wrapPhaseFloat (float x) noexcept
 {
@@ -355,20 +407,21 @@ void advancePhases (float* phase, const float* step, int n, bool neon) noexcept
     if (neon)
     {
         // no test of the lanes (a vector compare moved to the ARM registers stalls the NEON pipeline): the arithmetic is the same for every lane and the result is selected by the masks
-        const float32x4_t hop = vdupq_n_f32 (static_cast<float> (kHop)), hundred = vdupq_n_f32 (100.0f), two = vdupq_n_f32 (kTwoPiF);
-        const float32x4_t w1 = vdupq_n_f32 (kW1), w2 = vdupq_n_f32 (kW2), w3 = vdupq_n_f32 (kW3), inv = vdupq_n_f32 (kInvTwoPiLow), pi = vdupq_n_f32 (kPiF), zero = vdupq_n_f32 (0.0f);
+        const float32x4_t hop = vdupq_n_f32 (static_cast<float> (kHop));
+        for (; k + 8 <= n; k += 8)
+        {
+            const float32x4_t x[2] = { vaddq_f32 (vld1q_f32 (phase + k), vmulq_f32 (vld1q_f32 (step + k), hop)), vaddq_f32 (vld1q_f32 (phase + k + 4), vmulq_f32 (vld1q_f32 (step + k + 4), hop)) };
+            float32x4_t out[2];
+            wrapN<2> (x, out);
+            vst1q_f32 (phase + k, out[0]);
+            vst1q_f32 (phase + k + 4, out[1]);
+        }
         for (; k + 4 <= n; k += 4)
         {
-            const float32x4_t x = vaddq_f32 (vld1q_f32 (phase + k), vmulq_f32 (vld1q_f32 (step + k), hop));
-            const float32x4_t ax = vabsq_f32 (x);
-            const uint32x4_t wrapIt = vcgtq_f32 (ax, hundred);
-            const float32x4_t nf = vcvtq_f32_s32 (vcvtq_s32_f32 (vmulq_f32 (ax, inv)));
-            float32x4_t r = vsubq_f32 (vsubq_f32 (vsubq_f32 (ax, vmulq_f32 (nf, w1)), vmulq_f32 (nf, w2)), vmulq_f32 (nf, w3));
-            r = vbslq_f32 (vcgeq_f32 (r, two), vsubq_f32 (r, two), r);
-            r = vbslq_f32 (vcltq_f32 (r, zero), vaddq_f32 (r, two), r);
-            r = vbslq_f32 (vcgtq_f32 (r, pi), vsubq_f32 (r, two), r);
-            const float32x4_t signedR = vbslq_f32 (vcltq_f32 (x, zero), vnegq_f32 (r), r);
-            vst1q_f32 (phase + k, vbslq_f32 (wrapIt, signedR, x));
+            const float32x4_t x[1] = { vaddq_f32 (vld1q_f32 (phase + k), vmulq_f32 (vld1q_f32 (step + k), hop)) };
+            float32x4_t out[1];
+            wrapN<1> (x, out);
+            vst1q_f32 (phase + k, out[0]);
         }
     }
 #else
@@ -389,25 +442,31 @@ void advanceToSpectrum (float* phase, const float* step, const float* mag, float
 #if SB_SPECTRAL_NEON
     if (neon)
     {
-        const float32x4_t hop = vdupq_n_f32 (static_cast<float> (kHop)), hundred = vdupq_n_f32 (100.0f), two = vdupq_n_f32 (kTwoPiF);
-        const float32x4_t w1 = vdupq_n_f32 (kW1), w2 = vdupq_n_f32 (kW2), w3 = vdupq_n_f32 (kW3), inv = vdupq_n_f32 (kInvTwoPiLow), pi = vdupq_n_f32 (kPiF), zero = vdupq_n_f32 (0.0f);
+        const float32x4_t hop = vdupq_n_f32 (static_cast<float> (kHop));
+        for (; k + 8 <= n; k += 8)
+        {
+            const float32x4_t x[2] = { vaddq_f32 (vld1q_f32 (phase + k), vmulq_f32 (vld1q_f32 (step + k), hop)), vaddq_f32 (vld1q_f32 (phase + k + 4), vmulq_f32 (vld1q_f32 (step + k + 4), hop)) };
+            float32x4_t wrapped[2], rs[2], rc[2];
+            wrapN<2> (x, wrapped);
+            vst1q_f32 (phase + k, wrapped[0]);
+            vst1q_f32 (phase + k + 4, wrapped[1]);
+            sincosN<2> (wrapped, rs, rc);
+            const float32x4_t m0 = vld1q_f32 (mag + k), m1 = vld1q_f32 (mag + k + 4);
+            vst1q_f32 (re + k, vmulq_f32 (m0, rc[0]));
+            vst1q_f32 (im + k, vmulq_f32 (m0, rs[0]));
+            vst1q_f32 (re + k + 4, vmulq_f32 (m1, rc[1]));
+            vst1q_f32 (im + k + 4, vmulq_f32 (m1, rs[1]));
+        }
         for (; k + 4 <= n; k += 4)
         {
-            const float32x4_t x = vaddq_f32 (vld1q_f32 (phase + k), vmulq_f32 (vld1q_f32 (step + k), hop));
-            const float32x4_t ax = vabsq_f32 (x);
-            const uint32x4_t wrapIt = vcgtq_f32 (ax, hundred);
-            const float32x4_t nf = vcvtq_f32_s32 (vcvtq_s32_f32 (vmulq_f32 (ax, inv)));
-            float32x4_t r = vsubq_f32 (vsubq_f32 (vsubq_f32 (ax, vmulq_f32 (nf, w1)), vmulq_f32 (nf, w2)), vmulq_f32 (nf, w3));
-            r = vbslq_f32 (vcgeq_f32 (r, two), vsubq_f32 (r, two), r);
-            r = vbslq_f32 (vcltq_f32 (r, zero), vaddq_f32 (r, two), r);
-            r = vbslq_f32 (vcgtq_f32 (r, pi), vsubq_f32 (r, two), r);
-            const float32x4_t wrapped = vbslq_f32 (wrapIt, vbslq_f32 (vcltq_f32 (x, zero), vnegq_f32 (r), r), x);
-            vst1q_f32 (phase + k, wrapped);
-            float32x4_t rs, rc;
-            sincos4 (wrapped, rs, rc);
+            const float32x4_t x[1] = { vaddq_f32 (vld1q_f32 (phase + k), vmulq_f32 (vld1q_f32 (step + k), hop)) };
+            float32x4_t wrapped[1], rs[1], rc[1];
+            wrapN<1> (x, wrapped);
+            vst1q_f32 (phase + k, wrapped[0]);
+            sincosN<1> (wrapped, rs, rc);
             const float32x4_t m = vld1q_f32 (mag + k);
-            vst1q_f32 (re + k, vmulq_f32 (m, rc));
-            vst1q_f32 (im + k, vmulq_f32 (m, rs));
+            vst1q_f32 (re + k, vmulq_f32 (m, rc[0]));
+            vst1q_f32 (im + k, vmulq_f32 (m, rs[0]));
         }
     }
 #else
@@ -534,7 +593,7 @@ int findPeaks (const float* m, int n, float top, int* peaks, int maxPeaks, bool 
     const float threshold = 1.0e-5f * top;
     int count = 0;
     int k = 1;
-#if SB_SPECTRAL_NEON
+#if SB_SPECTRAL_NEON && defined(__aarch64__)   // (on the 32 bit Cortex-A17 the compare, narrow and store of the vector form cost more than the branchy scalar loop: 16 against 10 microseconds a frame)
     if (neon)
     {
         // sixteen bins at a time: the four comparisons become one byte per bin (0xff for a peak), and only a group of sixteen that has a peak is looked at one by one (a vector compare moved to

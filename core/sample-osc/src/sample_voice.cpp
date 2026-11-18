@@ -308,33 +308,56 @@ inline void readPlanned (const ReadPlan& r, const float* table, double pos, floa
     }
 }
 #if SB_SAMPLE_NEON
-/** Four consecutive samples of one channel: the interpolation of interpBlock () with the four sample positions in the four lanes (the taps of every lane are summed in the same order as the
-    scalar sum, so the bits are the same). `idx`: the integer positions, `ph`: the phase of the coefficient set. Every tap lies inside the data (the caller checked). */
-template <QualityTier Tier>
-inline float32x4_t interp4 (const float* buf, const int32_t* idx, const int32_t* ph, const float* table) noexcept
+/** U groups of four consecutive samples of one channel: the interpolation of interpBlock () with the four sample positions of a group in the four lanes (the taps of every lane are summed in the
+    same order as the scalar sum, so the bits are the same). `idx`: the integer positions, `ph`: the phase of the coefficient set, 4 U of each. Every tap lies inside the data (the caller checked).
+    The groups' operations are interleaved (the vector unit of the Key 61's core issues in order, so one group's chain of dependent operations would leave it idle). */
+template <QualityTier Tier, int U>
+inline void interpN (const float* buf, const int32_t* idx, const int32_t* ph, const float* table, float32x4_t* out) noexcept
 {
     constexpr int kTaps = Tier == QualityTier::low ? 4 : (Tier == QualityTier::medium ? 8 : 16);
     constexpr int kBefore = kTaps / 2 - 1;   // taps before the position: i - 1 (4), i - 3 (8), i - 7 (16)
-    float32x4_t sum = vdupq_n_f32 (0.0f);
+    for (int u = 0; u < U; ++u)
+        out[u] = vdupq_n_f32 (0.0f);
     for (int g = 0; g < kTaps / 4; ++g)
     {
-        float32x4_t c[4], b[4];
-        for (int k = 0; k < 4; ++k)
+        float32x4_t c[U][4], b[U][4], cc[U][4], bb[U][4];
+        float32x4x2_t c01[U], c23[U], b01[U], b23[U];
+        for (int u = 0; u < U; ++u)
+            for (int k = 0; k < 4; ++k)
+            {
+                c[u][k] = vld1q_f32 (table + ph[4 * u + k] * kTaps + 4 * g);
+                b[u][k] = vld1q_f32 (buf + idx[4 * u + k] - kBefore + 4 * g);
+            }
+        for (int u = 0; u < U; ++u)
         {
-            c[k] = vld1q_f32 (table + ph[k] * kTaps + 4 * g);
-            b[k] = vld1q_f32 (buf + idx[k] - kBefore + 4 * g);
+            c01[u] = vtrnq_f32 (c[u][0], c[u][1]); c23[u] = vtrnq_f32 (c[u][2], c[u][3]);
+            b01[u] = vtrnq_f32 (b[u][0], b[u][1]); b23[u] = vtrnq_f32 (b[u][2], b[u][3]);
         }
-        const float32x4x2_t c01 = vtrnq_f32 (c[0], c[1]), c23 = vtrnq_f32 (c[2], c[3]), b01 = vtrnq_f32 (b[0], b[1]), b23 = vtrnq_f32 (b[2], b[3]);
-        const float32x4_t cc[4] = { vcombine_f32 (vget_low_f32 (c01.val[0]), vget_low_f32 (c23.val[0])), vcombine_f32 (vget_low_f32 (c01.val[1]), vget_low_f32 (c23.val[1])),
-                                    vcombine_f32 (vget_high_f32 (c01.val[0]), vget_high_f32 (c23.val[0])), vcombine_f32 (vget_high_f32 (c01.val[1]), vget_high_f32 (c23.val[1])) };
-        const float32x4_t bb[4] = { vcombine_f32 (vget_low_f32 (b01.val[0]), vget_low_f32 (b23.val[0])), vcombine_f32 (vget_low_f32 (b01.val[1]), vget_low_f32 (b23.val[1])),
-                                    vcombine_f32 (vget_high_f32 (b01.val[0]), vget_high_f32 (b23.val[0])), vcombine_f32 (vget_high_f32 (b01.val[1]), vget_high_f32 (b23.val[1])) };
+        for (int u = 0; u < U; ++u)
+        {
+            cc[u][0] = vcombine_f32 (vget_low_f32 (c01[u].val[0]), vget_low_f32 (c23[u].val[0]));
+            cc[u][1] = vcombine_f32 (vget_low_f32 (c01[u].val[1]), vget_low_f32 (c23[u].val[1]));
+            cc[u][2] = vcombine_f32 (vget_high_f32 (c01[u].val[0]), vget_high_f32 (c23[u].val[0]));
+            cc[u][3] = vcombine_f32 (vget_high_f32 (c01[u].val[1]), vget_high_f32 (c23[u].val[1]));
+            bb[u][0] = vcombine_f32 (vget_low_f32 (b01[u].val[0]), vget_low_f32 (b23[u].val[0]));
+            bb[u][1] = vcombine_f32 (vget_low_f32 (b01[u].val[1]), vget_low_f32 (b23[u].val[1]));
+            bb[u][2] = vcombine_f32 (vget_high_f32 (b01[u].val[0]), vget_high_f32 (b23[u].val[0]));
+            bb[u][3] = vcombine_f32 (vget_high_f32 (b01[u].val[1]), vget_high_f32 (b23[u].val[1]));
+        }
         for (int j = 0; j < 4; ++j)
-            sum = vaddq_f32 (sum, vmulq_f32 (cc[j], bb[j]));
+            for (int u = 0; u < U; ++u)
+                out[u] = vaddq_f32 (out[u], vmulq_f32 (cc[u][j], bb[u][j]));
     }
-    return sum; // (0 + c0 b0 is c0 b0 exactly: the scalar low form starts with the product, the others with 0 +)
+    // (0 + c0 b0 is c0 b0 exactly: the scalar low form starts with the product, the others with 0 +)
 }
 
+template <QualityTier Tier>
+inline float32x4_t interp4 (const float* buf, const int32_t* idx, const int32_t* ph, const float* table) noexcept
+{
+    float32x4_t out[1];
+    interpN<Tier, 1> (buf, idx, ph, table, out);
+    return out[0];
+}
 
 /** cos (theta) and sin (theta) for theta in [0, pi / 2] in float lanes (the weights of the loop crossfade): the minimax polynomials on [0, pi / 4] and the complement beyond. Within 1.5e-7 of the
     library functions. */
@@ -1013,37 +1036,54 @@ void SampleVoice::renderBlockT (float* outLeft, float* outRight, int numFrames, 
             {
                 const double inv = plan.kind == ReadPlan::oneLevel ? plan.invScale0 : 1.0;
                 const float32x4_t gL = vdupq_n_f32 (gainL), gR = vdupq_n_f32 (gainR), total = vdupq_n_f32 (levelPart * antiClickGain_ * 1.0f);
-                for (int done = 0; done < n; done += 4)
+                for (int done = 0; done < n;)
                 {
-                    double pos[4];
+                    const int groups = done + 8 <= n ? 2 : 1;
+                    double pos[8];
                     pos[0] = playhead_;
-                    pos[1] = pos[0] + runStep;
-                    pos[2] = pos[1] + runStep;
-                    pos[3] = pos[2] + runStep;
-                    int32_t idx[4], ph[4];
-                    for (int k = 0; k < 4; ++k)
+                    for (int k = 1; k < 4 * groups; ++k)
+                        pos[k] = pos[k - 1] + runStep;
+                    int32_t idx[8], ph[8];
+                    for (int k = 0; k < 4 * groups; ++k)
                     {
                         const double q = plan.kind == ReadPlan::oneLevel ? pos[k] * inv : pos[k];
                         idx[k] = static_cast<int> (q);
                         ph[k] = static_cast<int> ((q - static_cast<double> (idx[k])) * SincTables::kPhases);
                     }
-                    const float32x4_t sL = interp4<Tier> (plan.a[0], idx, ph, table);
-                    const float32x4_t sR = plan.stereo ? interp4<Tier> (plan.a[1], idx, ph, table) : sL;
-                    const float32x4_t l = sanitize4 (vmulq_f32 (vmulq_f32 (sL, gL), total));
-                    const float32x4_t r = sanitize4 (vmulq_f32 (vmulq_f32 (sR, gR), total));
-                    if (Add)
+                    float32x4_t sL[2], sR[2];
+                    if (groups == 2)
                     {
-                        vst1q_f32 (outLeft + i + done, vaddq_f32 (vld1q_f32 (outLeft + i + done), l));
-                        if (outRight != nullptr)
-                            vst1q_f32 (outRight + i + done, vaddq_f32 (vld1q_f32 (outRight + i + done), r));
+                        interpN<Tier, 2> (plan.a[0], idx, ph, table, sL);
+                        if (plan.stereo)
+                            interpN<Tier, 2> (plan.a[1], idx, ph, table, sR);
+                        else
+                            sR[0] = sL[0], sR[1] = sL[1];
                     }
                     else
                     {
-                        vst1q_f32 (outLeft + i + done, l);
-                        if (outRight != nullptr)
-                            vst1q_f32 (outRight + i + done, r);
+                        interpN<Tier, 1> (plan.a[0], idx, ph, table, sL);
+                        sR[0] = plan.stereo ? interp4<Tier> (plan.a[1], idx, ph, table) : sL[0];
                     }
-                    playhead_ = pos[3] + runStep;
+                    for (int u = 0; u < groups; ++u)
+                    {
+                        const float32x4_t l = sanitize4 (vmulq_f32 (vmulq_f32 (sL[u], gL), total));
+                        const float32x4_t r = sanitize4 (vmulq_f32 (vmulq_f32 (sR[u], gR), total));
+                        const int at = i + done + 4 * u;
+                        if (Add)
+                        {
+                            vst1q_f32 (outLeft + at, vaddq_f32 (vld1q_f32 (outLeft + at), l));
+                            if (outRight != nullptr)
+                                vst1q_f32 (outRight + at, vaddq_f32 (vld1q_f32 (outRight + at), r));
+                        }
+                        else
+                        {
+                            vst1q_f32 (outLeft + at, l);
+                            if (outRight != nullptr)
+                                vst1q_f32 (outRight + at, r);
+                        }
+                    }
+                    playhead_ = pos[4 * groups - 1] + runStep;
+                    done += 4 * groups;
                 }
                 i += n - 1; // (the loop's own increment follows)
                 continue;

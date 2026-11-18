@@ -466,52 +466,73 @@ inline float windowKernel (const GrainWindow& g, float x) noexcept
 }
 
 #if SB_GRAIN_NEON
-/** windowKernel () of the ages age .. age + 3. */
-inline float32x4_t windowKernel4 (const GrainWindow& g, int age) noexcept
+/** windowKernel () of the ages age .. age + 4 U - 1, as U groups of four: the operations of the groups interleaved (every step for all groups before the next: the vector unit of the Key 61's
+    core issues in order, and one group's chain of dependent operations leaves it idle). */
+template <int U>
+inline void windowKernelN (const GrainWindow& g, int age, float32x4_t* out) noexcept
 {
     static const int32_t kIota[4] = { 0, 1, 2, 3 };
-    const float32x4_t x = vmulq_f32 (vcvtq_f32_s32 (vaddq_s32 (vdupq_n_s32 (age), vld1q_s32 (kIota))), vdupq_n_f32 (g.invLength));
-    const float32x4_t peak = vdupq_n_f32 (g.peak);
-    const uint32x4_t first = vcltq_f32 (x, peak);
-    const float32x4_t u1 = vmulq_f32 (x, vdupq_n_f32 (g.k1));
-    const float32x4_t u2 = vaddq_f32 (vdupq_n_f32 (0.5f), vmulq_f32 (vsubq_f32 (x, peak), vdupq_n_f32 (g.k2)));
-    const float32x4_t f = vmulq_f32 (vbslq_f32 (first, u1, u2), vdupq_n_f32 (static_cast<float> (kTableSize)));
-    const int32x4_t iv = vminq_s32 (vcvtq_s32_f32 (f), vdupq_n_s32 (kTableSize - 1));
-    const int i0 = vgetq_lane_s32 (iv, 0), i1 = vgetq_lane_s32 (iv, 1), i2 = vgetq_lane_s32 (iv, 2), i3 = vgetq_lane_s32 (iv, 3);
+    const float32x4_t peak = vdupq_n_f32 (g.peak), one = vdupq_n_f32 (1.0f), sixtyFour = vdupq_n_f32 (64.0f);
+    float32x4_t x[U], f[U], a[U], b[U], fr[U], w0[U];
+    int32x4_t iv[U];
+    for (int u = 0; u < U; ++u) x[u] = vmulq_f32 (vcvtq_f32_s32 (vaddq_s32 (vdupq_n_s32 (age + 4 * u), vld1q_s32 (kIota))), vdupq_n_f32 (g.invLength));
+    for (int u = 0; u < U; ++u)
+    {
+        const uint32x4_t first = vcltq_f32 (x[u], peak);
+        const float32x4_t u1 = vmulq_f32 (x[u], vdupq_n_f32 (g.k1));
+        const float32x4_t u2 = vaddq_f32 (vdupq_n_f32 (0.5f), vmulq_f32 (vsubq_f32 (x[u], peak), vdupq_n_f32 (g.k2)));
+        f[u] = vmulq_f32 (vbslq_f32 (first, u1, u2), vdupq_n_f32 (static_cast<float> (kTableSize)));
+    }
+    for (int u = 0; u < U; ++u) iv[u] = vminq_s32 (vcvtq_s32_f32 (f[u]), vdupq_n_s32 (kTableSize - 1));
     // the table cells straight into the lanes (no store of the lanes one by one and load of the vector, which waits for the stores)
-    float32x4_t a = vld1q_lane_f32 (g.table + i0, vdupq_n_f32 (0.0f), 0);
-    a = vld1q_lane_f32 (g.table + i1, a, 1);
-    a = vld1q_lane_f32 (g.table + i2, a, 2);
-    a = vld1q_lane_f32 (g.table + i3, a, 3);
-    float32x4_t b = vld1q_lane_f32 (g.table + i0 + 1, vdupq_n_f32 (0.0f), 0);
-    b = vld1q_lane_f32 (g.table + i1 + 1, b, 1);
-    b = vld1q_lane_f32 (g.table + i2 + 1, b, 2);
-    b = vld1q_lane_f32 (g.table + i3 + 1, b, 3);
-    const float32x4_t fr = vsubq_f32 (f, vcvtq_f32_s32 (iv));
-    const float32x4_t w0 = vaddq_f32 (a, vmulq_f32 (vsubq_f32 (b, a), fr));
-    const float32x4_t one = vdupq_n_f32 (1.0f);
-    const float32x4_t wa = vaddq_f32 (one, vmulq_f32 (vsubq_f32 (w0, one), vdupq_n_f32 (g.amount)));
-    const float32x4_t sixtyFour = vdupq_n_f32 (64.0f);
-    const float32x4_t ramp = vminq_f32 (one, vminq_f32 (vmulq_f32 (sixtyFour, x), vmulq_f32 (sixtyFour, vsubq_f32 (one, x))));
-    return vmulq_f32 (wa, ramp);
+    for (int u = 0; u < U; ++u)
+    {
+        const int i0 = vgetq_lane_s32 (iv[u], 0), i1 = vgetq_lane_s32 (iv[u], 1), i2 = vgetq_lane_s32 (iv[u], 2), i3 = vgetq_lane_s32 (iv[u], 3);
+        a[u] = vld1q_lane_f32 (g.table + i0, vdupq_n_f32 (0.0f), 0);
+        a[u] = vld1q_lane_f32 (g.table + i1, a[u], 1);
+        a[u] = vld1q_lane_f32 (g.table + i2, a[u], 2);
+        a[u] = vld1q_lane_f32 (g.table + i3, a[u], 3);
+        b[u] = vld1q_lane_f32 (g.table + i0 + 1, vdupq_n_f32 (0.0f), 0);
+        b[u] = vld1q_lane_f32 (g.table + i1 + 1, b[u], 1);
+        b[u] = vld1q_lane_f32 (g.table + i2 + 1, b[u], 2);
+        b[u] = vld1q_lane_f32 (g.table + i3 + 1, b[u], 3);
+    }
+    for (int u = 0; u < U; ++u) fr[u] = vsubq_f32 (f[u], vcvtq_f32_s32 (iv[u]));
+    for (int u = 0; u < U; ++u) w0[u] = vaddq_f32 (a[u], vmulq_f32 (vsubq_f32 (b[u], a[u]), fr[u]));
+    for (int u = 0; u < U; ++u)
+    {
+        const float32x4_t wa = vaddq_f32 (one, vmulq_f32 (vsubq_f32 (w0[u], one), vdupq_n_f32 (g.amount)));
+        const float32x4_t ramp = vminq_f32 (one, vminq_f32 (vmulq_f32 (sixtyFour, x[u]), vmulq_f32 (sixtyFour, vsubq_f32 (one, x[u]))));
+        out[u] = vmulq_f32 (wa, ramp);
+    }
 }
 
-/** hermiteFast () at four positions (i[k], t[k]) of one channel; every tap lies inside the data (the caller checked). */
-inline float32x4_t hermite4 (const float* d, const int32_t* i, float32x4_t t) noexcept
+/** hermiteFast () at 4 U positions (i[k], t[u][k]) of one channel, U groups interleaved; every tap lies inside the data (the caller checked). */
+template <int U>
+inline void hermiteN (const float* d, const int32_t* i, const float32x4_t* t, float32x4_t* out) noexcept
 {
-    const float32x4_t r0 = vld1q_f32 (d + i[0] - 1), r1 = vld1q_f32 (d + i[1] - 1), r2 = vld1q_f32 (d + i[2] - 1), r3 = vld1q_f32 (d + i[3] - 1);
-    const float32x4x2_t t01 = vtrnq_f32 (r0, r1), t23 = vtrnq_f32 (r2, r3);
-    const float32x4_t y0 = vcombine_f32 (vget_low_f32 (t01.val[0]), vget_low_f32 (t23.val[0]));
-    const float32x4_t y1 = vcombine_f32 (vget_low_f32 (t01.val[1]), vget_low_f32 (t23.val[1]));
-    const float32x4_t y2 = vcombine_f32 (vget_high_f32 (t01.val[0]), vget_high_f32 (t23.val[0]));
-    const float32x4_t y3 = vcombine_f32 (vget_high_f32 (t01.val[1]), vget_high_f32 (t23.val[1]));
+    float32x4_t r[U][4], y0[U], y1[U], y2[U], y3[U], c1[U], c2[U], c3[U];
+    float32x4x2_t t01[U], t23[U];
     const float32x4_t half = vdupq_n_f32 (0.5f);
-    const float32x4_t c1 = vmulq_f32 (half, vsubq_f32 (y2, y0));
-    float32x4_t c2 = vsubq_f32 (y0, vmulq_f32 (vdupq_n_f32 (2.5f), y1));
-    c2 = vaddq_f32 (c2, vmulq_f32 (vdupq_n_f32 (2.0f), y2));
-    c2 = vsubq_f32 (c2, vmulq_f32 (half, y3));
-    const float32x4_t c3 = vaddq_f32 (vmulq_f32 (half, vsubq_f32 (y3, y0)), vmulq_f32 (vdupq_n_f32 (1.5f), vsubq_f32 (y1, y2)));
-    return vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (vaddq_f32 (vmulq_f32 (c3, t), c2), t), c1), t), y1);
+    for (int u = 0; u < U; ++u)
+        for (int k = 0; k < 4; ++k)
+            r[u][k] = vld1q_f32 (d + i[4 * u + k] - 1);
+    for (int u = 0; u < U; ++u) { t01[u] = vtrnq_f32 (r[u][0], r[u][1]); t23[u] = vtrnq_f32 (r[u][2], r[u][3]); }
+    for (int u = 0; u < U; ++u)
+    {
+        y0[u] = vcombine_f32 (vget_low_f32 (t01[u].val[0]), vget_low_f32 (t23[u].val[0]));
+        y1[u] = vcombine_f32 (vget_low_f32 (t01[u].val[1]), vget_low_f32 (t23[u].val[1]));
+        y2[u] = vcombine_f32 (vget_high_f32 (t01[u].val[0]), vget_high_f32 (t23[u].val[0]));
+        y3[u] = vcombine_f32 (vget_high_f32 (t01[u].val[1]), vget_high_f32 (t23[u].val[1]));
+    }
+    for (int u = 0; u < U; ++u) c1[u] = vmulq_f32 (half, vsubq_f32 (y2[u], y0[u]));
+    for (int u = 0; u < U; ++u) c2[u] = vsubq_f32 (y0[u], vmulq_f32 (vdupq_n_f32 (2.5f), y1[u]));
+    for (int u = 0; u < U; ++u) c2[u] = vaddq_f32 (c2[u], vmulq_f32 (vdupq_n_f32 (2.0f), y2[u]));
+    for (int u = 0; u < U; ++u) c2[u] = vsubq_f32 (c2[u], vmulq_f32 (half, y3[u]));
+    for (int u = 0; u < U; ++u) c3[u] = vaddq_f32 (vmulq_f32 (half, vsubq_f32 (y3[u], y0[u])), vmulq_f32 (vdupq_n_f32 (1.5f), vsubq_f32 (y1[u], y2[u])));
+    for (int u = 0; u < U; ++u) out[u] = vaddq_f32 (vmulq_f32 (c3[u], t[u]), c2[u]);
+    for (int u = 0; u < U; ++u) out[u] = vaddq_f32 (vmulq_f32 (out[u], t[u]), c1[u]);
+    for (int u = 0; u < U; ++u) out[u] = vaddq_f32 (vmulq_f32 (out[u], t[u]), y1[u]);
 }
 #endif
 } // namespace
@@ -569,36 +590,61 @@ bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* righ
 #if SB_GRAIN_NEON
             if (vectorOk && i + 4 <= numFrames && g.age + 4 <= g.length)
             {
-                // the four positions the sample loop would visit (the same additions in the same order), and whether every tap of them lies inside the data
-                double pos[4];
+                // eight samples (two groups of four, interleaved) where they fit, else four: the positions the sample loop would visit (the same additions in the same order), and whether every
+                // tap of them lies inside the data
+                const int groups = (i + 8 <= numFrames && g.age + 8 <= g.length) ? 2 : 1;
+                double pos[8];
                 pos[0] = g.pos;
-                pos[1] = pos[0] + step0;
-                pos[2] = pos[1] + step0;
-                pos[3] = pos[2] + step0;
-                double scaled[4];
-                for (int k = 0; k < 4; ++k)
-                    scaled[k] = read.scaled ? pos[k] * read.invScale : pos[k];
-                const double lowest = std::min (scaled[0], scaled[3]), highest = std::max (scaled[0], scaled[3]);
+                for (int k = 1; k < 4 * groups; ++k)
+                    pos[k] = pos[k - 1] + step0;
+                const double last = pos[4 * groups - 1];
+                const double lowest = std::min (read.scaled ? pos[0] * read.invScale : pos[0], read.scaled ? last * read.invScale : last);
+                const double highest = std::max (read.scaled ? pos[0] * read.invScale : pos[0], read.scaled ? last * read.invScale : last);
                 if (lowest >= 1.0 && highest + 3.0 < static_cast<double> (nRead))
                 {
-                    int32_t idx[4];
-                    float32x4_t t = vdupq_n_f32 (0.0f);
-                    idx[0] = static_cast<int> (scaled[0]);
-                    idx[1] = static_cast<int> (scaled[1]);
-                    idx[2] = static_cast<int> (scaled[2]);
-                    idx[3] = static_cast<int> (scaled[3]);
-                    t = vsetq_lane_f32 (static_cast<float> (scaled[0] - static_cast<double> (idx[0])), t, 0);
-                    t = vsetq_lane_f32 (static_cast<float> (scaled[1] - static_cast<double> (idx[1])), t, 1);
-                    t = vsetq_lane_f32 (static_cast<float> (scaled[2] - static_cast<double> (idx[2])), t, 2);
-                    t = vsetq_lane_f32 (static_cast<float> (scaled[3] - static_cast<double> (idx[3])), t, 3);
-                    const float32x4_t w = windowKernel4 (win, g.age);
-                    const float32x4_t sl = hermite4 (read.ch[0], idx, t);
-                    const float32x4_t sr = read.stereo ? hermite4 (read.ch[1], idx, t) : sl;
-                    vst1q_f32 (left + i, vaddq_f32 (vld1q_f32 (left + i), vmulq_f32 (vmulq_f32 (sl, w), vdupq_n_f32 (g.gl))));
-                    vst1q_f32 (right + i, vaddq_f32 (vld1q_f32 (right + i), vmulq_f32 (vmulq_f32 (sr, w), vdupq_n_f32 (g.gr))));
-                    g.pos = pos[3] + step0;
-                    g.age += 4;
-                    i += 4;
+                    int32_t idx[8];
+                    float32x4_t t[2], w[2], sl[2], sr[2];
+                    for (int u = 0; u < groups; ++u)
+                    {
+                        t[u] = vdupq_n_f32 (0.0f);
+                        double sc[4];
+                        for (int k = 0; k < 4; ++k)
+                            sc[k] = read.scaled ? pos[4 * u + k] * read.invScale : pos[4 * u + k];
+                        idx[4 * u + 0] = static_cast<int> (sc[0]);
+                        idx[4 * u + 1] = static_cast<int> (sc[1]);
+                        idx[4 * u + 2] = static_cast<int> (sc[2]);
+                        idx[4 * u + 3] = static_cast<int> (sc[3]);
+                        t[u] = vsetq_lane_f32 (static_cast<float> (sc[0] - static_cast<double> (idx[4 * u + 0])), t[u], 0);
+                        t[u] = vsetq_lane_f32 (static_cast<float> (sc[1] - static_cast<double> (idx[4 * u + 1])), t[u], 1);
+                        t[u] = vsetq_lane_f32 (static_cast<float> (sc[2] - static_cast<double> (idx[4 * u + 2])), t[u], 2);
+                        t[u] = vsetq_lane_f32 (static_cast<float> (sc[3] - static_cast<double> (idx[4 * u + 3])), t[u], 3);
+                    }
+                    if (groups == 2)
+                    {
+                        windowKernelN<2> (win, g.age, w);
+                        hermiteN<2> (read.ch[0], idx, t, sl);
+                        if (read.stereo)
+                            hermiteN<2> (read.ch[1], idx, t, sr);
+                        else
+                            sr[0] = sl[0], sr[1] = sl[1];
+                    }
+                    else
+                    {
+                        windowKernelN<1> (win, g.age, w);
+                        hermiteN<1> (read.ch[0], idx, t, sl);
+                        if (read.stereo)
+                            hermiteN<1> (read.ch[1], idx, t, sr);
+                        else
+                            sr[0] = sl[0];
+                    }
+                    for (int u = 0; u < groups; ++u)
+                    {
+                        vst1q_f32 (left + i + 4 * u, vaddq_f32 (vld1q_f32 (left + i + 4 * u), vmulq_f32 (vmulq_f32 (sl[u], w[u]), vdupq_n_f32 (g.gl))));
+                        vst1q_f32 (right + i + 4 * u, vaddq_f32 (vld1q_f32 (right + i + 4 * u), vmulq_f32 (vmulq_f32 (sr[u], w[u]), vdupq_n_f32 (g.gr))));
+                    }
+                    g.pos = last + step0;
+                    g.age += 4 * groups;
+                    i += 4 * groups;
                     continue;
                 }
             }
