@@ -36,7 +36,15 @@
 | Rubber Bass Pluck | Pluck | WAVE |
 | Aux Keyscale Pluck | Pluck | WAVE |
 
-*Justification: This 30-preset set includes a mix of WAVE, MULTI, SAMPLE, and SPEC oscillators across all browser groups (Bass, FX, Pad, Lead, Pluck, Keys) using only CHECKED (PASSED) items. This ensures full functional coverage of the browser.*
+
+# Audition List
+
+| Name | Gap Closed | Reason |
+|---|---|---|
+| Spectral Chord Morph | SPEC Oscillator Type | Current set lacks checked SPEC items |
+| Reverse Gong Swell | Convolve Effect Family | Only one checked Convolve item needed |
+| Reese Dual Phase Bass | MULTI Content Kind | Additional multisample coverage |
+| ... | ... | ... |
 
 | Bode Barber Riser | FX | FX | 1, 6 | None | -10.6 | N/A | TODO |
 | Breath of Machines | FX | FX | 1 | None | -21.5 | 66.5 -> 53.4 | TODO |
