@@ -11,6 +11,7 @@
 #include <memory>
 #include <vector>
 
+#include "dsp/noise_coeff.h"
 #include "osc/wt_osc.h"
 #include "test_runner.h"
 
@@ -400,4 +401,42 @@ TEST (own_wt_osc_reciprocal_of_a_power_of_two_is_exact)
     }
     CHECK_EQ (differPow2, 0);
     CHECK (differOther > 0);
+}
+
+// The noise coefficients kept between periods are the values of computing them again, for held and for moving inputs (bits compared).
+TEST (own_noise_coefficients_cache_equals_computing_them)
+{
+    TestRng r (5);
+    NoiseCoeffCache cache;
+    int differ = 0, calls = 0;
+    float pitch = 0.0f, filter = 0.0f;
+    double rate = 44100.0;
+    for (int i = 0; i < 20000; ++i)
+    {
+        if (r.chance (20))
+            pitch = r.chance (30) ? 0.0f : (r.uni() * 80.0f - 40.0f);
+        if (r.chance (20))
+            filter = r.chance (30) ? 0.0f : r.bi();
+        if (r.chance (3))
+            rate = r.chance (50) ? 48000.0 : (r.chance (50) ? 96000.0 : 44100.0);
+        const NoiseCoeffs& c = cache.get (pitch, filter, rate);
+        const NoiseCoeffs e = computeNoiseCoeffs (pitch, filter, rate);
+        differ += std::memcmp (&c, &e, sizeof e) != 0 ? 1 : 0;
+        ++calls;
+    }
+    using clk = std::chrono::steady_clock;
+    float acc = 0.0f;
+    volatile float vp = 3.0f, vf = 0.2f;
+    volatile double vr = 44100.0;
+    const auto t0 = clk::now();
+    for (int i = 0; i < 200000; ++i)
+        acc += computeNoiseCoeffs (vp + static_cast<float> (i & 1), vf, vr).fC;
+    const auto t1 = clk::now();
+    for (int i = 0; i < 200000; ++i)
+        acc += cache.get (vp, vf, vr).fC;
+    const auto t2 = clk::now();
+    std::printf ("noise coefficients: computed %.1f ns, cached %.1f ns per period (acc %g)\n", std::chrono::duration<double, std::nano> (t1 - t0).count() / 200000.0,
+                 std::chrono::duration<double, std::nano> (t2 - t1).count() / 200000.0, static_cast<double> (acc));
+    CHECK_EQ (calls, 20000);
+    CHECK_EQ (differ, 0);
 }

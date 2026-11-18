@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "../dsp/noise_coeff.h"
 #include "../dsp/util.h"
 #include "synthyboy/quality.h"
 #include "../env_lfo/envelope.h"
@@ -270,6 +271,7 @@ private:
     bool noiseUseSample = false;
     float noiseFilt[2][2] = {}, noiseLp[2][4] = {}; // noise.filter poles, generator pitch low pass
     float noiseFilterAmount = 0.0f, noisePitchSemis = 0.0f;
+    NoiseCoeffCache noiseCoeffs;   // pitch gain, pitch low pass and filter pole of the noise (they change with their parameters only)
     float noiseGain = 0.0f, noiseGainPrev = 0.0f, noisePan = 0.0f, noiseStereo = 0.0f;
     int noiseColour = 0;
     struct Chan { float level = 0, levelPrev = 0, gl = 0, gr = 0, glPrev = 0, grPrev = 0; int dest = 3; bool env1 = true, on = false; };
