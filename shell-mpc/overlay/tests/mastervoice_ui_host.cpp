@@ -236,8 +236,8 @@ void testMasterGroupsAndMeters()
     r.refresh();
     int lit = 0;
     for (int n = 0; n < 12; ++n)
-        lit += ui::MiniKeyboardDisplay::isScaleNote (m.keyboard.scaleType, m.keyboard.scaleKey, n) ? 1 : 0;
-    check (lit == 7 && m.keyboard.scaleType == 1, "the keyboard shows 7 of the 12 notes for a major scale");
+        lit += ui::MiniKeyboardDisplay::isScaleNote (m.keyboard.state.scaleType, m.keyboard.state.scaleKey, n) ? 1 : 0;
+    check (lit == 7 && m.keyboard.state.scaleType == 1, "the keyboard shows 7 of the 12 notes for a major scale");
     // keyboard touch targets and note selection
     const auto kr = m.keyboard.computeRects();
     bool allKeysWide = true;
@@ -435,6 +435,32 @@ void testVoiceGridStoresNoTruth()
     check (g.turn (1.0).kind == ui::ChangeKind::None, "grid: a turn up at the top of the range reports nothing");
     const ui::Change t = g.turn (-1.0);
     check (t.kind == ui::ChangeKind::Value && t.id == g.stepId (1, 2) && std::fabs (t.value - 0.95) < 0.001 && g.state.values[1][2] == 1.0f, "grid: a turn down reports the new value and leaves `state` alone");
+}
+
+void testKeyboardStoresNoTruth()
+{
+    ui::MiniKeyboardDisplay k;
+    k.setId (7);
+    k.place ({ 0, 0, 480, 160 });
+    k.state.scaleType = 1;
+    k.state.scaleKey = 0;
+    const std::vector<uint32_t> before = pixelsOf (k, 480, 160);
+    const auto kr = k.computeRects();
+    const ui::Rect dKey = kr.white[1], eKey = kr.white[2], cKey = kr.white[0];   // D, E, C
+    const int y = dKey.bottom() - 4;   // below the black keys
+    ui::Change c = k.touchDown (dKey.x + dKey.w / 2, y, 0.0);
+    check (c.kind == ui::ChangeKind::Index && c.id == 7 && c.index == 2, "keyboard: a finger down on D reports the note 2");
+    c = k.touchMove (eKey.x + eKey.w / 2, y);
+    check (c.kind == ui::ChangeKind::Index && c.index == 4, "keyboard: a slide to E reports the note 4");
+    c = k.touchUp (eKey.x + eKey.w / 2, y);
+    check (c.kind == ui::ChangeKind::None, "keyboard: lifting after the slide reports nothing more");
+    check (k.touchDown (dKey.x + dKey.w / 2, y, 500.0).index == 2 && k.touchUp (dKey.x + dKey.w / 2, y).kind == ui::ChangeKind::None, "keyboard: a tap reports its key once (down), not again on lifting");
+    check (k.state.scaleKey == 0 && k.state.scaleType == 1 && k.state.scaleMode == 0, "keyboard: after the gesture with no write back `state` is as the owner left it");
+    check (pixelsOf (k, 480, 160) == before, "keyboard: ... and the picture is the same");
+    check (k.touchDown (cKey.x + cKey.w / 2, y, 100.0).kind == ui::ChangeKind::None, "keyboard: a touch on the root that is shown already reports nothing");
+    k.touchUp (cKey.x + cKey.w / 2, y);
+    k.state.scaleKey = 4;   // the owner wrote the parameter and sets the state
+    check (pixelsOf (k, 480, 160) != before, "keyboard: with the owner writing back, the next draw shows the new root");
 }
 
 void testVoiceStepsLitAndQ()
@@ -694,6 +720,7 @@ int main()
     testVoiceLayout();
     testVoiceGridDrawing();
     testVoiceGridStoresNoTruth();
+    testKeyboardStoresNoTruth();
     testVoiceStepsLitAndQ();
     testVoiceDraw();
     testFullCoverage();

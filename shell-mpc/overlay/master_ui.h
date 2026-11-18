@@ -116,9 +116,9 @@ public:
             full_.padAmount.state.value = std::round (percent);
         }
         full_.portaCurve.slope = inst.param (slopeIdx_);
-        full_.keyboard.scaleType = static_cast<int> (std::lround (inst.param (scaleTypeIdx_)));
-        full_.keyboard.scaleKey = static_cast<int> (std::lround (inst.param (scaleKeyIdx_)));
-        full_.keyboard.scaleMode = static_cast<int> (std::lround (inst.param (scaleModeIdx_)));
+        full_.keyboard.state.scaleType = static_cast<int> (std::lround (inst.param (scaleTypeIdx_)));
+        full_.keyboard.state.scaleKey = static_cast<int> (std::lround (inst.param (scaleKeyIdx_)));
+        full_.keyboard.state.scaleMode = static_cast<int> (std::lround (inst.param (scaleModeIdx_)));
         inst.setUiFullOpen (true);
         publishQGroup (inst);
     }
