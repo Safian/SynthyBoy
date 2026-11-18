@@ -590,7 +590,7 @@ The style grid is Q 1 and has no stepper of its own: PERLIN, S & H (sample and h
 
 ![LFO editor](img/lfo-editor.png)
 
-The editor gives you a 956 by 540 pixel canvas to draw and reshape the cycle. The canvas shows between 2 and 128 points. The top right corner displays the count (for example "9 / 128 POINTS"). A shape with no inner points is evaluated as a straight line. The top left corner displays a status message for three seconds whenever you save, load or copy a shape.
+The editor gives you a large canvas to draw and reshape the cycle. The canvas shows between 2 and 128 points. The top right corner displays the count (for example "9 / 128 POINTS"). A shape with no inner points is evaluated as a straight line. The top left corner displays a status message for three seconds whenever you save, load or copy a shape.
 
 **Top bar.** The bar across the top contains navigation, drawing tools and action menus:
 
@@ -626,7 +626,7 @@ The editor gives you a 956 by 540 pixel canvas to draw and reshape the cycle. Th
   - **GRID X** (Q 5): Horizontal cycle divisions (2 to 32 columns, default 8).
   - **GRID Y** (Q 6): Vertical height divisions (2 to 32 rows, default 8).
   - **SNAP** (Q 7): LED toggle. When active, point additions, drags, marker movements and cell tool draws snap to grid intersections.
-  - The grid is saved with the shape in your preset (state version 5). When loading a preset saved without a grid, the editor automatically chooses the coarsest matching grid from 4, 8, 12, 16, 24, 32, or defaults to 8.
+  - The grid is saved with the shape in your preset. When loading a preset saved without a grid, the editor automatically chooses the coarsest matching grid from 4, 8, 12, 16, 24, 32, or defaults to 8.
 - **TRIGGER** (Q 9 to 11 on a 16-knob device):
   - **MODE** (Q 9): Stepper for the six LFO trigger modes: Retrigger, Free-run, Envelope, Sustain envelope, Loop at point, Loop and hold. Tap the name to open the full list popup.
   - **PHASE** (Q 10): Phase angle (0 to 360 degrees).
@@ -636,13 +636,13 @@ The editor gives you a 956 by 540 pixel canvas to draw and reshape the cycle. Th
 
 On the 16-knob MPC XL, all eleven controls are active at once on knobs 1 to 11 (slots 8 and 12 to 16 are unused). On the 4-knob MPC Key 61, the active group is framed in yellow; tap a group or press the Q-Link bank button to switch between SELECTED POINT, GRID and TRIGGER.
 
-**The START / LOOP marker.** A vertical line with a round 56-pixel touch handle at the top marks the phase position on the canvas. Drag the handle to move it. The marker is directly bound to the engine parameter **PHASE** (`lfoN.phase`): moving the marker updates **PHASE**, and turning the **PHASE** knob moves the marker. What the marker represents depends on the trigger **MODE**:
+**The START / LOOP marker.** A vertical line with a round touch handle at the top marks the phase position on the canvas. Drag the handle to move it. The marker is directly bound to the engine parameter **PHASE**: moving the marker updates **PHASE**, and turning the **PHASE** knob moves the marker. What the marker represents depends on the trigger **MODE**:
 
 - In **Retrigger** and **Envelope** modes, the marker is labelled **START**. It sets the cycle start position when a note is struck. It drags continuously, snapping to points within 14 pixels or to the grid when **SNAP** is active.
 - In **Sustain envelope**, **Loop at point** and **Loop and hold** modes, the marker is labelled **LOOP**. It snaps to existing points and binds the shape's loop point to that point. In Sustain envelope, the LFO holds at this point while you hold the key. In Loop at point, the LFO plays to the end of the shape and loops back to this point. In Loop and hold, the LFO loops between start and this point while the key is held, then releases to the end of the shape.
 - In **Free-run** mode, the marker is dimmed and the canvas displays the hint "FREE-RUN: PHASE SHIFTS THE CYCLE" at the bottom. In Free-run the LFO runs on a continuous shared clock and **PHASE** shifts the cycle timing.
 
-**Point modulation (the MOD page).** Tap **MOD** in the top bar when one or more points are selected to open **PointModPage**:
+**Point modulation (the MOD page).** Tap **MOD** in the top bar when one or more points are selected to open the point modulation page:
 
 ![Point modulation](img/lfo-editor-pointmod.png)
 
@@ -666,7 +666,7 @@ On the editor canvas, a point with modulated time or level displays a colored ba
 - **RENAME A SAVED SHAPE ...:** Lists your saved shapes; choosing one opens the keyboard to enter a new name.
 - **DELETE A SAVED SHAPE ...:** Lists your saved shapes; choosing one asks for confirmation ("DELETE <name>?") and deletes the file.
 
-Saved shapes are stored as files named `<name>.lfoshape.json` inside folder `SynthyBoy/LFO Shapes/`. The folder is created on your SD card, a connected USB drive, or the plugin's own Content folder (the same storage locations used for user wavetables). The file format is standard JSON compatible with the desktop version (`synthyboy::serializeLfoShapeFile`). Any standard JSON shape file copied from a computer into `SynthyBoy/LFO Shapes/` is recognized and listed automatically. Point modulation is not stored in `.lfoshape.json`; saving a shape with modulated points displays the status warning `(POINT MODULATION NOT STORED)`.
+Saved shapes are stored as files named `<name>.lfoshape.json` inside folder `SynthyBoy/LFO Shapes/`. The folder is created on your SD card, a connected USB drive, or the plugin's own Content folder (the same storage locations used for user wavetables). The file format is the same JSON the desktop version writes. Any standard JSON shape file copied from a computer into `SynthyBoy/LFO Shapes/` is recognized and listed automatically. Point modulation is not stored in `.lfoshape.json`; saving a shape with modulated points displays the status warning `(POINT MODULATION NOT STORED)`.
 
 **The MORE list.** Tap **MORE** in the top bar to open the actions popup, arranged in three groups:
 
