@@ -20,7 +20,7 @@ Every item below keeps the output bit for bit: `WtOsc::setReference (true)` / `b
 
 | finding | status | commit | note |
 |---|---|---|---|
-| F1 | not done (not bit identical, ordered not to) | | |
+| F1 | done in round 13 (owner's decision, not bit identical for a moving morph) | 58588494 | each voice's morph age starts at a slot after the build of its first period: one of 8 evenly spaced periods, seed = note serial + 4 x oscillator, order 0 2 4 6 1 3 5 7 of the seed mod 8 (`WtOsc::setMorphStagger`, `morphStaggerSlot`; hook in `Voice::tick` at the note start). A chord of 8 is flat per block (256 cases, worst max - min 0, old 8); a held static morph is bit identical; Mac worst block of 8 Harmonic Stretch voices 40.7 -> 13.3 us, median 3.9 -> 9.3 us; `tier_bench --config low` on the Mac: Stretched Glass Choir p99 3.34 -> 2.30 %, Shepard Ascent 2.95 -> 2.00 %, medians +0.33 / +0.31 points, means unchanged. `docs/release/AUDIBLE-CHANGES-ROUND-13.md` |
 | F2 | done | 47f8c731 | pre-twiddle and clear only for bins 0..K (fast build); Mac build at the bench chord band limits 3.07 -> 2.94 us (about 4 %) |
 | F3 | done | ef84927b | stages 2 and 4 fused in NEON, swap list: with F2, a Harmonic Stretch build in the oscillator test 0.98 -> 0.67 us per block of 4 periods (-32 %) |
 | F4 | done | 16dadf0a | slot swap instead of two 8 KB copies per group; the cache stores only a held morph |
