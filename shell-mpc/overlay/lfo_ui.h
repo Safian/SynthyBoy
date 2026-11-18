@@ -355,6 +355,8 @@ public:
 
     bool fingerDown() const noexcept { return gestureDown_; }
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
+    /** The page went off the screen: the open list of the compact view closes. */
+    void closePopups() { if (instPopup_) closeInstanceList(); }
     /** A full screen opened or closed somewhere: the router keeps what the last page set, so this UI publishes its Q group again at the next update (). */
     void forgetQGroup() noexcept { qSlots_.forget(); }
 

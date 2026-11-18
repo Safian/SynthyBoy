@@ -72,6 +72,8 @@ public:
     virtual bool fingerDown() const noexcept { return false; }
     /** The stack of the instance was closed from outside (the Play page left): a running gesture ends. */
     virtual void dropGesture() noexcept {}
+    /** The view went off the screen (a host dialog over it, another page, no instance): a running gesture ends and the open pop-up lists close (the caller holds the controller's lock). */
+    virtual void onHidden() {}
     /** Hash (FNV-1a) of what is drawn, for the status file. */
     virtual uint32_t hash() const noexcept = 0;
     /** `key: value` lines of this view's own numbers (the status file, one second). */
