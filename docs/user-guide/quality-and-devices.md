@@ -112,9 +112,11 @@ On the MPC Key 61, playing large two-handed chords (9 or more notes) or holding 
 
 ---
 
+Sounds keep their loudness on the smaller device. When the MPC Key 61 switches off an effect that a preset uses, the engine makes up its level, so the preset is about as loud as on the MPC XL. The character of the missing effect, such as the room of a reverb, is still missing.
+
 ## 5. Practical Performance Tips for MPC Key 61 Users
 
-1. **Compensate for Convolve on Key 61**: If playing `Reese Dual Phase Bass` or `Dusty Rhodes Keys` on a Key 61, increase the track volume by +5 to +6 dB, or use an external MPC track insert effect (such as the stock MPC AIR Tube Drive or AIR Reverb).
+1. **Missing Convolve on Key 61**: `Reese Dual Phase Bass` and `Dusty Rhodes Keys` now keep their level on the Key 61. The cabinet colour of the Convolve effect is still missing, so add an external MPC track insert effect (such as the stock MPC AIR Tube Drive) if you want it.
 2. **Use FORCE ON for Essential Reverbs**: If a pad sounds too dry, navigate to the **FX** tab, select **Reverb**, and toggle **FORCE ON** to On. Keep an eye on voice count to ensure the audio block remains clean.
 3. **Turn Off Q-Link Status Pop-Up**: On the MPC Key 61, the host's optional "Show Q-Link Status When Touched" overlay can cause the experimental touchscreen overlay to flicker when touching knobs. Turn it off in **Preferences > General > Show Q-Link Status When Touched** (or hold the hardware Q-Link button and tap "Q-Link Status").
 4. **Use Key Aftertouch**: While the Key 61 lacks expressive pads with polyphonic pressure, its keyboard supports channel aftertouch. Assign Aftertouch to Macro 1 or Filter Cutoff in the modulation matrix for hands-on expressive control.

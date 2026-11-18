@@ -20,6 +20,7 @@
 #include "synthyboy/fx_rack.h"
 #include "synthyboy/fx_types.h"
 #include "synthyboy/quality.h"
+#include "fx_makeup.h"
 
 namespace synthyboy
 {
@@ -109,21 +110,32 @@ public:
     /** The latency of rack `rack` (0 .. 9) in samples of the chain rate: the sum of the modules that are on in it, in series; a splitter adds the slowest of its bands
         (document 06, 11). `reported` leaves out what the host is not told about (a limiter with limit_latency_comp off). */
     int rackLatency (int rack, bool reported) const noexcept;
+    /** On a bus chain (rack 1 or 2) the gain of the bypassed effects is not applied inside the chain but by the engine at the bus (OwnEngine, `runBus`), which knows what else reaches the output
+        from the same source: true when the bus rack holds a bypassed effect with a gain; `power` is the product of their power gains, `coherent` the product of their coherent amplitudes,
+        `amplitude` the product of their gains (what the engine applies when nothing else shares the source). */
+    bool busMakeup (float& power, float& coherent, float& amplitude) const noexcept;
+    /** The chain of a bus defers its makeup gain to the engine. */
+    void setBusDeferred (bool on) noexcept { busDeferred = on; }
 
 private:
-    struct Item { bool pool; int index; int key; };
+    struct Item { bool pool; int index; int key; bool bypass = false; }; // bypass: the item is the makeup gain of a bypassed effect (fx_makeup.h), not the effect
     struct Plan { std::array<Item, 32> item; int count = 0; };
     void buildPlan (const float* base) noexcept;
     void configureSlot (int s, const float* base, const float* delta, const FxFrame& frame, uint32_t fxMask) noexcept;
     void runRack (int rack, float* l, float* r, int n, int t0, int depth) noexcept;
     void runModule (int m, float* l, float* r, int n, int t0, int depth) noexcept;
     void runSlot (int s, float* l, float* r, int n, int t0) noexcept;
+    /** The gain that stands in for a bypassed effect (Quality::fxMakeup): ramped across the control period from the previous gain to the current one. */
+    void runMakeup (float prev, float now, float* l, float* r, int n, int t0, makeup::ProgramMeter& meter) noexcept;
+    /** One step of the smoothing of a makeup gain towards its target (immediately when `first` or `noSmoothing`). */
+    void stepMakeup (float target, bool& seen, float& prev, float& now, const FxFrame& frame) const noexcept;
     bool slotRuns (int s) const noexcept;
 
     double sr = 48000.0;
     bool active = false;
     bool configured = true;
     bool lowCost = false;
+    bool busDeferred = false;
     int quietRun = 0, holdSamples = 0;   // samples of silence in and out so far, and how many are needed
     void idleRack (int rack, int n, int depth) noexcept;
     int idleSettled = 0;            // consecutive updates with the same inputs that ended with nothing on
@@ -136,6 +148,13 @@ private:
     int rackId = 0;
     int moduleRack[16] = {};
     float levelGain[16] = {}, levelGainPrev[16] = {};
+    // the effects that are on in the preset but bypassed by the quality mask, and the gain that stands in for them (module 0 .. 12; the slots of the pool)
+    bool bypassed[16] = {}, makeupSeen[16] = {};
+    float makeupNow[16] = {}, makeupPrev[16] = {};
+    float makeupPow[16] = {}, makeupCoh[16] = {}, slotMakeupPow[FxPool::kSlots] = {}, slotMakeupCoh[FxPool::kSlots] = {};
+    bool slotBypassed[FxPool::kSlots] = {}, slotMakeupSeen[FxPool::kSlots] = {};
+    float slotMakeupNow[FxPool::kSlots] = {}, slotMakeupPrev[FxPool::kSlots] = {};
+    makeup::ProgramMeter meter[16], slotMeter[FxPool::kSlots]; // the program at the place of each bypassed effect (the input of the gain)
     FxPool* pool = nullptr;
     bool slotOn[FxPool::kSlots] = {};
     int slotRack[FxPool::kSlots] = {}, slotOrder[FxPool::kSlots] = {}, slotType[FxPool::kSlots] = {};

@@ -6,7 +6,10 @@
 //
 // One job per line (blank lines and lines starting with # are skipped); words separated by blanks:
 //   render OUT.wav PRESET.sbpreset PROFILE SECONDS [item]...
-// PROFILE is the grammar of shell-mpc/device_profile.h with ';' for ',' ("low", "high;voices=16;control=economy"). Items, times in seconds:
+// PROFILE is the grammar of shell-mpc/device_profile.h with ';' for ',' ("low", "high;voices=16;control=economy"), plus two keys of the lab itself:
+//   fxoff=NAME[+NAME...]   bypasses these effects too (chorus compressor delay distortion eq filter flanger phaser reverb hyperdim utility bode convolve splitter_lh splitter_lmh splitter_ms)
+//   fxon=NAME[+NAME...]    lets these effects run whatever the profile says
+// ("high;fxoff=reverb" is the full quality profile with the reverb bypassed: what the tier makeup of the effects is measured against). Items, times in seconds:
 //   on T KEY VEL           note on (velocity 0..1)        off T KEY              note off
 //   press T KEY VALUE      poly pressure of a note (0..1; NoteExpression Pressure)
 //   mw T VALUE             mod wheel                       bend T VALUE          pitch bend -1..1
@@ -73,6 +76,48 @@ bool doJob (const std::vector<std::string>& w)
     std::replace (profileText.begin(), profileText.end(), ';', ',');
     const double seconds = std::atof (w[4].c_str());
 
+    // the lab's own keys (fxoff=, fxon=) are taken out of the text before the profile grammar sees it
+    uint32_t fxOff = 0, fxOn = 0;
+    {
+        static const char* const kNames[] = { "chorus", "compressor", "delay", "distortion", "eq", "filter", "flanger", "phaser", "reverb", "hyperdim", "utility", "bode", "convolve",
+                                              "splitter_lh", "splitter_lmh", "splitter_ms" };
+        std::string kept;
+        size_t at = 0;
+        while (at <= profileText.size())
+        {
+            const size_t comma = std::min (profileText.find (',', at), profileText.size());
+            const std::string part = profileText.substr (at, comma - at);
+            at = comma + 1;
+            const bool off = part.rfind ("fxoff=", 0) == 0, on = part.rfind ("fxon=", 0) == 0;
+            if (! off && ! on)
+            {
+                kept += (kept.empty() ? "" : ",") + part;
+                continue;
+            }
+            std::string names = part.substr (off ? 6 : 5);
+            size_t a = 0;
+            while (a <= names.size())
+            {
+                const size_t plus = std::min (names.find ('+', a), names.size());
+                const std::string name = names.substr (a, plus - a);
+                a = plus + 1;
+                bool found = false;
+                for (int m = 0; m < 16; ++m)
+                    if (name == kNames[m])
+                    {
+                        (off ? fxOff : fxOn) |= 1u << m;
+                        found = true;
+                    }
+                if (! found)
+                {
+                    std::fprintf (stderr, "sound-lab: unknown effect '%s'\n", name.c_str());
+                    return false;
+                }
+            }
+        }
+        profileText = kept;
+    }
+
     synthyboy_mpc::Profile profile;
     std::string why;
     if (! synthyboy_mpc::parseProfile (profileText, profile, &why))
@@ -80,6 +125,7 @@ bool doJob (const std::vector<std::string>& w)
         std::fprintf (stderr, "sound-lab: profile '%s': %s\n", profileText.c_str(), why.c_str());
         return false;
     }
+    profile.fxMask = (profile.fxMask & ~fxOff) | fxOn;
     std::ifstream in (presetPath, std::ios::binary);
     const std::string text ((std::istreambuf_iterator<char> (in)), std::istreambuf_iterator<char>());
     PresetMeta meta;

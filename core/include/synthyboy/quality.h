@@ -92,6 +92,10 @@ struct Quality
     /** false (default): prepare () builds every built-in wavetable before it returns (what every shell did). true (needs `realtime`; the MPC shell sets it): prepare () builds only the one cycle tables and the
         tables the current parameters name; the others are built by a low priority thread, and a caller that applies a state calls IEngine::readyContent () (docs/MPC.md "Start-up time"). */
     bool lazyTables = false;
+    /** true (default): an effect that is switched ON in the preset but bypassed by `fxMask` leaves its loudness behind as a gain at its place in the chain (the own engine,
+        core/engine-own/fx/fx_makeup.h, docs/release/TIER-LEVEL-COMPENSATION.md): the sound keeps the level of the full quality, the character of the effect is still missing. Does nothing
+        while no effect that is on is bypassed (the signal path is then the one of every earlier version). false: the bypassed effect leaves nothing (the levels of before the makeup). The same flag switches the makeup of the unison cap (a cap under the voices of a preset gives the oscillator a gain). */
+    bool fxMakeup = true;
 };
 
 /** The economy groups a quality runs with (see Quality::economy). */
