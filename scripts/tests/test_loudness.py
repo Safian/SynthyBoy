@@ -6,7 +6,10 @@ import importlib.util
 import unittest
 from pathlib import Path
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:   # the interpreter of the CMake test (python3 -I) may not have numpy: the file is skipped, pytest with numpy runs it
+    raise unittest.SkipTest("numpy is not installed")
 
 SCRIPTS = Path(__file__).resolve().parent.parent
 
