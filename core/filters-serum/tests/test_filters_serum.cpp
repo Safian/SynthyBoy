@@ -531,10 +531,12 @@ TEST (serum_filters_jump_skips_the_cutoff_smoother)
         p.jump = jump;
         f.setParams (p);
         float peak = 0.0f;
-        for (int i = 0; i < 64; ++i)
+        // the states hold the 5 kHz tone when the cutoff drops, and a state variable filter rings them out at its new cutoff (about 40 samples to 1/e at 200 Hz): the window starts at
+        // sample 192, when that is over; the one pole smoother (270 samples to 1/e) still has the cutoff at several kHz there
+        for (int i = 0; i < 256; ++i)
         {
             const float y = f.process (std::sin (w * static_cast<float> (2560 + i)));
-            if (i >= 32)
+            if (i >= 192)
                 peak = std::max (peak, std::fabs (y));
         }
         return peak;

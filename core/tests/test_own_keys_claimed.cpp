@@ -174,11 +174,12 @@ TEST (own_fxfilter_pan_moves_the_two_cutoffs_apart)
 TEST (own_fxfilter_clean_mode_and_model_settings_change_the_sound)
 {
     const std::vector<Event> ev = { sbtest::noteOn (0, 57) };
-    // clean mode: the model's input is 24 dB lower and the output 24 dB higher: a driven filter saturates less
-    const std::vector<Setting> driven = { { "fxfilter.on", 1 }, { "fxfilter.model", 0 }, { "fxfilter.cutoff", 2000 }, { "fxfilter.resonance", 60 }, { "fxfilter.drive", 20 } };
+    // clean mode: the model's input is 24 dB lower and the output 24 dB higher: a driven filter saturates less. The model has to saturate for that to show: the Dirty one does (the
+    // Analog 12 dB mode is linear: its drive is a gain, so -24 dB then +24 dB gives the same samples and the difference is exactly 0)
+    const std::vector<Setting> driven = { { "fxfilter.on", 1 }, { "fxfilter.model", 1 }, { "fxfilter.cutoff", 2000 }, { "fxfilter.resonance", 60 }, { "fxfilter.drive", 20 } };
     const auto a = play (plus (base (1), driven), ev, 0.5);
     const auto b = play (plus (plus (base (1), driven), { { "fxfilter.clean_mode", 1 } }), ev, 0.5);
-    std::printf ("    fxfilter clean mode (Analog, drive 20): max difference %.5f of peak %.5f\n", maxDiff (a.left, b.left, 0.2), peakOf (a.left, 0.2));
+    std::printf ("    fxfilter clean mode (Dirty, drive 20): max difference %.5f of peak %.5f\n", maxDiff (a.left, b.left, 0.2), peakOf (a.left, 0.2));
     CHECK (maxDiff (a.left, b.left, 0.2) > 0.01 * peakOf (a.left, 0.2));
     // comb offset (Comb model), formant X (Formant model)
     const std::vector<Setting> comb = { { "fxfilter.on", 1 }, { "fxfilter.model", 6 }, { "fxfilter.cutoff", 220 }, { "fxfilter.resonance", 80 } };
@@ -323,21 +324,21 @@ TEST (own_no_smoothing_reaches_the_serum_filters_and_the_fx_filter)
             s = plus (s, { { "filter1.on", 1 }, { "filter1.model", 22 }, { "filter1.cutoff", 18000 } });
         auto e = make (s);
         std::vector<float> l (256), r (256);
-        Event ev[1] = { sbtest::noteOn (0, 48) };
+        Event ev[1] = { sbtest::noteOn (0, 84) }; // C6, about 1 kHz: far above the closed cutoff, so the filter that is already closed leaves very little of it (a note below 150 Hz would pass either way)
         e->process (ev, 1, l.data(), r.data(), 256);
         for (int k = 0; k < 8; ++k)
             e->process (nullptr, 0, l.data(), r.data(), 256);
         const ParamInfo* p = findParamByKey (fx ? "fxfilter.cutoff" : "filter1.cutoff");
         e->setParam (p->id, 150.0f); // from open to a very low cutoff
         e->process (nullptr, 0, l.data(), r.data(), 256);
-        return brightness (l, 0.0, 256.0 / kSr);
+        return rms (l, 128.0 / kSr, 256.0 / kSr); // the second half of the block: the ring of the old filter state has gone, the smoother is still open
     };
     for (bool fx : { false, true })
     {
         const double smooth = firstBlock (fx, false), jump = firstBlock (fx, true);
-        std::printf ("    %s filter, cutoff 18000 -> 150: first block brightness %.4f with smoothing, %.4f without\n", fx ? "fx" : "voice", smooth, jump);
+        std::printf ("    %s filter, cutoff 18000 -> 150: first block level (rms of its second half) %.4f with smoothing, %.4f without\n", fx ? "fx" : "voice", smooth, jump);
         if (!(jump < 0.5 * smooth))
-            std::printf ("    FAIL no_smoothing %s filter: brightness %.5f without the switch, %.5f with it (expected under half)\n", fx ? "fx" : "voice", smooth, jump);
+            std::printf ("    FAIL no_smoothing %s filter: level %.5f without the switch, %.5f with it (expected under half)\n", fx ? "fx" : "voice", smooth, jump);
         CHECK (jump < 0.5 * smooth); // the closed filter is there in the first block
     }
 }
