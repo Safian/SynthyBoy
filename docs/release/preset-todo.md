@@ -4,7 +4,7 @@ Csak az van itt, amit még meg kell hallgatni. Ami neked is ok és a mérés sze
 A név után írd oda: ok, vagy mi a baj vele. A zárójeles sor csak tájékoztatás (mit írtál korábban, mennyit változott a hangerő): azt nem kell átírnod.
 A név előtt szögletes zárójelben a böngésző-csoport áll (a Sounds böngészőben ott találod). A `*`-os presetek a második adag. A változások az ov32 csomagtól hallhatók.
 
-HÁTRAVAN: 151 preset a 160-ból (+ Init kész). Kikerült (ok): 10.
+HÁTRAVAN: 147 preset a 160-ból (+ Init kész). Kikerült (ok): 14.
 
 Gép és csomag, amin hallgatod: 
 
@@ -12,23 +12,11 @@ Gép és csomag, amin hallgatod:
 
 ### 1/a Átírt oktáv (te kérted; hasonlítsd az "ok" basszusokhoz, pl. 808 Boom, Solid Sub)
 
-[Bass Synth] Pulse Width Bass: 
-    (korábban: ez szerintme vagy 2oktávval magasabban szól mint kéne meg 2-3db halkabban; hangerő -1.2 dB; két oktávval lejjebb) jó lett
-
 [Bass Synth] Punchy Pluck Bass: 
     (korábban: egy okávval lentebb van mint kéne; hangerő -5.4 dB; egy oktávval feljebb) - még mindig magas a hangja még egy de lehet inkább 2 oktávval tlod lentebb 
 
-[Bass Synth] Warm Analog Bass: 
-    (korábban: két oktávval magasabban van mint kéne; hangerő +3.5 dB; két oktávval lejjebb) - jó lett
-
 [FX] Cosmic Teleport: 
     (korábban: -9 db vel halkabb meg két oktávval magasabb kb; hangerő +5.7 dB; két oktávval lejjebb) - kicsit mély lett -2 oktáv kéne
-
-[FX] Detonation Tail: 
-    (korábban: két oktávval magasabb; hangerő -15.0 dB; két oktávval lejjebb) - jó lett
-
-[Texture] Space Wind Storm: 
-    (korábban: 2 oktávval magasabb; hangerő -3.4 dB; két oktávval lejjebb) - jó lett
 
 [FX] Sub Drop Boom: 
     (korábban: 1 oktával alcsonyabb 3 dbvel halkabb; hangerő -1.1 dB; egy oktávval FELJEBB került; ha lejjebb kérted, írd ide) - egy oktávval legyen mélyebb
