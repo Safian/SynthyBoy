@@ -41,6 +41,8 @@ private:
     static constexpr int kM = kFftSize / 2;
     void transform (float* re, float* im, bool neon) const noexcept;
     uint16_t rev_[kM];
+    uint16_t swapI_[kM / 2], swapJ_[kM / 2];   // the index pairs of the bit reversal, i < j
+    int numSwaps_ = 0;
     float packC_[kM], packS_[kM];       // e^(+2 pi i k / kFftSize), k = 0 .. kM - 1
     float stageC_[kM], stageS_[kM];     // e^(+2 pi i k / (2 h)) for k < h at offset h - 1, h = 1, 2, 4 .. kM / 2
 };

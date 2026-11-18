@@ -461,20 +461,26 @@ inline float windowKernel (const GrainWindow& g, float x) noexcept
 /** windowKernel () of the ages age .. age + 3. */
 inline float32x4_t windowKernel4 (const GrainWindow& g, int age) noexcept
 {
-    const int32_t ages[4] = { age, age + 1, age + 2, age + 3 };
-    const float32x4_t x = vmulq_f32 (vcvtq_f32_s32 (vld1q_s32 (ages)), vdupq_n_f32 (g.invLength));
+    static const int32_t kIota[4] = { 0, 1, 2, 3 };
+    const float32x4_t x = vmulq_f32 (vcvtq_f32_s32 (vaddq_s32 (vdupq_n_s32 (age), vld1q_s32 (kIota))), vdupq_n_f32 (g.invLength));
     const float32x4_t peak = vdupq_n_f32 (g.peak);
     const uint32x4_t first = vcltq_f32 (x, peak);
     const float32x4_t u1 = vmulq_f32 (x, vdupq_n_f32 (g.k1));
     const float32x4_t u2 = vaddq_f32 (vdupq_n_f32 (0.5f), vmulq_f32 (vsubq_f32 (x, peak), vdupq_n_f32 (g.k2)));
     const float32x4_t f = vmulq_f32 (vbslq_f32 (first, u1, u2), vdupq_n_f32 (static_cast<float> (kTableSize)));
-    int32_t idx[4];
-    vst1q_s32 (idx, vminq_s32 (vcvtq_s32_f32 (f), vdupq_n_s32 (kTableSize - 1)));
-    const float lo[4] = { g.table[idx[0]], g.table[idx[1]], g.table[idx[2]], g.table[idx[3]] };
-    const float hi[4] = { g.table[idx[0] + 1], g.table[idx[1] + 1], g.table[idx[2] + 1], g.table[idx[3] + 1] };
-    const float32x4_t a = vld1q_f32 (lo);
-    const float32x4_t fr = vsubq_f32 (f, vcvtq_f32_s32 (vld1q_s32 (idx)));
-    const float32x4_t w0 = vaddq_f32 (a, vmulq_f32 (vsubq_f32 (vld1q_f32 (hi), a), fr));
+    const int32x4_t iv = vminq_s32 (vcvtq_s32_f32 (f), vdupq_n_s32 (kTableSize - 1));
+    const int i0 = vgetq_lane_s32 (iv, 0), i1 = vgetq_lane_s32 (iv, 1), i2 = vgetq_lane_s32 (iv, 2), i3 = vgetq_lane_s32 (iv, 3);
+    // the table cells straight into the lanes (no store of the lanes one by one and load of the vector, which waits for the stores)
+    float32x4_t a = vld1q_lane_f32 (g.table + i0, vdupq_n_f32 (0.0f), 0);
+    a = vld1q_lane_f32 (g.table + i1, a, 1);
+    a = vld1q_lane_f32 (g.table + i2, a, 2);
+    a = vld1q_lane_f32 (g.table + i3, a, 3);
+    float32x4_t b = vld1q_lane_f32 (g.table + i0 + 1, vdupq_n_f32 (0.0f), 0);
+    b = vld1q_lane_f32 (g.table + i1 + 1, b, 1);
+    b = vld1q_lane_f32 (g.table + i2 + 1, b, 2);
+    b = vld1q_lane_f32 (g.table + i3 + 1, b, 3);
+    const float32x4_t fr = vsubq_f32 (f, vcvtq_f32_s32 (iv));
+    const float32x4_t w0 = vaddq_f32 (a, vmulq_f32 (vsubq_f32 (b, a), fr));
     const float32x4_t one = vdupq_n_f32 (1.0f);
     const float32x4_t wa = vaddq_f32 (one, vmulq_f32 (vsubq_f32 (w0, one), vdupq_n_f32 (g.amount)));
     const float32x4_t sixtyFour = vdupq_n_f32 (64.0f);
@@ -568,13 +574,15 @@ bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* righ
                 if (lowest >= 1.0 && highest + 3.0 < static_cast<double> (nRead))
                 {
                     int32_t idx[4];
-                    float frac[4];
-                    for (int k = 0; k < 4; ++k)
-                    {
-                        idx[k] = static_cast<int> (scaled[k]);
-                        frac[k] = static_cast<float> (scaled[k] - static_cast<double> (idx[k]));
-                    }
-                    const float32x4_t t = vld1q_f32 (frac);
+                    float32x4_t t = vdupq_n_f32 (0.0f);
+                    idx[0] = static_cast<int> (scaled[0]);
+                    idx[1] = static_cast<int> (scaled[1]);
+                    idx[2] = static_cast<int> (scaled[2]);
+                    idx[3] = static_cast<int> (scaled[3]);
+                    t = vsetq_lane_f32 (static_cast<float> (scaled[0] - static_cast<double> (idx[0])), t, 0);
+                    t = vsetq_lane_f32 (static_cast<float> (scaled[1] - static_cast<double> (idx[1])), t, 1);
+                    t = vsetq_lane_f32 (static_cast<float> (scaled[2] - static_cast<double> (idx[2])), t, 2);
+                    t = vsetq_lane_f32 (static_cast<float> (scaled[3] - static_cast<double> (idx[3])), t, 3);
                     const float32x4_t w = windowKernel4 (win, g.age);
                     const float32x4_t sl = hermite4 (read.ch[0], idx, t);
                     const float32x4_t sr = read.stereo ? hermite4 (read.ch[1], idx, t) : sl;

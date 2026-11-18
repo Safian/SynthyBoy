@@ -48,6 +48,12 @@ RealIfft::RealIfft()
         for (int b = 0; b < 10; ++b)
             r |= ((i >> b) & 1) << (9 - b);
         rev_[i] = static_cast<uint16_t> (r);
+        if (r > i)
+        {
+            swapI_[numSwaps_] = static_cast<uint16_t> (i);
+            swapJ_[numSwaps_] = static_cast<uint16_t> (r);
+            ++numSwaps_;
+        }
         packC_[i] = static_cast<float> (std::cos (2.0 * kPi * i / kFftSize));
         packS_[i] = static_cast<float> (std::sin (2.0 * kPi * i / kFftSize));
     }
@@ -67,17 +73,36 @@ const RealIfft& RealIfft::instance() noexcept
 
 void RealIfft::transform (float* re, float* im, bool neon) const noexcept
 {
-    for (int i = 0; i < kM; ++i)
+    // the bit reversal: the pairs that change places, listed once (no test per index)
+    for (int p = 0; p < numSwaps_; ++p)
     {
-        const int j = rev_[i];
-        if (j > i)
-        {
-            std::swap (re[i], re[j]);
-            std::swap (im[i], im[j]);
-        }
+        const int i = swapI_[p], j = swapJ_[p];
+        std::swap (re[i], re[j]);
+        std::swap (im[i], im[j]);
     }
-    // the first two stages together (the twiddles are 1 and +i): blocks of four
-    for (int i = 0; i < kM; i += 4)
+    // the first two stages together (the twiddles are 1 and +i): blocks of four. The four lanes of a vector are four blocks (vld4 takes every fourth value into one vector).
+    int i = 0;
+#if SB_SPECTRAL_NEON
+    if (neon)
+        for (; i < kM; i += 16)
+        {
+            const float32x4x4_t r = vld4q_f32 (re + i), m = vld4q_f32 (im + i);
+            const float32x4_t x0r = vaddq_f32 (r.val[0], r.val[1]), x0i = vaddq_f32 (m.val[0], m.val[1]);
+            const float32x4_t x1r = vsubq_f32 (r.val[0], r.val[1]), x1i = vsubq_f32 (m.val[0], m.val[1]);
+            const float32x4_t x2r = vaddq_f32 (r.val[2], r.val[3]), x2i = vaddq_f32 (m.val[2], m.val[3]);
+            const float32x4_t x3r = vsubq_f32 (r.val[2], r.val[3]), x3i = vsubq_f32 (m.val[2], m.val[3]);
+            float32x4x4_t outR, outI;
+            outR.val[0] = vaddq_f32 (x0r, x2r);              outI.val[0] = vaddq_f32 (x0i, x2i);
+            outR.val[2] = vsubq_f32 (x0r, x2r);              outI.val[2] = vsubq_f32 (x0i, x2i);
+            outR.val[1] = vaddq_f32 (x1r, vnegq_f32 (x3i));  outI.val[1] = vaddq_f32 (x1i, x3r);
+            outR.val[3] = vsubq_f32 (x1r, vnegq_f32 (x3i));  outI.val[3] = vsubq_f32 (x1i, x3r);
+            vst4q_f32 (re + i, outR);
+            vst4q_f32 (im + i, outI);
+        }
+#else
+    (void) neon;
+#endif
+    for (; i < kM; i += 4)
     {
         const float x0r = re[i] + re[i + 1], x0i = im[i] + im[i + 1];
         const float x1r = re[i] - re[i + 1], x1i = im[i] - im[i + 1];
@@ -89,39 +114,60 @@ void RealIfft::transform (float* re, float* im, bool neon) const noexcept
         re[i + 1] = x1r + (-x3i); im[i + 1] = x1i + x3r;
         re[i + 3] = x1r - (-x3i); im[i + 3] = x1i - x3r;
     }
-    for (int h = 4; h < kM; h <<= 1)
+    // the remaining eight stages in pairs: the stage h and the stage 2 h on the four points of a butterfly of both, so that the data are loaded and stored once for two stages
+    // (the second stage's twiddle for the points b, d is i times the one for a, c: the table value of e^(i pi (k + h) / 2 h) is exactly that rotation)
+    for (int h = 4; h < kM; h <<= 2)
     {
-        const float* wr = stageC_ + (h - 1);
-        const float* wi = stageS_ + (h - 1);
-        for (int start = 0; start < kM; start += 2 * h)
+        const float* w1r = stageC_ + (h - 1);
+        const float* w1i = stageS_ + (h - 1);
+        const float* w2r = stageC_ + (2 * h - 1);
+        const float* w2i = stageS_ + (2 * h - 1);
+        for (int start = 0; start < kM; start += 4 * h)
         {
             int k = 0;
 #if SB_SPECTRAL_NEON
             if (neon)
                 for (; k < h; k += 4)
                 {
-                    const int a = start + k, b = a + h;
-                    const float32x4_t cr = vld1q_f32 (wr + k), ci = vld1q_f32 (wi + k);
-                    const float32x4_t rb = vld1q_f32 (re + b), ib = vld1q_f32 (im + b);
-                    const float32x4_t tr = vsubq_f32 (vmulq_f32 (rb, cr), vmulq_f32 (ib, ci));
-                    const float32x4_t ti = vaddq_f32 (vmulq_f32 (rb, ci), vmulq_f32 (ib, cr));
-                    const float32x4_t ra = vld1q_f32 (re + a), ia = vld1q_f32 (im + a);
-                    vst1q_f32 (re + b, vsubq_f32 (ra, tr));
-                    vst1q_f32 (im + b, vsubq_f32 (ia, ti));
-                    vst1q_f32 (re + a, vaddq_f32 (ra, tr));
-                    vst1q_f32 (im + a, vaddq_f32 (ia, ti));
+                    const int a = start + k, b = a + h, c = b + h, d = c + h;
+                    const float32x4_t c1 = vld1q_f32 (w1r + k), s1 = vld1q_f32 (w1i + k), c2 = vld1q_f32 (w2r + k), s2 = vld1q_f32 (w2i + k);
+                    const float32x4_t rb = vld1q_f32 (re + b), ib = vld1q_f32 (im + b), rd = vld1q_f32 (re + d), id = vld1q_f32 (im + d);
+                    const float32x4_t ra = vld1q_f32 (re + a), ia = vld1q_f32 (im + a), rc = vld1q_f32 (re + c), ic = vld1q_f32 (im + c);
+                    // the stage h: (a, b) and (c, d) with the twiddle of k
+                    const float32x4_t tbr = vsubq_f32 (vmulq_f32 (rb, c1), vmulq_f32 (ib, s1)), tbi = vaddq_f32 (vmulq_f32 (rb, s1), vmulq_f32 (ib, c1));
+                    const float32x4_t tdr = vsubq_f32 (vmulq_f32 (rd, c1), vmulq_f32 (id, s1)), tdi = vaddq_f32 (vmulq_f32 (rd, s1), vmulq_f32 (id, c1));
+                    const float32x4_t par = vaddq_f32 (ra, tbr), pai = vaddq_f32 (ia, tbi), pbr = vsubq_f32 (ra, tbr), pbi = vsubq_f32 (ia, tbi);
+                    const float32x4_t pcr = vaddq_f32 (rc, tdr), pci = vaddq_f32 (ic, tdi), pdr = vsubq_f32 (rc, tdr), pdi = vsubq_f32 (ic, tdi);
+                    // the stage 2 h: (a, c) with the twiddle of k, (b, d) with i times it
+                    const float32x4_t ucr = vsubq_f32 (vmulq_f32 (pcr, c2), vmulq_f32 (pci, s2)), uci = vaddq_f32 (vmulq_f32 (pcr, s2), vmulq_f32 (pci, c2));
+                    const float32x4_t udr = vsubq_f32 (vmulq_f32 (pdr, c2), vmulq_f32 (pdi, s2)), udi = vaddq_f32 (vmulq_f32 (pdr, s2), vmulq_f32 (pdi, c2));
+                    vst1q_f32 (re + a, vaddq_f32 (par, ucr));
+                    vst1q_f32 (im + a, vaddq_f32 (pai, uci));
+                    vst1q_f32 (re + c, vsubq_f32 (par, ucr));
+                    vst1q_f32 (im + c, vsubq_f32 (pai, uci));
+                    vst1q_f32 (re + b, vaddq_f32 (pbr, vnegq_f32 (udi)));
+                    vst1q_f32 (im + b, vaddq_f32 (pbi, udr));
+                    vst1q_f32 (re + d, vsubq_f32 (pbr, vnegq_f32 (udi)));
+                    vst1q_f32 (im + d, vsubq_f32 (pbi, udr));
                 }
-#else
-            (void) neon;
 #endif
             for (; k < h; ++k)
             {
-                const int a = start + k, b = a + h;
-                const float tr = re[b] * wr[k] - im[b] * wi[k], ti = re[b] * wi[k] + im[b] * wr[k];
-                re[b] = re[a] - tr;
-                im[b] = im[a] - ti;
-                re[a] += tr;
-                im[a] += ti;
+                const int a = start + k, b = a + h, c = b + h, d = c + h;
+                const float tbr = re[b] * w1r[k] - im[b] * w1i[k], tbi = re[b] * w1i[k] + im[b] * w1r[k];
+                const float tdr = re[d] * w1r[k] - im[d] * w1i[k], tdi = re[d] * w1i[k] + im[d] * w1r[k];
+                const float par = re[a] + tbr, pai = im[a] + tbi, pbr = re[a] - tbr, pbi = im[a] - tbi;
+                const float pcr = re[c] + tdr, pci = im[c] + tdi, pdr = re[c] - tdr, pdi = im[c] - tdi;
+                const float ucr = pcr * w2r[k] - pci * w2i[k], uci = pcr * w2i[k] + pci * w2r[k];
+                const float udr = pdr * w2r[k] - pdi * w2i[k], udi = pdr * w2i[k] + pdi * w2r[k];
+                re[a] = par + ucr;
+                im[a] = pai + uci;
+                re[c] = par - ucr;
+                im[c] = pai - uci;
+                re[b] = pbr + (-udi);
+                im[b] = pbi + udr;
+                re[d] = pbr - (-udi);
+                im[d] = pbi - udr;
             }
         }
     }
