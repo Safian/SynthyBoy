@@ -3,8 +3,14 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Usage: python3 scripts/gen-overlay-layout-header.py [--json FILE] [--out FILE | --check]
+# Usage: python3 scripts/gen-overlay-layout-header.py [--json FILE] [--out FILE | --check] [--kinds name=n,...] [--namespace a::b::c]
 #   default: writes shell-mpc/overlay/overlay_layout.h next to the JSON; --check exits 1 when the header on disk is not what the JSON generates.
+#   --kinds     the kinds of the views of THIS layout: "page=16,play=5" ... (name = the "kind" of a view in the JSON, n = its number in the header). Without it SynthyBoy's table (KINDS below). A plugin
+#               made with the kit (template-mpc) gives its own; the page kinds of the kit are the numbers from 6 (shell-mpc/kit/page_set.h kFirstPageKind).
+#   --namespace the C++ namespace of the header (default synthyboy_mpc::overlay::layout, SynthyBoy's).
+# The JSON may carry "paramsBefore" (an integer, default 38 = SynthyBoy's four LFO cursors, 32 spectrum columns and two pad pressure parameters): the number of parameters between the plugin's own list and
+# "Overlay Instance", and "paramsAfterInstance" (default 27 = SynthyBoy's three Play selectors and 24 proxies): the parameters between "Overlay Instance" and "Q 1". The skin modules (scripts/mpc-skin-extras) read them;
+# the header does not carry them.
 # The JSON is the single source of the views (region, marker squares and their colours, the instance picture and its colour table): the skin module (scripts/mpc-skin-extras/50_filter_overlay.py) reads it
 # directly, the plugin includes the generated header. The header is committed; scripts/tests/test_mpc_skin_overlay.py checks that it is current.
 
@@ -29,12 +35,40 @@ def rgb(text):
 KINDS = {"filter": 0, "lfo": 1, "env": 3, "spectrum": 4, "play": 5, "filterui": 6, "mixer": 7, "fx": 8, "mod": 9, "macros": 10, "master": 11, "voice": 12, "envui": 13, "lfoui": 14, "oscui": 15}
 
 
-def render(layout):
+# the names of the kind constants of the header: kKind<Name>; the names that are not just capitalised
+KIND_NAMES = {"filterui": "FilterUi", "lfoui": "LfoUi", "envui": "EnvUi", "oscui": "OscUi"}
+
+
+def parse_kinds(text):
+    """'page=16,play=5' -> {'page': 16, 'play': 5}."""
+    kinds = {}
+    for item in text.split(","):
+        name, _, number = item.strip().partition("=")
+        if not name or not number.strip().lstrip("-").isdigit():
+            raise ValueError("--kinds: %r is not name=number" % item)
+        kinds[name.strip()] = int(number)
+    if not kinds:
+        raise ValueError("--kinds: no kind given")
+    return kinds
+
+
+def kind_constants(kinds):
+    """The two lines of the header that name the kinds and tell the page kinds. SynthyBoy's own table gives the lines the header always had."""
+    names = ", ".join("kKind%s = %d" % (KIND_NAMES.get(k, k.capitalize()), n) for k, n in kinds.items())
+    if "play" in kinds and "filterui" in kinds:
+        page = "kind == kKindPlay || kind >= kKindFilterUi"
+    else:
+        page = "kind >= %d" % min([n for n in kinds.values() if n >= 6] or [6])
+    return ["constexpr int %s;" % names, "constexpr bool isPageKind (int kind) { return %s; }   // a page the plugin draws entirely (its own touch handling, the host widgets hidden under it)" % page]
+
+
+def render(layout, kinds=None, namespace="synthyboy_mpc::overlay::layout", source="shell-mpc/overlay/overlay_layout.json"):
+    kinds = kinds or KINDS
     origin = layout["tabOriginY"]
     views = layout["views"]
     seen = {}
     for v in views:
-        if v["kind"] not in KINDS:
+        if v["kind"] not in kinds:
             raise ValueError("view %r: unknown kind %r" % (v["name"], v["kind"]))
         if len(v["markers"]) != 2:
             raise ValueError("view %r needs exactly two markers" % v["name"])
@@ -45,11 +79,15 @@ def render(layout):
                 if all(abs(((c >> s) & 255) - ((oc >> s) & 255)) <= 4 for s in (0, 8, 16)):
                     raise ValueError("marker colour %s of %r is within the detector's tolerance of the marker colour of %r" % (m["rgb"], v["name"], other))
             seen["%s/%s" % (v["name"], m["rgb"])] = c
-    row = layout["meterRow"]
-    row_w = row["columns"] * row["columnW"] + (row["columns"] - 1) * row["gap"]
-    for v in views:
-        if v["kind"] == "spectrum" and v["region"] != {"x": row["x"], "y": row["y"], "w": row_w, "h": row["h"]}:
-            raise ValueError("view %r: the region is not the bounding box of the row of the meters (meterRow)" % v["name"])
+    if any(v["kind"] == "spectrum" for v in views):
+        row = layout["meterRow"]
+        row_w = row["columns"] * row["columnW"] + (row["columns"] - 1) * row["gap"]
+        for v in views:
+            if v["kind"] == "spectrum" and v["region"] != {"x": row["x"], "y": row["y"], "w": row_w, "h": row["h"]}:
+                raise ValueError("view %r: the region is not the bounding box of the row of the meters (meterRow)" % v["name"])
+    for key in ("paramsBefore", "paramsAfterInstance"):
+        if key in layout and (not isinstance(layout[key], int) or layout[key] < 0):
+            raise ValueError("%s must be a whole number of parameters, 0 or more" % key)
     inst = layout["instance"]
     if inst["slots"] != 16 or len(inst["slotColours"]) != inst["slots"] or inst["frames"] != inst["steps"] + 1 or inst["slots"] + 2 > inst["frames"]:
         raise ValueError("instance: 16 slot colours, frames = steps + 1, room for blank + 16 slots + none")
@@ -79,17 +117,16 @@ def render(layout):
             if i["x"] < m["x"] + m["w"] + 1 and m["x"] < i["x"] + i["w"] + 1 and i["y"] < m["y"] + m["h"] + 1 and m["y"] < i["y"] + i["h"] + 1:
                 raise ValueError("view %r: the instance picture touches a marker" % v["name"])
     lines = [
-        "// GENERATED by scripts/gen-overlay-layout-header.py from shell-mpc/overlay/overlay_layout.json - do not edit by hand.",
+        "// GENERATED by scripts/gen-overlay-layout-header.py from %s - do not edit by hand." % source,
         "// SynthyBoy - MPC overlay: the views (region of a tab + two marker squares + the instance picture each) of the overlay skin, in SCREEN coordinates (landscape UI, 1280 x 800).",
         "// Copyright (C) 2026 Safian Szabolcs",
         "// SPDX-License-Identifier: AGPL-3.0-or-later",
         "#pragma once",
         "",
-        "namespace synthyboy_mpc { namespace overlay { namespace layout {",
+        " ".join("namespace %s {" % n for n in namespace.split("::")),
         "struct Rect { int x, y, w, h; };",
         "struct Marker { Rect rect; unsigned rgb; unsigned cover; };   // cover: the colour of what lies under the marker (a transparent view paints it over the marker)",
-        "constexpr int kKindFilter = 0, kKindLfo = 1, kKindEnv = 3, kKindSpectrum = 4, kKindPlay = 5, kKindFilterUi = 6, kKindMixer = 7, kKindFx = 8, kKindMod = 9, kKindMacros = 10, kKindMaster = 11, kKindVoice = 12, kKindEnvUi = 13, kKindLfoUi = 14, kKindOscUi = 15;",
-        "constexpr bool isPageKind (int kind) { return kind == kKindPlay || kind >= kKindFilterUi; }   // a page the plugin draws entirely (its own touch handling, the host widgets hidden under it)",
+        *kind_constants(kinds),
         "struct View { const char* name; int kind; int index; Rect region; bool opaque; Marker markers[2]; Rect instance; };   // instance: the film strip image bound to the display parameter \"Overlay Instance\" (one frame = this size)",
         "constexpr int kScreenW = %d;" % layout["screen"]["width"],
         "constexpr int kScreenH = %d;" % layout["screen"]["height"],
@@ -108,9 +145,9 @@ def render(layout):
         r = v["region"]
         ms = ", ".join("{ { %d, %d, %d, %d }, 0x%06x, 0x%06x }" % (m["x"], m["y"] + origin, m["w"], m["h"], rgb(m["rgb"]), rgb(m["cover"])) for m in v["markers"])
         i = v["instance"]
-        lines.append('    { "%s", %d, %d, { %d, %d, %d, %d }, %s, { %s }, { %d, %d, %d, %d } },   // tab "%s"' % (v["name"], KINDS[v["kind"]], v["index"], r["x"], r["y"] + origin, r["w"], r["h"],
+        lines.append('    { "%s", %d, %d, { %d, %d, %d, %d }, %s, { %s }, { %d, %d, %d, %d } },   // tab "%s"' % (v["name"], kinds[v["kind"]], v["index"], r["x"], r["y"] + origin, r["w"], r["h"],
                                                                                 "true" if v["opaque"] else "false", ms, i["x"], i["y"] + origin, i["w"], i["h"], v["tab"]))
-    lines += ["};", "}}} // namespace synthyboy_mpc::overlay::layout", ""]
+    lines += ["};", "}" * len(namespace.split("::")) + " // namespace " + namespace, ""]
     return "\n".join(lines)
 
 
@@ -119,8 +156,15 @@ def main(argv=None):
     ap.add_argument("--json", default=str(DEFAULT_JSON))
     ap.add_argument("--out", default=str(DEFAULT_OUT))
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--kinds", default=None, help="the kinds of this layout: name=number,... (default SynthyBoy's)")
+    ap.add_argument("--namespace", default="synthyboy_mpc::overlay::layout", help="the C++ namespace of the header")
     args = ap.parse_args(argv)
-    text = render(json.loads(Path(args.json).read_text(encoding="utf-8")))
+    json_path = Path(args.json).resolve()
+    try:
+        source = json_path.relative_to(ROOT).as_posix()
+    except ValueError:
+        source = json_path.name
+    text = render(json.loads(json_path.read_text(encoding="utf-8")), parse_kinds(args.kinds) if args.kinds else None, args.namespace, source)
     out = Path(args.out)
     if args.check:
         if not out.is_file() or out.read_text(encoding="utf-8") != text:

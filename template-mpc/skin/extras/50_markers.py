@@ -2,20 +2,18 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Run by scripts/apply-mpc-skin-extras.py --extras-dir template-mpc/skin/extras (tools/gen_skin.py does it). It REUSES the helpers of SynthyBoy's modules (scripts/mpc-skin-extras/50_filter_overlay.py:
-# the PNG writers, the marker and instance image components; 83_pages.py: the RangedEnabling that hides a widget) and adds nothing of its own but the parameter numbers of THIS plugin:
+# Run by scripts/apply-mpc-skin-extras.py --extras-dir template-mpc/skin/extras (tools/gen_skin.py does it). It runs the REAL modules of SynthyBoy's skin (scripts/mpc-skin-extras/50_filter_overlay.py:
+# the marker and instance picture components; 83_pages.py: the RangedEnabling that hides a widget, the Q-Link mapping, the Q-Link bounds) on THIS plugin's layout (skin/overlay_layout.json): the modules take the
+# layout file from the skin meta ("layout_path") and the parameter numbers from the layout's "paramsBefore" and "paramsAfterInstance" (migration step 9 of docs/ui-components/TEMPLATE.md). The parameter list is
 #     parameter list = [ params.json entries ] [ "Overlay Instance" ] [ "Q 1" .. "Q 16" ]     (template-mpc/src/demo_plugin.cpp)
-# so "Overlay Instance" is ctx.param_count and "Q 1" is ctx.param_count + 1.
+# so "Overlay Instance" is ctx.param_count (paramsBefore 0) and "Q 1" is ctx.param_count + 1 (paramsAfterInstance 0).
 
 import importlib.util
-import json
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 LAYOUT_JSON = HERE.parent / "overlay_layout.json"
 SCRIPTS = HERE.parent.parent.parent / "scripts" / "mpc-skin-extras"
-Q_PROXIES = 16
-KEEP = ("Overlay Marker", "Overlay Instance")   # the components the plugin finds the page by: never hidden
 
 
 def _load(name):
@@ -26,25 +24,7 @@ def _load(name):
 
 
 def apply(tui, qlinks, ctx):
-    overlay = _load("50_filter_overlay.py")
-    pages = _load("83_pages.py")
-    layout = json.loads(LAYOUT_JSON.read_text(encoding="utf-8"))
-    overlay_param = ctx.param_count            # "Overlay Instance"
-    first_q = overlay_param + 1                # "Q 1"
-    for view in layout["views"]:
-        tab = ctx.tab(view["tab"])
-        items = tab["componentDefinition"]["componentsData"]
-        overlay._add_markers(view, ctx, items)
-        overlay._add_instance(view, ctx, items, layout, overlay_param)
-        for c in items:
-            if not c["componentData"]["name"].startswith(KEEP):
-                pages._hide_while_page_is_up(c, overlay_param)
-        links = {"Q-Link %d" % i: -1 for i in range(1, 17)}
-        for i in range(Q_PROXIES):
-            links["Q-Link %d" % (i + 1)] = first_q + i
-        entry = [m for m in qlinks["Screen Mode Q-Links"]["map"] if m["Tab"] == tab["fnKeyIndex"] + 1 and m["SubTab"] == 1]
-        if len(entry) != 1:
-            raise ValueError("Q-Links.json has %d entries for the tab %r" % (len(entry), view["tab"]))
-        entry[0]["Q-Links"] = links
-        entry[0]["Bank Direction"] = "Row"
-        tab["qlinkBoundsData"] = ["%s %d %s %d" % (b.split()[0], pages.QLINK_BOUNDS_Y, b.split()[2], pages.QLINK_BOUNDS_H) for b in tab["qlinkBoundsData"]]
+    # the modules are inactive without the overlay variant in the skin meta: this plugin IS the overlay variant, its meta is the layout file and nothing else
+    ctx.meta = {"variant": "overlay", "layout_path": str(LAYOUT_JSON)}
+    _load("50_filter_overlay.py").apply(tui, qlinks, ctx)   # the markers and the instance picture of every view
+    _load("83_pages.py").apply(tui, qlinks, ctx)            # the widgets hidden while a page is up, the Q-Links on the Q proxies, the Q-Link bounds
