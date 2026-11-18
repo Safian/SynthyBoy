@@ -14,7 +14,7 @@ MPCKIT_SCOPE ("startup", "engine construct");        // logs "engine construct: 
 
 Levels: `error warn info debug trace`. A category is any string; use a few stable ones (`startup`, `q`, `overlay`, `audio`).
 Each line in the file: `<ms since start> <INF|WRN|...> <thread tag> <category> <text>`. Lines longer than 176 bytes are cut.
-The audio thread may log: the call formats into a fixed record and publishes it into a lock free ring (no allocation, no lock, no I/O); a full ring drops the record and counts it (the writer then writes `-- N records dropped --`). The thread tag is the low bits of `pthread_self ()` (no thread local storage).
+The audio thread may log: the call formats into a fixed record and publishes it into a lock free ring (no allocation, no lock, no I/O); a full ring drops the record and counts it (the writer then writes `-- N records dropped: the ring was full --`). The thread tag is the low bits of `pthread_self ()` (no thread local storage).
 
 ## Switching it on, on the device
 
