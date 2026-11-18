@@ -613,5 +613,15 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(ui_cov_new_parts_host PRIVATE cxx_std_17)
     target_compile_options(ui_cov_new_parts_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME ui_cov_new_parts_host COMMAND ui_cov_new_parts_host)
+
+    add_executable(ui_load_bar_host EXCLUDE_FROM_ALL ui/tests/load_bar_host.cpp)
+    target_include_directories(ui_load_bar_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(ui_load_bar_host PRIVATE Threads::Threads)
+    target_compile_features(ui_load_bar_host PRIVATE cxx_std_17)
+    target_compile_options(ui_load_bar_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME ui_load_bar_host COMMAND ui_load_bar_host)
 endif()
 
