@@ -40,6 +40,30 @@ if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB MATCHES "^[+-]?[0-9]+(\\.[0-9]+)?$" OR SYNTH
 endif()
 target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OUTPUT_GAIN_DB=${SYNTHYBOY_MPC_OUTPUT_GAIN_DB})
 
+# The program list of a plugin track (the PRESET pop-up of the host), grouped like the Sounds browser: docs/MPC.md "Preset list of a plugin track". A string:
+#   off            the flat list as ever (default; the program list is bit-identical to a build without this option)
+#   prefix-short   "<Bass|Lead|Pad|Pluck|Keys|FX>: <Name>", cut to 24 characters
+#   prefix-group   "<Browser group>: <Name>", cut to 24 characters at the write (the host's name buffer)
+#   headers        a header entry before every group ("-- BASS SUB+808 --"); a header loads the first preset of its group
+#   vst-categories the VST2 program category opcodes are answered (names unchanged, in the order of the groups)
+# These are experiments for the device: pass it with scripts/build-mpc.sh --cmake-arg -DSYNTHYBOY_MPC_PROGRAM_GROUPS=<mode>.
+set(SYNTHYBOY_MPC_PROGRAM_GROUPS "off" CACHE STRING "MPC shell: grouping of the host's program list (off, prefix-short, prefix-group, headers, vst-categories)")
+set_property(CACHE SYNTHYBOY_MPC_PROGRAM_GROUPS PROPERTY STRINGS off prefix-short prefix-group headers vst-categories)
+if(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "off")
+    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 0)
+elseif(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "prefix-short")
+    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 1)
+elseif(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "prefix-group")
+    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 2)
+elseif(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "headers")
+    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 3)
+elseif(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "vst-categories")
+    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 4)
+else()
+    message(FATAL_ERROR "SYNTHYBOY_MPC_PROGRAM_GROUPS must be off, prefix-short, prefix-group, headers or vst-categories, not '${SYNTHYBOY_MPC_PROGRAM_GROUPS}'")
+endif()
+target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_PROGRAM_GROUPS=${SYNTHYBOY_MPC_PROGRAM_GROUPS_N})
+
 # Peak limiter after the make-up gain: by default OFF (the signal may exceed 0 dBFS, the player can place a limiter insert on the track in the MPC).
 # SYNTHYBOY_MPC_OUTPUT_LIMITER=ON restores the stereo-linked peak limiter at -1 dBFS.
 option(SYNTHYBOY_MPC_OUTPUT_LIMITER "MPC shell: peak limiter at -1 dBFS after the make-up gain" OFF)
