@@ -122,6 +122,11 @@ private:
     std::atomic<int> stIntegers[8] = {};   // active, released, sustaining, heldKeys, lowestHeld, highestHeld, orphans, pedal
     std::atomic<unsigned> stCounters[4] = {};
     void publishStats() noexcept;
+    /** Bit i: voices[i] is active (each voice keeps its bit, Voice::attachPool; CPU-REVIEW-VOICE-MOD.md V10). forEachActive (f) calls f (i) for the active voices in ascending index, the
+        order of the loops over the pool it replaces (with kOwnSavingVoiceControl: those loops). */
+    uint64_t activeMask = 0;
+    template <class F> void forEachActive (F&& f) noexcept;
+    static_assert (kMaxVoices + 4 <= 64, "the active voices are bits of a 64 bit mask");
     std::atomic<unsigned> missingMask { 0 };
     // transport (set from any thread by the shell between blocks; read by the audio thread)
     std::atomic<double> tpBpm { 120.0 }, tpPos { 0.0 };

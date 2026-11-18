@@ -166,7 +166,7 @@ void Voice::prepare (double sampleRate)
 
 void Voice::reset() noexcept
 {
-    active = false;
+    setActive (false);
     released = false;
     for (auto& e : env)
         e.kill();
@@ -218,7 +218,7 @@ float Voice::curvedSource (float x, const CompiledModCurve* curve, float& state,
 
 void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
 {
-    active = true;
+    setActive (true);
     released = false;
     killFading = false;
     killElapsed = 0.0f;
@@ -352,7 +352,7 @@ void Voice::release (float velocity) noexcept
 
 void Voice::kill() noexcept
 {
-    active = false;
+    setActive (false);
     released = true;
     for (auto& e : env)
         e.kill();
@@ -1106,7 +1106,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         // the voice ends when the amplitude envelope is done (the last period still fades to zero)
         if ((ampCur <= 0.0f && ampPrev <= 0.0f) || (killFading && killGain <= 0.0f && ampPrev <= 0.0f))
         {
-            active = false;
+            setActive (false);
             outL = outR = 0.0f;
             lastLevel = 0.0f;
             return;

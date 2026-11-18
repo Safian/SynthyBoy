@@ -131,6 +131,13 @@ public:
     float noisePosition() const noexcept { return noiseUseSample ? noiseSv.playheadFraction() : -1.0f; }
 
     bool isActive() const noexcept { return active; }
+    /** The engine's bit set of the active voices of its pool (CPU-REVIEW-VOICE-MOD.md V10): this voice keeps bit `index` of *mask equal to isActive (). */
+    void attachPool (uint64_t* mask, int index) noexcept
+    {
+        poolMask = mask;
+        poolBit = uint64_t (1) << index;
+        setActive (active);
+    }
     bool isReleased() const noexcept { return released; }
     int key() const noexcept { return keyNum; }
     int playedKey() const noexcept { return played; }
@@ -259,6 +266,14 @@ private:
     float customShape (const CompiledShape& cs, float u) noexcept;
 
     const TickGlobals* gl = nullptr;
+    uint64_t* poolMask = nullptr;
+    uint64_t poolBit = 0;
+    void setActive (bool on) noexcept
+    {
+        active = on;
+        if (poolMask != nullptr)
+            *poolMask = on ? (*poolMask | poolBit) : (*poolMask & ~poolBit);
+    }
     // the tables of the keys, looked up once in prepare () (CPU-REVIEW-VOICE-MOD.md V11): paramIndex (), libKeys (), destLawOf () and paramTable () are function local statics whose guard
     // check (a load and a barrier on ARM) every call paid on the audio thread
     const ParamIndex* pidx = nullptr;
