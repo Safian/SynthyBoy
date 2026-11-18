@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <vector>
 
 namespace synthyboy::filters
@@ -16,13 +18,17 @@ constexpr float kPi = 3.14159265358979323846f;
 constexpr float kPi = static_cast<float> (M_PI);
 #endif
 
+/** 0 for a NaN, an infinity and a magnitude below 1e-18, else x. Written on the bit pattern: x is kept where its magnitude bits m satisfy
+    bits (1e-18) <= m < bits (infinity) (a NaN has m above the bits of infinity), one unsigned compare after a subtraction. The same result as the float tests
+    (isnan || isinf, then |x| < 1e-18) for every input (test_filter_pair checks all 2^32), without the float compares, which 32 bit ARM makes through the VFP
+    flags (vcmp, vmrs) with a branch each. */
 inline float sanitize (float x) noexcept
 {
-    if (std::isnan (x) || std::isinf (x))
-        return 0.0f;
-    if (std::abs (x) < 1e-18f)
-        return 0.0f;
-    return x;
+    const float tinyF = 1e-18f;
+    uint32_t u, tiny;
+    std::memcpy (&u, &x, 4);
+    std::memcpy (&tiny, &tinyF, 4); // (folded to a constant by the compiler)
+    return ((u & 0x7fffffffu) - tiny < 0x7f800000u - tiny) ? x : 0.0f;
 }
 
 inline float softClip (float x) noexcept

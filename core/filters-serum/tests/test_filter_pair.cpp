@@ -182,6 +182,34 @@ TEST (pair_kernels_give_the_samples_of_two_process_calls_to_the_last_bit)
     }
 }
 
+namespace
+{
+/** sanitize () as it was written with float tests (filter_dsp.h writes it on the bit pattern now): the reference of the test below. */
+float sanitizeFloatTests (float x)
+{
+    if (std::isnan (x) || std::isinf (x))
+        return 0.0f;
+    if (std::abs (x) < 1e-18f)
+        return 0.0f;
+    return x;
+}
+} // namespace
+
+TEST (scalar_sanitize_on_the_bit_pattern_equals_the_float_tests_on_every_bit_pattern)
+{
+    long long bad = 0;
+    for (uint64_t u = 0; u < (1ull << 32); ++u)
+    {
+        const uint32_t b = static_cast<uint32_t> (u);
+        float x;
+        std::memcpy (&x, &b, 4);
+        const float got = sanitize (x), want = sanitizeFloatTests (x);
+        bad += std::memcmp (&got, &want, 4) != 0 ? 1 : 0;
+    }
+    std::printf ("    all 2^32 inputs: sanitize differs from the float tests in %lld\n", bad);
+    CHECK_EQ (bad, 0);
+}
+
 TEST (lane_sanitize_and_soft_clip_equal_the_scalar_functions_on_every_bit_pattern)
 {
 #if SYNTHYBOY_FILTER_NEON
@@ -199,7 +227,7 @@ TEST (lane_sanitize_and_soft_clip_equal_the_scalar_functions_on_every_bit_patter
         {
             s[l] = vs.get (l);
             c[l] = vc.get (l);
-            const float ws = sanitize (x[l]), wc = softClip (x[l]);
+            const float ws = sanitizeFloatTests (x[l]), wc = softClip (x[l]);
             badSan += std::memcmp (&s[l], &ws, 4) != 0 ? 1 : 0;
             // softClip of a NaN is a NaN in both (its payload is the hardware's): compared as "both NaN"
             badClip += (std::isnan (wc) ? ! std::isnan (c[l]) : std::memcmp (&c[l], &wc, 4) != 0) ? 1 : 0;

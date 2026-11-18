@@ -142,7 +142,7 @@ public:
         smoothedCutoff_ += smoothCoeff * (targetCutoff - smoothedCutoff_);
         smoothedRes_ += smoothCoeff * (targetRes - smoothedRes_);
 
-        const float out = processInternal (in, smoothedCutoff_, smoothedRes_);
+        const float out = processInternal (in, smoothedCutoff_, smoothedRes_, tanM (kPi * smoothedCutoff_ / srFloat), callParams());
         return sanitize (out);
     }
 
@@ -153,18 +153,25 @@ public:
         const float smoothCoeff = std::min (0.05f, 180.0f / srFloat);
         const int hold = params_.coefHold;
         int holdCount = 0; // i % hold without the integer division, which 32 bit ARM makes through a library call, once per sample
+        // what processInternal () took from the parameters every sample is the same for the whole call (CPU review F7): clamped once here; the targets too when no
+        // per sample modulation is given (the engine gives none)
+        const CallParams k = callParams();
+        const float fixedTargetCutoff = std::max (20.0f, std::min (params_.cutoff, srFloat * 0.49f));
+        const float fixedTargetRes = std::max (0.0f, std::min (params_.resonance, 1.0f));
+        // g = tanM (pi cutoff / sr) of processInternal (): redone only when the cutoff it runs on changes (bit for bit), which with a coefficient hold is once per hold
+        uint32_t gCutoffBits = 0;
+        bool haveG = false;
+        float g = 0.0f;
 
         for (int i = 0; i < numSamples; ++i)
         {
-            float targetCutoff = params_.cutoff;
+            float targetCutoff = fixedTargetCutoff;
             if (cutoffMod != nullptr)
-                targetCutoff = cutoffMod[i];
-            targetCutoff = std::max (20.0f, std::min (targetCutoff, srFloat * 0.49f));
+                targetCutoff = std::max (20.0f, std::min (cutoffMod[i], srFloat * 0.49f));
 
-            float targetRes = params_.resonance;
+            float targetRes = fixedTargetRes;
             if (resMod != nullptr)
-                targetRes = resMod[i];
-            targetRes = std::max (0.0f, std::min (targetRes, 1.0f));
+                targetRes = std::max (0.0f, std::min (resMod[i], 1.0f));
 
             smoothedCutoff_ += smoothCoeff * (targetCutoff - smoothedCutoff_);
             smoothedRes_ += smoothCoeff * (targetRes - smoothedRes_);
@@ -176,8 +183,17 @@ public:
             if (++holdCount >= hold)
                 holdCount = 0;
 
+            const float cutoff = hold <= 1 ? smoothedCutoff_ : heldCutoff_;
+            uint32_t cutoffBits;
+            std::memcpy (&cutoffBits, &cutoff, 4);
+            if (!haveG || cutoffBits != gCutoffBits)
+            {
+                g = tanM (kPi * cutoff / srFloat);
+                gCutoffBits = cutoffBits;
+                haveG = true;
+            }
             const float sampleIn = sanitize (in[i]);
-            out[i] = sanitize (processInternal (sampleIn, hold <= 1 ? smoothedCutoff_ : heldCutoff_, hold <= 1 ? smoothedRes_ : heldRes_));
+            out[i] = sanitize (processInternal (sampleIn, cutoff, hold <= 1 ? smoothedRes_ : heldRes_, g, k));
         }
     }
 
@@ -671,7 +687,22 @@ private:
         a2 = V::sanitized (v2 + lp);
     }
 
-    float processInternal (float in, float cutoff, float res) noexcept;
+    /** The parameters processInternal () uses besides cutoff and resonance, clamped as it clamped them every sample: the same for a whole call. */
+    struct CallParams
+    {
+        float drive, var, blend, mix;
+    };
+    CallParams callParams() const noexcept
+    {
+        CallParams k;
+        k.drive = std::max (0.0f, std::min (params_.drive, 1.0f));
+        k.var = std::max (0.0f, std::min (params_.var, 1.0f));
+        k.blend = std::max (0.0f, std::min (params_.blend, 1.0f));
+        k.mix = std::max (0.0f, std::min (params_.mix, 1.0f));
+        return k;
+    }
+    /** One sample of the type; g = tanM (pi cutoff / sr) and the clamped parameters are given by the caller (computed once per cutoff and once per call). */
+    float processInternal (float in, float cutoff, float res, float g, const CallParams& k) noexcept;
 
     // A small cache of the transcendental functions of the coefficients (the same argument gives the same result: nothing changes in the output). Cutoff and resonance move
     // slowly or not at all, so most samples ask for the arguments of the sample before.
@@ -761,15 +792,14 @@ private:
     float shHeld_ = 0.0f;
 };
 
-float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
+float FilterImpl::processInternal (float in, float cutoff, float res, float g, const CallParams& k) noexcept
 {
     const auto srFloat = static_cast<float> (sampleRate_);
-    const float g = tanM (kPi * cutoff / srFloat);
     const float R = 1.0f - 0.96f * res;
-    const float drive = std::max (0.0f, std::min (params_.drive, 1.0f));
-    const float var = std::max (0.0f, std::min (params_.var, 1.0f));
-    const float blend = std::max (0.0f, std::min (params_.blend, 1.0f));
-    const float mix = std::max (0.0f, std::min (params_.mix, 1.0f));
+    const float drive = k.drive;
+    const float var = k.var;
+    const float blend = k.blend;
+    const float mix = k.mix;
 
     // Input drive
     const float driveGain = 1.0f + 2.5f * drive;
