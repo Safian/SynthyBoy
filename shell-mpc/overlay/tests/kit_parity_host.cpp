@@ -1,6 +1,8 @@
 // SynthyBoy - MPC overlay tests: the KIT PARITY test (migration steps 2 and 3 of docs/ui-components/TEMPLATE.md). The pages of SynthyBoy now reach the parameters through the kit's parameter source
 // (mpckit::synthyboy_adapter::Params) and the kit's text function (mpckit::formatValue); this test compares them with the old direct calls of the engine (a verbatim copy of the old ui_bind.h formatValue is kept
 // here as the reference) for EVERY parameter of the table at a spread of values: the lookups, the conversions, the page text, the host text, the stepped rule, and the write of uibind::writePlain / writeNorm.
+// It also holds the parity of the overlay runtime's tables (migration step 8): the page set of SynthyBoy against overlay_layout.h, the default instance colours, validatePages on SynthyBoy's layout and on broken ones,
+// and the file names of the default branding against the old literal paths.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <algorithm>
@@ -10,7 +12,10 @@
 #include <string>
 #include <vector>
 
+#include "../../kit/branding.h"
+#include "../../kit/synthyboy_adapter.h"
 #include "../../q_step_rule.h"
+#include "../controller.h"
 #include "../ui_bind.h"
 
 using namespace synthyboy_mpc;
@@ -161,6 +166,65 @@ int main()
     kit.valueText (0, 0.0f, tiny, 0);
     check (tiny[0] == 'x', "a buffer of size 0 is not touched");
 
+    // ---- the page set of SynthyBoy (kit/synthyboy_adapter.h) is the generated layout, and passes the checks of the generator
+    {
+        namespace L = layout;
+        const mpckit::IPageSet& set = mpckit::synthyboy_adapter::PageSet::get();
+        check (set.numPages() == L::kNumViews, "the page set has the " + std::to_string (L::kNumViews) + " views of overlay_layout.h");
+        bool same = true;
+        for (int i = 0; i < L::kNumViews && same; ++i)
+        {
+            const mpckit::PageDef& d = set.page (i);
+            const L::View& v = L::kViews[i];
+            same = std::string (d.name) == v.name && d.kind == v.kind && d.index == v.index && d.opaque == v.opaque && d.region.x == v.region.x && d.region.y == v.region.y && d.region.w == v.region.w && d.region.h == v.region.h
+                   && d.instance.x == v.instance.x && d.instance.y == v.instance.y && d.instance.w == v.instance.w && d.instance.h == v.instance.h;
+            for (int m = 0; m < 2; ++m)
+                same = same && d.markers[m].rgb == v.markers[m].rgb && d.markers[m].cover == v.markers[m].cover && d.markers[m].rect.x == v.markers[m].rect.x && d.markers[m].rect.y == v.markers[m].rect.y;
+            same = same && mpckit::isPageKind (d.kind) == L::isPageKind (d.kind);
+        }
+        check (same, "every page of the set is the entry of the generated table (name, kind, index, region, markers, instance picture, page kind)");
+        const mpckit::InstanceColours& c = set.instanceColours();
+        const mpckit::InstanceColours defaults;
+        bool colours = c.none == L::kInstanceNoneRgb && c.blank == L::kInstanceBlankRgb && defaults.none == L::kInstanceNoneRgb && defaults.blank == L::kInstanceBlankRgb;
+        for (int s = 0; s < L::kMaxInstances; ++s)
+            colours = colours && c.slot[s] == L::kInstanceSlotRgb[s] && defaults.slot[s] == L::kInstanceSlotRgb[s];
+        check (colours, "the instance colours of the set, and the kit's defaults, are those of overlay_layout.h");
+        std::string why;
+        check (mpckit::validatePages (set, why), "SynthyBoy's page set passes validatePages (" + why + ")");
+
+        // a table with a fault is refused, each with its own reason
+        struct Broken : mpckit::IPageSet
+        {
+            std::vector<mpckit::PageDef> defs;
+            mpckit::InstanceColours colours;
+            int numPages() const noexcept override { return static_cast<int> (defs.size()); }
+            const mpckit::PageDef& page (int i) const noexcept override { return defs[static_cast<size_t> (i)]; }
+            const mpckit::InstanceColours& instanceColours() const noexcept override { return colours; }
+        };
+        auto fresh = [&] { Broken b; for (int i = 0; i < set.numPages(); ++i) b.defs.push_back (set.page (i)); return b; };
+        { Broken b = fresh(); b.defs[1].markers[0].rgb = b.defs[0].markers[0].rgb + 3; check (! mpckit::validatePages (b, why), "two marker colours within the tolerance are refused: " + why); }
+        { Broken b = fresh(); b.colours.slot[3] = b.defs[2].markers[1].rgb; check (! mpckit::validatePages (b, why), "an instance colour that is a marker colour is refused: " + why); }
+        { Broken b = fresh(); b.colours.blank = b.colours.none + 2; check (! mpckit::validatePages (b, why), "two instance colours within the tolerance are refused: " + why); }
+        { Broken b = fresh(); b.defs[0].markers[1].cover = b.colours.slot[0]; check (! mpckit::validatePages (b, why), "an instance colour that is the colour under a marker is refused: " + why); }
+        { Broken b = fresh(); b.defs[4].instance = { 2000, 2000, 6, 6 }; check (! mpckit::validatePages (b, why), "an instance picture outside its region is refused: " + why); }
+        { Broken b = fresh(); b.defs[4].instance = { b.defs[4].markers[0].rect.x + 3, b.defs[4].markers[0].rect.y, 6, 6 }; check (! mpckit::validatePages (b, why), "an instance picture on a marker is refused: " + why); }
+        { Broken b = fresh(); while (b.numPages() < 25) b.defs.push_back (b.defs[0]); check (! mpckit::validatePages (b, why), "more than 24 pages are refused: " + why); }
+        { Broken b = fresh(); b.defs.clear(); check (! mpckit::validatePages (b, why), "no page is refused: " + why); }
+    }
+    // ---- the branding: the default is SynthyBoy's (the old literal names), a plugin's own prefix gives its own
+    {
+        const Paths old;
+        const Paths now = Paths::forBranding (mpckit::Branding());
+        check (now.killSwitch == old.killSwitch && now.rotation == old.rotation && now.noGpu == old.noGpu && now.status == old.status && now.statusRequest == old.statusRequest && now.detail == old.detail && now.gpuClock == old.gpuClock
+               && now.rate == old.rate && now.pointerHotSpot == old.pointerHotSpot && now.look == old.look && now.dumpRequest == old.dumpRequest && now.dump == old.dump && now.qlinkSettings == old.qlinkSettings && now.backlightDir == old.backlightDir,
+               "Paths::forBranding (default) is the paths the controller always had");
+        const mpckit::Branding own { "mpckit-demo", "mpckit-demo-overlay-gpu", "MPCKIT_DEMO_Q_KNOBS" };
+        const Paths mine = Paths::forBranding (own);
+        check (mine.killSwitch == "/tmp/mpckit-demo-overlay-off" && mine.status == "/tmp/mpckit-demo-overlay-status.txt" && mine.look == "/tmp/mpckit-demo-overlay-look" && mine.qlinkSettings == old.qlinkSettings, "a plugin's branding gives its own files in /tmp, the host's own files stay");
+        check (std::string (mpckit::branding().prefix) == "synthyboy" && mpckit::tmpFile ("overlay-zpos-rest") == "/tmp/synthyboy-overlay-zpos-rest" && mpckit::tmpFile ("overlay-gpu-minfreq.orig") == "/tmp/synthyboy-overlay-gpu-minfreq.orig" && mpckit::tmpFile (own, "overlay-gpu.log") == "/tmp/mpckit-demo-overlay-gpu.log",
+               "the runtime's other files (zpos rest, GPU clock state, helper log) follow the branding; the default is the old names");
+        check (std::string (mpckit::branding().helperName) == "synthyboy-overlay-gpu" && std::string (mpckit::branding().qKnobsEnv) == "SYNTHYBOY_MPC_Q_KNOBS", "the default helper name and Q knob variable are SynthyBoy's");
+    }
     std::printf ("%s: %d checks, %d failed\n", g_fails ? "FAIL" : "PASS", g_checks, g_fails);
     return g_fails ? 1 : 0;
 }

@@ -40,6 +40,7 @@
 #include <drm/drm_mode.h>
 #include <linux/dma-buf.h>
 
+#include "../kit/branding.h"
 #include "../safe_file.h"
 #include "discovery.h"
 #include "drm_interfaces.h"
@@ -193,13 +194,13 @@ public:
         return ids;
     }
     // the rest value of the plane's zpos, outside the process (stacking.h IZposDriver): one small file, "<plane> <value>"; never followed through a symlink (safe_file.h)
-    static constexpr const char* kRestFile = "/tmp/synthyboy-overlay-zpos-rest";
+    static std::string restFile() { return mpckit::tmpFile ("overlay-zpos-rest"); }   // (the branding of the plugin: kit/branding.h; SynthyBoy: /tmp/synthyboy-overlay-zpos-rest)
     bool loadRest (uint32_t plane, uint64_t& value) override
     {
         char text[safefile::kSwitchBytes];
         unsigned long p = 0;
         unsigned long long v = 0;
-        if (safefile::readSmall (kRestFile, text, sizeof text) <= 0 || std::sscanf (text, "%lu %llu", &p, &v) != 2 || p != plane)
+        if (safefile::readSmall (restFile().c_str(), text, sizeof text) <= 0 || std::sscanf (text, "%lu %llu", &p, &v) != 2 || p != plane)
             return false;
         value = v;
         return true;
@@ -208,9 +209,9 @@ public:
     {
         char text[64];
         const int n = std::snprintf (text, sizeof text, "%u %llu\n", plane, static_cast<unsigned long long> (value));
-        safefile::writeSmall (kRestFile, text, static_cast<size_t> (n));
+        safefile::writeSmall (restFile().c_str(), text, static_cast<size_t> (n));
     }
-    void forgetRest (uint32_t) override { ::unlink (kRestFile); }
+    void forgetRest (uint32_t) override { ::unlink (restFile().c_str()); }
     /** The planes the application has on our CRTC right now (a plane that shows a framebuffer on it), our own plane left out: its pointer may have appeared since the discovery. */
     std::vector<uint32_t> liveAppPlanes()
     {

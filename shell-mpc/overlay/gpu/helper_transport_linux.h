@@ -10,6 +10,7 @@
 #pragma once
 
 #if defined(__linux__)
+#include "../../kit/branding.h"
 #include "../../write_files.h"
 #include <cerrno>
 #include <csignal>
@@ -37,11 +38,11 @@ class LinuxHelperTransport final : public IHelperTransport
 public:
     /** `helperPath`: the executable (next to the plugin). `logPath`: where its stdout / stderr go. */
 #if SYNTHYBOY_MPC_WRITE_FILES
-    static constexpr const char* kDefaultLog = "/tmp/synthyboy-overlay-gpu.log";
+    static std::string defaultLog() { return mpckit::tmpFile ("overlay-gpu.log"); }   // (the branding of the plugin: kit/branding.h; SynthyBoy: /tmp/synthyboy-overlay-gpu.log)
 #else
-    static constexpr const char* kDefaultLog = "/dev/null";   // the release build (write_files.h): the helper's output goes nowhere (trimLogFile ignores a device)
+    static std::string defaultLog() { return "/dev/null"; }   // the release build (write_files.h): the helper's output goes nowhere (trimLogFile ignores a device)
 #endif
-    LinuxHelperTransport (std::string helperPath, std::string logPath = kDefaultLog) : path_ (std::move (helperPath)), log_ (std::move (logPath)) {}
+    LinuxHelperTransport (std::string helperPath, std::string logPath = defaultLog()) : path_ (std::move (helperPath)), log_ (std::move (logPath)) {}
     ~LinuxHelperTransport() override
     {
         kill();
@@ -266,7 +267,7 @@ private:
     static int memfdCreate() noexcept
     {
 #if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 27))
-        return ::memfd_create ("synthyboy-overlay-gpu", MFD_CLOEXEC);
+        return ::memfd_create (mpckit::branding().helperName, MFD_CLOEXEC);   // (the name the helper process shows in /proc: the branding of the plugin)
 #else
         errno = ENOSYS;
         return -1;

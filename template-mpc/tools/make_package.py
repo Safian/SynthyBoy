@@ -3,8 +3,10 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Usage: python3 template-mpc/tools/make_package.py --out DIR [--arm32 FILE] [--arm64 FILE] [--sdk DIR]
+# Usage: python3 template-mpc/tools/make_package.py --out DIR [--arm32 FILE] [--arm64 FILE] [--helper32 FILE] [--helper64 FILE] [--sdk DIR]
 #   --arm32 / --arm64   the built module for that architecture (mpckit_demo.so); at least one. It is copied to VST/mpckitdemo-arm32.so / -arm64.so (the names in package/plugin.json).
+#   --helper32 / --helper64   the GPU helper of the overlay (mpckit-demo-overlay-gpu, built with -DMPCKIT_OVERLAY=ON) for that architecture; copied to VST/mpckit-demo-overlay-gpu-arm32 / -arm64, where the
+#                       plugin looks for it (the name is kBranding.helperName of src/overlay_hook.h). Without it the overlay draws with the CPU.
 #   The skin is generated into the folder (tools/gen_skin.py), plugin.json is package/plugin.json with file32 / file64 only for the binaries given, version.xml carries its version + ".0".
 #   The folder name is "<manufacturer> - VST - <name>" with the characters the MPC forbids removed (the rule of scripts/gen-mpc-manifest.py folder_name ()).
 # Copy the folder to the MPC's "VST2 Plugins" folder (see README); the SDK's validator (tools/validate.py of the SDK) checks it.
@@ -31,6 +33,8 @@ def main(argv=None):
     ap.add_argument("--out", required=True)
     ap.add_argument("--arm32")
     ap.add_argument("--arm64")
+    ap.add_argument("--helper32")
+    ap.add_argument("--helper64")
     ap.add_argument("--sdk", default=None)
     args = ap.parse_args(argv)
     if not args.arm32 and not args.arm64:
@@ -46,6 +50,11 @@ def main(argv=None):
             shutil.copyfile(src, folder / manifest[key])
         else:
             del manifest[key]
+    for arch, src in (("arm32", args.helper32), ("arm64", args.helper64)):   # the GPU helper of the overlay: next to the plugin binary, named <helperName>-<arch> (shell-mpc/overlay/service.h gpuHelperPath)
+        if src:
+            dst = folder / "VST" / ("mpckit-demo-overlay-gpu-" + arch)
+            shutil.copyfile(src, dst)
+            dst.chmod(0o755)
     cmd = [sys.executable, str(HERE / "gen_skin.py"), "--out", str(folder)]
     if args.sdk:
         cmd += ["--sdk", args.sdk]

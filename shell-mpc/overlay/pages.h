@@ -90,7 +90,8 @@ inline layout::View layoutViewOf (const mpckit::PageDef& d) noexcept
 class SynthyBoyPageFactory final : public mpckit::IPageFactory
 {
 public:
-    SynthyBoyPageFactory (ICurveRenderer& renderer, double fixedCostMs) noexcept : renderer_ (renderer), fixedCost_ (fixedCostMs) {}
+    /** `renderer`: the curve renderer of the views of the first overlay (null: the factory has a CPU renderer of its own); `fixedCostMs`: their fixed compute cost (-1: measured). The renderer given must outlive the factory. */
+    explicit SynthyBoyPageFactory (ICurveRenderer* renderer = nullptr, double fixedCostMs = -1.0) noexcept : renderer_ (renderer != nullptr ? *renderer : own_), fixedCost_ (fixedCostMs) {}
 
     std::unique_ptr<IView> make (const mpckit::PageDef& d) const override
     {
@@ -106,6 +107,25 @@ public:
                     return pages::make (d.name, d.kind, d.index);
                 return std::make_unique<NullView> (d.name);
         }
+    }
+
+    /** The readout targets of all pages of SynthyBoy without a controller or a renderer (the shell asks before the overlay exists). */
+    static void targetsOfAllPages (std::vector<int>& out)
+    {
+        FilterRendererStub stub;
+        SynthyBoyPageFactory (&stub, -1.0).readoutTargets (out);
+    }
+
+    /** The live block of the engine: synthyboy::LiveValues (IInstanceView::readLive). */
+    size_t liveBytes() const noexcept override { return sizeof (synthyboy::LiveValues); }
+    /** The readout values of a view whose targets start at `base` in the engine's list and number `count`: the pointer into the block only when ALL of them are in what the engine delivered (numTargets) and inside the
+        array; otherwise null, and the view draws without live values. */
+    const float* viewTargets (const void* live, int base, int count) const noexcept override
+    {
+        const synthyboy::LiveValues& lv = *static_cast<const synthyboy::LiveValues*> (live);
+        if (base < 0 || count <= 0 || count > synthyboy::LiveValues::kMaxTargets - base)
+            return nullptr;
+        return lv.numTargets >= base + count ? lv.target + base : nullptr;
     }
 
     void readoutTargets (std::vector<int>& out) const override
@@ -125,6 +145,7 @@ public:
     }
 
 private:
+    CpuCurveRenderer own_;
     ICurveRenderer& renderer_;
     double fixedCost_;
 };

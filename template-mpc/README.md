@@ -4,7 +4,7 @@ You only assemble your VST from ready UI elements: you write the **parameters**,
 
 This folder is a complete, small VST2 instrument ("MpcKit Demo": a sine through a state variable filter, 9 parameters) with three example pages built only from ready components. Licence: **AGPL-3.0-or-later**, as the file headers state (the library under `shell-mpc/` is the same licence; keep the headers when you copy files).
 
-Status of this template: see `docs/ui-components/TEMPLATE.md` ("Status"). In short: the plugin, the pages and the skin are complete; the overlay runtime that actually draws the pages on the MPC is linked in by migration step 8 of that document, until then the plugin plays and shows the host's own widgets.
+Status of this template: see `docs/ui-components/TEMPLATE.md` ("Status"). In short: the plugin, the pages and the skin are complete; the overlay runtime that actually draws the pages on the MPC is linked in with the CMake option `-DMPCKIT_OVERLAY=ON` (a Linux cross build; migration step 8 of that document: written, never built or run); without it the plugin plays and shows the host's own widgets.
 
 ## The file map
 
@@ -18,7 +18,7 @@ Status of this template: see `docs/ui-components/TEMPLATE.md` ("Status"). In sho
 | `src/demo_page_set.h` | the tabs: names, kinds, marker colours | yes, with `skin/overlay_layout.json` |
 | `src/demo_instance.h` | one instance: parameter mirror, engine, Q proxies, the "Overlay Instance" bookkeeping | rarely |
 | `src/demo_plugin.cpp` | the VST2 entry point and the display thread (plumbing) | rarely |
-| `src/overlay_hook.h` | the only place that touches the overlay runtime | no (step 8) |
+| `src/overlay_hook.h` | the only place that touches the overlay runtime (`mpckit::Overlay::attach` / `detach`, the page factory, the branding) | when you add a page |
 | `src/log_compat.h` | the developer log (`MPCKIT_LOG`) with an empty fallback | no |
 | `skin/params.json`, `skin/pages.json` | the parameters and the host widgets of each tab, for the skin generator | yes, in the same order as `demo_params.h` |
 | `skin/overlay_layout.json` | the tabs with their marker colours (the skin AND the plugin follow it) | yes |

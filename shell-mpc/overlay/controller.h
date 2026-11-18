@@ -30,19 +30,20 @@
 #include <unistd.h>
 #include <vector>
 
-#include "instance_view.h"
+#include "../kit/branding.h"
 #include "drm_interfaces.h"
 #include "gpu/gpu_overlay.h"
 #include "gpu_clock.h"
 #include "instance_slots.h"
-#include "overlay_layout.h"
-#include "../kit/synthyboy_adapter.h"
+#include "../kit/instance.h"
+#include "../kit/page_set.h"
 #include "page_detector.h"
 #include "panel_key.h"
 #include "mouse_router.h"
 #include "qlink_setting.h"
 #include "presenter.h"
 #include "standby.h"
+#include "../ui/theme.h"
 #include "renderer.h"
 #include "touch_input.h"
 #include "../safe_file.h"
@@ -51,9 +52,6 @@
 #include "ui_stack.h"
 #include "vblank_pacer.h"
 #include "view.h"
-#include "pages.h"
-#include "play_view.h"
-#include "views.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -73,6 +71,25 @@ struct Paths
     std::string dumpRequest = "/tmp/synthyboy-overlay-dump";
     std::string dump = "/tmp/synthyboy-overlay-curve.txt";
     std::string backlightDir = "/sys/class/backlight";   // the panel's backlight nodes (read only): the host's standby dim shows in them (standby.h)
+
+    /** The paths of a plugin with the given branding (kit/branding.h): /tmp/<prefix>-overlay-off ... The members above are the same names for SynthyBoy's branding (a test compares them). */
+    static Paths forBranding (const mpckit::Branding& b)
+    {
+        Paths p;
+        p.killSwitch = mpckit::tmpFile (b, "overlay-off");
+        p.rotation = mpckit::tmpFile (b, "overlay-rot");
+        p.noGpu = mpckit::tmpFile (b, "overlay-nogpu");
+        p.status = mpckit::tmpFile (b, "overlay-status.txt");
+        p.statusRequest = mpckit::tmpFile (b, "overlay-status-on");
+        p.detail = mpckit::tmpFile (b, "overlay-detail");
+        p.gpuClock = mpckit::tmpFile (b, "overlay-gpuclock");
+        p.rate = mpckit::tmpFile (b, "overlay-fps");
+        p.pointerHotSpot = mpckit::tmpFile (b, "overlay-pointer-hotspot");
+        p.look = mpckit::tmpFile (b, "overlay-look");
+        p.dumpRequest = mpckit::tmpFile (b, "overlay-dump");
+        p.dump = mpckit::tmpFile (b, "overlay-curve.txt");
+        return p;   // (qlinkSettings and backlightDir are the host's own files: no branding)
+    }
 };
 
 #ifndef SYNTHYBOY_MPC_OVERLAY_GPU_FRAME_MS
@@ -93,11 +110,14 @@ struct Timing
 class Controller
 {
 public:
-    /** `gpu`: the GPU helper (null: the CPU draws everything, as without the helper). Not owned. */
-    Controller (IPlaneBackend& backend, IFrameSource& frames, ICurveRenderer& renderer, const Paths& paths, const Timing& timing = Timing(), double fixedComputeCostMs = -1.0,
-                gpu::IGpuOverlay* gpuOverlay = nullptr, ITouchInput* touchInput = nullptr, const layout::View* viewTable = layout::kViews, int numViews = layout::kNumViews, bool deferViews = false)
-        : views_tbl_ (viewTable), numViews_ (std::min (numViews, static_cast<int> (Detection::kMaxViews))), backend_ (backend), presenter_ (backend), frames_ (frames), renderer_ (renderer), paths_ (paths), timing_ (timing), fixedCost_ (fixedComputeCostMs), gpu_ (gpuOverlay), touchIn_ (touchInput)
+    /** `gpuOverlay`: the GPU helper (null: the CPU draws everything, as without the helper). Not owned. `pages`: the tabs the plugin draws (the markers, the regions, the instance colours: kit/page_set.h);
+        `factory`: makes the view of each page and knows the plugin's live block (kit/page_set.h IPageFactory). Both are the plugin's and must outlive the controller. This class knows no engine: SynthyBoy's controller
+        for the tests is SynthyBoyController (controller_synthyboy.h). */
+    Controller (IPlaneBackend& backend, IFrameSource& frames, const Paths& paths, const Timing& timing, gpu::IGpuOverlay* gpuOverlay, ITouchInput* touchInput,
+                const mpckit::IPageSet& pages, mpckit::IPageFactory& factory, bool deferViews = false)
+        : pages_ (pages), factory_ (factory), numViews_ (std::min (pages.numPages(), static_cast<int> (Detection::kMaxViews))), backend_ (backend), presenter_ (backend), frames_ (frames), paths_ (paths), timing_ (timing), gpu_ (gpuOverlay), touchIn_ (touchInput)
     {
+        liveBuf_.resize ((factory_.liveBytes() + sizeof (std::max_align_t) - 1) / sizeof (std::max_align_t));
         if (! deferViews)
             buildViews();
         for (int& s : viewSlot_)
@@ -115,7 +135,7 @@ public:
         viewsBuilt_ = true;
         for (int i = 0; i < numViews_; ++i)
         {
-            const layout::View& v = views_tbl_[i];
+            const mpckit::PageDef& v = pages_.page (i);
             for (int m = 0; m < 2; ++m)
                 markers_[i * 2 + m] = { { v.markers[m].rect.x, v.markers[m].rect.y, v.markers[m].rect.w, v.markers[m].rect.h }, v.markers[m].rgb };
             regions_[i] = { v.region.x, v.region.y, v.region.w, v.region.h };
@@ -126,25 +146,13 @@ public:
             views_.back()->targets (targets_);
             targetCount_[i] = static_cast<int> (targets_.size()) - targetBase_[i];
         }
-        detector_ = std::make_unique<PageDetector> (frames_, markers_, numViews_, instanceRects_);
+        detector_ = std::make_unique<PageDetector> (frames_, markers_, numViews_, instanceRects_, &pages_.instanceColours());
         startupTimes().markUiStep (StartupTimes::kUiViewsBuilt);
     }
 
-    /** The table indices the overlay wants in the engine's readout (IEngine::setReadoutTargets), all views together; view i's targets start at targetBase (i). (SynthyBoy's page factory knows them: pages.h.) */
-    static void readoutTargets (std::vector<int>& out)
-    {
-        FilterRendererStub stub;
-        SynthyBoyPageFactory (stub, -1.0).readoutTargets (out);
-    }
-
-    /** The readout values of a view whose targets start at `base` in the engine's list and number `count`: the pointer into `lv` only when ALL of them are in what the engine delivered
-        (numTargets) and inside the array; otherwise null, and the view draws without live values. */
-    static const float* viewTargets (const synthyboy::LiveValues& lv, int base, int count) noexcept
-    {
-        if (base < 0 || count <= 0 || count > synthyboy::LiveValues::kMaxTargets - base)
-            return nullptr;
-        return lv.numTargets >= base + count ? lv.target + base : nullptr;
-    }
+    /** The table indices the overlay wants in the engine's readout (IEngine::setReadoutTargets), all views together (what the page factory says); view i's targets start at targetBase (i). Before a controller exists
+        SynthyBoy's shell asks SynthyBoyPageFactory::targetsOfAllPages (pages.h). */
+    void readoutTargets (std::vector<int>& out) const { factory_.readoutTargets (out); }
 
     // ---- instances (host threads; the lock is also held while the overlay thread uses an instance) ----
     /** Registers an instance and returns its slot (0 .. 15: the lowest free one, kept until detach). -1: all 16 slots are taken; such an instance never shows the overlay. */
@@ -211,7 +219,7 @@ public:
     UiStack uiState (int slot)
     {
         std::lock_guard<std::mutex> g (mu_);
-        return slot >= 0 && slot < layout::kMaxInstances ? ui_[slot] : UiStack();
+        return slot >= 0 && slot < mpckit::kMaxInstances ? ui_[slot] : UiStack();
     }
 
     /** The x the views cut their picture at (the left edge of what the host draws over the right part of the tab: its Q-Link panel; PanelKey::kNoKey: nothing), and how many times the key came or went (status file, tests). */
@@ -776,18 +784,18 @@ private:
     bool withUi (int slot, F&& f)
     {
         std::lock_guard<std::mutex> g (mu_);
-        return slot >= 0 && slot < layout::kMaxInstances && slots_.at (slot) != nullptr && f (ui_[slot]);
+        return slot >= 0 && slot < mpckit::kMaxInstances && slots_.at (slot) != nullptr && f (ui_[slot]);
     }
 
     /** The views the plugin draws entirely (the Play page with the full-screen pages over it, and the pages of the elements, page_view.h): the stack of an instance lives while one of these is on screen for it. */
-    bool isUiPage (int view) const noexcept { return view >= 0 && view < numViews_ && layout::isPageKind (views_tbl_[view].kind); }
+    bool isUiPage (int view) const noexcept { return view >= 0 && view < numViews_ && mpckit::isPageKind (pages_.page (view).kind); }
 
     /** The stack of the instance in `slot` belongs to a group of views: the three views of the Play page share one (the full screen of an element stays open when its sub-tab changes), every page of an
         element has its own. Another group on screen: the stack closes, and a page that always shows its element's page opens it. */
     void ensureUiPage (int slot, int view)
     {
         UiStack& u = ui_[slot];
-        const int group = views_tbl_[view].kind == layout::kKindPlay ? 0 : view + 1;
+        const int group = pages_.page (view).kind == mpckit::kPlayKind ? 0 : view + 1;
         if (uiGroup_[slot] != group)
         {
             u.closeAll();
@@ -808,7 +816,7 @@ private:
         if (d.view >= 0 && isUiPage (d.view) && (d.slot == kSlotUnknown || d.slot == kSlotNone))
             return;
         const int keep = d.view >= 0 && isUiPage (d.view) ? d.slot : -1;
-        for (int s = 0; s < layout::kMaxInstances; ++s)
+        for (int s = 0; s < mpckit::kMaxInstances; ++s)
             if (s != keep && ui_[s].closeAll())
             {
                 ++uiAutoCloses_;
@@ -822,7 +830,7 @@ private:
     {
         if (nowMs < nextReportMs_)
             return;
-        for (int s = 0; s < layout::kMaxInstances; ++s)
+        for (int s = 0; s < mpckit::kMaxInstances; ++s)
             if (mpckit::IInstance* v = slots_.at (s))
             {
                 v->setUiFullOpen (! ui_[s].isMain());   // what the controller knows is the truth: a stack that is closed never keeps the host widgets hidden
@@ -835,7 +843,7 @@ private:
 
     std::unique_ptr<IView> makeView (int i)
     {
-        return SynthyBoyPageFactory (renderer_, fixedCost_).make (mpckit::synthyboy_adapter::pageDefOf (views_tbl_[i]));   // (pages.h: the switch over the view kinds)
+        return factory_.make (pages_.page (i));   // (the plugin's factory: SynthyBoy's is in pages.h)
     }
 
     /** The touch screen: only while a view of the Play page is on screen (the plugin-drawn pages are there); the events go to the view, a running finger gets the clock for the long press. */
@@ -906,13 +914,13 @@ private:
             shownView_ = current_;
             view.onShown();   // another view was on screen: this one sets its shared state (the Q group) again
         }
-        synthyboy::LiveValues lv;
-        const bool haveLive = v->readLive (&lv, sizeof lv);   // (the instance's live block: the kit's opaque call, SynthyBoy's LiveValues)
+        const size_t liveBytes = factory_.liveBytes();   // the plugin's live block (SynthyBoy: synthyboy::LiveValues), read once a picture into a buffer the controller owns
+        const bool haveLive = liveBytes > 0 && v->readLive (liveBuf_.data(), liveBytes);
         ViewInput in;
         in.instance = v;
-        in.live = haveLive ? &lv : nullptr;
+        in.live = haveLive ? liveBuf_.data() : nullptr;
         const int base = targetBase_[current_];
-        in.targets = haveLive ? viewTargets (lv, base, targetCount_[current_]) : nullptr;
+        in.targets = haveLive ? factory_.viewTargets (liveBuf_.data(), base, targetCount_[current_]) : nullptr;
         in.nowMs = nowMs;
         in.frames = &frames_;
         in.rotation = rotation_;
@@ -1435,7 +1443,7 @@ private:
                 std::lock_guard<std::mutex> g (mu_);
                 if (activeSlot_ >= 0)
                     if (mpckit::IInstance* v = slots_.at (activeSlot_))
-                        static_cast<IInstanceView*> (v)->voiceStatus (vs);   // (SynthyBoy's diagnostic: every instance the controller holds here is an IInstanceView)
+                        v->diagnostics (vs);   // (the plugin's own lines: SynthyBoy's voices and held keys)
             }
             o << vs;   // the voices and the keys the engine believes are held (a stuck note shows as orphan_voices > 0 or held_keys > 0 with no key down)
             // the stepping of the Q proxies of the instance on screen: q_step_travel and q_knob_n (raw value, delta, travel)
@@ -1479,13 +1487,13 @@ private:
         for (int i = 0; i < numViews_; ++i)
         {
             const ViewCounters& c = views_[static_cast<size_t> (i)]->counters();
-            o << "view_" << views_tbl_[i].name << ": updates=" << c.updates << " changes=" << c.changes << " recomputes=" << c.recomputes << " frames=" << viewFrames_[static_cast<size_t> (i)].frames << "\n";
+            o << "view_" << pages_.page (i).name << ": updates=" << c.updates << " changes=" << c.changes << " recomputes=" << c.recomputes << " frames=" << viewFrames_[static_cast<size_t> (i)].frames << "\n";
         }
         char buf[200];
         for (int i = 0; i < numViews_; ++i)
         {
-            std::snprintf (buf, sizeof buf, "markers_read_%s: left=%06x right=%06x (expected %06x %06x)\n", views_tbl_[i].name, seen_[i][0] & 0xffffff, seen_[i][1] & 0xffffff,
-                           views_tbl_[i].markers[0].rgb, views_tbl_[i].markers[1].rgb);
+            std::snprintf (buf, sizeof buf, "markers_read_%s: left=%06x right=%06x (expected %06x %06x)\n", pages_.page (i).name, seen_[i][0] & 0xffffff, seen_[i][1] & 0xffffff,
+                           pages_.page (i).markers[0].rgb, pages_.page (i).markers[1].rgb);
             o << buf;
         }
         o << "panel: " << presenter_.panelWidth() << "x" << presenter_.panelHeight() << "\n";
@@ -1569,22 +1577,22 @@ private:
     static constexpr double kTouchPollMs = 12.0;     // the touch screen is read this often while the Play page is on screen
     static constexpr double kMinFrameGapMs = 5.0;    // never faster than this (a present waits for the vblank, 16.7 ms, anyway)
     static constexpr double kSlackMs = 3.0;
-    const layout::View* views_tbl_;   // the views of the skin (overlay_layout.h; a test gives its own table)
-    int numViews_;
+    const mpckit::IPageSet& pages_;   // the tabs the plugin draws (kit/page_set.h; SynthyBoy's: the adapter over overlay_layout.h, a test gives its own table)
+    mpckit::IPageFactory& factory_;   // makes the views of the pages, knows the live block (the plugin's)
+    int numViews_;   // (at most Detection::kMaxViews of them)
     IPlaneBackend& backend_;
     Presenter presenter_;
     IFrameSource& frames_;
-    ICurveRenderer& renderer_;
     Paths paths_;
     QLinkSettingFile qlinkOpt_ { paths_.qlinkSettings };   // the host's option for the pop-up (qlink_setting.h): read at the start and when the file changes; off: the key does nothing
     Timing timing_;
-    double fixedCost_;
     gpu::IGpuOverlay* gpu_ = nullptr;
     gpu::SceneData gpuScene_ {};
     bool noGpu_ = false, gpuShown_ = false, usingGpu_ = false, statusDue_ = false;
     int gpuView_ = -1, gpuRotation_ = 0, gpuSkipView_ = -1;
     unsigned long gpuFramesAtSecond_ = 0, gpuFramesAtShow_ = 0;
     std::function<std::string()> extraStatus_;
+    std::vector<std::max_align_t> liveBuf_;                // the plugin's live block of this picture (IInstance::readLive), the size the factory says
     standby::Backlight backlight_ { paths_.backlightDir };
     standby::Tracker standby_;
     std::atomic<double> dimFactor_ { standby::kDimFactor };   // the brightness of the host's picture while dimmed (measured, standby.h measureFactor)
@@ -1597,7 +1605,6 @@ private:
     bool rotationAmbiguous_ = false, paceApplied_ = false;
     unsigned planeLosses_ = 0, planeRefreshes_ = 0;
     std::string planeNote_ = "not on yet";
-    static_assert (layout::kNumViews <= Detection::kMaxViews, "the detector and the status file hold kMaxViews views: raise it with the layout");
     MarkerSpec markers_[Detection::kMaxViews * 2];
     Rect regions_[Detection::kMaxViews];
     ITouchInput* touchIn_ = nullptr;
@@ -1640,8 +1647,8 @@ private:
 
     std::mutex mu_;
     InstanceSlots slots_;                    // under mu_
-    UiStack ui_[layout::kMaxInstances];      // under mu_: the plugin-drawn pages of the instance in each slot
-    int uiGroup_[layout::kMaxInstances];     // under mu_: the group of views (ensureUiPage) the stack of each slot belongs to; -1: none yet
+    UiStack ui_[mpckit::kMaxInstances];      // under mu_: the plugin-drawn pages of the instance in each slot
+    int uiGroup_[mpckit::kMaxInstances];     // under mu_: the group of views (ensureUiPage) the stack of each slot belongs to; -1: none yet
     unsigned long uiAutoCloses_ = 0;         // stacks closed because the page left the screen (under mu_)
     int viewSlot_[Detection::kMaxViews];        // the slot whose instance each view object last read (-1: none yet); overlay thread
     unsigned long viewGeneration_[Detection::kMaxViews] = {};   // ... and which holder of that slot it was (InstanceSlots::generation): a slot given to a NEW instance is not the same instance

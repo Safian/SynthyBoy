@@ -97,7 +97,7 @@ int main()
     // ---- the readout targets: the union of the views, in the order of the layout ---------------------------------------------------------------------------------
     {
         std::vector<int> t;
-        Controller::readoutTargets (t);
+        SynthyBoyPageFactory::targetsOfAllPages (t);
         int f1[2], f2[2], o[4];
         synthyboy::FilterResponse::readoutIndices (1, f1);
         synthyboy::FilterResponse::readoutIndices (2, f2);
@@ -521,7 +521,7 @@ int main()
         FakeFrame frame; frame.views = legacy::kViews;
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+        SynthyBoyController ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
         inst.numTargets = 16;
         ctl.attach (&inst);
         double now = 0.0;
@@ -607,7 +607,7 @@ int main()
         auto shot = [&] (const char* view, auto setup)
         {
             TempDir dir; FakePlane plane; FakeFrame frame; CpuCurveRenderer renderer; FakeInstance inst; frame.views = legacy::kViews;
-            Controller ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+            SynthyBoyController ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
             setup (inst);
             ctl.attach (&inst);
             const int v = viewIndex (view);
@@ -620,7 +620,7 @@ int main()
             return s;
         };
         TempDir dir; FakePlane plane; FakeFrame frame; CpuCurveRenderer renderer; FakeInstance a, b; frame.views = legacy::kViews;
-        Controller ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+        SynthyBoyController ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
         setupA (a); setupB (b);
         check (ctl.attach (&a) == 0 && ctl.attach (&b) == 1, "two instances: slots 0 and 1");
         double now = 0.0;

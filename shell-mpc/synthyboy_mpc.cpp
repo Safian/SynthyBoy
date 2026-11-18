@@ -141,6 +141,8 @@
 #if !SYNTHYBOY_MPC_LFO_LIVE
 #error "SYNTHYBOY_MPC_OVERLAY needs SYNTHYBOY_MPC_LFO_LIVE (the display thread reports the display parameter 'Overlay Instance' to the host)"
 #endif
+#include "kit/synthyboy_adapter.h"
+#include "overlay/pages.h"
 #include "overlay/service.h"
 #include <exception>
 #include "play_log.h"
@@ -1285,7 +1287,7 @@ struct PluginInstance
             return;
         synthyboy_mpc::StartupDetailScope t (synthyboy_mpc::StartupTimes::kOverlayReadout);
         std::vector<int> idx;
-        synthyboy_mpc::overlay::Controller::readoutTargets (idx);
+        synthyboy_mpc::overlay::SynthyBoyPageFactory::targetsOfAllPages (idx);
         engine->setReadoutTargets (idx.data(), static_cast<int> (idx.size()));
     }
 
@@ -1300,7 +1302,10 @@ struct PluginInstance
 #endif
             publishOverlayContent();
         }
-        const int slot = synthyboy_mpc::overlay::Service::instance().attach (&overlayView);   // the slot stays this instance's until effClose; -1: more than 16 instances
+        // the plugin's tabs (overlay_layout.h) and the maker of their views, and the line of the status file only SynthyBoy knows (the quality profile of the device); the first instance of the process decides (service.h)
+        static synthyboy_mpc::overlay::SynthyBoyPageFactory pageFactory;
+        synthyboy_mpc::overlay::Service::instance().setStatus ([] { return "quality_profile: " + synthyboy_mpc::describeProfile (synthyboy_mpc::profileInForce().profile) + " (" + synthyboy_mpc::profileInForce().source + ")\n"; });
+        const int slot = synthyboy_mpc::overlay::Service::instance().attach (&overlayView, &mpckit::synthyboy_adapter::PageSet::get(), &pageFactory);   // the slot stays this instance's until effClose; -1: more than 16 instances
         overlaySlot.store (slot, std::memory_order_relaxed);
         overlayValue.store (synthyboy_mpc::overlay::instanceParamValue (slot), std::memory_order_relaxed);   // (the debug file is the display thread's business)
         overlayReportDue.store (true, std::memory_order_release);   // the first report: the display thread makes it

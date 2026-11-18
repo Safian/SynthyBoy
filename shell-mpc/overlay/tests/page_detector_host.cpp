@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "../overlay_layout.h"
 #include "../page_detector.h"
 
 using namespace synthyboy_mpc::overlay;

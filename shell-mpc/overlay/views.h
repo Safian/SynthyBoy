@@ -16,6 +16,7 @@
 #include "curve_source.h"
 #include "draw.h"
 #include "env_geometry.h"
+#include "overlay_layout.h"
 #include "renderer.h"
 #include "spectrum_curve.h"
 #include "synthyboy/lfo_display.h"

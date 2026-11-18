@@ -100,8 +100,35 @@ inline PageDef pageDefOf (const synthyboy_mpc::overlay::layout::View& v) noexcep
     return d;
 }
 
+/** IPageSet over a table of the generated form (synthyboy_mpc::overlay::layout::View, overlay_layout.h): the tables of the tests, and the table of SynthyBoy (PageSet). The instance colours are the ones of
+    overlay_layout.h. The table must have at least one entry and outlive nothing: the entries are copied. */
+class TablePageSet : public IPageSet
+{
+public:
+    TablePageSet (const synthyboy_mpc::overlay::layout::View* table, int count)
+    {
+        namespace L = synthyboy_mpc::overlay::layout;
+        defs_.resize (static_cast<size_t> (count > 0 ? count : 1));
+        for (int i = 0; i < count; ++i)
+            defs_[static_cast<size_t> (i)] = pageDefOf (table[i]);
+        count_ = count;
+        for (int s = 0; s < L::kMaxInstances; ++s)
+            colours_.slot[s] = L::kInstanceSlotRgb[s];
+        colours_.none = L::kInstanceNoneRgb;
+        colours_.blank = L::kInstanceBlankRgb;
+    }
+    int numPages() const noexcept override { return count_; }
+    const PageDef& page (int index) const noexcept override { return defs_[static_cast<size_t> (index < 0 ? 0 : (index >= count_ ? (count_ > 0 ? count_ - 1 : 0) : index))]; }
+    const InstanceColours& instanceColours() const noexcept override { return colours_; }
+
+private:
+    std::vector<PageDef> defs_;
+    InstanceColours colours_;
+    int count_ = 0;
+};
+
 /** IPageSet over the generated table synthyboy_mpc::overlay::layout::kViews (overlay_layout.h). The table has no separate tab name: `tab` is the view's name. */
-class PageSet final : public IPageSet
+class PageSet final : public TablePageSet
 {
 public:
     static const PageSet& get()
@@ -109,26 +136,13 @@ public:
         static const PageSet s;
         return s;
     }
-    int numPages() const noexcept override { return synthyboy_mpc::overlay::layout::kNumViews; }
-    const PageDef& page (int index) const noexcept override { return defs_[static_cast<size_t> (index < 0 ? 0 : (index >= numPages() ? numPages() - 1 : index))]; }
-    const InstanceColours& instanceColours() const noexcept override { return colours_; }
 
 private:
-    PageSet()
-    {
-        namespace L = synthyboy_mpc::overlay::layout;
-        defs_.resize (L::kNumViews);
-        for (int i = 0; i < L::kNumViews; ++i)
-        {
-            defs_[static_cast<size_t> (i)] = pageDefOf (L::kViews[i]);
-        }
-        for (int s = 0; s < L::kMaxInstances; ++s)
-            colours_.slot[s] = L::kInstanceSlotRgb[s];
-        colours_.none = L::kInstanceNoneRgb;
-        colours_.blank = L::kInstanceBlankRgb;
-    }
-    std::vector<PageDef> defs_;
-    InstanceColours colours_;
+    PageSet() : TablePageSet (synthyboy_mpc::overlay::layout::kViews, synthyboy_mpc::overlay::layout::kNumViews) {}
 };
+
+static_assert (synthyboy_mpc::overlay::layout::kMaxInstances == kMaxInstances && synthyboy_mpc::overlay::layout::kInstanceSteps == kInstanceSteps && synthyboy_mpc::overlay::layout::kInstanceFrames == kInstanceFrames,
+               "the generated layout and the kit agree on the film strip of the instance picture");
+static_assert (synthyboy_mpc::overlay::layout::kKindPlay == kPlayKind && synthyboy_mpc::overlay::layout::kKindFilterUi == kFirstPageKind, "the generated layout and the kit agree on the page kinds");
 
 }} // namespace mpckit::synthyboy_adapter

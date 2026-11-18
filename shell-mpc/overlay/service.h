@@ -11,6 +11,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <functional>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -22,7 +23,8 @@
 #include <dlfcn.h>
 #include <sched.h>
 #endif
-#include "../device_profile.h"
+#include "../kit/branding.h"
+#include "../kit/page_set.h"
 #include "../output_peak.h"
 #include "../play_log.h"
 #include "../startup_timing.h"
@@ -64,7 +66,8 @@ public:
 #endif
 
 #if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU)
-/** The helper executable next to the plugin binary: <folder of the .so>/synthyboy-overlay-gpu-<arch> (the package puts it into VST/ beside synthyboy-<arch>.so). Empty when the plugin's path is unknown. */
+/** The helper executable next to the plugin binary: <folder of the .so>/<helper name>-<arch> (the package puts it into VST/ beside the plugin binary; SynthyBoy: synthyboy-overlay-gpu-arm64 / -arm32, the name
+    is mpckit::Branding::helperName). Empty when the plugin's path is unknown. */
 inline std::string gpuHelperPath()
 {
     Dl_info info;
@@ -78,9 +81,9 @@ inline std::string gpuHelperPath()
         return {};
     dir.resize (slash);
 #if defined(__aarch64__)
-    return dir + "/synthyboy-overlay-gpu-arm64";
+    return dir + "/" + mpckit::branding().helperName + "-arm64";
 #else
-    return dir + "/synthyboy-overlay-gpu-arm32";
+    return dir + "/" + mpckit::branding().helperName + "-arm32";
 #endif
 }
 #endif
@@ -94,12 +97,32 @@ public:
         return *s;
     }
 
-    /** Returns the slot of the instance (0 .. 15, kept until detach; -1: more than 16 instances, this one never shows the overlay). */
-    int attach (mpckit::IInstance* view)
+    /** Returns the slot of the instance (0 .. 15, kept until detach; -1: more than 16 instances, this one never shows the overlay, or the plugin's pages are refused). `pages` and `factory` (kit/page_set.h) are the plugin's
+        tabs and the maker of their views, `branding` (kit/branding.h) the names of its files (null: SynthyBoy's): the FIRST attach of the process decides, a later attach of the same library finds the controller built and
+        its own arguments ignored (there is one overlay thread and one plane). A page set that fails mpckit::validatePages is refused (the reason is in the play log). The objects must outlive the overlay. */
+    int attach (mpckit::IInstance* view, const mpckit::IPageSet* pages, mpckit::IPageFactory* factory, const mpckit::Branding* branding = nullptr)
     {
         std::lock_guard<std::mutex> g (lifeMu_);
         if (stuck_)
             return -1;   // the overlay thread of an earlier run never ended (it is stuck in a call that does not return): no second thread on the same controller, this instance shows no overlay
+        if (! controller_)
+        {
+            if (pages == nullptr || factory == nullptr)
+                return -1;
+            std::string why;
+            if (! mpckit::validatePages (*pages, why))
+            {
+                synthyboy_mpc::PlayLog::line ("Service::attach: the page set is not valid: %s", why.c_str());
+                refused_ = true;
+                return -1;
+            }
+            if (branding != nullptr)
+                mpckit::setBranding (*branding);
+            pages_ = pages;
+            factory_ = factory;
+        }
+        if (refused_)
+            return -1;   // the page set was refused: no overlay for this library
         ensureController();
         const int slot = controller_->attach (view);
         synthyboy_mpc::PlayLog::line ("Service::attach slot %d, thread joinable %d", slot, thread_.joinable() ? 1 : 0);
@@ -146,6 +169,13 @@ public:
         return true;
     }
 
+    /** The plugin's own lines of the status file ("key: value\n" each; SynthyBoy: its quality profile, device_profile.h): called by the overlay thread once a second, from the Linux status text. Set it before attach. */
+    void setStatus (std::function<std::string()> f)
+    {
+        std::lock_guard<std::mutex> g (statusMu_);
+        statusHook_ = std::move (f);
+    }
+
 private:
     static constexpr int kDetachWaitMs = 2000;   // detach: the controller's lock
     static constexpr int kStopWaitMs = 2500;     // stopThread: the overlay thread to end (a vblank wait is bounded by the kernel at 3 s, the helper's kill at 2 s)
@@ -163,7 +193,7 @@ private:
     }
     static Paths shippedPaths()
     {
-        Paths p;
+        Paths p = Paths::forBranding (mpckit::branding());
 #if defined(SYNTHYBOY_MPC_DEBUG_HOOKS) && SYNTHYBOY_MPC_DEBUG_HOOKS
 #else
         p.pointerHotSpot.clear();
@@ -186,7 +216,6 @@ private:
         backend_ = std::make_unique<UnsupportedPlaneBackend>();
         frames_ = std::make_unique<UnsupportedFrameSource>();
 #endif
-        renderer_ = std::make_unique<CpuCurveRenderer>();
 #if defined(__linux__) && defined(SYNTHYBOY_MPC_OVERLAY_GPU)
         {
             gpu::GpuConfig cfg;
@@ -199,7 +228,7 @@ private:
         mouse_ = std::make_unique<LinuxMouseReader>();           // the mice: found at run time, hot plug, read only, never grabbed (mouse_linux.h)
         pointer_ = std::make_unique<LinuxPointerSource> (display_);   // the host's pointer plane: where the pointer is (drm_linux.h)
 #endif
-        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, shippedPaths(), shippedTiming(), -1.0, gpu_.get(), touch_.get(), layout::kViews, layout::kNumViews, true);   // true: the views are built by the overlay thread's first tick, not here (the host's thread)
+        controller_ = std::make_unique<Controller> (*backend_, *frames_, shippedPaths(), shippedTiming(), gpu_.get(), touch_.get(), *pages_, *factory_, true);   // true: the views are built by the overlay thread's first tick, not here (the host's thread)
 #if defined(__linux__)
         controller_->setMouse (mouse_.get(), pointer_.get());
         controller_->setExtraStatus ([this] { return cpuStatus(); });
@@ -334,6 +363,17 @@ private:
         return std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now().time_since_epoch()).count();
     }
 
+    /** The lines the plugin adds to the status file (setStatus): SynthyBoy's quality profile of the device. Called from the overlay thread once a second. */
+    std::string pluginStatus()
+    {
+        std::function<std::string()> f;
+        {
+            std::lock_guard<std::mutex> g (statusMu_);
+            f = statusHook_;
+        }
+        return f ? f() : std::string();
+    }
+
     std::string cpuStatus()
     {
         std::lock_guard<std::mutex> g (cpuMu_);
@@ -343,7 +383,7 @@ private:
             t += " " + n;
         char pk[160];
         std::snprintf (pk, sizeof pk, "\noutput_peak: %.5f\noutput_peak_total: %.5f\noutput_blocks: %lu\n", static_cast<double> (outputPeak().takeWindow()), static_cast<double> (outputPeak().total.load (std::memory_order_relaxed)), outputPeak().blocks.load (std::memory_order_relaxed));   // output_peak.h: what the plugin hands to the host
-        return t + (cpu_.plan.audioThreads.empty() ? " none" : "") + pk + "quality_profile: " + describeProfile (profileInForce().profile) + " (" + profileInForce().source + ")\n" + startupTimes().describe();   // startup_timing.h: open_ms_* and host_call_max_ms_*   // device_profile.h: the engine quality of this process
+        return t + (cpu_.plan.audioThreads.empty() ? " none" : "") + pk + pluginStatus() + startupTimes().describe();   // startup_timing.h: open_ms_* and host_call_max_ms_*   // device_profile.h: the engine quality of this process
     }
 
     std::mutex cpuMu_;
@@ -365,13 +405,17 @@ private:
 #endif
     std::unique_ptr<IPlaneBackend> backend_;
     std::unique_ptr<IFrameSource> frames_;
-    std::unique_ptr<ICurveRenderer> renderer_;
     std::unique_ptr<gpu::IHelperTransport> transport_;
     std::unique_ptr<gpu::IGpuOverlay> gpu_;
     std::unique_ptr<ITouchInput> touch_;
     std::unique_ptr<IMouseInput> mouse_;
     std::unique_ptr<IPointerSource> pointer_;
     std::unique_ptr<Controller> controller_;
+    bool refused_ = false;                            // under lifeMu_: the first page set did not pass validatePages
+    const mpckit::IPageSet* pages_ = nullptr;         // the tabs of the plugin (the first attach decides)
+    mpckit::IPageFactory* factory_ = nullptr;         // the maker of their views (the plugin's: SynthyBoy's is SynthyBoyPageFactory, pages.h)
+    std::mutex statusMu_;
+    std::function<std::string()> statusHook_;
 };
 
 }} // namespace synthyboy_mpc::overlay

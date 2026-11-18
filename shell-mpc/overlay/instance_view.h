@@ -90,6 +90,8 @@ public:
     /** Appends the voice and held key diagnostics of the instance to the status file (voices_active, voices_released, voices_sustaining, held_keys, held_lowest, held_highest, orphan_voices,
         note_ons, note_offs, note_offs_unmatched, voices_stolen, sustain_pedal, sound_off_requests): atomics the audio thread updates, no lock; nothing when the engine has none. */
     virtual void voiceStatus (std::string& /*out*/) const {}
+    /** The kit's diagnostics of an instance are SynthyBoy's voice status. */
+    void diagnostics (std::string& out) const override { voiceStatus (out); }
     /** The content the sound of this instance needs and does not have (IEngine::missingContent () bits; 0 = nothing missing). The oscillator page shows "content missing: ..." from it (the text is the page's). Lock free. */
     virtual unsigned missingContent() const noexcept { return 0; }
 };

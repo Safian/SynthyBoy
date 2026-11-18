@@ -10,7 +10,6 @@
 #include "../kit/instance.h"
 #include "drm_interfaces.h"
 #include "gpu/scene.h"
-#include "overlay_layout.h"
 #include "touch_decoder.h"
 #include "ui_stack.h"
 

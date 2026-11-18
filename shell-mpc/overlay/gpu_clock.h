@@ -17,6 +17,7 @@
 #include <dirent.h>
 #include <unistd.h>
 
+#include "../kit/branding.h"
 #include "../safe_file.h"
 
 namespace synthyboy_mpc { namespace overlay {
@@ -24,7 +25,9 @@ namespace synthyboy_mpc { namespace overlay {
 class GpuClock
 {
 public:
-    explicit GpuClock (std::string devfreqRoot = "/sys/class/devfreq", std::string stateFile = "/tmp/synthyboy-overlay-gpu-minfreq.orig", long long wantHz = 300000000LL)
+    /** The file that keeps the min_freq an earlier run raised (the branding of the plugin: kit/branding.h; SynthyBoy: /tmp/synthyboy-overlay-gpu-minfreq.orig). */
+    static std::string defaultStateFile() { return mpckit::tmpFile ("overlay-gpu-minfreq.orig"); }
+    explicit GpuClock (std::string devfreqRoot = "/sys/class/devfreq", std::string stateFile = defaultStateFile(), long long wantHz = 300000000LL)
         : root_ (std::move (devfreqRoot)), state_ (std::move (stateFile)), wantHz_ (wantHz) {}
     ~GpuClock() { release(); }
     GpuClock (const GpuClock&) = delete;

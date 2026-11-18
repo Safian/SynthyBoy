@@ -13,8 +13,6 @@
 #include <cstring>
 #include <string>
 
-#include "../kit/instance.h"
-#include "instance_view.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/modulation.h"
 
@@ -135,28 +133,6 @@ public:
 
 private:
     const MacroNames* previous_;
-};
-
-/** The hooks of PageView (page_view.h) for the pages of SynthyBoy: the macro names of the instance on screen are loaded from its content at every update and made the active ones (NamesScope) for everything the
-    view does; the loading bar follows IInstanceView::tablesLoading (). `Instance` is the type the pages take (every instance of SynthyBoy is an IInstanceView). A page of a plugin made with the kit uses
-    `NoHooks` (page_view.h) instead (migration step 6 of docs/ui-components/TEMPLATE.md). */
-class MacroNameHooks
-{
-public:
-    using Instance = IInstanceView;
-    /** Loads the names from the content of the instance. */
-    void update (mpckit::IInstance& inst)
-    {
-        const auto content = static_cast<IInstanceView&> (inst).content();   // the names of the macros the pages show: the ones of this instance, for everything the view does
-        names_.load (content.get());
-    }
-    /** The scope that makes the names the active ones (keep the object for as long as the names are used). */
-    NamesScope scope() const noexcept { return NamesScope (names_); }
-    /** A wavetable of the program is still being built (the bar at the top of the tab). */
-    bool loading (const mpckit::IInstance& inst) const noexcept { return static_cast<const IInstanceView&> (inst).tablesLoading(); }
-
-private:
-    MacroNames names_;
 };
 
 }} // namespace synthyboy_mpc::overlay

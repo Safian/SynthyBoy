@@ -1,11 +1,12 @@
 // SynthyBoy - MPC overlay tests: the table of views of the first overlay (a live filter curve over a region of a host tab, the LFO, oscillator, envelope and spectrum pictures, the Play tab), kept as it was for the
 // tests of the controller machinery (page detection, the instance picture, the slots, the status file, the failures of the plane): they need a view that is a picture of its own and not a page the plugin draws
-// entirely. The controller takes the table as an argument (Controller viewTable); the real layout is shell-mpc/overlay/overlay_layout.h.
+// entirely. The controller takes the table as a page set (pageSet () below: Controller's `pages` argument); the real layout is shell-mpc/overlay/overlay_layout.h.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
 #include "overlay_layout.h"
+#include "../../../kit/synthyboy_adapter.h"
 
 namespace synthyboy_mpc { namespace overlay { namespace legacy {
 
@@ -30,4 +31,11 @@ constexpr View kViews[kNumViews] = {
     { "play2", 5, 2, { 23, 124, 1234, 190 }, true, { { { 33, 134, 6, 6 }, 0x793a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a7964, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Play Env"
     { "play3", 5, 3, { 23, 124, 1234, 190 }, true, { { { 33, 134, 6, 6 }, 0x803a2c, 0x1e1d1e }, { { 1241, 134, 6, 6 }, 0x3a8064, 0x1e1d1e } }, { 45, 134, 6, 6 } },   // tab "Play LFO"
 };
+
+/** The table as the page set the controller takes (kit/page_set.h; the instance colours are those of overlay_layout.h). */
+inline const mpckit::IPageSet& pageSet()
+{
+    static const mpckit::synthyboy_adapter::TablePageSet set (kViews, kNumViews);
+    return set;
+}
 }}} // namespace synthyboy_mpc::overlay::legacy

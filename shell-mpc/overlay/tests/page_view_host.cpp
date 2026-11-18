@@ -15,7 +15,7 @@ using namespace ovt;
 
 namespace
 {
-/** A page of the KIT (mpckit::PageBase over mpckit::IInstance): one knob bound to a parameter by its key. It is the whole page; the view around it is PageView<KitPage, NoHooks>. */
+/** A page of the KIT (mpckit::PageBase over mpckit::IInstance): one knob bound to a parameter by its key. It is the whole page; the view around it is BasicPageView<KitPage, NoHooks>. */
 class KitPage : public mpckit::PageBase
 {
 public:
@@ -42,11 +42,11 @@ struct Rig
     FakeFrame frame;
     CpuCurveRenderer renderer;
     FakeInstance inst;
-    std::unique_ptr<Controller> ctl;
+    std::unique_ptr<SynthyBoyController> ctl;
     double now = 0.0;
     Rig()
     {
-        ctl = std::make_unique<Controller> (plane, frame, renderer, dir.paths(), Timing(), 10.0);
+        ctl = std::make_unique<SynthyBoyController> (plane, frame, renderer, dir.paths(), Timing(), 10.0);
         ctl->attach (&inst);
     }
     void run (double ms, double step = 10.0)
@@ -173,7 +173,7 @@ int main()
     // ---- the readout targets: the filter pages ask for the cutoff and the resonance of both filters
     {
         std::vector<int> t;
-        Controller::readoutTargets (t);
+        SynthyBoyPageFactory::targetsOfAllPages (t);
         int filterPages = 0;
         for (int i = 0; i < layout::kNumViews; ++i)
             filterPages += layout::kViews[i].kind == layout::kKindFilterUi ? 1 : 0;
@@ -185,13 +185,13 @@ int main()
         }
         check (filterPages == 2 && static_cast<int> (t.size()) == expect && expect <= synthyboy::LiveValues::kMaxTargets, "readout targets: " + std::to_string (t.size()) + " (the filter pages 4 each, the oscillator pages A, B, C 4 each, the Play views 12 each), within the engine's " + std::to_string (synthyboy::LiveValues::kMaxTargets));
     }
-    // ---- a page of the KIT over the page view (migration step 6): PageView<KitPage, NoHooks> takes mpckit::IInstance, loads no macro names and has no loading bar
+    // ---- a page of the KIT over the page view (migration step 6): BasicPageView<KitPage, NoHooks> takes mpckit::IInstance, loads no macro names and has no loading bar
     {
         FakeInstance inst;
         inst.set ("filter1.cutoff", 3000.0f);
         UiStack stack;
         stack.openFull (KitPage::kElementPage);
-        PageView<KitPage, NoHooks> pv ("kit", 1);
+        BasicPageView<KitPage, NoHooks> pv ("kit", 1);
         ViewInput in;
         in.instance = &inst; in.io = &inst; in.ui = &stack; in.nowMs = 1000.0;
         check (pv.update (in) && pv.valid() && pv.pageElement() == KitPage::kElementPage, "a kit page in the page view: the first update has a picture, the element is the page's");
@@ -212,12 +212,12 @@ int main()
         pv.update (in);
         check (std::fabs (pv.ui().knob().state.value - mpckit::synthyboy_adapter::Params::get().toNormalised (idx, inst.get ("filter1.cutoff"))) < 1.0e-6, "... and the next update shows it");
         // the SynthyBoy hooks are the default: the same view over a SynthyBoy page still loads the macro names and shows the loading bar
-        static_assert (std::is_same<PageView<FilterUi>, PageView<FilterUi, MacroNameHooks>>::value, "the default hooks of a page view are SynthyBoy's");
+        static_assert (std::is_same<PageView<FilterUi>, BasicPageView<FilterUi, MacroNameHooks>>::value, "the page view of SynthyBoy has its hooks");
     }
     // ---- the view factory of SynthyBoy (migration step 10): the view behind every page of the page set, and the readout targets all of them want
     {
         CpuCurveRenderer renderer;
-        SynthyBoyPageFactory factory (renderer, 10.0);
+        SynthyBoyPageFactory factory (&renderer, 10.0);
         const mpckit::IPageSet& set = mpckit::synthyboy_adapter::PageSet::get();
         bool all = set.numPages() == layout::kNumViews, names = true, elements = true;
         for (int i = 0; i < set.numPages() && all; ++i)
@@ -234,7 +234,7 @@ int main()
         check (all && names && elements, "the page factory makes a view for every page of the set: its name is the page's, a page of an element names its element, the Play view none");
         std::vector<int> a, b;
         factory.readoutTargets (a);
-        Controller::readoutTargets (b);
+        SynthyBoyPageFactory::targetsOfAllPages (b);
         check (! a.empty() && a == b, "the readout targets of the factory are the ones the controller reports (" + std::to_string (a.size()) + ")");
     }
     std::printf (g_fails ? "page_view_host: FAILED (%d)\n" : "page_view_host: OK\n", g_fails);

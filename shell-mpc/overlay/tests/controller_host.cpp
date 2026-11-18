@@ -17,13 +17,13 @@ struct Rig
     FakeFrame frame;
     CpuCurveRenderer renderer;
     FakeInstance inst;
-    std::unique_ptr<Controller> ctl;
+    std::unique_ptr<SynthyBoyController> ctl;
     double now = 0.0;
 
     explicit Rig (bool attach = true, double cost = 10.0, ITouchInput* touch = nullptr)
     {
         frame.views = legacy::kViews;
-        ctl = std::make_unique<Controller> (plane, frame, renderer, dir.paths(), Timing(), cost, nullptr, touch, legacy::kViews, legacy::kNumViews);
+        ctl = std::make_unique<SynthyBoyController> (plane, frame, renderer, dir.paths(), Timing(), cost, nullptr, touch, &legacy::pageSet());
         inst.set ("filter1.cutoff", 1000.0f);
         inst.set ("filter1.resonance", 30.0f);
         if (attach)
@@ -289,17 +289,17 @@ int main()
     {
         synthyboy::LiveValues lv;
         lv.numTargets = 20;
-        check (Controller::viewTargets (lv, 4, 12) == lv.target + 4, "the readout holds all 12 targets of a view at base 4: the values are given");
+        check (SynthyBoyPageFactory().viewTargets (&lv, 4, 12) == lv.target + 4, "the readout holds all 12 targets of a view at base 4: the values are given");
         lv.numTargets = 10;
-        check (Controller::viewTargets (lv, 4, 12) == nullptr, "the readout is shorter than base + count (10 < 16): no values (the view would read past the engine's list)");
-        check (Controller::viewTargets (lv, 4, 6) == lv.target + 4, "... exactly base + count is enough");
-        check (Controller::viewTargets (lv, 4, 7) == nullptr, "... one more is not");
+        check (SynthyBoyPageFactory().viewTargets (&lv, 4, 12) == nullptr, "the readout is shorter than base + count (10 < 16): no values (the view would read past the engine's list)");
+        check (SynthyBoyPageFactory().viewTargets (&lv, 4, 6) == lv.target + 4, "... exactly base + count is enough");
+        check (SynthyBoyPageFactory().viewTargets (&lv, 4, 7) == nullptr, "... one more is not");
         lv.numTargets = synthyboy::LiveValues::kMaxTargets;
-        check (Controller::viewTargets (lv, synthyboy::LiveValues::kMaxTargets - 4, 12) == nullptr, "a view whose targets end past the array (base + count > kMaxTargets): no values");
-        check (Controller::viewTargets (lv, -4, 4) == nullptr, "a negative base: no values");
-        check (Controller::viewTargets (lv, 0, 0) == nullptr, "a view without targets gets none");
+        check (SynthyBoyPageFactory().viewTargets (&lv, synthyboy::LiveValues::kMaxTargets - 4, 12) == nullptr, "a view whose targets end past the array (base + count > kMaxTargets): no values");
+        check (SynthyBoyPageFactory().viewTargets (&lv, -4, 4) == nullptr, "a negative base: no values");
+        check (SynthyBoyPageFactory().viewTargets (&lv, 0, 0) == nullptr, "a view without targets gets none");
         std::vector<int> all;
-        Controller::readoutTargets (all);
+        SynthyBoyPageFactory::targetsOfAllPages (all);
         check (! all.empty() && all.size() <= static_cast<size_t> (synthyboy::LiveValues::kMaxTargets), "the targets of all views together fit the engine's list (" + std::to_string (all.size()) + " of " + std::to_string (synthyboy::LiveValues::kMaxTargets) + ")");
     }
     // ---- the last instance closes: the mappings and dma-buf descriptors of the host's framebuffers that the frame source kept are let go (they would hold the host's buffers until the process ends) ----
