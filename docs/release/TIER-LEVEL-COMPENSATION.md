@@ -43,28 +43,28 @@ Not covered: the Vital adapter engine (`core/engine-vital`, not built for the MP
 
 ## 4. Result (all 160 presets, `scripts/measure-loudness.py`, Key 61 minus XL, LU)
 
-Final state of the branch (meter, band models, bus makeup, unison cap makeup). `before-after.csv` in the results folder has every preset.
+State of the tree `feature/mpc-overlay` (meter, band models, bus makeup; NO unison cap makeup, it was reverted: section 10), measured again in integration round 10 on the merged tree (`.hw-local/mpc-perf/round10/loudness-all160.csv` has every preset; the XL column of round 10 equals round 9 within 4e-6 LU for all 160). `before-after.csv` in the results folder of the branch is the state with the unison makeup, which the tree does not have.
 
 | Preset | Before | After |
 |---|---|---|
-| Reese Dual Phase Bass | -7.13 | -1.37 (Convolve -0.79 effect, unison cap -0.85 before the makeup) |
+| Reese Dual Phase Bass | -7.13 | -1.66 (Convolve -0.79 effect, unison cap -0.85) |
 | Dusty Rhodes Keys | -5.38 | -0.44 |
 | Bode Barber Riser | +3.57 | +0.95 |
 | Hyper Dimension Pad | +3.46 | +0.56 |
 | Bode Shifter Drone | +3.29 | -0.14 |
 | Cathedral Choir | +2.54 | +0.43 |
-| Lush Analog Pad | -2.51 | -1.93 (unison cap, makeup brings -2.73 to -1.93) |
+| Lush Analog Pad | -2.51 | -2.83 (unison cap, no makeup for it) |
 | Frozen Pluck Drone | +2.27 | +0.52 (bus makeup) |
 | Marimba Layer Keys | -2.08 | -0.15 |
 
-All 160: maximum 7.13 to 2.03 LU, RMS 1.00 to 0.42 LU, presets over 1 LU 13 to 6, over 2 LU 9 to 1. The XL column is identical to the last digit for all 160. Effects only (profile `low;unison=16`, no unison cap in force, minus XL): maximum 1.87, RMS 0.32, 2 presets over 1 LU (before: maximum 6.28, RMS 0.96 as `low` minus `low;fx=all`).
+All 160 (round 10, the tree as it is): maximum 7.13 to 2.83 LU, RMS 1.00 to 0.45 LU, presets over 1 LU 13 to 5, over 2 LU 9 to 2. (With the unison makeup of section 10 the branch had maximum 2.03, RMS 0.42, 6 over 1 LU, 1 over 2 LU.) The XL column is identical to the last digit for all 160. Effects only (profile `low;unison=16`, no unison cap in force, minus XL): maximum 1.87, RMS 0.32, 2 presets over 1 LU (before: maximum 6.28, RMS 0.96 as `low` minus `low;fx=all`).
 
 Still over 1 LU, and exactly why:
 
-- **Infinite Horizon (-2.03)** and **Lush Analog Pad (-1.93)**: the unison cap (6 and 7 voices under 3). Without the cap (`unison=16`) they are at -0.40 and +0.16. The unison makeup fixes the mean of the cap effect (over the 48 presets with a cap effect: mean -0.21 to 0.00 LU, RMS 0.56 to 0.49) but the effect of the cap on a single preset is the chance of the beating in its loudest 100 ms (Velvet Strings, the same settings as Lush Analog Pad, loses 0.20; Lush Analog Pad 2.73; Infinite Horizon is not moved by the gain at all). No setting based gain predicts that: section 10.
-- **Hyper Saw Lead (+1.52)**: unison cap, the other way (7 + 7 voices, cap effect +0.54 before the makeup, +1.18 with it): the same chance.
-- **Reese Dual Phase Bass (-1.37)**: Convolve -0.79 (the cabinet impulse on a bass: the model is -0.8 dB under the measurement) and the unison cap -0.58.
-- **Cosmic Drift Lead (-1.32)**: reverb mix 50 on a lead (-1.87 effects only, the reverb makes this lead LOUDER, which the models do not see) and the unison cap.
+- **Lush Analog Pad (-2.83)** and **Infinite Horizon (-2.23)**: the unison cap (6 and 7 voices under 3). Without the cap (`unison=16`, measured on the branch) Lush Analog Pad is at +0.16 and Infinite Horizon at -0.40. The effect of the cap on a single preset is the chance of the beating in its loudest 100 ms (Velvet Strings, the same settings as Lush Analog Pad, loses 0.20). No setting based gain predicts that and the unison makeup that was tried made single presets worse: section 10 (not in the code).
+- **Hyper Saw Lead (+0.55)**: unison cap, the other way (7 + 7 voices): the same chance; without the unison makeup it is back near +0.5 (with it +1.52).
+- **Reese Dual Phase Bass (-1.66)**: Convolve -0.79 (the cabinet impulse on a bass: the model is -0.8 dB under the measurement) and the unison cap -0.85.
+- **Cosmic Drift Lead (-1.69)**: reverb mix 50 on a lead (-1.87 effects only, the reverb makes this lead LOUDER, which the models do not see) and the unison cap.
 - **Sonar Ping (+1.35)**: reverb mix 25 on a percussive FX: the reverb takes 1.68 dB, the model 0.3; the steadiness follower does not see it (section 8).
 
 "None worse than before" does not hold literally: a makeup that is right on average exposes non effect residuals that an opposite effect residual hid.
@@ -105,11 +105,13 @@ The engine decides from the signals, not from the routing table: before the rack
 
 Test: `tier_makeup_bus_copy_of_main` (osc 1 sends 55 % to Bus 1, reverb mix 100 on Bus 1): bypassed +3.08 dB against the active case, with the makeup +0.15 dB. Frozen Pluck Drone: +1.44 LU with the gain per effect alone, +0.52 with the bus makeup.
 
-## 10. Unison cap makeup (design, last commit)
+## 10. Unison cap makeup (designed and measured, NOT in the code)
 
 Cause (measured): the cap of tier `low` (3 voices) takes voices away from presets that ask for more. The blend law normalises the summed power of the voices, so the expected power does not change; what changes is the loudest 100 ms: more voices at a small detune beat with higher coherent peaks. Measured on all 160 presets (`low;fx=all` against `low;fx=all;unison=16`, loudest 100 ms), 16 presets ask for more than 3 voices: the change runs from -2.73 (Lush Analog Pad, 6 + 6 voices) to +0.54 (Hyper Saw Lead), mean -0.6. It does not follow the settings: Velvet Strings (6 voices, detune 25, spread 100) changes by -0.20, Lush Analog Pad (6, 28 and 32, 100) by -2.73. A gain by the number of voices w x level^2 x n^alpha fits at best alpha = 0.3 (RMS error 0.78 dB against 0.94 dB for no makeup); detune, blend and spread do not improve it: the summed power under the blend law is the same, the rest is the chance of the beating in the loudest 100 ms of the gesture.
 
-Design: per oscillator, the gain (wanted / cap) ^ 0.15 in amplitude (0.3 in power) on the oscillator level when the cap is in force and the preset asks for more voices than it allows; wanted = the voices of the preset after modulation, cap = `Quality::maxUnison` (and the low tier cap), computed once per block into a table of 17 entries (`unisonMakeupTable`) and read in the voice tick where the level is set (`voice.cpp`, one line). Nothing else changes: with no cap in force or no oscillator over the cap the path is the one of before (bit equal, tested). It corrects the mean (+0.9 dB for 6 voices under 3), not the spread, which is chance; the presets whose cap effect is large by chance (Lush Analog Pad, Infinite Horizon) keep part of their difference. It is the last commit of the branch and touches `voice.cpp` (3 lines), `voice.h` (1), `own_engine.cpp` / `.h` (14); the other worker's branch changes `voice.cpp` in the sample / granular parameters only (merge checked: no conflict).
+Design (it was implemented in commit 62fb831f and reverted again by the coordinator before the merge into `feature/mpc-overlay`; the tree has no unison makeup, `Quality::maxUnison` only caps the voices): per oscillator, the gain (wanted / cap) ^ 0.15 in amplitude (0.3 in power) on the oscillator level when the cap is in force and the preset asks for more voices than it allows; wanted = the voices of the preset after modulation, cap = `Quality::maxUnison` (and the low tier cap), computed once per block into a table of 17 entries and read in the voice tick where the level is set. With no cap in force or no oscillator over the cap the path was bit equal to the path without it (tested). It corrected the mean (+0.9 dB for 6 voices under 3; over the 48 presets with a cap effect: mean -0.21 to 0.00 LU, RMS 0.56 to 0.49) but not the spread, which is chance.
+
+Why it is not in the code: it made single presets worse. Hyper Saw Lead (7 + 7 voices) has a cap effect of +0.54 LU without the makeup and +1.18 with it (Key 61 minus XL +1.52 in total, over the 1 LU line), and Lush Analog Pad and Infinite Horizon, whose cap effect is large by chance (-2.73 and -1.54 LU), keep most of their difference (Infinite Horizon is not moved by the gain at all). A gain that fixes the mean and moves a preset the wrong way by chance is not a better sound; the decision of the coordinator is to leave the cap without a gain. The numbers of the "with the makeup" columns of section 4 below that were measured with it are marked as such; the tree as it is has the figures of the round 10 table in section 4.
 
 ## 11. Model against measurement (second round)
 
