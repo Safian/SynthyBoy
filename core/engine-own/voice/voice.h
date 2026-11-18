@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 #include "../dsp/noise_coeff.h"
@@ -184,15 +185,15 @@ public:
 
 private:
     // the value of a parameter as this voice hears it: the knob, or the knob plus the modulation of the slots (inline fast path: most parameters are not modulated)
-    float P (int idx) const noexcept
+    float P (int idx) const noexcept { return readParam (gl->base, modP, idx); }
+    float PR (int idx) const noexcept { return readParam (gl->base, modRP, idx); } // the right lane (differs from P () where a slot has the stereo flag)
+    /** P () / PR () with the snapshot and the deltas given (Voice::tick keeps both in locals). The delta is tested for +-0 on its bits, (bits << 1) == 0, which is d == 0.0f for every
+        float (NaN included) without a float compare and its transfer of the flags to the core (CPU-REVIEW-VOICE-MOD.md V5). */
+    float readParam (const float* base, const float* delta, int idx) const noexcept
     {
-        const float d = modP[idx];
-        return d == 0.0f ? gl->base[idx] : modulatedSlow (idx, gl->base[idx], d);
-    }
-    float PR (int idx) const noexcept // the right lane (differs from P () where a slot has the stereo flag)
-    {
-        const float d = modRP[idx];
-        return d == 0.0f ? gl->base[idx] : modulatedSlow (idx, gl->base[idx], d);
+        uint32_t u;
+        std::memcpy (&u, delta + idx, sizeof u);
+        return (u << 1) == 0u ? base[idx] : modulatedSlow (idx, base[idx], delta[idx]);
     }
     float modulatedSlow (int idx, float base, float delta) const noexcept;
     void clearMod() noexcept;

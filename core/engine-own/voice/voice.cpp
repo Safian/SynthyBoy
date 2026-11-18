@@ -624,6 +624,13 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     const ParamIndex& pi = paramIndex();
     const double dt = kControlPeriod / g.sampleRate;
     const float fdt = static_cast<float> (dt);
+    // the parameter reads of this function with the snapshot and the delta arrays in locals (CPU-REVIEW-VOICE-MOD.md V5): a call between two reads (modulatedSlow, an oscillator
+    // update) no longer forces this->modP and gl->base to be loaded again. These hide the members P () and PR () inside tick (); the same values.
+    const float* const pBase = g.base;
+    const float* const pMod = modP;
+    const float* const pModR = modRP;
+    const auto P = [this, pBase, pMod] (int idx) noexcept { return readParam (pBase, pMod, idx); };
+    const auto PR = [this, pBase, pModR] (int idx) noexcept { return readParam (pBase, pModR, idx); };
 
     // ---- pitch of the note
     const MasterIdx& mi = pi.master;
@@ -1347,7 +1354,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         else
         {
             FilterSettings& s = filtSet[f];
-            fillFilterSettings (s, fi, [this] (int i) { return P (i); }, [this] (int i) { return PR (i); }, fi.cleanMode >= 0 && g.base[fi.cleanMode] >= 0.5f,
+            fillFilterSettings (s, fi, P, PR, fi.cleanMode >= 0 && g.base[fi.cleanMode] >= 0.5f,
                                 keyNum, vc.cutoffSemis, (g.economy & kEconomyMath) != 0);
             s.scalarOnly = g.scalarFilters;
             s.noSmoothing = g.noSmoothing;

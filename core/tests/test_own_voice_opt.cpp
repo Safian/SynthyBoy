@@ -730,3 +730,23 @@ TEST (matrix_zero_skip_gives_the_same_deltas_for_every_special_value)
     CHECK (res.skipped > 100000);
     CHECK_EQ (res.failed, 0);
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// V5: the zero test of a parameter delta on its bits is the float compare d == 0.0f, for all 2^32 bit patterns
+
+TEST (voice_param_read_zero_test_on_the_bits_is_the_float_compare_for_every_pattern)
+{
+    uint64_t mismatches = 0, zeros = 0;
+    for (uint64_t i = 0; i <= 0xffffffffull; ++i)
+    {
+        const uint32_t u = static_cast<uint32_t> (i);
+        float f;
+        std::memcpy (&f, &u, 4);
+        volatile float vf = f;   // (a real float compare, not folded into the integer test)
+        const bool byFloat = vf == 0.0f, byBits = (u << 1) == 0u;
+        mismatches += byFloat != byBits ? 1 : 0;
+        zeros += byBits ? 1 : 0;
+    }
+    CHECK_EQ (zeros, uint64_t (2));
+    CHECK_EQ (mismatches, uint64_t (0));
+}
