@@ -93,7 +93,7 @@ In the MPC Sounds browser and standard preset menus, presets are organized into 
 | **Moog Ladder Bass \*** | Vintage Moog ladder filter round bass with warm, fat analog low-end punch | Soul, funk, or disco basslines C1–C3; smooth legato transitions | Cutoff (Macro 1) | \* |
 | **Odd Harmonics Bass \*** | Hollow funk bass driven by odd harmonic series for a woody, round tone | Funky syncopated comping C1–A2; great for walking basslines | Cutoff (Macro 1) | \* |
 | **Pulse Width Bass \*** | PWM modulated pulse wave electro bass with animated harmonic movement | Rolling 80s synth-pop or electro basslines C3–G4 (sounds two octaves below the keys); wheel sweeps pulse width | Cutoff (Macro 1) | \* |
-| **Punchy Pluck Bass \*** | Tight transient bass with short percussive decay for driving club grooves | Fast staccato bass arps C0–C2 (sounds an octave above the keys); velocity controls envelope bite | Cutoff (Macro 1) | \* |
+| **Punchy Pluck Bass \*** | Tight transient bass with short percussive decay for driving club grooves | Fast staccato bass arps C2–C4 (sounds an octave below the keys); velocity controls envelope bite | Cutoff (Macro 1) | \* |
 | **Warm Analog Bass \*** | Classic deep house warm analog lowpass bass with gentle round low-end | Deep house, garage, or neo-soul chords/runs C3–F4 (sounds two octaves below the keys) | Cutoff (Macro 1) | \* |
 
 ---
@@ -296,7 +296,7 @@ In the MPC Sounds browser and standard preset menus, presets are organized into 
 | Preset Name | What It Is | What to Play | Macro to Try First | Status |
 |---|---|---|---|:---:|
 | **Bode Barber Riser** | Rising saw and noise build with recursive Bode frequency shifter and flanger | Hold note C2–C4 for 5–6 seconds leading up to a drop; lean on pad for feedback | Rise (Macro 1: pitch climb and riser build intensity) | |
-| **Cosmic Teleport \*** | Ascending pitch sweep dimensional teleport effect with fast LFO and delay | Strike single keys C4–C6 for sci-fi dimensional warp transitions (sounds two octaves below the keys) | FX Filter (Macro 1) | \* |
+| **Cosmic Teleport \*** | Ascending pitch sweep dimensional teleport effect with fast LFO and delay | Strike single keys C4–C6 for sci-fi dimensional warp transitions (sounds at the pitch of the keys) | FX Filter (Macro 1) | \* |
 | **Detonation Tail** | Thunderous cinematic impact hit with explosive noise, pitch drop sub, and cavernous tail | Strike single key C3–C4 on downbeats (sounds two octaves below the keys); let the massive sub rumble ring out | Blast (Macro 1: initial explosion punch and sub weight) | |
 | **Game Over Zap \*** | Retro 8-bit arcade explosion zap one-shot with waveshaper distortion | Hit single keys C2–C4 for classic arcade game-over explosions and laser zaps | FX Filter (Macro 1) | \* |
 | **Metal Gong Strike \*** | Physical resonant metallic gong strike percussion using tuned comb filter | Hit low notes C1–C3; long reverberant metallic decay | FX Filter (Macro 1) | \* |

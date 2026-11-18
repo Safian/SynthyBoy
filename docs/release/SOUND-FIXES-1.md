@@ -418,6 +418,10 @@ Owner's notes (MPC XL), applied by the method of sections 2 and 5: generator inp
 | EMS Squelch Bass | +2 dB, after re-measuring on the Ladder fixed engine | `master.volume` -12.2 -> -10.2 dB | re-measured: `fast_max` -28.30 LUFS, calibrated -22.99 at -12.2 dB: the Ladder fix did not move it, the method gives -12.2 | +2.0 dB over the method's level |
 | Nylon Zone Pluck | `synthyboy_preset_sanity`: peak above +3 dBFS | `master.volume` -1.4 -> -2.0 dB | chord peak (four notes, velocity 1.0, `synthyboy_preset_render`) 3.5 dBFS low, 3.1 medium and high | 2.9 low, 2.5 medium, 2.5 high |
 
-Not changed on purpose: Sub Drop Boom and Cosmic Teleport (open question 2: which octave).
+| Cosmic Teleport | too deep: raise by two octaves | `master.transpose` -24 -> 0 (+24 semitones, back to the pitch of the key); then re-levelled by the method | `fast_max` -26.07 LUFS at -11.6 dB (calibrated -23.00); chord8 peak -3.3 dBFS | after the transposition `fast_max` -23.71 (calibrated -20.65, 2.35 dB over the target); `master.volume` -11.6 -> -14.0 dB; chord8 peak -1.2 dBFS at -11.6 (about -3.6 at -14.0) |
+
+User guide rows of Punchy Pluck Bass (keys C2 .. C4, sounds an octave below the keys) and Cosmic Teleport (sounds at the pitch of the keys) updated.
+
+Not changed on purpose: Sub Drop Boom (open question 2: which octave).
 
 Nylon Zone Pluck, cause: the perceptual re-levelling (section 7) raised it from -3.0 to -1.4 dB (+1.6 dB, Pluck gesture: single struck notes) and the peak of a four note chord at full velocity, which the gesture does not contain, went from about 1.9 .. 2.1 to 3.1 .. 3.5 dBFS. (The +6 dB make-up gain of the shell is not in this gate: `synthyboy_preset_render` measures the raw engine output.) The levelling rule knows no peak ceiling; the fix is the level, no limiter: the highest volume at which the three quality profiles stay at or below +3 dBFS with a margin of about 0.1 dB (low profile, 2.9). Its calibrated loudness is now 0.6 dB under the target (-23.6 instead of -23.0 LUFS). A new `solve` run would set -1.4 again: for this preset the figure in the levels file is the peak ceiling, not the measure.

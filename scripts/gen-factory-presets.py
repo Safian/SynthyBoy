@@ -321,7 +321,7 @@ fx_names = [
     ("Alien Communication", "alien,vocal,weird", "Strange resonant formant alien chatter", {"osc1.wavetable": 9, "filter1.model": 5, "lfo1.rate": 6.5, **mod(1, "lfo1", "filter1.formant.x", 60), "delay.on": 1}),
     ("Game Over Zap", "game,retro,zap", "8-bit retro arcade game over explosion", {"osc1.wavetable": 2, "distortion.on": 1, "distortion.drive": 10, "env1.decay": 400, "env1.sustain": 0}),
     ("Sonar Ping", "sonar,ping,submarine", "Deep ocean submarine sonar ping", {"osc1.wavetable": 0, "filter1.cutoff": 1400, "filter1.resonance": 75, "env1.decay": 600, "delay.on": 1, "reverb.on": 1}),
-    ("Cosmic Teleport", "teleport,sweep,glitch", "Ascending dimensional teleport sweep", {"master.transpose": -24, "osc1.wavetable": 6, "filter1.cutoff": 3500, "lfo1.rate": 8.0, "delay.on": 1}),
+    ("Cosmic Teleport", "teleport,sweep,glitch", "Ascending dimensional teleport sweep", {"master.transpose": 0, "osc1.wavetable": 6, "filter1.cutoff": 3500, "lfo1.rate": 8.0, "delay.on": 1}),
     ("Vinyl Dust Crackle", "vinyl,crackle,retro", "Warm lo-fi vinyl dust noise generator", {"noise.on": 1, "noise.level": 40, "filter1.cutoff": 1500, "filter1.resonance": 20})
 ]
 for name, tags, desc, ov in fx_names:
