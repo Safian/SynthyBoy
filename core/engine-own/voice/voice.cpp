@@ -319,6 +319,9 @@ void Voice::legatoTo (const NoteStart& n) noexcept
 {
     sequence = n.sequence;
     vcCacheValid = false;
+    // the step of the voice control (vc.envFactor) follows `sequence`, which the all envelope cache key (epoch, tempo, nothing touched) does not hold: the next tick must
+    // derive the settings again (the per envelope cache is keyed on the factor itself). The same for the code of the reference switch, which uses the same test.
+    envCacheValid = false;
     glideOffset = (lastSemis - n.tunedNote);
     glideElapsed = 0.0f;
     glideTime = -1.0f;
@@ -841,9 +844,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     {
     SB_SECTION (sections::tickEnvLfo);
     const bool envFromCache = g.baseEpoch != 0 && envCacheValid && envCacheEpoch == g.baseEpoch && envCacheBpm == g.bpm && numTouched == 0 && !fresh;
-    // V1: an envelope none of whose keys a slot touched keeps the settings it derived from the parameters alone (the keys of the other groups may be modulated). The test of
-    // envFromCache above stays as it was: its key has no note sequence, so after a legato note it keeps the envelope factor of the step before (test_own_voice_legato_env.cpp);
-    // the per envelope cache below is used only where envFromCache is not, and is keyed on the factor itself, so every settings value is the one the code before computed.
+    // V1: an envelope none of whose keys a slot touched keeps the settings it derived from the parameters alone (the keys of the other groups may be modulated). A legato note
+    // (Voice::legatoTo) clears envCacheValid, because the key of envFromCache has no note sequence (test_own_voice_legato_env.cpp); the per envelope cache below is used only
+    // where envFromCache is not, and is keyed on the factor itself.
     lastTouchedGroups = g.referenceControl ? ~0u : touchedGroups();
     const uint32_t envTouched = lastTouchedGroups;
     uint32_t envFactorBits;
