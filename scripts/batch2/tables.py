@@ -27,7 +27,7 @@ add("Reese Dual Phase Bass", "Bass", "bass,reese,dnb,wavetable,convolve,cabinet,
         R("macro6", "lfo1.rate", 60),                                                      # Movement Rate
     ],
     ["Phase", "Cutoff", "Growl", "Dry Cab", "Octave Saw", "Movement Rate", "", ""],
-    content=C(wavetables=[WT(1, "pwm_dual_phase")], impulses=[IMP("cabinet_colour")]))
+    content=C(wavetables=[WT(1, "Analog/pwm_dual_phase")], impulses=[IMP("cabinet_colour")]))
 
 add("Vowel Table Lead", "Lead", "lead,vowel,formant,wavetable,legato,mod-wheel,expressive",
     "A solo voice from a table of five vowels: the wheel walks A, E, I, O, U on the frame axis, pressure on the pad opens the mouth and brings in a vibrato, velocity decides how bright the attack is; three unison voices make a small section, the legato mono line glides",
@@ -55,7 +55,7 @@ add("Vowel Table Lead", "Lead", "lead,vowel,formant,wavetable,legato,mod-wheel,e
         R("macro6", "reverb.mix", 30), R("macro6", "delay.mix", 20),                       # Space
     ],
     ["Vowel", "Dark", "Choir", "Octave Down", "Vibrato Rate", "Space", "", ""],
-    content=C(wavetables=[WT(1, "formant_sweep_aeiou")]))
+    content=C(wavetables=[WT(1, "Vocal/formant_sweep_aeiou")]))
 
 add("Drawbar Organ Keys", "Keys", "keys,organ,drawbars,tonewheel,rotary,bus,overdrive,percussion",
     "A tonewheel organ from a table of sixteen drawbar registrations (the table holds the 16 foot fundamental, so the oscillator is set an octave up): the frame is the registration, a key click and a fast second-harmonic percussion sit on the front of every note, the rotary is a chorus and a phaser, and a second copy overdrives on bus 1",
@@ -89,7 +89,7 @@ add("Drawbar Organ Keys", "Keys", "keys,organ,drawbars,tonewheel,rotary,bus,over
         R("macro6", "filter1.cutoff", 50),                                                 # Bright
     ],
     ["Registration", "Percussion", "Overdrive", "Click", "Rotary Speed", "Bright", "", ""],
-    content=C(wavetables=[WT(1, "organ_drawbars_16")]))
+    content=C(wavetables=[WT(1, "Spectral/organ_drawbars_16")]))
 
 add("Throat Singer Drone", "Pad", "pad,drone,overtone,throat,wavetable,scale,mono-ish,meditative",
     "Overtone singing: a drone with one narrow resonance that a slow LFO walks up and down the harmonic series from the fourth to the twentieth partial, so a tune of whistling overtones floats over a steady note; kept in the Phrygian dominant scale on D so that chords of fingers stay consonant",
@@ -117,7 +117,7 @@ add("Throat Singer Drone", "Pad", "pad,drone,overtone,throat,wavetable,scale,mon
         R("macro6", "osc1.unison.detune", 60),                                             # Choir
     ],
     ["Overtone", "Walk Speed", "Drone", "Bright", "Space", "Choir", "", ""],
-    content=C(wavetables=[WT(1, "overtone_throat_sweep")]))
+    content=C(wavetables=[WT(1, "Vocal/overtone_throat_sweep")]))
 
 add("Ladder FM Bass", "Bass", "bass,fm,ratio,wavetable,envelope,mono,sub",
     "An FM bass from the ratio ladder: the table steps through modulator ratios 1 to 8 (eight frames each, the index rising inside every step), an envelope throws the frame up at the front of the note so a hard key lands on a higher ratio and settles back into the fundamental, a sine sub keeps it big",
@@ -144,4 +144,4 @@ add("Ladder FM Bass", "Bass", "bass,fm,ratio,wavetable,envelope,mono,sub",
         R("macro6", "env1.decay", 35),                                                     # Decay
     ],
     ["Ratio", "Snap Length", "Drive", "Sub", "Cutoff", "Decay", "", ""],
-    content=C(wavetables=[WT(1, "fm_ratio_ladder")]))
+    content=C(wavetables=[WT(1, "Digital/fm_ratio_ladder")]))

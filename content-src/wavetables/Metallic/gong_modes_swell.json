@@ -1,0 +1,26 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Gong Modes Swell",
+ "category": "Metallic",
+ "description": "The thirteen modes of the factory gong sample around the 3rd harmonic; the upper modes swell from 45 % to full weight (bright^n): the bloom of a struck gong.",
+ "frames": 64,
+ "seed": "gong_modes_swell",
+ "source": {
+  "type": "partials",
+  "params": {
+   "set": "gong",
+   "scale": 3.0,
+   "count": 13,
+   "rolloff": 0.4,
+   "bright": {
+    "law": "linear",
+    "from": 0.45,
+    "to": 1.0
+   },
+   "seed": 8
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

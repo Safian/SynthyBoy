@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Vowel Sweep AEIOU",
+ "category": "Vocal",
+ "description": "The vowels A E I O U in turn through the formants of a voice at 220 Hz (best range A2 to A4).",
+ "frames": 64,
+ "seed": "formant_sweep_aeiou",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "formant_sweep_aeiou"
+  }
+ }
+}

@@ -1,0 +1,24 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Harmonic Band Sweep",
+ "category": "Spectral",
+ "description": "A 1/n series with one band of harmonics lifted 24 dB, its centre rising from the 1.5th to the 120th partial (accelerating): a swept bandpass written into the cycle.",
+ "frames": 64,
+ "seed": "harmonic_band_sweep",
+ "source": {
+  "type": "additive",
+  "params": {
+   "count": 300,
+   "rolloff": 1.0,
+   "peak_center": {
+    "law": "curve",
+    "from": 1.5,
+    "to": 120,
+    "power": 2.5
+   },
+   "peak_width": 0.28,
+   "peak_gain_db": 24,
+   "phase_quad": 0.004
+  }
+ }
+}

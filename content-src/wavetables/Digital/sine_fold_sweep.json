@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Sine Fold Sweep",
+ "category": "Digital",
+ "description": "A sine through a wave folder, the gain 0.4 to 14: sine, triangle, dense folded metal.",
+ "frames": 64,
+ "seed": "sine_fold_sweep",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "sine_fold_sweep"
+  }
+ }
+}

@@ -1,0 +1,34 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Vowel Cycle Men",
+ "category": "Vocal",
+ "description": "The vowel triangle walked in eight steps (ee, ih, eh, ae, ah, aw, uh-oo, oo) with the average formants of men (Peterson and Barney 1952), voice at 130 Hz; best range about an octave around that pitch.",
+ "frames": 64,
+ "seed": "vowel_cycle_men",
+ "source": {
+  "type": "formant",
+  "params": {
+   "f0": 130.0,
+   "voice": "men",
+   "sequence": [
+    "i",
+    "I",
+    "E",
+    "ae",
+    "a",
+    "o",
+    "U",
+    "u"
+   ],
+   "pos": {
+    "law": "linear",
+    "from": 0,
+    "to": 7
+   },
+   "tilt": 1.0
+  }
+ },
+ "post": {
+  "limit": 250
+ }
+}

@@ -1,0 +1,23 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Phase Distortion Knee",
+ "category": "Digital",
+ "description": "A cosine whose phase has a knee moved from the middle (0.5) to 0.04 of the cycle: sine to a pulse-like pinched wave.",
+ "frames": 64,
+ "seed": "pd_knee",
+ "source": {
+  "type": "pd",
+  "params": {
+   "mode": "knee",
+   "amount": {
+    "law": "curve",
+    "from": 0.5,
+    "to": 0.04,
+    "power": 0.9
+   }
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

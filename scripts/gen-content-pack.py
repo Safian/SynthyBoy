@@ -3,11 +3,12 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-#   gen-content-pack.py [--out-root content] [--check] [--list]
+#   gen-content-pack.py [--out-root content] [--check] [--list] [--only <category>]...
 #
 # Writes two content packs (docs/ARCHITECTURE.md section 6) below the output root:
-#   factory-wavetables/   pack com.safian.synthyboy.factory-wavetables, kind "wavetables": *.wav at the pack root (16 tables; 16 bit mono WAV, 2048 samples per frame, up to 64 frames: what
-#                 core/engine-own/osc/content_set.cpp reads: a file of N * 2048 samples is a table of N frames)
+#   factory-wavetables/   pack com.safian.synthyboy.factory-wavetables, kind "wavetables": <Category>/<slug>.wav (72 tables in the six categories Analog, Digital, Spectral, Vocal, Metallic, Noise; 16 bit
+#                 mono WAV, 2048 samples per frame, up to 64 frames: what core/engine-own/osc/content_set.cpp reads: a file of N * 2048 samples is a table of N frames). Every table is a RECIPE
+#                 (content-src/wavetables/<Category>/<slug>.json, scripts/wavetable_lib.py); the manifest lists "category" and "title" per file. Add-on packs: content-src/addons/<dir>/ -> content-addons/<dir>/.
 #   factory-samples/      pack com.safian.synthyboy.factory-samples, kind "samples": samples/*.wav (12 one-shots, loops and textures, 44.1 kHz, peak -1 dBFS, a 'smpl' chunk with the
 #                 root note and the loop where there is one), instruments/<name>/<name>.sfz + instruments/<name>/samples/*.wav (3 key-mapped instruments for the Multisample
 #                 type), impulses/*.wav (3 stereo impulse responses for Convolve, each under 1.5 s)
@@ -38,7 +39,7 @@ ROOT_NOTE = 60                 # the pitched samples are tuned to MIDI 60 (what 
 PEAK = 0.891                   # -1 dBFS: the headroom of the samples
 PACKS = {
     "factory-wavetables": {"id": "com.safian.synthyboy.factory-wavetables", "name": "Factory Wavetables", "kind": "wavetables",
-                   "description": "16 wavetables made by scripts/gen-content-pack.py (formant sweeps, PWM stacks, additive bells, FM series, organ drawbars, vocal and metallic tables) under CC0-1.0; 2048 samples per frame."},
+                   "version": "1.1.0", "description": "(set from the recipes by factory_wavetable_meta)"},
     "factory-samples": {"id": "com.safian.synthyboy.factory-samples", "name": "Factory Samples", "kind": "samples",
                 "description": "12 synthesised samples, 3 key-mapped instruments and 3 impulse responses made by scripts/gen-content-pack.py under CC0-1.0; 44.1 kHz, 16 bit."},
 }
@@ -408,14 +409,14 @@ def table_shape_collection(name):
     return np.concatenate([finish_frame(x, limit=120) for x in shapes])
 
 
-TABLES = [
-    ("formant_sweep_aeiou", table_formant_sweep), ("choir_singers_shift", table_choir_shift), ("overtone_throat_sweep", table_overtone_throat),
-    ("pwm_triple_stack", table_pwm_stack), ("pwm_saw_blend", table_pwm_saw_blend), ("pwm_dual_phase", table_pwm_dual_phase),
-    ("additive_bell_strike", table_bell_strike), ("additive_glass_harmonica", table_glass_harmonica),
-    ("fm_index_sweep", table_fm_index_sweep), ("fm_ratio_ladder", table_fm_ratio_ladder), ("fm_feedback_saw", table_fm_feedback),
-    ("organ_drawbars_16", table_organ_drawbars), ("metal_comb_sweep", table_metal_comb), ("ring_mod_ladder", table_ring_ladder),
-    ("sine_fold_sweep", table_sine_fold), ("harmonic_sieve", table_harmonic_sieve),
-]
+LEGACY_TABLES = {   # the first 16 tables, hand written: their recipes (content-src/wavetables/*/*.json) are `legacy` nodes naming a function here, so the files stay byte for byte what they were
+    "formant_sweep_aeiou": table_formant_sweep, "choir_singers_shift": table_choir_shift, "overtone_throat_sweep": table_overtone_throat,
+    "pwm_triple_stack": table_pwm_stack, "pwm_saw_blend": table_pwm_saw_blend, "pwm_dual_phase": table_pwm_dual_phase,
+    "additive_bell_strike": table_bell_strike, "additive_glass_harmonica": table_glass_harmonica,
+    "fm_index_sweep": table_fm_index_sweep, "fm_ratio_ladder": table_fm_ratio_ladder, "fm_feedback_saw": table_fm_feedback,
+    "organ_drawbars_16": table_organ_drawbars, "metal_comb_sweep": table_metal_comb, "ring_mod_ladder": table_ring_ladder,
+    "sine_fold_sweep": table_sine_fold, "harmonic_sieve": table_harmonic_sieve,
+}
 
 
 # --------------------------------------------------------------------------------------------------------------------------------------- samples
@@ -842,13 +843,67 @@ IMPULSES = [("small_room.wav", make_ir_room), ("plate.wav", make_ir_plate), ("ca
 
 
 # ------------------------------------------------------------------------------------------------------------------------------------- the packs
-def pack_files():
-    """{pack key: {relative path: bytes}}"""
-    wt = {}
-    for fname, fn in TABLES:
-        data = fn(fname)
-        assert len(data) % N == 0 and 1 <= len(data) // N <= 64, fname
-        wt[f"{fname}.wav"] = wav_bytes(data * 1.0, smpl=None)
+# A wavetable is a RECIPE (JSON, format "synthyboy-wavetable-recipe/1", scripts/wavetable_lib.py): content-src/wavetables/<Category>/<slug>.json for the factory pack, and
+# content-src/addons/<dir>/pack.json + <Category>/<slug>.json for every add-on pack (written to content-addons/<dir>/ with its own contentpack.json). The file of a recipe is
+# <Category>/<slug>.wav in its pack; the manifest lists "category" and "title" of every wavetable. Adding a table = adding a recipe file. The category folders are the six of wavetable_lib.CATEGORIES.
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import wavetable_lib as wl  # noqa: E402
+
+RECIPES_ROOT = os.path.join(HERE, "..", "content-src", "wavetables")
+ADDON_RECIPES = os.path.join(HERE, "..", "content-src", "addons")
+
+
+def load_recipes(root):
+    """[{category, slug, recipe}] of a recipe folder (<Category>/<slug>.json), recipes validated; a problem stops the script with the list of errors."""
+    out, bad = [], []
+    if not os.path.isdir(root):
+        return out
+    for cat in sorted(os.listdir(root)):
+        d = os.path.join(root, cat)
+        if not os.path.isdir(d):
+            continue
+        if cat not in wl.CATEGORIES:
+            bad.append(f"{d}: not a category folder ({', '.join(wl.CATEGORIES)})")
+            continue
+        for fn in sorted(os.listdir(d)):
+            if not fn.endswith(".json"):
+                continue
+            with open(os.path.join(d, fn), "r", encoding="utf-8") as f:
+                r, errors, _warnings = wl.clean_recipe(json.load(f))
+            if r is not None and r.get("category", cat) != cat:
+                errors.append(f"category {r.get('category')!r} differs from the folder {cat}")
+            if errors:
+                bad += [f"{cat}/{fn}: {e}" for e in errors]
+                continue
+            out.append({"category": cat, "slug": fn[:-5], "recipe": r})
+    if bad:
+        sys.exit("recipe errors:\n  " + "\n  ".join(bad))
+    return out
+
+
+def render_entry(e):
+    data = wl.table_samples(e["recipe"], e["slug"])
+    assert len(data) % N == 0 and 1 <= len(data) // N <= 64, e["slug"]
+    return wav_bytes(data * 1.0, smpl=None)
+
+
+def wavetable_files(entries, only, disk_dir):
+    """({path: bytes}, {path: (category, title)}, selected paths). Categories outside `only` are read from disk (for the manifest), not rendered."""
+    files, meta, selected = {}, {}, set()
+    for e in entries:
+        path = f"{e['category']}/{e['slug']}.wav"
+        meta[path] = (e["category"], e["recipe"]["title"])
+        if only and e["category"] not in only:
+            with open(os.path.join(disk_dir, path), "rb") as f:
+                files[path] = f.read()
+        else:
+            files[path] = render_entry(e)
+            selected.add(path)
+    return files, meta, selected
+
+
+def samples_files():
     sm = {}
     for fname, fn in SAMPLES:
         r = fn()
@@ -861,57 +916,127 @@ def pack_files():
             sm[f"instruments/{name}/{rel}"] = b
     for fname, fn in IMPULSES:
         sm[f"impulses/{fname}"] = wav_bytes(fn(), bits=24)
-    return {"factory-wavetables": wt, "factory-samples": sm}
+    return sm
 
 
-def manifest_text(key, files):
-    meta = PACKS[key]
-    doc = {"schemaVersion": 1, "id": meta["id"], "name": meta["name"], "version": VERSION, "license": "CC0-1.0", "attribution": "Safian Szabolcs", "kind": meta["kind"],
-           "requires_plugin": ">=0.1.0", "description": meta["description"],
-           "files": [{"path": p, "sha256": hashlib.sha256(files[p]).hexdigest(), "size": len(files[p])} for p in sorted(files)]}
+def manifest_text(meta, files, extra=None):
+    entries = []
+    for p in sorted(files):
+        e = {"path": p}
+        if extra and p in extra:
+            e["category"], e["title"] = extra[p]
+        e["sha256"] = hashlib.sha256(files[p]).hexdigest()
+        e["size"] = len(files[p])
+        entries.append(e)
+    doc = {"schemaVersion": 1, "id": meta["id"], "name": meta["name"], "version": meta.get("version", VERSION), "license": "CC0-1.0", "attribution": "Safian Szabolcs", "kind": meta["kind"],
+           "requires_plugin": ">=0.1.0", "description": meta["description"], "files": entries}
     return json.dumps(doc, indent=2, ensure_ascii=False) + "\n"   # byte for byte what tools/contentpack/contentpack.py manifest writes
 
 
+def factory_wavetable_meta(entries):
+    cats = sorted({e["category"] for e in entries}, key=wl.CATEGORIES.index)
+    m = dict(PACKS["factory-wavetables"])
+    m["description"] = (f"{len(entries)} wavetables in {len(cats)} categories ({', '.join(cats)}) made by scripts/gen-content-pack.py from the recipes in content-src/wavetables under CC0-1.0; "
+                        "2048 samples per frame, up to 64 frames.")
+    return m
+
+
+def addon_packs():
+    """[(dir name, meta, recipe entries)] of content-src/addons/*/pack.json."""
+    out = []
+    if os.path.isdir(ADDON_RECIPES):
+        for d in sorted(os.listdir(ADDON_RECIPES)):
+            pj = os.path.join(ADDON_RECIPES, d, "pack.json")
+            if os.path.isfile(pj):
+                with open(pj, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                meta = {"id": meta["id"], "name": meta["name"], "kind": "wavetables", "version": meta.get("version", "1.0.0"), "description": meta.get("description", "")}
+                out.append((d, meta, load_recipes(os.path.join(ADDON_RECIPES, d))))
+    return out
+
+
+def print_catalogue(entries, files):
+    print(f"{'category':9s} {'file':32s} {'frames':>6s} {'bytes':>8s}  title")
+    for e in entries:
+        path = f"{e['category']}/{e['slug']}.wav"
+        n = len(files[path])
+        print(f"{e['category']:9s} {e['slug']:32s} {(n - 44) // 4096:6d} {n:8d}  {e['recipe']['title']}")
+    print(f"{len(entries)} wavetables, {sum(len(b) for b in files.values())} bytes")
+
+
 def main():
-    here = os.path.dirname(os.path.abspath(__file__))
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out-root", default=os.path.join(here, "..", "content"))
-    ap.add_argument("--check", action="store_true")
-    ap.add_argument("--list", action="store_true")
+    ap.add_argument("--out-root", default=os.path.join(HERE, "..", "content"))
+    ap.add_argument("--addons-root", default=os.path.join(HERE, "..", "content-addons"))
+    ap.add_argument("--check", action="store_true", help="write nothing; exit 1 when a file differs from what the recipes make")
+    ap.add_argument("--list", action="store_true", help="print the wavetable catalogue (category, file, frames, bytes, title)")
+    ap.add_argument("--addon", action="append", help="process only this add-on pack (a folder name below content-src/addons); the factory packs are left alone (repeatable)")
+    ap.add_argument("--only", action="append", choices=wl.CATEGORIES, help="regenerate (or check) only this wavetable category; samples are left alone (repeatable)")
     a = ap.parse_args()
-    packs = pack_files()
-    out = {}
-    for key, files in packs.items():
-        for rel, b in files.items():
-            out[f"{key}/{rel}"] = b
-        out[f"{key}/contentpack.json"] = manifest_text(key, files).encode("utf-8")
-    total = sum(len(b) for b in out.values())
-    if a.list:
-        for rel in sorted(out):
-            print(f"{len(out[rel]):9d}  {rel}")
-        print(f"{total} bytes in {len(out)} files")
-        return 0
     root = os.path.abspath(a.out_root)
+    entries = load_recipes(RECIPES_ROOT)
+    targets = []      # (directory, {relative path: bytes}, selected paths or None)
+    wt_dir = os.path.join(root, "factory-wavetables")
+    files, meta, selected = wavetable_files(entries, a.only, wt_dir) if not a.addon else ({}, {}, set())
+    if a.list:
+        print_catalogue(entries, files)
+        for d, m, ents in addon_packs():
+            f2, _, _ = wavetable_files(ents, None, "")
+            print(f"\nadd-on pack {m['id']} ({d})")
+            print_catalogue(ents, f2)
+        return 0
+    sel = selected | {"contentpack.json"}
+    pack_meta = factory_wavetable_meta(entries)
+    if not a.addon:
+        targets.append((wt_dir, dict(files, **{"contentpack.json": manifest_text(pack_meta, files, meta).encode("utf-8")}), sel if a.only else None))
+    if not a.only:
+        if not a.addon:
+            sm = samples_files()
+            targets.append((os.path.join(root, "factory-samples"), dict(sm, **{"contentpack.json": manifest_text(PACKS["factory-samples"], sm).encode("utf-8")}), None))
+        for d, m, ents in addon_packs():
+            if a.addon and d not in a.addon:
+                continue
+            f2, m2, _ = wavetable_files(ents, None, "")
+            targets.append((os.path.join(os.path.abspath(a.addons_root), d), dict(f2, **{"contentpack.json": manifest_text(m, f2, m2).encode("utf-8")}), None))
+    total = sum(len(b) for _, fs, _ in targets for b in fs.values())
+    nfiles = sum(len(fs) for _, fs, _ in targets)
     if a.check:
-        bad = [rel for rel, b in out.items() if not os.path.isfile(os.path.join(root, rel)) or open(os.path.join(root, rel), "rb").read() != b]
-        for key in packs:
-            d = os.path.join(root, key)
-            for dp, _, fns in os.walk(d):
-                for fn in fns:
-                    rel = os.path.relpath(os.path.join(dp, fn), root).replace(os.sep, "/")
-                    if rel not in out and fn != ".DS_Store":
-                        bad.append(rel + " (not generated)")
+        bad = []
+        for d, fs, selpaths in targets:
+            for rel, b in fs.items():
+                if selpaths is not None and rel not in selpaths:
+                    continue
+                path = os.path.join(d, rel)
+                if not os.path.isfile(path) or open(path, "rb").read() != b:
+                    bad.append(os.path.relpath(path, os.path.dirname(root)))
+            if selpaths is None and os.path.isdir(d):
+                for dp, _, fns in os.walk(d):
+                    for fn in fns:
+                        rel = os.path.relpath(os.path.join(dp, fn), d).replace(os.sep, "/")
+                        if rel not in fs and fn != ".DS_Store":
+                            bad.append(os.path.relpath(os.path.join(d, rel), os.path.dirname(root)) + " (not generated)")
         if bad:
             print("content differs from the generator:", *sorted(bad), sep="\n  ")
             return 1
-        print(f"content pack up to date ({len(out)} files, {total} bytes)")
+        print(f"content pack up to date ({nfiles} files, {total} bytes)")
         return 0
-    for rel, b in out.items():
-        path = os.path.join(root, rel)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "wb") as f:
-            f.write(b)
-    print(f"wrote {len(out)} files, {total} bytes below {root}")
+    for d, fs, selpaths in targets:
+        for rel, b in fs.items():
+            if selpaths is not None and rel not in selpaths:
+                continue
+            path = os.path.join(d, rel)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(b)
+    if not a.only:     # a table that left the recipes leaves the folder: stale wavetable files go
+        for d, fs, selpaths in targets:
+            if os.path.isdir(d):
+                for dp, _, fns in os.walk(d):
+                    for fn in fns:
+                        rel = os.path.relpath(os.path.join(dp, fn), d).replace(os.sep, "/")
+                        if rel not in fs and fn != ".DS_Store":
+                            os.remove(os.path.join(d, rel))
+    print(f"wrote {nfiles} files, {total} bytes below {root}")
     return 0
 
 

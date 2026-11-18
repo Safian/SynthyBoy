@@ -63,7 +63,7 @@ add("Vowel Scrub Choir", "Lead", "lead,choir,granular,vowel,scrub,mod-wheel,plat
         R("macro6", "filter1.cutoff", 45),                                                 # Bright
     ],
     ["Vowel", "Cloud", "Short Grains", "Table Layer", "Space", "Bright", "", ""],
-    content=C(wavetables=[WT(2, "formant_sweep_aeiou")], samples=[SMP(1, "voice_sweep_aeiou")], impulses=[IMP("plate")]))
+    content=C(wavetables=[WT(2, "Vocal/formant_sweep_aeiou")], samples=[SMP(1, "voice_sweep_aeiou")], impulses=[IMP("plate")]))
 
 add("Frozen Pluck Drone", "Pad", "pad,drone,granular,freeze,bus,plate,convolve,pluck",
     "A plucked string held still: the play head is parked on the first hundred milliseconds of the pluck, so the Granular oscillator sustains one instant of it for as long as the key is down; a second copy runs on bus 1 through the plate impulse response alone (wet only), the dry copy stays in front",

@@ -1,0 +1,25 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Noise Burst Widening",
+ "category": "Noise",
+ "description": "A gaussian burst of noise once per cycle that widens from 6 % to the whole cycle: a click, a puff, a steady noise (the scan is the duty cycle of a noise gate).",
+ "frames": 64,
+ "seed": "noise_burst_widening",
+ "source": {
+  "type": "burst",
+  "params": {
+   "width": {
+    "law": "curve",
+    "from": 0.06,
+    "to": 1.0,
+    "power": 1.5
+   },
+   "tilt": 0.3,
+   "seed": 3
+  }
+ },
+ "post": {
+  "limit": 320,
+  "rms": 0.15
+ }
+}

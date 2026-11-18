@@ -696,8 +696,8 @@
     },
     {
       "path": "Lead/vowel_scrub_choir.sbpreset",
-      "sha256": "d524e8b15a9fe84402f274b040244cec4b7bdf43f3837949608a17f4b8a85336",
-      "size": 51368
+      "sha256": "0e2e883f8f92ea6ba9d8e02b4219b0499850f8ce99a233a748b97f3a6efa7f69",
+      "size": 51374
     },
     {
       "path": "Pad/frozen_pluck_drone.sbpreset",
@@ -736,8 +736,8 @@
     },
     {
       "path": "Keys/dusty_rhodes_keys.sbpreset",
-      "sha256": "b1128b112fb0686319c10cadee31f48fc1eaa209619cad42190b64910252ef4a",
-      "size": 51277
+      "sha256": "3201b941a59f312e6d008def4d84cc97ac4b4bc5e8eb7e500ce58d05e5608316",
+      "size": 51285
     },
     {
       "path": "Pluck/glass_ping_pluck.sbpreset",
@@ -771,8 +771,8 @@
     },
     {
       "path": "Lead/spectral_bowed_glass.sbpreset",
-      "sha256": "2a4c8748e1c44bd87ee72a9be265de8ee5f9a72f7841946c8a50bdec06aabc9d",
-      "size": 51163
+      "sha256": "5857262d8ff50516ae43f8e3f1bbf6c6150c60bdbc02ae3da156fb25b93581d2",
+      "size": 51172
     },
     {
       "path": "Pad/spectral_gong_pad.sbpreset",
@@ -786,28 +786,28 @@
     },
     {
       "path": "Bass/reese_dual_phase_bass.sbpreset",
-      "sha256": "2613806e2db00eeac10c6130314fe5851f7076ecb5c760d2272bd943ebcfed3f",
-      "size": 51090
+      "sha256": "814f68158ae4b4ce966dbad1b6d2e2dd4dbbb810392b1f59692e90679dbf8b36",
+      "size": 51097
     },
     {
       "path": "Lead/vowel_table_lead.sbpreset",
-      "sha256": "a5bb70d06cfe005e71f2633d5b8757509d6b79fd0a8adc29b4bf81f35f6e7e88",
-      "size": 50873
+      "sha256": "29bb9a9853c1af6b45ef1c7f5205a73f38cd9dcab97b6bf069553922c2f0a26d",
+      "size": 50879
     },
     {
       "path": "Keys/drawbar_organ_keys.sbpreset",
-      "sha256": "e1979ef9195a7ac8ac384a36ec83718e360e8707fbf6f96043b660e395c0604e",
-      "size": 50941
+      "sha256": "af59ebb9a3a52e889616c74da2411aa67285d61b66f927f039200160a15deb43",
+      "size": 50950
     },
     {
       "path": "Pad/throat_singer_drone.sbpreset",
-      "sha256": "363eb25fbe6122ecfd8be0cbc558490db36c5a5b6b409a8804ce429eb786fa8b",
-      "size": 50913
+      "sha256": "8d752b5a5ee5403e65c5b89657eb0fde1c4d16435dbf80a64274e3ef79a7fe3e",
+      "size": 50919
     },
     {
       "path": "Bass/ladder_fm_bass.sbpreset",
-      "sha256": "2f4455a06a10014a5058b5cfde6592944ec99a80fa028aa322ea75e1cacf16a5",
-      "size": 50856
+      "sha256": "23c26f5d735ae1dd6d9afe2f53263a64aa5170ec1e4121c7375f28786b582644",
+      "size": 50864
     }
   ]
 }

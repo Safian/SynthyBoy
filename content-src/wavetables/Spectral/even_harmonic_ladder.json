@@ -1,0 +1,20 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Even Harmonic Ladder",
+ "category": "Spectral",
+ "description": "The fundamental plus even harmonics only (octave, 4th, 6th ...) up to the 60th: a sine grows an octave-stacked, reedy tone.",
+ "frames": 64,
+ "seed": "even_harmonic_ladder",
+ "source": {
+  "type": "additive",
+  "params": {
+   "count": {
+    "law": "linear",
+    "from": 1,
+    "to": 60
+   },
+   "rolloff": 1.0,
+   "mask": "even"
+  }
+ }
+}

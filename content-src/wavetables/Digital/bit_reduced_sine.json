@@ -1,0 +1,32 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Bit Reduced Sine",
+ "category": "Digital",
+ "description": "A sine with a little saw, quantised to fewer and fewer bits (about 10 down to 1.8): smooth tone to a stepped, gritty one.",
+ "frames": 64,
+ "seed": "bit_reduced_sine",
+ "source": {
+  "type": "shape",
+  "params": {
+   "mode": "bits",
+   "drive": 1.0,
+   "bits": {
+    "law": "curve",
+    "from": 10,
+    "to": 1.8,
+    "power": 0.8
+   }
+  },
+  "input": {
+   "type": "classic",
+   "params": {
+    "sine": 1.0,
+    "saw": 0.4,
+    "count": 120
+   }
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

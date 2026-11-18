@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "PWM Dual Phase",
+ "category": "Analog",
+ "description": "Two opposite saws, the second a variable distance behind: the distance breathes 8 % to 50 % to 8 %, pulse to thin comb.",
+ "frames": 64,
+ "seed": "pwm_dual_phase",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "pwm_dual_phase"
+  }
+ }
+}

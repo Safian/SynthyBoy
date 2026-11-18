@@ -1,0 +1,25 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Drum Membrane Modes",
+ "category": "Metallic",
+ "description": "The modes of an ideal circular membrane (1, 1.59, 2.14, 2.30, 2.65 ...) with the fundamental walking from harmonic 2 to 10: a tom to a metallic tambourine-like drum.",
+ "frames": 64,
+ "seed": "drum_membrane_modes",
+ "source": {
+  "type": "partials",
+  "params": {
+   "set": "membrane",
+   "scale": {
+    "law": "linear",
+    "from": 2,
+    "to": 10
+   },
+   "count": 12,
+   "rolloff": 0.6,
+   "seed": 5
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

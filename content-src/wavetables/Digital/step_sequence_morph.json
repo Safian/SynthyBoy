@@ -1,0 +1,22 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Step Sequence Morph",
+ "category": "Digital",
+ "description": "Eight levels per cycle read like a step sequencer pattern that morphs through five random patterns (slewed corners): wave sequencing staircases.",
+ "frames": 64,
+ "seed": "step_sequence_morph",
+ "source": {
+  "type": "stepseq",
+  "params": {
+   "steps": 8,
+   "keys": 5,
+   "pos": {
+    "law": "linear",
+    "from": 0,
+    "to": 4
+   },
+   "slew": 0.15,
+   "seed": 21
+  }
+ }
+}

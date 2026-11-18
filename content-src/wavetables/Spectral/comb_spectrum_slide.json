@@ -1,0 +1,22 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Comb Spectrum Slide",
+ "category": "Spectral",
+ "description": "A comb of period 6 harmonics, depth 90 %, slides across the spectrum of a gently falling series by one full period: the notches walk through the partials.",
+ "frames": 64,
+ "seed": "comb_spectrum_slide",
+ "source": {
+  "type": "additive",
+  "params": {
+   "count": 200,
+   "rolloff": 0.9,
+   "comb_period": 6,
+   "comb_depth": 0.9,
+   "comb_offset": {
+    "law": "linear",
+    "from": 0,
+    "to": 6
+   }
+  }
+ }
+}

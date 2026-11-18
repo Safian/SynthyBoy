@@ -30,7 +30,7 @@ add("Dusty Rhodes Keys", "Keys", "keys,electric-piano,fm,vinyl,sample,convolve,c
         R("macro6", "filter1.cutoff", 55),                                                 # Tone
     ],
     ["Tine Bark", "Dust", "Chorus", "Dry Amp", "Sustain", "Tone", "", ""],
-    content=C(wavetables=[WT(1, "fm_index_sweep")], samples=[SMP(3, "vinyl_noise_bed")], impulses=[IMP("cabinet_colour")]))
+    content=C(wavetables=[WT(1, "Digital/fm_index_sweep")], samples=[SMP(3, "vinyl_noise_bed")], impulses=[IMP("cabinet_colour")]))
 
 add("Glass Ping Pluck", "Pluck", "pluck,glass,bell,sample,plate,convolve,shimmer",
     "A struck wine glass: the Sample oscillator plays the ping at every key (it is tuned, so the whole keyboard is a glass harmonica), a thin bell table adds the inharmonic body, and the plate impulse response carries the ring into a long tail",
