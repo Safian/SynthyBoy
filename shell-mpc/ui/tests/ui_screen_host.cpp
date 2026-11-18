@@ -598,6 +598,7 @@ int main()
                 // (a) the plot areas: the same top, bottom and height (and the same x range) in the three thirds
                 lfodisplay::Data ld;
                 ld.kind = lfodisplay::Data::Kind::Shape;
+                ld.area = playrows::plotRect (lc.displayRect());   // the owner of the compact view names the plot area
                 const Rect pw = oc.plotRect(), pe = ec.graph.plot(), pl = lfodisplay::plotRect (lc.displayRect(), ld);
                 check (pw.y == pe.y && pe.y == pl.y && pw.h == pe.h && pe.h == pl.h && pw.bottom() == pe.bottom() && pe.bottom() == pl.bottom() && pw.h > 100 && pw == playrows::plotRect (w) && pe == playrows::plotRect (e) && pl == playrows::plotRect (l),
                        nm + ": the wave, the envelope curve and the LFO curve have the same plot area top (" + std::to_string (pw.y) + "), bottom and height (" + std::to_string (pw.h) + "), below the header band");
@@ -605,7 +606,7 @@ int main()
                 const Rect fo = oc.full.rect(), fe = ec.full.rect(), fl = lc.full.rect();
                 check (fo.w >= 56 && fo.h >= 56 && fe.w >= 56 && fe.h >= 56 && fl.w >= 56 && fl.h >= 56 && w.contains (fo) && e.contains (fe) && l.contains (fl) && w.contains (oc.power.rect()) && (i == OscInstance::Sub || (w.contains (oc.route.rect()) && oc.route.rect().h >= 56 && oc.route.rect().w >= 56)),
                        nm + ": the touch targets of the buttons are 56 px at least and inside their display");
-                check (fo.x - w.x == fe.x - e.x && fe.x - e.x == fl.x - l.x && fo.y - w.y == fe.y - e.y && fe.y - e.y == fl.y - l.y && fo.right() == w.right() - 4 && (i == OscInstance::Sub || (oc.route.rect().right() <= fo.x && oc.power.rect().right() <= oc.route.rect().x)),
+                check (w.right() - fo.right() == e.right() - fe.right() && e.right() - fe.right() == l.right() - fl.right() && fo.y - w.y == fe.y - e.y && fe.y - e.y == fl.y - l.y && fo.right() == w.right() - 4 && fe.right() == e.right() - 4 && fl.right() == l.right() - 4 && (i == OscInstance::Sub || (oc.route.rect().right() <= fo.x && oc.power.rect().right() <= oc.route.rect().x)),
                        nm + ": the full screen button is at the same place in the three displays (rightmost); the route button is left of it, the power button at the left end");
             }
     }

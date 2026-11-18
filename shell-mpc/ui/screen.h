@@ -249,11 +249,12 @@ protected:
             display_ = { rect_.x + m, midY, W - 2 * m, std::max (0, panelY - gap - midY) };
             barBlock_ = {};
             bar.place ({});
-            const int halfW = (W - 3 * m) / 2;
-            tuneBlock_ = { rect_.x + m, panelY, halfW, bottomH };
+            // the two blocks are not of one width: the KIND stepper of the NOISE block (a third of it) needs its own minimum width (208 px), which a half of the screen does not give; TUNE gives the room (its cells are a touch narrower)
+            const int halfW = (W - 3 * m) / 2, shareW = 24;
+            tuneBlock_ = { rect_.x + m, panelY, halfW - shareW, bottomH };
             tune.setNoiseRow (true);
             tune.place ({ tuneBlock_.x + kPad, tuneBlock_.y + kTitleH, std::max (0, tuneBlock_.w - 2 * kPad), std::max (0, tuneBlock_.h - kTitleH - kPad) });
-            panelRect = { tuneBlock_.right() + m, panelY, W - 2 * m - halfW - m, bottomH };
+            panelRect = { tuneBlock_.right() + m, panelY, W - 2 * m - tuneBlock_.w - m, bottomH };
         }
         else if (noise)
         {
