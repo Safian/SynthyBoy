@@ -593,31 +593,33 @@ int findPeaks (const float* m, int n, float top, int* peaks, int maxPeaks, bool 
     const float threshold = 1.0e-5f * top;
     int count = 0;
     int k = 1;
-#if SB_SPECTRAL_NEON && defined(__aarch64__)   // (on the 32 bit Cortex-A17 the compare, narrow and store of the vector form cost more than the branchy scalar loop: 16 against 10 microseconds a frame)
-    if (neon)
+#if SB_SPECTRAL_NEON
+    if (neon && n <= 1056)
     {
-        // sixteen bins at a time: the four comparisons become one byte per bin (0xff for a peak), and only a group of sixteen that has a peak is looked at one by one (a vector compare moved to
-        // the ARM registers for every four bins stalls the NEON pipeline)
+        // pass 1: one flag byte (1 or 0) per bin, sixteen bins per iteration, nothing moved to the ARM registers; pass 2: the flags are read in order and the index appended without a branch (a
+        // compare and branch per bin of the plain loop mispredicts at every peak: a recorded sample has one every third bin or so)
+        uint8_t flags[1056];
         const float32x4_t vth = vdupq_n_f32 (threshold);
         const auto mask4 = [&] (int at)
         {
             const float32x4_t c = vld1q_f32 (m + at), p = vld1q_f32 (m + at - 1), q = vld1q_f32 (m + at + 1);
             return vandq_u32 (vandq_u32 (vcgtq_f32 (c, p), vcgeq_f32 (c, q)), vcgtq_f32 (c, vth));
         };
-        for (; k + 16 <= n - 1 && count < maxPeaks; k += 16)
+        int at = 1;
+        for (; at + 16 <= n - 1; at += 16)
         {
-            const uint16x8_t lo = vcombine_u16 (vmovn_u32 (mask4 (k)), vmovn_u32 (mask4 (k + 4)));
-            const uint16x8_t hi = vcombine_u16 (vmovn_u32 (mask4 (k + 8)), vmovn_u32 (mask4 (k + 12)));
-            uint8_t flags[16];
-            vst1q_u8 (flags, vcombine_u8 (vmovn_u16 (lo), vmovn_u16 (hi)));
-            uint32_t words[4];
-            std::memcpy (words, flags, sizeof words);
-            if ((words[0] | words[1] | words[2] | words[3]) == 0u)
-                continue;
-            for (int j = 0; j < 16 && count < maxPeaks; ++j)
-                if (flags[j] != 0)
-                    peaks[count++] = k + j;
+            const uint16x8_t lo = vcombine_u16 (vmovn_u32 (mask4 (at)), vmovn_u32 (mask4 (at + 4)));
+            const uint16x8_t hi = vcombine_u16 (vmovn_u32 (mask4 (at + 8)), vmovn_u32 (mask4 (at + 12)));
+            vst1q_u8 (flags + at, vshrq_n_u8 (vcombine_u8 (vmovn_u16 (lo), vmovn_u16 (hi)), 7));
         }
+        for (int j = at; j < n - 1; ++j)
+            flags[j] = (m[j] > m[j - 1] && m[j] >= m[j + 1] && m[j] > threshold) ? 1 : 0;
+        for (int j = 1; j < n - 1 && count < maxPeaks; ++j)
+        {
+            peaks[count] = j;
+            count += flags[j];
+        }
+        return count;
     }
 #else
     (void) neon;
