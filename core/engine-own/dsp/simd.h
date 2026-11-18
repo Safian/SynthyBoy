@@ -6,6 +6,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 // 32 bit ARM, and AArch64 on Linux (the MPC XL). Not Apple's arm64 (macOS, iOS): there the scalar code and its compiler contraction stay as they were.
@@ -17,6 +18,7 @@
 
 #if (((SB_ARM_LINUX_OR_32) && defined(__ARM_NEON)) || defined(SB_TEST_NEON)) && !defined(SB_NO_NEON) // SB_TEST_NEON: the same intrinsics on a build that does not define __ARM_NEON
  #include <arm_neon.h>
+ #include "neon_cmp.h"
  #define SB_NEON 1
 #else
  #define SB_NEON 0
@@ -110,6 +112,24 @@ inline void addTo (float* a, const float* b, int n) noexcept
 #endif
     for (; k < n; ++k)
         a[k] += b[k];
+}
+/** Whether |a[k]| < c and |b[k]| < c for every k (c > 0 a normal number): the float compares of a scalar loop `!(std::fabs (x) < c)`, made on NEON with the integer
+    compare of dsp/neon_cmp.h (the same result for every input: a NaN and an infinity are not below c). */
+inline bool allAbsBelow (const float* a, const float* b, int n, float c) noexcept
+{
+    int k = 0;
+#if SB_NEON
+    uint32x4_t acc = vdupq_n_u32 (0xffffffffu);
+    for (; k + 4 <= n; k += 4)
+        acc = vandq_u32 (acc, vandq_u32 (neoncmp::absLt (vld1q_f32 (a + k), c), neoncmp::absLt (vld1q_f32 (b + k), c)));
+    const uint32x2_t half = vand_u32 (vget_low_u32 (acc), vget_high_u32 (acc));
+    if ((vget_lane_u32 (half, 0) & vget_lane_u32 (half, 1)) == 0u)
+        return false;
+#endif
+    for (; k < n; ++k)
+        if (!(std::fabs (a[k]) < c) || !(std::fabs (b[k]) < c))
+            return false;
+    return true;
 }
 /** a[k] = clamp (a[k], lo, hi) */
 inline void clampTo (float* a, float lo, float hi, int n) noexcept

@@ -5,6 +5,7 @@
 // The constant forms are checked on all 2^32 bit patterns of x for every constant the engine uses them with (and a few more), against the scalar IEEE compare and
 // against the same compare in flush-to-zero mode (a subnormal x taken as zero of its sign); the general forms on every pair of a list of special values (both zeros,
 // subnormals, the normal boundaries, both infinities, NaNs of both signs and several payloads) and on random pairs of bit patterns.
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -13,6 +14,7 @@
 #include <vector>
 
 #include "dsp/neon_cmp.h"
+#include "dsp/simd.h"
 #include "test_runner.h"
 
 namespace
@@ -213,4 +215,54 @@ TEST (neon_flush_of_tiny_values_equals_flush_denormal)
 #else
     CHECK (true);
 #endif
+}
+
+TEST (runaway_test_and_limit_of_the_serum_filter_unit_equal_the_scalar_loops)
+{
+    // FilterUnit::process (): simd::allAbsBelow (200) against the scalar runaway loop, and, where it passes, simd::clampTo against std::clamp (x * 1, -16, 16)
+    using synthyboy::own::simd::allAbsBelow;
+    using synthyboy::own::simd::clampTo;
+    Rng r (17);
+    const float specials[] = { std::numeric_limits<float>::quiet_NaN(), -std::numeric_limits<float>::quiet_NaN(), INFINITY, -INFINITY, 200.0f, -200.0f,
+                               std::nextafter (200.0f, 0.0f), -std::nextafter (200.0f, 0.0f), std::nextafter (200.0f, 1000.0f), 16.0f, -16.0f,
+                               std::nextafter (16.0f, 100.0f), -0.0f, 0.0f, fromBits (0x00000001u), fromBits (0x807fffffu), 3.0e38f };
+    long long badTest = 0, badClamp = 0, runs = 0;
+    for (int it = 0; it < 400000; ++it)
+    {
+        static const int kSizes[] = { 32, 31, 7, 1, 0, 4, 13, 32 };
+        const int n = kSizes[it % 8];
+        float a[32], b[32];
+        const float scale = (it % 5 == 0) ? 300.0f : (it % 5 == 1 ? 20.0f : 1.0f);
+        for (int k = 0; k < n; ++k)
+        {
+            a[k] = scale * (static_cast<float> (r.next() >> 8) * (2.0f / 16777216.0f) - 1.0f);
+            b[k] = scale * (static_cast<float> (r.next() >> 8) * (2.0f / 16777216.0f) - 1.0f);
+        }
+        if (n > 0 && it % 3 == 0)
+        {
+            float* side = (r.next() & 1u) != 0 ? a : b;
+            side[r.next() % static_cast<uint32_t> (n)] = specials[r.next() % (sizeof specials / sizeof specials[0])];
+        }
+        bool runaway = false;
+        for (int k = 0; k < n; ++k)
+            runaway = runaway || !(std::fabs (a[k]) < 200.0f) || !(std::fabs (b[k]) < 200.0f);
+        badTest += allAbsBelow (a, b, n, 200.0f) == !runaway ? 0 : 1;
+        if (! runaway)
+        {
+            float ca[32], cb[32];
+            std::memcpy (ca, a, sizeof a);
+            std::memcpy (cb, b, sizeof b);
+            clampTo (ca, -16.0f, 16.0f, n);
+            clampTo (cb, -16.0f, 16.0f, n);
+            for (int k = 0; k < n; ++k)
+            {
+                const float wa = std::clamp (a[k] * 1.0f, -16.0f, 16.0f), wb = std::clamp (b[k] * 1.0f, -16.0f, 16.0f);
+                badClamp += (std::memcmp (&wa, &ca[k], 4) != 0 || std::memcmp (&wb, &cb[k], 4) != 0) ? 1 : 0;
+            }
+        }
+        ++runs;
+    }
+    std::printf ("    %lld blocks (special values, sizes 0 to 32): the runaway test differs in %lld, the limit in %lld values\n", runs, badTest, badClamp);
+    CHECK_EQ (badTest, 0);
+    CHECK_EQ (badClamp, 0);
 }
