@@ -16,12 +16,24 @@ def get_presets():
         with open(filepath, 'r') as f:
             try:
                 data = json.load(f)
+                meta = data.get("meta", {})
+                state = data.get("state", {})
+                params = state.get("params", {})
+                
+                # Osc types:
+                osc_types = []
+                for i in range(1, 4):
+                    osc_on = params.get(f"osc{i}.on", 0)
+                    if osc_on:
+                        osc_type = params.get(f"osc{i}.wavetable", 0) # simplified
+                        osc_types.append(str(osc_type))
+                
                 presets.append({
-                    "name": data.get("name"),
-                    "group": data.get("category"),
+                    "name": meta.get("name"),
+                    "group": meta.get("category"),
                     "folder": os.path.basename(os.path.dirname(filepath)),
-                    "osc": [data.get(f"osc{i}", {}).get("type") for i in range(1, 4) if data.get(f"osc{i}")],
-                    "effects": "Convolve" if "convolve" in str(data.get("effects", {})) else "None"
+                    "osc": osc_types,
+                    "effects": "Convolve" if params.get("convolve.on", 0) else "None"
                 })
             except:
                 continue
