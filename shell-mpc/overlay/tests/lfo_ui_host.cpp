@@ -9,6 +9,9 @@
 #include <string>
 #include <vector>
 
+#include <filesystem>
+#include <fstream>
+
 #include <sys/stat.h>
 
 #include "../lfo_ui.h"
@@ -67,6 +70,8 @@ public:
         ++shapeWrites;
         check (synthyboy::validateContent (next), "the content the LFO page wrote is valid (the state would keep it)");
     }
+    void wavetableSources (synthyboy::CatalogueSources& out) const override { out = synthyboy::CatalogueSources {}; out.userRoots = userRoots; }
+    void requestWavetable (int osc, const synthyboy::ContentFileRef& ref) override { wtOsc = osc; wtRef = ref; ++wtRequests; }
     void setQVirtual (int id, float v) noexcept override { router.setVirtualValue (id, v); }
     bool takeQVirtual (int id, float& v) noexcept override { return router.takeVirtual (id, v); }
     static int idx (const std::string& key) { const auto* p = synthyboy::findParamByKey (key.c_str()); return p ? static_cast<int> (p - synthyboy::paramTable()) : -1; }
@@ -80,6 +85,9 @@ public:
     }
     int sel[3] = { 2, 1, 1 }, lastSel = 0, q[16] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 }, qCalls = 0, writes = 0, lastWritten = -1, selWrites = 0, shapeWrites = 0;
     bool fullOpen = false;
+    std::vector<std::string> userRoots;   // the places the player's own files live (the card): a temporary directory in the tests of the saved shapes
+    int wtOsc = 0, wtRequests = 0;
+    synthyboy::ContentFileRef wtRef;
     std::shared_ptr<const synthyboy::StateContent> contentPtr;
     QRouter router;
 
@@ -427,6 +435,477 @@ void testEditor()
     r.tapC (r.ui.editor().back);
     r.tap (r.ui.full().bar.rndCells.cell (0).x + 4, r.ui.full().bar.rndCells.cell (0).y + 20);
     check (! r.ui.full().edit.enabled(), "EDIT is dim for a random LFO");
+}
+
+// ---- the editor: the marker, the quick delete and the selection, the saved shapes, the actions, the modulation of points
+struct TempDir
+{
+    std::string path;
+    TempDir()
+    {
+        std::string base = std::filesystem::temp_directory_path().string() + "/synthyboy_lfo_XXXXXX";
+        std::vector<char> t (base.begin(), base.end());
+        t.push_back ('\0');
+        path = ::mkdtemp (t.data()) != nullptr ? std::string (t.data()) : std::string();
+    }
+    ~TempDir() { if (! path.empty()) { std::error_code ec; std::filesystem::remove_all (path, ec); } }
+};
+
+/** Opens the editor of LFO 1 on a drawn shape of the given points (the content of the instance has it). */
+void openEditorOn (Rig& r, const ui::lfo::ShapeModel& m)
+{
+    r.inst.set ("lfo1.shape", 12.0f);
+    r.inst.setLfoShape (1, LfoUi::contentOf (1, m, 8, 8));
+    r.refresh();
+    if (r.stack.depth() == 0)
+        r.openFull();
+    r.tapC (r.ui.full().edit);
+    r.ui.editor().canvas.state.gridX = r.ui.editor().canvas.state.gridY = 8;
+    r.ui.editor().canvas.state.snap = false;
+}
+ui::lfo::ShapeModel triangleWith (std::initializer_list<std::pair<float, float>> more)
+{
+    ui::lfo::ShapeModel m = ui::lfo::ShapeModel::fromBuiltin (1);
+    for (const auto& p : more)
+        m.insert (p.first, p.second);
+    return m;
+}
+void chooseRow (Rig& r, int row)
+{
+    const ui::Rect rr = r.ui.list().rowRect (row);
+    r.tap (rr.x + 20, rr.y + 20);
+}
+void typeName (Rig& r, const std::string& name)
+{
+    for (char c : name)
+    {
+        const int k = c == ' ' ? r.ui.keyboard().keyOfKind (ui::TextEntry::Space) : r.ui.keyboard().keyOf (c);
+        const ui::TextEntry::Key& key = r.ui.keyboard().key (k);
+        r.tap (key.r.x + key.r.w / 2, key.r.y + key.r.h / 2);
+    }
+}
+void pressKey (Rig& r, ui::TextEntry::KeyKind kind)
+{
+    const ui::TextEntry::Key& key = r.ui.keyboard().key (r.ui.keyboard().keyOfKind (kind));
+    r.tap (key.r.x + key.r.w / 2, key.r.y + key.r.h / 2);
+}
+/** An action of the MORE list: the group (0 EDIT, 1 GRID, 2 COPY) and the row in it. */
+void more (Rig& r, int group, int row)
+{
+    r.tapC (r.ui.editor().more);
+    chooseRow (r, group);
+    chooseRow (r, row);
+}
+
+void testEditorMarker()
+{
+    Rig r;
+    r.inst.set ("lfo1.sync_type", 4.0f);   // loop at point
+    openEditorOn (r, triangleWith ({}));
+    ui::ShapeCanvas& cv = r.ui.editor().canvas;
+    check (cv.state.markerKind == ui::ShapeCanvas::MarkerLoop && std::fabs (cv.state.markerX - r.inst.get ("lfo1.phase") / 360.0f) < 1.0e-4f, "loop at point: the editor shows the LOOP marker at the PHASE of the LFO");
+    // the Q groups: TRIGGER = MODE, PHASE (parameters of the table), BEND ALL (virtual 7); EDIT is the active group and is on Q1 .. Q4
+    check (r.inst.q[8] == paramIdx ("lfo1.sync_type") && r.inst.q[9] == paramIdx ("lfo1.phase") && r.inst.q[10] == QRouter::encode (7, QRouter::kVirtual) && r.inst.q[11] == -1, "the TRIGGER group is on Q9 .. Q11: MODE, PHASE, BEND ALL");
+    check (r.ui.editor().mode.state.index == 4 && std::string (r.ui.editor().mode.state.text) == "Loop at point", "the MODE of the LFO is on the page");
+    r.inst.set ("lfo1.phase", 90.0f);
+    r.refresh();
+    check (std::fabs (cv.state.markerX - 0.25f) < 1.0e-4f && std::fabs (static_cast<float> (r.ui.editor().fphase.state.value) - 90.0f) < 1.0e-3f, "the marker and the PHASE field follow the parameter");
+    // dragging the marker: the PHASE is the point it snaps to, the loop point of the model too
+    const int w0 = r.inst.shapeWrites;
+    r.drag (static_cast<int> (cv.xOf (0.25f)), cv.plot().y + 20, static_cast<int> (cv.xOf (0.52f)), cv.plot().y + 20, 8);
+    check (std::fabs (r.inst.get ("lfo1.phase") - 180.0f) < 0.1f && r.ui.editor().model.loop == 1 && r.ui.editor().model.n == 3, "dragging the LOOP marker sets the PHASE (180 degrees = the peak) and the loop point (point 2)");
+    check (r.inst.shapeWrites > w0 && r.inst.contentPtr->lfoShapes[0].loopPoint == 1, "the loop point goes to the content");
+    check (r.ui.editor().undo.depth() == 1, "the marker drag is one undo state");
+    // the loop point moved with its point: the PHASE follows while they belong together
+    r.tap (static_cast<int> (cv.xOf (0.5f)), static_cast<int> (cv.yOf (1.0f)));
+    check (cv.state.selected == 1, "the peak is selected");
+    r.inst.hostQ (1, 0.6f);   // X
+    r.refresh();
+    check (std::fabs (r.ui.editor().model.p[1].x - 0.6f) < 1.0e-4f && std::fabs (r.inst.get ("lfo1.phase") - 216.0f) < 0.1f, "moving the loop point in time moves the PHASE with it (216 degrees)");
+    // the PHASE field moves the marker
+    r.inst.set ("lfo1.phase", 36.0f);
+    r.refresh();
+    check (std::fabs (cv.state.markerX - 0.1f) < 1.0e-4f, "the marker follows the PHASE (36 degrees = 0.1)");
+    // the other trigger modes: START (retrigger, envelope), dimmed with a hint (free-run)
+    for (int mode = 0; mode < 6; ++mode)
+    {
+        r.inst.set ("lfo1.sync_type", static_cast<float> (mode));
+        r.refresh();
+        check (cv.state.markerKind == ui::ShapeEditorPage::markerKindOf (mode) && cv.state.markerKind == (mode == 1 ? ui::ShapeCanvas::MarkerDim : (mode >= 3 ? ui::ShapeCanvas::MarkerLoop : ui::ShapeCanvas::MarkerStart)), "the marker kind of the trigger mode " + std::to_string (mode));
+    }
+    // the MODE stepper: a tap on its name opens the list of the six trigger types, a choice writes the parameter
+    r.tapC (r.ui.editor().mode);
+    check (r.ui.topPage() == LfoUi::kPageList && r.ui.list().state.count == 6, "MODE: the list of the six trigger types opens over the editor");
+    chooseRow (r, 3);
+    check (r.ui.topPage() == LfoUi::kPageEditor && r.inst.get ("lfo1.sync_type") == 3.0f, "a choice of the list writes lfo1.sync_type and closes the list (the editor is below)");
+    // the LOOP toggle sets the loop point at the selected point (and the PHASE in a loop mode)
+    r.inst.set ("lfo1.phase", 0.0f);
+    r.ui.editor().model.loop = -1;
+    r.refresh();
+    r.tap (static_cast<int> (cv.xOf (0.6f)), static_cast<int> (cv.yOf (1.0f)));
+    r.tapC (r.ui.editor().loop);
+    check (r.ui.editor().model.loop == 1 && std::fabs (r.inst.get ("lfo1.phase") - 216.0f) < 0.1f, "LOOP: the selected point is the loop point, the PHASE goes to it");
+}
+
+void testEditorQuickDeleteAndSelection()
+{
+    Rig r;
+    openEditorOn (r, triangleWith ({ { 0.25f, 0.5f }, { 0.75f, 0.5f } }));
+    ui::ShapeCanvas& cv = r.ui.editor().canvas;
+    ui::lfo::ShapeModel& m = r.ui.editor().model;
+    check (m.n == 5, "five points");
+    const ui::lfo::ShapeModel start = m;
+    // a double tap on a point deletes it (the touch path: two taps in a row)
+    const int px = static_cast<int> (cv.xOf (0.25f)), py = static_cast<int> (cv.yOf (0.5f));
+    r.tap (px, py, 30);
+    check (m.n == 5 && cv.state.selected == 1, "the first tap selects");
+    r.tap (px, py, 30);
+    check (m.n == 4 && r.inst.contentPtr->lfoShapes[0].points.size() == 4 && r.ui.editor().undo.depth() == 1, "the second tap deletes it: the content has four points, one undo state");
+    r.tapC (r.ui.editor().undoButton);
+    check (m == start && r.inst.contentPtr->lfoShapes[0].points.size() == 5, "UNDO restores the point exactly (and the content)");
+    // the SELECT tool: a rectangle over the two inner points of the sides, then DELETE
+    r.tap (r.ui.editor().tools.cell (4).x + 10, r.ui.editor().tools.cell (4).y + 10);
+    check (cv.state.tool == ui::ToolSelector::Select, "the SELECT tool");
+    r.drag (static_cast<int> (cv.xOf (0.15f)), static_cast<int> (cv.yOf (1.0f)) - 15, static_cast<int> (cv.xOf (0.85f)), static_cast<int> (cv.yOf (0.3f)), 8);
+    check (cv.selection().count() == 3 && r.ui.editor().del.enabled() && std::string (r.ui.editor().fpoint.state.text) == "3 SEL", "the rectangle selects the three inner points under it, the POINT field shows the count (" + std::to_string (cv.selection().count()) + ")");
+    r.tapC (r.ui.editor().del);
+    check (m.n == 2 && m.p[0].x == 0.0f && m.p[1].x == 1.0f, "DELETE removes the three selected points, the end points stay (" + std::to_string (m.n) + " left)");
+    check (r.inst.contentPtr->lfoShapes[0].points.size() == static_cast<size_t> (m.n), "the content follows the DELETE");
+    r.tapC (r.ui.editor().undoButton);
+    check (m == start, "one UNDO brings every deleted point back");
+    // the 128 point limit: a full shape adds nothing with the POINT tool
+    ui::lfo::ShapeModel full = ui::lfo::ShapeModel::fromBuiltin (2);
+    for (int i = 1; i < 127; ++i)
+        full.insert (static_cast<float> (i) / 127.0f, (i % 2) != 0 ? 0.2f : 0.8f);
+    r.tapC (r.ui.editor().back);
+    openEditorOn (r, full);
+    r.tap (r.ui.editor().tools.cell (0).x + 10, r.ui.editor().tools.cell (0).y + 10);
+    const int before = r.ui.editor().model.n;
+    r.tap (static_cast<int> (r.ui.editor().canvas.xOf (0.333f)), static_cast<int> (r.ui.editor().canvas.yOf (0.5f)));
+    check (before == ui::lfo::kMaxPoints && r.ui.editor().model.n == ui::lfo::kMaxPoints, "128 points: a tap on the canvas adds nothing");
+}
+
+void testShapeLibrary()
+{
+    TempDir tmp;
+    LfoShapeLibrary lib;
+    lib.setRoots ({ tmp.path });
+    lib.refresh();
+    check (lib.count() == 0 && lib.canSave(), "the library: nothing saved yet, a card is there");
+    ui::lfo::ShapeModel m = ui::lfo::ShapeModel::fromBuiltin (1);
+    m.insert (0.25f, 0.3f);
+    m.p[1].power = 5.5f;
+    m.smooth = true;
+    m.loop = 2;
+    check (lib.save ("Wobble", m, false) && lib.count() == 1 && lib.items()[0].name == "Wobble", "save: a new shape");
+    check (std::filesystem::exists (tmp.path + "/SynthyBoy/LFO Shapes/Wobble.lfoshape.json"), "the file is SynthyBoy/LFO Shapes/<name>.lfoshape.json below the root");
+    // the file is the core's format (the desktop reads it) with the loop point added
+    std::ifstream in (tmp.path + "/SynthyBoy/LFO Shapes/Wobble.lfoshape.json");
+    const std::string text ((std::istreambuf_iterator<char> (in)), std::istreambuf_iterator<char>());
+    synthyboy::LfoShapeFile coreFile;
+    check (synthyboy::parseLfoShapeFile (text, coreFile) && coreFile.name == "Wobble" && coreFile.smooth && coreFile.points.size() == 4 && text.find ("\"loop_point\":2") != std::string::npos, "the file is read by the core's parser (name, smooth, four points) and has the loop point");
+    ui::lfo::ShapeModel back;
+    check (lib.load (0, back) && back == m, "save then load gives an equal model (points, curves, SMOOTH, the loop point)");
+    check (! lib.save ("wobble", m, false) && lib.error() == "THAT NAME IS TAKEN" && lib.count() == 1, "save without overwrite refuses a taken name (any case)");
+    ui::lfo::ShapeModel m2 = m;
+    m2.smooth = false;
+    check (lib.save ("wobble", m2, true) && lib.count() == 1, "save with overwrite replaces it");
+    check (lib.load (0, back) && back == m2 && ! (back == m), "the replaced shape is the new one");
+    check (lib.save ("Alpha", m, false) && lib.count() == 2 && lib.items()[0].name == "Alpha", "the list is sorted by name");
+    check (lib.rename (0, "Beta") && lib.count() == 2 && lib.find ("Beta") >= 0 && lib.find ("Alpha") < 0 && lib.load (lib.find ("Beta"), back) && back == m, "rename: the file and the shape in it");
+    check (! lib.rename (0, "wobble") && lib.error() == "THAT NAME IS TAKEN", "rename to a taken name is refused");
+    check (lib.remove (lib.find ("Beta")) && lib.count() == 1 && ! std::filesystem::exists (tmp.path + "/SynthyBoy/LFO Shapes/Beta.lfoshape.json"), "delete removes the file");
+    check (! lib.save ("   ", m, true) && lib.error() == "THE NAME IS EMPTY", "an empty name is refused");
+    // a shape of the full 128 points
+    ui::lfo::ShapeModel big = ui::lfo::ShapeModel::fromBuiltin (2);
+    for (int i = 1; i < 127; ++i)
+        big.insert (static_cast<float> (i) / 127.0f, (i % 2) != 0 ? 0.2f : 0.8f);
+    check (big.n == 128 && lib.save ("Big", big, true) && lib.load (lib.find ("Big"), back) && back == big, "128 points survive save and load");
+    // a file of the plain core format (no loop point), a plain .json, and a damaged file
+    {
+        std::ofstream o (tmp.path + "/SynthyBoy/LFO Shapes/FromVital.lfoshape.json");
+        o << "{\"format\":\"synthyboy-lfo-shape\",\"version\":1,\"name\":\"x\",\"smooth\":false,\"points\":[{\"x\":0,\"y\":0},{\"x\":1,\"y\":1,\"power\":3}]}";
+        std::ofstream o2 (tmp.path + "/SynthyBoy/LFO Shapes/Plain.json");
+        o2 << "{\"format\":\"synthyboy-lfo-shape\",\"version\":1,\"name\":\"y\",\"smooth\":true,\"points\":[{\"x\":0,\"y\":1},{\"x\":1,\"y\":0}]}";
+        std::ofstream o3 (tmp.path + "/SynthyBoy/LFO Shapes/Broken.lfoshape.json");
+        o3 << "{\"format\":\"nothing\"}";
+        std::ofstream o4 (tmp.path + "/SynthyBoy/LFO Shapes/.hidden.lfoshape.json");
+        o4 << "{}";
+    }
+    lib.refresh();
+    check (lib.count() == 5 && lib.find (".hidden") < 0, "a file of the core's format, a plain .json and a damaged one are listed, a hidden file is not");
+    check (lib.load (lib.find ("FromVital"), back) && back.n == 2 && back.loop == -1 && std::fabs (back.p[0].power) < 1.0e-6f, "a file without a loop point loads with none");
+    check (lib.load (lib.find ("Plain"), back) && back.smooth && back.n == 2, "a plain .json loads");
+    check (! lib.load (lib.find ("Broken"), back) && lib.error() == "NOT A SHAPE FILE", "a damaged file is refused with a reason");
+    // two roots: the first one wins a name, the list holds both
+    TempDir other;
+    lib.setRoots ({ tmp.path, other.path });
+    lib.refresh();
+    const int before = lib.count();
+    {
+        std::filesystem::create_directories (other.path + "/SynthyBoy/LFO Shapes");
+        std::ofstream o (other.path + "/SynthyBoy/LFO Shapes/Wobble.lfoshape.json");
+        o << "{\"format\":\"synthyboy-lfo-shape\",\"version\":1,\"name\":\"other\",\"smooth\":false,\"points\":[{\"x\":0,\"y\":0},{\"x\":1,\"y\":1}]}";
+        std::ofstream o2 (other.path + "/SynthyBoy/LFO Shapes/Second.lfoshape.json");
+        o2 << "{\"format\":\"synthyboy-lfo-shape\",\"version\":1,\"name\":\"s\",\"smooth\":false,\"points\":[{\"x\":0,\"y\":0},{\"x\":1,\"y\":1}]}";
+    }
+    lib.refresh();
+    check (lib.count() == before + 1 && lib.find ("Second") >= 0, "two roots: a name both have is listed once (the first root's), the other root's shapes are listed too");
+    check (lib.load (lib.find ("Wobble"), back) && back == m2, "the shape of the first root is the one that loads");
+    // no root: nothing can be saved
+    LfoShapeLibrary none;
+    check (! none.canSave() && ! none.save ("X", m, true) && none.error() == "NO CARD OR DRIVE FOUND", "no card or drive: the save says so");
+}
+
+void testEditorShapesList()
+{
+    TempDir tmp;
+    Rig r;
+    r.inst.userRoots = { tmp.path };
+    openEditorOn (r, triangleWith ({ { 0.25f, 0.5f } }));
+    ui::lfo::ShapeModel& m = r.ui.editor().model;
+    const ui::lfo::ShapeModel original = m;
+    r.tapC (r.ui.editor().shapes);
+    check (r.ui.topPage() == LfoUi::kPageList && r.ui.list().state.count == 6 && std::string (r.ui.list().state.items[2]) == "SAVE AS ...", "SHAPES opens the list: factory shapes, my shapes, save as, replace, rename, delete");
+    // the factory shapes: the 12 built-in ones as starting points
+    chooseRow (r, 0);
+    check (r.ui.list().state.count == ui::lfo::kNumBuiltin && r.ui.list().state.headerBack, "FACTORY SHAPES: the 12 built-in shapes (the header goes back)");
+    chooseRow (r, 4);   // SQUARE
+    check (r.ui.topPage() == LfoUi::kPageEditor && m == ui::lfo::ShapeModel::fromBuiltin (4) && r.ui.editor().undo.depth() == 1, "a factory shape replaces the model: one undo state, the list closes");
+    check (r.inst.contentPtr->lfoShapes[0].points.size() == 4, "... and the content has its points");
+    r.tapC (r.ui.editor().undoButton);
+    check (m == original, "UNDO brings the old shape back exactly");
+    // SAVE AS: the keyboard, a name, OK
+    r.tapC (r.ui.editor().shapes);
+    chooseRow (r, 2);
+    check (r.ui.topPage() == LfoUi::kPageKeyboard && std::string (r.ui.keyboard().title()) == "NAME OF THE SHAPE", "SAVE AS opens the name keyboard (the list closed)");
+    typeName (r, "Wobble");
+    check (r.ui.keyboard().text() == "Wobble", "the keyboard types the name");
+    pressKey (r, ui::TextEntry::Ok);
+    check (r.ui.topPage() == LfoUi::kPageEditor && std::string (r.ui.editor().status()) == "SAVED Wobble" && r.ui.library().count() == 1, "OK saves the shape and the status says so");
+    check (std::filesystem::exists (tmp.path + "/SynthyBoy/LFO Shapes/Wobble.lfoshape.json"), "the file is on the card");
+    // change the shape, save again under the same name: the replace question
+    r.tap (r.ui.editor().tools.cell (1).x + 10, r.ui.editor().tools.cell (1).y + 10);
+    r.tap (static_cast<int> (r.ui.editor().canvas.xOf (0.5f)), static_cast<int> (r.ui.editor().canvas.yOf (0.9f)));
+    const ui::lfo::ShapeModel changed = m;
+    check (! (changed == original), "the shape was changed");
+    r.tapC (r.ui.editor().shapes);
+    chooseRow (r, 2);
+    typeName (r, "Wobble");
+    pressKey (r, ui::TextEntry::Ok);
+    check (r.ui.topPage() == LfoUi::kPageList && r.ui.list().state.count == 2 && std::string (r.ui.list().state.items[0]) == "REPLACE" && std::string (r.ui.list().state.items[1]) == "CANCEL", "a taken name asks once: REPLACE or CANCEL");
+    chooseRow (r, 1);
+    check (r.ui.topPage() == LfoUi::kPageEditor, "CANCEL closes the question");
+    ui::lfo::ShapeModel stored;
+    check (r.ui.library().load (0, stored) && stored == original, "CANCEL: the saved shape is still the old one");
+    r.tapC (r.ui.editor().shapes);
+    chooseRow (r, 2);
+    typeName (r, "Wobble");
+    pressKey (r, ui::TextEntry::Ok);
+    chooseRow (r, 0);
+    check (r.ui.topPage() == LfoUi::kPageEditor && r.ui.library().load (0, stored) && stored == changed, "REPLACE: the saved shape is the new one");
+    // LOAD: my shapes (loading replaces the model: one undo state)
+    r.tapC (r.ui.editor().undoButton);   // back to the shape before the change (the saved one is the changed one)
+    const ui::lfo::ShapeModel beforeLoad = m;
+    const int undoBefore = r.ui.editor().undo.depth();
+    r.tapC (r.ui.editor().shapes);
+    chooseRow (r, 1);
+    check (r.ui.list().state.count == 1 && std::string (r.ui.list().state.items[0]) == "Wobble", "MY SHAPES lists the saved shape");
+    chooseRow (r, 0);
+    check (r.ui.topPage() == LfoUi::kPageEditor && m == changed && r.ui.editor().undo.depth() == undoBefore + 1, "a saved shape loads: the model is the saved one, one undo state");
+    r.tapC (r.ui.editor().undoButton);
+    check (m == beforeLoad, "UNDO of the load restores the model exactly");
+    // OVERWRITE a saved shape from the list
+    r.tapC (r.ui.editor().shapes);
+    chooseRow (r, 3);
+    check (std::string (r.ui.list().state.header) == "REPLACE WHICH SHAPE?", "REPLACE A SAVED SHAPE lists the saved shapes");
+    chooseRow (r, 0);
+    check (r.ui.list().state.count == 2 && std::string (r.ui.list().state.items[0]) == "REPLACE", "... and asks once");
+    chooseRow (r, 0);
+    check (r.ui.library().load (0, stored) && stored == m, "the saved shape is replaced by the shape in the editor");
+    // RENAME
+    r.tapC (r.ui.editor().shapes);
+    chooseRow (r, 4);
+    chooseRow (r, 0);
+    check (r.ui.topPage() == LfoUi::kPageKeyboard && r.ui.keyboard().text() == "Wobble" && std::string (r.ui.keyboard().title()) == "NEW NAME OF THE SHAPE", "RENAME opens the keyboard with the old name");
+    pressKey (r, ui::TextEntry::Clear);
+    typeName (r, "Pulse");
+    pressKey (r, ui::TextEntry::Ok);
+    check (r.ui.library().find ("Pulse") == 0 && r.ui.library().find ("Wobble") < 0 && ! std::filesystem::exists (tmp.path + "/SynthyBoy/LFO Shapes/Wobble.lfoshape.json"), "the shape has the new name, the old file is gone");
+    // DELETE asks once; KEEP keeps it
+    r.tapC (r.ui.editor().shapes);
+    chooseRow (r, 5);
+    chooseRow (r, 0);
+    check (r.ui.list().state.count == 2 && std::string (r.ui.list().state.items[0]) == "DELETE", "DELETE A SAVED SHAPE asks once");
+    chooseRow (r, 1);
+    check (r.ui.library().count() == 1, "CANCEL keeps the shape");
+    r.tapC (r.ui.editor().shapes);
+    chooseRow (r, 5);
+    chooseRow (r, 0);
+    chooseRow (r, 0);
+    check (r.ui.library().count() == 0 && std::string (r.ui.editor().status()) == "DELETED Pulse", "DELETE removes the file");
+    // no card: the save says so
+    r.inst.userRoots.clear();
+    r.tapC (r.ui.editor().shapes);
+    chooseRow (r, 2);
+    check (r.ui.topPage() == LfoUi::kPageEditor && std::string (r.ui.editor().status()) == "NO CARD OR DRIVE FOUND", "no card or drive: SAVE AS says so and opens no keyboard");
+    // the list closes with the backdrop
+    r.tapC (r.ui.editor().shapes);
+    r.stack.back();
+    r.refresh();
+    check (r.ui.topPage() == LfoUi::kPageEditor, "the editor is below the list");
+}
+
+void testEditorActions()
+{
+    TempDir tmp;
+    Rig r;
+    r.inst.userRoots = { tmp.path };
+    ui::lfo::ShapeModel start = ui::lfo::ShapeModel::fromBuiltin (1);
+    start.p[0].power = 3.0f;
+    start.insert (0.25f, 0.4f);
+    openEditorOn (r, start);
+    ui::lfo::ShapeModel& m = r.ui.editor().model;
+    ui::ShapeCanvas& cv = r.ui.editor().canvas;
+    // EDIT group: select all, flip horizontally, flip vertically, shift, reset curves
+    r.tapC (r.ui.editor().more);
+    check (r.ui.topPage() == LfoUi::kPageList && r.ui.list().state.count == 3 && std::string (r.ui.list().state.items[0]) == "EDIT" && std::string (r.ui.list().state.items[2]) == "COPY", "MORE opens the list of the three groups");
+    chooseRow (r, 0);
+    check (r.ui.list().state.count == 7 && r.ui.list().state.headerBack, "the EDIT group has seven actions (the header goes back)");
+    chooseRow (r, 0);
+    check (r.ui.topPage() == LfoUi::kPageEditor && cv.selection().count() == m.n, "SELECT ALL selects every point");
+    const ui::lfo::ShapeModel a0 = m;
+    more (r, 0, 1);
+    ui::lfo::ShapeModel mirrored = a0;
+    mirrored.flipH();
+    check (m == mirrored && r.ui.editor().undo.depth() == 1 && r.inst.contentPtr->lfoShapes[0].points.size() == static_cast<size_t> (m.n), "FLIP HORIZONTAL: the shape mirrored, one undo state, the content follows");
+    r.tapC (r.ui.editor().undoButton);
+    check (m == a0, "UNDO restores the shape exactly");
+    more (r, 0, 2);
+    ui::lfo::ShapeModel inverted = a0;
+    inverted.flipV();
+    check (m == inverted, "FLIP VERTICAL");
+    r.tapC (r.ui.editor().undoButton);
+    more (r, 0, 4);   // SHIFT RIGHT by one grid column (8 columns)
+    bool turned = true;
+    for (int i = 0; i < 97; ++i)
+    {
+        const float x = (static_cast<float> (i) + 0.5f) / 97.0f;
+        float src = x - 0.125f;
+        src -= std::floor (src);
+        turned = turned && std::fabs (m.eval (x) - a0.eval (src)) < 4.0e-3f;
+    }
+    check (turned, "SHIFT RIGHT: the shape turned by one grid column (1/8)");
+    r.tapC (r.ui.editor().undoButton);
+    check (m == a0, "UNDO of the shift restores the shape exactly");
+    more (r, 0, 5);
+    bool straight = true;
+    for (int i = 0; i + 1 < m.n; ++i)
+        straight = straight && m.p[i].power == 0.0f;
+    check (straight, "RESET ALL CURVES");
+    r.tapC (r.ui.editor().undoButton);
+    // the loop point is cleared by an action
+    m.loop = 1;
+    more (r, 0, 6);
+    check (m.loop == -1, "CLEAR LOOP POINT");
+    // GRID group: presets, halve, double, follow the points
+    more (r, 1, 3);
+    check (cv.state.gridX == 16 && cv.state.gridY == 16 && r.ui.gridXOf (1) == 16, "GRID 16 x 16");
+    more (r, 1, 5);
+    check (cv.state.gridX == 8 && cv.state.gridY == 8, "HALVE THE GRID");
+    more (r, 1, 6);
+    check (cv.state.gridX == 16, "DOUBLE THE GRID");
+    more (r, 1, 4);
+    more (r, 1, 6);
+    check (cv.state.gridX == 32, "DOUBLE stops at 32");
+    more (r, 1, 0);
+    more (r, 1, 5);
+    check (cv.state.gridX == 2, "HALVE stops at 2");
+    more (r, 1, 7);
+    check (cv.state.gridX == ui::lfo::inferGrid (m) && cv.state.gridY == cv.state.gridX, "THE GRID FOLLOWS THE POINTS");
+    // COPY group: to another LFO
+    more (r, 2, 0);
+    check (r.ui.topPage() == LfoUi::kPageList && r.ui.list().state.count == 9 && std::string (r.ui.list().state.items[0]) == "LFO 2", "COPY TO LFO ... lists the other nine LFOs");
+    chooseRow (r, 1);   // LFO 3
+    check (r.ui.topPage() == LfoUi::kPageEditor && r.inst.get ("lfo3.shape") == 12.0f && std::string (r.ui.editor().status()) == "COPIED TO LFO 3", "the shape is copied to LFO 3, which plays the drawn shape");
+    bool found = false;
+    for (const synthyboy::ContentLfoShape& s : r.inst.contentPtr->lfoShapes)
+        if (s.lfo == 3)
+        {
+            found = LfoUi::modelOf (s) == m;
+        }
+    check (found, "the content of LFO 3 holds the same shape");
+    // from an oscillator: OSC A (on, the default saw table) gives a shape; OSC C (off) says so
+    more (r, 2, 1);
+    check (r.ui.topPage() == LfoUi::kPageEditor && m.n >= 2 && m.n <= ui::lfo::kMaxPoints && std::string (r.ui.editor().status()) == "LOADED OSC A", "OSC A CYCLE TO THIS LFO: a shape from the table");
+    float lo = 1.0f, hi = 0.0f;
+    for (int i = 0; i < 100; ++i)
+    {
+        const float v = m.eval (static_cast<float> (i) / 99.0f);
+        lo = std::min (lo, v); hi = std::max (hi, v);
+    }
+    check (lo >= 0.0f && hi <= 1.0f && hi - lo > 0.8f, "... that spans the range of the cycle");
+    r.tapC (r.ui.editor().undoButton);
+    more (r, 2, 3);
+    check (std::string (r.ui.editor().status()) == "THAT OSCILLATOR HAS NO WAVETABLE CYCLE", "OSC C CYCLE: a switched off oscillator gives no shape");
+    // to an oscillator: a WAV file in SynthyBoy/Wavetables, requested like a browser choice
+    more (r, 2, 5);
+    check (r.inst.wtRequests == 1 && r.inst.wtOsc == 2 && r.inst.wtRef.pack == "SynthyBoy/Wavetables" && r.inst.wtRef.file == "LFO 1 Shape.wav", "THIS SHAPE TO OSC B: the file is requested as the table of oscillator 2");
+    const std::string wav = tmp.path + "/SynthyBoy/Wavetables/LFO 1 Shape.wav";
+    check (std::filesystem::exists (wav) && std::filesystem::file_size (wav) > 8192 && std::filesystem::file_size (wav) < 9000, "the WAV file of one 2048 sample frame is on the card");
+    more (r, 2, 5);
+    check (r.inst.wtRef.file == "LFO 1 Shape 2.wav" && std::filesystem::exists (tmp.path + "/SynthyBoy/Wavetables/LFO 1 Shape 2.wav"), "a second export is a new file (a preset keeps the hash of the file it was made with)");
+}
+
+void testEditorPointModulation()
+{
+    Rig r;
+    openEditorOn (r, triangleWith ({ { 0.25f, 0.5f } }));
+    ui::lfo::ShapeModel& m = r.ui.editor().model;
+    ui::ShapeCanvas& cv = r.ui.editor().canvas;
+    check (! r.ui.editor().modButton.enabled(), "MOD is off while no point is selected");
+    r.tap (static_cast<int> (cv.xOf (0.25f)), static_cast<int> (cv.yOf (0.5f)));
+    check (cv.state.selected == 1 && r.ui.editor().modButton.enabled(), "a point is selected: MOD is on");
+    r.tapC (r.ui.editor().modButton);
+    check (r.ui.topPage() == LfoUi::kPagePointMod, "MOD opens the page of the modulation");
+    ui::PointModPage& pm = r.ui.pointModPage();
+    check (pm.target.state.index == 1 && ! pm.remove.enabled() && pm.board.numSources() > 10, "the page offers every modulation source, LEVEL is the value, nothing modulates yet");
+    const ui::Rect chip = pm.board.chipRectOfId (7);   // LFO 1
+    check (! chip.empty(), "the board has the source LFO 1");
+    r.tap (chip.x + chip.w / 2, chip.y + chip.h / 2);
+    check (m.p[1].my.source == 7 && std::fabs (m.p[1].my.amount - 0.5f) < 1.0e-4f && ! m.p[1].mx.on() && ! m.p[1].mc.on(), "a tap on a source modulates the level of the point by it at half depth");
+    check (pm.remove.enabled() && pm.amount.enabled() && std::fabs (static_cast<float> (pm.amount.state.value) - 50.0f) < 1.0e-3f, "the page shows the source and the amount");
+    check (r.ui.editor().undo.depth() >= 1, "the change is on the undo stack");
+    check (r.inst.contentPtr->lfoShapes[0].points[1].modY.present && r.inst.contentPtr->lfoShapes[0].points[1].modY.source == synthyboy::modSourceTable()[6].key && std::fabs (r.inst.contentPtr->lfoShapes[0].points[1].modY.amount - 0.5f) < 1.0e-4f, "the content has the modulation of the level (source lfo1, 0.5)");
+    // TIME is another value of the same point
+    r.tap (pm.target.rect().x + pm.target.rect().w - 10, pm.target.rect().y + pm.target.rect().h / 2);   // the right half: next
+    check (pm.target.state.index == 2 || pm.target.state.index == 0, "the stepper goes to another value (" + std::to_string (pm.target.state.index) + ")");
+    r.tap (pm.target.rect().x + 10, pm.target.rect().y + pm.target.rect().h / 2);   // back to LEVEL
+    check (pm.target.state.index == 1 && pm.remove.enabled(), "back to LEVEL: its source is shown again");
+    r.tapC (pm.remove);
+    check (! m.p[1].my.on() && ! r.inst.contentPtr->lfoShapes[0].points[1].modY.present, "REMOVE takes the modulation away (the content too)");
+    // the conversion between the model and the content keeps every modulation
+    ui::lfo::ShapeModel mm = triangleWith ({ { 0.25f, 0.5f } });
+    ui::lfo::PointSet one;
+    one.add (1);
+    mm.setMod (one, 0, 8, -0.25f);
+    mm.setMod (one, 1, 9, 0.75f);
+    mm.setMod (one, 2, 11, 1.0f);
+    check (LfoUi::modelOf (LfoUi::contentOf (1, mm)) == mm, "the content and back: the modulation of the time, the level and the curve is kept");
+    check (synthyboy::validateContent ([&] { synthyboy::StateContent c; c.lfoShapes.push_back (LfoUi::contentOf (1, mm)); return c; }()), "the content with point modulation is valid");
+    r.tapC (pm.back);
+    check (r.ui.topPage() == LfoUi::kPageEditor, "BACK is the editor");
+    // MOD for several points: one assignment for all
+    r.tap (r.ui.editor().tools.cell (4).x + 10, r.ui.editor().tools.cell (4).y + 10);
+    cv.selectAll();
+    r.refresh();
+    r.tapC (r.ui.editor().modButton);
+    const ui::Rect chip2 = r.ui.pointModPage().board.chipRectOfId (9);
+    r.tap (chip2.x + chip2.w / 2, chip2.y + chip2.h / 2);
+    bool all = true;
+    for (int i = 0; i < m.n; ++i)
+        all = all && m.p[i].my.source == 9;
+    check (all, "with every point selected the source goes to all of them");
 }
 
 void testTargets()
@@ -831,6 +1310,12 @@ int main()
     testWrites();
     testFullScreen();
     testEditor();
+    testEditorMarker();
+    testEditorQuickDeleteAndSelection();
+    testShapeLibrary();
+    testEditorShapesList();
+    testEditorActions();
+    testEditorPointModulation();
     testTargets();
     testDisplay();
     testKeyFollowCurve();
