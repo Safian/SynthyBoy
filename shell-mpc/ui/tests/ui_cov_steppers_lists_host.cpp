@@ -374,7 +374,7 @@ static void test_tool_selector()
     c = ts.turn (-1.0);
     check (c.kind == ChangeKind::Index && c.index == 1, "ToolSelector turn down moves to FLAT");
 
-    Image im = drawComponent (ts, 400, 200);
+    Image im = drawComponent (ts, 640, 200);
     check (drawnOutside (im, ts.rect(), backgroundPixel()) == 0, "ToolSelector draws strictly inside rect");
 }
 
