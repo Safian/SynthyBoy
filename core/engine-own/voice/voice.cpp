@@ -1198,12 +1198,17 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         {
             osc[o].render (t0, n, oscL[o], oscR[o], cross, gl->sampleRate);
             if (w0 != 1.0f || w1 != 1.0f)
+            {
+                // (k + 1) / n = (k + 1) * (1 / n) exactly when n is a power of two (see WtOsc::render)
+                const bool nPow2 = (n & (n - 1)) == 0;
+                const float invN = 1.0f / static_cast<float> (n);
                 for (int k = 0; k < n; ++k)
                 {
-                    const float g = lerp (w0, w1, static_cast<float> (k + 1) / static_cast<float> (n));
+                    const float g = lerp (w0, w1, nPow2 ? static_cast<float> (k + 1) * invN : static_cast<float> (k + 1) / static_cast<float> (n));
                     oscL[o][k] *= g;
                     oscR[o][k] *= g;
                 }
+            }
         }
         else
         {

@@ -350,3 +350,23 @@ TEST (own_wt_osc_timing_report)
     }
     CHECK (true);
 }
+
+// The proof behind the single reciprocal per render (F8): for a power of two n, (k + 1) / n and (k + 1) * (1 / n) are the same float for every k (both are the exact integer scaled by
+// 2^-m); for other n they can differ, which is why the oscillator divides there.
+TEST (own_wt_osc_reciprocal_of_a_power_of_two_is_exact)
+{
+    int differPow2 = 0, differOther = 0;
+    for (int n = 1; n <= 4096; ++n)
+    {
+        const float invN = 1.0f / static_cast<float> (n);
+        const bool pow2 = (n & (n - 1)) == 0;
+        for (int i = 1; i <= n; ++i)
+        {
+            const float d = static_cast<float> (i) / static_cast<float> (n), m = static_cast<float> (i) * invN;
+            if (std::memcmp (&d, &m, 4) != 0)
+                (pow2 ? differPow2 : differOther)++;
+        }
+    }
+    CHECK_EQ (differPow2, 0);
+    CHECK (differOther > 0);
+}

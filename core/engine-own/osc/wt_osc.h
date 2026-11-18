@@ -569,6 +569,11 @@ public:
         const bool morphing = morphActive;
         SB_SECTION (warped ? sections::oscWarp : (morphing ? sections::oscMorph : sections::oscTable));
         const int morphPairs = std::max (1, (curCount + 1) / 2);
+        // (k + 1) / n of the weight of the second cycle: for a power of two n (the 32 sample chunks) the quotient is exactly (k + 1) * (1 / n) (both are exact scalings by 2^-m of an
+        // integer below 2^24), so the divide is made once; for any other n the division stays
+        const bool nPow2 = !reference_ && n > 0 && (n & (n - 1)) == 0;
+        const float invN = 1.0f / static_cast<float> (n);
+        auto stepFrac = [&] (int i) noexcept { return nPow2 ? static_cast<float> (i) * invN : static_cast<float> (i) / static_cast<float> (n); };
         // the same for every lane of this call
         float bw = 1.0f;
         for (int w = 0; w < 2; ++w)
@@ -723,14 +728,14 @@ public:
                 if (reference_)
                     renderPlainReference (L, R, t0, n, ph, cA, cB, wB0, wB1, fscale, N, prevGainL[v], curGainL[v], prevGainR[v], curGainR[v], prevInc[v], curInc[v], invP);
                 else
-                    renderPlain (L, R, t0, n, ph, cA, cB, wB0, wB1, fscale, N, prevGainL[v], curGainL[v], prevGainR[v], curGainR[v], prevInc[v], curInc[v], invP);
+                    renderPlain (L, R, t0, n, ph, cA, cB, wB0, wB1, fscale, N, prevGainL[v], curGainL[v], prevGainR[v], curGainR[v], prevInc[v], curInc[v], invP, nPow2 ? invN : 0.0f);
             }
             else if (!warped)
             {
                 for (int k = 0; k < n; ++k)
                 {
                     const float t = static_cast<float> (t0 + k + 1) * invP;
-                    const float y = sampleAt (ph, k, 1.0f, lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)));
+                    const float y = sampleAt (ph, k, 1.0f, lerp (wB0, wB1, stepFrac (k + 1)));
                     L[k] += y * lerp (prevGainL[v], curGainL[v], t);
                     R[k] += y * lerp (prevGainR[v], curGainR[v], t);
                     ph += static_cast<uint32_t> (lerp (prevInc[v], curInc[v], t) * 4294967296.0f);
@@ -780,7 +785,7 @@ public:
                     {
                         const float t = static_cast<float> (t0 + k + 1) * invP;
                         const uint32_t incO = static_cast<uint32_t> (lerp (prevInc[v], curInc[v], t) * (4294967296.0f / static_cast<float> (os)));
-                        const float wBk = cB != nullptr ? lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)) : 0.0f;
+                        const float wBk = cB != nullptr ? lerp (wB0, wB1, stepFrac (k + 1)) : 0.0f;
                         for (int j = 0; j < os; ++j)
                         {
                             phs[total] = ph;
@@ -801,7 +806,7 @@ public:
                 {
                     const float t = static_cast<float> (t0 + k + 1) * invP;
                     const uint32_t incO = static_cast<uint32_t> (lerp (prevInc[v], curInc[v], t) * (4294967296.0f / static_cast<float> (os)));
-                    const float wBk = cB != nullptr ? lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)) : 0.0f; // only a second cycle has a weight
+                    const float wBk = cB != nullptr ? lerp (wB0, wB1, stepFrac (k + 1)) : 0.0f; // only a second cycle has a weight
                     for (int j = 0; j < os; ++j)
                     {
                         buf[nt - 1 + k * os + j] = syncOnly ? syncSample (ph, wBk)
@@ -962,10 +967,14 @@ public:
     /** The plain table read of one voice over a chunk (no warp): `n` samples from `ph`, added to L / R. The NEON version does four samples at a time with the operations
         of the scalar loop (the phases come from an integer prefix sum of the increments, kept in registers, the four table reads are four loads transposed into lanes). */
     static void renderPlain (float* L, float* R, int t0, int n, uint32_t& ph, const float* cA, const float* cB, float wB0, float wB1, float fscale, int N, float pg, float cgl,
-                             float pgr, float cgr, float pinc, float cinc, float invP) noexcept
+                             float pgr, float cgr, float pinc, float cinc, float invP, float invN) noexcept
     {
+        // invN: 1 / n when n is a power of two (then (k + 1) / n = (k + 1) * invN exactly), else 0 and the weights are divided
         int k = 0;
 #if SB_NEON
+        const float32x4_t vwb0 = vdupq_n_f32 (wB0), vdwb = vdupq_n_f32 (wB1 - wB0), vinvN = vdupq_n_f32 (invN);
+        const int32_t kfirst[4] = { 1, 2, 3, 4 };
+        int32x4_t vk = vld1q_s32 (kfirst); // k + j + 1
         const float32x4_t vinv = vdupq_n_f32 (1.0f / 16777216.0f), vscale = vdupq_n_f32 (fscale), vtwo32 = vdupq_n_f32 (4294967296.0f), vinvP = vdupq_n_f32 (invP);
         // lerp4 (a, b, t) = a + (b - a) * t with the difference formed once
         const float32x4_t vpinc = vdupq_n_f32 (pinc), vdinc = vsubq_f32 (vdupq_n_f32 (cinc), vpinc);
@@ -995,11 +1004,19 @@ public:
             {
                 const float* const bB[4] = { cB, cB, cB, cB };
                 const float32x4_t yB = hermite4 (bB, idx, fr);
-                float wk[4];
-                for (int j = 0; j < 4; ++j)
-                    wk[j] = lerp (wB0, wB1, static_cast<float> (k + j + 1) / static_cast<float> (n));
-                y = simd::lerp4 (y, yB, vld1q_f32 (wk));
+                float32x4_t wkv;
+                if (invN > 0.0f)
+                    wkv = vaddq_f32 (vwb0, vmulq_f32 (vdwb, vmulq_f32 (vcvtq_f32_s32 (vk), vinvN))); // lerp (wB0, wB1, (k + j + 1) / n)
+                else
+                {
+                    float wk[4];
+                    for (int j = 0; j < 4; ++j)
+                        wk[j] = lerp (wB0, wB1, static_cast<float> (k + j + 1) / static_cast<float> (n));
+                    wkv = vld1q_f32 (wk);
+                }
+                y = simd::lerp4 (y, yB, wkv);
             }
+            vk = vaddq_s32 (vk, vfour);
             vst1q_f32 (L + k, vaddq_f32 (vld1q_f32 (L + k), vmulq_f32 (y, vaddq_f32 (vpg, vmulq_f32 (vdgl, t)))));
             vst1q_f32 (R + k, vaddq_f32 (vld1q_f32 (R + k), vmulq_f32 (y, vaddq_f32 (vpgr, vmulq_f32 (vdgr, t)))));
         }
@@ -1014,7 +1031,7 @@ public:
             const float fr = pos - static_cast<float> (idx);
             float y = hermite (cA + idx, fr);
             if (cB != nullptr)
-                y = lerp (y, hermite (cB + idx, fr), lerp (wB0, wB1, static_cast<float> (k + 1) / static_cast<float> (n)));
+                y = lerp (y, hermite (cB + idx, fr), lerp (wB0, wB1, invN > 0.0f ? static_cast<float> (k + 1) * invN : static_cast<float> (k + 1) / static_cast<float> (n)));
             L[k] += y * lerp (pg, cgl, t);
             R[k] += y * lerp (pgr, cgr, t);
             ph += static_cast<uint32_t> (lerp (pinc, cinc, t) * 4294967296.0f); // x * 2^32 is exact in float: the same integer as the double product
