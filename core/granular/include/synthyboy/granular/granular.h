@@ -100,6 +100,8 @@ public:
 
     /** Tests only: reset() as it was before (the `active` flag of all grains written on every call). */
     void setLegacyReset (bool on) noexcept { legacyReset_ = on; }
+    /** Tests only: the scanning head advances with the two divisions and the loop bounds of every sample (as before GR1) instead of constants made once per call. */
+    void setLegacyHead (bool on) noexcept { legacyHead_ = on; }
 
     bool isActive() const noexcept { return active_; }
     int activeGrains() const noexcept;
@@ -128,6 +130,14 @@ private:
     bool renderGrains (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept;
     bool renderGrainsReference (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept;
     void advanceHead (const GrainParams& p) noexcept;
+    /** What advanceHead needs of `p` that does not change during a call of process (the divisions, the loop bounds, the sign of the step). */
+    struct HeadStep
+    {
+        double step = 0.0, lo = 0.0, hi = 0.0, l0 = 0.0, l1 = 0.0;
+        bool looping = false, pingPong = false;
+    };
+    HeadStep headStep (const GrainParams& p) const noexcept;
+    void advanceHead (const GrainParams& p, const HeadStep& hs) noexcept;
     float random01() noexcept;
 
     const SampleView* sample_ = nullptr;
@@ -135,6 +145,7 @@ private:
     bool reference_ = false;
     bool vectors_ = true;
     bool legacyReset_ = false;
+    bool legacyHead_ = false;
     bool grainsLive_ = false;   // a grain may be active (set by spawn, cleared by reset): reset has nothing to clear while it is false
     bool active_ = false, released_ = false, headDone_ = false;
     double head_ = 0.0;         // play head, fraction of the file

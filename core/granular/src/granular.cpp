@@ -375,6 +375,62 @@ void GranularVoice::advanceHead (const GrainParams& p) noexcept
         head_ = l1 - std::fmod (l0 - head_, l1 - l0);
 }
 
+GranularVoice::HeadStep GranularVoice::headStep (const GrainParams& p) const noexcept
+{
+    HeadStep h;
+    const double fileSeconds = static_cast<double> (sample_->numFrames) / sample_->sampleRate;
+    h.step = static_cast<double> (p.scanSpeed) / (fileSeconds * sampleRate_);
+    h.lo = std::min (p.regionLo, p.regionHi);
+    h.hi = std::max (p.regionLo, p.regionHi);
+    h.looping = p.loopMode != LoopMode::none && ! (p.loopMode == LoopMode::tailed && released_);
+    if (h.looping)
+    {
+        if (p.loopHi < p.loopLo)
+            h.step = -h.step;
+        if (p.loopMode == LoopMode::reverse)
+            h.step = -h.step;
+        h.pingPong = p.loopMode == LoopMode::pingPong;
+        h.l0 = std::max (h.lo, std::min (static_cast<double> (p.loopLo), static_cast<double> (p.loopHi)));
+        h.l1 = std::min (h.hi, std::max (static_cast<double> (p.loopLo), static_cast<double> (p.loopHi)));
+    }
+    return h;
+}
+
+/** advanceHead with the constants of the call made once: the same operations on the same values in the same order. */
+void GranularVoice::advanceHead (const GrainParams&, const HeadStep& h) noexcept
+{
+    if (headDone_)
+        return;
+    double step = h.step;
+    if (! h.looping)
+    {
+        head_ += step;
+        if (head_ >= h.hi && step > 0.0) { head_ = h.hi; headDone_ = true; }
+        else if (head_ <= h.lo && step < 0.0) { head_ = h.lo; headDone_ = true; }
+        return;
+    }
+    if (h.pingPong)
+        step *= static_cast<double> (headDirection_);
+    const double l0 = h.l0, l1 = h.l1;
+    head_ += step;
+    if (l1 - l0 < 1.0e-6)
+    {
+        head_ = l0;
+        return;
+    }
+    if (h.pingPong)
+    {
+        if (head_ >= l1) { head_ = l1 - (head_ - l1); headDirection_ = -headDirection_; }
+        else if (head_ <= l0) { head_ = l0 + (l0 - head_); headDirection_ = -headDirection_; }
+        head_ = std::max (l0, std::min (l1, head_));
+        return;
+    }
+    if (step > 0.0 && head_ >= l1)
+        head_ = l0 + std::fmod (head_ - l1, l1 - l0);
+    else if (step < 0.0 && head_ <= l0)
+        head_ = l1 - std::fmod (l0 - head_, l1 - l0);
+}
+
 bool GranularVoice::renderGrainsReference (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept
 {
     // loop markers for the grains (Loop Grains)
@@ -735,12 +791,18 @@ void GranularVoice::process (const GrainParams& p, float* left, float* right, in
         }
     }
     else
+    {
+        HeadStep hs;   // (nothing it reads changes while the block runs)
+        if (! p.manual)
+            hs = headStep (p);
         for (int i = 0; i < numFrames; ++i)
         {
             if (p.manual)
                 head_ = std::min (p.regionLo, p.regionHi) + std::fabs (static_cast<double> (p.regionHi) - static_cast<double> (p.regionLo)) * clamp01 (p.position);
-            else
+            else if (legacyHead_)
                 advanceHead (p);
+            else
+                advanceHead (p, hs);
             if (headDone_ && ! p.manual)
                 continue;
             spawnTimer_ -= 1.0;
@@ -750,6 +812,7 @@ void GranularVoice::process (const GrainParams& p, float* left, float* right, in
                 spawnTimer_ += period;
             }
         }
+    }
 
     bool any;
     if (reference_ || sample_->numFrames > (int64_t { 1 } << 29))   // (the kernel counts frames with 32 bit integers)
