@@ -6,7 +6,7 @@
 #include "../program_list.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/state.h"
-#include "startup_timing.h"
+#include "../startup_timing.h"
 
 #include <algorithm>
 #include <cctype>
