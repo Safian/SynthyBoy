@@ -1222,6 +1222,7 @@ void OwnEngine::controlTick() noexcept
         ctx.maxTouched = kNumModSlots;
         ctx.dt = fdt;
         ctx.bpm = globals.bpm;
+        ctx.reference = globals.referenceControl;
         matrix.evaluate (ctx);
     }
     // The readout without a sounding voice: the voice parameters (filter, oscillators ...) that the sources an idle engine has (macros, mod wheel, aftertouch, pitch
@@ -1254,6 +1255,7 @@ void OwnEngine::controlTick() noexcept
         pc.dt = fdt;
         pc.bpm = globals.bpm;
         pc.sourceMask = mask;
+        pc.reference = globals.referenceControl;
         matrix.evaluate (pc);
     }
 }
@@ -1382,6 +1384,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     globals.scalarFilters = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingVectorFilters) != 0;
     globals.scalarWarp = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingVectorWarp) != 0;
     globals.scalarContent = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingContentKernels) != 0;
+    globals.referenceControl = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingVoiceControl) != 0;
     globals.usedSources = matrix.sourceMask();
     globals.morphCache = &morphCache;
     globals.killSeconds = (globals.economy & kEconomyControl) != 0 ? lowKillSeconds.load (std::memory_order_relaxed) : 0.05f;

@@ -82,9 +82,13 @@ inline void rampLerp (float* out, float a, float b, int t0, int n, float invP) n
 {
     int k = 0;
 #if SB_NEON
-    const float32x4_t va = vdupq_n_f32 (a), vb = vdupq_n_f32 (b);
+    // the lane offsets stay in a register for the whole loop: ramp4 () builds its four integers on the stack and loads them as one vector, a 128 bit load from two pending 64 bit
+    // stores that cannot be forwarded (CPU-REVIEW-VOICE-MOD.md V2). The same integers t0 + k + 1 + lane, the same conversion and multiply as ramp4 ().
+    static const int32_t kIota[4] = { 0, 1, 2, 3 };
+    const int32x4_t iota = vld1q_s32 (kIota);
+    const float32x4_t va = vdupq_n_f32 (a), vb = vdupq_n_f32 (b), vInvP = vdupq_n_f32 (invP);
     for (; k + 4 <= n; k += 4)
-        vst1q_f32 (out + k, lerp4 (va, vb, ramp4 (t0, k, invP)));
+        vst1q_f32 (out + k, lerp4 (va, vb, vmulq_f32 (vcvtq_f32_s32 (vaddq_s32 (vdupq_n_s32 (t0 + k + 1), iota)), vInvP)));
 #endif
     for (; k < n; ++k)
         out[k] = a + (b - a) * (static_cast<float> (t0 + k + 1) * invP);

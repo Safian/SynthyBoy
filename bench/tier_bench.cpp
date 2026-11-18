@@ -35,6 +35,7 @@
 //   --profile FILE  a sampling profile of the audio thread (a timer signal every 250 us on Linux ARM): the program counters, one per line, for scripts/bench-profile.py to map to functions
 //   --tolerance X   with --verify: a sample may differ by X times the largest sample of the load (the vector forms of the Spectral oscillator differ by rounding, 3e-6 is the stated bound)
 //   --scalar-content  the Sample / Granular / Spectral / Multisample oscillators run their per sample (per frame) reference code, not the block kernels (the same: before / after)
+//   --no-voice-savings  the control code of the voices and the modulation matrix without the caches and skips of docs/release/CPU-REVIEW-VOICE-MOD.md (the same: before / after)
 //   --verify        no timing: every load is rendered twice under every profile, once with the savings (the pair kernels of the filters, the skipped effects with
 //                   mix 0) and once without, offline, 3 s with the chord struck twice, and the samples are compared. They must be the same values (the exit code is
 //                   1 otherwise): this is the check that the vector code of THIS CPU computes what the scalar code computes.
@@ -573,7 +574,7 @@ long currentKhz (int cpu)
 [[noreturn]] void usage (const char* message)
 {
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
-                          "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--scalar-warp] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]\n", message);
+                          "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--scalar-warp] [--no-voice-savings] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -806,6 +807,7 @@ int main (int argc, char** argv)
         else if (a == "--scalar-filters") o.savingsOff |= kOwnSavingVectorFilters;
         else if (a == "--scalar-warp") o.savingsOff |= kOwnSavingVectorWarp;
         else if (a == "--scalar-content") o.savingsOff |= kOwnSavingContentKernels;
+        else if (a == "--no-voice-savings") o.savingsOff |= kOwnSavingVoiceControl;
         else if (a == "--budget")      o.budget = std::atof (next());
         else usage (("unknown argument " + a).c_str());
     }
@@ -965,6 +967,8 @@ int main (int argc, char** argv)
         std::printf ("scalar warp samples (--scalar-warp)\n");
     if ((o.savingsOff & kOwnSavingContentKernels) != 0)
         std::printf ("reference code of the Sample / Granular / Spectral / Multisample oscillators (--scalar-content)\n");
+    if ((o.savingsOff & kOwnSavingVoiceControl) != 0)
+        std::printf ("voice control and modulation matrix without their caches and skips (--no-voice-savings)\n");
     std::printf ("device: %s; %s; build %s\n", model.empty() ? "(no device tree name)" : model.c_str(), cpuText.empty() ? "cpu not pinned (not Linux)" : cpuText.c_str(),
 #if defined(__aarch64__)
                  "arm64"
@@ -992,7 +996,7 @@ int main (int argc, char** argv)
 
     if (o.verify)
     {
-        std::printf ("\nverify: every load under every profile, with the savings and without (filters one side after the other, effects with mix 0 processed, warp samples one by one): the samples must be the same\n");
+        std::printf ("\nverify: every load under every profile, with the savings and without (filters one side after the other, effects with mix 0 processed, warp samples one by one, voice control without its caches): the samples must be the same\n");
         int failures = 0, runs = 0;
         for (size_t c = 0; c < configs.size(); ++c)
         {
@@ -1000,7 +1004,8 @@ int main (int argc, char** argv)
             int bad = 0;
             for (const auto& l : loads)
             {
-                const std::vector<float> with = renderForVerify (o, profiles[c], l, notes, 0), without = renderForVerify (o, profiles[c], l, notes, kOwnSavingFxMute | kOwnSavingVectorFilters | kOwnSavingVectorWarp | kOwnSavingContentKernels);
+                const std::vector<float> with = renderForVerify (o, profiles[c], l, notes, 0), without = renderForVerify (o, profiles[c], l, notes, kOwnSavingFxMute | kOwnSavingVectorFilters | kOwnSavingVectorWarp | kOwnSavingContentKernels
+                                                                                                                          | kOwnSavingVoiceControl);
                 size_t differ = 0;
                 float worst = 0.0f, peak = 0.0f;
                 for (size_t i = 0; i < with.size(); ++i)

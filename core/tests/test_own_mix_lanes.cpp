@@ -41,3 +41,45 @@ TEST (own_lane_mix_in_neon_lanes_is_the_scalar_mix)
     }
     CHECK_EQ (cases, 2000);
 }
+
+/** simd::rampLerp with the lane offsets in a register (CPU-REVIEW-VOICE-MOD.md V2) against the form it replaced (simd::ramp4 per step) and the scalar loop: the same bits for every start, length
+    and pair of ends (signed zeros, denormals, infinities and NaN among them). */
+TEST (own_ramp_lerp_with_the_offsets_in_a_register_is_the_ramp4_form)
+{
+    static_assert (SB_NEON == 1, "this test is built with the NEON forms on");
+    uint32_t s = 99u;
+    const auto bits = [&] { s ^= s << 13; s ^= s >> 17; s ^= s << 5; return s; };
+    const float special[] = { 0.0f, -0.0f, 1.0e-40f, -1.0e-40f, 1.0f, -1.0f, 3.4e38f, -3.4e38f, INFINITY, -INFINITY, NAN, 1.0e-30f };
+    long long compared = 0;
+    for (int rep = 0; rep < 200000; ++rep)
+    {
+        auto value = [&] () -> float
+        {
+            const uint32_t r = bits();
+            if (r % 5 == 0)
+                return special[r / 5 % (sizeof special / sizeof special[0])];
+            float f;
+            uint32_t u = bits();
+            std::memcpy (&f, &u, 4);
+            return (r % 5 == 1) ? f : static_cast<float> (static_cast<int32_t> (u >> 8) - (1 << 23)) * 1.0e-6f;
+        };
+        const float a = value(), b = value();
+        const int n = 1 + static_cast<int> (bits() % 32u);
+        const int t0 = rep % 3 == 0 ? static_cast<int> (bits() % 5000u) : (rep % 4) * 32;
+        const float invP = rep % 2 == 0 ? 1.0f / static_cast<float> (kControlPeriod) : 1.0f / static_cast<float> (1 + bits() % 4096u);
+        float got[32], old[32], scalar[32];
+        simd::rampLerp (got, a, b, t0, n, invP);
+        int k = 0;
+        const float32x4_t va = vdupq_n_f32 (a), vb = vdupq_n_f32 (b);
+        for (; k + 4 <= n; k += 4)
+            vst1q_f32 (old + k, simd::lerp4 (va, vb, simd::ramp4 (t0, k, invP)));
+        for (; k < n; ++k)
+            old[k] = a + (b - a) * (static_cast<float> (t0 + k + 1) * invP);
+        for (k = 0; k < n; ++k)
+            scalar[k] = a + (b - a) * (static_cast<float> (t0 + k + 1) * invP);
+        compared += n;
+        CHECK (std::memcmp (got, old, static_cast<size_t> (n) * sizeof (float)) == 0);
+        CHECK (std::memcmp (got, scalar, static_cast<size_t> (n) * sizeof (float)) == 0);
+    }
+    CHECK (compared > 1000000);
+}
