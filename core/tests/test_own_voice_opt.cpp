@@ -19,11 +19,14 @@
 #include <vector>
 
 #include "osc/wavetable_bank.h"
+#include "synthyboy/content_state.h"
+#include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/readout.h"
+#include "synthyboy/user_content.h"
 #include "voice/param_index.h"
 #include "voice/voice.h"
 #include "test_runner.h"
@@ -181,7 +184,8 @@ std::vector<float> randomPatch (Rand& r, const std::vector<float>* fromPreset, f
             static const char* const kDests[] = { "env1.attack", "env1.decay", "env1.sustain", "env1.release", "env2.attack", "env2.decay_curve", "env3.hold", "env1.attack_curve",
                                                   "lfo1.rate", "lfo1.smooth_time", "lfo2.phase", "lfo3.rate", "lfo1.fade_in", "rlfo1.rate", "osc1.level", "osc1.tune", "osc1.frame",
                                                   "osc2.pan", "osc1.unison.detune", "sub.level", "sub.tune", "filter1.cutoff", "filter1.resonance", "filter2.cutoff", "noise.level",
-                                                  "filter1.mix", "osc3.tune", "mod1.amount", "mod2.amount", "master.volume" };
+                                                  "filter1.mix", "osc3.tune", "mod1.amount", "mod2.amount", "master.volume", "osc1.gran.position", "osc1.sample.start",
+                                                  "osc1.spec.position", "osc1.gran.density", "osc1.pan", "sub.pan" };
             const int di = idxOf (kDests[r.range (0, static_cast<int> (sizeof kDests / sizeof kDests[0]) - 1)]);
             if (di >= 0 && modDestinationChoiceOf (static_cast<size_t> (di)) > 0)
                 d = modDestinationChoiceOf (static_cast<size_t> (di));
@@ -916,5 +920,49 @@ TEST (envelope_with_curve_denominators_is_bit_identical)
         }
     }
     std::printf ("%lld envelope steps, %lld runs differ\n", steps, failed);
+    CHECK_EQ (failed, 0);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The library oscillators (Sample, Granular, Spectral) with a file: their keys are read through the kept oscillator part (V7) too
+
+TEST (voice_opt_engine_library_oscillators_are_bit_identical)
+{
+    ensureAllBuiltinWavetables();
+    MemoryContentStore store;
+    {
+        const size_t n = 44100;
+        std::vector<float> x (n);
+        for (size_t i = 0; i < n; ++i)
+            x[i] = static_cast<float> (0.5 * std::sin (6.283185307179586 * 220.0 * static_cast<double> (i) / 44100.0) + 0.1 * std::sin (0.37 * static_cast<double> (i * i % 4001)));
+        store.add ("test", "tone.wav", encodeWav (x.data(), nullptr, n, 44100, 16));
+    }
+    StateContent content;
+    ContentFileRef ref;
+    ref.pack = "test";
+    ref.file = "tone.wav";
+    ref.name = "tone";
+    attachSample (content, 1, ref, 44100, 44100, 1);
+    int failed = 0, runs = 0;
+    for (int type = 1; type <= 3; ++type)
+        for (int s = 0; s < (sbtest::instrumented() ? 2 : 8); ++s)
+        {
+            Rand r (static_cast<uint32_t> (700 + 31 * type + s));
+            std::vector<float> plain = randomPatch (r, nullptr, 0.15f);
+            plain[static_cast<size_t> (idxOf ("osc1.on"))] = 1.0f;
+            plain[static_cast<size_t> (idxOf ("osc1.type"))] = static_cast<float> (type);
+            plain[static_cast<size_t> (idxOf ("osc1.level"))] = 80.0f;
+            EnginePair p (plain, s % 2 == 0 ? Tier::low : Tier::high, r);
+            for (IEngine* e : { p.opt.get(), p.ref.get() })
+            {
+                e->setContentStore (&store);
+                e->setContent (content);
+            }
+            char what[64];
+            std::snprintf (what, sizeof what, "library type %d patch %d", type, s);
+            ++runs;
+            failed += playAndCompare (p, r, 300, what) ? 0 : 1;
+        }
+    std::printf ("%d library oscillator runs, %d differ\n", runs, failed);
     CHECK_EQ (failed, 0);
 }

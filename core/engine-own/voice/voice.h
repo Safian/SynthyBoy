@@ -229,6 +229,33 @@ private:
     };
     RlfoSettings rlfoSet[4];
     uint32_t lastTouchedGroups = 0;   // touchedGroups () of the last period, as the envelopes and LFOs read it (before this period's matrix)
+    /** What an oscillator that is on derives from its keys alone (CPU-REVIEW-VOICE-MOD.md V7): kept while the snapshot epoch is the one it was built with and no slot touched a key of the
+        oscillator then or in this period. Everything that reads the note, the voice control, the content, the tables, the tempo or the state is computed every period from these. */
+    struct OscPart
+    {
+        int dest = 0, wtChoice = 0, pmode = 0, ratioSrc = -1, transposeSnap = 0, voicesRaw = 1, stack = 0, stackRepeat = 0, mode = 0, law = 0, morphType = 0, remapSlot = 0;
+        int warp[2] = {};
+        float blend = 0, send[2] = {}, fixedNote = 0, coarseSemis = 0, transpose = 0, tune001 = 0, frame = 0, frameSpread = 0, level = 0, pan = 0, panRight = 0, detuneSemis = 0, curve = 0,
+              blendShape = 0, spread = 0, uniBlend = 0, morphAmount = 0, morphSpread = 0, remapRise = 0, remapFall = 0;
+        float warpAmount[2] = {}, warpPhase[2] = {};
+        bool env1 = true, track = true, bendTrack = true, smooth = false, remapOn = false;
+        float libV[kLibKeyCount] = {};   // the keys of the library oscillators, filled when a library type first needs them (libValid)
+        bool libValid = false;
+        bool ok = false;
+        uint32_t epoch = 0;
+    };
+    OscPart oscPart[3];
+    void fillOscPart (int o, OscPart& op) noexcept;
+    /** The same for the sub oscillator (its keys alone). */
+    struct SubPart
+    {
+        int dest = 0, table = 0;
+        float blend = 0, send[2] = {}, octave12 = 0, tune = 0, level = 0, pan = 0;
+        bool on = false, env1 = true;
+        bool ok = false;
+        uint32_t epoch = 0;
+    };
+    SubPart subPart;
     float customShape (const CompiledShape& cs, float u) noexcept;
 
     const TickGlobals* gl = nullptr;
