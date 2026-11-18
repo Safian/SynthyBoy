@@ -224,8 +224,6 @@ private:
     int busDest[2] = {}, mainBypass = 0, busBypass[2] = {};
     std::atomic<uint32_t> fxMask { kFxAll };
     std::atomic<bool> fxMakeup { true };
-    float unisonMakeupTable[kMaxUnisonVoices + 1] = {};   // the gain by the voices a preset asks for, for the unison cap in force (unisonMakeupCap)
-    int unisonMakeupCap = 0;
     void makeupOfBus (int b, int n, float& prev, float& now) noexcept;
     MorphCache morphCache;
     TickGlobals globals;

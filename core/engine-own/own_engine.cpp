@@ -1347,19 +1347,6 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         if (tierLowCap.load (std::memory_order_relaxed) && lowCap > 0)
             mu = std::min (mu, lowCap);
         globals.maxUnison = mu;
-        // the makeup of the unison cap: the voices a cap takes away give the preset's loudest moments their coherent peaks; the gain is (wanted / cap) ^ 0.15 in amplitude (0.3 in power:
-        // measured on the factory presets, docs/release/TIER-LEVEL-COMPENSATION.md section 10), only for a cap that is in force
-        globals.unisonMakeup = nullptr;
-        if (fxMakeup.load (std::memory_order_relaxed) && mu < kMaxUnisonVoices)
-        {
-            if (unisonMakeupCap != mu)
-            {
-                for (int n = 0; n <= kMaxUnisonVoices; ++n)
-                    unisonMakeupTable[n] = n > mu ? std::pow (static_cast<float> (n) / static_cast<float> (mu), 0.15f) : 1.0f;
-                unisonMakeupCap = mu;
-            }
-            globals.unisonMakeup = unisonMakeupTable;
-        }
     }
     // announce the content set this block reads (hazard pointer: the message thread frees a set only when it is neither current nor announced)
     {
