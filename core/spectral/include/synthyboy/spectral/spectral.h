@@ -95,6 +95,8 @@ struct Scratch
     float tm[kBins], tf[kBins];
     // the block kernels of a frame (SpectralVoice::renderChannelFast): the angles (with a phase twist), the half length transform's output
     float angle[kBins];
+    float phaseTmp[kBins];       // the phases of one start frame (SpectralVoice::startFrames)
+    float olaTmp[kFftSize];      // one start frame before its part that lies in the past is dropped
     float zr[kFftSize / 2], zi[kFftSize / 2];
     // the gains of the band limit (shapeFrame): they depend on the settings only, so they are kept until the settings change
     float bandGain[kBins];
@@ -159,6 +161,12 @@ public:
     /** Measurements only (the bench's --scalar-content): synthesise the frames with the reference code (the full length transform of the mirrored spectrum, std::sin / std::cos / std::fmod per
         bin, one product per sample of the overlap add) instead of the block kernels of kernels.h. The two agree to rounding (a few 1e-7 of the largest sample, tests/test_spectral.cpp). */
     void setReferenceKernels (bool on) noexcept { reference_ = on; }
+    /** The sample of the first hop (the voice's output sample, 0 .. kHop) at which frame 1 .. 3 of the priming is made for a start offset: `join[j - 1] <= offset` means in noteOn. Every frame
+        is made before the squared window it would have in the sum exceeds 0.5 (and at the latest at kHop, the first regular frame), at a multiple of kStartStep. With the Smear warp all at once. */
+    static void startSchedule (int offset, bool smears, int join[3]) noexcept;
+    /** Measurements and tests only: the start of a note as before round 10 (the four frames of the priming made at once, the first hop their plain sum) instead of the start with the deferred frames
+        (section 4a of docs/engine-spec/07). From the sample kHop of the voice (the first regular frame) on the two give the same samples. */
+    void setLegacyStart (bool on) noexcept { legacyStart_ = on; }
     /** Renders numFrames samples into left / right (overwritten). */
     void process (const SpectralParams& p, float* left, float* right, int numFrames) noexcept;
 
@@ -172,6 +180,11 @@ private:
     /** `reuseShape`: the shaped bins (scratch.om / of / oth) and `twist` are those of the previous call for this channel, nothing has touched them since (the priming of a note). */
     void renderChannelFast (const SpectralParams& p, int ch, double frame, bool transientHit, bool reuseShape = false, float* twistState = nullptr) noexcept;
     void primeFast (const SpectralParams& p) noexcept;
+    // the start with deferred frames: frames 1 .. 3 of the priming (frame 0 is never made), the first of them in noteOn, the others when their weight in the first hop asks for them
+    void startFrames (const SpectralParams& p, int mask, bool phantom) noexcept;
+    void startPhases (const SpectralParams& p, int ch, int j, float* out) noexcept;
+    void refreshFirstHop (int from) noexcept;
+    void endFirstHop (const SpectralParams& p) noexcept;
 
     const Analysis* analysis_ = nullptr;
     double hostRate_ = 48000.0;
@@ -182,6 +195,12 @@ private:
     int outPos_ = kHop;          // next unread sample of the finished hop
     int ola_ = 0;                // write position of the overlap buffer (start of the hop to write)
     bool primed_ = false;
+    bool legacyStart_ = false;
+    bool startActive_ = false;   // the first hop (the output samples 0 .. kHop - startSkip_) is being read from the ring, normalised by the windows of the frames made so far
+    int startMask_ = 0;          // bit j - 1: frame j (1 .. 3) of the priming has been made
+    int startJoin_[3] = { -1, -1, -1 };   // the sample of the first hop at which frame 1 .. 3 is made (-1: made)
+    double startFrame_ = 0.0;    // the analysis frame (position) of the priming
+    int phaseFrame_[2] = { 0, 0 };   // per channel: the frame whose phases synthPhase holds (0: none yet)
     bool framePrimed_ = false;   // the frame of the first output hop was synthesised by primeFast (the first synthesizeHop only reads the hop)
     int startSkip_ = 0;          // the output starts this many samples into the first hop (noteOn's hopOffset)
     int lastTransientFrame_ = -1, drain_ = 0;
