@@ -508,3 +508,54 @@ TEST (granular_vector_form_equals_the_scalar_form_on_plain_grains)
     CHECK (blocks == 3200);
     CHECK_EQ (different, 0);
 }
+
+// SP1 (docs/release/CPU-REVIEW-CONTENT.md): reset() skips the 48 `active` writes while no grain was spawned since the last reset. A voice that is reset and restarted again and again (live clouds,
+// resets of an idle voice, jump start and plain start, manual and scanning) is bit for bit the voice with the old reset (`setLegacyReset`), and a reset leaves no grain active.
+TEST (granular_reset_that_skips_idle_voices_is_the_old_reset)
+{
+    Tone tone (440.0);
+    const auto view = tone.data.view();
+    int blocks = 0, different = 0;
+    for (int manual = 0; manual < 2; ++manual)
+        for (int jump = 0; jump < 2; ++jump)
+        {
+            GrainParams p;
+            p.densityHz = 80.0f;
+            p.lengthSec = 0.08f;
+            p.maxGrains = kMaxGrains;
+            p.manual = manual != 0;
+            p.position = 0.3f;
+            p.scanSpeed = 0.5f;
+            GranularVoice fast, old;
+            fast.prepare (44100.0);
+            old.prepare (44100.0);
+            old.setLegacyReset (true);
+            for (int note = 0; note < 6; ++note)
+            {
+                if (note % 3 == 2)
+                {
+                    fast.reset();   // a reset of a voice that is idle already
+                    old.reset();
+                }
+                fast.noteOn (&view, p, 5u + static_cast<uint32_t> (note), 0.0f, jump != 0, 0.1f * static_cast<float> (note));
+                old.noteOn (&view, p, 5u + static_cast<uint32_t> (note), 0.0f, jump != 0, 0.1f * static_cast<float> (note));
+                for (int block = 0; block < 40; ++block)
+                {
+                    std::vector<float> aL (128), aR (128), bL (128), bR (128);
+                    fast.process (p, aL.data(), aR.data(), 128, nullptr);
+                    old.process (p, bL.data(), bR.data(), 128, nullptr);
+                    ++blocks;
+                    if (std::memcmp (aL.data(), bL.data(), sizeof (float) * 128) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * 128) != 0)
+                        ++different;
+                }
+                CHECK_EQ (fast.activeGrains(), old.activeGrains());
+                fast.reset();
+                old.reset();
+                CHECK_EQ (fast.activeGrains(), 0);
+                CHECK_EQ (old.activeGrains(), 0);
+                CHECK (! fast.isActive());
+            }
+        }
+    CHECK_EQ (blocks, 4 * 6 * 40);
+    CHECK_EQ (different, 0);
+}

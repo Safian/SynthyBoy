@@ -148,7 +148,11 @@ class SpectralVoice
 public:
     SpectralVoice() = default;
     void prepare (double hostSampleRate) noexcept;
+    /** Stops the voice. Only the flags: the buffers (phases, smear, ring, finished hop) are not cleared, a note start (noteOn) clears or writes everything it reads. */
     void reset() noexcept;
+    /** Tests only: reset() as it was before (every buffer of both channels cleared), and a fill of all buffers with a pattern to start notes on dirty memory. */
+    void setLegacyReset (bool on) noexcept { legacyReset_ = on; }
+    void scribbleBuffersForTest (float value) noexcept;
 
     /** Starts the voice on `analysis` (null: silent). `startFraction` moves the play head by that share of the region (unison start / span). The overlap buffer is primed so
         that the note starts at full level: four frames are synthesised at once (the three before the first output hop and the first one of the hop itself).
@@ -196,6 +200,7 @@ private:
     int ola_ = 0;                // write position of the overlap buffer (start of the hop to write)
     bool primed_ = false;
     bool legacyStart_ = false;
+    bool legacyReset_ = false;
     bool startActive_ = false;   // the first hop (the output samples 0 .. kHop - startSkip_) is being read from the ring, normalised by the windows of the frames made so far
     int startMask_ = 0;          // bit j - 1: frame j (1 .. 3) of the priming has been made
     int startJoin_[3] = { -1, -1, -1 };   // the sample of the first hop at which frame 1 .. 3 is made (-1: made)

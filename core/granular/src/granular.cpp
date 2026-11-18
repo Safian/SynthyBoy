@@ -199,8 +199,11 @@ void GranularVoice::reset() noexcept
 {
     active_ = false;
     sample_ = nullptr;
+    if (! grainsLive_ && ! legacyReset_)
+        return;   // no grain was spawned since the last reset: every `active` is false already
     for (Grain& g : grains_)
         g.active = false;
+    grainsLive_ = false;
 }
 
 int GranularVoice::activeGrains() const noexcept
@@ -326,6 +329,7 @@ void GranularVoice::spawn (const GrainParams& p, int delay, int age, double head
     g.invLength = 1.0f / static_cast<float> (g.length);
     g.mip = mipFor (*sample_, std::fabs (g.inc));
     g.active = true;
+    grainsLive_ = true;
 }
 
 void GranularVoice::advanceHead (const GrainParams& p) noexcept

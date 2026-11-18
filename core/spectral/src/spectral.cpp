@@ -541,12 +541,25 @@ void SpectralVoice::reset() noexcept
 {
     active_ = false;
     analysis_ = nullptr;
+    if (! legacyReset_)
+        return;   // noteOn clears the smear memory, the ring and the phases of the channels it uses, and writes `finished` before it is read (tests/test_spectral.cpp: starts on dirty buffers)
     for (Channel& c : channel_)
     {
         std::fill (c.synthPhase, c.synthPhase + kBins, 0.0f);
         std::fill (c.smear, c.smear + kBins, 0.0f);
         std::fill (c.ring, c.ring + kFftSize, 0.0f);
         std::fill (c.finished, c.finished + kHop, 0.0f);
+    }
+}
+
+void SpectralVoice::scribbleBuffersForTest (float value) noexcept
+{
+    for (Channel& c : channel_)
+    {
+        std::fill (c.synthPhase, c.synthPhase + kBins, value);
+        std::fill (c.smear, c.smear + kBins, value);
+        std::fill (c.ring, c.ring + kFftSize, value);
+        std::fill (c.finished, c.finished + kHop, value);
     }
 }
 

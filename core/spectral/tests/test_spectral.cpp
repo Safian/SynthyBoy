@@ -6,6 +6,7 @@
 #include "synthyboy/spectral/kernels.h"
 #include "synthyboy/sampleosc/sample_data.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -1156,4 +1157,86 @@ TEST (spectral_the_deferred_frames_are_made_in_time_and_the_output_does_not_depe
                     CHECK (out == first);
             }
         }
+}
+
+// SP1 (docs/release/CPU-REVIEW-CONTENT.md): reset() only clears the flags. A note started on dirty buffers (every buffer of both channels filled with a pattern, and a note of other settings played
+// before) is bit for bit the note started on fully cleared ones (the old reset, `setLegacyReset`) and the note of a fresh voice: nothing downstream reads stale data. Frozen and scanning, Smear,
+// Phase Lock, Add Harmonics, the deferred and the legacy start, every start offset, a mono and a stereo sample (a stereo note before a mono one leaves the second channel dirty).
+TEST (spectral_a_note_started_on_dirty_buffers_is_the_note_started_on_cleared_ones)
+{
+    Tone tone (rich (220.0, 1.5));
+    std::vector<float> l (static_cast<size_t> (1.5 * kSr)), r (l.size());
+    for (size_t i = 0; i < l.size(); ++i)
+    {
+        l[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 311.0 * static_cast<double> (i) / kSr) + 0.1 * std::sin (0.01 * static_cast<double> (i * i % 1000)));
+        r[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 477.0 * static_cast<double> (i) / kSr));
+    }
+    SampleData stereoData;
+    stereoData.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), kSr);
+    Analysis stereo;
+    stereo.build (stereoData.view());
+    int runs = 0, identical = 0;
+    for (int variant = 0; variant < 5; ++variant)
+        for (int w : { -1, static_cast<int> (Warp::smear), static_cast<int> (Warp::addHarmonics) })
+            for (int legacyStart = 0; legacyStart < 2; ++legacyStart)
+                for (int k = 0; k < kStartSteps; ++k)
+                {
+                    SpectralParams p = frozen (0.4f);
+                    p.manual = variant != 4;
+                    p.scanSpeed = 0.7f;
+                    p.phaseLock = variant == 1;
+                    p.transients = variant == 2;
+                    p.pitchRatio = variant == 3 ? 1.37f : 1.0f;
+                    p.warpType[0] = w;
+                    p.warpAmount[0] = 0.8f;
+                    const Analysis* an = variant == 2 ? &tone.analysis : &stereo;   // (variant 2: a mono note after a stereo one)
+                    SpectralParams before = frozen (0.8f);
+                    before.warpType[0] = static_cast<int> (Warp::smear);
+                    before.warpAmount[0] = 0.5f;
+                    const int d = k * kStartStep;
+                    SpectralVoice fresh, dirty, old;
+                    for (SpectralVoice* v : { &fresh, &dirty, &old })
+                    {
+                        v->prepare (kSr);
+                        v->setLegacyStart (legacyStart != 0);
+                    }
+                    old.setLegacyReset (true);
+                    // the history of the two voices that are reset: a stereo note of other settings, played for a while
+                    for (SpectralVoice* v : { &dirty, &old })
+                    {
+                        v->noteOn (&stereo, before, 0.0f, 0);
+                        render (*v, before, 4096, 128);
+                        v->scribbleBuffersForTest (variant % 2 == 0 ? 0.7f : -0.3f);
+                        v->reset();
+                    }
+                    fresh.noteOn (an, p, 0.0f, d);
+                    dirty.noteOn (an, p, 0.0f, d);
+                    old.noteOn (an, p, 0.0f, d);
+                    std::vector<float> rf, rd, ro;
+                    const auto lf = render (fresh, p, 6144, 128, &rf);
+                    const auto ld = render (dirty, p, 6144, 128, &rd);
+                    const auto lo = render (old, p, 6144, 128, &ro);
+                    ++runs;
+                    const bool same = std::memcmp (lf.data(), ld.data(), lf.size() * sizeof (float)) == 0 && std::memcmp (rf.data(), rd.data(), rf.size() * sizeof (float)) == 0
+                                      && std::memcmp (lf.data(), lo.data(), lf.size() * sizeof (float)) == 0 && std::memcmp (rf.data(), ro.data(), rf.size() * sizeof (float)) == 0;
+                    identical += same ? 1 : 0;
+                    if (! CHECK (same))
+                        std::printf ("    variant %d warp %d legacyStart %d offset %d differs\n", variant, w, legacyStart, d);
+                }
+    CHECK_EQ (runs, identical);
+    std::printf ("    %d note starts on dirty buffers: all bit identical to the cleared start\n", runs);
+    // Mac timing of the reset of the 4 players of an oscillator slot (the cost of every note start before)
+    SpectralVoice slot[4];
+    double us[2] = {};
+    for (int legacy = 0; legacy < 2; ++legacy)
+    {
+        for (SpectralVoice& v : slot)
+            v.setLegacyReset (legacy != 0);
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 20000; ++i)
+            for (SpectralVoice& v : slot)
+                v.reset();
+        us[legacy] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / 20000.0;
+    }
+    std::printf ("    reset of 4 spectral voices: %.3f us now, %.3f us before (this Mac, warm)\n", us[0], us[1]);
 }

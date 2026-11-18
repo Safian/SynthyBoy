@@ -98,6 +98,9 @@ public:
     /** Tests: false runs the kernel with its scalar form only (the vector form, four samples of a grain at a time on ARM with NEON, gives the same bits). */
     void setVectorKernels (bool on) noexcept { vectors_ = on; }
 
+    /** Tests only: reset() as it was before (the `active` flag of all grains written on every call). */
+    void setLegacyReset (bool on) noexcept { legacyReset_ = on; }
+
     bool isActive() const noexcept { return active_; }
     int activeGrains() const noexcept;
     double playhead() const noexcept { return head_; }
@@ -131,6 +134,8 @@ private:
     double sampleRate_ = 44100.0;
     bool reference_ = false;
     bool vectors_ = true;
+    bool legacyReset_ = false;
+    bool grainsLive_ = false;   // a grain may be active (set by spawn, cleared by reset): reset has nothing to clear while it is false
     bool active_ = false, released_ = false, headDone_ = false;
     double head_ = 0.0;         // play head, fraction of the file
     int headDirection_ = 1;     // ping pong state

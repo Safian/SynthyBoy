@@ -122,8 +122,9 @@ void LibOsc::stopAll() noexcept
 
 void LibOsc::resetForNote() noexcept
 {
-    // The players (up to 68 per slot, the spectral ones with tens of KB of buffers each) are reset only if a library type has run on
-    // this slot since the last reset: a slot that plays wavetables never touches them, and a reset of an idle player is a no-op.
+    // The players (up to 68 per slot) are reset only if a library type has run on this slot since the last reset: a slot that plays
+    // wavetables never touches them. A reset clears flags only (the spectral voice's 37 KB of buffers and the 48 grains of a cloud are not
+    // written again: a note start clears or writes what it reads, tests in core/spectral and core/granular).
     if (playersUsed)
     {
         SB_SECTION (sections::libReset);
