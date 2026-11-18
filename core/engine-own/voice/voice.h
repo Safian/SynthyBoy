@@ -58,6 +58,7 @@ struct TickGlobals
     bool scalarWarp = false;                 // measurements (kOwnSavingVectorWarp): no four lane form of the oversampled oscillator samples
     bool scalarContent = false;              // measurements (kOwnSavingContentKernels): the library oscillators run their reference code, not the block kernels
     bool scalarFilters = false;              // measurements (setOwnSavingsOff, kOwnSavingVectorFilters): no pair kernels in the voice filters
+    bool referenceControl = false;           // measurements (setOwnSavingsOff, kOwnSavingVoiceControl): the control code of the voice as it was before the caches of CPU-REVIEW-VOICE-MOD.md
     uint32_t economy = 0;                    // the economy groups in force (EconomyFlags of quality.h); the three tiers: all at low, none at medium / high
     MorphCache* morphCache = nullptr;        // the engine's cache of morph cycles (may be null)
     float killSeconds = 0.05f;               // the fade of a voice that was stolen (Kill mode); tier low: OwnEngine::setLowTierKillFade
@@ -99,6 +100,7 @@ struct MixOut
 
 class Voice
 {
+    friend struct VoiceOptTest; // core/tests/test_own_voice_opt.cpp
 public:
     void prepare (double sampleRate);
     void reset() noexcept;
@@ -233,6 +235,15 @@ private:
     uint32_t envCacheEpoch = 0, vcCacheEpoch = 0, vcCacheSequence = 0;
     double envCacheBpm = 0.0;
     bool envCacheValid = false, vcCacheValid = false;
+    // the same per envelope (CPU-REVIEW-VOICE-MOD.md V1): envCache[e] holds the settings of the parameters alone while the snapshot epoch, the tempo and the envelope factor of the voice
+    // control are the ones it was built with, and no slot touched a key of envelope e then or in the last period (other keys may be modulated)
+    uint32_t envSetEpoch[6] = {};
+    double envSetBpm[6] = {};
+    float envSetFactor[6] = {};
+    bool envSetOk[6] = {};
+    /** The group (kGroup...) of every parameter index (voice.cpp paramGroups ()), and the groups of the keys the matrix touched (bit = group). */
+    const uint8_t* groupOf = nullptr;
+    uint32_t touchedGroups() const noexcept;
     float lfoAge[10] = {}, lfoSmoothL[10] = {}, lfoSmoothR[10] = {};
     float lfoReadPos[10] = {};            // the cycle position the display reads (lfoReadout): the offset of the LFO, or the clock of a free-running one
     float lfoOutR[10] = {};

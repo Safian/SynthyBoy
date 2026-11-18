@@ -132,6 +132,9 @@ add_executable(synthyboy_test_own_voice_legato_env test_own_voice_legato_env.cpp
 target_link_libraries(synthyboy_test_own_voice_legato_env PRIVATE synthyboy_core Threads::Threads)
 target_include_directories(synthyboy_test_own_voice_legato_env PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/engine-own")
 target_compile_options(synthyboy_test_own_voice_legato_env PRIVATE -Wall -Wextra -Wpedantic)
+synthyboy_add_test(synthyboy_test_own_voice_opt test_own_voice_opt.cpp)   # the CPU optimisations of the voice control and the matrix change no sample and no display value
+target_include_directories(synthyboy_test_own_voice_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+target_compile_definitions(synthyboy_test_own_voice_opt PRIVATE SYNTHYBOY_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 synthyboy_add_test(synthyboy_test_own_fx_mute test_own_fx_mute.cpp)   # an effect whose mix is exactly 0 is not processed (economy group Control)
 target_include_directories(synthyboy_test_own_fx_mute PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_fx_makeup test_own_fx_makeup.cpp)   # the tier level makeup of the bypassed effects

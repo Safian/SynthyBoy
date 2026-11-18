@@ -84,11 +84,66 @@ float noiseSample (int colour, float* s, Rng& r, float level, bool fast) noexcep
     }
     (void) level;
 }
+/** The groups of keys whose derived settings the voice keeps (bit k of Voice::touchedGroups () = group k): the envelopes, the LFOs, the random LFOs, the oscillators, the sub, the
+    noise and the filters; 0 = every other key. */
+enum ParamGroup : int { kGroupOther = 0, kGroupEnv = 1, kGroupLfo = 7, kGroupRlfo = 17, kGroupOsc = 21, kGroupSub = 24, kGroupNoise = 25, kGroupFilter = 26, kNumGroups = 28 };
+static_assert (kNumGroups <= 32, "the groups are bits of a 32 bit mask");
+
+/** The group of every parameter index, built once (Voice::prepare: never on the audio thread). The index structs of param_index.h hold only `int` fields. */
+const uint8_t* paramGroups() noexcept
+{
+    static const std::vector<uint8_t> table = []
+    {
+        std::vector<uint8_t> t (paramCount(), static_cast<uint8_t> (kGroupOther));
+        auto mark = [&t] (const void* idxStruct, size_t bytes, int group)
+        {
+            const int* f = static_cast<const int*> (idxStruct);
+            for (size_t i = 0; i < bytes / sizeof (int); ++i)
+                if (f[i] >= 0 && static_cast<size_t> (f[i]) < t.size())
+                    t[static_cast<size_t> (f[i])] = static_cast<uint8_t> (group);
+        };
+        static_assert (sizeof (EnvIdx) % sizeof (int) == 0 && sizeof (LfoIdx) % sizeof (int) == 0 && sizeof (RlfoIdx) % sizeof (int) == 0 && sizeof (OscIdx) % sizeof (int) == 0
+                       && sizeof (SubIdx) % sizeof (int) == 0 && sizeof (NoiseIdx) % sizeof (int) == 0 && sizeof (FilterIdx) % sizeof (int) == 0, "int fields only");
+        const ParamIndex& pi = paramIndex();
+        for (int e = 0; e < 6; ++e)
+            mark (&pi.env[e], sizeof (EnvIdx), kGroupEnv + e);
+        for (int l = 0; l < 10; ++l)
+            mark (&pi.lfo[l], sizeof (LfoIdx), kGroupLfo + l);
+        for (int r = 0; r < 4; ++r)
+            mark (&pi.rlfo[r], sizeof (RlfoIdx), kGroupRlfo + r);
+        for (int o = 0; o < 3; ++o)
+        {
+            mark (&pi.osc[o], sizeof (OscIdx), kGroupOsc + o);
+            mark (libKeys (o).idx, sizeof (LibKeys::idx), kGroupOsc + o);
+        }
+        mark (&pi.sub, sizeof (SubIdx), kGroupSub);
+        mark (&pi.noise, sizeof (NoiseIdx), kGroupNoise);
+        const int noiseFilter = findParamIndex (hashKey ("noise.filter"));
+        mark (&noiseFilter, sizeof (int), kGroupNoise);
+        for (int f = 0; f < 2; ++f)
+            mark (&pi.filter[f], sizeof (FilterIdx), kGroupFilter + f);
+        return t;
+    }();
+    return table.data();
+}
 } // namespace
+
+/** Bit k: some slot of the last evaluation touched a key of group k (the list of touched keys, and the pad pressure layer on the Filter 1 cutoff). A full list (it cannot be: one entry
+    per slot) counts as every group. */
+uint32_t Voice::touchedGroups() const noexcept
+{
+    if (numTouched >= kNumModSlots)
+        return ~0u;
+    uint32_t m = padCutTouched ? (1u << kGroupFilter) : 0u;
+    for (int i = 0; i < numTouched; ++i)
+        m |= 1u << groupOf[touched[i]];
+    return m;
+}
 
 void Voice::prepare (double sampleRate)
 {
     sr = sampleRate;
+    groupOf = paramGroups();
     mod.assign (paramCount(), 0.0f);
     modR.assign (paramCount(), 0.0f);
     modP = mod.data();
@@ -225,6 +280,8 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     tickCount = 0;
     envCacheValid = false;
     vcCacheValid = false;
+    for (bool& ok : envSetOk)
+        ok = false;
     ampPrev = ampCur = 0.0f;
     velGainPrev = velGain = 0.0f;
     std::fill (std::begin (srcLevel), std::end (srcLevel), 0.0f);
@@ -548,6 +605,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         ctx.dt = 0.0f;
         ctx.bpm = g.bpm;
         ctx.voiceAge = voiceAge;
+        ctx.reference = g.referenceControl;
         { SB_SECTION (sections::tickMatrix); g.matrix->evaluate (ctx); }
         // the control rate envelopes are evaluated for the same chunk as the note start: as sources they already have their value at the end of the first step
         for (int e = 0; e < 6; ++e)
@@ -566,29 +624,54 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     {
     SB_SECTION (sections::tickEnvLfo);
     const bool envFromCache = g.baseEpoch != 0 && envCacheValid && envCacheEpoch == g.baseEpoch && envCacheBpm == g.bpm && numTouched == 0 && !fresh;
+    // V1: an envelope none of whose keys a slot touched keeps the settings it derived from the parameters alone (the keys of the other groups may be modulated). The test of
+    // envFromCache above stays as it was: its key has no note sequence, so after a legato note it keeps the envelope factor of the step before (test_own_voice_legato_env.cpp);
+    // the per envelope cache below is used only where envFromCache is not, and is keyed on the factor itself, so every settings value is the one the code before computed.
+    const uint32_t envTouched = g.referenceControl ? ~0u : touchedGroups();
+    uint32_t envFactorBits;
+    std::memcpy (&envFactorBits, &vc.envFactor, 4);
     for (int e = 0; e < 6; ++e)
     {
+        // tier low: an envelope (not the amplitude envelope) that no slot reads is advanced every fourth period (staggered) by four periods
+        const bool decimated = (g.economy & kEconomyControl) != 0 && !fresh && e > 0 && ((g.usedSources >> srcEnv (e)) & 1u) == 0;
+        const bool skipped = decimated && ((tickCount + static_cast<uint32_t> (e)) & 3u) != 0u; // envOut keeps its last value
         EnvSettings s;
         if (envFromCache)
+        {
+            if (skipped)
+                continue;
             s = envCache[e];
+        }
         else
         {
-            envSettings (e, s, true);
-            envCache[e] = s;
+            const bool envUntouched = (envTouched & (1u << (kGroupEnv + e))) == 0;
+            uint32_t setFactorBits;
+            std::memcpy (&setFactorBits, &envSetFactor[e], 4);
+            if (!fresh && envUntouched && envSetOk[e] && g.baseEpoch != 0 && envSetEpoch[e] == g.baseEpoch && envSetBpm[e] == g.bpm && setFactorBits == envFactorBits)
+            {
+                // envCache[e], envLen[e] and legatoInv[e] hold what envSettings () gives now (the same keys, epoch, tempo and factor)
+                if (skipped)
+                    continue;
+                s = envCache[e];
+            }
+            else
+            {
+                envSettings (e, s, true);
+                envCache[e] = s;
+                envSetOk[e] = !fresh && envUntouched;
+                envSetEpoch[e] = g.baseEpoch;
+                envSetBpm[e] = g.bpm;
+                envSetFactor[e] = vc.envFactor;
+                if (skipped)
+                    continue;
+            }
         }
         if (fresh && e == 0)
         {
             const float v0 = env[0].advance (s, 0.0); // the level at the note's first sample
             envStart = v0 * v0;
         }
-        // tier low: an envelope (not the amplitude envelope) that no slot reads is advanced every fourth period (staggered) by four periods
-        double stepDt = dt;
-        if ((g.economy & kEconomyControl) != 0 && !fresh && e > 0 && ((g.usedSources >> srcEnv (e)) & 1u) == 0)
-        {
-            if (((tickCount + static_cast<uint32_t> (e)) & 3u) != 0u)
-                continue; // envOut keeps its last value
-            stepDt = 4.0 * dt;
-        }
+        const double stepDt = decimated ? 4.0 * dt : dt;
         const float v = env[e].advance (s, stepDt);
         envOut[e] = v * v;
     }
@@ -707,6 +790,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         ctx.dt = fdt;
         ctx.bpm = g.bpm;
         ctx.voiceAge = voiceAge;
+        ctx.reference = g.referenceControl;
         { SB_SECTION (sections::tickMatrix); g.matrix->evaluate (ctx); }
         // MPC shell: the poly aftertouch of a pad goes to the Filter 1 cutoff (a layer over the patch: the knob and the matrix slots are not touched). One pole smoothing
         // (time constant kPadPressureSeconds) of the ~170 / s stream; the delta is in semitones, the control domain of the cutoff. Off: nothing is computed.

@@ -89,6 +89,8 @@ struct EvalContext
     /** Bit k: source id k may be read; a slot that reads (as source or aux) a source outside the mask is skipped. The default reads everything; the display's
         readout of an idle engine uses the sources that have a value without a voice (macros, wheels ...). */
     uint64_t sourceMask = ~uint64_t (0);
+    /** Measurements (setOwnSavingsOff, kOwnSavingVoiceControl): every slot runs the whole evaluation, as before the skips of CPU-REVIEW-VOICE-MOD.md (the same results). */
+    bool reference = false;
 };
 
 class ModMatrix
