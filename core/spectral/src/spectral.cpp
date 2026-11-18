@@ -552,9 +552,17 @@ void SpectralVoice::reset() noexcept
 
 void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, float startFraction, int hopOffset) noexcept
 {
-    reset();
+    active_ = false;
+    analysis_ = nullptr;
     if (analysis == nullptr || ! analysis->valid() || p.scratch == nullptr)
         return;
+    // what a note needs cleared: the smear memory and the ring of the channels it uses (the phases are set by the first frame, `finished` is written before it is read)
+    for (int ch = 0; ch < (analysis->channels() > 1 ? 2 : 1); ++ch)
+    {
+        std::fill (channel_[ch].smear, channel_[ch].smear + kBins, 0.0f);
+        std::fill (channel_[ch].ring, channel_[ch].ring + kFftSize, 0.0f);
+        std::fill (channel_[ch].synthPhase, channel_[ch].synthPhase + kBins, 0.0f);
+    }
     analysis_ = analysis;
     hostRate_ = p.hostRate > 1000.0 ? p.hostRate : hostRate_;
     active_ = true;

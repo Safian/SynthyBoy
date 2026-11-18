@@ -669,7 +669,6 @@ void LibOsc::beginType (int type) noexcept
     {
         for (int u = 0; u < U; ++u)
         {
-            specVoices[static_cast<size_t> (u)].reset();
             specVoices[static_cast<size_t> (u)].setReferenceKernels (lp.referenceKernels);
             specParams.pitchRatio = semitonesToRatio (uni[u].semis);
             // the frames of a voice come every kHop samples: the voices of a chord and of the unison start at different offsets inside their hop (a quarter of a hop apart), so that in the steady
