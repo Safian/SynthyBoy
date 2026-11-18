@@ -18,6 +18,8 @@ Tartalomjegyzék
    - 5.1 Play
    - 5.2 Macros
    - 5.3 Osc A / B / C
+     - A wavetable-böngésző (hullámtáblák betöltése)
+     - Saját hullámtáblák hozzáadása
    - 5.4 Sub
    - 5.5 Noise
    - 5.6 Mixer
@@ -29,10 +31,11 @@ Tartalomjegyzék
    - 5.12 Master
    - 5.13 Voice control
 6. Moduláció
-7. Presetek
+7. Presetek és gyári tartalom
    - 7.1 Presetek böngészése
    - 7.2 A gyári hangok
    - 7.3 Hangminőség az egyes eszközökön
+   - 7.4 Gyári hullámtáblák (Factory Wavetables)
 8. Ismert korlátok
 9. Hibaelhárítás
 10. Második generációs padok (MPCe), MPC XL és egyéb gen 2 eszközök (lásd: [mpce-padok.md](mpce-padok.md))
@@ -43,7 +46,7 @@ Tartalomjegyzék
 ## 1. Mi ez
 
 A SynthyBoy egy szoftverszintetizátor-plugin Akai MPC hardverekhez (VST2 formátum, amelyet az MPC külső plugin-támogatása tölt be). Három oszcillátorral (A, B, C) rendelkezik, amelyek mindegyike hullámtáblákat (wavetable), multimintás hangszert (multisample), egyetlen hangmintát (sample), szemcséket (grains) vagy spektrumot képes megszólaltatni; ezen kívül tartalmaz egy szuboszcillátort (sub oscillator), egy zajgenerátort (noise generator), két szűrőt (filter), hat burkológörbét (envelope), tíz LFO-t és négy véletlenszerű LFO-t (random LFO), nyolc makrót (macro), egy 64 férőhelyes modulációs mátrixot (mod matrix), 16 effeket (13 effekt és három sávosztó splitter), valamint egy master szekciót hangolással (tuning), MPE támogatással és hangvezérléssel (voice control).
-A hangszerhez 136 gyári preset tartozik.
+A hangszerhez 136 gyári preset, valamint egy 72 gyári hullámtáblát (hat kategóriában) tartalmazó gyári tartalomcsomag tartozik.
 
 **Egyetlen csomag, két hardvergeneráció.** A SynthyBoy egyetlen csomag: a plugin a saját maga által rajzolt képernyőivel fut (nincs második, egyszerűbb változat). A standalone MPC hardverek mindkét generációjára le van fordítva: az első generációra (32 bites) és a második generációra (64 bites); az MPC a hardverhez illeszkedő buildet tölti be.
 
@@ -198,7 +201,7 @@ Az LFO panel csoportja (SHAPE, RATE, RISE, SMOOTH: XL-en a 9-12. Q-Link):
 | Útválasztó gomb (Route button: F1 / F2 / F12 / M / DIR / BAL / OFF) | Koppintás: megnyitja az adott oszcillátor kimeneti felugró ablakát (célpont, balance, BUS 1, BUS 2). A Sub oszcillátornak itt nincs útválasztó gombja; az útválasztása a saját oldalán található (5.4). |
 | Kijelző + teljes képernyő gomb | Az oszcillátor egyetlen ciklusa; a gomb megnyitja a teljes képernyős oszcillátor-oldalt (5.3 / 5.4 / 5.5 fejezet). |
 | Típusgombok: WAVE / MULTI / SAMPLE / GRAIN / SPEC | Az oszcillátor típusa (hullámtábla, multiminta, hangminta, granuláris, spektrális). Q 1. |
-| Forrásléptető és a listagomb | A hullámtábla neve vagy a betöltött fájl. Kompakt nézetben a hullámtáblák listagombja halvány; a lista a teljes képernyőről nyitható meg. Q 2. |
+| Forrásléptető és a listagomb | A hullámtábla neve (fájlból betöltött táblánál a fájl címe) vagy a betöltött fájl neve. A névre vagy a listagombra koppintva megnyílik a **wavetable-böngésző** (WAVE típusnál) vagy a **tartalomböngésző** (egyéb típusoknál); kompakt nézetből ilyenkor először a teljes képernyős nézet tárul fel. Q 2. |
 | PAN (panoráma) | -100 .. +100 százalék (C, L n, R n). Q 3. |
 | LEVEL (szint) | 0 .. 100 százalék. Q 4. |
 
@@ -244,7 +247,7 @@ A kép 16 potméteres eszközhöz van renderelve: a kis számok a Q-Link potmét
 | SAMPLE | Osc N Type = Sample | |
 | GRAIN | Osc N Type = Granular | |
 | SPEC | Osc N Type = Spectral | |
-| Forrásléptető (WAVE) | Osc N Wavetable, 15 választás: Sine, Saw, Square, Triangle, Pulse 25%, Saw to Square, Sine to Saw, Harmonic Series, Odd Harmonics, Formant Sweep, FM Sweep, PWM Sweep, Bell Partials, Preset table, Saw Down | A névre vagy a listagombra koppintva megnyílik a **wavetable-böngésző**: kategóriák (Basic, Morph, a telepített csomagok kategóriái, a saját mappáid, User) és a táblák, az aktuális megjelölve. A külső negyedek (és a Q-gomb) a beépített táblákat léptetik; ha a tábla fájlból való, akkor a kategóriája előző / következő táblájára lépnek (a végén nem történik semmi). Saját táblákhoz másolj WAV fájlokat az SD-kártya, egy USB-meghajtó vagy a plugin Content mappájának `SynthyBoy/Wavetables/<Kategória>/` mappájába (lásd angolul: `factory-content.md`, "Adding your own wavetables"). A fájl mono WAV (16, 24, 32 bit vagy 32 bites float), legfeljebb 16 MB, 2048 mintás képkockák egymás után; hiányzó fájlnál a preset fűrészt játszik. |
+| Forrásléptető (WAVE) | Osc N Wavetable, 15 választás: Sine, Saw, Square, Triangle, Pulse 25%, Saw to Square, Sine to Saw, Harmonic Series, Odd Harmonics, Formant Sweep, FM Sweep, PWM Sweep, Bell Partials, Preset table, Saw Down; vagy a fájlból betöltött tábla címe | A névre vagy a listagombra koppintva megnyílik a **wavetable-böngésző**: kategóriák (Basic, Morph, a telepített csomagok kategóriái, a saját mappáid, User) és a táblák listája, az aktuális tábla megjelölve. A külső negyedek (és a Q-Link potméter) a beépített táblákat léptetik; ha a tábla fájlból való, akkor a kategóriája előző / következő fájljára lépnek (a végpontokon nincs körbefordulás). Saját táblák hozzáadásához másolj WAV fájlokat az SD-kártya, egy USB-meghajtó vagy a plugin saját Content mappájának `SynthyBoy/Wavetables/<Kategória>/` könyvtárába (lásd alább és: [factory-content.md](../factory-content.md)). Q 2. |
 | Forrásléptető (egyéb típusok) | a betöltött fájl vagy hangszer | A névre vagy a listagombra koppintva megnyílik a **tartalomböngésző (content browser)** (lásd lentebb). |
 | PAN | -100 .. 100 százalék, alapértelmezett: 0 | Q 3 |
 | LEVEL | 0 .. 100 százalék, alapértelmezett: 50 | Q 4 |
@@ -279,6 +282,98 @@ UNISON blokk: MODE (Linear, Super, Exp, Inv, Random), STACK (Unison, Center Drop
 
 *FRAME MAP* (amit a kép mutat): a FRAME REMAP blokk tartalmazza a **REMAP** LED kapcsolót, a **CURVE** listát (Curve 1 .. Curve 4) és a **RISE** valamint **FALL** potmétereket (milliszekundumban, a remap bekapcsolt állapotában aktívak). Az újraképezési görbe a kijelzőre van rajzolva (a narancssárga vonal). A SPECTRAL MORPH blokk elemei: TYPE (None, Vocode, Formant Scale, Harmonic Stretch, Inharmonic Stretch, Smear, Random Amplitudes, Low Pass, High Pass, Phase Disperse, Shepard Tone, Time Skew), AMOUNT és SPREAD.
 A remap segítségével megváltoztatható, hogyan fusson végig a hullámtábla-pozíció a táblán; a morph segítségével pedig átformálhatók az egyes hullámformák felharmonikusai.
+
+#### A wavetable-böngésző (hullámtáblák betöltése)
+
+A SynthyBoy az érintőképernyős kezelőfelületén egy egységes, teljes képernyős böngészőt kínál a hullámtáblák böngészéséhez és betöltéséhez.
+
+**A böngésző megnyitása:**
+1. Válasszuk ki az oszcillátor fület (**Osc A**, **Osc B** vagy **Osc C**), és állítsuk a típust **WAVE**-re.
+2. Érintsük meg a hullámtábla nevét a forrásléptető mezőben (vagy a mellette lévő listagombot). Ez elérhető az Osc A / B / C teljes képernyős oldalain, valamint a Play oldal oszcillátor-harmadában (a kompakt nézetben) is — a Play oldalról megérintve először a teljes képernyős felület tárul fel.
+3. A wavetable-böngésző egy kétszintű listaként nyílik meg a teljes plugin-terület felett (56 képpont magas sorokkal).
+4. Mindig az éppen megszólaló hullámtábla **kategóriájában** nyílik meg, és az adott tábla ki van jelölve a listában (a beépített tábla a sorszáma alapján, a fájlból betöltött tábla a csomagja és elérési útja szerint).
+5. A fejlécben az aktuális kategória neve látható egy balra mutató vissza-nyíllal: erre koppintva léphetünk fel a kategóriák főlistájához (fejléc: "WAVETABLES", a kategórianevek után kis háromszöggel), ahol bármely kategóriát megérintve megnézhetjük az abban található hullámtáblákat.
+
+**Kategóriák a böngészőben:**
+- **Basic**: a hat beépített, egyetlen ciklusból álló alap-hullámforma (Sine, Saw, Square, Triangle, Pulse 25%, Saw Down).
+- **Morph**: a nyolc beépített, 64 képkockából álló morfózis-hullámtábla (Saw to Square, Sine to Saw, Harmonic Series, Odd Harmonics, Formant Sweep, FM Sweep, PWM Sweep, Bell Partials).
+- **Csomag-kategóriák (pack categories)**: a telepített hullámtábla-csomagok (például a gyári csomag: `com.safian.synthyboy.factory-wavetables`) kategóriái, mint az Analog, Digital, Spectral, Vocal, Metallic, Noise (lásd a 7.4 fejezetet).
+- **Saját mappák**: a felhasználó által létrehozott könyvtárak az SD-kártyán, USB-meghajtón vagy a belső tárhelyen.
+- **User**: a közvetlenül a gyökér `SynthyBoy/Wavetables/` mappába helyezett WAV fájlok gyűjtőhelye.
+- *Kategóriák összefésülése és sorrendje:* Az azonos nevű kategóriákat (kis- és nagybetűktől függetlenül) a csomagok és a felhasználói mappák között a böngésző automatikusan egyetlen kategóriává vonja össze. A kategóriák sorrendje rögzített: elöl a **Basic**, utána a **Morph**, ezt követik a további csomag- és felhasználói kategóriák ábécérendben, a sor legvégén pedig a **User** kategória áll. Egy kategórián belül először a beépített táblák szerepelnek a megszokott sorrendjükben, majd a fájlok következnek címük szerint ábécérendben.
+
+**Tábla kiválasztása, háttérbeli betöltés és a sárga állapotjelző:**
+- Érintsünk meg egy táblát a listában a megszólaltatásához.
+- A beépített táblák azonnal betöltődnek, és a böngésző ablaka bezárul.
+- A csomagból vagy saját fájlból származó táblát a háttérben olvassa be és dekódolja a megjelenítő szál (felépítve az FFT spektrumokat és a szinteket).
+- Amíg a háttérbeli betöltés folyamatban van, az oldal tetején megjelenik a **sárga színű állapotjelző sáv (amber bar)**.
+- **Zökkenőmentes váltás:** a korábban játszott hullámtábla folyamatosan és megszakítás nélkül szól mindaddig, amíg az új tábla teljesen el nem készül és publikálásra nem kerül. Nem keletkezik hangkimaradás, némulás vagy közbenső fűrészhullám-ugrás.
+- Amikor az új tábla készen áll, a motor átvált rá, és a forrásléptető mező megjeleníti a fájl címét.
+- Gyors egymásutánban leadott érintéseknél mindig a legutolsó kérés érvényesül.
+
+**Képkockák (frames) és a WT POS:**
+Egy hullámtábla egymást követő ciklusokból, úgynevezett **képkockákból (frames)** áll. Ezek között a **WT POS** (hullámtábla-pozíció) potméterrel vagy modulációval (LFO, burkoló, leütési dinamika, makró) pásztázhatunk végig folyamatosan az első kockától az utolsóig. Az egyetlen képkockából álló táblák önálló egyszeres ciklusok (single cycles).
+
+**Léptetés a nyilakkal és a Q-Link potméterrel (kategórián belül, nincs körbefordulás):**
+- Beépített tábla esetén a léptető bal és jobb szélén található nyilak (valamint a hozzárendelt Q-Link potméter, Q 2) a 15 beépített választás között léptetnek (a Preset table opciót a rendszer átugorja, amíg nincs fájl betöltve).
+- Fájlból betöltött táblánál a nyilak és a Q-Link potméter **ugyanazon kategória előző / következő fájljára** léptetnek (a böngésző listájában elfoglalt sorrend szerint). Így a Q-Link tekerésével vagy a nyilakkal kényelmesen végighallgatható egy teljes kategória minden táblája anélkül, hogy a böngészőt újra meg kellene nyitni.
+- A kategória legelső és legutolsó fájljánál **nem történik semmi: nincs körbefordulás (no wrap)**. A megfelelő irányú nyíl elhalványul, amint elértük a kategória határát.
+- A beépített táblákhoz való visszatéréshez nyissuk meg újra a böngészőt.
+- Ha egy betöltött fájl nem tartozik kategóriához (például egy olyan presetből származik, amelynek csomagja nincs telepítve a gépen), a léptetés a beépített táblákon mozog tovább.
+
+**Használhatatlan vagy érvénytelen fájlok:**
+Ha egy fájl nem használható hullámtáblaként (túl nagy, üres, hibás adatszerkezetű vagy nem támogatott formátumú):
+- A böngésző listájában a fájl sora kiírja az elutasítás pontos okát (például: "not a wavetable file: ..."), és a fájl nem választható ki.
+- A képernyő felső részén négy másodpercig megjelenik a hibaüzenet ("not a wavetable file: <ok>").
+- **A hangzás és az oszcillátor állapota változatlan marad**, semmilyen nemkívánatos megszakadás vagy némulás nem történik.
+
+#### Saját hullámtáblák hozzáadása
+
+Saját WAV hullámtábla-fájlokat egyszerű fájlmásolással adhatunk a hangszerhez.
+
+**A három mappa:**
+Másoljuk a kívánt WAV fájlokat a **`SynthyBoy/Wavetables/`** könyvtárba az alábbi három hely valamelyikén:
+1. Az **SD-kártya** legfelső szintjén: `/sdcard/SynthyBoy/Wavetables/`
+2. Egy csatlakoztatott **USB-meghajtó** legfelső szintjén: `<meghajtó>/SynthyBoy/Wavetables/` (az MPC fájlrendszerében a `/media/<meghajtó>/SynthyBoy/Wavetables/` útvonalon)
+3. A plugin saját belső **`Content`** mappájában: `Content/SynthyBoy/Wavetables/` (közvetlenül a plugin VST mappája mellett; SD-kártya és USB-meghajtó nélküli gépeken, a belső tárhelyre másolt pluginnál így adhatók hozzá fájlok).
+
+Ha a könyvtár még nem létezik, hozzuk létre. Az Akai MPC belső "MPC Documents" mappáját a plugin nem pásztázza: a fájlokat az SD-kártyára, USB-meghajtóra vagy a plugin Content könyvtárába helyezzük.
+
+**Mappaszerkezet és kategóriák:**
+- A közvetlenül a `SynthyBoy/Wavetables/` gyökérmappába másolt WAV fájlok a **User** kategóriában jelennek meg a böngészőben.
+- A `SynthyBoy/Wavetables/` mappán belül létrehozott almappák önálló **kategóriákká** válnak a mappa nevével megegyezően, és a bennük lévő WAV fájlok alkotják az adott kategória tábláit (például a `SynthyBoy/Wavetables/Pads/` almappa tartalma a "Pads" kategóriába kerül).
+- A rendszer kizárólag **egyetlen almappaszintet** olvas be: a mélyebbre ágyazott almappákat és azok fájljait figyelmen kívül hagyja.
+- A ponttal kezdődő rejtett fájlok és könyvtárak figyelmen kívül maradnak.
+- Ha ugyanaz a mappanév létezik az SD-kártyán és az USB-meghajtón is, a böngésző egyetlen közös kategóriává fésüli össze őket.
+
+**Dinamikus beolvasás (nincs indexelés, nincs újraindítás):**
+A böngésző nem igényel külön indexfájl létrehozását vagy az MPC újraindítását: a böngésző **minden megnyitásakor újra beolvassa** a meghajtók aktuális tartalmát. A tárhelyre felmásolt új hullámtáblák a böngésző következő megnyitásakor azonnal megjelennek.
+
+**Presetek hordozhatósága és a hiányzó fájlok kezelése:**
+Egy saját fájlt használó preset a mappanév, a fájlnév és egy SHA-256 ellenőrzőösszeg alapján jegyzi meg a hullámtáblát. Ha a projektet átvisszük egy másik MPC-re, és azon ugyanez a fájl megtalálható ugyanolyan mappanéven a támogatott gyökérkönyvtárak bármelyikében, a hangzás pontosan azonos marad.
+Ha a hivatkozott fájl hiányzik (vagy ellenőrzőösszege nem egyezik), az oszcillátor automatikusan egy tiszta **fűrészhullámra (saw)** áll vissza, a kijelzőn pedig megjelenik a "content missing: <fájlnév>" figyelmeztetés.
+
+**Támogatott WAV fájlformátumok és követelmények:**
+- Szabványos RIFF/WAVE formátum.
+- **Mono** csatorna (ha sztereó fájlt töltünk be, a plugin automatikusan a bal csatornát használja hullámtáblaként).
+- Mintamélység: 16, 24 vagy 32 bites egész (PCM), illetve 32 bites lebegőpontos (IEEE float), akár kiterjesztett (extensible) fejléccel is. Tetszőleges mintavételezési frekvencia támogatott.
+- Fájlméret: legfeljebb **16 MB** (`kMaxWavetableFileBytes`).
+- Hagyományos hullámtábla-szerkezet: **N darab 2048 mintás képkocka egymás után fűzve**, legfeljebb 256 képkockáig (a 256 feletti képkockákat a rendszer levágja).
+- Más szintetizátorok által használt formátumok: a `clm ` metaadat-blokkot (a `<!>1024 ...` vagy hasonló formátumot, 64-től 8192 mintáig) tartalmazó fájloknál a plugin az abban rögzített képkockaméretet veszi alapul, és köbös újramintavételezéssel automatikusan 2048 minta / képkocka méretre konvertálja.
+- Egyszeres ciklusú hullámformák (single cycles): azok a 16 és 4096 minta közötti fájlok, amelyek hossza nem 2048 egész számú többszöröse, egyetlen ciklusnak (single cycle) minősülnek, és a motor egyetlen 2048 mintás képkockává nyújtja őket.
+- Nem támogatott fájlok: a 16 mintánál rövidebb adatok, a 4096 mintánál hosszabb, de nem 2048 többszörösét kitevő sima hangminták (`clm ` blokk nélkül), az érvénytelen `clm ` méretek, a 8 bites, ADPCM tömörített vagy 64 bites lebegőpontos hangok, a kettőnél több csatornás fájlok, a sérült vagy hiányos adatszeletek, az üres fájlok, a 16 MB-nál nagyobb méret, valamint a nem WAV formátumok (FLAC, MP3). Ezeket a rendszer nem fogadja el hullámtáblaként, és pontos hibaüzenettel elutasítja.
+
+**Csomagok (Content packs):**
+A `Content/packs/<csomag>/` mappában elhelyezett, `wavetables` típusú `contentpack.json` leíróval ellátott csomagok szintén megjelennek a böngészőben: a fájlokat a manifesztben megadott `category` mező (ennek hiányában a mappa neve) rendezi kategóriákba, a megjelenített nevet pedig a `title` határozza meg.
+
+**Technikai korlátok:**
+- Legfeljebb 32 csomag.
+- Legfeljebb 1024 fájl csomagonként (manifesztenként).
+- Legfeljebb 512 könyvtárbejegyzés mappánként (a fájlrendszer által visszaadott első 512 elem, névsorba rendezve).
+- Legfeljebb 64 kategóriamappa gyökérenként.
+- Legfeljebb 96 kategória összesen.
+- Legfeljebb 4000 hullámtábla-fájl a teljes rendszerben.
+- A fájlnevek nem tartalmazhatnak kettőspontot (`:`), fordított perjelet (`\`), és hosszuk legfeljebb 255 bájt lehet.
 
 **MULTI (multimintás hangszer).** A forrás egy hangszerfájl (SFZ, vagy egy WAV, amely egyzónás hangszerré válik). Betöltött fájl nélkül a kijelző a NO SAMPLE feliratot és egy **LOAD INSTRUMENT** gombot mutat, amely megnyitja a tartalomböngészőt. A sávon található: **ENV** (megnyitja a multiminta burkoló oldalát: DELAY, ATTACK, HOLD, DECAY, SUSTAIN, RELEASE és az OVERRIDE kapcsoló, amely engedi, hogy ez a burkoló felülírja a hangszer sajátját), a **VEL TRK** LED kapcsoló az AMOUNT (0 .. 100) értékével és RAND (véletlen kezdőfázis). Az unison dobozban a TIMBRE (-100 .. +100 százalék) található.
 
@@ -681,7 +776,7 @@ A potméterek jelzik a modulációt: egy jelölő mutatja az élő (modulált) �
 
 **Makrók.** Nyolc makró (0 .. 100 százalék, alapértelmezett: 0) kizárólag forrásként működik: a makró nem csinál semmit, amíg nincs célpontja. A makró a források listájában "Macro n" néven jelenik meg.
 
-## 7. Presetek
+## 7. Presetek és gyári tartalom
 
 A plugin **137 programot** kínál a gazdarendszer felé: az "Init"-et (az alapértelmezett hangszín, 0. program) és 136 gyári presetet hat kategóriában. A lista kategóriák szerint (ábécérendben: Bass, FX, Keys, Lead, Pad, Pluck), azon belül pedig név szerint van rendezve.
 
@@ -795,6 +890,31 @@ Egyszerű szavakkal megfogalmazva:
 - Egy olyan eszközt, amelyet a plugin nem ismer fel, a rendszer a Key 61-hez hasonlóan kezel.
 
 Az XL profilt a kezdeti 112 gyári presettel és 16 kitartott hanggal mértük ki; a Key 61 profil a biztonsági megfontolásból választott (a sound set batch 1 24 presetjét ezt követően mindkét profil alatt megterveztük és kimértük, lásd: docs/release/SOUND-SET-BATCH-1.md).
+
+### 7.4 Gyári hullámtáblák (Factory Wavetables)
+
+A SynthyBoy egy dedikált gyári tartalomcsomaggal (`com.safian.synthyboy.factory-wavetables`) érkezik, amely **72 gyári hullámtáblát** (18,5 MB) tartalmaz hat kategóriában, kategóriánként 12 táblával:
+
+1. **Analog** (12 tábla): szűrő- és szinkronpásztázások (sync sweep), PWM rétegek, klasszikus analóg szintetizátorok karakterét idéző hullámformák.
+2. **Digital** (12 tábla): frekvenciamodulációs (FM) és fázistorzításos (phase distortion) spektrumok, additív felharmonikus-sorok, digitális szintetizátorhangzások.
+3. **Spectral** (12 tábla): formáns- és spektrális pásztázások, rezonáns és soksávos szűrt hullámformák, amelyek kiválóan alkalmasak spektrális szűrőtáblának is.
+4. **Vocal** (12 tábla): emberi magánhangzók, vokális formánsok és kórustextúrák; ezek a táblák egy meghatározott zenei alaphangra készültek, így annak kb. egy oktávos környezetében érvényesülnek legszebben.
+5. **Metallic** (12 tábla): inharmonikus fémek, harangok, gongok és ride cintányérok lecsengő spektrumai.
+6. **Noise** (12 tábla): fagyasztott fehér- és rózsaszínzaj-spektrumok, rezonáns sávok és suhogások, amelyek zajból tiszta hanggá sűrűsödnek.
+
+**Műszaki jellemzők és formátum:**
+- Minden tábla 16 bites mono PCM WAV formátumú, 2048 minta / képkocka felbontású, és néhány lépcsős kivételtől eltekintve pontosan 64 képkockából áll.
+- Mindegyik tábla egy folytonos pásztázás (scan): a hullámtábla-pozíció (**WT POS**) mozgatásával a hangzás simán, ugrások nélkül úszik át az első képkockától az utolsóig, miközben az érzékelt hangerő mindvégig kiegyenlített marad.
+- A táblák elsődlegesen a hullámtábla-oszcillátorhoz (**WAVE**, Osc A, B, C) készültek, de spektrális szűrőtáblaként is betölthetők a spektrális oszcillátorban (**SPEC**).
+
+**Licenc:**
+A gyári tartalomcsomag teljes anyaga algoritmikusan, matematikai egyenletekből és fizikai modellezésből lett szintetizálva (`scripts/gen-content-pack.py`), így semmilyen harmadik féltől származó hangmintát vagy jogvédett anyagot nem tartalmaz.
+- Licenc: Creative Commons Zero v1.0 Universal (`CC0-1.0`).
+- Szerző: Safian Szabolcs.
+- A táblák teljesen szabadon és jogdíjmentesen használhatók kereskedelmi zenei kiadványokban, filmzenékben és élő előadásokban.
+
+**Teljes hullámtábla-katalógus:**
+A 72 gyári hullámtábla tételes, részletes angol nyelvű műszaki leírása és pásztázási viselkedése az eredeti katalógusban található: [factory-content.md](../factory-content.md#2-factory-wavetables-comsafiansynthyboyfactory-wavetables).
 
 ## 8. Ismert korlátok
 
