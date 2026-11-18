@@ -11,11 +11,18 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import argparse
+import importlib.util
 import json
 import math
 import os
+from pathlib import Path
 import re
 import sys
+
+HERE = Path(__file__).resolve().parent
+_pv_spec = importlib.util.spec_from_file_location("product_version", HERE / "product_version.py")
+_pv_mod = importlib.util.module_from_spec(_pv_spec)
+_pv_spec.loader.exec_module(_pv_mod)
 
 # ---------------------------------------------------------------------------
 # Limits
@@ -439,7 +446,7 @@ def _write_hostsim(params_doc, out_dir):
         "vendor": plugin_info.get("vendor", "Safian"),
         "uid": plugin_info.get("uid", "SfSB"),
         "uidInt": plugin_info.get("uidInt", None),
-        "version": plugin_info.get("version", 1000),
+        "version": plugin_info.get("version", _pv_mod.load(HERE.parent)[2]),
         "isInstrument": plugin_info.get("isInstrument", True),
         "numInputs": plugin_info.get("numInputs", 0),
         "numOutputs": plugin_info.get("numOutputs", 2),
