@@ -907,24 +907,27 @@ void SampleVoice::renderBlockT (float* outLeft, float* outRight, int numFrames, 
     // a run of samples in which nothing but the plain read happens (no fade, no release, no rate modulation, no loop event, no crossfade, no mip blend): four at a time
     constexpr int kTaps = Tier == QualityTier::low ? 4 : (Tier == QualityTier::medium ? 8 : 16);
     const bool runOk = vectors_ && rateMod == nullptr && ! fadeEdges && plan.kind != ReadPlan::blend && ! plan.useUpper;
-    // the interval of positions (of the playhead) inside which no event can happen and every tap of the read lies inside the data
-    double runLo = boundLo, runHi = boundHi;
+    // The positions (of the playhead) a run may visit: where no event can happen and every tap of the read lies inside the data. An event bound only matters in the direction the playhead
+    // moves towards it: a head moving up meets the end bound (the loop or region end, or the start of the crossfade zone), a head moving down the start bound.
+    double evLo = boundLo, evHi = boundHi;
     bool xfadeRunOk = false;
     double xfadeLo = 0.0, xfadeHi = 0.0;
+    const bool zoneCap = mode == LoopMode::forward && xLen > 1.0;   // the crossfade zone changes how the playhead reads, whichever way it moves
     if (mode == LoopMode::forward || mode == LoopMode::pingPong || mode == LoopMode::reverse)
     {
-        runLo = lStart;
-        runHi = (mode == LoopMode::forward && xLen > 1.0) ? lEnd - xLen : lEnd;
+        evLo = lStart;
+        evHi = zoneCap ? lEnd - xLen : lEnd;
     }
+    double safeLo, safeHi;
     {
         const double inv = plan.kind == ReadPlan::oneLevel ? plan.invScale0 : 1.0;
         const double marginLo = static_cast<double> (kTaps / 2 - 1) + 1.0, marginHi = static_cast<double> (kTaps / 2) + 1.0;
-        runLo = std::max (runLo, marginLo / inv);
-        runHi = std::min (runHi, (static_cast<double> (plan.na) - marginHi) / inv);
+        safeLo = marginLo / inv;
+        safeHi = (static_cast<double> (plan.na) - marginHi) / inv;
         // the loop crossfade zone [lEnd - xLen, lEnd): the playhead reads there and the wrapped position lStart .. lStart + xLen; both must lie in the safe part of the data
-        xfadeRunOk = runOk && mode == LoopMode::forward && xLen > 1.0 && lStart >= marginLo / inv && lStart + xLen <= (static_cast<double> (plan.na) - marginHi) / inv;
-        xfadeLo = std::max (lEnd - xLen, marginLo / inv);
-        xfadeHi = std::min (lEnd, (static_cast<double> (plan.na) - marginHi) / inv);
+        xfadeRunOk = runOk && zoneCap && lStart >= safeLo && lStart + xLen <= safeHi;
+        xfadeLo = std::max (lEnd - xLen, safeLo);
+        xfadeHi = std::min (lEnd, safeHi);
     }
 #endif
     int i = 0;
@@ -998,6 +1001,8 @@ void SampleVoice::renderBlockT (float* outLeft, float* outRight, int numFrames, 
                 continue;
             }
         }
+        const double runLo = runStep > 0.0 ? safeLo : std::max (evLo, safeLo);
+        const double runHi = runStep > 0.0 ? std::min (evHi, safeHi) : std::min (zoneCap ? lEnd - xLen : safeHi, safeHi);
         if (runNow && playhead_ > runLo && playhead_ < runHi)
         {
             // whole samples that keep the playhead (and the next one) strictly inside the interval, with two samples of margin for the rounding of the repeated additions

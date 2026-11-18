@@ -115,6 +115,9 @@ private:
         float gl = 1.0f, gr = 1.0f;
         float windowAmount = 0.5f, windowSkew = 0.0f;
         float warpAmount[2] = { 0.0f, 0.0f };
+        // what the kernel needs of a grain that does not change while it plays, made once at the spawn (the window's peak and slopes, 1 / length, the mip level of the read)
+        float winPeak = 0.5f, winK1 = 1.0f, winK2 = 1.0f, winAmount = 0.5f, invLength = 1.0f;
+        int mip = 0;
     };
 
     void spawn (const GrainParams& p, int delay, int age, double headFraction) noexcept;

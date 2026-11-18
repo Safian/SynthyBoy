@@ -420,6 +420,8 @@ TEST (granular_kernels_agree_with_each_other_and_with_the_reference_loop)
                 p.randGain = 0.3f;
                 p.randWindow = 0.2f;
                 p.randSkew = 0.2f;
+                p.manual = variant == 0 && shape % 2 == 0;   // the head placed: the spawns come from the timer (the reference tests every sample)
+                p.position = 0.4f;
                 if (variant == 1 || variant == 3)
                 {
                     p.shapeFn = &testShape;
@@ -486,6 +488,7 @@ TEST (granular_vector_form_equals_the_scalar_form_on_plain_grains)
             p.randOffset = 0.5f;
             p.randDir = 0.3f;
             p.randPan = 0.5f;
+            p.shapeFn = &testShape;   // the engine always hands the function over; no slot has a type, so no warp plays and the vector form may run
             GranularVoice vec, scalar;
             vec.prepare (44100.0);
             scalar.prepare (44100.0);

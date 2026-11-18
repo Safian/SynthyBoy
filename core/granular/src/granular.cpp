@@ -317,6 +317,14 @@ void GranularVoice::spawn (const GrainParams& p, int delay, int age, double head
     g.windowSkew = std::max (-1.0f, std::min (1.0f, p.windowSkew + (random01() * 2.0f - 1.0f) * p.randSkew));
     for (int s = 0; s < 2; ++s)
         g.warpAmount[s] = clamp01 (p.shapeAmount[s] + (random01() * 2.0f - 1.0f) * p.randWarp[s]);
+    // the constants of the kernel (see renderGrains)
+    g.winAmount = clamp01 (g.windowAmount);
+    const float skew = std::max (-1.0f, std::min (1.0f, g.windowSkew == g.windowSkew ? g.windowSkew : 0.0f));
+    g.winPeak = 0.5f + 0.45f * skew;
+    g.winK1 = 0.5f / g.winPeak;
+    g.winK2 = 0.5f / (1.0f - g.winPeak);
+    g.invLength = 1.0f / static_cast<float> (g.length);
+    g.mip = mipFor (*sample_, std::fabs (g.inc));
     g.active = true;
 }
 
@@ -537,18 +545,17 @@ bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* righ
         // the window of this grain
         GrainWindow win;
         win.table = table;
-        win.amount = clamp01 (g.windowAmount);
-        const float skew = std::max (-1.0f, std::min (1.0f, g.windowSkew == g.windowSkew ? g.windowSkew : 0.0f));
-        win.peak = 0.5f + 0.45f * skew;
-        win.k1 = 0.5f / win.peak;
-        win.k2 = 0.5f / (1.0f - win.peak);
-        win.invLength = 1.0f / static_cast<float> (g.length);
+        win.amount = g.winAmount;
+        win.peak = g.winPeak;
+        win.k1 = g.winK1;
+        win.k2 = g.winK2;
+        win.invLength = g.invLength;
 
         // the read: one mip level for the whole block unless the rate modulation changes the rate per sample
         const double rate0 = std::fabs (g.inc);
         GrainRead read;
         if (rateMod == nullptr)
-            read.set (smp, mipFor (smp, rate0));
+            read.set (smp, g.mip);
         const double step0 = g.inc;
         const int nRead = read.n;
 
@@ -657,21 +664,42 @@ void GranularVoice::process (const GrainParams& p, float* left, float* right, in
     }
 
     const double period = std::max (1.0, sampleRate_ / std::max (0.01, static_cast<double> (p.densityHz)));
-    for (int i = 0; i < numFrames; ++i)
+    if (p.manual && ! reference_)
     {
-        if (p.manual)
-            head_ = std::min (p.regionLo, p.regionHi) + std::fabs (static_cast<double> (p.regionHi) - static_cast<double> (p.regionLo)) * clamp01 (p.position);
-        else
-            advanceHead (p);
-        if (headDone_ && ! p.manual)
-            continue;
-        spawnTimer_ -= 1.0;
-        if (spawnTimer_ <= 0.0)
+        // the head does not move: the spawns are found from the timer (it falls by exactly 1 per sample, so a spawn comes at the sample where it reaches 0) instead of one test per sample
+        head_ = std::min (p.regionLo, p.regionHi) + std::fabs (static_cast<double> (p.regionHi) - static_cast<double> (p.regionLo)) * clamp01 (p.position);
+        int i = 0;
+        while (i < numFrames)
         {
-            spawn (p, i, 0, head_);
+            const double left = spawnTimer_ - static_cast<double> (numFrames - i);
+            if (left > 0.0)
+            {
+                spawnTimer_ = left;
+                break;
+            }
+            const int at = spawnTimer_ <= 1.0 ? 0 : static_cast<int> (std::ceil (spawnTimer_)) - 1;   // the sample (counted from i) at which the timer has fallen to 0 or below
+            spawnTimer_ -= static_cast<double> (at + 1);
+            spawn (p, i + at, 0, head_);
             spawnTimer_ += period;
+            i += at + 1;
         }
     }
+    else
+        for (int i = 0; i < numFrames; ++i)
+        {
+            if (p.manual)
+                head_ = std::min (p.regionLo, p.regionHi) + std::fabs (static_cast<double> (p.regionHi) - static_cast<double> (p.regionLo)) * clamp01 (p.position);
+            else
+                advanceHead (p);
+            if (headDone_ && ! p.manual)
+                continue;
+            spawnTimer_ -= 1.0;
+            if (spawnTimer_ <= 0.0)
+            {
+                spawn (p, i, 0, head_);
+                spawnTimer_ += period;
+            }
+        }
 
     bool any;
     if (reference_ || sample_->numFrames > (int64_t { 1 } << 29))   // (the kernel counts frames with 32 bit integers)
