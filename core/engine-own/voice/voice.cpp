@@ -1387,6 +1387,32 @@ inline float peakOf (const float* x, int n) noexcept
         m = std::max (m, std::fabs (x[k]));
     return m;
 }
+
+/** The first write into a routing buffer (CPU-REVIEW-VOICE-MOD.md V6): d[k] = 0.0f + a[k] * g, lane by lane the operations of simd::addScaled on a buffer of +0 (the same +0 + product, so a
+    product of -0 gives +0 as before; NEON: the same vmulq / vaddq). */
+inline void firstScaled (float* d, const float* a, float g, int n) noexcept
+{
+    int k = 0;
+#if SB_NEON
+    const float32x4_t vg = vdupq_n_f32 (g), zero = vdupq_n_f32 (0.0f);
+    for (; k + 4 <= n; k += 4)
+        vst1q_f32 (d + k, vaddq_f32 (zero, vmulq_f32 (vld1q_f32 (a + k), vg)));
+#endif
+    for (; k < n; ++k)
+        d[k] = 0.0f + a[k] * g;
+}
+/** The same for simd::addTo: d[k] = 0.0f + b[k]. */
+inline void firstAdd (float* d, const float* b, int n) noexcept
+{
+    int k = 0;
+#if SB_NEON
+    const float32x4_t zero = vdupq_n_f32 (0.0f);
+    for (; k + 4 <= n; k += 4)
+        vst1q_f32 (d + k, vaddq_f32 (zero, vld1q_f32 (b + k)));
+#endif
+    for (; k < n; ++k)
+        d[k] = 0.0f + b[k];
+}
 } // namespace
 
 void Voice::render (const MixOut& out, int n, int t0) noexcept
@@ -1400,10 +1426,18 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     // only the targets and filter inputs that something is added to are cleared (usedT / usedFin); the rest is never read
     float tE_L[4][kControlPeriod], tE_R[4][kControlPeriod], tN_L[4][kControlPeriod], tN_R[4][kControlPeriod];
     float fin_L[2][kControlPeriod], fin_R[2][kControlPeriod];
-    float extNext[4][kControlPeriod] = {};
     float fout_L[2][kControlPeriod], fout_R[2][kControlPeriod];
+    // the mono outputs of Noise, Sub, Filter 1, Filter 2 of this chunk (the modulators of the warps in the next one). V6: written straight into extMono (nothing reads extMono after the
+    // oscillators of this chunk), and only the samples of a source that is off are zeroed; the reference (TickGlobals::referenceControl) fills a zeroed local array and copies it.
+    const bool ref = gl->referenceControl;
+    float extNextRef[4][kControlPeriod];
+    if (ref)
+        std::memset (extNextRef, 0, sizeof extNextRef);
+    float (*const extNext)[kControlPeriod] = ref ? extNextRef : extMono;
+    bool extWritten[2] = {};   // Noise, Sub
     bool usedT[2][4] = {}; // [through env 1][target]
     bool usedFin[2] = {};
+    // V6: the first write into a buffer is 0 + a * g (firstScaled), no fill with zeros before it; a buffer read with nothing written into it (a filter input) is zeroed then
     auto touchFin = [&] (int f)
     {
         if (!usedFin[f])
@@ -1419,33 +1453,49 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         simd::addScaled (dl, a, g, n);
         simd::addScaled (dr, b, g, n);
     };
+    auto toFin = [&] (int f, const float* a, const float* b, float g)
+    {
+        if (!usedFin[f] && !ref)
+        {
+            firstScaled (fin_L[f], a, g, n);
+            firstScaled (fin_R[f], b, g, n);
+            usedFin[f] = true;
+            return;
+        }
+        touchFin (f);
+        addScaled (fin_L[f], fin_R[f], a, b, g);
+    };
     auto toTarget = [&] (int target, bool env1, const float* a, const float* b, float g)
     {
+        float* zl = env1 ? tE_L[target] : tN_L[target];
+        float* zr = env1 ? tE_R[target] : tN_R[target];
         if (!usedT[env1][target])
         {
-            float* zl = env1 ? tE_L[target] : tN_L[target];
-            float* zr = env1 ? tE_R[target] : tN_R[target];
+            usedT[env1][target] = true;
+            if (!ref)
+            {
+                firstScaled (zl, a, g, n);
+                firstScaled (zr, b, g, n);
+                return;
+            }
             std::fill (zl, zl + kControlPeriod, 0.0f);
             std::fill (zr, zr + kControlPeriod, 0.0f);
-            usedT[env1][target] = true;
         }
-        addScaled (env1 ? tE_L[target] : tN_L[target], env1 ? tE_R[target] : tN_R[target], a, b, g);
+        addScaled (zl, zr, a, b, g);
     };
     // a source: its destination (0 Filter 1, 1 Filter 2, 2 both, 3 Effects only, 4 Direct out, 5 Filter blend, 6 None) and its taps to the buses
     auto route = [&] (int dest, bool env1, const float* a, const float* b, float blend, float send1, float send2)
     {
         switch (dest)
         {
-            case 0: touchFin (0); addScaled (fin_L[0], fin_R[0], a, b, 1.0f); break;
-            case 1: touchFin (1); addScaled (fin_L[1], fin_R[1], a, b, 1.0f); break;
-            case 2: touchFin (0); touchFin (1); addScaled (fin_L[0], fin_R[0], a, b, 1.0f); addScaled (fin_L[1], fin_R[1], a, b, 1.0f); break;
+            case 0: toFin (0, a, b, 1.0f); break;
+            case 1: toFin (1, a, b, 1.0f); break;
+            case 2: toFin (0, a, b, 1.0f); toFin (1, a, b, 1.0f); break;
             case 3: toTarget (0, env1, a, b, 1.0f); break;
             case 4: toTarget (3, env1, a, b, 1.0f); break;
             case 5: // filter blend: an equal power crossfade between the filters (0 = Filter 1 only)
-                touchFin (0);
-                touchFin (1);
-                addScaled (fin_L[0], fin_R[0], a, b, std::cos (blend * 1.5707963f));
-                addScaled (fin_L[1], fin_R[1], a, b, std::sin (blend * 1.5707963f));
+                toFin (0, a, b, std::cos (blend * 1.5707963f));
+                toFin (1, a, b, std::sin (blend * 1.5707963f));
                 break;
             default: break;
         }
@@ -1518,6 +1568,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         { SB_SECTION (sections::sub); sub.render (t0, n, sl, sr2, nullptr, gl->sampleRate); }
         for (int k = 0; k < n; ++k)
             extNext[1][k] = 0.5f * (sl[k] + sr2[k]);
+        extWritten[1] = true;
         srcLevel[4] = 0.5f * (sl[n - 1] + sr2[n - 1]);
         if (out.srcSq != nullptr)
         {
@@ -1582,6 +1633,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         }
         for (int k = 0; k < n; ++k)
             extNext[0][k] = 0.5f * (nl[k] + nr[k]);
+        extWritten[0] = true;
         srcLevel[3] = 0.5f * (nl[n - 1] + nr[n - 1]);
         if (out.srcSq != nullptr)
         {
@@ -1629,12 +1681,24 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         if (filtSend[f][1] > 0.0f)
             toTarget (2, filtEnv1[f], fout_L[f], fout_R[f], filtSend[f][1]);
     };
+    // series: the output of the first filter is added to the input of the second (the first write into an empty input: 0 + x, V6)
+    auto addFin = [&] (int f, const float* l, const float* r)
+    {
+        if (!usedFin[f] && !ref)
+        {
+            firstAdd (fin_L[f], l, n);
+            firstAdd (fin_R[f], r, n);
+            usedFin[f] = true;
+            return;
+        }
+        touchFin (f);
+        simd::addTo (fin_L[f], l, n);
+        simd::addTo (fin_R[f], r, n);
+    };
     if (routing == 2) // series 2 -> 1
     {
         runFilter (1);
-        touchFin (0);
-        simd::addTo (fin_L[0], fout_L[1], n);
-        simd::addTo (fin_R[0], fout_R[1], n);
+        addFin (0, fout_L[1], fout_R[1]);
         runFilter (0);
         toMain (0, false);
         toMain (1, true); // the output of the first filter went on into the second: only its taps stay
@@ -1642,9 +1706,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     else if (routing == 1) // series 1 -> 2
     {
         runFilter (0);
-        touchFin (1);
-        simd::addTo (fin_L[1], fout_L[0], n);
-        simd::addTo (fin_R[1], fout_R[0], n);
+        addFin (1, fout_L[0], fout_R[0]);
         runFilter (1);
         toMain (1, false);
         toMain (0, true);
@@ -1657,11 +1719,16 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         toMain (1, false);
     }
 
-    for (int j = 0; j < 4; ++j)
-    {
-        std::copy (extNext[j], extNext[j] + n, extMono[j]);
-        std::fill (extNext[j] + n, extNext[j] + kControlPeriod, 0.0f);
-    }
+    if (ref)
+        for (int j = 0; j < 4; ++j)
+        {
+            std::copy (extNext[j], extNext[j] + n, extMono[j]);
+            std::fill (extNext[j] + n, extNext[j] + kControlPeriod, 0.0f);
+        }
+    else
+        for (int j = 0; j < 2; ++j)
+            if (!extWritten[j])
+                std::fill (extMono[j], extMono[j] + n, 0.0f); // (Filter 1 and 2 are written by runFilter in every routing)
     // ---- amplitude, velocity, declick, fade (only the targets that received something are mixed: the others would add exact zeros)
     SB_SECTION (sections::renderFinal);
     float lastL = 0.0f, lastR = 0.0f;
