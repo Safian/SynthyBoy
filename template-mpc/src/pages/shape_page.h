@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // WHAT THIS PAGE ADDS to main_page.h: a component that is NOT one parameter. The graph shows the attack and the release, so the page
-//   - feeds it every frame in pullExtra () (the plugin's values -> the graph's state: a plain struct, the graph owns no truth),
+//   - feeds it every frame in pullExtra () (the plugin's values -> the graph's state: a plain struct, the graph owns no truth; the view state of the graph - the selected handle, LOCK, the zoom - is the page's:
+//     the graph asks for a change with a Request, the page keeps it here and gives it back with the next state),
 //   - registers it with addPart () (it is drawn and touched like the others; its changes are not bound to a parameter),
 //   - handles its changes in onChange () (the graph says WHICH handle moved and the new normalised time; the page writes the parameter).
 // TO SHOW ANOTHER PICTURE: a different display component (ui::FilterDisplay-like pictures live in shell-mpc/ui/, docs/ui-components/ lists them) is fed and handled the same way: state in,
@@ -37,7 +38,6 @@ public:
         graph_.state.shape.t[0] = graph_.state.shape.t[2] = graph_.state.shape.t[3] = 0.0;   // no delay, hold or decay: an attack - release envelope
         graph_.state.shape.sustain = 1.0;
         graph_.state.defaults = graph_.state.shape;
-        graph_.state.locked = true;
 
         group ({ &attack_, &release_ });                    // Q-Link 1, 2
         group ({ &cutoff_, &resonance_ });                  // the next group: Q-Link 5, 6 (a touch on a knob makes its group the active one)
@@ -65,6 +65,9 @@ protected:
         if (a == nullptr || r == nullptr || a->param < 0 || r->param < 0)
             return;
         ui::EnvGraph::State& s = graph_.state;
+        s.selected = selected_;   // the view state of the graph is the page's
+        s.locked = locked_;
+        s.zoom = zoom_;
         s.shape.t[1] = p.normOf (a->param, inst.param (a->param));
         s.shape.t[4] = p.normOf (r->param, inst.param (r->param));
         s.shape.timeMs[1] = inst.param (a->param);
@@ -81,6 +84,15 @@ protected:
         if (ch.id != kIdGraph)
             return;
         const ui::EnvGraph::Edit& e = graph_.edit();
+        if (ch.kind == ui::ChangeKind::Request)             // the graph asks for a change of its view state: a handle was tapped, LOCK was tapped, the ruler was dragged
+        {
+            if (e.handle == ui::EnvGraph::kSelect) selected_ = e.touched;
+            else if (e.handle == ui::EnvGraph::kLock) { locked_ = e.level >= 0.5; if (! locked_) zoom_ = e.t; }
+            else if (e.handle == ui::EnvGraph::kZoom) zoom_ = e.level;
+            return;
+        }
+        if (e.handle >= ui::envgraph::Delay && e.handle < ui::envgraph::kNumHandles)
+            selected_ = e.handle;                           // a handle that is dragged (or reset) is the selected one
         const int which = e.handle == ui::envgraph::Attack ? kIdAttack : (e.handle == ui::envgraph::Release ? kIdRelease : 0);
         if (which == 0)
             return;                                         // the other handles have no parameter in this plugin: the next frame draws them back
@@ -94,6 +106,9 @@ protected:
 private:
     ui::Knob attack_, release_, cutoff_, resonance_;
     ui::EnvGraph graph_;
+    int selected_ = ui::envgraph::None;                     // the view state of the graph: the handle whose value is written, LOCKED, the zoom of the unlocked ruler
+    bool locked_ = true;
+    double zoom_ = 0.0;
 };
 
 } // namespace demo

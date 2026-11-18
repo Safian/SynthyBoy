@@ -283,6 +283,8 @@ public:
 
     // ---- access for the tests
     ui::EnvCompact& compact() noexcept { return compact_; }
+    /** The handle of the graph shown as selected (the view state of the graph is this page's: the next update gives it to the graph; the full screen graph, or the compact one in the main state). */
+    void selectGraphHandle (int handle) noexcept { graphView_[stackDepth_ == 0 ? 0 : 1].selected = handle; }
     ui::EnvFullScreen& full() noexcept { return full_; }
     ui::ModTargetsPage& targetsPage() noexcept { return targets_; }
     ui::ModulationsPage& modsPage() noexcept { return mods_; }
@@ -485,9 +487,12 @@ private:
     }
     void pullGraph (IInstanceView& v, const synthyboy::LiveValues* live)
     {
-        for (ui::EnvGraph* g : { &compact_.graph, &full_.graph })
+        for (int gi = 0; gi < 2; ++gi)
         {
-            ui::EnvGraph::State& st = g->state;
+            ui::EnvGraph::State& st = (gi == 0 ? compact_.graph : full_.graph).state;
+            st.selected = graphView_[gi].selected;   // the view state of the graph is the page's: the graph stores none of it
+            st.locked = graphView_[gi].locked;
+            st.zoom = graphView_[gi].zoom;
             ui::envgraph::Shape s, d;
             if (! shapeOf (v, sel_, beats_, s, &d))
                 continue;
@@ -844,6 +849,7 @@ private:
                 case kTargets: stack.openDetail (kPageTargets); return;
                 case kTargetsAdd: stack.openDetail (kPageList); return;
                 case kListHeader: listGroup_ = -1; fillList(); return;
+                case kGraph: applyViewEdit ((stackDepth_ == 0 ? compact_.graph : full_.graph).edit()); return;   // the graph asks: a handle was touched, LOCK was tapped, the ruler was dragged
                 default: break;
             }
             if (id >= kTargetsRow && id < kTargetsRow + 4 * ui::ModTargetsPage::kPerPage && (id - kTargetsRow) % 4 == 3)
@@ -981,10 +987,28 @@ private:
         }
     }
 
+    /** The graph asked for a change of its view state (a Request of its id): the page keeps it and gives it back with the next update (pullGraph). */
+    void applyViewEdit (const ui::EnvGraph::Edit& e) noexcept
+    {
+        GraphView& gv = graphView_[stackDepth_ == 0 ? 0 : 1];
+        switch (e.handle)
+        {
+            case ui::EnvGraph::kSelect: gv.selected = e.touched; break;
+            case ui::EnvGraph::kLock:
+                gv.locked = e.level >= 0.5;
+                if (! gv.locked)
+                    gv.zoom = e.t;   // unlocked starts from the window the picture stands for now: it does not jump
+                break;
+            case ui::EnvGraph::kZoom: gv.zoom = e.level; break;
+            default: break;
+        }
+    }
     /** A handle of the graph was moved: the parameters it stands for. */
     void applyEdit (const ui::EnvGraph::Edit& e, IInstanceView& v)
     {
         using namespace ui::envgraph;
+        if (e.handle >= Delay && e.handle < kNumHandles)
+            graphView_[stackDepth_ == 0 ? 0 : 1].selected = e.handle;   // a handle that is dragged (or reset) is the selected one
         if (e.handle >= Delay && e.handle <= Release)
         {
             const int p = timeParam (e.handle == Release ? 4 : e.handle, beats_);
@@ -1111,6 +1135,8 @@ private:
     int w_ = 1280, h_ = 800, sel_ = 1, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = 0, underList_ = 0, selectedSource_ = ui::kNoSource, numTargets_ = 0, targetsPageIndex_ = 0;
     int timeMs_[5] = { -1, -1, -1, -1, -1 }, timeBeats_[5] = { -1, -1, -1, -1, -1 }, sustainP_ = -1, curveP_[3] = { -1, -1, -1 };
     int scratchSlots_[uibind::kMaxTargetSlots] = {};
+    struct GraphView { int selected = ui::envgraph::None; bool locked = true; double zoom = 0.0; };   // what the graph shows besides the envelope: the handle whose value is written, LOCKED, the zoom of the unlocked ruler
+    GraphView graphView_[2];             // the compact graph, the full screen graph
     double modsAtMs_ = -1000.0;
     std::string prefix_ = "env1.";
     char qName_[16] = {};

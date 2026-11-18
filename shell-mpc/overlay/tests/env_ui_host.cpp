@@ -303,6 +303,36 @@ void testGraphHandlesWriteParameters()
     check (std::fabs (hy - sy) < 1.5, "the curve handle sits where the curve is after the write");
 }
 
+void testGraphViewStateIsThePages()
+{
+    Rig r;
+    r.openFull();
+    ui::EnvGraph& g = r.ui.full().graph;
+    r.inst.set ("env1.attack", 900.0f); r.inst.set ("env1.decay", 900.0f); r.inst.set ("env1.release", 900.0f);
+    r.refresh();
+    check (g.state.selected == ui::envgraph::None && g.state.locked && g.state.zoom == 0.0, "the graph starts with no selected handle, locked, no zoom (the page's view state)");
+    // a tap on a handle: the graph asks, the page keeps the selection and gives it back with the next update
+    double hx, hy;
+    g.handlePoint (ui::envgraph::Attack, hx, hy);
+    r.tap (static_cast<int> (std::lround (hx)), static_cast<int> (std::lround (hy)), 20);
+    check (g.state.selected == ui::envgraph::Attack, "a tap on the attack handle: the page selects it and the next update gives it to the graph");
+    // a drag selects the handle that is dragged
+    r.dragHandle (g, ui::envgraph::Release, -20, 0);
+    check (g.state.selected == ui::envgraph::Release, "a drag of the release handle makes it the selected one");
+    // LOCK and the zoom of the unlocked ruler are the page's too
+    const ui::Rect lk = g.lockRect();
+    r.tap (lk.x + lk.w / 2, lk.y + lk.h / 2);
+    check (! g.state.locked && g.state.zoom > 0.0, "a tap on LOCK: the page unlocks and the zoom starts at the window the picture stood for (" + std::to_string (g.state.zoom) + " ms)");
+    const double z0 = g.state.zoom;
+    const ui::Rect zr = g.zoomRect();
+    r.drag (zr.x + zr.w / 2, zr.y + zr.h / 2, zr.x + zr.w / 2 + 80, zr.y + zr.h / 2);
+    check (g.state.zoom < z0 * 0.8, "a drag along the ruler zooms in: the page keeps the zoom (" + std::to_string (z0) + " -> " + std::to_string (g.state.zoom) + ")");
+    r.refresh();
+    check (! g.state.locked && g.state.zoom < z0 * 0.8, "the zoom and the unlocked state stay at every update");
+    r.tap (lk.x + lk.w / 2, lk.y + lk.h / 2);
+    check (g.state.locked, "a second tap on LOCK locks again");
+}
+
 void testDoubleTapResetsAHandle()
 {
     Rig r;
@@ -689,6 +719,7 @@ int main()
     testKnobsAndFieldsWriteParameters();
     testBeatsSwitch();
     testGraphHandlesWriteParameters();
+    testGraphViewStateIsThePages();
     testDoubleTapResetsAHandle();
     testCompactGraphDragAndNoOverlapOfFullButton();
     testTargetsPage();

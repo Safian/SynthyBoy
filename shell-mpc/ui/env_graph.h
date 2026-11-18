@@ -14,7 +14,10 @@
 // In:  State { shape (normalised times, sustain level 0 .. 1, curves -20 .. 20), defaults (a double tap on a handle), the ghost shape (envelope 1 behind another one), the dots of the voices (engine fine
 //      stage 1 .. 6 and the fraction of the stage that has run), the value text of every handle (the owner formats it with the unit), the colour }.
 // Out: a Value change on every move that changed something (id = the graph's id); `edit ()` says what: { handle, t, level, curve }. A double tap on a handle is the same with the default. The owner writes
-//      the parameters and gives the new shape back with the next state.
+//      the parameters and gives the new shape back with the next state. NEVER STORE THE TRUTH: the graph writes nothing to `state` (not the shape, not the selected handle, not the lock, not the zoom). The view state
+//      goes out as Request changes (`edit ().handle`): kSelect (a tap on another handle than `state.selected`: `touched` = the handle; a drag and a double tap carry their handle in the Value change), kLock (a tap on LOCK: `level` 1 = locked next, 0 = unlocked next, `t` = the
+//      time window the picture stands for now, where an unlocked zoom starts), kZoom (the ruler was dragged: `level` = the new zoom); the owner keeps them and gives them back with the next state. Private and transient:
+//      the handle held, the shape and the geometry at the touch, the finger's start, the zoom last reported.
 #pragma once
 
 #include "core.h"
@@ -127,8 +130,8 @@ public:
         rectangle. Everything of the graph (grid, ruler, curve, fill, handles, the value bubble) lies in this area or in the margin under it; nothing is drawn above its top (the full screen page leaves it empty and is unchanged). */
     Rect plotArea;
     /** What the last Change was. `handle` = the handle; t = the new normalised time (Delay .. Release, Decay), level = the new sustain level (Decay), curve = the new curve parameter (CurveA .. CurveR). */
-    struct Edit { int handle = envgraph::None; double t = 0.0, level = 0.0, curve = 0.0; bool reset = false; };   // handle kLock / kZoom: the lock was toggled / the zoom was dragged (view state, no parameter)
-    static constexpr int kLock = 100, kZoom = 101;
+    struct Edit { int handle = envgraph::None; double t = 0.0, level = 0.0, curve = 0.0; bool reset = false; int touched = envgraph::None; };   // handle kSelect / kLock / kZoom: view state, no parameter (a Request change): another handle was touched (`touched`) / the lock was toggled (`level` = locked next, `t` = the window now) / the zoom was dragged (`level` = the zoom)
+    static constexpr int kLock = 100, kZoom = 101, kSelect = 102;
 
     EnvGraph() = default;
     Size minSize() const override { return { 300, 160 }; }
@@ -481,7 +484,7 @@ protected:
                 continue;
             double hx, hy;
             handlePointOf (g, state.shape, h, hx, hy);
-            const bool sel = h == state.selected || h == drag_;
+            const bool sel = h == state.selected || h == drag_ || h == downHandle_;   // (the handle the finger holds is lit at once: gesture data, the selection itself is the owner's)
             const bool dim = h <= envgraph::Release && h != envgraph::Decay && isZero (h < envgraph::Decay ? h : 4);
             static const int kColourOf[envgraph::kNumHandles] = { 0, 1, 1, 2, 3, 1, 2, 3 };
             const uint32_t col = cs[kColourOf[h]];
@@ -500,7 +503,7 @@ protected:
         }
 
         // ---- the value of the selected / dragged handle over it
-        const int sh = drag_ != envgraph::None ? drag_ : state.selected;
+        const int sh = drag_ != envgraph::None ? drag_ : (downHandle_ != envgraph::None ? downHandle_ : state.selected);
         if (sh != envgraph::None && state.text[sh][0] != '\0')
         {
             double hx, hy;
@@ -544,6 +547,7 @@ protected:
                 zone_ = Zone::Zoom;
                 zoomStart_ = state.zoom > 0.0 ? state.zoom : startGeom_.window;
                 zoomAtX_ = x;
+                zoomLast_ = state.zoom;
             }
         }
         if (downHandle_ != envgraph::None)
@@ -551,9 +555,7 @@ protected:
             double hy;
             handlePointOf (startGeom_, start_, downHandle_, downX_, hy);
         }
-        if (downHandle_ != envgraph::None)
-            state.selected = downHandle_;
-        return Change::none();
+        return Change::none();   // (the handle the finger holds is drawn as selected at once, from the gesture: `downHandle_`; the selection itself is the owner's, told by the changes that follow)
     }
     Change onMove (int x, int y) override
     {
@@ -565,9 +567,9 @@ protected:
             // a drag to the right zooms in (the same time takes more room), to the left out: one e-fold per 160 pixels
             const double lo = state.beats ? 0.05 : 20.0, hi = state.beats ? 400.0 : 120000.0;
             const double z = std::clamp (zoomStart_ * std::exp (-static_cast<double> (x - zoomAtX_) / 160.0), lo, hi);
-            if (std::fabs (z - state.zoom) < 1.0e-9 * z)
+            if (std::fabs (z - zoomLast_) < 1.0e-9 * z)   // the zoom the picture shows, or the one reported last: the same again changes nothing
                 return Change::none();
-            state.zoom = z;
+            zoomLast_ = z;
             edit_ = Edit {};
             edit_.handle = kZoom;
             edit_.level = z;
@@ -655,17 +657,23 @@ protected:
         drag_ = envgraph::None;
         if (zone == Zone::Lock && kind != 0)
         {
-            // a tap on LOCK: the next state; unlocked starts from the zoom the envelope has now, so the picture does not jump
-            if (state.locked)
-                state.zoom = startGeom_.window;
-            state.locked = ! state.locked;
+            // a tap on LOCK: asks for the next state; unlocked starts from the zoom the envelope has now (`t`: the window the picture stands for), so the picture does not jump
             edit_ = Edit {};
             edit_.handle = kLock;
-            edit_.level = state.locked ? 1.0 : 0.0;
+            edit_.level = state.locked ? 0.0 : 1.0;
+            edit_.t = startGeom_.window;
             return Change::request (id_);
         }
         if (zone == Zone::Zoom || wasZoom)
             return Change::none();
+        if (! wasDrag && h != envgraph::None && kind == 1 && h != state.selected)
+        {
+            // a tap on a handle selects it: the owner is asked (a drag and a double tap carry the handle in their own changes)
+            edit_ = Edit {};
+            edit_.handle = kSelect;
+            edit_.touched = h;
+            return Change::request (id_);
+        }
         if (wasDrag || h == envgraph::None || kind != 2)
             return Change::none();
         Edit e;
@@ -701,6 +709,7 @@ private:
     double zoomStart_ = 0.0;
     int zoomAtX_ = 0;
     bool zoomDragging_ = false;
+    double zoomLast_ = 0.0;
     Shape start_;
     Edit edit_;
     int downHandle_ = envgraph::None, drag_ = envgraph::None;
