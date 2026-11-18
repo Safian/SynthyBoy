@@ -15,6 +15,7 @@
 | `icon` | `Icon` | `Power`, `PitchTrack`, `Generic` (LedToggle sets `Generic`, no icon drawn) | `Generic` |
 | `label` | `char[24]` | name (23 characters) | empty |
 | `showState` | `bool` | ToggleIcon only: " ON" / " OFF" after the label | false |
+| `negativeOff` | `bool` | ToggleIcon only: drawn in `Look::negative` (red) while off | false |
 | `knobLike` | `bool` | ToggleIcon only: no box, in a row of knobs | false |
 
 `LedToggle::centre` (float, default 0.5): the height of dot and name as a fraction of the rectangle.
@@ -33,7 +34,7 @@
 Can be a Q member, one slot. In the active Q group the lit name takes the Q colour and the unlit ring too; the chip comes from the group. The Q proxy still reports On / Off from the engine parameter.
 
 ## Options and variants
-`LedToggle::widthFor (name)` for layouts; `centre` to align with knob dials next to it; `ToggleIcon` icons `Power` and `PitchTrack`; `showState` and `knobLike` for `ToggleIcon`.
+`LedToggle::widthFor (name)` for layouts; `centre` to align with knob dials next to it; `ToggleIcon` icons `Power` and `PitchTrack`; `showState`, `negativeOff` and `knobLike` for `ToggleIcon`.
 
 ## Minimal example
 ```cpp
@@ -53,7 +54,7 @@ if (c.kind == ChangeKind::Index && c.id == 41)
 `VoiceScreen::randDetune10x`, `oscA` .. `oscNoise`; `MasterScreen::legato`, `bendLink`, `mpeOn`; `FilterFullScreen::clean`, `env1`; `EnvFullScreen::beats`, `legato`; `LfoFullScreen::monoQ`; `ModSlotDetail::auxInv`, `stereo`, `delaySync`; `FxSlotEditor::toggles`; `TuneRow::track`, `ToggleNumber::toggle`. `ToggleIcon` with `Power`: `OscillatorCompact::power`, `FilterFullScreen::power`, `MixerStrip::power` (`StripPower`).
 
 ## Limits and pitfalls
-- The header comment of `led_toggle.h` says "a Q-Link step and a wheel notch FLIP the state (either direction)", but `LedToggle::onTurn` only switches in the direction of the delta (up = on, down = off). The code is the truth; see the defect list in the report.
+- `onTurn` only switches in the direction of the delta (up = on, down = off; nothing when already so).
 - Name up to 23 characters; the width follows the name, so use `widthFor` in the layout.
 - Do not box a LedToggle and do not draw an ON / OFF word.
 - A disabled toggle (`setEnabled (false)`) is drawn dim; "off" is not "not available".
