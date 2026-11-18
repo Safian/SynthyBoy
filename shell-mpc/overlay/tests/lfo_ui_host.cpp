@@ -623,7 +623,7 @@ void testShapeLibrary()
     check (big.n == 128 && lib.save ("Big", big, true) && lib.load (lib.find ("Big"), back) && back == big, "128 points survive save and load");
     // a file of the plain core format (no loop point), a plain .json, and a damaged file
     {
-        std::ofstream o (tmp.path + "/SynthyBoy/LFO Shapes/FromVital.lfoshape.json");
+        std::ofstream o (tmp.path + "/SynthyBoy/LFO Shapes/FromImport.lfoshape.json");
         o << "{\"format\":\"synthyboy-lfo-shape\",\"version\":1,\"name\":\"x\",\"smooth\":false,\"points\":[{\"x\":0,\"y\":0},{\"x\":1,\"y\":1,\"power\":3}]}";
         std::ofstream o2 (tmp.path + "/SynthyBoy/LFO Shapes/Plain.json");
         o2 << "{\"format\":\"synthyboy-lfo-shape\",\"version\":1,\"name\":\"y\",\"smooth\":true,\"points\":[{\"x\":0,\"y\":1},{\"x\":1,\"y\":0}]}";
@@ -634,7 +634,7 @@ void testShapeLibrary()
     }
     lib.refresh();
     check (lib.count() == 5 && lib.find (".hidden") < 0, "a file of the core's format, a plain .json and a damaged one are listed, a hidden file is not");
-    check (lib.load (lib.find ("FromVital"), back) && back.n == 2 && back.loop == -1 && std::fabs (back.p[0].power) < 1.0e-6f, "a file without a loop point loads with none");
+    check (lib.load (lib.find ("FromImport"), back) && back.n == 2 && back.loop == -1 && std::fabs (back.p[0].power) < 1.0e-6f, "a file without a loop point loads with none");
     check (lib.load (lib.find ("Plain"), back) && back.smooth && back.n == 2, "a plain .json loads");
     check (! lib.load (lib.find ("Broken"), back) && lib.error() == "NOT A SHAPE FILE", "a damaged file is refused with a reason");
     // two roots: the first one wins a name, the list holds both

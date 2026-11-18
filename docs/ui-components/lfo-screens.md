@@ -20,7 +20,7 @@ The two views of the LFO element. The element has two types: an LFO (LFO 1 to 10
 Children keep their changes: `Carousel` and steppers `Index` / `Request`, `LedList` `Index`, knobs `Value`, `full`, `close`, `edit` `Request`, `targets` `Request`. The sync value is the owner's: use `SyncSwitch::nextSync (part, change)` to turn a mode or TRIP / DOT change into the sync parameter value.
 
 ## Q-Link
-Full: RATE (shape grid, RATE, RISE, SMOOTH), KEY (TRANSPOSE, TUNE; only in the key follow sync), TIMING (HZ / BPM / KEY list, PHASE, DELAY, MODE), MOTION (DIRECTION, SWING, STEREO, MONO), SHAPE (HOST, SMOOTH); random LFO: RANDOM (style grid, RATE, HZ / BPM / KEY, STEREO), KEY, TRIGGER. The edit page: EDIT, GRID ([shape-editor.md](shape-editor.md)).
+Full: RATE (shape grid, RATE, RISE, SMOOTH), KEY (TRANSPOSE, TUNE; only in the key follow sync), TIMING (HZ / BPM / KEY list, PHASE, DELAY, MODE), MOTION (DIRECTION, SWING, STEREO, MONO), SHAPE (HOST, SMOOTH); random LFO: RANDOM (style grid, RATE, HZ / BPM / KEY, STEREO), KEY, TRIGGER. The edit page: EDIT, GRID, TRIGGER ([shape-editor.md](shape-editor.md)).
 
 ## Options and variants
 `configure (random)`, `setKeyActive` (TRANSPOSE and TUNE replace the RATE knob in the key follow sync), `setPageMode`.

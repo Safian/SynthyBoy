@@ -758,7 +758,7 @@ For each component class, it records what it does in one line, its public behavi
 | **Draw Ops** | Rendering inside bounding box, SDF font text, scene op budget | `ui_screen_host.cpp`: "osc full screen: picture fits one scene" |
 
 ### 63. `ToolSelector` (shape_editor.h)
-**Description**: Tool selector bar for LFO curve editing (Point, Flat, Ramp Up, Ramp Down)
+**Description**: Tool selector bar for LFO curve editing (Point, Flat, Ramp Up, Ramp Down, Select, Soft, Bend)
 
 | Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
 | :--- | :--- | :--- |
@@ -770,7 +770,7 @@ For each component class, it records what it does in one line, its public behavi
 | **Draw Ops** | Rendering inside bounding box, SDF font text, scene op budget | `ui_lfo_host.cpp`: "shape editor tool selector rendering" |
 
 ### 64. `ShapeCanvas` (shape_editor.h)
-**Description**: Interactive piecewise curve canvas with point insertion, dragging, and curvature bending
+**Description**: Interactive piecewise curve canvas with point insertion, dragging, curvature bending, the quick delete (double tap), step drawing with no gaps, the selection (rectangle, taps, group move), the soft and bend tools and the loop / start marker (`ui_lfo_host.cpp`: testCanvasQuickDelete, testCanvasStepDrawing, testCanvasSelection, testCanvasSoftAndBend, testCanvasMarker; the model operations: testSelectionModel, testWholeShapeModel)
 
 | Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
 | :--- | :--- | :--- |
@@ -782,7 +782,7 @@ For each component class, it records what it does in one line, its public behavi
 | **Draw Ops** | Rendering inside bounding box, SDF font text, scene op budget | `ui_lfo_host.cpp`: "editor page: the picture fits one scene" |
 
 ### 65. `ShapeEditorPage` (shape_editor.h)
-**Description**: Full-screen custom LFO waveform editing view with canvas, grid snapping, and point coordinates
+**Description**: Full-screen custom LFO waveform editing view with canvas, grid snapping, and point coordinates, three Q groups (EDIT, GRID, TRIGGER), SHAPES / MORE / MOD buttons and the page of the point modulation (`ui_lfo_host.cpp`: testEditorPageAndPointMod)
 
 | Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
 | :--- | :--- | :--- |
