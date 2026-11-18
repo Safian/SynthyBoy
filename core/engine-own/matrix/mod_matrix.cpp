@@ -348,14 +348,22 @@ void ModMatrix::evaluate (const EvalContext& ctx) const noexcept
         return !ctx.reference && c.zeroSkip && ctx.src[c.source] <= 0.0f && srcR[c.source] <= 0.0f && amL == amL && amR == amR
                && (c.aux == 0 || (ctx.src[c.aux] == ctx.src[c.aux] && srcR[c.aux] == srcR[c.aux]));
     };
+    auto bitsOf = [] (float x) noexcept
+    {
+        uint32_t u;
+        std::memcpy (&u, &x, sizeof u);
+        return u;
+    };
     auto one = [&] (const CompiledSlot& c, float amountL, float amountR, float& outL, float& outR)
     {
         float xl = clamp01 (ctx.src[c.source]), xr = clamp01 (srcR[c.source]);
+        // V9: a lane whose inputs have the same bits as the left one's gives the same bits (the same expressions); the reference computes it all the same
+        const bool sameSource = !ctx.reference && bitsOf (xl) == bitsOf (xr);
         if (c.curve != nullptr)
         {
             auto curved = [&] (float x) { return std::clamp (shapes::ShapeData::evaluateTable (c.curve->table.data(), c.curve->table.size(), x), -1.0f, 1.0f); };
             xl = curved (xl);
-            xr = curved (xr);
+            xr = sameSource ? xl : curved (xr);
         }
         if (ctx.state != nullptr && (c.riseMs > 0.0f || c.fallMs > 0.0f))
         {
@@ -392,22 +400,32 @@ void ModMatrix::evaluate (const EvalContext& ctx) const noexcept
         if (ctx.state != nullptr && delay > 0.0f && ctx.voiceAge < delay)
             gate = 0.0f;
         float auxL = 1.0f, auxR = 1.0f;
-        if (c.aux != 0)
+        auto a = [&] (const float* s)
         {
-            auto a = [&] (const float* s)
-            {
-                float v = clamp01 (s[c.aux]);
-                if (c.auxPower != 0.0f)
-                    v = powerShape (v, -c.auxPower);
-                if (c.auxInv)
-                    v = 1.0f - v;
-                return v * c.auxOut;
-            };
-            auxL = a (ctx.src);
-            auxR = a (srcR);
+            float v = clamp01 (s[c.aux]);
+            if (c.auxPower != 0.0f)
+                v = powerShape (v, -c.auxPower);
+            if (c.auxInv)
+                v = 1.0f - v;
+            return v * c.auxOut;
+        };
+        if (!ctx.reference && bitsOf (xl) == bitsOf (xr) && bitsOf (amountL) == bitsOf (amountR) && (c.aux == 0 || bitsOf (ctx.src[c.aux]) == bitsOf (srcR[c.aux])))
+        {
+            if (c.aux != 0)
+                auxL = a (ctx.src);
+            outL = law (xl) * amountL * c.width * auxL * gate;
+            outR = outL;
         }
-        outL = law (xl) * amountL * c.width * auxL * gate;
-        outR = law (xr) * amountR * c.width * auxR * gate;
+        else
+        {
+            if (c.aux != 0)
+            {
+                auxL = a (ctx.src);
+                auxR = a (srcR);
+            }
+            outL = law (xl) * amountL * c.width * auxL * gate;
+            outR = law (xr) * amountR * c.width * auxR * gate;
+        }
         if (c.stereo)
             outR = -outR; // the stereo flag turns the right lane around (document 04, 3.2)
     };
