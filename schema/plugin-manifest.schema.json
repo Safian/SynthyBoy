@@ -10,6 +10,7 @@
     "id": { "type": "string", "pattern": "^[a-z0-9]+(\\.[a-z0-9-]+)+$" },
     "name": { "type": "string", "minLength": 1 },
     "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "build": { "type": "integer", "minimum": 0 },
     "kind": { "type": "string", "enum": ["instrument", "effect"] },
     "license": { "type": "string", "pattern": "^[A-Za-z0-9.+-]+$" },
     "homepage": { "type": "string", "pattern": "^https://" },

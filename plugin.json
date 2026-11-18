@@ -3,6 +3,7 @@
   "id": "com.safian.synthyboy",
   "name": "SynthyBoy",
   "version": "0.1.0",
+  "build": 1,
   "kind": "instrument",
   "author": "Safian Szabolcs",
   "description": "Wavetable synthesizer (CLAP and VST3) with an engine derived from Vital.",
