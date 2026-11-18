@@ -206,7 +206,7 @@ public:
             sb.gradientRect (static_cast<float> (kGroundX0), static_cast<float> (kTabY), static_cast<float> (kGroundX1), static_cast<float> (kTabY + kTabH), ui::theme::rgba (L.bg0), ui::theme::rgba (L.bg1));
         }
         compact_.draw (sb);
-        ui::lfodisplay::draw (sb, compact_.displayRect(), data_, ! displayHot_);
+        ui::lfodisplay::draw (sb, compact_.displayRect(), compactData(), ! displayHot_);
         compact_.full.draw (sb);
         if (instPopup_)
             list_.draw (sb);   // the list of the selector lies over the third (drawLive paints no cursors then)
@@ -255,7 +255,7 @@ public:
         if (stackDepth_ == 0)
         {
             if (! instPopup_)
-                ui::lfodisplay::drawLive (sb, compact_.displayRect(), data_);
+                ui::lfodisplay::drawLive (sb, compact_.displayRect(), compactData());
         }
         else if (pageTop_ == 0 || (pageTop_ == kPageList && underList_ == 0))
             ui::lfodisplay::drawLive (sb, full_.displayRect(), data_);
@@ -363,6 +363,13 @@ public:
     const std::vector<Item>& items() const noexcept { return items_; }
     const Item* item (int id) const noexcept { for (const Item& it : items_) if (it.id == id) return &it; return nullptr; }
     const ui::lfodisplay::Data& displayData() const noexcept { return data_; }
+    /** The data of the compact view (the Play third): the same picture with the plot area below the header band. The full page and the shape editor draw data_ as it is (no area). */
+    ui::lfodisplay::Data compactData() const noexcept
+    {
+        ui::lfodisplay::Data d = data_;
+        d.area = ui::playrows::plotRect (compact_.displayRect());
+        return d;
+    }
     int gridOf (int lfo) const noexcept { return gridXOf (lfo); }
     int gridXOf (int lfo) const noexcept { return lfo >= 1 && lfo <= kLfos ? gridX_[lfo - 1] : 8; }
     int gridYOf (int lfo) const noexcept { return lfo >= 1 && lfo <= kLfos ? gridY_[lfo - 1] : 8; }

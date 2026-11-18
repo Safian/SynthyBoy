@@ -53,6 +53,7 @@ struct Data
     int style = -1;              // Random: the style 0 .. 4 (Perlin, S & H, sine interpolation, Lorenz, Rossler): while the trace is flat (nothing sounds) a dim representative path of the style is drawn instead of a bare line
     const char* label = "";      // the name in the corner (the shape, the style); the compact view writes it in its header band
     bool dim = false;            // the LFO does nothing (the picture stays, faint)
+    Rect area;                   // the compact view (the third of the Play page): the plot area below the header band (playrows::plotRect of the display); empty = the whole rectangle, as the full page and the shape editor draw
     bool editing = false;        // the shape editor has the same ground and curve under its handles: no lead-in, no label
 };
 
@@ -71,17 +72,16 @@ inline bool hasLeadStrip (const Data& d) noexcept
 {
     return d.kind == Data::Kind::Shape && ! d.editing && (d.delayShare > 0.0f || d.riseShare > 0.0f);
 }
-/** The compact view (the third of the Play page, playrows.h): a display narrower than this (the full page's and the shape editor's are over 800 px wide). It has a header band at its top that holds the full screen button and the label,
+/** The compact view (the third of the Play page, playrows.h) is the one whose owner gave the plot area (Data::area, not empty). It has a header band at its top that holds the full screen button and the label,
     and the plot area below the band (playrows::plotRect: the same for the oscillator wave, the envelope graph and the LFO curve). */
-constexpr int kCompactMaxW = 520;
-inline bool isCompact (const Rect& r, const Data& d) noexcept { return ! d.editing && r.w < kCompactMaxW; }
+inline bool isCompact (const Rect&, const Data& d) noexcept { return ! d.editing && ! d.area.empty(); }
 inline Rect stripRect (const Rect& r, const Data& d) noexcept
 {
     if (! hasLeadStrip (d))
         return {};
     if (isCompact (r, d))
     {
-        const Rect area = playrows::plotRect (r);   // the strip is the top of the plot area: under the band, clear of the buttons
+        const Rect area = d.area;   // the strip is the top of the plot area: under the band, clear of the buttons
         return { area.x, area.y, area.w, 18 };
     }
     const Rect in = r.inset (8);
@@ -93,7 +93,7 @@ inline Rect plotRect (const Rect& r, const Data& d) noexcept
 {
     if (isCompact (r, d))
     {
-        const Rect area = playrows::plotRect (r);
+        const Rect area = d.area;
         const int stripH = hasLeadStrip (d) ? 24 : 0;
         return { area.x, area.y + stripH, area.w, std::max (0, area.h - stripH) };
     }

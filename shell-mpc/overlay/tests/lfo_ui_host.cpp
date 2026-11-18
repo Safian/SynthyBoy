@@ -1002,6 +1002,7 @@ void testKeyFollowCurve()
     r.now += 200.0;
     r.refresh();
     const ui::lfodisplay::Data& d = r.ui.displayData();
+    check (d.area.empty() && r.ui.compactData().area == ui::playrows::plotRect (r.ui.compact().displayRect()) && ! r.ui.compactData().area.empty(), "the compact view's display data carries the plot area below the header band; the data of the full page and the editor carries none");
     std::vector<float> smoothOn (d.y, d.y + d.n);
     float lo = 1, hi = -1;
     for (float y : smoothOn) { lo = std::min (lo, y); hi = std::max (hi, y); }

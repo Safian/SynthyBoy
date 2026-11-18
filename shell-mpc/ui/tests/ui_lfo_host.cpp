@@ -268,6 +268,7 @@ void testCompactPlot()
         d.envelope = cs.envelope; d.loopX = cs.envelope ? 0.6f : -1.0f; d.phase = cs.envelope ? 0.25f : 0.0f;
         d.numCursors = 2; d.cx[0] = 0.0f; d.cy[0] = 1.0f; d.cx[1] = 1.0f; d.cy[1] = -1.0f;
         d.dim = cs.dim;
+        d.area = area;   // the owner of the compact view names the plot area
         d.label = "LFO 1 - A LONG SHAPE NAME THAT NEEDS ITS ROOM";
         const std::string nm = std::string ("compact LFO display, ") + cs.name + ": ";
         const Rect pl = lfodisplay::plotRect (disp, d);
@@ -290,12 +291,14 @@ void testCompactPlot()
             }
         check (label && clear && room.right() <= fb.x, nm + "the label starts in its room of the band, left of the full screen button");
     }
-    // the full page and the shape editor keep their rectangle (the compact rule is for the narrow display of the third only)
+    // the full page and the shape editor keep their rectangle (the compact rule is for a display whose owner gave an area only: a narrow display without one is not compact)
     lfodisplay::Data d;
     d.kind = lfodisplay::Data::Kind::Shape; d.y = y; d.n = 256;
+    check (lfodisplay::plotRect (disp, d) == Rect { disp.x + 8, disp.y + 8 + 6, disp.w - 16, disp.h - 16 - 12 }, "a narrow display without an area keeps its rectangle (the compact view is named by Data::area, not guessed from the width)");
     const Rect wide { 20, 20, 700, 300 };
     check (lfodisplay::plotRect (wide, d) == Rect { wide.x + 8, wide.y + 8 + 6, wide.w - 16, wide.h - 16 - 12 }, "full page display: the curve's rectangle is unchanged (inset 8, 6 px padding)");
     d.editing = true;
+    d.area = area;   // even with an area the editor's canvas is not the compact view
     check (lfodisplay::plotRect (Rect { 20, 20, 400, 300 }, d) == Rect { 28, 34, 384, 284 - 12 }, "shape editor canvas (editing): the curve's rectangle is unchanged even in a narrow canvas");
 }
 
