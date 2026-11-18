@@ -164,8 +164,8 @@ is lifted.
 | **Drag up / down** on a knob or number field | Changes the value (up = more). A knob covers its whole range over 200 pixels of drag. A number field changes one step per its own number of pixels. |
 | **Horizontal drag** on a bar (modulation depth bars) | Changes the value; the whole bar is the whole range. |
 | **Vertical drag** on a fader (Mixer) | Changes the level. |
-| **Double tap** (two taps within 0.4 seconds and 30 pixels) | Sets a knob, number field, fader or depth bar to its default value; on an envelope handle sets that handle's default. |
-| **Long press** (0.6 seconds without moving) on a knob or number field | Opens the modulation page of that control (chapter 6). On the drawn-shape editor: deletes a point (a double tap on a point does it faster). |
+| **Double tap** (two taps within 0.4 seconds and 30 pixels) | Sets a knob, number field, fader or depth bar to its default value; on an envelope handle sets that handle's default; on the drawn-shape editor deletes an inner point or resets a curve handle to straight. |
+| **Long press** (0.6 seconds without moving) on a knob or number field | Opens the modulation page of that control (chapter 6). On the canvas of the drawn-shape editor: deletes an inner point (a double tap on a point does it faster). |
 | **Drag on the colored tab** at the top left of a knob that is modulated | Changes the depth of the modulation of the selected source (chapter 6). |
 | **Tap on a pictogram or cell** | Selects it (oscillator type, LFO shape, Sub waveform, ...). |
 
@@ -241,15 +241,10 @@ screen is quoted in capitals as it appears.
 The Play tab is ONE page: three live panels side by side, an **oscillator** panel (left), an **envelope** panel (middle) and an **LFO** panel (right). The first four Q-Links (knobs) belong to the oscillator panel (type, table or OCT, PAN, LEVEL), the next four to the envelope (ATTACK, DECAY, SUSTAIN, RELEASE) and the next four to the LFO (SHAPE, RATE, RISE, SMOOTH). On the MPC XL all twelve are on the knobs at once and every control carries the number of its knob. On the Key 61 the yellow frame marks the four knobs at the moment; touch a control of another panel to bring its group to the four knobs (the others follow), and use the Q-Link bank buttons for the rest. At the top of each panel is a selector: the current entry in the middle, its neighbours at the sides (tap one to step to it, or drag across), and a tap on the name opens the list. A switched-off oscillator is drawn grey (the power button is red).
 This is the place to play and tweak: the big controls of the three most used parts are in one view.
 
-The envelope panel with its ADSR group (Q-Links 5 to 8 on the XL; with the Key 61 the frame is on it while it is the active group):
-The Play page now features a unified, streamlined layout:
+The Play page layout:
 - **No tab rows:** Navigation is handled by a single selector in each third of the screen.
 - **Arrows step, tap opens list:** Use the arrows to step, or tap the name to open the full list of options for Sub, Osc A/B/C, Noise, Envelopes 1–6, LFOs 1–10, and R1–R4.
-- **Unified layout:** All three displays have the same height. The table selector, PAN, and LEVEL are consolidated into a single row.
-
-### 5.12 Master
-
-![Master](img/master.png)
+- **Unified display height:** All three displays share the same height and top alignment. Each display has a header band with its title and buttons (power, route, full-screen); the plot area sits below the band.
 
 The LFO panel with its group (SHAPE, RATE, RISE, SMOOTH: Q-Links 9 to 12 on the XL):
 
@@ -259,33 +254,22 @@ The LFO panel with its group (SHAPE, RATE, RISE, SMOOTH: Q-Links 9 to 12 on the 
 
 | Control | What it does |
 |---|---|
-| SUB, A, B, C, NOISE buttons | Choose which sound source the panel shows and edits (saved with the project). The five buttons have one width. |
-| Power button and name | Switch the shown source on and off. A source that is off shows its picture dimmed with a small OFF tag (see 5.3). |
-| Route button (F1 / F2 / F12 / M / DIR / BAL / OFF) | Tap: opens the output popup (target, balance, BUS 1, BUS 2) of that oscillator. Sub has no route button here; its routing is on its own page (5.4). |
-| Display + full-screen button | One cycle of the oscillator; the button opens the full-screen oscillator page (chapter 5.3 / 5.4 / 5.5). |
-| Type keys WAVE / MULTI / SAMPLE / GRAIN / SPEC | The oscillator type (wavetable, multisample, sample, granular, spectral). Q 1. |
+| Source selector (Sub, Osc A, Osc B, Osc C, Noise) | Choose which sound source the panel shows and edits (saved with the project). Arrows step, tap opens the list of five. |
+| Power button and name | Switch the shown source on and off; sits at the left of the display header band. A source that is off shows its picture dimmed with a small OFF tag (see 5.3). |
+| Route button (F1 / F2 / F12 / M / DIR / BAL / OFF) | Tap opens the output popup (target, balance, BUS 1, BUS 2) of that oscillator; sits in the display header band to the left of the full-screen button. Sub has no route button here; its routing is on its own page (5.4). |
+| Display + full-screen button | The display has a header band with the power button, source name, route button, and full-screen button (four corner brackets); one cycle of the oscillator is plotted below the band. The full-screen button opens the full-screen oscillator page (chapter 5.3 / 5.4 / 5.5). |
+| Type keys WAVE / MULTI / SAMPLE / GRAIN / SPEC | The oscillator type (wavetable, multisample, sample, granular, spectral), stacked under the display. Q 1. |
 | Source stepper and the list button | Wavetable name (the title of the file for a table from a file), or the loaded file. Both open the wavetable browser (or the content browser); from the compact view the full screen opens first. Q 2. |
 | PAN | -100 .. +100 percent (C, L n, R n). Q 3. |
 | LEVEL | 0 .. 100 percent. Q 4. |
 
 Sub and Noise have different controls (waveform, octave; noise colour, filter): see 5.4 and 5.5.
 
-**Envelope panel.** ENV 1 .. ENV 6 buttons (a small dot marks an envelope that modulates something), the
-envelope graph with a full-screen button, and the knobs ATTACK, DECAY, SUSTAIN, RELEASE (Q 1 - 4). The graph
-here is always fitted to the panel; the lock and the time ruler are on the full page. Details in 5.8.
+**Envelope panel.** The selector at the top chooses **Env 1 .. Env 6** (arrows step, tap opens the list). The display has a header band with the envelope name and the full-screen button at the right; the envelope graph is plotted below the band. Under the display are the knobs ATTACK, DECAY, SUSTAIN, RELEASE (Q 5 - 8 on the XL). The graph here is always fitted to the panel; the lock and the time ruler are on the full page. Details in 5.8.
 
-**LFO panel.** The stepper LFO 1 .. LFO 10, RND 1 .. RND 4 (a tap on the name opens the list), the
-shape display with a full-screen button, the SHAPE stepper, the RATE knob with the **HZ / BPM / KEY** list (three
-dots, the lit one is the mode), RISE and SMOOTH (Q 1 - 4). SMOOTH has a LED in front of its name: it is the switch
-of the smoothing and the knob sets its time (the knob is dim while the LED is off). Details in 5.9.
+**LFO panel.** The selector at the top chooses **LFO 1 .. LFO 10** or **RND 1 .. RND 4** (arrows step, tap opens the list). The display has a header band with the name and the full-screen button at the right; the LFO curve is plotted below the band. Under the display are the SHAPE stepper, the RATE knob with the **HZ / BPM / KEY** list (three dots, the lit one is the mode), RISE and SMOOTH (Q 9 - 12 on the XL). SMOOTH has a LED in front of its name: it is the switch of the smoothing and the knob sets its time (the knob is dim while the LED is off). Details in 5.9.
 
-**Full screen.** The full-screen button opens the page of that element over the whole plugin area (the same
-page as the corresponding Osc, Env or LFO tab, with a CLOSE button). Leaving the Play tab closes it.
-The Master page OUTPUT block includes:
-- **LIMIT switch:** The output limiter, off by default. Use it to prevent clipping when pushing the output levels high.
-- **QUALITY:** 
-  - **NO SMOOTHING:** Disables parameter smoothing, causing changes to jump immediately instead of gliding (ideal for hard rhythmic gating). Stored in the preset.
-  - **OVERSAMPLE 4X:** Cleans up high notes of the wavetable oscillator without a warp. Note: Uses more CPU. (2x on the gen 1 profile).
+**Full screen.** The full-screen button opens the page of that element over the whole plugin area (the same page as the corresponding Osc, Env or LFO tab, with a CLOSE button). Leaving the Play tab closes it.
 
 ### 5.2 Macros
 
@@ -468,11 +452,12 @@ The noise generator. Header: the power button (Noise On), the **SOUND** stepper 
 Tape Hiss, Vinyl Clicks, Digital Hash, Velvet Noise, Atmosphere), **FILTER** (-100 .. +100 percent), **PAN**, **LEVEL**
 (0 .. 100 percent, default 25) and the route button. The display draws the colour of the noise (faint while the noise is off).
 
-- TUNE: PITCH and FINE (number fields: -48 .. +48 semitones, -100 .. +100 cents), **KEY TRACK** (LED switch).
+- **TUNE:** PITCH and FINE (number fields: -48 .. +48 semitones, -100 .. +100 cents), **KEY TRACK** (LED switch).
 - **Two different steppers.** The header stepper SOUND chooses which of the nine noise sources the generator plays. The **KIND** stepper in the bottom block (Noise Type: Noise / Sample) chooses whether the source is that generated noise (Noise) or a sample file from the plugin's content (Sample). If no sample file is loaded in Sample mode, the generated noise plays instead.
-- Bottom, KIND = Noise (as in the picture): one block NOISE with KIND, STEREO (0 .. 100 percent) and the **ENV 1** LED switch.
-  KIND = Sample: block SOURCE (KIND, START = Noise Phase 0 .. 100 percent, STEREO, ENV 1) and block PLAYBACK (RANDOM, LOOP, BOUNCE LED switches).
-- Q groups: header (source, FILTER, PAN, LEVEL), TUNE, the bottom blocks.
+- **Layout variants:**
+  - With **KIND = Noise** (generated noise, as in the picture): the display spans the full width; under the display sits one row of two blocks side by side: **TUNE** on the left (PITCH, FINE, KEY TRACK) and **NOISE** on the right (KIND, STEREO 0 .. 100 percent, and the **ENV 1** LED switch).
+  - With **KIND = Sample**: the display is on the left with the **TUNE** column on its right; the bottom row holds blocks **SOURCE** (KIND, START = Noise Phase 0 .. 100 percent, STEREO, ENV 1) and **PLAYBACK** (RANDOM, LOOP, BOUNCE LED switches).
+- Q groups: header (SOUND, FILTER, PAN, LEVEL), TUNE, and the bottom blocks.
 
 ### 5.6 Mixer
 
@@ -601,28 +586,109 @@ Under it the **HOST** LED switch. **HOST** only matters when the LFO's MODE is F
 
 The style grid is Q 1 and has no stepper of its own: PERLIN, S & H (sample and hold), SINE INT (sine interpolate), LORENZ, ROSSLER. The display is the trace of the output. The block RANDOM is one row: the RATE knob (0.01 .. 200 Hz, default 2), the HZ / BPM / KEY list, the STEREO LED switch and the trigger MODE (a list of two: Retrigger, Free-run). In KEY follow the TRANSPOSE and TUNE block replaces the rate as above. Random LFOs have no EDIT button.
 
-**The drawn-shape editor.** The **EDIT** button at the top right opens the editor page over the page (BACK returns). If you press EDIT on a built-in shape, the shape is copied into points and becomes a drawn shape (the LFO's shape is then DRAWN); the original shape is one tap away in the picker. Choosing the cell DRAWN in the picker only makes the shape a drawn one (a triangle when it has no points yet); it does not open the editor.
+**The drawn-shape editor.** The **EDIT** button at the top right of the LFO page opens the editor page over the current view (tap **BACK** to return). If you press **EDIT** while a built-in shape is selected, the shape is converted into editable points and becomes a custom drawn shape (the LFO shape becomes DRAWN). You can switch back to any factory shape at any time with the shape picker on the LFO page. Choosing the cell DRAWN in the shape picker switches to the custom shape (a triangle when it has no points yet), but does not open the editor.
 
 ![LFO editor](img/lfo-editor.png)
 
-- **Top bar:** **BACK**, the seven **tools**, **SHAPES** (the shapes on the card and the factory shapes), **MORE** (flip, shift, grid presets, copies), **UNDO**, **DELETE** and **MOD** (the modulation of the selected points). Every change you make is ONE undo step, however long the gesture.
-- **Tools** (a row of seven): **POINT**, **FLAT**, **RAMP+**, **RAMP-**, **SELECT**, **SOFT**, **BEND**. The editor needs no mouse keys: what a modifier key does on a computer is a tool, a switch or a list entry here.
-  - POINT: tap on empty ground adds a point (snapped to the grid when SNAP is on), and dragging moves it; touching a point selects and drags it (the two end points only up and down); the small handle in the middle of a segment drags its curve (power -20 .. +20). **Quick delete:** a **double tap** on a point deletes it (not an end point; a double tap on empty ground adds one point), a double tap on a curve handle makes that curve straight; a long press on a point deletes it too, and **DELETE** deletes every selected point.
-  - FLAT / RAMP+ / RAMP-: touching a cell of the grid draws a flat piece, a rising or a falling ramp over the cell's column at the height of your finger (on a grid line when SNAP is on). **One drag across the columns draws the whole staircase or saw** - a fast finger leaves no gap, and the drag is one undo step.
-  - SELECT: drag a rectangle on empty ground to select the points inside it; tap a point to add it or (when it is selected) take it out; tap empty ground to clear. Drag one selected point and all of them move together (their order and form stay). With several points selected, **X** and **Y** are the centre of the selection, the third field becomes **SCALE** (the height of the selection) and the POINT field shows how many are selected.
-  - SOFT: drag a point and the selected points (or, with none selected, the points within a quarter of the cycle) follow it, the nearer the more; rainbow colours show how much each one follows.
-  - BEND: drag the handle of one curve and every curve bends by the same amount (**BEND ALL** is the same as a field and a knob).
-- The corner of the canvas shows how many points the shape has (up to 128).
-- **SELECTED POINT** (Q 1 - 4): POINT (which point is selected), X (its time), Y (its level), CURVE (the curve of the segment after it). Without a selected point they show a dash.
-- **GRID** (Q 5 - 7 on a 16-knob device): **GRID X** (columns of the cycle, 2 .. 32), **GRID Y** (rows of the height, 2 .. 32) and **SNAP** (a LED toggle: points snap to the grid lines). The grid is drawn on the canvas and used by SNAP and by the cell tools (FLAT, RAMP+, RAMP-). **The grid is stored in the preset together with the shape** (state version 5): a preset keeps its grid when you load it. A preset saved before that has no grid stored; the editor then takes the coarsest of 4, 8, 12, 16, 24, 32 whose lines all points lie on, else 8.
-- **TRIGGER** (Q 9 - 11 on a 16-knob device): **MODE** (how the LFO starts: Retrigger, Free-run, Envelope, Sustain envelope, Loop at point, Loop and hold; a tap on the name opens the list), **PHASE** (0 .. 360 degrees) and **BEND ALL**.
-- **The marker.** A vertical line with a round handle at its top shows the PHASE of the LFO on the shape; drag the handle to move it. In Retrigger and Envelope it is the **START** (where the cycle begins); in Sustain envelope, Loop at point and Loop and hold it is the **LOOP** position (the run waits there, or jumps back there, or loops up to there) and the handle snaps to the nearest point, which becomes the loop point of the shape; in Free-run the marker is dimmed (the PHASE only shifts the cycle). The **LOOP** toggle makes the selected point the loop point.
-- LED toggles **LOOP** and **SMOOTH** (smooth makes the cosine S-curve of every segment). A shape has one loop point and one smooth flag.
-- **SHAPES:** **FACTORY SHAPES** (the twelve built-in shapes as editable points), **MY SHAPES** (the shapes you saved), **SAVE AS ...** (asks for a name with the on-screen keyboard), **REPLACE / RENAME / DELETE A SAVED SHAPE** (replace and delete ask once). Loading a shape replaces the one in the editor in one undo step. Saved shapes are files `SynthyBoy/LFO Shapes/<name>.lfoshape.json` on the SD card, a USB drive or the plugin's Content folder (the same places as your own wavetables); the format is the one the desktop version reads, so a shape saved on one device loads on the other. Point modulation is not stored in the file (the editor says so when you save such a shape).
-- **MORE:** **EDIT** (SELECT ALL, FLIP HORIZONTAL, FLIP VERTICAL, SHIFT LEFT / RIGHT by one grid column with wrap-around, RESET ALL CURVES, CLEAR LOOP POINT), **GRID** (4, 8, 12, 16, 32 for both directions, HALVE, DOUBLE, THE GRID FOLLOWS THE POINTS), **COPY** (COPY TO LFO ...: the shape goes to another LFO and that LFO plays it; OSC A / B / C CYCLE TO THIS LFO: one cycle of an oscillator becomes the shape; THIS SHAPE TO OSC A / B / C: the shape becomes a wavetable of that oscillator, a WAV file in `SynthyBoy/Wavetables/`).
-- **MOD:** the page for the modulation of the **TIME**, the **LEVEL** or the **CURVE** of the selected points: tap a source to give it to the value, set the AMOUNT (-100 .. 100 percent), REMOVE takes it away. A modulated point shows a bar along the value that moves.
-- A drawn shape that has no points is read as a flat line.
-- The built-in shapes become exact points (sine = 3 points + smooth); EXP UP, EXP DN and HALF become 16 short segments and so follow the original only closely.
+The editor gives you a 956 by 540 pixel canvas to draw and reshape the cycle. The canvas shows between 2 and 128 points. The top right corner displays the count (for example "9 / 128 POINTS"). A shape with no inner points is evaluated as a straight line. The top left corner displays a status message for three seconds whenever you save, load or copy a shape.
+
+**Top bar.** The bar across the top contains navigation, drawing tools and action menus:
+
+- **BACK:** Returns to the LFO page.
+- **Tools:** A row of seven tools (**POINT**, **FLAT**, **RAMP+**, **RAMP-**, **SELECT**, **SOFT**, **BEND**). Every touch gesture is one undo step.
+- **SHAPES:** Opens the shape preset menu (factory shapes, your saved shapes, save, replace, rename and delete).
+- **MORE:** Opens the utility menu (**EDIT**, **GRID** and **COPY** actions).
+- **UNDO:** Reverts the previous change (depth of 32 undo states). The button is dim when the undo stack is empty.
+- **DELETE:** Deletes all selected inner points at once. The button is dim when no deletable point is selected.
+- **MOD:** Opens the point modulation page for the selected points. Enabled when at least one point is selected.
+
+**The seven tools.** Each tool adapts touch gestures to a specific editing role:
+
+| Tool | One touch gesture |
+|---|---|
+| **POINT** | Tap on empty ground to add a point (snapped to the grid when **SNAP** is active) and drag it. Touch an existing point to select and drag it; the two end points move only vertically. Touch the round middle handle of a segment to drag its curvature (-20 to +20). Double tap on an inner point to delete it (never an end point). Double tap on a curve handle to reset that curve to straight. A long press (0.6 seconds without moving) on an inner point deletes it as well. |
+| **FLAT** | Touch a grid cell to draw a horizontal segment across that column at finger height (snapped to a grid line when **SNAP** is active), replacing any points in that column. Dragging across columns fills every passed column with the finger height interpolated. |
+| **RAMP+** | Touch a grid cell to draw a rising ramp from the bottom grid line to the top grid line of the cell across that column. Dragging across columns draws rising saw teeth across all touched columns. |
+| **RAMP-** | Touch a grid cell to draw a falling ramp from the top grid line to the bottom grid line of the cell across that column. Dragging across columns draws falling saw teeth across all touched columns. |
+| **SELECT** | Drag on empty ground to draw a rectangle that selects all points inside it. Tap a point to add it to the selection or, if already part of a multi-point selection, tap to remove it. Tap empty ground to clear the selection. Drag any selected point to move all selected points together, keeping their relative spacing and shape. |
+| **SOFT** | Drag a point to move other points with a linear falloff. Closer points move more, shown in rainbow colours by weight. When two or more points are selected, the falloff applies across the selection. With no selection or one point selected, all points within 25 percent of the cycle follow the dragged point. |
+| **BEND** | Drag the curve handle of any curved segment to bend all bendable curves in the shape by the same amount. |
+
+![Tools in use](img/lfo-editor-tools.png)
+
+**Right column.** The column on the right side contains three titled Q groups and two LED toggles at the bottom:
+
+- **SELECTED POINT** (Q 1 to 4):
+  - One point selected: **POINT** (Q 1) shows the point number (1 to n). **X** (Q 2) sets the time position (0.00 to 1.00; disabled on end points). **Y** (Q 3) sets the level (0.00 to 1.00). **CURVE** (Q 4) sets the curvature of the segment after the point (-20 to +20).
+  - Two or more points selected: **POINT** (Q 1) shows the selection count (for example "3 SEL"). **X** (Q 2) moves the horizontal centre of the selection, shifting the points in time while keeping their order. **Y** (Q 3) moves the vertical centre of the selection up or down. **SCALE** (Q 4, replaces CURVE) scales the height of the selection (0.01 to 1.00) around its vertical centre.
+  - When no point is selected, these fields show a dash.
+- **GRID** (Q 5 to 7 on a 16-knob device):
+  - **GRID X** (Q 5): Horizontal cycle divisions (2 to 32 columns, default 8).
+  - **GRID Y** (Q 6): Vertical height divisions (2 to 32 rows, default 8).
+  - **SNAP** (Q 7): LED toggle. When active, point additions, drags, marker movements and cell tool draws snap to grid intersections.
+  - The grid is saved with the shape in your preset (state version 5). When loading a preset saved without a grid, the editor automatically chooses the coarsest matching grid from 4, 8, 12, 16, 24, 32, or defaults to 8.
+- **TRIGGER** (Q 9 to 11 on a 16-knob device):
+  - **MODE** (Q 9): Stepper for the six LFO trigger modes: Retrigger, Free-run, Envelope, Sustain envelope, Loop at point, Loop and hold. Tap the name to open the full list popup.
+  - **PHASE** (Q 10): Phase angle (0 to 360 degrees).
+  - **BEND ALL** (Q 11): Mean curvature of all bendable segments (-20 to +20); turning it bends every curved segment together.
+- **LOOP** (LED toggle): Toggles the loop point flag on the selected point. Dim when no point is selected.
+- **SMOOTH** (LED toggle): Enables cosine S-curve smoothing across all segments of the shape.
+
+On the 16-knob MPC XL, all eleven controls are active at once on knobs 1 to 11 (slots 8 and 12 to 16 are unused). On the 4-knob MPC Key 61, the active group is framed in yellow; tap a group or press the Q-Link bank button to switch between SELECTED POINT, GRID and TRIGGER.
+
+**The START / LOOP marker.** A vertical line with a round 56-pixel touch handle at the top marks the phase position on the canvas. Drag the handle to move it. The marker is directly bound to the engine parameter **PHASE** (`lfoN.phase`): moving the marker updates **PHASE**, and turning the **PHASE** knob moves the marker. What the marker represents depends on the trigger **MODE**:
+
+- In **Retrigger** and **Envelope** modes, the marker is labelled **START**. It sets the cycle start position when a note is struck. It drags continuously, snapping to points within 14 pixels or to the grid when **SNAP** is active.
+- In **Sustain envelope**, **Loop at point** and **Loop and hold** modes, the marker is labelled **LOOP**. It snaps to existing points and binds the shape's loop point to that point. In Sustain envelope, the LFO holds at this point while you hold the key. In Loop at point, the LFO plays to the end of the shape and loops back to this point. In Loop and hold, the LFO loops between start and this point while the key is held, then releases to the end of the shape.
+- In **Free-run** mode, the marker is dimmed and the canvas displays the hint "FREE-RUN: PHASE SHIFTS THE CYCLE" at the bottom. In Free-run the LFO runs on a continuous shared clock and **PHASE** shifts the cycle timing.
+
+**Point modulation (the MOD page).** Tap **MOD** in the top bar when one or more points are selected to open **PointModPage**:
+
+![Point modulation](img/lfo-editor-pointmod.png)
+
+- **BACK:** Returns to the editor canvas.
+- **MODULATE** (stepper): Selects the target value to modulate: **TIME**, **LEVEL** or **CURVE**.
+- **AMOUNT:** Modulation depth from -100 to +100 percent.
+- **REMOVE:** Removes the modulation assignment from the chosen target.
+- **Summary:** Displays the status above the board (for example "POINT 3: LEVEL BY LFO 2, +45 PERCENT" or "3 POINTS: TIME NOT MODULATED").
+- **Source board:** Lists all 57 modulation sources of the engine in category groups. Tap any source on the board to assign it to the chosen target on all currently selected points.
+
+On the editor canvas, a point with modulated time or level displays a colored bar showing its modulation travel range. A point with a modulated curve displays a colored ring around its segment curve handle.
+
+**The SHAPES list.** Tap **SHAPES** in the top bar to open the two-level shape popup:
+
+![Shapes menu](img/lfo-editor-shapes.png)
+
+- **FACTORY SHAPES:** Lists the twelve built-in shapes (Sine, Triangle, Saw Up, Saw Down, Square, Pulse, Step Up, Step Down, Random Steps, Exp Up, Exp Down, Half Sine) converted to editable points. Sine converts to 3 points with smoothing on; stepped shapes convert to exact vertical steps; curved shapes convert to 16 sampled segments. Loading a factory shape replaces the canvas in one undo step.
+- **MY SHAPES:** Lists all user-saved shapes alphabetically. Tap a shape name to load it into the editor.
+- **SAVE AS ...:** Opens the on-screen keyboard to enter a name and save the shape.
+- **REPLACE A SAVED SHAPE ...:** Lists your saved shapes; choosing one asks for confirmation ("REPLACE <name>?") and overwrites it.
+- **RENAME A SAVED SHAPE ...:** Lists your saved shapes; choosing one opens the keyboard to enter a new name.
+- **DELETE A SAVED SHAPE ...:** Lists your saved shapes; choosing one asks for confirmation ("DELETE <name>?") and deletes the file.
+
+Saved shapes are stored as files named `<name>.lfoshape.json` inside folder `SynthyBoy/LFO Shapes/`. The folder is created on your SD card, a connected USB drive, or the plugin's own Content folder (the same storage locations used for user wavetables). The file format is standard JSON compatible with the desktop version (`synthyboy::serializeLfoShapeFile`). Any standard JSON shape file copied from a computer into `SynthyBoy/LFO Shapes/` is recognized and listed automatically. Point modulation is not stored in `.lfoshape.json`; saving a shape with modulated points displays the status warning `(POINT MODULATION NOT STORED)`.
+
+**The MORE list.** Tap **MORE** in the top bar to open the actions popup, arranged in three groups:
+
+![More menu](img/lfo-editor-more.png)
+
+- **EDIT:**
+  - **SELECT ALL:** Selects every point in the shape.
+  - **FLIP HORIZONTAL:** Mirrors the shape in time. The first point becomes the last, curve signs invert, and the loop point mirrors.
+  - **FLIP VERTICAL:** Inverts all point levels upside down (level y becomes 1 - y).
+  - **SHIFT LEFT:** Shifts the shape left by one grid column with wrap-around.
+  - **SHIFT RIGHT:** Shifts the shape right by one grid column with wrap-around.
+  - **RESET ALL CURVES:** Straightens all segment curves to power 0.
+  - **CLEAR LOOP POINT:** Removes the loop point bookmark from the shape.
+- **GRID:**
+  - **GRID 4 x 4**, **GRID 8 x 8**, **GRID 12 x 12**, **GRID 16 x 16**, **GRID 32 x 32:** Quick resolution presets for columns and rows.
+  - **HALVE THE GRID:** Divides both grid resolutions by two (down to minimum 2).
+  - **DOUBLE THE GRID:** Multiplies both grid resolutions by two (up to maximum 32).
+  - **GRID FOLLOWS THE POINTS:** Sets the grid to the coarsest resolution (from 4, 8, 12, 16, 24, 32) whose lines all points lie on.
+- **COPY:**
+  - **COPY TO LFO ...:** Opens a list of LFOs (LFO 1 to 10 except current); copies the shape and grid to the selected LFO and sets its shape to DRAWN.
+  - **OSC A CYCLE TO THIS LFO**, **OSC B CYCLE TO THIS LFO**, **OSC C CYCLE TO THIS LFO:** Converts one single cycle from the chosen oscillator into up to 128 points on this LFO.
+  - **THIS SHAPE TO OSC A**, **THIS SHAPE TO OSC B**, **THIS SHAPE TO OSC C:** Exports the shape as a single-frame wavetable WAV file into `SynthyBoy/Wavetables/` and loads it into the chosen oscillator.
 
 ### 5.10 Mod matrix
 
@@ -734,6 +800,8 @@ Two sides, chosen by the buttons **MAIN** and **TUNING & MPE** at the top. The p
 | | SPREAD | Stereo Spread 0 .. 100 percent, default 100 |
 | | STEREO | Stereo Routing 0 .. 100 percent, default 100 (a knob like the other two) |
 | | VOICE OVERRIDE | a LED list: Kill / Steal |
+| | LIMIT | Output Limiter LED switch, default off (prevents clipping when pushing output levels high) |
+| | QUALITY | NO SMOOTHING (disables parameter smoothing, making changes jump immediately instead of gliding; stored in preset); OVERSAMPLE 4X (cleans up high notes of the wavetable oscillator without a warp; uses more CPU; 2x on the gen 1 profile) |
 | PITCH | TUNE | -100 .. +100 cents |
 | | TRANSPOSE | -48 .. +48 semitones |
 | | BEND UP, BEND DOWN | 0 .. 24 semitones, default 2; the **LINK** LED switch makes the down range follow the up range |
