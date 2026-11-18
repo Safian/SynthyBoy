@@ -749,6 +749,39 @@ void testMissingContentLine()
     r.inst.missingBits = 1u << 3;   // the user wavetable of A
     r.refresh();
     check (r.ui.missingText() == "content missing", "a missing wavetable without a reference in the state: the line says content missing");
+    // a name too long for its room loses its MIDDLE once: the text is drawn at the size the cut was made for, so the pen does not cut the end of it again (one ellipsis, not at the end), in the compact view's band and on the full screen
+    r.inst.set ("osc1.type", 1.0f);
+    content->samples[0].ref.name = "";
+    content->samples[0].ref.file = "drums/an_extremely_long_sample_file_name_that_can_not_fit_into_the_band_of_the_display_at_any_size_final_take_07.wav";
+    r.inst.missingBits = 1u << 0;
+    r.refresh();
+    for (int state = 0; state < 2; ++state)
+    {
+        if (state == 1)
+            r.openFull();
+        auto data = std::make_unique<gpu::SceneData>();
+        std::memset (data.get(), 0, sizeof (gpu::SceneData));
+        gpu::SceneBuilder sb (*data);
+        r.ui.drawOnDisplay (sb);
+        int lines = 0, bad = 0;
+        for (uint32_t k = 0; k < data->numOps; ++k)
+            if (data->ops[k].op == gpu::kOpText)
+            {
+                const std::string t = gpu::textString (*data, data->ops[k]);
+                if (t.rfind ("content missing", 0) != 0)
+                    continue;
+                ++lines;
+                size_t n = 0, last = 0;
+                for (size_t at = t.find ("\xE2\x80\xA6"); at != std::string::npos; at = t.find ("\xE2\x80\xA6", at + 3))
+                {
+                    ++n;
+                    last = at;
+                }
+                if (n != 1 || last + 3 >= t.size() || t.compare (0, 15, "content missing") != 0 || t.compare (t.size() - 2, 2, "07") != 0)
+                    ++bad;
+            }
+        check (lines == 1 && bad == 0, std::string ("the long name of the missing content loses its middle once (") + (state == 0 ? "compact view" : "full screen") + "): one ellipsis, not at the end, the end of the name stays");
+    }
 }
 
 /** The type drop-down of the compact view: closed it shows the current type, a tap opens the list of the types with their pictograms (rows >= 56 px), a row chooses (the same write the cells made). */

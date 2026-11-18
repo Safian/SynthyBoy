@@ -18,7 +18,7 @@
 | `wrap` | `bool` | the list goes round at the ends | false |
 | `caption` | `char[16]` | small name of the value at the top (MODE, STACK) | empty |
 
-Members: `bool listable = false`, `bool contentName = false`, `int minWidth = kMinW` (208). Helpers `setItem (text)`, `setCaption (text)`.
+Members: `bool listable = false`, `bool contentName = false`, `int minWidth = kMinW` (208). `contentName`: the item is the name of a piece of content (a file, a table title): too wide for its zone it loses its MIDDLE (`contentname::middleFit`, content_name.h), once: the text is cut at the size the pen draws it at (`Pen::fitSize` first, then the cut, then the same size as the maximum of `textCentered`), so the pen does not cut the end of the cut text again. The same rule holds for every other place that cuts a content name (the `content missing` line of `OscUi`, the notice of the effect page): the cut and the drawing use ONE size. Lists (`ListPopup` rows, the wavetable browser) and the carousel cut once at the end by the pen. Helpers `setItem (text)`, `setCaption (text)`.
 
 `UpDownStepper::State`: `value`, `min`, `max` (ints, all 0 by default), `caption` (`char[12]`).
 

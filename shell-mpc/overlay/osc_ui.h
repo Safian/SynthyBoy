@@ -1624,7 +1624,7 @@ private:
         ui::contentname::middleFit (missingText_.c_str(), size, static_cast<float> (box.w), fitted, static_cast<int> (sizeof fitted));
         ui::Cell cell (sb, box);
         ui::Pen pen (sb, true);
-        pen.textCentered (box, fitted, T.fLabel + 4.0f, pen.c (T.negative, 255), T.fMin);
+        pen.textCentered (box, fitted, size, pen.c (T.negative, 255), T.fMin);   // at the size the middle cut was made for (a larger maximum would let the pen cut the end of the cut text again)
     }
     std::string missingText_;
 
