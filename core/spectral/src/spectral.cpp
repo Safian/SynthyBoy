@@ -1323,10 +1323,15 @@ void SpectralVoice::startFrames (const SpectralParams& p, int mask, bool phantom
                 scratch.im[0] = 0.0f;
                 scratch.im[kBins - 1] = 0.0f;
                 kernels::RealIfft::instance().inverse (scratch.re, scratch.im, scratch.zr, scratch.zi, neon);
-                std::memset (scratch.olaTmp, 0, sizeof (float) * kFftSize);
-                kernels::overlapAdd (scratch.olaTmp, 0, scratch.zr, scratch.zi, kOutputScale, neon);
-                for (int n = (3 - j) * kHop; n < kFftSize; ++n)
-                    c.ring[(at + n) & (kFftSize - 1)] += scratch.olaTmp[n];
+                if (legacyStartOla_)
+                {
+                    std::memset (scratch.olaTmp, 0, sizeof (float) * kFftSize);
+                    kernels::overlapAdd (scratch.olaTmp, 0, scratch.zr, scratch.zi, kOutputScale, neon);
+                    for (int n = (3 - j) * kHop; n < kFftSize; ++n)
+                        c.ring[(at + n) & (kFftSize - 1)] += scratch.olaTmp[n];
+                }
+                else   // straight into the ring from the first sample that is not in the past (0 + x is x: the ring never holds a negative zero, so the sums are the same bits)
+                    kernels::overlapAdd (c.ring, at, scratch.zr, scratch.zi, kOutputScale, neon, (3 - j) * kHop);
             }
         }
     }

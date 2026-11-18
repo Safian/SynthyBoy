@@ -80,8 +80,8 @@ float wrapPhaseFloat (float x) noexcept;
 void advancePhases (float* phase, const float* step, int n, bool neon) noexcept;
 
 /** ring[(at + n) & (kFftSize - 1)] += x[n] * w[n] * scale for n < kFftSize, where x[2 m] = zr[m], x[2 m + 1] = zi[m] and w is the Hann window times 1 / kFftSize (exact): the
-    overlap add of a frame of the voice (the product is the voice's old (x / kFftSize * hann) * scale with the exact power of two moved into the table). `at` is a multiple of 4. The order of the products is the voice's: (x * w) * scale. */
-void overlapAdd (float* ring, int at, const float* zr, const float* zi, float scale, bool neon) noexcept;
+    overlap add of a frame of the voice (the product is the voice's old (x / kFftSize * hann) * scale with the exact power of two moved into the table). `at` is a multiple of 4. The order of the products is the voice's: (x * w) * scale. `first` (a multiple of 8, default 0): the sum starts at n = first, the samples before it are left out (a frame whose first part lies in the past). */
+void overlapAdd (float* ring, int at, const float* zr, const float* zi, float scale, bool neon, int first = 0) noexcept;
 
 // ---- the per bin loops of shapeFrame () (the same values as the scalar loops of the reference, bit for bit) ----------------------------------------------
 

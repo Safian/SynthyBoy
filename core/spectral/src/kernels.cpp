@@ -532,10 +532,10 @@ void warmTables() noexcept
     windowTable();
 }
 
-void overlapAdd (float* ring, int at, const float* zr, const float* zi, float scale, bool neon) noexcept
+void overlapAdd (float* ring, int at, const float* zr, const float* zi, float scale, bool neon, int first) noexcept
 {
     const float* w = windowTable();
-    int n = 0;
+    int n = first;
 #if SB_SPECTRAL_NEON
     if (neon)
     {

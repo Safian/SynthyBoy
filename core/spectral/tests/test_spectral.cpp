@@ -1362,3 +1362,90 @@ TEST (spectral_phase_lock_that_advances_only_the_kept_bins_is_the_old_phase_lock
     }
     std::printf ("    one frame with Phase Lock (a hop, rich tone): %.2f us now, %.2f us before (this Mac)\n", us[0], us[1]);
 }
+
+// SP6: a priming frame is overlap-added straight into the ring from its first kept sample. The kernel equals the old add through a zeroed temporary and a loop (arbitrary ring contents, every start that
+// the priming uses, both forms), and the notes (every start offset, the deferred frames, smear, stereo) are bit for bit the notes of the old priming (`setLegacyStartOla`).
+TEST (spectral_the_priming_overlap_add_straight_into_the_ring_is_the_old_one)
+{
+    uint32_t seed = 5u;
+    const auto next = [&] { seed = seed * 1664525u + 1013904223u; return static_cast<float> (seed >> 8) * (1.0f / 8388608.0f) - 1.0f; };
+    int kernelChecks = 0;
+    for (int neon = 0; neon < 2; ++neon)
+        for (int j = 1; j <= 3; ++j)
+            for (int rep = 0; rep < 20; ++rep)
+            {
+                std::vector<float> zr (kFftSize / 2), zi (kFftSize / 2), ring (kFftSize), ref (kFftSize), tmp (kFftSize, 0.0f);
+                for (auto& v : zr) v = 300.0f * next();
+                for (auto& v : zi) v = 300.0f * next();
+                for (auto& v : ring) v = next();
+                ref = ring;
+                const int at = (j * kHop) & (kFftSize - 1);
+                kernels::overlapAdd (tmp.data(), 0, zr.data(), zi.data(), 0.7f, neon != 0);
+                for (int n = (3 - j) * kHop; n < kFftSize; ++n)
+                    ref[static_cast<size_t> ((at + n) & (kFftSize - 1))] += tmp[static_cast<size_t> (n)];
+                kernels::overlapAdd (ring.data(), at, zr.data(), zi.data(), 0.7f, neon != 0, (3 - j) * kHop);
+                ++kernelChecks;
+                CHECK (std::memcmp (ring.data(), ref.data(), sizeof (float) * kFftSize) == 0);
+            }
+    CHECK_EQ (kernelChecks, 120);
+    Tone tone (rich (220.0, 1.2));
+    std::vector<float> l (static_cast<size_t> (1.2 * kSr)), r (l.size());
+    for (size_t i = 0; i < l.size(); ++i)
+    {
+        l[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 311.0 * static_cast<double> (i) / kSr) + 0.1 * std::sin (0.01 * static_cast<double> (i * i % 1000)));
+        r[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 477.0 * static_cast<double> (i) / kSr));
+    }
+    SampleData stereoData;
+    stereoData.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), kSr);
+    Analysis stereo;
+    stereo.build (stereoData.view());
+    int runs = 0, different = 0;
+    for (int variant = 0; variant < 4; ++variant)
+        for (int w : { -1, static_cast<int> (Warp::smear), static_cast<int> (Warp::addHarmonics) })
+            for (int k = 0; k < kStartSteps; ++k)
+            {
+                SpectralParams p = frozen (0.4f);
+                p.manual = variant != 1;
+                p.scanSpeed = 0.7f;
+                p.phaseLock = variant == 2;
+                p.pitchRatio = variant == 3 ? 1.37f : 1.0f;
+                p.warpType[0] = w;
+                p.warpAmount[0] = 0.8f;
+                const Analysis* an = variant >= 2 ? &stereo : &tone.analysis;
+                SpectralVoice a, b;
+                a.prepare (kSr);
+                b.prepare (kSr);
+                b.setLegacyStartOla (true);
+                a.noteOn (an, p, 0.0f, k * kStartStep);
+                b.noteOn (an, p, 0.0f, k * kStartStep);
+                std::vector<float> ra, rb;
+                const auto la = render (a, p, 8192, 128, &ra);
+                const auto lb = render (b, p, 8192, 128, &rb);
+                ++runs;
+                if (std::memcmp (la.data(), lb.data(), la.size() * sizeof (float)) != 0 || std::memcmp (ra.data(), rb.data(), ra.size() * sizeof (float)) != 0)
+                    ++different;
+            }
+    CHECK_EQ (runs, 48);
+    CHECK_EQ (different, 0);
+    // Mac timing of eight note starts (offset 0 / 128 / 256 / 384, two lanes each)
+    double us[2] = {};
+    for (int legacy = 0; legacy < 2; ++legacy)
+    {
+        SpectralParams p = frozen (0.4f);
+        SpectralVoice v[8];
+        for (SpectralVoice& x : v)
+        {
+            x.prepare (kSr);
+            x.setLegacyStartOla (legacy != 0);
+        }
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 100; ++i)
+            for (int n = 0; n < 8; ++n)
+            {
+                v[n].reset();
+                v[n].noteOn (&tone.analysis, p, 0.0f, (n % 4) * kStartStep);
+            }
+        us[legacy] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / 100.0;
+    }
+    std::printf ("    8 note starts: %.1f us now, %.1f us before (this Mac, warm)\n", us[0], us[1]);
+}
