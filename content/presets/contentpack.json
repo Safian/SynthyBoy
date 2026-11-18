@@ -7,7 +7,7 @@
   "attribution": "Safian Szabolcs",
   "kind": "presets",
   "requires_plugin": ">=0.1.0",
-  "description": "168 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
+  "description": "176 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
   "files": [
     {
       "path": "Bass/solid_sub.sbpreset",
@@ -848,6 +848,46 @@
       "path": "Lead/west_coast_wavefold.sbpreset",
       "sha256": "feba84d626439ea52c31604d67f27d0992d58b09eed86cf330f95ec1986b504d",
       "size": 50917
+    },
+    {
+      "path": "Keys/shimmer_bell_walk.sbpreset",
+      "sha256": "fa957b28fed4cb958c2652635d0a7b6281d5709c39d5439fdc8fea622cb114d0",
+      "size": 50914
+    },
+    {
+      "path": "Keys/free_bar_vibraphone.sbpreset",
+      "sha256": "6f7de8630266ad71bbe95aafa56ee57f319254bcff892705d47ef3f9e7eb3280",
+      "size": 50915
+    },
+    {
+      "path": "Pad/gong_bloom_pad.sbpreset",
+      "sha256": "968024a4830b55f825a6d6c1cdb9603b57753d442b480cb6cb65515a631670b8",
+      "size": 50922
+    },
+    {
+      "path": "FX/cymbal_cloud_riser.sbpreset",
+      "sha256": "c2bbac8335456bd852d79876d6ea64691046dfb33bc1c328388349434df75044",
+      "size": 50933
+    },
+    {
+      "path": "FX/wind_sweep_riser.sbpreset",
+      "sha256": "b1577d05094afbcedc0ab590ac1ff6ec184909b82f370ad6803a0416fec40daa",
+      "size": 50936
+    },
+    {
+      "path": "Lead/air_chiff_flute.sbpreset",
+      "sha256": "54dfd0d02e590cb3eed39fda5f3d6ef42cbeb713315f18c1298fefee790ea6aa",
+      "size": 50953
+    },
+    {
+      "path": "Bass/pink_noise_sub.sbpreset",
+      "sha256": "f1e5176f9058965065c60c8f288ee91689c4d23a2ec45db9d25736ad4790c031",
+      "size": 50939
+    },
+    {
+      "path": "FX/vinyl_crackle_bed.sbpreset",
+      "sha256": "3a62d5b2d31bb50e7625b382e4aaae8b52bd9e96af385fcc98a00ce8338d8505",
+      "size": 51052
     }
   ]
 }

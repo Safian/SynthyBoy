@@ -1681,6 +1681,86 @@
    "Vibrato Rate",
    "",
    ""
+  ],
+  "Shimmer Bell Walk": [
+   "Harmonic Walk",
+   "Ring Length",
+   "Dampen",
+   "Space",
+   "Strike Length",
+   "Shimmer",
+   "",
+   ""
+  ],
+  "Free Bar Vibraphone": [
+   "Mallet Hard",
+   "Motor Speed",
+   "Resonator",
+   "Space",
+   "Ring Length",
+   "Dampen",
+   "",
+   ""
+  ],
+  "Gong Bloom Pad": [
+   "Bloom",
+   "Swell Time",
+   "Drone",
+   "Space",
+   "Dark",
+   "Shimmer",
+   "",
+   ""
+  ],
+  "Cymbal Cloud Riser": [
+   "Cloud Motion",
+   "Riser Length",
+   "Flange Jet",
+   "Echo Wash",
+   "Bright",
+   "Width",
+   "",
+   ""
+  ],
+  "Wind Sweep Riser": [
+   "Band Pitch",
+   "Sweep Time",
+   "Whistle",
+   "Space",
+   "Muffle",
+   "Width",
+   "",
+   ""
+  ],
+  "Air Chiff Flute": [
+   "Breath Tone",
+   "Chiff",
+   "Dark",
+   "Echo",
+   "Vibrato Rate",
+   "Room",
+   "",
+   ""
+  ],
+  "Pink Noise Sub": [
+   "Brighten",
+   "Sub Boom",
+   "Thump Length",
+   "Drive",
+   "Cutoff",
+   "Decay",
+   "",
+   ""
+  ],
+  "Vinyl Crackle Bed": [
+   "Density",
+   "Dark",
+   "Hum",
+   "Space",
+   "Drift Rate",
+   "Surface Ticks",
+   "",
+   ""
   ]
  }
 }
