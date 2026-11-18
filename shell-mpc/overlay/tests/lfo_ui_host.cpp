@@ -648,6 +648,60 @@ void testShapeLibrary()
     check (lib.load (lib.find ("FromImport"), back) && back.n == 2 && back.loop == -1 && std::fabs (back.p[0].power) < 1.0e-6f, "a file without a loop point loads with none");
     check (lib.load (lib.find ("Plain"), back) && back.smooth && back.n == 2, "a plain .json loads");
     check (! lib.load (lib.find ("Broken"), back) && lib.error() == "NOT A SHAPE FILE", "a damaged file is refused with a reason");
+    // the point modulation is stored: an optional "point_mod" array with the stable text id of the source (never the number)
+    {
+        ui::lfo::ShapeModel mm = ui::lfo::ShapeModel::fromBuiltin (1);
+        mm.insert (0.25f, 0.3f);
+        mm.loop = 1;
+        ui::lfo::PointSet a, b;
+        a.add (1);
+        b.add (2);
+        b.add (3);
+        mm.setMod (a, 0, 8, -0.25f);    // the time of point 1 by LFO 2
+        mm.setMod (a, 1, 9, 0.75f);     // the level of point 1 by LFO 3
+        mm.setMod (b, 2, 7, 1.0f);      // the curve of points 2 and 3 by LFO 1
+        check (lib.save ("Modded", mm, false), "save: a shape with point modulation");
+        std::ifstream mf (tmp.path + "/SynthyBoy/LFO Shapes/Modded.lfoshape.json");
+        const std::string mtext ((std::istreambuf_iterator<char> (mf)), std::istreambuf_iterator<char>());
+        check (mtext.find ("\"point_mod\":[") != std::string::npos && mtext.find ("\"source\":\"lfo2\"") != std::string::npos && mtext.find ("\"target\":\"curve\"") != std::string::npos && mtext.find ("\"version\":1") != std::string::npos
+                   && mtext.find ("\"source\":8") == std::string::npos, "the file has point_mod with text ids of the sources, version stays 1");
+        check (mtext.find ("\"point_mod\"") < mtext.find ("\"points\""), "point_mod stands before the points (with loop_point)");
+        synthyboy::LfoShapeFile mcore;
+        check (synthyboy::parseLfoShapeFile (mtext, mcore) && mcore.name == "Modded" && static_cast<int> (mcore.points.size()) == mm.n, "the desktop parser of the core reads a file with point_mod (it skips the key)");
+        ui::lfo::ShapeModel got;
+        check (lib.load (lib.find ("Modded"), got) && got == mm && got.p[1].mx.source == 8 && got.p[2].mc.source == 7 && got.loop == 1, "save then load: the modulation (time, level, curve, source, amount) and the loop point are back");
+        check (lib.rename (lib.find ("Modded"), "Modded 2") && lib.load (lib.find ("Modded 2"), got) && got == mm, "rename keeps the point modulation");
+        std::filesystem::remove (tmp.path + "/SynthyBoy/LFO Shapes/Modded 2.lfoshape.json");
+        lib.refresh();
+        // a name with the text of the key, in both directions
+        ui::lfo::ShapeModel plain = mm;
+        for (int i = 0; i < plain.n; ++i)
+            plain.p[i].mx = plain.p[i].my = plain.p[i].mc = ui::lfo::PointMod {};
+        check (LfoShapeLibrary::fromText (LfoShapeLibrary::toText ("a \"point_mod\":[{\"point\":1,\"target\":\"level\",\"source\":\"lfo1\",\"amount\":1}] b", plain), got) && got == plain, "a name with the text of the key: a shape without modulation has none");
+        check (LfoShapeLibrary::fromText (LfoShapeLibrary::toText ("a \"point_mod\":[] b", mm), got) && got == mm, "a name with the text of the key: the real modulation is read");
+        // a hand-written file that holds the text inside strings and other values is not fooled either
+        check (LfoShapeLibrary::fromText ("{\"format\":\"synthyboy-lfo-shape\",\"name\":\"x \\\"point_mod\\\":[{\\\"point\\\":1}]\",\"other\":{\"point_mod\":[1]},\"points\":[{\"x\":0,\"y\":0},{\"x\":0.5,\"y\":1},{\"x\":1,\"y\":0}]}", got) && got.n == 3 && ! got.p[1].mx.on() && ! got.p[1].my.on() && ! got.p[1].mc.on(), "point_mod inside a string or inside another object is not the key");
+        // a file without the key loads with no modulation
+        check (LfoShapeLibrary::fromText ("{\"format\":\"synthyboy-lfo-shape\",\"version\":1,\"name\":\"x\",\"smooth\":false,\"points\":[{\"x\":0,\"y\":0},{\"x\":1,\"y\":1}]}", got) && got.n == 2 && ! got.p[0].mx.on() && ! got.p[0].my.on() && ! got.p[1].mc.on(), "a file without point_mod loads with no modulation, as before");
+        // bad entries are skipped one by one, the good ones load
+        const std::string bad = "{\"format\":\"synthyboy-lfo-shape\",\"version\":1,\"name\":\"x\",\"smooth\":false,\"point_mod\":["
+                                "{\"point\":1,\"target\":\"level\",\"source\":\"no_such_source\",\"amount\":0.5},"   // unknown source
+                                "{\"point\":9,\"target\":\"level\",\"source\":\"lfo1\",\"amount\":0.5},"             // point outside the shape
+                                "{\"point\":-1,\"target\":\"level\",\"source\":\"lfo1\",\"amount\":0.5},"
+                                "{\"point\":1.5,\"target\":\"level\",\"source\":\"lfo1\",\"amount\":0.5},"
+                                "{\"point\":1,\"target\":\"sideways\",\"source\":\"lfo1\",\"amount\":0.5},"          // unknown target
+                                "{\"point\":1,\"target\":\"level\",\"source\":7,\"amount\":0.5},"                    // a raw number is not an id
+                                "{\"point\":1,\"target\":\"level\",\"source\":\"lfo1\"},"                            // no amount
+                                "5,\"text\",null,{\"nested\":{\"a\":[1,2]}},"
+                                "{\"point\":1,\"target\":\"time\",\"source\":\"lfo3\",\"amount\":-0.5,\"future\":[true]},"   // good, with a key we do not know
+                                "{\"point\":0,\"target\":\"curve\",\"source\":\"lfo2\",\"amount\":9}"          // good, the amount is clamped
+                                "],\"points\":[{\"x\":0,\"y\":0},{\"x\":0.5,\"y\":1},{\"x\":1,\"y\":0}]}";
+        check (LfoShapeLibrary::fromText (bad, got) && got.n == 3, "a file with bad entries still loads");
+        check (! got.p[1].my.on() && got.p[1].mx.source == 9 && std::fabs (got.p[1].mx.amount + 0.5f) < 1.0e-6f && got.p[0].mc.source == 8 && got.p[0].mc.amount == 1.0f && ! got.p[2].mx.on() && ! got.p[2].my.on() && ! got.p[2].mc.on(),
+               "bad entries (unknown source, point out of range, raw number, unknown target, no amount) are skipped, the good ones are applied (amount clamped to 1)");
+        // a damaged tail ends the walk, what was read stays; the shape still loads
+        check (LfoShapeLibrary::fromText ("{\"format\":\"synthyboy-lfo-shape\",\"point_mod\":[{\"point\":1,\"target\":\"level\",\"source\":\"lfo1\",\"amount\":0.5},{\"point\":", got) == false, "a file cut off in the middle is no shape file (the core's parser says so)");
+    }
     // two roots: the first one wins a name, the list holds both
     TempDir other;
     lib.setRoots ({ tmp.path, other.path });
@@ -917,6 +971,46 @@ void testEditorPointModulation()
     for (int i = 0; i < m.n; ++i)
         all = all && m.p[i].my.source == 9;
     check (all, "with every point selected the source goes to all of them");
+}
+
+void testEditorPointModulationStored()
+{
+    TempDir tmp;
+    Rig r;
+    r.inst.userRoots = { tmp.path };
+    openEditorOn (r, triangleWith ({ { 0.25f, 0.5f } }));
+    ui::lfo::ShapeModel& m = r.ui.editor().model;
+    ui::ShapeCanvas& cv = r.ui.editor().canvas;
+    r.tap (static_cast<int> (cv.xOf (0.25f)), static_cast<int> (cv.yOf (0.5f)));
+    r.tapC (r.ui.editor().modButton);
+    ui::PointModPage& pm = r.ui.pointModPage();
+    const ui::Rect chip = pm.board.chipRectOfId (7);   // LFO 1
+    r.tap (chip.x + chip.w / 2, chip.y + chip.h / 2);
+    r.tapC (pm.back);
+    check (m.p[1].my.source == 7, "a point of the shape is modulated by LFO 1");
+    const ui::lfo::ShapeModel modded = m;
+    // SAVE AS: the status no longer warns that the modulation is not stored
+    r.tapC (r.ui.editor().shapes);
+    chooseRow (r, 2);
+    typeName (r, "Wob");
+    pressKey (r, ui::TextEntry::Ok);
+    check (std::string (r.ui.editor().status()) == "SAVED Wob", "the status of a save with point modulation is just SAVED <name> (the modulation is stored)");
+    ui::lfo::ShapeModel stored;
+    check (r.ui.library().load (0, stored) && stored == modded && stored.p[1].my.source == 7, "the file holds the modulation");
+    // another shape in the editor, then load the saved one: the modulation comes back in ONE undo step
+    r.tapC (r.ui.editor().shapes);
+    chooseRow (r, 0);
+    chooseRow (r, 4);   // SQUARE
+    const ui::lfo::ShapeModel square = m;
+    check (! (square == modded) && ! square.p[1].my.on(), "another shape without modulation is in the editor");
+    const int undoBefore = r.ui.editor().undo.depth();
+    r.tapC (r.ui.editor().shapes);
+    chooseRow (r, 1);
+    chooseRow (r, 0);
+    check (m == modded && m.p[1].my.source == 7 && r.ui.editor().undo.depth() == undoBefore + 1, "loading the saved shape applies its point modulation in the same single undo step");
+    check (r.inst.contentPtr->lfoShapes[0].points[1].modY.present && r.inst.contentPtr->lfoShapes[0].points[1].modY.source == synthyboy::modSourceTable()[6].key, "... and the content has it");
+    r.tapC (r.ui.editor().undoButton);
+    check (m == square && ! m.p[1].my.on(), "one UNDO takes shape and modulation back together");
 }
 
 void testTargets()
@@ -1328,6 +1422,7 @@ int main()
     testEditorShapesList();
     testEditorActions();
     testEditorPointModulation();
+    testEditorPointModulationStored();
     testTargets();
     testDisplay();
     testKeyFollowCurve();

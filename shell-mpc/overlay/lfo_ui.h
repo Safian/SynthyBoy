@@ -1632,9 +1632,8 @@ private:
     }
     void doSave (const std::string& name, bool overwrite)
     {
-        bool lost = false;
-        if (lib_.save (name, editor_.model, overwrite, &lost))
-            setStatusText ("SAVED " + name + (lost ? " (POINT MODULATION NOT STORED)" : ""));
+        if (lib_.save (name, editor_.model, overwrite))
+            setStatusText ("SAVED " + name);
         else
             setStatusText (lib_.error());
     }
