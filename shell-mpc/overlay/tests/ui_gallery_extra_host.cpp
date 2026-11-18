@@ -951,6 +951,157 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.refresh (2);
             r.picture (outDir + "/" + state + "_lfo_editor_tool_ramp_down.png");
         }
+
+        // 4.11 .. 4.30 The LFO editor, the new tools, the marker, the selection, the lists, the name keyboard and the page of the modulation of points
+        {
+            const std::string prefix = outDir + "/" + state + "_lfo_editor_";
+            auto openEd = [&] (float sync, float phaseDeg, bool modulated) -> std::unique_ptr<GalleryRig<LfoUi>>
+            {
+                auto r = std::make_unique<GalleryRig<LfoUi>> (baseInst, 1);
+                r->inst.set ("lfo1.shape", 12.0f);
+                r->inst.set ("lfo1.sync_type", sync);
+                r->inst.set ("lfo1.phase", phaseDeg);
+                synthyboy::ContentLfoShape cs;
+                cs.lfo = 1;
+                cs.gridX = 8;
+                cs.gridY = 4;
+                cs.points = { { 0.0f, 0.1f, 0.0f }, { 0.125f, 0.85f, 2.0f }, { 0.25f, 0.3f, 0.0f }, { 0.375f, 0.9f, -1.8f }, { 0.5f, 0.15f, 0.0f }, { 0.625f, 0.7f, 3.0f }, { 0.75f, 0.4f, 0.0f }, { 0.875f, 0.8f, 0.0f }, { 1.0f, 0.0f, 0.0f } };
+                if (modulated)
+                {
+                    cs.points[2].modY.present = true; cs.points[2].modY.source = synthyboy::modSourceTable()[7].key; cs.points[2].modY.amount = 0.3f;
+                    cs.points[5].modX.present = true; cs.points[5].modX.source = synthyboy::modSourceTable()[7].key; cs.points[5].modX.amount = 0.06f;
+                    cs.points[1].modCurve.present = true; cs.points[1].modCurve.source = synthyboy::modSourceTable()[7].key; cs.points[1].modCurve.amount = 0.4f;
+                }
+                r->inst.setLfoShape (1, cs);
+                r->refresh();
+                r->tap (r->ui.full().edit);
+                r->refresh (2);
+                return r;
+            };
+            auto px = [] (GalleryRig<LfoUi>& r, float f) { return static_cast<int> (r.ui.editor().canvas.xOf (f)); };
+            auto py = [] (GalleryRig<LfoUi>& r, float f) { return static_cast<int> (r.ui.editor().canvas.yOf (f)); };
+            auto toolOf = [] (GalleryRig<LfoUi>& r, int t) { const ui::Rect c = r.ui.editor().tools.cell (t); r.tapAt (c.x + c.w / 2, c.y + c.h / 2); };
+            auto touch = [] (GalleryRig<LfoUi>& r, TouchEvent::Kind k, int x, int y)
+            {
+                TouchEvent e; e.kind = k; e.x = x; e.y = y;
+                r.now += 16.0;
+                r.ui.touch (e, r.stack, r.inst, r.now);
+                r.refresh (1);
+            };
+            auto dragFrom = [&] (GalleryRig<LfoUi>& r, int x0, int y0, int x1, int y1)   // the finger stays down: the picture shows the gesture in flight
+            {
+                touch (r, TouchEvent::Down, x0, y0);
+                for (int i = 1; i <= 8; ++i)
+                    touch (r, TouchEvent::Move, x0 + (x1 - x0) * i / 8, y0 + (y1 - y0) * i / 8);
+            };
+            // the marker: LOOP (a loop mode), START (retrigger), dimmed with its hint (free-run)
+            openEd (4.0f, 135.0f, false)->picture (prefix + "marker_loop.png");
+            openEd (0.0f, 45.0f, false)->picture (prefix + "marker_start.png");
+            openEd (1.0f, 45.0f, false)->picture (prefix + "marker_freerun.png");
+            // the modulation of points: the bars and the ring of a curve handle
+            openEd (0.0f, 0.0f, true)->picture (prefix + "mod_bars.png");
+            // SELECT: the rubber band in flight, the selection done (the POINT field shows the count, the third field is SCALE)
+            {
+                auto r = openEd (0.0f, 0.0f, false);
+                toolOf (*r, ui::ToolSelector::Select);
+                dragFrom (*r, px (*r, 0.18f), py (*r, 0.98f), px (*r, 0.55f), py (*r, 0.05f));
+                r->picture (prefix + "select_rubber.png");
+                touch (*r, TouchEvent::Up, px (*r, 0.55f), py (*r, 0.05f));
+                r->refresh (2);
+                r->picture (prefix + "select_done.png");
+            }
+            // SOFT: the rainbow of the points that follow the finger
+            {
+                auto r = openEd (0.0f, 0.0f, false);
+                toolOf (*r, ui::ToolSelector::Soft);
+                dragFrom (*r, px (*r, 0.375f), py (*r, 0.9f), px (*r, 0.375f), py (*r, 0.55f));
+                r->picture (prefix + "soft.png");
+            }
+            // BEND: every curve moves with the one that is dragged
+            {
+                auto r = openEd (0.0f, 0.0f, false);
+                toolOf (*r, ui::ToolSelector::Bend);
+                float hx = 0.0f, hy = 0.0f;
+                r->ui.editor().canvas.midHandle (0, hx, hy);
+                dragFrom (*r, static_cast<int> (hx), static_cast<int> (hy), static_cast<int> (hx), static_cast<int> (hy) + 50);
+                r->picture (prefix + "bend.png");
+            }
+            // the lists of SHAPES and MORE over the editor
+            {
+                auto r = openEd (0.0f, 0.0f, false);
+                r->tap (r->ui.editor().shapes);
+                r->picture (prefix + "shapes_list.png");
+                r->tapAt (r->ui.list().rowRect (0).x + 20, r->ui.list().rowRect (0).y + 20);
+                r->picture (prefix + "shapes_factory.png");
+            }
+            {
+                auto r = openEd (0.0f, 0.0f, false);
+                r->tap (r->ui.editor().more);
+                r->picture (prefix + "more_list.png");
+                r->tapAt (r->ui.list().rowRect (0).x + 20, r->ui.list().rowRect (0).y + 20);
+                r->picture (prefix + "more_edit.png");
+                r->stack.back();
+                r->refresh();
+                r->tap (r->ui.editor().more);
+                r->tapAt (r->ui.list().rowRect (2).x + 20, r->ui.list().rowRect (2).y + 20);
+                r->picture (prefix + "more_copy.png");
+                r->tapAt (r->ui.list().rowRect (0).x + 20, r->ui.list().rowRect (0).y + 20);
+                r->picture (prefix + "more_copy_lfo.png");
+            }
+            // SAVE AS: the name keyboard, then the question when the name is taken (a temporary card with one saved shape)
+            {
+                const std::string card = (fs::temp_directory_path() / "synthyboy_lfo_gallery_card").string();
+                std::error_code ec;
+                fs::remove_all (card, ec);
+                fs::create_directories (card, ec);
+                auto r = openEd (0.0f, 0.0f, false);
+                r->inst.wtSources.userRoots = { card };
+                auto typeName = [&] (const std::string& name)
+                {
+                    for (char ch : name)
+                    {
+                        const int k = ch == ' ' ? r->ui.keyboard().keyOfKind (ui::TextEntry::Space) : r->ui.keyboard().keyOf (ch);
+                        const ui::TextEntry::Key& key = r->ui.keyboard().key (k);
+                        r->tapAt (key.r.x + key.r.w / 2, key.r.y + key.r.h / 2);
+                    }
+                };
+                r->tap (r->ui.editor().shapes);
+                r->tapAt (r->ui.list().rowRect (2).x + 20, r->ui.list().rowRect (2).y + 20);
+                typeName ("Wobble");
+                r->picture (prefix + "save_name.png");
+                const ui::TextEntry::Key& ok = r->ui.keyboard().key (r->ui.keyboard().keyOfKind (ui::TextEntry::Ok));
+                r->tapAt (ok.r.x + ok.r.w / 2, ok.r.y + ok.r.h / 2);
+                r->picture (prefix + "saved.png");
+                r->tap (r->ui.editor().shapes);
+                r->picture (prefix + "shapes_list_saved.png");
+                r->tapAt (r->ui.list().rowRect (1).x + 20, r->ui.list().rowRect (1).y + 20);
+                r->picture (prefix + "shapes_mine.png");
+                r->stack.back();
+                r->refresh();
+                r->tap (r->ui.editor().shapes);
+                r->tapAt (r->ui.list().rowRect (2).x + 20, r->ui.list().rowRect (2).y + 20);
+                typeName ("Wobble");
+                const ui::TextEntry::Key& ok2 = r->ui.keyboard().key (r->ui.keyboard().keyOfKind (ui::TextEntry::Ok));
+                r->tapAt (ok2.r.x + ok2.r.w / 2, ok2.r.y + ok2.r.h / 2);
+                r->picture (prefix + "confirm_replace.png");
+                r->stack.back();
+                r->refresh();
+                r->tap (r->ui.editor().shapes);
+                r->tapAt (r->ui.list().rowRect (5).x + 20, r->ui.list().rowRect (5).y + 20);
+                r->picture (prefix + "delete_which.png");
+                fs::remove_all (card, ec);
+            }
+            // the modulation of a point: nothing yet, then a source and an amount
+            {
+                auto r = openEd (0.0f, 0.0f, false);
+                r->tapAt (px (*r, 0.25f), py (*r, 0.3f));
+                r->tap (r->ui.editor().modButton);
+                r->picture (prefix + "pointmod_empty.png");
+                const ui::Rect chip = r->ui.pointModPage().board.chipRectOfId (8);
+                r->tapAt (chip.x + chip.w / 2, chip.y + chip.h / 2);
+                r->picture (prefix + "pointmod.png");
+            }
+        }
     }
 
     // =========================================================================
@@ -1383,6 +1534,28 @@ int main (int argc, char** argv)
             "test_init_lfo_editor_tool_flat.png",
             "test_init_lfo_editor_tool_ramp_up.png",
             "test_init_lfo_editor_tool_ramp_down.png",
+            "test_init_lfo_editor_marker_loop.png",
+            "test_init_lfo_editor_marker_start.png",
+            "test_init_lfo_editor_marker_freerun.png",
+            "test_init_lfo_editor_mod_bars.png",
+            "test_init_lfo_editor_select_rubber.png",
+            "test_init_lfo_editor_select_done.png",
+            "test_init_lfo_editor_soft.png",
+            "test_init_lfo_editor_bend.png",
+            "test_init_lfo_editor_shapes_list.png",
+            "test_init_lfo_editor_shapes_factory.png",
+            "test_init_lfo_editor_more_list.png",
+            "test_init_lfo_editor_more_edit.png",
+            "test_init_lfo_editor_more_copy.png",
+            "test_init_lfo_editor_more_copy_lfo.png",
+            "test_init_lfo_editor_save_name.png",
+            "test_init_lfo_editor_saved.png",
+            "test_init_lfo_editor_shapes_list_saved.png",
+            "test_init_lfo_editor_shapes_mine.png",
+            "test_init_lfo_editor_confirm_replace.png",
+            "test_init_lfo_editor_delete_which.png",
+            "test_init_lfo_editor_pointmod_empty.png",
+            "test_init_lfo_editor_pointmod.png",
             "test_init_mod_slot_detail.png",
             "test_init_mod_source_picker_groups.png",
             "test_init_mod_source_picker_group1.png",

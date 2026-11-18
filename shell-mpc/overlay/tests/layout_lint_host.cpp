@@ -1024,6 +1024,30 @@ void lintView (Runner& run, const layout::View& v, const LintInst& base)
                     lintRig (run, r, pg, "random", { &r.ui.full() });
                 });
             sub ("editor", [&] { Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh(); lintRig (run, r, pg, "editor", { &r.ui.editor() }); });
+            // the editor in its other states: the LOOP marker (a loop mode) with a selection of every point, the page of the modulation of a point, the lists of SHAPES and MORE over the editor
+            sub ("editor-loop", [&] {
+                LintInst inst = base;
+                inst.set ("lfo" + std::to_string (v.index) + ".sync_type", 4.0f);
+                Rig<LfoUi> r (inst, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
+                r.ui.editor().canvas.selectAll(); r.refresh();
+                lintRig (run, r, pg, "editor-loop", { &r.ui.editor() });
+            });
+            sub ("editor-pointmod", [&] {
+                Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
+                r.ui.editor().canvas.selectOnly (1); r.refresh();
+                r.stack.openDetail (LfoUi::kPagePointMod); r.refresh();
+                lintRig (run, r, pg, "editor-pointmod", { &r.ui.pointModPage() });
+            });
+            sub ("editor-shapes-list", [&] {
+                Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
+                r.tap (r.ui.editor().shapes); r.refresh();
+                lintRig (run, r, pg, "editor-shapes-list", { &r.ui.list() }, true);
+            });
+            sub ("editor-more-list", [&] {
+                Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
+                r.tap (r.ui.editor().more); r.refresh();
+                lintRig (run, r, pg, "editor-more-list", { &r.ui.list() }, true);
+            });
             sub ("targets-page", [&] {
                 LintInst inst = base;
                 inst.mod (1, sourceChoice (("lfo" + std::to_string (v.index)).c_str()), "filter1.cutoff", 45.0f);

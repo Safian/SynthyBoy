@@ -5,8 +5,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 // What it shows (UiStack, ui_stack.h; the element id of this UI is kElementLfo, the pages above it are ours): main = the compact view in the right third of the Play page (LfoCompact); full = the full screen
-// (LfoFullScreen) over the whole plugin area of the Play page; detail pages above it: the shape editor (ShapeEditorPage), the targets of the LFO (ModTargetsPage: the modulation matrix seen from the source), the
-// list popup (instances, choices, the destination to add) and the modulations of a control (ModulationsPage).
+// (LfoFullScreen) over the whole plugin area of the Play page; detail pages above it: the shape editor (ShapeEditorPage), the modulation of the selected points (PointModPage) and the name keyboard of a saved
+// shape (TextEntry) above that, the targets of the LFO (ModTargetsPage: the modulation matrix seen from the source), the list popup (instances, choices, the destination to add, the SHAPES and MORE lists of the editor)
+// and the modulations of a control (ModulationsPage). The editor's file work (the saved shapes in SynthyBoy/LFO Shapes/ on the card, lfo_shape_files.h) happens in the touch handler on the overlay thread, never in draw.
 // What it does with a touch: the library component gives a Change { id, kind, value }; the id says which control it was, the binding of the id (a key suffix of the engine table and a type) says which parameter and
 // how the UI value converts; the write goes through IInstanceView::writeParam (normalised; the plugin tells the host). The drawn shape is not a parameter: the editor changes a shape model, which goes to the
 // content state through IInstanceView::setLfoShape (at most every kShapeSendMs while a finger is down, and at the end of the gesture). Every update () reads every parameter back into the component states, so host
@@ -23,19 +24,28 @@
 #include <string>
 #include <vector>
 
+#include <sys/stat.h>
+
 #include "../ui/lfo_screen.h"
 #include "../ui/mod_targets.h"
 #include "../ui/shape_editor.h"
 #include "../ui/ui.h"
+#include "../safe_file.h"
 #include "../q_router.h"
 #include "q_publish.h"
 #include "curve_source.h"
+#include "lfo_shape_files.h"
 #include "page_view.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
 #include "ui_stack.h"
 #include "synthyboy/lfo_display.h"
+#include "synthyboy/osc_cycle.h"
 #include "synthyboy/params.h"
+#include "synthyboy/user_content.h"
+#include "synthyboy/wave_convert.h"
+#include "synthyboy/wavetable_catalogue.h"
+#include "synthyboy/wavetable_edit.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -47,14 +57,15 @@ public:
     // ---- the pages (UiStack ids)
     static constexpr int kElementPage = 3;                                    // the page of an LFO tab is the full screen of the element (page_view.h)
     static constexpr int kElementLfo = 3;                                     // the full screen of the LFO (the oscillator is 1, the envelope 2)
-    enum Page { kPageEditor = 40, kPageTargets = 41, kPageList = 42, kPageMods = 43 };
+    enum Page { kPageEditor = 40, kPageTargets = 41, kPageList = 42, kPageMods = 43, kPagePointMod = 44, kPageKeyboard = 45 };
 
     // ---- the id spaces of the controls (a Change comes out with the id the owner gave)
     enum Id : int
     {
         kClose = 1, kFullButton, kInstance, kLfoCells, kRndCells, kSyncMode, kSyncTrip, kSyncDot, kMonoTop, kTargets, kPicker, kSmoothPick, kHostPick, kEdit,
         kShape = 100, kStyle, kRate, kDivision, kRise, kSmoothTime, kSync, kMode, kPhase, kDelay, kDirection, kSwing, kStereo, kMono, kStereoToggle, kKeyTranspose, kKeyTune, kModeList,
-        kEdBack = 200, kEdTools, kEdUndo, kEdDelete, kEdSnap, kEdLoop, kEdSmooth, kEdCanvas, kEdX, kEdY, kEdCurve, kEdGridX, kEdGridY, kEdPoint,
+        kEdBack = 200, kEdTools, kEdUndo, kEdDelete, kEdSnap, kEdLoop, kEdSmooth, kEdCanvas, kEdX, kEdY, kEdCurve, kEdGridX, kEdGridY, kEdPoint, kEdShapes, kEdMore, kEdMod, kEdMode, kEdPhase, kEdBend,
+        kMpBack = 230, kMpTarget, kMpAmount, kMpRemove, kMpBoard, kKbOk = 250, kKbCancel,
         kTargetsBack = 300, kTargetsPage, kTargetsAdd, kTargetsRow = 310,   // 310 + 4 * row + (0 depth, 1 polarity, 2 bypass, 3 remove)
         kList = 400, kListBackdrop, kListHeader,
         kModsBack = 500, kModsRow = 510, kModsAddStep = 560, kModsAdd
@@ -96,6 +107,8 @@ public:
         editor_.place (tab);
         targets_.place (tab);
         mods_.place (tab);
+        pointMod_.place (tab);
+        entry_.place (tab);
         list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
         list_.setPopup (tab);
         list_.setId (kList);
@@ -206,9 +219,19 @@ public:
             ui::Cell cell (sb, { 0, kTabY, w_, kTabH }, 0);
             sb.gradientRect (0.0f, static_cast<float> (kTabY), static_cast<float> (w_), static_cast<float> (kTabY + kTabH), ui::theme::rgba (L.bg0), ui::theme::rgba (L.bg1));
         }
-        if (pageTop_ == kPageEditor)
+        if (pageTop_ == kPageEditor || (pageTop_ == kPageList && underList_ == kPageEditor))
         {
             editor_.draw (sb);
+            return;
+        }
+        if (pageTop_ == kPagePointMod)
+        {
+            pointMod_.draw (sb);
+            return;
+        }
+        if (pageTop_ == kPageKeyboard)
+        {
+            entry_.draw (sb);
             return;
         }
         if (pageTop_ == kPageTargets || (pageTop_ == kPageList && underList_ == kPageTargets))
@@ -334,6 +357,9 @@ public:
     ui::ModTargetsPage& targetsPage() noexcept { return targets_; }
     ui::ModulationsPage& modsPage() noexcept { return mods_; }
     ui::ListPopup& list() noexcept { return list_; }
+    ui::PointModPage& pointModPage() noexcept { return pointMod_; }
+    ui::TextEntry& keyboard() noexcept { return entry_; }
+    LfoShapeLibrary& library() noexcept { return lib_; }
     const std::vector<Item>& items() const noexcept { return items_; }
     const Item* item (int id) const noexcept { for (const Item& it : items_) if (it.id == id) return &it; return nullptr; }
     const ui::lfodisplay::Data& displayData() const noexcept { return data_; }
@@ -348,7 +374,13 @@ public:
         ui::lfo::ShapeModel m;
         m.n = static_cast<int> (std::min<size_t> (s.points.size(), ui::lfo::kMaxPoints));
         for (int i = 0; i < m.n; ++i)
-            m.p[i] = { s.points[static_cast<size_t> (i)].x, s.points[static_cast<size_t> (i)].y, s.points[static_cast<size_t> (i)].power };
+        {
+            const synthyboy::ContentPoint& cp = s.points[static_cast<size_t> (i)];
+            m.p[i] = ui::lfo::Point (cp.x, cp.y, cp.power);
+            m.p[i].mx = modOf (cp.modX);
+            m.p[i].my = modOf (cp.modY);
+            m.p[i].mc = modOf (cp.modCurve);
+        }
         m.smooth = s.smooth;
         m.loop = s.loopPoint;
         m.clean();
@@ -365,8 +397,40 @@ public:
         s.smooth = m.smooth;
         s.loopPoint = m.loop >= 0 && m.loop < m.n ? m.loop : -1;
         for (int i = 0; i < m.n; ++i)
-            s.points.emplace_back (m.p[i].x, m.p[i].y, m.p[i].power);
+        {
+            synthyboy::ContentPoint cp (m.p[i].x, m.p[i].y, m.p[i].power);
+            cp.modX = refOf (m.p[i].mx);
+            cp.modY = refOf (m.p[i].my);
+            cp.modCurve = refOf (m.p[i].mc);
+            s.points.push_back (cp);
+        }
         return s;
+    }
+    /** The modulation of a point as the model holds it (the choice id of the source) from the content state (the key of the source) and back; a source the table does not know is none. */
+    static ui::lfo::PointMod modOf (const synthyboy::ContentModRef& r)
+    {
+        ui::lfo::PointMod m;
+        if (! r.present)
+            return m;
+        for (size_t i = 0; i < synthyboy::modSourceCount(); ++i)
+            if (r.source == synthyboy::modSourceTable()[i].key)
+            {
+                m.source = static_cast<int> (i) + 1;
+                m.amount = std::clamp (r.amount, -1.0f, 1.0f);
+                break;
+            }
+        return m;
+    }
+    static synthyboy::ContentModRef refOf (const ui::lfo::PointMod& m)
+    {
+        synthyboy::ContentModRef r;
+        if (m.on() && m.source <= static_cast<int> (synthyboy::modSourceCount()))
+        {
+            r.present = true;
+            r.source = synthyboy::modSourceTable()[m.source - 1].key;
+            r.amount = m.amount;
+        }
+        return r;
     }
 
 private:
@@ -489,14 +553,16 @@ private:
         if (pageTop_ == kPageEditor && top != kPageEditor && top != kPageList)
             flushShape (inst, lastNowMs_);
         if (top == kPageList && pageTop_ != kPageList)
-            underList_ = pageTop_;
+            underList_ = stack.depth() >= 3 ? stack.id (stack.depth() - 2) : 0;   // the page the list lies over (the stack knows it: a page may have been closed and the list opened in one step)
         pageTop_ = top;
         pageSig_ = sig;
         switch (top)
         {
             case kPageTargets: targetsPageIndex_ = 0; loadTargets (inst, true); break;
             case kPageMods: loadMods (inst); break;
-            case kPageEditor: editor_.sync(); break;
+            case kPageEditor: setIds(); syncEditor (inst); break;
+            case kPagePointMod: setIds(); loadPointMod (inst, true); break;
+            case kPageKeyboard: beginKeyboard(); break;
             default: break;
         }
         modsDirty_ = true;
@@ -571,7 +637,7 @@ private:
     }
 
     // ---- the list popup: the instances, the choices of a parameter, the groups of the destinations and the parameters of a group
-    enum class ListKind : uint8_t { None, Instance, Param, Dest };
+    enum class ListKind : uint8_t { None, Instance, Param, Dest, Editor };
     using DestIndex = uibind::DestIndex;
     ListKind listKind_ = ListKind::None;
     int listParam_ = -1, listGroup_ = -1, underList_ = 0;
@@ -599,6 +665,11 @@ private:
     bool instPopup_ = false;   // the list of the selector of the compact view is open (main state only)
     void fillList (const IInstanceView* v)
     {
+        if (listKind_ == ListKind::Editor)
+        {
+            fillEditorList();
+            return;
+        }
         listNames_.clear();
         list_.state.header = nullptr;
         list_.state.headerBack = false;
@@ -867,7 +938,7 @@ private:
         full_.edit.setEnabled (rnd_ == 0);
         full_.bar.configure (rnd_ != 0, selection());
         if (stackDepth_ > 0 && pageTop_ == kPageEditor)
-            editor_.sync();
+            syncEditor (v);
         // the instance stepper of the compact view and the nameplate
         std::snprintf (name_, sizeof name_, rnd_ != 0 ? "RND %d - %s" : "LFO %d - %s", selection(),
                        rnd_ != 0 ? ui::styleName (shapeIdx_) : ui::lfoglyph::name (shapeIdx_));
@@ -1017,8 +1088,8 @@ private:
             m = ui::lfo::ShapeModel::fromBuiltin (shape);
         editor_.model = m;
         editor_.undo.clear();
-        editor_.canvas.state.selected = -1;
-        editor_.canvas.state.selectedSeg = -1;
+        editor_.canvas.selectOnly (-1);
+        phaseBound_ = false;
         // the grid: the one stored with the shape (the preset / the project), else the one the editor had for this LFO, else the default (the grid the points lie on)
         int& gx = gridX_[lfoNum_ - 1];
         int& gy = gridY_[lfoNum_ - 1];
@@ -1032,13 +1103,14 @@ private:
         editor_.canvas.state.gridX = gx;
         editor_.canvas.state.gridY = gy;
         editor_.setActiveGroup (0);
+        editor_.setStatus ("");
         setIds();
         if (shape != ui::lfo::kShapeCustom || have == nullptr)
         {
             v.setLfoShape (lfoNum_, contentOf (lfoNum_, m, gx, gy));
             uibind::writePlain (v, shapeP, ui::lfo::kShapeCustom);
         }
-        editor_.sync();
+        syncEditor (v);
         stack.openDetail (kPageEditor);
     }
     const synthyboy::ContentLfoShape* contentShape (int lfo) const noexcept
@@ -1062,6 +1134,8 @@ private:
         editor_.back.setId (kEdBack); editor_.tools.setId (kEdTools); editor_.undoButton.setId (kEdUndo); editor_.del.setId (kEdDelete);
         editor_.snap.setId (kEdSnap); editor_.loop.setId (kEdLoop); editor_.smooth.setId (kEdSmooth); editor_.canvas.setId (kEdCanvas);
         editor_.fx.setId (kEdX); editor_.fy.setId (kEdY); editor_.fcurve.setId (kEdCurve); editor_.fgx.setId (kEdGridX); editor_.fgy.setId (kEdGridY); editor_.fpoint.setId (kEdPoint);
+        editor_.shapes.setId (kEdShapes); editor_.more.setId (kEdMore); editor_.modButton.setId (kEdMod); editor_.mode.setId (kEdMode); editor_.fphase.setId (kEdPhase); editor_.fbend.setId (kEdBend);
+        pointMod_.back.setId (kMpBack); pointMod_.target.setId (kMpTarget); pointMod_.amount.setId (kMpAmount); pointMod_.remove.setId (kMpRemove); pointMod_.board.setId (kMpBoard);
     }
     void markDirty() noexcept { shapeDirty_ = true; }
     /** Sends the model to the content state (the plugin applies it on its display thread). */
@@ -1073,7 +1147,40 @@ private:
         shapeSentMs_ = nowMs;
         v.setLfoShape (lfoNum_, contentOf (lfoNum_, editor_.model, editor_.canvas.state.gridX, editor_.canvas.state.gridY));
     }
-    // the virtual targets of the Q groups of the editor, each as 0 .. 1: EDIT 0 POINT (the selected point of n), 1 X, 2 Y, 3 CURVE; GRID 4 GRID X, 5 GRID Y, 6 SNAP
+    /** The editor page from the model, the canvas state and the trigger of the LFO (the mode and the phase: the marker). */
+    void syncEditor (IInstanceView& v)
+    {
+        const int modeP = paramOf ("sync_type"), phaseP = paramOf ("phase");
+        if (modeP >= 0 && phaseP >= 0)
+        {
+            const synthyboy::ParamInfo& pi = uibind::info (modeP);
+            const int st = std::clamp (static_cast<int> (std::lround (v.param (modeP) - pi.min)), 0, std::max (0, pi.numChoices - 1));
+            const float keep = editor_.canvas.state.markerX;
+            editor_.setTrigger (st, pi.choices != nullptr && st < pi.numChoices ? pi.choices[st] : "", pi.numChoices, static_cast<double> (v.param (phaseP)));
+            if (gestureDown_ && gesture_ == &editor_)
+                editor_.canvas.state.markerX = keep;   // a finger on the page: the marker is where the finger put it until the parameter says the same
+            const ui::lfo::ShapeModel& m = editor_.model;
+            if (! gestureDown_)   // the loop point and the PHASE belong together while they say the same (a change of the shape then moves the PHASE)
+                phaseBound_ = st >= 3 && m.loop >= 0 && m.loop < m.n && std::fabs (m.p[m.loop].x * 360.0f - v.param (phaseP)) < 0.51f;
+        }
+        editor_.sync();
+    }
+    /** The loop modes (3, 4, 5) read the PHASE as the loop position (docs/ui-design/lfo-editor-capabilities.md): after a change that moved the loop point the PHASE follows it when it was bound to it; `force`: it takes the loop point of the model. */
+    void alignPhase (IInstanceView& v, bool force)
+    {
+        const ui::lfo::ShapeModel& m = editor_.model;
+        const int phaseP = paramOf ("phase");
+        if (phaseP < 0 || syncType_ < 3 || m.loop < 0 || m.loop >= m.n || ! (force || phaseBound_))
+            return;
+        uibind::writePlain (v, phaseP, std::clamp (static_cast<double> (m.p[m.loop].x) * 360.0, 0.0, 360.0));
+    }
+    void setStatusText (const std::string& s)
+    {
+        editor_.setStatus (s.c_str());
+        statusUntilMs_ = lastNowMs_ + kStatusMs;
+    }
+    // the virtual targets of the Q groups of the editor, each as 0 .. 1: EDIT 0 POINT (the selected point of n), 1 X, 2 Y, 3 CURVE (with several points selected: the centre in time, the centre in level, the height); GRID 4 GRID X,
+    // 5 GRID Y, 6 SNAP; TRIGGER 7 BEND ALL (MODE and PHASE are parameters of the table)
     static float gridNorm (int g) noexcept { return static_cast<float> (g - ui::lfo::kMinGrid) / static_cast<float> (ui::lfo::kMaxGrid - ui::lfo::kMinGrid); }
     static int gridOfNorm (float x) noexcept { return std::clamp (ui::lfo::kMinGrid + static_cast<int> (std::lround (x * static_cast<float> (ui::lfo::kMaxGrid - ui::lfo::kMinGrid))), ui::lfo::kMinGrid, ui::lfo::kMaxGrid); }
     float virtualValue (int id) const noexcept
@@ -1081,18 +1188,24 @@ private:
         const ui::lfo::ShapeModel& m = editor_.model;
         const int sel = editor_.canvas.state.selected;
         const bool ok = sel >= 0 && sel < m.n;
+        const ui::lfo::PointSet set = editor_.canvas.selection();
+        const bool multi = set.count() >= 2;
+        float x0 = 0.0f, x1 = 0.0f, y0 = 0.0f, y1 = 0.0f;
+        if (multi)
+            m.spanOf (set, x0, x1, y0, y1);
         switch (id)
         {
             case 0: return ok && m.n > 1 ? static_cast<float> (sel) / static_cast<float> (m.n - 1) : 0.0f;
-            case 1: return ok ? m.p[sel].x : 0.0f;
-            case 2: return ok ? m.p[sel].y : 0.0f;
-            case 3: return ok && sel + 1 < m.n ? (m.p[sel].power + ui::lfo::kMaxPower) / (2.0f * ui::lfo::kMaxPower) : 0.5f;
+            case 1: return multi ? 0.5f * (x0 + x1) : (ok ? m.p[sel].x : 0.0f);
+            case 2: return multi ? 0.5f * (y0 + y1) : (ok ? m.p[sel].y : 0.0f);
+            case 3: return multi ? y1 - y0 : (ok && sel + 1 < m.n ? (m.p[sel].power + ui::lfo::kMaxPower) / (2.0f * ui::lfo::kMaxPower) : 0.5f);
             case 4: return gridNorm (editor_.canvas.state.gridX);
             case 5: return gridNorm (editor_.canvas.state.gridY);
-            default: return editor_.canvas.state.snap ? 1.0f : 0.0f;
+            case 6: return editor_.canvas.state.snap ? 1.0f : 0.0f;
+            default: return std::clamp ((m.meanCurve() + ui::lfo::kMaxPower) / (2.0f * ui::lfo::kMaxPower), 0.0f, 1.0f);
         }
     }
-    void applyVirtual (int id, float x)
+    void applyVirtual (int id, float x, IInstanceView& v)
     {
         ui::lfo::ShapeModel& m = editor_.model;
         ui::ShapeCanvas::State& cs = editor_.canvas.state;
@@ -1111,8 +1224,32 @@ private:
         }
         if (id == 0)
         {
-            cs.selected = m.n > 0 ? std::clamp (static_cast<int> (std::lround (x * static_cast<float> (std::max (1, m.n - 1)))), 0, m.n - 1) : -1;
-            cs.selectedSeg = -1;
+            editor_.canvas.selectOnly (m.n > 0 ? std::clamp (static_cast<int> (std::lround (x * static_cast<float> (std::max (1, m.n - 1)))), 0, m.n - 1) : -1);
+            return;
+        }
+        const ui::lfo::ShapeModel before = m;
+        if (id == 7)
+        {
+            if (m.bendAll (x * 2.0f * ui::lfo::kMaxPower - ui::lfo::kMaxPower - m.meanCurve()))
+            {
+                editor_.undo.push (before);
+                markDirty();
+            }
+            return;
+        }
+        const ui::lfo::PointSet set = editor_.canvas.selection();
+        if (set.count() >= 2)   // several points: the fields move and scale the selection
+        {
+            float x0, x1, y0, y1;
+            m.spanOf (set, x0, x1, y0, y1);
+            float dx = id == 1 ? x - 0.5f * (x0 + x1) : 0.0f, dy = id == 2 ? x - 0.5f * (y0 + y1) : 0.0f;
+            const bool changed = id == 3 ? m.scaleSetY (set, x) : m.moveSet (set, dx, dy);
+            if (changed)
+            {
+                editor_.undo.push (before);
+                markDirty();
+                alignPhase (v, false);
+            }
             return;
         }
         const int sel = cs.selected;
@@ -1123,17 +1260,23 @@ private:
         else if (id == 2) m.move (sel, m.p[sel].x, x);
         else if (sel + 1 < m.n) m.setPower (sel, std::round (x * 2.0f * ui::lfo::kMaxPower - ui::lfo::kMaxPower));
         markDirty();
+        alignPhase (v, false);
     }
     void updateEditor (IInstanceView& v, double nowMs)
     {
-        for (int id = 0; id < 7; ++id)
+        for (int id = 0; id < QRouter::kNumVirtual; ++id)
         {
             float x;
             if (v.takeQVirtual (id, x))
-                applyVirtual (id, x);
+                applyVirtual (id, x, v);
         }
-        editor_.sync();
-        for (int id = 0; id < 7; ++id)
+        if (statusUntilMs_ > 0.0 && nowMs >= statusUntilMs_)
+        {
+            editor_.setStatus ("");
+            statusUntilMs_ = 0.0;
+        }
+        syncEditor (v);
+        for (int id = 0; id < QRouter::kNumVirtual; ++id)
             v.setQVirtual (id, virtualValue (id));
         if (shapeDirty_ && (nowMs - shapeSentMs_ >= kShapeSendMs || ! gestureDown_))
             flushShape (v, nowMs);
@@ -1142,8 +1285,14 @@ private:
     {
         using K = ui::ChangeKind;
         ui::lfo::ShapeModel& m = editor_.model;
-        ui::ShapeCanvas::State& cs = editor_.canvas.state;
-        const int sel = cs.selected >= 0 && cs.selected < m.n ? cs.selected : -1;
+        ui::ShapeCanvas& cv = editor_.canvas;
+        ui::ShapeCanvas::State& cs = cv.state;
+        const ui::lfo::PointSet set = cv.selection();
+        const int cnt = set.count();
+        const bool multi = cnt >= 2;
+        const int sel = cs.selected >= 0 && cs.selected < m.n ? cs.selected : (cnt == 1 ? set.first() : -1);   // the point the fields show
+        bool follow = false;   // the model changed in a way that can move the loop point: the PHASE follows it
+        const bool value = c.kind == K::Index || c.kind == K::Value;
         switch (c.id)
         {
             case kEdBack: flushShape (v, nowMs); stack.back(); return;
@@ -1155,27 +1304,39 @@ private:
                     if (editor_.undo.pop (back))
                     {
                         m = back;
+                        cs.marks.clear();
                         if (cs.selected >= m.n) cs.selected = -1;
+                        cs.selectedSeg = -1;
                         markDirty();
+                        follow = true;
                     }
                 }
                 break;
             case kEdDelete:
-                if (c.kind == K::Request && sel > 0 && sel < m.n - 1)
+                if (c.kind == K::Request)
                 {
-                    editor_.undo.push (m);
-                    if (m.remove (sel))
-                        cs.selected = -1;
-                    markDirty();
+                    int deletable = 0;
+                    for (int i = 1; i + 1 < m.n; ++i)
+                        deletable += set.has (i) ? 1 : 0;
+                    if (deletable > 0)
+                    {
+                        editor_.undo.push (m);
+                        m.removeSet (set);
+                        cv.selectOnly (-1);
+                        markDirty();
+                        follow = true;
+                    }
                 }
                 break;
             case kEdSnap: if (c.kind == K::Index) cs.snap = c.index != 0; break;
             case kEdLoop:
-                if (c.kind == K::Index && sel >= 0)
+                if (c.kind == K::Index && cs.selected >= 0 && cs.selected < m.n)
                 {
                     editor_.undo.push (m);
-                    m.loop = c.index != 0 ? sel : -1;
+                    m.loop = c.index != 0 ? cs.selected : -1;
                     markDirty();
+                    if (c.index != 0)
+                        alignPhase (v, true);
                 }
                 break;
             case kEdSmooth:
@@ -1187,27 +1348,78 @@ private:
                 }
                 break;
             case kEdCanvas:
-                if (c.kind == K::Index && c.index == ui::ShapeCanvas::Edited)
-                    markDirty();
+                if (c.kind == K::Index)
+                {
+                    if (c.index == ui::ShapeCanvas::Edited)
+                    {
+                        markDirty();
+                        follow = true;
+                    }
+                    else if (c.index == ui::ShapeCanvas::Marker)   // the marker is the PHASE; in the loop modes the model's loop point went with it
+                    {
+                        const int phaseP = paramOf ("phase");
+                        if (phaseP >= 0)
+                            uibind::writePlain (v, phaseP, std::clamp (c.value, 0.0, 1.0) * 360.0);
+                        if (cs.markerKind == ui::ShapeCanvas::MarkerLoop)
+                        {
+                            markDirty();
+                            phaseBound_ = m.loop >= 0;
+                        }
+                    }
+                }
                 break;
             case kEdX: case kEdY:
-                if ((c.kind == K::Index || c.kind == K::Value) && sel >= 0)
+                if (value && multi)
+                {
+                    float x0, x1, y0, y1, dx = 0.0f, dy = 0.0f;
+                    m.spanOf (set, x0, x1, y0, y1);
+                    if (c.id == kEdX) dx = static_cast<float> (c.value) - 0.5f * (x0 + x1); else dy = static_cast<float> (c.value) - 0.5f * (y0 + y1);
+                    const ui::lfo::ShapeModel before = m;
+                    if (m.moveSet (set, dx, dy))
+                    {
+                        editor_.undo.push (before);
+                        markDirty();
+                        follow = true;
+                    }
+                }
+                else if (value && sel >= 0)
                 {
                     editor_.undo.push (m);
                     if (c.id == kEdX) m.move (sel, static_cast<float> (c.value), m.p[sel].y); else m.move (sel, m.p[sel].x, static_cast<float> (c.value));
                     markDirty();
+                    follow = true;
                 }
                 break;
             case kEdCurve:
-                if ((c.kind == K::Index || c.kind == K::Value) && sel >= 0 && sel + 1 < m.n)
+                if (value && multi)   // the field is SCALE: the height of the selection
+                {
+                    const ui::lfo::ShapeModel before = m;
+                    if (m.scaleSetY (set, static_cast<float> (c.value)))
+                    {
+                        editor_.undo.push (before);
+                        markDirty();
+                    }
+                }
+                else if (value && sel >= 0 && sel + 1 < m.n)
                 {
                     editor_.undo.push (m);
                     m.setPower (sel, static_cast<float> (c.value));
                     markDirty();
                 }
                 break;
+            case kEdBend:
+                if (value)
+                {
+                    const ui::lfo::ShapeModel before = m;
+                    if (m.bendAll (static_cast<float> (c.value) - m.meanCurve()))
+                    {
+                        editor_.undo.push (before);
+                        markDirty();
+                    }
+                }
+                break;
             case kEdGridX: case kEdGridY:
-                if (c.kind == K::Index || c.kind == K::Value)
+                if (value)
                 {
                     const int g = std::clamp (static_cast<int> (std::lround (c.value)), ui::lfo::kMinGrid, ui::lfo::kMaxGrid);
                     (c.id == kEdGridX ? cs.gridX : cs.gridY) = g;
@@ -1216,14 +1428,525 @@ private:
                 }
                 break;
             case kEdPoint:
-                if ((c.kind == K::Index || c.kind == K::Value) && m.n > 0)
+                if (value && m.n > 0)
+                    cv.selectOnly (std::clamp (static_cast<int> (std::lround (c.value)) - 1, 0, m.n - 1));
+                break;
+            case kEdMode:
+                if (c.kind == K::Request)
+                    openModeList (stack, v);
+                else if (c.kind == K::Index && paramOf ("sync_type") >= 0)
+                    uibind::writePlain (v, paramOf ("sync_type"), c.index);
+                break;
+            case kEdPhase:
+                if (value && paramOf ("phase") >= 0)
                 {
-                    cs.selected = std::clamp (static_cast<int> (std::lround (c.value)) - 1, 0, m.n - 1);
-                    cs.selectedSeg = -1;
+                    uibind::writePlain (v, paramOf ("phase"), c.value);
+                    phaseBound_ = false;
                 }
+                break;
+            case kEdShapes: if (c.kind == K::Request) openEditorList (stack, v, Ed::ShapesRoot); break;
+            case kEdMore: if (c.kind == K::Request) openEditorList (stack, v, Ed::ActionsRoot); break;
+            case kEdMod: if (c.kind == K::Request && cnt > 0) stack.openDetail (kPagePointMod); break;
+            default: break;
+        }
+        if (follow)
+            alignPhase (v, false);
+        syncEditor (v);
+    }
+
+    // ---- the lists of the editor: SHAPES (the shapes, saving), MORE (the actions); the lists are the one ListPopup of the page
+    enum class Ed : uint8_t { None, ShapesRoot, ShapesFactory, ShapesMine, Confirm, ActionsRoot, ActionsGroup, CopyLfo };
+    enum class Verb : uint8_t { Load, Overwrite, Rename, Delete };
+    enum class Kb : uint8_t { SaveAs, Rename };
+    enum class Pending : uint8_t { SaveOver, OverwriteItem, DeleteItem };
+    enum class Act : uint8_t { SelectAll, FlipH, FlipV, ShiftL, ShiftR, ResetCurves, ClearLoop, Grid4, Grid8, Grid12, Grid16, Grid32, GridHalve, GridDouble, GridFollow, CopyToLfo, FromOscA, FromOscB, FromOscC, ToOscA, ToOscB, ToOscC };
+    struct ActionRow { int group; const char* text; Act act; };
+    static constexpr int kActionGroups = 3;
+    static const char* actionGroupName (int g) noexcept { static const char* const n[kActionGroups] = { "EDIT", "GRID", "COPY" }; return n[std::clamp (g, 0, kActionGroups - 1)]; }
+    /** The rows of the MORE list: a table (a new action is a row). */
+    static const std::vector<ActionRow>& actionRows()
+    {
+        static const std::vector<ActionRow> rows = {
+            { 0, "SELECT ALL", Act::SelectAll }, { 0, "FLIP HORIZONTAL", Act::FlipH }, { 0, "FLIP VERTICAL", Act::FlipV }, { 0, "SHIFT LEFT", Act::ShiftL }, { 0, "SHIFT RIGHT", Act::ShiftR },
+            { 0, "RESET ALL CURVES", Act::ResetCurves }, { 0, "CLEAR LOOP POINT", Act::ClearLoop },
+            { 1, "GRID 4 x 4", Act::Grid4 }, { 1, "GRID 8 x 8", Act::Grid8 }, { 1, "GRID 12 x 12", Act::Grid12 }, { 1, "GRID 16 x 16", Act::Grid16 }, { 1, "GRID 32 x 32", Act::Grid32 },
+            { 1, "HALVE THE GRID", Act::GridHalve }, { 1, "DOUBLE THE GRID", Act::GridDouble }, { 1, "GRID FOLLOWS THE POINTS", Act::GridFollow },
+            { 2, "COPY TO LFO ...", Act::CopyToLfo }, { 2, "OSC A CYCLE TO THIS LFO", Act::FromOscA }, { 2, "OSC B CYCLE TO THIS LFO", Act::FromOscB }, { 2, "OSC C CYCLE TO THIS LFO", Act::FromOscC },
+            { 2, "THIS SHAPE TO OSC A", Act::ToOscA }, { 2, "THIS SHAPE TO OSC B", Act::ToOscB }, { 2, "THIS SHAPE TO OSC C", Act::ToOscC } };
+        return rows;
+    }
+    static std::vector<std::string> userRootsOf (const IInstanceView& v)
+    {
+        synthyboy::CatalogueSources src;
+        v.wavetableSources (src);
+        return src.userRoots;
+    }
+    void openModeList (UiStack& stack, IInstanceView& v)
+    {
+        const int p = paramOf ("sync_type");
+        if (p < 0)
+            return;
+        listKind_ = ListKind::Param;
+        listParam_ = p;
+        stack.openDetail (kPageList);
+        fillList (&v);
+    }
+    void openEditorList (UiStack& stack, IInstanceView& v, Ed which)
+    {
+        listKind_ = ListKind::Editor;
+        ed_ = which;
+        edGroup_ = -1;
+        verb_ = Verb::Load;
+        if (which == Ed::ShapesRoot)
+        {
+            lib_.setRoots (userRootsOf (v));
+            lib_.refresh();
+        }
+        stack.openDetail (kPageList);
+        fillEditorList();
+    }
+    const char* verbHeader() const noexcept
+    {
+        switch (verb_)
+        {
+            case Verb::Overwrite: return "REPLACE WHICH SHAPE?";
+            case Verb::Rename: return "RENAME WHICH SHAPE?";
+            case Verb::Delete: return "DELETE WHICH SHAPE?";
+            default: return "MY SHAPES";
+        }
+    }
+    void fillEditorList()
+    {
+        edRows_.clear();
+        edMap_.clear();
+        const char* header = "";
+        bool back = false;
+        switch (ed_)
+        {
+            case Ed::ShapesRoot:
+                header = "SHAPES";
+                for (const char* r : { "FACTORY SHAPES", "MY SHAPES", "SAVE AS ...", "REPLACE A SAVED SHAPE ...", "RENAME A SAVED SHAPE ...", "DELETE A SAVED SHAPE ..." })
+                    edRows_.push_back (r);
+                break;
+            case Ed::ShapesFactory:
+                header = "FACTORY SHAPES";
+                back = true;
+                for (int i = 0; i < ui::lfo::kNumBuiltin; ++i)
+                    edRows_.push_back (ui::lfoglyph::name (i));
+                break;
+            case Ed::ShapesMine:
+                header = verbHeader();
+                back = true;
+                for (const LfoShapeLibrary::Item& it : lib_.items())
+                    edRows_.push_back (it.name);
+                if (edRows_.empty())
+                    edRows_.push_back (lib_.roots().empty() ? "NO CARD OR DRIVE FOUND" : "NO SAVED SHAPES");
+                break;
+            case Ed::Confirm:
+                header = edHeader_.c_str();
+                edRows_.push_back (edYes_);
+                edRows_.push_back ("CANCEL");
+                break;
+            case Ed::ActionsRoot:
+                header = "MORE";
+                for (int g = 0; g < kActionGroups; ++g)
+                    edRows_.push_back (actionGroupName (g));
+                break;
+            case Ed::ActionsGroup:
+                header = actionGroupName (edGroup_);
+                back = true;
+                for (size_t i = 0; i < actionRows().size(); ++i)
+                    if (actionRows()[i].group == edGroup_)
+                    {
+                        edRows_.push_back (actionRows()[i].text);
+                        edMap_.push_back (static_cast<int> (i));
+                    }
+                break;
+            case Ed::CopyLfo:
+                header = "COPY THIS SHAPE TO";
+                back = true;
+                for (int n = 1; n <= kLfos; ++n)
+                    if (n != lfoNum_)
+                    {
+                        edRows_.push_back ("LFO " + std::to_string (n));
+                        edMap_.push_back (n);
+                    }
                 break;
             default: break;
         }
+        listNames_.clear();
+        for (const std::string& r : edRows_)
+            listNames_.push_back (r.c_str());
+        list_.state.header = header;
+        list_.state.headerBack = back;
+        list_.state.current = -1;
+        list_.state.items = listNames_.data();
+        list_.state.count = static_cast<int> (listNames_.size());
+        list_.showCurrent();
+    }
+    /** The header of an editor list was tapped: one level up (the shapes and the actions start at their root). */
+    void editorListUp()
+    {
+        if (ed_ == Ed::ShapesFactory || ed_ == Ed::ShapesMine)
+            ed_ = Ed::ShapesRoot;
+        else if (ed_ == Ed::ActionsGroup)
+            ed_ = Ed::ActionsRoot;
+        else if (ed_ == Ed::CopyLfo)
+        {
+            ed_ = Ed::ActionsGroup;
+            edGroup_ = 2;
+        }
+        verb_ = Verb::Load;
+        fillEditorList();
+    }
+    void askConfirm (UiStack& stack, const std::string& header, const char* yes, Pending what)
+    {
+        listKind_ = ListKind::Editor;
+        ed_ = Ed::Confirm;
+        edHeader_ = header;
+        edYes_ = yes;
+        pending_ = what;
+        if (stack.top() != kPageList)
+            stack.openDetail (kPageList);
+        fillEditorList();
+    }
+    void openKeyboard (UiStack& stack, Kb purpose, const std::string& initial)
+    {
+        kbPurpose_ = purpose;
+        kbInitial_ = initial;
+        stack.openDetail (kPageKeyboard);
+    }
+    void beginKeyboard()
+    {
+        entry_.begin (kbPurpose_ == Kb::SaveAs ? "NAME OF THE SHAPE" : "NEW NAME OF THE SHAPE", kbInitial_.c_str(), kMaxShapeName, kKbOk, kKbCancel);
+    }
+    void doSave (const std::string& name, bool overwrite)
+    {
+        bool lost = false;
+        if (lib_.save (name, editor_.model, overwrite, &lost))
+            setStatusText ("SAVED " + name + (lost ? " (POINT MODULATION NOT STORED)" : ""));
+        else
+            setStatusText (lib_.error());
+    }
+    void keyboardOk (UiStack& stack)
+    {
+        const std::string name = entry_.text();
+        stack.back();
+        if (kbPurpose_ == Kb::Rename)
+        {
+            if (lib_.rename (pendingItem_, name))
+                setStatusText ("RENAMED TO " + name);
+            else
+                setStatusText (lib_.error());
+            return;
+        }
+        pendingName_ = name;
+        if (lib_.find (name) >= 0)
+            askConfirm (stack, "REPLACE " + name + "?", "REPLACE", Pending::SaveOver);
+        else
+            doSave (name, false);
+    }
+    /** A shape loaded or copied into the editor: one undo state, the grid the points lie on, the PHASE of the loop modes follows the loop point. */
+    void adoptShape (const ui::lfo::ShapeModel& m, const std::string& shown, IInstanceView& v)
+    {
+        editor_.undo.push (editor_.model);
+        editor_.model = m;
+        editor_.canvas.selectOnly (-1);
+        const int g = ui::lfo::inferGrid (m);
+        editor_.canvas.state.gridX = editor_.canvas.state.gridY = g;
+        gridX_[lfoNum_ - 1] = gridY_[lfoNum_ - 1] = g;
+        markDirty();
+        alignPhase (v, true);
+        setStatusText ("LOADED " + shown);
+        syncEditor (v);
+    }
+    void runPending (IInstanceView& v)
+    {
+        (void) v;
+        const int n = lib_.count();
+        switch (pending_)
+        {
+            case Pending::SaveOver: doSave (pendingName_, true); break;
+            case Pending::OverwriteItem: if (pendingItem_ >= 0 && pendingItem_ < n) doSave (lib_.items()[static_cast<size_t> (pendingItem_)].name, true); break;
+            case Pending::DeleteItem:
+                if (pendingItem_ >= 0 && pendingItem_ < n)
+                {
+                    const std::string name = lib_.items()[static_cast<size_t> (pendingItem_)].name;
+                    setStatusText (lib_.remove (pendingItem_) ? "DELETED " + name : lib_.error());
+                }
+                break;
+        }
+    }
+    void editorListChosen (int index, UiStack& stack, IInstanceView& v)
+    {
+        switch (ed_)
+        {
+            case Ed::ShapesRoot:
+                if (index == 0) { ed_ = Ed::ShapesFactory; fillEditorList(); }
+                else if (index == 2)   // SAVE AS: the keyboard (the list closes first: the keyboard replaces it)
+                {
+                    if (! lib_.canSave())
+                        setStatusText ("NO CARD OR DRIVE FOUND");
+                    stack.back();
+                    if (lib_.canSave())
+                        openKeyboard (stack, Kb::SaveAs, "");
+                }
+                else if (index >= 1 && index <= 5)
+                {
+                    verb_ = index == 1 ? Verb::Load : (index == 3 ? Verb::Overwrite : (index == 4 ? Verb::Rename : Verb::Delete));
+                    ed_ = Ed::ShapesMine;
+                    fillEditorList();
+                }
+                break;
+            case Ed::ShapesFactory:
+                if (index >= 0 && index < ui::lfo::kNumBuiltin)
+                    adoptShape (ui::lfo::ShapeModel::fromBuiltin (index), ui::lfoglyph::name (index), v);
+                stack.back();
+                break;
+            case Ed::ShapesMine:
+                if (index < 0 || index >= lib_.count())
+                {
+                    ed_ = Ed::ShapesRoot;   // the row that says there is nothing: back to the start
+                    fillEditorList();
+                    break;
+                }
+                pendingItem_ = index;
+                if (verb_ == Verb::Load)
+                {
+                    ui::lfo::ShapeModel m;
+                    if (lib_.load (index, m))
+                        adoptShape (m, lib_.items()[static_cast<size_t> (index)].name, v);
+                    else
+                        setStatusText (lib_.error());
+                    stack.back();
+                }
+                else if (verb_ == Verb::Rename)
+                {
+                    stack.back();
+                    openKeyboard (stack, Kb::Rename, lib_.items()[static_cast<size_t> (index)].name);
+                }
+                else if (verb_ == Verb::Overwrite)
+                    askConfirm (stack, "REPLACE " + lib_.items()[static_cast<size_t> (index)].name + "?", "REPLACE", Pending::OverwriteItem);
+                else
+                    askConfirm (stack, "DELETE " + lib_.items()[static_cast<size_t> (index)].name + "?", "DELETE", Pending::DeleteItem);
+                break;
+            case Ed::Confirm:
+                if (index == 0)
+                    runPending (v);
+                stack.back();
+                break;
+            case Ed::ActionsRoot:
+                edGroup_ = std::clamp (index, 0, kActionGroups - 1);
+                ed_ = Ed::ActionsGroup;
+                fillEditorList();
+                break;
+            case Ed::ActionsGroup:
+                if (index >= 0 && index < static_cast<int> (edMap_.size()))
+                {
+                    const Act a = actionRows()[static_cast<size_t> (edMap_[static_cast<size_t> (index)])].act;
+                    if (a == Act::CopyToLfo)
+                    {
+                        ed_ = Ed::CopyLfo;
+                        fillEditorList();
+                    }
+                    else
+                    {
+                        stack.back();
+                        runAction (a, v);
+                    }
+                }
+                break;
+            case Ed::CopyLfo:
+                if (index >= 0 && index < static_cast<int> (edMap_.size()))
+                    copyToLfo (edMap_[static_cast<size_t> (index)], v);
+                stack.back();
+                break;
+            default: stack.back(); break;
+        }
+    }
+    void setGridBoth (int gx, int gy)
+    {
+        ui::ShapeCanvas::State& cs = editor_.canvas.state;
+        cs.gridX = std::clamp (gx, ui::lfo::kMinGrid, ui::lfo::kMaxGrid);
+        cs.gridY = std::clamp (gy, ui::lfo::kMinGrid, ui::lfo::kMaxGrid);
+        gridX_[lfoNum_ - 1] = cs.gridX;
+        gridY_[lfoNum_ - 1] = cs.gridY;
+        markDirty();   // the grid is stored with the shape
+    }
+    /** One action of the MORE list. Every change of the shape is ONE undo state (the state before it); the selection is cleared when the points move to other indices. */
+    void runAction (Act a, IInstanceView& v)
+    {
+        ui::lfo::ShapeModel& m = editor_.model;
+        ui::ShapeCanvas& cv = editor_.canvas;
+        const ui::lfo::ShapeModel before = m;
+        bool changed = false;
+        switch (a)
+        {
+            case Act::SelectAll: cv.selectAll(); break;
+            case Act::FlipH: m.flipH(); cv.selectOnly (-1); changed = true; break;
+            case Act::FlipV: m.flipV(); changed = true; break;
+            case Act::ShiftL: case Act::ShiftR:
+            {
+                const float d = 1.0f / static_cast<float> (std::clamp (cv.state.gridX, ui::lfo::kMinGrid, ui::lfo::kMaxGrid));
+                if (m.shift (a == Act::ShiftR ? d : 1.0f - d))
+                {
+                    cv.selectOnly (-1);
+                    changed = true;
+                }
+                else
+                    setStatusText ("CANNOT SHIFT: THE SHAPE HAS TOO MANY POINTS");
+                break;
+            }
+            case Act::ResetCurves: changed = m.resetCurves(); break;
+            case Act::ClearLoop: if (m.loop >= 0) { m.loop = -1; changed = true; } break;
+            case Act::Grid4: setGridBoth (4, 4); break;
+            case Act::Grid8: setGridBoth (8, 8); break;
+            case Act::Grid12: setGridBoth (12, 12); break;
+            case Act::Grid16: setGridBoth (16, 16); break;
+            case Act::Grid32: setGridBoth (32, 32); break;
+            case Act::GridHalve: setGridBoth (cv.state.gridX / 2, cv.state.gridY / 2); break;
+            case Act::GridDouble: setGridBoth (cv.state.gridX * 2, cv.state.gridY * 2); break;
+            case Act::GridFollow: { const int g = ui::lfo::inferGrid (m); setGridBoth (g, g); break; }
+            case Act::FromOscA: case Act::FromOscB: case Act::FromOscC: shapeFromOsc (static_cast<int> (a) - static_cast<int> (Act::FromOscA) + 1, v); return;
+            case Act::ToOscA: case Act::ToOscB: case Act::ToOscC: shapeToOsc (static_cast<int> (a) - static_cast<int> (Act::ToOscA) + 1, v); return;
+            case Act::CopyToLfo: return;
+        }
+        if (changed)
+        {
+            editor_.undo.push (before);
+            markDirty();
+            alignPhase (v, false);
+        }
+        syncEditor (v);
+    }
+    /** The shape of this LFO to LFO `n`: the points, SMOOTH, the loop point, the modulation and the grid; the LFO takes the drawn shape (lfoN.shape = Custom) so that the copy is what plays. */
+    void copyToLfo (int n, IInstanceView& v)
+    {
+        if (n < 1 || n > kLfos || n == lfoNum_)
+            return;
+        const int gx = editor_.canvas.state.gridX, gy = editor_.canvas.state.gridY;
+        v.setLfoShape (n, contentOf (n, editor_.model, gx, gy));
+        const int p = uibind::indexOfKey ("lfo" + std::to_string (n) + ".shape");
+        if (p >= 0)
+            uibind::writePlain (v, p, ui::lfo::kShapeCustom);
+        gridX_[n - 1] = gx;
+        gridY_[n - 1] = gy;
+        setStatusText ("COPIED TO LFO " + std::to_string (n));
+    }
+    /** One cycle of oscillator `osc` (1 .. 3) as the shape of this LFO (at most 128 points, the error below 0.2 percent of full scale: convert::frameToLfoShape). */
+    void shapeFromOsc (int osc, IInstanceView& v)
+    {
+        synthyboy::ParamValues values = synthyboy::ParamValues::defaults();
+        for (size_t i = 0; i < synthyboy::paramCount(); ++i)
+            values.plain[i] = v.param (static_cast<int> (i));
+        synthyboy::OscCycle cycle;   // allocates (a real oscillator): once per action, on the overlay thread
+        const std::shared_ptr<const synthyboy::StateContent> content = v.content();
+        cycle.setContent (content != nullptr ? *content : synthyboy::StateContent {}, v.contentStore());
+        synthyboy::OscCycle::Request req;
+        req.osc = osc;
+        req.bpm = v.bpm();
+        float cyc[synthyboy::OscCycle::kSamples];
+        if (cycle.compute (values, req, cyc) != synthyboy::OscCycle::Kind::wavetable)
+        {
+            setStatusText ("THAT OSCILLATOR HAS NO WAVETABLE CYCLE");
+            return;
+        }
+        synthyboy::wtedit::Frame frame;
+        const int cn = synthyboy::OscCycle::kSamples;
+        for (size_t i = 0; i < frame.data.size(); ++i)   // 512 values to the 2048 of a frame (linear, the cycle wraps)
+        {
+            const float pos = static_cast<float> (i) * static_cast<float> (cn) / static_cast<float> (frame.data.size());
+            const int k = std::min (static_cast<int> (pos), cn - 1);
+            frame[i] = cyc[k] + (cyc[(k + 1) % cn] - cyc[k]) * (pos - static_cast<float> (k));
+        }
+        synthyboy::ContentLfoShape cs;
+        if (! synthyboy::convert::frameToLfoShape (frame, lfoNum_, cs))
+        {
+            setStatusText ("CANNOT MAKE A SHAPE OF THAT CYCLE");
+            return;
+        }
+        adoptShape (modelOf (cs), std::string ("OSC ") + static_cast<char> ('A' + osc - 1), v);
+    }
+    /** This shape as a wavetable of oscillator `osc`: one frame of 2048 samples, a WAV file in SynthyBoy/Wavetables/ (the player's own tables: the browser lists it in the category User) that the plugin loads like a file chosen in
+        the browser. A new file every time (the name is not used twice: a preset keeps the hash of the file it was made with). */
+    void shapeToOsc (int osc, IInstanceView& v)
+    {
+        lib_.setRoots (userRootsOf (v));
+        const std::string dir = lib_.folderFor ("SynthyBoy/Wavetables", true);
+        if (dir.empty())
+        {
+            setStatusText ("NO CARD OR DRIVE FOUND");
+            return;
+        }
+        synthyboy::wtedit::Frame frame;
+        synthyboy::convert::lfoShapeToFrame (contentOf (lfoNum_, editor_.model), frame);
+        const std::vector<uint8_t> wav = synthyboy::encodeWav (frame.data.data(), nullptr, frame.data.size(), 48000, 32);
+        std::string stem;
+        for (int k = 1; k < 1000; ++k)
+        {
+            stem = "LFO " + std::to_string (lfoNum_) + " Shape" + (k > 1 ? " " + std::to_string (k) : std::string());
+            struct stat st;
+            if (::stat ((dir + "/" + stem + ".wav").c_str(), &st) != 0)
+                break;
+        }
+        if (wav.empty() || ! safefile::writeReplacing ((dir + "/" + stem + ".wav").c_str(), reinterpret_cast<const char*> (wav.data()), wav.size()))
+        {
+            setStatusText ("CANNOT WRITE THE WAVETABLE FILE");
+            return;
+        }
+        synthyboy::ContentFileRef ref;
+        ref.pack = synthyboy::kUserWavetablePack;
+        ref.file = stem + ".wav";
+        ref.name = stem;
+        v.requestWavetable (osc, ref);
+        setStatusText ("SAVED " + stem + " FOR OSC " + static_cast<char> ('A' + osc - 1));
+    }
+
+    // ---- the modulation of the selected points (a page above the editor): which value (time, level, curve), the source, the amount
+    void loadPointMod (const IInstanceView& v, bool fresh)
+    {
+        (void) v;
+        const ui::lfo::ShapeModel& m = editor_.model;
+        const ui::lfo::PointSet set = editor_.canvas.selection();
+        const int first = set.first();
+        if (fresh)
+        {
+            uibind::fillSourceBoard (pointMod_.board);
+            pmTarget_ = 1;
+        }
+        if (first < 0)
+        {
+            pointMod_.load (pmTarget_, "", 0.0, 0, 0);
+            return;
+        }
+        const ui::lfo::PointMod& pm = pmTarget_ == 0 ? m.p[first].mx : (pmTarget_ == 1 ? m.p[first].my : m.p[first].mc);
+        pointMod_.load (pmTarget_, pm.on() ? uibind::sourceName (pm.source) : "", static_cast<double> (pm.amount) * 100.0, set.count(), first);
+    }
+    void pointModChange (const ui::Change& c, UiStack& stack, IInstanceView& v)
+    {
+        using K = ui::ChangeKind;
+        ui::lfo::ShapeModel& m = editor_.model;
+        const ui::lfo::PointSet set = editor_.canvas.selection();
+        const int first = set.first();
+        if (first < 0 && c.id != kMpBack)
+            return;
+        const ui::lfo::ShapeModel before = m;
+        const ui::lfo::PointMod cur = first < 0 ? ui::lfo::PointMod {} : (pmTarget_ == 0 ? m.p[first].mx : (pmTarget_ == 1 ? m.p[first].my : m.p[first].mc));
+        switch (c.id)
+        {
+            case kMpBack: stack.back(); return;
+            case kMpTarget: if (c.kind == K::Index) pmTarget_ = ((c.index % 3) + 3) % 3; break;
+            case kMpAmount: if ((c.kind == K::Index || c.kind == K::Value) && cur.on()) m.setMod (set, pmTarget_, cur.source, static_cast<float> (c.value / 100.0)); break;
+            case kMpRemove: if (c.kind == K::Request) m.setMod (set, pmTarget_, 0, 0.0f); break;
+            case kMpBoard: if (c.kind == K::Index && c.index > 0) m.setMod (set, pmTarget_, c.index, cur.on() ? cur.amount : 0.5f); break;
+            default: break;
+        }
+        if (! (m == before))
+        {
+            editor_.undo.push (before);
+            markDirty();
+        }
+        loadPointMod (v, false);
         editor_.sync();
     }
 
@@ -1235,6 +1958,10 @@ private:
             return instPopup_ ? static_cast<ui::Component*> (&list_) : &compact_;
         if (pageTop_ == kPageEditor)
             return &editor_;
+        if (pageTop_ == kPagePointMod)
+            return &pointMod_;
+        if (pageTop_ == kPageKeyboard)
+            return &entry_;
         if (pageTop_ == kPageTargets)
             return &targets_;
         if (pageTop_ == kPageMods)
@@ -1266,9 +1993,14 @@ private:
             return;
         using K = ui::ChangeKind;
         const int id = c.id;
-        if (id >= kEdBack && id <= kEdPoint && stackDepth_ > 0 && pageTop_ == kPageEditor)
+        if (id >= kEdBack && id <= kEdBend && stackDepth_ > 0 && pageTop_ == kPageEditor)
         {
             editorChange (c, stack, v, nowMs);
+            return;
+        }
+        if (id >= kMpBack && id <= kMpBoard && stackDepth_ > 0 && pageTop_ == kPagePointMod)
+        {
+            pointModChange (c, stack, v);
             return;
         }
         if (instPopup_ && stackDepth_ == 0)   // the list of the selector of the compact view
@@ -1291,7 +2023,12 @@ private:
                 case kListBackdrop: stack.back(); return;
                 case kTargets: stack.openDetail (kPageTargets); return;
                 case kTargetsAdd: listKind_ = ListKind::Dest; listGroup_ = -1; stack.openDetail (kPageList); fillList (&v); return;
-                case kListHeader: if (listKind_ == ListKind::Dest) { listGroup_ = -1; fillList (&v); } return;
+                case kListHeader:
+                    if (listKind_ == ListKind::Dest) { listGroup_ = -1; fillList (&v); }
+                    else if (listKind_ == ListKind::Editor) editorListUp();
+                    return;
+                case kKbOk: if (pageTop_ == kPageKeyboard) keyboardOk (stack); return;
+                case kKbCancel: if (pageTop_ == kPageKeyboard) stack.back(); return;
                 case kEdit: openEditor (stack, v); return;
                 case kInstance: openInstanceList (v); return;
                 case kShape: case kStyle: case kSync: case kMode: case kDirection: case kDivision:
@@ -1425,6 +2162,8 @@ private:
             selectSlot (index, v);
             stack.back();
         }
+        else if (listKind_ == ListKind::Editor)
+            editorListChosen (index, stack, v);
         else if (listKind_ == ListKind::Param)
         {
             if (listParam_ >= 0)
@@ -1524,11 +2263,33 @@ private:
         else if (pageTop_ == kPageEditor)
         {
             const int act = std::clamp (editor_.activeGroup(), 0, ui::ShapeEditorPage::kGroups - 1);
-            name = act == 0 ? "Edit" : "Grid";
-            // EDIT = the virtual targets 0 .. 3 (POINT, X, Y, CURVE), GRID = 4 .. 6 (GRID X, GRID Y, SNAP); the active one is on Q 1 .. 4, the other on Q 5 .. 8
-            qSlots_.publish (v, ui::ShapeEditorPage::kGroups, act, [] (int g, int* t) { for (int i = 0; i < 4; ++i) t[i] = g * 4 + i < 7 ? QRouter::encode (g * 4 + i, QRouter::kVirtual) : -1; });
-            int ids[ui::ShapeEditorPage::kGroups] = { 0, 1 };
+            name = act == 0 ? "Edit" : (act == 1 ? "Grid" : "Trigger");
+            // EDIT = the virtual targets 0 .. 3 (POINT, X, Y, CURVE), GRID = 4 .. 6 (GRID X, GRID Y, SNAP), TRIGGER = MODE and PHASE (the parameters of the table) and the virtual 7 (BEND ALL); the active one is on Q 1 .. 4, the others after it
+            const int modeP = paramOf ("sync_type"), phaseP = paramOf ("phase");
+            qSlots_.publish (v, ui::ShapeEditorPage::kGroups, act, [modeP, phaseP] (int g, int* t)
+            {
+                for (int i = 0; i < 4; ++i)
+                    t[i] = -1;
+                if (g == 0)
+                    for (int i = 0; i < 4; ++i)
+                        t[i] = QRouter::encode (i, QRouter::kVirtual);
+                else if (g == 1)
+                    for (int i = 0; i < 3; ++i)
+                        t[i] = QRouter::encode (4 + i, QRouter::kVirtual);
+                else
+                {
+                    t[0] = modeP;
+                    t[1] = phaseP;
+                    t[2] = QRouter::encode (7, QRouter::kVirtual);
+                }
+            });
+            int ids[ui::ShapeEditorPage::kGroups] = { 0, 1, 2 };
             setBlocks (editor_.groups, ui::ShapeEditorPage::kGroups, ids, ui::ShapeEditorPage::kGroups, act);
+        }
+        else if (pageTop_ == kPagePointMod || pageTop_ == kPageKeyboard)
+        {
+            name = pageTop_ == kPageKeyboard ? "Name" : "Modulation";
+            qSlots_.publish (v, 0, 0, [] (int, int*) {});
         }
         else if (pageTop_ == kPageTargets || pageTop_ == kPageMods)
         {
@@ -1570,11 +2331,27 @@ private:
     ui::ShapeEditorPage editor_;
     ui::ModTargetsPage targets_;
     ui::ModulationsPage mods_;
+    ui::PointModPage pointMod_;
+    ui::TextEntry entry_;
+    LfoShapeLibrary lib_;
     ui::ListPopup list_;
     UiStack idle_;                       // an empty stack: the pages are read from it while another element's page is open
     std::vector<Item> items_;
     ui::Component* gesture_ = nullptr;
     bool gestureDown_ = false, configured_ = false, modsDirty_ = true, shapeDirty_ = false, haveCurve_ = false, displayHot_ = false;
+    // the editor: the lists (SHAPES, MORE), the name keyboard, the modulation page
+    Ed ed_ = Ed::None;
+    Verb verb_ = Verb::Load;
+    Pending pending_ = Pending::SaveOver;
+    Kb kbPurpose_ = Kb::SaveAs;
+    int edGroup_ = -1, pendingItem_ = -1, pmTarget_ = 1;
+    std::string pendingName_, edHeader_, edYes_, kbInitial_;
+    std::vector<std::string> edRows_;
+    std::vector<int> edMap_;
+    bool phaseBound_ = false;   // the PHASE and the loop point of the model say the same (loop modes): a change of the shape moves the PHASE
+    double statusUntilMs_ = 0.0;
+    static constexpr double kStatusMs = 3500.0;
+    static constexpr int kMaxShapeName = 40;
     bool page_ = false;   // the page of an LFO tab
     int w_ = 1280, h_ = 800, lfoNum_ = 1, rnd_ = 0, highlight_ = 1, stackDepth_ = 0, pageTop_ = 0, pageSig_ = -1;
     int targetsPageIndex_ = 0, syncType_ = 0, shapeIdx_ = 0;

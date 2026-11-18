@@ -147,9 +147,10 @@ SyncSwitch | lfo_parts.h | HZ / BPM / KEY logic (not a component) | -
 RateControl | lfo_parts.h | rate knob or division stepper | V I
 InstanceBar | lfo_parts.h | LFO 1..10 + R1..R4 cells | I
 LfoCompact / LfoFullScreen | lfo_screen.h | LFO views | V I R
-ToolSelector | shape_editor.h | POINT FLAT RAMP+ RAMP- | I
-ShapeCanvas | shape_editor.h | drawing surface of the shape | I (Op)
-ShapeEditorPage | shape_editor.h | LFO shape editor page | V I R
+ToolSelector | shape_editor.h | POINT FLAT RAMP+ RAMP- SELECT SOFT BEND | I
+ShapeCanvas | shape_editor.h | drawing surface of the shape, the selection, the marker | I (Op)
+ShapeEditorPage | shape_editor.h | LFO shape editor page (3 Q groups) | V I R
+PointModPage | shape_editor.h | modulation of the selected points of a shape | V I R
 MixerStrip | mixer_strip.h | one channel strip | V I R
 MixerRoutingBar | mixer_screen.h | signal flow bar | -
 MixerFullScreen | mixer_screen.h | ten strips + routing bar | V I R
