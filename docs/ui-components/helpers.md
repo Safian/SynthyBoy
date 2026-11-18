@@ -7,14 +7,14 @@ Small header-only helpers that are not components: shown names for engine choice
 | Header | Content |
 |---|---|
 | `shell-mpc/ui/ui.h` | includes `display.h`, `filter_display.h`, `led_list.h`, `led_toggle.h`, `note_mask.h`, `list.h`, `panel.h`, `screen.h`, `text_entry.h`, `mixer_screen.h`, `fx_screen.h`, `voice_grid.h`, `voice_master.h`, `voice_screen.h` (so `core.h`, `base.h`, `composite.h`, `qgroup.h` and the rest come with them). It pulls in `fx_screen.h`, hence `synthyboy/fx_types.h` and `synthyboy/params.h`. To reuse the library without the engine, include the single headers instead. |
-| `choice_names.h` | `choicenames::lawOf (key)`, `shownChoice (key, index, engineName)`, `shownLabel (key)` |
+| `choice_names.h` | `choicenames::lawOf (key)`, `shownChoice (key, index, engineName)`, `shownLabel (key)`, `filterStyleNames (model)`, `shownFilterStyleNames (model, engineNames)` |
 | `play_rows.h` | namespace `playrows`: `kMargin` 6, `kSelectorH` 56, `kSelectorGap` 8, `kControlsH` 232, `kDisplayGap` (= `kQLane` + 4), `displayRect (third)`, `controlsLine (third)` |
 | `time_ruler.h` | `RulerTick`, `TimeRuler` (`kMaxTicks` 32), `rulerNextStep`, `rulerStepMs`, `formatRulerTime`, `makeTimeRuler (totalMs, x0, widthPx, minSpacingPx)` |
 | `lfo_model.h` | namespace `lfo`: `Point`, `ShapeModel`, `Undo`, `SyncMode { Hz, Bpm, Key }`, `syncModeOf`, `syncDot`, `syncTrip`, `syncOf`, `builtinAt`, `powerScale`, `powerForMid`, `snapTo`, `cellOf`, `inferGrid` |
 | `composite.h` | free function `layoutRow (rect, fixed, weight, n, gap, out)` and `constexpr int kGap = 4` |
 
 ## choice_names.h
-The engine's choice lists carry working names of other products' models. The screen never shows a name of another product: every page that shows such a parameter asks `shownChoice (key, index, engineName)` and `shownLabel (key)`. Today: `eq.law`, `convolve.law`, `oscN.unison.law`, `reverb.type`, `compressor.limit`. It is bound to SynthyBoy parameter keys (replace the table when you reuse it). No includes except `<cstring>`.
+The engine's choice lists carry working names of other products' models. The screen never shows a name of another product: every page that shows such a parameter asks `shownChoice (key, index, engineName)` and `shownLabel (key)` (and `shownFilterStyleNames (model, engineNames)` for filter models 0..7). Today: `eq.law`, `convolve.law`, `oscN.unison.law`, `reverb.type`, `compressor.limit`, `oscN.sample.loop_mode`, `oscN.sample.slice_play`. It is bound to SynthyBoy parameter keys (replace the table when you reuse it). No includes except `<cstring>`.
 
 ## play_rows.h
 One table so the three thirds of the Play page (oscillator, envelope, LFO) have the same selector row (56 px), the same display top and height, and controls that start on one line: `displayRect (third)` and `controlsLine (third)`. Pure functions of a `Rect`.
@@ -41,7 +41,7 @@ const char* shown = shownChoice ("eq.law", 0, "engine name");   // "State variab
 ```
 
 ## Used on
-`play_rows.h`: `OscillatorCompact`, `EnvCompact`, `LfoCompact`. `choice_names.h`: `shell-mpc/overlay/osc_ui.h`, `fx_ui.h`, `ui/fx_layout.h`. `time_ruler.h`: `ui/env_graph.h`. `lfo_model.h`: `ui/shape_editor.h`, `ui/lfo_parts.h`, `overlay/lfo_ui.h`.
+`play_rows.h`: `OscillatorCompact`, `EnvCompact`, `LfoCompact`. `choice_names.h`: `shell-mpc/overlay/osc_ui.h`, `filter_ui.h`, `fx_ui.h`, `ui/fx_layout.h`. `time_ruler.h`: `ui/env_graph.h`. `lfo_model.h`: `ui/shape_editor.h`, `ui/lfo_parts.h`, `overlay/lfo_ui.h`.
 
 ## Limits and pitfalls
 - `ui.h` is not free of the engine: it includes `fx_screen.h`. Include single headers for reuse.
