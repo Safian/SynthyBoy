@@ -34,9 +34,18 @@ if(MPC_SDK_DIR)
         POSITION_INDEPENDENT_CODE ON
         CXX_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN ON)
+    # The module exports VSTPluginMain only and links no dynamic libstdc++ (the checks of scripts/mpc-container-build.sh: the MPC firmware has its own libstdc++; the same options as shell-mpc/CMakeLists.txt).
+    if(UNIX AND NOT APPLE)
+        set(MPCKIT_EXPORTS "${CMAKE_CURRENT_BINARY_DIR}/mpckit_exports.map")
+        file(WRITE ${MPCKIT_EXPORTS} "{
+            global: VSTPluginMain;
+            local: *;
+        };")
+        target_link_options(mpckit_demo PRIVATE "-Wl,--version-script,${MPCKIT_EXPORTS}" "-Wl,--exclude-libs,ALL" "-Wl,--gc-sections" "-Wl,--as-needed" "-static-libstdc++" "-static-libgcc")
+    endif()
     # The overlay runtime (plugin-drawn pages): shell-mpc/overlay/ (header only, Linux code for the device) and its GPU helper, a separate executable (shell-mpc/overlay/gpu-helper). OFF by default: without it the
     # plugin is an instrument with the host's own widgets (skin/pages.json). ON: a Linux target only (a cross build for the device: the same toolchain as scripts/build-mpc.sh); the helper is built as
-    # mpckit-demo-overlay-gpu (the name of kBranding in src/overlay_hook.h) and goes next to the plugin binary in the package (tools/make_package.py --helper32 / --helper64).
+    # mpckit-demo-overlay-gpu (the name of kBranding in src/overlay_hook.h) and goes next to the plugin binary in the package (scripts/build-mpc.sh --plugin template-mpc does it).
     option(MPCKIT_OVERLAY "MpcKit Demo: draw the pages on the overlay plane (needs the generic overlay runtime)" OFF)
     if(MPCKIT_OVERLAY)
         if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")

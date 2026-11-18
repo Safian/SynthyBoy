@@ -6,9 +6,11 @@
 #
 # Environment (all set by build-mpc.sh): ARCH (arm32 | arm64), JOBS, MPC_SDK_DIR, WITH_BENCH (0 | 1), HOST_UID, HOST_GID, CMAKE_EXTRA_ARGS (optional:
 # space separated extra arguments of the module's cmake configure, from --cmake-arg).
+# Another plugin (build-mpc.sh --plugin DIR; migration step 12 of docs/ui-components/TEMPLATE.md) sets PLUGIN_TARGET, PLUGIN_CMAKE_SOURCE (the CMake source folder below /src), PLUGIN_CMAKE_ARGS, PLUGIN_MODULE (the module
+# below /build) and PLUGIN_HELPER (the GPU helper below /build, without its ".stripped"); without them everything is SynthyBoy's, as it always was.
 # Mounts: /src (read-only source tree), /build (CMake tree of this architecture), /build-bench (bench tree), /out (output directory), /mpc-sdk.
 #
-# Results: /build/shell-mpc/synthyboy_mpc.so (unstripped, kept for profiling), /build/shell-mpc/synthyboy_mpc.stripped.so (the one that is packaged) and,
+# Results: /build/shell-mpc/synthyboy_mpc.so (unstripped, kept for profiling), /build/shell-mpc/synthyboy_mpc.stripped.so (the one that is packaged; another plugin: PLUGIN_MODULE) and,
 # with WITH_BENCH=1, /out/bench-<ARCH>/synthyboy_bench and synthyboy_noteon_bench.
 #
 # The checks are the same for both architectures (see check_elf): ELF class and machine, DT_NEEDED limited to libc / libm / libdl / libpthread / the dynamic
@@ -46,6 +48,9 @@ case "${ARCH:-}" in
 esac
 : "${JOBS:?}" "${MPC_SDK_DIR:?}"
 WITH_BENCH="${WITH_BENCH:-0}"
+PLUGIN_TARGET="${PLUGIN_TARGET:-synthyboy_mpc}"
+PLUGIN_MODULE="${PLUGIN_MODULE:-shell-mpc/synthyboy_mpc.so}"
+PLUGIN_HELPER="${PLUGIN_HELPER:-shell-mpc/overlay/gpu-helper/synthyboy-overlay-gpu}"
 
 trap 'chown -R "${HOST_UID:-0}:${HOST_GID:-0}" /build /build-bench /out 2>/dev/null || true' EXIT
 
@@ -101,18 +106,25 @@ check_elf() {
 
 # ---- the plugin module ----------------------------------------------------------------------------------------------------------------------------
 read -r -a extra_args <<< "${CMAKE_EXTRA_ARGS:-}"
-cmake -S /src -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
-    -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON \
-    -DSYNTHYBOY_WITH_VITAL=OFF -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK_DIR" ${extra_args[@]+"${extra_args[@]}"}
-cmake --build /build --target synthyboy_mpc --parallel "$JOBS"
-so=/build/shell-mpc/synthyboy_mpc.so
+if [ -n "${PLUGIN_CMAKE_SOURCE:-}" ]; then
+    # another plugin made with the kit: its own CMake project, no SynthyBoy option
+    read -r -a plugin_args <<< "${PLUGIN_CMAKE_ARGS:-}"
+    cmake -S "/src/$PLUGIN_CMAKE_SOURCE" -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
+        -DMPC_SDK_DIR="$MPC_SDK_DIR" ${plugin_args[@]+"${plugin_args[@]}"} ${extra_args[@]+"${extra_args[@]}"}
+else
+    cmake -S /src -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
+        -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON \
+        -DSYNTHYBOY_WITH_VITAL=OFF -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK_DIR" ${extra_args[@]+"${extra_args[@]}"}
+fi
+cmake --build /build --target "$PLUGIN_TARGET" --parallel "$JOBS"
+so="/build/$PLUGIN_MODULE"
 check_elf "$so" module
 exported="$("$TRIPLE-nm" -D --defined-only "$so" | grep -w VSTPluginMain || true)"
 [ -n "$exported" ] || fail "VSTPluginMain is not an exported symbol"
 extra="$("$TRIPLE-nm" -D --defined-only "$so" | grep -v -w VSTPluginMain | grep -v '^$' || true)"
 [ -z "$extra" ] || fail "unexpected exported symbols: $extra"
 # The package gets a stripped copy; the unstripped module stays in the build tree for profiling.
-stripped=/build/shell-mpc/synthyboy_mpc.stripped.so
+stripped="${so%.so}.stripped.so"
 "$TRIPLE-strip" --strip-unneeded -o "$stripped" "$so"
 left="$("$TRIPLE-nm" -D --defined-only "$stripped" | awk '{print $NF}' | tr '\n' ' ')"
 [ "$left" = "VSTPluginMain " ] || fail "exports after strip: $left"
@@ -122,17 +134,19 @@ ls -l "$so" "$stripped"
 # ---- the GPU helper of the overlay (only when the module's CMake tree has the target: SYNTHYBOY_MPC_OVERLAY ON, SYNTHYBOY_MPC_OVERLAY_GPU AUTO / ON for ARM) ------------------------
 # A plain executable linked against libc only (the firmware's EGL / GBM / GLES libraries are opened at run time), the same ELF checks as the benchmarks; the stripped copy is packaged
 # next to the plugin (scripts/build-mpc.sh). A build without the target (the production package) does not even look at it.
-helper_dir=/build/shell-mpc/overlay/gpu-helper
+helper="/build/$PLUGIN_HELPER"
+helper_dir="$(dirname "$helper")"
+helper_name="$(basename "$helper")"
 targets="$(cmake --build /build --target help 2>/dev/null || true)"   # (captured first: grep -q ending a pipe early would fail the pipeline under pipefail)
 if grep -q 'synthyboy_overlay_gpu' <<< "$targets"; then
     cmake --build /build --target synthyboy_overlay_gpu --parallel "$JOBS"
-    check_elf "$helper_dir/synthyboy-overlay-gpu" tool
-    [ -s "$helper_dir/synthyboy-overlay-gpu.stripped" ] || fail "the stripped GPU helper is missing"
-    check_elf "$helper_dir/synthyboy-overlay-gpu.stripped" tool
-    "$TRIPLE-readelf" -d "$helper_dir/synthyboy-overlay-gpu.stripped" | grep -q 'libEGL\|libgbm\|libGLES' && fail "the GPU helper must not link the Mesa libraries (it opens them at run time)"
-    ls -l "$helper_dir/synthyboy-overlay-gpu" "$helper_dir/synthyboy-overlay-gpu.stripped"
+    check_elf "$helper_dir/$helper_name" tool
+    [ -s "$helper_dir/$helper_name.stripped" ] || fail "the stripped GPU helper is missing"
+    check_elf "$helper_dir/$helper_name.stripped" tool
+    "$TRIPLE-readelf" -d "$helper_dir/$helper_name.stripped" | grep -q 'libEGL\|libgbm\|libGLES' && fail "the GPU helper must not link the Mesa libraries (it opens them at run time)"
+    ls -l "$helper_dir/$helper_name" "$helper_dir/$helper_name.stripped"
 else
-    rm -f "$helper_dir"/synthyboy-overlay-gpu "$helper_dir"/synthyboy-overlay-gpu.stripped   # no leftover of an earlier variant in this tree is ever packaged
+    rm -f "$helper_dir/$helper_name" "$helper_dir/$helper_name.stripped"   # no leftover of an earlier variant in this tree is ever packaged
 fi
 
 # ---- the benchmarks (same toolchain, tests switched on in a tree of their own so that the module above is built exactly as the package needs it) ----
