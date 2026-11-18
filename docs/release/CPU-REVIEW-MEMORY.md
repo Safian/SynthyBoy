@@ -454,3 +454,10 @@ Rough sum of the bit identical code items for the heavy six (ranks 3 to 6, 11, 1
 - The RK3288 L2 size (1 MB from the datasheet, not read from the device).
 - The share of `P ()` and its misses in the measured voice tick sections (V1, V3 sizes).
 - The observation in V1 about the envelope cache and legato voice control steps (read, not run).
+
+## 12. Status on branch `work/opt-misc`
+
+| Finding | Status | Commit |
+|---|---|---|
+| M1 | done: indices wrapped without `%`, window as two contiguous runs, NEON min when no NaN / infinity / subnormal / -0 is in the ring (else the scalar loop), sum in the old order; `Limiter::reference` keeps the old code. Test `synthyboy_test_own_compressor_opt`. The three presets render byte for byte the same (float WAV + hash, tiers low / medium / high, single and chord) | 42c91fad |
+| K6 | done: `--float32`, `--hash`, `scripts/compare-renders.sh`, test `synthyboy_test_preset_render_output`, documented in `docs/MPC.md` | (this commit) |
