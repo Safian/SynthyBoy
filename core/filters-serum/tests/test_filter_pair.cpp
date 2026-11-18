@@ -210,11 +210,30 @@ TEST (scalar_sanitize_on_the_bit_pattern_equals_the_float_tests_on_every_bit_pat
     CHECK_EQ (bad, 0);
 }
 
+#if defined(__arm__) && defined(__GNUC__)
+/** 32 bit ARM: the VFP in flush-to-zero mode for the scope, as the MPC shell runs the engine (shell-mpc/synthyboy_mpc.cpp sets FPSCR.FZ). NEON arithmetic on ARMv7
+    always flushes subnormals; without FZ the VFP code would keep them, and softClip () of a subnormal would differ in the lanes for that reason alone. */
+struct FlushToZeroScope
+{
+    uint32_t saved = 0;
+    FlushToZeroScope()
+    {
+        __asm__ __volatile__ ("vmrs %0, fpscr" : "=r" (saved));
+        const uint32_t fz = saved | (1u << 24);
+        __asm__ __volatile__ ("vmsr fpscr, %0" : : "r" (fz));
+    }
+    ~FlushToZeroScope() { __asm__ __volatile__ ("vmsr fpscr, %0" : : "r" (saved)); }
+};
+#endif
+
 TEST (lane_sanitize_and_soft_clip_equal_the_scalar_functions_on_every_bit_pattern)
 {
 #if SYNTHYBOY_FILTER_NEON
     // NeonLanes::sanitized and ::softClipped make their tests with the integer compares of dsp/neon_cmp.h: every one of the 2^32 inputs against sanitize () and
     // softClip () of filter_dsp.h (NaNs, infinities, zeros and subnormals included)
+#if defined(__arm__) && defined(__GNUC__)
+    const FlushToZeroScope ftz;
+#endif
     long long badSan = 0, badClip = 0;
     for (uint64_t u = 0; u < (1ull << 32); u += 2)
     {
