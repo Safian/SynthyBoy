@@ -530,10 +530,13 @@ float applyWarp (int w, float a, float v, float* m, float* f, float* tm, float* 
 
 // ---- the voice ---------------------------------------------------------------------------------------------------------------------
 
+static void warmStartTables() noexcept;
+
 void SpectralVoice::prepare (double hostSampleRate) noexcept
 {
     Fft::instance();
     hannAt (0);
+    warmStartTables();   // the tables of a note start are built here, not on the audio thread
     hostRate_ = hostSampleRate > 1000.0 ? hostSampleRate : 48000.0;
 }
 
@@ -1030,14 +1033,59 @@ static const float* startGain (int mask) noexcept
 /** The most that a frame left out may weigh (the squared window of its own sample) at any sample of the first hop: it is made at the last block boundary before it would weigh more. */
 static constexpr double kMaxMissingWeight = 0.5;
 
+/** The sample of the first hop at which the squared window of frame j (1 .. 3) first passes kMaxMissingWeight, from each start sample q on (kHop: never): made once, the same expression as the loop of
+    startScheduleReference. */
+static bool windowPasses (int q, int j) noexcept
+{
+    const double w = 0.5 - 0.5 * std::cos (2.0 * kPi * (q + (3 - j) * kHop) / kFftSize);
+    return w * w > kMaxMissingWeight;
+}
+
+struct ScheduleTable
+{
+    int latest[3][kHop + 1];
+    ScheduleTable()
+    {
+        for (int j = 1; j <= 3; ++j)
+        {
+            latest[j - 1][kHop] = kHop;
+            for (int q = kHop - 1; q >= 0; --q)
+                latest[j - 1][q] = windowPasses (q, j) ? q : latest[j - 1][q + 1];
+        }
+    }
+};
+
+static const ScheduleTable& scheduleTable() noexcept
+{
+    static const ScheduleTable table;
+    return table;
+}
+
+static void warmStartTables() noexcept
+{
+    scheduleTable();
+}
+
 void SpectralVoice::startSchedule (int offset, bool smears, int join[3]) noexcept
+{
+    const int d = std::max (0, std::min (kHop - 1, offset));
+    const ScheduleTable& t = scheduleTable();
+    for (int j = 1; j <= 3; ++j)
+    {
+        const int latest = smears ? d   // the smear memory follows the order of the four shapings of the priming: all frames at once
+                                  : t.latest[j - 1][d];
+        join[j - 1] = std::max (d, (latest / kStartStep) * kStartStep);
+    }
+}
+
+void SpectralVoice::startScheduleReference (int offset, bool smears, int join[3]) noexcept
 {
     const int d = std::max (0, std::min (kHop - 1, offset));
     for (int j = 1; j <= 3; ++j)
     {
         int latest = kHop;
         if (smears)
-            latest = d;   // the smear memory follows the order of the four shapings of the priming: all frames at once
+            latest = d;
         else
             for (int q = d; q < kHop; ++q)
             {

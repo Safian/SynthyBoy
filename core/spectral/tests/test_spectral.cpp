@@ -1240,3 +1240,38 @@ TEST (spectral_a_note_started_on_dirty_buffers_is_the_note_started_on_cleared_on
     }
     std::printf ("    reset of 4 spectral voices: %.3f us now, %.3f us before (this Mac, warm)\n", us[0], us[1]);
 }
+
+// SP2: the start schedule from the table is the schedule of the loop of double cosines, for every start offset (also outside 0 .. kHop - 1, which are clamped) with and without Smear.
+TEST (spectral_the_start_schedule_from_the_table_is_the_loop_of_cosines)
+{
+    int compared = 0;
+    for (int offset = -3; offset < kHop + 3; ++offset)
+        for (int smears = 0; smears < 2; ++smears)
+        {
+            int a[3], b[3];
+            SpectralVoice::startSchedule (offset, smears != 0, a);
+            SpectralVoice::startScheduleReference (offset, smears != 0, b);
+            ++compared;
+            if (! CHECK (a[0] == b[0] && a[1] == b[1] && a[2] == b[2]))
+                std::printf ("    offset %d smears %d: %d %d %d against %d %d %d\n", offset, smears, a[0], a[1], a[2], b[0], b[1], b[2]);
+        }
+    CHECK_EQ (compared, (kHop + 6) * 2);
+    double us[2] = {};
+    int sink = 0;
+    for (int ref = 0; ref < 2; ++ref)
+    {
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 2000; ++i)
+            for (int k = 0; k < kStartSteps; ++k)
+            {
+                int j[3];
+                if (ref != 0)
+                    SpectralVoice::startScheduleReference (k * kStartStep, false, j);
+                else
+                    SpectralVoice::startSchedule (k * kStartStep, false, j);
+                sink += j[0] + j[1] + j[2];
+            }
+        us[ref] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / (2000.0 * kStartSteps);
+    }
+    std::printf ("    startSchedule: %.3f us per note start now, %.3f us before (this Mac; %d)\n", us[0], us[1], sink & 1);
+}

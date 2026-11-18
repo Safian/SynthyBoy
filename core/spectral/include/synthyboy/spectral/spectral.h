@@ -168,6 +168,8 @@ public:
     /** The sample of the first hop (the voice's output sample, 0 .. kHop) at which frame 1 .. 3 of the priming is made for a start offset: `join[j - 1] <= offset` means in noteOn. Every frame
         is made before the squared window it would have in the sum exceeds 0.5 (and at the latest at kHop, the first regular frame), at a multiple of kStartStep. With the Smear warp all at once. */
     static void startSchedule (int offset, bool smears, int join[3]) noexcept;
+    /** Tests only: startSchedule as it was (the loop of double cosines at every call). */
+    static void startScheduleReference (int offset, bool smears, int join[3]) noexcept;
     /** Measurements and tests only: the start of a note as before round 10 (the four frames of the priming made at once, the first hop their plain sum) instead of the start with the deferred frames
         (section 4a of docs/engine-spec/07). From the sample kHop of the voice (the first regular frame) on the two give the same samples. */
     void setLegacyStart (bool on) noexcept { legacyStart_ = on; }
