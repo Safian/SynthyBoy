@@ -61,8 +61,8 @@ void spectrumFromAngles (const float* angle, const float* mag, float* re, float*
 /** advancePhases () and spectrumFromAngles () in one pass over the bins (the data stay in registers; the same bits as the two calls): phase[k] advanced and wrapped, then re / im of mag[k] at that
     phase. */
 void advanceToSpectrum (float* phase, const float* step, const float* mag, float* re, float* im, int n, bool neon) noexcept;
-/** wrapPhase () in single precision: the remainder by three part constants of 2 pi (n * 2 pi is exact in float for n < 2^16), within 3e-7 radians of wrapPhase () (the rounding of the last
-    subtraction). For |x| below 1e5; beyond that (and for a NaN) wrapPhase () runs. The vector form of advancePhases () does exactly these operations below 1e5 (no phase of the voice goes beyond
+/** wrapPhase () in single precision: the remainder by three part constants of 2 pi (n * 2 pi is exact in float for n < 2^16) with the rounding errors of the differences kept and added back,
+    which makes it the very value of wrapPhase (). For |x| below 1e5; beyond that (and for a NaN) wrapPhase () runs. The vector form of advancePhases () does exactly these operations below 1e5 (no phase of the voice goes beyond
     5.2e4: the step is at most pi * 32 * kHop and the sum is wrapped every hop); above that it returns some finite value. */
 float wrapPhaseFloat (float x) noexcept;
 /** phase[k] = wrapped (phase[k] + step[k] * kHop) where the sum is beyond +-100, else the sum: the phase update of the voice. Wrapped by wrapPhaseFloat () (`neon`: four at a time, the same bits). */

@@ -572,6 +572,7 @@ TEST (spectral_phase_wrap_is_the_old_fmod_exactly_and_the_single_precision_wrap_
     KRng rng (9);
     int bad = 0, n = 0;
     double worstFloat = 0.0;
+    int notExact = 0;
     for (int i = 0; i < 400000; ++i)
     {
         const float range = i % 4 == 0 ? 120.0f : (i % 4 == 1 ? 2000.0f : (i % 4 == 2 ? 60000.0f : 300.0f));
@@ -584,15 +585,16 @@ TEST (spectral_phase_wrap_is_the_old_fmod_exactly_and_the_single_precision_wrap_
         const float a = old (x), b = wrapPhase (x), c = wrapPhaseFloat (x);
         if (! (a == b))
             ++bad;
-        // the single precision wrap: the same value to rounding (a result near +-pi may sit on the other side of the wrap, that is the same phase)
-        double d = std::fabs (static_cast<double> (a) - c);
-        d = std::min (d, std::fabs (d - 6.283185307179586));
-        worstFloat = std::max (worstFloat, d);
+        // the single precision wrap (rounding errors of its differences kept): the same value, bit for bit
+        if (! (a == c))
+            ++notExact;
+        worstFloat = std::max (worstFloat, std::fabs (static_cast<double> (a) - c));
     }
     CHECK (n > 0);
     CHECK_EQ (bad, 0);
-    CHECK (worstFloat < 4.0e-7);
-    // the phase update loop: the scalar form is wrapPhaseFloat (), the vector form gives its bits; both within rounding of the old loop
+    CHECK_EQ (notExact, 0);
+    CHECK (worstFloat == 0.0);
+    // the phase update loop: the scalar form is wrapPhaseFloat (), the vector form gives its bits; both the old loop's values
     std::vector<float> phase (kBins), step (kBins), expect (kBins), oldResult (kBins), vec (kBins);
     for (int k = 0; k < kBins; ++k)
     {
@@ -642,7 +644,7 @@ TEST (spectral_phase_wrap_is_the_old_fmod_exactly_and_the_single_precision_wrap_
         d = std::min (d, std::fabs (d - 6.283185307179586));
         worst = std::max (worst, d);
     }
-    CHECK (worst < 4.0e-7);
+    CHECK (worst == 0.0);
 }
 
 TEST (spectral_overlap_add_vector_form_matches_the_scalar_form)

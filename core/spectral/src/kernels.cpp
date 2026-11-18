@@ -282,14 +282,21 @@ template <int U>
 inline void wrapN (const float32x4_t* x, float32x4_t* out) noexcept
 {
     const float32x4_t hundred = vdupq_n_f32 (100.0f), two = vdupq_n_f32 (kTwoPiF), zero = vdupq_n_f32 (0.0f);
-    float32x4_t ax[U], nf[U], r[U];
+    float32x4_t ax[U], nf[U], r[U], r1[U], t2[U], u3[U], s[U], bb[U], e[U], w[U], bw[U], e2[U];
     uint32x4_t wrapIt[U];
     for (int u = 0; u < U; ++u) ax[u] = vabsq_f32 (x[u]);
     for (int u = 0; u < U; ++u) wrapIt[u] = vcgtq_f32 (ax[u], hundred);
     for (int u = 0; u < U; ++u) nf[u] = vcvtq_f32_s32 (vcvtq_s32_f32 (vmulq_f32 (ax[u], vdupq_n_f32 (kInvTwoPiLow))));
-    for (int u = 0; u < U; ++u) r[u] = vsubq_f32 (ax[u], vmulq_f32 (nf[u], vdupq_n_f32 (kW1)));
-    for (int u = 0; u < U; ++u) r[u] = vsubq_f32 (r[u], vmulq_f32 (nf[u], vdupq_n_f32 (kW2)));
-    for (int u = 0; u < U; ++u) r[u] = vsubq_f32 (r[u], vmulq_f32 (nf[u], vdupq_n_f32 (kW3)));
+    for (int u = 0; u < U; ++u) r1[u] = vsubq_f32 (ax[u], vmulq_f32 (nf[u], vdupq_n_f32 (kW1)));
+    for (int u = 0; u < U; ++u) t2[u] = vmulq_f32 (nf[u], vdupq_n_f32 (kW2));
+    for (int u = 0; u < U; ++u) u3[u] = vmulq_f32 (nf[u], vdupq_n_f32 (kW3));
+    for (int u = 0; u < U; ++u) s[u] = vsubq_f32 (r1[u], t2[u]);
+    for (int u = 0; u < U; ++u) bb[u] = vsubq_f32 (s[u], r1[u]);
+    for (int u = 0; u < U; ++u) e[u] = vaddq_f32 (vsubq_f32 (r1[u], vsubq_f32 (s[u], bb[u])), vsubq_f32 (vnegq_f32 (t2[u]), bb[u]));
+    for (int u = 0; u < U; ++u) w[u] = vsubq_f32 (s[u], u3[u]);
+    for (int u = 0; u < U; ++u) bw[u] = vsubq_f32 (w[u], s[u]);
+    for (int u = 0; u < U; ++u) e2[u] = vaddq_f32 (vsubq_f32 (s[u], vsubq_f32 (w[u], bw[u])), vsubq_f32 (vnegq_f32 (u3[u]), bw[u]));
+    for (int u = 0; u < U; ++u) r[u] = vaddq_f32 (w[u], vaddq_f32 (e2[u], e[u]));
     for (int u = 0; u < U; ++u) r[u] = vbslq_f32 (vcgeq_f32 (r[u], two), vsubq_f32 (r[u], two), r[u]);
     for (int u = 0; u < U; ++u) r[u] = vbslq_f32 (vcltq_f32 (r[u], zero), vaddq_f32 (r[u], two), r[u]);
     for (int u = 0; u < U; ++u) r[u] = vbslq_f32 (vcgtq_f32 (r[u], vdupq_n_f32 (kPiF)), vsubq_f32 (r[u], two), r[u]);
@@ -393,7 +400,12 @@ float wrapPhaseFloat (float x) noexcept
     if (! (ax < kReachable))
         return wrapPhase (x);
     const float n = static_cast<float> (static_cast<int> (ax * kInvTwoPiLow));
-    float r = ((ax - n * kW1) - n * kW2) - n * kW3;
+    // ax - n 2 pi = (ax - n W1) - n W2 - n W3 with every product and the first difference exact; the second difference is split into its sum and rounding error (the exact remainder
+    // is a float, so the corrected sum is that remainder to the last bit: wrapPhase () exactly)
+    const float r1 = ax - n * kW1, t2 = n * kW2, u3 = n * kW3;
+    const float s = r1 - t2, bb = s - r1, e = (r1 - (s - bb)) + (-t2 - bb);
+    const float w = s - u3, bw = w - s, e2 = (s - (w - bw)) + (-u3 - bw);
+    float r = w + (e2 + e);
     if (r >= kTwoPiF) r -= kTwoPiF;      // n was one short
     if (r < 0.0f) r += kTwoPiF;
     if (r > kPiF) r -= kTwoPiF;          // the wrap to +-pi (exact: r and 2 pi are within a factor of two)
