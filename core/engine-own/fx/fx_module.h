@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include <limits>
+
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
@@ -102,7 +104,7 @@ public:
     /** The gain at the place of the bypassed module, its power (with the level trim) and its coherent amplitude (with the level trim). */
     void makeup (const FxFrame& f, const float* base, const float* delta, const makeup::ProgramDesc& program, float& gain, float& power, float& coherent) noexcept
     {
-        const float level = levelIdx >= 0 ? dbToGain (fxValue (base, delta, levelIdx)) : 1.0f;
+        const float level = levelGainOf (base, delta);
         const float p = std::max (makeupPower (f, base, delta, program), 1.0e-4f);
         gain = level * std::sqrt (p);
         power = level * level * p;
@@ -111,7 +113,7 @@ public:
     /** The gain at the place of the bypassed module: the trim of its Level key and the square root of makeupPower (). */
     float makeupGain (const FxFrame& f, const float* base, const float* delta, const makeup::ProgramDesc& program) noexcept
     {
-        const float level = levelIdx >= 0 ? dbToGain (fxValue (base, delta, levelIdx)) : 1.0f;
+        const float level = levelGainOf (base, delta);
         return level * std::sqrt (std::max (makeupPower (f, base, delta, program), 1.0e-4f));
     }
     /** Position of the current call inside the control period (set by process ()). */
@@ -121,7 +123,7 @@ public:
     void update (const FxFrame& f, const float* base, const float* delta) noexcept
     {
         levelPrev = levelGain;
-        levelGain = levelIdx >= 0 ? dbToGain (fxValue (base, delta, levelIdx)) : 1.0f;
+        levelGain = levelGainOf (base, delta);
         if (!levelSeen)
         {
             levelPrev = levelGain;
@@ -211,6 +213,20 @@ protected:
     virtual float flushSeconds() const noexcept { return 1.0f; }
 
 private:
+    /** dbToGain of the Level key, computed again only when the key's value changes (a bit identical cache of a pow). */
+    float levelGainOf (const float* base, const float* delta) const noexcept
+    {
+        if (levelIdx < 0)
+            return 1.0f;
+        const float db = fxValue (base, delta, levelIdx);
+        if (!(db == levelDbCached) || makeup::legacyCaches())
+        {
+            levelGainCached = dbToGain (db);
+            levelDbCached = db;
+        }
+        return levelGainCached;
+    }
+    mutable float levelDbCached = std::numeric_limits<float>::quiet_NaN(), levelGainCached = 1.0f;
     int levelIdx;
     float mixNow = -1.0f;     // the mix of this period as the module reported it (-1: not reported)
     bool muted = false, probing = false, mixSeen = false;
