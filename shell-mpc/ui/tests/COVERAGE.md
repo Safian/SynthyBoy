@@ -655,7 +655,7 @@ For each component class, it records what it does in one line, its public behavi
 | Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
 | :--- | :--- | :--- |
 | **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | not tested |
-| **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | not tested |
+| **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | `ui_cov_steppers_lists_host.cpp`: "ModRowSelector ..." (reports, ends silent, `state` and the picture unchanged by a turn) |
 | **Wheel** | Mouse wheel input via `wheel()` and `wheelOver()` (`wheelUnit()`) | not tested |
 | **Value Text** | Value/parameter readout formatting, units, precision, caption | not tested |
 | **Layout / Minimum Sizes** | `minSize()`, touch target bounds, cell dimensions | not tested |
