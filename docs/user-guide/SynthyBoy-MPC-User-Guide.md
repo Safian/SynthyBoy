@@ -642,7 +642,7 @@ On the 16-knob MPC XL, all eleven controls are active at once on knobs 1 to 11 (
 - In **Sustain envelope**, **Loop at point** and **Loop and hold** modes, the marker is labelled **LOOP**. It snaps to existing points and binds the shape's loop point to that point. In Sustain envelope, the LFO holds at this point while you hold the key. In Loop at point, the LFO plays to the end of the shape and loops back to this point. In Loop and hold, the LFO loops between start and this point while the key is held, then releases to the end of the shape.
 - In **Free-run** mode, the marker is dimmed and the canvas displays the hint "FREE-RUN: PHASE SHIFTS THE CYCLE" at the bottom. In Free-run the LFO runs on a continuous shared clock and **PHASE** shifts the cycle timing.
 
-**Point modulation (the MOD page).** Tap **MOD** in the top bar when one or more points are selected to open the point modulation page:
+**Point modulation (the MOD page).** Tap **MOD** in the top bar when one or more points are selected to open the point modulation page. The page is mapped to the Q-Link knobs for direct parameter adjustment:
 
 ![Point modulation](img/lfo-editor-pointmod.png)
 
@@ -736,7 +736,7 @@ More in chapter 6.
 When the chain is empty, the page shows the **gallery**: "TAP AN EFFECT TO ADD IT TO THE CHAIN" and one card for each of the **16 effects** (13 effects and 3 splitters), each with a small picture of what it does (a curve, a response, bands). One tap on a card adds that effect to the end of the Main rack and opens it.
 
 **The effect page.** Every effect has one **table page** of its own, laid out in rows of four cells. The header has the power switch, the place and name ("MAIN CHAIN" and the name), the **RACK** stepper, a **PAGE n / m** stepper when the effect has more rows than fit, and **REMOVE**.
-Each row is one block of the effect and one Q group (chapter 4.3): without a display four rows fit on a page, under a display two or three. Knobs show the parameter's own name and value; whole numbers (VOICES) are number fields, on / off values are LED switches, and short lists (3 to 8 choices) show all their choices as a LED list; longer lists are steppers with a popup.
+Each row is one block of the effect and one Q group (chapter 4.3): without a display four rows fit on a page, under a display two or three. Knobs show the parameter's own name and value; whole numbers (VOICES) are number fields, on / off values are LED switches, and short lists (3 to 8 choices) show all their choices as a LED list; longer lists are steppers with a popup, which dynamically adjusts to fit the number of rows available.
 Controls that do not apply in the current state follow one rule: a cell that can hold two controls shows the one that applies (**RATE** or **DIVISION** share one cell, switched by SYNC; **TIME** or **DIVISION** in the delay); a control that does not apply and has no live control after it in its row is **hidden** and the row closes up (its Q group has fewer members; a row with nothing left is gone and the rows below move up, so the pages are made of the rows that remain); otherwise it is drawn **dim** in its place and takes no touch.
 The reverb in the picture below hides ROOM and FEEDBACK because the algorithm "Dense" has neither.
 
