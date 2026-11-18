@@ -47,6 +47,8 @@ target_include_directories(synthyboy_test_own_fx PRIVATE "${PROJECT_SOURCE_DIR}/
 synthyboy_add_test(synthyboy_test_own_osc_options test_own_osc_options.cpp)
 synthyboy_add_test(synthyboy_test_own_content_opt test_own_content_opt.cpp)   # the CPU optimisations of the library oscillators change no output sample
 target_include_directories(synthyboy_test_own_content_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_compressor_opt test_own_compressor_opt.cpp)   # the CPU optimisation of the Compressor limiter changes no output sample
+target_include_directories(synthyboy_test_own_compressor_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_osc_types test_own_osc_types.cpp)
 target_include_directories(synthyboy_test_own_osc_types PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_unison_cap test_own_unison_cap.cpp)
