@@ -152,8 +152,8 @@ public:
         that the note starts at full level: four frames are synthesised at once (the three before the first output hop and the first one of the hop itself).
         `hopOffset` (0 .. kHop - 1, a multiple of kStartStep in the engine): the output starts that many samples into the first hop, so the voice's next frame is due after kHop - hopOffset
         samples instead of kHop. Voices started in the same block with different offsets spread their frames over the four blocks of a hop instead of all landing in every fourth block.
-        The note is the same rendering shifted by the offset (frozen: sample for sample the output of offset 0 from sample `hopOffset` on); the play head runs on the true time, the first
-        step is (kHop - hopOffset) / kHop of a hop. */
+        The note is the same rendering shifted by the offset: sample for sample the output of offset 0 from sample `hopOffset` on, also while it scans (every frame has the position, the bins
+        and the phases it has at offset 0, only earlier in time). The play head is therefore ahead of the true time by `hopOffset` samples of the scan, less than one hop. */
     void noteOn (const Analysis* analysis, const SpectralParams& p, float startFraction, int hopOffset = 0) noexcept;
     void releaseLoop() noexcept { released_ = true; }
     /** Measurements only (the bench's --scalar-content): synthesise the frames with the reference code (the full length transform of the mirrored spectrum, std::sin / std::cos / std::fmod per
@@ -167,7 +167,7 @@ public:
 
 private:
     void synthesizeHop (const SpectralParams& p, bool advance) noexcept;
-    void advanceHead (const SpectralParams& p, double fraction = 1.0) noexcept;
+    void advanceHead (const SpectralParams& p) noexcept;
     void renderChannel (const SpectralParams& p, int ch, double frame, bool transientHit) noexcept;
     /** `reuseShape`: the shaped bins (scratch.om / of / oth) and `twist` are those of the previous call for this channel, nothing has touched them since (the priming of a note). */
     void renderChannelFast (const SpectralParams& p, int ch, double frame, bool transientHit, bool reuseShape = false, float* twistState = nullptr) noexcept;
@@ -184,7 +184,6 @@ private:
     bool primed_ = false;
     bool framePrimed_ = false;   // the frame of the first output hop was synthesised by primeFast (the first synthesizeHop only reads the hop)
     int startSkip_ = 0;          // the output starts this many samples into the first hop (noteOn's hopOffset)
-    double firstAdvance_ = 1.0;  // the first step of the play head, as a share of a hop
     int lastTransientFrame_ = -1, drain_ = 0;
     bool phaseInit_[2] = { false, false };
 

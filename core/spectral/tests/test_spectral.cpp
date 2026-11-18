@@ -838,9 +838,9 @@ namespace
 double dbOf (double a, double b) { return 20.0 * std::log10 (std::max (a, 1.0e-12) / std::max (b, 1.0e-12)); }
 } // namespace
 
-// The voice with a start offset d is the voice without one, d samples later in its rendering: for a frozen head every frame has the same bins, the frames of the offset voice are the frames of the
-// other, so sample t of the one is sample t + d of the other. Smear, Phase Lock, a phase twist, a transient restart and a stereo sample go through the same path (the smear memory and the phase
-// state are those of the frames in the same order).
+// The voice with a start offset d is the voice without one, d samples later in its rendering: every frame of the one is a frame of the other (the same position of the analysis, the same bins and
+// phases, d samples earlier in time), so sample t of the one is sample t + d of the other, frozen or scanning. Smear, Phase Lock, a phase twist, a transient restart and a stereo sample go
+// through the same path (the smear memory and the phase state are those of the frames in the same order).
 TEST (spectral_a_start_offset_renders_the_same_note_shifted_by_the_offset)
 {
     Tone tone (rich (220.0, 1.5));
@@ -856,10 +856,12 @@ TEST (spectral_a_start_offset_renders_the_same_note_shifted_by_the_offset)
     stereo.build (stereoData.view());
     double worstRelative = 0.0;
     int runs = 0;
-    for (int variant = 0; variant < 4; ++variant)
+    for (int variant = 0; variant < 5; ++variant)
         for (int w : { -1, static_cast<int> (Warp::smear), static_cast<int> (Warp::phaseTwist), static_cast<int> (Warp::addHarmonics) })
         {
             SpectralParams p = frozen (0.4f);
+            p.manual = variant != 4;
+            p.scanSpeed = 0.7f;
             p.phaseLock = variant == 1;
             p.transients = variant == 2;
             p.pitchRatio = variant == 3 ? 1.37f : 1.0f;
@@ -892,7 +894,7 @@ TEST (spectral_a_start_offset_renders_the_same_note_shifted_by_the_offset)
                     std::printf ("    variant %d warp %d offset %d: difference %g (peak %g)\n", variant, w, d, worst, peak);
             }
         }
-    CHECK_EQ (runs, 48);
+    CHECK_EQ (runs, 60);
     std::printf ("    offset voice against the shifted voice: largest difference over %d runs %.3g of the peak\n", runs, worstRelative);
 }
 
@@ -930,7 +932,7 @@ TEST (spectral_every_start_offset_begins_at_the_level_of_the_note_and_keeps_pitc
     }
 }
 
-// The play head runs on the true time: a voice with an offset reaches the same position at the same time, within one hop of the scan, and the same pitch while it scans.
+// The play head of a voice with an offset is at most one hop of the scan ahead of the other's (the same note d samples earlier), and the same source plays the same tones at the same times.
 TEST (spectral_a_start_offset_keeps_the_scan_speed_and_the_scan_position)
 {
     std::vector<float> two = sine (300.0, 1.0);
@@ -970,6 +972,12 @@ TEST (spectral_a_start_offset_keeps_the_scan_speed_and_the_scan_position)
             worst = std::max (worst, std::fabs (v.playhead() - baseHead[static_cast<size_t> (b)]));
         }
         CHECK (worst <= hopOfScan * 1.0001);
+        for (size_t t = 0; t + static_cast<size_t> (k * kStartStep) < baseOut.size() && t < out.size(); ++t)
+            if (out[t] != baseOut[t + static_cast<size_t> (k * kStartStep)])
+            {
+                CHECK (false);
+                break;
+            }
         // the same source reaches the same tone at the same time
         CHECK_NEAR (crossingHz (out, 12000, 36000), 300.0, 20.0);
         CHECK_NEAR (crossingHz (out, 60000, 74000), 900.0, 45.0);

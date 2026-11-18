@@ -566,7 +566,6 @@ void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, f
     primed_ = false;
     framePrimed_ = false;
     startSkip_ = std::max (0, std::min (kHop - 1, hopOffset));
-    firstAdvance_ = static_cast<double> (kHop - startSkip_) / kHop;
     lastTransientFrame_ = -1;
     drain_ = 0;
     phaseInit_[0] = phaseInit_[1] = false;
@@ -589,12 +588,12 @@ void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, f
     outPos_ = kHop;
 }
 
-void SpectralVoice::advanceHead (const SpectralParams& p, double fraction) noexcept
+void SpectralVoice::advanceHead (const SpectralParams& p) noexcept
 {
     if (headDone_ || analysis_ == nullptr)
         return;
     const double fileSeconds = static_cast<double> (analysis_->fileFrames()) / analysis_->fileRate();
-    double step = static_cast<double> (p.scanSpeed) * (static_cast<double> (kHop) / hostRate_) / fileSeconds * fraction;
+    double step = static_cast<double> (p.scanSpeed) * (static_cast<double> (kHop) / hostRate_) / fileSeconds;
     const double lo = std::min (p.regionLo, p.regionHi), hi = std::max (p.regionLo, p.regionHi);
     const bool looping = p.loopMode != LoopMode::none && ! (p.loopMode == LoopMode::tailed && released_);
     if (! looping)
@@ -1022,10 +1021,7 @@ void SpectralVoice::synthesizeHop (const SpectralParams& p, bool advance) noexce
     }
     ola_ = (ola_ + kHop) & (kFftSize - 1);
     if (advance && ! p.manual)
-    {
-        advanceHead (p, firstAdvance_);
-        firstAdvance_ = 1.0;
-    }
+        advanceHead (p);
 }
 
 void SpectralVoice::process (const SpectralParams& p, float* left, float* right, int numFrames) noexcept
