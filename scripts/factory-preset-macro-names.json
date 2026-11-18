@@ -1641,6 +1641,46 @@
    "Resonance",
    "",
    ""
+  ],
+  "FM Chain Tine Keys": [
+   "Tine Bell",
+   "Tine Decay",
+   "Body",
+   "Space",
+   "Mellow",
+   "Sustain Length",
+   "",
+   ""
+  ],
+  "PD Reso Acid Bass": [
+   "PD Peak",
+   "Squelch Decay",
+   "Diode Drive",
+   "Resonance",
+   "Cutoff",
+   "Sub",
+   "",
+   ""
+  ],
+  "Step Morph Pluck": [
+   "Pattern",
+   "Step Speed",
+   "Dark",
+   "Echo",
+   "Length",
+   "Detune",
+   "",
+   ""
+  ],
+  "West Coast Wavefold": [
+   "Fold Depth",
+   "Fold Drive",
+   "Dark",
+   "Space",
+   "Bite Length",
+   "Vibrato Rate",
+   "",
+   ""
   ]
  }
 }

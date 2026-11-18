@@ -49,6 +49,7 @@
  "EMS Squelch Bass": -10.2,
  "Electric Mute Pluck": -7.8,
  "Ethereal Glass": -11.6,
+ "FM Chain Tine Keys": -10.9,
  "FM Digital Lead": -14.7,
  "FM Soft Organ": -13.5,
  "Fast Arp Bass": -16.6,
@@ -94,6 +95,7 @@
  "Nylon Zone Pluck": -2.0,
  "Odd Harmonics Bass": -16.4,
  "Odd Harmonics Pad": -20.2,
+ "PD Reso Acid Bass": -14.3,
  "Parallel Dusk Pad": -21.9,
  "Pentatonic Step Pluck": -0.6,
  "Phaser Sweep Lead": -11.6,
@@ -128,6 +130,7 @@
  "Spruce Guitar": -2.0,
  "Staccato Bleep Lead": -7.9,
  "Starlight Shimmer": -14.2,
+ "Step Morph Pluck": -3.2,
  "Stretched Glass Choir": -19.1,
  "Stutter Grain Kit": -1.8,
  "Sub Drop Boom": -13.2,
@@ -162,5 +165,6 @@
  "Wah Pressure Clav": -12.3,
  "Warm Analog Bass": -6.2,
  "Warm Toy Piano": -9.7,
- "Warm Vintage Lead": -12.3
+ "Warm Vintage Lead": -12.3,
+ "West Coast Wavefold": -17.9
 }

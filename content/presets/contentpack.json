@@ -7,7 +7,7 @@
   "attribution": "Safian Szabolcs",
   "kind": "presets",
   "requires_plugin": ">=0.1.0",
-  "description": "164 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
+  "description": "168 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
   "files": [
     {
       "path": "Bass/solid_sub.sbpreset",
@@ -828,6 +828,26 @@
       "path": "Bass/sync_saw_raw_bass.sbpreset",
       "sha256": "715f3a2f28b812a87d40b23ee980d96dc1f23eab5f6b2f46c86b469b82e7f15e",
       "size": 50847
+    },
+    {
+      "path": "Keys/fm_chain_tine_keys.sbpreset",
+      "sha256": "1e220046cd6fab58f40a33ae2c1feb29b2b3ebf13a040a86c97bed6681d5b220",
+      "size": 50907
+    },
+    {
+      "path": "Bass/pd_reso_acid_bass.sbpreset",
+      "sha256": "23143b8e760178522585a1248b1bdc33d24cb90381873b120f11967abac04554",
+      "size": 50873
+    },
+    {
+      "path": "Pluck/step_morph_pluck.sbpreset",
+      "sha256": "4e7b2e7c6f0fcf6c478c323ab703141fe7ea3a1e5274872d3495a38bc527e5f1",
+      "size": 50943
+    },
+    {
+      "path": "Lead/west_coast_wavefold.sbpreset",
+      "sha256": "feba84d626439ea52c31604d67f27d0992d58b09eed86cf330f95ec1986b504d",
+      "size": 50917
     }
   ]
 }
