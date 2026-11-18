@@ -37,6 +37,7 @@
 #include "output_peak.h"
 #include "startup_timing.h"
 #include "kit/log.h"
+#include "kit/display_thread.h"   // the LFO / spectrum display thread of the build without the overlay uses it too
 #include "host_strings.h"
 #include "event_inbox.h"
 #include "output_stage.h"
@@ -141,7 +142,6 @@
 #if !SYNTHYBOY_MPC_LFO_LIVE
 #error "SYNTHYBOY_MPC_OVERLAY needs SYNTHYBOY_MPC_LFO_LIVE (the display thread reports the display parameter 'Overlay Instance' to the host)"
 #endif
-#include "kit/display_thread.h"
 #include "kit/q_targets.h"
 #include "kit/synthyboy_adapter.h"
 #include "overlay/pages.h"
