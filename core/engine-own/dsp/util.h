@@ -129,6 +129,9 @@ public:
             current = target;
         return current;
     }
+    /** No ramp is running: next () returns the target and changes nothing. */
+    bool settled() const noexcept { return countdown <= 0; }
+    float targetValue() const noexcept { return target; }
 
 private:
     float current = 1.0f, target = 1.0f, step = 0.0f;
