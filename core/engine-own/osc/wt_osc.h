@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <vector>
 
@@ -107,13 +108,17 @@ struct DecimatorTaps
 };
 
 struct WtOscLaneTest; // core/tests/test_own_warp_lanes.cpp
+struct WtOscOptTest;  // core/tests/test_own_wt_osc_opt.cpp
 
 class WtOsc
 {
     friend struct WtOscLaneTest;
+    friend struct WtOscOptTest; // core/tests/test_own_wt_osc_opt.cpp
 
 public:
     static constexpr int kMaxVoices = 16;
+    /** Tests only: run the code as it was before the optimisations of docs/release/CPU-REVIEW-OSC.md (the same output, slower). */
+    void setReference (bool on) noexcept { reference_ = on; }
     static constexpr int kOversample = 4, kTaps = 128;
     static constexpr int kOversampleLow = 2, kTapsLow = 32;
     static inline const DecimatorTaps<128> kDecimator4 { 0.105, 7.5 }; // cycles per sample of the 4x signal
@@ -236,7 +241,25 @@ public:
         }
         // stereo spread: own channel a, other channel b (equal power)
         const float w = clamp01 (t.spread);
-        float sa = std::sin (kPif * 0.5f * (0.5f + 0.5f * w)), sb = std::sin (kPif * 0.5f * (1.5f + 0.5f * w));
+        // the two sines depend on the spread only, and the Serum law below overwrites them: they are computed (and kept for the next full update) only when they are used
+        float sa = 0.0f, sb = 0.0f;
+        if (reference_)
+        {
+            sa = std::sin (kPif * 0.5f * (0.5f + 0.5f * w));
+            sb = std::sin (kPif * 0.5f * (1.5f + 0.5f * w));
+        }
+        else if (t.law != 1)
+        {
+            if (!(spreadOk && sameBits (spreadW, w)))
+            {
+                spreadSa = std::sin (kPif * 0.5f * (0.5f + 0.5f * w));
+                spreadSb = std::sin (kPif * 0.5f * (1.5f + 0.5f * w));
+                spreadW = w;
+                spreadOk = true;
+            }
+            sa = spreadSa;
+            sb = spreadSb;
+        }
         if (t.law == 1)
         {
             // the Serum law (document 01, 9.6): a measured gain per voice count, centre and outer gains on the blend axis, the own / other channel gains of the spread
@@ -274,26 +297,70 @@ public:
         // oscillator pan, constant power with 0 dB at the centre
         const float pan = std::clamp (t.pan, -1.0f, 1.0f);
         const float panRt = std::clamp (t.panRight, -1.0f, 1.0f);
-        const float panL = 1.41421356f * std::sin (kPif * 0.25f * (1.0f - pan)), panR = 1.41421356f * std::sin (kPif * 0.25f * (1.0f + panRt));
+        float panL, panR;
+        if (reference_)
+        {
+            panL = 1.41421356f * std::sin (kPif * 0.25f * (1.0f - pan));
+            panR = 1.41421356f * std::sin (kPif * 0.25f * (1.0f + panRt));
+        }
+        else
+        {
+            if (!(panLOk && sameBits (panKeyL, pan)))
+            {
+                panLValue = 1.41421356f * std::sin (kPif * 0.25f * (1.0f - pan));
+                panKeyL = pan;
+                panLOk = true;
+            }
+            if (!(panROk && sameBits (panKeyR, panRt)))
+            {
+                panRValue = 1.41421356f * std::sin (kPif * 0.25f * (1.0f + panRt));
+                panKeyR = panRt;
+                panROk = true;
+            }
+            panL = panLValue;
+            panR = panRValue;
+        }
         const int bump = odd ? 0 : 1;
         const float divisor = static_cast<float> (std::max (1, U - 1));
+        // the detune offset of each pair depends on the voice count, the mode, the curve and the range only (not on pitch, frame, level or pan)
+        const bool offHit = !reference_ && offOk && offU == U && offMode == t.mode && sameBits (offCurve, t.curve) && sameBits (offRange, t.detuneSemis);
+        if (!offHit)
+        {
+            offU = U;
+            offMode = t.mode;
+            offCurve = t.curve;
+            offRange = t.detuneSemis;
+            offOk = !reference_;
+        }
         int n = 0;
         auto addVoice = [&] (float semis, float amp, float gainL, float gainR, float framePos) noexcept
         {
             double f;
-            if (n < kMaxVoices && haveFreq[n] && freqSemis[n] == semis)
+            float inc;
+            if (!reference_ && n < kMaxVoices && haveFreq[n] && freqSemis[n] == semis)
+            {
                 f = freqHz[n]; // the same pitch as this voice had in the previous full update: the same double
+                if (!(incRate[n] == sampleRate)) // (the increment also depends on the rate; both are kept together)
+                {
+                    freqInc[n] = static_cast<float> (std::min (f, nyq) / sampleRate);
+                    incRate[n] = sampleRate;
+                }
+                inc = freqInc[n];
+            }
             else
             {
                 f = 440.0 * std::exp2 ((static_cast<double> (semis) - 69.0) / 12.0);
+                inc = static_cast<float> (std::min (f, nyq) / sampleRate);
                 if (n < kMaxVoices)
                 {
                     freqSemis[n] = semis;
                     freqHz[n] = f;
+                    freqInc[n] = inc;
+                    incRate[n] = sampleRate;
                     haveFreq[n] = true;
                 }
             }
-            curInc[n] = static_cast<float> (std::min (f, nyq) / sampleRate);
+            curInc[n] = inc;
             curGainL[n] = amp * gainL * panL * t.level;
             curGainR[n] = amp * gainR * panR * t.level;
             curFrameOf[n] = std::clamp (t.frame + t.frameSpread * framePos, 0.0f, 1.0f);
@@ -324,7 +391,14 @@ public:
                 }
                 default: break;
             }
-            const float semisOff = powerShape (tt, t.curve) * t.detuneSemis;
+            float semisOff;
+            if (offHit)
+                semisOff = offValue[i];
+            else
+            {
+                semisOff = powerShape (tt, t.curve) * t.detuneSemis;
+                offValue[i] = semisOff;
+            }
             const bool leftFlat = (i % 2) == 0;
             const float leftSemis = leftFlat ? -semisOff : semisOff;
             const float pos = divisor > 0.0f ? (static_cast<float> (2 * i + bump)) / divisor : 0.0f;
@@ -954,6 +1028,15 @@ private:
     float lastCross[6] = {};
     int curCount = 1, prevCount = 1;
     bool havePrev = false;
+    // the results of the sines and of the detune curve of the last full update (keyed on their inputs: the same values as computing them again); see update ()
+    bool reference_ = false;
+    static bool sameBits (float a, float b) noexcept { uint32_t x, y; std::memcpy (&x, &a, 4); std::memcpy (&y, &b, 4); return x == y; }
+    bool spreadOk = false, panLOk = false, panROk = false, offOk = false;
+    float spreadW = 0.0f, spreadSa = 0.0f, spreadSb = 0.0f, panKeyL = 0.0f, panLValue = 0.0f, panKeyR = 0.0f, panRValue = 0.0f;
+    int offU = 0, offMode = 0;
+    float offCurve = 0.0f, offRange = 0.0f, offValue[kMaxVoices] = {};
+    float freqInc[kMaxVoices] = {};
+    double incRate[kMaxVoices] = {};
     float freqSemis[kMaxVoices] = {};   // the pitch of every voice at its last full update () and its frequency in Hz (the double exp2 is not repeated for a held pitch)
     double freqHz[kMaxVoices] = {};
     bool haveFreq[kMaxVoices] = {};
