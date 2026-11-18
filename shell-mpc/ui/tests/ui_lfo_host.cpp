@@ -645,6 +645,13 @@ void testWholeShapeModel()
     loopShape.loop = 1;
     loopShape.shift (0.25f);
     check (loopShape.loop >= 0 && near (loopShape.p[loopShape.loop].y, 1.0f), "shift: the loop point stays on its point (the peak)");
+    lfo::ShapeModel atCut = lfo::ShapeModel::fromBuiltin (1);   // a triangle: the peak at x 0.5
+    atCut.loop = 1;
+    check (atCut.shift (0.5f) && atCut.loop == 0 && near (atCut.p[0].x, 0.0f) && near (atCut.p[0].y, 1.0f), "shift: the cut at the loop point: the loop point is the start of the shape (x 0), not its copy at the end");
+    lfo::PointSet ps;
+    ps.add (2);
+    ps.onInsert (-1);
+    check (ps.has (2) && ps.count() == 1, "point set: an insert at a negative index changes nothing");
     // bending all curves
     lfo::ShapeModel b;
     b.n = 4;
