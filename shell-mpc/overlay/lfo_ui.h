@@ -33,6 +33,7 @@
 #include "../safe_file.h"
 #include "../q_router.h"
 #include "q_publish.h"
+#include "q_publish_mod.h"
 #include "curve_source.h"
 #include "lfo_shape_files.h"
 #include "page_view.h"

@@ -28,6 +28,7 @@
 #include "macro_names.h"
 #include "page_view.h"
 #include "q_publish.h"
+#include "q_publish_mod.h"
 #include "spectrum_curve.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"

@@ -25,6 +25,7 @@
 #include "../ui/mod_targets.h"
 #include "../q_router.h"
 #include "q_publish.h"
+#include "q_publish_mod.h"
 #include "curve_source.h"
 #include "touch_decoder.h"
 #include "page_view.h"

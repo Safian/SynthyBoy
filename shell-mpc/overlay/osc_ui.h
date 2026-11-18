@@ -30,6 +30,7 @@
 #include "../q_router.h"
 #include "play_osc.h"
 #include "q_publish.h"
+#include "q_publish_mod.h"
 #include "ui_bind.h"
 #include "touch_decoder.h"
 #include "ui_stack.h"

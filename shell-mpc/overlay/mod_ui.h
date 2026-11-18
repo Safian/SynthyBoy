@@ -29,6 +29,7 @@
 #include "curve_source.h"
 #include "page_view.h"
 #include "q_publish.h"
+#include "q_publish_mod.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
 #include "ui_stack.h"
