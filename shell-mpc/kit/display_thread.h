@@ -18,6 +18,7 @@
 // NO DEPENDENCY on the synthesizer engine of SynthyBoy.
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -51,8 +52,8 @@ public:
     void addUnguarded (std::function<void()> tick) { features_.push_back (std::make_unique<Feature> (nullptr, owner_, std::move (tick))); }
 
     /** A feature says that something is going on (a voice sounds, a value moves): the next tick comes after the active period; false: the idle one. The last word of a tick counts. */
-    void setBusy (bool busy) noexcept { busy_ = busy; }
-    bool busy() const noexcept { return busy_; }
+    void setBusy (bool busy) noexcept { busy_.store (busy, std::memory_order_relaxed); }
+    bool busy() const noexcept { return busy_.load (std::memory_order_relaxed); }
     /** The active period always (measurements: the sweep of the cursors without a voice). */
     void setAlwaysActive (bool on) noexcept { always_ = on; }
 
@@ -63,7 +64,7 @@ public:
         auto next = std::chrono::steady_clock::now();
         while (! stop())
         {
-            next += always_ || busy_ ? timing_.active : timing_.idle;
+            next += always_ || busy_.load (std::memory_order_relaxed) ? timing_.active : timing_.idle;
             const auto now = std::chrono::steady_clock::now();
             if (next < now)
                 next = now;   // a tick that was late (a host call blocked): no catch-up burst of calls, one tick now and the grid goes on from here
@@ -104,7 +105,8 @@ private:
     const void* owner_;
     const char* name_;
     Timing timing_;
-    bool busy_ = false, always_ = false;
+    std::atomic<bool> busy_ { false };   // written by the audio / host thread (setBusy), read by the display thread
+    bool always_ = false;
     std::vector<std::unique_ptr<Feature>> features_;
 };
 
