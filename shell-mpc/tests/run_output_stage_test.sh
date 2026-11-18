@@ -8,3 +8,10 @@ c++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror -I . -
 "$out"
 c++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror -I . -DSYNTHYBOY_MPC_OUTPUT_LIMITER=1 tests/output_stage_host.cpp -o "$out"
 "$out"
+# the NEON form against the scalar loops, bit for bit (needs an ARM host: the NEON intrinsics; AArch64 also runs it with flush-to-zero set)
+case "$(uname -m)" in
+  arm64|aarch64)
+    c++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror -ffp-contract=off -DSB_TEST_NEON=1 -I . tests/output_stage_lanes_host.cpp -o "$out"
+    "$out"
+    ;;
+esac
