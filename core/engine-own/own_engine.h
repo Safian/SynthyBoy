@@ -79,6 +79,8 @@ public:
     void requestMeters() noexcept override { meterHold.store (kMeterHoldBlocks, std::memory_order_relaxed); }
     void silence() noexcept override;
     void setUltraRender (bool on) noexcept override { ultraRender.store (on, std::memory_order_relaxed); }
+    void setVoiceCountAlpha (float a) noexcept { voiceCountAlpha.store (std::clamp (a, 0.0f, 1.0f), std::memory_order_relaxed); }
+    float voiceCountGain() const noexcept { return lastVoiceCountGain.load (std::memory_order_relaxed); }
     void setContent (const StateContent& content) override;
     void setContentStore (const IContentStore* store) override;
 
@@ -233,6 +235,12 @@ private:
     float busMkNow[3] = { 1.0f, 1.0f, 1.0f }, busMkPrev[3] = { 1.0f, 1.0f, 1.0f };
     bool busMkSeen[3] = {};
     float busGain[3] = { 1.0f, 1.0f, 1.0f }, busGainPrev[3] = { 1.0f, 1.0f, 1.0f }, directGain = 1.0f, directGainPrev = 1.0f;
+    std::atomic<float> voiceCountAlpha { kVoiceCountAlphaDefault };
+    std::atomic<float> lastVoiceCountGain { 1.0f };
+    float voiceCountGainCur = 1.0f;
+    float voiceCountGainPrev = 1.0f;
+    float voiceCountGainDb = 0.0f;
+    int soundingAtPeriodStart = 0;
     int busDest[2] = {}, mainBypass = 0, busBypass[2] = {};
     std::atomic<uint32_t> fxMask { kFxAll };
     std::atomic<bool> fxMakeup { true };

@@ -47,6 +47,23 @@ bool setOwnSavingsOff (IEngine& engine, uint32_t off) noexcept
     return true;
 }
 
+bool setOwnVoiceCountAlpha (IEngine& engine, float alpha) noexcept
+{
+    auto* own = dynamic_cast<own::OwnEngine*> (&engine);
+    if (own == nullptr)
+        return false;
+    own->setVoiceCountAlpha (alpha);
+    return true;
+}
+
+float ownVoiceCountGain (const IEngine& engine) noexcept
+{
+    const auto* own = dynamic_cast<const own::OwnEngine*> (&engine);
+    if (own == nullptr)
+        return 1.0f;
+    return own->voiceCountGain();
+}
+
 bool setOwnLowTierMorphSpread (IEngine& engine, bool keep) noexcept
 {
     auto* own = dynamic_cast<own::OwnEngine*> (&engine);
@@ -488,6 +505,9 @@ double OwnEngine::wavetableBuildMs() const noexcept
 
 void OwnEngine::silence() noexcept
 {
+    voiceCountGainCur = voiceCountGainPrev = 1.0f;
+    voiceCountGainDb = 0.0f;
+    lastVoiceCountGain.store (1.0f, std::memory_order_relaxed);
     for (auto& g : ghosts)
         g.used = false;
     // the host transport stopped: notes and effect tails end at once, parameters, controllers and content stay
@@ -514,6 +534,9 @@ void OwnEngine::clearLatencyDelays() noexcept
 
 void OwnEngine::reset()
 {
+    voiceCountGainCur = voiceCountGainPrev = 1.0f;
+    voiceCountGainDb = 0.0f;
+    lastVoiceCountGain.store (1.0f, std::memory_order_relaxed);
     for (auto& g : ghosts)
         g.used = false;
     for (auto& v : voices)
@@ -1437,6 +1460,13 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     {
         if (controlPos == 0)
         {
+            soundingAtPeriodStart = 0;
+            forEachActive ([&] (int i)
+            {
+                const Voice* v = voices[static_cast<size_t> (i)].get();
+                if (!v->killing() && v->countLevel() > 0.0f)
+                    ++soundingAtPeriodStart;
+            });
             controlTick();
             // everything below that reads only parameters (and the global modulation) is redone only when one of them changed since the last period
             const uint32_t mask = effectiveFxMask (fxMask.load (std::memory_order_relaxed), base[fxReverbForce] >= 0.5f);
@@ -1551,6 +1581,78 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 end = std::min (end, std::max (events[ei].frame, pos + 1));
         }
         const int n = end - pos;
+        if (controlPos == 0)
+        {
+            voiceCountGainPrev = voiceCountGainCur;
+            const float alpha = voiceCountAlpha.load (std::memory_order_relaxed);
+            if (alpha <= 0.0f)
+            {
+                voiceCountGainCur = 1.0f;
+                voiceCountGainDb = 0.0f;
+            }
+            else
+            {
+                const MasterIdx& mIdx = paramIndex().master;
+                const bool monoOrLegato = (base[static_cast<size_t> (mIdx.polyphony)] <= 1.0f) || (base[static_cast<size_t> (mIdx.legato)] >= 0.5f);
+                float s1 = 0.0f, s2 = 0.0f;
+                int counted = 0;
+                forEachActive ([&] (int i)
+                {
+                    const Voice* v = voices[static_cast<size_t> (i)].get();
+                    if (v->killing())
+                        return;
+                    const float a = v->countLevel();
+                    if (a > 0.0f)
+                    {
+                        ++counted;
+                        s1 += a;
+                        s2 += a * a;
+                    }
+                });
+                float n_eff = 1.0f;
+                if (!monoOrLegato && counted > 1 && s2 >= 1e-12f)
+                {
+                    n_eff = (s1 * s1) / s2;
+                    if (n_eff < 1.0f)
+                        n_eff = 1.0f;
+                }
+                float T = 1.0f;
+                float targetDb = 0.0f;
+                if (n_eff <= 1.0f)
+                {
+                    T = 1.0f;
+                    targetDb = 0.0f;
+                }
+                else
+                {
+                    T = std::pow (n_eff, -alpha);
+                    targetDb = -alpha * (20.0f * std::log10 (n_eff));
+                }
+                if (soundingAtPeriodStart == 0)
+                {
+                    voiceCountGainCur = T;
+                    voiceCountGainPrev = T;
+                    voiceCountGainDb = targetDb;
+                }
+                else
+                {
+                    const float dtMs = (static_cast<float> (kControlPeriod) / static_cast<float> (sampleRate)) * 1000.0f;
+                    const float maxDownDb = 3.0f * dtMs;
+                    const float maxUpDb = 0.15f * dtMs;
+                    if (targetDb < voiceCountGainDb)
+                        voiceCountGainDb = std::max (voiceCountGainDb - maxDownDb, targetDb);
+                    else if (targetDb > voiceCountGainDb)
+                        voiceCountGainDb = std::min (voiceCountGainDb + maxUpDb, targetDb);
+                    voiceCountGainCur = std::pow (10.0f, voiceCountGainDb * 0.05f);
+                }
+                if (std::fabs (voiceCountGainCur - T) < 1e-6f)
+                {
+                    voiceCountGainCur = T;
+                    voiceCountGainDb = targetDb;
+                }
+            }
+            lastVoiceCountGain.store (voiceCountGainCur, std::memory_order_relaxed);
+        }
         // the voices add to Main, Bus 1, Bus 2 and Direct; the buses run through their racks and go to their destination, Main through the Main rack
         for (int t = 0; t < 4; ++t)
         {
@@ -1567,6 +1669,18 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         mo.srcSq = sourceMeters ? stripSq : nullptr;   // the voices measure their sources only while the display shows the source strips (requestMeters)
         forEachActive ([&] (int i) { voices[static_cast<size_t> (i)]->render (mo, n, controlPos); });
         addGhosts (n);
+        if (voiceCountGainPrev != 1.0f || voiceCountGainCur != 1.0f)
+        {
+            float gRamp[kControlPeriod];
+            const float invPeriod = 1.0f / static_cast<float> (kControlPeriod);
+            for (int i = 0; i < n; ++i)
+                gRamp[i] = lerp (voiceCountGainPrev, voiceCountGainCur, static_cast<float> (controlPos + i + 1) * invPeriod);
+            for (int t = 0; t < 4; ++t)
+            {
+                simd::mulRamp (mixL[t], gRamp, n);
+                simd::mulRamp (mixR[t], gRamp, n);
+            }
+        }
         if (sourceMeters)
             for (int s = 0; s < 7; ++s)   // Sub, A, B, C, Noise, Filter 1, Filter 2: the power sum of the voices of this period
                 stripBlockPeak[s] = std::max (stripBlockPeak[s], std::sqrt (stripSq[s]));
