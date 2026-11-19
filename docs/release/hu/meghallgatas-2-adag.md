@@ -207,7 +207,7 @@ Ez a dokumentum a SynthyBoy szintetizátor gyári hangmintacsomagjára épülő 
 ## Általános kérdések
 
 - **Hangerő a korábbi hangszínekhez képest:** A fenntartott kitartásnál (sustain) behangolt új 24 preset hangereje hogyan illeszkedik az 1. adag 24 új presetéhez és a korábbi 112 gyári presethez képest?
-- **Torzítás teljes akkordoknál a kimeneti fokozaton:** A hangszer fix +18 dB-es analóg kimeneti fokozatán a négyhangos vagy sokhangos akkordok maximális billentésnél okoznak-e nemkívánatos digitális vagy analóg torzítást limiter nélkül?
+- **Torzítás teljes akkordoknál a kimeneti fokozaton (historic kérdés a korábbi +18 dB-es kimeneti fokozathoz):** A korábbi fix +18 dB-es analóg kimeneti fokozaton a négyhangos vagy sokhangos akkordok maximális billentésnél okoztak-e nemkívánatos digitális vagy analóg torzítást limiter nélkül? (Megjegyzés: a jelenlegi kimeneti fokozat -2,5 dB-es utóerősítést és bekapcsolt limitert használ -0,5 dBFS plafonnal.)
 - **Monó kompatibilitás:** A granuláris szemcsefelhők, a spektrális újraszintézisek és a sztereó mintarétegek (mint a bakelitzaj vagy a gitárhangfal) monó összegzéskor nem szenvednek-e fáziskioltást vagy üregessé válást?
 - **Key 61 eltérések:** A Key 61 profilon a konvolúciós effektek (Convolve) és zengetők kiiktatása miatt az érintett hangszínek (különösen a Reese Dual Phase Bass, Dusty Rhodes Keys, Marimba Layer Keys és Frozen Pluck Drone) nem veszítenek-e túl sokat a térélményükből vagy a hangerejükből?
 - **A gyári mintacsomag hiánya esetén:** Amennyiben a mintacsomag fájljai nem érhetők el a rendszerben, az alatta megszólaló szintetizált hullámtáblás tartalékréteg önmagában elfogadható és zenei hangzást nyújt-e?

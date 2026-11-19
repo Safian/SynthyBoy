@@ -288,7 +288,7 @@ int main()
                 delete s;
             }
         }
-        {   // the loudness order: a louder input never comes out quieter (momentary max of 400 ms, unweighted) over make-up gains 0 .. 18 dB
+        {   // the loudness order: a louder input never comes out quieter (momentary max of 400 ms, unweighted) over make-up gains 0 .. 18 dB (historic test sweep)
             std::vector<float> in ((size_t) (3 * sr), 0.0f);
             for (size_t i = 0; i < in.size(); ++i)
             {
@@ -307,7 +307,7 @@ int main()
                 prev = lv;
                 delete s;
             }
-            check (mono, "loudness order: the momentary maximum never falls as the make-up gain rises 0 .. 18 dB (no inversion by pumping)");
+            check (mono, "loudness order: the momentary maximum never falls as the make-up gain rises 0 .. 18 dB (historic test sweep, no inversion by pumping)");
         }
         // ---------------- (d) latency, reset, the live switch ----------------
         {

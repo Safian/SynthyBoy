@@ -141,7 +141,7 @@ What the IInstanceView members are (`overlay/curve_source.h`), and where they go
 | --- | --- | --- | --- | --- |
 | `callback_stats.h` | audio callback statistics (diagnostics) | mpc_vst2_abi.h, safe_file.h, thread_policy.h | **GENERIC** | - |
 | `host_strings.h` | bounded strings for the host (putBounded, shortName, nameWithSuffix) | none | **GENERIC** | - |
-| `output_peak.h, output_stage.h` | output peak, make-up gain / limiter | none (default gain 18 dB is SynthyBoy's choice) | **GENERIC** | - |
+| `output_peak.h, output_stage.h` | output peak, make-up gain / limiter | none (default gain -2.5 dB / kMakeupGainDb is SynthyBoy's choice) | **GENERIC** | - |
 | `play_log.h, poll_guard.h` | debug log, PollGuard / PollStatus | safe_file.h; /tmp/synthyboy-* names | **GENERIC** | Branding (the kit log: shell-mpc/kit/log.h, another worker) |
 | `plugin_paths.h, safe_file.h, thread_policy.h` | plugin folder, safe file reads, thread scheduling | none | **GENERIC** | - |
 | `q_router.h` | QRouter (the 16 Q proxies) | none: it knows no parameter, the plugin passes in how to read and write | **GENERIC** | QProxyBank (kit/q_targets.h) wraps it |
