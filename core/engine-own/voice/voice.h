@@ -157,6 +157,8 @@ public:
     uint32_t serial() const noexcept { return noteSerial; }
     float velocity() const noexcept { return vel; }
     float level() const noexcept { return lastLevel; }
+    /** The voice's level for the voice-count gain (docs/release/VOICE-COUNT-GAIN-SPEC.md): envelope 1 times velocity factor. */
+    float countLevel() const noexcept { return ampCur * velGain; }
     float lastL() const noexcept { return outL; }
     float lastR() const noexcept { return outR; }
     void setTuningExpression (float semis) noexcept { tuneExpr = semis; }

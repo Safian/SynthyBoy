@@ -97,9 +97,10 @@ double momentaryMax (const std::vector<float>& L, const std::vector<float>& R, d
     return -0.691 + 10.0 * std::log10 (std::max (best, 1e-20));
 }
 
-Result run (const ParamValues& values, const StateContent& content, const Quality& q, const IContentStore* store, const Gesture& g, double sr, double hold, float gainDb, bool limiter)
+Result run (const ParamValues& values, const StateContent& content, const Quality& q, const IContentStore* store, const Gesture& g, double sr, double hold, float gainDb, bool limiter, float voiceGainAlpha)
 {
     auto engine = createEngine (EngineKind::own);
+    setOwnVoiceCountAlpha (*engine, voiceGainAlpha);
     engine->prepare (sr, kBlock, q);
     engine->setContentStore (store);
     for (size_t i = 0; i < paramCount(); ++i)
@@ -195,6 +196,7 @@ int main (int argc, char** argv)
     double sr = 48000.0, hold = 3.0;
     std::vector<int> note { 48 }, chord { 36, 48, 55, 60 }, chordS { 48, 55, 60, 64 }, chord6 { 36, 43, 48, 55, 60, 64 }, chord8 { 36, 43, 48, 52, 55, 60, 64, 67 };
     bool limiter = false;
+    float voiceGainAlpha = kVoiceCountAlphaDefault;
     for (int i = 1; i < argc; ++i)
     {
         const std::string a = argv[i];
@@ -212,6 +214,7 @@ int main (int argc, char** argv)
         else if (a == "--limiter") limiter = next() == "on";
         else if (a == "--hold") hold = std::atof (next().c_str());
         else if (a == "--sr") sr = std::atof (next().c_str());
+        else if (a == "--voice-gain-alpha") voiceGainAlpha = static_cast<float> (std::atof (next().c_str()));
         else
         {
             std::fprintf (stderr, "level-probe: unknown argument %s\n", a.c_str());
@@ -220,7 +223,7 @@ int main (int argc, char** argv)
     }
     if (presets.empty() || ! isEngineAvailable (EngineKind::own))
     {
-        std::fprintf (stderr, "usage: synthyboy_level_probe --presets DIR --content-dir DIR --profile TEXT [--gain DB] [--filter TEXT] [--note K] [--chord K,..] [--chord6 K,..] [--hold S] [--sr HZ]\n");
+        std::fprintf (stderr, "usage: synthyboy_level_probe --presets DIR --content-dir DIR --profile TEXT [--gain DB] [--filter TEXT] [--note K] [--chord K,..] [--chord6 K,..] [--hold S] [--sr HZ] [--voice-gain-alpha A]\n");
         return 2;
     }
     synthyboy_mpc::Profile profile;
@@ -266,7 +269,7 @@ int main (int argc, char** argv)
         all.push_back ({ "chordG_v127", { gk, gk + 4, gk + 7, gk + 12 }, 1.0f, 1.0 });   // held 1 s and released, as the gate plays it
         for (const Gesture& g : all)
         {
-            const Result r = run (values, content, q, store.get(), g, sr, hold, gain, limiter);
+            const Result r = run (values, content, q, store.get(), g, sr, hold, gain, limiter, voiceGainAlpha);
             std::printf (",\"%s\":{\"raw\":%.3f,\"pre\":%.3f,\"post\":%.3f,\"sus\":%.3f,\"mom\":%.3f,\"gr_max\":%.3f,\"engaged\":%.4f,\"early\":%.3f}", g.name, r.raw, r.pre, r.post, r.sus, r.mom, r.grMax, r.engaged, r.early);
         }
         std::printf ("}\n");

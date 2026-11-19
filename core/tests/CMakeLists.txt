@@ -174,7 +174,7 @@ synthyboy_add_test(synthyboy_test_output_stage test_output_stage.cpp)
 target_include_directories(synthyboy_test_output_stage PRIVATE "${PROJECT_SOURCE_DIR}/shell-mpc")
 # The voice-count gain of the own engine (docs/release/VOICE-COUNT-GAIN-SPEC.md): acceptance tests written before the implementation (they fail until it exists).
 synthyboy_add_test(synthyboy_test_own_voice_count_gain test_own_voice_count_gain.cpp)
-target_include_directories(synthyboy_test_own_voice_count_gain PRIVATE "${PROJECT_SOURCE_DIR}/shell-mpc")
+target_include_directories(synthyboy_test_own_voice_count_gain PRIVATE "${PROJECT_SOURCE_DIR}/shell-mpc" "${PROJECT_SOURCE_DIR}/core/engine-own")
 target_compile_definitions(synthyboy_test_own_voice_count_gain PRIVATE SYNTHYBOY_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}" SYNTHYBOY_TEST_CONTENT_STORE="${SYNTHYBOY_OUTPUT_STAGE_STORE}")
 set_tests_properties(synthyboy_test_own_voice_count_gain PROPERTIES LABELS slow TIMEOUT 1800)
 synthyboy_add_test(synthyboy_test_own_profile test_own_profile.cpp)   # the economy groups of a quality (the device profiles of shell-mpc/device_profile.h)

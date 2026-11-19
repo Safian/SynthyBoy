@@ -23,6 +23,7 @@
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "device_profile.h"
+#include "dsp/simd.h"
 
 using namespace synthyboy;
 
@@ -335,6 +336,38 @@ TEST (voice_count_gain_closes_the_chord_note_gap)
     const double fall = median (all0) - median (all5);
     std::printf ("    all    %6.2f  %6.2f dB (falls by %.2f dB)\n", median (all0), median (all5), fall);
     CHECK (fall >= 4.5 && fall <= 7.0);
+}
+
+TEST (voice_count_gain_neon_and_scalar_ramp_multiply_are_bit_identical)
+{
+#if defined(__ARM_NEON)
+    uint32_t s = 12345u;
+    const auto randFloat = [&] {
+        s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+        return static_cast<float> (static_cast<int32_t> (s)) * (1.0f / 2147483648.0f);
+    };
+    int totalCases = 0;
+    for (int rep = 0; rep < 500; ++rep)
+    {
+        for (int n : { 1, 4, 7, 16, 23, 31, 32 })
+        {
+            std::vector<float> dataNeon (static_cast<size_t> (n)), dataScalar (static_cast<size_t> (n)), g (static_cast<size_t> (n));
+            for (int i = 0; i < n; ++i)
+            {
+                dataNeon[static_cast<size_t> (i)] = dataScalar[static_cast<size_t> (i)] = randFloat();
+                g[static_cast<size_t> (i)] = std::fabs (randFloat());
+            }
+            own::simd::mulRamp (dataNeon.data(), g.data(), n);
+            own::simd::mulRampScalar (dataScalar.data(), g.data(), n);
+            for (int i = 0; i < n; ++i)
+                CHECK_EQ (bitsOf (dataNeon[static_cast<size_t> (i)]), bitsOf (dataScalar[static_cast<size_t> (i)]));
+            ++totalCases;
+        }
+    }
+    std::printf ("  NEON vs scalar ramp multiply verified bit-identical on %d cases\n", totalCases);
+#else
+    std::printf ("  no NEON in this build\n");
+#endif
 }
 
 #endif

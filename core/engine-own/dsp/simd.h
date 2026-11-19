@@ -20,6 +20,9 @@
  #include <arm_neon.h>
  #include "neon_cmp.h"
  #define SB_NEON 1
+#elif defined(__ARM_NEON) && !defined(SB_NO_NEON)
+ #include <arm_neon.h>
+ #define SB_NEON 0
 #else
  #define SB_NEON 0
 #endif
@@ -60,6 +63,25 @@ inline void mulAddTo (float* d, const float* a, const float* g, int n) noexcept
 #endif
     for (; k < n; ++k)
         d[k] += a[k] * g[k];
+}
+
+/** d[k] *= g[k] (docs/release/VOICE-COUNT-GAIN-SPEC.md section 5: ramp multiply without fused multiply-add) */
+inline void mulRamp (float* d, const float* g, int n) noexcept
+{
+    int k = 0;
+#if (SB_NEON || (defined(__ARM_NEON) && !defined(SB_NO_NEON)))
+    for (; k + 4 <= n; k += 4)
+        vst1q_f32 (d + k, vmulq_f32 (vld1q_f32 (d + k), vld1q_f32 (g + k)));
+#endif
+    for (; k < n; ++k)
+        d[k] *= g[k];
+}
+
+/** Scalar reference for mulRamp: d[k] *= g[k] */
+inline void mulRampScalar (float* d, const float* g, int n) noexcept
+{
+    for (int k = 0; k < n; ++k)
+        d[k] *= g[k];
 }
 
 /** t[k] = (t0 + k + 1) * invP for k = 0 .. 3 starting at k0, as the scalar loops write it: float (int) * invP */
