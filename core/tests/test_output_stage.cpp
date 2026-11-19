@@ -485,3 +485,111 @@ TEST (output_stage_nonpositive_sample_frames)
         }
     }
 }
+
+// 5. Limiting switch (LIMIT off/on) crossfade: no sample jump larger than a derived bound at the switch.
+TEST (output_stage_switch_crossfade_bound)
+{
+    const double sampleRates[] = { 44100.0, 48000.0 };
+    const double testFrequencies[] = { 150.0, 330.0, 1000.0 };
+
+    for (const double sr : sampleRates)
+    {
+        const int D = synthyboy::OutputStage::lookaheadFor (sr);
+        const float A = 0.5f;
+
+        for (const double f : testFrequencies)
+        {
+            // Derived bound:
+            // Delta y[n] <= sineStep + fadeStep
+            // where sineStep = 2 * pi * f / sr * A
+            // and fadeStep = 2 * A / (kSwitchFadeSeconds * sr)
+            const double sineStep = 2.0 * kPi * f / sr * static_cast<double> (A);
+            const double fadeStep = 2.0 * static_cast<double> (A) / std::max (1.0, std::round (synthyboy::OutputStage::kSwitchFadeSeconds * sr));
+            const double maxAllowedStep = sineStep + fadeStep + 1e-5;
+
+            for (const bool toOn : { true, false })
+            {
+                synthyboy::OutputStage stage;
+                stage.prepare (sr);
+                stage.setGainDb (0.0f);
+                stage.setLimiter (! toOn);
+                stage.reset();
+
+                const size_t sec = static_cast<size_t> (sr);
+                auto in = generateSine (sec, A, f, sr);
+                auto l = in, r = in;
+
+                const size_t switchPoint = sec / 2;
+
+                // Process first half before switch
+                stage.process (l.data(), r.data(), static_cast<int> (switchPoint));
+
+                // Flip switch
+                stage.setLimiter (toOn);
+
+                // Process second half across switch and fade
+                stage.process (l.data() + switchPoint, r.data() + switchPoint, static_cast<int> (sec - switchPoint));
+
+                // Measure maximum sample jump in the region around and throughout the switch
+                double observedMaxStep = 0.0;
+                const size_t checkStart = switchPoint > 10 ? switchPoint - 10 : 0;
+                const size_t checkEnd = std::min (sec - 1, switchPoint + static_cast<size_t> (synthyboy::OutputStage::kSwitchFadeSeconds * sr * 1.5));
+
+                for (size_t i = checkStart; i < checkEnd; ++i)
+                {
+                    const double stepL = static_cast<double> (std::fabs (l[i + 1] - l[i]));
+                    const double stepR = static_cast<double> (std::fabs (r[i + 1] - r[i]));
+                    observedMaxStep = std::max (observedMaxStep, std::max (stepL, stepR));
+                }
+
+                // Numeric assertion: jump bounded by derived bound
+                CHECK (observedMaxStep <= maxAllowedStep);
+                CHECK (observedMaxStep > 0.0);
+
+                // Verify that after crossfade completes, output matches the target path bit-identically
+                const size_t settledStart = switchPoint + static_cast<size_t> (synthyboy::OutputStage::kSwitchFadeSeconds * sr * 1.5) + static_cast<size_t> (D);
+                size_t settledDiffs = 0;
+                for (size_t i = settledStart; i < sec; ++i)
+                {
+                    const float expected = toOn ? in[i - static_cast<size_t> (D)] : in[i];
+                    uint32_t bObsL = 0, bExp = 0;
+                    std::memcpy (&bObsL, &l[i], sizeof (float));
+                    std::memcpy (&bExp, &expected, sizeof (float));
+                    if (bObsL != bExp)
+                        ++settledDiffs;
+                }
+                CHECK_EQ (settledDiffs, 0u);
+            }
+        }
+
+        // Test switching ON with signal far above ceiling:
+        // Output must never exceed ceiling from the switch moment onward
+        {
+            synthyboy::OutputStage stageLoud;
+            stageLoud.prepare (sr);
+            stageLoud.setGainDb (18.0f);
+            stageLoud.setLimiter (false);
+            stageLoud.reset();
+
+            const size_t sec = static_cast<size_t> (sr * 2);
+            auto inLoud = generateSine (sec, 0.5f, 220.0, sr);
+            auto lLoud = inLoud, rLoud = inLoud;
+
+            const size_t switchPoint = sec / 2;
+            stageLoud.process (lLoud.data(), rLoud.data(), static_cast<int> (switchPoint));
+
+            // Switch to ON
+            stageLoud.setLimiter (true);
+            stageLoud.process (lLoud.data() + switchPoint, rLoud.data() + switchPoint, static_cast<int> (sec - switchPoint));
+
+            float maxPostSwitchL = 0.0f, maxPostSwitchR = 0.0f;
+            for (size_t i = switchPoint; i < sec; ++i)
+            {
+                maxPostSwitchL = std::max (maxPostSwitchL, std::fabs (lLoud[i]));
+                maxPostSwitchR = std::max (maxPostSwitchR, std::fabs (rLoud[i]));
+            }
+            CHECK (maxPostSwitchL <= synthyboy::OutputStage::kCeiling);
+            CHECK (maxPostSwitchR <= synthyboy::OutputStage::kCeiling);
+        }
+    }
+}
