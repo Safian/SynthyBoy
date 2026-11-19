@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 
 namespace synthyboy
 {
@@ -40,13 +41,41 @@ inline float clamp01 (float v) noexcept
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
 }
 
-/** std::floor for floats: the same value for every input (zero keeps its sign, |x| >= 2^22 and NaN go to the library), without the library call that a 32 bit ARM makes for floorf. */
+/** floor of a float on its bits (CPU-REVIEW-VOICE-MOD.md V12: no float compares, whose flag transfers stall the A17, and no library call): +-0 is returned as it is; |x| < 1 gives +0 or
+    -1; otherwise the fraction bits below the binary point are cleared (the truncation, exact), and a negative x that had a fraction goes one lower (exact below 2^22); |x| >= 2^22,
+    infinities, NaN and denormals go to std::floor (a denormal as before: with flush-to-zero the old compare took it for 0 and called std::floor, which then decides by the mode: an
+    AArch64 frintm gives -0 for a negative one, the integer path -1). Equal to std::floor and to the form before for all 2^32 bit patterns, with and without flush-to-zero
+    (test_own_voice_opt.cpp). */
+inline float ffloorBits (float x) noexcept
+{
+    uint32_t u;
+    std::memcpy (&u, &x, sizeof u);
+    const uint32_t a = u & 0x7fffffffu;
+    if (a < 0x00800000u)
+        return a == 0u ? x : std::floor (x);          // +-0; a denormal
+    if (a >= 0x4a800000u)
+        return std::floor (x);                        // |x| >= 2^22 (already an integer), infinities, NaN
+    const bool negative = (u >> 31) != 0u;
+    if (a < 0x3f800000u)
+        return negative ? -1.0f : 0.0f;               // 0 < |x| < 1
+    const uint32_t fraction = 0x007fffffu >> ((a >> 23) - 127u);
+    if ((u & fraction) == 0u)
+        return x;                                     // an integer
+    const uint32_t t = u & ~fraction;                 // the truncation towards zero
+    float tf;
+    std::memcpy (&tf, &t, sizeof tf);
+    return negative ? tf - 1.0f : tf;
+}
+
+/** std::floor for floats: the same value for every input, in every floating point mode. Where floor is one instruction (AArch64 frintm, x86 with SSE 4.1 roundss) it is std::floor itself;
+    elsewhere (the 32 bit ARM of the Key 61, where floorf is a library call) ffloorBits (). */
 inline float ffloor (float x) noexcept
 {
-    if (!(std::fabs (x) < 4194304.0f) || x == 0.0f)
-        return std::floor (x);
-    const int i = static_cast<int> (x); // truncates towards zero
-    return static_cast<float> (i - (x < static_cast<float> (i) ? 1 : 0));
+#if defined(__aarch64__) || defined(__arm64__) || defined(__SSE4_1__)
+    return std::floor (x);
+#else
+    return ffloorBits (x);
+#endif
 }
 
 inline float lerp (float a, float b, float t) noexcept

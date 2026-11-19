@@ -404,11 +404,13 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
 
     const auto tVoices0 = std::chrono::steady_clock::now();
     voices.clear();
+    activeMask = 0;
     heldSrcValid = false;
     for (int i = 0; i < kPoolVoices; ++i)
     {
         voices.push_back (std::make_unique<Voice>());
         voices.back()->prepare (sampleRate);
+        voices.back()->attachPool (&activeMask, i);
     }
     sustainPending.assign (static_cast<size_t> (kPoolVoices), static_cast<uint8_t> (0));
     base.assign (paramCount(), 0.0f);
@@ -560,6 +562,34 @@ void OwnEngine::reset()
     cntNoteOns = cntNoteOffs = cntUnmatched = cntStolen = 0;
 }
 
+namespace
+{
+inline int lowestSetBit (uint64_t m) noexcept
+{
+#if defined(_MSC_VER)
+    unsigned long i;
+    _BitScanForward64 (&i, m);
+    return static_cast<int> (i);
+#else
+    return __builtin_ctzll (m);
+#endif
+}
+} // namespace
+
+template <class F> void OwnEngine::forEachActive (F&& f) noexcept
+{
+    if (globals.referenceControl)
+    {
+        for (size_t i = 0; i < voices.size(); ++i)
+            if (voices[i]->isActive())
+                f (static_cast<int> (i));
+        return;
+    }
+    // a snapshot of the set: what f (i) does to voice i (a tick that ends it) does not change the other voices, so the set is the one the loop over the pool visits
+    for (uint64_t m = activeMask; m != 0; m &= m - 1)
+        f (lowestSetBit (m));
+}
+
 int OwnEngine::polyphonyLimit() const noexcept
 {
     const MasterIdx& mi = paramIndex().master;
@@ -679,9 +709,12 @@ void OwnEngine::addGhosts (int n) noexcept
 void OwnEngine::updateLowestNote() noexcept
 {
     float lowest = 1000.0f;
-    for (const auto& v : voices)
-        if (v->isActive() && !v->killing())
-            lowest = std::min (lowest, v->tunedKeyNote());
+    forEachActive ([&] (int i)
+    {
+        const Voice& v = *voices[static_cast<size_t> (i)];
+        if (!v.killing())
+            lowest = std::min (lowest, v.tunedKeyNote());
+    });
     globals.lowestNote = lowest;
 }
 
@@ -689,8 +722,7 @@ void OwnEngine::killExcess() noexcept
 {
     const int P = polyphonyLimit();
     int n = 0;
-    for (const auto& v : voices)
-        n += (v->isActive() && !v->killing()) ? 1 : 0;
+    forEachActive ([&] (int i) { n += voices[static_cast<size_t> (i)]->killing() ? 0 : 1; });
     while (n > P)
     {
         Voice* v = pickVictim (false);
@@ -1108,7 +1140,7 @@ void OwnEngine::controlTick() noexcept
         const float rate = lfoRateHz (sync, base[static_cast<size_t> (li.rate)], static_cast<int> (base[static_cast<size_t> (li.division)] + 0.5f), globals.bpm, 440.0f, lastNoteSemis,
                                       base[static_cast<size_t> (li.keyTranspose)], base[static_cast<size_t> (li.keyTune)]);
         lfoPhase[l] += rate * fdt;
-        lfoPhase[l] -= std::floor (lfoPhase[l]);
+        lfoPhase[l] -= ffloor (lfoPhase[l]);   // (ffloor: std::floor for every float, without the libm call; CPU-REVIEW-VOICE-MOD.md V12)
         const int syncType = static_cast<int> (base[static_cast<size_t> (li.syncType)] + 0.5f);
         if (syncType >= 2 && li.mono >= 0 && base[static_cast<size_t> (li.mono)] >= 0.5f)
             monoCore[l].advance (syncType, base[static_cast<size_t> (li.phase)] * (1.0f / 360.0f), rate, base[static_cast<size_t> (li.delay)] * 0.001f, fdt, anyDown);
@@ -1143,9 +1175,7 @@ void OwnEngine::controlTick() noexcept
     }
     globals.activeVoices = activeCount.load (std::memory_order_relaxed);
     updateLowestNote();
-    for (size_t i = 0; i < voices.size(); ++i)
-        if (voices[i]->isActive())
-            voices[i]->tick (globals, static_cast<int> (i));
+    forEachActive ([&] (int i) { voices[static_cast<size_t> (i)]->tick (globals, i); });
     // the global modulation (sources that do not belong to a voice) of the global parameters
     for (int i = 0; i < gnumTouched; ++i)
     {
@@ -1155,9 +1185,12 @@ void OwnEngine::controlTick() noexcept
     gnumTouched = 0;
     float gsrc[kNumSourceIds] = {};
     const Voice* newest = nullptr; // a voice source on a global destination reads the most recently started active voice (document 04, 3.1)
-    for (const auto& v : voices)
-        if (v->isActive() && (newest == nullptr || v->serial() > newest->serial()))
-            newest = v.get();
+    forEachActive ([&] (int i)
+    {
+        const Voice* v = voices[static_cast<size_t> (i)].get();
+        if (newest == nullptr || v->serial() > newest->serial())
+            newest = v;
+    });
     for (int m = 0; m < 8; ++m)
         gsrc[srcMacro (m)] = globals.macro[m];
     for (int l = 0; l < 10; ++l)
@@ -1532,9 +1565,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         }
         std::fill (std::begin (stripSq), std::end (stripSq), 0.0f);
         mo.srcSq = sourceMeters ? stripSq : nullptr;   // the voices measure their sources only while the display shows the source strips (requestMeters)
-        for (auto& v : voices)
-            if (v->isActive())
-                v->render (mo, n, controlPos);
+        forEachActive ([&] (int i) { voices[static_cast<size_t> (i)]->render (mo, n, controlPos); });
         addGhosts (n);
         if (sourceMeters)
             for (int s = 0; s < 7; ++s)   // Sub, A, B, C, Noise, Filter 1, Filter 2: the power sum of the voices of this period
@@ -1614,8 +1645,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
 
     killExcess(); // the overflow of the Kill mode is resolved before the count is reported
     int count = 0;
-    for (const auto& v : voices)
-        count += (v->isActive() && !v->killing()) ? 1 : 0; // a voice in its 50 ms kill fade is on its way out: the count stays within the polyphony
+    forEachActive ([&] (int i) { count += voices[static_cast<size_t> (i)]->killing() ? 0 : 1; }); // a voice in its 50 ms kill fade is on its way out: the count stays within the polyphony
     activeCount.store (count, std::memory_order_relaxed);
     publishStats();
     writeReadout();
@@ -1627,24 +1657,23 @@ void OwnEngine::publishStats() noexcept
 {
     int active = 0, released = 0, sustaining = 0, orphans = 0;
     unsigned miss = 0;
-    for (const auto& v : voices)
+    forEachActive ([&] (int i)
     {
-        if (!v->isActive())
-            continue;
+        const Voice* v = voices[static_cast<size_t> (i)].get();
         miss |= v->missingMask();
         ++active;
         if (v->isReleased() || v->killing())
         {
             ++released;
-            continue;
+            return;
         }
         ++sustaining;
         bool held = sustainDown[std::clamp (v->channel(), 0, numChannels - 1)];
-        for (int i = 0; i < numPressed && !held; ++i)
-            held = pressed[i].playedKey == v->playedKey() && pressed[i].channel == v->channel();
+        for (int k = 0; k < numPressed && !held; ++k)
+            held = pressed[k].playedKey == v->playedKey() && pressed[k].channel == v->channel();
         if (!held)
             ++orphans;
-    }
+    });
     {
         // the content that no voice needs yet but the patch asks for: a user table that is not there, the impulse of Convolve, the sample of the noise source
         const ParamIndex& pi = paramIndex();
@@ -1778,9 +1807,12 @@ void OwnEngine::writeReadout() noexcept
         }
     }
     const Voice* newest = nullptr;
-    for (const auto& v : voices)
-        if (v->isActive() && (newest == nullptr || v->serial() > newest->serial()))
-            newest = v.get();
+    forEachActive ([&] (int i)
+    {
+        const Voice* v = voices[static_cast<size_t> (i)].get();
+        if (newest == nullptr || v->serial() > newest->serial())
+            newest = v;
+    });
     const int tc = pendingCount.load (std::memory_order_acquire);
     if (tc != activeTargetCount)
         activeTargetCount = tc;
@@ -1811,9 +1843,12 @@ void OwnEngine::writeReadout() noexcept
         for (; found < LiveValues::kReadVoices; ++found)
         {
             const Voice* best = nullptr;
-            for (const auto& v : voices)
-                if (v->isActive() && v->serial() < bound && (best == nullptr || v->serial() > best->serial()))
-                    best = v.get();
+            forEachActive ([&] (int i)
+            {
+                const Voice* v = voices[static_cast<size_t> (i)].get();
+                if (v->serial() < bound && (best == nullptr || v->serial() > best->serial()))
+                    best = v;
+            });
             if (best == nullptr)
                 break;
             order[found] = best;

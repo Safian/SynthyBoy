@@ -131,6 +131,13 @@ public:
     float noisePosition() const noexcept { return noiseUseSample ? noiseSv.playheadFraction() : -1.0f; }
 
     bool isActive() const noexcept { return active; }
+    /** The engine's bit set of the active voices of its pool (CPU-REVIEW-VOICE-MOD.md V10): this voice keeps bit `index` of *mask equal to isActive (). */
+    void attachPool (uint64_t* mask, int index) noexcept
+    {
+        poolMask = mask;
+        poolBit = uint64_t (1) << index;
+        setActive (active);
+    }
     bool isReleased() const noexcept { return released; }
     int key() const noexcept { return keyNum; }
     int playedKey() const noexcept { return played; }
@@ -175,7 +182,7 @@ public:
         const float len = st == 2 ? envLen[e][4] : (st == 3 ? envLen[e][1] : (st == 4 ? envLen[e][2] : (st == 6 ? envLen[e][3] : 0.0f)));
         fraction = env[e].fineFraction (len);
     }
-    float lfoReadout (int l) const noexcept { return lfoReadPos[l] - std::floor (lfoReadPos[l]); }
+    float lfoReadout (int l) const noexcept { return lfoReadPos[l] - ffloor (lfoReadPos[l]); }
     float modulatedParam (int idx) const noexcept { return gl != nullptr ? P (idx) : 0.0f; }
 
     /** Advances envelopes, LFOs and the matrix by one control period and computes the parameters of the period. */
@@ -229,9 +236,44 @@ private:
     };
     RlfoSettings rlfoSet[4];
     uint32_t lastTouchedGroups = 0;   // touchedGroups () of the last period, as the envelopes and LFOs read it (before this period's matrix)
+    /** What an oscillator that is on derives from its keys alone (CPU-REVIEW-VOICE-MOD.md V7): kept while the snapshot epoch is the one it was built with and no slot touched a key of the
+        oscillator then or in this period. Everything that reads the note, the voice control, the content, the tables, the tempo or the state is computed every period from these. */
+    struct OscPart
+    {
+        int dest = 0, wtChoice = 0, pmode = 0, ratioSrc = -1, transposeSnap = 0, voicesRaw = 1, stack = 0, stackRepeat = 0, mode = 0, law = 0, morphType = 0, remapSlot = 0;
+        int warp[2] = {};
+        float blend = 0, send[2] = {}, fixedNote = 0, coarseSemis = 0, transpose = 0, tune001 = 0, frame = 0, frameSpread = 0, level = 0, pan = 0, panRight = 0, detuneSemis = 0, curve = 0,
+              blendShape = 0, spread = 0, uniBlend = 0, morphAmount = 0, morphSpread = 0, remapRise = 0, remapFall = 0;
+        float warpAmount[2] = {}, warpPhase[2] = {};
+        bool env1 = true, track = true, bendTrack = true, smooth = false, remapOn = false;
+        float libV[kLibKeyCount] = {};   // the keys of the library oscillators, filled when a library type first needs them (libValid)
+        bool libValid = false;
+        bool ok = false;
+        uint32_t epoch = 0;
+    };
+    OscPart oscPart[3];
+    void fillOscPart (int o, OscPart& op) noexcept;
+    /** The same for the sub oscillator (its keys alone). */
+    struct SubPart
+    {
+        int dest = 0, table = 0;
+        float blend = 0, send[2] = {}, octave12 = 0, tune = 0, level = 0, pan = 0;
+        bool on = false, env1 = true;
+        bool ok = false;
+        uint32_t epoch = 0;
+    };
+    SubPart subPart;
     float customShape (const CompiledShape& cs, float u) noexcept;
 
     const TickGlobals* gl = nullptr;
+    uint64_t* poolMask = nullptr;
+    uint64_t poolBit = 0;
+    void setActive (bool on) noexcept
+    {
+        active = on;
+        if (poolMask != nullptr)
+            *poolMask = on ? (*poolMask | poolBit) : (*poolMask & ~poolBit);
+    }
     // the tables of the keys, looked up once in prepare () (CPU-REVIEW-VOICE-MOD.md V11): paramIndex (), libKeys (), destLawOf () and paramTable () are function local statics whose guard
     // check (a load and a barrier on ARM) every call paid on the audio thread
     const ParamIndex* pidx = nullptr;
