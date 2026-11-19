@@ -291,6 +291,34 @@ void testBandBoard()
     int k0 = 0, b0 = 0;
     check (maps && ! fxl::bandOfRack (2, k0, b0) && fxl::bandsOfSplitter (fxl::kKindSplitterLh) == 2 && fxl::bandsOfSplitter (fxl::kKindSplitterLmh) == 3 && fxl::bandsOfSplitter (fxl::kKindSplitterMs) == 2 && fxl::bandsOfSplitter (synthyboy::kFxTypeEq) == 0, "the seven band racks map to their splitter and band and back");
 }
+/** FxSlotCard stores nothing: a touch on the power zone reports the value it asks for and leaves `state` and the picture alone; the owner writes the effect and sets `state.on`, and the next draw shows it. */
+void testSlotCardStoresNoTruth()
+{
+    FxSlotCard card;
+    card.setId (21);
+    card.place ({ 0, 0, 124, 56 });
+    card.state.type = synthyboy::kFxTypeEq;
+    card.state.on = true;
+    const Rect pr = card.powerRect();
+    const Image before = drawComponent (card, 200, 100);
+    const int px = pr.x + pr.w / 2, py = pr.y + pr.h / 2;
+    Change c = card.touchDown (px, py, 0.0);
+    check (c.kind == ChangeKind::Index && c.id == 21 && c.index == FxSlotCard::kTogglePower && c.value == 0.0, "FxSlotCard: a touch on the power zone of a card that is on asks for off (0.0)");
+    card.touchUp (px, py);
+    check (card.state.on && drawComponent (card, 200, 100).px == before.px, "FxSlotCard: the card still shows ON and its picture is the same (the owner has not written back)");
+    c = card.touchDown (px, py, 500.0);
+    check (c.kind == ChangeKind::Index && c.index == FxSlotCard::kTogglePower && c.value == 0.0, "FxSlotCard: with no write back the same touch asks for the same value (no toggle is kept in the card)");
+    card.touchUp (px, py);
+    card.state.on = false;   // the owner wrote the effect and sets the state
+    check (drawComponent (card, 200, 100).px != before.px, "FxSlotCard: with the owner writing back, the next draw shows OFF");
+    c = card.touchDown (px, py, 1000.0);
+    check (c.kind == ChangeKind::Index && c.index == FxSlotCard::kTogglePower && c.value == 1.0, "FxSlotCard: a card that is off asks for on (1.0)");
+    card.touchUp (px, py);
+    // a card of a band's lane (selectOnPower false): the touch up after the power touch selects nothing
+    card.state.selectOnPower = false;
+    c = card.touchDown (px, py, 2000.0);
+    check (c.kind == ChangeKind::Index && card.touchUp (px, py).kind == ChangeKind::None, "FxSlotCard: on a lane card the power touch does not select on lifting");
+}
 } // namespace
 
 int main()
@@ -299,6 +327,7 @@ int main()
     testRule();
     testNumberKind();
     testBandBoard();
+    testSlotCardStoresNoTruth();
     std::printf ("%s\n", g_fails == 0 ? "ALL PASSED" : "FAILED");
     return g_fails == 0 ? 0 : 1;
 }

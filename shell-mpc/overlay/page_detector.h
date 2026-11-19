@@ -1,5 +1,5 @@
 // SynthyBoy - MPC overlay: the page detector. "A view of OUR skin is on screen and not covered" = both marker pictures of that view (two small solid squares of colours
-// that no other view uses, inside its region, shell-mpc/overlay/overlay_layout.json) are in the application's primary framebuffer. The overlay lives on another plane, so the markers
+// that no other view uses, inside its region, the page set of the plugin: kit/page_set.h, for SynthyBoy shell-mpc/overlay/overlay_layout.json) are in the application's primary framebuffer. The overlay lives on another plane, so the markers
 // stay readable while it covers them. A popup, a menu or another tab covers or replaces them, and the overlay goes.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -10,7 +10,6 @@
 
 #include "drm_interfaces.h"
 #include "instance_slots.h"
-#include "overlay_layout.h"
 #include "standby.h"
 
 namespace synthyboy_mpc { namespace overlay {
@@ -56,9 +55,10 @@ public:
     static constexpr int kPanelLineX = 1024, kPanelFillRgb = 0x1e1d1e;
     static constexpr int kPanelRows[6] = { 20, 120, 250, 400, 560, 700 };   // above the tab bar (it is black at the bottom of the screen)
 
-    /** `instances`: one rectangle per view (landscape UI pixels), null: the views have no instance picture (the slot then stays kSlotUnknown). */
-    PageDetector (IFrameSource& source, const MarkerSpec* markers, int numViews, const Rect* instances = nullptr)
-        : source_ (source), markers_ (markers), instances_ (instances), count_ (numViews > Detection::kMaxViews ? Detection::kMaxViews : numViews) {}
+    /** `instances`: one rectangle per view (landscape UI pixels), null: the views have no instance picture (the slot then stays kSlotUnknown). `colours`: the colours of the instance film strip (the page set's;
+        null: the defaults of instance_slots.h, SynthyBoy's); the object must outlive the detector. */
+    PageDetector (IFrameSource& source, const MarkerSpec* markers, int numViews, const Rect* instances = nullptr, const mpckit::InstanceColours* colours = nullptr)
+        : source_ (source), markers_ (markers), instances_ (instances), colours_ (colours != nullptr ? colours : &defaultInstanceColours()), count_ (numViews > Detection::kMaxViews ? Detection::kMaxViews : numViews) {}
 
     /** Reads the sample pixels of every marker (the four corners of an inset square and the centre) through the shared UI -> panel mapping. */
     Detection check (int rotation)
@@ -184,8 +184,8 @@ public:
         {
             const Rect& q = instances_[view];
             s[2].x = q.x; s[2].y = q.y; s[2].w = q.w; s[2].h = q.h;
-            s[2].known = slot >= 0 && slot < layout::kMaxInstances;
-            s[2].rgb = s[2].known ? static_cast<uint32_t> (layout::kInstanceSlotRgb[slot]) : 0u;
+            s[2].known = slot >= 0 && slot < mpckit::kMaxInstances;
+            s[2].rgb = s[2].known ? colours_->slot[slot] : 0u;
             n = 3;
         }
         const double f = standby::measureFactor (source_, s, n, rotation, w, h);
@@ -240,7 +240,7 @@ private:
             const bool ok = source_.pixel (px, py, v);
             if (k == 4)
                 d.instanceSeen = ok ? v : 0xffffffffu;
-            const int s = ok ? classifyInstanceRgb (v, kTolerance) : kSlotUnknown;
+            const int s = ok ? classifyInstanceRgb (v, kTolerance, *colours_) : kSlotUnknown;
             if (k == 0)
                 slot = s;
             else if (s != slot)
@@ -260,6 +260,7 @@ private:
     IFrameSource& source_;
     const MarkerSpec* markers_;
     const Rect* instances_;
+    const mpckit::InstanceColours* colours_;
     int count_;
 };
 

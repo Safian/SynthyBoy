@@ -151,7 +151,7 @@ void renderAll (const std::string& dir)
         r.live.envVoiceStage[2][2] = 2.0f; r.live.envVoiceFraction[2][2] = 0.5f;
         r.refresh();
         r.tap (r.ui.compact().full);
-        r.ui.full().graph.state.selected = ui::envgraph::Decay;
+        r.ui.selectGraphHandle (ui::envgraph::Decay);
         r.refresh();
         save (dir, "full_screen.png", r.ui);
         r.tap (r.ui.full().aCurve);

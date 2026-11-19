@@ -16,7 +16,7 @@
 
 #include "../ui/display.h"
 #include "../ui/theme.h"
-#include "curve_source.h"
+#include "instance_view.h"
 #include "gpu/scene.h"
 #include "play_osc.h"
 #include "view.h"

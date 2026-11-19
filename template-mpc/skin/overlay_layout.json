@@ -1,12 +1,14 @@
 {
   "format": "synthyboy-overlay-layout",
   "version": 4,
-  "comment": "The tabs of MpcKit Demo: one VIEW per tab, a pair of marker squares per view in colours no other view uses (docs/ui-components/TEMPLATE.md). Same schema as shell-mpc/overlay/overlay_layout.json; kind 'page' = a page the plugin draws entirely (needs the generator's --kinds option, migration step 9). Coordinates of a view are tab coordinates (1280 x 628, the tab starts at screen y tabOriginY). INSTANCE: the film strip bound to the display parameter 'Overlay Instance' shows which instance's page is up. The colours must differ from one another by more than the detector's tolerance (shell-mpc/kit/page_set.h validatePages).",
+  "comment": "The tabs of MpcKit Demo: one VIEW per tab, a pair of marker squares per view in colours no other view uses (docs/ui-components/TEMPLATE.md). Same schema as shell-mpc/overlay/overlay_layout.json; kind 'page' = a page the plugin draws entirely (the generator needs --kinds page=16 for the C++ header; the skin modules know the kind). PARAMSBEFORE: the number of parameters between the plugin's own list and 'Overlay Instance' (0: 'Overlay Instance' is the first parameter after params.json); PARAMSAFTERINSTANCE: between 'Overlay Instance' and 'Q 1' (0: the Q proxies follow it directly). SynthyBoy's numbers are 38 and 27 (the default of the modules). Coordinates of a view are tab coordinates (1280 x 628, the tab starts at screen y tabOriginY). INSTANCE: the film strip bound to the display parameter 'Overlay Instance' shows which instance's page is up. The colours must differ from one another by more than the detector's tolerance (shell-mpc/kit/page_set.h validatePages).",
   "screen": {
     "width": 1280,
     "height": 800
   },
   "tabOriginY": 110,
+  "paramsBefore": 0,
+  "paramsAfterInstance": 0,
   "background": "1e1d1e",
   "instance": {
     "slots": 16,

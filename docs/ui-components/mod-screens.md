@@ -44,5 +44,5 @@ c = m.touchUp (x, y);
 
 ## Limits and pitfalls
 - Polarity and state cells are 72 px wide: a LED toggle needs 96 px, so these stay `ToggleIcon` cells.
-- `ModRowSelector::turn` changes its own `selected` before reporting; the owner must set it from the slot list each update.
+- `ModRowSelector` stores nothing: `turn` reports the next row (`Index`) from `state.selected` and leaves `state` alone; `ModMatrixView::turnQ` selects the row from the change and `updateQGroup` sets `state.selected`, `state.maxRows` (and the page sets `state.text`) on the next update.
 - The ALL / BY SOURCE / BY DEST buttons are a tab row, not a list.

@@ -219,5 +219,49 @@ class CommandLineTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 2)
 
 
+class PackageManifestTests(unittest.TestCase):
+    """Another plugin's finished plugin.json (--package-manifest; migration step 12 of docs/ui-components/TEMPLATE.md): the folder name, and the plugin folder's files."""
+
+    TEMPLATE_MANIFEST = ROOT / "template-mpc" / "package" / "plugin.json"
+
+    def test_folder_name_of_the_template(self):
+        code, out, _ = run_quiet(gen_mpc.main, ["--package-manifest", str(self.TEMPLATE_MANIFEST), "--folder-name"])
+        self.assertEqual(code, 0)
+        self.assertEqual(out.strip(), "Example - VST - MpcKit Demo")
+
+    def test_only_the_binaries_that_exist_are_listed_and_version_xml_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            (folder / "VST").mkdir()
+            (folder / "VST" / "mpckitdemo-arm32.so").write_text("x")
+            code, _, _ = run_quiet(gen_mpc.main, ["--package-manifest", str(self.TEMPLATE_MANIFEST), "--plugin-dir", str(folder)])
+            self.assertEqual(code, 0)
+            data = json.loads((folder / "plugin.json").read_text(encoding="utf-8"))
+            self.assertEqual(data["file32"], "VST/mpckitdemo-arm32.so")
+            self.assertNotIn("file64", data)
+            self.assertEqual(data["uid"], "McKD")
+            xml = (folder / "version.xml").read_text(encoding="utf-8")
+            self.assertIn("<version>0.1.0.0</version>", xml)
+            self.assertNotIn("uiversion", xml, "no skin in the folder")
+            (folder / "Plugin Skins").mkdir()
+            (folder / "Plugin Skins" / "TUI.json").write_text("{}")
+            run_quiet(gen_mpc.main, ["--package-manifest", str(self.TEMPLATE_MANIFEST), "--plugin-dir", str(folder)])
+            self.assertIn("<uiversion>", (folder / "version.xml").read_text(encoding="utf-8"))
+
+    def test_no_binary_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, _, err = run_quiet(gen_mpc.main, ["--package-manifest", str(self.TEMPLATE_MANIFEST), "--plugin-dir", tmp])
+            self.assertEqual(code, 2)
+            self.assertIn("none of the binaries", err)
+
+    def test_the_two_modes_exclude_each_other(self):
+        with self.assertRaises(SystemExit) as ctx:
+            run_quiet(gen_mpc.main, ["--package-manifest", str(self.TEMPLATE_MANIFEST)])
+        self.assertEqual(ctx.exception.code, 2)
+        with self.assertRaises(SystemExit) as ctx:
+            run_quiet(gen_mpc.main, ["--folder-name"])
+        self.assertEqual(ctx.exception.code, 2)
+
+
 if __name__ == "__main__":
     unittest.main()

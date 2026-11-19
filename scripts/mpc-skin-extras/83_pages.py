@@ -11,13 +11,16 @@
 # Runs after 82_play.py (the Q proxies are registered by it), before 85_names.py and 90_frames.py.
 
 import json
+import os
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 LAYOUT_JSON = HERE.parent.parent / "shell-mpc" / "overlay" / "overlay_layout.json"
-PAGE_KINDS = ("filterui", "lfoui", "envui", "oscui", "macros", "mixer", "fx", "mod", "master", "voice")
+PAGE_KINDS = ("filterui", "lfoui", "envui", "oscui", "macros", "mixer", "fx", "mod", "master", "voice", "page")   # "page": the generic kind of another plugin (template-mpc)
 LFO_CURSORS, SPECTRUM_COLUMNS, PAD_PRESSURE_PARAMS = 4, 32, 2
 PLAY_GROUPS, PLAY_SLOTS, Q_PROXIES = 3, 8, 16
+# Another plugin uses this module with its own layout: the file from skin-meta ("layout_path") or the environment (MPC_OVERLAY_LAYOUT); the layout's "paramsBefore" and "paramsAfterInstance" (the parameters between
+# "Overlay Instance" and "Q 1"; SynthyBoy's default: the Play selectors and proxies) place the parameters (same keys as 50_filter_overlay.py).
 FULL_FRAME_LAST_VISIBLE = 18   # the widgets are visible while the "Overlay Instance" frame is 0 .. 18 (the slots use 1 .. 17); the plugin takes frame 24 while a page is up
 QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 301, 323
 KEEP = ("Overlay Marker", "Overlay Instance")   # the names of the components the plugin finds the page by
@@ -37,9 +40,9 @@ def _hide_while_page_is_up(component, overlay_param):
 def apply(tui, qlinks, ctx):
     if ctx.meta is None or ctx.meta.get("variant") != "overlay":
         return
-    layout = json.loads(LAYOUT_JSON.read_text(encoding="utf-8"))
-    overlay_param = ctx.param_count + LFO_CURSORS + SPECTRUM_COLUMNS + PAD_PRESSURE_PARAMS
-    first_proxy = overlay_param + 1 + PLAY_GROUPS + PLAY_GROUPS * PLAY_SLOTS   # "Q 1": after the Play selectors and their proxies
+    layout = json.loads(Path((ctx.meta or {}).get("layout_path") or os.environ.get("MPC_OVERLAY_LAYOUT") or LAYOUT_JSON).read_text(encoding="utf-8"))
+    overlay_param = ctx.param_count + int(layout.get("paramsBefore", LFO_CURSORS + SPECTRUM_COLUMNS + PAD_PRESSURE_PARAMS))
+    first_proxy = overlay_param + 1 + int(layout.get("paramsAfterInstance", PLAY_GROUPS + PLAY_GROUPS * PLAY_SLOTS))   # "Q 1": after the Play selectors and their proxies (SynthyBoy)
     q_idx = [first_proxy + i for i in range(Q_PROXIES)]
     for view in layout["views"]:
         if view["kind"] not in PAGE_KINDS:

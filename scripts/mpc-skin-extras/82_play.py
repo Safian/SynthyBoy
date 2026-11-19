@@ -21,12 +21,13 @@
 
 import copy
 import json
+import os
 import struct
 import zlib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-LAYOUT_JSON = HERE.parent.parent / "shell-mpc" / "overlay" / "overlay_layout.json"
+LAYOUT_JSON = HERE.parent.parent / "shell-mpc" / "overlay" / "overlay_layout.json"   # (skin-meta "layout_path" or the environment MPC_OVERLAY_LAYOUT name another; a layout without play views leaves this module idle)
 TABS = ("Play",)   # ONE Play page since 2026-11-18 (the sub-tabs "Play Env" and "Play LFO" are gone: one page, the Q groups of the three thirds in reading order on Q 1 .. 12)
 LFO_CURSORS, SPECTRUM_COLUMNS, PAD_PRESSURE_PARAMS, OVERLAY_INSTANCE = 4, 32, 2, 1
 GROUPS = 3
@@ -173,11 +174,13 @@ def _hide_while_full_screen(component, overlay_param):
 def apply(tui, qlinks, ctx):
     if ctx.meta is None or ctx.meta.get("variant") != "overlay":
         return
-    layout = json.loads(LAYOUT_JSON.read_text(encoding="utf-8"))
+    layout = json.loads(Path((ctx.meta or {}).get("layout_path") or os.environ.get("MPC_OVERLAY_LAYOUT") or LAYOUT_JSON).read_text(encoding="utf-8"))
     play_views = [v for v in layout["views"] if v["kind"] == "play"]
+    if not play_views:
+        return   # another plugin's layout: no Play page
     if [v["tab"] for v in play_views] != list(TABS):
         raise ValueError("overlay_layout.json has the play views %s, this module builds %s" % ([v["tab"] for v in play_views], list(TABS)))
-    first = ctx.param_count + LFO_CURSORS + SPECTRUM_COLUMNS + PAD_PRESSURE_PARAMS + OVERLAY_INSTANCE
+    first = ctx.param_count + int(layout.get("paramsBefore", LFO_CURSORS + SPECTRUM_COLUMNS + PAD_PRESSURE_PARAMS)) + OVERLAY_INSTANCE
     sel_idx = [first + g for g in range(GROUPS)]
     proxy_idx = [[first + GROUPS + g * SLOTS + s for s in range(SLOTS)] for g in range(GROUPS)]
     q_idx = [first + GROUPS + GROUPS * SLOTS + i for i in range(Q_PROXIES)]

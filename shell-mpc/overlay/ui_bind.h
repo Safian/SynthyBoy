@@ -13,77 +13,35 @@
 #include <string>
 #include <vector>
 
+#include "../kit/param_source.h"
+#include "../kit/synthyboy_params.h"
 #include "../ui/ui.h"
-#include "curve_source.h"
+#include "instance_view.h"
 #include "macro_names.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
 
 namespace synthyboy_mpc { namespace overlay { namespace uibind {
 
-inline int indexOfKey (const std::string& key) noexcept
-{
-    if (key.empty())
-        return -1;
-    const synthyboy::ParamInfo* p = synthyboy::findParamByKey (key.c_str());
-    return p != nullptr ? static_cast<int> (p - synthyboy::paramTable()) : -1;
-}
-inline const synthyboy::ParamInfo& info (int idx) noexcept { return synthyboy::paramTable()[idx]; }
-inline double normOf (int idx, float plain) noexcept { return synthyboy::toNormalised (info (idx), plain); }
+/** The parameters of SynthyBoy through the kit's parameter source (kit/param_source.h IParamSource): the lookups, the conversions and the text of a value are the kit's, so a page written on them runs on any plugin
+    (migration step 3 of docs/ui-components/TEMPLATE.md; `kit_parity_host` compares them with the old direct calls for every parameter). */
+inline const mpckit::IParamSource& params() noexcept { return mpckit::synthyboy_adapter::Params::get(); }
+
+inline int indexOfKey (const std::string& key) noexcept { return params().indexOfKey (key.c_str()); }   // (an empty key: -1)
+inline const synthyboy::ParamInfo& info (int idx) noexcept { return synthyboy::paramTable()[idx]; }   // the pages read ParamInfo (choices, ranges)
+inline double normOf (int idx, float plain) noexcept { return params().toNormalised (idx, plain); }
 inline void writePlain (IInstanceView& v, int idx, double plain) noexcept
 {
-    const synthyboy::ParamInfo& i = info (idx);
-    v.writeParam (idx, static_cast<float> (synthyboy::toNormalised (i, synthyboy::constrainValue (i, static_cast<float> (plain)))));
+    const mpckit::IParamSource& p = params();
+    v.writeParam (idx, p.toNormalised (idx, p.constrain (idx, static_cast<float> (plain))));
 }
 inline void writeNorm (IInstanceView& v, int idx, double norm) noexcept { v.writeParam (idx, static_cast<float> (std::clamp (norm, 0.0, 1.0))); }
 
-/** A value that rounds to zero at `decimals` places prints as +0 / 0, never as "-0.0" (a negative zero). */
-inline double noNegativeZero (double v, int decimals) noexcept
-{
-    double half = 0.5;
-    for (int i = 0; i < decimals; ++i)
-        half *= 0.1;
-    return std::fabs (v) < half ? 0.0 : v;
-}
-
 /** A value of a parameter as text with its unit: "35%", "+12 ct", "420 Hz", "1.20 s", "-6.0 dB" (at most 15 characters). Rates under 100 Hz keep their decimals (two under 10 Hz, one under 100 Hz: "0.25 Hz", "33.5 Hz",
-    "420 Hz"); a value that rounds to zero has no sign; a pan (a percentage from -100 to 100 whose key ends in ".pan") reads like the pans of the mixer: C, L 50, R 50. */
+    "420 Hz"); a value that rounds to zero has no sign; a pan (a percentage from -100 to 100 whose key ends in ".pan") reads like the pans of the mixer: C, L 50, R 50. The kit's function (mpckit::formatValue, the one algorithm). */
 inline void formatValue (const synthyboy::ParamInfo& pi, float plain, char* out, size_t cap)
 {
-    using synthyboy::Unit;
-    double v = static_cast<double> (plain);
-    const int dec = std::min<int> (pi.decimals, 2);
-    if (pi.unit == Unit::percent && pi.min < 0.0f && pi.max > 0.0f)
-    {
-        const size_t n = std::strlen (pi.key);
-        if (n >= 4 && std::strcmp (pi.key + n - 4, ".pan") == 0)
-        {
-            const double a = std::fabs (v);
-            if (a < 0.5)
-                std::snprintf (out, cap, "C");
-            else
-                std::snprintf (out, cap, v < 0.0 ? "L %.0f" : "R %.0f", a);
-            return;
-        }
-    }
-    switch (pi.unit)
-    {
-        case Unit::percent: v = noNegativeZero (v, dec); std::snprintf (out, cap, pi.min < 0.0f ? "%+.*f%%" : "%.*f%%", dec, v); break;
-        case Unit::cents: v = noNegativeZero (v, 0); std::snprintf (out, cap, "%+.0f ct", v); break;
-        case Unit::semitone: v = noNegativeZero (v, dec); std::snprintf (out, cap, "%+.*f st", dec, v); break;
-        case Unit::Hz:
-            if (v >= 1000.0) std::snprintf (out, cap, "%.2f kHz", v / 1000.0);
-            else if (v < 10.0) std::snprintf (out, cap, "%.2f Hz", v);
-            else if (v < 100.0) std::snprintf (out, cap, "%.1f Hz", v);
-            else std::snprintf (out, cap, "%.0f Hz", v);
-            break;
-        case Unit::ms: if (v >= 1000.0) std::snprintf (out, cap, "%.2f s", v / 1000.0); else std::snprintf (out, cap, v < 10.0 ? "%.1f ms" : "%.0f ms", v); break;
-        case Unit::dB: v = noNegativeZero (v, 1); std::snprintf (out, cap, "%+.1f dB", v); break;
-        case Unit::degrees: v = noNegativeZero (v, 0); std::snprintf (out, cap, "%.0f\xc2\xb0", v); break;
-        case Unit::beats: std::snprintf (out, cap, "%.2f beat", v); break;
-        case Unit::voices: std::snprintf (out, cap, v == 1.0 ? "%.0f voice" : "%.0f voices", v); break;
-        default: v = noNegativeZero (v, dec); std::snprintf (out, cap, "%.*f", dec, v); break;
-    }
+    mpckit::formatValue (mpckit::synthyboy_adapter::descOf (pi), plain, out, cap);
 }
 
 // ---- the modulation matrix

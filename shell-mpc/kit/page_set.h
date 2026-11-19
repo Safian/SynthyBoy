@@ -49,9 +49,17 @@ struct PageDef
     Rect instance;            // the film strip image next to the markers (6 x 6)
 };
 
-constexpr int kFirstPageKind = 6;   // kinds below are the pictures of the first overlay (gone); isPageKind (layout) is kind >= kFirstPageKind or the Play kind 5
+constexpr int kPlayKind = 5;        // the Play tab of SynthyBoy (a page drawn entirely, with the full screens of its elements over it); a plugin without one never uses the number
+constexpr int kFirstPageKind = 6;   // kinds below are the pictures of the first overlay (gone); isPageKind is kind >= kFirstPageKind or the Play kind 5
 constexpr int kScreenW = 1280, kScreenH = 800, kTabOriginY = 110, kTabH = 628;
 constexpr int kMaxInstances = 16;
+constexpr int kInstanceSteps = 32;    // the display parameter "Overlay Instance" has this many steps: frame f is the value f / kInstanceSteps (exact in a float)
+constexpr int kInstanceFrames = 33;   // frames of the film strip: 0 blank, 1 .. 16 slot 0 .. 15, 17 none, the rest blank
+constexpr int kMaxPages = 24;         // the page detector's limit (Detection::kMaxViews)
+constexpr uint32_t kBackgroundRgb = 0x1e1d1e;   // the colour of the dark picture of an opaque page (the host's own background)
+
+/** A page the plugin draws entirely (its own touch handling, the host widgets hidden under it): the Play kind or a kind from kFirstPageKind. */
+constexpr bool isPageKind (int kind) noexcept { return kind == kPlayKind || kind >= kFirstPageKind; }
 
 /** The colours of the instance film strip: slot 0 .. 15, "none" (an instance beyond the 16 slots), "blank" (nothing reported yet). The defaults are SynthyBoy's, which a second plugin can keep:
     the colours only have to differ from the markers of the SAME skin. */
@@ -81,6 +89,10 @@ public:
     virtual std::unique_ptr<synthyboy_mpc::overlay::IView> make (const PageDef& page) const = 0;
     /** The parameter indices all pages together want in the engine's live readout (IView::targets of every view); empty for a plugin that has none. */
     virtual void readoutTargets (std::vector<int>& out) const { out.clear(); }
+    /** The size in bytes of the plugin's live block (IInstance::readLive: the controller reads it once a picture and hands it to the views as ViewInput::live); 0: the plugin has none. */
+    virtual size_t liveBytes() const noexcept { return 0; }
+    /** The readout values of a view whose targets start at `base` in the list of readoutTargets and number `count`: a pointer into `live` (the block just read), null when they are not all there. */
+    virtual const float* viewTargets (const void* /*live*/, int /*base*/, int /*count*/) const noexcept { return nullptr; }
 };
 
 /** Two colours are told apart by the page detector when at least one channel differs by more than 4 (the generator uses the same rule; the detector's own tolerance is 2). */
@@ -93,24 +105,21 @@ inline bool colourClose (uint32_t a, uint32_t b) noexcept
 }
 
 /** The checks of the layout, the same ones as scripts/gen-overlay-layout-header.py: exactly two markers per page that no other marker is close to, instance colours that differ from each other and from every
-    marker, the instance picture inside the region and clear of the markers, at most 24 pages (the detector's limit). Returns true when all hold; otherwise `why` says what is wrong. */
+    marker, from the background of an opaque picture and from the colour under every marker, the instance picture inside the region (at least 4 x 4) and clear of the markers, at most 24 pages (the detector's
+    limit). The kind of a page is not checked (a table may hold the pictures of the first overlay). Returns true when all hold; otherwise `why` says what is wrong. */
 inline bool validatePages (const IPageSet& set, std::string& why)
 {
     const int n = set.numPages();
-    if (n < 1 || n > 24)
+    if (n < 1 || n > kMaxPages)
     {
         why = "a plugin has 1 .. 24 pages (the page detector holds 24 views)";
         return false;
     }
-    std::vector<uint32_t> marker;
+    std::vector<uint32_t> marker, under;   // `under`: the background of an opaque picture and what lies under every marker
+    under.push_back (kBackgroundRgb);
     for (int p = 0; p < n; ++p)
     {
         const PageDef& d = set.page (p);
-        if (d.kind < kFirstPageKind)
-        {
-            why = std::string ("page ") + d.name + ": kind below the page kinds";
-            return false;
-        }
         for (const MarkerDef& m : d.markers)
         {
             for (uint32_t other : marker)
@@ -120,6 +129,7 @@ inline bool validatePages (const IPageSet& set, std::string& why)
                     return false;
                 }
             marker.push_back (m.rgb);
+            under.push_back (m.cover);
         }
         const Rect& r = d.region;
         const Rect& i = d.instance;
@@ -151,6 +161,12 @@ inline bool validatePages (const IPageSet& set, std::string& why)
             if (colourClose (inst[a], m))
             {
                 why = "an instance colour is within the detector's tolerance of a marker colour";
+                return false;
+            }
+        for (uint32_t m : under)
+            if (colourClose (inst[a], m))
+            {
+                why = "an instance colour is within the detector's tolerance of the background or of the colour under a marker";
                 return false;
             }
     }

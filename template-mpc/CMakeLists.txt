@@ -34,10 +34,28 @@ if(MPC_SDK_DIR)
         POSITION_INDEPENDENT_CODE ON
         CXX_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN ON)
-    # The overlay runtime (plugin-drawn pages): OFF until migration step 8 of docs/ui-components/TEMPLATE.md; src/overlay_hook.h says what it needs.
+    # The module exports VSTPluginMain only and links no dynamic libstdc++ (the checks of scripts/mpc-container-build.sh: the MPC firmware has its own libstdc++; the same options as shell-mpc/CMakeLists.txt).
+    if(UNIX AND NOT APPLE)
+        set(MPCKIT_EXPORTS "${CMAKE_CURRENT_BINARY_DIR}/mpckit_exports.map")
+        file(WRITE ${MPCKIT_EXPORTS} "{
+            global: VSTPluginMain;
+            local: *;
+        };")
+        target_link_options(mpckit_demo PRIVATE "-Wl,--version-script,${MPCKIT_EXPORTS}" "-Wl,--exclude-libs,ALL" "-Wl,--gc-sections" "-Wl,--as-needed" "-static-libstdc++" "-static-libgcc")
+    endif()
+    # The overlay runtime (plugin-drawn pages): shell-mpc/overlay/ (header only, Linux code for the device) and its GPU helper, a separate executable (shell-mpc/overlay/gpu-helper). OFF by default: without it the
+    # plugin is an instrument with the host's own widgets (skin/pages.json). ON: a Linux target only (a cross build for the device: the same toolchain as scripts/build-mpc.sh); the helper is built as
+    # mpckit-demo-overlay-gpu (the name of kBranding in src/overlay_hook.h) and goes next to the plugin binary in the package (scripts/build-mpc.sh --plugin template-mpc does it).
     option(MPCKIT_OVERLAY "MpcKit Demo: draw the pages on the overlay plane (needs the generic overlay runtime)" OFF)
     if(MPCKIT_OVERLAY)
-        target_compile_definitions(mpckit_demo PRIVATE MPCKIT_OVERLAY=1)
+        if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            message(FATAL_ERROR "MPCKIT_OVERLAY needs a Linux target (DRM, evdev, dlopen): cross build for the MPC")
+        endif()
+        find_package(Threads REQUIRED)
+        target_compile_definitions(mpckit_demo PRIVATE MPCKIT_OVERLAY=1 SYNTHYBOY_MPC_OVERLAY_GPU=1 SYNTHYBOY_MPC_OVERLAY_GPU_FRAME_MS=33.3)
+        target_link_libraries(mpckit_demo PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+        add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../shell-mpc/overlay/gpu-helper" gpu-helper)
+        set_target_properties(synthyboy_overlay_gpu PROPERTIES OUTPUT_NAME "mpckit-demo-overlay-gpu")
     endif()
 else()
     message(STATUS "mpckit_demo: MPC_SDK_DIR is not set, the plugin module is not configured (the host test still is)")

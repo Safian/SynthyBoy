@@ -27,6 +27,7 @@
 #include "curve_source.h"
 #include "page_view.h"
 #include "q_publish.h"
+#include "q_publish_mod.h"
 #include "touch_decoder.h"
 #include "ui_bind.h"
 #include "ui_stack.h"
@@ -54,7 +55,7 @@ public:
         kRouting = 110, kBlend, kLevel, kPan,
         kKeytrack = 120, kEnv1, kVar, kCombOffset,
         kFormantX = 130, kFormantY, kFormantTrans, kFormantRes, kFormantSpread,
-        kDisplayCutoff = 150, kDisplayFormant,
+        kDisplayCutoff = 150, kDisplayFormant, kDisplayReso, kDisplayFormantY,   // the ids of the display's changes: the cutoff (x) and the resonance (y) of the finger, the formant X and Y
         kRouteDest = 200, kRouteBus1, kRouteBus2, kRouteLevel, kRoutePan, kRouteClose, kRouteBackdrop,
         kList = 300, kListBackdrop,
         kModsBack = 400, kModsRow = 410, kModsAddStep = 460, kModsAdd
@@ -183,12 +184,16 @@ public:
             gesture_ = top;
             gestureDown_ = true;
             handle (top->touchDown (x, y, nowMs), stack, inst);
+            handlePending (stack, inst);
             return true;
         }
         if (! gesture_ || ! gestureDown_)
             return false;
         if (ev.kind == TouchEvent::Move)
+        {
             handle (gesture_->touchMove (x, y), stack, inst);
+            handlePending (stack, inst);
+        }
         else
         {
             handle (gesture_->touchUp (x, y), stack, inst);
@@ -253,7 +258,7 @@ private:
         full_.style.setId (kStyle);
         full_.clean.setId (kClean);
         full_.route.setId (kRoute);
-        full_.display.assignIds (kDisplayCutoff, kResonance, kDisplayFormant, kFormantY);
+        full_.display.assignIds (kDisplayCutoff, kDisplayReso, kDisplayFormant, kDisplayFormantY);
 
         full_.cutoff.setId (kCutoff);
         full_.resonance.setId (kResonance);
@@ -299,7 +304,7 @@ private:
             case kStyle: s = "style"; break;
             case kClean: s = "clean_mode"; break;
             case kCutoff: case kDisplayCutoff: s = "cutoff"; break;
-            case kResonance: s = "resonance"; break;
+            case kResonance: case kDisplayReso: s = "resonance"; break;
             case kDrive: s = "drive"; break;
             case kMix: s = "mix"; break;
             case kBlend: s = "blend"; break;
@@ -310,7 +315,7 @@ private:
             case kVar: s = "var"; break;
             case kCombOffset: s = "comb_offset"; break;
             case kFormantX: case kDisplayFormant: s = "formant.x"; break;
-            case kFormantY: s = "formant.y"; break;
+            case kFormantY: case kDisplayFormantY: s = "formant.y"; break;
             case kFormantTrans: s = "formant.transpose"; break;
             case kFormantRes: s = "formant.resonance"; break;
             case kFormantSpread: s = "formant.spread"; break;
@@ -336,6 +341,14 @@ private:
         if (top != pageTop_ && gesture_ != nullptr)
             dropGesture();
         pageTop_ = top;
+    }
+
+    /** The second change of a touch on the display (the finger's Y: resonance or formant Y). */
+    void handlePending (UiStack& stack, IInstanceView& inst)
+    {
+        ui::Change extra;
+        while (gesture_ == &full_ && full_.display.takePending (extra))
+            handle (extra, stack, inst);
     }
 
     void handle (ui::Change c, UiStack& stack, IInstanceView& inst)
@@ -455,25 +468,21 @@ private:
             return;
         }
 
-        // the point of the display: cutoff and resonance, or the formant X and Y
-        ui::FilterDisplay& disp = full_.display;
-        if (c.id == kDisplayCutoff)
+        // the finger on the display: its X and Y come as two changes (ui::FilterDisplay: the cutoff on the log axis and the resonance, or the formant X and Y). In the dual mode `index` is the filter whose handle the finger holds.
+        if (c.id >= kDisplayCutoff && c.id <= kDisplayFormantY && c.kind == K::Value)
         {
-            const int targetFilter = sel_ == 3 ? disp.state.activeFilter : editFilter_;
-            if (sel_ == 3)
-                editFilter_ = targetFilter;
-            const int pCut = paramForId (kCutoff, targetFilter);
-            if (pCut >= 0)
-                uibind::writeNorm (inst, pCut, static_cast<float> (uibind::normOf (pCut, static_cast<float> (disp.cutoffHzFor (targetFilter)))));
-            const int pRes = paramForId (kResonance, targetFilter);
-            if (pRes >= 0)
-                uibind::writeNorm (inst, pRes, static_cast<float> (disp.resonanceNorm()));
-            return;
-        }
-        if (c.id == kDisplayFormant)
-        {
-            uibind::writeNorm (inst, paramForId (kFormantX, editFilter_), c.value);
-            uibind::writeNorm (inst, paramForId (kFormantY, editFilter_), disp.formantYNorm());
+            const bool cutoffOrReso = c.id == kDisplayCutoff || c.id == kDisplayReso;
+            const int targetFilter = cutoffOrReso && sel_ == 3 && (c.index == 1 || c.index == 2) ? c.index : editFilter_;
+            if (targetFilter != editFilter_)
+                editFilter_ = targetFilter;   // the handle the finger holds is the filter being edited (the selector follows on the next update)
+            const int pd = paramForId (c.id, targetFilter);
+            if (pd >= 0)
+            {
+                if (c.id == kDisplayCutoff)
+                    uibind::writeNorm (inst, pd, static_cast<float> (uibind::normOf (pd, static_cast<float> (ui::FilterDisplay::hzOfNorm (c.value)))));
+                else
+                    uibind::writeNorm (inst, pd, static_cast<float> (c.value));
+            }
             return;
         }
 
@@ -706,33 +715,18 @@ private:
         d.state.filter1On = on1Idx >= 0 && inst.param (on1Idx) >= 0.5f;
         d.state.filter2On = on2Idx >= 0 && inst.param (on2Idx) >= 0.5f;
 
-        if (! d.dragging())   // while a finger drags the point it follows the finger, not the parameter that is written a frame later
+        // every value comes from the parameters on every update, also under a finger: the display stores nothing, the point follows the parameter the finger wrote
+        d.state.cutoffHz1 = cut1Idx >= 0 ? inst.param (cut1Idx) : 12000.0;
+        d.state.resonancePct1 = res1Idx >= 0 ? inst.param (res1Idx) : 20.0;
+        d.state.cutoffHz2 = cut2Idx >= 0 ? inst.param (cut2Idx) : 12000.0;
+        d.state.resonancePct2 = res2Idx >= 0 ? inst.param (res2Idx) : 20.0;
+        d.state.cutoffHz = editFilter_ == 2 ? d.state.cutoffHz2 : d.state.cutoffHz1;
+        d.state.resonancePct = editFilter_ == 2 ? d.state.resonancePct2 : d.state.resonancePct1;
+        if (d.state.isFormant)
         {
-            d.state.cutoffHz1 = cut1Idx >= 0 ? inst.param (cut1Idx) : 12000.0;
-            d.state.resonancePct1 = res1Idx >= 0 ? inst.param (res1Idx) : 20.0;
-            d.state.cutoffHz2 = cut2Idx >= 0 ? inst.param (cut2Idx) : 12000.0;
-            d.state.resonancePct2 = res2Idx >= 0 ? inst.param (res2Idx) : 20.0;
-            d.state.cutoffHz = editFilter_ == 2 ? d.state.cutoffHz2 : d.state.cutoffHz1;
-            d.state.resonancePct = editFilter_ == 2 ? d.state.resonancePct2 : d.state.resonancePct1;
-            if (d.state.isFormant)
-            {
-                const int fxIdx = paramForId (kFormantX, editFilter_), fyIdx = paramForId (kFormantY, editFilter_);
-                d.state.formantX = fxIdx >= 0 ? inst.param (fxIdx) : 50.0;
-                d.state.formantY = fyIdx >= 0 ? inst.param (fyIdx) : 50.0;
-            }
-        }
-        else
-        {
-            if (d.state.activeFilter == 1)
-            {
-                d.state.cutoffHz2 = cut2Idx >= 0 ? inst.param (cut2Idx) : 12000.0;
-                d.state.resonancePct2 = res2Idx >= 0 ? inst.param (res2Idx) : 20.0;
-            }
-            else
-            {
-                d.state.cutoffHz1 = cut1Idx >= 0 ? inst.param (cut1Idx) : 12000.0;
-                d.state.resonancePct1 = res1Idx >= 0 ? inst.param (res1Idx) : 20.0;
-            }
+            const int fxIdx = paramForId (kFormantX, editFilter_), fyIdx = paramForId (kFormantY, editFilter_);
+            d.state.formantX = fxIdx >= 0 ? inst.param (fxIdx) : 50.0;
+            d.state.formantY = fyIdx >= 0 ? inst.param (fyIdx) : 50.0;
         }
         const CurveSource* active = editFilter_ == 2 ? curve2_.get() : curve1_.get();
         d.state.liveCutoffHz = active != nullptr ? active->stats().cutoffHz : -1.0;

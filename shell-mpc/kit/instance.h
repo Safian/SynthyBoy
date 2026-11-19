@@ -81,6 +81,10 @@ public:
     /** "key: value" lines about the Q proxies for the status file (QRouter::describe). */
     virtual void qStatus (std::string& /*out*/) const {}
 
+    // ---- diagnostics
+    /** Appends "key: value" lines about the instance to the status file of the overlay (SynthyBoy: its voices and held keys). Nothing by default. */
+    virtual void diagnostics (std::string& /*out*/) const {}
+
     // ---- the overlay's own bookkeeping
     /** A plugin-drawn full screen page is open for this instance: the plugin hides the host widgets (the display parameter "Overlay Instance" takes the frame the skin hides them at). */
     virtual void setUiFullOpen (bool /*open*/) noexcept {}

@@ -75,13 +75,16 @@ public:
     {
         ++counters_.updates;
         bool changed = false;
-        const int want[play::kPanels] = { std::clamp (in.instance->playSelection (0), 1, play::kOscSelections), std::clamp (in.instance->playSelection (1), 1, play::kEnvs),
-                                           std::clamp (in.instance->playSelection (2), 1, play::kLfos) };
-        std::shared_ptr<const synthyboy::StateContent> content = in.instance->content();
+        const IInstanceView& inst = instanceOf (in);   // (the generic ViewInput of view.h: SynthyBoy's views take their instance, writable instance and live block back: view_cast.h)
+        IInstanceView* const io = ioOf (in);
+        const synthyboy::LiveValues* const live = liveOf (in);
+        const int want[play::kPanels] = { std::clamp (inst.playSelection (0), 1, play::kOscSelections), std::clamp (inst.playSelection (1), 1, play::kEnvs),
+                                           std::clamp (inst.playSelection (2), 1, play::kLfos) };
+        std::shared_ptr<const synthyboy::StateContent> content = inst.content();
         names_.load (content.get());   // the names of the macros the chips of the knobs show (macro_names.h)
         const NamesScope scope (names_);
-        const synthyboy::IContentStore* store = in.instance->contentStore();
-        const double bpm = std::round (in.instance->bpm() * 10.0) / 10.0;
+        const synthyboy::IContentStore* store = inst.contentStore();
+        const double bpm = std::round (inst.bpm() * 10.0) / 10.0;
         const bool newContent = content != content_ || store != store_;
         for (int p = 0; p < play::kPanels; ++p)
         {
@@ -100,10 +103,10 @@ public:
         }
         // ---- oscillator: the picture of the display rectangle of the plugin-drawn oscillator UI (osc_display.h: the cycle of a wavetable, the overview of a sample, multisample or granular oscillator, the
         // spectrum of a spectral one, the noise colour, the sub oscillator's waveform, the live read-outs)
-        changed = osd_.update (*in.instance, sel_[0], in.targets, in.live, in.nowMs, counters_) || changed;
+        changed = osd_.update (inst, sel_[0], in.targets, live, in.nowMs, counters_) || changed;
         // ---- envelope: the curve (cheap) and the dot
         {
-            const bool data = group_[1]->read (*in.instance) || bpm != bpm_;
+            const bool data = group_[1]->read (inst) || bpm != bpm_;
             if (data || ! have_[1])
             {
                 synthyboy::EnvDisplay::Request req;
@@ -117,7 +120,7 @@ public:
             }
             int px = -1;
             double dx = 0.0, dl = 0.0;
-            if (in.live != nullptr && synthyboy::EnvDisplay::dotFor (envGeom_, envY_.data(), play::kEnvPoints, in.live->envFineStage[sel_[1] - 1], in.live->envFineFraction[sel_[1] - 1], dx, dl))
+            if (live != nullptr && synthyboy::EnvDisplay::dotFor (envGeom_, envY_.data(), play::kEnvPoints, live->envFineStage[sel_[1] - 1], live->envFineFraction[sel_[1] - 1], dx, dl))
                 px = static_cast<int> (std::lround (dx * (play::kPlotW - 1)));
             if (px != envDotPx_)
             {
@@ -130,24 +133,24 @@ public:
         {
             float sources[kSourceSlots] = {};
             bool sourcesChanged = false;
-            if (static_cast<int> (group_[2]->value ((std::string ("lfo") + std::to_string (sel_[2]) + ".shape").c_str()) + 0.5f) == 12 && in.live != nullptr)
+            if (static_cast<int> (group_[2]->value ((std::string ("lfo") + std::to_string (sel_[2]) + ".shape").c_str()) + 0.5f) == 12 && live != nullptr)
             {
                 for (int id = 1; id < kSourceSlots && id - 1 < synthyboy::LiveValues::kMaxSources; ++id)
                 {
-                    const float v = in.live->source[id - 1];
+                    const float v = live->source[id - 1];
                     const bool bipolar = (id >= 7 && id <= 14) || (id >= 15 && id <= 18) || id == 33 || id == 34;
                     sources[id] = bipolar ? 0.5f + 0.5f * v : v;
                 }
                 sourcesChanged = std::memcmp (sources, lastSources_, sizeof sources) != 0;
             }
-            const bool data = group_[2]->read (*in.instance) || newContent || bpm != bpm_;
+            const bool data = group_[2]->read (inst) || newContent || bpm != bpm_;
             if ((data || sourcesChanged || ! have_[2]) && (forced_[2] || ! have_[2] || budget_[2].due (in.nowMs)))
             {
                 const auto t0 = std::chrono::steady_clock::now();
                 synthyboy::LfoDisplay::Request req;
                 req.lfo = sel_[2];
                 req.bpm = bpm;
-                req.sources = in.live != nullptr ? sources : nullptr;
+                req.sources = live != nullptr ? sources : nullptr;
                 synthyboy::LfoDisplay::compute (group_[2]->values(), content.get(), req, lfoY_.data(), LfoView::kPoints);
                 budget_[2].spent (in.nowMs, msSince (t0));
                 group_[2]->accept();
@@ -156,7 +159,7 @@ public:
                 forced_[2] = false;
                 changed = true;
             }
-            const float x = in.live != nullptr ? synthyboy::LfoDisplay::cursorX (in.live->lfoPhase[sel_[2] - 1]) : -1.0f;
+            const float x = live != nullptr ? synthyboy::LfoDisplay::cursorX (live->lfoPhase[sel_[2] - 1]) : -1.0f;
             const int px = x < 0.0f ? -1 : static_cast<int> (std::lround (x * (play::kPlotW - 1)));
             if (px != lfoCursorPx_)
             {
@@ -174,7 +177,7 @@ public:
             changed = true;
         }
         // ---- the plugin-drawn oscillator pages: they read their parameters and the Q group; what they draw changes the picture
-        if (in.io != nullptr && in.ui != nullptr)
+        if (io != nullptr && in.ui != nullptr)
         {
             if (! osc_)
             {
@@ -183,7 +186,7 @@ public:
                 scratch_ = std::make_unique<gpu::SceneData>();
             }
             // the stack of the instance is shared by the elements: a page that belongs to another element is not the oscillator's (it sees an empty stack: its compact view)
-            osc_->update (*in.io, highlight_, in.ui->isMain() || in.ui->element() == OscUi::kElementOsc ? *in.ui : idleStack_, in.nowMs, sel_[1], sel_[2]);
+            osc_->update (*io, highlight_, in.ui->isMain() || in.ui->element() == OscUi::kElementOsc ? *in.ui : idleStack_, in.nowMs, sel_[1], sel_[2]);
             if (! env_)
                 env_ = std::make_unique<EnvUi>();
             const int openElement = in.ui->isMain() ? 0 : in.ui->element();
@@ -195,10 +198,10 @@ public:
                 if (lfo_)
                     lfo_->forgetQGroup();
             }
-            env_->update (*in.io, highlight_, *in.ui, in.nowMs, in.live);
+            env_->update (*io, highlight_, *in.ui, in.nowMs, live);
             if (! lfo_)
                 lfo_ = std::make_unique<LfoUi>();
-            lfo_->update (*in.io, highlight_, *in.ui, in.nowMs, in.live);
+            lfo_->update (*io, highlight_, *in.ui, in.nowMs, live);
             publishQ (in);
             const uint32_t h = oscUiHash() ^ (env_->drawHash (*scratch_) * 16777619u) ^ (lfo_->drawHash (*scratch_) * 2246822519u);
             if (h != uiHash_)
@@ -217,8 +220,9 @@ public:
         ui = { 0, 0, play::kRegionW, play::kRegionH };
         return true;
     }
-    bool onTouch (const TouchEvent& ev, UiStack& stack, IInstanceView& io, double nowMs) override
+    bool onTouch (const TouchEvent& ev, UiStack& stack, mpckit::IInstance& base, double nowMs) override
     {
+        IInstanceView& io = static_cast<IInstanceView&> (base);   // every instance of SynthyBoy is an IInstanceView
         const NamesScope scope (names_);
         if (ev.kind == TouchEvent::Down && stack.isMain() && ev.y >= play::kTabY)   // a touch on a third makes its Q group the active one (the same rule as every page: the group that was touched)
             highlight_ = ev.x < 434 ? 1 : (ev.x < 850 ? 2 : 3);
@@ -234,8 +238,9 @@ public:
             return true;
         return lfo_ != nullptr && lfo_->touch (ev, stack, io, nowMs);
     }
-    bool onWheel (int x, int y, int notches, UiStack& stack, IInstanceView& io, double nowMs) override
+    bool onWheel (int x, int y, int notches, UiStack& stack, mpckit::IInstance& base, double nowMs) override
     {
+        IInstanceView& io = static_cast<IInstanceView&> (base);
         const NamesScope scope (names_);
         // the same routing as a touch: the envelope's / LFO's full screens while open, else the three panels in turn
         if (env_ != nullptr && ! stack.isMain() && stack.element() == EnvUi::kElementEnv)
@@ -248,7 +253,7 @@ public:
             return true;
         return lfo_ != nullptr && lfo_->wheel (x, y, notches, stack, io, nowMs);
     }
-    void onTick (UiStack& stack, IInstanceView& io, double nowMs) override { const NamesScope scope (names_); if (osc_ != nullptr) osc_->tick (nowMs, stack, io); if (env_ != nullptr) env_->tick (nowMs, stack, io); if (lfo_ != nullptr) lfo_->tick (nowMs, stack, io); }
+    void onTick (UiStack& stack, mpckit::IInstance& base, double nowMs) override { IInstanceView& io = static_cast<IInstanceView&> (base); const NamesScope scope (names_); if (osc_ != nullptr) osc_->tick (nowMs, stack, io); if (env_ != nullptr) env_->tick (nowMs, stack, io); if (lfo_ != nullptr) lfo_->tick (nowMs, stack, io); }
     void onShown() override
     {
         qs_.forget();
@@ -344,7 +349,8 @@ public:
         and 9 .. 12 (wrapping); on the 16 knob device the order never changes (QRouter::wide). While a full screen is open its own page publishes, and this view publishes again when it closes. */
     void publishQ (const ViewInput& in)
     {
-        if (in.io == nullptr || osc_ == nullptr || env_ == nullptr || lfo_ == nullptr)
+        IInstanceView* const io = ioOf (in);
+        if (io == nullptr || osc_ == nullptr || env_ == nullptr || lfo_ == nullptr)
             return;
         if (! (in.ui->isMain() && osc_->isMain() && env_->isMain() && lfo_->isMain()))
         {
@@ -355,7 +361,7 @@ public:
         osc_->setCompactBlock (QRouter::blockOfGroup (3, active, 0));
         env_->setCompactBlock (QRouter::blockOfGroup (3, active, 1));
         lfo_->setCompactBlock (QRouter::blockOfGroup (3, active, 2));
-        qs_.publish (*in.io, 3, active, [&] (int g, int* t) { if (g == 0) osc_->compactTargets (t); else if (g == 1) env_->compactTargets (t); else lfo_->compactTargets (t); });
+        qs_.publish (*io, 3, active, [&] (int g, int* t) { if (g == 0) osc_->compactTargets (t); else if (g == 1) env_->compactTargets (t); else lfo_->compactTargets (t); });
     }
     const int* qTargets() const noexcept { return qs_.data(); }
     void writeStatus (std::ostream& o) const override

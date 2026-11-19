@@ -1,19 +1,15 @@
-// SynthyBoy - MPC UI component library: the whole library in one include. See docs/MPC.md, section "UI components".
+// SynthyBoy - MPC UI component library: the whole library in one include. See docs/MPC.md, section "UI components". ui_generic.h is the part that knows no engine (migration step 4 of
+// docs/ui-components/TEMPLATE.md); the headers below it are SynthyBoy's (the filter pages, the panels and screens of its controls, the effect pages: fx_screen.h includes the engine).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
-#include "display.h"
+#include "ui_generic.h"
+
 #include "filter_display.h"
-#include "led_list.h"
-#include "led_toggle.h"
-#include "note_mask.h"
-#include "list.h"
 #include "panel.h"
 #include "screen.h"
-#include "text_entry.h"
 #include "mixer_screen.h"
 #include "fx_screen.h"
-#include "voice_grid.h"
 #include "voice_master.h"
 #include "voice_screen.h"

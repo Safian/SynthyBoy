@@ -205,7 +205,7 @@ int main()
         CpuCurveRenderer renderer;
         FakeInstance inst2;
         inst2.hasRing = true;
-        Controller ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+        SynthyBoyController ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
         ctl.attach (&inst2);
         frame.setView (vi, true, 90);
         double t = 0.0;

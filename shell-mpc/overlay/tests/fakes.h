@@ -14,8 +14,8 @@
 #include <string>
 #include <vector>
 
-#include "../controller.h"
-#include "../curve_source.h"
+#include "../controller_synthyboy.h"
+#include "../instance_view.h"
 #include "../drm_interfaces.h"
 #include "../overlay_layout.h"
 #include "../renderer.h"

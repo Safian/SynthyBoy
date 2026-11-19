@@ -7,7 +7,7 @@ Terse. Human documentation: `README.md` (this folder), `docs/ui-components/TEMPL
 1. Read `src/demo_params.h`, `src/pages/main_page.h` (the how-to), then the page that matches what you need (`shape_page.h`: a display component; `list_page.h`: stepper / fader / own pop-up).
 2. Define the parameters first: `ParamId` + `kParams` in `src/demo_params.h`, the same order in `skin/params.json`. Keys are permanent.
 3. For every page: copy the closest page file, rename the class, set `kElementPage` (unique), change members, `bind` (id below 700, parameter KEY), `group` (up to 4 per Q group), `layout`.
-4. Register the page in four places: `src/demo_page_set.h`, `skin/overlay_layout.json` (new marker colours), `skin/pages.json` (host widgets; a parameter on one tab only), the page factory (after migration step 8; see `src/overlay_hook.h`). Keep `tests/pages_host.cpp` in step (a `commonChecks<MyPage>` line).
+4. Register the page in four places: `src/demo_page_set.h`, `skin/overlay_layout.json` (new marker colours), `skin/pages.json` (host widgets; a parameter on one tab only), the page factory (`DemoPageFactory` in `src/overlay_hook.h`: one `case` per page kind). Keep `tests/pages_host.cpp` in step (a `commonChecks<MyPage>` line).
 5. Do NOT build or run anything unless your task says so; when it does: `mpckit_demo_pages_host` first (native, seconds), the cross build and the package last, once.
 
 ## Rules

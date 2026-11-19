@@ -420,7 +420,7 @@ int main()
         FakeMouse mouse;
         FakePointer ptr;
         frame.views = legacy::kViews;
-        auto ctl = std::make_unique<Controller> (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+        auto ctl = std::make_unique<SynthyBoyController> (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
         ctl->setMouse (&mouse, &ptr);
         inst.set ("filter1.cutoff", 1000.0f);
         ctl->attach (&inst);

@@ -1,6 +1,6 @@
 // SynthyBoy - MPC overlay: how a plugin-drawn page publishes its Q slots. A page knows its Q GROUPS in reading order (four values each) and which one is active; QRouter::mapGroups puts the active group on the Q proxies
 // 1 .. 4 and the next groups of the page (wrapping, each once) on 5 .. 8, 9 .. 12 and 13 .. 16. The page asks for the slots of its groups with a callback and hands them over here; the router is told only when a slot changed.
-// A page that only knows one group publishes it with groups = 1 (the slots 5 .. 16 have no target).
+// A page that only knows one group publishes it with groups = 1 (the slots 5 .. 16 have no target). This header knows no engine: the helpers for the modulation rows (modRowTargets, setRowBlocks) are in q_publish_mod.h.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
@@ -9,8 +9,6 @@
 
 #include "../q_router.h"
 #include "../ui/qgroup.h"
-#include "curve_source.h"
-#include "synthyboy/params.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -42,25 +40,6 @@ inline void setBlocks (Group* groups, int n, const int* ids, int used, int activ
         groups[g].setBlock (-1);
     for (int k = 0; k < used; ++k)
         groups[ids[k]].setBlock (QRouter::blockOfGroup (used, activePos, k));
-}
-
-/** The three knobs of a modulation row (the rows of the modulation lists and of the targets lists are groups of their own): amount, polarity, on / off of the slot; a row without a slot has none. `t` has four entries, all set. */
-inline void modRowTargets (int slot, int* t) noexcept
-{
-    t[0] = t[1] = t[2] = t[3] = -1;
-    if (slot >= 0)
-    {
-        const synthyboy::ModSlotParams sp = synthyboy::modSlotParams (slot);
-        t[0] = sp.amount; t[1] = sp.bipolar; t[2] = sp.bypass;
-    }
-}
-
-/** The rows of a list page (ModulationsPage, ModTargetsPage) are the groups: tells the page which block of knobs every row has (its idle chips show it). */
-template <class RowsPage>
-inline void setRowBlocks (RowsPage& page, int maxRows, int n, int active) noexcept
-{
-    for (int r = 0; r < maxRows; ++r)
-        page.setRowBlock (r, r < n ? QRouter::blockOfGroup (n, active, r) : -1);
 }
 
 /** The sixteen slots of a page and what was published of them. `Inst` is any instance interface with setQGroup (const int*, int): IInstanceView of SynthyBoy, mpckit::IInstance of the kit (migration

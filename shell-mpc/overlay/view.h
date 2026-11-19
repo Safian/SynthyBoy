@@ -7,27 +7,26 @@
 #include <cstdint>
 #include <ostream>
 
-#include "curve_source.h"
+#include "../kit/instance.h"
 #include "drm_interfaces.h"
 #include "gpu/scene.h"
-#include "overlay_layout.h"
 #include "touch_decoder.h"
-#include "synthyboy/readout.h"
 #include "ui_stack.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
-/** What a view gets for one update (everything is valid for the call only). */
+/** What a view gets for one update (everything is valid for the call only). The instance is the kit's generic interface (mpckit::IInstance); the views of SynthyBoy know theirs is an IInstanceView and
+    cast it (view_cast.h: instanceOf, ioOf, liveOf). */
 struct ViewInput
 {
-    const IInstanceView* instance = nullptr;
-    const synthyboy::LiveValues* live = nullptr;   // null: the engine has written nothing yet
+    const mpckit::IInstance* instance = nullptr;
+    const void* live = nullptr;                    // the plugin's live block (IInstance::readLive; SynthyBoy: synthyboy::LiveValues), opaque here; null: the engine has written nothing yet
     const float* targets = nullptr;                // the readout values of this view's targets (null with `live`), in the order of IView::targets ()
     double nowMs = 0.0;
     IFrameSource* frames = nullptr;                // the application's primary framebuffer (the envelope view checks the line colour with it)
     int rotation = 90;
     int panelEdgeX = 1280;                         // the x the picture is cut at: right of it the host shows through (its Q-Link panel, which slides in and out; panel_key.h); 1280: nothing of the host over the tab
-    IInstanceView* io = nullptr;                   // the same instance, writable: the plugin-drawn pages write parameters through it (null in a test that has none)
+    mpckit::IInstance* io = nullptr;               // the same instance, writable: the plugin-drawn pages write parameters through it (null in a test that has none)
     const UiStack* ui = nullptr;                   // the plugin-drawn pages of this instance (main / full / detail, ui_stack.h); null in a test that has none. The views of today ignore it.
 };
 
@@ -60,12 +59,12 @@ public:
     virtual int pageElement() const noexcept { return -1; }
     /** A touch in UI pixels (screen coordinates). `stack` is the instance's UiStack (the caller holds its lock: the view may open and close pages), `io` the instance. true: the touch belongs to this
         view's plugin-drawn pages (the application gets it as well: the screen cannot keep it from the host). */
-    virtual bool onTouch (const TouchEvent&, UiStack&, IInstanceView&, double /*nowMs*/) { return false; }
+    virtual bool onTouch (const TouchEvent&, UiStack&, mpckit::IInstance&, double /*nowMs*/) { return false; }
     /** The mouse wheel at (x, y) in UI pixels, `notches` positive away from the user: the control under the pointer takes it (a knob a Q-Link step, a stepper or a list one step, a scrolled list scrolls). true: it
         lay over a control of this view's plugin-drawn pages. `stack` as for onTouch. */
-    virtual bool onWheel (int /*x*/, int /*y*/, int /*notches*/, UiStack&, IInstanceView&, double /*nowMs*/) { return false; }
+    virtual bool onWheel (int /*x*/, int /*y*/, int /*notches*/, UiStack&, mpckit::IInstance&, double /*nowMs*/) { return false; }
     /** The clock while a finger is down (long press). */
-    virtual void onTick (UiStack&, IInstanceView&, double /*nowMs*/) {}
+    virtual void onTick (UiStack&, mpckit::IInstance&, double /*nowMs*/) {}
     /** A finger is down on the plugin-drawn pages (the controller keeps its pace fast). */
     /** The view comes on screen again after another view (or none) was on it: whatever it set in a shared place (the Q group of the four hardware knobs: the router keeps what the LAST page set) is to be set again. */
     virtual void onShown() {}
