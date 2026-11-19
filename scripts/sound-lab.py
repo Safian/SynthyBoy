@@ -7,12 +7,12 @@
 #
 # For every preset and profile it renders: single notes (MIDI 36 / 48 / 60 / 72 / 84), velocity 30 / 80 / 127, the four note chord of the level measure (what scripts/tune-preset-levels.py
 # uses), an eight note chord at velocity 127, every macro at 0 and at 100, a held note with a pressure ramp, a held note with the mod wheel, and a long held note, and prints per preset:
-#   level      RMS of the loudest 300 ms of the 4 note chord (dBFS, the set's reference is -20), peak of the 8 note chord at velocity 127 raw and after the MPC output stage (+18 dB)
+#   level      RMS of the loudest 300 ms of the 4 note chord (dBFS, the set's reference is -20), peak of the 8 note chord at velocity 127 raw and after the make-up gain of the shells (OUTPUT_GAIN_DB = synthyboy::kMakeupGainDb, before their limiter)
 #   stereo     correlation, level of the mono sum against the stereo level, the worst 1/3 octave band of the mono sum
 #   dc / click mean of the hold, the start and the end of a note
 #   movement   spread of the spectral centroid (octaves) and of the level (dB) over a held note; the depth of a periodic level movement
 #   response   velocity: level and centroid change from 30 to 127; per macro: spectral distance of 0 -> 100; pressure, mod wheel: the same
-# The raw engine output is what is measured (the MPC shell adds its fixed make-up gain after it, OUTPUT_GAIN_DB).
+# The raw engine output is what is measured (the shells add their output stage after it: OUTPUT_GAIN_DB of make-up gain and the look-ahead limiter, core/include/synthyboy/output_stage.h).
 
 import argparse
 import json
@@ -383,7 +383,7 @@ def run_report(preset_path, profile, lab, quick=False, long_hold=False):
 def fmt(o):
     L = []
     L.append(f"== {o['name']} [{o['category']}] profile {o['profile']}")
-    L.append(f"  level   chord4 RMS {o['chord_rms']:6.1f} dBFS (ref -20, held {o['chord_hold']:.1f} s)  chord4 peak {o['chord_peak_db']:6.1f}  8-note v127 peak {o['chord8_peak_db']:6.1f} raw = {o['chord8_peak_out_db']:6.1f} dBFS at +18"
+    L.append(f"  level   chord4 RMS {o['chord_rms']:6.1f} dBFS (ref -20, held {o['chord_hold']:.1f} s)  chord4 peak {o['chord_peak_db']:6.1f}  8-note v127 peak {o['chord8_peak_db']:6.1f} raw = {o['chord8_peak_out_db']:6.1f} dBFS at +{OUTPUT_GAIN_DB:g} before the limiter"
              f"  8-note RMS {o['chord8_rms']:6.1f}  single-note peak {o['single_peak_db']:6.1f}")
     L.append(f"  stereo  corr {o['stereo_cor']:5.2f}  mono sum {o['mono_db']:5.1f} dB vs stereo  worst 1/3 oct band {o['mono_worst_band_db']:6.1f} dB at {o['mono_worst_band_hz']:.0f} Hz")
     L.append(f"  clean   dc {o['dc_max']:.5f}  click ratio {o['click_start_max']:.1f}  end level {o['end_level_db_max']:.1f} dBFS  tail {o['tail_s_max']:.2f} s")
