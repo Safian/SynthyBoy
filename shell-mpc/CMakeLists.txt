@@ -31,14 +31,15 @@ target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_ENGINE_VITAL=${SY
 
 target_compile_options(synthyboy_mpc PRIVATE -Wall -Wextra -Wpedantic)
 
-# Output level (docs/MPC.md "Output level"): the shell output stage (shell-mpc/output_stage.h).
-# Factory presets are levelled internally inside the engine so MPC and desktop shells share the same loudness (0 dB shell make-up by default).
-# Range -24 .. 24. Default 0 dB.
-set(SYNTHYBOY_MPC_OUTPUT_GAIN_DB 9 CACHE STRING "MPC shell: make-up gain of the output stage in dB")
-if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB MATCHES "^[+-]?[0-9]+(\\.[0-9]+)?$" OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB LESS -24 OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB GREATER 24)
-    message(FATAL_ERROR "SYNTHYBOY_MPC_OUTPUT_GAIN_DB must be a number from -24 to 24, not '${SYNTHYBOY_MPC_OUTPUT_GAIN_DB}'")
+# Output level (docs/MPC.md "Output level"): the shell output stage (shell-mpc/output_stage.h -> core/include/synthyboy/output_stage.h).
+# Empty (default): the make-up gain is synthyboy::kMakeupGainDb, the one value of every shell. A number from -24 to 24 overrides it for this build (tests, trial packages).
+set(SYNTHYBOY_MPC_OUTPUT_GAIN_DB "" CACHE STRING "MPC shell: make-up gain of the output stage in dB (empty: synthyboy::kMakeupGainDb)")
+if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB STREQUAL "")
+    if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB MATCHES "^[+-]?[0-9]+(\\.[0-9]+)?$" OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB LESS -24 OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB GREATER 24)
+        message(FATAL_ERROR "SYNTHYBOY_MPC_OUTPUT_GAIN_DB must be empty or a number from -24 to 24, not '${SYNTHYBOY_MPC_OUTPUT_GAIN_DB}'")
+    endif()
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OUTPUT_GAIN_DB=${SYNTHYBOY_MPC_OUTPUT_GAIN_DB})
 endif()
-target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OUTPUT_GAIN_DB=${SYNTHYBOY_MPC_OUTPUT_GAIN_DB})
 
 # The program list of a plugin track (the PRESET pop-up of the host), grouped like the Sounds browser: docs/MPC.md "Preset list of a plugin track". A string:
 #   off            the flat list as ever (default; the program list is bit-identical to a build without this option)
@@ -64,9 +65,9 @@ else()
 endif()
 target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_PROGRAM_GROUPS=${SYNTHYBOY_MPC_PROGRAM_GROUPS_N})
 
-# Peak limiter after the make-up gain: by default OFF (the signal may exceed 0 dBFS, the player can place a limiter insert on the track in the MPC).
-# SYNTHYBOY_MPC_OUTPUT_LIMITER=ON restores the stereo-linked peak limiter at -1 dBFS.
-option(SYNTHYBOY_MPC_OUTPUT_LIMITER "MPC shell: peak limiter at -1 dBFS after the make-up gain" OFF)
+# The look-ahead peak limiter after the make-up gain is the plugin setting LIMIT (default on, docs/MPC.md "Output limiter").
+# SYNTHYBOY_MPC_OUTPUT_LIMITER=ON forces it on whatever the setting says (tests); OFF (default) leaves it to the setting.
+option(SYNTHYBOY_MPC_OUTPUT_LIMITER "MPC shell: force the output peak limiter on (else the plugin setting LIMIT decides)" OFF)
 if(SYNTHYBOY_MPC_OUTPUT_LIMITER)
     target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OUTPUT_LIMITER=1)
 else()

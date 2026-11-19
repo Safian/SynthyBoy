@@ -136,7 +136,8 @@
 #include "pad_pressure.h"
 #endif
 
-// Make-up gain of the output stage in dB (CMake cache entry of the same name, docs/MPC.md "Output level"). 0 = no gain. The peak limiter behind it is compiled in only with SYNTHYBOY_MPC_OUTPUT_LIMITER (default off).
+// Make-up gain of the output stage in dB (docs/MPC.md "Output level"): synthyboy::kMakeupGainDb (core/include/synthyboy/output_stage.h, the one value of every shell) unless the CMake cache entry
+// SYNTHYBOY_MPC_OUTPUT_GAIN_DB gives another. The look-ahead peak limiter behind it is the plugin setting LIMIT (default on; SYNTHYBOY_MPC_OUTPUT_LIMITER forces it for tests).
 // Debug hooks (CMake option SYNTHYBOY_MPC_DEBUG_HOOKS, default OFF, never in the package; docs/MPC.md "Switches and files"): the /tmp files that only the host tests and the acceptance runs on the device use -
 // /tmp/synthyboy-ui-fake-write, -q-fake-group, -q-fake-write, -overlay-q-step-travel, -overlay-fake-slot, -play-log (+ -dump, the .txt, the chunk copies). Without the option the plugin does not look at them at all.
 #ifndef SYNTHYBOY_MPC_DEBUG_HOOKS
@@ -172,7 +173,7 @@ using synthyboy_mpc::stepCountOf;   // the rule of the relative Q proxies: q_ste
 #endif
 
 #ifndef SYNTHYBOY_MPC_OUTPUT_GAIN_DB
-#define SYNTHYBOY_MPC_OUTPUT_GAIN_DB 9.0
+#define SYNTHYBOY_MPC_OUTPUT_GAIN_DB synthyboy::kMakeupGainDb
 #endif
 
 /** The most a preset file may have (a preset is a few KB; the content folder is on user writable media). */
@@ -394,7 +395,7 @@ struct PluginInstance
     std::atomic<float> paramUndo[synthyboy::kMaxParams];   // the value a parameter had before the host's last change of it (NaN: none): see writeRealParam
 #endif
 
-    // Output stage: the make-up gain of the MPC shell (SYNTHYBOY_MPC_OUTPUT_GAIN_DB, set once in the constructor) and, only when built with SYNTHYBOY_MPC_OUTPUT_LIMITER, the peak limiter behind it.
+    // Output stage: the make-up gain of the MPC shell (SYNTHYBOY_MPC_OUTPUT_GAIN_DB, set once in the constructor) and the look-ahead peak limiter behind it (the setting LIMIT, below).
     // Only the audio thread calls process(); prepare() runs with the engine's prepare (effMainsChanged, the host is not processing then).
     synthyboy_mpc::SwitchableOutputStage outputStage;
     // All Sound Off requests of the host side (effStopProcess, effMainsChanged (0)): the audio thread puts one event at the front of its next block (processReplacing).
@@ -2315,6 +2316,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (std::isfinite(opt) && opt > 0.0f)
         {
             inst->sampleRate = opt;
+            // the look-ahead of the output limiter at this rate: the host reads initialDelay after effSetSampleRate (docs/MPC.md "Output limiter"; it must not rely on it)
+            e->initialDelay = inst->outputStage.limiter() ? static_cast<VstInt32> (synthyboy::OutputStage::lookaheadFor (opt)) : 0;
 #if SYNTHYBOY_MPC_OVERLAY
             inst->overlayRate.store (opt, std::memory_order_relaxed);
 #endif
@@ -3112,7 +3115,7 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     inst->engine->process(inst->events.count > 0 ? inst->events.slots : nullptr,
                           static_cast<int>(inst->events.count),
                           out0, out1, sampleFrames);
-    // Make-up gain and, when built with it, the peak limiter (output_stage.h): what leaves here is what the host gets, so the spectrum below shows the same signal.
+    // Make-up gain and the look-ahead peak limiter (output_stage.h; off: the gain only, no delay): what leaves here is what the host gets, so the spectrum below shows the same signal.
     inst->outputStage.process (out0, out1, sampleFrames);
     if (out0 != nullptr)
         synthyboy_mpc::outputPeak().note (out0, out1, sampleFrames);   // the peak for the status file (output_peak.h): one pass, relaxed atomics
@@ -3210,7 +3213,7 @@ extern "C"
         effect->flags = effFlagsCanReplacing | effFlagsIsSynth | effFlagsProgramChunks;
         effect->resvd1 = 0;
         effect->resvd2 = 0;
-        effect->initialDelay = 0;
+        effect->initialDelay = inst->outputStage.limiter() ? static_cast<VstInt32> (synthyboy::OutputStage::lookaheadFor (44100.0)) : 0;   // set again by effSetSampleRate
         effect->object = inst;
         // Build unique ID from four bytes: (('S'<<24)|('f'<<16)|('S'<<8)|'B')
         effect->uniqueID = (static_cast<VstInt32>('S') << 24) | (static_cast<VstInt32>('f') << 16)
