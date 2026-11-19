@@ -184,6 +184,7 @@ bool clap_activate (const clap_plugin_t* p, double sample_rate, uint32_t, uint32
     self->sampleRate = sample_rate > 0.0 ? sample_rate : 48000.0;
     self->maxBlockSize = std::max (max_frames_count, 32u);
     self->stopWatch.reset();
+    self->outputStage.prepare (self->sampleRate);
     if (self->engine)
     {
         self->engine->setUltraRender (self->prefs.ultraRender && self->offlineRender);
@@ -212,6 +213,7 @@ void clap_stop_processing (const clap_plugin_t* p) noexcept
 void clap_reset (const clap_plugin_t* p) noexcept
 {
     auto* self = toClap (p);
+    self->outputStage.reset();
     if (self->engine)
         self->engine->reset();
 }
@@ -354,6 +356,7 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
         const auto processStart = meters ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
         self->engine->process (self->events.data(), static_cast<int> (self->events.size()),
                                outL, outR, static_cast<int> (process->frames_count));
+        self->outputStage.process (outL, outR, static_cast<int> (process->frames_count));
         self->samplesDone.fetch_add (process->frames_count, std::memory_order_relaxed);
         if (meters)
         {

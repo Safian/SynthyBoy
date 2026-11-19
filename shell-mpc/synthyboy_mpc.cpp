@@ -172,7 +172,7 @@ using synthyboy_mpc::stepCountOf;   // the rule of the relative Q proxies: q_ste
 #endif
 
 #ifndef SYNTHYBOY_MPC_OUTPUT_GAIN_DB
-#define SYNTHYBOY_MPC_OUTPUT_GAIN_DB 0.0
+#define SYNTHYBOY_MPC_OUTPUT_GAIN_DB 9.0
 #endif
 
 /** The most a preset file may have (a preset is a few KB; the content folder is on user writable media). */

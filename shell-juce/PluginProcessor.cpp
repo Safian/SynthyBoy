@@ -312,6 +312,7 @@ void SynthyBoyProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     quality.realtime = ! isNonRealtime();
     engine->setUltraRender (prefs.ultraRender && isNonRealtime()); // a bounce at 4x oversampling (S p.315, A385)
     stopWatch.reset();
+    outputStage.prepare (sampleRate);
     engine->prepare (sampleRate, samplesPerBlock, quality);
     setLatencySamples (engine->latencySamples());
 }
@@ -447,6 +448,8 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     const auto processStart = juce::Time::getHighResolutionTicks();
     engine->process (events.data(), numEvents, buffer.getWritePointer (0),
                      numChannels > 1 ? buffer.getWritePointer (1) : nullptr, numSamples);
+    outputStage.process (buffer.getWritePointer (0),
+                         numChannels > 1 ? buffer.getWritePointer (1) : nullptr, numSamples);
     {
         // CPU: the time the engine needed for this block against the time the block lasts, smoothed over a few blocks
         const double spent = juce::Time::highResolutionTicksToSeconds (juce::Time::getHighResolutionTicks() - processStart);
