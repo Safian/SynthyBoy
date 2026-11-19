@@ -896,7 +896,7 @@ There are two primary ways to browse and select presets in SynthyBoy:
    - In Track View or Track Edit mode on a Plugin track, the MPC host header displays the current preset in its **PRESET** field.
    - Tapping the **PRESET** field opens the host's standard scrollable program list containing all 161 programs (program 0 "Init", followed by the 160 factory presets ordered by category and name).
    - Tapping any preset immediately loads that sound into the engine.
-   - **The "*" mark:** The plugin appends " *" after the preset name in the header whenever you change a parameter after loading, or when a saved project restores modified settings. Loading a preset again clears the asterisk mark. A project remembers the preset by name and restores it even if a subsequent release updates the program list; if the name is not found, the saved sound is retained without a preset name.
+   - **No "*" mark:** The preset name in the header is always shown as it is; the plugin adds no mark when you change a parameter or when a project is restored (a project saved by an earlier version with "Name *" is shown as "Name"). A project remembers the preset by name and restores it even if a subsequent release updates the program list; if the name is not found, the saved sound is retained without a preset name.
 
 2. **The Sounds browser (Sounds Mode — being verified on the device):**
    - Akai MPC hardware provides a dedicated instrument and preset browser known as **Sounds Mode** (Akai MPC Standalone OS User Guide v3.10.1, "Sounds Mode", pp. 147–148; MPC Live III, MPC XL User Guide v3.10.1, "Sounds Mode", pp. 153–154).

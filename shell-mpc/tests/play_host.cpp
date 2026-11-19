@@ -196,20 +196,29 @@ int main (int argc, char** argv)
         check (ok, "the selectors are stepped integers 0 .. n - 1 (displayed as 1 .. n)");
     }
     {
-        // the mark of a changed program: the host drops its own "*" when it reads the name again (audioMasterUpdateDisplay), so the plugin carries the mark in the program name
+        // no mark of a changed program in any name the host reads (removed by design: docs/MPC.md "Q proxies")
         AEffect* pm = make();
         char nm[64] = {};
+        auto endsWithStar = [] (const char* n) { std::string t = n; while (! t.empty() && t.back() == ' ') t.pop_back(); return ! t.empty() && t.back() == '*'; };
         pm->dispatcher (pm, effGetProgramName, 0, 0, nm, 0.0f);
-        const std::string clean = nm;
-        check (clean.size() < 2 || clean.substr (clean.size() - 2) != " *", "a fresh instance: the program name has no mark (" + clean + ")");
+        check (! endsWithStar (nm), std::string ("a fresh instance: the program name has no mark (") + nm + ")");
         pm->setParameter (pm, 0, 0.123f);
         std::memset (nm, 0, sizeof nm);
         pm->dispatcher (pm, effGetProgramName, 0, 0, nm, 0.0f);
-        check (std::string (nm) == clean + " *", "a parameter edit: the name carries the mark (" + std::string (nm) + ")");
+        check (! endsWithStar (nm), std::string ("a parameter edit: the name has no mark (") + nm + ")");
         pm->dispatcher (pm, effSetProgram, 0, 1, nullptr, 0.0f);
         std::memset (nm, 0, sizeof nm);
         pm->dispatcher (pm, effGetProgramName, 0, 0, nm, 0.0f);
-        check (std::string (nm).size() >= 2 && std::string (nm).substr (std::string (nm).size() - 2) != " *", "loading a program clears the mark (" + std::string (nm) + ")");
+        check (! endsWithStar (nm), std::string ("loading a program: the name has no mark (") + nm + ")");
+        pm->setParameter (pm, 0, 0.5f);
+        bool listed = true;
+        for (int i = 0; i < 400; ++i)
+        {
+            std::memset (nm, 0, sizeof nm);
+            if (pm->dispatcher (pm, effGetProgramNameIndexed, i, 0, nm, 0.0f) != 1) break;
+            listed = listed && ! endsWithStar (nm);
+        }
+        check (listed, "after a parameter edit no listed program name (effGetProgramNameIndexed) has a mark");
         closeIt (pm);
     }
     // the defaults of the selectors

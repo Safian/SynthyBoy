@@ -139,6 +139,33 @@ class TestNaming(unittest.TestCase):
             self.assertNotIn("/", stem)
             self.assertTrue(stem.startswith(f"{number:03d}-{cword}-"))
 
+    def test_no_host_visible_name_ends_with_a_star(self):
+        """The "modified" mark (" *") is gone by design (docs/MPC.md "Q proxies"): no factory preset name, no generated .xpl
+        (file name, <preset> name, chunk name) and no content pack entry ends with "*"."""
+        presets_dir = REPO / "content" / "presets"
+        cats = gen.preset_categories(presets_dir)
+        self.assertEqual(len(cats), 160)
+        for name in cats:
+            self.assertFalse(name.rstrip().endswith("*"), name)
+        chunks = [(name, ('{"mpcProgram":1,"mpcProgramName":%s}' % json.dumps(name)).encode("utf-8")) for name in sorted(cats)]
+        rows = gen.plan(chunks, presets_dir, categories_file=gen.CATEGORIES_FILE)
+        with tempfile.TemporaryDirectory() as t:
+            for by_folders in (False, True):
+                out = Path(t, "f" if by_folders else "flat")
+                gen.write_set(rows, out, gen.DEVICE_PLUGIN_PATHS["xl"], by_folders=by_folders)
+                files = sorted(out.rglob("*.xpl"))
+                self.assertEqual(len(files), 160)
+                for f in files:
+                    self.assertFalse(f.stem.rstrip().endswith("*"), f.name)
+                    parsed = fmt.parse_xpl(f.read_text(encoding="utf-8"))
+                    self.assertFalse(json.loads(parsed["chunk_bytes"])["mpcProgramName"].rstrip().endswith("*"), f.name)
+                    self.assertNotRegex(f.read_text(encoding="utf-8"), r"<preset>[^<]*\*\s*</preset>")
+        pack = json.loads((presets_dir / "contentpack.json").read_text(encoding="utf-8"))
+        for entry in pack["files"]:
+            for value in entry.values():
+                if isinstance(value, str):
+                    self.assertFalse(value.rstrip().endswith("*"), value)
+
     def test_every_content_folder_is_in_the_table(self):
         folders = {p.name for p in (REPO / "content" / "presets").iterdir() if p.is_dir()}
         self.assertEqual(folders, {c for c, _ in gen.CATEGORIES})

@@ -881,7 +881,7 @@ A SynthyBoy-ban két fő módja van a presetek böngészésének és kiválaszt�
    - Track View vagy Track Edit módban egy Plugin sávon az MPC fejlécében látható az aktuális preset a **PRESET** mezőben.
    - A **PRESET** mező megérintése megnyitja a gazdarendszer szabványos görgethető programlistáját, amely mind a 161 programot tartalmazza (a 0. "Init" programot, majd a 160 gyári presetet kategória és név szerint rendezve).
    - Bármelyik presetet megérintve az azonnal betöltődik a motorba.
-   - **A "*" jelölés:** A plugin egy " *" jelet fűz a preset neve mögé a fejlécben, valahányszor módosítunk egy paramétert a betöltés után, vagy ha egy elmentett projekt módosított beállításokat állít vissza. A preset újbóli betöltése törli a csillag jelölést. A projekt név szerint jegyzi meg a presetet, és akkor is visszaállítja, ha egy későbbi kiadás frissíti a programlistát; ha a név nem található, az elmentett hangszín presetnév nélkül marad meg.
+   - **Nincs "*" jelölés:** A preset neve a fejlécben mindig úgy jelenik meg, ahogy van; a plugin nem fűz jelölést a név mögé paraméter módosításakor vagy projekt visszaállításakor (a korábbi verzióval " *"-gal mentett projekt "Név"-ként jelenik meg). A projekt név szerint jegyzi meg a presetet, és akkor is visszaállítja, ha egy későbbi kiadás frissíti a programlistát; ha a név nem található, az elmentett hangszín presetnév nélkül marad meg.
 
 2. **A Sounds böngésző (Sounds Mode — hardveres ellenőrzés alatt):**
    - Az Akai MPC hardverek rendelkeznek egy dedikált hangszer- és presetböngészővel, amely **Sounds Mode** néven ismert (Akai MPC Standalone OS User Guide v3.10.1, "Sounds Mode", 147–148. oldal; MPC Live III, MPC XL User Guide v3.10.1, "Sounds Mode", 153–154. oldal).
