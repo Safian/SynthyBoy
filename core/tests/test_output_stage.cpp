@@ -362,3 +362,126 @@ TEST (output_stage_nan_and_inf_recovery)
         }
     }
 }
+
+// 4. sampleFrames <= 0 (0 and negative): no write, no state change
+// (a following block identical to a run that never saw it).
+TEST (output_stage_nonpositive_sample_frames)
+{
+    const double sampleRates[] = { 44100.0, 48000.0 };
+
+    for (const double sr : sampleRates)
+    {
+        for (const bool limiterOn : { true, false })
+        {
+            synthyboy::OutputStage stageA, stageB;
+            stageA.prepare (sr);
+            stageA.setLimiter (limiterOn);
+            stageB.prepare (sr);
+            stageB.setLimiter (limiterOn);
+
+            // 1. No write check: buffers must remain exactly byte-identical
+            constexpr size_t kSentinelCount = 64;
+            const uint32_t kSentinelPattern = 0xdeadbeefu;
+            float sentinelL[kSentinelCount];
+            float sentinelR[kSentinelCount];
+
+            auto resetSentinels = [&]() {
+                for (size_t i = 0; i < kSentinelCount; ++i)
+                {
+                    std::memcpy (&sentinelL[i], &kSentinelPattern, sizeof (float));
+                    std::memcpy (&sentinelR[i], &kSentinelPattern, sizeof (float));
+                }
+            };
+
+            auto checkSentinels = [&]() -> bool {
+                for (size_t i = 0; i < kSentinelCount; ++i)
+                {
+                    uint32_t bL = 0, bR = 0;
+                    std::memcpy (&bL, &sentinelL[i], sizeof (float));
+                    std::memcpy (&bR, &sentinelR[i], sizeof (float));
+                    if (bL != kSentinelPattern || bR != kSentinelPattern)
+                        return false;
+                }
+                return true;
+            };
+
+            resetSentinels();
+            stageA.process (sentinelL, sentinelR, 0);
+            CHECK (checkSentinels());
+
+            stageA.process (sentinelL, sentinelR, -1);
+            CHECK (checkSentinels());
+
+            stageA.process (sentinelL, sentinelR, -100);
+            CHECK (checkSentinels());
+
+            // 2. No state change from idle:
+            // stageA saw n=0 and n<0 calls; stageB did not.
+            // A following block must be 100% bit-identical.
+            const int bs = 128;
+            auto testBlockL = generateSine (static_cast<size_t> (bs), 0.8f, 440.0, sr);
+            auto testBlockR = generateSine (static_cast<size_t> (bs), 0.6f, 880.0, sr);
+
+            auto outA_L = testBlockL, outA_R = testBlockR;
+            auto outB_L = testBlockL, outB_R = testBlockR;
+
+            stageA.process (outA_L.data(), outA_R.data(), bs);
+            stageB.process (outB_L.data(), outB_R.data(), bs);
+
+            size_t diffIdle = 0;
+            for (size_t i = 0; i < static_cast<size_t> (bs); ++i)
+            {
+                uint32_t bAL = 0, bBL = 0, bAR = 0, bBR = 0;
+                std::memcpy (&bAL, &outA_L[i], sizeof (float));
+                std::memcpy (&bBL, &outB_L[i], sizeof (float));
+                std::memcpy (&bAR, &outA_R[i], sizeof (float));
+                std::memcpy (&bBR, &outB_R[i], sizeof (float));
+                if (bAL != bBL || bAR != bBR)
+                    ++diffIdle;
+            }
+            CHECK_EQ (diffIdle, 0u);
+            CHECK_EQ (stageA.lastGain(), stageB.lastGain());
+            CHECK_NEAR (stageA.gainReductionDb(), stageB.gainReductionDb(), 1e-6);
+
+            // 3. No state change while actively limiting:
+            // Both process a hot signal block first
+            auto hotL = generateSine (static_cast<size_t> (bs), 2.0f, 1000.0, sr);
+            auto hotR = generateSine (static_cast<size_t> (bs), 2.0f, 1000.0, sr);
+            auto hotA_L = hotL, hotA_R = hotR;
+            auto hotB_L = hotL, hotB_R = hotR;
+
+            stageA.process (hotA_L.data(), hotA_R.data(), bs);
+            stageB.process (hotB_L.data(), hotB_R.data(), bs);
+
+            // Interleave n<=0 calls into stageA only
+            resetSentinels();
+            stageA.process (sentinelL, sentinelR, 0);
+            stageA.process (sentinelL, sentinelR, -5);
+            CHECK (checkSentinels());
+
+            // Process next block through both
+            auto nextL = generateSine (static_cast<size_t> (bs), 1.5f, 330.0, sr);
+            auto nextR = generateSine (static_cast<size_t> (bs), 1.5f, 330.0, sr);
+            auto nextA_L = nextL, nextA_R = nextR;
+            auto nextB_L = nextL, nextB_R = nextR;
+
+            stageA.process (nextA_L.data(), nextA_R.data(), bs);
+            stageB.process (nextB_L.data(), nextB_R.data(), bs);
+
+            size_t diffActive = 0;
+            for (size_t i = 0; i < static_cast<size_t> (bs); ++i)
+            {
+                uint32_t bAL = 0, bBL = 0, bAR = 0, bBR = 0;
+                std::memcpy (&bAL, &nextA_L[i], sizeof (float));
+                std::memcpy (&bBL, &nextB_L[i], sizeof (float));
+                std::memcpy (&bAR, &nextA_R[i], sizeof (float));
+                std::memcpy (&bBR, &nextB_R[i], sizeof (float));
+                if (bAL != bBL || bAR != bBR)
+                    ++diffActive;
+            }
+            CHECK_EQ (diffActive, 0u);
+            CHECK_EQ (stageA.lastGain(), stageB.lastGain());
+            CHECK_NEAR (stageA.gainReductionDb(), stageB.gainReductionDb(), 1e-6);
+        }
+    }
+}
