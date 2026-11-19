@@ -14,6 +14,16 @@ else()
     target_compile_options(synthyboy_preset_render PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# level-probe: the levels of every factory preset after the shells' output stage, for the levelling against the stock MPC instruments (scripts/level-to-stock.py).
+add_executable(synthyboy_level_probe level_probe.cpp)
+target_link_libraries(synthyboy_level_probe PRIVATE synthyboy_core)
+set_target_properties(synthyboy_level_probe PROPERTIES CXX_EXTENSIONS OFF)
+if(MSVC)
+    target_compile_options(synthyboy_level_probe PRIVATE /W4)
+else()
+    target_compile_options(synthyboy_level_probe PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 # The gate: every factory preset x 3 tiers passes the checks (the velocity sweep is off here, it is for the report).
 # Label `slow` like the other audio quality gates.
 # The factory presets are written for the Vital-derived engine (the own engine of builds without Vital, iOS, has no sample / granular / spectral
