@@ -34,7 +34,7 @@ public:
     void setPadPressure (bool on, float percent) noexcept override { padOn = on; padPercent = percent; ++padWrites; }
     bool outputLimiter (bool& on) const noexcept override { on = limiterOn; return true; }
     void setOutputLimiter (bool on) noexcept override { limiterOn = on; ++limiterWrites; }
-    bool limiterOn = false;   // the demo view's state (the plugin's default, output_stage.h kOutputLimiterDefaultOn, is on; the galleries keep showing the switch off)
+    bool limiterOn = false;   // the default of the plugin (output_stage.h kOutputLimiterDefaultOn: off)
     int limiterWrites = 0;
     bool padOn = false;
     float padPercent = 35.0f;

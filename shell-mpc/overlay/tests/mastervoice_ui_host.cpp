@@ -662,13 +662,13 @@ void testMasterPadPressure()
     check (! r.ui.item (MasterUi::kPadPressure) || r.ui.item (MasterUi::kPadPressure)->param < 0, "the two are not engine parameters");
 }
 
-// the output limiter: one LED toggle "LIMIT" in the OUTPUT block (a shell setting, no Q group; on by default in the plugin, off in the demo view)
+// the output limiter: one LED toggle "LIMIT" in the OUTPUT block (a shell setting, no Q group), off by default in the plugin
 void testMasterOutputLimiter()
 {
     MRig r;
     r.refresh();
     ui::MasterScreen& m = r.ui.screen();
-    check (m.outputLimiter.enabled() && ! m.outputLimiter.state.on, "output limiter: LIMIT shows the setting of the view (the demo view: off)");
+    check (m.outputLimiter.enabled() && ! m.outputLimiter.state.on, "output limiter: LIMIT shows the setting (off by default)");
     check (m.outputLimiter.rect().h >= 56 && m.outputLimiter.rect().w >= 56 && m.outputLimiter.sizeOk(), "output limiter: touch target of at least 56 pixels");
     check (m.blockRect (0).contains (m.outputLimiter.rect()) && ! m.outputLimiter.rect().overlaps (m.voiceOverride.rect()) && ! m.outputLimiter.rect().overlaps (m.stereoRouting.rect())
                && ! m.outputLimiter.rect().overlaps (m.spread.rect()) && ! m.outputLimiter.rect().overlaps (m.volume.rect()) && ! m.outputLimiter.rect().overlaps (m.meters.rect()),

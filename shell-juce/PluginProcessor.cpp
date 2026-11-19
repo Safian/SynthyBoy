@@ -292,6 +292,13 @@ void SynthyBoyProcessor::timerCallback()
     prepareToPlay (preparedSampleRate, preparedBlockSize);
 }
 
+void SynthyBoyProcessor::reset()
+{
+    if (engine != nullptr)
+        engine->reset();
+    outputStage.reset();
+}
+
 void SynthyBoyProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     preparedSampleRate = sampleRate;

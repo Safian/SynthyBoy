@@ -1,6 +1,6 @@
 // SynthyBoy - MPC shell: output stage. The stage itself is the one of every shell, core/include/synthyboy/output_stage.h (make-up gain, then a stereo-linked look-ahead peak
 // limiter with a program-dependent release at -0.5 dB full scale, a hard safety clip behind it). This header adds what is the MPC shell's own: the limiter as the plugin setting LIMIT
-// (default ON, kOutputLimiterDefaultOn), the environment / build override SYNTHYBOY_MPC_OUTPUT_LIMITER for tests, and the chunk member "mpcOutputLimiter".
+// (default OFF, kOutputLimiterDefaultOn: the default sound is unity gain staging without dynamics; the limiter is the user's choice), the environment / build override SYNTHYBOY_MPC_OUTPUT_LIMITER for tests, and the chunk member "mpcOutputLimiter".
 // Tested by shell-mpc/tests/output_stage_host.cpp and output_stage_lanes_host.cpp (tests/run_output_stage_test.sh).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -25,7 +25,7 @@ using OutputStage = synthyboy::OutputStage;
 
 // ---- the limiter as a plugin setting (docs/MPC.md "Output limiter") ----
 /** The default of the setting "LIMIT" on the Master page (OUTPUT block): the one constant to flip. A project saved before the setting existed keeps this default. */
-constexpr bool kOutputLimiterDefaultOn = true;
+constexpr bool kOutputLimiterDefaultOn = false;
 
 /** SYNTHYBOY_MPC_OUTPUT_LIMITER in the environment forces the limiter for tests: "1" on, "0" off, anything else (or unset) leaves it to the setting. A build with
     -DSYNTHYBOY_MPC_OUTPUT_LIMITER=1 forces it on as before (the value 0 of the default build forces nothing). Returns -1 (not forced), 0 (off) or 1 (on). */

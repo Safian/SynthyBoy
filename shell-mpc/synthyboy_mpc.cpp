@@ -408,7 +408,14 @@ struct PluginInstance
     {
         const int forced = synthyboy_mpc::outputLimiterForced();
         outputStage.setLimiter (forced >= 0 ? forced == 1 : outputLimiter.load (std::memory_order_relaxed));
+        latencyDirty.store (true, std::memory_order_release);   // the look-ahead is part of the reported latency only while the limiter is on
     }
+    // The latency the host is told (AEffect::initialDelay): the engine's (Bode's frequency shifter) plus the output limiter's look-ahead while it is on, in samples at the prepared
+    // rate. Any thread may mark it stale (the switch, the audio thread when the engine's latency moved); the next dispatcher call that is not effProcessEvents (so never on the
+    // audio thread) writes the field and sends audioMasterIOChanged (reportLatency in dispatch).
+    std::atomic<bool> latencyDirty { false };
+    std::atomic<int> latencyReported { 0 };
+    int latencyNow() const noexcept { return (engine ? engine->latencySamples() : 0) + outputStage.latencySamples(); }
 
     // ---- the life of the instance towards the host (robustness review F5, F12) ----
     // closing: effClose has begun. From that moment no thread of this instance calls the host (the gate below answers 0 at once), every loop of ours stops at its next look, and nothing new is started.
@@ -2017,6 +2024,17 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     PluginInstance* inst = getInstance(e);
     if (!inst && opcode != effOpen && opcode != effClose)
         return 0;
+    // a latency change (the LIMIT switch, a chunk, Bode's latency) is told here: never on the audio thread (effProcessEvents), never while closing
+    if (inst && opcode != effProcessEvents && opcode != effClose && inst->latencyDirty.load (std::memory_order_acquire) && inst->latencyDirty.exchange (false, std::memory_order_acq_rel))
+    {
+        const int lat = inst->latencyNow();
+        if (lat != inst->latencyReported.load (std::memory_order_relaxed))
+        {
+            e->initialDelay = static_cast<VstInt32> (lat);
+            inst->latencyReported.store (lat, std::memory_order_relaxed);
+            inst->audioMaster (e, audioMasterIOChanged, 0, 0, nullptr, 0.0f);
+        }
+    }
 
     switch (opcode)
     {
@@ -2317,7 +2335,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         {
             inst->sampleRate = opt;
             // the look-ahead of the output limiter at this rate: the host reads initialDelay after effSetSampleRate (docs/MPC.md "Output limiter"; it must not rely on it)
-            e->initialDelay = inst->outputStage.limiter() ? static_cast<VstInt32> (synthyboy::OutputStage::lookaheadFor (opt)) : 0;
+            e->initialDelay = static_cast<VstInt32> ((inst->engine ? inst->engine->latencySamples() : 0) + (inst->outputStage.limiter() ? synthyboy::OutputStage::lookaheadFor (opt) : 0));
+            inst->latencyReported.store (e->initialDelay, std::memory_order_relaxed);
 #if SYNTHYBOY_MPC_OVERLAY
             inst->overlayRate.store (opt, std::memory_order_relaxed);
 #endif
@@ -2490,7 +2509,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 }
 #endif
                 {
-                    // the output limiter setting rides in the chunk; a chunk without it (an older one) leaves the setting as it is (the default is off)
+                    // the output limiter setting rides in the chunk; a chunk without it (an older one) leaves the setting as it is (the default, kOutputLimiterDefaultOn: off);
+                    // applyOutputLimiter marks the reported latency stale, the next dispatcher call tells the host
                     bool limiterOn = inst->outputLimiter.load (std::memory_order_relaxed);
                     if (synthyboy_mpc::outputLimiterFromChunk (chunk, static_cast<size_t>(size), limiterOn))
                     {
@@ -3117,6 +3137,8 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
                           out0, out1, sampleFrames);
     // Make-up gain and the look-ahead peak limiter (output_stage.h; off: the gain only, no delay): what leaves here is what the host gets, so the spectrum below shows the same signal.
     inst->outputStage.process (out0, out1, sampleFrames);
+    if (inst->latencyNow() != inst->latencyReported.load (std::memory_order_relaxed))
+        inst->latencyDirty.store (true, std::memory_order_release);   // told to the host by the next dispatcher call off the audio thread
     if (out0 != nullptr)
         synthyboy_mpc::outputPeak().note (out0, out1, sampleFrames);   // the peak for the status file (output_peak.h): one pass, relaxed atomics
 #if SYNTHYBOY_MPC_SPECTRUM
@@ -3213,7 +3235,9 @@ extern "C"
         effect->flags = effFlagsCanReplacing | effFlagsIsSynth | effFlagsProgramChunks;
         effect->resvd1 = 0;
         effect->resvd2 = 0;
-        effect->initialDelay = inst->outputStage.limiter() ? static_cast<VstInt32> (synthyboy::OutputStage::lookaheadFor (44100.0)) : 0;   // set again by effSetSampleRate
+        effect->initialDelay = inst->outputStage.limiter() ? static_cast<VstInt32> (synthyboy::OutputStage::lookaheadFor (44100.0)) : 0;   // set again by effSetSampleRate and by every change (latencyDirty)
+        inst->latencyReported.store (effect->initialDelay, std::memory_order_relaxed);
+        inst->latencyDirty.store (false, std::memory_order_relaxed);
         effect->object = inst;
         // Build unique ID from four bytes: (('S'<<24)|('f'<<16)|('S'<<8)|'B')
         effect->uniqueID = (static_cast<VstInt32>('S') << 24) | (static_cast<VstInt32>('f') << 16)

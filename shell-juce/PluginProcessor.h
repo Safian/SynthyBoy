@@ -58,6 +58,8 @@ public:
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void setNonRealtime (bool isNonRealtime) noexcept override;
     void releaseResources() override {}
+    /** The host's flush (transport stop / locate, a new position): the engine's voices and tails and the output stage's delay line and reduction start clean. */
+    void reset() override;
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
