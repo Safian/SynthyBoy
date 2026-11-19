@@ -103,6 +103,7 @@ TEST (own_master_stage_hoisted_scalar_form_is_the_per_sample_loop)
     CHECK_EQ (bad, 0);
 }
 
+#if !defined(__arm__)   // (the NEON of ARMv7 flushes subnormals whatever the float mode is: on 32 bit ARM only the flush-to-zero test below is the contract, the shell runs in that mode)
 TEST (own_master_stage_neon_form_is_the_per_sample_loop)
 {
     static_assert (SB_NEON == 1, "this test is built with the NEON forms on");
@@ -111,17 +112,29 @@ TEST (own_master_stage_neon_form_is_the_per_sample_loop)
     std::printf ("    %lld samples: %lld differ\n", samples, bad);
     CHECK_EQ (bad, 0);
 }
+#endif
 
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__arm__)
 TEST (own_master_stage_neon_form_is_the_per_sample_loop_with_flush_to_zero_set)
 {
+#if defined(__aarch64__)
     uint64_t saved;
     asm volatile ("mrs %0, fpcr" : "=r"(saved));
     const uint64_t fz = saved | (1ull << 24);   // FPCR.FZ: what the MPC shell sets around the audio callback
     asm volatile ("msr fpcr, %0" :: "r"(fz) : "memory");
+#else
+    uint32_t saved;
+    asm volatile ("vmrs %0, fpscr" : "=r"(saved));
+    const uint32_t fz = saved | (1u << 24);   // FPSCR.FZ: the same bit on 32 bit ARM
+    asm volatile ("vmsr fpscr, %0" :: "r"(fz) : "memory");
+#endif
     long long samples = 0;
     const long long bad = run (true, 400, samples);
+#if defined(__aarch64__)
     asm volatile ("msr fpcr, %0" :: "r"(saved) : "memory");
+#else
+    asm volatile ("vmsr fpscr, %0" :: "r"(saved) : "memory");
+#endif
     std::printf ("    %lld samples: %lld differ\n", samples, bad);
     CHECK_EQ (bad, 0);
 }

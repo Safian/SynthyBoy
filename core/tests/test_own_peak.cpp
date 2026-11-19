@@ -1,6 +1,6 @@
 // SynthyBoy - own engine tests: the NEON block peak (dsp/peak.h: the strip, bus, master and effect chain peaks) gives the float of the scalar loops it replaced, for random blocks and
 // for blocks made of every special value (silence, NaN, both infinities, both zeros, subnormals, full scale), mono and stereo, every length from 0 to 40, unaligned starts, in the
-// default float mode and (on AArch64) with the flush-to-zero bit set as the MPC shell sets it. Compiled with the NEON forms on (also on Apple's arm64); links nothing of the engine.
+// default float mode (not on 32 bit ARM: its NEON flushes subnormals whatever the mode is) and, on both ARM forms, with the flush-to-zero bit set as the MPC shell sets it. Compiled with the NEON forms on (also on Apple's arm64); links nothing of the engine.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <cmath>
@@ -42,6 +42,11 @@ float sample (int style)
 #if defined(__aarch64__)
 uint64_t readFpcr() { uint64_t v; asm volatile ("mrs %0, fpcr" : "=r"(v)); return v; }
 void writeFpcr (uint64_t v) { asm volatile ("msr fpcr, %0" :: "r"(v) : "memory"); }   // (the memory clobber keeps the calls on the right side of it)
+constexpr uint64_t kFlushBit = 1ull << 24;   // FPCR.FZ
+#elif defined(__arm__)
+uint64_t readFpcr() { uint32_t v; asm volatile ("vmrs %0, fpscr" : "=r"(v)); return v; }
+void writeFpcr (uint64_t v) { const uint32_t w = static_cast<uint32_t> (v); asm volatile ("vmsr fpscr, %0" :: "r"(w) : "memory"); }
+constexpr uint64_t kFlushBit = 1ull << 24;   // FPSCR.FZ
 #endif
 
 long long runAll()
@@ -82,17 +87,19 @@ long long runAll()
 }
 } // namespace
 
+#if !defined(__arm__)   // (the NEON of ARMv7 flushes subnormals whatever the float mode is: on 32 bit ARM only the flush-to-zero test below is the contract, the shell runs in that mode)
 TEST (own_neon_peak_is_the_scalar_peak_in_the_default_float_mode)
 {
     static_assert (SB_PEAK_NEON == 1, "this test is built with the NEON forms on");
     CHECK_EQ (runAll(), 0);
 }
+#endif
 
-#if defined(__aarch64__)
+#if defined(__aarch64__) || defined(__arm__)
 TEST (own_neon_peak_is_the_scalar_peak_with_flush_to_zero_set)
 {
     const uint64_t saved = readFpcr();
-    writeFpcr (saved | (1ull << 24));   // FPCR.FZ: what the MPC shell sets
+    writeFpcr (saved | kFlushBit);   // FZ: what the MPC shell sets
     const long long bad = runAll();
     // the subnormal case must really be in flush mode: a subnormal alone gives 0 in both forms
     volatile float subSrc = 1.0e-40f;   // (not a compile time constant)

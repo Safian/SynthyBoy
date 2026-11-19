@@ -256,8 +256,13 @@ TEST (runaway_test_and_limit_of_the_serum_filter_unit_equal_the_scalar_loops)
             clampTo (cb, -16.0f, 16.0f, n);
             for (int k = 0; k < n; ++k)
             {
+                // the ARMv7 NEON min / max flush a subnormal to a zero of its sign whatever the floating point mode is (and the engine runs with flush-to-zero set, where x * 1 does the same):
+                // the vector limit equals std::clamp on the value as it is (IEEE, Apple's arm64) or on the value flushed to zero (arm32), the two forms differ only on a subnormal
                 const float wa = std::clamp (a[k] * 1.0f, -16.0f, 16.0f), wb = std::clamp (b[k] * 1.0f, -16.0f, 16.0f);
-                badClamp += (std::memcmp (&wa, &ca[k], 4) != 0 || std::memcmp (&wb, &cb[k], 4) != 0) ? 1 : 0;
+                const float fa = std::clamp (ftz (a[k]), -16.0f, 16.0f), fb = std::clamp (ftz (b[k]), -16.0f, 16.0f);
+                const bool okA = std::memcmp (&wa, &ca[k], 4) == 0 || std::memcmp (&fa, &ca[k], 4) == 0;
+                const bool okB = std::memcmp (&wb, &cb[k], 4) == 0 || std::memcmp (&fb, &cb[k], 4) == 0;
+                badClamp += (okA && okB) ? 0 : 1;
             }
         }
         ++runs;
