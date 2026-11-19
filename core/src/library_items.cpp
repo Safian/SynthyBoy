@@ -106,6 +106,10 @@ const std::vector<FormulaExample>& formulaExamples()
         { "DnbWave chirp up", "sin(2*pi * (w + 7*w^2))" },
         { "DnbWave sweep (y)", "sin(2*pi * ((1 + 14*y)*w - 7*y*w^2))" },
         { "DnbWave drive (y)", "tanh(2.5 * sin(2*pi * ((1 + 14*y)*w - 7*y*w^2)))" },
+        { "Monster growl (y)", "tanh(2.5 * sin(2*pi*w + (2 + 4*y) * sin(pi*w) * sin(2*pi*w * (2 + 3*y))))" },
+        { "Acid 303 (y)", "tanh((1 - 2*w) + 1.2 * exp(-4*w) * sin(2*pi*w * (2 + 14*y)))" },
+        { "Vowel formant (y)", "sin(pi*w) * (sin(2*pi*w * (2 + 5*y)) + 0.7 * sin(2*pi*w * (5 + 9*y)))" },
+        { "Metallic comb (y)", "tanh(sin(2*pi*w) + 0.6 * sin(pi*w) * sin(2*pi*w * 2.73) + 0.4 * sin(pi*w) * sin(2*pi*w * 5.41 * (1 + y)))" },
     };
     return examples;
 }

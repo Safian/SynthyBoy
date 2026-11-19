@@ -773,4 +773,30 @@ TEST (formula_dnb_wave_generation)
     err = Formula::compile ("tanh(2.5 * sin(2*pi * ((1 + 14*y)*w - 7*y*w^2)))", f);
     CHECK (err.ok);
     CHECK (f.isMultiFrame());
+
+    // 5. Monster growl (y)
+    err = Formula::compile ("tanh(2.5 * sin(2*pi*w + (2 + 4*y) * sin(pi*w) * sin(2*pi*w * (2 + 3*y))))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 6. Acid 303 (y)
+    err = Formula::compile ("tanh((1 - 2*w) + 1.2 * exp(-4*w) * sin(2*pi*w * (2 + 14*y)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 7. Vowel formant (y)
+    err = Formula::compile ("sin(pi*w) * (sin(2*pi*w * (2 + 5*y)) + 0.7 * sin(2*pi*w * (5 + 9*y)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 8. Metallic comb (y)
+    err = Formula::compile ("tanh(sin(2*pi*w) + 0.6 * sin(pi*w) * sin(2*pi*w * 2.73) + 0.4 * sin(pi*w) * sin(2*pi*w * 5.41 * (1 + y)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
 }

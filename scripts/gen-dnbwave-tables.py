@@ -63,5 +63,25 @@ def main():
     make_wavetable(os.path.join(target_dir, "DnbWave_drive.wav"), 64,
                    lambda w, y: math.tanh(2.5 * math.sin(2.0 * math.pi * ((1.0 + 14.0 * y) * w - 7.0 * y * (w**2)))))
 
+    # 4. Monster growl (64 frames)
+    make_wavetable(os.path.join(target_dir, "Monster_growl.wav"), 64,
+                   lambda w, y: math.tanh(2.5 * math.sin(2.0 * math.pi * w + (2.0 + 4.0 * y) * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * (2.0 + 3.0 * y)))))
+
+    # 5. Acid 303 (64 frames)
+    make_wavetable(os.path.join(target_dir, "Acid_303.wav"), 64,
+                   lambda w, y: math.tanh((1.0 - 2.0 * w) + 1.2 * math.exp(-4.0 * w) * math.sin(2.0 * math.pi * w * (2.0 + 14.0 * y))))
+
+    # 6. Vowel formant (64 frames)
+    make_wavetable(os.path.join(target_dir, "Vowel_formant.wav"), 64,
+                   lambda w, y: math.sin(math.pi * w) * (math.sin(2.0 * math.pi * w * (2.0 + 5.0 * y)) + 0.7 * math.sin(2.0 * math.pi * w * (5.0 + 9.0 * y))))
+
+    # 7. Metallic comb (64 frames)
+    make_wavetable(os.path.join(target_dir, "Metallic_comb.wav"), 64,
+                   lambda w, y: math.tanh(math.sin(2.0 * math.pi * w) + 0.6 * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * 2.73) + 0.4 * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * 5.41 * (1.0 + y))))
+
+    # 8. PWM sweep (64 frames)
+    make_wavetable(os.path.join(target_dir, "PWM_sweep.wav"), 64,
+                   lambda w, y: 1.0 if w < (0.05 + 0.9 * y) else -1.0)
+
 if __name__ == "__main__":
     main()
