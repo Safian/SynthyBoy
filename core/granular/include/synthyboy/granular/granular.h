@@ -36,6 +36,10 @@ using ShapeFn = float (*) (int type, float x, float amount);
     1 the full shape; `skew` (-1 .. 1) moves the peak of the shape towards the start (< 0) or the end (> 0). Never NaN, in 0 .. 1. */
 float windowValue (WindowShape shape, float x, float amount, float skew) noexcept;
 
+/** a[i] = isfinite (a[i]) ? max (-16, min (16, a[i])) : 0 for i < n: the output stage of the voice. `neon`: four at a time, the same operations in every lane (a non finite value is masked to 0 as the scalar
+    test does): the same bits for every normal sample (NEON on 32 bit ARM flushes subnormals, as the other vector forms of the engine do). */
+void clampFinite (float* a, int n, bool neon) noexcept;
+
 /** The settings of a cloud. The oscillator fills the struct once per block (from the keys and the modulation) and hands it to process (). */
 struct GrainParams
 {
@@ -93,6 +97,18 @@ public:
     /** Renders `numFrames` samples into left / right (overwritten). `rateMod` (optional) multiplies the grain read rate per sample (FM). */
     void process (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept;
 
+    /** Measurements only (the bench's --scalar-content): the grains run through the per sample reference loop instead of the kernel (the same bits, see core/granular/tests). */
+    void setReferenceKernels (bool on) noexcept { reference_ = on; }
+    /** Tests: false runs the kernel with its scalar form only (the vector form, four samples of a grain at a time on ARM with NEON, gives the same bits). */
+    void setVectorKernels (bool on) noexcept { vectors_ = on; }
+
+    /** Tests only: reset() as it was before (the `active` flag of all grains written on every call). */
+    void setLegacyReset (bool on) noexcept { legacyReset_ = on; }
+    /** Tests only: the output stage runs the scalar form (as before SP10) instead of the NEON form. */
+    void setLegacyOutput (bool on) noexcept { legacyOutput_ = on; }
+    /** Tests only: the scanning head advances with the two divisions and the loop bounds of every sample (as before GR1) instead of constants made once per call. */
+    void setLegacyHead (bool on) noexcept { legacyHead_ = on; }
+
     bool isActive() const noexcept { return active_; }
     int activeGrains() const noexcept;
     double playhead() const noexcept { return head_; }
@@ -110,14 +126,34 @@ private:
         float gl = 1.0f, gr = 1.0f;
         float windowAmount = 0.5f, windowSkew = 0.0f;
         float warpAmount[2] = { 0.0f, 0.0f };
+        // what the kernel needs of a grain that does not change while it plays, made once at the spawn (the window's peak and slopes, 1 / length, the mip level of the read)
+        float winPeak = 0.5f, winK1 = 1.0f, winK2 = 1.0f, winAmount = 0.5f, invLength = 1.0f;
+        int mip = 0;
     };
 
     void spawn (const GrainParams& p, int delay, int age, double headFraction) noexcept;
+    /** Renders the playing grains of the block into left / right (added). Returns true if any grain was playing. The kernel and the reference loop give the same bits. */
+    bool renderGrains (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept;
+    bool renderGrainsReference (const GrainParams& p, float* left, float* right, int numFrames, const float* rateMod) noexcept;
     void advanceHead (const GrainParams& p) noexcept;
+    /** What advanceHead needs of `p` that does not change during a call of process (the divisions, the loop bounds, the sign of the step). */
+    struct HeadStep
+    {
+        double step = 0.0, lo = 0.0, hi = 0.0, l0 = 0.0, l1 = 0.0;
+        bool looping = false, pingPong = false;
+    };
+    HeadStep headStep (const GrainParams& p) const noexcept;
+    void advanceHead (const GrainParams& p, const HeadStep& hs) noexcept;
     float random01() noexcept;
 
     const SampleView* sample_ = nullptr;
     double sampleRate_ = 44100.0;
+    bool reference_ = false;
+    bool vectors_ = true;
+    bool legacyReset_ = false;
+    bool legacyOutput_ = false;
+    bool legacyHead_ = false;
+    bool grainsLive_ = false;   // a grain may be active (set by spawn, cleared by reset): reset has nothing to clear while it is false
     bool active_ = false, released_ = false, headDone_ = false;
     double head_ = 0.0;         // play head, fraction of the file
     int headDirection_ = 1;     // ping pong state

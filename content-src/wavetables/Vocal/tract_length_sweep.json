@@ -1,0 +1,23 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Tract Length Sweep",
+ "category": "Vocal",
+ "description": "The vowel ah with all formants scaled 0.6 to 1.7: a giant to a chipmunk (the vocal tract length), pitch fixed at 150 Hz.",
+ "frames": 64,
+ "seed": "tract_length_sweep",
+ "source": {
+  "type": "formant",
+  "params": {
+   "f0": 150,
+   "vowel_a": "a",
+   "shift": {
+    "law": "linear",
+    "from": 0.6,
+    "to": 1.7
+   }
+  }
+ },
+ "post": {
+  "limit": 250
+ }
+}

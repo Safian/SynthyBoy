@@ -114,6 +114,13 @@ public:
     void setParams (const FilterParams& params) noexcept
     {
         params_ = params;
+        if (params.jump)
+        {
+            smoothedCutoff_ = std::max (20.0f, std::min (params.cutoff, static_cast<float> (sampleRate_ * 0.49)));
+            smoothedRes_ = std::max (0.0f, std::min (params.resonance, 1.0f));
+            heldCutoff_ = smoothedCutoff_;
+            heldRes_ = smoothedRes_;
+        }
     }
 
     const FilterParams& getParams() const noexcept
@@ -135,7 +142,7 @@ public:
         smoothedCutoff_ += smoothCoeff * (targetCutoff - smoothedCutoff_);
         smoothedRes_ += smoothCoeff * (targetRes - smoothedRes_);
 
-        const float out = processInternal (in, smoothedCutoff_, smoothedRes_);
+        const float out = processInternal (in, smoothedCutoff_, smoothedRes_, tanM (kPi * smoothedCutoff_ / srFloat), callParams());
         return sanitize (out);
     }
 
@@ -146,18 +153,25 @@ public:
         const float smoothCoeff = std::min (0.05f, 180.0f / srFloat);
         const int hold = params_.coefHold;
         int holdCount = 0; // i % hold without the integer division, which 32 bit ARM makes through a library call, once per sample
+        // what processInternal () took from the parameters every sample is the same for the whole call (CPU review F7): clamped once here; the targets too when no
+        // per sample modulation is given (the engine gives none)
+        const CallParams k = callParams();
+        const float fixedTargetCutoff = std::max (20.0f, std::min (params_.cutoff, srFloat * 0.49f));
+        const float fixedTargetRes = std::max (0.0f, std::min (params_.resonance, 1.0f));
+        // g = tanM (pi cutoff / sr) of processInternal (): redone only when the cutoff it runs on changes (bit for bit), which with a coefficient hold is once per hold
+        uint32_t gCutoffBits = 0;
+        bool haveG = false;
+        float g = 0.0f;
 
         for (int i = 0; i < numSamples; ++i)
         {
-            float targetCutoff = params_.cutoff;
+            float targetCutoff = fixedTargetCutoff;
             if (cutoffMod != nullptr)
-                targetCutoff = cutoffMod[i];
-            targetCutoff = std::max (20.0f, std::min (targetCutoff, srFloat * 0.49f));
+                targetCutoff = std::max (20.0f, std::min (cutoffMod[i], srFloat * 0.49f));
 
-            float targetRes = params_.resonance;
+            float targetRes = fixedTargetRes;
             if (resMod != nullptr)
-                targetRes = resMod[i];
-            targetRes = std::max (0.0f, std::min (targetRes, 1.0f));
+                targetRes = std::max (0.0f, std::min (resMod[i], 1.0f));
 
             smoothedCutoff_ += smoothCoeff * (targetCutoff - smoothedCutoff_);
             smoothedRes_ += smoothCoeff * (targetRes - smoothedRes_);
@@ -169,8 +183,17 @@ public:
             if (++holdCount >= hold)
                 holdCount = 0;
 
+            const float cutoff = hold <= 1 ? smoothedCutoff_ : heldCutoff_;
+            uint32_t cutoffBits;
+            std::memcpy (&cutoffBits, &cutoff, 4);
+            if (!haveG || cutoffBits != gCutoffBits)
+            {
+                g = tanM (kPi * cutoff / srFloat);
+                gCutoffBits = cutoffBits;
+                haveG = true;
+            }
             const float sampleIn = sanitize (in[i]);
-            out[i] = sanitize (processInternal (sampleIn, hold <= 1 ? smoothedCutoff_ : heldCutoff_, hold <= 1 ? smoothedRes_ : heldRes_));
+            out[i] = sanitize (processInternal (sampleIn, cutoff, hold <= 1 ? smoothedRes_ : heldRes_, g, k));
         }
     }
 
@@ -185,7 +208,21 @@ public:
         const bool scream = type == FilterType::ScreamLP || type == FilterType::ScreamBP;
         const bool ladder = type == FilterType::EMSLadder || type == FilterType::MGLadder;
         const bool diffusor = type == FilterType::Diffusor;
-        if (fb.type_ != type || !(scream || ladder || diffusor) || fa.sampleRate_ != fb.sampleRate_ || fa.params_.coefHold != fb.params_.coefHold)
+        const bool allpasses = type == FilterType::Allpasses; // Smear / Allpasses: the all-pass chain of the Diffusor with 6 stages, its own taps and gain
+        const bool chain = diffusor || allpasses;
+        const bool multi = type >= FilterType::LH && type <= FilterType::NN; // Multi SVF: two state variable filters in series, the second at a cutoff shifted by var
+        const bool flanges = type >= FilterType::CmbL && type <= FilterType::PhsHL;
+        const bool phaser = type == FilterType::PhsL || type == FilterType::PhsH || type == FilterType::PhsHL;
+        const bool flg = type == FilterType::FlgL || type == FilterType::FlgH || type == FilterType::FlgHL;
+        const bool comb = flanges && !phaser;                                  // Cmb and Flg: a delay line with a filtered feedback
+        const bool fbLow = type == FilterType::CmbL || type == FilterType::FlgL || type == FilterType::PhsL;   // the feedback filter of a Flanges type: L, H or HL
+        const bool fbHigh = type == FilterType::CmbH || type == FilterType::FlgH || type == FilterType::PhsH;
+        const bool fbBand = flanges && !fbLow && !fbHigh;
+        const bool ring2 = type == FilterType::RingModX2;
+        const bool ring = type == FilterType::RingMod || ring2; // Ring Mod: the carrier of the two sides is made once when their phases are the same
+        if (fb.type_ != type || !(scream || ladder || chain || multi || flanges || ring) || fa.sampleRate_ != fb.sampleRate_ || fa.params_.coefHold != fb.params_.coefHold)
+            return false;
+        if (comb && (fa.combDelay1_.empty() || fb.combDelay1_.empty()))
             return false;
 
         const auto srFloat = static_cast<float> (fa.sampleRate_);
@@ -193,7 +230,7 @@ public:
         const int hold = fa.params_.coefHold;
 
         // per lane, what processBlock () and processInternal () take from the parameters
-        float targetCutoff[2], targetRes[2], drive[2], var[2], mix[2];
+        float targetCutoff[2], targetRes[2], drive[2], var[2], blend[2], mix[2];
         for (int l = 0; l < 2; ++l)
         {
             const FilterParams& p = f[l]->params_;
@@ -201,6 +238,7 @@ public:
             targetRes[l] = std::max (0.0f, std::min (p.resonance, 1.0f));
             drive[l] = std::max (0.0f, std::min (p.drive, 1.0f));
             var[l] = std::max (0.0f, std::min (p.var, 1.0f));
+            blend[l] = std::max (0.0f, std::min (p.blend, 1.0f));
             mix[l] = std::max (0.0f, std::min (p.mix, 1.0f));
         }
         int stages = 0;
@@ -209,11 +247,14 @@ public:
             stages = std::max (1, std::min (static_cast<int> (1.0f + 7.0f * var[0]), 8));
             if (std::max (1, std::min (static_cast<int> (1.0f + 7.0f * var[1]), 8)) != stages)
                 return false;
+        }
+        else if (allpasses)
+            stages = 6;
+        if (chain)
             for (int l = 0; l < 2; ++l)
                 for (int i = 0; i < stages; ++i)
                     if (f[l]->diffuserDelays_[i].empty())
                         return false;
-        }
 
         const V vTargetCutoff = V::set (targetCutoff[0], targetCutoff[1]), vTargetRes = V::set (targetRes[0], targetRes[1]);
         const V vSmooth = V::all (smoothCoeff);
@@ -241,33 +282,87 @@ public:
         }
         const V vLadderDriveGain = V::set (1.0f + 2.0f * ladderDrive[0], 1.0f + 2.0f * ladderDrive[1]);
         const V vTwoFat = V::all (2.0f * fat);
+        const bool fatOn = fat > 0.001f; // (a per call constant: tested once, not per sample)
+        // Multi SVF: the factor of the second cutoff (FREQ, -4 to +4 octaves), the blend of the two stages, and which output each stage gives (per call constants)
+        float multiFactor[2] = { 1.0f, 1.0f };
+        if (multi)
+            for (int l = 0; l < 2; ++l)
+                multiFactor[l] = f[l]->pow2M ((var[l] - 0.5f) * 8.0f);
+        const V vBlendOut2 = V::set (1.0f - 0.5f * blend[0], 1.0f - 0.5f * blend[1]), vBlendOut1 = V::set (0.5f * blend[0], 0.5f * blend[1]);
+        // stage 1: 0 low pass (LH LB LP LN), 1 high pass (HB HP HN), 2 band pass (BP BN), 3 peak (PP PN), 4 notch (NN)
+        const int sel1 = (type == FilterType::HB || type == FilterType::HP || type == FilterType::HN) ? 1
+                         : (type == FilterType::BP || type == FilterType::BN) ? 2 : (type == FilterType::PP || type == FilterType::PN) ? 3 : type == FilterType::NN ? 4 : 0;
+        // stage 2: 0 high pass (LH), 1 band pass (LB HB), 2 peak (LP HP BP PP), 3 notch (LN HN BN PN NN)
+        const int sel2 = (type == FilterType::LB || type == FilterType::HB) ? 1
+                         : (type == FilterType::LP || type == FilterType::HP || type == FilterType::BP || type == FilterType::PP) ? 2
+                         : (type == FilterType::LN || type == FilterType::HN || type == FilterType::BN || type == FilterType::PN || type == FilterType::NN) ? 3 : 0;
+        // Flanges: the feedback filters of the L and H types follow var only (one coefficient per call), those of the HL types the cutoff (see the cutoff block)
+        float bwFactor[2] = { 0.0f, 0.0f };
+        V vFbLP = V::all (0.0f), vFbHP = V::all (0.0f);
+        if (flanges)
+            for (int l = 0; l < 2; ++l)
+            {
+                bwFactor[l] = 0.1f + 1.8f * var[l];
+                if (fbLow)
+                {
+                    const float fLP = 50.0f + 18000.0f * var[l];
+                    onePoleCoef (f[l]->combFeedbackLP_, f[l]->tanM (kPi * std::min (fLP, srFloat * 0.49f) / srFloat));
+                }
+                else if (fbHigh)
+                {
+                    const float fHP = 20.0f + 12000.0f * var[l];
+                    onePoleCoef (f[l]->combFeedbackHP_, f[l]->tanM (kPi * std::min (fHP, srFloat * 0.49f) / srFloat));
+                }
+            }
+        if (fbLow)
+            vFbLP = V::set (fa.combFeedbackLP_.lastCoef, fb.combFeedbackLP_.lastCoef);
+        else if (fbHigh)
+            vFbHP = V::set (fa.combFeedbackHP_.lastCoef, fb.combFeedbackHP_.lastCoef);
+
+        // Ring Mod x2: the factor of the second carrier (SPREAD), a per call constant
+        float ringFactor[2] = { 1.0f, 1.0f };
+        if (ring2)
+            for (int l = 0; l < 2; ++l)
+                ringFactor[l] = f[l]->pow2M ((var[l] - 0.5f) * 4.0f);
+        const float twoPi = 2.0f * kPi;
+        V ringPhase1 = V::set (fa.ringModPhase1_, fb.ringModPhase1_), ringPhase2 = V::set (fa.ringModPhase2_, fb.ringModPhase2_);
+        float ringInc1[2] = { 0.0f, 0.0f }, ringInc2[2] = { 0.0f, 0.0f };
+        V vRingInc1 = V::all (0.0f), vRingInc2 = V::all (0.0f);
 
         V smoothedCutoff = V::set (fa.smoothedCutoff_, fb.smoothedCutoff_), smoothedRes = V::set (fa.smoothedRes_, fb.smoothedRes_);
         V heldCutoff = V::set (fa.heldCutoff_, fb.heldCutoff_), heldRes = V::set (fa.heldRes_, fb.heldRes_);
 
         // the states, sanitized as every scalar module does at the start of its call (they are stored sanitized, so once is the same as every sample)
         V s1 = V::sanitized (V::set (fa.svf1_.s1, fb.svf1_.s1)), s2 = V::sanitized (V::set (fa.svf1_.s2, fb.svf1_.s2));
+        V t1 = V::sanitized (V::set (fa.svf2_.s1, fb.svf2_.s1)), t2 = V::sanitized (V::set (fa.svf2_.s2, fb.svf2_.s2));
         V ps = V::sanitized (V::set (fa.onePole1_.s, fb.onePole1_.s));
         V ls[4];
         for (int k = 0; k < 4; ++k)
             ls[k] = V::sanitized (V::set (fa.ladder_.s[k], fb.ladder_.s[k]));
+        V fbLPs = V::sanitized (V::set (fa.combFeedbackLP_.s, fb.combFeedbackLP_.s)), fbHPs = V::sanitized (V::set (fa.combFeedbackHP_.s, fb.combFeedbackHP_.s));
+        V aps[6];
+        for (int k = 0; k < 6; ++k)
+            aps[k] = V::sanitized (V::set (fa.phaserAP_[k].s, fb.phaserAP_[k].s));
 
         // what follows the cutoff of a lane; redone when that cutoff changes
-        float lastCutoff[2] = { 0.0f, 0.0f }, g[2] = { 0.0f, 0.0f };
+        float lastCutoff[2] = { 0.0f, 0.0f }, g[2] = { 0.0f, 0.0f }, g2[2] = { 0.0f, 0.0f };
         bool haveCutoff[2] = { false, false };
         DelayLine::Tap taps[2][8];
-        V vGSafe = V::all (0.0f), vScreamCoef = V::all (0.0f);
+        V vGSafe = V::all (0.0f), vGSafe2 = V::all (0.0f), vScreamCoef = V::all (0.0f), vPhCoef = V::all (0.0f);
         V vLG = V::all (0.0f), vLG0 = V::all (0.0f), vLG2 = V::all (0.0f), vLG3 = V::all (0.0f), vLG4 = V::all (0.0f);
         float lastR[2] = { 0.0f, 0.0f };
         bool haveR[2] = { false, false };
-        V vDEff = V::all (0.0f);
+        V vDEff = V::all (0.0f), vDEff2 = V::all (0.0f);
 
         int holdCount = 0;
         for (int i = 0; i < numSamples; ++i)
         {
             smoothedCutoff = smoothedCutoff + vSmooth * (vTargetCutoff - smoothedCutoff);
             smoothedRes = smoothedRes + vSmooth * (vTargetRes - smoothedRes);
-            if (hold <= 1 || holdCount == 0) // (i % hold) == 0
+            // the held cutoff and resonance are new only on the first sample of a hold (every sample without a hold): only there can the coefficients that follow
+            // them change, so only there are the lanes' values compared with the last ones (the other samples would find them equal and skip the same work)
+            const bool newHold = hold <= 1 || holdCount == 0;
+            if (newHold) // (i % hold) == 0
             {
                 heldCutoff = smoothedCutoff;
                 heldRes = smoothedRes;
@@ -278,7 +373,7 @@ public:
             const V in = V::sanitized (V::set (inA[i], inB[i]));
 
             bool cutoffChanged = false;
-            for (int l = 0; l < 2; ++l)
+            for (int l = 0; l < 2 && newHold; ++l)
             {
                 const float c = cutoff.get (l);
                 if (haveCutoff[l] && c == lastCutoff[l])
@@ -286,19 +381,22 @@ public:
                 lastCutoff[l] = c;
                 haveCutoff[l] = true;
                 cutoffChanged = true;
-                g[l] = f[l]->tanM (kPi * c / srFloat);
+                // g of processInternal (); the all-pass chains, the combs, the flangers and the ring modulators do not use it (processInternal () computes it for them through the
+                // memo, which changes nothing but the memo)
+                if (!chain && !comb && !ring)
+                    g[l] = f[l]->tanM (kPi * c / srFloat);
                 if (scream)
                 {
                     const float screamFreq = std::max (20.0f, std::min (c * screamFactor[l], srFloat * 0.49f));
                     screamG[l] = f[l]->tanM (kPi * screamFreq / srFloat);
-                    OnePoleTPT& op = f[l]->onePole1_;
-                    if (!(op.haveCoef && screamG[l] == op.lastG))
-                    {
-                        op.lastCoef = screamG[l] / (1.0f + screamG[l]);
-                        op.lastG = screamG[l];
-                        op.haveCoef = true;
-                    }
+                    onePoleCoef (f[l]->onePole1_, screamG[l]);
                     haveR[l] = false; // the division of the state variable filter depends on g as well
+                }
+                else if (multi)
+                {
+                    const float fc2 = std::max (20.0f, std::min (c * multiFactor[l], srFloat * 0.49f));
+                    g2[l] = f[l]->tanM (kPi * fc2 / srFloat);
+                    haveR[l] = false; // the divisions of both state variable filters depend on their g as well
                 }
                 else if (ladder)
                 {
@@ -315,11 +413,48 @@ public:
                         ld.haveG = true;
                     }
                 }
-                else
+                else if (ring)
                 {
+                    // the phase steps of processInternal (): 2 pi cutoff / sr, and 2 pi fc2 / sr with fc2 = clamp (cutoff * factor, 20, 0.49 sr)
+                    ringInc1[l] = 2.0f * kPi * c / srFloat;
+                    if (ring2)
+                    {
+                        const float fc2 = std::max (20.0f, std::min (c * ringFactor[l], srFloat * 0.49f));
+                        ringInc2[l] = 2.0f * kPi * fc2 / srFloat;
+                    }
+                }
+                else if (chain)
+                {
+                    // the delay of each stage as processInternal () computes it: max (2, (sr / max (20, cutoff)) * factor), then read ()'s clamp in tapFor ()
                     const float perCycle = srFloat / std::max (20.0f, c);
                     for (int k = 0; k < stages; ++k)
-                        taps[l][k] = f[l]->diffuserDelays_[k].tapFor (std::max (2.0f, perCycle * (0.2f + 0.15f * static_cast<float> (k))));
+                        taps[l][k] = f[l]->diffuserDelays_[k].tapFor (std::max (2.0f, perCycle * (diffusor ? 0.2f + 0.15f * static_cast<float> (k) : 0.3f + 0.2f * static_cast<float> (k))));
+                }
+                else
+                {
+                    // Flanges: the delay of the comb or the flanger (processInternal () computes it, with its log10, every sample) and the HL feedback filters
+                    if (comb)
+                    {
+                        float delaySamples = srFloat / std::max (20.0f, c);
+                        if (flg)
+                        {
+                            const float delaySec = 0.0002f + 0.0098f * (1.0f - std::log10 (std::max (20.0f, c) / 20.0f) / 3.0f);
+                            delaySamples = std::max (2.0f, delaySec * srFloat);
+                        }
+                        taps[l][0] = f[l]->combDelay1_.tapFor (delaySamples);
+                    }
+                    else
+                        for (int k = 0; k < 6; ++k)
+                            onePoleCoef (f[l]->phaserAP_[k], g[l]);
+                    if (fbBand)
+                    {
+                        const float fLP = std::min (c * (1.0f + bwFactor[l]), srFloat * 0.49f);
+                        const float fHP = std::max (20.0f, c / (1.0f + bwFactor[l]));
+                        const float gLP = f[l]->tanM (kPi * fLP / srFloat);
+                        const float gHP = f[l]->tanM (kPi * fHP / srFloat);
+                        onePoleCoef (f[l]->combFeedbackLP_, gLP);
+                        onePoleCoef (f[l]->combFeedbackHP_, gHP);
+                    }
                 }
             }
             if (cutoffChanged)
@@ -329,6 +464,11 @@ public:
                     vGSafe = V::set (std::max (1e-5f, std::min (g[0], 50.0f)), std::max (1e-5f, std::min (g[1], 50.0f)));
                     vScreamCoef = V::set (fa.onePole1_.lastCoef, fb.onePole1_.lastCoef);
                 }
+                else if (multi)
+                {
+                    vGSafe = V::set (std::max (1e-5f, std::min (g[0], 50.0f)), std::max (1e-5f, std::min (g[1], 50.0f)));
+                    vGSafe2 = V::set (std::max (1e-5f, std::min (g2[0], 50.0f)), std::max (1e-5f, std::min (g2[1], 50.0f)));
+                }
                 else if (ladder)
                 {
                     vLG = V::set (fa.ladder_.cG, fb.ladder_.cG);
@@ -337,17 +477,32 @@ public:
                     vLG3 = V::set (fa.ladder_.cG3, fb.ladder_.cG3);
                     vLG4 = V::set (fa.ladder_.cG4, fb.ladder_.cG4);
                 }
+                else if (ring)
+                {
+                    vRingInc1 = V::set (ringInc1[0], ringInc1[1]);
+                    vRingInc2 = V::set (ringInc2[0], ringInc2[1]);
+                }
+                else if (flanges)
+                {
+                    if (phaser)
+                        vPhCoef = V::set (fa.phaserAP_[0].lastCoef, fb.phaserAP_[0].lastCoef);
+                    if (fbBand)
+                    {
+                        vFbLP = V::set (fa.combFeedbackLP_.lastCoef, fb.combFeedbackLP_.lastCoef);
+                        vFbHP = V::set (fa.combFeedbackHP_.lastCoef, fb.combFeedbackHP_.lastCoef);
+                    }
+                }
             }
 
             const V drivenIn = V::softClipped (vDriveGain * in);
             V rawOut = drivenIn;
-            if (scream)
+            if (scream || multi)
             {
                 // SVFTPT::process without FAT: the damping is 2 R, its division is redone when g or R change
                 const V R = vOne - V::all (0.96f) * res;
                 const V damping = V::all (2.0f) * R * vOne;
                 bool dChanged = false;
-                for (int l = 0; l < 2; ++l)
+                for (int l = 0; l < 2 && newHold; ++l)
                 {
                     const float Rl = R.get (l);
                     if (haveR[l] && Rl == lastR[l])
@@ -355,31 +510,53 @@ public:
                     lastR[l] = Rl;
                     haveR[l] = true;
                     dChanged = true;
-                    SVFTPT& sv = f[l]->svf1_;
-                    const float gSafe = vGSafe.get (l), dampingL = damping.get (l);
-                    if (!(sv.haveD && gSafe == sv.dG && Rl == sv.dR))
-                    {
-                        sv.dCached = 1.0f / (1.0f + dampingL * gSafe + gSafe * gSafe);
-                        sv.dG = gSafe;
-                        sv.dR = Rl;
-                        sv.haveD = true;
-                    }
+                    svfDivision (f[l]->svf1_, vGSafe.get (l), Rl, damping.get (l));
+                    if (multi)
+                        svfDivision (f[l]->svf2_, vGSafe2.get (l), Rl, damping.get (l));
                 }
                 if (dChanged)
+                {
                     vDEff = V::set (fa.svf1_.dCached, fb.svf1_.dCached);
-                const V hp = (drivenIn - (damping + vGSafe) * s1 - s2) * vDEff;
-                const V v1 = vGSafe * hp;
-                const V bp = v1 + s1;
-                s1 = V::sanitized (v1 + bp);
-                const V v2 = vGSafe * bp;
-                const V lp = v2 + s2;
-                s2 = V::sanitized (v2 + lp);
-                const V primary = type == FilterType::ScreamBP ? bp : lp;
-                // OnePoleTPT::processLP at the second cutoff
-                const V pv = vScreamCoef * (primary - ps);
-                const V screamLP = pv + ps;
-                ps = V::sanitized (pv + screamLP);
-                rawOut = V::softClipped (primary + V::softClipped (vScreamGain * res * screamLP));
+                    if (multi)
+                        vDEff2 = V::set (fa.svf2_.dCached, fb.svf2_.dCached);
+                }
+                V lp, bp, hp;
+                svfStep (drivenIn, damping, vGSafe, vDEff, s1, s2, lp, bp, hp);
+                if (scream)
+                {
+                    const V primary = type == FilterType::ScreamBP ? bp : lp;
+                    // OnePoleTPT::processLP at the second cutoff
+                    const V pv = vScreamCoef * (primary - ps);
+                    const V screamLP = pv + ps;
+                    ps = V::sanitized (pv + screamLP);
+                    rawOut = V::softClipped (primary + V::softClipped (vScreamGain * res * screamLP));
+                }
+                else
+                {
+                    // the Multi SVF case of processInternal (): the output of stage 1 by type, clipped, through stage 2 at the second cutoff, its output by type,
+                    // clipped, and the blend of the two
+                    V out1 = lp;
+                    if (sel1 == 1)
+                        out1 = hp;
+                    else if (sel1 == 2)
+                        out1 = bp;
+                    else if (sel1 == 3)
+                        out1 = V::softClipped (drivenIn + (vOne + V::all (1.5f) * res) * bp);
+                    else if (sel1 == 4)
+                        out1 = hp + lp;
+                    out1 = V::softClipped (out1);
+                    V lp2, bp2, hp2;
+                    svfStep (out1, damping, vGSafe2, vDEff2, t1, t2, lp2, bp2, hp2);
+                    V out2 = hp2;
+                    if (sel2 == 1)
+                        out2 = bp2;
+                    else if (sel2 == 2)
+                        out2 = V::softClipped (out1 + (vOne + V::all (1.5f) * res) * bp2);
+                    else if (sel2 == 3)
+                        out2 = hp2 + lp2;
+                    out2 = V::softClipped (out2);
+                    rawOut = vBlendOut2 * out2 + vBlendOut1 * out1;
+                }
             }
             else if (ladder)
             {
@@ -387,7 +564,7 @@ public:
                 const V S = vLG0 * (vLG3 * ls[0] + vLG2 * ls[1] + vLG * ls[2] + ls[3]);
                 const V k = V::all (3.85f) * res * (vOne - V::all (0.05f) * res);
                 V fbk = V::softClipped (S);
-                if (fat > 0.001f)
+                if (fatOn)
                     fbk = fbk / (vOne + vTwoFat * (S * S));
                 const V u = V::softClipped ((vLadderDriveGain * drivenIn - k * fbk) / (vOne + k * vLG4));
                 V y = u;
@@ -399,11 +576,34 @@ public:
                 }
                 rawOut = y;
             }
-            else
+            else if (ring)
             {
-                // the all-pass chain of the Diffusor: the two lines of a stage are read and written one after the other, the stage's arithmetic is side by side
+                // the Ring Mod cases of processInternal (): the phases step and wrap in the lanes; the sine of a phase is made once when the two lanes hold the same
+                // phase (both sides at the same cutoff, as with the filter pan at 0: the same samples, one sinf instead of two)
+                ringPhase1 = V::wrapped (ringPhase1 + vRingInc1, twoPi);
+                float c0, c1;
+                if (!ring2)
+                {
+                    c0 = std::sin (ringPhase1.get (0));
+                    c1 = ringPhase1.lanesEqual() ? c0 : std::sin (ringPhase1.get (1));
+                }
+                else
+                {
+                    ringPhase2 = V::wrapped (ringPhase2 + vRingInc2, twoPi);
+                    const float s10 = std::sin (ringPhase1.get (0)), s20 = std::sin (ringPhase2.get (0));
+                    const float s11 = ringPhase1.lanesEqual() ? s10 : std::sin (ringPhase1.get (1));
+                    const float s21 = ringPhase2.lanesEqual() ? s20 : std::sin (ringPhase2.get (1));
+                    c0 = 0.5f * (s10 + s20);
+                    c1 = 0.5f * (s11 + s21);
+                }
+                rawOut = drivenIn * V::set (c0, c1);
+            }
+            else if (chain)
+            {
+                // the all-pass chain of the Diffusor (gain 0.5 + 0.45 res) or of Smear / Allpasses (gain 0.6 res): the two lines of a stage are read and written one
+                // after the other, the stage's arithmetic is side by side
                 V ap = drivenIn;
-                const V gDiff = V::all (0.5f) + V::all (0.45f) * res;
+                const V gDiff = diffusor ? V::all (0.5f) + V::all (0.45f) * res : V::all (0.6f) * res;
                 for (int k = 0; k < stages; ++k)
                 {
                     DelayLine& da = fa.diffuserDelays_[k];
@@ -411,10 +611,54 @@ public:
                     const V delayed = V::set (da.readTap (taps[0][k]), db.readTap (taps[1][k]));
                     const V x = ap - gDiff * delayed;
                     ap = delayed + gDiff * x;
-                    da.write (x.get (0));
-                    db.write (x.get (1));
+                    // write () stores sanitize (x): the same value made in the lanes (sanitize gives what it is given for a sanitized value)
+                    const V xs = V::sanitized (x);
+                    da.writeSanitized (xs.get (0));
+                    db.writeSanitized (xs.get (1));
                 }
                 rawOut = ap;
+            }
+            else
+            {
+                // the Flanges case of processInternal ()
+                V x = drivenIn, delayed = drivenIn;
+                if (comb)
+                    x = delayed = V::set (fa.combDelay1_.readTap (taps[0][0]), fb.combDelay1_.readTap (taps[1][0]));
+                else
+                    for (int k = 0; k < 6; ++k)
+                    {
+                        // phaserAP_[k].processLP (ap, g, lp, hp); ap = lp - hp
+                        const V pv = vPhCoef * (x - aps[k]);
+                        const V lp = pv + aps[k];
+                        aps[k] = V::sanitized (pv + lp);
+                        const V hp = x - lp;
+                        x = lp - hp;
+                    }
+                // the feedback filter: combFeedbackLP_.processLPOnly, combFeedbackHP_.processHPOnly, or the second after the first
+                V fbFiltered = x;
+                if (fbLow || fbBand)
+                {
+                    const V pv = vFbLP * (fbFiltered - fbLPs);
+                    const V lp = pv + fbLPs;
+                    fbLPs = V::sanitized (pv + lp);
+                    fbFiltered = lp;
+                }
+                if (fbHigh || fbBand)
+                {
+                    const V pv = vFbHP * (fbFiltered - fbHPs);
+                    const V lp = pv + fbHPs;
+                    fbHPs = V::sanitized (pv + lp);
+                    fbFiltered = fbFiltered - lp;
+                }
+                if (comb)
+                {
+                    const V toWrite = V::sanitized (drivenIn + V::softClipped (V::all (0.97f) * res * fbFiltered)); // write () stores sanitize (toWrite)
+                    fa.combDelay1_.writeSanitized (toWrite.get (0));
+                    fb.combDelay1_.writeSanitized (toWrite.get (1));
+                    rawOut = V::all (0.5f) * (drivenIn + delayed);
+                }
+                else
+                    rawOut = V::all (0.5f) * (drivenIn + V::softClipped (fbFiltered * (vOne + res)));
             }
 
             const V out = V::sanitized (vOneMinusMix * in + vMix * rawOut);
@@ -428,24 +672,102 @@ public:
             f[l]->smoothedRes_ = smoothedRes.get (l);
             f[l]->heldCutoff_ = heldCutoff.get (l);
             f[l]->heldRes_ = heldRes.get (l);
-            if (scream)
+            if (scream || multi)
             {
                 f[l]->svf1_.s1 = s1.get (l);
                 f[l]->svf1_.s2 = s2.get (l);
+            }
+            if (scream)
                 f[l]->onePole1_.s = ps.get (l);
+            else if (multi)
+            {
+                f[l]->svf2_.s1 = t1.get (l);
+                f[l]->svf2_.s2 = t2.get (l);
             }
             else if (ladder)
                 for (int k = 0; k < 4; ++k)
                     f[l]->ladder_.s[k] = ls[k].get (l);
+            else if (ring)
+            {
+                f[l]->ringModPhase1_ = ringPhase1.get (l);
+                if (ring2)
+                    f[l]->ringModPhase2_ = ringPhase2.get (l);
+            }
+            else if (flanges)
+            {
+                if (fbLow || fbBand)
+                    f[l]->combFeedbackLP_.s = fbLPs.get (l);
+                if (fbHigh || fbBand)
+                    f[l]->combFeedbackHP_.s = fbHPs.get (l);
+                if (phaser)
+                    for (int k = 0; k < 6; ++k)
+                        f[l]->phaserAP_[k].s = aps[k].get (l);
+            }
         }
         return true;
     }
 
 private:
-    float processInternal (float in, float cutoff, float res) noexcept;
+    /** The coefficient memo of OnePoleTPT::processLP (): g / (1 + g), redone when g differs from the last one. */
+    static void onePoleCoef (OnePoleTPT& op, float g) noexcept
+    {
+        if (!(op.haveCoef && g == op.lastG))
+        {
+            op.lastCoef = g / (1.0f + g);
+            op.lastG = g;
+            op.haveCoef = true;
+        }
+    }
+    /** The kept division of SVFTPT::process () without FAT, redone when gSafe or R differ from the last ones. */
+    static void svfDivision (SVFTPT& sv, float gSafe, float R, float damping) noexcept
+    {
+        if (!(sv.haveD && gSafe == sv.dG && R == sv.dR))
+        {
+            sv.dCached = 1.0f / (1.0f + damping * gSafe + gSafe * gSafe);
+            sv.dG = gSafe;
+            sv.dR = R;
+            sv.haveD = true;
+        }
+    }
+    /** One sample of SVFTPT::process () without FAT in the lanes (its operations one by one): the low, band and high pass outputs; notch = hp + lp. */
+    template <class V>
+    static void svfStep (const V& x, const V& damping, const V& gSafe, const V& dEff, V& a1, V& a2, V& lp, V& bp, V& hp) noexcept
+    {
+        hp = (x - (damping + gSafe) * a1 - a2) * dEff;
+        const V v1 = gSafe * hp;
+        bp = v1 + a1;
+        a1 = V::sanitized (v1 + bp);
+        const V v2 = gSafe * bp;
+        lp = v2 + a2;
+        a2 = V::sanitized (v2 + lp);
+    }
+
+    /** The parameters processInternal () uses besides cutoff and resonance, clamped as it clamped them every sample: the same for a whole call. */
+    struct CallParams
+    {
+        float drive, var, blend, mix;
+    };
+    CallParams callParams() const noexcept
+    {
+        CallParams k;
+        k.drive = std::max (0.0f, std::min (params_.drive, 1.0f));
+        k.var = std::max (0.0f, std::min (params_.var, 1.0f));
+        k.blend = std::max (0.0f, std::min (params_.blend, 1.0f));
+        k.mix = std::max (0.0f, std::min (params_.mix, 1.0f));
+        return k;
+    }
+    /** One sample of the type; g = tanM (pi cutoff / sr) and the clamped parameters are given by the caller (computed once per cutoff and once per call). */
+    float processInternal (float in, float cutoff, float res, float g, const CallParams& k) noexcept;
 
     // A small cache of the transcendental functions of the coefficients (the same argument gives the same result: nothing changes in the output). Cutoff and resonance move
     // slowly or not at all, so most samples ask for the arguments of the sample before.
+    // (Inlined into processInternal (): with the pair kernels calling them as well, GCC stopped inlining them there, and the scalar path of the Multi SVF types
+    // ran about 6 % more instructions on 32 bit ARM, which would also have inflated the --scalar-filters "before" of the bench. The same operations either way.)
+#if defined(__GNUC__)
+ #define SYNTHYBOY_FILTER_INLINE inline __attribute__ ((always_inline))
+#else
+ #define SYNTHYBOY_FILTER_INLINE inline
+#endif
     struct MemoEntry { float x = 0.0f, y = 0.0f; bool valid = false; };
     static constexpr int kMemo = 16;
     MemoEntry tanMemo_[kMemo], pow2Memo_[kMemo], pow10Memo_[kMemo];
@@ -455,7 +777,7 @@ private:
         std::memcpy (&u, &x, 4);
         return static_cast<int> ((u ^ (u >> 11) ^ (u >> 19)) % kMemo);
     }
-    float tanM (float x) noexcept
+    SYNTHYBOY_FILTER_INLINE float tanM (float x) noexcept
     {
         MemoEntry& e = tanMemo_[memoSlot (x)];
         if (!(e.valid && e.x == x))
@@ -466,7 +788,7 @@ private:
         }
         return e.y;
     }
-    float pow2M (float x) noexcept
+    SYNTHYBOY_FILTER_INLINE float pow2M (float x) noexcept
     {
         MemoEntry& e = pow2Memo_[memoSlot (x)];
         if (!(e.valid && e.x == x))
@@ -477,7 +799,7 @@ private:
         }
         return e.y;
     }
-    float pow10M (float x) noexcept
+    SYNTHYBOY_FILTER_INLINE float pow10M (float x) noexcept
     {
         MemoEntry& e = pow10Memo_[memoSlot (x)];
         if (!(e.valid && e.x == x))
@@ -525,15 +847,14 @@ private:
     float shHeld_ = 0.0f;
 };
 
-float FilterImpl::processInternal (float in, float cutoff, float res) noexcept
+float FilterImpl::processInternal (float in, float cutoff, float res, float g, const CallParams& k) noexcept
 {
     const auto srFloat = static_cast<float> (sampleRate_);
-    const float g = tanM (kPi * cutoff / srFloat);
     const float R = 1.0f - 0.96f * res;
-    const float drive = std::max (0.0f, std::min (params_.drive, 1.0f));
-    const float var = std::max (0.0f, std::min (params_.var, 1.0f));
-    const float blend = std::max (0.0f, std::min (params_.blend, 1.0f));
-    const float mix = std::max (0.0f, std::min (params_.mix, 1.0f));
+    const float drive = k.drive;
+    const float var = k.var;
+    const float blend = k.blend;
+    const float mix = k.mix;
 
     // Input drive
     const float driveGain = 1.0f + 2.5f * drive;

@@ -33,7 +33,7 @@ static void test_list_popup_selection_and_turn()
     lp.state.count = 8;
     lp.state.current = 0;
 
-    check (lp.minSize().w == 240 && lp.minSize().h == 3 * ListPopup::kRowH + 2 * ListPopup::kPad, "ListPopup minSize");
+    check (lp.minSize().w == 240 && lp.minSize().h == ListPopup::kRowH + 2 * ListPopup::kPad, "ListPopup minSize (one row: the box follows its rows)");
     check (lp.visibleRows() == (250 - 2 * ListPopup::kPad) / ListPopup::kRowH, "ListPopup visibleRows calculation");
     check (lp.scrolls(), "ListPopup scrolls when count > visibleRows");
 

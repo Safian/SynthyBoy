@@ -8,6 +8,8 @@
 #include "synthyboy/sampleosc/wav_reader.h"
 
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
 #include <limits>
 #include <cmath>
 #include <cstring>
@@ -724,3 +726,190 @@ TEST (sampleosc_quality_tiers)
     }
 }
 
+
+// The block kernel (SampleVoice::renderBlock) against the per sample reference (setReferenceKernels (true)): the same bits for every tier, mono and stereo, every loop mode, the mip
+// levels (a pitch ratio above 1), edge fades, a rate modulation, a released voice and the three render calls.
+TEST (sampleosc_block_kernel_equals_reference)
+{
+    constexpr int kFrames = 3000;
+    std::vector<float> left (kFrames), right (kFrames);
+    sbtest::Rng rng (7);
+    for (int i = 0; i < kFrames; ++i)
+    {
+        left[static_cast<size_t> (i)] = static_cast<float> (0.6 * std::sin (2.0 * kPi * 330.0 * i / 44100.0) + 0.3 * (rng.uniform() * 2.0 - 1.0));
+        right[static_cast<size_t> (i)] = static_cast<float> (0.5 * std::sin (2.0 * kPi * 523.0 * i / 44100.0));
+    }
+    SampleData mono, stereo;
+    CHECK (mono.loadFromFrames (left.data(), nullptr, kFrames, 44100.0, 60));
+    CHECK (stereo.loadFromFrames (left.data(), right.data(), kFrames, 44100.0, 60));
+    const SampleView views[2] = { mono.view(), stereo.view() };
+
+    const QualityTier tiers[3] = { QualityTier::low, QualityTier::medium, QualityTier::high };
+    const LoopMode modes[5] = { LoopMode::none, LoopMode::forward, LoopMode::pingPong, LoopMode::reverse, LoopMode::tailed };
+    const float semis[4] = { 0.0f, 7.3f, 19.0f, -5.0f };
+    int configs = 0, different = 0;
+    for (const SampleView& view : views)
+        for (QualityTier tier : tiers)
+            for (LoopMode mode : modes)
+                for (float st : semis)
+                    for (int variant = 0; variant < 3; ++variant)
+                    {
+                        SampleOscParams p;
+                        p.quality = tier;
+                        p.loopMode = mode;
+                        p.loopStart = 0.2f;
+                        p.loopEnd = 0.8f;
+                        p.loopCrossfade = variant == 1 ? 0.3f : 0.0f;
+                        p.edgeFadeMs = variant == 2 ? 5.0f : 0.0f;
+                        p.reverse = variant == 2 && mode == LoopMode::none;
+                        p.pan = -0.3f;
+                        p.level = 0.8f;
+                        SampleVoice kernel, reference;
+                        kernel.prepare (44100.0, 128);
+                        reference.prepare (44100.0, 128);
+                        reference.setReferenceKernels (true);
+                        for (SampleVoice* v : { &kernel, &reference })
+                        {
+                            v->setUnisonPan (0.4f);
+                            v->setUnisonLevel (0.7f);
+                            v->setUnisonPitchRatio (1.003f);
+                            v->setUnisonStartOffset (0.1f);
+                            v->noteOn (64, 0.9f, &view, p);
+                            v->setSemitoneOffset (st);
+                        }
+                        std::vector<float> rate (128);
+                        for (int i = 0; i < 128; ++i)
+                            rate[static_cast<size_t> (i)] = 1.0f + 0.2f * static_cast<float> (std::sin (0.1 * i));
+                        for (int block = 0; block < 40; ++block)
+                        {
+                            if (block == 30)
+                            {
+                                kernel.noteOff();
+                                reference.noteOff();
+                            }
+                            const int n = block % 3 == 0 ? 128 : (block % 3 == 1 ? 77 : 1);
+                            std::vector<float> aL (128, 0.5f), aR (128, 0.5f), bL (128, 0.5f), bR (128, 0.5f);
+                            const int call = block % 4;
+                            if (call == 0)
+                            {
+                                kernel.process (aL.data(), aR.data(), n);
+                                reference.process (bL.data(), bR.data(), n);
+                            }
+                            else if (call == 1)
+                            {
+                                kernel.processAdd (aL.data(), aR.data(), n);
+                                reference.processAdd (bL.data(), bR.data(), n);
+                            }
+                            else if (call == 2)
+                            {
+                                kernel.processModulated (aL.data(), aR.data(), n, rate.data());
+                                reference.processModulated (bL.data(), bR.data(), n, rate.data());
+                            }
+                            else
+                            {
+                                kernel.process (aL.data(), nullptr, n);
+                                reference.process (bL.data(), nullptr, n);
+                            }
+                            ++configs;
+                            // the loop crossfade weights are computed in float lanes (the reference calls the library's double cos and sin): within 3e-6 of the reference there, every other path the same bits
+                            bool bitsDiffer = std::memcmp (aL.data(), bL.data(), sizeof (float) * 128) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * 128) != 0;
+                            if (bitsDiffer && p.loopCrossfade > 0.0f)
+                            {
+                                bitsDiffer = false;
+                                for (size_t q = 0; q < 128; ++q)
+                                    if (std::fabs (aL[q] - bL[q]) > 3.0e-6f || std::fabs (aR[q] - bR[q]) > 3.0e-6f)
+                                        bitsDiffer = true;
+                            }
+                            if (bitsDiffer
+                                || kernel.isActive() != reference.isActive() || kernel.getPlayheadPosition() != reference.getPlayheadPosition())
+                            {
+                                if (different++ < 5)
+                                    std::printf ("    differs: channels %d tier %d loop %d semitones %g variant %d block %d (call %d, %d frames)\n", view.numChannels, static_cast<int> (tier), static_cast<int> (mode),
+                                                 static_cast<double> (st), variant, block, call, n);
+                            }
+                        }
+                    }
+    CHECK (configs > 1000);
+    CHECK_EQ (different, 0);
+}
+
+// SA1: the block kernel keeps the log2 of the pitch ratio and the pan gains until their inputs change. The output is the output of the kernel that computes them on every call (`setLegacyCaches`), bit
+// for bit, with the pan and the pitch moved between blocks (and held for several), over the tiers, a mono and a stereo sample, with mip levels (ratios above 1).
+TEST (sampleosc_cached_pitch_logarithm_and_pan_gains_equal_the_per_call_computation)
+{
+    constexpr int kFrames = 6000;
+    std::vector<float> left (kFrames), right (kFrames);
+    sbtest::Rng rng (11);
+    for (int i = 0; i < kFrames; ++i)
+    {
+        left[static_cast<size_t> (i)] = static_cast<float> (0.6 * std::sin (2.0 * kPi * 1300.0 * i / 44100.0) + 0.3 * (rng.uniform() * 2.0 - 1.0));
+        right[static_cast<size_t> (i)] = static_cast<float> (0.5 * std::sin (2.0 * kPi * 523.0 * i / 44100.0));
+    }
+    SampleData mono, stereo;
+    CHECK (mono.loadFromFrames (left.data(), nullptr, kFrames, 44100.0, 60));
+    CHECK (stereo.loadFromFrames (left.data(), right.data(), kFrames, 44100.0, 60));
+    const SampleView views[2] = { mono.view(), stereo.view() };
+    CHECK (views[0].numMipLevels > 1 && views[1].numMipLevels > 1);   // (the log2 of the ratio is read)
+    int blocks = 0, different = 0;
+    for (const SampleView& view : views)
+        for (QualityTier tier : { QualityTier::low, QualityTier::medium, QualityTier::high })
+            for (LoopMode mode : { LoopMode::none, LoopMode::forward })
+            {
+                SampleOscParams p;
+                p.quality = tier;
+                p.loopMode = mode;
+                p.loopStart = 0.2f;
+                p.loopEnd = 0.8f;
+                p.pan = 0.1f;
+                SampleVoice cached, legacy;
+                for (SampleVoice* v : { &cached, &legacy })
+                    v->prepare (44100.0, 128);
+                legacy.setLegacyCaches (true);
+                for (SampleVoice* v : { &cached, &legacy })
+                {
+                    v->setUnisonPan (0.4f);
+                    v->noteOn (64, 0.9f, &view, p);
+                }
+                for (int block = 0; block < 60; ++block)
+                {
+                    const float st = (block / 4) % 5 == 0 ? 0.0f : 3.0f + 5.0f * static_cast<float> ((block / 4) % 5);   // held for 4 blocks, mostly above an octave... up to 23 semitones
+                    const float pan = 0.5f * static_cast<float> (std::sin (0.3 * (block / 3)));                         // held for 3 blocks
+                    for (SampleVoice* v : { &cached, &legacy })
+                    {
+                        v->setSemitoneOffset (st);
+                        v->setUnisonPan (pan);
+                    }
+                    std::vector<float> aL (128), aR (128), bL (128), bR (128);
+                    cached.process (aL.data(), aR.data(), 128);
+                    legacy.process (bL.data(), bR.data(), 128);
+                    ++blocks;
+                    if (std::memcmp (aL.data(), bL.data(), sizeof (float) * 128) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * 128) != 0
+                        || cached.getPlayheadPosition() != legacy.getPlayheadPosition())
+                        ++different;
+                }
+            }
+    CHECK_EQ (blocks, 2 * 3 * 2 * 60);
+    CHECK_EQ (different, 0);
+    // Mac timing: a voice rendered as four blocks of 32 samples (the engine's control periods), pitched up 12 semitones, high tier
+    double us[2] = {};
+    for (int legacyRun = 0; legacyRun < 2; ++legacyRun)
+    {
+        SampleOscParams p;
+        p.quality = QualityTier::high;
+        p.loopMode = LoopMode::forward;
+        p.loopStart = 0.1f;
+        p.loopEnd = 0.9f;
+        SampleVoice v;
+        v.prepare (44100.0, 128);
+        v.setLegacyCaches (legacyRun != 0);
+        v.noteOn (64, 0.9f, &views[0], p);
+        v.setSemitoneOffset (12.0f);
+        std::vector<float> l (32), r (32);
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 20000; ++i)
+            for (int k = 0; k < 4; ++k)
+                v.process (l.data(), r.data(), 32);
+        us[legacyRun] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / 20000.0;
+    }
+    std::printf ("    4 x 32 samples of a voice: %.3f us now, %.3f us before (this Mac)\n", us[0], us[1]);
+}

@@ -1,0 +1,30 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Ring Mod Glide",
+ "category": "Metallic",
+ "description": "A sine with its octave, ring modulated by a sine whose ratio glides continuously from 1 to 9.5: the sum and difference lines slide through the spectrum (non-integer ratios give inharmonic clang).",
+ "frames": 64,
+ "seed": "ring_mod_glide",
+ "source": {
+  "type": "ring",
+  "params": {
+   "c": {
+    "law": "linear",
+    "from": 1.0,
+    "to": 9.5
+   },
+   "dry": 0.0,
+   "max_k": 4
+  },
+  "input": {
+   "type": "additive",
+   "params": {
+    "count": 2,
+    "rolloff": 1.0
+   }
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

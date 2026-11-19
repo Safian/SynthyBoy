@@ -8,6 +8,7 @@
 //   along with a manifest.json.
 
 #include "mpc_vst2_abi.h"
+#include "program_list.h"
 
 #include <chrono>
 #include <cstdio>
@@ -227,15 +228,25 @@ int main (int argc, char** argv)
         // Select program
         e->dispatcher (e, effSetProgram, 0, i, nullptr, 0.0f);
 
-        // Get program name
-        char nameBuf[256] = {};
-        e->dispatcher (e, effGetProgramNameIndexed, i, 0, nameBuf, 0.0f);
-        std::string progName = nameBuf;
-        if (progName.empty() && i == 0) progName = "Init";
+        // A header entry of a grouped program list (SYNTHYBOY_MPC_PROGRAM_GROUPS=headers) loads another program: the plugin's current program is then not `i`; it is no preset, skip it
+        if (e->dispatcher (e, effGetProgram, 0, 0, nullptr, 0.0f) != i)
+            continue;
 
         // Get chunk
         void* data = nullptr;
         const VstIntPtr n = e->dispatcher (e, effGetChunk, 0, 0, &data, 0.0f);
+
+        // The program's own name is the one in the chunk (program_list.h programNameFromChunk), not the label of the host's list (the prefix modes of SYNTHYBOY_MPC_PROGRAM_GROUPS change that)
+        char nameBuf[256] = {};
+        e->dispatcher (e, effGetProgramNameIndexed, i, 0, nameBuf, 0.0f);
+        std::string progName = nameBuf;
+        if (data != nullptr && n > 0)
+        {
+            std::string own;
+            if (synthyboy_mpc::programNameFromChunk (data, static_cast<size_t> (n), own))
+                progName = own;
+        }
+        if (progName.empty() && i == 0) progName = "Init";
         if (data == nullptr || n <= 0)
         {
             std::fprintf (stderr, "Warning: Program %d ('%s') returned empty chunk\n", i, progName.c_str());

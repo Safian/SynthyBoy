@@ -568,7 +568,8 @@ void analyse (Capture& cap, Sink& sink)
     {
         const TextOp& t = cap.texts[i];
         const std::string tn = "text[" + maskDigits (t.s) + "]@" + gridOf (t.box.x0, t.box.y0);
-        if (t.s.find ("\xE2\x80\xA6") != std::string::npos)
+        // an ellipsis at the END of a text is a cut (a finding); an ellipsis in the MIDDLE is the rule for the name of a piece of content (ui/content_name.h: a file name is shown by title or stem and loses its middle, never its end)
+        if (t.s.size() >= 3 && t.s.compare (t.s.size() - 3, 3, "\xE2\x80\xA6") == 0)
             sink.add (cap, "d", 2, tn, "ellipsis", "\"" + t.s + "\" is cut with an ellipsis (" + frectStr (t.box) + ")");
         if (t.hasCell && (t.box.x0 < t.cell.x0 - 0.5f || t.box.x1 > t.cell.x1 + 0.5f || t.box.y0 < t.cell.y0 - 0.5f || t.box.y1 > t.cell.y1 + 0.5f))
             sink.add (cap, "d", 2, tn, "cell", "\"" + t.s + "\" " + frectStr (t.box) + " leaves its cache cell " + frectStr (t.cell));
@@ -1023,6 +1024,30 @@ void lintView (Runner& run, const layout::View& v, const LintInst& base)
                     lintRig (run, r, pg, "random", { &r.ui.full() });
                 });
             sub ("editor", [&] { Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh(); lintRig (run, r, pg, "editor", { &r.ui.editor() }); });
+            // the editor in its other states: the LOOP marker (a loop mode) with a selection of every point, the page of the modulation of a point, the lists of SHAPES and MORE over the editor
+            sub ("editor-loop", [&] {
+                LintInst inst = base;
+                inst.set ("lfo" + std::to_string (v.index) + ".sync_type", 4.0f);
+                Rig<LfoUi> r (inst, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
+                r.ui.editor().canvas.selectAll(); r.refresh();
+                lintRig (run, r, pg, "editor-loop", { &r.ui.editor() });
+            });
+            sub ("editor-pointmod", [&] {
+                Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
+                r.ui.editor().canvas.selectOnly (1); r.refresh();
+                r.stack.openDetail (LfoUi::kPagePointMod); r.refresh();
+                lintRig (run, r, pg, "editor-pointmod", { &r.ui.pointModPage() });
+            });
+            sub ("editor-shapes-list", [&] {
+                Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
+                r.tap (r.ui.editor().shapes); r.refresh();
+                lintRig (run, r, pg, "editor-shapes-list", { &r.ui.list() }, true);
+            });
+            sub ("editor-more-list", [&] {
+                Rig<LfoUi> r (base, v.index); r.refresh(); r.stack.openDetail (LfoUi::kPageEditor); r.refresh();
+                r.tap (r.ui.editor().more); r.refresh();
+                lintRig (run, r, pg, "editor-more-list", { &r.ui.list() }, true);
+            });
             sub ("targets-page", [&] {
                 LintInst inst = base;
                 inst.mod (1, sourceChoice (("lfo" + std::to_string (v.index)).c_str()), "filter1.cutoff", 45.0f);

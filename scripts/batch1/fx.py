@@ -33,7 +33,7 @@ add("Bode Barber Riser", "FX", "riser,bode,frequency-shifter,noise,build,sweep,m
 add("Detonation Tail", "FX", "impact,hit,one-shot,splitter,limiter,cinematic",
     "A cinematic impact: a noise burst, a sine boom whose pitch collapses, and a split at 300 Hz so the low end is saturated while the highs go into a delay and a big reverb; a limiter closes the chain",
     {
-        "master.polyphony": 4,
+        "master.polyphony": 4, "master.transpose": -24,
         "osc1.on": 1, "osc1.wavetable": "Sine", "osc1.level": 78,
         "osc2.on": 1, "osc2.wavetable": "Saw", "osc2.level": 22, "osc2.transpose": -12,
         "noise.on": 1, "noise.level": 70, "noise.destination": "Filter 1",

@@ -338,7 +338,7 @@ Reading the table for the two things that were reported as different in the own 
 ## 10. Chain order law (one more time)
 
 The order of modules in a rack is the permutation `fx.order`; two modules never share a position (a repeated choice is repaired: the lowest free module takes the position). Modules whose `*.rack` is not Main belong to the other racks of the structure of `08-effects.md`.
-The **Direct out** destination bypasses the racks, the buses and their effects (it is added after the racks). `main.fx_bypass` / `busN.fx_bypass` mute the effects of a rack (the dry bus passes). Level trims come last in each module.
+The **Direct out** destination bypasses the racks, the buses and their effects (it is added after the racks, scaled by `direct.level`). `master.volume` still applies to it: the master gain scales the sum of Main and Direct, so everything that reaches the output follows the master volume (the own engine; `own_direct_follows_master_volume`). `main.fx_bypass` / `busN.fx_bypass` mute the effects of a rack (the dry bus passes). Level trims come last in each module.
 
 ## 11. Latency and its compensation across the buses
 
@@ -402,3 +402,15 @@ Vectors: a slot of a type, with the defaults of the type, switched on at the sta
 for the effects with a free-running modulation (Chorus: difference up to 0.31 against a 0.24 peak; Phaser 0.044; Reverb 0.053, all with the same peak level within 1 dB) the sample values differ because the LFO phase of a slot starts when the slot is created, not with the engine -- match slot against instance 0 by level and spectrum, not by sample, for these.
 Latency vectors: Bode slot in Main: 32; two Bode slots in Main: 64; Bode slot + instance 0 Bode in Main: 64; a Bode slot in Bus 2: 32; a Compressor slot (defaults, no limiter): 0.
 
+
+## 12. A skipped effect (profile `fx=low`) and the level: what "level-neutral" can mean
+
+A tier or profile that masks an effect out (`Quality::fxMask`: Key 61 `low` skips reverb, flanger, Hyper/Dimension, Bode, Convolve) bypasses it: the signal passes as the dry input. The processed output of an effect with a mix `m` is `a(m) dry + b(m) wet`, where `wet` is a function of the input signal, not a fixed gain. A compensation gain applied to the bypassed dry would have to equal the level ratio `|a dry + b wet| / |dry|`, which depends on the spectrum of the signal against the magnitude response of the wet path. It is signal independent only for a broadband, noise-like input, where the power sum `sqrt (a^2 + b^2 g^2)` with the broadband gain `g` of the wet path applies. Per effect:
+
+* **Reverb**: `g` (the wet level against the input) is set by the size, decay and the diffusion, about -8.5 dB at the first 10 ms window (section 9) and tail-shaped over time; no single number. Not defined; no compensation. A bypassed reverb is also quieter in the sense of the tail, which no gain restores.
+* **Flanger**: the wet path is the input through a swept comb with unity broadband gain; the power sum with `a`, `b` of the mix stays within +-3 dB of 1 and the comb notches average out; the skip is within that of the processed level. Not worth a gain.
+* **Hyper/Dimension**: the unison copies are normalised to the input level (broadband `g` of 1), so the power sum is `sqrt ((1 - m)^2 + m^2)`, 0.71 .. 1; the bypass at 1 is at most 3 dB louder than the processed signal at `m` 0.5. Definable but the wrong sign for a make-up; no compensation.
+* **Bode**: a frequency shifter: the wet is the input shifted, unity broadband gain: as the flanger. Not defined for tonal input (a shifted tone leaves the band of the dry one).
+* **Convolve**: with the Vital law the impulse is used as it is, so the broadband gain is the L2 norm of the impulse (times `ir_gain`); the factory pack's impulses are normalised to an L2 norm of 1 (`g` = 1, nothing to compensate). The level difference measured on the Key 61 (5 .. 6 dB for the cabinets of Dusty Rhodes Keys and Reese Dual Phase Bass) is the cabinet's magnitude response at the notes of the sound, which a broadband number does not describe. Not definable from the settings; no compensation.
+
+Decision: no compensation gain is implemented. The profile skips an effect as before, bit-identical, and the patch-level fix is the preset's own level at the profile it is played on (or a profile with `fx=all`).

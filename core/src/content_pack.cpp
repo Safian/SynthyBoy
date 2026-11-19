@@ -349,6 +349,26 @@ private:
                     if (! parseInt (sz)) return false;
                     f.size = static_cast<size_t> (sz >= 0 ? sz : 0);
                 }
+                else if (std::strcmp (k, "category") == 0 || std::strcmp (k, "title") == 0)
+                {
+                    // display texts of the wavetable browser: a text that is too long is cut (at the start of a UTF-8 character), a value that is not a string is skipped
+                    if (p < end && *p == '"')
+                    {
+                        char tbuf[64];
+                        if (! parseString (tbuf, sizeof tbuf, tr)) return false;
+                        std::string t = tbuf;
+                        if (tr)
+                        {
+                            while (! t.empty() && (static_cast<unsigned char> (t.back()) & 0xC0) == 0x80)
+                                t.pop_back();                                   // a cut inside a character: the whole character goes
+                            if (! t.empty() && static_cast<unsigned char> (t.back()) >= 0xC0)
+                                t.pop_back();
+                        }
+                        (k[0] == 'c' ? f.category : f.title) = t;
+                    }
+                    else if (! skipValue (1))
+                        return false;
+                }
                 else
                 {
                     if (! skipValue (1)) return false;
@@ -423,6 +443,16 @@ std::string serializeContentPackManifest (const ContentPackInfo& info)
         escapeJsonString (f.sha256, s);
         s += ",\n      \"size\": ";
         s += std::to_string (f.size);
+        if (! f.category.empty())
+        {
+            s += ",\n      \"category\": ";
+            escapeJsonString (f.category, s);
+        }
+        if (! f.title.empty())
+        {
+            s += ",\n      \"title\": ";
+            escapeJsonString (f.title, s);
+        }
         s += "\n    }";
         if (i + 1 < info.files.size())
             s += ",";

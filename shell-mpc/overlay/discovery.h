@@ -345,4 +345,21 @@ inline CpuPlan planCpus (const std::vector<int>& online, const std::vector<int>&
     return plan;
 }
 
+/** The cores a thread of the shell that renders or polls (the overlay thread, the GPU helper, the display thread) runs on: the plan's cores when it changes anything, else every online core (a thread that
+    was held back by an earlier plan is released). One rule for all of them. */
+inline std::vector<int> coresForOwnThreads (const CpuPlan& plan, const std::vector<int>& online)
+{
+    return plan.changed ? plan.allowed : online;
+}
+
+/** The set as a bit mask (core n = bit n; cores of 64 and above are left out): what /proc/<tid>/status shows as Cpus_allowed (0x0f for the cores 0-3). */
+inline unsigned long long cpuMask (const std::vector<int>& cpus)
+{
+    unsigned long long m = 0;
+    for (int c : cpus)
+        if (c >= 0 && c < 64)
+            m |= 1ull << c;
+    return m;
+}
+
 }} // namespace synthyboy_mpc::overlay

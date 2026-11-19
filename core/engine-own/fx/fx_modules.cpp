@@ -16,6 +16,7 @@
 #include "synthyboy/fx/utility.h"
 #include "bode.h"
 #include "convolve.h"
+#include "fx_makeup.h"
 
 namespace synthyboy
 {
@@ -33,7 +34,7 @@ FxWorker::FxWorker() : thread ([this] { loop(); }) {}
 FxWorker::~FxWorker()
 {
     stop.store (true);
-    cv.notify_all();
+    wake.notify();
     if (thread.joinable())
         thread.join();
 }
@@ -48,7 +49,7 @@ bool FxWorker::submit (Fn fn, void* ctx) noexcept
             j.fn = fn;
             j.ctx = ctx;
             j.state.store (2, std::memory_order_release);
-            cv.notify_one();
+            wake.notify();
             return true;
         }
     }
@@ -57,21 +58,19 @@ bool FxWorker::submit (Fn fn, void* ctx) noexcept
 
 void FxWorker::loop()
 {
+    runHelperThreadStartHook ("sb-fx-job");   // the shell's scheduling class and cores, not those of the thread that first used a Convolve (dsp/helper_thread.h)
     while (!stop.load())
     {
-        bool any = false;
+        // a submit () that comes while the jobs are being run sets the flag again, so the wait below returns at once: no wake-up is lost, and nothing wakes the thread when there is no work
         for (auto& j : jobs)
             if (j.state.load (std::memory_order_acquire) == 2)
             {
                 j.fn (j.ctx);
                 j.state.store (0, std::memory_order_release);
-                any = true;
             }
-        if (!any)
-        {
-            std::unique_lock<std::mutex> lock (mutex);
-            cv.wait_for (lock, std::chrono::milliseconds (2));
-        }
+        if (stop.load())
+            break;
+        wake.wait();
     }
 }
 
@@ -84,6 +83,32 @@ constexpr float kDivisionBeats[13] = { 0.0f, 128.0f, 64.0f, 32.0f, 16.0f, 8.0f, 
 float V (const float* base, const float* delta, int idx) noexcept { return fxValue (base, delta, idx); }
 float pct (const float* base, const float* delta, int idx) noexcept { return fxValue (base, delta, idx) * 0.01f; }
 int choice (const float* base, int idx) noexcept { return idx >= 0 ? static_cast<int> (base[idx] + 0.5f) : 0; }
+
+/** The loudness models of the modules (FxModule::makeupPower) are cheap but run every control period for a bypassed module: the result is kept while the keys they read are the same. */
+template <int N>
+struct MakeupCache
+{
+    float key[N] = {};
+    float result = 1.0f;
+    bool valid = false;
+    bool same (const float (&k)[N]) const noexcept
+    {
+        if (!valid)
+            return false;
+        for (int i = 0; i < N; ++i)
+            if (key[i] != k[i])
+                return false;
+        return true;
+    }
+    float store (const float (&k)[N], float r) noexcept
+    {
+        for (int i = 0; i < N; ++i)
+            key[i] = k[i];
+        result = r;
+        valid = true;
+        return r;
+    }
+};
 
 float lfoRate (const float* base, const float* delta, int rateIdx, int syncIdx, int divIdx, double bpm) noexcept
 {
@@ -121,6 +146,7 @@ public:
         p.cutoff = V (b, d, cutoff);
         p.spread = clamp01 (pct (b, d, spread));
         fx.fast = f.lowCost;
+        fx.scalarLoops = f.scalarLoops;
         fx.set (p);
     }
     void idleAdvance (int n) noexcept override { fx.idle (n); }
@@ -323,18 +349,41 @@ public:
     {
         model = K ("fxfilter.model"); style = K ("fxfilter.style"); cutoff = K ("fxfilter.cutoff"); res = K ("fxfilter.resonance"); drive = K ("fxfilter.drive");
         blend = K ("fxfilter.blend"); mix = K ("fxfilter.mix"); var = K ("fxfilter.var");
+        keytrack = K ("fxfilter.keytrack"); pan = K ("fxfilter.pan"); combOffset = K ("fxfilter.comb_offset"); formantX = K ("fxfilter.formant.x");
+        formantY = K ("fxfilter.formant.y"); formantRes = K ("fxfilter.formant.resonance"); formantSpread = K ("fxfilter.formant.spread");
+        formantTranspose = K ("fxfilter.formant.transpose"); cleanMode = K ("fxfilter.clean_mode");
     }
     int moduleIndex() const noexcept override { return 5; }
     void prepare (double sr, int) override { fx.prepare (sr); }
     void reset() noexcept override { fx.reset(); }
-    void configure (const FxFrame&, const float* b, const float* d) noexcept override
+    void configure (const FxFrame& f, const float* b, const float* d) noexcept override
     {
         FilterSettings s;
+        s.noSmoothing = f.noSmoothing;
         s.model = choice (b, model);
         s.style = choice (b, style);
         s.cutoffHz = V (b, d, cutoff);
+        // the keys the voice filters have as well (docs/ui-design/13-new-keys 4.11): key tracking follows the last played note (relative to 60), pan moves the two channels'
+        // cutoffs in opposite directions (+-100 % = +-12 semitones), the model settings, clean mode. At their defaults (0, 0, 42, 50, 50, 85, 0, 0, off) nothing changes.
+        const float kt = V (b, d, keytrack);
+        if (kt != 0.0f)
+            s.cutoffHz *= semitonesToRatio ((f.lastNote - 60.0f) * kt * 0.01f);
+        const float panShift = V (b, d, pan) * 0.01f;
+        if (panShift != 0.0f)
+        {
+            s.cutoffHzR = s.cutoffHz * std::exp2 (panShift);
+            s.cutoffHz *= std::exp2 (-panShift);
+        }
+        s.clean = cleanMode >= 0 && b[cleanMode] >= 0.5f;
+        s.combOffset = V (b, d, combOffset);
+        s.formantX = pct (b, d, formantX);
+        s.formantY = pct (b, d, formantY);
+        s.formantRes = pct (b, d, formantRes);
+        s.formantSpread = pct (b, d, formantSpread);
+        s.formantTranspose = V (b, d, formantTranspose);
         s.resonance = pct (b, d, res);
         s.drive = V (b, d, drive) * (1.0f / 20.0f);
+        s.driveDb = V (b, d, drive); // the classic models (0 .. 7) read the drive in dB (the voice filters set both); it was left at 0 here, so the drive of the FX filter did nothing for them
         s.blend = pct (b, d, blend);
         s.mix = 1.0f;
         s.var = pct (b, d, var);
@@ -355,7 +404,7 @@ public:
 private:
     FilterUnit fx;
     float wetGain = 1.0f;
-    int model, style, cutoff, res, drive, blend, mix, var;
+    int model, style, cutoff, res, drive, blend, mix, var, keytrack, pan, combOffset, formantX, formantY, formantRes, formantSpread, formantTranspose, cleanMode;
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------- flanger
@@ -383,9 +432,23 @@ public:
     }
     void idleAdvance (int n) noexcept override { fx.idle (n); }
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
+    bool hasMakeup() const noexcept override { return true; }
+    float makeupPower (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc& program) noexcept override
+    {
+        const float k[2] = { V (b, d, feedback), V (b, d, center) };
+        if (!cache.same (k))
+        {
+            gains = makeup::flangerBandGains (k[0], k[1]);
+            cache.store (k, 1.0f);
+        }
+        return makeup::flangerPower (V (b, d, mix), gains, program);
+    }
+    float makeupCoherent (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc&) noexcept override { return std::cos (clamp01 (pct (b, d, mix)) * 1.5707963f); }
 
 private:
     Flanger fx;
+    MakeupCache<2> cache;
+    makeup::BandGains gains {};
     int mix, feedback, rate, sync, division, depth, center, phase;
 };
 
@@ -464,9 +527,26 @@ public:
         fx.set (p);
     }
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
+    bool hasMakeup() const noexcept override { return true; }
+    float makeupPower (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc& program) noexcept override
+    {
+        const float k[13] = { 0.0f, V (b, d, size), V (b, d, decay), V (b, d, lowCut), V (b, d, highCut), V (b, d, hsGain), V (b, d, hsCut), V (b, d, lsGain), V (b, d, width),
+                              feedback >= 0 ? V (b, d, feedback) : 50.0f, static_cast<float> (choice (b, type)), static_cast<float> (choice (b, room)), 0.0f };
+        if (!cache.same (k))
+        {
+            makeup::ReverbIn in;
+            in.mix = k[0]; in.size = k[1]; in.decayMs = k[2]; in.lowCutHz = k[3]; in.highCutHz = k[4]; in.highShelfDb = k[5]; in.highShelfHz = k[6]; in.lowShelfDb = k[7];
+            in.widthPct = k[8]; in.feedbackPct = k[9]; in.type = static_cast<int> (k[10]); in.room = static_cast<int> (k[11]);
+            wetDb = makeup::reverbWetDb (in);
+            cache.store (k, 1.0f);
+        }
+        return makeup::reverbPower (V (b, d, mix), wetDb, program);
+    }
 
 private:
     Reverb fx;
+    MakeupCache<13> cache;
+    float wetDb = 0.0f;
     int mix, size, decay, pre, lowCut, highCut, hsCut, hsGain, lsCut, lsGain, chAmount, chRate, type, width, diffA, diffB, room, er, feedback;
 };
 
@@ -477,13 +557,25 @@ public:
     HyperModule() : FxModule (K ("hyperdim.level"))
     {
         rate = K ("hyperdim.rate"); unison = K ("hyperdim.unison"); detune = K ("hyperdim.detune"); mix = K ("hyperdim.mix");
-        dimSize = K ("hyperdim.dim_size"); dimMix = K ("hyperdim.dim_mix");
+        dimSize = K ("hyperdim.dim_size"); dimMix = K ("hyperdim.dim_mix"); retrig = K ("hyperdim.retrig");
     }
     int moduleIndex() const noexcept override { return 9; }
     void prepare (double sr, int maxBlock) override { fx.prepare (sr, std::max (maxBlock, kControlPeriod)); }
     void reset() noexcept override { fx.reset(); }
-    void configure (const FxFrame&, const float* b, const float* d) noexcept override
+    void configure (const FxFrame& f, const float* b, const float* d) noexcept override
     {
+        // hyperdim.retrig: every note-on restarts the hyper voices' LFO offsets (document 13-new-keys 4.13); the notes before the module's first block do not count
+        if (!notesSeen)
+        {
+            lastNoteOns = f.noteOns;
+            notesSeen = true;
+        }
+        if (f.noteOns != lastNoteOns)
+        {
+            lastNoteOns = f.noteOns;
+            if (retrig >= 0 && b[retrig] >= 0.5f)
+                fx.retrigger();
+        }
         fx::HyperDimension::Params p;
         p.enabled = true;
         p.hyperRate = V (b, d, rate);
@@ -496,10 +588,26 @@ public:
         fx.setParams (p);
     }
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
+    bool hasMakeup() const noexcept override { return true; }
+    float makeupPower (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc& program) noexcept override
+    {
+        const float k[3] = { static_cast<float> (choice (b, unison)), V (b, d, mix), V (b, d, dimMix) };
+        if (!cache.same (k))
+        {
+            gains = makeup::hyperBandGains (static_cast<int> (k[0]), k[1], k[2]);
+            cache.store (k, 1.0f);
+        }
+        return makeup::hyperPower (gains, program);
+    }
+    float makeupCoherent (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc&) noexcept override { return 1.0f - clamp01 (pct (b, d, mix)); }
 
 private:
+    MakeupCache<3> cache;
+    makeup::BandGains gains {};
     fx::HyperDimension fx;
-    int rate, unison, detune, mix, dimSize, dimMix;
+    int rate, unison, detune, mix, dimSize, dimMix, retrig;
+    uint32_t lastNoteOns = 0;
+    bool notesSeen = false;
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------- Utility
@@ -547,12 +655,25 @@ public:
     {
         mono = K ("bode.mono_input"); shift = K ("bode.shift"); range = K ("bode.range"); dir = K ("bode.dir"); width = K ("bode.width"); delay = K ("bode.delay");
         sync = K ("bode.sync"); division = K ("bode.division"); feed = K ("bode.feed"); balance = K ("bode.balance"); blur = K ("bode.blur"); mix = K ("bode.mix");
+        retrig = K ("bode.retrig");
     }
     int moduleIndex() const noexcept override { return 11; }
     void prepare (double sr, int maxBlock) override { fx.prepare (sr, std::max (maxBlock, kControlPeriod)); }
     void reset() noexcept override { fx.reset(); }
     void configure (const FxFrame& f, const float* b, const float* d) noexcept override
     {
+        // bode.retrig: every note-on restarts the carrier phase; the notes before the module's first block do not count
+        if (!notesSeen)
+        {
+            lastNoteOns = f.noteOns;
+            notesSeen = true;
+        }
+        if (f.noteOns != lastNoteOns)
+        {
+            lastNoteOns = f.noteOns;
+            if (retrig >= 0 && b[retrig] >= 0.5f)
+                fx.retrig();
+        }
         fx::Bode::Params p;
         p.monoInput = b[mono] >= 0.5f;
         p.shift = pct (b, d, shift);
@@ -573,10 +694,28 @@ public:
     }
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
     int latency() const noexcept override { return fx.latency(); }
+    bool hasMakeup() const noexcept override { return true; }
+    float makeupPower (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc& program) noexcept override
+    {
+        // the shift in Hz is the shift (percent) of the range: Bode::process, deltaFreq = shift x range
+        const float shiftHz = std::fabs (std::clamp (pct (b, d, shift), -1.0f, 1.0f) * std::clamp (V (b, d, range), 0.0f, 5000.0f));
+        const float k[3] = { V (b, d, mix), V (b, d, feed), shiftHz };
+        if (!cache.same (k))
+        {
+            gains = makeup::bodeBandGains (k[0], k[1], k[2]);
+            cache.store (k, 1.0f);
+        }
+        return makeup::bodePower (gains, b[mono] >= 0.5f, program);
+    }
+    float makeupCoherent (const FxFrame&, const float* b, const float* d, const makeup::ProgramDesc&) noexcept override { return 1.0f - clamp01 (pct (b, d, mix)); }
 
 private:
+    MakeupCache<3> cache;
+    makeup::BandGains gains {};
     fx::Bode fx;
-    int mono, shift, range, dir, width, delay, sync, division, feed, balance, blur, mix;
+    int mono, shift, range, dir, width, delay, sync, division, feed, balance, blur, mix, retrig;
+    uint32_t lastNoteOns = 0;
+    bool notesSeen = false;
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------- Convolve
@@ -594,7 +733,7 @@ public:
     }
     ~ConvolveModule() override
     {
-        while (jobBusy.load (std::memory_order_acquire) != 0)
+        while (jobBusy.load (std::memory_order_acquire) != 0 || specBusy.load (std::memory_order_acquire) != 0)
             std::this_thread::yield();
         delete ready.exchange (nullptr);
         delete retired.exchange (nullptr);
@@ -604,10 +743,16 @@ public:
     int moduleIndex() const noexcept override { return 12; }
     void prepare (double sr, int maxBlock) override
     {
-        while (jobBusy.load (std::memory_order_acquire) != 0)
+        while (jobBusy.load (std::memory_order_acquire) != 0 || specBusy.load (std::memory_order_acquire) != 0)
             std::this_thread::yield();
         sampleRate = sr;
         block = std::max (maxBlock, kControlPeriod);
+        specReady.store (false);
+        specLive = makeup::BandSpectrum();
+        specBuiltKey = Key();
+        specCache = SpecCache();
+        weights = makeup::BandWeights();
+        keyCache = KeyCache();
         delete ready.exchange (nullptr);
         delete active;
         active = nullptr;
@@ -626,27 +771,8 @@ public:
         present = haveIr;
         if (!haveIr)
             return;
-        const bool serum = choice (b, law) == 1;
         Key k;
-        k.impulse = f.content->impulse.get();
-        k.serum = serum;
-        k.phiMin = phiMin >= 0 && b[phiMin] >= 0.5f;
-        const float sizeKnob = clamp01 (V (b, d, size) * 0.01f);
-        k.size = serum ? std::pow (10.0f, 0.7f * (sizeKnob * 100.0f - 50.0f) / 50.0f) : 0.25f * std::pow (16.0f, sizeKnob);
-        k.attack = V (b, d, attack) * 0.001f;
-        const float decayKnob = clamp01 (V (b, d, decay) * 0.01f);
-        if (serum)
-            k.decay = decayKnob >= 0.9999f ? 0.0f : decayKnob * 40.0f;
-        else
-            k.decay = decayKnob >= 0.9999f ? 0.0f : std::max (0.01f, decayKnob * static_cast<float> (f.content->impulse->frames / f.content->impulse->rate) * k.size);
-        k.damp = clamp01 (pct (b, d, damp));
-        k.irGain = V (b, d, irGain);
-        // the keys that shape the impulse are quantised a little so that a smooth modulation does not rebuild at every period
-        k.size = std::round (k.size * 200.0f) / 200.0f;
-        k.attack = std::round (k.attack * 1000.0f) / 1000.0f;
-        k.decay = std::round (k.decay * 100.0f) / 100.0f;
-        k.damp = std::round (k.damp * 100.0f) / 100.0f;
-        k.irGain = std::round (k.irGain * 10.0f) / 10.0f;
+        makeKey (f, b, d, k);
         wantKey = k;
         // live parameters
         live.tone = std::clamp (pct (b, d, tone), -1.0f, 1.0f);
@@ -677,6 +803,73 @@ public:
             takeOver (f);
         }
     }
+    bool hasMakeup() const noexcept override { return true; }
+    /** The loudness of the module for a tier that bypasses it: the program power of dry x cos + wet x sin with the wet path of the impulse as it would be built (its spectrum, computed
+        on the helper thread from the same key as the real build, so a bypassed module never builds a convolver), the tone and the pre delay on it (fx_makeup.h convolvePower). Until
+        the spectrum of the first key is there (a live render) the module counts as 1. */
+    float makeupPower (const FxFrame& f, const float* b, const float* d, const makeup::ProgramDesc& program) noexcept override
+    {
+        if (!(ir >= 0 && b[ir] >= 0.5f && f.content != nullptr && f.content->impulse != nullptr))
+            return 1.0f; // no impulse: the active module does nothing either
+        Key k;
+        makeKey (f, b, d, k);
+        takeOverSpectrum();
+        if (!(k == specBuiltKey) && !(k == specPendingKey && specBusy.load (std::memory_order_acquire) != 0) && specBusy.load (std::memory_order_acquire) == 0)
+        {
+            specJob.self = this;
+            specJob.impulse = f.content->impulse;
+            specJob.key = k;
+            specPendingKey = k;
+            specBusy.store (1, std::memory_order_release);
+            if (!FxWorker::instance().submit (&ConvolveModule::runSpectrumJob, &specJob))
+                specBusy.store (0, std::memory_order_release);
+        }
+        if (!f.realtime)
+        {
+            // offline: wait for the spectrum so that the output never depends on the thread timing
+            for (int guard = 0; guard < 400000 && specBusy.load (std::memory_order_acquire) != 0; ++guard)
+                std::this_thread::yield();
+            takeOverSpectrum();
+        }
+        if (!specLive.valid)
+            return 1.0f;
+        makeup::WetShaping sh;
+        sh.tone = std::clamp (pct (b, d, tone), -1.0f, 1.0f);
+        sh.serumLaw = choice (b, law) == 1;
+        sh.serumCornerHz = sh.serumLaw && sh.tone != 0.0f ? static_cast<float> (fx::Convolve::serumToneCornerHz (static_cast<double> (sh.tone) * 100.0)) : 0.0f;
+        const int s = choice (b, sync);
+        double delay = V (b, d, predelay) * 0.001;
+        if (s != 0 && f.bpm > 10.0)
+            delay = 16.0 / std::exp2 (std::clamp (b[division], 0.0f, 8.0f)) * (s == 2 ? 1.5 : (s == 3 ? 2.0 / 3.0 : 1.0)) * (60.0 / f.bpm);
+        sh.delaySeconds = static_cast<float> (std::clamp (delay, 0.0, 2.0));
+        const float mixNow = clamp01 (pct (b, d, mix));
+        SpecCache& c = specCache;
+        if (!(c.valid && c.generation == specGeneration && c.mix == mixNow && c.tone == sh.tone && c.delay == sh.delaySeconds && c.corner == sh.serumCornerHz && c.serum == sh.serumLaw && c.rate == sampleRate))
+        {
+            makeup::convolveBandPowers (specLive, sh, mixNow, sampleRate, c.bands, c.coherent);
+            c.valid = true;
+            c.generation = specGeneration;
+            c.mix = mixNow;
+            c.tone = sh.tone;
+            c.delay = sh.delaySeconds;
+            c.corner = sh.serumCornerHz;
+            c.serum = sh.serumLaw;
+            c.rate = sampleRate;
+        }
+        if (makeup::legacyCaches())
+            return makeup::convolvePower (c.bands, program);
+        makeup::updateWeights (weights, program);   // (the weights of the program are made again only when its shares change)
+        return makeup::convolvePower (c.bands, weights);
+    }
+    float makeupCoherent (const FxFrame&, const float*, const float*, const makeup::ProgramDesc& program) noexcept override
+    {
+        if (!(specLive.valid && specCache.valid))
+            return 1.0f;
+        if (makeup::legacyCaches())
+            return makeup::convolveCoherent (specCache.coherent, program);   // (the weighted mean of the coherent amplitudes; makeupPower has just filled the cache)
+        makeup::updateWeights (weights, program);
+        return makeup::convolveCoherent (specCache.coherent, weights);
+    }
     void run (float* l, float* r, int n) noexcept override
     {
         if (!present || active == nullptr)
@@ -704,6 +897,72 @@ private:
             return impulse == o.impulse && serum == o.serum && phiMin == o.phiMin && size == o.size && attack == o.attack && decay == o.decay && damp == o.damp && irGain == o.irGain;
         }
     };
+    /** The key of the impulse the parameters ask for (configure () and the loudness model of a bypassed module build the same one). */
+    void makeKey (const FxFrame& f, const float* b, const float* d, Key& k) const noexcept
+    {
+        // the key is a function of these values: while they are the same as at the last call the key is too (two powf and five roundf less per call)
+        KeyInputs in;
+        in.impulse = f.content->impulse.get();
+        in.law = choice (b, law);
+        in.phiMin = phiMin >= 0 && b[phiMin] >= 0.5f;
+        in.size = V (b, d, size);
+        in.attack = V (b, d, attack);
+        in.decay = V (b, d, decay);
+        in.damp = pct (b, d, damp);
+        in.irGain = V (b, d, irGain);
+        in.length = static_cast<float> (f.content->impulse->frames / f.content->impulse->rate);
+        if (keyCache.valid && keyCache.in == in && !makeup::legacyCaches())
+        {
+            k = keyCache.key;
+            return;
+        }
+        makeKeyUncached (f, b, d, k);
+        keyCache.in = in;
+        keyCache.key = k;
+        keyCache.valid = true;
+    }
+    void makeKeyUncached (const FxFrame& f, const float* b, const float* d, Key& k) const noexcept
+    {
+        const bool serum = choice (b, law) == 1;
+        k.impulse = f.content->impulse.get();
+        k.serum = serum;
+        k.phiMin = phiMin >= 0 && b[phiMin] >= 0.5f;
+        const float sizeKnob = clamp01 (V (b, d, size) * 0.01f);
+        k.size = serum ? std::pow (10.0f, 0.7f * (sizeKnob * 100.0f - 50.0f) / 50.0f) : 0.25f * std::pow (16.0f, sizeKnob);
+        k.attack = V (b, d, attack) * 0.001f;
+        const float decayKnob = clamp01 (V (b, d, decay) * 0.01f);
+        if (serum)
+            k.decay = decayKnob >= 0.9999f ? 0.0f : decayKnob * 40.0f;
+        else
+            k.decay = decayKnob >= 0.9999f ? 0.0f : std::max (0.01f, decayKnob * static_cast<float> (f.content->impulse->frames / f.content->impulse->rate) * k.size);
+        k.damp = clamp01 (pct (b, d, damp));
+        k.irGain = V (b, d, irGain);
+        // the keys that shape the impulse are quantised a little so that a smooth modulation does not rebuild at every period
+        k.size = std::round (k.size * 200.0f) / 200.0f;
+        k.attack = std::round (k.attack * 1000.0f) / 1000.0f;
+        k.decay = std::round (k.decay * 100.0f) / 100.0f;
+        k.damp = std::round (k.damp * 100.0f) / 100.0f;
+        k.irGain = std::round (k.irGain * 10.0f) / 10.0f;
+    }
+    struct KeyInputs
+    {
+        const ContentSet::Impulse* impulse = nullptr;
+        int law = 0;
+        bool phiMin = false;
+        float size = 0, attack = 0, decay = 0, damp = 0, irGain = 0, length = 0;
+        bool operator== (const KeyInputs& o) const noexcept
+        {
+            return impulse == o.impulse && law == o.law && phiMin == o.phiMin && size == o.size && attack == o.attack && decay == o.decay && damp == o.damp && irGain == o.irGain && length == o.length;
+        }
+    };
+    struct KeyCache
+    {
+        bool valid = false;
+        KeyInputs in;
+        Key key;
+    };
+    mutable KeyCache keyCache;
+    makeup::BandWeights weights;   // the weights of the program of the bypassed module's loudness model
     struct Job
     {
         ConvolveModule* self = nullptr;
@@ -760,6 +1019,67 @@ private:
         j->impulse.reset();
         m->jobBusy.store (0, std::memory_order_release);
     }
+
+    void takeOverSpectrum() noexcept
+    {
+        if (specReady.exchange (false, std::memory_order_acq_rel))
+        {
+            specLive = specPending;
+            specBuiltKey = specPendingKey;
+            ++specGeneration;
+        }
+    }
+    /** The spectrum of the impulse of a key, on the helper thread (the impulse shaped as the real build does it, then its FFT): the data of the loudness model. */
+    static void runSpectrumJob (void* ctx)
+    {
+        SpecJob* j = static_cast<SpecJob*> (ctx);
+        ConvolveModule* m = j->self;
+        fx::Convolve c;
+        c.prepare (m->sampleRate, m->block);
+        fx::Convolve::Params p;
+        p.size = j->key.size;
+        p.minimumPhase = j->key.phiMin;
+        p.attack = j->key.attack;
+        p.decay = j->key.decay;
+        p.damp = j->key.damp;
+        p.irGain = j->key.irGain;
+        p.mix = 1.0f;
+        p.serumLaw = j->key.serum;
+        p.hostRate = m->sampleRate;
+        c.params = p;
+        std::vector<float> irL, irR;
+        const int frames = c.shapedIr (j->impulse->data.data(), j->impulse->frames, 2, j->impulse->rate, irL, irR);
+        makeup::BandSpectrum spec;
+        if (frames > 0)
+            makeup::irBandSpectrum (irL.data(), irR.data(), frames, m->sampleRate, spec);
+        m->specPending = spec;
+        j->impulse.reset();
+        m->specReady.store (true, std::memory_order_release);
+        m->specBusy.store (0, std::memory_order_release);
+    }
+
+    struct SpecJob
+    {
+        ConvolveModule* self = nullptr;
+        std::shared_ptr<const ContentSet::Impulse> impulse;
+        Key key;
+    };
+    struct SpecCache
+    {
+        bool valid = false, serum = false;
+        unsigned generation = 0;
+        float mix = 0, tone = 0, delay = 0, corner = 0;
+        float bands[makeup::kBands] = {}, coherent[makeup::kBands] = {};
+        double rate = 0;
+    };
+    // the loudness model of a bypassed module (makeupPower)
+    std::atomic<int> specBusy { 0 };
+    std::atomic<bool> specReady { false };
+    SpecJob specJob;
+    makeup::BandSpectrum specPending, specLive;
+    Key specBuiltKey, specPendingKey;
+    SpecCache specCache;
+    unsigned specGeneration = 0;
 
     int ir, size, tone, phiMin, predelay, sync, division, attack, decay, damp, irGain, mix, law;
     double sampleRate = 48000.0;

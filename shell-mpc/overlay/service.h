@@ -25,6 +25,7 @@
 #include "../device_profile.h"
 #include "../output_peak.h"
 #include "../play_log.h"
+#include "../startup_timing.h"
 #include "../poll_guard.h"
 #include "../thread_policy.h"
 #include "controller.h"
@@ -93,6 +94,26 @@ public:
         return *s;
     }
 
+#if defined(__linux__)
+    /** The CPU rule of the overlay for ANOTHER thread of the shell that renders or polls (the display thread; the engine helper threads through the hook of helper_thread_hook.h, once that is merged: its hook calls
+        this too): the calling thread gets the cores of the plan (coresForOwnThreads). `seen` is the plan the thread applied last (start with 0): the call does nothing while the plan is the same, and while the overlay
+        thread has not made its first plan (false: ask again later), so it is cheap enough to call on every pass of a loop. True: the cores were set now. */
+    static bool applyCpusToThisThread (unsigned& seen)
+    {
+        Service& s = instance();
+        const unsigned gen = s.cpuGen_.load (std::memory_order_acquire);
+        if (gen == 0 || gen == seen)
+            return false;
+        std::vector<int> cpus;
+        {
+            std::lock_guard<std::mutex> g (s.cpuMu_);
+            cpus = coresForOwnThreads (s.cpu_.plan, s.cpu_.online);
+        }
+        seen = gen;
+        return setAffinity (0, cpus);
+    }
+#endif
+
     /** Returns the slot of the instance (0 .. 15, kept until detach; -1: more than 16 instances, this one never shows the overlay). */
     int attach (IInstanceView* view)
     {
@@ -153,6 +174,13 @@ private:
 
     /** The files the controller looks at in the shipped plugin. The switches that are features (overlay-off, nogpu, rot, look, detail, fps, gpuclock) and the status file stay; the debug ones (the pointer hot spot, the
         curve dump request) are empty without SYNTHYBOY_MPC_DEBUG_HOOKS, so the plugin does not look at them. */
+    /** The shipped timing: the GPU helper is started as soon as an instance is attached (the overlay thread does it, in parallel with the host's own loading), not when the first page is found on screen. */
+    static Timing shippedTiming()
+    {
+        Timing t;
+        t.prewarmGpu = true;
+        return t;
+    }
     static Paths shippedPaths()
     {
         Paths p;
@@ -191,7 +219,7 @@ private:
         mouse_ = std::make_unique<LinuxMouseReader>();           // the mice: found at run time, hot plug, read only, never grabbed (mouse_linux.h)
         pointer_ = std::make_unique<LinuxPointerSource> (display_);   // the host's pointer plane: where the pointer is (drm_linux.h)
 #endif
-        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, shippedPaths(), Timing(), -1.0, gpu_.get(), touch_.get());
+        controller_ = std::make_unique<Controller> (*backend_, *frames_, *renderer_, shippedPaths(), shippedTiming(), -1.0, gpu_.get(), touch_.get(), layout::kViews, layout::kNumViews, true);   // true: the views are built by the overlay thread's first tick, not here (the host's thread)
 #if defined(__linux__)
         controller_->setMouse (mouse_.get(), pointer_.get());
         controller_->setExtraStatus ([this] { return cpuStatus(); });
@@ -238,6 +266,7 @@ private:
     void run()
     {
         useNormalScheduling (0, "sb-overlay");
+        startupTimes().markUiStep (StartupTimes::kUiThreadStart);
         synthyboy_mpc::PlayLog::line ("Service::run entered");
 #if defined(__linux__)
         {
@@ -271,7 +300,14 @@ private:
 #endif
             const auto tickStart = std::chrono::steady_clock::now();
             double wait = 1000.0;
-            gTick.run ([&] { wait = controller_->tick (now); });   // Controller::tick catches everything itself; this is the second barrier (and the count)
+            gTick.run ([&] { wait = controller_->tick (now); });
+            if (! startupTimes().uiReached())
+            {
+                if (gpu_ && gpu_->active())
+                    startupTimes().markUiStep (StartupTimes::kUiHelperReady);
+                if (controller_->framesTotal() > 0)
+                    startupTimes().markUi();
+            }   // the first frame of our UI that was shown (a relaxed load once it is set)   // Controller::tick catches everything itself; this is the second barrier (and the count)
             if (gTick.off)
             {
                 lk.lock();
@@ -296,6 +332,8 @@ private:
         nextCpuScanMs_ = nowSteadyMs() + 10000.0;
         const bool changed = first || st.plan.allowed != cpu_.plan.allowed;
         cpu_ = st;
+        if (changed)
+            cpuGen_.fetch_add (1, std::memory_order_release);   // the other threads of the shell (applyCpusToThisThread) follow
         if (st.plan.changed && changed)
             setAffinity (0, st.plan.allowed);
         if (gpu_ && st.plan.changed)
@@ -327,11 +365,12 @@ private:
             t += " " + n;
         char pk[160];
         std::snprintf (pk, sizeof pk, "\noutput_peak: %.5f\noutput_peak_total: %.5f\noutput_blocks: %lu\n", static_cast<double> (outputPeak().takeWindow()), static_cast<double> (outputPeak().total.load (std::memory_order_relaxed)), outputPeak().blocks.load (std::memory_order_relaxed));   // output_peak.h: what the plugin hands to the host
-        return t + (cpu_.plan.audioThreads.empty() ? " none" : "") + pk + "quality_profile: " + describeProfile (profileInForce().profile) + " (" + profileInForce().source + ")\n";   // device_profile.h: the engine quality of this process
+        return t + (cpu_.plan.audioThreads.empty() ? " none" : "") + pk + "quality_profile: " + describeProfile (profileInForce().profile) + " (" + profileInForce().source + ")\n" + startupTimes().describe();   // startup_timing.h: open_ms_* and host_call_max_ms_*   // device_profile.h: the engine quality of this process
     }
 
     std::mutex cpuMu_;
     CpuState cpu_;
+    std::atomic<unsigned> cpuGen_ { 0 };   // counts the plans that changed the cores (0: none made yet)
     double nextCpuScanMs_ = 0.0;
     int helperPidSet_ = 0;
     std::string threadAffinity_ = "unknown", helperAffinity_ = "no helper";

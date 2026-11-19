@@ -5,7 +5,7 @@
 #
 #   name-preset-macros.py [--presets DIR] [--names FILE] [--proposal FILE] [--rederive] [--write] [--check]
 #
-# Reads every .sbpreset below DIR (default content/presets): the mod matrix slots whose source is a macro and that really drive something (a destination, an amount that is not
+# Reads every .sbpreset below DIR (default content/presets): the mod matrix slots whose source or aux source is a macro and that really drive something (a destination, an amount that is not
 # zero, not bypassed) are the targets of that macro. A macro with targets gets a readable name from them, a macro without targets keeps the default name (an empty string):
 #   one target (or targets that share one short name)  -> its short name: "Cutoff", "Reso", "Drive", "Warp", "Detune", "LFO Rate" ...
 #   two targets                                         -> "A + B" when it fits 16 characters, else the module both belong to ("Filter"), else their two modules ("LFO + Phaser"), else "A +" (the first one and a plus)
@@ -40,6 +40,41 @@ SHORT_NAMES = {
     "distortion.mix": "Dist Mix", "reverb.decay": "Rev Decay", "reverb.mix": "Reverb", "chorus.mix": "Chorus", "delay.mix": "Delay", "phaser.mix": "Phaser",
     "fxfilter.mix": "FX Filter", "fxfilter.cutoff": "FX Cutoff", "rlfo1.rate": "Rnd LFO Rate", "rlfo2.rate": "Rnd LFO Rate",
     "compressor.mix": "Comp Mix", "compressor.mid.gain": "Comp Gain", "filter1.comb_offset": "Comb Offset", "filter1.formant.resonance": "Formant Res", "filter2.formant.resonance": "Formant Res", "flanger.feedback": "Flange Fdbk", "utility.width": "Width", "bode.feed": "Feedback", "bode.shift": "Shift", "bode.mix": "Bode Mix",
+    "osc1.gran.density": "Grain Dens", "osc2.gran.density": "Grain Dens", "osc3.gran.density": "Grain Dens",
+    "convolve.attack": "Conv Attack",
+    "osc1.gran.position": "Grain Pos",
+    "osc1.gran.rand_dir": "Rnd Dir",
+    "osc1.gran.rand_level": "Rnd Level",
+    "osc1.gran.rand_offset": "Rnd Offset",
+    "osc1.gran.rand_pan": "Rnd Pan",
+    "osc1.gran.rand_pitch": "Rnd Pitch",
+    "osc1.multi.timbre": "Timbre",
+    "osc1.sample.slice": "Slice",
+    "osc1.spec.freq_hi": "Freq Hi",
+    "osc1.spec.freq_shift": "Freq Shift",
+    "osc1.spec.position": "Spec Pos",
+    "osc2.gran.position": "Grain Pos",
+    "osc2.gran.rand_dir": "Rnd Dir",
+    "osc2.gran.rand_level": "Rnd Level",
+    "osc2.gran.rand_offset": "Rnd Offset",
+    "osc2.gran.rand_pan": "Rnd Pan",
+    "osc2.gran.rand_pitch": "Rnd Pitch",
+    "osc2.multi.timbre": "Timbre",
+    "osc2.sample.slice": "Slice",
+    "osc2.spec.freq_hi": "Freq Hi",
+    "osc2.spec.freq_shift": "Freq Shift",
+    "osc2.spec.position": "Spec Pos",
+    "osc3.gran.position": "Grain Pos",
+    "osc3.gran.rand_dir": "Rnd Dir",
+    "osc3.gran.rand_level": "Rnd Level",
+    "osc3.gran.rand_offset": "Rnd Offset",
+    "osc3.gran.rand_pan": "Rnd Pan",
+    "osc3.gran.rand_pitch": "Rnd Pitch",
+    "osc3.multi.timbre": "Timbre",
+    "osc3.sample.slice": "Slice",
+    "osc3.spec.freq_hi": "Freq Hi",
+    "osc3.spec.freq_shift": "Freq Shift",
+    "osc3.spec.position": "Spec Pos",
     "noise.level": "Noise", "lfo1.rate": "LFO Rate", "lfo2.rate": "LFO Rate", "lfo3.rate": "LFO Rate", "lfo4.rate": "LFO Rate",
 }
 # The words that open a parameter's name and say which module it is (the page it is on says it too); they go.
@@ -132,7 +167,7 @@ def combine_unbounded(keys, params, macro):
 
 
 def macro_targets(state_params, doc):
-    """{macro (1 .. 8): [(destination key, amount percent)]} of the slots that drive something."""
+    """{macro (1 .. 8): [(destination key, amount percent)]} of the slots that drive something (main or aux source)."""
     source_key = {s["choice"]: s["key"] for s in doc["modSources"]}
     dest_key = {d["choice"]: d["key"] for d in doc["modDestinations"]}
     out = {}
@@ -142,9 +177,34 @@ def macro_targets(state_params, doc):
         amount = float(state_params.get(p + "amount", 0))
         if not src or not dst or amount == 0 or state_params.get(p + "bypass", 0):
             continue
+
+        target_param = dest_key.get(dst)
+        if not target_param:
+            continue
+
+        # If destination is another slot's amount (e.g. mod01.amount), resolve to that slot's target
+        m_slot = re.match(r"^mod(\d+)\.amount$", target_param)
+        if m_slot:
+            target_slot = int(m_slot.group(1))
+            t_dst = int(state_params.get(f"mod{target_slot:02d}.destination", 0))
+            if t_dst in dest_key:
+                target_param = dest_key[t_dst]
+
+        # Main source
         key = source_key.get(src, "")
-        if key.startswith("macro") and key[5:].isdigit() and dst in dest_key:
-            out.setdefault(int(key[5:]), []).append((dest_key[dst], amount))
+        main_macro = None
+        if key.startswith("macro") and key[5:].isdigit():
+            main_macro = int(key[5:])
+            out.setdefault(main_macro, []).append((target_param, amount))
+
+        # Aux source (treat aux use as use)
+        aux = int(state_params.get(p + "aux_source", 0))
+        if aux:
+            aux_key = source_key.get(aux, "")
+            if aux_key.startswith("macro") and aux_key[5:].isdigit():
+                aux_macro = int(aux_key[5:])
+                if aux_macro != main_macro:
+                    out.setdefault(aux_macro, []).append((target_param, amount))
     return out
 
 

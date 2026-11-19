@@ -6,8 +6,10 @@
 #include <memory>
 #include "fx_chain.h"
 #include "../dsp/section_timing.h"
+#include "../dsp/peak.h"
 
 #include <algorithm>
+
 #include <cstdarg>
 #include <cstdio>
 
@@ -177,6 +179,8 @@ void FxChain::prepare (double sampleRate, int maxBlk)
     splitLmh.prepare (sr, std::max (maxBlk, kControlPeriod));
     splitMs.prepare (sr, std::max (maxBlk, kControlPeriod));
     vbase.assign (paramCount(), 0.0f);
+    for (auto& m : meter) m.prepare (sr);
+    for (auto& m : slotMeter) m.prepare (sr);
     reset();
 }
 
@@ -194,7 +198,17 @@ void FxChain::reset() noexcept
         levelGain[i] = levelGainPrev[i] = 1.0f;
         prevOn[i] = false;
         fadeIn[i] = false;
+        bypassed[i] = makeupSeen[i] = false;
+        makeupNow[i] = makeupPrev[i] = 1.0f;
     }
+    for (int s = 0; s < FxPool::kSlots; ++s)
+    {
+        slotBypassed[s] = slotMakeupSeen[s] = false;
+        slotMakeupNow[s] = slotMakeupPrev[s] = 1.0f;
+        slotMeter[s].reset();
+    }
+    for (auto& m : meter)
+        m.reset();
     for (auto& m : inst)
         if (m != nullptr)
             m->clearLevel();
@@ -219,7 +233,10 @@ void FxChain::configureSlot (int s, const float* base, const float* delta, const
     slotOrder[s] = std::clamp (static_cast<int> (base[keys.order] + 0.5f), 0, kFxOrderMax);
     slotMine[s] = slotRack[s] == rackId;
     if (!slotMine[s])
+    {
+        slotBypassed[s] = false;
         return;
+    }
     // the module the audio thread works with: take over a freshly created one
     FxModule* prevRunning = sl.running;
     if (FxModule* fresh = sl.pending.exchange (nullptr, std::memory_order_acq_rel))
@@ -250,7 +267,10 @@ void FxChain::configureSlot (int s, const float* base, const float* delta, const
         }
         sl.running = want;
     }
-    if (sl.running != nullptr)
+    // an effect of the slot that is on but bypassed by the mask leaves its loudness behind (Quality::fxMakeup)
+    const bool bypass = frame.makeup && slotOn[s] && !maskOk && sl.cur != nullptr && sl.curType == typeKey && sl.cur->hasMakeup();
+    slotBypassed[s] = bypass;
+    if (sl.running != nullptr || bypass)
     {
         // the parameters: the plain values of the source keys from the normalised p01 .. p24 (the modulation is added in the normalised domain)
         const FxTypeDescriptor& d = fxTypeDescriptor (typeKey);
@@ -260,7 +280,47 @@ void FxChain::configureSlot (int s, const float* base, const float* delta, const
             const float norm = clamp01 (modulatedValue (paramTable()[static_cast<size_t> (pk)], destLawOf (static_cast<size_t> (pk)), base[pk], delta != nullptr ? delta[pk] : 0.0f));
             vbase[static_cast<size_t> (d.source[k])] = fxInstancePlain (typeKey, k, norm);
         }
-        sl.running->update (frame, vbase.data(), nullptr);
+        if (sl.running != nullptr)
+            sl.running->update (frame, vbase.data(), nullptr);
+        else
+        {
+            slotMakeupPrev[s] = slotMakeupNow[s];
+            slotMeter[s].endPeriod (frame.period);
+            float g, pw, co;
+            sl.cur->makeup (frame, vbase.data(), nullptr, slotMeter[s].desc(), g, pw, co);
+            slotMakeupPow[s] = pw;
+            slotMakeupCoh[s] = co;
+            stepMakeup (g, slotMakeupSeen[s], slotMakeupPrev[s], slotMakeupNow[s], frame);
+        }
+    }
+    if (!bypass)
+    {
+        slotMakeupSeen[s] = false;
+        slotMakeupPrev[s] = slotMakeupNow[s] = 1.0f;
+    }
+}
+
+void FxChain::stepMakeup (float target, bool& seen, float& prev, float& now, const FxFrame& frame) const noexcept
+{
+    target = std::clamp (target, 0.03f, 16.0f); // -30 .. +24 dB: a model that is far off must not silence or blow up the sound
+    if (!seen)
+    {
+        prev = 1.0f; // the effect has just been bypassed (a preset load, a mask change): the gain comes in across one control period
+        now = target;
+        seen = true;
+    }
+    else if (frame.noSmoothing)
+        prev = now = target;
+    else
+    {
+        // 20 ms: a knob that moves the model's inputs, the build of an impulse that comes in late (the constant is made again only when the period or the rate changes)
+        if (smoothPeriod != frame.period || smoothRate != sr || makeup::legacyCaches())
+        {
+            smoothStep = 1.0f - std::exp (-static_cast<float> (frame.period) / (0.02f * static_cast<float> (sr)));
+            smoothPeriod = frame.period;
+            smoothRate = sr;
+        }
+        now += (target - now) * smoothStep;
     }
 }
 
@@ -268,12 +328,12 @@ void FxChain::buildPlan (const float*) noexcept
 {
     for (auto& p : plan)
         p.count = 0;
-    auto add = [&] (int rack, bool isPool, int index, int key)
+    auto add = [&] (int rack, bool isPool, int index, int key, bool bypass = false)
     {
         Plan& p = plan[static_cast<size_t> (rack)];
         if (p.count >= 32)
             return;
-        Item it { isPool, index, key };
+        Item it { isPool, index, key, bypass };
         int at = p.count;
         // stable insertion: ascending key; on a tie the module of instance 0 first, then the slots by number
         while (at > 0)
@@ -293,11 +353,17 @@ void FxChain::buildPlan (const float*) noexcept
         const int m = order[pos];
         if (on[m])
             add (moduleRack[m], false, m, fxModuleSortKey (pos));
+        else if (bypassed[m])
+            add (moduleRack[m], false, m, fxModuleSortKey (pos), true); // the gain of the bypassed effect, at its place in the chain
     }
     if (pool != nullptr)
         for (int s = 0; s < FxPool::kSlots; ++s)
+        {
             if (slotMine[s] && (pool->slot (s).running != nullptr || pool->slot (s).fading))
                 add (slotRack[s], true, s, slotOrder[s]);
+            else if (slotMine[s] && slotBypassed[s])
+                add (slotRack[s], true, s, slotOrder[s], true);
+        }
 }
 
 void FxChain::update (const float* base, const float* delta, const FxFrame& frame, uint32_t fxMask, bool inputsSame) noexcept
@@ -326,8 +392,13 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
         used[std::min (m, 15)] = true;
         order[i] = std::min (m, 15);
     }
+    bool maskedOut[16] = {}; // on in the preset, switched off by the mask
     for (int m = 0; m < 16; ++m)
-        on[m] = f.on[m] >= 0 && base[f.on[m]] >= 0.5f && (fxMask & (1u << m)) != 0;
+    {
+        const bool presetOn = f.on[m] >= 0 && base[f.on[m]] >= 0.5f;
+        on[m] = presetOn && (fxMask & (1u << m)) != 0;
+        maskedOut[m] = presetOn && (fxMask & (1u << m)) == 0;
+    }
     // the rack of every module (the splitters only sit in a bus: a band value clamps to Main) and who owns it: this chain, if the module sits in this rack, or
     // in the band of a splitter that is on and sits in this rack
     for (int m = 0; m < 16; ++m)
@@ -347,12 +418,35 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
         if (r >= 3)
             mine = (r <= 4 && splitterHere[0]) || (r >= 5 && r <= 7 && splitterHere[1]) || (r >= 8 && splitterHere[2]);
         on[m] = on[m] && mine;
+        bypassed[m] = frame.makeup && m < kNumFxModules && maskedOut[m] && mine && inst[m]->hasMakeup();
         if (m >= 13)
         {
             levelGainPrev[m] = levelGain[m];
             levelGain[m] = f.level[m] >= 0 ? dbToGain (fxValue (base, delta, f.level[m])) : 1.0f;
         }
         active = active || on[m];
+    }
+    // the effects that are on in the preset but bypassed by the mask leave their loudness behind as a gain (Quality::fxMakeup, fx_makeup.h)
+    for (int m = 0; m < kNumFxModules; ++m)
+    {
+        makeupPrev[m] = makeupNow[m];
+        if (bypassed[m])
+        {
+            meter[m].endPeriod (frame.period);
+            float g, pw, co;
+            inst[m]->makeup (frame, base, delta, meter[m].desc(), g, pw, co);
+            makeupPow[m] = pw;
+            makeupCoh[m] = co;
+            stepMakeup (g, makeupSeen[m], makeupPrev[m], makeupNow[m], frame);
+            active = true;
+        }
+        else
+        {
+            if (makeupSeen[m])
+                meter[m].reset();
+            makeupSeen[m] = false;
+            makeupPrev[m] = makeupNow[m] = 1.0f;
+        }
     }
     // modules: configure the ones that are on (a module that was off starts clean and fades in over one period)
     for (int m = 0; m < kNumFxModules; ++m)
@@ -376,7 +470,7 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
         for (int s = 0; s < FxPool::kSlots; ++s)
         {
             configureSlot (s, base, delta, frame, fxMask);
-            if (slotMine[s] && (pool->slot (s).running != nullptr || pool->slot (s).fading))
+            if (slotMine[s] && (pool->slot (s).running != nullptr || pool->slot (s).fading || slotBypassed[s]))
                 active = true;
         }
     if (on[13])
@@ -428,6 +522,8 @@ int FxChain::rackLatency (int rack, bool reported) const noexcept
     for (int i = 0; i < p.count; ++i)
     {
         const Item& it = p.item[static_cast<size_t> (i)];
+        if (it.bypass)
+            continue; // the gain of a bypassed effect has no latency
         if (it.pool)
         {
             const FxPool::Slot& sl = pool->slot (it.index);
@@ -526,6 +622,38 @@ void FxChain::runModule (int m, float* l, float* r, int n, int t0, int depth) no
     }
 }
 
+bool FxChain::busMakeup (float& power, float& coherent, float& amplitude) const noexcept
+{
+    const Plan& p = plan[static_cast<size_t> (rackId)];
+    bool any = false;
+    power = coherent = amplitude = 1.0f;
+    for (int i = 0; i < p.count; ++i)
+    {
+        const Item& it = p.item[static_cast<size_t> (i)];
+        if (!it.bypass)
+            continue;
+        any = true;
+        power *= it.pool ? slotMakeupPow[it.index] : makeupPow[it.index];
+        coherent *= it.pool ? slotMakeupCoh[it.index] : makeupCoh[it.index];
+        amplitude *= it.pool ? slotMakeupNow[it.index] : makeupNow[it.index];
+    }
+    return any;
+}
+
+void FxChain::runMakeup (float prev, float now, float* l, float* r, int n, int t0, makeup::ProgramMeter& meter) noexcept
+{
+    meter.accumulate (l, r, n); // the input of the gain: the program the effect would have seen
+    if (prev == 1.0f && now == 1.0f)
+        return;
+    const float invP = 1.0f / static_cast<float> (period);
+    for (int i = 0; i < n; ++i)
+    {
+        const float g = lerp (prev, now, static_cast<float> (t0 + i + 1) * invP);
+        l[i] *= g;
+        r[i] *= g;
+    }
+}
+
 /** A slot: a linear 10 ms crossfade between the outgoing and the incoming module (nullptr = the dry input), both fed with the same input. */
 void FxChain::runSlot (int s, float* l, float* r, int n, int t0) noexcept
 {
@@ -585,7 +713,15 @@ void FxChain::runRack (int rack, float* l, float* r, int n, int t0, int depth) n
     for (int i = 0; i < p.count; ++i)
     {
         const Item& it = p.item[static_cast<size_t> (i)];
-        if (it.pool)
+        if (it.bypass)
+        {
+            const bool defer = busDeferred && rack == rackId && depth == 0; // the engine applies the gain of a bus rack (busMakeup)
+            if (it.pool)
+                runMakeup (defer ? 1.0f : slotMakeupPrev[it.index], defer ? 1.0f : slotMakeupNow[it.index], l, r, n, t0, slotMeter[it.index]);
+            else
+                runMakeup (defer ? 1.0f : makeupPrev[it.index], defer ? 1.0f : makeupNow[it.index], l, r, n, t0, meter[it.index]);
+        }
+        else if (it.pool)
             runSlot (it.index, l, r, n, t0);
         else
             runModule (it.index, l, r, n, t0, depth);
@@ -600,6 +736,8 @@ void FxChain::idleRack (int rack, int n, int depth) noexcept
     for (int i = 0; i < p.count; ++i)
     {
         const Item& it = p.item[static_cast<size_t> (i)];
+        if (it.bypass)
+            continue;
         if (it.pool)
         {
             if (pool->slot (it.index).running != nullptr)
@@ -625,9 +763,7 @@ void FxChain::process (float* l, float* r, int n, int t0) noexcept
         runRack (rackId, l, r, n, t0, 0);
         return;
     }
-    float peakIn = 0.0f;
-    for (int i = 0; i < n; ++i)
-        peakIn = std::max (peakIn, std::max (std::fabs (l[i]), std::fabs (r[i])));
+    const float peakIn = peak::peakAbsPair (l, r, n);
     bool settling = false; // a crossfade of a slot or a fade in of a module in progress needs every block
     for (int m = 0; m < 16 && !settling; ++m)
         settling = fadeIn[m];
@@ -640,9 +776,7 @@ void FxChain::process (float* l, float* r, int n, int t0) noexcept
         return;
     }
     runRack (rackId, l, r, n, t0, 0);
-    float peakOut = 0.0f;
-    for (int i = 0; i < n; ++i)
-        peakOut = std::max (peakOut, std::max (std::fabs (l[i]), std::fabs (r[i])));
+    const float peakOut = peak::peakAbsPair (l, r, n);
     quietRun = (peakIn == 0.0f && peakOut < 1.0e-6f) ? std::min (quietRun + n, holdSamples + kControlPeriod) : 0;
 }
 } // namespace own

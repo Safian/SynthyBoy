@@ -32,6 +32,10 @@ public:
     float param (int i) const noexcept override { return v_[i]; }
     bool padPressure (bool& on, float& percent) const noexcept override { on = padOn; percent = padPercent; return true; }
     void setPadPressure (bool on, float percent) noexcept override { padOn = on; padPercent = percent; ++padWrites; }
+    bool outputLimiter (bool& on) const noexcept override { on = limiterOn; return true; }
+    void setOutputLimiter (bool on) noexcept override { limiterOn = on; ++limiterWrites; }
+    bool limiterOn = false;   // the default of the plugin (output_stage.h kOutputLimiterDefaultOn)
+    int limiterWrites = 0;
     bool padOn = false;
     float padPercent = 35.0f;
     int padWrites = 0;
@@ -63,10 +67,10 @@ public:
     int qN = 0, qCalls = 0, writes = 0, lastWritten = -1;
     bool fullOpen = false;
     int playLastSelector() const noexcept override { return 2; }
-    void setQVirtual (int id, float v) noexcept override { if (id >= 0 && id < 8) virtualOut[id] = v; }
+    void setQVirtual (int id, float v) noexcept override { if (id >= 0 && id < kVirtualSlots) virtualOut[id] = v; }
     bool takeQVirtual (int id, float& v) noexcept override
     {
-        if (id < 0 || id >= 8 || ! virtualDue[id])
+        if (id < 0 || id >= kVirtualSlots || ! virtualDue[id])
             return false;
         virtualDue[id] = false;
         v = virtualIn[id];
@@ -74,8 +78,9 @@ public:
     }
     /** The host writes the virtual Q target `id` (the page takes it at its next update). */
     void setVirtualIn (int id, float v) { virtualIn[id] = v; virtualDue[id] = true; }
-    float virtualOut[8] = {}, virtualIn[8] = {};
-    bool virtualDue[8] = {};
+    static constexpr int kVirtualSlots = 10;   // QRouter::kNumVirtual
+    float virtualOut[kVirtualSlots] = {}, virtualIn[kVirtualSlots] = {};
+    bool virtualDue[kVirtualSlots] = {};
     const SpectrumRing* spectrumRing() const noexcept override { return ring; }
     static int idx (const std::string& key) { const auto* p = synthyboy::findParamByKey (key.c_str()); return p ? static_cast<int> (p - synthyboy::paramTable()) : -1; }
     void set (const std::string& key, float v) { const int i = idx (key); if (i >= 0) v_[i] = v; }

@@ -28,9 +28,9 @@ struct MorphScratch
 /** Builds one band limited cycle (2048 samples, with the guard samples: out[-1] .. out[2050] are written) of the table at the frame position `framePos`
     (0 .. frames - 1; the two neighbouring frames are mixed when `interpolate`), changed by the spectral morph `type` with the amount `m` (0 .. 1), keeping
     only the harmonics up to `maxHarmonic` (the band limit of the voice). `phaseInc` = the phase increment of the voice (cycles per sample) and `hostRate`
-    are used by Vocode. `fast` (tier low): the transform of the real signal runs as one complex transform of half the size (rounding differs by about 1e-7 relative). Real time safe. */
+    are used by Vocode. `scalarTransform`: the inverse transform runs its scalar loops also where the NEON form exists (the same bits; measurements, --scalar-warp). `fast` (tier low): the transform of the real signal runs as one complex transform of half the size (rounding differs by about 1e-7 relative). Real time safe. `referenceBuild`: the build as it was before the work on the known zero bins (tests only: the same bits, slower). */
 void buildMorphCycle (const Wavetable& wt, float framePos, bool interpolate, int type, float m, int maxHarmonic, float phaseInc, double hostRate, float* out,
-                      MorphScratch& scratch, bool fast = false) noexcept;
+                      MorphScratch& scratch, bool fast = false, bool scalarTransform = false, bool referenceBuild = false) noexcept;
 /** The last cycles that buildMorphCycle () made, by their arguments: a chord that is played again (or the same note on several voices) asks for the same cycles again, and a
     copy gives the same samples as a new build. One per engine (allocated in prepare ()); the audio thread only. */
 class MorphCache

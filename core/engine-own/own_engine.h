@@ -11,6 +11,7 @@
 #include <mutex>
 #include <vector>
 
+#include "dsp/helper_thread.h"
 #include "dsp/util.h"
 #include "matrix/mod_matrix.h"
 #include "osc/content_set.h"
@@ -62,12 +63,20 @@ public:
     void process (const Event* events, int numEvents, float* left, float* right, int numFrames) noexcept override;
     void setTransport (const TransportInfo& t) noexcept override;
     void setReadoutTargets (const int* idx, int count) noexcept override;
+    void readyContent() noexcept override;
+    void readyContentFor (const float* plain, size_t count) noexcept override;
+    bool contentPending() const noexcept override;
+    double wavetableBuildMs() const noexcept override;
+    double prepareDetailMs (int part) const noexcept override { return part == 0 ? prepareVoicesMs.load (std::memory_order_relaxed) : part == 1 ? prepareFxMs.load (std::memory_order_relaxed) : 0.0; }
     int activeVoices() const noexcept override { return activeCount.load (std::memory_order_relaxed); }
+    bool voiceStats (VoiceStats& out) const noexcept override;
+    unsigned missingContent() const noexcept override { return missingMask.load (std::memory_order_relaxed); }
     int latencySamples() const noexcept override { return reportedLatency.load (std::memory_order_relaxed); }
     void setTuningSource (const tuning::ITuningSource* s) noexcept override { noteTuning.setSource (s); paramGen.fetch_add (1u, std::memory_order_release); }
     EngineCapsMask capabilities() const noexcept override;
     EngineCaps2Mask capabilities2() const noexcept override;
     bool copyReadout (LiveValues& out) const noexcept override;
+    void requestMeters() noexcept override { meterHold.store (kMeterHoldBlocks, std::memory_order_relaxed); }
     void silence() noexcept override;
     void setUltraRender (bool on) noexcept override { ultraRender.store (on, std::memory_order_relaxed); }
     void setContent (const StateContent& content) override;
@@ -90,6 +99,8 @@ private:
     Voice* pickVictim (bool includeKilling) noexcept;
     void applyAxes (int channel, int axis, float value) noexcept;
     void killExcess() noexcept;
+    /** sub.mono: the lowest tuned key note of the sounding voices (globals.lowestNote), read by the voices when they tick. */
+    void updateLowestNote() noexcept;
     void writeReadout() noexcept;
     void controlTick() noexcept;
     Voice* allocateVoice (bool legato) noexcept;
@@ -108,6 +119,12 @@ private:
     std::atomic<bool> lowKeepMorphSpread { kDefaultLowTierMorphSpread };
     std::atomic<uint32_t> savingsOff { 0 };
     std::atomic<int> activeCount { 0 };
+    // voice diagnostics (voiceStats): the counters are written by the audio thread, the snapshot at the end of every block
+    unsigned cntNoteOns = 0, cntNoteOffs = 0, cntUnmatched = 0, cntStolen = 0;
+    std::atomic<int> stIntegers[8] = {};   // active, released, sustaining, heldKeys, lowestHeld, highestHeld, orphans, pedal
+    std::atomic<unsigned> stCounters[4] = {};
+    void publishStats() noexcept;
+    std::atomic<unsigned> missingMask { 0 };
     // transport (set from any thread by the shell between blocks; read by the audio thread)
     std::atomic<double> tpBpm { 120.0 }, tpPos { 0.0 };
     std::atomic<bool> tpPlaying { false };
@@ -145,6 +162,8 @@ private:
     std::unique_ptr<spectral::Scratch> spectralScratch;
 
     std::vector<std::unique_ptr<Voice>> voices;
+    float heldSrc[kNumSourceIds] = {};   // the source values of the voice the global modulation read last (the held values while no voice sounds, document 04, 3.1)
+    bool heldSrcValid = false;
     std::vector<uint8_t> sustainPending;
     std::vector<float> base;       // snapshot of all parameters for the block
     // The snapshot, the compiled matrix and the tuning table are rebuilt only when something they read changed: every writer (setParam, content, tuning source) bumps
@@ -167,6 +186,11 @@ private:
     FxChain fx[3];                 // the racks Main, Bus 1, Bus 2
     FxPool fxPool;                 // the 16 slots of the effect instance pool
     int fxiTypeIndex[kNumFxInstances] = {};
+    std::atomic<double> prepareVoicesMs { 0.0 }, prepareFxMs { 0.0 };   // what the last prepare () spent on the voice pool and on the effects (the start-up record of the shell)
+    int wtParamIdx[6] = { -1, -1, -1, -1, -1, -1 };   // table positions of osc1..3.wavetable and osc1..3.spec.flt_table: the keys that name a built-in table (set once in the constructor)
+    bool lazyBank = false;                              // prepare () took a share of the background builder (stopped in the destructor)
+    const Wavetable* wtHeld[3] = { nullptr, nullptr, nullptr };   // audio thread: the table each oscillator plays now (the new one when it is ready, else the one it had)
+    unsigned wavetableMaskOfParams() const noexcept;   // bit (1 << choice) for every built-in table the current values of those keys name
     IntDelay dlVoices, dlBusOut[2], dlBusIn[2], dlMainOut, dlDirect;  // latency compensation (document 06, 11)
     std::atomic<int> reportedLatency { 0 };
     void clearLatencyDelays() noexcept;
@@ -187,16 +211,27 @@ private:
     std::atomic<int> fxWant[kNumFxInstances];
     std::atomic<bool> fxWorkDue { false }, fxWorkerStop { false };
     std::thread fxWorker;
+    WakeSignal fxWake;             // wakes fxWorker: a type key was set, or stop
     void startFxWorker();
     void stopFxWorker() noexcept;
     float mixL[4][kControlPeriod] = {}, mixR[4][kControlPeriod] = {}; // Main, Bus 1, Bus 2, Direct of the current period
     // the level meters of the mixer (LiveValues::stripPeak, audio thread only until writeReadout publishes them): per strip (Sub, A, B, C, Noise, Filter 1, Filter 2, Bus 1, Bus 2, Master) the peak of this block and the
     // shown level (the peak with a slow release); stripSq collects the power sums of the voices' sources of one control period (MixOut::srcSq)
+    // the source strips (0 .. 6) are measured while meterHold > 0: requestMeters () sets it, every measured block takes one off (a request that arrives meanwhile is not overwritten: compare and exchange)
+    static constexpr int kMeterHoldBlocks = 256;
+    std::atomic<int> meterHold { 0 };
+    bool sourceMeters = false;   // this block measures the source strips (audio thread)
     float stripSq[7] = {}, stripBlockPeak[LiveValues::kMaxStrips] = {}, stripShown[LiveValues::kMaxStrips] = {};
     int lastBlockFrames = 0;   // the frames of the block that writeReadout publishes
+    // the makeup of the bypassed effects of a bus (docs/release/TIER-LEVEL-COMPENSATION.md section 9): the powers of Main, of the bus input and their cross term, smoothed over 100 ms, and the gain
+    double busStat[3][3] = {};
+    float busMkNow[3] = { 1.0f, 1.0f, 1.0f }, busMkPrev[3] = { 1.0f, 1.0f, 1.0f };
+    bool busMkSeen[3] = {};
     float busGain[3] = { 1.0f, 1.0f, 1.0f }, busGainPrev[3] = { 1.0f, 1.0f, 1.0f }, directGain = 1.0f, directGainPrev = 1.0f;
     int busDest[2] = {}, mainBypass = 0, busBypass[2] = {};
     std::atomic<uint32_t> fxMask { kFxAll };
+    std::atomic<bool> fxMakeup { true };
+    void makeupOfBus (int b, int n, float& prev, float& now) noexcept;
     MorphCache morphCache;
     TickGlobals globals;
     NoteTuning noteTuning;
@@ -225,6 +260,7 @@ private:
     float lastVelocity = 0.0f;
     const int fxReverbForceIndex;
     const int fxOversampleIndex;
+    const int noSmoothingIndex;
     std::vector<float> scratchRight;
 };
 } // namespace own

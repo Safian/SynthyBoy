@@ -3,7 +3,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// The axis (Serum 2 manual, "ruler scaling below the envelope"): the x axis is TIME. LOCKED (the default): the envelope always fills the plot, so a change of the times only changes how much time the ruler under
+// The axis (ruler scaling below the envelope): the x axis is TIME. LOCKED (the default): the envelope always fills the plot, so a change of the times only changes how much time the ruler under
 // the graph stands for (a continuous fit, not steps). A stage of 0 takes no width; a stage with time takes its share of the width on the one common scale, but never less than kMinStageW pixels (so the
 // handles of two short neighbours stay apart); the sustain is a level, a short fixed gap marks it. UNLOCKED: the scale is the zoom the player sets by dragging along the ruler band (the window in
 // time units), the envelope may run past the right edge (the handles beyond it are not offered). The ruler marks are round times (time_ruler.h: ms / s, or beats in BEATS mode), they are also the vertical grid.
@@ -123,6 +123,9 @@ public:
         double zoom = 0.0;                                   // unlocked: the time (ms or beats) the plot's width stands for; 0 = what the envelope needs now (taken when it is unlocked)
     };
     State state;
+    /** The drawing area of the curve when the owner gives it (the compact view of the Play page: playrows::plotRect, below the header band that holds the buttons); an empty rectangle (the default) = the margins of `plot()` inside the
+        rectangle. Everything of the graph (grid, ruler, curve, fill, handles, the value bubble) lies in this area or in the margin under it; nothing is drawn above its top (the full screen page leaves it empty and is unchanged). */
+    Rect plotArea;
     /** What the last Change was. `handle` = the handle; t = the new normalised time (Delay .. Release, Decay), level = the new sustain level (Decay), curve = the new curve parameter (CurveA .. CurveR). */
     struct Edit { int handle = envgraph::None; double t = 0.0, level = 0.0, curve = 0.0; bool reset = false; };   // handle kLock / kZoom: the lock was toggled / the zoom was dragged (view state, no parameter)
     static constexpr int kLock = 100, kZoom = 101;
@@ -132,6 +135,8 @@ public:
     /** The drawing area of the curve inside the rectangle (the margins hold the value text and the handles at the edges). */
     Rect plot() const noexcept
     {
+        if (! plotArea.empty())
+            return plotArea;
         const bool c = compactChrome();
         return { rect_.x + (c ? 18 : 24), rect_.y + (c ? 30 : 38), std::max (0, rect_.w - (c ? 36 : 48)), std::max (0, rect_.h - (c ? 30 : 38) - (c ? 22 : 40)) };
     }
@@ -503,7 +508,8 @@ protected:
             const float size = T.fValue;
             const int tw = static_cast<int> (std::ceil (Pen::textWidth (state.text[sh], size))) + 16, th = 26;
             int bx = static_cast<int> (std::lround (hx)) - tw / 2, by = static_cast<int> (std::lround (hy)) - th - 12;
-            if (by < rect_.y + 2)
+            const int topLimit = plotArea.empty() ? rect_.y + 2 : plotArea.y;   // with a plot area (the header band above it holds the buttons) the bubble stays in it
+            if (by < topLimit)
                 by = static_cast<int>(std::lround (hy)) + 14;
             bx = std::clamp (bx, rect_.x + 2, std::max (rect_.x + 2, rect_.right() - tw - 2));
             const Rect bubble { bx, by, tw, th };

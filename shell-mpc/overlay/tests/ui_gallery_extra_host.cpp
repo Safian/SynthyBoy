@@ -47,6 +47,15 @@ using namespace synthyboy_mpc::overlay;
 namespace
 {
 
+static std::string g_onlyPrefix;
+
+inline bool shouldRender (const std::string& name)
+{
+    if (g_onlyPrefix.empty())
+        return true;
+    return name.rfind (g_onlyPrefix, 0) == 0;
+}
+
 class GalleryInst final : public IInstanceView
 {
 public:
@@ -131,13 +140,13 @@ public:
 
     void setQVirtual (int id, float v) noexcept override
     {
-        if (id >= 0 && id < 8)
+        if (id >= 0 && id < kVirtualSlots)
             virtualOut[id] = v;
     }
 
     bool takeQVirtual (int id, float& v) noexcept override
     {
-        if (id < 0 || id >= 8 || ! virtualDue[id])
+        if (id < 0 || id >= kVirtualSlots || ! virtualDue[id])
             return false;
         virtualDue[id] = false;
         v = virtualIn[id];
@@ -147,6 +156,9 @@ public:
     std::shared_ptr<const synthyboy::StateContent> content() const override { return content_; }
 
     void setContent (std::shared_ptr<const synthyboy::StateContent> c) { content_ = std::move (c); }
+    /** The wavetable browser's catalogue sources (wavetable_catalogue.h): empty = the built-in tables only. */
+    void wavetableSources (synthyboy::CatalogueSources& out) const override { out = wtSources; }
+    synthyboy::CatalogueSources wtSources;
 
     void setLfoShape (int lfo, const synthyboy::ContentLfoShape& shape) override
     {
@@ -228,8 +240,23 @@ public:
     bool fullOpen = false;
     bool haveLive = true;
     synthyboy::LiveValues liveValues;
-    float virtualOut[8] = {}, virtualIn[8] = {};
-    bool virtualDue[8] = {};
+    static constexpr int kVirtualSlots = 10;   // QRouter::kNumVirtual
+    float virtualOut[kVirtualSlots] = {}, virtualIn[kVirtualSlots] = {};
+    bool virtualDue[kVirtualSlots] = {};
+
+    bool padPressure (bool& on, float& percent) const noexcept override
+    {
+        on = padPressureOn;
+        percent = padPressurePercent;
+        return true;
+    }
+    void setPadPressure (bool on, float percent) noexcept override
+    {
+        padPressureOn = on;
+        padPressurePercent = percent;
+    }
+    bool padPressureOn = false;
+    float padPressurePercent = 35.0f;
 
 private:
     float v_[synthyboy::kMaxParams] = {};
@@ -276,6 +303,10 @@ void compositeAndWritePng (const std::string& path, uit::Image& im)
 template <class F>
 void saveScene (const std::string& path, F&& draw, int w = 1280, int h = 800)
 {
+    const std::string stem = fs::path (path).stem().string();
+    if (! shouldRender (stem))
+        return;
+
     auto scene = std::make_unique<gpu::SceneData>();
     gpu::SceneBuilder sb (*scene);
     sb.begin (gpu::kKindPlay, 0, w, h);
@@ -450,6 +481,33 @@ void setupEffectNonDefault (GalleryInst& inst, int type)
     }
 }
 
+/** A small wavetable library for the browser states: a pack with two categories and the player's folder with a category and a loose file (the files are placeholders: the browser lists names and sizes only). */
+void makeWavetableGalleryLibrary (synthyboy::CatalogueSources& src)
+{
+    const fs::path root = fs::temp_directory_path() / "synthyboy_gallery_wavetables";
+    std::error_code ec;
+    fs::remove_all (root, ec);
+    const std::string pack = "com.gallery.wavetables";
+    fs::create_directories (root / "packs" / pack / "Analog", ec);
+    fs::create_directories (root / "packs" / pack / "Vocal", ec);
+    const char* const files[][2] = { { "Analog/warm_saw_stack.wav", "Warm Saw Stack" }, { "Analog/thin_pulse_sweep.wav", "Thin Pulse Sweep" }, { "Analog/sync_lead.wav", "Sync Lead" },
+                                     { "Vocal/choir_ah.wav", "Choir Ah" }, { "Vocal/formant_sweep.wav", "Formant Sweep" } };
+    std::string list;
+    for (const auto& f : files)
+    {
+        std::ofstream (root / "packs" / pack / f[0]) << "placeholder";
+        list += std::string (list.empty() ? "" : ",") + "{\"path\":\"" + f[0] + "\",\"sha256\":\"" + std::string (64, 'b') + "\",\"size\":4096,\"title\":\"" + f[1] + "\"}";
+    }
+    std::ofstream (root / "packs" / pack / "contentpack.json") << "{\"schemaVersion\":1,\"id\":\"" << pack << "\",\"name\":\"Gallery Wavetables\",\"version\":\"1.0.0\",\"license\":\"CC0-1.0\",\"attribution\":\"t\","
+                                                                  "\"kind\":\"wavetables\",\"requires_plugin\":\">=0.1.0\",\"files\":[" << list << "]}";
+    fs::create_directories (root / "SynthyBoy" / "Wavetables" / "Bass", ec);
+    for (const char* n : { "sub_grind.wav", "reese_move.wav" })
+        std::ofstream (root / "SynthyBoy" / "Wavetables" / "Bass" / n) << "placeholder";
+    std::ofstream (root / "SynthyBoy" / "Wavetables" / "my_loose_table.wav") << "placeholder";
+    src.packDirs = { (root / "packs").string() };
+    src.userRoots = { root.string() };
+}
+
 void renderExtraStates (const std::string& outDir, const std::string& state, GalleryInst& baseInst)
 {
     std::printf ("Rendering extra states for: %s ...\n", state.c_str());
@@ -517,6 +575,46 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.refresh (2);
             r.tap (r.ui.ui().full().basic.source.dropdown);
             r.picture (outDir + "/" + state + "_osca_wavetable_list.png");
+        }
+
+        // 1.5b Wavetable browser with a pack and the player's folders: the categories, and a category with the file table that is loaded marked
+        {
+            synthyboy::CatalogueSources src;
+            makeWavetableGalleryLibrary (src);
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.inst.wtSources = src;
+            r.inst.set ("osc1.type", 0.0f);
+            r.refresh (2);
+            r.tap (r.ui.ui().full().basic.source.dropdown);
+            const ui::Rect h = r.ui.ui().list().headerRect();
+            r.tapAt (h.x + 20, h.y + h.h / 2);   // the way up: the categories
+            r.picture (outDir + "/" + state + "_osca_wavetable_categories.png");
+            const ui::Rect row = r.ui.ui().list().rowRect (2);
+            r.tapAt (row.x + 30, row.y + row.h / 2);   // the third category: the first of the pack's
+            r.picture (outDir + "/" + state + "_osca_wavetable_category.png");
+        }
+        {
+            synthyboy::CatalogueSources src;
+            makeWavetableGalleryLibrary (src);
+            GalleryRig<OscPageUi> r (baseInst, 2);
+            r.inst.wtSources = src;
+            auto c = std::make_shared<synthyboy::StateContent>();
+            if (r.inst.content())
+                *c = *r.inst.content();
+            synthyboy::ContentWavetable w;
+            w.osc = 1;
+            w.ref.pack = "com.gallery.wavetables";
+            w.ref.file = "Analog/warm_saw_stack.wav";
+            w.ref.name = "Warm Saw Stack";
+            w.frames = 64;
+            c->wavetables.push_back (w);
+            r.inst.setContent (c);
+            r.inst.set ("osc1.type", 0.0f);
+            r.inst.set ("osc1.wavetable", static_cast<float> (synthyboy::kWavetablePresetTable));
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_osca_wavetable_file_selector.png");
+            r.tap (r.ui.ui().full().basic.source.dropdown);
+            r.picture (outDir + "/" + state + "_osca_wavetable_file_marked.png");
         }
 
         // 1.6 Warp type list popup
@@ -627,6 +725,24 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.refresh (2);
             r.tap (r.ui.full().style);
             r.picture (outDir + "/" + state + "_filter1_style_list.png");
+        }
+
+        // 2.4b Style list popup (classic: Ladder)
+        {
+            GalleryRig<FilterUi> r (baseInst, 1);
+            r.inst.set ("filter1.model", 2.0f); // Ladder (classic)
+            r.refresh (2);
+            r.tap (r.ui.full().style);
+            r.picture (outDir + "/" + state + "_filter1_style_list_classic.png");
+        }
+
+        // 2.4c Style list popup (Serum: Scream)
+        {
+            GalleryRig<FilterUi> r (baseInst, 1);
+            r.inst.set ("filter1.model", 16.0f); // Scream (Serum)
+            r.refresh (2);
+            r.tap (r.ui.full().style);
+            r.picture (outDir + "/" + state + "_filter1_style_list_serum.png");
         }
 
         // 2.5 Output / routing popup
@@ -835,6 +951,157 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.tapAt (c.x + c.w / 2, c.y + c.h / 2);
             r.refresh (2);
             r.picture (outDir + "/" + state + "_lfo_editor_tool_ramp_down.png");
+        }
+
+        // 4.11 .. 4.30 The LFO editor, the new tools, the marker, the selection, the lists, the name keyboard and the page of the modulation of points
+        {
+            const std::string prefix = outDir + "/" + state + "_lfo_editor_";
+            auto openEd = [&] (float sync, float phaseDeg, bool modulated) -> std::unique_ptr<GalleryRig<LfoUi>>
+            {
+                auto r = std::make_unique<GalleryRig<LfoUi>> (baseInst, 1);
+                r->inst.set ("lfo1.shape", 12.0f);
+                r->inst.set ("lfo1.sync_type", sync);
+                r->inst.set ("lfo1.phase", phaseDeg);
+                synthyboy::ContentLfoShape cs;
+                cs.lfo = 1;
+                cs.gridX = 8;
+                cs.gridY = 4;
+                cs.points = { { 0.0f, 0.1f, 0.0f }, { 0.125f, 0.85f, 2.0f }, { 0.25f, 0.3f, 0.0f }, { 0.375f, 0.9f, -1.8f }, { 0.5f, 0.15f, 0.0f }, { 0.625f, 0.7f, 3.0f }, { 0.75f, 0.4f, 0.0f }, { 0.875f, 0.8f, 0.0f }, { 1.0f, 0.0f, 0.0f } };
+                if (modulated)
+                {
+                    cs.points[2].modY.present = true; cs.points[2].modY.source = synthyboy::modSourceTable()[7].key; cs.points[2].modY.amount = 0.3f;
+                    cs.points[5].modX.present = true; cs.points[5].modX.source = synthyboy::modSourceTable()[7].key; cs.points[5].modX.amount = 0.06f;
+                    cs.points[1].modCurve.present = true; cs.points[1].modCurve.source = synthyboy::modSourceTable()[7].key; cs.points[1].modCurve.amount = 0.4f;
+                }
+                r->inst.setLfoShape (1, cs);
+                r->refresh();
+                r->tap (r->ui.full().edit);
+                r->refresh (2);
+                return r;
+            };
+            auto px = [] (GalleryRig<LfoUi>& r, float f) { return static_cast<int> (r.ui.editor().canvas.xOf (f)); };
+            auto py = [] (GalleryRig<LfoUi>& r, float f) { return static_cast<int> (r.ui.editor().canvas.yOf (f)); };
+            auto toolOf = [] (GalleryRig<LfoUi>& r, int t) { const ui::Rect c = r.ui.editor().tools.cell (t); r.tapAt (c.x + c.w / 2, c.y + c.h / 2); };
+            auto touch = [] (GalleryRig<LfoUi>& r, TouchEvent::Kind k, int x, int y)
+            {
+                TouchEvent e; e.kind = k; e.x = x; e.y = y;
+                r.now += 16.0;
+                r.ui.touch (e, r.stack, r.inst, r.now);
+                r.refresh (1);
+            };
+            auto dragFrom = [&] (GalleryRig<LfoUi>& r, int x0, int y0, int x1, int y1)   // the finger stays down: the picture shows the gesture in flight
+            {
+                touch (r, TouchEvent::Down, x0, y0);
+                for (int i = 1; i <= 8; ++i)
+                    touch (r, TouchEvent::Move, x0 + (x1 - x0) * i / 8, y0 + (y1 - y0) * i / 8);
+            };
+            // the marker: LOOP (a loop mode), START (retrigger), dimmed with its hint (free-run)
+            openEd (4.0f, 135.0f, false)->picture (prefix + "marker_loop.png");
+            openEd (0.0f, 45.0f, false)->picture (prefix + "marker_start.png");
+            openEd (1.0f, 45.0f, false)->picture (prefix + "marker_freerun.png");
+            // the modulation of points: the bars and the ring of a curve handle
+            openEd (0.0f, 0.0f, true)->picture (prefix + "mod_bars.png");
+            // SELECT: the rubber band in flight, the selection done (the POINT field shows the count, the third field is SCALE)
+            {
+                auto r = openEd (0.0f, 0.0f, false);
+                toolOf (*r, ui::ToolSelector::Select);
+                dragFrom (*r, px (*r, 0.18f), py (*r, 0.98f), px (*r, 0.55f), py (*r, 0.05f));
+                r->picture (prefix + "select_rubber.png");
+                touch (*r, TouchEvent::Up, px (*r, 0.55f), py (*r, 0.05f));
+                r->refresh (2);
+                r->picture (prefix + "select_done.png");
+            }
+            // SOFT: the rainbow of the points that follow the finger
+            {
+                auto r = openEd (0.0f, 0.0f, false);
+                toolOf (*r, ui::ToolSelector::Soft);
+                dragFrom (*r, px (*r, 0.375f), py (*r, 0.9f), px (*r, 0.375f), py (*r, 0.55f));
+                r->picture (prefix + "soft.png");
+            }
+            // BEND: every curve moves with the one that is dragged
+            {
+                auto r = openEd (0.0f, 0.0f, false);
+                toolOf (*r, ui::ToolSelector::Bend);
+                float hx = 0.0f, hy = 0.0f;
+                r->ui.editor().canvas.midHandle (0, hx, hy);
+                dragFrom (*r, static_cast<int> (hx), static_cast<int> (hy), static_cast<int> (hx), static_cast<int> (hy) + 50);
+                r->picture (prefix + "bend.png");
+            }
+            // the lists of SHAPES and MORE over the editor
+            {
+                auto r = openEd (0.0f, 0.0f, false);
+                r->tap (r->ui.editor().shapes);
+                r->picture (prefix + "shapes_list.png");
+                r->tapAt (r->ui.list().rowRect (0).x + 20, r->ui.list().rowRect (0).y + 20);
+                r->picture (prefix + "shapes_factory.png");
+            }
+            {
+                auto r = openEd (0.0f, 0.0f, false);
+                r->tap (r->ui.editor().more);
+                r->picture (prefix + "more_list.png");
+                r->tapAt (r->ui.list().rowRect (0).x + 20, r->ui.list().rowRect (0).y + 20);
+                r->picture (prefix + "more_edit.png");
+                r->stack.back();
+                r->refresh();
+                r->tap (r->ui.editor().more);
+                r->tapAt (r->ui.list().rowRect (2).x + 20, r->ui.list().rowRect (2).y + 20);
+                r->picture (prefix + "more_copy.png");
+                r->tapAt (r->ui.list().rowRect (0).x + 20, r->ui.list().rowRect (0).y + 20);
+                r->picture (prefix + "more_copy_lfo.png");
+            }
+            // SAVE AS: the name keyboard, then the question when the name is taken (a temporary card with one saved shape)
+            {
+                const std::string card = (fs::temp_directory_path() / "synthyboy_lfo_gallery_card").string();
+                std::error_code ec;
+                fs::remove_all (card, ec);
+                fs::create_directories (card, ec);
+                auto r = openEd (0.0f, 0.0f, false);
+                r->inst.wtSources.userRoots = { card };
+                auto typeName = [&] (const std::string& name)
+                {
+                    for (char ch : name)
+                    {
+                        const int k = ch == ' ' ? r->ui.keyboard().keyOfKind (ui::TextEntry::Space) : r->ui.keyboard().keyOf (ch);
+                        const ui::TextEntry::Key& key = r->ui.keyboard().key (k);
+                        r->tapAt (key.r.x + key.r.w / 2, key.r.y + key.r.h / 2);
+                    }
+                };
+                r->tap (r->ui.editor().shapes);
+                r->tapAt (r->ui.list().rowRect (2).x + 20, r->ui.list().rowRect (2).y + 20);
+                typeName ("Wobble");
+                r->picture (prefix + "save_name.png");
+                const ui::TextEntry::Key& ok = r->ui.keyboard().key (r->ui.keyboard().keyOfKind (ui::TextEntry::Ok));
+                r->tapAt (ok.r.x + ok.r.w / 2, ok.r.y + ok.r.h / 2);
+                r->picture (prefix + "saved.png");
+                r->tap (r->ui.editor().shapes);
+                r->picture (prefix + "shapes_list_saved.png");
+                r->tapAt (r->ui.list().rowRect (1).x + 20, r->ui.list().rowRect (1).y + 20);
+                r->picture (prefix + "shapes_mine.png");
+                r->stack.back();
+                r->refresh();
+                r->tap (r->ui.editor().shapes);
+                r->tapAt (r->ui.list().rowRect (2).x + 20, r->ui.list().rowRect (2).y + 20);
+                typeName ("Wobble");
+                const ui::TextEntry::Key& ok2 = r->ui.keyboard().key (r->ui.keyboard().keyOfKind (ui::TextEntry::Ok));
+                r->tapAt (ok2.r.x + ok2.r.w / 2, ok2.r.y + ok2.r.h / 2);
+                r->picture (prefix + "confirm_replace.png");
+                r->stack.back();
+                r->refresh();
+                r->tap (r->ui.editor().shapes);
+                r->tapAt (r->ui.list().rowRect (5).x + 20, r->ui.list().rowRect (5).y + 20);
+                r->picture (prefix + "delete_which.png");
+                fs::remove_all (card, ec);
+            }
+            // the modulation of a point: nothing yet, then a source and an amount
+            {
+                auto r = openEd (0.0f, 0.0f, false);
+                r->tapAt (px (*r, 0.25f), py (*r, 0.3f));
+                r->tap (r->ui.editor().modButton);
+                r->picture (prefix + "pointmod_empty.png");
+                const ui::Rect chip = r->ui.pointModPage().board.chipRectOfId (8);
+                r->tapAt (chip.x + chip.w / 2, chip.y + chip.h / 2);
+                r->picture (prefix + "pointmod.png");
+            }
         }
     }
 
@@ -1089,6 +1356,19 @@ void renderExtraStates (const std::string& outDir, const std::string& state, Gal
             r.picture (outDir + "/" + state + "_master_main.png");
         }
 
+        // 9.1b Main side with PAD PRESS switch on
+        {
+            GalleryRig<MasterUi> r (baseInst, 1);
+            r.inst.setPadPressure (true, 50.0f);
+            r.inst.set ("master.volume", 0.85f);
+            r.inst.set ("master.pan", 25.0f);
+            r.inst.set ("master.limiter", 1.0f);
+            r.inst.set ("master.voice_limit", 8.0f);
+            r.ui.screen().setSide (ui::MasterScreen::SideMain);
+            r.refresh (2);
+            r.picture (outDir + "/" + state + "_master_pad_press.png");
+        }
+
         // 9.2 Tuning/MPE side with non-default values
         {
             GalleryRig<MasterUi> r (baseInst, 1);
@@ -1186,13 +1466,17 @@ int main (int argc, char** argv)
             while (i + 1 < argc && argv[i + 1][0] != '-')
                 presets.push_back (argv[++i]);
         }
+        else if (arg == "--only-prefix" && i + 1 < argc)
+        {
+            g_onlyPrefix = argv[++i];
+        }
         else if (arg == "--test")
         {
             testMode = true;
         }
         else if (arg == "--help" || arg == "-h")
         {
-            std::printf ("Usage: %s [--out DIR] [--preset FILE ...] [--presets FILE ...] [--test]\n", argv[0]);
+            std::printf ("Usage: %s [--out DIR] [--preset FILE ...] [--presets FILE ...] [--only-prefix PFX] [--test]\n", argv[0]);
             return 0;
         }
     }
@@ -1212,6 +1496,10 @@ int main (int argc, char** argv)
             "test_init_osca_grain_empty.png",
             "test_init_osca_grain_loaded.png",
             "test_init_osca_wavetable_list.png",
+            "test_init_osca_wavetable_categories.png",
+            "test_init_osca_wavetable_category.png",
+            "test_init_osca_wavetable_file_selector.png",
+            "test_init_osca_wavetable_file_marked.png",
             "test_init_osca_warp_list.png",
             "test_init_osca_route.png",
             "test_init_osca_unison.png",
@@ -1222,6 +1510,8 @@ int main (int argc, char** argv)
             "test_init_filter1_model_formant.png",
             "test_init_filter1_model_comb.png",
             "test_init_filter1_style_list.png",
+            "test_init_filter1_style_list_classic.png",
+            "test_init_filter1_style_list_serum.png",
             "test_init_filter1_route.png",
             "test_init_filter_dual_parallel.png",
             "test_init_filter_dual_serial.png",
@@ -1245,6 +1535,28 @@ int main (int argc, char** argv)
             "test_init_lfo_editor_tool_flat.png",
             "test_init_lfo_editor_tool_ramp_up.png",
             "test_init_lfo_editor_tool_ramp_down.png",
+            "test_init_lfo_editor_marker_loop.png",
+            "test_init_lfo_editor_marker_start.png",
+            "test_init_lfo_editor_marker_freerun.png",
+            "test_init_lfo_editor_mod_bars.png",
+            "test_init_lfo_editor_select_rubber.png",
+            "test_init_lfo_editor_select_done.png",
+            "test_init_lfo_editor_soft.png",
+            "test_init_lfo_editor_bend.png",
+            "test_init_lfo_editor_shapes_list.png",
+            "test_init_lfo_editor_shapes_factory.png",
+            "test_init_lfo_editor_more_list.png",
+            "test_init_lfo_editor_more_edit.png",
+            "test_init_lfo_editor_more_copy.png",
+            "test_init_lfo_editor_more_copy_lfo.png",
+            "test_init_lfo_editor_save_name.png",
+            "test_init_lfo_editor_saved.png",
+            "test_init_lfo_editor_shapes_list_saved.png",
+            "test_init_lfo_editor_shapes_mine.png",
+            "test_init_lfo_editor_confirm_replace.png",
+            "test_init_lfo_editor_delete_which.png",
+            "test_init_lfo_editor_pointmod_empty.png",
+            "test_init_lfo_editor_pointmod.png",
             "test_init_mod_slot_detail.png",
             "test_init_mod_source_picker_groups.png",
             "test_init_mod_source_picker_group1.png",
@@ -1267,6 +1579,7 @@ int main (int argc, char** argv)
             "test_init_fx_gallery_add.png",
             "test_init_fx_param_choice_popup.png",
             "test_init_master_main.png",
+            "test_init_master_pad_press.png",
             "test_init_master_tuning_mpe.png",
             "test_init_voice_row_pan.png",
             "test_init_voice_row_detune.png",

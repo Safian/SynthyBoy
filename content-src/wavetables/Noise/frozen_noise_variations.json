@@ -1,0 +1,114 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Frozen Noise Variations",
+ "category": "Noise",
+ "description": "Four different frozen noises (seeds 11 to 14) cross faded one into the next: the texture changes character while the colour stays the same.",
+ "frames": 64,
+ "seed": "frozen_noise_variations",
+ "source": {
+  "type": "mix",
+  "params": {
+   "g1": {
+    "law": "keys",
+    "points": [
+     [
+      0,
+      1
+     ],
+     [
+      0.34,
+      0
+     ]
+    ],
+    "ease": "smooth"
+   },
+   "g2": {
+    "law": "keys",
+    "points": [
+     [
+      0,
+      0
+     ],
+     [
+      0.34,
+      1
+     ],
+     [
+      0.67,
+      0
+     ]
+    ],
+    "ease": "smooth"
+   },
+   "g3": {
+    "law": "keys",
+    "points": [
+     [
+      0.34,
+      0
+     ],
+     [
+      0.67,
+      1
+     ],
+     [
+      1,
+      0
+     ]
+    ],
+    "ease": "smooth"
+   },
+   "g4": {
+    "law": "keys",
+    "points": [
+     [
+      0.67,
+      0
+     ],
+     [
+      1,
+      1
+     ]
+    ],
+    "ease": "smooth"
+   }
+  },
+  "inputs": [
+   {
+    "type": "noise",
+    "params": {
+     "tilt": 0.6,
+     "seed": 11,
+     "count": 300
+    }
+   },
+   {
+    "type": "noise",
+    "params": {
+     "tilt": 0.6,
+     "seed": 12,
+     "count": 300
+    }
+   },
+   {
+    "type": "noise",
+    "params": {
+     "tilt": 0.6,
+     "seed": 13,
+     "count": 300
+    }
+   },
+   {
+    "type": "noise",
+    "params": {
+     "tilt": 0.6,
+     "seed": 14,
+     "count": 300
+    }
+   }
+  ]
+ },
+ "post": {
+  "limit": 320
+ }
+}

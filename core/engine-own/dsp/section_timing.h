@@ -39,6 +39,8 @@ enum Id : int
     tickSub,              // Voice::tick: the sub oscillator
     tickAmp,              // Voice::tick: amplitude, velocity, the end of the note
     renderFinal,          // Voice::render: amplitude, velocity, declick and the add to the buses
+    libNoteStart,         // the library oscillators at the start of a note: LibOsc::beginType (the voices are started, the Spectral oscillator primes its frames here)
+    libReset,             // LibOsc::resetForNote: the players of the slot are stopped
     kCount
 };
 
@@ -48,7 +50,7 @@ inline const char* name (int id) noexcept
         "engine rest (snapshot, control tick, buses, master)", "voice tick: other", "voice tick: envelopes + LFOs", "voice tick: modulation matrix",
         "voice tick: oscillator update", "osc: morph cycle build", "voice render: routing / mix / output", "osc: wavetable read", "osc: morph read", "osc: warp + decimator",
         "osc: sample / granular / spectral", "sub oscillator", "noise", "filter 1", "filter 2", "fx: update", "fx: chorus", "fx: compressor", "fx: delay", "fx: distortion",
-        "fx: eq", "fx: fx filter", "fx: flanger", "fx: phaser", "fx: reverb", "fx: hyper / dimension", "fx: utility", "fx: bode", "fx: convolve", "fx: splitters", "fx: pool slots", "voice tick: oscillator parameters", "voice tick: filter settings", "voice tick: sources", "voice tick: sub", "voice tick: amplitude", "voice render: amplitude / velocity / output" };
+        "fx: eq", "fx: fx filter", "fx: flanger", "fx: phaser", "fx: reverb", "fx: hyper / dimension", "fx: utility", "fx: bode", "fx: convolve", "fx: splitters", "fx: pool slots", "voice tick: oscillator parameters", "voice tick: filter settings", "voice tick: sources", "voice tick: sub", "voice tick: amplitude", "voice render: amplitude / velocity / output", "osc: library note start (priming)", "osc: library reset for a note" };
     return id >= 0 && id < kCount ? kNames[id] : "?";
 }
 

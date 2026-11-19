@@ -258,8 +258,9 @@ int main()
             in.live = &lv;
             in.nowMs = 0.0;
             v.update (in);
-            const int vi = legacy::kNumViews - 4 + idx;   // the Play views of the legacy table are the last three
-            check (std::string (legacy::kViews[vi].name) == "play" + std::to_string (idx) && legacy::kViews[vi].kind == layout::kKindPlay && legacy::kViews[vi].index == idx, "the layout's last three views are play1 .. play3");
+            const int vi = legacy::kNumViews - 4 + 1;   // the Play view of the (frozen, older) legacy table: its play1 (the current layout has the ONE Play view, play1; `idx` is the third whose Q group is the active one)
+            check (std::string (legacy::kViews[vi].name) == "play1" && legacy::kViews[vi].kind == layout::kKindPlay && std::string (v.name()) == "play1", "the Play view is named play1 whatever third is the active one"
+                   " (the layout has one Play view)");
             Rect r;
             check (v.regionOverride (r) && r.w == PlayView::kW && r.h == PlayView::kH && r.y == 0 && r.w == 1280 && r.h == 800, "the Play view's region is the whole screen");
             check (v.valid(), "the Play view has data after one update");

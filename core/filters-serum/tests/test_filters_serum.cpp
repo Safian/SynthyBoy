@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -453,10 +454,95 @@ TEST (serum_filters_model_style_table_reaches_every_type_exactly_once)
         CHECK_EQ (hits[static_cast<size_t> (t)], 1);
     CHECK_EQ (serumModelStyleCount (7), 0);
     CHECK_EQ (serumModelStyleCount (27), 0);
+    // the query of the UI: the styles a model really has (classic models 0 .. 7, then the Serum table)
+    const int kExpected[8] = { 6, 6, 6, 6, 2, 3, 6, 2 };
+    for (int model = 0; model < kFirstSerumModel; ++model)
+        CHECK_EQ (filterModelStyleCount (model), kExpected[model]);
+    for (int model = kFirstSerumModel; model <= kLastSerumModel; ++model)
+        CHECK_EQ (filterModelStyleCount (model), serumModelStyleCount (model));
+    CHECK_EQ (filterModelStyleCount (-1), 0);
+    CHECK_EQ (filterModelStyleCount (27), 0);
     // the names of the new models' styles
     CHECK (std::string (getFilterTypeName (serumFilterTypeOf (22, 4))) == "High 12");
     CHECK (std::string (getFilterTypeName (serumFilterTypeOf (23, 3))) == "BPN");
     CHECK (std::string (getFilterTypeName (serumFilterTypeOf (24, 8))) == "Phs HL");
     CHECK (std::string (getFilterTypeName (serumFilterTypeOf (25, 11))) == "Dist.Comb 2 BP");
     CHECK (std::string (getFilterTypeName (serumFilterTypeOf (26, 5))) == "Exp BPF");
+
+    // filterModelStyleNames and filterModelStyleName queries
+    CHECK (filterModelStyleNames (-1) == nullptr);
+    CHECK (filterModelStyleNames (27) == nullptr);
+    CHECK (std::string (filterModelStyleName (-1, 0)).empty());
+    CHECK (std::string (filterModelStyleName (27, 0)).empty());
+
+    for (int model = 0; model <= kLastSerumModel; ++model)
+    {
+        const int cnt = filterModelStyleCount (model);
+        CHECK (cnt > 0);
+        const char* const* names = filterModelStyleNames (model);
+        CHECK (names != nullptr);
+        for (int s = 0; s < cnt; ++s)
+        {
+            CHECK (names[s] != nullptr);
+            const char* name = filterModelStyleName (model, s);
+            CHECK (name != nullptr && name[0] != '\0');
+            CHECK_EQ (std::string (name), std::string (names[s]));
+            if (model >= kFirstSerumModel)
+            {
+                const char* expected = getFilterTypeName (serumFilterTypeOf (model, s));
+                CHECK_EQ (std::string (name), std::string (expected));
+            }
+        }
+        CHECK (std::string (filterModelStyleName (model, -1)).empty());
+        CHECK (std::string (filterModelStyleName (model, cnt)).empty());
+    }
+
+    // Classic model style names verification
+    CHECK_EQ (std::string (filterModelStyleName (0, 0)), "Style A (12 dB)");
+    CHECK_EQ (std::string (filterModelStyleName (0, 5)), "Style F (shelf)");
+    CHECK_EQ (std::string (filterModelStyleName (4, 0)), "Style A (12 dB)");
+    CHECK_EQ (std::string (filterModelStyleName (4, 1)), "Style B (24 dB)");
+    CHECK_EQ (std::string (filterModelStyleName (5, 0)), "A-O-I-E");
+    CHECK_EQ (std::string (filterModelStyleName (5, 1)), "A-I-U-O");
+    CHECK_EQ (std::string (filterModelStyleName (5, 2)), "Vocal Tract");
+    CHECK_EQ (std::string (filterModelStyleName (6, 0)), "Comb");
+    CHECK_EQ (std::string (filterModelStyleName (7, 0)), "Positive Feedback");
+    CHECK_EQ (std::string (filterModelStyleName (7, 1)), "Negative Feedback");
+}
+
+// FilterParams::jump (quality.no_smoothing of the own engine): a step of the cutoff applies at once instead of through the one pole smoother
+TEST (serum_filters_jump_skips_the_cutoff_smoother)
+{
+    auto tail = [] (bool jump)
+    {
+        Filter f;
+        f.prepare (48000.0);
+        f.setType (static_cast<int> (FilterType::Low12));
+        FilterParams p;
+        p.cutoff = 18000.0f;
+        p.resonance = 0.1f;
+        f.setParams (p);
+        std::vector<float> in (64), out (64);
+        const float w = 2.0f * kPi * 5000.0f / 48000.0f;
+        for (int k = 0; k < 40; ++k) // settle on the open filter
+            for (int i = 0; i < 64; ++i)
+                f.process (std::sin (w * static_cast<float> (k * 64 + i)));
+        p.cutoff = 200.0f;
+        p.jump = jump;
+        f.setParams (p);
+        float peak = 0.0f;
+        // the states hold the 5 kHz tone when the cutoff drops, and a state variable filter rings them out at its new cutoff (about 40 samples to 1/e at 200 Hz): the window starts at
+        // sample 192, when that is over; the one pole smoother (270 samples to 1/e) still has the cutoff at several kHz there
+        for (int i = 0; i < 256; ++i)
+        {
+            const float y = f.process (std::sin (w * static_cast<float> (2560 + i)));
+            if (i >= 192)
+                peak = std::max (peak, std::fabs (y));
+        }
+        return peak;
+    };
+    const float smooth = tail (false), jumped = tail (true);
+    std::printf ("    5 kHz after a step of the cutoff to 200 Hz: peak %.3f with the smoother, %.3f with jump\n", static_cast<double> (smooth), static_cast<double> (jumped));
+    CHECK (smooth > 0.4f);
+    CHECK (jumped < 0.15f);
 }

@@ -1,0 +1,20 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Prime Harmonics",
+ "category": "Spectral",
+ "description": "Only prime-numbered harmonics (2 3 5 7 11 ...) plus the fundamental, more of them as the frames go on: an irregular, bell-ish spectrum that is still a pitch.",
+ "frames": 64,
+ "seed": "prime_harmonics",
+ "source": {
+  "type": "additive",
+  "params": {
+   "count": {
+    "law": "linear",
+    "from": 2,
+    "to": 120
+   },
+   "rolloff": 0.8,
+   "mask": "prime"
+  }
+ }
+}

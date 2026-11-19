@@ -1,0 +1,28 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Random Metal Morph",
+ "category": "Metallic",
+ "description": "Six seeded random sets of 14 inharmonic partials (5th to 150th harmonic) cross faded one into the next: an anvil, a pipe, a can, each blending into the following.",
+ "frames": 64,
+ "seed": "random_metal_morph",
+ "source": {
+  "type": "partials",
+  "params": {
+   "set": "random",
+   "keys": 6,
+   "pos": {
+    "law": "linear",
+    "from": 0,
+    "to": 5
+   },
+   "count": 14,
+   "lo": 5,
+   "hi": 150,
+   "rolloff": 0.7,
+   "seed": 11
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

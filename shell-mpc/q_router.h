@@ -36,9 +36,9 @@ public:
     // (Q 1 of the Tune group), kSem: what is left inside the octave (Q 2). transpose = 12 * oct + sem; the two knobs no longer do the same thing.
     static constexpr int kModeShift = 16, kIndexMask = 0xffff;
     static constexpr int kPlain = 0, kOct = 1, kSem = 2;
-    /** kVirtual: the target is no parameter but a VIRTUAL value of the plugin-drawn page (the index is its id 0 .. kNumVirtual - 1: the values of the LFO shape editor). The page tells the router the value the target has
+    /** kVirtual: the target is no parameter but a VIRTUAL value of the plugin-drawn page (the index is its id 0 .. kNumVirtual - 1: the values of the LFO shape editor and of its point modulation page). The page tells the router the value the target has
         now (setVirtualValue); a write of the host to the Q proxy is kept for the page (takeVirtual) and not written to any parameter. target (q) is none for it: every table index code ignores it. */
-    static constexpr int kVirtual = 3, kNumVirtual = 8;
+    static constexpr int kVirtual = 3, kNumVirtual = 10;   // 0 .. 7 the LFO editor page (LfoUi::kVirt*), 8 and 9 its point modulation page; the other pages use 0 and 1
     static constexpr int encode (int tableIndex, int mode) noexcept { return tableIndex < 0 ? kNone : (tableIndex | (mode << kModeShift)); }
     static int indexOf (int encoded) noexcept { return encoded < 0 ? kNone : (encoded & kIndexMask); }
     static int modeOf (int encoded) noexcept { return encoded < 0 ? kPlain : (encoded >> kModeShift); }
@@ -63,10 +63,17 @@ public:
 
     /** The slot block (0: the active group, 1 .. 3: the next groups in reading order, wrapping, each group once) a group of a page with `nGroups` groups gets when group `active` is the active one; -1 when the
         group has no block (more than four groups) or the arguments are out of range. Slots 4 * block .. 4 * block + 3 are its four knobs. */
+    /** The device has 16 Q-Link knobs (the MPC XL): a page whose groups all fit (at most four) keeps its slots where they are whatever group a touch made the active one: nothing re-orders under the player's hand. The
+        probe is the UI library's device flag (ui::QGroup::wideDevice, set once at start; q_publish.h connects the two): the router itself has no state of a device. A page of more than four groups pages as before. */
+    using Probe = bool (*) ();
+    static Probe& wideProbe() noexcept { static Probe p = nullptr; return p; }
+    static bool wide() noexcept { return wideProbe() != nullptr && wideProbe()(); }
     static int blockOfGroup (int nGroups, int active, int group) noexcept
     {
         if (nGroups <= 0 || active < 0 || active >= nGroups || group < 0 || group >= nGroups)
             return -1;
+        if (wide() && nGroups <= kGroups)
+            active = 0;
         const int k = (group - active + nGroups) % nGroups;
         return k < kGroups ? k : -1;
     }
@@ -79,6 +86,8 @@ public:
             out[i] = kNone;
         if (nGroups <= 0 || active < 0 || active >= nGroups)
             return 0;
+        if (wide() && nGroups <= kGroups)
+            active = 0;   // the XL: the groups of a page that fits the sixteen knobs stay on their knobs
         const int blocks = std::min (nGroups, kGroups);
         for (int k = 0; k < blocks; ++k)
             targetsOf ((active + k) % nGroups, out + k * kGroupSize);

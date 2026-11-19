@@ -19,6 +19,7 @@ struct FilterSettings
     int model = 3, style = 0;
     float cutoffHz = 12000.0f, resonance = 0.2f, drive = 0.0f, blend = 0.0f, mix = 1.0f, var = 0.5f;
     bool clean = false;
+    bool noSmoothing = false;             // quality.no_smoothing: the Serum models' cutoff / resonance smoothing is skipped
     bool fast = false;                    // tier low: cheaper tanh in the classic models
     bool scalarOnly = false;              // measurements (setOwnSavingsOff): the two sides of a Serum model run one after the other also where a pair kernel exists
     float cutoffHzR = -1.0f, level = 1.0f, driveDb = 0.0f, combOffset = 42.0f, formantX = 0.5f, formantY = 0.5f, formantRes = 0.85f, formantSpread = 0.0f, formantTranspose = 0.0f;
@@ -124,6 +125,7 @@ public:
         p.var = clamp01 (morph >= 0.0f ? morph : s.var);
         p.blend = clamp01 (s.blend);
         p.mix = clamp01 (s.mix);
+        p.jump = s.noSmoothing;
         p.coefHold = s.fast ? 4 : 1; // tier low: the coefficients follow the smoothed cutoff every fourth sample (the memo of the transcendental functions then hits)
         left.setParams (p);
         if (s.cutoffHzR > 0.0f)
@@ -231,25 +233,45 @@ public:
                 }
             }
         }
-        bool runaway = false;
-        for (int k = 0; k < n; ++k)
-            runaway = runaway || !(std::fabs (outL[k]) < 200.0f) || !(std::fabs (outR[k]) < 200.0f);
-        if (runaway)
+        if (scalarOnly || trim != 1.0f)
         {
-            left.reset();
-            right.reset();
-            std::fill (outL, outL + n, 0.0f);
-            std::fill (outR, outR + n, 0.0f);
+            // the loops as they were (measurements: setOwnSavingsOff, kOwnSavingVectorFilters), and the general form for a trim other than 1
+            bool runaway = false;
+            for (int k = 0; k < n; ++k)
+                runaway = runaway || !(std::fabs (outL[k]) < 200.0f) || !(std::fabs (outR[k]) < 200.0f);
+            if (runaway)
+            {
+                runaway_ (outL, outR, n);
+                return;
+            }
+            for (int k = 0; k < n; ++k)
+            {
+                outL[k] = std::clamp (outL[k] * trim, -16.0f, 16.0f);
+                outR[k] = std::clamp (outR[k] * trim, -16.0f, 16.0f);
+            }
             return;
         }
-        for (int k = 0; k < n; ++k)
+        // the same in vector form (CPU review F6): the runaway test on the bit patterns (the decision of the loop above for every input), then the limit. After the
+        // test every value is finite and below 200 in magnitude, where vmax / vmin give what std::clamp gives (signed zero included), and x * 1 is x.
+        if (!simd::allAbsBelow (outL, outR, n, 200.0f))
         {
-            outL[k] = std::clamp (outL[k] * trim, -16.0f, 16.0f);
-            outR[k] = std::clamp (outR[k] * trim, -16.0f, 16.0f);
+            runaway_ (outL, outR, n);
+            return;
         }
+        simd::clampTo (outL, -16.0f, 16.0f, n);
+        simd::clampTo (outR, -16.0f, 16.0f, n);
     }
 
 private:
+    /** A runaway (a value not finite or beyond 200): the filters are reset and the block is silence. */
+    void runaway_ (float* outL, float* outR, int n) noexcept
+    {
+        left.reset();
+        right.reset();
+        std::fill (outL, outL + n, 0.0f);
+        std::fill (outR, outR + n, 0.0f);
+    }
+
     filters::Filter left, right;
     ClassicFilter cl[2];
     ClassicParams prevP, curP, prevPR, curPR;

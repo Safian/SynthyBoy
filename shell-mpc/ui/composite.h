@@ -47,11 +47,12 @@ public:
 
     void place (const Rect& r) override { rect_ = r; layout(); }
     void setEnabled (bool e) override { enabled_ = e; cap_ = nullptr; syncKids(); }
+    void setInactive (bool i) override { inactive_ = i; for (int k = 0; k < n_; ++k) kids_[k]->setInactive (i); }
     void setQ (bool frame, int index) override { qFrame_ = frame; qIndex_ = frame ? index : 0; for (int i = 0; i < n_; ++i) kids_[i]->setQ (frame, 0); }
 
     void draw (gpu::SceneBuilder& sb) const override
     {
-        Pen pen (sb, enabled_);
+        Pen pen (sb, enabled_, inactive_);
         {
             Cell cell (sb, rect_);
             drawUnder (pen);
@@ -163,7 +164,7 @@ public:
     /** Only CRS (the full screen of the sub oscillator: its OCT is in the top band); vertical variant only. */
     void setCrsOnly (bool b) { crsOnly_ = b; applyVariant(); layout(); }
     bool isCrsOnly() const noexcept { return crsOnly_; }
-    /** The noise: PITCH (the CRS field under another name), FINE and the key tracking (three rows that fill the height); vertical variant only. */
+    /** The noise: PITCH (the CRS field under another name), FINE and the key tracking (three rows that fill the height, or one row of three: setNoiseRow); vertical variant only. */
     void setNoise (bool n)
     {
         noise_ = n;
@@ -174,12 +175,15 @@ public:
         layout();
     }
     bool isNoise() const noexcept { return noise_; }
+    /** The noise's three fields side by side in ONE row (PITCH, FINE, KEY TRACK: the generated noise's TUNE block at the bottom, the same row as its NOISE block); false (the default): three rows one above the other (the TUNE column beside the display of the sample noise). Noise only. */
+    void setNoiseRow (bool b) { noiseRow_ = b; layout(); }
+    bool isNoiseRow() const noexcept { return noiseRow_; }
     static constexpr int kRowH = 56;
     bool isShort() const noexcept { return short_; }
     Size minSize() const override
     {
         if (vertical_)
-            return crsOnly_ ? Size { 80, kRowH } : noise_ ? Size { 2 * 80 + kGap, 2 * kRowH + kQLane } : short_ ? Size { 2 * 80 + kGap, kRowH } : Size { 2 * 80 + kGap, 3 * kRowH + 2 * kQLane };
+            return crsOnly_ ? Size { 80, kRowH } : noise_ ? (noiseRow_ ? Size { 3 * 80 + 2 * kGap, kRowH } : Size { 80, 3 * kRowH + 2 * kQLane }) : short_ ? Size { 2 * 80 + kGap, kRowH } : Size { 2 * 80 + kGap, 3 * kRowH + 2 * kQLane };
         return short_ ? Size { 2 * 80 + kGap, 56 } : Size { 4 * 80 + 72 + 4 * kGap, 56 };
     }
 
@@ -196,11 +200,20 @@ protected:
         if (vertical_)
         {
             // two columns: rows of two fields (OCT SEM, FIN CRS; noise: PITCH FINE) and the switch across the width; the lane of the Q index chips (kQLane) between the rows; the rows fill the height
+            if (noise_ && noiseRow_)
+            {
+                // the noise in one row: three equal cells side by side, as tall as the row (the controls of one row have one height, so that their tops and index chips stand on one line)
+                const int w3 = std::max (0, (rect_.w - 2 * kGap) / 3);
+                crs.place ({ rect_.x, rect_.y, w3, rect_.h });
+                fin.place ({ rect_.x + w3 + kGap, rect_.y, w3, rect_.h });
+                track.place ({ rect_.x + 2 * (w3 + kGap), rect_.y, std::max (0, rect_.w - 2 * (w3 + kGap)), rect_.h });
+                return;
+            }
             struct Line { Component* a; Component* b; };
             Line lines[3];
             int n = 0;
             if (crsOnly_) lines[n++] = { &crs, nullptr };
-            else if (noise_) { lines[n++] = { &crs, &fin }; lines[n++] = { &track, nullptr }; }
+            else if (noise_) { lines[n++] = { &crs, nullptr }; lines[n++] = { &fin, nullptr }; lines[n++] = { &track, nullptr }; }
             else if (short_) lines[n++] = { &oct, &crs };
             else { lines[n++] = { &oct, &sem }; lines[n++] = { &fin, &crs }; lines[n++] = { &track, &more }; }
             const int H = std::max (n * kRowH, rect_.h - (n - 1) * kQLane);   // the height of the rows together
@@ -232,7 +245,7 @@ protected:
         }
     }
     bool short_;
-    bool vertical_ = false, crsOnly_ = false, noise_ = false;
+    bool vertical_ = false, crsOnly_ = false, noise_ = false, noiseRow_ = false;
 };
 
 // ===============================================================================================================================================================
@@ -259,7 +272,7 @@ protected:
 // ===============================================================================================================================================================
 /** 9. TypeBar: the strip under the oscillator display, whose content depends on the oscillator type: 1 to 4 slots left to right in a fixed height rectangle. The slots of the preset are the
     filled ones and form ONE Q group (`group`: the filled slots in order; empty slots draw nothing and take no Q-Link). The presets are DATA (a table of BarItem, the same mechanism as the
-    KnobPanel's): wavetable (the frame number, the phase, RAND, the phase memory), granular (crossfade, grain window, loop mode, unison), sub (the phase), multisample (VEL TRACK toggle,
+    KnobPanel's): wavetable (FRAME, PHASE, RAND, MAP), granular (crossfade, grain window, loop mode, unison), sub (the phase), multisample (VEL TRACK toggle,
     its amount, RAND), noise (STEREO). The ids of the slots are given by the owner (`slot (i)->setId`). The former PhaseRow is the wavetable preset of this component. */
 enum class BarKind : uint8_t { Frame, Phase, Rand, Number, Stepper, GrainWindow, UnisonDetail, Toggle, Envelope, ToggleNumber, Page };   // Page: a button that opens a detail page of the type (its label)
 struct BarItem { BarKind kind; const char* label; uint8_t weight; };
@@ -565,11 +578,21 @@ public:
     MenuButton dropdown { "", MenuButton::Icon::Down };
 
     SourcePicker() { addKid (stepper); addKid (dropdown); setPrimary (&stepper); }
-    Size minSize() const override { return { Stepper::kMinW + kGap + 56, 56 }; }
+    Size minSize() const override { return { stepper.minSize().w + (compact_ ? 0 : kGap + 56), 56 }; }   // the stepper's own minimum (a narrower one in the compact row of the Play page)
+    /** The compact variant (the row of the Play page, where PAN and LEVEL stand beside it): no list button, the stepper has the whole width so that a table name has the room it needs; a tap on the name (`listable`) is the list / the browser. */
+    void setCompact (bool c) { compact_ = c; show (dropdown, ! c); layout(); }
+    bool compact() const noexcept { return compact_; }
 
 protected:
+    bool compact_ = false;
     void layout() override
     {
+        if (compact_)
+        {
+            stepper.place (rect_);
+            dropdown.place ({});
+            return;
+        }
         Rect r[2];
         const int fixed[2] = { 0, 56 }, weight[2] = { 1, 0 };
         layoutRow (rect_, fixed, weight, 2, kGap, r);
@@ -589,7 +612,7 @@ inline const char* instanceName (OscInstance i) noexcept { static const char* co
 class BasicControls : public Composite
 {
 public:
-    PictogramSelector selector;
+    TypeSelector selector;   // the type / waveform: the row of cells (the full screen) or, stacked, a drop-down (the Play page's third)
     Stepper noiseType;
     SourcePicker source;
     NumberField oct { "OCT", NumberField::Format::IntSigned };
@@ -642,7 +665,15 @@ public:
     OscInstance instance() const noexcept { return inst_; }
     OscKind kind() const noexcept { return kind_; }
     /** The stacked arrangement is the compact view (vertical knobs: the dial over the name and the value); the row is the top band of the full screen (side knobs: the dial at the left, the name and the value beside it). */
-    void setStacked (bool s) { stacked_ = s; pan.state.side = level.state.side = filter.state.side = ! s; layout(); }
+    void setStacked (bool s)
+    {
+        stacked_ = s;
+        pan.state.side = level.state.side = filter.state.side = ! s;
+        selector.dropdown = s;
+        source.stepper.minWidth = s ? 150 : Stepper::kMinW;   // the compact row holds the table stepper, PAN and LEVEL side by side: about 200 px for the stepper alone (no list button: the name is the list), 140 px of text
+        source.setCompact (s);
+        layout();
+    }
     bool stacked() const noexcept { return stacked_; }
     /** The ids of the parts from base: selector, source stepper, dropdown, OCT, FILTER, noise type, PAN, LEVEL = base .. base + 7 (the same call in every view gives the same ids). */
     void assignIds (int base)
@@ -656,7 +687,7 @@ public:
         const Component* second = inst_ == OscInstance::Noise ? static_cast<const Component*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<const Component*> (&oct) : &source);
         const Size a = first->minSize(), b = second->minSize(), p = pan.minSize();
         if (stacked_)
-            return inst_ == OscInstance::Noise ? Size { std::max (a.w, 3 * p.w + 2 * kGap), a.h + p.h + kQLane } : Size { std::max ({ a.w, b.w, 2 * p.w + kGap }), a.h + b.h + p.h + 2 * kQLane };
+            return inst_ == OscInstance::Noise ? Size { std::max (a.w, 3 * p.w + 2 * kGap), a.h + p.h + kQLane } : Size { std::max ({ a.w + b.w + kGap, 2 * Size { 172, 72 }.w + kGap }), std::max (a.h, b.h) + kQLane + 72 };
         return { a.w + b.w + 2 * p.w + 3 * kGap, std::max ({ a.h, b.h, p.h }) };
     }
     void setEnabled (bool e) override { Composite::setEnabled (e); }
@@ -668,6 +699,8 @@ protected:
         Component* second = inst_ == OscInstance::Noise ? static_cast<Component*> (&filter) : (inst_ == OscInstance::Sub ? static_cast<Component*> (&oct) : &source);
         if (stacked_ && inst_ == OscInstance::Noise)
         {
+            filter.state.side = pan.state.side = level.state.side = false;   // three vertical knobs in one row (a third is too narrow for three side knobs)
+            filter.state.dialMax = pan.state.dialMax = level.state.dialMax = 0;
             // the noise: the type stepper, then FILTER, PAN and LEVEL as one row of three knobs of the same size
             const int h1 = first->minSize().h;
             first->place ({ rect_.x, rect_.y, rect_.w, h1 });
@@ -679,13 +712,15 @@ protected:
         }
         if (stacked_)
         {
-            const int h1 = first->minSize().h, h2 = second->minSize().h, h3 = std::max (0, rect_.h - h1 - h2 - 2 * kQLane);
-            first->place ({ rect_.x, rect_.y, rect_.w, h1 });
-            second->place ({ rect_.x, rect_.y + h1 + kQLane, rect_.w, h2 });
-            Rect r[2];
-            const int fixed[2] = { 0, 0 }, weight[2] = { 1, 1 };
-            layoutRow ({ rect_.x, rect_.y + h1 + h2 + 2 * kQLane, rect_.w, h3 }, fixed, weight, 2, kGap, r);
-            pan.place (r[0]); level.place (r[1]);
+            // two rows of the same height, the rows of the envelope third's knobs: row 1 the two selectors side by side (the type as a drop-down at the left, the table / content stepper or OCT at the right, 72 px high, in the middle of
+            // the row), row 2 PAN and LEVEL as the side variant of the knob (the dial at the left, the name and the value beside it: the size of the envelope's knobs, dial at most 96 px); the lane of the Q chips between the rows
+            const int rowH = std::max (0, (rect_.h - kQLane) / 2), row2Y = rect_.y + rowH + kQLane, cw = (rect_.w - kGap) / 2, h1 = std::min (rowH, 72), y1 = rect_.y + (rowH - h1) / 2;
+            first->place ({ rect_.x, y1, cw, h1 });
+            second->place ({ rect_.x + cw + kGap, y1, rect_.w - cw - kGap, h1 });
+            pan.state.side = level.state.side = true;
+            pan.state.dialMax = level.state.dialMax = 96;
+            pan.place ({ rect_.x, row2Y, cw, rowH });
+            level.place ({ rect_.x + cw + kGap, row2Y, rect_.w - cw - kGap, rowH });
             return;
         }
         Rect r[4];

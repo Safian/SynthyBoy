@@ -431,6 +431,8 @@ public:
     Knob spread { "SPREAD" };
     Knob stereoRouting { "STEREO" };   // master.stereo_routing is a continuous percentage: a knob, not a list
     LedList voiceOverride;
+    LedToggle outputLimiter;   // the output limiter of the plugin (a shell setting, not an engine parameter: no Q group); in the strip under the knobs, outside the Q frame
+    LedToggle noSmoothing, oversample4x;   // QUALITY: quality.no_smoothing and quality.oversample_4x (engine parameters, touch only: every Q slot of the page is taken), in the same strip
     // PITCH
     Knob tune { "TUNE" };
     NumberField transpose, bendUp, bendDown;
@@ -486,6 +488,9 @@ public:
         stealPriority.setTitle ("STEAL"); stealPriority.state.titleInLane = true;
         velocityTrack.state.format = NumberField::Format::IntSigned;
         velocityTrack.setLabel ("VEL TRACK");
+        outputLimiter.setLabel ("LIMIT");
+        noSmoothing.setLabel ("NO SMOOTHING");
+        oversample4x.setLabel ("OVERSAMPLE 4X");
         padPressure.setLabel ("PAD PRESS");
         padAmount.state.format = NumberField::Format::IntPlain;
         padAmount.setLabel ("PAD %");
@@ -632,7 +637,7 @@ public:
 protected:
     std::vector<Component*> sideMainComponents()
     {
-        return { &volume, &meters, &spread, &stereoRouting, &voiceOverride, &tune, &transpose, &bendUp, &bendDown, &bendLink, &polyphony, &legato, &polyLegato, &phaseLegato, &sameNote, &stealPriority, &velocityTrack, &voiceMeter, &padPressure, &padAmount,
+        return { &volume, &meters, &spread, &stereoRouting, &voiceOverride, &outputLimiter, &noSmoothing, &oversample4x, &tune, &transpose, &bendUp, &bendDown, &bendLink, &polyphony, &legato, &polyLegato, &phaseLegato, &sameNote, &stealPriority, &velocityTrack, &voiceMeter, &padPressure, &padAmount,
                  &portaTime, &portaSlope, &portaAlways, &portaScaled, &portaCurve };
     }
     std::vector<Component*> sideTuningComponents()
@@ -647,15 +652,22 @@ protected:
         sideTuning.place ({ rect_.x + 468, rect_.y + 4, 220, 56 });
 
         // ---- side MAIN
-        {   // OUTPUT: the meters (the scale in a column of its own) at the left, the three knobs VOLUME, SPREAD, STEREO (one size) and the voice override as a LED list at the right; the group of four stands on one line
+        {   // OUTPUT: the meters (the scale in a column of its own) at the left; at the right the Q group of four on one line (the three knobs VOLUME, SPREAD, STEREO, one size, and the voice override as a LED list) over a strip of three LED switches
+            // that are outside the Q frame (touch only): LIMIT (the plugin's output limiter) and the QUALITY pair NO SMOOTHING, OVERSAMPLE 4X (quality.* of the engine; the caption QUALITY stands in front of the pair)
             const Rect in = inner (0);
-            const int mw = 100;
+            const int mw = 100, stripH = th, upperH = std::max (th, in.h - stripH - 4);
             meters.place ({ in.x, in.y + 4, mw, in.h - 8 });
             const int lw = 150, kx = in.x + mw + 8, kw = (in.right() - lw - g - kx - 2 * g) / 3;
-            volume.place ({ kx, in.y, kw, in.h });
-            spread.place ({ kx + kw + g, in.y, kw, in.h });
-            stereoRouting.place ({ kx + 2 * (kw + g), in.y, kw, in.h });
-            voiceOverride.place ({ in.right() - lw, in.y, lw, std::min (in.h, 2 * 64) });
+            volume.place ({ kx, in.y, kw, upperH });
+            spread.place ({ kx + kw + g, in.y, kw, upperH });
+            stereoRouting.place ({ kx + 2 * (kw + g), in.y, kw, upperH });
+            voiceOverride.place ({ in.right() - lw, in.y, lw, std::min (upperH, 2 * 64) });
+            const int sy = in.bottom() - stripH;
+            const int w0 = std::max (LedToggle::widthFor (outputLimiter.state.label), 96), w1 = LedToggle::widthFor (noSmoothing.state.label), w2 = LedToggle::widthFor (oversample4x.state.label);
+            outputLimiter.place ({ kx, sy, w0, stripH });
+            qualityCaption_ = { kx + w0 + 3 * g, sy, 70, stripH };
+            noSmoothing.place ({ qualityCaption_.right(), sy, w1, stripH });
+            oversample4x.place ({ qualityCaption_.right() + w1 + g, sy, std::min (w2, std::max (0, in.right() - (qualityCaption_.right() + w1 + g))), stripH });
         }
         {   // PITCH: one row of four cells at one height (TUNE as a medium knob with its text beside it, TRANSPOSE, BEND UP, BEND DOWN: PITCH 1 Q group), LINK as a LED toggle under the two bend fields (PITCH 2 Q group)
             const Rect in = inner (1);
@@ -745,10 +757,13 @@ protected:
                 const Rect r = blockRect (b);
                 p.textLeft ({ r.x + kBlockPad + 6, r.y + 3, std::max (0, r.w - 20), 16 }, blockName (b), T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
             }
+        if (side_ == SideMain && ! qualityCaption_.empty())
+            p.textLeft (qualityCaption_, "QUALITY", T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
     }
 
 private:
     int side_ = SideMain, activeGroup_ = 0;
+    Rect qualityCaption_;   // the small caption of the QUALITY pair in the OUTPUT block
 
     void buildGroups()
     {

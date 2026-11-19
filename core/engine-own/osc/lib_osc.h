@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <vector>
 
@@ -60,6 +61,8 @@ struct LibKeys
 
 /** Index of the keys of oscillator `osc` (0 .. 2). */
 const LibKeys& libKeys (int osc) noexcept;
+/** True once libKeys () has built its table (its first call runs snprintf and hashing: OwnEngine::prepare () makes it, so the audio thread never does). For the test. */
+bool libKeysBuilt() noexcept;
 
 /** Values of the keys of one oscillator at the end of a control period, read by the voice. */
 struct LibParams
@@ -79,6 +82,7 @@ struct LibParams
     int switchKey = -1;         // the last key switch of the instrument
     float fixedSemis = 0.0f;
     spectral::Scratch* scratch = nullptr;
+    bool referenceKernels = false;     // measurements (kOwnSavingContentKernels): the per sample reference code of the library oscillators
     uint32_t* chokeLatest = nullptr;   // [256] of this oscillator slot: the latest note sequence that started a zone of each group (engine wide for the slot)
     uint32_t* chokeCounter = nullptr;  // notes started on this slot
 };
@@ -89,6 +93,8 @@ public:
     static constexpr int kMaxU = WtOsc::kMaxVoices;
     static constexpr int kSpecU = 4;
     static constexpr int kSlots = multisample::kMaxLayerSlots;
+    /** Tests only (process wide): update () computes the pan law, the detune curve, the spread pan and the pitch ratios on every call, as before they were cached by their inputs. */
+    static void setLegacyCachesForTest (bool on) noexcept;
 
     LibOsc();
     ~LibOsc();
@@ -148,12 +154,25 @@ private:
     {
         float semis = 0.0f, det = 0.0f;
         float gPrevL = 0, gPrevR = 0, gL = 0, gR = 0;
+        float ratioSemis = std::numeric_limits<float>::quiet_NaN(), ratio = 1.0f;   // semitonesToRatio (semis), made again only when `semis` changes
     };
+    /** The libm results of update () by the inputs they were made for (a NaN input never matches): the pan law of the two channels, the detune curve and the spread pan of the lanes. Bit identical. */
+    struct UpdateCache
+    {
+        bool pan = false, shape = false, spread = false;
+        float panIn = 0.0f, panRightIn = 0.0f, panL = 1.0f, panR = 1.0f;
+        int shapeU = 0;
+        float shapeCurve = 0.0f, shape_[kMaxU] = {};
+        int spreadU = 0;
+        float spreadIn = 0.0f, spreadL[kMaxU] = {}, spreadR[kMaxU] = {};
+    };
+    float ratioOf (Unison& un) const noexcept;
     void beginType (int type) noexcept;
     void renderType (int type, int t0, int n, float* L, float* R, const float* const* cross) noexcept;
     float modulator (int warpType, int slot, const float* const* cross, int k, float& m) const noexcept;
 
     double sr = 48000.0;
+    float spectralGain_ = 1.0f;   // kSpectralGain scaled to the host rate (prepare ())
     int cur = 0, from = -1;
     int fadePos = 0, fadeTotal = 480;
     bool anyPlaying = false;
@@ -164,6 +183,7 @@ private:
     LibParams lp;
     int U = 1;
     Unison uni[kMaxU];
+    UpdateCache cache_;
     float tapSemis = 60.0f;
     Rng rng;
     float randomPerNote = 0.0f;
@@ -183,6 +203,7 @@ private:
     std::vector<float> filterGain;
     float lastCut = 1.0e9f, lastMix = 1.0e9f, lastFltPos = -1.0f;
     int lastFltTable = -1;
+    const Wavetable* heldFlt_ = nullptr;   // the built-in table the spectral filter of this oscillator played last (kept while a newly chosen one is being built)
     float fltX[257], fltY[257];
     int lastFilterOsc = -1;
     // Multisample

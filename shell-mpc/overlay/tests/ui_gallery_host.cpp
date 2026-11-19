@@ -145,6 +145,18 @@ public:
         content_ = c;
     }
     void setContent (std::shared_ptr<const synthyboy::StateContent> c) { content_ = std::move (c); }
+    /** A sample the state refers to (a pack, a long file name, no title) whose file is not there: the content reference without the data, and the engine's missing_content bit of the oscillator (`missingContent`). */
+    void addMissingSample (int osc, const std::string& file)
+    {
+        auto c = content_ ? std::make_shared<synthyboy::StateContent> (*content_) : std::make_shared<synthyboy::StateContent>();
+        synthyboy::ContentSample cs;
+        cs.osc = osc; cs.ref.pack = "gallery"; cs.ref.file = file;
+        c->samples.push_back (cs);
+        content_ = c;
+        missingBits |= 1u << (osc - 1);
+    }
+    unsigned missingContent() const noexcept override { return missingBits; }
+    unsigned missingBits = 0;
 
     static int idx (const std::string& key)
     {
@@ -207,6 +219,20 @@ public:
     bool haveLive = true;
     synthyboy::LiveValues liveValues;
 
+    bool padPressure (bool& on, float& percent) const noexcept override
+    {
+        on = padPressureOn;
+        percent = padPressurePercent;
+        return true;
+    }
+    void setPadPressure (bool on, float percent) noexcept override
+    {
+        padPressureOn = on;
+        padPressurePercent = percent;
+    }
+    bool padPressureOn = false;
+    float padPressurePercent = 35.0f;
+
 private:
     float v_[synthyboy::kMaxParams] = {};
     std::shared_ptr<const synthyboy::StateContent> content_;
@@ -266,8 +292,38 @@ void saveScene (const std::string& path, F&& draw, int w = 1280, int h = 800)
     compositeAndWritePng (path, im);
 }
 
-void savePlay (const std::string& path, int highlight, GalleryInst& inst, int w = 1280, int h = 800)
+inline std::string slugify (const std::string& s)
 {
+    std::string out;
+    for (char c : s)
+    {
+        if (c >= 'A' && c <= 'Z')
+            out.push_back (static_cast<char> (std::tolower (c)));
+        else if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
+            out.push_back (c);
+        else if (c == ' ' || c == '-' || c == '_')
+        {
+            if (! out.empty() && out.back() != '_')
+                out.push_back ('_');
+        }
+    }
+    while (! out.empty() && out.back() == '_')
+        out.pop_back();
+    return out;
+}
+
+void savePlay (const std::string& path, int highlight, GalleryInst& inst,
+               int oscSel = 2, int envSel = 1, int lfoSlot = 1,
+               int w = 1280, int h = 800, const std::function<void (PlayView&, UiStack&)>& act = nullptr)
+{
+    const int savedOsc = inst.playSelection (0);
+    const int savedEnv = inst.playSelection (1);
+    const int savedLfo = inst.playSelection (2);
+
+    inst.setPlaySelection (0, oscSel);
+    inst.setPlaySelection (1, envSel);
+    inst.setPlaySelection (2, lfoSlot >= 10 ? 1 : lfoSlot);
+
     PlayView pv (highlight, 0.0);
     UiStack stack;
     ViewInput in;
@@ -277,14 +333,28 @@ void savePlay (const std::string& path, int highlight, GalleryInst& inst, int w 
     in.live = inst.haveLive ? &inst.liveValues : nullptr;
     in.nowMs = 1000.0;
     pv.update (in);
+    if (lfoSlot >= 10 && pv.lfoUi() != nullptr)
+    {
+        pv.lfoUi()->select (lfoSlot, inst);
+    }
     in.nowMs = 1500.0;
     pv.update (in);
+    if (act)   // a touch on the page (the type list opened, ...), then the picture
+    {
+        act (pv, stack);
+        in.nowMs = 1600.0;
+        pv.update (in);
+    }
 
     uit::Image im;
     im.w = w; im.h = h;
     im.px.assign (static_cast<size_t> (w) * static_cast<size_t> (h), 0u);
     pv.render (im.px.data(), w, h);
     compositeAndWritePng (path, im);
+
+    inst.setPlaySelection (0, savedOsc);
+    inst.setPlaySelection (1, savedEnv);
+    inst.setPlaySelection (2, savedLfo);
 }
 
 template <class Ui>
@@ -347,14 +417,108 @@ void addEffect (GalleryRig<FxUi>& r, int type)
     r.tapAt (row.x + row.w / 2, row.y + row.h / 2);
 }
 
-void renderState (const std::string& outDir, const std::string& state, GalleryInst& baseInst)
+void renderState (const std::string& outDir, const std::string& state, GalleryInst& baseInst, const std::string& onlyPrefix = "")
 {
     std::printf ("Rendering state: %s ...\n", state.c_str());
 
+    auto shouldRender = [&] (const std::string& name) -> bool
+    {
+        if (onlyPrefix.empty())
+            return true;
+        if (state.rfind (onlyPrefix, 0) == 0)
+            return true;
+        const std::string full = state + "_" + name;
+        if (full.rfind (onlyPrefix, 0) == 0)
+            return true;
+        if (name.rfind (onlyPrefix, 0) == 0)
+            return true;
+        return false;
+    };
+
     // 1. Play 1-3
-    savePlay (outDir + "/" + state + "_play1.png", 1, baseInst);
-    savePlay (outDir + "/" + state + "_play2.png", 2, baseInst);
-    savePlay (outDir + "/" + state + "_play3.png", 3, baseInst);
+    if (shouldRender ("play1.png")) savePlay (outDir + "/" + state + "_play1.png", 1, baseInst);
+    // (one Play page since 2026-11-18: the play2 / play3 states are gone)
+
+    // (a0) the Play page (2026-11-18): oscillator A, Sub and Noise switched off (grey display and controls, the power button red), the selectors (carousels) at the first, a middle and the last entry of each third,
+    // the type drop-down closed (the compact views above) and open for A, Sub and Noise
+    {
+        struct Off { const char* name; const char* key; int sel; };
+        for (const Off& o : { Off { "osca", "osc1.on", playosc::kA }, Off { "sub", "sub.on", playosc::kSub }, Off { "noise", "noise.on", playosc::kNoise } })
+            if (shouldRender (std::string ("play1_off_") + o.name + ".png"))
+            {
+                GalleryInst off = baseInst;
+                off.set (o.key, 0.0f);
+                savePlay (outDir + "/" + state + "_play1_off_" + o.name + ".png", 1, off, o.sel, 1, 1);
+            }
+        const int oscSel[3] = { playosc::kSub, playosc::kB, playosc::kNoise }, envSel[3] = { 1, 3, 6 }, lfoSel[3] = { 1, 5, 14 };
+        const char* const pos[3] = { "first", "middle", "last" };
+        for (int i = 0; i < 3; ++i)
+            if (shouldRender (std::string ("play1_carousel_") + pos[i] + ".png"))
+                savePlay (outDir + "/" + state + "_play1_carousel_" + pos[i] + ".png", 1, baseInst, oscSel[i], envSel[i], lfoSel[i]);
+        struct Ty { const char* name; int sel; };
+        for (const Ty& t : { Ty { "osca", playosc::kA }, Ty { "sub", playosc::kSub }, Ty { "noise", playosc::kNoise } })
+            if (shouldRender (std::string ("play1_type_open_") + t.name + ".png"))
+                savePlay (outDir + "/" + state + "_play1_type_open_" + t.name + ".png", 1, baseInst, t.sel, 1, 1, 1280, 800,
+                          [&baseInst] (PlayView& pv, UiStack& st)
+                          {
+                              OscUi* o = pv.oscUi();
+                              if (o == nullptr) return;
+                              GalleryInst io = baseInst;
+                              const ui::Rect r = o->compact().basic.selector.rect();
+                              TouchEvent d; d.kind = TouchEvent::Down; d.x = r.x + r.w / 2; d.y = r.y + r.h / 2;
+                              TouchEvent u = d; u.kind = TouchEvent::Up;
+                              pv.onTouch (d, st, io, 1550.0);
+                              pv.onTouch (u, st, io, 1590.0);
+                          });
+    }
+
+    // (a1) the header band of the displays (2026-11-18): an envelope with long times (the curve runs to the right edge and up to the top under the band), an LFO with a lead strip (delay and rise: the strip is the top of the plot area),
+    // an oscillator A and a Noise whose picture lies below the band with the buttons in it (power, route F1, full screen), the Sub without a route button
+    {
+        if (shouldRender ("play1_env_long.png"))
+        {
+            GalleryInst g = baseInst;
+            g.set ("env1.attack", 3000.0f); g.set ("env1.decay", 8000.0f); g.set ("env1.release", 9000.0f);
+            savePlay (outDir + "/" + state + "_play1_env_long.png", 1, g, playosc::kA, 1, 1);
+        }
+        if (shouldRender ("play1_lfo_lead.png"))
+        {
+            GalleryInst g = baseInst;
+            g.set ("lfo1.delay", 400.0f); g.set ("lfo1.fade_in", 600.0f);
+            savePlay (outDir + "/" + state + "_play1_lfo_lead.png", 1, g, playosc::kA, 1, 1);
+        }
+    }
+
+    // (a) Play 1-3 for each of the five oscillator sources, envelope 1 and 6, and LFO 1, 10, R1
+    for (int p = 1; p <= 1; ++p)   // the one Play page
+    {
+        const std::string pstr = std::to_string (p);
+        // Oscillator sources: Sub, Osc A, Osc B, Osc C, Noise
+        if (shouldRender ("play" + pstr + "_src_sub.png"))
+            savePlay (outDir + "/" + state + "_play" + pstr + "_src_sub.png", p, baseInst, playosc::kSub, 1, 1);
+        if (shouldRender ("play" + pstr + "_src_osca.png"))
+            savePlay (outDir + "/" + state + "_play" + pstr + "_src_osca.png", p, baseInst, playosc::kA, 1, 1);
+        if (shouldRender ("play" + pstr + "_src_oscb.png"))
+            savePlay (outDir + "/" + state + "_play" + pstr + "_src_oscb.png", p, baseInst, playosc::kB, 1, 1);
+        if (shouldRender ("play" + pstr + "_src_oscc.png"))
+            savePlay (outDir + "/" + state + "_play" + pstr + "_src_oscc.png", p, baseInst, playosc::kC, 1, 1);
+        if (shouldRender ("play" + pstr + "_src_noise.png"))
+            savePlay (outDir + "/" + state + "_play" + pstr + "_src_noise.png", p, baseInst, playosc::kNoise, 1, 1);
+
+        // Envelopes 1 and 6
+        if (shouldRender ("play" + pstr + "_env1.png"))
+            savePlay (outDir + "/" + state + "_play" + pstr + "_env1.png", p, baseInst, playosc::kA, 1, 1);
+        if (shouldRender ("play" + pstr + "_env6.png"))
+            savePlay (outDir + "/" + state + "_play" + pstr + "_env6.png", p, baseInst, playosc::kA, 6, 1);
+
+        // LFO 1, 10, R1 (slot 10 in LfoUi is R1)
+        if (shouldRender ("play" + pstr + "_lfo1.png"))
+            savePlay (outDir + "/" + state + "_play" + pstr + "_lfo1.png", p, baseInst, playosc::kA, 1, 1);
+        if (shouldRender ("play" + pstr + "_lfo10.png"))
+            savePlay (outDir + "/" + state + "_play" + pstr + "_lfo10.png", p, baseInst, playosc::kA, 1, 10);
+        if (shouldRender ("play" + pstr + "_lfoR1.png"))
+            savePlay (outDir + "/" + state + "_play" + pstr + "_lfoR1.png", p, baseInst, playosc::kA, 1, 10);
+    }
 
     // 2. Macros (both banks)
     {
@@ -433,8 +597,117 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
                     }
                 }
         }
+        // Osc A: a sample type whose file is missing: "content missing: <name>" on the display (the name from the state's reference, underscores as spaces, the middle goes when it is too long)
+        {
+            GalleryInst gm = baseInst;
+            gm.set ("osc1.type", 1.0f);
+            gm.addMissingSample (1, "packs/drums/drum_loop_120bpm_breakbeat_long_file_name_final_take.wav");
+            GalleryRig<OscPageUi> rm (gm, 2);
+            rm.refresh (2);
+            rm.picture (outDir + "/" + state + "_osca_missing_content.png");
+        }
         GalleryRig<OscPageUi> rOscSub (baseInst, 1); rOscSub.refresh (2); rOscSub.picture (outDir + "/" + state + "_oscsub.png");
         GalleryRig<OscPageUi> rOscNoise (baseInst, 5); rOscNoise.refresh (2); rOscNoise.picture (outDir + "/" + state + "_oscnoise.png");
+
+        // (b) Full Sub and Noise pages with each LED toggle on and off
+        {
+            struct ToggleDef { const char* key; const char* name; };
+            const ToggleDef subToggles[] = {
+                { "sub.env1", "env1" },
+                { "sub.mono", "mono" },
+                { "sub.phase_contiguous", "freerun" },
+            };
+            for (const auto& tg : subToggles)
+            {
+                if (shouldRender (std::string ("oscsub_") + tg.name + "_on.png"))
+                {
+                    GalleryInst gi = baseInst;
+                    gi.set (tg.key, 1.0f);
+                    GalleryRig<OscPageUi> r (gi, 1);
+                    r.refresh (2);
+                    r.picture (outDir + "/" + state + "_oscsub_" + tg.name + "_on.png");
+                }
+                if (shouldRender (std::string ("oscsub_") + tg.name + "_off.png"))
+                {
+                    GalleryInst gi = baseInst;
+                    gi.set (tg.key, 0.0f);
+                    GalleryRig<OscPageUi> r (gi, 1);
+                    r.refresh (2);
+                    r.picture (outDir + "/" + state + "_oscsub_" + tg.name + "_off.png");
+                }
+            }
+            if (shouldRender ("oscsub_all_on.png"))
+            {
+                GalleryInst gi = baseInst;
+                gi.set ("sub.env1", 1.0f); gi.set ("sub.mono", 1.0f); gi.set ("sub.phase_contiguous", 1.0f);
+                GalleryRig<OscPageUi> r (gi, 1);
+                r.refresh (2);
+                r.picture (outDir + "/" + state + "_oscsub_all_on.png");
+            }
+            if (shouldRender ("oscsub_all_off.png"))
+            {
+                GalleryInst gi = baseInst;
+                gi.set ("sub.env1", 0.0f); gi.set ("sub.mono", 0.0f); gi.set ("sub.phase_contiguous", 0.0f);
+                GalleryRig<OscPageUi> r (gi, 1);
+                r.refresh (2);
+                r.picture (outDir + "/" + state + "_oscsub_all_off.png");
+            }
+
+            const ToggleDef noiseGenToggles[] = {
+                { "noise.env1", "env1" },
+                { "noise.keytrack", "keytrack" },
+            };
+            for (const auto& tg : noiseGenToggles)
+            {
+                if (shouldRender (std::string ("oscnoise_") + tg.name + "_on.png"))
+                {
+                    GalleryInst gi = baseInst;
+                    gi.set ("noise.type", 0.0f);
+                    gi.set (tg.key, 1.0f);
+                    GalleryRig<OscPageUi> r (gi, 5);
+                    r.refresh (2);
+                    r.picture (outDir + "/" + state + "_oscnoise_" + tg.name + "_on.png");
+                }
+                if (shouldRender (std::string ("oscnoise_") + tg.name + "_off.png"))
+                {
+                    GalleryInst gi = baseInst;
+                    gi.set ("noise.type", 0.0f);
+                    gi.set (tg.key, 0.0f);
+                    GalleryRig<OscPageUi> r (gi, 5);
+                    r.refresh (2);
+                    r.picture (outDir + "/" + state + "_oscnoise_" + tg.name + "_off.png");
+                }
+            }
+
+            const ToggleDef noiseSampleToggles[] = {
+                { "noise.env1", "env1" },
+                { "noise.keytrack", "keytrack" },
+                { "noise.random_phase", "rand" },
+                { "noise.loop", "loop" },
+                { "noise.bounce", "bounce" },
+            };
+            for (const auto& tg : noiseSampleToggles)
+            {
+                if (shouldRender (std::string ("oscnoise_sample_") + tg.name + "_on.png"))
+                {
+                    GalleryInst gi = baseInst;
+                    gi.set ("noise.type", 1.0f);
+                    gi.set (tg.key, 1.0f);
+                    GalleryRig<OscPageUi> r (gi, 5);
+                    r.refresh (2);
+                    r.picture (outDir + "/" + state + "_oscnoise_sample_" + tg.name + "_on.png");
+                }
+                if (shouldRender (std::string ("oscnoise_sample_") + tg.name + "_off.png"))
+                {
+                    GalleryInst gi = baseInst;
+                    gi.set ("noise.type", 1.0f);
+                    gi.set (tg.key, 0.0f);
+                    GalleryRig<OscPageUi> r (gi, 5);
+                    r.refresh (2);
+                    r.picture (outDir + "/" + state + "_oscnoise_sample_" + tg.name + "_off.png");
+                }
+            }
+        }
     }
 
     // 4. Mixer
@@ -460,6 +733,61 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
             rOut.stack.openDetail (FilterUi::kPageRoute);
             rOut.refresh (2);
             rOut.picture (outDir + "/" + state + "_filter1_output.png");
+        }
+
+        // (c) Filter 1 with every filter model once (model name in file name)
+        const auto* pModel = synthyboy::findParamByKey ("filter1.model");
+        const int numModels = pModel ? pModel->numChoices : 27;
+        for (int m = 0; m < numModels; ++m)
+        {
+            const std::string mname = (pModel && m < pModel->numChoices) ? slugify (pModel->choices[m]) : std::to_string (m);
+            const std::string ftarget = "filter1_model_" + mname + ".png";
+            if (shouldRender (ftarget))
+            {
+                GalleryInst gi = baseInst;
+                gi.set ("filter1.model", static_cast<float> (m));
+                if (m == 5) // Formant
+                {
+                    gi.set ("filter1.formant.x", 45.0f);
+                    gi.set ("filter1.formant.y", 75.0f);
+                    gi.set ("filter1.formant.resonance", 60.0f);
+                    gi.set ("filter1.formant.spread", 30.0f);
+                }
+                else if (m == 6) // Comb
+                {
+                    gi.set ("filter1.comb_offset", 35.0f);
+                }
+                GalleryRig<FilterUi> rFlt (gi, 1);
+                float live[4] = { rFlt.inst.param (idx[0]), rFlt.inst.param (idx[1]), 0.0f, 0.0f };
+                rFlt.in.targets = live;
+                rFlt.refresh (2);
+                rFlt.picture (outDir + "/" + state + "_" + ftarget);
+            }
+        }
+
+        // (c) Style list open for one classic (Ladder, model 2) and one Serum model (Scream, model 16)
+        if (shouldRender ("filter1_style_list_classic.png") || shouldRender ("filter1_style_list.png"))
+        {
+            GalleryInst gi = baseInst;
+            gi.set ("filter1.model", 2.0f); // Ladder (classic)
+            GalleryRig<FilterUi> rStyleClassic (gi, 1);
+            float live[4] = { rStyleClassic.inst.param (idx[0]), rStyleClassic.inst.param (idx[1]), 0.0f, 0.0f };
+            rStyleClassic.in.targets = live;
+            rStyleClassic.refresh (2);
+            rStyleClassic.tap (rStyleClassic.ui.full().style);
+            rStyleClassic.picture (outDir + "/" + state + "_filter1_style_list_classic.png");
+            rStyleClassic.picture (outDir + "/" + state + "_filter1_style_list.png");
+        }
+        if (shouldRender ("filter1_style_list_serum.png"))
+        {
+            GalleryInst gi = baseInst;
+            gi.set ("filter1.model", 16.0f); // Scream (Serum model)
+            GalleryRig<FilterUi> rStyleSerum (gi, 1);
+            float live[4] = { rStyleSerum.inst.param (idx[0]), rStyleSerum.inst.param (idx[1]), 0.0f, 0.0f };
+            rStyleSerum.in.targets = live;
+            rStyleSerum.refresh (2);
+            rStyleSerum.tap (rStyleSerum.ui.full().style);
+            rStyleSerum.picture (outDir + "/" + state + "_filter1_style_list_serum.png");
         }
 
         GalleryRig<FilterUi> rFlt2 (baseInst, 2);
@@ -708,6 +1036,73 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         }
     }
 
+    // 9c. (d) Every FX effect page once with the effect in a splitter band too (one picture per splitter kind)
+    {
+        static const char* const kSplitKinds[3] = { "splitter_lh", "splitter_lmh", "splitter_ms" };
+        for (int si = 0; si < 3; ++si)
+        {
+            const int kind = ui::fxl::kKindSplitterLh + si;
+            const int rack = ui::fxl::bandRack (kind, 0);
+
+            static const char* const kFxNames[14] = { "", "chorus", "compressor", "delay", "distortion", "eq", "filter", "flanger", "phaser", "reverb", "hyperdimension", "utility", "bode", "convolve" };
+            for (int t = 1; t <= 13; ++t)
+            {
+                const std::string baseName = "fx_" + std::string (kFxNames[t]) + "_" + kSplitKinds[si];
+                if (! shouldRender (baseName + ".png") && ! shouldRender (baseName + "_page1.png"))
+                    continue;
+
+                GalleryInst inst = baseInst;
+                for (int i = 1; i < synthyboy::kNumFxInstanceTypes; ++i)
+                {
+                    inst.set (std::string (synthyboy::fxTypeDescriptor (i).prefix) + ".on", 0.0f);
+                    inst.set (std::string (synthyboy::fxTypeDescriptor (i).prefix) + ".rack", 0.0f);
+                }
+                for (int i = 1; i <= 16; ++i)
+                {
+                    char k[24]; std::snprintf (k, sizeof k, "fxi%02d.type", i); inst.set (k, 0.0f);
+                }
+
+                inst.set (std::string (kSplitKinds[si]) + ".on", 1.0f);
+                const char* pre = synthyboy::fxTypeDescriptor (t).prefix;
+                inst.set (std::string (pre) + ".on", 1.0f);
+                inst.set (std::string (pre) + ".rack", static_cast<float> (rack));
+
+                GalleryRig<FxUi> rFx (inst, 1);
+                rFx.refresh (2);
+
+                if (! rFx.ui.screen().slotEditor.bands.lane[0].cards[0].rect().empty())
+                {
+                    rFx.tap (rFx.ui.screen().slotEditor.bands.lane[0].cards[0]);
+                    rFx.refresh (2);
+                }
+                else
+                {
+                    rFx.tap (rFx.ui.screen().slotEditor.bands.lane[0].tile);
+                    addEffect (rFx, t);
+                    rFx.refresh (2);
+                }
+
+                const int numPages = rFx.ui.screen().slotEditor.numPages();
+                for (int p = 0; p < numPages; ++p)
+                {
+                    rFx.ui.screen().slotEditor.setPage (p);
+                    rFx.refresh (2);
+                    std::string fname = state + "_" + baseName;
+                    if (numPages > 1)
+                    {
+                        rFx.picture (outDir + "/" + fname + "_page" + std::to_string (p + 1) + ".png");
+                        if (p == 0)
+                            rFx.picture (outDir + "/" + fname + ".png");
+                    }
+                    else
+                    {
+                        rFx.picture (outDir + "/" + fname + ".png");
+                    }
+                }
+            }
+        }
+    }
+
     // 10. Master (both sub-pages)
     {
         GalleryRig<MasterUi> rMasterMain (baseInst, 1);
@@ -720,6 +1115,17 @@ void renderState (const std::string& outDir, const std::string& state, GalleryIn
         rMasterTuning.ui.screen().setSide (ui::MasterScreen::SideTuning);
         rMasterTuning.refresh (2);
         rMasterTuning.picture (outDir + "/" + state + "_master_tuning_mpe.png");
+
+        // (e) Master page with PAD PRESS switch on
+        if (shouldRender ("master_pad_press.png"))
+        {
+            GalleryRig<MasterUi> rMasterPad (baseInst, 1);
+            rMasterPad.inst.padPressureOn = true;
+            rMasterPad.ui.screen().setSide (ui::MasterScreen::SideMain);
+            rMasterPad.refresh (2);
+            rMasterPad.picture (outDir + "/" + state + "_master_pad_press.png");
+            rMasterPad.picture (outDir + "/" + state + "_master_pad_press_on.png");
+        }
     }
 
     // 11. Voice
@@ -854,6 +1260,7 @@ int main (int argc, char** argv)
 {
     std::string outDir;
     std::vector<std::string> presets;
+    std::string onlyPrefix;
     bool testMode = false;
     bool listMode = false;
     int knobs = 16;   // the XL first: the idle chips of the mapped groups read 5 .. 16; `--knobs 4` renders the Key 61 (the chips relative to the bank, 1 .. 4)
@@ -874,6 +1281,10 @@ int main (int argc, char** argv)
             while (i + 1 < argc && argv[i + 1][0] != '-')
                 presets.push_back (argv[++i]);
         }
+        else if (arg == "--only-prefix" && i + 1 < argc)
+        {
+            onlyPrefix = argv[++i];
+        }
         else if (arg == "--knobs" && i + 1 < argc)
         {
             knobs = std::atoi (argv[++i]) <= 4 ? 4 : 16;
@@ -888,7 +1299,7 @@ int main (int argc, char** argv)
         }
         else if (arg == "--help" || arg == "-h")
         {
-            std::printf ("Usage: %s [--out DIR] [--preset FILE ...] [--knobs 16|4] [--test] [--list]\n", argv[0]);
+            std::printf ("Usage: %s [--out DIR] [--preset FILE ...] [--only-prefix PREFIX] [--knobs 16|4] [--test] [--list]\n", argv[0]);
             return 0;
         }
     }
@@ -939,10 +1350,11 @@ int main (int argc, char** argv)
     // Render Init state
     {
         GalleryInst initInst;
-        renderState (outDir, "Init", initInst);
+        renderState (outDir, "Init", initInst, onlyPrefix);
     }
 
-    renderNames (outDir);
+    if (onlyPrefix.empty() || onlyPrefix == "Named" || onlyPrefix.rfind ("Named", 0) == 0)
+        renderNames (outDir);
 
     // Default presets if none specified
     if (presets.empty())
@@ -969,7 +1381,7 @@ int main (int argc, char** argv)
         GalleryInst inst;
         if (inst.loadPresetFile (p))
         {
-            renderState (outDir, stem, inst);
+            renderState (outDir, stem, inst, onlyPrefix);
         }
         else
         {

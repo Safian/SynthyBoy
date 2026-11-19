@@ -1,0 +1,26 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Bell Pitch Walk",
+ "category": "Metallic",
+ "description": "A church-bell family of twelve partials (hum 0.5, prime, tierce 1.18, quint 1.5, nominal 2 ...) whose prime walks from the 2nd to the 12th harmonic: the bell grows from a dull clang to a bright shimmer.",
+ "frames": 64,
+ "seed": "bell_pitch_walk",
+ "source": {
+  "type": "partials",
+  "params": {
+   "set": "bell",
+   "scale": {
+    "law": "linear",
+    "from": 2,
+    "to": 12
+   },
+   "count": 12,
+   "rolloff": 0.9,
+   "bright": 0.92,
+   "seed": 3
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

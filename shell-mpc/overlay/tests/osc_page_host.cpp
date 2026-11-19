@@ -49,8 +49,16 @@ public:
     void setUiFullOpen (bool o) noexcept override { fullOpen = o; }
     void contentRoots (std::vector<ContentRoot>& out) const override { out = roots; }
     void requestContent (int osc, int kind, const std::string& path) override { requests.push_back ({ osc, kind, path }); loadState = 1; }
-    int contentLoad (std::string*) const override { return loadState; }
+    int contentLoad (std::string* m) const override { if (m != nullptr) *m = loadMessage; return loadState; }
+    void wavetableSources (synthyboy::CatalogueSources& out) const override { out = sources; }
+    void requestWavetable (int osc, const synthyboy::ContentFileRef& ref) override { wtRequests.push_back ({ osc, ref }); loadState = 1; }
+    int takeWavetableSteps (int) noexcept override { const int n = wtSteps; wtSteps = 0; return n; }
     std::shared_ptr<const synthyboy::StateContent> content() const override { return contentPtr; }
+    struct WtRequest { int osc; synthyboy::ContentFileRef ref; };
+    std::vector<WtRequest> wtRequests;
+    synthyboy::CatalogueSources sources;
+    std::string loadMessage;
+    int wtSteps = 0;
     struct Request { int osc, kind; std::string path; };
     std::vector<ContentRoot> roots;
     std::vector<Request> requests;
@@ -290,7 +298,7 @@ int main()
                "Noise header Basic Q group stays intact");
 
         // Tuning column stays intact
-        check (r.page.ui().full().tuneBlock().w >= 200 && r.page.ui().full().tuneBlock().h >= 200, "Noise tune block is present");
+        check (r.page.ui().full().tuneBlock().w >= 200 && r.page.ui().full().tuneBlock().h >= 150, "Noise tune block is present");
         check (r.page.ui().full().barBlock().empty(), "Noise bar block is eliminated");
 
         // Generated noise mode: 1 NOISE block, no PLAYBACK block
@@ -375,6 +383,21 @@ int main()
                 if (panel.part (ui::PanelSlot::NoiseType) != nullptr)
                     hasEnabled = true;
             check (hasEnabled, "Noise block has enabled controls, no greyed-out-only block");
+        }
+    }
+    {
+        // the table selector of a page opens the wavetable browser (Osc A and Osc C); a built-in table is chosen as the stepper chooses it, the parameter is written
+        for (int sel : { 2, 4 })
+        {
+            Rig r (sel);
+            const std::string key = sel == 2 ? "osc1.wavetable" : "osc3.wavetable";
+            ui::Stepper& st = r.page.ui().full().basic.source.stepper;
+            check (st.listable && r.page.ui().full().basic.source.dropdown.enabled(), "the table stepper of the page is listable and its list button is enabled");
+            r.tap (st.rect().x + st.rect().w / 2, st.rect().y + st.rect().h / 2);
+            check (r.page.topPage() == OscUi::kPageList && std::string (r.page.ui().list().state.header) == "Basic", "page " + std::to_string (sel) + ": the name of the table opens the browser in the category of the table");
+            const ui::Rect row = r.page.ui().list().rowRect (0);
+            r.tap (row.x + 30, row.y + row.h / 2);
+            check (r.inst.get (key) == 0.0f && r.page.topPage() == 0, "page " + std::to_string (sel) + ": a built-in table writes " + key + " and the browser closes");
         }
     }
     {

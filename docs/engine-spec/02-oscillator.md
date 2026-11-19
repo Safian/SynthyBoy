@@ -336,6 +336,11 @@ Interpolation "of coefficients" means complex linear interpolation of `A P`.
 
 For all types, harmonic numbers above `K` are zero and the result goes through the usual inverse transform and 7 ms cross-fade.
 
+**Where the own engine departs from the table above (a range must not end in silence, measured: Smear at 100 %, High Pass from 60 % on a note above C5, Random Amplitudes -73 dB .. +6 dB):**
+* *Smear*: `m'` is capped at 0.999 (at `m' = 1` the input never enters `a`: silence). The top of the range is the heaviest smear, about -28 dB under the dry saw.
+* *High Pass*: the cutoff stops at the band limit `K` of the voice, so the top harmonic of the note always remains (a cutoff above `K` removes every harmonic: silence, by definition of a high pass; the range ends before it).
+* *Random Amplitudes*: the energy of the harmonics `1 .. K` is kept at the dry value for every `q > 0` (a gain `sqrt(E_in / E_out)`), and if the draw deletes every harmonic the strongest one is kept. The morph changes the spectrum, not the level; `q = 0` is the plain table. Test `own_morph_*` (`core/tests/test_own_morph_range.cpp`).
+
 **Better:** the morph types are the expensive part of this engine because they need an inverse DFT per rebuild per unison voice; with
 morph off the own engine can use precomputed mips.
 
@@ -441,3 +446,7 @@ All: filter off, `master.volume 0`, `osc1.level 100`, `env1.attack 0`, `osc1.ran
 | O18 | Level: `osc1.level 50` | -6.02 dB |
 
 Tolerances for O10 .. O15: +-0.4 dB for entries above -40 dB.
+
+## 14. `quality.oversample_4x` in the own engine (what it switches)
+
+The switch is read at every block (`OwnEngine::process`, `globals.oversample`, also set by the ultra render of the offline renderer; the older note in 13-new-keys.md A106 that it is applied in `prepare ()` describes the Vital engine). In the voice it sets `OscTick.oversample`: **a wavetable oscillator without a warp is rendered through the oversampled path** (the one a warp already uses: 4x oversampling and a 128 tap decimator, the table read at the band limit of 3.2 times the host rate) instead of the plain table read of the 1x path. What it does NOT change: the effects, the filters, the sample / granular / spectral / multisample oscillators, the sub oscillator, the quality tier's other caps. Where it differs from the plain path: audible aliasing of the interpolation images of a bright high note (the 1x path's 4 point read leaves images at about -43 .. -58 dB, section "memory" of `wavetable_bank.h`); on an oscillator that already has a warp (Sync, Bend, FM ...) the switch changes nothing, it is oversampled anyway. **Per profile:** at tier low the economy group Warp (`kEconomyWarp`, a device profile `warp=2x`) makes the oversampled path 2x with a 32 tap decimator and a band limit of 1.0, so the switch then means 2x, not 4x; a profile with `warp=4x` gets the full 4x. The cost is that of a warped oscillator per unison voice (docs/release/SOUND-SET-BATCH-1.md section 7 item 5). The capability probe in `ownv_every_new_capability_bit_has_an_audible_probe` uses a bright saw note without a warp for this reason.

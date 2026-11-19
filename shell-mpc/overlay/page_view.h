@@ -96,6 +96,12 @@ public:
         if (in.io == nullptr || in.ui == nullptr)
             return false;
         bool changed = false;
+        const bool loading = in.io->tablesLoading();   // a wavetable of the program is still being built: the bar below
+        if (loading != loading_)
+        {
+            loading_ = loading;
+            changed = true;
+        }
         {
             const auto content = in.io->content();   // the names of the macros the pages show (macro_names.h): the ones of this instance, for everything this view does
             names_.load (content.get());
@@ -190,6 +196,11 @@ private:
             sb.clip (0.0f, 0.0f, static_cast<float> (edgeX_), static_cast<float> (page::kH));
         page::ground (sb);
         ui_.draw (sb);
+        if (loading_)   // the loading mark: a 4 px amber bar along the top edge of the tab (inside the Q-Link panel cut), drawn over the page, no text, no touch target
+        {
+            ui::Cell cell (sb, { 0, page::kTabY, page::kW, 4 }, 0);
+            sb.rect (0.0f, static_cast<float> (page::kTabY), static_cast<float> (std::min (edgeX_, page::kW)), static_cast<float> (page::kTabY + 4), ui::theme::rgba (0xFFB000u));
+        }
     }
 
     std::string name_;
@@ -200,6 +211,7 @@ private:
     std::unique_ptr<gpu::SceneData> scratch_;
     uint32_t hash_ = 0;
     bool have_ = false;
+    bool loading_ = false;   // IInstanceView::tablesLoading () at the last update
     int edgeX_ = 1280;   // the key (ViewInput::panelEdgeX)
 };
 

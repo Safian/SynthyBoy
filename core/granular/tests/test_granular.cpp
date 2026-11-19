@@ -5,7 +5,10 @@
 #include "synthyboy/granular/granular.h"
 #include "synthyboy/sampleosc/sample_data.h"
 
+#include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 #include <vector>
 
 #include "test_runner.h"
@@ -367,4 +370,319 @@ TEST (granular_block_size_does_not_change_the_sound)
     for (size_t i = 0; i < a.size(); ++i)
         worst = std::max (worst, static_cast<double> (std::fabs (a[i] - b[i])));
     CHECK (worst < 1.0e-4);
+}
+
+// The grain kernels against the reference loop (setReferenceKernels (true)) and against each other: over every window shape, pitch ratios that use the mip levels, loop grains with the
+// crossfade, reversed and randomised grains, pointwise warps, a rate modulation, and stereo. The vector form (four samples of a grain at a time, setVectorKernels) gives the very bits of the
+// scalar form of the kernel; the kernel and the reference loop agree to rounding (the window of the kernel multiplies by a reciprocal where the reference divides: about 1e-7 of the
+// grain's level; the largest difference is at the tail of a grain, where the window is nearly 0 and the 64 (1 - x) ramp turns the 1 ulp of x into 4e-6: the bound is stated as 3e-5 of the block's largest sample).
+namespace
+{
+float testShape (int type, float x, float amount) { return type == 0 ? std::tanh (x * (1.0f + 4.0f * amount)) : std::round (x * (2.0f + 30.0f * amount)) / (2.0f + 30.0f * amount); }
+}
+TEST (granular_kernels_agree_with_each_other_and_with_the_reference_loop)
+{
+    Tone mono (220.0, 1.5);
+    SampleData stereo;
+    {
+        std::vector<float> l (66000), r (66000);
+        for (size_t i = 0; i < l.size(); ++i)
+        {
+            l[i] = static_cast<float> (0.5 * std::sin (2.0 * kPi * 330.0 * static_cast<double> (i) / 44100.0));
+            r[i] = static_cast<float> (0.4 * std::sin (2.0 * kPi * 551.0 * static_cast<double> (i) / 44100.0) + 0.1 * std::sin (0.37 * static_cast<double> (i)));
+        }
+        stereo.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), 44100.0);
+    }
+    int blocks = 0, vectorDifferent = 0;
+    double worstRelative = 0.0;
+    for (int variant = 0; variant < 4; ++variant)
+        for (int shape = 0; shape < kNumWindowShapes; ++shape)
+            for (float pitch : { 0.7f, 1.0f, 2.9f, 9.5f })
+            {
+                const auto view = variant % 2 == 0 ? mono.data.view() : stereo.view();
+                GrainParams p;
+                p.shape = static_cast<WindowShape> (shape);
+                p.windowAmount = 0.8f;
+                p.windowSkew = variant == 1 ? 0.6f : -0.3f;
+                p.pitchRatio = pitch;
+                p.densityHz = 70.0f;
+                p.lengthSec = 0.09f;
+                p.maxGrains = 24;
+                p.scanSpeed = 0.5f;
+                p.loopMode = variant >= 2 ? LoopMode::forward : LoopMode::none;
+                p.loopLo = 0.2f;
+                p.loopHi = 0.7f;
+                p.loopGrains = variant >= 2;
+                p.loopCrossfade = 0.3f;
+                p.randOffset = 0.3f;
+                p.randDir = variant == 3 ? 0.5f : 0.0f;
+                p.randPitch = 2.0f;
+                p.randLength = 0.3f;
+                p.randPan = 0.6f;
+                p.randGain = 0.3f;
+                p.randWindow = 0.2f;
+                p.randSkew = 0.2f;
+                p.manual = variant == 0 && shape % 2 == 0;   // the head placed: the spawns come from the timer (the reference tests every sample)
+                p.position = 0.4f;
+                if (variant == 1 || variant == 3)
+                {
+                    p.shapeFn = &testShape;
+                    p.shapeType[0] = 0;
+                    p.shapeType[1] = 1;
+                    p.shapeAmount[0] = 0.5f;
+                    p.shapeAmount[1] = 0.4f;
+                    p.randWarp[0] = 0.2f;
+                }
+                // variant 0 and 2 plain (the vector form runs; 2 is looped, so it does not), 1 and 3 with the warps (it does not): the plain ones need a second set with nothing but the read
+                GranularVoice vec, scalar, reference;
+                for (GranularVoice* v : { &vec, &scalar, &reference })
+                    v->prepare (44100.0);
+                scalar.setVectorKernels (false);
+                reference.setReferenceKernels (true);
+                for (GranularVoice* v : { &vec, &scalar, &reference })
+                    v->noteOn (&view, p, 99u + static_cast<uint32_t> (shape), 0.3f, true, 0.1f);
+                std::vector<float> rate (128);
+                for (size_t i = 0; i < 128; ++i)
+                    rate[i] = 1.0f + 0.5f * static_cast<float> (std::sin (0.2 * static_cast<double> (i)));
+                for (int block = 0; block < 60; ++block)
+                {
+                    const int n = block % 2 == 0 ? 128 : 53;
+                    std::vector<float> aL (128), aR (128), bL (128), bR (128), cL (128), cR (128);
+                    const float* rm = variant == 2 && block % 3 == 0 ? rate.data() : nullptr;
+                    vec.process (p, aL.data(), aR.data(), n, rm);
+                    scalar.process (p, bL.data(), bR.data(), n, rm);
+                    reference.process (p, cL.data(), cR.data(), n, rm);
+                    ++blocks;
+                    if (std::memcmp (aL.data(), bL.data(), sizeof (float) * 128) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * 128) != 0
+                        || vec.activeGrains() != reference.activeGrains())
+                        ++vectorDifferent;
+                    double peak = 1.0e-9, worst = 0.0;
+                    for (size_t i = 0; i < 128; ++i)
+                    {
+                        peak = std::max ({ peak, static_cast<double> (std::fabs (cL[i])), static_cast<double> (std::fabs (cR[i])) });
+                        worst = std::max ({ worst, static_cast<double> (std::fabs (aL[i] - cL[i])), static_cast<double> (std::fabs (aR[i] - cR[i])) });
+                    }
+                    worstRelative = std::max (worstRelative, worst / peak);
+                }
+            }
+    CHECK (blocks > 1000);
+    CHECK_EQ (vectorDifferent, 0);
+    CHECK (worstRelative < 3.0e-5);
+    std::printf ("    grain kernels: vector against scalar %d of %d blocks differ; kernel against reference: largest difference %.3g of the block's peak\n", vectorDifferent, blocks, worstRelative);
+}
+
+// Plain grains (no warp, no loop wrap, no rate modulation) so that the vector form really runs: it must give the bits of the scalar form over a long play.
+TEST (granular_vector_form_equals_the_scalar_form_on_plain_grains)
+{
+    Tone mono (220.0, 2.0);
+    int different = 0, blocks = 0;
+    for (float pitch : { 0.5f, 1.0f, 1.7f, 5.0f })
+        for (int skewed = 0; skewed < 2; ++skewed)
+        {
+            const auto view = mono.data.view();
+            GrainParams p;
+            p.pitchRatio = pitch;
+            p.densityHz = 90.0f;
+            p.lengthSec = 0.12f;
+            p.maxGrains = 32;
+            p.scanSpeed = 0.3f;
+            p.windowSkew = skewed != 0 ? 0.5f : 0.0f;
+            p.randOffset = 0.5f;
+            p.randDir = 0.3f;
+            p.randPan = 0.5f;
+            p.shapeFn = &testShape;   // the engine always hands the function over; no slot has a type, so no warp plays and the vector form may run
+            GranularVoice vec, scalar;
+            vec.prepare (44100.0);
+            scalar.prepare (44100.0);
+            scalar.setVectorKernels (false);
+            vec.noteOn (&view, p, 5u, 0.0f, true, 0.0f);
+            scalar.noteOn (&view, p, 5u, 0.0f, true, 0.0f);
+            for (int block = 0; block < 400; ++block)
+            {
+                std::vector<float> aL (128), aR (128), bL (128), bR (128);
+                vec.process (p, aL.data(), aR.data(), 128, nullptr);
+                scalar.process (p, bL.data(), bR.data(), 128, nullptr);
+                ++blocks;
+                if (std::memcmp (aL.data(), bL.data(), sizeof (float) * 128) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * 128) != 0)
+                    ++different;
+            }
+        }
+    CHECK (blocks == 3200);
+    CHECK_EQ (different, 0);
+}
+
+// SP1 (docs/release/CPU-REVIEW-CONTENT.md): reset() skips the 48 `active` writes while no grain was spawned since the last reset. A voice that is reset and restarted again and again (live clouds,
+// resets of an idle voice, jump start and plain start, manual and scanning) is bit for bit the voice with the old reset (`setLegacyReset`), and a reset leaves no grain active.
+TEST (granular_reset_that_skips_idle_voices_is_the_old_reset)
+{
+    Tone tone (440.0);
+    const auto view = tone.data.view();
+    int blocks = 0, different = 0;
+    for (int manual = 0; manual < 2; ++manual)
+        for (int jump = 0; jump < 2; ++jump)
+        {
+            GrainParams p;
+            p.densityHz = 80.0f;
+            p.lengthSec = 0.08f;
+            p.maxGrains = kMaxGrains;
+            p.manual = manual != 0;
+            p.position = 0.3f;
+            p.scanSpeed = 0.5f;
+            GranularVoice fast, old;
+            fast.prepare (44100.0);
+            old.prepare (44100.0);
+            old.setLegacyReset (true);
+            for (int note = 0; note < 6; ++note)
+            {
+                if (note % 3 == 2)
+                {
+                    fast.reset();   // a reset of a voice that is idle already
+                    old.reset();
+                }
+                fast.noteOn (&view, p, 5u + static_cast<uint32_t> (note), 0.0f, jump != 0, 0.1f * static_cast<float> (note));
+                old.noteOn (&view, p, 5u + static_cast<uint32_t> (note), 0.0f, jump != 0, 0.1f * static_cast<float> (note));
+                for (int block = 0; block < 40; ++block)
+                {
+                    std::vector<float> aL (128), aR (128), bL (128), bR (128);
+                    fast.process (p, aL.data(), aR.data(), 128, nullptr);
+                    old.process (p, bL.data(), bR.data(), 128, nullptr);
+                    ++blocks;
+                    if (std::memcmp (aL.data(), bL.data(), sizeof (float) * 128) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * 128) != 0)
+                        ++different;
+                }
+                CHECK_EQ (fast.activeGrains(), old.activeGrains());
+                fast.reset();
+                old.reset();
+                CHECK_EQ (fast.activeGrains(), 0);
+                CHECK_EQ (old.activeGrains(), 0);
+                CHECK (! fast.isActive());
+            }
+        }
+    CHECK_EQ (blocks, 4 * 6 * 40);
+    CHECK_EQ (different, 0);
+}
+
+// GR1: the scanning head with the divisions and loop bounds made once per call is the head of every sample's own computation (`setLegacyHead`): the grains it spawns (the output, bit for bit) and the play head
+// agree over every loop mode, both scan directions, reversed and degenerate loop markers, a Tailed loop that is released, and blocks of different sizes.
+TEST (granular_the_scanning_head_with_constants_made_once_is_the_head_of_every_sample)
+{
+    Tone tone (330.0, 1.5);
+    const auto view = tone.data.view();
+    int runs = 0, different = 0;
+    for (LoopMode mode : { LoopMode::none, LoopMode::forward, LoopMode::pingPong, LoopMode::reverse, LoopMode::tailed })
+        for (float speed : { 1.0f, -0.7f, 3.5f })
+            for (int shape = 0; shape < 3; ++shape)
+            {
+                GrainParams p;
+                p.densityHz = 70.0f;
+                p.lengthSec = 0.05f;
+                p.maxGrains = kMaxGrains;
+                p.manual = false;
+                p.scanSpeed = speed;
+                p.loopMode = mode;
+                p.regionLo = 0.1f;
+                p.regionHi = 0.9f;
+                p.loopLo = shape == 1 ? 0.6f : 0.3f;
+                p.loopHi = shape == 1 ? 0.3f : (shape == 2 ? 0.3f : 0.55f);   // shape 1: reversed markers, shape 2: a loop of no length
+                GranularVoice fast, old;
+                fast.prepare (44100.0);
+                old.prepare (44100.0);
+                old.setLegacyHead (true);
+                fast.noteOn (&view, p, 9u, 0.0f, true, 0.0f);
+                old.noteOn (&view, p, 9u, 0.0f, true, 0.0f);
+                for (int block = 0; block < 150; ++block)
+                {
+                    const int n = block % 3 == 0 ? 64 : (block % 3 == 1 ? 128 : 100);
+                    if (block == 90)
+                    {
+                        fast.releaseLoop();
+                        old.releaseLoop();
+                    }
+                    std::vector<float> aL (static_cast<size_t> (n)), aR (aL), bL (aL), bR (aL);
+                    fast.process (p, aL.data(), aR.data(), n, nullptr);
+                    old.process (p, bL.data(), bR.data(), n, nullptr);
+                    if (std::memcmp (aL.data(), bL.data(), sizeof (float) * static_cast<size_t> (n)) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * static_cast<size_t> (n)) != 0
+                        || fast.playhead() != old.playhead() || fast.activeGrains() != old.activeGrains())
+                        ++different;
+                }
+                ++runs;
+            }
+    CHECK_EQ (runs, 45);
+    CHECK_EQ (different, 0);
+    // Mac timing: a scanning cloud for 128 samples
+    double us[2] = {};
+    int live = 0;
+    for (int legacy = 0; legacy < 2; ++legacy)
+    {
+        GrainParams p;
+        p.densityHz = 60.0f;
+        p.lengthSec = 0.07f;
+        p.maxGrains = kMaxGrains;
+        p.manual = false;
+        p.scanSpeed = 0.3f;
+        p.loopMode = LoopMode::forward;
+        p.loopLo = 0.2f;
+        p.loopHi = 0.8f;
+        GranularVoice v;
+        v.prepare (44100.0);
+        v.setLegacyHead (legacy != 0);
+        v.noteOn (&view, p, 9u, 0.0f, true, 0.0f);
+        std::vector<float> l (128), r (128);
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int block = 0; block < 5000; ++block)
+            v.process (p, l.data(), r.data(), 128, nullptr);
+        us[legacy] = std::chrono::duration<double, std::micro> (std::chrono::steady_clock::now() - t0).count() / 5000.0;
+        live = v.activeGrains();
+    }
+    std::printf ("    scanning cloud (%d grains live), 128 samples: %.2f us now, %.2f us before (this Mac)\n", live, us[0], us[1]);
+}
+
+// SP10: the output stage of the cloud (mask of non finite values, clamp to +-16) in NEON lanes: the kernel against the scalar loop on values of every kind, and the voice against the voice with the scalar stage.
+TEST (granular_the_output_stage_in_lanes_is_the_per_sample_stage)
+{
+    const float inf = std::numeric_limits<float>::infinity(), nan = std::numeric_limits<float>::quiet_NaN();
+    std::vector<float> special = { 0.0f, -0.0f, 1.0f, -1.0f, 16.0f, -16.0f, 16.0001f, -16.0001f, 15.9999f, 1.0e30f, -1.0e30f, 3.4e38f, -3.4e38f, inf, -inf, nan, -nan, 1.0e-30f, 1.0e-39f, -1.0e-39f, 0.5f };
+    uint32_t seed = 77u;
+    for (int i = 0; i < 500; ++i)
+    {
+        seed = seed * 1664525u + 1013904223u;
+        special.push_back (40.0f * (static_cast<float> (seed >> 8) * (1.0f / 8388608.0f) - 1.0f));
+    }
+    for (int n : { 0, 1, 3, 4, 5, 8, 17, static_cast<int> (special.size()) })
+        for (int neon = 0; neon < 2; ++neon)
+        {
+            std::vector<float> a (special.begin(), special.end()), ref (special.begin(), special.end());
+            clampFinite (a.data(), n, neon != 0);
+            for (int i = 0; i < n; ++i)
+                ref[static_cast<size_t> (i)] = std::isfinite (ref[static_cast<size_t> (i)]) ? std::max (-16.0f, std::min (16.0f, ref[static_cast<size_t> (i)])) : 0.0f;
+            CHECK (std::memcmp (a.data(), ref.data(), a.size() * sizeof (float)) == 0);   // (the values after n are untouched)
+        }
+    Tone tone (330.0, 1.5);
+    const auto view = tone.data.view();
+    int blocks = 0, different = 0;
+    for (int jump = 0; jump < 2; ++jump)
+    {
+        GrainParams p;
+        p.densityHz = 400.0f;   // many grains: the sum goes past 16 and the clamp works
+        p.lengthSec = 0.2f;
+        p.maxGrains = kMaxGrains;
+        GranularVoice a, b;
+        a.prepare (44100.0);
+        b.prepare (44100.0);
+        b.setLegacyOutput (true);
+        a.noteOn (&view, p, 3u, 0.0f, jump != 0, 0.0f);
+        b.noteOn (&view, p, 3u, 0.0f, jump != 0, 0.0f);
+        for (int block = 0; block < 100; ++block)
+        {
+            const int n = block % 4 == 0 ? 1 : (block % 4 == 1 ? 33 : 128);
+            std::vector<float> aL (static_cast<size_t> (n)), aR (aL), bL (aL), bR (aL);
+            a.process (p, aL.data(), aR.data(), n, nullptr);
+            b.process (p, bL.data(), bR.data(), n, nullptr);
+            ++blocks;
+            if (std::memcmp (aL.data(), bL.data(), sizeof (float) * static_cast<size_t> (n)) != 0 || std::memcmp (aR.data(), bR.data(), sizeof (float) * static_cast<size_t> (n)) != 0)
+                ++different;
+        }
+    }
+    CHECK_EQ (blocks, 200);
+    CHECK_EQ (different, 0);
 }

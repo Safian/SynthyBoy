@@ -18,9 +18,17 @@ endif()
 # Label `slow` like the other audio quality gates.
 # The factory presets are written for the Vital-derived engine (the own engine of builds without Vital, iOS, has no sample / granular / spectral
 # oscillators), so the gate runs only where that engine is built.
+# The files the presets of sound set batch 2 name (wavetables, samples, instruments, impulse responses: pack id + file) are read from a content store, <root>/<pack id>/<file>:
+# links to the factory packs content/factory-* named by their ids (the shell reads them from Content/packs/<pack id>, scripts/build-mpc.sh). Without a store a sample, granular,
+# spectral or multisample oscillator is silent and Convolve absent, and the gate would not check what those presets sound like.
+set(SYNTHYBOY_CONTENT_STORE "${CMAKE_CURRENT_BINARY_DIR}/content-store")
+file(MAKE_DIRECTORY "${SYNTHYBOY_CONTENT_STORE}")
+file(CREATE_LINK "${PROJECT_SOURCE_DIR}/content/factory-wavetables" "${SYNTHYBOY_CONTENT_STORE}/com.safian.synthyboy.factory-wavetables" SYMBOLIC COPY_ON_ERROR)
+file(CREATE_LINK "${PROJECT_SOURCE_DIR}/content/factory-samples" "${SYNTHYBOY_CONTENT_STORE}/com.safian.synthyboy.factory-samples" SYMBOLIC COPY_ON_ERROR)
+
 if(SYNTHYBOY_WITH_VITAL)
     add_test(NAME synthyboy_preset_sanity
-             COMMAND synthyboy_preset_render --presets "${PROJECT_SOURCE_DIR}/content/presets" --summary-only)
+             COMMAND synthyboy_preset_render --presets "${PROJECT_SOURCE_DIR}/content/presets" --content-dir "${SYNTHYBOY_CONTENT_STORE}" --summary-only)
     set_tests_properties(synthyboy_preset_sanity PROPERTIES LABELS slow TIMEOUT 1500)
 endif()
 

@@ -243,6 +243,27 @@ void testEnvLfo()
             mapped += f.groups[ids[g]].block() >= 1;
         check (mapped == std::min (n - 1, 3), "LFO page: the groups after the active one have their blocks (" + std::to_string (mapped) + ")");
     }
+    // the shape editor: EDIT (virtual 0 .. 3), GRID (virtual 4 .. 6), TRIGGER (MODE and PHASE of the table, virtual 7)
+    {
+        demo::Rig<LfoUi> r;
+        r.refresh();
+        r.stack.openDetail (LfoUi::kPageEditor);
+        r.refresh();
+        ui::ShapeEditorPage& e = r.ui.editor();
+        checkPage ("LFO shape editor", r, ui::ShapeEditorPage::kGroups, [&] (int g) { e.setActiveGroup (g); r.refresh(); });
+        e.setActiveGroup (0);
+        r.refresh();
+        check (r.inst.q[0] == QRouter::encode (0, QRouter::kVirtual) && r.inst.q[3] == QRouter::encode (3, QRouter::kVirtual) && r.inst.q[4] == QRouter::encode (4, QRouter::kVirtual) && r.inst.q[6] == QRouter::encode (6, QRouter::kVirtual) && r.inst.q[7] == -1
+                   && r.inst.q[8] == demo::Inst::idx ("lfo1.sync_type") && r.inst.q[9] == demo::Inst::idx ("lfo1.phase") && r.inst.q[10] == QRouter::encode (7, QRouter::kVirtual) && r.inst.q[11] == -1 && r.inst.q[12] == -1,
+               "LFO shape editor, EDIT active: Q 1 .. 4 POINT X Y CURVE, Q 5 .. 7 GRID X GRID Y SNAP, Q 9 .. 11 MODE PHASE BEND ALL (11 of the 16 slots)");
+        int mapped = 0;
+        for (int g = 0; g < ui::ShapeEditorPage::kGroups; ++g)
+            mapped += e.groups[g].block() >= 1;
+        check (mapped == 2 && e.groups[0].block() == 0, "LFO shape editor: the two other groups have their blocks (idle chips 5 .. 12 on the XL)");
+        e.setActiveGroup (2);
+        r.refresh();
+        check (r.inst.q[0] == demo::Inst::idx ("lfo1.sync_type") && r.inst.q[1] == demo::Inst::idx ("lfo1.phase") && r.inst.q[4] == QRouter::encode (0, QRouter::kVirtual), "LFO shape editor, TRIGGER active: MODE and PHASE on Q 1 and Q 2, then EDIT (wrapping)");
+    }
 }
 
 void testModDetail()
@@ -313,7 +334,10 @@ void testOneGroupPage()
     int used = 0;
     for (int i = 0; i < 16; ++i)
         used += inst.q[i] != -1;
-    check (inst.qN == 16 && used >= 1 && used <= 4 && inst.q[4] == -1 && inst.q[8] == -1 && inst.q[15] == -1, "the compact oscillator view (one group): only the first four slots can have a target (" + std::to_string (used) + " set)");
+    // in the main state the Play view publishes the groups of the three thirds together (PlayView::publishQ, tested in env_ui_host): the oscillator alone publishes nothing, and its compact group has four targets
+    int ct[4];
+    ui.compactTargets (ct);
+    check (used == 0 && ct[0] >= 0 && ct[1] >= 0 && ct[2] >= 0 && ct[3] >= 0, "the compact oscillator view (one group): the Play view publishes it; its four targets are the compact group's (" + std::to_string (used) + " set by the oscillator itself)");
 }
 
 void testStatusSlotCount()

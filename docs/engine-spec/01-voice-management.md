@@ -41,7 +41,7 @@ routed to a filter whose `filterN.on` is 0 is added to the effects path instead 
 blend" splits the source between the two filters with an equal-power law, `g1 = cos(b pi/2)`, `g2 = sin(b pi/2)`, `b` = the source's
 `filter_blend` (0..1), ramped per chunk; a source whose blended filter is off passes its share to Effects. The bus sends
 (`bus1_send`, `bus2_send`, linear gain 0..1 ramped per chunk) tap the source after its level and pan whatever its destination is.
-Direct out bypasses the whole effect rack except what the rack puts behind (document 6). The `env1` button of a source (state
+Direct out bypasses the whole effect rack except what the rack puts behind (document 6); the master volume still scales it (document 6, section 10). The `env1` button of a source (state
 version 3) set to Off removes the amplitude multiplication for that source and routes it through a separate path that is multiplied
 by V*G squared only (no envelope), and keeps the voice alive until the longest enabled envelope has ended; with every button on
 (default) the baseline above holds exactly.
@@ -432,3 +432,9 @@ When a note is triggered, per-voice smoothers jump to their targets (no ramp fro
 | V13 | velocity_track -100, v 0.5, level 100 | gain 2.25 (+7.04 dB), output clipped at ±2.1: harmonics appear |
 
 Tolerances: frequencies +-0.5 ct, levels +-0.15 dB for laws (V3, V5 .. V13); V1/V2 the set of sounding pitches exactly; V4 +-0.25 st.
+
+## 11. Sounding voices and a preset change, All Notes Off, All Sound Off (own engine and MPC shell)
+
+* **Program change / setChunk (MPC shell).** `applyState` writes the parameter values and the content into the engine; it does not reset the engine and does not release voices. A voice whose key is still down therefore continues and sounds with the new patch's parameters from the next control period (its envelope stage is kept); a voice in its release stage finishes with the new release time. This is the usual behaviour of a synth and is left as it is; a voice can only stay forever if its key is really held (or the sustain pedal is down).
+* **CC 123 All Notes Off**: every voice is released (release stage), the held-key list and the pending pedal releases are cleared. **CC 120 All Sound Off** (`Event::AllNotesOff` with `value` 1): the voices stop at once with the short ramp (3 ms ghost at the tier low, the 50 ms kill fade otherwise), the pedal state is cleared. The shell sends the same event at the start of the next block after `effStopProcess` and `effMainsChanged (0)`, so nothing keeps sounding after the host stopped processing.
+* **Diagnostics.** `IEngine::voiceStats ()` (active, released and sustaining voices, held keys with the lowest and highest, orphan voices, note-ons, note-offs, note-offs that matched no voice, steals, pedal): the MPC status file shows them for the instance on screen (`voices_active`, `held_keys`, `orphan_voices` ...). `orphan_voices` is the bug state: a voice that is not released while its key is not held and no pedal is down; it is always 0 (tests `core/tests/test_own_note_storm.cpp` assert it after every event).

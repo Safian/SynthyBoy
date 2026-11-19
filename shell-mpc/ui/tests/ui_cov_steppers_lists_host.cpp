@@ -354,13 +354,14 @@ static void test_tool_selector()
 {
     ToolSelector ts;
     ts.setId (109);
-    ts.place ({ 50, 50, 288, 56 });
+    ts.place ({ 50, 50, 504, 56 });
 
-    check (ts.minSize().w == 4 * 72 && ts.minSize().h == 56, "ToolSelector minSize is 288x56");
+    check (ts.minSize().w == 7 * 72 && ts.minSize().h == 56, "ToolSelector minSize is 504x56 (seven tools)");
     check (std::strcmp (ToolSelector::name (0), "POINT") == 0, "Tool 0 is POINT");
     check (std::strcmp (ToolSelector::name (1), "FLAT") == 0, "Tool 1 is FLAT");
     check (std::strcmp (ToolSelector::name (2), "RAMP+") == 0, "Tool 2 is RAMP+");
     check (std::strcmp (ToolSelector::name (3), "RAMP-") == 0, "Tool 3 is RAMP-");
+    check (std::strcmp (ToolSelector::name (4), "SELECT") == 0 && std::strcmp (ToolSelector::name (5), "SOFT") == 0 && std::strcmp (ToolSelector::name (6), "BEND") == 0, "Tools 4, 5, 6 are SELECT, SOFT, BEND");
 
     // Tap tool 2
     Rect c2 = ts.cell (2);
@@ -373,7 +374,7 @@ static void test_tool_selector()
     c = ts.turn (-1.0);
     check (c.kind == ChangeKind::Index && c.index == 1, "ToolSelector turn down moves to FLAT");
 
-    Image im = drawComponent (ts, 400, 200);
+    Image im = drawComponent (ts, 640, 200);
     check (drawnOutside (im, ts.rect(), backgroundPixel()) == 0, "ToolSelector draws strictly inside rect");
 }
 
@@ -441,9 +442,69 @@ static void test_pictogram_out_of_range_turn_and_row_selector_boundaries()
     check (! mrs.turn (0.0), "row selector: no step, no change");
 }
 
+
+/** A content name in a stepper (`contentName`): the middle goes when it does not fit, ONCE. The text is drawn at the size the middle cut was made for; drawn at a larger maximum the pen cut the end of the cut text again ("drum…take…"). Every width, with and
+    without a caption, long names, names that just fit and non-ASCII names: at most one ellipsis, never at the end, the start and the end of the name stay, and the text fits the zone at the size it is drawn at. */
+static void test_stepper_content_name_is_cut_once()
+{
+    static const char kEll[] = "\xE2\x80\xA6";
+    auto ellipses = [&] (const std::string& t, size_t& last)
+    {
+        int n = 0;
+        for (size_t at = t.find (kEll); at != std::string::npos; at = t.find (kEll, at + 3))
+        {
+            ++n;
+            last = at;
+        }
+        return n;
+    };
+    const char* const names[] = { "voice sweep aei long name final take 2", "Harmonic Series", "A fairly long wavetable title that does not fit", "short", "very long name with \xC3\xA4\xC3\xB6\xC3\xBC accents inside it", "Warm Evolving Pad Texture Long", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" };
+    int checked = 0, cut = 0, bad = 0;
+    for (int w : { 208, 240, 300, 420 })
+        for (bool caption : { false, true })
+            for (const char* name : names)
+            {
+                Stepper s;
+                s.contentName = true;
+                s.state.count = 3;
+                s.place ({ 20, 20, w, 56 });
+                s.setItem (name);
+                if (caption)
+                    s.setCaption ("TABLE");
+                Scene sc (500, 100, kBackgroundRgba);
+                s.draw (sc.builder());
+                const int zoneW = w - 4 - 2 * 28;   // the stepper draws in its rectangle inset by 2, the arrows take 28 px at each side
+                bool found = false;
+                for (uint32_t k = 0; k < sc.data->numOps; ++k)
+                {
+                    if (sc.data->ops[k].op != gpu::kOpText)
+                        continue;
+                    const std::string t = gpu::textString (*sc.data, sc.data->ops[k]);
+                    if (caption && t == "TABLE")
+                        continue;
+                    found = true;
+                    ++checked;
+                    size_t last = 0;
+                    const int n = ellipses (t, last);
+                    const std::string whole = name;
+                    const bool wholeShown = t == whole;
+                    cut += ! wholeShown;
+                    const bool start = wholeShown || (n == 1 && t.compare (0, 2, whole, 0, 2) == 0), end = wholeShown || (n == 1 && last + 3 < t.size() && whole.compare (whole.size() - 2, 2, t, t.size() - 2, 2) == 0);
+                    if (n > 1 || (n == 1 && last + 3 >= t.size()) || ! start || ! end || sdf::textWidth (t.c_str(), sc.data->ops[k].f[2]) > static_cast<float> (zoneW) + 0.5f)
+                    {
+                        ++bad;
+                        check (false, std::string ("content name '") + name + "' at width " + std::to_string (w) + (caption ? " with caption" : "") + " is drawn as '" + t + "' (" + std::to_string (n) + " ellipses)");
+                    }
+                }
+                check (found, std::string ("content name '") + name + "' is drawn");
+            }
+    check (checked > 40 && cut > 10 && bad == 0, "a content name too wide for its stepper loses its middle once (" + std::to_string (cut) + " of " + std::to_string (checked) + " drawn names were cut): one ellipsis, never at the end, the start and the end of the name stay, the text fits at the size it is drawn at");
+}
+
 int main()
 {
     test_stepper_basic_and_clamping();
+    test_stepper_content_name_is_cut_once();
     test_stepper_wrap_mode();
     test_stepper_listable_center_tap();
     test_up_down_stepper();

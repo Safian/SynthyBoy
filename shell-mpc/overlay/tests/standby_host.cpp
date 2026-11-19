@@ -729,6 +729,20 @@ int main()
             if (! v.hold || ! v.dimmed) ++hidden;
         }
         check (hidden == 0 && t.dimmed() && t.dims() == 1 && std::string (t.evidence()) == "picture" && t.hiddenTicks() == 0, "tracker, XL: the blurred markers alone dim it at once, backlight unchanged, evidence picture, 0 hidden");
+        {
+            // XL with a backlight that reads 4 awake and 3 dimmed (one level, ratio 0.75): that is no backlight drop, the evidence stays the picture
+            Tracker x;
+            double tt = 0.0;
+            for (int i = 0; i < 300; ++i) { tt += 10.0; x.update (tt, true, false, true, true, 4, false); }
+            for (int i = 0; i < 50; ++i) { tt += 10.0; x.update (tt, false, false, true, true, 3, true); }
+            check (x.dimmed() && std::string (x.evidence()) == "picture" && ! x.backlightLow(), "tracker, XL: a one level step of the backlight (4 -> 3) is not backlight evidence: evidence picture");
+            // a real drop (227 -> 106) with the dimmed markers is still backlight+picture
+            Tracker k2;
+            tt = 0.0;
+            for (int i = 0; i < 300; ++i) { tt += 10.0; k2.update (tt, true, false, true, true, 227, false); }
+            for (int i = 0; i < 50; ++i) { tt += 10.0; k2.update (tt, false, true, true, true, 106, false); }
+            check (k2.dimmed() && std::string (k2.evidence()) == "backlight+picture", "tracker, Key 61: the drop of 121 levels is still backlight evidence");
+        }
         // half-way frames (neither sharp nor blurred) while waking: held, then awake
         int gone = 0;
         for (int i = 0; i < 20; ++i) { now += 10.0; if (! t.update (now, false, false, true, true, 3, false).hold) ++gone; }

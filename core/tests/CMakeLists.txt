@@ -45,6 +45,16 @@ target_include_directories(synthyboy_test_own_voice PRIVATE "${PROJECT_SOURCE_DI
 synthyboy_add_test(synthyboy_test_own_fx test_own_fx.cpp)
 target_include_directories(synthyboy_test_own_fx PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/tools/own-oracle")
 synthyboy_add_test(synthyboy_test_own_osc_options test_own_osc_options.cpp)
+synthyboy_add_test(synthyboy_test_own_content_opt test_own_content_opt.cpp)   # the CPU optimisations of the library oscillators change no output sample
+target_include_directories(synthyboy_test_own_content_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_compressor_opt test_own_compressor_opt.cpp)   # the CPU optimisation of the Compressor limiter changes no output sample
+target_include_directories(synthyboy_test_own_compressor_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_preset_render_output test_preset_render_output.cpp LINK synthyboy_fx_serum_b)   # the files of synthyboy_preset_render --float32 / --hash
+target_include_directories(synthyboy_test_preset_render_output PRIVATE "${PROJECT_SOURCE_DIR}/tools/preset-render" "${PROJECT_SOURCE_DIR}/core/fx-serum-b")
+synthyboy_add_test(synthyboy_test_own_helper_thread test_own_helper_thread.cpp)   # the wake-up flag and the helper threads of the engine
+target_include_directories(synthyboy_test_own_helper_thread PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_libkeys_warm test_own_libkeys_warm.cpp)   # libKeys () is built in prepare (), not on the audio thread (a process of its own: built once per process)
+target_include_directories(synthyboy_test_own_libkeys_warm PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_osc_types test_own_osc_types.cpp)
 target_include_directories(synthyboy_test_own_osc_types PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_unison_cap test_own_unison_cap.cpp)
@@ -68,9 +78,91 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
     target_compile_options(synthyboy_test_own_warp_lanes PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
     target_link_libraries(synthyboy_test_own_warp_lanes PRIVATE Threads::Threads)
     add_test(NAME synthyboy_test_own_warp_lanes COMMAND synthyboy_test_own_warp_lanes)
+    # The integer NEON compares (dsp/neon_cmp.h) against the float compares on every bit pattern, and the simd.h loops built on them (NEON forms on, no fused
+    # multiply-add); header only, links nothing of the engine.
+    add_executable(synthyboy_test_neon_cmp test_neon_cmp.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_neon_cmp PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/engine-own")
+    target_compile_features(synthyboy_test_neon_cmp PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_neon_cmp PRIVATE SB_TEST_NEON=1)
+    target_compile_options(synthyboy_test_neon_cmp PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_neon_cmp PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_neon_cmp COMMAND synthyboy_test_neon_cmp)
+    # The NEON block peak (dsp/peak.h: strip, bus, master and effect chain peaks) against the scalar loops it replaced, on every special value, default and flush-to-zero float mode; header only.
+    add_executable(synthyboy_test_own_peak test_own_peak.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_own_peak PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/engine-own")
+    target_compile_features(synthyboy_test_own_peak PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_own_peak PRIVATE SB_TEST_NEON=1)
+    target_compile_options(synthyboy_test_own_peak PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_own_peak PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_own_peak COMMAND synthyboy_test_own_peak)
+    # The engine's master stage (dsp/master_stage.h) in its hoisted scalar and NEON forms against the per sample loop it replaced; header only.
+    add_executable(synthyboy_test_own_master_stage test_own_master_stage.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_own_master_stage PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/engine-own")
+    target_compile_features(synthyboy_test_own_master_stage PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_own_master_stage PRIVATE SB_TEST_NEON=1)
+    target_compile_options(synthyboy_test_own_master_stage PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_own_master_stage PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_own_master_stage COMMAND synthyboy_test_own_master_stage)
+    # The voice filter (FilterUnit) and the chorus with their vector forms against their scalar loops (the --scalar-filters switch): the filters-serum sources compiled
+    # into the test with the pair kernels and the NEON loops on, without fused multiply-add.
+    add_executable(synthyboy_test_own_filter_unit_lanes test_own_filter_unit_lanes.cpp test_own_chorus_lanes.cpp "${PROJECT_SOURCE_DIR}/core/filters-serum/src/filter.cpp"
+        "${PROJECT_SOURCE_DIR}/core/filters-serum/src/filter_types.cpp" "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_own_filter_unit_lanes PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own"
+        "${PROJECT_SOURCE_DIR}/core/filters-serum/include" "${PROJECT_SOURCE_DIR}/core/filters-serum/src")
+    target_compile_features(synthyboy_test_own_filter_unit_lanes PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_own_filter_unit_lanes PRIVATE SB_TEST_NEON=1 SYNTHYBOY_FILTER_TEST_NEON=1)
+    target_compile_options(synthyboy_test_own_filter_unit_lanes PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_own_filter_unit_lanes PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_own_filter_unit_lanes COMMAND synthyboy_test_own_filter_unit_lanes)
 endif()
+# The lane mix of the library players (LibOsc::mixLane: simd::rampLerp + simd::mulAddTo) against the scalar loop, with the NEON forms on (also on Apple's arm64) and without fused multiply-add.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
+    add_executable(synthyboy_test_own_mix_lanes test_own_mix_lanes.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_own_mix_lanes PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own")
+    target_compile_features(synthyboy_test_own_mix_lanes PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_own_mix_lanes PRIVATE SB_TEST_NEON=1)
+    target_compile_options(synthyboy_test_own_mix_lanes PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_own_mix_lanes PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_own_mix_lanes COMMAND synthyboy_test_own_mix_lanes)
+endif()
+# The NEON inverse transform of the spectral morph cycle against its scalar loops: morph.cpp and the wavetable it needs compiled into the test with the NEON form on (also on Apple's arm64) and
+# without fused multiply-add; it links nothing else of the engine.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
+    add_executable(synthyboy_test_own_morph_transform test_own_morph_transform.cpp "${PROJECT_SOURCE_DIR}/core/engine-own/osc/morph.cpp"
+        "${PROJECT_SOURCE_DIR}/core/engine-own/osc/wavetable_bank.cpp" "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_own_morph_transform PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own"
+        "${PROJECT_SOURCE_DIR}/core/src")
+    target_compile_features(synthyboy_test_own_morph_transform PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_own_morph_transform PRIVATE SB_TEST_NEON=1)
+    target_compile_options(synthyboy_test_own_morph_transform PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_own_morph_transform PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_own_morph_transform COMMAND synthyboy_test_own_morph_transform)
+endif()
+# The optimised wavetable oscillator (docs/release/CPU-REVIEW-OSC.md) against the code it replaced (WtOsc::setReference), bit for bit on random patches; the NEON forms on, no fused multiply-add.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
+    add_executable(synthyboy_test_own_wt_osc_opt test_own_wt_osc_opt.cpp "${PROJECT_SOURCE_DIR}/core/engine-own/osc/morph.cpp"
+        "${PROJECT_SOURCE_DIR}/core/engine-own/osc/wavetable_bank.cpp" "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+    target_include_directories(synthyboy_test_own_wt_osc_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/include" "${PROJECT_SOURCE_DIR}/core/engine-own"
+        "${PROJECT_SOURCE_DIR}/core/src")
+    target_compile_features(synthyboy_test_own_wt_osc_opt PRIVATE cxx_std_17)
+    target_compile_definitions(synthyboy_test_own_wt_osc_opt PRIVATE SB_TEST_NEON=1)
+    target_compile_options(synthyboy_test_own_wt_osc_opt PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+    target_link_libraries(synthyboy_test_own_wt_osc_opt PRIVATE Threads::Threads)
+    add_test(NAME synthyboy_test_own_wt_osc_opt COMMAND synthyboy_test_own_wt_osc_opt)
+endif()
+# A legato note keeps the envelope scaling of the previous voice control step while nothing of the voice is modulated (docs/release/CPU-REVIEW-VOICE-MOD.md V1 side note):
+# a reproduction that FAILS on the code as it is. Built, not registered with CTest until the owner decides the fix (it changes output in that case).
+add_executable(synthyboy_test_own_voice_legato_env test_own_voice_legato_env.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
+target_link_libraries(synthyboy_test_own_voice_legato_env PRIVATE synthyboy_core Threads::Threads)
+target_include_directories(synthyboy_test_own_voice_legato_env PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/engine-own")
+target_compile_options(synthyboy_test_own_voice_legato_env PRIVATE -Wall -Wextra -Wpedantic)
+synthyboy_add_test(synthyboy_test_own_voice_opt test_own_voice_opt.cpp)   # the CPU optimisations of the voice control and the matrix change no sample and no display value
+target_include_directories(synthyboy_test_own_voice_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+target_compile_definitions(synthyboy_test_own_voice_opt PRIVATE SYNTHYBOY_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 synthyboy_add_test(synthyboy_test_own_fx_mute test_own_fx_mute.cpp)   # an effect whose mix is exactly 0 is not processed (economy group Control)
 target_include_directories(synthyboy_test_own_fx_mute PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_fx_makeup test_own_fx_makeup.cpp)   # the tier level makeup of the bypassed effects
+target_include_directories(synthyboy_test_own_fx_makeup PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 synthyboy_add_test(synthyboy_test_own_profile test_own_profile.cpp)   # the economy groups of a quality (the device profiles of shell-mpc/device_profile.h)
 target_include_directories(synthyboy_test_own_profile PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 synthyboy_add_test(synthyboy_test_rt         test_rt_alloc.cpp)   # replaces global operator new/delete
@@ -85,8 +177,24 @@ target_include_directories(synthyboy_fuzz_smoke PRIVATE "${PROJECT_SOURCE_DIR}/c
 target_compile_definitions(synthyboy_fuzz_smoke PRIVATE SYNTHYBOY_FUZZ_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 
 # The user content library of the shells (WP-01): store, references, Missing Files logic, library, Vital import inside the plugin (synthetic fixtures)
+synthyboy_add_test(synthyboy_test_wavetable_file test_wavetable_file.cpp)
+synthyboy_add_test(synthyboy_test_wavetable_catalogue test_wavetable_catalogue.cpp)
 synthyboy_add_test(synthyboy_test_user_content test_user_content.cpp "${PROJECT_SOURCE_DIR}/core/vital-import/tests/fixtures.cpp")
 target_include_directories(synthyboy_test_user_content PRIVATE "${PROJECT_SOURCE_DIR}/core/vital-import" "${PROJECT_SOURCE_DIR}/core/vital-import/tests")
 synthyboy_add_test(synthyboy_test_clap_content test_clap_content.cpp LINK synthyboy_static ${CMAKE_DL_LIBS})
 # GROUPD (WP-14 / 15 / 16): sample -> wavetable, frame <-> LFO shape, WAV of a render, the offline render driver on the own engine
 synthyboy_add_test(synthyboy_test_wave_convert test_wave_convert.cpp)
+synthyboy_add_test(synthyboy_test_own_ladder_range test_own_ladder_range.cpp)
+target_include_directories(synthyboy_test_own_ladder_range PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_morph_range test_own_morph_range.cpp)
+target_include_directories(synthyboy_test_own_morph_range PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_comb_pitch test_own_comb_pitch.cpp)
+target_include_directories(synthyboy_test_own_comb_pitch PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+synthyboy_add_test(synthyboy_test_own_engine_fixes test_own_engine_fixes.cpp)
+synthyboy_add_test(synthyboy_test_own_filter_styles test_own_filter_styles.cpp)
+target_include_directories(synthyboy_test_own_filter_styles PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/core/filters-serum/include")
+synthyboy_add_test(synthyboy_test_own_keys_claimed test_own_keys_claimed.cpp)
+synthyboy_add_test(synthyboy_test_own_note_storm test_own_note_storm.cpp)
+synthyboy_add_test(synthyboy_test_own_content_policy test_own_content_policy.cpp)
+synthyboy_add_test(synthyboy_test_own_convolve_bypass test_own_convolve_bypass.cpp)
+target_include_directories(synthyboy_test_own_convolve_bypass PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")   # Convolve is bypassed at tier low (quality.h) also with an impulse loaded

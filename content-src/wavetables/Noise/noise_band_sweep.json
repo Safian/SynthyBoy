@@ -1,0 +1,32 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Noise Band Sweep",
+ "category": "Noise",
+ "description": "Frozen white noise with one narrow band (a quarter octave) lifted 30 dB, its centre rising from the 3rd to the 300th harmonic: whistling wind sweeping up.",
+ "frames": 64,
+ "seed": "noise_band_sweep",
+ "source": {
+  "type": "spec",
+  "params": {
+   "band_center": {
+    "law": "curve",
+    "from": 3,
+    "to": 300,
+    "power": 2.2
+   },
+   "band_width": 0.25,
+   "band_gain_db": 30
+  },
+  "input": {
+   "type": "noise",
+   "params": {
+    "tilt": 0.0,
+    "seed": 3,
+    "count": 300
+   }
+  }
+ },
+ "post": {
+  "limit": 320
+ }
+}

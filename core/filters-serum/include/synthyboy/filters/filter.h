@@ -19,6 +19,7 @@ struct FilterParams
     float var = 0.0f;       // Contextual Var parameter [0.0f, 1.0f] (FAT, FREQ, MORPH, etc.)
     float blend = 0.0f;     // Blend / morph / style parameter [0.0f, 1.0f]
     float mix = 1.0f;       // Dry/wet mix [0.0f, 1.0f] (1.0f = 100% wet)
+    bool jump = false;      // quality.no_smoothing (engine-own): the smoothed cutoff and resonance are set to their targets at once
     int coefHold = 1;       // Tier low (engine-own): the smoothed cutoff and resonance that the filter runs on are updated every coefHold samples (1 = every sample)
 };
 
@@ -83,8 +84,9 @@ public:
     /**
      * The two filters of a stereo pair in one pass: the same samples as `a.process (inA, outA, n); b.process (inB, outB, n);` to the last bit, with the arithmetic
      * of the two done side by side (NEON on ARM). Returns false, having done nothing, when there is no pair kernel for the case: a build without NEON, a type
-     * other than Scream LP / BP, EMS Ladder, MG Ladder and Diffusor, two filters of different type or sample rate or coefficient hold, or a Diffusor whose two
-     * sides run a different number of stages; the caller then calls process () twice. The four buffers must not overlap, except in with its own out.
+     * other than Scream LP / BP, EMS Ladder, MG Ladder, Diffusor, Allpasses (Smear), the twelve Multi SVF types (LH .. NN) and the nine Flanges types (Cmb, Flg,
+     * Phs L / H / HL) and Ring Mod / Ring Mod x2, two filters of different type or sample rate or coefficient hold, or a Diffusor whose two sides run a different number of stages; the
+     * caller then calls process () twice. The four buffers must not overlap, except in with its own out.
      */
     static bool processPair (Filter& a, Filter& b, const float* inA, float* outA, const float* inB, float* outB, int numSamples) noexcept;
     /** Tests: the pair kernel in its reference form (two plain floats per value, any platform), and whether processPair () has a kernel in this build. */

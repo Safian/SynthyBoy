@@ -40,6 +40,7 @@ TOPICS = {
     "f2e133c7": "key 61", "397c0654": "pointer plane", "94f5e3dd": "quality profile", "77f74d2e": "led", "76ffa60f": "led",
     "331af461": "macro names", "5c470640": "standby", "389944b1": "q router", "2b3555b7": "stepped", "f9b1310f": "string",
     "f5b13a93": "in-host drawing", "a7a0034d": "q-link",
+    "08e70caf": "power and full screen", "0e9e4dd9": "wavetable pack docs", "16df7e89": "wavetable files", "18d19d6b": "wavetable browser", "308dd896": "wavetable browser", "3482d198": "limiter", "34cc1053": "drop-down", "3acdaf1b": "output limiter", "43304c10": "factory wavetables", "53dd6ff2": "register of seven", "5b0aa592": "carousel", "8b5a6ad1": "play page", "78b86717": "header band", "1434acc4": "lfo editor", "2952f44e": "noise page", "3828e026": "content names", "88382e77": "shape library", "a1292f4c": "lfo editor", "b8831b4a": "shape shift", "bc3a05b1": "content names", "bf6c4223": "noise oscillator page", "c553d1ba": "lfo editor", "e5decad4": "lfo editor", "e89a9dc4": "lfo editor", "f9f3c1a0": "lfo editor", "b70dd4af": "lfo shape editor", "ae4c563b": "one play page", "c7ef2d29": "perceptual levelling", "db8d0b3d": "wavetable lab", "ef1ef5bd": "play and master",
 }
 
 
@@ -121,8 +122,8 @@ class DocsReleaseTests(unittest.TestCase):
         n_pre = len([f for f in os.listdir(os.path.join(ROOT, "content", "presets")) if os.path.isdir(os.path.join(ROOT, "content", "presets", f))])
         count = sum(len([x for x in os.listdir(os.path.join(ROOT, "content", "presets", d)) if x.endswith(".sbpreset")])
                     for d in os.listdir(os.path.join(ROOT, "content", "presets")) if os.path.isdir(os.path.join(ROOT, "content", "presets", d)))
-        self.assertEqual(count, 136)
-        self.assertIn("136 factory presets", self.changelog)
+        self.assertEqual(count, 160)
+        self.assertIn("160 factory presets", self.changelog)
         self.assertGreater(n_files, 0)
         self.assertGreater(n_pre, 0)
         # parameter sequence of the overlay build: engine + 4 cursors + 32 spectrum + 2 pad pressure + 1 instance + 3 selectors + 24 proxies + 16 Q

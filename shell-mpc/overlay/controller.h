@@ -45,6 +45,8 @@
 #include "renderer.h"
 #include "touch_input.h"
 #include "../safe_file.h"
+#include "../write_files.h"
+#include "../startup_timing.h"
 #include "ui_stack.h"
 #include "vblank_pacer.h"
 #include "view.h"
@@ -60,6 +62,7 @@ struct Paths
     std::string rotation = "/tmp/synthyboy-overlay-rot";
     std::string noGpu = "/tmp/synthyboy-overlay-nogpu";
     std::string status = "/tmp/synthyboy-overlay-status.txt";
+    std::string statusRequest = "/tmp/synthyboy-overlay-status-on";   // only a build with SYNTHYBOY_MPC_WRITE_FILES 0 (write_files.h) looks at it: the status file is written while this file exists
     std::string detail = "/tmp/synthyboy-overlay-detail";   // 1 / full, 2 / reduced: the level of detail of the UI (ui/theme.h Detail); without the file (or "auto") the plugin chooses from the measured frame time
     std::string gpuClock = "/tmp/synthyboy-overlay-gpuclock";   // "off": the clock of the GPU is left to its governor; otherwise it is raised while the picture moves (gpu_clock.h)
     std::string rate = "/tmp/synthyboy-overlay-fps";   // 30 or 60: the pictures a second the GPU path aims at; without the file (or "auto") 30 on a GPU of the Mali-T series (the Key 61), 60 (tried, kept when it is reached) on the others
@@ -83,6 +86,7 @@ struct Timing
     bool followDisplayPace = true;    // once the display is known: the picture gap is the pace grid's (vblanks per picture x the measured period; scenes for the GPU 20 % faster than the grid)
     double switchesEveryMs = 1000.0;  // kill switch, rotation file, status file
     int unreadableLimit = 20;         // checks in a row (2 s) without a readable framebuffer -> disabled
+    bool prewarmGpu = false;          // start the GPU helper as soon as an instance is attached and the display is known, not when the first page is found on screen (the service sets it; the helper then ran in parallel with the host's loading)
 };
 
 class Controller
@@ -90,9 +94,24 @@ class Controller
 public:
     /** `gpu`: the GPU helper (null: the CPU draws everything, as without the helper). Not owned. */
     Controller (IPlaneBackend& backend, IFrameSource& frames, ICurveRenderer& renderer, const Paths& paths, const Timing& timing = Timing(), double fixedComputeCostMs = -1.0,
-                gpu::IGpuOverlay* gpuOverlay = nullptr, ITouchInput* touchInput = nullptr, const layout::View* viewTable = layout::kViews, int numViews = layout::kNumViews)
+                gpu::IGpuOverlay* gpuOverlay = nullptr, ITouchInput* touchInput = nullptr, const layout::View* viewTable = layout::kViews, int numViews = layout::kNumViews, bool deferViews = false)
         : views_tbl_ (viewTable), numViews_ (std::min (numViews, static_cast<int> (Detection::kMaxViews))), backend_ (backend), presenter_ (backend), frames_ (frames), renderer_ (renderer), paths_ (paths), timing_ (timing), fixedCost_ (fixedComputeCostMs), gpu_ (gpuOverlay), touchIn_ (touchInput)
     {
+        if (! deferViews)
+            buildViews();
+        for (int& s : viewSlot_)
+            s = -1;
+        for (int& g : uiGroup_)
+            g = -1;
+    }
+
+    /** Makes the views (the 24 pages' scenes: every layout view is constructed, its region and readout targets are taken) and the page detector. The constructor does it unless `deferViews` was given (the service does:
+        the plugin's calling thread, the host's effOpen path, must not pay for it); then the first tick () of the overlay thread does it. Idempotent. Only the thread that ticks calls it after construction. */
+    void buildViews()
+    {
+        if (viewsBuilt_)
+            return;
+        viewsBuilt_ = true;
         for (int i = 0; i < numViews_; ++i)
         {
             const layout::View& v = views_tbl_[i];
@@ -107,10 +126,7 @@ public:
             targetCount_[i] = static_cast<int> (targets_.size()) - targetBase_[i];
         }
         detector_ = std::make_unique<PageDetector> (frames_, markers_, numViews_, instanceRects_);
-        for (int& s : viewSlot_)
-            s = -1;
-        for (int& g : uiGroup_)
-            g = -1;
+        startupTimes().markUiStep (StartupTimes::kUiViewsBuilt);
     }
 
     /** The table indices the overlay wants in the engine's readout (IEngine::setReadoutTargets), all views together; view i's targets start at targetBase (i). */
@@ -218,6 +234,17 @@ public:
     void touchEvent (const TouchEvent& ev, double nowMs)
     {
         ++touchEvents_;
+        if (hostGesture_)
+        {
+            if (ev.kind == TouchEvent::Down)
+                hostGesture_ = false;   // a new gesture (an Up was lost): it is ours
+            else
+            {
+                if (ev.kind == TouchEvent::Up)
+                    hostGesture_ = false;
+                return;   // the rest of a gesture that went down on the host's own screen
+            }
+        }
         if (swallowTouch (ev))
             return;   // the host is dimmed (standby): this touch wakes it and nothing else, whole gesture included
         if (keyEdge_ < PanelKey::kNoKey && ev.x >= keyEdge_)
@@ -310,6 +337,7 @@ public:
     {
         try
         {
+            buildViews();   // a no-op after the first tick (the service defers it to here: off the host's thread)
             if (nowMs < lastNowMs_)
                 rebaseClock();   // the caller's clock began again (a thread that was started anew): the deadlines of the earlier run would never come
             lastNowMs_ = nowMs;
@@ -350,7 +378,7 @@ private:
         }
         if (gpu_)
             gpu_->poll (nowMs);
-        pollTouch (nowMs);
+        readTouch (nowMs);   // read now, delivered after the page check below (a touch is judged by the check of its own step)
         // a GPU picture is on the plane: the next scene goes FIRST, before any call that can wait for the display's locks (the page detection below reads the CRTC, which waits while the helper's
         // plane update holds them for a vblank): the scenes then come at the rhythm of the pace grid, whatever the rest of the step takes
         double early = 0.0;
@@ -389,6 +417,7 @@ private:
         else if (count == 0)    hiddenReason = "no instance";
         if (! hiddenReason.empty())
         {
+            hideCurrentView();
             presenter_.hide();
             hideGpu (nowMs);
             current_ = shownView_ = -1;
@@ -397,6 +426,18 @@ private:
             return timing_.detectEveryMs;
         }
 
+        if (timing_.prewarmGpu && ! prewarmTried_ && gpu_ && ! noGpu_ && ! killed_)
+        {
+            // The helper's start (EGL, GBM, the first context: 584 ms on the Key 61) in parallel with the host's loading: the overlay thread asks for it now, with no page on screen yet. The helper only
+            // takes the plane when a scene is shown; a failure is handled by the backend (back off, then the CPU path) as for any start.
+            prewarmTried_ = true;
+            if (presenter_.open())
+            {
+                applyPace();
+                startupTimes().markUiStep (StartupTimes::kUiHelperAsked);
+                gpu_->request (nowMs);
+            }
+        }
         if (nowMs >= nextDetectMs_)
         {
             nextDetectMs_ = nowMs + (standby_.busy() ? std::min (timing_.detectEveryMs, kStandbyBusyMs) : timing_.detectEveryMs);
@@ -496,6 +537,7 @@ private:
             {
                 if (current_ >= 0 && view < 0)
                     ++viewHides_;   // the page went off the screen (a blink when the panel comes or goes)
+                hideCurrentView();   // the view that was on screen is not any more: its pop-up lists close, its gesture ends
                 if (view >= 0 && view != current_)
                 {
                     keys_[view].forget();   // another tab or sub-tab: the host's picture under us is another one, the reference is taken again
@@ -513,6 +555,7 @@ private:
                 setState ("hidden: " + why);
             }
         }
+        deliverTouch (nowMs);
         updateKey (nowMs);
         if (current_ >= 0)
         {
@@ -687,6 +730,7 @@ private:
     /** The picture of the view on screen (current_ >= 0): the GPU scene or the CPU drawing. Returns after how many milliseconds the next step is due. */
     double drawCurrent (double nowMs)
     {
+        startupTimes().markUiStep (StartupTimes::kUiPageSeen);
         {
             std::lock_guard<std::mutex> g (mu_);
             if (! slots_.at (activeSlot_))     // the instance whose page is on screen has closed since the last check
@@ -711,6 +755,7 @@ private:
                 return 1000.0;
             }
             applyPace();
+            startupTimes().markUiStep (StartupTimes::kUiHelperAsked);
             gpu_->request (nowMs);
         }
         const bool wantGpu = gpu_ && gpu_->active() && gpuSkipView_ != current_;
@@ -828,14 +873,63 @@ private:
         }
     }
 
-    /** The touch screen: only while a view of the Play page is on screen (the plugin-drawn pages are there); the events go to the view, a running finger gets the clock for the long press. */
-    void pollTouch (double nowMs)
+    /** The touch screen is read for the plugin-drawn pages only while a view of the Play page is on screen (by what the last page check said). */
+    bool touchEligible() const noexcept { return current_ >= 0 && isUiPage (current_) && activeSlot_ >= 0 && presenter_.opened(); }
+
+    /** A touch event that is not ours (nothing of ours on screen): the host's. A finger that went down on the host is the host's until it is up, also when our page is on screen again meanwhile. */
+    void noteHostTouch (const TouchEvent& ev) noexcept
+    {
+        if (ev.kind == TouchEvent::Down)
+            hostGesture_ = true;
+        else if (ev.kind == TouchEvent::Up)
+            hostGesture_ = false;
+    }
+
+    /** First part of the touch step, before the page check: while our page is on screen (as far as the last check knows) the events are read and kept; with no page they are read and thrown away (they must not
+        arrive later, when a page is on screen again: the taps of the host's dialogs). A finger going down asks for a page check in this very step: the touch is delivered after it (deliverTouch). */
+    void readTouch (double nowMs)
+    {
+        for (const TouchEvent& ev : pendingTouch_)   // left over from a step that ended before its delivery: not ours
+            noteHostTouch (ev);
+        pendingTouch_.clear();
+        if (touchIn_ == nullptr)
+            return;
+        if (touchEligible())
+        {
+            touchIn_->configure (presenter_.panelWidth(), presenter_.panelHeight(), rotation_);
+            bool down = false;
+            touchIn_->poll ([this, &down] (const TouchEvent& ev)
+            {
+                if (ev.kind == TouchEvent::Down)
+                    down = true;
+                if (pendingTouch_.size() < kMaxPendingTouch || ev.kind != TouchEvent::Move)
+                    pendingTouch_.push_back (ev);
+            });
+            if (down)
+                nextDetectMs_ = nowMs;
+        }
+        else
+            touchIn_->poll ([this] (const TouchEvent& ev) { noteHostTouch (ev); });
+    }
+
+    /** Second part, after the page check of this step (current_ is what the check found, the one source of the touch and of the picture): the kept events go to the view on screen, or are the host's. A running
+        finger gets the clock for the long press. */
+    void deliverTouch (double nowMs)
     {
         pollMouse (nowMs);
-        if (touchIn_ == nullptr || current_ < 0 || ! isUiPage (current_) || activeSlot_ < 0 || ! presenter_.opened())
+        if (touchIn_ == nullptr)
             return;
-        touchIn_->configure (presenter_.panelWidth(), presenter_.panelHeight(), rotation_);
-        touchIn_->poll ([this, nowMs] (const TouchEvent& ev) { touchEvent (ev, nowMs); });
+        const bool ours = touchEligible();
+        for (const TouchEvent& ev : pendingTouch_)
+        {
+            if (ours)
+                touchEvent (ev, nowMs);
+            else
+                noteHostTouch (ev);
+        }
+        pendingTouch_.clear();
+        if (! ours)
+            return;
         std::lock_guard<std::mutex> g (mu_);
         IInstanceView* v = slots_.at (activeSlot_);
         if (v != nullptr && views_[static_cast<size_t> (current_)]->fingerDown())
@@ -843,6 +937,17 @@ private:
             views_[static_cast<size_t> (current_)]->onTick (ui_[activeSlot_], *v, nowMs);
             needFrame_ = true;
         }
+    }
+
+    /** The view on screen goes off it (or is replaced): its gesture ends and its pop-up lists close, so a list opened by a touch that came before the check noticed the host's dialog is not open when the page
+        comes back. */
+    void hideCurrentView()
+    {
+        if (current_ < 0)
+            return;
+        std::lock_guard<std::mutex> g (mu_);
+        views_[static_cast<size_t> (current_)]->onHidden();
+        needFrame_ = true;
     }
 
     /** The mouse: like the touch screen only while a plugin-drawn page is on screen (the events of other times are read and thrown away: they must not arrive later). Left button = a finger, the wheel = steps. */
@@ -1110,6 +1215,9 @@ private:
     void readSwitches (double nowMs)
     {
         killed_ = exists (paths_.killSwitch);
+#if ! SYNTHYBOY_MPC_WRITE_FILES
+        statusRequested_ = ! paths_.statusRequest.empty() && exists (paths_.statusRequest);
+#endif
         if (qlinkOpt_.poll())
         {
             // the option of the host changed (or was read the first time): with it off the pop-up never comes, the key is off entirely: nothing is read, nothing is cut, the references are dropped
@@ -1384,6 +1492,10 @@ private:
 
     void writeStatus (bool final_)
     {
+#if ! SYNTHYBOY_MPC_WRITE_FILES
+        if (! statusRequested_)
+            return;   // the release build (write_files.h): no periodic status file unless /tmp/synthyboy-overlay-status-on exists (read once a second in readSwitches)
+#endif
         std::ostringstream o;
         o << "state: " << state_ << "\n";
         o << "view: " << (current_ >= 0 && state_ == "visible" ? views_[static_cast<size_t> (current_)]->name() : "none") << "\n";
@@ -1412,7 +1524,16 @@ private:
                     if (IInstanceView* v = slots_.at (activeSlot_))
                         v->qStatus (qs);
             }
-            o << qs;   // the stepping of the Q proxies of the instance on screen: q_step_travel and q_knob_n (raw value, delta, travel)
+            o << qs;
+            std::string vs;
+            {
+                std::lock_guard<std::mutex> g (mu_);
+                if (activeSlot_ >= 0)
+                    if (IInstanceView* v = slots_.at (activeSlot_))
+                        v->voiceStatus (vs);
+            }
+            o << vs;   // the voices and the keys the engine believes are held (a stuck note shows as orphan_voices > 0 or held_keys > 0 with no key down)
+            // the stepping of the Q proxies of the instance on screen: q_step_travel and q_knob_n (raw value, delta, travel)
         }
         if (extraStatus_)
             o << extraStatus_();
@@ -1598,6 +1719,9 @@ private:
     unsigned long detailFrames_ = 0;
     const char* detailSource_ = "auto";
     int look_ = 1;
+    std::vector<TouchEvent> pendingTouch_;   // read at the start of the step, delivered after its page check
+    bool hostGesture_ = false;               // a finger is down that went down while no page of ours was on screen
+    static constexpr size_t kMaxPendingTouch = 256;
     unsigned long touchEvents_ = 0, touchTaken_ = 0, wheelEvents_ = 0, wheelTaken_ = 0;
     Rect instanceRects_[Detection::kMaxViews];
     int targetBase_[Detection::kMaxViews] = {};
@@ -1607,6 +1731,9 @@ private:
     struct ViewFrames { unsigned long frames = 0, changes = 0; };
     std::vector<ViewFrames> viewFrames_ = std::vector<ViewFrames> (Detection::kMaxViews);
     std::unique_ptr<PageDetector> detector_;
+    bool prewarmTried_ = false;   // the pre-warm of the helper was tried once (Timing::prewarmGpu)
+    [[maybe_unused]] bool statusRequested_ = false;   // SYNTHYBOY_MPC_WRITE_FILES 0 only: the request file existed at the last look
+    bool viewsBuilt_ = false;   // buildViews () has run (the overlay thread's first tick when the constructor was told to defer)
     std::vector<uint32_t> canvas_;
 
     std::mutex mu_;

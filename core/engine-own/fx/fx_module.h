@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include <limits>
+
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
@@ -10,9 +12,12 @@
 #include <mutex>
 #include <thread>
 
+#include "../dsp/helper_thread.h"
 #include "../dsp/util.h"
+#include "../dsp/peak.h"
 #include "../matrix/mod_matrix.h"
 #include "../osc/content_set.h"
+#include "fx_makeup.h"
 
 namespace synthyboy
 {
@@ -24,11 +29,15 @@ struct FxFrame
     double bpm = 120.0;
     int period = kControlPeriod;
     float lastNote = 60.0f;
+    bool noSmoothing = false;            // quality.no_smoothing: the module's settings apply at once (configure () runs twice, the level trim does not ramp)
+    uint32_t noteOns = 0;                // the number of notes started so far (Hyper and Bode retrigger on a change of it)
     double songBeats = 0.0;
     const ContentSet* content = nullptr; // the set this block reads (Convolve takes its impulse from it)
     bool lowCost = false;                // tier low: the cheaper forms of dsp/fastmath.h in the per sample code
     bool realtime = false;               // Quality::realtime: the audio thread never waits for a helper thread
     bool muteSkip = false;               // economy group Control: a module whose mix is exactly 0 is not processed (FxModule::process)
+    bool makeup = true;                  // Quality::fxMakeup: a bypassed effect that is on in the preset leaves its loudness as a gain (FxChain, FxModule::makeupGain)
+    bool scalarLoops = false;            // measurements (setOwnSavingsOff, kOwnSavingVectorFilters): the scalar loops also where a vector form exists (the chorus LFO refresh)
 };
 
 /** One helper thread for the slow work of the effects that must not run on the audio thread (the partitioning of a Convolve impulse). A job is a function and a
@@ -48,8 +57,7 @@ private:
     struct Job { std::atomic<int> state { 0 }; Fn fn = nullptr; void* ctx = nullptr; };
     static constexpr int kJobs = 64;
     Job jobs[kJobs];
-    std::mutex mutex;
-    std::condition_variable cv;
+    WakeSignal wake;   // no timeout: submit () and the destructor notify (dsp/helper_thread.h)
     std::atomic<bool> stop { false };
     std::thread thread;
 };
@@ -86,6 +94,30 @@ public:
     virtual bool latencyReported() const noexcept { return true; }
     /** The module index 0 .. 12. */
     virtual int moduleIndex() const noexcept = 0;
+    /** true: the module has a model of its loudness (makeupPower), so that a tier that bypasses it can leave that loudness behind (core/engine-own/fx/fx_makeup.h). */
+    virtual bool hasMakeup() const noexcept { return false; }
+    /** The power the module gives the program, against the bypassed module (1 = the same level), from the module's own keys (`base` / `delta` as configure () reads them) and the program the chain's meter sees at the module's place (`program`). Called by
+        the chain for a module that is on in the preset but bypassed by the quality mask, once per control period, on the audio thread: it must be cheap (the models cache their result
+        while the keys are the same) and may start work on the helper thread but never wait for it. The level trim of the module is not in it (makeupGain). */
+    virtual float makeupPower (const FxFrame& /*f*/, const float* /*base*/, const float* /*delta*/, const makeup::ProgramDesc& /*program*/) noexcept { return 1.0f; }
+    /** The amplitude with which a copy of the input of the module on another path adds up with the module's output (the part of the output that is coherent with the input, per unit of
+        input): the dry part of the mix by default of the models; Convolve adds the real part of its impulse response. Used where a bypassed effect sits on a bus (FxChain::busMakeup). */
+    virtual float makeupCoherent (const FxFrame& /*f*/, const float* /*base*/, const float* /*delta*/, const makeup::ProgramDesc& /*program*/) noexcept { return 0.0f; }
+    /** The gain at the place of the bypassed module, its power (with the level trim) and its coherent amplitude (with the level trim). */
+    void makeup (const FxFrame& f, const float* base, const float* delta, const makeup::ProgramDesc& program, float& gain, float& power, float& coherent) noexcept
+    {
+        const float level = levelGainOf (base, delta);
+        const float p = std::max (makeupPower (f, base, delta, program), 1.0e-4f);
+        gain = level * std::sqrt (p);
+        power = level * level * p;
+        coherent = level * makeupCoherent (f, base, delta, program);
+    }
+    /** The gain at the place of the bypassed module: the trim of its Level key and the square root of makeupPower (). */
+    float makeupGain (const FxFrame& f, const float* base, const float* delta, const makeup::ProgramDesc& program) noexcept
+    {
+        const float level = levelGainOf (base, delta);
+        return level * std::sqrt (std::max (makeupPower (f, base, delta, program), 1.0e-4f));
+    }
     /** Position of the current call inside the control period (set by process ()). */
     int callOffset() const noexcept { return t0Now; }
     int callPeriod() const noexcept { return periodNow; }
@@ -93,7 +125,7 @@ public:
     void update (const FxFrame& f, const float* base, const float* delta) noexcept
     {
         levelPrev = levelGain;
-        levelGain = levelIdx >= 0 ? dbToGain (fxValue (base, delta, levelIdx)) : 1.0f;
+        levelGain = levelGainOf (base, delta);
         if (!levelSeen)
         {
             levelPrev = levelGain;
@@ -103,6 +135,11 @@ public:
         mixNow = -1.0f;
         probing = false;
         configure (f, base, delta);
+        if (f.noSmoothing)
+        {
+            configure (f, base, delta); // the same settings twice: a module that ramps from its previous to its new settings finds them equal
+            levelPrev = levelGain;
+        }
         if (!mixSeen)
         {
             mixBefore = mixNow; // the first period of the module's life: there was no mix before it
@@ -137,10 +174,8 @@ public:
             {
                 float zl[kControlPeriod] = {}, zr[kControlPeriod] = {};
                 run (zl, zr, n);
-                float peak = 0.0f;
-                for (int i = 0; i < n; ++i)
-                    peak = std::max (peak, std::max (std::fabs (zl[i]), std::fabs (zr[i])));
-                quietRun = peak < 1.0e-6f ? quietRun + n : 0; // (a non finite sample is not below the threshold: the module stays in the flush)
+                const float zp = own::peak::peakAbsPair (zl, zr, n);
+                quietRun = zp < 1.0e-6f ? quietRun + n : 0; // (a non finite sample is not below the threshold: the module stays in the flush)
                 if (quietRun >= quietNeeded)
                     clean = true;
             }
@@ -178,6 +213,20 @@ protected:
     virtual float flushSeconds() const noexcept { return 1.0f; }
 
 private:
+    /** dbToGain of the Level key, computed again only when the key's value changes (a bit identical cache of a pow). */
+    float levelGainOf (const float* base, const float* delta) const noexcept
+    {
+        if (levelIdx < 0)
+            return 1.0f;
+        const float db = fxValue (base, delta, levelIdx);
+        if (!(db == levelDbCached) || makeup::legacyCaches())
+        {
+            levelGainCached = dbToGain (db);
+            levelDbCached = db;
+        }
+        return levelGainCached;
+    }
+    mutable float levelDbCached = std::numeric_limits<float>::quiet_NaN(), levelGainCached = 1.0f;
     int levelIdx;
     float mixNow = -1.0f;     // the mix of this period as the module reported it (-1: not reported)
     bool muted = false, probing = false, mixSeen = false;

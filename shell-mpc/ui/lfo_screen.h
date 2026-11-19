@@ -1,7 +1,7 @@
 // SynthyBoy - MPC UI component library: the two views of the LFO ELEMENT (owner approved plan; drawn for the Play tab of 1280 x 628, other sizes scale in proportion): LfoCompact (the third of the width on
 // the main page, about 408 x 620) and LfoFullScreen (the whole tab). The element has two types: an LFO (LFO 1 .. 10: a shape of one cycle) and a RANDOM LFO (RND 1 .. 4: a style); `configure (random)`
 // swaps the parts and the Q groups, the places stay.
-//  - LfoCompact: the instance stepper (the 14 LFOs, a tap on its name opens the list) with the full screen button on the display, the display, and under it the Q group RATE: [SHAPE, RATE or DIVISION, RISE,
+//  - LfoCompact: the instance stepper (the 14 LFOs, a tap on its name opens the list; the same selector as the envelope's and the oscillator's, top row of the third) the display (with a header band at its top: its label and the full screen button; the curve lies below the band), and under it the Q group RATE: [SHAPE, RATE or DIVISION, RISE,
 //    SMOOTH time] (a random LFO: [STYLE, RATE or DIVISION, SYNC, STEREO]), one frame around the four.
 //  - LfoFullScreen: the top bar (close, the instance cells, HZ / BPM / KEY with TRIP and DOT, MONO, the targets button), in the middle the display at the left and the picker of the shapes (the free cells of
 //    last row hold SMOOTH and HOST; EDIT is on the corner of the display) or of the styles at the right, and the bottom band of titled blocks, one Q group each: RATE, TIMING, MOTION, KEY (the KEY block works in the key follow sync
@@ -10,7 +10,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include "carousel.h"
 #include "lfo_parts.h"
+#include "play_rows.h"
 
 namespace synthyboy_mpc { namespace ui {
 
@@ -18,8 +20,8 @@ namespace synthyboy_mpc { namespace ui {
 class LfoCompact : public Composite
 {
 public:
-    Stepper instance;                                       // LFO 1 .. 10, RND 1 .. 4
-    MenuButton full { "", MenuButton::Icon::Expand };      // the full screen button, on the display
+    Carousel instance;                                      // LFO 1 .. 10, RND 1 .. 4: the selector of the three thirds (neighbours step, the name opens the list)
+    MenuButton full { "", MenuButton::Icon::Expand };      // the full screen button, at the right end of the header band of the display
     Stepper shape, style, sync;
     RateControl rate;
     Knob rise { "RISE" }, smoothTime { "SMOOTH" };
@@ -68,9 +70,18 @@ protected:
     {
         const int m = 6, W = rect_.w - 2 * m;
         instance.place ({ rect_.x + m, rect_.y + m, W, kRowH });
-        const int dy = rect_.y + m + kRowH + 8, qy = rect_.bottom() - m - (random_ ? kQuadRandomH : kQuadH);
-        display_ = { rect_.x + m, dy, W, std::max (0, qy - 8 - dy) };
-        full.place ({ display_.right() - 64 - 4, display_.y + 4, 64, 56 });
+        // an LFO: the display is the rectangle every third of the Play page shares (play_rows.h) and the block starts one chip lane + 4 px under it (the first member, SHAPE, at the common controls line); a random LFO (not on the Play page)
+        // has two more rows and takes its room from the display
+        const int dy = rect_.y + m + kRowH + 8;
+        int qy = rect_.bottom() - m - kQuadRandomH;
+        if (random_)
+            display_ = { rect_.x + m, dy, W, std::max (0, qy - 8 - dy) };
+        else
+        {
+            display_ = playrows::displayRect (rect_);
+            qy = display_.bottom() + 4;
+        }
+        full.place (playrows::fullRect (display_));   // in the header band of the display, the same place as the oscillator's and the envelope graph's; the curve lies below the band (lfodisplay::plotRect of a compact display)
         int y = qy + kQLane;
         if (random_)
         {

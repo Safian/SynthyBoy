@@ -517,6 +517,46 @@ void testHideDimConditions()
     }
 }
 
+/** The names of the oscillator and filter choices that did not fit their boxes, and the rule for the name of a piece of content (ui/content_name.h). */
+void testShortNamesAndContentNames()
+{
+    check (std::string (ui::shownChoice ("osc2.sample.loop_mode", 3, "Forward/reverse loop")) == "Ping-pong" && std::string (ui::shownChoice ("osc2.sample.loop_mode", 1, "Forward loop")) == "Forward loop",
+           "the loop mode 'Forward/reverse loop' is shown as 'Ping-pong', the others as the engine says");
+    check (std::string (ui::shownChoice ("osc1.sample.slice_play", 0, "Play slice to end")) == "Slice to end" && std::string (ui::shownChoice ("osc1.sample.slice_play", 1, "Play single slice")) == "One slice", "the slice play modes have short names");
+    bool classicOk = true, fits = true;
+    const int counts[8] = { 6, 6, 6, 6, 2, 3, 6, 2 };
+    for (int m = 0; m < 8; ++m)
+    {
+        const char* const* n = ui::filterStyleNames (m);
+        classicOk = classicOk && n != nullptr;
+        for (int i = 0; n != nullptr && i < counts[m]; ++i)
+            fits = fits && n[i] != nullptr && n[i][0] != '\0' && std::strlen (n[i]) <= 16;
+    }
+    check (classicOk && fits && ui::filterStyleNames (8) == nullptr && ui::filterStyleNames (22) == nullptr, "the eight classic filter models have their documented style names (at most 16 characters), the Serum models keep the engine's");
+    check (std::string (ui::filterStyleNames (6)[1]) == "Positive flange" && std::string (ui::filterStyleNames (3)[5]) == "Shelf", "comb style B is the positive flange, the digital style F the shelf");
+    // content names
+    check (ui::contentname::display ("", "/packs/drums/drum_loop_120bpm.wav") == "drum loop 120bpm" && ui::contentname::display ("Break Beat", "x/y.wav") == "Break Beat" && ui::contentname::display ("", "noext") == "noext",
+           "a content name is the pack's title, else the file name without folder and extension, underscores as spaces");
+    char out[96];
+    ui::contentname::middleFit ("voice_sweep_aei_long_name_final_take", 20.0f, 200.0f, out, sizeof out);
+    const std::string cut = out;
+    const size_t at = cut.find ("\xE2\x80\xA6");
+    check (at != std::string::npos && at > 0 && at + 3 < cut.size() && cut.compare (0, 3, "voi") == 0 && cut.compare (cut.size() - 3, 3, "ake") == 0 && sdf::textWidth (out, 20.0f) <= 200.0f,
+           "a content name that is too wide loses its middle (start and end stay), and then fits (" + cut + ")");
+    ui::contentname::middleFit ("short", 20.0f, 400.0f, out, sizeof out);
+    check (std::string (out) == "short", "a name that fits stays whole");
+    {
+        // a name that fits the room but not the buffer (the pen's own buffer is 96 bytes) loses its middle too, never its end
+        std::string longName (120, 'a');
+        longName.replace (0, 3, "abc");
+        longName.replace (117, 3, "xyz");
+        ui::contentname::middleFit (longName.c_str(), 8.0f, 100000.0f, out, sizeof out);
+        const std::string c2 = out;
+        const size_t at2 = c2.find ("\xE2\x80\xA6");
+        check (at2 != std::string::npos && c2.size() < sizeof out && c2.compare (0, 3, "abc") == 0 && c2.compare (c2.size() - 3, 3, "xyz") == 0, "a name wider than the buffer loses its middle although the room is wide enough (" + c2 + ")");
+    }
+}
+
 } // namespace
 
 int main()
@@ -529,6 +569,7 @@ int main()
     testLabelsFitCellAtPageFont();
     testChoiceNamesNoThirdParty();
     testHideDimConditions();
+    testShortNamesAndContentNames();
 
     std::printf ("\nui_fx_tables_host: %s (%d failure(s))\n", g_fails == 0 ? "ALL PASS" : "FAILED", g_fails);
     return g_fails ? 1 : 0;

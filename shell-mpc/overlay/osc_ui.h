@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -23,6 +24,7 @@
 #include "../ui/ui.h"
 #include "../ui/choice_names.h"
 #include "content_browser.h"
+#include "wavetable_browser.h"
 #include "osc_spec_page.h"
 #include "curve_source.h"
 #include "../q_router.h"
@@ -33,6 +35,7 @@
 #include "ui_stack.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
+#include "synthyboy/wavetable_catalogue.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -84,6 +87,7 @@ public:
         Mask,        // the notes of the transpose snap (NoteMask): bits 0 .. 11 of the parameter
         SnapBit,     // the toggle for bit 12 of the same parameter (snap the played note, not the transpose)
         Source,      // the source of a granular / multisample oscillator: the name of the file that is loaded; a tap opens the content browser
+        Table,       // the table of a wavetable oscillator: a built-in table (the choice parameter) or a table FILE (content); the name opens the wavetable browser, the arrows step the 15 choices or the files of the category
         Inert        // no value: a button
     };
 
@@ -104,11 +108,12 @@ public:
     // ----------------------------------------------------------------------------------------------------------------------------------------------------------------------
     /** The canvas is the whole screen (1280 x 800: the Play view's region; every coordinate is a screen pixel); the pages live in the tab (y kTabY .. kTabY + kTabH). */
     static constexpr int kCanvasW = 1280, kCanvasH = 800, kTabY = 110, kTabH = 628;
+    static constexpr int kCompactX = 8, kCompactW = 420;                // the left third of the Play page
     void setCanvas (int w, int h)
     {
         w_ = w; h_ = h;
         const ui::Rect tab { 0, kTabY, w, kTabH };
-        compact_.place ({ 8, kTabY + 4, 420, kTabH - 8 });
+        compact_.place ({ kCompactX, kTabY + 4, kCompactW, kTabH - 8 });
         full_.place (tab);
         popupBox_ = { w / 2 - 340, kTabY + kTabH / 2 - 110, 680, 220 };
         route_.place (popupBox_);
@@ -133,6 +138,8 @@ public:
         if (sel != sel_ || raw != typeRaw_ || ! configured_)
             configure (&inst, sel, false, raw);
         stackDepth_ = stack.depth();
+        if (stackDepth_ > 0 && srcPopup_)
+            closeSourceList();
         syncPages (stack, inst);
         envSel_ = selectedEnv; lfoSel_ = selectedLfo;
         const int lastSel = inst.playLastSelector();
@@ -149,8 +156,11 @@ public:
             const bool sample = ti >= 0 && inst.param (ti) >= 0.5f;
             updateNoiseType (sample, inst);
         }
+        updateMissing (inst);
+        updateWavetable (inst);
         pull (inst, main_);
         pull (inst, page_);
+        applyInactive();
         updateSpecVisibility (inst);
         updateLoadButton (inst);
         if (pageTop_ == kPageEnvelope)
@@ -179,6 +189,8 @@ public:
             return detail_.displayRect();   // the same picture of the oscillator over the page (the fan of the unison voices, the grain window on the sample)
         return {};
     }
+    /** The rectangle the picture is drawn in: the plot area of the compact view (below the header band with the buttons, ui::playrows::plotRect); empty in every other state (the picture has its display rectangle). */
+    ui::Rect plotArea() const noexcept { return stackDepth_ == 0 ? compact_.plotRect() : ui::Rect {}; }
     bool isMain() const noexcept { return stackDepth_ == 0; }
     /** The instance (1 Sub .. 5 Noise) and the type of the oscillator it shows (0 wavetable, 1 sample, 2 granular, 3 spectral, 4 multisample; -1 for Sub and Noise). */
     int selection() const noexcept { return sel_; }
@@ -237,7 +249,13 @@ public:
     /** The route popup and the list popup (over the page and over the picture). */
     void drawPopup (gpu::SceneBuilder& sb) const
     {
-        if (stackDepth_ == 0 || pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope || pageTop_ == kPageMods || oscspec::isSpecPage (pageTop_))
+        if (stackDepth_ == 0)
+        {
+            if (srcPopup_)
+                list_.draw (sb);   // the list of the source selector lies over the third
+            return;
+        }
+        if (pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope || pageTop_ == kPageMods || oscspec::isSpecPage (pageTop_))
             return;
         if (pageTop_ == kPageRoute)
             route_.draw (sb);
@@ -247,8 +265,13 @@ public:
     /** What goes on top of the picture in the display rectangle (the full screen button of the compact view). */
     void drawOnDisplay (gpu::SceneBuilder& sb) const
     {
+        drawMissing (sb);
         if (stackDepth_ == 0)
+        {
             compact_.full.draw (sb);
+            compact_.power.draw (sb);
+            compact_.route.draw (sb);   // the buttons that stand in the corners of the display lie over its picture
+        }
         else if (loadShown_)
             loadBtn_.draw (sb);
     }
@@ -261,7 +284,7 @@ public:
     /** The touch hit this view's drawing (the main state: the oscillator third; any other state: everything). */
     bool covers (int x, int y) const noexcept
     {
-        return stackDepth_ > 0 ? ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y) : ui::Rect { 8, kTabY + 4, 420, kTabH - 8 }.contains (x, y);
+        return stackDepth_ > 0 ? ui::Rect { 0, kTabY, w_, kTabH }.contains (x, y) : ui::Rect { kCompactX, kTabY + 4, kCompactW, kTabH - 8 }.contains (x, y);
     }
 
     // ----------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -275,7 +298,7 @@ public:
             gesture_ = nullptr;
             if (! covers (ev.x, ev.y) || ! top)
                 return false;
-            if (loadShown_ && loadBtn_.rect().contains (x, y))
+            if (loadShown_ && ! srcPopup_ && loadBtn_.rect().contains (x, y))
             {
                 loadBtn_.touchDown (x, y, nowMs);
                 gesture_ = &loadBtn_;
@@ -332,6 +355,9 @@ public:
     bool fingerDown() const noexcept { return gestureDown_; }
     /** The stack changed behind the UI's back (the page left, another instance): the gesture is dropped. */
     void dropGesture() noexcept { gesture_ = nullptr; gestureDown_ = false; }
+    /** The page went off the screen (a host dialog over it): the open list of the compact view closes, so it is not still there when the page comes back. */
+    void closePopups() { if (srcPopup_) closeSourceList(); }
+    bool popupOpen() const noexcept { return srcPopup_; }
     /** Another element's page opened or closed: the Q group is published again at the next update (the router keeps what the last page set). */
     void forgetQGroup() noexcept { qSlots_.forget(); }
 
@@ -477,10 +503,12 @@ private:
             {
                 // the source of a granular / multisample oscillator is content (a file), not a parameter: its name is shown and a tap opens the content browser (the folders of the machine, the WAV files, the SFZ instruments)
                 const bool contentType = kind != ui::OscKind::Wavetable && ! otherType;
-                bind (main_, kBasic + 1, &b->source.stepper, contentType ? T::Source : T::Stepper, kind == ui::OscKind::Wavetable && ! otherType ? "wavetable" : "", ! contentType && (kind != ui::OscKind::Wavetable || otherType));
-                const bool listOk = (b == &full_.basic && kind == ui::OscKind::Wavetable && ! otherType) || contentType;   // wavetable: the list of all sources, on the full screen; the content types: the browser, from both views
+                const bool tableType = kind == ui::OscKind::Wavetable && ! otherType;
+                bind (main_, kBasic + 1, &b->source.stepper, contentType ? T::Source : (tableType ? T::Table : T::Stepper), tableType ? "wavetable" : "", ! contentType && ! tableType);
+                const bool listOk = tableType || contentType;   // the wavetable browser (categories, tables) and the content browser, from both views (from the compact view the full screen opens first)
                 bind (main_, kBasic + 2, &b->source.dropdown, T::Inert, "", ! listOk);
                 b->source.stepper.listable = listOk;
+                b->source.stepper.contentName = contentType || tableType;   // a file name or the title of a table file: the middle goes when it does not fit (content_name.h), the lint accepts that
             }
             if (sub)
                 bind (main_, kBasic + 3, &b->oct, T::Number, "octave");
@@ -764,7 +792,7 @@ private:
             pageTop_ = top;
             pageSig_ = sig;
             if (top != kPageList)
-                browseMode_ = false;
+                browseMode_ = wtMode_ = false;
             loadPage (inst);
         }
     }
@@ -796,7 +824,9 @@ private:
                 bindSpec (pageTop_);
                 break;
             case kPageList:
-                if (browseMode_)
+                if (wtMode_)
+                    fillWavetableList();
+                else if (browseMode_)
                     fillBrowserList();
                 else if (listParam_ >= 0)
                 {
@@ -1066,6 +1096,12 @@ private:
                 }
                 continue;
             }
+            if (it.type == T::Table && it.param >= 0)
+            {
+                showTable (static_cast<ui::Stepper*> (it.c), it, v.param (it.param), v);
+                it.c->setEnabled (true);
+                continue;
+            }
             if (it.type == T::Source)
             {
                 auto* st = static_cast<ui::Stepper*> (it.c);
@@ -1272,11 +1308,11 @@ private:
             if (typeRaw_ == 4)
             {
                 for (const synthyboy::ContentInstrument& i : c->instruments)
-                    if (i.osc == osc) name = i.ref.name.empty() ? stemOf (i.ref.file) : i.ref.name;
+                    if (i.osc == osc) name = ui::contentname::display (i.ref.name, i.ref.file);
             }
             else
                 for (const synthyboy::ContentSample& s : c->samples)
-                    if (s.osc == osc) name = s.ref.name.empty() ? stemOf (s.ref.file) : s.ref.name;
+                    if (s.osc == osc) name = ui::contentname::display (s.ref.name, s.ref.file);
         }
         st->setItem (name.empty() ? "NO SAMPLE" : name.c_str());
     }
@@ -1318,7 +1354,7 @@ private:
     ui::Component* topComponent() noexcept
     {
         if (stackDepth_ == 0)
-            return &compact_;
+            return srcPopup_ ? static_cast<ui::Component*> (&list_) : &compact_;
         if (oscspec::isSpecPage (pageTop_))
             return &spec_;
         if (pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope)
@@ -1338,11 +1374,32 @@ private:
             return;
         using K = ui::ChangeKind;
         const int id = c.id;
+        // ---- the list of the source selector of the compact view (a popup over the third, not a page of the stack)
+        if (srcPopup_ && stackDepth_ == 0)
+        {
+            if (id == kList && c.kind == K::Index)
+            {
+                if (popupIsType_)   // the type list: the same Index change the cells made (the owner's handler below writes the type)
+                {
+                    const int chosen = c.index;
+                    closeSourceList();
+                    handle (ui::Change::indexed (kBasic, chosen, chosen), stack, v);
+                    return;
+                }
+                v.setPlaySelection (0, c.index + 1);
+                closeSourceList();
+            }
+            else if (id == kListBackdrop && c.kind == K::Request)
+                closeSourceList();
+            return;
+        }
         // ---- navigation
         if (c.kind == K::Request)
         {
             switch (id)
             {
+                case kInstances: openSourceList(); return;
+                case kBasic + 0: openTypeList(); return;   // the type drop-down of the compact view (the full screen's cells never send it)
                 case kFullButton: stack.openFull (kElementOsc); return;
                 case kClose: case kDetailBack: case kModsBack: case kRouteClose: case kRouteBackdrop: stack.back(); return;
                 case kTuneMore: stack.openDetail (oscspec::kMore); return;
@@ -1353,13 +1410,16 @@ private:
                     return;
                 case kListBackdrop: stack.back(); return;
                 case kListHeader:
-                    if (browseMode_ && browser_.tap (0) == ContentBrowser::Action::Changed)
+                    if (wtMode_ && wtBrowser_.up() == WavetableBrowser::Action::Changed)
+                        fillWavetableList();
+                    else if (browseMode_ && browser_.tap (0) == ContentBrowser::Action::Changed)
                         fillBrowserList();
                     return;
                 case kBasic + 1: case kBasic + 2:
                 {
                     const Item* src = item (kBasic + 1);
                     if (src != nullptr && src->type == T::Source) openBrowser (stack, v);
+                    else if (src != nullptr && src->type == T::Table) openWavetableBrowser (stack, v);
                     else openList (src, stack);
                     return;
                 }
@@ -1408,6 +1468,11 @@ private:
         }
         if (id == kList && c.kind == K::Index)
         {
+            if (wtMode_)
+            {
+                chooseWavetableRow (c.index, stack, v);
+                return;
+            }
             if (browseMode_)
             {
                 const ContentBrowser::Action a = browser_.tap (c.index + 1);   // the list shows the rows after the header
@@ -1481,14 +1546,91 @@ private:
             if (typeRaw_ == 4)
             {
                 for (const synthyboy::ContentInstrument& i : c->instruments)
-                    if (i.osc == osc) name = i.ref.name.empty() ? stemOf (i.ref.file) : i.ref.name;
+                    if (i.osc == osc) name = ui::contentname::display (i.ref.name, i.ref.file);
             }
             else
                 for (const synthyboy::ContentSample& s : c->samples)
-                    if (s.osc == osc) name = s.ref.name.empty() ? stemOf (s.ref.file) : s.ref.name;
+                    if (s.osc == osc) name = ui::contentname::display (s.ref.name, s.ref.file);
         }
         return name;
     }
+    // ---- the content the sound needs and does not have (IInstanceView::missingContent: bits 0 .. 2 the file of oscillator 1 .. 3, 3 .. 5 the user wavetable of oscillator 1 .. 3, 6 the impulse of Convolve, 7 the sample of the noise)
+    /** The INACTIVE look of a switched-off oscillator (docs/ui-components/theme.md, `ui::Pen::inactiveGrey`): the controls under the display, the blocks and the Q frames are drawn grey, the display picture is grey too (OscDisplay);
+        the power button is red (`negativeOff`) and the selector and the buttons of the display keep their colours. Nothing is disabled: the controls stay operable, a patch can be prepared on a switched-off oscillator (as before). */
+    void applyInactive()
+    {
+        const bool off = ! compact_.power.state.on;
+        compact_.setInactive (off);
+        compact_.instances.setInactive (false); compact_.power.setInactive (false); compact_.full.setInactive (false); compact_.route.setInactive (false);
+        compact_.basic.group.setInactive (off);
+        full_.setInactive (off);
+        full_.close.setInactive (false); full_.power.setInactive (false); full_.route.setInactive (false);
+        for (ui::QGroup& g : full_.groups)
+            g.setInactive (off);
+    }
+    /** The text "content missing: <name>" for the oscillator on screen ("" when it misses nothing); the name is taken from the state's content reference (the pack's title, else the file name; the reference is there although the file is not). */
+    void updateMissing (const IInstanceView& v)
+    {
+        missingText_.clear();
+        const unsigned bits = v.missingContent();
+        if (bits == 0)
+            return;
+        const int osc = playosc::oscNumber (sel_);
+        bool missing = false;
+        std::string name;
+        const std::shared_ptr<const synthyboy::StateContent> c = v.content();
+        if (sel_ == playosc::kNoise)
+        {
+            missing = (bits & (1u << 7)) != 0;
+            if (missing && c != nullptr)
+                for (const synthyboy::ContentSample& s : c->samples)
+                    if (s.osc == synthyboy::kNoiseSampleOsc)
+                        name = ui::contentname::display (s.ref.name, s.ref.file);
+        }
+        else if (osc >= 1 && osc <= 3)
+        {
+            const bool fileType = typeRaw_ == 1 || typeRaw_ == 2 || typeRaw_ == 3 || typeRaw_ == 4;
+            if (fileType)
+            {
+                missing = (bits & (1u << (osc - 1))) != 0;
+                if (missing)
+                    name = loadedName (v);
+            }
+            else
+            {
+                missing = (bits & (1u << (3 + osc - 1))) != 0;
+                if (missing && c != nullptr)
+                    for (const synthyboy::ContentWavetable& w : c->wavetables)
+                        if (w.osc == osc)
+                            name = ui::contentname::display (w.ref.name, w.ref.file);
+            }
+        }
+        if (missing)
+            missingText_ = name.empty() ? std::string ("content missing") : "content missing: " + name;
+    }
+public:
+    const std::string& missingText() const noexcept { return missingText_; }
+private:
+    /** The line over the display (in the header band of the compact view, else at the top of the display rectangle of the state on screen), in the warning colour; a name that does not fit loses its middle. */
+    void drawMissing (gpu::SceneBuilder& sb) const
+    {
+        const ui::Rect r = displayRect();
+        if (missingText_.empty() || r.empty())
+            return;
+        const ui::theme::Look& T = ui::theme::L();
+        // the compact view: the band of the display between the power button and the route / full screen button; the other states: between the corners of the display
+        const ui::Rect box = stackDepth_ == 0 ? compact_.labelRect() : ui::Rect { r.x + 4 + 64 + 8, r.y + 8, std::max (0, r.w - 2 * (4 + 64 + 8)), 48 };
+        const float size = ui::Pen::fitSize (missingText_.c_str(), static_cast<float> (box.w), static_cast<float> (box.h), T.fLabel + 4.0f, T.fMin);
+        if (size <= 0.0f)
+            return;
+        char fitted[96];   // the size of the pen's own buffer: middleFit cuts a name that would not go into it
+        ui::contentname::middleFit (missingText_.c_str(), size, static_cast<float> (box.w), fitted, static_cast<int> (sizeof fitted));
+        ui::Cell cell (sb, box);
+        ui::Pen pen (sb, true);
+        pen.textCentered (box, fitted, size, pen.c (T.negative, 255), T.fMin);   // at the size the middle cut was made for (a larger maximum would let the pen cut the end of the cut text again)
+    }
+    std::string missingText_;
+
     /** The empty state: a type that plays a file with no file loaded gets one button over its display (the page of the type and the full screen). */
     void updateLoadButton (const IInstanceView& v)
     {
@@ -1500,6 +1642,218 @@ private:
         loadBtn_.place (r.empty() ? ui::Rect {} : ui::Rect { r.x + r.w / 2 - 150, r.y + r.h * 2 / 3 - 8, 300, 64 });
         loadBtn_.setId (kSpecLoad);
         marksRect_ = r;
+    }
+
+    // ======================================================================================================================================================================
+    // the wavetable browser and the stepping of the table (docs/MPC.md "Wavetable browser")
+    /** The content reference of the table FILE oscillator `sel_` has (pack, file, shown name); false when its content has none. */
+    bool contentTable (const IInstanceView& v, std::string& pack, std::string& file, std::string& title) const
+    {
+        const std::shared_ptr<const synthyboy::StateContent> c = v.content();
+        const int osc = playosc::oscNumber (sel_);
+        if (c == nullptr)
+            return false;
+        for (const synthyboy::ContentWavetable& w : c->wavetables)
+            if (w.osc == osc)
+            {
+                pack = w.ref.pack;
+                file = w.ref.file;
+                title = ui::contentname::display (w.ref.name, w.ref.file);
+                return true;
+            }
+        return false;
+    }
+    /** The table stepper: the name of the built-in table, or the title of the file when the oscillator plays one (the parameter is "Preset table" and the content has the file). With a file the stepper has three
+        positions (previous, this, next: the arrows are the files of the category, dimmed at its ends once the catalogue says where the file is), else the 15 choices of the parameter. */
+    void showTable (ui::Stepper* st, const Item& it, float plain, const IInstanceView& v) const
+    {
+        const synthyboy::ParamInfo& pi = info (it.param);
+        const int choice = std::clamp (static_cast<int> (std::lround (plain - pi.min)), 0, std::max (0, pi.numChoices - 1));
+        std::string pack, file, title;
+        const bool have = contentTable (v, pack, file, title);
+        showStepper (st, it.param, plain);
+        if (choice != synthyboy::kWavetablePresetTable || ! have)
+            return;
+        st->setItem (title.c_str());
+        if (! stepValid_)
+        {
+            st->state.count = 3; st->state.index = 1; st->state.wrap = false;   // the catalogue is read at the first step: both arrows are lit until then
+            return;
+        }
+        int entry = -1, index = 0, count = 0;
+        const int category = stepCat_.findFile (pack, file, entry);   // where the file the content names stands in the catalogue we have
+        if (category >= 0 && synthyboy::filePosition (stepCat_, category, entry, index, count))
+        {
+            // the position among the files of the category as three places: first (no previous), in the middle, last (no next); a category of one file has no arrow
+            st->state.wrap = false;
+            st->state.count = count > 1 ? 3 : 1;
+            st->state.index = count > 1 ? (index <= 0 ? 0 : (index >= count - 1 ? 2 : 1)) : 0;
+        }
+        // a file that is in no category: the arrows step the 15 choices as for a built-in table (showStepper's state)
+    }
+    /** The catalogue and the place of the file `pack` / `file` in it, read once per file (a file that is loaded now, or the one a step asked for): the directory listing happens at the first step, not at every frame. */
+    void ensureStepInfo (IInstanceView& v, const std::string& pack, const std::string& file)
+    {
+        if (stepValid_ && stepPack_ == pack && stepFile_ == file)
+            return;
+        if (stepValid_ && v.contentLoad (nullptr) == 1)
+            return;   // a file we asked for is still loading: the content is the old one, our position is the new one
+        synthyboy::CatalogueSources src;
+        v.wavetableSources (src);
+        stepCat_ = synthyboy::buildWavetableCatalogue (synthyboy::StdCatalogueFs {}, src);
+        stepCategory_ = stepCat_.findFile (pack, file, stepEntry_);
+        stepPack_ = pack;
+        stepFile_ = file;
+        stepValid_ = true;
+    }
+    void requestFile (IInstanceView& v, const synthyboy::WavetableEntry& e)
+    {
+        wtLastPack_ = e.ref.pack;
+        wtLastFile_ = e.ref.file;
+        v.requestWavetable (playosc::oscNumber (sel_), e.ref);
+    }
+    /** One step to the previous / next file of the category of the file `pack` / `file`: 0 asked for it, 1 the end of the category (nothing happens: no wrap), 2 the file is in no category. */
+    int stepFileBy (IInstanceView& v, const std::string& pack, const std::string& file, int dir)
+    {
+        ensureStepInfo (v, pack, file);
+        if (stepCategory_ < 0)
+            return 2;
+        int next = -1;
+        if (! synthyboy::neighbourFile (stepCat_, stepCategory_, stepEntry_, dir, next))
+            return 1;
+        const synthyboy::WavetableEntry& e = stepCat_.categories[static_cast<size_t> (stepCategory_)].entries[static_cast<size_t> (next)];
+        requestFile (v, e);
+        stepEntry_ = next;   // the next step starts from here, before the content shows the new file (the latest request wins in the plugin)
+        stepPack_ = e.ref.pack;
+        stepFile_ = e.ref.file;
+        return 0;
+    }
+    /** A step of the table: `delta` positions (the arrows: -1 / +1, the wheel: more). A file table steps the files of its category (the end: nothing), a built-in table the choices (the "Preset table" entry is skipped while the
+        oscillator has no file: it would play the saw). `target`: the choice the stepper asked for. */
+    void stepTable (IInstanceView& v, const Item& it, int delta, int target)
+    {
+        const synthyboy::ParamInfo& pi = info (it.param);
+        const int last = std::max (0, pi.numChoices - 1);
+        const int cur = std::clamp (static_cast<int> (std::lround (v.param (it.param) - pi.min)), 0, last);
+        std::string pack, file, title;
+        const bool have = contentTable (v, pack, file, title);
+        if (cur == synthyboy::kWavetablePresetTable && have)
+        {
+            const int dir = delta > 0 ? 1 : -1;
+            int result = 0;
+            for (int n = 0; n < std::min (std::abs (delta), 16); ++n)
+            {
+                result = stepFileBy (v, n == 0 ? pack : stepPack_, n == 0 ? file : stepFile_, dir);
+                if (result != 0)
+                    break;
+            }
+            if (result != 2)
+                return;   // asked for the neighbour, or the end of the category: nothing more happens
+            target = std::clamp (cur + dir, 0, last);   // a file that is in no category: the built-in neighbour
+        }
+        const int dir = target > cur ? 1 : -1;
+        if (target == synthyboy::kWavetablePresetTable && ! have)
+            target += dir;   // no file table: "Preset table" would play the saw
+        writePlain (v, it.param, pi.min + std::clamp (target, 0, last));
+    }
+    void writeTable (Item& it, const ui::Change& c, IInstanceView& v)
+    {
+        if (c.kind != ui::ChangeKind::Index || it.c == nullptr)
+            return;
+        const int delta = c.index - static_cast<ui::Stepper*> (it.c)->state.index;
+        if (delta != 0)
+            stepTable (v, it, delta, c.index);
+    }
+    /** Every frame: the steps the Q knob left (the table is a file: the knob does not move the parameter), and the message of a refused file (the line over the display, the row of the browser). */
+    void updateWavetable (IInstanceView& v)
+    {
+        const int osc = playosc::oscNumber (sel_);
+        if (osc < 1 || typeRaw_ != 0)
+            return;
+        int steps = std::clamp (v.takeWavetableSteps (osc), -8, 8);
+        const Item* it = item (kBasic + 1);
+        if (steps != 0 && it != nullptr && it->type == T::Table && it->param >= 0)
+            stepTable (v, *it, steps, static_cast<int> (std::lround (v.param (it->param) - info (it->param).min)) + (steps > 0 ? 1 : -1));
+        std::string message;
+        static const char kPrefix[] = "not a wavetable file: ";
+        if (v.contentLoad (&message) == 3 && message.compare (0, sizeof kPrefix - 1, kPrefix) == 0)
+        {
+            missingText_ = message;
+            if (! wtLastFile_.empty())
+            {
+                wtBrowser_.markRefused (wtLastPack_, wtLastFile_, message.substr (sizeof kPrefix - 1));
+                if (wtMode_)
+                    fillWavetableList();   // the browser's strings were made again: the list points at the new ones
+                wtLastFile_.clear();
+                stepValid_ = false;   // our position was the file that failed: the content's file is where we are
+            }
+        }
+    }
+    /** The wavetable browser in the list popup (over the full screen: from the compact view the full screen opens first): the categories, the tables of one, the current one marked. */
+    void openWavetableBrowser (UiStack& stack, IInstanceView& v)
+    {
+        const Item* it = item (kBasic + 1);
+        if (it == nullptr || it->param < 0)
+            return;
+        synthyboy::CatalogueSources src;
+        v.wavetableSources (src);
+        synthyboy::WavetableCatalogue cat = synthyboy::buildWavetableCatalogue (synthyboy::StdCatalogueFs {}, src);
+        const synthyboy::ParamInfo& pi = info (it->param);
+        const int choice = std::clamp (static_cast<int> (std::lround (v.param (it->param) - pi.min)), 0, std::max (0, pi.numChoices - 1));
+        std::string pack, file, title;
+        const bool fileTable = choice == synthyboy::kWavetablePresetTable && contentTable (v, pack, file, title);
+        if (fileTable)
+        {
+            stepCat_ = cat;
+            stepCategory_ = stepCat_.findFile (pack, file, stepEntry_);
+            stepPack_ = pack;
+            stepFile_ = file;
+            stepValid_ = true;
+        }
+        wtBrowser_.open (std::move (cat), fileTable ? -1 : choice, pack, file);
+        wtMode_ = true;
+        browseMode_ = false;
+        listParam_ = -1;
+        if (stack.depth() == 0)
+            stack.openFull (kElementOsc);
+        stack.openDetail (kPageList);
+        fillWavetableList();
+    }
+    void fillWavetableList()
+    {
+        // the header is the list's own bar (the way up and the title), the rows are the categories or the tables
+        list_.state.header = wtBrowser_.title().c_str();
+        list_.state.headerBack = ! wtBrowser_.atCategories();
+        list_.state.items = wtBrowser_.items();
+        list_.state.icons = nullptr;
+        list_.state.count = wtBrowser_.count();
+        list_.state.current = wtBrowser_.currentRow();
+        list_.showCurrent();
+    }
+    void chooseWavetableRow (int row, UiStack& stack, IInstanceView& v)
+    {
+        using A = WavetableBrowser::Action;
+        const Item* it = item (kBasic + 1);
+        const A a = wtBrowser_.tap (row);
+        if (a == A::Changed)
+            fillWavetableList();
+        else if (a == A::ChoseBuiltin && it != nullptr && it->param >= 0)
+        {
+            writePlain (v, it->param, info (it->param).min + wtBrowser_.chosenChoice());   // as the stepper did: the choice parameter, the old table plays until the new one is built
+            stack.back();
+        }
+        else if (a == A::ChoseFile)
+        {
+            requestFile (v, wtBrowser_.chosenEntry());
+            stepCat_ = wtBrowser_.catalogue();
+            stepCategory_ = wtBrowser_.chosenCategory();
+            stepEntry_ = wtBrowser_.chosenIndex();
+            stepPack_ = wtBrowser_.chosenEntry().ref.pack;
+            stepFile_ = wtBrowser_.chosenEntry().ref.file;
+            stepValid_ = true;
+            stack.back();
+        }
+        // A::Refused: the row says why, nothing changes
     }
 
     /** The content browser in the list popup (over the full screen: from the compact view the full screen opens first): the roots the instance offers, the folders, the files. */
@@ -1536,6 +1890,59 @@ private:
         const int cur = browser_.rowOf (lastChosen_[browser_.kind() - 1]);
         list_.state.current = cur > 0 ? cur - 1 : -1;
         list_.showCurrent();
+    }
+
+    /** The list of the source selector of the compact view: Sub, Osc A, Osc B, Osc C, Noise (the names of the selector), five rows of 56 px under the header row, a popup over the third. */
+    void openSourceList()
+    {
+        static const char* const kNames[playosc::kInstances] = { "Sub", "Osc A", "Osc B", "Osc C", "Noise" };
+        const ui::Rect third { kCompactX, kTabY + 4, kCompactW, kTabH - 8 };
+        list_.state.header = nullptr;
+        list_.state.headerBack = false;
+        list_.state.items = kNames;
+        list_.state.icons = nullptr;
+        popupIsType_ = false;
+        list_.state.count = playosc::kInstances;
+        list_.state.current = sel_ - 1;
+        list_.place ({ third.x + 6, third.y + 6 + ui::playrows::kSelectorH, third.w - 12, playosc::kInstances * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup (third);
+        list_.showCurrent();
+        srcPopup_ = true;
+    }
+    /** The list of the type drop-down of the compact view: the items of the selector (WAVE .. SPEC, or the six waveforms of the sub) with their pictograms, rows of 56 px, a popup over the third. */
+    void openTypeList()
+    {
+        const ui::TypeSelector& sel = compact_.basic.selector;
+        typeNames_.clear(); typeIcons_.clear();
+        for (int i = 0; i < sel.state.count; ++i)
+        {
+            typeNames_.push_back (sel.state.items[i].label);
+            typeIcons_.push_back (sel.state.items[i].pictogram);
+        }
+        const ui::Rect third { kCompactX, kTabY + 4, kCompactW, kTabH - 8 };
+        list_.state.header = nullptr;
+        list_.state.headerBack = false;
+        list_.state.items = typeNames_.data();
+        list_.state.icons = typeIcons_.data();
+        list_.state.count = sel.state.count;
+        list_.state.current = sel.state.index;
+        list_.place ({ third.x + 6, third.y + 6 + ui::playrows::kSelectorH, third.w - 12, std::min (sel.state.count, 8) * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup (third);
+        list_.showCurrent();
+        popupIsType_ = true;
+        srcPopup_ = true;
+    }
+    std::vector<const char*> typeNames_;
+    std::vector<int> typeIcons_;
+    bool popupIsType_ = false;
+    void closeSourceList()
+    {
+        srcPopup_ = false;
+        popupIsType_ = false;
+        list_.state.icons = nullptr;
+        list_.state.current = -1;
+        list_.place ({ 340, kTabY + 20, 600, 9 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
+        list_.setPopup ({ 0, kTabY, w_, kTabH });
     }
 
     /** The list popup of a choice parameter (the owner's item: its parameter): over the full screen. */
@@ -1605,6 +2012,7 @@ private:
                     writePlain (v, p, pi.min + (n > 0 ? (c.index % n + n) % n : 0));
                 }
                 break;
+            case T::Table: writeTable (it, c, v); break;
             case T::StepperLoop:
                 if (c.kind == K::Index)
                 {
@@ -1638,6 +2046,11 @@ private:
     // the Q group: the four targets the hardware knobs are mapped to
     void resolveQ (IInstanceView&) {}
     /** The table index behind a member of a Q group (a composite: its primary child); -1 when there is none. */
+    /** The four targets of the Basic group of the compact view (table indices, -1 none) and its block of knobs (the Play view maps the groups of the three thirds together). */
+public:   // the Play view reads the targets of the compact group and sets its block
+    void compactTargets (int* t) const noexcept { for (int i = 0; i < 4; ++i) t[i] = paramOfMember (compact_.basic.group.member (i)); }
+    void setCompactBlock (int block) noexcept { compact_.basic.group.setBlock (block); }
+private:
     int paramOfMember (const ui::Component* m) const noexcept
     {
         while (m != nullptr)
@@ -1670,12 +2083,8 @@ private:
         {
             name = "Basic";
             compact_.basic.group.setActive (highlight_ == 1);
-            if (highlight_ != 1)
-            {
-                qActive_ = 0;
-                return;   // the Env / LFO sub-tab: the view of the Env / LFO owns the group (EnvUi / LfoUi)
-            }
-            qSlots_.publish (v, 1, 0, [&] (int, int* t) { members (compact_.basic.group, t); });
+            qActive_ = 0;
+            return;   // the main state: the Play view publishes the three groups of the page together (PlayView::publishQ), the oscillator's is the first
         }
         else if (pageTop_ == kPageUnison || pageTop_ == kPageGrain || pageTop_ == kPageEnvelope)
         {
@@ -1726,6 +2135,7 @@ private:
     ui::ModulationsPage mods_;
     ui::RoutePanel route_;
     ui::ListPopup list_;
+    bool srcPopup_ = false;   // the list of the source selector of the compact view is open (main state only)
     oscspec::OscSpecPage spec_;
     ui::MenuButton loadBtn_ { "LOAD SAMPLE", ui::MenuButton::Icon::None };
     ui::Rect marksRect_;
@@ -1733,6 +2143,13 @@ private:
     ContentBrowser browser_;
     std::string browserTitle_;
     bool browseMode_ = false;
+    WavetableBrowser wtBrowser_;
+    bool wtMode_ = false;                       // the list popup is the wavetable browser
+    // the stepping through the files of one category (the arrows of the table stepper, the Q knob): the catalogue as it was when the file table was loaded or the browser opened, and where the table is in it
+    synthyboy::WavetableCatalogue stepCat_;
+    std::string stepPack_, stepFile_, wtLastPack_, wtLastFile_;
+    int stepCategory_ = -1, stepEntry_ = -1;
+    bool stepValid_ = false;
     std::string lastChosen_[2];   // the file that was loaded last for the granular (0) and multisample (1) type: the browser opens in its folder
     int listParam_ = -1;
     ui::Rect popupBox_;

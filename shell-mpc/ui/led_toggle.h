@@ -1,7 +1,7 @@
 // SynthyBoy - MPC UI component library: LedToggle, a two-state control as ONE compact row: a small flat dot and the name. The state is the dot (lit = the accent colour, filled; unlit = a dim thin ring) and the
 // brightness of the name; there is no ON / OFF word (the value text the Q proxy reports stays On / Off: that comes from the engine parameter). Same contract as every component (core.h).
 // It is a ToggleIcon (same state: `on`, `label`; the owners that read and write a toggle keep working) with another drawing and another size: 56 px high, as wide as its name needs (96 px at least).
-// In: on, label (15 characters). Out: an Index change 0 / 1 on a tap (made on the touch up); a Q-Link step and a wheel notch FLIP the state (either direction).
+// In: on, label (23 characters). Out: an Index change 0 / 1 on a tap (made on the touch up); turn: up = on, down = off.
 // Look: no box and no fill (the dot and the name on the ground of the block); the library palette and fonts only; a flat dot (no glow, no gradient halo), a thin crisp outline; the active Q member: the chip comes from the group, the name takes the Q colour (lit: full, unlit: dimmed).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later

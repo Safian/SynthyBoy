@@ -90,6 +90,76 @@ int main()
         check (! s.overflow() && p.sizeOk() && drawnOutside (im, { 0, 0, 1280, 628 }, backgroundPixel()) == 0, std::string ("draws inside the parent, one scene (") + (big ? "large" : "minimum size") + ", " + std::to_string (s.numOps()) + " ops)");
         writePng (outDir() + (big ? "/list_popup.png" : "/list_popup_min.png"), im, 1);
     }
+    // the box follows the rows: 1, 3 and many rows (the placed box is the largest and the anchor)
+    {
+        const Rect parent { 0, 0, 1280, 628 };
+        const int rowsToTry[3] = { 1, 3, 20 };
+        for (int k = 0; k < 3; ++k)
+        {
+            const int n = rowsToTry[k];
+            ListPopup p;
+            p.state.items = names; p.state.count = n; p.state.current = 0;
+            p.setId (4); p.setBackdropId (5);
+            p.place ({ 340, 60, 600, 9 * ListPopup::kRowH + 2 * ListPopup::kPad });
+            p.setPopup (parent);
+            const std::string tag = " (" + std::to_string (n) + " rows)";
+            const int want = std::min (n, 9) * ListPopup::kRowH + 2 * ListPopup::kPad;
+            const Rect b = p.box();
+            check (b.h == want && b.x == 340 && b.y == 60 && b.w == 600 && p.rect().h == want, "list box: the height follows the rows, the top left is the anchor" + tag + " (" + std::to_string (b.h) + ")");
+            check (b.h >= ListPopup::kRowH + 2 * ListPopup::kPad && b.h <= 9 * ListPopup::kRowH + 2 * ListPopup::kPad && b.x >= 0 && b.y >= 0 && b.right() <= 1280 && b.bottom() <= 800 && parent.contains (b.x, b.y) && b.bottom() <= parent.bottom(), "list box: at least one row, at most the placed height, on the screen" + tag);
+            check (p.visibleRows() == std::min (n, 9) && p.scrolls() == (n > 9) && p.sizeOk(), "list box: the visible rows follow the box, it scrolls only above nine rows" + tag);
+            Rect t[2];
+            check (p.touchTargets (t, 2) == 1 && t[0].x == b.x && t[0].y == b.y && t[0].w == b.w && t[0].h == b.h, "list box: the touch target is the box" + tag);
+            // a tap on the last visible row selects it
+            const int last = p.firstRow() + p.visibleRows() - 1;
+            const Rect lr = p.rowRect (last);
+            p.touchDown (lr.x + 20, lr.y + lr.h - 3, 0.0);
+            Change c = p.touchUp (lr.x + 20, lr.y + lr.h - 3);
+            check (c.kind == ChangeKind::Index && c.id == 4 && c.index == last && lr.bottom() == b.bottom() - ListPopup::kPad, "list box: a tap on the bottom edge of the last row selects it" + tag);
+            // a tap just below the box is the backdrop: close
+            p.touchDown (b.x + 50, b.bottom() + 6, 10.0);
+            c = p.touchUp (b.x + 50, b.bottom() + 6);
+            check (c.kind == ChangeKind::Request && c.id == 5, "list box: a tap below the box closes" + tag);
+            // the same point inside the OLD fixed box (n < 9) is outside the new one: it closes, it does not select
+            if (n < 9)
+            {
+                const int y = 60 + 9 * ListPopup::kRowH;
+                p.touchDown (400, y, 20.0);
+                c = p.touchUp (400, y);
+                check (c.kind == ChangeKind::Request && c.id == 5, "list box: the empty part of the old box is the backdrop now" + tag);
+            }
+            Scene s (1280, 628, kBackgroundRgba);
+            p.draw (s.builder());
+            const Image im = render (s);
+            check (! s.overflow() && drawnOutside (im, parent, backgroundPixel()) == 0, "list box: draws inside the parent" + tag);
+            writePng (outDir() + "/list_popup_" + std::to_string (n) + ".png", im, 1);
+        }
+        // a longer list than the placed box scrolls inside it as before, the box does not grow
+        ListPopup q;
+        q.state.items = names; q.state.count = 20;
+        q.place ({ 400, 100, 480, 340 });
+        q.setPopup (parent);
+        check (q.box().h == 340 && q.visibleRows() == 5 && q.scrolls(), "list box: a longer list keeps the placed height and scrolls");
+        // the header counts into the content height
+        q.state.count = 2; q.state.header = "PATH";
+        check (q.box().h == ListPopup::kRowH + 2 * ListPopup::kRowH + 2 * ListPopup::kPad && q.visibleRows() == 2, "list box: the header bar is part of the content height");
+        // the box is moved back on the screen and into the parent
+        q.state.header = nullptr; q.state.count = 3;
+        q.place ({ 1200, 600, 600, 500 });
+        q.setPopup ({ 0, 0, 1280, 800 });
+        Rect b = q.box();
+        check (b.x == 1280 - 600 && b.right() == 1280 && b.bottom() <= 800 && b.y == 600 && b.h == 3 * ListPopup::kRowH + 2 * ListPopup::kPad, "list box: moved back inside the screen at the right edge (x " + std::to_string (b.x) + ")");
+        q.state.count = 9;
+        b = q.box();
+        check (b.bottom() == 800 && b.y == 800 - b.h, "list box: moved up at the bottom edge");
+        q.place ({ -50, -20, 300, 200 });
+        b = q.box();
+        check (b.x == 0 && b.y == 0, "list box: moved in at the left and top edge");
+        q.place ({ 100, 400, 300, 500 });
+        q.setPopup ({ 0, 110, 1280, 628 });
+        b = q.box();
+        check (b.y >= 110 && b.bottom() <= 110 + 628, "list box: inside the dimmed parent when it fits there");
+    }
     // the header bar (the content browser's way up and path)
     {
         ListPopup p;

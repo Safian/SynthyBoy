@@ -3,10 +3,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 #include "synthyboy/spectral/spectral.h"
+#include "synthyboy/spectral/kernels.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <limits>
 #include <cstring>
+
+// The reference loops here and the block kernels of kernels.cpp must compute the same bits where they do the same thing: no fused multiply-add in either, on any compiler / CPU.
+#if defined(__clang__)
+ #pragma clang fp contract(off)
+#elif defined(__GNUC__)
+ #pragma GCC optimize ("fp-contract=off")
+#endif
 
 namespace synthyboy
 {
@@ -248,7 +258,7 @@ void buildFilterGains (float* gains, const float* x, const float* y, int numPoin
 namespace
 {
 /** One spectral warp on the magnitudes m and the frequencies f (radians per file sample) of a frame. Returns an extra pitch ratio (1 = none). `twist` receives the phase twist. */
-float applyWarp (int w, float a, float v, float* m, float* f, float* tm, float* tf, const float* external, float* smear, float& twist) noexcept
+float applyWarp (int w, float a, float v, float* m, float* f, float* tm, float* tf, const float* external, float* smear, float& twist, Scratch* cache) noexcept
 {
     a = clamp01 (a);
     v = clamp01 (v);
@@ -277,6 +287,19 @@ float applyWarp (int w, float a, float v, float* m, float* f, float* tm, float* 
         case Warp::comb:
         {
             const float period = 2.0f + (1.0f - v) * 60.0f;
+            if (cache != nullptr)
+            {
+                // the gain of every bin depends on the amount and the variation only: made when they change, not for every frame of every voice
+                if (cache->combA != a || cache->combV != v)
+                {
+                    for (int k = 0; k < kBins; ++k)
+                        cache->combGain[k] = (1.0f - a) + a * (0.5f + 0.5f * std::cos (kTwoPi * static_cast<float> (k) / period));
+                    cache->combA = a;
+                    cache->combV = v;
+                }
+                kernels::mulBins (m, cache->combGain, kBins, kernels::haveNeon());
+                break;
+            }
             for (int k = 0; k < kBins; ++k)
                 m[k] *= (1.0f - a) + a * (0.5f + 0.5f * std::cos (kTwoPi * static_cast<float> (k) / period));
             break;
@@ -302,6 +325,23 @@ float applyWarp (int w, float a, float v, float* m, float* f, float* tm, float* 
         {
             const int n = 1 + static_cast<int> (v * 3.99f);
             copyOut();
+            if (cache != nullptr)
+            {
+                // the multiples of each target in the order of the loop below (k = t h rises with h), without a division or a remainder per bin
+                for (int h = 2; h <= n + 1; ++h)
+                    for (int t = 1; t * h < kBins; ++t)
+                    {
+                        const int k = t * h;
+                        const float value = a * m[k] * 0.7f;
+                        if (value > tm[t])
+                        {
+                            tm[t] = value;
+                            tf[t] = f[k] / static_cast<float> (h);
+                        }
+                    }
+                copyBack();
+                break;
+            }
             for (int k = 2; k < kBins; ++k)
                 for (int h = 2; h <= n + 1; ++h)
                     if (k % h == 0)
@@ -492,10 +532,13 @@ float applyWarp (int w, float a, float v, float* m, float* f, float* tm, float* 
 
 // ---- the voice ---------------------------------------------------------------------------------------------------------------------
 
+static void warmStartTables() noexcept;
+
 void SpectralVoice::prepare (double hostSampleRate) noexcept
 {
     Fft::instance();
     hannAt (0);
+    warmStartTables();   // the tables of a note start are built here, not on the audio thread
     hostRate_ = hostSampleRate > 1000.0 ? hostSampleRate : 48000.0;
 }
 
@@ -503,6 +546,8 @@ void SpectralVoice::reset() noexcept
 {
     active_ = false;
     analysis_ = nullptr;
+    if (! legacyReset_)
+        return;   // noteOn clears the smear memory, the ring and the phases of the channels it uses, and writes `finished` before it is read (tests/test_spectral.cpp: starts on dirty buffers)
     for (Channel& c : channel_)
     {
         std::fill (c.synthPhase, c.synthPhase + kBins, 0.0f);
@@ -512,11 +557,30 @@ void SpectralVoice::reset() noexcept
     }
 }
 
-void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, float startFraction) noexcept
+void SpectralVoice::scribbleBuffersForTest (float value) noexcept
 {
-    reset();
+    for (Channel& c : channel_)
+    {
+        std::fill (c.synthPhase, c.synthPhase + kBins, value);
+        std::fill (c.smear, c.smear + kBins, value);
+        std::fill (c.ring, c.ring + kFftSize, value);
+        std::fill (c.finished, c.finished + kHop, value);
+    }
+}
+
+void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, float startFraction, int hopOffset) noexcept
+{
+    active_ = false;
+    analysis_ = nullptr;
     if (analysis == nullptr || ! analysis->valid() || p.scratch == nullptr)
         return;
+    // what a note needs cleared: the smear memory and the ring of the channels it uses (the phases are set by the first frame, `finished` is written before it is read)
+    for (int ch = 0; ch < (analysis->channels() > 1 ? 2 : 1); ++ch)
+    {
+        std::fill (channel_[ch].smear, channel_[ch].smear + kBins, 0.0f);
+        std::fill (channel_[ch].ring, channel_[ch].ring + kFftSize, 0.0f);
+        std::fill (channel_[ch].synthPhase, channel_[ch].synthPhase + kBins, 0.0f);
+    }
     analysis_ = analysis;
     hostRate_ = p.hostRate > 1000.0 ? p.hostRate : hostRate_;
     active_ = true;
@@ -526,6 +590,8 @@ void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, f
     outPos_ = kHop;
     ola_ = 0;
     primed_ = false;
+    framePrimed_ = false;
+    startSkip_ = std::max (0, std::min (kHop - 1, hopOffset));
     lastTransientFrame_ = -1;
     drain_ = 0;
     phaseInit_[0] = phaseInit_[1] = false;
@@ -538,11 +604,67 @@ void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, f
     head_ = std::max (static_cast<double> (lo), std::min (static_cast<double> (hi), head_));
     if (p.manual)
         head_ = lo + (hi - lo) * clamp01 (p.position);
-    // prime: three frames at the start position, so that the first output hop is the sum of four frames
-    for (int i = 0; i < 3; ++i)
-        synthesizeHop (p, false);
+    startActive_ = false;
+    startMask_ = 0;
+    startJoin_[0] = startJoin_[1] = startJoin_[2] = -1;
+    phaseFrame_[0] = phaseFrame_[1] = 0;
+    if (legacyStart_)
+    {
+        // prime: three frames at the start position, so that the first output hop is the sum of four frames (the fourth is the frame of the hop itself)
+        if (reference_)
+            for (int i = 0; i < 3; ++i)
+                synthesizeHop (p, false);
+        else
+            primeFast (p);
+        primed_ = true;
+        outPos_ = kHop;
+        return;
+    }
+    // the start of docs/engine-spec/07 section 4a: frames 1 .. 3 of the priming (frame 0 is never made); the first hop is their sum divided by the squared windows of the frames that exist
+    {
+        const double fileFrames = static_cast<double> (analysis_->fileFrames());
+        startFrame_ = head_ * fileFrames / kHop;
+        const int index = static_cast<int> (std::lround (startFrame_));
+        lastTransientFrame_ = index;
+        bool smears = false;
+        for (int w = 0; w < 2; ++w)
+            smears = smears || (p.warpType[w] == static_cast<int> (Warp::smear) && p.warpAmount[w] > 0.0f);
+        startSchedule (startSkip_, smears, startJoin_);
+        int strike = 0;
+        for (int j = 0; j < 3; ++j)
+            if (startJoin_[j] <= startSkip_)
+            {
+                strike |= 1 << j;
+                startJoin_[j] = -1;
+            }
+        if (strike == 0)
+        {
+            // (never with the schedule: the frame that weighs most at the first sample has a squared window above 0.5)
+            int best = 0;
+            double bestWeight = -1.0;
+            for (int j = 1; j <= 3; ++j)
+            {
+                const double w = 0.5 - 0.5 * std::cos (2.0 * kPi * (startSkip_ + (3 - j) * kHop) / kFftSize);
+                if (w > bestWeight)
+                {
+                    bestWeight = w;
+                    best = j;
+                }
+            }
+            strike = 1 << (best - 1);
+            startJoin_[best - 1] = -1;
+        }
+        startFrames (p, strike, smears);
+        startMask_ = strike;
+        startActive_ = true;
+        ola_ = 0;
+        outPos_ = startSkip_;
+        refreshFirstHop (startSkip_);
+        startSkip_ = 0;
+        if (! p.manual)
+            advanceHead (p);
+    }
     primed_ = true;
-    outPos_ = kHop;
 }
 
 void SpectralVoice::advanceHead (const SpectralParams& p) noexcept
@@ -590,7 +712,7 @@ void SpectralVoice::advanceHead (const SpectralParams& p) noexcept
 /** The first half of a hop of one channel, shared by the voice and by the display (computeMagnitudeSpectrum): the analysis frame `frame` of channel `src` (interpolated between two analysis
     frames), the spectral filter, the band, the warps and the pitch / frequency shift, down to the magnitudes (scratch.om), frequencies (scratch.of) and phases (scratch.oth) of the output bins.
     `smear`: the per channel state of the smear warp (kBins values). `twist`: the phase twist the warps ask for. One code for both, so that the display shows what the voice plays. */
-static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, double frame, double hostRate, Scratch& scratch, float* smear, float& twist) noexcept
+static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, double frame, double hostRate, Scratch& scratch, float* smear, float& twist, bool fast) noexcept
 {
     float* const mag_ = scratch.mag; float* const freq_ = scratch.freq; float* const theta_ = scratch.theta;
     float* const om_ = scratch.om; float* const of_ = scratch.of; float* const oth_ = scratch.oth; float* const tm_ = scratch.tm; float* const tf_ = scratch.tf;
@@ -606,15 +728,55 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
     const double fileRate = an.fileRate();
     const double fileBinHz = fileRate / kFftSize, hostBinHz = hostRate / kFftSize;
 
-    for (int k = 0; k < kBins; ++k)
+    const bool neon = kernels::haveNeon();
+    if (fast)
     {
-        mag_[k] = m0[k] + (m1[k] - m0[k]) * fr;
-        freq_[k] = fq[k];
-        theta_[k] = ph[k];
+        kernels::lerpBins (mag_, m0, m1, fr, kBins, neon);
+        std::memcpy (freq_, fq, sizeof (float) * kBins);
+        std::memcpy (theta_, ph, sizeof (float) * kBins);
     }
+    else
+        for (int k = 0; k < kBins; ++k)
+        {
+            mag_[k] = m0[k] + (m1[k] - m0[k]) * fr;
+            freq_[k] = fq[k];
+            theta_[k] = ph[k];
+        }
     const auto band = [&] (float* m, double binHz)
     {
         const float lo = std::max (1.0f, p.freqLoHz), hi = std::max (lo, p.freqHiHz);
+        if (fast)
+        {
+            // the gains depend on the settings and the bin spacing only: computed when they change, not for every frame of every voice
+            if (scratch.bandLo != lo || scratch.bandHi != hi || scratch.bandBinHz != binHz || scratch.bandSmooth != p.bandSmooth)
+            {
+                for (int k = 0; k < kBins; ++k)
+                {
+                    const float f = static_cast<float> (k * binHz);
+                    float g;
+                    if (p.bandSmooth)
+                    {
+                        if (f <= 0.0f)
+                            g = 0.0f;
+                        else
+                        {
+                            const float a = lo / f, b = f / hi;
+                            const float a2 = a * a, a4 = a2 * a2, b2 = b * b, b4 = b2 * b2;
+                            g = 1.0f / std::sqrt ((1.0f + a4 * a4) * (1.0f + b4 * b4));
+                        }
+                    }
+                    else
+                        g = f >= lo && f <= hi ? 1.0f : 0.0f;
+                    scratch.bandGain[k] = g;
+                }
+                scratch.bandLo = lo;
+                scratch.bandHi = hi;
+                scratch.bandBinHz = binHz;
+                scratch.bandSmooth = p.bandSmooth;
+            }
+            kernels::mulBins (m, scratch.bandGain, kBins, neon);
+            return;
+        }
         for (int k = 0; k < kBins; ++k)
         {
             const float f = static_cast<float> (k * binHz);
@@ -636,8 +798,13 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
         }
     };
     if (p.filterGain != nullptr)
-        for (int k = 0; k < kBins; ++k)
-            mag_[k] *= p.filterGain[k];
+    {
+        if (fast)
+            kernels::mulBins (mag_, p.filterGain, kBins, neon);
+        else
+            for (int k = 0; k < kBins; ++k)
+                mag_[k] *= p.filterGain[k];
+    }
     if (! p.bandPostWarp)
         band (mag_, fileBinHz);
 
@@ -647,7 +814,7 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
         if (p.warpType[w] >= 0 && p.warpType[w] < kNumSpectralWarps && p.warpAmount[w] > 0.0f)
         {
             const float* ext = isExternalWarp (p.warpType[w]) ? p.external[externalSource (p.warpType[w])] : nullptr;
-            extra *= applyWarp (p.warpType[w], p.warpAmount[w], p.warpVar[w], mag_, freq_, tm_, tf_, ext, smear, twist);
+            extra *= applyWarp (p.warpType[w], p.warpAmount[w], p.warpVar[w], mag_, freq_, tm_, tf_, ext, smear, twist, fast ? &scratch : nullptr);
         }
 
     // the pitch: bin k goes to bin k * r (+ the frequency shift) with its frequency scaled the same way
@@ -663,11 +830,19 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
         int peaks[kBins / 2];
         int numPeaks = 0;
         float top = 0.0f;
-        for (int k = 0; k < kBins; ++k)
-            top = std::max (top, mag_[k]);
-        for (int k = 1; k < kBins - 1 && numPeaks < kBins / 2; ++k)
-            if (mag_[k] > mag_[k - 1] && mag_[k] >= mag_[k + 1] && mag_[k] > 1.0e-5f * top)
-                peaks[numPeaks++] = k;
+        if (fast)
+        {
+            top = kernels::maxBins (mag_, kBins, neon);
+            numPeaks = kernels::findPeaks (mag_, kBins, top, peaks, kBins / 2, kernels::findPeaksVector());
+        }
+        else
+        {
+            for (int k = 0; k < kBins; ++k)
+                top = std::max (top, mag_[k]);
+            for (int k = 1; k < kBins - 1 && numPeaks < kBins / 2; ++k)
+                if (mag_[k] > mag_[k - 1] && mag_[k] >= mag_[k + 1] && mag_[k] > 1.0e-5f * top)
+                    peaks[numPeaks++] = k;
+        }
         const auto place = [&] (int k, int offset)
         {
             const int j = k + offset;
@@ -678,18 +853,60 @@ static void shapeFrame (const SpectralParams& p, const Analysis& an, int src, do
                 oth_[j] = theta_[k];
             }
         };
-        for (int i = 0; i < numPeaks; ++i)
-        {
-            const int centre = peaks[i];
-            const int from = i == 0 ? 1 : (peaks[i - 1] + centre + 1) / 2;
-            const int to = i + 1 == numPeaks ? kBins - 1 : (centre + peaks[i + 1]) / 2;
-            const int offset = static_cast<int> (std::lround (static_cast<double> (centre) * r + shiftBins)) - centre;
-            for (int k = from; k <= to; ++k)
-                place (k, offset);
-        }
+        if (fast)
+            kernels::placeAll (mag_, freq_, theta_, om_, of_, oth_, peaks, numPeaks, r, shiftBins, shiftRad, kBins, neon);
+        else
+            for (int i = 0; i < numPeaks; ++i)
+            {
+                const int centre = peaks[i];
+                const int from = i == 0 ? 1 : (peaks[i - 1] + centre + 1) / 2;
+                const int to = i + 1 == numPeaks ? kBins - 1 : (centre + peaks[i + 1]) / 2;
+                const int offset = static_cast<int> (std::lround (static_cast<double> (centre) * r + shiftBins)) - centre;
+                for (int k = from; k <= to; ++k)
+                    place (k, offset);
+            }
     }
     if (p.bandPostWarp)
         band (om_, hostBinHz);
+}
+
+/** The peaks of the phase lock: the bins j in 1 .. kBins - 2 with om[j] > om[j - 1], om[j] >= om[j + 1] and om[j] > 1e-6, in order. Returns their number. */
+static int lockPeaks (const float* om, uint16_t* peaks) noexcept
+{
+    int numPeaks = 0;
+    for (int j = 1; j < kBins - 1; ++j)
+        if (om[j] > om[j - 1] && om[j] >= om[j + 1] && om[j] > 1.0e-6f)
+            peaks[numPeaks++] = static_cast<uint16_t> (j);
+    return numPeaks;
+}
+
+/** Identity phase locking (Laroche and Dolson, "Improved phase vocoder time-scale modification of audio", 1999): every bin of a peak's region of influence takes the peak's synthesis phase plus
+    its analysis phase difference to the peak, phase[q] = phase[peak] + (oth[q] - oth[peak]). The regions are centred on the peaks with their boundaries at the midpoints: between the peaks a and b
+    the bins a + 1 .. (a + b) / 2 follow a and (a + b) / 2 + 1 .. b - 1 follow b; bins 1 .. first peak - 1 follow the first peak, last peak + 1 .. kBins - 1 the last one. (The same midpoints
+    as the regions the pitch shift moves together, shapeFrame ().) Only bin 0 and the peaks keep their own phase. Until round 13 the bins (a + b) / 2 + 1 .. b - 1 were left out (the half of
+    every region left of its peak, after the first one, kept its own advanced phase). No peak: nothing. */
+static void lockToPeaks (float* phase, const float* oth, const uint16_t* peaks, int numPeaks, bool neon) noexcept
+{
+    if (numPeaks == 0)
+        return;
+    // a recorded sound has a peak every three to four bins: most runs are one or two bins long and are written here, the longer ones by the kernel (the same expression, the same bits)
+    const auto run = [&] (int from, int to, int peak)
+    {
+        const float p0 = phase[peak], o0 = oth[peak];
+        if (to - from < 4)
+            for (int q = from; q <= to; ++q)
+                phase[q] = p0 + (oth[q] - o0);
+        else
+            kernels::lockRun (phase, oth, from, to, p0, o0, neon);
+    };
+    run (1, peaks[0] - 1, peaks[0]);
+    for (int k = 1; k < numPeaks; ++k)
+    {
+        const int a = peaks[k - 1], b = peaks[k], mid = (a + b) / 2;
+        run (a + 1, mid, a);
+        run (mid + 1, b - 1, b);
+    }
+    run (peaks[numPeaks - 1] + 1, kBins - 1, peaks[numPeaks - 1]);
 }
 
 void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame, bool transientHit) noexcept
@@ -699,7 +916,7 @@ void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame
     Scratch& scratch = *p.scratch;
     float* const re_ = scratch.re; float* const im_ = scratch.im; float* const om_ = scratch.om; float* const of_ = scratch.of; float* const oth_ = scratch.oth;
     float twist = 0.0f;
-    shapeFrame (p, an, std::min (ch, an.channels() - 1), frame, hostRate_, scratch, c.smear, twist);
+    shapeFrame (p, an, std::min (ch, an.channels() - 1), frame, hostRate_, scratch, c.smear, twist, false);
 
     // phases: advance by the frequency of the partial; after a transient (Transients) restart from the phases of the analysis; Phase Lock ties the bins around a peak to it
     if ((transientHit && p.transients) || ! phaseInit_[ch])
@@ -718,24 +935,9 @@ void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame
         }
     if (p.phaseLock)
     {
-        int peak = -1;
-        for (int j = 1; j < kBins - 1; ++j)
-        {
-            if (! (om_[j] > om_[j - 1] && om_[j] >= om_[j + 1] && om_[j] > 1.0e-6f))
-                continue;
-            // the region of the previous peak ends in the middle between the two
-            const int from = peak < 0 ? 1 : (peak + j) / 2 + 1;
-            if (peak >= 0)
-                for (int q = peak + 1; q < from; ++q)
-                    c.synthPhase[q] = c.synthPhase[peak] + (oth_[q] - oth_[peak]);
-            else
-                for (int q = 1; q < j; ++q)
-                    c.synthPhase[q] = c.synthPhase[j] + (oth_[q] - oth_[j]);
-            peak = j;
-        }
-        if (peak >= 0)
-            for (int q = peak + 1; q < kBins; ++q)
-                c.synthPhase[q] = c.synthPhase[peak] + (oth_[q] - oth_[peak]);
+        uint16_t peaks[kBins];
+        const int numPeaks = lockPeaks (om_, peaks);
+        lockToPeaks (c.synthPhase, oth_, peaks, numPeaks, false);
     }
 
     for (int j = 0; j < kBins; ++j)
@@ -757,6 +959,425 @@ void SpectralVoice::renderChannel (const SpectralParams& p, int ch, double frame
         c.ring[(ola_ + n) & (kFftSize - 1)] += re_[n] * hannAt (n) * kOutputScale;
 }
 
+/** advancePhases () followed by the phase lock, for the bins that the lock does not overwrite only. The lock's peaks depend on the magnitudes only: with them found first, only the phases
+    that the lock keeps are advanced: bin 0 and every peak (lockToPeaks () overwrites every other bin). They are gathered into `tmpPhase` / `tmpStep` (1 + the number of peaks values), advanced
+    by the very kernel (the same bits per bin: no lane depends on its neighbours), and put back; then the lock runs on the peaks. With no peak the lock does nothing and every bin is advanced.
+    The same bits as advancePhases () of every bin followed by the lock (setLegacyPhaseLock). */
+static void advanceAndLock (float* phase, const float* step, const float* om, const float* oth, float* tmpPhase, float* tmpStep, bool neon) noexcept
+{
+    uint16_t peaks[kBins];
+    const int numPeaks = lockPeaks (om, peaks);
+    if (numPeaks == 0)
+    {
+        kernels::advancePhases (phase, step, kBins, neon);
+        return;
+    }
+    tmpPhase[0] = phase[0];
+    tmpStep[0] = step[0];
+    for (int k = 0; k < numPeaks; ++k)
+    {
+        tmpPhase[k + 1] = phase[peaks[k]];
+        tmpStep[k + 1] = step[peaks[k]];
+    }
+    kernels::advancePhases (tmpPhase, tmpStep, numPeaks + 1, neon);
+    phase[0] = tmpPhase[0];
+    for (int k = 0; k < numPeaks; ++k)
+        phase[peaks[k]] = tmpPhase[k + 1];
+    lockToPeaks (phase, oth, peaks, numPeaks, neon);
+}
+
+void SpectralVoice::renderChannelFast (const SpectralParams& p, int ch, double frame, bool transientHit, bool reuseShape, float* twistState) noexcept
+{
+    const Analysis& an = *analysis_;
+    Channel& c = channel_[ch];
+    Scratch& scratch = *p.scratch;
+    float* const re_ = scratch.re; float* const im_ = scratch.im; float* const om_ = scratch.om; float* const of_ = scratch.of; float* const oth_ = scratch.oth;
+    const bool neon = kernels::haveNeon();
+    float twist = 0.0f;
+    if (reuseShape && twistState != nullptr)
+        twist = *twistState;
+    else
+    {
+        shapeFrame (p, an, std::min (ch, an.channels() - 1), frame, hostRate_, scratch, c.smear, twist, true);
+        if (twistState != nullptr)
+            *twistState = twist;
+    }
+
+    // phases: advance by the frequency of the partial; after a transient (Transients) restart from the phases of the analysis; Phase Lock ties the bins around a peak to it
+    bool fusedAdvance = false, locked = false;
+    if ((transientHit && p.transients) || ! phaseInit_[ch])
+    {
+        phaseInit_[ch] = true;
+        for (int j = 0; j < kBins; ++j)
+            c.synthPhase[j] = oth_[j];
+    }
+    else if (p.phaseLock && ! legacyLock_)
+    {
+        advanceAndLock (c.synthPhase, of_, om_, oth_, scratch.zr, scratch.zi, neon);   // (zr, zi are free until the transform below)
+        locked = true;
+    }
+    else if (p.phaseLock || twist != 0.0f)
+        kernels::advancePhases (c.synthPhase, of_, kBins, neon);
+    else
+        fusedAdvance = true;   // phase update, sine and cosine and the bins in one pass below
+    if (p.phaseLock && ! locked)
+    {
+        uint16_t peaks[kBins];
+        const int numPeaks = lockPeaks (om_, peaks);
+        lockToPeaks (c.synthPhase, oth_, peaks, numPeaks, neon);
+    }
+
+    // the bins of the frame: magnitude * (cos, sin) of the phase (bin 0 silent, the Nyquist bin real), then the transform of the real signal and the overlap add
+    if (fusedAdvance)
+        kernels::advanceToSpectrum (c.synthPhase, of_, om_, re_, im_, kBins, neon);
+    else
+    {
+        const float* angle = c.synthPhase;
+        if (twist != 0.0f)
+        {
+            for (int j = 0; j < kBins; ++j)
+                scratch.angle[j] = c.synthPhase[j] + twist * kTwoPi * static_cast<float> (j) * static_cast<float> (j) * 0.05f / kBins;
+            angle = scratch.angle;
+        }
+        kernels::spectrumFromAngles (angle, om_, re_, im_, kBins, neon);
+    }
+    re_[0] = 0.0f;               // bin 0 is silent, and the Nyquist bin is real
+    im_[0] = 0.0f;
+    im_[kBins - 1] = 0.0f;
+    kernels::RealIfft::instance().inverse (re_, im_, scratch.zr, scratch.zi, neon);
+    kernels::overlapAdd (c.ring, ola_, scratch.zr, scratch.zi, kOutputScale, neon);
+}
+
+/** The gains of the first hop for each set of made frames: 1.5 over the sum of the squared synthesis windows of the frames 1 .. 3 that are in the ring (bit j - 1: frame j), at the sample q of the
+    first hop (frame j is at n = q + (3 - j) kHop there). With all four frames the sum is 1.5 and the gain 1; without the others it renormalises the output to the level of the frames that exist. */
+namespace
+{
+std::atomic<int> gStartTablesBuilt { 0 };
+}
+
+struct StartGainTable
+{
+    float g[8][kHop];
+    StartGainTable()
+    {
+        gStartTablesBuilt.fetch_add (1);
+        for (int m = 0; m < 8; ++m)
+            for (int q = 0; q < kHop; ++q)
+            {
+                double sum = 0.0;
+                for (int j = 1; j <= 3; ++j)
+                    if (m & (1 << (j - 1)))
+                    {
+                        const double w = 0.5 - 0.5 * std::cos (2.0 * kPi * (q + (3 - j) * kHop) / kFftSize);
+                        sum += w * w;
+                    }
+                g[m][q] = static_cast<float> (1.5 / std::max (sum, 0.02));
+            }
+    }
+};
+
+static const StartGainTable& startGainTable() noexcept
+{
+    static const StartGainTable table;
+    return table;
+}
+
+static const float* startGain (int mask) noexcept
+{
+    return startGainTable().g[mask & 7];
+}
+
+/** The most that a frame left out may weigh (the squared window of its own sample) at any sample of the first hop: it is made at the last block boundary before it would weigh more. */
+static constexpr double kMaxMissingWeight = 0.5;
+
+/** The sample of the first hop at which the squared window of frame j (1 .. 3) first passes kMaxMissingWeight, from each start sample q on (kHop: never): made once, the same expression as the loop of
+    startScheduleReference. */
+static bool windowPasses (int q, int j) noexcept
+{
+    const double w = 0.5 - 0.5 * std::cos (2.0 * kPi * (q + (3 - j) * kHop) / kFftSize);
+    return w * w > kMaxMissingWeight;
+}
+
+struct ScheduleTable
+{
+    int latest[3][kHop + 1];
+    ScheduleTable()
+    {
+        gStartTablesBuilt.fetch_add (1);
+        for (int j = 1; j <= 3; ++j)
+        {
+            latest[j - 1][kHop] = kHop;
+            for (int q = kHop - 1; q >= 0; --q)
+                latest[j - 1][q] = windowPasses (q, j) ? q : latest[j - 1][q + 1];
+        }
+    }
+};
+
+static const ScheduleTable& scheduleTable() noexcept
+{
+    static const ScheduleTable table;
+    return table;
+}
+
+static void warmStartTables() noexcept
+{
+    kernels::warmTables();
+    startGainTable();
+    scheduleTable();
+}
+
+int SpectralVoice::tablesBuiltForTest() noexcept
+{
+    return kernels::tablesBuilt() + gStartTablesBuilt.load();
+}
+
+void SpectralVoice::startSchedule (int offset, bool smears, int join[3]) noexcept
+{
+    const int d = std::max (0, std::min (kHop - 1, offset));
+    const ScheduleTable& t = scheduleTable();
+    for (int j = 1; j <= 3; ++j)
+    {
+        const int latest = smears ? d   // the smear memory follows the order of the four shapings of the priming: all frames at once
+                                  : t.latest[j - 1][d];
+        join[j - 1] = std::max (d, (latest / kStartStep) * kStartStep);
+    }
+}
+
+void SpectralVoice::startScheduleReference (int offset, bool smears, int join[3]) noexcept
+{
+    const int d = std::max (0, std::min (kHop - 1, offset));
+    for (int j = 1; j <= 3; ++j)
+    {
+        int latest = kHop;
+        if (smears)
+            latest = d;
+        else
+            for (int q = d; q < kHop; ++q)
+            {
+                const double w = 0.5 - 0.5 * std::cos (2.0 * kPi * (q + (3 - j) * kHop) / kFftSize);
+                if (w * w > kMaxMissingWeight)
+                {
+                    latest = q;
+                    break;
+                }
+            }
+        join[j - 1] = std::max (d, (latest / kStartStep) * kStartStep);
+    }
+}
+
+/** The phases of frame j of the priming (j = 1 .. 3) into `out`: the analysis phase (the phase lock applied, as frame 0 had it) advanced j times by the bin frequencies, wrapped as always; from the
+    phases the voice holds for an earlier frame when there are such. When frame j is the latest so far the voice goes on from it (synthPhase). scratch.of / oth / om are those of the frame. */
+void SpectralVoice::startPhases (const SpectralParams& p, int ch, int j, float* out) noexcept
+{
+    Scratch& scratch = *p.scratch;
+    Channel& c = channel_[ch];
+    const bool neon = kernels::haveNeon();
+    const float* const of_ = scratch.of; const float* const oth_ = scratch.oth; const float* const om_ = scratch.om;
+    const auto lock = [&]
+    {
+        uint16_t peaks[kBins];
+        const int numPeaks = lockPeaks (om_, peaks);
+        lockToPeaks (out, oth_, peaks, numPeaks, neon && ! reference_);
+    };
+    int steps;
+    if (phaseFrame_[ch] >= 1 && phaseFrame_[ch] <= j)
+    {
+        std::memcpy (out, c.synthPhase, sizeof (float) * kBins);
+        steps = j - phaseFrame_[ch];
+    }
+    else
+    {
+        std::memcpy (out, oth_, sizeof (float) * kBins);
+        if (p.phaseLock)
+            lock();
+        steps = j;
+    }
+    for (int i = 0; i < steps; ++i)
+    {
+        if (reference_)
+            for (int k = 0; k < kBins; ++k)
+            {
+                float x = out[k] + of_[k] * kHop;
+                if (x > 100.0f || x < -100.0f)
+                    x = wrapPi (std::fmod (x, kTwoPi));
+                out[k] = x;
+            }
+        else if (p.phaseLock && ! legacyLock_)
+            advanceAndLock (out, of_, om_, oth_, scratch.zr, scratch.zi, neon);
+        else
+        {
+            kernels::advancePhases (out, of_, kBins, neon);
+            if (p.phaseLock)
+                lock();
+        }
+        if (reference_ && p.phaseLock)
+            lock();
+    }
+    if (j > phaseFrame_[ch])
+    {
+        std::memcpy (c.synthPhase, out, sizeof (float) * kBins);
+        phaseFrame_[ch] = j;
+        phaseInit_[ch] = true;
+    }
+}
+
+/** Makes the frames of `mask` (bit j - 1: frame j of the priming) of every channel into the ring, in order, at the position of the start (startFrame_) with the settings `p` has now: one shaping for
+    them all (the Smear warp, which keeps a memory that each shaping changes, shapes every frame, after one more shaping for the frame 0 that is never made when `phantom`: its memory is then
+    what the four shapings of the old priming left). Frame j lies at ring position j kHop. */
+void SpectralVoice::startFrames (const SpectralParams& p, int mask, bool phantom) noexcept
+{
+    const Analysis& an = *analysis_;
+    const int channels = an.channels() > 1 ? 2 : 1;
+    Scratch& scratch = *p.scratch;
+    const bool neon = kernels::haveNeon();
+    bool smears = false;
+    for (int w = 0; w < 2; ++w)
+        smears = smears || (p.warpType[w] == static_cast<int> (Warp::smear) && p.warpAmount[w] > 0.0f);
+    for (int ch = 0; ch < channels; ++ch)
+    {
+        Channel& c = channel_[ch];
+        float twist = 0.0f;
+        bool shaped = false;
+        if (phantom && smears && mask != 0)
+            shapeFrame (p, an, std::min (ch, an.channels() - 1), startFrame_, hostRate_, scratch, c.smear, twist, ! reference_);
+        for (int j = 1; j <= 3; ++j)
+        {
+            if (! (mask & (1 << (j - 1))))
+                continue;
+            if (! shaped || smears)
+            {
+                shapeFrame (p, an, std::min (ch, an.channels() - 1), startFrame_, hostRate_, scratch, c.smear, twist, ! reference_);
+                shaped = true;
+            }
+            startPhases (p, ch, j, scratch.phaseTmp);
+            const int at = (j * kHop) & (kFftSize - 1);
+            if (reference_)
+            {
+                for (int k = 0; k < kBins; ++k)
+                {
+                    float angle = scratch.phaseTmp[k];
+                    if (twist != 0.0f)
+                        angle += twist * kTwoPi * static_cast<float> (k) * static_cast<float> (k) * 0.05f / kBins;
+                    const float magnitude = k == 0 ? 0.0f : scratch.om[k];
+                    scratch.re[k] = magnitude * std::cos (angle);
+                    scratch.im[k] = k == kBins - 1 ? 0.0f : magnitude * std::sin (angle);
+                }
+                for (int k = 1; k < kFftSize / 2; ++k)
+                {
+                    scratch.re[kFftSize - k] = scratch.re[k];
+                    scratch.im[kFftSize - k] = -scratch.im[k];
+                }
+                Fft::instance().inverse (scratch.re, scratch.im);
+                for (int n = (3 - j) * kHop; n < kFftSize; ++n)   // frame j began (3 - j) hops before the first output sample: that part is gone
+                    c.ring[(at + n) & (kFftSize - 1)] += scratch.re[n] * hannAt (n) * kOutputScale;
+            }
+            else
+            {
+                const float* angle = scratch.phaseTmp;
+                if (twist != 0.0f)
+                {
+                    for (int k = 0; k < kBins; ++k)
+                        scratch.angle[k] = scratch.phaseTmp[k] + twist * kTwoPi * static_cast<float> (k) * static_cast<float> (k) * 0.05f / kBins;
+                    angle = scratch.angle;
+                }
+                kernels::spectrumFromAngles (angle, scratch.om, scratch.re, scratch.im, kBins, neon);
+                scratch.re[0] = 0.0f;
+                scratch.im[0] = 0.0f;
+                scratch.im[kBins - 1] = 0.0f;
+                kernels::RealIfft::instance().inverse (scratch.re, scratch.im, scratch.zr, scratch.zi, neon);
+                if (legacyStartOla_)
+                {
+                    std::memset (scratch.olaTmp, 0, sizeof (float) * kFftSize);
+                    kernels::overlapAdd (scratch.olaTmp, 0, scratch.zr, scratch.zi, kOutputScale, neon);
+                    for (int n = (3 - j) * kHop; n < kFftSize; ++n)
+                        c.ring[(at + n) & (kFftSize - 1)] += scratch.olaTmp[n];
+                }
+                else   // straight into the ring from the first sample that is not in the past (0 + x is x: the ring never holds a negative zero, so the sums are the same bits)
+                    kernels::overlapAdd (c.ring, at, scratch.zr, scratch.zi, kOutputScale, neon, (3 - j) * kHop);
+            }
+        }
+    }
+}
+
+/** The samples `from` .. kHop - 1 of the first hop into `finished`: the ring of the hop (position 3 kHop) times the gain of the frames made so far. */
+void SpectralVoice::refreshFirstHop (int from) noexcept
+{
+    const int channels = analysis_ != nullptr && analysis_->channels() > 1 ? 2 : 1;
+    const float* const gain = startGain (startMask_);
+    for (int ch = 0; ch < channels; ++ch)
+    {
+        Channel& c = channel_[ch];
+        for (int q = from; q < kHop; ++q)
+            c.finished[q] = c.ring[(3 * kHop + q) & (kFftSize - 1)] * gain[q];
+    }
+}
+
+/** The first hop has been read: the frames that were still to be made are made now (their weight in the hop is gone, their later part is in the ring), the ring slots of the hop are cleared (the next
+    frame writes over them). (The play head took its first step in noteOn, as in the first synthesizeHop of the old start.) */
+void SpectralVoice::endFirstHop (const SpectralParams& p) noexcept
+{
+    int due = 0;
+    for (int j = 0; j < 3; ++j)
+        if (startJoin_[j] >= 0)
+        {
+            due |= 1 << j;
+            startJoin_[j] = -1;
+        }
+    if (due != 0)
+    {
+        startFrames (p, due, false);
+        startMask_ |= due;
+    }
+    const int channels = analysis_ != nullptr && analysis_->channels() > 1 ? 2 : 1;
+    for (int ch = 0; ch < channels; ++ch)
+        for (int q = 0; q < kHop; ++q)
+            channel_[ch].ring[(3 * kHop + q) & (kFftSize - 1)] = 0.0f;
+    startActive_ = false;
+}
+
+/** The four frames of the start of a note (the three of synthesizeHop (p, false) and the one that the first synthesizeHop (p, true) makes), one channel after the other: the frames are at the
+    same position of the analysis with the same settings, so the shaped bins are the same for all four and are made once per channel (the phases differ and are advanced for each). Only the
+    smear warp keeps a memory that each call changes: a note with it shapes every frame, as the four calls did. The frame of the fourth hop stays in the ring (the first synthesizeHop reads the
+    hop and does not synthesise again: `framePrimed_`), the ring of the overlap add ends up exactly where the three hops and the fourth frame would leave it.
+    The first real frame is the fourth: it carries the phases that the voice goes on from (the analysis phase advanced three times by the bin frequencies, wrapped as always), so that
+    everything after the priming is what the voice has always played. (A circular shift of one frame cannot stand in for the earlier three: see docs/engine-spec/07 section 8.) */
+void SpectralVoice::primeFast (const SpectralParams& p) noexcept
+{
+    if (analysis_ == nullptr)
+        return;
+    const int channels = analysis_->channels() > 1 ? 2 : 1;
+    const double fileFrames = static_cast<double> (analysis_->fileFrames());
+    if (p.manual)
+        head_ = std::min (p.regionLo, p.regionHi) + std::fabs (static_cast<double> (p.regionHi) - static_cast<double> (p.regionLo)) * clamp01 (p.position);
+    const double frame = head_ * fileFrames / kHop;
+    const int index = static_cast<int> (std::lround (frame));
+    const bool transientHit = analysis_->transient (index) && index != lastTransientFrame_;
+    lastTransientFrame_ = index;
+    bool smears = false;
+    for (int w = 0; w < 2; ++w)
+        smears = smears || (p.warpType[w] == static_cast<int> (Warp::smear) && p.warpAmount[w] > 0.0f);
+    for (int ch = 0; ch < channels; ++ch)
+    {
+        Channel& c = channel_[ch];
+        float twist = 0.0f;
+        for (int hop = 0; hop < 4; ++hop)
+        {
+            ola_ = hop * kHop;
+            renderChannelFast (p, ch, frame, hop == 0 && transientHit, hop > 0 && ! smears, &twist);
+            if (hop == 3)
+                break;
+            for (int n = 0; n < kHop; ++n)
+            {
+                const int at = (ola_ + n) & (kFftSize - 1);
+                c.finished[n] = c.ring[at];
+                c.ring[at] = 0.0f;
+            }
+        }
+    }
+    ola_ = (3 * kHop) & (kFftSize - 1);
+    framePrimed_ = true;
+}
+
 void SpectralVoice::synthesizeHop (const SpectralParams& p, bool advance) noexcept
 {
     if (analysis_ == nullptr)
@@ -774,6 +1395,8 @@ void SpectralVoice::synthesizeHop (const SpectralParams& p, bool advance) noexce
         transientHit = true;
     lastTransientFrame_ = index;
 
+    const bool rendered = framePrimed_;   // primeFast made the frame of this hop (the first one of the note)
+    framePrimed_ = false;
     if (headDone_ && advance)
     {
         // the play head ran out: the overlap buffer drains for four hops, then the voice ends
@@ -783,9 +1406,16 @@ void SpectralVoice::synthesizeHop (const SpectralParams& p, bool advance) noexce
             return;
         }
     }
-    else
+    else if (! rendered)
+    {
         for (int ch = 0; ch < channels; ++ch)
-            renderChannel (p, ch, frame, transientHit);
+        {
+            if (reference_)
+                renderChannel (p, ch, frame, transientHit);
+            else
+                renderChannelFast (p, ch, frame, transientHit);
+        }
+    }
 
     for (int ch = 0; ch < channels; ++ch)
     {
@@ -809,19 +1439,48 @@ void SpectralVoice::process (const SpectralParams& p, float* left, float* right,
     if (! active_ || analysis_ == nullptr || p.scratch == nullptr)
         return;
     const bool stereo = analysis_->channels() > 1;
-    for (int i = 0; i < numFrames; ++i)
+    int i = 0;
+    while (i < numFrames)
     {
+        if (startActive_)
+        {
+            if (outPos_ >= kHop)
+                endFirstHop (p);
+            else
+            {
+                int due = 0;
+                for (int j = 0; j < 3; ++j)
+                    if (startJoin_[j] >= 0 && outPos_ >= startJoin_[j])
+                    {
+                        due |= 1 << j;
+                        startJoin_[j] = -1;
+                    }
+                if (due != 0)
+                {
+                    startFrames (p, due, false);
+                    startMask_ |= due;
+                    refreshFirstHop (outPos_);
+                }
+            }
+        }
         if (outPos_ >= kHop)
         {
             synthesizeHop (p, true);
-            outPos_ = 0;
+            outPos_ = startSkip_;   // the first hop of a note is read from its offset on
+            startSkip_ = 0;
             if (! active_)
                 return;
         }
-        const float l = channel_[0].finished[outPos_] * p.gain, r = (stereo ? channel_[1].finished[outPos_] : channel_[0].finished[outPos_]) * p.gain;
-        left[i] = std::isfinite (l) ? std::max (-16.0f, std::min (16.0f, l)) : 0.0f;
-        right[i] = std::isfinite (r) ? std::max (-16.0f, std::min (16.0f, r)) : 0.0f;
-        ++outPos_;
+        // the samples up to the next event (the end of the hop, the next frame of the start that is due) read the finished hop as it is: one run through the output stage
+        int run = std::min (numFrames - i, kHop - outPos_);
+        if (startActive_)
+            for (int j = 0; j < 3; ++j)
+                if (startJoin_[j] > outPos_)
+                    run = std::min (run, startJoin_[j] - outPos_);
+        kernels::gainClamp (left + i, channel_[0].finished + outPos_, p.gain, run, ! legacyOutput_ && kernels::haveNeon());
+        kernels::gainClamp (right + i, (stereo ? channel_[1].finished : channel_[0].finished) + outPos_, p.gain, run, ! legacyOutput_ && kernels::haveNeon());
+        outPos_ += run;
+        i += run;
     }
 }
 
@@ -837,7 +1496,7 @@ void computeMagnitudeSpectrum (const Analysis& an, const SpectralParams& p, doub
     float twist = 0.0f;
     const int last = an.numFrames() - 1;
     frame = std::max (0.0, std::min (static_cast<double> (last), frame));
-    shapeFrame (p, an, 0, frame, p.hostRate > 0.0 ? p.hostRate : 48000.0, scratch, smear, twist);
+    shapeFrame (p, an, 0, frame, p.hostRate > 0.0 ? p.hostRate : 48000.0, scratch, smear, twist, false);
     std::copy (scratch.om, scratch.om + kBins, om);
 }
 } // namespace spectral

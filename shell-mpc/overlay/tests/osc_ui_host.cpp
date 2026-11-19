@@ -55,8 +55,18 @@ public:
     void setUiFullOpen (bool o) noexcept override { fullOpen = o; }
     void contentRoots (std::vector<ContentRoot>& out) const override { out = roots; }
     void requestContent (int osc, int kind, const std::string& path) override { requests.push_back ({ osc, kind, path }); loadState = 1; }
-    int contentLoad (std::string*) const override { return loadState; }
+    int contentLoad (std::string* m) const override { if (m != nullptr) *m = loadMessage; return loadState; }
+    void wavetableSources (synthyboy::CatalogueSources& out) const override { out = sources; }
+    void requestWavetable (int osc, const synthyboy::ContentFileRef& ref) override { wtRequests.push_back ({ osc, ref }); loadState = 1; }
+    int takeWavetableSteps (int) noexcept override { const int n = wtSteps; wtSteps = 0; return n; }
     std::shared_ptr<const synthyboy::StateContent> content() const override { return contentPtr; }
+    struct WtRequest { int osc; synthyboy::ContentFileRef ref; };
+    std::vector<WtRequest> wtRequests;
+    synthyboy::CatalogueSources sources;
+    std::string loadMessage;
+    int wtSteps = 0;
+    unsigned missingContent() const noexcept override { return missingBits; }
+    unsigned missingBits = 0;   // the engine's missing_content bits
     struct Request { int osc, kind; std::string path; };
     std::vector<ContentRoot> roots;
     std::vector<Request> requests;
@@ -145,27 +155,49 @@ void testNoiseBasicQ1IsNoiseSample()
     Rig r;
     r.inst.sel = 5;
     r.refresh();
-    check (r.inst.q[0] == Inst::idx ("noise.sample") && r.inst.q[1] == Inst::idx ("noise.filter") && r.inst.q[2] == Inst::idx ("noise.pan") && r.inst.q[3] == Inst::idx ("noise.level"),
+    int ct[4];
+    r.ui.compactTargets (ct);   // the main state's Q group is published by the Play view (PlayView::publishQ): the oscillator's compact group is what it asks for
+    check (ct[0] == Inst::idx ("noise.sample") && ct[1] == Inst::idx ("noise.filter") && ct[2] == Inst::idx ("noise.pan") && ct[3] == Inst::idx ("noise.level"),
            "noise: the Basic group is noise.sample, noise.filter, noise.pan, noise.level (not noise.type)");
 }
 
 void testBasicGroupsAndSelection()
 {
     Rig r;
-    check (r.inst.q[0] == Inst::idx ("osc1.type") && r.inst.q[1] == Inst::idx ("osc1.wavetable") && r.inst.q[2] == Inst::idx ("osc1.pan") && r.inst.q[3] == Inst::idx ("osc1.level"),
-           "A: the Basic group is type, wavetable, pan, level of osc1");
+    int ct[4];
+    r.ui.compactTargets (ct);
+    check (ct[0] == Inst::idx ("osc1.type") && ct[1] == Inst::idx ("osc1.wavetable") && ct[2] == Inst::idx ("osc1.pan") && ct[3] == Inst::idx ("osc1.level"),
+           "A: the Basic group is type, wavetable, pan, level of osc1");;
     r.inst.sel = 1;
     r.refresh();
-    check (r.inst.q[0] == Inst::idx ("sub.waveform") && r.inst.q[1] == Inst::idx ("sub.octave") && r.inst.q[2] == Inst::idx ("sub.pan") && r.inst.q[3] == Inst::idx ("sub.level"), "Sub: waveform, octave, pan, level");
+    r.ui.compactTargets (ct);
+    check (ct[0] == Inst::idx ("sub.waveform") && ct[1] == Inst::idx ("sub.octave") && ct[2] == Inst::idx ("sub.pan") && ct[3] == Inst::idx ("sub.level"), "Sub: waveform, octave, pan, level");
     r.inst.sel = 4;
     r.refresh();
-    check (r.inst.q[0] == Inst::idx ("osc3.type") && r.inst.q[2] == Inst::idx ("osc3.pan"), "C is osc3");
-    // the compact view's instance selector writes the Play Osc selector
+    r.ui.compactTargets (ct);
+    check (ct[0] == Inst::idx ("osc3.type") && ct[2] == Inst::idx ("osc3.pan"), "C is osc3");
+    // the compact view's source selector (the one selector of the three thirds: a stepper with a list) writes the Play Osc selector
     r.inst.sel = 2;
     r.refresh();
     const ui::Rect c = r.ui.compact().instances.rect();
-    r.tap (c.x + c.w * 4 / 5 + 4, c.y + c.h / 2);
-    check (r.inst.sel == 5, "tap on the fifth cell of the selector: Play Osc = Noise");
+    check (c.h >= 56 && std::string (r.ui.compact().instances.state.text) == "Osc A" && r.ui.compact().instances.listable, "the selector shows the current source in the owner's wording (Osc A) and has a list");
+    r.tap (c.x + c.w * 7 / 8, c.y + c.h / 2);   // the right arrow: the next source
+    check (r.inst.sel == 3, "tap on the right arrow of the selector: Play Osc = B (the next source)");
+    r.refresh();
+    r.tap (c.x + c.w / 2, c.y + c.h / 2);   // the name: the list of the five sources
+    {
+        const ui::ListPopup& l = r.ui.list();
+        const char* const want[5] = { "Sub", "Osc A", "Osc B", "Osc C", "Noise" };
+        bool names = l.state.count == 5 && l.state.current == 2;
+        for (int i = 0; i < 5 && names; ++i)
+            names = std::string (l.state.items[i]) == want[i] && l.rowRect (i).h >= 56;
+        check (r.stack.isMain() && names, "a tap on the name opens the list: Sub, Osc A, Osc B, Osc C, Noise (rows >= 56 px), B is the current one, no page of the stack opened");
+    }
+    {
+        const ui::Rect row = r.ui.list().rowRect (4);
+        r.tap (row.x + row.w / 2, row.y + row.h / 2);
+    }
+    check (r.inst.sel == 5, "tap on the fifth row of the list: Play Osc = Noise");
     r.refresh();
     check (r.ui.selection() == 5, "the UI follows the selector");
 }
@@ -177,7 +209,10 @@ void testFullScreenOpensAndCloses()
     r.openFull();
     check (r.stack.depth() == 1 && r.inst.fullOpen, "the full-screen button opens the full screen and tells the plugin");
     check (r.ui.displayRect().w > 500, "the full screen has a display rectangle");
+    check (r.ui.plotArea().empty(), "the full screen's picture has no plot area (it fills its display rectangle)");
     r.tapC (r.ui.full().close);
+    check (r.stack.isMain() && r.ui.plotArea() == ui::playrows::plotRect (r.ui.displayRect()) && r.ui.plotArea().y >= ui::playrows::bandRect (r.ui.displayRect()).bottom() && ! r.ui.plotArea().overlaps (r.ui.compact().full.rect()) && ! r.ui.plotArea().overlaps (r.ui.compact().power.rect()) && (r.ui.compact().route.rect().empty() || ! r.ui.plotArea().overlaps (r.ui.compact().route.rect())),
+           "the compact view: the picture's plot area is the common one, under the header band; the buttons (power, route, full screen) stand in the band");
     check (r.stack.isMain() && ! r.inst.fullOpen, "the close button is back (main again, the plugin is told)");
     // navigating away
     r.openFull();
@@ -279,7 +314,7 @@ void testDisabledControls()
     const OscUi::Item* ph = r.ui.item (OscUi::kWarp1Var);
     check (r.ui.full().panel.warp()->first.hasVar() && ph != nullptr && ph->param == Inst::idx ("osc1.warp.phase"), "the VAR knob of a warp slot is its PHASE (osc1.warp.phase)");
     const OscUi::Item* drop = r.ui.item (OscUi::kBasic + 2);
-    check (drop != nullptr && ! drop->c->enabled(), "the source dropdown of the compact view is disabled (the list opens from the full screen)");
+    check (drop != nullptr && drop->c->enabled() && r.ui.compact().basic.source.stepper.listable, "the table of the compact view opens the wavetable browser (its name is listable; the full screen opens first)");
     // the source stepper of multisample is disabled
     r.inst.set ("osc1.type", 4.0f);
     r.refresh();
@@ -487,18 +522,18 @@ void testSourceAndWarpLists()
 {
     Rig r;
     r.openFull();
-    // the source dropdown opens the list of the wavetables; the stepper's name does too, its outer quarters step
+    // the source dropdown opens the wavetable browser (the category of the current table, Saw is in Basic); the stepper's name does too, its outer quarters step
     ui::MenuButton& drop = r.ui.full().basic.source.dropdown;
-    check (drop.enabled() && ! r.ui.compact().basic.source.dropdown.enabled(), "the source dropdown is enabled on the full screen (wavetable type), not on the compact view");
+    check (drop.enabled() && r.ui.compact().basic.source.dropdown.enabled(), "the table dropdown is enabled on the full screen and on the compact view (wavetable type)");
     r.tapC (drop);
-    check (r.stack.top() == OscUi::kPageList && r.ui.list().state.count == 15, "the dropdown opens the list of the 15 wavetables");
+    check (r.stack.top() == OscUi::kPageList && r.ui.list().state.count == 6 && std::string (r.ui.list().state.header) == "Basic" && r.ui.list().state.headerBack, "the dropdown opens the browser in the category of the current table: the six one cycle tables, the header is the way up");
     const ui::Rect row = r.ui.list().rowRect (r.ui.list().firstRow());
     r.tap (row.x + 30, row.y + 20);
     check (r.inst.get ("osc1.wavetable") == static_cast<float> (r.ui.list().firstRow()) && r.stack.depth() == 1, "a tap on a row writes osc1.wavetable");
     ui::Stepper& st = r.ui.full().basic.source.stepper;
     const ui::Rect sr = st.rect();
     r.tap (sr.x + sr.w / 2, sr.y + sr.h / 2);
-    check (r.stack.top() == OscUi::kPageList, "a tap on the name of the source stepper opens the list as well");
+    check (r.stack.top() == OscUi::kPageList && r.ui.list().state.current == 0, "a tap on the name of the table stepper opens the browser as well, the current table (Sine, the first row) marked");
     r.tap (20, 130);
     const float w0 = r.inst.get ("osc1.wavetable");
     r.tap (sr.x + sr.w - 8, sr.y + sr.h / 2);
@@ -638,7 +673,7 @@ void testSourceBrowserInTheOscillatorUi()
     check (src != nullptr && src->c->enabled() && r.ui.compact().basic.source.stepper.listable && r.ui.compact().basic.source.dropdown.enabled(), "granular: the source of the compact view is enabled (a tap opens the browser)");
     check (std::string (r.ui.compact().basic.source.stepper.state.text) == "NO SAMPLE", "granular: no sample loaded: the source says NO SAMPLE");
     // from the compact view the dropdown opens the full screen and the list over it
-    r.tapC (r.ui.compact().basic.source.dropdown);
+    r.tapC (r.ui.compact().basic.source.stepper);   // the name of the source is the list / the browser (the compact row has no list button)
     check (r.stack.depth() == 2 && r.stack.top() == OscUi::kPageList && r.ui.list().state.count == 1 && std::string (r.ui.list().state.header) == "SOURCES" && ! r.ui.list().state.headerBack && std::string (r.ui.list().state.items[0]) == "LIBRARY \xe2\x96\xb6", "granular: the dropdown opens the full screen and the list of the sources (the header is the title, no way up at the roots)");
     // LIBRARY, then Drums, then the sample
     auto row = [&] (int i) { const ui::Rect q = r.ui.list().rowRect (i); r.tap (q.x + 30, q.y + q.h / 2); };
@@ -683,10 +718,125 @@ void testSourceBrowserInTheOscillatorUi()
     Rig none;
     none.inst.set ("osc1.type", 4.0f);
     none.refresh();
-    none.tapC (none.ui.compact().basic.source.dropdown);
+    none.tapC (none.ui.compact().basic.source.stepper);
     check (none.stack.depth() == 0, "an instance without roots: the browser does not open");
 }
 
+
+/** The content the sound needs and does not have: "content missing: <name>" over the display, the name from the state's content reference (title, else file name without extension, underscores as spaces). */
+void testMissingContentLine()
+{
+    Rig r;
+    r.inst.set ("osc1.type", 1.0f);   // a sample oscillator
+    auto content = std::make_shared<synthyboy::StateContent>();
+    synthyboy::ContentSample cs;
+    cs.osc = 1; cs.ref.pack = "p"; cs.ref.file = "drums/drum_loop_120bpm.wav";
+    content->samples.push_back (cs);
+    r.inst.contentPtr = content;
+    r.refresh();
+    check (r.ui.missingText().empty(), "nothing missing: no line over the display");
+    r.inst.missingBits = 1u << 0;
+    r.refresh();
+    check (r.ui.missingText() == "content missing: drum loop 120bpm", "the file of oscillator A is missing: 'content missing: drum loop 120bpm' (" + r.ui.missingText() + ")");
+    r.inst.missingBits = 1u << 1;   // oscillator B's file: not A's
+    r.refresh();
+    check (r.ui.missingText().empty(), "the line is for the oscillator on screen only");
+    r.inst.missingBits = 1u << 0;
+    content->samples[0].ref.name = "Break Beat";   // the pack's title wins
+    r.refresh();
+    check (r.ui.missingText() == "content missing: Break Beat", "the pack's title is the name when it has one");
+    r.inst.set ("osc1.type", 0.0f);
+    r.inst.missingBits = 1u << 3;   // the user wavetable of A
+    r.refresh();
+    check (r.ui.missingText() == "content missing", "a missing wavetable without a reference in the state: the line says content missing");
+    // a name too long for its room loses its MIDDLE once: the text is drawn at the size the cut was made for, so the pen does not cut the end of it again (one ellipsis, not at the end), in the compact view's band and on the full screen
+    r.inst.set ("osc1.type", 1.0f);
+    content->samples[0].ref.name = "";
+    content->samples[0].ref.file = "drums/an_extremely_long_sample_file_name_that_can_not_fit_into_the_band_of_the_display_at_any_size_final_take_07.wav";
+    r.inst.missingBits = 1u << 0;
+    r.refresh();
+    for (int state = 0; state < 2; ++state)
+    {
+        if (state == 1)
+            r.openFull();
+        auto data = std::make_unique<gpu::SceneData>();
+        std::memset (data.get(), 0, sizeof (gpu::SceneData));
+        gpu::SceneBuilder sb (*data);
+        r.ui.drawOnDisplay (sb);
+        int lines = 0, bad = 0;
+        for (uint32_t k = 0; k < data->numOps; ++k)
+            if (data->ops[k].op == gpu::kOpText)
+            {
+                const std::string t = gpu::textString (*data, data->ops[k]);
+                if (t.rfind ("content missing", 0) != 0)
+                    continue;
+                ++lines;
+                size_t n = 0, last = 0;
+                for (size_t at = t.find ("\xE2\x80\xA6"); at != std::string::npos; at = t.find ("\xE2\x80\xA6", at + 3))
+                {
+                    ++n;
+                    last = at;
+                }
+                if (n != 1 || last + 3 >= t.size() || t.compare (0, 15, "content missing") != 0 || t.compare (t.size() - 2, 2, "07") != 0)
+                    ++bad;
+            }
+        check (lines == 1 && bad == 0, std::string ("the long name of the missing content loses its middle once (") + (state == 0 ? "compact view" : "full screen") + "): one ellipsis, not at the end, the end of the name stays");
+    }
+}
+
+/** The type drop-down of the compact view: closed it shows the current type, a tap opens the list of the types with their pictograms (rows >= 56 px), a row chooses (the same write the cells made). */
+void testTypeDropdown()
+{
+    Rig r;
+    r.inst.set ("osc1.type", 0.0f);
+    r.refresh();
+    ui::TypeSelector& t = r.ui.compact().basic.selector;
+    check (t.dropdown && std::string (t.state.items[t.state.index].label) == "WAVE" && t.rect().h >= 56, "the type is a drop-down in the compact view: closed it shows WAVE");
+    r.tapC (t);
+    {
+        const ui::ListPopup& l = r.ui.list();
+        const char* const want[5] = { "WAVE", "MULTI", "SAMPLE", "GRAIN", "SPEC" };
+        bool ok = r.stack.isMain() && l.state.count == 5 && l.state.icons != nullptr && l.state.current == 0;
+        for (int i = 0; i < 5 && ok; ++i)
+            ok = std::string (l.state.items[i]) == want[i] && l.state.icons[i] >= 0 && l.rowRect (i).h >= 56;
+        check (ok, "a tap opens the list of the five types with their pictograms (rows >= 56 px), no page of the stack");
+    }
+    {
+        const ui::Rect row = r.ui.list().rowRect (3);   // GRAIN
+        r.tap (row.x + row.w / 2, row.y + row.h / 2);
+    }
+    check (r.inst.get ("osc1.type") == 2.0f && r.stack.isMain(), "the row GRAIN writes the granular type (osc1.type = 2) and the list closes");
+    r.refresh();
+    check (std::string (t.state.items[t.state.index].label) == "GRAIN", "the closed drop-down shows GRAIN");
+    // the sub oscillator: the six waveforms
+    r.inst.sel = 1;
+    r.refresh();
+    ui::TypeSelector& st = r.ui.compact().basic.selector;
+    r.tapC (st);
+    check (r.ui.list().state.count == 6 && std::string (r.ui.list().state.items[5]) == "PULSE", "the sub oscillator's drop-down lists the six waveforms");
+    r.tap (20, 130);   // the backdrop closes
+    check (r.stack.isMain(), "a tap on the backdrop closes the list");
+}
+
+/** A switched-off oscillator: the inactive (grey) look for the display, the controls under it and the Q frames, the power button red, nothing disabled (the controls stay operable). */
+void testInactiveLook()
+{
+    const uint32_t g = ui::Pen::inactiveGrey (0x2ee6f0ffu);
+    check (((g >> 24) & 255u) == ((g >> 16) & 255u) && ((g >> 16) & 255u) == ((g >> 8) & 255u) && (g & 255u) == 255u && ((g >> 8) & 255u) > 0u, "the inactive look: a colour becomes a grey of its own brightness, the alpha stays");
+    Rig r;
+    r.inst.set ("osc1.on", 1.0f);
+    r.refresh();
+    check (! r.ui.compact().basic.inactive() && ! r.ui.compact().basic.pan.inactive() && ! r.ui.compact().basic.group.inactive() && r.ui.compact().power.state.on, "an oscillator that is on: the controls have the normal look");
+    r.inst.set ("osc1.on", 0.0f);
+    r.refresh();
+    ui::OscillatorCompact& c = r.ui.compact();
+    check (! c.power.state.on && c.power.state.negativeOff && ! c.power.inactive() && ! c.instances.inactive() && ! c.full.inactive(), "switched off: the power button is red (negative colour), the selector and the corner buttons keep their look");
+    check (c.basic.inactive() && c.basic.pan.inactive() && c.basic.level.inactive() && c.basic.selector.inactive() && c.basic.group.inactive() && c.basic.pan.enabled() && c.basic.level.enabled() && c.basic.selector.enabled(), "switched off: the whole Q block is grey and still operable (enabled)");
+    check (r.ui.full().basic.inactive() && r.ui.full().panel.inactive() && r.ui.full().groups[0].inactive() && ! r.ui.full().power.inactive() && ! r.ui.full().close.inactive(), "switched off: the full screen's blocks and groups are grey, its power button and close button are not");
+    r.inst.set ("osc1.on", 1.0f);
+    r.refresh();
+    check (! c.basic.inactive() && ! c.basic.group.inactive() && ! r.ui.full().panel.inactive(), "switched on again: the normal look is back");
+}
 
 /** The detail pages of the types (osc_spec_page.h): how each is reached, BACK, the size of the display, every visible control writes its parameter, the hidden states, the Q groups, the empty state. */
 void testSpecPages()
@@ -898,12 +1048,51 @@ void testReview2()
         const OscUi::Item* fine = r.ui.item (OscUi::kTuneFin);
         const OscUi::Item* key = r.ui.item (OscUi::kTuneTrack);
         check (pitch != nullptr && pitch->param == Inst::idx ("noise.pitch") && fine != nullptr && fine->param == Inst::idx ("noise.fine") && key != nullptr && key->param == Inst::idx ("noise.keytrack"), "noise: the tuning column is PITCH, FINE and KEY TRACK");
+        {   // the generated noise: the whole tab, the display over ONE row of two blocks (TUNE, NOISE) of three cells each, no block under half covered
+            ui::OscillatorFullScreen& f = r.ui.full();
+            const ui::Component* tuneCells[3] = { &f.tune.crs, &f.tune.fin, &f.tune.track };
+            const ui::Component* noiseCells[3] = { f.panel.part (ui::PanelSlot::NoiseType), f.panel.part (ui::PanelSlot::NoiseStereo), f.panel.part (ui::PanelSlot::NoiseEnv1) };
+            bool oneRow = true, covered = true, order = true;
+            for (int b = 0; b < 2; ++b)
+            {
+                const ui::Component* const* cells = b == 0 ? tuneCells : noiseCells;
+                const ui::Rect blk = b == 0 ? f.tuneBlock() : f.panel.blockRect (0);
+                long area = 0;
+                for (int i = 0; i < 3; ++i)
+                {
+                    oneRow = oneRow && cells[i] != nullptr && cells[i]->rect().y == tuneCells[0]->rect().y && cells[i]->rect().h == ui::KnobPanel::kOneRowH && blk.contains (cells[i]->rect());
+                    area += cells[i] != nullptr ? static_cast<long> (cells[i]->rect().w) * cells[i]->rect().h : 0;
+                    order = order && (i == 0 || (cells[i] != nullptr && cells[i - 1] != nullptr && cells[i - 1]->rect().right() <= cells[i]->rect().x));
+                }
+                covered = covered && area * 2 >= static_cast<long> (blk.w) * blk.h;
+            }
+            check (oneRow && covered && order, "noise (generated): PITCH, FINE, KEY TRACK and KIND, STEREO, ENV 1 are one row of two blocks, each at least half covered");
+            check (f.displayRect().w >= 1200 && f.displayRect().bottom() < f.tuneBlock().y && f.displayRect().h >= 300 && f.tuneBlock().h == f.panel.blockRect (0).h && f.tuneBlock().bottom() <= r.ui.full().rect().bottom(), "noise (generated): the display has the whole width and the room the one row frees");
+        }
         r.inst.set ("noise.type", 1.0f);
         r.refresh();
         const OscUi::Item* st = r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseStart));
         check (st != nullptr && st->c->enabled() && r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseLoop))->c->enabled(), "noise: with the type Sample the sample controls are live");
         const OscUi::Item* env = r.ui.item (OscUi::kPanel + static_cast<int> (ui::PanelSlot::NoiseEnv1));
         check (env != nullptr && env->param == Inst::idx ("noise.env1"), "noise: ENV 1 is on the panel");
+        {   // the noise that plays a sample: the display at the left, the TUNE column (three rows) at its right, SOURCE and PLAYBACK as ONE row under them, every block covered for at least half
+            ui::OscillatorFullScreen& f = r.ui.full();
+            const ui::Rect t = f.tuneBlock(), d = f.displayRect(), b0 = f.panel.blockRect (0), b1 = f.panel.blockRect (1);
+            check (f.panel.numBlocks() == 2 && std::string (f.panel.blockTitle (0)) == "SOURCE" && std::string (f.panel.blockTitle (1)) == "PLAYBACK" && b0.y == b1.y && b0.h == b1.h && b0.h == ui::KnobPanel::kBlockTitleH + ui::KnobPanel::kOneRowH + ui::KnobPanel::kBlockPad,
+                   "noise (sample): the blocks SOURCE and PLAYBACK are one row of the same height, the title strip, the row at its maximum height and the padding");
+            check (t.x >= d.right() && t.y == d.y && t.h == d.h && t.bottom() < b0.y && f.tune.crs.rect().y < f.tune.fin.rect().y && f.tune.fin.rect().y < f.tune.track.rect().y && f.tune.crs.rect().w == f.tune.track.rect().w && f.tune.crs.rect().h >= 56 && t.contains (f.tune.track.rect()) && d.h >= 300,
+                   "noise (sample): the TUNE column beside the display holds PITCH, FINE and KEY TRACK in three rows, and the display has the room the one row frees");
+            for (int b = 0; b < f.panel.numBlocks(); ++b)
+            {
+                long area = 0;
+                ui::Component* leaves[16];
+                const int n = f.panel.collectLeaves (leaves, 0, 16);
+                for (int i = 0; i < n; ++i)
+                    if (f.panel.blockRect (b).contains (leaves[i]->rect()))
+                        area += static_cast<long> (leaves[i]->rect().w) * leaves[i]->rect().h;
+                check (area * 2 >= static_cast<long> (f.panel.blockRect (b).w) * f.panel.blockRect (b).h, std::string ("noise (sample): the block ") + f.panel.blockTitle (b) + " is covered by its controls for at least half its area");
+            }
+        }
         r.tapC (*static_cast<ui::Component*> (&r.ui.full().tune.track));
         check (r.inst.get ("noise.keytrack") == 1.0f, "noise: KEY TRACK writes noise.keytrack");
     }
@@ -970,6 +1159,155 @@ void testFollowUps()
     check (clean, "no oscillator page shows 'Vital' or 'Serum'" + (clean ? std::string() : " (" + where + ")"));
 }
 
+
+/** A machine with wavetable files: a pack with a category folder (Analog) and a root file, the player's folder SynthyBoy/Wavetables with a category (Bass: x, y, z, and a 17 MB file and an empty one) and a loose file. */
+std::string makeWavetableLibrary (synthyboy::CatalogueSources& sources)
+{
+    char tmpl[] = "/tmp/sbovl-XXXXXX";
+    const char* dir = ::mkdtemp (tmpl);
+    const std::string root = dir != nullptr ? dir : "/tmp";
+    if (dir != nullptr)
+        g_libraries.push_back (root);
+    auto make = [&] (const std::string& rel) { ::mkdir ((root + "/" + rel).c_str(), 0755); };
+    auto touch = [&] (const std::string& rel, const char* text = "x") { std::ofstream (root + "/" + rel) << text; };
+    make ("packs"); make ("packs/com.t.pack"); make ("packs/com.t.pack/Analog");
+    touch ("packs/com.t.pack/Analog/warm.wav");
+    const std::string sha (64, 'a');
+    touch ("packs/com.t.pack/contentpack.json", ("{\"schemaVersion\":1,\"id\":\"com.t.pack\",\"name\":\"T\",\"version\":\"1.0.0\",\"license\":\"CC0-1.0\",\"attribution\":\"t\",\"kind\":\"wavetables\",\"requires_plugin\":\">=0.1.0\","
+                                                  "\"files\":[{\"path\":\"Analog/warm.wav\",\"sha256\":\"" + sha + "\",\"size\":4096,\"title\":\"Warm Saw\"}]}").c_str());
+    make ("SynthyBoy"); make ("SynthyBoy/Wavetables"); make ("SynthyBoy/Wavetables/Bass");
+    touch ("SynthyBoy/Wavetables/Bass/x.wav"); touch ("SynthyBoy/Wavetables/Bass/y.wav"); touch ("SynthyBoy/Wavetables/Bass/z.wav");
+    touch ("SynthyBoy/Wavetables/Bass/empty.wav", "");
+    { std::ofstream f (root + "/SynthyBoy/Wavetables/Bass/big.wav"); f << "x"; }
+    (void) ::truncate ((root + "/SynthyBoy/Wavetables/Bass/big.wav").c_str(), 17 * 1024 * 1024);   // a sparse file: 17 MB on paper, nothing on disk
+    touch ("SynthyBoy/Wavetables/loose.wav");
+    sources.packDirs = { root + "/packs" };
+    sources.userRoots = { root };
+    return root;
+}
+
+void testWavetableBrowser()
+{
+    synthyboy::CatalogueSources sources;
+    makeWavetableLibrary (sources);
+    Rig r;
+    r.inst.sources = sources;
+    r.openFull();
+    // opening: the category of the current table (Saw: Basic), the header is the way up, the current table is marked
+    r.tapC (r.ui.full().basic.source.dropdown);
+    check (r.stack.top() == OscUi::kPageList && std::string (r.ui.list().state.header) == "Basic" && r.ui.list().state.headerBack && r.ui.list().state.count == 6 && r.ui.list().state.current == 1, "browser: it opens in the category of the current table (Basic), Saw marked");
+    // the way up: the categories (Basic, Morph, the pack's, the player's, User)
+    {
+        const ui::Rect h = r.ui.list().headerRect();
+        r.tap (h.x + 20, h.y + h.h / 2);
+    }
+    check (std::string (r.ui.list().state.header) == "WAVETABLES" && ! r.ui.list().state.headerBack && r.ui.list().state.count == 5, "browser: the way up shows the five categories (" + std::to_string (r.ui.list().state.count) + ")");
+    check (std::string (r.ui.list().state.items[0]) == "Basic \xe2\x96\xb6" && std::string (r.ui.list().state.items[2]) == "Analog \xe2\x96\xb6" && std::string (r.ui.list().state.items[3]) == "Bass \xe2\x96\xb6" && std::string (r.ui.list().state.items[4]) == "User \xe2\x96\xb6", "browser: Basic, Morph, then the others by name, User last");
+    auto row = [&] (int i) { const ui::Rect q = r.ui.list().rowRect (i); r.tap (q.x + 30, q.y + q.h / 2); };
+    row (3);   // Bass
+    check (std::string (r.ui.list().state.header) == "Bass" && r.ui.list().state.count == 5 && r.stack.top() == OscUi::kPageList, "browser: a category shows its tables (big, empty, x, y, z)");
+    // the two files that cannot be loaded say why; a tap on one changes nothing
+    check (std::string (r.ui.list().state.items[0]).find ("too large") != std::string::npos && std::string (r.ui.list().state.items[1]).find ("empty") != std::string::npos, "browser: a file above the limit and an empty file say why in their row");
+    row (0);
+    check (r.inst.wtRequests.empty() && r.stack.top() == OscUi::kPageList, "browser: a tap on a refused file loads nothing and the list stays");
+    // a file: the request carries the user pack, the path below it, no hash (it is computed when the file is loaded); the browser closes
+    row (3);   // y
+    check (r.inst.wtRequests.size() == 1 && r.inst.wtRequests[0].osc == 1 && r.inst.wtRequests[0].ref.pack == "SynthyBoy/Wavetables" && r.inst.wtRequests[0].ref.file == "Bass/y.wav" && r.inst.wtRequests[0].ref.sha256.empty() && r.stack.depth() == 1, "browser: a tap on a file asks the instance to load Bass/y.wav of the user pack and closes the list");
+    // what the instance does next: the content names the file, the oscillator is on "Preset table"
+    auto showFile = [&] (const std::string& file, const std::string& name)
+    {
+        auto c = std::make_shared<synthyboy::StateContent>();
+        synthyboy::ContentWavetable w;
+        w.osc = 1; w.ref.pack = "SynthyBoy/Wavetables"; w.ref.file = file; w.ref.name = name; w.frames = 2;
+        c->wavetables.push_back (w);
+        r.inst.contentPtr = c;
+        r.inst.set ("osc1.wavetable", 13.0f);
+        r.inst.loadState = 2;
+        r.refresh();
+    };
+    showFile ("Bass/y.wav", "y");
+    ui::Stepper& st = r.ui.full().basic.source.stepper;
+    check (std::string (st.state.text) == "y" && st.state.count == 3 && st.state.index == 1, "table: the selector shows the title of the file; y is in the middle of x, y, z (both arrows lit)");
+    const ui::Rect sr = st.rect();
+    r.tap (sr.x + sr.w - 8, sr.y + sr.h / 2);   // next: z
+    check (r.inst.wtRequests.size() == 2 && r.inst.wtRequests[1].ref.file == "Bass/z.wav" && r.inst.get ("osc1.wavetable") == 13.0f, "table: the right arrow loads the next FILE of the category (z), the parameter stays Preset table");
+    showFile ("Bass/z.wav", "z");
+    check (st.state.index == 2 && st.state.count == 3, "table: z is the last file: the next arrow is dimmed");
+    const size_t n = r.inst.wtRequests.size();
+    r.tap (sr.x + sr.w - 8, sr.y + sr.h / 2);
+    check (r.inst.wtRequests.size() == n && r.inst.get ("osc1.wavetable") == 13.0f, "table: at the last file nothing happens (no wrap, no built-in table)");
+    r.tap (sr.x + 8, sr.y + sr.h / 2);   // previous: y
+    check (r.inst.wtRequests.size() == n + 1 && r.inst.wtRequests.back().ref.file == "Bass/y.wav", "table: the left arrow loads the previous file (y; the refused big and empty files are skipped at the other end)");
+    showFile ("Bass/x.wav", "x");
+    check (st.state.index == 0, "table: x is the first loadable file: the previous arrow is dimmed");
+    r.tap (sr.x + 8, sr.y + sr.h / 2);
+    check (r.inst.wtRequests.size() == n + 1, "table: at the first file nothing happens");
+    // the Q knob: the plugin leaves steps (the parameter stays), the page loads the neighbour file
+    r.inst.wtSteps = 1;
+    r.refresh();
+    check (r.inst.wtRequests.size() == n + 2 && r.inst.wtRequests.back().ref.file == "Bass/y.wav", "table: a Q knob step moves to the next file as the arrow does");
+    // a built-in table from the browser: the parameter is written as always
+    showFile ("Bass/y.wav", "y");
+    r.tapC (r.ui.full().basic.source.dropdown);
+    check (std::string (r.ui.list().state.header) == "Bass" && r.ui.list().state.current >= 0 && std::string (r.ui.list().state.items[r.ui.list().state.current]) == "y", "browser: with a file table it opens in its category with the file marked");
+    {
+        const ui::Rect h = r.ui.list().headerRect();
+        r.tap (h.x + 20, h.y + h.h / 2);
+    }
+    row (1);   // Morph
+    row (0);   // Saw to Square
+    check (r.inst.get ("osc1.wavetable") == 5.0f && r.stack.depth() == 1, "browser: a built-in table of Morph writes oscN.wavetable (Saw to Square), the list closes");
+    check (r.inst.wtRequests.size() == n + 2, "browser: choosing a built-in table loads no file");
+    // the built-in stepping skips "Preset table" while the oscillator has no file table; the ends do not wrap
+    r.inst.contentPtr = nullptr;
+    r.inst.set ("osc1.wavetable", 12.0f);
+    r.refresh();
+    r.tap (sr.x + sr.w - 8, sr.y + sr.h / 2);
+    check (r.inst.get ("osc1.wavetable") == 14.0f, "table: from Bell Partials the next table is Saw Down (Preset table, which would play the saw, is skipped without a file)");
+    r.tap (sr.x + 8, sr.y + sr.h / 2);
+    check (r.inst.get ("osc1.wavetable") == 12.0f, "table: and back");
+}
+
+void testWavetableRefusedFileAndCompactView()
+{
+    synthyboy::CatalogueSources sources;
+    makeWavetableLibrary (sources);
+    Rig r;
+    r.inst.sources = sources;
+    // the compact view (Play page): the name of the table opens the full screen and the browser over it
+    r.tapC (r.ui.compact().basic.source.stepper);
+    check (r.stack.depth() == 2 && r.stack.top() == OscUi::kPageList && std::string (r.ui.list().state.header) == "Basic", "compact view: the table's name opens the full screen and the wavetable browser");
+    r.tap (20, 130);
+    check (r.stack.depth() == 1, "compact view: the backdrop closes the browser");
+    // a pack file: the request names the pack's folder, the manifest's path and the SHA-256 of the manifest
+    r.tapC (r.ui.full().basic.source.dropdown);
+    {
+        const ui::Rect h = r.ui.list().headerRect();
+        r.tap (h.x + 20, h.y + h.h / 2);
+    }
+    auto row = [&] (int i) { const ui::Rect q = r.ui.list().rowRect (i); r.tap (q.x + 30, q.y + q.h / 2); };
+    row (2);   // Analog
+    check (r.ui.list().state.count == 1 && std::string (r.ui.list().state.items[0]) == "Warm Saw", "pack: a manifest title is the name of the row");
+    row (0);
+    check (r.inst.wtRequests.size() == 1 && r.inst.wtRequests[0].ref.pack == "com.t.pack" && r.inst.wtRequests[0].ref.file == "Analog/warm.wav" && r.inst.wtRequests[0].ref.sha256 == std::string (64, 'a'), "pack: the request carries the pack folder, the path and the manifest's SHA-256");
+    // the load is refused: the display says it, and the row of that file says why the next time
+    r.inst.loadState = 3;
+    r.inst.loadMessage = "not a wavetable file: damaged or truncated audio data";
+    r.refresh();
+    check (r.ui.missingText() == "not a wavetable file: damaged or truncated audio data", "refused: the line over the display says why");
+    r.inst.loadState = 0;
+    r.refresh();
+    r.tapC (r.ui.full().basic.source.dropdown);
+    {
+        const ui::Rect h = r.ui.list().headerRect();
+        r.tap (h.x + 20, h.y + h.h / 2);
+    }
+    row (2);
+    check (std::string (r.ui.list().state.items[0]).find ("damaged or truncated audio data") != std::string::npos, "refused: the row of the file says why (" + std::string (r.ui.list().state.items[0]) + ")");
+    row (0);
+    check (r.inst.wtRequests.size() == 1, "refused: a tap on it asks for nothing more");
+}
+
 int main()
 {
     testSteepEdgeNoLongLine();
@@ -990,8 +1328,13 @@ int main()
     testQGroupFollowsTheActiveGroup();
     testContentBrowser();
     testSourceBrowserInTheOscillatorUi();
+    testMissingContentLine();
+    testInactiveLook();
+    testTypeDropdown();
     testGranularAndSubAndNoise();
     testSourceAndWarpLists();
+    testWavetableBrowser();
+    testWavetableRefusedFileAndCompactView();
     testReview2();
     testSpecPages();
     testFollowUps();

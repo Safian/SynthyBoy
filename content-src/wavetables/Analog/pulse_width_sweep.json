@@ -1,0 +1,18 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Pulse Width Sweep",
+ "category": "Analog",
+ "description": "A plain pulse whose width narrows from 50 % (square) to 5 % (thin reedy pulse).",
+ "frames": 64,
+ "seed": "pulse_width_sweep",
+ "source": {
+  "type": "pulse",
+  "params": {
+   "width": {
+    "law": "linear",
+    "from": 0.5,
+    "to": 0.05
+   }
+  }
+ }
+}

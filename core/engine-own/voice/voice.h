@@ -5,8 +5,10 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
+#include "../dsp/noise_coeff.h"
 #include "../dsp/util.h"
 #include "synthyboy/quality.h"
 #include "../env_lfo/envelope.h"
@@ -44,6 +46,9 @@ struct TickGlobals
     const float* lfoPhase = nullptr;      // [10] free running phases in cycles (global instance)
     const float* rlfoValue = nullptr;     // [4] global random LFO values -1 .. 1
     int activeVoices = 0;
+    bool noSmoothing = false;             // quality.no_smoothing (Serum 2 Disable Smoothing): the per period ramps are skipped, values jump at the start of the period
+    bool tuningNoteOnOnly = false;        // master.tuning.mts_note_on_only with an MTS-ESP master connected: a sounding note keeps the tuning it started with
+    float lowestNote = 1000.0f;           // sub.mono: the lowest tuned key note of the sounding voices (OwnEngine::updateLowestNote)
     float concertA = 440.0f;
     const OwnContent* lfoContent = nullptr;  // custom LFO shapes, modulation curves
     const LfoCore* monoCore = nullptr;    // [10] the shared instance of the mono LFOs (sync types 2 .. 5)
@@ -52,7 +57,9 @@ struct TickGlobals
     const ContentSet* content = nullptr;     // decoded content of the state (user tables, samples, instruments, curves); never null once the engine runs
     int quality = 2;                         // 0 low, 1 medium, 2 high: the interpolation tier of the sample types
     bool scalarWarp = false;                 // measurements (kOwnSavingVectorWarp): no four lane form of the oversampled oscillator samples
+    bool scalarContent = false;              // measurements (kOwnSavingContentKernels): the library oscillators run their reference code, not the block kernels
     bool scalarFilters = false;              // measurements (setOwnSavingsOff, kOwnSavingVectorFilters): no pair kernels in the voice filters
+    bool referenceControl = false;           // measurements (setOwnSavingsOff, kOwnSavingVoiceControl): the control code of the voice as it was before the caches of CPU-REVIEW-VOICE-MOD.md
     uint32_t economy = 0;                    // the economy groups in force (EconomyFlags of quality.h); the three tiers: all at low, none at medium / high
     MorphCache* morphCache = nullptr;        // the engine's cache of morph cycles (may be null)
     float killSeconds = 0.05f;               // the fade of a voice that was stolen (Kill mode); tier low: OwnEngine::setLowTierKillFade
@@ -64,6 +71,7 @@ struct TickGlobals
     uint32_t* chokeLatest = nullptr;         // [3][256] choke groups of the multisample oscillators (engine wide per slot)
     uint32_t* chokeCounter = nullptr;        // [3]
     const int* switchKey = nullptr;          // [3] last key switch of the multisample instrument of each oscillator, -1 = default
+    const Wavetable* const* wtResolved = nullptr; // [3] the built-in table each oscillator plays in this block (OwnEngine: the chosen one when built, else the one it had); null: the voice looks the choice up itself
     float padPressureToCutoff = 0.0f;        // MPC shell: depth of the pad pressure to Filter 1 cutoff layer, 0 = off, 1 = kPadPressureSemitones at full pressure
 };
 
@@ -93,6 +101,7 @@ struct MixOut
 
 class Voice
 {
+    friend struct VoiceOptTest; // core/tests/test_own_voice_opt.cpp
 public:
     void prepare (double sampleRate);
     void reset() noexcept;
@@ -109,11 +118,15 @@ public:
     float readPosition (int osc) const noexcept { return lib[osc].readPosition(); }
     int readGrains (int osc, float* pos, float* life, int maxN) const noexcept { return lib[osc].readGrains (pos, life, maxN); }
     float subPhase() const noexcept { return sub.firstPhase(); }
+    /** sub.phase_contiguous: the sub oscillator continues with the phase of the previous note. */
+    void setSubPhase (float p) noexcept { sub.setPhase (p); }
     /** The phases of the unison voices of wavetable oscillator o (phase memory, phase legato: OwnEngine::startNote). */
     static constexpr int kPhaseCount = WtOsc::kMaxVoices;
     void oscPhases (int o, uint32_t* out) const noexcept { osc[o].getPhases (out); }
     void setOscPhases (int o, const uint32_t* in) noexcept { osc[o].setPhases (in); }
     /** The step (0 .. 7) of the voice control this voice plays: (the number of the note - 1) modulo the length. */
+    /** Bit o: oscillator o (on) is a Sample / Granular / Spectral / Multisample oscillator without its file (the instance shows "content missing"). */
+    uint32_t missingMask() const noexcept { return missingBits; }
     int voiceControlStep() const noexcept { return vcStep; }
     float noisePosition() const noexcept { return noiseUseSample ? noiseSv.playheadFraction() : -1.0f; }
 
@@ -172,22 +185,60 @@ public:
 
 private:
     // the value of a parameter as this voice hears it: the knob, or the knob plus the modulation of the slots (inline fast path: most parameters are not modulated)
-    float P (int idx) const noexcept
+    float P (int idx) const noexcept { return readParam (gl->base, modP, idx); }
+    float PR (int idx) const noexcept { return readParam (gl->base, modRP, idx); } // the right lane (differs from P () where a slot has the stereo flag)
+    /** P () / PR () with the snapshot and the deltas given (Voice::tick keeps both in locals). The delta is tested for +-0 on its bits, (bits << 1) == 0, which is d == 0.0f for every
+        float (NaN included) without a float compare and its transfer of the flags to the core (CPU-REVIEW-VOICE-MOD.md V5). */
+    float readParam (const float* base, const float* delta, int idx) const noexcept
     {
-        const float d = modP[idx];
-        return d == 0.0f ? gl->base[idx] : modulatedSlow (idx, gl->base[idx], d);
-    }
-    float PR (int idx) const noexcept // the right lane (differs from P () where a slot has the stereo flag)
-    {
-        const float d = modRP[idx];
-        return d == 0.0f ? gl->base[idx] : modulatedSlow (idx, gl->base[idx], d);
+        uint32_t u;
+        std::memcpy (&u, delta + idx, sizeof u);
+        return (u << 1) == 0u ? base[idx] : modulatedSlow (idx, base[idx], delta[idx]);
     }
     float modulatedSlow (int idx, float base, float delta) const noexcept;
     void clearMod() noexcept;
     float lfoValue (int l, const TickGlobals& g, float& valueRight, int steps = 1) noexcept;
+    float lfoValueReference (int l, const TickGlobals& g, float& valueRight, int steps = 1) noexcept;   // as before the settings cache (TickGlobals::referenceControl)
+    /** What an LFO derives from its keys, the tempo, the voice control and the sample rate (CPU-REVIEW-VOICE-MOD.md V3): kept per voice and LFO while those are the same and no slot touched a
+        key of the LFO (the key follow rate, sync 4, reads the pitch of the voice and is computed every time from the kept keys). */
+    struct LfoSettings
+    {
+        int shape = 0, sync = 0, syncType = 0, division = 0, dir = 0;
+        float rateKnob = 0.0f, keyTranspose = 0.0f, keyTune = 0.0f, rate = 0.0f;   // rate: vc.lfoFactor * lfoRateHz (...) for sync != 4
+        float knob = 0.0f, delay = 0.0f, fade = 0.0f, stereo = 0.0f, swing = 0.0f, half = 0.0f;
+        bool mono = false, host = false, smooth = false;
+        float dt[2] = {}, coef[2] = {};   // the period of 1 and of 4 control periods (the decimated LFOs of tier low) and 1 - exp2 (-dt / half)
+        const CompiledShape* custom = nullptr;
+        // the key
+        bool ok = false;
+        uint32_t epoch = 0, factorBits = 0, concertABits = 0;
+        double bpm = 0.0, sampleRate = 0.0;
+        const OwnContent* content = nullptr;
+        const LfoCore* monoCore = nullptr;
+    };
+    LfoSettings lfoSet[10];
+    /** The same for a random LFO: its keys and the rate (except the key follow rate). */
+    struct RlfoSettings
+    {
+        int syncType = 0, sync = 0, division = 0, style = 0;
+        float rateKnob = 0.0f, keyTranspose = 0.0f, keyTune = 0.0f, rate = 0.0f;
+        bool stereo = false;
+        bool ok = false;
+        uint32_t epoch = 0, factorBits = 0, concertABits = 0;
+        double bpm = 0.0;
+    };
+    RlfoSettings rlfoSet[4];
+    uint32_t lastTouchedGroups = 0;   // touchedGroups () of the last period, as the envelopes and LFOs read it (before this period's matrix)
     float customShape (const CompiledShape& cs, float u) noexcept;
 
     const TickGlobals* gl = nullptr;
+    // the tables of the keys, looked up once in prepare () (CPU-REVIEW-VOICE-MOD.md V11): paramIndex (), libKeys (), destLawOf () and paramTable () are function local statics whose guard
+    // check (a load and a barrier on ARM) every call paid on the audio thread
+    const ParamIndex* pidx = nullptr;
+    const LibKeys* libk[3] = {};
+    const DestLaw* laws = nullptr;       // destLawOf (i) == laws[i] for every table index
+    const ParamInfo* infos = nullptr;
+    int noiseFilterKey = -1;             // noise.filter
     double sr = 48000.0;
     bool active = false, released = false;
     int keyNum = 60, chan = 0, played = 60;
@@ -202,6 +253,9 @@ private:
     void evaluateVoiceControl (const TickGlobals& g) noexcept;
     int32_t id = -1;
     uint32_t noteSerial = 0;
+    float velCurved = 0.0f, noteCurved = 0.0f;   // the velocity and note sources after their curves (content.curves), gliding on a legato transition when curve.*.legato is On
+    bool curveFresh = true;                       // the next tick starts the curved sources at their targets (a new note)
+    float curvedSource (float x, const CompiledModCurve* curve, float& state, bool glide, float dt, float portSeconds) noexcept;
     float vel = 1.0f, releaseVel = 0.0f, tuneExpr = 0.0f, polyPressure = 0.0f, smoothedPressure = 0.0f, padCoefDt = 0.0f, padCoef = 0.0f, slide = 0.0f, exprX = 0.0f;
     float glideOffset = 0.0f, glideTime = 0.0f, glideElapsed = 0.0f, glideSlope = 0.0f; // semitones left, seconds
     float lastSemis = 60.0f;
@@ -220,6 +274,15 @@ private:
     uint32_t envCacheEpoch = 0, vcCacheEpoch = 0, vcCacheSequence = 0;
     double envCacheBpm = 0.0;
     bool envCacheValid = false, vcCacheValid = false;
+    // the same per envelope (CPU-REVIEW-VOICE-MOD.md V1): envCache[e] holds the settings of the parameters alone while the snapshot epoch, the tempo and the envelope factor of the voice
+    // control are the ones it was built with, and no slot touched a key of envelope e then or in the last period (other keys may be modulated)
+    uint32_t envSetEpoch[6] = {};
+    double envSetBpm[6] = {};
+    float envSetFactor[6] = {};
+    bool envSetOk[6] = {};
+    /** The group (kGroup...) of every parameter index (voice.cpp paramGroups ()), and the groups of the keys the matrix touched (bit = group). */
+    const uint8_t* groupOf = nullptr;
+    uint32_t touchedGroups() const noexcept;
     float lfoAge[10] = {}, lfoSmoothL[10] = {}, lfoSmoothR[10] = {};
     float lfoReadPos[10] = {};            // the cycle position the display reads (lfoReadout): the offset of the LFO, or the clock of a free-running one
     float lfoOutR[10] = {};
@@ -258,6 +321,7 @@ private:
     bool noiseUseSample = false;
     float noiseFilt[2][2] = {}, noiseLp[2][4] = {}; // noise.filter poles, generator pitch low pass
     float noiseFilterAmount = 0.0f, noisePitchSemis = 0.0f;
+    NoiseCoeffCache noiseCoeffs;   // pitch gain, pitch low pass and filter pole of the noise (they change with their parameters only)
     float noiseGain = 0.0f, noiseGainPrev = 0.0f, noisePan = 0.0f, noiseStereo = 0.0f;
     int noiseColour = 0;
     struct Chan { float level = 0, levelPrev = 0, gl = 0, gr = 0, glPrev = 0, grPrev = 0; int dest = 3; bool env1 = true, on = false; };
@@ -266,6 +330,7 @@ private:
     float oscBlend[3] = {}, oscSend[3][2] = {}, subBlend = 0.0f, subSend[2] = {}, noiseBlend = 0.0f, noiseSend[2] = {}, filtSend[2][2] = {};
     bool oscEnv1[3] = { true, true, true };
     bool oscOn[3] = { true, false, false };
+    uint32_t missingBits = 0;   // bit o: oscillator o is of a file type and has no file (it plays its built-in wavetable)
     bool oscWarpOnly[3] = {};   // out of its key range with Key Warp on: the oscillator runs (its signal warps the others) but is not heard
     FilterUnit filt[2];
     FilterSettings filtSet[2];

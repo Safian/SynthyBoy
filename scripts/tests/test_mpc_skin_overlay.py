@@ -178,14 +178,14 @@ class OverlayLayoutFileTests(unittest.TestCase):
         self.assertEqual(ovl["variant"], "overlay")
         self.assertNotIn("variant", prod)
         self.assertNotIn("tabLimit", ovl, "the overlay layout stays within the 32 tabs of the host")
-        self.assertEqual((len(prod["pages"]), len(ovl["pages"])), (34, 24))   # the production layout; the 3 Play tabs, minus the tabs the plugin's pages replace (F1 / F2 model, Mod 3-4, Mod Amt, the single effects, the six oscillator tabs and Sub/Nois: five pages of the oscillator UI take their place)
+        self.assertEqual((len(prod["pages"]), len(ovl["pages"])), (34, 22))   # the production layout; the one Play tab, minus the tabs the plugin's pages replace (F1 / F2 model, Mod 3-4, Mod Amt, the single effects, the six oscillator tabs and Sub/Nois: five pages of the oscillator UI take their place)
         self.assertLessEqual(len(ovl["pages"]), 32)
-        play = ovl["pages"][:3]
-        self.assertEqual([(p["name"], p["fn"], p["kick"], p.get("custom")) for p in play], [(n, "Play", [], True) for n in ("Play", "Play Env", "Play LFO")])
+        play = ovl["pages"][:1]
+        self.assertEqual([(p["name"], p["fn"], p["kick"], p.get("custom")) for p in play], [(n, "Play", [], True) for n in ("Play",)])
         renamed = {"Mod": "Mod 1-2", "FX": "FX Chain"}
         prod_by_name = {p["name"]: p for p in prod["pages"]}
         osc_pages = {"Osc A": "osc1_main", "Osc B": "osc2_main", "Osc C": "osc3_main", "Sub": "sub_main", "Noise": "noise"}   # the OSC tab: one page of the oscillator UI per oscillator (its host widgets stay under it, hidden)
-        for p in ovl["pages"][3:]:
+        for p in ovl["pages"][1:]:
             if p["name"] in osc_pages:
                 self.assertEqual((p["fn"], p["kick"]), ("Osc", [osc_pages[p["name"]]]), p["name"])
                 continue
@@ -270,12 +270,12 @@ class OverlaySkinTests(unittest.TestCase):
     # ---- the overlay skin ----
     def test_24_tabs_and_the_sub_tabs_are_under_the_same_function_key(self):
         tabs = self.o_tui["pageData"]["tabs"]
-        self.assertEqual(len(tabs), 24)
+        self.assertEqual(len(tabs), 22)
         self.assertLessEqual(len(tabs), 32, "the host's limit")
         f1, f2 = self.tab("Filter 1"), self.tab("Filter 2")
         self.assertEqual((f1["fnKeyIndex"], f2["fnKeyIndex"]), (4, 4))   # the Play key is the first one
         self.assertEqual((f1["fnKeySubIndex"], f2["fnKeySubIndex"]), (0, 1))
-        self.assertEqual(len({(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs}), 24)
+        self.assertEqual(len({(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs}), 22)
         for gone in ("F1 Model", "F2 Model", "Mod 3-4", "Mod Amt", "FX Filt", "Distort", "Comp 1", "Comp 2", "EQ", "Chorus", "Delay", "Phaser", "FX Level", "Osc 1", "Osc1 Shp", "Osc 2", "Osc2 Shp", "Osc 3", "Osc3 Shp", "Sub/Nois"):
             self.assertFalse([t for t in tabs if t["tabName"] == gone], gone)
 
@@ -425,7 +425,7 @@ class OverlaySkinTests(unittest.TestCase):
                             self.fail("%s has a pixel %r close to a marker colour %06x" % (png.name, px, m))
 
     # ---- the Play page ----
-    PLAY = (("Play", "osc", 3), ("Play Env", "env", 6), ("Play LFO", "lfo", 10))
+    PLAY = (("Play", "osc", 3),)   # ONE Play tab; the selectors and the proxies of the three groups stay (inert host parameters for the second and third sub-tab)
     SLOTS = {"osc": ("frame", "unison.voices", "unison.detune", "unison.blend", "phase", "random_phase", "pan", "level"),
              "env": ("attack", "hold", "decay", "sustain", "release", "attack_curve", "decay_curve", "release_curve"),
              "lfo": ("rate", "fade_in", "delay", "smooth_time", "smooth", "sync", "sync_type", "division")}
@@ -435,10 +435,10 @@ class OverlaySkinTests(unittest.TestCase):
 
     def test_play_tabs_are_the_first_function_key(self):
         tabs = self.o_tui["pageData"]["tabs"]
-        self.assertEqual([t["tabName"] for t in tabs[:3]], ["Play", "Play Env", "Play LFO"])
-        self.assertEqual([(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs[:3]], [(0, 0), (0, 1), (0, 2)])
-        self.assertEqual(tabs[3]["tabName"], "Macros")
-        self.assertEqual(tabs[3]["fnKeyIndex"], 1)
+        self.assertEqual([t["tabName"] for t in tabs[:1]], ["Play"])
+        self.assertEqual([(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs[:1]], [(0, 0)])
+        self.assertEqual(tabs[1]["tabName"], "Macros")   # one Play tab: Macros is the second
+        self.assertEqual(tabs[1]["fnKeyIndex"], 1)
         self.assertEqual(len({t["fnKeyIndex"] for t in tabs}), 10, "ten function keys")
         self.assertFalse(any("Play" in t["tabName"] for t in self.p_tui["pageData"]["tabs"]), "the production skin has no Play tab")
 
@@ -448,7 +448,7 @@ class OverlaySkinTests(unittest.TestCase):
         first = [t["tabName"] for t in tabs if t["fnKeySubIndex"] == 0]
         self.assertEqual(first, ["Play", "Macros", "Osc", "Mix", "Filter", "Env", "LFO", "Mod", "FX", "Master"])
         later = [t["tabName"] for t in tabs if t["fnKeySubIndex"] > 0]
-        self.assertEqual(later, ["Play Env", "Play LFO", "Osc B", "Osc C", "Sub", "Noise", "Filter 2", "Env 2", "Env 3", "Env 4", "LFO 2", "LFO 3", "LFO 4", "Voice"])
+        self.assertEqual(later, ["Osc B", "Osc C", "Sub", "Noise", "Filter 2", "Env 2", "Env 3", "Env 4", "LFO 2", "LFO 3", "LFO 4", "Voice"])
         names = [t["tabName"] for t in tabs]
         self.assertEqual(len(names), len(set(names)), "the tab names of the finished skin are unique")
         self.assertTrue(all(1 <= len(n) <= 8 for n in names))
@@ -543,13 +543,13 @@ class OverlaySkinTests(unittest.TestCase):
         # the format: every tab sits on a function key and is reached by the key (ui-reference "fnKeyIndex" / "fnKeySubIndex"); a plugin has no call that selects a tab (docs/MPC.md "Q proxies").
         names = [t["tabName"] for t in self.o_tui["pageData"]["tabs"]]
         self.assertFalse([n for n in names if "Full" in n], "no blank page of its own: the full-screen page is drawn over the Play page")
-        self.assertEqual(len(names), 24, "the tab count of the overlay skin")
+        self.assertEqual(len(names), 22, "the tab count of the overlay skin")
 
     def test_play_views_markers_and_the_fallback_picture(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
         views = [v for v in layout["views"] if v["kind"] == "play"]
-        self.assertEqual([v["tab"] for v in views], ["Play", "Play Env", "Play LFO"])
-        self.assertEqual([v["index"] for v in views], [1, 2, 3], "the highlighted panel of the sub-tab")
+        self.assertEqual([v["tab"] for v in views], ["Play"])
+        self.assertEqual([v["index"] for v in views], [1], "the one Play view")
         for v in views:
             self.assertEqual(v["region"], {"x": 23, "y": 14, "w": 1234, "h": 190})
             items = {c["componentData"]["name"]: c for c in self.tab(v["tab"])["componentDefinition"]["componentsData"]}

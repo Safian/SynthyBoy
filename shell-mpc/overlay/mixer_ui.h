@@ -90,6 +90,7 @@ public:
     void update (IInstanceView& inst, const UiStack& stack, double nowMs, const page::Input& in)
     {
         (void) nowMs;
+        inst.requestMeters();   // the source strips of this page: the engine measures them only while a page asks (every update of the page)
         if (listOpen_ && ! (stack.depth() >= 2 && stack.top() == kPageList))
             listOpen_ = false;
         for (int s = 0; s < ui::MixerFullScreen::kStrips; ++s)

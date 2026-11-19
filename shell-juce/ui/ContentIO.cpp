@@ -174,6 +174,16 @@ FlowResult loadSampleFile (UiContext& ctx, int osc, const juce::File& file)
         const std::string o = "osc" + std::to_string (osc);
         if (probe.rootNote >= 0)
             setParameter (ctx.host, (o + ".sample.root").c_str(), static_cast<float> (probe.rootNote));
+        {
+            // the loop of the WAV 'smpl' chunk becomes the loop settings of the oscillator, once, here at load time
+            const SampleLoopSettings loop = sampleLoopSettings (probe);
+            if (loop.valid)
+            {
+                setParameter (ctx.host, (o + ".sample.loop_mode").c_str(), static_cast<float> (loop.mode));
+                setParameter (ctx.host, (o + ".sample.loop_start").c_str(), loop.startPercent);
+                setParameter (ctx.host, (o + ".sample.loop_end").c_str(), loop.endPercent);
+            }
+        }
         // a granular or spectral oscillator keeps its type (the sample is its content as well); any other type becomes Sample
         const int current = juce::roundToInt (readParameter (ctx.host, (o + ".type").c_str()));
         const int sampleType = choiceIndexOf ((o + ".type").c_str(), "Sample");

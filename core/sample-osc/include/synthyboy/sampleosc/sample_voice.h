@@ -98,6 +98,14 @@ public:
     /** Sets the read head to a fraction (0..1) of the playback region right now (uni start / start phase of the host oscillator). */
     void seekFraction (double fraction) noexcept;
 
+    /** Measurements only (the bench's --scalar-content): render with the per sample reference (renderFrame) instead of the block kernel. Both give the same bits; the
+        kernel only does once per block what the reference does for every sample. */
+    void setReferenceKernels (bool on) noexcept { reference_ = on; }
+    /** Tests: false runs the block kernel with its scalar form only (the vector form, four samples at a time on ARM with NEON, gives the same bits). */
+    void setVectorKernels (bool on) noexcept { vectors_ = on; }
+    /** Tests only: the block kernel computes the log2 of the pitch ratio and the pan gains on every call, as before they were cached by their inputs. */
+    void setLegacyCaches (bool on) noexcept { legacyCaches_ = on; }
+
     // --- Status queries ---
     bool isActive() const noexcept { return active_; }
     bool isReleasing() const noexcept { return stopping_; }
@@ -122,6 +130,10 @@ private:
     void updatePitchRatio() noexcept;
     void renderFrame (float& outL, float& outR) noexcept;
     void renderFrame (float& outL, float& outR, double rateMult) noexcept;
+    /** The block kernel: `numFrames` samples written (add == false; outRight may be null) or added to the buffers (add == true), the same bits as numFrames calls of renderFrame. */
+    void renderBlock (float* outLeft, float* outRight, int numFrames, const float* rateMod, bool add) noexcept;
+    template <QualityTier Tier, bool Add>
+    void renderBlockT (float* outLeft, float* outRight, int numFrames, const float* rateMod) noexcept;
 
     double hostSampleRate_ = 44100.0;
     const SampleView* sample_ = nullptr;
@@ -143,6 +155,18 @@ private:
     float unisonStartOffset_ = 0.0f;
     float unisonPan_ = 0.0f;
     float unisonLevel_ = 1.0f;
+
+    /** The block kernel counts frames with 32 bit integers (a 64 bit conversion of a double is a library call on 32 bit ARM): a sample of more than 2^30 frames plays through the reference. */
+    bool useKernel() const noexcept { return ! reference_ && (sample_ == nullptr || sample_->numFrames <= (int64_t { 1 } << 30)); }
+    bool reference_ = false;
+    bool vectors_ = true;
+    bool legacyCaches_ = false;
+    // the block kernel's per call libm results and what they were made for (a NaN key never matches)
+    double cachedLogKey_ = std::numeric_limits<double>::quiet_NaN(), cachedLog_ = 0.0;
+    float cachedPanKey_ = std::numeric_limits<float>::quiet_NaN(), cachedGainL_ = 1.0f, cachedGainR_ = 0.0f;
+    // the pitch ratio of the last updatePitchRatio (2^(semitones / 12) is the dear part, and the semitones rarely change from one control period to the next)
+    float cachedSemitones_ = std::numeric_limits<float>::quiet_NaN();
+    double cachedSpeedFromPitch_ = 1.0;
 
     // Anti-click envelope
     float antiClickGain_ = 0.0f;

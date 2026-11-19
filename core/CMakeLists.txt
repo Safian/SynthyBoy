@@ -18,6 +18,8 @@ add_library(synthyboy_core STATIC
     src/content_pack.cpp
     src/content_store.cpp
     src/user_content.cpp
+    src/wavetable_file.cpp
+    src/wavetable_catalogue.cpp
     src/user_library.cpp
     src/library_items.cpp
     src/kick_pages.cpp
@@ -33,6 +35,7 @@ add_library(synthyboy_core STATIC
     engine-own/own_support.cpp
     engine-own/fx/fx_chain.cpp
     engine-own/fx/fx_modules.cpp
+    engine-own/fx/fx_makeup.cpp
     engine-own/osc/wavetable_bank.cpp
     engine-own/osc/morph.cpp
     engine-own/osc/content_set.cpp

@@ -6,6 +6,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 // 32 bit ARM, and AArch64 on Linux (the MPC XL). Not Apple's arm64 (macOS, iOS): there the scalar code and its compiler contraction stay as they were.
@@ -17,6 +18,7 @@
 
 #if (((SB_ARM_LINUX_OR_32) && defined(__ARM_NEON)) || defined(SB_TEST_NEON)) && !defined(SB_NO_NEON) // SB_TEST_NEON: the same intrinsics on a build that does not define __ARM_NEON
  #include <arm_neon.h>
+ #include "neon_cmp.h"
  #define SB_NEON 1
 #else
  #define SB_NEON 0
@@ -48,6 +50,18 @@ inline void addScaled (float* d, const float* a, float g, int n) noexcept
         d[k] += a[k] * g;
 }
 
+/** d[k] += a[k] * g[k] */
+inline void mulAddTo (float* d, const float* a, const float* g, int n) noexcept
+{
+    int k = 0;
+#if SB_NEON
+    for (; k + 4 <= n; k += 4)
+        vst1q_f32 (d + k, vaddq_f32 (vld1q_f32 (d + k), vmulq_f32 (vld1q_f32 (a + k), vld1q_f32 (g + k))));
+#endif
+    for (; k < n; ++k)
+        d[k] += a[k] * g[k];
+}
+
 /** t[k] = (t0 + k + 1) * invP for k = 0 .. 3 starting at k0, as the scalar loops write it: float (int) * invP */
 #if SB_NEON
 inline float32x4_t ramp4 (int t0, int k0, float invP) noexcept
@@ -68,9 +82,13 @@ inline void rampLerp (float* out, float a, float b, int t0, int n, float invP) n
 {
     int k = 0;
 #if SB_NEON
-    const float32x4_t va = vdupq_n_f32 (a), vb = vdupq_n_f32 (b);
+    // the lane offsets stay in a register for the whole loop: ramp4 () builds its four integers on the stack and loads them as one vector, a 128 bit load from two pending 64 bit
+    // stores that cannot be forwarded (CPU-REVIEW-VOICE-MOD.md V2). The same integers t0 + k + 1 + lane, the same conversion and multiply as ramp4 ().
+    static const int32_t kIota[4] = { 0, 1, 2, 3 };
+    const int32x4_t iota = vld1q_s32 (kIota);
+    const float32x4_t va = vdupq_n_f32 (a), vb = vdupq_n_f32 (b), vInvP = vdupq_n_f32 (invP);
     for (; k + 4 <= n; k += 4)
-        vst1q_f32 (out + k, lerp4 (va, vb, ramp4 (t0, k, invP)));
+        vst1q_f32 (out + k, lerp4 (va, vb, vmulq_f32 (vcvtq_f32_s32 (vaddq_s32 (vdupq_n_s32 (t0 + k + 1), iota)), vInvP)));
 #endif
     for (; k < n; ++k)
         out[k] = a + (b - a) * (static_cast<float> (t0 + k + 1) * invP);
@@ -110,6 +128,24 @@ inline void addTo (float* a, const float* b, int n) noexcept
 #endif
     for (; k < n; ++k)
         a[k] += b[k];
+}
+/** Whether |a[k]| < c and |b[k]| < c for every k (c > 0 a normal number): the float compares of a scalar loop `!(std::fabs (x) < c)`, made on NEON with the integer
+    compare of dsp/neon_cmp.h (the same result for every input: a NaN and an infinity are not below c). */
+inline bool allAbsBelow (const float* a, const float* b, int n, float c) noexcept
+{
+    int k = 0;
+#if SB_NEON
+    uint32x4_t acc = vdupq_n_u32 (0xffffffffu);
+    for (; k + 4 <= n; k += 4)
+        acc = vandq_u32 (acc, vandq_u32 (neoncmp::absLt (vld1q_f32 (a + k), c), neoncmp::absLt (vld1q_f32 (b + k), c)));
+    const uint32x2_t half = vand_u32 (vget_low_u32 (acc), vget_high_u32 (acc));
+    if ((vget_lane_u32 (half, 0) & vget_lane_u32 (half, 1)) == 0u)
+        return false;
+#endif
+    for (; k < n; ++k)
+        if (!(std::fabs (a[k]) < c) || !(std::fabs (b[k]) < c))
+            return false;
+    return true;
 }
 /** a[k] = clamp (a[k], lo, hi) */
 inline void clampTo (float* a, float lo, float hi, int n) noexcept

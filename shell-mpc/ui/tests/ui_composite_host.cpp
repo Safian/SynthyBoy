@@ -514,9 +514,17 @@ void testSourceAndVertical()
     check (t.isCrsOnly() && t.collectLeaves (l, 0, 8) == 1 && l[0] == &t.crs && t.minSize().h == 56 && t.crs.rect().y == 10, "tune row vertical: CRS only (the sub oscillator's full screen)");
     t.setCrsOnly (false);
     t.setNoise (true);
-    t.place ({ 10, 10, 260, 2 * 56 + kQLane + 20 });
-    check (t.isNoise() && t.collectLeaves (l, 0, 8) == 3 && l[0] == &t.fin && l[1] == &t.crs && l[2] == &t.track && std::string (t.crs.state.label) == "PITCH" && std::string (t.fin.state.label) == "FINE" && t.crs.rect().y == t.fin.rect().y && t.track.rect().y >= t.crs.rect().bottom() + kQLane && leavesOk (t, t.rect(), why),
-           "tune row vertical noise: PITCH and FINE in a row, KEY TRACK across" + why);
+    t.place ({ 10, 10, 260, 3 * 56 + 2 * kQLane + 20 });
+    check (t.isNoise() && ! t.isNoiseRow() && t.minSize().h == 3 * 56 + 2 * kQLane && t.collectLeaves (l, 0, 8) == 3 && l[0] == &t.fin && l[1] == &t.crs && l[2] == &t.track && std::string (t.crs.state.label) == "PITCH" && std::string (t.fin.state.label) == "FINE"
+               && t.crs.rect().x == t.fin.rect().x && t.crs.rect().w == t.rect().w && t.fin.rect().w == t.rect().w && t.track.rect().w == t.rect().w && t.fin.rect().y >= t.crs.rect().bottom() + kQLane && t.track.rect().y >= t.fin.rect().bottom() + kQLane
+               && t.crs.rect().h >= 56 && t.fin.rect().h >= 56 && t.track.rect().h >= 56 && t.track.rect().bottom() == t.rect().bottom() && leavesOk (t, t.rect(), why),
+           "tune row vertical noise: PITCH, FINE and KEY TRACK in three rows that fill the height" + why);
+    t.setNoiseRow (true);
+    t.place ({ 10, 10, 620, 128 });
+    check (t.isNoiseRow() && t.minSize().h == 56 && t.minSize().w == 3 * 80 + 2 * kGap && t.collectLeaves (l, 0, 8) == 3 && t.crs.rect().y == t.rect().y && t.fin.rect().y == t.rect().y && t.track.rect().y == t.rect().y && t.crs.rect().h == 128 && t.fin.rect().h == 128 && t.track.rect().h == 128
+               && t.crs.rect().right() + kGap == t.fin.rect().x && t.fin.rect().right() + kGap == t.track.rect().x && t.track.rect().right() == t.rect().right() && t.crs.rect().w >= 200 && leavesOk (t, t.rect(), why),
+           "tune row vertical noise, one row: PITCH, FINE and KEY TRACK side by side, one height, the whole width" + why);
+    t.setNoiseRow (false);
     t.setNoise (false);
     t.place ({ 10, 10, 400, 3 * 56 + 2 * kQLane });
     drawChecks (t, "tune row vertical", { 10, 10, 400, 3 * 56 + 2 * kQLane }, "tunerow_vertical.png");

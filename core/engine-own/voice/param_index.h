@@ -24,6 +24,7 @@ struct SubIdx
 {
     int on, waveform, octave, tune, level, pan, destination, env1, phase;
     int filterBlend, bus1Send, bus2Send;
+    int mono, phaseContiguous;
 };
 
 struct NoiseIdx
@@ -59,7 +60,7 @@ struct MasterIdx
     int volume, polyphony, bendRange, velocityTrack, transpose, tune, legato, portTime, portSlope, portAlways, portScaled, bendDownRange, bendDownLink,
         stereoSpread, sameNote, stealPriority, voiceOverride, polyLegato,
         scaleKey, scaleType, scaleMode, tuningA4, tuningScale, tuningMts, mpeOn, mpeBendRange, mpeXyz, mpeYModwheel, mpeBendToX, mpeYBipolar, stereoRouting,
-        curveVelLegato, curveNoteLegato, voicePhaseLegato;
+        curveVelLegato, curveNoteLegato, voicePhaseLegato, tuningMtsNoteOnOnly;
 };
 
 /** The per voice panel (docs/ui-design/13-new-keys.md 4.30). */

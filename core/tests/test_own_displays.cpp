@@ -65,6 +65,7 @@ struct LfoRig
     std::unique_ptr<IEngine> e;
     std::vector<float> l = std::vector<float> (256), r = std::vector<float> (256);
     ParamValues values = ParamValues::defaults();
+    bool meters = false;   // the display shows the source strips: requestMeters () before every block
 
     template <class F>
     explicit LfoRig (F&& setup, const StateContent* content = nullptr)
@@ -75,9 +76,11 @@ struct LfoRig
         if (content != nullptr)
             e->setContent (*content);
     }
-    void note() { Event on = sbtest::noteOn (0, 60, 0.8f); e->process (&on, 1, l.data(), r.data(), 256); }
+    void note() { Event on = sbtest::noteOn (0, 60, 0.8f); if (meters) e->requestMeters(); e->process (&on, 1, l.data(), r.data(), 256); }
     LiveValues block()
     {
+        if (meters)
+            e->requestMeters();
         e->process (nullptr, 0, l.data(), r.data(), 256);
         LiveValues live;
         CHECK (e->copyReadout (live));
@@ -587,6 +590,7 @@ TEST (own_mixer_strip_peaks_follow_the_sources_and_decay)
         both (e, v, "env1.attack", 2.0f);
         both (e, v, "env1.sustain", 100.0f);
     });
+    rig.meters = true;
     LiveValues live;
     CHECK (rig.e->copyReadout (live));
     for (int s = 0; s < LiveValues::kMaxStrips; ++s)
@@ -612,6 +616,7 @@ TEST (own_mixer_strip_peaks_follow_the_sources_and_decay)
             both (e, v, "env1.attack", 2.0f);
             both (e, v, "env1.sustain", 100.0f);
         });
+        loud.meters = true;
         loud.note();
         LiveValues l2;
         for (int b = 0; b < 40; ++b)
@@ -638,6 +643,81 @@ TEST (own_mixer_strip_peaks_follow_the_sources_and_decay)
     for (int b = 0; b < 400; ++b)
         live = rig.block();
     CHECK (live.stripPeak[9] < 0.05f && live.stripPeak[1] < 0.05f);
+}
+
+// The source strips are measured only while the display asks (IEngine::requestMeters). Against an engine that is asked every block (the behaviour before the request existed): the audio of both is
+// identical to the bit, the bus and master strips are the same floats always, the source strips are the same floats from the moment the display asks (a steady chord, so no louder past is
+// forgotten), the first block after the request already carries real values, and they fall back to 0 once the requests stop.
+TEST (own_source_meters_are_measured_only_while_asked_and_change_no_output)
+{
+    const auto setup = [] (IEngine& e, ParamValues& v)
+    {
+        both (e, v, "osc1.on", 1.0f);
+        both (e, v, "osc1.level", 70.0f);
+        both (e, v, "osc2.on", 1.0f);
+        both (e, v, "osc2.level", 50.0f);
+        both (e, v, "osc3.on", 0.0f);
+        both (e, v, "sub.on", 1.0f);
+        both (e, v, "sub.level", 60.0f);
+        both (e, v, "noise.on", 1.0f);
+        both (e, v, "noise.level", 20.0f);
+        both (e, v, "osc1.bus1_send", 60.0f);
+        both (e, v, "osc2.bus2_send", 40.0f);
+        both (e, v, "env1.attack", 2.0f);
+        both (e, v, "env1.sustain", 100.0f);
+    };
+    LfoRig always (setup), onDemand (setup);
+    always.meters = true;
+    const int notes[3] = { 60, 64, 67 };
+    for (int n = 0; n < 3; ++n)
+    {
+        Event on = sbtest::noteOn (0, notes[n], 0.8f);
+        always.e->requestMeters();
+        always.e->process (&on, 1, always.l.data(), always.r.data(), 256);
+        onDemand.e->process (&on, 1, onDemand.l.data(), onDemand.r.data(), 256);
+    }
+    auto bits = [] (float x) { uint32_t u; std::memcpy (&u, &x, 4); return u; };
+    long long audioBad = 0, stripBad = 0;
+    LiveValues a, d;
+    const auto step = [&] (bool ask)
+    {
+        onDemand.meters = ask;
+        a = always.block();
+        d = onDemand.block();
+        for (size_t i = 0; i < always.l.size(); ++i)
+            audioBad += bits (always.l[i]) != bits (onDemand.l[i]) || bits (always.r[i]) != bits (onDemand.r[i]);
+    };
+    // 60 blocks nobody asks: the source strips read 0, the bus and master strips equal the reference
+    for (int b = 0; b < 60; ++b)
+    {
+        step (false);
+        for (int s = 0; s < 7; ++s)
+            CHECK (d.stripPeak[s] == 0.0f);
+        for (int s = 7; s < 10; ++s)
+            stripBad += bits (a.stripPeak[s]) != bits (d.stripPeak[s]);
+    }
+    CHECK (a.stripPeak[1] > 0.2f && a.stripPeak[0] > 0.1f && a.stripPeak[4] > 0.05f);   // (the reference does measure the sources)
+    // the display asks: the first block already has real values (not the stale zeros), and the strips follow the reference
+    step (true);
+    for (int s = 0; s < 7; ++s)
+        if (a.stripPeak[s] > 0.0f)
+            CHECK (d.stripPeak[s] > 0.9f * a.stripPeak[s]);
+    for (int b = 0; b < 300; ++b)
+    {
+        step (true);
+        if (b >= 150)   // (the memory of the release, 300 ms, is gone: the floats are the reference's)
+            for (int s = 0; s < 10; ++s)
+                stripBad += bits (a.stripPeak[s]) != bits (d.stripPeak[s]);
+    }
+    CHECK_EQ (audioBad, 0);
+    CHECK_EQ (stripBad, 0);
+    // the requests stop: the hold runs out and the source strips go to 0 while the output keeps being identical
+    for (int b = 0; b < 400; ++b)
+        step (false);
+    for (int s = 0; s < 7; ++s)
+        CHECK (d.stripPeak[s] == 0.0f);
+    CHECK_EQ (audioBad, 0);
+    std::printf ("    %lld output samples and %lld meter values differ from the engine that is always asked\n", audioBad, stripBad);
 }
 
 // the voice control: each of the newest voices reports the step of the voice control it plays (note number - 1, modulo the length): the highlighted column of the Voice page

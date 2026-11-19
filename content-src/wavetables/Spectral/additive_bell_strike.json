@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Bell Strike",
+ "category": "Spectral",
+ "description": "Additive bell partials (a hum, a prime, a tierce, a nominal cluster) whose high members fade as the frames go on.",
+ "frames": 64,
+ "seed": "additive_bell_strike",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "additive_bell_strike"
+  }
+ }
+}

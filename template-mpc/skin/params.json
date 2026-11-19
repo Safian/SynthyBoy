@@ -1,0 +1,194 @@
+{
+  "format": "mpckit-params",
+  "version": 1,
+  "count": 9,
+  "plugin": {
+    "name": "MpcKit Demo",
+    "vendor": "Example",
+    "uid": "McKD",
+    "version": 1000,
+    "isInstrument": true,
+    "numInputs": 0,
+    "numOutputs": 2,
+    "numPrograms": 1,
+    "programs": [
+      "Init"
+    ]
+  },
+  "params": [
+    {
+      "key": "level",
+      "name": "Level",
+      "group": "Main",
+      "min": -60,
+      "max": 6,
+      "default": -6,
+      "scale": "linear",
+      "skew": 1,
+      "interval": 0,
+      "decimals": 1,
+      "unit": "dB",
+      "flags": [
+        "automatable"
+      ],
+      "ownEngine": true,
+      "id": 1000
+    },
+    {
+      "key": "pan",
+      "name": "Pan",
+      "group": "Main",
+      "min": -100,
+      "max": 100,
+      "default": 0,
+      "scale": "linear",
+      "skew": 1,
+      "interval": 0,
+      "decimals": 0,
+      "unit": "percent",
+      "flags": [
+        "automatable"
+      ],
+      "ownEngine": true,
+      "id": 1001
+    },
+    {
+      "key": "pitch",
+      "name": "Pitch",
+      "group": "Main",
+      "min": -24,
+      "max": 24,
+      "default": 0,
+      "scale": "linear",
+      "skew": 1,
+      "interval": 1,
+      "decimals": 0,
+      "unit": "semitone",
+      "flags": [
+        "automatable"
+      ],
+      "ownEngine": true,
+      "id": 1002
+    },
+    {
+      "key": "cutoff",
+      "name": "Cutoff",
+      "group": "Filter",
+      "min": 20,
+      "max": 20000,
+      "default": 8000,
+      "scale": "exp_skew",
+      "skew": 0.3,
+      "interval": 0,
+      "decimals": 0,
+      "unit": "Hz",
+      "flags": [
+        "automatable"
+      ],
+      "ownEngine": true,
+      "id": 1003
+    },
+    {
+      "key": "resonance",
+      "name": "Resonance",
+      "group": "Filter",
+      "min": 0,
+      "max": 100,
+      "default": 10,
+      "scale": "linear",
+      "skew": 1,
+      "interval": 0,
+      "decimals": 0,
+      "unit": "percent",
+      "flags": [
+        "automatable"
+      ],
+      "ownEngine": true,
+      "id": 1004
+    },
+    {
+      "key": "filter_on",
+      "name": "Filter On",
+      "group": "Filter",
+      "min": 0,
+      "max": 1,
+      "default": 1,
+      "scale": "stepped",
+      "skew": 1,
+      "interval": 1,
+      "decimals": 0,
+      "unit": "none",
+      "flags": [
+        "automatable",
+        "stepped"
+      ],
+      "ownEngine": true,
+      "choices": [
+        "Off",
+        "On"
+      ],
+      "id": 1005
+    },
+    {
+      "key": "mode",
+      "name": "Mode",
+      "group": "Filter",
+      "min": 0,
+      "max": 3,
+      "default": 0,
+      "scale": "stepped",
+      "skew": 1,
+      "interval": 1,
+      "decimals": 0,
+      "unit": "none",
+      "flags": [
+        "automatable",
+        "stepped"
+      ],
+      "ownEngine": true,
+      "choices": [
+        "Low Pass",
+        "High Pass",
+        "Band Pass",
+        "Notch"
+      ],
+      "id": 1006
+    },
+    {
+      "key": "attack",
+      "name": "Attack",
+      "group": "Amp",
+      "min": 0,
+      "max": 10000,
+      "default": 10,
+      "scale": "exp_skew",
+      "skew": 0.3,
+      "interval": 0,
+      "decimals": 0,
+      "unit": "ms",
+      "flags": [
+        "automatable"
+      ],
+      "ownEngine": true,
+      "id": 1007
+    },
+    {
+      "key": "release",
+      "name": "Release",
+      "group": "Amp",
+      "min": 0,
+      "max": 10000,
+      "default": 300,
+      "scale": "exp_skew",
+      "skew": 0.3,
+      "interval": 0,
+      "decimals": 0,
+      "unit": "ms",
+      "flags": [
+        "automatable"
+      ],
+      "ownEngine": true,
+      "id": 1008
+    }
+  ]
+}

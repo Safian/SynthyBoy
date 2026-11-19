@@ -1,0 +1,24 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Sparse Spectrum Fill",
+ "category": "Noise",
+ "description": "A noise spectrum with only 2 % of the harmonics present, filling to 100 %: a few ringing lines, a crackling comb, then full noise.",
+ "frames": 64,
+ "seed": "sparse_spectrum_fill",
+ "source": {
+  "type": "noise",
+  "params": {
+   "tilt": 0.5,
+   "seed": 8,
+   "count": 300,
+   "density": {
+    "law": "linear",
+    "from": 0.02,
+    "to": 1.1
+   }
+  }
+ },
+ "post": {
+  "limit": 320
+ }
+}

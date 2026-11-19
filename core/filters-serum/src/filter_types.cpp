@@ -140,6 +140,116 @@ const ModelTypes kModels[19] = {
           FilterType::DistComb1LP, FilterType::DistComb1BP, FilterType::DistComb2LP, FilterType::DistComb2BP } },       // 25 Misc
   { 6, { FilterType::MGLadder, FilterType::AcidLadder, FilterType::MGDirty, FilterType::Comb2, FilterType::ExpMM, FilterType::ExpBPF } }, // 26 New
 };
+// Classic filter style names (models 0 .. 7)
+static constexpr const char* const kClassicAnalogStyles[6] = {
+    "Style A (12 dB)", "Style B (24 dB)", "Style C (notch swap)",
+    "Style D (dual notch)", "Style E (band peak notch)", "Style F (shelf)"
+};
+static constexpr const char* const kClassicDiodeStyles[2] = {
+    "Style A (12 dB)", "Style B (24 dB)"
+};
+static constexpr const char* const kClassicFormantStyles[3] = {
+    "A-O-I-E", "A-I-U-O", "Vocal Tract"
+};
+// the six styles of the Comb (docs/engine-spec/05-filters.md 8.1): feedback_style = style mod 3 (comb, positive flange, negative flange), filter_style = style div 3 (blend filter, band filter); style 0 is the plain comb of old
+static constexpr const char* const kClassicCombStyles[6] = {
+    "Comb", "Positive Flange", "Negative Flange", "Comb Band", "Positive Flange Band", "Negative Flange Band"
+};
+static constexpr const char* const kClassicPhaserStyles[2] = {
+    "Positive Feedback", "Negative Feedback"
+};
+
+// Serum filter model style names (models 8 .. 26)
+static constexpr const char* const kMultiSvfStyles[12] = {
+    "LH", "LB", "LP", "LN", "HB", "HP", "HN", "BP", "BN", "PP", "PN", "NN"
+};
+static constexpr const char* const kSlopeStyles[6] = {
+    "MG Low 6", "MG Low 18", "Low 6", "Low 18", "High 6", "High 18"
+};
+static constexpr const char* const kEq6Styles[3] = {
+    "Low EQ 6", "Band EQ 6", "High EQ 6"
+};
+static constexpr const char* const kRingModStyles[2] = {
+    "Ring Mod", "Ring Mod x2"
+};
+static constexpr const char* const kSampleHoldStyles[2] = {
+    "SampHold", "SampHold-"
+};
+static constexpr const char* const kSmearStyles[3] = {
+    "Combs", "Allpasses", "Reverb"
+};
+static constexpr const char* const kFrenchLpStyles[1] = {
+    "French LP"
+};
+static constexpr const char* const kAddBassStyles[1] = {
+    "Add Bass"
+};
+static constexpr const char* const kScreamStyles[2] = {
+    "Scream LP", "Scream BP"
+};
+static constexpr const char* const kNewWspStyles[1] = {
+    "New Wsp"
+};
+static constexpr const char* const kDjMixerStyles[1] = {
+    "DJ Mixer Xfer"
+};
+static constexpr const char* const kDiffusorStyles[1] = {
+    "Diffusor"
+};
+static constexpr const char* const kEmsLadderStyles[1] = {
+    "EMS Ladder"
+};
+static constexpr const char* const kPzSvfStyles[1] = {
+    "PZ SVF"
+};
+static constexpr const char* const kNormalStyles[12] = {
+    "MG Low 12", "MG Low 24", "Low 12", "Low 24", "High 12", "High 24",
+    "Band 12", "Band 24", "Peak 12", "Peak 24", "Notch 12", "Notch 24"
+};
+static constexpr const char* const kMultiMorphStyles[4] = {
+    "LBH", "LPH", "LNH", "BPN"
+};
+static constexpr const char* const kFlangesStyles[9] = {
+    "Cmb L", "Flg L", "Phs L", "Cmb H", "Flg H", "Phs H", "Cmb HL", "Flg HL", "Phs HL"
+};
+static constexpr const char* const kMiscStyles[12] = {
+    "Low EQ 12", "Band EQ 12", "High EQ 12", "German LP",
+    "Formant-I", "Formant-II", "Formant-III", "Bandreject",
+    "Dist.Comb 1 LP", "Dist.Comb 1 BP", "Dist.Comb 2 LP", "Dist.Comb 2 BP"
+};
+static constexpr const char* const kNewStyles[6] = {
+    "MG Ladder", "Acid Ladder", "MG Dirty", "Comb 2", "Exp MM", "Exp BPF"
+};
+
+static constexpr const char* const* kModelStyles[27] = {
+    kClassicAnalogStyles,  // 0 Analog
+    kClassicAnalogStyles,  // 1 Dirty
+    kClassicAnalogStyles,  // 2 Ladder
+    kClassicAnalogStyles,  // 3 Digital
+    kClassicDiodeStyles,   // 4 Diode
+    kClassicFormantStyles, // 5 Formant
+    kClassicCombStyles,    // 6 Comb
+    kClassicPhaserStyles,  // 7 Phaser
+    kMultiSvfStyles,       // 8 Multi SVF
+    kSlopeStyles,          // 9 Slope
+    kEq6Styles,            // 10 EQ 6 dB
+    kRingModStyles,        // 11 Ring Mod
+    kSampleHoldStyles,     // 12 Sample Hold
+    kSmearStyles,          // 13 Smear
+    kFrenchLpStyles,       // 14 French LP
+    kAddBassStyles,        // 15 Add Bass
+    kScreamStyles,         // 16 Scream
+    kNewWspStyles,         // 17 New Wsp
+    kDjMixerStyles,        // 18 DJ Mixer
+    kDiffusorStyles,       // 19 Diffusor
+    kEmsLadderStyles,      // 20 EMS Ladder
+    kPzSvfStyles,          // 21 PZ SVF
+    kNormalStyles,         // 22 Normal
+    kMultiMorphStyles,     // 23 Multi Morph
+    kFlangesStyles,        // 24 Flanges
+    kMiscStyles,           // 25 Misc
+    kNewStyles             // 26 New
+};
 } // namespace
 
 const char* getFilterTypeName (int type) noexcept
@@ -166,6 +276,30 @@ const char* getFilterVarName (int type) noexcept
 int serumModelStyleCount (int model) noexcept
 {
     return model >= kFirstSerumModel && model <= kLastSerumModel ? kModels[model - kFirstSerumModel].count : 0;
+}
+
+int filterModelStyleCount (int model) noexcept
+{
+    static constexpr int kClassic[kFirstSerumModel] = { 6, 6, 6, 6, 2, 3, 6, 2 }; // Analog, Dirty, Ladder, Digital, Diode, Formant, Comb, Phaser
+    if (model >= 0 && model < kFirstSerumModel)
+        return kClassic[model];
+    return serumModelStyleCount (model);
+}
+
+const char* const* filterModelStyleNames (int model) noexcept
+{
+    if (model >= 0 && model <= kLastSerumModel)
+        return kModelStyles[model];
+    return nullptr;
+}
+
+const char* filterModelStyleName (int model, int style) noexcept
+{
+    const int count = filterModelStyleCount (model);
+    if (model < 0 || model > kLastSerumModel || style < 0 || style >= count)
+        return "";
+    const char* const* names = filterModelStyleNames (model);
+    return names != nullptr && names[style] != nullptr ? names[style] : "";
 }
 
 int serumFilterTypeOf (int model, int style) noexcept

@@ -1,0 +1,26 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Bowl Beating Pairs",
+ "category": "Metallic",
+ "description": "Singing bowl modes (1, 2.7, 5.2, 8.4 ...) each split into a close pair whose spacing opens from 0 to 1.4 harmonics: the slow beating of a rubbed bowl becomes a wide chorus.",
+ "frames": 64,
+ "seed": "bowl_beating_pairs",
+ "source": {
+  "type": "partials",
+  "params": {
+   "set": "bowl",
+   "scale": 3.0,
+   "count": 6,
+   "rolloff": 0.6,
+   "pair_delta": {
+    "law": "linear",
+    "from": 0,
+    "to": 1.4
+   },
+   "seed": 9
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

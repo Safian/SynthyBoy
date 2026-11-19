@@ -221,14 +221,17 @@ public:
     }
     float framePosition() const noexcept { return lastTargets_[0]; }
 
-    /** The picture of the oscillator in a rectangle of the canvas: what the data of OscCycle::computeDisplay is (docs/MPC.md "Oscillator UI"), drawn by ui/display.h. `live`: the running parts only. */
-    void draw (gpu::SceneBuilder& sb, const ui::Rect& r, bool live) const
+    /** The picture of the oscillator in a rectangle of the canvas: what the data of OscCycle::computeDisplay is (docs/MPC.md "Oscillator UI"), drawn by ui/display.h. `live`: the running parts only. `plotArea`: the rectangle the picture is drawn in (the compact view's, below its header band); empty = the display rectangle. */
+    void draw (gpu::SceneBuilder& sb, const ui::Rect& r, bool live, const ui::Rect& plotArea = {}) const
     {
         using K = synthyboy::OscCycle::Kind;
         ui::display::Data d;
+        d.area = plotArea;   // the compact view of the Play page: the picture lies below the header band that holds the buttons (OscUi::plotArea)
         d.dim = kind_ == K::off && ghost_ != K::off;   // switched off, with the picture of its content under a veil
         const K kind = d.dim ? ghost_ : kind_;
         d.colour = ui::theme::instanceColour (sel_ - 1);
+        if (kind_ == K::off)   // a switched off oscillator: the picture in the grey of the inactive look (ui::Pen::inactiveGrey), as the controls under it
+            d.colour = ui::Pen::inactiveGrey ((d.colour << 8) | 255u) >> 8;
         d.n = std::min (displayPoints_, static_cast<int> (cycle_.size()));
         d.cycle = cycle_.data();
         if (kind == K::wavetable)

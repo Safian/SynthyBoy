@@ -1,0 +1,26 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Triangle Fold",
+ "category": "Analog",
+ "description": "A triangle through a folder, the gain 1 to 7.5: triangle, then folded humps appear (the west coast fold on a smooth source).",
+ "frames": 64,
+ "seed": "triangle_fold",
+ "source": {
+  "type": "shape",
+  "params": {
+   "mode": "fold",
+   "drive": {
+    "law": "linear",
+    "from": 1,
+    "to": 7.5
+   }
+  },
+  "input": {
+   "type": "classic",
+   "params": {
+    "tri": 1.0,
+    "saw": 0.0
+   }
+  }
+ }
+}

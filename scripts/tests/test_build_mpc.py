@@ -98,7 +98,18 @@ class BuildMpcTest(unittest.TestCase):
     # ---- argument handling -------------------------------------------------------------------------------------------------------------------
 
     def test_usage_errors(self):
-        for args in (["--arch", "x86"], ["--arch"], ["--jobs", "0"], ["--jobs", "two"], ["--bogus"], ["--skins", str(self.tmp / "nope")]):
+        for args in (
+            ["--arch", "x86"],
+            ["--arch"],
+            ["--jobs", "0"],
+            ["--jobs", "two"],
+            ["--bogus"],
+            ["--skins", str(self.tmp / "nope")],
+            ["--xpl-presets", "bad"],
+            ["--xpl-presets"],
+            ["--dump-tool", str(self.tmp / "no-such-tool")],
+            ["--chunks", str(self.tmp / "no-such-dir")],
+        ):
             r = self.run_script(BUILD_MPC, *args)
             self.assertEqual(r.returncode, 2, (args, r.stderr))
         self.assertEqual(self.runs(), [])
@@ -116,6 +127,8 @@ class BuildMpcTest(unittest.TestCase):
             self.assertEqual(r.returncode, 0)
             self.assertIn("Usage: scripts/", r.stdout)
         self.assertIn("--arch arm32|arm64|all", self.run_script(BUILD_MPC, "--help").stdout)
+        self.assertIn("--xpl-presets xl|k61|both|off", self.run_script(BUILD_MPC, "--help").stdout)
+        self.assertIn("--dump-tool PATH", self.run_script(BUILD_MPC, "--help").stdout)
 
     def test_no_docker_prints_manual_commands_for_both_architectures(self):
         r = self.run_script(BUILD_MPC, "--out", str(self.out), MPC_DOCKER=str(self.tmp / "no-such-docker"))
@@ -290,6 +303,72 @@ class BuildMpcTest(unittest.TestCase):
 
     def test_validator_without_ok_line_fails(self):
         self.assertEqual(self.build("--arch", "all", FAKE_VALIDATE="nothing useful").returncode, 1)
+
+    # ---- the xpl presets packaging -------------------------------------------------------------------------------------------
+
+    def test_xpl_presets_skip_notice_when_tool_absent(self):
+        r = self.build("--no-validate", "--xpl-presets", "xl")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertIn("native dump tool (dump_mpc_chunks) or native plugin library not found", r.stdout)
+        self.assertFalse((self.folder() / "Presets").exists())
+        self.assertFalse((self.out / "Presets-k61").exists())
+
+    def test_xpl_presets_packaging_with_chunks(self):
+        mock_chunks = self.tmp / "mock_chunks"
+        mock_chunks.mkdir()
+        presets_dir = ROOT / "content" / "presets"
+        for p in presets_dir.glob("*/*.sbpreset"):
+            try:
+                name = json.loads(p.read_text(encoding="utf-8"))["meta"]["name"]
+                chunk_file = mock_chunks / f"{name}.chunk"
+                chunk_data = json.dumps({"mpcProgram": 1, "mpcProgramName": name, "format": "synthyboy-state"})
+                chunk_file.write_text(chunk_data, encoding="utf-8")
+            except Exception:
+                pass
+
+        r = self.build("--no-validate", "--xpl-presets", "xl", "--chunks", str(mock_chunks), XPL_PATH_MODE="device")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+
+        presets = self.folder() / "Presets"
+        k61_presets = self.out / "Presets-k61"
+        self.assertTrue(presets.is_dir())
+        self.assertTrue(k61_presets.is_dir())
+
+        xl_files = sorted(presets.glob("*.xpl"))
+        k61_files = sorted(k61_presets.glob("*.xpl"))
+        self.assertGreater(len(xl_files), 0)
+        self.assertEqual(len(xl_files), len(k61_files))
+
+        sample_xl = xl_files[0].read_text(encoding="utf-8")
+        sample_k61 = (k61_presets / xl_files[0].name).read_text(encoding="utf-8")
+        self.assertIn("synthyboy-arm64.so", sample_xl)
+        self.assertIn("synthyboy-arm32.so", sample_k61)
+
+    def test_xpl_presets_off_flag(self):
+        mock_chunks = self.tmp / "mock_chunks_off"
+        mock_chunks.mkdir()
+        r = self.build("--no-validate", "--xpl-presets", "off", "--chunks", str(mock_chunks))
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertFalse((self.folder() / "Presets").exists())
+        self.assertFalse((self.out / "Presets-k61").exists())
+
+    def test_xpl_presets_shared_mode(self):
+        mock_chunks = self.tmp / "mock_chunks_shared"
+        mock_chunks.mkdir()
+        presets_dir = ROOT / "content" / "presets"
+        for p in presets_dir.glob("*/*.sbpreset"):
+            try:
+                name = json.loads(p.read_text(encoding="utf-8"))["meta"]["name"]
+                chunk_file = mock_chunks / f"{name}.chunk"
+                chunk_data = json.dumps({"mpcProgram": 1, "mpcProgramName": name, "format": "synthyboy-state"})
+                chunk_file.write_text(chunk_data, encoding="utf-8")
+            except Exception:
+                pass
+
+        r = self.build("--no-validate", "--xpl-presets", "xl", "--chunks", str(mock_chunks), XPL_PATH_MODE="shared")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertTrue((self.folder() / "Presets").is_dir())
+        self.assertFalse((self.out / "Presets-k61").exists())
 
     # ---- the wrapper -------------------------------------------------------------------------------------------------------------------------
 

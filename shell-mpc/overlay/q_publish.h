@@ -8,10 +8,14 @@
 #include <cstring>
 
 #include "../q_router.h"
+#include "../ui/qgroup.h"
 #include "curve_source.h"
 #include "synthyboy/params.h"
 
 namespace synthyboy_mpc { namespace overlay {
+
+/** Connects the router's device rule to the UI library's device flag (ui::QGroup::setWideDevice, set once by the overlay at start): one switch for the frames, the chips and the slot order. */
+inline const bool kQDeviceRule = (QRouter::wideProbe() = &ui::QGroup::wideDevice, true);
 
 /** The groups of a screen that have members, in index order (a screen can have a group that is empty for the instance on it, like the FORMANT block of a filter without formants): ids[k] is the index of the k-th one, the
     result is how many there are; `activePos` gets the position of `active` among them (-1: the active group is none of them). */
@@ -59,7 +63,8 @@ inline void setRowBlocks (RowsPage& page, int maxRows, int n, int active) noexce
         page.setRowBlock (r, r < n ? QRouter::blockOfGroup (n, active, r) : -1);
 }
 
-/** The sixteen slots of a page and what was published of them. */
+/** The sixteen slots of a page and what was published of them. `Inst` is any instance interface with setQGroup (const int*, int): IInstanceView of SynthyBoy, mpckit::IInstance of the kit (migration
+    step 1 of docs/ui-components/TEMPLATE.md; the callers are unchanged: the type is deduced). */
 struct QSlots
 {
     int target[QRouter::kCount];
@@ -71,8 +76,8 @@ struct QSlots
     const int* data() const noexcept { return target; }
 
     /** Maps the page: nGroups groups, `active` the active one, targetsOf (group, int* four) the targets of a group; tells the instance when something changed. Returns the slot count in use. */
-    template <class TargetsOf>
-    int publish (IInstanceView& v, int nGroups, int active, TargetsOf&& targetsOf)
+    template <class Inst, class TargetsOf>
+    int publish (Inst& v, int nGroups, int active, TargetsOf&& targetsOf)
     {
         int t[QRouter::kCount];
         const int used = QRouter::mapGroups (nGroups, active, targetsOf, t);
@@ -80,7 +85,8 @@ struct QSlots
         return used;
     }
     /** The slots are known already (kCount values). */
-    void publishRaw (IInstanceView& v, const int* t)
+    template <class Inst>
+    void publishRaw (Inst& v, const int* t)
     {
         if (! set || std::memcmp (t, target, sizeof target) != 0)
         {

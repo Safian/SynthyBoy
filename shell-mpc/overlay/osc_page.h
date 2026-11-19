@@ -58,8 +58,8 @@ public:
         const ui::Rect r = osc_.displayRect();
         if (! r.empty() && display_.valid())
         {
-            display_.draw (sb, r, false);
-            display_.draw (sb, r, true);
+            display_.draw (sb, r, false, osc_.plotArea());
+            display_.draw (sb, r, true, osc_.plotArea());
             if (marks_.any())
                 marks_.draw (sb, r);
         }

@@ -73,6 +73,8 @@ public:
     /** The user packs map to their directories, every other pack is a directory below the root (or below an extra root). The SHA-256 of the
         reference is verified when it has one. */
     bool readFile (const ContentFileRef& ref, std::vector<uint8_t>& bytes) const override;
+    /** The same lookup, reading a file from disk only up to `maxBytes` (a wavetable file: wavetable_file.h). */
+    bool readFileBounded (const ContentFileRef& ref, std::vector<uint8_t>& bytes, size_t maxBytes, bool* tooLarge) const override;
     bool contains (const ContentFileRef& ref) const;
 
     /** Writes `bytes` as `<pack dir>/<sha12>/<stem of fileName>.wav` (content addressed: the same bytes are stored once) and fills `ref` with the
@@ -138,7 +140,19 @@ struct SampleFacts
     int64_t frames = 0;
     int rootNote = -1;        // from the file name (`Name F2`, `Eb3`), else the WAV instrument / sampler chunk; -1 = none
     bool rootFromName = false;
+    bool hasLoop = false;     // the WAV 'smpl' chunk has a loop
+    int64_t loopStart = -1, loopEnd = -1;   // frames (the end is the last frame of the loop, inclusive, as the chunk stores it)
+    int loopType = 0;         // 0 forward, 1 ping-pong, 2 backward
 };
+/** What loading a sample does with the loop of its 'smpl' chunk (a one-time write of parameter values by the shells' load path, never in the audio path, so a preset stays explicit):
+    oscN.sample.loop_mode (1 Forward loop, 2 Reverse loop, 3 Forward/reverse loop), oscN.sample.loop_start and loop_end in percent of the file. `valid` false: the file has no usable loop. */
+struct SampleLoopSettings
+{
+    bool valid = false;
+    int mode = 0;
+    float startPercent = 0.0f, endPercent = 100.0f;
+};
+SampleLoopSettings sampleLoopSettings (const SampleFacts& facts) noexcept;
 /** Reads the header and the root note of a WAV file. False when the bytes are not a WAV file the engine can decode. */
 bool probeSampleWav (const std::vector<uint8_t>& wav, const std::string& fileName, SampleFacts& facts);
 

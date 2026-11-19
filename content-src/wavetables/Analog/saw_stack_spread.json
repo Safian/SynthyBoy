@@ -1,0 +1,20 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Saw Stack Spread",
+ "category": "Analog",
+ "description": "Seven saws whose phases fan out from together to +-0.45 cycle: a single saw thins into a staircase and a comb, the supersaw look frozen in one cycle.",
+ "frames": 64,
+ "seed": "saw_stack_spread",
+ "source": {
+  "type": "classic",
+  "params": {
+   "saw": 1.0,
+   "stack": 7,
+   "stack_spread": {
+    "law": "linear",
+    "from": 0.0,
+    "to": 0.45
+   }
+  }
+ }
+}

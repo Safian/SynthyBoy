@@ -1,0 +1,663 @@
+{
+  "format": "synthyboy-factory-preset-categories",
+  "version": 1,
+  "groups": [
+    "Bass Sub+808",
+    "Bass Reese",
+    "Bass Acid",
+    "Bass Synth",
+    "Lead Synth",
+    "Lead Sync+FM",
+    "Pad Warm",
+    "Pad Evolving",
+    "Keys",
+    "Pluck",
+    "Bells+Mallets",
+    "Strings+Brass",
+    "Sequence",
+    "Texture",
+    "FX"
+  ],
+  "presets": {
+    "808 Boom": {
+      "group": "Bass Sub+808",
+      "why": "Pitch-gliding sine sub bass with classic 808 decay"
+    },
+    "Accordion Reed": {
+      "group": "Strings+Brass",
+      "why": "Dual reed acoustic folk accordion emulation"
+    },
+    "Acid Saw Reso": {
+      "group": "Bass Acid",
+      "why": "Classic 303-style resonant sawtooth acid line"
+    },
+    "Acoustic Style Pluck": {
+      "group": "Pluck",
+      "why": "Crisp acoustic guitar transient steel-string pluck"
+    },
+    "Alien Communication": {
+      "group": "Texture",
+      "why": "Resonant formant alien vocal chatter soundscape"
+    },
+    "Aux Keyscale Pluck": {
+      "group": "Pluck",
+      "why": "Plucked synth with keyboard-scaled dynamic filter sweep"
+    },
+    "B3 Drawbar Organ": {
+      "group": "Keys",
+      "why": "Warm tonewheel jazz drawbar organ"
+    },
+    "Bell Chime Lead": {
+      "group": "Bells+Mallets",
+      "why": "Crystalline bell overtones and struck chime lead"
+    },
+    "Bell FM Ripple Lead": {
+      "group": "Lead Sync+FM",
+      "why": "Sine carrier phase-modulated FM bell lead with velocity bite"
+    },
+    "Bell Mallet Pluck": {
+      "group": "Bells+Mallets",
+      "why": "Percussive bell mallet strike with metallic overtones"
+    },
+    "Bend Formant Growl": {
+      "group": "Bass Acid",
+      "why": "Aggressive bent saw growl through parallel formant and analog filters"
+    },
+    "Bode Barber Riser": {
+      "group": "FX",
+      "why": "Rising saw and noise build with recursive Bode frequency shifter"
+    },
+    "Bode Shifter Drone": {
+      "group": "Texture",
+      "why": "Slow metallic feedback drone through Bode frequency shifter"
+    },
+    "Bowed MPE Strings": {
+      "group": "Strings+Brass",
+      "why": "Expressive bowed string ensemble with pad pressure vibrato"
+    },
+    "Bowed Pressure Strings": {
+      "group": "Strings+Brass",
+      "why": "Expressive bowed string ensemble with pad pressure vibrato"
+    },
+    "Brass Swell Ensemble": {
+      "group": "Strings+Brass",
+      "why": "3-oscillator swelling brass ensemble with filter dynamics"
+    },
+    "Breakbeat Slice Keys": {
+      "group": "Keys",
+      "why": "Breakbeat-sliced sample keys with parallel crush"
+    },
+    "Breath Flute Lead": {
+      "group": "Lead Synth",
+      "why": "Breath-based flute lead using sample oscillator"
+    },
+    "Breath of Machines": {
+      "group": "Texture",
+      "why": "Breathing industrial atmosphere with formant noise and Lorenz LFO"
+    },
+    "Cathedral Choir": {
+      "group": "Pad Warm",
+      "why": "Vast reverberant sacred choir pad"
+    },
+    "Celesta Bells": {
+      "group": "Bells+Mallets",
+      "why": "Fairytale orchestral celesta bell keyboard"
+    },
+    "Chime Drop": {
+      "group": "Bells+Mallets",
+      "why": "Delicate falling metallic glass chime cluster"
+    },
+    "Chord Cloud Pad": {
+      "group": "Pad Evolving",
+      "why": "Granular cloud pad with four-chord progression drift"
+    },
+    "Chorused Saw Solo": {
+      "group": "Lead Synth",
+      "why": "Bright sawtooth solo lead bathed in stereo chorus"
+    },
+    "Clavinet Funk": {
+      "group": "Keys",
+      "why": "Funky 70s electronic clavinet keyboard"
+    },
+    "Click Attack Bass": {
+      "group": "Bass Synth",
+      "why": "Punchy synth bass with transient click attack"
+    },
+    "Comb Metal Bass": {
+      "group": "Bass Synth",
+      "why": "Physical resonant comb filter metallic string bass"
+    },
+    "Comb Reso Swell": {
+      "group": "Pad Evolving",
+      "why": "Acoustic-like resonant comb filter swelling wash"
+    },
+    "Comb Zither": {
+      "group": "Pluck",
+      "why": "Physical modeled plucked zither string using comb resonance"
+    },
+    "Cosmic Drift Lead": {
+      "group": "Lead Synth",
+      "why": "Slowly drifting ambient analog solo synth lead"
+    },
+    "Cosmic Teleport": {
+      "group": "FX",
+      "why": "Ascending pitch sweep dimensional teleport effect"
+    },
+    "Custom Shape Wobble": {
+      "group": "Bass Reese",
+      "why": "Detuned dual-saw bass with rhythmic hand-drawn wobble LFO"
+    },
+    "Dark Cinema Drone": {
+      "group": "Texture",
+      "why": "Low suspenseful cinematic atmospheric drone"
+    },
+    "Deep Sea Ambient": {
+      "group": "Pad Evolving",
+      "why": "Submerged oceanic atmosphere with slow filter movement"
+    },
+    "Detonation Tail": {
+      "group": "FX",
+      "why": "Cinematic impact hit with sub drop and reverberant tail"
+    },
+    "Diffusor Cloud Pad": {
+      "group": "Pad Evolving",
+      "why": "Detuned saw pad smeared by Diffusor filter into slow drift"
+    },
+    "Digital Glass Tap": {
+      "group": "Pluck",
+      "why": "Modern UI glassy transient percussive tap tone"
+    },
+    "Diode Bite Lead": {
+      "group": "Lead Synth",
+      "why": "Sharp biting diode ladder filtered aggressive lead"
+    },
+    "Diode Saturated Bass": {
+      "group": "Bass Acid",
+      "why": "Warm saturated diode ladder filter resonant bass"
+    },
+    "Dirty Distortion Bass": {
+      "group": "Bass Acid",
+      "why": "Overdriven industrial bass using dirty filter model"
+    },
+    "Dirty Peak Lead": {
+      "group": "Lead Synth",
+      "why": "Distorted resonant peak filter industrial synth lead"
+    },
+    "Drawbar Organ Keys": {
+      "group": "Keys",
+      "why": "Drawbar organ emulation using wavetable oscillator"
+    },
+    "Dream Grand Piano": {
+      "group": "Keys",
+      "why": "Acoustic grand piano style dynamic keyboard"
+    },
+    "Dual Octave Hero": {
+      "group": "Lead Synth",
+      "why": "Heroic stacked octave dual sawtooth anthem lead"
+    },
+    "Dusty Rhodes Keys": {
+      "group": "Keys",
+      "why": "Dusty keys emulation with sampled Rhodes"
+    },
+    "Dyno Electric Piano": {
+      "group": "Keys",
+      "why": "Bright modified 80s dyno tine electric piano"
+    },
+    "EMS Squelch Bass": {
+      "group": "Bass Acid",
+      "why": "Resonant EMS ladder bass with short snappy filter envelope"
+    },
+    "Electric Mute Pluck": {
+      "group": "Pluck",
+      "why": "Palm-muted electric guitar style synth pluck"
+    },
+    "Ethereal Glass": {
+      "group": "Pad Evolving",
+      "why": "Airy crystalline glass texture with slowly shifting overtones"
+    },
+    "FM Digital Lead": {
+      "group": "Lead Sync+FM",
+      "why": "Crisp digital FM synthesis lead with sharp modulation"
+    },
+    "FM Soft Organ": {
+      "group": "Keys",
+      "why": "Smooth gospel tonewheel organ using FM synthesis"
+    },
+    "Fast Arp Bass": {
+      "group": "Sequence",
+      "why": "Fast sequenced trance arpeggio bassline"
+    },
+    "Fat Reese": {
+      "group": "Bass Reese",
+      "why": "5-voice detuned sawtooth Reese bass for drum and bass"
+    },
+    "Formant Pop Pluck": {
+      "group": "Pluck",
+      "why": "Short staccato vocal formant pop pluck"
+    },
+    "Formant Vowel Bass": {
+      "group": "Bass Synth",
+      "why": "Formant filter sweeping vocal vowel bassline"
+    },
+    "Frozen Aurora": {
+      "group": "Pad Evolving",
+      "why": "Cold crystalline northern lights atmospheric soundscape"
+    },
+    "Frozen Pluck Drone": {
+      "group": "Pad Evolving",
+      "why": "Frozen granular pluck drone"
+    },
+    "Game Over Zap": {
+      "group": "FX",
+      "why": "Retro 8-bit arcade explosion zap one-shot"
+    },
+    "Gentle Flute Pad": {
+      "group": "Pad Warm",
+      "why": "Soft breathy woodwind flute ensemble pad"
+    },
+    "Glass Organ Tones": {
+      "group": "Keys",
+      "why": "Crystalline cathedral glass church organ"
+    },
+    "Glass Ping Pluck": {
+      "group": "Pluck",
+      "why": "Glassy plucked sound using sampled glass"
+    },
+    "Glass Zone Bells": {
+      "group": "Bells+Mallets",
+      "why": "Struck glass bell multisample with Hirajoshi scale"
+    },
+    "Golden Dawn Pad": {
+      "group": "Pad Warm",
+      "why": "Peaceful warm morning dawn analog pad"
+    },
+    "Gong Grain Swarm": {
+      "group": "FX",
+      "why": "Inharmonic metallic grain swarm effect"
+    },
+    "Gritty Square Bass": {
+      "group": "Bass Synth",
+      "why": "Raw edgy lo-fi square wave synth bass"
+    },
+    "Harmonic Cloud": {
+      "group": "Pad Evolving",
+      "why": "Dense evolving harmonic cluster pad with subtle modulation"
+    },
+    "Harmonic Shimmer Lead": {
+      "group": "Lead Synth",
+      "why": "Upper harmonic rich shimmering solo synth lead"
+    },
+    "Harmonic Sine Bass": {
+      "group": "Bass Sub+808",
+      "why": "Smooth sine sub bass with subtle upper harmonics"
+    },
+    "Harmonic Tine Pluck": {
+      "group": "Pluck",
+      "why": "Rich harmonic struck tine transient pluck"
+    },
+    "Harp Drops": {
+      "group": "Pluck",
+      "why": "Fluid crystalline concert harp plucked string drops"
+    },
+    "Harpsichord Bar": {
+      "group": "Strings+Brass",
+      "why": "Crisp baroque plucked harpsichord strings"
+    },
+    "Hyper Dimension Pad": {
+      "group": "Pad Warm",
+      "why": "Sine-to-saw pad expanded with Hyper/Dimension width"
+    },
+    "Hyper Saw Lead": {
+      "group": "Lead Synth",
+      "why": "7-voice detuned supersaw stadium anthem lead"
+    },
+    "Infinite Horizon": {
+      "group": "Pad Evolving",
+      "why": "Massive cinematic landscape pad with endless evolving decay"
+    },
+    "Just Intonation Keys": {
+      "group": "Keys",
+      "why": "Pure harmonic-series keyboard tuned in just intonation"
+    },
+    "Kalimba Tines": {
+      "group": "Bells+Mallets",
+      "why": "African wooden thumb piano struck metal tines"
+    },
+    "Karplus Harp": {
+      "group": "Pluck",
+      "why": "Karplus-Strong physical string model excited by noise burst"
+    },
+    "Ladder FM Bass": {
+      "group": "Bass Synth",
+      "why": "FM bass with ladder filter"
+    },
+    "Laser Beam Lead": {
+      "group": "Lead Sync+FM",
+      "why": "Futuristic cutting sync and warp modulation laser lead"
+    },
+    "Lo-Fi Rhodes": {
+      "group": "Keys",
+      "why": "Mellow chillhop Rhodes electric piano with warm tape saturation"
+    },
+    "Lorenz Garden": {
+      "group": "Pad Evolving",
+      "why": "Generative bell pad with chaotic Lorenz and Rossler LFO drift"
+    },
+    "Lush Analog Pad": {
+      "group": "Pad Warm",
+      "why": "Warm enveloping classic analog string/synth pad"
+    },
+    "Marimba Layer Keys": {
+      "group": "Bells+Mallets",
+      "why": "Multisampled marimba layers"
+    },
+    "Marimba Synth": {
+      "group": "Bells+Mallets",
+      "why": "Warm struck wooden marimba bar resonance"
+    },
+    "Metal Gong Strike": {
+      "group": "FX",
+      "why": "Physical resonant metallic gong strike percussion"
+    },
+    "Metallic Edge Lead": {
+      "group": "Lead Synth",
+      "why": "Aggressive electro lead with metallic overtone edge"
+    },
+    "Mid Side Halo": {
+      "group": "Pad Warm",
+      "why": "3-oscillator warm pad with mid/side processing and wide halo"
+    },
+    "Moog Ladder Bass": {
+      "group": "Bass Synth",
+      "why": "Vintage analog ladder filter round bass"
+    },
+    "MPE Pressure Lead": {
+      "group": "Lead Synth",
+      "why": "Expressive MPE solo lead with per-note pressure filter modulation"
+    },
+    "Muted Honky Tonk": {
+      "group": "Keys",
+      "why": "Saloon-style upright piano with detuned unison tines"
+    },
+    "Noise Riser": {
+      "group": "FX",
+      "why": "Filtered white noise transitional build-up riser"
+    },
+    "Nylon Zone Pluck": {
+      "group": "Pluck",
+      "why": "Nylon plucked multisample"
+    },
+    "Odd Harmonics Bass": {
+      "group": "Bass Synth",
+      "why": "Hollow funk bass driven by odd harmonic series"
+    },
+    "Odd Harmonics Pad": {
+      "group": "Pad Warm",
+      "why": "Warm hollow wooden pipe organ pad with odd harmonics"
+    },
+    "Parallel Dusk Pad": {
+      "group": "Pad Evolving",
+      "why": "Dual parallel stereo filters with opposing LFO cutoff motion"
+    },
+    "Pentatonic Step Pluck": {
+      "group": "Sequence",
+      "why": "Self-playing 16-step pentatonic arpeggio sequence with synced LFO"
+    },
+    "Phaser Sweep Lead": {
+      "group": "Lead Synth",
+      "why": "Spacey multi-stage phaser swept solo synth lead"
+    },
+    "Pitch Drop 808": {
+      "group": "Bass Sub+808",
+      "why": "Sub 808 with rapid envelope pitch drop and pulse knock"
+    },
+    "Pizzicato Strings": {
+      "group": "Strings+Brass",
+      "why": "Orchestral string section short plucked pizzicato"
+    },
+    "Plucked Lead Tone": {
+      "group": "Lead Synth",
+      "why": "Hybrid fast pluck transient with sustained body"
+    },
+    "Pulse Width Bass": {
+      "group": "Bass Synth",
+      "why": "PWM modulated pulse wave electro bass"
+    },
+    "Pulse Width Mod Lead": {
+      "group": "Lead Synth",
+      "why": "Classic 80s chorus-widened pulse-width modulated lead"
+    },
+    "Punchy Pluck Bass": {
+      "group": "Bass Synth",
+      "why": "Tight transient bass with short percussive decay"
+    },
+    "Radiant Pulse Pad": {
+      "group": "Sequence",
+      "why": "Pulsing rhythmic pad with tempo-synced chord pulse"
+    },
+    "Reese Dual Phase Bass": {
+      "group": "Bass Reese",
+      "why": "Dual-phase reese bass using wavetables"
+    },
+    "Reverse Gong Swell": {
+      "group": "FX",
+      "why": "Reversed gong swell effect"
+    },
+    "Ring Mod Gamelan": {
+      "group": "Bells+Mallets",
+      "why": "Inharmonic metallic gamelan bar strike with ring modulation"
+    },
+    "Rising Grain Riser": {
+      "group": "FX",
+      "why": "Rising granular riser effect"
+    },
+    "Rotary Rock Organ": {
+      "group": "Keys",
+      "why": "Gritty rock organ through rotary Leslie speaker chorus"
+    },
+    "Rubber Bass Pluck": {
+      "group": "Pluck",
+      "why": "Bouncy rubberized synth pluck with elastic filter response"
+    },
+    "Sci-Fi Laser Sweep": {
+      "group": "FX",
+      "why": "Downward pitch-modulated sci-fi laser burst"
+    },
+    "Scream Filter Bass": {
+      "group": "Bass Reese",
+      "why": "3-voice detuned saw bass driven through scream filter"
+    },
+    "Screaming Sync Lead": {
+      "group": "Lead Sync+FM",
+      "why": "Aggressive pitched oscillator hard-sync rock lead"
+    },
+    "Shepard Ascent": {
+      "group": "Texture",
+      "why": "Endless ascending Shepard tone drone with Lorenz LFO modulation"
+    },
+    "Slow Motion Waves": {
+      "group": "Pad Evolving",
+      "why": "Slow morphing wavetable sweep across spectral frames"
+    },
+    "Solid Sub": {
+      "group": "Bass Sub+808",
+      "why": "Deep pure sine sub bass foundation"
+    },
+    "Solo Square Lead": {
+      "group": "Lead Synth",
+      "why": "Expressive monophonic retro square wave solo lead"
+    },
+    "Sonar Ping": {
+      "group": "FX",
+      "why": "Deep ocean submarine acoustic sonar ping"
+    },
+    "Space Odyssey Pad": {
+      "group": "Pad Evolving",
+      "why": "Expansive sci-fi atmospheric pad with cosmic movement"
+    },
+    "Space Wind Storm": {
+      "group": "Texture",
+      "why": "Howling ambient cosmic wind noise soundscape"
+    },
+    "Space Wobble Bass": {
+      "group": "Bass Reese",
+      "why": "Dub-style wobble bass with LFO-modulated lowpass cutoff"
+    },
+    "Spectral Bowed Glass": {
+      "group": "Lead Synth",
+      "why": "Spectral bowed glass lead"
+    },
+    "Spectral Chord Morph": {
+      "group": "FX",
+      "why": "Spectral chord morphing effect"
+    },
+    "Spectral Gong Pad": {
+      "group": "Pad Evolving",
+      "why": "Spectral gong pad"
+    },
+    "Spectral Vowel Freeze": {
+      "group": "Pad Evolving",
+      "why": "Spectral vowel freezing pad"
+    },
+    "Spruce Guitar": {
+      "group": "Pluck",
+      "why": "Clean acoustic guitar pluck with warm spruce resonance"
+    },
+    "Staccato Bleep Lead": {
+      "group": "Lead Synth",
+      "why": "Retro arcade-inspired punchy staccato bleep melody lead"
+    },
+    "Starlight Shimmer": {
+      "group": "Pad Warm",
+      "why": "Bright crystalline shimmering high-register synth pad"
+    },
+    "Stretched Glass Choir": {
+      "group": "Pad Evolving",
+      "why": "Spectral-stretched partials drifting across random LFOs"
+    },
+    "Stutter Grain Kit": {
+      "group": "Pluck",
+      "why": "Stutter grain drum kit"
+    },
+    "Sub Drop Boom": {
+      "group": "FX",
+      "why": "Subwoofer-testing downward pitch drop boom impact"
+    },
+    "Sub Duo Octave": {
+      "group": "Bass Sub+808",
+      "why": "Dual octave stacked pure sine sub bass"
+    },
+    "Subterranean Duo": {
+      "group": "Bass Sub+808",
+      "why": "Pure sine sub paired with folded saw growl layer"
+    },
+    "Subtle Tape Drift": {
+      "group": "Pad Warm",
+      "why": "Vintage warm pad with subtle tape flutter and pitch drift"
+    },
+    "Sync Cry Lead": {
+      "group": "Lead Sync+FM",
+      "why": "Expressive singing hard-sync saw lead with envelope sweep"
+    },
+    "Sync Growl Bass": {
+      "group": "Bass Acid",
+      "why": "Hard-sync modulated aggressive growl bass"
+    },
+    "Tempo Gate Chords": {
+      "group": "Sequence",
+      "why": "Chords rhythmic chopped by a 16-step tempo-synced gate LFO"
+    },
+    "Throat Singer Drone": {
+      "group": "Pad Evolving",
+      "why": "Throat singer drone"
+    },
+    "Tine Glass Keys": {
+      "group": "Keys",
+      "why": "Electric piano combining FM sine body with glassy bell tine ping"
+    },
+    "Trance Short Pluck": {
+      "group": "Sequence",
+      "why": "Punchy sequenced trance groove pluck with tight decay"
+    },
+    "Tri Soft Solo": {
+      "group": "Lead Synth",
+      "why": "Flute-like soft triangle wave solo lead"
+    },
+    "Tri-Band Split Texture": {
+      "group": "Texture",
+      "why": "Multiband three-way split texture with distortion, utility, and chorus"
+    },
+    "Triple Fifth Lead": {
+      "group": "Lead Synth",
+      "why": "Stacked 3-oscillator power-chord lead with fifth and octave layers"
+    },
+    "Triple Fold Reese": {
+      "group": "Bass Reese",
+      "why": "3-oscillator detuned saw reese with sine-fold wavefolding"
+    },
+    "Twin Warp Lead": {
+      "group": "Lead Sync+FM",
+      "why": "Dual sync and bend warp stages in series with LFO sweep"
+    },
+    "Utility Width Keys": {
+      "group": "Keys",
+      "why": "Chorused triangle and square keys with mono low-end utility"
+    },
+    "Velvet Strings": {
+      "group": "Strings+Brass",
+      "why": "Silky smooth orchestral synth string section"
+    },
+    "Vibraphone Bars": {
+      "group": "Bells+Mallets",
+      "why": "Warm jazz vibraphone struck metal bars with tremolo"
+    },
+    "Vintage Brass Pad": {
+      "group": "Strings+Brass",
+      "why": "Classic 80s warm synth brass ensemble pad"
+    },
+    "Vintage Electric Tine": {
+      "group": "Keys",
+      "why": "Classic warm Rhodes electric piano with soft tines"
+    },
+    "Vinyl Dust Crackle": {
+      "group": "Texture",
+      "why": "Continuous vintage vinyl record dust and crackle generator"
+    },
+    "Vocaloid Lead": {
+      "group": "Lead Synth",
+      "why": "Singing formant vocal tract lead synthesizer"
+    },
+    "Vowel Choir Pad": {
+      "group": "Pad Warm",
+      "why": "Synthetic choral pad with warm formant vowel blending"
+    },
+    "Vowel Scrub Choir": {
+      "group": "Lead Synth",
+      "why": "Formant-scrubbing choir lead"
+    },
+    "Vowel Table Lead": {
+      "group": "Lead Synth",
+      "why": "Vocal vowel lead using wavetables"
+    },
+    "Vowel Whistle Lead": {
+      "group": "Lead Synth",
+      "why": "Mono legato vocal formant morph lead with expressive vibrato"
+    },
+    "Wah Pressure Clav": {
+      "group": "Keys",
+      "why": "Expressive funk clavinet with pad pressure sweeping wah filter"
+    },
+    "Warm Analog Bass": {
+      "group": "Bass Synth",
+      "why": "Classic deep house warm analog lowpass bass"
+    },
+    "Warm Toy Piano": {
+      "group": "Bells+Mallets",
+      "why": "Lo-fi indie toy piano with struck bell-like tines"
+    },
+    "Warm Vintage Lead": {
+      "group": "Lead Synth",
+      "why": "Smooth vintage analog lowpass filtered solo lead"
+    }
+  }
+}

@@ -14,6 +14,11 @@ struct ContentPackFile
     std::string path;
     std::string sha256;
     size_t size = 0;
+    /** Optional, for the wavetable browser (docs/MPC.md "Wavetable browser"): the category the file is listed under and the name it is shown with. Empty: the browser takes the first folder of
+        `path` as the category ("Analog/saw_stack.wav" -> "Analog"; a file in the root of the pack: the pack's `name`) and the file name without its extension as the title. A manifest without
+        these keys reads as before; a longer text than 63 bytes is cut. */
+    std::string category;
+    std::string title;
 };
 
 struct ContentPackInfo

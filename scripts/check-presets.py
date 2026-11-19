@@ -216,7 +216,7 @@ class PresetChecker:
                     self.add_error("interval_grid", path_str, k, f"Stepped parameter {k!r} value {val} is not an integer")
 
         # Modulation slot checks (Rules 6, 7, 8, 9, 10, 12, 13)
-        seen_routes: Dict[Tuple[int, int], int] = {}
+        seen_routes: Dict[Tuple[int, int, int, int], int] = {}
         macro_targets: Dict[int, List[str]] = defaultdict(list)
 
         for slot in range(1, 65):
@@ -225,11 +225,13 @@ class PresetChecker:
             a_k = f"mod{slot:02d}.amount"
             b_k = f"mod{slot:02d}.bypass"
             aux_k = f"mod{slot:02d}.aux_source"
+            bip_k = f"mod{slot:02d}.bipolar"
 
             src_val = params.get(s_k, 0)
             dst_val = params.get(d_k, 0)
             amt_val = params.get(a_k, 0)
             byp_val = params.get(b_k, 0)
+            bip_val = params.get(bip_k, 0)
 
             try:
                 src = int(round(float(src_val)))
@@ -247,11 +249,16 @@ class PresetChecker:
                 byp = int(round(float(byp_val)))
             except (ValueError, TypeError):
                 byp = 0
+            try:
+                bip = int(round(float(bip_val)))
+            except (ValueError, TypeError):
+                bip = 0
 
             # Rule 6: source index outside lists
             if src < 0 or (src != 0 and src not in self.mod_sources):
                 self.add_error("mod_source_invalid", path_str, s_k, f"Slot {slot:02d}: source index {src} is outside modSources list")
 
+            aux_src = 0
             if aux_k in params:
                 try:
                     aux_src = int(round(float(params[aux_k])))
@@ -275,8 +282,8 @@ class PresetChecker:
                 if byp == 0 and abs(amt) < 1e-6:
                     self.add_error("mod_slot_amount_zero", path_str, a_k, f"Slot {slot:02d}: switched on (bypass=0) with amount 0")
 
-                # Rule 10: two slots with the same source and destination
-                route_key = (src, dst)
+                # Rule 10: two slots with the same source, aux source, destination and polarity
+                route_key = (src, aux_src, dst, bip)
                 if route_key in seen_routes:
                     prev_slot = seen_routes[route_key]
                     self.add_error("mod_slot_duplicate", path_str, s_k, f"Slot {slot:02d} duplicates route of slot {prev_slot:02d} (source {src}, destination {dst})")
@@ -286,8 +293,14 @@ class PresetChecker:
                 # Macro target tracking & nonexistent parameter check (Rule 12)
                 dest_entry = self.mod_destinations.get(dst)
                 dest_param_key = dest_entry.get("key") if dest_entry else None
+                macro_sources_in_slot = []
                 if src in self.macro_sources:
-                    macro_entry = self.macro_sources[src]
+                    macro_sources_in_slot.append((src, s_k, "main"))
+                if aux_src in self.macro_sources and aux_src != src:
+                    macro_sources_in_slot.append((aux_src, aux_k, "aux"))
+
+                for m_choice, field_key, role in macro_sources_in_slot:
+                    macro_entry = self.macro_sources[m_choice]
                     macro_key = macro_entry.get("key", "")
                     m_num_match = re.search(r"\d+", macro_key)
                     macro_num = int(m_num_match.group(0)) if m_num_match else 0

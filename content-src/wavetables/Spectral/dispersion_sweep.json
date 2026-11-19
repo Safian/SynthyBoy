@@ -1,0 +1,20 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Dispersion Sweep",
+ "category": "Spectral",
+ "description": "A flat 1/n spectrum whose partial phases rotate with n squared: the magnitudes never change, the waveform sweeps from a saw through chirps to noise-like ripples (a phase-only scan).",
+ "frames": 64,
+ "seed": "dispersion_sweep",
+ "source": {
+  "type": "additive",
+  "params": {
+   "count": 80,
+   "rolloff": 1.0,
+   "phase_quad": {
+    "law": "linear",
+    "from": 0,
+    "to": 0.012
+   }
+  }
+ }
+}

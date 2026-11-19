@@ -1,0 +1,14 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Choir Singers Shift",
+ "category": "Vocal",
+ "description": "The vowels A, O, U through a male, a female and a child's vocal tract and back: a choir whose singers change (48 frames).",
+ "frames": 48,
+ "seed": "choir_singers_shift",
+ "source": {
+  "type": "legacy",
+  "params": {
+   "fn": "choir_singers_shift"
+  }
+ }
+}

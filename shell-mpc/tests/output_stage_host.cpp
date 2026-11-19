@@ -6,6 +6,8 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <string>
+#include <utility>
 #include <vector>
 
 using synthyboy_mpc::BasicOutputStage;
@@ -344,6 +346,79 @@ int main()
                 exact = exact && (l1[i] == l2[i]) && (r1[i] == r2[i]);
             check (exact, "limiter ON: varying block sizes (1, 2, 7, 32...) give bit-identical output");
         }
+    }
+    // =========================================================================
+    // PART 3: the limiter as a plugin setting (SwitchableOutputStage, the chunk member, the environment override)
+    // =========================================================================
+    using synthyboy_mpc::SwitchableOutputStage;
+    check (SwitchableOutputStage().limiter() == synthyboy_mpc::kOutputLimiterDefaultOn, "setting: a new stage has the default of kOutputLimiterDefaultOn");
+    static_assert (noexcept (std::declval<SwitchableOutputStage&>().process ((float*) nullptr, (float*) nullptr, 0)), "process must be noexcept (switchable)");
+    for (double sr : { 44100.0, 48000.0 })
+    {
+        const int sec = (int) sr;
+        // a full chord (six partials, about 1.5 peak) at the 18 dB make-up gain of the MPC shell
+        auto chord = [&] (int n) {
+            std::vector<float> v ((size_t) n, 0.0f);
+            for (float hz : { 110.0f, 165.0f, 220.0f, 277.2f, 330.0f, 440.0f })
+                for (int i = 0; i < n; ++i) v[(size_t) i] += 0.25f * std::sin (2.0f * kPi * hz * (float) i / (float) sr);
+            return v;
+        };
+        {
+            SwitchableOutputStage s; s.prepare (sr); s.setGainDb (18.0f); s.setLimiter (false);
+            auto in = chord (sec); auto l = in, r = in; run (s, l, r);
+            check (peakOf (l, sec / 4) > 2.0f, "switchable, limiter off: the full chord peaks far over full scale (what the setting is for)");
+            check (s.gainReductionDb() == 0.0f, "switchable, limiter off: no reduction reported");
+        }
+        {
+            SwitchableOutputStage s; s.prepare (sr); s.setGainDb (18.0f); s.setLimiter (true);
+            auto in = chord (sec); auto l = in, r = in; run (s, l, r);
+            check (peakOf (l, 0) <= OutputStage::kCeiling + 1e-6f && peakOf (r, 0) <= OutputStage::kCeiling + 1e-6f, "switchable, limiter on: the full chord never passes the -1 dBFS ceiling (from the first sample)");
+            check (peakOf (l, sec / 2) > 0.5f, "switchable, limiter on: a sustained chord keeps its level (no pumping down to silence)");
+            check (s.gainReductionDb() > 6.0f, "switchable, limiter on: the reduction is reported");
+        }
+        {
+            // below the threshold the limiter passes the samples bit-identical (gain 0 dB)
+            SwitchableOutputStage s; s.prepare (sr); s.setGainDb (0.0f); s.setLimiter (true);
+            auto in = sine (sec / 2, 0.3f, 330.0f, sr); auto l = in, r = in; run (s, l, r);
+            bool same = true; for (size_t i = 0; i < in.size(); ++i) same = same && l[i] == in[i] && r[i] == in[i];
+            check (same, "switchable, limiter on: peaks under the ceiling pass bit-identical at 0 dB");
+        }
+        {
+            // switched while running: off for a second, then on: from the switch the ceiling holds
+            SwitchableOutputStage s; s.prepare (sr); s.setGainDb (18.0f); s.setLimiter (false);
+            auto in = chord (2 * sec); std::vector<float> l (in.begin(), in.begin() + sec), r = l;
+            run (s, l, r);
+            s.setLimiter (true);
+            std::vector<float> l2 (in.begin() + sec, in.end()), r2 = l2;
+            run (s, l2, r2);
+            check (peakOf (l, sec / 4) > 2.0f && peakOf (l2, 0) <= OutputStage::kCeiling + 1e-6f, "switchable: switching the limiter on while running holds the ceiling from the next block");
+        }
+    }
+    {   // the chunk member: round trip, position before the pad pressure members, an older chunk, a damaged member
+        const std::string base = "{\"mpcProgram\":3,\"mpcProgramName\":\"A\",\"version\":4,\"params\":{\"a\":1}}";
+        for (bool v : { true, false })
+        {
+            std::string c = synthyboy_mpc::chunkWithOutputLimiter (base, v);
+            bool got = ! v;
+            check (synthyboy_mpc::outputLimiterFromChunk (c.data(), c.size(), got) && got == v, "chunk: the limiter setting survives a round trip");
+            const std::string withPad = c.substr (0, c.size() - 1) + ",\"mpcPadPressure\":1,\"mpcPadPressureAmount\":35.00}";
+            bool got2 = ! v;
+            check (synthyboy_mpc::outputLimiterFromChunk (withPad.data(), withPad.size(), got2) && got2 == v, "chunk: the member is found before the pad pressure members");
+        }
+        bool keep = true;
+        check (! synthyboy_mpc::outputLimiterFromChunk (base.data(), base.size(), keep) && keep, "chunk: an older chunk without the member leaves the setting as it is");
+        const std::string bad = "{\"mpcProgram\":3,\"params\":{\"a\":1},\"mpcOutputLimiter\":7}";
+        keep = true;
+        check (! synthyboy_mpc::outputLimiterFromChunk (bad.data(), bad.size(), keep) && keep, "chunk: a damaged member is ignored");
+        check (! synthyboy_mpc::outputLimiterFromChunk (nullptr, 0, keep), "chunk: no data");
+    }
+    {   // the environment forces the state for tests
+        ::setenv ("SYNTHYBOY_MPC_OUTPUT_LIMITER", "0", 1);
+        check (synthyboy_mpc::outputLimiterForced() == 0, "environment: SYNTHYBOY_MPC_OUTPUT_LIMITER=0 forces the limiter off");
+        ::setenv ("SYNTHYBOY_MPC_OUTPUT_LIMITER", "1", 1);
+        check (synthyboy_mpc::outputLimiterForced() == 1, "environment: SYNTHYBOY_MPC_OUTPUT_LIMITER=1 forces the limiter on");
+        ::unsetenv ("SYNTHYBOY_MPC_OUTPUT_LIMITER");
+        check (synthyboy_mpc::outputLimiterForced() == (SYNTHYBOY_MPC_OUTPUT_LIMITER != 0 ? 1 : -1), "environment: unset leaves it to the setting (a build with the limiter ON forces it on)");
     }
     std::printf ("%s  (%d failures)\n", failures == 0 ? "OK" : "FAILED", failures);
     return failures == 0 ? 0 : 1;

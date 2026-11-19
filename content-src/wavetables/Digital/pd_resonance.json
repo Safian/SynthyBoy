@@ -1,0 +1,22 @@
+{
+ "schema": "synthyboy-wavetable-recipe/1",
+ "title": "Phase Distortion Resonance",
+ "category": "Digital",
+ "description": "A sine with a falling window whose frequency is swept 1 to 16 cycles per period: the resonant filter sweep of phase distortion synthesis.",
+ "frames": 64,
+ "seed": "pd_resonance",
+ "source": {
+  "type": "pd",
+  "params": {
+   "mode": "resonance",
+   "amount": {
+    "law": "linear",
+    "from": 1,
+    "to": 16
+   }
+  }
+ },
+ "post": {
+  "limit": 300
+ }
+}

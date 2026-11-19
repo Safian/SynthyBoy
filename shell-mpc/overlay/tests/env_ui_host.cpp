@@ -118,13 +118,13 @@ void testEveryControlHasAParameter()
             int unbound = 0;
             for (const EnvUi::Item& it : r.ui.items())
             {
-                if (it.type == EnvUi::T::Inert || it.type == EnvUi::T::Graph || it.type == EnvUi::T::Select)
+                if (it.type == EnvUi::T::Inert || it.type == EnvUi::T::Graph || it.type == EnvUi::T::Select || it.type == EnvUi::T::Pick)   // Pick: the selector of the compact view (the Play Env selector, no parameter of its own)
                     continue;
                 if (it.active (r.ui.beats()) < 0)
                     ++unbound;
             }
             check (unbound == 0 && r.ui.selection() == env && r.ui.beats() == (units > 0.5f),
-                   "envelope " + std::to_string (env) + (units > 0.5f ? " in beats" : " in ms") + ": every control has a parameter, the selection follows Play Env");
+                   "envelope " + std::to_string (env) + (units > 0.5f ? " in beats" : " in ms") + ": every control has a parameter, the selection follows Play Env (unbound " + std::to_string (unbound) + ", selection " + std::to_string (r.ui.selection()) + ", beats " + std::to_string (r.ui.beats()) + ")");
         }
 }
 
@@ -132,17 +132,37 @@ void testSelectorWritesPlayEnv()
 {
     Rig r;
     const ui::Rect c = r.ui.compact().instances.rect();
-    r.tap (c.x + c.w * 4 / 6 + 4, c.y + c.h / 2);
-    check (r.inst.env == 5, "tap on the fifth cell of the selector: Play Env = 5");
+    check (c.h >= 56 && std::string (r.ui.compact().instances.state.text) == "ENV 1" && r.ui.compact().instances.listable, "the selector shows ENV 1 and has a list");
+    r.tap (c.x + c.w * 7 / 8, c.y + c.h / 2);   // the right arrow: the next envelope
+    check (r.inst.env == 2, "tap on the right arrow of the selector: Play Env = 2");
+    r.refresh();
+    r.tap (c.x + c.w / 2, c.y + c.h / 2);   // the name: the list of the six envelopes
+    {
+        const ui::ListPopup& l = r.ui.list();
+        bool names = l.state.count == 6 && l.state.current == 1;
+        for (int i = 0; i < 6 && names; ++i)
+            names = std::string (l.state.items[i]) == "ENV " + std::to_string (i + 1) && l.rowRect (i).h >= 56;
+        check (r.stack.isMain() && names, "a tap on the name opens the list ENV 1 .. 6 (rows >= 56 px), no page of the stack opened");
+    }
+    {
+        const ui::Rect row = r.ui.list().rowRect (4);
+        r.tap (row.x + row.w / 2, row.y + row.h / 2);
+    }
+    check (r.inst.env == 5, "tap on the fifth row of the list: Play Env = 5");
+    r.refresh();
     check (r.ui.selection() == 5, "the UI follows the selector");
-    check (r.inst.q[0] == envIdx (5, "attack") && r.inst.q[1] == envIdx (5, "decay") && r.inst.q[2] == envIdx (5, "sustain") && r.inst.q[3] == envIdx (5, "release"),
+    int ct[4];
+    r.ui.compactTargets (ct);   // the Play view publishes the main state's groups (PlayView::publishQ): the envelope's compact group is what it asks for
+    check (ct[0] == envIdx (5, "attack") && ct[1] == envIdx (5, "decay") && ct[2] == envIdx (5, "sustain") && ct[3] == envIdx (5, "release"),
            "the ADSR group follows the envelope: attack, decay, sustain, release of env5");
 }
 
 void testCompactQGroupOnlyOnTheEnvSubTab()
 {
     Rig r;
-    check (r.inst.q[0] == envIdx (1, "attack") && r.inst.q[3] == envIdx (1, "release"), "sub tab Env: the ADSR group of env1 is the group");
+    int ct[4];
+    r.ui.compactTargets (ct);
+    check (ct[0] == envIdx (1, "attack") && ct[3] == envIdx (1, "release"), "sub tab Env: the ADSR group of env1 is the group");
     Rig o;
     o.inst.qCalls = 0;
     o.refresh (1);
@@ -150,7 +170,8 @@ void testCompactQGroupOnlyOnTheEnvSubTab()
     Rig m;
     m.inst.set ("env1.units", 1.0f);
     m.refresh();
-    check (m.inst.q[0] == envIdx (1, "attack_beats") && m.inst.q[1] == envIdx (1, "decay_beats") && m.inst.q[2] == envIdx (1, "sustain") && m.inst.q[3] == envIdx (1, "release_beats"),
+    m.ui.compactTargets (ct);
+    check (ct[0] == envIdx (1, "attack_beats") && ct[1] == envIdx (1, "decay_beats") && ct[2] == envIdx (1, "sustain") && ct[3] == envIdx (1, "release_beats"),
            "in beats the group is attack_beats, decay_beats, sustain, release_beats");
 }
 
@@ -375,9 +396,9 @@ void testModulatedKnobsShowTheirSource()
     check (r.ui.numTargets() == 1, "the envelope counts its targets: 1");
     check (r.ui.full().numTargetLines == 1 && r.ui.full().tagsRect().w >= 200 && r.ui.full().graph.rect().w > 1200, "the full screen lists its target as a tag in the top bar (room " + std::to_string (r.ui.full().tagsRect().w) + " px) and the graph keeps the whole width");
     check (r.ui.compact().instances.hasTargets (0) && ! r.ui.compact().instances.hasTargets (1),
-           "compact env tabs: ENV 1 has target dot (hasTargets=true), ENV 2 has no mark (hasTargets=false)");
+           "compact env selector: ENV 1 has target dot (hasTargets=true), ENV 2 has no mark (hasTargets=false)");
     check (r.ui.full().instances.hasTargets (0) && ! r.ui.full().instances.hasTargets (1),
-           "full screen env tabs: ENV 1 has target dot, ENV 2 has no mark");
+           "full screen env cells: ENV 1 has target dot, ENV 2 has no mark");
     // add target for ENV 4 as well
     r.inst.set ("mod02.source", 4.0f);
     r.inst.set ("mod02.destination", static_cast<float> (synthyboy::modDestinationChoiceOf (static_cast<size_t> (envIdx (1, "attack")))));
@@ -532,7 +553,7 @@ void testPlayViewRoutesTheElements()
     in.nowMs = 500.0;
     pv.update (in);
     check (pv.valid(), "the Play view has data");
-    check (inst.qGroup[0] == inst.index ("env3.attack") && inst.qGroup[3] == inst.index ("env3.release"), "sub-tab Env: the Q group is the ADSR of the selected envelope (env3)");
+    check (inst.qGroup[0] == inst.index ("env3.attack") && inst.qGroup[3] == inst.index ("env3.release"), "the envelope third is the active one: its Q group (the ADSR of env3) is on Q 1 .. 4");
     auto touch = [&] (TouchEvent::Kind k, int x, int y) { TouchEvent e; e.kind = k; e.x = x; e.y = y; in.nowMs += 60.0; return pv.onTouch (e, st, inst, in.nowMs); };
     auto tap = [&] (int x, int y) { const bool a = touch (TouchEvent::Down, x, y); touch (TouchEvent::Up, x, y); in.nowMs += 200.0; pv.update (in); return a; };
     // the full screen button of the envelope's compact view (the corner of its graph)
@@ -570,6 +591,48 @@ void testPlayViewRoutesTheElements()
     in.nowMs += 100.0;
     pv.update (in);
     check (! inst.uiFullOpen.load(), "closed from outside: the host widgets come back");
+}
+
+// ---- ONE Play page: the groups of the three thirds on Q 1 .. 12 in reading order; the third that is touched becomes the active one (4 knob device: it moves to Q 1 .. 4, the others follow in reading order, wrapping);
+// the 16 knob device: the slots stay where they are, whatever is touched
+void testPlayPageQSlots()
+{
+    for (const bool wide : { false, true })
+    {
+        ui::QGroup::setWideDevice (wide);
+        ovt::FakeInstance inst;
+        inst.playSel[0] = 2; inst.playSel[1] = 3; inst.playSel[2] = 1;   // 2 = Osc A (osc1), Env 3, LFO 1
+        synthyboy::LiveValues lv;
+        PlayView pv (1, 10.0);
+        UiStack st;
+        ViewInput in;
+        in.instance = &inst; in.io = &inst; in.ui = &st; in.live = &lv; in.nowMs = 0.0;
+        pv.update (in);
+        in.nowMs = 500.0;
+        pv.update (in);
+        const std::string dev = wide ? "16 knob device: " : "4 knob device: ";
+        check (std::string (pv.name()) == "play1", dev + "the one Play view is named play1");
+        check (inst.qGroup[0] == inst.index ("osc1.type") && inst.qGroup[2] == inst.index ("osc1.pan") && inst.qGroup[3] == inst.index ("osc1.level") && inst.qGroup[4] == inst.index ("env3.attack") && inst.qGroup[7] == inst.index ("env3.release")
+                   && inst.qGroup[8] == inst.index ("lfo1.shape") && inst.qGroup[12] == -1 && inst.qGroup[15] == -1,
+               dev + "the oscillator's group on Q 1 .. 4, the envelope's on 5 .. 8, the LFO's on 9 .. 12, nothing on 13 .. 16");
+        auto touch = [&] (TouchEvent::Kind k, int x, int y) { TouchEvent e; e.kind = k; e.x = x; e.y = y; in.nowMs += 60.0; return pv.onTouch (e, st, inst, in.nowMs); };
+        touch (TouchEvent::Down, 1000, 330);   // the LFO's third (a touch on its display)
+        touch (TouchEvent::Up, 1000, 330);
+        in.nowMs += 200.0;
+        pv.update (in);
+        check (pv.highlight() == 3, dev + "a touch in the LFO's third makes its group the active one");
+        if (wide)
+            check (inst.qGroup[0] == inst.index ("osc1.type") && inst.qGroup[4] == inst.index ("env3.attack") && inst.qGroup[8] == inst.index ("lfo1.shape"), dev + "the slots stay where they are under a touch");
+        else
+            check (inst.qGroup[0] == inst.index ("lfo1.shape") && inst.qGroup[4] == inst.index ("osc1.type") && inst.qGroup[8] == inst.index ("env3.attack"), dev + "the LFO's group is on Q 1 .. 4, the oscillator's and the envelope's follow in reading order");
+        touch (TouchEvent::Down, 640, 330);   // the envelope's third
+        touch (TouchEvent::Up, 640, 330);
+        in.nowMs += 200.0;
+        pv.update (in);
+        if (! wide)
+            check (pv.highlight() == 2 && inst.qGroup[0] == inst.index ("env3.attack") && inst.qGroup[4] == inst.index ("lfo1.shape") && inst.qGroup[8] == inst.index ("osc1.type"), dev + "the envelope touched: its group on Q 1 .. 4, then the LFO's, then the oscillator's");
+    }
+    ui::QGroup::setWideDevice (false);
 }
 
 void testEnvelopeParameterCoverage()
@@ -635,6 +698,7 @@ int main()
     testDrawing();
     testHashChangesWithTheDots();
     testPlayViewRoutesTheElements();
+    testPlayPageQSlots();
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;
 }

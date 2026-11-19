@@ -32,6 +32,7 @@
 #include "synthyboy/params.h"
 #include "synthyboy/readout.h"
 #include "synthyboy/state.h"
+#include "synthyboy/wavetable_catalogue.h"
 
 namespace synthyboy_mpc { namespace overlay {
 
@@ -43,10 +44,14 @@ public:
     virtual float param (int tableIndex) const noexcept = 0;
     /** The live values of the engine (readout of the targets the overlay subscribed, the LFO phases, the envelope stages ...). false: the engine has not written any yet. */
     virtual bool live (synthyboy::LiveValues& out) const noexcept = 0;
+    /** The Mixer page is on screen: the engine measures the source strips (LiveValues::stripPeak[0 .. 6]) for the next moments (IEngine::requestMeters). Called every update of that page; lock free. */
+    virtual void requestMeters() noexcept {}
     /** The sample rate of the instance (Hz). */
     virtual double sampleRate() const noexcept = 0;
     /** The tempo of the host (beats per minute) for the synced LFO rates. */
     virtual double bpm() const noexcept { return 120.0; }
+    /** true while a wavetable the current program names is still being built (the sound is the table the oscillator had until then): the plugin-drawn pages show a thin amber bar at the top of the tab. */
+    virtual bool tablesLoading() const noexcept { return false; }
     /** The content of the state (custom LFO shapes, user wavetables, remap curves): a snapshot that stays valid while the pointer is held; changes when the state changes. */
     virtual std::shared_ptr<const synthyboy::StateContent> content() const { return nullptr; }
     virtual const synthyboy::IContentStore* contentStore() const noexcept { return nullptr; }
@@ -81,6 +86,16 @@ public:
     virtual void requestContent (int /*osc*/, int /*kind*/, const std::string& /*path*/) {}
     /** The state of the last load: 0 none yet, 1 loading, 2 done, 3 failed (`message` gets the reason when it is not null). */
     virtual int contentLoad (std::string* /*message*/) const { return 0; }
+    /** The wavetable browser (overlay/wavetable_browser.h): where the catalogue looks for tables, the installed packs and the roots that may hold SynthyBoy/Wavetables (wavetable_catalogue.h). Called from the overlay thread when the
+        browser opens. Empty (the default): the browser lists the built-in tables only. */
+    virtual void wavetableSources (synthyboy::CatalogueSources& out) const { out = synthyboy::CatalogueSources {}; }
+    /** Asks the instance to load the wavetable FILE `ref` (pack, file; the SHA-256 is computed by the instance) as the table of oscillator `osc` (1 .. 3): the display thread reads and checks the file, puts the reference into the content,
+        gives it to the engine and then sets oscN.wavetable to "Preset table"; the old table plays until the new one is built. The latest request wins. The result is `contentLoad` (3 = refused, with "not a wavetable file: <reason>") and
+        content () of a later moment. Called from the overlay thread; it only stores the request. */
+    virtual void requestWavetable (int /*osc*/, const synthyboy::ContentFileRef& /*ref*/) {}
+    /** The steps the Q knob of oscillator `osc` made while its table is a file (-1 / +1 summed since the last call; the Q knob of the stepper does not move the parameter then): the overlay loads the previous / next file of the
+        category for them. Lock free, 0 when there are none. */
+    virtual int takeWavetableSteps(int /*osc*/) noexcept { return 0; }
     /** The plugin-drawn LFO page writes the DRAWN shape of LFO `lfo` (1 .. 10) into the content of the state (a shape with 2 .. 128 points, the loop point, the smooth flag): a request, applied by the plugin's display
         thread (the engine gets the new content, the chunk keeps it, content () shows it a moment later); a newer request for the same LFO replaces an older one that was not applied yet. Called from the overlay
         thread; it only stores the request. */
@@ -90,10 +105,20 @@ public:
     virtual bool padPressure (bool& /*on*/, float& /*percent*/) const noexcept { return false; }
     /** The Master page sets the layer (the instance applies it to its settings and to the engine, the chunk keeps it). Lock free. */
     virtual void setPadPressure (bool /*on*/, float /*percent*/) noexcept {}
+    /** The output limiter of the plugin (Master page, OUTPUT block, "LIMIT"; docs/MPC.md "Output limiter"): fills `on` with the state the output stage runs and returns true, false when this
+        instance has none (the toggle is then disabled). Lock free. */
+    virtual bool outputLimiter (bool& /*on*/) const noexcept { return false; }
+    /** The Master page switches the limiter (the instance applies it to its output stage, the chunk keeps it). Lock free. */
+    virtual void setOutputLimiter (bool /*on*/) noexcept {}
     /** The plugin-drawn Macros page names macro `macro` (0 .. 7): `name` is cleaned and cut (synthyboy::sanitizeMacroName), "" is the default name. A request, applied by the plugin's display thread
         (the state's content, the chunk and content () show it a moment later; the host is told the names of the Q proxies changed); a newer request for the same macro replaces an older one that was
         not applied yet. Called from the overlay thread; it only stores the request. */
     virtual void setMacroName (int /*macro*/, const std::string& /*name*/) {}
+    /** Appends the voice and held key diagnostics of the instance to the status file (voices_active, voices_released, voices_sustaining, held_keys, held_lowest, held_highest, orphan_voices,
+        note_ons, note_offs, note_offs_unmatched, voices_stolen, sustain_pedal, sound_off_requests): atomics the audio thread updates, no lock; nothing when the engine has none. */
+    virtual void voiceStatus (std::string& /*out*/) const {}
+    /** The content the sound of this instance needs and does not have (IEngine::missingContent () bits; 0 = nothing missing). The oscillator page shows "content missing: ..." from it (the text is the page's). Lock free. */
+    virtual unsigned missingContent() const noexcept { return 0; }
     /** The VIRTUAL Q targets (q_router.h): a Q knob that is not a parameter (the values of the shape editor). The page tells the router the value (0 .. 1) a virtual target has now; the host's write to the
         Q proxy comes back through takeQVirtual (the latest written value; false when there is none since the last call). Lock free. */
     virtual void setQVirtual (int /*id*/, float /*normalised*/) noexcept {}

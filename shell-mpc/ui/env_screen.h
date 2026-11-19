@@ -1,6 +1,6 @@
 // SynthyBoy - MPC UI component library: the two views of the ENVELOPE element (ENV 1 .. 6), layout presets built from library components (owner approved plan "ui-elem-envelope-lfo.md"; drawn for 1280 x 800,
 // the Play page's tab is 1280 x 628 at y 110). Same contract as every component (core.h).
-//  - EnvCompact: the third of the width (400 x 620) in the middle of the Play page: the instance selector (ENV 1 .. 6), the envelope graph with the "full screen" button in its top right corner (the handles
+//  - EnvCompact: the third of the width (400 x 620) in the middle of the Play page: the instance selector (ENV 1 .. 6: the ONE selector of the three thirds, a Stepper with the list of its entries; the colour of the envelope and the dot "it has targets" stand in it), the envelope graph with a header band at its top (the "full screen" button at its right end: nothing of the graph lies under it; the handles
 //    can be dragged here too), and under it the ADSR Q group (ATTACK, DECAY, SUSTAIN, RELEASE) in one frame.
 //  - EnvFullScreen: the top bar (close, the instance selector, the targets button), the big graph (the whole width; the times stand under it and on the knobs, so there are no second boxes for them), the
 //    list of what the envelope modulates at its right (only when it modulates something: otherwise the TARGETS button is enough), and the bottom band of three Q groups, each a titled block: ADSR [ATTACK, DECAY, SUSTAIN, RELEASE], SHAPE [A CURVE, D CURVE, R CURVE], TIME [DELAY, HOLD, BEATS, LEGATO].
@@ -8,9 +8,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include "carousel.h"
 #include "env_graph.h"
 #include "led_toggle.h"
 #include "panel.h"
+#include "play_rows.h"
 
 namespace synthyboy_mpc { namespace ui {
 
@@ -71,10 +73,36 @@ protected:
 };
 
 // ===============================================================================================================================================================
+/** EnvCarousel: the selector of the envelope in the compact view, the same component as the LFO's and the oscillator's (a Carousel: the current entry in the middle, the neighbours at its sides, a tap on a neighbour steps, a tap on the
+    name opens the list of ENV 1 .. 6), with what the six tabs showed: a small dot in the colour of the envelope beside the name (and a smaller one beside the neighbour's) when the envelope has modulation targets (`setTargetMask`:
+    bit n = envelope n + 1). The list rows carry the same dots (ListPopup::State::dotMask). */
+class EnvCarousel : public Carousel
+{
+public:
+    uint8_t targetMask_ = 0;
+    void setTargetMask (uint8_t m) noexcept { targetMask_ = m; state.dotMask = m; state.dotColours = colours(); }
+    uint8_t targetMask() const noexcept { return targetMask_; }
+    bool hasTargets (int i) const noexcept { return i >= 0 && i < kNumEnvs && (targetMask_ & (1u << i)) != 0; }
+    EnvCarousel()
+    {
+        static const char* const kNames[kNumEnvs] = { "ENV 1", "ENV 2", "ENV 3", "ENV 4", "ENV 5", "ENV 6" };
+        state.count = kNumEnvs; state.wrap = true; state.names = kNames; state.dotColours = colours();
+        setItem ("ENV 1");
+    }
+    /** The colours of the six envelopes (the list rows use them for their dots). */
+    static const uint32_t* colours() noexcept
+    {
+        struct Table { uint32_t c[kNumEnvs]; Table() { for (int i = 0; i < kNumEnvs; ++i) c[i] = envColour (i); } };
+        static const Table t;   // built once, thread safely (a table filled at every call was a data race between the threads that create the pages)
+        return t.c;
+    }
+};
+
+// ===============================================================================================================================================================
 class EnvCompact : public Composite
 {
 public:
-    EnvSelector instances;
+    EnvCarousel instances;
     EnvGraph graph;
     MenuButton full { "", MenuButton::Icon::Expand };
     Knob attack { "ATTACK" }, decay { "DECAY" }, sustain { "SUSTAIN" }, release { "RELEASE" };
@@ -84,7 +112,10 @@ public:
     EnvCompact()
     {
         for (Knob* k : { &attack, &decay, &sustain, &release })
+        {
             k->state.side = true;
+            k->state.dialMax = 96;   // the rows are as tall as the third leaves (about 108 px): the dial stays as big as before and the name and the value keep their room
+        }
         addKid (instances); addKid (full); addKid (graph);   // the full screen button lies over the graph: it takes the touch first and is drawn last (draw below)
         addKid (attack); addKid (decay); addKid (sustain); addKid (release);
         group.set (0, &attack); group.set (1, &decay); group.set (2, &sustain); group.set (3, &release);
@@ -96,7 +127,7 @@ public:
     void draw (gpu::SceneBuilder& sb) const override
     {
         {
-            Pen pen (sb, enabled_);
+            Pen pen (sb, enabled_, inactive_);
             Cell cell (sb, rect_);
             drawUnder (pen);
         }
@@ -114,15 +145,17 @@ protected:
     {
         const int W = rect_.w - 2 * kMargin;
         instances.place ({ rect_.x + kMargin, rect_.y + kMargin, W, kSelectorH });
-        const int knobsH = kQLane + 2 * kKnobH + kQLane, by = rect_.bottom() - kMargin - knobsH + kQLane;
-        const int gy = rect_.y + kMargin + kSelectorH + 8, gh = std::max (0, by - kQLane - 4 - gy);
-        graph.place ({ rect_.x + kMargin, gy, W, gh });
-        full.place ({ graph.rect().right() - 64 - 4, graph.rect().y + 4, 64, 56 });
+        // the display is the one of the three thirds (play_rows.h); the knobs start at the common controls line (their Q chip lane lies above it) and share what is left of the third
+        const Rect gr = playrows::displayRect (rect_);
+        graph.place (gr);
+        graph.plotArea = playrows::plotRect (gr);   // the curve and the handles lie below the header band; the full screen button stands in the band, the same place as the oscillator's and the LFO's
+        full.place (playrows::fullRect (gr));
+        const int by = playrows::controlsLine (rect_), kh = std::max (kKnobH, (rect_.bottom() - kMargin - by - kQLane) / 2);
         const int cw = (W - kGap) / 2;
-        attack.place ({ rect_.x + kMargin, by, cw, kKnobH });
-        decay.place ({ rect_.x + kMargin + cw + kGap, by, W - cw - kGap, kKnobH });
-        sustain.place ({ rect_.x + kMargin, by + kKnobH + kQLane, cw, kKnobH });
-        release.place ({ rect_.x + kMargin + cw + kGap, by + kKnobH + kQLane, W - cw - kGap, kKnobH });
+        attack.place ({ rect_.x + kMargin, by, cw, kh });
+        decay.place ({ rect_.x + kMargin + cw + kGap, by, W - cw - kGap, kh });
+        sustain.place ({ rect_.x + kMargin, by + kh + kQLane, cw, kh });
+        release.place ({ rect_.x + kMargin + cw + kGap, by + kh + kQLane, W - cw - kGap, kh });
     }
 };
 

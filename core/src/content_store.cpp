@@ -4,6 +4,7 @@
 
 #include "synthyboy/content_store.h"
 
+#include <algorithm>
 #include <cstdio>
 
 #include "sha256.h"
@@ -36,6 +37,13 @@ bool MemoryContentStore::readFile (const ContentFileRef& ref, std::vector<uint8_
 
 bool DirectoryContentStore::readFile (const ContentFileRef& ref, std::vector<uint8_t>& bytes) const
 {
+    return readFileBounded (ref, bytes, kMaxContentFileBytes, nullptr);
+}
+
+bool DirectoryContentStore::readFileBounded (const ContentFileRef& ref, std::vector<uint8_t>& bytes, size_t maxBytes, bool* tooLarge) const
+{
+    if (tooLarge != nullptr)
+        *tooLarge = false;
     if (ref.file.empty())
         return false;
     const std::string path = root_ + "/" + (ref.pack.empty() ? std::string() : ref.pack + "/") + ref.file;
@@ -43,15 +51,18 @@ bool DirectoryContentStore::readFile (const ContentFileRef& ref, std::vector<uin
     if (f == nullptr)
         return false;
     bytes.clear();
+    const size_t limit = std::min (maxBytes, kMaxContentFileBytes);
     uint8_t buffer[65536];
     size_t n;
     while ((n = std::fread (buffer, 1, sizeof buffer, f)) > 0)
     {
         bytes.insert (bytes.end(), buffer, buffer + n);
-        if (bytes.size() > kMaxContentFileBytes)
+        if (bytes.size() > limit)
         {
             std::fclose (f);
             bytes.clear();
+            if (tooLarge != nullptr)
+                *tooLarge = true;
             return false;
         }
     }

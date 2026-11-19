@@ -200,6 +200,7 @@ class TestGeneratedFileComparison(unittest.TestCase):
             chunk_bytes=chunk_data,
             preset_name="Acid Saw Reso",
             template_info=tmpl_info,
+            num_programs=tmpl_info["header"]["num_programs"],
         )
         self.assertEqual(fname, "Acid Saw Reso.xpl")
         gen_bytes = xml_text.encode("utf-8")
@@ -216,6 +217,7 @@ class TestGeneratedFileComparison(unittest.TestCase):
             preset_name="Acid Saw Reso",
             template_info=tmpl_info,
             plugin_path=custom_plugin_path,
+            num_programs=tmpl_info["header"]["num_programs"],
         )
         # Parse both and verify only plugin_attrs['file'] differs
         parsed_custom = gen_mpc_xpl.parse_xpl(xml_custom_path)
@@ -235,6 +237,7 @@ class TestGeneratedFileComparison(unittest.TestCase):
             preset_name="Acid Saw Reso",
             template_info=tmpl_info,
             date_override=custom_date,
+            num_programs=tmpl_info["header"]["num_programs"],
         )
         parsed_date = gen_mpc_xpl.parse_xpl(xml_custom_date)
         self.assertEqual(parsed_date["version_date"], custom_date)
@@ -254,7 +257,7 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
         self.assertIn("Preset Name: Acid Saw Reso", res.stdout)
         self.assertIn("numPrograms:    113", res.stdout)
 
-    def test_all_136_presets_with_helper_or_fixtures(self):
+    def test_all_160_presets_with_helper_or_fixtures(self):
         # Look for built native helper and plugin module
         build_dirs = [REPO_ROOT / "build-native", REPO_ROOT / "build-mpc", REPO_ROOT / "build"]
         helper_bin = None
@@ -302,9 +305,9 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
                 gen_res = subprocess.run(gen_cmd, capture_output=True, text=True)
                 self.assertEqual(gen_res.returncode, 0, f"Generator failed: {gen_res.stderr}\n{gen_res.stdout}")
 
-                # Verify exactly 136 .xpl files generated (the 112 of the first sets and the 24 of sound set batch 1)
+                # Verify exactly 160 .xpl files generated (the 112 of the first sets and the 24 each of sound set batches 1 and 2)
                 xpl_files = list(out_dir.glob("*.xpl"))
-                self.assertEqual(len(xpl_files), 136, f"Expected 136 preset files, got {len(xpl_files)}")
+                self.assertEqual(len(xpl_files), 160, f"Expected 160 preset files, got {len(xpl_files)}")
 
                 # Check each file has valid envelope and header, and decodes (dec.py) to the structure of the file the device wrote
                 device_blob = TestDecodesLikeDeviceFiles._decode_with_dec_py(get_example_path("zz-sbtest-program.xpl"))
@@ -312,9 +315,11 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
                 for xf in xpl_files:
                     header, keys, param_keys = TestDecodesLikeDeviceFiles._structure(TestDecodesLikeDeviceFiles._decode_with_dec_py(xf))
                     # (a preset with user content, a wavetable or a sample of its own, has one more member, "content": the only difference allowed)
-                    self.assertEqual((header, [k for k in keys if k != "content"], param_keys), device_structure, f"{xf.name}: structure differs from the device's file")
+                    # (the chunk of this build also has "mpcOutputLimiter", the limiter setting of the Master page, before the pad pressure members: the file the device wrote is older)
+                    self.assertEqual((header, [k for k in keys if k not in ("content", "mpcOutputLimiter")], param_keys), device_structure, f"{xf.name}: structure differs from the device's file")
+                    self.assertIn("mpcOutputLimiter", keys, f"{xf.name}: no limiter setting in the chunk")
                     parsed = gen_mpc_xpl.parse_xpl(xf.read_text(encoding="utf-8"))
-                    self.assertEqual(parsed["header"]["num_programs"], 113)
+                    self.assertEqual(parsed["header"]["num_programs"], 161)
                     self.assertEqual(parsed["header"]["chunk_magic"], b"CcnK")
                     self.assertEqual(parsed["header"]["fx_magic"], b"FBCh")
                     self.assertGreater(len(parsed["chunk_bytes"]), 1000)
@@ -337,6 +342,68 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
                 xpl_files = list(out_dir.glob("*.xpl"))
                 self.assertGreaterEqual(len(xpl_files), 1)
                 self.assertTrue((out_dir / "Acid Saw Reso.xpl").is_file())
+                parsed = gen_mpc_xpl.parse_xpl((out_dir / "Acid Saw Reso.xpl").read_text(encoding="utf-8"))
+                self.assertEqual(parsed["header"]["num_programs"], 3)   # the chunks of the set (the two fixtures: Acid Saw Reso, Harp Drops) and Init
+
+    def test_create_xpl_derives_137_programs_by_default(self):
+        tmpl = gen_mpc_xpl.parse_xpl(get_example_path("prev_Acid_Saw_Reso.xpl").read_text(encoding="utf-8"))
+        self.assertEqual(tmpl["header"]["num_programs"], 113)  # template has old 113
+        chunk = (FIXTURES_DIR / "acid_saw_reso.chunk").read_bytes()
+        name = "Acid Saw Reso"
+        # Without num_programs override, it derives 161 from factory presets count (160) + 1 (Init)
+        _, xml_text = gen_mpc_xpl.create_xpl_from_chunk(chunk, name, tmpl)
+        parsed = gen_mpc_xpl.parse_xpl(xml_text)
+        self.assertEqual(parsed["header"]["num_programs"], 161)
+
+    def test_create_xpl_override_num_programs(self):
+        tmpl = gen_mpc_xpl.parse_xpl(get_example_path("prev_Acid_Saw_Reso.xpl").read_text(encoding="utf-8"))
+        chunk = (FIXTURES_DIR / "acid_saw_reso.chunk").read_bytes()
+        name = "Acid Saw Reso"
+        _, xml_text = gen_mpc_xpl.create_xpl_from_chunk(chunk, name, tmpl, num_programs=150)
+        parsed = gen_mpc_xpl.parse_xpl(xml_text)
+        self.assertEqual(parsed["header"]["num_programs"], 150)
+
+    def test_cli_num_programs_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp)
+            tmpl_path = get_example_path("prev_Acid_Saw_Reso.xpl")
+            cmd = [
+                sys.executable,
+                str(SCRIPTS_DIR / "gen-mpc-xpl.py"),
+                "--chunks", str(FIXTURES_DIR),
+                "--template", str(tmpl_path),
+                "--out", str(out_dir),
+                "--num-programs", "150",
+            ]
+            res = subprocess.run(cmd, capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            gen_file = out_dir / "Acid Saw Reso.xpl"
+            self.assertTrue(gen_file.is_file())
+            parsed = gen_mpc_xpl.parse_xpl(gen_file.read_text(encoding="utf-8"))
+            self.assertEqual(parsed["header"]["num_programs"], 150)
+
+    def test_num_programs_cli_option(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            out_dir = Path(tmp_dir) / "out"
+            tmpl_path = get_example_path("prev_Acid_Saw_Reso.xpl")
+            gen_cmd = [
+                sys.executable,
+                str(SCRIPTS_DIR / "gen-mpc-xpl.py"),
+                "--chunks",
+                str(FIXTURES_DIR),
+                "--template",
+                str(tmpl_path),
+                "--num-programs",
+                "137",
+                "--out",
+                str(out_dir),
+            ]
+            res = subprocess.run(gen_cmd, capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, f"Generator failed: {res.stderr}\n{res.stdout}")
+            f = out_dir / "Acid Saw Reso.xpl"
+            self.assertTrue(f.is_file())
+            parsed = gen_mpc_xpl.parse_xpl(f.read_text(encoding="utf-8"))
+            self.assertEqual(parsed["header"]["num_programs"], 137)
 
 
 class TestDecodesLikeDeviceFiles(unittest.TestCase):
@@ -354,8 +421,8 @@ class TestDecodesLikeDeviceFiles(unittest.TestCase):
 
     @staticmethod
     def _structure(blob: bytes):
-        """What must be the same: the 160 byte bank header but its chunkSize, the order of the keys of the JSON chunk and the set of the parameter keys."""
-        header = blob[:156]
+        """What must be the same: the 160 byte bank header (except chunkSize and numPrograms), the order of the keys of the JSON chunk and the set of the parameter keys."""
+        header = blob[:24] + blob[28:156]
         chunk_size = int.from_bytes(blob[156:160], "big")
         assert chunk_size == len(blob) - 160
         doc = json.loads(blob[160:].decode("utf-8"))
@@ -370,7 +437,7 @@ class TestDecodesLikeDeviceFiles(unittest.TestCase):
                 tmpl = gen_mpc_xpl.parse_xpl(get_example_path(template_name).read_text(encoding="utf-8"))
                 chunk = (FIXTURES_DIR / chunk_name).read_bytes()
                 name = json.loads(chunk.decode("utf-8"))["mpcProgramName"]
-                _, xml_text = gen_mpc_xpl.create_xpl_from_chunk(chunk, name, tmpl)
+                _, xml_text = gen_mpc_xpl.create_xpl_from_chunk(chunk, name, tmpl, num_programs=tmpl["header"]["num_programs"])
                 with tempfile.TemporaryDirectory() as tmp:
                     generated = Path(tmp) / "generated.xpl"
                     generated.write_bytes(xml_text.encode("utf-8"))

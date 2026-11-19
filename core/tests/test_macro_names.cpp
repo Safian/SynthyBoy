@@ -294,7 +294,7 @@ TEST (the_factory_presets_carry_clean_names_and_load_as_before)
             CHECK (back == content);
         }
     }
-    CHECK_EQ (presets, 136);   // the first 112 and the 24 of sound set batch 1
+    CHECK_EQ (presets, 160);   // the first 112 and the 24 each of sound set batches 1 and 2
     CHECK (named >= 100 && names >= 300);
 }
 #endif

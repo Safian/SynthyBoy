@@ -3,7 +3,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
 //   synthyboy_preset_render --presets DIR [--engine vital|own] [--tier low|medium|high|all] [--summary-only] [--velocity]
-//                           [--wav OUTDIR] [--filter SUBSTRING] [--sr 48000] [--content-dir DIR]
+//                           [--wav OUTDIR] [--chord-wav OUTDIR] [--float32] [--hash] [--filter SUBSTRING] [--sr 48000] [--content-dir DIR] [--scalar-content] [--hold SECONDS]
+//   --scalar-content  the own engine runs the reference code of the Sample / Granular / Spectral / Multisample oscillators (setOwnSavingsOff, kOwnSavingContentKernels): render once with and once
+//                     without it to compare the two (scripts/content-kernel-compare.py)
+//   --float32         the WAVs are 32 bit float instead of 24 bit PCM (a 24 bit file cannot show a difference below half a step, 6e-8 of full scale): use it wherever two builds are compared
+//   --hash            also write <preset>.hash next to every WAV: the 64 bit hash of the float bits and the frame count (also for a render that is not finite); `diff -r` of two folders then compares every bit
 //
 // Per preset and tier (a fresh engine each, the state loaded the way the shell loads it: every parameter, then the content):
 //   single   one note (C1 for the category Bass, else C3), velocity 0.8, held 1.5 s, then released until the output is silent
@@ -35,6 +39,7 @@
 #include "synthyboy/preset.h"
 #include "synthyboy/quality.h"
 #include "synthyboy/state.h"
+#include "render_output.h"
 #include "wav_reader.h"
 
 using namespace synthyboy;
@@ -57,10 +62,14 @@ struct Options
     std::string tier = "all";
     bool summaryOnly = false;
     bool velocity = false;
-    std::string wavDir;
+    bool sustainAware = false;
+    std::string wavDir, chordWavDir;
     std::string filter;
     double sampleRate = 48000.0;
     const IContentStore* contentStore = nullptr;
+    bool scalarContent = false; // --scalar-content
+    presetrender::OutputOptions out; // --float32, --hash
+    double hold = 0.0;          // --hold SECONDS: the held time of the single note and of the chord (default 1.5 s / 1 s)
     std::string contentDir; // root of the content packs the presets reference (<root>/<pack>/<file>); default: PRESETS/content when it exists
 };
 
@@ -91,6 +100,8 @@ std::unique_ptr<IEngine> makeEngine (const Options& o, const Quality& q, const L
     auto engine = createEngine (o.engine);
     if (engine == nullptr)
         return engine;
+    if (o.scalarContent)
+        setOwnSavingsOff (*engine, kOwnSavingContentKernels);
     engine->prepare (o.sampleRate, kBlock, q);
     // without the store a "Preset table" falls back to the saw and a "Sample" to silence: imported presets would not be rendered as they sound
     engine->setContentStore (o.contentStore);
@@ -268,10 +279,16 @@ int main (int argc, char** argv)
         else if (a == "--tier") o.tier = next();
         else if (a == "--summary-only") o.summaryOnly = true;
         else if (a == "--velocity") o.velocity = true;
+        else if (a == "--sustain-aware") o.sustainAware = true;
         else if (a == "--wav") o.wavDir = next();
+        else if (a == "--chord-wav") o.chordWavDir = next();
         else if (a == "--filter") o.filter = next();
         else if (a == "--sr") o.sampleRate = std::atof (next().c_str());
         else if (a == "--content-dir") o.contentDir = next();
+        else if (a == "--scalar-content") o.scalarContent = true;
+        else if (a == "--float32") o.out.float32 = true;
+        else if (a == "--hash") o.out.hash = true;
+        else if (a == "--hold") o.hold = std::atof (next().c_str());
         else
         {
             std::fprintf (stderr, "preset-render: unknown argument %s\n", a.c_str());
@@ -281,7 +298,7 @@ int main (int argc, char** argv)
     if (o.presets.empty() || ! isEngineAvailable (o.engine))
     {
         std::fprintf (stderr, "usage: synthyboy_preset_render --presets DIR [--engine vital|own] [--tier low|medium|high|all] [--summary-only] [--velocity] "
-                              "[--wav OUTDIR] [--filter TEXT] [--sr 48000] [--content-dir DIR]  (the engine must be built in)\n");
+                              "[--wav OUTDIR] [--chord-wav OUTDIR] [--float32] [--hash] [--filter TEXT] [--sr 48000] [--content-dir DIR]  (the engine must be built in)\n");
         return 2;
     }
 
@@ -366,8 +383,24 @@ int main (int argc, char** argv)
             const std::vector<int> keys { p.meta.category == "Bass" ? 24 + 12 : 60 };
             const std::vector<int> chord { keys[0], keys[0] + 4, keys[0] + 7, keys[0] + 12 };
             const bool wav = ! o.wavDir.empty();
-            const Render s = render (o, q, p, keys, 0.8f, kHoldSingle, true, wav);
-            const Render c = render (o, q, p, chord, 1.0f, kHoldChord, false, false);
+            const Render s = render (o, q, p, keys, 0.8f, o.hold > 0.0 ? o.hold : kHoldSingle, true, wav);
+
+            double chordHold = kHoldChord;
+            if (o.sustainAware)
+            {
+                float att = 5.0f, del = 0.0f;
+                const auto* pAtt = findParamByKey ("env1.attack");
+                const auto* pDel = findParamByKey ("env1.delay");
+                const int attIdx = pAtt != nullptr ? findParamIndex (pAtt->id) : -1;
+                const int delIdx = pDel != nullptr ? findParamIndex (pDel->id) : -1;
+                if (attIdx >= 0) att = p.values.plain[static_cast<size_t> (attIdx)];
+                if (delIdx >= 0) del = p.values.plain[static_cast<size_t> (delIdx)];
+                const double attSec = (std::max (0.0f, att) + std::max (0.0f, del)) / 1000.0;
+                chordHold = std::min (5.0, std::max (1.0, 0.4 + attSec));
+            }
+            if (o.hold > 0.0)
+                chordHold = o.hold;
+            const Render c = render (o, q, p, chord, 1.0f, chordHold, false, ! o.chordWavDir.empty());
 
             std::vector<std::string> problems;
             if (! s.finite || ! c.finite)
@@ -387,22 +420,12 @@ int main (int argc, char** argv)
                 velSlope.push_back (velPeaks[3].back() - velPeaks[0].back());
             }
 
-            if (wav && s.finite && ! s.left.empty())
-            {
-                std::filesystem::create_directories (std::filesystem::path (o.wavDir) / t.name, ec);
-                std::vector<float> inter (s.left.size() * 2);
-                for (size_t i = 0; i < s.left.size(); ++i)
-                {
-                    inter[2 * i] = s.left[i];
-                    inter[2 * i + 1] = s.right[i];
-                }
-                std::vector<uint8_t> bytes;
-                if (fx::writeWav (bytes, inter.data(), static_cast<int> (s.left.size()), 2, static_cast<int> (o.sampleRate), 24, false))
-                {
-                    std::ofstream out (std::filesystem::path (o.wavDir) / t.name / (std::filesystem::path (p.file).stem().string() + ".wav"), std::ios::binary);
-                    out.write (reinterpret_cast<const char*> (bytes.data()), static_cast<std::streamsize> (bytes.size()));
-                }
-            }
+            if (wav && ! s.left.empty() && (s.finite || o.out.hash))
+                presetrender::writeRenderFiles (std::filesystem::path (o.wavDir) / t.name, std::filesystem::path (p.file).stem().string(), s.left, s.right, static_cast<int> (o.sampleRate), o.out, s.finite);
+
+            if (! o.chordWavDir.empty() && ! c.left.empty() && (c.finite || o.out.hash))
+                // the chord render (four notes at the start of one block: the notes get the serials 0 .. 3 of a fresh engine) as a wav, to compare two builds
+                presetrender::writeRenderFiles (std::filesystem::path (o.chordWavDir) / t.name, std::filesystem::path (p.file).stem().string(), c.left, c.right, static_cast<int> (o.sampleRate), o.out, c.finite);
 
             if (s.finite)
             {

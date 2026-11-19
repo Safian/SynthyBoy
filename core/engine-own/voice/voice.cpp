@@ -9,6 +9,7 @@
 #include "osc_options.h"
 #include "../env_lfo/lfo_eval.h"
 #include "../dsp/simd.h"
+#include "../dsp/peak.h"
 #include "../dsp/section_timing.h"
 
 #include <cstring>
@@ -84,11 +85,72 @@ float noiseSample (int colour, float* s, Rng& r, float level, bool fast) noexcep
     }
     (void) level;
 }
+/** The groups of keys whose derived settings the voice keeps (bit k of Voice::touchedGroups () = group k): the envelopes, the LFOs, the random LFOs, the oscillators, the sub, the
+    noise and the filters; 0 = every other key. */
+enum ParamGroup : int { kGroupOther = 0, kGroupEnv = 1, kGroupLfo = 7, kGroupRlfo = 17, kGroupOsc = 21, kGroupSub = 24, kGroupNoise = 25, kGroupFilter = 26, kNumGroups = 28 };
+static_assert (kNumGroups <= 32, "the groups are bits of a 32 bit mask");
+
+/** The group of every parameter index, built once (Voice::prepare: never on the audio thread). The index structs of param_index.h hold only `int` fields. */
+const uint8_t* paramGroups() noexcept
+{
+    static const std::vector<uint8_t> table = []
+    {
+        std::vector<uint8_t> t (paramCount(), static_cast<uint8_t> (kGroupOther));
+        auto mark = [&t] (const void* idxStruct, size_t bytes, int group)
+        {
+            const int* f = static_cast<const int*> (idxStruct);
+            for (size_t i = 0; i < bytes / sizeof (int); ++i)
+                if (f[i] >= 0 && static_cast<size_t> (f[i]) < t.size())
+                    t[static_cast<size_t> (f[i])] = static_cast<uint8_t> (group);
+        };
+        static_assert (sizeof (EnvIdx) % sizeof (int) == 0 && sizeof (LfoIdx) % sizeof (int) == 0 && sizeof (RlfoIdx) % sizeof (int) == 0 && sizeof (OscIdx) % sizeof (int) == 0
+                       && sizeof (SubIdx) % sizeof (int) == 0 && sizeof (NoiseIdx) % sizeof (int) == 0 && sizeof (FilterIdx) % sizeof (int) == 0, "int fields only");
+        const ParamIndex& pi = paramIndex();
+        for (int e = 0; e < 6; ++e)
+            mark (&pi.env[e], sizeof (EnvIdx), kGroupEnv + e);
+        for (int l = 0; l < 10; ++l)
+            mark (&pi.lfo[l], sizeof (LfoIdx), kGroupLfo + l);
+        for (int r = 0; r < 4; ++r)
+            mark (&pi.rlfo[r], sizeof (RlfoIdx), kGroupRlfo + r);
+        for (int o = 0; o < 3; ++o)
+        {
+            mark (&pi.osc[o], sizeof (OscIdx), kGroupOsc + o);
+            mark (libKeys (o).idx, sizeof (LibKeys::idx), kGroupOsc + o);
+        }
+        mark (&pi.sub, sizeof (SubIdx), kGroupSub);
+        mark (&pi.noise, sizeof (NoiseIdx), kGroupNoise);
+        const int noiseFilter = findParamIndex (hashKey ("noise.filter"));
+        mark (&noiseFilter, sizeof (int), kGroupNoise);
+        for (int f = 0; f < 2; ++f)
+            mark (&pi.filter[f], sizeof (FilterIdx), kGroupFilter + f);
+        return t;
+    }();
+    return table.data();
+}
 } // namespace
+
+/** Bit k: some slot of the last evaluation touched a key of group k (the list of touched keys, and the pad pressure layer on the Filter 1 cutoff). A full list (it cannot be: one entry
+    per slot) counts as every group. */
+uint32_t Voice::touchedGroups() const noexcept
+{
+    if (numTouched >= kNumModSlots)
+        return ~0u;
+    uint32_t m = padCutTouched ? (1u << kGroupFilter) : 0u;
+    for (int i = 0; i < numTouched; ++i)
+        m |= 1u << groupOf[touched[i]];
+    return m;
+}
 
 void Voice::prepare (double sampleRate)
 {
     sr = sampleRate;
+    groupOf = paramGroups();
+    pidx = &paramIndex();
+    for (int o = 0; o < 3; ++o)
+        libk[o] = &libKeys (o);
+    laws = &destLawOf (0);
+    infos = paramTable();
+    noiseFilterKey = findParamIndex (hashKey ("noise.filter"));
     mod.assign (paramCount(), 0.0f);
     modR.assign (paramCount(), 0.0f);
     modP = mod.data();
@@ -138,7 +200,21 @@ void Voice::clearMod() noexcept
 
 float Voice::modulatedSlow (int idx, float b, float d) const noexcept
 {
-    return modulatedValue (paramTable()[idx], destLawOf (static_cast<size_t> (idx)), b, d, (gl->economy & kEconomyMath) != 0);
+    return modulatedValue (infos[idx], laws[idx], b, d, (gl->economy & kEconomyMath) != 0);
+}
+
+/** A source through its curve; with `glide` (curve.velocity.legato / curve.note.legato) a change of the target after a legato note-on moves to it with the one pole time constant
+    master.portamento.time (coefficient 1 - exp (-dt / time), document 04 section 7); a new note starts at the target. */
+float Voice::curvedSource (float x, const CompiledModCurve* curve, float& state, bool glide, float dt, float portSeconds) noexcept
+{
+    float target = x;
+    if (curve != nullptr && curve->present)
+        target = std::clamp (shapes::ShapeData::evaluateTable (curve->table.data(), curve->table.size(), clamp01 (x)), 0.0f, 1.0f);
+    if (!glide || curveFresh || portSeconds <= 1.0e-4f)
+        state = target;
+    else
+        state += (target - state) * (1.0f - std::exp (-dt / portSeconds));
+    return state;
 }
 
 void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
@@ -154,6 +230,7 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     id = n.noteId;
     noteSerial = n.serial;
     vel = n.velocity;
+    curveFresh = true;
     releaseVel = 0.0f;
     tuneExpr = 0.0f;
     polyPressure = 0.0f;
@@ -210,6 +287,12 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     tickCount = 0;
     envCacheValid = false;
     vcCacheValid = false;
+    for (bool& ok : envSetOk)
+        ok = false;
+    for (auto& ls : lfoSet)
+        ls.ok = false;
+    for (auto& rs : rlfoSet)
+        rs.ok = false;
     ampPrev = ampCur = 0.0f;
     velGainPrev = velGain = 0.0f;
     std::fill (std::begin (srcLevel), std::end (srcLevel), 0.0f);
@@ -262,7 +345,7 @@ void Voice::release (float velocity) noexcept
         e.noteOff();
     if (gl != nullptr)
         for (int o = 0; o < 3; ++o)
-            lib[o].noteOff (P (libKeys (o).idx[lk_sLoopExit]) >= 0.5f);
+            lib[o].noteOff (P (libk[o]->idx[lk_sLoopExit]) >= 0.5f);
 }
 
 void Voice::kill() noexcept
@@ -282,6 +365,144 @@ float Voice::customShape (const CompiledShape& cs, float u) noexcept
 }
 
 float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps) noexcept
+{
+    // V3: the code of lfoValueReference () with the settings of the LFO kept while their inputs are the same (the same expressions of the same values)
+    LfoSettings& st = lfoSet[l];
+    uint32_t factorBits, concertABits;
+    std::memcpy (&factorBits, &vc.lfoFactor, 4);
+    std::memcpy (&concertABits, &g.concertA, 4);
+    if (!(st.ok && g.baseEpoch != 0 && st.epoch == g.baseEpoch && (lastTouchedGroups & (1u << (kGroupLfo + l))) == 0 && st.bpm == g.bpm && st.factorBits == factorBits
+          && st.concertABits == concertABits && st.sampleRate == g.sampleRate && st.content == g.lfoContent && st.monoCore == g.monoCore))
+    {
+        const LfoIdx& li = pidx->lfo[l];
+        st.shape = static_cast<int> (P (li.shape) + 0.5f);
+        st.sync = static_cast<int> (P (li.sync) + 0.5f);
+        st.syncType = std::clamp (static_cast<int> (P (li.syncType) + 0.5f), 0, 5);
+        st.rateKnob = P (li.rate);
+        st.division = static_cast<int> (P (li.division) + 0.5f);
+        st.keyTranspose = P (li.keyTranspose);
+        st.keyTune = P (li.keyTune);
+        st.rate = vc.lfoFactor * lfoRateHz (st.sync, st.rateKnob, st.division, g.bpm, g.concertA, lastSemis, st.keyTranspose, st.keyTune);
+        st.knob = P (li.phase) * (1.0f / 360.0f);
+        st.delay = P (li.delay) * 0.001f;
+        st.fade = P (li.fadeIn) * 0.001f;
+        st.stereo = P (li.stereo) * (1.0f / 720.0f);
+        st.mono = st.syncType >= 2 && li.mono >= 0 && g.base[li.mono] >= 0.5f && g.monoCore != nullptr;
+        st.host = li.host >= 0 && g.base[li.host] >= 0.5f;
+        st.smooth = P (li.smooth) >= 0.5f;
+        st.swing = li.swing >= 0 ? clamp01 (P (li.swing) * 0.01f) : 0.0f;
+        st.dir = static_cast<int> (P (li.direction) + 0.5f);
+        st.custom = (st.shape == 12 && g.lfoContent != nullptr && g.lfoContent->lfo[static_cast<size_t> (l)].present) ? &g.lfoContent->lfo[static_cast<size_t> (l)] : nullptr;
+        st.half = st.smooth ? 0.2f * P (li.smoothTime) * 0.001f : 0.0f; // half life of the one pole (document 03, 3.4)
+        for (int k = 0; k < 2; ++k)
+        {
+            st.dt[k] = static_cast<float> ((k == 0 ? 1 : 4) * kControlPeriod / g.sampleRate);
+            st.coef[k] = st.smooth && st.half >= 0.0002f ? 1.0f - std::exp2 (-st.dt[k] / st.half) : 0.0f;
+        }
+        st.ok = !g.referenceControl && (lastTouchedGroups & (1u << (kGroupLfo + l))) == 0;
+        st.epoch = g.baseEpoch;
+        st.bpm = g.bpm;
+        st.factorBits = factorBits;
+        st.concertABits = concertABits;
+        st.sampleRate = g.sampleRate;
+        st.content = g.lfoContent;
+        st.monoCore = g.monoCore;
+    }
+    const int ki = steps == 4 ? 1 : 0;
+    const float dt = steps == 1 || steps == 4 ? st.dt[ki] : static_cast<float> (steps * kControlPeriod / g.sampleRate);
+    const int shape = st.shape;
+    const int sync = st.sync;
+    const int syncType = st.syncType;
+    const float rate = sync == 4 ? vc.lfoFactor * lfoRateHz (sync, st.rateKnob, st.division, g.bpm, g.concertA, lastSemis, st.keyTranspose, st.keyTune) : st.rate;
+    const float knob = st.knob;
+    const float delay = st.delay, fade = st.fade;
+    const float stereo = st.stereo;
+    const bool mono = st.mono;
+    const bool host = st.host;
+
+    float pos, pos0;
+    if (syncType == 1)
+    {
+        // free-run: every voice reads the same clock (the engine's, or the host song position with the HOST lock)
+        float clock;
+        if (host && g.playing && sync != 4)
+        {
+            const double c = static_cast<double> (rate) * g.songSeconds;
+            clock = static_cast<float> (c - std::floor (c));
+        }
+        else if (sync == 4)
+        {
+            lfoCore[l].advance (0, 0.0f, rate, 0.0f, dt, true);
+            clock = lfoCore[l].offset;
+        }
+        else
+            clock = g.lfoPhase != nullptr ? g.lfoPhase[l] : lfoCore[l].offset;
+        pos = clock + knob;
+        pos -= ffloor (pos);
+        pos0 = pos;
+        lfoReadPos[l] = clock; // display only: the free-running clock (the offset of the core does not move for it)
+    }
+    else
+    {
+        if (mono)
+        {
+            pos = g.monoCore[l].position (syncType, knob);
+        }
+        else
+        {
+            lfoCore[l].advance (syncType, knob, rate, delay, dt, !released);
+            pos = lfoCore[l].position (syncType, knob);
+        }
+        pos0 = syncType == 0 ? knob - ffloor (knob) : (syncType == 2 ? std::min (knob, 1.0f) : 0.0f);
+        lfoReadPos[l] = mono ? g.monoCore[l].offset : lfoCore[l].offset; // display only
+    }
+    lfoAge[l] += dt;
+    const bool smooth = st.smooth;
+    float fadeAmount = 1.0f;
+    if (!smooth)
+    {
+        if (lfoAge[l] < delay)
+            fadeAmount = 0.0f;
+        else if (fade > 0.0f)
+            fadeAmount = clamp01 ((lfoAge[l] - delay) / fade);
+    }
+    const float swing = st.swing;
+    const int dir = st.dir;
+    const CompiledShape* custom = st.custom;
+    auto shapeAt = [&] (float u, bool wrap) -> float // 0 .. 1
+    {
+        return lfoShapeAt (shape, u, wrap, swing, dir, custom, src, scratchShape, noteSerial + static_cast<uint32_t> (l));
+    };
+    const bool wrap = syncType <= 1;
+    const bool smoothStep = smooth && st.half >= 0.0002f;
+    const float coef = steps == 1 || steps == 4 ? st.coef[ki] : (smoothStep ? 1.0f - std::exp2 (-dt / st.half) : 0.0f);
+    auto lane = [&] (float sign, float& smoothed) -> float
+    {
+        const float s = shapeAt (pos + sign * stereo, wrap);
+        float out = s;
+        if (fadeAmount < 1.0f)
+            out = lerp (shapeAt (pos0 + sign * stereo, wrap), s, fadeAmount);
+        float v = 2.0f * out - 1.0f;
+        if (smooth)
+        {
+            if (smoothStep)
+                smoothed += (v - smoothed) * coef;
+            else
+                smoothed = v;
+            v = smoothed;
+        }
+        else
+            smoothed = v;
+        return v;
+    };
+    const float left = lane (1.0f, lfoSmoothL[l]);
+    valueRight = stereo != 0.0f ? lane (-1.0f, lfoSmoothR[l]) : left;
+    if (stereo == 0.0f)
+        lfoSmoothR[l] = lfoSmoothL[l];
+    return left;
+}
+
+float Voice::lfoValueReference (int l, const TickGlobals& g, float& valueRight, int steps) noexcept
 {
     const LfoIdx& li = paramIndex().lfo[l];
     const float dt = static_cast<float> (steps * kControlPeriod / g.sampleRate);
@@ -378,7 +599,7 @@ float Voice::lfoValue (int l, const TickGlobals& g, float& valueRight, int steps
 
 void Voice::evaluateVoiceControl (const TickGlobals& g) noexcept
 {
-    const VoiceCtlIdx& v = paramIndex().vctl;
+    const VoiceCtlIdx& v = pidx->vctl;
     if (v.length < 0)
         return;
     const int length = std::clamp (static_cast<int> (g.base[v.length] + 0.5f), 1, 8);
@@ -407,9 +628,16 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     SB_SECTION (sections::tickOther);
     gl = &g;
     index = voiceIndex;
-    const ParamIndex& pi = paramIndex();
+    const ParamIndex& pi = *pidx;
     const double dt = kControlPeriod / g.sampleRate;
     const float fdt = static_cast<float> (dt);
+    // the parameter reads of this function with the snapshot and the delta arrays in locals (CPU-REVIEW-VOICE-MOD.md V5): a call between two reads (modulatedSlow, an oscillator
+    // update) no longer forces this->modP and gl->base to be loaded again. These hide the members P () and PR () inside tick (); the same values.
+    const float* const pBase = g.base;
+    const float* const pMod = modP;
+    const float* const pModR = modRP;
+    const auto P = [this, pBase, pMod] (int idx) noexcept { return readParam (pBase, pMod, idx); };
+    const auto PR = [this, pBase, pModR] (int idx) noexcept { return readParam (pBase, pModR, idx); };
 
     // ---- pitch of the note
     const MasterIdx& mi = pi.master;
@@ -436,7 +664,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     }
     const float bend = g.channelBendSemis != nullptr ? g.channelBendSemis[chan & 15] : 0.0f;
     // the tuned note follows the tuning (A4, scale, MTS-ESP) with a 20 ms one pole: a retuned note glides, a new note starts on its value
-    if (g.tunedNotes != nullptr)
+    if (g.tunedNotes != nullptr && !g.tuningNoteOnOnly)
     {
         const float target = g.tunedNotes[keyNum & 127];
         if (target == target)
@@ -492,6 +720,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         s.decay *= vc.envFactor;
         s.release *= vc.envFactor;
     };
+    // the velocity and note sources read through their curves (content.curves); with curve.velocity.legato / curve.note.legato a legato transition glides with master.portamento.time
+    const CompiledModCurve* velCurve = g.lfoContent != nullptr ? &g.lfoContent->velocityCurve : nullptr;
+    const CompiledModCurve* noteCurve = g.lfoContent != nullptr ? &g.lfoContent->noteCurve : nullptr;
+    const bool velGlide = mi.curveVelLegato >= 0 && g.base[mi.curveVelLegato] >= 0.5f, noteGlide = mi.curveNoteLegato >= 0 && g.base[mi.curveNoteLegato] >= 0.5f;
+    const float portSeconds = g.base[mi.portTime] * 0.001f;
     // ---- a note starts with its constant sources already in the matrix (document 03 1.3a, document 04: the interpolation of a voice is reset to the new value at a note
     //      start), so an envelope time that a macro or the velocity modulates is read modulated at the very first period
     if (fresh)
@@ -500,8 +733,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         std::fill (std::begin (src), std::end (src), 0.0f);
         for (int m = 0; m < 8; ++m)
             src[srcMacro (m)] = g.macro[m];
-        src[kSrcVelocity] = vel;
-        src[kSrcNote] = std::clamp ((lastSemis + bend) * (1.0f / 127.0f), 0.0f, 1.0f);
+        src[kSrcVelocity] = curvedSource (vel, velCurve, velCurved, velGlide, fdt, portSeconds);
+        src[kSrcNote] = curvedSource (std::clamp ((lastSemis + bend) * (1.0f / 127.0f), 0.0f, 1.0f), noteCurve, noteCurved, noteGlide, fdt, portSeconds);
         src[kSrcAftertouch] = g.channelAftertouch != nullptr ? g.channelAftertouch[chan & 15] : 0.0f;
         src[kSrcModWheel] = g.channelModWheel != nullptr ? g.channelModWheel[chan & 15] : 0.0f;
         src[kSrcRandom] = randomPerNote;
@@ -528,6 +761,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         ctx.dt = 0.0f;
         ctx.bpm = g.bpm;
         ctx.voiceAge = voiceAge;
+        ctx.reference = g.referenceControl;
         { SB_SECTION (sections::tickMatrix); g.matrix->evaluate (ctx); }
         // the control rate envelopes are evaluated for the same chunk as the note start: as sources they already have their value at the end of the first step
         for (int e = 0; e < 6; ++e)
@@ -546,29 +780,55 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     {
     SB_SECTION (sections::tickEnvLfo);
     const bool envFromCache = g.baseEpoch != 0 && envCacheValid && envCacheEpoch == g.baseEpoch && envCacheBpm == g.bpm && numTouched == 0 && !fresh;
+    // V1: an envelope none of whose keys a slot touched keeps the settings it derived from the parameters alone (the keys of the other groups may be modulated). The test of
+    // envFromCache above stays as it was: its key has no note sequence, so after a legato note it keeps the envelope factor of the step before (test_own_voice_legato_env.cpp);
+    // the per envelope cache below is used only where envFromCache is not, and is keyed on the factor itself, so every settings value is the one the code before computed.
+    lastTouchedGroups = g.referenceControl ? ~0u : touchedGroups();
+    const uint32_t envTouched = lastTouchedGroups;
+    uint32_t envFactorBits;
+    std::memcpy (&envFactorBits, &vc.envFactor, 4);
     for (int e = 0; e < 6; ++e)
     {
+        // tier low: an envelope (not the amplitude envelope) that no slot reads is advanced every fourth period (staggered) by four periods
+        const bool decimated = (g.economy & kEconomyControl) != 0 && !fresh && e > 0 && ((g.usedSources >> srcEnv (e)) & 1u) == 0;
+        const bool skipped = decimated && ((tickCount + static_cast<uint32_t> (e)) & 3u) != 0u; // envOut keeps its last value
         EnvSettings s;
         if (envFromCache)
+        {
+            if (skipped)
+                continue;
             s = envCache[e];
+        }
         else
         {
-            envSettings (e, s, true);
-            envCache[e] = s;
+            const bool envUntouched = (envTouched & (1u << (kGroupEnv + e))) == 0;
+            uint32_t setFactorBits;
+            std::memcpy (&setFactorBits, &envSetFactor[e], 4);
+            if (!fresh && envUntouched && envSetOk[e] && g.baseEpoch != 0 && envSetEpoch[e] == g.baseEpoch && envSetBpm[e] == g.bpm && setFactorBits == envFactorBits)
+            {
+                // envCache[e], envLen[e] and legatoInv[e] hold what envSettings () gives now (the same keys, epoch, tempo and factor)
+                if (skipped)
+                    continue;
+                s = envCache[e];
+            }
+            else
+            {
+                envSettings (e, s, true);
+                envCache[e] = s;
+                envSetOk[e] = !fresh && envUntouched;
+                envSetEpoch[e] = g.baseEpoch;
+                envSetBpm[e] = g.bpm;
+                envSetFactor[e] = vc.envFactor;
+                if (skipped)
+                    continue;
+            }
         }
         if (fresh && e == 0)
         {
             const float v0 = env[0].advance (s, 0.0); // the level at the note's first sample
             envStart = v0 * v0;
         }
-        // tier low: an envelope (not the amplitude envelope) that no slot reads is advanced every fourth period (staggered) by four periods
-        double stepDt = dt;
-        if ((g.economy & kEconomyControl) != 0 && !fresh && e > 0 && ((g.usedSources >> srcEnv (e)) & 1u) == 0)
-        {
-            if (((tickCount + static_cast<uint32_t> (e)) & 3u) != 0u)
-                continue; // envOut keeps its last value
-            stepDt = 4.0 * dt;
-        }
+        const double stepDt = decimated ? 4.0 * dt : dt;
         const float v = env[e].advance (s, stepDt);
         envOut[e] = v * v;
     }
@@ -588,10 +848,10 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         {
             if (((tickCount + static_cast<uint32_t> (l)) & 3u) != 0u)
                 continue; // lfoOut / lfoOutR keep their last values
-            lfoOut[l] = lfoValue (l, g, lfoOutR[l], 4);
+            lfoOut[l] = g.referenceControl ? lfoValueReference (l, g, lfoOutR[l], 4) : lfoValue (l, g, lfoOutR[l], 4);
             continue;
         }
-        lfoOut[l] = lfoValue (l, g, lfoOutR[l]);
+        lfoOut[l] = g.referenceControl ? lfoValueReference (l, g, lfoOutR[l]) : lfoValue (l, g, lfoOutR[l]);
     }
     for (int r = 0; r < 4; ++r)
     {
@@ -605,17 +865,53 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         }
         const float fdtS = fdt * static_cast<float> (steps);
         const RlfoIdx& ri = pi.rlfo[r];
-        const int syncType = static_cast<int> (P (ri.syncType) + 0.5f);
-        if (syncType == 1 && g.rlfoValue != nullptr)
+        if (g.referenceControl)
+        {
+            const int syncType = static_cast<int> (P (ri.syncType) + 0.5f);
+            if (syncType == 1 && g.rlfoValue != nullptr)
+                rlfoOut[r] = rlfoOutR[r] = g.rlfoValue[r];
+            else
+            {
+                const int sync = static_cast<int> (P (ri.sync) + 0.5f);
+                const float rate = vc.lfoFactor * lfoRateHz (sync, P (ri.rate), static_cast<int> (P (ri.division) + 0.5f), g.bpm, g.concertA, lastSemis, P (ri.keyTranspose), P (ri.keyTune));
+                const int style = static_cast<int> (P (ri.style) + 0.5f);
+                rlfoOut[r] = rlfo[r].advance (style, rate * fdtS);
+                // stereo: the right lane has random numbers of its own
+                rlfoOutR[r] = (ri.stereo >= 0 && g.base[ri.stereo] >= 0.5f) ? rlfoR[r].advance (style, rate * fdtS) : rlfoOut[r];
+            }
+            continue;
+        }
+        // V3: the same with the keys and the rate of the random LFO kept while their inputs are the same and no slot touched its keys
+        RlfoSettings& rs = rlfoSet[r];
+        uint32_t factorBits, concertABits;
+        std::memcpy (&factorBits, &vc.lfoFactor, 4);
+        std::memcpy (&concertABits, &g.concertA, 4);
+        const bool untouched = (lastTouchedGroups & (1u << (kGroupRlfo + r))) == 0;
+        if (!(rs.ok && untouched && g.baseEpoch != 0 && rs.epoch == g.baseEpoch && rs.bpm == g.bpm && rs.factorBits == factorBits && rs.concertABits == concertABits))
+        {
+            rs.syncType = static_cast<int> (P (ri.syncType) + 0.5f);
+            rs.sync = static_cast<int> (P (ri.sync) + 0.5f);
+            rs.rateKnob = P (ri.rate);
+            rs.division = static_cast<int> (P (ri.division) + 0.5f);
+            rs.keyTranspose = P (ri.keyTranspose);
+            rs.keyTune = P (ri.keyTune);
+            rs.rate = vc.lfoFactor * lfoRateHz (rs.sync, rs.rateKnob, rs.division, g.bpm, g.concertA, lastSemis, rs.keyTranspose, rs.keyTune);
+            rs.style = static_cast<int> (P (ri.style) + 0.5f);
+            rs.stereo = ri.stereo >= 0 && g.base[ri.stereo] >= 0.5f;
+            rs.ok = untouched;
+            rs.epoch = g.baseEpoch;
+            rs.bpm = g.bpm;
+            rs.factorBits = factorBits;
+            rs.concertABits = concertABits;
+        }
+        if (rs.syncType == 1 && g.rlfoValue != nullptr)
             rlfoOut[r] = rlfoOutR[r] = g.rlfoValue[r];
         else
         {
-            const int sync = static_cast<int> (P (ri.sync) + 0.5f);
-            const float rate = vc.lfoFactor * lfoRateHz (sync, P (ri.rate), static_cast<int> (P (ri.division) + 0.5f), g.bpm, g.concertA, lastSemis, P (ri.keyTranspose), P (ri.keyTune));
-            const int style = static_cast<int> (P (ri.style) + 0.5f);
-            rlfoOut[r] = rlfo[r].advance (style, rate * fdtS);
+            const float rate = rs.sync == 4 ? vc.lfoFactor * lfoRateHz (rs.sync, rs.rateKnob, rs.division, g.bpm, g.concertA, lastSemis, rs.keyTranspose, rs.keyTune) : rs.rate;
+            rlfoOut[r] = rlfo[r].advance (rs.style, rate * fdtS);
             // stereo: the right lane has random numbers of its own
-            rlfoOutR[r] = (ri.stereo >= 0 && g.base[ri.stereo] >= 0.5f) ? rlfoR[r].advance (style, rate * fdtS) : rlfoOut[r];
+            rlfoOutR[r] = rs.stereo ? rlfoR[r].advance (rs.style, rate * fdtS) : rlfoOut[r];
         }
     }
 
@@ -632,8 +928,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         src[srcRlfo (r)] = 0.5f + 0.5f * rlfoOut[r];
     for (int m = 0; m < 8; ++m)
         src[srcMacro (m)] = g.macro[m];
-    src[kSrcVelocity] = vel;
-    src[kSrcNote] = std::clamp ((lastSemis + bend) * (1.0f / 127.0f), 0.0f, 1.0f);
+    src[kSrcVelocity] = curvedSource (vel, velCurve, velCurved, velGlide, fdt, portSeconds);
+    src[kSrcNote] = curvedSource (std::clamp ((lastSemis + bend) * (1.0f / 127.0f), 0.0f, 1.0f), noteCurve, noteCurved, noteGlide, fdt, portSeconds);
+    curveFresh = false;
     src[kSrcAftertouch] = g.channelAftertouch != nullptr ? g.channelAftertouch[chan & 15] : 0.0f;
     src[kSrcPitchWheel] = 0.5f + 0.5f * (mi.bendRange >= 0 && g.base[mi.bendRange] > 0.0f && g.channelBendSemis != nullptr ? std::clamp (bend / g.base[mi.bendRange], -1.0f, 1.0f) : 0.0f);
     src[kSrcModWheel] = g.channelModWheel != nullptr ? g.channelModWheel[chan & 15] : 0.0f;
@@ -686,6 +983,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         ctx.dt = fdt;
         ctx.bpm = g.bpm;
         ctx.voiceAge = voiceAge;
+        ctx.reference = g.referenceControl;
         { SB_SECTION (sections::tickMatrix); g.matrix->evaluate (ctx); }
         // MPC shell: the poly aftertouch of a pad goes to the Filter 1 cutoff (a layer over the patch: the knob and the matrix slots are not touched). One pole smoothing
         // (time constant kPadPressureSeconds) of the ~170 / s stream; the delta is in semitones, the control domain of the cutoff. Off: nothing is computed.
@@ -757,7 +1055,10 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     if (fresh)
     {
         for (int o = 0; o < 3; ++o)
+        {
             osc[o].start (P (pi.osc[o].phase) * (1.0f / 360.0f), clamp01 (P (pi.osc[o].randomPhase) * 0.01f), rng);
+            osc[o].setMorphStagger (WtOsc::morphStaggerSeed (noteSerial, o)); // the morph rebuilds of a chord's voices fall in different periods (WtOsc::setMorphStagger)
+        }
         sub.start (P (pi.sub.phase) * 0.01f, 0.0f, rng);
     }
     // a content set that replaced the one a sample-type player reads stops that player
@@ -765,8 +1066,16 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     {
         SB_SECTION (sections::tickOscParams);
         const OscIdx& oi = pi.osc[o];
-        const LibKeys& lk = libKeys (o);
-        const int type = std::clamp (static_cast<int> (P (oi.type) + 0.5f), 0, 4);
+        const LibKeys& lk = *libk[o];
+        const int declaredType = std::clamp (static_cast<int> (P (oi.type) + 0.5f), 0, 4);
+        // docs/ARCHITECTURE.md section 6: the plugin tolerates absence of content (built-in tables) and flags it. A Sample, Granular, Spectral or Multisample oscillator whose file is
+        // not there plays its built-in wavetable (oscN.wavetable) instead of silence; missingMask () tells the instance view (bit o: oscillator o has no file). Content present: the type as set.
+        const bool fileMissing = declaredType != kOscTypeWavetable && (g.content == nullptr || (declaredType == 4 ? g.content->instrument[o] == nullptr : !g.content->sample[o].valid));
+        const int type = fileMissing ? kOscTypeWavetable : declaredType;
+        if (fileMissing && P (oi.on) >= 0.5f)
+            missingBits |= 1u << o;
+        else
+            missingBits &= ~(1u << o);
         lib[o].setType (type, fresh);
         const bool fadingFromWt = lib[o].fadingFromWavetable();
         oscOn[o] = P (oi.on) >= 0.5f;
@@ -793,6 +1102,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             }
         }
         OscTick& t = oscTick[o];
+        t.jump = g.noSmoothing;
         t.active = oscOn[o];
         if (!oscOn[o])
         {
@@ -800,7 +1110,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             t.level = 0.0f;
             {
                 SB_SECTION (sections::tickOscUpdate);
-                osc[o].update (t, g.sampleRate, rng);
+                // (a silent tick is applied with the next one that is not: WtOsc::deferSilent)
+                if (!osc[o].deferSilent (t, g.sampleRate, false, false))
+                    osc[o].update (t, g.sampleRate, rng);
                 pitchTapOn[o] = false;
                 lib[o].updateOff (g.content);
             }
@@ -813,9 +1125,10 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         oscEnv1[o] = P (oi.env1) >= 0.5f;
         const ContentSet* cs = g.content;
         int wtChoice = std::clamp (static_cast<int> (P (oi.wavetable) + 0.5f), 0, kNumWavetableChoices - 1);
-        t.wt = wtChoice == kWavetablePresetTable ? (cs != nullptr ? cs->userTable[o].get() : nullptr) : builtinWavetable (wtChoice);
+        // audio thread: the engine resolved the table of this block (the chosen one when built, else the one the oscillator had: never a substitute)
+        t.wt = wtChoice == kWavetablePresetTable ? (cs != nullptr ? cs->userTable[o].get() : nullptr) : (g.wtResolved != nullptr ? g.wtResolved[o] : builtinWavetableIfReady (wtChoice));
         if (t.wt == nullptr)
-            t.wt = builtinWavetable (kWavetableSaw); // the preset table needs its content (a missing file: the saw)
+            t.wt = builtinWavetableIfReady (kWavetableSaw); // the preset table needs its content (a missing file: the saw): the original meaning of the fallback
         // ---- pitch: the coarse term of the pitch mode and the Ratio source
         const bool track = P (oi.pitchTrack) >= 0.5f;
         const bool bendTrack = P (oi.bendTrack) >= 0.5f;
@@ -837,11 +1150,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             {
                 if (hops >= 4)
                     ok = false;
-                else if (g.base[libKeys (s).idx[lk_pitchMode]] < 1.5f)
+                else if (g.base[libk[s]->idx[lk_pitchMode]] < 1.5f)
                     break; // the chain ends at a source that plays its own note
                 else
                 {
-                    const int next = static_cast<int> (g.base[libKeys (s).idx[lk_ratioSrc]] + 0.5f) - 1;
+                    const int next = static_cast<int> (g.base[libk[s]->idx[lk_ratioSrc]] + 0.5f) - 1;
                     if (next < 0 || next >= 4)
                         break;
                     if (next == o)
@@ -921,8 +1234,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         {
             // the cross modulation entries of the list name the other two oscillators in order
             SB_SECTION (sections::tickOscUpdate);
-            osc[o].update (t, g.sampleRate, rng);
-            osc[o].updateMorph (g.sampleRate, fresh, g.morphCache);
+            if (!osc[o].deferSilent (t, g.sampleRate, true, fresh)) // level 0 of this period: the render is exactly zero, the update waits for the next period that is not
+            {
+                osc[o].update (t, g.sampleRate, rng);
+                osc[o].updateMorph (g.sampleRate, fresh, g.morphCache);
+            }
         }
         else
         {
@@ -947,6 +1263,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             lp.serial = noteSerial;
             lp.switchKey = g.switchKey != nullptr ? g.switchKey[o] : -1;
             lp.scratch = g.spectralScratch;
+            lp.referenceKernels = g.scalarContent;
             lp.chokeLatest = g.chokeLatest != nullptr ? g.chokeLatest + o * 256 : nullptr;
             lp.chokeCounter = g.chokeCounter != nullptr ? g.chokeCounter + o : nullptr;
             SB_SECTION (sections::tickOscUpdate);
@@ -966,15 +1283,20 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         subCh.env1 = P (si.env1) >= 0.5f;
         subTick.active = subCh.on;
         static const int kSubTable[6] = { 0, kRoundedRectTable, 3, 1, 2, 4 };
-        subTick.wt = builtinWavetable (kSubTable[std::clamp (static_cast<int> (P (si.waveform) + 0.5f), 0, 5)]);
+        subTick.wt = builtinWavetableIfReady (kSubTable[std::clamp (static_cast<int> (P (si.waveform) + 0.5f), 0, 5)]);
         subTick.semis = noteSemis + std::round (P (si.octave)) * 12.0f + P (si.tune) + (vc.mask[4] ? vc.detuneSemis : 0.0f);
-        subTick.level = subCh.on ? std::max (0.0f, P (si.level) * 0.01f) : 0.0f;
+        // sub.mono (document 02, 9): only the voice with the lowest note of the sounding voices (within half a semitone) carries the sub; the gate moves the level, which the
+        // oscillator ramps across the period
+        const float subGate = (si.mono >= 0 && g.base[static_cast<size_t> (si.mono)] >= 0.5f && tunedKey > g.lowestNote + 0.5f) ? 0.0f : 1.0f;
+        subTick.level = subCh.on ? std::max (0.0f, P (si.level) * 0.01f) * subGate : 0.0f;
         subTick.pan = std::clamp (P (si.pan) * 0.01f + (vc.mask[4] ? vc.pan : 0.0f), -1.0f, 1.0f);
+        subTick.jump = g.noSmoothing;
         subTick.voices = 1;
         subTick.spread = 0.0f;
         subTick.blend = 1.0f;
         subTick.frame = 0.0f;
-        sub.update (subTick, g.sampleRate, rng);
+        if (!sub.deferSilent (subTick, g.sampleRate, false, false))
+            sub.update (subTick, g.sampleRate, rng);
         pitchTap[3] = subTick.semis;
         pitchTapOn[3] = subCh.on;
     }
@@ -997,8 +1319,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         noisePan = std::clamp (P (ni.pan) * 0.01f + (vc.mask[3] ? vc.pan : 0.0f), -1.0f, 1.0f);
         noiseStereo = clamp01 (P (ni.stereo) * 0.01f);
         noiseColour = std::clamp (static_cast<int> (P (ni.sample) + 0.5f), 0, 8);
-        static const int kNoiseFilterKey = findParamIndex (hashKey ("noise.filter"));
-        noiseFilterAmount = kNoiseFilterKey >= 0 ? clamp01 (std::fabs (P (kNoiseFilterKey) * 0.01f)) * (P (kNoiseFilterKey) < 0.0f ? -1.0f : 1.0f) : 0.0f;
+        noiseFilterAmount = noiseFilterKey >= 0 ? clamp01 (std::fabs (P (noiseFilterKey) * 0.01f)) * (P (noiseFilterKey) < 0.0f ? -1.0f : 1.0f) : 0.0f;
         noisePitchSemis = P (ni.pitch) + P (ni.fine) * 0.01f + (P (ni.keytrack) >= 0.5f ? noteSemis - 60.0f : 0.0f);
         // noise.type = Sample: a content sample is the source (a missing file plays the generator)
         const ContentSet* ncs = g.content;
@@ -1042,10 +1363,13 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         else
         {
             FilterSettings& s = filtSet[f];
-            fillFilterSettings (s, fi, [this] (int i) { return P (i); }, [this] (int i) { return PR (i); }, fi.cleanMode >= 0 && g.base[fi.cleanMode] >= 0.5f,
+            fillFilterSettings (s, fi, P, PR, fi.cleanMode >= 0 && g.base[fi.cleanMode] >= 0.5f,
                                 keyNum, vc.cutoffSemis, (g.economy & kEconomyMath) != 0);
             s.scalarOnly = g.scalarFilters;
+            s.noSmoothing = g.noSmoothing;
             filt[f].set (s);
+            if (g.noSmoothing)
+                filt[f].set (s); // the same settings twice: the coefficients do not ramp
             if (fresh)
                 filt[f].reset(); // the smoothers start at the targets of this note, not at the ones of the note this voice played before
             if (filtStale[f])
@@ -1056,7 +1380,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         }
         filtLevelPrev[f] = filtLevel[f];
         filtLevel[f] = dbToGain (P (fi.level));
-        if (fresh)
+        if (fresh || g.noSmoothing)
             filtLevelPrev[f] = filtLevel[f];
     }
     fresh = false;
@@ -1067,10 +1391,33 @@ namespace
 /** The largest magnitude of n samples. */
 inline float peakOf (const float* x, int n) noexcept
 {
-    float m = 0.0f;
-    for (int k = 0; k < n; ++k)
-        m = std::max (m, std::fabs (x[k]));
-    return m;
+    return peak::peakAbs (x, n);   // NEON where built (dsp/peak.h): the same float as the scalar loop it replaced, NaN passed over
+}
+
+/** The first write into a routing buffer (CPU-REVIEW-VOICE-MOD.md V6): d[k] = 0.0f + a[k] * g, lane by lane the operations of simd::addScaled on a buffer of +0 (the same +0 + product, so a
+    product of -0 gives +0 as before; NEON: the same vmulq / vaddq). */
+inline void firstScaled (float* d, const float* a, float g, int n) noexcept
+{
+    int k = 0;
+#if SB_NEON
+    const float32x4_t vg = vdupq_n_f32 (g), zero = vdupq_n_f32 (0.0f);
+    for (; k + 4 <= n; k += 4)
+        vst1q_f32 (d + k, vaddq_f32 (zero, vmulq_f32 (vld1q_f32 (a + k), vg)));
+#endif
+    for (; k < n; ++k)
+        d[k] = 0.0f + a[k] * g;
+}
+/** The same for simd::addTo: d[k] = 0.0f + b[k]. */
+inline void firstAdd (float* d, const float* b, int n) noexcept
+{
+    int k = 0;
+#if SB_NEON
+    const float32x4_t zero = vdupq_n_f32 (0.0f);
+    for (; k + 4 <= n; k += 4)
+        vst1q_f32 (d + k, vaddq_f32 (zero, vld1q_f32 (b + k)));
+#endif
+    for (; k < n; ++k)
+        d[k] = 0.0f + b[k];
 }
 } // namespace
 
@@ -1085,10 +1432,18 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     // only the targets and filter inputs that something is added to are cleared (usedT / usedFin); the rest is never read
     float tE_L[4][kControlPeriod], tE_R[4][kControlPeriod], tN_L[4][kControlPeriod], tN_R[4][kControlPeriod];
     float fin_L[2][kControlPeriod], fin_R[2][kControlPeriod];
-    float extNext[4][kControlPeriod] = {};
     float fout_L[2][kControlPeriod], fout_R[2][kControlPeriod];
+    // the mono outputs of Noise, Sub, Filter 1, Filter 2 of this chunk (the modulators of the warps in the next one). V6: written straight into extMono (nothing reads extMono after the
+    // oscillators of this chunk), and only the samples of a source that is off are zeroed; the reference (TickGlobals::referenceControl) fills a zeroed local array and copies it.
+    const bool ref = gl->referenceControl;
+    float extNextRef[4][kControlPeriod];
+    if (ref)
+        std::memset (extNextRef, 0, sizeof extNextRef);
+    float (*const extNext)[kControlPeriod] = ref ? extNextRef : extMono;
+    bool extWritten[2] = {};   // Noise, Sub
     bool usedT[2][4] = {}; // [through env 1][target]
     bool usedFin[2] = {};
+    // V6: the first write into a buffer is 0 + a * g (firstScaled), no fill with zeros before it; a buffer read with nothing written into it (a filter input) is zeroed then
     auto touchFin = [&] (int f)
     {
         if (!usedFin[f])
@@ -1104,33 +1459,49 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         simd::addScaled (dl, a, g, n);
         simd::addScaled (dr, b, g, n);
     };
+    auto toFin = [&] (int f, const float* a, const float* b, float g)
+    {
+        if (!usedFin[f] && !ref)
+        {
+            firstScaled (fin_L[f], a, g, n);
+            firstScaled (fin_R[f], b, g, n);
+            usedFin[f] = true;
+            return;
+        }
+        touchFin (f);
+        addScaled (fin_L[f], fin_R[f], a, b, g);
+    };
     auto toTarget = [&] (int target, bool env1, const float* a, const float* b, float g)
     {
+        float* zl = env1 ? tE_L[target] : tN_L[target];
+        float* zr = env1 ? tE_R[target] : tN_R[target];
         if (!usedT[env1][target])
         {
-            float* zl = env1 ? tE_L[target] : tN_L[target];
-            float* zr = env1 ? tE_R[target] : tN_R[target];
+            usedT[env1][target] = true;
+            if (!ref)
+            {
+                firstScaled (zl, a, g, n);
+                firstScaled (zr, b, g, n);
+                return;
+            }
             std::fill (zl, zl + kControlPeriod, 0.0f);
             std::fill (zr, zr + kControlPeriod, 0.0f);
-            usedT[env1][target] = true;
         }
-        addScaled (env1 ? tE_L[target] : tN_L[target], env1 ? tE_R[target] : tN_R[target], a, b, g);
+        addScaled (zl, zr, a, b, g);
     };
     // a source: its destination (0 Filter 1, 1 Filter 2, 2 both, 3 Effects only, 4 Direct out, 5 Filter blend, 6 None) and its taps to the buses
     auto route = [&] (int dest, bool env1, const float* a, const float* b, float blend, float send1, float send2)
     {
         switch (dest)
         {
-            case 0: touchFin (0); addScaled (fin_L[0], fin_R[0], a, b, 1.0f); break;
-            case 1: touchFin (1); addScaled (fin_L[1], fin_R[1], a, b, 1.0f); break;
-            case 2: touchFin (0); touchFin (1); addScaled (fin_L[0], fin_R[0], a, b, 1.0f); addScaled (fin_L[1], fin_R[1], a, b, 1.0f); break;
+            case 0: toFin (0, a, b, 1.0f); break;
+            case 1: toFin (1, a, b, 1.0f); break;
+            case 2: toFin (0, a, b, 1.0f); toFin (1, a, b, 1.0f); break;
             case 3: toTarget (0, env1, a, b, 1.0f); break;
             case 4: toTarget (3, env1, a, b, 1.0f); break;
             case 5: // filter blend: an equal power crossfade between the filters (0 = Filter 1 only)
-                touchFin (0);
-                touchFin (1);
-                addScaled (fin_L[0], fin_R[0], a, b, std::cos (blend * 1.5707963f));
-                addScaled (fin_L[1], fin_R[1], a, b, std::sin (blend * 1.5707963f));
+                toFin (0, a, b, std::cos (blend * 1.5707963f));
+                toFin (1, a, b, std::sin (blend * 1.5707963f));
                 break;
             default: break;
         }
@@ -1159,12 +1530,17 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         {
             osc[o].render (t0, n, oscL[o], oscR[o], cross, gl->sampleRate);
             if (w0 != 1.0f || w1 != 1.0f)
+            {
+                // (k + 1) / n = (k + 1) * (1 / n) exactly when n is a power of two (see WtOsc::render)
+                const bool nPow2 = (n & (n - 1)) == 0;
+                const float invN = 1.0f / static_cast<float> (n);
                 for (int k = 0; k < n; ++k)
                 {
-                    const float g = lerp (w0, w1, static_cast<float> (k + 1) / static_cast<float> (n));
+                    const float g = lerp (w0, w1, nPow2 ? static_cast<float> (k + 1) * invN : static_cast<float> (k + 1) / static_cast<float> (n));
                     oscL[o][k] *= g;
                     oscR[o][k] *= g;
                 }
+            }
         }
         else
         {
@@ -1198,6 +1574,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         { SB_SECTION (sections::sub); sub.render (t0, n, sl, sr2, nullptr, gl->sampleRate); }
         for (int k = 0; k < n; ++k)
             extNext[1][k] = 0.5f * (sl[k] + sr2[k]);
+        extWritten[1] = true;
         srcLevel[4] = 0.5f * (sl[n - 1] + sr2[n - 1]);
         if (out.srcSq != nullptr)
         {
@@ -1210,13 +1587,9 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     {
         SB_SECTION (sections::noise);
         // noise.pitch: the generator played at another rate (down: the band shrinks, up: white but quieter) and noise.filter (docs/engine-spec/02 section 10)
-        const float rate = std::exp2 (noisePitchSemis * (1.0f / 12.0f));
-        const float oct = std::log2 (std::max (rate, 1.0e-3f));
-        const float pitchGain = oct <= 0.0f ? 1.0f : (oct <= 1.0f ? lerp (1.0f, 0.757f, oct) : (oct <= 2.0f ? lerp (0.757f, 0.628f, oct - 1.0f) : 0.628f * std::pow (0.83f, oct - 2.0f)));
-        const float lpC = rate < 0.999f ? 1.0f - std::exp (-kTwoPif * std::min (0.45f, 0.4f * rate) * 1.0f) : 1.0f;
+        const NoiseCoeffs& nc = noiseCoeffs.get (noisePitchSemis, noiseFilterAmount, gl->sampleRate);
+        const float pitchGain = nc.pitchGain, lpC = nc.lpC, fC = nc.fC;
         const float fa = noiseFilterAmount;
-        const float fHz = fa < 0.0f ? 20000.0f * std::pow (0.002f, -fa) : 20.0f * std::pow (800.0f, std::max (fa, 0.0f));
-        const float fC = std::min (0.99f, 1.0f - std::exp (-kTwoPif * std::min (fHz, 0.45f * static_cast<float> (gl->sampleRate)) / static_cast<float> (gl->sampleRate)));
         auto shapeNoiseCh = [&] (int ch, float x) noexcept
         {
             float* lp = noiseLp[ch];
@@ -1266,6 +1639,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         }
         for (int k = 0; k < n; ++k)
             extNext[0][k] = 0.5f * (nl[k] + nr[k]);
+        extWritten[0] = true;
         srcLevel[3] = 0.5f * (nl[n - 1] + nr[n - 1]);
         if (out.srcSq != nullptr)
         {
@@ -1313,12 +1687,24 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         if (filtSend[f][1] > 0.0f)
             toTarget (2, filtEnv1[f], fout_L[f], fout_R[f], filtSend[f][1]);
     };
+    // series: the output of the first filter is added to the input of the second (the first write into an empty input: 0 + x, V6)
+    auto addFin = [&] (int f, const float* l, const float* r)
+    {
+        if (!usedFin[f] && !ref)
+        {
+            firstAdd (fin_L[f], l, n);
+            firstAdd (fin_R[f], r, n);
+            usedFin[f] = true;
+            return;
+        }
+        touchFin (f);
+        simd::addTo (fin_L[f], l, n);
+        simd::addTo (fin_R[f], r, n);
+    };
     if (routing == 2) // series 2 -> 1
     {
         runFilter (1);
-        touchFin (0);
-        simd::addTo (fin_L[0], fout_L[1], n);
-        simd::addTo (fin_R[0], fout_R[1], n);
+        addFin (0, fout_L[1], fout_R[1]);
         runFilter (0);
         toMain (0, false);
         toMain (1, true); // the output of the first filter went on into the second: only its taps stay
@@ -1326,9 +1712,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     else if (routing == 1) // series 1 -> 2
     {
         runFilter (0);
-        touchFin (1);
-        simd::addTo (fin_L[1], fout_L[0], n);
-        simd::addTo (fin_R[1], fout_R[0], n);
+        addFin (1, fout_L[0], fout_R[0]);
         runFilter (1);
         toMain (1, false);
         toMain (0, true);
@@ -1341,11 +1725,16 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         toMain (1, false);
     }
 
-    for (int j = 0; j < 4; ++j)
-    {
-        std::copy (extNext[j], extNext[j] + n, extMono[j]);
-        std::fill (extNext[j] + n, extNext[j] + kControlPeriod, 0.0f);
-    }
+    if (ref)
+        for (int j = 0; j < 4; ++j)
+        {
+            std::copy (extNext[j], extNext[j] + n, extMono[j]);
+            std::fill (extNext[j] + n, extNext[j] + kControlPeriod, 0.0f);
+        }
+    else
+        for (int j = 0; j < 2; ++j)
+            if (!extWritten[j])
+                std::fill (extMono[j], extMono[j] + n, 0.0f); // (Filter 1 and 2 are written by runFilter in every routing)
     // ---- amplitude, velocity, declick, fade (only the targets that received something are mixed: the others would add exact zeros)
     SB_SECTION (sections::renderFinal);
     float lastL = 0.0f, lastR = 0.0f;

@@ -326,9 +326,14 @@ def write_manifest(directory, manifest):
 def make_manifest(directory, args):
     directory = Path(directory)
     meta = {}
+    labels = {}       # the optional per-file "category" and "title" survive a rewrite of the manifest
     existing = directory / MANIFEST_NAME
     if existing.exists():
-        meta = {k: v for k, v in read_manifest(directory).items() if k != "files"}
+        old = read_manifest(directory)
+        meta = {k: v for k, v in old.items() if k != "files"}
+        for e in old.get("files", []) if isinstance(old, dict) else []:
+            if isinstance(e, dict) and isinstance(e.get("path"), str):
+                labels[e["path"]] = {k: e[k] for k in ("category", "title") if isinstance(e.get(k), str)}
     meta.setdefault("schemaVersion", 1)
     for arg, key in (("id", "id"), ("name", "name"), ("version", "version"), ("kind", "kind"), ("license", "license"),
                      ("attribution", "attribution"), ("requires_plugin", "requires_plugin"), ("description", "description")):
@@ -339,7 +344,10 @@ def make_manifest(directory, args):
     files = []
     for path in list_pack_files(directory):
         full = directory / path
-        files.append({"path": path, "sha256": sha256_file(full), "size": full.stat().st_size})
+        entry = {"path": path}
+        entry.update(labels.get(path, {}))
+        entry.update({"sha256": sha256_file(full), "size": full.stat().st_size})
+        files.append(entry)
     meta["files"] = files
     errors = check_manifest_content(meta, "contentpack(%s)" % directory.name)
     if errors:

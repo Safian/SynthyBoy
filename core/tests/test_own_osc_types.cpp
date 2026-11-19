@@ -2,11 +2,14 @@
 // spectral morph and the memory of the wavetable bank (docs/engine-spec/07 section 8, vectors S1 .. S5, and 02 section 13).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <chrono>
 #include <cmath>
 #include <complex>
 #include <functional>
 #include <cstdio>
+#include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "osc/wavetable_bank.h"
@@ -343,15 +346,15 @@ TEST (own_osc_granular_and_spectral_types_play_the_sample)
     }
 }
 
-// S5: a sample type without content is silent
-TEST (own_osc_sample_type_without_content_is_silent)
+// S5: a sample type without content is not silent: the missing file is tolerated and flagged, the oscillator plays its built-in wavetable (docs/ARCHITECTURE.md section 6, test_own_content_policy)
+TEST (own_osc_sample_type_without_content_plays_the_built_in_wavetable)
 {
     for (int t = 1; t <= 4; ++t)
     {
         Rig r (false, "osc1.type", static_cast<float> (t));
         const Out o = r.render (69, 0.5, 0.6);
-        CHECK (peakOf (o.l, 0, o.l.size()) == 0.0);
-        CHECK (peakOf (o.r, 0, o.r.size()) == 0.0);
+        CHECK (peakOf (o.l, 0, o.l.size()) > 0.01);
+        CHECK (peakOf (o.r, 0, o.r.size()) > 0.01);
     }
 }
 
@@ -519,6 +522,140 @@ TEST (own_wavetable_bank_memory)
     const size_t bytes = own::builtinBankBytes();
     std::printf ("    built-in wavetable bank: %.1f MB (the eight 64 frame tables with all mip levels and spectra)\n", static_cast<double>(bytes) / 1048576.0);
     CHECK (bytes < 32u * 1024u * 1024u);
+}
+
+// the lazy bank (Quality::lazyTables): a table is built when it is first chosen; the audio thread reads a finished table by an atomic pointer and never a substitute
+TEST (own_lazy_wavetable_bank_ready_and_same)
+{
+    own::resetBuiltinBankForTests();
+    CHECK (own::builtinWavetableIfReady (5) == nullptr);        // nothing was built by anyone
+    CHECK (! own::builtinWavetableSettled (5));
+    own::ensureBuiltinWavetables ((1u << 5) | (1u << 12));
+    const own::Wavetable* a = own::builtinWavetableIfReady (5);
+    CHECK (a != nullptr);
+    CHECK (own::builtinWavetable (5) == a);                       // the same object, not a second build
+    CHECK (own::builtinWavetableSettled (5));
+    CHECK (own::builtinWavetableIfReady (kWavetablePresetTable) == nullptr && own::builtinWavetableSettled (kWavetablePresetTable));   // "Preset table" has no built-in table
+    CHECK (own::builtinWavetableIfReady (-1) == nullptr && own::builtinWavetableIfReady (999) == nullptr);
+    own::requestBuiltinWavetable (-1, 3);                         // out of range: ignored
+    own::requestBuiltinWavetable (99, 3);
+    own::requestBuiltinWavetable (0, 999);
+    CHECK (own::builtinBankBuildMs() >= 0.0);
+}
+
+namespace
+{
+struct HeldNoteRun
+{
+    std::unique_ptr<IEngine> eng;
+    std::vector<float> out;
+    HeldNoteRun (float firstTable, bool lazy)
+    {
+        eng = createOwnEngine();
+        set ("osc1.wavetable", firstTable);
+        set ("osc2.on", 0.0f);
+        set ("filter1.on", 0.0f);
+        Quality q;
+        q.realtime = true;
+        q.lazyTables = lazy;
+        eng->prepare (48000.0, 256, q);
+        eng->readyContent();
+    }
+    void set (const char* key, float v)
+    {
+        if (const ParamInfo* p = findParamByKey (key))
+            eng->setParam (p->id, v);
+    }
+    void blocks (int n, bool noteOn)
+    {
+        std::vector<float> l (256), r (256);
+        for (int b = 0; b < n; ++b)
+        {
+            std::vector<Event> ev;
+            if (noteOn && b == 0)
+                ev.push_back (sbtest::noteOn (0, 48));
+            eng->process (ev.data(), static_cast<int> (ev.size()), l.data(), r.data(), 256);
+            out.insert (out.end(), l.begin(), l.end());
+            out.insert (out.end(), r.begin(), r.end());
+        }
+    }
+};
+}
+
+// A table chosen during a held note that is not built yet: the oscillator KEEPS the table it had (the output is exactly that of an engine that never changed), and once the builder has delivered
+// the new table the output is the new table's: never a third waveform (no saw substitute).
+TEST (own_lazy_table_change_keeps_the_old_table_until_the_swap)
+{
+    own::resetBuiltinBankForTests();
+    own::setBuiltinBuilderPausedForTests (true);
+    HeldNoteRun stay (1.0f, true), change (1.0f, true);   // saw (single cycle table: built in prepare)
+    stay.blocks (8, true);
+    change.blocks (8, true);
+    change.set ("osc1.wavetable", 9.0f);                  // Formant Sweep: a 64 frame table nobody has built
+    CHECK (change.eng->contentPending());
+    stay.blocks (30, false);
+    change.blocks (30, false);
+    bool same = stay.out.size() == change.out.size();
+    for (size_t i = 0; same && i < stay.out.size(); ++i)
+        same = stay.out[i] == change.out[i];
+    CHECK (same);                                         // while the new table is not ready: exactly the old table's output
+    own::setBuiltinBuilderPausedForTests (false);
+    bool built = false;
+    for (int i = 0; i < 4000 && ! built; ++i)             // bounded wait for the builder (20 s)
+    {
+        built = ! change.eng->contentPending();
+        if (! built)
+            std::this_thread::sleep_for (std::chrono::milliseconds (5));
+    }
+    CHECK (built);
+    const size_t before = change.out.size();
+    stay.blocks (30, false);
+    change.blocks (30, false);
+    bool differs = false;
+    for (size_t i = before; i < change.out.size() && ! differs; ++i)
+        differs = stay.out[i] != change.out[i];
+    CHECK (differs);                                      // the new table sounds after the swap
+    double energy = 0.0;
+    for (size_t i = before; i < change.out.size(); ++i)
+        energy += static_cast<double> (change.out[i]) * change.out[i];
+    CHECK (energy > 1.0e-9);                              // and it is a sound, not silence
+}
+
+// A program change: the tables the incoming values name are built BEFORE the values are set (readyContentFor), so the first block after the change already has index and table together.
+TEST (own_state_load_builds_the_tables_before_the_values_take_effect)
+{
+    own::resetBuiltinBankForTests();
+    own::setBuiltinBuilderPausedForTests (true);   // the builder cannot help: only the calling thread builds
+    HeldNoteRun run (1.0f, true);
+    ParamValues vals = ParamValues::defaults();
+    if (const ParamInfo* p = findParamByKey ("osc1.wavetable"))
+        vals.plain[static_cast<size_t> (findParamIndex (p->id))] = 11.0f;
+    run.eng->readyContentFor (vals.plain, paramCount());
+    CHECK (own::builtinWavetableSettled (11));
+    for (size_t i = 0; i < paramCount(); ++i)
+        run.eng->setParam (paramTable()[i].id, vals.plain[i]);
+    CHECK (! run.eng->contentPending());
+    own::setBuiltinBuilderPausedForTests (false);
+}
+
+// open, close at once, repeat: the builder is stopped by the last engine (bound: one frame of a table and its 10 ms sleep), nothing is left running and nothing half built is ever read
+TEST (own_lazy_engine_open_close_repeat)
+{
+    own::resetBuiltinBankForTests();
+    for (int i = 0; i < 20; ++i)
+    {
+        HeldNoteRun run (static_cast<float> (1 + (i % 2)), true);
+        run.set ("osc1.wavetable", static_cast<float> (5 + (i % 8)));   // a morph table: the builder starts on it
+        run.blocks (2, i % 2 == 0);
+        const auto t0 = std::chrono::steady_clock::now();
+        run.eng.reset();                                               // the destructor stops and joins the builder when this was the last engine
+        const double ms = std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count();
+        CHECK (ms < 500.0);                                            // generous for a loaded test machine: the design bound is one frame plus 10 ms
+    }
+    // the tables that were finished are whole: reading them gives the same pointer and numbers on the next open
+    for (int c = 5; c <= 12; ++c)
+        if (const own::Wavetable* t = own::builtinWavetableIfReady (c))
+            CHECK (t->numFrames() == 64);
 }
 
 // Render OSC Warp bakes the warp of the oscillator into a 256 frame table; the table played at the same warp position sounds like the warp

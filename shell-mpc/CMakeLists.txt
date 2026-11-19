@@ -40,6 +40,30 @@ if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB MATCHES "^[+-]?[0-9]+(\\.[0-9]+)?$" OR SYNTH
 endif()
 target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OUTPUT_GAIN_DB=${SYNTHYBOY_MPC_OUTPUT_GAIN_DB})
 
+# The program list of a plugin track (the PRESET pop-up of the host), grouped like the Sounds browser: docs/MPC.md "Preset list of a plugin track". A string:
+#   off            the flat list as ever (default; the program list is bit-identical to a build without this option)
+#   prefix-short   "<Bass|Lead|Pad|Pluck|Keys|FX>: <Name>", cut to 24 characters
+#   prefix-group   "<Browser group>: <Name>", cut to 24 characters at the write (the host's name buffer)
+#   headers        a header entry before every group ("-- BASS SUB+808 --"); a header loads the first preset of its group
+#   vst-categories the VST2 program category opcodes are answered (names unchanged, in the order of the groups)
+# These are experiments for the device: pass it with scripts/build-mpc.sh --cmake-arg -DSYNTHYBOY_MPC_PROGRAM_GROUPS=<mode>.
+set(SYNTHYBOY_MPC_PROGRAM_GROUPS "off" CACHE STRING "MPC shell: grouping of the host's program list (off, prefix-short, prefix-group, headers, vst-categories)")
+set_property(CACHE SYNTHYBOY_MPC_PROGRAM_GROUPS PROPERTY STRINGS off prefix-short prefix-group headers vst-categories)
+if(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "off")
+    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 0)
+elseif(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "prefix-short")
+    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 1)
+elseif(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "prefix-group")
+    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 2)
+elseif(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "headers")
+    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 3)
+elseif(SYNTHYBOY_MPC_PROGRAM_GROUPS STREQUAL "vst-categories")
+    set(SYNTHYBOY_MPC_PROGRAM_GROUPS_N 4)
+else()
+    message(FATAL_ERROR "SYNTHYBOY_MPC_PROGRAM_GROUPS must be off, prefix-short, prefix-group, headers or vst-categories, not '${SYNTHYBOY_MPC_PROGRAM_GROUPS}'")
+endif()
+target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_PROGRAM_GROUPS=${SYNTHYBOY_MPC_PROGRAM_GROUPS_N})
+
 # Peak limiter after the make-up gain: by default OFF (the signal may exceed 0 dBFS, the player can place a limiter insert on the track in the MPC).
 # SYNTHYBOY_MPC_OUTPUT_LIMITER=ON restores the stereo-linked peak limiter at -1 dBFS.
 option(SYNTHYBOY_MPC_OUTPUT_LIMITER "MPC shell: peak limiter at -1 dBFS after the make-up gain" OFF)
@@ -108,6 +132,17 @@ if(SYNTHYBOY_MPC_DEBUG_HOOKS)
     target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_DEBUG_HOOKS=1)
 else()
     target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_DEBUG_HOOKS=0)
+endif()
+
+# The developer log (shell-mpc/kit/log.h, macro MPCKIT_DEV_LOG) and the files the plugin and its GPU helper write into /tmp for the developer (shell-mpc/write_files.h, macro SYNTHYBOY_MPC_WRITE_FILES).
+# ON (default, today's behaviour: the device measurements need the status file): the log exists (every category off until /tmp/synthyboy-log.conf switches it on) and the files are written as before.
+# OFF (the public release: scripts/build-mpc.sh --release): no log code, no log strings, no log thread; no report / probe / error files; the helper's output goes to /dev/null; the status file only while
+# /tmp/synthyboy-overlay-status-on exists. docs/MPC.md "Logging in the plugin".
+option(SYNTHYBOY_MPC_DEV_LOG "MPC shell: developer log and diagnostic files in /tmp (OFF for the public release)" ON)
+if(SYNTHYBOY_MPC_DEV_LOG)
+    target_compile_definitions(synthyboy_mpc PRIVATE MPCKIT_DEV_LOG=1 SYNTHYBOY_MPC_WRITE_FILES=1)
+else()
+    target_compile_definitions(synthyboy_mpc PRIVATE MPCKIT_DEV_LOG=0 SYNTHYBOY_MPC_WRITE_FILES=0)
 endif()
 
 if(SYNTHYBOY_MPC_OVERLAY)
@@ -401,6 +436,15 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(ui_led_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME ui_led_host COMMAND ui_led_host)
 
+    add_executable(ui_carousel_host EXCLUDE_FROM_ALL ui/tests/ui_carousel_host.cpp)
+    target_include_directories(ui_carousel_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_compile_features(ui_carousel_host PRIVATE cxx_std_17)
+    target_compile_options(ui_carousel_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME ui_carousel_host COMMAND ui_carousel_host)
+
     # the FX slot editor driven by the tables of the effects (ui/fx_layout.h): the tables against the engine, the one rule for what does nothing, the pages, the number field kind
     add_executable(ui_fx_editor_host EXCLUDE_FROM_ALL ui/tests/ui_fx_editor_host.cpp)
     target_include_directories(ui_fx_editor_host PRIVATE
@@ -442,12 +486,29 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(host_strings_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME host_strings_host COMMAND host_strings_host)
 
+    add_executable(preset_index_host EXCLUDE_FROM_ALL tests/preset_index_host.cpp)
+    target_include_directories(preset_index_host PRIVATE "${CMAKE_SOURCE_DIR}/core/include" "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(preset_index_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(preset_index_host PRIVATE cxx_std_17)
+    target_compile_options(preset_index_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME preset_index_host COMMAND preset_index_host "${CMAKE_SOURCE_DIR}/content/presets" "${CMAKE_SOURCE_DIR}/scripts/build-preset-index.py")
+
     add_executable(poll_guard_host EXCLUDE_FROM_ALL tests/poll_guard_host.cpp)
     target_include_directories(poll_guard_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(poll_guard_host PRIVATE Threads::Threads)
     target_compile_features(poll_guard_host PRIVATE cxx_std_17)
     target_compile_options(poll_guard_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME poll_guard_host COMMAND poll_guard_host)
+
+    # The start-up record and the developer log (kit/log.h): logic only, no plugin needed.
+    foreach(t startup_timing_host log_host log_off_host log_rt_host)
+        add_executable(${t} EXCLUDE_FROM_ALL tests/${t}.cpp)
+        target_include_directories(${t} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+        target_link_libraries(${t} PRIVATE Threads::Threads)
+        target_compile_features(${t} PRIVATE cxx_std_17)
+        target_compile_options(${t} PRIVATE -Wall -Wextra -Wpedantic)
+        add_test(NAME ${t} COMMAND ${t})
+    endforeach()
 
     add_executable(play_log_host EXCLUDE_FROM_ALL tests/play_log_host.cpp)
     target_include_directories(play_log_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -552,5 +613,15 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(ui_cov_new_parts_host PRIVATE cxx_std_17)
     target_compile_options(ui_cov_new_parts_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME ui_cov_new_parts_host COMMAND ui_cov_new_parts_host)
+
+    add_executable(ui_load_bar_host EXCLUDE_FROM_ALL ui/tests/load_bar_host.cpp)
+    target_include_directories(ui_load_bar_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(ui_load_bar_host PRIVATE Threads::Threads)
+    target_compile_features(ui_load_bar_host PRIVATE cxx_std_17)
+    target_compile_options(ui_load_bar_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME ui_load_bar_host COMMAND ui_load_bar_host)
 endif()
 

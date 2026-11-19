@@ -24,16 +24,26 @@
 #include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/events.h"
+#include "synthyboy/helper_thread_hook.h"
 #include "synthyboy/midi_events.h"
 #include "synthyboy/params.h"
 #include "synthyboy/quality.h"
 #include "synthyboy/state.h"
 #include "synthyboy/user_content.h"
+#include "synthyboy/wavetable_catalogue.h"
+#include "synthyboy/wavetable_file.h"
 
 #include "mpc_vst2_abi.h"
+#include "thread_policy.h"
+#if defined(__linux__)
+#include "overlay/cpu_plan_linux.h"   // the plan of the cores (standalone; also used by the engine helper threads below)
+#endif
 #include "device_profile.h"
 #include "output_peak.h"
+#include "startup_timing.h"
+#include "kit/log.h"
 #include "host_strings.h"
+#include "event_inbox.h"
 #include "output_stage.h"
 #include "safe_file.h"
 #include "plugin_paths.h"
@@ -56,6 +66,12 @@
 #define SYNTHYBOY_MPC_LFO_LIVE 0
 #endif
 #if SYNTHYBOY_MPC_LFO_LIVE
+// SYNTHYBOY_MPC_PROGRAM_GROUPS (CMake option of the same name, a string): how the program list of the host is grouped (program_list.h, docs/MPC.md "Preset list of a plugin track"); the number is the
+// GroupMode: 0 off (default, the flat list as ever), 1 prefix-short, 2 prefix-group, 3 headers, 4 vst-categories.
+#ifndef SYNTHYBOY_MPC_PROGRAM_GROUPS
+#define SYNTHYBOY_MPC_PROGRAM_GROUPS 0
+#endif
+
 #ifndef SYNTHYBOY_MPC_LFO_LIVE_HZ
 #define SYNTHYBOY_MPC_LFO_LIVE_HZ 10
 #endif
@@ -308,7 +324,8 @@ struct PluginInstance
     // Core
     std::unique_ptr<synthyboy::IEngine> engine;
     synthyboy::StateContent content;
-    EventBuffer events;
+    EventBuffer events;                                         // the events of the block being rendered (audio thread only)
+    synthyboy_mpc::EventInbox<synthyboy::Event> eventInbox;     // effProcessEvents pushes here (any thread), processReplacing takes them over at the start of its block
 
     // Transport
     double sampleRate = 44100.0;
@@ -320,6 +337,9 @@ struct PluginInstance
 
     // Programs
     std::vector<synthyboy_mpc::ProgramEntry> programs;
+    // The program list as the host sees it (built once at start, never changed afterwards: no lock): program number -> item (Init, header, preset). currentProgram is always a preset or Init.
+    synthyboy_mpc::ProgramView view;
+    std::atomic<bool> hostAskedCategories { false };   // the host has called effGetNumProgramCategories (mode vst-categories answers by category only after that)
     std::atomic<int> currentProgram {0};
     // The "chunk wins" protection: the MPC saves the program number in the project
     // and may select that program again right after restoring the chunk; that selection
@@ -372,7 +392,18 @@ struct PluginInstance
 
     // Output stage: the make-up gain of the MPC shell (SYNTHYBOY_MPC_OUTPUT_GAIN_DB, set once in the constructor) and, only when built with SYNTHYBOY_MPC_OUTPUT_LIMITER, the peak limiter behind it.
     // Only the audio thread calls process(); prepare() runs with the engine's prepare (effMainsChanged, the host is not processing then).
-    synthyboy_mpc::OutputStage outputStage;
+    synthyboy_mpc::SwitchableOutputStage outputStage;
+    // All Sound Off requests of the host side (effStopProcess, effMainsChanged (0)): the audio thread puts one event at the front of its next block (processReplacing).
+    std::atomic<bool> soundOffPending { false };
+    std::atomic<unsigned> soundOffRequests { 0 };
+    // The output limiter as a plugin setting (Master page, OUTPUT block, "LIMIT"; saved in the chunk as "mpcOutputLimiter"; docs/MPC.md "Output limiter"). Not an engine parameter and not a host
+    // parameter (the host's parameter count does not change). SYNTHYBOY_MPC_OUTPUT_LIMITER in the environment (or a build with it ON) forces the state for tests (output_stage.h).
+    std::atomic<bool> outputLimiter { synthyboy_mpc::kOutputLimiterDefaultOn };
+    void applyOutputLimiter() noexcept
+    {
+        const int forced = synthyboy_mpc::outputLimiterForced();
+        outputStage.setLimiter (forced >= 0 ? forced == 1 : outputLimiter.load (std::memory_order_relaxed));
+    }
 
     // ---- the life of the instance towards the host (robustness review F5, F12) ----
     // closing: effClose has begun. From that moment no thread of this instance calls the host (the gate below answers 0 at once), every loop of ours stops at its next look, and nothing new is started.
@@ -415,7 +446,9 @@ struct PluginInstance
         {
             return inst.engine && inst.engine->copyReadout (out) && out.block != 0; // block 0: the engine wrote no values yet
         }
+        void requestMeters() noexcept override { if (inst.engine) inst.engine->requestMeters(); }
         double bpm() const noexcept override { return inst.overlayBpm.load (std::memory_order_relaxed); }
+        bool tablesLoading() const noexcept override { return (inst.engine && inst.engine->contentPending()) || inst.wtLoading.load (std::memory_order_relaxed); }   // a built-in table in the making, or a wavetable file the display thread is loading
         int playSelection (int group) const noexcept override { return group >= 0 && group < synthyboy_mpc::play::kGroups ? inst.playSel[group].load (std::memory_order_relaxed) : 1; }
         void setQGroup (const int* targets, int n) noexcept override { inst.qRouter.setGroup (targets, n, static_cast<int> (synthyboy::paramCount())); }
         void writeParam (int tableIndex, float normalised) noexcept override { inst.uiWrite (tableIndex, normalised); }
@@ -431,8 +464,21 @@ struct PluginInstance
         void contentRoots (std::vector<ContentRoot>& out) const override { inst.contentRootsOf (out); }
         void requestContent (int osc, int kind, const std::string& path) override { inst.requestContentLoad (osc, kind, path); }
         int contentLoad (std::string* message) const override { return inst.contentLoadState (message); }
+        void wavetableSources (synthyboy::CatalogueSources& out) const override { inst.wavetableSourcesOf (out); }
+        void requestWavetable (int osc, const synthyboy::ContentFileRef& ref) override { inst.requestWavetableLoad (osc, ref); }
+        int takeWavetableSteps (int osc) noexcept override { return osc >= 1 && osc <= 3 ? inst.wtStepMail[osc - 1].exchange (0, std::memory_order_relaxed) : 0; }
         void setLfoShape (int lfo, const synthyboy::ContentLfoShape& shape) override { inst.requestLfoShape (lfo, shape); }
         void setMacroName (int macro, const std::string& name) override { inst.macroNameQueue.post (macro, name); }
+        bool outputLimiter (bool& on) const noexcept override
+        {
+            on = inst.outputStage.limiter();   // what the stage runs (the setting, or the state the environment forces)
+            return true;
+        }
+        void setOutputLimiter (bool on) noexcept override
+        {
+            inst.outputLimiter.store (on, std::memory_order_relaxed);
+            inst.applyOutputLimiter();
+        }
 #if SYNTHYBOY_MPC_PAD_PRESSURE
         bool padPressure (bool& on, float& percent) const noexcept override
         {
@@ -447,6 +493,18 @@ struct PluginInstance
             inst.updateEnginePadPressure();
         }
 #endif
+        unsigned missingContent() const noexcept override { return inst.engine != nullptr ? inst.engine->missingContent() : 0u; }
+        void voiceStatus (std::string& out) const override
+        {
+            synthyboy::VoiceStats s;
+            if (inst.engine == nullptr || ! inst.engine->voiceStats (s))
+                return;
+            char b[480];
+            std::snprintf (b, sizeof b, "voices_active: %d\nvoices_released: %d\nvoices_sustaining: %d\nheld_keys: %d\nheld_lowest: %d\nheld_highest: %d\norphan_voices: %d\nnote_ons: %u\nnote_offs: %u\nnote_offs_unmatched: %u\nvoices_stolen: %u\nsustain_pedal: %d\nsound_off_requests: %u\nmissing_content: %u\n",
+                           s.active, s.released, s.sustaining, s.heldKeys, s.lowestHeld, s.highestHeld, s.orphans, s.noteOns, s.noteOffs, s.unmatchedNoteOffs, s.stolen, s.sustainPedal ? 1 : 0,
+                           inst.soundOffRequests.load (std::memory_order_relaxed), inst.engine->missingContent());
+            out += b;
+        }
         void setQVirtual (int id, float normalised) noexcept override { inst.qRouter.setVirtualValue (id, normalised); }
         bool takeQVirtual (int id, float& normalised) noexcept override { return inst.qRouter.takeVirtual (id, normalised); }
         unsigned long qWriteCount() const noexcept override { return inst.qRouter.writeCount(); }
@@ -466,7 +524,17 @@ struct PluginInstance
     std::atomic<double> overlayRate { 44100.0 };   // sampleRate for the overlay thread (sampleRate itself is the host thread's)
     std::atomic<double> overlayBpm { 120.0 };      // the host's tempo for the overlay thread (the synced LFO rates)
     std::shared_ptr<const synthyboy::StateContent> overlayContent;   // a copy of `content` for the overlay thread (std::atomic_load / atomic_store): custom LFO shapes, user wavetables
-    void publishOverlayContent() { std::atomic_store (&overlayContent, std::make_shared<const synthyboy::StateContent> (content)); }
+    void publishOverlayContent()
+    {
+        std::atomic_store (&overlayContent, std::make_shared<const synthyboy::StateContent> (content));
+        for (int o = 0; o < 3; ++o)   // the Q knob of a table stepper reads these (qWrite): a file table is loaded for the oscillator
+        {
+            bool has = false;
+            for (const synthyboy::ContentWavetable& w : content.wavetables)
+                has = has || w.osc == o + 1;
+            wtFileLoaded[o].store (has, std::memory_order_relaxed);
+        }
+    }
 
     // ---- the content the plugin-drawn pages load (the sample / instrument browser of the oscillator UI, overlay/content_browser.h): the overlay thread posts a request, the display thread loads it (reads the
     // file, decodes the header, puts it into the content store, sets the engine's content). `contentMutex` serialises every change of `content` (the host thread's setChunk, this load) and the chunk's copy of it.
@@ -478,6 +546,36 @@ struct PluginInstance
     std::atomic<int> contentLoadStatus { 0 };                 // 0 none, 1 loading, 2 done, 3 failed
     std::atomic<long long> contentLoadFailedMs { 0 };         // when the last load failed (the failure is shown for a few seconds)
     std::set<std::string> contentPackRoots;                    // the directories added as pack roots (once each)
+
+    // ---- the wavetable browser (overlay/wavetable_browser.h, docs/MPC.md "Wavetable browser"): the overlay thread posts the wavetable FILE to load (the latest request wins), the display thread reads, checks and hashes it (off the audio
+    // thread), puts the reference into the content, gives the content to the engine (the new table is built there; the old one plays until it is swapped in) and only then sets oscN.wavetable to "Preset table".
+    bool wtReqPending = false;                                 // under contentReqMutex
+    int wtReqOsc = 0;
+    synthyboy::ContentFileRef wtReqRef;
+    std::atomic<bool> wtLoading { false };                     // a wavetable file is waiting to be loaded or is being loaded: the amber bar of the pages
+    std::atomic<int> wtStepMail[3] {};                         // the Q knob of an oscillator whose table is a file: steps (-1 / +1, summed) the overlay turns into "the previous / next file of the category"
+    std::atomic<bool> wtFileLoaded[3] {};                      // the content has a wavetable file for oscillator 1 .. 3 (set by publishOverlayContent)
+    static int keyIndex (const char* key) noexcept { const synthyboy::ParamInfo* p = synthyboy::findParamByKey (key); return p != nullptr ? static_cast<int> (p - synthyboy::paramTable()) : -1; }
+    int wtParam[3] = { keyIndex ("osc1.wavetable"), keyIndex ("osc2.wavetable"), keyIndex ("osc3.wavetable") };
+    /** The Q knob's write of a table index. A stepped Q knob on oscN.wavetable while the oscillator plays a FILE table (the parameter is "Preset table" and the content has the file) does not move the parameter
+        to the neighbouring built-in table: it leaves one step for the overlay, which loads the previous / next file of the category (wavetable_catalogue.h). Atomics only (the host's thread or the audio thread). */
+    void qWrite (int t, float normalised) noexcept
+    {
+        for (int o = 0; o < 3; ++o)
+            if (t == wtParam[o] && t >= 0 && wtFileLoaded[o].load (std::memory_order_relaxed))
+            {
+                const synthyboy::ParamInfo& info = synthyboy::paramTable()[t];
+                const float plain = synthyboy::constrainValue (info, synthyboy::fromNormalised (info, normalised));
+                const float old = paramMirror[t].load (std::memory_order_relaxed);
+                if (static_cast<int> (std::lround (old)) == synthyboy::kWavetablePresetTable)
+                {
+                    if (plain != old)
+                        wtStepMail[o].fetch_add (plain > old ? 1 : -1, std::memory_order_relaxed);
+                    return;
+                }
+            }
+        writeRealParam (this, static_cast<size_t> (t), normalised);
+    }
 
     /** The places the browser starts from: the SD card of the MPC, the plugin's own content folder, every USB drive that is mounted under /media (the internal partitions are not offered). Only those that exist. */
     void contentRootsOf (std::vector<synthyboy_mpc::overlay::IInstanceView::ContentRoot>& out) const
@@ -512,6 +610,49 @@ struct PluginInstance
         contentReqKind = kind;
         contentReqPath = path;
         contentLoadStatus.store (1, std::memory_order_relaxed);
+    }
+    /** Where the wavetable catalogue looks: the installed packs (Content/packs) and the roots that may hold SynthyBoy/Wavetables (the SD card, the USB drives, the plugin's Content folder). */
+    void wavetableSourcesOf (synthyboy::CatalogueSources& out) const
+    {
+        out = synthyboy::CatalogueSources {};
+        if (! contentDirPath.empty())
+            out.packDirs.push_back (contentDirPath + "/packs");
+        std::vector<synthyboy_mpc::overlay::IInstanceView::ContentRoot> roots;
+        contentRootsOf (roots);
+        for (const auto& r : roots)
+            out.userRoots.push_back (r.path);
+    }
+    void requestWavetableLoad (int osc, const synthyboy::ContentFileRef& ref)
+    {
+        std::lock_guard<std::mutex> g (contentReqMutex);
+        wtReqPending = true;
+        wtReqOsc = osc;
+        wtReqRef = ref;
+        wtLoading.store (true, std::memory_order_relaxed);
+        contentLoadStatus.store (1, std::memory_order_relaxed);
+    }
+    /** The drives (and the SD card) are pack roots of the content store for the files of SynthyBoy/Wavetables: a reference "SynthyBoy/Wavetables" + "Bass/x.wav" is read from whichever root has it. Added once each, under
+        contentMutex (the store is read under it). The plugin's own Content folder is the store's first root already. */
+    void ensureUserWavetableRoots()
+    {
+        if (! contentStore)
+            return;
+        std::vector<synthyboy_mpc::overlay::IInstanceView::ContentRoot> roots;
+        contentRootsOf (roots);
+        std::lock_guard<std::mutex> g (contentMutex);
+        for (const auto& r : roots)
+            if (r.path != contentDirPath && contentPackRoots.insert (r.path).second)
+                contentStore->addPackRoot (r.path);
+    }
+    /** State loading: a content section that names a file of the user folders needs the roots before the engine reads it. Not under contentMutex. */
+    void ensureUserWavetableRootsFor (const synthyboy::StateContent& c)
+    {
+        for (const synthyboy::ContentWavetable& w : c.wavetables)
+            if (w.ref.pack == synthyboy::kUserWavetablePack)
+            {
+                ensureUserWavetableRoots();
+                return;
+            }
     }
     int contentLoadState (std::string* message) const
     {
@@ -633,24 +774,73 @@ struct PluginInstance
     {
         int osc = 0, kind = 0;
         std::string path;
+        synthyboy::ContentFileRef wtRef;
+        bool wavetable = false;
         {
             std::lock_guard<std::mutex> g (contentReqMutex);
-            if (! contentReqPending)
+            if (wtReqPending)
+            {
+                wtReqPending = false;
+                wavetable = true;
+                osc = wtReqOsc;
+                wtRef = wtReqRef;
+            }
+            else if (! contentReqPending)
                 return;
-            contentReqPending = false;
-            osc = contentReqOsc;
-            kind = contentReqKind;
-            path = contentReqPath;
+            else
+            {
+                contentReqPending = false;
+                osc = contentReqOsc;
+                kind = contentReqKind;
+                path = contentReqPath;
+            }
         }
         std::string why;
         bool ok = false;
-        try { ok = loadContentFile (osc, kind, path, why); }
-        catch (...) { why = "unexpected error"; }
+        try { ok = wavetable ? loadWavetableFile (osc, wtRef, why) : loadContentFile (osc, kind, path, why); }
+        catch (...) { why = wavetable ? "not a wavetable file: unexpected error" : "unexpected error"; }
         std::lock_guard<std::mutex> g (contentReqMutex);
         contentLoadMessage = why;
         contentLoadFailedMs.store (steadyMs(), std::memory_order_relaxed);
-        if (! contentReqPending || ! ok)   // a newer request is already waiting: its own state (loading) stays
+        if (! wtReqPending)
+            wtLoading.store (false, std::memory_order_relaxed);
+        if ((! contentReqPending && ! wtReqPending) || ! ok)   // a newer request is already waiting: its own state (loading) stays
             contentLoadStatus.store (ok ? 2 : 3, std::memory_order_relaxed);
+    }
+    /** A wavetable file the browser chose (the pack's file, or a file of a user folder): read bounded, parsed by the rules of wavetable_file.h, its SHA-256 computed now, the reference put into the content of the oscillator,
+        the engine given the content (the table is built there while the oscillator keeps playing the one it had), and only then oscN.wavetable = "Preset table". A refused file leaves everything as it was and says why. */
+    bool loadWavetableFile (int osc, synthyboy::ContentFileRef ref, std::string& why)
+    {
+        if (osc < 1 || osc > synthyboy::kMaxContentWavetables || ! contentStore || ! engine)
+        {
+            why = "no content store";
+            return false;
+        }
+        ensureUserWavetableRoots();   // takes contentMutex itself: before the lock below
+        std::lock_guard<std::mutex> g (contentMutex);   // the store's roots change under this mutex: the file is read (bounded, parsed, hashed) under it too
+        int frames = 0;
+        std::string reason;
+        if (! synthyboy::prepareWavetableRef (*contentStore, ref, frames, reason))
+        {
+            why = synthyboy::wavetableRefusalText (reason);
+            return false;
+        }
+        synthyboy::StateContent next = content;
+        synthyboy::attachWavetable (next, osc, ref, std::string(), frames);
+        if (! synthyboy::validateContent (next))
+        {
+            why = synthyboy::wavetableRefusalText ("the name cannot be kept in the state");
+            return false;
+        }
+        content = std::move (next);
+        engine->setContent (content);
+        publishOverlayContent();
+        if (wtParam[osc - 1] >= 0)
+        {
+            const synthyboy::ParamInfo& p = synthyboy::paramTable()[wtParam[osc - 1]];
+            uiWrite (wtParam[osc - 1], synthyboy::toNormalised (p, synthyboy::constrainValue (p, static_cast<float> (synthyboy::kWavetablePresetTable))));
+        }
+        return true;
     }
     /** A content file read whole (a sample, an SFZ): a regular file of 1 .. `limit` bytes, read in blocks that stop when the instance is closing (effClose does not wait for a 200 MB sample on a slow stick). */
     bool readWholeFile (const std::string& path, std::vector<uint8_t>& bytes, size_t limit) const
@@ -683,6 +873,7 @@ struct PluginInstance
         synthyboy::StateContent next = content;
         synthyboy::ContentFileRef ref;
         int rootNote = -1;
+        synthyboy::SampleLoopSettings loop;
         if (kind == 2 && sfz)
         {
             const std::string folder = dirName (path), pack = baseName (folder), root = dirName (folder);
@@ -711,6 +902,7 @@ struct PluginInstance
                 return false;
             }
             rootNote = facts.rootNote;
+            loop = synthyboy::sampleLoopSettings (facts);
             if (kind == 1)
             {
                 if (! contentStore->addFile (synthyboy::ContentKind::sample, name, bytes, ref))
@@ -739,6 +931,15 @@ struct PluginInstance
         if (rootNote >= 0 && kind == 1)
             if (const synthyboy::ParamInfo* p = synthyboy::findParamByKey (("osc" + std::to_string (osc) + ".sample.root").c_str()))
                 uiWrite (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, static_cast<float> (rootNote))));
+        if (loop.valid && kind == 1)
+        {
+            // the loop of the WAV 'smpl' chunk becomes the oscillator's loop settings, once, at load time (the same path as the root note)
+            const std::string o = "osc" + std::to_string (osc);
+            const std::pair<const char*, float> writes[3] = { { ".sample.loop_mode", static_cast<float> (loop.mode) }, { ".sample.loop_start", loop.startPercent }, { ".sample.loop_end", loop.endPercent } };
+            for (const auto& w : writes)
+                if (const synthyboy::ParamInfo* p = synthyboy::findParamByKey ((o + w.first).c_str()))
+                    uiWrite (static_cast<int> (p - synthyboy::paramTable()), synthyboy::toNormalised (*p, synthyboy::constrainValue (*p, w.second)));
+        }
         return true;
     }
     bool overlayAttached = false;
@@ -1091,15 +1292,27 @@ struct PluginInstance
             audioMaster (e, audioMasterAutomate, paramIndex, 0, nullptr, overlayValue.load (std::memory_order_relaxed));
     }
 
+    /** The knobs the views show live (the filters' cutoff and resonance, the oscillators' frame and warp): the audio thread takes the list over at the end of its next block. Building the list constructs every
+        page once (24 scenes): the display thread does it at its start, not the host's thread in VSTPluginMain. */
+    void publishReadoutTargets()
+    {
+        if (! engine)
+            return;
+        synthyboy_mpc::StartupDetailScope t (synthyboy_mpc::StartupTimes::kOverlayReadout);
+        std::vector<int> idx;
+        synthyboy_mpc::overlay::Controller::readoutTargets (idx);
+        engine->setReadoutTargets (idx.data(), static_cast<int> (idx.size()));
+    }
+
     void startOverlay()
     {
         if (overlayAttached)
             return;
         if (engine)
         {
-            std::vector<int> idx;
-            synthyboy_mpc::overlay::Controller::readoutTargets (idx);   // the knobs the views show live (the filters' cutoff and resonance, the oscillators' frame and warp): the audio thread takes the list over at the end of its next block
-            engine->setReadoutTargets (idx.data(), static_cast<int> (idx.size()));
+#if ! SYNTHYBOY_MPC_LFO_LIVE
+            publishReadoutTargets();   // no display thread in this build: here
+#endif
             publishOverlayContent();
         }
         const int slot = synthyboy_mpc::overlay::Service::instance().attach (&overlayView);   // the slot stays this instance's until effClose; -1: more than 16 instances
@@ -1192,6 +1405,12 @@ struct PluginInstance
             // Own scheduling, set here (not inherited): normal policy, nice 0, all CPUs. Not lower than normal: this thread holds host locks while it is inside
             // audioMasterAutomate, and a starved holder would make the host's own threads wait for it.
             synthyboy_mpc::useNormalScheduling (0, "sb-lfo-display");
+#if SYNTHYBOY_MPC_OVERLAY && defined(__linux__)
+            // the display thread polls and calls the host like the overlay thread: the same cores (the overlay's CPU plan keeps off the isolated ones and the ones the host's audio threads are pinned to).
+            // The plan is made by the overlay thread (and re-read every 10 s): applied at the start when it exists, else (and on every change) on the passes of the loop below.
+            unsigned cpuPlanSeen = 0;
+            synthyboy_mpc::overlay::Service::applyCpusToThisThread (cpuPlanSeen);
+#endif
             const int first = static_cast<int> (synthyboy::paramCount());
             int syncIdx[synthyboy_mpc::kLfoLiveCount], phaseIdx[synthyboy_mpc::kLfoLiveCount];
             for (int l = 0; l < synthyboy_mpc::kLfoLiveCount; ++l)
@@ -1214,6 +1433,9 @@ struct PluginInstance
             synthyboy_mpc::SpectrumAnalyser analyser;   // allocates here, once, on this thread
             float specLast[synthyboy_mpc::kSpectrumCount] = {};
 #endif
+#if SYNTHYBOY_MPC_OVERLAY
+            bool readoutPublished = false;
+#endif
             while (!liveStop.load (std::memory_order_relaxed))
             {
 #if SYNTHYBOY_MPC_SPECTRUM
@@ -1227,6 +1449,9 @@ struct PluginInstance
                 std::this_thread::sleep_until (next);
                 if (liveStop.load (std::memory_order_relaxed) || closing.load (std::memory_order_acquire))
                     break;
+#if SYNTHYBOY_MPC_OVERLAY && defined(__linux__)
+                synthyboy_mpc::overlay::Service::applyCpusToThisThread (cpuPlanSeen);   // one atomic load while the plan is the same
+#endif
                 if (! hostKnows.load (std::memory_order_acquire))
                     continue;   // the host has not called us yet, so it may not hold this effect's pointer: no callback before it does, and no report is taken out of its flag meanwhile (robustness review F12)
 #if SYNTHYBOY_MPC_OVERLAY
@@ -1237,6 +1462,13 @@ struct PluginInstance
                 gContent.run ([&] { injectFault ("content"); contentPoll(); });                                          // a sample or an instrument the browser asked for
                 gShape.run ([&] { injectFault ("shape"); lfoShapePoll(); });                                             // a drawn LFO shape the LFO page wrote
                 gMacroName.run ([&] { injectFault ("macro"); macroNamePoll (e); });                                      // a name the Macros page gave a macro
+                if (! readoutPublished)   // once, after the first report of the overlay slot above (see publishReadoutTargets)
+                {
+                    readoutPublished = true;
+                    try { publishReadoutTargets(); } catch (...) {}
+                }
+                if (engine)
+                    synthyboy_mpc::startupTimes().setWavetableMs (engine->wavetableBuildMs());   // the background builder goes on after prepare: the status shows its running total
 #endif
                 gLive.run ([&]
                 {
@@ -1395,6 +1627,7 @@ struct PluginInstance
 #else
         b += "LFO_LIVE=OFF";
 #endif
+        b += std::string (" PROGRAM_GROUPS=") + synthyboy_mpc::groupModeName (static_cast<synthyboy_mpc::GroupMode> (SYNTHYBOY_MPC_PROGRAM_GROUPS));
 #if SYNTHYBOY_MPC_PAD_PRESSURE
         extraParams += synthyboy_mpc::kPadPressureParams;
         b += " PAD_PRESSURE=ON";
@@ -1439,6 +1672,7 @@ struct PluginInstance
         outputStage.prepare (sampleRate > 0.0 ? sampleRate : 44100.0);
         outputStage.setGainDb (static_cast<float> (SYNTHYBOY_MPC_OUTPUT_GAIN_DB));
         outputStage.reset();
+        applyOutputLimiter();
         // Create engine based on SYNTHYBOY_MPC_ENGINE_VITAL (from CMake) && SYNTHYBOY_HAS_VITAL (from core)
 #if SYNTHYBOY_MPC_ENGINE_VITAL && SYNTHYBOY_HAS_VITAL
         engine = synthyboy::createEngine(synthyboy::EngineKind::vital);
@@ -1448,6 +1682,8 @@ struct PluginInstance
 #if SYNTHYBOY_MPC_PAD_PRESSURE
         updateEnginePadPressure();
 #endif
+        synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kEngineCreate);
+        MPCKIT_LOG ("startup", info, "engine created at %.2f ms", mpckit::devlog::logger().elapsedMs());
 
         // Build content store path: Content/ next to the plugin binary.
         // UserContentStore keeps its files under <user directory>/content.
@@ -1473,10 +1709,22 @@ struct PluginInstance
             if (engine && contentStore)
                 engine->setContentStore (contentStore.get());
         }
+        synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kContentStore);
 
         // Scan factory presets (never on the audio thread).
-        if (!contentDir.empty())
-            programs = synthyboy_mpc::scanPrograms (contentDir + "/presets");
+        {
+            MPCKIT_SCOPE ("startup", "scan factory presets");
+            if (!contentDir.empty())
+            {
+                // the preset index when it is valid and current (one small file, docs/MPC.md "The preset index"), else the scan; user presets outside this folder are not in the index
+                std::string source;
+                programs = synthyboy_mpc::loadPrograms (contentDir + "/presets", &source);
+                MPCKIT_LOG ("startup", info, "%zu programs from %s", programs.size(), source.c_str());
+            }
+        }
+        view = synthyboy_mpc::buildProgramView (programs, static_cast<synthyboy_mpc::GroupMode> (SYNTHYBOY_MPC_PROGRAM_GROUPS));
+        synthyboy_mpc::startupTimes().setProgramMode (synthyboy_mpc::groupModeName (view.mode), view.numPrograms());
+        synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kScanPresets);
 
         // Apply default values to engine and mirror
         if (engine)
@@ -1492,6 +1740,7 @@ struct PluginInstance
 #endif
             }
         }
+        synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kDefaultParams);
     }
 
     /** The end of this instance's life (effClose calls it, the destructor again, harmlessly), in the order that keeps everything alive for whoever still uses it:
@@ -1577,10 +1826,22 @@ static std::string currentProgramName (PluginInstance* inst)
             return inst->noProgramName.empty() ? "Init" : inst->noProgramName;
     }
     int prog = static_cast<int> (inst->currentProgram.load (std::memory_order_relaxed));
-    if (prog == 0)
-        return "Init";
-    if (prog >= 1 && prog <= static_cast<int> (inst->programs.size()))
-        return inst->programs[static_cast<size_t> (prog - 1)].name;
+    if (prog >= 1 && prog < inst->view.numPrograms() && ! inst->view.isHeader (prog))
+        return inst->view.items[static_cast<size_t> (prog)].baseName;
+    return "Init";
+}
+
+/** The name of the current program as the host's list shows it (the label of the mode); in the "no program" state the saved name. */
+static std::string currentProgramLabel (PluginInstance* inst)
+{
+    {
+        std::lock_guard<std::mutex> g (inst->programMutex);
+        if (inst->noProgram)
+            return inst->noProgramName.empty() ? "Init" : inst->noProgramName;
+    }
+    const int prog = static_cast<int> (inst->currentProgram.load (std::memory_order_relaxed));
+    if (prog >= 1 && prog < inst->view.numPrograms() && ! inst->view.isHeader (prog))
+        return inst->view.label (prog);
     return "Init";
 }
 
@@ -1604,6 +1865,7 @@ static std::string buildStateChunk (PluginInstance* inst)
         chunk = synthyboy_mpc::play::chunkWithPlay (std::move (chunk), sel);
     }
 #endif
+    chunk = synthyboy_mpc::chunkWithOutputLimiter (std::move (chunk), inst->outputLimiter.load (std::memory_order_relaxed));   // before the pad pressure members, which are read from the very end
 #if SYNTHYBOY_MPC_PAD_PRESSURE
     chunk = synthyboy_mpc::chunkWithPadPressure (std::move (chunk), inst->padPressure.load (std::memory_order_relaxed), inst->padPressureAmount.load (std::memory_order_relaxed));
 #endif
@@ -1618,6 +1880,8 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
 {
     const auto* table = synthyboy::paramTable();
     size_t count = synthyboy::paramCount();
+    if (inst->engine)
+        inst->engine->readyContentFor (values.plain, count);   // not the audio thread: the tables the state names are built BEFORE its parameters are set, so index and table take effect together
     for (size_t i = 0; i < count; ++i)
     {
         inst->paramMirror[i].store(values.plain[i], std::memory_order_relaxed);
@@ -1628,6 +1892,7 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
             inst->engine->setParam(table[i].id, values.plain[i]);
     }
 #if SYNTHYBOY_MPC_OVERLAY
+    inst->ensureUserWavetableRootsFor (content);   // a file of the user wavetable folders: the drives are pack roots before the engine reads the reference (the lock below is not held yet)
     std::lock_guard<std::mutex> contentGuard (inst->contentMutex);
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
@@ -1638,6 +1903,8 @@ static void applyState (PluginInstance* inst, const synthyboy::ParamValues& valu
     inst->content = std::move(content);
     if (inst->engine)
         inst->engine->setContent(inst->content);
+    if (inst->engine)
+        inst->engine->readyContent();   // not the audio thread: the built-in tables the state names are there before the next block (a table another thread is still making is waited for)
 #if SYNTHYBOY_MPC_OVERLAY
     inst->publishOverlayContent();
     if (namesChanged)
@@ -1682,8 +1949,31 @@ static VstIntPtr pluginDispatcher(AEffect* e, VstInt32 opcode, VstInt32 index,
             if (! inst->hostKnows.load (std::memory_order_relaxed))
                 inst->hostKnows.store (true, std::memory_order_release);   // the host holds the AEffect pointer now: the display thread may call it back (robustness review F12)
         }
-    try { return dispatch(e, opcode, index, value, ptr, opt); }
-    catch (...) { return 0; }
+    synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kFirstCall);   // the host's first call of this plugin (once; a relaxed load afterwards)
+    // What the host waits for: the time of every call it makes of us, the longest of each kind kept (status file host_call_max_ms_*). Not the per-block audio calls.
+    int slot = -1;
+    switch (opcode)
+    {
+        case effOpen: slot = synthyboy_mpc::StartupTimes::kCallOpen; break;
+        case effSetProgram: slot = synthyboy_mpc::StartupTimes::kCallSetProgram; break;
+        case effGetProgramName: slot = synthyboy_mpc::StartupTimes::kCallGetProgramName; break;
+        case effGetProgramNameIndexed: slot = synthyboy_mpc::StartupTimes::kCallGetProgramNameIndexed; break;
+        case effGetChunk: slot = synthyboy_mpc::StartupTimes::kCallGetChunk; break;
+        case effSetChunk: slot = synthyboy_mpc::StartupTimes::kCallSetChunk; break;
+        case effMainsChanged: slot = synthyboy_mpc::StartupTimes::kCallMains; break;
+        case effSetSampleRate: slot = synthyboy_mpc::StartupTimes::kCallSampleRate; break;
+        case effSetBlockSize: slot = synthyboy_mpc::StartupTimes::kCallBlockSize; break;
+        case effGetParamName: case effGetParamLabel: case effGetParamDisplay: case effGetParameterProperties: case effCanBeAutomated: slot = synthyboy_mpc::StartupTimes::kCallParamInfo; break;
+        case effProcessEvents: break;   // every block, on the audio thread: not timed here
+        default: slot = synthyboy_mpc::StartupTimes::kCallOther; break;
+    }
+    const int64_t t0 = slot >= 0 ? synthyboy_mpc::StartupTimes::nowNs() : 0;
+    VstIntPtr result = 0;
+    try { result = dispatch(e, opcode, index, value, ptr, opt); }
+    catch (...) { result = 0; }
+    if (slot >= 0)
+        synthyboy_mpc::startupTimes().callDone (static_cast<synthyboy_mpc::StartupTimes::Call> (slot), synthyboy_mpc::StartupTimes::nowNs() - t0);
+    return result;
 }
 
 #if SYNTHYBOY_MPC_CALLBACK_STATS
@@ -1768,12 +2058,20 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 #if SYNTHYBOY_MPC_OVERLAY
         synthyboy_mpc::PlayLog::line ("effSetProgram %d (protected %d, window %d)", prog, inst->protectedProgram.load (std::memory_order_relaxed), inst->restoreSinceMs.load (std::memory_order_relaxed) >= 0 ? 1 : 0);
 #endif
-        int numProgs = static_cast<int> (inst->programs.size()) + 1;
+        synthyboy_mpc::startupTimes().noteProgramCall (synthyboy_mpc::StartupTimes::kPcSetProgram, prog);
+        int numProgs = inst->view.numPrograms();
         // Out of range: do nothing
         if (prog < 0 || prog >= numProgs) return 1;
 
         // Check if protection is armed for this index BEFORE disarming
         bool wasProtected = (inst->protectedProgram.load (std::memory_order_relaxed) == prog);
+        // A header of the list (mode headers) loads a preset of its group (program_list.h effectiveProgram)
+        if (inst->view.isHeader (prog))
+        {
+            prog = synthyboy_mpc::effectiveProgram (inst->view, prog, inst->currentProgram.load (std::memory_order_relaxed));
+            if (prog < 0) return 1;
+            wasProtected = false;
+        }
         // Disarm protection (any effSetProgram disarms it)
         inst->protectedProgram.store (-1, std::memory_order_relaxed);
 
@@ -1796,7 +2094,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         else
         {
             // Program >= 1: load preset file
-            const auto& entry = inst->programs[static_cast<size_t> (prog - 1)];
+            const auto& entry = inst->programs[static_cast<size_t> (inst->view.items[static_cast<size_t> (prog)].preset)];
             std::string data;
             if (! synthyboy_mpc::safefile::readWholeBounded (entry.path.c_str(), data, kMaxPresetFileBytes))
                 return 1; // file cannot be read, is not a regular file or is larger than a preset can be (4 MB; a preset is a few KB)
@@ -1825,6 +2123,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     case effGetProgram:
     {
         if (!inst) return 0;
+        synthyboy_mpc::startupTimes().noteProgramCall (synthyboy_mpc::StartupTimes::kPcGetProgram, 0);
         return inst->currentProgram.load (std::memory_order_relaxed);
     }
 
@@ -1839,24 +2138,38 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (!inst) return 0;
         char* name = static_cast<char*>(ptr);
         if (!name) return 0;
-        std::string progName = currentProgramName (inst);
+        synthyboy_mpc::startupTimes().noteProgramCall (synthyboy_mpc::StartupTimes::kPcGetProgramName, 0);
+        std::string progName = currentProgramLabel (inst);
 #if SYNTHYBOY_MPC_OVERLAY
         if (inst->programModified.load (std::memory_order_relaxed))
             progName += " *";
 #endif
-        copyString(name, kVstMaxProgNameLen + 1, progName.c_str());
+        copyString(name, kVstMaxProgNameLen + 1, synthyboy_mpc::truncateUtf8 (progName, synthyboy_mpc::kProgramNameMax).c_str());
         return 1;
     }
 
     case effGetProgramNameIndexed:
     {
         char* name = static_cast<char*>(ptr);
+        if (inst)
+            synthyboy_mpc::startupTimes().noteProgramCall (synthyboy_mpc::StartupTimes::kPcGetProgramNameIndexed, static_cast<int> (value));
         if (!inst || !name || index < 0) return 0;
-        int numProgs = static_cast<int> (inst->programs.size()) + 1;
-        if (index >= numProgs) return 0;
-        const std::string& progName = (index == 0) ? std::string ("Init") : inst->programs[static_cast<size_t> (index - 1)].name;
-        copyString(name, kVstMaxProgNameLen + 1, progName.c_str());
+        // value = the VST2 category (-1: no category); only the mode vst-categories looks at it. The buffer is char[kVstMaxProgNameLen + 1]: the label is cut to what fits.
+        const int n = synthyboy_mpc::programOfIndexed (inst->view, index, static_cast<int> (value), inst->hostAskedCategories.load (std::memory_order_relaxed));
+        if (n < 0) return 0;
+        copyString(name, kVstMaxProgNameLen + 1, synthyboy_mpc::truncateUtf8 (inst->view.label (n), synthyboy_mpc::kProgramNameMax).c_str());
         return 1;
+    }
+
+    case effGetNumProgramCategories_Deprecated:
+    {
+        // VST2 program categories: the number of categories (0 = no categories, a flat list). Only the mode vst-categories has any.
+        if (!inst) return 0;
+        synthyboy_mpc::startupTimes().noteProgramCall (synthyboy_mpc::StartupTimes::kPcNumCategories, static_cast<int> (value));
+        const int n = synthyboy_mpc::numProgramCategories (inst->view);
+        if (n > 0)
+            inst->hostAskedCategories.store (true, std::memory_order_relaxed);
+        return n;
     }
 
     case effGetParamName:
@@ -2045,9 +2358,16 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
     {
         if (!inst) return 0;
         inst->mainsOn = (value != 0);
+        if (value == 0)
+        {
+            inst->soundOffRequests.fetch_add (1u, std::memory_order_relaxed);
+            inst->soundOffPending.store (true, std::memory_order_release);
+        }
 #if SYNTHYBOY_MPC_CALLBACK_STATS
         inst->callbackStats.restartGaps();
 #endif
+        if (inst->mainsOn)
+            synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kResume);
         // Prepare when mains go on if sample rate or block size changed since last prepare
         if (inst->mainsOn && inst->engine)
         {
@@ -2059,11 +2379,15 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 // The quality profile of this device (device_profile.h: a table by device name with overrides, "low" everywhere until the devices are measured), fixed for the life of the process.
                 synthyboy::Quality quality = synthyboy_mpc::profileQuality (synthyboy_mpc::profileInForce().profile);
                 quality.realtime = true; // live: audio thread never waits for helper thread
+                quality.lazyTables = true; // the 64 frame built-in tables nothing names are built by a low priority thread, not before the host's resume call returns (docs/MPC.md "Start-up time")
                 inst->engine->prepare(safeSr, bs, quality);
                 inst->outputStage.prepare (safeSr);
                 inst->prepared = true;
                 inst->lastPreparedSampleRate = sr;
                 inst->lastPreparedBlockSize = bs;
+                synthyboy_mpc::startupTimes().setWavetableMs (inst->engine->wavetableBuildMs());
+                synthyboy_mpc::startupTimes().setPrepareParts (inst->engine->prepareDetailMs (0), inst->engine->prepareDetailMs (1));
+                MPCKIT_LOG ("startup", info, "engine prepared (sr %d, block %d)", sr, bs);
             }
             else
             {
@@ -2071,6 +2395,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 inst->outputStage.reset();
             }
         }
+        if (inst->mainsOn)
+            synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kPrepared);
         return 1;
     }
 
@@ -2102,7 +2428,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             synthyboy::Event event;
             if (synthyboy::translateMidiMessage(data, numBytes, deltaFrames, event))
             {
-                inst->events.push(event);
+                inst->eventInbox.push (event, event.type == synthyboy::Event::NoteOff);
             }
         }
         return 1;
@@ -2180,6 +2506,15 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                             inst->playSetSelector (g, sel[g]);
                 }
 #endif
+                {
+                    // the output limiter setting rides in the chunk; a chunk without it (an older one) leaves the setting as it is (the default is off)
+                    bool limiterOn = inst->outputLimiter.load (std::memory_order_relaxed);
+                    if (synthyboy_mpc::outputLimiterFromChunk (chunk, static_cast<size_t>(size), limiterOn))
+                    {
+                        inst->outputLimiter.store (limiterOn, std::memory_order_relaxed);
+                        inst->applyOutputLimiter();
+                    }
+                }
 #if SYNTHYBOY_MPC_PAD_PRESSURE
                 {
                     // the player's pad setting rides in the chunk; a chunk without it (an older one) leaves the setting as it is
@@ -2207,7 +2542,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                     // Has a program number: try to read the name
                     std::string name;
                     bool hasName = synthyboy_mpc::programNameFromChunk(chunk, static_cast<size_t>(size), name);
-                    int r = synthyboy_mpc::resolveProgram (inst->programs, idx, hasName, name);
+                    int r = synthyboy_mpc::resolveProgramInView (inst->view, inst->programs, idx, hasName, name);
 
                     if (r >= 0)
                     {
@@ -2477,6 +2812,11 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
     case effStopProcess:
     {
+        if (inst)
+        {
+            inst->soundOffRequests.fetch_add (1u, std::memory_order_relaxed);
+            inst->soundOffPending.store (true, std::memory_order_release);   // the voices stop at the next block (CC 120 for the engine): nothing keeps sounding after the host stopped processing
+        }
         return 1;
     }
 
@@ -2553,7 +2893,7 @@ static void pluginSetParameter(AEffect* e, VstInt32 index, float parameter)
         {
             const int q = index - PluginInstance::qBase();
             const synthyboy_mpc::QRouter::Write w = inst->qRouter.hostWrite (q, parameter, restoring, [inst] (int t) noexcept { return inst->qReadNorm (t); },
-                                                                              [inst] (int t, float v) { writeRealParam (inst, static_cast<size_t> (t), v); },
+                                                                              [inst] (int t, float v) { inst->qWrite (t, v); },
                                                                               [] (int t) noexcept { return stepCountOf (synthyboy::paramTable()[t]); });
             if (logging)
             {
@@ -2715,6 +3055,8 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     } statsScope (inst->callbackStats, sampleFrames, inst->sampleRate);
 #endif
 
+    const int64_t firstBlockT0 = synthyboy_mpc::startupTimes().reached (synthyboy_mpc::StartupTimes::kFirstAudio) ? 0 : synthyboy_mpc::StartupTimes::nowNs();   // only until the first block has gone all the way
+
     // Save and flush denormals
     uint32_t savedFz = flushDenormalsSave();
     flushDenormalsOn();
@@ -2737,11 +3079,33 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
         inst->engine->setTransport(inst->transport);
     }
 
+    // take over what the host delivered since the last block (events.push keeps its overflow rules)
+    {
+        synthyboy::Event taken;
+        while (inst->events.count < EventBuffer::kCapacity && inst->eventInbox.pop (taken))
+            inst->events.push (taken);
+    }
+
     // Clamp event frames to the last frame of the block
     for (size_t i = 0; i < inst->events.count; ++i)
     {
         if (static_cast<int32_t>(inst->events.slots[i].frame) >= sampleFrames)
             inst->events.slots[i].frame = sampleFrames - 1;
+    }
+
+    // All Sound Off (stop / mains off): one event at the front of the block, the same as CC 120 from the keyboard
+    if (inst->soundOffPending.exchange (false, std::memory_order_acquire))
+    {
+        synthyboy::Event off;
+        off.type = synthyboy::Event::AllNotesOff;
+        off.channel = -1;
+        off.value = 1.0f;
+        off.frame = 0;
+        const size_t keep = std::min (inst->events.count, EventBuffer::kCapacity - 1);
+        for (size_t i = keep; i > 0; --i)
+            inst->events.slots[i] = inst->events.slots[i - 1];
+        inst->events.slots[0] = off;
+        inst->events.count = keep + 1;
     }
 
     float* out0 = (e->numOutputs > 0) ? outputs[0] : nullptr;
@@ -2763,6 +3127,9 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     // Clear remaining events
     inst->events.clear();
 
+    if (firstBlockT0 != 0)
+        synthyboy_mpc::startupTimes().addDetail (synthyboy_mpc::StartupTimes::kFirstBlock, synthyboy_mpc::StartupTimes::nowNs() - firstBlockT0);
+    synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kFirstAudio);   // the first block that went all the way (a relaxed load after the first)
     // Restore denormal mode
     flushDenormalsRestore(savedFz);
 }
@@ -2778,10 +3145,35 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     #define MPC_PLUGIN_EXPORT
 #endif
 
+namespace
+{
+/** The policy of the engine's helper threads (the effect module builder, the Convolve job thread; engine-own/dsp/helper_thread.h): a normal scheduling class, nice 0, and the cores the overlay
+    thread uses (not the isolated cores and not the cores the audio threads are pinned to, overlay/discovery.h planCpus), instead of what they inherit from the thread that happened to
+    create them (the host's loader, a thread of any policy). Runs on the helper thread, once at its start; best effort, never throws. */
+void engineHelperThreadPolicy (const char* name) noexcept
+{
+    try
+    {
+        synthyboy_mpc::useNormalScheduling (0, name);
+#if defined(__linux__)
+        const synthyboy_mpc::overlay::CpuState st = synthyboy_mpc::overlay::planOwnCpus();
+        if (st.plan.changed)
+            synthyboy_mpc::overlay::setAffinity (0, st.plan.allowed);
+#endif
+    }
+    catch (...)
+    {
+    }
+}
+} // namespace
+
 extern "C"
 {
     MPC_PLUGIN_EXPORT AEffect* VSTPluginMain(audioMasterCallback audioMaster)
     {
+        synthyboy_mpc::startupTimes().begin();   // the start-up record (startup_timing.h): time zero is the first entry here
+        synthyboy::setHelperThreadStartHook (&engineHelperThreadPolicy);   // before any engine exists: its helper threads get the policy above
+        try { MPCKIT_LOG_START ("synthyboy"); } catch (...) {}   // dev builds only: the developer log (kit/log.h), off until /tmp/synthyboy-log.conf switches a category on
         // Create the plugin instance. No exception may reach the host: a failure here means "no plugin".
         PluginInstance* inst = nullptr;
         try { inst = new PluginInstance(); }
@@ -2801,7 +3193,7 @@ extern "C"
         effect->processReplacing = pluginProcessReplacing;
         effect->setParameter = pluginSetParameter;
         effect->getParameter = pluginGetParameter;
-        effect->numPrograms = static_cast<VstInt32>(inst->programs.size()) + 1;
+        effect->numPrograms = static_cast<VstInt32>(inst->view.numPrograms());
         effect->numParams = static_cast<VstInt32>(synthyboy::paramCount());
 #if SYNTHYBOY_MPC_LFO_LIVE
 #if SYNTHYBOY_MPC_SPECTRUM
@@ -2842,11 +3234,11 @@ extern "C"
             audioMaster(effect, audioMasterVersion, 0, 0, nullptr, 0.0f);
 
 #if SYNTHYBOY_MPC_LFO_LIVE
-        try { inst->startLive (effect); }
+        try { synthyboy_mpc::StartupDetailScope t (synthyboy_mpc::StartupTimes::kStartLive); inst->startLive (effect); }
         catch (...) {} // no thread: the cursors stay idle
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
-        try { inst->startOverlay(); synthyboy_mpc::PlayLog::line ("VSTPluginMain: instance %p attached to the overlay, slot %d", static_cast<void*> (inst), inst->overlaySlot.load()); }
+        try { synthyboy_mpc::StartupDetailScope t (synthyboy_mpc::StartupTimes::kStartOverlay); inst->startOverlay(); synthyboy_mpc::PlayLog::line ("VSTPluginMain: instance %p attached to the overlay, slot %d", static_cast<void*> (inst), inst->overlaySlot.load()); }
         catch (const std::exception& ex) { synthyboy_mpc::PlayLog::line ("VSTPluginMain: startOverlay threw: %s", ex.what()); } // no overlay: the plugin works as without it
         catch (...) { synthyboy_mpc::PlayLog::line ("VSTPluginMain: startOverlay threw"); }
 #endif
@@ -2855,6 +3247,8 @@ extern "C"
         catch (...) {} // no file: the statistics are only collected
 #endif
 
+        synthyboy_mpc::startupTimes().mark (synthyboy_mpc::StartupTimes::kMainReturned);
+        MPCKIT_LOG ("startup", info, "VSTPluginMain returns");
         return effect;
     }
 }

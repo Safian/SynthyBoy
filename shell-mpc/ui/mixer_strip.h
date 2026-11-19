@@ -1,4 +1,4 @@
-// SynthyBoy - MPC UI component library: the MIXER CHANNEL STRIP components (Fader, SendBar, MixerStrip).
+// SynthyBoy - MPC UI component library: the MIXER CHANNEL STRIP components (Fader, SliderBar, MixerStrip).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once

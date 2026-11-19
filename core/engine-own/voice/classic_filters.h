@@ -6,11 +6,13 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <vector>
 
 #include "../dsp/util.h"
 #include "../dsp/simd.h"
 #include "../dsp/fastmath.h"
+#include "../dsp/neon_cmp.h"
 #include "../fx/fx_dsp.h"
 
 #ifndef SB_MID_SAT
@@ -224,25 +226,30 @@ public:
         hardtanh () as the scalar function itself for a lane above its knee (below it the value passes: the common case costs a compare). The same samples. */
     static void svfPairLoopDigitalNeon (ClassicFilter& A, ClassicFilter& B, const SvfSetup& za, const SvfSetup& zb, const float* inA, float* outA, const float* inB, float* outB, int n) noexcept
     {
-        auto pair = [] (float a, float b) noexcept { const float t[2] = { a, b }; return vld1_f32 (t); };
+        // the lanes are written as the S halves of the D register (GCC's vector subscript; a float t[2] went through the stack on 32 bit ARM), and the compares are
+        // the integer forms of dsp/neon_cmp.h (GCC makes a float compare on 32 bit ARM lane by lane through the VFP flags): the same masks for every input
+        auto pair = [] (float a, float b) noexcept { float32x2_t r = vdup_n_f32 (a); r[1] = b; return r; };
         auto divide = [] (float32x2_t a, float32x2_t b) noexcept
         {
  #if defined(__aarch64__)
             return vdiv_f32 (a, b);
  #else
-            const float t[2] = { vget_lane_f32 (a, 0) / vget_lane_f32 (b, 0), vget_lane_f32 (a, 1) / vget_lane_f32 (b, 1) };
-            return vld1_f32 (t);
+            float32x2_t r = a;
+            r[0] = a[0] / b[0];
+            r[1] = a[1] / b[1];
+            return r;
  #endif
         };
-        auto flush = [] (float32x2_t v) noexcept { return vbsl_f32 (vclt_f32 (vabs_f32 (v), vdup_n_f32 (1.0e-18f)), vdup_n_f32 (0.0f), v); };
+        auto flush = [] (float32x2_t v) noexcept { return neoncmp::flushTiny (v); };
         auto limit = [&A, &B] (float32x2_t v) noexcept
         {
             // hardtanh (): a <= 0.66 ? v : ...; the comparison of the scalar function, per lane (a NaN is not <= 0.66 and goes through the function, as there)
-            const uint32x2_t below = vcle_f32 (vabs_f32 (v), vdup_n_f32 (0.66f));
+            const uint32x2_t below = neoncmp::absLe (v, 0.66f);
             if ((vget_lane_u32 (below, 0) & vget_lane_u32 (below, 1)) != 0u)
                 return v;
-            const float t[2] = { A.hardtanh (vget_lane_f32 (v, 0)), B.hardtanh (vget_lane_f32 (v, 1)) };
-            return vld1_f32 (t);
+            float32x2_t r = vdup_n_f32 (A.hardtanh (vget_lane_f32 (v, 0)));
+            r[1] = B.hardtanh (vget_lane_f32 (v, 1));
+            return r;
         };
         const bool two = za.two;
         const float32x2_t g = pair (za.g, zb.g), R = pair (za.R, zb.R), dEff = pair (za.dEff, zb.dEff), post = pair (za.post, zb.post);
@@ -616,7 +623,7 @@ private:
         const float c0 = z.c[0], c1 = z.c[1], c2 = z.c[2], c3 = z.c[3], c4 = z.c[4];
         for (int i = 0; i < n; ++i)
         {
-            const float S = G * G * G * s[0] + G * G * s[1] + G * s[2] + s[3];
+            const float S = (1.0f - G) * (G * G * G * s[0] + G * G * s[1] + G * s[2] + s[3]); // what the four stages add to the input's share G^4 u (y = G x + (1 - G) s per stage)
             const float u = th ((fastMath ? (pre * in[i] - k * S) * z.invDen : (pre * in[i] - k * S) / (1.0f + k * G * G * G * G)) * 0.9f) * 1.1f;
             float x = u, st[4];
             for (int j = 0; j < 4; ++j)
@@ -718,8 +725,8 @@ public:
     {
         for (int i = 0; i < n; ++i)
         {
-            const float Sa = za.G * za.G * za.G * A.s[0] + za.G * za.G * A.s[1] + za.G * A.s[2] + A.s[3];
-            const float Sb = zb.G * zb.G * zb.G * B.s[0] + zb.G * zb.G * B.s[1] + zb.G * B.s[2] + B.s[3];
+            const float Sa = (1.0f - za.G) * (za.G * za.G * za.G * A.s[0] + za.G * za.G * A.s[1] + za.G * A.s[2] + A.s[3]);
+            const float Sb = (1.0f - zb.G) * (zb.G * zb.G * zb.G * B.s[0] + zb.G * zb.G * B.s[1] + zb.G * B.s[2] + B.s[3]);
             const float ua = A.th ((A.fastMath ? (za.pre * inA[i] - za.k * Sa) * za.invDen : (za.pre * inA[i] - za.k * Sa) / (1.0f + za.k * za.G * za.G * za.G * za.G)) * 0.9f) * 1.1f;
             const float ub = B.th ((B.fastMath ? (zb.pre * inB[i] - zb.k * Sb) * zb.invDen : (zb.pre * inB[i] - zb.k * Sb) / (1.0f + zb.k * zb.G * zb.G * zb.G * zb.G)) * 0.9f) * 1.1f;
             float xa = ua, xb = ub, sta[4], stb[4];
@@ -908,7 +915,7 @@ private:
             // The four resonators are four independent filters fed the same sample: one NEON register holds the four. Svf::step () lane by lane (separate multiply
             // and add, flushDenormal as a select); the four band outputs are weighted in the lanes and summed one after the other, as the scalar loop sums them.
             auto four = [] (float a, float b, float c, float d) noexcept { const float t[4] = { a, b, c, d }; return vld1q_f32 (t); };
-            auto flush = [] (float32x4_t v) noexcept { return vbslq_f32 (vcltq_f32 (vabsq_f32 (v), vdupq_n_f32 (1.0e-18f)), vdupq_n_f32 (0.0f), v); };
+            auto flush = [] (float32x4_t v) noexcept { return neoncmp::flushTiny (v); }; // flushDenormal () on the bit patterns (dsp/neon_cmp.h)
             const float32x4_t a1 = four (cf[0].a1, cf[1].a1, cf[2].a1, cf[3].a1), a2 = four (cf[0].a2, cf[1].a2, cf[2].a2, cf[3].a2), a3 = four (cf[0].a3, cf[1].a3, cf[2].a3, cf[3].a3);
             const float32x4_t vk = vld1q_f32 (kq), vgain = vld1q_f32 (gain), vbpGain = vld1q_f32 (bpGain), two = vdupq_n_f32 (2.0f), eight = vdupq_n_f32 (8.0f);
             float32x4_t s1 = four (fm[0].s1, fm[1].s1, fm[2].s1, fm[3].s1), s2 = four (fm[0].s2, fm[1].s2, fm[2].s2, fm[3].s2);
@@ -970,7 +977,101 @@ private:
         }
     }
 
+    /** The Comb model (document 05, 8): style 0 is the plain comb (the one-pole loop filter at the comb offset; blend and style are not read), styles 1 .. 5 are
+        `style = feedback_style + 3 * filter_style` (feedback_style 0 comb, 1 positive flange, 2 negative flange; filter_style 0 low / high blend, 1 band); a style above 5 is 5. */
     void combFilter (const float* in, float* out, int n, float f, float r, const ClassicParams& p) noexcept
+    {
+        const int st = std::clamp (p.style, 0, 5);
+        if (st == 0)
+            combPlain (in, out, n, f, r, p);
+        else
+            combStyled (in, out, n, f, r, p, st);
+    }
+
+    void combStyled (const float* in, float* out, int n, float f, float r, const ClassicParams& p, int st) noexcept
+    {
+        const int fbStyle = st % 3;
+        const bool band = st >= 3;
+        const float srf = static_cast<float> (sr), fe = std::max (f, 20.0f);
+        const float T = std::clamp (srf / fe, 2.0f, srf * 0.09f);
+        const float fc = fe * std::exp2 (p.combOffset / 12.0f);
+        const float edge = srf / 2.1f;
+        float aA, aB, lowGain = 1.0f, highGain = 0.0f;
+        if (!band)
+        {
+            // a low / high blend around the corner n_cut + comb_offset (one pole split), then a second one pole high pass at n_cut - 48 semitones
+            aA = OnePole::coefficient (std::clamp (fc, 1.0f, edge), sr);
+            lowGain = std::clamp (2.0f - p.blendRaw, 0.0f, 1.0f);
+            highGain = std::clamp (p.blendRaw, 0.0f, 1.0f);
+            aB = OnePole::coefficient (std::clamp (fe * 0.0625f, 1.0f, edge), sr);
+        }
+        else
+        {
+            // a band around n_cut + comb_offset whose half width is blend * 4 octaves: a high pass at the lower corner, a low pass at the upper one
+            const float octaves = clamp01 (p.blendRaw * 0.5f) * 4.0f;
+            aA = OnePole::coefficient (std::clamp (fc * std::exp2 (octaves), 1.0f, edge), sr);
+            aB = OnePole::coefficient (std::clamp (fc * std::exp2 (-octaves), 1.0f, edge), sr);
+        }
+        // the loop filter delays the signal at the pitch: its phase delay is taken off the delay line (as for the plain comb), so the comb rings at sr / T
+        using Cx = std::complex<float>;
+        const float w0 = kTwoPif * fe / srf;
+        const Cx zi = std::polar (1.0f, -w0);
+        auto onePole = [&] (float a) { return Cx (a) / (Cx (1.0f) - Cx (1.0f - a) * zi); };
+        Cx H;
+        if (!band)
+        {
+            const Cx lp = onePole (aA);
+            H = (lowGain * lp + highGain * (Cx (1.0f) - lp)) * (Cx (1.0f) - onePole (aB));
+        }
+        else
+            H = (Cx (1.0f) - onePole (aB)) * onePole (aA);
+        const float loopDelay = -std::arg (H) / w0;
+        const float lineT = fbStyle == 2 ? 0.5f * T : T;
+        const float readAt = std::max (lineT - 1.0f - loopDelay, 0.0f);
+        auto filtered = [&] (float x) noexcept
+        {
+            if (!band)
+            {
+                lpA = flushDenormal (lpA + aA * (x - lpA));
+                const float sp = lowGain * lpA + highGain * (x - lpA);
+                lpB = flushDenormal (lpB + aB * (sp - lpB));
+                return sp - lpB;
+            }
+            lpB = flushDenormal (lpB + aB * (x - lpB));
+            const float h = x - lpB;
+            lpA = flushDenormal (lpA + aA * (h - lpA));
+            return lpA;
+        };
+        combUsed = true;
+        if (fbStyle == 0)
+        {
+            float fb = lerp (-1.0f, 1.0f, r);
+            fb = fb / std::sqrt (std::fabs (fb) + 1.0e-5f);
+            fb = std::clamp (fb, -0.98f, 0.98f);
+            const float scale = 1.0f - 0.5f * fb * fb;
+            for (int i = 0; i < n; ++i)
+            {
+                const float w = hardtanh (filtered (scale * in[i] + fb * comb.read (readAt)));
+                comb.push (w);
+                out[i] = w;
+            }
+            return;
+        }
+        // flanges: the delay line holds x / sqrt (2) + hardtanh (fb filtered (delay)); the output is x / sqrt (2) scale + filtered (negative: the feedback and the output term
+        // inverted, the read at T / 2)
+        const float fb = std::min (clamp01 (r), 0.98f);
+        const float sgn = fbStyle == 2 ? -1.0f : 1.0f;
+        const float scale = 1.0f / (1.0f + fb);
+        const float inGain = 0.70710678f;
+        for (int i = 0; i < n; ++i)
+        {
+            const float fd = filtered (comb.read (readAt));
+            comb.push (inGain * in[i] + hardtanh (sgn * fb * fd));
+            out[i] = inGain * in[i] * scale + sgn * fd;
+        }
+    }
+
+    void combPlain (const float* in, float* out, int n, float f, float r, const ClassicParams& p) noexcept
     {
         const float T = std::clamp (static_cast<float> (sr) / std::max (f, 20.0f), 2.0f, static_cast<float> (sr) * 0.09f);
         float fb = lerp (-1.0f, 1.0f, r);
@@ -979,10 +1080,15 @@ private:
         const float scale = 1.0f - 0.5f * fb * fb;
         const float loopHz = std::clamp (f * std::exp2 (p.combOffset / 12.0f), 20.0f, static_cast<float> (sr) * 0.45f);
         const float a = OnePole::coefficient (loopHz, sr);
+        // The loop filter delays the signal as well: the phase delay of its one pole at the pitch (about T / 70 at the default offset of 42 semitones, 1.1 % of the period
+        // = 19 cents flat) is taken off the length of the delay line, so the comb resonates at sr / T, the pitch of the cutoff.
+        const float w0 = kTwoPif * std::max (f, 20.0f) / static_cast<float> (sr), bpole = 1.0f - a;
+        const float loopDelay = std::atan2 (bpole * std::sin (w0), 1.0f - bpole * std::cos (w0)) / w0;
+        const float readAt = std::max (T - 1.0f - loopDelay, 0.0f);
         combUsed = true;
         for (int i = 0; i < n; ++i)
         {
-            const float v = scale * in[i] + fb * comb.read (T - 1.0f);
+            const float v = scale * in[i] + fb * comb.read (readAt);
             lpA += a * (v - lpA);
             lpA = flushDenormal (lpA);
             const float w = hardtanh (lpA);

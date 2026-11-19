@@ -53,6 +53,7 @@
 #include "../vblank_linux.h"
 #include "../vblank_pacer.h"
 #include "gl_api.h"
+#include "../../write_files.h"
 
 using namespace synthyboy_mpc::overlay::gpu;
 using synthyboy_mpc::overlay::FramePacer;
@@ -1968,8 +1969,10 @@ private:
                     n += std::snprintf (text + n, sizeof text - static_cast<size_t> (n), " %d", ages_[i]);
                 if (n > 0 && static_cast<size_t> (n) < sizeof text - 2)
                     text[n++] = '\n';
+#if SYNTHYBOY_MPC_WRITE_FILES   // the release build (write_files.h) writes no probe file
                 if (n > 0)
                     synthyboy_mpc::safefile::writeSmall ("/tmp/synthyboy-overlay-gpu-egl.txt", text, static_cast<size_t> (n < static_cast<int> (sizeof text) ? n : static_cast<int> (sizeof text) - 1));
+#endif
             }
         }
     }

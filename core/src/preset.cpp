@@ -349,13 +349,15 @@ private:
                 return false;
             skipWs();
 
-            char val[256];
             if (p < end && *p == '"')
             {
-                if (! parseString (val, sizeof val, truncated))
-                    return false;
+                // A value is kept up to 8 KB (it used to be 255 characters: a longer description was silently dropped); a longer one is still skipped whole.
+                std::string val (std::min<size_t> (static_cast<size_t> (end - p) + 1, 8192u), '\0');
+                if (! parseString (&val[0], val.size(), truncated))
+                    return false;   // also when the buffer ends inside the string: a partial read (the scan's 4 KB prefix) is never taken for a complete meta object
                 if (! truncated)
                 {
+                    val.resize (std::strlen (val.c_str()));
                     if (std::strcmp (key, "name") == 0) meta.name = val;
                     else if (std::strcmp (key, "category") == 0) meta.category = val;
                     else if (std::strcmp (key, "author") == 0) meta.author = val;
@@ -506,15 +508,23 @@ std::vector<PresetEntry> scanPresetDirectory (const std::string& directoryPath)
             FILE* f = std::fopen (filePath.c_str(), "rb");
             if (f != nullptr)
             {
+                // The meta object is at the start of the document (the container writes it before the state, which is about 50 KB of parameters): the first 4 KB are read and parsed;
+                // only when they do not hold a complete meta object (a long description, another key order) the first 64 KB are, as before. On a cold slow medium reading the 136 files
+                // of the factory bank whole (6.9 MB) was the biggest part of the first open of the plugin.
                 char buf[65536];
-                const size_t n = std::fread (buf, 1, sizeof buf, f);
-                std::fclose (f);
-                if (n > 0)
+                constexpr size_t kPrefix = 4096;
+                size_t n = std::fread (buf, 1, kPrefix, f);
+                PresetMeta meta;
+                bool ok = n > 0 && readPresetMeta (buf, n, meta);
+                if (! ok && n == kPrefix)
                 {
-                    PresetMeta meta;
-                    if (readPresetMeta (buf, n, meta))
-                        entries.push_back ({ filePath, std::move (meta) });
+                    n += std::fread (buf + n, 1, sizeof buf - n, f);
+                    meta = PresetMeta();
+                    ok = readPresetMeta (buf, n, meta);
                 }
+                std::fclose (f);
+                if (ok)
+                    entries.push_back ({ filePath, std::move (meta) });
             }
         }
     }

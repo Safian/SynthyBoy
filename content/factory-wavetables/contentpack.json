@@ -1,0 +1,517 @@
+{
+  "schemaVersion": 1,
+  "id": "com.safian.synthyboy.factory-wavetables",
+  "name": "Factory Wavetables",
+  "version": "1.1.0",
+  "license": "CC0-1.0",
+  "attribution": "Safian Szabolcs",
+  "kind": "wavetables",
+  "requires_plugin": ">=0.1.0",
+  "description": "72 wavetables in 6 categories (Analog, Digital, Spectral, Vocal, Metallic, Noise) made by scripts/gen-content-pack.py from the recipes in content-src/wavetables under CC0-1.0; 2048 samples per frame, up to 64 frames.",
+  "files": [
+    {
+      "path": "Analog/octave_saw_stack.wav",
+      "category": "Analog",
+      "title": "Octave Saw Stack",
+      "sha256": "3a2b74fa0e8526a32cca116cac7537711fdc4e91a1f6320c889d483393ec6c2d",
+      "size": 262188
+    },
+    {
+      "path": "Analog/pulse_width_sweep.wav",
+      "category": "Analog",
+      "title": "Pulse Width Sweep",
+      "sha256": "ecc8ae0b2bb7b34b58d767da5a20fc607fb92f1e5359867bab92423113da7be5",
+      "size": 262188
+    },
+    {
+      "path": "Analog/pwm_dual_phase.wav",
+      "category": "Analog",
+      "title": "PWM Dual Phase",
+      "sha256": "919a0f702e2e5549f647d35703b24cedf6db05bce2a39fa0a7bb7a65b38d6be2",
+      "size": 262188
+    },
+    {
+      "path": "Analog/pwm_saw_blend.wav",
+      "category": "Analog",
+      "title": "PWM Saw Blend",
+      "sha256": "ac63eeb51abba1433619cfae3c5ab2e5b8050f326922d681a8f3777e50999665",
+      "size": 262188
+    },
+    {
+      "path": "Analog/pwm_triple_stack.wav",
+      "category": "Analog",
+      "title": "PWM Triple Stack",
+      "sha256": "ba3adb5a56fe0720cc85da8a7bb828ed2211d5f3aee1638e7bab22632dec87b0",
+      "size": 262188
+    },
+    {
+      "path": "Analog/saw_filter_sweep.wav",
+      "category": "Analog",
+      "title": "Saw Filter Sweep",
+      "sha256": "e557226a92a42daa63fa5227b6cac5e4aa7e6d93b49c3c9122b3f0ec97ddfaeb",
+      "size": 262188
+    },
+    {
+      "path": "Analog/saw_soft_clip.wav",
+      "category": "Analog",
+      "title": "Saw Soft Clip",
+      "sha256": "b9f41eaa595fca352b099e18f01571541c09f679e9659730f2ea606284a1ed37",
+      "size": 262188
+    },
+    {
+      "path": "Analog/saw_stack_spread.wav",
+      "category": "Analog",
+      "title": "Saw Stack Spread",
+      "sha256": "7ee55214091f35a6b14de9894e6afa118f3b2459ca0326d9237558a72835e0b7",
+      "size": 262188
+    },
+    {
+      "path": "Analog/sync_saw_sweep.wav",
+      "category": "Analog",
+      "title": "Sync Saw Sweep",
+      "sha256": "2e1a224ccdd40adb1ff227e557aed0e40a416cf08dcedef9d77729693d446861",
+      "size": 262188
+    },
+    {
+      "path": "Analog/sync_sine_sweep.wav",
+      "category": "Analog",
+      "title": "Sync Sine Sweep",
+      "sha256": "fe01f9b4ca11c3796c98de790c81f0cbc2500b175ccb82205c6153b606514cc4",
+      "size": 262188
+    },
+    {
+      "path": "Analog/triangle_fold.wav",
+      "category": "Analog",
+      "title": "Triangle Fold",
+      "sha256": "33895e9cb8c286b6bb019b11dcefae141e5b23dcb6ee9334b77623dbc3341a1e",
+      "size": 262188
+    },
+    {
+      "path": "Analog/triangle_to_saw.wav",
+      "category": "Analog",
+      "title": "Triangle To Saw",
+      "sha256": "74a15bcfbbca00d2829c37b8ec07b66a751e7d90e4cdfaca856758a9d2820ce4",
+      "size": 262188
+    },
+    {
+      "path": "Digital/bit_reduced_sine.wav",
+      "category": "Digital",
+      "title": "Bit Reduced Sine",
+      "sha256": "863a5e0a8b3036125e8cf08107e23333189371f49e643233dcfc855940caed9e",
+      "size": 262188
+    },
+    {
+      "path": "Digital/fm_chain_123.wav",
+      "category": "Digital",
+      "title": "FM Chain 1-2-3",
+      "sha256": "9193d253d101851d9f61c4e78619776997d381b09293c82fff3bf49798088dd8",
+      "size": 262188
+    },
+    {
+      "path": "Digital/fm_feedback_saw.wav",
+      "category": "Digital",
+      "title": "FM Feedback Saw",
+      "sha256": "5b3bf98b0e59c17804fbb3b67431cd04f6e60a7f3087ec37bfba307023c43dcc",
+      "size": 262188
+    },
+    {
+      "path": "Digital/fm_index_sweep.wav",
+      "category": "Digital",
+      "title": "FM Index Sweep",
+      "sha256": "bdd7591fad68c24c72fde08576dd0dd97cb56ecb092d4f111bac3392a89ac5f8",
+      "size": 262188
+    },
+    {
+      "path": "Digital/fm_ratio_ladder.wav",
+      "category": "Digital",
+      "title": "FM Ratio Ladder",
+      "sha256": "32ac1add55fcccdeadccb6588296b4324f28c2df545fc1d72a9a40c59d925ef1",
+      "size": 262188
+    },
+    {
+      "path": "Digital/fm_triple_index.wav",
+      "category": "Digital",
+      "title": "FM 3 To 1 Index",
+      "sha256": "3efbf59827c3e0202aaf758f73fcfef1d606b01c194cac0a8b4401ae44e1f519",
+      "size": 262188
+    },
+    {
+      "path": "Digital/gauss_formant_sweep.wav",
+      "category": "Digital",
+      "title": "Gauss Formant Sweep",
+      "sha256": "2c0e8b167c83a8974eaf0f3e67b3b6de27ab71851ee710947b02c2bf75527a2f",
+      "size": 262188
+    },
+    {
+      "path": "Digital/pd_knee.wav",
+      "category": "Digital",
+      "title": "Phase Distortion Knee",
+      "sha256": "78810f99572dba45a7458d516c44a6d8cb54373e7b81aa8813f61c4d4d7226c7",
+      "size": 262188
+    },
+    {
+      "path": "Digital/pd_resonance.wav",
+      "category": "Digital",
+      "title": "Phase Distortion Resonance",
+      "sha256": "2df1e0ecc832662a4cd50a7dc4f834b4242242e0807b509e834d68fc0ae49714",
+      "size": 262188
+    },
+    {
+      "path": "Digital/sine_fold_sweep.wav",
+      "category": "Digital",
+      "title": "Sine Fold Sweep",
+      "sha256": "82a8ee1d796ab016c1db92d117a0f96ed69aa30f10dfcb4674cbfc3dd963ff6f",
+      "size": 262188
+    },
+    {
+      "path": "Digital/sine_to_square_shaper.wav",
+      "category": "Digital",
+      "title": "Sine To Square Shaper",
+      "sha256": "5c344064592fb43c72df9b306453c09b7e534745e7c7505b2aefce717eb245d6",
+      "size": 262188
+    },
+    {
+      "path": "Digital/step_sequence_morph.wav",
+      "category": "Digital",
+      "title": "Step Sequence Morph",
+      "sha256": "bed959767ab5502c67d18a7585d8fd82e4179f8888ed332b00095345334906c1",
+      "size": 262188
+    },
+    {
+      "path": "Metallic/bell_pitch_walk.wav",
+      "category": "Metallic",
+      "title": "Bell Pitch Walk",
+      "sha256": "57fb023cfd3146168d890d451fc8040413bdfbcd3411314e5bb829b575a2af69",
+      "size": 262188
+    },
+    {
+      "path": "Metallic/bowl_beating_pairs.wav",
+      "category": "Metallic",
+      "title": "Bowl Beating Pairs",
+      "sha256": "83e7207b493b8387c722451804907e5d21f513073cbfcd597a03b60f258dc249",
+      "size": 262188
+    },
+    {
+      "path": "Metallic/cymbal_cloud.wav",
+      "category": "Metallic",
+      "title": "Cymbal Cloud",
+      "sha256": "815cc9e234d8a7285116fad11b0794e1efa20696151892af6f7762ebf254ca11",
+      "size": 262188
+    },
+    {
+      "path": "Metallic/drum_membrane_modes.wav",
+      "category": "Metallic",
+      "title": "Drum Membrane Modes",
+      "sha256": "4166328ece5066e0f0539bb6c2976e834422745e30a3e5fa172194a8fa2a7f9c",
+      "size": 262188
+    },
+    {
+      "path": "Metallic/free_bar_modes.wav",
+      "category": "Metallic",
+      "title": "Free Bar Modes",
+      "sha256": "e68339b792418fe54124bd0980ec0e925c44c2d2c79c1f75cc2aec6e3d41cede",
+      "size": 262188
+    },
+    {
+      "path": "Metallic/gong_modes_swell.wav",
+      "category": "Metallic",
+      "title": "Gong Modes Swell",
+      "sha256": "b0c967060fea1861f35c9a213cdd30a51ff9bf6e59a7f6e5e06d7baf28c0cce2",
+      "size": 262188
+    },
+    {
+      "path": "Metallic/metal_comb_sweep.wav",
+      "category": "Metallic",
+      "title": "Metal Comb Sweep",
+      "sha256": "7bc6d16bada58e08253e11195431219316bdbf0ea1ce901d6660500c3dc30328",
+      "size": 262188
+    },
+    {
+      "path": "Metallic/random_metal_morph.wav",
+      "category": "Metallic",
+      "title": "Random Metal Morph",
+      "sha256": "6e3571d8e3e603307e075bf92e34eb5a908e6aed7ac375db9541efac11143c31",
+      "size": 262188
+    },
+    {
+      "path": "Metallic/resonant_comb_metal.wav",
+      "category": "Metallic",
+      "title": "Resonant Comb Metal",
+      "sha256": "e7f42f7a4843a133bfcbb7f19363dd70d5eb8550f9a28e060b190d6acc2ede2c",
+      "size": 262188
+    },
+    {
+      "path": "Metallic/ring_mod_glide.wav",
+      "category": "Metallic",
+      "title": "Ring Mod Glide",
+      "sha256": "ab45f94518e00cabd09585e8d0f5cd3bf188aefc7748daf22b3e8017526df5fa",
+      "size": 262188
+    },
+    {
+      "path": "Metallic/ring_mod_ladder.wav",
+      "category": "Metallic",
+      "title": "Ring Mod Ladder",
+      "sha256": "7862884f1c1a7d69ccebdc795c07c6b0c85bf583bb1adb6448aa417a6c106b43",
+      "size": 262188
+    },
+    {
+      "path": "Metallic/ring_mod_saw_glide.wav",
+      "category": "Metallic",
+      "title": "Ring Mod Saw Glide",
+      "sha256": "010658a378a35190cc837168f87cd614cf9da1fe707cbc4da38a352fa65b85fa",
+      "size": 262188
+    },
+    {
+      "path": "Noise/breath_air_bumps.wav",
+      "category": "Noise",
+      "title": "Breath Air Bumps",
+      "sha256": "352f5b046fe163dd57d35c33ac3d7c7e6a00d0ba101ab0b1f8811d304aa917a9",
+      "size": 262188
+    },
+    {
+      "path": "Noise/colour_tilt_sweep.wav",
+      "category": "Noise",
+      "title": "Colour Tilt Sweep",
+      "sha256": "06cc92b7fd428baf989d79183e80752f4f435442206045339a4a75db9083ee6c",
+      "size": 262188
+    },
+    {
+      "path": "Noise/crackle_pulses.wav",
+      "category": "Noise",
+      "title": "Crackle Pulses",
+      "sha256": "12df3143b24631aa83dfd2a3672b09e458ecd5a3aea0d65570edadf233df99fc",
+      "size": 262188
+    },
+    {
+      "path": "Noise/frozen_noise_variations.wav",
+      "category": "Noise",
+      "title": "Frozen Noise Variations",
+      "sha256": "d1f76dcddfaea26c6be7a6cebfd368abcf8f8d83e69befc722933ee3449f993f",
+      "size": 262188
+    },
+    {
+      "path": "Noise/noise_band_sweep.wav",
+      "category": "Noise",
+      "title": "Noise Band Sweep",
+      "sha256": "183067f50db20798ce2b404516ef5fd315bb92fefe137bfdee31e42c1a5f3488",
+      "size": 262188
+    },
+    {
+      "path": "Noise/noise_burst_widening.wav",
+      "category": "Noise",
+      "title": "Noise Burst Widening",
+      "sha256": "437bd3228d45989b83751a95e8a038d8b5e8bce85d97b64a465a865aff5dd7bc",
+      "size": 262188
+    },
+    {
+      "path": "Noise/noise_notch_sweep.wav",
+      "category": "Noise",
+      "title": "Noise Notch Sweep",
+      "sha256": "ddce0293b789bad02ca5e56e3bb00113883c1486fda4242bba6744097d3518a8",
+      "size": 262188
+    },
+    {
+      "path": "Noise/noise_to_saw.wav",
+      "category": "Noise",
+      "title": "Noise To Saw",
+      "sha256": "c3a3122e24d7df3626a68eebcc82c9d5f207261b943af66c2813d09935c6e015",
+      "size": 262188
+    },
+    {
+      "path": "Noise/noise_to_sine.wav",
+      "category": "Noise",
+      "title": "Noise To Sine",
+      "sha256": "d186c508b6a75a5849902c3253d13289c6c59619b4c727a6b871b20f4711a3d2",
+      "size": 262188
+    },
+    {
+      "path": "Noise/pink_lowpass_sweep.wav",
+      "category": "Noise",
+      "title": "Pink Lowpass Sweep",
+      "sha256": "8ba58c2843e0ea36a68d0a3bd6e046547f4380136eeb0963235f0a23cf598af4",
+      "size": 262188
+    },
+    {
+      "path": "Noise/rumble_to_hiss.wav",
+      "category": "Noise",
+      "title": "Rumble To Hiss",
+      "sha256": "d8c6edd2341b05fd7905b867f87be9a1d8cbb8fbe5fe4719ad7243fd66ca46c1",
+      "size": 262188
+    },
+    {
+      "path": "Noise/sparse_spectrum_fill.wav",
+      "category": "Noise",
+      "title": "Sparse Spectrum Fill",
+      "sha256": "5fc080f3cc754aee6307a7f3aa179767a222a6b23027ab032f3a060e4615f13a",
+      "size": 262188
+    },
+    {
+      "path": "Spectral/additive_bell_strike.wav",
+      "category": "Spectral",
+      "title": "Bell Strike",
+      "sha256": "7b3f2968eaadfce27e5944b180d656ac3598179bbb598964d98166c64dbd9962",
+      "size": 262188
+    },
+    {
+      "path": "Spectral/additive_glass_harmonica.wav",
+      "category": "Spectral",
+      "title": "Glass Harmonica",
+      "sha256": "88079754c6da0880f72e93e01e583eb4bde977b64d8a471fe923e9a00713c2c1",
+      "size": 196652
+    },
+    {
+      "path": "Spectral/bore_odd_to_even.wav",
+      "category": "Spectral",
+      "title": "Bore Odd To Even",
+      "sha256": "13e41beb630fd10a3cbfd916de8e942d10ae72140c8fca06519056b0f82fdbfa",
+      "size": 262188
+    },
+    {
+      "path": "Spectral/comb_spectrum_slide.wav",
+      "category": "Spectral",
+      "title": "Comb Spectrum Slide",
+      "sha256": "80179066161e375ed38ae83136decd2ee284bbcd3e4db1b270a92e65402cc9c3",
+      "size": 262188
+    },
+    {
+      "path": "Spectral/dispersion_sweep.wav",
+      "category": "Spectral",
+      "title": "Dispersion Sweep",
+      "sha256": "7c73abebe0b78319bfaba7d4d57738c0fbcc841ff24a4958aa5899c1feedb299",
+      "size": 262188
+    },
+    {
+      "path": "Spectral/even_harmonic_ladder.wav",
+      "category": "Spectral",
+      "title": "Even Harmonic Ladder",
+      "sha256": "53565052af611f0c0946a0b7b3aa050e8e580202e040b8cccaf415c10ec7f7dc",
+      "size": 262188
+    },
+    {
+      "path": "Spectral/harmonic_band_sweep.wav",
+      "category": "Spectral",
+      "title": "Harmonic Band Sweep",
+      "sha256": "6dad4bcd291671552f08ca0bd9e50fabb842d2bd1933d16671308f4dd88984ae",
+      "size": 262188
+    },
+    {
+      "path": "Spectral/harmonic_sieve.wav",
+      "category": "Spectral",
+      "title": "Harmonic Sieve",
+      "sha256": "33d41da1f703e1709437e290f7d0257706b86316e726cb8a99ca9d458bc8859b",
+      "size": 131116
+    },
+    {
+      "path": "Spectral/odd_harmonic_ladder.wav",
+      "category": "Spectral",
+      "title": "Odd Harmonic Ladder",
+      "sha256": "8847c22d0ae33797f7872f75ee37912ef6b7a3d30c90354963950de93d2b6079",
+      "size": 262188
+    },
+    {
+      "path": "Spectral/organ_drawbars_16.wav",
+      "category": "Spectral",
+      "title": "Organ Drawbars",
+      "sha256": "b09efad0727cc2afe889ea1680e8eedbeace0ad72b80f574bdf3c0e6a3cb763a",
+      "size": 127020
+    },
+    {
+      "path": "Spectral/prime_harmonics.wav",
+      "category": "Spectral",
+      "title": "Prime Harmonics",
+      "sha256": "a07c6da10a08434a4f97718f2fb0537cabbcbe2a70e090b9e9bc485cb8738e68",
+      "size": 262188
+    },
+    {
+      "path": "Spectral/spectral_tilt_sweep.wav",
+      "category": "Spectral",
+      "title": "Spectral Tilt Sweep",
+      "sha256": "465aa2e0d4ef32d9bc358e4f9b13240b5819f6a846ed067e8e3464a721a3fc2a",
+      "size": 262188
+    },
+    {
+      "path": "Vocal/breathy_to_pressed.wav",
+      "category": "Vocal",
+      "title": "Breathy To Pressed",
+      "sha256": "9335e698105aa1efce38cdba41a915171546b40cee879da49a70a326b5d48361",
+      "size": 262188
+    },
+    {
+      "path": "Vocal/choir_blend.wav",
+      "category": "Vocal",
+      "title": "Choir Blend",
+      "sha256": "0ad81298c310069ff5989156a165e90d2a4bb181fc4e365a7cbdf00037f256c6",
+      "size": 262188
+    },
+    {
+      "path": "Vocal/choir_singers_shift.wav",
+      "category": "Vocal",
+      "title": "Choir Singers Shift",
+      "sha256": "d80eb714240bfd0e5d69bc8e69c2b2fb860e5affa17bec07e2917024a97f8cc3",
+      "size": 196652
+    },
+    {
+      "path": "Vocal/diphthong_series.wav",
+      "category": "Vocal",
+      "title": "Diphthong Series",
+      "sha256": "a7d9e8fdde8009b69ea1077140bfaa55c9abf693313a05d70efebc67b1820065",
+      "size": 262188
+    },
+    {
+      "path": "Vocal/formant_sweep_aeiou.wav",
+      "category": "Vocal",
+      "title": "Vowel Sweep AEIOU",
+      "sha256": "4e8247c3ab1ee4002e8f0dff3175220d603193f18e90d388205e9b4698a8d315",
+      "size": 262188
+    },
+    {
+      "path": "Vocal/overtone_duet.wav",
+      "category": "Vocal",
+      "title": "Overtone Duet",
+      "sha256": "d95f37a3729ad2acc9f59dbcdb41b21487eab41fb9f42dfb0ad78573eaf81100",
+      "size": 262188
+    },
+    {
+      "path": "Vocal/overtone_throat_sweep.wav",
+      "category": "Vocal",
+      "title": "Overtone Throat Sweep",
+      "sha256": "b0bc665d04662cb9683e67541588bcf0d7c6ec43a900675697bc4c2b24487be8",
+      "size": 262188
+    },
+    {
+      "path": "Vocal/tract_length_sweep.wav",
+      "category": "Vocal",
+      "title": "Tract Length Sweep",
+      "sha256": "43185d75f2cc6198142a9c50861a1dd8d810f041164ea0fb8f291da164ff866a",
+      "size": 262188
+    },
+    {
+      "path": "Vocal/vowel_cycle_children.wav",
+      "category": "Vocal",
+      "title": "Vowel Cycle Children",
+      "sha256": "a699044c4573f0826bf16b09f1ac450f9d847af74e946eb6edeeec4aa9bc1150",
+      "size": 262188
+    },
+    {
+      "path": "Vocal/vowel_cycle_men.wav",
+      "category": "Vocal",
+      "title": "Vowel Cycle Men",
+      "sha256": "3c97914dc65de84c9c12c36a8e6f3d4b55a2ffaf1bc830d6efb9a23dff2b0046",
+      "size": 262188
+    },
+    {
+      "path": "Vocal/vowel_cycle_women.wav",
+      "category": "Vocal",
+      "title": "Vowel Cycle Women",
+      "sha256": "b9c6750f7e334eac284b1d995f8852bd424432863075b82bd0087be9acd3c85a",
+      "size": 262188
+    },
+    {
+      "path": "Vocal/whisper_to_voiced.wav",
+      "category": "Vocal",
+      "title": "Whisper To Voiced",
+      "sha256": "db61b75d540d843590847ba9a4c01eedead067fedd7d14b349584b3bd8697aa1",
+      "size": 262188
+    }
+  ]
+}

@@ -31,6 +31,20 @@ namespace synthyboy
  * Threading: prepare / reset / destruction are called while no process() runs. setParam, getParam and activeVoices
  * may be called from any thread at any time (lock free); process() is called from one audio thread at a time.
  */
+/** What an engine can tell about its voices and the keys it believes are held (diagnostics: the status file of the MPC shell, the note storm tests). All values as of the end of the last
+    process(); the counters count since prepare() / reset (never wrap in practice). */
+struct VoiceStats
+{
+    int active = 0;            // sounding voices, the released ones that still fade included
+    int released = 0;          // of these in their release stage (or fading out)
+    int sustaining = 0;        // of these not released (a key down, or the pedal)
+    int heldKeys = 0;          // keys the engine believes are down (events only)
+    int lowestHeld = -1, highestHeld = -1;   // MIDI notes, -1 none
+    int orphans = 0;           // not released voices whose key is not held while the pedal is up: the bug state (a stuck note); always 0
+    bool sustainPedal = false; // the pedal of any channel is down
+    unsigned noteOns = 0, noteOffs = 0, unmatchedNoteOffs = 0, stolen = 0;
+};
+
 class IEngine
 {
 public:
@@ -116,11 +130,33 @@ public:
     /** The knobs whose modulated value the display wants (GROUPA2 WP-17): table indices, at most LiveValues::kMaxTargets (the rest is ignored). Any thread, lock free;
         the audio thread takes the list over at the end of its next block. */
     virtual void setReadoutTargets (const int* /*paramIndices*/, int /*count*/) noexcept {}
+    /** The display shows the level meters of the SOURCE strips (LiveValues::stripPeak[0 .. 6]: Sub, A, B, C, Noise, Filter 1, Filter 2): call it at least every few frames while they are on screen. The own engine measures the
+        sources (a peak per voice, source and control period) only for a while (about 0.7 s of blocks) after the last call, and the strips 0 .. 6 read 0 in between; the bus and master strips (7 .. 9) are always
+        measured. Any thread, lock free; a no-op for an engine without these meters. */
+    virtual void requestMeters() noexcept {}
     /** Copies the live values of the last blocks (readout.h). Any thread, lock free; false (nothing written) for an engine that has none. */
     virtual bool copyReadout (LiveValues& /*out*/) const noexcept { return false; }
 
+    /** Not real time (the host's thread, the display thread; never the audio thread): builds on the calling thread whatever the CURRENT parameter values need and prepare () left to a background thread
+        (the own engine: the built-in wavetables the oscillators name). Call it after a state or program was applied. A no-op for an engine that builds everything in prepare (). */
+    virtual void readyContent() noexcept {}
+    /** The same for a state that is about to be applied: builds, on the calling thread, the tables the plain values `plain[0 .. count)` (indexed like the parameter table) name, BEFORE the caller sets them,
+        so that the parameters and the tables they name take effect for the audio thread together. A no-op for an engine that builds everything in prepare (). */
+    virtual void readyContentFor (const float* /*plain*/, size_t /*count*/) noexcept {}
+    /** true while a table the current parameter values name is still being built (the plugin-drawn pages show a small "loading" mark); the sound is that of the table the oscillator had until then. Any thread. */
+    virtual bool contentPending() const noexcept { return false; }
+    /** Milliseconds this engine has spent building its built-in wavetables (summed over all threads that built them; 0: none or not known): the start-up record of the shell. Any thread. */
+    virtual double wavetableBuildMs() const noexcept { return 0.0; }
+    /** Milliseconds the last prepare () spent on part `part` of its work: 0 the voice pool, 1 the effects (pool and the three racks); 0.0 for another part or an engine that does not know. Any thread. */
+    virtual double prepareDetailMs (int /*part*/) const noexcept { return 0.0; }
+
     /** Number of sounding voices (including released ones that are still fading out) after the last process(). */
     virtual int activeVoices() const noexcept = 0;
+    /** The voice and held key diagnostics; false (nothing written) for an engine that has none. Any thread, lock free. */
+    virtual bool voiceStats (VoiceStats& /*out*/) const noexcept { return false; }
+    /** The content the sound needs and does not have (docs/ARCHITECTURE.md section 6, the `missing_content` flag), as of the last block; bits: 0 .. 2 the file (sample, granular, spectral,
+        multisample) of oscillator 1 .. 3, 3 .. 5 the user wavetable of oscillator 1 .. 3 (the built-in saw plays), 6 the impulse of Convolve (bypassed), 7 the sample of the noise source. Any thread. */
+    virtual unsigned missingContent() const noexcept { return 0; }
 
     /** Latency of the output in samples at the host rate, as of the last process() (any thread). engine-vital: Bode's Hilbert filter
         delays the signal path it sits in, the engine delays every other path to match (the Direct output, the other buses, the bands of
@@ -159,8 +195,12 @@ bool setOwnLowTierKillFade (IEngine& engine, float seconds) noexcept;
 /** Own engine only, for measurements: switches off ways the engine saves work without changing the sound, so that one binary can be measured with and without each
     (bench/tier_bench.cpp --no-fx-mute, --scalar-filters). Bits of `off`: kOwnSavingFxMute = an effect whose mix is exactly 0 is processed all the same (FxModule::process),
     kOwnSavingVectorFilters = the voice filters run their scalar loops also where a vector kernel exists, kOwnSavingVectorWarp = the oversampled samples of a
-    warped oscillator are made one by one also where the four lane form exists (--scalar-warp). Default 0 (every saving on). False if `engine` is not an own engine. */
-enum OwnSaving : uint32_t { kOwnSavingFxMute = 1u << 0, kOwnSavingVectorFilters = 1u << 1, kOwnSavingVectorWarp = 1u << 2 };
+    warped oscillator are made one by one also where the four lane form exists (--scalar-warp), kOwnSavingContentKernels = the Sample / Granular / Spectral / Multisample oscillators run their
+    per sample (or per frame) reference code instead of the block kernels (--scalar-content; the same samples, or the stated tolerance for the spectral kernels). kOwnSavingVectorFilters also covers the
+    four lane LFO refresh of the chorus. kOwnSavingVoiceControl = the control code of the voices and the modulation matrix runs as it was before the caches and skips of
+    docs/release/CPU-REVIEW-VOICE-MOD.md (--no-voice-savings; the same samples and the same display values). Default 0 (every saving on). False if `engine` is not an own engine. */
+enum OwnSaving : uint32_t { kOwnSavingFxMute = 1u << 0, kOwnSavingVectorFilters = 1u << 1, kOwnSavingVectorWarp = 1u << 2, kOwnSavingContentKernels = 1u << 3,
+                            kOwnSavingVoiceControl = 1u << 4 };
 bool setOwnSavingsOff (IEngine& engine, uint32_t off) noexcept;
 
 enum class EngineKind
