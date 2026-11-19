@@ -855,11 +855,54 @@ private:
     {
         ensureLibrary();
         juce::PopupMenu menu;
-        juce::PopupMenu examples;
+        juce::PopupMenu digitalMenu;
+        juce::PopupMenu analogMenu;
+        juce::PopupMenu spectralMenu;
+        juce::PopupMenu vowelMenu;
+        juce::PopupMenu shapingMenu;
+        juce::PopupMenu allMenu;
+
         const auto& list = formulaExamples();
         for (size_t i = 0; i < list.size(); ++i)
-            examples.addItem (static_cast<int> (i) + 1, juce::String (list[i].name) + ":  " + list[i].expression);
-        menu.addSubMenu ("Examples", examples);
+        {
+            const int id = static_cast<int> (i) + 1;
+            const juce::String itemText = juce::String (list[i].name) + ":  " + list[i].expression;
+            const std::string name (list[i].name);
+
+            allMenu.addItem (id, itemText);
+
+            if (name.find ("Dnb") != std::string::npos || name.find ("Monster") != std::string::npos
+                || name.find ("Acid") != std::string::npos || name.find ("sync") != std::string::npos
+                || name.find ("FM") != std::string::npos || name.find ("Bitcrush") != std::string::npos)
+            {
+                digitalMenu.addItem (id, itemText);
+            }
+            else if (name.find ("Vowel") != std::string::npos || name.find ("Formant") != std::string::npos)
+            {
+                vowelMenu.addItem (id, itemText);
+            }
+            else if (name.find ("Spectral") != std::string::npos || name.find ("harmonic") != std::string::npos
+                     || name.find ("Harmonic") != std::string::npos || name.find ("Bell") != std::string::npos
+                     || name.find ("Metallic") != std::string::npos || name.find ("Organ") != std::string::npos)
+            {
+                spectralMenu.addItem (id, itemText);
+            }
+            else if (name.find ("folded") != std::string::npos || name.find ("rectified") != std::string::npos)
+            {
+                shapingMenu.addItem (id, itemText);
+            }
+            else
+            {
+                analogMenu.addItem (id, itemText);
+            }
+        }
+
+        menu.addSubMenu ("Digital & Bass", digitalMenu);
+        menu.addSubMenu ("Analog & Shapes", analogMenu);
+        menu.addSubMenu ("Spectral & Harmonics", spectralMenu);
+        menu.addSubMenu ("Vowel & Formants", vowelMenu);
+        menu.addSubMenu ("Waveshaping & Math", shapingMenu);
+        menu.addSubMenu ("All Formula Presets", allMenu);
         menu.addSeparator();
         formulaLibrary->addTo (menu, 1000);
         menu.showMenuAsync (popupOptions (presetsBtn),

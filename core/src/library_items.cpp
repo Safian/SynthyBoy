@@ -110,6 +110,10 @@ const std::vector<FormulaExample>& formulaExamples()
         { "Acid 303 (y)", "tanh((1 - 2*w) + 1.2 * exp(-4*w) * sin(2*pi*w * (2 + 14*y)))" },
         { "Vowel formant (y)", "sin(pi*w) * (sin(2*pi*w * (2 + 5*y)) + 0.7 * sin(2*pi*w * (5 + 9*y)))" },
         { "Metallic comb (y)", "tanh(sin(2*pi*w) + 0.6 * sin(pi*w) * sin(2*pi*w * 2.73) + 0.4 * sin(pi*w) * sin(2*pi*w * 5.41 * (1 + y)))" },
+        { "Hard sync sweep (y)", "1 - 2 * ((w * (1 + 7*y)) % 1)" },
+        { "FM sweep (y)", "sin(2*pi*w + 4.0 * y * sin(4*pi*w))" },
+        { "Organ drawbars", "sin(2*pi*w) + 0.8*sin(4*pi*w) + 0.6*sin(6*pi*w) + 0.4*sin(8*pi*w)" },
+        { "Bitcrush sweep (y)", "rint(sin(2*pi*w) * (2 + 14 * (1 - y))) / (2 + 14 * (1 - y))" },
     };
     return examples;
 }

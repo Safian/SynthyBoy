@@ -799,4 +799,28 @@ TEST (formula_dnb_wave_generation)
     CHECK (f.isMultiFrame());
     CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
     CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 9. Hard sync sweep (y)
+    err = Formula::compile ("1 - 2 * ((w * (1 + 7*y)) % 1)", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 10. FM sweep (y)
+    err = Formula::compile ("sin(2*pi*w + 4.0 * y * sin(4*pi*w))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 11. Organ drawbars
+    err = Formula::compile ("sin(2*pi*w) + 0.8*sin(4*pi*w) + 0.6*sin(6*pi*w) + 0.4*sin(8*pi*w)", f);
+    CHECK (err.ok);
+    CHECK (! f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 12. Bitcrush sweep (y)
+    err = Formula::compile ("rint(sin(2*pi*w) * (2 + 14 * (1 - y))) / (2 + 14 * (1 - y))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
 }

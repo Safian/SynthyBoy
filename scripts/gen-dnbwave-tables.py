@@ -50,38 +50,73 @@ def make_wavetable(filename: str, num_frames: int, func):
 def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     target_dir = os.path.join(root, "content", "wavetables")
+    digital_dir = os.path.join(target_dir, "Digital")
+    analog_dir = os.path.join(target_dir, "Analog")
+    spectral_dir = os.path.join(target_dir, "Spectral")
+    vowel_dir = os.path.join(target_dir, "Vowel")
 
-    # 1. Single frame DnbWave (descending kick chirp)
-    make_wavetable(os.path.join(target_dir, "DnbWave.wav"), 1,
-                   lambda w, y: math.sin(2.0 * math.pi * (15.0 * w - 7.0 * (w**2))))
+    # --- Digital & Bass ---
+    # 1. DnbWave (Single frame kick chirp)
+    for d in (target_dir, digital_dir):
+        make_wavetable(os.path.join(d, "DnbWave.wav"), 1,
+                       lambda w, y: math.sin(2.0 * math.pi * (15.0 * w - 7.0 * (w**2))))
+        make_wavetable(os.path.join(d, "DnbWave_sweep.wav"), 64,
+                       lambda w, y: math.sin(2.0 * math.pi * ((1.0 + 14.0 * y) * w - 7.0 * y * (w**2))))
+        make_wavetable(os.path.join(d, "DnbWave_drive.wav"), 64,
+                       lambda w, y: math.tanh(2.5 * math.sin(2.0 * math.pi * ((1.0 + 14.0 * y) * w - 7.0 * y * (w**2)))))
+        make_wavetable(os.path.join(d, "Monster_growl.wav"), 64,
+                       lambda w, y: math.tanh(2.5 * math.sin(2.0 * math.pi * w + (2.0 + 4.0 * y) * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * (2.0 + 3.0 * y)))))
+        make_wavetable(os.path.join(d, "Acid_303.wav"), 64,
+                       lambda w, y: math.tanh((1.0 - 2.0 * w) + 1.2 * math.exp(-4.0 * w) * math.sin(2.0 * math.pi * w * (2.0 + 14.0 * y))))
 
-    # 2. Multi-frame DnbWave sweep (64 frames)
-    make_wavetable(os.path.join(target_dir, "DnbWave_sweep.wav"), 64,
-                   lambda w, y: math.sin(2.0 * math.pi * ((1.0 + 14.0 * y) * w - 7.0 * y * (w**2))))
+    make_wavetable(os.path.join(digital_dir, "Hard_sync.wav"), 64,
+                   lambda w, y: 1.0 - 2.0 * ((w * (1.0 + 7.0 * y)) % 1.0))
+    make_wavetable(os.path.join(digital_dir, "FM_sweep.wav"), 64,
+                   lambda w, y: math.sin(2.0 * math.pi * w + 4.0 * y * math.sin(4.0 * math.pi * w)))
+    make_wavetable(os.path.join(digital_dir, "Bitcrush_sweep.wav"), 64,
+                   lambda w, y: round(math.sin(2.0 * math.pi * w) * (2.0 + 14.0 * (1.0 - y))) / (2.0 + 14.0 * (1.0 - y)))
 
-    # 3. Multi-frame DnbWave drive (64 frames)
-    make_wavetable(os.path.join(target_dir, "DnbWave_drive.wav"), 64,
-                   lambda w, y: math.tanh(2.5 * math.sin(2.0 * math.pi * ((1.0 + 14.0 * y) * w - 7.0 * y * (w**2)))))
+    # --- Analog & Shapes ---
+    for d in (target_dir, analog_dir):
+        make_wavetable(os.path.join(d, "PWM_sweep.wav"), 64,
+                       lambda w, y: 1.0 if w < (0.05 + 0.9 * y) else -1.0)
 
-    # 4. Monster growl (64 frames)
-    make_wavetable(os.path.join(target_dir, "Monster_growl.wav"), 64,
-                   lambda w, y: math.tanh(2.5 * math.sin(2.0 * math.pi * w + (2.0 + 4.0 * y) * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * (2.0 + 3.0 * y)))))
+    # Basic shapes (4 frames: Sine, Triangle, Saw, Square)
+    def basic_shape(w, y):
+        # 4 frames: frame 0 = sine, 1 = triangle, 2 = saw, 3 = square
+        if y < 0.25:
+            # Sine to triangle
+            t = y / 0.25
+            sine = math.sin(2.0 * math.pi * w)
+            tri = (1.0 - 4.0 * abs(w - 0.5)) if w < 0.75 else (4.0 * (w - 0.75) - 1.0)
+            return (1.0 - t) * sine + t * tri
+        elif y < 0.5:
+            # Triangle to saw
+            t = (y - 0.25) / 0.25
+            tri = (1.0 - 4.0 * abs(w - 0.5)) if w < 0.75 else (4.0 * (w - 0.75) - 1.0)
+            saw = 1.0 - 2.0 * w
+            return (1.0 - t) * tri + t * saw
+        else:
+            # Saw to square
+            t = (y - 0.5) / 0.5
+            saw = 1.0 - 2.0 * w
+            sq = 1.0 if w < 0.5 else -1.0
+            return (1.0 - t) * saw + t * sq
 
-    # 5. Acid 303 (64 frames)
-    make_wavetable(os.path.join(target_dir, "Acid_303.wav"), 64,
-                   lambda w, y: math.tanh((1.0 - 2.0 * w) + 1.2 * math.exp(-4.0 * w) * math.sin(2.0 * math.pi * w * (2.0 + 14.0 * y))))
+    make_wavetable(os.path.join(analog_dir, "Basic_shapes.wav"), 64, basic_shape)
 
-    # 6. Vowel formant (64 frames)
-    make_wavetable(os.path.join(target_dir, "Vowel_formant.wav"), 64,
-                   lambda w, y: math.sin(math.pi * w) * (math.sin(2.0 * math.pi * w * (2.0 + 5.0 * y)) + 0.7 * math.sin(2.0 * math.pi * w * (5.0 + 9.0 * y))))
+    # --- Spectral & Harmonics ---
+    for d in (target_dir, spectral_dir):
+        make_wavetable(os.path.join(d, "Metallic_comb.wav"), 64,
+                       lambda w, y: math.tanh(math.sin(2.0 * math.pi * w) + 0.6 * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * 2.73) + 0.4 * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * 5.41 * (1.0 + y))))
 
-    # 7. Metallic comb (64 frames)
-    make_wavetable(os.path.join(target_dir, "Metallic_comb.wav"), 64,
-                   lambda w, y: math.tanh(math.sin(2.0 * math.pi * w) + 0.6 * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * 2.73) + 0.4 * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * 5.41 * (1.0 + y))))
+    make_wavetable(os.path.join(spectral_dir, "Organ_drawbars.wav"), 64,
+                   lambda w, y: (math.sin(2.0 * math.pi * w) + 0.8 * math.sin(4.0 * math.pi * w) + 0.6 * math.sin(6.0 * math.pi * w) + 0.4 * math.sin(8.0 * math.pi * w)) * 0.4)
 
-    # 8. PWM sweep (64 frames)
-    make_wavetable(os.path.join(target_dir, "PWM_sweep.wav"), 64,
-                   lambda w, y: 1.0 if w < (0.05 + 0.9 * y) else -1.0)
+    # --- Vowel & Formants ---
+    for d in (target_dir, vowel_dir):
+        make_wavetable(os.path.join(d, "Vowel_formant.wav"), 64,
+                       lambda w, y: math.sin(math.pi * w) * (math.sin(2.0 * math.pi * w * (2.0 + 5.0 * y)) + 0.7 * math.sin(2.0 * math.pi * w * (5.0 + 9.0 * y))))
 
 if __name__ == "__main__":
     main()
