@@ -144,7 +144,11 @@ Lines found: 80 in 10 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 29.
+Commits found: 30.
+
+### 8457a466 (2026-11-19) Docs: OUTPUT-LEVEL.md, the single source of truth for the output level (rules, verified facts, refut
+
+- matching line: Docs: OUTPUT-LEVEL.md, the single source of truth for the output level (rules, verified facts, refuted claims, open questions, plan)
 
 ### 14411d71 (2026-11-19) Internal gain-staging (0 dB shell gain, -12.5 LUFS presets), shell/DSP bugfixes, and MPC XL + Key 61
 
