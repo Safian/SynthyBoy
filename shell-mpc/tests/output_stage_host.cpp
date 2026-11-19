@@ -382,6 +382,16 @@ int main()
         keep = true;
         check (! synthyboy_mpc::outputLimiterFromChunk (bad.data(), bad.size(), keep) && keep, "chunk: a damaged member is ignored");
         check (! synthyboy_mpc::outputLimiterFromChunk (nullptr, 0, keep), "chunk: no data");
+        const std::string pre1 = "{\"format\":\"synthyboy-preset\",\"version\":1,\"meta\":{\"name\":\"X\"},\"outputLimiter\":1,\"state\":{\"params\":{\"a\":1}}}";
+        const std::string pre0 = "{\"format\":\"synthyboy-preset\",\"outputLimiter\":false,\"state\":{}}";
+        const std::string preNone = "{\"format\":\"synthyboy-preset\",\"state\":{},\"x\":{\"mpcOutputLimiter\":1}}";
+        bool pv = false;
+        check (synthyboy_mpc::outputLimiterFromPreset (pre1.data(), pre1.size(), pv) && pv, "preset: \"outputLimiter\":1 switches the limiter on");
+        pv = true;
+        check (synthyboy_mpc::outputLimiterFromPreset (pre0.data(), pre0.size(), pv) && ! pv, "preset: \"outputLimiter\":false switches it off");
+        pv = false;
+        check (! synthyboy_mpc::outputLimiterFromPreset (preNone.data(), preNone.size(), pv) && ! pv, "preset: without the member (the chunk's member is another key) nothing is set");
+        check (! synthyboy_mpc::outputLimiterFromPreset (nullptr, 0, pv), "preset: no data");
     }
     {
         ::setenv ("SYNTHYBOY_MPC_OUTPUT_LIMITER", "0", 1);

@@ -66,4 +66,29 @@ inline bool outputLimiterFromChunk (const void* data, size_t size, bool& on) noe
     return true;
 }
 
+/** The preset's own choice of the output limiter: the optional top-level member "outputLimiter" of a .sbpreset file (1 / 0 or true / false; written by
+    scripts/gen-factory-presets.py for the presets whose measured overshoot asks for it). True when it is there (then `on` is set); false leaves `on` as it is. A program without
+    the member gets the default (kOutputLimiterDefaultOn: off) from the caller. Never reads outside `size`. */
+inline bool outputLimiterFromPreset (const void* data, size_t size, bool& on) noexcept
+{
+    if (data == nullptr || size == 0)
+        return false;
+    const std::string_view text (static_cast<const char*> (data), size);
+    static constexpr std::string_view kKey = "\"outputLimiter\":";
+    const size_t a = text.find (kKey);
+    if (a == std::string_view::npos)
+        return false;
+    size_t q = a + kKey.size();
+    while (q < text.size() && (text[q] == ' ' || text[q] == '\t'))
+        ++q;
+    const std::string_view v = text.substr (q, 5);
+    if (v.substr (0, 1) == "1" || v.substr (0, 4) == "true")
+        on = true;
+    else if (v.substr (0, 1) == "0" || v.substr (0, 5) == "false")
+        on = false;
+    else
+        return false;
+    return true;
+}
+
 } // namespace synthyboy_mpc

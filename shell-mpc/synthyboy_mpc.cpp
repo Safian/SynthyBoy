@@ -2102,6 +2102,8 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         {
             // Program 0: Init (default values, empty content)
             applyState (inst, synthyboy::ParamValues::defaults (), synthyboy::StateContent {});
+            inst->outputLimiter.store (synthyboy_mpc::kOutputLimiterDefaultOn, std::memory_order_relaxed);   // the default sound: no limiter
+            inst->applyOutputLimiter();
         }
         else
         {
@@ -2119,6 +2121,11 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 return 1; // load failed
 
             applyState (inst, values, std::move(content));
+            // the preset says whether its sound needs the output limiter (the member "outputLimiter"; without it the default: off). The project's chunk then carries it.
+            bool limiterOn = synthyboy_mpc::kOutputLimiterDefaultOn;
+            synthyboy_mpc::outputLimiterFromPreset (data.data(), data.size(), limiterOn);
+            inst->outputLimiter.store (limiterOn, std::memory_order_relaxed);
+            inst->applyOutputLimiter();
         }
 
         inst->currentProgram.store (prog, std::memory_order_relaxed);
