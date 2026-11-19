@@ -1,8 +1,7 @@
 // SynthyBoy - own engine tests: a legato note and the envelope time scaling of the voice control (docs/release/CPU-REVIEW-VOICE-MOD.md V1 side note, CPU-REVIEW-PROFILE.md
 // section 9). A legato note moves the voice to the next step of the voice control (Voice::legatoTo: `sequence`), and the envelope times follow the step's envelope scaling.
-// Whether they do must not depend on whether some unrelated key of the voice happens to be modulated. This test is EXPECTED TO FAIL on the code as it is: the envelope
-// settings cache (keyed on the snapshot epoch and the tempo, not on the note sequence) keeps the scaling of the previous step while nothing of the voice is modulated.
-// It is not registered with CTest (core/tests/CMakeLists.txt: synthyboy_test_own_voice_legato_env) until the behaviour is fixed (an owner decision: the fix changes output).
+// Whether they do must not depend on whether some unrelated key of the voice happens to be modulated. The envelope settings cache is keyed on the snapshot epoch and the tempo, not on
+// the note sequence, so Voice::legatoTo clears it (it kept the scaling of the previous step while nothing of the voice is modulated: fixed, a regression test now).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <cmath>
@@ -38,7 +37,7 @@ struct Rig
     ModMatrix matrix;
     TickGlobals g;
 
-    explicit Rig (bool unrelatedSlot)
+    explicit Rig (bool unrelatedSlot, bool reference)
     {
         v.prepare (kSr);
         base.assign (kMaxParams, 0.0f);
@@ -60,14 +59,15 @@ struct Rig
         g.matrix = &matrix;
         g.sampleRate = kSr;
         g.bpm = 120.0;
+        g.referenceControl = reference;   // the code before the caches of round 13 (--no-voice-savings)
         g.baseEpoch = 1;   // as the engine: the caches of the voice may hold
     }
 };
 } // namespace
 
-TEST (voice_legato_note_takes_the_envelope_scaling_of_its_step_without_modulation)
+static void legatoNoteTakesTheScalingOfItsStep (bool reference)
 {
-    Rig plain (false), modulated (true);
+    Rig plain (false, reference), modulated (true, reference);
     NoteStart n1;
     n1.key = 60;
     n1.tunedNote = 60.0f;
@@ -98,4 +98,14 @@ TEST (voice_legato_note_takes_the_envelope_scaling_of_its_step_without_modulatio
         std::printf ("envelope 1 after the legato note differs %d periods after it: %.9g without modulation, %.9g with an unrelated slot\n", firstDiff, static_cast<double> (a),
                      static_cast<double> (b));
     CHECK_EQ (firstDiff, -1);
+}
+
+TEST (voice_legato_note_takes_the_envelope_scaling_of_its_step_without_modulation)
+{
+    legatoNoteTakesTheScalingOfItsStep (false);
+}
+
+TEST (voice_legato_note_takes_the_envelope_scaling_of_its_step_reference_control)
+{
+    legatoNoteTakesTheScalingOfItsStep (true);
 }

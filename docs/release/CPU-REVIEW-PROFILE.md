@@ -1,5 +1,7 @@
 # CPU review: the quality profiles, work that cannot be heard, and the shell's audio thread work (Key 61 first)
 
+> **Implementation status of S1, S2, S4, S7 to S10, H2 (branch `work/opt-voice`, 2026-11-19).** Done and bit identical: S1 (V1), S2 (its parameter part, V7), S10 (V6), H2 (V10). Skipped: S4 and S8 (not bit identical: display and, after an edit, audio), S7 (tiny, needs delay line / rack / sign of zero conditions in code another worker changes), S9 (in `wt_osc.h`, another worker's file). The legato note of section 9 is confirmed as a bug (failing test `core/tests/test_own_voice_legato_env.cpp`).
+
 Read only review of `feature/mpc-overlay` at 8e5cf113 (2026-11-18, after the round 12 merge of the three optimisation branches). No source file was changed, nothing was built or run, no device was touched. Every file:line below was re-opened in this tree.
 
 The three earlier reviews (`CPU-REVIEW-OSC.md`, `CPU-REVIEW-FILTER-FX.md`, `CPU-REVIEW-CONTENT.md`) own the oscillators, the voice filters and effects, and the content engines. Their items are not repeated here. Where an item of this review touches one of theirs, it says so (for example S3 and FILTER-FX F10, the strip peaks).
@@ -137,6 +139,8 @@ Per block, outside `engine->process` (`synthyboy_mpc.cpp:3013-3120`):
 
 ### S1. The envelope settings cache is dropped whenever any key of the voice is modulated
 
+- **Status (work/opt-voice, 6e0a0b0d): done as CPU-REVIEW-VOICE-MOD.md V1, bit identical.** The side note of section 9 is confirmed (`core/tests/test_own_voice_legato_env.cpp`, aea3d5ea); the fix is left to the owner (it changes output).
+
 - **Where.** `voice.cpp:568` (`envFromCache` requires `numTouched == 0`), `:597` (`envCacheValid = numTouched == 0 && !fresh`), the settings lambda `:477-509` (out of line in the arm32 object: `Voice::tick ... EnvSettings` lambda at offset 0x48d4 of `voice.cpp.o`).
 - **Trace.** `process` -> period loop -> `controlTick` -> `Voice::tick` -> envelope loop, 6 envelopes. `numTouched` counts every key the voice's matrix touched in the last period. In all six presets the velocity route to a filter key (or `filter1.mix`) is nonzero every period, so `numTouched > 0` always and all six envelopes rebuild their settings every period, although none of their keys is modulated (the env routes of Stretched Glass Choir and Ring Mod Gamelan come from macro 5 and macro 3, which are 0).
 - **Loop level.** Per period x voice x 6 envelopes.
@@ -147,6 +151,8 @@ Per block, outside `engine->process` (`synthyboy_mpc.cpp:3013-3120`):
 
 ### S2. An off sub oscillator still does its whole tick
 
+- **Status (73459fe8): done as the sub part of V7, bit identical.** The parameter part of the sub is kept (no key reads, no `round`); the silent tick is still built and deferred every period, which keeps the switch on mid note exact (the early exit of the sketch is not bit identical there). What stays per period: one acquire load of the table, three adds, a clamp and the copy of the silent tick.
+
 - **Where.** `voice.cpp:995-1022`: about 12 `P ()` reads, `builtinWavetableIfReady` (an acquire load), `std::round`, the static table guard, the copy of a whole `OscTick` into `pendingTick` by `deferSilent` (`wt_osc.h:464`), for a sub that is off.
 - **Trace.** `controlTick` -> `Voice::tick` -> sub block, per voice per period; the render is already skipped (`voice.cpp:1245`).
 - **Measured.** "voice tick: sub" with the sub off (round 12): Stretched Glass Choir 0.59 %, Ring Mod Gamelan 0.49 %, Triple Fifth Lead 0.49 %, Parallel Dusk Pad 0.38 % of the block; Shepard Ascent 0.42 % (round 10). Lorenz Garden has the sub on (0.73 %, not a waste).
@@ -156,6 +162,8 @@ Per block, outside `engine->process` (`synthyboy_mpc.cpp:3013-3120`):
 - **Change sketch.** As the noise: `if (!subCh.on && P (si.on) < 0.5f && subSettled) { pitchTapOn[3] = false; } else { ...as now...; subSettled = !subCh.on; }`, and in the period the sub comes on, run the block twice (first with level 0, as a silent tick, then live), which reproduces the old replay except for the pitch.
 
 ### S3. The mixer meters run on every voice, source and period, also when no page shows them
+
+- **Status: not part of this branch** (the meters belong to the shell / peak work).
 
 - **Where.** `peakOf` (`voice.cpp:1112-1119`) at `:1238-1242` (each oscillator), `:1252-1256` (sub), `:1316-1320` (noise), `:1346-1350` (each filter, also an off one); the bus input peaks `own_engine.cpp:1536-1542`; the master peak `:1603`; the strip sums `:1534-1535`. `mo.srcSq` is always set (`own_engine.cpp:1529`), so the voice always measures.
 - **Disassembly.** `Voice::render`'s `runFilter` lambda (offset 0x429e of `voice.cpp.o`): `vldmia`, `vabs.f32`, `vcmp.f32`, `vmrs APSR_nzcv`, `it mi`, `vmovmi.f32`, `cmp`, `bne`: a scalar loop with the flag transfer in the loop carried chain.
@@ -169,6 +177,8 @@ Per block, outside `engine->process` (`synthyboy_mpc.cpp:3013-3120`):
 
 ### S4. Unread modulators are slowed to a quarter, not stopped
 
+- **Status: skipped, not bit identical.** The shape value of an unread LFO is read: the display shows the sources of the newest voice (`writeReadout`), and the smoothing state carries every value into the next; an LFO that only advanced its phase shows another value when its voice is or becomes the newest, and after an edit that makes it read, the audio differs.
+
 - **Where.** `voice.cpp:605-615` (LFOs), `:616-640` (random LFOs), `:584-594` (envelopes); `Voice::lfoValue` `voice.cpp:299-375` (about 16 `P ()` reads, the rate, the core advance, one or two shape evaluations).
 - **Trace.** `Voice::tick`, per period x voice x 10 LFOs / 4 random LFOs / 5 envelopes; an unread one runs every fourth period with four periods of time.
 - **Who reads an unread modulator.** No slot (that is what "unread" means, `usedSources`). The display: the LFO cursors read only `lfoReadPos` (`voice.h:175`, the phase, set in `lfoValue` before the shape), the envelope dots read the envelope stage and position; the source meters of the display read `src[]` of the newest voice (`own_engine.cpp:1783-1797`).
@@ -179,6 +189,8 @@ Per block, outside `engine->process` (`synthyboy_mpc.cpp:3013-3120`):
 - **Change sketch.** Split `lfoValue` into `lfoAdvance` (rate, core advance, age, `lfoReadPos`) and `lfoShapeValue`. For an unread LFO at its quarter step call `lfoAdvance` only, and `lfoShapeValue` only for the newest voice when demand bit 4 is set. A random LFO that no slot reads: keep stepping its generator (the sequence must stay the one a later read would see), which is most of its cost; only its key reads could be cached. Envelopes: keep as now (their advance is cheap and their stage is the display's).
 
 ### S5. The display readout is written every block
+
+- **Status: not part of this branch.**
 
 - **Where.** `own_engine.cpp:1620-1621` -> `publishStats` `:1626-1677`, `writeReadout` `:1758-1879`.
 - **What it does per block (est.).** 10 strip levels with `log10f` and the release (`:1762-1773`, the `exp` once): 1 to 1.5 k; the newest voices by serial, 8 passes over 36 voices (`:1805-1815`): about 2 k; per found voice 3 read positions, the sub phase, the step, 10 `lfoReadout` (each a `floorf` call, an import of the plugin), 6 `envReadoutFine` (a division each): about 3 k; 64 sources; the newest voice's envelopes; up to 96 targets (`:1862-1876`; the overlay subscribes the targets of all 24 views at its start, `synthyboy_mpc.cpp:1290-1299`, `overlay/controller.h:133-146`), each a `P ()` or a modulated value: 1.5 to 6 k; `publishStats` about 1 k. Total about 8 to 14 k cycles = **0.17 to 0.3 % of every block**. The bench sets no targets, so it shows the lower end.
@@ -191,6 +203,8 @@ Per block, outside `engine->process` (`synthyboy_mpc.cpp:3013-3120`):
 
 ### S6. A voice at exactly zero amplitude that has not finished renders in full
 
+- **Status: not part of this branch.**
+
 - **Where.** `voice.cpp:764-774`: a voice ends only when envelope 1 is `done` (or a kill fade ends). Envelope 1 in sustain with sustain 0, or in release from a value of 0 (`envelope.h:162-173`), gives `ampPrev = ampCur = 0` for as long as the key is held, or for the whole release time, while the oscillators, filters and mix run.
 - **Which preset.** Ring Mod Gamelan: sustain 0, decay 1500 ms with curve -3. The amplitude (the square of the envelope) is below -60 dB after 84 % of the decay (1.26 s) and exactly 0 from 1.5 s on; a key held longer, and the following 320 ms release from 0, are exact silence at full cost. The other five have a sustain above 0.
 - **Bench.** The bench strikes the chord again every second (`bench/tier_bench.cpp:385-405`), so it never reaches this state: **0 in the measured figures**. In playing, a held chord of Ring Mod Gamelan past 1.5 s costs everything for nothing: per voice about (42.2 - fixed part) / 8, est. 4 to 5 points of the block per such voice at round 12 (scaled from `configs.csv` `voices=6` against `low`: 2 voices = 16.3 points at round 10 out of 74.45, i.e. 21.9 % of the median; 21.9 % x 42.2 / 2 = 4.6 per voice).
@@ -199,6 +213,8 @@ Per block, outside `engine->process` (`synthyboy_mpc.cpp:3013-3120`):
 - **Change sketch.** In `tick` after the amplitude block: compute `silentHold` from the conditions; if set, keep the envelopes, LFOs and matrix (they are the sources of the global slots and the display), skip the oscillator, sub, noise and filter sections, and let `render` return after setting `lastBus*` and `outL / outR` to 0. Clear `silentHold` the moment any condition fails, and on that period run the full tick (the oscillators restart from their held state, which nothing heard in between).
 
 ### S7. A bus that nothing feeds still runs its per sample loops
+
+- **Status: skipped.** Est. 0.06 %; an exact skip needs the bus delay lines (their state), the bus rack tails, the ghosts and the sign of zero of Main covered, and it sits in the bus / peak code of `own_engine.cpp` that the shell and peak work changes now.
 
 - **Where.** `own_engine.cpp:1547-1583` (`runBus`: the gain lerp loop, the add to the destination), `:1536-1542` (bus input peak, see S3).
 - **Six presets.** No send to Bus 1 or Bus 2 anywhere (all `*.bus1_send`, `*.bus2_send` 0); the bus racks already take their early exit (FILTER-FX F11 measured that).
@@ -209,6 +225,8 @@ Per block, outside `engine->process` (`synthyboy_mpc.cpp:3013-3120`):
 
 ### S8. A slot with amount 0 marks its source as read
 
+- **Status: skipped, not bit identical.** A source behind a zero amount slot that is left out of the mask is decimated at tier low: the display of the newest voice's sources changes at once, and its phase and smoothing state (4 steps against one of 4 times the length) differ when an edit gives the slot an amount.
+
 - **Where.** `mod_matrix.cpp:302-303` adds the source bits of every compiled slot to `srcMask`, also of a slot whose amount is 0 (it is compiled at `:276-301` and skipped at evaluation, `:425`). So an LFO behind a zero amount slot runs every period, not at the quarter rate.
 - **Six presets.** No slot with amount 0: **0**. Matters for user patches with a parked route.
 - **Consequence.** Bit identical if the bits are left out only for slots whose amount is 0 and that no other slot modulates (`amountDest`).
@@ -216,6 +234,8 @@ Per block, outside `engine->process` (`synthyboy_mpc.cpp:3013-3120`):
 - **Change sketch.** In `compile`, after the loop, OR the bits only of slots with `c.amount != 0` or with an incoming amount slot.
 
 ### S9, S10. Small fixed copies (each about 0.1 % or less)
+
+- **Status: S10 done in 738dc125 (with V6), bit identical. S9 skipped here:** it is in `osc/wt_osc.h`, the wavetable oscillator, which another worker changes in this round (hand it to that work).
 
 - **S9.** `WtOsc::update` copies all 16 lanes of `curInc`, `curGainL`, `curGainR` into `prev` every period before its early return (`wt_osc.h:216-221`), and zeroes the lanes above the count when it does not return (`:418-422`). Lanes at or above `max (curCount, prevCount)` are never read by `render` (`wt_osc.h:614`, `:634`). Copying `max (curCount, prevCount)` lanes is bit identical. Saving est. 30 to 40 cycles x 3 oscillators x 32 voice periods = 3 to 4 k = **0.06 to 0.08 %**. (OSC F6 kept this copy on purpose as "not the cost"; I agree it is small.)
 - **S10.** `float extNext[4][kControlPeriod] = {}` (`voice.cpp:1133`) zeroes 128 floats per voice period, then `:1390-1394` copies them. Only the entries whose source is off need the zero. Saving est. 32 voice periods x 100 to 150 cycles = **0.07 to 0.1 %**. Bit identical.
@@ -226,10 +246,17 @@ Per block, outside `engine->process` (`synthyboy_mpc.cpp:3013-3120`):
 - **Cost (est.).** Engine loop about 7 flag transfers per sample: 128 x 65 to 90 = 8 to 11.5 k (0.17 to 0.25 %). Shell stage 128 x 40 to 60 = 5 to 8 k (0.11 to 0.17 %). Peak 256 calls x 15 to 25 = 4 to 6.5 k (0.08 to 0.14 %). Together **0.36 to 0.56 % per block**, of which the shell part (0.2 to 0.3 %) is not in any bench figure.
 - **Saving.** Hoist `routeSin != 0` (loop invariant); a NEON body for the common case (all `|y| <= 1.8` and finite, tested with integer compares on the bit patterns, fall back to the scalar loop for the block otherwise); the master peak with `vmaxq_f32` (FILTER-FX F10 lists this one loop; the rest is new); in the shell, a NEON finite test over the block and one multiply pass, and the output peak with `vmaxq_f32 (vabsq_f32)` (the input is already finite, so `fmax` and `max` agree). **0.25 to 0.45 %** together.
 - **Status (work/opt-shell).** Done in three commits. The shell's output stage and output peak (`shell-mpc/output_stage.h`, `output_peak.h`): 40157a36 (and the explicit parentheses a0eb51b2): four samples at a time, the two `isfinite` tests as integer compares on the magnitude bits and the multiply always made (so a flush-to-zero multiply flushes a subnormal like the scalar one); the gain smoothing and any limiter group that is not in its quiet state (reduction on, or a sample above the ceiling) run through the scalar body; the peak is `vmaxq_f32` over magnitudes with a NaN lane masked (`fmax` passed a NaN over too; a signalling NaN is excluded from the comparison because the AArch64 libm `fmax` lets it poison the running maximum, and the stage's output has no NaN at all). The engine's master loop: dca71634 (`core/engine-own/dsp/master_stage.h`, see V6 remnants in `CPU-REVIEW-VOICE-MOD.md`); the master peak is F10's `peakAbsPair` after the loop (62e404f6). Tests: `shell-mpc/tests/output_stage_lanes_host.cpp`, `core/tests/test_own_master_stage.cpp`.
+- **Status: not part of this branch** (shell / master work).
+
+- **Where.** `own_engine.cpp:1589-1604` (per sample: `smoothedGain.next`, the loop invariant test `routeSin != 0.0f`, the Direct lerp, two `outputLimit` each with a `fabs` compare and a NaN compare, the master peak with two `max`); `output_stage.h:49-62` (a gain compare, four `std::isfinite`, two multiplies); `output_peak.h:21-26` (two `fmaxf` calls).
+- **Cost (est.).** Engine loop about 7 flag transfers per sample: 128 x 65 to 90 = 8 to 11.5 k (0.17 to 0.25 %). Shell stage 128 x 40 to 60 = 5 to 8 k (0.11 to 0.17 %). Peak 256 calls x 15 to 25 = 4 to 6.5 k (0.08 to 0.14 %). Together **0.36 to 0.56 % per block**, of which the shell part (0.2 to 0.3 %) is not in any bench figure.
+- **Saving.** Hoist `routeSin != 0` (loop invariant); a NEON body for the common case (all `|y| <= 1.8` and finite, tested with integer compares on the bit patterns, fall back to the scalar loop for the block otherwise); the master peak with `vmaxq_f32` (FILTER-FX F10 lists this one loop; the rest is new); in the shell, a NEON finite test over the block and one multiply pass, and the output peak with `vmaxq_f32 (vabsq_f32)` (the input is already finite, so `fmax` and `max` agree). **0.25 to 0.45 %** together.
 - **Consequence.** Bit identical (the same operations per sample; the vector test only chooses the path).
 - **Confidence.** Medium. **Risk.** Low.
 
 ### H2. Thirty six voice objects are visited many times per period
+
+- **Status (9cec1ec1): done as CPU-REVIEW-VOICE-MOD.md V10, bit identical.**
 
 - **Where.** The pool is `kMaxVoices + 4` = 36 (`own_engine.h:85`) whatever the cap. Each period: `controlTick` visits all 36 for `sustainPending` (`own_engine.cpp:1139-1141`), `killExcess` (`:696-697`), `updateLowestNote` (`:686-688`), the tick loop (`:1149-1151`), the newest voice (`:1161-1163`); `process` the render loop (`:1530-1532`). Per block: `killExcess`, the active count, `publishStats`, `writeReadout`'s newest search and its 8 passes (`:1775-1777`, `:1805-1815`). About 1.2 to 1.4 k visits per block, each a load of `active` from a separate heap object (an inactive voice's line is cold).
 - **Cost (est.).** 5 to 15 cycles per visit: 6 to 20 k = **0.13 to 0.4 %**. Low confidence on the cycle figure (cache behaviour).

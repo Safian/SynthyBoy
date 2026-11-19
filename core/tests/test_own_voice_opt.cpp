@@ -19,11 +19,14 @@
 #include <vector>
 
 #include "osc/wavetable_bank.h"
+#include "synthyboy/content_state.h"
+#include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/modulation.h"
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/readout.h"
+#include "synthyboy/user_content.h"
 #include "voice/param_index.h"
 #include "voice/voice.h"
 #include "test_runner.h"
@@ -181,7 +184,8 @@ std::vector<float> randomPatch (Rand& r, const std::vector<float>* fromPreset, f
             static const char* const kDests[] = { "env1.attack", "env1.decay", "env1.sustain", "env1.release", "env2.attack", "env2.decay_curve", "env3.hold", "env1.attack_curve",
                                                   "lfo1.rate", "lfo1.smooth_time", "lfo2.phase", "lfo3.rate", "lfo1.fade_in", "rlfo1.rate", "osc1.level", "osc1.tune", "osc1.frame",
                                                   "osc2.pan", "osc1.unison.detune", "sub.level", "sub.tune", "filter1.cutoff", "filter1.resonance", "filter2.cutoff", "noise.level",
-                                                  "filter1.mix", "osc3.tune", "mod1.amount", "mod2.amount", "master.volume" };
+                                                  "filter1.mix", "osc3.tune", "mod1.amount", "mod2.amount", "master.volume", "osc1.gran.position", "osc1.sample.start",
+                                                  "osc1.spec.position", "osc1.gran.density", "osc1.pan", "sub.pan" };
             const int di = idxOf (kDests[r.range (0, static_cast<int> (sizeof kDests / sizeof kDests[0]) - 1)]);
             if (di >= 0 && modDestinationChoiceOf (static_cast<size_t> (di)) > 0)
                 d = modDestinationChoiceOf (static_cast<size_t> (di));
@@ -749,4 +753,216 @@ TEST (voice_param_read_zero_test_on_the_bits_is_the_float_compare_for_every_patt
     }
     CHECK_EQ (zeros, uint64_t (2));
     CHECK_EQ (mismatches, uint64_t (0));
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// V12: ffloorBits and ffloor against std::floor and against the form they replaced, for all 2^32 bit patterns (signed zeros, denormals, infinities, every NaN)
+
+namespace
+{
+float ffloorBefore (float x) noexcept
+{
+    if (!(std::fabs (x) < 4194304.0f) || x == 0.0f)
+        return std::floor (x);
+    const int i = static_cast<int> (x);
+    return static_cast<float> (i - (x < static_cast<float> (i) ? 1 : 0));
+}
+} // namespace
+
+namespace
+{
+/** Flush-to-zero on (the MPC audio thread and the bench run with it): denormal inputs of the float arithmetic and compares count as zero, denormal results become zero. */
+struct FlushToZero
+{
+#if defined(__aarch64__) || defined(__arm64__)
+    uint64_t saved = 0;
+    FlushToZero() { __asm__ __volatile__ ("mrs %0, fpcr" : "=r"(saved)); const uint64_t on = saved | (uint64_t (1) << 24); __asm__ __volatile__ ("msr fpcr, %0" : : "r"(on)); }
+    ~FlushToZero() { __asm__ __volatile__ ("msr fpcr, %0" : : "r"(saved)); }
+    static constexpr bool available = true;
+#elif defined(__x86_64__) || defined(__i386__)
+    unsigned saved = 0;
+    FlushToZero() { saved = __builtin_ia32_stmxcsr(); __builtin_ia32_ldmxcsr (saved | 0x8040u); }
+    ~FlushToZero() { __builtin_ia32_ldmxcsr (saved); }
+    static constexpr bool available = true;
+#else
+    static constexpr bool available = false;
+#endif
+};
+} // namespace
+
+TEST (ffloor_on_the_bits_is_the_form_before_for_every_pattern_with_flush_to_zero)
+{
+    // with flush-to-zero the form before sent a denormal to std::floor (its compare with 0 was true): the new one does the same; every other pattern is unaffected by the mode
+    if (!FlushToZero::available)
+        return;
+    FlushToZero ftz;
+    uint64_t differBefore = 0;
+    for (uint64_t i = 0; i <= 0xffffffffull; ++i)
+    {
+        const uint32_t u = static_cast<uint32_t> (i);
+        float x;
+        std::memcpy (&x, &u, 4);
+        volatile float vx = x;
+        const float a = ffloorBits (vx), c = ffloorBefore (vx), d = ffloor (vx);
+        differBefore += std::memcmp (&a, &c, 4) != 0 || std::memcmp (&d, &c, 4) != 0 ? 1 : 0;
+    }
+    CHECK_EQ (differBefore, uint64_t (0));
+}
+
+TEST (ffloor_on_the_bits_is_std_floor_for_every_pattern)
+{
+    uint64_t differFloor = 0, differBefore = 0, nans = 0;
+    for (uint64_t i = 0; i <= 0xffffffffull; ++i)
+    {
+        const uint32_t u = static_cast<uint32_t> (i);
+        float x;
+        std::memcpy (&x, &u, 4);
+        volatile float vx = x;
+        const float a = ffloorBits (vx), b = std::floor (vx), c = ffloorBefore (vx), d = ffloor (vx);
+        uint32_t ua, ub, uc;
+        std::memcpy (&ua, &a, 4);
+        std::memcpy (&ub, &b, 4);
+        std::memcpy (&uc, &c, 4);
+        nans += x != x ? 1 : 0;
+        differFloor += ua != ub ? 1 : 0;
+        differBefore += ua != uc || std::memcmp (&d, &c, 4) != 0 ? 1 : 0;
+    }
+    std::printf ("ffloor: 2^32 patterns (%llu NaN), %llu differ from std::floor, %llu from the form before\n", static_cast<unsigned long long> (nans),
+                 static_cast<unsigned long long> (differFloor), static_cast<unsigned long long> (differBefore));
+    CHECK_EQ (differFloor, uint64_t (0));
+    CHECK_EQ (differBefore, uint64_t (0));
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The engine comparisons again with flush-to-zero on, as the MPC audio thread and the bench run (the compares and the arithmetic treat denormals as zero there)
+
+TEST (voice_opt_engine_with_flush_to_zero_is_bit_identical)
+{
+    if (!FlushToZero::available)
+        return;
+    ensureAllBuiltinWavetables();
+    const std::vector<std::vector<float>> presets = factoryPresets();
+    FlushToZero ftz;
+    int failed = 0, runs = 0;
+    for (int s = 0; s < (sbtest::instrumented() ? 6 : 40); ++s)
+    {
+        Rand r (static_cast<uint32_t> (9000 + s));
+        const std::vector<float> plain = randomPatch (r, nullptr, 0.25f);
+        EnginePair p (plain, s % 3 == 0 ? Tier::high : Tier::low, r);
+        char what[64];
+        std::snprintf (what, sizeof what, "flush-to-zero random patch %d", s);
+        ++runs;
+        failed += playAndCompare (p, r, 400, what) ? 0 : 1;
+    }
+    for (size_t i = 0; i < presets.size(); i += sbtest::instrumented() ? 16 : 4)
+    {
+        Rand r (static_cast<uint32_t> (300 + i));
+        const std::vector<float> plain = randomPatch (r, &presets[i], 0.03f);
+        EnginePair p (plain, Tier::low, r);
+        char what[64];
+        std::snprintf (what, sizeof what, "flush-to-zero factory preset %zu (edited)", i);
+        ++runs;
+        failed += playAndCompare (p, r, 300, what) ? 0 : 1;
+    }
+    std::printf ("%d runs with flush-to-zero, %d differ\n", runs, failed);
+    CHECK_EQ (failed, 0);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// V13: an envelope with the curve denominators given (and the decay to a sustain of 1 without its shape) against the same envelope without them
+
+TEST (envelope_with_curve_denominators_is_bit_identical)
+{
+    Rand r (4242u);
+    const float curves[] = { 0.0f, 5.0e-5f, -5.0e-5f, 1.0f, -3.0f, 3.0f, 10.0f, -10.0f, 79.0f, -79.0f, 80.0f, 85.0f, -85.0f, 95.0f, -95.0f, 200.0f, INFINITY, -INFINITY, NAN };
+    const float sustains[] = { 1.0f, 1.0f, 0.0f, 0.5f, 0.999999f, -0.0f };
+    long long steps = 0, failed = 0;
+    for (int run = 0; run < 20000; ++run)
+    {
+        EnvSettings a;
+        a.delay = r.chance (0.7f) ? 0.0f : 0.05f * r.uni();
+        a.attack = r.chance (0.2f) ? 0.0f : 0.5f * r.uni();
+        a.hold = r.chance (0.6f) ? 0.0f : 0.1f * r.uni();
+        a.decay = r.chance (0.1f) ? 0.0f : (r.chance (0.05f) ? INFINITY : 2.0f * r.uni());
+        a.sustain = r.chance (0.5f) ? sustains[r.range (0, 5)] : r.uni();
+        a.release = r.chance (0.1f) ? 0.0f : 1.0f * r.uni();
+        a.attackCurve = curves[r.range (0, static_cast<int> (sizeof curves / sizeof curves[0]) - 1)];
+        a.decayCurve = curves[r.range (0, static_cast<int> (sizeof curves / sizeof curves[0]) - 1)];
+        a.releaseCurve = curves[r.range (0, static_cast<int> (sizeof curves / sizeof curves[0]) - 1)];
+        EnvSettings b = a;
+        b.fillDens();
+        Envelope x, y;
+        const float start = r.chance (0.5f) ? 0.0f : r.uni();
+        x.noteOn (start);
+        y.noteOn (start);
+        const int n = r.range (10, 400);
+        const int off = r.range (0, n);
+        for (int t = 0; t < n; ++t)
+        {
+            if (t == off)
+            {
+                x.noteOff();
+                y.noteOff();
+            }
+            const double dt = r.chance (0.2f) ? 4.0 * 32.0 / 44100.0 : (r.chance (0.02f) ? 0.0 : 32.0 / 44100.0);
+            const float vx = x.advance (a, dt), vy = y.advance (b, dt);
+            const double px = x.stageSeconds(), py = y.stageSeconds();
+            const float fx = x.fineFraction (0.37f), fy = y.fineFraction (0.37f);
+            ++steps;
+            if (std::memcmp (&vx, &vy, 4) != 0 || x.fineStage() != y.fineStage() || std::memcmp (&px, &py, 8) != 0 || std::memcmp (&fx, &fy, 4) != 0)
+            {
+                if (failed < 5)
+                    std::printf ("envelope run %d step %d: %.9g against %.9g (curves %g %g %g, sustain %g)\n", run, t, static_cast<double> (vx), static_cast<double> (vy),
+                                 static_cast<double> (a.attackCurve), static_cast<double> (a.decayCurve), static_cast<double> (a.releaseCurve), static_cast<double> (a.sustain));
+                ++failed;
+                break;
+            }
+        }
+    }
+    std::printf ("%lld envelope steps, %lld runs differ\n", steps, failed);
+    CHECK_EQ (failed, 0);
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// The library oscillators (Sample, Granular, Spectral) with a file: their keys are read through the kept oscillator part (V7) too
+
+TEST (voice_opt_engine_library_oscillators_are_bit_identical)
+{
+    ensureAllBuiltinWavetables();
+    MemoryContentStore store;
+    {
+        const size_t n = 44100;
+        std::vector<float> x (n);
+        for (size_t i = 0; i < n; ++i)
+            x[i] = static_cast<float> (0.5 * std::sin (6.283185307179586 * 220.0 * static_cast<double> (i) / 44100.0) + 0.1 * std::sin (0.37 * static_cast<double> (i * i % 4001)));
+        store.add ("test", "tone.wav", encodeWav (x.data(), nullptr, n, 44100, 16));
+    }
+    StateContent content;
+    ContentFileRef ref;
+    ref.pack = "test";
+    ref.file = "tone.wav";
+    ref.name = "tone";
+    attachSample (content, 1, ref, 44100, 44100, 1);
+    int failed = 0, runs = 0;
+    for (int type = 1; type <= 3; ++type)
+        for (int s = 0; s < (sbtest::instrumented() ? 2 : 8); ++s)
+        {
+            Rand r (static_cast<uint32_t> (700 + 31 * type + s));
+            std::vector<float> plain = randomPatch (r, nullptr, 0.15f);
+            plain[static_cast<size_t> (idxOf ("osc1.on"))] = 1.0f;
+            plain[static_cast<size_t> (idxOf ("osc1.type"))] = static_cast<float> (type);
+            plain[static_cast<size_t> (idxOf ("osc1.level"))] = 80.0f;
+            EnginePair p (plain, s % 2 == 0 ? Tier::low : Tier::high, r);
+            for (IEngine* e : { p.opt.get(), p.ref.get() })
+            {
+                e->setContentStore (&store);
+                e->setContent (content);
+            }
+            char what[64];
+            std::snprintf (what, sizeof what, "library type %d patch %d", type, s);
+            ++runs;
+            failed += playAndCompare (p, r, 300, what) ? 0 : 1;
+        }
+    std::printf ("%d library oscillator runs, %d differ\n", runs, failed);
+    CHECK_EQ (failed, 0);
 }

@@ -150,12 +150,9 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64|ARM64)$" AND NOT MSVC)
     target_link_libraries(synthyboy_test_own_wt_osc_opt PRIVATE Threads::Threads)
     add_test(NAME synthyboy_test_own_wt_osc_opt COMMAND synthyboy_test_own_wt_osc_opt)
 endif()
-# A legato note keeps the envelope scaling of the previous voice control step while nothing of the voice is modulated (docs/release/CPU-REVIEW-VOICE-MOD.md V1 side note):
-# a reproduction that FAILS on the code as it is. Built, not registered with CTest until the owner decides the fix (it changes output in that case).
-add_executable(synthyboy_test_own_voice_legato_env test_own_voice_legato_env.cpp "${PROJECT_SOURCE_DIR}/core/tests/test_main.cpp")
-target_link_libraries(synthyboy_test_own_voice_legato_env PRIVATE synthyboy_core Threads::Threads)
-target_include_directories(synthyboy_test_own_voice_legato_env PRIVATE "${PROJECT_SOURCE_DIR}/core/tests" "${PROJECT_SOURCE_DIR}/core/engine-own")
-target_compile_options(synthyboy_test_own_voice_legato_env PRIVATE -Wall -Wextra -Wpedantic)
+# A legato note takes the envelope scaling of its voice control step also while nothing of the voice is modulated (docs/release/CPU-REVIEW-VOICE-MOD.md V1 side note).
+synthyboy_add_test(synthyboy_test_own_voice_legato_env test_own_voice_legato_env.cpp)
+target_include_directories(synthyboy_test_own_voice_legato_env PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_voice_opt test_own_voice_opt.cpp)   # the CPU optimisations of the voice control and the matrix change no sample and no display value
 target_include_directories(synthyboy_test_own_voice_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 target_compile_definitions(synthyboy_test_own_voice_opt PRIVATE SYNTHYBOY_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}")

@@ -167,7 +167,7 @@ void Voice::prepare (double sampleRate)
 
 void Voice::reset() noexcept
 {
-    active = false;
+    setActive (false);
     released = false;
     for (auto& e : env)
         e.kill();
@@ -219,7 +219,7 @@ float Voice::curvedSource (float x, const CompiledModCurve* curve, float& state,
 
 void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
 {
-    active = true;
+    setActive (true);
     released = false;
     killFading = false;
     killElapsed = 0.0f;
@@ -293,6 +293,9 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
         ls.ok = false;
     for (auto& rs : rlfoSet)
         rs.ok = false;
+    for (auto& op : oscPart)
+        op.ok = false;
+    subPart.ok = false;
     ampPrev = ampCur = 0.0f;
     velGainPrev = velGain = 0.0f;
     std::fill (std::begin (srcLevel), std::end (srcLevel), 0.0f);
@@ -317,6 +320,9 @@ void Voice::legatoTo (const NoteStart& n) noexcept
 {
     sequence = n.sequence;
     vcCacheValid = false;
+    // the step of the voice control (vc.envFactor) follows `sequence`, which the all envelope cache key (epoch, tempo, nothing touched) does not hold: the next tick must
+    // derive the settings again (the per envelope cache is keyed on the factor itself). The same for the code of the reference switch, which uses the same test.
+    envCacheValid = false;
     glideOffset = (lastSemis - n.tunedNote);
     glideElapsed = 0.0f;
     glideTime = -1.0f;
@@ -350,7 +356,7 @@ void Voice::release (float velocity) noexcept
 
 void Voice::kill() noexcept
 {
-    active = false;
+    setActive (false);
     released = true;
     for (auto& e : env)
         e.kill();
@@ -597,6 +603,65 @@ float Voice::lfoValueReference (int l, const TickGlobals& g, float& valueRight, 
     return left;
 }
 
+void Voice::fillOscPart (int o, OscPart& op) noexcept
+{
+    // the expressions of Voice::tick as they were, on the keys of oscillator o (and the stereo spread of the master, a plain value)
+    const OscIdx& oi = pidx->osc[o];
+    const LibKeys& lk = *libk[o];
+    op.dest = static_cast<int> (P (oi.destination) + 0.5f);
+    op.blend = oi.filterBlend >= 0 ? clamp01 (P (oi.filterBlend) * 0.01f) : 0.0f;
+    op.send[0] = oi.bus1Send >= 0 ? std::max (0.0f, P (oi.bus1Send) * 0.01f) : 0.0f;
+    op.send[1] = oi.bus2Send >= 0 ? std::max (0.0f, P (oi.bus2Send) * 0.01f) : 0.0f;
+    op.env1 = P (oi.env1) >= 0.5f;
+    op.wtChoice = std::clamp (static_cast<int> (P (oi.wavetable) + 0.5f), 0, kNumWavetableChoices - 1);
+    op.track = P (oi.pitchTrack) >= 0.5f;
+    op.bendTrack = P (oi.bendTrack) >= 0.5f;
+    op.fixedNote = P (oi.fixedPitch);
+    op.pmode = static_cast<int> (P (lk.idx[lk_pitchMode]) + 0.5f);
+    const float coarse = P (oi.pitchCoarse);
+    float coarseSemis = coarse;
+    if (op.pmode == 1)
+        coarseSemis = 12.0f * std::log2 (std::max (1.0f, 1.0f + ffloor (coarse)));
+    else if (op.pmode == 2)
+        coarseSemis = coarse >= 0.0f ? 12.0f * std::log2 (1.0f + coarse) : 12.0f * std::log2 (1.0f / (1.0f - coarse));
+    op.coarseSemis = coarseSemis;
+    op.ratioSrc = op.pmode == 2 ? static_cast<int> (P (lk.idx[lk_ratioSrc]) + 0.5f) - 1 : -1;
+    op.transposeSnap = static_cast<int> (P (oi.transposeSnap) + 0.5f);
+    op.transpose = P (oi.transpose);
+    op.tune001 = P (oi.tune) * 0.01f;
+    op.frame = clamp01 (P (oi.frame) * 0.01f);
+    op.frameSpread = std::clamp (P (oi.frameSpread) * 0.01f, -1.0f, 1.0f);
+    op.level = std::max (0.0f, P (oi.level) * 0.01f);
+    op.pan = P (oi.pan) * 0.01f;
+    op.panRight = PR (oi.pan) * 0.01f;
+    op.voicesRaw = static_cast<int> (P (oi.uniVoices) + 0.5f);
+    const float detune = clamp01 (P (oi.uniDetune) * 0.01f);
+    op.detuneSemis = detune * std::max (P (oi.uniRange), 0.0f);
+    op.curve = P (oi.uniCurve);
+    op.blendShape = std::clamp (P (oi.uniBlendShape) * 0.01f, -1.0f, 1.0f);
+    op.stack = static_cast<int> (P (oi.uniStack) + 0.5f);
+    op.stackRepeat = static_cast<int> (P (oi.uniStackRepeat) + 0.5f);
+    op.mode = static_cast<int> (P (oi.uniMode) + 0.5f);
+    op.spread = clamp01 (P (oi.uniSpread) * 0.01f) * clamp01 (gl->base[pidx->master.stereoSpread] * 0.01f);
+    op.uniBlend = clamp01 (P (oi.uniBlend) * 0.01f);
+    op.law = oi.uniLaw >= 0 ? static_cast<int> (gl->base[oi.uniLaw] + 0.5f) : 0;
+    op.warp[0] = static_cast<int> (P (oi.warpType) + 0.5f);
+    op.warpAmount[0] = clamp01 (P (oi.warpAmount) * 0.01f);
+    op.warpPhase[0] = P (oi.warpPhase) * (1.0f / 360.0f);
+    op.warp[1] = static_cast<int> (P (oi.warp2Type) + 0.5f);
+    op.warpAmount[1] = clamp01 (P (oi.warp2Amount) * 0.01f);
+    op.warpPhase[1] = P (oi.warp2Phase) * (1.0f / 360.0f);
+    op.morphType = static_cast<int> (P (lk.idx[lk_morphType]) + 0.5f);
+    op.morphAmount = clamp01 (P (lk.idx[lk_morphAmount]) * 0.01f);
+    op.morphSpread = std::clamp (P (lk.idx[lk_morphSpread]) * 0.01f, -1.0f, 1.0f);
+    op.smooth = P (lk.idx[lk_smooth]) >= 0.5f;
+    op.remapOn = P (lk.idx[lk_remapOn]) >= 0.5f;
+    op.remapSlot = std::clamp (static_cast<int> (P (lk.idx[lk_remapSlot]) + 0.5f), 0, kNumRemapSlots - 1);
+    op.remapRise = P (lk.idx[lk_remapRise]);
+    op.remapFall = P (lk.idx[lk_remapFall]);
+    op.libValid = false;
+}
+
 void Voice::evaluateVoiceControl (const TickGlobals& g) noexcept
 {
     const VoiceCtlIdx& v = pidx->vctl;
@@ -780,9 +845,9 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     {
     SB_SECTION (sections::tickEnvLfo);
     const bool envFromCache = g.baseEpoch != 0 && envCacheValid && envCacheEpoch == g.baseEpoch && envCacheBpm == g.bpm && numTouched == 0 && !fresh;
-    // V1: an envelope none of whose keys a slot touched keeps the settings it derived from the parameters alone (the keys of the other groups may be modulated). The test of
-    // envFromCache above stays as it was: its key has no note sequence, so after a legato note it keeps the envelope factor of the step before (test_own_voice_legato_env.cpp);
-    // the per envelope cache below is used only where envFromCache is not, and is keyed on the factor itself, so every settings value is the one the code before computed.
+    // V1: an envelope none of whose keys a slot touched keeps the settings it derived from the parameters alone (the keys of the other groups may be modulated). A legato note
+    // (Voice::legatoTo) clears envCacheValid, because the key of envFromCache has no note sequence (test_own_voice_legato_env.cpp); the per envelope cache below is used only
+    // where envFromCache is not, and is keyed on the factor itself.
     lastTouchedGroups = g.referenceControl ? ~0u : touchedGroups();
     const uint32_t envTouched = lastTouchedGroups;
     uint32_t envFactorBits;
@@ -814,8 +879,10 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             else
             {
                 envSettings (e, s, true);
-                envCache[e] = s;
                 envSetOk[e] = !fresh && envUntouched;
+                if (envSetOk[e])
+                    s.fillDens(); // V13: settings that are kept get the denominators of their curves once
+                envCache[e] = s;
                 envSetEpoch[e] = g.baseEpoch;
                 envSetBpm[e] = g.bpm;
                 envSetFactor[e] = vc.envFactor;
@@ -1043,7 +1110,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         // the voice ends when the amplitude envelope is done (the last period still fades to zero)
         if ((ampCur <= 0.0f && ampPrev <= 0.0f) || (killFading && killGain <= 0.0f && ampPrev <= 0.0f))
         {
-            active = false;
+            setActive (false);
             outL = outR = 0.0f;
             lastLevel = 0.0f;
             return;
@@ -1052,6 +1119,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
 
     }
     // ---- oscillators
+    // the groups of keys this period's matrix touched (V7; the pad pressure layer on the Filter 1 cutoff among them): what the oscillators, the sub and the filters read now
+    const uint32_t nowTouched = g.referenceControl ? ~0u : touchedGroups();
     if (fresh)
     {
         for (int o = 0; o < 3; ++o)
@@ -1118,33 +1187,39 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             }
             continue;
         }
-        oscDest[o] = static_cast<int> (P (oi.destination) + 0.5f);
-        oscBlend[o] = oi.filterBlend >= 0 ? clamp01 (P (oi.filterBlend) * 0.01f) : 0.0f;
-        oscSend[o][0] = oi.bus1Send >= 0 ? std::max (0.0f, P (oi.bus1Send) * 0.01f) : 0.0f;
-        oscSend[o][1] = oi.bus2Send >= 0 ? std::max (0.0f, P (oi.bus2Send) * 0.01f) : 0.0f;
-        oscEnv1[o] = P (oi.env1) >= 0.5f;
+        // V7: the part of the oscillator that depends on its keys alone, kept while the epoch is the same and no slot touched its keys (the reference: read every period)
+        OscPart& op = oscPart[o];
+        {
+            const bool untouched = (nowTouched & (1u << (kGroupOsc + o))) == 0;
+            if (!(op.ok && untouched && g.baseEpoch != 0 && op.epoch == g.baseEpoch))
+            {
+                fillOscPart (o, op);
+                op.ok = untouched;
+                op.epoch = g.baseEpoch;
+            }
+        }
+        oscDest[o] = op.dest;
+        oscBlend[o] = op.blend;
+        oscSend[o][0] = op.send[0];
+        oscSend[o][1] = op.send[1];
+        oscEnv1[o] = op.env1;
         const ContentSet* cs = g.content;
-        int wtChoice = std::clamp (static_cast<int> (P (oi.wavetable) + 0.5f), 0, kNumWavetableChoices - 1);
+        const int wtChoice = op.wtChoice;
         // audio thread: the engine resolved the table of this block (the chosen one when built, else the one the oscillator had: never a substitute)
         t.wt = wtChoice == kWavetablePresetTable ? (cs != nullptr ? cs->userTable[o].get() : nullptr) : (g.wtResolved != nullptr ? g.wtResolved[o] : builtinWavetableIfReady (wtChoice));
         if (t.wt == nullptr)
             t.wt = builtinWavetableIfReady (kWavetableSaw); // the preset table needs its content (a missing file: the saw): the original meaning of the fallback
         // ---- pitch: the coarse term of the pitch mode and the Ratio source
-        const bool track = P (oi.pitchTrack) >= 0.5f;
-        const bool bendTrack = P (oi.bendTrack) >= 0.5f;
-        const float fixedNote = P (oi.fixedPitch);   // Fixed Pitch: the note an oscillator without pitch tracking plays; 0 (the default) is the oscillator's own C3
+        const bool track = op.track;
+        const bool bendTrack = op.bendTrack;
+        const float fixedNote = op.fixedNote;   // Fixed Pitch: the note an oscillator without pitch tracking plays; 0 (the default) is the oscillator's own C3
         float base = track ? noteSemis + foldSemis - (bendTrack ? 0.0f : bend) : (fixedNote >= 0.5f ? fixedNote : 60.0f);
-        const int pmode = static_cast<int> (P (lk.idx[lk_pitchMode]) + 0.5f);
-        const float coarse = P (oi.pitchCoarse);
-        float coarseSemis = coarse;
-        if (pmode == 1)
-            coarseSemis = 12.0f * std::log2 (std::max (1.0f, 1.0f + ffloor (coarse)));
-        else if (pmode == 2)
-            coarseSemis = coarse >= 0.0f ? 12.0f * std::log2 (1.0f + coarse) : 12.0f * std::log2 (1.0f / (1.0f - coarse));
+        const int pmode = op.pmode;
+        const float coarseSemis = op.coarseSemis;
         if (pmode == 2)
         {
             // Ratio SRC: the pitch of another source (as of the last period) replaces the note; a loop, itself or a source that is off is the note
-            const int srcIdx = static_cast<int> (P (lk.idx[lk_ratioSrc]) + 0.5f) - 1; // 0 .. 2 oscillators, 3 sub
+            const int srcIdx = op.ratioSrc; // 0 .. 2 oscillators, 3 sub
             bool ok = srcIdx >= 0 && srcIdx != o && srcIdx < 4 && pitchTapOn[srcIdx];
             for (int s = srcIdx, hops = 0; ok && s < 3; ++hops)
             {
@@ -1165,40 +1240,39 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
             if (ok)
                 base = pitchTap[srcIdx];
         }
-        t.semis = base + snapTranspose (static_cast<int> (P (oi.transposeSnap) + 0.5f), base, P (oi.transpose)) + P (oi.tune) * 0.01f + coarseSemis + (vc.mask[o] && track ? vc.detuneSemis : 0.0f);
+        t.semis = base + snapTranspose (op.transposeSnap, base, op.transpose) + op.tune001 + coarseSemis + (vc.mask[o] && track ? vc.detuneSemis : 0.0f);
         pitchTap[o] = t.semis;
         pitchTapOn[o] = true;
-        t.frame = clamp01 (P (oi.frame) * 0.01f);
-        t.frameSpread = std::clamp (P (oi.frameSpread) * 0.01f, -1.0f, 1.0f);
-        t.level = std::max (0.0f, P (oi.level) * 0.01f);
+        t.frame = op.frame;
+        t.frameSpread = op.frameSpread;
+        t.level = op.level;
         const float vcPan = vc.mask[o] ? vc.pan : 0.0f;
-        t.pan = std::clamp (P (oi.pan) * 0.01f + vcPan, -1.0f, 1.0f);
-        t.panRight = std::clamp (PR (oi.pan) * 0.01f + vcPan, -1.0f, 1.0f);
-        t.voices = std::clamp (static_cast<int> (P (oi.uniVoices) + 0.5f), 1, std::max (1, g.maxUnison));
-        const float detune = clamp01 (P (oi.uniDetune) * 0.01f);
-        t.detuneSemis = detune * std::max (P (oi.uniRange), 0.0f);
-        t.curve = P (oi.uniCurve);
-        t.blendShape = std::clamp (P (oi.uniBlendShape) * 0.01f, -1.0f, 1.0f);
-        t.stack = static_cast<int> (P (oi.uniStack) + 0.5f);
-        t.stackRepeat = static_cast<int> (P (oi.uniStackRepeat) + 0.5f);
-        t.mode = static_cast<int> (P (oi.uniMode) + 0.5f);
-        t.spread = clamp01 (P (oi.uniSpread) * 0.01f) * clamp01 (g.base[mi.stereoSpread] * 0.01f);
-        t.blend = clamp01 (P (oi.uniBlend) * 0.01f);
-        t.law = oi.uniLaw >= 0 ? static_cast<int> (g.base[oi.uniLaw] + 0.5f) : 0;
-        t.warp[0] = static_cast<int> (P (oi.warpType) + 0.5f);
-        t.warpAmount[0] = clamp01 (P (oi.warpAmount) * 0.01f);
-        t.warpPhase[0] = P (oi.warpPhase) * (1.0f / 360.0f);
-        t.warp[1] = static_cast<int> (P (oi.warp2Type) + 0.5f);
-        t.warpAmount[1] = clamp01 (P (oi.warp2Amount) * 0.01f);
-        t.warpPhase[1] = P (oi.warp2Phase) * (1.0f / 360.0f);
-        t.morphType = static_cast<int> (P (lk.idx[lk_morphType]) + 0.5f);
-        t.morphAmount = clamp01 (P (lk.idx[lk_morphAmount]) * 0.01f);
-        t.morphSpread = std::clamp (P (lk.idx[lk_morphSpread]) * 0.01f, -1.0f, 1.0f);
-        t.smooth = P (lk.idx[lk_smooth]) >= 0.5f;
-        if (P (lk.idx[lk_remapOn]) >= 0.5f)
+        t.pan = std::clamp (op.pan + vcPan, -1.0f, 1.0f);
+        t.panRight = std::clamp (op.panRight + vcPan, -1.0f, 1.0f);
+        t.voices = std::clamp (op.voicesRaw, 1, std::max (1, g.maxUnison));
+        t.detuneSemis = op.detuneSemis;
+        t.curve = op.curve;
+        t.blendShape = op.blendShape;
+        t.stack = op.stack;
+        t.stackRepeat = op.stackRepeat;
+        t.mode = op.mode;
+        t.spread = op.spread;
+        t.blend = op.uniBlend;
+        t.law = op.law;
+        t.warp[0] = op.warp[0];
+        t.warpAmount[0] = op.warpAmount[0];
+        t.warpPhase[0] = op.warpPhase[0];
+        t.warp[1] = op.warp[1];
+        t.warpAmount[1] = op.warpAmount[1];
+        t.warpPhase[1] = op.warpPhase[1];
+        t.morphType = op.morphType;
+        t.morphAmount = op.morphAmount;
+        t.morphSpread = op.morphSpread;
+        t.smooth = op.smooth;
+        if (op.remapOn)
         {
             // frame position remap (02 6.7): the drawn curve of the slot, then a one pole slew with RISE (up) / FALL (down)
-            const int rslot = std::clamp (static_cast<int> (P (lk.idx[lk_remapSlot]) + 0.5f), 0, kNumRemapSlots - 1);
+            const int rslot = op.remapSlot;
             float target = t.frame;
             if (cs != nullptr && cs->remap[o][rslot].size() == 257)
             {
@@ -1206,7 +1280,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
                 const int ci = std::min (static_cast<int> (xx), 255);
                 target = lerp (cs->remap[o][rslot][static_cast<size_t> (ci)], cs->remap[o][rslot][static_cast<size_t> (ci) + 1], xx - static_cast<float> (ci));
             }
-            const float ms = target > remapCur[o] ? P (lk.idx[lk_remapRise]) : P (lk.idx[lk_remapFall]);
+            const float ms = target > remapCur[o] ? op.remapRise : op.remapFall;
             if (fresh || !remapInit[o] || ms <= 0.0f)
                 remapCur[o] = target;
             else
@@ -1225,7 +1299,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         t.remap = nullptr;
         if (cs != nullptr)
         {
-            const int slot = std::clamp (static_cast<int> (P (lk.idx[lk_remapSlot]) + 0.5f), 0, kNumRemapSlots - 1);
+            const int slot = op.remapSlot;
             if (cs->remap[o][slot].size() == 257)
                 t.remap = cs->remap[o][slot].data();
         }
@@ -1247,12 +1321,17 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         if (type != kOscTypeWavetable || lib[o].libraryRunning())
         {
             LibParams lp;
-            for (int i = 0; i < kLibKeyCount; ++i)
-                lp.v[i] = lk.idx[i] >= 0 ? P (lk.idx[i]) : 0.0f;
+            if (!op.libValid)
+            {
+                for (int i = 0; i < kLibKeyCount; ++i)
+                    op.libV[i] = lk.idx[i] >= 0 ? P (lk.idx[i]) : 0.0f;
+                op.libValid = op.ok;
+            }
+            std::copy (std::begin (op.libV), std::end (op.libV), std::begin (lp.v));
             lp.type = type;
             lp.noteSemis = noteSemis;
             lp.noteRaw = static_cast<float> (keyNum);
-            lp.transposeTune = P (oi.transpose) + P (oi.tune) * 0.01f;
+            lp.transposeTune = op.transpose + op.tune001;
             lp.pitchTrack = track;
             lp.bendTrack = bendTrack;
             lp.velocity = vel;
@@ -1275,21 +1354,40 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
     {
         SB_SECTION (sections::tickSub);
         const SubIdx& si = pi.sub;
-        subCh.on = P (si.on) >= 0.5f;
-        subCh.dest = static_cast<int> (P (si.destination) + 0.5f);
-        subBlend = si.filterBlend >= 0 ? clamp01 (P (si.filterBlend) * 0.01f) : 0.0f;
-        subSend[0] = si.bus1Send >= 0 ? std::max (0.0f, P (si.bus1Send) * 0.01f) : 0.0f;
-        subSend[1] = si.bus2Send >= 0 ? std::max (0.0f, P (si.bus2Send) * 0.01f) : 0.0f;
-        subCh.env1 = P (si.env1) >= 0.5f;
+        // V7: the part of the sub that depends on its keys alone, kept as the oscillators' (the reference: read every period)
+        SubPart& sp = subPart;
+        const bool subUntouched = (nowTouched & (1u << kGroupSub)) == 0;
+        if (!(sp.ok && subUntouched && g.baseEpoch != 0 && sp.epoch == g.baseEpoch))
+        {
+            sp.on = P (si.on) >= 0.5f;
+            sp.dest = static_cast<int> (P (si.destination) + 0.5f);
+            sp.blend = si.filterBlend >= 0 ? clamp01 (P (si.filterBlend) * 0.01f) : 0.0f;
+            sp.send[0] = si.bus1Send >= 0 ? std::max (0.0f, P (si.bus1Send) * 0.01f) : 0.0f;
+            sp.send[1] = si.bus2Send >= 0 ? std::max (0.0f, P (si.bus2Send) * 0.01f) : 0.0f;
+            sp.env1 = P (si.env1) >= 0.5f;
+            static const int kSubTable[6] = { 0, kRoundedRectTable, 3, 1, 2, 4 };
+            sp.table = kSubTable[std::clamp (static_cast<int> (P (si.waveform) + 0.5f), 0, 5)];
+            sp.octave12 = std::round (P (si.octave)) * 12.0f;
+            sp.tune = P (si.tune);
+            sp.level = std::max (0.0f, P (si.level) * 0.01f);
+            sp.pan = P (si.pan) * 0.01f;
+            sp.ok = subUntouched;
+            sp.epoch = g.baseEpoch;
+        }
+        subCh.on = sp.on;
+        subCh.dest = sp.dest;
+        subBlend = sp.blend;
+        subSend[0] = sp.send[0];
+        subSend[1] = sp.send[1];
+        subCh.env1 = sp.env1;
         subTick.active = subCh.on;
-        static const int kSubTable[6] = { 0, kRoundedRectTable, 3, 1, 2, 4 };
-        subTick.wt = builtinWavetableIfReady (kSubTable[std::clamp (static_cast<int> (P (si.waveform) + 0.5f), 0, 5)]);
-        subTick.semis = noteSemis + std::round (P (si.octave)) * 12.0f + P (si.tune) + (vc.mask[4] ? vc.detuneSemis : 0.0f);
+        subTick.wt = builtinWavetableIfReady (sp.table);
+        subTick.semis = noteSemis + sp.octave12 + sp.tune + (vc.mask[4] ? vc.detuneSemis : 0.0f);
         // sub.mono (document 02, 9): only the voice with the lowest note of the sounding voices (within half a semitone) carries the sub; the gate moves the level, which the
         // oscillator ramps across the period
         const float subGate = (si.mono >= 0 && g.base[static_cast<size_t> (si.mono)] >= 0.5f && tunedKey > g.lowestNote + 0.5f) ? 0.0f : 1.0f;
-        subTick.level = subCh.on ? std::max (0.0f, P (si.level) * 0.01f) * subGate : 0.0f;
-        subTick.pan = std::clamp (P (si.pan) * 0.01f + (vc.mask[4] ? vc.pan : 0.0f), -1.0f, 1.0f);
+        subTick.level = subCh.on ? sp.level * subGate : 0.0f;
+        subTick.pan = std::clamp (sp.pan + (vc.mask[4] ? vc.pan : 0.0f), -1.0f, 1.0f);
         subTick.jump = g.noSmoothing;
         subTick.voices = 1;
         subTick.spread = 0.0f;

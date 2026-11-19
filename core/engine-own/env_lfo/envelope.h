@@ -4,6 +4,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include "../dsp/util.h"
 
 namespace synthyboy
@@ -14,6 +15,26 @@ struct EnvSettings
 {
     float delay = 0, attack = 0, hold = 0, decay = 0, sustain = 1, release = 0; // seconds / 0 .. 1
     float attackCurve = 0, decayCurve = 0, releaseCurve = 0;
+    /** With `dens` (settings that a voice keeps for many periods, CPU-REVIEW-VOICE-MOD.md V13): expm1 () of each curve, the constant denominator of powerShape (), computed once (unused for a
+        curve below 1e-4 in size, which powerShape () treats as linear); and a decay to a sustain of exactly 1 is 1 without its shape. Without `dens` the stages compute as before. */
+    float attackDen = 0, decayDen = 0, releaseDen = 0;
+    bool dens = false;
+    void fillDens() noexcept
+    {
+        attackDen = std::fabs (attackCurve) < 1.0e-4f ? 0.0f : std::expm1 (attackCurve);
+        decayDen = std::fabs (decayCurve) < 1.0e-4f ? 0.0f : std::expm1 (decayCurve);
+        releaseDen = std::fabs (releaseCurve) < 1.0e-4f ? 0.0f : std::expm1 (releaseCurve);
+        dens = true;
+    }
+    /** powerShape (x, curve) with its denominator expm1 (curve) given: the same operations on the same values. */
+    float shape (float x, float curve, float den) const noexcept
+    {
+        if (!dens)
+            return powerShape (x, curve);
+        if (std::fabs (curve) < 1.0e-4f)
+            return x;
+        return std::expm1 (curve * x) / den;
+    }
 };
 
 /** Stages: delay (0), attack ramps up with attackCurve, hold at 1, decay to the sustain level, sustain, release to 0. The output is evaluated
@@ -133,7 +154,7 @@ public:
                         break;
                     }
                     pos += left;
-                    value = lerp (startLevel, 1.0f, powerShape (static_cast<float> (pos / s.attack), s.attackCurve));
+                    value = lerp (startLevel, 1.0f, s.shape (static_cast<float> (pos / s.attack), s.attackCurve, s.attackDen));
                     return value;
                 case Stage::hold:
                     if (!(s.hold > 0.0f) || pos + left >= s.hold)
@@ -157,7 +178,11 @@ public:
                         return value;
                     }
                     pos += left;
-                    value = lerp (1.0f, s.sustain, powerShape (static_cast<float> (pos / s.decay), s.decayCurve));
+                    // a decay to a sustain of exactly 1: 1 + (1 - 1) * shape = 1 for every finite shape, and the shape is finite for |curve| <= 80 (x = pos / decay is in 0 .. 1)
+                    if (s.dens && s.sustain == 1.0f && std::fabs (s.decayCurve) <= 80.0f)
+                        value = 1.0f;
+                    else
+                        value = lerp (1.0f, s.sustain, s.shape (static_cast<float> (pos / s.decay), s.decayCurve, s.decayDen));
                     return value;
                 case Stage::sustain:
                     value = s.sustain; // follows the (modulated) sustain level
@@ -170,7 +195,7 @@ public:
                         return value;
                     }
                     pos += left;
-                    value = releaseFrom * (1.0f - powerShape (static_cast<float> (pos / s.release), s.releaseCurve));
+                    value = releaseFrom * (1.0f - s.shape (static_cast<float> (pos / s.release), s.releaseCurve, s.releaseDen));
                     return value;
             }
         }

@@ -1,5 +1,7 @@
 # CPU review: voice management, modulation and the master stage (Key 61, tier `low`)
 
+> **Implementation status (branch `work/opt-voice`, 2026-11-19).** Done and bit identical: V1, V2, V3, V4, V5, V6, V7, V9, V10, V11, V12, V13 (commits below each finding). Skipped: V8 (changes the display and, after an edit, the audio). Not in this round: V14, V15. The legato bug of the V1 side note is confirmed and fixed (`work/fix-legato-env`: `Voice::legatoTo` clears `envCacheValid`; `core/tests/test_own_voice_legato_env.cpp` is in CTest). Proof: `synthyboy_test_own_voice_opt` (old code against new, selectable by `setOwnSavingsOff (kOwnSavingVoiceControl)` / `tier_bench --no-voice-savings`) and the exhaustive tests named at each item.
+
 Read only review of `feature/mpc-overlay` at 8e5cf113 (2026-11-18). No source file was changed, nothing was built or run, no device was touched. Every file:line below was re-opened and checked in that tree. The findings of `CPU-REVIEW-OSC.md`, `CPU-REVIEW-FILTER-FX.md` and `CPU-REVIEW-CONTENT.md` are not repeated; where a finding of theirs is in this area it is named and only new evidence is given.
 
 Scope: `core/engine-own/own_engine.cpp` (block entry, control tick, voice loop, mixer, master), `core/engine-own/voice/voice.cpp` and `voice.h` (tick and render, note start, release, stealing helpers), `filter_setup.h`, `core/engine-own/matrix/` (compile, evaluate, laws), `core/engine-own/env_lfo/` (envelopes, LFOs, random LFOs, drawn shapes), the parameter snapshot and smoothing in the engine, the voice routing and mix (`halfSum`, `route`, sends, strip meters), the M/S splitter question, the master stage.
@@ -132,6 +134,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 
 ### V1. The envelope settings cache is dropped whenever any parameter is modulated
 
+- **Status (work/opt-voice, 6e0a0b0d): done, bit identical.** Per envelope cache keyed on epoch, tempo, the envelope factor of the voice control (the exact input that `sequence` stands for) and the touched group mask; the old all envelope test stays in front; the legato staleness of the side note (a real bug: `core/tests/test_own_voice_legato_env.cpp`, aea3d5ea, failed on the code before and after) is fixed afterwards in `work/fix-legato-env`, see the side note. The decimated envelopes skip the settings work when their cache holds.
+
 - **Where.** `voice.cpp:568` (`envFromCache` needs `numTouched == 0`), `:569-578` (the loop), `:477-509` (`envSettings`), `:595-600` (the cache is marked valid only without modulation).
 - **Loop level.** Per voice period x 6 envelopes.
 - **What it does.** With any slot that moves any voice parameter (velocity to the cutoff is enough), every envelope rebuilds its settings every period: 9 `P ()` reads, 2 reads of `g.base`, 14 multiplies, the display lengths `envLen`. In all seven presets velocity slots are non zero, so the cache never hits. For an envelope that no slot reads, three of four periods compute the settings and then `continue` past them at `:586-591`: the work is thrown away.
@@ -145,6 +149,12 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 
 ### V2. `simd::ramp4` makes a store forwarding stall in every NEON ramp
 
+- **Side note (correctness, not CPU): fixed (`work/fix-legato-env`).** The all envelope cache key (epoch, tempo, nothing touched) had no `sequence`. A legato note (`Voice::legatoTo`) re-evaluates the voice control (`vc.envFactor` can change with the step), but a valid envelope cache kept the old times; this happened only without any modulation and with voice control envelope steps or random envelope set, in the old code (`--no-voice-savings`) as well. Fix: `legatoTo` sets `envCacheValid = false` (the smallest correct change: `vc.envFactor` depends on `sequence`, which changes only at a note start, where `start` already clears the cache, and at `legatoTo`; the per envelope cache of V1 is keyed on the factor itself; a key with `sequence` would add a compare to every tick for the same result). It applies to both paths, because the old path uses the same test, so `synthyboy_test_own_voice_opt` still compares like with like (unchanged). Tests: `synthyboy_test_own_voice_legato_env` (new and reference path), now in CTest. Presets: only the five with `master.legato` on (Breath Flute Lead, Solo Square Lead, Spectral Bowed Glass, Vowel Table Lead, Vowel Whistle Lead) can play legato, and all five have every voice control envelope step 0, random envelope 0 and scale 100 (factor 1 in every step), so no factory preset changes; the 160 presets x 3 tiers x single note and chord renders are identical before and after (`diff -rq`, 960 files each).
+
+### V2. `simd::ramp4` makes a store forwarding stall in every NEON ramp
+
+- **Status (175e032c): done, bit identical.** `rampLerp` keeps the lane offsets in a register; `ramp4` unchanged for `wt_osc.h`. The GCC object code was not inspected (no GCC cross compiler on the Mac): the integration build should check `voice.cpp.o` for the `vstr` / `vld1` pair.
+
 - **Where.** `dsp/simd.h:67-72` (`ramp4` builds `int32_t idx[4]` and loads it with `vld1q_s32`), used by `rampLerp` `:81-91`; callers `voice.cpp:1340` (per filter, also for an off filter), `:1399`, `:1400`, `osc/lib_osc.cpp:57`.
 - **Loop level.** Per voice period x (2 output ramps + 2 filter level ramps) x 8 NEON steps.
 - **What it does.** GCC computes the four integers in a register (`vdup.32`, `vadd.i32`), then stores them as two 64 bit halves (`vstr d16`, `vstr d17`) and reloads them with one 128 bit `vld1.32` (bench binary, `Voice::render` at 0x916c6 and 0x915b6, the filter lambda at 0x88914). A 128 bit load from two pending 64 bit stores cannot be forwarded.
@@ -155,6 +165,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 - **Change sketch.** `static const int32_t kIota[4] = {0, 1, 2, 3};` and in `rampLerp`: `const int32x4_t iota = vld1q_s32 (kIota);` once before the loop, then per step `vcvtq_f32_s32 (vaddq_s32 (vdupq_n_s32 (t0 + k + 1), iota))` times `vdupq_n_f32 (invP)`. Keep `ramp4` with the same body for the reference path in `wt_osc.h:1135` or switch it too. Check the object code for the absence of the `vstr` / `vld1` pair. `wt_osc.h:1066` already does it this way.
 
 ### V3. LFO: the settings and the smoothing coefficient are rebuilt per lane per period
+
+- **Status (c2aad11d): done, bit identical.** LFO settings, both periods and both smoothing coefficients kept per voice and LFO; the random LFOs keep their keys and rate the same way. Old code selectable (`lfoValueReference`).
 
 - **Where.** `voice.cpp:299-392` (`lfoValue`), in particular `:302` (`steps * kControlPeriod / g.sampleRate`, a double divide), `:303-311`, `:350`, `:359-361`, `:376` (about 20 `P ()` reads), `:306` (`lfoRateHz`), `:378` (`std::exp2 (-dt / half)`, a libm `exp2f` and a float divide per lane).
 - **Loop level.** Per voice period x evaluated LFOs (used ones every period, unused ones every 4th period with 4 periods of time) x lanes (1: no preset uses stereo).
@@ -168,6 +180,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 
 ### V4. The matrix evaluates slots whose source is exactly 0, both lanes
 
+- **Status (d05d6d83): done, bit identical.** `CompiledSlot::zeroSkip` with the conditions extended where the sketch was not exact: a finite power and width, and for an aux a finite aux power of at most 80 in size and a finite aux output (an aux power beyond about 88 makes `inf / inf`); also the amounts not NaN. Proved over 37.7 M evaluations of every special value combination.
+
 - **Where.** `mod_matrix.cpp:412-436` (the loop), `:337-399` (`one`), `:425-426` (only a zero amount is skipped).
 - **Loop level.** Per voice period x compiled voice slot (the global evaluate runs once per period at `own_engine.cpp:1229`).
 - **What it does.** For each slot with a non zero amount, `one ()` clamps both lanes, runs the law (copysign, `powerShape` with its `fabs < 1e-4` test), the delay gate, the aux, five multiplies per lane, then finds 0 and continues at `:429-430`. In the bench the macros, the mod wheel and the aftertouch are 0, so these slots always produce 0.
@@ -180,6 +194,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 
 ### V5. Every parameter read pays a VFP compare and a `vmrs`; 46 sites call it out of line
 
+- **Status (25e7e958): done, bit identical.** `(bits << 1) == 0` (all 2^32 patterns agree with `d == 0.0f`); snapshot and delta pointers in locals inside `tick`. Exact also with flush-to-zero, because under flush-to-zero no delta can be a denormal (every delta is an arithmetic result, flushed).
+
 - **Where.** `voice.h:185-194` (`P`, `PR`); bench binary: 46 `bl Voice::P` in `Voice::tick`, the outlined body at 0x98600 (`vcmp.f32 s1, #0`, `vmrs`, branch), the inlined copies alike.
 - **Loop level.** Per voice period x parameter read. After V1 and V3 the oscillators (about 45 reads each when on), the filters (about 25 each, `filter_setup.h:23-45` and `voice.cpp:1075-1103`) and the sub (about 12) remain: 130 to 197 reads per vp.
 - **What it does.** `d == 0.0f` on a float: a VFP compare and a transfer of the flags (`vmrs APSR_nzcv, fpscr`), which waits for the VFP pipeline. Each read also reloads `this->modP` and `gl->base` because stores to float members in between may alias.
@@ -190,6 +206,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 
 ### V6. Zero fills and copies of the routing buffers
 
+- **Status (738dc125): done, bit identical.** First writes `0 + a * g` (the +0 add is kept: writing the bare product would leave a -0 where the old code had +0; that variant is caught by the comparison test); extNext written straight into extMono, only an off Noise / Sub zeroed.
+
 - **Where.** `voice.cpp:1133` (`extNext[4][32] = {}`, 512 bytes), `:1137-1145` (`touchFin`: 2 x 128 bytes per filter input), `:1152-1163` (`toTarget`: 2 x 128 bytes per first use of a target), `:1390-1394` (extNext copied to extMono and the tail filled).
 - **Loop level.** Per voice period.
 - **What it does.** About 7 `memset` calls (library calls; 8 in `Voice::render`, 16 in the inlined `route` lambda of the bench binary) and 4 `memmove` per vp, then the first `addScaled` loads the zeros it just wrote.
@@ -199,6 +217,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 - **Change sketch.** `simd::scaleTo (d, a, g, n)` = `vst1q (d, vaddq_f32 (vdupq_n_f32 (0.0f), vmulq_f32 (a, g)))`; `touchFin` and `toTarget` mark "empty" instead of filling, and the first `addScaled` into an empty buffer calls `scaleTo`. A reader that finds a buffer still empty (a target with nothing added) reads it as zero (fill it at that point). `extNext`: two arrays and an index flip; zero only `extNext[j]` that got no write in this period (Noise and Sub when off).
 
 ### V7. Oscillator (and sub) parameters are read and derived every period although nothing moved them
+
+- **Status (73459fe8): done, bit identical.** `Voice::OscPart` / `SubPart` keyed on the epoch and the touched group mask of this period (at build and now); everything that reads the note, the voice control, content, tables or state stays per period. The library keys are filled only when a library type needs them.
 
 - **Where.** `voice.cpp:785-992` (about 45 `P ()` reads, clamps, the pitch mode `log2f` at `:861, :863`, `builtinWavetableIfReady`, `lib[o].setType`), `:994-1022` (sub).
 - **Loop level.** Per voice period x oscillator on.
@@ -211,6 +231,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 
 ### V8. Unused LFOs are shaped and smoothed in every voice only for the display
 
+- **Status: skipped, not bit identical.** The value of an unused LFO is read by the display for the newest voice (`writeReadout` sources) and its smoothing state carries over: when the newest voice ends, or an edit makes the LFO used, the old code has a different value / state than one that skipped the shape (display at once, audio after the edit).
+
 - **Where.** `voice.cpp:605-613` (an LFO no slot reads still runs `lfoValue` every 4th period), `:649-650` (into `src`), `own_engine.cpp:1783-1797` (the display reads `src` of the newest voice only).
 - **What it does.** Per evaluation: `lfoCore.advance`, the shape (`cosf` for the default sine, `lfo.h:21`), the smoothing (V3). Nothing in the audio path reads the result: `usedSources` covers slots and the source points of drawn shapes (`mod_matrix.cpp:302-317`), the global slots read only globally used sources. The display needs the phase (`lfoReadPos`) of up to 8 voices (`own_engine.cpp:1822-1823`) and the value of the newest voice.
 - **Consequence.** Audio bit identical for a fixed patch. Display unchanged for the newest voice. Two edges: when the newest voice ends, the next one shows a stale value for up to one period; when an edit makes the LFO used, its smoothed state starts from a stale value (a transient shorter than the smoothing time, only at that edit).
@@ -220,6 +242,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 
 ### V9. The right lane of a slot is computed even when it equals the left
 
+- **Status (fd0357f3): done, bit identical.** The right lane is the left result when the clamped (and slewed) source, the amount and the aux value have the same bits; a curve is evaluated once when the clamped sources agree.
+
 - **Where.** `mod_matrix.cpp:339-399`.
 - **What it does.** `xr`, `auxR`, `law (xr)` and the product are computed again. Only the LFOs and random LFOs with stereo, and `kSrcStereo`, differ between `src` and `srcR` (`voice.cpp:690-695`); no preset uses LFO stereo.
 - **Consequence.** Bit identical (the same expression on the same inputs; then the existing `stereo` sign flip).
@@ -228,6 +252,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 - **Change sketch.** In `one`: when `xl` and `xr` have the same bits, `amountL == amountR` and (no aux or the aux values have the same bits), compute the left lane and copy it to the right before the `stereo` flip.
 
 ### V10. The engine scans the 36 voice pool many times per period
+
+- **Status (9cec1ec1): done, bit identical.** A 64 bit set of the active voices kept by the voices themselves, visited in ascending index (snapshot); the per event loops keep their scans. `polyphonyLimit` was not cached (one call per period).
 
 - **Where.** `own_engine.cpp:1139-1141` (pending pedal), `:1142` with `:692-710` (`killExcess`, which also calls `polyphonyLimit` and so `paramIndex`), `:1149` with `:683-690`, `:1150-1152`, `:1162-1164`, `:1530-1532`; per block `:1615`, `:1617-1618`, `publishStats` `:1630-1647`, `writeReadout` `:1775-1777` and the selection `:1805-1815` (up to 8 x 36).
 - **What it does.** Each test dereferences a `unique_ptr` into a separate large `Voice` and reads one flag: 6 scans of 36 per period, about 500 tests per block.
@@ -239,6 +265,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 
 ### V11. Function local statics with a guard and a barrier on the hot path
 
+- **Status (ddb1a17e): done, bit identical.** Kept as `Voice` members set in `prepare` (not `TickGlobals`, so the direct voice rigs of the tests need nothing new); `noise.filter` index too.
+
 - **Where.** `voice/param_index.cpp:121-125` (`paramIndex`), `matrix/mod_matrix.cpp:112-122` (`destLawOf`), `libKeys` (`osc/lib_osc.h:63`); `paramTable ()` called from `Voice::modulatedSlow` (`voice.cpp:139-142`).
 - **What it does.** Bench binary: `paramIndex` saves 8 core and 8 NEON D registers, loads the guard and runs `dmb ish` on every call (the inlined builder makes the prologue that large); `destLawOf` the same with 9 + 2 registers and a size computation. Called once per tick, once per `lfoValue`, per oscillator (`libKeys`), per modulated read (`destLawOf`, `paramTable`).
 - **Measured.** `paramIndex` 0.06 to 0.13 %, `libKeys` 0.04 to 0.08 %, `destLawOf` 0.07 to 0.18 % of the samples.
@@ -248,6 +276,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 - **Change sketch.** Keep `const ParamIndex*`, the `LibKeys` pointers, the `DestLaw` array pointer and the `ParamInfo` table pointer in `TickGlobals` (filled in `OwnEngine::prepare`, which already warms `destLawOf (0)` at `own_engine.cpp:406`) and pass them down; `modulatedSlow` uses them.
 
 ### V12. `ffloor` is out of line, has three `vmrs`, and sends 0 to the library
+
+- **Status (d1c25764): done, bit identical.** `ffloorBits` (bit form) on 32 bit ARM, `std::floor` where it is one instruction (AArch64, x86 SSE 4.1). Correction to the sketch: a denormal must still go to `std::floor` (with flush-to-zero the old compare took it for 0, and AArch64 `frintm` then gives -0 for a negative denormal, not -1). Proved for all 2^32 patterns with and without flush-to-zero. `own_engine.cpp` LFO phases and the LFO readout use `ffloor`.
 
 - **Where.** `dsp/util.h:44-50`; callers here: `voice.cpp:331, 346` (`knob - ffloor (knob)` with the phase knob 0 in all seven presets), `lfo_eval.h` `lfoShapeAt`, `lfo.h:119, 130`; `own_engine.cpp:1115` uses `std::floor` (a libm `floorf` call) for 10 global LFO phases per period.
 - **What it does.** `x == 0.0f` is sent to `std::floor`, a library call, to keep the sign of zero; the remaining path has three compares with `vmrs`.
@@ -259,6 +289,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 
 ### V13. Envelope curves: a constant `expm1f` per evaluation, and a decay to sustain 1
 
+- **Status (20abedd2): done, bit identical.** `EnvSettings::fillDens` for kept settings; the sustain 1 shortcut needs `|decayCurve| <= 80` (beyond, `expm1` overflows to `inf / inf` = NaN, which the old code propagated).
+
 - **Where.** `env_lfo/envelope.h:136, 160, 173` with `dsp/util.h:66-71` (`powerShape` = `expm1 (p x) / expm1 (p)`).
 - **What it does.** Two `expm1f` and a divide per curved stage evaluation; `expm1 (p)` depends only on the curve. In a decay to sustain 1 (all default envelopes) `lerp (1, 1, t)` is 1 whatever `powerShape` returns.
 - **Consequence.** Bit identical (same denominator value; `1 + 0 * t = 1` for finite `t`, and `t` is finite for curves in the parameter range).
@@ -268,6 +300,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 
 ### V14. A dirty block (any knob or Q-Link move) rebuilds everything; the bench never measures it
 
+- **Status: not part of this round** (not in the task).
+
 - **Where.** `own_engine.cpp:243-276` (`setParam` always bumps `paramGen`, even for an unchanged value), `:1290-1305` (copy of 2637 atomics, `ModMatrix::compile`, `++baseEpoch`), `:1332-1334` (tuning), `mod_matrix.cpp:240-306` (per compiled slot `isVoiceParam` with up to 9 `strncmp` `:27-34`, `ownerNode` string parsing `:173-198`).
 - **What it does.** One block after any `setParam`: about 5 to 8 k cycles of copy, 7 to 15 k for the compile, then every voice cache keyed on `baseEpoch` is invalid for that block (voice control, V1, V3, V7), and every FX rack runs its full update (FILTER-FX F11, 1.4 to 1.8 % measured).
 - **Consequence.** Bit identical for (1) to (3) below.
@@ -276,6 +310,8 @@ Savings are per heavy preset in points of the block. "vp" = voice periods per bl
 - **Change sketch.** (1) In `setParam` compare the constrained value with the stored one (bits) and skip the store and the bump when equal. (2) Precompute `isVoiceParam` and `ownerNode` per parameter index once (they depend on the key only) so `compile` does no string work. (3) A dirty bitmap of 2637 bits set by `setParam`; the snapshot copies only the changed words and calls `compile` only when a `modNN.*` or a slot related key changed. (4) Optional: an epoch per group so a cutoff sweep does not invalidate the envelope and LFO caches. Bench: add `--sweep KEY` to `synthyboy_tier_bench` (one `setParam` per block) and measure Mid Side Halo and Lorenz Garden with `--sweep filter1.cutoff` before and after.
 
 ### V15. Rounding level and user patch items (not for the factory presets)
+
+- **Status: not part of this round** (not in the task; the slew and power denominators would follow the V13 pattern).
 
 - LFO shape 0 uses libm `cosf` per lane (`lfo.h:21`). At tier low a table sine (`fastmath::sinCycles`, used by the oscillators) would be rounding level, about 1e-7. Used sine LFOs: Stretched Glass Choir, Mid Side Halo lfo 1: 32 calls per block x 80 to 200 = **0.05 to 0.14**. Low value; only with V8 not done does it reach the unused LFOs too.
 - Slot slew: `std::exp` per lane per slot per voice period (`mod_matrix.cpp:360`), constant for a given `dt` and rise / fall time. No factory preset uses slew; for a user patch with k slewed slots at 8 voices: 32 x 2 k x (80 to 200) cycles = 0.11 to 0.27 % per slot. Bit identical fix: compute both coefficients in `compile` for the control period `dt` (pass `dt` in), use them when `ctx.dt` equals it.
