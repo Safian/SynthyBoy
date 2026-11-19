@@ -1,5 +1,7 @@
 # Levelling to the stock MPC instruments (2026-11-19)
 
+> **Superseded (2026-11-19) by `docs/release/OUTPUT-LEVEL.md`**, the single source of truth for the output level. Numbers and claims below that differ from it are wrong or historic; keep this file only as method/tool documentation.
+
 Branch `work/loudness-fix`. The owner's decision: the factory presets sit beside the stock MPC instruments at EQUAL loudness ("a gyárihoz hasonló működés legyen ... a gyári presetekkel együtt pont egyforma lesz a hangerő"); what is heard is the sustained level; the output limiter (`core/include/synthyboy/output_stage.h`, ceiling -0.5 dBFS) is a guard that normally idles; the raw engine peaks stay inside the engine's safety knee.
 
 Two rounds were made the same day. Round 1 fitted the velocity 127 note and chord PEAKS; round 2 (this state) fits the LOUDNESS (sustained levels and the note peak) and treats the chord peak as a limit. Round 1's figures are in the git history of this file.
@@ -199,3 +201,24 @@ Velocity 127 against 100 (the table above, "v127-v100"): Bass 0.2 dB (stock 0.1)
 - `synthyboy_test_output_stage_presets` (`core/tests/test_output_stage_presets.cpp`): `output_stage_on_every_factory_preset` (no sample above the ceiling at make-up gains -2.5 .. 15 dB, no loudness inversion: pass) and `output_stage_presets_sit_at_the_stock_level` (every preset's mean error within 3 dB but the 11 held back; the limiter budget on both four note chords held on 636 of 640 renders, at least 90 percent required; no sample above the ceiling): pass.
 - `synthyboy_preset_render --engine own --summary-only`, tiers low, medium, high (the gate `synthyboy_preset_sanity` with the own engine): PASS, 0 failures.
 - `gen-factory-presets.py --check`, `check-presets.py` (0 errors, the same 79 warnings as before), the preset pytest files, `test_docs_release.py`, `test_docs_mpc.py`: pass.
+
+## Round 3: unity gain staging, no limiter (the current state)
+
+The owner's rule: the default sound is unity gain staging (`kMakeupGainDb` = 0 dB, the limiter off in every shell, no latency); the whole level lives in `master.volume`; at velocity 127 a four note chord (both voicings), a six note and an eight note chord peak at most -1 dBFS at the output (hard). The same objective as round 2 is fitted under that limit (`level-to-stock.py solve --gain 0 --gate ...`; the probe runs the stage with the limiter off). No preset needs more than the +6 dB top of `master.volume`.
+
+Before (round 2: -1.0 dB make-up, limiter on) and after, Key 61, medians, target in brackets (the XL table is within about 1.5 dB):
+
+| category | note peak | note sustained | chord sustained | chord peak (stock voicing) | 8-note chord peak |
+|---|---|---|---|---|---|
+| Bass | -14.2 -> -16.6 (-9.1) | -21.4 -> -22.0 (-20.0) | -16.1 -> -17.3 (-22.0) | -4.8 -> -6.1 (-7.0) | -1.1 |
+| Lead | -12.7 -> -15.7 (-11.5) | -21.8 -> -23.6 (-19.5) | -15.8 -> -17.6 (-19.0) | -3.6 -> -6.4 (-8.0) | -1.1 |
+| Pad | -10.0 -> -14.1 (-9.6) | -21.3 -> -25.2 (-19.0) | -14.4 -> -18.6 (-15.0) | -1.0 -> -5.0 (-5.6) | -1.3 |
+| Keys | -10.5 -> -14.7 (-10.5) | -32.1 -> -34.3 (-27.0) | -24.8 -> -27.3 (-27.0) | -1.4 -> -5.3 (-4.0) | -1.1 |
+| Pluck | -16.2 -> -16.2 (-16.2) | -48.5 -> -48.5 (-31.0) | -42.6 -> -42.7 (-26.0) | -7.2 -> -7.2 (-8.1) | -4.0 |
+| FX | -12.1 -> -14.7 (-11.0) | -23.5 -> -24.5 (-22.0) | -17.7 -> -19.0 (-20.0) | -4.9 -> -5.9 (-7.0) | -1.3 |
+
+Under the hard rule our notes end below the stock medians by: Bass 7.5 dB (note peak) / 2 dB (note sustained), Lead 4 / 4, Pad 4.5 / 6, Keys 4 / 7, FX 4 / 2.5; Pluck is on target (its peak only). 65 presets are held back by the rule (mean error beyond 3 dB; the list is `kHeldBack` in `core/tests/test_output_stage_presets.cpp`): every one sits with a chord at -1.0 dBFS. The cause is the chord-to-note distance of the engine (9 to 10 dB, stock 2 to 8 dB; section "Chord against note").
+
+**Prototype, on paper, not in the engine (an owner decision):** a polyphony-dependent gain, every voice scaled by n^-alpha with n the number of sounding voices (the engine's unison already normalises its voices to unit power, 1/sqrt(U), `osc/wt_osc.h`). `level-to-stock.py simulate` refits from the same measurement (exact for a linear voice bus and effects): alpha 0.25 (four notes -3.0 dB, eight -4.5 dB): chord-to-note peak 6 to 7.4 dB, notes within 0 to 4 dB of the stock peaks, 12 presets held back; alpha 0.5 (1/sqrt(n): four notes -6 dB, eight -9 dB): chord-to-note 2.9 to 4.4 dB (stock 2 to 8), note peaks within -3 to +2.3 dB of the stock, note sustained within 2.7 dB (Keys -4.8, Pluck -17.5: decay), 9 presets held back (808 Boom, Punchy Pluck Bass, Game Over Zap, Sub Drop Boom, EMS Squelch Bass, Shepard Ascent, Lorenz Garden, Bode Barber Riser, Infinite Horizon). In the engine it would have to be smooth (a slewed gain as voices start and end, else a step at every note) and decide whether release tails count as voices.
+
+**Per-preset limiter:** a preset can switch the limiter on (`"outputLimiter":1`, `scripts/factory-preset-output-limiter.json`, read by the MPC shell). The list is empty; the candidates by measurement (the chord's peak in the strike, a crest of 15 dB or more, and loudness the hard rule blocks): EMS Squelch Bass (blocked +13.5 dB, crest 28 dB), Plucked Lead Tone (+9.0, 21 dB), Fast Arp Bass (+6.5, 15 dB); 808 Boom, Punchy Pluck Bass, Sub Drop Boom and Game Over Zap (+14 to +26 dB, crest 32 to 60 dB) are decaying sounds whose 0.3 .. 2 s window, not their peak, makes the gap: a limiter would not close it within the 3 dB budget.

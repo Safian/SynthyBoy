@@ -1,6 +1,6 @@
 // SynthyBoy - MPC shell: output stage. The stage itself is the one of every shell, core/include/synthyboy/output_stage.h (make-up gain, then a stereo-linked look-ahead peak
 // limiter with a program-dependent release at -0.5 dB full scale, a hard safety clip behind it). This header adds what is the MPC shell's own: the limiter as the plugin setting LIMIT
-// (default ON, kOutputLimiterDefaultOn), the environment / build override SYNTHYBOY_MPC_OUTPUT_LIMITER for tests, and the chunk member "mpcOutputLimiter".
+// (default OFF, kOutputLimiterDefaultOn: the default sound is unity gain staging without dynamics; the limiter is the user's choice), the environment / build override SYNTHYBOY_MPC_OUTPUT_LIMITER for tests, and the chunk member "mpcOutputLimiter".
 // Tested by shell-mpc/tests/output_stage_host.cpp and output_stage_lanes_host.cpp (tests/run_output_stage_test.sh).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -25,7 +25,7 @@ using OutputStage = synthyboy::OutputStage;
 
 // ---- the limiter as a plugin setting (docs/MPC.md "Output limiter") ----
 /** The default of the setting "LIMIT" on the Master page (OUTPUT block): the one constant to flip. A project saved before the setting existed keeps this default. */
-constexpr bool kOutputLimiterDefaultOn = true;
+constexpr bool kOutputLimiterDefaultOn = false;
 
 /** SYNTHYBOY_MPC_OUTPUT_LIMITER in the environment forces the limiter for tests: "1" on, "0" off, anything else (or unset) leaves it to the setting. A build with
     -DSYNTHYBOY_MPC_OUTPUT_LIMITER=1 forces it on as before (the value 0 of the default build forces nothing). Returns -1 (not forced), 0 (off) or 1 (on). */
@@ -63,6 +63,31 @@ inline bool outputLimiterFromChunk (const void* data, size_t size, bool& on) noe
     if (p + 1 >= tail.size() || (tail[p] != '0' && tail[p] != '1') || (tail[p + 1] != ',' && tail[p + 1] != '}'))
         return false;
     on = tail[p] == '1';
+    return true;
+}
+
+/** The preset's own choice of the output limiter: the optional top-level member "outputLimiter" of a .sbpreset file (1 / 0 or true / false; written by
+    scripts/gen-factory-presets.py for the presets whose measured overshoot asks for it). True when it is there (then `on` is set); false leaves `on` as it is. A program without
+    the member gets the default (kOutputLimiterDefaultOn: off) from the caller. Never reads outside `size`. */
+inline bool outputLimiterFromPreset (const void* data, size_t size, bool& on) noexcept
+{
+    if (data == nullptr || size == 0)
+        return false;
+    const std::string_view text (static_cast<const char*> (data), size);
+    static constexpr std::string_view kKey = "\"outputLimiter\":";
+    const size_t a = text.find (kKey);
+    if (a == std::string_view::npos)
+        return false;
+    size_t q = a + kKey.size();
+    while (q < text.size() && (text[q] == ' ' || text[q] == '\t'))
+        ++q;
+    const std::string_view v = text.substr (q, 5);
+    if (v.substr (0, 1) == "1" || v.substr (0, 4) == "true")
+        on = true;
+    else if (v.substr (0, 1) == "0" || v.substr (0, 5) == "false")
+        on = false;
+    else
+        return false;
     return true;
 }
 

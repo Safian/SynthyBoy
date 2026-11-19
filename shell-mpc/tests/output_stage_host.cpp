@@ -77,9 +77,15 @@ int main()
     checkf (std::fabs (20.0 * std::log10 ((double) C) + 0.5) < 1e-5, "the ceiling is -0.5 dB full scale (%.6f)", (double) C);
     check (OutputStage::lookaheadFor (44100.0) == 132 && OutputStage::lookaheadFor (48000.0) == 144 && OutputStage::lookaheadFor (96000.0) == 288, "look-ahead 3 ms: 132 / 144 / 288 samples at 44.1 / 48 / 96 kHz");
     check (OutputStage::lookaheadFor (0.0) == 132 && OutputStage::lookaheadFor (std::numeric_limits<double>::quiet_NaN()) == 132, "an invalid rate counts as 44.1 kHz");
-    check (synthyboy::kMakeupGainDb == -1.0f && OutputStage().gainDb() == synthyboy::kMakeupGainDb, "a new stage starts at kMakeupGainDb (-1.0 dB since the levelling to the stock instruments), the one value of every shell");
-    check (OutputStage().limiter(), "a new stage has the limiter on");
-    check (synthyboy_mpc::kOutputLimiterDefaultOn, "MPC: the setting LIMIT is on by default");
+    check (synthyboy::kMakeupGainDb == 0.0f && OutputStage().gainDb() == synthyboy::kMakeupGainDb, "a new stage starts at kMakeupGainDb (0 dB: unity gain staging), the one value of every shell");
+    check (! OutputStage().limiter() && OutputStage().latencySamples() == 0, "a new stage has the limiter off and reports no latency (the default sound: no dynamics, no delay)");
+    {
+        OutputStage s; s.prepare (48000.0); s.reset();
+        auto in = sine (4800, 3.0f, 440.0, 48000.0); auto l = in, r = in; run (s, l, r);
+        bool same = true; for (size_t i = 0; i < in.size(); ++i) same = same && l[i] == in[i] && r[i] == in[i];
+        check (same, "a new stage passes every sample unchanged and undelayed (unity gain, limiter off), also far above full scale");
+    }
+    check (! synthyboy_mpc::kOutputLimiterDefaultOn, "MPC: the setting LIMIT is off by default (the user switches it on)");
 
     for (double sr : { 44100.0, 48000.0, 96000.0 })
     {
@@ -367,7 +373,7 @@ int main()
             check (synthyboy_mpc::outputLimiterFromChunk (withPad.data(), withPad.size(), got2) && got2 == v, "chunk: the member is found before the pad pressure members");
         }
         bool keep = true;
-        check (! synthyboy_mpc::outputLimiterFromChunk (base.data(), base.size(), keep) && keep, "chunk: an older chunk without the member leaves the setting as it is (the default: on)");
+        check (! synthyboy_mpc::outputLimiterFromChunk (base.data(), base.size(), keep) && keep, "chunk: an older chunk without the member leaves the setting as it is (the default: off)");
         keep = false;
         const std::string off = synthyboy_mpc::chunkWithOutputLimiter (base, false);
         bool v = true;
@@ -376,6 +382,16 @@ int main()
         keep = true;
         check (! synthyboy_mpc::outputLimiterFromChunk (bad.data(), bad.size(), keep) && keep, "chunk: a damaged member is ignored");
         check (! synthyboy_mpc::outputLimiterFromChunk (nullptr, 0, keep), "chunk: no data");
+        const std::string pre1 = "{\"format\":\"synthyboy-preset\",\"version\":1,\"meta\":{\"name\":\"X\"},\"outputLimiter\":1,\"state\":{\"params\":{\"a\":1}}}";
+        const std::string pre0 = "{\"format\":\"synthyboy-preset\",\"outputLimiter\":false,\"state\":{}}";
+        const std::string preNone = "{\"format\":\"synthyboy-preset\",\"state\":{},\"x\":{\"mpcOutputLimiter\":1}}";
+        bool pv = false;
+        check (synthyboy_mpc::outputLimiterFromPreset (pre1.data(), pre1.size(), pv) && pv, "preset: \"outputLimiter\":1 switches the limiter on");
+        pv = true;
+        check (synthyboy_mpc::outputLimiterFromPreset (pre0.data(), pre0.size(), pv) && ! pv, "preset: \"outputLimiter\":false switches it off");
+        pv = false;
+        check (! synthyboy_mpc::outputLimiterFromPreset (preNone.data(), preNone.size(), pv) && ! pv, "preset: without the member (the chunk's member is another key) nothing is set");
+        check (! synthyboy_mpc::outputLimiterFromPreset (nullptr, 0, pv), "preset: no data");
     }
     {
         ::setenv ("SYNTHYBOY_MPC_OUTPUT_LIMITER", "0", 1);

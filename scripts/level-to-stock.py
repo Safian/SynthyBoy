@@ -48,7 +48,7 @@ def load_targets(path):
 
 def measure(probe, content_dir, gain, out):
     def one(key):
-        r = subprocess.run([probe, "--presets", PRESETS, "--content-dir", content_dir, "--profile", PROFILES[key], "--gain", str(gain)],
+        r = subprocess.run([probe, "--presets", PRESETS, "--content-dir", content_dir, "--profile", PROFILES[key], "--gain", str(gain), "--limiter", "on" if LIMITER_ON else "off"],
                            check=True, capture_output=True, text=True)
         return [dict(json.loads(line), prof=key) for line in r.stdout.splitlines() if line.strip()]
     with ThreadPoolExecutor(max_workers=2) as ex:
@@ -80,6 +80,12 @@ CEILING_DB = -0.5      # the output stage's ceiling
 LIMIT_GR_DB = 3.0      # the limiter budget: at most this reduction on a velocity 127 four note chord (either voicing) ...
 LIMIT_SHARE = 0.25     # ... and in at most this share of its blocks
 CHORDS = ("chord_v127", "chordS_v127")   # ours (36 48 55 60) and the stock voicing (48 55 60 64)
+# The default sound (2026-11-19, the owner's rule): no limiter. Then every velocity 127 chord of the probe (four notes in both voicings, six, eight) must peak at most
+# HARD_PEAK_DB at the stage output, so the host meter never reaches its over-0 segment. LIMITER_ON (the --limiter option) restores the budget mode of the limiter.
+HARD_PEAK_DB = -1.0
+HARD_CHORDS = ("chord_v127", "chordS_v127", "chord6_v127", "chord8_v127")
+LIMITER_ON = False
+POLY_ALPHA = 0.0   # the polyphony gain prototype (simulate only): a chord of n notes scaled by n ** -POLY_ALPHA
 
 
 def errors(p, targets, gain=None):
@@ -96,7 +102,7 @@ def errors(p, targets, gain=None):
         if r["note_v127"]["sus"] > SILENT_DB:
             out.append((1.0, r["note_v127"]["sus"] + shift - targets["sustain_note_v127"][cat]))
         if r["chordS_v127"]["sus"] > SILENT_DB:
-            out.append((1.0, r["chordS_v127"]["sus"] + shift - targets["sustain_chord_v127"][cat]))
+            out.append((1.0, r["chordS_v127"]["sus"] + shift + poly("chordS_v127") - targets["sustain_chord_v127"][cat]))
     return out
 
 
@@ -127,17 +133,31 @@ def gate_peaks(gate, content_dir):
     return names
 
 
+NOTES = {"chord_v127": 4, "chordS_v127": 4, "chord6_v127": 6, "chord8_v127": 8, "chordG_v127": 4}
+
+
+def poly(g):
+    """The level change of the polyphony gain prototype for a gesture (0 dB for a note, or with POLY_ALPHA 0)."""
+    n = NOTES.get(g, 1)
+    return -20.0 * POLY_ALPHA * __import__("math").log10(n) if POLY_ALPHA else 0.0
+
+
 def constrained_change(p, targets, gate_peak=None):
-    """The fit, then the limits: the limiter budget on both four note chords (velocity 127, both profiles: the peak it sees at most LIMIT_GR_DB over the ceiling;
-    a chord whose limiter acted in more than LIMIT_SHARE of the blocks goes down by 0.3 dB per round) and no raw engine peak above SAFE_RAW_DB."""
+    """The fit, then the limits. Without the limiter (the default): every velocity 127 chord (HARD_CHORDS, both profiles) at most HARD_PEAK_DB at the output. With it
+    (LIMITER_ON): the limiter budget on both four note chords (the peak it sees at most LIMIT_GR_DB over the ceiling; a chord whose limiter acted in more than LIMIT_SHARE of
+    the blocks goes down by 0.3 dB per round). Always: no raw engine peak above SAFE_RAW_DB, the preset gate's raw peaks under GATE_LIMIT_DB."""
     d = needed_change(p, targets)
     for prof in PROFILES:
-        for g in CHORDS:
-            r = p[prof][g]
-            d = min(d, CEILING_DB + LIMIT_GR_DB - 0.1 - r["pre"])
-            if r["engaged"] > LIMIT_SHARE:
-                d = min(d, -0.3)   # over the share: a small step down per round (a larger one swings back and forth with the fit)
-    raw = max(p[x][g]["raw"] for x in PROFILES for g in ("note_v127", "chord_v127", "chordS_v127", "chord6_v127", "chordG_v127"))
+        if LIMITER_ON:
+            for g in CHORDS:
+                r = p[prof][g]
+                d = min(d, CEILING_DB + LIMIT_GR_DB - 0.1 - r["pre"])
+                if r["engaged"] > LIMIT_SHARE:
+                    d = min(d, -0.3)   # over the share: a small step down per round (a larger one swings back and forth with the fit)
+        else:
+            for g in HARD_CHORDS:
+                d = min(d, HARD_PEAK_DB - 0.05 - (p[prof][g]["pre"] + poly(g)))
+    raw = max(p[x][g]["raw"] + poly(g) for x in PROFILES for g in ("note_v127", "chord_v127", "chordS_v127", "chord6_v127", "chord8_v127", "chordG_v127"))
     d = min(d, SAFE_RAW_DB - 0.05 - raw)
     if gate_peak is not None:
         d = min(d, GATE_LIMIT_DB - gate_peak)
@@ -213,6 +233,40 @@ def cmd_solve(a):
 def med(xs):
     xs = [x for x in xs if x is not None and x > -150]
     return st.median(xs) if xs else float("nan")
+
+
+def cmd_simulate(a):
+    """The polyphony gain prototype on paper: from one measurement, the fit and its limits with every chord scaled by n ** -alpha (exact for a linear voice bus and effects;
+    the prototype is not in the engine). Prints, per category, the note peak / note sustained / chord sustained after the fit, and the presets the limits hold back."""
+    global POLY_ALPHA
+    targets = load_targets(a.targets)
+    ps = by_preset(read_measure(a.measure))
+    levels = current_levels()
+    for alpha in a.alphas:
+        POLY_ALPHA = alpha
+        rows = {}
+        held = []
+        for n, p in ps.items():
+            d = constrained_change(p, targets)
+            d = min(VOLUME_MAX - levels[n], max(VOLUME_MIN - levels[n], d))
+            free = needed_change(p, targets)
+            e = errors(p, targets)
+            mean = st.mean(x for _, x in e) + d
+            if abs(mean) > 3.0:
+                held.append("%s %+.1f" % (n, mean))
+            c = p["category"]
+            r = p["low"]
+            rows.setdefault(c, []).append((r["note_v127"]["pre"] + d, r["note_v127"]["sus"] + d if r["note_v127"]["sus"] > SILENT_DB else None,
+                                           r["chordS_v127"]["sus"] + d + poly("chordS_v127") if r["chordS_v127"]["sus"] > SILENT_DB else None,
+                                           r["chordS_v127"]["pre"] + d + poly("chordS_v127") - (r["note_v127"]["pre"] + d)))
+        print("alpha %.2f (a four note chord %+.1f dB, eight %+.1f dB): Key 61 medians, target in brackets" % (alpha, -20 * alpha * __import__("math").log10(4), -20 * alpha * __import__("math").log10(8)))
+        for c in CATEGORIES:
+            v = rows[c]
+            print("  %-5s note peak %6.1f (%5.1f)  note sus %6.1f (%5.1f)  chord sus %6.1f (%5.1f)  chord - note peak %+5.1f (%+.1f)" % (
+                c, med(x[0] for x in v), targets["peak_note_v127"][c], med(x[1] for x in v), targets["sustain_note_v127"][c], med(x[2] for x in v), targets["sustain_chord_v127"][c],
+                med(x[3] for x in v), targets["peak_chord_v127"][c] - targets["peak_note_v127"][c]))
+        print("  held back (mean error beyond 3 dB): %d: %s" % (len(held), ", ".join(sorted(held))))
+    POLY_ALPHA = 0.0
 
 
 def cmd_report(a):
@@ -331,6 +385,8 @@ def main():
     s.add_argument("--probe", required=True); s.add_argument("--content-dir", required=True); s.add_argument("--gain", type=float, required=True)
     s.add_argument("--targets", default=TARGETS_PATH); s.add_argument("--rounds", type=int, default=3); s.add_argument("--work", default="level-to-stock-work")
     s.add_argument("--gate", help="synthyboy_preset_render: its raw peaks (every tier) are kept under +2.85 dBFS so the preset gate passes")
+    sm = sub.add_parser("simulate")
+    sm.add_argument("--measure", required=True); sm.add_argument("--targets", default=TARGETS_PATH); sm.add_argument("--alphas", type=float, nargs="+", default=[0.0, 0.25, 0.5])
     r = sub.add_parser("report")
     r.add_argument("--measure", required=True); r.add_argument("--before"); r.add_argument("--targets", default=TARGETS_PATH); r.add_argument("--md")
     a = ap.parse_args()
@@ -340,6 +396,8 @@ def main():
         cmd_gains(a)
     elif a.cmd == "solve":
         cmd_solve(a)
+    elif a.cmd == "simulate":
+        cmd_simulate(a)
     else:
         cmd_report(a)
 

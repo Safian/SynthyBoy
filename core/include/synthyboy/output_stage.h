@@ -42,9 +42,9 @@ namespace synthyboy
 {
 
 /** THE make-up gain of every shell, in dB (the MPC build option SYNTHYBOY_MPC_OUTPUT_GAIN_DB overrides it for the MPC shell only when it is given). Change the level of all shells here.
-    -1.0 dB: the factory presets are levelled to the stock MPC instruments (scripts/level-to-stock.py, docs/release/LEVELLING-STOCK-2026-11-19.md); the rule's value: the gain at which
-    the median preset needs no change of its master.volume and no preset needs more than its +6 dB top. A new value needs a new levelling run. */
-constexpr float kMakeupGainDb = -1.0f;
+    0 dB (2026-11-19, the owner's rule): the default sound is unity gain staging: with every level control at 0 the track output carries the engine's output as it is, no hidden
+    gain and no limiter; the whole level lives in the presets' master.volume (levelled to the stock MPC instruments: scripts/level-to-stock.py, docs/release/LEVELLING-STOCK-2026-11-19.md). */
+constexpr float kMakeupGainDb = 0.0f;
 
 class OutputStage
 {
@@ -61,7 +61,7 @@ public:
     static constexpr float kSwitchFadeSeconds = 0.010f;     // the crossfade of setLimiter
     static constexpr int kMaxLookahead = 1023;              // samples (the delay ring has 1024)
 
-    /** The make-up gain starts at kMakeupGainDb, the limiter on, prepared for 44.1 kHz. */
+    /** The make-up gain starts at kMakeupGainDb, the limiter OFF (the default sound: unity gain staging, no dynamics, no latency), prepared for 44.1 kHz. */
     OutputStage() noexcept
     {
         setGainDb (kMakeupGainDb);
@@ -469,7 +469,7 @@ private:
     float mix = 1.0f, fadeInc = 0.01f, minG = 1.0f, lastG = 1.0f;
     bool target = true;
     uint32_t clips = 0, laneGroups = 0;
-    std::atomic<bool> wanted { true };
+    std::atomic<bool> wanted { false };
     std::atomic<float> lastMinGain { 1.0f };
 };
 

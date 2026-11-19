@@ -1,5 +1,7 @@
 # SynthyBoyVST — Teljes Technikai Review (Ágak, Hangosság / Gain-Staging, Motor, MPC Shell és Hibák)
 
+> **Level claims superseded (2026-11-19) by `docs/release/OUTPUT-LEVEL.md`** (chapter 0 and every statement about make-up gain, limiter default, peaks and parity: see its section C for the refuted ones).
+
 ## 0. Végrehajtási összefoglaló — Mit és miért csináltam (2026-11-19)
 
 > [!NOTE]

@@ -24,6 +24,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 PARAMS_JSON_PATH = os.path.join(ROOT_DIR, "docs", "params.json")
 LEVELS_PATH = os.path.join(SCRIPT_DIR, "factory-preset-levels.json")
+OUTPUT_LIMITER_PATH = os.path.join(SCRIPT_DIR, "factory-preset-output-limiter.json")
 MACRO_NAMES_PATH = os.path.join(SCRIPT_DIR, "factory-preset-macro-names.json")
 PAD_PRESSURE_PATH = os.path.join(SCRIPT_DIR, "factory-preset-pad-pressure.json")
 DEFAULT_OUTPUT_DIR = os.path.join(ROOT_DIR, "content", "presets")
@@ -163,9 +164,19 @@ def make_preset(name: str, category: str, tags: str, description: str, overrides
         f'"meta":{{"name":{json.dumps(meta["name"])},"category":{json.dumps(meta["category"])},'
         f'"author":{json.dumps(meta["author"])},"license":{json.dumps(meta["license"])},'
         f'"tags":{json.dumps(meta["tags"])},"description":{json.dumps(meta["description"])}}},'
-        f'"state":{state_json}}}'
+        + ('"outputLimiter":1,' if name in load_output_limiter() else '')
+        + f'"state":{state_json}}}'
     )
     return meta, doc
+
+
+def load_output_limiter() -> dict:
+    """The presets whose sound asks for the shells' output limiter (the top-level member "outputLimiter":1, read by the MPC shell when the program is loaded; without it the
+    limiter stays off, the default sound): scripts/factory-preset-output-limiter.json, preset name -> the measured reason (docs/release/LEVELLING-STOCK-2026-11-19.md)."""
+    if not os.path.isfile(OUTPUT_LIMITER_PATH):
+        return {}
+    with open(OUTPUT_LIMITER_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------

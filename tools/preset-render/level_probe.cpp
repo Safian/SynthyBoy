@@ -3,13 +3,13 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_level_probe --presets DIR --content-dir DIR --profile TEXT [--gain DB] [--filter TEXT] [--note K] [--chord K,K,..] [--chord6 K,K,..] [--chord-stock K,K,..] [--hold S] [--sr HZ]
+//   synthyboy_level_probe --presets DIR --content-dir DIR --profile TEXT [--gain DB] [--filter TEXT] [--note K] [--chord K,K,..] [--chord6 K,K,..] [--chord8 K,K,..] [--chord-stock K,K,..] [--limiter on|off] [--hold S] [--sr HZ]
 //
 // Per preset (own engine, a fresh engine per gesture, 0.3 s of silence before the note (the smoothing of master.volume), offline, 128 frame blocks, the quality of the device profile TEXT of shell-mpc/device_profile.h, e.g. "low" = Key 61,
 // "high,voices=16,control=economy" = XL) five gestures held --hold seconds (default 3): the note (default key 48 = C3 with C4 = 60) at velocity 127 and 100, the chord (default
-// 36 48 55 60) at 127 and 100, the six note chord (default 36 43 48 55 60 64) at 127, and the chord of the stock reference (chordS, default 48 55 60 64: the voicing the stock
+// 36 48 55 60) at 127 and 100, the six note chord (default 36 43 48 55 60 64) and the eight note chord (default 36 43 48 52 55 60 64 67) at 127, and the chord of the stock reference (chordS, default 48 55 60 64: the voicing the stock
 // instruments were measured with) at 127 and 100, and the chord of the preset gate (chordG: C1 for Bass, else 60, plus 4, 7, 12 semitones) at 127, released after 1 s as the gate does. Each through the shells' output stage (core/include/synthyboy/output_stage.h, make-up gain
-// --gain, default kMakeupGainDb, limiter on). One JSON object per line and preset: for every gesture
+// --gain, default kMakeupGainDb; --limiter on|off, default off: the default sound of the shells). One JSON object per line and preset: for every gesture
 //   raw      sample peak of the raw engine output (dBFS)            pre    raw + gain: the peak the limiter sees (dBFS)
 //   post     sample peak after the stage (what the host gets)       sus    RMS of both channels after the stage, 0.3 .. 2.0 s after the strike (dBFS)
 //   mom      loudest 400 ms after the stage (BS.1770 K-weighted momentary loudness, LUFS; K-weighting coefficients of 48 kHz, so --sr 48000)
@@ -97,7 +97,7 @@ double momentaryMax (const std::vector<float>& L, const std::vector<float>& R, d
     return -0.691 + 10.0 * std::log10 (std::max (best, 1e-20));
 }
 
-Result run (const ParamValues& values, const StateContent& content, const Quality& q, const IContentStore* store, const Gesture& g, double sr, double hold, float gainDb)
+Result run (const ParamValues& values, const StateContent& content, const Quality& q, const IContentStore* store, const Gesture& g, double sr, double hold, float gainDb, bool limiter)
 {
     auto engine = createEngine (EngineKind::own);
     engine->prepare (sr, kBlock, q);
@@ -106,7 +106,7 @@ Result run (const ParamValues& values, const StateContent& content, const Qualit
         engine->setParam (paramTable()[i].id, values.plain[i]);
     engine->setContent (content);
     OutputStage stage;
-    stage.setLimiter (true);
+    stage.setLimiter (limiter);
     stage.prepare (sr);
     stage.setGainDb (gainDb);
     stage.reset();
@@ -193,7 +193,8 @@ int main (int argc, char** argv)
     std::string presets, contentDir, profileText = "low", filter;
     float gain = kMakeupGainDb;
     double sr = 48000.0, hold = 3.0;
-    std::vector<int> note { 48 }, chord { 36, 48, 55, 60 }, chordS { 48, 55, 60, 64 }, chord6 { 36, 43, 48, 55, 60, 64 };
+    std::vector<int> note { 48 }, chord { 36, 48, 55, 60 }, chordS { 48, 55, 60, 64 }, chord6 { 36, 43, 48, 55, 60, 64 }, chord8 { 36, 43, 48, 52, 55, 60, 64, 67 };
+    bool limiter = false;
     for (int i = 1; i < argc; ++i)
     {
         const std::string a = argv[i];
@@ -207,6 +208,8 @@ int main (int argc, char** argv)
         else if (a == "--chord") chord = parseKeys (next());
         else if (a == "--chord6") chord6 = parseKeys (next());
         else if (a == "--chord-stock") chordS = parseKeys (next());
+        else if (a == "--chord8") chord8 = parseKeys (next());
+        else if (a == "--limiter") limiter = next() == "on";
         else if (a == "--hold") hold = std::atof (next().c_str());
         else if (a == "--sr") sr = std::atof (next().c_str());
         else
@@ -239,7 +242,7 @@ int main (int argc, char** argv)
             files.push_back (e.path());
     std::sort (files.begin(), files.end());
     const Gesture gestures[] = { { "note_v127", note, 1.0f }, { "note_v100", note, 100.0f / 127.0f }, { "chord_v127", chord, 1.0f }, { "chord_v100", chord, 100.0f / 127.0f },
-                                 { "chord6_v127", chord6, 1.0f },
+                                 { "chord6_v127", chord6, 1.0f }, { "chord8_v127", chord8, 1.0f },
                                  { "chordS_v127", chordS, 1.0f }, { "chordS_v100", chordS, 100.0f / 127.0f } };
     for (const auto& f : files)
     {
@@ -263,7 +266,7 @@ int main (int argc, char** argv)
         all.push_back ({ "chordG_v127", { gk, gk + 4, gk + 7, gk + 12 }, 1.0f, 1.0 });   // held 1 s and released, as the gate plays it
         for (const Gesture& g : all)
         {
-            const Result r = run (values, content, q, store.get(), g, sr, hold, gain);
+            const Result r = run (values, content, q, store.get(), g, sr, hold, gain, limiter);
             std::printf (",\"%s\":{\"raw\":%.3f,\"pre\":%.3f,\"post\":%.3f,\"sus\":%.3f,\"mom\":%.3f,\"gr_max\":%.3f,\"engaged\":%.4f,\"early\":%.3f}", g.name, r.raw, r.pre, r.post, r.sus, r.mom, r.grMax, r.engaged, r.early);
         }
         std::printf ("}\n");

@@ -179,6 +179,7 @@ TEST (output_stage_on_every_factory_preset)
                 for (int gi = 0; gi < kGainCount; ++gi)
                 {
                     OutputStage st;
+                    st.setLimiter (true);   // the user's opt-in: the limiter must hold the ceiling at any gain
                     st.prepare (kSr);
                     st.setGainDb (kGains[gi]);
                     st.reset();
@@ -269,20 +270,24 @@ double targetOf (const std::string& text, const std::string& key, const std::str
 }
 } // namespace
 
-// The levelling to the stock MPC instruments (scripts/level-to-stock.py, docs/release/LEVELLING-STOCK-2026-11-19.md), at kMakeupGainDb with the limiter on, Key 61 and XL profiles,
-// the gestures of the levelling (0.3 s of silence, then held 3 s, velocity 127):
-// (a) the loudness: the quantity the levelling sets, the mean of a preset's dB errors against its category's stock medians over both profiles (Bass, Lead, Pad, FX: note
-//     peak, note sustained, sustained of the four note chord in the stock voicing 48 55 60 64, RMS 0.3 .. 2 s, a silent one left out; Keys, Pluck: the note peak), within
-//     3 dB for every preset but those the levelling holds back by its limits (kHeldBack: the limiter budget, the raw peak or the top of master.volume; the document says why);
-//     the single windows (each error within 3 dB) are counted and printed, not asserted: the stock instruments' note / chord / sustain ratios differ from ours;
-// (b) the limiter budget: on both four note chords (48 55 60 64 and ours, 36 48 55 60) at most 3 dB of reduction and at most 25 % of the blocks reduced, for at least 90 %
-//     of the renders; never a sample above the ceiling.
-// The presets the levelling holds back by its limits (filled from the report of scripts/level-to-stock.py; the reason per preset is in the document).
-const std::string kHeldBack[] = {
-    "808 Boom", "Breath of Machines", "EMS Squelch Bass", "Infinite Horizon", "Lorenz Garden", "Plucked Lead Tone", "Punchy Pluck Bass", "Shepard Ascent",
-    "Sub Drop Boom",          // the raw-peak limit (1.4 of full scale) on a chord or the note: their sustained part is quieter against their peak than the stock median's
-    "Game Over Zap",          // the limiter budget on its four note chord
-    "Bode Barber Riser",      // at the top of master.volume (+6 dB): a riser, quiet in the 0.3 .. 2 s window
+// The levelling to the stock MPC instruments (scripts/level-to-stock.py, docs/release/LEVELLING-STOCK-2026-11-19.md) with the DEFAULT stage of the shells (kMakeupGainDb, the
+// limiter off: no latency, no dynamics), Key 61 and XL profiles, the gestures of the levelling (0.3 s of silence, then held 3 s, velocity 127):
+// (a) the hard peak rule: the four note chord in both voicings (48 55 60 64, 36 48 55 60), the six note (36 43 48 55 60 64) and the eight note chord (36 43 48 52 55 60 64 67)
+//     peak at most -1.0 dBFS at the stage output, for every preset (so a host meter never reaches its over-0 segment without a limiter);
+// (b) the loudness: the mean of a preset's dB errors against its category's stock medians over both profiles (Bass, Lead, Pad, FX: note peak, note sustained, sustained of
+//     the stock-voiced chord, RMS 0.3 .. 2 s, a silent one left out; Keys, Pluck: the note peak), within 3 dB for every preset but those the levelling holds back by its
+//     limits (kHeldBack); the single windows are counted and printed, not asserted.
+// The presets the levelling holds back by its limits (from the report of scripts/level-to-stock.py; the reason per preset is in the document).
+const std::string kHeldBack[] = {   // 65 presets, all held by the hard peak rule on a chord (our chords peak 9 to 10 dB over our notes, the stock ones 2 to 8 dB)
+    "808 Boom", "Acid Saw Reso", "B3 Drawbar Organ", "Bell Chime Lead", "Bell FM Ripple Lead", "Bode Barber Riser", "Bowed MPE Strings", "Bowed Pressure Strings",
+    "Brass Swell Ensemble", "Breath of Machines", "Cathedral Choir", "Celesta Bells", "Comb Reso Swell", "Custom Shape Wobble", "Dark Cinema Drone", "Deep Sea Ambient",
+    "Diffusor Cloud Pad", "Dirty Peak Lead", "Drawbar Organ Keys", "Dream Grand Piano", "Dual Octave Hero", "EMS Squelch Bass", "Ethereal Glass", "FM Soft Organ",
+    "Fast Arp Bass", "Frozen Aurora", "Game Over Zap", "Glass Organ Tones", "Glass Zone Bells", "Golden Dawn Pad", "Harmonic Cloud", "Harpsichord Bar",
+    "Hyper Dimension Pad", "Infinite Horizon", "Just Intonation Keys", "Laser Beam Lead", "Lorenz Garden", "Lush Analog Pad", "Marimba Layer Keys", "Moog Ladder Bass",
+    "Muted Honky Tonk", "Odd Harmonics Pad", "Pitch Drop 808", "Plucked Lead Tone", "Pulse Width Mod Lead", "Punchy Pluck Bass", "Radiant Pulse Pad", "Shepard Ascent",
+    "Slow Motion Waves", "Space Odyssey Pad", "Starlight Shimmer", "Stretched Glass Choir", "Sub Drop Boom", "Subtle Tape Drift", "Sync Cry Lead", "Throat Singer Drone",
+    "Tine Glass Keys", "Twin Warp Lead", "Utility Width Keys", "Velvet Strings", "Vibraphone Bars", "Vintage Brass Pad", "Vintage Electric Tine", "Vowel Choir Pad",
+    "Warm Toy Piano",
 };
 
 TEST (output_stage_presets_sit_at_the_stock_level)
@@ -294,29 +299,24 @@ TEST (output_stage_presets_sit_at_the_stock_level)
     const auto presets = loadPresets();
     DirectoryContentStore store (SYNTHYBOY_TEST_CONTENT_STORE);
     const char* profiles[] = { "low", "high,voices=16,control=economy" };
-    struct Played { double peak = 0, sus = -200, grMax = 0, share = 0; };
+    struct Played { double peak = 0, sus = -200; };
     auto play = [&] (const Preset& p, const Quality& q, const std::vector<int>& keys) {
         std::vector<float> L, R;
         renderRaw (p, q, &store, keys, L, R, 3.0, 0.0);
-        OutputStage st;
+        OutputStage st;   // the default: the limiter off
         st.prepare (kSr);
         st.setGainDb (kMakeupGainDb);
         st.reset();
+        CHECK (! st.limiter() && st.latencySamples() == 0);
         Played r;
-        int engaged = 0, blocks = 0;
         double pk = 0;
         for (size_t o = 0; o + kBlock <= L.size(); o += kBlock)
         {
             st.process (L.data() + o, R.data() + o, kBlock);
-            const double gr = st.gainReductionDb();
-            r.grMax = std::max (r.grMax, gr);
-            engaged += gr > 0.01;
-            ++blocks;
             for (size_t i = o; i < o + kBlock; ++i)
                 pk = std::max ({ pk, static_cast<double> (std::fabs (L[i])), static_cast<double> (std::fabs (R[i])) });
         }
         r.peak = 20.0 * std::log10 (std::max (pk, 1e-10));
-        r.share = static_cast<double> (engaged) / blocks;
         double e = 0;
         const size_t a = static_cast<size_t> (0.3 * kSr), b = std::min (L.size(), static_cast<size_t> (2.0 * kSr));
         for (size_t i = a; i < b; ++i)
@@ -324,7 +324,8 @@ TEST (output_stage_presets_sit_at_the_stock_level)
         r.sus = 10.0 * std::log10 (std::max (e / (2.0 * static_cast<double> (b - a)), 1e-20));
         return r;
     };
-    long windows = 0, windowsOutside = 0, outside = 0, chords = 0, inBudget = 0, overCeiling = 0;
+    long windows = 0, windowsOutside = 0, outside = 0, chords = 0, overHard = 0, overFull = 0;
+    double worst = -200;
     Quality qs[2];
     for (int k = 0; k < 2; ++k)
     {
@@ -341,7 +342,7 @@ TEST (output_stage_presets_sit_at_the_stock_level)
         int n = 0;
         for (int k = 0; k < 2; ++k)
         {
-            const Played note = play (p, qs[k], { 48 }), chordS = play (p, qs[k], { 48, 55, 60, 64 }), chordO = play (p, qs[k], { 36, 48, 55, 60 });
+            const Played note = play (p, qs[k], { 48 }), chordS = play (p, qs[k], { 48, 55, 60, 64 });
             auto err = [&] (double v, const char* key) {
                 const double t = targetOf (targets, key, p.category);
                 CHECK (std::isfinite (t));
@@ -359,11 +360,17 @@ TEST (output_stage_presets_sit_at_the_stock_level)
                 if (chordS.sus > -80.0)
                     err (chordS.sus, "sustain_chord_v127");
             }
-            for (const Played* c : { &chordS, &chordO })
+            const Played others[] = { play (p, qs[k], { 36, 48, 55, 60 }), play (p, qs[k], { 36, 43, 48, 55, 60, 64 }), play (p, qs[k], { 36, 43, 48, 52, 55, 60, 64, 67 }) };
+            for (const Played* c : { &chordS, &others[0], &others[1], &others[2] })
             {
                 ++chords;
-                inBudget += c->grMax <= 3.05 && c->share <= 0.25;
-                overCeiling += c->peak > 20.0 * std::log10 (static_cast<double> (OutputStage::kCeiling)) + 1e-4;
+                worst = std::max (worst, c->peak);
+                overFull += c->peak > 0.0;
+                if (c->peak > -1.0 + 1e-6)
+                {
+                    ++overHard;
+                    std::printf ("  over -1 dBFS: %s (%s, %s): chord peak %.2f dBFS\n", p.name.c_str(), p.category.c_str(), profiles[k], c->peak);
+                }
             }
         }
         const double mean = sum / n;
@@ -376,9 +383,9 @@ TEST (output_stage_presets_sit_at_the_stock_level)
         if (held)
             std::printf ("  held back by the levelling's limits: %s (%s): mean error %+.2f dB\n", p.name.c_str(), p.category.c_str(), mean);
     }
-    std::printf ("  presets outside +-3 dB (mean error): %ld; single windows outside +-3 dB: %ld of %ld; four note chords within the limiter budget (at most 3 dB, at most 25 %% of the blocks): %ld of %ld (%.1f %%); above the ceiling: %ld\n",
-                 outside, windowsOutside, windows, inBudget, chords, 100.0 * static_cast<double> (inBudget) / static_cast<double> (chords), overCeiling);
+    std::printf ("  limiter off: %ld chord renders (4 notes in two voicings, 6, 8; both profiles): the highest peak %.2f dBFS, %ld above -1 dBFS, %ld above 0 dBFS; presets outside +-3 dB (mean error): %ld; single windows outside: %ld of %ld\n",
+                 chords, worst, overHard, overFull, outside, windowsOutside, windows);
+    CHECK_EQ (overHard, 0L);
+    CHECK_EQ (overFull, 0L);
     CHECK_EQ (outside, 0L);
-    CHECK (static_cast<double> (inBudget) >= 0.9 * static_cast<double> (chords));
-    CHECK_EQ (overCeiling, 0L);
 }
