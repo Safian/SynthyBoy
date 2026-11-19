@@ -32,8 +32,9 @@ target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_ENGINE_VITAL=${SY
 target_compile_options(synthyboy_mpc PRIVATE -Wall -Wextra -Wpedantic)
 
 # Output level (docs/MPC.md "Output level"): the shell output stage (shell-mpc/output_stage.h -> core/include/synthyboy/output_stage.h).
-# Empty (default): the make-up gain is synthyboy::kMakeupGainDb, the one value of every shell. A number from -24 to 24 overrides it for this build (tests, trial packages).
-set(SYNTHYBOY_MPC_OUTPUT_GAIN_DB "" CACHE STRING "MPC shell: make-up gain of the output stage in dB (empty: synthyboy::kMakeupGainDb)")
+# Empty (default): the make-up gain is synthyboy::kMakeupGainDb (-2.5 dB, factory presets levelled to stock Akai instruments),
+# the one value of every shell. A number from -24 to 24 overrides it for this build (tests, trial packages).
+set(SYNTHYBOY_MPC_OUTPUT_GAIN_DB "" CACHE STRING "MPC shell: make-up gain of the output stage in dB (empty: synthyboy::kMakeupGainDb, -2.5 dB)")
 if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB STREQUAL "")
     if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB MATCHES "^[+-]?[0-9]+(\\.[0-9]+)?$" OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB LESS -24 OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB GREATER 24)
         message(FATAL_ERROR "SYNTHYBOY_MPC_OUTPUT_GAIN_DB must be empty or a number from -24 to 24, not '${SYNTHYBOY_MPC_OUTPUT_GAIN_DB}'")
@@ -65,7 +66,7 @@ else()
 endif()
 target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_PROGRAM_GROUPS=${SYNTHYBOY_MPC_PROGRAM_GROUPS_N})
 
-# The look-ahead peak limiter after the make-up gain is the plugin setting LIMIT (default on, docs/MPC.md "Output limiter").
+# The look-ahead peak limiter after the make-up gain is the plugin setting LIMIT (default on, ceiling -0.5 dBFS, 3 ms look-ahead; docs/MPC.md "Output limiter").
 # SYNTHYBOY_MPC_OUTPUT_LIMITER=ON forces it on whatever the setting says (tests); OFF (default) leaves it to the setting.
 option(SYNTHYBOY_MPC_OUTPUT_LIMITER "MPC shell: force the output peak limiter on (else the plugin setting LIMIT decides)" OFF)
 if(SYNTHYBOY_MPC_OUTPUT_LIMITER)
