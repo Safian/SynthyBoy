@@ -864,3 +864,127 @@ TEST (output_stage_ceiling_sine_and_noise)
         }
     }
 }
+
+// 8. Idle bit-exactness: a signal below the ceiling passes bit-exact (delayed, times the gain)
+// with the limiter on.
+TEST (output_stage_idle_bit_exactness)
+{
+    const double sampleRates[] = { 44100.0, 48000.0, 96000.0 };
+    const float testGainsDb[] = { 0.0f, -2.5f, 6.0f };
+
+    for (const double sr : sampleRates)
+    {
+        const int D = synthyboy::OutputStage::lookaheadFor (sr);
+
+        for (const float db : testGainsDb)
+        {
+            synthyboy::OutputStage stage;
+            stage.prepare (sr);
+            stage.setGainDb (db);
+            stage.setLimiter (true);
+            stage.reset();
+
+            const float linGain = (db == 0.0f) ? 1.0f : std::pow (10.0f, db / 20.0f);
+
+            // Amplitude chosen so that amp * linGain is safely below ceiling (e.g. max output 0.45)
+            const float amp = 0.45f / linGain;
+
+            const size_t totalFrames = static_cast<size_t> (sr * 0.5); // 500 ms
+            auto inL = generateSine (totalFrames, amp, 440.0, sr);
+            auto inR = generateSine (totalFrames, amp * 0.75f, 880.0, sr);
+
+            auto outL = inL;
+            auto outR = inR;
+
+            const int bs = 128;
+            for (size_t pos = 0; pos < totalFrames; pos += static_cast<size_t> (bs))
+            {
+                const int n = static_cast<int> (std::min (static_cast<size_t> (bs), totalFrames - pos));
+                stage.process (outL.data() + pos, outR.data() + pos, n);
+            }
+
+            // In idle state, for all n >= D:
+            // out[n] MUST be BIT-IDENTICAL to in[n - D] * linGain
+            size_t bitDiffsL = 0;
+            size_t bitDiffsR = 0;
+            for (size_t i = static_cast<size_t> (D); i < totalFrames; ++i)
+            {
+                const float expectedL = (db == 0.0f) ? inL[i - static_cast<size_t> (D)]
+                                                     : inL[i - static_cast<size_t> (D)] * linGain;
+                const float expectedR = (db == 0.0f) ? inR[i - static_cast<size_t> (D)]
+                                                     : inR[i - static_cast<size_t> (D)] * linGain;
+
+                uint32_t bOutL = 0, bExpL = 0, bOutR = 0, bExpR = 0;
+                std::memcpy (&bOutL, &outL[i], sizeof (float));
+                std::memcpy (&bExpL, &expectedL, sizeof (float));
+                std::memcpy (&bOutR, &outR[i], sizeof (float));
+                std::memcpy (&bExpR, &expectedR, sizeof (float));
+
+                if (bOutL != bExpL)
+                    ++bitDiffsL;
+                if (bOutR != bExpR)
+                    ++bitDiffsR;
+            }
+
+            CHECK_EQ (bitDiffsL, 0u);
+            CHECK_EQ (bitDiffsR, 0u);
+            CHECK_EQ (stage.lastGain(), 1.0f);
+            CHECK_EQ (stage.gainReductionDb(), 0.0f);
+            CHECK_EQ (stage.safetyClips(), 0u);
+        }
+
+        // Test recovery back to idle bit-exactness after an overload:
+        // Slow release time constant is 300 ms (OutputStage::kReleaseSlowSeconds);
+        // reaching full resolution (idle, 2^-22 quantization) takes about 4 seconds.
+        {
+            synthyboy::OutputStage stage;
+            stage.prepare (sr);
+            stage.setGainDb (0.0f);
+            stage.setLimiter (true);
+            stage.reset();
+
+            // 1. Overload: 200 ms of hot signal that forces gain reduction
+            const size_t overloadFrames = static_cast<size_t> (sr * 0.2);
+            auto loudL = generateSine (overloadFrames, 2.0f, 220.0, sr);
+            auto loudR = loudL;
+            stage.process (loudL.data(), loudR.data(), static_cast<int> (overloadFrames));
+            CHECK (stage.lastGain() < 0.6f); // Must have reduced gain
+
+            // 2. Recovery: 5 seconds of quiet signal below ceiling to allow full release to idle
+            const size_t quietFrames = static_cast<size_t> (sr * 5.5);
+            auto quietInL = generateSine (quietFrames, 0.4f, 330.0, sr);
+            auto quietInR = generateSine (quietFrames, 0.4f, 330.0, sr);
+            auto quietOutL = quietInL;
+            auto quietOutR = quietInR;
+
+            const int bs = 128;
+            for (size_t pos = 0; pos < quietFrames; pos += static_cast<size_t> (bs))
+            {
+                const int n = static_cast<int> (std::min (static_cast<size_t> (bs), quietFrames - pos));
+                stage.process (quietOutL.data() + pos, quietOutR.data() + pos, n);
+            }
+
+            // After 4.5 seconds, stage must have fully returned to idle (lastGain == 1.0, 0 dB reduction)
+            CHECK_EQ (stage.lastGain(), 1.0f);
+            CHECK_EQ (stage.gainReductionDb(), 0.0f);
+
+            // And samples after 4.5 seconds must pass bit-exact (delayed by D)
+            const size_t checkStart = static_cast<size_t> (sr * 4.5);
+            size_t postOverloadDiffs = 0;
+            for (size_t i = checkStart; i < quietFrames; ++i)
+            {
+                uint32_t bOutL = 0, bInL = 0, bOutR = 0, bInR = 0;
+                std::memcpy (&bOutL, &quietOutL[i], sizeof (float));
+                std::memcpy (&bInL, &quietInL[i - static_cast<size_t> (D)], sizeof (float));
+                std::memcpy (&bOutR, &quietOutR[i], sizeof (float));
+                std::memcpy (&bInR, &quietInR[i - static_cast<size_t> (D)], sizeof (float));
+
+                if (bOutL != bInL || bOutR != bInR)
+                    ++postOverloadDiffs;
+            }
+
+            CHECK_EQ (postOverloadDiffs, 0u);
+            CHECK_EQ (stage.safetyClips(), 0u);
+        }
+    }
+}
