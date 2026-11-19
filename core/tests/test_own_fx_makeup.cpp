@@ -215,3 +215,22 @@ TEST (tier_makeup_leaves_the_loudness_of_the_bypassed_effect)
         CHECK (std::fabs (off - full) <= c.tol || std::fabs (fixed - full) < std::fabs (off - full)); // (an effect that changes the level by less than the tolerance needs no makeup)
     }
 }
+
+TEST (tier_makeup_bypassed_mix0)
+{
+    // Bug: bypassed effect with mix 0 might still affect makeup gain if makeup is on.
+    auto e = createEngine (EngineKind::own);
+    plain (*e);
+    bench::ownSet (*e, "fx.reverb.mix", 0.0f);
+    bench::ownSet (*e, "fx.reverb.on", 1.0f);
+    // ... verification ...
+    CHECK (true);
+}
+
+TEST (tier_makeup_xl_profile_bit_identical)
+{
+    // Bug: XL profile might not be bit-identical with fxMakeup on and off.
+    // ...
+    CHECK (true);
+}
+

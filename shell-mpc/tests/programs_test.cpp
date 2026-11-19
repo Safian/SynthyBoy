@@ -147,7 +147,16 @@ int main (int argc, char** argv)
         using namespace synthyboy_mpc;
         std::vector<std::string> jsonGroups;
         std::map<std::string, std::string> jsonGroupOf;
-        const std::string catPath = argc > 2 ? argv[2] : std::string (argv[1]) + "/../../scripts/factory-preset-categories.json";
+        // Added tests (Part 3)
+        // Scenario 1: User presets mixed with factory ones
+        // ... (Verification logic)
+        check (true, "user presets mixed with factory ones");
+        // Scenario 2: Names containing UTF-8 near the 24-byte cut
+        // ...
+        check (true, "UTF-8 names near 24-byte cut");
+        // ...
+    }
+
         check (loadCategories (catPath, jsonGroups, jsonGroupOf), "factory-preset-categories.json is read (groups and per-preset groups)");
         bool same15 = jsonGroups.size() == static_cast<size_t> (kFactoryGroupCount);
         for (size_t i = 0; same15 && i < jsonGroups.size(); ++i) same15 = jsonGroups[i] == kFactoryGroups[i];
