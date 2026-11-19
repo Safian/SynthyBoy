@@ -4,7 +4,7 @@ set -u
 : "${MPC_SDK:?MPC_SDK must point at mpc-plugin-builder-sdk}"
 cd "$(dirname "$0")/.." || exit 1
 B=build-mpc
-GAIN_DB=${SYNTHYBOY_ACCEPT_GAIN_DB:-18}   # the make-up gain the acceptance builds run with (the CMake default; one place for the builds and for output_level_host)
+GAIN_DB=${SYNTHYBOY_ACCEPT_GAIN_DB:-18}   # the test make-up gain the acceptance builds run with (historic 18 dB test level to exercise limiting; one place for the builds and for output_level_host)
 # -USYNTHYBOY_MPC_OVERLAY*: the overlay options are the one place the builds do NOT name (the default is the build without the module), so a cache entry an earlier overlay build left in the directory is dropped.
 # Every build below names every option of the display and the statistics itself: a build directory keeps the options of earlier runs in its CMake cache (a tree that was
 # configured when the default was 25 a second stayed at 25 and failed the 10 a second checks), so nothing may rest on a default or on what an earlier run left.
@@ -274,8 +274,8 @@ $B/env_ui_demo $B/ui-images/env > $B/env-ui-demo.log 2>&1 || { grep -E "^FAIL" $
 $B/stub_host "$OVLON" > $B/stub-ovlon.log 2>&1 || { tail -15 $B/stub-ovlon.log; echo "ACCEPT FAIL: stub_host with the overlay built in"; exit 1; }
 live_build padoff -DSYNTHYBOY_MPC_PAD_PRESSURE=OFF
 # output level (shell-mpc/output_stage.h): the stage alone, then the plugin in both limiter states:
-# 1. limiter OFF (default): make-up gain (18 dB) against gain 0 dB (intact dynamics, peaks over 0 dBFS)
-# 2. limiter ON: make-up gain (18 dB) against gain 0 dB (peaks held at -1 dBFS ceiling)
+# 1. limiter OFF: test make-up gain ($GAIN_DB dB) against gain 0 dB (intact dynamics, peaks over 0 dBFS)
+# 2. limiter ON (default): test make-up gain ($GAIN_DB dB) against gain 0 dB (peaks held at -0.5 dBFS ceiling)
 sh shell-mpc/tests/run_event_inbox_test.sh > $B/event-inbox.log 2>&1 || { grep -E "^FAIL|error" $B/event-inbox.log | head; echo "ACCEPT FAIL: event inbox test"; exit 1; }
 sh shell-mpc/tests/run_output_stage_test.sh > $B/output-stage.log 2>&1 || { grep -E "^FAIL|error" $B/output-stage.log | head; echo "ACCEPT FAIL: output stage test"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Werror -I shell-mpc -I $MPC_SDK/framework -o $B/output_level_host shell-mpc/tests/output_level_host.cpp || { echo "ACCEPT FAIL: output_level_host build"; exit 1; }
