@@ -203,6 +203,16 @@ enum OwnSaving : uint32_t { kOwnSavingFxMute = 1u << 0, kOwnSavingVectorFilters 
                             kOwnSavingVoiceControl = 1u << 4 };
 bool setOwnSavingsOff (IEngine& engine, uint32_t off) noexcept;
 
+#define SYNTHYBOY_HAS_VOICE_COUNT_GAIN 1
+
+constexpr float kVoiceCountAlphaDefault = 0.5f;
+
+/** Own engine only: scales the voice sum by n_eff ^ -alpha (docs/release/VOICE-COUNT-GAIN-SPEC.md). Clamped to 0 .. 1; default 0.5. False if `engine` is not an own engine. Any thread, lock free. */
+bool setOwnVoiceCountAlpha (IEngine& engine, float alpha) noexcept;
+
+/** Own engine only: the smoothed voice-count gain of the last control period (1.0 for another engine). Any thread, lock free. */
+float ownVoiceCountGain (const IEngine& engine) noexcept;
+
 enum class EngineKind
 {
     own,  // engine-own: always available
