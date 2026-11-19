@@ -593,3 +593,145 @@ TEST (output_stage_switch_crossfade_bound)
         }
     }
 }
+
+// 6. Look-ahead delay reporting: initialDelay equals the actual latency measured with an impulse
+// (idle state, limiter on) and equals 0 with limiter off.
+TEST (output_stage_lookahead_delay_reporting)
+{
+    const double sampleRates[] = { 44100.0, 48000.0, 88200.0, 96000.0, 192000.0 };
+
+    for (const double sr : sampleRates)
+    {
+        const int expectedLookahead = synthyboy::OutputStage::lookaheadFor (sr);
+
+        // Case A: Limiter ON
+        {
+            synthyboy::OutputStage stage;
+            stage.prepare (sr);
+            stage.setLimiter (true);
+            stage.setGainDb (0.0f);
+            stage.reset();
+
+            // Shell reporting (e.g. synthyboy_mpc.cpp:2307, 3199)
+            const int initialDelay = stage.limiter() ? synthyboy::OutputStage::lookaheadFor (sr) : 0;
+            CHECK_EQ (initialDelay, expectedLookahead);
+            CHECK_EQ (stage.latencySamples(), expectedLookahead);
+
+            // Measure actual latency with an impulse in idle state
+            const size_t bufSize = static_cast<size_t> (expectedLookahead + 128);
+            std::vector<float> impulseL (bufSize, 0.0f);
+            std::vector<float> impulseR (bufSize, 0.0f);
+            const float impulseAmp = 0.5f;
+            impulseL[0] = impulseAmp;
+            impulseR[0] = impulseAmp;
+
+            stage.process (impulseL.data(), impulseR.data(), static_cast<int> (bufSize));
+
+            // Find peak position
+            size_t measuredLatencyL = 0;
+            float maxValL = 0.0f;
+            for (size_t i = 0; i < bufSize; ++i)
+            {
+                if (std::fabs (impulseL[i]) > maxValL)
+                {
+                    maxValL = std::fabs (impulseL[i]);
+                    measuredLatencyL = i;
+                }
+            }
+
+            // Exactly equals lookahead and initialDelay
+            CHECK_EQ (static_cast<int> (measuredLatencyL), expectedLookahead);
+            CHECK_EQ (static_cast<int> (measuredLatencyL), initialDelay);
+            CHECK_EQ (static_cast<int> (measuredLatencyL), stage.latencySamples());
+
+            // Check bit-exact value at latency and silence everywhere else
+            CHECK_EQ (impulseL[static_cast<size_t> (expectedLookahead)], impulseAmp);
+            CHECK_EQ (impulseR[static_cast<size_t> (expectedLookahead)], impulseAmp);
+
+            size_t nonZeroSilences = 0;
+            for (size_t i = 0; i < bufSize; ++i)
+            {
+                if (i != static_cast<size_t> (expectedLookahead))
+                {
+                    if (impulseL[i] != 0.0f || impulseR[i] != 0.0f)
+                        ++nonZeroSilences;
+                }
+            }
+            CHECK_EQ (nonZeroSilences, 0u);
+        }
+
+        // Case B: Limiter OFF
+        {
+            synthyboy::OutputStage stage;
+            stage.prepare (sr);
+            stage.setLimiter (false);
+            stage.setGainDb (0.0f);
+            stage.reset();
+
+            const int initialDelay = stage.limiter() ? synthyboy::OutputStage::lookaheadFor (sr) : 0;
+            CHECK_EQ (initialDelay, 0);
+            CHECK_EQ (stage.latencySamples(), 0);
+
+            const size_t bufSize = static_cast<size_t> (expectedLookahead + 128);
+            std::vector<float> impulseL (bufSize, 0.0f);
+            std::vector<float> impulseR (bufSize, 0.0f);
+            const float impulseAmp = 0.5f;
+            impulseL[0] = impulseAmp;
+            impulseR[0] = impulseAmp;
+
+            stage.process (impulseL.data(), impulseR.data(), static_cast<int> (bufSize));
+
+            size_t measuredLatencyL = 0;
+            float maxValL = 0.0f;
+            for (size_t i = 0; i < bufSize; ++i)
+            {
+                if (std::fabs (impulseL[i]) > maxValL)
+                {
+                    maxValL = std::fabs (impulseL[i]);
+                    measuredLatencyL = i;
+                }
+            }
+
+            CHECK_EQ (static_cast<int> (measuredLatencyL), 0);
+            CHECK_EQ (static_cast<int> (measuredLatencyL), initialDelay);
+            CHECK_EQ (static_cast<int> (measuredLatencyL), stage.latencySamples());
+
+            CHECK_EQ (impulseL[0], impulseAmp);
+            CHECK_EQ (impulseR[0], impulseAmp);
+
+            size_t nonZeroSilencesOff = 0;
+            for (size_t i = 1; i < bufSize; ++i)
+            {
+                if (impulseL[i] != 0.0f || impulseR[i] != 0.0f)
+                    ++nonZeroSilencesOff;
+            }
+            CHECK_EQ (nonZeroSilencesOff, 0u);
+        }
+
+        // Case C: Small block processing across blocks
+        {
+            synthyboy::OutputStage stage;
+            stage.prepare (sr);
+            stage.setLimiter (true);
+            stage.setGainDb (0.0f);
+            stage.reset();
+
+            const int blockSize = 64;
+            const size_t totalFrames = static_cast<size_t> (expectedLookahead + 256);
+            std::vector<float> impulseL (totalFrames, 0.0f);
+            std::vector<float> impulseR (totalFrames, 0.0f);
+            impulseL[0] = 0.4f;
+            impulseR[0] = 0.4f;
+
+            for (size_t pos = 0; pos < totalFrames; pos += static_cast<size_t> (blockSize))
+            {
+                const int n = static_cast<int> (std::min (static_cast<size_t> (blockSize), totalFrames - pos));
+                stage.process (impulseL.data() + pos, impulseR.data() + pos, n);
+            }
+
+            CHECK_EQ (impulseL[static_cast<size_t> (expectedLookahead)], 0.4f);
+            CHECK_EQ (impulseR[static_cast<size_t> (expectedLookahead)], 0.4f);
+            CHECK_EQ (impulseL[0], 0.0f);
+        }
+    }
+}
