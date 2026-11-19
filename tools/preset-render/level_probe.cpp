@@ -3,16 +3,18 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_level_probe --presets DIR --content-dir DIR --profile TEXT [--gain DB] [--filter TEXT] [--note K] [--chord K,K,..] [--chord6 K,K,..] [--hold S] [--sr HZ]
+//   synthyboy_level_probe --presets DIR --content-dir DIR --profile TEXT [--gain DB] [--filter TEXT] [--note K] [--chord K,K,..] [--chord6 K,K,..] [--chord-stock K,K,..] [--hold S] [--sr HZ]
 //
 // Per preset (own engine, a fresh engine per gesture, 0.3 s of silence before the note (the smoothing of master.volume), offline, 128 frame blocks, the quality of the device profile TEXT of shell-mpc/device_profile.h, e.g. "low" = Key 61,
 // "high,voices=16,control=economy" = XL) five gestures held --hold seconds (default 3): the note (default key 48 = C3 with C4 = 60) at velocity 127 and 100, the chord (default
-// 36 48 55 60) at 127 and 100, the six note chord (default 36 43 48 55 60 64) at 127. Each through the shells' output stage (core/include/synthyboy/output_stage.h, make-up gain
+// 36 48 55 60) at 127 and 100, the six note chord (default 36 43 48 55 60 64) at 127, and the chord of the stock reference (chordS, default 48 55 60 64: the voicing the stock
+// instruments were measured with) at 127 and 100, and the chord of the preset gate (chordG: C1 for Bass, else 60, plus 4, 7, 12 semitones) at 127, released after 1 s as the gate does. Each through the shells' output stage (core/include/synthyboy/output_stage.h, make-up gain
 // --gain, default kMakeupGainDb, limiter on). One JSON object per line and preset: for every gesture
 //   raw      sample peak of the raw engine output (dBFS)            pre    raw + gain: the peak the limiter sees (dBFS)
 //   post     sample peak after the stage (what the host gets)       sus    RMS of both channels after the stage, 0.3 .. 2.0 s after the strike (dBFS)
 //   mom      loudest 400 ms after the stage (BS.1770 K-weighted momentary loudness, LUFS; K-weighting coefficients of 48 kHz, so --sr 48000)
 //   gr_max   deepest gain reduction (dB)                            engaged  share of the 128 frame blocks in which the limiter reduced at all (gainReductionDb > 0.01 dB)
+//   early    raw peak of the first 100 ms (the strike) against raw over the whole hold
 // Deterministic.
 
 #include <algorithm>
@@ -45,11 +47,12 @@ struct Gesture
     const char* name;
     std::vector<int> keys;
     float velocity;
+    double offAt = 0.0;   // seconds: the note off (0: held to the end)
 };
 
 struct Result
 {
-    double raw = -200, pre = -200, post = -200, sus = -200, mom = -200, grMax = 0, engaged = 0;
+    double raw = -200, pre = -200, post = -200, sus = -200, mom = -200, grMax = 0, engaged = 0, early = -200;
 };
 
 double db (double x) { return 20.0 * std::log10 (std::max (x, 1e-10)); }
@@ -121,11 +124,25 @@ Result run (const ParamValues& values, const StateContent& content, const Qualit
     const int blocks = static_cast<int> (std::ceil (hold * sr / kBlock));
     std::vector<float> L (static_cast<size_t> (blocks) * kBlock), R (L.size());
     Result r;
-    double rawPk = 0, postPk = 0;
+    double rawPk = 0, postPk = 0, earlyPk = 0;
+    const int earlyBlocks = static_cast<int> (0.1 * sr / kBlock);
     int engaged = 0;
     for (int b = 0; b < blocks; ++b)
     {
         std::vector<Event> ev;
+        const int offBlock = g.offAt > 0.0 ? static_cast<int> (std::ceil (g.offAt * sr / kBlock)) : -1;
+        if (b == offBlock)
+            for (int k : g.keys)
+            {
+                Event e;
+                e.frame = 0;
+                e.type = Event::NoteOff;
+                e.channel = 0;
+                e.key = static_cast<int16_t> (k);
+                e.value = 0.0f;
+                e.noteId = -1;
+                ev.push_back (e);
+            }
         if (b == 0)
             for (int k : g.keys)
             {
@@ -147,6 +164,8 @@ Result run (const ParamValues& values, const StateContent& content, const Qualit
             if (! std::isfinite (rr[i])) rr[i] = 0.0f;
             rawPk = std::max ({ rawPk, static_cast<double> (std::fabs (l[i])), static_cast<double> (std::fabs (rr[i])) });
         }
+        if (b < earlyBlocks)
+            earlyPk = rawPk;
         stage.process (l, rr, kBlock);
         for (int i = 0; i < kBlock; ++i)
             postPk = std::max ({ postPk, static_cast<double> (std::fabs (l[i])), static_cast<double> (std::fabs (rr[i])) });
@@ -155,6 +174,7 @@ Result run (const ParamValues& values, const StateContent& content, const Qualit
         engaged += gr > 0.01;
     }
     r.raw = db (rawPk);
+    r.early = db (earlyPk);
     r.pre = r.raw + gainDb;
     r.post = db (postPk);
     r.engaged = static_cast<double> (engaged) / blocks;
@@ -173,7 +193,7 @@ int main (int argc, char** argv)
     std::string presets, contentDir, profileText = "low", filter;
     float gain = kMakeupGainDb;
     double sr = 48000.0, hold = 3.0;
-    std::vector<int> note { 48 }, chord { 36, 48, 55, 60 }, chord6 { 36, 43, 48, 55, 60, 64 };
+    std::vector<int> note { 48 }, chord { 36, 48, 55, 60 }, chordS { 48, 55, 60, 64 }, chord6 { 36, 43, 48, 55, 60, 64 };
     for (int i = 1; i < argc; ++i)
     {
         const std::string a = argv[i];
@@ -186,6 +206,7 @@ int main (int argc, char** argv)
         else if (a == "--note") note = parseKeys (next());
         else if (a == "--chord") chord = parseKeys (next());
         else if (a == "--chord6") chord6 = parseKeys (next());
+        else if (a == "--chord-stock") chordS = parseKeys (next());
         else if (a == "--hold") hold = std::atof (next().c_str());
         else if (a == "--sr") sr = std::atof (next().c_str());
         else
@@ -218,7 +239,8 @@ int main (int argc, char** argv)
             files.push_back (e.path());
     std::sort (files.begin(), files.end());
     const Gesture gestures[] = { { "note_v127", note, 1.0f }, { "note_v100", note, 100.0f / 127.0f }, { "chord_v127", chord, 1.0f }, { "chord_v100", chord, 100.0f / 127.0f },
-                                 { "chord6_v127", chord6, 1.0f } };
+                                 { "chord6_v127", chord6, 1.0f },
+                                 { "chordS_v127", chordS, 1.0f }, { "chordS_v100", chordS, 100.0f / 127.0f } };
     for (const auto& f : files)
     {
         std::ifstream in (f, std::ios::binary);
@@ -235,10 +257,14 @@ int main (int argc, char** argv)
             return 1;
         }
         std::printf ("{\"name\":\"%s\",\"category\":\"%s\",\"profile\":\"%s\",\"gain\":%.2f", meta.name.c_str(), meta.category.c_str(), profileText.c_str(), gain);
-        for (const Gesture& g : gestures)
+        // the chord of the preset gate (synthyboy_preset_render: C1 for Bass, else C3 with C4 = 60, plus 4, 7, 12 semitones; its raw peak must stay under +3 dBFS)
+        const int gk = meta.category == "Bass" ? 36 : 60;
+        std::vector<Gesture> all (std::begin (gestures), std::end (gestures));
+        all.push_back ({ "chordG_v127", { gk, gk + 4, gk + 7, gk + 12 }, 1.0f, 1.0 });   // held 1 s and released, as the gate plays it
+        for (const Gesture& g : all)
         {
             const Result r = run (values, content, q, store.get(), g, sr, hold, gain);
-            std::printf (",\"%s\":{\"raw\":%.3f,\"pre\":%.3f,\"post\":%.3f,\"sus\":%.3f,\"mom\":%.3f,\"gr_max\":%.3f,\"engaged\":%.4f}", g.name, r.raw, r.pre, r.post, r.sus, r.mom, r.grMax, r.engaged);
+            std::printf (",\"%s\":{\"raw\":%.3f,\"pre\":%.3f,\"post\":%.3f,\"sus\":%.3f,\"mom\":%.3f,\"gr_max\":%.3f,\"engaged\":%.4f,\"early\":%.3f}", g.name, r.raw, r.pre, r.post, r.sus, r.mom, r.grMax, r.engaged, r.early);
         }
         std::printf ("}\n");
         std::fflush (stdout);

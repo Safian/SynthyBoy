@@ -10,13 +10,15 @@
 #                             measure, set master.volume, regenerate the presets, measure again, until no preset moves by more than 0.05 dB (writes scripts/factory-preset-levels.json)
 #   level-to-stock.py report  --measure MEASURE.jsonl [--before BEFORE.jsonl] [--targets FILE] [--md OUT.md]   tables and checks of docs/release/LEVELLING-STOCK-2026-11-19.md
 #
-# The rule (docs/release/LEVELLING-STOCK-2026-11-19.md): per preset ONE master.volume change d (dB) = the least-squares fit, equal weights, of the four dB errors
-#   (note peak v127 - target note peak), (chord peak v127 - target chord peak), on the Key 61 profile ("low") and on the XL profile ("high,voices=16,control=economy"),
-# where a peak is the peak the output stage receives (raw + make-up gain; the limiter idles at the targets, so it is also what the host receives) -> d = the mean of
-# (target - peak) over the four. master.volume is the last gain of the engine before its safety knee (+-1.8 of full scale), so a peak follows it 1:1 in dB while the raw peak
-# stays under the knee; a second round measures what the first set. Then two limits: the chord peak within 2.5 dB of its target on both profiles (CHORD_WINDOW) and no raw
-# engine peak above 1.5 of full scale (SAFE_RAW_DB). Clamped to the range of master.volume (docs/params.json: -60 .. +6 dB), rounded to 0.1 dB.
-# Gestures (synthyboy_level_probe): note key 48 (C3 with C4 = 60), chord 36 48 55 60, six note chord 36 43 48 55 60 64; velocity 127 and 100; held 3 s; 48 kHz.
+# The rule (docs/release/LEVELLING-STOCK-2026-11-19.md): per preset ONE master.volume change d (dB) = the weighted least-squares fit of the dB errors against the stock medians of
+# its category of (note peak v127), (note sustained v127), (sustained of the four note chord in the stock voicing 48 55 60 64, v127), on the Key 61 profile ("low") and on the
+# XL profile ("high,voices=16,control=economy"); equal weights; Keys and Pluck (decaying sounds) by the note peak only (PEAK_ONLY: why there); a sustained level of a
+# sound that has decayed (under -80 dBFS) is left out. A peak is what the output stage receives (raw + make-up gain), a sustained level the RMS 0.3 .. 2 s after the strike after the stage.
+# The chord PEAK is a limit, not a target: the limiter may act on a velocity 127 four note chord (both voicings, both profiles), by at most 3 dB and in at most 25 % of the
+# blocks; no raw engine peak above 1.4 of full scale (the knee starts at 1.8; the preset gate allows +3 dBFS = 1.41), the gate's own chord included. master.volume follows 1:1 in dB (the last gain before the knee); rounds measure what the last set.
+# Clamped to the range of master.volume (docs/params.json: -60 .. +6 dB), rounded to 0.1 dB.
+# Gestures (synthyboy_level_probe): note key 48 (C3 with C4 = 60), chords 36 48 55 60 (ours) and 48 55 60 64 (the stock voicing), six note chord 36 43 48 55 60 64; velocity 127 and 100;
+# held 3 s after 0.3 s of silence; 48 kHz.
 
 import argparse
 import json
@@ -36,7 +38,7 @@ PROFILES = {"low": "low", "xl": "high,voices=16,control=economy"}
 CATEGORIES = ["Bass", "Lead", "Pad", "Keys", "Pluck", "FX"]
 VOLUME_MIN, VOLUME_MAX = -60.0, 6.0
 KNEE_DB = 20 * __import__("math").log10(1.8)      # +5.11 dBFS: the engine's safety knee starts there
-SAFE_RAW_DB = 20 * __import__("math").log10(1.5)  # +3.52 dBFS: the margin the levelling keeps under it
+SAFE_RAW_DB = 20 * __import__("math").log10(1.4)  # +2.92 dBFS: the margin the levelling keeps under it (and under the +3 dBFS of the preset gate)
 
 
 def load_targets(path):
@@ -69,37 +71,77 @@ def by_preset(rows):
     return out
 
 
+# Decaying instruments (Keys, Pluck): the note peak only. Weighting the peak 2:1 against the sustained levels was tried (2026-11-19): our keys and plucks decay
+# faster than the stock ones, their 0.3 .. 2 s level lies 10 to 50 dB under the stock bar readings, the sustained errors pull the volume up until the raw-peak limit,
+# and 16 of 50 Keys and 18 of 44 Pluck note peaks ended more than 3 dB over their target (peak only: 1 of 50 and 0 of 44).
+PEAK_ONLY = ("Keys", "Pluck")
+SILENT_DB = -80.0      # a sustained level under this (the sound has decayed in the 0.3 .. 2 s window) is left out
+CEILING_DB = -0.5      # the output stage's ceiling
+LIMIT_GR_DB = 3.0      # the limiter budget: at most this reduction on a velocity 127 four note chord (either voicing) ...
+LIMIT_SHARE = 0.25     # ... and in at most this share of its blocks
+CHORDS = ("chord_v127", "chordS_v127")   # ours (36 48 55 60) and the stock voicing (48 55 60 64)
+
+
 def errors(p, targets, gain=None):
-    """The four dB errors (peak - target) of a preset; `gain` re-bases the peaks to another make-up gain (raw + gain)."""
+    """The weighted dB errors (measured - target) of the objective: note peak v127, note sustained v127, sustained of the stock-voiced chord v127, on both profiles.
+    `gain` re-bases the peaks to another make-up gain (the sustained levels move with it 1:1 too). Returns [(weight, error)]."""
     cat = p["category"]
-    e = []
+    out = []
     for prof in PROFILES:
         r = p[prof]
-        g = r["gain"] if gain is None else gain
-        e.append(r["note_v127"]["raw"] + g - targets["peak_note_v127"][cat])
-        e.append(r["chord_v127"]["raw"] + g - targets["peak_chord_v127"][cat])
-    return e
-
-
-CHORD_WINDOW = 2.5   # dB: the chord peak (velocity 127) is pulled into this window around its target after the fit (the test allows 3)
+        shift = 0.0 if gain is None else gain - r["gain"]
+        out.append((1.0, r["note_v127"]["pre"] + shift - targets["peak_note_v127"][cat]))
+        if cat in PEAK_ONLY:
+            continue
+        if r["note_v127"]["sus"] > SILENT_DB:
+            out.append((1.0, r["note_v127"]["sus"] + shift - targets["sustain_note_v127"][cat]))
+        if r["chordS_v127"]["sus"] > SILENT_DB:
+            out.append((1.0, r["chordS_v127"]["sus"] + shift - targets["sustain_chord_v127"][cat]))
+    return out
 
 
 def needed_change(p, targets, gain=None):
-    return -st.mean(errors(p, targets, gain))
+    e = errors(p, targets, gain)
+    return -sum(w * x for w, x in e) / sum(w for w, _ in e)
 
 
-def constrained_change(p, targets):
-    """The fit, then two limits: the velocity 127 chord peak within CHORD_WINDOW of its target on both profiles (the stock chord / note ratio differs from ours for many
-    presets: the chord wins), and no raw engine peak (note, chord, six note chord, velocity 127) above SAFE_RAW_DB (1.5 of full scale, under the knee at 1.8)."""
+GATE_LIMIT_DB = 2.85   # the preset gate (synthyboy_preset_render) fails a raw peak above +3 dBFS; the levelling keeps 0.15 dB under it
+
+
+def gate_peaks(gate, content_dir):
+    """The raw peaks of the preset gate's own renders (synthyboy_preset_render, own engine, tiers low / medium / high: its single note and its chord; the highest of the
+    tiers), by preset name. Its gestures differ from the probe's (velocity 0.8 and 1.0, 1 s chord with a release, 256 frame blocks, no silence first)."""
+    r = subprocess.run([gate, "--presets", PRESETS, "--engine", "own", "--content-dir", content_dir], capture_output=True, text=True)
+    by_file = {}
+    for line in r.stdout.splitlines():
+        w = line.split()
+        if len(w) >= 4 and w[0].endswith(".sbpreset"):
+            by_file[w[0]] = max(by_file.get(w[0], -200.0), float(w[2]), float(w[3]))
+    names = {}
+    for cat in CATEGORIES:
+        d = os.path.join(PRESETS, cat)
+        for f in sorted(os.listdir(d)):
+            if f.endswith(".sbpreset"):
+                with open(os.path.join(d, f), "r", encoding="utf-8") as fh:
+                    names[json.load(fh)["meta"]["name"]] = by_file.get(f)
+    return names
+
+
+def constrained_change(p, targets, gate_peak=None):
+    """The fit, then the limits: the limiter budget on both four note chords (velocity 127, both profiles: the peak it sees at most LIMIT_GR_DB over the ceiling;
+    a chord whose limiter acted in more than LIMIT_SHARE of the blocks goes down by 0.3 dB per round) and no raw engine peak above SAFE_RAW_DB."""
     d = needed_change(p, targets)
-    cat = p["category"]
-    ce = [p[x]["chord_v127"]["pre"] - targets["peak_chord_v127"][cat] for x in PROFILES]
-    hi = min(CHORD_WINDOW - e for e in ce)
-    lo = max(-CHORD_WINDOW - e for e in ce)
-    # the two profiles more than twice the window apart (an effect the Key 61 skips carries the peak): the middle, so both miss by the same
-    d = (lo + hi) / 2 if lo > hi else min(max(d, lo), hi)
-    raw = max(p[x][g]["raw"] for x in PROFILES for g in ("note_v127", "chord_v127", "chord6_v127"))
-    return min(d, SAFE_RAW_DB - 0.05 - raw)
+    for prof in PROFILES:
+        for g in CHORDS:
+            r = p[prof][g]
+            d = min(d, CEILING_DB + LIMIT_GR_DB - 0.1 - r["pre"])
+            if r["engaged"] > LIMIT_SHARE:
+                d = min(d, -0.3)   # over the share: a small step down per round (a larger one swings back and forth with the fit)
+    raw = max(p[x][g]["raw"] for x in PROFILES for g in ("note_v127", "chord_v127", "chordS_v127", "chord6_v127", "chordG_v127"))
+    d = min(d, SAFE_RAW_DB - 0.05 - raw)
+    if gate_peak is not None:
+        d = min(d, GATE_LIMIT_DB - gate_peak)
+    return d
 
 
 def current_levels():
@@ -115,7 +157,7 @@ def cmd_gains(a):
     best = None
     for g in a.candidates:
         d = sorted(needed_change(p, targets, g) for p in ps.values())
-        over = [n for n, p in ps.items() if levels[n] + needed_change(p, targets, g) > VOLUME_MAX]
+        over = [n for n, p in ps.items() if levels[n] + min(needed_change(p, targets, g), constrained_change(p, targets) - (g - p["low"]["gain"])) > VOLUME_MAX]
         under = [n for n, p in ps.items() if levels[n] + needed_change(p, targets, g) < VOLUME_MIN]
         q = st.quantiles(d, n=10)
         print("  %+5.1f dB: median %+.2f  p10 %+.2f  p90 %+.2f  min %+.2f  max %+.2f   over +6: %d %s  under -60: %d" % (g, st.median(d), q[0], q[-1], d[0], d[-1], len(over), sorted(over)[:6], len(under)))
@@ -123,7 +165,7 @@ def cmd_gains(a):
     g0 = a.candidates[0]
     med = st.median(needed_change(p, targets, g0) for p in ps.values())
     g = round((g0 + med) * 2) / 2
-    while any(levels[n] + needed_change(p, targets, g) > VOLUME_MAX for n, p in ps.items()):
+    while any(levels[n] + min(needed_change(p, targets, g), constrained_change(p, targets) - (g - p["low"]["gain"])) > VOLUME_MAX for n, p in ps.items()):
         g += 0.5
     print("rule (median change about 0, nobody above +6 dB of master.volume): kMakeupGainDb = %+.1f dB" % g)
 
@@ -138,6 +180,7 @@ def cmd_solve(a):
         if rnd == a.rounds:
             break
         levels = current_levels()
+        gates = gate_peaks(a.gate, a.content_dir) if a.gate else {}
         moved = 0.0
         new = {}
         for n, v in levels.items():
@@ -145,10 +188,10 @@ def cmd_solve(a):
             if p is None:
                 new[n] = v
                 continue
-            d = constrained_change(p, targets)
+            d = constrained_change(p, targets, gates.get(n))
             # a preset whose peaks do not follow master.volume 1:1 (an effect after the volume that depends on the level): the slope seen in the last round scales the step
             if prev is not None and n in prev and abs(applied.get(n, 0.0)) >= 0.3:
-                seen = st.mean(p[x]["chord_v127"]["pre"] - prev[n][x]["chord_v127"]["pre"] for x in PROFILES)
+                seen = st.mean(p[x]["note_v127"]["pre"] - prev[n][x]["note_v127"]["pre"] for x in PROFILES)
                 slope = min(1.5, max(0.3, seen / applied[n]))
                 d = d / slope
             nv = round(min(VOLUME_MAX, max(VOLUME_MIN, v + d)), 1)
@@ -181,64 +224,94 @@ def cmd_report(a):
     w = L.append
     w("Targets (`%s`): %s" % (os.path.relpath(a.targets, ROOT_DIR), targets.get("notes", "")))
     w("")
-    w("Make-up gain of the measurement: %+.1f dB. Peaks in dBFS after the output stage (what the host receives), sustained = RMS 0.3 .. 2.0 s after the strike, medians per category." % rows[0]["gain"])
+    w("Make-up gain of the measurement: %+.1f dB. Medians per category; peaks in dBFS after the output stage (what the host receives; the limiter's ceiling is -0.5 dBFS), "
+      "sustained = RMS 0.3 .. 2.0 s after the strike (presets silent there left out); chord = the stock voicing 48 55 60 64 unless marked \"ours\" (36 48 55 60); target in brackets." % rows[0]["gain"])
     w("")
     for prof in PROFILES:
         w("**%s profile**" % ("Key 61 (low)" if prof == "low" else "XL (high, 16 voices, economy control)"))
         w("")
-        w("| category | n | note peak v127 (target) | chord peak v127 (target) | note sustained | chord sustained | note v127-v100 (stock) | chord6 peak | limiter engaged, chord v127 (median share of blocks) |" + (" before: note / chord peak, note / chord sustained |" if before else ""))
-        w("|---|---|---|---|---|---|---|---|---|" + ("---|" if before else ""))
+        head = "| category | n | note peak | note sustained | chord sustained | chord peak | chord peak, ours | six note chord peak | note v127-v100 | chord v127-v100 |"
+        if before:
+            head += " before: note peak / note sus / chord peak / chord sus (ours, ov40 levels at +9 dB) |"
+        w(head)
+        w("|---|---|---|---|---|---|---|---|---|---|" + ("---|" if before else ""))
         for c in CATEGORIES + ["ALL"]:
             sel = [p[prof] for p in ps.values() if c == "ALL" or p["category"] == c]
-            tn = targets["peak_note_v127"].get(c) if c != "ALL" else None
-            tc = targets["peak_chord_v127"].get(c) if c != "ALL" else None
-            stockvel = (targets["peak_note_v127"][c] - targets["peak_note_v100"][c]) if c != "ALL" and "peak_note_v100" in targets else None
+            def t(key):
+                return "%.1f" % targets[key][c] if c != "ALL" else "-"
+            def tv(k1, k2):
+                return "%.1f" % (targets[k1][c] - targets[k2][c]) if c != "ALL" else "-"
             cells = [c, str(len(sel)),
-                     "%.1f (%s)" % (med(r["note_v127"]["post"] for r in sel), "%.1f" % tn if tn is not None else "-"),
-                     "%.1f (%s)" % (med(r["chord_v127"]["post"] for r in sel), "%.1f" % tc if tc is not None else "-"),
-                     "%.1f" % med(r["note_v127"]["sus"] for r in sel),
-                     "%.1f" % med(r["chord_v127"]["sus"] for r in sel),
-                     "%.1f (%s)" % (med(r["note_v127"]["pre"] - r["note_v100"]["pre"] for r in sel), "%.1f" % stockvel if stockvel is not None else "-"),
-                     "%.1f" % med(r["chord6_v127"]["post"] for r in sel),
-                     "%.1f %%" % (100 * med(r["chord_v127"]["engaged"] for r in sel))]
+                     "%.1f (%s)" % (med(r["note_v127"]["post"] for r in sel), t("peak_note_v127")),
+                     "%.1f (%s)" % (med(r["note_v127"]["sus"] for r in sel), t("sustain_note_v127")),
+                     "%.1f (%s)" % (med(r["chordS_v127"]["sus"] for r in sel), t("sustain_chord_v127")),
+                     "%.1f (%s)" % (med(r["chordS_v127"]["post"] for r in sel), t("peak_chord_v127")),
+                     "%.1f" % med(r["chord_v127"]["post"] for r in sel),
+                     "%.1f (%s)" % (med(r["chord6_v127"]["post"] for r in sel), t("peak_chord6_v127")),
+                     "%.1f (%s)" % (med(r["note_v127"]["pre"] - r["note_v100"]["pre"] for r in sel), tv("peak_note_v127", "peak_note_v100")),
+                     "%.1f (%s)" % (med(r["chordS_v127"]["pre"] - r["chordS_v100"]["pre"] for r in sel), tv("peak_chord_v127", "peak_chord_v100"))]
             if before:
                 bs = [p[prof] for p in before.values() if c == "ALL" or p["category"] == c]
-                cells.append("%.1f / %.1f, %.1f / %.1f" % (med(r["note_v127"]["post"] for r in bs), med(r["chord_v127"]["post"] for r in bs),
-                                                            med(r["note_v127"]["sus"] for r in bs), med(r["chord_v127"]["sus"] for r in bs)))
+                cells.append("%.1f / %.1f / %.1f / %.1f" % (med(r["note_v127"]["post"] for r in bs), med(r["note_v127"]["sus"] for r in bs),
+                                                            med(r["chord_v127"]["post"] for r in bs), med(r["chord_v127"]["sus"] for r in bs)))
             w("| " + " | ".join(cells) + " |")
         w("")
-    # residuals
+    # voicing
+    w("**Voicing** (Key 61, medians of ours 36 48 55 60 minus the stock voicing 48 55 60 64, dB): " + ", ".join(
+        "%s peak %+.1f / sustained %+.1f" % (c, med(p["low"]["chord_v127"]["post"] - p["low"]["chordS_v127"]["post"] for p in ps.values() if p["category"] == c),
+                                             med(p["low"]["chord_v127"]["sus"] - p["low"]["chordS_v127"]["sus"] for p in ps.values() if p["category"] == c)) for c in CATEGORIES) + ".")
+    w("")
+    w("**Chord against note** (Key 61, stock voicing, medians, dB): peak of the chord minus peak of the note, raw: " + ", ".join(
+        "%s %+.1f (strike, first 100 ms: %+.1f; stock %+.1f)" % (c, med(p["low"]["chordS_v127"]["raw"] - p["low"]["note_v127"]["raw"] for p in ps.values() if p["category"] == c),
+                                                                  med(p["low"]["chordS_v127"]["early"] - p["low"]["note_v127"]["early"] for p in ps.values() if p["category"] == c),
+                                                                  targets["peak_chord_v127"][c] - targets["peak_note_v127"][c]) for c in CATEGORIES)
+      + "; sustained chord minus note: " + ", ".join("%s %+.1f (stock %+.1f)" % (c, med(p["low"]["chordS_v127"]["sus"] - p["low"]["note_v127"]["sus"] for p in ps.values() if p["category"] == c and p["low"]["note_v127"]["sus"] > SILENT_DB),
+                                                                                   targets["sustain_chord_v127"][c] - targets["sustain_note_v127"][c]) for c in CATEGORIES) + ".")
+    w("")
+    # residuals of the objective
     res = []
     for n, p in sorted(ps.items()):
         e = errors(p, targets)
-        res.append((max(abs(x) for x in e), n, p["category"], e))
+        res.append((max(abs(x) for _, x in e), n, p["category"], p))
     big = [r for r in res if r[0] > 3.0]
-    w("Residuals (dB, after the fit; per preset the largest of note / chord on Key 61 / XL): median %.2f, p90 %.2f, max %.2f; above 3 dB: %d presets." % (
+    w("Residuals of the objective (dB; per preset the largest of its errors on both profiles): median %.2f, p90 %.2f, max %.2f; above 3 dB: %d presets." % (
         st.median(r[0] for r in res), st.quantiles([r[0] for r in res], n=10)[-1], max(r[0] for r in res), len(big)))
     w("")
     if big:
-        w("| preset | category | note error Key 61 / XL | chord error Key 61 / XL | chord - note (ours) | chord - note (target) |")
+        w("| preset | category | note peak error Key 61 / XL | note sustained error | chord sustained error | limited by |")
         w("|---|---|---|---|---|---|")
-        for m, n, c, e in sorted(big, reverse=True):
-            p = ps[n]["low"]
-            w("| %s | %s | %+.1f / %+.1f | %+.1f / %+.1f | %+.1f | %+.1f |" % (n, c, e[0], e[2], e[1], e[3], p["chord_v127"]["raw"] - p["note_v127"]["raw"],
-                                                                              targets["peak_chord_v127"][c] - targets["peak_note_v127"][c]))
+        for m, n, c, p in sorted(big, key=lambda r: -r[0]):
+            def err(prof, g, k, tk):
+                v = p[prof][g][k]
+                return (v - targets[tk][c]) if (k == "pre" or v > SILENT_DB) else None
+            f = lambda x: "-" if x is None else "%+.1f" % x
+            lim = []
+            if any(p[x][g]["pre"] >= CEILING_DB + LIMIT_GR_DB - 0.3 for x in PROFILES for g in CHORDS):
+                lim.append("limiter budget")
+            if max(p[x][g]["raw"] for x in PROFILES for g in ("note_v127", "chord_v127", "chordS_v127", "chord6_v127", "chordG_v127")) >= SAFE_RAW_DB - 0.3:
+                lim.append("raw peak")
+            w("| %s | %s | %s / %s | %s / %s | %s / %s | %s |" % (n, c, f(err("low", "note_v127", "pre", "peak_note_v127")), f(err("xl", "note_v127", "pre", "peak_note_v127")),
+                                                             f(err("low", "note_v127", "sus", "sustain_note_v127")), f(err("xl", "note_v127", "sus", "sustain_note_v127")),
+                                                             f(err("low", "chordS_v127", "sus", "sustain_chord_v127")), f(err("xl", "chordS_v127", "sus", "sustain_chord_v127")),
+                                                             ", ".join(lim) or "the spread of its own errors"))
         w("")
-    # limiter engagement, knee, profiles
-    eng = [p["low"]["chord_v127"]["engaged"] for p in ps.values()] + [p["xl"]["chord_v127"]["engaged"] for p in ps.values()]
-    share = sum(x <= 0.05 for x in eng) / len(eng)
-    w("Limiter, velocity 127 chord: engaged in at most 5 %% of the blocks for %.1f %% of the preset renders (Key 61 and XL); median share %.2f %%, p90 %.2f %%, max %.1f %%; deepest reduction max %.2f dB." % (
-        100 * share, 100 * st.median(eng), 100 * st.quantiles(eng, n=10)[-1], 100 * max(eng),
-        max(max(p[x]["chord_v127"]["gr_max"] for x in PROFILES) for p in ps.values())))
-    e6 = [p[x]["chord6_v127"]["engaged"] for p in ps.values() for x in PROFILES]
-    w("Six note chord (36 43 48 55 60 64, velocity 127): limiter engaged at all in %d of %d renders, median share %.2f %%, deepest reduction max %.2f dB." % (
-        sum(x > 0 for x in e6), len(e6), 100 * st.median(e6), max(p[x]["chord6_v127"]["gr_max"] for p in ps.values() for x in PROFILES)))
-    raw = [(max(p[x][g]["raw"] for x in PROFILES for g in ("note_v127", "chord_v127", "chord6_v127")), n) for n, p in ps.items()]
-    w("Raw engine peaks (note, chord, six note chord, velocity 127): max %+.2f dBFS (%s); above +3.52 dBFS (1.5): %d; above the knee +5.11 dBFS (1.8): %d." % (
+    for g, name in (("chord_v127", "ours, 36 48 55 60"), ("chordS_v127", "stock voicing, 48 55 60 64")):
+        gr = [p[x][g]["gr_max"] for p in ps.values() for x in PROFILES]
+        sh = [p[x][g]["engaged"] for p in ps.values() for x in PROFILES]
+        ok = sum(1 for p in ps.values() for x in PROFILES if p[x][g]["gr_max"] <= LIMIT_GR_DB + 0.05 and p[x][g]["engaged"] <= LIMIT_SHARE)
+        w("Limiter, four note chord velocity 127 (%s, 3 s): within the budget (at most %.0f dB, at most %.0f %% of the blocks) on %d of %d renders (%.1f %%); deepest reduction median %.2f, max %.2f dB; share of blocks median %.1f %%, p90 %.1f %%, max %.1f %%." % (
+            name, LIMIT_GR_DB, 100 * LIMIT_SHARE, ok, len(gr), 100.0 * ok / len(gr), st.median(gr), max(gr), 100 * st.median(sh), 100 * st.quantiles(sh, n=10)[-1], 100 * max(sh)))
+    e6 = [p[x]["chord6_v127"] for p in ps.values() for x in PROFILES]
+    w("Six note chord (36 43 48 55 60 64, velocity 127): the limiter acts in %d of %d renders; deepest reduction median %.2f, max %.2f dB; share of blocks median %.1f %%, max %.1f %%." % (
+        sum(r["engaged"] > 0 for r in e6), len(e6), st.median(r["gr_max"] for r in e6), max(r["gr_max"] for r in e6), 100 * st.median(r["engaged"] for r in e6), 100 * max(r["engaged"] for r in e6)))
+    post = max(p[x][g]["post"] for p in ps.values() for x in PROFILES for g in ("note_v127", "chord_v127", "chordS_v127", "chord6_v127", "chordG_v127"))
+    w("Highest sample the host receives on any of these gestures: %.2f dBFS (the ceiling)." % post)
+    raw = [(max(p[x][g]["raw"] for x in PROFILES for g in ("note_v127", "chord_v127", "chordS_v127", "chord6_v127", "chordG_v127")), n) for n, p in ps.items()]
+    w("Raw engine peaks: max %+.2f dBFS (%s); above +2.92 dBFS (1.4): %d; above the knee +5.11 dBFS (1.8): %d." % (
         max(raw)[0], max(raw)[1], sum(r[0] > SAFE_RAW_DB for r in raw), sum(r[0] > KNEE_DB for r in raw)))
-    diff = sorted(((abs(p["low"]["chord_v127"]["post"] - p["xl"]["chord_v127"]["post"]), n, p["low"]["chord_v127"]["post"], p["xl"]["chord_v127"]["post"]) for n, p in ps.items()), reverse=True)
+    diff = sorted(((abs(p["low"]["chordS_v127"]["sus"] - p["xl"]["chordS_v127"]["sus"]), n, p["low"]["chordS_v127"]["sus"], p["xl"]["chordS_v127"]["sus"]) for n, p in ps.items() if p["low"]["chordS_v127"]["sus"] > SILENT_DB), reverse=True)
     far = [d for d in diff if d[0] > 1.0]
-    w("Key 61 against XL, chord peak velocity 127: median difference %.2f dB; more than 1 dB apart: %d presets%s" % (
+    w("Key 61 against XL, sustained chord velocity 127: median difference %.2f dB; more than 1 dB apart: %d presets%s" % (
         st.median(d[0] for d in diff), len(far), (": " + ", ".join("%s (%.1f / %.1f)" % (d[1], d[2], d[3]) for d in far)) if far else "."))
     text = "\n".join(L) + "\n"
     if a.md:
@@ -257,6 +330,7 @@ def main():
     s = sub.add_parser("solve")
     s.add_argument("--probe", required=True); s.add_argument("--content-dir", required=True); s.add_argument("--gain", type=float, required=True)
     s.add_argument("--targets", default=TARGETS_PATH); s.add_argument("--rounds", type=int, default=3); s.add_argument("--work", default="level-to-stock-work")
+    s.add_argument("--gate", help="synthyboy_preset_render: its raw peaks (every tier) are kept under +2.85 dBFS so the preset gate passes")
     r = sub.add_parser("report")
     r.add_argument("--measure", required=True); r.add_argument("--before"); r.add_argument("--targets", default=TARGETS_PATH); r.add_argument("--md")
     a = ap.parse_args()

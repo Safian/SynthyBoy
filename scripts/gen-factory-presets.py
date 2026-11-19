@@ -652,13 +652,16 @@ def load_levels() -> dict:
 
 # Category-appropriate velocity tracking (%). Replaces the global 100% quadratic default so basses, leads and pads stay
 # punchy and usable on dynamic pads/keys while keys and plucks keep wide expressive dynamics.
+# Since 2026-11-19 against the stock MPC instruments (docs/release/LEVELLING-STOCK-2026-11-19.md): their basses and leads hardly move with velocity, pads drop about
+# 3 dB and plucks about 4 dB from velocity 127 to 100. The engine scales the level by 1 - track * (1 - v^2): no change at velocity 127, at 100 track 100 % gives -4.1 dB.
+# Keys keeps 70 (the stock pianos drop 8 dB, more than this law allows: an owner item).
 CATEGORY_VELOCITY_TRACK = {
-    "Bass": 30.0,
-    "Lead": 45.0,
-    "Pad": 50.0,
+    "Bass": 5.0,
+    "Lead": 0.0,
+    "Pad": 75.0,
     "FX": 50.0,
     "Keys": 70.0,
-    "Pluck": 75.0,
+    "Pluck": 95.0,
 }
 
 
