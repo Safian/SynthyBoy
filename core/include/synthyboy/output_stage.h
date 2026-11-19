@@ -8,9 +8,11 @@
 //   p = max (|L|, |R|) after the make-up gain; the gain this sample needs is r = 1 below the ceiling, else kCeiling / p (the reciprocal by an integer seed and three Newton steps from
 //   below: no divide instruction, never above the true quotient but for rounding, which a margin of 2^-20 under the ceiling covers);
 //   h = the minimum of r over the last W = D + 1 samples (D = the look-ahead in samples; a streaming van Herk / Gil-Werman minimum: O(1) per sample, one pass of W every W samples);
-//   (kept as the reduction 1 - gain: fine resolution near no reduction) the envelope follows h down at once and back up with a program-dependent release: a one pole whose rate is
-//   crossfaded from kReleaseFastSeconds to kReleaseSlowSeconds by a weight s that rises (time constant kSustainSeconds) while an overload was seen within the last kOverloadHoldSeconds and
-//   falls (kSustainFallSeconds) when none was: a drum hit releases fast, a held chord or a bass held over the ceiling releases slowly (no gain movement at the rate of the waveform);
+//   (kept as the reduction 1 - gain: fine resolution near no reduction) a two-stage release: the SLOW stage is the reduction a lasting overload needs: it rises towards h at a rate
+//   scaled by a weight s that measures how long the overload has lasted (s rises with kSustainSeconds while overloads come within kOverloadHoldSeconds, falls with kSustainFallSeconds),
+//   and falls with kReleaseSlowSeconds; the FAST stage follows h down at once and releases with kReleaseFastSeconds, but only down to the slow stage. A drum hit hardly moves the
+//   slow stage and recovers fast; a held chord or bass brings the slow stage to the reduction its crests need, so the gain does not move at the rate of the waveform, and its release
+//   is slow; a pluck followed by a held sound recovers fast from its attack down to what the held part needs (no loudness inversion as the make-up gain rises);
 //   the gain is env quantised down to 2^-22 and smoothed by two cascaded moving averages of B1 and B2 samples (B1 + B2 - 1 = W): the attack is an S-shaped ramp over the look-ahead that
 //   ends exactly at the peak (every value the two averages see is at most the r of the sample that leaves the delay line then), so the limited signal never needs the safety clip.
 // The output is the delayed sample times that gain; a gain of exactly 1 passes the delayed sample untouched (bit-identical, only delayed by D). While nothing needs a reduction (idle)
@@ -49,8 +51,9 @@ public:
     static constexpr float kLookaheadSeconds = 0.003f;      // 3 ms: 132 samples at 44.1 kHz, 144 at 48 kHz, 288 at 96 kHz
     static constexpr float kReleaseFastSeconds = 0.030f;    // a single transient (with the hold and the weight it measures about 45 ms)
     static constexpr float kReleaseSlowSeconds = 0.300f;    // a sustained overload
-    static constexpr float kSustainSeconds = 0.300f;        // time constant of the crossfade weight between the two while an overload goes on (rises)
-    static constexpr float kSustainFallSeconds = 0.600f;    // ... and after it (falls): the release after a long overload stays slow to its end
+    static constexpr float kSlowAttackSeconds = 0.020f;     // how fast the slow stage takes on the reduction of a lasting overload (scaled by the weight s)
+    static constexpr float kSustainSeconds = 0.300f;        // the weight s: how long the overload has lasted (rises with this time constant while overloads come within kOverloadHoldSeconds)
+    static constexpr float kSustainFallSeconds = 0.300f;    // ... and falls with this one when they stop
     static constexpr float kOverloadHoldSeconds = 0.025f;   // an overload within this time counts as still going on (longer than half a period of 20 Hz)
     static constexpr float kGainSmoothingSeconds = 0.020f;  // the make-up gain after setGainDb
     static constexpr float kSwitchFadeSeconds = 0.010f;     // the crossfade of setLimiter
@@ -87,6 +90,7 @@ public:
         cSlow = static_cast<float> (std::exp (-1.0 / (kReleaseSlowSeconds * rate)));
         sRise = static_cast<float> (std::exp (-1.0 / (kSustainSeconds * rate)));
         sFall = static_cast<float> (std::exp (-1.0 / (kSustainFallSeconds * rate)));
+        kBaseAttack = static_cast<float> (1.0 - std::exp (-1.0 / (kSlowAttackSeconds * rate)));
         smCoef = static_cast<float> (std::exp (-1.0 / (kGainSmoothingSeconds * rate)));
         holdN = static_cast<int> (std::lround (kOverloadHoldSeconds * rate));
         fadeInc = static_cast<float> (1.0 / std::max (1.0, std::round (kSwitchFadeSeconds * rate)));
@@ -114,6 +118,7 @@ public:
         sum1 = static_cast<uint32_t> (B1) * kQ;
         sum2 = full2;
         red = 0.0f;
+        base = 0.0f;
         s = 0.0f;
         since = holdN;
         calm = 0;
@@ -230,15 +235,25 @@ private:
             s = 1.0f + (s - 1.0f) * sRise;
         else
             s = s * sFall;
+        // the slow stage: the reduction a lasting overload needs. It follows hr up at a rate that grows with s (a single hit hardly moves it, a held chord or bass brings it to the
+        // reduction its crests need within some tens of milliseconds) and back down with the slow release
+        if (hr > base)
+            base += (hr - base) * (kBaseAttack * s);
+        else
+        {
+            base = hr + (base - hr) * cSlow;
+            if (base - hr < kSnap)
+                base = hr;
+        }
+        // the fast stage: down at once to what this sample needs, back up with the fast release, but not above the slow stage
         if (hr >= red)
             red = hr;
         else
         {
-            const float u = 1.0f - s, u2 = u * u;
-            const float c = cFast + (cSlow - cFast) * (1.0f - u2 * u2);   // the weight 1 - (1 - s)^4: the slow rate holds while s is high (a crossfade of the coefficients alone is ruled by the fast rate)
-            red = hr + (red - hr) * c;
-            if (red - hr < kSnap)
-                red = hr;
+            const float fl = std::max (hr, base);
+            red = fl + (red - fl) * cFast;
+            if (red - fl < kSnap)
+                red = fl;
         }
         // the gain quantised DOWN to 2^-22: the reduction rounded up
         const float rq22 = red * static_cast<float> (kQ);
@@ -256,7 +271,7 @@ private:
         if (++i2 == B2)
             i2 = 0;
         const float g = sum2 == full2 ? 1.0f : static_cast<float> (sum2) * invScale2;
-        if (hr == 0.0f && red == 0.0f)
+        if (hr == 0.0f && red == 0.0f && base == 0.0f)
         {
             if (++calm >= W && sum2 == full2)
             {
@@ -444,7 +459,7 @@ private:
     int i1 = 0, i2 = 0, B1 = 1, B2 = 1, shift1 = 0;
     float invScale2 = 1.0f;
     // envelope, release crossfade
-    float red = 0.0f, s = 0.0f, cFast = 0.0f, cSlow = 0.0f, sRise = 0.0f, sFall = 0.0f;
+    float red = 0.0f, base = 0.0f, s = 0.0f, cFast = 0.0f, cSlow = 0.0f, sRise = 0.0f, sFall = 0.0f, kBaseAttack = 0.0f;
     int since = 0, holdN = 1, calm = 0, D = 1, W = 2;
     bool idle = true;
     // make-up gain, switch
