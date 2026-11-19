@@ -140,7 +140,7 @@ class TestNaming(unittest.TestCase):
             self.assertTrue(stem.startswith(f"{number:03d}-{cword}-"))
 
     def test_no_host_visible_name_ends_with_a_star(self):
-        """The "modified" mark (" *") is gone by design (docs/MPC.md "Program name"): no factory preset name, no generated .xpl
+        """The "modified" mark (" *") is gone by design (docs/MPC.md "Q proxies"): no factory preset name, no generated .xpl
         (file name, <preset> name, chunk name) and no content pack entry ends with "*"."""
         presets_dir = REPO / "content" / "presets"
         cats = gen.preset_categories(presets_dir)

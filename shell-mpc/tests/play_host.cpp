@@ -196,7 +196,7 @@ int main (int argc, char** argv)
         check (ok, "the selectors are stepped integers 0 .. n - 1 (displayed as 1 .. n)");
     }
     {
-        // no mark of a changed program in any name the host reads (removed by design: docs/MPC.md "Program name")
+        // no mark of a changed program in any name the host reads (removed by design: docs/MPC.md "Q proxies")
         AEffect* pm = make();
         char nm[64] = {};
         auto endsWithStar = [] (const char* n) { std::string t = n; while (! t.empty() && t.back() == ' ') t.pop_back(); return ! t.empty() && t.back() == '*'; };

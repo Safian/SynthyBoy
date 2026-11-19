@@ -34,7 +34,7 @@
 5. **Mi NEM változott / ismert korlátok (review-fókusz):**
    - `core/src/param_table.cpp` (`master.volume` default `-12.0f`) és `docs/params.json` (`stateVersion: 4`) szándékosan változatlan a frozen v2 golden hash tesztek miatt (`test_new_keys.cpp:182`, `test_state_v3.cpp`, `test_name_preset_macros.py`).
    - `work/sound-batch-3` szándékosan nincs még mergelve (előbb a 160-as alapkészlet lezárása volt a cél).
-   - `shell-mpc/synthyboy_mpc.cpp` `effSetChunk` → `setProgramModified(true)` (`.xpl` betöltéskor azonnali `*` jelölés) még nyitott review pont.
+   - `shell-mpc/synthyboy_mpc.cpp` `effSetChunk` → `setProgramModified(true)` (`.xpl` betöltéskor azonnali `*` jelölés) megoldva: a `*` jelölés végleg megszűnt (owner döntés, 2026-11-19; `setProgramModified` eltávolítva).
    - `synthyboy_test_release_scripts` 3 korábbi skin-layout tesztje (`test_mpc_skin_names`, `test_mpc_skin_osc`, `test_mpc_skin_subtabs`) a `feature/mpc-overlay` ágról örökölt, változatlanul bukó teszt.
    - Desktop VST3/AU (JUCE) bináris nem lett lokálisan újrafordítva (a `shell-clap` tesztek és a `ShellOutputStage` fejléc-kompatibilitás futott).
    - `scripts/factory-preset-levels.json`: 14 halkabb/rövid pluck patch `+6.0 dB`-en clampelt (`0.3..2.9 dB` shortfall a `-12.5 LUFS` célhoz képest).
@@ -200,6 +200,7 @@ A repóban **komoly ág- és worktree-felhalmozódás** van (~65 lokális ág, 6
 
 8. **Gyári `.xpl` preset betöltéskor azonnal megjelenik a `" *"` (módosított) jelölés (`shell-mpc/synthyboy_mpc.cpp:2533`)**
    - A host a Sounds böngészőből `.xpl` betöltéskor `effSetChunk`-ot hív, a 2533. sor pedig feltétel nélkül beállítja: `inst->setProgramModified(true)`. Így egy érintetlen gyári preset neve mögött is rögtön `*` jelenik meg.
+   - **Megoldva (2026-11-19):** a jelölés megszűnt, `setProgramModified` eltávolítva; a régi `" *"` nevű projektek `*` nélkül töltődnek be (`stripModifiedMark`).
 
 9. **Régi projekt betöltésekor átszivárgó plugin-beállítások (`shell-mpc/synthyboy_mpc.cpp:2509-2530`)**
    - Ha egy korábbi projektben `mpcOutputLimiter=1` vagy egyedi `padPressure` / `playSel` volt, és utána olyan régebbi projektet (vagy `.xpl`-t) töltünk be, amiben ezek a kulcsok nincsenek benne, a kód az előző állapotot hagyja meg alapértelmezett visszaállítás helyett.

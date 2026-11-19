@@ -529,7 +529,7 @@ inline int programOfIndexed (const ProgramView& v, int index, int category, bool
 }
 
 /** The mark of a "modified" program that older plugin versions appended to the name ("Name *"; saved in the chunk of a project): a trailing "*" and the spaces before it are cut off. The plugin never writes the mark
-    (it is gone by design, docs/MPC.md "Program name"), but a project saved earlier still carries it, and the name is looked up in the program list. Only the trailing marks go; a "*" inside a name stays. */
+    (it is gone by design, docs/MPC.md "Q proxies"), but a project saved earlier still carries it, and the name is looked up in the program list. Only the trailing marks go; a "*" inside a name stays. */
 inline std::string stripModifiedMark (std::string name)
 {
     bool cut = false;

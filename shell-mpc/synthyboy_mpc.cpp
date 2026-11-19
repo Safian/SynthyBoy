@@ -368,7 +368,7 @@ struct PluginInstance
         noProgramName = on ? name : std::string();
     }
 #if SYNTHYBOY_MPC_OVERLAY
-    // The program name the host reads never carries a "modified" mark (removed by design, docs/MPC.md "Program name"). The host drops its own "*" when it is told to read the program name again
+    // The program name the host reads never carries a "modified" mark (removed by design, docs/MPC.md "Q proxies"). The host drops its own "*" when it is told to read the program name again
     // (audioMasterUpdateDisplay): programNameRefreshDue is set by a chunk restore, and the display thread tells the host once.
     std::atomic<bool> programNameRefreshDue { false };
 #endif
