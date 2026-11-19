@@ -42,7 +42,7 @@ TEST (output_stage_parity_mpc_desktop)
 {
     // Desktop path:
     // JUCE (shell-juce/PluginProcessor.cpp:315, 451, 485) and CLAP (shell-clap/synthyboy_clap.cpp:187, 216, 359, 383):
-    // synthyboy::OutputStage outputStage (default constructor sets kMakeupGainDb = -2.5 dB, limiter ON).
+    // synthyboy::OutputStage outputStage (default constructor sets kMakeupGainDb = -1.0 dB, limiter ON).
     // prepare(sampleRate), reset().
     //
     // MPC path:

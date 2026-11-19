@@ -32,9 +32,9 @@ target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_ENGINE_VITAL=${SY
 target_compile_options(synthyboy_mpc PRIVATE -Wall -Wextra -Wpedantic)
 
 # Output level (docs/MPC.md "Output level"): the shell output stage (shell-mpc/output_stage.h -> core/include/synthyboy/output_stage.h).
-# Empty (default): the make-up gain is synthyboy::kMakeupGainDb (-2.5 dB, factory presets levelled to stock Akai instruments),
+# Empty (default): the make-up gain is synthyboy::kMakeupGainDb (-1.0 dB, factory presets levelled to stock Akai instruments),
 # the one value of every shell. A number from -24 to 24 overrides it for this build (tests, trial packages).
-set(SYNTHYBOY_MPC_OUTPUT_GAIN_DB "" CACHE STRING "MPC shell: make-up gain of the output stage in dB (empty: synthyboy::kMakeupGainDb, -2.5 dB)")
+set(SYNTHYBOY_MPC_OUTPUT_GAIN_DB "" CACHE STRING "MPC shell: make-up gain of the output stage in dB (empty: synthyboy::kMakeupGainDb, -1.0 dB)")
 if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB STREQUAL "")
     if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB MATCHES "^[+-]?[0-9]+(\\.[0-9]+)?$" OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB LESS -24 OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB GREATER 24)
         message(FATAL_ERROR "SYNTHYBOY_MPC_OUTPUT_GAIN_DB must be empty or a number from -24 to 24, not '${SYNTHYBOY_MPC_OUTPUT_GAIN_DB}'")
