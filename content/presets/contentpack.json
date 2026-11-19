@@ -11,17 +11,17 @@
   "files": [
     {
       "path": "Bass/solid_sub.sbpreset",
-      "sha256": "caa0eb5b66145e8626e1a83d76c2f9795f0dc6897a3463e7053d8a99397365fd",
+      "sha256": "1eb0b373fd770a1ca2977578af652e5815b84e23e44255c54f86b1ab308f468b",
       "size": 50338
     },
     {
       "path": "Bass/acid_saw_reso.sbpreset",
-      "sha256": "aff7c39b12741aa111e0526f7ead34a6c107c89f5a42d84307c57fc48ade7f24",
+      "sha256": "7d8b4706e2764aefd6bd5978f8b9caa7af949a851161f7f6bfbb6f07af2ae4b8",
       "size": 50347
     },
     {
       "path": "Bass/fat_reese.sbpreset",
-      "sha256": "bdb2b938be5c8e10e7d05b1e0ed27237a3ca8c4f65520dd66417448ac0cb04aa",
+      "sha256": "db2f7e26da86d138b2801b6b37fe8a7ed4c0e1e02094fb6c5d1ca1d43bbd2fb4",
       "size": 50368
     },
     {
@@ -31,7 +31,7 @@
     },
     {
       "path": "Bass/dirty_distortion_bass.sbpreset",
-      "sha256": "a2bb8be9e3504905690b3f53a08a2fc3f1ff09de893a51d52d64d7be3388d861",
+      "sha256": "eeafe3a8c83a37709bcc3770a321e51f3aee1d8ff226e0811c226da89ae94b87",
       "size": 50359
     },
     {
@@ -41,62 +41,62 @@
     },
     {
       "path": "Bass/formant_vowel_bass.sbpreset",
-      "sha256": "059b4e9ad80781be335f564ed5543460bcdd4eec886a2ab7a7186641419ce2c3",
-      "size": 50341
+      "sha256": "d36684c6ac047830548de4410c4b498a1f759fc825c9ef71d08adf02f656567c",
+      "size": 50343
     },
     {
       "path": "Bass/harmonic_sine_bass.sbpreset",
-      "sha256": "3376f936bd30b5a2f722b6442d594a4bbc10a58c714cbce1acc1d579d2781c7e",
+      "sha256": "0d6c3639abd9959736d8dce992519aac8d4adfaf2d78bb3f2e09669d2cd2b09a",
       "size": 50351
     },
     {
       "path": "Bass/moog_ladder_bass.sbpreset",
-      "sha256": "e254589034db34193758b134b1f54f9bc562d70a8a6f0f91bf6c2690e1e48edb",
+      "sha256": "48eba4cf367589304129f312f094bfe9a6afa66118f1ff56b1416c6f4cd363a9",
       "size": 50345
     },
     {
       "path": "Bass/pulse_width_bass.sbpreset",
-      "sha256": "6938d300409abe0f946235a901bfb22e4e7f21545cea62b8d3c819d7a4477802",
+      "sha256": "a214ffdc100daaf2db0a21a11d352d727d2c5d1ce8b87327775e2ca39181a608",
       "size": 50340
     },
     {
       "path": "Bass/comb_metal_bass.sbpreset",
-      "sha256": "f2f8862934d9c9a3df134005dbe23a9507dafd7358a8997b5d4717fabfc3b85a",
+      "sha256": "f65d7e3a9aa03ee2112e56d7befce143a200a8f70c819656485f8c350b9bf9ca",
       "size": 50348
     },
     {
       "path": "Bass/diode_saturated_bass.sbpreset",
-      "sha256": "4a2a6ed3e52007ce7428ecfdeecd7f3bdf0aaaecc5aea918976c6f625fc338d4",
+      "sha256": "99d66113558ba555857c4249cb56b0a5d561f193cc4fece0d69550a69f25fac9",
       "size": 50356
     },
     {
       "path": "Bass/sync_growl_bass.sbpreset",
-      "sha256": "2016fee9ce9794207290704ba7464cb6b0d6fcbd5d62b0f200e0f0cfd9d7bd52",
+      "sha256": "b063da476876d8422b847470094355d922a75313062d86743178090cbbd532b6",
       "size": 50349
     },
     {
       "path": "Bass/click_attack_bass.sbpreset",
-      "sha256": "493427000ec8556fbeb5cc9e83bea72e9d37f6c09377e200a056e0efb71fa572",
-      "size": 50354
+      "sha256": "238a744a7b658f0972f12daf9dd0e162262849e834eb3de8bceb07313f29cbf4",
+      "size": 50356
     },
     {
       "path": "Bass/warm_analog_bass.sbpreset",
-      "sha256": "1c0e4ddeea1c3b168e871149820a3b1c95674f32331c0fa1059276f7b560d542",
-      "size": 50341
+      "sha256": "1773308f51d196a673bd9474ba39edb0faeca405be07d227e6e99026a1ad021c",
+      "size": 50339
     },
     {
       "path": "Bass/gritty_square_bass.sbpreset",
-      "sha256": "0cfd280cfc7d0c15fb18ea6a2a53c7fdd5408cc8ee848c67124f889a9eff6a70",
+      "sha256": "bf35d32173a150cfe7d3aa0016a87b07e3172af43cce4fc32758d8655b20ff04",
       "size": 50343
     },
     {
       "path": "Bass/sub_duo_octave.sbpreset",
-      "sha256": "12bf2e1d054b964ed6741807ccbc76f7e29ac90e2e39e9f61413a2176b807bbb",
+      "sha256": "e3b77e3bea04bd64586281c539c6f6ed58aa9c03336957712b61580f010268d1",
       "size": 50358
     },
     {
       "path": "Bass/odd_harmonics_bass.sbpreset",
-      "sha256": "5142eb371484f5b338cb9759856dae1ce939622fa1b4623d2e230a1569384230",
+      "sha256": "c3ea7c9f860e3aeec843b7e1ea0d3e9290c9f74ef9ed759908cc2921d3e3749d",
       "size": 50350
     },
     {
@@ -106,43 +106,43 @@
     },
     {
       "path": "Bass/space_wobble_bass.sbpreset",
-      "sha256": "c7c322e3c2ab86f4533a1e84a8ac5c1c9fa9b42c0a8ea8c1cf8f9e3bd1a92018",
+      "sha256": "5cf127f0a4ec3ce8f1d8173f646ba3c3eadb99c81017978a35db8f1d087833e5",
       "size": 50354
     },
     {
       "path": "Lead/hyper_saw_lead.sbpreset",
-      "sha256": "2902788a42766512920d787acc7ad9eeb9e1b5b02670d44bb8023659fd3f7e3a",
+      "sha256": "6e5ad9485d7abd7df4840b23a21d722e5a0829eea6ca81906e4d7baf0ccdff8e",
       "size": 50385
     },
     {
       "path": "Lead/solo_square_lead.sbpreset",
-      "sha256": "c96cceb6890466c9693c4837dfddbd44bb89ac461530177e1caa0446e0b64d71",
+      "sha256": "8122d05b6df1dda56ff86f3d275497e96459ae07f0ae6eae3d5ec1ab7572e1be",
       "size": 50348
     },
     {
       "path": "Lead/vocaloid_lead.sbpreset",
-      "sha256": "36bf96a992591e791394c30ad82833c6d337711905e0c00d1d500b79e3d97d4e",
+      "sha256": "5b4c227f8a204599b5118c05a04f3d48c61cb38654cf82c514a55b24af904482",
       "size": 50336
     },
     {
       "path": "Lead/screaming_sync_lead.sbpreset",
-      "sha256": "407da3c75e6a6707359ced07bd6475531db1de2b90504c1ba186e341bc4e9226",
-      "size": 50346
+      "sha256": "cd75ef789af09752ed3a49f50e6f62f3902a3201823819c6d2c972c6bfab6a30",
+      "size": 50347
     },
     {
       "path": "Lead/warm_vintage_lead.sbpreset",
-      "sha256": "589ff185d007997fc9e97115a19a4244a386a50603b1f5733daf0e2f64811076",
+      "sha256": "36a1db72bd34b5f001f51111d8faa3f8cf37dc58a49713df9062b6d062d318af",
       "size": 50349
     },
     {
       "path": "Lead/bell_chime_lead.sbpreset",
-      "sha256": "7c0c5080713fa913e2469a32a9abd4a6ddebe87d848b347598ab2825819acc96",
+      "sha256": "2bd32d87ff6696bd4b72d4fa6d5f6cf7cb29e45077244006cdc60d9ef98b8814",
       "size": 50349
     },
     {
       "path": "Lead/dirty_peak_lead.sbpreset",
-      "sha256": "ee937d9b5395a3cfbcf24d6ccc46b35413e7ea49030e3ae0f5d85ff526c28bfd",
-      "size": 50350
+      "sha256": "787610b91fc8a8da8ae977893752a469f533109452d23b645b788d83645ddbd9",
+      "size": 50352
     },
     {
       "path": "Lead/pulse_width_mod_lead.sbpreset",
@@ -151,58 +151,58 @@
     },
     {
       "path": "Lead/fm_digital_lead.sbpreset",
-      "sha256": "e1372487ee937f457311f05ae47a2f0ecedf4b32d03a527888225f1c2600a1c1",
-      "size": 50345
+      "sha256": "b36c915646d58bea723d10c02c6d0a692e6deb26fe233a971e46e373af89f60a",
+      "size": 50347
     },
     {
       "path": "Lead/tri_soft_solo.sbpreset",
-      "sha256": "691b0256b6825cbcaa7e0d4b42155c3ab74a1a443f99a2c748a8e90ece62d2e4",
+      "sha256": "31b27c3c3478a6df3a3b1be178a6b86768fc6e166ea455073ca67ca17e6efebd",
       "size": 50341
     },
     {
       "path": "Lead/laser_beam_lead.sbpreset",
-      "sha256": "0ec88a05d304d16fb30a8fd60cb17d942a03b2a4013f5caec932a8666ea410e8",
+      "sha256": "33f7cb560d027925c3ebc21826e672faaca115bd8506f181520f2dd385dc8958",
       "size": 50340
     },
     {
       "path": "Lead/chorused_saw_solo.sbpreset",
-      "sha256": "9982b9d824358f403a72e9dc35eb6545c52028e3b8d7697f6aa5aed507cc8543",
+      "sha256": "5deac2e9ac09e5f5e12eb26c0db2ab585e333bbe6802610eabc4a61185f57a64",
       "size": 50347
     },
     {
       "path": "Lead/dual_octave_hero.sbpreset",
-      "sha256": "304d58fcf58ab57d6c020dc74eb568601aa4d3144d301dc65d2a273371f00b66",
+      "sha256": "b19d5f103387d164aa9fa03a51bc8aace206e436c6d703cb0425170e0d86d2ee",
       "size": 50363
     },
     {
       "path": "Lead/diode_bite_lead.sbpreset",
-      "sha256": "a793e6d12169e240c6dfd7ba10344c55de1cec16eb3fcac8d9c041f69b33b914",
+      "sha256": "2ef1af91ea69b7a457c9ce329821ae5d83d4e4f4f4f9181c1be8dc0f701c182d",
       "size": 50343
     },
     {
       "path": "Lead/phaser_sweep_lead.sbpreset",
-      "sha256": "f559473ea311b3c6cc3c159870cf608c65f801043f855dc46a89660f2391b350",
-      "size": 50342
+      "sha256": "8758b744437a6c832d787c96d8ecd7b5d05e3f468ed0251df10413a31f850d67",
+      "size": 50343
     },
     {
       "path": "Lead/cosmic_drift_lead.sbpreset",
-      "sha256": "ea8e49ec56a33830fd1d4e5ed3b1f93a26a8ad188e513217a2c8290bb53f5a98",
-      "size": 50356
+      "sha256": "256bf94edd2a9a83c414a024d514d5c61c2fd04ca34c8ccb15e53730f85a184c",
+      "size": 50357
     },
     {
       "path": "Lead/staccato_bleep_lead.sbpreset",
-      "sha256": "5e1f1ef6fa1597bf92e9a80fadf11d5311955ece7b0c31018668161de1338a74",
+      "sha256": "bf177af82514abd172cd6e7ee2d469a83666fe4995c54d70aa4e83a2a960625c",
       "size": 50344
     },
     {
       "path": "Lead/harmonic_shimmer_lead.sbpreset",
-      "sha256": "f6e82b11cd12f5576d500ea69904a7b4552f27744f1a030767441a6179ad5b54",
+      "sha256": "bffc5fa08de6622a494d8e0765ed0c712b25d39f5191124f4826d414ba1a5cd5",
       "size": 50356
     },
     {
       "path": "Lead/metallic_edge_lead.sbpreset",
-      "sha256": "7c185a7baa102d56fb62fdfef650974c49ccb0ce9ce02de9bbb757e562fea8db",
-      "size": 50352
+      "sha256": "e8f74607ccb412d53b697c2edbdd48daa7bfd9440200dc1afde121f260c3391b",
+      "size": 50354
     },
     {
       "path": "Lead/plucked_lead_tone.sbpreset",
@@ -221,7 +221,7 @@
     },
     {
       "path": "Pad/dark_cinema_drone.sbpreset",
-      "sha256": "e4ff24329f872b721fac36fab5ab5c95db2cec3ec54820fa1c68086b1aa1e4f5",
+      "sha256": "5681c1c906523d9d11b7a4796d6bb17a186f517cceb537e0fe29a4f1ea2fbe99",
       "size": 50375
     },
     {
@@ -246,17 +246,17 @@
     },
     {
       "path": "Pad/space_odyssey_pad.sbpreset",
-      "sha256": "29124ab2c148ae92ba0e282756845198487e18f29ee7467f485fbb99618e7049",
+      "sha256": "f38684d0e97b34ba41b35e7df9e022b890d3bf8f1422bd1431314c6079782754",
       "size": 50362
     },
     {
       "path": "Pad/golden_dawn_pad.sbpreset",
-      "sha256": "d6503ecda1fd5a1d51dfe12d99e408c4be54c24736b534a381a95f43f9f05824",
-      "size": 50373
+      "sha256": "1f3c95aa3ac0e476e2d4ae84a26287e578bb9c06c0b27cc40343fd1366c0d1eb",
+      "size": 50374
     },
     {
       "path": "Pad/deep_sea_ambient.sbpreset",
-      "sha256": "6b6c4cba09a04c062b0e5fbaf8c9971a1bc7c1cae4422ebc281a2bbf200e5035",
+      "sha256": "4bf76f8eb6ef4f27ed485797406cc1b1ac6674c9bc20fec2a7c652cfea350b61",
       "size": 50360
     },
     {
@@ -266,8 +266,8 @@
     },
     {
       "path": "Pad/odd_harmonics_pad.sbpreset",
-      "sha256": "07370b72e8378c844a8b4c1333e62344e28a9e675d95b99b3ac447eed7b5e7e5",
-      "size": 50342
+      "sha256": "c9087633ff047c3bfc76ec1bb7054d7dfb7cfc06b6c49e8db7d813dfa91a4502",
+      "size": 50344
     },
     {
       "path": "Pad/frozen_aurora.sbpreset",
@@ -296,12 +296,12 @@
     },
     {
       "path": "Pad/gentle_flute_pad.sbpreset",
-      "sha256": "2e042e9fa2f2d5ddff12ba7f9cb0d782799e7fe56df422022f288f6e0e09a526",
+      "sha256": "16a3614637400155235afe424d3160be3a0a230c0de32350a9edbecc87d0a1b0",
       "size": 50347
     },
     {
       "path": "Pad/radiant_pulse_pad.sbpreset",
-      "sha256": "7d722c384f5f4bb4b9d1f0213b8b154cc82414f812cc232ce6233dbfa16584ff",
+      "sha256": "afbee2a5cfb6bb92456cb28ccb01992330156532d77563f228115f25a0ab85d7",
       "size": 50343
     },
     {
@@ -311,82 +311,82 @@
     },
     {
       "path": "Pluck/acoustic_style_pluck.sbpreset",
-      "sha256": "0023bc48b77c729fa1c4b547125532e93b3e67ec8aa52c8564b5db07635a270d",
+      "sha256": "0ea7b5bbf4fa8a6a96200514683a3f77be516b39104a5f69389c42b4e7b38d00",
       "size": 50358
     },
     {
       "path": "Pluck/bell_mallet_pluck.sbpreset",
-      "sha256": "6b838638bb76a95a100a3abcebc5b25f8c3ec8d8e0340fbc76323f5bad8ab485",
+      "sha256": "c4aaedd288008ae89158884e9169a4978e31abe8ff10f1282ef179a6a9f42e97",
       "size": 50352
     },
     {
       "path": "Pluck/marimba_synth.sbpreset",
-      "sha256": "b02d41eba6e02e8172676fb915ffc7fbaf0cf174f7c3ad30549f54e3db0c4a68",
+      "sha256": "db96b11da4bbd3d936a94a9d35d460b06b1ac892fa1b4cb3c9c76051090a04ee",
       "size": 50348
     },
     {
       "path": "Pluck/pizzicato_strings.sbpreset",
-      "sha256": "5ee9a2f5e91eff812434f52f2a2fd439f851824837a51ac4834ae5c9f6330d5d",
-      "size": 50374
+      "sha256": "e44c91e6408ccfd074e2df6504e40d902116329c777172bde728a7b3594b950e",
+      "size": 50376
     },
     {
       "path": "Pluck/kalimba_tines.sbpreset",
-      "sha256": "7eb3cb50120e7ab40fd5b70a0249d02a852e3dba6d2f75a9e16cba8abe0ae8b1",
-      "size": 50366
+      "sha256": "01b719537b1cc6f22930fec989821b1b7a9e5d9685251426ff27460246f08c6f",
+      "size": 50368
     },
     {
       "path": "Pluck/trance_short_pluck.sbpreset",
-      "sha256": "9686a6c82147dd9e30593f439aedd00b2818dee6c5c227873f37906a661c85f5",
-      "size": 50351
+      "sha256": "7b6aa09b3668d67f242e27c9b619af76c913ba328545715f45d5bb4281646176",
+      "size": 50353
     },
     {
       "path": "Pluck/formant_pop_pluck.sbpreset",
-      "sha256": "7e983c2ffab0c49c822cb0b4b1bd983e1b4121ad9d19c4ad754c2a370df8ec4e",
-      "size": 50342
+      "sha256": "533ea9618eb63cc08202dc26047d88f0b117ed7215524bfcce2790bf53679345",
+      "size": 50340
     },
     {
       "path": "Pluck/harp_drops.sbpreset",
-      "sha256": "0b6957b4ecd97843c671914a9ce6fc80437a7048c1a1a6e84c862840741cc1ad",
+      "sha256": "9d834dc38ed111a3907b61c91d44101a2d925e76557ca623aa56b7ec37e3fee3",
       "size": 50348
     },
     {
       "path": "Pluck/comb_zither.sbpreset",
-      "sha256": "b32f8eced97b3c67029b1fdb9d850d9c046d0a0e1d1395050d3d82aebd31bbe1",
+      "sha256": "61867eb872ca373bb5f15a964b796754780bd1d2d31849c6467bd3baa717a4eb",
       "size": 50342
     },
     {
       "path": "Pluck/chime_drop.sbpreset",
-      "sha256": "3af0e00db275f1ce3493af2b4d66778023ff9fefa5f2ea734fda98bb57a0415b",
+      "sha256": "a239d5be70d62c049e0e70d3d38efffd53da5d9137963f5da3983747fcecca0d",
       "size": 50338
     },
     {
       "path": "Pluck/harmonic_tine_pluck.sbpreset",
-      "sha256": "fdd2a0d51806310e9c8080229deac4f748373a8a33c8153fbbe5622e3e8fd9ba",
+      "sha256": "9a9342af88a36b8e4978952850bb36f53496d9c971f86c62ef3084505757febf",
       "size": 50347
     },
     {
       "path": "Pluck/electric_mute_pluck.sbpreset",
-      "sha256": "8f80b4f7c3fc27af4b18e651adbdb175af3b87b85f4d2d9c968f98a3fefdcc7f",
+      "sha256": "4f9086af13b41f001c9429bbb3d5dac0e04363cc6e18e5862a15a3ca932e76b4",
       "size": 50360
     },
     {
       "path": "Pluck/spruce_guitar.sbpreset",
-      "sha256": "68f75bfbd0312131fced977ff9fad84451f74e724b5973667b81ef68a216ee17",
+      "sha256": "a3dc1f01eb2631a19e7f5aa9d30189a4050d90f284b75d1c00f6b71225aebb81",
       "size": 50354
     },
     {
       "path": "Pluck/digital_glass_tap.sbpreset",
-      "sha256": "7d1a4d29b14190c27f98d87b4744e338fe7438be3b1b93039f4cd038651f0d4b",
+      "sha256": "4169565d89981011c5bd6debbbb4690757eb376efd17cb7a64b372bb0b1f450b",
       "size": 50341
     },
     {
       "path": "Pluck/rubber_bass_pluck.sbpreset",
-      "sha256": "7d5adec6d5eaee3c0f5d3ffc7970251ad936b6430ac5f01d247a05f5c4e14e79",
+      "sha256": "e50b31ada50643126d0b00dbc4ee462b8b041240cd6f5ca16c079b116a5df24d",
       "size": 50348
     },
     {
       "path": "Keys/vintage_electric_tine.sbpreset",
-      "sha256": "12ebeda1bc9a26e7daa794805c596fbe81f523341ca006018d62207e3842bc14",
+      "sha256": "0a061426e7864c7f94375ea37eff1e7ddc1bf2e74931f75fa6951805195b827f",
       "size": 50380
     },
     {
@@ -401,7 +401,7 @@
     },
     {
       "path": "Keys/rotary_rock_organ.sbpreset",
-      "sha256": "68a74b68ad1f35355fe73dbd78a66b4342ff5d51e2cd906171287de5eb581bc5",
+      "sha256": "2ff62ed1c4842952dc05c5480e399b3cf15dead0cf487e5d843201ccd4814855",
       "size": 50365
     },
     {
@@ -411,7 +411,7 @@
     },
     {
       "path": "Keys/clavinet_funk.sbpreset",
-      "sha256": "d0624e4b0b4aad5e0119b39b630977e213a999baf02d597868ad1919a3f58ac0",
+      "sha256": "5546f153caec355c26118bc6f149bc878a2d9fd65707f6519abfb461e8e47ddf",
       "size": 50341
     },
     {
@@ -431,22 +431,22 @@
     },
     {
       "path": "Keys/accordion_reed.sbpreset",
-      "sha256": "35d9303a9de79c7427aa8c04c7155d7b588d79b019deb20e466a73365a69c081",
+      "sha256": "6dd55c4765b74d6e7b75cfb78221c761eb760316df2b3022eb99e3a24e95899a",
       "size": 50369
     },
     {
       "path": "Keys/warm_toy_piano.sbpreset",
-      "sha256": "6be581f48a36af2d9241b9c9d039da0898ea1fbd5ed934acd7b0b4adc2ddb9e6",
+      "sha256": "513f87deb1c8802012958464b163940c36d20675a37159ef03d9059f2082ee06",
       "size": 50340
     },
     {
       "path": "Keys/glass_organ_tones.sbpreset",
-      "sha256": "e83e536dc7c59d20c67973496ffa997478f335eee1ee65f52e7b7e908fcbbe99",
+      "sha256": "2ac637cab6e44a81626cb1eb00636810ea3eaa09e197b4dbcd37981de3d47d94",
       "size": 50355
     },
     {
       "path": "Keys/lo_fi_rhodes.sbpreset",
-      "sha256": "5d19d0cc4dc7ce30f489c1562ba94c7ba1b47ab0e9f3eac88493813bda1b0a25",
+      "sha256": "f3082ba02244d716484827466f37e95b6d4e1996a75a9f490780fbe6e6fdea4c",
       "size": 50345
     },
     {
@@ -456,22 +456,22 @@
     },
     {
       "path": "Keys/dyno_electric_piano.sbpreset",
-      "sha256": "7eacf32e3600843d4568f8f179967feadd1c911e3520ce8f82f0f173ed1f69dd",
+      "sha256": "cf1e617506e69d8928322341e4ee060b09ec2a83ae27040939020e296823dd2c",
       "size": 50354
     },
     {
       "path": "FX/sci_fi_laser_sweep.sbpreset",
-      "sha256": "92f3db9b2fec1bb601c74cc1be0cfd5b38265774b13c4c4d57e304bfa5116e99",
+      "sha256": "9ecc1f7aecae6b1a1e4f9b7a2ff02559562193941a13d8f5f850b27d3039424a",
       "size": 50351
     },
     {
       "path": "FX/noise_riser.sbpreset",
-      "sha256": "6ed17b8f0357ce68d8e5af7dac0c1045e1ab6e34b5c85f7ee78eb7275d71a4dc",
-      "size": 50352
+      "sha256": "09bc7f2a4718ac5fb64dc625a7e4495ffaaff740b0ce13db89d67ebbe32c0614",
+      "size": 50354
     },
     {
       "path": "FX/metal_gong_strike.sbpreset",
-      "sha256": "0d9c8bd6e81644cd9f5df04bdfed05affcffb4d8cddf52b61205e9fd48621504",
+      "sha256": "8e719d7510f62df78d183c65d72a810fbb78efe5f71bb23f97bb3656f779efc6",
       "size": 50358
     },
     {
@@ -481,37 +481,37 @@
     },
     {
       "path": "FX/space_wind_storm.sbpreset",
-      "sha256": "5a2330ac2b4fea376f2c20fbb01814d7d9b38a4492649feec9158d09a580bbdf",
-      "size": 50361
+      "sha256": "ab7d0157b34f557755cb7e6d23de8ab818f32c6892da85db267950241ee21d0d",
+      "size": 50362
     },
     {
       "path": "FX/alien_communication.sbpreset",
-      "sha256": "34cc991d7ae7d0cb8eb1f472633ca3e3f0dc58e45d6b9edcb096f267e3edb621",
-      "size": 50354
+      "sha256": "380468d5b961126311cf6772da1f427a9d613d0e29bdea91eb7a96dfb69fa7e4",
+      "size": 50356
     },
     {
       "path": "FX/game_over_zap.sbpreset",
-      "sha256": "c34b0b315857ff4ccc61e9f61bfa7246e3b520698fac591018fcfd3e85c76a6d",
+      "sha256": "dc96d1d2cc5da278278378ff4c79fea68794dc567cdfaa35b93078263d54b3e9",
       "size": 50338
     },
     {
       "path": "FX/sonar_ping.sbpreset",
-      "sha256": "610ee3669afec733c358c7f7aeae082c761955b727cb2febcf6fd5d428e212a7",
+      "sha256": "c6b32caa6a105c4d5e70ce3fa2839bb4f03a544f326dd9b34b1b45ad7e810cfc",
       "size": 50340
     },
     {
       "path": "FX/cosmic_teleport.sbpreset",
-      "sha256": "f8db045a9e8c2be8a8a7536448ea6c0c01874a31d63ea03175b2443392861a3d",
+      "sha256": "ee0ba82c3ee21e9dbbf934f59042ccc21929c389ca9b7cce6bcaeb78052ad9a6",
       "size": 50350
     },
     {
       "path": "FX/vinyl_dust_crackle.sbpreset",
-      "sha256": "186929bfc26cb4570b6d628433e364382770854b64585f2c7597f391439d121d",
-      "size": 50362
+      "sha256": "f22113727e41c4b5184556e0b97b9c6c73baca0ddbc5d66746a303c2cc72ef1c",
+      "size": 50364
     },
     {
       "path": "Bass/scream_filter_bass.sbpreset",
-      "sha256": "ca5dad84ec5dcd6783b07e07392c06b41c2214b21b0580de3fad1608098d8a51",
+      "sha256": "165e33b812ec326f82991d59faf2db6da61ad890fff28f550ce1dfd2a926cebe",
       "size": 50399
     },
     {
@@ -526,17 +526,17 @@
     },
     {
       "path": "Lead/twin_warp_lead.sbpreset",
-      "sha256": "350381eb0a0c664a92798836c32cdcfd4fbfa18235fb208abbd27d87cc82015f",
+      "sha256": "d7292ed31f60869bb8de49a302e408ba8dcf3e602f4b0dcab31040c4cc1beaa9",
       "size": 50391
     },
     {
       "path": "Pluck/aux_keyscale_pluck.sbpreset",
-      "sha256": "d2422ecdf172e6309b31f3c7526ae5923571c3026eb18db74726cace8e2adc42",
-      "size": 50440
+      "sha256": "e9c3685f4281cd7c6e635467074799959008b9aa261473baa9766c61942c3cef",
+      "size": 50438
     },
     {
       "path": "Pad/hyper_dimension_pad.sbpreset",
-      "sha256": "b96f88fff8924b61d2f8a6096161fd245f40df6e78fb23c13f69640a18113e6e",
+      "sha256": "a45a050a7bb1e4924450f412ab1a5f2625b8aff14240f961ffc35bb8854bbb4f",
       "size": 50387
     },
     {
@@ -546,42 +546,42 @@
     },
     {
       "path": "FX/bode_shifter_drone.sbpreset",
-      "sha256": "6e77a2cf68606bea68dcc430689975ad783b8922f187008a1d416d04b0accafd",
+      "sha256": "b75a92db278c9ec5b0c5e0772bf42f6813356bb74022b06114e4181f8af1e09b",
       "size": 50418
     },
     {
       "path": "Bass/custom_shape_wobble.sbpreset",
-      "sha256": "02d62e3b59d5322114013f8db755269a2f27ff2fedc72886878f884a135ec91d",
+      "sha256": "c65c0997b5918f80d7994498a9081f84d23a4c397937ce4a9eb545e8175c9280",
       "size": 50680
     },
     {
       "path": "Lead/mpe_pressure_lead.sbpreset",
-      "sha256": "a51d5e9e6612627baa580b4b8fb0d10aefa4201ae345063ce06a01247b813d92",
+      "sha256": "52ce9d5969abbbb9b1164155f2c8c4bf71897f5a0138372ae4f320be03a82b04",
       "size": 50409
     },
     {
       "path": "Keys/just_intonation_keys.sbpreset",
-      "sha256": "3d4aa12d21e334fb84fb97d72ca7bb3bb21cacd9111a45b8e7253d28f3755202",
+      "sha256": "b8944dbdace2454097d9f7a5b9183f345d2c738580fce9cbb1b968867daa7e49",
       "size": 50389
     },
     {
       "path": "Pad/tri_band_split_texture.sbpreset",
-      "sha256": "1c99332f55ebd008a01b14f1a8f1bbe42599745c6f705677158efc1d4beb60df",
+      "sha256": "8ebd6a4780d19aa4f8263521dbae7844e0f6b5ef7dae2e6c4d905ea6696088a3",
       "size": 50434
     },
     {
       "path": "Bass/subterranean_duo.sbpreset",
-      "sha256": "9bfd0f8475459dcd01e2e29053c2b1e78f7792bc8f78b2a6e98f342904eae440",
-      "size": 50475
+      "sha256": "f51350d42b33e90569f7aab8c102ba14c34ef03df2a6064cca827bc582f81d4c",
+      "size": 50473
     },
     {
       "path": "Bass/bend_formant_growl.sbpreset",
-      "sha256": "cf6015e96495eea94a3105eadf6d8f9590cc739b3feb0d9200d379a15db51f66",
-      "size": 50554
+      "sha256": "7d534e9ad43775b73f08c49e95db58e446ac8dc6358a51dbccfcd34b0dc9b853",
+      "size": 50556
     },
     {
       "path": "Bass/triple_fold_reese.sbpreset",
-      "sha256": "ae5f579613150ee75c9435119f60530c37ea156893a7a78b0a05ac13c308a502",
+      "sha256": "6bcce6e663b8eea74c7a4975dd8952e4c59409fe4dd77dad09f12a2ef1a427ad",
       "size": 50558
     },
     {
@@ -596,7 +596,7 @@
     },
     {
       "path": "FX/detonation_tail.sbpreset",
-      "sha256": "a4a22c991dbb4c35d1d8786f8915b591508a23fa69703e9fd05f2149539114db",
+      "sha256": "e37c3406234d2e7527da71a8257bc100966aab5631ee8d9842e76bbc8c566392",
       "size": 50514
     },
     {
@@ -606,37 +606,37 @@
     },
     {
       "path": "Pluck/karplus_harp.sbpreset",
-      "sha256": "fa72ad44cf4291f82b5a0ab73d4acfcadad8593fdbcd59d4ef31601d74a2c370",
+      "sha256": "34dba4284d0f4ba048ee8987fa2b2f9ae24731a726d88bdb4d4a9c6fb402057c",
       "size": 50560
     },
     {
       "path": "Pluck/ring_mod_gamelan.sbpreset",
-      "sha256": "a1b6e55af0ae3069f933852bef38ca0aabacaa2eb6016f03e5cff70eee5f19f0",
-      "size": 50522
+      "sha256": "7e90ff9481409e3ccd0096288582dc58de46ae7642e852b5514f755d17691be1",
+      "size": 50524
     },
     {
       "path": "Pluck/pentatonic_step_pluck.sbpreset",
-      "sha256": "c2b242463d9e80b516c477ee6d2e5305a80a90d54a154e4e294e4c201bc19f6b",
+      "sha256": "a1b117c6d8734dbbdef7a9f19c1d0bcff1ef96d8d7aa99fbbdd48faff952dc47",
       "size": 51736
     },
     {
       "path": "Keys/tempo_gate_chords.sbpreset",
-      "sha256": "f4a1a076d52907a3147f521feab96a32ec1577261580fba13f79c931d3e41dab",
+      "sha256": "c6d3f78a92ecb1a5b34720d4ae2728a7031667decd1f69154b7224d16e04d67c",
       "size": 51517
     },
     {
       "path": "Lead/sync_cry_lead.sbpreset",
-      "sha256": "a56b6bc2bca47033fe7fd5f510d833925d442ef53ec5bc3222e18b3c50ce2474",
+      "sha256": "6b3372ff8d5f8f5837c151d28788134eb6d796dde288e81925aab9af45ff5b98",
       "size": 50507
     },
     {
       "path": "Lead/vowel_whistle_lead.sbpreset",
-      "sha256": "142189160800382206c3e1934ca7948c7e972d27655d509b78d379e998dd3277",
+      "sha256": "292820e49f40fb3ee99aed5e849f1e6baf3ec202a524831ac09a77ce44625ebf",
       "size": 50525
     },
     {
       "path": "Lead/triple_fifth_lead.sbpreset",
-      "sha256": "ccf8493b1c60f03ebd4a47b7cbb734283013e48f968ed877f930924f61451f78",
+      "sha256": "83b9ffbae152c06b79ad7db770ad1379869dfa1bef13cc9d04bc87013b1e71ed",
       "size": 50566
     },
     {
@@ -651,17 +651,17 @@
     },
     {
       "path": "Pad/mid_side_halo.sbpreset",
-      "sha256": "2c43dffe7ae1d943a78445e5bcb02d0552a20fe48a0fa0c6be4b66166adc5093",
+      "sha256": "c649212e000eba3dbb90d9c7d3634b34766d5484526c3dd1bb84d79e829fb44d",
       "size": 50549
     },
     {
       "path": "Pad/parallel_dusk_pad.sbpreset",
-      "sha256": "e6538bd6ec10bb36b847b86ec6b0c62a58ba493e68df542142b35bf84e82e8d6",
+      "sha256": "3613e1768dcc47e364f3521f32a51bbdb6bdbae628b6c8199c93304e8e370179",
       "size": 50587
     },
     {
       "path": "Pad/brass_swell_ensemble.sbpreset",
-      "sha256": "243d782c2fbf8d92b5efd64500929d3a6cb0a5ba6ef5dedda49fd140979cce4d",
+      "sha256": "59f58c602f3cfecdb88eac0f1d5619ff374a97bb412a0c4c75c3fb53a2aa9c25",
       "size": 50553
     },
     {
@@ -671,7 +671,7 @@
     },
     {
       "path": "Keys/wah_pressure_clav.sbpreset",
-      "sha256": "3bdc1f9a746c770ed731bcad680a5b006910fe001548b38c62393df618973fc6",
+      "sha256": "91d2286aa174ba1e806b714248a43428469ef8f79d3c0638e4d05d292fe66b92",
       "size": 50547
     },
     {
@@ -691,38 +691,38 @@
     },
     {
       "path": "Pad/chord_cloud_pad.sbpreset",
-      "sha256": "01497633e767793d8bb2b3c538f6908167309aaa3d87b94842b48ffba2f2eca2",
+      "sha256": "a8a44c564753163af76736812e96c72e65c2110e76f01306d9a34a7e6acdb2cc",
       "size": 50961
     },
     {
       "path": "Lead/vowel_scrub_choir.sbpreset",
-      "sha256": "5761e1ec072922ef3182e293af1b9ef6125ae4b3111043000b4cf63a6195a1da",
+      "sha256": "518fddab925536e8b292c8755969b200ad519e1a01255bf45c31a5627bd2cf7c",
       "size": 51371
     },
     {
       "path": "Pad/frozen_pluck_drone.sbpreset",
-      "sha256": "6540be1d1fd3a05c98dd227f39fd3ec9c5746781f2cfee163a5874e2c423bf33",
-      "size": 51102
+      "sha256": "85c2aaa996d63aaf89e2839a94bb260a2c8ba93de8bb565499372761217738d6",
+      "size": 51100
     },
     {
       "path": "FX/gong_grain_swarm.sbpreset",
-      "sha256": "2811dea352af66eaf55d293684b4b09895f0825c9ea10d12c3af90ba8148ee04",
-      "size": 50933
+      "sha256": "6fc6db3cee74eb79cdfdd660b7873a893a973807fd7920047c797f5bd6fc78ef",
+      "size": 50934
     },
     {
       "path": "Pluck/stutter_grain_kit.sbpreset",
-      "sha256": "40e7c3c987daceda9d7d2831f126d4a64269ab04f029b269de210457b0be7ac9",
-      "size": 50921
+      "sha256": "af9adda7a36e925410057453e2d1d3ffddd0318fa6af91f0b8d65c1f865698d4",
+      "size": 50922
     },
     {
       "path": "FX/rising_grain_riser.sbpreset",
-      "sha256": "a2b21087249a356273cbab15dc3df5b3dfdd6485d5030bca7ecbeedd90d84824",
-      "size": 50928
+      "sha256": "1b4813301b7383594ddee056883b58f892bd0842ae2b3613f3331d331c830134",
+      "size": 50930
     },
     {
       "path": "Pluck/nylon_zone_pluck.sbpreset",
-      "sha256": "4fbef4b99f426febc406f7af112b5074ec6cd68870cc2aef299fb468775219d0",
-      "size": 50963
+      "sha256": "d1b16d8695ebda5b2f06a89e9df0e7dea86a1af7d699634217976e78a3689ca6",
+      "size": 50965
     },
     {
       "path": "Keys/marimba_layer_keys.sbpreset",
@@ -731,22 +731,22 @@
     },
     {
       "path": "Keys/glass_zone_bells.sbpreset",
-      "sha256": "7a0a31ef8c15a04aff1acb308a25b3b4162da91dd93fe52cc2b03e5168942412",
+      "sha256": "052a0ac70f5c1ce403b2c74baf03ff9f20044126046b0c8dc4955aa6d095987a",
       "size": 51017
     },
     {
       "path": "Keys/dusty_rhodes_keys.sbpreset",
-      "sha256": "7068d3ec31e30145e607f07bda563433d05c0e92cbb17c2d0c6b689fc2d14a3d",
+      "sha256": "f14ad73ffc1887bcb5da3445b6ff7be6cee005f15beaf3238ab629d1f3211856",
       "size": 51284
     },
     {
       "path": "Pluck/glass_ping_pluck.sbpreset",
-      "sha256": "3faf685dfc3ad94b6c67943df216addb8806c0ab5719e272fb724f84f040719f",
+      "sha256": "7fdd01017b9d0b8e1328c647cd636d6728f4999525565ef716f020569c61279b",
       "size": 51004
     },
     {
       "path": "Keys/breakbeat_slice_keys.sbpreset",
-      "sha256": "3b760e31c440617585d135f07529499a2b64d6c82b43aef4b84d457745659983",
+      "sha256": "bbf87059265dfbf3b19c3d1aa44fb4946650c2b478131161d0a06edeab2c69dd",
       "size": 51264
     },
     {
@@ -756,58 +756,58 @@
     },
     {
       "path": "FX/reverse_gong_swell.sbpreset",
-      "sha256": "55a24e942d592115a218c6ea79ee54b8bad4106e4bd41fcd09f0adee886db403",
+      "sha256": "6b5025ef878f270569e8518ad54c85c9656c7d54f7513176d12133b0bc368904",
       "size": 51013
     },
     {
       "path": "Lead/breath_flute_lead.sbpreset",
-      "sha256": "4ce3f3bbef8fd2422db9d920f62784862f6c8b71d494f0476a29f6a30887783f",
-      "size": 50862
+      "sha256": "73bfbe60874b340ab387ee9a7721473d221fa417d3ddbda6b2d50e70ed0db02b",
+      "size": 50863
     },
     {
       "path": "Pad/spectral_vowel_freeze.sbpreset",
-      "sha256": "732290b8c5ebafe367c36de99aa939f696271a2cb92e5110ce48397c927fe841",
+      "sha256": "0acd215a07de4c2a688e02dfb743b1054b58a7464878eb7665c6b5025f75b5df",
       "size": 50902
     },
     {
       "path": "Lead/spectral_bowed_glass.sbpreset",
-      "sha256": "a8d1448d866931eaf08a2edaae1f6e892c7dd731bfb2a0660cecbaee080751fc",
+      "sha256": "85c8baa8d3fc1cf4c467cd2cc6856a523b1761e9291a03d668df967b05c05e32",
       "size": 51169
     },
     {
       "path": "Pad/spectral_gong_pad.sbpreset",
-      "sha256": "93d1ed16789ec2eef843b9f9fc2d5bf138e056c1688d6244e5be6bab0aa1d2a5",
+      "sha256": "42e4b9cb51d22bf194370dd98024a1a755c53db3114a7f4d17f888f249b5baf5",
       "size": 50907
     },
     {
       "path": "FX/spectral_chord_morph.sbpreset",
-      "sha256": "10439400ee663fa2014be7a049cc702edc5393553d97a7e7427e067c38d9c25c",
+      "sha256": "e66b72382fa4793b68377f2e6631c3f88c363d734524a028f7bf8b3fadc0bd5c",
       "size": 50909
     },
     {
       "path": "Bass/reese_dual_phase_bass.sbpreset",
-      "sha256": "cab4082a57c215a81cc43bcf3f45b1619928bf76cc3d9fa07d9502eadcb17fa6",
+      "sha256": "5108886d34dcb7746f0e6d44689fe21d0329529f7514dc02d72d4fa27e7bdce0",
       "size": 51095
     },
     {
       "path": "Lead/vowel_table_lead.sbpreset",
-      "sha256": "fda3d463b97fc5d39af93b8490927cbea88a281cee30b4aff6f999ca40c1eecc",
+      "sha256": "90d8193e9e9f584bfd39ea0cde6b9dc45bdb54b89589ade43d1c9218f5db483b",
       "size": 50878
     },
     {
       "path": "Keys/drawbar_organ_keys.sbpreset",
-      "sha256": "8978fe2d741eeee23981d51e5e5cf5cf02c319bd067f2c7e21b21385003a422f",
+      "sha256": "8f9baaf2517b42df2149ce80988b84d8055f4a71ab823900f9d87ae5f17e066c",
       "size": 50949
     },
     {
       "path": "Pad/throat_singer_drone.sbpreset",
-      "sha256": "ab273af4e5d34bc877fdfdb9391c22a1669d20a5fffa6f7a40002184b63195d8",
-      "size": 50917
+      "sha256": "275b5492923c060de81bea6faa0530c82fbc1342b8fcc012d8e53e786ab2be84",
+      "size": 50915
     },
     {
       "path": "Bass/ladder_fm_bass.sbpreset",
-      "sha256": "569a9718b447f746974dd9e9d52b11e774bfae7a4d27131772c5c36d82b5530f",
-      "size": 50859
+      "sha256": "a1181a21b00156960443b3dbc9e1e63981c726f5906d1c63dbafbd6ee8634d90",
+      "size": 50862
     }
   ]
 }

@@ -279,8 +279,8 @@ double targetOf (const std::string& text, const std::string& key, const std::str
 //     of the renders; never a sample above the ceiling.
 // The presets the levelling holds back by its limits (filled from the report of scripts/level-to-stock.py; the reason per preset is in the document).
 const std::string kHeldBack[] = {
-    "808 Boom", "B3 Drawbar Organ", "Breath of Machines", "EMS Squelch Bass", "Infinite Horizon", "Lorenz Garden", "Lush Analog Pad", "Plucked Lead Tone", "Punchy Pluck Bass",
-    "Shepard Ascent", "Sub Drop Boom",   // the raw-peak limit (1.4 of full scale) on a chord or the note: their sustained part is quieter against their peak than the stock median's
+    "808 Boom", "Breath of Machines", "EMS Squelch Bass", "Infinite Horizon", "Lorenz Garden", "Plucked Lead Tone", "Punchy Pluck Bass", "Shepard Ascent",
+    "Sub Drop Boom",          // the raw-peak limit (1.4 of full scale) on a chord or the note: their sustained part is quieter against their peak than the stock median's
     "Game Over Zap",          // the limiter budget on its four note chord
     "Bode Barber Riser",      // at the top of master.volume (+6 dB): a riser, quiet in the 0.3 .. 2 s window
 };

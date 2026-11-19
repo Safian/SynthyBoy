@@ -27,7 +27,7 @@ To repeat after an engine change: build `synthyboy_level_probe` and `synthyboy_p
 
 ## The make-up gain
 
-`kMakeupGainDb` stays **-2.5 dB** (chosen in round 1). The `master.volume` change each preset would need under the round 2 objective, measured on the round 1 levels with the new velocity tracking:
+**`kMakeupGainDb` = -1.0 dB**: the rule's value under the round 2 objective (round 1 had chosen -2.5 dB). The `master.volume` change each preset would need, measured on the round 1 levels with the new velocity tracking:
 
 ```
 make-up gain: median / p10 / p90 / min / max of the needed master.volume change (dB); presets that would need master.volume above +6 or below -60
@@ -40,58 +40,57 @@ make-up gain: median / p10 / p90 / min / max of the needed master.volume change 
 rule (median change about 0, nobody above +6 dB of master.volume): kMakeupGainDb = -1.0 dB
 ```
 
-At -2.5 dB two presets would need more than +6 dB (Bode Barber Riser, Spectral Gong Pad: a riser and a gong, quiet in the 0.3 .. 2 s window); the rule now gives -1.0 dB (median change 0.0, none above +6). Not changed: a decision for the owner (a new value needs a new levelling run). The applied changes from round 1: median +0.8 dB, p10 -1.6, p90 +3.2, min -8.8, max +8.6; from the `ov40` levels: median -3.1 dB, p10 -11.0, p90 +1.0. `master.volume` now runs from -19.6 to +6.0 dB (median -6.8), 2 presets at the top.
+At -1.0 dB the median change is 0.0 dB (p90 +3.7) and, with the limits applied, no preset needs more than +6 dB; at -2.5 dB two would have (Bode Barber Riser, Spectral Gong Pad). After the levelling one preset sits at the +6 dB top (Bode Barber Riser, a riser, quiet in the 0.3 .. 2 s window: held back below). `master.volume` now runs from -21.1 to +6.0 dB (median -7.9); against the -2.5 dB state of round 2 every preset moved by -1.5 dB or less (the ones held back by the raw-peak limit did not move: they are 1.5 dB louder).
 
 ## Result (`scripts/level-to-stock.py report`, the final round)
 
 Targets (`scripts/stock-level-targets.json`): Key 61 host track meter, Hype + 9 stock presets (report add671aa). Bass/Lead refs are MONOPHONIC plugins: chord targets there are conservative judgement (-7/-8), not measured. FX has no stock measurement: interpolated. Stock never exceeded -3 dBFS with 6-note v127 chord, no limiter proven; sustain values are approximate live-bar readings. Velocity: bass/lead insensitive; pianos/plucks/strings drop 5-9 dB v127->v100.
 
-Make-up gain of the measurement: -2.5 dB. Medians per category; peaks in dBFS after the output stage (what the host receives; the limiter's ceiling is -0.5 dBFS), sustained = RMS 0.3 .. 2.0 s after the strike (presets silent there left out); chord = the stock voicing 48 55 60 64 unless marked "ours" (36 48 55 60); target in brackets.
+Make-up gain of the measurement: -1.0 dB. Medians per category; peaks in dBFS after the output stage (what the host receives; the limiter's ceiling is -0.5 dBFS), sustained = RMS 0.3 .. 2.0 s after the strike (presets silent there left out); chord = the stock voicing 48 55 60 64 unless marked "ours" (36 48 55 60); target in brackets.
 
 **Key 61 (low) profile**
 
 | category | n | note peak | note sustained | chord sustained | chord peak | chord peak, ours | six note chord peak | note v127-v100 | chord v127-v100 | before: note peak / note sus / chord peak / chord sus (ours, ov40 levels at +9 dB) |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Bass | 29 | -14.2 (-9.1) | -21.4 (-20.0) | -16.1 (-22.0) | -4.8 (-7.0) | -4.5 | -2.0 (-8.0) | 0.2 (0.1) | 0.2 (1.0) | -0.5 / -7.5 / -0.5 / -8.5 |
-| Lead | 30 | -13.0 (-11.5) | -21.8 (-19.5) | -15.8 (-19.0) | -3.6 (-8.0) | -3.5 | -1.2 (-8.0) | 0.0 (-0.9) | 0.0 (2.0) | -0.5 / -8.7 / -0.5 / -8.4 |
-| Pad | 36 | -11.3 (-9.6) | -22.2 (-19.0) | -15.3 (-15.0) | -2.0 (-5.6) | -2.9 | -0.5 (-3.5) | 2.9 (2.8) | 2.9 (3.3) | -0.5 / -10.8 / -0.5 / -9.5 |
-| Keys | 25 | -11.4 (-10.5) | -34.0 (-27.0) | -26.7 (-27.0) | -2.6 (-4.0) | -2.5 | -0.5 (-3.6) | 2.7 (8.1) | 2.7 (8.0) | -0.5 / -22.0 / -0.5 / -15.3 |
+| Bass | 29 | -14.2 (-9.1) | -21.4 (-20.0) | -16.1 (-22.0) | -4.8 (-7.0) | -4.5 | -1.8 (-8.0) | 0.2 (0.1) | 0.2 (1.0) | -0.5 / -7.5 / -0.5 / -8.5 |
+| Lead | 30 | -12.7 (-11.5) | -21.8 (-19.5) | -15.8 (-19.0) | -3.6 (-8.0) | -3.5 | -1.2 (-8.0) | 0.0 (-0.9) | 0.0 (2.0) | -0.5 / -8.7 / -0.5 / -8.4 |
+| Pad | 36 | -10.0 (-9.6) | -21.3 (-19.0) | -14.4 (-15.0) | -1.0 (-5.6) | -1.9 | -0.5 (-3.5) | 2.9 (2.8) | 2.9 (3.3) | -0.5 / -10.8 / -0.5 / -9.5 |
+| Keys | 25 | -10.5 (-10.5) | -33.1 (-27.0) | -26.7 (-27.0) | -1.4 (-4.0) | -1.3 | -0.5 (-3.6) | 2.7 (8.1) | 2.7 (8.0) | -0.5 / -22.0 / -0.5 / -15.3 |
 | Pluck | 22 | -16.2 (-16.2) | -50.4 (-31.0) | -44.1 (-26.0) | -7.2 (-8.1) | -6.9 | -5.8 (-7.0) | 3.9 (3.7) | 3.9 (3.6) | -0.5 / -29.6 / -0.5 / -23.5 |
-| FX | 18 | -12.6 (-11.0) | -23.5 (-22.0) | -17.7 (-20.0) | -4.9 (-7.0) | -4.3 | -2.0 (-6.0) | 1.8 (1.0) | 1.8 (3.0) | -0.5 / -10.6 / -0.5 / -9.7 |
-| ALL | 160 | -12.9 (-) | -22.8 (-) | -16.7 (-) | -3.8 (-) | -3.9 | -1.2 (-) | 1.9 (-) | 1.8 (-) | -0.5 / -10.4 / -0.5 / -9.5 |
+| FX | 18 | -12.1 (-11.0) | -23.5 (-22.0) | -17.7 (-20.0) | -4.9 (-7.0) | -4.3 | -2.0 (-6.0) | 1.8 (1.0) | 1.8 (3.0) | -0.5 / -10.6 / -0.5 / -9.7 |
+| ALL | 160 | -11.9 (-) | -22.4 (-) | -16.4 (-) | -3.5 (-) | -3.2 | -0.8 (-) | 1.9 (-) | 1.8 (-) | -0.5 / -10.4 / -0.5 / -9.5 |
 
 **XL (high, 16 voices, economy control) profile**
 
 | category | n | note peak | note sustained | chord sustained | chord peak | chord peak, ours | six note chord peak | note v127-v100 | chord v127-v100 | before: note peak / note sus / chord peak / chord sus (ours, ov40 levels at +9 dB) |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Bass | 29 | -14.2 (-9.1) | -21.1 (-20.0) | -16.1 (-22.0) | -4.8 (-7.0) | -4.5 | -2.1 (-8.0) | 0.2 (0.1) | 0.2 (1.0) | -0.5 / -7.5 / -0.5 / -8.5 |
-| Lead | 30 | -12.5 (-11.5) | -21.8 (-19.5) | -15.7 (-19.0) | -3.5 (-8.0) | -3.4 | -1.2 (-8.0) | 0.0 (-0.9) | 0.0 (2.0) | -0.5 / -8.7 / -0.5 / -8.4 |
-| Pad | 36 | -9.9 (-9.6) | -21.7 (-19.0) | -15.3 (-15.0) | -2.2 (-5.6) | -2.1 | -0.5 (-3.5) | 2.9 (2.8) | 2.9 (3.3) | -0.5 / -10.8 / -0.5 / -9.5 |
-| Keys | 25 | -11.4 (-10.5) | -34.1 (-27.0) | -27.9 (-27.0) | -2.7 (-4.0) | -2.5 | -0.5 (-3.6) | 2.7 (8.1) | 2.7 (8.0) | -0.5 / -21.9 / -0.5 / -15.4 |
+| Bass | 29 | -13.9 (-9.1) | -21.1 (-20.0) | -16.1 (-22.0) | -4.8 (-7.0) | -4.5 | -1.8 (-8.0) | 0.2 (0.1) | 0.2 (1.0) | -0.5 / -7.5 / -0.5 / -8.5 |
+| Lead | 30 | -12.0 (-11.5) | -21.2 (-19.5) | -15.7 (-19.0) | -3.4 (-8.0) | -3.4 | -1.2 (-8.0) | 0.0 (-0.9) | 0.0 (2.0) | -0.5 / -8.7 / -0.5 / -8.4 |
+| Pad | 36 | -8.9 (-9.6) | -21.2 (-19.0) | -14.0 (-15.0) | -1.0 (-5.6) | -0.9 | -0.5 (-3.5) | 2.9 (2.8) | 2.9 (3.3) | -0.5 / -10.8 / -0.5 / -9.5 |
+| Keys | 25 | -10.5 (-10.5) | -33.2 (-27.0) | -27.8 (-27.0) | -1.5 (-4.0) | -1.3 | -0.5 (-3.6) | 2.7 (8.1) | 2.7 (8.0) | -0.5 / -21.9 / -0.5 / -15.4 |
 | Pluck | 22 | -16.2 (-16.2) | -51.1 (-31.0) | -43.0 (-26.0) | -7.3 (-8.1) | -6.9 | -5.8 (-7.0) | 3.9 (3.7) | 3.9 (3.6) | -0.5 / -28.8 / -0.5 / -22.0 |
-| FX | 18 | -11.8 (-11.0) | -23.5 (-22.0) | -17.7 (-20.0) | -4.1 (-7.0) | -3.8 | -2.0 (-6.0) | 1.8 (1.0) | 1.8 (3.0) | -0.5 / -11.1 / -0.5 / -9.8 |
-| ALL | 160 | -12.1 (-) | -22.7 (-) | -16.7 (-) | -3.3 (-) | -3.1 | -0.9 (-) | 1.8 (-) | 1.9 (-) | -0.5 / -10.4 / -0.5 / -9.5 |
+| FX | 18 | -11.1 (-11.0) | -23.5 (-22.0) | -17.7 (-20.0) | -4.1 (-7.0) | -3.6 | -1.7 (-6.0) | 1.8 (1.0) | 1.8 (3.0) | -0.5 / -11.1 / -0.5 / -9.8 |
+| ALL | 160 | -11.3 (-) | -22.2 (-) | -16.3 (-) | -3.2 (-) | -2.6 | -0.7 (-) | 1.8 (-) | 1.9 (-) | -0.5 / -10.4 / -0.5 / -9.5 |
 
-**Voicing** (Key 61, medians of ours 36 48 55 60 minus the stock voicing 48 55 60 64, dB): Bass peak +0.1 / sustained +0.6, Lead peak +0.0 / sustained +0.4, Pad peak -0.5 / sustained +0.5, Keys peak +0.1 / sustained +0.5, Pluck peak +0.0 / sustained +0.2, FX peak +0.1 / sustained +0.1.
+**Voicing** (Key 61, medians of ours 36 48 55 60 minus the stock voicing 48 55 60 64, dB): Bass peak +0.1 / sustained +0.6, Lead peak +0.0 / sustained +0.4, Pad peak -0.5 / sustained +0.5, Keys peak +0.0 / sustained +0.5, Pluck peak +0.0 / sustained +0.2, FX peak +0.1 / sustained +0.1.
 
 **Chord against note** (Key 61, stock voicing, medians, dB): peak of the chord minus peak of the note, raw: Bass +10.4 (strike, first 100 ms: +9.4; stock +2.1), Lead +9.7 (strike, first 100 ms: +9.4; stock +3.5), Pad +9.1 (strike, first 100 ms: +8.7; stock +4.0), Keys +9.3 (strike, first 100 ms: +9.1; stock +6.5), Pluck +9.0 (strike, first 100 ms: +9.0; stock +8.1), FX +8.9 (strike, first 100 ms: +8.6; stock +4.0); sustained chord minus note: Bass +5.9 (stock -2.0), Lead +6.3 (stock +0.5), Pad +6.9 (stock +4.0), Keys +6.2 (stock +0.0), Pluck +6.3 (stock +5.0), FX +6.4 (stock +2.0).
 
-Residuals of the objective (dB; per preset the largest of its errors on both profiles): median 3.63, p90 7.80, max 43.03; above 3 dB: 93 presets.
+Residuals of the objective (dB; per preset the largest of its errors on both profiles): median 2.90, p90 7.77, max 42.43; above 3 dB: 78 presets.
 
 | preset | category | note peak error Key 61 / XL | note sustained error | chord sustained error | limited by |
 |---|---|---|---|---|---|
-| Game Over Zap | FX | +10.2 / +10.2 | -43.0 / -43.0 | -39.2 / -39.2 | the spread of its own errors |
-| Punchy Pluck Bass | Bass | -2.6 / -2.6 | -32.0 / -32.0 | -24.3 / -24.3 | raw peak |
-| 808 Boom | Bass | -2.7 / -2.7 | -29.1 / -29.1 | -21.1 / -21.1 | raw peak |
-| Shepard Ascent | Pad | +0.6 / +0.2 | -19.5 / -19.2 | -13.8 / -13.6 | raw peak |
-| Sub Drop Boom | FX | -1.4 / -1.4 | -17.3 / -17.3 | -13.3 / -13.3 | raw peak |
-| EMS Squelch Bass | Bass | -4.0 / -4.0 | -17.0 / -17.0 | -8.6 / -8.6 | raw peak |
-| Lorenz Garden | Pad | -2.1 / -2.1 | -14.1 / -14.1 | -11.2 / -11.1 | raw peak |
-| Breath of Machines | FX | -2.1 / -0.8 | -12.2 / -13.1 | -3.1 / -4.7 | raw peak |
-| Bode Barber Riser | FX | +1.3 / +3.2 | -10.4 / -11.1 | -6.0 / -6.7 | the spread of its own errors |
-| Infinite Horizon | Pad | -4.7 / -0.7 | -10.4 / -8.7 | -8.4 / -7.3 | raw peak |
-| Plucked Lead Tone | Lead | -1.5 / -1.5 | -10.1 / -10.1 | -3.9 / -3.9 | raw peak |
-| Lush Analog Pad | Pad | -3.1 / +0.8 | -8.9 / -6.2 | -4.8 / -2.2 | raw peak |
+| Game Over Zap | FX | +10.8 / +10.8 | -42.4 / -42.4 | -38.7 / -38.7 | the spread of its own errors |
+| Punchy Pluck Bass | Bass | -1.1 / -1.1 | -30.5 / -30.5 | -22.8 / -22.8 | raw peak |
+| 808 Boom | Bass | -1.2 / -1.2 | -27.6 / -27.6 | -19.6 / -19.6 | raw peak |
+| Shepard Ascent | Pad | +2.1 / +1.7 | -18.0 / -17.7 | -12.3 / -12.1 | raw peak |
+| Sub Drop Boom | FX | +0.1 / +0.1 | -15.8 / -15.8 | -11.8 / -11.8 | raw peak |
+| EMS Squelch Bass | Bass | -2.5 / -2.5 | -15.5 / -15.5 | -7.1 / -7.1 | raw peak |
+| Lorenz Garden | Pad | -0.6 / -0.6 | -12.6 / -12.6 | -9.7 / -9.6 | raw peak |
+| Breath of Machines | FX | -0.6 / +0.7 | -10.7 / -11.6 | -1.6 / -3.2 | raw peak |
+| Bode Barber Riser | FX | +2.8 / +4.7 | -8.9 / -9.6 | -4.5 / -5.2 | the spread of its own errors |
+| Infinite Horizon | Pad | -3.2 / +0.8 | -8.9 / -7.2 | -6.9 / -5.8 | raw peak |
+| Plucked Lead Tone | Lead | -0.0 / -0.0 | -8.6 / -8.6 | -2.4 / -2.4 | raw peak |
 | Sub Duo Octave | Bass | -7.5 / -7.5 | -0.7 / -0.7 | +8.3 / +8.3 | the spread of its own errors |
 | Odd Harmonics Bass | Bass | -7.9 / -7.9 | -0.1 / -0.1 | +8.1 / +8.1 | the spread of its own errors |
 | Pulse Width Bass | Bass | -7.9 / -7.9 | +0.2 / +0.2 | +7.7 / +7.7 | the spread of its own errors |
@@ -99,109 +98,93 @@ Residuals of the objective (dB; per preset the largest of its errors on both pro
 | Gritty Square Bass | Bass | -7.8 / -7.8 | +2.6 / +2.6 | +5.1 / +5.1 | the spread of its own errors |
 | Dirty Distortion Bass | Bass | -7.7 / -7.7 | +3.0 / +3.0 | +4.8 / +4.8 | the spread of its own errors |
 | Comb Metal Bass | Bass | -4.8 / -4.8 | -2.8 / -2.8 | +7.6 / +7.6 | the spread of its own errors |
-| Moog Ladder Bass | Bass | -5.1 / -5.1 | -2.7 / -2.7 | +7.6 / +7.6 | raw peak |
+| Moog Ladder Bass | Bass | -5.1 / -5.1 | -2.7 / -2.7 | +7.6 / +7.6 | the spread of its own errors |
 | Scream Filter Bass | Bass | -6.5 / -6.5 | -1.1 / -1.1 | +7.5 / +7.5 | the spread of its own errors |
-| Acid Saw Reso | Bass | -4.6 / -4.6 | -2.8 / -2.8 | +7.4 / +7.4 | raw peak |
+| Lush Analog Pad | Pad | -1.6 / +2.3 | -7.4 / -4.7 | -3.3 / -0.7 | raw peak |
+| Acid Saw Reso | Bass | -4.6 / -4.6 | -2.8 / -2.8 | +7.4 / +7.4 | the spread of its own errors |
 | Space Wobble Bass | Bass | -5.8 / -5.8 | -1.4 / -1.4 | +7.2 / +7.2 | the spread of its own errors |
 | Harmonic Sine Bass | Bass | -7.1 / -7.1 | +0.3 / +0.3 | +7.0 / +7.0 | the spread of its own errors |
 | Click Attack Bass | Bass | -6.1 / -6.4 | -0.9 / -0.9 | +7.1 / +7.1 | the spread of its own errors |
-| Fat Reese | Bass | -5.1 / -4.8 | -1.9 / -2.2 | +7.1 / +6.9 | raw peak |
+| Fat Reese | Bass | -5.1 / -4.8 | -1.9 / -2.2 | +7.1 / +6.9 | the spread of its own errors |
 | Diode Saturated Bass | Bass | -6.9 / -6.9 | +0.5 / +0.5 | +6.4 / +6.4 | the spread of its own errors |
 | Sonar Ping | FX | -6.8 / -5.1 | -0.2 / +0.0 | +6.1 / +5.9 | the spread of its own errors |
 | Custom Shape Wobble | Bass | -4.3 / -4.3 | -2.4 / -2.4 | +6.6 / +6.6 | the spread of its own errors |
-| Pulse Width Mod Lead | Lead | +3.0 / +2.8 | -6.6 / -6.6 | -1.8 / -1.8 | raw peak |
-| Pitch Drop 808 | Bass | +3.5 / +3.5 | -6.5 / -6.5 | -5.1 / -5.1 | raw peak |
 | Diode Bite Lead | Lead | -6.5 / -6.5 | +0.5 / +0.5 | +5.9 / +5.9 | the spread of its own errors |
 | Cosmic Teleport | FX | -6.5 / -6.5 | +0.0 / +0.0 | +6.3 / +6.3 | the spread of its own errors |
 | Solid Sub | Bass | -6.1 / -6.1 | +0.4 / +0.4 | +5.6 / +5.6 | the spread of its own errors |
-| Twin Warp Lead | Lead | -3.9 / -4.0 | -2.3 / -2.3 | +6.1 / +6.1 | raw peak |
+| Twin Warp Lead | Lead | -3.9 / -4.0 | -2.3 / -2.3 | +6.1 / +6.1 | the spread of its own errors |
+| Dual Octave Hero | Lead | -3.2 / -3.2 | -2.9 / -2.9 | +6.0 / +6.0 | the spread of its own errors |
 | Formant Vowel Bass | Bass | -5.7 / -5.7 | -0.4 / -0.4 | +5.9 / +5.9 | the spread of its own errors |
-| Fast Arp Bass | Bass | -5.5 / -5.5 | -5.7 / -5.7 | +3.4 / +3.4 | raw peak |
 | Laser Beam Lead | Lead | -3.0 / -3.0 | -2.4 / -2.4 | +5.5 / +5.5 | the spread of its own errors |
 | Subterranean Duo | Bass | -1.9 / -1.9 | -3.7 / -3.7 | +5.5 / +5.5 | the spread of its own errors |
-| Hyper Dimension Pad | Pad | -5.4 / -2.5 | +1.5 / -1.8 | +3.5 / +0.4 | raw peak |
 | Metal Gong Strike | FX | -5.1 / -2.3 | -0.1 / +0.1 | +3.6 / +3.7 | the spread of its own errors |
-| Dual Octave Hero | Lead | -4.1 / -4.1 | -3.8 / -3.8 | +5.1 / +5.1 | raw peak |
-| Velvet Strings | Pad | +0.7 / -2.1 | -5.1 / -5.0 | -1.2 / -1.1 | raw peak |
 | Phaser Sweep Lead | Lead | -5.1 / -3.0 | -0.4 / -0.2 | +4.6 / +4.3 | the spread of its own errors |
-| Vintage Brass Pad | Pad | +0.1 / -0.1 | -5.0 / -5.1 | -1.2 / -1.5 | raw peak |
-| Bell FM Ripple Lead | Lead | -1.3 / -1.7 | -5.0 / -2.8 | -0.0 / +0.6 | raw peak |
-| Ethereal Glass | Pad | -1.0 / +0.9 | -4.9 / -4.9 | -2.1 / -1.8 | raw peak |
+| Pulse Width Mod Lead | Lead | +4.5 / +4.3 | -5.1 / -5.1 | -0.3 / -0.3 | raw peak |
+| Pitch Drop 808 | Bass | +5.0 / +5.0 | -5.0 / -5.0 | -3.6 / -3.6 | raw peak |
 | Solo Square Lead | Lead | -4.9 / -4.9 | +2.7 / +2.7 | +2.1 / +2.1 | the spread of its own errors |
-| Harmonic Cloud | Pad | -1.8 / +1.3 | -4.8 / -4.5 | -2.8 / -2.6 | raw peak |
-| Sync Cry Lead | Lead | -0.3 / +0.3 | -4.8 / -4.7 | +2.2 / +2.3 | raw peak |
+| Fast Arp Bass | Bass | -4.0 / -4.0 | -4.2 / -4.2 | +4.9 / +4.9 | raw peak |
 | FM Digital Lead | Lead | -4.2 / -4.2 | -0.7 / -0.7 | +4.8 / +4.8 | the spread of its own errors |
-| MPE Pressure Lead | Lead | -3.5 / -2.5 | -1.5 / -1.7 | +4.6 / +4.7 | raw peak |
+| MPE Pressure Lead | Lead | -3.5 / -2.5 | -1.5 / -1.7 | +4.6 / +4.7 | the spread of its own errors |
 | Sci-Fi Laser Sweep | FX | -4.4 / -4.4 | -0.2 / -0.2 | +4.7 / +4.7 | the spread of its own errors |
 | Sync Growl Bass | Bass | -3.0 / -3.0 | -1.8 / -1.8 | +4.7 / +4.7 | the spread of its own errors |
-| Dirty Peak Lead | Lead | -3.5 / -3.5 | -1.3 / -1.3 | +4.7 / +4.7 | raw peak |
+| Hyper Dimension Pad | Pad | -4.7 / -1.8 | +2.2 / -1.1 | +4.2 / +1.1 | the spread of its own errors |
+| Dirty Peak Lead | Lead | -3.5 / -3.5 | -1.3 / -1.3 | +4.7 / +4.7 | the spread of its own errors |
 | Detonation Tail | FX | +4.6 / +4.1 | -1.5 / -1.5 | -2.9 / -2.9 | the spread of its own errors |
 | Ladder FM Bass | Bass | -2.6 / -2.6 | -1.8 / -1.8 | +4.5 / +4.5 | the spread of its own errors |
 | Throat Singer Drone | Pad | +3.2 / +4.5 | -3.1 / -2.6 | -1.1 / -1.1 | the spread of its own errors |
-| Cathedral Choir | Pad | -3.3 / -1.8 | -4.5 / -3.5 | -1.6 / -0.4 | raw peak |
 | Tri Soft Solo | Lead | -4.2 / -2.7 | -1.0 / -0.8 | +4.5 / +4.1 | the spread of its own errors |
-| Starlight Shimmer | Pad | -4.4 / -2.3 | -3.1 / -2.5 | -0.2 / +0.4 | raw peak |
-| Stretched Glass Choir | Pad | -2.0 / -3.0 | -4.1 / -4.3 | -0.8 / +0.2 | raw peak |
 | Alien Communication | FX | -4.2 / -4.2 | -0.1 / -0.1 | +4.3 / +4.3 | the spread of its own errors |
-| Bowed Pressure Strings | Pad | -1.7 / -1.6 | -4.2 / -3.7 | -0.4 / -0.4 | raw peak |
 | Triple Fifth Lead | Lead | +2.3 / +2.1 | -4.2 / -4.0 | +1.7 / +2.0 | the spread of its own errors |
 | Bell Chime Lead | Lead | -0.9 / -0.9 | -3.2 / -3.2 | +4.2 / +4.2 | the spread of its own errors |
-| Subtle Tape Drift | Pad | -0.3 / -0.3 | -4.1 / -4.1 | -0.2 / -0.2 | raw peak |
 | Vowel Scrub Choir | Lead | +1.3 / +0.9 | -4.1 / -3.9 | +2.7 / +3.3 | the spread of its own errors |
 | Harmonic Shimmer Lead | Lead | -0.8 / -0.8 | -3.3 / -3.3 | +4.0 / +4.0 | the spread of its own errors |
+| Sync Cry Lead | Lead | +0.5 / +1.1 | -4.0 / -3.9 | +3.0 / +3.1 | the spread of its own errors |
 | Chord Cloud Pad | Pad | +2.4 / +2.3 | -4.0 / -2.3 | +0.6 / +1.2 | the spread of its own errors |
 | Cosmic Drift Lead | Lead | -3.9 / +1.5 | -2.3 / -1.7 | +3.3 / +3.2 | the spread of its own errors |
 | Hyper Saw Lead | Lead | -1.6 / +0.9 | -3.4 / -3.4 | +3.9 / +3.5 | the spread of its own errors |
 | Vocaloid Lead | Lead | -3.4 / -3.4 | -0.5 / -0.5 | +3.8 / +3.8 | the spread of its own errors |
-| Vibraphone Bars | Keys | -3.8 / -2.1 | +7.8 / +8.0 | +13.8 / +13.5 | raw peak |
-| Frozen Aurora | Pad | -3.8 / +0.7 | -3.6 / -2.1 | -0.5 / -0.3 | raw peak |
 | Chorused Saw Solo | Lead | +0.3 / +0.8 | -3.8 / -3.6 | +3.1 / +3.3 | the spread of its own errors |
-| Bowed MPE Strings | Pad | -1.0 / -1.1 | -3.7 / -3.8 | -1.1 / -1.3 | raw peak |
-| Diffusor Cloud Pad | Pad | -1.7 / -0.2 | -3.3 / -3.7 | -0.4 / -0.5 | raw peak |
 | Warm Vintage Lead | Lead | +0.5 / +0.6 | -3.7 / -3.7 | +3.2 / +3.2 | the spread of its own errors |
-| Space Odyssey Pad | Pad | -3.6 / +0.7 | -2.9 / -1.6 | +0.2 / +0.4 | raw peak |
-| Brass Swell Ensemble | Pad | +0.4 / -0.2 | -3.6 / -3.4 | +0.7 / +0.7 | raw peak |
 | Metallic Edge Lead | Lead | +1.4 / +1.4 | -3.6 / -3.6 | +2.1 / +2.1 | the spread of its own errors |
-| Slow Motion Waves | Pad | -3.5 / -3.5 | -2.4 / -2.4 | +0.4 / +0.4 | raw peak |
+| Velvet Strings | Pad | +2.2 / -0.6 | -3.6 / -3.5 | +0.3 / +0.4 | raw peak |
+| Vintage Brass Pad | Pad | +1.6 / +1.4 | -3.5 / -3.6 | +0.3 / -0.0 | raw peak |
+| Bell FM Ripple Lead | Lead | +0.2 / -0.2 | -3.5 / -1.3 | +1.5 / +2.1 | raw peak |
+| Ethereal Glass | Pad | +0.5 / +2.4 | -3.4 / -3.4 | -0.6 / -0.3 | raw peak |
 | Gong Grain Swarm | FX | +0.8 / +1.4 | -3.4 / -2.2 | +1.1 / +2.3 | the spread of its own errors |
-| Golden Dawn Pad | Pad | -3.4 / -1.3 | -0.4 / +0.1 | +1.6 / +1.4 | raw peak |
 | Bend Formant Growl | Bass | -3.0 / -2.3 | -0.5 / -0.5 | +3.4 / +3.1 | the spread of its own errors |
+| Harmonic Cloud | Pad | -0.3 / +2.8 | -3.3 / -3.0 | -1.3 / -1.2 | raw peak |
 | Bode Shifter Drone | FX | -3.3 / +3.0 | -2.2 / -2.6 | +2.9 / +2.2 | the spread of its own errors |
 | Vinyl Dust Crackle | FX | -1.9 / -1.8 | -1.3 / -1.4 | +3.3 / +3.3 | the spread of its own errors |
-| Comb Reso Swell | Pad | -3.3 / -3.3 | -1.8 / -1.8 | +0.0 / +0.0 | raw peak |
-| Deep Sea Ambient | Pad | -2.9 / -1.3 | -3.2 / -2.7 | -1.0 / -1.2 | raw peak |
-| Celesta Bells | Keys | -2.7 / -3.1 | -32.9 / -21.2 | -26.1 / -15.1 | raw peak |
 | Reese Dual Phase Bass | Bass | -2.2 / -1.3 | -1.5 / -0.9 | +3.1 / +3.0 | the spread of its own errors |
-| B3 Drawbar Organ | Keys | -3.1 / -3.1 | +10.4 / +10.4 | +16.4 / +16.4 | raw peak |
+| Golden Dawn Pad | Pad | -3.1 / -1.0 | -0.1 / +0.4 | +1.9 / +1.7 | the spread of its own errors |
+| Cathedral Choir | Pad | -1.8 / -0.3 | -3.0 / -2.0 | -0.1 / +1.1 | raw peak |
 
-Limiter, four note chord velocity 127 (ours, 36 48 55 60, 3 s): within the budget (at most 3 dB, at most 25 % of the blocks) on 320 of 320 renders (100.0 %); deepest reduction median 0.00, max 0.82 dB; share of blocks median 0.0 %, p90 0.0 %, max 24.1 %.
-Limiter, four note chord velocity 127 (stock voicing, 48 55 60 64, 3 s): within the budget (at most 3 dB, at most 25 % of the blocks) on 320 of 320 renders (100.0 %); deepest reduction median 0.00, max 0.87 dB; share of blocks median 0.0 %, p90 0.0 %, max 23.8 %.
-Six note chord (36 43 48 55 60 64, velocity 127): the limiter acts in 128 of 320 renders; deepest reduction median 0.00, max 0.92 dB; share of blocks median 0.0 %, max 53.4 %.
+Limiter, four note chord velocity 127 (ours, 36 48 55 60, 3 s): within the budget (at most 3 dB, at most 25 % of the blocks) on 318 of 320 renders (99.4 %); deepest reduction median 0.00, max 2.32 dB; share of blocks median 0.0 %, p90 3.9 %, max 34.8 %.
+Limiter, four note chord velocity 127 (stock voicing, 48 55 60 64, 3 s): within the budget (at most 3 dB, at most 25 % of the blocks) on 318 of 320 renders (99.4 %); deepest reduction median 0.00, max 2.04 dB; share of blocks median 0.0 %, p90 3.6 %, max 34.5 %.
+Six note chord (36 43 48 55 60 64, velocity 127): the limiter acts in 144 of 320 renders; deepest reduction median 0.00, max 2.42 dB; share of blocks median 0.0 %, max 99.1 %.
 Highest sample the host receives on any of these gestures: -0.50 dBFS (the ceiling).
-Raw engine peaks: max +2.92 dBFS (Acid Saw Reso); above +2.92 dBFS (1.4): 0; above the knee +5.11 dBFS (1.8): 0.
-Key 61 against XL, sustained chord velocity 127: median difference 0.04 dB; more than 1 dB apart: 17 presets: Chime Drop (-64.3 / -45.7), Celesta Bells (-53.1 / -42.1), Marimba Layer Keys (-42.2 / -39.0), Hyper Dimension Pad (-11.5 / -14.6), Karplus Harp (-44.5 / -41.4), Lush Analog Pad (-19.8 / -17.2), Harp Drops (-40.8 / -39.1), Ring Mod Gamelan (-35.7 / -34.2), Breath of Machines (-23.1 / -24.7), Dream Grand Piano (-32.1 / -30.7), Cathedral Choir (-16.6 / -15.4), Breakbeat Slice Keys (-26.7 / -27.9), Gong Grain Swarm (-18.9 / -17.7), Infinite Horizon (-23.4 / -22.3), Glass Ping Pluck (-33.6 / -32.5), Breath Flute Lead (-18.1 / -17.1), Stretched Glass Choir (-15.8 / -14.8)
+Raw engine peaks: max +2.92 dBFS (Pitch Drop 808); above +2.92 dBFS (1.4): 0; above the knee +5.11 dBFS (1.8): 0.
+Key 61 against XL, sustained chord velocity 127: median difference 0.04 dB; more than 1 dB apart: 17 presets: Chime Drop (-64.3 / -45.7), Celesta Bells (-51.6 / -40.6), Marimba Layer Keys (-40.7 / -37.5), Hyper Dimension Pad (-10.8 / -13.9), Karplus Harp (-44.5 / -41.4), Lush Analog Pad (-18.3 / -15.7), Harp Drops (-40.8 / -39.1), Ring Mod Gamelan (-35.7 / -34.2), Breath of Machines (-21.6 / -23.2), Dream Grand Piano (-30.6 / -29.2), Cathedral Choir (-15.1 / -13.9), Breakbeat Slice Keys (-26.7 / -27.9), Gong Grain Swarm (-18.9 / -17.7), Infinite Horizon (-21.9 / -20.8), Glass Ping Pluck (-33.6 / -32.5), Breath Flute Lead (-18.1 / -17.1), Stretched Glass Choir (-14.3 / -13.3)
 
 ## Presets held back by the limits
 
-The test allows these to miss their loudness (the mean of their errors) by more than 3 dB; all are louder at their peaks than the stock medians allow for their sustained level:
+The test allows these to miss their loudness (the mean of their errors) by more than 3 dB; all are louder at their peaks than the stock medians allow for their sustained level (at -1.0 dB):
 
 | preset | category | mean error | held back by |
 |---|---|---|---|
-| 808 Boom | Bass | -17.6 | raw peak (a boom that decays: its 0.3 .. 2 s level) |
-| Punchy Pluck Bass | Bass | -19.6 | raw peak (decaying) |
-| EMS Squelch Bass | Bass | -9.8 | raw peak |
-| Plucked Lead Tone | Lead | -5.2 | raw peak |
-| Shepard Ascent | Pad | -10.9 | raw peak (an evolving pad) |
-| Lorenz Garden | Pad | -9.1 | raw peak |
-| Infinite Horizon | Pad | -6.7 | raw peak (its reverb, absent on the Key 61, carries the XL peak) |
-| Lush Analog Pad | Pad | -4.1 | raw peak |
-| B3 Drawbar Organ | Keys | -3.1 | raw peak |
-| Sub Drop Boom | FX | -10.6 | raw peak (decaying) |
-| Breath of Machines | FX | -6.0 | raw peak |
-| Game Over Zap | FX | -24.0 | the limiter budget and the raw peak (a short zap: nothing left in the window) |
-| Bode Barber Riser | FX | -4.9 | the top of `master.volume` (a riser) |
+| 808 Boom | Bass | -16.1 | raw peak (a boom that decays: its 0.3 .. 2 s level) |
+| Punchy Pluck Bass | Bass | -18.1 | raw peak (decaying) |
+| EMS Squelch Bass | Bass | -8.3 | raw peak |
+| Plucked Lead Tone | Lead | -3.7 | raw peak |
+| Shepard Ascent | Pad | -9.4 | raw peak (an evolving pad) |
+| Lorenz Garden | Pad | -7.6 | raw peak |
+| Infinite Horizon | Pad | -5.2 | raw peak (its reverb, absent on the Key 61, carries the XL peak) |
+| Sub Drop Boom | FX | -9.1 | raw peak (decaying) |
+| Breath of Machines | FX | -4.5 | raw peak |
+| Game Over Zap | FX | -23.5 | the limiter budget and the raw peak (a short zap: nothing left in the window) |
+| Bode Barber Riser | FX | -3.4 | the top of `master.volume` (a riser) |
 
-Seven more lie between 2.5 and 3 dB (Cathedral Choir, Celesta Bells, Fast Arp Bass, Harmonic Cloud, Pitch Drop 808, Vibraphone Bars, and B3 Drawbar Organ above). The single windows (each error within 3 dB) hold for 468 of 768 checks: the stock instruments' note / chord / sustain ratios differ from ours (next section).
+Lush Analog Pad lies at 2.6 dB. The single windows (each error within 3 dB) hold for 503 of 768 checks: the stock instruments' note / chord / sustain ratios differ from ours (next section).
 
 ## Chord against note
 
@@ -213,6 +196,6 @@ Velocity 127 against 100 (the table above, "v127-v100"): Bass 0.2 dB (stock 0.1)
 
 ## Checks
 
-- `synthyboy_test_output_stage_presets` (`core/tests/test_output_stage_presets.cpp`): `output_stage_on_every_factory_preset` (no sample above the ceiling at make-up gains -2.5 .. 15 dB, no loudness inversion: pass) and `output_stage_presets_sit_at_the_stock_level` (every preset's mean error within 3 dB but the 13 held back; the limiter budget on both four note chords held on 640 of 640 renders, at least 90 percent required; no sample above the ceiling): pass.
+- `synthyboy_test_output_stage_presets` (`core/tests/test_output_stage_presets.cpp`): `output_stage_on_every_factory_preset` (no sample above the ceiling at make-up gains -2.5 .. 15 dB, no loudness inversion: pass) and `output_stage_presets_sit_at_the_stock_level` (every preset's mean error within 3 dB but the 11 held back; the limiter budget on both four note chords held on 636 of 640 renders, at least 90 percent required; no sample above the ceiling): pass.
 - `synthyboy_preset_render --engine own --summary-only`, tiers low, medium, high (the gate `synthyboy_preset_sanity` with the own engine): PASS, 0 failures.
 - `gen-factory-presets.py --check`, `check-presets.py` (0 errors, the same 79 warnings as before), the preset pytest files, `test_docs_release.py`, `test_docs_mpc.py`: pass.
