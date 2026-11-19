@@ -743,10 +743,10 @@ The MPC pad sends polyphonic aftertouch for every held pad ("MPC XL pads"). The 
 
 The MPC shell passes the engine's output through an output stage (`shell-mpc/output_stage.h`) before it reaches the host:
 
-- a fixed make-up gain, `SYNTHYBOY_MPC_OUTPUT_GAIN_DB` (CMake cache entry of `shell-mpc`, default 18 dB, range -24 .. 24; 0 = no gain);
-- the peak limiter is a **plugin setting now** (see "Output limiter" below): **off by default** (the output is float, the host's mixer has its faders, and the player may want to drive the next stage), switched on the Master page. Before, it was chosen at build time (`SYNTHYBOY_MPC_OUTPUT_LIMITER`, default OFF), and a full chord at the 18 dB make-up gain peaks 6 to 17 dB over full scale (measured): with the limiter off the host's mixer has to take that down, or the player switches LIMIT on.
+- an optional fixed make-up gain, `SYNTHYBOY_MPC_OUTPUT_GAIN_DB` (CMake cache entry of `shell-mpc`, default **0 dB**, range -24 .. 24; 0 = unity, no hidden shell boost);
+- the peak limiter is a **plugin setting** (see "Output limiter" below): **off by default** (the output is float, the host's mixer has its faders, and the player may want to drive the next stage), switched on the Master page.
 
-Why: the factory presets are levelled to a four-note chord whose RMS is 20 dB under full scale, with peaks near full scale. On the device that reads as quiet next to the stock instruments. The 18 dB gain brings the presets to commercial listening levels without squashing attacks or altering dynamic response; limiting is left to the user on the MPC channel strip.
+Why 0 dB: all 160 factory presets are now levelled internally inside the engine (`scripts/measure-loudness.py`, `-12.5 LUFS` `fast_max` for single-note categories and `-10.5 LUFS` for 3-note Pad/Keys triads, with category-appropriate `master.velocity_track` and `master.volume` default `-3 dB`), so the MPC build and desktop shells (VST3/AU/CLAP) deliver the same commercial loudness without a hidden shell gain mismatch. Earlier builds (`ov29..ov32` at +18 dB, `ov33..ov37` at +6 dB) compensated for presets that sat at -28..-20 LUFS internally.
 
 ### Output limiter
 

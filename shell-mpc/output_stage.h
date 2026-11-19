@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <string_view>
 
 // 32 bit ARM and AArch64 Linux (the MPC builds); SB_TEST_NEON builds the same intrinsics on any ARM (the host test); SB_NO_NEON forces the scalar loop.
 #if (((defined(__arm__) || (defined(__aarch64__) && defined(__linux__))) && defined(__ARM_NEON)) || defined(SB_TEST_NEON)) && ! defined(SB_NO_NEON)
@@ -40,15 +41,16 @@ public:
         smCoef = std::exp (-1.0f / (kGainSmoothingSeconds * (float) safeSr));
         reset();
     }
-    void reset() noexcept { env = 1.0f; curGain = targetGain; }
+    void reset() noexcept { env = 1.0f; lastEnv.store (1.0f, std::memory_order_relaxed); curGain = targetGain; }
     void setGainDb (float db) noexcept { if (! std::isfinite (db)) db = 0.0f; gDb = std::clamp (db, -24.0f, 24.0f); targetGain = gDb == 0.0f ? 1.0f : std::pow (10.0f, gDb / 20.0f); }
     float gainDb() const noexcept { return gDb; }
     float gainReductionDb() const noexcept {
         if constexpr (! LimiterEnabled) {
             return 0.0f;
         } else {
-            if (env >= 1.0f) return 0.0f;
-            const float safeEnv = std::max (env, 1e-6f);
+            const float e = lastEnv.load (std::memory_order_relaxed);
+            if (e >= 1.0f) return 0.0f;
+            const float safeEnv = std::max (e, 1e-6f);
             return -20.0f * std::log10 (safeEnv);
         }
     }
@@ -62,6 +64,8 @@ public:
 #endif
         for (; i < n; ++i)
             sampleScalar (l, r, i);
+        if constexpr (LimiterEnabled)
+            lastEnv.store (env, std::memory_order_relaxed);
     }
 private:
     /** One sample of the stage (the loop body of the plain version). Also what the NEON form falls back to wherever its conditions do not hold. */
@@ -145,6 +149,7 @@ private:
     }
 #endif
     float gDb = 0.0f, targetGain = 1.0f, curGain = 1.0f, env = 1.0f;
+    std::atomic<float> lastEnv { 1.0f };
     float relCoef = 0.99981105f, smCoef = 0.99886686f;
 };
 
@@ -207,12 +212,12 @@ inline bool outputLimiterFromChunk (const void* data, size_t size, bool& on) noe
     if (data == nullptr || size < 24)
         return false;
     const size_t tailLen = std::min<size_t> (size, 240);
-    const std::string tail (static_cast<const char*> (data) + (size - tailLen), tailLen);
-    static const char kKey[] = "\"mpcOutputLimiter\":";
+    const std::string_view tail (static_cast<const char*> (data) + (size - tailLen), tailLen);
+    static constexpr std::string_view kKey = "\"mpcOutputLimiter\":";
     const size_t a = tail.rfind (kKey);
-    if (a == std::string::npos)
+    if (a == std::string_view::npos)
         return false;
-    const size_t p = a + sizeof (kKey) - 1;
+    const size_t p = a + kKey.size();
     if (p + 1 >= tail.size() || (tail[p] != '0' && tail[p] != '1') || (tail[p + 1] != ',' && tail[p + 1] != '}'))
         return false;
     on = tail[p] == '1';

@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_BIN = ROOT / "build-sound" / "tools" / "sound-lab" / "synthyboy_sound_lab"
 SR = 44100
 PROFILES = {"xl": "high;voices=16;control=economy", "low": "low"}
-OUTPUT_GAIN_DB = 18.0
+OUTPUT_GAIN_DB = 0.0
 
 
 def db(x, floor=-200.0):

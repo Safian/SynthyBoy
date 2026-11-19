@@ -172,7 +172,7 @@ using synthyboy_mpc::stepCountOf;   // the rule of the relative Q proxies: q_ste
 #endif
 
 #ifndef SYNTHYBOY_MPC_OUTPUT_GAIN_DB
-#define SYNTHYBOY_MPC_OUTPUT_GAIN_DB 18.0
+#define SYNTHYBOY_MPC_OUTPUT_GAIN_DB 0.0
 #endif
 
 /** The most a preset file may have (a preset is a few KB; the content folder is on user writable media). */
@@ -2828,7 +2828,7 @@ static void writeRealParam (PluginInstance* inst, size_t index, float parameter)
             plain = undo;
     }
 #endif
-    if (plain == oldPlain)
+    if (plain == oldPlain || synthyboy::toNormalised (*info, oldPlain) == parameter)
         return;
 #if SYNTHYBOY_MPC_OVERLAY
     inst->paramUndo[index].store (oldPlain, std::memory_order_relaxed);
@@ -3006,6 +3006,10 @@ static float pluginGetParameter(AEffect* e, VstInt32 index)
 
 static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outputs, VstInt32 sampleFrames)
 {
+    // Return early for sampleFrames <= 0 (keep pending events for next block; must precede any memset)
+    if (sampleFrames <= 0)
+        return;
+
     PluginInstance* inst = getInstance(e);
     if (!inst || !inst->engine || !outputs)
     {
@@ -3018,10 +3022,6 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
         }
         return;
     }
-
-    // Return early for sampleFrames <= 0 (keep pending events for next block)
-    if (sampleFrames <= 0)
-        return;
 
 #if SYNTHYBOY_MPC_CALLBACK_STATS
     // Measures the gap to the previous call and, at the end of the scope, the time spent in this one (atomics only, see callback_stats.h)
@@ -3040,18 +3040,20 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
     uint32_t savedFz = flushDenormalsSave();
     flushDenormalsOn();
 
-    // Update transport from host once per block
+    // Update transport from host once per block (VST2 ABI: index = 0, value = filter flags)
     if (inst->audioMaster)
     {
         VstTimeInfo* timeInfo = reinterpret_cast<VstTimeInfo*>(
-            static_cast<VstIntPtr>(inst->audioMaster(e, audioMasterGetTime, kVstTempoValid | kVstPpqPosValid | kVstTransportPlaying, 0, nullptr, 0.0f)));
+            static_cast<VstIntPtr>(inst->audioMaster(e, audioMasterGetTime, 0, kVstTempoValid | kVstPpqPosValid | kVstTransportPlaying, nullptr, 0.0f)));
         if (timeInfo)
         {
-            inst->transport.bpm = timeInfo->tempo > 0 ? timeInfo->tempo : inst->transport.bpm;
+            if ((timeInfo->flags & kVstTempoValid) != 0 && std::isfinite(timeInfo->tempo) && timeInfo->tempo > 0.0)
+                inst->transport.bpm = timeInfo->tempo;
 #if SYNTHYBOY_MPC_OVERLAY
             inst->overlayBpm.store (inst->transport.bpm, std::memory_order_relaxed);
 #endif
-            inst->transport.songPosBeats = timeInfo->ppqPos;
+            if ((timeInfo->flags & kVstPpqPosValid) != 0 && std::isfinite(timeInfo->ppqPos))
+                inst->transport.songPosBeats = timeInfo->ppqPos;
             inst->transport.playing = (timeInfo->flags & kVstTransportPlaying) != 0;
         }
         // If host returns null, keep previous values
@@ -3065,11 +3067,28 @@ static void pluginProcessReplacing(AEffect* e, float** /*inputs*/, float** outpu
             inst->events.push (taken);
     }
 
-    // Clamp event frames to the last frame of the block
+    // Clamp event frames to the last frame of the block and keep monotonic order (OwnEngine::process assumes frame-sorted events)
+    bool sorted = true;
     for (size_t i = 0; i < inst->events.count; ++i)
     {
         if (static_cast<int32_t>(inst->events.slots[i].frame) >= sampleFrames)
             inst->events.slots[i].frame = sampleFrames - 1;
+        if (i > 0 && inst->events.slots[i].frame < inst->events.slots[i - 1].frame)
+            sorted = false;
+    }
+    if (!sorted)
+    {
+        for (size_t i = 1; i < inst->events.count; ++i)
+        {
+            const synthyboy::Event key = inst->events.slots[i];
+            size_t j = i;
+            while (j > 0 && inst->events.slots[j - 1].frame > key.frame)
+            {
+                inst->events.slots[j] = inst->events.slots[j - 1];
+                --j;
+            }
+            inst->events.slots[j] = key;
+        }
     }
 
     // All Sound Off (stop / mains off): one event at the front of the block, the same as CC 120 from the keyboard

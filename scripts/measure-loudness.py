@@ -154,7 +154,7 @@ def measure(binary, profile, presets_dir, work, volume_set=None):
 
 
 CALIB = HERE / "factory-preset-loudness.json"
-TARGET = -23.0
+TARGET = -12.5
 # The presets the owner called "ok" on the level (docs/release/preset-todo.md, MPC XL, package ov29): they define what the gesture of their category must read to be "right". For the
 # categories he has not auditioned yet (Lead, Pad, Keys, Pluck) the median of the category as it was is the reference (no change of the category's level, only a levelling inside it)
 # until his notes come; re-run `calibrate` with a longer list then.
