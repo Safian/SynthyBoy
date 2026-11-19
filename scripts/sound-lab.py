@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_BIN = ROOT / "build-sound" / "tools" / "sound-lab" / "synthyboy_sound_lab"
 SR = 44100
 PROFILES = {"xl": "high;voices=16;control=economy", "low": "low"}
-OUTPUT_GAIN_DB = 9.0
+OUTPUT_GAIN_DB = -2.5
 
 
 def db(x, floor=-200.0):
@@ -383,7 +383,7 @@ def run_report(preset_path, profile, lab, quick=False, long_hold=False):
 def fmt(o):
     L = []
     L.append(f"== {o['name']} [{o['category']}] profile {o['profile']}")
-    L.append(f"  level   chord4 RMS {o['chord_rms']:6.1f} dBFS (ref -20, held {o['chord_hold']:.1f} s)  chord4 peak {o['chord_peak_db']:6.1f}  8-note v127 peak {o['chord8_peak_db']:6.1f} raw = {o['chord8_peak_out_db']:6.1f} dBFS at +{OUTPUT_GAIN_DB:g} before the limiter"
+    L.append(f"  level   chord4 RMS {o['chord_rms']:6.1f} dBFS (ref -20, held {o['chord_hold']:.1f} s)  chord4 peak {o['chord_peak_db']:6.1f}  8-note v127 peak {o['chord8_peak_db']:6.1f} raw = {o['chord8_peak_out_db']:6.1f} dBFS at {OUTPUT_GAIN_DB:+g} dB before the limiter"
              f"  8-note RMS {o['chord8_rms']:6.1f}  single-note peak {o['single_peak_db']:6.1f}")
     L.append(f"  stereo  corr {o['stereo_cor']:5.2f}  mono sum {o['mono_db']:5.1f} dB vs stereo  worst 1/3 oct band {o['mono_worst_band_db']:6.1f} dB at {o['mono_worst_band_hz']:.0f} Hz")
     L.append(f"  clean   dc {o['dc_max']:.5f}  click ratio {o['click_start_max']:.1f}  end level {o['end_level_db_max']:.1f} dBFS  tail {o['tail_s_max']:.2f} s")

@@ -213,6 +213,6 @@ Ez a dokumentum a SynthyBoy szintetizátor első adagjában elkészült 24 új p
 ## Általános kérdések
 
 - **Hangerő a korábbi hangszínekhez képest:** Hogyan viszonyul az új 24 preset hangereje az eredeti 112 gyári presethez képest; a fenntartott kitartásnál (sustain) behangolt új lassú padek nem hatnak-e halkabbnak, mint a korábbi padek?
-- **Torzítás teljes akkordoknál a kimeneti fokozaton:** A hangszer fix +18 dB-es analóg kimeneti fokozatán torzítanak-e a teljes, sokhangos akkordok maximális billentésnél limiter nélkül, vagy szükség van a kimeneti limiter (vagy sávlimiter) bekapcsolására?
+- **Torzítás teljes akkordoknál a kimeneti fokozaton (historic kérdés a korábbi +18 dB-es kimeneti fokozathoz):** A korábbi fix +18 dB-es analóg kimeneti fokozaton torzítottak-e a teljes, sokhangos akkordok maximális billentésnél limiter nélkül? (Megjegyzés: a jelenlegi kimeneti fokozat -2,5 dB-es utóerősítést és bekapcsolt limitert használ -0,5 dBFS plafonnal.)
 - **Monó kompatibilitás:** Monó összegzéskor (például klubhangrendszeren vagy kis hangszórón) nem vesznek-e el fontos zenei részletek, különösen a kifejezetten sztereóra épített rétegeknél (mint a Parallel Dusk Pad vagy a Mid Side Halo)?
 - **Key 61 eltérések:** A Key 61 hardverprofilján a kikapcsolt effektek (zengető, flanger, Hyper-Dimension, Bode, Convolve) miatt a hangszínek (különösen a Bode Barber Riser, Triple Fifth Lead, Shepard Ascent és Detonation Tail) nem válnak-e túl szárazzá, tompává vagy aránytalanul hangossá/halkká az XL-hez képest?
