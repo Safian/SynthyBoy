@@ -1436,8 +1436,7 @@ struct PluginInstance
 #endif
 #if SYNTHYBOY_MPC_OVERLAY
 #if defined(__linux__)
-        unsigned cpuPlanSeen = 0;
-        synthyboy_mpc::overlay::Service::applyCpusToThisThread (cpuPlanSeen);
+        unsigned cpuPlanSeen = 0;   // applied on the passes of run () only: run () resets the affinity first (useNormalScheduling), so a call here would mark the plan seen and be undone
         display.addUnguarded ([&] { synthyboy_mpc::overlay::Service::applyCpusToThisThread (cpuPlanSeen); });
 #endif
         bool readoutPublished = false;
