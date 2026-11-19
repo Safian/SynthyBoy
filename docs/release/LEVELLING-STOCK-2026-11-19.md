@@ -1,5 +1,7 @@
 # Levelling to the stock MPC instruments (2026-11-19)
 
+> **Superseded (2026-11-19) by `docs/release/OUTPUT-LEVEL.md`**, the single source of truth for the output level. Numbers and claims below that differ from it are wrong or historic; keep this file only as method/tool documentation.
+
 Branch `work/loudness-fix`. The owner's decision: the factory presets sit beside the stock MPC instruments at EQUAL loudness ("a gyárihoz hasonló működés legyen ... a gyári presetekkel együtt pont egyforma lesz a hangerő"); what is heard is the sustained level; the output limiter (`core/include/synthyboy/output_stage.h`, ceiling -0.5 dBFS) is a guard that normally idles; the raw engine peaks stay inside the engine's safety knee.
 
 Two rounds were made the same day. Round 1 fitted the velocity 127 note and chord PEAKS; round 2 (this state) fits the LOUDNESS (sustained levels and the note peak) and treats the chord peak as a limit. Round 1's figures are in the git history of this file.

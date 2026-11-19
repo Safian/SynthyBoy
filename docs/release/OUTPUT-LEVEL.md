@@ -67,6 +67,10 @@ Hype "Almighty" (first reference): note −10.9, 4-note −6.5. Highest stock pe
 5. **Presets that cannot reach their target under the peak rule** (list in the levelling test). Closed by: the fix per preset (trim / limiter on that preset) after D1.
 6. **XL output / monitor volume.** Not readable from the host screen. Closed by: the owner reading the knob once.
 
+### D1 detail: the result of the unity / hard-peak run (commit e03e09f4, Key 61 medians, target in brackets)
+
+With the limiter OFF and every 4/6/8-note chord at most −1.0 dBFS: note peak Bass −16.6 (−9.1), Lead −15.7 (−11.5), Pad −14.1 (−9.6), Keys −14.7 (−10.5), Pluck −16.2 (−16.2), FX −14.7 (−11.0); note sustained 0.5–4 dB under target; 65 presets miss the loudness target (worst Game Over Zap −25.7, 808 Boom −20.9, Punchy Pluck Bass −19.1, Sub Drop Boom −13.9, EMS Squelch Bass −13.5 dB). Cause: our chord peak is 9–10 dB above the note peak, stock 2–8 dB. Offline prototype, per-voice gain n^−α (n sounding voices; not in the engine): α 0.25 gives chord−note 6–7.4 dB and 12 presets held back; α 0.5 (1/√n, the rule the engine already uses for unison) gives 2.9–4.4 dB, note peaks within −3…+2.3 dB of stock, 9 presets held back (Keys −4.8 dB and Pluck −17.5 dB short in sustain because they decay). Decision for the owner: accept quieter notes, or adopt the polyphony gain (needs smoothing as voices start/stop and a rule for release tails). Per-preset limiter candidates (measured crest ≥ 15 dB): EMS Squelch Bass, Plucked Lead Tone, Fast Arp Bass. `IOChanged` on a limiter switch is unverified on the device.
+
 ## E. Plan from here (one owner per step)
 
 1. Opus worker: finish the unity / limiter-off / per-preset limiter run on `work/loudness-fix` (committed; no new variants).
