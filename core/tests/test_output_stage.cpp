@@ -224,3 +224,141 @@ TEST (output_stage_aliased_and_null_pointers)
         }
     }
 }
+
+// 3. NaN / Inf in the input: output finite, bounded by the ceiling, and the stage recovers
+// (next clean block normal).
+TEST (output_stage_nan_and_inf_recovery)
+{
+    const double sampleRates[] = { 44100.0, 48000.0 };
+    const float nanVal = std::numeric_limits<float>::quiet_NaN();
+    const float negNanVal = -std::numeric_limits<float>::quiet_NaN();
+    const float infVal = std::numeric_limits<float>::infinity();
+    const float negInfVal = -std::numeric_limits<float>::infinity();
+
+    for (const double sr : sampleRates)
+    {
+        for (const bool limiterOn : { true, false })
+        {
+            synthyboy::OutputStage stageTest;
+            stageTest.prepare (sr);
+            stageTest.setLimiter (limiterOn);
+
+            synthyboy::OutputStage stageRef;
+            stageRef.prepare (sr);
+            stageRef.setLimiter (limiterOn);
+
+            const int bs = 128;
+
+            // Block 1: Clean prelude
+            auto clean1L = generateSine (static_cast<size_t> (bs), 0.5f, 440.0, sr);
+            auto clean1R = generateSine (static_cast<size_t> (bs), 0.3f, 880.0, sr);
+
+            auto test1L = clean1L, test1R = clean1R;
+            auto ref1L = clean1L, ref1R = clean1R;
+
+            stageTest.process (test1L.data(), test1R.data(), bs);
+            stageRef.process (ref1L.data(), ref1R.data(), bs);
+
+            // Block 2: Corrupted block containing NaNs, -NaNs, +Infs, -Infs
+            std::vector<float> badL (static_cast<size_t> (bs));
+            std::vector<float> badR (static_cast<size_t> (bs));
+            std::vector<float> zeroL (static_cast<size_t> (bs), 0.0f);
+            std::vector<float> zeroR (static_cast<size_t> (bs), 0.0f);
+
+            for (size_t i = 0; i < static_cast<size_t> (bs); ++i)
+            {
+                switch (i % 4)
+                {
+                    case 0: badL[i] = nanVal;    badR[i] = negNanVal; break;
+                    case 1: badL[i] = infVal;    badR[i] = negInfVal; break;
+                    case 2: badL[i] = negInfVal; badR[i] = infVal; break;
+                    default: badL[i] = negNanVal; badR[i] = nanVal; break;
+                }
+            }
+
+            stageTest.process (badL.data(), badR.data(), bs);
+            stageRef.process (zeroL.data(), zeroR.data(), bs);
+
+            // Check that during the corrupted block, all output samples are finite and <= ceiling
+            bool allBadFinite = true;
+            bool allBadBounded = true;
+            for (size_t i = 0; i < static_cast<size_t> (bs); ++i)
+            {
+                if (! std::isfinite (badL[i]) || ! std::isfinite (badR[i]))
+                    allBadFinite = false;
+                if (std::fabs (badL[i]) > synthyboy::OutputStage::kCeiling + 1e-6f ||
+                    std::fabs (badR[i]) > synthyboy::OutputStage::kCeiling + 1e-6f)
+                    allBadBounded = false;
+            }
+            CHECK (allBadFinite);
+            CHECK (allBadBounded);
+
+            // Block 3: Next clean block normal
+            auto clean3L = generateSine (static_cast<size_t> (bs * 4), 0.7f, 330.0, sr);
+            auto clean3R = generateSine (static_cast<size_t> (bs * 4), 0.7f, 660.0, sr);
+
+            auto test3L = clean3L, test3R = clean3R;
+            auto ref3L = clean3L, ref3R = clean3R;
+
+            size_t diffPostRecovery = 0;
+            bool allCleanFinite = true;
+            bool allCleanBounded = true;
+
+            for (size_t pos = 0; pos < clean3L.size(); pos += static_cast<size_t> (bs))
+            {
+                stageTest.process (test3L.data() + pos, test3R.data() + pos, bs);
+                stageRef.process (ref3L.data() + pos, ref3R.data() + pos, bs);
+
+                for (size_t i = pos; i < pos + static_cast<size_t> (bs); ++i)
+                {
+                    if (! std::isfinite (test3L[i]) || ! std::isfinite (test3R[i]))
+                        allCleanFinite = false;
+                    if (std::fabs (test3L[i]) > synthyboy::OutputStage::kCeiling + 1e-6f ||
+                        std::fabs (test3R[i]) > synthyboy::OutputStage::kCeiling + 1e-6f)
+                        allCleanBounded = false;
+
+                    uint32_t bTL = 0, bRL = 0, bTR = 0, bRR = 0;
+                    std::memcpy (&bTL, &test3L[i], sizeof (float));
+                    std::memcpy (&bRL, &ref3L[i], sizeof (float));
+                    std::memcpy (&bTR, &test3R[i], sizeof (float));
+                    std::memcpy (&bRR, &ref3R[i], sizeof (float));
+
+                    if (bTL != bRL || bTR != bRR)
+                        ++diffPostRecovery;
+                }
+            }
+
+            CHECK (allCleanFinite);
+            CHECK (allCleanBounded);
+            // Must have recovered and be bit-identical to the reference run that saw zeros
+            CHECK_EQ (diffPostRecovery, 0u);
+            CHECK_EQ (stageTest.lastGain(), stageRef.lastGain());
+            CHECK_NEAR (stageTest.gainReductionDb(), stageRef.gainReductionDb(), 1e-5);
+
+            // With limiter on, verify that NaNs, infinities and extreme values up to 3e38 remain finite and within ceiling
+            if (limiterOn)
+            {
+                synthyboy::OutputStage stageHuge;
+                stageHuge.prepare (sr);
+                stageHuge.setLimiter (true);
+                std::vector<float> lHuge (256, nanVal), rHuge (256, negInfVal);
+                lHuge[5] = 3.0e38f;
+                rHuge[7] = 1.0e30f;
+                lHuge[9] = 1.0e-40f;
+                stageHuge.process (lHuge.data(), rHuge.data(), 256);
+
+                bool hugeOk = true;
+                for (size_t i = 0; i < 256; ++i)
+                {
+                    if (! std::isfinite (lHuge[i]) || ! std::isfinite (rHuge[i]))
+                        hugeOk = false;
+                    if (std::fabs (lHuge[i]) > synthyboy::OutputStage::kCeiling ||
+                        std::fabs (rHuge[i]) > synthyboy::OutputStage::kCeiling)
+                        hugeOk = false;
+                }
+                CHECK (hugeOk);
+                CHECK (std::isfinite (stageHuge.gainReductionDb()));
+            }
+        }
+    }
+}
