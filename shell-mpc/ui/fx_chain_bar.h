@@ -15,7 +15,8 @@ namespace synthyboy_mpc { namespace ui {
 // ===============================================================================================================================================================
 /** FxSlotCard: One effect slot card in the chain bar.
     Shows type pictogram, type name, power toggle, rack badge ("M", "B1", "B2"),
-    or "+" for adding a new effect. Supports tap to select, and drag-and-drop to reorder. */
+    or "+" for adding a new effect. Supports tap to select, and drag-and-drop to reorder.
+    It stores nothing: it draws `state` (the owner sets it on every update) and writes none of it; a touch on the power zone reports `kTogglePower` with the value it asks for (1.0 on, 0.0 off, the opposite of `state.on`). */
 class FxSlotCard : public Component
 {
 public:
@@ -71,9 +72,8 @@ public:
         const Rect pr = powerRect();
         if (! pr.empty() && pr.contains (x, y))
         {
-            state.on = ! state.on;
             powerHit_ = ! state.selectOnPower;
-            return Change::indexed (id_, kTogglePower, state.on ? 1.0 : 0.0);
+            return Change::indexed (id_, kTogglePower, state.on ? 0.0 : 1.0);   // the value it asks for (the opposite of what `state` shows): the owner writes the effect, the next update shows it
         }
         return Change::none();
     }

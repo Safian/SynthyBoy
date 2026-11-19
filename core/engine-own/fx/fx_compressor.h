@@ -116,21 +116,32 @@ public:
         {
             const float in[2] = { l[i], r[i] };
             float sig[3][2], out[2] = { 0.0f, 0.0f };
-            for (int c = 0; c < 2; ++c)
+            if (p.bands == 3)
             {
-                const float x = in[c];
-                float lowS = lr[c][1].process (lr[c][0].process (x));
-                float restS = lr[c][3].process (lr[c][2].process (x));
-                float midS = 0.0f, highS = 0.0f;
-                if (p.bands == 0)
+                for (int c = 0; c < 2; ++c)
                 {
-                    midS = lr[c][5].process (lr[c][4].process (restS));
-                    highS = lr[c][7].process (lr[c][6].process (restS));
-                    lowS = ap[c][1].process (ap[c][0].process (lowS)) + ap[c][3].process (ap[c][2].process (lowS));
+                    sig[0][c] = 0.0f;
+                    sig[1][c] = in[c];
+                    sig[2][c] = 0.0f;
                 }
-                else if (p.bands == 3) { lowS = 0.0f; midS = x; }
-                else midS = restS;
-                sig[0][c] = lowS; sig[1][c] = midS; sig[2][c] = highS;
+            }
+            else
+            {
+                for (int c = 0; c < 2; ++c)
+                {
+                    const float x = in[c];
+                    float lowS = lr[c][1].process (lr[c][0].process (x));
+                    float restS = lr[c][3].process (lr[c][2].process (x));
+                    float midS = 0.0f, highS = 0.0f;
+                    if (p.bands == 0)
+                    {
+                        midS = lr[c][5].process (lr[c][4].process (restS));
+                        highS = lr[c][7].process (lr[c][6].process (restS));
+                        lowS = ap[c][1].process (ap[c][0].process (lowS)) + ap[c][3].process (ap[c][2].process (lowS));
+                    }
+                    else midS = restS;
+                    sig[0][c] = lowS; sig[1][c] = midS; sig[2][c] = highS;
+                }
             }
             for (int b = 0; b < 3; ++b)
             {
@@ -143,11 +154,15 @@ public:
                 const float thrUdb = k.thrUdb, thrU = k.thrU, thrL = k.thrL;
                 const float x2 = 0.5f * (sig[b][0] * sig[b][0] + sig[b][1] * sig[b][1]);
                 const float Na = k.Na, Nr = k.Nr;
-                // the lower (upward) envelope: the same in all the modes
-                float& el = envLo[b];
-                el = std::min ((x2 + el * (x2 > el ? Na : Nr)) / ((x2 > el ? Na : Nr) + 1.0f), thrL);
-                el = flushDenormal (std::max (el, 1.0e-20f));
-                const float gLo = powG (thrL / el, std::clamp (bd.lowerRatio, -1.0f, 1.0f) * 0.5f);
+                // the lower (upward) envelope: the same in all the modes (skip pow when ratio is 0)
+                float gLo = 1.0f;
+                if (bd.lowerRatio != 0.0f)
+                {
+                    float& el = envLo[b];
+                    el = std::min ((x2 + el * (x2 > el ? Na : Nr)) / ((x2 > el ? Na : Nr) + 1.0f), thrL);
+                    el = flushDenormal (std::max (el, 1.0e-20f));
+                    gLo = powG (thrL / el, std::clamp (bd.lowerRatio, -1.0f, 1.0f) * 0.5f);
+                }
                 float gHi = 1.0f;
                 if (!limitMode && !serumMode)
                 {

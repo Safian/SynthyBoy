@@ -383,25 +383,31 @@ static void test_mod_row_selector()
     ModRowSelector mrs;
     mrs.setId (110);
     mrs.place ({ 50, 50, 50, 50 });
-    mrs.maxRows = 8;
-    mrs.selected = 0;
+    mrs.state.maxRows = 8;
+    mrs.state.selected = 0;
 
     check (mrs.minSize().w == 56 && mrs.minSize().h == 56, "ModRowSelector minSize is 56x56 (a touch target)");
 
-    // Turn up advances selection
+    // Turn up reports the next row; the selector stores nothing: with no owner writing back `state` stays and the same turn reports the same row, the picture is the same
+    mrs.state.text[0] = '0'; mrs.state.text[1] = '1'; mrs.state.text[2] = '\0';
+    const Image before = drawComponent (mrs, 200, 200);
     Change c = mrs.turn (1.0);
-    check (c.kind == ChangeKind::Index && c.index == 1 && mrs.selected == 1, "ModRowSelector turn up advances to 1");
+    check (c.kind == ChangeKind::Index && c.id == 110 && c.index == 1 && mrs.state.selected == 0, "ModRowSelector turn up reports row 1 and leaves its state alone (the owner selects)");
+    c = mrs.turn (1.0);
+    check (c.kind == ChangeKind::Index && c.index == 1, "ModRowSelector: with no write back the same turn reports the same row (no step is kept in the component)");
+    check (drawComponent (mrs, 200, 200).px == before.px, "ModRowSelector: the picture does not change by a turn");
 
-    // Turn down retreats selection
+    // The owner sets the row; a turn down retreats from it
+    mrs.state.selected = 1;
     c = mrs.turn (-1.0);
-    check (c.kind == ChangeKind::Index && c.index == 0 && mrs.selected == 0, "ModRowSelector turn down retreats to 0");
+    check (c.kind == ChangeKind::Index && c.index == 0 && mrs.state.selected == 1, "ModRowSelector turn down reports row 0 from the row the owner set");
 
     // Zero delta does nothing
     c = mrs.turn (0.0);
     check (c.kind == ChangeKind::None, "ModRowSelector turn 0 does nothing");
 
     // When maxRows <= 0, turn does nothing
-    mrs.maxRows = 0;
+    mrs.state.maxRows = 0;
     c = mrs.turn (1.0);
     check (c.kind == ChangeKind::None, "ModRowSelector with maxRows 0 does nothing");
 
@@ -431,14 +437,14 @@ static void test_pictogram_out_of_range_turn_and_row_selector_boundaries()
 
     ModRowSelector mrs;
     mrs.setId (80);
-    mrs.maxRows = 8;
-    mrs.selected = 0;
-    check (! mrs.turn (-1.0) && mrs.selected == 0, "row selector: a step down at the first row reports nothing");
-    mrs.selected = 7;
-    check (! mrs.turn (1.0) && mrs.selected == 7, "row selector: a step up at the last row reports nothing");
-    mrs.selected = 3;
+    mrs.state.maxRows = 8;
+    mrs.state.selected = 0;
+    check (! mrs.turn (-1.0) && mrs.state.selected == 0, "row selector: a step down at the first row reports nothing");
+    mrs.state.selected = 7;
+    check (! mrs.turn (1.0) && mrs.state.selected == 7, "row selector: a step up at the last row reports nothing");
+    mrs.state.selected = 3;
     Change d = mrs.turn (1.0);
-    check (d.kind == ChangeKind::Index && d.index == 4 && mrs.selected == 4, "row selector: a step inside the rows reports the new row");
+    check (d.kind == ChangeKind::Index && d.index == 4 && mrs.state.selected == 3, "row selector: a step inside the rows reports the new row, the component keeps the row the owner set");
     check (! mrs.turn (0.0), "row selector: no step, no change");
 }
 

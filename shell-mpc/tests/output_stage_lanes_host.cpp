@@ -1,6 +1,7 @@
-// SynthyBoy - MPC shell: the NEON form of the output stage (shell-mpc/output_stage.h) and of the output peak (shell-mpc/output_peak.h) gives the samples and the peak of the scalar loops, to the bit:
-// the plain stage and the limiter stage, over special inputs (silence, NaN, both infinities, both zeros, subnormals, full scale, huge values that overflow in the gain), random blocks, every length 0 .. 40,
-// null channels, gain changes in the middle of a run (the smoothing), the limiter in and out of reduction, in the default float mode and (AArch64) with flush-to-zero set as the shell sets it.
+// SynthyBoy - MPC shell: the NEON form of the output stage (core/include/synthyboy/output_stage.h) and of the output peak (shell-mpc/output_peak.h) gives the samples and the peak of the scalar loops,
+// to the bit: special inputs (silence, NaN, both infinities, both zeros, subnormals, full scale, huge values that overflow in the gain), quiet stretches (the idle path), random blocks, every length
+// 0 .. 40, null channels and one buffer for both, gain changes in the middle of a run (the smoothing), the limiter switched on and off (the crossfade), resets, in and out of reduction, at three
+// sample rates, in the default float mode and (AArch64) with flush-to-zero set as the shell sets it.
 // Built with SB_TEST_NEON (the NEON forms on any ARM host). Run by tests/run_output_stage_test.sh.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -14,7 +15,6 @@
 #include <limits>
 #include <vector>
 
-using synthyboy_mpc::BasicOutputStage;
 using synthyboy_mpc::OutputPeak;
 
 static_assert (SYNTHYBOY_OUT_NEON == 1 && SYNTHYBOY_PEAK_NEON == 1, "this test is built with the NEON forms on");
@@ -48,36 +48,41 @@ static uint64_t readFpcr() { uint64_t v; asm volatile ("mrs %0, fpcr" : "=r"(v))
 static void writeFpcr (uint64_t v) { asm volatile ("msr fpcr, %0" :: "r"(v) : "memory"); }
 #endif
 
-template <bool Lim>
-static long long compareStage (double sr, int runs)
+static long long compareStage (double sr, int runs, unsigned long long& groups)
 {
     long long bad = 0, samples = 0;
     for (int run = 0; run < runs; ++run)
     {
-        BasicOutputStage<Lim> fast, ref;
+        synthyboy::OutputStage fast, ref;
         ref.scalarOnly = true;
-        fast.prepare (sr);
-        ref.prepare (sr);
-        const float gains[] = { 0.0f, 6.0f, -24.0f, 24.0f, 0.5f, -3.0f };
-        float db = gains[run % 6];
-        fast.setGainDb (db); ref.setGainDb (db);
-        fast.reset(); ref.reset();
-        for (int blk = 0; blk < 60; ++blk)
+        const float gains[] = { 0.0f, 6.0f, -24.0f, 24.0f, 0.5f, -3.0f, 9.0f };
+        float db = gains[run % 7];
+        bool on = run % 3 != 0;
+        for (auto* st : { &fast, &ref }) { st->setLimiter (on); st->prepare (sr); st->setGainDb (db); st->reset(); }
+        int style = run % 5, quiet = 0;
+        for (int blk = 0; blk < 120; ++blk)
         {
-            if (blk % 7 == 3)   // a gain change in the middle of the run: the smoothing, sample by sample first
+            if (blk % 9 == 4)   // a gain change in the middle of the run: the smoothing, sample by sample first
             {
-                db = gains[rnd() % 6];
+                db = gains[rnd() % 7];
                 fast.setGainDb (db); ref.setGainDb (db);
             }
+            if (blk % 13 == 7)   // the switch: the crossfade, then the other path
+            {
+                on = ! on;
+                fast.setLimiter (on); ref.setLimiter (on);
+            }
+            if (blk % 31 == 30) { fast.reset(); ref.reset(); }
+            if (blk % 6 == 0) { style = (int) (rnd() % 5); quiet = (int) (rnd() % 3); }
             const int n = (blk % 5 == 0) ? (int) (rnd() % 41) : 128 - (int) (rnd() % 3);
-            const int style = (run + blk / 4) % 5;
             std::vector<float> l ((size_t) n), r ((size_t) n);
-            for (auto& v : l) v = sampleOf (style);
-            for (auto& v : r) v = sampleOf ((style + blk) % 5);
+            // quiet stretches (the idle path of the limiter) between the special and loud ones
+            for (auto& v : l) v = quiet > 0 ? 0.02f * (uni() - 0.5f) : sampleOf (style);
+            for (auto& v : r) v = quiet > 0 ? 0.02f * (uni() - 0.5f) : sampleOf ((style + blk) % 5);
             std::vector<float> l1 = l, r1 = r, l2 = l, r2 = r;
-            const int mode = (run + blk) % 7;   // 0 .. 4 stereo, 5 left only, 6 right only
-            float* pl1 = mode == 6 ? nullptr : l1.data(); float* pr1 = mode == 5 ? nullptr : r1.data();
-            float* pl2 = mode == 6 ? nullptr : l2.data(); float* pr2 = mode == 5 ? nullptr : r2.data();
+            const int mode = (run + blk) % 8;   // 0 .. 4 stereo, 5 left only, 6 right only, 7 the same buffer for both
+            float* pl1 = mode == 6 ? nullptr : l1.data(); float* pr1 = mode == 5 ? nullptr : (mode == 7 ? l1.data() : r1.data());
+            float* pl2 = mode == 6 ? nullptr : l2.data(); float* pr2 = mode == 5 ? nullptr : (mode == 7 ? l2.data() : r2.data());
             fast.process (pl1, pr1, n);
             ref.process (pl2, pr2, n);
             for (int i = 0; i < n; ++i)
@@ -85,13 +90,16 @@ static long long compareStage (double sr, int runs)
                 const bool differ = bitsOf (l1[(size_t) i]) != bitsOf (l2[(size_t) i]) || bitsOf (r1[(size_t) i]) != bitsOf (r2[(size_t) i]);
                 bad += differ;
                 if (differ && bad < 4)
-                    std::printf ("    differ: lim %d run %d block %d sample %d: in %08x %08x out %08x %08x vs %08x %08x\n", (int) Lim, run, blk, i, bitsOf (l[(size_t) i]), bitsOf (r[(size_t) i]), bitsOf (l1[(size_t) i]), bitsOf (r1[(size_t) i]), bitsOf (l2[(size_t) i]), bitsOf (r2[(size_t) i]));
+                    std::printf ("    differ: run %d block %d sample %d: in %08x %08x out %08x %08x vs %08x %08x\n", run, blk, i, bitsOf (l[(size_t) i]), bitsOf (r[(size_t) i]), bitsOf (l1[(size_t) i]), bitsOf (r1[(size_t) i]), bitsOf (l2[(size_t) i]), bitsOf (r2[(size_t) i]));
             }
             bad += bitsOf (fast.gainReductionDb()) != bitsOf (ref.gainReductionDb());
+            bad += bitsOf (fast.lastGain()) != bitsOf (ref.lastGain());
             samples += n;
         }
+        groups += fast.vectorGroups();
+        bad += ref.vectorGroups() != 0u;
     }
-    std::printf ("    %lld samples (%s): %lld differ\n", samples, Lim ? "limiter" : "plain", bad);
+    std::printf ("    %lld samples: %lld differ\n", samples, bad);
     return bad;
 }
 
@@ -126,13 +134,13 @@ static long long comparePeak (int reps)
 
 static void runAll (const char* mode)
 {
-    char what[160];
-    for (double sr : { 44100.0, 48000.0 })
+    char what[200];
+    for (double sr : { 44100.0, 48000.0, 96000.0 })
     {
-        std::snprintf (what, sizeof what, "%s, %.0f Hz: plain stage, NEON = scalar to the bit", mode, sr);
-        check (compareStage<false> (sr, 120) == 0, what);
-        std::snprintf (what, sizeof what, "%s, %.0f Hz: limiter stage, NEON = scalar to the bit", mode, sr);
-        check (compareStage<true> (sr, 120) == 0, what);
+        unsigned long long groups = 0;
+        const long long bad = compareStage (sr, 150, groups);
+        std::snprintf (what, sizeof what, "%s, %.0f Hz: the stage (gain, look-ahead limiter on / off / switching, idle and limiting), NEON = scalar to the bit (%llu groups of four by NEON)", mode, sr, groups);
+        check (bad == 0 && groups > 10000, what);
     }
     std::snprintf (what, sizeof what, "%s: output peak, NEON = fmax loop to the bit", mode);
     check (comparePeak (20000) == 0, what);

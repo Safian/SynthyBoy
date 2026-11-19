@@ -251,15 +251,15 @@ protected:
         // the selected step: every row's value
         const Rect sr = stripRect();
         char t[40];
-        std::snprintf (t, sizeof t, "STEP %d", grid.selectedStep + 1);
+        std::snprintf (t, sizeof t, "STEP %d", grid.state.selectedStep + 1);
         p.textLeft ({ sr.x + 12, sr.y, 96, sr.h }, t, T.fLabel, p.c (T.q, 255), T.fMin);
         const int cw = (sr.w - 120) / VoiceGrid::kNumRows;
         for (int r = 0; r < VoiceGrid::kNumRows; ++r)
         {
             char v[24];
-            VoiceGrid::formatValue (r, grid.values[r][std::clamp (grid.selectedStep, 0, VoiceGrid::kNumSteps - 1)], v, sizeof v);
+            VoiceGrid::formatValue (r, grid.state.values[r][std::clamp (grid.state.selectedStep, 0, VoiceGrid::kNumSteps - 1)], v, sizeof v);
             std::snprintf (t, sizeof t, "%s  %s", VoiceGrid::rowName (r), v);
-            p.textLeft ({ sr.x + 112 + r * cw, sr.y, cw - 6, sr.h }, t, T.fLabel - 1.0f, p.c (r == grid.activeRow ? T.text : T.textDim, 255), T.fMin);
+            p.textLeft ({ sr.x + 112 + r * cw, sr.y, cw - 6, sr.h }, t, T.fLabel - 1.0f, p.c (r == grid.state.activeRow ? T.text : T.textDim, 255), T.fMin);
         }
     }
 

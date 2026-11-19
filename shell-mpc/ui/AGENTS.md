@@ -4,7 +4,7 @@ For AI coding agents. Imperative and terse. Human docs with one page per compone
 
 ## Rules that must hold
 1. THE CONTRACT. A component takes a plain `state` struct, a `Rect` (`place`), the flags `setQ` / `setEnabled`, and an opaque `setId`. It draws only inside its rectangle (`draw (gpu::SceneBuilder&)`), takes `touchDown / touchMove / touchUp / tick / turn / wheel`, and returns a `Change { kind, id, value, index }` (kind `None` = nothing).
-2. NEVER STORE THE TRUTH in a component. The value comes in through `state` every update; the owner writes the parameter and the next update shows it. A change that would not change the value is not reported. (Known exceptions to fix, not to copy: `FilterDisplay`, `MiniKeyboardDisplay`, `FxSlotCard`, `ModRowSelector`, `VoiceGrid` write part of their own state.)
+2. NEVER STORE THE TRUTH in a component. The value comes in through `state` every update; the owner writes the parameter and the next update shows it. A change that would not change the value is not reported. Private and transient gesture data (the handle held, the start of a drag, the last position reported) is not the truth and may stay in the component; view state that is not a parameter (a selection, a lock, a zoom) is the owner's too: the component asks for it with a `Request` or a change that names it, and the owner sets it in `state` on the next update. A component writes none of its `state`.
 3. TOUCH TARGETS are at least 56 px in the smaller direction (`touchTargets` must list the real rectangles; a component with inner cells overrides it). `minSize()` is the smallest legible size; the layout gives at least that.
 4. YELLOW (`theme::L().q`) is only for Q frames and chips. The accent colour is `flow[0]`.
 5a. THE DEVICE RULE FOR Q GROUPS: one switch, `QGroup::setWideDevice` (16 knobs, the XL). Wide: no frame, no active group look, every mapped member shows its slot chip 1..16 in the one chip style, slots do not move under a touch (pages of at most four groups). 4 knobs (Key 61): the frame marks the active four, a touch makes a group active, chips 1..4. Yellow stays only for Q frames and chips.
@@ -136,7 +136,7 @@ EnvGraph | env_graph.h | DAHDSR graph with handles | V R
 EnvCarousel / EnvSelector | env_screen.h | envelope 1..6 selector (carousel with target dots) / cells | I R
 TypeSelector | base.h | PictogramSelector that can be a drop-down (type of an oscillator) | I R
 EnvCompact / EnvFullScreen | env_screen.h | envelope views | V I R
-FilterDisplay | filter_display.h | response + cutoff/reso handle, formant pad | V (x only)
+FilterDisplay | filter_display.h | response + cutoff/reso handle, formant pad | V (x, then y by takePending)
 FilterRoutePanel | filter_display.h | route popup of a filter | V I R
 FilterKnob / FilterToggle | filter_display.h | knob / toggle with dim look | V / I
 FilterFullScreen | filter_display.h | filter page | V I R

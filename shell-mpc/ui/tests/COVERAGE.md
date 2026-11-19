@@ -270,7 +270,7 @@ For each component class, it records what it does in one line, its public behavi
 
 | Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
 | :--- | :--- | :--- |
-| **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | `ui_env_host.cpp`: "a touch on the centre of handle 1 takes that handle" |
+| **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | `ui_env_host.cpp`: "a touch on the centre of handle 1 takes that handle"; "stores nothing: ..." (tap asks to select, a drag and a double tap with no write back leave `state` and the picture alone, LOCK and the zoom are requests); `env_ui_host.cpp`: the page keeps the view state |
 | **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | not tested |
 | **Wheel** | Mouse wheel input via `wheel()` and `wheelOver()` (`wheelUnit()`) | not tested |
 | **Value Text** | Value/parameter readout formatting, units, precision, caption | `ui_env_host.cpp`: "time ruler labels" |
@@ -318,7 +318,7 @@ For each component class, it records what it does in one line, its public behavi
 
 | Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
 | :--- | :--- | :--- |
-| **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | not tested |
+| **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | `ui_display_host.cpp`: "filter display: ..." (X then Y by `takePending`, the dual handle, dead band, no write to `state`, the picture unchanged); `filter_ui_host.cpp`: the owner writes both axes and the display follows under the finger |
 | **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | not tested |
 | **Wheel** | Mouse wheel input via `wheel()` and `wheelOver()` (`wheelUnit()`) | not tested |
 | **Value Text** | Value/parameter readout formatting, units, precision, caption | not tested |
@@ -655,7 +655,7 @@ For each component class, it records what it does in one line, its public behavi
 | Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
 | :--- | :--- | :--- |
 | **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | not tested |
-| **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | not tested |
+| **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | `ui_cov_steppers_lists_host.cpp`: "ModRowSelector ..." (reports, ends silent, `state` and the picture unchanged by a turn) |
 | **Wheel** | Mouse wheel input via `wheel()` and `wheelOver()` (`wheelUnit()`) | not tested |
 | **Value Text** | Value/parameter readout formatting, units, precision, caption | not tested |
 | **Layout / Minimum Sizes** | `minSize()`, touch target bounds, cell dimensions | not tested |
@@ -798,8 +798,8 @@ For each component class, it records what it does in one line, its public behavi
 
 | Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
 | :--- | :--- | :--- |
-| **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | not tested |
-| **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | not tested |
+| **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | `mastervoice_ui_host.cpp`: "grid: ..." (a stroke over columns, the pending columns, no write to `state`, the picture unchanged until the owner writes back) |
+| **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | `mastervoice_ui_host.cpp`: "grid: a turn ..." |
 | **Wheel** | Mouse wheel input via `wheel()` and `wheelOver()` (`wheelUnit()`) | not tested |
 | **Value Text** | Value/parameter readout formatting, units, precision, caption | not tested |
 | **Layout / Minimum Sizes** | `minSize()`, touch target bounds, cell dimensions | not tested |
@@ -822,7 +822,7 @@ For each component class, it records what it does in one line, its public behavi
 
 | Public Behaviour | Implementation & Interface Behaviour | Existing Test Status |
 | :--- | :--- | :--- |
-| **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | not tested |
+| **Touch Down / Move / Up** | Gestures (tap, drag sensitivity, double-tap default, outside capture) | `mastervoice_ui_host.cpp`: "keyboard: ..." (reports, no write to `state`, the picture unchanged until the owner writes back) |
 | **Turn (Q-Link step)** | Hardware rotary knob delta handling (normalised or discrete steps) | not tested |
 | **Wheel** | Mouse wheel input via `wheel()` and `wheelOver()` (`wheelUnit()`) | not tested |
 | **Value Text** | Value/parameter readout formatting, units, precision, caption | not tested |

@@ -17,6 +17,8 @@
 # For every render the figures of scripts/loudness.py are taken; the preset's figure is the energy mean over its renders. THE MEASURE is `fast_max`: the loudest 100 ms (K-weighted,
 # BS.1770) of the gesture; `solve` moves master.volume so that fast_max + the calibration of the category (scripts/factory-preset-loudness.json) is the one target.
 # The rule, the target and the check against the ear: docs/release/SOUND-FIXES-1.md.
+# SUPERSEDED for the factory set (2026-11-19): the levels are set by scripts/level-to-stock.py against the stock MPC instruments (docs/release/LEVELLING-STOCK-2026-11-19.md);
+# `measure` still measures, `solve` must not be run on the set (it would undo that levelling).
 
 import argparse
 import importlib.util
@@ -154,7 +156,7 @@ def measure(binary, profile, presets_dir, work, volume_set=None):
 
 
 CALIB = HERE / "factory-preset-loudness.json"
-TARGET = -23.0
+TARGET = -12.5
 # The presets the owner called "ok" on the level (docs/release/preset-todo.md, MPC XL, package ov29): they define what the gesture of their category must read to be "right". For the
 # categories he has not auditioned yet (Lead, Pad, Keys, Pluck) the median of the category as it was is the reference (no change of the category's level, only a levelling inside it)
 # until his notes come; re-run `calibrate` with a longer list then.

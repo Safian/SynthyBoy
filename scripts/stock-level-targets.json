@@ -1,0 +1,59 @@
+{
+ "peak_note_v127": {
+  "Bass": -9.1,
+  "Lead": -11.5,
+  "Pad": -9.6,
+  "Keys": -10.5,
+  "Pluck": -16.2,
+  "FX": -11.0
+ },
+ "peak_chord_v127": {
+  "Bass": -7.0,
+  "Lead": -8.0,
+  "Pad": -5.6,
+  "Keys": -4.0,
+  "Pluck": -8.1,
+  "FX": -7.0
+ },
+ "peak_note_v100": {
+  "Bass": -9.2,
+  "Lead": -10.6,
+  "Pad": -12.4,
+  "Keys": -18.6,
+  "Pluck": -19.9,
+  "FX": -12.0
+ },
+ "peak_chord_v100": {
+  "Bass": -8.0,
+  "Lead": -10.0,
+  "Pad": -8.9,
+  "Keys": -12.0,
+  "Pluck": -11.7,
+  "FX": -10.0
+ },
+ "sustain_note_v127": {
+  "Bass": -20,
+  "Lead": -19.5,
+  "Pad": -19,
+  "Keys": -27,
+  "Pluck": -31,
+  "FX": -22
+ },
+ "sustain_chord_v127": {
+  "Bass": -22,
+  "Lead": -19,
+  "Pad": -15,
+  "Keys": -27,
+  "Pluck": -26,
+  "FX": -20
+ },
+ "peak_chord6_v127": {
+  "Bass": -8,
+  "Lead": -8,
+  "Pad": -3.5,
+  "Keys": -3.6,
+  "Pluck": -7,
+  "FX": -6
+ },
+ "notes": "Key 61 host track meter, Hype + 9 stock presets (report add671aa). Bass/Lead refs are MONOPHONIC plugins: chord targets there are conservative judgement (-7/-8), not measured. FX has no stock measurement: interpolated. Stock never exceeded -3 dBFS with 6-note v127 chord, no limiter proven; sustain values are approximate live-bar readings. Velocity: bass/lead insensitive; pianos/plucks/strings drop 5-9 dB v127->v100."
+}

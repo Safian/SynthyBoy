@@ -23,33 +23,37 @@
 namespace synthyboy_mpc { namespace ui {
 
 // ===============================================================================================================================================================
-/** The number of a row as the first member of its Q group: it steps the selected row (turn: an Index change with the new row), and a tap on it is the row selection of the view. */
+/** The number of a row as the first member of its Q group: it steps the selected row (turn: an Index change with the new row), and a tap on it is the row selection of the view. It stores nothing: it draws `state.text` and
+    steps from `state.selected` (both set by the owner on every update: ModMatrixView::updateQGroup); the view selects the row from the change (turnQ), and the next update shows it. */
 class ModRowSelector : public Component
 {
 public:
-    int selected = 0;
-    int maxRows = 0;
-    char text[8] = {};
+    struct State
+    {
+        int selected = 0;
+        int maxRows = 0;
+        char text[8] = {};
+    };
+    State state;
 
     ModRowSelector() = default;
     Size minSize() const override { return { 56, 56 }; }
 
     Change turn (double delta) override
     {
-        if (maxRows <= 0) return Change::none();
+        if (state.maxRows <= 0) return Change::none();
         int step = delta > 0.0 ? 1 : (delta < 0.0 ? -1 : 0);
-        const int next = std::clamp (selected + step, 0, maxRows - 1);
-        if (step == 0 || next == selected)   // at the first or the last row a further step changes nothing: no change is reported
+        const int next = std::clamp (state.selected + step, 0, state.maxRows - 1);
+        if (step == 0 || next == state.selected)   // at the first or the last row a further step changes nothing: no change is reported
             return Change::none();
-        selected = next;
-        return Change::indexed (id_, selected, static_cast<double> (selected));
+        return Change::indexed (id_, next, static_cast<double> (next));
     }
 
 protected:
     void drawBody (Pen& p) const override
     {
         const theme::Look& T = theme::L();
-        p.textCentered (rect_, text, T.fLabel, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
+        p.textCentered (rect_, state.text, T.fLabel, p.c (qFrame_ ? T.q : T.textDim, 255), T.fMin);
     }
 };
 
@@ -97,7 +101,7 @@ public:
     void setSlot (int idx)
     {
         slotIndex = idx;
-        std::snprintf (number.text, sizeof number.text, "%02d", std::clamp (idx + 1, 0, 99));
+        std::snprintf (number.state.text, sizeof number.state.text, "%02d", std::clamp (idx + 1, 0, 99));
         layout();
     }
 
@@ -297,8 +301,8 @@ public:
         }
         // the number of the selected row is the first member of the group: its chip is the first index, and the first Q-Link steps the row
         ModRowSelector& num = windowRows[wIdx].number;
-        num.maxRows = visibleSlotCount_;
-        num.selected = selectedRow_;
+        num.state.maxRows = visibleSlotCount_;
+        num.state.selected = selectedRow_;
         qgroup.set (0, &num);
         qgroup.set (1, &windowRows[wIdx].sourceBtn);
         qgroup.set (2, &windowRows[wIdx].destBtn);

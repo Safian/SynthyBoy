@@ -236,8 +236,8 @@ void testMasterGroupsAndMeters()
     r.refresh();
     int lit = 0;
     for (int n = 0; n < 12; ++n)
-        lit += ui::MiniKeyboardDisplay::isScaleNote (m.keyboard.scaleType, m.keyboard.scaleKey, n) ? 1 : 0;
-    check (lit == 7 && m.keyboard.scaleType == 1, "the keyboard shows 7 of the 12 notes for a major scale");
+        lit += ui::MiniKeyboardDisplay::isScaleNote (m.keyboard.state.scaleType, m.keyboard.state.scaleKey, n) ? 1 : 0;
+    check (lit == 7 && m.keyboard.state.scaleType == 1, "the keyboard shows 7 of the 12 notes for a major scale");
     // keyboard touch targets and note selection
     const auto kr = m.keyboard.computeRects();
     bool allKeysWide = true;
@@ -336,7 +336,7 @@ void testVoiceGridDrawing()
     for (int s = 1; s <= 5; ++s)
         written += r.inst.get ("voicectl.s" + std::to_string (s + 1) + ".pan") > 50.0f ? 1 : 0;
     check (written == 5, "a stroke over columns 2 .. 6 writes every one of them, the skipped ones too (" + std::to_string (written) + " of 5)");
-    check (g.selectedStep == 5, "the selected step is the last one touched");
+    check (g.state.selectedStep == 5, "the selected step is the last one touched");
     // the values at the selected step are written under the grid
     r.inst.set ("voicectl.s6.detune", -25.0f);
     r.inst.set ("voicectl.s6.cutoff", 40.0f);
@@ -353,16 +353,16 @@ void testVoiceGridDrawing()
     check (vs.rowBlockRect().contains (vs.rowList.rect()) && vs.rowBlockRect().right() <= g.rect().x && ! vs.rowBlockRect().overlaps (g.rect()), "the list stands in a block of its own at the left of the grid, the grid has the rest of the width");
     const ui::Rect row2 = vs.rowList.rowRect (2);
     r.tapAt (row2.x + row2.w / 2, row2.y + row2.h / 2);
-    check (g.activeRow == 2 && vs.rowList.state.index == 2 && r.inst.q[1] != -1 && QRouter::indexOf (r.inst.q[1]) == VoiceUi::kVirtualRow, "a tap on CUTOFF selects the row; the list is Q2 of the header group (the virtual row target)");
+    check (g.state.activeRow == 2 && vs.rowList.state.index == 2 && r.inst.q[1] != -1 && QRouter::indexOf (r.inst.q[1]) == VoiceUi::kVirtualRow, "a tap on CUTOFF selects the row; the list is Q2 of the header group (the virtual row target)");
     check (vs.groups[0].member (1) == &vs.rowList && vs.groups[0].frameless() && vs.groups[0].numMembers() == 4, "the header group is [STEP, the ROW list, LENGTH, VALUE] and has no frame (its members lie apart)");
     {
         // the VALUE field shows the value the way the grid cell does: a centred pan is "MID", not "0"
         r.tapAt (vs.rowList.rowRect (0).x + vs.rowList.rowRect (0).w / 2, vs.rowList.rowRect (0).y + vs.rowList.rowRect (0).h / 2);
         r.refresh();
         char want[16], got[16];
-        ui::VoiceGrid::formatValue (0, g.value (0, g.selectedStep), want, sizeof want);
+        ui::VoiceGrid::formatValue (0, g.value (0, g.state.selectedStep), want, sizeof want);
         ui::NumberField::formatValue (vs.stepValue.state, got);
-        check (std::string (got) == std::string (want) && (g.value (0, g.selectedStep) != 0.0f || std::string (got) == "MID"), "the VALUE field of the PAN row has the format of the grid cell (" + std::string (got) + " / " + std::string (want) + ")");
+        check (std::string (got) == std::string (want) && (g.value (0, g.state.selectedStep) != 0.0f || std::string (got) == "MID"), "the VALUE field of the PAN row has the format of the grid cell (" + std::string (got) + " / " + std::string (want) + ")");
         r.tapAt (vs.rowList.rowRect (2).x + vs.rowList.rowRect (2).w / 2, vs.rowList.rowRect (2).y + vs.rowList.rowRect (2).h / 2);
         r.refresh();
     }
@@ -370,21 +370,97 @@ void testVoiceGridDrawing()
     // one text for one value: the VALUE field reads as the cell of the grid and the strip do ("MID", "0 c", "40%", "25L")
     {
         char want[16], got[16];
-        ui::VoiceGrid::formatValue (2, g.value (2, g.selectedStep), want, sizeof want);
+        ui::VoiceGrid::formatValue (2, g.value (2, g.state.selectedStep), want, sizeof want);
         ui::NumberField::formatValue (vs.stepValue.state, got);
         check (std::string (got) == want && std::string (got) != "0" && std::string (got).find ('%') != std::string::npos, "the VALUE field of CUTOFF reads like the strip: " + std::string (got));
-        const int savedRow = g.activeRow;
-        g.activeRow = 0;
-        r.inst.set ("voicectl.s" + std::to_string (g.selectedStep + 1) + ".pan", 0.0f);
+        const int savedRow = g.state.activeRow;
+        g.state.activeRow = 0;
+        r.inst.set ("voicectl.s" + std::to_string (g.state.selectedStep + 1) + ".pan", 0.0f);
         r.refresh (2);
         ui::NumberField::formatValue (vs.stepValue.state, got);
         check (std::string (got) == "MID", "the VALUE field of PAN at the middle reads MID, as the cell does (" + std::string (got) + ")");
-        g.activeRow = savedRow;
+        g.state.activeRow = savedRow;
         r.refresh (2);
     }
     check (vs.length.rect().w >= 160 && vs.stepValue.rect().w >= 180 && vs.qStepSelect.rect().right() <= vs.length.rect().x, "LENGTH and VALUE have the room the ROW stepper left (" + std::to_string (vs.length.rect().w) + ", " + std::to_string (vs.stepValue.rect().w) + " px)");
     check (r.ui.screen().turnQ (1, 1.0).index == 3, "a Q-Link step on Q2 moves the row on (the list)");
     r.refresh();
+}
+
+/** The pixels of a component drawn alone (to see whether a gesture changed the picture). */
+std::vector<uint32_t> pixelsOf (const ui::Component& c, int w, int h)
+{
+    uit::Scene sc (w, h, ui::theme::rgba (ui::theme::L().bg0, 255));
+    c.draw (sc.builder());
+    return uit::render (sc).px;
+}
+
+void testVoiceGridStoresNoTruth()
+{
+    ui::VoiceGrid g;
+    g.place ({ 0, 0, 800, 260 });
+    g.state.length = 8;
+    g.state.activeRow = 1;
+    g.state.selectedStep = 0;
+    const std::vector<uint32_t> before = pixelsOf (g, 800, 260);
+    const ui::Rect c2 = g.columnRect (2), c5 = g.columnRect (5);
+    const int y = c2.y + 32 + (c2.h - 62) / 4;   // the upper half of the bar: a positive value
+    const ui::Change d = g.touchDown (c2.x + c2.w / 2, y, 0.0);
+    check (d.kind == ui::ChangeKind::Value && d.id == g.stepId (1, 2) && d.value > 0.1, "grid: a finger down reports the value of its height under the id of its column");
+    const ui::Change m = g.touchMove (c5.x + c5.w / 2, y);
+    check (m.kind == ui::ChangeKind::Value && m.id == g.stepId (1, 5), "grid: a move to another column reports that column");
+    ui::Change p;
+    int skipped = 0;
+    bool onTheLine = true;
+    while (g.takePending (p))
+    {
+        ++skipped;
+        onTheLine = onTheLine && (p.id == g.stepId (1, 3) || p.id == g.stepId (1, 4)) && std::fabs (p.value - d.value) < 0.02;   // same height: the same value on the line between
+    }
+    check (skipped == 2 && onTheLine, "grid: a fast stroke hands over the two skipped columns, on the line between the last report and this one");
+    const ui::Change same = g.touchMove (c5.x + c5.w / 2, y);
+    check (same.kind == ui::ChangeKind::None, "grid: a move that would not change the reported value is not reported, although the owner has written nothing back");
+    g.touchUp (c5.x, y);
+    bool untouched = g.state.selectedStep == 0 && g.state.activeRow == 1 && g.state.length == 8;
+    for (int r = 0; r < ui::VoiceGrid::kNumRows; ++r)
+        for (int s = 0; s < ui::VoiceGrid::kNumSteps; ++s)
+            untouched = untouched && g.state.values[r][s] == 0.0f;
+    check (untouched, "grid: after a whole stroke with no write back, `state` is as the owner left it (no value, no selected step)");
+    check (pixelsOf (g, 800, 260) == before, "grid: ... and the picture is the same");
+    g.state.selectedStep = 2;
+    g.setValue (1, 2, static_cast<float> (d.value));   // the owner writes the parameter and sets the state
+    check (pixelsOf (g, 800, 260) != before, "grid: with the owner writing back, the next draw shows the new value (and the selected frame)");
+    // a Q-Link turn
+    g.state.values[1][2] = 1.0f;
+    check (g.turn (1.0).kind == ui::ChangeKind::None, "grid: a turn up at the top of the range reports nothing");
+    const ui::Change t = g.turn (-1.0);
+    check (t.kind == ui::ChangeKind::Value && t.id == g.stepId (1, 2) && std::fabs (t.value - 0.95) < 0.001 && g.state.values[1][2] == 1.0f, "grid: a turn down reports the new value and leaves `state` alone");
+}
+
+void testKeyboardStoresNoTruth()
+{
+    ui::MiniKeyboardDisplay k;
+    k.setId (7);
+    k.place ({ 0, 0, 480, 160 });
+    k.state.scaleType = 1;
+    k.state.scaleKey = 0;
+    const std::vector<uint32_t> before = pixelsOf (k, 480, 160);
+    const auto kr = k.computeRects();
+    const ui::Rect dKey = kr.white[1], eKey = kr.white[2], cKey = kr.white[0];   // D, E, C
+    const int y = dKey.bottom() - 4;   // below the black keys
+    ui::Change c = k.touchDown (dKey.x + dKey.w / 2, y, 0.0);
+    check (c.kind == ui::ChangeKind::Index && c.id == 7 && c.index == 2, "keyboard: a finger down on D reports the note 2");
+    c = k.touchMove (eKey.x + eKey.w / 2, y);
+    check (c.kind == ui::ChangeKind::Index && c.index == 4, "keyboard: a slide to E reports the note 4");
+    c = k.touchUp (eKey.x + eKey.w / 2, y);
+    check (c.kind == ui::ChangeKind::None, "keyboard: lifting after the slide reports nothing more");
+    check (k.touchDown (dKey.x + dKey.w / 2, y, 500.0).index == 2 && k.touchUp (dKey.x + dKey.w / 2, y).kind == ui::ChangeKind::None, "keyboard: a tap reports its key once (down), not again on lifting");
+    check (k.state.scaleKey == 0 && k.state.scaleType == 1 && k.state.scaleMode == 0, "keyboard: after the gesture with no write back `state` is as the owner left it");
+    check (pixelsOf (k, 480, 160) == before, "keyboard: ... and the picture is the same");
+    check (k.touchDown (cKey.x + cKey.w / 2, y, 100.0).kind == ui::ChangeKind::None, "keyboard: a touch on the root that is shown already reports nothing");
+    k.touchUp (cKey.x + cKey.w / 2, y);
+    k.state.scaleKey = 4;   // the owner wrote the parameter and sets the state
+    check (pixelsOf (k, 480, 160) != before, "keyboard: with the owner writing back, the next draw shows the new root");
 }
 
 void testVoiceStepsLitAndQ()
@@ -397,10 +473,10 @@ void testVoiceStepsLitAndQ()
     r.inst.liveValues.voiceStep[0] = 0.0f;   // the newest voice plays step 1
     r.inst.liveValues.voiceStep[1] = 2.0f;
     r.refresh();
-    check (r.ui.screen().grid.voiceStepMask == 0x05, "the steps the voices play are lit (steps 1 and 3)");
+    check (r.ui.screen().grid.state.voiceStepMask == 0x05, "the steps the voices play are lit (steps 1 and 3)");
     r.inst.liveValues.voiceStep[1] = 6.0f;   // beyond the length: not lit
     r.refresh();
-    check (r.ui.screen().grid.voiceStepMask == 0x01, "a step beyond the length is not lit");
+    check (r.ui.screen().grid.state.voiceStepMask == 0x01, "a step beyond the length is not lit");
 
     // the Q group STEP: two virtual targets, the length, the value of the selected step
     ui::VoiceScreen& v = r.ui.screen();
@@ -409,10 +485,10 @@ void testVoiceStepsLitAndQ()
     check (r.inst.q[2] == demo::Inst::idx ("voicectl.length") && r.inst.q[3] == demo::Inst::idx ("voicectl.s1.pan"), "Q3 is the length, Q4 the value of the selected step");
     r.inst.setVirtualIn (VoiceUi::kVirtualStep, 1.0f);   // the host writes step 8
     r.refresh();
-    check (v.grid.selectedStep == 7 && r.inst.q[3] == demo::Inst::idx ("voicectl.s8.pan"), "the host's write to the virtual step target selects step 8 and the value target follows");
+    check (v.grid.state.selectedStep == 7 && r.inst.q[3] == demo::Inst::idx ("voicectl.s8.pan"), "the host's write to the virtual step target selects step 8 and the value target follows");
     r.inst.setVirtualIn (VoiceUi::kVirtualRow, 0.4f);
     r.refresh();
-    check (v.grid.activeRow == 2 && r.inst.q[3] == demo::Inst::idx ("voicectl.s8.cutoff"), "the virtual row target selects CUTOFF");
+    check (v.grid.state.activeRow == 2 && r.inst.q[3] == demo::Inst::idx ("voicectl.s8.cutoff"), "the virtual row target selects CUTOFF");
     // the value field writes the step
     const ui::Rect sv = v.stepValue.rect();
     r.drag (sv.x + sv.w / 2, sv.y + sv.h / 2, sv.x + sv.w / 2, sv.y + sv.h / 2 - 30, true);
@@ -586,13 +662,13 @@ void testMasterPadPressure()
     check (! r.ui.item (MasterUi::kPadPressure) || r.ui.item (MasterUi::kPadPressure)->param < 0, "the two are not engine parameters");
 }
 
-// the output limiter: one LED toggle "LIMIT" in the OUTPUT block (a shell setting, no Q group), off by default in the plugin
+// the output limiter: one LED toggle "LIMIT" in the OUTPUT block (a shell setting, no Q group; on by default in the plugin, off in the demo view)
 void testMasterOutputLimiter()
 {
     MRig r;
     r.refresh();
     ui::MasterScreen& m = r.ui.screen();
-    check (m.outputLimiter.enabled() && ! m.outputLimiter.state.on, "output limiter: LIMIT shows the setting (off by default)");
+    check (m.outputLimiter.enabled() && ! m.outputLimiter.state.on, "output limiter: LIMIT shows the setting of the view (the demo view: off)");
     check (m.outputLimiter.rect().h >= 56 && m.outputLimiter.rect().w >= 56 && m.outputLimiter.sizeOk(), "output limiter: touch target of at least 56 pixels");
     check (m.blockRect (0).contains (m.outputLimiter.rect()) && ! m.outputLimiter.rect().overlaps (m.voiceOverride.rect()) && ! m.outputLimiter.rect().overlaps (m.stereoRouting.rect())
                && ! m.outputLimiter.rect().overlaps (m.spread.rect()) && ! m.outputLimiter.rect().overlaps (m.volume.rect()) && ! m.outputLimiter.rect().overlaps (m.meters.rect()),
@@ -643,6 +719,8 @@ int main()
     testMasterQuality();
     testVoiceLayout();
     testVoiceGridDrawing();
+    testVoiceGridStoresNoTruth();
+    testKeyboardStoresNoTruth();
     testVoiceStepsLitAndQ();
     testVoiceDraw();
     testFullCoverage();

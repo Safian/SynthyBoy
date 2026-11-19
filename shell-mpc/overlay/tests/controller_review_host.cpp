@@ -52,7 +52,7 @@ static int runCase (int which)
         case 2: p.pointerHotSpot = big; break;
         case 3: p.gpuClock = big; break;
     }
-    Controller ctl (plane, frame, renderer, p, Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+    SynthyBoyController ctl (plane, frame, renderer, p, Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
     inst.set ("filter1.cutoff", 1000.0f);
     inst.set ("filter1.resonance", 30.0f);
     ctl.attach (&inst);

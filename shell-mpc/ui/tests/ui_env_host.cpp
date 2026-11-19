@@ -272,7 +272,11 @@ void testLockedFitRulerAndZoom()
         Touch tc;
         tc.down (g, lk.x + lk.w / 2, lk.y + lk.h / 2);
         const Change c = tc.up (g, lk.x + lk.w / 2, lk.y + lk.h / 2);
-        check (c && g.edit().handle == EnvGraph::kLock && ! g.state.locked, "a tap on LOCK unlocks");
+        check (c.kind == ChangeKind::Request && g.edit().handle == EnvGraph::kLock && g.edit().level == 0.0 && g.state.locked && g.state.zoom == 0.0, "a tap on LOCK asks to unlock (level 0) and writes neither `locked` nor `zoom` itself");
+        check (std::fabs (g.edit().t - before.window) < 1.0e-9, "... and tells the window the picture stands for now, where the unlocked zoom starts");
+        g.state.locked = g.edit().level >= 0.5;   // the owner keeps the view state and gives it back
+        if (! g.state.locked)
+            g.state.zoom = g.edit().t;
         const EnvGraph::Geom after = g.geom();
         bool same = true;
         for (int k = 0; k < 7; ++k)
@@ -284,19 +288,23 @@ void testLockedFitRulerAndZoom()
         const double z0 = g.state.zoom;
         Touch tz;
         tz.down (g, zr.x + zr.w / 2, zr.y + zr.h / 2);
-        tz.move (g, zr.x + zr.w / 2 + 80, zr.y + zr.h / 2);
-        check (g.state.zoom < z0 * 0.7 && g.edit().handle == EnvGraph::kZoom, "a drag right along the ruler zooms in (" + std::to_string (z0) + " -> " + std::to_string (g.state.zoom) + ")");
+        const Change zc = tz.move (g, zr.x + zr.w / 2 + 80, zr.y + zr.h / 2);
+        check (zc.kind == ChangeKind::Request && g.edit().handle == EnvGraph::kZoom && g.edit().level < z0 * 0.7 && g.state.zoom == z0, "a drag right along the ruler asks for a zoom in (" + std::to_string (z0) + " -> " + std::to_string (g.edit().level) + ") and does not write `zoom` itself");
+        check (tz.move (g, zr.x + zr.w / 2 + 80, zr.y + zr.h / 2).kind == ChangeKind::None, "a move that asks for the zoom reported last asks for nothing");
+        g.state.zoom = g.edit().level;   // the owner
         tz.up (g, zr.x + zr.w / 2 + 80, zr.y + zr.h / 2);
+        const double z1 = g.state.zoom;
         Touch ty;
         ty.down (g, zr.x + zr.w / 2, zr.y + zr.h / 2);
-        ty.move (g, zr.x + zr.w / 2 - 300, zr.y + zr.h / 2);
-        check (g.state.zoom > z0, "a drag left zooms out");
+        const Change yc = ty.move (g, zr.x + zr.w / 2 - 300, zr.y + zr.h / 2);
+        check (yc.kind == ChangeKind::Request && g.edit().level > z0 && g.state.zoom == z1, "a drag left asks for a zoom out");
+        g.state.zoom = g.edit().level;
         ty.up (g, zr.x + zr.w / 2 - 300, zr.y + zr.h / 2);
         const Rect lk2 = g.lockRect();
         Touch tl;
         tl.down (g, lk2.x + 10, lk2.y + 10);
-        tl.up (g, lk2.x + 10, lk2.y + 10);
-        check (g.state.locked, "a second tap on LOCK locks again");
+        const Change lc = tl.up (g, lk2.x + 10, lk2.y + 10);
+        check (lc.kind == ChangeKind::Request && g.edit().handle == EnvGraph::kLock && g.edit().level == 1.0 && ! g.state.locked, "a second tap on LOCK asks to lock again");
     }
     // locked drag: the handle's end stays under the finger although the picture refits at every step
     {
@@ -404,6 +412,51 @@ void testDoubleTapResets()
     tc.down (g, x, y);
     const Change c = tc.up (g, x, y);
     check (c && g.edit().reset && g.edit().handle == envgraph::Release && std::fabs (g.edit().t - 0.25) < 1.0e-12, "a double tap on a handle is the default");
+}
+
+void testGraphStoresNoTruth()
+{
+    EnvGraph g;
+    g.place ({ 20, 20, 800, 340 });
+    g.state.shape.t[1] = 0.35;
+    g.state.defaults = g.state.shape;
+    const Image before = drawComponent (g, 900, 400);
+    double hx, hy;
+    g.handlePoint (envgraph::Attack, hx, hy);
+    const int x0 = static_cast<int> (hx), y0 = static_cast<int> (std::lround (hy));
+    Touch tc;
+    check (! tc.down (g, x0, y0), "stores nothing: a touch down alone gives no change");
+    check (drawComponent (g, 900, 400).px != before.px, "the handle the finger holds is drawn lit at once (gesture data, not the selection)");
+    Change c = tc.up (g, x0, y0);
+    check (c.kind == ChangeKind::Request && g.edit().handle == EnvGraph::kSelect && g.edit().touched == envgraph::Attack && g.state.selected == envgraph::None, "a tap on a handle asks the owner to select it and does not write `selected`");
+    check (drawComponent (g, 900, 400).px == before.px, "... and after lifting the picture is as before (the owner has not written back)");
+    g.state.selected = envgraph::Attack;   // the owner
+    check (drawComponent (g, 900, 400).px != before.px, "with the owner writing back the handle is drawn selected");
+    tc.t += 1000.0;   // (a new tap, not the second of a double tap)
+    tc.down (g, x0, y0);
+    check (! tc.up (g, x0, y0), "a tap on the handle that is selected already reports nothing");
+    // a drag with no owner write back: the changes come, `state` stays, and the handle that is dragged is named in each one
+    g.state.selected = envgraph::None;
+    const double t1 = g.state.shape.t[1];
+    tc.down (g, x0, y0);
+    int reports = 0;
+    for (int i = 1; i <= 10; ++i)
+    {
+        const Change m = tc.move (g, x0 + 6 * i, y0);
+        if (m.kind == ChangeKind::Value)
+        {
+            ++reports;
+            check (g.edit().handle == envgraph::Attack && g.edit().t > t1, "a drag step reports the attack longer than the one the state shows");
+        }
+    }
+    check (reports >= 8 && g.state.shape.t[1] == t1 && g.state.selected == envgraph::None && g.state.zoom == 0.0 && g.state.locked, "a drag with no write back: every step reports, `state` is as the owner left it");
+    tc.up (g, x0 + 60, y0);
+    // a double tap is the default, also without a write back
+    tc.t += 1000.0;
+    tc.down (g, x0, y0); tc.up (g, x0, y0);
+    tc.down (g, x0, y0);
+    c = tc.up (g, x0, y0);
+    check (c.kind == ChangeKind::Value && g.edit().reset && g.edit().handle == envgraph::Attack && g.state.shape.t[1] == t1, "a double tap reports the default and leaves the shape to the owner");
 }
 
 void testDrawing()
@@ -614,6 +667,7 @@ int main()
     testDecayIsTwoDimensional();
     testCurveHandleFollowsTheFinger();
     testDoubleTapResets();
+    testGraphStoresNoTruth();
     testDrawing();
     testCompactLayout();
     testCompactPlot();

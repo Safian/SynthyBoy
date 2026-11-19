@@ -39,12 +39,14 @@ STUB_DOCKER = textwrap.dedent('''\
         esac
     done
     [ -n "${STUB_FAIL_ARCH:-}" ] && [ "$STUB_FAIL_ARCH" = "$arch" ] && exit 1
-    mkdir -p "$build/shell-mpc"
-    printf 'fake %s module' "$arch" > "$build/shell-mpc/synthyboy_mpc.stripped.so"
+    module="${STUB_MODULE:-shell-mpc/synthyboy_mpc.so}"
+    mkdir -p "$build/$(dirname "$module")"
+    printf 'fake %s module' "$arch" > "$build/${module%.so}.stripped.so"
     # the overlay build also makes the GPU helper (scripts/mpc-container-build.sh); the production build does not
     if [ -n "${STUB_HELPER:-}" ]; then
-        mkdir -p "$build/shell-mpc/overlay/gpu-helper"
-        printf 'fake %s helper' "$arch" > "$build/shell-mpc/overlay/gpu-helper/synthyboy-overlay-gpu.stripped"
+        helper="${STUB_HELPER_PATH:-shell-mpc/overlay/gpu-helper/synthyboy-overlay-gpu}"
+        mkdir -p "$build/$(dirname "$helper")"
+        printf 'fake %s helper' "$arch" > "$build/$helper.stripped"
     fi
 ''')
 
@@ -155,7 +157,8 @@ class BuildMpcTest(unittest.TestCase):
         text = CONTAINER.read_text()
         self.assertIn("synthyboy_overlay_gpu", text)
         self.assertIn("libEGL", text)   # the helper must not link the Mesa libraries
-        self.assertIn('check_elf "$helper_dir/synthyboy-overlay-gpu.stripped" tool', text)
+        self.assertIn('check_elf "$helper_dir/$helper_name.stripped" tool', text)
+        self.assertIn('PLUGIN_HELPER="${PLUGIN_HELPER:-shell-mpc/overlay/gpu-helper/synthyboy-overlay-gpu}"', text, "SynthyBoy's helper is the default of the container script")
 
     def test_container_script_holds_each_architecture_to_the_glibc_of_its_device_helper_included(self):
         text = CONTAINER.read_text()
@@ -165,7 +168,7 @@ class BuildMpcTest(unittest.TestCase):
         self.assertRegex(text, r'arm64\)(?:.|\n)*?GLIBC_MAX="\$GLIBC_MAX_ARM64"')
         self.assertIn('"$TRIPLE-objdump" -T "$so"', text)   # the check every binary of the architecture passes, the helper too
         # the helper is checked as a tool with the same check_elf as the plugin, and for BOTH architectures: the file class regex and the loader name come from the architecture
-        self.assertIn('check_elf "$helper_dir/synthyboy-overlay-gpu" tool', text)
+        self.assertIn('check_elf "$helper_dir/$helper_name" tool', text)
         self.assertIn("FILE_RE='ELF 64-bit LSB.*ARM aarch64'", text)
 
     def test_container_script_finds_the_drm_uapi_headers_on_a_native_arm64_host(self):
@@ -173,6 +176,69 @@ class BuildMpcTest(unittest.TestCase):
         self.assertIn("linux-libc-dev-armhf-cross", text)
         self.assertIn("/opt/drm-uapi", text)
         self.assertIn('printf \'#include <drm/drm.h>', text)
+
+    # ---- another plugin (--plugin DIR, migration step 12 of docs/ui-components/TEMPLATE.md) ---------------------------------------------------
+
+    def plugin_build(self, *args, **env):
+        common = ["--out", str(self.out), "--build-dir", str(self.tree), "--skins", str(self.skins), "--plugin", "template-mpc"]
+        return self.run_script(BUILD_MPC, *common, *args, **env)
+
+    def test_the_template_is_built_and_packaged_with_its_own_names(self):
+        r = self.plugin_build("--no-validate", "--arch", "all", STUB_MODULE="mpckit_demo.so", STUB_HELPER="1", STUB_HELPER_PATH="gpu-helper/mpckit-demo-overlay-gpu")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        runs = self.runs()
+        self.assertEqual(len(runs), 2)
+        for run, arch in zip(runs, ("arm32", "arm64")):
+            self.assertIn("ARCH=" + arch, run)
+            self.assertIn("PLUGIN_TARGET=mpckit_demo", run)
+            self.assertIn("PLUGIN_CMAKE_SOURCE=template-mpc", run)
+            self.assertIn("PLUGIN_CMAKE_ARGS=-DMPCKIT_OVERLAY=ON", run)
+            self.assertIn("PLUGIN_MODULE=mpckit_demo.so", run)
+            self.assertIn("PLUGIN_HELPER=gpu-helper/mpckit-demo-overlay-gpu", run)
+        folder = self.out / "Example - VST - MpcKit Demo"
+        self.assertEqual(sorted(p.name for p in (folder / "VST").iterdir()), ["mpckit-demo-overlay-gpu-arm32", "mpckit-demo-overlay-gpu-arm64", "mpckitdemo-arm32.so", "mpckitdemo-arm64.so"])
+        self.assertEqual((folder / "VST" / "mpckitdemo-arm32.so").read_text(), "fake arm32 module")
+        self.assertTrue(os.access(folder / "VST" / "mpckit-demo-overlay-gpu-arm64", os.X_OK))
+        m = json.loads((folder / "plugin.json").read_text(encoding="utf-8"))
+        self.assertEqual((m["name"], m["uid"], m["file32"], m["file64"]), ("MpcKit Demo", "McKD", "VST/mpckitdemo-arm32.so", "VST/mpckitdemo-arm64.so"))
+        self.assertTrue((folder / "version.xml").is_file())
+        self.assertFalse((folder / "Content").exists(), "no presets or content packs for another plugin")
+        self.assertFalse((self.out / FOLDER).exists(), "nothing of SynthyBoy's package")
+        self.assertTrue((folder / "Plugin Skins" / "TUI.json").is_file(), "the given skin is copied")
+
+    def test_the_template_with_one_architecture_lists_one_binary(self):
+        r = self.plugin_build("--no-validate", "--arch", "arm64", STUB_MODULE="mpckit_demo.so")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        folder = self.out / "Example - VST - MpcKit Demo"
+        m = json.loads((folder / "plugin.json").read_text(encoding="utf-8"))
+        self.assertIn("file64", m)
+        self.assertNotIn("file32", m)
+
+    def test_plugin_usage_errors(self):
+        for args in (["--plugin"], ["--plugin", str(self.tmp / "no-such-plugin")], ["--plugin", "scripts"]):
+            r = self.run_script(BUILD_MPC, "--out", str(self.out), *args)
+            self.assertEqual(r.returncode, 2, (args, r.stderr))
+        self.assertEqual(self.runs(), [])
+        bad = self.tmp / "badplugin"
+        bad.mkdir()
+        (bad / "mpc-plugin.conf").write_text("TARGET=x\nUNKNOWN=1\n")
+        r = self.run_script(BUILD_MPC, "--out", str(self.out), "--plugin", str(bad))
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("unknown key UNKNOWN", r.stderr)
+        (bad / "mpc-plugin.conf").write_text("TARGET=x\n")
+        r = self.run_script(BUILD_MPC, "--out", str(self.out), "--plugin", str(bad))
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("missing", r.stderr)
+
+    def test_the_container_script_builds_another_plugins_own_cmake_project(self):
+        text = CONTAINER.read_text()
+        self.assertIn('cmake -S "/src/$PLUGIN_CMAKE_SOURCE" -B /build', text)
+        self.assertIn('cmake --build /build --target "$PLUGIN_TARGET"', text)
+        self.assertIn('so="/build/$PLUGIN_MODULE"', text)
+        self.assertIn('stripped="${so%.so}.stripped.so"', text)
+        conf = (ROOT / "template-mpc" / "mpc-plugin.conf").read_text()
+        for key in ("TARGET=mpckit_demo", "CMAKE_SOURCE=template-mpc", "MODULE=mpckit_demo.so", "BINARY_BASE=mpckitdemo", "MANIFEST=package/plugin.json", "SKIN_SCRIPT=tools/gen_skin.py"):
+            self.assertIn(key, conf)
 
     def test_scripts_are_valid_bash(self):
         for script in (BUILD_MPC, BUILD_ARMV7, CONTAINER):

@@ -26,7 +26,10 @@ namespace synthyboy_mpc { namespace ui {
 // ===============================================================================================================================
 /** FilterDisplay: the response curve on a log frequency axis (20 Hz .. 20 kHz) with thin lines, or the Formant XY pad.
     The curves are what the filter really does (shell-mpc/overlay/curve_source.h: the engine's own filter run on an impulse); one filter: its line with a faint fill, both filters: F1 and F2 and the
-    resultant (white). Interactive: the point on the curve is the cutoff (x) and the resonance (y), or the formant X / Y; while a finger drags it its values are written next to it. Touch target >= 56 px. */
+    resultant (white). Interactive: the point on the curve is the cutoff (x) and the resonance (y), or the formant X / Y; while a finger drags it its values are written next to it. Touch target >= 56 px.
+    NEVER STORE THE TRUTH: the display draws only `state` (the owner sets it on every update) and writes none of it. A touch reports the position of the finger as two changes, X first (`Value`, `id` = the id of the cutoff,
+    `value` = the position on the log axis 0 .. 1, `hzOfNorm (value)` is the frequency) and Y second, taken with `takePending` (`id` = the id of the resonance, `value` = 0 .. 1): in the dual mode `index` of both is the filter
+    whose handle the finger holds (1 or 2; the nearer handle at touch down), else 0. The owner writes the parameters; the next update shows the handle there. Private and transient: the handle held and the last position reported. */
 class FilterDisplay : public Component
 {
 public:
@@ -160,6 +163,19 @@ public:
         }
     }
     bool dragging() const noexcept { return dragging_; }
+
+    /** The frequency of a position on the log axis (0 .. 1: 20 Hz .. 20 kHz): what `value` of the cutoff change means. */
+    static double hzOfNorm (double norm) noexcept { return kFMin * std::pow (10.0, std::clamp (norm, 0.0, 1.0) * 3.0); }
+
+    /** The second change of the last touch (the Y of the finger: resonance or formant Y) after a `touchDown` or `touchMove` that returned the first: false when there is none. */
+    bool takePending (Change& c) noexcept
+    {
+        if (! hasPending_)
+            return false;
+        c = pending_;
+        hasPending_ = false;
+        return true;
+    }
 
     void draw (gpu::SceneBuilder& sb) const override
     {
@@ -461,6 +477,7 @@ protected:
     Change onDown (int x, int y, double /*nowMs*/) override
     {
         dragging_ = true;
+        grabbed_ = state.isFormant ? 0 : state.activeFilter;
         if (state.dual && ! state.isFormant)
         {
             float hx1 = 0.0f, hy1 = 0.0f, hx2 = 0.0f, hy2 = 0.0f;
@@ -470,64 +487,61 @@ protected:
             const float dx2 = static_cast<float> (x) - hx2, dy2 = static_cast<float> (y) - hy2;
             const float distSq1 = dx1 * dx1 + dy1 * dy1;
             const float distSq2 = dx2 * dx2 + dy2 * dy2;
-            state.activeFilter = distSq2 < distSq1 ? 2 : 1;
+            grabbed_ = distSq2 < distSq1 ? 2 : 1;   // the handle the finger holds (gesture data; `state.activeFilter` is the owner's, it follows the change)
         }
-        return updateTouch (x, y);
+        return updateTouch (x, y, true);
     }
 
     Change onMove (int x, int y) override
     {
-        return updateTouch (x, y);
+        return updateTouch (x, y, false);
     }
 
     Change onUp (int /*x*/, int /*y*/) override
     {
         dragging_ = false;
+        hasPending_ = false;
         return Change::none();
     }
 
-    Change updateTouch (int x, int y)
+    /** The finger at (x, y) as changes: X (returned) and Y (`takePending`). A finger down reports both (it also names the filter whose handle it holds); a move reports only the axis that moved since the last report. */
+    Change updateTouch (int x, int y, bool first)
     {
+        hasPending_ = false;
         const Rect in = plot();
         if (in.w <= 0 || in.h <= 0)
             return Change::none();
 
         const double normX = std::clamp (static_cast<double> (x - in.x) / static_cast<double> (in.w), 0.0, 1.0);
         const double normY = std::clamp (static_cast<double> (in.bottom() - y) / static_cast<double> (in.h), 0.0, 1.0);
+        const bool xMoved = first || normX != lastX_;
+        const bool yMoved = first || normY != lastY_;
+        if (! xMoved && ! yMoved)
+            return Change::none();
+        lastX_ = normX;
+        lastY_ = normY;
 
-        if (state.isFormant)
+        Change cx = Change::normalised (state.isFormant ? idFormantX_ : idCutoff_, normX);
+        Change cy = Change::normalised (state.isFormant ? idFormantY_ : idReso_, normY);
+        cx.index = cy.index = grabbed_;
+        if (xMoved && yMoved)
         {
-            state.formantX = normX * 100.0;
-            state.formantY = normY * 100.0;
-            return Change::normalised (idFormantX_, normX);
+            pending_ = cy;
+            hasPending_ = true;
+            return cx;
         }
-        else
-        {
-            const double newCut = kFMin * std::pow (10.0, normX * 3.0);
-            const double newRes = normY * 100.0;
-            if (state.dual)
-            {
-                if (state.activeFilter == 2)
-                {
-                    state.cutoffHz2 = newCut;
-                    state.resonancePct2 = newRes;
-                }
-                else
-                {
-                    state.cutoffHz1 = newCut;
-                    state.resonancePct1 = newRes;
-                }
-            }
-            state.cutoffHz = newCut;
-            state.resonancePct = newRes;
-            return Change::normalised (idCutoff_, normX);
-        }
+        return xMoved ? cx : cy;
     }
 
 private:
     int idCutoff_ = 0, idReso_ = 0;
     int idFormantX_ = 0, idFormantY_ = 0;
+    // gesture data (not the value): the finger is down, the handle it holds (1, 2, 0 = formant), the position of the last report, the second change of a touch
     bool dragging_ = false;
+    int grabbed_ = 0;
+    double lastX_ = 0.0, lastY_ = 0.0;
+    Change pending_;
+    bool hasPending_ = false;
 };
 
 // ===============================================================================================================================

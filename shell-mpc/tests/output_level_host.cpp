@@ -4,7 +4,7 @@
 //
 // Usage: output_level_host <plugin built with the make-up gain> <plugin built with SYNTHYBOY_MPC_OUTPUT_GAIN_DB=0> <gain in dB> [off|on]
 //   limiter OFF (default): quiet note louder by gain, velocity 100 vs 127 dynamic difference matches gain 0 build, peak exceeds 0 dBFS.
-//   limiter ON: quiet note louder by gain, loud chord kept at -1 dBFS ceiling, both reach ceiling.
+//   limiter ON: quiet note louder by gain, loud chord kept under the ceiling (-0.5 dBFS, synthyboy::OutputStage::kCeiling), the plugin with the gain reaches it.
 // Prints the measured levels. Exit 0 = every check passed.
 #include "mpc_vst2_abi.h"
 #include "output_stage.h"
@@ -127,12 +127,12 @@ int main (int argc, char** argv)
     }
     else
     {
-        // Limiter ON: peaks are kept at ceiling (-1 dBFS)
+        // Limiter ON: peaks are kept under the ceiling (-0.5 dBFS)
         const std::vector<int> chord { 36, 43, 48, 52, 55, 60 };
         const Level lg = play (withGain, 1.0f, chord, 127, 2.0), lp = play (plain, 1.0f, chord, 127, 2.0);
         std::printf ("loud:  with gain peak %.2f dBFS rms %.2f dBFS; gain 0 peak %.2f dBFS rms %.2f dBFS; difference %.2f dB\n",
                      db (lg.peak), db (lg.rms), db (lp.peak), db (lp.rms), db (lg.rms) - db (lp.rms));
-        check (lg.peak <= ceiling * 1.000001 && lp.peak <= ceiling * 1.000001, "loud: no sample of either plugin is above the ceiling (-1 dBFS)");
+        check (lg.peak <= ceiling * 1.000001 && lp.peak <= ceiling * 1.000001, "loud: no sample of either plugin is above the ceiling (-0.5 dBFS)");
         check (lg.peak > 0.99 * ceiling, "loud: the plugin with the make-up gain reaches the ceiling (the limiter works)");
         check (lg.rms > lp.rms, "loud: the plugin with the make-up gain is still the louder one");
     }

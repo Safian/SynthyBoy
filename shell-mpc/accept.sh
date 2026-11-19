@@ -154,7 +154,7 @@ for f in "$OVLOFF" "$OVLDEF" "$LIB"; do
 done
 OVCORE=$(find $B/core -name '*.a' | tr '\n' ' ')
 OVSRC=shell-mpc/overlay/tests
-c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I shell-mpc/overlay -o $B/geometry_render_host $OVSRC/geometry_render_host.cpp || { echo "ACCEPT FAIL: geometry_render_host build"; exit 1; }
+c++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/geometry_render_host $OVSRC/geometry_render_host.cpp || { echo "ACCEPT FAIL: geometry_render_host build"; exit 1; }
 $B/geometry_render_host > $B/geometry-render.log 2>&1 || { grep -E "^FAIL|ERROR" $B/geometry-render.log | head; echo "ACCEPT FAIL: geometry_render_host (rotation mapping, renderer)"; exit 1; }
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -o $B/curve_host $OVSRC/curve_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: curve_host build"; exit 1; }
 $B/curve_host > $B/curve-host.log 2>&1 || { grep -E "^FAIL" $B/curve-host.log; echo "ACCEPT FAIL: curve_host (curve source)"; exit 1; }
@@ -210,6 +210,9 @@ $B/mixfx_ui_host > $B/mixfx-ui-host.log 2>&1 || { grep -E "^FAIL" $B/mixfx-ui-ho
 # the master and voice UI (shell-mpc/overlay/master_ui.h, voice_ui.h: output, pitch, voices, glide, scale, MPE; the step grid, the random, scaling and target blocks, Q groups)
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/mastervoice_ui_host $OVSRC/mastervoice_ui_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: mastervoice_ui_host build"; exit 1; }
 $B/mastervoice_ui_host > $B/mastervoice-ui-host.log 2>&1 || { grep -E "^FAIL" $B/mastervoice-ui-host.log; echo "ACCEPT FAIL: mastervoice_ui_host (the master and voice UI: wiring, grid, Q groups)"; exit 1; }
+# the kit parity (shell-mpc/kit/, migration steps 2 and 3 of docs/ui-components/TEMPLATE.md): the kit's parameter source and text function against the old direct calls, for every parameter of the table
+c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/kit_parity_host $OVSRC/kit_parity_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: kit_parity_host build"; exit 1; }
+$B/kit_parity_host > $B/kit-parity-host.log 2>&1 || { grep -E "^FAIL" $B/kit-parity-host.log | head; echo "ACCEPT FAIL: kit_parity_host (the kit's parameter source differs from the old direct calls)"; exit 1; }
 # the plugin-drawn pages (shell-mpc/overlay/page_view.h, pages.h: the real layout, the controller opens the element page of the tab, group changes, the blank instance picture, the readout targets)
 c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I core/include -I core/filters-serum/include -I shell-mpc/overlay -I shell-mpc/ui -o $B/page_view_host $OVSRC/page_view_host.cpp $OVCORE -lpthread || { echo "ACCEPT FAIL: page_view_host build"; exit 1; }
 $B/page_view_host > $B/page-view-host.log 2>&1 || { grep -E "^FAIL" $B/page-view-host.log; echo "ACCEPT FAIL: page_view_host (the plugin-drawn pages: opening, groups, readout targets)"; exit 1; }
@@ -456,7 +459,7 @@ $B/layout_lint_host --self-test > $B/layout-lint-selftest.log 2>&1 || { tail -15
 $B/layout_lint_host --presets-dir content/presets --baseline $OVSRC/layout_lint_baseline.json --quiet > $B/layout-lint.log 2>&1 || { tail -30 $B/layout-lint.log; echo "ACCEPT FAIL: layout_lint_host (a finding that is not in the baseline, or a baseline entry that is gone)"; exit 1; }
 # the robustness review (docs: .hw-local/mpc-ui-plans/robustness-review.md): the logic alone, plainly and under AddressSanitizer + UBSan (and ThreadSanitizer where threads are the point)
 RT=shell-mpc/tests
-for t in safe_file_host poll_guard_host play_log_host startup_timing_host log_host; do
+for t in safe_file_host poll_guard_host display_thread_host play_log_host startup_timing_host log_host; do
     c++ -std=c++17 -O1 -Wall -Wextra -Wpedantic -Werror -I shell-mpc -o $B/$t $RT/$t.cpp -lpthread || { echo "ACCEPT FAIL: $t build"; exit 1; }
     $B/$t > $B/$t.log 2>&1 || { grep -E "^FAIL" $B/$t.log; echo "ACCEPT FAIL: $t (robustness review)"; exit 1; }
     c++ -std=c++17 -O1 -g -fsanitize=address,undefined -I shell-mpc -o $B/${t}_asan $RT/$t.cpp -lpthread || { echo "ACCEPT FAIL: $t asan build"; exit 1; }
@@ -517,7 +520,8 @@ python3 -m unittest scripts/tests/test_docs_release.py scripts/tests/test_docs_m
 # the release proof: no developer log strings in the DEV_LOG=OFF binary (and the same patterns are found in the default overlay build, so the check can see them)
 NOLOG="$(find build-mpc-live-nolog -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1)"
 LOGPAT="-dev\.log|-log\.conf|mpckit|engine created at|scan factory presets|VSTPluginMain returns"
-strings -a "$NOLOG" | grep -E -e "$LOGPAT" > $B/nolog-strings.txt && { head -5 $B/nolog-strings.txt; echo "ACCEPT FAIL: log strings in the release (DEV_LOG=OFF) build"; exit 1; }
+strings -a "$NOLOG" | grep -E -e "$LOGPAT" | grep -v -E "^N[0-9]+mpckit[0-9]" > $B/nolog-strings.txt &&   # (the RTTI type names of the kit classes, N6mpckit9IInstanceE, are not log strings: the kit holds classes now, not only the log)
+ { head -5 $B/nolog-strings.txt; echo "ACCEPT FAIL: log strings in the release (DEV_LOG=OFF) build"; exit 1; }
 strings -a "$OVLREL" | grep -qE -e "$LOGPAT" || { echo "ACCEPT FAIL: the developer log is not in the default overlay build (the release proof would see nothing)"; exit 1; }
 # the lock free hand-over of the events between the threads (event_inbox.h): plainly and under ThreadSanitizer
 sh shell-mpc/tests/run_event_inbox_test.sh > $B/event-inbox.log 2>&1 || { tail -15 $B/event-inbox.log; echo "ACCEPT FAIL: event_inbox_host"; exit 1; }

@@ -578,6 +578,42 @@ void testDragShowsValues()
     check (opsDragging > data2->numOps, "the dragged values are drawn beside the point only while it is dragged (" + std::to_string (opsDragging) + " > " + std::to_string (data2->numOps) + " ops)");
 }
 
+void testDisplayStoresNoTruth()
+{
+    Rig r;
+    r.inst.set ("filter1.cutoff", 500.0f);
+    r.inst.set ("filter1.resonance", 10.0f);
+    r.refresh();
+    ui::FilterDisplay& d = r.ui.full().display;
+    const ui::Rect dr = d.rect();
+    // a finger down writes both axes at once (X as the cutoff, Y as the resonance)
+    r.ui.touch (ev (TouchEvent::Down, dr.x + dr.w * 3 / 4, dr.y + dr.h / 4), r.stack, r.inst, r.now);
+    const float cut1 = r.inst.get ("filter1.cutoff"), res1 = r.inst.get ("filter1.resonance");
+    check (d.dragging() && cut1 > 2000.0f && res1 > 40.0f, "a finger down on the display writes the cutoff and the resonance (" + std::to_string (cut1) + " Hz, " + std::to_string (res1) + " %)");
+    // the finger is still down: an update shows the parameters (the display keeps no copy of the finger)
+    r.refresh();
+    check (std::fabs (d.state.cutoffHz - cut1) < 0.5 && std::fabs (d.state.resonancePct - res1) < 0.5, "under the finger the display state is what the parameters say");
+    // a move to the other side: the parameters follow the finger, and after the next update so does the display
+    r.ui.touch (ev (TouchEvent::Move, dr.x + dr.w / 4, dr.y + dr.h * 3 / 4), r.stack, r.inst, r.now + 16.0);
+    const float cut2 = r.inst.get ("filter1.cutoff"), res2 = r.inst.get ("filter1.resonance");
+    check (cut2 < cut1 * 0.5f && res2 < res1 * 0.5f, "a move writes the new position (" + std::to_string (cut2) + " Hz, " + std::to_string (res2) + " %)");
+    r.refresh();
+    check (std::fabs (d.state.cutoffHz - cut2) < 0.5 && std::fabs (d.state.resonancePct - res2) < 0.5, "the next update shows the point where the finger wrote it, with the finger still down");
+    r.ui.touch (ev (TouchEvent::Up, dr.x + dr.w / 4, dr.y + dr.h * 3 / 4), r.stack, r.inst, r.now + 40.0);
+    r.refresh();
+    check (! d.dragging() && std::fabs (r.inst.get ("filter1.cutoff") - cut2) < 0.5f, "lifting writes nothing more");
+
+    // the formant pad: X and Y both written, from one finger
+    r.inst.set ("filter1.model", 5.0f);
+    r.inst.set ("filter1.formant.x", 50.0f);
+    r.inst.set ("filter1.formant.y", 50.0f);
+    r.refresh();
+    const ui::Rect fr = d.rect();   // the formant layout has its own display rectangle (the rectangle of the response curve is not the pad's)
+    r.ui.touch (ev (TouchEvent::Down, fr.x + fr.w / 5, fr.bottom() - fr.h / 5), r.stack, r.inst, r.now);
+    check (r.inst.get ("filter1.formant.x") < 30.0f && r.inst.get ("filter1.formant.y") < 30.0f, "a finger down on the formant pad writes X and Y (" + std::to_string (r.inst.get ("filter1.formant.x")) + ", " + std::to_string (r.inst.get ("filter1.formant.y")) + ")");
+    r.ui.touch (ev (TouchEvent::Up, fr.x + fr.w / 5, fr.bottom() - fr.h / 5), r.stack, r.inst, r.now + 40.0);
+}
+
 void testRealCurveAndLiveTargets()
 {
     Rig r;
@@ -1093,6 +1129,7 @@ int main()
     testStyleListAndModelList();
     testFilterModelStyles();
     testDragShowsValues();
+    testDisplayStoresNoTruth();
     testRealCurveAndLiveTargets();
     testDrawingAndSceneOps();
     testSwitchedOffFilterIsDim();

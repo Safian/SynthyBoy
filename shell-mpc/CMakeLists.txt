@@ -31,14 +31,15 @@ target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_ENGINE_VITAL=${SY
 
 target_compile_options(synthyboy_mpc PRIVATE -Wall -Wextra -Wpedantic)
 
-# Output level (docs/MPC.md "Output level"): the shell adds a fixed make-up gain to the engine's output (shell-mpc/output_stage.h).
-# The factory presets are levelled to a chord of -20 dBFS RMS with peaks near full scale; on the MPC that reads as quiet next to the stock instruments.
-# 0 = no gain (comparisons, shell-mpc/tests/output_level_host.cpp). Range -24 .. 24. Default 18 dB.
-set(SYNTHYBOY_MPC_OUTPUT_GAIN_DB 18 CACHE STRING "MPC shell: make-up gain of the output stage in dB")
-if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB MATCHES "^[+-]?[0-9]+(\\.[0-9]+)?$" OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB LESS -24 OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB GREATER 24)
-    message(FATAL_ERROR "SYNTHYBOY_MPC_OUTPUT_GAIN_DB must be a number from -24 to 24, not '${SYNTHYBOY_MPC_OUTPUT_GAIN_DB}'")
+# Output level (docs/MPC.md "Output level"): the shell output stage (shell-mpc/output_stage.h -> core/include/synthyboy/output_stage.h).
+# Empty (default): the make-up gain is synthyboy::kMakeupGainDb, the one value of every shell. A number from -24 to 24 overrides it for this build (tests, trial packages).
+set(SYNTHYBOY_MPC_OUTPUT_GAIN_DB "" CACHE STRING "MPC shell: make-up gain of the output stage in dB (empty: synthyboy::kMakeupGainDb)")
+if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB STREQUAL "")
+    if(NOT SYNTHYBOY_MPC_OUTPUT_GAIN_DB MATCHES "^[+-]?[0-9]+(\\.[0-9]+)?$" OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB LESS -24 OR SYNTHYBOY_MPC_OUTPUT_GAIN_DB GREATER 24)
+        message(FATAL_ERROR "SYNTHYBOY_MPC_OUTPUT_GAIN_DB must be empty or a number from -24 to 24, not '${SYNTHYBOY_MPC_OUTPUT_GAIN_DB}'")
+    endif()
+    target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OUTPUT_GAIN_DB=${SYNTHYBOY_MPC_OUTPUT_GAIN_DB})
 endif()
-target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OUTPUT_GAIN_DB=${SYNTHYBOY_MPC_OUTPUT_GAIN_DB})
 
 # The program list of a plugin track (the PRESET pop-up of the host), grouped like the Sounds browser: docs/MPC.md "Preset list of a plugin track". A string:
 #   off            the flat list as ever (default; the program list is bit-identical to a build without this option)
@@ -64,9 +65,9 @@ else()
 endif()
 target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_PROGRAM_GROUPS=${SYNTHYBOY_MPC_PROGRAM_GROUPS_N})
 
-# Peak limiter after the make-up gain: by default OFF (the signal may exceed 0 dBFS, the player can place a limiter insert on the track in the MPC).
-# SYNTHYBOY_MPC_OUTPUT_LIMITER=ON restores the stereo-linked peak limiter at -1 dBFS.
-option(SYNTHYBOY_MPC_OUTPUT_LIMITER "MPC shell: peak limiter at -1 dBFS after the make-up gain" OFF)
+# The look-ahead peak limiter after the make-up gain is the plugin setting LIMIT (default on, docs/MPC.md "Output limiter").
+# SYNTHYBOY_MPC_OUTPUT_LIMITER=ON forces it on whatever the setting says (tests); OFF (default) leaves it to the setting.
+option(SYNTHYBOY_MPC_OUTPUT_LIMITER "MPC shell: force the output peak limiter on (else the plugin setting LIMIT decides)" OFF)
 if(SYNTHYBOY_MPC_OUTPUT_LIMITER)
     target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_OUTPUT_LIMITER=1)
 else()
@@ -353,6 +354,17 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(mastervoice_ui_host PRIVATE cxx_std_17)
     target_compile_options(mastervoice_ui_host PRIVATE -Wall -Wextra -Wpedantic)
 
+    # the kit parity test (migration steps 2 and 3, docs/ui-components/TEMPLATE.md): the parameter source of the kit against the old direct calls, for every parameter
+    add_executable(kit_parity_host EXCLUDE_FROM_ALL overlay/tests/kit_parity_host.cpp)
+    target_include_directories(kit_parity_host PRIVATE
+        "${CMAKE_SOURCE_DIR}/core/include"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui")
+    target_link_libraries(kit_parity_host PRIVATE synthyboy_core Threads::Threads)
+    target_compile_features(kit_parity_host PRIVATE cxx_std_17)
+    target_compile_options(kit_parity_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME kit_parity_host COMMAND kit_parity_host)
+
     add_executable(page_view_host EXCLUDE_FROM_ALL overlay/tests/page_view_host.cpp)
     target_include_directories(page_view_host PRIVATE
         "${CMAKE_SOURCE_DIR}/core/include"
@@ -499,6 +511,14 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(poll_guard_host PRIVATE cxx_std_17)
     target_compile_options(poll_guard_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME poll_guard_host COMMAND poll_guard_host)
+
+    # The kit's display thread (kit/display_thread.h): the features in order, guarded, busy / idle, stop. Logic only, no plugin needed.
+    add_executable(display_thread_host EXCLUDE_FROM_ALL tests/display_thread_host.cpp)
+    target_include_directories(display_thread_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(display_thread_host PRIVATE Threads::Threads)
+    target_compile_features(display_thread_host PRIVATE cxx_std_17)
+    target_compile_options(display_thread_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME display_thread_host COMMAND display_thread_host)
 
     # The start-up record and the developer log (kit/log.h): logic only, no plugin needed.
     foreach(t startup_timing_host log_host log_off_host log_rt_host)

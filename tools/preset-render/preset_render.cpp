@@ -4,6 +4,9 @@
 //
 //   synthyboy_preset_render --presets DIR [--engine vital|own] [--tier low|medium|high|all] [--summary-only] [--velocity]
 //                           [--wav OUTDIR] [--chord-wav OUTDIR] [--float32] [--hash] [--filter SUBSTRING] [--sr 48000] [--content-dir DIR] [--scalar-content] [--hold SECONDS]
+//                           [--output-stage]
+//   --output-stage    every render goes through the output stage of the shells (core/include/synthyboy/output_stage.h: kMakeupGainDb, the look-ahead limiter on), so the WAVs and the
+//                     figures are what a shell hands to its host (delayed by the look-ahead). Default: the raw engine output, what the loudness scripts measure.
 //   --scalar-content  the own engine runs the reference code of the Sample / Granular / Spectral / Multisample oscillators (setOwnSavingsOff, kOwnSavingContentKernels): render once with and once
 //                     without it to compare the two (scripts/content-kernel-compare.py)
 //   --float32         the WAVs are 32 bit float instead of 24 bit PCM (a 24 bit file cannot show a difference below half a step, 6e-8 of full scale): use it wherever two builds are compared
@@ -35,6 +38,7 @@
 #include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/engine_caps.h"
+#include "synthyboy/output_stage.h"
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/quality.h"
@@ -69,6 +73,7 @@ struct Options
     const IContentStore* contentStore = nullptr;
     bool scalarContent = false; // --scalar-content
     presetrender::OutputOptions out; // --float32, --hash
+    bool outputStage = false;   // --output-stage
     double hold = 0.0;          // --hold SECONDS: the held time of the single note and of the chord (default 1.5 s / 1 s)
     std::string contentDir; // root of the content packs the presets reference (<root>/<pack>/<file>); default: PRESETS/content when it exists
 };
@@ -128,6 +133,9 @@ Render render (const Options& o, const Quality& q, const Loaded& p, const std::v
     const double silentLinear = std::pow (10.0, kSilentDb / 20.0);
 
     std::vector<float> l (kBlock), rr (kBlock);
+    OutputStage stage;   // --output-stage: what the shells play
+    stage.prepare (o.sampleRate);
+    stage.reset();
     double peak = 0.0, holdPeak = 0.0, sum = 0.0;
     long dcCount = 0;
     int silentRun = 0, silentSince = -1;
@@ -167,6 +175,8 @@ Render render (const Options& o, const Quality& q, const Loaded& p, const std::v
             }
         }
         engine->process (ev.empty() ? nullptr : ev.data(), static_cast<int> (ev.size()), l.data(), rr.data(), kBlock);
+        if (o.outputStage)
+            stage.process (l.data(), rr.data(), kBlock);
 
         double blockPeak = 0.0, blockSq = 0.0;
         for (int i = 0; i < kBlock; ++i, ++frame)
@@ -289,6 +299,7 @@ int main (int argc, char** argv)
         else if (a == "--float32") o.out.float32 = true;
         else if (a == "--hash") o.out.hash = true;
         else if (a == "--hold") o.hold = std::atof (next().c_str());
+        else if (a == "--output-stage") o.outputStage = true;
         else
         {
             std::fprintf (stderr, "preset-render: unknown argument %s\n", a.c_str());

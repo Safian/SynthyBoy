@@ -72,13 +72,18 @@ protected:
 };
 
 // ===============================================================================================================================
-/** Mini 12-key keyboard diagram highlighting in-scale notes for the selected scale and key. */
+/** Mini 12-key keyboard diagram highlighting in-scale notes for the selected scale and key. It stores nothing of the scale: it draws `state` (the owner sets it on every update) and a touch on a key reports the key (`Index`,
+    `index` = the note 0 .. 11); the owner writes the parameter and the next update shows it. A key that is already the root, or was already reported in this gesture, is not reported again. */
 class MiniKeyboardDisplay : public Component
 {
 public:
-    int scaleType = 0;   // 0 Chromatic .. 19
-    int scaleKey = 0;    // 0 C .. 11 B
-    int scaleMode = 0;   // 0 Conform, 1 Mark only
+    struct State
+    {
+        int scaleType = 0;   // 0 Chromatic .. 19
+        int scaleKey = 0;    // 0 C .. 11 B
+        int scaleMode = 0;   // 0 Conform, 1 Mark only
+    };
+    State state;
 
     MiniKeyboardDisplay() = default;
     Size minSize() const override { return { 240, 90 }; }
@@ -170,12 +175,8 @@ public:
     {
         tap_.down (x, y, now);
         downNote_ = hitTestNote (x, y);
-        if (downNote_ >= 0)
-        {
-            scaleKey = downNote_;
-            return Change::indexed (id_, downNote_, static_cast<double> (downNote_));
-        }
-        return Change::none();
+        reported_ = -1;
+        return report (downNote_);
     }
     Change onMove (int x, int y) override
     {
@@ -184,8 +185,7 @@ public:
         if (note >= 0 && note != downNote_)
         {
             downNote_ = note;
-            scaleKey = note;
-            return Change::indexed (id_, note, static_cast<double> (note));
+            return report (note);
         }
         return Change::none();
     }
@@ -193,10 +193,7 @@ public:
     {
         const int note = hitTestNote (x, y);
         if (tap_.up() != 0 && note >= 0)
-        {
-            scaleKey = note;
-            return Change::indexed (id_, note, static_cast<double> (note));
-        }
+            return report (note);
         return Change::none();
     }
 
@@ -210,7 +207,7 @@ protected:
         const int m = 8, labelH = 22;
         char lblBuf[48];
         static const char* const kKeyNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-        std::snprintf (lblBuf, sizeof lblBuf, scaleType <= 0 ? "ALL 12 NOTES" : "SCALE ON %s", kKeyNames[std::clamp (scaleKey, 0, 11)]);
+        std::snprintf (lblBuf, sizeof lblBuf, state.scaleType <= 0 ? "ALL 12 NOTES" : "SCALE ON %s", kKeyNames[std::clamp (state.scaleKey, 0, 11)]);
         p.textLeft ({ rect_.x + m, rect_.y + 4, rect_.w - 2 * m, labelH }, lblBuf, T.fLabel - 2.0f, p.c (T.textDim, 255), T.fMin);
 
         const KeyRects kr = computeRects();
@@ -220,8 +217,8 @@ protected:
         for (int i = 0; i < 7; ++i)
         {
             const int note = kr.whiteNote[i];
-            const bool in = isScaleNote (scaleType, scaleKey, note);
-            const bool isRoot = (note == scaleKey);
+            const bool in = isScaleNote (state.scaleType, state.scaleKey, note);
+            const bool isRoot = (note == state.scaleKey);
             const Rect wr = kr.white[i];
             p.rect (wr.x + 1, wr.y, wr.right() - 1, wr.bottom(), p.c (in ? T.panel0 : T.bg1, 255));
             if (in)
@@ -236,8 +233,8 @@ protected:
         for (int i = 0; i < 5; ++i)
         {
             const int note = kr.blackNote[i];
-            const bool in = isScaleNote (scaleType, scaleKey, note);
-            const bool isRoot = (note == scaleKey);
+            const bool in = isScaleNote (state.scaleType, state.scaleKey, note);
+            const bool isRoot = (note == state.scaleKey);
             const Rect br = kr.black[i];
             p.rect (br, p.c (T.bg0, 255));   // dark, thin outline: the notes of the scale are the outline (accent for the root) and a small bar, not a coloured block
             p.rrect (br, 3.0f, p.c (in ? (isRoot ? T.flow[0] : T.keylineHi) : T.keyline, 255), isRoot ? 1.5f : 1.0f);
@@ -249,6 +246,16 @@ protected:
 private:
     TapGesture tap_;
     int downNote_ = -1;
+    int reported_ = -1;   // the note of the last report of this gesture (gesture data, not the value: the root is `state.scaleKey`)
+
+    /** The change for a touch on `note`: none for no key, for the root that is shown already, and for the key this gesture reported last. */
+    Change report (int note) noexcept
+    {
+        if (note < 0 || note == state.scaleKey || note == reported_)
+            return Change::none();
+        reported_ = note;
+        return Change::indexed (id_, note, static_cast<double> (note));
+    }
 };
 
 // ===============================================================================================================================

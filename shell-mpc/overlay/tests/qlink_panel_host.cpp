@@ -77,7 +77,7 @@ struct Rig
     FakeFrame frame;
     CpuCurveRenderer renderer;
     FakeInstance inst;
-    std::unique_ptr<Controller> ctl;
+    std::unique_ptr<SynthyBoyController> ctl;
     Host host { frame };
     double now = 0.0;
     int maxEdge = PanelKey::kNoKey;   // the lowest cut seen since the last reset (the deepest into the strip)
@@ -90,7 +90,7 @@ struct Rig
     Rig()
     {
         frame.views = legacy::kViews;
-        ctl = std::make_unique<Controller> (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+        ctl = std::make_unique<SynthyBoyController> (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
         inst.set ("filter1.cutoff", 1000.0f);
         ctl->attach (&inst);
         host.all();

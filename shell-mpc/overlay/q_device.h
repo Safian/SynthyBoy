@@ -10,6 +10,8 @@
 #include <cstdlib>
 #include <string>
 
+#include "../kit/branding.h"
+
 namespace synthyboy_mpc { namespace overlay {
 
 /** The rule above, pure: `model` the device name ("" when it could not be read), `build64` the plugin is the 64-bit build. */
@@ -47,7 +49,7 @@ inline std::string readDeviceModel()
 /** The device this plugin runs on has 16 Q-Link knobs at once. */
 inline bool detectSixteenQLinks()
 {
-    if (const char* e = std::getenv ("SYNTHYBOY_MPC_Q_KNOBS"))
+    if (const char* e = std::getenv (mpckit::branding().qKnobsEnv))   // (SynthyBoy: SYNTHYBOY_MPC_Q_KNOBS; kit/branding.h)
     {
         if (std::string (e) == "16")
             return true;

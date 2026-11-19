@@ -114,6 +114,10 @@ On the MPC Key 61, playing large two-handed chords (9 or more notes) or holding 
 
 Sounds keep their loudness on the smaller device. When the MPC Key 61 switches off an effect that a preset uses, the engine makes up its level, so the preset is about as loud as on the MPC XL. The character of the missing effect, such as the room of a reverb, is still missing. The unison cap of the Key 61 (3 voices) gets no level makeup: a preset that asks for more voices can sound a little louder or quieter than on the XL (Lush Analog Pad and Infinite Horizon about 2 to 3 dB quieter, Hyper Saw Lead about half a dB louder), because how loud the beating of the detuned voices is differs from preset to preset and a gain would help some and harm others.
 
+## Output Level and the Output Limiter (All Devices)
+
+The plugin's output has a fixed make-up gain followed by an output limiter, the same on the MPC Key 61, the MPC XL and the desktop plugins. The limiter (LIMIT on the Master page, OUTPUT block) is **on by default**: it looks 3 milliseconds ahead, lowers the gain smoothly just before a peak would pass -0.5 dB full scale and brings it back quickly after a single hit and slowly after a held, loud chord, so nothing the plugin hands to the MPC is clipped and the held part of a sound can be loud. It costs a tiny fraction of the processor time and adds 3 milliseconds of delay, which you do not hear when playing. Switch LIMIT off only if you want the plugin's gain alone (no delay); then loud notes and chords can pass full scale and the MPC clips them. The setting is saved with the project; a project that stored LIMIT off keeps it off.
+
 ## 5. Practical Performance Tips for MPC Key 61 Users
 
 1. **Missing Convolve on Key 61**: `Dusty Rhodes Keys` keeps its level on the Key 61 (within half a dB) and `Reese Dual Phase Bass` is within about 1.7 dB of the XL (its unison cap is not made up). The cabinet colour of the Convolve effect is still missing, so add an external MPC track insert effect (such as the stock MPC AIR Tube Drive) if you want it.

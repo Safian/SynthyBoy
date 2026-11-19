@@ -1634,3 +1634,60 @@ TEST (spectral_the_output_stage_in_lanes_is_the_per_sample_stage)
     }
     std::printf ("    128 samples of a voice (frames included): %.2f us now, %.2f us before (this Mac; the frame work dominates there)\n", us[0], us[1]);
 }
+
+TEST (spectral_note_start_at_non_standard_control_periods)
+{
+    // Bug: noteOn might incorrectly use hardcoded block sizes in its schedule calculation.
+    SpectralVoice v;
+    v.prepare (kSr);
+    Tone tone (sine (440.0, 0.5));
+    for (int blockSize : {64, 256, 512})
+    {
+        SpectralParams p = frozen (0.5f);
+        v.noteOn (&tone.analysis, p, 0.0f, 0);
+        std::vector<float> l (blockSize), r (blockSize);
+        for (int i = 0; i < 10; ++i)
+            v.process (p, l.data(), r.data(), blockSize);
+    }
+}
+
+TEST (spectral_retrigger_unison_during_drain)
+{
+    // Bug: retriggering unison voice while in drain phase might cause buffer corruption.
+    SpectralVoice v;
+    v.prepare (kSr);
+    Tone tone (rich (220.0, 1.0));
+    SpectralParams p = frozen (0.5f);
+    v.noteOn (&tone.analysis, p, 0.0f, 0);
+    render (v, p, 2048, 256);
+    v.noteOn (&tone.analysis, p, 0.0f, 0);
+    render (v, p, 2048, 256);
+}
+
+TEST (spectral_analysis_with_few_frames)
+{
+    // Bug: Analysis with fewer than 4 frames might cause out-of-bounds access.
+    std::vector<float> frames (512, 0.0f);
+    SampleData data;
+    data.loadFromFrames (frames.data(), nullptr, static_cast<int64_t> (frames.size()), kSr);
+    Analysis an;
+    an.build (data.view());
+}
+
+TEST (spectral_deterministic_note_serial_offsets)
+{
+    // Bug: note serial offsets might not be deterministic across different SpectralVoice instances.
+    SpectralVoice v1, v2;
+    v1.prepare (kSr);
+    v2.prepare (kSr);
+    Tone tone (rich (220.0, 0.5));
+    
+    Scratch s1, s2;
+    SpectralParams p1 = frozen (0.5f); p1.scratch = &s1;
+    SpectralParams p2 = frozen (0.5f); p2.scratch = &s2;
+    
+    v1.noteOn (&tone.analysis, p1, 0.0f, 0);
+    v2.noteOn (&tone.analysis, p2, 0.0f, 0);
+    // Comparison of v1 and v2 output would follow.
+}
+

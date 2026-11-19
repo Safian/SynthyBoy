@@ -269,7 +269,7 @@ int main()
         FakeFrame frame; frame.views = legacy::kViews;
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+        SynthyBoyController ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
         ctl.attach (&inst);
         double now = 0.0;
         auto run = [&] (double ms) { const double end = now + ms; while (now < end) { now += 10.0; ctl.tick (now); } };
@@ -305,7 +305,7 @@ int main()
         fp.panelH = 800;
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+        SynthyBoyController ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
         ctl.attach (&inst);
         frame.setAll (true, rot);
         double now = 0.0;
@@ -320,7 +320,7 @@ int main()
         FakeFrame frame; frame.views = legacy::kViews;
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+        SynthyBoyController ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
         ctl.attach (&inst);
         frame.setAll (true, 90);
         frame.setAll (true, 270);
@@ -341,7 +341,7 @@ int main()
         frame.fatal = "display discovery failed: no free overlay plane on CRTC 82";
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+        SynthyBoyController ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
         ctl.attach (&inst);
         double now = 0.0;
         for (int i = 0; i < 10; ++i) { now += 10.0; ctl.tick (now); }
@@ -356,7 +356,7 @@ int main()
         FakeFrame frame; frame.views = legacy::kViews;
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+        SynthyBoyController ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
         ctl.attach (&inst);
         frame.setAll (true, 90);
         double now = 0.0;
@@ -399,7 +399,7 @@ int main()
             FakeInstance inst;
             Timing t;
             t.followDisplayPace = follow;
-            Controller ctl (fp, frame, renderer, dir.paths(), t, 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+            SynthyBoyController ctl (fp, frame, renderer, dir.paths(), t, 10.0, nullptr, nullptr, &legacy::pageSet());
             ctl.attach (&inst);
             frame.setAll (true, 90);
             double now = 0.0, wait = 0.0;
@@ -423,7 +423,7 @@ int main()
         FakeFrame frame; frame.views = legacy::kViews;
         CpuCurveRenderer renderer;
         FakeInstance inst;
-        Controller ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, legacy::kViews, legacy::kNumViews);
+        SynthyBoyController ctl (fp, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, nullptr, &legacy::pageSet());
         ctl.attach (&inst);
         frame.setAll (true, 90);
         double now = 0.0;

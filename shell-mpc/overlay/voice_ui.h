@@ -20,7 +20,7 @@
 #include "../ui/list.h"
 #include "../ui/theme.h"
 #include "../ui/voice_screen.h"
-#include "curve_source.h"
+#include "instance_view.h"
 #include "page_view.h"
 #include "q_publish.h"
 #include "touch_decoder.h"
@@ -90,9 +90,9 @@ public:
         // the host writes the virtual targets: the Q-Link of the step and of the row
         float x;
         if (inst.takeQVirtual (kVirtualStep, x))
-            full_.grid.selectedStep = std::clamp (static_cast<int> (std::lround (x * 7.0f)), 0, 7);
+            full_.grid.state.selectedStep = std::clamp (static_cast<int> (std::lround (x * 7.0f)), 0, 7);
         if (inst.takeQVirtual (kVirtualRow, x))
-            full_.grid.activeRow = std::clamp (static_cast<int> (std::lround (x * 5.0f)), 0, 5);
+            full_.grid.state.activeRow = std::clamp (static_cast<int> (std::lround (x * 5.0f)), 0, 5);
         pull (inst);
 
         // the steps the newest voices play, lit in the grid
@@ -101,24 +101,24 @@ public:
             for (int v = 0; v < synthyboy::LiveValues::kReadVoices; ++v)
             {
                 const int s = static_cast<int> (std::lround (in.live->voiceStep[v]));
-                if (in.live->voiceStep[v] >= 0.0f && s < 8 && s < std::max (1, full_.grid.length))
+                if (in.live->voiceStep[v] >= 0.0f && s < 8 && s < std::max (1, full_.grid.state.length))
                     mask = static_cast<uint8_t> (mask | (1u << s));
             }
-        full_.grid.voiceStepMask = mask;
+        full_.grid.state.voiceStepMask = mask;
 
         // the step and the row of the header: the selectors, the value of the step
         char stepBuf[32];
-        std::snprintf (stepBuf, sizeof stepBuf, "STEP %d", full_.grid.selectedStep + 1);
+        std::snprintf (stepBuf, sizeof stepBuf, "STEP %d", full_.grid.state.selectedStep + 1);
         full_.qStepSelect.state.count = 8;
-        full_.qStepSelect.state.index = full_.grid.selectedStep;
+        full_.qStepSelect.state.index = full_.grid.state.selectedStep;
         full_.qStepSelect.setItem (stepBuf);
-        full_.rowList.state.index = std::clamp (full_.grid.activeRow, 0, ui::VoiceGrid::kNumRows - 1);
-        const float sv = full_.grid.value (full_.grid.activeRow, full_.grid.selectedStep) * 100.0f;
+        full_.rowList.state.index = std::clamp (full_.grid.state.activeRow, 0, ui::VoiceGrid::kNumRows - 1);
+        const float sv = full_.grid.value (full_.grid.state.activeRow, full_.grid.state.selectedStep) * 100.0f;
         full_.stepValue.state.value = std::round (sv);
-        ui::VoiceGrid::formatValue (full_.grid.activeRow, static_cast<float> (std::round (sv)) / 100.0f, full_.stepValue.state.text, sizeof full_.stepValue.state.text);   // one text for one value: the same as the cell and the strip
-        full_.stepValue.setLabel (ui::VoiceGrid::rowName (full_.grid.activeRow));
-        inst.setQVirtual (kVirtualStep, static_cast<float> (full_.grid.selectedStep) / 7.0f);
-        inst.setQVirtual (kVirtualRow, static_cast<float> (full_.grid.activeRow) / 5.0f);
+        ui::VoiceGrid::formatValue (full_.grid.state.activeRow, static_cast<float> (std::round (sv)) / 100.0f, full_.stepValue.state.text, sizeof full_.stepValue.state.text);   // one text for one value: the same as the cell and the strip
+        full_.stepValue.setLabel (ui::VoiceGrid::rowName (full_.grid.state.activeRow));
+        inst.setQVirtual (kVirtualStep, static_cast<float> (full_.grid.state.selectedStep) / 7.0f);
+        inst.setQVirtual (kVirtualRow, static_cast<float> (full_.grid.state.activeRow) / 5.0f);
 
         inst.setUiFullOpen (true);
         publishQGroup (inst);
@@ -144,10 +144,11 @@ public:
             return false;
         if (ev.kind == TouchEvent::Move)
         {
-            handle (gesture_->touchMove (x, y), stack, inst);
+            const ui::Change moved = gesture_->touchMove (x, y);
             ui::Change extra;
-            while (gesture_ == &full_ && full_.grid.takePending (extra))   // the columns a fast stroke passed over
+            while (gesture_ == &full_ && full_.grid.takePending (extra))   // the columns a fast stroke passed over (first: the last change selects its step, that of the finger)
                 handle (extra, stack, inst);
+            handle (moved, stack, inst);
         }
         else
         {
@@ -284,7 +285,7 @@ private:
                     nf->state.value = val;
                     nf->state.min = p.min; nf->state.max = p.max; nf->state.step = 1.0; nf->state.defaultValue = p.def; nf->state.pxPerStep = 8;
                     if (it.id == kLength)
-                        full_.grid.length = static_cast<int> (std::lround (val));
+                        full_.grid.state.length = static_cast<int> (std::lround (val));
                     break;
                 }
                 case T::Toggle:
@@ -307,7 +308,7 @@ private:
                     break;
                 }
                 case T::GridStep:
-                    if (it.row >= 0 && it.step >= 0 && ! (gestureDown_ && gesture_ == &full_ && it.row == full_.grid.activeRow))   // a bar under the finger shows what the finger draws
+                    if (it.row >= 0 && it.step >= 0)   // (the grid draws only what is set here: a bar under the finger follows the parameter the finger wrote)
                         full_.grid.setValue (it.row, it.step, val * 0.01f);
                     break;
                 case T::Inert:
@@ -334,17 +335,17 @@ private:
         }
         if (ch.id == kStepSelect && ch.kind == ui::ChangeKind::Index)
         {
-            full_.grid.selectedStep = std::clamp (ch.index, 0, 7);
+            full_.grid.state.selectedStep = std::clamp (ch.index, 0, 7);
             return;
         }
         if (ch.id == kRowSelect && ch.kind == ui::ChangeKind::Index)
         {
-            full_.grid.activeRow = std::clamp (ch.index, 0, 5);
+            full_.grid.state.activeRow = std::clamp (ch.index, 0, 5);
             return;
         }
         if (ch.id == kStepValue && ch.kind == ui::ChangeKind::Index)   // the value of the selected step as a number
         {
-            const int idx = stepParam (full_.grid.activeRow, full_.grid.selectedStep);
+            const int idx = stepParam (full_.grid.state.activeRow, full_.grid.state.selectedStep);
             if (idx >= 0)
                 uibind::writePlain (inst, idx, std::clamp (ch.value, -100.0, 100.0));
             return;
@@ -373,7 +374,11 @@ private:
                 if (it->type == T::Knob)
                     uibind::writeNorm (inst, it->param, ch.value);
                 else if (it->type == T::GridStep)
+                {
                     uibind::writePlain (inst, it->param, ch.value * 100.0);   // -1 .. +1 of the grid is -100 .. +100 of the parameter
+                    if (it->step >= 0)
+                        full_.grid.state.selectedStep = it->step;   // the id of a change names the step the finger (or the knob) is on: the owner holds the selection
+                }
                 else
                     uibind::writePlain (inst, it->param, ch.value);
                 break;
@@ -404,7 +409,7 @@ private:
                 t[0] = QRouter::encode (kVirtualStep, QRouter::kVirtual);
                 t[1] = QRouter::encode (kVirtualRow, QRouter::kVirtual);
                 t[2] = uibind::indexOfKey ("voicectl.length");
-                t[3] = stepParam (full_.grid.activeRow, full_.grid.selectedStep);
+                t[3] = stepParam (full_.grid.state.activeRow, full_.grid.state.selectedStep);
             }
             else if (k == 1)
             {

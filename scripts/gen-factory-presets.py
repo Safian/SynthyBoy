@@ -316,7 +316,7 @@ fx_names = [
     ("Sci-Fi Laser Sweep", "laser,sweep,sci-fi", "Pitch modulated downward laser burst", {"osc1.wavetable": 1, "env2.decay": 120, "env2.sustain": 0, "filter1.cutoff": 6000}),
     ("Noise Riser", "noise,riser,build", "Filtered white noise build-up riser", {"noise.on": 1, "noise.level": 80, "osc1.on": 0, "filter1.cutoff": 1200, "reverb.on": 1}),
     ("Metal Gong Strike", "gong,metal,percussion", "Deep resonant physical metallic gong", {"osc1.wavetable": 12, "filter1.model": 6, "filter1.cutoff": 800, "filter1.resonance": 85, "env1.decay": 1800, "reverb.on": 1}),
-    ("Sub Drop Boom", "sub,drop,boom", "Subwoofer testing downward pitch drop", {"master.transpose": 12, "osc1.wavetable": 0, "env1.decay": 1400, "env1.sustain": 0, "master.volume": -4}),
+    ("Sub Drop Boom", "sub,drop,boom", "Subwoofer testing downward pitch drop", {"master.transpose": 0, "osc1.wavetable": 0, "env1.decay": 1400, "env1.sustain": 0, "master.volume": -4}),
     ("Space Wind Storm", "wind,storm,ambient", "Howling space wind noise atmosphere", {"master.transpose": -24, "noise.on": 1, "noise.level": 70, "filter1.cutoff": 225, "filter1.resonance": 60, "lfo1.rate": 0.2}),
     ("Alien Communication", "alien,vocal,weird", "Strange resonant formant alien chatter", {"osc1.wavetable": 9, "filter1.model": 5, "lfo1.rate": 6.5, **mod(1, "lfo1", "filter1.formant.x", 60), "delay.on": 1}),
     ("Game Over Zap", "game,retro,zap", "8-bit retro arcade game over explosion", {"osc1.wavetable": 2, "distortion.on": 1, "distortion.drive": 10, "env1.decay": 400, "env1.sustain": 0}),
@@ -650,6 +650,21 @@ def load_levels() -> dict:
         return json.load(f)
 
 
+# Category-appropriate velocity tracking (%). Replaces the global 100% quadratic default so basses, leads and pads stay
+# punchy and usable on dynamic pads/keys while keys and plucks keep wide expressive dynamics.
+# Since 2026-11-19 against the stock MPC instruments (docs/release/LEVELLING-STOCK-2026-11-19.md): their basses and leads hardly move with velocity, pads drop about
+# 3 dB and plucks about 4 dB from velocity 127 to 100. The engine scales the level by 1 - track * (1 - v^2): no change at velocity 127, at 100 track 100 % gives -4.1 dB.
+# Keys keeps 70 (the stock pianos drop 8 dB, more than this law allows: an owner item).
+CATEGORY_VELOCITY_TRACK = {
+    "Bass": 5.0,
+    "Lead": 0.0,
+    "Pad": 75.0,
+    "FX": 50.0,
+    "Keys": 70.0,
+    "Pluck": 95.0,
+}
+
+
 def build_all():
     """All presets as (name, category, meta, document text), in a fixed order."""
     out = []
@@ -671,6 +686,7 @@ def build_all():
         raise KeyError(f"{MACRO_NAMES_PATH}: no preset named {unknown}")
     for name, category, tags, desc, ov in presets:
         ov = with_pad_pressure(name, with_macros(category, ov), pad_pressure)
+        ov.setdefault("master.velocity_track", CATEGORY_VELOCITY_TRACK.get(category, 50.0))
         check_macros(name, {**default_values, **{k: float(v) for k, v in ov.items()}})
         if name in levels:
             ov["master.volume"] = levels[name]
@@ -679,6 +695,7 @@ def build_all():
         out.append((name, category, meta, doc))
     for name, category, tags, desc, ov, content in showcase:
         ov = with_pad_pressure(name, with_macros(category, ov), pad_pressure)
+        ov.setdefault("master.velocity_track", CATEGORY_VELOCITY_TRACK.get(category, 50.0))
         check_macros(name, {**default_values, **{k: float(v) for k, v in ov.items()}})
         if name in levels:
             ov["master.volume"] = levels[name]
@@ -688,6 +705,7 @@ def build_all():
         out.append((name, category, meta, doc))
     for name, category, tags, desc, ov, content in batches:
         ov = dict(ov)
+        ov.setdefault("master.velocity_track", CATEGORY_VELOCITY_TRACK.get(category, 50.0))
         check_macros(name, {**default_values, **{k: float(v) for k, v in ov.items()}})
         if name in levels:
             ov["master.volume"] = levels[name]

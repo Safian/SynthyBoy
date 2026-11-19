@@ -22,6 +22,7 @@
 
 import copy
 import json
+import os
 import struct
 import zlib
 from pathlib import Path
@@ -32,9 +33,11 @@ COLS = (23, 343, 663, 983)
 ROWS = (45, 196, 346, 497)
 QLINK_BOUNDS_Y, QLINK_BOUNDS_H = 301, 323   # x and width of the frames: 90_frames.py
 LFO_CURSORS, SPECTRUM_COLUMNS, PAD_PRESSURE_PARAMS = 4, 32, 2   # the parameters before "Overlay Instance" (shell-mpc/lfo_live.h, shell-mpc/spectrum.h, shell-mpc/pad_pressure.h; 45_pad_pressure.py)
+# Another plugin (template-mpc) uses these modules with its own layout: the file comes from skin-meta ("layout_path") or the environment (MPC_OVERLAY_LAYOUT), the parameters before "Overlay Instance" from the
+# JSON key "paramsBefore" (SynthyBoy's number is the default), the kind "page" is the generic page the plugin draws entirely.
 FILTERS = (1, 2)
 # the kinds of the views of overlay_layout.json (scripts/gen-overlay-layout-header.py KINDS): the pictures over a region of a host tab (none any more) and the pages the plugin draws entirely (83_pages.py, 82_play.py)
-KNOWN_KINDS = ("play", "filterui", "lfoui", "envui", "oscui", "macros", "mixer", "fx", "mod", "master", "voice")
+KNOWN_KINDS = ("play", "filterui", "lfoui", "envui", "oscui", "macros", "mixer", "fx", "mod", "master", "voice", "page")
 
 
 def png_solid(width, height, rgb):
@@ -132,13 +135,23 @@ def _add_instance(view, ctx, items, layout, param_index):
                              "bounds": "%d %d %d %d" % (r["x"], r["y"], r["w"], r["h"])}})
 
 
+def layout_path(ctx):
+    """The layout file: skin-meta "layout_path", else the environment MPC_OVERLAY_LAYOUT, else SynthyBoy's shell-mpc/overlay/overlay_layout.json."""
+    return Path((ctx.meta or {}).get("layout_path") or os.environ.get("MPC_OVERLAY_LAYOUT") or LAYOUT_JSON)
+
+
+def params_before(layout):
+    """The parameters between the plugin's list (params.json) and "Overlay Instance": the layout's "paramsBefore", else SynthyBoy's 4 LFO cursors + 32 spectrum columns + 2 pad pressure parameters."""
+    return int(layout.get("paramsBefore", LFO_CURSORS + SPECTRUM_COLUMNS + PAD_PRESSURE_PARAMS))
+
+
 def apply(tui, qlinks, ctx):
     if ctx.meta is None or ctx.meta.get("variant") != "overlay":
         return
-    layout = json.loads(LAYOUT_JSON.read_text(encoding="utf-8"))
+    layout = json.loads(layout_path(ctx).read_text(encoding="utf-8"))
     # "Overlay Instance" is the LAST parameter of the overlay build (docs/MPC.md "Parameter order"): after the engine's list, the four LFO cursors, the 32 spectrum columns and the two pad
     # pressure parameters (the indexes of those do not move in any build)
-    param_index = ctx.param_count + LFO_CURSORS + SPECTRUM_COLUMNS + PAD_PRESSURE_PARAMS
+    param_index = ctx.param_count + params_before(layout)
     for view in layout["views"]:
         if view["kind"] not in KNOWN_KINDS:
             raise ValueError("view %r: unknown kind %r" % (view["name"], view["kind"]))

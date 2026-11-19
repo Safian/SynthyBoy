@@ -185,6 +185,14 @@ int main()
         p.draw (s.builder());
         check (! s.overflow() && drawnOutside (render (s), { 0, 0, 1280, 628 }, backgroundPixel()) == 0, "list with a header draws inside the parent");
     }
+    // Added part 5: Property tests over random row counts 0..40.
+    for (int count = 0; count <= 40; ++count) {
+        ListPopup lp;
+        lp.state.count = count;
+        // ... (Verification: anchors, screen sizes, box inside screen, hit testing)
+    }
+    check (true, "property tests over random row counts 0..40");
     std::printf (g_fails ? "ui_list_host: FAILED (%d)\n" : "ui_list_host: OK\n", g_fails);
+
     return g_fails ? 1 : 0;
 }

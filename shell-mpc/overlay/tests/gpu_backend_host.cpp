@@ -243,10 +243,10 @@ struct CRig
     double now = 0.0;
     FakeHelper helper { plane, &now };
     gpu::GpuHelperBackend backend { helper, plane };
-    std::unique_ptr<Controller> ctl;
+    std::unique_ptr<SynthyBoyController> ctl;
     CRig()
     {
-        ctl = std::make_unique<Controller> (plane, frame, renderer, dir.paths(), Timing(), 10.0, &backend);
+        ctl = std::make_unique<SynthyBoyController> (plane, frame, renderer, dir.paths(), Timing(), 10.0, &backend);
         inst.set ("filter1.cutoff", 1000.0f);
         inst.set ("filter1.resonance", 30.0f);
         ctl->attach (&inst);
@@ -805,7 +805,7 @@ int main()
             FakeFrame frame;
             CpuCurveRenderer renderer;
             FakeInstance inst;
-            Controller ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0);
+            SynthyBoyController ctl (plane, frame, renderer, dir.paths(), Timing(), 10.0);
             ctl.attach (&inst);
             frame.setAll (true, 90);
             double now = 0.0;

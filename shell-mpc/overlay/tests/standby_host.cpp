@@ -115,7 +115,7 @@ struct Rig
     CpuCurveRenderer renderer;
     FakeInstance inst;
     FakeTouch touch;
-    std::unique_ptr<Controller> ctl;
+    std::unique_ptr<SynthyBoyController> ctl;
     double now = 0.0;
     int missing = 0;       // ticks at which the page had been shown and was not (a frame without our picture)
     bool watching = false;
@@ -124,7 +124,7 @@ struct Rig
     explicit Rig (bool withBacklight = true, int bl = 227)
     {
         frame.views = legacy::kViews;
-        ctl = std::make_unique<Controller> (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, &touch, legacy::kViews, legacy::kNumViews);
+        ctl = std::make_unique<SynthyBoyController> (plane, frame, renderer, dir.paths(), Timing(), 10.0, nullptr, &touch, &legacy::pageSet());
         inst.set ("filter1.cutoff", 1000.0f);
         inst.set ("filter1.resonance", 30.0f);
         ctl->attach (&inst);
