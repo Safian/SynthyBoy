@@ -1,5 +1,7 @@
 # Sound fixes 1: levels by a perceptual measure, register of seven presets, Fast Arp Bass
 
+> **Method superseded (2026-11-19).** The levels of the factory presets are now set against the stock MPC instruments: the peaks of a velocity 127 note and chord after the shells' output stage, per category, against the stock medians (`scripts/level-to-stock.py`, `docs/release/LEVELLING-STOCK-2026-11-19.md`). `scripts/measure-loudness.py` (`fast_max`, below) stays as a measuring tool; its `solve` must not be run on the set any more: it would undo that levelling.
+
 Branch `work/sound-fixes` (base df076188). Written from measurements of the offline engine render (own engine, XL profile `high;voices=16;control=economy`, Key 61 profile `low` as a second column); nothing here was heard. The binaries of the sound lab were built before the pending engine fixes (Ladder feedback sum, comb tuning, FX filter drive): see section 9.
 
 ## Magyar összefoglaló a tulajdonosnak

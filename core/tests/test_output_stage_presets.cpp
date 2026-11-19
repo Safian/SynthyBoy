@@ -1,6 +1,6 @@
 // SynthyBoy - the output stage of the shells (core/include/synthyboy/output_stage.h) on every factory preset: the raw own engine render of a velocity 127 four note chord
 // (keys 36 48 55 60) and of a single note (key 48), held 2 s, under the device profiles of the MPC Key 61 ("low") and of the MPC XL ("high,voices=16,control=economy"), 48 kHz, the
-// content packs as the store; then the stage at make-up gains 2, 4, 6, 9 (kMakeupGainDb) and 15 dB, 128 frame blocks.
+// content packs as the store; then the stage at make-up gains kMakeupGainDb, 2, 4, 6, 9 and 15 dB, 128 frame blocks.
 // Checks: no output sample above the ceiling, every sample finite, the safety clip never acts (the limiter holds the ceiling by itself), and the loudness order: the loudest 400 ms
 // (momentary loudness, BS.1770 K-weighting) never falls as the make-up gain rises (no inversion by pumping; kLoudnessTolerance below).
 // Prints, per profile and category, the gain reduction (deepest, mean, the share of 128 frame blocks above 3 and 6 dB) at every gain: the figures the choice of kMakeupGainDb starts from.
@@ -36,8 +36,9 @@ namespace
 constexpr double kSr = 48000.0;
 constexpr int kBlock = 128;
 constexpr double kHold = 2.0, kTail = 0.5;
-const float kGains[] = { 2.0f, 4.0f, 6.0f, kMakeupGainDb, 15.0f };
-constexpr int kGainCount = 5;
+const float kGains[] = { kMakeupGainDb, 2.0f, 4.0f, 6.0f, 9.0f, 15.0f };   // rising: the loudness order is checked along it
+static_assert (kMakeupGainDb < 2.0f, "kGains must rise");
+constexpr int kGainCount = 6;
 // A deeply limited sound reaches a plateau of loudness: more gain then moves the loudest 400 ms by a few hundredths of a LU either way (the release after the attack, the window).
 // 0.15 LU is far under what is heard (about 0.5 to 1 LU); the measured worst on 2026-11-19 was 0.12 LU (Bowed MPE Strings, single note, +12 -> +15 dB, at most 9.6 dB of reduction).
 constexpr double kLoudnessTolerance = 0.15;
@@ -72,7 +73,7 @@ std::vector<Preset> loadPresets()
 }
 
 /** The raw engine output: keys at velocity 1.0 held kHold, then kTail of release. */
-void renderRaw (const Preset& p, const Quality& q, const IContentStore* store, const std::vector<int>& keys, std::vector<float>& L, std::vector<float>& R)
+void renderRaw (const Preset& p, const Quality& q, const IContentStore* store, const std::vector<int>& keys, std::vector<float>& L, std::vector<float>& R, double hold = kHold, double tail = kTail)
 {
     auto engine = createEngine (EngineKind::own);
     engine->prepare (kSr, kBlock, q);
@@ -80,7 +81,13 @@ void renderRaw (const Preset& p, const Quality& q, const IContentStore* store, c
     for (size_t i = 0; i < paramCount(); ++i)
         engine->setParam (paramTable()[i].id, p.values.plain[i]);
     engine->setContent (p.content);
-    const int blocks = static_cast<int> ((kHold + kTail) * kSr / kBlock), holdBlocks = static_cast<int> (kHold * kSr / kBlock);
+    {
+        // 0.3 s of silence: the engine smooths master.volume from its default after a state is loaded (on the device the plugin has run before a note comes)
+        std::vector<float> zl (kBlock), zr (kBlock);
+        for (int b = 0; b < static_cast<int> (0.3 * kSr / kBlock); ++b)
+            engine->process (nullptr, 0, zl.data(), zr.data(), kBlock);
+    }
+    const int blocks = static_cast<int> ((hold + tail) * kSr / kBlock), holdBlocks = static_cast<int> (hold * kSr / kBlock);
     L.assign (static_cast<size_t> (blocks * kBlock), 0.0f);
     R.assign (L.size(), 0.0f);
     for (int b = 0; b < blocks; ++b)
@@ -218,7 +225,7 @@ TEST (output_stage_on_every_factory_preset)
                         double outPeak = 0;
                         for (size_t i = 0; i < l.size(); ++i)
                             outPeak = std::max ({ outPeak, static_cast<double> (std::fabs (l[i])), static_cast<double> (std::fabs (r[i])) });
-                        std::printf ("  %s, %s, chord velocity 127, +%.0f dB: raw peak %.2f dBFS, after the gain %.2f dBFS, after the stage %.2f dBFS, deepest reduction %.2f dB, loudest 400 ms %.2f LUFS\n",
+                        std::printf ("  %s, %s, chord velocity 127, %+.1f dB: raw peak %.2f dBFS, after the gain %.2f dBFS, after the stage %.2f dBFS, deepest reduction %.2f dB, loudest 400 ms %.2f LUFS\n",
                                      p.name.c_str(), pr.name, kGains[gi], 20.0 * std::log10 (rawPeak), 20.0 * std::log10 (rawPeak) + kGains[gi], 20.0 * std::log10 (outPeak), deepest, loud);
                     }
                 }
@@ -244,4 +251,75 @@ TEST (output_stage_on_every_factory_preset)
     CHECK_EQ (notFinite, 0L);
     CHECK_EQ (clips, 0L);
     CHECK_EQ (inversions, 0L);
+}
+
+namespace
+{
+/** The number of the member `category` inside the object `key` of the flat targets file (scripts/stock-level-targets.json); NaN when absent. */
+double targetOf (const std::string& text, const std::string& key, const std::string& category)
+{
+    const size_t k = text.find ("\"" + key + "\"");
+    if (k == std::string::npos)
+        return std::nan ("");
+    const size_t open = text.find ('{', k), close = text.find ('}', k);
+    const size_t c = text.find ("\"" + category + "\"", open);
+    if (open == std::string::npos || c == std::string::npos || c > close)
+        return std::nan ("");
+    return std::atof (text.c_str() + text.find (':', c) + 1);
+}
+} // namespace
+
+// The levelling to the stock MPC instruments (scripts/level-to-stock.py, docs/release/LEVELLING-STOCK-2026-11-19.md): at kMakeupGainDb with the limiter on, the velocity 127 chord
+// (36 48 55 60) of every preset, Key 61 and XL profiles, peaks within 3 dB of its category's target, and the limiter only guards: it reduces in at most 5 % of the blocks
+// for at least 90 % of the renders.
+TEST (output_stage_presets_sit_at_the_stock_level)
+{
+    std::ifstream tf (std::string (SYNTHYBOY_TEST_SOURCE_DIR) + "/scripts/stock-level-targets.json");
+    std::stringstream ts;
+    ts << tf.rdbuf();
+    const std::string targets = ts.str();
+    const auto presets = loadPresets();
+    DirectoryContentStore store (SYNTHYBOY_TEST_CONTENT_STORE);
+    const char* profiles[] = { "low", "high,voices=16,control=economy" };
+    long renders = 0, outside = 0, quiet = 0;
+    std::vector<float> L, R;
+    for (const char* pt : profiles)
+    {
+        synthyboy_mpc::Profile profile;
+        std::string why;
+        CHECK (synthyboy_mpc::parseProfile (pt, profile, &why));
+        Quality q = synthyboy_mpc::profileQuality (profile);
+        q.realtime = false;
+        for (const Preset& p : presets)
+        {
+            const double target = targetOf (targets, "peak_chord_v127", p.category);
+            CHECK (std::isfinite (target));
+            renderRaw (p, q, &store, { 36, 48, 55, 60 }, L, R, 3.0, 0.0);   // the gesture of scripts/level-to-stock.py: held 3 s (a riser or an evolving pad peaks late)
+            OutputStage st;
+            st.prepare (kSr);
+            st.setGainDb (kMakeupGainDb);
+            st.reset();
+            int engaged = 0, blocks = 0;
+            double peak = 0;
+            for (size_t o = 0; o + kBlock <= L.size(); o += kBlock)
+            {
+                st.process (L.data() + o, R.data() + o, kBlock);
+                engaged += st.gainReductionDb() > 0.01f;
+                ++blocks;
+                for (size_t i = o; i < o + kBlock; ++i)
+                    peak = std::max ({ peak, static_cast<double> (std::fabs (L[i])), static_cast<double> (std::fabs (R[i])) });
+            }
+            const double pk = 20.0 * std::log10 (std::max (peak, 1e-10));
+            ++renders;
+            if (std::fabs (pk - target) > 3.0)
+            {
+                ++outside;
+                std::printf ("  outside the window: %s (%s, %s): chord peak %.2f dBFS, target %.1f\n", p.name.c_str(), p.category.c_str(), pt, pk, target);
+            }
+            quiet += engaged <= blocks / 20;
+        }
+    }
+    std::printf ("  %ld renders: %ld outside +-3 dB of the target; the limiter reduces in at most 5 %% of the blocks in %ld (%.1f %%)\n", renders, outside, quiet, 100.0 * static_cast<double> (quiet) / static_cast<double> (renders));
+    CHECK_EQ (outside, 0L);
+    CHECK (static_cast<double> (quiet) >= 0.9 * static_cast<double> (renders));
 }
