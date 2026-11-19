@@ -251,7 +251,7 @@ private:
     std::atomic<double> tempo { 120.0 };
 
     std::unique_ptr<synthyboy::IEngine> engine;
-    synthyboy::ShellOutputStage outputStage;
+    synthyboy::OutputStage outputStage;   // make-up gain + look-ahead limiter (synthyboy/output_stage.h); its look-ahead is part of the reported latency
     synthyboy::EngineCapsMask caps = synthyboy::kCapNone; // engine->capabilities (), constant after construction
     synthyboy::EngineCaps2Mask caps2 = synthyboy::kCap2None; // engine->capabilities2 ()
 

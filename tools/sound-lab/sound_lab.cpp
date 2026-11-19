@@ -9,6 +9,8 @@
 // PROFILE is the grammar of shell-mpc/device_profile.h with ';' for ',' ("low", "high;voices=16;control=economy"), plus two keys of the lab itself:
 //   fxoff=NAME[+NAME...]   bypasses these effects too (chorus compressor delay distortion eq filter flanger phaser reverb hyperdim utility bode convolve splitter_lh splitter_lmh splitter_ms)
 //   fxon=NAME[+NAME...]    lets these effects run whatever the profile says
+//   stage=on               the output stage of the shells after the engine (core/include/synthyboy/output_stage.h: kMakeupGainDb, look-ahead limiter on): the file is what a shell hands
+//                          to its host, delayed by the look-ahead; without it (default) the raw engine output that scripts/measure-loudness.py measures
 // ("high;fxoff=reverb" is the full quality profile with the reverb bypassed: what the tier makeup of the effects is measured against). Items, times in seconds:
 //   on T KEY VEL           note on (velocity 0..1)        off T KEY              note off
 //   press T KEY VALUE      poly pressure of a note (0..1; NoteExpression Pressure)
@@ -16,7 +18,7 @@
 //   set KEY VALUE          a parameter, before the note (after the preset is loaded; e.g. macro.1 0.5)
 //   ramp KEY T0 T1 V0 V1   a parameter moved linearly between T0 and T1 (updated every block)
 //   bpm VALUE              host tempo with a running transport
-// The output is a 32 bit float stereo WAV at 44100 Hz, the raw engine output (the MPC shell adds its make-up gain after it). The engine runs as tier_bench runs it: 128 frame
+// The output is a 32 bit float stereo WAV at 44100 Hz, the raw engine output (the shells add their output stage after it; stage=on renders that too). The engine runs as tier_bench runs it: 128 frame
 // blocks, quality of the profile, offline (deterministic).
 
 #include <algorithm>
@@ -36,6 +38,7 @@
 #include "synthyboy/content_state.h"
 #include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
+#include "synthyboy/output_stage.h"
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "synthyboy/state.h"
@@ -76,8 +79,9 @@ bool doJob (const std::vector<std::string>& w)
     std::replace (profileText.begin(), profileText.end(), ';', ',');
     const double seconds = std::atof (w[4].c_str());
 
-    // the lab's own keys (fxoff=, fxon=) are taken out of the text before the profile grammar sees it
+    // the lab's own keys (fxoff=, fxon=, stage=on) are taken out of the text before the profile grammar sees it
     uint32_t fxOff = 0, fxOn = 0;
+    bool withStage = false;
     {
         static const char* const kNames[] = { "chorus", "compressor", "delay", "distortion", "eq", "filter", "flanger", "phaser", "reverb", "hyperdim", "utility", "bode", "convolve",
                                               "splitter_lh", "splitter_lmh", "splitter_ms" };
@@ -88,6 +92,11 @@ bool doJob (const std::vector<std::string>& w)
             const size_t comma = std::min (profileText.find (',', at), profileText.size());
             const std::string part = profileText.substr (at, comma - at);
             at = comma + 1;
+            if (part == "stage=on" || part == "stage=off")
+            {
+                withStage = part == "stage=on";
+                continue;
+            }
             const bool off = part.rfind ("fxoff=", 0) == 0, on = part.rfind ("fxon=", 0) == 0;
             if (! off && ! on)
             {
@@ -226,6 +235,9 @@ bool doJob (const std::vector<std::string>& w)
     std::vector<float> L (static_cast<size_t> (total)), R (static_cast<size_t> (total));
     size_t next = 0;
     std::vector<Event> block;
+    OutputStage stage;
+    stage.prepare (kRate);
+    stage.reset();
     for (long pos = 0; pos < total; pos += kBlock)
     {
         block.clear();
@@ -249,6 +261,8 @@ bool doJob (const std::vector<std::string>& w)
             engine->setTransport (ti);
         }
         engine->process (block.empty() ? nullptr : block.data(), static_cast<int> (block.size()), L.data() + pos, R.data() + pos, kBlock);
+        if (withStage)
+            stage.process (L.data() + pos, R.data() + pos, kBlock);
     }
     writeWav (out, L, R);
     return true;

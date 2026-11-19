@@ -379,8 +379,8 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
         // quality.oversample_4x changed: only prepare () can apply it (activate () calls it again after the restart)
         if (self->engine->needsPrepare() && self->host != nullptr && self->host->request_restart != nullptr)
             self->host->request_restart (self->host);
-        // Bode's latency changed (the effect was switched on / off or moved): the host reads the new value after the restart
-        const int latency = self->engine->latencySamples();
+        // Bode's latency changed (the effect was switched on / off or moved): the host reads the new value after the restart (the output limiter's look-ahead is added)
+        const int latency = self->engine->latencySamples() + self->outputStage.latencySamples();
         if (latency != self->reportedLatency.load (std::memory_order_relaxed))
         {
             self->reportedLatency.store (latency, std::memory_order_relaxed);
@@ -631,7 +631,7 @@ const clap_plugin_voice_info_t s_voice_info = {
 uint32_t ext_latency_get (const clap_plugin_t* plugin) noexcept
 {
     auto* self = static_cast<SynthyBoyClap*> (plugin->plugin_data);
-    const int latency = self->engine ? self->engine->latencySamples() : 0;
+    const int latency = (self->engine ? self->engine->latencySamples() : 0) + OutputStage::lookaheadFor (self->sampleRate) * (self->outputStage.limiter() ? 1 : 0);
     self->reportedLatency.store (latency, std::memory_order_relaxed);
     return static_cast<uint32_t> (latency);
 }

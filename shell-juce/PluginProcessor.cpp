@@ -314,7 +314,7 @@ void SynthyBoyProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     stopWatch.reset();
     outputStage.prepare (sampleRate);
     engine->prepare (sampleRate, samplesPerBlock, quality);
-    setLatencySamples (engine->latencySamples());
+    setLatencySamples (engine->latencySamples() + outputStage.latencySamples());
 }
 
 void SynthyBoyProcessor::setNonRealtime (bool isNonRealtime) noexcept
@@ -481,8 +481,8 @@ void SynthyBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::M
     peakL.store (magL, std::memory_order_relaxed);
     peakR.store (magR, std::memory_order_relaxed);
 
-    // Bode's latency (the engine delays every other path to match): tell the host when it changes
-    const int latency = engine->latencySamples();
+    // Bode's latency (the engine delays every other path to match) and the look-ahead of the output limiter: tell the host when it changes
+    const int latency = engine->latencySamples() + outputStage.latencySamples();
     if (latency != getLatencySamples())
         setLatencySamples (latency);
 }

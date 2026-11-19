@@ -160,6 +160,16 @@ synthyboy_add_test(synthyboy_test_own_fx_mute test_own_fx_mute.cpp)   # an effec
 target_include_directories(synthyboy_test_own_fx_mute PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_fx_makeup test_own_fx_makeup.cpp)   # the tier level makeup of the bypassed effects
 target_include_directories(synthyboy_test_own_fx_makeup PRIVATE "${PROJECT_SOURCE_DIR}/bench")
+# The output stage of the shells (core/include/synthyboy/output_stage.h) on every factory preset, chord and single note, Key 61 and XL profiles, at several make-up gains:
+# never above the ceiling, finite, no safety clip, no loudness inversion; prints the gain reduction per category. Needs the factory content packs as a store (links by pack id).
+set(SYNTHYBOY_OUTPUT_STAGE_STORE "${CMAKE_CURRENT_BINARY_DIR}/output-stage-content-store")
+file(MAKE_DIRECTORY "${SYNTHYBOY_OUTPUT_STAGE_STORE}")
+file(CREATE_LINK "${PROJECT_SOURCE_DIR}/content/factory-wavetables" "${SYNTHYBOY_OUTPUT_STAGE_STORE}/com.safian.synthyboy.factory-wavetables" SYMBOLIC COPY_ON_ERROR)
+file(CREATE_LINK "${PROJECT_SOURCE_DIR}/content/factory-samples" "${SYNTHYBOY_OUTPUT_STAGE_STORE}/com.safian.synthyboy.factory-samples" SYMBOLIC COPY_ON_ERROR)
+synthyboy_add_test(synthyboy_test_output_stage_presets test_output_stage_presets.cpp)
+target_include_directories(synthyboy_test_output_stage_presets PRIVATE "${PROJECT_SOURCE_DIR}/shell-mpc")
+target_compile_definitions(synthyboy_test_output_stage_presets PRIVATE SYNTHYBOY_TEST_SOURCE_DIR="${PROJECT_SOURCE_DIR}" SYNTHYBOY_TEST_CONTENT_STORE="${SYNTHYBOY_OUTPUT_STAGE_STORE}")
+set_tests_properties(synthyboy_test_output_stage_presets PROPERTIES LABELS slow TIMEOUT 1800)
 synthyboy_add_test(synthyboy_test_own_profile test_own_profile.cpp)   # the economy groups of a quality (the device profiles of shell-mpc/device_profile.h)
 target_include_directories(synthyboy_test_own_profile PRIVATE "${PROJECT_SOURCE_DIR}/bench")
 synthyboy_add_test(synthyboy_test_rt         test_rt_alloc.cpp)   # replaces global operator new/delete

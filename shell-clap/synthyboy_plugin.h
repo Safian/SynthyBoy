@@ -55,7 +55,7 @@ struct SynthyBoyClap
     std::atomic<int64_t> lastOnSample { 0 }, lastOffSample { -1 }, samplesDone { 0 };
     std::atomic<double> tempo { 120.0 };
     Quality quality;
-    ShellOutputStage outputStage;
+    OutputStage outputStage;   // make-up gain + look-ahead limiter (synthyboy/output_stage.h); its look-ahead is part of the reported latency
     std::vector<Event> events;
     double sampleRate = 48000.0;
     uint32_t maxBlockSize = 512;
