@@ -74,6 +74,7 @@ struct Options
     bool scalarContent = false; // --scalar-content
     presetrender::OutputOptions out; // --float32, --hash
     bool outputStage = false;   // --output-stage
+    float voiceGainAlpha = kVoiceCountAlphaDefault; // --voice-gain-alpha A
     double hold = 0.0;          // --hold SECONDS: the held time of the single note and of the chord (default 1.5 s / 1 s)
     std::string contentDir; // root of the content packs the presets reference (<root>/<pack>/<file>); default: PRESETS/content when it exists
 };
@@ -107,6 +108,7 @@ std::unique_ptr<IEngine> makeEngine (const Options& o, const Quality& q, const L
         return engine;
     if (o.scalarContent)
         setOwnSavingsOff (*engine, kOwnSavingContentKernels);
+    setOwnVoiceCountAlpha (*engine, o.voiceGainAlpha);
     engine->prepare (o.sampleRate, kBlock, q);
     // without the store a "Preset table" falls back to the saw and a "Sample" to silence: imported presets would not be rendered as they sound
     engine->setContentStore (o.contentStore);
@@ -300,6 +302,7 @@ int main (int argc, char** argv)
         else if (a == "--hash") o.out.hash = true;
         else if (a == "--hold") o.hold = std::atof (next().c_str());
         else if (a == "--output-stage") o.outputStage = true;
+        else if (a == "--voice-gain-alpha") o.voiceGainAlpha = static_cast<float> (std::atof (next().c_str()));
         else
         {
             std::fprintf (stderr, "preset-render: unknown argument %s\n", a.c_str());
@@ -309,7 +312,7 @@ int main (int argc, char** argv)
     if (o.presets.empty() || ! isEngineAvailable (o.engine))
     {
         std::fprintf (stderr, "usage: synthyboy_preset_render --presets DIR [--engine vital|own] [--tier low|medium|high|all] [--summary-only] [--velocity] "
-                              "[--wav OUTDIR] [--chord-wav OUTDIR] [--float32] [--hash] [--filter TEXT] [--sr 48000] [--content-dir DIR]  (the engine must be built in)\n");
+                              "[--wav OUTDIR] [--chord-wav OUTDIR] [--float32] [--hash] [--filter TEXT] [--sr 48000] [--content-dir DIR] [--voice-gain-alpha A]  (the engine must be built in)\n");
         return 2;
     }
 
