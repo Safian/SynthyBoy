@@ -528,10 +528,27 @@ inline int programOfIndexed (const ProgramView& v, int index, int category, bool
     return v.groupFirst[static_cast<size_t> (category)] + index;
 }
 
+/** The mark of a "modified" program that older plugin versions appended to the name ("Name *"; saved in the chunk of a project): a trailing "*" and the spaces before it are cut off. The plugin never writes the mark
+    (it is gone by design, docs/MPC.md "Program name"), but a project saved earlier still carries it, and the name is looked up in the program list. Only the trailing marks go; a "*" inside a name stays. */
+inline std::string stripModifiedMark (std::string name)
+{
+    bool cut = false;
+    while (! name.empty() && name.back() == '*')
+    {
+        name.pop_back();
+        cut = true;
+    }
+    if (cut)
+        while (! name.empty() && name.back() == ' ')
+            name.pop_back();
+    return name;
+}
+
 /** Like resolveProgram, for a view. The name is the preset's own name. Order: the stored number when that item has the name; the preset that had the stored number in the old (mode "off") list when it has
     the name; the first preset of that name; -1. A chunk without a name: the stored number is a number of the old list. Never returns a header. */
-inline int resolveProgramInView (const ProgramView& v, const std::vector<ProgramEntry>& presets, int storedIndex, bool hasName, const std::string& name) noexcept
+inline int resolveProgramInView (const ProgramView& v, const std::vector<ProgramEntry>& presets, int storedIndex, bool hasName, const std::string& nameWithMark) noexcept
 {
+    const std::string name = stripModifiedMark (nameWithMark);
     const int count = static_cast<int> (presets.size());
     if (! hasName)
         return storedIndex >= 0 && storedIndex <= count ? v.legacyToNumber[static_cast<size_t> (storedIndex)] : -1;
@@ -750,7 +767,7 @@ inline bool programNameFromChunk (const void* data, size_t size, std::string& na
         if (name.size() > 256)
             return false;
 
-        nameOut = std::move (name);
+        nameOut = stripModifiedMark (std::move (name));   // a project saved with the old " *" mark loads without it
         return true;
     }
     catch (...)

@@ -368,15 +368,9 @@ struct PluginInstance
         noProgramName = on ? name : std::string();
     }
 #if SYNTHYBOY_MPC_OVERLAY
-    // The host shows a mark ("*") after the program name when the sound is not the program any more, and drops it when it is told to read the program name again (audioMasterUpdateDisplay, which the Q
-    // proxies need: docs/MPC.md "Q proxies"). So the plugin keeps the mark itself: programModified is set by a chunk restore or a parameter change, cleared by loading a program, and the name the
-    // host reads carries " *" while it is set. programMarkDue: the display thread tells the host when it changed.
-    std::atomic<bool> programModified { false }, programMarkDue { false };
-    void setProgramModified (bool m) noexcept
-    {
-        if (programModified.exchange (m, std::memory_order_relaxed) != m)
-            programMarkDue.store (true, std::memory_order_release);
-    }
+    // The program name the host reads never carries a "modified" mark (removed by design, docs/MPC.md "Program name"). The host drops its own "*" when it is told to read the program name again
+    // (audioMasterUpdateDisplay): programNameRefreshDue is set by a chunk restore, and the display thread tells the host once.
+    std::atomic<bool> programNameRefreshDue { false };
 #endif
 
     // Chunk buffers: owned by the plugin instance, reused across effGetChunk calls. The host reads the chunk AFTER the call returned, and may ask from two threads (an autosave worker and the UI): every call fills
@@ -1136,8 +1130,8 @@ struct PluginInstance
         qFakeWrite (e);
         if (! audioMaster)
             return;
-        if (programMarkDue.exchange (false, std::memory_order_acq_rel))
-            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);   // the program name has or has no mark now
+        if (programNameRefreshDue.exchange (false, std::memory_order_acq_rel))
+            audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);   // the host reads the program name again (and drops its own mark)
         const VstInt32 base = qBase();
         qBank.poll ([&] (int q, float v) { audioMaster (e, audioMasterAutomate, base + q, 0, nullptr, v); },
                     [&] (int real) { audioMaster (e, audioMasterAutomate, real, 0, nullptr, qReadNorm (real)); },
@@ -2105,9 +2099,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
         inst->currentProgram.store (prog, std::memory_order_relaxed);
         inst->setNoProgram (false, std::string());
-#if SYNTHYBOY_MPC_OVERLAY
-        inst->setProgramModified (false);
-#endif
         // Request display update from host
         if (inst->audioMaster)
             inst->audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
@@ -2134,10 +2125,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         if (!name) return 0;
         synthyboy_mpc::startupTimes().noteProgramCall (synthyboy_mpc::StartupTimes::kPcGetProgramName, 0);
         std::string progName = currentProgramLabel (inst);
-#if SYNTHYBOY_MPC_OVERLAY
-        if (inst->programModified.load (std::memory_order_relaxed))
-            progName += " *";
-#endif
         copyString(name, kVstMaxProgNameLen + 1, synthyboy_mpc::truncateUtf8 (progName, synthyboy_mpc::kProgramNameMax).c_str());
         return 1;
     }
@@ -2513,7 +2500,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 #endif
 
 #if SYNTHYBOY_MPC_OVERLAY
-                inst->setProgramModified (true);   // a project's state: the host marks the program as changed after a chunk restore
+                inst->programNameRefreshDue.store (true, std::memory_order_release);   // the host marks the program as changed after a chunk restore: it reads the name again
 #endif
                 if (idx == -1)
                 {
@@ -2840,10 +2827,6 @@ static void writeRealParam (PluginInstance* inst, size_t index, float parameter)
 
     // Disarm protection: any parameter write from the host disarms it
     inst->protectedProgram.store (-1, std::memory_order_relaxed);
-
-#if SYNTHYBOY_MPC_OVERLAY
-    inst->setProgramModified (true);
-#endif
 
     // Call engine directly (IEngine::setParam is lock-free, any thread)
     if (inst->engine)

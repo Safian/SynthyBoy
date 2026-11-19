@@ -105,6 +105,14 @@ int main (int argc, char** argv)
     check (synthyboy_mpc::programNameFromChunk (c.data(), c.size(), nm) && nm == "Acid \"Saw\" \\ Reso", "programNameFromChunk reads the name back (unescaped)");
     const std::string ctl = synthyboy_mpc::chunkWithProgram (state, 1, std::string ("a\tb\x01") + "\xc3\xa9");
     check (ctl.find ("\"mpcProgramName\":\"a\\u0009b\\u0001\xc3\xa9\",") != std::string::npos, "control characters are written as \\u00XX, UTF-8 bytes stay as they are");
+    {
+        check (synthyboy_mpc::stripModifiedMark ("Acid Saw Reso *") == "Acid Saw Reso" && synthyboy_mpc::stripModifiedMark ("Acid Saw Reso*") == "Acid Saw Reso" && synthyboy_mpc::stripModifiedMark ("Acid Saw Reso  **") == "Acid Saw Reso"
+                   && synthyboy_mpc::stripModifiedMark ("Acid Saw Reso") == "Acid Saw Reso" && synthyboy_mpc::stripModifiedMark ("A*B") == "A*B" && synthyboy_mpc::stripModifiedMark ("") == "" && synthyboy_mpc::stripModifiedMark ("Init *") == "Init",
+               "stripModifiedMark cuts a trailing \" *\" / \"*\" and nothing else");
+        const std::string marked = "{\"mpcProgram\":20,\"mpcProgramName\":\"Acid Saw Reso *\",\"x\":1}";
+        std::string got;
+        check (synthyboy_mpc::programNameFromChunk (marked.data(), marked.size(), got) && got == "Acid Saw Reso", "a chunk saved with \"Name *\" is read as \"Name\"");
+    }
     check (synthyboy_mpc::programNameFromChunk (ctl.data(), ctl.size(), nm) && nm == std::string ("a\tb\x01") + "\xc3\xa9", "and they are read back");
     const std::string old = "{\"mpcProgram\":5," + state.substr (1);
     nm = "untouched";
@@ -290,6 +298,23 @@ int main (int argc, char** argv)
             }
             check (oldOk, (tag + "a save with the old number and the name finds its preset").c_str());
             check (nameOnly && staleIndex, (tag + "a save whose number no longer fits (other mode, other package) is found by its name").c_str());
+            {
+                // the "modified" mark is gone by design: no name the host reads (labels, base names, headers, in any mode) ends with "*"; a project saved with the old " *" still finds its preset
+                bool noStar = true, markLoads = true;
+                for (int n = 0; n < v.numPrograms(); ++n)
+                {
+                    const std::string lab = truncateUtf8 (v.label (n), kProgramNameMax);
+                    noStar = noStar && ! lab.empty() && lab.back() != '*' && v.items[static_cast<size_t> (n)].baseName.back() != '*';
+                }
+                for (int i = 0; i < N; ++i)
+                {
+                    const std::string& nm2 = presets[static_cast<size_t> (i)].name;
+                    const int plain = resolveProgramInView (v, presets, i + 1, true, nm2);
+                    markLoads = markLoads && resolveProgramInView (v, presets, i + 1, true, nm2 + " *") == plain && resolveProgramInView (v, presets, 9999, true, nm2 + "*") == plain;
+                }
+                check (noStar, (tag + "no program label or name ends with \"*\" (" + std::to_string (v.numPrograms()) + " items)").c_str());
+                check (markLoads, (tag + "a save with \"Name *\" / \"Name*\" resolves to the preset \"Name\"").c_str());
+            }
             check (numOnly, (tag + "a save with only the old number (before names were stored) finds its preset through the old numbering").c_str());
             check (resolveProgramInView (v, presets, 0, true, "Init") == 0 && resolveProgramInView (v, presets, 3, true, "No Such Preset") == -1 && resolveProgramInView (v, presets, N + 5, false, "") == -1
                        && resolveProgramInView (v, presets, 0, false, "") == 0,
