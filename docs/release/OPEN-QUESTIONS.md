@@ -92,7 +92,7 @@ Lines found: 80 in 10 files.
 - docs/MPC.md:723 [Not measured]: Not measured: the MPCe Q-Link mode from a drum track to plugin parameters, 16 Levels, Note Repeat, pad lighting from a plugin.
 - docs/MPC.md:730 [pending]: - **Polyphonic vs Channel Aftertouch (0xA0 vs 0xD0).** The layer reacts strictly to polyphonic aftertouch (0xA0, per-voice/per-pad pressure). Channel afterto...
 - docs/MPC.md:740 [Not measured]: - **Not measured on a device.** How the opening of the filter sounds from a pad, whether the default amount is right on the MPC XL and the Key 61, and the CP...
-- docs/MPC.md:759 [not known]: - **Latency.** The look-ahead is reported to the host where it has a field: the MPC shell sets `AEffect::initialDelay` to the look-ahead in samples when the ...
+- docs/MPC.md:759 [not known]: - **Latency.** The look-ahead is reported to the host while the limiter is on, where the host has a field. MPC shell: `AEffect::initialDelay` is the engine's...
 - docs/MPC.md:762 [is open]: - **Forcing it for tests.** `SYNTHYBOY_MPC_OUTPUT_LIMITER` in the environment (read when the instance is opened): `1` forces the limiter on, `0` off, anythin...
 - docs/MPC.md:785 [Not verified]: - **Stacking against the host's pointer (the zpos rule, `discovery.h` `chooseZpos`, `shell-mpc/overlay/stacking.h`).** The host keeps its mouse pointer on a ...
 - docs/MPC.md:818 [not built]: - The status file says who draws: `renderer: gpu` or `cpu` (the helper is running and acknowledged, and the last picture was its), `gpu_state` (`idle`, `star...
@@ -144,15 +144,51 @@ Lines found: 80 in 10 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 20.
+Commits found: 29.
+
+### 14411d71 (2026-11-19) Internal gain-staging (0 dB shell gain, -12.5 LUFS presets), shell/DSP bugfixes, and MPC XL + Key 61
+
+- matching line: - Sub Drop Boom master.transpose 12 -> 0 (owner preset-todo.md jegyzet).
 
 ### 6a715f06 (2026-11-18) docs(release): plan sound set batch 3 for 72-table wavetable pack
 
 - matching line: 4. Open questions for the owner.
 
+### 4c0683b9 (2026-11-18) Preset todo: four presets the owner accepted are removed (Pulse Width Bass, Warm Analog Bass, Detona
+
+- matching line: Preset todo: four presets the owner accepted are removed (Pulse Width Bass, Warm Analog Bass, Detonation Tail, Space Wind Storm)
+
 ### 88a4d876 (2026-11-18) docs(ui): replace outdated SendBar comment note in mixer.md
 
 - matching line: - Open questions: none.
+
+### 1851ef7c (2026-11-18) Update preset-todo.md
+
+- matching line: Update preset-todo.md
+
+### 47c96d64 (2026-11-18) Preset todo: the whole list in order of importance, each preset with its browser group
+
+- matching line: Preset todo: the whole list in order of importance, each preset with its browser group
+
+### 0de6a197 (2026-11-18) Preset todo: what to listen to first, then the rest; presets that are fine for both of us are remove
+
+- matching line: Preset todo: what to listen to first, then the rest; presets that are fine for both of us are removed
+
+### 303812c7 (2026-11-17) Preset todo: the Bass and FX notes were taken on the XL with ov29
+
+- matching line: Preset todo: the Bass and FX notes were taken on the XL with ov29
+
+### f5e6e62e (2026-11-17) Update preset-todo.md
+
+- matching line: Update preset-todo.md
+
+### bcb4ce5e (2026-11-17) Preset todo: every preset by name in the selector's order, ready to fill in
+
+- matching line: Preset todo: every preset by name in the selector's order, ready to fill in
+
+### b78ba5b6 (2026-11-17) Owner's preset audition notes: an empty todo file to fill in on any machine
+
+- matching line: Owner's preset audition notes: an empty todo file to fill in on any machine
 
 ### 5f669118 (2026-11-17) test(shell-mpc): add FX page tables data consistency host test
 
