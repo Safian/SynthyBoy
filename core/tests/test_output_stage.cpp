@@ -735,3 +735,132 @@ TEST (output_stage_lookahead_delay_reporting)
         }
     }
 }
+
+// 7. Ceiling: for a full-scale 1 kHz sine at +12 dB and white noise at +20 dB,
+// no output sample above the ceiling (-0.5 dBFS linear 0.94406088) with the limiter on.
+TEST (output_stage_ceiling_sine_and_noise)
+{
+    const double sampleRates[] = { 44100.0, 48000.0 };
+    const float kExpectedCeiling = 0.94406088f;
+
+    // Verify ceiling constant matches exact numerical expectation
+    CHECK_NEAR (synthyboy::OutputStage::kCeiling, kExpectedCeiling, 1e-7);
+    CHECK_NEAR (20.0 * std::log10 (static_cast<double> (synthyboy::OutputStage::kCeiling)), -0.5, 1e-4);
+
+    for (const double sr : sampleRates)
+    {
+        const size_t totalFrames = static_cast<size_t> (sr * 1.5); // 1.5 seconds
+
+        // 1. Full-scale 1 kHz sine at +12 dB
+        // Test both input scaled (+12 dB linear ~ 3.981) with gain 0 dB,
+        // and input full scale (1.0) with stage gain +12 dB.
+        const float amp12dB = std::pow (10.0f, 12.0f / 20.0f);
+
+        for (int mode = 0; mode < 2; ++mode)
+        {
+            synthyboy::OutputStage stageSine;
+            stageSine.prepare (sr);
+            stageSine.setLimiter (true);
+            if (mode == 0)
+                stageSine.setGainDb (0.0f);
+            else
+                stageSine.setGainDb (12.0f);
+            stageSine.reset();
+
+            const float inputAmp = (mode == 0) ? amp12dB : 1.0f;
+            auto sineL = generateSine (totalFrames, inputAmp, 1000.0, sr);
+            auto sineR = generateSine (totalFrames, inputAmp, 1000.0, sr);
+
+            const int bs = 128;
+            for (size_t pos = 0; pos < totalFrames; pos += static_cast<size_t> (bs))
+            {
+                const int n = static_cast<int> (std::min (static_cast<size_t> (bs), totalFrames - pos));
+                stageSine.process (sineL.data() + pos, sineR.data() + pos, n);
+            }
+
+            float maxPeakL = 0.0f, maxPeakR = 0.0f;
+            size_t violations = 0;
+            for (size_t i = 0; i < totalFrames; ++i)
+            {
+                const float absL = std::fabs (sineL[i]);
+                const float absR = std::fabs (sineR[i]);
+                if (absL > maxPeakL) maxPeakL = absL;
+                if (absR > maxPeakR) maxPeakR = absR;
+                if (absL > synthyboy::OutputStage::kCeiling || absR > synthyboy::OutputStage::kCeiling)
+                    ++violations;
+            }
+
+            CHECK_EQ (violations, 0u);
+            CHECK (maxPeakL <= synthyboy::OutputStage::kCeiling);
+            CHECK (maxPeakR <= synthyboy::OutputStage::kCeiling);
+            // Must have pushed up to the ceiling (within 0.1 dB of ceiling)
+            CHECK (maxPeakL >= synthyboy::OutputStage::kCeiling * 0.98f);
+            CHECK (maxPeakR >= synthyboy::OutputStage::kCeiling * 0.98f);
+            CHECK_EQ (stageSine.safetyClips(), 0u); // Limiter holds ceiling on its own
+        }
+
+        // 2. White noise at +20 dB
+        // Test both input scaled (+20 dB linear = 10.0) with gain 0 dB,
+        // and input 1.0 with stage gain +20 dB.
+        const float amp20dB = 10.0f;
+
+        // Deterministic pseudo-random white noise
+        std::mt19937 rng (12345u);
+        std::uniform_real_distribution<float> dist (-1.0f, 1.0f);
+
+        std::vector<float> baseNoiseL (totalFrames);
+        std::vector<float> baseNoiseR (totalFrames);
+        for (size_t i = 0; i < totalFrames; ++i)
+        {
+            baseNoiseL[i] = dist (rng);
+            baseNoiseR[i] = dist (rng);
+        }
+
+        for (int mode = 0; mode < 2; ++mode)
+        {
+            synthyboy::OutputStage stageNoise;
+            stageNoise.prepare (sr);
+            stageNoise.setLimiter (true);
+            if (mode == 0)
+                stageNoise.setGainDb (0.0f);
+            else
+                stageNoise.setGainDb (20.0f);
+            stageNoise.reset();
+
+            const float noiseGain = (mode == 0) ? amp20dB : 1.0f;
+            std::vector<float> noiseL (totalFrames);
+            std::vector<float> noiseR (totalFrames);
+            for (size_t i = 0; i < totalFrames; ++i)
+            {
+                noiseL[i] = baseNoiseL[i] * noiseGain;
+                noiseR[i] = baseNoiseR[i] * noiseGain;
+            }
+
+            const int bs = 128;
+            for (size_t pos = 0; pos < totalFrames; pos += static_cast<size_t> (bs))
+            {
+                const int n = static_cast<int> (std::min (static_cast<size_t> (bs), totalFrames - pos));
+                stageNoise.process (noiseL.data() + pos, noiseR.data() + pos, n);
+            }
+
+            float maxNoisePeakL = 0.0f, maxNoisePeakR = 0.0f;
+            size_t noiseViolations = 0;
+            for (size_t i = 0; i < totalFrames; ++i)
+            {
+                const float absL = std::fabs (noiseL[i]);
+                const float absR = std::fabs (noiseR[i]);
+                if (absL > maxNoisePeakL) maxNoisePeakL = absL;
+                if (absR > maxNoisePeakR) maxNoisePeakR = absR;
+                if (absL > synthyboy::OutputStage::kCeiling || absR > synthyboy::OutputStage::kCeiling)
+                    ++noiseViolations;
+            }
+
+            CHECK_EQ (noiseViolations, 0u);
+            CHECK (maxNoisePeakL <= synthyboy::OutputStage::kCeiling);
+            CHECK (maxNoisePeakR <= synthyboy::OutputStage::kCeiling);
+            // Must have pushed near ceiling
+            CHECK (maxNoisePeakL >= synthyboy::OutputStage::kCeiling * 0.95f);
+            CHECK (maxNoisePeakR >= synthyboy::OutputStage::kCeiling * 0.95f);
+        }
+    }
+}
