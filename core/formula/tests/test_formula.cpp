@@ -705,3 +705,72 @@ TEST (formula_fuzz_1000_strings)
     // Fuzz of 1000 iterations must finish well within bounded time (< 2000 ms)
     CHECK (elapsedMs < 2000);
 }
+
+TEST (formula_dnb_wave_generation)
+{
+    Formula f;
+    Error err;
+
+    // 1. DnbWave single-cycle kick-chirp (ICanHasKick style)
+    err = Formula::compile ("sin(2*pi * (15*w - 7*w^2))", f);
+    CHECK (err.ok);
+    CHECK (! f.isMultiFrame());
+    CHECK (f.usesW());
+
+    // Boundary zero-crossings (w = 0 and w = 1)
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    std::vector<float> frame (kSamplesPerFrame);
+    err = renderFrames (f, 1, frame.data());
+    CHECK (err.ok);
+
+    // Verify all samples are in [-1, 1]
+    for (float s : frame)
+    {
+        CHECK (std::isfinite (s));
+        CHECK (s >= -1.0f && s <= 1.0f);
+    }
+
+    // Verify frequency drop (chirp): more zero-crossings in first quarter than in last quarter
+    int zeroCrossingsFirstQuarter = 0;
+    for (int i = 1; i < kSamplesPerFrame / 4; ++i)
+        if ((frame[i - 1] < 0.0f && frame[i] >= 0.0f) || (frame[i - 1] > 0.0f && frame[i] <= 0.0f))
+            ++zeroCrossingsFirstQuarter;
+
+    int zeroCrossingsLastQuarter = 0;
+    for (int i = kSamplesPerFrame * 3 / 4; i < kSamplesPerFrame; ++i)
+        if ((frame[i - 1] < 0.0f && frame[i] >= 0.0f) || (frame[i - 1] > 0.0f && frame[i] <= 0.0f))
+            ++zeroCrossingsLastQuarter;
+
+    CHECK (zeroCrossingsFirstQuarter > zeroCrossingsLastQuarter);
+
+    // 2. DnbWave chirp up
+    err = Formula::compile ("sin(2*pi * (w + 7*w^2))", f);
+    CHECK (err.ok);
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f);
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);
+
+    // 3. DnbWave sweep (y) - multi-frame wavetable
+    err = Formula::compile ("sin(2*pi * ((1 + 14*y)*w - 7*y*w^2))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK (f.usesY());
+
+    std::vector<float> multiFrames (4 * kSamplesPerFrame);
+    err = renderFrames (f, 4, multiFrames.data());
+    CHECK (err.ok);
+
+    // Frame 0 (y = 0) is pure fundamental sine
+    for (int i = 0; i < kSamplesPerFrame; ++i)
+    {
+        const double w = static_cast<double> (i) / (kSamplesPerFrame - 1);
+        const float expected = static_cast<float> (std::sin (2.0 * 3.14159265358979323846 * w));
+        CHECK_NEAR (multiFrames[i], expected, 0.01f);
+    }
+
+    // 4. DnbWave drive (y) - saturated
+    err = Formula::compile ("tanh(2.5 * sin(2*pi * ((1 + 14*y)*w - 7*y*w^2)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+}

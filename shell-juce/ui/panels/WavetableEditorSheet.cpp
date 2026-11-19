@@ -1598,17 +1598,18 @@ void WavetableEditorSheet::setMode (Mode newMode)
     layersTabBtn.setToggleState (newMode == Mode::layers, juce::dontSendNotification);
 
     const bool isWide = (getWidth() >= 600);
+    const bool sideBySideCanvases = isWide && (newMode == Mode::wave || newMode == Mode::spectrum);
 
     if (waveCanvas)
         waveCanvas->setVisible (newMode == Mode::wave || isWide);
     if (spectrumCanvas)
-        spectrumCanvas->setVisible (newMode == Mode::spectrum || isWide);
+        spectrumCanvas->setVisible (newMode == Mode::spectrum || sideBySideCanvases);
     if (processView)
-        processView->setVisible (newMode == Mode::process && ! isWide);
+        processView->setVisible (newMode == Mode::process);
     if (formulaView)
-        formulaView->setVisible (newMode == Mode::formula && ! isWide);
+        formulaView->setVisible (newMode == Mode::formula);
     if (layersView)
-        layersView->setVisible (newMode == Mode::layers && ! isWide);
+        layersView->setVisible (newMode == Mode::layers);
 
     resized();
 }
@@ -1851,10 +1852,19 @@ bool WavetableEditorSheet::applyFormula (const std::string& expression, std::str
         if (currentFrameIndex < wt.numFrames())
         {
             auto& frame = wt.getFrame (currentFrameIndex);
-            for (size_t s = 0; s < wtedit::kWaveformSize; ++s)
+            if (f.usesQ())
             {
-                const double x = (static_cast<double> (s) / static_cast<double> (wtedit::kWaveformSize - 1)) * 2.0 - 1.0;
-                frame[s] = f.evaluate (x, static_cast<int> (currentFrameIndex), static_cast<int> (wt.numFrames()));
+                std::vector<float> buffer (wtedit::kWaveformSize);
+                formula::renderFrames (f, 1, buffer.data());
+                std::copy_n (buffer.data(), wtedit::kWaveformSize, frame.sampleData());
+            }
+            else
+            {
+                for (size_t s = 0; s < wtedit::kWaveformSize; ++s)
+                {
+                    const double x = (static_cast<double> (s) / static_cast<double> (wtedit::kWaveformSize - 1)) * 2.0 - 1.0;
+                    frame[s] = f.evaluate (x, static_cast<int> (currentFrameIndex), static_cast<int> (wt.numFrames()));
+                }
             }
         }
     }
@@ -2586,7 +2596,13 @@ void WavetableEditorSheet::resized()
         if (waveCanvas)
             waveCanvas->setBounds (leftArea);
 
-        if (spectrumCanvas)
+        if (currentMode == Mode::process && processView)
+            processView->setBounds (rightArea);
+        else if (currentMode == Mode::formula && formulaView)
+            formulaView->setBounds (rightArea);
+        else if (currentMode == Mode::layers && layersView)
+            layersView->setBounds (rightArea);
+        else if (spectrumCanvas)
             spectrumCanvas->setBounds (rightArea);
     }
     else

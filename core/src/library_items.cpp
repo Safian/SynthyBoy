@@ -102,6 +102,10 @@ const std::vector<FormulaExample>& formulaExamples()
         { "Sine to saw (y)", "sin(2*pi*x) * (1 - y) + (1 - 2*w) * y" },
         { "Spectral partials (q)", "q < 16 ? 1.0 / q : 0.0" },
         { "Spectral odd partials (q)", "(q % 2 == 1) ? 1.0 / q : 0.0" },
+        { "DnbWave", "sin(2*pi * (15*w - 7*w^2))" },
+        { "DnbWave chirp up", "sin(2*pi * (w + 7*w^2))" },
+        { "DnbWave sweep (y)", "sin(2*pi * ((1 + 14*y)*w - 7*y*w^2))" },
+        { "DnbWave drive (y)", "tanh(2.5 * sin(2*pi * ((1 + 14*y)*w - 7*y*w^2)))" },
     };
     return examples;
 }
