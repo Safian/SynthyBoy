@@ -77,7 +77,7 @@ int main()
     checkf (std::fabs (20.0 * std::log10 ((double) C) + 0.5) < 1e-5, "the ceiling is -0.5 dB full scale (%.6f)", (double) C);
     check (OutputStage::lookaheadFor (44100.0) == 132 && OutputStage::lookaheadFor (48000.0) == 144 && OutputStage::lookaheadFor (96000.0) == 288, "look-ahead 3 ms: 132 / 144 / 288 samples at 44.1 / 48 / 96 kHz");
     check (OutputStage::lookaheadFor (0.0) == 132 && OutputStage::lookaheadFor (std::numeric_limits<double>::quiet_NaN()) == 132, "an invalid rate counts as 44.1 kHz");
-    check (synthyboy::kMakeupGainDb == -2.5f && OutputStage().gainDb() == synthyboy::kMakeupGainDb, "a new stage starts at kMakeupGainDb (-2.5 dB since the levelling to the stock instruments), the one value of every shell");
+    check (synthyboy::kMakeupGainDb == -1.0f && OutputStage().gainDb() == synthyboy::kMakeupGainDb, "a new stage starts at kMakeupGainDb (-1.0 dB since the levelling to the stock instruments), the one value of every shell");
     check (OutputStage().limiter(), "a new stage has the limiter on");
     check (synthyboy_mpc::kOutputLimiterDefaultOn, "MPC: the setting LIMIT is on by default");
 

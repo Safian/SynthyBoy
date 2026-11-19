@@ -42,9 +42,9 @@ namespace synthyboy
 {
 
 /** THE make-up gain of every shell, in dB (the MPC build option SYNTHYBOY_MPC_OUTPUT_GAIN_DB overrides it for the MPC shell only when it is given). Change the level of all shells here.
-    -2.5 dB: the factory presets are levelled to the stock MPC instruments (scripts/level-to-stock.py, docs/release/LEVELLING-STOCK-2026-11-19.md); this is the gain at which the median
-    preset kept its master.volume as near as the range of master.volume (-60 .. +6 dB) allows every preset to reach its target. A new value needs a new levelling run. */
-constexpr float kMakeupGainDb = -2.5f;
+    -1.0 dB: the factory presets are levelled to the stock MPC instruments (scripts/level-to-stock.py, docs/release/LEVELLING-STOCK-2026-11-19.md); the rule's value: the gain at which
+    the median preset needs no change of its master.volume and no preset needs more than its +6 dB top. A new value needs a new levelling run. */
+constexpr float kMakeupGainDb = -1.0f;
 
 class OutputStage
 {
