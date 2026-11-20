@@ -1492,7 +1492,7 @@ Measured 2026-11-20/21 on the MPC Key 61 (armv7, MPC OS 3.10.1.12, develop `bf18
 
 About 80 to 90 MB of host RSS per added SynthyBoy track (a little above the 72 MB heap of the probe). No `VmSwap`, no OOM or kill line in `dmesg` at any reading. Extrapolation (NOT measured): a fourth track would leave about 2.45 GB available. Memory did come back to the one-track level after the reopen.
 
-The host app (`MPC`, pid 15978) crashed at 00:27:46 (a Sentry crash envelope was sent) while the plugin list was being scrolled for the fourth track, with the dialog of track 8 open; it restarted as pid 7135 (uptime 2 days: not a reboot). MemAvailable was about 2.5 GB just before, so memory is not the cause. The journal gives no cause; whether it is reproducible, or specific to the flick gestures of that run, is open (`TODO.md`).
+The host app (`MPC`, pid 15978) crashed at 00:27:46 (a Sentry crash envelope was sent) while the plugin list was being scrolled for the fourth track, with the dialog of track 8 open; it restarted as pid 7135 (uptime 2 days: not a reboot). MemAvailable was about 2.5 GB just before, so memory is not the cause. The journal gives no cause; whether it is reproducible, or specific to the flick gestures of that run, is open (see the open items list in the repository root).
 
 ## Logging in the plugin
 
