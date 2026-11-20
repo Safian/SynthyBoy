@@ -12,6 +12,7 @@ mi a baj, hol látszik (fájl:sor / eszköz / mérés), és mitől kész. Aki do
 - Q-Link gombok az XL-en nem tesztelhetők gépről (nincs befecskendező eszköz, csak a Key 61-re van). Kész, ha a VOLUME Q-Linkkel is igazolt mindkét eszközön.
 - Leütéserő az XL-en: a napló szerint az utolsó 16 hang mind 127-tel érkezett. Valódi padütéses próba (Full Level ki és be) az ownerrel; a Key 61 billentyűzet velocity-görbéje sincs megmérve.
 - `sample.loop_link` (hurokhossz-összekötés): a specifikáció szerint csak szerkesztő-segéd, de a felületen nincs hozzá látható vezérlő (`shell-juce/ui/panels/OscPanel.cpp:92` csak listázza). Megvalósítani a szerkesztőben, vagy kivenni a kulcsot.
+- MPC kimenet 0 dBFS fölött (owner: track +7,06 dB, kimenet +7,11 dB mérve a Key 61-en, +6 dB plugin hangerő és +5,82 dB fader): mit csinál a gép (kemény vágás a konverternél vagy saját védelem): nem mérte senki. Kész, ha egy loopback vagy rögzített kimenet (a gép saját felvétele vagy külső visszahurkolás) megmutatja a vágás módját, és a doksiba kerül.
 
 ## Rajzolás
 - A V csúcsánál a két szár átfedi egymást és kétszer keveredik: áttetsző vagy fénylő vonalnál világosabb folt lehet. Szemrevételezés eszközön.
