@@ -153,7 +153,18 @@ inline float stepQuantize (State& s, float y, float levels) noexcept
     const float dy = y - s.y;
     float out;
     if (std::fabs (dy) < kEps)
-        out = ffloor (levels * (0.5f * (y + s.y)) + 0.5f) / levels;
+    {
+        // a segment too short for the quotient of the antiderivative: the exact average of the staircase over it. A jump of the staircase inside it (the two steps differ) makes the
+        // average a mix of the two levels, not the level at the midpoint (that one is off by up to half a step).
+        const float k0 = ffloor (levels * s.y + 0.5f), k1 = ffloor (levels * y + 0.5f);
+        if (k0 == k1)
+            out = k0 / levels;
+        else
+        {
+            const float yj = (std::max (k0, k1) - 0.5f) / levels; // the jump between the two steps
+            out = (k0 * (yj - s.y) + k1 * (y - yj)) / (levels * dy);
+        }
+    }
     else
         out = (bt - s.b) / dy;
     s.y = y;

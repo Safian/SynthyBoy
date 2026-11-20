@@ -64,8 +64,8 @@ TEST (own_alias_dist_tanh_values_are_the_segment_averages)
         const double tol = fast ? 5e-4 : 1e-4;
         // Soft Clip, 0 dB, 0 -> 1: ln cosh 1
         CHECK_NEAR (aliasfx::run (aliasfx::params (0, 0.0f), fast, { 1.0f })[0], 0.433781, tol);
-        // Zero-Square, first sample 0.01: u = 0.32, ln cosh (0.32) / 0.32
-        CHECK_NEAR (aliasfx::run (aliasfx::params (9, 0.0f), fast, { 0.01f })[0], 0.157075, tol);
+        // Zero-Square, first sample 0.01: u = 0.32, ln cosh (0.32) / 0.32 = 0.050349 / 0.32 = 0.157342 (the plan has 0.050264 / 0.157075, an arithmetic slip)
+        CHECK_NEAR (aliasfx::run (aliasfx::params (9, 0.0f), fast, { 0.01f })[0], 0.157342, tol);
         // Tube, 1.0: (ln cosh 1.3 - ln cosh 0.3) - tanh 0.3, then the DC blocker (1 - 0.001424)
         CHECK_NEAR (aliasfx::run (aliasfx::params (6, 0.0f), fast, { 1.0f })[0], 0.34235, 2e-3);
         // Asym, 1.0: ln cosh 1, then the DC blocker
