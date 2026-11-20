@@ -57,6 +57,7 @@
 #include "../../write_files.h"
 
 using namespace synthyboy_mpc::overlay::gpu;
+namespace gpu = synthyboy_mpc::overlay::gpu;
 using synthyboy_mpc::overlay::FramePacer;
 using synthyboy_mpc::overlay::LinuxVblankClock;
 using synthyboy_mpc::overlay::PaceStats;
@@ -1064,7 +1065,7 @@ private:
                     {
                         const float half = o.f[0];
                         beginDraw (GL_TRIANGLE_STRIP, 1, o.rgba, half, true);
-                        gpu::buildStrokeStrip (pts_, half, style_.soft, [&] (float x, float y, float d0, float d1) {
+                        synthyboy_mpc::overlay::gpu::buildStrokeStrip (pts_, half, style_.soft, [&] (float x, float y, float d0, float d1) {
                             add (x, y, d0, d1);
                         });
                         end();
