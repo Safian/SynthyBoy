@@ -677,8 +677,19 @@ Voice* OwnEngine::allocateVoice (bool legato) noexcept
         n += (v->isActive() && !v->killing()) ? 1 : 0;
     const bool killMode = base[static_cast<size_t> (mi.voiceOverride)] < 0.5f && !legato;
     Voice* free = freeVoice();
+    if (free != nullptr && killMode && n >= P)
+    {
+        // Kill mode, the limit is reached: the voice killExcess () would pick (the same rule) is given up now, at this note-on, so that no more than the limit sound from the first sample of
+        // the block (a strike of many notes used to start and render all of them for one control period before killExcess () ran at the next tick). killExcess () stays as the safety net.
+        if (Voice* victim = pickVictim (false))
+        {
+            ++cntStolen;
+            killOverflowVoice (*victim);
+        }
+        return free;
+    }
     if (free != nullptr && (killMode || n < P))
-        return free; // Kill mode: the overflow is resolved at the next control tick (killExcess)
+        return free;
     Voice* victim = pickVictim (false);
     if (victim != nullptr)
         ++cntStolen;
@@ -756,12 +767,17 @@ void OwnEngine::killExcess() noexcept
         if (v == nullptr)
             break;
         ++cntStolen;
-        if ((economyMask.load (std::memory_order_relaxed) & kEconomyControl) != 0)
-            ghostKill (*v); // tier low: the voice stops, a ramp of its last output fades on the buses
-        else
-            v->startKill(); // the envelopes fade to zero in 50 ms
+        killOverflowVoice (*v);
         --n;
     }
+}
+
+void OwnEngine::killOverflowVoice (Voice& v) noexcept
+{
+    if ((economyMask.load (std::memory_order_relaxed) & kEconomyControl) != 0)
+        ghostKill (v); // tier low: the voice stops, a ramp of its last output fades on the buses
+    else
+        v.startKill(); // the envelopes fade to zero in 50 ms
 }
 
 void OwnEngine::removePressed (int playedKey, int channel) noexcept

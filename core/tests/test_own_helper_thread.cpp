@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -207,4 +208,91 @@ TEST (engine_live_fx_type_change_wakes_the_builder)
     std::printf ("    the slot's module took over after %.1f ms\n", duration<double, std::milli> (steady_clock::now() - t0).count());
     CHECK (differs);
     CHECK (controlSame);
+}
+
+// The wake-up flag is the lock-free 3-state word (plus a semaphore handle on the Mac and Windows): no std::mutex / std::condition_variable (120 bytes on libc++), so it is small and notify () never takes a lock.
+TEST (wake_signal_is_small_and_lock_free)
+{
+    CHECK (sizeof (own::WakeSignal) <= 16);
+}
+
+// Four producers notify at once while one consumer waits: every item published is seen (no lost wake-up), and the signal is destroyed cleanly afterwards.
+TEST (wake_signal_loses_no_wake_up_with_four_producers)
+{
+    own::WakeSignal w;
+    const int perProducer = sbtest::scaled (50000, 5000);
+    const int producers = 4;
+    const int total = perProducer * producers;
+    std::atomic<int> published { 0 }, taken { 0 };
+    std::atomic<bool> stop { false };
+    std::thread consumer ([&]
+    {
+        for (;;)
+        {
+            w.wait();
+            taken.store (published.load (std::memory_order_acquire), std::memory_order_release);
+            if (stop.load (std::memory_order_acquire) && taken.load() == total)
+                break;
+        }
+    });
+    std::vector<std::thread> prod;
+    for (int p = 0; p < producers; ++p)
+        prod.emplace_back ([&]
+        {
+            for (int i = 0; i < perProducer; ++i)
+            {
+                published.fetch_add (1, std::memory_order_release);
+                w.notify();
+                if (i % 1000 == 0)
+                    std::this_thread::yield();
+            }
+        });
+    for (auto& t : prod)
+        t.join();
+    stop.store (true, std::memory_order_release);
+    w.notify();
+    const auto end = steady_clock::now() + seconds (20);
+    while (taken.load() != total && steady_clock::now() < end)
+        std::this_thread::sleep_for (milliseconds (1));
+    CHECK_EQ (taken.load(), total);
+    if (taken.load() != total)
+        w.notify();   // rescue
+    consumer.join();
+}
+
+// The sound does not change: a 256-frame offline render with a Distortion on slot 1 gives the same bits as before the change (the build worker compares the printed line with the one of the old code).
+TEST (wake_signal_checksum_of_an_offline_distortion_render)
+{
+    auto e = createOwnEngine();
+    setKey (*e, "osc2.on", 0.0f);
+    setKey (*e, "filter1.on", 0.0f);
+    Quality q;
+    q.realtime = false;
+    e->prepare (48000.0, 128, q);
+    e->readyContent();
+    setKey (*e, "fxi01.on", 1.0f);
+    setKey (*e, "fxi01.p01", 1.0f);
+    setKey (*e, "fxi01.p02", 1.0f);
+    setKey (*e, "fxi01.type", 4.0f);   // Distortion
+    std::vector<float> l (128), r (128);
+    uint64_t h = 1469598103934665603ull;
+    for (int blk = 0; blk < 2; ++blk)
+    {
+        std::vector<Event> ev;
+        if (blk == 0)
+            ev.push_back (sbtest::noteOn (0, 48));
+        e->process (ev.data(), static_cast<int> (ev.size()), l.data(), r.data(), 128);
+        for (const auto* v : { &l, &r })
+            for (float f : *v)
+            {
+                uint32_t bits = 0;
+                std::memcpy (&bits, &f, sizeof bits);
+                for (int b = 0; b < 4; ++b)
+                {
+                    h ^= (bits >> (8 * b)) & 0xffu;
+                    h *= 1099511628211ull;
+                }
+            }
+    }
+    std::printf ("WAKE-SIGNAL-CHECKSUM %016llx\n", static_cast<unsigned long long> (h));
 }

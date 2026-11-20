@@ -220,6 +220,88 @@ TEST (ownv_kill_mode_fades_the_excess_voice_in_50_ms)
     CHECK (line (0.35, 523.2511) > 0.5);
 }
 
+// A burst of 16 note-ons in one block with the polyphony limit 8 (the MPC Key 61 at tier low): in Kill mode no more than the limit may sound from the first sample. The voices beyond it are given up
+// at their note-on (the rule of killExcess: with the default priority the earliest goes), not at the next control tick, so they never render the first control period. The keys fall from 75 to 60, so
+// the 8 survivors (the last 8 notes, keys 67 .. 60) are the lower ones and the 8 victims (keys 75 .. 68) are the louder, higher sines: whatever the victims render is plainly visible in the first 32 frames.
+namespace
+{
+std::unique_ptr<IEngine> burstEngine (Tier tier, float override)
+{
+    auto e = createOwnEngine();
+    e->prepare (kSr, 256, qualityForTier (tier));
+    sinePatch (*e);
+    set (*e, "master.polyphony", 8);
+    set (*e, "master.voice_override", override);
+    CHECK (setOwnVoiceCountAlpha (*e, 0.0f)); // no voice-count gain: the energy of the voices adds up
+    return e;
+}
+
+/** One block of 128 frames with the notes `first` .. `first + count - 1` descending from key 75 at frame 0; the first 32 frames (the first control period) and the whole block are returned. */
+struct BurstResult
+{
+    std::vector<float> left, right;
+    VoiceStats stats;
+    int active = 0;
+    double firstPeriodEnergy() const
+    {
+        double s = 0.0;
+        for (size_t i = 0; i < 32; ++i)
+            s += static_cast<double> (left[i]) * left[i] + static_cast<double> (right[i]) * right[i];
+        return s;
+    }
+};
+
+BurstResult burst (IEngine& e, int firstIndex, int count)
+{
+    std::vector<Event> ev;
+    for (int i = firstIndex; i < firstIndex + count; ++i)
+        ev.push_back (sbtest::noteOn (0, 75 - i, 1.0f));
+    BurstResult r;
+    r.left.assign (128, 0.0f);
+    r.right.assign (128, 0.0f);
+    e.process (ev.data(), static_cast<int> (ev.size()), r.left.data(), r.right.data(), 128);
+    r.active = e.activeVoices();
+    CHECK (e.voiceStats (r.stats));
+    return r;
+}
+} // namespace
+
+TEST (ownv_kill_mode_burst_never_renders_more_than_the_polyphony_limit)
+{
+    auto e16 = burstEngine (Tier::low, 0.0f);   // Kill
+    const BurstResult all = burst (*e16, 0, 16);
+    // (a) after the block at most 8 voices sound (activeVoices () does not count the ones in the kill fade); today killExcess () has resolved the overflow at the block end, so this holds before the fix too
+    std::printf ("    burst: activeVoices %d, VoiceStats::active %d, stolen %u\n", all.active, all.stats.active, all.stats.stolen);
+    CHECK (all.active <= 8);
+    CHECK (all.stats.active <= 8);
+    CHECK_EQ (all.stats.stolen, 8u);
+    // (b) the first control period renders only the survivors: the same notes 9 .. 16 played alone give the same energy (before the fix all 16 voices render it: about twice that and more)
+    auto e8 = burstEngine (Tier::low, 0.0f);
+    const BurstResult survivors = burst (*e8, 8, 8);
+    const double e16first = all.firstPeriodEnergy(), e8first = survivors.firstPeriodEnergy();
+    std::printf("    burst: first period energy 16 notes %.9g, the last 8 notes alone %.9g (ratio %.3f)\n", e16first, e8first, e8first > 0.0 ? e16first / e8first : 0.0);
+    CHECK (e8first > 0.0);
+    CHECK (e16first <= 1.2 * e8first);
+    CHECK (e16first >= 0.8 * e8first);
+}
+
+TEST (ownv_steal_mode_burst_checksum)
+{
+    auto e = burstEngine (Tier::low, 1.0f);   // Steal: unchanged by the Kill mode fix, the build worker compares this line with the one of the old code
+    const BurstResult r = burst (*e, 0, 16);
+    double sum = 0.0;
+    for (size_t i = 0; i < 128; ++i)
+        sum += std::fabs (static_cast<double> (r.left[i])) + std::fabs (static_cast<double> (r.right[i]));
+    std::printf ("BURST-STEAL-CHECKSUM sum_abs %.9g last8 left", sum);
+    for (size_t i = 120; i < 128; ++i)
+        std::printf (" %.9g", static_cast<double> (r.left[i]));
+    std::printf (" right");
+    for (size_t i = 120; i < 128; ++i)
+        std::printf (" %.9g", static_cast<double> (r.right[i]));
+    std::printf (" active %d stolen %u\n", r.active, r.stats.stolen);
+    CHECK (r.active <= 8);
+}
+
 TEST (ownv_note_recall_on_release_with_one_voice)
 {
     for (int override = 0; override < 2; ++override)

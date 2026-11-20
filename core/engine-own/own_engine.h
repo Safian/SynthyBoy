@@ -102,6 +102,8 @@ private:
     Voice* pickVictim (bool includeKilling) noexcept;
     void applyAxes (int channel, int axis, float value) noexcept;
     void killExcess() noexcept;
+    /** Gives a voice up in Kill mode: the 50 ms fade, or at tier low (economy control) the ghost ramp. killExcess () and allocateVoice () use it. */
+    void killOverflowVoice (Voice& v) noexcept;
     /** sub.mono: the lowest tuned key note of the sounding voices (globals.lowestNote), read by the voices when they tick. */
     void updateLowestNote() noexcept;
     void writeReadout() noexcept;

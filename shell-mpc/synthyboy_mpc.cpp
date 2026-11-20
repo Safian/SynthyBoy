@@ -3357,6 +3357,7 @@ extern "C"
     MPC_PLUGIN_EXPORT AEffect* VSTPluginMain(audioMasterCallback audioMaster)
     {
         synthyboy_mpc::startupTimes().begin();   // the start-up record (startup_timing.h): time zero is the first entry here
+        (void) synthyboy_mpc::outputPeak(); (void) synthyboy_mpc::noteDiagnostics();   // belt and braces: touched before any instance exists (they are constant-initialised globals, no guard on the MIDI or audio thread)
         synthyboy::setHelperThreadStartHook (&engineHelperThreadPolicy);   // before any engine exists: its helper threads get the policy above
         try { MPCKIT_LOG_START ("synthyboy"); } catch (...) {}   // dev builds only: the developer log (kit/log.h), off until /tmp/synthyboy-log.conf switches a category on
         // Create the plugin instance. No exception may reach the host: a failure here means "no plugin".
