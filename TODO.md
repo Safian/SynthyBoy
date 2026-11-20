@@ -5,9 +5,6 @@ Ami elkészült, azt TÖRÖLD innen (nincs „kész" rész: a történet a commi
 mi a baj, hol látszik (fájl:sor / eszköz / mérés), és mitől kész. Aki dolgozik rajta, írja a sor végére: `(fut: <ág>)`.
 
 ## Eszköz-felület (MPC XL, Key 61)
-- VOLUME gomb a Master oldalon: kb. 6 képpont alatti húzás nem csinál semmit (holtsáv), finoman nem állítható (XL-mérés: −17,30 helyett csak −16,88-ra lehetett visszatenni). Kész, ha 0,1 dB-es lépés érintéssel beállítható.
-- VOLUME gomb: az értékre koppintva nincs számbevitel. Kész, ha szám írható be, vagy leírt döntés van, hogy nem lesz.
-- A húzás érzékenysége nem állandó (30 képpont = 5–7 dB). Ellenőrizni, hogy ez szándékos görbe-e.
 - Q-Link gombok az XL-en nem tesztelhetők gépről (nincs befecskendező eszköz, csak a Key 61-re van). Kész, ha a VOLUME Q-Linkkel is igazolt mindkét eszközön.
 - Leütéserő az XL-en: a napló szerint az utolsó 16 hang mind 127-tel érkezett. Valódi padütéses próba (Full Level ki és be) az ownerrel; a Key 61 billentyűzet velocity-görbéje sincs megmérve.
 - `sample.loop_link` (hurokhossz-összekötés): a specifikáció szerint csak szerkesztő-segéd, de a felületen nincs hozzá látható vezérlő (`shell-juce/ui/panels/OscPanel.cpp:92` csak listázza). Megvalósítani a szerkesztőben, vagy kivenni a kulcsot.
