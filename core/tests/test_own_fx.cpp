@@ -1321,12 +1321,15 @@ TEST (fx_flanger_delay_cap_and_phaser_denormal_flush)
         r1[0] = 1.0f;
         fl.process (l1.data(), r1.data(), n1);
 
-        // Before fix (0.85 * sr clamp): delay echoes at sample 14280 (r1[4800] == 0.0f, r1[14280] ≈ 0.7071f).
-        // After fix (0.10 * sr clamp): delay clamped to 4800 samples (r1[4800] ≈ 0.7071f, r1[14280] == 0.0f).
-        CHECK (std::fabs (r1[4800]) > 0.5f);
-        CHECK (std::fabs (r1[14280]) < 1.0e-5f);
+        // Because readCubic is evaluated before push at sample 0, an impulse fed at index 0 echoes at index period + 1.
+        // Before fix (0.85 * sr clamp): delay echoes at sample 14281 (r1[4801] == 0.0f, r1[14281] ≈ 0.7071f).
+        // After fix (0.10 * sr clamp): delay clamped to 4800 samples (r1[4801] ≈ 0.7071f, r1[14281] == 0.0f).
+        std::printf ("FLANGER: echo at sample 4801=%.4f (unclamped 14281=%.4f)\n", r1[4801], r1[14281]);
+        CHECK (std::fabs (r1[4801]) > 0.5f);
+        CHECK (std::fabs (r1[14281]) < 1.0e-5f);
 
-        // Maximum valid delay: depth = 1.0, centerHz = 20.0 Hz -> delay = 0.0995 s = 4776 samples
+        // Maximum valid delay: depth = 1.0, centerHz = 20.0 Hz -> delay = 0.0995 s = 4776 samples.
+        // Echo appears at sample 4776 + 1 = 4777.
         fl.reset();
         p.depth = 1.0f;
         fl.set (p);
@@ -1337,7 +1340,7 @@ TEST (fx_flanger_delay_cap_and_phaser_denormal_flush)
         fl.process (l2.data(), r2.data(), n2);
 
         // Fits within the 0.105 s buffer (8192 floats) without wrap-around:
-        CHECK (std::fabs (r2[4776]) > 0.5f);
+        CHECK (std::fabs (r2[4777]) > 0.5f);
     }
 
     // (2) Phaser bpA / bpB feedback denormal flush
