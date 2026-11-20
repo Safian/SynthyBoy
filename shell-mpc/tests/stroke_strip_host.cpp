@@ -363,6 +363,93 @@ void testGentlePolylineBitIdentity()
     check (bitIdentical, "gentle polyline: all vertices bit-identical between old and new builder");
 }
 
+float distToSegment (float px, float py, Pt a, Pt b)
+{
+    const float dx = b.x - a.x, dy = b.y - a.y;
+    const float l2 = dx * dx + dy * dy;
+    if (l2 < 1e-9f)
+        return std::hypot (px - a.x, py - a.y);
+    const float t = std::clamp (((px - a.x) * dx + (py - a.y) * dy) / l2, 0.0f, 1.0f);
+    return std::hypot (px - (a.x + t * dx), py - (a.y + t * dy));
+}
+
+float distToPolyline (float px, float py, const std::vector<Pt>& pts)
+{
+    float d = 1e9f;
+    for (size_t i = 0; i + 1 < pts.size(); ++i)
+        d = std::min (d, distToSegment (px, py, pts[i], pts[i + 1]));
+    return d;
+}
+
+int countWholeStripLeaks (const std::vector<Pt>& pts, const std::vector<Vertex>& verts, float threshold = 1.275f)
+{
+    int leaks = 0;
+    const float minX = std::min ({ pts[0].x, pts[1].x, pts[2].x });
+    const float maxX = std::max ({ pts[0].x, pts[1].x, pts[2].x });
+    const int x0 = static_cast<int> (std::floor (minX - 10.0f));
+    const int x1 = static_cast<int> (std::ceil (maxX + 10.0f));
+    for (int y = 20; y <= 300; ++y)
+    {
+        const float py = static_cast<float> (y) + 0.5f;
+        for (int x = x0; x <= x1; ++x)
+        {
+            const float px = static_cast<float> (x) + 0.5f;
+            const float d = distToPolyline (px, py, pts);
+            if (d > threshold)
+            {
+                const float cov = pixelCoverage (px, py, verts, 0.775f, 1.0f);
+                if (cov > 0.05f)
+                    ++leaks;
+            }
+        }
+    }
+    return leaks;
+}
+
+void testWholeStrip()
+{
+    const float dy = 280.0f;
+    const float xTip = 150.0f;
+    const float half = 0.775f;
+    const float threshold = half + 0.5f;
+
+    // Old builder fails whole-strip check on steep slope 56 (leaks outside polyline)
+    {
+        const float dx = dy / 56.0f;
+        const std::vector<Pt> pts56 = { { xTip - dx, 20.0f }, { xTip, 300.0f }, { xTip + dx, 20.0f } };
+        std::vector<Vertex> vertsOld;
+        buildStrokeStripOld (pts56.data(), pts56.size(), half, 1.0f, [&] (float x, float y, float d0, float d1) {
+            vertsOld.push_back ({ x, y, d0, d1 });
+        });
+        const int leaksOld = countWholeStripLeaks (pts56, vertsOld, threshold);
+        check (leaksOld > 0, "whole strip test fails on old builder code before fix (slope 56 leaks outside polyline)");
+    }
+
+    // New builder: rasterise complete strip (all triangles incl. join)
+    // for V slopes 2.2, 2.4 (both sides of miter limit) and steep slopes (12 and 56)
+    for (float slope : { 2.2f, 2.4f, 12.0f, 56.0f })
+    {
+        const float dx = dy / slope;
+        const std::vector<Pt> pts = { { xTip - dx, 20.0f }, { xTip, 300.0f }, { xTip + dx, 20.0f } };
+        std::vector<Vertex> verts;
+        synthyboy_mpc::overlay::gpu::buildStrokeStrip (pts, half, 1.0f, [&] (float x, float y, float d0, float d1) {
+            verts.push_back ({ x, y, d0, d1 });
+        });
+
+        // 1. Tip row (y = 299) has a covered pixel
+        const RowResult r299 = evalRow (299, static_cast<int> (xTip - 20), static_cast<int> (xTip + 20), verts, half, 1.0f);
+        char labelTip[128];
+        std::snprintf (labelTip, sizeof labelTip, "whole strip slope %.1f: tip row (y = 299) has a covered pixel (max cov %.4f)", slope, r299.max);
+        check (r299.max > 0.05f, labelTip);
+
+        // 2. No pixel farther than half + 0.5 px from polyline has coverage above 0.05
+        const int leaks = countWholeStripLeaks (pts, verts, threshold);
+        char labelLeak[128];
+        std::snprintf (labelLeak, sizeof labelLeak, "whole strip slope %.1f: no pixel farther than half + 0.5 px has cov > 0.05 (%d leaks)", slope, leaks);
+        check (leaks == 0, labelLeak);
+    }
+}
+
 } // namespace
 
 int main()
@@ -372,6 +459,7 @@ int main()
     testVShapeFailureAndPass();
     testArmSlopes();
     testGentlePolylineBitIdentity();
+    testWholeStrip();
     std::printf ("%s: %d failed\n", g_fails ? "FAIL" : "PASS", g_fails);
     return g_fails ? 1 : 0;
 }
