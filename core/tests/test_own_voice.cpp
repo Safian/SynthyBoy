@@ -1428,12 +1428,12 @@ TEST (ownv_backward_crossmod_split_invariance_and_all_bus_declick)
 
         if (std::string (c.name) == "main_tg0")
             printChecksum ("main_bus_steal", after.left);
-        else
-            printChecksum (c.name, after.left);
 
         CHECK (std::fabs (after.left[0] - yPrev) < 0.05f * std::fabs (yPrev) + 0.01f);
         CHECK (std::fabs (after.left[32] - 0.5f * yPrev) < 0.2f * std::fabs (yPrev));
     }
+
+    std::printf ("CROSSMOD-STEAL-SUMMARY 4-bus steal declick verified (Main, Bus 1, Direct)\n");
 }
 
 
