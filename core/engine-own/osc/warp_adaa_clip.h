@@ -20,10 +20,11 @@ namespace warpadaa
 /** Below this distance of two arguments of the closed form the output is the law at their midpoint. */
 constexpr float kEps = 1.0f / 1024.0f;
 
-/** y = the last input of the warp, a = the amount (or the Quantize levels) that b was computed for, b = F (or its bounded part) at the last input. */
+/** y = the last input of the warp, a = the amount (or the Quantize levels) that b and c were computed for, b = F (or its bounded part) at the last input, c = the constant a tanh law
+    subtracts (warp_adaa_tanh.h; unused by the others). */
 struct State
 {
-    float y = 0.0f, a = -1.0f, b = 0.0f;
+    float y = 0.0f, a = -1.0f, b = 0.0f, c = 0.0f;
 };
 
 namespace detail
