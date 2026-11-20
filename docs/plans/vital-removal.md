@@ -6,6 +6,8 @@
 
 ## Owner decisions (the tasks they gate are marked)
 
+**Decided by the owner on 2026-11-21: every row as recommended** ("Igen mehet!"). V6 is the owner's own step.
+
 | # | Question | Recommendation |
 |---|---|---|
 | V1 | Keep the Vital **preset importer** (`core/vital-import/`, 16 files; `tools/vital-import/` CLI; Editor import menu; `user.imported-vital` pack)? It reads the `.vital` JSON file format (interoperability), it is not engine code (`NOTICE:34` lists it as not Vital-derived). | Keep it. Users bring Vital presets; only `synthyboy_vital_roundtrip` (links the engine) goes. |
