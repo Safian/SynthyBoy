@@ -372,7 +372,7 @@ The plugin runs inside the MPC application: a defect of it can take the whole ap
 - **Files in /tmp (F3, F4, F16).** `safe_file.h`: ONE reader (`O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC`, regular files only by `fstat`, at most 256 bytes into a fixed buffer, never blocks, never allocates in proportion to the file) for every switch / debug / status-input file; the writers do not follow symlinks and replace by rename. Test: `safe_file_host`. The GPU clock only writes numbers the GPU lists into sysfs; the helper's log is opened with `O_NOFOLLOW` and trimmed only when it is a regular file.
 - **No exception leaves a tick (F2).** `poll_guard.h`: every tick of the display thread (cursors, spectrum, overlay report, Play proxies, Q proxies, page writes, content loading, LFO shapes) and of the overlay service thread runs in a `PollGuard`; the exception is caught, counted and written to `/tmp/synthyboy-mpc-status.txt`, five failures in a row switch the feature off for the life of the instance. The overlay controller's own tick disables the overlay at the first one. Test: `poll_guard_host`, and `close_hang_host` C (a fault injected into a tick of the plugin, debug build).
 - **effClose (F5, F12).** `closing` is set first; the host callback goes through a gate that answers 0 while the instance is closing or before the host has called the dispatcher once (the host does not hold the AEffect pointer before that); a sample read stops at the next 1 MB block. effClose waits for the display thread at most 1.5 s and for the overlay at most 2 s (+2.5 s to stop its thread). When the display thread does not come back it is detached and frees the instance itself when it ends (nothing is joined without a limit, nothing is used after it was freed); when the overlay thread does not let go the instance is kept for good (a few MB lost instead of a crash) and the overlay stays off for the rest of the process. Test: `close_hang_host` (a host callback that blocks).
-- **Debug hooks (F8).** CMake option `SYNTHYBOY_MPC_DEBUG_HOOKS`, default OFF, never in the package. Without it the plugin does not look at: `/tmp/synthyboy-ui-fake-write`, `-q-fake-group`, `-q-fake-write`, `-overlay-q-step-travel`, `-overlay-fake-slot`, `-play-log` (and its `.txt`, `-dump`, `-dump.txt`, `-chunk-get.json`, `-chunk-set.json`), `-overlay-pointer-hotspot`, `-overlay-dump` (+ `-curve.txt`), `-overlay-gpu-dump` (the helper's frame dump flag). With it, the play log is a lock-free ring that the host's threads (the audio thread included) only format into; the display thread writes it out. Still read in the package (features, through the bounded reader once a second): `-overlay-off`, `-overlay-nogpu`, `-overlay-rot`, `-overlay-look`, `-overlay-detail`, `-overlay-fps`, `-overlay-gpuclock`, the host's settings file; written: `-overlay-status.txt`, `-mpc-status.txt`, `-overlay-gpu.log`, `-overlay-gpu-minfreq.orig`, `-overlay-zpos-rest`. The helper's own debug files (`-overlay-nopartial`, `-overlay-gpu-egl.txt`, the bench files of the measuring build) are in the helper process, not the host's.
+- **Debug hooks (F8).** CMake option `SYNTHYBOY_MPC_DEBUG_HOOKS`, default OFF, never in the package. Without it the plugin does not look at: `/tmp/synthyboy-ui-fake-write`, `-q-fake-group`, `-q-fake-write`, `-overlay-q-step-travel`, `-overlay-fake-slot`, `-play-log` (and its `.txt`, `-dump`, `-dump.txt`, `-chunk-get.json`, `-chunk-set.json`), `-overlay-pointer-hotspot`, `-overlay-dump` (+ `-curve.txt`), `-overlay-gpu-dump` (the helper's frame dump flag), `-select-program` (+ `.ack`). With it, the play log is a lock-free ring that the host's threads (the audio thread included) only format into; the display thread writes it out. Still read in the package (features, through the bounded reader once a second): `-overlay-off`, `-overlay-nogpu`, `-overlay-rot`, `-overlay-look`, `-overlay-detail`, `-overlay-fps`, `-overlay-gpuclock`, the host's settings file; written: `-overlay-status.txt`, `-mpc-status.txt`, `-overlay-gpu.log`, `-overlay-gpu-minfreq.orig`, `-overlay-zpos-rest`. The helper's own debug files (`-overlay-nopartial`, `-overlay-gpu-egl.txt`, the bench files of the measuring build) are in the helper process, not the host's.
 - **FX type parameters (F6).** In a live run `OwnEngine::setParam` only records the wanted FX type; a worker thread of the engine builds the module (the same pool code); offline runs build it at once. What remains: the module is there up to a few milliseconds after the write, and every other setParam path (all atomics) was already allocation free.
 - **Program name and chunk (F13).** `programMutex` and `chunkMutex` (never taken by the audio thread); `effGetChunk` rotates over four buffers so the pointer of one call stays valid for the next three.
 - **Display descriptor, zpos (F14, F15).** The borrowed DRM descriptor is compared once a second with what was found (device, inode, still `/dev/dri/card*`, still master): when it differs the overlay disables itself. The zpos a plane had at rest is kept in `/tmp/synthyboy-overlay-zpos-rest` while the plane is raised, so the next run after a host crash puts back the true value; after a reboot of the device nothing is needed (the kernel state is gone too).
@@ -1444,6 +1444,44 @@ Read every second by the overlay thread (not logging): `/tmp/synthyboy-overlay-o
 | `/tmp/synthyboy-play-log-dump.txt` | on request file | tens of kB | display thread | no |
 | `/tmp/synthyboy-overlay-curve.txt` | on request file `/tmp/synthyboy-overlay-dump` | kB | overlay thread | no |
 | `/tmp/synthyboy-overlay-gpu-frame.raw` and `.txt` | while `/tmp/synthyboy-overlay-gpu-dump` exists, once a second at most (a readback of the frame) | the frame, 1 to 4 MB | the GPU helper | no |
+| `/tmp/synthyboy-select-program` | on request file | tens of B | display thread | no |
+| `/tmp/synthyboy-select-program.ack` | written after program selection or error | tens of B | display thread | no |
+
+### Remote program select hook (`SYNTHYBOY_MPC_DEBUG_HOOKS` only)
+
+To enable automated scripts (such as an overnight acceptance run stepping through all 160 factory presets) to switch programs without touch screen interaction, builds with `SYNTHYBOY_MPC_DEBUG_HOOKS=ON` support remote program selection through `/tmp` files:
+- **Compiled out entirely otherwise:** when `SYNTHYBOY_MPC_DEBUG_HOOKS` is OFF (the default and for release packages), the hook is `#if`-ed out completely; no `/tmp` file is checked, and no strings exist in the binary.
+- **Thread model:** polled on the non-audio display thread (`liveLoop`) every ~100 ms (zero heap allocation when idle, never polled on the audio thread).
+- **Thread-safe handover while audio runs:** the program switch invokes the exact code path `effSetProgram` uses. State content, wavetables, samples, parameters, and output limiter are loaded into the engine using the same thread-safe atomics and engine mutexes that protect host UI thread program changes against `processReplacing`.
+- **Request file:** `/tmp/synthyboy-select-program` (environment variable `SYNTHYBOY_MPC_SELECT_PROGRAM_FILE` overrides the path for tests).
+  * Format: a single line containing either a 0-based decimal program index (in `effGetProgramNameIndexed` order, 0 .. `numPrograms - 1`) or an exact program name (e.g. `Init` or `Space Wobble Bass`).
+  * As soon as detected, the file is read and immediately deleted (`unlink`).
+- **Host update:** after selection, `programNameRefreshDue` is set and `audioMasterUpdateDisplay` is sent so the host PRESET display pop-up and field follow.
+- **Acknowledgement file:** `/tmp/synthyboy-select-program.ack` (written atomically via temporary file and rename):
+  * Success format: `<counter> ok <index> <name>` (e.g. `1 ok 0 Init`, `2 ok 1 Space Wobble Bass`).
+  * Error format: `<counter> error <reason>` (e.g. `error out of range`, `error unknown name`).
+  * `<counter>` is a monotonic integer counter starting at 1 incremented on every written ack line.
+
+Example commands:
+```bash
+# Step by program index:
+echo 0 > /tmp/synthyboy-select-program
+cat /tmp/synthyboy-select-program.ack   # 1 ok 0 Init
+
+echo 1 > /tmp/synthyboy-select-program
+cat /tmp/synthyboy-select-program.ack   # 2 ok 1 Space Wobble Bass
+
+# Step by exact preset name:
+echo "Space Wobble Bass" > /tmp/synthyboy-select-program
+cat /tmp/synthyboy-select-program.ack   # 3 ok 1 Space Wobble Bass
+
+# Error handling:
+echo 9999 > /tmp/synthyboy-select-program
+cat /tmp/synthyboy-select-program.ack   # 4 error out of range
+
+echo "Unknown Preset" > /tmp/synthyboy-select-program
+cat /tmp/synthyboy-select-program.ack   # 5 error unknown name
+```
 
 Option builds: `SYNTHYBOY_MPC_CALLBACK_STATS` writes `/tmp/synthyboy-callback-stats.txt` (and `.2` ..) every 5 s from its own low priority thread; `SYNTHYBOY_MPC_OVERLAY_BENCH` (helper) writes `/tmp/sb-bench-stats.txt`, `/tmp/sb-pace-trace.txt`.
 

@@ -547,6 +547,15 @@ if(NOT CMAKE_CROSSCOMPILING)
         add_test(NAME close_hang_host COMMAND close_hang_host $<TARGET_FILE:synthyboy_mpc> $<$<BOOL:${SYNTHYBOY_MPC_DEBUG_HOOKS}>:--hooks>)
     endif()
 
+    add_executable(select_program_host EXCLUDE_FROM_ALL tests/select_program_host.cpp)
+    target_include_directories(select_program_host PRIVATE "${MPC_SDK_DIR}/framework" "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(select_program_host PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+    target_compile_features(select_program_host PRIVATE cxx_std_17)
+    target_compile_options(select_program_host PRIVATE -Wall -Wextra -Wpedantic)
+    if(SYNTHYBOY_MPC_OVERLAY AND SYNTHYBOY_MPC_DEBUG_HOOKS)
+        add_test(NAME select_program_host COMMAND select_program_host $<TARGET_FILE:synthyboy_mpc>)
+    endif()
+
     add_executable(controller_review_host EXCLUDE_FROM_ALL overlay/tests/controller_review_host.cpp)
     target_include_directories(controller_review_host PRIVATE
         "${CMAKE_SOURCE_DIR}/core/include"

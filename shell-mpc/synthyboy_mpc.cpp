@@ -139,7 +139,7 @@
 // Make-up gain of the output stage in dB (docs/MPC.md "Output level"): synthyboy::kMakeupGainDb (core/include/synthyboy/output_stage.h, the one value of every shell) unless the CMake cache entry
 // SYNTHYBOY_MPC_OUTPUT_GAIN_DB gives another. The look-ahead peak limiter behind it is the plugin setting LIMIT (default on; SYNTHYBOY_MPC_OUTPUT_LIMITER forces it for tests).
 // Debug hooks (CMake option SYNTHYBOY_MPC_DEBUG_HOOKS, default OFF, never in the package; docs/MPC.md "Switches and files"): the /tmp files that only the host tests and the acceptance runs on the device use -
-// /tmp/synthyboy-ui-fake-write, -q-fake-group, -q-fake-write, -overlay-q-step-travel, -overlay-fake-slot, -play-log (+ -dump, the .txt, the chunk copies). Without the option the plugin does not look at them at all.
+// /tmp/synthyboy-ui-fake-write, -q-fake-group, -q-fake-write, -overlay-q-step-travel, -overlay-fake-slot, -play-log (+ -dump, the .txt, the chunk copies), -select-program (+ .ack). Without the option the plugin does not look at them at all.
 #ifndef SYNTHYBOY_MPC_DEBUG_HOOKS
 #define SYNTHYBOY_MPC_DEBUG_HOOKS 0
 #endif
@@ -1129,6 +1129,13 @@ struct PluginInstance
     void qFakeWrite (AEffect*) noexcept {}
     void qStepTravelFile() noexcept {}
 #endif
+#if SYNTHYBOY_MPC_DEBUG_HOOKS
+    /** Remote program (preset) select hook (SYNTHYBOY_MPC_DEBUG_HOOKS only; docs/MPC.md "Debug hooks"):
+        polls /tmp/synthyboy-select-program (SYNTHYBOY_MPC_SELECT_PROGRAM_FILE changes the path). Display thread. */
+    void remoteProgramSelectPoll (AEffect* e);
+#else
+    void remoteProgramSelectPoll (AEffect*) noexcept {}
+#endif
     /** The display thread, every tick: the host is told the Q values after a group change or a change of a target, and the real parameter a Q write changed. */
     void qPoll (AEffect* e)
     {
@@ -1449,6 +1456,9 @@ struct PluginInstance
         display.add ("content loading", [&] { injectFault ("content"); contentPoll(); });                                          // a sample or an instrument the browser asked for
         display.add ("LFO shape", [&] { injectFault ("shape"); lfoShapePoll(); });                                                 // a drawn LFO shape the LFO page wrote
         display.add ("macro name", [&] { injectFault ("macro"); macroNamePoll (e); });                                             // a name the Macros page gave a macro
+#if SYNTHYBOY_MPC_DEBUG_HOOKS
+        display.add ("program select", [&] { injectFault ("program_select"); remoteProgramSelectPoll (e); });                       // remote program (preset) select hook
+#endif
         display.addUnguarded ([&]
         {
             if (! readoutPublished)   // once, after the first report of the overlay slot above (see publishReadoutTargets)
@@ -2821,6 +2831,127 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
         return 0;
     }
 }
+
+#if SYNTHYBOY_MPC_DEBUG_HOOKS
+void PluginInstance::remoteProgramSelectPoll (AEffect* e)
+{
+    if (e == nullptr)
+        return;
+    static const std::string path = [] {
+        const char* p = std::getenv ("SYNTHYBOY_MPC_SELECT_PROGRAM_FILE");
+        return std::string (p != nullptr && *p != '\0' ? p : "/tmp/synthyboy-select-program");
+    }();
+    char text[synthyboy_mpc::safefile::kSwitchBytes];
+    if (! synthyboy_mpc::safefile::readFirstLine (path.c_str(), text, sizeof text))
+        return;
+    ::unlink (path.c_str());
+
+    static std::atomic<long long> ackCounter { 0 };
+    const long long seq = ++ackCounter;
+    static const std::string ackPath = path + ".ack";
+
+    auto writeAck = [&] (const char* status, const char* payload)
+    {
+        char ackBuf[512];
+        std::snprintf (ackBuf, sizeof ackBuf, "%lld %s %s\n", seq, status, payload != nullptr ? payload : "");
+        synthyboy_mpc::safefile::writeReplacing (ackPath.c_str(), ackBuf, std::strlen (ackBuf));
+    };
+
+    // Trim leading and trailing ASCII whitespace
+    char* start = text;
+    while (*start != '\0' && static_cast<unsigned char> (*start) <= ' ')
+        ++start;
+    char* end = start + std::strlen (start);
+    while (end > start && static_cast<unsigned char> (*(end - 1)) <= ' ')
+        --end;
+    *end = '\0';
+
+    if (*start == '\0')
+    {
+        writeAck ("error", "unknown name");
+        return;
+    }
+
+    // Check if `start` is a decimal integer: optional sign then all digits
+    bool isDecimal = true;
+    const char* p = start;
+    if (*p == '+' || *p == '-')
+        ++p;
+    if (*p == '\0')
+        isDecimal = false;
+    else
+    {
+        while (*p != '\0')
+        {
+            if (*p < '0' || *p > '9')
+            {
+                isDecimal = false;
+                break;
+            }
+            ++p;
+        }
+    }
+
+    const int numProgs = view.numPrograms();
+    int targetProg = -1;
+
+    if (isDecimal)
+    {
+        char* endp = nullptr;
+        errno = 0;
+        const long val = std::strtol (start, &endp, 10);
+        if (errno == ERANGE || val < 0 || val >= numProgs)
+        {
+            writeAck ("error", "out of range");
+            return;
+        }
+        targetProg = static_cast<int> (val);
+    }
+    else
+    {
+        const std::string name (start);
+        if (name == "Init" || name == "init")
+        {
+            targetProg = 0;
+        }
+        else
+        {
+            for (int i = 1; i < numProgs; ++i)
+            {
+                if (view.isHeader (i))
+                    continue;
+                const auto& it = view.items[static_cast<size_t> (i)];
+                if (it.baseName == name || it.label == name)
+                {
+                    targetProg = i;
+                    break;
+                }
+            }
+        }
+        if (targetProg < 0)
+        {
+            writeAck ("error", "unknown name");
+            return;
+        }
+    }
+
+    // Target program is valid. Select through effSetProgram
+    if (e->dispatcher != nullptr)
+        e->dispatcher (e, effSetProgram, 0, targetProg, nullptr, 0.0f);
+    programNameRefreshDue.store (true, std::memory_order_release);
+    if (audioMaster)
+        audioMaster (e, audioMasterUpdateDisplay, 0, 0, nullptr, 0.0f);
+
+    const int currentProg = currentProgram.load (std::memory_order_relaxed);
+    char nameBuf[kVstMaxProgNameLen + 1] = {};
+    if (e->dispatcher != nullptr)
+        e->dispatcher (e, effGetProgramName, 0, 0, nameBuf, 0.0f);
+
+    char okPayload[256];
+    std::snprintf (okPayload, sizeof okPayload, "%d %s", currentProg, nameBuf);
+    writeAck ("ok", okPayload);
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // Parameter access (normalized 0..1)
