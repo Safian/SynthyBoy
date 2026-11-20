@@ -98,7 +98,7 @@ inline float naive (int type, float t, bool fast) noexcept
     switch (type)
     {
         case 0: case 9: return th (t);
-        case 6: return th (t) - kTanh03;
+        case 6: return th (t) - th (0.3f); // the same function twice, so that the law is exactly 0 at x = 0 (the float constant kTanh03 is one ulp off std::tanh (0.3f))
         case 10: return th (std::max (t, 0.0f)) + std::max (std::min (t, 0.0f), -0.5f);
         case 7:
         {
