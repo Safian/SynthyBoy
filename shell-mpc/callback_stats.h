@@ -34,6 +34,12 @@
 #include <string>
 #include <thread>
 
+#include <sys/resource.h>
+#if defined (__linux__)
+ #include <sys/syscall.h>
+ #include <unistd.h>
+#endif
+
 #include "mpc_vst2_abi.h"
 #include "safe_file.h"
 #include "thread_policy.h"
@@ -62,6 +68,10 @@ public:
     uint64_t begin (int frames, double sampleRate) noexcept
     {
         const uint64_t t0 = nowNs();
+#if defined (__linux__)
+        if (audioTid.load (std::memory_order_relaxed) == 0) // once, at the first callback: no system call in any later one
+            audioTid.store (static_cast<long> (::syscall (SYS_gettid)), std::memory_order_relaxed);
+#endif
         const uint64_t nominal = frames > 0 && sampleRate > 0.0 ? static_cast<uint64_t> (static_cast<double> (frames) * 1.0e9 / sampleRate) : 0;
         if (restart.load (std::memory_order_relaxed) && restart.exchange (false, std::memory_order_relaxed))
             havePrev = false;
@@ -426,6 +436,7 @@ public:
         appendHostCanDo (o);
         appendDispatcher (o);
         appendHostCalls (o);
+        appendPageFaults (o);
         return o;
     }
 
@@ -483,6 +494,48 @@ private:
         std::atomic<uint64_t> gap { 0 }, at { 0 }, nominal { 0 };
         std::atomic<int> frames { 0 };
     };
+
+    /** The page faults (a major fault can block the audio thread for milliseconds): "page_faults: audio_minflt=<N> audio_majflt=<M> proc_minflt=<P> proc_majflt=<Q>" (the audio_ part on Linux only: the
+        thread's own counters from /proc/self/task/<tid>/stat, fields 10 and 12 after the closing bracket of the command name; the process totals from getrusage). Writer thread only. */
+    void appendPageFaults (std::string& o) const
+    {
+        using u64 = unsigned long long;
+        std::string line = "page_faults:";
+        char b[96];
+#if defined (__linux__)
+        const long tid = audioTidNow();
+        if (tid > 0)
+        {
+            char path[64];
+            std::snprintf (path, sizeof (path), "/proc/self/task/%ld/stat", tid);
+            if (std::FILE* f = std::fopen (path, "r"))
+            {
+                char text[1024];
+                const size_t n = std::fread (text, 1, sizeof (text) - 1, f);
+                std::fclose (f);
+                text[n] = 0;
+                const char* paren = std::strrchr (text, ')');
+                u64 minflt = 0, majflt = 0;
+                if (paren != nullptr && std::sscanf (paren + 1, " %*c %*d %*d %*d %*d %*d %*u %llu %*u %llu", &minflt, &majflt) == 2)
+                {
+                    std::snprintf (b, sizeof (b), " audio_minflt=%llu audio_majflt=%llu", minflt, majflt);
+                    line += b;
+                }
+            }
+        }
+#endif
+        struct rusage ru {};
+        if (getrusage (RUSAGE_SELF, &ru) == 0)
+        {
+            std::snprintf (b, sizeof (b), " proc_minflt=%llu proc_majflt=%llu", static_cast<u64> (ru.ru_minflt), static_cast<u64> (ru.ru_majflt));
+            line += b;
+        }
+        o += line;
+        o += "\n";
+    }
+#if defined (__linux__)
+    long audioTidNow() const noexcept { return audioTid.load (std::memory_order_relaxed); }
+#endif
 
     __attribute__ ((format (printf, 2, 0))) static void appendfv (std::string& o, const char* fmt, va_list args)
     {
@@ -738,6 +791,9 @@ private:
     std::atomic<int> lastFrames { 0 };
     Slot slot[kTop];
     std::atomic<bool> restart { false };
+#if defined (__linux__)
+    std::atomic<long> audioTid { 0 }; // the kernel thread id of the audio thread, taken once at the first callback; the writer reads /proc/self/task/<tid>/stat with it
+#endif
     // the host side (see the API above)
     std::atomic<uint64_t> midiEvents { 0 }, sysexEvents { 0 }, otherTypeEvents { 0 }, systemOrOther { 0 }, noteOnVel0 { 0 };
     std::atomic<uint64_t> typeCount[kMidiTypes] {}, chanCount[kMidiTypes][16] {}, ccCount[kCcCount] {};
