@@ -1,8 +1,9 @@
 # Third-party software
 
 SynthyBoy is licensed under AGPL-3.0-or-later. It is built against the components in the first table, which are
-fetched at configure time by CMake `FetchContent` at the exact revisions given (see `CMakeLists.txt`), and it contains
-the source files listed in the second table, which are copied into this repository.
+fetched at configure time by CMake `FetchContent` at the exact revisions given (see `CMakeLists.txt`). No third-party
+source is copied into this repository except the font files below. (An engine derived from Vital was part of earlier versions;
+it is removed from the tree and from every build, `docs/UPSTREAM.md` is the record of it.)
 
 | Component | Version / revision | Licence (as used here) | Source |
 |-----------|--------------------|------------------------|--------|
@@ -15,19 +16,6 @@ the source files listed in the second table, which are copied into this reposito
 One patch is applied to a fetched component: `third_party/patches/clap-juce-extensions-extension-hook.patch` (MIT, the licence of the patched files) gives the wrapper of clap-juce-extensions a hook for a CLAP
 extension of the plug-in (`clap_juce_audio_processor_capabilities::clapPluginExtension`, called by the wrapper's `extension ()`), so that the JUCE-wrapped CLAP build offers `synthyboy.content` like the native shell. The
 top-level `CMakeLists.txt` applies it with `patch -p1` to a copy of the fetched sources in the build directory; the fetched tree is not modified.
-
-## Source included in this repository
-
-Only in `core/engine-vital/` (built with `SYNTHYBOY_WITH_VITAL=ON`, never in iOS builds; see `docs/UPSTREAM.md` for the exact
-file list, the changes and what was not taken).
-
-| Component | Revision | Licence (as used here) | Files |
-|-----------|----------|------------------------|-------|
-| Vital (Matt Tytel) | commit `636ca0e` (2022-04-20), https://github.com/mtytel/vital | GPL-3.0-or-later (every imported file's header: "version 3 ... or (at your option) any later version"); the combined work is AGPL-3.0-or-later via GPLv3 section 13 | `core/engine-vital/upstream/src/synthesis/**` (143 files after removing `effects_engine`), `src/common/wavetable/**`, `src/common/{synth_constants.h, synth_types.*, synth_parameters.*, line_generator.*, tuning.*, fourier_transform.h}`, `src/interface/look_and_feel/synth_strings.h` (string table only), licence text `LICENSE-GPL-3.0`; translated tests in `core/engine-vital/tests/synthesis/**` |
-| KISS FFT | as shipped in Vital 636ca0e | BSD-3-Clause | `core/engine-vital/upstream/third_party/kissfft/{kissfft.h, COPYING, LICENSES/}` (the VLA of the original is replaced for MSVC, see docs/UPSTREAM.md) |
-| JSON for Modern C++ (nlohmann/json) | 3.1.2, as shipped in Vital 636ca0e | MIT | `core/engine-vital/upstream/third_party/json/json.h` |
-
-Vital's presets, wavetables, skins, tunings, fonts, icons, GUI and network code are not included and must not be added.
 
 ## Fonts of the bitmap GUI
 
@@ -51,7 +39,7 @@ implementation is ours; the manuals of other products were used as a description
 | `core/tuning/` | `.scl`, `.kbm`, `.tun` parsers, 128-key table, the `ITuningSource` seam for MTS-ESP (the library is not linked, see below) |
 | `core/formula/` | formula compiler (bytecode) and frame renderer; grammar written for this project (`GRAMMAR.md`) |
 | `core/shapes/` | custom LFO shapes, velocity / note curves |
-| `core/wavetable-edit/`, `core/wavetable-render/` | wavetable data model and tools, clean-room renderer of the ten Vital component types |
+| `core/wavetable-edit/`, `core/wavetable-render/` | wavetable data model and tools, clean-room renderer of the ten component types of the Vital wavetable format |
 | `core/vital-import/` | `.vital` / `.vitaltable` / `.vitallfo` importer (own JSON reader, see the next section for the control-name table) |
 | `core/sample-osc/` | sample oscillator DSP and WAV reader |
 | `core/filters-serum/`, `core/fx-serum-a/`, `core/fx-serum-b/` | additional filter types and effects; `fx-serum-b` has its own radix-2 FFT (`fft.cpp`) and partitioned convolution |
@@ -62,7 +50,7 @@ implementation is ours; the manuals of other products were used as a description
 
 `core/vital-import/vital_map.cpp` contains a table of the setting names of the `.vital` preset file format
 (730 rows, owner decision Q33 in `docs/ui-design/12-decisions.md`). The names are facts of the file format, authored from
-our own adapter table (`core/engine-vital/adapter/vital_bindings.cpp`); no Vital preset, wavetable or LFO file is
+the adapter table of the former Vital-derived engine (removed; git history); no Vital preset, wavetable or LFO file is
 bundled. The wavetable renderer (`core/wavetable-render/`) is a clean-room implementation from the design document; it
 does not contain Vital source code. The table ships in the binary under the AGPL-3.0-or-later of this project.
 

@@ -1,5 +1,7 @@
 # Upstream take-over record: Vital
 
+**History (2026-11-21).** The Vital-derived engine described here was removed from the build and the tree (docs/plans/vital-removal.md, owner decision of 2026-11-20: one engine, the own engine). This file is the record of what the take-over was, kept for the licence history; nothing below is in the product any more. The importer of the `.vital` file format (`core/vital-import`) is a separate, own-code component and stays.
+
 This file records what was taken from upstream, how, what was left out and why, and every local change to imported
 files. See [ARCHITECTURE.md](ARCHITECTURE.md) section 2 for the policy.
 
