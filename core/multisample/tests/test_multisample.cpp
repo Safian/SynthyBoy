@@ -402,3 +402,63 @@ TEST (multisample_instrument_over_budget_keeps_the_middle_of_the_keyboard_and_pl
     CHECK_EQ (inst.zone (0).region.center, 60);              // with that zone's root, so that the pitch is right
     CHECK_EQ (inst.zone (3).region.center, 72);
 }
+
+// Reuses setup and helper patterns from multisample_layer_voice_plays_a_zone_at_pitch_with_the_sfz_envelope_and_velocity
+TEST (multisample_layer_voice_one_pole_filter_slope_is_6_db_per_octave)
+{
+    Files files;
+    files.bytes["s4k.wav"] = wav16 (sine (4000.0, 0.5));
+    files.bytes["s8k.wav"] = wav16 (sine (8000.0, 0.5));
+    files.bytes["s2k.wav"] = wav16 (sine (2000.0, 0.5));
+    files.bytes["s1k.wav"] = wav16 (sine (1000.0, 0.5));
+
+    // LPF 1-pole with fixed cutoff 1000 Hz at 48 kHz: level difference between 4 kHz and 8 kHz must be ~6 dB (was ~13.3 dB as 2-pole biquad)
+    Instrument inst4k, inst8k;
+    inst4k.build (parseSfz ("<region> sample=s4k.wav key=60 fil_type=lpf_1p cutoff=1000 loop_mode=loop_continuous loop_start=0 loop_end=24000"), files.reader());
+    inst8k.build (parseSfz ("<region> sample=s8k.wav key=60 fil_type=lpf_1p cutoff=1000 loop_mode=loop_continuous loop_start=0 loop_end=24000"), files.reader());
+
+    LayerVoice v4k, v8k;
+    v4k.prepare (kSr);
+    v8k.prepare (kSr);
+    v4k.noteOn (inst4k, 0, 60, 127, nullptr, -1.0f, 1, synthyboy::sampleosc::QualityTier::medium);
+    v8k.noteOn (inst8k, 0, 60, 127, nullptr, -1.0f, 2, synthyboy::sampleosc::QualityTier::medium);
+    const auto out4k = play (v4k, 24000, 0.0f);
+    const auto out8k = play (v8k, 24000, 0.0f);
+
+    // HPF 1-pole with fixed cutoff 8000 Hz at 48 kHz: level difference between 2 kHz and 1 kHz must be ~6 dB (was ~12.1 dB as 2-pole biquad)
+    Instrument inst2k, inst1k;
+    inst2k.build (parseSfz ("<region> sample=s2k.wav key=60 fil_type=hpf_1p cutoff=8000 loop_mode=loop_continuous loop_start=0 loop_end=24000"), files.reader());
+    inst1k.build (parseSfz ("<region> sample=s1k.wav key=60 fil_type=hpf_1p cutoff=8000 loop_mode=loop_continuous loop_start=0 loop_end=24000"), files.reader());
+
+    LayerVoice v2k, v1k;
+    v2k.prepare (kSr);
+    v1k.prepare (kSr);
+    v2k.noteOn (inst2k, 0, 60, 127, nullptr, -1.0f, 3, synthyboy::sampleosc::QualityTier::medium);
+    v1k.noteOn (inst1k, 0, 60, 127, nullptr, -1.0f, 4, synthyboy::sampleosc::QualityTier::medium);
+    const auto out2k = play (v2k, 24000, 0.0f);
+    const auto out1k = play (v1k, 24000, 0.0f);
+
+    // Direct single-frequency DFT magnitude on steady-state frames (4800 to 24000 = 19200 frames, an exact integer number of cycles)
+    const auto dftAmp = [] (const std::vector<float>& x, size_t from, size_t n, double hz)
+    {
+        double re = 0.0, im = 0.0;
+        for (size_t i = 0; i < n && from + i < x.size(); ++i)
+        {
+            const double ph = 2.0 * kPi * hz * static_cast<double> (i) / kSr;
+            re += static_cast<double> (x[from + i]) * std::cos (ph);
+            im -= static_cast<double> (x[from + i]) * std::sin (ph);
+        }
+        return 2.0 * std::sqrt (re * re + im * im) / static_cast<double> (n);
+    };
+
+    const double a4k = dftAmp (out4k, 4800, 19200, 4000.0);
+    const double a8k = dftAmp (out8k, 4800, 19200, 8000.0);
+    const double diffLpDb = 20.0 * std::log10 (a4k / a8k);
+    CHECK_NEAR (diffLpDb, 6.0, 1.0);
+
+    const double a2k = dftAmp (out2k, 4800, 19200, 2000.0);
+    const double a1k = dftAmp (out1k, 4800, 19200, 1000.0);
+    const double diffHpDb = 20.0 * std::log10 (a2k / a1k);
+    CHECK_NEAR (diffHpDb, 6.0, 1.0);
+}
+
