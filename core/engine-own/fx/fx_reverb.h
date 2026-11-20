@@ -391,7 +391,11 @@ private:
     {
         float sizeScale = 1.0f, T = 1.0f, aH = 1.0f, aL = 0.0f, aHs = 0.5f, aLs = 0.5f, erScale = 1.0f, erLevel = 0.3f, outScale = 1.0f;
         float apIn = 0.5f, apLine = 0.3f, depth = 0.0f;
+        // type 3 (vintage): everything that depends only on the parameters and the sample rate, once per call of process ()
+        float vRatio = 1.0f, vInDelay = 0.0f, vInC = 0.3f, vApC = 0.3f, vLpCoef = 0.0f, vApDelay[4] = {}, vLen[2][8] = {}, vGain[2][8] = {};
     };
+    static constexpr int kC[8] = { 1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617 }; // the comb lengths of the vintage type (samples at 44.1 kHz)
+    static constexpr int kAp[4] = { 556, 441, 341, 225 };                             // its all-pass lengths
     static float gainFor (float roundTrip, float T) noexcept { return std::min (std::exp (-kLn1000 * roundTrip / T), 0.9996f); }
 
     void prepareCore (int type, float aHsC, float aLsC) noexcept
@@ -436,6 +440,19 @@ private:
         else
         {
             c.depth = chorus * 0.8f * 0.001f * sr;
+            c.vRatio = sr / 44100.0f * c.sizeScale;
+            c.vInDelay = 142.0f * c.vRatio;
+            c.vInC = 0.3f + 0.4f * p.diffA;
+            c.vApC = 0.3f + 0.4f * p.diffB;
+            c.vLpCoef = OnePole::coefficient (7000.0f, sampleRate);
+            for (int k = 0; k < 4; ++k)
+                c.vApDelay[k] = static_cast<float> (kAp[k]) * c.vRatio;
+            for (int ch = 0; ch < 2; ++ch)
+                for (int k = 0; k < 8; ++k)
+                {
+                    c.vLen[ch][k] = (static_cast<float> (kC[k]) + (ch == 1 ? 23.0f : 0.0f)) * c.vRatio;
+                    c.vGain[ch][k] = gainFor (c.vLen[ch][k] / sr, c.T);
+                }
         }
     }
 
@@ -584,28 +601,23 @@ private:
 
     void vintageSample (float mono, float& outL, float& outR) noexcept
     {
-        const float sr = static_cast<float> (sampleRate);
-        static const int kC[8] = { 1116, 1188, 1277, 1356, 1422, 1491, 1557, 1617 };
-        static const int kAp[4] = { 556, 441, 341, 225 };
-        const float ratio = sr / 44100.0f * cfg.sizeScale;
         float out[2];
         for (int c = 0; c < 2; ++c)
         {
-            float x = vInAp[c].process (mono, 142.0f * ratio, 0.3f + 0.4f * p.diffA);
+            float x = vInAp[c].process (mono, cfg.vInDelay, cfg.vInC);
             float sum = 0.0f;
             for (int k = 0; k < 8; ++k)
             {
-                const float len = (static_cast<float> (kC[k]) + (c == 1 ? 23.0f : 0.0f)) * ratio;
+                const float len = cfg.vLen[c][k];
                 const float mod = cfg.depth * std::sin (kTwoPif * (phase + static_cast<float> (k) / 8.0f + 0.5f * static_cast<float> (c)));
                 const float rd = vComb[c][k].readCubic (std::max (len + mod - 1.0f, 2.0f));
-                const float gk = gainFor (len / sr, cfg.T);
                 const float damped = vDamp[c][k].process (rd, cfg.aH, cfg.aHs, cfg.aL, cfg.aLs);
-                vComb[c][k].push (flushDenormal (x + damped * gk));
+                vComb[c][k].push (flushDenormal (x + damped * cfg.vGain[c][k]));
                 sum += rd;
             }
             for (int k = 0; k < 4; ++k)
-                sum = vAp[c][k].process (sum, static_cast<float> (kAp[k]) * ratio, 0.3f + 0.4f * p.diffB);
-            vLp[c] += OnePole::coefficient (7000.0f, sampleRate) * (sum - vLp[c]);
+                sum = vAp[c][k].process (sum, cfg.vApDelay[k], cfg.vApC);
+            vLp[c] += cfg.vLpCoef * (sum - vLp[c]);
             vLp[c] = flushDenormal (vLp[c]);
             out[c] = vLp[c] * 0.14f * kOutVintage;
         }
