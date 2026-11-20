@@ -538,6 +538,68 @@ TEST (own_builtin_tables_match_the_checkpoints)
     }
 }
 
+// Verifies monotonic raised-cosine taper across the top fifth of wavetable mip levels (audit rank 13).
+// Reuses setup from own_builtin_tables_match_the_checkpoints (builtinWavetable, cycle).
+TEST (own_wavetable_mip_level_taper_monotonic)
+{
+    // Sawtooth table (entry 1) at mip level m = 1 (top = 512 harmonics > 20)
+    const own::Wavetable* wt = own::builtinWavetable (1);
+    CHECK (wt != nullptr);
+    if (wt == nullptr)
+        return;
+
+    const int m = 1;
+    const int top = own::Wavetable::maxHarmonics (m);
+    const int n = own::Wavetable::size (m);
+    CHECK (top > 20);
+
+    const float* cycle = wt->cycle (0, m);
+    CHECK (cycle != nullptr);
+    if (cycle == nullptr)
+        return;
+
+    const float* spec = wt->spectrum (0);
+    CHECK (spec != nullptr);
+    if (spec == nullptr)
+        return;
+
+    constexpr double kTwoPi = 6.28318530717958647692;
+    const int hStart = static_cast<int> (0.7 * top);
+    std::vector<double> ratio (static_cast<size_t> (top + 1), 0.0);
+
+    for (int h = hStart; h <= top; ++h)
+    {
+        double c = 0.0, s = 0.0;
+        const double omega = kTwoPi * static_cast<double> (h) / static_cast<double> (n);
+        for (int i = 0; i < n; ++i)
+        {
+            const double angle = omega * static_cast<double> (i);
+            c += static_cast<double> (cycle[i]) * std::cos (angle);
+            s += static_cast<double> (cycle[i]) * std::sin (angle);
+        }
+        const double mag = (2.0 / static_cast<double> (n)) * std::sqrt (c * c + s * s);
+        const double srcMag = std::sqrt (static_cast<double> (spec[h]) * static_cast<double> (spec[h])
+                                       + static_cast<double> (spec[own::Wavetable::kHarmonics + h]) * static_cast<double> (spec[own::Wavetable::kHarmonics + h]));
+        ratio[static_cast<size_t> (h)] = srcMag > 0.0 ? (mag / srcMag) : 0.0;
+    }
+
+    // 1. Check ratio is within 1 percent of 1.0 at 0.8 * top (h = 410 for top = 512).
+    // On buggy code, taper drops to ~0.767 at h = 410 because cosine starts at 85% instead of 80%.
+    const int hAt08 = static_cast<int> (std::round (0.8 * top));
+    CHECK_NEAR (ratio[static_cast<size_t> (hAt08)], 1.0, 0.01);
+
+    // 2. Check ratio is non-increasing in h across 0.75 * top .. top (with 1e-3 slack).
+    // On buggy code, taper rises from ~0.767 at h = 410 to 1.0 at h = 435 (24 rising steps).
+    const int hCheckStart = static_cast<int> (0.75 * top);
+    bool nonIncreasing = true;
+    for (int h = hCheckStart; h < top; ++h)
+    {
+        if (ratio[static_cast<size_t> (h + 1)] > ratio[static_cast<size_t> (h)] + 1.0e-3)
+            nonIncreasing = false;
+    }
+    CHECK (nonIncreasing);
+}
+
 // The capability test of the rulebook: a bit is only set when an off / on render proves an audible difference. One probe per bit: the same patch with one
 // key changed from an "off" to an "on" value must render differently, and the key must be supported by the engine.
 TEST (own_every_capability_bit_has_an_audible_probe)
