@@ -6,7 +6,7 @@
 //
 //   synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets]
 //                        [--seconds 30] [--repeat N] [--budget PCT] [--notes K] [--retrigger 1] [--paced] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz]
-//                        [--sections] [--list] [--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N]
+//                        [--sections] [--list] [--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] [--pmu compute|cache] [--pmu-require]
 //
 //   --core N        pin the measuring thread to CPU N (Linux: sched_setaffinity; elsewhere the option is refused). The frequency governor is not touched. The CPU the run
 //                   really was on, its part number and its frequency settings are printed. The engine's helper threads are moved to the other CPUs (see --no-helpers-away).
@@ -17,6 +17,10 @@
 //                   shortest gap that keeps the duty below 94 %, 12 ms for 128 frames at 44.1 kHz; 0 = no gap)
 //   --rt-require    exit 1 when --rt could not be applied
 //   --no-helpers-away  leave the engine's helper threads as they are inherited (with --core they are then pinned to the measured core too)
+//   --pmu SET       read the hardware counters of the measuring thread around every block (perf_event_open, outside the timed region; bench/perf/perf_pmu.h): compute =
+//                   cycles, instructions, branch mispredictions; cache = cycles, L1D refill / access, L2D refill / access. A line "pmu:" follows each run (or says why the
+//                   counters are unavailable) and the csv gets the columns pmu_set .. pmu_scaling (scaling 1.000 = the counters ran the whole time)
+//   --pmu-require   exit 1 when the counters could not be opened
 //   --retry-invalid N  a run that the health rules mark INVALID (a stall, run queue delay, a frequency drop, a major page fault, heat) is repeated up to N times (default 2);
 //                   the last run is kept and its validity is in the csv
 //   --set NAME      the list of profiles (default settings):
@@ -99,6 +103,7 @@
 #include "device_profile.h"
 #include "own_heavy_patch.h"
 #include "perf/perf_env.h"
+#include "perf/perf_pmu.h"
 #include "perf/perf_sched.h"
 #include "perf/perf_stats.h"
 
@@ -261,6 +266,8 @@ struct Options
     bool rtRequire = false;  // --rt-require
     bool helpersAway = true; // --no-helpers-away clears it
     int retryInvalid = 2;    // --retry-invalid
+    std::string pmu;         // --pmu: "" (off), "compute" or "cache"
+    bool pmuRequire = false; // --pmu-require
 };
 
 struct PresetData
@@ -385,10 +392,36 @@ struct Result
     long khzBefore = 0, khzAfter = 0;
     bool valid = true;
     std::string invalidReason;
+    // the hardware counters (--pmu): per block means, scaled to the time the counters were enabled
+    bool pmuOpened = false;
+    std::string pmuWhy;                  // why they could not be opened
+    std::vector<std::string> pmuNames;   // the events of the set, in the order of pmuPerBlock
+    std::vector<double> pmuPerBlock;
+    double pmuCyclesP99 = 0.0;
+    double pmuScaling = 0.0;             // time the counters ran / time they were enabled
 };
 
 long currentKhz (int cpu);
 std::string readLine (const std::string& path);
+
+/** The per block mean of a counter of the run, NaN when the run has not that event. */
+double pmuEvent (const Result& r, const char* name)
+{
+    for (size_t i = 0; i < r.pmuNames.size(); ++i)
+        if (r.pmuNames[i] == name)
+            return r.pmuPerBlock[i];
+    return std::numeric_limits<double>::quiet_NaN();
+}
+
+/** A number as text, "n/a" (or "" for the csv) when it is not there. */
+std::string pmuText (double v, const char* format, const char* absent)
+{
+    if (std::isnan (v))
+        return absent;
+    char text[48];
+    std::snprintf (text, sizeof text, format, v);
+    return text;
+}
 
 Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load& load, int notes, int cpu)
 {
@@ -407,6 +440,16 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
     const long long retrigger = std::max<long long> (1, static_cast<long long> (o.retrigger * o.sampleRate / o.block));
     std::vector<double> times;
     times.reserve (static_cast<size_t> (measured));
+    perf::PmuReader pmu;
+    std::string pmuWhy;
+    const bool pmuOn = ! o.pmu.empty() && pmu.open (o.pmu == "cache" ? perf::PmuSet::cache : perf::PmuSet::compute, pmuWhy);
+    perf::PmuSample pmuS0, pmuS1;
+    double pmuSum[8] = {};
+    unsigned long long pmuEnabled = 0, pmuRunning = 0;
+    long long pmuBlocks = 0;
+    std::vector<double> pmuCycles;
+    if (pmuOn)
+        pmuCycles.reserve (static_cast<size_t> (measured));
     std::vector<double> sectionSum, sectionCalls, sectionReads, slowSections;
     double slowBlock = 0.0;
     double voiceSum = 0.0;
@@ -451,9 +494,11 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
             std::this_thread::sleep_until (start + std::chrono::duration_cast<std::chrono::steady_clock::duration> (blockTime * static_cast<double> (b)));
         if (o.sections)
             ownSectionReset();   // per block: the totals are summed below (the same numbers as one reset at the start), and the longest block keeps its own
+        const bool pmuRead0 = pmuOn && pmu.read (pmuS0);   // the counters are read outside t0 .. t1
         const auto t0 = std::chrono::steady_clock::now();
         engine->process (events.data(), static_cast<int> (events.size()), left.data(), right.data(), o.block);
         const auto t1 = std::chrono::steady_clock::now();
+        const bool pmuRead1 = pmuRead0 && pmu.read (pmuS1);
         if (o.sections && b >= warmup)
         {
             const int count = ownSectionCount();
@@ -487,6 +532,16 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
             const int av = engine->activeVoices();
             voiceSum += av;
             voiceMax = std::max (voiceMax, av);
+            if (pmuRead1)
+            {
+                const unsigned long long de = pmuS1.timeEnabled - pmuS0.timeEnabled, dr = pmuS1.timeRunning - pmuS0.timeRunning;
+                for (int i = 0; i < pmu.count(); ++i)
+                    pmuSum[i] += static_cast<double> (pmuS1.value[i] - pmuS0.value[i]);
+                pmuEnabled += de;
+                pmuRunning += dr;
+                ++pmuBlocks;
+                pmuCycles.push_back (std::max (0.0, perf::scaledCount (pmuS1.value[0] - pmuS0.value[0], de, dr)));   // the first event of both sets is the cycle count
+            }
         }
         if (o.rt > 0 && ! o.paced && gapMs > 0.0 && (b + 1) % perf::kRtGapEvery == 0)
             std::this_thread::sleep_for (std::chrono::duration<double, std::milli> (gapMs));
@@ -541,6 +596,22 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
     }
     r.voicesMean = voiceSum / static_cast<double> (times.size());
     r.voicesMax = voiceMax;
+    if (! o.pmu.empty())
+    {
+        r.pmuOpened = pmuOn && pmuBlocks > 0;
+        r.pmuWhy = pmuOn ? (pmuBlocks > 0 ? "" : "the counters could not be read") : pmuWhy;
+        if (r.pmuOpened)
+        {
+            for (int i = 0; i < pmu.count(); ++i)
+            {
+                r.pmuNames.push_back (pmu.name (i));
+                r.pmuPerBlock.push_back (perf::scaledCount (static_cast<unsigned long long> (pmuSum[i]), pmuEnabled, pmuRunning) / static_cast<double> (pmuBlocks));
+            }
+            std::sort (pmuCycles.begin(), pmuCycles.end());
+            r.pmuCyclesP99 = perf::percentileSorted (pmuCycles, 0.99);
+            r.pmuScaling = perf::ratio (static_cast<double> (pmuRunning), static_cast<double> (pmuEnabled));
+        }
+    }
     if (o.sections)
     {
         // the clock reads that land in a section: one of the two of each of its own scopes, and one of each scope entered directly inside it
@@ -650,7 +721,8 @@ long currentKhz (int cpu)
 {
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
                           "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--scalar-warp] [--no-voice-savings] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list] "
-                          "[--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N]\n", message);
+                          "[--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] "
+                          "[--pmu compute|cache] [--pmu-require]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -891,10 +963,13 @@ int main (int argc, char** argv)
         else if (a == "--rt-require")  o.rtRequire = true;
         else if (a == "--no-helpers-away") o.helpersAway = false;
         else if (a == "--retry-invalid") o.retryInvalid = std::atoi (next());
+        else if (a == "--pmu")         o.pmu = next();
+        else if (a == "--pmu-require") o.pmuRequire = true;
         else usage (("unknown argument " + a).c_str());
     }
     if (o.seconds <= 0.0 || o.block < 1 || o.block > 8192 || o.notes < 0 || o.notes > kMaxVoices || o.sampleRate < 8000.0 || o.retrigger <= 0.0 || o.repeat < 1 || o.repeat > 99 || o.budget < 0.0
-        || (o.rt != 0 && (o.rt < 1 || o.rt > 99)) || o.rtGapMs < -1.0 || o.retryInvalid < 0 || o.retryInvalid > 9)
+        || (o.rt != 0 && (o.rt < 1 || o.rt > 99)) || o.rtGapMs < -1.0 || o.retryInvalid < 0 || o.retryInvalid > 9
+        || (! o.pmu.empty() && o.pmu != "compute" && o.pmu != "cache"))
         usage ("argument out of range");
     if (o.micro)
     {
@@ -1167,7 +1242,8 @@ int main (int argc, char** argv)
     }
     if (csv != nullptr)
         std::fprintf (csv, "device,cpu,cpu_info,profile,settings,load,group,notes,voices_mean,voices_max,sr,block,blocks,min_pct,median_pct,p99_pct,max_pct,mean_pct,min_ms,median_ms,p99_ms,max_ms,mean_ms,blocks_over_100pct,cpu_khz_after_run,pass"
-                          ",p999_pct,rt_prio,thread_cpu_ms,run_delay_pct,nivcsw,minflt_run,minflt_measured,majflt,rss_kb,temp_c_max,khz_before,valid,invalid_reason\n");
+                          ",p999_pct,rt_prio,thread_cpu_ms,run_delay_pct,nivcsw,minflt_run,minflt_measured,majflt,rss_kb,temp_c_max,khz_before,valid,invalid_reason"
+                          ",pmu_set,cycles_mean,cycles_p99,instr_mean,ipc,l1d_refill_per_block,l1d_access_per_block,l2d_refill_per_block,l2d_access_per_block,br_mis_per_block,pmu_scaling\n");
 
     std::printf ("\nshare of the block's real time (%.3f ms = 100 %%) spent in process(), one core:\n", budgetMs);
     std::printf ("%-58s %-24s %5s %6s | %7s %7s %7s %7s %7s | %5s %8s %4s\n", "profile", "load", "notes", "voices", "min %", "median%", "p99 %", "max %", "mean %", "over", "cpu MHz", "pass");
@@ -1204,7 +1280,27 @@ int main (int argc, char** argv)
                     const std::string verdict = r.valid ? std::string ("valid") : "INVALID (" + r.invalidReason + ")";
                     std::printf ("    health: run_delay %.4f %%, thread cpu %.1f ms of %.1f ms, nivcsw %ld, minflt %ld (measured %ld), majflt %ld, rss %ld kB, temp %s C, cpu %ld -> %ld kHz, %s\n",
                                  100.0 * r.runDelayShare, r.threadCpuMs, r.sumMs, r.nivcsw, r.minflt, r.minfltMeasured, r.majflt, r.rssKb, temp, r.khzBefore, r.khzAfter, verdict.c_str());
+                    if (! o.pmu.empty())
+                    {
+                        if (r.pmuOpened)
+                        {
+                            const double cyc = pmuEvent (r, "cycles"), ins = pmuEvent (r, "instructions"), l1r = pmuEvent (r, "l1d_refill"), l1a = pmuEvent (r, "l1d_access");
+                            const double l2r = pmuEvent (r, "l2d_refill"), l2a = pmuEvent (r, "l2d_access"), brm = pmuEvent (r, "br_mis_pred");
+                            const double ipc = std::isnan (ins) ? ins : perf::ratio (ins, cyc);
+                            const double l1pct = std::isnan (l1r) ? l1r : 100.0 * perf::ratio (l1r, l1a), l2pct = std::isnan (l2r) ? l2r : 100.0 * perf::ratio (l2r, l2a);
+                            std::printf ("    pmu: set %s cycles %s/block (p99 %s), ipc %s, l1d refill %s/block (%s %%), l2d refill %s/block (%s %%), br_mis %s/block, scaling %.3f\n", o.pmu.c_str(),
+                                         pmuText (cyc, "%.0f", "n/a").c_str(), pmuText (r.pmuCyclesP99, "%.0f", "n/a").c_str(), pmuText (ipc, "%.2f", "n/a").c_str(), pmuText (l1r, "%.1f", "n/a").c_str(),
+                                         pmuText (l1pct, "%.2f", "n/a").c_str(), pmuText (l2r, "%.1f", "n/a").c_str(), pmuText (l2pct, "%.2f", "n/a").c_str(), pmuText (brm, "%.1f", "n/a").c_str(), r.pmuScaling);
+                        }
+                        else
+                            std::printf ("    pmu: unavailable (%s)\n", r.pmuWhy.c_str());
+                    }
                     std::fflush (stdout);
+                    if (! o.pmu.empty() && ! r.pmuOpened && o.pmuRequire)
+                    {
+                        std::fprintf (stderr, "tier_bench: --pmu-require: %s\n", r.pmuWhy.c_str());
+                        return 1;
+                    }
                     if (r.valid || attempt >= o.retryInvalid)
                         break;
                     std::printf ("    retry %d: %s\n", attempt + 1, r.invalidReason.c_str());
@@ -1245,10 +1341,20 @@ int main (int argc, char** argv)
                     char tempText[24] = "";
                     if (! std::isnan (r.tempMaxC))
                         std::snprintf (tempText, sizeof tempText, "%.1f", r.tempMaxC);
-                    std::fprintf (csv, "\"%s\",%d,\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%d,%.2f,%d,%.0f,%d,%lld,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%.5f,%.5f,%.5f,%lld,%ld,%d,%.3f,%d,%.1f,%.4f,%ld,%ld,%ld,%ld,%ld,%s,%ld,%d,\"%s\"\n", model.c_str(), cpu,
+                    // the T15 columns, empty when the counters are off, could not be opened or the set has not the event
+                    std::string pmuCsv = ",,,,,,,,,,";
+                    if (r.pmuOpened)
+                    {
+                        const double cyc = pmuEvent (r, "cycles"), ins = pmuEvent (r, "instructions"), l1r = pmuEvent (r, "l1d_refill"), l1a = pmuEvent (r, "l1d_access");
+                        const double l2r = pmuEvent (r, "l2d_refill"), l2a = pmuEvent (r, "l2d_access"), brm = pmuEvent (r, "br_mis_pred");
+                        pmuCsv = o.pmu + "," + pmuText (cyc, "%.1f", "") + "," + pmuText (r.pmuCyclesP99, "%.1f", "") + "," + pmuText (ins, "%.1f", "") + ","
+                                 + pmuText (std::isnan (ins) ? ins : perf::ratio (ins, cyc), "%.3f", "") + "," + pmuText (l1r, "%.2f", "") + "," + pmuText (l1a, "%.2f", "") + "," + pmuText (l2r, "%.2f", "") + ","
+                                 + pmuText (l2a, "%.2f", "") + "," + pmuText (brm, "%.2f", "") + "," + pmuText (r.pmuScaling, "%.4f", "");
+                    }
+                    std::fprintf (csv, "\"%s\",%d,\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%d,%.2f,%d,%.0f,%d,%lld,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%.5f,%.5f,%.5f,%lld,%ld,%d,%.3f,%d,%.1f,%.4f,%ld,%ld,%ld,%ld,%ld,%s,%ld,%d,\"%s\",%s\n", model.c_str(), cpu,
                                   cpuText.c_str(), configs[c].c_str(), synthyboy_mpc::describeProfile (profiles[c]).c_str(), l.name.c_str(), l.group.c_str(), notes, r.voicesMean, r.voicesMax,
                                   o.sampleRate, o.block, r.blocks, r.minMs * k, r.medianMs * k, r.p99Ms * k, r.maxMs * k, r.meanMs * k, r.minMs, r.medianMs, r.p99Ms, r.maxMs, r.meanMs, r.over, khz, pass, r.p999Ms * k, o.rt, r.threadCpuMs, 100.0 * r.runDelayShare, r.nivcsw, r.minflt,
-                                  r.minfltMeasured, r.majflt, r.rssKb, tempText, r.khzBefore, r.valid ? 1 : 0, r.invalidReason.c_str());
+                                  r.minfltMeasured, r.majflt, r.rssKb, tempText, r.khzBefore, r.valid ? 1 : 0, r.invalidReason.c_str(), pmuCsv.c_str());
                     std::fflush (csv);
                 }
                 cells[c][li].p99.push_back (r.p99Ms * k);
