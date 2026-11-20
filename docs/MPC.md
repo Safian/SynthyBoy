@@ -764,6 +764,62 @@ The spectrum of the MPC shell shows the signal after the output stage, that is w
 
 There is no separate parameter for the level of the instrument: that is Master Volume (first knob of the second row of the Macros tab), which is saved with the project.
 
+### Unattended device level sweep (`scripts/device-level-sweep.py`)
+
+To verify and record level calibration across all 160 factory presets (index 0..159) on real hardware without interactive operator intervention, `scripts/device-level-sweep.py` automates program selection, pad hits, peak readout, and track mixer screenshot capture.
+
+#### Modes of operation
+
+- **Run on device (`run`):**
+  ```bash
+    # Key 61 (uses hwctl pad injection):
+    python3 scripts/device-level-sweep.py run --device k61 [--limit N] [--resume] [--outdir DIR]
+
+    # MPC XL (uses seqnote 129 0 MIDI input):
+    python3 scripts/device-level-sweep.py run --device xl [--limit N] [--resume] [--outdir DIR]
+
+    # Dry-run preview (prints planned shell/SSH commands without touching hardware):
+    python3 scripts/device-level-sweep.py run --device k61 --dry-run --limit 3
+  ```
+  Default output directory: `/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-perf/level-sweep-<device>-<date>/`.
+
+- **Offline verifier (`verify`):**
+  Checks that every preset index 0..159 has exactly two images (`-full.png`, `-half.png`), no other images, that `-full` was written before `-half` by file mtime (and both are the two newest files of that preset), that `sweep.csv` has 160 lines, and that peak levels match the target thresholds (`--full-target -10.0 --full-tol 2.0 --half-diff 11.9 --half-tol 3.0`, owner target: factory-like level, full hit near -10 dB full scale, half hit about 12 dB lower). Writes `verify-report.md` with failing presets listed first, and exits non-zero if any check fails:
+  ```bash
+    python3 scripts/device-level-sweep.py verify <outdir> [--full-target -10.0] [--full-tol 2.0] [--half-diff 11.9] [--half-tol 3.0]
+  ```
+
+- **Selftest (`selftest`):**
+  Runs the verifier against synthetic test suites (pass case, out-of-tolerance peaks, missing images, inverted mtime, stray images, truncated CSV):
+  ```bash
+    python3 scripts/device-level-sweep.py selftest
+  ```
+
+#### Files and output structure
+
+- **Files on device:**
+  * Request file: `/tmp/synthyboy-select-program` (decimal program index 0..159).
+  * Acknowledgement: `/tmp/synthyboy-select-program.ack` (`<counter> ok <index> <name>`).
+  * Status file: `/tmp/synthyboy-overlay-status.txt` (switched by `/tmp/synthyboy-overlay-status-on`, sampled every fifth of a second for `output_peak`; `output_peak_total` is held max and not used).
+  * Play log: `/tmp/synthyboy-play-log.txt` (switched by `/tmp/synthyboy-play-log`, records note-on events and velocities).
+- **Files in output directory:**
+  * `<NNN>-<preset-slug>-full.png`: Host track view mixer meter picture after full hit (velocity 127).
+  * `<NNN>-<preset-slug>-half.png`: Host track view mixer meter picture after half hit (velocity 64).
+  * `preflight.png`: Initial host track view picture taken during preflight.
+  * `sweep.csv`: Exactly 160 lines, one per preset (`index,name,full_peak_dBFS,half_peak_dBFS,diff,play_log_velocities,timestamp`).
+  * `sweep.log`: Unattended execution log.
+  * `verify-report.md`: Verification results table.
+
+#### Device rules kept
+
+1. **Lock directories:** Takes `/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-tools/DEVICE-LOCK` (Key 61) or `/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-tools/DEVICE-LOCK-XL` (XL) before touching device, released on completion, error, or Ctrl-C.
+2. **Project Sbtest only:** Operates exclusively in the currently open project `Sbtest`; never saves, never reboots.
+3. **Single touch per command:** Never touches anything except the peak-hold reset tap on the meter number (Key 61: UI (152, 714) via `/tmp/mtouch`; XL: UI (355, 698) via mirrored `/tmp/mtouch tap 924 101 90`).
+4. **Note injection paths:**
+   - Key 61: hardware-path pad 1 injection via `hwctl.sh raw "99 25 7f"` (full) and `"99 25 40"` (half), held eight tenths of a second.
+   - XL: ALSA sequencer MIDI input via `seqnote 129 0` (note 48, held eight tenths of a second) with `SEQNOTE_VEL=127` and `SEQNOTE_VEL=64`.
+5. **Retry & fault tolerance:** Up to 2 retries per preset on error (partial images cleaned before retry); after 5 consecutive failed presets, sweep halts automatically to protect against persistent device issues.
+
 ## Overlay (experimental)
 
 Live pictures on seventeen tabs (the Play page's three sub-tabs included), drawn by the plugin itself on a display plane that the MPC firmware does not offer to plugins: the response curve of Filter 1 and Filter 2, the shape of LFO 1 - 4 with the cursor of the playing voice, (the oscillator pictures of this first overlay are gone: the OSC tab is now drawn entirely by the plugin, see "The OSC tab"), the live phase marker of Envelope 1 - 4 on top of the native envelope widget, and the spectrum of the plugin's output as a curve over the row of meters of the Macros tab. EXPERIMENTAL, off by default; proven on the MPC Key 61 (32-bit) and on the MPC XL (64-bit) with the same code. The skin alone cannot do this: the SDK widgets have no curve that follows the real filter, no LFO shape with modulation and smoothing, no oscillator output with warp and morph (the `Envelope` widget draws broken lines from a few stage values, see "Envelope tabs").
@@ -1451,7 +1507,7 @@ Read every second by the overlay thread (not logging): `/tmp/synthyboy-overlay-o
 
 To enable automated scripts (such as an overnight acceptance run stepping through all 160 factory presets) to switch programs without touch screen interaction, builds with `SYNTHYBOY_MPC_DEBUG_HOOKS=ON` support remote program selection through `/tmp` files:
 - **Compiled out entirely otherwise:** when `SYNTHYBOY_MPC_DEBUG_HOOKS` is OFF (the default and for release packages), the hook is `#if`-ed out completely; no `/tmp` file is checked, and no strings exist in the binary.
-- **Thread model:** polled on the non-audio display thread (`liveLoop`) every ~100 ms (zero heap allocation when idle, never polled on the audio thread).
+- **Thread model:** polled on the non-audio display thread (`liveLoop`) every tenth of a second (zero heap allocation when idle, never polled on the audio thread).
 - **Thread-safe handover while audio runs:** the program switch invokes the exact code path `effSetProgram` uses. State content, wavetables, samples, parameters, and output limiter are loaded into the engine using the same thread-safe atomics and engine mutexes that protect host UI thread program changes against `processReplacing`.
 - **Request file:** `/tmp/synthyboy-select-program` (environment variable `SYNTHYBOY_MPC_SELECT_PROGRAM_FILE` overrides the path for tests).
   * Format: a single line containing either a 0-based decimal program index (in `effGetProgramNameIndexed` order, 0 .. `numPrograms - 1`) or an exact program name (e.g. `Init` or `Space Wobble Bass`).
@@ -1464,23 +1520,23 @@ To enable automated scripts (such as an overnight acceptance run stepping throug
 
 Example commands:
 ```bash
-# Step by program index:
-echo 0 > /tmp/synthyboy-select-program
-cat /tmp/synthyboy-select-program.ack   # 1 ok 0 Init
+  # Step by program index:
+  echo 0 > /tmp/synthyboy-select-program
+  cat /tmp/synthyboy-select-program.ack   # 1 ok 0 Init
 
-echo 1 > /tmp/synthyboy-select-program
-cat /tmp/synthyboy-select-program.ack   # 2 ok 1 Space Wobble Bass
+  echo 1 > /tmp/synthyboy-select-program
+  cat /tmp/synthyboy-select-program.ack   # 2 ok 1 Space Wobble Bass
 
-# Step by exact preset name:
-echo "Space Wobble Bass" > /tmp/synthyboy-select-program
-cat /tmp/synthyboy-select-program.ack   # 3 ok 1 Space Wobble Bass
+  # Step by exact preset name:
+  echo "Space Wobble Bass" > /tmp/synthyboy-select-program
+  cat /tmp/synthyboy-select-program.ack   # 3 ok 1 Space Wobble Bass
 
-# Error handling:
-echo 9999 > /tmp/synthyboy-select-program
-cat /tmp/synthyboy-select-program.ack   # 4 error out of range
+  # Error handling:
+  echo 9999 > /tmp/synthyboy-select-program
+  cat /tmp/synthyboy-select-program.ack   # 4 error out of range
 
-echo "Unknown Preset" > /tmp/synthyboy-select-program
-cat /tmp/synthyboy-select-program.ack   # 5 error unknown name
+  echo "Unknown Preset" > /tmp/synthyboy-select-program
+  cat /tmp/synthyboy-select-program.ack   # 5 error unknown name
 ```
 
 Option builds: `SYNTHYBOY_MPC_CALLBACK_STATS` writes `/tmp/synthyboy-callback-stats.txt` (and `.2` ..) every 5 s from its own low priority thread; `SYNTHYBOY_MPC_OVERLAY_BENCH` (helper) writes `/tmp/sb-bench-stats.txt`, `/tmp/sb-pace-trace.txt`.
