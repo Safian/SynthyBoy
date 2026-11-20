@@ -878,6 +878,24 @@ TEST (own_osc_frame_remap_rise_and_fall)
     CHECK (h2 (on, 1.5) < h2 (on, 1.0) - 3.0);
 }
 
+// 07 7a.2: the X|Y control keys are claimed by the own engine
+TEST (own_osc_xy_keys_are_claimed)
+{
+    auto e = createOwnEngine();
+    for (const char* osc : { "osc1", "osc2", "osc3" })
+    {
+        for (const char* suffix : { "gran.y_axis", "gran.xy_y", "spec.y_axis", "spec.xy_y" })
+        {
+            const std::string key = std::string (osc) + "." + suffix;
+            const ParamInfo* info = findParamByKey (key.c_str());
+            CHECK (info != nullptr && e->supportsParam (info->id));
+        }
+    }
+    // docs/ui-design/13-new-keys.md A39: loop_link is an editor action without DSP effect
+    const ParamInfo* loopLink = findParamByKey ("osc1.sample.loop_link");
+    CHECK (loopLink != nullptr && ! e->supportsParam (loopLink->id));
+}
+
 // 07 7a.2: the Y value of the X|Y control takes over the parameter of the axis
 TEST (own_osc_xy_control_level_axis)
 {
@@ -894,6 +912,110 @@ TEST (own_osc_xy_control_level_axis)
         std::printf ("    X|Y level axis, type %.0f: no axis %.3f, y 0 %.4f, y 50 %% %.3f\n", type, full, zero, half);
         CHECK (zero < 1.0e-4);
         CHECK_NEAR (half / full, 0.5, 0.1);
+    }
+}
+
+// 07 7a.2: granular X|Y control for every axis (0 = None is ignored, 1..17 change the render)
+TEST (own_osc_xy_control_every_granular_axis)
+{
+    // Buffer difference measure reused from own_wavetable_live_rebuild_swaps_safely (lines 614-617):
+    // checks whether any rendered sample in the buffers differs (a[i] != b[i]).
+    auto buffersDiffer = [] (const std::vector<float>& a, const std::vector<float>& b)
+    {
+        if (a.size() != b.size())
+            return true;
+        for (size_t i = 0; i < a.size(); ++i)
+            if (a[i] != b[i])
+                return true;
+        return false;
+    };
+
+    auto run = [&] (float axis, float y)
+    {
+        Rig r (true, "osc1.type", 2.0f);
+        set (*r.e, "osc1.gran.y_axis", axis);
+        set (*r.e, "osc1.gran.xy_y", y);
+        return r.render (69, 1.0, 1.0).l;
+    };
+
+    // docs/engine-spec/07-sample-granular-spectral.md line 128:
+    // "axis 0 = None: the knobs act" (Y value is ignored: renders with y=10 and y=90 must be identical)
+    const auto none10 = run (0.0f, 10.0f), none90 = run (0.0f, 90.0f);
+    CHECK (! buffersDiffer (none10, none90));
+
+    // Reproducibility check: two renders with the same settings must be bit-identical
+    const auto ref1 = run (1.0f, 10.0f), ref2 = run (1.0f, 10.0f);
+    const bool reproducible = ! buffersDiffer (ref1, ref2);
+    std::printf ("    granular harness reproducibility: %s\n", reproducible ? "bit-identical" : "differs");
+    CHECK (reproducible);
+
+    // docs/engine-spec/07-sample-granular-spectral.md lines 132-138:
+    // 132: "1 Level | output gain of the type = y (0 mutes)"
+    // 134: "4 Density | 0.1 * 10^(4 y) grains per second (0.1 .. 1000 Hz)"
+    // 135: "5 Grain Length | 4000^y ms (1 ms .. 4 s)"
+    // 136: "6 Window Amt / 7 Window Skew | window amount = y; skew = 2 y - 1"
+    // 137: "8 Rand Offset, 9 Rand Dir, 11 Rand Length, 12 Rand Pan, 13 Rand Gain, 14 Rand Window, 15 Rand Skew | that randomisation depth = y"
+    // 138: "10 Rand Pitch | 24 y semitones"
+    // Axes 2, 3 (Warp 1/2) and 16, 17 (Rand Warp 1/2) do not alter the render with default harness
+    // settings (warp.type is None/0, so warp amount is unused); per Rule R5 and R2, they are stopped
+    // and reported in REPORT.md under ENGINE FINDINGS.
+    for (int axis : { 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 })
+    {
+        const auto y10 = run (static_cast<float> (axis), 10.0f);
+        const auto y90 = run (static_cast<float> (axis), 90.0f);
+        const bool diff = buffersDiffer (y10, y90);
+        std::printf ("    granular axis %d: differs %s\n", axis, diff ? "true" : "false");
+        CHECK (diff);
+    }
+}
+
+// 07 7a.2: spectral X|Y control for every axis (0 = None is ignored, 1..7 change the render)
+TEST (own_osc_xy_control_every_spectral_axis)
+{
+    // Buffer difference measure reused from own_wavetable_live_rebuild_swaps_safely (lines 614-617):
+    // checks whether any rendered sample in the buffers differs (a[i] != b[i]).
+    auto buffersDiffer = [] (const std::vector<float>& a, const std::vector<float>& b)
+    {
+        if (a.size() != b.size())
+            return true;
+        for (size_t i = 0; i < a.size(); ++i)
+            if (a[i] != b[i])
+                return true;
+        return false;
+    };
+
+    auto run = [&] (float axis, float y)
+    {
+        Rig r (true, "osc1.type", 3.0f);
+        set (*r.e, "osc1.spec.y_axis", axis);
+        set (*r.e, "osc1.spec.xy_y", y);
+        return r.render (69, 1.0, 1.0).l;
+    };
+
+    // docs/engine-spec/07-sample-granular-spectral.md line 128:
+    // "axis 0 = None: the knobs act" (Y value is ignored: renders with y=10 and y=90 must be identical)
+    const auto none10 = run (0.0f, 10.0f), none90 = run (0.0f, 90.0f);
+    CHECK (! buffersDiffer (none10, none90));
+
+    // Reproducibility check: two renders with the same settings must be bit-identical
+    const auto ref1 = run (1.0f, 10.0f), ref2 = run (1.0f, 10.0f);
+    const bool reproducible = ! buffersDiffer (ref1, ref2);
+    std::printf ("    spectral harness reproducibility: %s\n", reproducible ? "bit-identical" : "differs");
+    CHECK (reproducible);
+
+    // docs/engine-spec/07-sample-granular-spectral.md lines 142-146:
+    // 142: "1 Level | output gain = y (times the trim of 7a.1)"
+    // 146: "6 Freq Lo / 7 Freq Hi | the low / high band edge = 20 * 1000^y Hz (20 Hz .. 20 kHz)"
+    // Axes 2, 3 (Warp 1/2) and 4, 5 (Spec Flt Cutoff / Wet/Dry) do not alter the render with default
+    // harness settings (warp.type is None/0, flt_use is 0); per Rule R5 and R2, they are stopped
+    // and reported in REPORT.md under ENGINE FINDINGS.
+    for (int axis : { 1, 6, 7 })
+    {
+        const auto y10 = run (static_cast<float> (axis), 10.0f);
+        const auto y90 = run (static_cast<float> (axis), 90.0f);
+        const bool diff = buffersDiffer (y10, y90);
+        std::printf ("    spectral axis %d: differs %s\n", axis, diff ? "true" : "false");
+        CHECK (diff);
     }
 }
 
