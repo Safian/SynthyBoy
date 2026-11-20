@@ -55,7 +55,8 @@ mi a baj, hol látszik (fájl:sor / eszköz / mérés), és mitől kész. Aki do
   - 2. rész (19): megerősítve 15; a kód stimmel, a hatás mérendő: 6, 10; részben téves: 5, 18.
   - 3. rész (18): megerősítve 1, 5, 9, 17; a kód stimmel, a hatás mérendő: 6, 8, 10, 11, 12, 13, 18; részben téves: 2, 3, 4, 7, 14, 15, 16.
 - Megvalósítási sorrend: a 3. rész ellenőrző doksijának „Work List Check" szakasza (15 lépés, az ítéletek után átrendezve). Az elszigetelt, megbízható teljesítménymérés az első (3. rész 9.); a determinisztikus hibajavítások (kis, tesztelhető tételek) ezzel párhuzamosan mehetnek.
-- Javítási kör (teszt először; a kis tételek fordítás nélkül készülnek, egy build worker fordít kötegenként egyszer). Kész és a `develop`-ban van: sub pan, fésűszűrők külön csillapítása, létraszűrők korlátja (a dióda kivételével), mip-lekerekítés, HOST-LFO időszámítás, flanger visszacsatolás, multisample 1 pólusú szűrők, háromsávos splitter, granulár hurok-átúsztatás (mindkét irány). A kör végén: az érintett presetek listája a koordinátornak, majd egyszer az alapok, a szinttábla és a kapukör.
+- Javítási kör (teszt először; a kis tételek fordítás nélkül készülnek, egy build worker fordít kötegenként egyszer). Kész és a `develop`-ban van: sub pan, fésűszűrők külön csillapítása, létraszűrők korlátja (a dióda kivételével), mip-lekerekítés, HOST-LFO időszámítás, flanger visszacsatolás, multisample 1 pólusú szűrők, háromsávos splitter, granulár hurok-átúsztatás (mindkét irány), torzító visszaállítása és állandói, Bode vágása, kikapcsolt szűrők kihagyása, effekt-lecsengés hossza a valódi mintavételi frekvenciából, a CLIP jelző motor oldala. A kör végén: az érintett presetek listája a koordinátornak, majd egyszer az alapok, a szinttábla és a kapukör.
+- Visszaküldve a 2. kötegből (a javítás megvan az ágon, de a teszt a javítással is elbukik, ezért nincs beolvasztva): CLAP shell lecsengés és mono (`agy/nb2-clap-tails`: a teszt zengetőt feltételez, de a próbában nem szól lecsengés); multisample erősítés mintánkénti rámpája (`agy/nb2-multi-gain-ramp`: a legnagyobb lépés 0,00102-ről 0,0000551-re csökkent, de a teszt 0,0000480-at vár). Mindkettőhöz bővebb terv kell.
 - Minden hangot változtató javítás után: a bitre azonos alapok (refcompare, paraméter-audit, arany renderek) és a preset-szintek újraellenőrzése egyszer, a javítási kör végén.
 
 ## DSP-audit 1. rész megállapításai (hangút) — `docs/review/OWN-ENGINE-DSP-AUDIT-1-VOICE-PATH-2026-11-20.md`
@@ -73,7 +74,6 @@ Gemini 4 Neon írta, kódolvasásból, mérés nélkül. Minden tételt a megval
 - 12. Spektrális morph: teljes 2048 pontos komplex IFFT a fél méretű valós helyett, magas hangoknál is.
 - 16. A szűrő vágási frekvenciája lineáris Hz-ben simít 5,5 ms-mal: elkeni a gyors szűrőburkolót.
 - 17. (maradék) Granulár hurok-átúsztatás, szélső esetek (`docs/review/GRANULAR-LOOP-CROSSFADE-ANALYSIS-2026-11-20.md`, Q6): ha a hurokhatár a fájl szélétől 1–2 mintán belül van, az interpoláció a fájlon kívüli (nulla) mintát is érinti; ha se a hurok előtt, se utána nincs elég anyag, az átúsztatás a rendelkezésre álló hosszra rövidül, teljes fájlos huroknál megszűnik. Eldöntendő, kell-e ezekre külön megoldás (pl. körbeforduló olvasás).
-- 18. A kikapcsolt szűrők ágai is lefutnak (`voice.cpp:1751-1824`).
 - 19. Lorenz / Rössler véletlen LFO: Euler-lépés a stabilitási határon, a sebesség 1,38 Hz alatt és 27,6 Hz fölött nem változik (`core/engine-own/env_lfo/lfo.h:182-210`).
 - 21. Zajgenerátorok: 44,1 kHz-re rögzített együtthatók; a zajszűrő és a hangmagasság a 4–8. színt kihagyja; a sample-zaj mindig „high" minőségben fut.
 - 22. Mátrix: a hangfrekvenciás források 1378 Hz-re mintavételeződnek szűrés nélkül; aktív slotonként `exp` / `expm1` minden 32 mintában. (Ide tartozik: a mátrix nem mintánként számol, `core/engine-own/README.md`.)
@@ -91,16 +91,16 @@ Gemini 4 Neon írta, kódolvasásból, mérés nélkül; megvalósítás előtt 
 - 4. Konvolúció: egyenletes 128 mintás partíciók (33,5 MB), komplex FFT valós adaton, impulzuscsere átúsztatás nélkül, adatverseny a `live.tone`-on (`core/fx-serum-b/convolve.cpp`, `fx_modules.cpp:1014`).
 - 5. Zengető: minden példány mind a 6 algoritmus pufferét lefoglalja (4,7 MB); mintánként sok `sin` / `exp` / osztás; a Nitrous Space csillapítása negatív erősítést ad.
 - 6. Késleltető HQ mód: a 8 pontos Lagrange 56 osztást végez mintánként és csatornánként. Szúrópróba: igaz, beágyazott ciklus osztással (`core/engine-own/fx/fx_dsp.h:65-80`).
-- 7. Bode frekvenciatoló: mintánként 64 egész modulo és 4 trigonometria; a Hilbert-szűrő 800 Hz alatt gyenge; a `softLimit` visszacsatolás nélkül is vág ±1-nél.
+- 7. (maradék) Bode frekvenciatoló: mintánként 64 egész modulo és 4 trigonometria (`core/fx-serum-b/bode.cpp`); a Hilbert-szűrő 800 Hz alatt gyenge. A ±1-es vágás visszacsatolás nélkül már javítva.
 - 8. Kompresszor többsávos módban 100% alatti mixszel: a nedves jel átmegy a keresztváltón, a száraz nem, fáziskioltás a keresztezési frekvenciákon; a limiter mintánként lineárisan pásztáz.
 - 9. Hangszám-függő erősítés csak a vezérlési rács elején frissül: közepes és magas szinten egy akkord akár 31 mintáig csillapítatlanul szól (`core/engine-own/own_engine.cpp:1461-1470,1578-1655`).
 - 10. Szinte minden effekt 32 mintánként lépteti a paramétereit (lépcsőzaj); a „low" szinten a chorus 4, a phaser 8 mintáig tartja az értéket.
 - 11. (maradék) Flanger: fölösleges 512 KB puffer (900 ms, miközben legfeljebb 100 ms kell) és mintánkénti osztás.
 - 12. Hyper / Dimension: 11 puffer ugyanazzal a jellel, mintánként akár 23 `sin` / `cos`; a Dimension 0% mixnél is fut.
 - 13. CLAP shell: hang nélkül azonnal alvást jelez, levágja a zengető és késleltető lecsengését; mono kimenetnél a bal csatornát felülírja a jobb. Szúrópróba: mindkettő igaz (`shell-clap/synthyboy_clap.cpp:353,392`). JUCE shell: `setLatencySamples()` a hangszálon (`shell-juce/PluginProcessor.cpp:494`).
-- 14. Torzító: `pow`, osztás és `exp` mintánként; a `reset()` nem nullázza a DC-állapotot; a szűrő Q-ja nem a specifikáció szerinti.
+- 14. (maradék) Torzító: a szűrő Q-ja nem a specifikáció szerinti (lineáris `k = 2 - 1.9r` a `Q = 0.5 + 15.5 r^3` helyett: `core/engine-own/fx/fx_effects.h`, `Distortion`). A visszaállítás és a mintánkénti állandók már javítva.
 - 15. EQ: osztás mintánként sávonként; mind a 4 sáv együtthatói 32 mintánként újraszámolódnak akkor is, ha nem változnak; torzulás a Nyquist közelében.
-- 16. Effektlánc: bekapcsoláskor 0,73 ms-os felúsztatás, kikapcsoláskor nincs leúsztatás (kattanás, levágott lecsengés); sorrendváltásnál nincs átúsztatás; beégetett `44100`; a 255 mintánál hosszabb késleltetés csendben csonkul.
+- 16. (maradék) Effektlánc: bekapcsoláskor 0,73 ms-os felúsztatás, kikapcsoláskor nincs leúsztatás (kattanás, levágott lecsengés); sorrendváltásnál nincs átúsztatás; a 255 mintánál hosszabb késleltetés csendben csonkul; a némított splitter-sávok effektjei is futnak. A beégetett `44100` már javítva.
 - 17. Chorus: rögzített nedves szint a hangszámtól függetlenül (1 és 4 hang között szintugrás); phaser: nincs denormális-védelem a visszacsatolásban; a szinkronizált LFO-k nem igazodnak az ütemhez.
 - 18. Öt effekt (kompresszor, Hyper, Utility, Bode, konvolúció) 0% mixnél sem marad ki a „low" szinten; a lecsengés-tartás 20 másodperc minden típusra.
 - 19. Kimenet: a limiter mintacsúcsot néz, nem valódi csúcsot; az `OUTPUT-LEVEL.md` ellentmond magának. Szúrópróba: igaz, a 62. sor még `T = -4.50 dBFS`-t ír a −10,0 mellett.
