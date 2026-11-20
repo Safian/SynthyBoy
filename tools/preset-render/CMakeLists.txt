@@ -26,8 +26,8 @@ endif()
 
 # The gate: every factory preset x 3 tiers passes the checks (the velocity sweep is off here, it is for the report).
 # Label `slow` like the other audio quality gates.
-# The factory presets are written for the Vital-derived engine (the own engine of builds without Vital, iOS, has no sample / granular / spectral
-# oscillators), so the gate runs only where that engine is built.
+# The gate runs on the OWN engine, the one every shell ships (owner decision 2026-11-20: one engine; the Vital engine is a measuring reference only and the gate must not
+# depend on it). Thresholds are unchanged.
 # The files the presets of sound set batch 2 name (wavetables, samples, instruments, impulse responses: pack id + file) are read from a content store, <root>/<pack id>/<file>:
 # links to the factory packs content/factory-* named by their ids (the shell reads them from Content/packs/<pack id>, scripts/build-mpc.sh). Without a store a sample, granular,
 # spectral or multisample oscillator is silent and Convolve absent, and the gate would not check what those presets sound like.
@@ -36,11 +36,9 @@ file(MAKE_DIRECTORY "${SYNTHYBOY_CONTENT_STORE}")
 file(CREATE_LINK "${PROJECT_SOURCE_DIR}/content/factory-wavetables" "${SYNTHYBOY_CONTENT_STORE}/com.safian.synthyboy.factory-wavetables" SYMBOLIC COPY_ON_ERROR)
 file(CREATE_LINK "${PROJECT_SOURCE_DIR}/content/factory-samples" "${SYNTHYBOY_CONTENT_STORE}/com.safian.synthyboy.factory-samples" SYMBOLIC COPY_ON_ERROR)
 
-if(SYNTHYBOY_WITH_VITAL)
-    add_test(NAME synthyboy_preset_sanity
-             COMMAND synthyboy_preset_render --presets "${PROJECT_SOURCE_DIR}/content/presets" --content-dir "${SYNTHYBOY_CONTENT_STORE}" --summary-only)
-    set_tests_properties(synthyboy_preset_sanity PROPERTIES LABELS slow TIMEOUT 1500)
-endif()
+add_test(NAME synthyboy_preset_sanity
+         COMMAND synthyboy_preset_render --engine own --presets "${PROJECT_SOURCE_DIR}/content/presets" --content-dir "${SYNTHYBOY_CONTENT_STORE}" --summary-only)
+set_tests_properties(synthyboy_preset_sanity PROPERTIES LABELS slow TIMEOUT 1500)
 
 # The shipped factory presets are exactly what scripts/gen-factory-presets.py generates (docs/params.json -> state v3, deterministic).
 find_package(Python3 COMPONENTS Interpreter QUIET)
