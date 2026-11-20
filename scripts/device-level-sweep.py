@@ -23,9 +23,11 @@ import os
 import re
 import shutil
 import signal
+import select
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -34,7 +36,15 @@ DEFAULT_FULL_TARGET = -10.0  # dBFS
 DEFAULT_FULL_TOL = 2.0       # dB
 DEFAULT_HALF_DIFF = 11.9     # dB (full_peak - half_peak)
 DEFAULT_HALF_TOL = 3.0       # dB
-PRESET_COUNT = 160           # Indices 0..159
+PRESET_COUNT = 160           # Factory presets only
+FIRST_INDEX = 1              # Program index 0 is the empty "Init" program: not swept
+LAST_INDEX = FIRST_INDEX + PRESET_COUNT - 1   # 160 (program_list_length is 161)
+# The offline level table (docs/release/OUTPUT-LEVEL-TABLE-2026-11-20.md) holds the note for 3 s; slow-attack pads and risers peak after seconds, so a 0.8 s hold
+# measured them 10..23 dB too low (first full sweep 2026-11-20: 39 of 159 presets). Hold like the offline gesture and measure the whole note.
+SWEEP_HOLD_S = 3.0
+SWEEP_WINDOW_S = 4.5
+SWEEP_NOTE = 48              # C3, the note of the offline level table (OUTPUT-LEVEL-TABLE)
+QUIET_PEAK = 1e-3            # a status write below this (-60 dBFS) counts as silence
 
 # Device configurations
 DEVICES = {
@@ -46,7 +56,7 @@ DEVICES = {
         "tools_dir": "/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-tools",
         "hwctl": "/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-tools/hwctl/hwctl.sh",
         "shot_sh": "/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-tools/shot.sh",
-        "tap_coords": (152, 714),  # UI track strip green peak hold reset
+        "tap_coords": (38, 698),  # green peak-hold readout under strip 1 (tap resets it to -INF)
     },
     "xl": {
         "name": "Akai MPC XL",
@@ -126,7 +136,7 @@ def parse_status_output_peak(text: str) -> Optional[float]:
     Explicitly ignores output_peak_total.
     Line format: output_peak: 0.12345
     """
-    m = re.search(r"^output_peak:\s*([0-9.]+)", text, re.MULTILINE)
+    m = re.search(r"^output_peak:\s*([0-9.]+(?:[eE][-+]?[0-9]+)?)", text, re.MULTILINE)
     if m:
         try:
             return float(m.group(1))
@@ -149,8 +159,71 @@ def parse_play_log_velocities(text: str) -> List[int]:
     return vels
 
 
+def parse_play_log_events(text: str, after_counter: int = 0) -> List[Tuple[int, int, int]]:
+    """Return (counter, note, velocity) of note_on lines with counter > after_counter.
+
+    The velocity is the engine velocity when the line has one, else the host velocity.
+    Line format: <counter> <ms> note_on channel <ch> note <n> vel <v> engine <e> dropped <d>
+    """
+    events = []
+    for line in text.splitlines():
+        if "note_on" not in line:
+            continue
+        m = re.match(r"^\s*(\d+)\s+\d+\s+note_on\b.*?\bnote\s+(\d+)\b.*?\bvel\s+(\d+)\b(?:.*?\bengine\s+(\d+)\b)?", line)
+        if not m:
+            continue
+        counter = int(m.group(1))
+        if counter <= after_counter:
+            continue
+        vel = int(m.group(4)) if m.group(4) is not None else int(m.group(3))
+        events.append((counter, int(m.group(2)), vel))
+    return events
+
+
+def parse_sample_line(line: str) -> Optional[Tuple[int, float]]:
+    """Parse one sampler line 'output_peak: <p> output_blocks: <n>' -> (blocks, peak)."""
+    mp = re.search(r"output_peak:\s*([0-9.]+(?:[eE][-+]?[0-9]+)?)", line)
+    mb = re.search(r"output_blocks:\s*(\d+)", line)
+    if not mp or not mb:
+        return None
+    return int(mb.group(1)), float(mp.group(1))
+
+
+def peak_in_window(samples: List[Tuple[float, int, float]], t_start: float, t_end: float) -> Tuple[float, int]:
+    """Max output_peak over the status writes that were first seen inside [t_start, t_end].
+
+    samples: (receipt_time, output_blocks, output_peak), in receipt order. output_peak is the peak since the
+    previous status write and the write is identified by its output_blocks counter. A write first seen
+    before t_start was written before the hit and is discarded. Returns (max_peak, number_of_writes_used).
+    """
+    first_seen: Dict[int, Tuple[float, float]] = {}
+    for t, blocks, peak in samples:
+        if blocks not in first_seen:
+            first_seen[blocks] = (t, peak)
+    used = [pk for (t, pk) in first_seen.values() if t_start <= t <= t_end]
+    return (max(used) if used else 0.0), len(used)
+
+
+def quiet_writes_seen(samples: List[Tuple[float, int, float]], need: int = 2) -> bool:
+    """True when the last `need` distinct status writes are all below QUIET_PEAK."""
+    seen: Dict[int, float] = {}
+    order: List[int] = []
+    for _, blocks, peak in samples:
+        if blocks not in seen:
+            order.append(blocks)
+        seen[blocks] = peak
+    if len(order) < need:
+        return False
+    return all(seen[b] < QUIET_PEAK for b in order[-need:])
+
+
+def hit_reached_plugin(events: List[Tuple[int, int, int]], velocity: int) -> bool:
+    """True when the play log shows exactly one new note_on, SWEEP_NOTE at `velocity`."""
+    return len(events) == 1 and events[0][1] == SWEEP_NOTE and events[0][2] == velocity
+
+
 def get_factory_programs(presets_dir: Optional[str] = None) -> List[str]:
-    """Get the 160 factory program names in host program order (index 0..159).
+    """Get the program names in host program order: index 0 = Init, then the 160 factory presets (1..160).
 
     Program 0 is always 'Init'. Presets follow in sortPrograms order:
     category (plain <), then case-insensitive name, then path.
@@ -186,10 +259,10 @@ def get_factory_programs(presets_dir: Optional[str] = None) -> List[str]:
         programs.extend([e[3] for e in entries])
 
     # If presets could not be read or are fewer than 160, fill with sensible fallback names
-    while len(programs) < PRESET_COUNT:
+    while len(programs) < PRESET_COUNT + 1:
         programs.append(f"Preset {len(programs)}")
 
-    return programs[:PRESET_COUNT]
+    return programs[:PRESET_COUNT + 1]
 
 
 class DeviceLock:
@@ -380,38 +453,97 @@ class DeviceExecutor:
             time.sleep(0.2)
 
     def send_hit(self, velocity: int, hold_s: float = 0.8):
-        """Send pad hit (Key 61) or sequencer note (XL)."""
-        if self.device_key == "k61":
-            # Hex velocity: 127 -> 7f, 64 -> 40
-            hex_vel = f"{velocity:02x}"
-            self.local([self.cfg["hwctl"], "raw", f"99 25 {hex_vel}"])
-            if not self.dry_run:
-                time.sleep(hold_s)
-            else:
-                self.logger(f"[dry-run] sleep {hold_s}")
-            self.local([self.cfg["hwctl"], "raw", "99 25 00"])
-        elif self.device_key == "xl":
-            # Note 48 on ALSA client 129 port 0 via seqnote
+        """Play SWEEP_NOTE (C3 = 48, the note of the offline level table) at `velocity` for `hold_s`.
+
+        Both devices: seqnote writes the note straight into the MPC's ALSA sequencer input (client 129 port 0),
+        which the host routes to the selected plugin track. The Key 61 pads cannot be used: every pad / pad
+        note of the host's Pad Perform maps to MIDI 72..98 (pad 0x25 plays 72 = C5), never to 48.
+        """
+        if self.device_key == "xl":
             self.logger("  (XL: using seqnote 129 0 - MIDI input path, not the pads: XL has no pad injection)")
-            cmd = f"SEQNOTE_VEL={velocity} /tmp/seqnote 129 0 {hold_s} 48"
-            self.ssh(cmd)
+        cmd = f"SEQNOTE_VEL={velocity} /tmp/seqnote 129 0 {hold_s} {SWEEP_NOTE}"
+        self.ssh(cmd, timeout=int(hold_s) + 10)
 
-    def sample_output_peak(self, duration_s: float = 3.0, interval_s: float = 0.2) -> float:
-        """Sample output_peak from status file over duration_s and return the maximum."""
+    def play_log_counter(self) -> int:
+        """Highest event counter in the device play log (0 when empty or unreadable)."""
+        code, out, _ = self.ssh(f"tail -n 1 {DEV_PLAY_LOG_TXT} 2>/dev/null")
+        m = re.match(r"^\s*(\d+)\s", out) if code == 0 else None
+        return int(m.group(1)) if m else 0
+
+    def play_log_events(self, after_counter: int) -> List[Tuple[int, int, int]]:
+        """(counter, note, velocity) of the note_on events logged after `after_counter`."""
+        code, out, _ = self.ssh(f"tail -n 60 {DEV_PLAY_LOG_TXT} 2>/dev/null")
+        return parse_play_log_events(out, after_counter) if code == 0 else []
+
+    def hit_and_measure(self, velocity: int, hold_s: float = 0.8, window_s: float = 3.0,
+                        preroll_max_s: float = 8.0) -> Tuple[float, List[Tuple[int, int, int]]]:
+        """Play one hit and return (peak_linear, note_on_events) of exactly that hit.
+
+        A sampler streams `output_peak` + `output_blocks` from the status file every 0.1 s over one ssh
+        session. The status file is rewritten about once a second and output_peak is the peak since the
+        previous write, so a reading belongs to the hit only when its write (a new output_blocks value) was
+        first seen after the hit started. The window starts at the hit and ends `window_s` later; writes seen
+        earlier are discarded. Before the hit the sampler waits until two consecutive writes are silent, so no
+        tail of the previous hit or program can leak into the number.
+        """
         if self.dry_run:
-            self.logger(f"[dry-run] sample {DEV_STATUS} output_peak every {interval_s}s over {duration_s}s (take max)")
-            return 0.31622  # ~ -10.0 dBFS
+            self.logger(f"[dry-run] stream {DEV_STATUS} output_peak/output_blocks every 0.1s; wait for 2 silent writes "
+                        f"(< {QUIET_PEAK}); hit; window starts at the hit and lasts {window_s}s (max over writes first seen inside)")
+            self.send_hit(velocity, hold_s)
+            self.logger(f"[dry-run] check {DEV_PLAY_LOG_TXT} for a new note_on {SWEEP_NOTE} vel {velocity}")
+            return 0.31622, [(0, SWEEP_NOTE, velocity)]  # ~ -10.0 dBFS
 
-        samples = []
-        steps = max(1, int(duration_s / interval_s))
-        for _ in range(steps):
-            time.sleep(interval_s)
-            code, out, _ = self.ssh(f"cat {DEV_STATUS} 2>/dev/null")
-            if code == 0:
-                pk = parse_status_output_peak(out)
-                if pk is not None:
-                    samples.append(pk)
-        return max(samples) if samples else 0.0
+        before = self.play_log_counter()
+        iters = int((preroll_max_s + hold_s + window_s + 4.0) / 0.1)
+        remote = (f"i=0; while [ $i -lt {iters} ]; do "
+                  f"echo $(grep -E '^(output_peak|output_blocks):' {DEV_STATUS} 2>/dev/null); "
+                  f"i=$((i+1)); sleep 0.1; done")
+        proc = subprocess.Popen(
+            ["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+             "-o", "LogLevel=ERROR", "-o", "ConnectTimeout=10", f"{self.cfg['user']}@{self.cfg['ip']}", remote],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1)
+        samples: List[Tuple[float, int, float]] = []
+        lock = threading.Lock()
+
+        def reader():
+            for line in proc.stdout:
+                parsed = parse_sample_line(line)
+                if parsed:
+                    with lock:
+                        samples.append((time.monotonic(), parsed[0], parsed[1]))
+
+        th = threading.Thread(target=reader, daemon=True)
+        th.start()
+        try:
+            t0 = time.monotonic()
+            quiet = False
+            while time.monotonic() - t0 < preroll_max_s:
+                time.sleep(0.1)
+                with lock:
+                    quiet = quiet_writes_seen(list(samples), 2)
+                if quiet:
+                    break
+            if not quiet:
+                self.logger(f"  WARNING: status not silent before the hit after {preroll_max_s}s; measuring anyway")
+            t_hit = time.monotonic()
+            self.send_hit(velocity, hold_s)
+            t_end = t_hit + window_s
+            while time.monotonic() < t_end + 0.3:
+                time.sleep(0.1)
+            with lock:
+                snap = list(samples)
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except Exception:
+                proc.kill()
+            th.join(timeout=2)
+        peak, used = peak_in_window(snap, t_hit, t_end)
+        if used == 0:
+            self.logger("  WARNING: no status write seen inside the hit window")
+        events = self.play_log_events(before)
+        return peak, events
 
     def capture_screenshot(self, name: str, target_file: Optional[str] = None) -> bool:
         """Capture host track view screenshot and place it in the outdir."""
@@ -441,13 +573,6 @@ class DeviceExecutor:
                 return False
             return True
         return False
-
-    def read_play_log(self) -> str:
-        """Read recent play log text."""
-        if self.dry_run:
-            return "1 100 note_on channel 10 note 37 vel 127\n2 900 note_off channel 10 note 37 vel 0"
-        c, out, _ = self.ssh(f"tail -n 20 {DEV_PLAY_LOG_TXT} 2>/dev/null")
-        return out if c == 0 else ""
 
 
 def run_sweep(args, logger=None) -> int:
@@ -509,6 +634,7 @@ def run_sweep(args, logger=None) -> int:
         log(f"Resume mode: found {len(completed_presets)} already completed presets in CSV")
 
     limit = args.limit if args.limit is not None else PRESET_COUNT
+    last_index = FIRST_INDEX + min(limit, PRESET_COUNT) - 1
     consecutive_failures = 0
     total_failed = 0
 
@@ -521,7 +647,7 @@ def run_sweep(args, logger=None) -> int:
             log(f"PREFLIGHT CHECK FAILED: {pre_msg}")
             return 1
 
-        for idx in range(min(limit, PRESET_COUNT)):
+        for idx in range(FIRST_INDEX, last_index + 1):
             fallback_name = factory_progs[idx] if idx < len(factory_progs) else f"Preset {idx}"
             slug = slugify(fallback_name)
             full_img = os.path.join(outdir, f"{idx:03d}-{slug}-full.png")
@@ -548,7 +674,7 @@ def run_sweep(args, logger=None) -> int:
                                 pass
                     time.sleep(1.0)
 
-                log(f"--- Preset {idx:03d}/{min(limit, PRESET_COUNT)-1}: {fallback_name} ---")
+                log(f"--- Preset {idx:03d}/{last_index}: {fallback_name} ---")
 
                 # 1. Select program by index
                 sel_ok, ack_name = executor.select_program(idx, fallback_name=fallback_name, timeout_s=5.0)
@@ -564,47 +690,36 @@ def run_sweep(args, logger=None) -> int:
                 # 2. Tap-reset the peak hold
                 executor.tap_reset_peak_hold()
 
-                # 3. FULL hit (velocity 127, hold 0.8 s)
-                executor.send_hit(velocity=127, hold_s=0.8)
-                if not args.dry_run:
-                    time.sleep(1.2)
-                else:
-                    log("[dry-run] wait 1.2s")
-
-                # 4. Sample output_peak over 3 s (max)
-                full_peak_linear = executor.sample_output_peak(duration_s=3.0, interval_s=0.2)
+                # 3. FULL hit (velocity 127) measured over its own window
+                full_peak_linear, full_events = executor.hit_and_measure(velocity=127, hold_s=SWEEP_HOLD_S, window_s=SWEEP_WINDOW_S)
                 full_peak_dbfs = linear_to_dbfs(full_peak_linear)
+                if not hit_reached_plugin(full_events, 127):
+                    log(f"FULL hit did not reach the plugin as note {SWEEP_NOTE} vel 127 (play log: {full_events})")
+                    continue
 
-                # 5. Screenshot FULL hit
+                # 4. Screenshot FULL hit (the host readout holds the peak)
                 shot_full_ok = executor.capture_screenshot(full_img_name)
                 if not shot_full_ok and not args.dry_run:
                     log(f"Failed to capture FULL screenshot for preset {idx}")
                     continue
 
-                # 6. Tap-reset the peak hold
+                # 5. Tap-reset the peak hold
                 executor.tap_reset_peak_hold()
 
-                # 7. HALF hit (velocity 64, hold 0.8 s)
-                executor.send_hit(velocity=64, hold_s=0.8)
-                if not args.dry_run:
-                    time.sleep(1.2)
-                else:
-                    log("[dry-run] wait 1.2s")
-
-                # 8. Sample output_peak over 3 s (max)
-                half_peak_linear = executor.sample_output_peak(duration_s=3.0, interval_s=0.2)
+                # 6. HALF hit (velocity 64)
+                half_peak_linear, half_events = executor.hit_and_measure(velocity=64, hold_s=SWEEP_HOLD_S, window_s=SWEEP_WINDOW_S)
                 half_peak_dbfs = linear_to_dbfs(half_peak_linear)
+                if not hit_reached_plugin(half_events, 64):
+                    log(f"HALF hit did not reach the plugin as note {SWEEP_NOTE} vel 64 (play log: {half_events})")
+                    continue
 
-                # 9. Screenshot HALF hit
+                # 7. Screenshot HALF hit
                 shot_half_ok = executor.capture_screenshot(half_img_name)
                 if not shot_half_ok and not args.dry_run:
                     log(f"Failed to capture HALF screenshot for preset {idx}")
                     continue
 
-                # 10. Check play log velocities if available
-                play_log_txt = executor.read_play_log()
-                vels = parse_play_log_velocities(play_log_txt)
-                vel_str = "/".join(str(v) for v in vels[-2:]) if len(vels) >= 2 else "127/64"
+                vel_str = f"{full_events[-1][2]}/{half_events[-1][2]}"
 
                 # 11. Record CSV line
                 diff = round(full_peak_dbfs - half_peak_dbfs, 2)
@@ -653,9 +768,11 @@ def verify_sweep(
     half_tol: float = DEFAULT_HALF_TOL,
     report_path: Optional[str] = None,
     logger=None,
+    count: int = PRESET_COUNT,
 ) -> Tuple[bool, Dict]:
-    """Offline verification of sweep results."""
+    """Offline verification of sweep results (factory presets 1..count; count < 160 for partial trials)."""
     log = logger or print
+    last_index = FIRST_INDEX + count - 1
     outdir = os.path.abspath(outdir)
     if not os.path.isdir(outdir):
         return False, {"error": f"Output directory does not exist: {outdir}"}
@@ -674,8 +791,8 @@ def verify_sweep(
         with open(csv_file, "r", encoding="utf-8") as f:
             csv_lines = [l.strip() for l in f.readlines() if l.strip()]
 
-        if len(csv_lines) != PRESET_COUNT:
-            errors.append(f"CSV line count is {len(csv_lines)}, expected {PRESET_COUNT}")
+        if len(csv_lines) != count:
+            errors.append(f"CSV line count is {len(csv_lines)}, expected {count}")
 
         r = csv.reader(csv_lines)
         for row in r:
@@ -706,7 +823,7 @@ def verify_sweep(
     image_files = [f for f in all_files if f.lower().endswith(".png")]
 
     # Group image files by preset prefix (NNN-)
-    preset_images = {i: [] for i in range(PRESET_COUNT)}
+    preset_images = {i: [] for i in range(FIRST_INDEX, last_index + 1)}
     stray_images = []
 
     for img in image_files:
@@ -715,7 +832,7 @@ def verify_sweep(
         m = re.match(r"^(\d{3})-.*-(full|half)\.png$", img)
         if m:
             idx = int(m.group(1))
-            if 0 <= idx < PRESET_COUNT:
+            if FIRST_INDEX <= idx <= last_index:
                 preset_images[idx].append(img)
             else:
                 stray_images.append(img)
@@ -725,11 +842,11 @@ def verify_sweep(
     if stray_images:
         errors.append(f"Found {len(stray_images)} stray or unexpected image file(s): {', '.join(stray_images[:10])}")
 
-    # Check each preset index 0..159
+    # Check each factory preset index 1..160 (index 0 = Init is not swept)
     results = []
     failing_presets = []
 
-    for idx in range(PRESET_COUNT):
+    for idx in range(FIRST_INDEX, last_index + 1):
         imgs = preset_images[idx]
         imgs_full = [f for f in imgs if f.endswith("-full.png")]
         imgs_half = [f for f in imgs if f.endswith("-half.png")]
@@ -799,7 +916,7 @@ def verify_sweep(
         f.write("# SynthyBoy MPC Level Sweep Verification Report\n\n")
         f.write(f"- **Directory:** `{outdir}`\n")
         f.write(f"- **Generated:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"- **Total Presets:** {PRESET_COUNT}\n")
+        f.write(f"- **Total Presets:** {count}\n")
         f.write(f"- **Passed:** {total_pass}\n")
         f.write(f"- **Failed:** {total_fail}\n")
         f.write(f"- **Overall Status:** {'**PASS**' if all_ok else '**FAIL**'}\n\n")
@@ -825,7 +942,7 @@ def verify_sweep(
                 f.write(f"| {r['index']:03d} | {r['name']} | {r['full_peak']:.2f} | {f_st} | {r['half_peak']:.2f} | {r['diff']:.2f} | {d_st} | **FAIL** | {issues} |\n")
             f.write("\n")
 
-        f.write("## All Presets (160)\n\n")
+        f.write(f"## All Presets ({count})\n\n")
         f.write("| Index | Name | Full Peak | Full Status | Half Peak | Diff | Diff Status | Overall |\n")
         f.write("|:-----:|:-----|:---------:|:-----------:|:---------:|:----:|:-----------:|:-------:|\n")
         for r in results:
@@ -835,7 +952,7 @@ def verify_sweep(
             f.write(f"| {r['index']:03d} | {r['name']} | {r['full_peak']:.2f} | {f_st} | {r['half_peak']:.2f} | {r['diff']:.2f} | {d_st} | {o_st} |\n")
 
     log(f"Verification report written to {report_file}")
-    log(f"Verification result: {total_pass}/{PRESET_COUNT} passed. Status: {'PASS' if all_ok else 'FAIL'}")
+    log(f"Verification result: {total_pass}/{count} passed. Status: {'PASS' if all_ok else 'FAIL'}")
 
     return all_ok, {
         "all_ok": all_ok,
@@ -857,7 +974,7 @@ def selftest(logger=None) -> int:
         # 1. Populate ideal 160 preset dataset
         base_time = 1700000000.0
         csv_lines = []
-        for idx in range(PRESET_COUNT):
+        for idx in range(FIRST_INDEX, LAST_INDEX + 1):
             name = factory_progs[idx]
             slug = slugify(name)
             full_img = os.path.join(tmpdir, f"{idx:03d}-{slug}-full.png")
@@ -968,7 +1085,7 @@ def main():
     run_p = subparsers.add_parser("run", help="Run level sweep on device")
     run_p.add_argument("--device", choices=["k61", "xl"], default="k61", help="Device to sweep (k61 or xl)")
     run_p.add_argument("--outdir", default=None, help="Output directory")
-    run_p.add_argument("--limit", type=int, default=None, help="Limit sweep to first N presets (0..limit-1)")
+    run_p.add_argument("--limit", type=int, default=None, help="Limit sweep to first N presets (indices 1..N)")
     run_p.add_argument("--dry-run", action="store_true", help="Print commands without executing or touching hardware")
     run_p.add_argument("--resume", action="store_true", help="Resume an interrupted sweep")
     run_p.add_argument("--csv", default=None, help="CSV file path (defaults to <outdir>/sweep.csv)")
@@ -982,6 +1099,7 @@ def main():
     ver_p.add_argument("--full-tol", type=float, default=DEFAULT_FULL_TOL, help="Tolerance for full hit peak dBFS (default: 2.0)")
     ver_p.add_argument("--half-diff", type=float, default=DEFAULT_HALF_DIFF, help="Target difference full - half dBFS (default: 11.9)")
     ver_p.add_argument("--half-tol", type=float, default=DEFAULT_HALF_TOL, help="Tolerance for difference full - half dBFS (default: 3.0)")
+    ver_p.add_argument("--limit", type=int, default=PRESET_COUNT, help="Verify only presets 1..N (partial trial); default 160")
     ver_p.add_argument("--report", default=None, help="Path for verify-report.md (defaults to <outdir>/verify-report.md)")
 
     # selftest mode
@@ -1003,6 +1121,7 @@ def main():
             half_diff=args.half_diff,
             half_tol=args.half_tol,
             report_path=args.report,
+            count=args.limit,
         )
         sys.exit(0 if ok else 1)
     elif args.mode == "selftest":

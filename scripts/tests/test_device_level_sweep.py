@@ -116,7 +116,7 @@ def test_parse_play_log_velocities():
 
 def test_get_factory_programs_order():
     progs = sweep_mod.get_factory_programs()
-    assert len(progs) == 160
+    assert len(progs) == 161  # Init + 160 factory presets (program_list_length 161)
     assert progs[0] == "Init"
     assert "Acid Saw Reso" in progs
     assert "808 Boom" in progs
@@ -163,7 +163,7 @@ def test_verifier_synthetic_full_pass():
         base_time = 1700000000.0
         progs = sweep_mod.get_factory_programs()
 
-        for idx in range(160):
+        for idx in range(1, 161):
             name = progs[idx]
             slug = sweep_mod.slugify(name)
             f_img = os.path.join(tmpdir, f"{idx:03d}-{slug}-full.png")
@@ -207,7 +207,7 @@ def test_verifier_peak_tolerances():
         progs = sweep_mod.get_factory_programs()
         base_time = 1700000000.0
 
-        for idx in range(160):
+        for idx in range(1, 161):
             name = progs[idx]
             slug = sweep_mod.slugify(name)
             f_img = os.path.join(tmpdir, f"{idx:03d}-{slug}-full.png")
@@ -259,7 +259,7 @@ def test_verifier_mtime_ordering():
         progs = sweep_mod.get_factory_programs()
         base_time = 1700000000.0
 
-        for idx in range(160):
+        for idx in range(1, 161):
             name = progs[idx]
             slug = sweep_mod.slugify(name)
             f_img = os.path.join(tmpdir, f"{idx:03d}-{slug}-full.png")
@@ -295,7 +295,7 @@ def test_verifier_stray_images():
         progs = sweep_mod.get_factory_programs()
         base_time = 1700000000.0
 
-        for idx in range(160):
+        for idx in range(1, 161):
             name = progs[idx]
             slug = sweep_mod.slugify(name)
             f_img = os.path.join(tmpdir, f"{idx:03d}-{slug}-full.png")
@@ -327,7 +327,7 @@ def test_verifier_csv_count():
         progs = sweep_mod.get_factory_programs()
         base_time = 1700000000.0
 
-        for idx in range(160):
+        for idx in range(1, 161):
             name = progs[idx]
             slug = sweep_mod.slugify(name)
             f_img = os.path.join(tmpdir, f"{idx:03d}-{slug}-full.png")
@@ -338,7 +338,7 @@ def test_verifier_csv_count():
                 f.write(b"PNG")
             os.utime(f_img, (base_time, base_time))
             os.utime(h_img, (base_time + 1, base_time + 1))
-            if idx < 155:
+            if idx < 156:
                 csv_lines.append(f"{idx},{name},-10.00,-21.90,11.90,127/64,2026-11-20T12:00:00\n")
 
         with open(os.path.join(tmpdir, "sweep.csv"), "w", encoding="utf-8") as f:
@@ -347,6 +347,17 @@ def test_verifier_csv_count():
         ok, res = sweep_mod.verify_sweep(tmpdir, logger=lambda m: None)
         assert ok is False
         assert any("CSV line count is 155" in e for e in res["errors"])
+
+
+def _fake_hits():
+    """hit_and_measure replacement: full (127) then half (64) hits, each one clean note_on 48."""
+    state = {"i": 0}
+
+    def fake(velocity, *a, **k):
+        r = (0.31622, [(state["i"], 48, velocity)])
+        state["i"] += 1
+        return r
+    return fake
 
 
 def test_retry_and_abort_consecutive_failures():
@@ -397,8 +408,8 @@ def test_retry_success_cleans_partial_files():
         args.outdir = tmpdir
         args.csv = os.path.join(tmpdir, "sweep.csv")
 
-        # Put a partial leftover file for preset 0
-        leftover = os.path.join(tmpdir, "000-init-full.png")
+        # Put a partial leftover file for preset 1
+        leftover = os.path.join(tmpdir, "001-808-boom-full.png")
         with open(leftover, "wb") as f:
             f.write(b"OLD_PARTIAL")
 
@@ -408,7 +419,7 @@ def test_retry_success_cleans_partial_files():
             attempts[0] += 1
             if attempts[0] == 1:
                 return False, "temporary glitch"
-            return True, "Init"
+            return True, "808 Boom"
 
         with patch.object(sweep_mod.DeviceLock, "acquire"), \
              patch.object(sweep_mod.DeviceLock, "release"), \
@@ -416,10 +427,8 @@ def test_retry_success_cleans_partial_files():
             with patch.object(sweep_mod.DeviceExecutor, "preflight_check", return_value=(True, "ok")), \
                  patch.object(sweep_mod.DeviceExecutor, "select_program", side_effect=mock_select), \
                  patch.object(sweep_mod.DeviceExecutor, "tap_reset_peak_hold"), \
-                 patch.object(sweep_mod.DeviceExecutor, "send_hit"), \
-                 patch.object(sweep_mod.DeviceExecutor, "sample_output_peak", return_value=0.31622), \
-                 patch.object(sweep_mod.DeviceExecutor, "capture_screenshot", return_value=True), \
-                 patch.object(sweep_mod.DeviceExecutor, "read_play_log", return_value="note_on vel 127\nnote_on vel 64"):
+                 patch.object(sweep_mod.DeviceExecutor, "hit_and_measure", side_effect=_fake_hits()), \
+                 patch.object(sweep_mod.DeviceExecutor, "capture_screenshot", return_value=True):
                 code = sweep_mod.run_sweep(args, logger=lambda m: None)
                 assert code == 0
                 assert attempts[0] == 2
@@ -427,7 +436,7 @@ def test_retry_success_cleans_partial_files():
                 # Verify CSV line written
                 with open(args.csv, "r") as f:
                     csv_data = f.read()
-                assert "0,Init,-10.00,-10.00,0.00" in csv_data
+                assert "1,808 Boom,-10.00,-10.00,0.00,127/64" in csv_data
 
 
 def test_resume_mode_skips_complete_presets():
@@ -445,13 +454,13 @@ def test_resume_mode_skips_complete_presets():
         args.outdir = tmpdir
         args.csv = os.path.join(tmpdir, "sweep.csv")
 
-        # Preset 0 already complete
-        f0 = os.path.join(tmpdir, "000-init-full.png")
-        h0 = os.path.join(tmpdir, "000-init-half.png")
+        # Preset 1 already complete
+        f0 = os.path.join(tmpdir, "001-808-boom-full.png")
+        h0 = os.path.join(tmpdir, "001-808-boom-half.png")
         with open(f0, "wb") as f: f.write(b"PNG")
         with open(h0, "wb") as f: f.write(b"PNG")
         with open(args.csv, "w") as f:
-            f.write("0,Init,-10.00,-21.90,11.90,127/64,2026-11-20T12:00:00\n")
+            f.write("1,808 Boom,-10.00,-21.90,11.90,127/64,2026-11-20T12:00:00\n")
 
         selected_indices = []
 
@@ -465,15 +474,14 @@ def test_resume_mode_skips_complete_presets():
             with patch.object(sweep_mod.DeviceExecutor, "preflight_check", return_value=(True, "ok")), \
                  patch.object(sweep_mod.DeviceExecutor, "select_program", side_effect=mock_select), \
                  patch.object(sweep_mod.DeviceExecutor, "tap_reset_peak_hold"), \
-                 patch.object(sweep_mod.DeviceExecutor, "send_hit"), \
-                 patch.object(sweep_mod.DeviceExecutor, "sample_output_peak", return_value=0.31622), \
-                 patch.object(sweep_mod.DeviceExecutor, "capture_screenshot", return_value=True), \
-                 patch.object(sweep_mod.DeviceExecutor, "read_play_log", return_value="note_on vel 127\nnote_on vel 64"):
+                 patch.object(sweep_mod.DeviceExecutor, "hit_and_measure", side_effect=_fake_hits()), \
+                 patch.object(sweep_mod.DeviceExecutor, "capture_screenshot", return_value=True):
                 code = sweep_mod.run_sweep(args, logger=lambda m: None)
                 assert code == 0
-                # Preset 0 skipped, Preset 1 run
+                # Preset 1 skipped, preset 2 run (index 0 = Init is never swept)
                 assert 0 not in selected_indices
-                assert 1 in selected_indices
+                assert 1 not in selected_indices
+                assert 2 in selected_indices
 
 
 def test_dry_run_commands_k61_and_xl():
@@ -492,11 +500,14 @@ def test_dry_run_commands_k61_and_xl():
     assert code == 0
     k61_text = "\n".join(logs_k61)
     assert "DEVICE-LOCK" in k61_text
-    assert "hwctl.sh raw 99 25 7f" in k61_text
-    assert "hwctl.sh raw 99 25 40" in k61_text
-    assert "mtouch tap 152 714 90" in k61_text
+    assert "SEQNOTE_VEL=127 /tmp/seqnote 129 0 3.0 48" in k61_text
+    assert "SEQNOTE_VEL=64 /tmp/seqnote 129 0 3.0 48" in k61_text
+    assert "mtouch tap 38 698 90" in k61_text
+    assert "ssh root@192.168.0.30 'printf '1\\n' > /tmp/synthyboy-select-program'" in k61_text
+    assert "printf '0\\n' > /tmp/synthyboy-select-program'" in k61_text  # preflight only
+    assert "printf '2\\n'" not in k61_text  # --limit 1 sweeps only program 1
     assert "shot.sh preflight" in k61_text
-    assert "shot.sh 000-init-full" in k61_text
+    assert "shot.sh 001-808-boom-full" in k61_text
 
     logs_xl = []
     args.device = "xl"
@@ -505,10 +516,62 @@ def test_dry_run_commands_k61_and_xl():
     assert code == 0
     xl_text = "\n".join(logs_xl)
     assert "DEVICE-LOCK-XL" in xl_text
-    assert "SEQNOTE_VEL=127 /tmp/seqnote 129 0 0.8 48" in xl_text
-    assert "SEQNOTE_VEL=64 /tmp/seqnote 129 0 0.8 48" in xl_text
+    assert "SEQNOTE_VEL=127 /tmp/seqnote 129 0 3.0 48" in xl_text
+    assert "SEQNOTE_VEL=64 /tmp/seqnote 129 0 3.0 48" in xl_text
     assert "MIDI input path, not the pads: XL has no pad injection" in xl_text
     assert "mtouch tap 924 101 90" in xl_text
     assert "xshot.sh preflight" in xl_text
-    assert "xshot.sh 000-init-full" in xl_text
+    assert "xshot.sh 001-808-boom-full" in xl_text
 
+
+
+def test_parse_play_log_events_and_hit_check():
+    text = (
+        "17 54442 note_off channel 1 note 72 vel 64 engine 64 dropped 0\n"
+        "79 262932 note_on channel 1 note 48 vel 127 engine 127 dropped 0\n"
+        "80 263730 note_off channel 1 note 48 vel 64 engine 64 dropped 0\n"
+        "81 270000 note_on channel 1 note 48 vel 64 engine 60 dropped 0\n"
+    )
+    ev = sweep_mod.parse_play_log_events(text, 0)
+    assert ev == [(79, 48, 127), (81, 48, 60)]
+    assert sweep_mod.parse_play_log_events(text, 79) == [(81, 48, 60)]
+    assert sweep_mod.hit_reached_plugin([(79, 48, 127)], 127)
+    assert not sweep_mod.hit_reached_plugin([(79, 72, 127)], 127)   # wrong note (pad 0x25 plays 72)
+    assert not sweep_mod.hit_reached_plugin([], 127)
+    assert not sweep_mod.hit_reached_plugin([(1, 48, 127), (2, 48, 127)], 127)
+
+
+def test_parse_sample_line_ignores_total():
+    assert sweep_mod.parse_sample_line("output_peak: 0.44627 output_blocks: 149596") == (149596, 0.44627)
+    assert sweep_mod.parse_sample_line("output_peak: 1e-05 output_blocks: 5") == (5, 1e-05)
+    assert sweep_mod.parse_sample_line("") is None
+
+
+def test_peak_in_window_uses_only_writes_first_seen_after_the_hit():
+    # (receipt_time, output_blocks, output_peak). The write with blocks 100 was seen before the hit (t=10):
+    # it must not count even though it is repeated by later polls. Write 200 contains the hit.
+    samples = [
+        (8.0, 100, 0.9), (9.0, 100, 0.9),            # stale loud write before the hit (previous tail)
+        (10.2, 100, 0.9), (10.4, 200, 0.45), (10.6, 200, 0.45),
+        (11.5, 300, 0.001), (12.5, 400, 0.0),
+    ]
+    peak, used = sweep_mod.peak_in_window(samples, t_start=10.0, t_end=13.0)
+    assert peak == 0.45 and used == 3
+    # nothing new inside the window
+    assert sweep_mod.peak_in_window(samples[:3], 10.0, 13.0) == (0.0, 0)
+    # a write first seen after the window is ignored
+    peak, _ = sweep_mod.peak_in_window(samples + [(14.0, 500, 0.8)], 10.0, 13.0)
+    assert peak == 0.45
+
+
+def test_quiet_writes_seen():
+    q = sweep_mod.quiet_writes_seen
+    assert not q([(1, 1, 0.0)], 2)
+    assert q([(1, 1, 0.5), (2, 2, 0.0), (3, 3, 0.0001)], 2)
+    assert not q([(1, 1, 0.0), (2, 2, 0.3)], 2)
+
+
+def test_sweep_covers_only_factory_presets_1_to_160():
+    assert sweep_mod.FIRST_INDEX == 1 and sweep_mod.LAST_INDEX == 160
+    assert sweep_mod.DEVICES["k61"]["tap_coords"] == (38, 698)
+    assert sweep_mod.SWEEP_NOTE == 48

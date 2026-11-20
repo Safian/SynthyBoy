@@ -766,13 +766,13 @@ There is no separate parameter for the level of the instrument: that is Master V
 
 ### Unattended device level sweep (`scripts/device-level-sweep.py`)
 
-To verify and record level calibration across all 160 factory presets (index 0..159) on real hardware without interactive operator intervention, `scripts/device-level-sweep.py` automates program selection, pad hits, peak readout, and track mixer screenshot capture.
+To verify and record level calibration across the 160 factory presets (program indices 1..160; index 0 is the empty Init program and is not swept) on real hardware without interactive operator intervention, `scripts/device-level-sweep.py` automates program selection, note hits (C3 = 48), peak readout, and track mixer screenshot capture.
 
 #### Modes of operation
 
 - **Run on device (`run`):**
   ```bash
-    # Key 61 (uses hwctl pad injection):
+    # Key 61 (note 48 via seqnote 129 0, like the XL):
     python3 scripts/device-level-sweep.py run --device k61 [--limit N] [--resume] [--outdir DIR]
 
     # MPC XL (uses seqnote 129 0 MIDI input):
@@ -784,7 +784,7 @@ To verify and record level calibration across all 160 factory presets (index 0..
   Default output directory: `/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-perf/level-sweep-<device>-<date>/`.
 
 - **Offline verifier (`verify`):**
-  Checks that every preset index 0..159 has exactly two images (`-full.png`, `-half.png`), no other images, that `-full` was written before `-half` by file mtime (and both are the two newest files of that preset), that `sweep.csv` has 160 lines, and that peak levels match the target thresholds (`--full-target -10.0 --full-tol 2.0 --half-diff 11.9 --half-tol 3.0`, owner target: factory-like level, full hit near -10 dB full scale, half hit about 12 dB lower). Writes `verify-report.md` with failing presets listed first, and exits non-zero if any check fails:
+  Checks that every preset index 1..160 has exactly two images (`-full.png`, `-half.png`), no other images, that `-full` was written before `-half` by file mtime (and both are the two newest files of that preset), that `sweep.csv` has 160 lines (`--limit N` verifies presets 1..N of a partial trial), and that peak levels match the target thresholds (`--full-target -10.0 --full-tol 2.0 --half-diff 11.9 --half-tol 3.0`, owner target: factory-like level, full hit near -10 dB full scale, half hit about 12 dB lower). Writes `verify-report.md` with failing presets listed first, and exits non-zero if any check fails:
   ```bash
     python3 scripts/device-level-sweep.py verify <outdir> [--full-target -10.0] [--full-tol 2.0] [--half-diff 11.9] [--half-tol 3.0]
   ```
@@ -798,10 +798,10 @@ To verify and record level calibration across all 160 factory presets (index 0..
 #### Files and output structure
 
 - **Files on device:**
-  * Request file: `/tmp/synthyboy-select-program` (decimal program index 0..159).
+  * Request file: `/tmp/synthyboy-select-program` (decimal program index; 0 = Init, 1..160 = the factory presets, `program_list_length` 161).
   * Acknowledgement: `/tmp/synthyboy-select-program.ack` (`<counter> ok <index> <name>`).
-  * Status file: `/tmp/synthyboy-overlay-status.txt` (switched by `/tmp/synthyboy-overlay-status-on`, sampled every fifth of a second for `output_peak`; `output_peak_total` is held max and not used).
-  * Play log: `/tmp/synthyboy-play-log.txt` (switched by `/tmp/synthyboy-play-log`, records note-on events and velocities).
+  * Status file: `/tmp/synthyboy-overlay-status.txt` (switched by `/tmp/synthyboy-overlay-status-on`, `output_peak` is the peak since the previous status write, the file is rewritten about once a second; `output_peak_total` is held max and not used. The sweep streams `output_peak` and `output_blocks` every 0.1 s over one ssh session while the hit is played; a write is identified by its `output_blocks` and counts for a hit only when it was first seen after the hit started (window: hit start to 3 s later, max over those writes), writes seen earlier are discarded, and before each hit the sweep waits for two silent writes so no tail leaks into the next number).
+  * Play log: `/tmp/synthyboy-play-log.txt` (switched by `/tmp/synthyboy-play-log`, records note-on events and velocities; the sweep takes the new note_on lines of each hit and accepts the hit only when exactly one note_on, note 48 at the expected velocity, arrived).
 - **Files in output directory:**
   * `<NNN>-<preset-slug>-full.png`: Host track view mixer meter picture after full hit (velocity 127).
   * `<NNN>-<preset-slug>-half.png`: Host track view mixer meter picture after half hit (velocity 64).
@@ -814,10 +814,9 @@ To verify and record level calibration across all 160 factory presets (index 0..
 
 1. **Lock directories:** Takes `/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-tools/DEVICE-LOCK` (Key 61) or `/Users/szabi/Documents/Projects/Safian/.hw-local/mpc-tools/DEVICE-LOCK-XL` (XL) before touching device, released on completion, error, or Ctrl-C.
 2. **Project Sbtest only:** Operates exclusively in the currently open project `Sbtest`; never saves, never reboots.
-3. **Single touch per command:** Never touches anything except the peak-hold reset tap on the meter number (Key 61: UI (152, 714) via `/tmp/mtouch`; XL: UI (355, 698) via mirrored `/tmp/mtouch tap 924 101 90`).
+3. **Single touch per command:** Never touches anything except the peak-hold reset tap on the meter number (Key 61: UI (38, 698), the green readout under strip 1, via `/tmp/mtouch tap 38 698 90`; XL: UI (355, 698) via mirrored `/tmp/mtouch tap 924 101 90`).
 4. **Note injection paths:**
-   - Key 61: hardware-path pad 1 injection via `hwctl.sh raw "99 25 7f"` (full) and `"99 25 40"` (half), held eight tenths of a second.
-   - XL: ALSA sequencer MIDI input via `seqnote 129 0` (note 48, held eight tenths of a second) with `SEQNOTE_VEL=127` and `SEQNOTE_VEL=64`.
+   - Both devices: ALSA sequencer MIDI input via `seqnote 129 0` (note 48 = C3, the note of the offline level table, held eight tenths of a second) with `SEQNOTE_VEL=127` and `SEQNOTE_VEL=64`. Key 61 pads are not used: the Pad Perform maps every pad note (0x24..0x33 and the rest of 0..127 that reach the plugin) to MIDI 72..98 (`hwctl.sh raw "99 25 7f"` plays 72 = C5, 3 dB louder than C3 on basses), none to 48; seqnote 129 0 reaches the plugin as note 48 (play log) and the track meter.
 5. **Retry & fault tolerance:** Up to 2 retries per preset on error (partial images cleaned before retry); after 5 consecutive failed presets, sweep halts automatically to protect against persistent device issues.
 
 ## Overlay (experimental)
