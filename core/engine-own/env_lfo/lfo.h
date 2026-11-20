@@ -212,7 +212,7 @@ public:
                     deriv (lx + 0.5f * h * k1x, ly + 0.5f * h * k1y, lz + 0.5f * h * k1z, k2x, k2y, k2z);
 
                     float k3x = 0.0f, k3y = 0.0f, k3z = 0.0f;
-                    deriv (lx + 0.5f * h * k2x, ly + 0.5f * h * k2z, lz + 0.5f * h * k2z, k3x, k3y, k3z);
+                    deriv (lx + 0.5f * h * k2x, ly + 0.5f * h * k2y, lz + 0.5f * h * k2z, k3x, k3y, k3z);
 
                     float k4x = 0.0f, k4y = 0.0f, k4z = 0.0f;
                     deriv (lx + h * k3x, ly + h * k3y, lz + h * k3z, k4x, k4y, k4z);
