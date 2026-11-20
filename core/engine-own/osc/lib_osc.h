@@ -224,7 +224,8 @@ private:
     // Mask / Vocode warps: the last 2048 samples of the other oscillators and the noise, and their magnitude spectra
     std::vector<float> ring, extMag;
     int ringPos = 0;
-    bool ringDirty = false;
+    int extSamples[3] = { 0, 0, 0 };
+    bool extValid[3] = { false, false, false };
 };
 } // namespace own
 } // namespace synthyboy

@@ -43,6 +43,20 @@ float divisionBeats (int idx) noexcept
     return whole * (m == 1 ? 2.0f / 3.0f : (m == 2 ? 1.5f : 1.0f));
 }
 
+const float* extHannWindow() noexcept
+{
+    static const struct Table
+    {
+        float w[spectral::kFftSize];
+        Table() noexcept
+        {
+            for (int i = 0; i < spectral::kFftSize; ++i)
+                w[i] = 0.5f - 0.5f * std::cos (kTwoPif * static_cast<float> (i) / 2048.0f);
+        }
+    } table;
+    return table.w;
+}
+
 std::atomic<bool> gLegacyCaches { false };
 bool legacyCaches() noexcept { return gLegacyCaches.load (std::memory_order_relaxed); }
 
@@ -144,6 +158,11 @@ void LibOsc::prepare (double sampleRate)
     ring.assign (3 * 2048, 0.0f);
     extMag.assign (3 * (spectral::kBins), 0.0f);
     ringPos = 0;
+    for (int e = 0; e < 3; ++e)
+    {
+        extSamples[e] = 0;
+        extValid[e] = false;
+    }
 }
 
 void LibOsc::stopAll() noexcept
@@ -181,6 +200,11 @@ void LibOsc::resetForNote() noexcept
     for (auto& u : uni)
         u = Unison();
     lastCut = lastMix = 1.0e9f;
+    for (int e = 0; e < 3; ++e)
+    {
+        extSamples[e] = 0;
+        extValid[e] = false;
+    }
 }
 
 void LibOsc::setType (int newType, bool fresh) noexcept
@@ -547,25 +571,29 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
         }
         for (int e = 0; e < 3; ++e)
             s.external[e] = nullptr;
+        const float* hann = extHannWindow();
         for (int k = 0; k < 2; ++k)
             if (s.warpType[k] >= 0 && spectral::isExternalWarp (s.warpType[k]))
             {
                 const int e = spectral::externalSource (s.warpType[k]);
-                if (ringDirty || e >= 0)
+                if (e < 0 || e >= 3)
+                    continue;
+                s.external[e] = extMag.data() + e * spectral::kBins;
+                if (!extValid[e] || extSamples[e] >= spectral::kStartStep)
                 {
-                    // the magnitudes of the last 2048 samples of the source (Hann window, 2048 point FFT), one FFT per period
+                    extValid[e] = true;
+                    extSamples[e] = 0;
                     float re[spectral::kFftSize], im[spectral::kFftSize];
                     const float* r = ring.data() + e * 2048;
                     for (int i = 0; i < 2048; ++i)
                     {
-                        re[i] = r[(ringPos + i) & 2047] * (0.5f - 0.5f * std::cos (kTwoPif * static_cast<float> (i) / 2048.0f));
+                        re[i] = r[(ringPos + i) & 2047] * hann[i];
                         im[i] = 0.0f;
                     }
                     spectral::Fft::instance().forward (re, im);
                     float* mag = extMag.data() + e * spectral::kBins;
                     for (int i = 0; i < spectral::kBins; ++i)
                         mag[i] = std::sqrt (re[i] * re[i] + im[i] * im[i]);
-                    s.external[e] = mag;
                 }
             }
         s.gain = 1.0f;
@@ -1011,7 +1039,8 @@ void LibOsc::render (int t0, int n, float* L, float* R, const float* const* cros
             for (int e = 0; e < 3; ++e)
                 ring[static_cast<size_t> (e * 2048 + ((ringPos + k) & 2047))] = cross != nullptr && cross[e] != nullptr ? cross[e][k] : 0.0f;
         ringPos = (ringPos + n) & 2047;
-        ringDirty = true;
+        for (int e = 0; e < 3; ++e)
+            extSamples[e] += n;
     }
     std::fill (L, L + n, 0.0f);
     std::fill (R, R + n, 0.0f);
