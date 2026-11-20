@@ -38,8 +38,13 @@ mi a baj, hol látszik (fájl:sor / eszköz / mérés), és mitől kész. Aki do
 ## Saját motor (egy motor lesz: a saját)
 - X|Y „Density" tengely: a specifikáció (`docs/engine-spec/07`, 7a.2) szerint csak szabad ütemű módban hat, a kód (`core/engine-own/osc/lib_osc.cpp`, X|Y blokk) feltétel nélkül ír. Ellenőrizni.
 - A paraméter-audit adatai ellentmondanak egymásnak (`docs/ui-design/param-audit-keys.csv`: ALIVE, `param-audit-baseline-own.json`: UNSUPPORTED): az audit alapját újra kell generálni az X|Y kulcsok bekapcsolása után.
-- Az audit 1. és 2. részének független ellenőrzése Gemini Argonnal: minden megállapításra ítélet (megerősítve / a kód stimmel, a hatás mérendő / részben téves / megcáfolva). (fut: `agy/own-verify-1`, `agy/own-verify-2`) A 3. rész ellenőrzése utánuk indul.
-- A három audit rangsorolt, 15 lépéses munkalistája a 3. rész végén van („Ordered Work List Across Parts 1 to 3"): ebből lesz a megvalósítási sorrend, AMINT az ellenőrzés megvan. Első lépése a megbízható mérés (lásd lent, 3. rész 9.).
+- A három audit független ellenőrzése megvan (Gemini Argon, megcáfolni próbálta mindegyiket): `docs/review/OWN-ENGINE-DSP-AUDIT-{1,2,3}-VERIFICATION-2026-11-20.md`. Javítani CSAK az ellenőrző doksi adott szakasza alapján szabad (az adja a helyes fájl:sort és azt, mi téves az auditban). Ítéletek:
+  - 1. rész (27): megerősítve 17; a kód stimmel, a hatás mérendő: 5, 9, 18, 23, 26, 27; részben téves: 2, 8, 10, 21.
+  - 2. rész (19): megerősítve 15; a kód stimmel, a hatás mérendő: 6, 10; részben téves: 5, 18.
+  - 3. rész (18): megerősítve 1, 5, 9, 17; a kód stimmel, a hatás mérendő: 6, 8, 10, 11, 12, 13, 18; részben téves: 2, 3, 4, 7, 14, 15, 16.
+- Megvalósítási sorrend: a 3. rész ellenőrző doksijának „Work List Check" szakasza (15 lépés, az ítéletek után átrendezve). Az elszigetelt, megbízható teljesítménymérés az első (3. rész 9.); a determinisztikus hibajavítások (kis, tesztelhető tételek) ezzel párhuzamosan mehetnek.
+- Folyamatban lévő javítások (teszt először, Gemini Flash, tételenként egy ág): 1. rész 15. sub pan (fut: `agy/fix-sub-pan`); 1. rész 14. fésűszűrők közös állapota (fut: `agy/fix-comb-lp`); 1. rész 17. granulár hurok-átúsztatás (fut: `agy/fix-gran-loop`).
+- Minden hangot változtató javítás után: a bitre azonos alapok (refcompare, paraméter-audit, arany renderek) és a preset-szintek újraellenőrzése egyszer, a javítási kör végén.
 
 ## DSP-audit 1. rész megállapításai (hangút) — `docs/review/OWN-ENGINE-DSP-AUDIT-1-VOICE-PATH-2026-11-20.md`
 Gemini 4 Neon írta, kódolvasásból, mérés nélkül. Minden tételt a megvalósítás ELŐTT ellenőrizni kell a kódban, és a doksiban megnevezett méréssel bizonyítani. A sorszám a doksi rangsora. Hat tételt szúrópróbával megnéztem: az eredmény a sor végén.
