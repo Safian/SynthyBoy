@@ -2421,6 +2421,22 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             if (deltaFrames < 0)
                 deltaFrames = 0;
 
+#if SYNTHYBOY_MPC_DEBUG_HOOKS
+            const uint8_t status = data[0] & 0xF0;
+            if (status == 0x90 || status == 0x80)
+            {
+                const int channel = (data[0] & 0x0F) + 1;
+                const int noteNum = data[1] & 0x7F;
+                const int hostVel = numBytes >= 3 ? (data[2] & 0x7F) : 0;
+                const bool isNoteOn = (status == 0x90 && hostVel > 0);
+                // Velocity given to the engine: the shell applies no mapping to note velocity
+                // (curve or pad mapping, if any, is identity in the shell);
+                // the engine receives the velocity directly corresponding to hostVel.
+                const int engineVel = hostVel;
+                synthyboy_mpc::PlayLog::note (isNoteOn, channel, noteNum, hostVel, engineVel);
+            }
+#endif
+
             synthyboy::Event event;
             if (synthyboy::translateMidiMessage(data, numBytes, deltaFrames, event))
             {

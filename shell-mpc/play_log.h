@@ -6,8 +6,9 @@
 // of its switch file or of its dump (robustness review F8: a leftover file in /tmp must not make setParameter do file I/O on the host's audio thread).
 //
 // With the option: off unless the file /tmp/synthyboy-play-log exists (environment variable SYNTHYBOY_MPC_PLAY_LOG_FILE changes the path; the display thread looks at it on every tick, so creating or deleting the
-// file switches the log on and off while the app runs). Then every call of effSetChunk, effGetChunk, effSetProgram and setParameter is logged as one line
+// file switches the log on and off while the app runs). Then every call of effSetChunk, effGetChunk, effSetProgram, setParameter and incoming MIDI note-on / note-off is logged as one line
 //     <counter> <milliseconds since the first line> <what> <arguments> [-> what the plugin did]
+//     (for note events: <counter> <ms> note_on channel <1-16> note <num> vel <host_vel> engine <engine_vel> dropped <count>)
 // together with the number of getParameter calls since the previous line. The thread that logs (the host's audio thread included) only FORMATS the line into a fixed slot of a lock free ring (no allocation,
 // no lock, no file): the display thread writes the ring out to /tmp/synthyboy-play-log.txt (the switch file's own name plus ".txt") once a tick (drain ()). A full ring drops the line and counts it; the file
 // stops growing at 512 KB (the last line says so). A request file "<log path>-dump" makes the display thread write the state of the instance to "<log path>-dump.txt" and delete the request.
@@ -80,6 +81,7 @@ public:
         if (s == nullptr)
         {
             dropped().fetch_add (1, std::memory_order_relaxed);
+            droppedTotal().fetch_add (1, std::memory_order_relaxed);
             return;
         }
         va_list ap;
@@ -89,6 +91,17 @@ public:
         s->ms = nowMs();
         s->gets = gets().exchange (0, std::memory_order_relaxed);
         s->seq.store (pos + 1, std::memory_order_release);   // published: the display thread may take it
+    }
+
+    /** Incoming MIDI note event (NoteOn / NoteOff). Lock-free, no allocation, no file I/O. */
+    static void note (bool isNoteOn, int channel, int noteNumber, int hostVelocity, int engineVelocity) noexcept
+    {
+        if (! enabled())
+            return;
+        const long drop = droppedTotal().load (std::memory_order_relaxed);
+        line ("%s channel %d note %d vel %d engine %d dropped %ld",
+              isNoteOn ? "note_on" : "note_off",
+              channel, noteNumber, hostVelocity, engineVelocity, drop);
     }
 
     /** The display thread, every tick: the lines of the ring go to the file ("<log path>.txt"), the chunks that were offered to their files. */
@@ -168,6 +181,8 @@ public:
     {
         std::lock_guard<std::mutex> g (mutex());
         state() = State();
+        dropped().store (0, std::memory_order_relaxed);
+        droppedTotal().store (0, std::memory_order_relaxed);
     }
 
 private:
@@ -201,6 +216,7 @@ private:
     static Ring& ring() { static Ring r; return r; }
     static std::atomic<size_t>& headCounter() { static std::atomic<size_t> h { 0 }; return h; }
     static std::atomic<long>& dropped() { static std::atomic<long> d { 0 }; return d; }
+    static std::atomic<long>& droppedTotal() { static std::atomic<long> dt { 0 }; return dt; }
     static State& state() { static State s; return s; }
     static std::mutex& mutex() { static std::mutex m; return m; }
     static std::mutex& chunkMutex() { static std::mutex m; return m; }
@@ -238,6 +254,7 @@ public:
     static unsigned hash (const void*, size_t) noexcept { return 0; }
     static void countGet() noexcept {}
     static void line (const char*, ...) noexcept __attribute__ ((format (printf, 1, 2))) {}
+    static void note (bool, int, int, int, int) noexcept {}
     static void drain() noexcept {}
     static void offerChunk (bool, const void*, size_t) noexcept {}
     static bool dumpRequested() noexcept { return false; }
