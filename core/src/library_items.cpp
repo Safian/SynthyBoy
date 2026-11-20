@@ -114,6 +114,16 @@ const std::vector<FormulaExample>& formulaExamples()
         { "FM sweep (y)", "sin(2*pi*w + 4.0 * y * sin(4*pi*w))" },
         { "Organ drawbars", "sin(2*pi*w) + 0.8*sin(4*pi*w) + 0.6*sin(6*pi*w) + 0.4*sin(8*pi*w)" },
         { "Bitcrush sweep (y)", "rint(sin(2*pi*w) * (2 + 14 * (1 - y))) / (2 + 14 * (1 - y))" },
+        { "Modern talking (y)", "tanh(1.8 * (sin(2*pi*w)*0.35 + sin(pi*w) * sin(2*pi*w * (3 + 6*y)) * exp(-2*w) * 1.4))" },
+        { "Reese detune (y)", "1 - w - (w * (1.04 + 0.12*y) % 1)" },
+        { "Supersaw stack (y)", "0.34 * (3 - 2*w - 2 * (w * (1.02 + 0.06*y) % 1) - 2 * ((w * (0.98 - 0.06*y) + 1) % 1))" },
+        { "Sub 808 drop (y)", "sin(2*pi * (w + (2 + 6*y) * w * (1 - w)^2))" },
+        { "Buchla wavefold (y)", "tanh(1.5 * sin(2*pi*w + (1 + 3*y) * sin(4*pi*w)))" },
+        { "Acoustic pluck (y)", "sin(2*pi*w) + (0.6*sin(4*pi*w) + 0.4*sin(6*pi*w) + 0.3*sin(8*pi*w) + 0.2*sin(10*pi*w)) * (1 - 0.85*y)" },
+        { "Shepard riser (y)", "0.5 * sin(2*pi*w * 2^y) + 0.7 * sin(2*pi*w * 2^(1+y)) + 0.5 * sin(2*pi*w * 2^(2+y)) + 0.3 * sin(2*pi*w * 2^(3+y))" },
+        { "Comb filter sweep (y)", "1 - w - ((w + 0.05 + 0.3*y) % 1)" },
+        { "Tape saturate (y)", "tanh(2.0 * sin(2*pi * (w + 0.03 * y * sin(2*pi*w * 3))))" },
+        { "Chime bells", "sin(2*pi*w) + sin(pi*w) * (0.65*sin(2*pi*w * 2.76) + 0.4*sin(2*pi*w * 5.4) + 0.2*sin(2*pi*w * 8.9))" },
     };
     return examples;
 }

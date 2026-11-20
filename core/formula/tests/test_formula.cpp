@@ -823,4 +823,68 @@ TEST (formula_dnb_wave_generation)
     err = Formula::compile ("rint(sin(2*pi*w) * (2 + 14 * (1 - y))) / (2 + 14 * (1 - y))", f);
     CHECK (err.ok);
     CHECK (f.isMultiFrame());
+
+    // 13. Modern talking (y)
+    err = Formula::compile ("tanh(1.8 * (sin(2*pi*w)*0.35 + sin(pi*w) * sin(2*pi*w * (3 + 6*y)) * exp(-2*w) * 1.4))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 14. Reese detune (y)
+    err = Formula::compile ("1 - w - (w * (1.04 + 0.12*y) % 1)", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 15. Supersaw stack (y)
+    err = Formula::compile ("0.34 * (3 - 2*w - 2 * (w * (1.02 + 0.06*y) % 1) - 2 * ((w * (0.98 - 0.06*y) + 1) % 1))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 16. Sub 808 drop (y)
+    err = Formula::compile ("sin(2*pi * (w + (2 + 6*y) * w * (1 - w)^2))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 17. Buchla wavefold (y)
+    err = Formula::compile ("tanh(1.5 * sin(2*pi*w + (1 + 3*y) * sin(4*pi*w)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 18. Acoustic pluck (y)
+    err = Formula::compile ("sin(2*pi*w) + (0.6*sin(4*pi*w) + 0.4*sin(6*pi*w) + 0.3*sin(8*pi*w) + 0.2*sin(10*pi*w)) * (1 - 0.85*y)", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 19. Shepard riser (y)
+    err = Formula::compile ("0.5 * sin(2*pi*w * 2^y) + 0.7 * sin(2*pi*w * 2^(1+y)) + 0.5 * sin(2*pi*w * 2^(2+y)) + 0.3 * sin(2*pi*w * 2^(3+y))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 20. Comb filter sweep (y)
+    err = Formula::compile ("1 - w - ((w + 0.05 + 0.3*y) % 1)", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 21. Tape saturate (y)
+    err = Formula::compile ("tanh(2.0 * sin(2*pi * (w + 0.03 * y * sin(2*pi*w * 3))))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 22. Chime bells
+    err = Formula::compile ("sin(2*pi*w) + sin(pi*w) * (0.65*sin(2*pi*w * 2.76) + 0.4*sin(2*pi*w * 5.4) + 0.2*sin(2*pi*w * 8.9))", f);
+    CHECK (err.ok);
+    CHECK (! f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
 }

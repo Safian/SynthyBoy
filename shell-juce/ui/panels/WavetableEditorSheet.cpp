@@ -873,7 +873,9 @@ private:
 
             if (name.find ("Dnb") != std::string::npos || name.find ("Monster") != std::string::npos
                 || name.find ("Acid") != std::string::npos || name.find ("sync") != std::string::npos
-                || name.find ("FM") != std::string::npos || name.find ("Bitcrush") != std::string::npos)
+                || name.find ("FM") != std::string::npos || name.find ("Bitcrush") != std::string::npos
+                || name.find ("Modern talking") != std::string::npos || name.find ("Reese") != std::string::npos
+                || name.find ("808") != std::string::npos)
             {
                 digitalMenu.addItem (id, itemText);
             }
@@ -883,11 +885,15 @@ private:
             }
             else if (name.find ("Spectral") != std::string::npos || name.find ("harmonic") != std::string::npos
                      || name.find ("Harmonic") != std::string::npos || name.find ("Bell") != std::string::npos
-                     || name.find ("Metallic") != std::string::npos || name.find ("Organ") != std::string::npos)
+                     || name.find ("Metallic") != std::string::npos || name.find ("Organ") != std::string::npos
+                     || name.find ("Pluck") != std::string::npos || name.find ("pluck") != std::string::npos
+                     || name.find ("Chime") != std::string::npos || name.find ("Shepard") != std::string::npos)
             {
                 spectralMenu.addItem (id, itemText);
             }
-            else if (name.find ("folded") != std::string::npos || name.find ("rectified") != std::string::npos)
+            else if (name.find ("folded") != std::string::npos || name.find ("wavefold") != std::string::npos
+                     || name.find ("rectified") != std::string::npos || name.find ("Comb") != std::string::npos
+                     || name.find ("Tape") != std::string::npos)
             {
                 shapingMenu.addItem (id, itemText);
             }
