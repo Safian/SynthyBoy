@@ -1687,18 +1687,44 @@ TEST (own_spectral_chord_start_is_spread_by_the_budget)
 
 TEST (own_spectral_a_waiting_voice_is_silent)
 {
-    // 8 notes of unison 2: 5 of the 16 voices start 128 samples (4 ticks) late and are silent until then
-    SpecRig on (lowStagger (true), 2), off (lowStagger (false), 2);
-    const Out a = on.render (8, 2 * 44100, 128, -1, 22050), b = off.render (8, 2 * 44100, 128, -1, 22050);
-    const double ra = rmsOfRange (a.l, 0, 128), rb = rmsOfRange (b.l, 0, 128);
-    std::printf ("    first 128 samples: rms %.5f staggered, %.5f at once (ratio %.3f)\n", ra, rb, ra / std::max (rb, 1.0e-12));
-    CHECK (rb > 1.0e-4);
-    CHECK (ra < 0.97 * rb);            // before: exactly 1 (the two renders are identical)
-    CHECK (ra > 0.6 * rb);             // 11 of the 16 voices sound
-    CHECK (a.l != b.l);
-    CHECK (sbtest::allFinite (a.l) && sbtest::allFinite (a.r) && sbtest::allFinite (b.l));
-    CHECK (peakOf (a.l, 40000, a.l.size()) < 1.0e-4);
-    CHECK (peakOf (b.l, 40000, b.l.size()) < 1.0e-4);
+    // One note, one voice, nothing else sounding. Before the note a foreign start (note serial 0, a pattern that fills all five quads to the budget) is booked in the engine's ledger,
+    // so the voice of the note does not fit: it waits until the quads of the foreign start are over (quad 5 = tick 20 of the engine) and has to output exactly nothing until then.
+    // The ledger is switched on by the first process call, which is an empty period of 32 frames (tick 0); the note starts in tick 1 and is granted in tick 20.
+    constexpr int kFrames = 4096;
+    constexpr int kGrantTick = 5 * 4;
+    constexpr int kGrantFrame = (kGrantTick - 1) * 32;   // counted from the note
+    spectral::StartPattern full;
+    for (auto& us : full.us)
+        us = static_cast<uint16_t> (spectral::kStartBudgetUs);
+
+    SpecRig waiting (lowStagger (true), 1);
+    {
+        float pl[32], pr[32];
+        waiting.e->process (nullptr, 0, pl, pr, 32);
+    }
+    auto& ledger = const_cast<spectral::StartLedger&> (waiting.ledger());
+    CHECK (ledger.enabledForTest());
+    CHECK (ledger.request (spectral::startKey (0, 0, 0), full));   // granted: the ledger is empty, and it books every quad up to the budget
+    const Out a = waiting.render (1, kFrames, 128);
+    CHECK_EQ (ledger.grantedLaterForTest(), 1u);                  // the voice of the note was granted after waiting ...
+    CHECK_EQ (ledger.maxWaitTicksForTest(), static_cast<uint32_t> (kGrantTick - 1));   // ... exactly when the foreign booking ended
+    CHECK_EQ (ledger.waitingForTest(), 0);
+
+    int firstSound = -1;
+    for (int i = 0; i < kFrames && firstSound < 0; ++i)
+        if (a.l[static_cast<size_t> (i)] != 0.0f || a.r[static_cast<size_t> (i)] != 0.0f)
+            firstSound = i;
+    std::printf ("    waiting voice: first non-zero sample at %d (granted at frame %d)\n", firstSound, kGrantFrame);
+    CHECK (firstSound >= kGrantFrame);                 // every output sample before the grant is exactly 0.0f (no tolerance)
+    CHECK (firstSound >= 0);                           // after it the voice sounds
+    CHECK (peakOf (a.l, kGrantFrame + 1024, a.l.size()) > 1.0e-3);
+    CHECK (sbtest::allFinite (a.l) && sbtest::allFinite (a.r));
+
+    // control: the same note without the foreign booking sounds from the first block (so the silence above is the ledger's wait, not the sound's own attack)
+    SpecRig free (lowStagger (true), 1);
+    const Out b = free.render (1, kFrames, 128);
+    CHECK_EQ (free.ledger().grantedNowForTest(), 1u);
+    CHECK (peakOf (b.l, 0, static_cast<size_t> (kGrantFrame)) > 1.0e-3);
 }
 
 TEST (own_spectral_kill_burst_keeps_the_start_work_of_the_survivors_only)
