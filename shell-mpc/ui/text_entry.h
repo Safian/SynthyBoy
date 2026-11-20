@@ -40,7 +40,7 @@ public:
 
     /** Starts an entry: the title of the bar, the text so far (cut to the limit; the caret at its end), the longest text in characters, and the ids of the two Requests. A text that is empty starts with shift on
         (a name begins with a capital); the letter layer is the first one. */
-    void begin (const char* title, const char* initial, int maxChars, int okId, int cancelId)
+    void begin (const char* title, const char* initial, int maxChars, int okId, int cancelId, Layer startLayer = Layer::Letters)
     {
         setText (title_, sizeof title_, title);
         maxChars_ = std::clamp (maxChars, 1, kMaxText / 4);
@@ -55,8 +55,8 @@ public:
         }
         okId_ = okId;
         cancelId_ = cancelId;
-        layer_ = Layer::Letters;
-        shift_ = text_.empty() ? Shift::Once : Shift::Off;
+        layer_ = startLayer;
+        shift_ = (layer_ == Layer::Letters && text_.empty()) ? Shift::Once : Shift::Off;
         pressed_ = -1;
         layout();
     }

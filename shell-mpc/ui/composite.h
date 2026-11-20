@@ -77,6 +77,7 @@ public:
         return Change::none();
     }
     Change touchMove (int x, int y) override { return cap_ ? cap_->touchMove (x, y) : Change::none(); }
+    Change touchMove (int x, int y, double nowMs) override { return cap_ ? cap_->touchMove (x, y, nowMs) : Change::none(); }
     Change touchUp (int x, int y) override
     {
         Component* k = cap_;
@@ -799,6 +800,15 @@ public:
             return Change::none();
         }
         return Composite::touchMove (x, y);
+    }
+    Change touchMove (int x, int y, double nowMs) override
+    {
+        if (backdropTap_)
+        {
+            tap_.move (x, y);
+            return Change::none();
+        }
+        return Composite::touchMove (x, y, nowMs);
     }
     Change touchUp (int x, int y) override
     {

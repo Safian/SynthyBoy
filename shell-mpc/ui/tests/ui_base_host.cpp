@@ -76,8 +76,9 @@ void testKnob()
     k.state.value = 0.5;
     c = k.touchDown (x, 100, 0.0);
     c = k.touchMove (x, 97);
-    check (! c, "knob: a movement inside the tap square (3 px) is not a drag");
-    c = k.touchMove (x + 80, 100);
+    // Updated expectation: dead zone removed so any movement >= 1 px changes value (3 px = +0.015)
+    check (c.kind == ChangeKind::Value && near (c.value, 0.515), "knob: 3 px up changes value to 0.515 (dead zone removed)");
+    c = k.touchMove (x + 80, 97);
     check (! c, "knob: a sideways slide is not a drag");
     c = k.touchMove (x, 90);
     check (c.kind == ChangeKind::Value && near (c.value, 0.55), "knob: 10 px up = +0.05");
