@@ -115,7 +115,9 @@ class DocsReleaseTests(unittest.TestCase):
         st = preset_state()
         n_params = len(st["state"]["params"])
         self.assertEqual(n_params, self.params["count"])
-        self.assertEqual(st["state"]["version"], self.params["stateVersion"])
+        # the factory presets deliberately stay at an older state version (3fd5d3dd: "the factory presets stay at version 4"); the engine
+        # migrates them on load, so a preset may be older than the table's stateVersion (core/include/synthyboy/state.h kStateVersion), never newer
+        self.assertLessEqual(st["state"]["version"], self.params["stateVersion"])
         self.assertIn(f"`synthyboy-state` version {st['state']['version']} with all {n_params} parameter keys", self.changelog)
         self.assertIn(f"{n_params} engine parameters", self.changelog)
         n_files = len(subprocess.check_output(["git", "ls-files", "content/presets"], cwd=ROOT, text=True).split("\n")) - 1
