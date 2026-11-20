@@ -1,7 +1,7 @@
 # Implementation Plan: Own Engine Memory Footprint & Tier-Scaled Allocation
 
 **Scope:** SynthyBoy's own synth engine (`core/engine-own` and the clean-room DSP libraries `core/filters-serum`, `core/fx-serum-a`, `core/fx-serum-b`, `core/sample-osc`, `core/granular`, `core/spectral`, `core/multisample`).
-**Targets:** Akai MPC Key 61 (ARMv7 Cortex-A17, NEON, 2 GB RAM, 32 KB L1D / ~1 MB L2, quality tier `low`, 8 voices usable, 44.1 kHz, 128-frame blocks, 2 cores isolated for audio), MPC XL (ARM64 Cortex-A55/A76, `high,voices=16`), iOS, and desktop (`high`, 32 voices).
+**Targets:** Akai MPC Key 61 (ARMv7 Cortex-A17, NEON, 4 GB RAM (measured MemTotal 4,113,388 kB, no swap, 2026-11-21), 32 KB L1D / ~1 MB L2, quality tier `low`, 8 voices usable, 44.1 kHz, 128-frame blocks, 2 cores isolated for audio), MPC XL (ARM64 Cortex-A55/A76, `high,voices=16`), iOS, and desktop (`high`, 32 voices).
 **Findings covered (verified against source + verification reports + `TODO.md`):**
 - Part 3 Rank 1 (`CONFIRMED`): `OwnEngine::prepare()` unconditionally allocates 36 voices and all 13 FX modules across 3 racks on every tier.
 - Part 3 Rank 6 (`CONFIRMED-CODE / CONSEQUENCE-UNPROVEN`): `sizeof(Voice) = 33,128 B` interleaving hot/cold state, per-oscillator `MorphScratch` (`2.66 MB`), and `~4,968` small heap allocations per instance.
@@ -87,7 +87,7 @@
 | `OwnEngine` fixed buffers (`base/gdelta/pdelta`, `morphCache 131 KB`, `spectralScratch 76 KB`, `scratchRight 16 KB`, struct) | `~370,000 B` (`0.37 MB`) | `~10` | `own_engine.cpp:146,393,433-438,461` |
 | **Total per `OwnEngine` instance (`prepare()` baseline)** | **`80.67 MB`** (`76.93 MiB`) | **`~4,978`** | (`+0.61 MB` after first `setContent()`, `own_content.h:47-52`) |
 | **1 instance + shared WT bank (full `33.10 MB` / lazy startup `~4.5 MB`)** | **`113.77 MB` / `85.17 MB`** | — | `wavetable_bank.cpp:229-281` |
-| **4 instances + shared WT bank (full `33.10 MB`)** | **`355.78 MB`** (`4 × 80.67 + 33.10`) | **`~19,912`** | On Key 61 (2 GB RAM), MPC host + 1 instance + 422 MB filmstrips already uses `~945 MB VmRSS` (`[measured: docs/MPC.md:117,148,159]`). |
+| **4 instances + shared WT bank (full `33.10 MB`)** | **`355.78 MB`** (`4 × 80.67 + 33.10`) | **`~19,912`** | On Key 61 (4 GB RAM), MPC host + 1 instance + 422 MB filmstrips already uses `~945 MB VmRSS` (`[measured: docs/MPC.md:117,148,159]`). |
 | **Key 61 `engine_prepare` startup time (`[measured: docs/MPC.md:327]`)** | **`186.8 ms`** (`prepare_voices 95.6 ms` + `prepare_fx 73.6 ms` + `wavetables 8.7 ms` + `overlay 10.7 ms`) | — | |
 
 ### 1.3 Audit claims verified wrong, corrected, or already fixed

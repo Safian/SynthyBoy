@@ -75,7 +75,7 @@ Costs, computed from the code:
 | `readCubic` on integer-constant delays in all all-passes and taps; replace by direct ring reads | only `apLine` in type 0 is an exact integer (`kA[k] * scale - 1`, `:246`). The others are float products with `sr` or `sizeScale` (`:342-344`, `:438-439`, `:478`) - constant for a chunk, **fractional**. The right replacement is a per-chunk precomputed fixed-fraction tap (task R5), not a direct read | `fx_reverb.h:246, 342-344, 438, 478`; verif. rank 5 (c).2 |
 | "skip the early reflections when `erLevel == 0`" | `erLevel` is never 0: `kEr[4] = 0` is overridden for type 4 by `kErRoom` (min 0.15, `:306-308`), all others >= 0.25; there is no key. Nothing to skip | `fx_reverb.h:306-308` |
 | 0 trig "when `depth == 0`" | correct but empty in the content: `chorus_amount` is 20 in all 160 presets | content scan |
-| reverb on Key 61 "100 % masked", memory "saves 7.5-12 MB" | 14.6 MB over 3 racks is real RAM on a 2 GB device; the CPU of the effect on `low` is zero today (masked) | `quality.h:112`, `memory-footprint.md` item 6 |
+| reverb on Key 61 "100 % masked", memory "saves 7.5-12 MB" | 14.6 MB over 3 racks is real RAM on a 4 GB device; the CPU of the effect on `low` is zero today (masked) | `quality.h:112`, `memory-footprint.md` item 6 |
 | Convolve memory "33.5 MB" | true only at the 524,288-frame cap; the factory impulses need 0.2 to 4.1 MB | 1.3, 1.1 |
 | Convolve `reset()` allocates | `assign` of equal size, not shown to allocate; `m_tailFftHist*` use `std::fill` | `convolve.cpp:103-130` |
 | Convolve `live.tone` race | real, fixed in `rt-threading.md` T2 (interim) and structurally by this plan | `fx_modules.cpp:778, 1014` |
