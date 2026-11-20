@@ -1587,7 +1587,93 @@ void testSpikeDecimation()
                                ") reaches its own row");
         }
     }
+
+    // Alternating case: max at odd index directly followed by min at next even index
+    for (int oddIdx : { 1, 35, 125 })
+    {
+        float y[128] = {};
+        y[oddIdx] = 1.0f;
+        y[oddIdx + 1] = -0.5f;
+        ui::lfodisplay::Data d;
+        d.kind = ui::lfodisplay::Data::Kind::Shape;
+        d.y = y;
+        d.n = 128;
+
+        for (int detail : { 1, 2 })
+        {
+            ui::theme::setDetail (detail);
+            uit::Scene sc (400, 200, uit::kBackgroundRgba);
+            ui::lfodisplay::draw (sc.builder(), rect, d, false);
+
+            bool reachedRow = false;
+            const gpu::SceneData& sd = *sc.data;
+            for (uint32_t opIdx = 0; opIdx < sd.numOps; ++opIdx)
+            {
+                if (sd.ops[opIdx].op == gpu::kOpCurve)
+                {
+                    const int first = static_cast<int> (sd.ops[opIdx].f[0]);
+                    const int n = static_cast<int> (sd.ops[opIdx].f[1]);
+                    for (int i = 0; i < n; ++i)
+                    {
+                        if (std::abs (sd.y[first + i] - expectedRow) < 1e-3f)
+                        {
+                            reachedRow = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            check (reachedRow, "detail level " + std::to_string (detail) +
+                               ": alternating max at odd index " + std::to_string (oddIdx) +
+                               " and min at even index " + std::to_string (oddIdx + 1) +
+                               " reaches max row");
+        }
+    }
+
     ui::theme::setDetail (1);
+}
+
+void testEditorSpikeInColumn()
+{
+    // Three model points inside one column, the middle one a peak: the peak's row is reached
+    ui::ShapeCanvas canvas;
+    canvas.place ({ 0, 0, 400, 200 });
+    const ui::Rect pl = canvas.plot();
+    const int cols = std::clamp (pl.w, 2, ui::lfodisplay::kMaxPoints);
+
+    ui::lfo::ShapeModel model;
+    model.n = 5;
+    const float colX = 191.0f / static_cast<float> (cols - 1);
+    model.p[0] = { 0.0f, 0.0f, 0.0f };
+    model.p[1] = { colX - 0.1f / static_cast<float> (cols - 1), 0.0f, 0.0f };
+    model.p[2] = { colX, 1.0f, 0.0f };
+    model.p[3] = { colX + 0.1f / static_cast<float> (cols - 1), 0.0f, 0.0f };
+    model.p[4] = { 1.0f, 0.0f, 0.0f };
+    canvas.state.shape = &model;
+
+    const float expectedRow = canvas.yOf (1.0f);
+    uit::Scene sc (400, 200, uit::kBackgroundRgba);
+    canvas.draw (sc.builder());
+
+    bool reachedRow = false;
+    const gpu::SceneData& sd = *sc.data;
+    for (uint32_t opIdx = 0; opIdx < sd.numOps; ++opIdx)
+    {
+        if (sd.ops[opIdx].op == gpu::kOpCurve)
+        {
+            const int first = static_cast<int> (sd.ops[opIdx].f[0]);
+            const int n = static_cast<int> (sd.ops[opIdx].f[1]);
+            for (int i = 0; i < n; ++i)
+            {
+                if (std::abs (sd.y[first + i] - expectedRow) < 1e-3f)
+                {
+                    reachedRow = true;
+                    break;
+                }
+            }
+        }
+    }
+    check (reachedRow, "shape editor: three model points inside one column, middle one a peak: peak's row is reached");
 }
 }
 
@@ -1614,6 +1700,7 @@ int main()
     testKeyFollowCurve();
     testTouchAndDraw();
     testSpikeDecimation();
+    testEditorSpikeInColumn();
     std::printf ("%s: %d failed\n", uit::g_fails ? "FAIL" : "PASS", uit::g_fails);
     return uit::g_fails ? 1 : 0;
 }

@@ -229,8 +229,14 @@ public:
         const Rect pl = plot();
         const int cols = std::clamp (pl.w, 2, lfodisplay::kMaxPoints);
         float y[lfodisplay::kMaxPoints];
+        float sampled[lfodisplay::kMaxPoints];
+        float bestDev[lfodisplay::kMaxPoints];
         for (int i = 0; i < cols; ++i)
+        {
             y[i] = 2.0f * state.shape->eval (static_cast<float> (i) / static_cast<float> (cols - 1)) - 1.0f;
+            sampled[i] = y[i];
+            bestDev[i] = -1.0f;
+        }
         const lfo::ShapeModel& m = *state.shape;
         for (int j = 0; j < m.n; ++j)
         {
@@ -249,7 +255,20 @@ public:
             if (isExt)
             {
                 const int col = std::clamp (static_cast<int> (std::round (std::clamp (m.p[j].x, 0.0f, 1.0f) * static_cast<float> (cols - 1))), 0, cols - 1);
-                y[col] = 2.0f * m.p[j].y - 1.0f;
+                const float cand = 2.0f * m.p[j].y - 1.0f;
+                float ref = sampled[col];
+                if (col > 0 && col < cols - 1)
+                    ref = 0.5f * (sampled[col - 1] + sampled[col + 1]);
+                else if (col > 0)
+                    ref = sampled[col - 1];
+                else if (col + 1 < cols)
+                    ref = sampled[col + 1];
+                const float dev = std::abs (cand - ref);
+                if (dev > bestDev[col])
+                {
+                    bestDev[col] = dev;
+                    y[col] = cand;
+                }
             }
         }
         d.y = y;
