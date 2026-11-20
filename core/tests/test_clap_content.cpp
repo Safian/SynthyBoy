@@ -258,7 +258,7 @@ TEST (clap_content_extension_imports_lists_attaches_and_removes)
     const auto base = [] { return std::vector<clap_event_param_value_t> {
         paramEvent ("osc1.type", 1.0), paramEvent ("osc1.unison.voices", 1.0), paramEvent ("osc1.random_phase", 0.0), paramEvent ("osc1.sample.loop_mode", 1.0),
         paramEvent ("filter1.on", 0.0), paramEvent ("osc1.level", 100.0) }; };
-    const bool sampleOsc = isEngineAvailable (EngineKind::vital); // the own engine (builds without Vital) has no Sample oscillator
+    const bool sampleOsc = true; // the own engine implements the Sample oscillator (kCapSampleOsc)
     if (sampleOsc)
         CHECK (rmsOf (play (plugin, 69, 0.8, base()), 0.3, 0.7) < 1.0e-4);
     plugin->reset (plugin);

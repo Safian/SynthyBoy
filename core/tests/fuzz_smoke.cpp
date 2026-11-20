@@ -407,10 +407,8 @@ TEST (fuzz_garbled_state_through_the_engines)
     // a loaded document is clamped into the table's ranges; the engines must render it to finite samples
     sbtest::Rng rng (0xf0220007);
     const auto& presets = presetSeeds();
-    for (EngineKind kind : { EngineKind::own, EngineKind::vital })
+    for (EngineKind kind : { EngineKind::own })
     {
-        if (! isEngineAvailable (kind))
-            continue;
         auto engine = createEngine (kind);
         CHECK (engine != nullptr);
         if (engine == nullptr)

@@ -401,50 +401,6 @@ TEST (new_key_defaults_are_neutral)
     CHECK_EQ (byKey ("voice.phase_legato").def, 0.0f);
 }
 
-// ---------------------------------------------------------------------------------------------------------------------
-// version 2 sound
-// ---------------------------------------------------------------------------------------------------------------------
-namespace
-{
-struct AudioGolden
-{
-    EngineKind kind;
-    bool busy;
-    uint64_t hash;
-    double rms[8];
-};
-
-// computed by golden_audio.h against commit 9c97a69 (before any version 3 change), Release, Apple clang arm64
-const AudioGolden kAudioGolden[] = {
-    { EngineKind::own, false, 0xc3e433c23a7f89a5ull, { 0.0348080222, 0.0314500257, 0.0313985968, 0.0294308046, 0.0212378432, 0.0136766413, 0.00517099979, 0 } },
-    { EngineKind::own, true, 0x44f50232b180c48dull, { 0.00390323847, 0.00352709373, 0.00352535563, 0.00304898028, 0.00240944165, 0.00147217084, 0.000581839939, 0 } },
-    { EngineKind::vital, false, 0x765f4bc243b189c1ull, { 0.0415010124, 0.0428797808, 0.042447056, 0.0326433135, 0.0215032742, 0.00750400726, 7.19796001e-05, 3.88780198e-38 } },
-    // the busy patch of the Vital engine draws every value from its range: the wider EQ gain and compressor threshold ranges of REFCOMPARE round 3 (B34) give other values (deliberate; the default patch is unchanged); the bit-exact hash of it changed once more with the sample rate fix of the chorus and the phaser (the busy patch holds both: the RMS of the segments is the same to 9 digits, only the samples differ)
-    { EngineKind::vital, true, 0x0ecaf6456c563d02ull, { 2.11131332e-05, 0.000167065476, 0.000484127418, 0.000793745871, 0.00110979276, 0.0013015965, 0.00129324883, 0.00126312724 } },
-};
-} // namespace
-
-TEST (version_2_sound_is_unchanged_in_both_engines)
-{
-    for (const auto& g : kAudioGolden)
-    {
-        if (! isEngineAvailable (g.kind) || g.kind == EngineKind::own) // the own engine's sound is no longer frozen (it implements the engine, oracle tests in test_own_engine.cpp)
-            continue;
-        const auto r = sbgolden::audioRender (g.kind, g.busy);
-        const auto rms = sbgolden::segmentRms (r);
-        sbtest::state().context = engineName (g.kind);
-        CHECK (rms.size() == 8);
-        for (size_t i = 0; i < rms.size() && i < 8; ++i)
-            if (! CHECK (std::fabs (rms[i] - g.rms[i]) <= 1.0e-6 + 1.0e-3 * g.rms[i]))
-                std::printf ("    segment %zu: rms %.9g, golden %.9g\n", i, rms[i], g.rms[i]);
-#if defined(__APPLE__) && defined(__aarch64__) && defined(NDEBUG)
-        // bit exact on the platform the golden was computed on
-        CHECK_EQ (sbgolden::audioFnv (r), g.hash);
-#endif
-        sbtest::state().context = "";
-    }
-}
-
 TEST (engines_ignore_the_new_keys)
 {
     for (const auto& c : sbtest::engineCases())

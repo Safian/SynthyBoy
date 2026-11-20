@@ -772,11 +772,6 @@ TEST (native_clap_preferences_mpe_defaults_default_midi_map_and_preset_changes)
 
 TEST (native_clap_silences_notes_and_tails_when_the_host_stops)
 {
-    if (! isEngineAvailable (EngineKind::vital)) // the own engine (builds without Vital, iOS) does not implement silence () / setUltraRender ()
-    {
-        std::printf ("    skipped: needs the Vital-derived engine\n");
-        return;
-    }
     for (const bool silence : { true, false })
     {
         const auto dir = std::filesystem::temp_directory_path() / (silence ? "sb_clap_stop_on" : "sb_clap_stop_off");
@@ -843,11 +838,6 @@ TEST (native_clap_silences_notes_and_tails_when_the_host_stops)
 
 TEST (native_clap_offline_render_runs_at_ultra_quality_when_the_preference_is_on)
 {
-    if (! isEngineAvailable (EngineKind::vital)) // the own engine (builds without Vital, iOS) does not implement silence () / setUltraRender ()
-    {
-        std::printf ("    skipped: needs the Vital-derived engine\n");
-        return;
-    }
     const auto render = [] (bool ultraPreference, bool offline)
     {
         const auto dir = std::filesystem::temp_directory_path() / "sb_clap_ultra";
