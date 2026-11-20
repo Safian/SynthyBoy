@@ -7,6 +7,7 @@
 //   synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets]
 //                        [--seconds 30] [--repeat N] [--budget PCT] [--notes K] [--retrigger 1] [--paced] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz]
 //                        [--sections] [--list] [--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] [--pmu compute|cache] [--pmu-require]
+//                        [--evict] [--first-blocks N]
 //
 //   --core N        pin the measuring thread to CPU N (Linux: sched_setaffinity; elsewhere the option is refused). The frequency governor is not touched. The CPU the run
 //                   really was on, its part number and its frequency settings are printed. The engine's helper threads are moved to the other CPUs (see --no-helpers-away).
@@ -21,6 +22,11 @@
 //                   cycles, instructions, branch mispredictions; cache = cycles, L1D refill / access, L2D refill / access. A line "pmu:" follows each run (or says why the
 //                   counters are unavailable) and the csv gets the columns pmu_set .. pmu_scaling (scaling 1.000 = the counters ran the whole time)
 //   --pmu-require   exit 1 when the counters could not be opened
+//   --evict         cold caches: before every block, outside the timed region, a read-modify-write of a buffer of twice the largest cache level of the measured core
+//                   (/sys/devices/system/cpu/cpuN/cache; 4 MiB without them) pushes the engine's working set out. The ratio of the evict run to the warm run is the
+//                   cache sensitivity of the load. The csv column cold_mode says evict or warm.
+//   --first-blocks N  no steady run: for every profile and load a fresh engine, the time of prepare (), then the first N blocks (1 .. 64) with the chord struck in block 0 and no
+//                   warm-up, each with its time and its minor page faults: the first-note and first-touch cost that a long run hides
 //   --retry-invalid N  a run that the health rules mark INVALID (a stall, run queue delay, a frequency drop, a major page fault, heat) is repeated up to N times (default 2);
 //                   the last run is kept and its validity is in the csv
 //   --set NAME      the list of profiles (default settings):
@@ -268,6 +274,8 @@ struct Options
     int retryInvalid = 2;    // --retry-invalid
     std::string pmu;         // --pmu: "" (off), "compute" or "cache"
     bool pmuRequire = false; // --pmu-require
+    bool evict = false;      // --evict
+    int firstBlocks = 0;     // --first-blocks
 };
 
 struct PresetData
@@ -444,6 +452,9 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
     std::string pmuWhy;
     const bool pmuOn = ! o.pmu.empty() && pmu.open (o.pmu == "cache" ? perf::PmuSet::cache : perf::PmuSet::compute, pmuWhy);
     perf::PmuSample pmuS0, pmuS1;
+    std::vector<unsigned char> evictBuf;
+    if (o.evict)
+        evictBuf.assign (perf::evictBytes (perf::cacheLevelBytes (cpu)), 0);
     double pmuSum[8] = {};
     unsigned long long pmuEnabled = 0, pmuRunning = 0;
     long long pmuBlocks = 0;
@@ -494,6 +505,8 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
             std::this_thread::sleep_until (start + std::chrono::duration_cast<std::chrono::steady_clock::duration> (blockTime * static_cast<double> (b)));
         if (o.sections)
             ownSectionReset();   // per block: the totals are summed below (the same numbers as one reset at the start), and the longest block keeps its own
+        if (o.evict)
+            perf::evictCaches (evictBuf);   // before the timed region (and after the paced sleep)
         const bool pmuRead0 = pmuOn && pmu.read (pmuS0);   // the counters are read outside t0 .. t1
         const auto t0 = std::chrono::steady_clock::now();
         engine->process (events.data(), static_cast<int> (events.size()), left.data(), right.data(), o.block);
@@ -722,7 +735,7 @@ long currentKhz (int cpu)
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
                           "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--scalar-warp] [--no-voice-savings] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list] "
                           "[--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] "
-                          "[--pmu compute|cache] [--pmu-require]\n", message);
+                          "[--pmu compute|cache] [--pmu-require] [--evict] [--first-blocks N]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -923,6 +936,63 @@ void runMicro()
     }
 }
 
+namespace
+{
+/** --first-blocks: a fresh engine as run () makes it, the time of prepare (), then the first `o.firstBlocks` blocks with the chord struck in block 0 and no warm-up: time, share of the
+    block and the minor page faults of every block (the first touch of the engine's memory, the first note). */
+void runFirstBlocks (const Options& o, const synthyboy_mpc::Profile& profile, const Load& load, int notes)
+{
+    auto engine = createEngine (EngineKind::own);
+    applyLoad (*engine, load);
+    setOwnSavingsOff (*engine, o.savingsOff);
+    Quality quality = synthyboy_mpc::profileQuality (profile);
+    quality.realtime = true;
+    const auto p0 = std::chrono::steady_clock::now();
+    engine->prepare (o.sampleRate, o.block, quality);
+    const auto p1 = std::chrono::steady_clock::now();
+    std::printf ("first: prepare %.1f ms\n", 1000.0 * std::chrono::duration<double> (p1 - p0).count());
+    std::vector<float> left (static_cast<size_t> (o.block)), right (static_cast<size_t> (o.block));
+    std::vector<Event> events;
+    events.reserve (static_cast<size_t> (2 * notes + 2));
+    const double budgetMs = 1000.0 * o.block / o.sampleRate;
+    float sink = 0.0f;
+    for (int b = 0; b < o.firstBlocks; ++b)
+    {
+        events.clear();
+        if (b == 0)
+        {
+            for (int v = 0; v < notes; ++v)
+            {
+                Event off;
+                off.type = Event::NoteOff;
+                off.key = static_cast<int16_t> (36 + (v * 7) % 60);
+                events.push_back (off);
+            }
+            for (int v = 0; v < notes; ++v)
+            {
+                Event on;
+                on.type = Event::NoteOn;
+                on.key = static_cast<int16_t> (36 + (v * 7) % 60);
+                on.value = 0.6f + 0.4f * static_cast<float> (v % 3) / 2.0f;
+                on.frame = std::min (v, o.block - 1);
+                events.push_back (on);
+            }
+            std::stable_sort (events.begin(), events.end(), [] (const Event& x, const Event& y) { return x.frame < y.frame; });
+        }
+        const perf::Rusage before = perf::readRusage();
+        const auto t0 = std::chrono::steady_clock::now();
+        engine->process (events.data(), static_cast<int> (events.size()), left.data(), right.data(), o.block);
+        const auto t1 = std::chrono::steady_clock::now();
+        const perf::Rusage after = perf::readRusage();
+        sink += left[static_cast<size_t> (o.block / 2)];
+        const double ms = 1000.0 * std::chrono::duration<double> (t1 - t0).count();
+        std::printf ("first: block %d %.3f ms (%.1f %%) minflt %ld\n", b, ms, 100.0 * ms / budgetMs, after.minflt - before.minflt);
+    }
+    if (sink == 12345.678f)
+        std::puts ("");
+}
+} // namespace
+
 int main (int argc, char** argv)
 {
     Options o;
@@ -965,11 +1035,13 @@ int main (int argc, char** argv)
         else if (a == "--retry-invalid") o.retryInvalid = std::atoi (next());
         else if (a == "--pmu")         o.pmu = next();
         else if (a == "--pmu-require") o.pmuRequire = true;
+        else if (a == "--evict")       o.evict = true;
+        else if (a == "--first-blocks") o.firstBlocks = std::atoi (next());
         else usage (("unknown argument " + a).c_str());
     }
     if (o.seconds <= 0.0 || o.block < 1 || o.block > 8192 || o.notes < 0 || o.notes > kMaxVoices || o.sampleRate < 8000.0 || o.retrigger <= 0.0 || o.repeat < 1 || o.repeat > 99 || o.budget < 0.0
         || (o.rt != 0 && (o.rt < 1 || o.rt > 99)) || o.rtGapMs < -1.0 || o.retryInvalid < 0 || o.retryInvalid > 9
-        || (! o.pmu.empty() && o.pmu != "compute" && o.pmu != "cache"))
+        || (! o.pmu.empty() && o.pmu != "compute" && o.pmu != "cache") || o.firstBlocks < 0 || o.firstBlocks > 64)
         usage ("argument out of range");
     if (o.micro)
     {
@@ -1234,6 +1306,22 @@ int main (int argc, char** argv)
         return failures == 0 ? 0 : 1;
     }
 
+    if (o.firstBlocks > 0)
+    {
+        std::printf ("\nfirst blocks: a fresh engine per profile and load, the chord struck in block 0, no warm-up; budget %.3f ms per block\n", budgetMs);
+        for (size_t c = 0; c < configs.size(); ++c)
+        {
+            const int notes = o.notes > 0 ? o.notes : profiles[c].maxVoices;
+            for (const auto& l : loads)
+            {
+                std::printf ("%-58s %-24.24s %5d notes\n", configs[c].c_str(), l.name.c_str(), notes);
+                runFirstBlocks (o, profiles[c], l, notes);
+                std::fflush (stdout);
+            }
+        }
+        return 0;
+    }
+
     FILE* csv = o.csv.empty() ? nullptr : std::fopen (o.csv.c_str(), "w");
     if (! o.csv.empty() && csv == nullptr)
     {
@@ -1243,7 +1331,7 @@ int main (int argc, char** argv)
     if (csv != nullptr)
         std::fprintf (csv, "device,cpu,cpu_info,profile,settings,load,group,notes,voices_mean,voices_max,sr,block,blocks,min_pct,median_pct,p99_pct,max_pct,mean_pct,min_ms,median_ms,p99_ms,max_ms,mean_ms,blocks_over_100pct,cpu_khz_after_run,pass"
                           ",p999_pct,rt_prio,thread_cpu_ms,run_delay_pct,nivcsw,minflt_run,minflt_measured,majflt,rss_kb,temp_c_max,khz_before,valid,invalid_reason"
-                          ",pmu_set,cycles_mean,cycles_p99,instr_mean,ipc,l1d_refill_per_block,l1d_access_per_block,l2d_refill_per_block,l2d_access_per_block,br_mis_per_block,pmu_scaling\n");
+                          ",pmu_set,cycles_mean,cycles_p99,instr_mean,ipc,l1d_refill_per_block,l1d_access_per_block,l2d_refill_per_block,l2d_access_per_block,br_mis_per_block,pmu_scaling,cold_mode,first_block_ms\n");
 
     std::printf ("\nshare of the block's real time (%.3f ms = 100 %%) spent in process(), one core:\n", budgetMs);
     std::printf ("%-58s %-24s %5s %6s | %7s %7s %7s %7s %7s | %5s %8s %4s\n", "profile", "load", "notes", "voices", "min %", "median%", "p99 %", "max %", "mean %", "over", "cpu MHz", "pass");
@@ -1351,10 +1439,10 @@ int main (int argc, char** argv)
                                  + pmuText (std::isnan (ins) ? ins : perf::ratio (ins, cyc), "%.3f", "") + "," + pmuText (l1r, "%.2f", "") + "," + pmuText (l1a, "%.2f", "") + "," + pmuText (l2r, "%.2f", "") + ","
                                  + pmuText (l2a, "%.2f", "") + "," + pmuText (brm, "%.2f", "") + "," + pmuText (r.pmuScaling, "%.4f", "");
                     }
-                    std::fprintf (csv, "\"%s\",%d,\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%d,%.2f,%d,%.0f,%d,%lld,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%.5f,%.5f,%.5f,%lld,%ld,%d,%.3f,%d,%.1f,%.4f,%ld,%ld,%ld,%ld,%ld,%s,%ld,%d,\"%s\",%s\n", model.c_str(), cpu,
+                    std::fprintf (csv, "\"%s\",%d,\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%d,%.2f,%d,%.0f,%d,%lld,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%.5f,%.5f,%.5f,%lld,%ld,%d,%.3f,%d,%.1f,%.4f,%ld,%ld,%ld,%ld,%ld,%s,%ld,%d,\"%s\",%s,%s,\n", model.c_str(), cpu,
                                   cpuText.c_str(), configs[c].c_str(), synthyboy_mpc::describeProfile (profiles[c]).c_str(), l.name.c_str(), l.group.c_str(), notes, r.voicesMean, r.voicesMax,
                                   o.sampleRate, o.block, r.blocks, r.minMs * k, r.medianMs * k, r.p99Ms * k, r.maxMs * k, r.meanMs * k, r.minMs, r.medianMs, r.p99Ms, r.maxMs, r.meanMs, r.over, khz, pass, r.p999Ms * k, o.rt, r.threadCpuMs, 100.0 * r.runDelayShare, r.nivcsw, r.minflt,
-                                  r.minfltMeasured, r.majflt, r.rssKb, tempText, r.khzBefore, r.valid ? 1 : 0, r.invalidReason.c_str(), pmuCsv.c_str());
+                                  r.minfltMeasured, r.majflt, r.rssKb, tempText, r.khzBefore, r.valid ? 1 : 0, r.invalidReason.c_str(), pmuCsv.c_str(), o.evict ? "evict" : "warm");
                     std::fflush (csv);
                 }
                 cells[c][li].p99.push_back (r.p99Ms * k);
