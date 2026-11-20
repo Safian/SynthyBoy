@@ -608,6 +608,7 @@ void SpectralVoice::noteOn (const Analysis* analysis, const SpectralParams& p, f
     startMask_ = 0;
     startJoin_[0] = startJoin_[1] = startJoin_[2] = -1;
     phaseFrame_[0] = phaseFrame_[1] = 0;
+    framesMadeForTest_ = shapesMadeForTest_ = 0;
     if (legacyStart_)
     {
         // prime: three frames at the start position, so that the first output hop is the sum of four frames (the fourth is the frame of the hop itself)
@@ -1143,6 +1144,66 @@ void SpectralVoice::startSchedule (int offset, bool smears, int join[3]) noexcep
     }
 }
 
+void SpectralVoice::startWork (int offset, bool smears, int frames[kStartQuads], int shapes[kStartQuads]) noexcept
+{
+    for (int i = 0; i < kStartQuads; ++i)
+        frames[i] = shapes[i] = 0;
+    const int d = std::max (0, std::min (kHop - 1, offset));
+    int join[3];
+    startSchedule (d, smears, join);
+    int strike = 0;
+    for (int j = 0; j < 3; ++j)
+        if (join[j] <= d)
+        {
+            ++strike;
+            join[j] = -1;
+        }
+    if (strike == 0)
+    {
+        // noteOn's fallback (never with the schedule): the frame that weighs most at the first sample is the strike
+        int best = 0;
+        double bestWeight = -1.0;
+        for (int j = 1; j <= 3; ++j)
+        {
+            const double w = 0.5 - 0.5 * std::cos (2.0 * kPi * (d + (3 - j) * kHop) / kFftSize);
+            if (w > bestWeight)
+            {
+                bestWeight = w;
+                best = j;
+            }
+        }
+        strike = 1;
+        join[best - 1] = -1;
+    }
+    frames[0] = strike;
+    shapes[0] = smears ? 1 + strike : 1;
+    for (int j = 0; j < 3; ++j)
+    {
+        if (join[j] < 0)
+            continue;
+        // one call of startFrames per join sample: one shaping (with the Smear warp every frame is in the strike, so none is left here), the frames that share it
+        const int quad = std::min (kStartQuads - 1, (join[j] - d) / kStartStep);
+        bool first = true;
+        for (int i = 0; i < j; ++i)
+            if (join[i] == join[j])
+                first = false;
+        ++frames[quad];
+        if (first)
+            ++shapes[quad];
+    }
+}
+
+StartPattern SpectralVoice::startPattern (int offset, bool smears, int channels) noexcept
+{
+    int frames[kStartQuads], shapes[kStartQuads];
+    startWork (offset, smears, frames, shapes);
+    StartPattern pattern {};
+    const int n = channels > 1 ? 2 : 1;
+    for (int i = 0; i < kStartQuads; ++i)
+        pattern.us[i] = static_cast<uint16_t> ((frames[i] * kStartFrameUs + shapes[i] * kStartShapeUs) * n);
+    return pattern;
+}
+
 void SpectralVoice::startScheduleReference (int offset, bool smears, int join[3]) noexcept
 {
     const int d = std::max (0, std::min (kHop - 1, offset));
@@ -1239,7 +1300,10 @@ void SpectralVoice::startFrames (const SpectralParams& p, int mask, bool phantom
         float twist = 0.0f;
         bool shaped = false;
         if (phantom && smears && mask != 0)
+        {
             shapeFrame (p, an, std::min (ch, an.channels() - 1), startFrame_, hostRate_, scratch, c.smear, twist, ! reference_);
+            ++shapesMadeForTest_;
+        }
         for (int j = 1; j <= 3; ++j)
         {
             if (! (mask & (1 << (j - 1))))
@@ -1248,7 +1312,9 @@ void SpectralVoice::startFrames (const SpectralParams& p, int mask, bool phantom
             {
                 shapeFrame (p, an, std::min (ch, an.channels() - 1), startFrame_, hostRate_, scratch, c.smear, twist, ! reference_);
                 shaped = true;
+                ++shapesMadeForTest_;
             }
+            ++framesMadeForTest_;
             startPhases (p, ch, j, scratch.phaseTmp);
             const int at = (j * kHop) & (kFftSize - 1);
             if (reference_)

@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "synthyboy/sampleosc/sample_types.h"
+#include "synthyboy/spectral/start_ledger.h"
 
 namespace synthyboy
 {
@@ -86,7 +87,7 @@ private:
     bool truncated_ = false;
 };
 
-/** The work arrays of one frame: they are not state, so the voices of an oscillator share one (the oscillator owns it; about 40 KB). */
+/** The work arrays of one frame: they are not state, so the voices of an oscillator share one (the oscillator owns it; about 82 KB, with the start ledger of the engine). */
 struct Scratch
 {
     float re[kFftSize], im[kFftSize];
@@ -105,6 +106,8 @@ struct Scratch
     float bandLo = -1.0f, bandHi = -1.0f;
     double bandBinHz = -1.0;
     bool bandSmooth = false;
+    // the admission of the note starts over the blocks (start_ledger.h): one per engine, the oscillators ask it, it does nothing while it is disabled
+    StartLedger start;
 };
 
 /** The per block settings of a voice. */
@@ -180,6 +183,13 @@ public:
     static void startSchedule (int offset, bool smears, int join[3]) noexcept;
     /** Tests only: startSchedule as it was (the loop of double cosines at every call). */
     static void startScheduleReference (int offset, bool smears, int join[3]) noexcept;
+    /** The work of a note start per channel, by quad (a quad = kStartStep samples of the voice counted from the start; the strike is quad 0): the frames and the shapings the voice makes in it
+        (one shaping for the frames of one call of startFrames, a shaping per frame and one more for the frame that is never made with the Smear warp). Derived from startSchedule. */
+    static void startWork (int offset, bool smears, int frames[kStartQuads], int shapes[kStartQuads]) noexcept;
+    /** The warm us of that work in the quads (kStartFrameUs a frame, kStartShapeUs a shaping, times the channels of the sample: 1 or 2): what the start ledger books. */
+    static StartPattern startPattern (int offset, bool smears, int channels) noexcept;
+    /** Tests only: the frames and the shapings that startFrames made since noteOn (all channels). */
+    void startCountersForTest (int& frames, int& shapes) const noexcept { frames = framesMadeForTest_; shapes = shapesMadeForTest_; }
     /** Measurements and tests only: the start of a note as before round 10 (the four frames of the priming made at once, the first hop their plain sum) instead of the start with the deferred frames
         (section 4a of docs/engine-spec/07). From the sample kHop of the voice (the first regular frame) on the two give the same samples. */
     void setLegacyStart (bool on) noexcept { legacyStart_ = on; }
@@ -225,6 +235,7 @@ private:
     int startSkip_ = 0;          // the output starts this many samples into the first hop (noteOn's hopOffset)
     int lastTransientFrame_ = -1, drain_ = 0;
     bool phaseInit_[2] = { false, false };
+    int framesMadeForTest_ = 0, shapesMadeForTest_ = 0;   // startFrames' work since noteOn (the cost model's check)
 
     // state per channel (the phases of the output partials, the overlap-add buffer, the smear memory)
     struct Channel
