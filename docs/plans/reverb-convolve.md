@@ -1,6 +1,6 @@
 # Plan: reverb (six algorithms) and Convolve - CPU, memory and quality (and Hyper / Dimension)
 
-Status of this document: NOT FINISHED - sections 1 and 2 are written and committed; sections 3 to 8 follow (each is committed when it is complete).
+Status of this document: NOT FINISHED - sections 1 to 3 are written and committed; sections 4 to 8 follow (each is committed when it is complete).
 
 Written on branch `worktree-agent-ad6ebad4a87a4235d`, base `develop` 6069a30f (2026-11-20). Reading and reasoning only: no build, no test, no benchmark was run. Arithmetic that is not in a repository
 document was done with throw-away Python scripts (not committed), only to check sums and flop counts.
@@ -131,3 +131,136 @@ The `Reverse Gong Swell` and `Frozen Pluck Drone` presets are the two with Convo
 ### 2.4 Memory baseline
 
 `memory-footprint.md` task T1 (the memory probe: heap bytes, allocation count, `prepare_fx_ms`, RSS) gives the instance figures; T01's `bytes=` column gives the per-object figures (reverb arena, Convolve tables, hyper buffers). Expected before (computed in 1.2 to 1.4): reverb 4,874,240 B (44.1 kHz), Convolve 4,087,808 B + 882,000 B pre-delay at the plate impulse and 33,546,240 B + 882,000 B at the cap, Hyper 180,224 B + small.
+
+## 3. Design options and the chosen design
+
+### 3.1 Reverb: three options
+
+**R-A. Keep the six algorithms exactly as specified; remove the redundant work (chosen).** Six changes, each in its own task (section 4), each proven against a frozen copy of today's reverb (task T04):
+
+1. *Per-chunk coefficients.* Everything that depends only on parameters and the sample rate is computed once per `process()` call into the existing `CoreCfg` (`fx_reverb.h:278-282`): for type 3 the 16 loop gains `gainFor(len / sr, T)` (`:489`), the 16 lengths, the 7 kHz coefficient (`:496`), `ratio`, the all-pass delays and coefficients; for type 1 `sc`, `g`, `p0`, `p1`, the `S()` products, the all-pass coefficients (`:438-448`); for the phase `min(chorusRate, 16) / sr` (`:236, :380`, one division per sample today) and `phase -= floor(phase)` replaced by a compare (identical for `phase` in [0, 2); the increment is below 1). *Same expressions, same values: bit-identical.*
+2. *Trigonometry shared.* Type 0 computes group 1 and 3 as the negatives of group 0 and 2 (16 libm calls -> 8, bit-identical: same argument). Then all four LFO users take `sin theta` and `cos theta` of the one free-running phase (2 libm calls) and derive every lane / line offset with the angle-addition identity and constant `(cos delta_k, sin delta_k)` pairs (type 0: lanes, `delta = 2 pi lane / 16`; types 2/4/5 and 3: `delta = 2 pi k / 8`, vintage right channel `+ pi`; plate: `0, pi`). libm per sample: type 0 16 -> 2, types 2/4/5 8 -> 2, type 3 16 -> 2, plate 2 -> 2 (no gain). *Not bit-identical*: bound in 3.7.
+3. *8x8 Walsh-Hadamard by butterfly* (`:415-421`): 3 stages, 24 add/sub + 8 multiplies instead of 64 iterations of bit tests. Not bit-identical (different addition order), bound 3.7.
+4. *Type 0 all-pass read as an integer read* (`:246`): `DelayLine::readInt(int d)` = `buf[(pos - d) & mask]`, which equals `readCubic` at an integer delay `d >= 1` (there `t = 0` and `((c3*0 + c2)*0 + c1)*0 + y1 = y1`, `fx_dsp.h:41-50`). Bit-identical up to the sign of a zero (`-0 + 0 = +0`); the tests normalise zeros by adding `0.0f`.
+5. *Fixed-fraction taps.* Every tap whose position is constant for a chunk (the 12 early-reflection taps of types 1..5; plate `plIn`, `plDel1/2`, `plAp2` reads and the 14 output taps; types 2/4/5 `inAp` and `netAp`; type 3 `vInAp`, `vAp`) gets, once per chunk, the integer part and the four Catmull-Rom weights `w0..w3` of its fractional part (the coefficients of `fx_dsp.h:48-49` as functions of `t`); per sample the read is `w0 y0 + w1 y1 + w2 y2 + w3 y3` (4 loads, 4 multiply-adds, no integer/fraction split, no `c1..c3`). 24 (plate), 24 (types 2/4/5) and 22 (type 3) of the 38 / 32 / 38 reads per sample become fixed taps. Not bit-identical (the same cubic as a weighted sum), bound 3.7.
+6. *Per-chunk cache and the Nitrous guard.* `process()` recomputes `prepareFdn / prepareCore / MixGains / TrapLp / OnePole` coefficients each call although parameters rarely change: compare the `Params` (a `memcmp` of the struct plus `sampleRate`) and skip the recomputation when equal (about 25 libm per chunk = 0.8 per sample; bit-identical, the same code runs whenever something changed), and `ah = max(ah, 0)` at `:301` (3.3).
+
+Effect on sound: none audible; bit-identical for 1, 4 (zero sign aside), 6 and the group sharing of 2; rounding-level (computed bounds in 3.7) for the rest. CPU, from the cost model of this section (cycle weights HYPOTHESIS: ARMv7 libm 60, division 17, `readCubic` 28, `readLagrange4` 32, fixed tap 12, integer read 3, floor 10; x86 libm 25, division 11, `readCubic` 18, `readLagrange4` 22, fixed tap 8, integer read 2, floor 6; remaining arithmetic counted per line from the code): cost against today's code, cumulative after tasks R1..R7, ARM / x86:
+
+| type | today (cycles/sample, ARM / x86) | after R1 (type 3) | R2 (8-line) | R3 (type 0) | R5 (trig) | R6 (fixed taps) | R7 (cache, phase) |
+|------|----------------------------------|-----|-----|-----|-----|-----|-----|
+| 0 | 2,889 / 1,999 | 1.00 | 1.00 | 0.70 / 0.77 | 0.57 / 0.70 | 0.57 / 0.70 | **0.55 / 0.68** |
+| 1 | 1,719 / 1,200 | 1.00 | 1.00 | 1.00 | 1.00 | 0.78 / 0.80 | **0.75 / 0.78** |
+| 2, 4, 5 | 2,755 / 2,145 | 1.00 | 0.78 / 0.72 | 0.78 / 0.72 | 0.65 / 0.65 | 0.51 / 0.54 | **0.49 / 0.52** |
+| 3 | 4,728 / 2,938 | 0.65 / 0.72 | 0.65 / 0.72 | 0.65 / 0.72 | 0.47 / 0.60 | 0.39 / 0.52 | **0.38 / 0.51** |
+
+The audit's "2x to 5x" is therefore plausible for type 3 on the ARM and about 1.3x to 2x for the others; the plate gains least (its cost is the 38 reads, of which only 24 can become fixed taps, and its libm count is already low). Memory: unchanged by this plan (the arena is `memory-footprint.md` T3). Real-time safety: unchanged (no allocation; the new per-chunk tables are members). Risk: low; the feedback loops keep their gains <= 0.9996 (`fx_reverb.h:283`) and the orthonormal matrices, so rounding-level differences cannot grow.
+
+**R-B. R-A plus 4-lane NEON kernels for type 0 (4 groups x 4 lines) and types 2/4/5 (8 lines).** The repository has the precedent: the chorus kernel does the arithmetic of `DelayLine::readCubic` lane by lane (`fx_effects.h:353`, with a scalar twin and equality tests). Sound: rounding level. CPU: a further 1.5x to 2.5x on the ARM (HYPOTHESIS, decided by T01 numbers after R7). Risk: a second code path to keep equal on two instruction sets, written by workers that cannot compile. **Not chosen for the first pass; defined as task R8 with a numeric trigger** (section 4): it is executed only if, after R7, the measured cost on the target device is above the acceptance numbers of section 5.
+
+**R-C. Cheaper algorithms (for example 8 or 12 lines instead of 16).** `06-effects.md:236` allows it ("the own engine can use 8 or 12 lines ... if RT60 and density hold"). It changes the sound of the type that 131 of 160 presets store, and the specified vectors (R1..R3) were measured on 16 lines. **Rejected** under the rule "the specified algorithms and numbers must be kept"; it stays the last lever if the Key 61 budget cannot be met (owner decision, 6.4).
+
+Chosen: **R-A**, with R-B as the measured fallback.
+
+### 3.2 Reverb memory
+
+Not designed here: `memory-footprint.md` T3 (one arena of 589,824 floats = 2,359,296 B at 44.1 kHz, `DelayLine`s bound into it, the selected algorithm's slice cleared on a type change, which also removes the stale-tail bleed after a type switch). Dependency: this plan's reverb tasks start after T3, because both edit `fx_reverb.h` and `fx_dsp.h`. A type switch still cuts from one core to the next without a crossfade; the spec is silent (`06-effects.md:246-251`), so it stays an owner decision (6.4).
+
+### 3.3 Nitrous Space damping
+
+Options: (a) `ah = max(ah, 0)` at `fx_reverb.h:301` (chosen: one line, bit-identical for every value the engine can produce since the minimum is +0.2767, and it states the property `06-effects.md:257` describes: Nitrous and Basin "brighten the shelf" by pulling `A_h` toward 1, never past 0); (b) narrow the clamp of `highShelfDb` for Space to -10.16 dB (rejected: it moves the clamp the spec states, -24 .. 0 dB, `:212`, `:257`); (c) do nothing (rejected: any tool or later change of the key range that sends -12 dB to Space inverts the polarity of the high band on every pass: per-pass HF gain magnitude 0.0858 at -12 dB and 0.3585 at -24 dB, so a *stronger* damping setting gives a *louder* high tail). Task R7 carries (a), tested through `Reverb::set` directly.
+
+### 3.4 Convolve: three options
+
+The behaviour to keep (`convolve.h:13-30`): zero latency (`latency() == 0`), exact lags 0..127 in the head, size / attack / decay / damp / phi MIN / IR gain / tone / pre-delay / mix / level, the IR cap of 524,288 frames, audio-thread safety; and the rate invariance of `06-effects.md:334` (convolve 0.28 dB).
+
+**C-A. Keep the uniform 128-sample partitions; make them cheap.** Real-input transforms (129 bins instead of 256: `N/2 + 1`), structure-of-arrays spectra, vectorisable complex multiply-add loops, a ring index without `%`, a head with 8 independent accumulators, a crossfade between two whole convolvers on a swap. Per sample at `F = 63,945`: `2 x 499 x 129 / 128 = 1,006` CMAC = 8,050 flops (+ transforms 160 + head 512) = **about 8,700 flops/sample, 1.9x fewer than today's 16,800 by the packing alone**, and about 65,000 at the cap (2x). Memory half of today (129/256). Sound: rounding level. It still scales linearly with the impulse length: at the 4 s impulse of the audit the cost stays at 12,000 real MACs per sample. Swap: two convolvers, the new one without history (tail loss remains).
+
+**C-B. Non-uniform partitioning (Gardner 1995; Garcia 2002), real transforms, and a crossfade between two whole convolvers.** Cost per sample grows only with `log F` (3.4.6). Swap: the old convolver fades out while a new one (zero history) fades in: the click is gone; **the tail loss is not** (a new convolver needs one impulse length of input before its tail is complete). Memory at a swap: two complete convolvers.
+
+**C-D. Non-uniform partitioning with an input state that survives an impulse change, and a seam crossfade per stage (chosen).** Same cost as C-B. A swap exchanges only the *impulse set* (the partition spectra); the input-spectrum history (the frequency-delay line, FDL) stays, so the new impulse answers at once to everything played before the swap (the right physical result, as if the new impulse had always been there); each stage crossfades its own output at its first block boundary after the swap, so the head reacts in 128 samples and the late tail over its own block length. It needs an impulse set that fits the state's capacity; otherwise (a different impulse file, or growth beyond the capacity) the module takes C-B's whole-convolver crossfade, where the old tail *should* fade out. Task C6 builds that C-B path first; C7 and C8 add the seamless path; the plan ends with C-D.
+
+Why C-D: the work per second is the finding of `TODO.md:85`, and C-A leaves it growing with the impulse; and the keys that shape the impulse are modulation destinations (`04-modulation-matrix.md:364-370`), so rebuilding under modulation is a designed use that loses the tail at every rebuild today and that C-B would still gate. The price of C-D is the transition code (3.4.7), isolated in two tasks that can be dropped (the plan then ends with C-B; risk in section 6) without touching the others.
+
+#### 3.4.1 Partition schedule (constants of the design)
+
+Head: 128 taps in the time domain, both channels (lags 0..127). Three frequency-domain stages, block size `B`, real transform size `2B`, `r = B / 128` base ticks per block (a tick = 128 samples of the module's own sample counter, so the output does not depend on the host block size, the property of `convolve_block_size_independence`, `core/fx-serum-b/tests/test_convolve.cpp:138-189`, checked at 1e-6):
+
+| stage | B | transform 2B | bins B+1 | r | impulse offset `o = 3B` | ticks of slack | work units | stagger `phi` (ticks) |
+|-------|---|--------------|----------|---|--------------------------|----------------|------------|-----------------------|
+| 1 | 128 | 256 | 129 | 1 | 128 (= B: synchronous, as today) | 0 | all at the block end | 0 |
+| 2 | 1,024 | 2,048 | 1,025 | 8 | 3,072 | 16 | 8 (1 + 6 + 1) | 4 |
+| 3 | 8,192 | 16,384 | 8,193 | 64 | 24,576 | 128 | 64 (1 + 62 + 1) | 1 |
+
+Rule (Gardner): a partition of block size `B` may start at an impulse offset `o >= B` (its input block is complete at time `(j+1)B`, its first output is needed at `jB + o`); the slack `o - B` is what lets the work be spread. With `o = 3B` the slack is `2B = 2r` ticks; a sequence of `r` units starting `phi <= r` ticks after the block completes ends at `(j+1)B + (phi + r) 128 = (j+2)B + 128 phi <= jB + 3B`. Units per block: unit 0 = forward real transform of the block (both channels) into the FDL; units 1..r-2 = a slice of the partition multiply-accumulate (`acc += X_{j-p} * H_p` for the slice's `p`); unit r-1 = inverse transform and overlap-add into the stage's output ring at times `jB + o + [0, 2B)`. One unit per tick; the stagger puts the stage-3 forward transform on ticks `= 1 (mod 64)`, its inverse on `= 0 (mod 64)`, the stage-2 forward transform on `= 4 (mod 8)` and its inverse on `= 3 (mod 8)`, so the three large transforms never share a tick.
+
+#### 3.4.2 The plan for an impulse of `F` frames (`conv_plan.h`, a pure function, task C2)
+
+```
+F <= 128:            head only
+128 < F <= 5,120:    n1 = ceil((F - 128) / 128)                          (n1 <= 39)
+5,120 < F <= 45,056: n1 = 23, n2 = ceil((F - 3,072) / 1,024)             (n2 <= 41)
+F > 45,056:          n1 = 23, n2 = 21, n3 = ceil((F - 24,576) / 8,192)   (n3 = 61 at F = 524,288)
+```
+
+`n1 = 23` covers impulse samples [128, 3,072), `n2 = 21` covers [3,072, 24,576). The two thresholds are the break-even points of the cost model: extending stage 1 by `D` samples costs `16 D / 128` flops per sample, extending stage 2 costs `16 D / 1,024`, opening stage 2 costs about 220 flops per sample of transforms (`2 channels x 2 transforms x 2.5 N log2 N / B` with `N = 2,048`) -> break-even `D = 2,011`, taken as 2,048, so 3,072 + 2,048 = 5,120; opening stage 3 costs about 280 (`N = 16,384`) -> `D = 20,480`, so 24,576 + 20,480 = 45,056. (A real transform of `N` points about `2.5 N log2 N` flops, a CMAC 8 flops: both HYPOTHESIS as to the cost on the device, which T01 measures; the constants are then adjusted in one place.) Examples: `F` = 3,969 -> (31, 0, 0); 30,870 -> (23, 28, 0); 63,945 -> (23, 21, 5); 524,288 -> (23, 21, 61).
+
+#### 3.4.3 Real transforms and data layout
+
+`RealFft` (task C1, header-only on top of the existing `Radix2FFT`, `fft.h:36-60`): a real transform of `N` points as a complex transform of `N/2` points plus the standard untangling pass (`X[k] = (Z[k] + conj Z[N/2-k]) / 2 - i e^{-2 pi i k / N} (Z[k] - conj Z[N/2-k]) / 2`), output `N/2 + 1` bins; the inverse is the mirror image. Spectra are stored structure-of-arrays (`re[bins]`, `im[bins]`, 16-byte aligned), so the multiply-accumulate loop `accRe += xr*hr - xi*hi; accIm += xr*hi + xi*hr` has no reduction and the compiler vectorises it without `-ffast-math` (lane-wise arithmetic, no reassociation). Flops of a real transform against today's full complex transform of the zero-padded input: `(log2 N - 1) / (2 log2 N)` = 0.44 (N = 256), 0.45 (2,048), 0.46 (16,384) - 2.2x fewer.
+
+#### 3.4.4 The head
+
+Taps stored in ascending lag order and the input history in a doubled ring, so the dot product runs over two ascending contiguous arrays; 8 independent accumulators per channel (two 4-lane vectors) summed at the end, which the compiler vectorises because each lane keeps its own order. 128 x 2 MAC per sample as now, 4-wide on NEON and SSE. Not bit-identical to the sequential sum (rounding level, 3.7).
+
+#### 3.4.5 Objects: what is allocated where
+
+* `IrSet` (immutable once published; built on the helper thread by a new `Convolve::buildIrSet`, which shapes the impulse exactly as `shapeIr` does today, `convolve.cpp:257-416`, then cuts and transforms it): `frames`, the plan `(n1, n2, n3)`, head taps L/R, partition spectra per stage per channel (structure-of-arrays), and the **transition kit** (second output rings and the extra accumulator sets of the stages it uses).
+* `ConvState` (in the engine object; allocated off the audio thread in `prepare` / `install`): head history ring, per stage a pending input block (`B` floats per channel), the FDL of `c_s + 1` spectra per channel, the accumulator (one spectrum per channel), the output ring of `K` slots of `B` floats per channel (`K` = 4, 5, 5), transform scratch. Capacity `(c1, c2, c3)` = the plan counts of `F_cap = min(524,288, ceil(1.5 F))` of the first impulse (1.5 = headroom for the modulation of `size`, whose key range is 0.25 .. 4 and, with the Serum law, `10^(+-0.7)` = 0.2 .. 5.0, `fx_modules.cpp:931`). A change beyond the capacity takes the replace path.
+* Memory formulas (bytes): `H = 2 x 8 x (n1 x 129 + n2 x 1,025 + n3 x 8,193)`; `FDL = 2 x 8 x ((c1+1) x 129 + (c2+1) x 1,025 + (c3+1) x 8,193)`; rings 372,736, pending blocks 74,752, accumulators 149,552, scratch about 140,000, pre-delay 882,000 (unchanged). Steady state, kit not held, at `F = 63,945` (cap 95,917, so `c` = 23, 21, 9): `1,047,312 + 1,721,216 + 372,736 + 74,752 + 149,552 + 140,000 + 882,000 = 4,387,568 B` against **4,969,808 B today** (4,087,808 + 882,000): **12 % less**; the peak during a rebuild adds `H` and the kit (1,047,312 + 372,736 + 299,104 = 1,719,152) = 6.1 MB against **9.06 MB today** (a whole second convolver). At the cap `F = 524,288`: `H = 8,388,240`, `FDL = 8,537,792`, total **18.5 MB against 34.4 MB today (1.86x less)**, peak 27.6 MB against 68 MB. So memory improves clearly only for long impulses; for the factory impulses it is 12 % steady and 33 % at the peak (nothing can be smaller than `H` + FDL = `2 x 8 B x frames x 2` channels once real transforms are used).
+
+#### 3.4.6 CPU per sample (flops, model of 3.4.2; today's from 1.3)
+
+| `F` (frames) | plan | today | after | ratio |
+|--------------|------|-------|-------|-------|
+| 3,969 (cabinet) | (31,0,0) | 1,824 | 1,172 | 1.6x |
+| 30,870 (small room) | (23,28,0) | 8,544 | 1,711 | 5.0x |
+| 63,945 (plate) | (23,21,5) | 16,800 | 1,959 | 8.6x |
+| 524,288 (cap) | (23,21,61) | 131,872 | 2,855 | 46x |
+
+(Plate CMAC part: `2 x (23 x 129/128 + 21 x 1,025/1,024 + 5 x 8,193/8,192) = 98.4` CMAC = 787 flops; transforms 160 + 220 + 280 = 660; head 512.) The floor is the head plus the stage-1 transforms (672 flops): below about 5,000 frames the structure gives only the packing and vectorisation (1.6x). HYPOTHESIS: the real ratio on the device is better than the flop ratio for small `F` (the new loops vectorise, the old ones do not) and worse for large `F` (radix-2 transforms of 8,192 complex points are memory bound); the `FXCOST convolve` lines of T01 decide, and section 5 states the acceptance numbers against the measured baseline.
+
+#### 3.4.7 The seam transition (task C7)
+
+A swap request carries an `IrSet` whose plan fits the capacity. The engine then acts **per stage**: the head and stage 1 at the tick where the request is taken, stages 2 and 3 at their next block start `j_s`:
+
+1. Head: both tap sets run for the next 128 samples; the output is `(1 - a) head_cur + a head_next`, `a` a raised cosine `0.5 (1 - cos(pi u))`, `u` 0..1 over the 128 samples.
+2. Stage `s`, from block `j_s`: the unit sequence of block `j_s` computes three accumulations (block `j_s - 1` with `H_next`, block `j_s` with `H_cur`, block `j_s` with `H_next`; all their inputs are in the FDL) and three inverse transforms. The current ring receives `y_cur` as always; the kit's ring receives `y_next` of `j_s - 1` (second half) and of `j_s` (both halves). The slot of times `[j_s B + o, (j_s + 1) B + o)` is read as `(1 - a) ring_cur + a ring_next`, `a` a raised cosine over the `B` samples of the slot; from the next slot on only `H_next` runs, the kit's ring becomes the stage's ring, and the old ring storage and the old `IrSet` leave with the retired set to the helper thread, like `retired` / `retiredLate` today (`fx_modules.cpp:982-984`).
+3. `H_next` answers to the input played before the swap from the first block on, because the FDL is shared: the old tail does not vanish and the new one does not start from silence. Full convergence to the new impulse takes the stage's own time: head 128 samples, stage 1 256, stage 2 `1,024 + 3,072 + 1,024 = 5,120`, stage 3 `8,192 + 24,576 + 8,192 = 40,960` samples (0.93 s at 44.1 kHz): late-tail components (lags above 24,576) switch last, which is what a listener expects of a late tail.
+4. A second request during a transition replaces the pending one (only the newest `IrSet` is kept; the superseded one goes to the retire list).
+
+Extra cost: one slot per stage at about 3x that stage's multiply-accumulate, once per swap. Real-time safety: the request and the retire list are single-writer atomic pointers (the pattern of `ready` / `retired`); the audio thread allocates nothing (the kit and the new ring storage came with the `IrSet`).
+
+#### 3.4.8 Module integration (tasks C6, C8)
+
+`ConvolveModule::runJob` (`fx_modules.cpp:996-1021`) stops building a `Convolve` + `loadIr` and calls `Convolve::buildIrSet(params, sampleRate, impulse)`; it never reads `live`: `tone`, `mix` and the pre-delay are audio-thread parameters of the engine (`configure` already hands them over there, `:788-797`, and the read at `:1014` goes), so **the data race on `live.tone` cannot exist in this design**, and the `job.tone` snapshot of `rt-threading.md` T2 becomes dead code, removed in C8. The result travels through the existing `ready` atomic. `takeOver`: (a) same impulse file and the plan fits the engine's capacity -> in-place swap (C-D path); (b) otherwise (first impulse, another file, capacity exceeded) the job also carried a prepared engine: the old engine fades out over 2,048 samples (46 ms at 44.1 kHz; raised cosine against the new engine) and is retired (C-B path, task C6). So that the worker can choose (a) or (b), the audio thread publishes `(impulse pointer, capacity)` in one atomic pair; a stale choice is re-checked at `takeOver`, and a set that does not fit is retired and rebuilt (the key stays unbuilt, `:786`).
+
+### 3.5 The `live.tone` race, stated plainly
+
+Today: `configure` (audio thread) writes `live.tone` (`fx_modules.cpp:778`) while `runJob` (helper thread) reads it (`:1014`) with no ordering: a data race (undefined behaviour; in practice a stale or a new float, harmless on the targets, but a ThreadSanitizer failure). Fix 1 (`rt-threading.md` T2, first): copy `live.tone` into `job.tone` before `jobBusy.store(1, release)` and read `j->tone`. Fix 2 (this plan, C8): the job no longer needs the tone at all. Test: a ThreadSanitizer run of a test that moves `convolve.tone` every period while a rebuild runs (gate of section 5); today it reports a race.
+
+### 3.6 Hyper / Dimension (rank 12)
+
+**H-A (chosen).** In `process`: per-call tables for the voices (`vCenter`, `baseDelaySamples`, `maxExcursion`, the pan `cos` / `sin` gains, the LFO increment `kTwoPi * lfoFreq * invFs`), computed with the same expressions as today (bit-identical); **one** delay buffer instead of eleven (`monoIn` written once; the 7 voice reads and the 4 dimension reads index the same ring, which holds the same samples as the eleven copies did: bit-identical while `unison` is constant); the Dimension block (4 reads + `sin` / `cos`) runs only while `currentDimMix_ != 0 || targetDimMix != 0` (its LFO phase still advances by the same increment and wrap, so its state is the same when it is opened again; with both mixes 0 the term `dimL * 0` is exactly 0 for finite `dimL`: the same output); the Hyper voice reads run only while `currentHyperMix_ != 0 || targetHyperMix != 0` (output `inL + (hypL - inL) * 0 = inL`; the voice LFO phases still advance). Memory 176 KiB -> 16 KiB per instance (11x). libm per sample at `unison = 4`: 14 -> 4 (the voice `sin`s) + 2 only with `dimMix > 0`; divisions 4 -> 0. **One deliberate difference**: when `unison` changes during play, the newly active voices read the real recent input from the shared buffer instead of their own never-refreshed buffer (today a voice above the old `unison` has not written for a while and reads old data); not bit-identical in that case only, and better. **H-B (rejected)**: replace the voice `sin(phase)` by a recurrence: saves 4 libm calls per sample at the price of a drifting state and not bit-identical output; the whole effect is 0.4 % on the XL and used by 2 presets.
+
+### 3.7 Which changes keep the sound, and by how much
+
+| change | class | bound / how proven |
+|--------|-------|--------------------|
+| R1 hoists (type 3), R3 group sharing and integer read (type 0), R7 per-chunk tables, phase increment, cache, Hyper H-A (constant `unison`) | **bit-identical** | `memcmp` after normalising `-0`; `<NAME>-CHECKSUM` lines (64-bit FNV-1a of the float bits) |
+| R2 Walsh-Hadamard butterfly | rounding: each `h_i` differs by <= 3 ulp of the sum (<= 1.8e-7 relative); loop gains <= 0.9996 and an orthonormal matrix keep the difference <= 2e-6 of the peak | tolerance 2e-6 x peak |
+| R5 trig by angle addition | the LFO phase is computed once in float and offset by constants exact to 1e-7, instead of `2 pi (phase + lane/16)` in float: delay-modulation error <= `depth x 5e-7` samples; at the default `chorus_amount` 0.2 (all presets) depth = `0.2^2 x 2500 x rate` = 100 samples (`fx_reverb.h:230`) -> 5e-5 samples -> relative error <= `2 pi (4 kHz / 44.1 kHz) x 5e-5 = 2.9e-5` (-91 dB) for a 4 kHz band-limited program; at amount 1 (depth 2,500) 7e-4 (-63 dB) | tolerance 1e-4 x peak at amount 0.2 on a band-limited program; at amount 1 the test compares level, RT60 and spectrum instead of samples |
+| R6 fixed taps | the same cubic as a weighted sum: rounding, <= 4 ulp per read | tolerance 2e-6 x peak |
+| Convolve: head with 8 accumulators, real transforms, non-uniform schedule | rounding: summation order of `F` products, error about `sqrt(F) x 6e-8` relative to the output rms (`F` = 70,000: 1.6e-5) | tolerance 5e-5 x max abs of the reference up to `F` = 70,000 and 2e-4 at the cap |
+| Convolve swap (C6, C7, C8) | **intended audible change**: no click, tail preserved; only in the blocks after a rebuild | C7 / C8 tests (history preserved, no discontinuity) |
+| Nitrous guard (R7) | none in the engine's range (`ah >= +0.2767`); fixes direct use | test through `Reverb::set` |
