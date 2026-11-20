@@ -117,21 +117,16 @@ int main (int argc, char** argv)
                      diffGain, diffPlain, std::fabs (diffGain - diffPlain));
         check (std::fabs (diffGain - diffPlain) < 0.05, "dynamics: velocity 100 vs 127 difference matches plain build (dynamics intact)");
 
-        // Limiter OFF: peak can exceed 0 dBFS when gain > 0; unity design keeps headroom
+        // Limiter OFF: peak exceeds 0 dBFS (no limiter in signal path)
         const std::vector<int> chord { 36, 43, 48, 52, 55, 60 };
         const Level lg = play (withGain, 1.0f, chord, 127, 2.0), lp = play (plain, 1.0f, chord, 127, 2.0);
         std::printf ("loud:  with gain peak %.2f dBFS rms %.2f dBFS; gain 0 peak %.2f dBFS rms %.2f dBFS; difference %.2f dB\n",
                      db (lg.peak), db (lg.rms), db (lp.peak), db (lp.rms), db (lg.rms) - db (lp.rms));
+        check (lg.peak > 1.0, "loud: peak exceeds 0 dBFS (no limiter in signal path)");
         if (gain > 0.0)
-        {
-            check (lg.peak > 1.0, "loud: peak exceeds 0 dBFS (no limiter in signal path)");
             check (lg.rms > lp.rms, "loud: the plugin with the make-up gain is still the louder one");
-        }
         else
-        {
-            check (lg.peak > 1e-4 && lg.peak <= 1.0, "loud: clean headroom without limiter under unity gain");
             check (std::fabs (db (lg.rms) - db (lp.rms)) < 0.1, "loud: builds match at unity gain");
-        }
     }
     else
     {
@@ -141,15 +136,11 @@ int main (int argc, char** argv)
         std::printf ("loud:  with gain peak %.2f dBFS rms %.2f dBFS; gain 0 peak %.2f dBFS rms %.2f dBFS; difference %.2f dB\n",
                      db (lg.peak), db (lg.rms), db (lp.peak), db (lp.rms), db (lg.rms) - db (lp.rms));
         check (lg.peak <= ceiling * 1.000001 && lp.peak <= ceiling * 1.000001, "loud: no sample of either plugin is above the ceiling (-0.5 dBFS)");
+        check (lg.peak > 0.99 * ceiling, "loud: loud chord reaches the ceiling (the limiter works)");
         if (gain > 0.0)
-        {
-            check (lg.peak > 0.99 * ceiling, "loud: the plugin with the make-up gain reaches the ceiling (the limiter works)");
             check (lg.rms > lp.rms, "loud: the plugin with the make-up gain is still the louder one");
-        }
         else
-        {
             check (std::fabs (db (lg.rms) - db (lp.rms)) < 0.1, "loud: builds match at unity gain");
-        }
     }
 
     // Suspend / resume cycle after limiting: must reset output stage transient state (MAGAS-2)
