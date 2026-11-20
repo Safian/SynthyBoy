@@ -129,7 +129,7 @@ void HyperDimension::process (float* l, float* r, int n) noexcept
 
     // What depends only on the parameters, once per call (the same expressions as per sample before): the voice delays, pans and LFO increments
     const float maxExcursion = detune * 0.003f * static_cast<float> (sampleRate_);
-    float baseDelay[kMaxUnison] = {}, panL[kMaxUnison] = {}, panR[kMaxUnison] = {}, lfoInc[kMaxUnison] = {};
+    float baseDelay[kMaxUnison] = {}, panL[kMaxUnison] = {}, panR[kMaxUnison] = {}, lfoStep[kMaxUnison] = {};
     for (int v = 0; v < unison; ++v)
     {
         const size_t uv = static_cast<size_t> (v);
@@ -142,7 +142,7 @@ void HyperDimension::process (float* l, float* r, int n) noexcept
         panL[uv] = std::cos (angle);
         panR[uv] = std::sin (angle);
         const float lfoFreq = rate * kRateSpreads[uv];
-        lfoInc[uv] = kTwoPi * lfoFreq * invFs;
+        lfoStep[uv] = kTwoPi * lfoFreq; // the per sample increment is lfoStep * invFs, written as before so that the compiler contracts the accumulation the same way (bit identical phases)
     }
     // A mix that is 0 now and stays 0 makes its part of the sum exactly 0 (the output is the same bit for bit): the work is skipped, the phases still advance
     const bool hypActive = currentHyperMix_ != 0.0f || targetHyperMix != 0.0f; // (with unison 0 the voices add nothing, and the blend still pulls the dry signal down)
@@ -182,7 +182,7 @@ void HyperDimension::process (float* l, float* r, int n) noexcept
                 hypR += voiceSample * panR[uv];
 
                 // Advance LFO
-                phase += lfoInc[uv];
+                phase += lfoStep[uv] * invFs;
                 if (phase >= kTwoPi)
                     phase -= kTwoPi;
             }
@@ -195,7 +195,7 @@ void HyperDimension::process (float* l, float* r, int n) noexcept
             for (int v = 0; v < unison; ++v)
             {
                 float& phase = hyperLfoPhases_[static_cast<size_t> (v)];
-                phase += lfoInc[static_cast<size_t> (v)];
+                phase += lfoStep[static_cast<size_t> (v)] * invFs;
                 if (phase >= kTwoPi)
                     phase -= kTwoPi;
             }
