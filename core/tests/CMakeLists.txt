@@ -212,3 +212,11 @@ synthyboy_add_test(synthyboy_test_own_note_storm test_own_note_storm.cpp)
 synthyboy_add_test(synthyboy_test_own_content_policy test_own_content_policy.cpp)
 synthyboy_add_test(synthyboy_test_own_convolve_bypass test_own_convolve_bypass.cpp)
 target_include_directories(synthyboy_test_own_convolve_bypass PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")   # Convolve is bypassed at tier low (quality.h) also with an impulse loaded
+# The aliasing tests of docs/plans/distortion-antialiasing.md: every core/tests/test_own_alias_<name>.cpp is registered as synthyboy_test_own_alias_<name> (a new task adds no line here).
+file(GLOB SYNTHYBOY_ALIAS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/test_own_alias_*.cpp")
+foreach(alias_src ${SYNTHYBOY_ALIAS_TEST_SOURCES})
+    get_filename_component(alias_name "${alias_src}" NAME_WE)
+    string(REGEX REPLACE "^test_own_alias_" "" alias_short "${alias_name}")
+    synthyboy_add_test(synthyboy_test_own_alias_${alias_short} "${alias_src}")
+    target_include_directories(synthyboy_test_own_alias_${alias_short} PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+endforeach()
