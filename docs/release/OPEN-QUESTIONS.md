@@ -144,7 +144,43 @@ Lines found: 80 in 10 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 51.
+Commits found: 60.
+
+### e8080e9b (2026-11-20) TODO.md: plan wave 1 merged, filter arena held back, memory numbers, Spectral start budget
+
+- matching line: TODO.md: plan wave 1 merged, filter arena held back, memory numbers, Spectral start budget
+
+### 6777ead9 (2026-11-20) TODO.md: note-on burst after the Kill fix (5ef901c8)
+
+- matching line: TODO.md: note-on burst after the Kill fix (5ef901c8)
+
+### 5ef901c8 (2026-11-20) TODO.md: release batch 1 done; the page-fault line still to be verified on Linux
+
+- matching line: TODO.md: release batch 1 done; the page-fault line still to be verified on Linux
+
+### 180d6d28 (2026-11-20) Merge release batch 1 into develop: lock-free WakeSignal, refused Convolve jobs free nothing on the 
+
+- matching line: Merge release batch 1 into develop: lock-free WakeSignal, refused Convolve jobs free nothing on the audio thread, lock-free MPC event inbox, constant-initialised MPC accessors, page-fault counters,...
+
+### 8d9186a4 (2026-11-20) TODO.md: note-on burst before-measurement on the Key 61 (develop 414b46af)
+
+- matching line: TODO.md: note-on burst before-measurement on the Key 61 (develop 414b46af)
+
+### 80efa0bb (2026-11-20) TODO.md: Lorenz/Rössler, flanger/phaser, cross-mod and 4-bus declick done
+
+- matching line: TODO.md: Lorenz/Rössler, flanger/phaser, cross-mod and 4-bus declick done
+
+### 414b46af (2026-11-20) TODO.md: spread the Spectral note start over blocks (before release, owner's decision)
+
+- matching line: TODO.md: spread the Spectral note start over blocks (before release, owner's decision)
+
+### 6069a30f (2026-11-20) TODO.md: seven batch-3 fixes done, three held back, three plans written
+
+- matching line: TODO.md: seven batch-3 fixes done, three held back, three plans written
+
+### 1c0fe0a0 (2026-11-20) docs(release): fix OPEN-QUESTIONS.md Part A citations to match line moves in MPC.md and RELEASE.md
+
+- matching line: - A4: docs/MPC.md:1115 -> docs/MPC.md:1114 (device rule / fallback GUESS)
 
 ### 6d276105 (2026-11-20) TODO.md: CLAP tails / mono and the multisample gain ramp done
 
