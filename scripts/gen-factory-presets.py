@@ -661,18 +661,15 @@ def load_levels() -> dict:
         return json.load(f)
 
 
-# Category-appropriate velocity tracking (%). Replaces the global 100% quadratic default so basses, leads and pads stay
-# punchy and usable on dynamic pads/keys while keys and plucks keep wide expressive dynamics.
-# Since 2026-11-19 against the stock MPC instruments (docs/release/LEVELLING-STOCK-2026-11-19.md): their basses and leads hardly move with velocity, pads drop about
-# 3 dB and plucks about 4 dB from velocity 127 to 100. The engine scales the level by 1 - track * (1 - v^2): no change at velocity 127, at 100 track 100 % gives -4.1 dB.
-# Keys keeps 70 (the stock pianos drop 8 dB, more than this law allows: an owner item).
+# Category velocity tracking (%): 100.0 for EVERY category (owner decision 2026-11-20: engine law lerp(1, v^2, t);
+# Bass and Lead had 5 and 0 to copy stock mono synths, which made pad hits and the Full Level mode look dead).
 CATEGORY_VELOCITY_TRACK = {
-    "Bass": 5.0,
-    "Lead": 0.0,
-    "Pad": 75.0,
-    "FX": 50.0,
-    "Keys": 70.0,
-    "Pluck": 95.0,
+    "Bass": 100.0,
+    "Lead": 100.0,
+    "Pad": 100.0,
+    "FX": 100.0,
+    "Keys": 100.0,
+    "Pluck": 100.0,
 }
 
 
@@ -697,7 +694,7 @@ def build_all():
         raise KeyError(f"{MACRO_NAMES_PATH}: no preset named {unknown}")
     for name, category, tags, desc, ov in presets:
         ov = with_pad_pressure(name, with_macros(category, ov), pad_pressure)
-        ov.setdefault("master.velocity_track", CATEGORY_VELOCITY_TRACK.get(category, 50.0))
+        ov.setdefault("master.velocity_track", CATEGORY_VELOCITY_TRACK.get(category, 100.0))
         check_macros(name, {**default_values, **{k: float(v) for k, v in ov.items()}})
         if name in levels:
             ov["master.volume"] = levels[name]
@@ -706,7 +703,7 @@ def build_all():
         out.append((name, category, meta, doc))
     for name, category, tags, desc, ov, content in showcase:
         ov = with_pad_pressure(name, with_macros(category, ov), pad_pressure)
-        ov.setdefault("master.velocity_track", CATEGORY_VELOCITY_TRACK.get(category, 50.0))
+        ov.setdefault("master.velocity_track", CATEGORY_VELOCITY_TRACK.get(category, 100.0))
         check_macros(name, {**default_values, **{k: float(v) for k, v in ov.items()}})
         if name in levels:
             ov["master.volume"] = levels[name]
@@ -716,7 +713,7 @@ def build_all():
         out.append((name, category, meta, doc))
     for name, category, tags, desc, ov, content in batches:
         ov = dict(ov)
-        ov.setdefault("master.velocity_track", CATEGORY_VELOCITY_TRACK.get(category, 50.0))
+        ov.setdefault("master.velocity_track", CATEGORY_VELOCITY_TRACK.get(category, 100.0))
         check_macros(name, {**default_values, **{k: float(v) for k, v in ov.items()}})
         if name in levels:
             ov["master.volume"] = levels[name]
