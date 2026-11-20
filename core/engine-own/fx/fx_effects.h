@@ -553,7 +553,7 @@ public:
                 const float period = std::clamp (delay * sr, 2.0f, 0.85f * sr);
                 const float rd = line[c].readCubic (period);
                 const float in = io[c][i];
-                line[c].push (std::clamp (in + f * rd, -1.0f, 1.0f) * 1.0f);
+                line[c].push (loopLimit (in + f * rd));
                 io[c][i] = dryG * in + wetG * rd;
             }
         }
