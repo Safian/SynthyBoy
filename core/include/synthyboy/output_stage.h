@@ -132,6 +132,7 @@ public:
         lastMinGain.store (1.0f, std::memory_order_relaxed);
     }
 
+    /** Lock free from any thread. A gain change takes effect at the start of the next process () block (one-block latency); smoothing starts from that block. */
     void setGainDb (float db) noexcept
     {
         if (! std::isfinite (db))
@@ -167,7 +168,8 @@ public:
     /** true: the scalar per sample loop for every block (the reference the NEON form is tested against). */
     bool scalarOnly = false;
 
-    /** In place; l or r may be null (mono), l == r is one mono channel. */
+    /** In place; l or r may be null (mono), l == r is one mono channel.
+        Target gain is latched once per block at the top of process () (one-block latency for setGainDb). */
     void process (float* l, float* r, int n) noexcept
     {
         if (n <= 0 || (l == nullptr && r == nullptr))
@@ -175,14 +177,15 @@ public:
         if (l == r)
             r = nullptr;
         target = wanted.load (std::memory_order_relaxed);
+        const float tg = targetGain.load (std::memory_order_relaxed);
         minG = 1.0f;
         int i = 0;
 #if SYNTHYBOY_OUT_NEON
         if (! scalarOnly)
-            i = processLanes (l, r, n);
+            i = processLanes (l, r, n, tg);
 #endif
         for (; i < n; ++i)
-            step (l, r, i);
+            step (l, r, i, tg);
         lastMinGain.store (minG, std::memory_order_relaxed);
     }
 
@@ -304,10 +307,10 @@ private:
         return x;
     }
 
-    /** One sample: the reference loop body, also what the NEON form falls back to wherever its conditions do not hold. */
-    void step (float* l, float* r, int i) noexcept
+    /** One sample: the reference loop body, also what the NEON form falls back to wherever its conditions do not hold.
+        tg is the block-latched target gain from process () (one-block latency for setGainDb). */
+    void step (float* l, float* r, int i, float tg) noexcept
     {
-        const float tg = targetGain.load (std::memory_order_relaxed);
         if (curGain != tg)
         {
             curGain = tg + (curGain - tg) * smCoef;
@@ -402,7 +405,7 @@ private:
     /** The groups of four in the steady state: the make-up gain settled, no crossfade, the detector idle, no sample of the group above the ceiling (|x| <= kCeiling as an integer compare
         of the magnitude bits: the samples are finite here) and the four slots of the delay ring contiguous. There the output is the delayed samples (limiter on) or the gained ones (off)
         and nothing else changes: exactly what four calls of step () give. Any other group goes through step (). Returns the number of samples done (n). */
-    int processLanes (float* l, float* r, int n) noexcept
+    int processLanes (float* l, float* r, int n, float tg) noexcept
     {
         int i = 0;
         const uint32x4_t absMask = vdupq_n_u32 (0x7fffffffu), c = vdupq_n_u32 (bitsOf (kCeiling));
@@ -410,9 +413,9 @@ private:
         while (i < n)
         {
             const int rd = (w - D) & kMask;
-            if (i + 4 > n || ! idle || curGain != targetGain.load (std::memory_order_relaxed) || mix != (target ? 1.0f : 0.0f) || w + 4 > kRing || rd + 4 > kRing)
+            if (i + 4 > n || ! idle || curGain != tg || mix != (target ? 1.0f : 0.0f) || w + 4 > kRing || rd + 4 > kRing)
             {
-                step (l, r, i);
+                step (l, r, i, tg);
                 ++i;
                 continue;
             }
@@ -424,7 +427,7 @@ private:
             if ((vget_lane_u32 (hh, 0) & vget_lane_u32 (hh, 1)) == 0u)
             {
                 for (int k = 0; k < 4; ++k)
-                    step (l, r, i + k);
+                    step (l, r, i + k, tg);
                 i += 4;
                 continue;
             }
@@ -467,6 +470,7 @@ private:
     int since = 0, holdN = 1, calm = 0, D = 1, W = 2;
     bool idle = true;
     // make-up gain, switch
+    static_assert (std::atomic<float>::is_always_lock_free, "output stage atomics must be lock free (audio thread)");
     std::atomic<float> gDb { 0.0f };
     std::atomic<float> targetGain { 1.0f };
     float curGain = 1.0f, smCoef = 0.99886686f;

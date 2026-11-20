@@ -988,3 +988,139 @@ TEST (output_stage_idle_bit_exactness)
         }
     }
 }
+
+// 9. Block-latched gain change smoothing against reference per-sample loop:
+// A gain change set between two blocks takes effect from the second block on,
+// with the same smoothing curve as a reference implementation of the old per-sample loop.
+TEST (output_stage_gain_change_between_blocks_smoothing)
+{
+    const double sampleRates[] = { 44100.0, 48000.0, 96000.0 };
+    const float newGainsDb[] = { -6.0f, 3.5f };
+    const int blockSizes[] = { 64, 128 };
+
+    for (const double sr : sampleRates)
+    {
+        const float smCoef = static_cast<float> (std::exp (-1.0 / (synthyboy::OutputStage::kGainSmoothingSeconds * sr)));
+
+        for (const float newDb : newGainsDb)
+        {
+            const float targetGainLin = std::pow (10.0f, newDb / 20.0f);
+
+            for (const int bs : blockSizes)
+            {
+                for (const bool scalar : { false, true })
+                {
+                    synthyboy::OutputStage stage;
+                    stage.prepare (sr);
+                    stage.setLimiter (false); // Limiter off: direct gained path (mix == 0, latency == 0)
+                    stage.setGainDb (0.0f);   // Initial gain 0 dB (unity 1.0f)
+                    stage.reset();
+                    stage.scalarOnly = scalar;
+
+                    // 350 ms: sufficient for 20 ms exponential smoothing to reach 1e-6 snap threshold (~13.8 * 20 ms = 276 ms).
+                    const double durationSeconds = 0.35;
+                    const int numBlocks = static_cast<int> (std::ceil (durationSeconds * sr / static_cast<double> (bs)));
+                    const size_t totalFrames = static_cast<size_t> (numBlocks * bs);
+
+                    // Sine test signal safely under ceiling even with +3.5 dB gain
+                    auto inL = generateSine (totalFrames, 0.4f, 440.0, sr);
+                    auto inR = generateSine (totalFrames, 0.3f, 880.0, sr);
+
+                    auto outL = inL;
+                    auto outR = inR;
+
+                    // Reference implementation of the old per-sample loop
+                    std::vector<float> refCurGain (totalFrames, 1.0f);
+                    float simGain = 1.0f;
+
+                    // Block 0: gain change has not happened yet (gain is 1.0f)
+                    stage.process (outL.data(), outR.data(), bs);
+
+                    // Assert block 0 was processed at initial gain (1.0f): bit-identical to input
+                    size_t block0DiffsL = 0, block0DiffsR = 0;
+                    for (int i = 0; i < bs; ++i)
+                    {
+                        uint32_t bOutL = 0, bInL = 0, bOutR = 0, bInR = 0;
+                        std::memcpy (&bOutL, &outL[static_cast<size_t> (i)], sizeof (float));
+                        std::memcpy (&bInL, &inL[static_cast<size_t> (i)], sizeof (float));
+                        std::memcpy (&bOutR, &outR[static_cast<size_t> (i)], sizeof (float));
+                        std::memcpy (&bInR, &inR[static_cast<size_t> (i)], sizeof (float));
+                        if (bOutL != bInL) ++block0DiffsL;
+                        if (bOutR != bInR) ++block0DiffsR;
+                    }
+                    CHECK_EQ (block0DiffsL, 0u);
+                    CHECK_EQ (block0DiffsR, 0u);
+
+                    // Gain change set BETWEEN block 0 and block 1
+                    stage.setGainDb (newDb);
+
+                    // Compute reference smoothing curve for blocks 1..numBlocks-1
+                    bool monotonic = true;
+                    for (size_t i = static_cast<size_t> (bs); i < totalFrames; ++i)
+                    {
+                        if (simGain != targetGainLin)
+                        {
+                            simGain = targetGainLin + (simGain - targetGainLin) * smCoef;
+                            if (std::fabs (simGain - targetGainLin) < 1e-6f * targetGainLin)
+                                simGain = targetGainLin;
+                        }
+                        refCurGain[i] = simGain;
+                        if (i > static_cast<size_t> (bs))
+                        {
+                            if (targetGainLin > 1.0f && refCurGain[i] < refCurGain[i - 1])
+                                monotonic = false;
+                            if (targetGainLin < 1.0f && refCurGain[i] > refCurGain[i - 1])
+                                monotonic = false;
+                        }
+                    }
+                    CHECK (monotonic);
+
+                    // Process subsequent blocks
+                    for (int b = 1; b < numBlocks; ++b)
+                    {
+                        const size_t pos = static_cast<size_t> (b * bs);
+                        stage.process (outL.data() + pos, outR.data() + pos, bs);
+                    }
+
+                    // Assert that the gain change took effect from the second block on (sample bs):
+                    // output at sample bs must not equal input (gain change has taken effect)
+                    CHECK (outL[static_cast<size_t> (bs)] != inL[static_cast<size_t> (bs)]);
+
+                    // Explicit assertion of sample values at key positions (no tautology):
+                    // First sample of block 1:
+                    const float firstExpectedGain = targetGainLin + (1.0f - targetGainLin) * smCoef;
+                    const float expectedSampleL = inL[static_cast<size_t> (bs)] * firstExpectedGain;
+                    CHECK_NEAR (outL[static_cast<size_t> (bs)], expectedSampleL, 1e-6f);
+
+                    // Settle check at 100 ms (5 time constants): must be within 1 % of target
+                    const size_t settle100ms = static_cast<size_t> (0.10 * sr);
+                    if (settle100ms < totalFrames)
+                    {
+                        CHECK_NEAR (refCurGain[settle100ms], targetGainLin, 0.01 * targetGainLin);
+                        CHECK_NEAR (outL[settle100ms], inL[settle100ms] * targetGainLin, 0.01 * targetGainLin);
+                    }
+
+                    // Compare every sample in blocks 1..numBlocks-1 to the reference per-sample loop output (bit-for-bit)
+                    size_t smoothedDiffsL = 0, smoothedDiffsR = 0;
+                    for (size_t i = static_cast<size_t> (bs); i < totalFrames; ++i)
+                    {
+                        const float expL = inL[i] * refCurGain[i];
+                        const float expR = inR[i] * refCurGain[i];
+
+                        uint32_t bOutL = 0, bExpL = 0, bOutR = 0, bExpR = 0;
+                        std::memcpy (&bOutL, &outL[i], sizeof (float));
+                        std::memcpy (&bExpL, &expL, sizeof (float));
+                        std::memcpy (&bOutR, &outR[i], sizeof (float));
+                        std::memcpy (&bExpR, &expR, sizeof (float));
+
+                        if (bOutL != bExpL) ++smoothedDiffsL;
+                        if (bOutR != bExpR) ++smoothedDiffsR;
+                    }
+
+                    CHECK_EQ (smoothedDiffsL, 0u);
+                    CHECK_EQ (smoothedDiffsR, 0u);
+                }
+            }
+        }
+    }
+}
