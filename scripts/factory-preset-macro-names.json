@@ -1601,6 +1601,246 @@
    "Decay",
    "",
    ""
+  ],
+  "Analog Sweep Bass": [
+   "Sweep",
+   "Bark Length",
+   "Drive",
+   "Sub",
+   "Cutoff",
+   "Resonance",
+   "",
+   ""
+  ],
+  "Trance Stack Lead": [
+   "Spread",
+   "Cutoff",
+   "Fifth",
+   "Space",
+   "Detune",
+   "Breath Rate",
+   "",
+   ""
+  ],
+  "Sync Sine Screamer": [
+   "Sync",
+   "Scream Length",
+   "Tube Drive",
+   "Octave Down",
+   "Cutoff",
+   "Vibrato Rate",
+   "",
+   ""
+  ],
+  "Sync Saw Raw Bass": [
+   "Sync Ratio",
+   "Tear Length",
+   "Clip Drive",
+   "Sub",
+   "Cutoff",
+   "Resonance",
+   "",
+   ""
+  ],
+  "FM Chain Tine Keys": [
+   "Tine Bell",
+   "Tine Decay",
+   "Body",
+   "Space",
+   "Mellow",
+   "Sustain Length",
+   "",
+   ""
+  ],
+  "PD Reso Acid Bass": [
+   "PD Peak",
+   "Squelch Decay",
+   "Diode Drive",
+   "Resonance",
+   "Cutoff",
+   "Sub",
+   "",
+   ""
+  ],
+  "Step Morph Pluck": [
+   "Pattern",
+   "Step Speed",
+   "Dark",
+   "Echo",
+   "Length",
+   "Detune",
+   "",
+   ""
+  ],
+  "West Coast Wavefold": [
+   "Fold Depth",
+   "Fold Drive",
+   "Dark",
+   "Space",
+   "Bite Length",
+   "Vibrato Rate",
+   "",
+   ""
+  ],
+  "Shimmer Bell Walk": [
+   "Harmonic Walk",
+   "Ring Length",
+   "Dampen",
+   "Space",
+   "Strike Length",
+   "Shimmer",
+   "",
+   ""
+  ],
+  "Free Bar Vibraphone": [
+   "Mallet Hard",
+   "Motor Speed",
+   "Resonator",
+   "Space",
+   "Ring Length",
+   "Dampen",
+   "",
+   ""
+  ],
+  "Gong Bloom Pad": [
+   "Bloom",
+   "Swell Time",
+   "Drone",
+   "Space",
+   "Dark",
+   "Shimmer",
+   "",
+   ""
+  ],
+  "Cymbal Cloud Riser": [
+   "Cloud Motion",
+   "Riser Length",
+   "Flange Jet",
+   "Echo Wash",
+   "Bright",
+   "Width",
+   "",
+   ""
+  ],
+  "Wind Sweep Riser": [
+   "Band Pitch",
+   "Sweep Time",
+   "Whistle",
+   "Space",
+   "Muffle",
+   "Width",
+   "",
+   ""
+  ],
+  "Air Chiff Flute": [
+   "Breath Tone",
+   "Chiff",
+   "Dark",
+   "Echo",
+   "Vibrato Rate",
+   "Room",
+   "",
+   ""
+  ],
+  "Pink Noise Sub": [
+   "Brighten",
+   "Sub Boom",
+   "Thump Length",
+   "Drive",
+   "Cutoff",
+   "Decay",
+   "",
+   ""
+  ],
+  "Vinyl Crackle Bed": [
+   "Density",
+   "Dark",
+   "Hum",
+   "Space",
+   "Drift Rate",
+   "Surface Ticks",
+   "",
+   ""
+  ],
+  "Acoustic Bore Reed": [
+   "Bore Morph",
+   "Dark",
+   "Vibrato Rate",
+   "Grit",
+   "Echo",
+   "Room",
+   "",
+   ""
+  ],
+  "Harmonic Wah Bass": [
+   "Wah Position",
+   "Wah Rate",
+   "Tube Drive",
+   "Sub",
+   "Dark",
+   "Resonance",
+   "",
+   ""
+  ],
+  "Cathedral Bell Ring": [
+   "Bell Bright",
+   "Ring Length",
+   "Dampen",
+   "Hall",
+   "Strike Length",
+   "Beating",
+   "",
+   ""
+  ],
+  "Dispersion Phase Pad": [
+   "Phase Swirl",
+   "Swirl Speed",
+   "Dark",
+   "Space",
+   "Clip Drive",
+   "Width",
+   "",
+   ""
+  ],
+  "Soprano Vowel Pad": [
+   "Vowel",
+   "Vowel Speed",
+   "Choir",
+   "Space",
+   "Dark",
+   "Chest",
+   "",
+   ""
+  ],
+  "Talk Box Baritone": [
+   "Mouth",
+   "Tube Drive",
+   "Dark",
+   "Echo",
+   "Vibrato Rate",
+   "Double",
+   "",
+   ""
+  ],
+  "Choir Swell Ensemble": [
+   "Vowel Blend",
+   "Attack Time",
+   "High Voices",
+   "Hall",
+   "Dark",
+   "Width",
+   "",
+   ""
+  ],
+  "Diphthong Morph Vox": [
+   "Diphthong",
+   "Word Speed",
+   "Dark",
+   "Echo Space",
+   "Vibrato Rate",
+   "Double",
+   "",
+   ""
   ]
  }
 }

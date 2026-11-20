@@ -2,7 +2,7 @@
 
 This chapter documents the factory sound library for SynthyBoy on Akai MPC standalone hardware and desktop hosts.
 
-The current factory sound library comprises **136 production presets** organized into **15 focused browser groups** in the MPC host Sounds browser (conforming to Akai MPC stock naming conventions, avoiding slashes and punctuation). In addition, **24 new presets** developed for Sound Set Batch 2 (utilizing the new factory content pack of wavetables, samples, multisample instruments, and impulse responses) are detailed in the [Coming with the Next Build](#coming-with-the-next-build-sound-set-batch-2) section.
+The current factory sound library comprises **136 production presets** organized into **15 focused browser groups** in the MPC host Sounds browser (conforming to Akai MPC stock naming conventions, avoiding slashes and punctuation). In addition, **24 new presets** developed for Sound Set Batch 2 (utilizing the new factory content pack of wavetables, samples, multisample instruments, and impulse responses) are detailed in the [Coming with the Next Build](#coming-with-the-next-build-sound-set-batch-2) section. A further 24 presets (Sound Set Batch 3), built on the factory wavetables that no earlier preset used, are in the [Sound Set Batch 3](#sound-set-batch-3-24-presets-on-the-unused-wavetables) section at the end of this chapter.
 
 ---
 
@@ -353,3 +353,39 @@ Every preset in Sound Set Batch 2 is engineered to remain musically usable even 
 - **Secondary Wavetable Layer**: Each preset combines its sample, granular, or spectral oscillator with a secondary wavetable layer (tuned between 10% and 30% of oscillator output). If a sample file is absent, the engine bypasses the missing asset cleanly and plays the secondary synth layer (-18 dB to -32 dBFS), ensuring tracks never go completely silent.
 - **Wavetable Fallback**: If a factory wavetable WAV is missing, the engine automatically falls back to a clean **sawtooth** waveform.
 - **Convolution Fallback**: If an impulse response WAV is missing, the Convolve effect passes the **dry input signal** through without coloration or interruption.
+
+---
+
+---
+
+## Sound Set Batch 3 (24 presets on the unused wavetables)
+
+Sound Set Batch 3 adds **24 presets** (184 in all) that are built on the factory wavetables that no earlier preset used: four for each of the six wavetable categories (Analog, Digital, Metallic, Noise, Spectral, Vocal). They need the factory wavetable pack (`content/factory-wavetables`); without a table file the engine plays a saw. They were measured, not heard.
+
+| Preset Name | Browser Group | What It Is | What to Play | Macro to Try First | Wavetable |
+|---|---|---|---|---|---|
+| **Analog Sweep Bass** | **Bass Synth** | A punchy analog bass whose filter sweep is in the table. | Roots and fifths C1 to G2. The wheel keeps the sweep open. | Sweep (Macro 1) | `saw_filter_sweep.wav` |
+| **Trance Stack Lead** | **Lead Synth** | A supersaw lead with the width in the table. | Chords and lines C3 to C5. The wheel opens the spread. | Spread (Macro 1) | `saw_stack_spread.wav` |
+| **Sync Sine Screamer** | **Lead Sync+FM** | A mono hard sync lead that screams once at every key and then sings. | Lines C3 to G4, legato with a glide. The wheel pushes the sync ratio. | Sync (Macro 1) | `sync_sine_sweep.wav` |
+| **Sync Saw Raw Bass** | **Bass Synth** | A raw hard sync bass with a firm sub. | Notes C1 to G2, legato slides. The wheel and macro 1 walk the sync ratio. | Sync Ratio (Macro 1) | `sync_saw_sweep.wav` |
+| **FM Chain Tine Keys** | **Keys** | An electric piano with a bright tine strike that falls to a mellow body. | Chords C2 to G4. Play hard for a brighter strike. | Tine Bell (Macro 1) | `fm_chain_123.wav` |
+| **PD Reso Acid Bass** | **Bass Acid** | An acid line whose squelch is in the oscillator. | Mono lines C1 to C3 with legato slides. Strike hard for a higher resonance peak. | PD Peak (Macro 1) | `pd_resonance.wav` |
+| **Step Morph Pluck** | **Sequence** | A wave sequencing pluck: every note steps through the patterns of the table. | Short notes and arpeggios C3 to C5. | Pattern (Macro 1) | `step_sequence_morph.wav` |
+| **West Coast Wavefold** | **Lead Sync+FM** | A west coast lead: a sine that the frame axis folds into dense metal. | Mono lines C2 to C5. Wheel and pressure fold it harder. | Fold Depth (Macro 1) | `sine_fold_sweep.wav` |
+| **Shimmer Bell Walk** | **Bells+Mallets** | A bell whose upper partials open with velocity. | Notes and slow chords C3 to G5. Hard keys glitter, soft keys clang. | Harmonic Walk (Macro 1) | `bell_pitch_walk.wav` |
+| **Free Bar Vibraphone** | **Bells+Mallets** | Vibraphone bars with a motor tremolo that the wheel switches on. | Melodies and chords F2 to F5. Wheel up is motor on. | Mallet Hard (Macro 1) | `free_bar_modes.wav` |
+| **Gong Bloom Pad** | **Pad Evolving** | A pad that opens like a struck gong: dark hum first, bronze after. | Held chords C2 to G4, two seconds or more. | Bloom (Macro 1) | `gong_modes_swell.wav` |
+| **Cymbal Cloud Riser** | **FX** | A four second riser from a dull hum to a cymbal cloud, cut at the top. | One note held for five seconds (C3 or any key). | Cloud Motion (Macro 1) | `cymbal_cloud.wav` |
+| **Wind Sweep Riser** | **FX** | A wind riser: a narrow band whistles up through frozen noise. | One key held for five seconds. Every key sounds the same. | Band Pitch (Macro 1) | `noise_band_sweep.wav` |
+| **Air Chiff Flute** | **Lead Synth** | A breathy flute: a triangle with an air layer from the noise table. | Mono lines C3 to C6, legato. Pressure and wheel add breath. | Breath Tone (Macro 1) | `breath_air_bumps.wav` |
+| **Pink Noise Sub** | **Bass Sub+808** | A sub bass with a pitched noise thump that closes within a quarter second. | Notes C1 to G2. | Brighten (Macro 1) | `pink_lowpass_sweep.wav` |
+| **Vinyl Crackle Bed** | **Texture** | A bed of dust, crackle and rattle for the back of a track. | Hold any key. Every key sounds the same. | Density (Macro 1) | `crackle_pulses.wav` |
+| **Acoustic Bore Reed** | **Lead Synth** | A reed solo that moves from clarinet to saxophone with pad pressure. | Mono lines C3 to G5, legato. Press harder for the fuller bore. | Bore Morph (Macro 1) | `bore_odd_to_even.wav` |
+| **Harmonic Wah Bass** | **Bass Synth** | A talking funk bass with a wah in the oscillator. | Lines C1 to C3. | Wah Position (Macro 1) | `harmonic_band_sweep.wav` |
+| **Cathedral Bell Ring** | **Bells+Mallets** | A bronze cathedral bell that settles from the strike to the hum. | Notes and slow chords C3 to G5. Hard keys ring brighter. | Bell Bright (Macro 1) | `additive_bell_strike.wav` |
+| **Dispersion Phase Pad** | **Pad Evolving** | A pad whose magnitudes never change and whose waveform does. | Held chords C2 to G4 (they sound an octave lower: master.transpose is minus 12). | Phase Swirl (Macro 1) | `dispersion_sweep.wav` |
+| **Soprano Vowel Pad** | **Pad Warm** | A choir of women walking the vowels. | Chords A2 to A4 (the table is a voice at 220 Hz; the preset sounds an octave below the key). | Vowel (Macro 1) | `vowel_cycle_women.wav` |
+| **Talk Box Baritone** | **Lead Synth** | A talk box lead: the wheel is the mouth. | Mono lines C2 to C4 (an octave below the key, men's voice at 130 Hz). | Mouth (Macro 1) | `vowel_cycle_men.wav` |
+| **Choir Swell Ensemble** | **Pad Warm** | A swelling choir of men, women and children. | Held chords C2 to G4. | Vowel Blend (Macro 1) | `choir_blend.wav` |
+| **Diphthong Morph Vox** | **Lead Synth** | A talking synth lead that says a word on a held key. | Mono lines C2 to C4 (an octave below the key). | Diphthong (Macro 1) | `diphthong_series.wav` |
+

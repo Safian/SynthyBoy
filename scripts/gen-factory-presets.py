@@ -651,7 +651,7 @@ assert len(set(p[0] for p in presets) | set(s[0] for s in showcase)) == 112, "pr
 assert len(set(file_name_of(p[0]) for p in presets) | set(file_name_of(s[0]) for s in showcase)) == 112
 
 
-BATCH_FILES = ("factory-presets-batch1.py", "factory-presets-batch2.py")   # the sound set batches after the first hundred and the showcase (scripts/sb_preset_dsl.py is their vocabulary)
+BATCH_FILES = ("factory-presets-batch1.py", "factory-presets-batch2.py", "factory-presets-batch3.py")   # the sound set batches after the first hundred and the showcase (scripts/sb_preset_dsl.py is their vocabulary)
 
 
 def load_batches() -> list:

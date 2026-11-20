@@ -60,10 +60,10 @@ class FactoryPresets(unittest.TestCase):
         data = json.loads(pp.DATA_FILE.read_text(encoding="utf-8"))["presets"]
         self.assertGreaterEqual(len(data), 30)
         self.assertLessEqual(len(data), 70)
-        # the presets of sound set batches 1 and 2 carry their pressure route in their own data (scripts/factory-presets-batch1.py, -batch2.py), as MPE Pressure Lead does
+        # the presets of sound set batches 1, 2 and 3 carry their pressure route in their own data (scripts/factory-presets-batch1.py, -batch2.py), as MPE Pressure Lead does
         import importlib.util
         own = set()
-        for part in ("factory-presets-batch1.py", "factory-presets-batch2.py"):
+        for part in ("factory-presets-batch1.py", "factory-presets-batch2.py", "factory-presets-batch3.py"):
             spec = importlib.util.spec_from_file_location("factory_presets_" + part[16:22], str(ROOT / "scripts" / part))
             batch = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(batch)
