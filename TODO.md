@@ -49,35 +49,31 @@ mi a baj, hol látszik (fájl:sor / eszköz / mérés), és mitől kész. Aki do
   - 2. rész (19): megerősítve 15; a kód stimmel, a hatás mérendő: 6, 10; részben téves: 5, 18.
   - 3. rész (18): megerősítve 1, 5, 9, 17; a kód stimmel, a hatás mérendő: 6, 8, 10, 11, 12, 13, 18; részben téves: 2, 3, 4, 7, 14, 15, 16.
 - Megvalósítási sorrend: a 3. rész ellenőrző doksijának „Work List Check" szakasza (15 lépés, az ítéletek után átrendezve). Az elszigetelt, megbízható teljesítménymérés az első (3. rész 9.); a determinisztikus hibajavítások (kis, tesztelhető tételek) ezzel párhuzamosan mehetnek.
-- Folyamatban lévő javítások (teszt először, Gemini Flash, tételenként egy ág): 1. rész 15. sub pan (fut: `agy/fix-sub-pan`); 1. rész 14. fésűszűrők közös állapota (fut: `agy/fix-comb-lp`); 1. rész 17. granulár hurok-átúsztatás (fut: `agy/fix-gran-loop`).
+- Javítási kör (teszt először; a kis tételek fordítás nélkül készülnek, egy build worker fordít kötegenként egyszer). Kész és a `develop`-ban van: sub pan, fésűszűrők külön csillapítása, létraszűrők korlátja (a dióda kivételével), mip-lekerekítés, HOST-LFO időszámítás, flanger visszacsatolás, multisample 1 pólusú szűrők, háromsávos splitter. A kör végén: az érintett presetek listája a koordinátornak, majd egyszer az alapok, a szinttábla és a kapukör.
 - Minden hangot változtató javítás után: a bitre azonos alapok (refcompare, paraméter-audit, arany renderek) és a preset-szintek újraellenőrzése egyszer, a javítási kör végén.
 
 ## DSP-audit 1. rész megállapításai (hangút) — `docs/review/OWN-ENGINE-DSP-AUDIT-1-VOICE-PATH-2026-11-20.md`
 Gemini 4 Neon írta, kódolvasásból, mérés nélkül. Minden tételt a megvalósítás ELŐTT ellenőrizni kell a kódban, és a doksiban megnevezett méréssel bizonyítani. A sorszám a doksi rangsora. Hat tételt szúrópróbával megnéztem: az eredmény a sor végén.
-- 1. Létraszűrők (Moog/EMS/Acid, dióda): a `gSafe <= 0.95` korlát 10,67 kHz-nél megállítja a vágási frekvenciát 44,1 kHz-en. Szúrópróba: a korlát megvan (`core/filters-serum/src/filter.cpp:406`).
+- 1. (maradék) Diódalétra: a `gSafe <= 0.95` korlát ott megmaradt (10,67 kHz 44,1 kHz-en), mert a visszacsatolásában egy mintányi késleltetés van, és a korlát emelése instabillá tenné (`core/filters-serum/src/filter_dsp.h`, `DiodeLadder`). Kész, ha a visszacsatolás késleltetés nélküli megoldásra van átírva és a létrák stabilitási tesztjei rá is átmennek.
 - 2. A decimáló szűrő unison-hangonként fut, nem egyszer az összegen (`core/engine-own/osc/wt_osc.h`): nagy CPU-nyereség várható.
 - 3. Spektrális külső Mask/Vocode: 2048 pontos FFT minden 32 mintában az 512 mintás lépés helyett (`core/engine-own/osc/lib_osc.cpp:554-569`).
 - 4. Warp előtti sávhatár `3.2 * sampleRate` 4x túlmintavételezésnél. Szúrópróba: a szám megvan (`wt_osc.h:672`), de a 2–3,2 fs közti összetevők a hallható sáv fölé tükröződnek és a decimáló kiszűri őket; csak a nemlineáris warpok keverhetik vissza. Feltevés, mérés dönti el.
 - 5. Kemény nemlinearitások és hard sync csak túlmintavételezésre támaszkodnak (a „low" szinten 2x), és mintánként `libm` hívások futnak (`core/engine-own/osc/warp.h`): ADAA / BLEP és polinomos közelítés.
 - 6. Frame-pásztázás nincs simítva a 32 mintás vezérlési perióduson belül: 1378 Hz-es lépcsőzaj frame-modulációnál (`wt_osc.h:222,705-713`).
 - 7. Sample és granulár: a mip-szint választása nem veszi figyelembe a lejátszási sebességet, felfelé hangoláskor akár egy oktávnyi szűretlen aliasing (`core/sample-osc/src/sample_voice.cpp`, `core/granular/src/granular.cpp`).
-- 8. HOST-hoz zárt LFO: a `songSeconds` a `bpm` és a `songBeats` betöltése ELŐTT számolódik (`core/engine-own/own_engine.cpp:1371-1378`). Szúrópróba: a sorrend tényleg ez; az viszont nem igaz, hogy a `songBeats` nem halad blokkon belül (`own_engine.cpp:1154` lépteti).
 - 9. Mintánkénti `pow` / `tan` / trigonometria és osztás a szűrők belső ciklusában (`core/engine-own/voice/filter_unit.h`, `core/filters-serum/src/filter_dsp.h`, `filter.cpp`, `classic_filters.h`).
 - 10. Memória: minden szűrő 14 késleltetővonalat foglal, a `LibOsc` hangonként előre lefoglal mindent; 60–80 MB munkakészlet, hideg gyorsítótár a Key 61-en.
 - 11. Nyers NEON lebegőpontos összehasonlítások maradtak (`wt_osc.h`, `core/spectral/src/kernels.cpp`), ARMv7-en skalárra esnek vissza.
 - 12. Spektrális morph: teljes 2048 pontos komplex IFFT a fél méretű valós helyett, magas hangoknál is.
-- 13. Mip-táblák lekerekítése: a feltétel 80%-nál lép be, a koszinusz 85%-tól indul, 80–85% között horpadás. Szúrópróba: igaz (`core/engine-own/osc/wavetable_bank.cpp:300-301`; 80%-nál a súly 0,75).
-- 14. `Combs` és `Reverb` szűrőtípus: egy közös aluláteresztő állapot a négy fésűvonalra (`filter.cpp:1294,1326`). Szúrópróba: nem tudtam megerősíteni.
-- 15. Sub oszcillátor: a `subTick.panRight` soha nem kap értéket, a jobb csatorna nem követi a pant (`core/engine-own/voice/voice.cpp:1390`). Szúrópróba: ilyen értékadást nem találtam, valószínűleg igaz.
 - 16. A szűrő vágási frekvenciája lineáris Hz-ben simít 5,5 ms-mal: elkeni a gyors szűrőburkolót.
-- 17. Granulár hurok-átúsztatás negatív indexről olvas, ha a hurok eleje közelebb van, mint az átúsztatás hossza; visszafelé játszott szemcsénél nem működik (`granular.cpp:485,739`).
+- 17. Granulár hurok-átúsztatás (`core/granular/src/granular.cpp:485,739`): KÉTSZER visszautasítva, nincs a `develop`-ban. Az első javítás ugrást vitt a hurokpontra nem periodikus anyagnál; a második (`agy/nb-gran-loop-2`: előtte lévő vagy utána lévő anyagból úsztat, mindkét irányban) tesztje a javítás nélküli kódon is átmegy, tehát nem mutatja ki a hibát. Előbb azt kell tisztázni futtatással: mit olvas a kód negatív pozíción (csend vagy az első minta), átlépi-e a tesztben a szemcse a hurokhatárt, és van-e egyáltalán hallható ugrás a mostani kódban előre és visszafelé. Csak utána javítani.
 - 18. A kikapcsolt szűrők ágai is lefutnak (`voice.cpp:1751-1824`).
 - 19. Lorenz / Rössler véletlen LFO: Euler-lépés a stabilitási határon, a sebesség 1,38 Hz alatt és 27,6 Hz fölött nem változik (`core/engine-own/env_lfo/lfo.h:182-210`).
 - 20. Unison középső hang: +3 dB kiemelés 0% szórásnál (`wt_osc.h:257-271,384`).
 - 21. Zajgenerátorok: 44,1 kHz-re rögzített együtthatók; a zajszűrő és a hangmagasság a 4–8. színt kihagyja; a sample-zaj mindig „high" minőségben fut.
 - 22. Mátrix: a hangfrekvenciás források 1378 Hz-re mintavételeződnek szűrés nélkül; aktív slotonként `exp` / `expm1` minden 32 mintában. (Ide tartozik: a mátrix nem mintánként számol, `core/engine-own/README.md`.)
 - 23. Mip-szint váltás átúsztatás nélkül: hallható ugrás hajlításnál.
-- 24. Multisample: az 1 pólusú szűrők valójában 2 pólusúak; az erősítés 32 mintánként lép.
+- 24. (maradék) Multisample: az erősítés 32 mintánként lép, nem mintánként (`core/engine-own/osc/lib_osc.cpp:975,991`).
 - 25. Keresztmoduláció blokkon belüli eseményfelosztásnál rossz indexre ír; a kattanásgátló csak a Main buszon él; tétlen globális LFO-k is futnak.
 - 26. Klasszikus létra és dióda: 8–11 skalár osztás mintánként; több szűrőmodell nincs NEON-ra írva.
 - 27. Bitre azonos skalár = NEON szabály (nincs FMA, nincs közelítő reciprok) mindenhol; a `fastmath.h` `union`-nal típust vált (nem definiált viselkedés).
@@ -86,7 +82,6 @@ Gemini 4 Neon írta, kódolvasásból, mérés nélkül. Minden tételt a megval
 ## DSP-audit 2. rész megállapításai (effektek, kimenet) — `docs/review/OWN-ENGINE-DSP-AUDIT-2-EFFECTS-OUTPUT-2026-11-20.md`
 Gemini 4 Neon írta, kódolvasásból, mérés nélkül; megvalósítás előtt minden tétel ellenőrizendő és mérendő. Öt tételt szúrópróbával megnéztem: az eredmény a sor végén. A jelentés szerint a lánc vége (kimeneti fokozat, master térd, hangszám-függő erősítés) rendben van, a hibák az effektekben vannak.
 - 1. Torzító: mind a 14 típus túlmintavételezés és ADAA nélkül fut (erős aliasing a kemény típusoknál); a 12–13. típus (X-Shaper) csak kemény vágás. Szúrópróba: a torzító blokkjában nincs túlmintavételezés (`core/engine-own/fx/fx_effects.h:660-740`).
-- 2. Háromsávos splitter: az alsó sáv fázisigazítása 4. rendű mindentáteresztő a 2. rendű helyett, bevágás a keresztezésnél (`core/fx-serum-a/.../splitter_lmh.*`).
 - 3. A splitter sávjai között nincs késleltetés-kiegyenlítés összeolvasztás előtt: Bode vagy limiter egy sávban fésűszűrőzést okoz (`core/engine-own/fx/fx_chain.cpp:583-610`).
 - 4. Konvolúció: egyenletes 128 mintás partíciók (33,5 MB), komplex FFT valós adaton, impulzuscsere átúsztatás nélkül, adatverseny a `live.tone`-on (`core/fx-serum-b/convolve.cpp`, `fx_modules.cpp:1014`).
 - 5. Zengető: minden példány mind a 6 algoritmus pufferét lefoglalja (4,7 MB); mintánként sok `sin` / `exp` / osztás; a Nitrous Space csillapítása negatív erősítést ad.
@@ -95,7 +90,7 @@ Gemini 4 Neon írta, kódolvasásból, mérés nélkül; megvalósítás előtt 
 - 8. Kompresszor többsávos módban 100% alatti mixszel: a nedves jel átmegy a keresztváltón, a száraz nem, fáziskioltás a keresztezési frekvenciákon; a limiter mintánként lineárisan pásztáz.
 - 9. Hangszám-függő erősítés csak a vezérlési rács elején frissül: közepes és magas szinten egy akkord akár 31 mintáig csillapítatlanul szól (`core/engine-own/own_engine.cpp:1461-1470,1578-1655`).
 - 10. Szinte minden effekt 32 mintánként lépteti a paramétereit (lépcsőzaj); a „low" szinten a chorus 4, a phaser 8 mintáig tartja az értéket.
-- 11. Flanger: a visszacsatolás bemenete ±1-re vágva, DC-szűrő nélkül; fölösleges 512 KB puffer. Szúrópróba: csak a paraméter korlátozását találtam (`fx_effects.h:537`), a jel vágását nem tudtam megerősíteni.
+- 11. (maradék) Flanger: fölösleges 512 KB puffer (900 ms, miközben legfeljebb 100 ms kell) és mintánkénti osztás.
 - 12. Hyper / Dimension: 11 puffer ugyanazzal a jellel, mintánként akár 23 `sin` / `cos`; a Dimension 0% mixnél is fut.
 - 13. CLAP shell: hang nélkül azonnal alvást jelez, levágja a zengető és késleltető lecsengését; mono kimenetnél a bal csatornát felülírja a jobb. Szúrópróba: mindkettő igaz (`shell-clap/synthyboy_clap.cpp:353,392`). JUCE shell: `setLatencySamples()` a hangszálon (`shell-juce/PluginProcessor.cpp:494`).
 - 14. Torzító: `pow`, osztás és `exp` mintánként; a `reset()` nem nullázza a DC-állapotot; a szűrő Q-ja nem a specifikáció szerinti.
