@@ -36,12 +36,40 @@ mi a baj, hol látszik (fájl:sor / eszköz / mérés), és mitől kész. Aki do
 - Régi `.hw-local/TODO-MPC.md` (2026-11-14) még nem ellenőrzött pontjai: böngészőcsempe (`Plugin Skins/browser_images/soundsmode.png` 270×110 a skin-generátorba), burkoló-görbület összevetése a host `Envelope` Quadratic rajzával, G2 csatorna-aftertouch (0xD0) a nyomás→cutoff rétegben, G3/G5/G9, MPCe Q-Link Mode X/Y → Macro 1–2 (mérés kell), pad-világítás plugin felől, automatizálás-felvétel (LFO n Cursor / Spectrum n), kétsávos próba (második SynthyBoy-sáv), Serum-preset 1:1 minta (owner), Steinberg VST2 terjesztés és Open MPC katalógus (owner), `feature/mpc-shell` ág törlése. Kész, ha mindegyiket élőnek (külön sor ide) vagy elavultnak (törölve) minősítettük; utána a régi fájl törölhető.
 
 ## Saját motor (egy motor lesz: a saját)
-- X|Y vezérlő Y tengelye (12 kulcs): a DSP kész, a `core/engine-own/own_support.cpp` 50–53. sora letagadja. (fut: `agy/own-xy-claim`)
+- X|Y vezérlő Y tengelye (12 kulcs): a letagadó sorok kivéve, a kulcsok élnek, 16 tengely teszttel igazolva, a hiánylista „No key remains"; nincs még a `develop`-ban. Hátravan 8 tengely tesztje (Warp, Warp 2, Rand Warp, Rand Warp 2, spektrális szűrő cutoff és mix), mert a próbaállásban a warp és a spektrális szűrő ki volt kapcsolva. (fut: `agy/own-xy-claim-2`)
 - X|Y „Density" tengely: a specifikáció (`docs/engine-spec/07`, 7a.2) szerint csak szabad ütemű módban hat, a kód (`core/engine-own/osc/lib_osc.cpp`, X|Y blokk) feltétel nélkül ír. Ellenőrizni.
-- Az X|Y tengelyek közül eddig csak a Level volt tesztelve.
 - A paraméter-audit adatai ellentmondanak egymásnak (`docs/ui-design/param-audit-keys.csv`: ALIVE, `param-audit-baseline-own.json`: UNSUPPORTED): az audit alapját újra kell generálni az X|Y kulcsok bekapcsolása után.
-- DSP-audit: 1. rész, hangút (fut: `agy/own-audit-1-voice`); 2. rész: effektek, kimenet, szintkezelés; 3. rész: teljesítmény és memória az ARMv7-en. Mindegyik megállapításból külön tétel lesz ide.
-- A modulációs mátrix 32 mintánként számol, nem mintánként (`core/engine-own/README.md`, „What is not there yet").
+- DSP-audit 2. rész: effektek, kimenet, szintkezelés (fut: `agy/own-audit-2-fx`); 3. rész: a motor magja, teljesítmény és memória az ARMv7-en (nem indult).
+
+## DSP-audit 1. rész megállapításai (hangút) — `docs/review/OWN-ENGINE-DSP-AUDIT-1-VOICE-PATH-2026-11-20.md`
+Gemini 4 Neon írta, kódolvasásból, mérés nélkül. Minden tételt a megvalósítás ELŐTT ellenőrizni kell a kódban, és a doksiban megnevezett méréssel bizonyítani. A sorszám a doksi rangsora. Hat tételt szúrópróbával megnéztem: az eredmény a sor végén.
+- 1. Létraszűrők (Moog/EMS/Acid, dióda): a `gSafe <= 0.95` korlát 10,67 kHz-nél megállítja a vágási frekvenciát 44,1 kHz-en. Szúrópróba: a korlát megvan (`core/filters-serum/src/filter.cpp:406`).
+- 2. A decimáló szűrő unison-hangonként fut, nem egyszer az összegen (`core/engine-own/osc/wt_osc.h`): nagy CPU-nyereség várható.
+- 3. Spektrális külső Mask/Vocode: 2048 pontos FFT minden 32 mintában az 512 mintás lépés helyett (`core/engine-own/osc/lib_osc.cpp:554-569`).
+- 4. Warp előtti sávhatár `3.2 * sampleRate` 4x túlmintavételezésnél. Szúrópróba: a szám megvan (`wt_osc.h:672`), de a 2–3,2 fs közti összetevők a hallható sáv fölé tükröződnek és a decimáló kiszűri őket; csak a nemlineáris warpok keverhetik vissza. Feltevés, mérés dönti el.
+- 5. Kemény nemlinearitások és hard sync csak túlmintavételezésre támaszkodnak (a „low" szinten 2x), és mintánként `libm` hívások futnak (`core/engine-own/osc/warp.h`): ADAA / BLEP és polinomos közelítés.
+- 6. Frame-pásztázás nincs simítva a 32 mintás vezérlési perióduson belül: 1378 Hz-es lépcsőzaj frame-modulációnál (`wt_osc.h:222,705-713`).
+- 7. Sample és granulár: a mip-szint választása nem veszi figyelembe a lejátszási sebességet, felfelé hangoláskor akár egy oktávnyi szűretlen aliasing (`core/sample-osc/src/sample_voice.cpp`, `core/granular/src/granular.cpp`).
+- 8. HOST-hoz zárt LFO: a `songSeconds` a `bpm` és a `songBeats` betöltése ELŐTT számolódik (`core/engine-own/own_engine.cpp:1371-1378`). Szúrópróba: a sorrend tényleg ez; az viszont nem igaz, hogy a `songBeats` nem halad blokkon belül (`own_engine.cpp:1154` lépteti).
+- 9. Mintánkénti `pow` / `tan` / trigonometria és osztás a szűrők belső ciklusában (`core/engine-own/voice/filter_unit.h`, `core/filters-serum/src/filter_dsp.h`, `filter.cpp`, `classic_filters.h`).
+- 10. Memória: minden szűrő 14 késleltetővonalat foglal, a `LibOsc` hangonként előre lefoglal mindent; 60–80 MB munkakészlet, hideg gyorsítótár a Key 61-en.
+- 11. Nyers NEON lebegőpontos összehasonlítások maradtak (`wt_osc.h`, `core/spectral/src/kernels.cpp`), ARMv7-en skalárra esnek vissza.
+- 12. Spektrális morph: teljes 2048 pontos komplex IFFT a fél méretű valós helyett, magas hangoknál is.
+- 13. Mip-táblák lekerekítése: a feltétel 80%-nál lép be, a koszinusz 85%-tól indul, 80–85% között horpadás. Szúrópróba: igaz (`core/engine-own/osc/wavetable_bank.cpp:300-301`; 80%-nál a súly 0,75).
+- 14. `Combs` és `Reverb` szűrőtípus: egy közös aluláteresztő állapot a négy fésűvonalra (`filter.cpp:1294,1326`). Szúrópróba: nem tudtam megerősíteni.
+- 15. Sub oszcillátor: a `subTick.panRight` soha nem kap értéket, a jobb csatorna nem követi a pant (`core/engine-own/voice/voice.cpp:1390`). Szúrópróba: ilyen értékadást nem találtam, valószínűleg igaz.
+- 16. A szűrő vágási frekvenciája lineáris Hz-ben simít 5,5 ms-mal: elkeni a gyors szűrőburkolót.
+- 17. Granulár hurok-átúsztatás negatív indexről olvas, ha a hurok eleje közelebb van, mint az átúsztatás hossza; visszafelé játszott szemcsénél nem működik (`granular.cpp:485,739`).
+- 18. A kikapcsolt szűrők ágai is lefutnak (`voice.cpp:1751-1824`).
+- 19. Lorenz / Rössler véletlen LFO: Euler-lépés a stabilitási határon, a sebesség 1,38 Hz alatt és 27,6 Hz fölött nem változik (`core/engine-own/env_lfo/lfo.h:182-210`).
+- 20. Unison középső hang: +3 dB kiemelés 0% szórásnál (`wt_osc.h:257-271,384`).
+- 21. Zajgenerátorok: 44,1 kHz-re rögzített együtthatók; a zajszűrő és a hangmagasság a 4–8. színt kihagyja; a sample-zaj mindig „high" minőségben fut.
+- 22. Mátrix: a hangfrekvenciás források 1378 Hz-re mintavételeződnek szűrés nélkül; aktív slotonként `exp` / `expm1` minden 32 mintában. (Ide tartozik: a mátrix nem mintánként számol, `core/engine-own/README.md`.)
+- 23. Mip-szint váltás átúsztatás nélkül: hallható ugrás hajlításnál.
+- 24. Multisample: az 1 pólusú szűrők valójában 2 pólusúak; az erősítés 32 mintánként lép.
+- 25. Keresztmoduláció blokkon belüli eseményfelosztásnál rossz indexre ír; a kattanásgátló csak a Main buszon él; tétlen globális LFO-k is futnak.
+- 26. Klasszikus létra és dióda: 8–11 skalár osztás mintánként; több szűrőmodell nincs NEON-ra írva.
+- 27. Bitre azonos skalár = NEON szabály (nincs FMA, nincs közelítő reciprok) mindenhol; a `fastmath.h` `union`-nal típust vált (nem definiált viselkedés).
 - A Vital kivezetésének terve: build-kapcsolók (`SYNTHYBOY_WITH_VITAL`, `SYNTHYBOY_SHELL_ENGINE`), az asztali plugin alapmotorja, a Vitalhoz mérő eszközök (`tools/own-oracle`, refcompare, paraméter-audit), `NOTICE` / `THIRD_PARTY.md`, a Vital-preset importáló, és a `wtedit::vital` adatmodell licenckérdése (`docs/ui-design/OWN-ENGINE-GAP.md`, történet 5. pont).
 
 ## Tudás és ügynök-eszközök
