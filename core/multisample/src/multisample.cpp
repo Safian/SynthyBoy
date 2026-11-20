@@ -730,16 +730,23 @@ void LayerVoice::setupFilter (const Region& r, int key, int velocity) noexcept
         return;
     const double cents = static_cast<double> (r.filKeytrackCents) * (key - r.filKeycenter) + static_cast<double> (r.filVeltrackCents) * velocity / 127.0;
     const double cutoff = std::min (0.45 * rate_, std::max (10.0, static_cast<double> (r.filCutoffHz) * std::pow (2.0, cents / 1200.0)));
+    if (r.filType == 1 || r.filType == 3)
+    {
+        const double g = std::tan (3.14159265358979323846 * cutoff / rate_);
+        fb0_ = static_cast<float> (g / (1.0 + g));
+        fb1_ = fb2_ = fa1_ = fa2_ = 0.0f;
+        filType_ = r.filType;
+        return;
+    }
     const double w0 = 6.283185307179586 * cutoff / rate_;
     const double cosw = std::cos (w0), sinw = std::sin (w0);
-    const bool onePole = r.filType == 1 || r.filType == 3;
-    const double q = onePole ? 0.70710678 : 0.70710678 * std::pow (10.0, std::max (0.0, static_cast<double> (r.filResonanceDb)) / 20.0);
+    const double q = 0.70710678 * std::pow (10.0, std::max (0.0, static_cast<double> (r.filResonanceDb)) / 20.0);
     const double alpha = sinw / (2.0 * q);
     double b0 = 1.0, b1 = 0.0, b2 = 0.0, a0 = 1.0, a1 = 0.0, a2 = 0.0;
     switch (r.filType)
     {
-        case 1: case 2: b0 = (1.0 - cosw) / 2.0; b1 = 1.0 - cosw; b2 = b0; a0 = 1.0 + alpha; a1 = -2.0 * cosw; a2 = 1.0 - alpha; break;                    // low pass
-        case 3: case 4: b0 = (1.0 + cosw) / 2.0; b1 = -(1.0 + cosw); b2 = b0; a0 = 1.0 + alpha; a1 = -2.0 * cosw; a2 = 1.0 - alpha; break;                // high pass
+        case 2: b0 = (1.0 - cosw) / 2.0; b1 = 1.0 - cosw; b2 = b0; a0 = 1.0 + alpha; a1 = -2.0 * cosw; a2 = 1.0 - alpha; break;                    // low pass
+        case 4: b0 = (1.0 + cosw) / 2.0; b1 = -(1.0 + cosw); b2 = b0; a0 = 1.0 + alpha; a1 = -2.0 * cosw; a2 = 1.0 - alpha; break;                // high pass
         case 5: b0 = alpha; b1 = 0.0; b2 = -alpha; a0 = 1.0 + alpha; a1 = -2.0 * cosw; a2 = 1.0 - alpha; break;                                           // band pass
         default: b0 = 1.0; b1 = -2.0 * cosw; b2 = 1.0; a0 = 1.0 + alpha; a1 = -2.0 * cosw; a2 = 1.0 - alpha; break;                                       // band reject
     }
@@ -768,7 +775,35 @@ void LayerVoice::processAdd (float* left, float* right, float* tmpLeft, float* t
     voice_.setSemitoneOffset (semitones + tuneSemitones_);
     voice_.setSpeedMultiplier (1.0);
     voice_.processModulated (tmpLeft, tmpRight, numFrames, rateMod);
-    if (filType_ > 0)
+    if (filType_ == 1)
+        for (int i = 0; i < numFrames; ++i)
+        {
+            const float xl = tmpLeft[i], xr = tmpRight[i];
+            const float vl = (xl - fzl_[0]) * fb0_;
+            const float yl = vl + fzl_[0];
+            fzl_[0] = yl + vl;
+            const float vr = (xr - fzr_[0]) * fb0_;
+            const float yr = vr + fzr_[0];
+            fzr_[0] = yr + vr;
+            tmpLeft[i] = yl;
+            tmpRight[i] = yr;
+        }
+    else if (filType_ == 3)
+        for (int i = 0; i < numFrames; ++i)
+        {
+            const float xl = tmpLeft[i], xr = tmpRight[i];
+            const float vl = (xl - fzl_[0]) * fb0_;
+            const float lpL = vl + fzl_[0];
+            fzl_[0] = lpL + vl;
+            const float yl = xl - lpL;
+            const float vr = (xr - fzr_[0]) * fb0_;
+            const float lpR = vr + fzr_[0];
+            fzr_[0] = lpR + vr;
+            const float yr = xr - lpR;
+            tmpLeft[i] = yl;
+            tmpRight[i] = yr;
+        }
+    else if (filType_ > 0)
         for (int i = 0; i < numFrames; ++i)   // transposed direct form II
         {
             const float xl = tmpLeft[i], xr = tmpRight[i];
