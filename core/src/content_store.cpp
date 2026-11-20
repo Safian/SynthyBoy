@@ -46,8 +46,14 @@ bool DirectoryContentStore::readFileBounded (const ContentFileRef& ref, std::vec
         *tooLarge = false;
     if (ref.file.empty())
         return false;
-    const std::string path = root_ + "/" + (ref.pack.empty() ? std::string() : ref.pack + "/") + ref.file;
+    std::string path = root_ + "/" + (ref.pack.empty() ? std::string() : ref.pack + "/") + ref.file;
     std::FILE* f = std::fopen (path.c_str(), "rb");
+    if (f == nullptr && ref.pack.rfind ("com.safian.synthyboy.", 0) == 0)
+    {
+        const std::string shortPack = ref.pack.substr (21);
+        path = root_ + "/" + shortPack + "/" + ref.file;
+        f = std::fopen (path.c_str(), "rb");
+    }
     if (f == nullptr)
         return false;
     bytes.clear();

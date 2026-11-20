@@ -392,6 +392,18 @@ int main()
         pv = false;
         check (! synthyboy_mpc::outputLimiterFromPreset (preNone.data(), preNone.size(), pv) && ! pv, "preset: without the member (the chunk's member is another key) nothing is set");
         check (! synthyboy_mpc::outputLimiterFromPreset (nullptr, 0, pv), "preset: no data");
+        const std::string trim1 = "{\"format\":\"synthyboy-preset\",\"tierTrimDb\":1.5,\"state\":{}}";
+        const std::string trimNeg = "{\"format\":\"synthyboy-preset\",\"tierTrimDb\":-2.4,\"state\":{}}";
+        const std::string trimClamp = "{\"format\":\"synthyboy-preset\",\"tierTrimDb\":15.0,\"state\":{}}";
+        float tv = 0.0f;
+        check (synthyboy_mpc::tierTrimDbFromPreset (trim1.data(), trim1.size(), tv) && std::fabs (tv - 1.5f) < 1e-4f, "preset: \"tierTrimDb\":1.5 parses correctly");
+        tv = 0.0f;
+        check (synthyboy_mpc::tierTrimDbFromPreset (trimNeg.data(), trimNeg.size(), tv) && std::fabs (tv - (-2.4f)) < 1e-4f, "preset: \"tierTrimDb\":-2.4 parses correctly");
+        tv = 0.0f;
+        check (synthyboy_mpc::tierTrimDbFromPreset (trimClamp.data(), trimClamp.size(), tv) && std::fabs (tv - 9.0f) < 1e-4f, "preset: \"tierTrimDb\":15.0 clamped to +9 dB");
+        tv = 42.0f;
+        check (! synthyboy_mpc::tierTrimDbFromPreset (preNone.data(), preNone.size(), tv) && tv == 42.0f, "preset: missing tierTrimDb leaves value untouched");
+        check (! synthyboy_mpc::tierTrimDbFromPreset (nullptr, 0, tv), "preset: null data");
     }
     {
         ::setenv ("SYNTHYBOY_MPC_OUTPUT_LIMITER", "0", 1);
