@@ -93,6 +93,7 @@ add("Cymbal Cloud Riser", "FX", "fx,riser,cymbal,metallic,cloud,sweep,flanger",
         "flanger.on": 1, "flanger.rate": 0.2, "flanger.depth": 60, "flanger.mix": 30,
         "delay.on": 1, "delay.sync": "Tempo dotted", "delay.division": "1/8 note", "delay.feedback": 45, "delay.mix": 22,
         "reverb.on": 1, "reverb.type": "Plate", "reverb.decay": 3500, "reverb.mix": 32,
+        "utility.on": 1, "utility.level": 6.0,
     },
     [
         R("env1", "osc1.frame", 70),                                                       # the cloud opens with the swell
