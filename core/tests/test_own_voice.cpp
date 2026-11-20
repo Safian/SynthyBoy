@@ -1300,3 +1300,140 @@ TEST (ownv_idle_filters_checksum)
     }
 }
 
+// Reuses the rig and helper calls (make, set, sbtest::noteOn, sbtest::render, CHECK) from
+// TEST (ownv_bus_sends_levels_and_racks) and TEST (ownv_idle_filters_checksum)
+
+TEST (ownv_backward_crossmod_split_invariance_and_all_bus_declick)
+{
+    auto printChecksum = [] (const char* name, const std::vector<float>& left)
+    {
+        CHECK (sbtest::allFinite (left));
+        CHECK (left.size() >= 8);
+        double sumAbs = 0.0;
+        for (float s : left)
+            sumAbs += std::fabs (static_cast<double> (s));
+        CHECK (sumAbs > 0.0);
+        const size_t sz = left.size();
+        std::printf ("CROSSMOD-CHECKSUM %s sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                     name, sumAbs,
+                     static_cast<double> (left[sz - 8]),
+                     static_cast<double> (left[sz - 7]),
+                     static_cast<double> (left[sz - 6]),
+                     static_cast<double> (left[sz - 5]),
+                     static_cast<double> (left[sz - 4]),
+                     static_cast<double> (left[sz - 3]),
+                     static_cast<double> (left[sz - 2]),
+                     static_cast<double> (left[sz - 1]));
+    };
+
+    // 1. Backward cross-mod split invariance: Osc 2 -> Osc 1
+    {
+        auto setupCrossModOsc = [] () -> std::unique_ptr<IEngine>
+        {
+            auto e = make();
+            set (*e, "osc1.on", 1.0f);
+            set (*e, "osc1.wavetable", 0.0f); // Sine
+            set (*e, "osc1.level", 100.0f);
+            set (*e, "osc1.warp.type", 7.0f); // FM from Osc 2
+            set (*e, "osc1.warp.amount", 100.0f);
+            set (*e, "osc2.on", 1.0f);
+            set (*e, "osc2.wavetable", 1.0f); // Saw
+            set (*e, "osc2.level", 100.0f);
+            set (*e, "osc2.transpose", 7.0f);
+            set (*e, "filter1.on", 0.0f);
+            set (*e, "env1.attack", 0.0f);
+            set (*e, "master.volume", -6.0f);
+            return e;
+        };
+
+        auto eA = setupCrossModOsc();
+        auto eB = setupCrossModOsc();
+        const auto rA = sbtest::render (*eA, { sbtest::noteOn (0, 60) }, 4800, 256);
+        const auto rB = sbtest::render (*eB, { sbtest::noteOn (0, 60) }, 4800, 10);
+
+        printChecksum ("osc2_to_osc1_unsplit_block256", rA.left);
+
+        float maxDiff = 0.0f;
+        for (size_t i = 0; i < rA.left.size(); ++i)
+            maxDiff = std::max (maxDiff, std::fabs (rA.left[i] - rB.left[i]));
+        CHECK (maxDiff < 1.0e-5f);
+    }
+
+    // 1b. Backward cross-mod split invariance: Sub -> Osc 1
+    {
+        auto setupCrossModSub = [] () -> std::unique_ptr<IEngine>
+        {
+            auto e = make();
+            set (*e, "osc1.on", 1.0f);
+            set (*e, "osc1.wavetable", 0.0f); // Sine
+            set (*e, "osc1.level", 100.0f);
+            set (*e, "osc1.warp.type", 53.0f); // FM Thru-Zero from Sub
+            set (*e, "osc1.warp.amount", 100.0f);
+            set (*e, "sub.on", 1.0f);
+            set (*e, "sub.level", 100.0f);
+            set (*e, "sub.waveform", 3.0f); // Saw
+            set (*e, "filter1.on", 0.0f);
+            set (*e, "env1.attack", 0.0f);
+            set (*e, "master.volume", -6.0f);
+            return e;
+        };
+
+        auto eA = setupCrossModSub();
+        auto eB = setupCrossModSub();
+        const auto rA = sbtest::render (*eA, { sbtest::noteOn (0, 60) }, 4800, 256);
+        const auto rB = sbtest::render (*eB, { sbtest::noteOn (0, 60) }, 4800, 10);
+
+        printChecksum ("sub_to_osc1_unsplit_block256", rA.left);
+
+        float maxDiff = 0.0f;
+        for (size_t i = 0; i < rA.left.size(); ++i)
+            maxDiff = std::max (maxDiff, std::fabs (rA.left[i] - rB.left[i]));
+        CHECK (maxDiff < 1.0e-5f);
+    }
+
+    // 2. 4-bus steal declick: test Direct out (tg == 3) and Bus 1 (tg == 1), plus Main bus (tg == 0)
+    struct DeclickTargetCase
+    {
+        const char* name;
+        int destination;
+        float bus1Send;
+    };
+    const DeclickTargetCase cases[] = {
+        { "direct_out_tg3", 4, 0.0f },
+        { "bus1_tg1", 6, 100.0f },
+        { "main_tg0", 3, 0.0f }
+    };
+
+    for (const auto& c : cases)
+    {
+        auto e = make();
+        set (*e, "master.polyphony", 1.0f);
+        set (*e, "master.voice_override", 1.0f); // Steal
+        set (*e, "osc1.wavetable", 2.0f); // Square
+        set (*e, "osc1.level", 100.0f);
+        set (*e, "osc1.destination", static_cast<float> (c.destination));
+        if (c.bus1Send > 0.0f)
+            set (*e, "osc1.bus1_send", c.bus1Send);
+        set (*e, "filter1.on", 0.0f);
+        set (*e, "master.volume", 0.0f);
+        set (*e, "env1.attack", 0.0f);
+        set (*e, "env1.sustain", 100.0f);
+
+        const auto prev = sbtest::render (*e, { sbtest::noteOn (0, 48) }, 2048, 256);
+        const float yPrev = prev.left[2047];
+        CHECK (std::fabs (yPrev) > 0.4f);
+
+        set (*e, "env1.attack", 500.0f);
+        const auto after = sbtest::render (*e, { sbtest::noteOn (0, 60) }, 128, 256);
+
+        if (std::string (c.name) == "main_tg0")
+            printChecksum ("main_bus_steal", after.left);
+        else
+            printChecksum (c.name, after.left);
+
+        CHECK (std::fabs (after.left[0] - yPrev) < 0.05f * std::fabs (yPrev) + 0.01f);
+        CHECK (std::fabs (after.left[32] - 0.5f * yPrev) < 0.2f * std::fabs (yPrev));
+    }
+}
+
+
