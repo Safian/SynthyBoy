@@ -859,7 +859,7 @@ void LibOsc::startPendingSpectral() noexcept
         const int offset = static_cast<int> (quarter) * spectral::kStartStep;
         // the start ledger (tier low): the voice starts when the start work of this and the next blocks fits the budget, in the order of the note serial; disabled it always says yes
         if (!lp.scratch->start.request (spectral::startKey (lp.serial, oscIdx, u), spectral::SpectralVoice::startPattern (offset, smears, channels)))
-            break;   // the later unison voices and notes come after this one
+            continue;   // the later unison voices ask too: they register now and wait behind this one in key order (their wait counts from the note start)
         spectral::SpectralVoice& sv = specVoices[static_cast<size_t> (u)];
         sv.setReferenceKernels (lp.referenceKernels);
         specParams.pitchRatio = ratioOf (uni[u]);
