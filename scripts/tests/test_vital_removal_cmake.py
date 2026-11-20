@@ -66,28 +66,45 @@ class TestDefinitions(unittest.TestCase):
         self.assertNotRegex(read("tests/bitmap-gui/CMakeLists.txt"), r'/golden"')
 
 
-class ReferenceToolsGone(unittest.TestCase):
-    """R5 (V3): the tools that measure against the Vital engine, their scripts and the Vital engine round trip are gone; no file still points at them."""
+class ReferenceToolsOwnEngine(unittest.TestCase):
+    """R5 (V3, corrected): the tools that measure AGAINST Vital are gone (own-oracle, the Vital engine round trip, bench --engine vital). param-audit and ref-compare
+    also serve Serum 2 and the own engine: they stay, with the own engine as the only engine (no --engine option) and no WITH_VITAL gate."""
 
     GONE = [
-        "tools/param-audit", "tools/ref-compare", "scripts/run-param-audit.sh", "scripts/param_audit_report.py", "scripts/run-ref-compare.sh",
         "tools/vital-import/vital_roundtrip.cpp", "tools/own-oracle/CMakeLists.txt", "tools/own-oracle/own_oracle.cpp",
         "tools/own-oracle/fx_oracle.cpp", "tools/own-oracle/osc_oracle.cpp",
     ]
+    KEPT = ["tools/param-audit/exemptions.tsv", "tools/param-audit/param_audit.cpp", "tools/ref-compare/ref_render.cpp", "tools/ref-compare/test_metrics.py",
+            "scripts/run-param-audit.sh", "scripts/param_audit_report.py", "scripts/run-ref-compare.sh"]
 
     def test_paths_are_gone(self):
         for f in self.GONE:
             self.assertFalse(os.path.exists(os.path.join(ROOT, f)), f)
 
+    def test_audit_and_ref_compare_are_kept(self):
+        for f in self.KEPT:
+            self.assertTrue(os.path.isfile(os.path.join(ROOT, f)), f)
+
     def test_the_helper_header_of_the_own_engine_tests_stays(self):
         # core/tests/test_own_*.cpp include own_oracle.h from tools/own-oracle (core/tests/CMakeLists.txt adds the include directory)
         self.assertTrue(os.path.isfile(os.path.join(ROOT, "tools", "own-oracle", "own_oracle.h")))
 
-    def test_no_build_file_names_the_removed_tools(self):
+    def test_cmake_lines(self):
         text = read("CMakeLists.txt")
-        for name in ("tools/param-audit", "tools/ref-compare", "tools/own-oracle"):
-            self.assertNotIn(name, text)
+        self.assertNotIn("tools/own-oracle", text)
+        self.assertRegex(text, r"\n    add_subdirectory\(tools/param-audit\)\n    add_subdirectory\(tools/ref-compare\)\n")
         self.assertNotIn("synthyboy_vital_roundtrip", read("tools/vital-import/CMakeLists.txt"))
+
+    def test_no_vital_engine_option_or_path(self):
+        pat = re.compile(r"EngineKind::vital|WITH_VITAL|--engine vital|vital\|own|own\|vital|--engine\b")
+        for f in ("tools/param-audit/param_audit.cpp", "tools/param-audit/audit.h", "tools/param-audit/test_param_semantics.cpp", "tools/param-audit/CMakeLists.txt",
+                  "tools/ref-compare/ref_render.cpp", "tools/ref-compare/CMakeLists.txt", "scripts/run-param-audit.sh"):
+            hits = [n + 1 for n, line in enumerate(read(f).splitlines()) if pat.search(line)]
+            self.assertEqual(hits, [], f"{f}: lines {hits}")
+
+    def test_audit_baseline_is_the_own_one(self):
+        self.assertIn("param-audit-baseline-own.json", read("scripts/run-param-audit.sh"))
+        self.assertIn("param-audit-baseline-own.json", read("tools/param-audit/CMakeLists.txt"))
 
     def test_bench_has_one_engine(self):
         text = read("bench/bench_engine.cpp")
@@ -103,7 +120,7 @@ class Workflow(unittest.TestCase):
 
     def test_no_vital_engine_in_the_jobs(self):
         text = read(".github/workflows/build.yml")
-        for needle in ("SYNTHYBOY_SHELL_ENGINE", "--engine vital", "run-param-audit", "ios-vital-free", "-DSYNTHYBOY_WITH_VITAL"):
+        for needle in ("SYNTHYBOY_SHELL_ENGINE", "--engine vital", "ios-vital-free", "-DSYNTHYBOY_WITH_VITAL"):
             self.assertNotIn(needle, text, needle)
 
     def test_the_general_rule_runs_in_the_build_job(self):
