@@ -1027,3 +1027,49 @@ TEST (ownv_phaser_vector_p1_notches)
         deep += twelve[static_cast<size_t> (i)] < -10.0 ? 1 : 0;
     CHECK (deep >= 4); // four of the six notches of 12 stages are found within +-8 % of the measured positions
 }
+
+TEST (ownv_sub_oscillator_pan_stereo_balance)
+{
+    auto renderSub = [] (float pan)
+    {
+        auto e = make();
+        set (*e, "osc1.on", 0);
+        set (*e, "filter1.on", 0);
+        set (*e, "master.volume", 0);
+        set (*e, "env1.attack", 1);
+        set (*e, "env1.release", 50);
+        set (*e, "sub.on", 1);
+        set (*e, "sub.waveform", 0);
+        set (*e, "sub.octave", 0);
+        set (*e, "sub.level", 50);
+        set (*e, "sub.pan", pan);
+        return run (*e, { sbtest::noteOn (0, 69) }, 0.5);
+    };
+
+    const auto outNeg = renderSub (-100.0f);
+    const auto outZero = renderSub (0.0f);
+    const auto outPos = renderSub (100.0f);
+
+    const size_t start = static_cast<size_t> (0.1 * kSr);
+    const size_t end = static_cast<size_t> (0.4 * kSr);
+    const double lNeg = oracle::rms (outNeg.left, start, end);
+    const double rNeg = oracle::rms (outNeg.right, start, end);
+    const double lZero = oracle::rms (outZero.left, start, end);
+    const double rZero = oracle::rms (outZero.right, start, end);
+    const double lPos = oracle::rms (outPos.left, start, end);
+    const double rPos = oracle::rms (outPos.right, start, end);
+
+    std::printf ("Sub pan -100: L = %.6f, R = %.6f\n", lNeg, rNeg);
+    std::printf ("Sub pan    0: L = %.6f, R = %.6f\n", lZero, rZero);
+    std::printf ("Sub pan +100: L = %.6f, R = %.6f\n", lPos, rPos);
+
+    // Expected after fix:
+    // at -100: right channel is silent or far below the left
+    CHECK (rNeg < 1.0e-3 * lNeg);
+    // at +100: left channel is far below the right
+    CHECK (lPos < 1.0e-3 * rPos);
+    // at 0: both are equal within 1 percent
+    CHECK (std::fabs (lZero - rZero) / lZero < 0.01);
+    // mirror-symmetric: left RMS at -100 equals right RMS at +100 within 1 percent
+    CHECK (std::fabs (lNeg - rPos) / lNeg < 0.01);
+}
