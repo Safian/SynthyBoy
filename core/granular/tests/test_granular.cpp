@@ -686,3 +686,145 @@ TEST (granular_the_output_stage_in_lanes_is_the_per_sample_stage)
     CHECK_EQ (blocks, 200);
     CHECK_EQ (different, 0);
 }
+
+// Rank 17: loop grains crossfade is continuous for non-periodic material (decisive test from analysis Q7)
+TEST (granular_loop_grains_crossfade_boundary)
+{
+    // Q7.1: Non-periodic FM cosine + linear DC ramp, 2.0 s at 44.1 kHz
+    const double sampleRate = 44100.0;
+    const int totalFrames = static_cast<int> (sampleRate * 2.0); // 88200 frames
+    std::vector<float> sampleData (static_cast<size_t> (totalFrames));
+    for (size_t i = 0; i < sampleData.size(); ++i)
+    {
+        const double t = static_cast<double> (i) / sampleRate;
+        const double phase = 2.0 * kPi * (173.3 * t + 241.7 * t * t);
+        sampleData[i] = static_cast<float> (0.25 * std::cos (phase) + 0.30 * (1.0 - 1.5 * t));
+    }
+
+    SampleData sample;
+    sample.loadFromFrames (sampleData.data(), nullptr, totalFrames, sampleRate);
+    const auto view = sample.view();
+
+    float maxSampleStep = 0.0f;
+    for (size_t i = 1; i < sampleData.size(); ++i)
+        maxSampleStep = std::max (maxSampleStep, std::fabs (sampleData[i] - sampleData[i - 1]));
+
+    const float wrapLimit = 1.15f * maxSampleStep;
+    const float regionLimit = 1.25f * maxSampleStep;
+
+    struct TestCase
+    {
+        const char* name;
+        float loopLo;
+        float loopHi;
+        bool isBitIdentityCase;
+    };
+
+    const TestCase cases[] = {
+        { "A (loopLo = 0.0, loopHi = 0.5: no pre-roll, post-roll exists: F2/R1)", 0.0f, 0.5f, false },
+        { "B (loopLo = 0.25, loopHi = 0.75: both exist: F1/R1)", 0.25f, 0.75f, true },
+        { "C (loopLo = 0.5, loopHi = 0.9999: pre-roll exists, no post-roll: F1/R2)", 0.5f, 0.9999f, false }
+    };
+
+    for (const auto& tc : cases)
+    {
+        // Q7.2: Grain parameters
+        GrainParams p;
+        p.loopLo = tc.loopLo;
+        p.loopHi = tc.loopHi;
+        p.loopGrains = true;
+        p.loopCrossfade = 0.1f;
+        p.densityHz = 0.5f;
+        p.maxGrains = 1;
+        p.lengthSec = 1.0f;
+        p.gain = 1.0f;
+        p.windowAmount = 0.0f;
+        p.manual = true;
+        p.scanSpeed = 0.0f;
+        p.pitchRatio = 1.0f;
+        p.regionLo = 0.0f;
+        p.regionHi = 1.0f;
+
+        // Forward grains: start just before loopHi, crossing into loopLo at i_wrap = 4410
+        p.reverseGrains = false;
+        p.position = tc.loopHi - 0.05f;
+        GranularVoice vf;
+        vf.prepare (sampleRate);
+        vf.noteOn (&view, p, 1u, 0.0f, true, 0.0f);
+        std::vector<float> rightFwd;
+        auto outFwd = render (vf, p, 12000, 256, &rightFwd);
+        outFwd.resize (12000);
+        rightFwd.resize (12000);
+
+        // Q7.3: Tight wrap window [i_wrap - 8, i_wrap + 8] = [4402, 4418]
+        const int iWrapFwd = 4410;
+        float maxJumpWrapFwd = 0.0f;
+        for (int i = iWrapFwd - 8; i <= iWrapFwd + 8; ++i)
+            maxJumpWrapFwd = std::max (maxJumpWrapFwd, std::fabs (outFwd[static_cast<size_t> (i)] - outFwd[static_cast<size_t> (i - 1)]));
+
+        // Full crossfade + wrap region [1000, 9000]
+        float maxJumpRegionFwd = 0.0f;
+        for (size_t i = 1000; i <= 9000; ++i)
+            maxJumpRegionFwd = std::max (maxJumpRegionFwd, std::fabs (outFwd[i] - outFwd[i - 1]));
+
+        // Q7.5: Bit-identity case for B-Fwd (F1): compare kernel and reference, print checksum
+        double f1SumKernel = 0.0;
+        double f1SumRef = 0.0;
+        if (tc.isBitIdentityCase)
+        {
+            GranularVoice vfRef;
+            vfRef.prepare (sampleRate);
+            vfRef.setReferenceKernels (true);
+            vfRef.noteOn (&view, p, 1u, 0.0f, true, 0.0f);
+            std::vector<float> rightRef;
+            auto outFwdRef = render (vfRef, p, 12000, 256, &rightRef);
+            outFwdRef.resize (12000);
+            rightRef.resize (12000);
+
+            for (float s : outFwd)
+                f1SumKernel += static_cast<double> (s);
+
+            for (float s : outFwdRef)
+                f1SumRef += static_cast<double> (s);
+        }
+
+        // Reverse grains: start just after loopLo, crossing into loopHi at i_wrap = 4411
+        p.reverseGrains = true;
+        p.position = tc.loopLo + 0.05f;
+        GranularVoice vr;
+        vr.prepare (sampleRate);
+        vr.noteOn (&view, p, 1u, 0.0f, true, 0.0f);
+        std::vector<float> rightRev;
+        auto outRev = render (vr, p, 12000, 256, &rightRev);
+        outRev.resize (12000);
+        rightRev.resize (12000);
+
+        // Q7.3: Tight wrap window [i_wrap - 8, i_wrap + 8] = [4403, 4419]
+        const int iWrapRev = 4411;
+        float maxJumpWrapRev = 0.0f;
+        for (int i = iWrapRev - 8; i <= iWrapRev + 8; ++i)
+            maxJumpWrapRev = std::max (maxJumpWrapRev, std::fabs (outRev[static_cast<size_t> (i)] - outRev[static_cast<size_t> (i - 1)]));
+
+        // Full crossfade + wrap region [1000, 9000]
+        float maxJumpRegionRev = 0.0f;
+        for (size_t i = 1000; i <= 9000; ++i)
+            maxJumpRegionRev = std::max (maxJumpRegionRev, std::fabs (outRev[i] - outRev[i - 1]));
+
+        std::printf ("    case %s:\n", tc.name);
+        if (tc.isBitIdentityCase)
+            std::printf ("F1-CHECKSUM: %#.9g (ref: %#.9g)\n", f1SumKernel, f1SumRef);
+        std::printf ("      sample max step: %f, wrap limit: %f, region limit: %f\n",
+                     maxSampleStep, wrapLimit, regionLimit);
+        std::printf ("      forward wrap jump: %f (ratio: %.3fx), region jump: %f (ratio: %.3fx)\n",
+                     maxJumpWrapFwd, maxJumpWrapFwd / maxSampleStep,
+                     maxJumpRegionFwd, maxJumpRegionFwd / maxSampleStep);
+        std::printf ("      reverse wrap jump: %f (ratio: %.3fx), region jump: %f (ratio: %.3fx)\n",
+                     maxJumpWrapRev, maxJumpWrapRev / maxSampleStep,
+                     maxJumpRegionRev, maxJumpRegionRev / maxSampleStep);
+
+        CHECK (maxJumpWrapFwd <= wrapLimit);
+        CHECK (maxJumpRegionFwd <= regionLimit);
+        CHECK (maxJumpWrapRev <= wrapLimit);
+        CHECK (maxJumpRegionRev <= regionLimit);
+    }
+}
