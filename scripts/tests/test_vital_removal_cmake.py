@@ -49,5 +49,21 @@ class ShellsOwnEngineOnly(unittest.TestCase):
             self.assertNotIn("kCapVoiceControl", read(f).split("aboutText")[1].split("}")[0], f)
 
 
+class TestDefinitions(unittest.TestCase):
+    """R4: no test is compiled for a Vital shell engine; golden-own is the only set of bitmap golden pictures (V5)."""
+
+    def test_no_shell_engine_definition(self):
+        for f in ("CMakeLists.txt", "tests/bitmap-gui/CMakeLists.txt"):
+            text = read(f)
+            self.assertNotIn("SYNTHYBOY_SHELL_ENGINE_VITAL", text, f)
+            self.assertNotIn("SYNTHYBOY_HARNESS_OWN_ENGINE", text, f)
+            self.assertNotRegex(text, r"if\(SYNTHYBOY_SHELL_ENGINE STREQUAL", f)
+
+    def test_golden_own_is_the_only_golden_set(self):
+        self.assertFalse(os.path.isdir(os.path.join(ROOT, "tests", "bitmap-gui", "golden")))
+        self.assertIn("golden-own", read("tests/bitmap-gui/CMakeLists.txt"))
+        self.assertNotRegex(read("tests/bitmap-gui/CMakeLists.txt"), r'/golden"')
+
+
 if __name__ == "__main__":
     unittest.main()
