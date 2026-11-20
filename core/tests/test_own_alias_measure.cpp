@@ -64,14 +64,14 @@ TEST (own_alias_meter_ignores_a_tone_next_to_a_harmonic_and_reads_one_further_aw
 {
     // The periodic 4-term window has a spectrum of 7 bins (offsets -3 .. +3), so a tone 2 bins from the harmonic is entirely inside the exclusion of +-5 bins.
     // (A tone 4 bins away would leak 2 and 3 bins further, outside it: the plan's "+ 4 bins" cannot read below -85 dB; + 2 is used.)
-    auto near = std::vector<std::pair<size_t, double>> { { kBin, 1.0 }, { kBin + 2, 1.0e-3 } };
-    const aliasm::Result rn = aliasm::measure (tones (near).data(), kN, f0(), kFs);
+    auto closeT = std::vector<std::pair<size_t, double>> { { kBin, 1.0 }, { kBin + 2, 1.0e-3 } };
+    const aliasm::Result rn = aliasm::measure (tones (closeT).data(), kN, f0(), kFs);
     std::printf ("    tone at + 2 bins: alias %.3f dB\n", rn.aliasDb);
     CHECK (rn.aliasDb < -85.0);
 
     // The same tone 10 bins away: a clear tone of amplitude 1e-3 against 1.0 = -60 dB.
-    auto far = std::vector<std::pair<size_t, double>> { { kBin, 1.0 }, { kBin + 10, 1.0e-3 } };
-    const aliasm::Result rf = aliasm::measure (tones (far).data(), kN, f0(), kFs);
+    auto distantT = std::vector<std::pair<size_t, double>> { { kBin, 1.0 }, { kBin + 10, 1.0e-3 } };
+    const aliasm::Result rf = aliasm::measure (tones (distantT).data(), kN, f0(), kFs);
     std::printf ("    tone at + 10 bins: alias %.3f dB (expected -60.00)\n", rf.aliasDb);
     CHECK_NEAR (rf.aliasDb, -60.0, 0.3);
 }
