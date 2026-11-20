@@ -275,6 +275,34 @@ private:
     Biquad stage2_;
 };
 
+/** 2nd-Order All-Pass Filter: single 2nd-order Butterworth AP biquad (matches LR4_LP + LR4_HP phase alignment). */
+class LinkwitzRiley2AP
+{
+public:
+    void reset() noexcept
+    {
+        stage_.reset();
+    }
+
+    void setCutoff (float cutoffHz, double sampleRate) noexcept
+    {
+        stage_.setButterworthAP (cutoffHz, sampleRate);
+    }
+
+    void setButterworthAP (float cutoffHz, double sampleRate) noexcept
+    {
+        stage_.setButterworthAP (cutoffHz, sampleRate);
+    }
+
+    float process (float in) noexcept
+    {
+        return stage_.process (in);
+    }
+
+private:
+    Biquad stage_;
+};
+
 /** 4th-Order All-Pass Filter: two cascaded 2nd-order Butterworth AP biquads. */
 class LinkwitzRiley4AP
 {

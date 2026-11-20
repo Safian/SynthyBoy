@@ -74,8 +74,8 @@ private:
     float lastFreq2_ = -1.0f;
 
     // Phase alignment for Low band (all-pass at f2)
-    LinkwitzRiley4AP ap2L_;
-    LinkwitzRiley4AP ap2R_;
+    LinkwitzRiley2AP ap2L_;
+    LinkwitzRiley2AP ap2R_;
 
     // Preallocated scratch buffers
     std::vector<float> scratchLowL_;
