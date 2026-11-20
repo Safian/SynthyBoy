@@ -1751,6 +1751,12 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     // ---- filters (series routing feeds one into the other)
     auto runFilter = [&] (int f)
     {
+        if (!filtOn[f] && !usedFin[f])
+        {
+            std::fill (extNext[2 + f], extNext[2 + f] + n, 0.0f);
+            srcLevel[5 + f] = 0.0f;
+            return;
+        }
         touchFin (f);
         if (filtOn[f])
         {
@@ -1778,6 +1784,8 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     };
     auto toMain = [&] (int f, bool suppress)
     {
+        if (!usedFin[f])
+            return;
         // the output of a filter: Effects only (Main), Direct out or None; the taps to the buses stay whatever the destination is
         if (!suppress && filtDest[f] != 2)
             toTarget (filtDest[f] == 1 ? 3 : 0, filtEnv1[f], fout_L[f], fout_R[f], 1.0f);
@@ -1803,7 +1811,8 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     if (routing == 2) // series 2 -> 1
     {
         runFilter (1);
-        addFin (0, fout_L[1], fout_R[1]);
+        if (usedFin[1])
+            addFin (0, fout_L[1], fout_R[1]);
         runFilter (0);
         toMain (0, false);
         toMain (1, true); // the output of the first filter went on into the second: only its taps stay
@@ -1811,7 +1820,8 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     else if (routing == 1) // series 1 -> 2
     {
         runFilter (0);
-        addFin (1, fout_L[0], fout_R[0]);
+        if (usedFin[0])
+            addFin (1, fout_L[0], fout_R[0]);
         runFilter (1);
         toMain (1, false);
         toMain (0, true);
