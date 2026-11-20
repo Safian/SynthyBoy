@@ -114,11 +114,18 @@ TEST (voice_legato_note_takes_the_envelope_scaling_of_its_step_reference_control
 // Regression test: Lorenz and Rossler attractors scale speed across low and high rates and stay stable.
 TEST (own_rlfo_attractors_scale_rate_and_stay_stable)
 {
+    float maxDiffLowSummary[2] = {};
+    float maxDiffHighSummary[2] = {};
+
     for (int style = 3; style <= 4; ++style)
     {
-        // 1. Low-rate scaling: 0.1 Hz vs 1.0 Hz at 44100 Hz.
+        // 1. Low-rate scaling: 0.1 Hz vs 1.0 Hz at 44100 Hz (500 periods = 0.363 s audio).
         // Before fix: both rates clamp dt to 0.001f, giving maxDiff == 0.0f.
-        // After fix: 1.0 Hz integrates 10x further in ODE time, giving maxDiff > 0.05f.
+        // After fix: 1.0 Hz integrates 10x further in ODE time (totalT = 2.90 vs 0.29).
+        // For Lorenz (style 3), rapid divergence yields maxDiff > 0.5f (~0.98f).
+        // For Rossler (style 4), starting at (0.174, 0, 0) with 0.09 output scale,
+        // x(t) moves from 0.174 to -0.233 at t=2.90, allowing maxDiff <= 0.0367f (~0.0355f).
+        // Expected minDiff: Lorenz > 0.05f, Rossler > 0.02f (both are 0.0f before fix).
         {
             RandomLfo lfoA;
             RandomLfo lfoB;
@@ -135,7 +142,9 @@ TEST (own_rlfo_attractors_scale_rate_and_stay_stable)
                 if (diff > maxDiffLow)
                     maxDiffLow = diff;
             }
-            CHECK (maxDiffLow > 0.05f);
+            maxDiffLowSummary[style - 3] = maxDiffLow;
+            const float minExpectedDiff = (style == 3) ? 0.05f : 0.02f;
+            CHECK (maxDiffLow > minExpectedDiff);
         }
 
         // 2. High-rate scaling: 30.0 Hz vs 60.0 Hz at 44100 Hz.
@@ -157,6 +166,7 @@ TEST (own_rlfo_attractors_scale_rate_and_stay_stable)
                 if (diff > maxDiffHigh)
                     maxDiffHigh = diff;
             }
+            maxDiffHighSummary[style - 3] = maxDiffHigh;
             CHECK (maxDiffHigh > 0.05f);
         }
 
@@ -187,6 +197,10 @@ TEST (own_rlfo_attractors_scale_rate_and_stay_stable)
             CHECK ((maxVal - minVal) > 0.1f);
         }
     }
+
+    std::printf ("    RLFO attractors maxDiff: low=[Lorenz: %.4f, Rossler: %.4f], high=[Lorenz: %.4f, Rossler: %.4f]\n",
+                 static_cast<double> (maxDiffLowSummary[0]), static_cast<double> (maxDiffLowSummary[1]),
+                 static_cast<double> (maxDiffHighSummary[0]), static_cast<double> (maxDiffHighSummary[1]));
 
     // 4. Bit-identity verification for styles 0, 1, 2 (Perlin, S&H, Sine interpolate).
     for (int s = 0; s <= 2; ++s)
