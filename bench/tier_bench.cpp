@@ -7,7 +7,7 @@
 //   synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets]
 //                        [--seconds 30] [--repeat N] [--budget PCT] [--notes K] [--retrigger 1] [--paced] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz]
 //                        [--sections] [--list] [--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] [--pmu compute|cache] [--pmu-require]
-//                        [--evict] [--first-blocks N] [--modules] [--module-group GROUP] [--module-reps N]
+//                        [--evict] [--first-blocks N] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK]
 //
 //   --core N        pin the measuring thread to CPU N (Linux: sched_setaffinity; elsewhere the option is refused). The frequency governor is not touched. The CPU the run
 //                   really was on, its part number and its frequency settings are printed. The engine's helper threads are moved to the other CPUs (see --no-helpers-away).
@@ -47,7 +47,12 @@
 //                                  the nine effects of state version 2 (reverb and flanger only run when the profile's fx mask lets them)
 //                     heavy        the heavy patch of bench/own_heavy_patch.h (3 x 7 unison, one morph, one warp): the patch of the earlier device measurements
 //                     basic        the default patch (one saw oscillator, one filter)
+//                     dist:T       the basic patch with the distortion on: type T, drive +18 dB, mix 100 (a held chord of the profile's polyphony: 8 notes at low)
+//                     warp:T:A     the basic patch with the oscillator 1 warp of type T at amount A, unison 3 (with --sections: the cost of that warp per block)
 //                     any other    a factory preset by its name ("Hyper Saw Lead") or file path
+//   --no-aa MASK    switch the anti-aliasing changes OFF by their bits (core/include/synthyboy/aa_switch.h: 1 distortion ADAA, 2 warp ADAA, 4 BLEP, 8 BLAMP, 16 band limit,
+//                   32 library warp ADAA; 63 = all; decimal or 0x hex), before the engines are made. The cost of a stage is the median with --no-aa 0 minus the median with
+//                   --no-aa 63 in one binary.
 //   --all-presets   every .sbpreset below DIR instead of the default loads (the table of cost per preset per profile)
 //   --seconds S     measured audio per run (default 30; the first second of every run is played and not measured)
 //   --repeat N      run the whole list N times, one pass after the other (default 1). The summary then takes, per preset, the MEDIAN of the passes' 99th
@@ -101,6 +106,7 @@
  #include <xmmintrin.h>
 #endif
 
+#include "synthyboy/aa_switch.h"
 #include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/modulation.h"
@@ -287,6 +293,8 @@ struct Options
     int moduleReps = 3;      // --module-reps
     std::string moduleGroup = "all"; // --module-group
     bool secondsGiven = false;       // --seconds was on the command line (--modules runs 2 s without it)
+    uint32_t noAa = 0;               // --no-aa: the bits of synthyboy::aa::Off that are switched off
+    bool noAaGiven = false;
 };
 
 struct PresetData
@@ -316,11 +324,11 @@ bool loadPresetFile (const std::string& path, PresetData& out)
 
 struct Load
 {
-    enum Kind { worst, heavy, basic, preset, moduleCase } kind = basic;
+    enum Kind { worst, heavy, basic, preset, moduleCase, dist, warp } kind = basic;
     std::string name;
     std::string group; // "synthetic" or the category of the preset
     PresetData data;
-    std::vector<std::pair<std::string, float>> params; // moduleCase: the parameters set on top of the defaults (perf/perf_modules.h)
+    std::vector<std::pair<std::string, float>> params; // moduleCase, dist, warp: the parameters set on top of the defaults (perf/perf_modules.h)
 };
 
 void setIfKnown (IEngine& engine, const std::string& key, float value)
@@ -380,6 +388,8 @@ void applyLoad (IEngine& engine, const Load& load)
         case Load::heavy: bench::ownHeavyPatch (engine); break;
         case Load::basic: setIfKnown (engine, "master.polyphony", 32.0f); break;
         case Load::moduleCase:
+        case Load::dist:
+        case Load::warp:
             setIfKnown (engine, "master.polyphony", 32.0f);   // as basic
             for (const auto& p : load.params)
                 setIfKnown (engine, p.first, p.second);
@@ -752,7 +762,7 @@ long currentKhz (int cpu)
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
                           "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--scalar-warp] [--no-voice-savings] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list] "
                           "[--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] "
-                          "[--pmu compute|cache] [--pmu-require] [--evict] [--first-blocks N] [--modules] [--module-group GROUP] [--module-reps N]\n", message);
+                          "[--pmu compute|cache] [--pmu-require] [--evict] [--first-blocks N] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -1054,6 +1064,16 @@ int main (int argc, char** argv)
         else if (a == "--pmu-require") o.pmuRequire = true;
         else if (a == "--evict")       o.evict = true;
         else if (a == "--modules")     o.modules = true;
+        else if (a == "--no-aa")
+        {
+            char* end = nullptr;
+            const char* text = next();
+            const unsigned long mask = std::strtoul (text, &end, 0);
+            if (end == text || *end != '\0' || mask > static_cast<unsigned long> (synthyboy::aa::kAll))
+                usage ("--no-aa needs a mask 0 .. 63");
+            o.noAa = static_cast<uint32_t> (mask);
+            o.noAaGiven = true;
+        }
         else if (a == "--module-group") o.moduleGroup = next();
         else if (a == "--module-reps") o.moduleReps = std::atoi (next());
         else if (a == "--first-blocks") o.firstBlocks = std::atoi (next());
@@ -1067,6 +1087,7 @@ int main (int argc, char** argv)
         usage ("argument out of range");
     if (o.modules && ! o.secondsGiven)
         o.seconds = 2.0;
+    synthyboy::aa::setOff (o.noAa);   // before any engine is made
     if (o.micro)
     {
 #if defined(__linux__)
@@ -1137,6 +1158,31 @@ int main (int argc, char** argv)
             l.kind = name == "worst" ? Load::worst : (name == "heavy" ? Load::heavy : Load::basic);
             l.name = name;
             l.group = "synthetic";
+            loads.push_back (std::move (l));
+            return true;
+        }
+        // dist:<type> and warp:<type>:<amount>, the synthetic loads of the anti-aliasing plan (docs/plans/distortion-antialiasing.md, A3)
+        if (name.rfind ("dist:", 0) == 0 || name.rfind ("warp:", 0) == 0)
+        {
+            const bool isDist = name[0] == 'd';
+            int type = 0;
+            float amount = 0.0f;
+            char tail = 0;
+            const char* text = name.c_str() + 5;
+            const int got = isDist ? std::sscanf (text, "%d%c", &type, &tail) : std::sscanf (text, "%d:%f%c", &type, &amount, &tail);
+            if (got != (isDist ? 1 : 2) || type < 0)
+            {
+                if (required)
+                    usage (("load '" + name + "': expected dist:<type> or warp:<type>:<amount>").c_str());
+                return false;
+            }
+            l.kind = isDist ? Load::dist : Load::warp;
+            l.name = name;
+            l.group = "synthetic";
+            if (isDist)
+                l.params = { { "distortion.on", 1.0f }, { "distortion.type", static_cast<float> (type) }, { "distortion.drive", 18.0f }, { "distortion.mix", 100.0f } };
+            else
+                l.params = { { "osc1.warp.type", static_cast<float> (type) }, { "osc1.warp.amount", amount }, { "osc1.unison.voices", 3.0f } };
             loads.push_back (std::move (l));
             return true;
         }
@@ -1252,6 +1298,8 @@ int main (int argc, char** argv)
     std::printf ("synthyboy_tier_bench: %.0f Hz, block %d frames = %.3f ms, %.1f s measured per run after 1 s of warm-up, retrigger every %.2f s, flush-to-zero %s, %s%s%s\n", o.sampleRate, o.block,
                  budgetMs, o.seconds, o.retrigger, o.ftz ? "on" : "off", o.paced ? "blocks paced at real time" : "blocks back to back",
                  (o.savingsOff & kOwnSavingFxMute) != 0 ? ", effects with mix 0 processed (--no-fx-mute)" : "", (o.savingsOff & kOwnSavingVectorFilters) != 0 ? ", scalar filters (--scalar-filters)" : "");
+    if (o.noAaGiven)
+        std::printf ("anti-aliasing switch: changes with these bits are OFF: %u (core/include/synthyboy/aa_switch.h; 0 = all on, 63 = all off)\n", static_cast<unsigned> (o.noAa));
     if ((o.savingsOff & kOwnSavingVectorWarp) != 0)
         std::printf ("scalar warp samples (--scalar-warp)\n");
     if ((o.savingsOff & kOwnSavingContentKernels) != 0)
