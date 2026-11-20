@@ -299,6 +299,11 @@ void ModMatrix::compile (const float* base) noexcept
             c.amountSlot = owner - 100;
         }
         c.curve = (content != nullptr && content->modCurve[static_cast<size_t> (s)].present) ? &content->modCurve[static_cast<size_t> (s)] : nullptr;
+        c.hasPower = !(std::fabs (-c.power) < 1.0e-4f);
+        c.powerDen = c.hasPower ? std::expm1 (-c.power) : 1.0f;
+        c.hasAuxPower = c.auxPower != 0.0f && !(std::fabs (-c.auxPower) < 1.0e-4f);
+        c.auxPowerDen = c.hasAuxPower ? std::expm1 (-c.auxPower) : 1.0f;
+        c.slewCached = false;
         // V4: with a source x <= 0 (+-0, negative, -inf; not NaN) in a lane, one () computes clamp01 (x) = +-0 (no curve, no slew: the test of one () itself), law = copysign
         // (powerShape (|+-0|, -power), +-0): +0 for |power| < 1e-4, else expm1 (+-0) / expm1 (-power) = +-0 for every finite power (expm1 of a finite value is finite, -1 or +inf, and not 0
         // for |power| >= 1e-4); not bipolar (2x - 1 would be -1). Then +-0 * amount * width * aux * gate is +-0 when the other factors are finite: the amount (checked per evaluation:
@@ -374,26 +379,58 @@ void ModMatrix::evaluate (const EvalContext& ctx) const noexcept
                 st.heldR = xr;
                 st.init = true;
             }
-            auto slew = [&] (float held, float x)
+            if (!ctx.reference)
             {
-                const float t = x > held ? c.riseMs : c.fallMs;
-                if (!(t > 0.0f))
-                    return x;
-                return held + (x - held) * (1.0f - std::exp (-ctx.dt * 2.302585f / (t * 0.001f)));
-            };
-            st.heldL = slew (st.heldL, xl);
-            st.heldR = slew (st.heldR, xr);
+                const uint32_t dtBits = bitsOf (ctx.dt);
+                if (!c.slewCached || dtBits != c.slewDtBits)
+                {
+                    c.riseAlpha = c.riseMs > 0.0f ? (1.0f - std::exp (-ctx.dt * 2.302585f / (c.riseMs * 0.001f))) : 0.0f;
+                    c.fallAlpha = c.fallMs > 0.0f ? (1.0f - std::exp (-ctx.dt * 2.302585f / (c.fallMs * 0.001f))) : 0.0f;
+                    c.slewDtBits = dtBits;
+                    c.slewCached = true;
+                }
+                auto slew = [&] (float held, float x)
+                {
+                    if (x > held)
+                        return c.riseMs > 0.0f ? held + (x - held) * c.riseAlpha : x;
+                    return c.fallMs > 0.0f ? held + (x - held) * c.fallAlpha : x;
+                };
+                st.heldL = slew (st.heldL, xl);
+                st.heldR = slew (st.heldR, xr);
+            }
+            else
+            {
+                auto slew = [&] (float held, float x)
+                {
+                    const float t = x > held ? c.riseMs : c.fallMs;
+                    if (!(t > 0.0f))
+                        return x;
+                    return held + (x - held) * (1.0f - std::exp (-ctx.dt * 2.302585f / (t * 0.001f)));
+                };
+                st.heldL = slew (st.heldL, xl);
+                st.heldR = slew (st.heldR, xr);
+            }
             xl = st.heldL;
             xr = st.heldR;
         }
         auto law = [&] (float x)
         {
+            if (ctx.reference)
+            {
+                if (c.bipolar)
+                {
+                    const float y = 2.0f * x - 1.0f;
+                    return 0.5f * std::copysign (powerShape (std::fabs (y), -c.power), y); // swings +-0.5 of the full range
+                }
+                return std::copysign (powerShape (std::fabs (x), -c.power), x);
+            }
+            auto shaped = [&] (float u) noexcept { return c.hasPower ? std::expm1 (-c.power * u) / c.powerDen : u; };
             if (c.bipolar)
             {
                 const float y = 2.0f * x - 1.0f;
-                return 0.5f * std::copysign (powerShape (std::fabs (y), -c.power), y); // swings +-0.5 of the full range
+                return 0.5f * std::copysign (shaped (std::fabs (y)), y);
             }
-            return std::copysign (powerShape (std::fabs (x), -c.power), x);
+            return std::copysign (shaped (std::fabs (x)), x);
         };
         float gate = 1.0f;
         const float delay = c.delaySync ? c.delayBeats * static_cast<float> (60.0 / std::max (ctx.bpm, 1.0)) : c.delayMs * 0.001f;
@@ -403,8 +440,16 @@ void ModMatrix::evaluate (const EvalContext& ctx) const noexcept
         auto a = [&] (const float* s)
         {
             float v = clamp01 (s[c.aux]);
-            if (c.auxPower != 0.0f)
-                v = powerShape (v, -c.auxPower);
+            if (ctx.reference)
+            {
+                if (c.auxPower != 0.0f)
+                    v = powerShape (v, -c.auxPower);
+            }
+            else
+            {
+                if (c.hasAuxPower)
+                    v = std::expm1 (-c.auxPower * v) / c.auxPowerDen;
+            }
             if (c.auxInv)
                 v = 1.0f - v;
             return v * c.auxOut;

@@ -966,3 +966,221 @@ TEST (voice_opt_engine_library_oscillators_are_bit_identical)
     std::printf ("%d library oscillator runs, %d differ\n", runs, failed);
     CHECK_EQ (failed, 0);
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Precomputed expm1 denominators and cached slew alphas (ModMatrix::compile / evaluate)
+// Reusing helper types from matrix_zero_skip_gives_the_same_deltas_for_every_special_value and envelope_with_curve_denominators_is_bit_identical
+
+TEST (matrix_precomputed_power_and_slew_are_bit_identical)
+{
+    long long cases = 0, failed = 0;
+    const int tune = idxOf ("osc1.tune");
+    const ModSlotParams& sp = paramIndex().slot[0];
+
+    std::vector<float> dL[2], dR[2];
+    for (int k = 0; k < 2; ++k)
+    {
+        dL[k].assign (paramCount(), 0.0f);
+        dR[k].assign (paramCount(), 0.0f);
+    }
+
+    const float powers[] = { 0.0f, 5.0e-5f, -5.0e-5f, 1.5f, -6.0f, 80.0f, -80.0f, 100.0f, INFINITY, NAN };
+    const float auxPowers[] = { 0.0f, 5.0e-5f, 3.0f, -8.0f, NAN };
+    const bool bipolars[] = { false, true };
+    const float rises[] = { 0.0f, 15.0f, 120.0f };
+    const float falls[] = { 0.0f, 40.0f, 250.0f };
+
+    for (float power : powers)
+        for (float auxPower : auxPowers)
+            for (bool bipolar : bipolars)
+                for (float rise : rises)
+                    for (float fall : falls)
+                    {
+                        std::vector<float> base (kMaxParams, 0.0f);
+                        for (size_t i = 0; i < paramCount(); ++i)
+                            base[i] = paramTable()[i].def;
+
+                        base[static_cast<size_t> (sp.source)] = static_cast<float> (kSrcMacro1);
+                        base[static_cast<size_t> (sp.destination)] = static_cast<float> (modDestinationChoiceOf (static_cast<size_t> (tune)));
+                        base[static_cast<size_t> (sp.amount)] = 100.0f;
+                        base[static_cast<size_t> (sp.power)] = power;
+                        base[static_cast<size_t> (sp.bipolar)] = bipolar ? 1.0f : 0.0f;
+                        base[static_cast<size_t> (sp.auxSource)] = static_cast<float> (kSrcMacro1 + 1);
+                        base[static_cast<size_t> (sp.auxPower)] = auxPower;
+                        base[static_cast<size_t> (sp.auxOutput)] = 100.0f;
+                        base[static_cast<size_t> (sp.rise)] = rise;
+                        base[static_cast<size_t> (sp.fall)] = fall;
+
+                        ModMatrix m;
+                        m.compile (base.data());
+
+                        int touched[2][kNumModSlots] = {}, num[2] = {};
+                        SlotState state[2][kNumModSlots] = {};
+
+                        for (const float dt : { 32.0f / 44100.0f, 32.0f / 48000.0f })
+                        {
+                            for (int tick = 0; tick < 16; ++tick)
+                            {
+                                const float u = static_cast<float> (tick < 8 ? tick : 15 - tick) / 7.0f;
+                                const float xl = 0.05f + 0.88f * u;
+                                const float xr = 0.93f - 0.88f * u;
+                                const float al = 0.23f + 0.50f * u;
+                                const float ar = 0.71f - 0.50f * u;
+
+                                float srcL[kNumSourceIds] = {}, srcRv[kNumSourceIds] = {};
+                                srcL[kSrcMacro1] = xl;
+                                srcRv[kSrcMacro1] = xr;
+                                srcL[kSrcMacro1 + 1] = al;
+                                srcRv[kSrcMacro1 + 1] = ar;
+                                srcL[kSrcFixed] = srcRv[kSrcFixed] = 1.0f;
+
+                                for (int k = 0; k < 2; ++k)
+                                {
+                                    EvalContext ctx;
+                                    ctx.src = srcL;
+                                    ctx.srcR = srcRv;
+                                    ctx.delta = dL[k].data();
+                                    ctx.deltaRight = dR[k].data();
+                                    ctx.touched = touched[k];
+                                    ctx.numTouched = &num[k];
+                                    ctx.maxTouched = kNumModSlots;
+                                    ctx.state = state[k];
+                                    ctx.dt = dt;
+                                    ctx.voiceAge = 0.01f + 0.001f * static_cast<float> (tick);
+                                    ctx.reference = (k == 0);
+                                    m.evaluate (ctx);
+                                }
+
+                                ++cases;
+                                bool same = num[0] == num[1]
+                                            && std::memcmp (touched[0], touched[1], sizeof touched[0]) == 0
+                                            && std::memcmp (dL[0].data(), dL[1].data(), dL[0].size() * sizeof (float)) == 0
+                                            && std::memcmp (dR[0].data(), dR[1].data(), dR[0].size() * sizeof (float)) == 0;
+                                for (int q = 0; q < kNumModSlots && same; ++q)
+                                    same = std::memcmp (&state[0][q].heldL, &state[1][q].heldL, sizeof (float)) == 0
+                                           && std::memcmp (&state[0][q].heldR, &state[1][q].heldR, sizeof (float)) == 0
+                                           && state[0][q].init == state[1][q].init;
+
+                                if (!same)
+                                {
+                                    if (failed < 5)
+                                        std::printf ("matrix precompute differs: power %g auxPower %g bipolar %d rise %g fall %g dt %g tick %d\n",
+                                                     static_cast<double> (power), static_cast<double> (auxPower), bipolar ? 1 : 0,
+                                                     static_cast<double> (rise), static_cast<double> (fall), static_cast<double> (dt), tick);
+                                    ++failed;
+                                }
+
+                                for (int k = 0; k < 2; ++k)
+                                    for (int q = 0; q < num[k]; ++q)
+                                        dL[k][static_cast<size_t> (touched[k][q])] = dR[k][static_cast<size_t> (touched[k][q])] = 0.0f;
+                            }
+                        }
+                    }
+
+    std::printf ("%lld matrix precompute checks, %lld differ\n", cases, failed);
+    CHECK_EQ (failed, 0);
+
+    // 2. Print MODMATRIX-CHECKSUM <case> sum=<%.9g> last8=<8x %.9g> for 4 fixed 200-tick runs
+    struct FixedRun
+    {
+        const char* name;
+        float power;
+        float auxPower;
+        bool withAux;
+        bool bipolar;
+        float riseMs;
+        float fallMs;
+    };
+
+    const FixedRun runs4[4] = {
+        { "unipolar_curve", 2.5f, 0.0f, false, false, 0.0f, 0.0f },
+        { "bipolar_curve", -3.0f, 0.0f, false, true, 0.0f, 0.0f },
+        { "aux_curve", 1.5f, -2.0f, true, false, 0.0f, 0.0f },
+        { "rise_fall_slew", 0.0f, 0.0f, false, false, 15.0f, 40.0f }
+    };
+
+    const float dt48k = 32.0f / 48000.0f;
+
+    for (const auto& run : runs4)
+    {
+        std::vector<float> base (kMaxParams, 0.0f);
+        for (size_t i = 0; i < paramCount(); ++i)
+            base[i] = paramTable()[i].def;
+
+        base[static_cast<size_t> (sp.source)] = static_cast<float> (kSrcMacro1);
+        base[static_cast<size_t> (sp.destination)] = static_cast<float> (modDestinationChoiceOf (static_cast<size_t> (tune)));
+        base[static_cast<size_t> (sp.amount)] = 100.0f;
+        base[static_cast<size_t> (sp.power)] = run.power;
+        base[static_cast<size_t> (sp.bipolar)] = run.bipolar ? 1.0f : 0.0f;
+        base[static_cast<size_t> (sp.auxSource)] = run.withAux ? static_cast<float> (kSrcMacro1 + 1) : 0.0f;
+        base[static_cast<size_t> (sp.auxPower)] = run.auxPower;
+        base[static_cast<size_t> (sp.auxOutput)] = 100.0f;
+        base[static_cast<size_t> (sp.rise)] = run.riseMs;
+        base[static_cast<size_t> (sp.fall)] = run.fallMs;
+
+        ModMatrix m;
+        m.compile (base.data());
+
+        SlotState state[2][kNumModSlots] = {};
+        int touched[2][kNumModSlots] = {}, num[2] = {};
+        double sumAbs = 0.0;
+        float last8[8] = {};
+
+        for (int t = 0; t < 200; ++t)
+        {
+            const float xl = 0.05f + 0.88f * (0.5f + 0.5f * std::sin (0.05f * static_cast<float> (t)));
+            const float xr = 0.05f + 0.88f * (0.5f + 0.5f * std::cos (0.07f * static_cast<float> (t)));
+            const float al = 0.10f + 0.80f * (0.5f + 0.5f * std::sin (0.11f * static_cast<float> (t) + 1.0f));
+            const float ar = 0.10f + 0.80f * (0.5f + 0.5f * std::cos (0.13f * static_cast<float> (t) + 2.0f));
+
+            float srcL[kNumSourceIds] = {}, srcRv[kNumSourceIds] = {};
+            srcL[kSrcMacro1] = xl;
+            srcRv[kSrcMacro1] = xr;
+            srcL[kSrcMacro1 + 1] = al;
+            srcRv[kSrcMacro1 + 1] = ar;
+            srcL[kSrcFixed] = srcRv[kSrcFixed] = 1.0f;
+
+            for (int k = 0; k < 2; ++k)
+            {
+                EvalContext ctx;
+                ctx.src = srcL;
+                ctx.srcR = srcRv;
+                ctx.delta = dL[k].data();
+                ctx.deltaRight = dR[k].data();
+                ctx.touched = touched[k];
+                ctx.numTouched = &num[k];
+                ctx.maxTouched = kNumModSlots;
+                ctx.state = state[k];
+                ctx.dt = dt48k;
+                ctx.voiceAge = 0.001f * static_cast<float> (t);
+                ctx.reference = (k == 0);
+                m.evaluate (ctx);
+            }
+
+            const float outL = dL[1][tune];
+            const float outR = dR[1][tune];
+            sumAbs += static_cast<double> (std::fabs (outL)) + static_cast<double> (std::fabs (outR));
+            if (t >= 192)
+                last8[t - 192] = outL;
+
+            bool same = std::memcmp (dL[0].data(), dL[1].data(), dL[0].size() * sizeof (float)) == 0
+                        && std::memcmp (dR[0].data(), dR[1].data(), dR[0].size() * sizeof (float)) == 0;
+            if (!same)
+                ++failed;
+
+            for (int k = 0; k < 2; ++k)
+                for (int q = 0; q < num[k]; ++q)
+                    dL[k][static_cast<size_t> (touched[k][q])] = dR[k][static_cast<size_t> (touched[k][q])] = 0.0f;
+        }
+
+        CHECK (sumAbs > 0.0);
+        std::printf ("MODMATRIX-CHECKSUM %s sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                     run.name, sumAbs,
+                     static_cast<double> (last8[0]), static_cast<double> (last8[1]),
+                     static_cast<double> (last8[2]), static_cast<double> (last8[3]),
+                     static_cast<double> (last8[4]), static_cast<double> (last8[5]),
+                     static_cast<double> (last8[6]), static_cast<double> (last8[7]));
+    }
+    CHECK_EQ (failed, 0);
+}
+

@@ -1433,3 +1433,73 @@ TEST (own_noise_filter_and_generator_pitch)
     CHECK (hf (down) < 0.25 * hf (white));
     CHECK_NEAR (rmsOfRange (up, 12000, 40000) / rmsOfRange (white, 12000, 40000), 0.757, 0.08);
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// External Mask/Vocode warp checksum reference for hop-rate FFT (rank 3)
+// Reuses Rig and set from TEST (own_osc_spectral_mask_from_the_noise) at line 1398
+TEST (own_osc_spectral_external_warp_checksum)
+{
+    auto printChecksum = [] (const char* name, const std::vector<float>& left)
+    {
+        CHECK (sbtest::allFinite (left));
+        CHECK (left.size() >= 8);
+        const double rms = rmsOfRange (left, 0, left.size());
+        CHECK (rms > 0.01);
+        double sumAbs = 0.0;
+        for (float s : left)
+            sumAbs += std::fabs (static_cast<double> (s));
+        CHECK (sumAbs > 0.0);
+        const size_t sz = left.size();
+        std::printf ("SPECEXT-CHECKSUM %s sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                     name, sumAbs,
+                     static_cast<double> (left[sz - 8]),
+                     static_cast<double> (left[sz - 7]),
+                     static_cast<double> (left[sz - 6]),
+                     static_cast<double> (left[sz - 5]),
+                     static_cast<double> (left[sz - 4]),
+                     static_cast<double> (left[sz - 3]),
+                     static_cast<double> (left[sz - 2]),
+                     static_cast<double> (left[sz - 1]));
+    };
+
+    // 1. mask_noise_u1: osc1.type = 3, osc1.unison.voices = 1, osc1.warp.type = 95, osc1.warp.amount = 100, noise.on = 1, noise.level = 100
+    {
+        Rig r (true, "osc1.type", 3.0f);
+        set (*r.e, "osc1.unison.voices", 1.0f);
+        set (*r.e, "osc1.warp.type", 95.0f);
+        set (*r.e, "osc1.warp.amount", 100.0f);
+        set (*r.e, "noise.on", 1.0f);
+        set (*r.e, "noise.level", 100.0f);
+        const auto out = r.render (69, 0.45, 0.5);
+        printChecksum ("mask_noise_u1", out.l);
+    }
+
+    // 2. mask_and_vocode_noise_u4: osc1.type = 3, osc1.unison.voices = 4, osc1.warp.type = 95, osc1.warp.amount = 80,
+    //                             osc1.warp2.type = 98, osc1.warp2.amount = 60, noise.on = 1, noise.level = 100
+    {
+        Rig r (true, "osc1.type", 3.0f);
+        set (*r.e, "osc1.unison.voices", 4.0f);
+        set (*r.e, "osc1.warp.type", 95.0f);
+        set (*r.e, "osc1.warp.amount", 80.0f);
+        set (*r.e, "osc1.warp2.type", 98.0f);
+        set (*r.e, "osc1.warp2.amount", 60.0f);
+        set (*r.e, "noise.on", 1.0f);
+        set (*r.e, "noise.level", 100.0f);
+        const auto out = r.render (69, 0.45, 0.5);
+        printChecksum ("mask_and_vocode_noise_u4", out.l);
+    }
+
+    // 3. mask_osc2_u2: osc1.type = 3, osc1.unison.voices = 2, osc1.warp.type = 93, osc1.warp.amount = 100,
+    //                  osc2.on = 1, osc2.wavetable = 1, osc2.level = 100
+    {
+        Rig r (true, "osc1.type", 3.0f);
+        set (*r.e, "osc1.unison.voices", 2.0f);
+        set (*r.e, "osc1.warp.type", 93.0f);
+        set (*r.e, "osc1.warp.amount", 100.0f);
+        set (*r.e, "osc2.on", 1.0f);
+        set (*r.e, "osc2.wavetable", 1.0f);
+        set (*r.e, "osc2.level", 100.0f);
+        const auto out = r.render (69, 0.45, 0.5);
+        printChecksum ("mask_osc2_u2", out.l);
+    }
+}

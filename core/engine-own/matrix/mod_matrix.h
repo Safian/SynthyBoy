@@ -63,6 +63,11 @@ struct CompiledSlot
     float delayMs = 0.0f, delayBeats = 0.0f;
     bool delaySync = false;
     const CompiledModCurve* curve = nullptr;
+    bool hasPower = false, hasAuxPower = false;
+    float powerDen = 1.0f, auxPowerDen = 1.0f;
+    mutable uint32_t slewDtBits = 0u;
+    mutable bool slewCached = false;
+    mutable float riseAlpha = 0.0f, fallAlpha = 0.0f;
     /** A source <= 0 in both lanes gives an output of +-0 (CPU-REVIEW-VOICE-MOD.md V4): no curve, not bipolar, no slew, a finite power and width, and an aux transform that gives a finite
         value for every aux value that is not NaN (finite aux power of at most 80 in size, finite aux output). ModMatrix::evaluate then skips the slot; the conditions and why they suffice:
         mod_matrix.cpp, test_own_voice_opt.cpp (matrix_zero_skip_...). */

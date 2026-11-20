@@ -21,6 +21,7 @@
 #include "synthyboy/fx_types.h"
 #include "synthyboy/quality.h"
 #include "fx_makeup.h"
+#include "fx_latency.h"
 
 namespace synthyboy
 {
@@ -167,6 +168,7 @@ private:
     fx::SplitterLH splitLh;
     fx::SplitterLMH splitLmh;
     fx::SplitterMS splitMs;
+    IntDelay dlLh[2], dlLmh[3], dlMs[2];
     float scratchA[2][kControlPeriod] = {}, scratchB[2][kControlPeriod] = {};
     int maxBlock = 512;
 };
