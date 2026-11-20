@@ -38,7 +38,8 @@ mi a baj, hol látszik (fájl:sor / eszköz / mérés), és mitől kész. Aki do
 ## Saját motor (egy motor lesz: a saját)
 - X|Y „Density" tengely: a specifikáció (`docs/engine-spec/07`, 7a.2) szerint csak szabad ütemű módban hat, a kód (`core/engine-own/osc/lib_osc.cpp`, X|Y blokk) feltétel nélkül ír. Ellenőrizni.
 - A paraméter-audit adatai ellentmondanak egymásnak (`docs/ui-design/param-audit-keys.csv`: ALIVE, `param-audit-baseline-own.json`: UNSUPPORTED): az audit alapját újra kell generálni az X|Y kulcsok bekapcsolása után.
-- DSP-audit 3. rész: a motor magja, teljesítmény és memória az ARMv7-en, a végén rangsorolt munkalista az 1–3. részből. (fut: `agy/own-audit-3-core`)
+- Az audit 1. és 2. részének független ellenőrzése Gemini Argonnal: minden megállapításra ítélet (megerősítve / a kód stimmel, a hatás mérendő / részben téves / megcáfolva). (fut: `agy/own-verify-1`, `agy/own-verify-2`) A 3. rész ellenőrzése utánuk indul.
+- A három audit rangsorolt, 15 lépéses munkalistája a 3. rész végén van („Ordered Work List Across Parts 1 to 3"): ebből lesz a megvalósítási sorrend, AMINT az ellenőrzés megvan. Első lépése a megbízható mérés (lásd lent, 3. rész 9.).
 
 ## DSP-audit 1. rész megállapításai (hangút) — `docs/review/OWN-ENGINE-DSP-AUDIT-1-VOICE-PATH-2026-11-20.md`
 Gemini 4 Neon írta, kódolvasásból, mérés nélkül. Minden tételt a megvalósítás ELŐTT ellenőrizni kell a kódban, és a doksiban megnevezett méréssel bizonyítani. A sorszám a doksi rangsora. Hat tételt szúrópróbával megnéztem: az eredmény a sor végén.
@@ -92,6 +93,27 @@ Gemini 4 Neon írta, kódolvasásból, mérés nélkül; megvalósítás előtt 
 - 17. Chorus: rögzített nedves szint a hangszámtól függetlenül (1 és 4 hang között szintugrás); phaser: nincs denormális-védelem a visszacsatolásban; a szinkronizált LFO-k nem igazodnak az ütemhez.
 - 18. Öt effekt (kompresszor, Hyper, Utility, Bode, konvolúció) 0% mixnél sem marad ki a „low" szinten; a lecsengés-tartás 20 másodperc minden típusra.
 - 19. Kimenet: a limiter mintacsúcsot néz, nem valódi csúcsot; az `OUTPUT-LEVEL.md` ellentmond magának. Szúrópróba: igaz, a 62. sor még `T = -4.50 dBFS`-t ír a −10,0 mellett.
+
+## DSP-audit 3. rész megállapításai (motor magja, teljesítmény, memória) — `docs/review/OWN-ENGINE-DSP-AUDIT-3-CORE-PERFORMANCE-2026-11-20.md`
+Gemini 4 Neon írta, kódolvasásból, mérés nélkül; megvalósítás előtt minden tétel ellenőrizendő és mérendő. Három tételt szúrópróbával megnéztem: az eredmény a sor végén.
+- 1. A `prepare()` szinttől függetlenül mind a 36 hangot és mind a 13 effektet lefoglalja 3 rackre: 70–75 MB példányonként a „low" szinten is (8 hang használható).
+- 2. `ContentHub`: 8 elemű körpuffer szinkronizálás nélkül, felszabadítás úgy, hogy a hangszál még olvashatja (use-after-free gyors LFO- vagy görbehúzásnál).
+- 3. `WakeSignal::notify()` a hangszálról: mutex macOS / iOS / Windows alatt, `futex` rendszerhívás Linuxon; a konvolúció a hangszálon engedhet el `shared_ptr`-t. Szúrópróba: a futex-ébresztés megvan (`core/engine-own/dsp/helper_thread.h:71`); azt, hogy a hangszálról hívódik, nem ellenőriztem, és a futex-ébresztés önmagában nem blokkol.
+- 4. ARM32 fordítás `-march=armv7-a`-val a `-mcpu=cortex-a17` helyett (szoftveres egész osztás), hiányzó `-fno-math-errno`, nincs LTO. Szúrópróba: a jelző megvan (`cmake/toolchains/armv7-linux-gnueabihf.cmake:16`).
+- 5. 16 egyszerre érkező hang megkerüli a hangszám-korlátot az ütés blokkjában (Key 61-en 8 a korlát): korlátlan munka egy blokkban.
+- 6. A `Voice` 33 KB, a forró és hideg mezők keverve; minden oszcillátornak saját 24,6 KB-os morph-munkaterülete van; kb. 3500 apró foglalás példányonként.
+- 7. Egyetlen paraméter mozdítása minden blokkban újramásolja mind a 2637 paramétert, újrafordítja a mátrixot és újraszámolja a hangolást (Q-Link tekerésnél tüske).
+- 8. Apple ARM64-en a NEON ki van kapcsolva (iOS és Apple Silicon skalár ciklusokon fut); a CLAP shellben és a motorban nincs denormális-védelem (FTZ/DAZ) beállítva.
+- 9. Mérési módszer: a `tier_bench` normál ütemezéssel fut a host valós idejű szála mellett (20–25% torzítás a p99-ben, 18% napi szórás), nincs modulonkénti költségtábla. A munkalista ELSŐ lépése: megbízható, elszigetelt mérés.
+- 10. A beépített hullámtábla-építő szál nem hívja a segédszál-indító horgot (valós idejű ütemezést és hangmag-affinitást örökölhet), és 10 ms-onként örökké ébred.
+- 11. Az importált presetek 4x túlmintavételezés-kapcsolója a „low" szinten nincs korlátozva; a „low" szint 5 effektet teljesen kihagy 31+ gyári presetnél, takarékos pótlék nélkül.
+- 12. `process()`: fölösleges nullázás és felülírás, néma buszok feldolgozása, egy `assign()`, ami túlméretes mono blokknál foglalhat.
+- 13. MPC shell: az eseménysor pörgő zárat használ; a preset betöltése 2637 paramétert egyenként ír (szakadozó hang presetváltáskor).
+- 14. Nulla hangerejű, de még aktív hangok teljes költséggel futnak; a kijelző-visszaolvasás `exp` / `log10` hívásokat végez a hangszálon.
+- 15. Nincs `mlock`, a laphibák nincsenek számolva; egy halott tartalomkészlet a memóriában ragad.
+- 16. Sehol nincs igazítás (`alignas`) a saját motorban; a `fastmath` segédeknek nincs védelme szélső értékekre.
+- 17. A README 20,5 MB-ot ír a hullámtábla-bankra, a jelentés szerint valójában kb. 33,1 MB. Szúrópróba: a 20,5 MB a README-ben megvan; a 33,1 MB-ot nem ellenőriztem.
+- 18. A mérőprogram más `libm`-et használ, mint az eszközön futó plugin; kivételkezelés és RTTI bekapcsolva a DSP-könyvtárakban.
 
 ## Tudás és ügynök-eszközök
 - Tudásmappa (`docs/dsp-knowledge/`: témánként rövid fájl forrásokkal, döntésekkel és bizonyító teszttel, tisztaszoba-szabály, tesztreceptek) és egy rá mutató vékony skill: az owner döntésére vár.
