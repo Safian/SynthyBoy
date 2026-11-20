@@ -5,6 +5,7 @@ Ami elkészült, azt TÖRÖLD innen (nincs „kész" rész: a történet a commi
 mi a baj, hol látszik (fájl:sor / eszköz / mérés), és mitől kész. Aki dolgozik rajta, írja a sor végére: `(fut: <ág>)`.
 
 ## Eszköz-felület (MPC XL, Key 61)
+- Master oldal: kis piros „CLIP” felirat a kimeneti mérő fölött, mint a keverőkön (owner kérése, 2026-11-20). Akkor gyullad ki, amikor a motor végi master védelem működésbe lép (a jel ±1,8 fölé megy: `core/engine-own/dsp/master_stage.h`, `outputLimit`), mert ez a védelem ma láthatatlan és nem kapcsolható. Kell hozzá: a motor jelezze a felületnek, hogy a blokkban volt-e ilyen minta (zárolás és foglalás nélkül, a meglévő kiolvasó úton); a felirat tartson kb. 2 másodpercig, vagy koppintásra törlődjön, ahogy a host csúcskijelzője. Kész, ha egy szándékosan túlhajtott preseten kigyullad mindkét eszközön, tiszta játéknál soha, és a `test_rt_alloc` átmegy.
 - VOLUME gomb a Master oldalon: kb. 6 képpont alatti húzás nem csinál semmit (holtsáv), finoman nem állítható (XL-mérés: −17,30 helyett csak −16,88-ra lehetett visszatenni). Kész, ha 0,1 dB-es lépés érintéssel beállítható.
 - VOLUME gomb: az értékre koppintva nincs számbevitel. Kész, ha szám írható be, vagy leírt döntés van, hogy nem lesz.
 - A húzás érzékenysége nem állandó (30 képpont = 5–7 dB). Ellenőrizni, hogy ez szándékos görbe-e.
