@@ -19,6 +19,10 @@ using synthyboy_mpc::OutputPeak;
 
 static_assert (SYNTHYBOY_OUT_NEON == 1 && SYNTHYBOY_PEAK_NEON == 1, "this test is built with the NEON forms on");
 
+// constant initialisation: both diagnostics objects can be built at compile time, so the namespace-scope globals need no dynamic-init guard
+constexpr synthyboy_mpc::OutputPeak kConstPeak {};
+constexpr synthyboy_mpc::NoteDiagnostics kConstNd {};
+
 static int failures = 0;
 static void check (bool ok, const char* what) { std::printf ("%s  %s\n", ok ? "PASS" : "FAIL", what); if (! ok) ++failures; }
 
@@ -148,6 +152,9 @@ static void runAll (const char* mode)
 
 int main()
 {
+    check (&synthyboy_mpc::outputPeak() == &synthyboy_mpc::gOutputPeak, "outputPeak() returns the namespace-scope constant-initialised object");
+    check (&synthyboy_mpc::noteDiagnostics() == &synthyboy_mpc::gNoteDiagnostics, "noteDiagnostics() returns the namespace-scope constant-initialised object");
+    check (kConstPeak.blocks.load() == 0 && kConstNd.totalNotes.load() == 0, "the compile-time-built objects start at zero");
     runAll ("default float mode");
 #if defined(__aarch64__)
     const uint64_t saved = readFpcr();
