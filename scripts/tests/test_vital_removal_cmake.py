@@ -19,10 +19,9 @@ def read(*p):
 class DefaultEngine(unittest.TestCase):
     """R1: a configure without flags builds the own engine only."""
 
-    def test_with_vital_defaults_off(self):
-        m = re.search(r"^option\(SYNTHYBOY_WITH_VITAL\b[^\n]*?\b(ON|OFF)\)", read("CMakeLists.txt"), re.M)
-        self.assertIsNotNone(m, "option(SYNTHYBOY_WITH_VITAL ...) not found")
-        self.assertEqual(m.group(1), "OFF")
+    def test_with_vital_option_is_gone(self):
+        # it defaulted to OFF (R1) and was removed with core/engine-vital (R7)
+        self.assertNotIn("SYNTHYBOY_WITH_VITAL", read("CMakeLists.txt"))
 
     def test_the_shell_engine_is_not_selectable_and_never_vital(self):
         text = read("CMakeLists.txt")
@@ -202,6 +201,11 @@ class EngineDirectoryGone(unittest.TestCase):
 
     def test_core_cmake_has_no_engine_vital(self):
         self.assertNotIn("engine-vital", read("core/CMakeLists.txt"))
+
+    def test_importer_audit_does_not_read_the_removed_engine(self):
+        text = read("scripts/audit-vital-import.py")
+        self.assertNotIn("core/engine-vital", text)
+        self.assertIn("--vital-definitions", text)
 
     def test_no_option_and_no_define(self):
         for f in self.LIVING:
