@@ -65,8 +65,8 @@ void Bode::prepare (double sampleRate, int maxBlock)
     m_sampleRate = std::clamp (sampleRate, 22050.0, 192000.0);
     m_maxBlock = std::clamp (maxBlock, 1, 4096);
 
-    m_histL.assign (static_cast<size_t> (kHilbertTaps), 0.0f);
-    m_histR.assign (static_cast<size_t> (kHilbertTaps), 0.0f);
+    m_histL.assign (static_cast<size_t> (2 * kHilbertTaps), 0.0f);
+    m_histR.assign (static_cast<size_t> (2 * kHilbertTaps), 0.0f);
     m_histPos = 0;
 
     m_dryDelayL.assign (static_cast<size_t> (kHilbertLatency), 0.0f);
@@ -206,12 +206,14 @@ void Bode::process (float* l, float* r, int n) noexcept
         const float shiftInL = softLimit (inL + feedback * delOutL);
         const float shiftInR = softLimit (inR + feedback * delOutR);
 
-        // Store into Hilbert history ring buffers
+        // Store into Hilbert history ring buffers (mirrored: write at pos and pos + kHilbertTaps)
         m_histL[static_cast<size_t> (m_histPos)] = shiftInL;
         m_histR[static_cast<size_t> (m_histPos)] = shiftInR;
+        m_histL[static_cast<size_t> (m_histPos + kHilbertTaps)] = shiftInL;
+        m_histR[static_cast<size_t> (m_histPos + kHilbertTaps)] = shiftInR;
 
         // In-phase signal is the center tap (delayed by M)
-        const int centerIdx = (m_histPos - M + kHilbertTaps) % kHilbertTaps;
+        const int centerIdx = m_histPos - M + kHilbertTaps;
         const float iL = m_histL[static_cast<size_t> (centerIdx)];
         const float iR = m_histR[static_cast<size_t> (centerIdx)];
 
@@ -221,8 +223,8 @@ void Bode::process (float* l, float* r, int n) noexcept
         for (int k = 1; k <= M; k += 2)
         {
             const float c = m_hilbertCoeffs[static_cast<size_t> (M + k)];
-            const int idxPos = (m_histPos - (M + k) + kHilbertTaps) % kHilbertTaps;
-            const int idxNeg = (m_histPos - (M - k) + kHilbertTaps) % kHilbertTaps;
+            const int idxPos = m_histPos - (M + k) + kHilbertTaps;
+            const int idxNeg = m_histPos - (M - k) + kHilbertTaps;
             qL += c * (m_histL[static_cast<size_t> (idxPos)] - m_histL[static_cast<size_t> (idxNeg)]);
             qR += c * (m_histR[static_cast<size_t> (idxPos)] - m_histR[static_cast<size_t> (idxNeg)]);
         }
