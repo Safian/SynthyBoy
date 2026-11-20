@@ -78,7 +78,35 @@ int main (int argc, char** argv)
             Profile a, b;
             check (parseProfile (text, a) && parseProfile (describeProfile (a), b) && a == b, std::string ("the description of '") + text + "' reads back to the same profile: " + describeProfile (a));
         }
-        check (describeProfile (profileLow()) == "low,voices=8,unison=3,warp=2x,morph=half,math=fast,control=economy,fx=low,samples=low", "the description of low names every setting");
+        check (describeProfile (profileLow()) == "low,voices=8,unison=3,warp=2x,morph=half,math=fast,control=economy,start=stagger,fx=low,samples=low", "the description of low names every setting");
+    }
+
+    // ---- the Spectral start stagger (docs/plans/spectral-start.md S2) --------------------------------------------------------------------------------------
+    {
+        check (synthyboy::spectralStartOf (low), "spectralStartOf: tier low staggers the Spectral start");
+        check (! synthyboy::spectralStartOf (medium) && ! synthyboy::spectralStartOf (high) && ! synthyboy::spectralStartOf (synthyboy::Quality {}), "spectralStartOf: tiers medium and high and the default quality do not");
+        synthyboy::Quality noGrid = low;
+        noGrid.economy = 0;
+        check (! synthyboy::spectralStartOf (noGrid), "spectralStartOf: without the control economy there is no 32 sample grid, so no stagger, whatever the tier says");
+        synthyboy::Quality off = low;
+        off.spectralStart = 0;
+        check (! synthyboy::spectralStartOf (off), "spectralStartOf: spectralStart = 0 switches it off at tier low");
+        synthyboy::Quality forced = high;
+        forced.economy = static_cast<int> (synthyboy::kEconomyControl);
+        forced.spectralStart = 1;
+        check (synthyboy::spectralStartOf (forced), "spectralStartOf: spectralStart = 1 with the control economy switches it on at tier high");
+
+        Profile p;
+        check (parseProfile ("low,start=off", p) && ! p.stagger && ! synthyboy::spectralStartOf (profileQuality (p)), "low,start=off: no stagger");
+        Profile back;
+        check (describeProfile (p).find (",start=off,") != std::string::npos && parseProfile (describeProfile (p), back) && back == p, "start=off is described and reads back");
+        check (parseProfile ("low,start=stagger", p) && p.stagger && p == profileLow(), "start=stagger is the base of low");
+        std::string why;
+        check (! parseProfile ("low,start=maybe", p, &why) && why == "start must be stagger or off, not 'maybe'", "low,start=maybe is refused with the reason: " + why);
+        check (parseProfile ("high,voices=16,control=economy", p) && ! p.stagger && ! synthyboy::spectralStartOf (profileQuality (p)), "the XL text: control economy, no stagger (it keeps today's instant start)");
+        check (parseProfile ("low", p) && synthyboy::spectralStartOf (profileQuality (p)), "the Key 61 text 'low': stagger");
+        check (! profileMedium().stagger && ! profileHigh().stagger, "medium and high do not stagger");
+        check (parseProfile ("high,control=economy,start=stagger", p) && synthyboy::spectralStartOf (profileQuality (p)), "start=stagger can be switched on over a higher base");
     }
 
     // ---- what does not parse -----------------------------------------------------------------------------------------------------------------------
