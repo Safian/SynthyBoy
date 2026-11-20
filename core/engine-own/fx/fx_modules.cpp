@@ -822,7 +822,10 @@ public:
             specPendingKey = k;
             specBusy.store (1, std::memory_order_release);
             if (!FxWorker::instance().submit (&ConvolveModule::runSpectrumJob, &specJob))
+            {
+                specJob.impulse.reset(); // refused: the block's content set still holds the impulse (never the last reference on the audio thread)
                 specBusy.store (0, std::memory_order_release);
+            }
         }
         if (!f.realtime)
         {
@@ -968,6 +971,7 @@ private:
         ConvolveModule* self = nullptr;
         std::shared_ptr<const ContentSet::Impulse> impulse;
         Key key;
+        float tone = 0.0f; // the tone of live at the time of the submit: the helper thread must not read live.tone, which configure () writes
     };
 
     void takeOver (const FxFrame&) noexcept
@@ -988,10 +992,14 @@ private:
         job.self = this;
         job.impulse = f.content->impulse;
         job.key = k;
+        job.tone = live.tone;
         pendingKey = k;
         jobBusy.store (1, std::memory_order_release);
         if (!FxWorker::instance().submit (&ConvolveModule::runJob, &job))
+        {
+            job.impulse.reset(); // refused: the content set of the block still holds the impulse, so this is never the last reference (nothing is freed on the audio thread)
             jobBusy.store (0, std::memory_order_release);
+        }
     }
     static void runJob (void* ctx)
     {
@@ -1011,7 +1019,7 @@ private:
         p.hostRate = m->sampleRate;
         c->params = p;
         c->loadIr (j->impulse->data.data(), j->impulse->frames, 2, j->impulse->rate);
-        c->params.tone = m->live.tone;
+        c->params.tone = j->tone;
         c->params.mix = 1.0f;
         delete m->retired.exchange (nullptr);
         delete m->retiredLate.exchange (nullptr);

@@ -22,6 +22,7 @@ namespace
 {
 std::atomic<unsigned long> g_allocations { 0 };
 std::atomic<unsigned long> g_frees { 0 };
+std::atomic<unsigned long> g_threadFrees { 0 };   // frees on the counted thread only (the audio thread of the test), like g_allocations
 // Only the thread that runs the test (and calls process ()) is counted: the engine-vital Convolve module partitions its impulse response on
 // a builder thread of its own (docs/UPSTREAM.md), which is allowed to allocate; the real-time rule is about the audio thread.
 thread_local bool t_countThisThread = false;
@@ -57,14 +58,22 @@ void* countedAlignedAlloc (std::size_t size, std::size_t alignment) noexcept
 void countedFree (void* p) noexcept
 {
     if (p != nullptr)
+    {
         g_frees.fetch_add (1, std::memory_order_relaxed);
+        if (t_countThisThread)
+            g_threadFrees.fetch_add (1, std::memory_order_relaxed);
+    }
     std::free (p);
 }
 
 void countedAlignedFree (void* p) noexcept
 {
     if (p != nullptr)
+    {
         g_frees.fetch_add (1, std::memory_order_relaxed);
+        if (t_countThisThread)
+            g_threadFrees.fetch_add (1, std::memory_order_relaxed);
+    }
 #if defined (_WIN32)
     _aligned_free (p);
 #else

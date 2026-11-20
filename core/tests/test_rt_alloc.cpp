@@ -6,15 +6,22 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <new>
+#include <thread>
 #include <vector>
 
 #include "alloc_hook.h"
+#include "../engine-own/fx/fx_module.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/content_store.h"
+#include "synthyboy/params.h"
+#include "synthyboy/quality.h"
 #include "synthyboy/tuning.h"
 
 using namespace synthyboy;
@@ -334,4 +341,123 @@ TEST (process_does_not_allocate_with_the_new_events_content_and_keys)
         CHECK (finite);
         engine->setTuningSource (nullptr);
     }
+}
+
+// A Convolve build job that FxWorker refuses (its 64 slots are full) must not keep the last strong reference of an impulse: when the retired content set is gone, the next startBuild () /
+// makeupPower () would drop it, and the free would happen on the audio thread. The failed submit () releases the impulse at once.
+namespace
+{
+std::atomic<bool> g_releaseBarrier { false };
+std::atomic<int> g_barrierDone { 0 };
+void waitOnBarrier (void*)
+{
+    while (! g_releaseBarrier.load (std::memory_order_acquire))
+        std::this_thread::sleep_for (std::chrono::milliseconds (1));
+    g_barrierDone.fetch_add (1);
+}
+
+void setKeyValue (IEngine& engine, const char* key, float value)
+{
+    const ParamInfo* info = findParamByKey (key);
+    CHECK (info != nullptr);
+    if (info != nullptr)
+        engine.setParam (info->id, value);
+}
+
+StateContent contentWithImpulse (const char* file)
+{
+    StateContent content;
+    ContentFileRef ref;
+    ref.pack = "rt";
+    ref.file = file;
+    content.impulses.push_back (ref);
+    return content;
+}
+} // namespace
+
+TEST (convolve_failed_submit_frees_nothing_on_the_audio_thread)
+{
+    for (const Tier tier : { Tier::high, Tier::low })   // high: startBuild (), low: the bypassed module's makeupPower ()
+    {
+        g_releaseBarrier.store (false);
+        g_barrierDone.store (0);
+        int submitted = 0;
+        while (own::FxWorker::instance().submit (&waitOnBarrier, nullptr))   // every slot of the worker is taken; the first job runs and blocks it
+            ++submitted;
+
+        MemoryContentStore store;
+        store.add ("rt", "ir1.wav", testWav (512, false));
+        store.add ("rt", "ir2.wav", testWav (1024, true));
+        auto engine = createOwnEngine();
+        Quality q = qualityForTier (tier);
+        q.realtime = true;
+        engine->prepare (48000.0, 128, q);
+        engine->setContentStore (&store);
+        setKeyValue (*engine, "convolve.on", 1.0f);
+        setKeyValue (*engine, "convolve.ir", 1.0f);
+        setKeyValue (*engine, "convolve.size", 50.0f);
+        static float left[128], right[128];
+
+        engine->setContent (contentWithImpulse ("ir1.wav"));
+        engine->process (nullptr, 0, left, right, 128);   // the job (or the spectrum job) holds the impulse of ir1 and is refused
+        setKeyValue (*engine, "convolve.on", 0.0f);
+        engine->setContent (contentWithImpulse ("ir2.wav"));
+        engine->process (nullptr, 0, left, right, 128);   // the block now reads the set of ir2
+        engine->setContent (contentWithImpulse ("ir2.wav"));   // the set of ir1 is destroyed here (message thread): before the fix the refused job is the only owner of its impulse
+        setKeyValue (*engine, "convolve.on", 1.0f);
+
+        const auto beforeFrees = g_threadFrees.load();
+        const auto beforeAllocs = g_allocations.load();
+        engine->process (nullptr, 0, left, right, 128);   // the next job replaces the old one: it must not free anything here
+        const auto frees = g_threadFrees.load() - beforeFrees;
+        const auto allocs = g_allocations.load() - beforeAllocs;
+
+        g_releaseBarrier.store (true, std::memory_order_release);
+        for (int i = 0; i < 5000 && g_barrierDone.load() != submitted; ++i)
+            std::this_thread::sleep_for (std::chrono::milliseconds (2));
+        engine.reset();
+
+        if (! CHECK_EQ (frees, 0ul))
+            std::printf ("    tier %d: %lu free(s) on the audio thread\n", static_cast<int> (tier), frees);
+        CHECK_EQ (allocs, 0ul);
+        CHECK_EQ (g_barrierDone.load(), submitted);
+    }
+}
+
+// The sound does not change: an offline render with the Convolve and tone 50 % (the job takes the tone as a copy now); the build worker compares the printed line with the one of the old code.
+TEST (convolve_job_checksum_of_an_offline_render)
+{
+    MemoryContentStore store;
+    store.add ("rt", "ir1.wav", testWav (512, false));
+    auto engine = createOwnEngine();
+    Quality q = qualityForTier (Tier::high);
+    q.realtime = false;
+    engine->prepare (48000.0, 128, q);
+    engine->setContentStore (&store);
+    engine->setContent (contentWithImpulse ("ir1.wav"));
+    setKeyValue (*engine, "convolve.on", 1.0f);
+    setKeyValue (*engine, "convolve.ir", 1.0f);
+    setKeyValue (*engine, "convolve.tone", 50.0f);
+    static float left[128], right[128];
+    uint64_t h = 1469598103934665603ull;
+    for (int block = 0; block < 4; ++block)
+    {
+        Event events[1];
+        const int n = block == 0 ? 1 : 0;
+        if (n == 1)
+            events[0] = sbtest::noteOn (0, 48);
+        engine->process (events, n, left, right, 128);
+        for (const float* v : { left, right })
+            for (int i = 0; i < 128; ++i)
+            {
+                uint32_t bits = 0;
+                std::memcpy (&bits, &v[i], sizeof bits);
+                for (int b = 0; b < 4; ++b)
+                {
+                    h ^= (bits >> (8 * b)) & 0xffu;
+                    h *= 1099511628211ull;
+                }
+            }
+    }
+    std::printf ("CONVOLVE-JOB-CHECKSUM %016llx\n", static_cast<unsigned long long> (h));
 }

@@ -237,6 +237,13 @@ int main (int argc, char** argv)
     check (field (t, "largest_gaps: ") == 10, "all ten gaps are listed (at most ten are kept)");
     const size_t one = t.find ("  1 at_ms="), two = t.find ("  2 at_ms=");
     check (one != std::string::npos && two != std::string::npos && field (t.substr (one), "gap_us=") >= field (t.substr (two), "gap_us="), "the list is in descending order");
+    // ---- page faults (diagnostic: the writer thread reads the kernel counters, the audio thread only remembers its thread id) ----
+    check (has (t, "\npage_faults: "), "page_faults: the line is in the file");
+    check (field (t, "proc_minflt=") >= 0 && field (t, "proc_majflt=") >= 0, "page_faults: process minor and major fault counters are non-negative integers");
+#if defined (__linux__)
+    check (field (t, "audio_minflt=") >= 0 && field (t, "audio_majflt=") >= 0, "page_faults: the audio thread's minor and major fault counters are non-negative integers");
+    check (field (t, "audio_minflt=") <= field (t, "proc_minflt="), "page_faults: the audio thread's minor faults are part of the process total");
+#endif
     std::printf ("%s  (%d failures)\n", fails ? "FAIL" : "OK", fails);
     return fails ? 1 : 0;
 }
