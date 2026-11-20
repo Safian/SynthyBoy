@@ -218,6 +218,7 @@ public:
             prevInc[i] = curInc[i];
             prevGainL[i] = curGainL[i];
             prevGainR[i] = curGainR[i];
+            prevFrameOf[i] = curFrameOf[i];
         }
         prevFrame = curFrame;
         // the same inputs as the previous period (the usual case of a held note): the voices below would be computed again to the same values
@@ -419,6 +420,7 @@ public:
         {
             curGainL[i] = curGainR[i] = 0.0f;
             curInc[i] = curInc[0];
+            curFrameOf[i] = curFrameOf[0];
         }
         curFrame = t.frame;
         if (t.jump)
@@ -430,6 +432,7 @@ public:
                 prevInc[i] = curInc[i];
                 prevGainL[i] = curGainL[i];
                 prevGainR[i] = curGainR[i];
+                prevFrameOf[i] = curFrameOf[i];
             }
             prevCount = curCount;
             havePrev = true;
@@ -702,17 +705,39 @@ public:
             }
             else
             {
-                const float fpos = curFrameOf[v] * static_cast<float> (frames - 1);
-                const int f0 = std::min (static_cast<int> (fpos), std::max (frames - 2, 0));
-                if (tick.smooth || frames < 2)
+                if (frames < 2)
                 {
-                    const float ff = frames > 1 ? fpos - static_cast<float> (f0) : 0.0f;
-                    cA = wt.cycle (f0, level);
-                    cB = frames > 1 && ff > 1.0e-4f ? wt.cycle (f0 + 1, level) : nullptr;
-                    wB0 = wB1 = ff;
+                    cA = wt.cycle (0, level);
+                    cB = nullptr;
+                    wB0 = wB1 = 0.0f;
+                }
+                else if (tick.smooth)
+                {
+                    const float fpos = curFrameOf[v] * static_cast<float> (frames - 1);
+                    const float pfpos = prevFrameOf[v] * static_cast<float> (frames - 1);
+                    if (std::fabs (fpos - pfpos) >= 1.0f)
+                    {
+                        const int fold = std::clamp (static_cast<int> (std::round (pfpos)), 0, frames - 1);
+                        const int fnew = std::clamp (static_cast<int> (std::round (fpos)), 0, frames - 1);
+                        cA = wt.cycle (fold, level);
+                        cB = fnew != fold ? wt.cycle (fnew, level) : nullptr;
+                        wB0 = tStart;
+                        wB1 = tEnd;
+                    }
+                    else
+                    {
+                        const int f0 = std::min (static_cast<int> (fpos), frames - 2);
+                        const float ff1 = fpos - static_cast<float> (f0);
+                        const float ff0 = std::clamp (pfpos - static_cast<float> (f0), 0.0f, 1.0f);
+                        wB0 = lerp (ff0, ff1, tStart);
+                        wB1 = lerp (ff0, ff1, tEnd);
+                        cA = wt.cycle (f0, level);
+                        cB = (wB0 > 1.0e-4f || wB1 > 1.0e-4f) ? wt.cycle (f0 + 1, level) : nullptr;
+                    }
                 }
                 else
                 {
+                    const float fpos = curFrameOf[v] * static_cast<float> (frames - 1);
                     // the frame steps (the integer part of the position); the change is cross-faded over the control period so that it does not click
                     const int fnew = std::min (static_cast<int> (fpos + 1.0e-3f), frames - 1); // the tolerance keeps 40 % of 256 frames on frame 102 (float rounding of the knob)
                     const int fold = std::clamp (frameIdx[v] < 0 ? fnew : frameIdx[v], 0, frames - 1);
@@ -1230,7 +1255,7 @@ private:
     std::vector<float> history;                  // [voice][kTaps - 1]: the oversampled path's last samples (allocated in prepareMorph ())
     bool historyDirty = false;
     float prevInc[kMaxVoices] = {}, curInc[kMaxVoices] = {}, prevGainL[kMaxVoices] = {}, curGainL[kMaxVoices] = {}, prevGainR[kMaxVoices] = {},
-          curGainR[kMaxVoices] = {}, curFrameOf[kMaxVoices] = {};
+          curGainR[kMaxVoices] = {}, prevFrameOf[kMaxVoices] = {}, curFrameOf[kMaxVoices] = {};
     float prevFrame = 0.0f, curFrame = 0.0f;
     float lastCross[6] = {};
     int curCount = 1, prevCount = 1;
