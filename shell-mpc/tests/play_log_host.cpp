@@ -46,6 +46,16 @@ int main()
     const std::string a = slurp (txt);
     check (count (a, "setParameter") == 100 && a.find ("setParameter 99 (real) 24.75 -> written") != std::string::npos, "drain () writes the 100 lines in order");
 
+    // note logging (debug hooks build): note_on and note_off format, dropped count
+    PlayLog::note (true, 1, 60, 40, 40);
+    PlayLog::note (true, 1, 62, 127, 127);
+    PlayLog::note (false, 1, 60, 0, 0);
+    PlayLog::drain();
+    const std::string noteLog = slurp (txt);
+    check (noteLog.find ("note_on channel 1 note 60 vel 40 engine 40 dropped 0") != std::string::npos, "PlayLog::note formats velocity 40");
+    check (noteLog.find ("note_on channel 1 note 62 vel 127 engine 127 dropped 0") != std::string::npos, "PlayLog::note formats velocity 127");
+    check (noteLog.find ("note_off channel 1 note 60 vel 0 engine 0 dropped 0") != std::string::npos, "PlayLog::note formats note_off");
+
     // eight threads at once: every line is there once or counted as lost
     std::vector<std::thread> ts;
     std::atomic<bool> go { false };
