@@ -396,6 +396,9 @@ jobs:
       - name: No Vital-derived object, symbol or string in static libraries
         run: scripts/check-no-vital.sh build-novital/core/libsynthyboy_core.a build-novital/shell-clap/libsynthyboy_static.a
 
+      - name: No Vital identifier and no GPL header in the source of the own engine
+        run: scripts/check-no-vital.sh --source core/engine-own
+
       - name: The check fails on a library that contains Vital-derived code (self-test)
         run: scripts/check-no-vital.sh --self-test
 

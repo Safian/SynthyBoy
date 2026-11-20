@@ -4,10 +4,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Usage: scripts/check-no-vital.sh <libsynthyboy_core.a> [more archives...]
+#        scripts/check-no-vital.sh --source <dir> [more dirs...]   (source tree of the own engine, core/engine-own)
 #        scripts/check-no-vital.sh --self-test
 #
 # An archive is rejected if one of its object file names, symbols (nm, demangled) or strings contains
 # "sbvital", "Vital" or "vital::". Exit status: 0 clean, 1 found Vital-derived content (or a failed self-test), 2 usage.
+#
+# --source: a source tree fails if a file has a Vital identifier (sbvital, vital::, an #include of a path with "vital", an identifier that
+# starts with Vital / vital_ / vitalX) or a GPL license text (GNU General Public License, GPL-2.0 / GPL-3.0 / LGPL: only the AGPL header
+# of this project is allowed). The plain word Vital in a comment (a name of a reference engine, history) is not an identifier and passes.
 #
 # Environment: CXX (compiler for --self-test, default c++), AR, NM, STRINGS.
 
@@ -21,10 +26,8 @@ pattern='sbvital|Vital|vital::'
 # "Vital" + file / preset / bank / table / LFO) and the user-visible reverb type name "Vital" (core/src/param_table.cpp kReverbTypes, a
 # string in the parameter table, no engine code) are allowed. Anything else that mentions Vital still fails.
 # The UI library of the static plug-in with the bitmap GUI (synthyboy_static_ui, docs/ARCHITECTURE.md 4.3) adds the user interface of that importer: the result type of its flow (VitalFlowResult,
-# shell-juce/ui/ContentIO.h), the texts "Vital import" and "(Vital line mapping)" and "Vital Group: ..." (an explanation of the editor's group model), and its references to the editor model
-# synthyboy::wtedit::vital:: of core/wavetable-edit (the non-UI model of a wavetable group of components and keyframes, in the core of every platform since the editor exists; see
-# docs/ui-design/OWN-ENGINE-GAP.md, "Open question for the owner").
-allowed='kPackImportedVital|vitalimport|importVital|isVitalBankName|VitalPluginImport|looksLikeVitalPreset|decodeVitalEffectOrder|Imported Vital Wavetables|imported wavetables from Vital presets|Vital (file|preset|bank|table|lfo)|^[[:space:]]*Vital$|VitalFlowResult|Vital import|Vital line mapping|Vital Group:|wtedit::vital::'
+# shell-juce/ui/ContentIO.h), the texts "Vital import" and "(Vital line mapping)". (The editor's layer model is synthyboy::wtedit::layers.)
+allowed='kPackImportedVital|vitalimport|importVital|isVitalBankName|VitalPluginImport|looksLikeVitalPreset|decodeVitalEffectOrder|Imported Vital Wavetables|imported wavetables from Vital presets|Vital (file|preset|bank|table|lfo)|^[[:space:]]*Vital$|VitalFlowResult|Vital import|Vital line mapping'
 NM="${NM:-nm}"
 AR="${AR:-ar}"
 STRINGS="${STRINGS:-strings}"
@@ -65,6 +68,29 @@ check_archive()
         found=1
     fi
 
+    return $found
+}
+
+# source tree check: prints the offending lines (at most a few per category) and returns 1 if there are any, 2 if the directory is missing
+check_source()
+{
+    local dir="$1" found=0 hits
+    if [[ ! -d "$dir" ]]; then
+        echo "check-no-vital: $dir: no such directory" >&2
+        return 2
+    fi
+    hits="$(grep -rnE 'sbvital|vital::|#[[:space:]]*include[[:space:]]*["<][^">]*vital|\bVital[A-Z][A-Za-z0-9_]*|\bvital_[a-z]|\bvital[A-Z][A-Za-z0-9_]*' "$dir" || true)"
+    if [[ -n "$hits" ]]; then
+        echo "check-no-vital: $dir: Vital identifiers ($(echo "$hits" | wc -l | tr -d ' ') lines):" >&2
+        echo "$hits" | head -n 5 | sed 's/^/    /' >&2
+        found=1
+    fi
+    hits="$(grep -rniE 'GNU (Lesser |Library )?General Public License|(^|[^A])L?GPL-?[0-9]|(^|[^A])GPL' "$dir" | grep -v 'Affero' || true)"
+    if [[ -n "$hits" ]]; then
+        echo "check-no-vital: $dir: GPL header or license text ($(echo "$hits" | wc -l | tr -d ' ') lines):" >&2
+        echo "$hits" | head -n 5 | sed 's/^/    /' >&2
+        found=1
+    fi
     return $found
 }
 
@@ -146,6 +172,20 @@ fi
 if [[ "$1" == "--self-test" ]]; then
     self_test
     exit $?
+fi
+
+if [[ "$1" == "--source" ]]; then
+    shift
+    [[ $# -gt 0 ]] || { echo "usage: $0 --source <dir>..." >&2; exit 2; }
+    status=0
+    for tree in "$@"; do
+        if check_source "$tree"; then
+            echo "check-no-vital: $tree: clean"
+        else
+            status=1
+        fi
+    done
+    exit $status
 fi
 
 status=0
