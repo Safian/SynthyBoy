@@ -74,8 +74,10 @@ long long run (bool lanes, int reps, long long& samples)
             for (auto& v : dl) v = sampleOf ((style + 1) % 5);
             for (auto& v : dr) v = sampleOf ((style + 2) % 5);
             std::vector<float> l1 = l, r1 = r;
-            synthyboy::own::master::stageReference (l.data(), r.data(), dl.data(), dr.data(), n, p, a);
-            synthyboy::own::master::stage (l1.data(), r1.data(), dl.data(), dr.data(), n, p, b, lanes);
+            bool clipRef = false, clipStage = false;
+            synthyboy::own::master::stageReference (l.data(), r.data(), dl.data(), dr.data(), n, p, a, &clipRef);
+            synthyboy::own::master::stage (l1.data(), r1.data(), dl.data(), dr.data(), n, p, b, lanes, &clipStage);
+            bad += (clipRef != clipStage);
             for (int i = 0; i < n; ++i)
             {
                 const bool d = bitsOf (l[static_cast<size_t> (i)]) != bitsOf (l1[static_cast<size_t> (i)]) || bitsOf (r[static_cast<size_t> (i)]) != bitsOf (r1[static_cast<size_t> (i)]);
@@ -139,3 +141,121 @@ TEST (own_master_stage_neon_form_is_the_per_sample_loop_with_flush_to_zero_set)
     CHECK_EQ (bad, 0);
 }
 #endif
+
+TEST (own_master_stage_clip_flag_reports_safety_limit)
+{
+    const int testLengths[] = { 1, 3, 4, 5, 127, 128 };
+    for (int n : testLengths)
+    {
+        for (bool lanes : { false, true })
+        {
+            // (a) a block whose samples all stay at or below 1.8 in magnitude after the gain, including exactly 1.8 and -1.8: no clip
+            {
+                std::vector<float> l (static_cast<size_t> (n), 0.5f);
+                std::vector<float> r (static_cast<size_t> (n), -0.5f);
+                std::vector<float> dl (static_cast<size_t> (n), 0.0f);
+                std::vector<float> dr (static_cast<size_t> (n), 0.0f);
+                l[0] = 1.8f;
+                r[0] = -1.8f;
+                if (n > 1) { l[1] = -1.8f; r[1] = 1.8f; }
+                if (n > 3) { l[3] = 1.8f; r[3] = -1.8f; }
+
+                LinearSmoother a, b;
+                a.reset (44100.0, 0.02);
+                b.reset (44100.0, 0.02);
+                a.setCurrentAndTarget (1.0f);
+                b.setCurrentAndTarget (1.0f);
+
+                master::Params p;
+                p.controlPos = 0;
+                bool clipRef = false, clipStage = false;
+                auto lRef = l, rRef = r;
+                auto lStage = l, rStage = r;
+
+                master::stageReference (lRef.data(), rRef.data(), dl.data(), dr.data(), n, p, a, &clipRef);
+                master::stage (lStage.data(), rStage.data(), dl.data(), dr.data(), n, p, b, lanes, &clipStage);
+
+                CHECK_EQ (clipRef, false);
+                CHECK_EQ (clipStage, false);
+                for (int i = 0; i < n; ++i)
+                {
+                    CHECK_EQ (bitsOf (lRef[static_cast<size_t> (i)]), bitsOf (lStage[static_cast<size_t> (i)]));
+                    CHECK_EQ (bitsOf (rRef[static_cast<size_t> (i)]), bitsOf (rStage[static_cast<size_t> (i)]));
+                }
+            }
+
+            // (b) a block with ONE sample at 1.81 in the left channel at an index that is not a multiple of 4, and one with -1.9 in the right channel: clip
+            {
+                std::vector<float> l (static_cast<size_t> (n), 0.2f);
+                std::vector<float> r (static_cast<size_t> (n), -0.2f);
+                std::vector<float> dl (static_cast<size_t> (n), 0.0f);
+                std::vector<float> dr (static_cast<size_t> (n), 0.0f);
+
+                const size_t idxLeft = n >= 4 ? 3 : (n > 1 ? 1 : 0);
+                const size_t idxRight = n >= 4 ? 1 : (n > 1 ? 1 : 0);
+                l[idxLeft] = 1.81f;
+                r[idxRight] = -1.9f;
+
+                LinearSmoother a, b;
+                a.reset (44100.0, 0.02);
+                b.reset (44100.0, 0.02);
+                a.setCurrentAndTarget (1.0f);
+                b.setCurrentAndTarget (1.0f);
+
+                master::Params p;
+                p.controlPos = 0;
+                bool clipRef = false, clipStage = false;
+                auto lRef = l, rRef = r;
+                auto lStage = l, rStage = r;
+
+                master::stageReference (lRef.data(), rRef.data(), dl.data(), dr.data(), n, p, a, &clipRef);
+                master::stage (lStage.data(), rStage.data(), dl.data(), dr.data(), n, p, b, lanes, &clipStage);
+
+                CHECK_EQ (clipRef, true);
+                CHECK_EQ (clipStage, true);
+                for (int i = 0; i < n; ++i)
+                {
+                    CHECK_EQ (bitsOf (lRef[static_cast<size_t> (i)]), bitsOf (lStage[static_cast<size_t> (i)]));
+                    CHECK_EQ (bitsOf (rRef[static_cast<size_t> (i)]), bitsOf (rStage[static_cast<size_t> (i)]));
+                }
+            }
+
+            // (c) a block containing a NaN and nothing above 1.8: no clip
+            {
+                std::vector<float> l (static_cast<size_t> (n), 0.4f);
+                std::vector<float> r (static_cast<size_t> (n), -0.4f);
+                std::vector<float> dl (static_cast<size_t> (n), 0.0f);
+                std::vector<float> dr (static_cast<size_t> (n), 0.0f);
+
+                const float qnan = std::numeric_limits<float>::quiet_NaN();
+                l[0] = qnan;
+                if (n > 1) r[n - 1] = qnan;
+                if (n > 3) l[3] = 1.8f;
+
+                LinearSmoother a, b;
+                a.reset (44100.0, 0.02);
+                b.reset (44100.0, 0.02);
+                a.setCurrentAndTarget (1.0f);
+                b.setCurrentAndTarget (1.0f);
+
+                master::Params p;
+                p.controlPos = 0;
+                bool clipRef = false, clipStage = false;
+                auto lRef = l, rRef = r;
+                auto lStage = l, rStage = r;
+
+                master::stageReference (lRef.data(), rRef.data(), dl.data(), dr.data(), n, p, a, &clipRef);
+                master::stage (lStage.data(), rStage.data(), dl.data(), dr.data(), n, p, b, lanes, &clipStage);
+
+                CHECK_EQ (clipRef, false);
+                CHECK_EQ (clipStage, false);
+                for (int i = 0; i < n; ++i)
+                {
+                    CHECK_EQ (bitsOf (lRef[static_cast<size_t> (i)]), bitsOf (lStage[static_cast<size_t> (i)]));
+                    CHECK_EQ (bitsOf (rRef[static_cast<size_t> (i)]), bitsOf (rStage[static_cast<size_t> (i)]));
+                }
+            }
+        }
+    }
+}
+

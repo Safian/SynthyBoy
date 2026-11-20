@@ -168,6 +168,9 @@ public:
         of the effects and the voices, which must not happen on the audio thread). Any thread, lock free. The shell then prepares the engine
         again on a thread that may allocate (JUCE: the message thread with the processing suspended; CLAP: request_restart). */
     virtual bool needsPrepare() const noexcept { return false; }
+
+    /** True if any output sample exceeded +-1.8 since the previous call (clearing the flag); false on engines without a safety limit. */
+    virtual bool takeClipFlag() noexcept { return false; }
 };
 
 /** The engine written for this project (always built; the only engine on iOS). */

@@ -79,6 +79,7 @@ public:
     void requestMeters() noexcept override { meterHold.store (kMeterHoldBlocks, std::memory_order_relaxed); }
     void silence() noexcept override;
     void setUltraRender (bool on) noexcept override { ultraRender.store (on, std::memory_order_relaxed); }
+    bool takeClipFlag() noexcept override { return clipFlag.exchange (false, std::memory_order_relaxed); }
     void setVoiceCountAlpha (float a) noexcept { voiceCountAlpha.store (std::clamp (a, 0.0f, 1.0f), std::memory_order_relaxed); }
     float voiceCountGain() const noexcept { return lastVoiceCountGain.load (std::memory_order_relaxed); }
     void setContent (const StateContent& content) override;
@@ -131,6 +132,8 @@ private:
     uint64_t activeMask = 0;
     template <class F> void forEachActive (F&& f) noexcept;
     static_assert (kMaxVoices + 4 <= 64, "the active voices are bits of a 64 bit mask");
+    std::atomic<bool> clipFlag { false };
+    static_assert (std::atomic<bool>::is_always_lock_free);
     std::atomic<unsigned> missingMask { 0 };
     // transport (set from any thread by the shell between blocks; read by the audio thread)
     std::atomic<double> tpBpm { 120.0 }, tpPos { 0.0 };

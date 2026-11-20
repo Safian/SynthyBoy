@@ -36,11 +36,13 @@ struct Params
     float routeCos = 1.0f, routeSin = 0.0f;   // the stereo routing (master.stereo_routing)
     float directPrev = 1.0f, directNow = 1.0f; // the Direct gain at the start and the end of the control period
     int controlPos = 0;                        // the position of the first sample in the control period
+    bool* clipped = nullptr;                   // set to true if any sample exceeds +-1.8 magnitude
 };
 
 /** The loop of OwnEngine::process before this file existed: n samples of left / right (the main sum), directL / directR (the Direct sum). */
-inline void stageReference (float* left, float* right, const float* directL, const float* directR, int n, const Params& p, LinearSmoother& gain) noexcept
+inline void stageReference (float* left, float* right, const float* directL, const float* directR, int n, const Params& p, LinearSmoother& gain, bool* clipped = nullptr) noexcept
 {
+    bool* const clip = clipped != nullptr ? clipped : p.clipped;
     for (int i = 0; i < n; ++i)
     {
         const float g = gain.next();
@@ -51,15 +53,19 @@ inline void stageReference (float* left, float* right, const float* directL, con
             right[i] = r0 * p.routeCos + l0 * p.routeSin;
         }
         const float dg = lerp (p.directPrev, p.directNow, static_cast<float> (p.controlPos + i + 1) * (1.0f / static_cast<float> (kControlPeriod)));
-        left[i] = outputLimit ((left[i] + directL[i] * dg) * g);
-        right[i] = outputLimit ((right[i] + directR[i] * dg) * g);
+        const float yl = (left[i] + directL[i] * dg) * g;
+        const float yr = (right[i] + directR[i] * dg) * g;
+        if (clip != nullptr && (std::fabs (yl) > 1.8f || std::fabs (yr) > 1.8f))
+            *clip = true;
+        left[i] = outputLimit (yl);
+        right[i] = outputLimit (yr);
     }
 }
 
 namespace detail
 {
 template <bool Route>
-inline void sampleOne (float* left, float* right, const float* directL, const float* directR, int i, float g, const Params& p) noexcept
+inline void sampleOne (float* left, float* right, const float* directL, const float* directR, int i, float g, const Params& p, bool* clip) noexcept
 {
     if (Route)
     {
@@ -68,13 +74,17 @@ inline void sampleOne (float* left, float* right, const float* directL, const fl
         right[i] = r0 * p.routeCos + l0 * p.routeSin;
     }
     const float dg = lerp (p.directPrev, p.directNow, static_cast<float> (p.controlPos + i + 1) * (1.0f / static_cast<float> (kControlPeriod)));
-    left[i] = outputLimit ((left[i] + directL[i] * dg) * g);
-    right[i] = outputLimit ((right[i] + directR[i] * dg) * g);
+    const float yl = (left[i] + directL[i] * dg) * g;
+    const float yr = (right[i] + directR[i] * dg) * g;
+    if (clip != nullptr && (std::fabs (yl) > 1.8f || std::fabs (yr) > 1.8f))
+        *clip = true;
+    left[i] = outputLimit (yl);
+    right[i] = outputLimit (yr);
 }
 
 #if SB_NEON
 /** The safety limit of four samples: y itself where no lane is above 1.8 in magnitude (a NaN lane gives +0), else the scalar limit of each lane. */
-inline float32x4_t limit4 (float32x4_t y) noexcept
+inline float32x4_t limit4 (float32x4_t y, bool* clip = nullptr) noexcept
 {
     const uint32x4_t u = vandq_u32 (vreinterpretq_u32_f32 (y), vdupq_n_u32 (0x7fffffffu));
     const uint32x4_t nan = vcgtq_u32 (u, vdupq_n_u32 (0x7f800000u));
@@ -85,14 +95,18 @@ inline float32x4_t limit4 (float32x4_t y) noexcept
         float t[4];
         vst1q_f32 (t, y);
         for (float& v : t)
+        {
+            if (clip != nullptr && std::fabs (v) > 1.8f)
+                *clip = true;
             v = outputLimit (v);
+        }
         return vld1q_f32 (t);
     }
     return vreinterpretq_f32_u32 (vbicq_u32 (vreinterpretq_u32_f32 (y), nan));
 }
 
 template <bool Route>
-inline int lanes (float* left, float* right, const float* directL, const float* directR, int i, int n, float g, const Params& p) noexcept
+inline int lanes (float* left, float* right, const float* directL, const float* directR, int i, int n, float g, const Params& p, bool* clip) noexcept
 {
     const float32x4_t vg = vdupq_n_f32 (g), vc = vdupq_n_f32 (p.routeCos), vs = vdupq_n_f32 (p.routeSin), vp = vdupq_n_f32 (p.directPrev), vn = vdupq_n_f32 (p.directNow);
     const float invP = 1.0f / static_cast<float> (kControlPeriod);
@@ -109,38 +123,39 @@ inline int lanes (float* left, float* right, const float* directL, const float* 
         const float32x4_t dg = simd::lerp4 (vp, vn, simd::ramp4 (p.controlPos, i, invP));
         const float32x4_t yl = vmulq_f32 (vaddq_f32 (l, vmulq_f32 (vld1q_f32 (directL + i), dg)), vg);
         const float32x4_t yr = vmulq_f32 (vaddq_f32 (r, vmulq_f32 (vld1q_f32 (directR + i), dg)), vg);
-        vst1q_f32 (left + i, limit4 (yl));
-        vst1q_f32 (right + i, limit4 (yr));
+        vst1q_f32 (left + i, limit4 (yl, clip));
+        vst1q_f32 (right + i, limit4 (yr, clip));
     }
     return i;
 }
 #endif
 
 template <bool Route>
-inline void run (float* left, float* right, const float* directL, const float* directR, int n, const Params& p, LinearSmoother& gain, bool useLanes) noexcept
+inline void run (float* left, float* right, const float* directL, const float* directR, int n, const Params& p, LinearSmoother& gain, bool useLanes, bool* clip) noexcept
 {
     int i = 0;
     for (; i < n && ! gain.settled(); ++i)   // the ramp: one smoother step per sample, as before
-        sampleOne<Route> (left, right, directL, directR, i, gain.next(), p);
+        sampleOne<Route> (left, right, directL, directR, i, gain.next(), p, clip);
     const float g = gain.targetValue();       // settled: next () would return this and change nothing
 #if SB_NEON
     if (useLanes)
-        i = lanes<Route> (left, right, directL, directR, i, n, g, p);
+        i = lanes<Route> (left, right, directL, directR, i, n, g, p, clip);
 #else
     (void) useLanes;
 #endif
     for (; i < n; ++i)
-        sampleOne<Route> (left, right, directL, directR, i, g, p);
+        sampleOne<Route> (left, right, directL, directR, i, g, p, clip);
 }
 } // namespace detail
 
 /** The same samples as stageReference. useLanes false: the scalar form with the hoists only (the NEON form is a build setting; the flag is for the tests). */
-inline void stage (float* left, float* right, const float* directL, const float* directR, int n, const Params& p, LinearSmoother& gain, bool useLanes = true) noexcept
+inline void stage (float* left, float* right, const float* directL, const float* directR, int n, const Params& p, LinearSmoother& gain, bool useLanes = true, bool* clipped = nullptr) noexcept
 {
+    bool* const clip = clipped != nullptr ? clipped : p.clipped;
     if (p.routeSin != 0.0f)
-        detail::run<true> (left, right, directL, directR, n, p, gain, useLanes);
+        detail::run<true> (left, right, directL, directR, n, p, gain, useLanes, clip);
     else
-        detail::run<false> (left, right, directL, directR, n, p, gain, useLanes);
+        detail::run<false> (left, right, directL, directR, n, p, gain, useLanes, clip);
 }
 } // namespace master
 } // namespace own

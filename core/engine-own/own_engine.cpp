@@ -1456,6 +1456,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     const MasterIdx& mi = pi.master;
     const int fxReverbForce = fxReverbForceIndex;
     int pos = 0, ei = 0;
+    bool blockClipped = false;
     const bool eventGrid = (globals.economy & kEconomyControl) != 0;
     while (pos < numFrames)
     {
@@ -1745,12 +1746,15 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             mp.directPrev = directGainPrev;
             mp.directNow = directGain;
             mp.controlPos = controlPos;
+            mp.clipped = &blockClipped;
             master::stage (left + pos, rightOut + pos, mixL[3], mixR[3], end - pos, mp, smoothedGain);
         }
         stripBlockPeak[9] = std::max (stripBlockPeak[9], peak::peakAbsPair (left + pos, rightOut + pos, end - pos));   // Master: what leaves the engine
         controlPos = (controlPos + n) % kControlPeriod;
         pos = end;
     }
+    if (blockClipped)
+        clipFlag.store (true, std::memory_order_relaxed);
     while (ei < numEvents)
         handleEvent (events[ei++]);
 
