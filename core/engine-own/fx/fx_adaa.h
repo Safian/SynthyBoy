@@ -23,7 +23,7 @@ namespace adaa
 constexpr float kEps = 1.0f / 1024.0f;
 
 /** The types (bit n = distortion type n) that run through the ADAA. Types 4 and 5 are lo-fi effects on purpose and never join. */
-constexpr uint32_t kConverted = (1u << 1) | (1u << 11);
+constexpr uint32_t kConverted = (1u << 0) | (1u << 1) | (1u << 6) | (1u << 9) | (1u << 10) | (1u << 11);
 
 /** x = the last raw input (before the drive), g = the gain b was computed for, b = the bounded part of F at x * g. */
 struct State
@@ -31,73 +31,93 @@ struct State
     float x = 0.0f, g = -1.0f, b = 0.0f;
 };
 
-/** The piecewise linear part of the antiderivative at v. */
-inline float lin (int type, float v) noexcept
+/** tanh (0.3), the constant the Tube law (type 6) subtracts. */
+constexpr float kTanh03 = 0.29131261f;
+constexpr float kLn2 = 0.69314718f;
+
+/** ln cosh (t) - |t| = L (|t|) - ln 2 with L (s) = log1p (exp (-2 s)): bounded, between -0.7 and 0. */
+inline float lncoshBnd (float t, bool fast) noexcept
+{
+    const float e = fast ? fastmath::exp (-2.0f * std::fabs (t)) : std::exp (-2.0f * std::fabs (t));
+    const float l = fast ? kLn2 * fastmath::log2 (1.0f + e) : std::log1p (e);
+    return l - kLn2;
+}
+
+/** The piecewise linear part of the antiderivative at t, the argument of the closed form (t = v; type 9: 32 v; type 6: v + 0.3). */
+inline float lin (int type, float t) noexcept
 {
     switch (type)
     {
-        case 1: return std::fabs (v);
-        case 11: return v;
+        case 0: case 6: case 9: case 1: return std::fabs (t);
+        case 11: return t;
+        case 10: return t >= 0.0f ? t : 0.5f * -t;
         default: return 0.0f;
     }
 }
 
-/** The bounded part of the antiderivative at v: F = lin + bnd. */
-inline float bnd (int type, float v, bool fast) noexcept
+/** The bounded part of the antiderivative at t: F = lin + bnd. */
+inline float bnd (int type, float t, bool fast) noexcept
 {
-    (void) fast;
-    const float s = std::fabs (v);
+    const float s = std::fabs (t);
     switch (type)
     {
+        case 0: case 6: case 9: return lncoshBnd (t, fast);
         case 1: return s < 1.0f ? -0.5f + 0.5f * (1.0f - s) * (1.0f - s) : -0.5f;
         case 11:
         {
             const float h = s < 1.0f ? 0.5f * s * s : s - 0.5f; // H (s), the integral of min (s, 1)
-            return (v < 0.0f ? -h : h) - v;
+            return (t < 0.0f ? -h : h) - t;
         }
+        case 10: return t >= 0.0f ? lncoshBnd (t, fast) : (s >= 0.5f ? -0.125f : 0.5f * t * t - 0.5f * s);
         default: return 0.0f;
     }
 }
 
-/** Today's law (docs/engine-spec/06-effects.md section 4) of a converted type. */
-inline float naive (int type, float v, bool fast) noexcept
+/** Today's law (docs/engine-spec/06-effects.md section 4) of a converted type at t (the argument of the closed form). */
+inline float naive (int type, float t, bool fast) noexcept
 {
-    (void) fast;
+    auto th = [fast] (float a) noexcept { return fast ? fastmath::tanh (a) : std::tanh (a); };
     switch (type)
     {
-        case 1: return std::clamp (v, -1.0f, 1.0f);
-        case 11: return std::fabs (std::clamp (v, -1.0f, 1.0f));
-        default: return v;
+        case 0: case 9: return th (t);
+        case 6: return th (t) - kTanh03;
+        case 10: return th (std::max (t, 0.0f)) + std::max (std::min (t, 0.0f), -0.5f);
+        case 1: return std::clamp (t, -1.0f, 1.0f);
+        case 11: return std::fabs (std::clamp (t, -1.0f, 1.0f));
+        default: return t;
     }
 }
 
 /** One sample of the converted type `type`: x = the raw input, g = the drive gain. The result has no DC blocker applied. */
 inline float step (int type, State& s, float x, float g, bool fast) noexcept
 {
-    const float v = x * g;
-    if (!(std::fabs (v) < 1.0e6f)) // too large or not finite: reset the pair and return the law of the clamped value
+    const float ge = type == 9 ? 32.0f * g : g; // Zero-Square is tanh (32 v)
+    const float off = type == 6 ? 0.3f : 0.0f;  // Tube is tanh (v + 0.3) - tanh (0.3)
+    const float sub = type == 6 ? kTanh03 : 0.0f;
+    const float t = x * ge + off;
+    if (!(std::fabs (t) < 1.0e6f)) // too large or not finite: reset the pair and return the law of the clamped value
     {
-        const float c = v != v ? 0.0f : (v > 0.0f ? 1.0e6f : -1.0e6f);
+        const float c = t != t ? 0.0f : (t > 0.0f ? 1.0e6f : -1.0e6f);
         s.x = 0.0f;
-        s.g = g;
-        s.b = bnd (type, 0.0f, fast);
+        s.g = ge;
+        s.b = bnd (type, off, fast);
         return naive (type, c, fast);
     }
-    const float vp = s.x * g;
-    if (g != s.g) // the gain changed: the stored bounded part belongs to the old gain
+    const float tp = s.x * ge + off;
+    if (ge != s.g) // the gain changed: the stored bounded part belongs to the old gain
     {
-        s.b = bnd (type, vp, fast);
-        s.g = g;
+        s.b = bnd (type, tp, fast);
+        s.g = ge;
     }
-    const float bv = bnd (type, v, fast);
-    const float dv = v - vp;
+    const float bt = bnd (type, t, fast);
+    const float dt = t - tp;
     float y;
-    if (std::fabs (dv) < kEps)
-        y = naive (type, 0.5f * (v + vp), fast);
+    if (std::fabs (dt) < kEps)
+        y = naive (type, 0.5f * (t + tp), fast);
     else
-        y = ((lin (type, v) - lin (type, vp)) + (bv - s.b)) / dv;
+        y = ((lin (type, t) - lin (type, tp)) + (bt - s.b)) / dt - sub;
     s.x = flushDenormal (x);
-    s.b = flushDenormal (bv);
+    s.b = flushDenormal (bt);
     return y;
 }
 } // namespace adaa
