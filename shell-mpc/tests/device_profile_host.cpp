@@ -207,7 +207,7 @@ int main (int argc, char** argv)
                "the process takes the first line of the debug file before the environment variable: " + c.source);
         std::stringstream ss;
         ss << std::ifstream (reportPath).rdbuf();
-        check (ss.str().find ("profile: low,unison=7,warp=4x\n") == 0 && ss.str().find ("profile_settings: low,voices=8,unison=7,warp=4x,morph=half,math=fast,control=economy,fx=low,samples=low\n") != std::string::npos,
+        check (ss.str().find ("profile: low,unison=7,warp=4x\n") == 0 && ss.str().find ("profile_settings: low,voices=8,unison=7,warp=4x,morph=half,math=fast,control=economy,start=stagger,fx=low,samples=low\n") != std::string::npos,
                "the report file says what is in force: " + ss.str().substr (0, ss.str().find ('\n')));
         // fixed for the life of the process: a changed file and environment change nothing
         { std::ofstream (file) << "high\n"; }
