@@ -244,6 +244,7 @@ private:
     float voiceCountGainPrev = 1.0f;
     float voiceCountGainDb = 0.0f;
     int soundingAtPeriodStart = 0;
+    int vcgRampStart = 0, vcgRampLen = kControlPeriod;
     int busDest[2] = {}, mainBypass = 0, busBypass[2] = {};
     std::atomic<uint32_t> fxMask { kFxAll };
     std::atomic<bool> fxMakeup { true };

@@ -92,7 +92,7 @@ void readSample (const SampleView& s, double pos, double rate, float& l, float& 
 {
     int m = 0;
     if (rate > 1.0 && s.numMipLevels > 1)
-        m = std::min (s.numMipLevels - 1, static_cast<int> (std::floor (std::log2 (rate))));
+        m = std::min (s.numMipLevels - 1, static_cast<int> (std::ceil (std::log2 (rate))));
     if (m > 0 && s.mipLevels != nullptr)
     {
         const auto& lvl = s.mipLevels[m];
@@ -170,7 +170,7 @@ struct GrainRead
 inline int mipFor (const SampleView& s, double rate) noexcept
 {
     if (rate > 1.0 && s.numMipLevels > 1)
-        return std::min (s.numMipLevels - 1, static_cast<int> (std::floor (std::log2 (rate))));
+        return std::min (s.numMipLevels - 1, static_cast<int> (std::ceil (std::log2 (rate))));
     return 0;
 }
 

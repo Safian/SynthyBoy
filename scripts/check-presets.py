@@ -132,8 +132,10 @@ class PresetChecker:
             self.add_error("format_version", path_str, None, f"Wrong state format: {state_format!r} (expected 'synthyboy-state')")
 
         state_version = state.get("version")
-        if state_version != self.state_version:
-            self.add_error("format_version", path_str, None, f"Wrong state version: {state_version!r} (expected {self.state_version})")
+        # The factory presets stay at state version 4 by decision (3fd5d3dd): the engine (docs/params.json "stateVersion", 5) migrates them on load.
+        # A preset must not be NEWER than the engine and not older than 4.
+        if not isinstance(state_version, int) or state_version < 4 or state_version > self.state_version:
+            self.add_error("format_version", path_str, None, f"Wrong state version: {state_version!r} (expected 4..{self.state_version})")
 
         # Meta checks
         meta = data.get("meta")

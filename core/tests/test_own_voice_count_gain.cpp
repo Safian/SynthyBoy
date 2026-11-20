@@ -33,6 +33,7 @@ TEST (voice_count_gain_alpha_zero_and_single_voices_are_bit_identical) { CHECK (
 TEST (voice_count_gain_steady_state_follows_n_to_the_minus_alpha) { CHECK (! "voice-count gain not implemented (docs/release/VOICE-COUNT-GAIN-SPEC.md)"); }
 TEST (voice_count_gain_slopes_are_bounded) { CHECK (! "voice-count gain not implemented (docs/release/VOICE-COUNT-GAIN-SPEC.md)"); }
 TEST (voice_count_gain_closes_the_chord_note_gap) { CHECK (! "voice-count gain not implemented (docs/release/VOICE-COUNT-GAIN-SPEC.md)"); }
+TEST (voice_count_gain_applies_immediately_on_mid_period_chord_strike) { CHECK (! "voice-count gain not implemented (docs/release/VOICE-COUNT-GAIN-SPEC.md)"); }
 
 #else
 
@@ -303,6 +304,128 @@ TEST (voice_count_gain_slopes_are_bounded)
     const double first = 20.0 * std::log10 (std::max (static_cast<double> (ownVoiceCountGain (*c)), 1e-6));
     std::printf ("  four notes from silence: the gain of the first period %.3f dB\n", first);
     CHECK_NEAR (first, -6.0206, 0.05);
+}
+
+// Mid-period chord strike acceptance test: extends voice_count_gain_slopes_are_bounded
+// for unaligned note-ons when eventGrid is disabled (desktop medium/high quality tiers).
+TEST (voice_count_gain_applies_immediately_on_mid_period_chord_strike)
+{
+    Quality q = qualityForTier (Tier::high);
+    q.realtime = false;
+    const int block = 32;
+    auto e0 = makeEngine (testPatch(), {}, q, nullptr, 0.0f, block);
+    auto e1 = makeEngine (testPatch(), {}, q, nullptr, 0.5f, block);
+
+    std::vector<float> l0 (static_cast<size_t> (block)), r0 (static_cast<size_t> (block));
+    std::vector<float> l1 (static_cast<size_t> (block)), r1 (static_cast<size_t> (block));
+
+    std::vector<Event> chord;
+    for (int key : { 48, 55, 60, 64 })
+    {
+        Event ev = noteOn (key, 1.0f);
+        ev.frame = 5;
+        chord.push_back (ev);
+    }
+
+    // 1. Strike a 4-note chord from silence at frame = 5 inside block 0 (32 samples)
+    e0->process (chord.data(), static_cast<int> (chord.size()), l0.data(), r0.data(), block);
+    e1->process (chord.data(), static_cast<int> (chord.size()), l1.data(), r1.data(), block);
+
+    double sumSq0 = 0.0, sumSq1 = 0.0;
+    for (int i = 5; i < 32; ++i)
+    {
+        sumSq0 += static_cast<double> (l0[static_cast<size_t> (i)]) * l0[static_cast<size_t> (i)] + static_cast<double> (r0[static_cast<size_t> (i)]) * r0[static_cast<size_t> (i)];
+        sumSq1 += static_cast<double> (l1[static_cast<size_t> (i)]) * l1[static_cast<size_t> (i)] + static_cast<double> (r1[static_cast<size_t> (i)]) * r1[static_cast<size_t> (i)];
+    }
+    const double rms0 = std::sqrt (std::max (sumSq0 / (2.0 * 27.0), 1e-30));
+    const double rms1 = std::sqrt (std::max (sumSq1 / (2.0 * 27.0), 1e-30));
+    const double diffDb = 20.0 * std::log10 (std::max (rms1 / rms0, 1e-15));
+    const double firstGainDb = 20.0 * std::log10 (std::max (static_cast<double> (ownVoiceCountGain (*e1)), 1e-6));
+
+    std::printf ("  mid-period chord strike (frame = 5): diffDb = %.4f dB, firstGainDb = %.4f dB\n", diffDb, firstGainDb);
+    CHECK_NEAR (diffDb, -6.0206, 0.05);
+    CHECK_NEAR (firstGainDb, -6.0206, 0.05);
+
+    // Render second block (samples 32..63): gain stays at -6.0206 dB
+    e1->process (nullptr, 0, l1.data(), r1.data(), block);
+    const double secondGainDb = 20.0 * std::log10 (std::max (static_cast<double> (ownVoiceCountGain (*e1)), 1e-6));
+    std::printf ("  second block gain: %.4f dB\n", secondGainDb);
+    CHECK_NEAR (secondGainDb, -6.0206, 0.05);
+
+    // 2. Mid-period addition to a held note
+    auto eHeld = makeEngine (testPatch(), {}, q, nullptr, 0.5f, block);
+    std::vector<float> lHeld (static_cast<size_t> (block)), rHeld (static_cast<size_t> (block));
+
+    std::vector<Event> evHeld = { noteOn (48, 1.0f) };
+    eHeld->process (evHeld.data(), 1, lHeld.data(), rHeld.data(), block);
+    for (int b = 1; b < 10; ++b)
+        eHeld->process (nullptr, 0, lHeld.data(), rHeld.data(), block);
+
+    std::vector<Event> evAdd;
+    for (int key : { 55, 60, 64 })
+    {
+        Event ev = noteOn (key, 1.0f);
+        ev.frame = 7;
+        evAdd.push_back (ev);
+    }
+    eHeld->process (evAdd.data(), static_cast<int> (evAdd.size()), lHeld.data(), rHeld.data(), block);
+
+    const double afterAddDb = 20.0 * std::log10 (std::max (static_cast<double> (ownVoiceCountGain (*eHeld)), 1e-6));
+    std::printf ("  mid-period note addition (frame = 7 of block 10): afterAddDb = %.4f dB (expected -1.5625 dB)\n", afterAddDb);
+    CHECK_NEAR (afterAddDb, -1.5625, 0.05);
+
+    // 3. Bit-identity checksum: render a 4-note chord at frame = 0 on profileQuality ("low") and Tier::high, 256 samples each
+    auto printVcgChecksum = [] (const char* caseName, const std::vector<float>& left)
+    {
+        CHECK (left.size() >= 8);
+        double sumAbs = 0.0;
+        for (float s : left)
+            sumAbs += std::fabs (static_cast<double> (s));
+        const size_t sz = left.size();
+        std::printf ("VCG-CHECKSUM %s sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                     caseName, sumAbs,
+                     static_cast<double> (left[sz - 8]),
+                     static_cast<double> (left[sz - 7]),
+                     static_cast<double> (left[sz - 6]),
+                     static_cast<double> (left[sz - 5]),
+                     static_cast<double> (left[sz - 4]),
+                     static_cast<double> (left[sz - 3]),
+                     static_cast<double> (left[sz - 2]),
+                     static_cast<double> (left[sz - 1]));
+    };
+
+    {
+        const Quality qLow = profileQuality ("low");
+        auto eLow = makeEngine (testPatch(), {}, qLow, nullptr, 0.5f, block);
+        std::vector<float> leftLow (256, 0.0f), rightLow (256, 0.0f);
+        std::vector<Event> chord0;
+        for (int key : { 48, 55, 60, 64 })
+            chord0.push_back (noteOn (key, 1.0f));
+        for (int b = 0; b < 8; ++b)
+        {
+            const Event* evPtr = (b == 0) ? chord0.data() : nullptr;
+            const int evNum = (b == 0) ? static_cast<int> (chord0.size()) : 0;
+            eLow->process (evPtr, evNum, leftLow.data() + static_cast<size_t> (b * block), rightLow.data() + static_cast<size_t> (b * block), block);
+        }
+        printVcgChecksum ("low_grid_frame0", leftLow);
+    }
+
+    {
+        Quality qHigh = qualityForTier (Tier::high);
+        qHigh.realtime = false;
+        auto eHigh = makeEngine (testPatch(), {}, qHigh, nullptr, 0.5f, block);
+        std::vector<float> leftHigh (256, 0.0f), rightHigh (256, 0.0f);
+        std::vector<Event> chord0;
+        for (int key : { 48, 55, 60, 64 })
+            chord0.push_back (noteOn (key, 1.0f));
+        for (int b = 0; b < 8; ++b)
+        {
+            const Event* evPtr = (b == 0) ? chord0.data() : nullptr;
+            const int evNum = (b == 0) ? static_cast<int> (chord0.size()) : 0;
+            eHigh->process (evPtr, evNum, leftHigh.data() + static_cast<size_t> (b * block), rightHigh.data() + static_cast<size_t> (b * block), block);
+        }
+        printVcgChecksum ("high_nogrid_frame0", leftHigh);
+    }
 }
 
 TEST (voice_count_gain_closes_the_chord_note_gap)
