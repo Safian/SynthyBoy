@@ -404,7 +404,7 @@ public:
                     Ladder4Pole& ld = f[l]->ladder_;
                     if (!(ld.haveG && g[l] == ld.lastG))
                     {
-                        const float gSafe = std::max (1e-5f, std::min (g[l], 0.95f));
+                        const float gSafe = std::max (1e-5f, std::min (g[l], 50.0f));
                         ld.cG = gSafe / (1.0f + gSafe);
                         ld.cG0 = 1.0f / (1.0f + gSafe);
                         ld.cG2 = ld.cG * ld.cG;
