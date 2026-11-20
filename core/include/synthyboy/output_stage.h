@@ -126,7 +126,7 @@ public:
         calm = 0;
         idle = true;
         lastG = 1.0f;
-        curGain = targetGain;
+        curGain = targetGain.load (std::memory_order_relaxed);
         target = wanted.load (std::memory_order_relaxed);
         mix = target ? 1.0f : 0.0f;
         lastMinGain.store (1.0f, std::memory_order_relaxed);
@@ -136,10 +136,11 @@ public:
     {
         if (! std::isfinite (db))
             db = 0.0f;
-        gDb = std::clamp (db, -24.0f, 24.0f);
-        targetGain = gDb == 0.0f ? 1.0f : std::pow (10.0f, gDb / 20.0f);
+        const float clamped = std::clamp (db, -24.0f, 24.0f);
+        gDb.store (clamped, std::memory_order_relaxed);
+        targetGain.store (clamped == 0.0f ? 1.0f : std::pow (10.0f, clamped / 20.0f), std::memory_order_relaxed);
     }
-    float gainDb() const noexcept { return gDb; }
+    float gainDb() const noexcept { return gDb.load (std::memory_order_relaxed); }
 
     /** Lock free from any thread; the audio thread starts the crossfade at its next process (). */
     void setLimiter (bool on) noexcept { wanted.store (on, std::memory_order_relaxed); }
@@ -306,11 +307,12 @@ private:
     /** One sample: the reference loop body, also what the NEON form falls back to wherever its conditions do not hold. */
     void step (float* l, float* r, int i) noexcept
     {
-        if (curGain != targetGain)
+        const float tg = targetGain.load (std::memory_order_relaxed);
+        if (curGain != tg)
         {
-            curGain = targetGain + (curGain - targetGain) * smCoef;
-            if (std::fabs (curGain - targetGain) < 1e-6f * targetGain)
-                curGain = targetGain;
+            curGain = tg + (curGain - tg) * smCoef;
+            if (std::fabs (curGain - tg) < 1e-6f * tg)
+                curGain = tg;
         }
         float a = (l != nullptr) ? l[i] : 0.0f;
         float b = (r != nullptr) ? r[i] : 0.0f;
@@ -408,7 +410,7 @@ private:
         while (i < n)
         {
             const int rd = (w - D) & kMask;
-            if (i + 4 > n || ! idle || curGain != targetGain || mix != (target ? 1.0f : 0.0f) || w + 4 > kRing || rd + 4 > kRing)
+            if (i + 4 > n || ! idle || curGain != targetGain.load (std::memory_order_relaxed) || mix != (target ? 1.0f : 0.0f) || w + 4 > kRing || rd + 4 > kRing)
             {
                 step (l, r, i);
                 ++i;
@@ -465,7 +467,9 @@ private:
     int since = 0, holdN = 1, calm = 0, D = 1, W = 2;
     bool idle = true;
     // make-up gain, switch
-    float gDb = 0.0f, targetGain = 1.0f, curGain = 1.0f, smCoef = 0.99886686f;
+    std::atomic<float> gDb { 0.0f };
+    std::atomic<float> targetGain { 1.0f };
+    float curGain = 1.0f, smCoef = 0.99886686f;
     float mix = 1.0f, fadeInc = 0.01f, minG = 1.0f, lastG = 1.0f;
     bool target = true;
     uint32_t clips = 0, laneGroups = 0;
