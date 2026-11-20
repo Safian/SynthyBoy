@@ -344,12 +344,38 @@ struct Biquad
 class DelayLine
 {
 public:
+    /** Owning form: the line allocates its own storage (maxSamples + 4 floats). */
     void prepare (size_t maxSamples)
     {
-        buffer_.assign (maxSamples + 4, 0.0f);
+        owned_.assign (maxSamples + 4, 0.0f);
+        data_ = owned_.data();
+        size_ = owned_.size();
         writeIndex_ = 0;
         written_ = false;
     }
+
+    /** Non-owning form: the line runs on `length` floats of storage somebody else owns (FilterImpl's delay arena; a length is what prepare () would allocate: maxSamples + 4).
+        The storage must be zero and outlive the line; the line does not clear it here. Every read / write below is the one of the owning form. */
+    void bind (float* externalBuf, size_t length) noexcept
+    {
+        owned_.clear();
+        owned_.shrink_to_fit();
+        data_ = externalBuf;
+        size_ = externalBuf != nullptr ? length : 0;
+        writeIndex_ = 0;
+        written_ = false;
+    }
+
+    /** Forgets what was written without touching the storage (the owner has zeroed it already). */
+    void rewind() noexcept
+    {
+        writeIndex_ = 0;
+        written_ = false;
+    }
+
+    /** Heap bytes this line owns (0 for a bound line). */
+    size_t ownedBytes() const noexcept { return owned_.capacity() * sizeof (float); }
+    size_t ownedAllocs() const noexcept { return owned_.capacity() != 0 ? 1u : 0u; }
 
     /** A line that was never written is all zero at index 0 already: only a written one is cleared (a voice resets its filters at every
         note and most filter types never touch their delay lines). */
@@ -357,29 +383,29 @@ public:
     {
         if (!written_)
             return;
-        std::fill (buffer_.begin(), buffer_.end(), 0.0f);
+        std::fill (data_, data_ + size_, 0.0f);
         writeIndex_ = 0;
         written_ = false;
     }
 
     void write (float in) noexcept
     {
-        if (buffer_.empty())
+        if (size_ == 0)
             return;
         written_ = true;
-        buffer_[writeIndex_] = sanitize (in);
+        data_[writeIndex_] = sanitize (in);
         // (writeIndex_ + 1) % size without the integer division, which 32 bit ARM makes through a library call
-        if (++writeIndex_ == buffer_.size())
+        if (++writeIndex_ == size_)
             writeIndex_ = 0;
     }
     /** write () of a value the caller has sanitized already (the pair kernels sanitize in the lanes): the same store without the scalar compares. */
     void writeSanitized (float in) noexcept
     {
-        if (buffer_.empty())
+        if (size_ == 0)
             return;
         written_ = true;
-        buffer_[writeIndex_] = in;
-        if (++writeIndex_ == buffer_.size())
+        data_[writeIndex_] = in;
+        if (++writeIndex_ == size_)
             writeIndex_ = 0;
     }
 
@@ -390,10 +416,10 @@ public:
         size_t intD = 1;
         float frac = 0.0f;
     };
-    bool empty() const noexcept { return buffer_.empty(); }
+    bool empty() const noexcept { return size_ == 0; }
     Tap tapFor (float delaySamples) const noexcept
     {
-        const float maxD = static_cast<float> (buffer_.size() - 2);
+        const float maxD = static_cast<float> (size_ - 2);
         const float d = std::max (1.0f, std::min (delaySamples, maxD));
         Tap t;
         t.intD = static_cast<size_t> (d);
@@ -404,27 +430,27 @@ public:
     {
         const size_t intD = t.intD;
         const float frac = t.frac;
-        const size_t size = buffer_.size();
+        const size_t size = size_;
         size_t i1 = writeIndex_ + size - intD;
         if (i1 >= size)
             i1 -= size;
         size_t i2 = writeIndex_ + size - intD - 1;
         if (i2 >= size)
             i2 -= size;
-        return buffer_[i1] * (1.0f - frac) + buffer_[i2] * frac;
+        return data_[i1] * (1.0f - frac) + data_[i2] * frac;
     }
 
     float read (float delaySamples) const noexcept
     {
-        if (buffer_.empty())
+        if (size_ == 0)
             return 0.0f;
 
-        const float maxD = static_cast<float> (buffer_.size() - 2);
+        const float maxD = static_cast<float> (size_ - 2);
         const float d = std::max (1.0f, std::min (delaySamples, maxD));
         const auto intD = static_cast<size_t> (d);
         const float frac = d - static_cast<float> (intD);
 
-        const size_t size = buffer_.size();
+        const size_t size = size_;
         // intD <= size - 2 and writeIndex_ < size, so both sums are in [1, 2 size): one subtraction is the same as the remainder
         size_t i1 = writeIndex_ + size - intD;
         if (i1 >= size)
@@ -433,11 +459,13 @@ public:
         if (i2 >= size)
             i2 -= size;
 
-        return buffer_[i1] * (1.0f - frac) + buffer_[i2] * frac;
+        return data_[i1] * (1.0f - frac) + data_[i2] * frac;
     }
 
 private:
-    std::vector<float> buffer_;
+    std::vector<float> owned_;
+    float* data_ = nullptr;
+    size_t size_ = 0;
     size_t writeIndex_ = 0;
     bool written_ = false;
 };
@@ -451,6 +479,13 @@ struct AllpassDiffuser
     void prepare (size_t samples, float g)
     {
         delay.prepare (samples);
+        gain = g;
+    }
+
+    /** The delay on `length` floats of somebody else's storage (see DelayLine::bind). */
+    void bind (float* externalBuf, size_t length, float g) noexcept
+    {
+        delay.bind (externalBuf, length);
         gain = g;
     }
 
