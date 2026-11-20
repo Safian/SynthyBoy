@@ -39,6 +39,13 @@ public:
     bool padOn = false;
     float padPercent = 35.0f;
     int padWrites = 0;
+    bool clipFlag = false;
+    bool takeClipFlag() noexcept override
+    {
+        const bool hit = clipFlag;
+        clipFlag = false;
+        return hit;
+    }
     bool live (synthyboy::LiveValues& out) const noexcept override
     {
         out = liveValues;

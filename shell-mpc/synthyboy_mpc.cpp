@@ -459,6 +459,10 @@ struct PluginInstance
         {
             return inst.engine && inst.engine->copyReadout (out) && out.block != 0; // block 0: the engine wrote no values yet
         }
+        bool takeClipFlag() noexcept override
+        {
+            return inst.engine ? inst.engine->takeClipFlag() : false;
+        }
         void requestMeters() noexcept override { if (inst.engine) inst.engine->requestMeters(); }
         double bpm() const noexcept override { return inst.overlayBpm.load (std::memory_order_relaxed); }
         bool tablesLoading() const noexcept override { return (inst.engine && inst.engine->contentPending()) || inst.wtLoading.load (std::memory_order_relaxed); }   // a built-in table in the making, or a wavetable file the display thread is loading

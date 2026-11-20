@@ -379,6 +379,8 @@ public:
     std::shared_ptr<const synthyboy::StateContent> contentPtr;
     double sampleRate() const noexcept override { return 48000.0; }
     std::atomic<bool> hasLive { false };
+    std::atomic<bool> clipFlag { false };
+    bool takeClipFlag() noexcept override { return clipFlag.exchange (false, std::memory_order_relaxed); }
     std::atomic<float> liveCutoff { 1000.0f }, liveRes { 20.0f };
 
 private:
