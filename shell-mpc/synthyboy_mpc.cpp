@@ -404,6 +404,13 @@ struct PluginInstance
         outputStage.setLimiter (forced >= 0 ? forced == 1 : outputLimiter.load (std::memory_order_relaxed));
         latencyDirty.store (true, std::memory_order_release);   // the look-ahead is part of the reported latency only while the limiter is on
     }
+    std::atomic<float> tierTrimDb { 0.0f };
+    void applyTierTrim() noexcept
+    {
+        const bool isLow = synthyboy_mpc::profileInForce().profile == synthyboy_mpc::profileLow();
+        const float trim = isLow ? tierTrimDb.load (std::memory_order_relaxed) : 0.0f;
+        outputStage.setGainDb (static_cast<float> (SYNTHYBOY_MPC_OUTPUT_GAIN_DB) + trim);
+    }
     // The latency the host is told (AEffect::initialDelay): the engine's (Bode's frequency shifter) plus the output limiter's look-ahead while it is on, in samples at the prepared
     // rate. Any thread may mark it stale (the switch, the audio thread when the engine's latency moved); the next dispatcher call that is not effProcessEvents (so never on the
     // audio thread) writes the field and sends audioMasterIOChanged (reportLatency in dispatch).
@@ -1330,7 +1337,7 @@ struct PluginInstance
         }
         // the plugin's tabs (overlay_layout.h) and the maker of their views, and the line of the status file only SynthyBoy knows (the quality profile of the device); the first instance of the process decides (service.h)
         static synthyboy_mpc::overlay::SynthyBoyPageFactory pageFactory;
-        synthyboy_mpc::overlay::Service::instance().setStatus ([] { return "quality_profile: " + synthyboy_mpc::describeProfile (synthyboy_mpc::profileInForce().profile) + " (" + synthyboy_mpc::profileInForce().source + ")\n"; });
+        synthyboy_mpc::overlay::Service::instance().setStatus ([] { return "quality_profile: " + synthyboy_mpc::describeProfile (synthyboy_mpc::profileInForce().profile) + " (" + synthyboy_mpc::profileInForce().source + ")\n" + synthyboy_mpc::noteDiagnostics().formatLine(); });
         const int slot = synthyboy_mpc::overlay::Service::instance().attach (&overlayView, &mpckit::synthyboy_adapter::PageSet::get(), &pageFactory);   // the slot stays this instance's until effClose; -1: more than 16 instances
         overlaySlot.store (slot, std::memory_order_relaxed);
         overlayValue.store (synthyboy_mpc::overlay::instanceParamValue (slot), std::memory_order_relaxed);   // (the debug file is the display thread's business)
@@ -1675,7 +1682,7 @@ struct PluginInstance
         qBank.bind (&overlayView);   // the proxies read the values of the targets through the overlay view (the parameter mirror)
 #endif
         outputStage.prepare (sampleRate > 0.0 ? sampleRate : 44100.0);
-        outputStage.setGainDb (static_cast<float> (SYNTHYBOY_MPC_OUTPUT_GAIN_DB));
+        applyTierTrim();
         outputStage.reset();
         applyOutputLimiter();
         // Create engine based on SYNTHYBOY_MPC_ENGINE_VITAL (from CMake) && SYNTHYBOY_HAS_VITAL (from core)
@@ -2108,6 +2115,9 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             applyState (inst, synthyboy::ParamValues::defaults (), synthyboy::StateContent {});
             inst->outputLimiter.store (synthyboy_mpc::kOutputLimiterDefaultOn, std::memory_order_relaxed);   // the default sound: no limiter
             inst->applyOutputLimiter();
+            inst->tierTrimDb.store (0.0f, std::memory_order_relaxed);
+            inst->applyTierTrim();
+            synthyboy_mpc::noteDiagnostics().setTierTrimDb (0.0f);
         }
         else
         {
@@ -2130,6 +2140,12 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             synthyboy_mpc::outputLimiterFromPreset (data.data(), data.size(), limiterOn);
             inst->outputLimiter.store (limiterOn, std::memory_order_relaxed);
             inst->applyOutputLimiter();
+
+            float trimDb = 0.0f;
+            synthyboy_mpc::tierTrimDbFromPreset (data.data(), data.size(), trimDb);
+            inst->tierTrimDb.store (trimDb, std::memory_order_relaxed);
+            inst->applyTierTrim();
+            synthyboy_mpc::noteDiagnostics().setTierTrimDb (trimDb);
         }
 
         inst->currentProgram.store (prog, std::memory_order_relaxed);
@@ -2431,7 +2447,6 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
             if (deltaFrames < 0)
                 deltaFrames = 0;
 
-#if SYNTHYBOY_MPC_DEBUG_HOOKS
             const uint8_t status = data[0] & 0xF0;
             if (status == 0x90 || status == 0x80)
             {
@@ -2439,13 +2454,16 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
                 const int noteNum = data[1] & 0x7F;
                 const int hostVel = numBytes >= 3 ? (data[2] & 0x7F) : 0;
                 const bool isNoteOn = (status == 0x90 && hostVel > 0);
+                if (isNoteOn)
+                    synthyboy_mpc::noteDiagnostics().noteOn (hostVel);
+#if SYNTHYBOY_MPC_DEBUG_HOOKS
                 // Velocity given to the engine: the shell applies no mapping to note velocity
                 // (curve or pad mapping, if any, is identity in the shell);
                 // the engine receives the velocity directly corresponding to hostVel.
                 const int engineVel = hostVel;
                 synthyboy_mpc::PlayLog::note (isNoteOn, channel, noteNum, hostVel, engineVel);
-            }
 #endif
+            }
 
             synthyboy::Event event;
             if (synthyboy::translateMidiMessage(data, numBytes, deltaFrames, event))

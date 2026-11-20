@@ -35,6 +35,7 @@
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "../../shell-mpc/device_profile.h"
+#include "../../shell-mpc/output_stage.h"
 
 using namespace synthyboy;
 
@@ -262,14 +263,18 @@ int main (int argc, char** argv)
             std::fprintf (stderr, "level-probe: %s does not load\n", f.string().c_str());
             return 1;
         }
-        std::printf ("{\"name\":\"%s\",\"category\":\"%s\",\"profile\":\"%s\",\"gain\":%.2f", meta.name.c_str(), meta.category.c_str(), profileText.c_str(), gain);
+        float trimDb = 0.0f;
+        synthyboy_mpc::tierTrimDbFromPreset (text.data(), text.size(), trimDb);
+        const bool isLow = profile == synthyboy_mpc::profileLow();
+        const float effectiveGain = gain + (isLow ? trimDb : 0.0f);
+        std::printf ("{\"name\":\"%s\",\"category\":\"%s\",\"profile\":\"%s\",\"gain\":%.2f,\"tierTrimDb\":%.2f", meta.name.c_str(), meta.category.c_str(), profileText.c_str(), gain, isLow ? trimDb : 0.0f);
         // the chord of the preset gate (synthyboy_preset_render: C1 for Bass, else C3 with C4 = 60, plus 4, 7, 12 semitones; its raw peak must stay under +3 dBFS)
         const int gk = meta.category == "Bass" ? 36 : 60;
         std::vector<Gesture> all (std::begin (gestures), std::end (gestures));
         all.push_back ({ "chordG_v127", { gk, gk + 4, gk + 7, gk + 12 }, 1.0f, 1.0 });   // held 1 s and released, as the gate plays it
         for (const Gesture& g : all)
         {
-            const Result r = run (values, content, q, store.get(), g, sr, hold, gain, limiter, voiceGainAlpha);
+            const Result r = run (values, content, q, store.get(), g, sr, hold, effectiveGain, limiter, voiceGainAlpha);
             std::printf (",\"%s\":{\"raw\":%.3f,\"pre\":%.3f,\"post\":%.3f,\"sus\":%.3f,\"mom\":%.3f,\"gr_max\":%.3f,\"engaged\":%.4f,\"early\":%.3f}", g.name, r.raw, r.pre, r.post, r.sus, r.mom, r.grMax, r.engaged, r.early);
         }
         std::printf ("}\n");

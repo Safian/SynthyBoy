@@ -55,13 +55,13 @@ add("Karplus Harp", "Pluck", "string,comb,physical,noise-burst,harp,keytracked",
         "env4.attack": 0, "env4.decay": 16, "env4.sustain": 0, "env4.release": 10,
         "chorus.on": 1, "chorus.mix": 14, "chorus.rate": 0.3, "utility.on": 1, "utility.level": 10,
         "eq.on": 1, "eq.level": 12, "eq.low.cutoff": 90, "eq.low.gain": -4, "eq.mid.cutoff": 2500, "eq.mid.gain": 2,
-        **limiter_last(-9),
+        **limiter_last(-2),
         "reverb.on": 1, "reverb.mix": 18, "reverb.decay": 2200, "reverb.type": "Plate",
     },
     [
-        R("env4", "noise.level", 100),                                       # the pluck
+        R("env4", "noise.level", 75),                                       # the pluck
         R("env2", "filter2.cutoff", 18),                                     # the highs fade first
-        R("velocity", "env4.decay", 5), R("velocity", "filter2.cutoff", 10),
+        R("velocity", "env4.decay", 5), R("velocity", "filter2.cutoff", 10), R("velocity", "noise.level", 20),
         R("mod_wheel", "env1.decay", -40),                                   # the wheel mutes the strings
         R("macro1", "filter2.cutoff", 40),                                   # Brightness
         R("macro2", "filter1.comb_offset", 45),                              # Ring Tone: the comb offset adds the upper partials and the ring

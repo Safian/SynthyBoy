@@ -63,7 +63,7 @@ add("Spectral Gong Pad", "Pad", "pad,spectral,gong,metal,inharmonic,drone,wide",
     "The gong's spectrum held and bowed: the Spectral oscillator scans a slice of the gong's decay back and forth (loop forward-reverse), so the inharmonic partials swell and fade like a bowed metal plate, and every unison voice reads it from another place; the bass below 200 Hz is kept in the middle",
     {
         "master.polyphony": 4,
-        "osc1.on": 1, "osc1.type": "Spectral", "osc1.level": 56, "osc1.sample.root": 36, "osc1.sample.loop_mode": "Forward/reverse loop", "osc1.sample.loop_start": 8, "osc1.sample.loop_end": 55, "osc1.sample.normalize": 1,
+        "osc1.on": 1, "osc1.type": "Spectral", "osc1.level": 62, "osc1.sample.root": 36, "osc1.sample.loop_mode": "Forward/reverse loop", "osc1.sample.loop_start": 8, "osc1.sample.loop_end": 55, "osc1.sample.normalize": 1,
         "osc1.sample.scan": 25, "osc1.spec.freq_lo": 120, "osc1.spec.freq_hi": 10000, "osc1.spec.phase_lock": 1, "osc1.warp.type": "Add Subharmonics", "osc1.warp.amount": 0,
         "osc1.unison.voices": 2, "osc1.unison.detune": 10, "osc1.unison.spread": 100, "osc1.sample.uni_start": 20, "osc1.sample.uni_span": 25,
         "osc2.on": 1, "osc2.wavetable": "Bell Partials", "osc2.frame": 35, "osc2.level": 18, "osc2.transpose": 0,

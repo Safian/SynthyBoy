@@ -31,6 +31,7 @@ from concurrent.futures import ThreadPoolExecutor
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 LEVELS_PATH = os.path.join(SCRIPT_DIR, "factory-preset-levels.json")
+TIER_TRIM_PATH = os.path.join(SCRIPT_DIR, "factory-preset-tier-trim.json")
 TARGETS_PATH = os.path.join(SCRIPT_DIR, "stock-level-targets.json")
 GEN = os.path.join(SCRIPT_DIR, "gen-factory-presets.py")
 PRESETS = os.path.join(ROOT_DIR, "content", "presets")
@@ -39,6 +40,13 @@ CATEGORIES = ["Bass", "Lead", "Pad", "Keys", "Pluck", "FX"]
 VOLUME_MIN, VOLUME_MAX = -60.0, 6.0
 KNEE_DB = 20 * __import__("math").log10(1.8)      # +5.11 dBFS: the engine's safety knee starts there
 SAFE_RAW_DB = 20 * __import__("math").log10(1.4)  # +2.92 dBFS: the margin the levelling keeps under it (and under the +3 dBFS of the preset gate)
+
+
+def load_tier_trims():
+    if not os.path.isfile(TIER_TRIM_PATH):
+        return {}
+    with open(TIER_TRIM_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 def load_targets(path):
@@ -93,14 +101,14 @@ POLY_ALPHA = 0.0   # the polyphony gain prototype (simulate only): a chord of n 
 # Target single-note peak at velocity 127: T = -4.5 dBFS (SAME for all categories).
 # Chords: 4-note (stock voicing 48 55 60 64 and ours 36 48 55 60), 6-note and 8-note at velocity 127, both profiles (Key 61 and XL).
 # d = min(T - note_peak, -0.5 - 0.05 - max_chord_peak over all those chords and both profiles).
-TOP_TARGET_T = -4.5
+TOP_TARGET_T = -10.0
 TOP_CHORD_LIMIT = -0.55  # -0.5 - 0.05: hottest level where every full chord stays <= -0.5 dBFS without limiter
 TOP_CHORDS = ("chord_v127", "chordS_v127", "chord6_v127", "chord8_v127")
 
 
 def top_change(p):
-    note_peak = max(p[prof]["note_v127"]["pre"] for prof in PROFILES)
-    max_chord_peak = max(p[prof][g]["pre"] for prof in PROFILES for g in TOP_CHORDS)
+    note_peak = max(p[prof]["note_v127"]["post"] for prof in PROFILES)
+    max_chord_peak = max(p[prof][g]["post"] for prof in PROFILES for g in TOP_CHORDS)
     return min(TOP_TARGET_T - note_peak, TOP_CHORD_LIMIT - max_chord_peak)
 
 
@@ -216,43 +224,83 @@ def cmd_solve(a):
         if rnd == a.rounds:
             break
         levels = current_levels()
+        tier_trims = load_tier_trims()
         gates = gate_peaks(a.gate, a.content_dir) if a.gate else {}
         moved = 0.0
-        new = {}
+        new_levels = {}
+        new_tier_trims = {}
         for n, v in levels.items():
             p = ps.get(n)
             if p is None:
-                new[n] = v
+                new_levels[n] = v
+                if n in tier_trims:
+                    new_tier_trims[n] = tier_trims[n]
                 continue
             if getattr(a, "rule", "stock") == "top":
-                d = top_change(p)
+                # Per-profile levelling (owner decision 2026-11-20):
+                # T = -10.0 dBFS, chords <= -0.5 dBFS (solve to -0.55).
+                # d_p = min(T - note_p, -0.55 - maxchord_p) for each profile p.
+                # master.volume = base + d_high (the XL value).
+                # tierTrimDb = d_low - d_high, clamped to -6..+9, written when magnitude >= 0.5 dB.
+                note_high = p["xl"]["note_v127"]["post"]
+                maxchord_high = max(p["xl"][g]["post"] for g in TOP_CHORDS)
+                d_high = min(TOP_TARGET_T - note_high, TOP_CHORD_LIMIT - maxchord_high)
+
+                note_low = p["low"]["note_v127"]["post"]
+                maxchord_low = max(p["low"][g]["post"] for g in TOP_CHORDS)
+                d_low = min(TOP_TARGET_T - note_low, TOP_CHORD_LIMIT - maxchord_low)
+
+                if a.gate and n in gates:
+                    d_high = min(d_high, GATE_LIMIT_DB - gates[n])
+                    d_low = min(d_low, GATE_LIMIT_DB - gates[n])
+
+                cur_trim = tier_trims.get(n, 0.0)
+                raw_trim = cur_trim + (d_low - d_high)
+                clamped_trim = round(min(9.0, max(-6.0, raw_trim)), 1)
+                if abs(clamped_trim) >= 0.5:
+                    new_tier_trims[n] = clamped_trim
+
+                # a preset whose peaks do not follow master.volume 1:1: the slope seen in the last round scales the step
+                if prev is not None and n in prev and abs(applied.get(n, 0.0)) >= 0.3:
+                    seen = st.mean(p[x]["note_v127"]["pre"] - prev[n][x]["note_v127"]["pre"] for x in PROFILES)
+                    slope = min(1.5, max(0.3, seen / applied[n]))
+                    d_high = d_high / slope
+
+                raw_vol = v + d_high
+                if raw_vol > VOLUME_MAX:
+                    missing = raw_vol - VOLUME_MAX
+                    note_pk = max(p[prof]["note_v127"]["pre"] for prof in PROFILES)
+                    note_reached = note_pk + (VOLUME_MAX - v)
+                    print("  [volume range exceeded] '%s': needed master.volume %+.2f dB (> %+.1f dB, missing %.2f dB); note peak reaches %+.2f dBFS instead of %+.1f dBFS" % (
+                        n, raw_vol, VOLUME_MAX, missing, note_reached, TOP_TARGET_T))
+                nv = round(min(VOLUME_MAX, max(VOLUME_MIN, raw_vol)), 1)
+                applied[n] = nv - v
+                trim_delta = abs(clamped_trim - cur_trim)
+                moved = max(moved, abs(nv - v), trim_delta)
+                new_levels[n] = nv
             else:
                 d = constrained_change(p, targets, gates.get(n))
-            # a preset whose peaks do not follow master.volume 1:1 (an effect after the volume that depends on the level): the slope seen in the last round scales the step
-            if prev is not None and n in prev and abs(applied.get(n, 0.0)) >= 0.3:
-                seen = st.mean(p[x]["note_v127"]["pre"] - prev[n][x]["note_v127"]["pre"] for x in PROFILES)
-                slope = min(1.5, max(0.3, seen / applied[n]))
-                d = d / slope
-            raw_vol = v + d
-            if raw_vol > VOLUME_MAX:
-                missing = raw_vol - VOLUME_MAX
-                note_pk = max(p[prof]["note_v127"]["pre"] for prof in PROFILES)
-                note_reached = note_pk + (VOLUME_MAX - v)
-                print("  [volume range exceeded] '%s': needed master.volume %+.2f dB (> %+.1f dB, missing %.2f dB); note peak reaches %+.2f dBFS instead of %+.1f dBFS" % (
-                    n, raw_vol, VOLUME_MAX, missing, note_reached, TOP_TARGET_T))
-            nv = round(min(VOLUME_MAX, max(VOLUME_MIN, raw_vol)), 1)
-            applied[n] = nv - v
-            moved = max(moved, abs(nv - v))
-            new[n] = nv
+                if prev is not None and n in prev and abs(applied.get(n, 0.0)) >= 0.3:
+                    seen = st.mean(p[x]["note_v127"]["pre"] - prev[n][x]["note_v127"]["pre"] for x in PROFILES)
+                    slope = min(1.5, max(0.3, seen / applied[n]))
+                    d = d / slope
+                raw_vol = v + d
+                nv = round(min(VOLUME_MAX, max(VOLUME_MIN, raw_vol)), 1)
+                applied[n] = nv - v
+                moved = max(moved, abs(nv - v))
+                new_levels[n] = nv
         prev = ps
         with open(LEVELS_PATH, "w", encoding="utf-8") as f:
-            json.dump(dict(sorted(new.items())), f, indent=1, ensure_ascii=False)
+            json.dump(dict(sorted(new_levels.items())), f, indent=1, ensure_ascii=False)
+            f.write("\n")
+        with open(TIER_TRIM_PATH, "w", encoding="utf-8") as f:
+            json.dump(dict(sorted(new_tier_trims.items())), f, indent=1, ensure_ascii=False)
             f.write("\n")
         subprocess.run([sys.executable, "-I", GEN, "--out", PRESETS], check=True, capture_output=True)
         print("round %d: largest move %.2f dB" % (rnd + 1, moved))
         if moved <= 0.05:
-            ps = by_preset(measure(a.probe, a.content_dir, a.gain, os.path.join(a.work, "final.jsonl")))
             break
+    ps = by_preset(measure(a.probe, a.content_dir, a.gain, os.path.join(a.work, "final.jsonl")))
     print("measurements in", a.work)
 
 
@@ -404,113 +452,156 @@ def cmd_table(a):
     rows = read_measure(a.measure)
     ps = by_preset(rows)
     levels = current_levels()
+    tier_trims = load_tier_trims()
     L = []
     w = L.append
     w("# Factory Preset Output Level Table (2026-11-20)")
     w("")
     w("The owner's latest simple level rule (2026-11-20):")
     w("- Engine default: voice-count alpha 0.5, make-up gain 0 dB, limiter OFF.")
-    w("- Target single-note peak at velocity 127: T = -4.5 dBFS across all categories.")
+    w("- Target single-note peak at velocity 127: T = -10.0 dBFS across all categories (supersedes -4.5 dBFS).")
     w("- Full chords (4-note stock and ours, 6-note, 8-note at velocity 127) at most -0.5 dBFS without limiter.")
-    w("- master.volume change d = min(T - note_peak, -0.5 - 0.05 - max_chord_peak).")
+    w("- Per-profile solve: d_p = min(T - note_p, -0.55 - maxchord_p) for each profile.")
+    w("- master.volume = base + d_high (XL); tierTrimDb = d_low - d_high written when |tierTrimDb| >= 0.5 dB.")
+    w("- At least 5 dB room to master.volume cap (+6 dB): master.volume <= +1.0 dB.")
     w("- Velocity tracking = 100% for all presets (engine law lerp(1, v^2, t)).")
     w("")
-    w("| Category | Preset | Note Peak v127 (K61) | Note Peak v127 (XL) | 4-Note Chord Peak | 6-Note Chord Peak | 8-Note Chord Peak | v127 - v64 Diff | master.volume | Flag |")
-    w("|---|---|---|---|---|---|---|---|---|---|")
+    w("| Category | Preset | Note Peak v127 (K61) | Note Peak v127 (XL) | K61 vs XL Diff | 4-Note Chord | 6-Note Chord | 8-Note Chord | v127 - v100 | v127 - v64 | master.volume | Room to +6 | tierTrimDb | Flag |")
+    w("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 
     col_note_low = []
     col_note_xl = []
+    col_k61_xl_diff = []
     col_chord4 = []
     col_chord6 = []
     col_chord8 = []
-    col_vdiff = []
+    col_v100_diff = []
+    col_v64_diff = []
     col_vol = []
-    outside_vdiff = []
-    miss_t_list = []
+    col_room = []
+    col_tier_trim = []
+
+    outside_v64 = []
     chords_over_limit = []
+    room_under_5 = []
+    k61_xl_over_1 = []
+    notes_outside_window = []
+
+    cat_notes = {}
 
     for n in sorted(ps.keys(), key=lambda x: (ps[x]["category"], x)):
         p = ps[n]
         cat = p["category"]
         vol = levels.get(n, 0.0)
+        room = 6.0 - vol
+        trim = tier_trims.get(n, 0.0)
+
         n_low = p["low"]["note_v127"]["post"]
         n_xl = p["xl"]["note_v127"]["post"]
+        k61_xl_diff = abs(n_low - n_xl)
+
         c4 = max(p[x][g]["post"] for x in PROFILES for g in ("chord_v127", "chordS_v127"))
         c6 = max(p[x]["chord6_v127"]["post"] for x in PROFILES)
         c8 = max(p[x]["chord8_v127"]["post"] for x in PROFILES)
-        v64 = p["low"]["note_v64"]["post"] if "note_v64" in p["low"] else (p["low"]["note_v100"]["post"] + 12.0)
-        vdiff = n_low - v64
+
+        v100 = p["low"]["note_v100"]["post"]
+        v100_diff = n_low - v100
+
+        v64 = p["low"]["note_v64"]["post"] if "note_v64" in p["low"] else (p["low"]["note_v100"]["post"] + 6.0)
+        v64_diff = n_low - v64
 
         col_note_low.append(n_low)
         col_note_xl.append(n_xl)
+        col_k61_xl_diff.append(k61_xl_diff)
         col_chord4.append(c4)
         col_chord6.append(c6)
         col_chord8.append(c8)
-        col_vdiff.append(vdiff)
+        col_v100_diff.append(v100_diff)
+        col_v64_diff.append(v64_diff)
         col_vol.append(vol)
+        col_room.append(room)
+        col_tier_trim.append(trim)
 
-        if not (10.0 <= vdiff <= 14.0):
-            outside_vdiff.append((n, vdiff))
+        cat_notes.setdefault(cat, []).append(n_low)
+        cat_notes.setdefault(cat + "_xl", []).append(n_xl)
+
+        if v64_diff < 6.0:
+            outside_v64.append((n, v64_diff))
 
         max_chord = max(c4, c6, c8)
         if max_chord > -0.5:
             chords_over_limit.append((n, max_chord))
 
+        if room < 5.0:
+            room_under_5.append((n, vol, room))
+
+        if k61_xl_diff > 1.0:
+            k61_xl_over_1.append((n, k61_xl_diff))
+
+        for n_val, prof_label in [(n_low, "K61"), (n_xl, "XL")]:
+            if not (-12.0 <= n_val <= -9.5):
+                notes_outside_window.append((n, prof_label, n_val))
+
         flag = "-"
-        note_max = max(n_low, n_xl)
-        if note_max < TOP_TARGET_T - 0.1:  # misses T (-4.5 dBFS)
-            if vol >= VOLUME_MAX - 0.05:
-                flag = "MAX_VOL"
-                miss_t_list.append((n, cat, note_max, "hit master.volume max (+6 dB)"))
-            elif max_chord >= -0.55 - 0.1:
-                flag = "CHORD_LIMIT"
-                miss_t_list.append((n, cat, note_max, "chord peak limit (-0.55 dBFS)"))
-            else:
-                flag = "MISS_T"
-                miss_t_list.append((n, cat, note_max, "below target"))
+        if room < 5.0:
+            flag = "ROOM<5dB"
+        elif max_chord > -0.5:
+            flag = "CHORD>-0.5"
+        elif not (-12.0 <= n_low <= -9.5 and -12.0 <= n_xl <= -9.5):
+            flag = "NOTE_WINDOW"
 
-        w("| %s | %s | %+.2f | %+.2f | %+.2f | %+.2f | %+.2f | %+.2f | %+.1f | %s |" % (
-            cat, n, n_low, n_xl, c4, c6, c8, vdiff, vol, flag))
+        trim_str = f"{trim:+.1f}" if abs(trim) >= 0.5 else "0.0"
+        w(f"| {cat} | {n} | {n_low:+.2f} | {n_xl:+.2f} | {k61_xl_diff:.2f} | {c4:+.2f} | {c6:+.2f} | {c8:+.2f} | {v100_diff:.2f} | {v64_diff:.2f} | {vol:+.1f} | {room:.1f} | {trim_str} | {flag} |")
 
     w("")
-    w("## Summary Statistics (all %d presets)" % len(ps))
+    w(f"## Summary Statistics (all {len(ps)} presets)")
     w("")
-    w("| Metric | Median | Min | Max | Target / Window |")
+    w("| Metric | Median | Min | Max | Target / Acceptance Window |")
     w("|---|---|---|---|---|")
-    w("| Note Peak v127 (Key 61) | %+.2f dBFS | %+.2f dBFS | %+.2f dBFS | -4.50 dBFS |" % (st.median(col_note_low), min(col_note_low), max(col_note_low)))
-    w("| Note Peak v127 (XL) | %+.2f dBFS | %+.2f dBFS | %+.2f dBFS | -4.50 dBFS |" % (st.median(col_note_xl), min(col_note_xl), max(col_note_xl)))
-    w("| 4-Note Chord Peak | %+.2f dBFS | %+.2f dBFS | %+.2f dBFS | <= -0.50 dBFS |" % (st.median(col_chord4), min(col_chord4), max(col_chord4)))
-    w("| 6-Note Chord Peak | %+.2f dBFS | %+.2f dBFS | %+.2f dBFS | <= -0.50 dBFS |" % (st.median(col_chord6), min(col_chord6), max(col_chord6)))
-    w("| 8-Note Chord Peak | %+.2f dBFS | %+.2f dBFS | %+.2f dBFS | <= -0.50 dBFS |" % (st.median(col_chord8), min(col_chord8), max(col_chord8)))
-    w("| v127 - v64 Level Diff | %+.2f dB | %+.2f dB | %+.2f dB | ~12 dB (window 10..14 dB) |" % (st.median(col_vdiff), min(col_vdiff), max(col_vdiff)))
-    w("| master.volume | %+.1f dB | %+.1f dB | %+.1f dB | [-60 .. +6] dB |" % (st.median(col_vol), min(col_vol), max(col_vol)))
+    w(f"| Note Peak v127 (Key 61) | {st.median(col_note_low):+.2f} dBFS | {min(col_note_low):+.2f} dBFS | {max(col_note_low):+.2f} dBFS | -10.00 dBFS (window -12.0 .. -9.5 dBFS) |")
+    w(f"| Note Peak v127 (XL) | {st.median(col_note_xl):+.2f} dBFS | {min(col_note_xl):+.2f} dBFS | {max(col_note_xl):+.2f} dBFS | -10.00 dBFS (window -12.0 .. -9.5 dBFS) |")
+    w(f"| Key 61 vs XL Note Difference | {st.median(col_k61_xl_diff):.2f} dB | {min(col_k61_xl_diff):.2f} dB | {max(col_k61_xl_diff):.2f} dB | <= 1.00 dB |")
+    w(f"| 4-Note Chord Peak | {st.median(col_chord4):+.2f} dBFS | {min(col_chord4):+.2f} dBFS | {max(col_chord4):+.2f} dBFS | <= -0.50 dBFS |")
+    w(f"| 6-Note Chord Peak | {st.median(col_chord6):+.2f} dBFS | {min(col_chord6):+.2f} dBFS | {max(col_chord6):+.2f} dBFS | <= -0.50 dBFS |")
+    w(f"| 8-Note Chord Peak | {st.median(col_chord8):+.2f} dBFS | {min(col_chord8):+.2f} dBFS | {max(col_chord8):+.2f} dBFS | <= -0.50 dBFS |")
+    w(f"| v127 - v100 Dynamics Diff | {st.median(col_v100_diff):.2f} dB | {min(col_v100_diff):.2f} dB | {max(col_v100_diff):.2f} dB | median >= 3.50 dB |")
+    w(f"| v127 - v64 Dynamics Diff | {st.median(col_v64_diff):.2f} dB | {min(col_v64_diff):.2f} dB | {max(col_v64_diff):.2f} dB | all >= 6.00 dB |")
+    w(f"| master.volume | {st.median(col_vol):+.1f} dB | {min(col_vol):+.1f} dB | {max(col_vol):+.1f} dB | <= +1.0 dB (min 5 dB room) |")
+    w(f"| Room to +6 dB cap | {st.median(col_room):.1f} dB | {min(col_room):.1f} dB | {max(col_room):.1f} dB | >= 5.0 dB |")
     w("")
-    w("### Chord Peak Verification")
-    w("- Chords over -0.5 dBFS: %d" % len(chords_over_limit))
-    if chords_over_limit:
-        for n, pk in chords_over_limit:
-            w("  - FAIL: %s chord peak %+.2f dBFS > -0.5 dBFS" % (n, pk))
-    else:
-        w("- PASS: Every 4/6/8-note chord across both profiles stays <= -0.5 dBFS.")
+    w("### Per-Category Note Medians (Acceptance: within 0.5 dB of -10.0 dBFS)")
+    for cat in CATEGORIES:
+        med_k61 = st.median(cat_notes[cat])
+        med_xl = st.median(cat_notes[cat + "_xl"])
+        pass_k61 = abs(med_k61 - (-10.0)) <= 0.5
+        pass_xl = abs(med_xl - (-10.0)) <= 0.5
+        w(f"- **{cat}**: Key 61 median {med_k61:+.2f} dBFS ({'PASS' if pass_k61 else 'FAIL'}), XL median {med_xl:+.2f} dBFS ({'PASS' if pass_xl else 'FAIL'})")
     w("")
-    w("### Velocity Dynamics Verification (v127 vs v64)")
-    w("- Median difference: %+.2f dB (expected ~12 dB with velocity_track 100 %%)" % st.median(col_vdiff))
-    w("- Presets outside 10..14 dB window: %d" % len(outside_vdiff))
-    for n, d in outside_vdiff:
-        w("  - %s: %+.2f dB" % (n, d))
-    w("")
-    w("### Presets Missing Target T = -4.5 dBFS (%d presets)" % len(miss_t_list))
-    for n, cat, pk, reason in miss_t_list:
-        w("- %s (%s): reached %+.2f dBFS (missing %.2f dB; reason: %s)" % (n, cat, pk, TOP_TARGET_T - pk, reason))
+    w("### Offline Acceptance Verification")
+    w(f"- Chords over -0.5 dBFS: {len(chords_over_limit)}")
+    for n, pk in chords_over_limit:
+        w(f"  - FAIL: {n} chord peak {pk:+.2f} dBFS > -0.5 dBFS")
+    w(f"- Key 61 vs XL Note Diff > 1.0 dB: {len(k61_xl_over_1)}")
+    for n, diff in k61_xl_over_1:
+        w(f"  - FAIL: {n} diff {diff:.2f} dB > 1.0 dB")
+    w(f"- Velocity 127 vs 64 Diff < 6.0 dB: {len(outside_v64)}")
+    for n, diff in outside_v64:
+        w(f"  - FAIL: {n} span {diff:.2f} dB < 6.0 dB")
+    w(f"- Presets with Room to +6 dB < 5.0 dB (master.volume > +1.0 dB): {len(room_under_5)}")
+    for n, vol, rm in room_under_5:
+        w(f"  - FAIL: {n} vol {vol:+.1f} dB, room {rm:.1f} dB < 5.0 dB")
+    w(f"- Single Note Peaks Outside Window [-12.0, -9.5] dBFS: {len(notes_outside_window)}")
+    for n, prof, pk in notes_outside_window:
+        w(f"  - FAIL: {n} ({prof}): {pk:+.2f} dBFS outside [-12.0, -9.5] dBFS")
     w("")
     text = "\n".join(L) + "\n"
     if a.out:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
         with open(a.out, "w", encoding="utf-8") as f:
             f.write(text)
-    print("Table written with %d presets to %s." % (len(ps), a.out if a.out else "stdout"))
-    print("Median v127-v64 diff: %.2f dB; outside 10..14 dB: %d" % (st.median(col_vdiff), len(outside_vdiff)))
-    print("Chords over -0.5 dBFS: %d; Presets missing T: %d" % (len(chords_over_limit), len(miss_t_list)))
+    print(f"Table written with {len(ps)} presets to {a.out if a.out else 'stdout'}.")
+    print(f"Median v127-v100: {st.median(col_v100_diff):.2f} dB, v127-v64: {st.median(col_v64_diff):.2f} dB")
+    print(f"Chords over -0.5: {len(chords_over_limit)}, K61 vs XL > 1dB: {len(k61_xl_over_1)}, Room < 5dB: {len(room_under_5)}, Notes outside [-12, -9.5]: {len(notes_outside_window)}")
 
 
 def main():

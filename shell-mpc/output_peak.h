@@ -4,8 +4,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <string>
 
 // the NEON form (same condition as output_stage.h)
 #if (((defined(__arm__) || (defined(__aarch64__) && defined(__linux__))) && defined(__ARM_NEON)) || defined(SB_TEST_NEON)) && ! defined(SB_NO_NEON)
@@ -82,6 +86,55 @@ inline OutputPeak& outputPeak() noexcept
 {
     static OutputPeak p;
     return p;
+}
+
+struct NoteDiagnostics
+{
+    static constexpr int kMaxNotes = 16;
+    std::atomic<int> velocities[kMaxNotes] {};
+    std::atomic<uint32_t> totalNotes { 0 };
+    std::atomic<float> activeTierTrimDb { 0.0f };
+
+    void noteOn (int vel) noexcept
+    {
+        const uint32_t c = totalNotes.fetch_add (1, std::memory_order_relaxed);
+        velocities[c % kMaxNotes].store (vel, std::memory_order_relaxed);
+    }
+
+    void setTierTrimDb (float trimDb) noexcept
+    {
+        activeTierTrimDb.store (trimDb, std::memory_order_relaxed);
+    }
+
+    std::string formatLine() const
+    {
+        const uint32_t total = totalNotes.load (std::memory_order_relaxed);
+        const float trim = activeTierTrimDb.load (std::memory_order_relaxed);
+        std::string s = "note_velocities:";
+        if (total == 0)
+        {
+            s += " none";
+        }
+        else
+        {
+            const uint32_t count = std::min<uint32_t> (total, static_cast<uint32_t> (kMaxNotes));
+            const uint32_t start = total >= static_cast<uint32_t> (kMaxNotes) ? total - static_cast<uint32_t> (kMaxNotes) : 0u;
+            for (uint32_t i = 0; i < count; ++i)
+            {
+                s += " " + std::to_string (velocities[(start + i) % static_cast<uint32_t> (kMaxNotes)].load (std::memory_order_relaxed));
+            }
+        }
+        char trimBuf[32];
+        std::snprintf (trimBuf, sizeof trimBuf, " active_tier_trim_db: %.2f\n", static_cast<double> (trim));
+        s += trimBuf;
+        return s;
+    }
+};
+
+inline NoteDiagnostics& noteDiagnostics() noexcept
+{
+    static NoteDiagnostics nd;
+    return nd;
 }
 
 } // namespace synthyboy_mpc

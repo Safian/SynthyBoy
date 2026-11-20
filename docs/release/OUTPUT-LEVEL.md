@@ -1,13 +1,14 @@
 # Output level: the single source of truth (2026-11-20)
 
 > **Összefoglaló a tulajdonosnak (magyarul).** Ez az egyetlen dokumentum, amely a kimeneti szintről szól; minden worker-megbízás erre hivatkozik, a régi jelentések nem érvényesek, ahol ellentmondanak.
-> **A tulajdonos legújabb döntése (2026-11-20):**
-> 1. **Velocity tracking:** minden presetnél 100% (`master.velocity_track = 100.0`, lerp(1, v^2, t)). A korábbi Bass=5% és Lead=0% (amely két monofón gyári szintit másolt) miatt a pad-ütések és a Full Level mód halottnak tűnt; a 100% visszaállítja az élénk dinamikát.
-> 2. **Célszintek:** egy hang csúcsa teljes leütésnél (velocity 127) `T = -4.5 dBFS`, egységesen minden kategóriára. Ez felülírja a gyári készletek másolását (ahol a -9…-16 dBFS miatt a kivezérlésjelző csak a skála felét-kétharmadát mutatta).
-> 3. **Akkord korlát:** minden 4-, 6- és 8-hangos akkord (mindkét profilban, Key 61 és XL) maximum `-0.5 dBFS` lehet limiter nélkül.
-> 4. **Voice-count gain:** az engine beépített hangszám-erősítése `alpha = 0.5` (1/√n) csökkenti az akkordok torlódását, így limiter nélkül sem lépik túl a -0.5 dBFS-t.
-> 5. **Hangerő-számítás:** `d = min(T - note_peak, -0.5 - 0.05 - max_chord_peak)`, a `master.volume` [-60, +6] dB tartományán belül.
-> **Eredmények (160 preset mérése):** Egyetlen akkord sem lépi túl a -0.5 dBFS-t. A v127-v64 dinamikakülönbség mediánja 11.91 dB (~12 dB). Öt preset érte el a maximális +6 dB hangerőt, a többit a -0.55 dBFS akkordkorlát tartotta a cél közelében.
+> **A tulajdonos végleges döntése (2026-11-20, a T = -4.5 dBFS és a "full / near 0" helyébe lép):**
+> 1. **Velocity tracking:** minden presetnél 100% (`master.velocity_track = 100.0`, lerp(1, v^2, t)). Megjegyzés: a padok Full Level funkciója minden leütésre fixen velocity 127-et küld a hardverről (`docs/MPC.md` ~705-717); ezt preset beállítás nem módosítja, a `velocity_track 100` a dinamikus játékot és a padok dinamikáját teszi egységessé.
+> 2. **Célszintek:** egy hang csúcsa teljes leütésnél (C3 velocity 127 minta-csúcs) `T = -10.0 dBFS`, egységesen minden kategóriára. Ok: a gyári stock hangszerek headroom-ot tartanak a védelem helyett (Fabric Piano egy hang -10.5 dBFS, 4 hangos akkord -3.7 dBFS, egyetlen gyári hangszer sem vágott le).
+> 3. **Akkord korlát:** minden 4-, 6- és 8-hangos akkord (36-48-55-60, 48-55-60-64, 6 hangos, 8 hangos) velocity 127-nél legfeljebb `-0.5 dBFS` lehet limiter nélkül mindkét profilban (megoldás -0.55 dBFS-re).
+> 4. **Per-profil szintezés és tierTrimDb:** a szintezés profilfüggően, külön-külön fut Key 61-re (`low`) és XL-re (`high,voices=16,control=economy`). Profilonként $d_p = \min(T - \text{note}_p, -0.55 - \text{maxchord}_p)$. A `master.volume = base + d_high` (az XL értéke); az új felső szintű preset mező `tierTrimDb = d_low - d_high` (-6..+9 dB-re korlátozva), amely csak akkor kerül a `.sbpreset`-be, ha magnitúdója legalább 0.5 dB. Ezt az MPC shell betöltéskor beolvassa és az `OutputStage::setGainDb`-n keresztül KIZÁRÓLAG a Key 61 (low profilú) eszközön érvényesíti a meglévő simított erősítéssel.
+> 5. **Hangerő-tartalék:** a felhasználónak lehetősége kell legyen a hangerőt feljebb húzni a `master.volume` potival (-60..+6 dB). Minden preset legalább 5 dB tartalékot tart a +6 dB-ig (`master.volume <= +1.0 dB`).
+> 6. **ov42 gyökéroka:** az `e03e09f4` commit még voice-count alpha = 0 mellett szintezett a -1 dBFS akkord-korlát alatt, így az egyes hangok kb. -15.7 dBFS-re estek vissza; az `a9766fc2` beemelte az alpha 0.5-öt, de a `docs/release/VOICE-COUNT-GAIN-SPEC.md` 4. és 9. szakasz 6. lépése szerinti újraszintezés kimaradt.
+> 7. **Kiadási megjegyzés a felhasználóknak:** A korábbi projektekben elmentett hangszínek nem migrálnak automatikusan; a felhasználóknak újra be kell tölteniük a preseteket a frissített szintek és a tierTrimDb érvényesítéséhez.
 
 Scope: the output level of the SynthyBoy MPC plugin and its desktop shells: what is decided, what is verified, what is refuted, what is open. If another document (listed in section F) disagrees with this one, this one wins.
 
@@ -19,12 +20,18 @@ Scope: the output level of the SynthyBoy MPC plugin and its desktop shells: what
 4. A preset is usable at once: no fiddling with the volume; a full-velocity hit reads near the top of the track meter and never enters the over-0 segment, 2026-11-19. The tension with rule 1 is open question D1.
 5. Follow the general plugin convention once researched (job g94, `docs/review/PRESET-LEVEL-CONVENTIONS-2026-11-19.md`), 2026-11-19.
 6. No " *" in any program name the host sees (branch `work/no-asterisk`), 2026-11-19.
-7. Simple top-level rule (the owner's latest decision, 2026-11-20; overrides rule 1 "same as stock" where they conflict):
-   - **Velocity tracking:** `master.velocity_track = 100.0` (%) for EVERY category and preset (engine law `lerp(1, v^2, t)`). Bass and Lead had 5% and 0% to copy monophonic stock synths, which made dynamic pad hits and Full Level look dead.
-   - **Target single-note peak:** `T = -4.5 dBFS` at velocity 127 across all categories (sits near the top of the track meter). Overrides rule 1: ov42 read only half to two-thirds of the meter because targets copied stock single-note levels (-9..-16 dBFS) and monophonic velocity tracks.
-   - **Full chord limit:** every 4-note (ours 36 48 55 60 and stock voicing 48 55 60 64), 6-note, and 8-note chord at velocity 127 at most `-0.5 dBFS` WITHOUT limiter, across both Key 61 and XL profiles.
-   - **Voice-count gain:** engine default voice-count scaling alpha = 0.5 (`G = n_eff ^ -0.5`), keeping polyphonic chords balanced without squashing or pumping.
-   - **Level change:** `d = min(T - note_peak, -0.5 - 0.05 - max_chord_peak)`, clamped to master.volume range [-60 .. +6] dB.
+7. Simple top-level rule & stock headroom (the owner's latest decision, 2026-11-20; supersedes T = -4.5 dBFS of the same day):
+   - **Target single-note peak:** `T = -10.0 dBFS` at velocity 127 across all categories (single note C3 sample peak). Stock instruments keep headroom instead of relying on a guard limiter (e.g. Fabric Piano single note -10.5 dBFS, 4-note chord -3.7 dBFS; no stock instrument clipped).
+   - **Full chord limit:** every 4-note (ours 36 48 55 60 and stock voicing 48 55 60 64), 6-note, and 8-note chord at velocity 127 at most `-0.5 dBFS` WITHOUT limiter, across both Key 61 and XL profiles (solve target -0.55 dBFS). With voice-count gain alpha 0.5, chords stay under -0.5 dBFS naturally.
+   - **Velocity tracking:** `master.velocity_track = 100.0` (%) for EVERY category and preset (engine law `lerp(1, v^2, t)`). Note on Full Level: pad Full Level sends velocity 127 on every hit (`docs/MPC.md` ~705-717); no preset setting changes hardware pad velocity, velocity_track 100 ensures consistent dynamics.
+   - **Per-profile levelling:** `level-to-stock.py solve --rule top` solved separately for Key 61 (`low`) and XL (`high,voices=16,control=economy`).
+     Per preset $d_p = \min(T - \text{note}_p, -0.55 - \text{maxchord}_p)$ for each profile $p$.
+     `master.volume = base + d_high` (the XL value).
+     New top-level preset member `tierTrimDb = d_low - d_high`, clamped to [-6, +9] dB, written into `.sbpreset` only when $|tierTrimDb| \ge 0.5$ dB. Applied via `OutputStage::setGainDb` ONLY on the low-profile device (Key 61) at preset load.
+   - **Room to +6 dB volume cap:** The user must be able to raise a sound toward full level with `master.volume` (range -60..+6 dB). After levelling, every preset keeps at least 5 dB of room up to +6 dB (`master.volume <= +1.0 dB`). Internal gain was added to volume-capped presets to enforce this.
+   - **Voice-count gain:** engine default voice-count scaling alpha = 0.5 (`G = n_eff ^ -0.5`).
+   - **Root cause of ov42:** Commit `e03e09f4` levelled with voice-count alpha 0 under the -1 dBFS chord rule so single notes sat at about -15.7 dBFS; commit `a9766fc2` merged alpha 0.5 and the re-level required by `docs/release/VOICE-COUNT-GAIN-SPEC.md` sections 4 and 9 step 6 was skipped.
+   - **Release Note:** Users must reload presets in existing projects; saved projects do not migrate automatically.
 
 ## B. Verified facts (each with its evidence)
 

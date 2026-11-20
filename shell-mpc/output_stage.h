@@ -91,4 +91,54 @@ inline bool outputLimiterFromPreset (const void* data, size_t size, bool& on) no
     return true;
 }
 
+/** The preset's tier trim in dB for the low-profile device (Key 61) relative to XL:
+    the optional top-level member "tierTrimDb" of a .sbpreset file (clamped to -6..+9).
+    Returns true when present and parsed; false otherwise, leaving trimDb unchanged.
+    Never reads outside size. */
+inline bool tierTrimDbFromPreset (const void* data, size_t size, float& trimDb) noexcept
+{
+    if (data == nullptr || size == 0)
+        return false;
+    const std::string_view text (static_cast<const char*> (data), size);
+    static constexpr std::string_view kKey = "\"tierTrimDb\":";
+    const size_t a = text.find (kKey);
+    if (a == std::string_view::npos)
+        return false;
+    size_t q = a + kKey.size();
+    while (q < text.size() && (text[q] == ' ' || text[q] == '\t'))
+        ++q;
+    if (q >= text.size())
+        return false;
+    size_t end = q;
+    if (text[end] == '+' || text[end] == '-')
+        ++end;
+    bool hasDigits = false;
+    while (end < text.size() && text[end] >= '0' && text[end] <= '9')
+    {
+        hasDigits = true;
+        ++end;
+    }
+    if (end < text.size() && text[end] == '.')
+    {
+        ++end;
+        while (end < text.size() && text[end] >= '0' && text[end] <= '9')
+        {
+            hasDigits = true;
+            ++end;
+        }
+    }
+    if (! hasDigits)
+        return false;
+    char buf[32];
+    const size_t len = std::min (end - q, sizeof (buf) - 1);
+    std::memcpy (buf, text.data() + q, len);
+    buf[len] = '\0';
+    char* endptr = nullptr;
+    const float val = std::strtof (buf, &endptr);
+    if (endptr == buf)
+        return false;
+    trimDb = std::clamp (val, -6.0f, 9.0f);
+    return true;
+}
+
 } // namespace synthyboy_mpc

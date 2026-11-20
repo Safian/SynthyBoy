@@ -28,6 +28,7 @@
 #include "synthyboy/params.h"
 #include "synthyboy/preset.h"
 #include "device_profile.h"
+#include "../../shell-mpc/output_stage.h"
 
 using namespace synthyboy;
 
@@ -46,6 +47,7 @@ constexpr double kLoudnessTolerance = 0.15;
 struct Preset
 {
     std::string name, category;
+    float tierTrimDb = 0.0f;
     ParamValues values;
     StateContent content;
 };
@@ -67,6 +69,9 @@ std::vector<Preset> loadPresets()
             continue;
         p.name = meta.name;
         p.category = meta.category;
+        float trim = 0.0f;
+        synthyboy_mpc::tierTrimDbFromPreset (text.data(), text.size(), trim);
+        p.tierTrimDb = trim;
         out.push_back (std::move (p));
     }
     return out;
@@ -256,34 +261,11 @@ TEST (output_stage_on_every_factory_preset)
 
 // The owner's simple level rule (2026-11-20):
 // Unity stage (kMakeupGainDb = 0 dB), limiter OFF.
-// (a) Single-note peak at velocity 127 within 1.0 dB of target T = -4.5 dBFS across all categories,
-//     unless held back by the chord peak limit or master.volume maximum (kBelowTarget).
+// (a) Single-note peak at velocity 127 targets T = -10.0 dBFS across all categories,
+//     every preset sits between -12.0 and -9.5 dBFS.
 // (b) Every 4-note (ours and stock voicing), 6-note and 8-note chord at velocity 127 at most -0.5 dBFS.
-// (c) Master velocity tracking = 100% on every preset.
-const std::string kBelowTarget[] = {
-    "808 Boom", "Acid Saw Reso", "Alien Communication", "B3 Drawbar Organ",
-    "Bell Chime Lead", "Bell FM Ripple Lead", "Bode Barber Riser", "Bode Shifter Drone",
-    "Breakbeat Slice Keys", "Breath of Machines", "Cathedral Choir", "Celesta Bells",
-    "Chime Drop", "Click Attack Bass", "Comb Metal Bass", "Comb Reso Swell",
-    "Cosmic Drift Lead", "Cosmic Teleport", "Custom Shape Wobble", "Dark Cinema Drone",
-    "Deep Sea Ambient", "Diffusor Cloud Pad", "Diode Bite Lead", "Diode Saturated Bass",
-    "Dirty Peak Lead", "Drawbar Organ Keys", "Dream Grand Piano", "Dual Octave Hero",
-    "EMS Squelch Bass", "Ethereal Glass", "FM Digital Lead", "FM Soft Organ",
-    "Fast Arp Bass", "Fat Reese", "Formant Vowel Bass", "Frozen Aurora",
-    "Frozen Pluck Drone", "Glass Organ Tones", "Glass Ping Pluck", "Golden Dawn Pad",
-    "Harmonic Cloud", "Harmonic Sine Bass", "Harpsichord Bar", "Hyper Dimension Pad",
-    "Hyper Saw Lead", "Infinite Horizon", "Laser Beam Lead", "Lorenz Garden",
-    "Lush Analog Pad", "MPE Pressure Lead", "Marimba Layer Keys", "Metal Gong Strike",
-    "Moog Ladder Bass", "Muted Honky Tonk", "Noise Riser", "Nylon Zone Pluck",
-    "Odd Harmonics Bass", "Parallel Dusk Pad", "Phaser Sweep Lead", "Pitch Drop 808",
-    "Plucked Lead Tone", "Pulse Width Bass", "Rising Grain Riser", "Sci-Fi Laser Sweep",
-    "Scream Filter Bass", "Slow Motion Waves", "Sonar Ping", "Space Odyssey Pad",
-    "Space Wobble Bass", "Spectral Gong Pad", "Spectral Vowel Freeze", "Starlight Shimmer",
-    "Stretched Glass Choir", "Sub Drop Boom", "Sub Duo Octave", "Sync Cry Lead",
-    "Throat Singer Drone", "Tine Glass Keys", "Tri Soft Solo", "Twin Warp Lead",
-    "Velvet Strings", "Vibraphone Bars", "Vintage Electric Tine", "Vocaloid Lead",
-    "Vowel Choir Pad", "Vowel Table Lead", "Warm Analog Bass", "Warm Toy Piano"
-};
+// (c) Per-preset Key 61 versus XL note difference at most 1.0 dB.
+// (d) Master velocity tracking = 100% on every preset.
 
 TEST (output_stage_presets_sit_at_the_stock_level)
 {
@@ -301,12 +283,12 @@ TEST (output_stage_presets_sit_at_the_stock_level)
     }
 
     struct Played { double peak = 0; };
-    auto play = [&] (const Preset& p, const Quality& q, const std::vector<int>& keys) {
+    auto play = [&] (const Preset& p, const Quality& q, const std::vector<int>& keys, float trimDb) {
         std::vector<float> L, R;
         renderRaw (p, q, &store, keys, L, R, 3.0, 0.0);
         OutputStage st;   // the default: the limiter off
         st.prepare (kSr);
-        st.setGainDb (kMakeupGainDb);
+        st.setGainDb (kMakeupGainDb + trimDb);
         st.reset();
         CHECK (! st.limiter() && st.latencySamples() == 0);
         Played r;
@@ -321,9 +303,9 @@ TEST (output_stage_presets_sit_at_the_stock_level)
         return r;
     };
 
-    constexpr double kTargetNoteDb = -4.5;
+    constexpr double kTargetNoteDb = -10.0;
     constexpr double kMaxChordDb = -0.5;
-    long chords = 0, overChordLimit = 0, noteOutsideWindow = 0;
+    long chords = 0, overChordLimit = 0, noteOutsideWindow = 0, k61XlDiffOverLimit = 0;
     double worstChord = -200;
     Quality qs[2];
     for (int k = 0; k < 2; ++k)
@@ -337,22 +319,22 @@ TEST (output_stage_presets_sit_at_the_stock_level)
 
     for (const Preset& p : presets)
     {
-        const bool belowAllowed = std::find (std::begin (kBelowTarget), std::end (kBelowTarget), p.name) != std::end (kBelowTarget);
+        Played notePerProf[2];
         for (int k = 0; k < 2; ++k)
         {
-            const Played note = play (p, qs[k], { 48 });
-            if (! belowAllowed)
+            const float trimDb = (k == 0 ? p.tierTrimDb : 0.0f);
+            notePerProf[k] = play (p, qs[k], { 48 }, trimDb);
+            const Played& note = notePerProf[k];
+
+            if (note.peak < -12.0 || note.peak > -9.5)
             {
-                if (std::fabs (note.peak - kTargetNoteDb) > 1.0)
-                {
-                    ++noteOutsideWindow;
-                    std::printf ("  single note outside target +-1 dB: %s (%s, %s): note peak %.2f dBFS (target %.1f)\n",
-                                 p.name.c_str(), p.category.c_str(), profiles[k], note.peak, kTargetNoteDb);
-                }
+                ++noteOutsideWindow;
+                std::printf ("  single note outside target [-12.0, -9.5] dBFS: %s (%s, %s): note peak %.2f dBFS (target %.1f)\n",
+                             p.name.c_str(), p.category.c_str(), profiles[k], note.peak, kTargetNoteDb);
             }
 
-            const Played chordS = play (p, qs[k], { 48, 55, 60, 64 });
-            const Played others[] = { play (p, qs[k], { 36, 48, 55, 60 }), play (p, qs[k], { 36, 43, 48, 55, 60, 64 }), play (p, qs[k], { 36, 43, 48, 52, 55, 60, 64, 67 }) };
+            const Played chordS = play (p, qs[k], { 48, 55, 60, 64 }, trimDb);
+            const Played others[] = { play (p, qs[k], { 36, 48, 55, 60 }, trimDb), play (p, qs[k], { 36, 43, 48, 55, 60, 64 }, trimDb), play (p, qs[k], { 36, 43, 48, 52, 55, 60, 64, 67 }, trimDb) };
             for (const Played* c : { &chordS, &others[0], &others[1], &others[2] })
             {
                 ++chords;
@@ -364,9 +346,17 @@ TEST (output_stage_presets_sit_at_the_stock_level)
                 }
             }
         }
+        const double diff = std::fabs (notePerProf[0].peak - notePerProf[1].peak);
+        if (diff > 1.0)
+        {
+            ++k61XlDiffOverLimit;
+            std::printf ("  Key 61 vs XL note diff > 1.0 dB: %s: K61 %.2f, XL %.2f, diff %.2f dB\n",
+                         p.name.c_str(), notePerProf[0].peak, notePerProf[1].peak, diff);
+        }
     }
-    std::printf ("  limiter off: %ld chord renders (4 notes in two voicings, 6, 8; both profiles): the highest peak %.2f dBFS, %ld above -0.5 dBFS; presets outside +-1 dB of target: %ld\n",
-                 chords, worstChord, overChordLimit, noteOutsideWindow);
+    std::printf ("  limiter off: %ld chord renders: highest peak %.2f dBFS, %ld above -0.5 dBFS; note outside [-12, -9.5]: %ld; K61 vs XL diff > 1.0 dB: %ld\n",
+                 chords, worstChord, overChordLimit, noteOutsideWindow, k61XlDiffOverLimit);
     CHECK_EQ (overChordLimit, 0L);
     CHECK_EQ (noteOutsideWindow, 0L);
+    CHECK_EQ (k61XlDiffOverLimit, 0L);
 }
