@@ -538,6 +538,15 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_options(play_log_host PRIVATE -Wall -Wextra -Wpedantic)
     add_test(NAME play_log_host COMMAND play_log_host)
 
+    add_executable(stroke_strip_host EXCLUDE_FROM_ALL tests/stroke_strip_host.cpp)
+    target_include_directories(stroke_strip_host PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/overlay")
+    target_link_libraries(stroke_strip_host PRIVATE Threads::Threads)
+    target_compile_features(stroke_strip_host PRIVATE cxx_std_17)
+    target_compile_options(stroke_strip_host PRIVATE -Wall -Wextra -Wpedantic)
+    add_test(NAME stroke_strip_host COMMAND stroke_strip_host)
+
     add_executable(close_hang_host EXCLUDE_FROM_ALL tests/close_hang_host.cpp)
     target_include_directories(close_hang_host PRIVATE "${MPC_SDK_DIR}/framework" "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(close_hang_host PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
