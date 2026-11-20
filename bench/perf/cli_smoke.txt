@@ -3,3 +3,8 @@
 # regular expression: a CTest PASS_REGULAR_EXPRESSION of the output. It must hold no semicolon and no square bracket (CMake reads this file as a list).
 # Empty lines and lines starting with a hash are ignored.
 list_basic~any~--list --load basic --config low~profile low
+rt_flags~posix~--load basic --config low --seconds 0.3 --rt 20 --mlock --csv /dev/null~rt: 
+csv_schema2~posix~--load basic --config low --seconds 0.3 --csv /dev/null~csv schema 2
+health_line~posix~--load basic --config low --seconds 0.3~health: run_delay
+helpers_away~linux~--load basic --config low --seconds 0.3 --core 0~helpers: 
+verify_guard~any~--verify --load basic --config low~verify: 0 of 1 renders differ
