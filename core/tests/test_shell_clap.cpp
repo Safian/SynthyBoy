@@ -907,3 +907,212 @@ TEST (native_clap_offline_render_runs_at_ultra_quality_when_the_preference_is_on
     CHECK (offlineOnly == plain);
     CHECK (bounce != plain);
 }
+
+// Rank 13 verification: shell tail continuation on voice end and mono output downmixing.
+// Reuses helper types, includes, set-up calls and check macros from native_clap_audio_render_and_state
+// and native_clap_silences_notes_and_tails_when_the_host_stops.
+TEST (native_clap_tail_continuation_and_mono_downmix)
+{
+    const clap_plugin_entry_t* entry = synthyboy_clap_get_entry();
+    CHECK (entry != nullptr);
+    const auto* factory = static_cast<const clap_plugin_factory_t*> (entry->get_factory (CLAP_PLUGIN_FACTORY_ID));
+    CHECK (factory != nullptr);
+
+    const clap_plugin_t* plugin = factory->create_plugin (factory, &s_mockHost, "com.safian.synthyboy");
+    CHECK (plugin != nullptr);
+    CHECK (plugin->init (plugin));
+    CHECK (plugin->activate (plugin, 48000.0, 32, 512));
+    CHECK (plugin->start_processing (plugin));
+
+    // Part 1: Tail continuation when activeVoices() drops to 0 while FX tail is sounding
+    {
+        const auto* paramsExt = static_cast<const clap_plugin_params_t*> (plugin->get_extension (plugin, CLAP_EXT_PARAMS));
+        CHECK (paramsExt != nullptr);
+        const auto* voiceExt = static_cast<const clap_plugin_voice_info_t*> (plugin->get_extension (plugin, CLAP_EXT_VOICE_INFO));
+        CHECK (voiceExt != nullptr);
+
+        auto setParamClap = [&] (const char* key, double val) {
+            const ParamInfo* info = findParamByKey (key);
+            CHECK (info != nullptr);
+            clap_event_param_value_t ev {};
+            ev.header.size = sizeof ev;
+            ev.header.time = 0;
+            ev.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+            ev.header.type = CLAP_EVENT_PARAM_VALUE;
+            ev.param_id = info->id;
+            ev.value = val;
+            SimpleEvents se;
+            se.events.push_back (&ev.header);
+            clap_input_events_t inEvs = se.inEvents();
+            paramsExt->flush (plugin, &inEvs, nullptr);
+        };
+
+        // Switch on reverb with decay >= 2s and wet mix >= 50% via CLAP params interface BEFORE the note
+        setParamClap ("reverb.on", 1.0);
+        setParamClap ("reverb.mix", 100.0);
+        setParamClap ("reverb.decay", 3000.0);
+
+        std::vector<float> bufL (512, 0.0f);
+        std::vector<float> bufR (512, 0.0f);
+        float* channelData[2] = { bufL.data(), bufR.data() };
+        clap_audio_buffer_t audioOut {};
+        audioOut.data32 = channelData;
+        audioOut.channel_count = 2;
+
+        clap_process_t proc {};
+        proc.frames_count = 512;
+        proc.audio_outputs = &audioOut;
+        proc.audio_outputs_count = 1;
+
+        // Play a note of at least 0.1 s at velocity 0.9 (10 blocks of 512 frames @ 48 kHz = 5120 frames = ~0.1067 s)
+        clap_event_note_t noteOnEv {};
+        noteOnEv.header.size = sizeof noteOnEv;
+        noteOnEv.header.time = 0;
+        noteOnEv.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+        noteOnEv.header.type = CLAP_EVENT_NOTE_ON;
+        noteOnEv.note_id = 1;
+        noteOnEv.key = 60;
+        noteOnEv.velocity = 0.9;
+
+        SimpleEvents onEvs;
+        onEvs.events.push_back (&noteOnEv.header);
+        clap_input_events_t inOn = onEvs.inEvents();
+        proc.in_events = &inOn;
+        plugin->process (plugin, &proc);
+
+        proc.in_events = nullptr;
+        for (int b = 1; b < 10; ++b)
+            plugin->process (plugin, &proc);
+
+        // Note Off
+        clap_event_note_t noteOffEv = noteOnEv;
+        noteOffEv.header.time = 0;
+        noteOffEv.header.type = CLAP_EVENT_NOTE_OFF;
+        noteOffEv.velocity = 0.0;
+
+        SimpleEvents offEvs;
+        offEvs.events.push_back (&noteOffEv.header);
+        clap_input_events_t inOff = offEvs.inEvents();
+        proc.in_events = &inOff;
+        plugin->process (plugin, &proc);
+        proc.in_events = nullptr;
+
+        // Process silence blocks with no events until activeVoices is 0
+        clap_voice_info_t vinfo {};
+        CHECK (voiceExt->get (plugin, &vinfo));
+        while (vinfo.voice_count > 0)
+        {
+            plugin->process (plugin, &proc);
+            CHECK (voiceExt->get (plugin, &vinfo));
+        }
+        CHECK_EQ (vinfo.voice_count, 0u);
+
+        // (a) One block after the voice has ended (activeVoices is 0), output peak is above 0.001
+        plugin->process (plugin, &proc);
+        float tailPeak = 0.0f;
+        for (int i = 0; i < 512; ++i)
+            tailPeak = std::max ({ tailPeak, std::abs (bufL[i]), std::abs (bufR[i]) });
+        std::printf ("    measured tail peak: %f\n", tailPeak);
+        CHECK (tailPeak > 0.001f);
+
+        // (b) Every process call during the next 1 second returns CLAP_PROCESS_CONTINUE and never CLAP_PROCESS_SLEEP
+        const int blocksIn1Sec = static_cast<int> (std::ceil (1.0 * 48000.0 / 512.0)); // 94 blocks
+        for (int b = 0; b < blocksIn1Sec; ++b)
+        {
+            const int32_t status = plugin->process (plugin, &proc);
+            CHECK_EQ (status, static_cast<int32_t> (CLAP_PROCESS_CONTINUE));
+            CHECK (status != static_cast<int32_t> (CLAP_PROCESS_SLEEP));
+        }
+
+        // (c) With the effect switched OFF (a second run, dry patch), after the voice ended
+        // and the hold time the fix uses (2.0s = 96000 frames) has passed in silence,
+        // the status becomes CLAP_PROCESS_SLEEP (process that long plus one block)
+        setParamClap ("reverb.on", 0.0);
+        plugin->reset (plugin);
+
+        // Play note for 10 blocks (>= 0.1s)
+        proc.in_events = &inOn;
+        plugin->process (plugin, &proc);
+        proc.in_events = nullptr;
+        for (int b = 1; b < 10; ++b)
+            plugin->process (plugin, &proc);
+
+        // Note off
+        proc.in_events = &inOff;
+        plugin->process (plugin, &proc);
+        proc.in_events = nullptr;
+
+        // Process silence until voice ended
+        CHECK (voiceExt->get (plugin, &vinfo));
+        while (vinfo.voice_count > 0)
+        {
+            plugin->process (plugin, &proc);
+            CHECK (voiceExt->get (plugin, &vinfo));
+        }
+        CHECK_EQ (vinfo.voice_count, 0u);
+
+        // Hold time the fix uses: 2.0 seconds (96000 frames @ 48 kHz).
+        // In 512-frame blocks: 96000 / 512 = 187.5 -> 188 blocks.
+        // During the first second of silence (~94 blocks), status remains CLAP_PROCESS_CONTINUE.
+        // After the hold time has passed in silence (process that long plus one block = 189 blocks),
+        // the status becomes CLAP_PROCESS_SLEEP.
+        const int holdBlocks = static_cast<int> (std::ceil (2.0 * 48000.0 / 512.0)); // 188 blocks
+        int32_t midStatus = CLAP_PROCESS_SLEEP;
+        for (int b = 0; b < blocksIn1Sec; ++b)
+            midStatus = plugin->process (plugin, &proc);
+        CHECK_EQ (midStatus, static_cast<int32_t> (CLAP_PROCESS_CONTINUE));
+
+        int32_t sleepStatus = CLAP_PROCESS_CONTINUE;
+        for (int b = blocksIn1Sec; b <= holdBlocks; ++b)
+            sleepStatus = plugin->process (plugin, &proc);
+        CHECK_EQ (sleepStatus, static_cast<int32_t> (CLAP_PROCESS_SLEEP));
+    }
+
+    // Part 2: Mono output buffer downmix (channel_count == 1) with left-panned signal
+    {
+        plugin->reset (plugin);
+
+        auto monoPatch = ParamValues::defaults();
+        monoPatch.plain[indexOfKey ("osc1.pan")] = -100.0f; // 100% hard left
+        CHECK (loadStateText (plugin, saveState (monoPatch)));
+
+        std::vector<float> bufMono (512, 0.0f);
+        float* channelData[1] = { bufMono.data() };
+        clap_audio_buffer_t audioOut {};
+        audioOut.data32 = channelData;
+        audioOut.channel_count = 1;
+
+        clap_process_t proc {};
+        proc.frames_count = 512;
+        proc.audio_outputs = &audioOut;
+        proc.audio_outputs_count = 1;
+
+        clap_event_note_t noteOnEv {};
+        noteOnEv.header.size = sizeof noteOnEv;
+        noteOnEv.header.time = 0;
+        noteOnEv.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+        noteOnEv.header.type = CLAP_EVENT_NOTE_ON;
+        noteOnEv.note_id = 2;
+        noteOnEv.key = 60;
+        noteOnEv.velocity = 0.9;
+
+        SimpleEvents evs;
+        evs.events.push_back (&noteOnEv.header);
+        clap_input_events_t inEvs = evs.inEvents();
+        proc.in_events = &inEvs;
+
+        plugin->process (plugin, &proc);
+
+        // On defect code: outR aliases outL, right channel (0.0f) overwrites left channel -> monoPeak == 0.0f
+        // On fixed code: mono receives 0.5f * (L + R) -> monoPeak > 0.02f
+        float monoPeak = 0.0f;
+        for (int i = 0; i < 512; ++i)
+            monoPeak = std::max (monoPeak, std::abs (bufMono[i]));
+        CHECK (monoPeak > 0.02f);
+    }
+
+    plugin->stop_processing (plugin);
+    plugin->deactivate (plugin);
+    plugin->destroy (plugin);
+}
+

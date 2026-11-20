@@ -159,6 +159,22 @@ private:
     SynthyBoyClap& self;
 };
 
+struct SynthyBoyClapImpl final : public SynthyBoyClap
+{
+    explicit SynthyBoyClapImpl (const clap_host_t* h)
+        : SynthyBoyClap (h), monoScratch (8192, 0.0f)
+    {
+        silentFrames = static_cast<uint64_t> (std::round (2.0 * sampleRate));
+    }
+    std::vector<float> monoScratch;
+    uint64_t silentFrames = 0;
+};
+
+inline SynthyBoyClapImpl* toClapImpl (const clap_plugin_t* p) noexcept
+{
+    return static_cast<SynthyBoyClapImpl*> (p->plugin_data);
+}
+
 ContentHost* resolveContentHost (const clap_plugin_t* p) noexcept
 {
     return p != nullptr && p->plugin_data != nullptr ? static_cast<SynthyBoyClap*> (p->plugin_data)->contentHost.get() : nullptr;
@@ -175,14 +191,16 @@ bool clap_init (const clap_plugin_t*) noexcept
 
 void clap_destroy (const clap_plugin_t* p) noexcept
 {
-    delete toClap (p);
+    delete toClapImpl (p);
 }
 
 bool clap_activate (const clap_plugin_t* p, double sample_rate, uint32_t, uint32_t max_frames_count) noexcept
 {
-    auto* self = toClap (p);
+    auto* self = toClapImpl (p);
     self->sampleRate = sample_rate > 0.0 ? sample_rate : 48000.0;
     self->maxBlockSize = std::max (max_frames_count, 32u);
+    self->monoScratch.assign (std::max (self->maxBlockSize, 8192u), 0.0f);
+    self->silentFrames = static_cast<uint64_t> (std::round (2.0 * self->sampleRate));
     self->stopWatch.reset();
     self->outputStage.prepare (self->sampleRate);
     if (self->engine)
@@ -212,7 +230,8 @@ void clap_stop_processing (const clap_plugin_t* p) noexcept
 
 void clap_reset (const clap_plugin_t* p) noexcept
 {
-    auto* self = toClap (p);
+    auto* self = toClapImpl (p);
+    self->silentFrames = static_cast<uint64_t> (std::round (2.0 * self->sampleRate));
     self->outputStage.reset();
     if (self->engine)
         self->engine->reset();
@@ -224,7 +243,7 @@ void clap_reset (const clap_plugin_t* p) noexcept
 
 clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* process) noexcept
 {
-    auto* self = toClap (p);
+    auto* self = toClapImpl (p);
     if (! self->engine)
         return CLAP_PROCESS_ERROR;
 
@@ -347,49 +366,77 @@ clap_process_status clap_process (const clap_plugin_t* p, const clap_process_t* 
     }
 
     // 2. Render audio
+    bool isSilent = true;
     if (process->audio_outputs_count > 0 && process->audio_outputs[0].data32 != nullptr)
     {
+        const bool isMono = (process->audio_outputs[0].channel_count == 1);
         float* outL = process->audio_outputs[0].data32[0];
-        float* outR = (process->audio_outputs[0].channel_count > 1) ? process->audio_outputs[0].data32[1] : outL;
+        float* outR = ! isMono ? process->audio_outputs[0].data32[1] : self->monoScratch.data();
 
-        const bool meters = self->ui.guiActive.load (std::memory_order_relaxed);
-        const auto processStart = meters ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
-        self->engine->process (self->events.data(), static_cast<int> (self->events.size()),
-                               outL, outR, static_cast<int> (process->frames_count));
-        self->outputStage.process (outL, outR, static_cast<int> (process->frames_count));
-        self->samplesDone.fetch_add (process->frames_count, std::memory_order_relaxed);
-        if (meters)
+        if (outL != nullptr && outR != nullptr)
         {
-            // the live displays of a GUI: load of this block (smoothed), peaks, voices and the scope ring; nothing of this runs without a GUI
-            const double spent = std::chrono::duration<double> (std::chrono::steady_clock::now() - processStart).count();
-            const double budget = self->sampleRate > 0.0 ? static_cast<double> (process->frames_count) / self->sampleRate : 0.0;
-            if (budget > 0.0)
-                self->ui.cpu.store (self->ui.cpu.load (std::memory_order_relaxed) * 0.9f + static_cast<float> (spent / budget) * 0.1f, std::memory_order_relaxed);
-            float magL = 0.0f, magR = 0.0f;
+            const bool meters = self->ui.guiActive.load (std::memory_order_relaxed);
+            const auto processStart = meters ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
+            self->engine->process (self->events.data(), static_cast<int> (self->events.size()),
+                                   outL, outR, static_cast<int> (process->frames_count));
+            self->outputStage.process (outL, outR, static_cast<int> (process->frames_count));
+            self->samplesDone.fetch_add (process->frames_count, std::memory_order_relaxed);
+
             for (uint32_t i = 0; i < process->frames_count; ++i)
             {
-                magL = std::max (magL, std::fabs (outL[i]));
-                magR = std::max (magR, std::fabs (outR[i]));
+                if (std::fabs (outL[i]) >= 1e-6f || std::fabs (outR[i]) >= 1e-6f)
+                {
+                    isSilent = false;
+                    break;
+                }
             }
-            self->ui.peakL.store (magL, std::memory_order_relaxed);
-            self->ui.peakR.store (magR, std::memory_order_relaxed);
-            self->ui.voiceCount.store (self->engine->activeVoices(), std::memory_order_relaxed);
-            self->ui.writeScope (outL, outR, static_cast<int> (process->frames_count));
-        }
-        // quality.oversample_4x changed: only prepare () can apply it (activate () calls it again after the restart)
-        if (self->engine->needsPrepare() && self->host != nullptr && self->host->request_restart != nullptr)
-            self->host->request_restart (self->host);
-        // Bode's latency changed (the effect was switched on / off or moved): the host reads the new value after the restart (the output limiter's look-ahead is added)
-        const int latency = self->engine->latencySamples() + self->outputStage.latencySamples();
-        if (latency != self->reportedLatency.load (std::memory_order_relaxed))
-        {
-            self->reportedLatency.store (latency, std::memory_order_relaxed);
-            if (self->host != nullptr && self->host->request_restart != nullptr)
+
+            if (isMono)
+            {
+                for (uint32_t i = 0; i < process->frames_count; ++i)
+                    outL[i] = 0.5f * (outL[i] + outR[i]);
+            }
+
+            if (meters)
+            {
+                // the live displays of a GUI: load of this block (smoothed), peaks, voices and the scope ring; nothing of this runs without a GUI
+                const double spent = std::chrono::duration<double> (std::chrono::steady_clock::now() - processStart).count();
+                const double budget = self->sampleRate > 0.0 ? static_cast<double> (process->frames_count) / self->sampleRate : 0.0;
+                if (budget > 0.0)
+                    self->ui.cpu.store (self->ui.cpu.load (std::memory_order_relaxed) * 0.9f + static_cast<float> (spent / budget) * 0.1f, std::memory_order_relaxed);
+                float magL = 0.0f, magR = 0.0f;
+                for (uint32_t i = 0; i < process->frames_count; ++i)
+                {
+                    magL = std::max (magL, std::fabs (outL[i]));
+                    magR = std::max (magR, std::fabs (isMono ? outL[i] : outR[i]));
+                }
+                self->ui.peakL.store (magL, std::memory_order_relaxed);
+                self->ui.peakR.store (magR, std::memory_order_relaxed);
+                self->ui.voiceCount.store (self->engine->activeVoices(), std::memory_order_relaxed);
+                self->ui.writeScope (outL, isMono ? outL : outR, static_cast<int> (process->frames_count));
+            }
+            // quality.oversample_4x changed: only prepare () can apply it (activate () calls it again after the restart)
+            if (self->engine->needsPrepare() && self->host != nullptr && self->host->request_restart != nullptr)
                 self->host->request_restart (self->host);
+            // Bode's latency changed (the effect was switched on / off or moved): the host reads the new value after the restart (the output limiter's look-ahead is added)
+            const int latency = self->engine->latencySamples() + self->outputStage.latencySamples();
+            if (latency != self->reportedLatency.load (std::memory_order_relaxed))
+            {
+                self->reportedLatency.store (latency, std::memory_order_relaxed);
+                if (self->host != nullptr && self->host->request_restart != nullptr)
+                    self->host->request_restart (self->host);
+            }
         }
     }
 
-    return (self->engine->activeVoices() > 0) ? CLAP_PROCESS_CONTINUE : CLAP_PROCESS_SLEEP;
+    const bool hasVoices = (self->engine->activeVoices() > 0);
+    if (hasVoices || ! isSilent)
+        self->silentFrames = 0;
+    else
+        self->silentFrames += process->frames_count;
+
+    const uint64_t holdFrames = static_cast<uint64_t> (std::round (2.0 * self->sampleRate));
+    return (hasVoices || self->silentFrames < holdFrames) ? CLAP_PROCESS_CONTINUE : CLAP_PROCESS_SLEEP;
 }
 
 // -----------------------------------------------------------------------------
@@ -757,7 +804,7 @@ const clap_plugin_t* factory_create_plugin (const clap_plugin_factory_t*, const 
     if (plugin_id == nullptr || std::strcmp (plugin_id, kPluginId) != 0 || host == nullptr)
         return nullptr;
 
-    auto* self = new SynthyBoyClap (host);
+    auto* self = new SynthyBoyClapImpl (host);
     self->contentHost = std::make_unique<NativeContentHost> (*self);
     setContentHostResolver (resolveContentHost);
     self->plugin.desc = &s_descriptor;
