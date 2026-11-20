@@ -17,7 +17,7 @@
 
 namespace synthyboy_mpc { namespace ui { namespace lfodisplay {
 
-constexpr int kMaxCursors = 8, kMaxPoints = 1024;
+constexpr int kMaxCursors = 8, kMaxPoints = 2048;
 
 /** A representative path of a random style at x 0 .. 1 (-1 .. 1): what the style looks like, a fixed picture (the same functions as the style glyphs of the picker, so the picture and the glyph agree). */
 inline float restPath (int style, float t) noexcept
@@ -181,10 +181,39 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             const float capW = static_cast<float> (std::strlen (cap)) * (T.fSmall - 1.0f) * 0.62f;
             sb.text (std::max (sx0 + 6.0f, sx1 - 80.0f - capW), sTop + 13.0f, T.fSmall - 1.0f, cap, a (T.textDim, 180));
         }
-        const int step = rich() ? 1 : 2;   // the reduced tier: every second point of the curve (the vertical steps of a stepped shape stay: two neighbouring points make them)
+        const int step = (rich() || d.editing) ? 1 : 2;   // never decimate in the editor; reduced tier drops every second point but keeps local extremes
         const int n = std::min ((d.n + step - 1) / step, kMaxPoints);
-        for (int i = 0; i < n; ++i)
-            rows[i] = std::min (bottom + 40.0f, std::max (top - 40.0f, rowOf (plot, d.y[std::min (d.n - 1, i * step)])));
+        if (step == 1)
+        {
+            for (int i = 0; i < n; ++i)
+                rows[i] = std::min (bottom + 40.0f, std::max (top - 40.0f, rowOf (plot, d.y[std::min (d.n - 1, i)])));
+        }
+        else
+        {
+            auto isExtreme = [&] (int k) -> bool {
+                if (k <= 0 || k >= d.n - 1) return false;
+                const float prev = d.y[k - 1], cur = d.y[k], next = d.y[k + 1];
+                return (cur >= prev && cur >= next && (cur > prev || cur > next))
+                    || (cur <= prev && cur <= next && (cur < prev || cur < next));
+            };
+            for (int i = 0; i < n; ++i)
+            {
+                int srcIdx = std::min (d.n - 1, i * step);
+                if (i > 0 && i < n - 1)
+                {
+                    if (! isExtreme (srcIdx))
+                    {
+                        const int left = srcIdx - 1;
+                        const int right = srcIdx + 1;
+                        if (left > 0 && isExtreme (left))
+                            srcIdx = left;
+                        else if (right < d.n - 1 && isExtreme (right) && (i == n - 2 || (right + 1) / 2 == i))
+                            srcIdx = right;
+                    }
+                }
+                rows[i] = std::min (bottom + 40.0f, std::max (top - 40.0f, rowOf (plot, d.y[srcIdx])));
+            }
+        }
         const int first = sb.curve (rows, n, plot.x, plot.w);
         if (first >= 0)
         {

@@ -226,15 +226,36 @@ public:
         const theme::Look& T = theme::L();
         Pen pen (sb, enabled_);
         lfodisplay::Data d = data();
-        float y[256];
-        for (int i = 0; i < 256; ++i)
-            y[i] = 2.0f * state.shape->eval (static_cast<float> (i) / 255.0f) - 1.0f;
-        d.y = y;
-        d.n = 256;
-        lfodisplay::draw (sb, rect_, d, false);   // the loop is the marker below: the display draws none here
         const Rect pl = plot();
-        Cell cell (sb, rect_);
+        const int cols = std::clamp (pl.w, 2, lfodisplay::kMaxPoints);
+        float y[lfodisplay::kMaxPoints];
+        for (int i = 0; i < cols; ++i)
+            y[i] = 2.0f * state.shape->eval (static_cast<float> (i) / static_cast<float> (cols - 1)) - 1.0f;
         const lfo::ShapeModel& m = *state.shape;
+        for (int j = 0; j < m.n; ++j)
+        {
+            bool isExt = false;
+            if (j > 0 && j < m.n - 1)
+            {
+                const float prev = m.p[j - 1].y, cur = m.p[j].y, next = m.p[j + 1].y;
+                isExt = (cur >= prev && cur >= next && (cur > prev || cur > next))
+                     || (cur <= prev && cur <= next && (cur < prev || cur < next));
+            }
+            else if (m.n > 1)
+            {
+                const int other = j == 0 ? 1 : m.n - 2;
+                isExt = m.p[j].y != m.p[other].y;
+            }
+            if (isExt)
+            {
+                const int col = std::clamp (static_cast<int> (std::round (std::clamp (m.p[j].x, 0.0f, 1.0f) * static_cast<float> (cols - 1))), 0, cols - 1);
+                y[col] = 2.0f * m.p[j].y - 1.0f;
+            }
+        }
+        d.y = y;
+        d.n = cols;
+        lfodisplay::draw (sb, rect_, d, false);   // the loop is the marker below: the display draws none here
+        Cell cell (sb, rect_);
         // the modulation of the points: a bar from the value to the value plus the amount (time: along the axis, level: up and down)
         for (int i = 0; i < m.n; ++i)
         {
