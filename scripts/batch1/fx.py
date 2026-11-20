@@ -13,6 +13,7 @@ add("Bode Barber Riser", "FX", "riser,bode,frequency-shifter,noise,build,sweep,m
         "bode.on": 1, "bode.shift": 25, "bode.range": 700, "bode.dir": 100, "bode.feed": 42, "bode.blur": 25, "bode.mix": 55,
         "flanger.on": 1, "flanger.mix": 30, "flanger.rate": 0.25, "flanger.feedback": 45,
         "reverb.on": 1, "reverb.type": "Nitrous", "reverb.mix": 26, "reverb.decay": 3800,
+        "utility.on": 1, "utility.level": 3.0,
     },
     [
         R("env3", "osc1.transpose", 19, label="rise"), R("env3", "osc2.transpose", 19),        # two octaves up over the attack
@@ -34,7 +35,7 @@ add("Detonation Tail", "FX", "impact,hit,one-shot,splitter,limiter,cinematic",
     "A cinematic impact: a noise burst, a sine boom whose pitch collapses, and a split at 300 Hz so the low end is saturated while the highs go into a delay and a big reverb; a limiter closes the chain",
     {
         "master.polyphony": 4, "master.transpose": -24,
-        "osc1.on": 1, "osc1.wavetable": "Sine", "osc1.level": 78,
+        "osc1.on": 1, "osc1.wavetable": "Sine", "osc1.level": 40,
         "osc2.on": 1, "osc2.wavetable": "Saw", "osc2.level": 22, "osc2.transpose": -12,
         "noise.on": 1, "noise.level": 70, "noise.destination": "Filter 1",
         "filter1.on": 1, "filter1.model": "Digital", "filter1.cutoff": 6000, "filter1.resonance": 14,
@@ -47,13 +48,13 @@ add("Detonation Tail", "FX", "impact,hit,one-shot,splitter,limiter,cinematic",
         "delay.on": 1, "delay.rack": "Splitter L/H high", "delay.sync": "Tempo dotted", "delay.division": 5, "delay.mix": 28, "delay.feedback": 46, "delay.style": "Ping pong",
         "reverb.on": 1, "reverb.rack": "Splitter L/H high", "reverb.type": "Hall", "reverb.mix": 38, "reverb.decay": 6000, "reverb.size": 90,
         "eq.on": 1, "eq.low.cutoff": 60, "eq.low.gain": 4, "eq.mid.cutoff": 400, "eq.mid.gain": -3,
-        **limiter_last(-8, 100),
+        **limiter_last(0, 100),
     },
     [
         R("env3", "osc1.transpose", 22, label="fall"),                        # the boom falls from two octaves above
         R("env2", "filter1.cutoff", 30),
         R("env4", "noise.level", 28),
-        R("velocity", "filter1.cutoff", 14), R("velocity", "noise.level", 18),
+        R("velocity", "filter1.cutoff", 14), R("velocity", "noise.level", 18), R("velocity", "osc1.level", 25),
         R("mod_wheel", "reverb.mix", 30),
         R("macro1", "noise.level", 30), R("macro1", "env4.decay", 20),        # Impact
         R("macro2", "osc1.level", 22), R("macro2", "@fall.amount", 20),       # Boom

@@ -25,6 +25,7 @@ ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 PARAMS_JSON_PATH = os.path.join(ROOT_DIR, "docs", "params.json")
 LEVELS_PATH = os.path.join(SCRIPT_DIR, "factory-preset-levels.json")
 OUTPUT_LIMITER_PATH = os.path.join(SCRIPT_DIR, "factory-preset-output-limiter.json")
+TIER_TRIM_PATH = os.path.join(SCRIPT_DIR, "factory-preset-tier-trim.json")
 MACRO_NAMES_PATH = os.path.join(SCRIPT_DIR, "factory-preset-macro-names.json")
 PAD_PRESSURE_PATH = os.path.join(SCRIPT_DIR, "factory-preset-pad-pressure.json")
 DEFAULT_OUTPUT_DIR = os.path.join(ROOT_DIR, "content", "presets")
@@ -159,15 +160,29 @@ def make_preset(name: str, category: str, tags: str, description: str, overrides
     if content:
         state_json = state_json[:-1] + content_text(content) + "}"
 
+    tier_trims = load_tier_trim()
+    trim_db = tier_trims.get(name, 0.0)
+    trim_str = f'"tierTrimDb":{format_g9(trim_db)},' if abs(trim_db) >= 0.5 else ''
+
     doc = (
         f'{{"format":"synthyboy-preset","version":1,'
         f'"meta":{{"name":{json.dumps(meta["name"])},"category":{json.dumps(meta["category"])},'
         f'"author":{json.dumps(meta["author"])},"license":{json.dumps(meta["license"])},'
         f'"tags":{json.dumps(meta["tags"])},"description":{json.dumps(meta["description"])}}},'
         + ('"outputLimiter":1,' if name in load_output_limiter() else '')
+        + trim_str
         + f'"state":{state_json}}}'
     )
     return meta, doc
+
+
+def load_tier_trim() -> dict:
+    """The presets whose low-profile Key 61 level needs a trim relative to high-profile XL:
+    scripts/factory-preset-tier-trim.json, preset name -> tierTrimDb."""
+    if not os.path.isfile(TIER_TRIM_PATH):
+        return {}
+    with open(TIER_TRIM_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 def load_output_limiter() -> dict:
@@ -203,17 +218,17 @@ bass_names = [
     ("Acid Saw Reso", "acid,reso,tb303", "Classic 303-style resonant sawtooth acid line", {"osc1.wavetable": 1, "filter1.on": 1, "filter1.model": 2, "filter1.cutoff": 450, "filter1.resonance": 78, "env2.decay": 280, "env2.sustain": 0}),
     ("Fat Reese", "reese,detune,dnb", "Dual detuned saws reese bass for DnB", {"osc1.wavetable": 1, "osc1.unison.voices": 5, "osc1.unison.detune": 22, "osc2.on": 1, "osc2.wavetable": 1, "osc2.transpose": -12, "filter1.cutoff": 800}),
     ("Punchy Pluck Bass", "pluck,punch,edm", "Tight transient bass with short envelope decay", {"master.transpose": -12, "osc1.wavetable": 2, "filter1.cutoff": 300, "env1.decay": 180, "env1.sustain": 10, "env1.release": 50}),
-    ("Dirty Distortion Bass", "dirty,drive,industrial", "Overdriven bass using dirty filter model", {"osc1.wavetable": 4, "filter1.model": 1, "filter1.cutoff": 650, "filter1.drive": 65, "distortion.on": 1, "distortion.drive": 12}),
+    ("Dirty Distortion Bass", "dirty,drive,industrial", "Overdriven bass using dirty filter model", {"osc1.wavetable": 4, "osc1.level": 25, "filter1.model": 1, "filter1.cutoff": 650, "filter1.drive": 10, "distortion.on": 1, "distortion.drive": 2, **mod(1, "velocity", "distortion.drive", 20)}),
     ("808 Boom", "808,hiphop,trap", "Pitch-gliding sine 808 boom bass", {"osc1.wavetable": 0, "env1.decay": 850, "env1.sustain": 0, "env1.release": 400, "master.volume": -5}),
     ("Formant Vowel Bass", "formant,vowel,dubstep", "Formant sweeping vowel bass", {"osc1.wavetable": 9, "filter1.model": 5, "filter1.cutoff": 950, "filter1.resonance": 60}),
     ("Harmonic Sine Bass", "harmonic,warm,smooth", "Sine wave with subtle upper harmonics", {"osc1.wavetable": 7, "filter1.cutoff": 250, "filter1.resonance": 15}),
     ("Moog Ladder Bass", "ladder,analog,vintage", "Vintage ladder filter round bass", {"osc1.wavetable": 1, "filter1.model": 2, "filter1.cutoff": 380, "filter1.resonance": 45, "master.volume": -8}),
     ("Pulse Width Bass", "pwm,square,electro", "PWM modulated electro bass", {"master.transpose": -24, "osc1.wavetable": 11, "osc1.frame": 75, "filter1.cutoff": 550, "osc1.warp.type": 1, "osc1.warp.amount": 35}),
     ("Comb Metal Bass", "comb,metal,texture", "Physical resonant string-like comb bass", {"osc1.wavetable": 1, "filter1.model": 6, "filter1.cutoff": 220, "filter1.resonance": 70}),
-    ("Diode Saturated Bass", "diode,saturation,warm", "Warm saturated diode ladder filter bass", {"osc1.wavetable": 5, "filter1.model": 4, "filter1.cutoff": 420, "filter1.drive": 50}),
+    ("Diode Saturated Bass", "diode,saturation,warm", "Warm saturated diode ladder filter bass", {"osc1.wavetable": 5, "filter1.model": 4, "filter1.cutoff": 420, "filter1.drive": 50, "utility.on": 1, "utility.level": 10.0}),
     ("Sync Growl Bass", "sync,growl,modern", "Hard sync modulated aggressive growl bass", {"osc1.wavetable": 1, "osc1.warp.type": 2, "osc1.warp.amount": 45, "filter1.cutoff": 750}),
     ("Click Attack Bass", "transient,click,punch", "Sharp transient click on attack", {"osc1.wavetable": 2, "noise.on": 1, "noise.level": 20, "env1.decay": 220}),
-    ("Warm Analog Bass", "warm,smooth,house", "Classic deep house analog bass", {"master.transpose": -24, "osc1.wavetable": 5, "filter1.model": 0, "filter1.cutoff": 320, "filter1.resonance": 25}),
+    ("Warm Analog Bass", "warm,smooth,house", "Classic deep house analog bass", {"master.transpose": -24, "osc1.wavetable": 5, "osc1.level": 70, "filter1.model": 0, "filter1.cutoff": 320, "filter1.resonance": 25}),
     ("Gritty Square Bass", "gritty,square,lofi", "Raw gritty square wave bassline", {"osc1.wavetable": 2, "filter1.cutoff": 520, "distortion.on": 1, "distortion.drive": 7.5}),
     ("Sub Duo Octave", "octave,sub,layer", "Dual octave stacked sub bass", {"osc1.wavetable": 0, "osc2.on": 1, "osc2.wavetable": 0, "osc2.transpose": -12, "osc2.level": 75}),
     ("Odd Harmonics Bass", "odd,hollow,funk", "Hollow funk bass with odd harmonic series", {"osc1.wavetable": 8, "filter1.cutoff": 600, "filter1.resonance": 30}),
@@ -243,7 +258,7 @@ lead_names = [
     ("Laser Beam Lead", "laser,sharp,futuristic", "Futuristic cutting laser lead", {"osc1.wavetable": 1, "filter1.cutoff": 7500, "env2.decay": 90, "env2.sustain": 10, "delay.on": 1}),
     ("Chorused Saw Solo", "chorus,saw,pop", "Bright saw lead bathed in stereo chorus", {"osc1.wavetable": 1, "filter1.cutoff": 4200, "chorus.on": 1, "chorus.mix": 75, "reverb.on": 1}),
     ("Dual Octave Hero", "octave,hero,anthem", "Octave stacked heroic lead synth", {"osc1.wavetable": 1, "osc2.on": 1, "osc2.wavetable": 1, "osc2.transpose": 12, "filter1.cutoff": 3800, "delay.on": 1}),
-    ("Diode Bite Lead", "diode,bite,acid", "Sharp biting diode filtered synth lead", {"osc1.wavetable": 1, "filter1.model": 4, "filter1.cutoff": 3100, "filter1.resonance": 45, "filter1.drive": 40}),
+    ("Diode Bite Lead", "diode,bite,acid", "Sharp biting diode filtered synth lead", {"osc1.wavetable": 1, "filter1.model": 4, "filter1.cutoff": 3100, "filter1.resonance": 45, "filter1.drive": 40, "utility.on": 1, "utility.level": 10.0}),
     ("Phaser Sweep Lead", "phaser,sweep,space", "Spacey phaser swept lead tone", {"osc1.wavetable": 6, "filter1.model": 7, "filter1.cutoff": 2500, "lfo1.rate": 0.5, "reverb.on": 1}),
     ("Cosmic Drift Lead", "drift,cosmic,ambient", "Slowly drifting ambient synth lead", {"osc1.wavetable": 7, "osc1.unison.voices": 4, "osc1.unison.detune": 20, "filter1.cutoff": 2100, "reverb.on": 1, "reverb.mix": 50}),
     ("Staccato Bleep Lead", "bleep,staccato,retro", "Game-inspired staccato bleep melody", {"osc1.wavetable": 2, "env1.decay": 150, "env1.sustain": 0, "filter1.cutoff": 4500}),
@@ -331,7 +346,7 @@ fx_names = [
     ("Space Wind Storm", "wind,storm,ambient", "Howling space wind noise atmosphere", {"master.transpose": -24, "noise.on": 1, "noise.level": 70, "filter1.cutoff": 225, "filter1.resonance": 60, "lfo1.rate": 0.2}),
     ("Alien Communication", "alien,vocal,weird", "Strange resonant formant alien chatter", {"osc1.wavetable": 9, "filter1.model": 5, "lfo1.rate": 6.5, **mod(1, "lfo1", "filter1.formant.x", 60), "delay.on": 1}),
     ("Game Over Zap", "game,retro,zap", "8-bit retro arcade game over explosion", {"osc1.wavetable": 2, "distortion.on": 1, "distortion.drive": 10, "env1.decay": 400, "env1.sustain": 0}),
-    ("Sonar Ping", "sonar,ping,submarine", "Deep ocean submarine sonar ping", {"osc1.wavetable": 0, "filter1.cutoff": 1400, "filter1.resonance": 75, "env1.decay": 600, "delay.on": 1, "reverb.on": 1}),
+    ("Sonar Ping", "sonar,ping,submarine", "Deep ocean submarine sonar ping", {"osc1.wavetable": 0, "osc1.level": 60, "filter1.cutoff": 1400, "filter1.resonance": 75, "env1.decay": 600, "delay.on": 1, "reverb.on": 1}),
     ("Cosmic Teleport", "teleport,sweep,glitch", "Ascending dimensional teleport sweep", {"master.transpose": 0, "osc1.wavetable": 6, "filter1.cutoff": 3500, "lfo1.rate": 8.0, "delay.on": 1}),
     ("Vinyl Dust Crackle", "vinyl,crackle,retro", "Warm lo-fi vinyl dust noise generator", {"noise.on": 1, "noise.level": 40, "filter1.cutoff": 1500, "filter1.resonance": 20})
 ]
@@ -627,7 +642,8 @@ showcase = [
       "splitter_lmh.on": 1, "splitter_lmh.freq_low": 220, "splitter_lmh.freq_high": 2500,
       "distortion.on": 1, "distortion.rack": 5, "distortion.drive": 30, "distortion.mix": 60,
       "utility.on": 1, "utility.rack": 6, "utility.width": 160,
-      "chorus.on": 1, "chorus.rack": 7, "chorus.mix": 60}, None),
+      "chorus.on": 1, "chorus.rack": 7, "chorus.mix": 60,
+      **mod(1, "velocity", "distortion.drive", 25), **mod(2, "velocity", "osc1.level", 25)}, None),
 ]
 assert len(showcase) == 12
 assert len(set(p[0] for p in presets) | set(s[0] for s in showcase)) == 112, "preset names must be unique"

@@ -79,7 +79,7 @@ add("Triple Fold Reese", "Bass", "reese,three-oscillators,wavefold,series-filter
         "env1.attack": 3, "env1.decay": 500, "env1.sustain": 100, "env1.release": 160,
         "env3.attack": 0, "env3.decay": 900, "env3.sustain": 0, "env3.release": 200,
         "phaser.on": 1, "phaser.mix": 30, "phaser.rate": 0.12, "phaser.depth": 20, "phaser.feedback": 40,
-        "distortion.on": 1, "distortion.type": "Sine fold", "distortion.drive": 3, "distortion.mix": 55,
+        "distortion.on": 1, "distortion.type": "Sine fold", "distortion.drive": 0, "distortion.mix": 55,
         "utility.on": 1, "utility.mono_bass": 1, "utility.mono_freq": 120, "utility.width": 130, "utility.hpf": 25,
     },
     [
@@ -106,15 +106,15 @@ add("Pitch Drop 808", "Bass", "808,pitch-drop,envelope-modulation,click,eq,compr
         "env1.attack": 0, "env1.decay": 1500, "env1.sustain": 0, "env1.release": 350, "env1.decay_curve": -4,
         "env3.attack": 0, "env3.decay": 110, "env3.sustain": 0, "env3.release": 60,
         "env4.attack": 0, "env4.decay": 45, "env4.sustain": 0, "env4.release": 30,
-        "distortion.on": 1, "distortion.type": "Tube", "distortion.drive": 8, "distortion.mix": 55,
+        "distortion.on": 1, "distortion.type": "Tube", "distortion.drive": 4, "distortion.mix": 55,
         "eq.on": 1, "eq.low.cutoff": 70, "eq.low.gain": 4, "eq.mid.cutoff": 350, "eq.mid.gain": -3,
-        "compressor.on": 1, "compressor.bands": "Single band", "compressor.mid.upper_threshold": -22, "compressor.mid.upper_ratio": 45,
+        "compressor.on": 1, "compressor.bands": "Single band", "compressor.mid.upper_threshold": -10, "compressor.mid.upper_ratio": 45,
         "compressor.attack": 30, "compressor.release": 60, "compressor.mid.gain": 3,
     },
     [
         R("env3", "osc1.transpose", 10, label="drop"),                      # the pitch falls from ten semitones above
         R("env4", "osc2.level", 55),                                        # the knock
-        R("velocity", "osc1.transpose", 8), R("velocity", "filter1.cutoff", 14),
+        R("velocity", "osc1.transpose", 8), R("velocity", "filter1.cutoff", 14), R("velocity", "distortion.drive", 15),
         R("mod_wheel", "distortion.drive", 60),
         R("macro1", "@drop.amount", 35),                                   # Drop: how far the pitch falls
         R("macro2", "env1.decay", 30), R("macro2", "env1.release", 25),     # Tail

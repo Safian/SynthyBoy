@@ -161,7 +161,7 @@ add("Rising Grain Riser", "FX", "fx,riser,granular,build,swell,bus,shimmer,sweep
     "A six second build: the Granular oscillator reads the rising texture in real time (the grains are a hundred and fifty milliseconds, sixty a second), a filter climbs, a delay and reverb on bus 2 throw the grains after it; hold the key to the top, let go for the tail. Play C2 for the plain build, other keys transpose it",
     {
         "master.polyphony": 2,
-        "osc1.on": 1, "osc1.type": "Granular", "osc1.level": 74, "osc1.sample.root": 36, "osc1.sample.loop_mode": "One-shot", "osc1.sample.normalize": 1, "osc1.bus2_send": 45,
+        "osc1.on": 1, "osc1.type": "Granular", "osc1.level": 100, "osc1.sample.root": 36, "osc1.sample.loop_mode": "One-shot", "osc1.sample.normalize": 1, "osc1.bus2_send": 45,
         "osc1.gran.manual": 0, "osc1.gran.density": 60, "osc1.gran.length": 150, "osc1.gran.window_shape": "Hann", "osc1.gran.window_amount": 80,
         "osc1.gran.rand_offset": 3, "osc1.gran.rand_pan": 60, "osc1.gran.rand_pitch": 0, "osc1.gran.max_grains": 48,
         "osc1.unison.voices": 2, "osc1.unison.detune": 10, "osc1.unison.spread": 85,
@@ -169,7 +169,7 @@ add("Rising Grain Riser", "FX", "fx,riser,granular,build,swell,bus,shimmer,sweep
         "filter1.on": 1, "filter1.model": "Analog", "filter1.style": 1, "filter1.cutoff": 500, "filter1.resonance": 18, "filter1.keytrack": 0,
         "env1.attack": 120, "env1.decay": 6000, "env1.sustain": 100, "env1.release": 1800,
         "env2.attack": 5600, "env2.decay": 400, "env2.sustain": 100,
-        "bus2.level": -3, "bus2.destination": "Main",
+        "bus2.level": 0, "bus2.destination": "Main",
         "delay.on": 1, "delay.rack": "Bus 2", "delay.sync": 2, "delay.division": 6, "delay.mix": 40, "delay.feedback": 50, "delay.style": "Ping pong",
         "reverb.on": 1, "reverb.rack": "Bus 2", "reverb.type": "Hall", "reverb.mix": 45, "reverb.decay": 5000,
     },
