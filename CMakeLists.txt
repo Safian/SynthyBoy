@@ -50,11 +50,8 @@ endif()
 #   SYNTHYBOY_BUILD_PLUGIN  VST3 + CLAP via JUCE (fetches JUCE and clap-juce-extensions); OFF builds only the core
 #                           (used by the ARMv7 / AArch64 cross builds and the sanitizer jobs)
 #   SYNTHYBOY_BUILD_TESTS   core unit / real-time / thread tests (CTest)
-#   SYNTHYBOY_WITH_VITAL    Vital-derived engine in core/engine-vital (docs/plans/vital-removal.md); OFF by default, nothing
-#                           of core/engine-vital is then added to the build (the option goes with the directory)
 option(SYNTHYBOY_BUILD_PLUGIN "Build the JUCE plugin (VST3 + CLAP)" ON)
 option(SYNTHYBOY_BUILD_TESTS "Build the core tests" ON)
-option(SYNTHYBOY_WITH_VITAL "Include the Vital-derived engine (core/engine-vital)" OFF)
 option(SYNTHYBOY_BUILD_MPC_SHELL "Build the MPC VST2 shell (shell-mpc)" OFF)
 set(MPC_SDK_DIR "" CACHE PATH "Path to the MPC plugin SDK (for shell-mpc)")
 # SYNTHYBOY_BITMAP_GUI: the native CLAP module (shell-clap, synthyboy.clap) renders the editor of shell-juce/ui into a pixel buffer and offers it through the CLAP extension

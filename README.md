@@ -85,7 +85,7 @@ The MPC VST2 build (`scripts/build-mpc.sh`, [docs/MPC.md](docs/MPC.md); end-user
 | `docs/ui-components/` | developer documentation of the MPC UI component library (`shell-mpc/ui/`): one page per component, how a page is built, reuse in another plugin; entry page [docs/ui-components/README.md](docs/ui-components/README.md), instructions for AI agents [shell-mpc/ui/AGENTS.md](shell-mpc/ui/AGENTS.md) |
 
 CMake options: `SYNTHYBOY_BUILD_PLUGIN` (ON; OFF builds only the core, no JUCE download), `SYNTHYBOY_BUILD_TESTS` (ON),
-`SYNTHYBOY_WITH_VITAL` (OFF; the option goes with the removed `core/engine-vital`), `SYNTHYBOY_DEFAULT_TIER` (`high` | `medium` | `low`: the quality tier of the plugin).
+`SYNTHYBOY_DEFAULT_TIER` (`high` | `medium` | `low`: the quality tier of the plugin).
 
 ## Engine
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Independent audit of the Vital preset importer (docs/ui-design/VITAL-IMPORT-AUDIT-REPORT.md).
 
-    python3 -I scripts/audit-vital-import.py --vital DIR [--vital DIR ...] --imported DIR [--json OUT.json] [-v]
+    python3 -I scripts/audit-vital-import.py --vital DIR [--vital DIR ...] --imported DIR [--vital-definitions FILE] [--json OUT.json] [-v]
 
   --vital       directories searched recursively for .vital files (unzip a .vitalbank first); the originals are never modified
   --imported    output directory of `synthyboy_vital_import` (<name>.sbpreset + <name>.report.json)
@@ -11,8 +11,9 @@ Python 3 standard library only; nothing is imported from the importer. The audit
   - the importer's report.json and the written .sbpreset,
   - docs/params.json (OUR parameter table: ranges, units, choice lists, modulation source / destination lists),
   - core/vital-import/vital_map.cpp (ONLY the pairing "our key <-> Vital control name"; its conversion columns are not used),
-  - core/engine-vital/upstream/src/common/synth_parameters.cpp (Vital's own definition of every control: range, value scale, display
-    multiplier / units; this is the independent source of the expected value).
+  - optional, --vital-definitions FILE: a copy of Vital's own definition of every control (its `synth_parameters.cpp`: range, value scale,
+    display multiplier / units; the independent source of the expected value). The repository no longer holds that file (the Vital-derived
+    engine is removed); without the option stage 2 (correctness of the values) is skipped and the other stages run.
 
 Checks
   1 completeness  every key of `settings` and every modulation slot / wavetable / LFO shape / the sample object ends up in exactly ONE of
@@ -58,9 +59,9 @@ def num_or_none(text):
         return KNOWN_CONST.get(text.strip())
 
 
-def load_vital_details():
-    """control name -> dict(min, max, default, mult, scale, invert, units, offset) from Vital's parameter definition."""
-    src = open(os.path.join(REPO, 'core/engine-vital/upstream/src/common/synth_parameters.cpp'), encoding='utf-8').read()
+def load_vital_details(path):
+    """control name -> dict(min, max, default, mult, scale, invert, units, offset) from Vital's parameter definition (the file at `path`)."""
+    src = open(path, encoding='utf-8').read()
     lists = {}
     for m in re.finditer(r'ValueDetailsLookup::(\w+)\[\] = \{(.*?)\n  \};', src, re.S):
         lists[m.group(1)] = m.group(2)
@@ -246,7 +247,7 @@ def normalise_class(detail, name):
 class Audit:
     def __init__(self, args):
         self.args = args
-        self.details = load_vital_details()
+        self.details = load_vital_details(args.vital_definitions) if args.vital_definitions else None
         self.pairs = load_pairs()
         self.by_control = {c: k for k, c in self.pairs}
         self.params, self.mod_sources, self.mod_dests = load_params()
@@ -443,6 +444,8 @@ class Audit:
             mm = MOD_KEY.match(ctl)
             if mm and int(mm.group(1)) - 1 not in active_slots:
                 continue  # unused slot: stays at the default (checked below with the untouched keys)
+            if self.details is None:
+                continue  # no --vital-definitions: stage 2 (the value of every row) is skipped
             d = self.details(ctl)
             if d is None:
                 self.err(name, 'table', 'no Vital definition found for %s' % ctl)
@@ -804,6 +807,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--vital', action='append', required=True)
     ap.add_argument('--imported', required=True)
+    ap.add_argument('--vital-definitions', help="a copy of Vital's synth_parameters.cpp (optional; without it the value stage is skipped)")
     ap.add_argument('--json')
     ap.add_argument('--skip-sample-osc', action='store_true')
     ap.add_argument('-v', '--verbose', action='store_true')

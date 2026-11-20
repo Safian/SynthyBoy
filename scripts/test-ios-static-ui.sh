@@ -5,7 +5,7 @@
 #
 # Usage: scripts/test-ios-static-ui.sh [--sdk iphonesimulator|iphoneos] [--archs "arm64;x86_64"] [--build-dir DIR] [--no-run]
 #
-#   1. configure + build with -DCMAKE_SYSTEM_NAME=iOS -DSYNTHYBOY_STATIC_UI=ON -DSYNTHYBOY_WITH_VITAL=OFF: libsynthyboy_static_ui.a, the link list, and the two test programs
+#   1. configure + build with -DCMAKE_SYSTEM_NAME=iOS -DSYNTHYBOY_STATIC_UI=ON: libsynthyboy_static_ui.a, the link list, and the two test programs
 #   2. scripts/check-static-ui-symbols.py (the library exports synthyboy_clap_get_entry and nothing else; the parts before the partial link are checked for the JUCE namespace)
 #      and scripts/check-no-vital.sh (the iOS rule) over the library and the archives it links
 #   3. (simulator SDK, unless --no-run) the tests of the bitmap GUI run IN the iOS simulator against the linked library: the same 31 tests and the goldens of the own engine
@@ -39,7 +39,7 @@ extra=()
 step "1. configure and build for the $sdk SDK ($archs)"
 cmake -S "$root" -B "$build" -G Ninja \
     -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT="$sdk" -DCMAKE_OSX_ARCHITECTURES="$archs" \
-    -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_WITH_VITAL=OFF -DSYNTHYBOY_STATIC_UI=ON -DCMAKE_BUILD_TYPE=Release ${extra[@]+"${extra[@]}"}
+    -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_STATIC_UI=ON -DCMAKE_BUILD_TYPE=Release ${extra[@]+"${extra[@]}"}
 cmake --build "$build" --target synthyboy_static_ui synthyboy_test_bitmap_gui synthyboy_test_bitmap_golden --parallel
 lib="$build/shell-clap/libsynthyboy_static_ui.a"
 parts="$build/shell-clap/libsynthyboy_static_ui_parts.a"

@@ -114,7 +114,7 @@ if [ -n "${PLUGIN_CMAKE_SOURCE:-}" ]; then
 else
     cmake -S /src -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
         -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON \
-        -DSYNTHYBOY_WITH_VITAL=OFF -DMPC_SDK_DIR="$MPC_SDK_DIR" ${extra_args[@]+"${extra_args[@]}"}
+        -DMPC_SDK_DIR="$MPC_SDK_DIR" ${extra_args[@]+"${extra_args[@]}"}
 fi
 cmake --build /build --target "$PLUGIN_TARGET" --parallel "$JOBS"
 so="/build/$PLUGIN_MODULE"
@@ -153,7 +153,7 @@ fi
 if [ "$WITH_BENCH" = 1 ]; then
     cmake -S /src -B /build-bench -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
         -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_MPC_SHELL=OFF \
-        -DSYNTHYBOY_WITH_VITAL=OFF -DMPC_SDK_DIR="$MPC_SDK_DIR" \
+        -DMPC_SDK_DIR="$MPC_SDK_DIR" \
         -DCMAKE_EXE_LINKER_FLAGS="-static-libstdc++ -static-libgcc"
     cmake --build /build-bench --target synthyboy_bench synthyboy_noteon_bench --parallel "$JOBS"
     rm -rf "/out/bench-$ARCH"
