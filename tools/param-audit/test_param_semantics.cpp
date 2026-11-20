@@ -25,7 +25,7 @@ bool verbose() { return std::getenv ("SYNTHYBOY_AUDIT_VERBOSE") != nullptr; }
 
 Rig& rig()
 {
-    static Rig r (EngineKind::vital);
+    static Rig r (EngineKind::own);
     return r;
 }
 
@@ -1029,7 +1029,7 @@ TEST (reverb_force_enable_overrides_the_tier_mask)
     const auto sc = scriptByName ("long");
     auto levelTail = [&] (Tier tier, float force, float reverb)
     {
-        Rig r (EngineKind::vital, kSr, tier);
+        Rig r (EngineKind::own, kSr, tier);
         r.begin ({ { "reverb.on", reverb }, { "reverb.mix", 100.0f }, { "reverb.force_enable", force }, { "reverb.decay", 3000.0f } });
         return rmsDbOf (r.render (sc).l, at (1.0), at (1.9));
     };

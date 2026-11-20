@@ -1,6 +1,6 @@
 # Audio quality gates
 
-**History note (2026-11-21):** the Vital-derived engine and the tools that measured against it are removed (docs/plans/vital-removal.md): `core/engine-vital/tests` (the `test_vital_*` tests named below), `tools/param-audit` with `scripts/run-param-audit.sh` and `tools/ref-compare` with `scripts/run-ref-compare.sh` are gone from the tree (git history has them). Their last results stay in `docs/ui-design/PARAM-AUDIT-REPORT.md`, `param-audit-baseline*.json`, `REFCOMPARE-REPORT.md` and `refcompare-*.json`. The sections below that describe them are a record, not a procedure.
+**History note (2026-11-21):** the Vital-derived engine and the tools that measured against it are removed (docs/plans/vital-removal.md): `core/engine-vital/tests` (the `test_vital_*` tests named below), `tools/own-oracle` (the comparison with the Vital engine) are gone from the tree. `tools/param-audit` (`scripts/run-param-audit.sh`) and `tools/ref-compare` (`scripts/run-ref-compare.sh`) stay and run on the own engine only (no `--engine` option; the baseline is `docs/ui-design/param-audit-baseline-own.json`); numbers in the sections below that are the Vital engine's (`param-audit-baseline.json`, the `test_vital_*` tests) are a record.
 
 What the test suite measures about the sound of the Vital-derived engine through SynthyBoy's own parameter model, the numbers it
 measured, and the tolerance of every assertion. The tests are `core/engine-vital/tests/test_vital_audio.cpp`

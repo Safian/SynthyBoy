@@ -3,7 +3,7 @@
 #
 # Renders the real Serum 2 presets (tests/serum-presets/) through the installed Serum 2 plug-in (tools/serum-reference, macOS only, the plug-in is licensed software and is
 # never touched beyond loading it: a dialog or an authorization stops that preset and is recorded), imports them with our importer, renders the imported presets through the
-# Vital-derived engine with the same note script (tools/ref-compare/ref_render.cpp) and compares the pairs (tools/ref-compare/ref_compare.py: envelope, log-mel and multi-resolution
+# own engine with the same note script (tools/ref-compare/ref_render.cpp) and compares the pairs (tools/ref-compare/ref_compare.py: envelope, log-mel and multi-resolution
 # STFT distance, centroid / rolloff, f0 in cents, stereo, LUFS / peak, noise floor, tail) into a 0..100 score and a class (MATCH / CLOSE / DIFFERENT / FAILED).
 #
 # Usage: scripts/run-ref-compare.sh [options]

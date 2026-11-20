@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_ref_render --manifest FILE [--user-dir DIR] [--engine vital|own] [--tier low|medium|high] [--sr 48000]
+//   synthyboy_ref_render --manifest FILE [--user-dir DIR] [--tier low|medium|high] [--sr 48000]
 //
 // --user-dir: the directory that holds content/ (the importer's --content-dir is DIR/content).
 // The manifest has one render per line, tab separated: ID  PRESET.sbpreset  NOTES  LENGTH  OUT.wav  [OVERRIDES]
@@ -93,7 +93,7 @@ bool writeWav (const std::filesystem::path& p, const std::vector<float>& l, cons
 
 int main (int argc, char** argv)
 {
-    std::string manifest, contentDir, engineName = "vital", tierName = "high";
+    std::string manifest, contentDir, tierName = "high";
     int sr = 48000;
     for (int i = 1; i < argc; ++i)
     {
@@ -101,17 +101,16 @@ int main (int argc, char** argv)
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
         if (a == "--manifest") manifest = next();
         else if (a == "--user-dir" || a == "--content-dir") contentDir = next();
-        else if (a == "--engine") engineName = next();
         else if (a == "--tier") tierName = next();
         else if (a == "--sr") sr = std::atoi (next().c_str());
         else manifest.clear();
     }
     if (manifest.empty())
     {
-        std::fprintf (stderr, "usage: synthyboy_ref_render --manifest FILE [--user-dir DIR] [--engine vital|own] [--tier low|medium|high] [--sr 48000]\n");
+        std::fprintf (stderr, "usage: synthyboy_ref_render --manifest FILE [--user-dir DIR] [--tier low|medium|high] [--sr 48000]\n");
         return 2;
     }
-    const EngineKind kind = engineName == "own" ? EngineKind::own : EngineKind::vital;
+    const EngineKind kind = EngineKind::own; // the own engine is the only engine
     const Tier tier = tierName == "low" ? Tier::low : tierName == "medium" ? Tier::medium : Tier::high;
     const Quality q = qualityForTier (tier);
     std::unique_ptr<UserContentStore> store;   // the tables, samples and instruments the importer stored below <DIR>/content
