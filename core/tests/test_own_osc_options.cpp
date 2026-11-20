@@ -33,12 +33,15 @@ struct Note
     int at, off, key;   // sample of the note on, of the note off (-1: never), key
 };
 
+static float sRigVoiceCountAlpha = synthyboy::kVoiceCountAlphaDefault;
+
 struct Rig
 {
     std::unique_ptr<IEngine> e;
     Rig()
     {
         e = createOwnEngine();
+        synthyboy::setOwnVoiceCountAlpha (*e, sRigVoiceCountAlpha);
         e->setParam (kParamMasterPolyphony, 8.0f);
         e->prepare (kSr, kBlock, qualityForTier (Tier::high));
         set ("filter1.on", 0.0f);
@@ -174,6 +177,12 @@ constexpr uint64_t kGoldenSaw = 0xd2c89411914ab6a6ull, kGoldenPolyLegato = 0x327
 
 TEST (own_osc_options_defaults_keep_the_render_bit_identical)
 {
+    // The golden checksums were recorded before voice-count gain existed:
+    // set voice-count alpha to 0.0f so the multi-voice scenarios match alpha-less expectations.
+    struct ScopedAlpha {
+        ScopedAlpha() { sRigVoiceCountAlpha = 0.0f; }
+        ~ScopedAlpha() { sRigVoiceCountAlpha = synthyboy::kVoiceCountAlphaDefault; }
+    } scopedAlpha;
     if (std::getenv ("SB_PRINT_GOLDEN") != nullptr)
         std::printf ("golden saw %016llx polylegato %016llx untracked %016llx two %016llx ranges %016llx\n", static_cast<unsigned long long> (fnv (scenarioSaw())),
                  static_cast<unsigned long long> (fnv (scenarioPolyLegato())), static_cast<unsigned long long> (fnv (scenarioUntracked())),
@@ -302,6 +311,12 @@ TEST (own_osc_key_warp_keeps_an_oscillator_out_of_its_range_running_as_a_warp_so
 
 TEST (own_osc_phase_memory_contiguous_continues_with_the_phase_of_the_previous_note)
 {
+    // The test subtracts a single-note render from a two-note render:
+    // set voice-count alpha to 0.0f so the first voice is not attenuated in the two-note render.
+    struct ScopedAlpha {
+        ScopedAlpha() { sRigVoiceCountAlpha = 0.0f; }
+        ~ScopedAlpha() { sRigVoiceCountAlpha = synthyboy::kVoiceCountAlphaDefault; }
+    } scopedAlpha;
     const int t2 = 256 * 22;
     auto pair = [&] (int memory) {
         Rig r;

@@ -476,6 +476,8 @@ double lineAt (const std::vector<float>& x, double t0, double hz, size_t n = 480
 TEST (ownv_voice_control_steps_pan_and_detune_alternate_per_note)
 {
     auto e = make();
+    // The test compares multi-voice sums against alpha-less expectations (two sounding voices > 1.0):
+    synthyboy::setOwnVoiceCountAlpha (*e, 0.0f);
     sinePatch (*e);
     set (*e, "voicectl.length", 2);
     set (*e, "voicectl.s1.pan", 100);
@@ -487,6 +489,7 @@ TEST (ownv_voice_control_steps_pan_and_detune_alternate_per_note)
     CHECK (lineAt (o.right, 0.3, f2) < 0.05 && lineAt (o.left, 0.3, f2) > 1.0);   // step 2 pans left and detunes by a semitone
     // the mask: a target that is off ignores the step values
     auto e2 = make();
+    synthyboy::setOwnVoiceCountAlpha (*e2, 0.0f);
     sinePatch (*e2);
     set (*e2, "voicectl.s1.pan", 100);
     set (*e2, "voicectl.osc.a", 0);
