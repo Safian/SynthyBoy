@@ -1,10 +1,13 @@
-# Output level: the single source of truth (2026-11-19)
+# Output level: the single source of truth (2026-11-20)
 
 > **Összefoglaló a tulajdonosnak (magyarul).** Ez az egyetlen dokumentum, amely a kimeneti szintről szól; minden worker-megbízás erre hivatkozik, a régi jelentések nem érvényesek, ahol ellentmondanak.
-> **Mi a baj, mérve:** a telepített ov40 hangjai nem halkak, hanem túl hangosak és vágnak: akkordnál a csúcs a gazdasávon átlagosan +10,7 dBFS (156 a 160 presetből 0 fölé megy), egy hang +1,3 és +4,5 dBFS között. Az eszköz kimenete 0-nál vág, ezért hangzik laposnak/halknak; a Key 61 kijelzőjén a 0 fölötti halvány sáv ez. A gyári Akai hangszerek egy hangja −10…−12, négyhangos akkordja −4…−8 dBFS (az XL ugyanezt adja 0,5 dB-en belül).
-> **Eldöntött szabályok:** a gyáriakkal azonos szint és viselkedés; a shell kimenete egységerősítésű, a szint a presetben él; a limiter alapból KI van, nulla késleltetéssel, a LIMIT a felhasználó kapcsolója (preseten belül csak ott, ahol torzítás miatt kell); a preset azonnal használható, hangerővel nem kell bajlódni; nincs " *" a nevekben.
-> **Nyitott:** (1) a konkrét célszámok (egy hang, 4/6/8 hangú akkord csúcsa) a „teljes ütésnél a 0 közelében" és a „mint a gyári" összeegyeztetésére: az iparági szokás kutatása (g94) után; (2) Keys velocity-görbe; (3) akkord/hang csúcsarány (a miénk 9–10 dB, a gyárié 2–8 dB); (4) Pluck/Keys tartós szintje 20 dB-lel a gyári alatt (hangzástervezés); (5) a csúcsszabály alatt célt nem érő presetek; (6) az XL kimeneti/monitor hangerője nincs kiolvasva.
-> **Innen:** a E szakasz lépései, nincs új mérés, amíg ez a dokumentum nem tartalmazza a kérdéses szám lezáró mérését.
+> **A tulajdonos legújabb döntése (2026-11-20):**
+> 1. **Velocity tracking:** minden presetnél 100% (`master.velocity_track = 100.0`, lerp(1, v^2, t)). A korábbi Bass=5% és Lead=0% (amely két monofón gyári szintit másolt) miatt a pad-ütések és a Full Level mód halottnak tűnt; a 100% visszaállítja az élénk dinamikát.
+> 2. **Célszintek:** egy hang csúcsa teljes leütésnél (velocity 127) `T = -4.5 dBFS`, egységesen minden kategóriára. Ez felülírja a gyári készletek másolását (ahol a -9…-16 dBFS miatt a kivezérlésjelző csak a skála felét-kétharmadát mutatta).
+> 3. **Akkord korlát:** minden 4-, 6- és 8-hangos akkord (mindkét profilban, Key 61 és XL) maximum `-0.5 dBFS` lehet limiter nélkül.
+> 4. **Voice-count gain:** az engine beépített hangszám-erősítése `alpha = 0.5` (1/√n) csökkenti az akkordok torlódását, így limiter nélkül sem lépik túl a -0.5 dBFS-t.
+> 5. **Hangerő-számítás:** `d = min(T - note_peak, -0.5 - 0.05 - max_chord_peak)`, a `master.volume` [-60, +6] dB tartományán belül.
+> **Eredmények (160 preset mérése):** Egyetlen akkord sem lépi túl a -0.5 dBFS-t. A v127-v64 dinamikakülönbség mediánja 11.91 dB (~12 dB). Öt preset érte el a maximális +6 dB hangerőt, a többit a -0.55 dBFS akkordkorlát tartotta a cél közelében.
 
 Scope: the output level of the SynthyBoy MPC plugin and its desktop shells: what is decided, what is verified, what is refuted, what is open. If another document (listed in section F) disagrees with this one, this one wins.
 
@@ -16,12 +19,18 @@ Scope: the output level of the SynthyBoy MPC plugin and its desktop shells: what
 4. A preset is usable at once: no fiddling with the volume; a full-velocity hit reads near the top of the track meter and never enters the over-0 segment, 2026-11-19. The tension with rule 1 is open question D1.
 5. Follow the general plugin convention once researched (job g94, `docs/review/PRESET-LEVEL-CONVENTIONS-2026-11-19.md`), 2026-11-19.
 6. No " *" in any program name the host sees (branch `work/no-asterisk`), 2026-11-19.
+7. Simple top-level rule (the owner's latest decision, 2026-11-20; overrides rule 1 "same as stock" where they conflict):
+   - **Velocity tracking:** `master.velocity_track = 100.0` (%) for EVERY category and preset (engine law `lerp(1, v^2, t)`). Bass and Lead had 5% and 0% to copy monophonic stock synths, which made dynamic pad hits and Full Level look dead.
+   - **Target single-note peak:** `T = -4.5 dBFS` at velocity 127 across all categories (sits near the top of the track meter). Overrides rule 1: ov42 read only half to two-thirds of the meter because targets copied stock single-note levels (-9..-16 dBFS) and monophonic velocity tracks.
+   - **Full chord limit:** every 4-note (ours 36 48 55 60 and stock voicing 48 55 60 64), 6-note, and 8-note chord at velocity 127 at most `-0.5 dBFS` WITHOUT limiter, across both Key 61 and XL profiles.
+   - **Voice-count gain:** engine default voice-count scaling alpha = 0.5 (`G = n_eff ^ -0.5`), keeping polyphonic chords balanced without squashing or pumping.
+   - **Level change:** `d = min(T - note_peak, -0.5 - 0.05 - max_chord_peak)`, clamped to master.volume range [-60 .. +6] dB.
 
 ## B. Verified facts (each with its evidence)
 
 All device numbers: host track meter peak-hold readout, track fader 0.00 dB, master fader 0.00 dB, velocity as stated, note C3 (48) or the named chord, held about 4 s; the readout was reset by a tap before every run.
 
-**B1. Stock references (peak, dBFS; Key 61 device, 2026-11-19; pictures `.hw-local/mpc-perf/k61-shots/level-stock2-*`).**
+**B1. Stock references (REFERENCE ONLY, overridden by owner decision 2026-11-20; peak, dBFS; Key 61 device, 2026-11-19; pictures `.hw-local/mpc-perf/k61-shots/level-stock2-*`).**
 
 | kind (presets measured) | 1 note v127 | 4-note v127 | 1 note v100 | 4-note v100 | 6-note v127 |
 |---|---|---|---|---|---|
@@ -40,6 +49,18 @@ Hype "Almighty" (first reference): note −10.9, 4-note −6.5. Highest stock pe
 **B4. Engine facts.** The master knee is linear up to 1.8 and tanh toward 2.0 (`core/engine-own/dsp/master_stage.h`); the old limiter had ceiling −1 dBFS, zero attack, 120 ms release (rejected as squashing). Our 4-note chord peak sits about 9–10 dB above our single-note peak (all four voices start together, first crests add: up to +12 dB); the stock gap is 2–8 dB. Random oscillator phase does not cure it (gap 10.7 → 9.8 dB on ten presets). The XL runs the high profile (`profile: high,voices=16,control=economy`).
 
 **B5. Shared output stage (branch `work/loudness-fix`).** `core/include/synthyboy/output_stage.h`: make-up gain (shared constant), optional 3 ms look-ahead limiter (ceiling −0.5 dBFS), idle path bit exact. Cost: idle 0.07–0.4 µs per block on the Mac. Tests: `run_output_stage_test.sh`, `synthyboy_test_output_stage_presets`, `core/tests/test_output_stage.cpp`.
+
+**B6. Level table summary under the 2026-11-20 decision (`docs/release/OUTPUT-LEVEL-TABLE-2026-11-20.md`).**
+
+- Target single-note peak at velocity 127: `T = -4.50 dBFS`.
+- Chord peak ceiling: `<= -0.50 dBFS` without limiter.
+- Note peak v127: Key 61 median `-5.70 dBFS` (min -11.32, max -4.45); XL median `-5.09 dBFS` (min -11.32, max -4.45).
+- 4-note chord peak: median `-2.18 dBFS`, max `-0.51 dBFS`.
+- 6-note chord peak: median `-1.85 dBFS`, max `-0.51 dBFS`.
+- 8-note chord peak: median `-1.29 dBFS`, max `-0.50 dBFS`.
+- Over -0.50 dBFS: exactly 0 chords across all 160 presets and both profiles.
+- Velocity dynamics (v127 vs v64 diff): median `+11.91 dB` (~12 dB expected from v^2 law with track 100%).
+- Presets reaching master.volume max (+6.0 dB): 5 presets (Bode Barber Riser, Diode Bite Lead, Diode Saturated Bass, Rising Grain Riser, Spectral Gong Pad).
 
 ## C. Refuted or corrected claims (do not reuse)
 
