@@ -1123,3 +1123,168 @@ TEST (serum_ladder_cutoff_t5_96khz)
     CHECK (finite);
     CHECK (peak < 8.0f);
 }
+
+// =============================================================================
+// Diode ladder probe (docs/plans/diode-ladder.md, task Z1): records what the
+// serum DiodeLadder (AcidLadder) does BEFORE its change. Prints only; no
+// numeric assertion, so it passes on both sides of the change.
+// =============================================================================
+
+namespace
+{
+
+/** Impulse response of 4096 samples (1e-3 impulse, divided by 1e-3), as findCornerFrequency measures it. */
+static std::vector<float> diodeProbeImpulse (Filter& filter)
+{
+    filter.reset();
+    constexpr int kIrLen = 4096;
+    std::vector<float> ir (kIrLen, 0.0f);
+    for (int i = 0; i < kIrLen; ++i)
+        ir[i] = filter.process (i == 0 ? 1.0e-3f : 0.0f) / 1.0e-3f;
+    return ir;
+}
+
+} // namespace
+
+TEST (serum_diode_probe_before_change)
+{
+    const FilterType type = FilterType::AcidLadder;
+
+    // (a) -3 dB corner at resonance 0.
+    struct CornerRow
+    {
+        double sr;
+        float fc;
+    };
+    const CornerRow cornerRows[] = {
+        { 44100.0, 1000.0f }, { 44100.0, 4000.0f }, { 44100.0, 8000.0f }, { 44100.0, 10000.0f },
+        { 44100.0, 12000.0f }, { 44100.0, 16000.0f }, { 44100.0, 19000.0f }, { 44100.0, 21000.0f },
+        { 96000.0, 16000.0f }, { 96000.0, 24000.0f }, { 96000.0, 36000.0f }, { 96000.0, 42000.0f },
+    };
+    for (const auto& row : cornerRows)
+    {
+        Filter filter;
+        filter.prepare (row.sr);
+        filter.setType (static_cast<int> (type));
+        FilterParams p;
+        p.cutoff = row.fc;
+        p.resonance = 0.0f;
+        p.drive = 0.0f;
+        p.var = 0.0f;
+        p.blend = 0.0f;
+        p.mix = 1.0f;
+        filter.setParams (p);
+        const double f3db = findCornerFrequency (filter, row.sr);
+        std::printf ("DIODE-CORNER sr=%.0f fc=%.0f f3db=%.1f\n", row.sr, static_cast<double> (row.fc), f3db);
+    }
+
+    // (b) peak of the magnitude response, 50 Hz to 0.45 sr in 5 Hz steps, dB re the DC sum.
+    {
+        const double sr = 44100.0;
+        const float peakCutoffs[] = { 1000.0f, 2000.0f, 5000.0f, 10000.0f, 15000.0f };
+        const float peakRes[] = { 0.5f, 0.8f, 1.0f };
+        for (float fc : peakCutoffs)
+        {
+            for (float r : peakRes)
+            {
+                Filter filter;
+                filter.prepare (sr);
+                filter.setType (static_cast<int> (type));
+                FilterParams p;
+                p.cutoff = fc;
+                p.resonance = r;
+                p.drive = 0.0f;
+                p.var = 0.0f;
+                p.blend = 0.0f;
+                p.mix = 1.0f;
+                filter.setParams (p);
+                const std::vector<float> ir = diodeProbeImpulse (filter);
+                const int n = static_cast<int> (ir.size());
+
+                double dcGain = 0.0;
+                for (int i = 0; i < n; ++i)
+                    dcGain += ir[i];
+                const double dcAbs = std::max (std::fabs (dcGain), 1.0e-30);
+
+                double bestMag = 0.0, bestHz = 0.0;
+                for (double hz = 50.0; hz <= 0.45 * sr; hz += 5.0)
+                {
+                    double re = 0.0, im = 0.0;
+                    const double omega = 2.0 * 3.14159265358979323846 * hz / sr;
+                    for (int i = 0; i < n; ++i)
+                    {
+                        re += ir[i] * std::cos (omega * i);
+                        im -= ir[i] * std::sin (omega * i);
+                    }
+                    const double mag = std::sqrt (re * re + im * im);
+                    if (mag > bestMag)
+                    {
+                        bestMag = mag;
+                        bestHz = hz;
+                    }
+                }
+                const double peakDb = 20.0 * std::log10 (std::max (bestMag, 1.0e-30) / dcAbs);
+                std::printf ("DIODE-PEAK sr=44100 fc=%.0f res=%.1f peakHz=%.1f peakDb=%.3f\n",
+                             static_cast<double> (fc), static_cast<double> (r), bestHz, peakDb);
+            }
+        }
+    }
+
+    // (c) checksums of 1 s of the 130.8128 Hz saw of T2.
+    {
+        const double sr = 44100.0;
+        std::vector<float> inputSaw (44100);
+        float phase = 0.0f;
+        const float phaseInc = 130.8128f / 44100.0f;
+        for (size_t i = 0; i < 44100; ++i)
+        {
+            inputSaw[i] = 2.0f * phase - 1.0f;
+            phase += phaseInc;
+            if (phase >= 1.0f)
+                phase -= 1.0f;
+        }
+
+        const float sumCutoffs[] = { 500.0f, 2000.0f, 5000.0f, 8000.0f, 10000.0f };
+        const float sumRes[] = { 0.0f, 0.5f, 1.0f };
+        const float sumDrive[] = { 0.0f, 1.0f };
+        for (float fc : sumCutoffs)
+        {
+            for (float r : sumRes)
+            {
+                for (float d : sumDrive)
+                {
+                    Filter filter;
+                    filter.prepare (sr);
+                    filter.setType (static_cast<int> (type));
+                    FilterParams p;
+                    p.cutoff = fc;
+                    p.resonance = r;
+                    p.drive = d;
+                    p.var = 0.0f;
+                    p.blend = 0.0f;
+                    p.mix = 1.0f;
+                    filter.setParams (p);
+                    filter.reset();
+
+                    double sumAbs = 0.0;
+                    float last8[8] = { 0 };
+                    for (size_t i = 0; i < 44100; ++i)
+                    {
+                        const float y = filter.process (inputSaw[i]);
+                        sumAbs += std::fabs (static_cast<double> (y));
+                        if (i >= 44100 - 8)
+                            last8[i - (44100 - 8)] = y;
+                    }
+                    std::printf ("DIODE-CHECKSUM fc=%.0f res=%.1f drive=%.0f sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                                 static_cast<double> (fc), static_cast<double> (r), static_cast<double> (d), sumAbs,
+                                 static_cast<double> (last8[0]), static_cast<double> (last8[1]),
+                                 static_cast<double> (last8[2]), static_cast<double> (last8[3]),
+                                 static_cast<double> (last8[4]), static_cast<double> (last8[5]),
+                                 static_cast<double> (last8[6]), static_cast<double> (last8[7]));
+                }
+            }
+        }
+    }
+
+    CHECK (true);
+}
