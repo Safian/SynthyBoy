@@ -55,5 +55,11 @@
   "Pluck": -7,
   "FX": -6
  },
- "notes": "Key 61 host track meter, Hype + 9 stock presets (report add671aa). Bass/Lead refs are MONOPHONIC plugins: chord targets there are conservative judgement (-7/-8), not measured. FX has no stock measurement: interpolated. Stock never exceeded -3 dBFS with 6-note v127 chord, no limiter proven; sustain values are approximate live-bar readings. Velocity: bass/lead insensitive; pianos/plucks/strings drop 5-9 dB v127->v100."
+ "top_rule": {
+  "target_note_v127": -4.5,
+  "limit_chord_v127": -0.5,
+  "margin_db": 0.05,
+  "notes": "Owner decision 2026-11-20 (overrides per-category stock targets): target single-note peak at velocity 127 T = -4.5 dBFS for all categories; chords (4, 6, 8 notes at velocity 127, both profiles) at most -0.5 dBFS without limiter."
+ },
+ "notes": "REFERENCE ONLY (overridden by top_rule, 2026-11-20): Key 61 host track meter, Hype + 9 stock presets (report add671aa). Bass/Lead refs are MONOPHONIC plugins: chord targets there are conservative judgement (-7/-8), not measured. FX has no stock measurement: interpolated. Stock never exceeded -3 dBFS with 6-note v127 chord, no limiter proven; sustain values are approximate live-bar readings. Velocity: bass/lead insensitive; pianos/plucks/strings drop 5-9 dB v127->v100."
 }

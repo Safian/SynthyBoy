@@ -88,6 +88,22 @@ LIMITER_ON = False
 POLY_ALPHA = 0.0   # the polyphony gain prototype (simulate only): a chord of n notes scaled by n ** -POLY_ALPHA
 
 
+# The owner's simple level rule set (his latest decision 2026-11-20; overrides stock targets):
+# Measured with engine default (voice-count alpha 0.5, make-up gain 0, limiter off).
+# Target single-note peak at velocity 127: T = -4.5 dBFS (SAME for all categories).
+# Chords: 4-note (stock voicing 48 55 60 64 and ours 36 48 55 60), 6-note and 8-note at velocity 127, both profiles (Key 61 and XL).
+# d = min(T - note_peak, -0.5 - 0.05 - max_chord_peak over all those chords and both profiles).
+TOP_TARGET_T = -4.5
+TOP_CHORD_LIMIT = -0.55  # -0.5 - 0.05: hottest level where every full chord stays <= -0.5 dBFS without limiter
+TOP_CHORDS = ("chord_v127", "chordS_v127", "chord6_v127", "chord8_v127")
+
+
+def top_change(p):
+    note_peak = max(p[prof]["note_v127"]["pre"] for prof in PROFILES)
+    max_chord_peak = max(p[prof][g]["pre"] for prof in PROFILES for g in TOP_CHORDS)
+    return min(TOP_TARGET_T - note_peak, TOP_CHORD_LIMIT - max_chord_peak)
+
+
 def errors(p, targets, gain=None):
     """The weighted dB errors (measured - target) of the objective: note peak v127, note sustained v127, sustained of the stock-voiced chord v127, on both profiles.
     `gain` re-bases the peaks to another make-up gain (the sustained levels move with it 1:1 too). Returns [(weight, error)]."""
@@ -208,13 +224,23 @@ def cmd_solve(a):
             if p is None:
                 new[n] = v
                 continue
-            d = constrained_change(p, targets, gates.get(n))
+            if getattr(a, "rule", "stock") == "top":
+                d = top_change(p)
+            else:
+                d = constrained_change(p, targets, gates.get(n))
             # a preset whose peaks do not follow master.volume 1:1 (an effect after the volume that depends on the level): the slope seen in the last round scales the step
             if prev is not None and n in prev and abs(applied.get(n, 0.0)) >= 0.3:
                 seen = st.mean(p[x]["note_v127"]["pre"] - prev[n][x]["note_v127"]["pre"] for x in PROFILES)
                 slope = min(1.5, max(0.3, seen / applied[n]))
                 d = d / slope
-            nv = round(min(VOLUME_MAX, max(VOLUME_MIN, v + d)), 1)
+            raw_vol = v + d
+            if raw_vol > VOLUME_MAX:
+                missing = raw_vol - VOLUME_MAX
+                note_pk = max(p[prof]["note_v127"]["pre"] for prof in PROFILES)
+                note_reached = note_pk + (VOLUME_MAX - v)
+                print("  [volume range exceeded] '%s': needed master.volume %+.2f dB (> %+.1f dB, missing %.2f dB); note peak reaches %+.2f dBFS instead of %+.1f dBFS" % (
+                    n, raw_vol, VOLUME_MAX, missing, note_reached, TOP_TARGET_T))
+            nv = round(min(VOLUME_MAX, max(VOLUME_MIN, raw_vol)), 1)
             applied[n] = nv - v
             moved = max(moved, abs(nv - v))
             new[n] = nv
@@ -374,6 +400,119 @@ def cmd_report(a):
     print(text)
 
 
+def cmd_table(a):
+    rows = read_measure(a.measure)
+    ps = by_preset(rows)
+    levels = current_levels()
+    L = []
+    w = L.append
+    w("# Factory Preset Output Level Table (2026-11-20)")
+    w("")
+    w("The owner's latest simple level rule (2026-11-20):")
+    w("- Engine default: voice-count alpha 0.5, make-up gain 0 dB, limiter OFF.")
+    w("- Target single-note peak at velocity 127: T = -4.5 dBFS across all categories.")
+    w("- Full chords (4-note stock and ours, 6-note, 8-note at velocity 127) at most -0.5 dBFS without limiter.")
+    w("- master.volume change d = min(T - note_peak, -0.5 - 0.05 - max_chord_peak).")
+    w("- Velocity tracking = 100% for all presets (engine law lerp(1, v^2, t)).")
+    w("")
+    w("| Category | Preset | Note Peak v127 (K61) | Note Peak v127 (XL) | 4-Note Chord Peak | 6-Note Chord Peak | 8-Note Chord Peak | v127 - v64 Diff | master.volume | Flag |")
+    w("|---|---|---|---|---|---|---|---|---|---|")
+
+    col_note_low = []
+    col_note_xl = []
+    col_chord4 = []
+    col_chord6 = []
+    col_chord8 = []
+    col_vdiff = []
+    col_vol = []
+    outside_vdiff = []
+    miss_t_list = []
+    chords_over_limit = []
+
+    for n in sorted(ps.keys(), key=lambda x: (ps[x]["category"], x)):
+        p = ps[n]
+        cat = p["category"]
+        vol = levels.get(n, 0.0)
+        n_low = p["low"]["note_v127"]["post"]
+        n_xl = p["xl"]["note_v127"]["post"]
+        c4 = max(p[x][g]["post"] for x in PROFILES for g in ("chord_v127", "chordS_v127"))
+        c6 = max(p[x]["chord6_v127"]["post"] for x in PROFILES)
+        c8 = max(p[x]["chord8_v127"]["post"] for x in PROFILES)
+        v64 = p["low"]["note_v64"]["post"] if "note_v64" in p["low"] else (p["low"]["note_v100"]["post"] + 12.0)
+        vdiff = n_low - v64
+
+        col_note_low.append(n_low)
+        col_note_xl.append(n_xl)
+        col_chord4.append(c4)
+        col_chord6.append(c6)
+        col_chord8.append(c8)
+        col_vdiff.append(vdiff)
+        col_vol.append(vol)
+
+        if not (10.0 <= vdiff <= 14.0):
+            outside_vdiff.append((n, vdiff))
+
+        max_chord = max(c4, c6, c8)
+        if max_chord > -0.5:
+            chords_over_limit.append((n, max_chord))
+
+        flag = "-"
+        note_max = max(n_low, n_xl)
+        if note_max < TOP_TARGET_T - 0.1:  # misses T (-4.5 dBFS)
+            if vol >= VOLUME_MAX - 0.05:
+                flag = "MAX_VOL"
+                miss_t_list.append((n, cat, note_max, "hit master.volume max (+6 dB)"))
+            elif max_chord >= -0.55 - 0.1:
+                flag = "CHORD_LIMIT"
+                miss_t_list.append((n, cat, note_max, "chord peak limit (-0.55 dBFS)"))
+            else:
+                flag = "MISS_T"
+                miss_t_list.append((n, cat, note_max, "below target"))
+
+        w("| %s | %s | %+.2f | %+.2f | %+.2f | %+.2f | %+.2f | %+.2f | %+.1f | %s |" % (
+            cat, n, n_low, n_xl, c4, c6, c8, vdiff, vol, flag))
+
+    w("")
+    w("## Summary Statistics (all %d presets)" % len(ps))
+    w("")
+    w("| Metric | Median | Min | Max | Target / Window |")
+    w("|---|---|---|---|---|")
+    w("| Note Peak v127 (Key 61) | %+.2f dBFS | %+.2f dBFS | %+.2f dBFS | -4.50 dBFS |" % (st.median(col_note_low), min(col_note_low), max(col_note_low)))
+    w("| Note Peak v127 (XL) | %+.2f dBFS | %+.2f dBFS | %+.2f dBFS | -4.50 dBFS |" % (st.median(col_note_xl), min(col_note_xl), max(col_note_xl)))
+    w("| 4-Note Chord Peak | %+.2f dBFS | %+.2f dBFS | %+.2f dBFS | <= -0.50 dBFS |" % (st.median(col_chord4), min(col_chord4), max(col_chord4)))
+    w("| 6-Note Chord Peak | %+.2f dBFS | %+.2f dBFS | %+.2f dBFS | <= -0.50 dBFS |" % (st.median(col_chord6), min(col_chord6), max(col_chord6)))
+    w("| 8-Note Chord Peak | %+.2f dBFS | %+.2f dBFS | %+.2f dBFS | <= -0.50 dBFS |" % (st.median(col_chord8), min(col_chord8), max(col_chord8)))
+    w("| v127 - v64 Level Diff | %+.2f dB | %+.2f dB | %+.2f dB | ~12 dB (window 10..14 dB) |" % (st.median(col_vdiff), min(col_vdiff), max(col_vdiff)))
+    w("| master.volume | %+.1f dB | %+.1f dB | %+.1f dB | [-60 .. +6] dB |" % (st.median(col_vol), min(col_vol), max(col_vol)))
+    w("")
+    w("### Chord Peak Verification")
+    w("- Chords over -0.5 dBFS: %d" % len(chords_over_limit))
+    if chords_over_limit:
+        for n, pk in chords_over_limit:
+            w("  - FAIL: %s chord peak %+.2f dBFS > -0.5 dBFS" % (n, pk))
+    else:
+        w("- PASS: Every 4/6/8-note chord across both profiles stays <= -0.5 dBFS.")
+    w("")
+    w("### Velocity Dynamics Verification (v127 vs v64)")
+    w("- Median difference: %+.2f dB (expected ~12 dB with velocity_track 100 %%)" % st.median(col_vdiff))
+    w("- Presets outside 10..14 dB window: %d" % len(outside_vdiff))
+    for n, d in outside_vdiff:
+        w("  - %s: %+.2f dB" % (n, d))
+    w("")
+    w("### Presets Missing Target T = -4.5 dBFS (%d presets)" % len(miss_t_list))
+    for n, cat, pk, reason in miss_t_list:
+        w("- %s (%s): reached %+.2f dBFS (missing %.2f dB; reason: %s)" % (n, cat, pk, TOP_TARGET_T - pk, reason))
+    w("")
+    text = "\n".join(L) + "\n"
+    if a.out:
+        os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+        with open(a.out, "w", encoding="utf-8") as f:
+            f.write(text)
+    print("Table written with %d presets to %s." % (len(ps), a.out if a.out else "stdout"))
+    print("Median v127-v64 diff: %.2f dB; outside 10..14 dB: %d" % (st.median(col_vdiff), len(outside_vdiff)))
+    print("Chords over -0.5 dBFS: %d; Presets missing T: %d" % (len(chords_over_limit), len(miss_t_list)))
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -385,10 +524,13 @@ def main():
     s.add_argument("--probe", required=True); s.add_argument("--content-dir", required=True); s.add_argument("--gain", type=float, required=True)
     s.add_argument("--targets", default=TARGETS_PATH); s.add_argument("--rounds", type=int, default=3); s.add_argument("--work", default="level-to-stock-work")
     s.add_argument("--gate", help="synthyboy_preset_render: its raw peaks (every tier) are kept under +2.85 dBFS so the preset gate passes")
+    s.add_argument("--rule", choices=["stock", "top"], default="stock", help="top: owner's 2026-11-20 level rule (T=-4.5 dBFS, chords <= -0.5 dBFS)")
     sm = sub.add_parser("simulate")
     sm.add_argument("--measure", required=True); sm.add_argument("--targets", default=TARGETS_PATH); sm.add_argument("--alphas", type=float, nargs="+", default=[0.0, 0.25, 0.5])
     r = sub.add_parser("report")
     r.add_argument("--measure", required=True); r.add_argument("--before"); r.add_argument("--targets", default=TARGETS_PATH); r.add_argument("--md")
+    t = sub.add_parser("table")
+    t.add_argument("--measure", required=True); t.add_argument("--out")
     a = ap.parse_args()
     if a.cmd == "measure":
         measure(a.probe, a.content_dir, a.gain, a.out)
@@ -398,8 +540,10 @@ def main():
         cmd_solve(a)
     elif a.cmd == "simulate":
         cmd_simulate(a)
-    else:
+    elif a.cmd == "report":
         cmd_report(a)
+    else:
+        cmd_table(a)
 
 
 if __name__ == "__main__":

@@ -244,7 +244,7 @@ int main (int argc, char** argv)
         if (e.is_regular_file() && e.path().extension() == ".sbpreset" && e.path().string().find (filter) != std::string::npos)
             files.push_back (e.path());
     std::sort (files.begin(), files.end());
-    const Gesture gestures[] = { { "note_v127", note, 1.0f }, { "note_v100", note, 100.0f / 127.0f }, { "chord_v127", chord, 1.0f }, { "chord_v100", chord, 100.0f / 127.0f },
+    const Gesture gestures[] = { { "note_v127", note, 1.0f }, { "note_v100", note, 100.0f / 127.0f }, { "note_v64", note, 64.0f / 127.0f }, { "chord_v127", chord, 1.0f }, { "chord_v100", chord, 100.0f / 127.0f },
                                  { "chord6_v127", chord6, 1.0f }, { "chord8_v127", chord8, 1.0f },
                                  { "chordS_v127", chordS, 1.0f }, { "chordS_v100", chordS, 100.0f / 127.0f } };
     for (const auto& f : files)
