@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "dsp/helper_thread.h"
+#include "osc/wavetable_bank.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/helper_thread_hook.h"
 #include "synthyboy/params.h"
@@ -295,4 +296,101 @@ TEST (wake_signal_checksum_of_an_offline_distortion_render)
             }
     }
     std::printf ("WAKE-SIGNAL-CHECKSUM %016llx\n", static_cast<unsigned long long> (h));
+}
+
+namespace
+{
+std::atomic<unsigned> gSeenNames { 0 };   // bit 0 "sb-fx-build", bit 1 "sb-wt-build"
+std::atomic<std::thread::id> gWtThread;
+void maskHook (const char* name)
+{
+    if (std::strcmp (name, "sb-fx-build") == 0)
+        gSeenNames.fetch_or (1u);
+    else if (std::strcmp (name, "sb-wt-build") == 0)
+    {
+        gWtThread.store (std::this_thread::get_id());
+        gSeenNames.fetch_or (2u);
+    }
+}
+} // namespace
+
+// The wavetable bank's builder thread calls the start hook first thing (scheduling class and cores of the shell), like the effect builder: without it the thread inherits the audio thread's policy.
+TEST (wavetable_bank_builder_thread_starts_with_the_hook)
+{
+    own::resetBuiltinBankForTests();
+    gSeenNames.store (0);
+    gWtThread.store (std::thread::id());
+    setHelperThreadStartHook (&maskHook);
+    {
+        auto e = createOwnEngine();
+        Quality q;
+        q.realtime = true;
+        q.lazyTables = true;
+        e->prepare (48000.0, 128, q);   // starts the bank's builder thread
+        std::this_thread::sleep_for (milliseconds (20));
+    }                                   // stops and joins it
+    setHelperThreadStartHook (nullptr);
+    CHECK ((gSeenNames.load() & 2u) != 0u);
+    CHECK (gWtThread.load() != std::this_thread::get_id());
+    CHECK (gWtThread.load() != std::thread::id());
+}
+
+// Two engines ask for different tables with the same request slot number: both tables are built (the requests of different instances do not overwrite each other).
+TEST (wavetable_bank_requests_of_two_instances_with_the_same_slot_are_both_built)
+{
+    own::resetBuiltinBankForTests();
+    own::setBuiltinBuilderPausedForTests (true);
+    own::startBuiltinBankBackground();
+    own::requestBuiltinWavetable (0, 5);   // instance A
+    own::requestBuiltinWavetable (0, 6);   // instance B, the same slot
+    own::setBuiltinBuilderPausedForTests (false);
+    bool both = false;
+    for (int i = 0; i < 4000 && ! both; ++i)   // bounded wait (20 s)
+    {
+        both = own::builtinWavetableIfReady (5) != nullptr && own::builtinWavetableIfReady (6) != nullptr;
+        if (! both)
+            std::this_thread::sleep_for (milliseconds (5));
+    }
+    own::stopBuiltinBankBackground();
+    CHECK (both);
+    CHECK (own::builtinWavetableIfReady (5) != nullptr);
+    CHECK (own::builtinWavetableIfReady (6) != nullptr);
+}
+
+// The sound does not change: 256 frames of table 5 and of table 6 (all tables built offline) give the same bits as before the change (the build worker compares the printed line with the one of the old code).
+TEST (wavetable_bank_checksum_of_two_morph_tables)
+{
+    uint64_t h = 1469598103934665603ull;
+    for (float table : { 5.0f, 6.0f })
+    {
+        own::resetBuiltinBankForTests();
+        auto e = createOwnEngine();
+        setKey (*e, "osc2.on", 0.0f);
+        setKey (*e, "filter1.on", 0.0f);
+        setKey (*e, "osc1.wavetable", table);
+        Quality q;
+        q.realtime = false;
+        e->prepare (48000.0, 128, q);   // offline: ensureAllBuiltinWavetables
+        e->readyContent();
+        std::vector<float> l (128), r (128);
+        for (int blk = 0; blk < 2; ++blk)
+        {
+            std::vector<Event> ev;
+            if (blk == 0)
+                ev.push_back (sbtest::noteOn (0, 48));
+            e->process (ev.data(), static_cast<int> (ev.size()), l.data(), r.data(), 128);
+            for (const auto* v : { &l, &r })
+                for (float f : *v)
+                {
+                    uint32_t bits = 0;
+                    std::memcpy (&bits, &f, sizeof bits);
+                    for (int b = 0; b < 4; ++b)
+                    {
+                        h ^= (bits >> (8 * b)) & 0xffu;
+                        h *= 1099511628211ull;
+                    }
+                }
+        }
+    }
+    std::printf ("WT-BANK-CHECKSUM %016llx\n", static_cast<unsigned long long> (h));
 }

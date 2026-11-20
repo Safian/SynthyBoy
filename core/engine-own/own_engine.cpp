@@ -93,7 +93,7 @@ bool setOwnPadPressureToCutoff (IEngine& engine, float amount01) noexcept
 
 namespace own
 {
-OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable"))), fxOversampleIndex (findParamIndex (hashKey ("quality.oversample_4x"))), noSmoothingIndex (findParamIndex (hashKey ("quality.no_smoothing")))
+OwnEngine::OwnEngine() : fxReverbForceIndex (findParamIndex (hashKey ("reverb.force_enable"))), fxOversampleIndex (findParamIndex (hashKey ("quality.oversample_4x"))), noSmoothingIndex (findParamIndex (hashKey ("quality.no_smoothing"))), convolveOnIndex (findParamIndex (hashKey ("convolve.on")))
 {
     for (int k = 0; k < 128; ++k)
         tunedNotes[k] = static_cast<float> (k);
@@ -390,7 +390,6 @@ void OwnEngine::prepare (double newSampleRate, int maxBlockFrames, const Quality
 {
     sampleRate = newSampleRate > 0.0 ? newSampleRate : 44100.0;
     setQuality (quality);
-    scratchRight.assign (static_cast<size_t> (std::max (maxBlockFrames, 4096)), 0.0f);
     // The built-in tables (allocates, FFTs: not on the audio thread). Offline (tests, renders) and every shell that does not ask for lazyTables: all of them here, as always. Lazy (the MPC shell): the one cycle
     // tables (a few ms) and the tables the current parameters name are built here; any other table is built when it is first chosen, by a low priority thread that takes the latest request of each
     // oscillator (docs/MPC.md "Start-up time"). Until it is ready the oscillator keeps playing the table it had (see wtHeld, below).
@@ -1343,21 +1342,13 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     if (left == nullptr || numFrames <= 0)
         return;
     std::fill (left, left + numFrames, 0.0f);
-    float* rightOut = right;
     if (!prepared)
     {
         if (right != nullptr)
             std::fill (right, right + numFrames, 0.0f);
         return;
     }
-    // right may be null (mono output): render into a scratch right channel that is dropped. The scratch is a member to avoid allocation.
-    if (rightOut == nullptr)
-    {
-        if (static_cast<int> (scratchRight.size()) < numFrames)
-            scratchRight.assign (static_cast<size_t> (numFrames), 0.0f); // a block larger than prepare () announced: grows once
-        rightOut = scratchRight.data();
-    }
-    std::fill (rightOut, rightOut + numFrames, 0.0f);
+    // right may be null (mono output): every 32 frame chunk below renders its right channel into a small stack buffer and folds it into left (no allocation, any block size). A given right is written chunk by chunk.
     std::fill (std::begin (stripBlockPeak), std::end (stripBlockPeak), 0.0f);   // the meters of this block start from nothing
     lastBlockFrames = numFrames;
     {
@@ -1799,8 +1790,10 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         if (!mainBypass)
             fx[0].process (mixL[0], mixR[0], n, controlPos);
         dlMainOut.process (mixL[0], mixR[0], n);
+        float monoRight[kControlPeriod];   // n <= kControlPeriod: the right channel of a mono output, dropped after the fold below
+        float* const chunkRight = right != nullptr ? right + pos : monoRight;
         std::copy (mixL[0], mixL[0] + n, left + pos);
-        std::copy (mixR[0], mixR[0] + n, rightOut + pos);
+        std::copy (mixR[0], mixR[0] + n, chunkRight);
         {
             // master volume (smoothed), stereo routing, Direct (past every rack and the routing, scaled by its own level), the master volume on everything that reaches the output, the Direct sum included
             // (it did not before: a Direct source ignored master.volume), and the safety stage: dsp/master_stage.h (the same samples as the per sample loop it replaced)
@@ -1811,9 +1804,12 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             mp.directNow = directGain;
             mp.controlPos = controlPos;
             mp.clipped = &blockClipped;
-            master::stage (left + pos, rightOut + pos, mixL[3], mixR[3], end - pos, mp, smoothedGain);
+            master::stage (left + pos, chunkRight, mixL[3], mixR[3], end - pos, mp, smoothedGain);
         }
-        stripBlockPeak[9] = std::max (stripBlockPeak[9], peak::peakAbsPair (left + pos, rightOut + pos, end - pos));   // Master: what leaves the engine
+        stripBlockPeak[9] = std::max (stripBlockPeak[9], peak::peakAbsPair (left + pos, chunkRight, end - pos));   // Master: what leaves the engine
+        if (right == nullptr)
+            for (int i = 0; i < n; ++i)
+                left[pos + i] = 0.5f * (left[pos + i] + monoRight[i]);
         controlPos = (controlPos + n) % kControlPeriod;
         pos = end;
     }
@@ -1821,10 +1817,6 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         clipFlag.store (true, std::memory_order_relaxed);
     while (ei < numEvents)
         handleEvent (events[ei++]);
-
-    if (right == nullptr)
-        for (int i = 0; i < numFrames; ++i)
-            left[i] = 0.5f * (left[i] + rightOut[i]);
 
     killExcess(); // the overflow of the Kill mode is resolved before the count is reported
     int count = 0;
@@ -1865,8 +1857,7 @@ void OwnEngine::publishStats() noexcept
             if (base[static_cast<size_t> (pi.osc[o].on)] >= 0.5f && base[static_cast<size_t> (pi.osc[o].type)] < 0.5f
                 && static_cast<int> (base[static_cast<size_t> (pi.osc[o].wavetable)] + 0.5f) == kWavetablePresetTable && (cs == nullptr || cs->userTable[o] == nullptr))
                 miss |= 8u << o;
-        static const int convolveOn = findParamIndex (hashKey ("convolve.on"));
-        if (convolveOn >= 0 && base[static_cast<size_t> (convolveOn)] >= 0.5f && (cs == nullptr || cs->impulse == nullptr))
+        if (convolveOnIndex >= 0 && base[static_cast<size_t> (convolveOnIndex)] >= 0.5f && (cs == nullptr || cs->impulse == nullptr))
             miss |= 64u;
     }
     missingMask.store (miss, std::memory_order_relaxed);

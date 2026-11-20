@@ -280,7 +280,7 @@ private:
     const int fxReverbForceIndex;
     const int fxOversampleIndex;
     const int noSmoothingIndex;
-    std::vector<float> scratchRight;
+    const int convolveOnIndex;   // "convolve.on" (publishStats: no function-local static on the audio thread)
 };
 } // namespace own
 } // namespace synthyboy

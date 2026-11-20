@@ -19,6 +19,7 @@
 #include <unistd.h>
 #endif
 
+#include "../dsp/helper_thread.h"
 #include "../dsp/util.h"
 #include "synthyboy/params.h"
 
@@ -370,7 +371,8 @@ struct Bank
     std::atomic<const Wavetable*> ready[kBankSlots];
     std::atomic<int> state[kBankSlots];   // 0 not built, 1 being built, 2 built, 3 failed (allocation): never tried again
     std::unique_ptr<Wavetable> owned[kBankSlots];
-    std::atomic<int> latest[kRequestSlots];   // the table each slot wants now, -1 none
+    std::atomic<uint32_t> wantedMask { 0u };   // bit c: table c was requested and is not built yet (any number of engines: requests are OR-ed, never overwritten)
+    WakeSignal wake;                           // the background thread sleeps on it (no timeout): a request, an unpause and stop wake it
     std::atomic<long long> buildUs { 0 };
     std::mutex workerMutex;
     std::thread worker;
@@ -385,12 +387,11 @@ struct Bank
             ready[c].store (nullptr, std::memory_order_relaxed);
             state[c].store (0, std::memory_order_relaxed);
         }
-        for (auto& l : latest)
-            l.store (-1, std::memory_order_relaxed);
     }
     ~Bank()
     {
-        stop.store (true, std::memory_order_relaxed);
+        stop.store (true, std::memory_order_release);
+        wake.notify();
         if (worker.joinable())
             worker.join();   // at most one frame of the table it is making
     }
@@ -469,31 +470,38 @@ struct Bank
             t.join();
     }
 
-    /** The background thread: builds the latest request of every slot that is not built yet, then sleeps. Low priority: it must not take the cores from the audio threads. */
+    /** The background thread: builds the tables that were requested and are not built yet, then sleeps on the wake signal (no timeout, no polling). Low priority: it must not take the cores from the audio threads. */
     void run() noexcept
     {
+        runHelperThreadStartHook ("sb-wt-build");   // first: the shell's policy (scheduling class, cores) before anything else
 #if defined(__linux__)
         ::setpriority (PRIO_PROCESS, static_cast<id_t> (::syscall (SYS_gettid)), 10);
 #endif
-        while (! stop.load (std::memory_order_relaxed))
+        while (! stop.load (std::memory_order_acquire))
         {
-            bool worked = false;
-            if (paused.load (std::memory_order_relaxed))
+            if (paused.load (std::memory_order_acquire))
             {
-                std::this_thread::sleep_for (std::chrono::milliseconds (5));
+                wake.wait();   // the unpause (or stop) wakes it; the requests stay in wantedMask
                 continue;
             }
-            for (int k = 0; k < kRequestSlots && ! stop.load (std::memory_order_relaxed); ++k)
+            uint32_t mask = wantedMask.exchange (0u, std::memory_order_acq_rel);
+            for (int c = 0; c < kBankSlots && mask != 0u; ++c)
             {
-                const int c = latest[k].load (std::memory_order_relaxed);   // read again after every build: a request made meanwhile wins
-                if (buildable (c) && state[c].load (std::memory_order_acquire) == 0)
+                if ((mask & (1u << c)) == 0u)
+                    continue;
+                if (stop.load (std::memory_order_acquire))
+                    break;
+                if (paused.load (std::memory_order_acquire))
                 {
-                    ensure (c, &stop);
-                    worked = true;
+                    wantedMask.fetch_or (mask, std::memory_order_release);   // the bits not built yet stay requested
+                    break;
                 }
+                mask &= ~(1u << c);
+                if (buildable (c) && state[c].load (std::memory_order_acquire) == 0)
+                    ensure (c, &stop);
             }
-            if (! worked)
-                std::this_thread::sleep_for (std::chrono::milliseconds (10));
+            if (wantedMask.load (std::memory_order_acquire) == 0u && ! stop.load (std::memory_order_acquire))
+                wake.wait();
         }
     }
 
@@ -522,10 +530,11 @@ struct Bank
                 --users;
             if (users > 0 || ! worker.joinable())
                 return;
-            stop.store (true, std::memory_order_relaxed);
+            stop.store (true, std::memory_order_release);
+            wake.notify();
             t = std::move (worker);
         }
-        t.join();   // one frame of a table at most, plus the 10 ms sleep
+        t.join();   // one frame of a table at most
         stop.store (false, std::memory_order_relaxed);
     }
 };
@@ -566,8 +575,11 @@ bool builtinWavetableSettled (int choice) noexcept
 
 void requestBuiltinWavetable (int slot, int choice) noexcept
 {
-    if (slot >= 0 && slot < kRequestSlots && choice >= 0 && choice < kBankSlots)
-        g_bank.latest[slot].store (choice, std::memory_order_relaxed);
+    if (slot >= 0 && slot < kRequestSlots && Bank::buildable (choice) && g_bank.state[choice].load (std::memory_order_acquire) == 0)
+    {
+        g_bank.wantedMask.fetch_or (1u << choice, std::memory_order_release);   // lock free; the slot only validates, the table is what is wanted
+        g_bank.wake.notify();
+    }
 }
 
 void ensureBuiltinWavetables (unsigned mask) noexcept
@@ -601,7 +613,9 @@ void stopBuiltinBankBackground() noexcept
 
 void setBuiltinBuilderPausedForTests (bool paused) noexcept
 {
-    g_bank.paused.store (paused, std::memory_order_relaxed);
+    g_bank.paused.store (paused, std::memory_order_release);
+    if (! paused)
+        g_bank.wake.notify();
 }
 
 void resetBuiltinBankForTests() noexcept
@@ -612,8 +626,7 @@ void resetBuiltinBankForTests() noexcept
         g_bank.state[c].store (0, std::memory_order_relaxed);
         g_bank.owned[static_cast<size_t> (c)].reset();
     }
-    for (auto& l : g_bank.latest)
-        l.store (-1, std::memory_order_relaxed);
+    g_bank.wantedMask.store (0u, std::memory_order_relaxed);
 }
 
 double builtinBankBuildMs() noexcept
