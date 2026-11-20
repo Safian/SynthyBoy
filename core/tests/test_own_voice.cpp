@@ -1073,3 +1073,50 @@ TEST (ownv_sub_oscillator_pan_stereo_balance)
     // mirror-symmetric: left RMS at -100 equals right RMS at +100 within 1 percent
     CHECK (std::fabs (lNeg - rPos) / lNeg < 0.01);
 }
+
+// Reuses setup and helpers from ownv_lfo_sync_types_envelope_sustain_loop_and_hold (test_own_voice.cpp:333)
+// and the block-size comparison pattern from own_output_does_not_depend_on_the_block_size (test_own_engine.cpp:702).
+TEST (ownv_host_locked_lfo_block_size_independence)
+{
+    std::vector<float> ref;
+    for (const int block : { 32, 512 })
+    {
+        auto e = make();
+        set (*e, "lfo1.shape", 0.0f);
+        set (*e, "lfo1.sync", 0.0f);       // Hz rate (not beat-synced)
+        set (*e, "lfo1.sync_type", 1.0f);  // free-running (reads host transport clock)
+        set (*e, "lfo1.host", 1.0f);       // HOST-locked mode
+        set (*e, "lfo1.rate", 4.0f);       // 4 Hz
+        set (*e, "lfo1.smooth", 0.0f);
+        set (*e, "mod01.source", srcChoice ("lfo1"));
+        set (*e, "mod01.destination", dstChoice ("filter1.cutoff"));
+        set (*e, "mod01.amount", 40.0f);
+
+        const int total = static_cast<int> (0.5 * kSr);
+        std::vector<float> l (static_cast<size_t> (total)), r (static_cast<size_t> (total));
+        TransportInfo tr;
+        tr.bpm = 120.0;
+        tr.songPosBeats = 1.0;
+        tr.playing = true;
+        int pos = 0;
+        while (pos < total)
+        {
+            const int n = std::min (block, total - pos);
+            Event ev[2];
+            int ne = 0;
+            if (pos <= 100 && pos + n > 100)
+                ev[ne++] = sbtest::noteOn (100 - pos, 60);
+            if (pos <= 12000 && pos + n > 12000)
+                ev[ne++] = sbtest::noteOff (12000 - pos, 60);
+            e->setTransport (tr);
+            e->process (ev, ne, l.data() + pos, r.data() + pos, n);
+            tr.songPosBeats += static_cast<double> (n) / kSr * (tr.bpm / 60.0);
+            pos += n;
+        }
+        if (ref.empty())
+            ref = l;
+        else
+            CHECK (ref == l);
+    }
+}
+
