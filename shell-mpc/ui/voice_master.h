@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "base.h"
+#include "clip_label.h"
 #include "composite.h"
 #include "core.h"
 #include "led_list.h"
@@ -434,6 +435,8 @@ public:
 
     // OUTPUT
     Knob volume { "VOLUME" };
+    ClipLabel clip;
+    ClipHold& clipHold = clip.hold;
     PeakMeterDisplay meters;
     Knob spread { "SPREAD" };
     Knob stereoRouting { "STEREO" };   // master.stereo_routing is a continuous percentage: a knob, not a list
@@ -644,7 +647,7 @@ public:
 protected:
     std::vector<Component*> sideMainComponents()
     {
-        return { &volume, &meters, &spread, &stereoRouting, &voiceOverride, &outputLimiter, &noSmoothing, &oversample4x, &tune, &transpose, &bendUp, &bendDown, &bendLink, &polyphony, &legato, &polyLegato, &phaseLegato, &sameNote, &stealPriority, &velocityTrack, &voiceMeter, &padPressure, &padAmount,
+        return { &volume, &clip, &meters, &spread, &stereoRouting, &voiceOverride, &outputLimiter, &noSmoothing, &oversample4x, &tune, &transpose, &bendUp, &bendDown, &bendLink, &polyphony, &legato, &polyLegato, &phaseLegato, &sameNote, &stealPriority, &velocityTrack, &voiceMeter, &padPressure, &padAmount,
                  &portaTime, &portaSlope, &portaAlways, &portaScaled, &portaCurve };
     }
     std::vector<Component*> sideTuningComponents()
@@ -663,7 +666,9 @@ protected:
             // that are outside the Q frame (touch only): LIMIT (the plugin's output limiter) and the QUALITY pair NO SMOOTHING, OVERSAMPLE 4X (quality.* of the engine; the caption QUALITY stands in front of the pair)
             const Rect in = inner (0);
             const int mw = 100, stripH = th, upperH = std::max (th, in.h - stripH - 4);
-            meters.place ({ in.x, in.y + 4, mw, in.h - 8 });
+            const int clipH = 56;
+            clip.place ({ in.x, in.y, mw, clipH });
+            meters.place ({ in.x, in.y + clipH, mw, in.h - clipH });
             const int lw = 150, kx = in.x + mw + 8, kw = (in.right() - lw - g - kx - 2 * g) / 3;
             volume.place ({ kx, in.y, kw, upperH });
             spread.place ({ kx + kw + g, in.y, kw, upperH });

@@ -169,4 +169,7 @@ inline uint32_t mix (uint32_t a, uint32_t b, float t) noexcept
     return out;
 }
 
+/** The theme's alert red colour (clipping and safety warnings: T.negative). */
+inline uint32_t alert() noexcept { return L().negative; }
+
 }}} // namespace synthyboy_mpc::ui::theme
