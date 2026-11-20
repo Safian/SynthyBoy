@@ -913,3 +913,120 @@ TEST (sampleosc_cached_pitch_logarithm_and_pan_gains_equal_the_per_call_computat
     }
     std::printf ("    4 x 32 samples of a voice: %.3f us now, %.3f us before (this Mac)\n", us[0], us[1]);
 }
+
+// sampleosc_mip_selection_blocks_fractional_octave_and_scan_aliasing
+// Reuses helper types, includes, set-up calls and check macros from sampleosc_aliasing_sanity_noise_pitch_up (lines 515-576)
+TEST (sampleosc_mip_selection_blocks_fractional_octave_and_scan_aliasing)
+{
+    const double sampleRate = 44100.0;
+    constexpr int kFrames = 8192;
+    const double unattenuatedRms = 1.0 / std::sqrt (2.0); // ~0.7071
+
+    // Case A (fractional-octave pitch-up on QualityTier::low and QualityTier::medium):
+    // 18000 Hz sine (kFrames = 8192, 44100 Hz, root 60), note 65 (+5 st, pitchRatio = 2^(5/12) = 1.33484,
+    // 18000 * 1.33484 = 24027 Hz aliases to 20073 Hz), speed = 1.0, loopMode = LoopMode::forward.
+    // Render 4096 frames, measure RMS over [512, 4096) vs 1 / sqrt(2) = 0.7071:
+    //   BEFORE FIX: rho = 0.4167, round(0.4167) = 0 (mip 0) -> rejectionDb ≈ -0.5 to 0 dB (rms ≈ 0.65..0.71).
+    //   AFTER FIX:  ceil(0.4167) = 1 (mip 1) -> rejectionDb < -40 dB (rms < 0.007).
+    //   CHECK (rejectionDb < -35.0).
+    std::vector<float> sine18k (kFrames);
+    for (int i = 0; i < kFrames; ++i)
+        sine18k[static_cast<size_t> (i)] = static_cast<float> (std::sin (2.0 * kPi * 18000.0 * static_cast<double> (i) / sampleRate));
+
+    SampleData sd18k;
+    CHECK (sd18k.loadFromFrames (sine18k.data(), nullptr, kFrames, sampleRate, 60));
+    CHECK (sd18k.numMipLevels() >= 2);
+    const auto view18k = sd18k.view();
+
+    for (QualityTier tier : { QualityTier::low, QualityTier::medium })
+    {
+        SampleVoice voice;
+        voice.prepare (sampleRate, 512);
+        SampleOscParams params;
+        params.rootKey = 60;
+        params.quality = tier;
+        params.loopMode = LoopMode::forward;
+        params.loopStart = 0.0f;
+        params.loopEnd = 1.0f;
+
+        voice.noteOn (65, 1.0f, &view18k, params);
+
+        constexpr int kRenderLen = 4096;
+        std::vector<float> rendered (kRenderLen, 0.0f);
+        for (int s = 0; s < kRenderLen; s += 256)
+            voice.process (rendered.data() + s, nullptr, 256);
+
+        const double measuredRms = sbtest::rmsOf (rendered, 512, kRenderLen);
+        const double rejectionDb = sbtest::toDb (measuredRms / unattenuatedRms);
+        CHECK (rejectionDb < -35.0);
+    }
+
+    // Case B (fast scan speed = 4.0 at unity pitch on QualityTier::low and QualityTier::high):
+    // 14000 Hz sine (44100 Hz, root 60), note 60 (pitchRatio = 1.0), voice.setSpeedMultiplier (4.0)
+    // (14000 * 4 = 56000 Hz aliases to 11900 Hz):
+    //   BEFORE FIX: pitchRatio_ == 1.0 <= 1.0 -> direct (mip 0) -> rejectionDb ≈ 0 dB.
+    //   AFTER FIX:  effRatio = 4.0, rho = 2.0 (mip 2) -> rejectionDb < -40 dB.
+    //   CHECK (rejectionDb < -35.0).
+    std::vector<float> sine14k (kFrames);
+    for (int i = 0; i < kFrames; ++i)
+        sine14k[static_cast<size_t> (i)] = static_cast<float> (std::sin (2.0 * kPi * 14000.0 * static_cast<double> (i) / sampleRate));
+
+    SampleData sd14k;
+    CHECK (sd14k.loadFromFrames (sine14k.data(), nullptr, kFrames, sampleRate, 60));
+    CHECK (sd14k.numMipLevels() >= 3);
+    const auto view14k = sd14k.view();
+
+    for (QualityTier tier : { QualityTier::low, QualityTier::high })
+    {
+        SampleVoice voice;
+        voice.prepare (sampleRate, 512);
+        SampleOscParams params;
+        params.rootKey = 60;
+        params.quality = tier;
+        params.loopMode = LoopMode::forward;
+        params.loopStart = 0.0f;
+        params.loopEnd = 1.0f;
+
+        voice.noteOn (60, 1.0f, &view14k, params);
+        voice.setSpeedMultiplier (4.0);
+
+        constexpr int kRenderLen = 4096;
+        std::vector<float> rendered (kRenderLen, 0.0f);
+        for (int s = 0; s < kRenderLen; s += 256)
+            voice.process (rendered.data() + s, nullptr, 256);
+
+        const double measuredRms = sbtest::rmsOf (rendered, 512, kRenderLen);
+        const double rejectionDb = sbtest::toDb (measuredRms / unattenuatedRms);
+        CHECK (rejectionDb < -35.0);
+    }
+
+    // Case C (unity pitch note = 60, speed = 1.0, QualityTier::low):
+    // print SAMPLEMIP-CHECKSUM (sum of abs + last 8 samples, %.9g) so the build worker confirms unity playback is bit-identical.
+    {
+        SampleVoice voice;
+        voice.prepare (sampleRate, 512);
+        SampleOscParams params;
+        params.rootKey = 60;
+        params.quality = QualityTier::low;
+        params.loopMode = LoopMode::forward;
+        params.loopStart = 0.0f;
+        params.loopEnd = 1.0f;
+
+        voice.noteOn (60, 1.0f, &view18k, params);
+        voice.setSpeedMultiplier (1.0);
+
+        constexpr int kRenderLen = 4096;
+        std::vector<float> rendered (kRenderLen, 0.0f);
+        for (int s = 0; s < kRenderLen; s += 256)
+            voice.process (rendered.data() + s, nullptr, 256);
+
+        double sumAbs = 0.0;
+        for (float s : rendered)
+            sumAbs += static_cast<double> (std::fabs (s));
+        std::printf ("SAMPLEMIP-CHECKSUM: %.9g", sumAbs);
+        for (int i = kRenderLen - 8; i < kRenderLen; ++i)
+            std::printf (" [%d]=%.9g", i, static_cast<double> (rendered[static_cast<size_t> (i)]));
+        std::printf ("\n");
+    }
+}
+
