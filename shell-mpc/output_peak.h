@@ -25,6 +25,7 @@ struct OutputPeak
 {
     std::atomic<float> window { 0.0f }, total { 0.0f };
     std::atomic<unsigned long> blocks { 0 };
+    constexpr OutputPeak() noexcept = default;
 
     /** The largest absolute sample of n samples, a NaN passed over (what std::fmax (p, std::fabs (x)) gives): the NEON form masks a NaN lane to zero with an integer compare on the magnitude bits and takes the
         vector maximum of numbers; a subnormal lane is treated as the float maximum of the build treats it (flushed to zero in flush mode, as the shell runs the audio thread). */
@@ -82,11 +83,12 @@ struct OutputPeak
     float takeWindow() noexcept { return window.exchange (0.0f, std::memory_order_relaxed); }
 };
 
-inline OutputPeak& outputPeak() noexcept
-{
-    static OutputPeak p;
-    return p;
-}
+static_assert (std::atomic<float>::is_always_lock_free, "lock-free float atomics");
+static_assert (std::atomic<uint32_t>::is_always_lock_free, "lock-free uint32 atomics");
+
+/** Constant-initialised at namespace scope (no function-local static, so no thread-safe-static guard on the MIDI or audio thread). */
+inline OutputPeak gOutputPeak {};
+inline OutputPeak& outputPeak() noexcept { return gOutputPeak; }
 
 struct NoteDiagnostics
 {
@@ -94,6 +96,7 @@ struct NoteDiagnostics
     std::atomic<int> velocities[kMaxNotes] {};
     std::atomic<uint32_t> totalNotes { 0 };
     std::atomic<float> activeTierTrimDb { 0.0f };
+    constexpr NoteDiagnostics() noexcept = default;
 
     void noteOn (int vel) noexcept
     {
@@ -131,10 +134,7 @@ struct NoteDiagnostics
     }
 };
 
-inline NoteDiagnostics& noteDiagnostics() noexcept
-{
-    static NoteDiagnostics nd;
-    return nd;
-}
+inline NoteDiagnostics gNoteDiagnostics {};
+inline NoteDiagnostics& noteDiagnostics() noexcept { return gNoteDiagnostics; }
 
 } // namespace synthyboy_mpc
