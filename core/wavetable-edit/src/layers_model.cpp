@@ -1,4 +1,4 @@
-// SynthyBoy - wavetable-edit: Vital Group/Component/Keyframe model implementation.
+// SynthyBoy - wavetable-edit: Group / Component / Keyframe layer model implementation.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace synthyboy::wtedit::vital
+namespace synthyboy::wtedit::layers
 {
 namespace
 {
@@ -390,4 +390,4 @@ void Group::initFromWavetable(const Wavetable& wt)
     components_.push_back(std::move(waveSource));
 }
 
-} // namespace synthyboy::wtedit::vital
+} // namespace synthyboy::wtedit::layers

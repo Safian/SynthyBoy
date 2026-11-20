@@ -956,7 +956,7 @@ private:
 };
 
 //==============================================================================
-// LAYERS VIEW COMPONENT (VITAL GROUP MODEL)
+// LAYERS VIEW COMPONENT (LAYER GROUP MODEL)
 //==============================================================================
 class WavetableEditorSheet::LayersView final : public juce::Component
 {
@@ -974,7 +974,7 @@ public:
         addAndMakeVisible (addComponentBtn);
         addAndMakeVisible (renderTableBtn);
         addAndMakeVisible (infoLabel);
-        infoLabel.setText ("Vital Group: Sources & Modifiers with Keyframe Timeline (0..255)", juce::dontSendNotification);
+        infoLabel.setText ("Layers: Sources & Modifiers with Keyframe Timeline (0..255)", juce::dontSendNotification);
     }
 
     void resized() override
@@ -1009,11 +1009,11 @@ public:
         g.drawRoundedRectangle (timelineRect.toFloat(), t.px (4.0f), 1.0f);
 
         // Draw component summary list
-        const size_t numComp = owner.vitalGroup.numComponents();
+        const size_t numComp = owner.layerGroup.numComponents();
         int y = r.getY() + t.gap();
         for (size_t i = 0; i < numComp && y < r.getBottom() - t.touch(); ++i)
         {
-            const auto* c = owner.vitalGroup.getComponent (i);
+            const auto* c = owner.layerGroup.getComponent (i);
             if (! c)
                 continue;
             auto cr = juce::Rectangle<int> (r.getX(), y, r.getWidth(), t.touch()).reduced (0, t.ipx (2));
@@ -1046,7 +1046,7 @@ private:
                 if (result <= 0)
                     return;
                 owner.pushUndo();
-                using CT = wtedit::vital::ComponentType;
+                using CT = wtedit::layers::ComponentType;
                 CT type = CT::WaveSource;
                 std::string name = "Wave Source";
 
@@ -1062,10 +1062,10 @@ private:
                     default: break;
                 }
 
-                auto comp = std::make_unique<wtedit::vital::Component> (type, name);
-                comp->insertKeyframe (wtedit::vital::Keyframe (0.0f));
-                comp->insertKeyframe (wtedit::vital::Keyframe (255.0f));
-                owner.vitalGroup.addComponent (std::move (comp));
+                auto comp = std::make_unique<wtedit::layers::Component> (type, name);
+                comp->insertKeyframe (wtedit::layers::Keyframe (0.0f));
+                comp->insertKeyframe (wtedit::layers::Keyframe (255.0f));
+                owner.layerGroup.addComponent (std::move (comp));
                 repaint();
             });
     }
@@ -1480,8 +1480,8 @@ WavetableEditorSheet::~WavetableEditorSheet()
 WavetableEditorSheet::WavetableEditorSheet (UiContext& context, wtedit::Wavetable initialTable)
     : ctx (context), wt (std::move (initialTable))
 {
-    // Sync vital group from wavetable
-    vitalGroup.initFromWavetable (wt);
+    // Sync the layer group from the wavetable
+    layerGroup.initFromWavetable (wt);
     undoStack.push (wt); // baseline state
     lastModWheel = ctx.host.modWheel();
     startTimerHz (30); // the import worker and the mod wheel (followModWheel)
@@ -2102,7 +2102,7 @@ bool WavetableEditorSheet::executeProcessCommand (const std::string& commandName
 
 void WavetableEditorSheet::renderLayersToTable()
 {
-    vitalGroup.renderWavetable (wt, wt.numFrames());
+    layerGroup.renderWavetable (wt, wt.numFrames());
     isModified = true;
     updateHeaderInfo();
     repaint();
@@ -2122,7 +2122,7 @@ bool WavetableEditorSheet::importAudioData (const float* samples, size_t numSamp
         pushUndo();
         wt = std::move (newWt);
         currentFrameIndex = 0;
-        vitalGroup.initFromWavetable (wt);
+        layerGroup.initFromWavetable (wt);
         isModified = true;
         updateHeaderInfo();
         repaint();
@@ -2145,7 +2145,7 @@ bool WavetableEditorSheet::importImageData (const uint8_t* grayscale, int width,
         pushUndo();
         wt = std::move (newWt);
         currentFrameIndex = 0;
-        vitalGroup.initFromWavetable (wt);
+        layerGroup.initFromWavetable (wt);
         isModified = true;
         updateHeaderInfo();
         repaint();
@@ -2400,7 +2400,7 @@ void WavetableEditorSheet::replaceTable (wtedit::Wavetable newTable)
     pushUndo();
     wt = std::move (newTable);
     currentFrameIndex = 0;
-    vitalGroup.initFromWavetable (wt);
+    layerGroup.initFromWavetable (wt);
     isModified = true;
     refreshAll();
 }
@@ -2959,7 +2959,7 @@ bool WavetableEditorSheet::finishImport()
     pushUndo();
     wt = job->result;
     currentFrameIndex = 0;
-    vitalGroup.initFromWavetable (wt);
+    layerGroup.initFromWavetable (wt);
     isModified = true;
     refreshAll();
     if (importSheet)

@@ -444,9 +444,9 @@ TEST(cross_frame_spectral_and_morph_ops)
 }
 
 //==============================================================================
-TEST(vital_group_component_model)
+TEST(layers_group_component_model)
 {
-    using namespace vital;
+    using namespace layers;
 
     Group group;
     CHECK_EQ(group.numComponents(), 1u);
