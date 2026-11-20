@@ -461,3 +461,43 @@ TEST (convolve_job_checksum_of_an_offline_render)
     }
     std::printf ("CONVOLVE-JOB-CHECKSUM %016llx\n", static_cast<unsigned long long> (h));
 }
+
+// A mono block larger than the 4096 frames that prepare () announced: process () must neither allocate nor free (IEngine::process contract), and its output is that of the same notes rendered in 128 frame mono blocks.
+TEST (process_oversized_mono_block_neither_allocates_nor_frees)
+{
+    constexpr int kBig = 8192, kBlock = 128;
+    const Event chord[3] = { sbtest::noteOn (0, 48), sbtest::noteOn (0, 55), sbtest::noteOn (0, 60) };
+
+    auto big = createOwnEngine();
+    big->prepare (48000.0, kBlock, qualityForTier (Tier::low));
+    std::vector<float> bigOut (static_cast<size_t> (kBig), 0.0f);   // allocated before the counters are read
+    const auto beforeAllocs = g_allocations.load();
+    const auto beforeFrees = g_threadFrees.load();
+    big->process (chord, 3, bigOut.data(), nullptr, kBig);
+    const auto allocs = g_allocations.load() - beforeAllocs;
+    const auto frees = g_threadFrees.load() - beforeFrees;
+    if (! CHECK_EQ (allocs, 0ul))
+        std::printf ("    %lu allocation(s) in an oversized mono block\n", allocs);
+    if (! CHECK_EQ (frees, 0ul))
+        std::printf ("    %lu free(s) in an oversized mono block\n", frees);
+
+    auto small = createOwnEngine();
+    small->prepare (48000.0, kBlock, qualityForTier (Tier::low));
+    std::vector<float> smallOut (static_cast<size_t> (kBig), 0.0f);
+    for (int blk = 0; blk < kBig / kBlock; ++blk)
+        small->process (blk == 0 ? chord : nullptr, blk == 0 ? 3 : 0, smallOut.data() + blk * kBlock, nullptr, kBlock);
+    CHECK (std::memcmp (bigOut.data(), smallOut.data(), static_cast<size_t> (kBig) * sizeof (float)) == 0);
+
+    uint64_t h = 1469598103934665603ull;
+    for (float f : bigOut)
+    {
+        uint32_t bits = 0;
+        std::memcpy (&bits, &f, sizeof bits);
+        for (int b = 0; b < 4; ++b)
+        {
+            h ^= (bits >> (8 * b)) & 0xffu;
+            h *= 1099511628211ull;
+        }
+    }
+    std::printf ("MONO-OVERSIZED-CHECKSUM %016llx\n", static_cast<unsigned long long> (h));
+}

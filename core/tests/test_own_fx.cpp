@@ -2,8 +2,11 @@
 // the effect instance pool, the latency compensation across the buses, Convolve.
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -1460,3 +1463,143 @@ TEST (fx_flanger_delay_cap_and_phaser_denormal_flush)
     }
 }
 
+
+// ---- The delay lines of the six reverb types share one arena (docs/plans/memory-footprint.md, task T3) ----
+namespace
+{
+constexpr int kArenaLen = 8192;
+constexpr int kArenaChunk = 128;
+
+struct ArenaSignal
+{
+    std::vector<float> l, r;
+};
+
+// an impulse plus a stereo noise burst, deterministic
+ArenaSignal arenaSignal()
+{
+    ArenaSignal s;
+    s.l.assign (static_cast<size_t> (kArenaLen), 0.0f);
+    s.r.assign (static_cast<size_t> (kArenaLen), 0.0f);
+    sbtest::Rng rng (0x4eaa5eull);
+    s.l[0] = 1.0f;
+    s.r[0] = -0.5f;
+    for (int i = 64; i < 1500; ++i)
+    {
+        s.l[static_cast<size_t> (i)] = static_cast<float> (rng.uniform() * 2.0 - 1.0) * 0.3f;
+        s.r[static_cast<size_t> (i)] = static_cast<float> (rng.uniform() * 2.0 - 1.0) * 0.3f;
+    }
+    return s;
+}
+
+void arenaProcess (own::Reverb& r, std::vector<float>& l, std::vector<float>& rr)
+{
+    for (size_t pos = 0; pos < l.size(); pos += static_cast<size_t> (kArenaChunk))
+        r.process (l.data() + pos, rr.data() + pos, std::min (kArenaChunk, static_cast<int> (l.size() - pos)));
+}
+
+uint64_t arenaHashOf (const std::vector<float>& a, const std::vector<float>& b)
+{
+    uint64_t h = 1469598103934665603ull;
+    for (const std::vector<float>* v : { &a, &b })
+        for (const float x : *v)
+        {
+            uint32_t bits;
+            std::memcpy (&bits, &x, sizeof (bits));
+            for (int k = 0; k < 4; ++k)
+            {
+                h ^= (bits >> (8 * k)) & 0xffu;
+                h *= 1099511628211ull;
+            }
+        }
+    return h;
+}
+
+own::Reverb::Params arenaParams (int type, int room)
+{
+    own::Reverb::Params p;
+    p.type = type;
+    p.room = room;
+    p.mix = 0.5f;
+    p.decay = 1.2f;
+    p.chorusAmount = 0.3f;   // the modulated reads
+    return p;
+}
+} // namespace
+
+TEST (fx_reverb_arena_memory_and_checksum_of_the_six_types)
+{
+    for (const double sr : { 44100.0, 48000.0 })
+    {
+        own::Reverb r;
+        r.prepare (sr);
+        std::printf ("    reverb delay memory at %.0f Hz: %zu bytes in %d block(s)\n", sr, r.memoryBytes(), r.bufferAllocCount());
+        CHECK (r.memoryBytes() <= (sr < 46000.0 ? 2400000u : 2550000u));   // before: 4,874,240 / 5,087,232 bytes in 93 blocks
+        CHECK_EQ (r.bufferAllocCount(), 1);
+    }
+
+    const ArenaSignal in = arenaSignal();
+    uint64_t all = 1469598103934665603ull;
+    for (int type = 0; type <= 5; ++type)
+        for (int room = 0; room < (type == 4 ? 5 : 1); ++room)
+        {
+            own::Reverb r;
+            r.prepare (44100.0);
+            r.set (arenaParams (type, room));
+            std::vector<float> l = in.l, rr = in.r;
+            arenaProcess (r, l, rr);
+            const uint64_t h = arenaHashOf (l, rr);
+            std::printf ("    REVERB-ARENA-CHECKSUM type=%d room=%d %016llx\n", type, room, static_cast<unsigned long long> (h));
+            all = (all ^ h) * 1099511628211ull;
+            float peak = 0.0f;
+            for (const float x : l)
+                peak = std::max (peak, std::fabs (x));
+            CHECK (peak > 0.0f);
+        }
+    std::printf ("    REVERB-ARENA-CHECKSUM all %016llx\n", static_cast<unsigned long long> (all));
+}
+
+// The topology is switched while the reverb runs, 0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 0: a core that takes the arena over (another group of lines) finds silence in it, not what the core before it left.
+// The input of the cores is cut for the check (both input filters at the same corner: their difference is zero), so whatever the new core says is stale data.
+TEST (fx_reverb_arena_topology_switch_leaves_no_stale_bleed)
+{
+    const ArenaSignal in = arenaSignal();
+    own::Reverb r;
+    r.prepare (44100.0);
+    const int sequence[7] = { 0, 1, 2, 3, 4, 5, 0 };
+    const bool newGroup[7] = { true, true, true, true, true, false, true };   // 2 (Hall), 4 (Nitrous) and 5 (Basin) share their lines
+    for (int step = 0; step < 7; ++step)
+    {
+        const int type = sequence[step];
+        // the cut input of this step: the check
+        own::Reverb::Params cut = arenaParams (type, 2);
+        cut.mix = 1.0f;
+        cut.lowCut = 8000.0f;
+        cut.highCut = 8000.0f;
+        r.set (cut);
+        std::vector<float> l (static_cast<size_t> (4096), 0.0f), rr (static_cast<size_t> (4096), 0.0f);
+        arenaProcess (r, l, rr);
+        float peak = 0.0f;
+        for (size_t i = 256; i < l.size(); ++i)   // the first samples still carry the input filters of the step before
+            peak = std::max ({ peak, std::fabs (l[i]), std::fabs (rr[i]) });
+        if (newGroup[step])
+            CHECK (peak < 1.0e-9f);
+        // and the step makes noise of its own: the lines of this type are dirty when the next one comes
+        own::Reverb::Params live = arenaParams (type, 2);
+        r.set (live);
+        std::vector<float> a = in.l, b = in.r;
+        arenaProcess (r, a, b);
+        float loud = 0.0f;
+        for (const float x : a)
+            loud = std::max (loud, std::fabs (x));
+        CHECK (loud > 0.01f);
+        // the input filters settle at the same corner for the first samples of the next step: the cut run starts with the filters empty
+        own::Reverb::Params settle = arenaParams (type, 2);
+        settle.mix = 1.0f;
+        settle.lowCut = 8000.0f;
+        settle.highCut = 8000.0f;
+        r.set (settle);
+        std::vector<float> s1 (static_cast<size_t> (128), 0.0f), s2 (static_cast<size_t> (128), 0.0f);
+        arenaProcess (r, s1, s2);
+    }
+}

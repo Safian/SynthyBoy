@@ -1,0 +1,5 @@
+# CLI smoke tests of synthyboy_tier_bench, read by bench/CMakeLists.txt. One test per line:  name~platform~arguments~regular expression
+# name: the test is synthyboy_tier_bench_<name>.  platform: any, posix (not Windows) or linux.  arguments: split like a shell line, @PRESETS@ is content/presets.
+# regular expression: a CTest PASS_REGULAR_EXPRESSION of the output. It must hold no semicolon and no square bracket (CMake reads this file as a list).
+# Empty lines and lines starting with a hash are ignored.
+list_basic~any~--list --load basic --config low~profile low

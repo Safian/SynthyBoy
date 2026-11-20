@@ -17,24 +17,60 @@ namespace own
 class DelayLine
 {
 public:
-    void prepare (int maxSamples)
+    DelayLine() = default;
+    // the reads go through `ptr`: a copy of an owning line points at its own storage, a copy of a bound line at the same external storage (a move keeps the heap block of the vector)
+    DelayLine (const DelayLine& o) : buf (o.buf), ptr (o.buf.empty() ? o.ptr : nullptr), mask (o.mask), pos (o.pos) { if (! buf.empty()) ptr = buf.data(); }
+    DelayLine& operator= (const DelayLine& o)
+    {
+        if (this != &o)
+        {
+            buf = o.buf;
+            ptr = buf.empty() ? o.ptr : buf.data();
+            mask = o.mask;
+            pos = o.pos;
+        }
+        return *this;
+    }
+    DelayLine (DelayLine&&) noexcept = default;
+    DelayLine& operator= (DelayLine&&) noexcept = default;
+
+    /** The size of the storage (a power of two) that prepare () allocates for `maxSamples`. */
+    static int storageSize (int maxSamples) noexcept
     {
         int n = 16;
         while (n < maxSamples + 4)
             n <<= 1;
+        return n;
+    }
+    void prepare (int maxSamples)
+    {
+        const int n = storageSize (maxSamples);
         buf.assign (static_cast<size_t> (n), 0.0f);
+        ptr = buf.data();
         mask = n - 1;
         pos = 0;
     }
-    void reset() noexcept { std::fill (buf.begin(), buf.end(), 0.0f); pos = 0; }
-    void push (float x) noexcept { pos = (pos + 1) & mask; buf[static_cast<size_t> (pos)] = x; }
+    /** The line runs on `pow2Size` floats (a power of two, as storageSize () gives) of storage somebody else owns, which must be zero and outlive the line; the line owns nothing then. */
+    void bind (float* externalBuf, int pow2Size) noexcept
+    {
+        std::vector<float>().swap (buf);
+        ptr = externalBuf;
+        mask = pow2Size - 1;
+        pos = 0;
+    }
+    /** Heap bytes this line owns (0 for a bound line). */
+    size_t allocatedBytes() const noexcept { return buf.capacity() * sizeof (float); }
+    void reset() noexcept { if (ptr != nullptr) std::fill (ptr, ptr + (static_cast<size_t> (mask) + 1), 0.0f); pos = 0; }
+    /** Forgets the write position without touching the storage (the owner has zeroed it). */
+    void rewind() noexcept { pos = 0; }
+    void push (float x) noexcept { pos = (pos + 1) & mask; ptr[static_cast<size_t> (pos)] = x; }
     /** The sample written `d` samples ago (d >= 0, fractional). */
     float read (float d) const noexcept
     {
         const float dd = std::max (d, 0.0f);
         const int i = static_cast<int> (dd);
         const float f = dd - static_cast<float> (i);
-        const float a = buf[static_cast<size_t> ((pos - i) & mask)], b = buf[static_cast<size_t> ((pos - i - 1) & mask)];
+        const float a = ptr[static_cast<size_t> ((pos - i) & mask)], b = ptr[static_cast<size_t> ((pos - i - 1) & mask)];
         return a + (b - a) * f;
     }
     /** Catmull-Rom (cubic) interpolation, `d` samples back from the newest sample (d >= 1 for the full four points). */
@@ -43,8 +79,8 @@ public:
         const float dd = std::max (d, 1.0f);
         const int i = static_cast<int> (dd);
         const float t = dd - static_cast<float> (i);
-        const float y0 = buf[static_cast<size_t> ((pos - i + 1) & mask)], y1 = buf[static_cast<size_t> ((pos - i) & mask)];
-        const float y2 = buf[static_cast<size_t> ((pos - i - 1) & mask)], y3 = buf[static_cast<size_t> ((pos - i - 2) & mask)];
+        const float y0 = ptr[static_cast<size_t> ((pos - i + 1) & mask)], y1 = ptr[static_cast<size_t> ((pos - i) & mask)];
+        const float y2 = ptr[static_cast<size_t> ((pos - i - 1) & mask)], y3 = ptr[static_cast<size_t> ((pos - i - 2) & mask)];
         const float c1 = 0.5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3, c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
         return ((c3 * t + c2) * t + c1) * t + y1;
     }
@@ -54,8 +90,8 @@ public:
         const float dd = std::max (d, 1.0f);
         const int i = static_cast<int> (dd);
         const float t = dd - static_cast<float> (i);
-        const float y0 = buf[static_cast<size_t> ((pos - i + 1) & mask)], y1 = buf[static_cast<size_t> ((pos - i) & mask)];
-        const float y2 = buf[static_cast<size_t> ((pos - i - 1) & mask)], y3 = buf[static_cast<size_t> ((pos - i - 2) & mask)];
+        const float y0 = ptr[static_cast<size_t> ((pos - i + 1) & mask)], y1 = ptr[static_cast<size_t> ((pos - i) & mask)];
+        const float y2 = ptr[static_cast<size_t> ((pos - i - 1) & mask)], y3 = ptr[static_cast<size_t> ((pos - i - 2) & mask)];
         // nodes at -1, 0, 1, 2 around y1
         const float c0 = -t * (t - 1.0f) * (t - 2.0f) * (1.0f / 6.0f), c1 = (t + 1.0f) * (t - 1.0f) * (t - 2.0f) * 0.5f,
                     c2 = -(t + 1.0f) * t * (t - 2.0f) * 0.5f, c3 = (t + 1.0f) * t * (t - 1.0f) * (1.0f / 6.0f);
@@ -74,7 +110,7 @@ public:
             for (int m = -3; m <= 4; ++m)
                 if (m != k)
                     w *= (t - static_cast<float> (m)) / static_cast<float> (k - m);
-            acc += w * buf[static_cast<size_t> ((pos - i - k) & mask)];
+            acc += w * ptr[static_cast<size_t> ((pos - i - k) & mask)];
         }
         return acc;
     }
@@ -82,6 +118,7 @@ public:
 
 private:
     std::vector<float> buf;
+    float* ptr = nullptr;
     int mask = 15, pos = 0;
 };
 
