@@ -36,10 +36,9 @@ mi a baj, hol látszik (fájl:sor / eszköz / mérés), és mitől kész. Aki do
 - Régi `.hw-local/TODO-MPC.md` (2026-11-14) még nem ellenőrzött pontjai: böngészőcsempe (`Plugin Skins/browser_images/soundsmode.png` 270×110 a skin-generátorba), burkoló-görbület összevetése a host `Envelope` Quadratic rajzával, G2 csatorna-aftertouch (0xD0) a nyomás→cutoff rétegben, G3/G5/G9, MPCe Q-Link Mode X/Y → Macro 1–2 (mérés kell), pad-világítás plugin felől, automatizálás-felvétel (LFO n Cursor / Spectrum n), kétsávos próba (második SynthyBoy-sáv), Serum-preset 1:1 minta (owner), Steinberg VST2 terjesztés és Open MPC katalógus (owner), `feature/mpc-shell` ág törlése. Kész, ha mindegyiket élőnek (külön sor ide) vagy elavultnak (törölve) minősítettük; utána a régi fájl törölhető.
 
 ## Saját motor (egy motor lesz: a saját)
-- X|Y vezérlő Y tengelye (12 kulcs): a letagadó sorok kivéve, a kulcsok élnek, 16 tengely teszttel igazolva, a hiánylista „No key remains"; nincs még a `develop`-ban. Hátravan 8 tengely tesztje (Warp, Warp 2, Rand Warp, Rand Warp 2, spektrális szűrő cutoff és mix), mert a próbaállásban a warp és a spektrális szűrő ki volt kapcsolva. (fut: `agy/own-xy-claim-2`)
 - X|Y „Density" tengely: a specifikáció (`docs/engine-spec/07`, 7a.2) szerint csak szabad ütemű módban hat, a kód (`core/engine-own/osc/lib_osc.cpp`, X|Y blokk) feltétel nélkül ír. Ellenőrizni.
 - A paraméter-audit adatai ellentmondanak egymásnak (`docs/ui-design/param-audit-keys.csv`: ALIVE, `param-audit-baseline-own.json`: UNSUPPORTED): az audit alapját újra kell generálni az X|Y kulcsok bekapcsolása után.
-- DSP-audit 2. rész: effektek, kimenet, szintkezelés (fut: `agy/own-audit-2-fx`); 3. rész: a motor magja, teljesítmény és memória az ARMv7-en (nem indult).
+- DSP-audit 3. rész: a motor magja, teljesítmény és memória az ARMv7-en, a végén rangsorolt munkalista az 1–3. részből. (fut: `agy/own-audit-3-core`)
 
 ## DSP-audit 1. rész megállapításai (hangút) — `docs/review/OWN-ENGINE-DSP-AUDIT-1-VOICE-PATH-2026-11-20.md`
 Gemini 4 Neon írta, kódolvasásból, mérés nélkül. Minden tételt a megvalósítás ELŐTT ellenőrizni kell a kódban, és a doksiban megnevezett méréssel bizonyítani. A sorszám a doksi rangsora. Hat tételt szúrópróbával megnéztem: az eredmény a sor végén.
@@ -71,6 +70,28 @@ Gemini 4 Neon írta, kódolvasásból, mérés nélkül. Minden tételt a megval
 - 26. Klasszikus létra és dióda: 8–11 skalár osztás mintánként; több szűrőmodell nincs NEON-ra írva.
 - 27. Bitre azonos skalár = NEON szabály (nincs FMA, nincs közelítő reciprok) mindenhol; a `fastmath.h` `union`-nal típust vált (nem definiált viselkedés).
 - A Vital kivezetésének terve: build-kapcsolók (`SYNTHYBOY_WITH_VITAL`, `SYNTHYBOY_SHELL_ENGINE`), az asztali plugin alapmotorja, a Vitalhoz mérő eszközök (`tools/own-oracle`, refcompare, paraméter-audit), `NOTICE` / `THIRD_PARTY.md`, a Vital-preset importáló, és a `wtedit::vital` adatmodell licenckérdése (`docs/ui-design/OWN-ENGINE-GAP.md`, történet 5. pont).
+
+## DSP-audit 2. rész megállapításai (effektek, kimenet) — `docs/review/OWN-ENGINE-DSP-AUDIT-2-EFFECTS-OUTPUT-2026-11-20.md`
+Gemini 4 Neon írta, kódolvasásból, mérés nélkül; megvalósítás előtt minden tétel ellenőrizendő és mérendő. Öt tételt szúrópróbával megnéztem: az eredmény a sor végén. A jelentés szerint a lánc vége (kimeneti fokozat, master térd, hangszám-függő erősítés) rendben van, a hibák az effektekben vannak.
+- 1. Torzító: mind a 14 típus túlmintavételezés és ADAA nélkül fut (erős aliasing a kemény típusoknál); a 12–13. típus (X-Shaper) csak kemény vágás. Szúrópróba: a torzító blokkjában nincs túlmintavételezés (`core/engine-own/fx/fx_effects.h:660-740`).
+- 2. Háromsávos splitter: az alsó sáv fázisigazítása 4. rendű mindentáteresztő a 2. rendű helyett, bevágás a keresztezésnél (`core/fx-serum-a/.../splitter_lmh.*`).
+- 3. A splitter sávjai között nincs késleltetés-kiegyenlítés összeolvasztás előtt: Bode vagy limiter egy sávban fésűszűrőzést okoz (`core/engine-own/fx/fx_chain.cpp:583-610`).
+- 4. Konvolúció: egyenletes 128 mintás partíciók (33,5 MB), komplex FFT valós adaton, impulzuscsere átúsztatás nélkül, adatverseny a `live.tone`-on (`core/fx-serum-b/convolve.cpp`, `fx_modules.cpp:1014`).
+- 5. Zengető: minden példány mind a 6 algoritmus pufferét lefoglalja (4,7 MB); mintánként sok `sin` / `exp` / osztás; a Nitrous Space csillapítása negatív erősítést ad.
+- 6. Késleltető HQ mód: a 8 pontos Lagrange 56 osztást végez mintánként és csatornánként. Szúrópróba: igaz, beágyazott ciklus osztással (`core/engine-own/fx/fx_dsp.h:65-80`).
+- 7. Bode frekvenciatoló: mintánként 64 egész modulo és 4 trigonometria; a Hilbert-szűrő 800 Hz alatt gyenge; a `softLimit` visszacsatolás nélkül is vág ±1-nél.
+- 8. Kompresszor többsávos módban 100% alatti mixszel: a nedves jel átmegy a keresztváltón, a száraz nem, fáziskioltás a keresztezési frekvenciákon; a limiter mintánként lineárisan pásztáz.
+- 9. Hangszám-függő erősítés csak a vezérlési rács elején frissül: közepes és magas szinten egy akkord akár 31 mintáig csillapítatlanul szól (`core/engine-own/own_engine.cpp:1461-1470,1578-1655`).
+- 10. Szinte minden effekt 32 mintánként lépteti a paramétereit (lépcsőzaj); a „low" szinten a chorus 4, a phaser 8 mintáig tartja az értéket.
+- 11. Flanger: a visszacsatolás bemenete ±1-re vágva, DC-szűrő nélkül; fölösleges 512 KB puffer. Szúrópróba: csak a paraméter korlátozását találtam (`fx_effects.h:537`), a jel vágását nem tudtam megerősíteni.
+- 12. Hyper / Dimension: 11 puffer ugyanazzal a jellel, mintánként akár 23 `sin` / `cos`; a Dimension 0% mixnél is fut.
+- 13. CLAP shell: hang nélkül azonnal alvást jelez, levágja a zengető és késleltető lecsengését; mono kimenetnél a bal csatornát felülírja a jobb. Szúrópróba: mindkettő igaz (`shell-clap/synthyboy_clap.cpp:353,392`). JUCE shell: `setLatencySamples()` a hangszálon (`shell-juce/PluginProcessor.cpp:494`).
+- 14. Torzító: `pow`, osztás és `exp` mintánként; a `reset()` nem nullázza a DC-állapotot; a szűrő Q-ja nem a specifikáció szerinti.
+- 15. EQ: osztás mintánként sávonként; mind a 4 sáv együtthatói 32 mintánként újraszámolódnak akkor is, ha nem változnak; torzulás a Nyquist közelében.
+- 16. Effektlánc: bekapcsoláskor 0,73 ms-os felúsztatás, kikapcsoláskor nincs leúsztatás (kattanás, levágott lecsengés); sorrendváltásnál nincs átúsztatás; beégetett `44100`; a 255 mintánál hosszabb késleltetés csendben csonkul.
+- 17. Chorus: rögzített nedves szint a hangszámtól függetlenül (1 és 4 hang között szintugrás); phaser: nincs denormális-védelem a visszacsatolásban; a szinkronizált LFO-k nem igazodnak az ütemhez.
+- 18. Öt effekt (kompresszor, Hyper, Utility, Bode, konvolúció) 0% mixnél sem marad ki a „low" szinten; a lecsengés-tartás 20 másodperc minden típusra.
+- 19. Kimenet: a limiter mintacsúcsot néz, nem valódi csúcsot; az `OUTPUT-LEVEL.md` ellentmond magának. Szúrópróba: igaz, a 62. sor még `T = -4.50 dBFS`-t ír a −10,0 mellett.
 
 ## Tudás és ügynök-eszközök
 - Tudásmappa (`docs/dsp-knowledge/`: témánként rövid fájl forrásokkal, döntésekkel és bizonyító teszttel, tisztaszoba-szabály, tesztreceptek) és egy rá mutató vékony skill: az owner döntésére vár.
