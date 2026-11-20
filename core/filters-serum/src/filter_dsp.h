@@ -165,7 +165,7 @@ struct Ladder4Pole
         // the coefficients are a function of g alone: kept while g stays the same (a held or constant cutoff)
         if (!(haveG && g == lastG))
         {
-            const float gSafe = std::max (1e-5f, std::min (g, 50.0f));
+            const float gSafe = std::max (1e-5f, std::min (g, 50.0f)); // never binds: the cutoff is clamped to 0.49 * sampleRate before, so g <= tan (0.49 * pi) = 31.8; the diode ladder below keeps 0.95 (unit delay in its feedback)
             cG = gSafe / (1.0f + gSafe);
             cG0 = 1.0f / (1.0f + gSafe);
             cG2 = cG * cG;
