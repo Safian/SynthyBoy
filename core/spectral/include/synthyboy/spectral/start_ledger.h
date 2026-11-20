@@ -154,7 +154,7 @@ public:
                 if (g.quad + static_cast<uint32_t> (i) > nowQuad)
                 {
                     uint32_t& slot = ring_[(g.quad + static_cast<uint32_t> (i)) % kRing];
-                    slot = slot > g.pattern.us[i] ? slot - g.pattern.us[i] : 0u;
+                    slot = slot > static_cast<uint32_t> (g.pattern.us[i]) ? slot - static_cast<uint32_t> (g.pattern.us[i]) : 0u;
                 }
             g.valid = false;
         }
@@ -201,7 +201,7 @@ private:
             const uint32_t booked = ring_[(quad + static_cast<uint32_t> (i)) % kRing];
             if (booked != 0)
                 empty = false;
-            if (booked + p.us[i] > static_cast<uint32_t> (budget_))
+            if (booked + static_cast<uint32_t> (p.us[i]) > static_cast<uint32_t> (budget_))
                 ok = false;
         }
         return ok || empty;                          // a voice always makes progress, whatever the budget is
@@ -214,7 +214,7 @@ private:
         for (int i = 0; i < kStartQuads; ++i)
         {
             uint32_t& slot = ring_[(quad + static_cast<uint32_t> (i)) % kRing];
-            slot += p.us[i];
+            slot += static_cast<uint32_t> (p.us[i]);
             maxBooked_ = std::max (maxBooked_, slot);
         }
         Grant& g = grants_[grantHead_];
