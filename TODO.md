@@ -21,13 +21,19 @@ mi a baj, hol látszik (fájl:sor / eszköz / mérés), és mitől kész. Aki do
 - Fő layer kísérlet (a saját síkunk beillesztése a host képkocka-küldésébe, a `work/inhost-draw` hookjára építve): az owner jóváhagyta, nem indult el. Sorrend: XL csak olvasó vizsgálat, Key 61 próbaillesztés majd 30 perces élő futás, vágás/elrejtés próba, a mai `SETPLANE` késleltetésének mérése.
 
 ## Hangszint és leütés
-- Key 61: a 160 presetes mérés (teljes és fél ütés) fut; az XL-en ugyanez még nincs meg.
+- Key 61: a 160 presetes mérés (teljes és fél ütés, két kép presetenként) fut `.hw-local/mpc-perf/level-sweep-k61-full/` (indult 2026-11-20 16:56; fut: `work/sweep-fix`). Kész, ha `device-level-sweep.py verify` átmegy (a fél ütés célja ≥ 6 dB, a telítődő presetek, pl. Bend Formant Growl 6,3 dB, külön kivételek) és a képeket átnéztük. Az XL-en ugyanez még nincs meg (nincs pad-befecskendezés, a `seqnote` útvonal van).
 - Mi volt az XL-en a „2/3" olvasat: a koordinátor szerint mentett, szerkesztett példány (−17,3 dB a gyári −13,6 helyett). Kiadási megjegyzés kell: régi projektben a presetet újra be kell tölteni.
-- A telepítő szkriptek eddig nem vitték át a preseteket és a tartalmat az eszközre (javítva a koordinátor szerint): ellenőrizni, hogy a javítás commitban van és teszt védi.
-- Preset-ellenőrző kapu (`synthyboy_preset_sanity`): átállítani a saját motorra a küszöbök lazítása nélkül (owner döntése: egy motor).
-- A plafon közeli presetek belső erősítése (legalább 5 dB tartalék a hangerőgombon minden preseten) és a szaturáló presetek velocity → drive útvonala: az állapotuk nincs visszaigazolva.
-- Kimeneti fokozat erősítése (`agy/g108-output-stage-hardening`: fordítási idejű zárolásmentesség-ellenőrzés, blokkonként egyszer olvasott cél): review és beolvasztás, utána teljesítménymérés a Key 61 profilon.
+- Kimeneti fokozat erősítése (fut: `agy/g108-output-stage-hardening`; `agy/g108-output-stage-hardening`: fordítási idejű zárolásmentesség-ellenőrzés, blokkonként egyszer olvasott cél): review és beolvasztás, utána teljesítménymérés a Key 61 profilon.
 - A g107 javításai után nem futott második teljes kapukör.
+
+## Eszközmérés és telepítés (új, 2026-11-20)
+- `scripts/device-level-sweep.py` (ág: `work/sweep-fix`, c4deb6c8, nincs develop-ban): (a) a play-log számláló újraindulását (app újraindítás után a régi `/tmp/synthyboy-play-log.txt` sorok) nem kezeli (`hit_reached_plugin`, kb. 463–473. és 216–218. sor): a próba első 4 presetje elbukott; (b) a `verify` fix 11,9 ± 3 dB félütés-célt vár minden presetre, a telítődőknek az offline táblából (`docs/release/OUTPUT-LEVEL-TABLE-2026-11-20.md`) kellene presetenkénti várt érték. Kész, ha mindkettő javítva és tesztelt, és a ág be van olvasztva.
+- A telepítő szkriptek (`k61-install.sh`, `xl-install.sh`) a `.hw-local/mpc-perf/` alatt vannak, nem a repóban, és 2026-11-20-ig nem szinkronizálták a `Presets` és `Content` mappát (minden korábbi eszközmérés régi presetekkel ment). Javítva, de nincs repóban és nincs teszt. Kész, ha a szkriptek a `scripts/` alatt vannak, és egy teszt ellenőrzi, hogy a csomag mappái mind átkerülnek.
+- A Key 61 Track Mixer útvonala (hwctl `raw "90 34 7f"` + `"90 34 00"` = Main, mód-menü rács (58,52), 2. oldal nyíl (1240,455), TRACK MIXER (1092,160); csúcstartó nullázás koppintás kb. (38,698)) nincs a `docs/MPC.md`-ben. Kész, ha leírt és a sweep-szkript hivatkozik rá.
+- A Key 61 padjei MIDI 72..98 hangot küldenek, egyik sem a 48-at (C3): a szintmérés `seqnote` hangot használ, nem padet. Kész, ha dokumentált, és a valódi padütéses próba (owner) megvan.
+- `pq.sh` fixen a Key 61-et olvassa: XL-en hibás gépre ment. Kész, ha van `--device` kapcsoló vagy XL-es megfelelő.
+- A Key 61 `overlay-status.txt` `markers_read_*` sora a szerkesztőoldalon eltért a vártól (`left=723a2c right=3a7264` a várt `aa3a2c 3aaa64` helyett): megnézni a Track nézeten, hogy csak az oldal miatt volt-e.
+- Régi `.hw-local/TODO-MPC.md` (2026-11-14) még nem ellenőrzött pontjai: böngészőcsempe (`Plugin Skins/browser_images/soundsmode.png` 270×110 a skin-generátorba), burkoló-görbület összevetése a host `Envelope` Quadratic rajzával, G2 csatorna-aftertouch (0xD0) a nyomás→cutoff rétegben, G3/G5/G9, MPCe Q-Link Mode X/Y → Macro 1–2 (mérés kell), pad-világítás plugin felől, automatizálás-felvétel (LFO n Cursor / Spectrum n), kétsávos próba (második SynthyBoy-sáv), Serum-preset 1:1 minta (owner), Steinberg VST2 terjesztés és Open MPC katalógus (owner), `feature/mpc-shell` ág törlése. Kész, ha mindegyiket élőnek (külön sor ide) vagy elavultnak (törölve) minősítettük; utána a régi fájl törölhető.
 
 ## Saját motor (egy motor lesz: a saját)
 - X|Y vezérlő Y tengelye (12 kulcs): a DSP kész, a `core/engine-own/own_support.cpp` 50–53. sora letagadja. (fut: `agy/own-xy-claim`)
@@ -48,6 +54,3 @@ mi a baj, hol látszik (fájl:sor / eszköz / mérés), és mitől kész. Aki do
 - `agy/g54-pack-versions-010` (0.1.0 verziószövegek): beolvasztás a kiadásjelölt körben.
 - `agy/g84-reduced-set-proposal` (csökkentett preset-készlet): az owner döntésére vár.
 - `work/sound-batch-3` (24 új preset): meghallgatásra vár.
-- `work/gate-ebed844f` helyi ág és az `origin/feature/mpc-overlay` távoli ág: kell-e még (a helyi `feature/mpc-overlay` már törölve, a `develop` tartalmazza).
-- `CLAUDE.md` link az `AGENTS.md`-re a repó gyökerében, a `template-mpc/` és a `shell-mpc/ui/` alatt (globális szabály: egyetlen forrás az `AGENTS.md`).
-- A régi `.hw-local/TODO-MPC.md` (2026-11-14) még élő tételeit ide átvezetni, utána a régi fájlt törölni.
