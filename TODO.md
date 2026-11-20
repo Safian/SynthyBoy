@@ -75,7 +75,6 @@ Gemini 4 Neon írta, kódolvasásból, mérés nélkül. Minden tételt a megval
 - 17. (maradék) Granulár hurok-átúsztatás, szélső esetek (`docs/review/GRANULAR-LOOP-CROSSFADE-ANALYSIS-2026-11-20.md`, Q6): ha a hurokhatár a fájl szélétől 1–2 mintán belül van, az interpoláció a fájlon kívüli (nulla) mintát is érinti; ha se a hurok előtt, se utána nincs elég anyag, az átúsztatás a rendelkezésre álló hosszra rövidül, teljes fájlos huroknál megszűnik. Eldöntendő, kell-e ezekre külön megoldás (pl. körbeforduló olvasás).
 - 18. A kikapcsolt szűrők ágai is lefutnak (`voice.cpp:1751-1824`).
 - 19. Lorenz / Rössler véletlen LFO: Euler-lépés a stabilitási határon, a sebesség 1,38 Hz alatt és 27,6 Hz fölött nem változik (`core/engine-own/env_lfo/lfo.h:182-210`).
-- 20. Unison középső hang: +3 dB kiemelés 0% szórásnál (`wt_osc.h:257-271,384`).
 - 21. Zajgenerátorok: 44,1 kHz-re rögzített együtthatók; a zajszűrő és a hangmagasság a 4–8. színt kihagyja; a sample-zaj mindig „high" minőségben fut.
 - 22. Mátrix: a hangfrekvenciás források 1378 Hz-re mintavételeződnek szűrés nélkül; aktív slotonként `exp` / `expm1` minden 32 mintában. (Ide tartozik: a mátrix nem mintánként számol, `core/engine-own/README.md`.)
 - 23. Mip-szint váltás átúsztatás nélkül: hallható ugrás hajlításnál.
