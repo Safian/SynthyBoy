@@ -173,6 +173,8 @@ inline int mipFor (const SampleView& s, double rate) noexcept
         return std::min (s.numMipLevels - 1, static_cast<int> (std::floor (std::log2 (rate))));
     return 0;
 }
+
+enum class LoopXFade { none, beforeWrap, afterWrap };
 } // namespace
 
 float windowValue (WindowShape shape, float x, float amount, float skew) noexcept
@@ -442,6 +444,57 @@ bool GranularVoice::renderGrainsReference (const GrainParams& p, float* left, fl
     const bool wrap = p.loopGrains && loopLen > 8.0;
     const double xfade = wrap ? std::min (0.5, static_cast<double> (clamp01 (p.loopCrossfade))) * loopLen : 0.0;
 
+    LoopXFade fwdMode = LoopXFade::none;
+    double fwdXf = 0.0;
+    LoopXFade revMode = LoopXFade::none;
+    double revXf = 0.0;
+    if (wrap && xfade > 1.0)
+    {
+        // Forward (step > 0): F1 pre-roll available, F2 post-roll available, F3 fallback
+        if (lg0 - xfade >= 0.0)
+        {
+            fwdMode = LoopXFade::beforeWrap;
+            fwdXf = xfade;
+        }
+        else if (lg1 + xfade <= fileFrames - 1.0)
+        {
+            fwdMode = LoopXFade::afterWrap;
+            fwdXf = xfade;
+        }
+        else if (lg0 >= 1.0)
+        {
+            fwdMode = LoopXFade::beforeWrap;
+            fwdXf = std::min (xfade, lg0);
+        }
+        else if (fileFrames - 1.0 - lg1 >= 1.0)
+        {
+            fwdMode = LoopXFade::afterWrap;
+            fwdXf = std::min (xfade, fileFrames - 1.0 - lg1);
+        }
+
+        // Reverse (step < 0): R1 post-roll available, R2 pre-roll available, R3 fallback
+        if (lg1 + xfade <= fileFrames - 1.0)
+        {
+            revMode = LoopXFade::beforeWrap;
+            revXf = xfade;
+        }
+        else if (lg0 - xfade >= 0.0)
+        {
+            revMode = LoopXFade::afterWrap;
+            revXf = xfade;
+        }
+        else if (fileFrames - 1.0 - lg1 >= 1.0)
+        {
+            revMode = LoopXFade::beforeWrap;
+            revXf = std::min (xfade, fileFrames - 1.0 - lg1);
+        }
+        else if (lg0 >= 1.0)
+        {
+            revMode = LoopXFade::afterWrap;
+            revXf = std::min (xfade, lg0);
+        }
+    }
+
     bool any = false;
     for (Grain& g : grains_)
     {
@@ -475,29 +528,61 @@ bool GranularVoice::renderGrainsReference (const GrainParams& p, float* left, fl
             }
             float sl, sr;
             readSample (*sample_, g.pos, rate, sl, sr);
-            if (wrap && xfade > 1.0)
+            if (step > 0.0)
             {
-                const double toEnd = lg1 - g.pos;
-                if (toEnd < xfade && step > 0.0)
+                if (fwdMode == LoopXFade::beforeWrap)
                 {
-                    const float t = static_cast<float> (1.0 - toEnd / xfade);
-                    float al, ar;
-                    readSample (*sample_, lg0 + static_cast<double> (t) * xfade, rate, al, ar);
-                    const float a = std::cos (t * 1.5707963f), b = std::sin (t * 1.5707963f);
-                    sl = sl * a + al * b;
-                    sr = sr * a + ar * b;
-                }
-                else if (step < 0.0)
-                {
-                    const double toStart = g.pos - lg0;
-                    if (toStart < xfade)
+                    const double toEnd = lg1 - g.pos;
+                    if (toEnd < fwdXf)
                     {
-                        const float t = static_cast<float> (1.0 - toStart / xfade);
+                        const float t = static_cast<float> (1.0 - toEnd / fwdXf);
                         float al, ar;
-                        readSample (*sample_, lg1 - static_cast<double> (t) * xfade, rate, al, ar);
+                        readSample (*sample_, g.pos - loopLen, rate, al, ar);
                         const float a = std::cos (t * 1.5707963f), b = std::sin (t * 1.5707963f);
                         sl = sl * a + al * b;
                         sr = sr * a + ar * b;
+                    }
+                }
+                else if (fwdMode == LoopXFade::afterWrap)
+                {
+                    const double fromStart = g.pos - lg0;
+                    if (fromStart < fwdXf)
+                    {
+                        const float u = static_cast<float> (fromStart / fwdXf);
+                        float al, ar;
+                        readSample (*sample_, g.pos + loopLen, rate, al, ar);
+                        const float a = std::cos (u * 1.5707963f), b = std::sin (u * 1.5707963f);
+                        sl = al * a + sl * b;
+                        sr = ar * a + sr * b;
+                    }
+                }
+            }
+            else if (step < 0.0)
+            {
+                if (revMode == LoopXFade::beforeWrap)
+                {
+                    const double toStart = g.pos - lg0;
+                    if (toStart < revXf)
+                    {
+                        const float t = static_cast<float> (1.0 - toStart / revXf);
+                        float al, ar;
+                        readSample (*sample_, g.pos + loopLen, rate, al, ar);
+                        const float a = std::cos (t * 1.5707963f), b = std::sin (t * 1.5707963f);
+                        sl = sl * a + al * b;
+                        sr = sr * a + ar * b;
+                    }
+                }
+                else if (revMode == LoopXFade::afterWrap)
+                {
+                    const double toEnd = lg1 - g.pos;
+                    if (toEnd < revXf)
+                    {
+                        const float u = static_cast<float> (toEnd / revXf);
+                        float al, ar;
+                        readSample (*sample_, g.pos - loopLen, rate, al, ar);
+                        const float a = std::cos (u * 1.5707963f), b = std::sin (u * 1.5707963f);
+                        sl = al * a + sl * b;
+                        sr = ar * a + sr * b;
                     }
                 }
             }
@@ -620,6 +705,57 @@ bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* righ
     const double loopLen = lg1 - lg0;
     const bool wrap = p.loopGrains && loopLen > 8.0;
     const double xfade = wrap ? std::min (0.5, static_cast<double> (clamp01 (p.loopCrossfade))) * loopLen : 0.0;
+
+    LoopXFade fwdMode = LoopXFade::none;
+    double fwdXf = 0.0;
+    LoopXFade revMode = LoopXFade::none;
+    double revXf = 0.0;
+    if (wrap && xfade > 1.0)
+    {
+        // Forward (step > 0): F1 pre-roll available, F2 post-roll available, F3 fallback
+        if (lg0 - xfade >= 0.0)
+        {
+            fwdMode = LoopXFade::beforeWrap;
+            fwdXf = xfade;
+        }
+        else if (lg1 + xfade <= fileFrames - 1.0)
+        {
+            fwdMode = LoopXFade::afterWrap;
+            fwdXf = xfade;
+        }
+        else if (lg0 >= 1.0)
+        {
+            fwdMode = LoopXFade::beforeWrap;
+            fwdXf = std::min (xfade, lg0);
+        }
+        else if (fileFrames - 1.0 - lg1 >= 1.0)
+        {
+            fwdMode = LoopXFade::afterWrap;
+            fwdXf = std::min (xfade, fileFrames - 1.0 - lg1);
+        }
+
+        // Reverse (step < 0): R1 post-roll available, R2 pre-roll available, R3 fallback
+        if (lg1 + xfade <= fileFrames - 1.0)
+        {
+            revMode = LoopXFade::beforeWrap;
+            revXf = xfade;
+        }
+        else if (lg0 - xfade >= 0.0)
+        {
+            revMode = LoopXFade::afterWrap;
+            revXf = xfade;
+        }
+        else if (fileFrames - 1.0 - lg1 >= 1.0)
+        {
+            revMode = LoopXFade::beforeWrap;
+            revXf = std::min (xfade, fileFrames - 1.0 - lg1);
+        }
+        else if (lg0 >= 1.0)
+        {
+            revMode = LoopXFade::afterWrap;
+            revXf = std::min (xfade, lg0);
+        }
+    }
     const SampleView& smp = *sample_;
     const float* const table = windows().table[static_cast<int> (p.shape) < kNumWindowShapes ? static_cast<int> (p.shape) : 0];
     // a pointwise warp plays only where a slot has a type and an amount (the engine hands the function over always)
@@ -742,29 +878,61 @@ bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* righ
             }
             float sl, sr;
             read.read (g.pos, sl, sr);
-            if (wrap && xfade > 1.0)
+            if (step > 0.0)
             {
-                const double toEnd = lg1 - g.pos;
-                if (toEnd < xfade && step > 0.0)
+                if (fwdMode == LoopXFade::beforeWrap)
                 {
-                    const float t = static_cast<float> (1.0 - toEnd / xfade);
-                    float al, ar;
-                    read.read (lg0 + static_cast<double> (t) * xfade, al, ar);
-                    const float a = std::cos (t * 1.5707963f), b = std::sin (t * 1.5707963f);
-                    sl = sl * a + al * b;
-                    sr = sr * a + ar * b;
-                }
-                else if (step < 0.0)
-                {
-                    const double toStart = g.pos - lg0;
-                    if (toStart < xfade)
+                    const double toEnd = lg1 - g.pos;
+                    if (toEnd < fwdXf)
                     {
-                        const float t = static_cast<float> (1.0 - toStart / xfade);
+                        const float t = static_cast<float> (1.0 - toEnd / fwdXf);
                         float al, ar;
-                        read.read (lg1 - static_cast<double> (t) * xfade, al, ar);
+                        read.read (g.pos - loopLen, al, ar);
                         const float a = std::cos (t * 1.5707963f), b = std::sin (t * 1.5707963f);
                         sl = sl * a + al * b;
                         sr = sr * a + ar * b;
+                    }
+                }
+                else if (fwdMode == LoopXFade::afterWrap)
+                {
+                    const double fromStart = g.pos - lg0;
+                    if (fromStart < fwdXf)
+                    {
+                        const float u = static_cast<float> (fromStart / fwdXf);
+                        float al, ar;
+                        read.read (g.pos + loopLen, al, ar);
+                        const float a = std::cos (u * 1.5707963f), b = std::sin (u * 1.5707963f);
+                        sl = al * a + sl * b;
+                        sr = ar * a + sr * b;
+                    }
+                }
+            }
+            else if (step < 0.0)
+            {
+                if (revMode == LoopXFade::beforeWrap)
+                {
+                    const double toStart = g.pos - lg0;
+                    if (toStart < revXf)
+                    {
+                        const float t = static_cast<float> (1.0 - toStart / revXf);
+                        float al, ar;
+                        read.read (g.pos + loopLen, al, ar);
+                        const float a = std::cos (t * 1.5707963f), b = std::sin (t * 1.5707963f);
+                        sl = sl * a + al * b;
+                        sr = sr * a + ar * b;
+                    }
+                }
+                else if (revMode == LoopXFade::afterWrap)
+                {
+                    const double toEnd = lg1 - g.pos;
+                    if (toEnd < revXf)
+                    {
+                        const float u = static_cast<float> (toEnd / revXf);
+                        float al, ar;
+                        read.read (g.pos - loopLen, al, ar);
+                        const float a = std::cos (u * 1.5707963f), b = std::sin (u * 1.5707963f);
+                        sl = al * a + sl * b;
+                        sr = ar * a + sr * b;
                     }
                 }
             }
