@@ -1388,6 +1388,7 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         const float subGate = (si.mono >= 0 && g.base[static_cast<size_t> (si.mono)] >= 0.5f && tunedKey > g.lowestNote + 0.5f) ? 0.0f : 1.0f;
         subTick.level = subCh.on ? sp.level * subGate : 0.0f;
         subTick.pan = std::clamp (sp.pan + (vc.mask[4] ? vc.pan : 0.0f), -1.0f, 1.0f);
+        subTick.panRight = subTick.pan;
         subTick.jump = g.noSmoothing;
         subTick.voices = 1;
         subTick.spread = 0.0f;
