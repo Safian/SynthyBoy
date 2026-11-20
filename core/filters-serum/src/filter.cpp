@@ -157,6 +157,14 @@ public:
                     rc.rewind();
                 reverbAP_[0].delay.rewind();
                 reverbAP_[1].delay.rewind();
+                // the one-pole memories the families run on beside the lines (the feedback low-passes of the combs, the reverb and the comb combs, the feedback high-pass,
+                // the phaser all-passes) belong to the family as well: the Combs and Reverb types read combFeedbackLP_ [0..3] and the Cmb / Flg / Phs types [0], and
+                // another family leaves them where its last block ended
+                for (auto& lp : combFeedbackLP_)
+                    lp.reset();
+                combFeedbackHP_.reset();
+                for (auto& ap : phaserAP_)
+                    ap.reset();
                 delayGroup_ = newGroup;
             }
         }
