@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Independent audit of the Vital preset importer (docs/ui-design/VITAL-IMPORT-AUDIT-REPORT.md).
 
-    python3 -I scripts/audit-vital-import.py --vital DIR [--vital DIR ...] --imported DIR [--roundtrip FILE.json] [--json OUT.json] [-v]
+    python3 -I scripts/audit-vital-import.py --vital DIR [--vital DIR ...] --imported DIR [--json OUT.json] [-v]
 
   --vital       directories searched recursively for .vital files (unzip a .vitalbank first); the originals are never modified
   --imported    output directory of `synthyboy_vital_import` (<name>.sbpreset + <name>.report.json)
-  --roundtrip   output of `synthyboy_vital_roundtrip` (what the Vital-derived engine holds after loading each .sbpreset); optional
 
 Python 3 standard library only; nothing is imported from the importer. The audit reads
   - the original .vital JSON (settings, modulations, wavetables, lfos, sample),
@@ -24,8 +23,6 @@ Checks
                   range, snapped to our step, and compared with the .sbpreset. Special rows (frame position, oscillator destination,
                   warp type, sample, filter routing, effect order, bend range, voice amplitude, modulation slots) have their own rule.
                   Keys the importer does not address must still hold their default.
-  3 engine        (with --roundtrip) the engine's parameter read-back equals the file for every key, and the value of every Vital
-                  control inside the engine equals the number in the original .vital file (up to the documented deviations).
 Exit code 0 when every check passes, 1 otherwise.
 """
 import argparse
@@ -262,8 +259,6 @@ class Audit:
         self.ignored_classes = collections.defaultdict(lambda: collections.Counter())
         self.dropped_items = []
         self.expect_dev = collections.Counter()
-        self.rt_ok = 0
-        self.rt_expl = collections.Counter()
 
     def err(self, preset, area, text):
         self.errors.append((preset, area, text))
@@ -283,10 +278,6 @@ class Audit:
                 path = os.path.join(self.args.imported, f)
                 doc = json.load(open(path, encoding='utf-8'))
                 imported[doc.get('import', {}).get('source', {}).get('sha256')] = (f[:-len('.sbpreset')], doc)
-        rt = {}
-        if self.args.roundtrip:
-            for e in json.load(open(self.args.roundtrip, encoding='utf-8'))['presets']:
-                rt[e['file'][:-len('.sbpreset')]] = e
         for v in vitals:
             sha = sha256_file(v)
             if sha not in imported:
@@ -294,11 +285,11 @@ class Audit:
                 continue
             stem, doc = imported[sha]
             report = json.load(open(os.path.join(self.args.imported, stem + '.report.json'), encoding='utf-8'))
-            self.audit_one(os.path.basename(v), json.load(open(v, encoding='utf-8')), report, doc, rt.get(stem), stem)
+            self.audit_one(os.path.basename(v), json.load(open(v, encoding='utf-8')), report, doc, stem)
         return not self.errors
 
     # ---------------------------------------------------------------------------------------------------------------
-    def audit_one(self, name, vdoc, report, sb, rt, stem):
+    def audit_one(self, name, vdoc, report, sb, stem):
         S = vdoc['settings']
         state = sb['state']['params']
         content = sb['state'].get('content', {})
@@ -482,9 +473,6 @@ class Audit:
         # ---- metadata, macro names (doc 11, 1.2.1) ---------------------------------------------------------------------
         self.audit_meta(name, vdoc, sb, stem)
 
-        # ---- 3 engine -------------------------------------------------------------------------------------------------
-        if rt is not None:
-            self.audit_engine(name, S, rt, items, cls, by_name, len(active_slots), state)
         self.per_file.append(dict(file=name, counts=dict(cnt), report=report['counts'], fidelity=report['fidelity'], keys=len(S)))
         for k, v in cnt.items():
             self.class_totals[k] += v
@@ -811,55 +799,11 @@ class Audit:
                     last = max(last, int(round(k.get('position', 0))))
         return last + 1 if last >= 0 else None
 
-    # ---------------------------------------------------------------------------------------------------------------
-    def audit_engine(self, name, S, rt, items, cls, by_name, n_active, state):
-        for mm in rt['param_mismatches']:
-            self.err(name, 'engine', 'state round trip: %s set %s read back %s' % (mm['key'], mm['set'], mm['got']))
-        if rt['connected_slots'] != n_active:
-            self.err(name, 'engine', 'the engine wired %d modulation slots, the file has %d importable connections' % (rt['connected_slots'], n_active))
-        approx_names = {it['vital_name'] for it in items if it['kind'] == 'approximated'}
-        for ctl, got in rt['controls'].items():
-            if ctl not in S:
-                continue
-            raw = float(S[ctl])
-            if got is None:
-                self.err(name, 'engine', 'control %s does not exist in the engine' % ctl)
-                continue
-            d = self.details(ctl)
-            rng = (d['max'] - d['min']) if d and d['max'] is not None and d['min'] is not None else 1.0
-            mm = MOD_KEY.match(ctl)
-            if mm and (cls.get(ctl, '').startswith('ignored') or cls.get(ctl, '').startswith('dropped')):
-                continue  # the engine has no connection in that slot
-            if ctl == 'pitch_bend_range':
-                continue  # the engine takes the bend range from master.bend_range (its own control stays 0, see vital_engine.cpp)
-            tol = 1e-3 * max(1.0, abs(raw)) + 2e-3 * rng
-            if abs(got - raw) <= tol:
-                self.rt_ok += 1
-                continue
-            if ctl in approx_names:
-                self.rt_expl['approximated by the importer (clamped / remapped)'] += 1
-                continue
-            if re.match(r'osc_\d_(wave_frame|frame_spread)$', ctl):
-                self.err(name, 'engine', 'control %s: file %.6g, engine %.6g' % (ctl, raw, got))
-                continue
-            if ctl in ('effect_chain_order',):
-                self.rt_expl['effect_chain_order (the engine keeps the control for the import only; the chain takes its order from fx.order.1..16, checked above)'] += 1
-                continue
-            if ctl == 'sample_on':
-                self.rt_expl['sample_on with a custom sample (noise switched off, sample mapped to an oscillator)'] += 1
-                continue
-            if re.match(r'(sample|osc_\d)_(on|level|pan|transpose|tune|random_phase|destination)$', ctl) and any(
-                    s for s in (state.get('osc1.type'), state.get('osc2.type'), state.get('osc3.type'))):
-                self.rt_expl['sample controls moved onto the oscillator that plays the sample'] += 1
-                continue
-            self.err(name, 'engine', 'control %s: file %.9g, engine %.9g' % (ctl, raw, got))
-
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--vital', action='append', required=True)
     ap.add_argument('--imported', required=True)
-    ap.add_argument('--roundtrip')
     ap.add_argument('--json')
     ap.add_argument('--skip-sample-osc', action='store_true')
     ap.add_argument('-v', '--verbose', action='store_true')
@@ -880,8 +824,6 @@ def main():
             print('  %5d  %-48s %s' % (n, kname, detail))
     print('\nvalue rows checked: %d, mismatches: %d' % (a.rows['checked'], a.rows['mismatch']))
     print('expected deviations noted: %s' % dict(a.expect_dev))
-    if args.roundtrip:
-        print('engine control read-back equal to the file: %d; explained deviations: %s' % (a.rt_ok, dict(a.rt_expl)))
     byarea = collections.Counter(e[1] for e in a.errors)
     print('\nERRORS: %d  %s' % (len(a.errors), dict(byarea)))
     seen = collections.Counter()

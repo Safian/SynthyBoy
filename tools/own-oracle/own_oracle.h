@@ -1,4 +1,4 @@
-// SynthyBoy - own-oracle: render and measurement helpers over IEngine (shared by the tool and the oracle tests).
+// SynthyBoy - own-oracle: render and measurement helpers over IEngine (shared by the own engine tests, core/tests/test_own_*.cpp).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 #pragma once
