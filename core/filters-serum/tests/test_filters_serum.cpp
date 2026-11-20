@@ -4,6 +4,7 @@
 
 #include "synthyboy/filters/filter.h"
 #include "synthyboy/filters/filter_types.h"
+#include "../src/filter_dsp.h"
 #include "test_runner.h"
 
 #include <algorithm>
@@ -17,12 +18,6 @@ using namespace synthyboy::filters;
 
 namespace
 {
-
-#ifndef M_PI
-constexpr float kPi = 3.14159265358979323846f;
-#else
-constexpr float kPi = static_cast<float> (M_PI);
-#endif
 
 // Fast linear-congruential generator for deterministic pseudo-random test vectors
 struct SimpleRng
@@ -545,4 +540,146 @@ TEST (serum_filters_jump_skips_the_cutoff_smoother)
     std::printf ("    5 kHz after a step of the cutoff to 200 Hz: peak %.3f with the smoother, %.3f with jump\n", static_cast<double> (smooth), static_cast<double> (jumped));
     CHECK (smooth > 0.4f);
     CHECK (jumped < 0.15f);
+}
+
+// Rank 14: Combs and Reverb must use 4 independent comb feedback low-pass filters instead of sharing one
+TEST (serum_filters_combs_and_reverb_independent_comb_damping)
+{
+    // Test 1: Combs filter type
+    {
+        constexpr double sampleRate = 44100.0;
+        constexpr float srFloat = static_cast<float> (sampleRate);
+        Filter filter;
+        filter.prepare (sampleRate);
+        filter.setType (static_cast<int> (FilterType::Combs));
+
+        FilterParams p;
+        p.cutoff = 800.0f;
+        p.resonance = 0.7f;
+        p.drive = 0.0f;
+        p.var = 0.5f; // Damping clearly on: damping LP cutoff ~ 11025 Hz
+        p.mix = 1.0f; // 100% wet
+        filter.setParams (p);
+        filter.reset();
+
+        // Independent 4-comb reference as specified by the filter architecture:
+        // 4 parallel comb lines each with its own independent OnePoleTPT feedback low-pass filter
+        DelayLine refCombs[4];
+        static constexpr float kReverbCombMs[4] = { 29.7f, 37.1f, 41.3f, 43.7f };
+        for (int i = 0; i < 4; ++i)
+        {
+            const size_t combLen = static_cast<size_t> (kReverbCombMs[i] * 0.001f * srFloat) + 16;
+            refCombs[i].prepare (combLen);
+            refCombs[i].reset();
+        }
+        OnePoleTPT refLP[4];
+        for (int i = 0; i < 4; ++i)
+            refLP[i].reset();
+
+        static constexpr float kCombRatios[4] = { 1.0f, 1.33f, 1.67f, 2.11f };
+        const float baseDelay = std::max (2.0f, srFloat / std::max (20.0f, p.cutoff));
+        const float dampG = std::tan (kPi * std::max (100.0f, srFloat * (0.45f - 0.4f * p.var)) / srFloat);
+
+        constexpr int numSamples = 4096;
+        float maxDiff = 0.0f;
+
+        for (int n = 0; n < numSamples; ++n)
+        {
+            const float in = (n == 0) ? 1.0f : 0.0f; // Impulse
+            const float out = filter.process (in);
+
+            // Compute reference output
+            const float drivenIn = softClip ((1.0f + 2.5f * p.drive) * in);
+            float sum = 0.0f;
+            for (int i = 0; i < 4; ++i)
+            {
+                const float d = std::max (2.0f, std::min (baseDelay * kCombRatios[i], static_cast<float> (sampleRate * 0.05)));
+                const float delayed = refCombs[i].read (d);
+                const float damped = refLP[i].processLPOnly (delayed, dampG);
+                refCombs[i].write (drivenIn + softClip (0.85f * p.resonance * damped));
+                sum += delayed;
+            }
+            const float rawOut = 0.25f * sum;
+            const float refOut = sanitize ((1.0f - p.mix) * in + p.mix * rawOut);
+
+            const float diff = std::fabs (out - refOut);
+            if (diff > maxDiff)
+                maxDiff = diff;
+        }
+
+        std::printf ("    Combs filter impulse response max diff vs independent 4-comb reference: %e\n", static_cast<double> (maxDiff));
+        CHECK (maxDiff < 1e-5f);
+    }
+
+    // Test 2: Reverb filter type
+    {
+        constexpr double sampleRate = 44100.0;
+        constexpr float srFloat = static_cast<float> (sampleRate);
+        Filter filter;
+        filter.prepare (sampleRate);
+        filter.setType (static_cast<int> (FilterType::Reverb));
+
+        FilterParams p;
+        p.cutoff = 1000.0f;
+        p.resonance = 0.7f;
+        p.drive = 0.0f;
+        p.var = 0.5f; // Damping clearly on: dampG = tan(pi * max(200, srFloat * (0.4 - 0.35 * 0.5)) / srFloat)
+        p.mix = 1.0f; // 100% wet
+        filter.setParams (p);
+        filter.reset();
+
+        // Independent 4-comb + 2-allpass reference
+        DelayLine refCombs[4];
+        static constexpr float kReverbCombMs[4] = { 29.7f, 37.1f, 41.3f, 43.7f };
+        for (int i = 0; i < 4; ++i)
+        {
+            const size_t combLen = static_cast<size_t> (kReverbCombMs[i] * 0.001f * srFloat) + 16;
+            refCombs[i].prepare (combLen);
+            refCombs[i].reset();
+        }
+        OnePoleTPT refLP[4];
+        for (int i = 0; i < 4; ++i)
+            refLP[i].reset();
+
+        AllpassDiffuser refAP[2];
+        refAP[0].prepare (static_cast<size_t> (5.1f * 0.001f * srFloat) + 16, 0.7f);
+        refAP[1].prepare (static_cast<size_t> (12.7f * 0.001f * srFloat) + 16, 0.7f);
+        refAP[0].reset();
+        refAP[1].reset();
+
+        const float dampG = std::tan (kPi * std::max (200.0f, srFloat * (0.4f - 0.35f * p.var)) / srFloat);
+        static constexpr float kRevDelayMs[4] = { 25.0f, 32.0f, 37.0f, 41.0f };
+
+        constexpr int numSamples = 4096;
+        float maxDiff = 0.0f;
+
+        for (int n = 0; n < numSamples; ++n)
+        {
+            const float in = (n == 0) ? 1.0f : 0.0f; // Impulse
+            const float out = filter.process (in);
+
+            // Compute reference output
+            const float drivenIn = softClip ((1.0f + 2.5f * p.drive) * in);
+            float sum = 0.0f;
+            for (int i = 0; i < 4; ++i)
+            {
+                const float d = kRevDelayMs[i] * 0.001f * srFloat;
+                const float delayed = refCombs[i].read (d);
+                const float damped = refLP[i].processLPOnly (delayed, dampG);
+                refCombs[i].write (drivenIn + softClip (0.8f * p.resonance * damped));
+                sum += delayed;
+            }
+            float rev = refAP[0].process (sum * 0.25f);
+            rev = refAP[1].process (rev);
+            const float rawOut = 0.5f * drivenIn + 0.5f * rev;
+            const float refOut = sanitize ((1.0f - p.mix) * in + p.mix * rawOut);
+
+            const float diff = std::fabs (out - refOut);
+            if (diff > maxDiff)
+                maxDiff = diff;
+        }
+
+        std::printf ("    Reverb filter impulse response max diff vs independent 4-comb reference: %e\n", static_cast<double> (maxDiff));
+        CHECK (maxDiff < 1e-5f);
+    }
 }

@@ -86,7 +86,8 @@ public:
             s.reset();
 
         waspSVF_.reset();
-        combFeedbackLP_.reset();
+        for (auto& lp : combFeedbackLP_)
+            lp.reset();
         combFeedbackHP_.reset();
         for (auto& ap : phaserAP_)
             ap.reset();
@@ -306,7 +307,7 @@ public:
                 if (fbLow)
                 {
                     const float fLP = 50.0f + 18000.0f * var[l];
-                    onePoleCoef (f[l]->combFeedbackLP_, f[l]->tanM (kPi * std::min (fLP, srFloat * 0.49f) / srFloat));
+                    onePoleCoef (f[l]->combFeedbackLP_[0], f[l]->tanM (kPi * std::min (fLP, srFloat * 0.49f) / srFloat));
                 }
                 else if (fbHigh)
                 {
@@ -315,7 +316,7 @@ public:
                 }
             }
         if (fbLow)
-            vFbLP = V::set (fa.combFeedbackLP_.lastCoef, fb.combFeedbackLP_.lastCoef);
+            vFbLP = V::set (fa.combFeedbackLP_[0].lastCoef, fb.combFeedbackLP_[0].lastCoef);
         else if (fbHigh)
             vFbHP = V::set (fa.combFeedbackHP_.lastCoef, fb.combFeedbackHP_.lastCoef);
 
@@ -339,7 +340,7 @@ public:
         V ls[4];
         for (int k = 0; k < 4; ++k)
             ls[k] = V::sanitized (V::set (fa.ladder_.s[k], fb.ladder_.s[k]));
-        V fbLPs = V::sanitized (V::set (fa.combFeedbackLP_.s, fb.combFeedbackLP_.s)), fbHPs = V::sanitized (V::set (fa.combFeedbackHP_.s, fb.combFeedbackHP_.s));
+        V fbLPs = V::sanitized (V::set (fa.combFeedbackLP_[0].s, fb.combFeedbackLP_[0].s)), fbHPs = V::sanitized (V::set (fa.combFeedbackHP_.s, fb.combFeedbackHP_.s));
         V aps[6];
         for (int k = 0; k < 6; ++k)
             aps[k] = V::sanitized (V::set (fa.phaserAP_[k].s, fb.phaserAP_[k].s));
@@ -452,7 +453,7 @@ public:
                         const float fHP = std::max (20.0f, c / (1.0f + bwFactor[l]));
                         const float gLP = f[l]->tanM (kPi * fLP / srFloat);
                         const float gHP = f[l]->tanM (kPi * fHP / srFloat);
-                        onePoleCoef (f[l]->combFeedbackLP_, gLP);
+                        onePoleCoef (f[l]->combFeedbackLP_[0], gLP);
                         onePoleCoef (f[l]->combFeedbackHP_, gHP);
                     }
                 }
@@ -488,7 +489,7 @@ public:
                         vPhCoef = V::set (fa.phaserAP_[0].lastCoef, fb.phaserAP_[0].lastCoef);
                     if (fbBand)
                     {
-                        vFbLP = V::set (fa.combFeedbackLP_.lastCoef, fb.combFeedbackLP_.lastCoef);
+                        vFbLP = V::set (fa.combFeedbackLP_[0].lastCoef, fb.combFeedbackLP_[0].lastCoef);
                         vFbHP = V::set (fa.combFeedbackHP_.lastCoef, fb.combFeedbackHP_.lastCoef);
                     }
                 }
@@ -696,7 +697,7 @@ public:
             else if (flanges)
             {
                 if (fbLow || fbBand)
-                    f[l]->combFeedbackLP_.s = fbLPs.get (l);
+                    f[l]->combFeedbackLP_[0].s = fbLPs.get (l);
                 if (fbHigh || fbBand)
                     f[l]->combFeedbackHP_.s = fbHPs.get (l);
                 if (phaser)
@@ -837,7 +838,7 @@ private:
 
     SVFTPT formantSVF_[3];
     SVFTPT waspSVF_;
-    OnePoleTPT combFeedbackLP_;
+    OnePoleTPT combFeedbackLP_[4];
     OnePoleTPT combFeedbackHP_;
     OnePoleTPT phaserAP_[6];
 
@@ -1118,7 +1119,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res, float g, c
             {
                 const float fLP = 50.0f + 18000.0f * var;
                 const float gLP = tanM (kPi * std::min (fLP, srFloat * 0.49f) / srFloat);
-                fbFiltered = combFeedbackLP_.processLPOnly (delayed, gLP);
+                fbFiltered = combFeedbackLP_[0].processLPOnly (delayed, gLP);
             }
             else if (type_ == FilterType::CmbH || type_ == FilterType::FlgH)
             {
@@ -1134,7 +1135,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res, float g, c
                 const float fHP = std::max (20.0f, fCenter / (1.0f + bwFactor));
                 const float gLP = tanM (kPi * fLP / srFloat);
                 const float gHP = tanM (kPi * fHP / srFloat);
-                fbFiltered = combFeedbackHP_.processHPOnly (combFeedbackLP_.processLPOnly (delayed, gLP), gHP);
+                fbFiltered = combFeedbackHP_.processHPOnly (combFeedbackLP_[0].processLPOnly (delayed, gLP), gHP);
             }
 
             const float fbGain = 0.97f * res;
@@ -1160,7 +1161,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res, float g, c
             {
                 const float fLP = 50.0f + 18000.0f * var;
                 const float gLP = tanM (kPi * std::min (fLP, srFloat * 0.49f) / srFloat);
-                fbFiltered = combFeedbackLP_.processLPOnly (ap, gLP);
+                fbFiltered = combFeedbackLP_[0].processLPOnly (ap, gLP);
             }
             else if (type_ == FilterType::PhsH)
             {
@@ -1176,7 +1177,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res, float g, c
                 const float fHP = std::max (20.0f, fCenter / (1.0f + bwFactor));
                 const float gLP = tanM (kPi * fLP / srFloat);
                 const float gHP = tanM (kPi * fHP / srFloat);
-                fbFiltered = combFeedbackHP_.processHPOnly (combFeedbackLP_.processLPOnly (ap, gLP), gHP);
+                fbFiltered = combFeedbackHP_.processHPOnly (combFeedbackLP_[0].processLPOnly (ap, gLP), gHP);
             }
 
             rawOut = 0.5f * (drivenIn + softClip (fbFiltered * (1.0f + res)));
@@ -1291,7 +1292,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res, float g, c
         {
             const float d = std::max (2.0f, std::min (baseDelay * kCombRatios[i], static_cast<float> (sampleRate_ * 0.05)));
             const float delayed = reverbCombs_[i].read (d);
-            const float damped = combFeedbackLP_.processLPOnly (delayed, dampG);
+            const float damped = combFeedbackLP_[i].processLPOnly (delayed, dampG);
             reverbCombs_[i].write (drivenIn + softClip (0.85f * res * damped));
             sum += delayed;
         }
@@ -1323,7 +1324,7 @@ float FilterImpl::processInternal (float in, float cutoff, float res, float g, c
         {
             const float d = kRevDelayMs[i] * 0.001f * srFloat;
             const float delayed = reverbCombs_[i].read (d);
-            const float damped = combFeedbackLP_.processLPOnly (delayed, dampG);
+            const float damped = combFeedbackLP_[i].processLPOnly (delayed, dampG);
             reverbCombs_[i].write (drivenIn + softClip (0.8f * res * damped));
             sum += delayed;
         }
