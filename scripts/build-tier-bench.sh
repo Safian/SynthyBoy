@@ -75,7 +75,7 @@ for a in "${archs[@]}"; do
         if command -v ninja >/dev/null 2>&1; then GEN="Ninja"; else GEN="Unix Makefiles"; fi
         "$TRIPLE-g++" --version | head -1
         cmake -S /src -B /build -G "$GEN" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
-            -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_MPC_SHELL=OFF -DSYNTHYBOY_WITH_VITAL=OFF -DSYNTHYBOY_SHELL_ENGINE=own \
+            -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_MPC_SHELL=OFF -DSYNTHYBOY_WITH_VITAL=OFF \
             -DSYNTHYBOY_TIER_BENCH_STATIC=ON -DSYNTHYBOY_SECTION_TIMING=$( [ -n "$VARIANT" ] && echo ON || echo OFF )
         cmake --build /build --target synthyboy_tier_bench --parallel "$JOBS"
         rm -rf "/out/tier-bench-$ARCH$VARIANT"

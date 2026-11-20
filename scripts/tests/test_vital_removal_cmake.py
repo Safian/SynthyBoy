@@ -23,10 +23,10 @@ class DefaultEngine(unittest.TestCase):
         self.assertIsNotNone(m, "option(SYNTHYBOY_WITH_VITAL ...) not found")
         self.assertEqual(m.group(1), "OFF")
 
-    def test_shell_engine_defaults_to_own(self):
+    def test_the_shell_engine_is_not_selectable_and_never_vital(self):
         text = read("CMakeLists.txt")
         self.assertNotRegex(text, r'set\(SYNTHYBOY_SHELL_ENGINE_DEFAULT "vital"\)')
-        self.assertRegex(text, r'set\(SYNTHYBOY_SHELL_ENGINE "\$\{SYNTHYBOY_SHELL_ENGINE_DEFAULT\}"|set\(SYNTHYBOY_SHELL_ENGINE "own"')
+        self.assertNotIn("SYNTHYBOY_SHELL_ENGINE ", text.replace("SYNTHYBOY_SHELL_ENGINE_VITAL", ""))
 
 
 SHELL_FILES = [

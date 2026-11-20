@@ -51,7 +51,7 @@ if ! command -v arm-linux-gnueabihf-g++ >/dev/null 2>&1; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends g++-arm-linux-gnueabihf gcc-arm-linux-gnueabihf binutils-arm-linux-gnueabihf cmake make file git ca-certificates
 fi
 cmake -S /src -B /build -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=/src/cmake/toolchains/armv7-linux-gnueabihf.cmake \
-    -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_MPC_SHELL=OFF -DSYNTHYBOY_WITH_VITAL=OFF -DSYNTHYBOY_SHELL_ENGINE=own \
+    -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=ON -DSYNTHYBOY_BUILD_MPC_SHELL=OFF -DSYNTHYBOY_WITH_VITAL=OFF \
     -DCMAKE_EXE_LINKER_FLAGS=-static '"$extra_args"'
 cmake --build /build --target "$TARGET" --parallel "$JOBS"
 found=$(find /build -name "$TARGET" -type f | head -n 1)

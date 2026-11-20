@@ -1,5 +1,5 @@
 // SynthyBoy - golden images of the bitmap GUI: the editor as the extension renders it (not through the editor directly) at 390 x 844 (phone), 1024 x 768 (tablet) and 1024 x 600 (the
-// Akai MPC), compared with the stored pictures with a tolerance. SYNTHYBOY_UPDATE_GOLDEN=1 writes the goldens (tests/bitmap-gui/golden/); SYNTHYBOY_BITMAP_GUI_DUMP_DIR=dir writes the actual
+// Akai MPC), compared with the stored pictures with a tolerance. SYNTHYBOY_UPDATE_GOLDEN=1 writes the goldens (tests/bitmap-gui/golden-own/); SYNTHYBOY_BITMAP_GUI_DUMP_DIR=dir writes the actual
 // pictures as PNG (and the difference of a failed comparison).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
@@ -14,7 +14,7 @@
 using namespace bgtest;
 
 #ifndef SYNTHYBOY_GOLDEN_DIR
- #error "SYNTHYBOY_GOLDEN_DIR names tests/bitmap-gui/golden"
+ #error "SYNTHYBOY_GOLDEN_DIR names tests/bitmap-gui/golden-own"
 #endif
 
 namespace
