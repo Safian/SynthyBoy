@@ -31,10 +31,30 @@ option(SYNTHYBOY_TIER_BENCH_STATIC "Link synthyboy_tier_bench fully static (Linu
 if(SYNTHYBOY_TIER_BENCH_STATIC)
     target_link_options(synthyboy_tier_bench PRIVATE -static)
 endif()
+option(SYNTHYBOY_TIER_BENCH_STATIC_LIBCXX "Link the benchmarks with -static-libstdc++ -static-libgcc but dynamic glibc, like the plugin (libm of the device)" OFF)
 if(MSVC)
     target_compile_options(synthyboy_tier_bench PRIVATE /W4)
 else()
     target_compile_options(synthyboy_tier_bench PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# The libm of the device against the libm of the build (bench/libm_probe.cpp): links nothing of the engine; the same link rule as synthyboy_tier_bench.
+add_executable(synthyboy_libm_probe libm_probe.cpp)
+set_target_properties(synthyboy_libm_probe PROPERTIES CXX_EXTENSIONS OFF)
+if(SYNTHYBOY_TIER_BENCH_STATIC)
+    target_link_options(synthyboy_libm_probe PRIVATE -static)
+    target_compile_definitions(synthyboy_libm_probe PRIVATE SB_LIBM_PROBE_LINK="static")
+else()
+    target_compile_definitions(synthyboy_libm_probe PRIVATE SB_LIBM_PROBE_LINK="dynamic")
+    if(SYNTHYBOY_TIER_BENCH_STATIC_LIBCXX)
+        target_link_options(synthyboy_tier_bench PRIVATE -static-libstdc++ -static-libgcc)
+        target_link_options(synthyboy_libm_probe PRIVATE -static-libstdc++ -static-libgcc)
+    endif()
+endif()
+if(MSVC)
+    target_compile_options(synthyboy_libm_probe PRIVATE /W4)
+else()
+    target_compile_options(synthyboy_libm_probe PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # What a profile step changes in the sound (bench/profile_compare.cpp): level and spectrum differences of every factory preset between two profiles.
@@ -59,8 +79,8 @@ else()
     target_compile_options(synthyboy_fx_makeup_calibrate PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# The libm of the device against the libm of the build: the cost of the math functions the engine calls and of the two clocks (bench/libm_probe.cpp; run it on
-# the device, a static and a dynamic build of it give the difference of the two links).
+# The cost of the math functions the engine calls and of the two clocks (bench/libm_probe.cpp; run it on the device, a static and a dynamic build of it give the
+# difference of the two links).
 add_test(NAME synthyboy_libm_probe COMMAND synthyboy_libm_probe --quick)
 set_tests_properties(synthyboy_libm_probe PROPERTIES PASS_REGULAR_EXPRESSION "LIBM-PROBE-RESULT ok" TIMEOUT 120)
 
