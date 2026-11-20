@@ -61,6 +61,21 @@ else()
     target_compile_options(synthyboy_libm_probe PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# The hardware performance counters (bench/pmu_probe.cpp, bench/perf/perf_pmu.h): links nothing of the engine; the same link rule as synthyboy_tier_bench.
+add_executable(synthyboy_pmu_probe pmu_probe.cpp)
+target_include_directories(synthyboy_pmu_probe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+set_target_properties(synthyboy_pmu_probe PROPERTIES CXX_EXTENSIONS OFF)
+if(SYNTHYBOY_TIER_BENCH_STATIC)
+    target_link_options(synthyboy_pmu_probe PRIVATE -static)
+elseif(SYNTHYBOY_TIER_BENCH_STATIC_LIBCXX)
+    target_link_options(synthyboy_pmu_probe PRIVATE -static-libstdc++ -static-libgcc)
+endif()
+if(MSVC)
+    target_compile_options(synthyboy_pmu_probe PRIVATE /W4)
+else()
+    target_compile_options(synthyboy_pmu_probe PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 # What a profile step changes in the sound (bench/profile_compare.cpp): level and spectrum differences of every factory preset between two profiles.
 add_executable(synthyboy_profile_compare profile_compare.cpp)
 target_link_libraries(synthyboy_profile_compare PRIVATE synthyboy_core)

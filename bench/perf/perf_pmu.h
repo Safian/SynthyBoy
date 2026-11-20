@@ -96,14 +96,17 @@ public:
     PmuReader& operator= (const PmuReader&) = delete;
     ~PmuReader() { close(); }
 
-    bool open (PmuSet set, std::string& why)
+    bool open (PmuSet set, std::string& why) { return openEvents (eventSet (set), why); }
+
+    /** The events of any list (at most 8, the first is the group leader); after a failure lastErrno() is the errno of the call. */
+    bool openEvents (const std::vector<PmuEventSpec>& specs, std::string& why)
     {
         close();
+        lastErrno_ = 0;
 #if defined(__linux__) && defined(__NR_perf_event_open)
-        const std::vector<PmuEventSpec> specs = eventSet (set);
-        if (specs.size() > 8)
+        if (specs.empty() || specs.size() > 8)
         {
-            why = "too many events";
+            why = "no events or too many";
             return false;
         }
         for (const PmuEventSpec& spec : specs)
@@ -121,6 +124,7 @@ public:
             const long fd = ::syscall (__NR_perf_event_open, &attr, 0 /* this thread */, -1 /* any cpu */, leader, PERF_FLAG_FD_CLOEXEC);
             if (fd < 0)
             {
+                lastErrno_ = errno;
                 why = explainOpenError (errno, parseParanoid (readTextFile ("/proc/sys/kernel/perf_event_paranoid")));
                 close();
                 return false;
@@ -134,7 +138,7 @@ public:
         why.clear();
         return true;
 #else
-        (void) set;
+        (void) specs;
         why = "not Linux";
         return false;
 #endif
@@ -173,6 +177,7 @@ public:
 #endif
     }
 
+    int lastErrno() const noexcept { return lastErrno_; }
     int count() const noexcept { return n_; }
     const char* name (int i) const noexcept { return i >= 0 && i < n_ ? names_[i] : ""; }
 
@@ -180,5 +185,6 @@ private:
     int fds_[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
     const char* names_[8] = {};
     int n_ = 0;
+    int lastErrno_ = 0;
 };
 } // namespace synthyboy::perf
