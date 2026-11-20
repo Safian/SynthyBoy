@@ -65,5 +65,37 @@ class TestDefinitions(unittest.TestCase):
         self.assertNotRegex(read("tests/bitmap-gui/CMakeLists.txt"), r'/golden"')
 
 
+class ReferenceToolsGone(unittest.TestCase):
+    """R5 (V3): the tools that measure against the Vital engine, their scripts and the Vital engine round trip are gone; no file still points at them."""
+
+    GONE = [
+        "tools/param-audit", "tools/ref-compare", "scripts/run-param-audit.sh", "scripts/param_audit_report.py", "scripts/run-ref-compare.sh",
+        "tools/vital-import/vital_roundtrip.cpp", "tools/own-oracle/CMakeLists.txt", "tools/own-oracle/own_oracle.cpp",
+        "tools/own-oracle/fx_oracle.cpp", "tools/own-oracle/osc_oracle.cpp",
+    ]
+
+    def test_paths_are_gone(self):
+        for f in self.GONE:
+            self.assertFalse(os.path.exists(os.path.join(ROOT, f)), f)
+
+    def test_the_helper_header_of_the_own_engine_tests_stays(self):
+        # core/tests/test_own_*.cpp include own_oracle.h from tools/own-oracle (core/tests/CMakeLists.txt adds the include directory)
+        self.assertTrue(os.path.isfile(os.path.join(ROOT, "tools", "own-oracle", "own_oracle.h")))
+
+    def test_no_build_file_names_the_removed_tools(self):
+        text = read("CMakeLists.txt")
+        for name in ("tools/param-audit", "tools/ref-compare", "tools/own-oracle"):
+            self.assertNotIn(name, text)
+        self.assertNotIn("synthyboy_vital_roundtrip", read("tools/vital-import/CMakeLists.txt"))
+
+    def test_bench_has_one_engine(self):
+        text = read("bench/bench_engine.cpp")
+        self.assertNotIn("EngineKind::vital", text)
+        self.assertNotRegex(text, r"own\|vital")
+
+    def test_audit_script_has_no_engine_round_trip(self):
+        self.assertNotIn("roundtrip", read("scripts/audit-vital-import.py"))
+
+
 if __name__ == "__main__":
     unittest.main()
