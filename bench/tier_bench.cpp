@@ -7,7 +7,7 @@
 //   synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets]
 //                        [--seconds 30] [--repeat N] [--budget PCT] [--notes K] [--retrigger 1] [--paced] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz]
 //                        [--sections] [--list] [--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] [--pmu compute|cache] [--pmu-require]
-//                        [--evict] [--first-blocks N]
+//                        [--evict] [--first-blocks N] [--modules] [--module-group GROUP] [--module-reps N]
 //
 //   --core N        pin the measuring thread to CPU N (Linux: sched_setaffinity; elsewhere the option is refused). The frequency governor is not touched. The CPU the run
 //                   really was on, its part number and its frequency settings are printed. The engine's helper threads are moved to the other CPUs (see --no-helpers-away).
@@ -25,6 +25,12 @@
 //   --evict         cold caches: before every block, outside the timed region, a read-modify-write of a buffer of twice the largest cache level of the measured core
 //                   (/sys/devices/system/cpu/cpuN/cache; 4 MiB without them) pushes the engine's working set out. The ratio of the evict run to the warm run is the
 //                   cache sensitivity of the load. The csv column cold_mode says evict or warm.
+//   --modules       no preset loads: the cost of every module on its own (bench/perf/perf_modules.h: every effect type, filter model, warp type, the morph, unison 3 / 7 / 16,
+//                   Osc 2, Osc 3, Sub, Noise). Per profile and case: the base load "basic" and the case are run one after the other, --module-reps times, and the cost is the
+//                   median over the repetitions of (median block time of the case - that of the base): no clock inside the engine. One line per case, then "module-table:".
+//                   --seconds defaults to 2 here. With --rt a run that the health rules mark INVALID is repeated (--retry-invalid).
+//   --module-group G  only the cases of one group: fx, filter, warp, morph, unison or osc (default all)
+//   --module-reps N   repetitions of every case (default 3)
 //   --first-blocks N  no steady run: for every profile and load a fresh engine, the time of prepare (), then the first N blocks (1 .. 64) with the chord struck in block 0 and no
 //                   warm-up, each with its time and its minor page faults: the first-note and first-touch cost that a long run hides
 //   --retry-invalid N  a run that the health rules mark INVALID (a stall, run queue delay, a frequency drop, a major page fault, heat) is repeated up to N times (default 2);
@@ -109,6 +115,7 @@
 #include "device_profile.h"
 #include "own_heavy_patch.h"
 #include "perf/perf_env.h"
+#include "perf/perf_modules.h"
 #include "perf/perf_pmu.h"
 #include "perf/perf_sched.h"
 #include "perf/perf_stats.h"
@@ -276,6 +283,10 @@ struct Options
     bool pmuRequire = false; // --pmu-require
     bool evict = false;      // --evict
     int firstBlocks = 0;     // --first-blocks
+    bool modules = false;    // --modules
+    int moduleReps = 3;      // --module-reps
+    std::string moduleGroup = "all"; // --module-group
+    bool secondsGiven = false;       // --seconds was on the command line (--modules runs 2 s without it)
 };
 
 struct PresetData
@@ -305,10 +316,11 @@ bool loadPresetFile (const std::string& path, PresetData& out)
 
 struct Load
 {
-    enum Kind { worst, heavy, basic, preset } kind = basic;
+    enum Kind { worst, heavy, basic, preset, moduleCase } kind = basic;
     std::string name;
     std::string group; // "synthetic" or the category of the preset
     PresetData data;
+    std::vector<std::pair<std::string, float>> params; // moduleCase: the parameters set on top of the defaults (perf/perf_modules.h)
 };
 
 void setIfKnown (IEngine& engine, const std::string& key, float value)
@@ -367,6 +379,11 @@ void applyLoad (IEngine& engine, const Load& load)
         case Load::worst: worstPatch (engine); break;
         case Load::heavy: bench::ownHeavyPatch (engine); break;
         case Load::basic: setIfKnown (engine, "master.polyphony", 32.0f); break;
+        case Load::moduleCase:
+            setIfKnown (engine, "master.polyphony", 32.0f);   // as basic
+            for (const auto& p : load.params)
+                setIfKnown (engine, p.first, p.second);
+            break;
         case Load::preset:
             for (size_t i = 0; i < paramCount(); ++i)
                 engine.setParam (table[i].id, load.data.values.plain[i]);
@@ -735,7 +752,7 @@ long currentKhz (int cpu)
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
                           "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--scalar-warp] [--no-voice-savings] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list] "
                           "[--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] "
-                          "[--pmu compute|cache] [--pmu-require] [--evict] [--first-blocks N]\n", message);
+                          "[--pmu compute|cache] [--pmu-require] [--evict] [--first-blocks N] [--modules] [--module-group GROUP] [--module-reps N]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -1006,7 +1023,7 @@ int main (int argc, char** argv)
         else if (a == "--config")      o.configs.push_back (next());
         else if (a == "--load")        o.loads.push_back (next());
         else if (a == "--all-presets") o.allPresets = true;
-        else if (a == "--seconds")     o.seconds = std::atof (next());
+        else if (a == "--seconds")     { o.seconds = std::atof (next()); o.secondsGiven = true; }
         else if (a == "--notes")       o.notes = std::atoi (next());
         else if (a == "--retrigger")   o.retrigger = std::atof (next());
         else if (a == "--paced")       o.paced = true;
@@ -1036,13 +1053,20 @@ int main (int argc, char** argv)
         else if (a == "--pmu")         o.pmu = next();
         else if (a == "--pmu-require") o.pmuRequire = true;
         else if (a == "--evict")       o.evict = true;
+        else if (a == "--modules")     o.modules = true;
+        else if (a == "--module-group") o.moduleGroup = next();
+        else if (a == "--module-reps") o.moduleReps = std::atoi (next());
         else if (a == "--first-blocks") o.firstBlocks = std::atoi (next());
         else usage (("unknown argument " + a).c_str());
     }
     if (o.seconds <= 0.0 || o.block < 1 || o.block > 8192 || o.notes < 0 || o.notes > kMaxVoices || o.sampleRate < 8000.0 || o.retrigger <= 0.0 || o.repeat < 1 || o.repeat > 99 || o.budget < 0.0
         || (o.rt != 0 && (o.rt < 1 || o.rt > 99)) || o.rtGapMs < -1.0 || o.retryInvalid < 0 || o.retryInvalid > 9
-        || (! o.pmu.empty() && o.pmu != "compute" && o.pmu != "cache") || o.firstBlocks < 0 || o.firstBlocks > 64)
+        || (! o.pmu.empty() && o.pmu != "compute" && o.pmu != "cache") || o.firstBlocks < 0 || o.firstBlocks > 64
+        || o.moduleReps < 1 || o.moduleReps > 99 || (o.moduleGroup != "all" && o.moduleGroup != "fx" && o.moduleGroup != "filter" && o.moduleGroup != "warp" && o.moduleGroup != "morph"
+                                                      && o.moduleGroup != "unison" && o.moduleGroup != "osc"))
         usage ("argument out of range");
+    if (o.modules && ! o.secondsGiven)
+        o.seconds = 2.0;
     if (o.micro)
     {
 #if defined(__linux__)
@@ -1157,7 +1181,7 @@ int main (int argc, char** argv)
     }
     for (const auto& n : o.loads)
         addNamed (n, true);
-    if (loads.empty())
+    if (loads.empty() && ! o.modules)
     {
         addNamed ("worst", true);
         for (const char* n : kHeavy)
@@ -1304,6 +1328,63 @@ int main (int argc, char** argv)
         }
         std::printf ("verify: %d of %d renders differ\n", failures, runs);
         return failures == 0 ? 0 : 1;
+    }
+
+    if (o.modules)
+    {
+        // the base ("basic") and the case, one after the other, moduleReps times; cost = the median over the repetitions of (median block time of the case - that of the base)
+        Load base;
+        base.kind = Load::basic;
+        base.name = "basic";
+        base.group = "synthetic";
+        const double budgetUs = 1.0e6 * o.block / o.sampleRate;
+        auto median = [] (std::vector<double> v) { std::sort (v.begin(), v.end()); return v[v.size() / 2]; };
+        auto runGated = [&] (const synthyboy_mpc::Profile& profile, const Load& l, int notes)
+        {
+            Result r;
+            for (int attempt = 0;; ++attempt)
+            {
+                r = run (o, profile, l, notes, cpu);
+                if (o.rt <= 0 || r.valid || attempt >= o.retryInvalid)
+                    break;
+                std::printf ("    retry %d: %s\n", attempt + 1, r.invalidReason.c_str());
+            }
+            return r;
+        };
+        const std::vector<perf::ModuleCase> cases = perf::moduleCases();
+        size_t printed = 0;
+        for (size_t c = 0; c < configs.size(); ++c)
+        {
+            const int notes = o.notes > 0 ? o.notes : profiles[c].maxVoices;
+            std::printf ("\nmodule costs under %s with %d notes (%.1f s per run, %d repetition%s)\n", configs[c].c_str(), notes, o.seconds, o.moduleReps, o.moduleReps == 1 ? "" : "s");
+            for (const auto& mc : cases)
+            {
+                if (o.moduleGroup != "all" && mc.group != o.moduleGroup)
+                    continue;
+                Load l;
+                l.kind = Load::moduleCase;
+                l.name = mc.name;
+                l.group = mc.group;
+                l.params = mc.params;
+                std::vector<double> baseUs, caseUs, costUs;
+                for (int rep = 0; rep < o.moduleReps; ++rep)
+                {
+                    const double b = 1000.0 * runGated (profiles[c], base, notes).medianMs;
+                    const double m = 1000.0 * runGated (profiles[c], l, notes).medianMs;
+                    baseUs.push_back (b);
+                    caseUs.push_back (m);
+                    costUs.push_back (m - b);
+                }
+                const double baseMed = median (baseUs), caseMed = median (caseUs), cost = median (costUs);
+                const double spread = baseMed > 0.0 ? 100.0 * (*std::max_element (costUs.begin(), costUs.end()) - *std::min_element (costUs.begin(), costUs.end())) / baseMed : 0.0;
+                std::printf ("module %s | %s | base %.2f us | case %.2f us | cost %+.2f us | %+.2f %% of block | reps %d | spread %.1f %%\n", mc.group.c_str(), mc.name.c_str(), baseMed, caseMed,
+                             cost, 100.0 * cost / budgetUs, o.moduleReps, spread);
+                std::fflush (stdout);
+                ++printed;
+            }
+        }
+        std::printf ("module-table: %zu cases\n", printed);
+        return 0;
     }
 
     if (o.firstBlocks > 0)
