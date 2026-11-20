@@ -972,9 +972,11 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
     else if (type == kOscTypeMultisample && boundSet != nullptr && boundSet->instrument[oscIdx] != nullptr)
     {
         const multisample::Instrument& inst = *boundSet->instrument[oscIdx];
-        const float t = static_cast<float> (t0 + n) * invP;
-        for (int slot = 0; slot < kSlots; ++slot)
-            for (int u = 0; u < U; ++u)
+        for (int u = 0; u < U; ++u)
+        {
+            float vL[kControlPeriod] = {}, vR[kControlPeriod] = {};
+            bool any = false;
+            for (int slot = 0; slot < kSlots; ++slot)
             {
                 Layer& l = layers[static_cast<size_t> (slot * kMaxU + u)];
                 if (!l.voice.isActive())
@@ -988,8 +990,15 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
                     st += (lp.bendTrack ? lp.noteSemis - lp.noteRaw : 0.0f);
                 st += uni[u].det;
                 l.voice.setReferenceKernels (lp.referenceKernels);
-                l.voice.processAdd (L, R, a, b, n, st, nullptr, lerp (uni[u].gPrevL, uni[u].gL, t), lerp (uni[u].gPrevR, uni[u].gR, t));
+                l.voice.processAdd (vL, vR, a, b, n, st, nullptr, 1.0f, 1.0f);
+                any = true;
             }
+            if (any)
+            {
+                mixLane (L, vL, uni[u].gPrevL, uni[u].gL, t0, n, invP);
+                mixLane (R, vR, uni[u].gPrevR, uni[u].gR, t0, n, invP);
+            }
+        }
     }
 }
 
