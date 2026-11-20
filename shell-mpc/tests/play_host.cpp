@@ -656,6 +656,50 @@ int main (int argc, char** argv)
     check (still >= 12 && totalReports.load() - b2 <= 14 && a->getParameter (a, prox0 + 2 * pl::kSlots) == a->getParameter (a, pl::realIndex (2, 7, 0)), "echoing host: a selector change causes the 8 proxy reports (+ selector + echoes), then nothing runs on (" + std::to_string (totalReports.load() - b2) + " reports)");
     echo.store (false);
     closeIt (a);
+
+    // ---- developer play log of note velocity events (shell-mpc/play_log.h)
+    {
+        const std::string base = "/tmp/sb-play-vel-" + std::to_string (static_cast<long> (getpid()));
+        ::setenv ("SYNTHYBOY_MPC_PLAY_LOG_FILE", base.c_str(), 1);
+        std::remove ((base + ".txt").c_str());
+        if (FILE* f = std::fopen (base.c_str(), "w")) std::fclose (f);
+
+        AEffect* ve = make();
+        check (ve != nullptr, "play log: instance created");
+        if (ve)
+        {
+            VstMidiEvent m40; std::memset (&m40, 0, sizeof (m40));
+            m40.type = kVstMidiType; m40.byteSize = sizeof (VstMidiEvent);
+            m40.midiData[0] = static_cast<char> (0x90); m40.midiData[1] = 60; m40.midiData[2] = 40;
+
+            VstMidiEvent m127; std::memset (&m127, 0, sizeof (m127));
+            m127.type = kVstMidiType; m127.byteSize = sizeof (VstMidiEvent);
+            m127.midiData[0] = static_cast<char> (0x90); m127.midiData[1] = 62; m127.midiData[2] = 127;
+
+            VstEvent* evArr[2] = { reinterpret_cast<VstEvent*> (&m40), reinterpret_cast<VstEvent*> (&m127) };
+            VstEvents evs; std::memset (&evs, 0, sizeof (evs));
+            evs.numEvents = 2; evs.events[0] = evArr[0]; evs.events[1] = evArr[1];
+
+            ve->dispatcher (ve, effProcessEvents, 0, 0, &evs, 0.0f);
+            sleepMs (600); // allow the display thread to drain the log
+
+            std::string log;
+            if (FILE* lf = std::fopen ((base + ".txt").c_str(), "r"))
+            {
+                char buf[4096];
+                while (size_t nr = std::fread (buf, 1, sizeof (buf), lf))
+                    log.append (buf, nr);
+                std::fclose (lf);
+            }
+            check (log.find ("note_on channel 1 note 60 vel 40 engine 40 dropped 0") != std::string::npos,
+                   "play log contains note-on with velocity 40");
+            check (log.find ("note_on channel 1 note 62 vel 127 engine 127 dropped 0") != std::string::npos,
+                   "play log contains note-on with velocity 127");
+            closeIt (ve);
+        }
+        std::remove (base.c_str());
+        std::remove ((base + ".txt").c_str());
+    }
     std::printf ("%s  (%d failures)\n", fails ? "FAIL" : "OK", fails);
     return fails ? 1 : 0;
 }
