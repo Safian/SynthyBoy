@@ -81,6 +81,12 @@ def main():
                    lambda w, y: 0.5 * ((1.0 - 2.0 * w) + (1.0 - 2.0 * ((w * (1.0 + 0.04 * (1.0 + 3.0 * y))) % 1.0))))
     make_wavetable(os.path.join(digital_dir, "Sub_808_drop.wav"), 64,
                    lambda w, y: math.sin(2.0 * math.pi * (w + (2.0 + 6.0 * y) * w * ((1.0 - w) ** 2))))
+    make_wavetable(os.path.join(digital_dir, "Donk_bass.wav"), 64,
+                   lambda w, y: math.sin(2.0 * math.pi * (w + (4.0 + 10.0 * y) * w * ((1.0 - w) ** 3))))
+    make_wavetable(os.path.join(digital_dir, "Dirty_sync.wav"), 64,
+                   lambda w, y: (1.0 - 2.0 * ((w * (1.0 + 7.0 * y)) % 1.0)) * (1.0 - 0.4 * math.sin(math.pi * w)))
+    make_wavetable(os.path.join(digital_dir, "Neuro_squelch.wav"), 64,
+                   lambda w, y: math.tanh(2.5 * math.sin(2.0 * math.pi * w * (1.0 + 4.0 * y)) * math.exp(-3.0 * w) + 0.5 * math.sin(2.0 * math.pi * w)))
 
     # --- Analog & Shapes ---
     for d in (target_dir, analog_dir):
@@ -116,6 +122,10 @@ def main():
                    lambda w, y: 0.5 * ((1.0 - 2.0 * w) + (1.0 - 2.0 * ((w + 0.05 + 0.3 * y) % 1.0))))
     make_wavetable(os.path.join(analog_dir, "Tape_saturate.wav"), 64,
                    lambda w, y: math.tanh(2.0 * math.sin(2.0 * math.pi * (w + 0.03 * y * math.sin(2.0 * math.pi * w * 3.0)))))
+    make_wavetable(os.path.join(analog_dir, "Casio_CZ_res.wav"), 64,
+                   lambda w, y: math.sin(2.0 * math.pi * w * (2.0 + 10.0 * y)) * 0.5 * (1.0 - math.cos(2.0 * math.pi * w)))
+    make_wavetable(os.path.join(analog_dir, "Hypersaw_5x.wav"), 64,
+                   lambda w, y: 0.2 * ((1.0 - 2.0 * w) + (1.0 - 2.0 * ((w * (1.01 + 0.03 * y)) % 1.0)) + (1.0 - 2.0 * ((w * (0.99 - 0.03 * y) + 1.0) % 1.0)) + (1.0 - 2.0 * ((w * (1.02 + 0.06 * y)) % 1.0)) + (1.0 - 2.0 * ((w * (0.98 - 0.06 * y) + 1.0) % 1.0))))
 
     # --- Spectral & Harmonics ---
     for d in (target_dir, spectral_dir):
@@ -132,11 +142,19 @@ def main():
                    lambda w, y: 0.5 * math.sin(2.0 * math.pi * w * (2.0 ** y)) + 0.7 * math.sin(2.0 * math.pi * w * (2.0 ** (1.0 + y))) + 0.5 * math.sin(2.0 * math.pi * w * (2.0 ** (2.0 + y))) + 0.3 * math.sin(2.0 * math.pi * w * (2.0 ** (3.0 + y))))
     make_wavetable(os.path.join(spectral_dir, "Chime_bells.wav"), 64,
                    lambda w, y: math.sin(2.0 * math.pi * w) + math.sin(math.pi * w) * (0.65 * math.sin(2.0 * math.pi * w * 2.76) + 0.4 * math.sin(2.0 * math.pi * w * 5.4) + 0.2 * math.sin(2.0 * math.pi * w * 8.9)))
+    make_wavetable(os.path.join(spectral_dir, "Gamelan_gong.wav"), 64,
+                   lambda w, y: math.sin(2.0 * math.pi * w) + math.sin(math.pi * w) * (0.8 * math.sin(2.0 * math.pi * w * 1.52) + 0.6 * math.sin(2.0 * math.pi * w * 2.76) + 0.4 * math.sin(2.0 * math.pi * w * (4.2 + 2.0 * y))))
+    make_wavetable(os.path.join(spectral_dir, "Harmonic_ladder.wav"), 64,
+                   lambda w, y: math.sin(2.0 * math.pi * w) + 0.5 * math.sin(4.0 * math.pi * w) * y + 0.33 * math.sin(6.0 * math.pi * w) * (y ** 2) + 0.25 * math.sin(8.0 * math.pi * w) * (y ** 3) + 0.2 * math.sin(10.0 * math.pi * w) * (y ** 4))
+    make_wavetable(os.path.join(spectral_dir, "Chebyshev_fold.wav"), 64,
+                   lambda w, y: math.sin(2.0 * math.pi * w) - 0.5 * y * math.sin(6.0 * math.pi * w) + 0.3 * y * math.sin(10.0 * math.pi * w))
 
     # --- Vowel & Formants ---
     for d in (target_dir, vowel_dir):
         make_wavetable(os.path.join(d, "Vowel_formant.wav"), 64,
                        lambda w, y: math.sin(math.pi * w) * (math.sin(2.0 * math.pi * w * (2.0 + 5.0 * y)) + 0.7 * math.sin(2.0 * math.pi * w * (5.0 + 9.0 * y))))
+    make_wavetable(os.path.join(vowel_dir, "Vowel_talkbox.wav"), 64,
+                   lambda w, y: math.sin(math.pi * w) * (math.sin(2.0 * math.pi * w * (1.0 + 4.0 * y)) + 0.8 * math.sin(2.0 * math.pi * w * (3.0 + 8.0 * y)) + 0.5 * math.sin(2.0 * math.pi * w * (6.0 + 10.0 * y))))
 
 if __name__ == "__main__":
     main()

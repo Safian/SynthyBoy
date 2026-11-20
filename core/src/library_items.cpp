@@ -124,6 +124,15 @@ const std::vector<FormulaExample>& formulaExamples()
         { "Comb filter sweep (y)", "1 - w - ((w + 0.05 + 0.3*y) % 1)" },
         { "Tape saturate (y)", "tanh(2.0 * sin(2*pi * (w + 0.03 * y * sin(2*pi*w * 3))))" },
         { "Chime bells", "sin(2*pi*w) + sin(pi*w) * (0.65*sin(2*pi*w * 2.76) + 0.4*sin(2*pi*w * 5.4) + 0.2*sin(2*pi*w * 8.9))" },
+        { "Donk bass (y)", "sin(2*pi * (w + (4 + 10*y) * w * (1 - w)^3))" },
+        { "Dirty sync (y)", "(1 - 2 * ((w * (1.0 + 7.0*y)) % 1)) * (1 - 0.4 * sin(pi*w))" },
+        { "Neuro squelch (y)", "tanh(2.5 * sin(2*pi*w * (1 + 4*y)) * exp(-3*w) + 0.5 * sin(2*pi*w))" },
+        { "Casio CZ res (y)", "sin(2*pi*w * (2 + 10*y)) * 0.5 * (1 - cos(2*pi*w))" },
+        { "Hypersaw 5x (y)", "0.2 * (5 - 2*w - 2*((w*(1.01+0.03*y))%1) - 2*((w*(0.99-0.03*y)+1)%1) - 2*((w*(1.02+0.06*y))%1) - 2*((w*(0.98-0.06*y)+1)%1))" },
+        { "Gamelan gong (y)", "sin(2*pi*w) + sin(pi*w) * (0.8*sin(2*pi*w * 1.52) + 0.6*sin(2*pi*w * 2.76) + 0.4*sin(2*pi*w * (4.2 + 2.0*y)))" },
+        { "Harmonic ladder (y)", "sin(2*pi*w) + 0.5*sin(4*pi*w) * y + 0.33*sin(6*pi*w) * y^2 + 0.25*sin(8*pi*w) * y^3 + 0.2*sin(10*pi*w) * y^4" },
+        { "Vowel talkbox (y)", "sin(pi*w) * (sin(2*pi*w * (1 + 4*y)) + 0.8 * sin(2*pi*w * (3 + 8*y)) + 0.5 * sin(2*pi*w * (6 + 10*y)))" },
+        { "Chebyshev fold (y)", "sin(2*pi*w) - 0.5*y * sin(6*pi*w) + 0.3*y * sin(10*pi*w)" },
     };
     return examples;
 }

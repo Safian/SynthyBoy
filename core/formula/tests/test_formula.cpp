@@ -887,4 +887,63 @@ TEST (formula_dnb_wave_generation)
     CHECK (! f.isMultiFrame());
     CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
     CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 23. Donk bass (y)
+    err = Formula::compile ("sin(2*pi * (w + (4 + 10*y) * w * (1 - w)^3))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 24. Dirty sync (y)
+    err = Formula::compile ("(1 - 2 * ((w * (1.0 + 7.0*y)) % 1)) * (1 - 0.4 * sin(pi*w))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 25. Neuro squelch (y)
+    err = Formula::compile ("tanh(2.5 * sin(2*pi*w * (1 + 4*y)) * exp(-3*w) + 0.5 * sin(2*pi*w))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 26. Casio CZ res (y)
+    err = Formula::compile ("sin(2*pi*w * (2 + 10*y)) * 0.5 * (1 - cos(2*pi*w))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 27. Hypersaw 5x (y)
+    err = Formula::compile ("0.2 * (5 - 2*w - 2*((w*(1.01+0.03*y))%1) - 2*((w*(0.99-0.03*y)+1)%1) - 2*((w*(1.02+0.06*y))%1) - 2*((w*(0.98-0.06*y)+1)%1))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 28. Gamelan gong (y)
+    err = Formula::compile ("sin(2*pi*w) + sin(pi*w) * (0.8*sin(2*pi*w * 1.52) + 0.6*sin(2*pi*w * 2.76) + 0.4*sin(2*pi*w * (4.2 + 2.0*y)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 29. Harmonic ladder (y)
+    err = Formula::compile ("sin(2*pi*w) + 0.5*sin(4*pi*w) * y + 0.33*sin(6*pi*w) * y^2 + 0.25*sin(8*pi*w) * y^3 + 0.2*sin(10*pi*w) * y^4", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 30. Vowel talkbox (y)
+    err = Formula::compile ("sin(pi*w) * (sin(2*pi*w * (1 + 4*y)) + 0.8 * sin(2*pi*w * (3 + 8*y)) + 0.5 * sin(2*pi*w * (6 + 10*y)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 31. Chebyshev fold (y)
+    err = Formula::compile ("sin(2*pi*w) - 0.5*y * sin(6*pi*w) + 0.3*y * sin(10*pi*w)", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
 }

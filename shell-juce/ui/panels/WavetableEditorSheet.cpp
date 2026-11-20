@@ -875,11 +875,13 @@ private:
                 || name.find ("Acid") != std::string::npos || name.find ("sync") != std::string::npos
                 || name.find ("FM") != std::string::npos || name.find ("Bitcrush") != std::string::npos
                 || name.find ("Modern talking") != std::string::npos || name.find ("Reese") != std::string::npos
-                || name.find ("808") != std::string::npos)
+                || name.find ("808") != std::string::npos || name.find ("Donk") != std::string::npos
+                || name.find ("squelch") != std::string::npos)
             {
                 digitalMenu.addItem (id, itemText);
             }
-            else if (name.find ("Vowel") != std::string::npos || name.find ("Formant") != std::string::npos)
+            else if (name.find ("Vowel") != std::string::npos || name.find ("Formant") != std::string::npos
+                     || name.find ("talkbox") != std::string::npos || name.find ("Talkbox") != std::string::npos)
             {
                 vowelMenu.addItem (id, itemText);
             }
@@ -887,13 +889,14 @@ private:
                      || name.find ("Harmonic") != std::string::npos || name.find ("Bell") != std::string::npos
                      || name.find ("Metallic") != std::string::npos || name.find ("Organ") != std::string::npos
                      || name.find ("Pluck") != std::string::npos || name.find ("pluck") != std::string::npos
-                     || name.find ("Chime") != std::string::npos || name.find ("Shepard") != std::string::npos)
+                     || name.find ("Chime") != std::string::npos || name.find ("Shepard") != std::string::npos
+                     || name.find ("Gamelan") != std::string::npos || name.find ("gong") != std::string::npos)
             {
                 spectralMenu.addItem (id, itemText);
             }
             else if (name.find ("folded") != std::string::npos || name.find ("wavefold") != std::string::npos
-                     || name.find ("rectified") != std::string::npos || name.find ("Comb") != std::string::npos
-                     || name.find ("Tape") != std::string::npos)
+                     || name.find ("fold") != std::string::npos || name.find ("rectified") != std::string::npos
+                     || name.find ("Comb") != std::string::npos || name.find ("Tape") != std::string::npos)
             {
                 shapingMenu.addItem (id, itemText);
             }
