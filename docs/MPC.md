@@ -1474,6 +1474,26 @@ Every call of the host is answered on the host's thread. The longest work each c
 
 The display thread's calls into the host (`audioMasterAutomate`, `UpdateDisplay`) are made only after the host has called us once, and never after effClose began.
 
+## Memory on the Key 61
+
+Measured 2026-11-20/21 on the MPC Key 61 (armv7, MPC OS 3.10.1.12, develop `bf18c706`). The device reports `MemTotal` 4,113,388 kB (4 GB, not 2 GB) and has no swap (`SwapFree` 0): the OOM killer is the only limit.
+
+**Engine probe** (`synthyboy_test_own_memory` built static for armv7 with `scripts/build-arm32-test.sh`, run on the device; the Mac gives 67.2 MB and 2515 allocations for tier low). One instance of tier low: 4761 allocations, 72.38 MB heap (peak 105.6 MB), prepare 51.8 ms voices and 38.8 ms effects; four instances: 289.5 MB (peak 322.8 MB). The tiers xl and high print the same bytes as low (not understood), and the probe's `rss_kb` column is not usable. The built-in 33.1 MB wavetable bank is warmed before the counters start and exists once per process.
+
+**The real host** (test project Sbtest, one Spectral preset (Spectral Vowel Freeze) per SynthyBoy track, tier low, one note held, readings 8 to 20 s after the preset load, nothing saved):
+
+| SynthyBoy tracks | MPC VmRSS | VmHWM | MemAvailable | MemFree | VmRSS per added track | threads |
+|---|---|---|---|---|---|---|
+| 1 | 996,484 kB | 1,095,532 kB | 2,707,872 kB | 1,193,072 kB | | 53 |
+| 2 | 1,077,256 kB | 1,095,532 kB | 2,627,048 kB | 1,112,248 kB | +80,772 kB | 55 |
+| 3 | 1,166,656 kB | 1,166,656 kB | 2,536,968 kB | 1,022,152 kB | +89,400 kB | 57 |
+| 4 | not measured: the host app crashed while the 4th track was being added (see below) | | | | | |
+| Sbtest reopened from disk after the restart (one track) | 938,436 kB | 1,063,400 kB | 2,722,884 kB | 1,206,692 kB | | 53 |
+
+About 80 to 90 MB of host RSS per added SynthyBoy track (a little above the 72 MB heap of the probe). No `VmSwap`, no OOM or kill line in `dmesg` at any reading. Extrapolation (NOT measured): a fourth track would leave about 2.45 GB available. Memory did come back to the one-track level after the reopen.
+
+The host app (`MPC`, pid 15978) crashed at 00:27:46 (a Sentry crash envelope was sent) while the plugin list was being scrolled for the fourth track, with the dialog of track 8 open; it restarted as pid 7135 (uptime 2 days: not a reboot). MemAvailable was about 2.5 GB just before, so memory is not the cause. The journal gives no cause; whether it is reproducible, or specific to the flick gestures of that run, is open (`TODO.md`).
+
 ## Logging in the plugin
 
 Every file the plugin and the GPU helper write, and which thread writes it. "Host / audio" says whether a write can ever block the host's main thread or the audio thread.
