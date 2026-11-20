@@ -12,6 +12,7 @@
 #include "synthyboy/modulation.h"
 #include "test_runner.h"
 #include "test_util.h"
+#include "fx/fx_effects.h"
 
 // MSVC does not define M_PI without _USE_MATH_DEFINES: portable constant.
 static constexpr double kTestPi = 3.14159265358979323846;
@@ -1072,4 +1073,98 @@ TEST (ownv_sub_oscillator_pan_stereo_balance)
     CHECK (std::fabs (lZero - rZero) / lZero < 0.01);
     // mirror-symmetric: left RMS at -100 equals right RMS at +100 within 1 percent
     CHECK (std::fabs (lNeg - rPos) / lNeg < 0.01);
+}
+
+// Existing test in this file setting up flanger: ownv_flanger_has_a_delayed_copy_and_feedback_matters (line 719)
+TEST (ownv_flanger_headroom_thd_and_dc_loop_limit)
+{
+    // (a) Sine at 1.5 peak amplitude (inside engine headroom) through flanger with feedback 0 and mix 100%.
+    // In unfixed code, line[c].push(clamp(in + f*rd, -1.0f, 1.0f)) hard-clips the 1.5-peak sine at +-1.0f,
+    // producing strong 3rd (and 5th) harmonics with THD ~18.5% (> 1%).
+    // In fixed code using loopLimit, the signal is within loopLimit (+-8.0f) and passes unclipped (THD < 0.01%).
+    {
+        own::Flanger flanger;
+        flanger.prepare (kSr);
+        own::Flanger::Params p;
+        p.feedback = 0.0f;
+        p.mix = 1.0f;
+        p.depth = 0.0f;
+        p.centerHz = 330.0f;
+        flanger.set (p);
+
+        const double f0 = 200.0;
+        const int nSamples = 4800;
+        std::vector<float> inL (nSamples), inR (nSamples);
+        for (int i = 0; i < nSamples; ++i)
+        {
+            const double t = static_cast<double> (i) / kSr;
+            const float s = 1.5f * static_cast<float> (std::sin (2.0 * kTestPi * f0 * t));
+            inL[i] = s;
+            inR[i] = s;
+        }
+
+        flanger.process (inL.data(), inR.data(), nSamples);
+
+        // Measure with direct DFT at fundamental (200 Hz), 3rd harmonic (600 Hz), 5th harmonic (1000 Hz)
+        // over the last 2400 samples (10 full cycles: exact integer period, zero spectral leakage).
+        auto dftMag = [&] (const std::vector<float>& x, double freq)
+        {
+            double re = 0.0, im = 0.0;
+            const size_t from = 2400;
+            const size_t len = 2400;
+            for (size_t i = 0; i < len; ++i)
+            {
+                const double ph = 2.0 * kTestPi * freq * static_cast<double> (i) / kSr;
+                re += static_cast<double> (x[from + i]) * std::cos (ph);
+                im -= static_cast<double> (x[from + i]) * std::sin (ph);
+            }
+            return 2.0 * std::sqrt (re * re + im * im) / static_cast<double> (len);
+        };
+
+        const double h1 = dftMag (inL, f0);
+        const double h3 = dftMag (inL, 3.0 * f0);
+        const double h5 = dftMag (inL, 5.0 * f0);
+        const double thd = std::sqrt (h3 * h3 + h5 * h5) / std::max (h1, 1.0e-9);
+
+        // Required: total harmonic distortion below 1 percent (fails on unfixed code: ~18.5%)
+        CHECK (thd < 0.01);
+    }
+
+    // (b) Feedback at maximum positive value (+1.0) with DC offset of 0.5 for 0.5 s, then silence for 2.0 s.
+    // In any case every sample is finite and below the loop limit (8.0f).
+    {
+        own::Flanger flangerDc;
+        flangerDc.prepare (kSr);
+        own::Flanger::Params p;
+        p.feedback = 1.0f; // maximum positive feedback
+        p.mix = 0.5f;
+        p.depth = 0.5f;
+        p.centerHz = 330.0f;
+        flangerDc.set (p);
+
+        const size_t nDc = static_cast<size_t> (0.5 * kSr);
+        const size_t nSilence = static_cast<size_t> (2.0 * kSr);
+        const size_t nTotal = nDc + nSilence;
+
+        std::vector<float> bufL (nTotal, 0.0f), bufR (nTotal, 0.0f);
+        for (size_t i = 0; i < nDc; ++i)
+        {
+            bufL[i] = 0.5f;
+            bufR[i] = 0.5f;
+        }
+
+        flangerDc.process (bufL.data(), bufR.data(), static_cast<int> (nTotal));
+
+        bool allFiniteAndBounded = true;
+        for (size_t i = 0; i < nTotal; ++i)
+        {
+            if (! std::isfinite (bufL[i]) || std::fabs (bufL[i]) > 8.0f + 1.0e-4f ||
+                ! std::isfinite (bufR[i]) || std::fabs (bufR[i]) > 8.0f + 1.0e-4f)
+            {
+                allFiniteAndBounded = false;
+                break;
+            }
+        }
+        CHECK (allFiniteAndBounded);
+    }
 }
