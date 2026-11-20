@@ -5,11 +5,33 @@
 #include "event_inbox.h"
 
 #include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <thread>
 #include <vector>
 
 struct Ev { int seq = 0; int frame = 0; bool off = false; };
+
+// lock-freedom probe: the first copy of an event marked `stall` (the copy into the ring) parks the copying thread (up to 200 ms) until the second producer has finished its push.
+static std::atomic<bool> p1InCopy { false }, p2Done { false }, p2DoneWhileStalled { false }, stallUsed { false };
+struct StallingEv
+{
+    int seq = 0; bool stall = false;
+    StallingEv() = default;
+    StallingEv (int s, bool st) : seq (s), stall (st) {}
+    StallingEv& operator= (const StallingEv& o)
+    {
+        if (o.stall && ! stallUsed.exchange (true)) {
+            p1InCopy.store (true, std::memory_order_release);
+            const auto t0 = std::chrono::steady_clock::now();
+            while (! p2Done.load (std::memory_order_acquire) && std::chrono::steady_clock::now() - t0 < std::chrono::milliseconds (200))
+                std::this_thread::yield();
+            p2DoneWhileStalled.store (p2Done.load (std::memory_order_acquire), std::memory_order_release);
+        }
+        seq = o.seq;
+        return *this;
+    }
+};
 
 static int failures = 0;
 static void check (bool ok, const char* what) { std::printf ("%s  %s\n", ok ? "PASS" : "FAIL", what); if (! ok) ++failures; }
@@ -70,6 +92,41 @@ int main()
         }
         for (auto& th : t) th.join();
         check (got == 2 * per && ! dup, "two producers: no event lost, none twice");
+    }
+    {
+        // lock-freedom: a producer stalled inside its push must not hold up a second producer
+        using SInbox = synthyboy_mpc::EventInbox<StallingEv, 1024>;
+        static SInbox in;
+        double p2Ms = 1.0e9;
+        std::thread p1 ([&] { in.push (StallingEv (1, true), true); });
+        std::thread p2 ([&] {
+            while (! p1InCopy.load (std::memory_order_acquire)) std::this_thread::yield();
+            const auto t0 = std::chrono::steady_clock::now();
+            in.push (StallingEv (2, false), true);
+            p2Ms = std::chrono::duration<double, std::milli> (std::chrono::steady_clock::now() - t0).count();
+            p2Done.store (true, std::memory_order_release);
+        });
+        p1.join(); p2.join();
+        check (p2DoneWhileStalled.load(), "lock-free: producer 2 finishes while producer 1 is stalled inside its push");
+        check (p2Ms < 50.0, "lock-free: producer 2 needed less than 50 ms");
+        StallingEv got; int n = 0, sum = 0;
+        while (in.pop (got)) { ++n; sum += got.seq; }
+        check (n == 2 && sum == 3, "both stalled-test events arrive");
+    }
+    {
+        // four producers, one consumer: exactly 100000 events, none twice, none lost
+        static Inbox in;
+        const int per = 25000, np = 4;
+        std::vector<std::thread> t;
+        for (int p = 0; p < np; ++p)
+            t.emplace_back ([&, p] { for (int i = 0; i < per;) { Ev e; e.seq = p * per + i; if (in.push (e, true)) ++i; else std::this_thread::yield(); } });
+        std::vector<char> seen ((size_t) (np * per), 0);
+        int got = 0; bool dup = false; Ev e;
+        while (got < np * per) {
+            if (in.pop (e)) { if (seen[(size_t) e.seq]) dup = true; seen[(size_t) e.seq] = 1; ++got; }
+        }
+        for (auto& th : t) th.join();
+        check (got == 100000 && ! dup && ! in.pop (e) && in.size() == 0, "four producers x 25000: exactly 100000 events, no duplicate, no loss");
     }
     std::printf ("%s  (%d failures)\n", failures == 0 ? "OK" : "FAILED", failures);
     return failures == 0 ? 0 : 1;
