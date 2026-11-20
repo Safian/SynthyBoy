@@ -6,7 +6,9 @@
 #include "../dsp/fastmath.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include "../dsp/util.h"
+#include "synthyboy/aa_switch.h"
 
 namespace synthyboy
 {
@@ -231,6 +233,57 @@ inline float warpSample (int type, float y, float a, float m, bool fast = false)
         default:
             return y;
     }
+}
+
+/** True for the warps that are memoryless functions of the table sample (Quantize and the Dist warps): they create content above the band of the table read, so they are the ones
+    the sample-domain anti-aliasing (ADAA) and the band limit factor of warpBandLimitFactor () concern. Ring and amplitude modulation are not (they multiply by another oscillator). */
+inline bool warpIsSampleDomain (int type) noexcept
+{
+    return type == kWarpQuantize || (type >= kWarpDistTube && type <= kWarpDistSoftSat);
+}
+
+/** A point of the phase map where the warped phase (and so the output) has a jump (kind 1: a step and a slope jump) or only a slope jump (kind 2), at the master phase `phase`
+    (0 .. 2^32 = one cycle). */
+struct WarpEvent
+{
+    uint32_t phase;
+    int kind;
+};
+
+/** The events of the phase map of slot 1 for the amount a (at most 2 into out). Smooth maps (Formant, Bend family, Squeeze, Asym family, PD) and the modulation warps have none. */
+inline int warpEvents (int type, float a, WarpEvent* out) noexcept
+{
+    switch (type)
+    {
+        case kWarpSync: case kWarpSyncVar:
+            out[0] = { 0u, 1 };
+            return 1;
+        case kWarpFlip:
+            out[0] = { 0u, 1 };
+            out[1] = { 2147483648u, 2 };
+            return 2;
+        case kWarpMirror:
+            out[0] = { 0u, 2 };
+            out[1] = { 2147483648u, 2 };
+            return 2;
+        case kWarpPulse:
+            out[0] = { static_cast<uint32_t> ((1.0 - 0.7 * static_cast<double> (a)) * 4294967296.0), 2 };
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+/** The factor of the sample rate that the wavetable is band-limited to before the warps: 1.0 at tier low (the Nyquist of the 2x stream), otherwise 3.2 (docs/engine-spec/02-oscillator.md
+    section 14) and 2.0 when a sample-domain warp follows the table read (the images above the 4x Nyquist would be mixed into the audible band). The 2.0 is the owner decision D4 of the
+    plan; nothing calls this until it is taken. */
+inline float warpBandLimitFactor (int w0, int w1, bool lowWarp) noexcept
+{
+    if (lowWarp)
+        return 1.0f;
+    if ((warpIsSampleDomain (w0) || warpIsSampleDomain (w1)) && (synthyboy::aa::off() & synthyboy::aa::kBandLimit) == 0)
+        return 2.0f;
+    return 3.2f;
 }
 } // namespace own
 } // namespace synthyboy

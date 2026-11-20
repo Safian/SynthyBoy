@@ -37,6 +37,7 @@ struct ContentSet
     std::unique_ptr<multisample::Instrument> instrument[3];
     std::vector<float> remap[3][4];                           // 257 points or empty (identity)
     std::vector<float> specFilterX[3], specFilterY[3];        // the drawn spectral filter mask (empty = flat)
+    std::vector<float> shaper[2], shaperInt[2];               // the X-Shaper curves A and B: 513 points, and their cumulative integral (513 values); empty = the identity
     /** The impulse response of Convolve (content.impulses[0]): interleaved stereo float frames. Shared so a rebuild running on the helper thread keeps it alive. */
     struct Impulse
     {
@@ -57,5 +58,7 @@ struct ContentSet
 
 /** A drawn curve (points with power) sampled at 257 positions. */
 std::vector<float> sampleCurve257 (const std::vector<ContentPoint>& points);
+/** The same at 513 positions (the X-Shaper curves). */
+std::vector<float> sampleCurve513 (const std::vector<ContentPoint>& points);
 } // namespace own
 } // namespace synthyboy

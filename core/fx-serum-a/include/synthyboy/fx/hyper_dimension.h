@@ -5,6 +5,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <vector>
 
 namespace synthyboy::fx
@@ -42,21 +43,23 @@ public:
     int tailSamples() const noexcept;
     float tailLength() const noexcept;
 
+    /** The heap bytes of the delay buffer (one buffer serves every Hyper voice and every Dimension tap: they all hold the same mono input). */
+    size_t memoryBytes() const noexcept { return buf_.size() * sizeof (float); }
+
 private:
     Params params_;
     double sampleRate_ = 44100.0;
     int maxBlock_ = 512;
 
-    // Hyper voice delay lines & LFOs
-    std::array<std::vector<float>, kMaxUnison> hyperBuffers_;
-    std::array<int, kMaxUnison> hyperWriteIndices_ {};
-    int hyperMask_ = 0;
+    // The mono input delay line every Hyper voice and every Dimension tap reads (they used to write eleven copies of it)
+    std::vector<float> buf_;
+    int wr_ = 0;
+    int mask_ = 0;
+
+    // Hyper voice LFOs
     std::array<float, kMaxUnison> hyperLfoPhases_ {};
 
-    // Dimension delay lines
-    std::array<std::vector<float>, 4> dimBuffers_;
-    std::array<int, 4> dimWriteIndices_ {};
-    int dimMask_ = 0;
+    // Dimension LFO
     float dimLfoPhase_ = 0.0f;
 
     // Parameter smoothing targets

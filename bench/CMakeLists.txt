@@ -79,6 +79,19 @@ else()
     target_compile_options(synthyboy_fx_makeup_calibrate PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# The cost of one effect object on its own: Reverb (six algorithms), Convolve (five impulse lengths), Hyper / Dimension (bench/fx_cost_bench.cpp, docs/plans/reverb-convolve.md section 2.2).
+add_executable(synthyboy_fx_cost_bench fx_cost_bench.cpp)
+target_link_libraries(synthyboy_fx_cost_bench PRIVATE synthyboy_core Threads::Threads)
+target_include_directories(synthyboy_fx_cost_bench PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+set_target_properties(synthyboy_fx_cost_bench PROPERTIES CXX_EXTENSIONS OFF)
+if(MSVC)
+    target_compile_options(synthyboy_fx_cost_bench PRIVATE /W4)
+else()
+    target_compile_options(synthyboy_fx_cost_bench PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+add_test(NAME synthyboy_fx_cost_smoke COMMAND synthyboy_fx_cost_bench --quick --repeat 1)
+set_tests_properties(synthyboy_fx_cost_smoke PROPERTIES PASS_REGULAR_EXPRESSION "FXCOST-DONE lines=25" TIMEOUT 600)
+
 # The cost of the math functions the engine calls and of the two clocks (bench/libm_probe.cpp; run it on the device, a static and a dynamic build of it give the
 # difference of the two links).
 add_test(NAME synthyboy_libm_probe COMMAND synthyboy_libm_probe --quick)
