@@ -58,3 +58,30 @@ if(MSVC)
 else()
     target_compile_options(synthyboy_fx_makeup_calibrate PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# The libm of the device against the libm of the build: the cost of the math functions the engine calls and of the two clocks (bench/libm_probe.cpp; run it on
+# the device, a static and a dynamic build of it give the difference of the two links).
+add_test(NAME synthyboy_libm_probe COMMAND synthyboy_libm_probe --quick)
+set_tests_properties(synthyboy_libm_probe PROPERTIES PASS_REGULAR_EXPRESSION "LIBM-PROBE-RESULT ok" TIMEOUT 120)
+
+# CLI smoke tests of the benchmarks, one line per test in bench/perf/cli_smoke.txt:  name~platform~arguments~regular expression
+# platform: any | posix (not Windows) | linux;  @PRESETS@ = content/presets;  the test is synthyboy_tier_bench_<name>
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/perf/cli_smoke.txt" SYNTHYBOY_CLI_SMOKE)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/perf/cli_smoke.txt")
+foreach(line IN LISTS SYNTHYBOY_CLI_SMOKE)
+    if(line STREQUAL "" OR line MATCHES "^#")
+        continue()
+    endif()
+    string(REPLACE "~" ";" fields "${line}")
+    list(GET fields 0 smoke_name)
+    list(GET fields 1 smoke_platform)
+    list(GET fields 2 smoke_args)
+    list(GET fields 3 smoke_regex)
+    if((smoke_platform STREQUAL "linux" AND NOT CMAKE_SYSTEM_NAME STREQUAL "Linux") OR (smoke_platform STREQUAL "posix" AND WIN32))
+        continue()
+    endif()
+    string(REPLACE "@PRESETS@" "${PROJECT_SOURCE_DIR}/content/presets" smoke_args "${smoke_args}")
+    separate_arguments(smoke_argv UNIX_COMMAND "${smoke_args}")
+    add_test(NAME synthyboy_tier_bench_${smoke_name} COMMAND synthyboy_tier_bench ${smoke_argv})
+    set_tests_properties(synthyboy_tier_bench_${smoke_name} PROPERTIES PASS_REGULAR_EXPRESSION "${smoke_regex}" TIMEOUT 120)
+endforeach()
