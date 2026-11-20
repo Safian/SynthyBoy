@@ -12,6 +12,10 @@ else()
     target_compile_options(synthyboy_bench PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# The defaults of synthyboy_bench are those of the devices: 44.1 kHz and flush-to-zero on (the header line prints "engine own, 44100 Hz").
+add_test(NAME synthyboy_bench_defaults COMMAND synthyboy_bench --engine own --patch default --seconds 0.3)
+set_tests_properties(synthyboy_bench_defaults PROPERTIES PASS_REGULAR_EXPRESSION "own, 44100 Hz" TIMEOUT 120)
+
 add_executable(synthyboy_noteon_bench noteon_bench.cpp)
 target_link_libraries(synthyboy_noteon_bench PRIVATE synthyboy_core)
 set_target_properties(synthyboy_noteon_bench PROPERTIES CXX_EXTENSIONS OFF)
