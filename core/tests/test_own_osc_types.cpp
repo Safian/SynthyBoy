@@ -957,8 +957,8 @@ TEST (own_osc_xy_control_every_granular_axis)
     // 137: "8 Rand Offset, 9 Rand Dir, 11 Rand Length, 12 Rand Pan, 13 Rand Gain, 14 Rand Window, 15 Rand Skew | that randomisation depth = y"
     // 138: "10 Rand Pitch | 24 y semitones"
     // Axes 2, 3 (Warp 1/2) and 16, 17 (Rand Warp 1/2) do not alter the render with default harness
-    // settings (warp.type is None/0, so warp amount is unused); per Rule R5 and R2, they are stopped
-    // and reported in REPORT.md under ENGINE FINDINGS.
+    // settings (warp.type is None/0, so warp amount is unused); they are covered by own_osc_xy_control_warp_axes
+    // with warp 1 / warp 2 switched to a non-None type.
     for (int axis : { 1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 })
     {
         const auto y10 = run (static_cast<float> (axis), 10.0f);
@@ -1007,9 +1007,221 @@ TEST (own_osc_xy_control_every_spectral_axis)
     // 142: "1 Level | output gain = y (times the trim of 7a.1)"
     // 146: "6 Freq Lo / 7 Freq Hi | the low / high band edge = 20 * 1000^y Hz (20 Hz .. 20 kHz)"
     // Axes 2, 3 (Warp 1/2) and 4, 5 (Spec Flt Cutoff / Wet/Dry) do not alter the render with default
-    // harness settings (warp.type is None/0, flt_use is 0); per Rule R5 and R2, they are stopped
-    // and reported in REPORT.md under ENGINE FINDINGS.
+    // harness settings (warp.type is None/0, flt_use is 0); axes 2, 3 are covered by own_osc_xy_control_warp_axes
+    // and axes 4, 5 are covered by own_osc_xy_control_spectral_filter_axes.
     for (int axis : { 1, 6, 7 })
+    {
+        const auto y10 = run (static_cast<float> (axis), 10.0f);
+        const auto y90 = run (static_cast<float> (axis), 90.0f);
+        const bool diff = buffersDiffer (y10, y90);
+        std::printf ("    spectral axis %d: differs %s\n", axis, diff ? "true" : "false");
+        CHECK (diff);
+    }
+}
+
+// 07 7a.2: granular and spectral X|Y control for the warp axes (granular: 2, 16, 3, 17; spectral: 2, 3)
+TEST (own_osc_xy_control_warp_axes)
+{
+    auto buffersDiffer = [] (const std::vector<float>& a, const std::vector<float>& b)
+    {
+        if (a.size() != b.size())
+            return true;
+        for (size_t i = 0; i < a.size(); ++i)
+            if (a[i] != b[i])
+                return true;
+        return false;
+    };
+
+    // --- Granular type (osc1.type 2.0f, param_table.cpp:396): pointwise warp (Quantize = 3, param_table.cpp:61, 248) ---
+    // Warp 1 on: axis 2 (Warp 1 amount) and axis 16 (Rand Warp 1)
+    {
+        auto runG1 = [&] (float axis, float y, float knobWarpAmt = 50.0f, float knobRandWarp = 0.0f)
+        {
+            Rig r (true, "osc1.type", 2.0f);
+            set (*r.e, "osc1.warp.type", 3.0f); // Quantize (kWarpTypes1[3], param_table.cpp:61, 248)
+            set (*r.e, "osc1.warp.amount", knobWarpAmt); // param_table.cpp:249
+            set (*r.e, "osc1.gran.rand_warp", knobRandWarp); // param_table.cpp:458
+            set (*r.e, "osc1.gran.y_axis", axis); // param_table.cpp:461
+            set (*r.e, "osc1.gran.xy_y", y); // param_table.cpp:462
+            return r.render (69, 1.0, 1.0).l;
+        };
+
+        // R5 check: with y_axis = 0 (None), changing the normal knobs must change the render
+        const auto r5_knobWarp10 = runG1 (0.0f, 0.0f, 10.0f, 0.0f);
+        const auto r5_knobWarp90 = runG1 (0.0f, 0.0f, 90.0f, 0.0f);
+        CHECK (buffersDiffer (r5_knobWarp10, r5_knobWarp90));
+
+        const auto r5_knobRand10 = runG1 (0.0f, 0.0f, 50.0f, 10.0f);
+        const auto r5_knobRand90 = runG1 (0.0f, 0.0f, 50.0f, 90.0f);
+        CHECK (buffersDiffer (r5_knobRand10, r5_knobRand90));
+
+        // Reproducibility check: two renders with the same settings must be bit-identical
+        const auto ref1 = runG1 (2.0f, 10.0f);
+        const auto ref2 = runG1 (2.0f, 10.0f);
+        const bool reproducible = ! buffersDiffer (ref1, ref2);
+        std::printf ("    granular harness (warp 1) reproducibility: %s\n", reproducible ? "bit-identical" : "differs");
+        CHECK (reproducible);
+
+        for (int axis : { 2, 16 })
+        {
+            const auto y10 = runG1 (static_cast<float> (axis), 10.0f);
+            const auto y90 = runG1 (static_cast<float> (axis), 90.0f);
+            const bool diff = buffersDiffer (y10, y90);
+            std::printf ("    granular axis %d: differs %s\n", axis, diff ? "true" : "false");
+            CHECK (diff);
+        }
+    }
+
+    // Warp 2 on: axis 3 (Warp 2 amount) and axis 17 (Rand Warp 2)
+    {
+        auto runG2 = [&] (float axis, float y, float knobWarpAmt = 50.0f, float knobRandWarp = 0.0f)
+        {
+            Rig r (true, "osc1.type", 2.0f);
+            set (*r.e, "osc1.warp2.type", 3.0f); // Quantize (kWarpTypes1[3], param_table.cpp:61, 425)
+            set (*r.e, "osc1.warp2.amount", knobWarpAmt); // param_table.cpp:426
+            set (*r.e, "osc1.gran.rand_warp2", knobRandWarp); // param_table.cpp:459
+            set (*r.e, "osc1.gran.y_axis", axis); // param_table.cpp:461
+            set (*r.e, "osc1.gran.xy_y", y); // param_table.cpp:462
+            return r.render (69, 1.0, 1.0).l;
+        };
+
+        // R5 check: with y_axis = 0 (None), changing the normal knobs must change the render
+        const auto r5_knobWarp10 = runG2 (0.0f, 0.0f, 10.0f, 0.0f);
+        const auto r5_knobWarp90 = runG2 (0.0f, 0.0f, 90.0f, 0.0f);
+        CHECK (buffersDiffer (r5_knobWarp10, r5_knobWarp90));
+
+        const auto r5_knobRand10 = runG2 (0.0f, 0.0f, 50.0f, 10.0f);
+        const auto r5_knobRand90 = runG2 (0.0f, 0.0f, 50.0f, 90.0f);
+        CHECK (buffersDiffer (r5_knobRand10, r5_knobRand90));
+
+        // Reproducibility check: two renders with the same settings must be bit-identical
+        const auto ref1 = runG2 (3.0f, 10.0f);
+        const auto ref2 = runG2 (3.0f, 10.0f);
+        const bool reproducible = ! buffersDiffer (ref1, ref2);
+        std::printf ("    granular harness (warp 2) reproducibility: %s\n", reproducible ? "bit-identical" : "differs");
+        CHECK (reproducible);
+
+        for (int axis : { 3, 17 })
+        {
+            const auto y10 = runG2 (static_cast<float> (axis), 10.0f);
+            const auto y90 = runG2 (static_cast<float> (axis), 90.0f);
+            const bool diff = buffersDiffer (y10, y90);
+            std::printf ("    granular axis %d: differs %s\n", axis, diff ? "true" : "false");
+            CHECK (diff);
+        }
+    }
+
+    // --- Spectral type (osc1.type 3.0f, param_table.cpp:396): spectral warp (Spectral Comb = 76, param_table.cpp:58, 248) ---
+    // Warp 1 on: axis 2 (Warp amount)
+    {
+        auto runS1 = [&] (float axis, float y, float knobWarpAmt = 50.0f)
+        {
+            Rig r (true, "osc1.type", 3.0f);
+            set (*r.e, "osc1.warp.type", 76.0f); // Spectral Comb (kWarpTypes1[76], param_table.cpp:58, 248)
+            set (*r.e, "osc1.warp.amount", knobWarpAmt); // param_table.cpp:249
+            set (*r.e, "osc1.spec.y_axis", axis); // param_table.cpp:475
+            set (*r.e, "osc1.spec.xy_y", y); // param_table.cpp:476
+            return r.render (69, 1.0, 1.0).l;
+        };
+
+        // R5 check: with y_axis = 0 (None), changing the normal knob must change the render
+        const auto r5_knob10 = runS1 (0.0f, 0.0f, 10.0f);
+        const auto r5_knob90 = runS1 (0.0f, 0.0f, 90.0f);
+        CHECK (buffersDiffer (r5_knob10, r5_knob90));
+
+        // Reproducibility check: two renders with the same settings must be bit-identical
+        const auto ref1 = runS1 (2.0f, 10.0f);
+        const auto ref2 = runS1 (2.0f, 10.0f);
+        const bool reproducible = ! buffersDiffer (ref1, ref2);
+        std::printf ("    spectral harness (warp 1) reproducibility: %s\n", reproducible ? "bit-identical" : "differs");
+        CHECK (reproducible);
+
+        const auto y10 = runS1 (2.0f, 10.0f);
+        const auto y90 = runS1 (2.0f, 90.0f);
+        const bool diff = buffersDiffer (y10, y90);
+        std::printf ("    spectral axis 2: differs %s\n", diff ? "true" : "false");
+        CHECK (diff);
+    }
+
+    // Warp 2 on: axis 3 (Warp 2 amount)
+    {
+        auto runS2 = [&] (float axis, float y, float knobWarpAmt = 50.0f)
+        {
+            Rig r (true, "osc1.type", 3.0f);
+            set (*r.e, "osc1.warp2.type", 76.0f); // Spectral Comb (kWarpTypes1[76], param_table.cpp:58, 425)
+            set (*r.e, "osc1.warp2.amount", knobWarpAmt); // param_table.cpp:426
+            set (*r.e, "osc1.spec.y_axis", axis); // param_table.cpp:475
+            set (*r.e, "osc1.spec.xy_y", y); // param_table.cpp:476
+            return r.render (69, 1.0, 1.0).l;
+        };
+
+        // R5 check: with y_axis = 0 (None), changing the normal knob must change the render
+        const auto r5_knob10 = runS2 (0.0f, 0.0f, 10.0f);
+        const auto r5_knob90 = runS2 (0.0f, 0.0f, 90.0f);
+        CHECK (buffersDiffer (r5_knob10, r5_knob90));
+
+        // Reproducibility check: two renders with the same settings must be bit-identical
+        const auto ref1 = runS2 (3.0f, 10.0f);
+        const auto ref2 = runS2 (3.0f, 10.0f);
+        const bool reproducible = ! buffersDiffer (ref1, ref2);
+        std::printf ("    spectral harness (warp 2) reproducibility: %s\n", reproducible ? "bit-identical" : "differs");
+        CHECK (reproducible);
+
+        const auto y10 = runS2 (3.0f, 10.0f);
+        const auto y90 = runS2 (3.0f, 90.0f);
+        const bool diff = buffersDiffer (y10, y90);
+        std::printf ("    spectral axis 3: differs %s\n", diff ? "true" : "false");
+        CHECK (diff);
+    }
+}
+
+// 07 7a.2: spectral X|Y control for the spectral filter axes (4 Spec Flt Cutoff, 5 Spec Flt Wet/Dry)
+TEST (own_osc_xy_control_spectral_filter_axes)
+{
+    auto buffersDiffer = [] (const std::vector<float>& a, const std::vector<float>& b)
+    {
+        if (a.size() != b.size())
+            return true;
+        for (size_t i = 0; i < a.size(); ++i)
+            if (a[i] != b[i])
+                return true;
+        return false;
+    };
+
+    auto run = [&] (float axis, float y, float cut = 0.0f, float mix = 100.0f)
+    {
+        Rig r (true, "osc1.type", 3.0f);
+        // Spectral filter enabled from wavetable (param_table.cpp:488, 489)
+        set (*r.e, "osc1.spec.flt_use", 1.0f); // onOff (param_table.cpp:488)
+        set (*r.e, "osc1.spec.flt_table", 1.0f); // kWavetableSaw (param_table.cpp:489)
+        r.e->readyContent();
+        set (*r.e, "osc1.spec.cut", cut); // SB_PCT_RANGE (param_table.cpp:470)
+        set (*r.e, "osc1.spec.mix", mix); // SB_PCT (param_table.cpp:471)
+        set (*r.e, "osc1.spec.y_axis", axis); // whole (param_table.cpp:475)
+        set (*r.e, "osc1.spec.xy_y", y); // SB_PCT (param_table.cpp:476)
+        return r.render (69, 1.0, 1.0).l;
+    };
+
+    // R5 check: with y_axis = 0 (None), changing the normal cutoff and mix knobs must change the render
+    const auto r5_cut_lo = run (0.0f, 0.0f, -80.0f, 100.0f);
+    const auto r5_cut_hi = run (0.0f, 0.0f, 80.0f, 100.0f);
+    CHECK (buffersDiffer (r5_cut_lo, r5_cut_hi));
+
+    const auto r5_mix_lo = run (0.0f, 0.0f, 0.0f, 10.0f);
+    const auto r5_mix_hi = run (0.0f, 0.0f, 0.0f, 90.0f);
+    CHECK (buffersDiffer (r5_mix_lo, r5_mix_hi));
+
+    // Reproducibility check: two renders with the same settings must be bit-identical
+    const auto ref1 = run (4.0f, 10.0f);
+    const auto ref2 = run (4.0f, 10.0f);
+    const bool reproducible = ! buffersDiffer (ref1, ref2);
+    std::printf ("    spectral filter harness reproducibility: %s\n", reproducible ? "bit-identical" : "differs");
+    CHECK (reproducible);
+
+    // docs/engine-spec/07-sample-granular-spectral.md lines 144-145:
+    // 144: "4 Spec Flt Cutoff | the spectral filter's shift (cut) = 2 y - 1"
+    // 145: "5 Spec Flt Wet/Dry | the spectral filter's mix = y"
+    for (int axis : { 4, 5 })
     {
         const auto y10 = run (static_cast<float> (axis), 10.0f);
         const auto y90 = run (static_cast<float> (axis), 90.0f);
