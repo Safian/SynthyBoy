@@ -82,7 +82,7 @@ Gemini 4 Neon írta, kódolvasásból, mérés nélkül. Minden tételt a megval
 - 25. (maradék) A tétlen globális LFO-k 0 hang mellett is lépnek (`core/engine-own/own_engine.cpp:1159-1178`). A keresztmoduláció indexelése és a kattanásgátló mind a 4 buszon már javítva.
 - 26. Klasszikus létra és dióda: 8–11 skalár osztás mintánként; több szűrőmodell nincs NEON-ra írva.
 - 27. Bitre azonos skalár = NEON szabály (nincs FMA, nincs közelítő reciprok) mindenhol; a `fastmath.h` `union`-nal típust vált (nem definiált viselkedés).
-- A Vital kivezetésének terve: build-kapcsolók (`SYNTHYBOY_WITH_VITAL`, `SYNTHYBOY_SHELL_ENGINE`), az asztali plugin alapmotorja, a Vitalhoz mérő eszközök (`tools/own-oracle`, refcompare, paraméter-audit), `NOTICE` / `THIRD_PARTY.md`, a Vital-preset importáló, és a `wtedit::vital` adatmodell licenckérdése (`docs/ui-design/OWN-ENGINE-GAP.md`, történet 5. pont).
+- A Vital kivezetésének terve: terv: `docs/plans/vital-removal.md` (owner-döntések V1–V7 várnak). build-kapcsolók (`SYNTHYBOY_WITH_VITAL`, `SYNTHYBOY_SHELL_ENGINE`), az asztali plugin alapmotorja, a Vitalhoz mérő eszközök (`tools/own-oracle`, refcompare, paraméter-audit), `NOTICE` / `THIRD_PARTY.md`, a Vital-preset importáló, és a `wtedit::vital` adatmodell licenckérdése (`docs/ui-design/OWN-ENGINE-GAP.md`, történet 5. pont).
 
 ## DSP-audit 2. rész megállapításai (effektek, kimenet) — `docs/review/OWN-ENGINE-DSP-AUDIT-2-EFFECTS-OUTPUT-2026-11-20.md`
 Gemini 4 Neon írta, kódolvasásból, mérés nélkül; megvalósítás előtt minden tétel ellenőrizendő és mérendő. Öt tételt szúrópróbával megnéztem: az eredmény a sor végén. A jelentés szerint a lánc vége (kimeneti fokozat, master térd, hangszám-függő erősítés) rendben van, a hibák az effektekben vannak.
