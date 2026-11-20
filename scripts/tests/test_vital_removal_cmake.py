@@ -120,5 +120,23 @@ class Workflow(unittest.TestCase):
             self.assertIn("steps", job, name)
 
 
+class LayersModel(unittest.TestCase):
+    """R8 (V2): the wavetable editor's layer model is wtedit::layers (it was wtedit::vital); the model is ours, the importer stays."""
+
+    FILES = ["core/include/synthyboy/wavetable_edit.h", "core/wavetable-edit/src/layers_model.cpp", "core/wavetable-edit/CMakeLists.txt",
+             "core/wavetable-edit/tests/test_wtedit.cpp", "shell-juce/ui/panels/WavetableEditorSheet.cpp",
+             "shell-juce/ui/panels/WavetableEditorSheet.h", "shell-juce/ui/tests/test_wavetable.cpp"]
+
+    def test_namespace_is_layers(self):
+        self.assertIn("namespace layers", read("core/include/synthyboy/wavetable_edit.h"))
+        self.assertIn("namespace synthyboy::wtedit::layers", read("core/wavetable-edit/src/layers_model.cpp"))
+
+    def test_no_vital_name_in_the_model_and_the_editor(self):
+        for f in self.FILES:
+            text = read(f)
+            for needle in ("wtedit::vital", "namespace vital", "using namespace vital", "vitalGroup", "Vital Group", "vital_model"):
+                self.assertNotIn(needle, text, f"{f}: {needle}")
+
+
 if __name__ == "__main__":
     unittest.main()
