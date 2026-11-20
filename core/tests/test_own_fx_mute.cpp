@@ -101,6 +101,100 @@ float difference (const Rig& a, const Rig& b)
         d = std::max (d, std::max (std::fabs (a.l[i] - b.l[i]), std::fabs (a.r[i] - b.r[i])));
     return d;
 }
+
+constexpr double kSr96 = 96000.0;
+
+template <typename...>
+using void_t = void;
+
+template <typename F, typename = void>
+struct HasSampleRate { static constexpr bool value = false; };
+
+template <typename F>
+struct HasSampleRate<F, void_t<decltype (static_cast<F*> (nullptr)->sampleRate)>> { static constexpr bool value = true; };
+
+template <typename F>
+void setFrameSampleRate (F& f, double sr)
+{
+    if constexpr (HasSampleRate<F>::value)
+        f.sampleRate = sr;
+}
+
+template <typename M, typename = void>
+struct HasSetSampleRate { static constexpr bool value = false; };
+
+template <typename M>
+struct HasSetSampleRate<M, void_t<decltype (static_cast<M*> (nullptr)->setSampleRate (0.0))>> { static constexpr bool value = true; };
+
+template <typename M>
+void callSetSampleRate (M* m, double sr)
+{
+    if constexpr (HasSetSampleRate<M>::value)
+        m->setSampleRate (sr);
+}
+
+/** A module prepared at 96 kHz, run period by period on a test signal (reusing Rig's setup pattern from
+    a_module_with_a_tail_is_flushed_before_it_is_skipped_and_wakes_without_old_sound). */
+struct Rig96
+{
+    std::unique_ptr<FxModule> m;
+    std::vector<float> base, delta;
+    FxFrame frame;
+    long long pos = 0;
+    int mixIdx = -1;
+    float l[kP] = {}, r[kP] = {}, inL[kP] = {}, inR[kP] = {};
+
+    Rig96 (const Case& c, bool muteSkip, float mixPercent)
+    {
+        m = makeFxModule (c.module);
+        callSetSampleRate (m.get(), kSr96);
+        m->prepare (kSr96, kP);
+        base = defaults();
+        delta.assign (paramCount(), 0.0f);
+        mixIdx = fxModuleKeyIndex (c.mixKey);
+        base[static_cast<size_t> (mixIdx)] = mixPercent;
+        frame.muteSkip = muteSkip;
+        setFrameSampleRate (frame, kSr96);
+    }
+    void setMix (float percent) { base[static_cast<size_t> (mixIdx)] = percent; }
+    /** One control period; silent = the input is zeros. */
+    void step (bool silent = false)
+    {
+        for (int i = 0; i < kP; ++i)
+        {
+            const double t = static_cast<double> (pos + i) / kSr96;
+            const float x = silent ? 0.0f : static_cast<float> (0.4 * std::sin (2.0 * 3.14159265358979 * 220.0 * t) * (0.6 + 0.4 * std::sin (2.0 * 3.14159265358979 * 0.7 * t))
+                                                                 + 0.2 * std::sin (2.0 * 3.14159265358979 * 331.0 * t));
+            inL[i] = l[i] = x;
+            inR[i] = r[i] = silent ? 0.0f : 0.8f * x;
+        }
+        pos += kP;
+        m->update (frame, base.data(), delta.data());
+        m->process (l, r, kP, 0, kP);
+    }
+    float peak() const
+    {
+        float p = 0.0f;
+        for (int i = 0; i < kP; ++i)
+            p = std::max (p, std::max (std::fabs (l[i]), std::fabs (r[i])));
+        return p;
+    }
+    bool outputIsInput() const
+    {
+        for (int i = 0; i < kP; ++i)
+            if (l[i] != inL[i] || r[i] != inR[i])
+                return false;
+        return true;
+    }
+};
+
+bool sameOutput96 (const Rig96& a, const Rig96& b)
+{
+    for (int i = 0; i < kP; ++i)
+        if (a.l[i] != b.l[i] || a.r[i] != b.r[i])
+            return false;
+    return true;
+}
 } // namespace
 
 TEST (a_module_with_mix_zero_from_the_start_is_skipped_and_its_output_is_its_input)
@@ -262,4 +356,82 @@ TEST (a_mix_that_is_modulated_or_not_reported_or_a_switched_off_rule_never_skips
         skipped += r.m->skippedNow() ? 1 : 0;
     }
     CHECK_EQ (skipped, 0);
+}
+
+// Existing test reused for setup pattern, helper types, set-up calls and check macros:
+// a_module_with_a_tail_is_flushed_before_it_is_skipped_and_wakes_without_old_sound
+TEST (flush_duration_at_96khz_uses_actual_sample_rate_not_hardcoded_44100)
+{
+    // Effect with longest flushSeconds(): Delay (module 2) and Reverb (module 8) override flushSeconds() = 20.0f.
+    const Case delayCase { 2, "delay", "delay.mix", 20.0f };
+    Rig96 off (delayCase, false, 60.0f), on (delayCase, true, 60.0f);
+
+    // Short burst of 0.5 s (1500 periods at 96 kHz): echoes and tails in the state
+    constexpr int kBurstPeriods = 1500;
+    for (int p = 0; p < kBurstPeriods; ++p)
+    {
+        off.step();
+        on.step();
+        CHECK (sameOutput96 (off, on));
+    }
+
+    off.setMix (0.0f);
+    on.setMix (0.0f);
+
+    // Midpoint between flushSeconds * 44100 / 96000 (9.1875 s = 882000 samples = 27563 periods)
+    // and flushSeconds (20.0 s = 1920000 samples = 60000 periods):
+    // Midpoint = 14.59375 s = 1401000 samples = 43781 periods.
+    constexpr int kMidpointPeriods = 43781;
+    int firstSkipped = -1;
+    bool same = true, dry = true;
+
+    for (int p = 0; p < kMidpointPeriods; ++p)
+    {
+        off.step();
+        on.step();
+        same = same && sameOutput96 (off, on);
+        if (p >= 1)
+            dry = dry && on.outputIsInput();
+        if (firstSkipped < 0 && on.m->skippedNow())
+            firstSkipped = p;
+    }
+
+    CHECK (same);
+    CHECK (dry);
+
+    // At the midpoint (14.59375 s = 1401000 samples), the module must STILL be flushing (not skipped),
+    // because 14.59375 s < flushSeconds (20.0 s).
+    // Before the fix (defect), flushSeconds() was multiplied by 44100.0f, so quietNeeded was 882000 samples (9.1875 s / 27563 periods),
+    // causing on.m->skippedNow() to already be true (flushed early at 9.1875 s).
+    CHECK (! on.m->skippedNow());
+
+    // Continue stepping until flush completes (limit = 20 s + 25 s = 45 s = 135000 periods at 96 kHz)
+    const int limit = static_cast<int> ((delayCase.flushSeconds + 25.0f) * kSr96 / kP);
+    for (int p = kMidpointPeriods; p < limit && firstSkipped < 0; ++p)
+    {
+        off.step();
+        on.step();
+        same = same && sameOutput96 (off, on);
+        dry = dry && on.outputIsInput();
+        if (on.m->skippedNow())
+            firstSkipped = p;
+    }
+
+    const double seconds = firstSkipped * kP / kSr96;
+    std::printf ("    %-10s at 96 kHz flushed and skipped %.2f s after the mix went to 0\n", delayCase.name, seconds);
+
+    CHECK (firstSkipped > 0);
+    // Must not flush before the intended flushSeconds (20.0 s). Before the fix, seconds was ~9.19 s.
+    CHECK (seconds >= delayCase.flushSeconds);
+
+    // Opened on a silent input: what is left of the old tail is below -120 dBFS
+    on.setMix (100.0f);
+    float out = 0.0f;
+    for (int p = 0; p < 3000; ++p)
+    {
+        on.step (true);
+        out = std::max (out, on.peak());
+    }
+    std::printf ("    %-10s at 96 kHz peak after opening on silence %.2e\n", delayCase.name, static_cast<double> (out));
+    CHECK (out <= 1.0e-6f);
 }

@@ -38,6 +38,7 @@ struct FxFrame
     bool muteSkip = false;               // economy group Control: a module whose mix is exactly 0 is not processed (FxModule::process)
     bool makeup = true;                  // Quality::fxMakeup: a bypassed effect that is on in the preset leaves its loudness as a gain (FxChain, FxModule::makeupGain)
     bool scalarLoops = false;            // measurements (setOwnSavingsOff, kOwnSavingVectorFilters): the scalar loops also where a vector form exists (the chorus LFO refresh)
+    double sampleRate = 44100.0;
 };
 
 /** One helper thread for the slow work of the effects that must not run on the audio thread (the partitioning of a Convolve impulse). A job is a function and a
@@ -81,7 +82,11 @@ public:
     explicit FxModule (int levelKeyIndex) noexcept : levelIdx (levelKeyIndex) {}
     virtual ~FxModule() = default;
 
-    virtual void prepare (double sampleRate, int maxBlock) = 0;
+    virtual void prepare (double sampleRate, int maxBlock)
+    {
+        sampleRate_ = sampleRate;
+    }
+    void setSampleRate (double sampleRate) noexcept { sampleRate_ = sampleRate; }
     virtual void reset() noexcept = 0;
     /** Reads the keys once per control period. */
     virtual void configure (const FxFrame& f, const float* base, const float* delta) noexcept = 0;
@@ -124,6 +129,8 @@ public:
 
     void update (const FxFrame& f, const float* base, const float* delta) noexcept
     {
+        if (f.sampleRate > 0.0)
+            sampleRate_ = f.sampleRate;
         levelPrev = levelGain;
         levelGain = levelGainOf (base, delta);
         if (!levelSeen)
@@ -155,7 +162,7 @@ public:
             configure (f, base, delta);
             mixNow = 0.0f;
         }
-        quietNeeded = static_cast<int> (flushSeconds() * 44100.0f);
+        quietNeeded = static_cast<int> (flushSeconds() * static_cast<float> (sampleRate_));
     }
     /** The module and its output trim (ramped across the period); t0 = position of this call in the period, period = its length.
         A muted module (update ()) is not run: its output is its input. While its state is clean (never fed since it was made, or flushed) that costs nothing but the
@@ -232,6 +239,7 @@ private:
     bool muted = false, probing = false, mixSeen = false;
     bool clean = true;        // nothing was fed since the module was made, or it was flushed
     int quietRun = 0, quietNeeded = 44100;
+    double sampleRate_ = 44100.0;
     int t0Now = 0, periodNow = kControlPeriod;
     float levelGain = 1.0f, levelPrev = 1.0f;
     bool levelSeen = false;

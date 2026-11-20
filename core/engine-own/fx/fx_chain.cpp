@@ -141,7 +141,10 @@ void FxPool::typeChanged (int slot, int type)
     {
         m = makeFxModule (type - 1);
         if (m != nullptr)
+        {
             m->prepare (sr, maxBlk);
+            m->setSampleRate (sr);
+        }
     }
     FxModule* old = s.pending.exchange (m.release(), std::memory_order_acq_rel);
     s.pendingType.store (type, std::memory_order_release);
@@ -174,6 +177,7 @@ void FxChain::prepare (double sampleRate, int maxBlk)
     {
         inst[m] = makeFxModule (m);
         inst[m]->prepare (sr, std::max (maxBlk, kControlPeriod));
+        inst[m]->setSampleRate (sr);
     }
     splitLh.prepare (sr, std::max (maxBlk, kControlPeriod));
     splitLmh.prepare (sr, std::max (maxBlk, kControlPeriod));
@@ -281,7 +285,11 @@ void FxChain::configureSlot (int s, const float* base, const float* delta, const
             vbase[static_cast<size_t> (d.source[k])] = fxInstancePlain (typeKey, k, norm);
         }
         if (sl.running != nullptr)
-            sl.running->update (frame, vbase.data(), nullptr);
+        {
+            FxFrame f = frame;
+            f.sampleRate = sr;
+            sl.running->update (f, vbase.data(), nullptr);
+        }
         else
         {
             slotMakeupPrev[s] = slotMakeupNow[s];
@@ -459,7 +467,9 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
                 inst[m]->clearLevel();
                 fadeIn[m] = true;
             }
-            inst[m]->update (frame, base, delta);
+            FxFrame f = frame;
+            f.sampleRate = sr;
+            inst[m]->update (f, base, delta);
         }
         prevOn[m] = on[m];
     }
