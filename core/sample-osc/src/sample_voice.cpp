@@ -153,7 +153,7 @@ inline void readSampleStereo (const SampleView& sample, double pos, double stepR
     }
     else
     {
-        const int m = std::max (0, std::min (sample.numMipLevels - 1, static_cast<int> (std::round (rho))));
+        const int m = std::max (0, std::min (sample.numMipLevels - 1, static_cast<int> (std::ceil (rho))));
         const double scale = static_cast<double> (1 << m);
         const double posM = pos / scale;
         const auto& lvl = sample.mipLevels[m];
@@ -264,7 +264,7 @@ inline ReadPlan makePlan (const SampleView& sample, double stepRatio, QualityTie
         }
         return r;
     }
-    const int m = std::max (0, std::min (sample.numMipLevels - 1, static_cast<int> (std::round (rho))));
+    const int m = std::max (0, std::min (sample.numMipLevels - 1, static_cast<int> (std::ceil (rho))));
     const auto& lvl = sample.mipLevels[m];
     r.kind = ReadPlan::oneLevel;
     r.a[0] = lvl.channels[0];
@@ -689,6 +689,8 @@ void SampleVoice::renderFrame (float& outL, float& outR, double rateMult) noexce
         ? std::max (0.0, std::min (0.49 * lLen, static_cast<double> (params_.loopCrossfade) * lLen))
         : 0.0;
 
+    const double effRatio = std::fabs (pitchRatio_ * speed_ * rateMult);
+
     if (xLen > 1.0 && playhead_ >= lEnd - xLen && playhead_ < lEnd)
     {
         const double t = (playhead_ - (lEnd - xLen)) / xLen;
@@ -696,8 +698,8 @@ void SampleVoice::renderFrame (float& outL, float& outR, double rateMult) noexce
 
         float outL1 = 0.0f, outR1 = 0.0f;
         float outL2 = 0.0f, outR2 = 0.0f;
-        readSampleStereo (*sample_, playhead_, pitchRatio_, params_.quality, tables, outL1, outR1);
-        readSampleStereo (*sample_, wrapPos, pitchRatio_, params_.quality, tables, outL2, outR2);
+        readSampleStereo (*sample_, playhead_, effRatio, params_.quality, tables, outL1, outR1);
+        readSampleStereo (*sample_, wrapPos, effRatio, params_.quality, tables, outL2, outR2);
 
         const double wOut = std::cos (t * 0.5 * kPi);
         const double wIn = std::sin (t * 0.5 * kPi);
@@ -706,7 +708,7 @@ void SampleVoice::renderFrame (float& outL, float& outR, double rateMult) noexce
     }
     else
     {
-        readSampleStereo (*sample_, playhead_, pitchRatio_, params_.quality, tables, sL, sR);
+        readSampleStereo (*sample_, playhead_, effRatio, params_.quality, tables, sL, sR);
     }
 
     // Panning (equal-power)
@@ -913,17 +915,18 @@ void SampleVoice::renderBlockT (float* outLeft, float* outRight, int numFrames, 
     const auto& tables = SincTables::instance();
     const float* const table = Tier == QualityTier::low ? tables.low : (Tier == QualityTier::medium ? tables.med : tables.high);
     // (the logarithm of the ratio and the pan gains are functions of values that rarely change from one block to the next: made again only when those change)
+    const double baseRatio = std::fabs (pitchRatio_ * speed_);
     double rho = 0.0;
-    if (sample_->numMipLevels > 1 && pitchRatio_ > 1.0)
+    if (sample_->numMipLevels > 1 && baseRatio > 1.0)
     {
-        if (! (pitchRatio_ == cachedLogKey_) || legacyCaches_)
+        if (! (baseRatio == cachedLogKey_) || legacyCaches_)
         {
-            cachedLog_ = std::log2 (pitchRatio_);
-            cachedLogKey_ = pitchRatio_;
+            cachedLog_ = std::log2 (baseRatio);
+            cachedLogKey_ = baseRatio;
         }
         rho = cachedLog_;
     }
-    const ReadPlan plan = makePlan (*sample_, pitchRatio_, Tier, rho);
+    const ReadPlan plan = makePlan (*sample_, baseRatio, Tier, rho);
 
     const LoopMode mode = params_.loopMode == LoopMode::tailed ? LoopMode::forward : params_.loopMode;
     const double xLen = (mode == LoopMode::forward && lLen > 2.0)
@@ -1116,15 +1119,34 @@ void SampleVoice::renderBlockT (float* outLeft, float* outRight, int numFrames, 
             const double wrapPos = lStart + t * xLen;
             float outL1 = 0.0f, outR1 = 0.0f;
             float outL2 = 0.0f, outR2 = 0.0f;
-            readPlanned<Tier> (plan, table, playhead_, outL1, outR1);
-            readPlanned<Tier> (plan, table, wrapPos, outL2, outR2);
+            if (rateMod != nullptr)
+            {
+                const double effRatio = std::fabs (pitchRatio_ * speed_ * static_cast<double> (rateMod[i]));
+                readSampleStereo (*sample_, playhead_, effRatio, Tier, tables, outL1, outR1);
+                readSampleStereo (*sample_, wrapPos, effRatio, Tier, tables, outL2, outR2);
+            }
+            else
+            {
+                readPlanned<Tier> (plan, table, playhead_, outL1, outR1);
+                readPlanned<Tier> (plan, table, wrapPos, outL2, outR2);
+            }
             const double wOut = std::cos (t * 0.5 * kPi);
             const double wIn = std::sin (t * 0.5 * kPi);
             sL = static_cast<float> (wOut * outL1 + wIn * outL2);
             sR = static_cast<float> (wOut * outR1 + wIn * outR2);
         }
         else
-            readPlanned<Tier> (plan, table, playhead_, sL, sR);
+        {
+            if (rateMod != nullptr)
+            {
+                const double effRatio = std::fabs (pitchRatio_ * speed_ * static_cast<double> (rateMod[i]));
+                readSampleStereo (*sample_, playhead_, effRatio, Tier, tables, sL, sR);
+            }
+            else
+            {
+                readPlanned<Tier> (plan, table, playhead_, sL, sR);
+            }
+        }
 
         float edge = 1.0f;
         if (fadeEdges)
