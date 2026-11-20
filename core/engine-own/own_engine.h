@@ -79,6 +79,7 @@ public:
     void requestMeters() noexcept override { meterHold.store (kMeterHoldBlocks, std::memory_order_relaxed); }
     void silence() noexcept override;
     void setUltraRender (bool on) noexcept override { ultraRender.store (on, std::memory_order_relaxed); }
+    bool takeClipFlag() noexcept override { return false; }
     void setVoiceCountAlpha (float a) noexcept { voiceCountAlpha.store (std::clamp (a, 0.0f, 1.0f), std::memory_order_relaxed); }
     float voiceCountGain() const noexcept { return lastVoiceCountGain.load (std::memory_order_relaxed); }
     void setContent (const StateContent& content) override;

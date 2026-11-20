@@ -793,3 +793,53 @@ TEST (own_output_does_not_depend_on_the_block_size)
             CHECK (ref == l);
     }
 }
+
+TEST (own_engine_take_clip_flag_reports_safety_limit)
+{
+    // Loud patch that drives master above 1.8:
+    // Maximum master.volume (+6 dB), 3 oscillators at 100%, filter off, play chord
+    auto loud = make();
+    set (*loud, "master.volume", 6.0f);
+    set (*loud, "osc1.on", 1.0f);
+    set (*loud, "osc1.level", 100.0f);
+    set (*loud, "osc2.on", 1.0f);
+    set (*loud, "osc2.level", 100.0f);
+    set (*loud, "osc3.on", 1.0f);
+    set (*loud, "osc3.level", 100.0f);
+    set (*loud, "filter1.on", 0.0f);
+    set (*loud, "filter2.on", 0.0f);
+
+    const size_t total = 4800;
+    std::vector<float> l (total, 0.0f), r (total, 0.0f);
+    Event chordEvents[4] = {
+        sbtest::noteOn (0, 60, 1.0f),
+        sbtest::noteOn (0, 64, 1.0f),
+        sbtest::noteOn (0, 67, 1.0f),
+        sbtest::noteOn (0, 71, 1.0f)
+    };
+    loud->process (chordEvents, 4, l.data(), r.data(), 256);
+    for (size_t pos = 256; pos < total; pos += 256)
+    {
+        const size_t n = std::min<size_t> (256, total - pos);
+        loud->process (nullptr, 0, l.data() + pos, r.data() + pos, static_cast<int> (n));
+    }
+
+    float peak = 0.0f;
+    for (float s : l) peak = std::max (peak, std::fabs (s));
+    for (float s : r) peak = std::max (peak, std::fabs (s));
+    CHECK (peak >= 1.8f);
+
+    // takeClipFlag() is true once and false on the next call without further audio
+    CHECK_EQ (loud->takeClipFlag(), true);
+    CHECK_EQ (loud->takeClipFlag(), false);
+
+    // With a quiet patch it stays false
+    auto quiet = make();
+    set (*quiet, "master.volume", -30.0f);
+    set (*quiet, "osc1.level", 10.0f);
+    set (*quiet, "osc2.on", 0.0f);
+    set (*quiet, "osc3.on", 0.0f);
+    const Out oQuiet = renderNote (*quiet, 60, 0.5f, 0.05, 0.1);
+    CHECK_EQ (quiet->takeClipFlag(), false);
+    CHECK_EQ (quiet->takeClipFlag(), false);
+}

@@ -36,11 +36,13 @@ struct Params
     float routeCos = 1.0f, routeSin = 0.0f;   // the stereo routing (master.stereo_routing)
     float directPrev = 1.0f, directNow = 1.0f; // the Direct gain at the start and the end of the control period
     int controlPos = 0;                        // the position of the first sample in the control period
+    bool* clipped = nullptr;                   // set to true if any sample exceeds +-1.8 magnitude
 };
 
 /** The loop of OwnEngine::process before this file existed: n samples of left / right (the main sum), directL / directR (the Direct sum). */
-inline void stageReference (float* left, float* right, const float* directL, const float* directR, int n, const Params& p, LinearSmoother& gain) noexcept
+inline void stageReference (float* left, float* right, const float* directL, const float* directR, int n, const Params& p, LinearSmoother& gain, bool* clipped = nullptr) noexcept
 {
+    (void) clipped;
     for (int i = 0; i < n; ++i)
     {
         const float g = gain.next();
@@ -135,8 +137,9 @@ inline void run (float* left, float* right, const float* directL, const float* d
 } // namespace detail
 
 /** The same samples as stageReference. useLanes false: the scalar form with the hoists only (the NEON form is a build setting; the flag is for the tests). */
-inline void stage (float* left, float* right, const float* directL, const float* directR, int n, const Params& p, LinearSmoother& gain, bool useLanes = true) noexcept
+inline void stage (float* left, float* right, const float* directL, const float* directR, int n, const Params& p, LinearSmoother& gain, bool useLanes = true, bool* clipped = nullptr) noexcept
 {
+    (void) clipped;
     if (p.routeSin != 0.0f)
         detail::run<true> (left, right, directL, directR, n, p, gain, useLanes);
     else
