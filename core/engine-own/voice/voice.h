@@ -390,7 +390,7 @@ private:
     int vcStep = 0;
     float outL = 0.0f, outR = 0.0f, lastLevel = 0.0f;
     float lastBusL[4] = {}, lastBusR[4] = {};
-    float declickL = 0.0f, declickR = 0.0f;
+    float declickL[4] = {}, declickR[4] = {};
     int declickPos = 0;
     bool fresh = true;
     float glideStart = 0.0f;

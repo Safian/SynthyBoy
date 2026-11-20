@@ -175,7 +175,13 @@ void Voice::reset() noexcept
     filt[1].reset();
     clearMod();
     outL = outR = 0.0f;
-    declickL = declickR = 0.0f;
+    for (int tg = 0; tg < 4; ++tg)
+    {
+        lastBusL[tg] = 0.0f;
+        lastBusR[tg] = 0.0f;
+        declickL[tg] = 0.0f;
+        declickR[tg] = 0.0f;
+    }
     declickPos = 0;
     killFading = false;
     killElapsed = 0.0f;
@@ -299,11 +305,22 @@ void Voice::start (const NoteStart& n, float lastOutL, float lastOutR) noexcept
     ampPrev = ampCur = 0.0f;
     velGainPrev = velGain = 0.0f;
     std::fill (std::begin (srcLevel), std::end (srcLevel), 0.0f);
-    declickL = lastOutL;
-    declickR = lastOutR;
-    declickPos = (lastOutL != 0.0f || lastOutR != 0.0f) ? 64 : 0;
+    declickL[0] = lastOutL;
+    declickR[0] = lastOutR;
+    for (int tg = 1; tg < 4; ++tg)
+    {
+        declickL[tg] = lastBusL[tg];
+        declickR[tg] = lastBusR[tg];
+    }
+    bool anyDeclick = false;
+    for (int tg = 0; tg < 4; ++tg)
+        if (declickL[tg] != 0.0f || declickR[tg] != 0.0f)
+            anyDeclick = true;
+    declickPos = anyDeclick ? 64 : 0;
     for (int o = 0; o < 3; ++o)
         std::fill (std::begin (oscMono[o]), std::end (oscMono[o]), 0.0f);
+    for (int j = 0; j < 4; ++j)
+        std::fill (std::begin (extMono[j]), std::end (extMono[j]), 0.0f);
     filt[0].reset();
     filt[1].reset();
     for (auto& o : osc)
@@ -1619,9 +1636,9 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         int c = 0;
         for (int j = 0; j < 3; ++j)
             if (j != o)
-                cross[c++] = oscMono[j];
+                cross[c++] = oscMono[j] + t0;
         for (int j = 0; j < 4; ++j)
-            cross[2 + j] = extMono[j]; // Noise, Sub, Filter 1, Filter 2: the last chunk (the filters run after the oscillators)
+            cross[2 + j] = extMono[j] + t0; // Noise, Sub, Filter 1, Filter 2: the last chunk (the filters run after the oscillators)
         float w0 = 1.0f, w1 = 1.0f;
         if (lib[o].type() != kOscTypeWavetable || lib[o].libraryRunning())
             lib[o].wavetableWeights (t0, n, w0, w1);
@@ -1656,13 +1673,13 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
                 oscR[o][k] += tr[k];
             }
         }
-        simd::halfSum (oscMono[o], oscL[o], oscR[o], n);
-        srcLevel[o] = oscMono[o][n - 1];
+        simd::halfSum (oscMono[o] + t0, oscL[o], oscR[o], n);
+        srcLevel[o] = oscMono[o][t0 + n - 1];
         if (oscWarpOnly[o])
             continue;   // Key Warp: out of its key range the oscillator only warps the others (its signal is in oscMono), it is not routed and not in the mixer strips
         if (out.srcSq != nullptr)
         {
-            const float pk = peakOf (oscMono[o], n);
+            const float pk = peakOf (oscMono[o] + t0, n);
             out.srcSq[1 + o] += pk * pk;   // the strips of the mixer: Sub 0, A 1, B 2, C 3, Noise 4, Filter 1 5, Filter 2 6
         }
         route (oscDest[o], oscEnv1[o], oscL[o], oscR[o], oscBlend[o], oscSend[o][0], oscSend[o][1]);
@@ -1672,12 +1689,12 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         float sl[kControlPeriod], sr2[kControlPeriod];
         { SB_SECTION (sections::sub); sub.render (t0, n, sl, sr2, nullptr, gl->sampleRate); }
         for (int k = 0; k < n; ++k)
-            extNext[1][k] = 0.5f * (sl[k] + sr2[k]);
+            extNext[1][t0 + k] = 0.5f * (sl[k] + sr2[k]);
         extWritten[1] = true;
         srcLevel[4] = 0.5f * (sl[n - 1] + sr2[n - 1]);
         if (out.srcSq != nullptr)
         {
-            const float pk = peakOf (extNext[1], n);
+            const float pk = peakOf (extNext[1] + t0, n);
             out.srcSq[0] += pk * pk;
         }
         route (subCh.dest, subCh.env1, sl, sr2, subBlend, subSend[0], subSend[1]);
@@ -1737,12 +1754,12 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
             nr[k] = b * g * 1.41421356f * gr2;
         }
         for (int k = 0; k < n; ++k)
-            extNext[0][k] = 0.5f * (nl[k] + nr[k]);
+            extNext[0][t0 + k] = 0.5f * (nl[k] + nr[k]);
         extWritten[0] = true;
         srcLevel[3] = 0.5f * (nl[n - 1] + nr[n - 1]);
         if (out.srcSq != nullptr)
         {
-            const float pk = peakOf (extNext[0], n);
+            const float pk = peakOf (extNext[0] + t0, n);
             out.srcSq[4] += pk * pk;
         }
         route (noiseCh.dest, noiseCh.env1, nl, nr, noiseBlend, noiseSend[0], noiseSend[1]);
@@ -1753,7 +1770,7 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     {
         if (!filtOn[f] && !usedFin[f])
         {
-            std::fill (extNext[2 + f], extNext[2 + f] + n, 0.0f);
+            std::fill (extNext[2 + f] + t0, extNext[2 + f] + t0 + n, 0.0f);
             srcLevel[5 + f] = 0.0f;
             return;
         }
@@ -1774,11 +1791,11 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
             simd::mulBy (fout_L[f], gk, n);
             simd::mulBy (fout_R[f], gk, n);
         }
-        simd::halfSum (extNext[2 + f], fout_L[f], fout_R[f], n);
+        simd::halfSum (extNext[2 + f] + t0, fout_L[f], fout_R[f], n);
         srcLevel[5 + f] = 0.5f * (fout_L[f][n - 1] + fout_R[f][n - 1]);
         if (out.srcSq != nullptr)
         {
-            const float pk = peakOf (extNext[2 + f], n);
+            const float pk = peakOf (extNext[2 + f] + t0, n);
             out.srcSq[5 + f] += pk * pk;
         }
     };
@@ -1836,14 +1853,11 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
 
     if (ref)
         for (int j = 0; j < 4; ++j)
-        {
-            std::copy (extNext[j], extNext[j] + n, extMono[j]);
-            std::fill (extNext[j] + n, extNext[j] + kControlPeriod, 0.0f);
-        }
+            std::copy (extNext[j] + t0, extNext[j] + t0 + n, extMono[j] + t0);
     else
         for (int j = 0; j < 2; ++j)
             if (!extWritten[j])
-                std::fill (extMono[j], extMono[j] + n, 0.0f); // (Filter 1 and 2 are written by runFilter in every routing)
+                std::fill (extMono[j] + t0, extMono[j] + t0 + n, 0.0f); // (Filter 1 and 2 are written by runFilter in every routing)
     // ---- amplitude, velocity, declick, fade (only the targets that received something are mixed: the others would add exact zeros)
     SB_SECTION (sections::renderFinal);
     float lastL = 0.0f, lastR = 0.0f;
@@ -1853,7 +1867,8 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
     for (int tg = 0; tg < 4; ++tg)
     {
         const bool ue = usedT[1][tg], un = usedT[0][tg];
-        if (tg != 0 && !ue && !un)
+        const bool hasDeclick = declickPos > 0 && (declickL[tg] != 0.0f || declickR[tg] != 0.0f);
+        if (tg != 0 && !ue && !un && !hasDeclick)
         {
             lastBusL[tg] = lastBusR[tg] = 0.0f;
             continue;
@@ -1877,24 +1892,27 @@ void Voice::render (const MixOut& out, int n, int t0) noexcept
         };
         mixLane (ml, tE_L[tg], tN_L[tg]);
         mixLane (mr, tE_R[tg], tN_R[tg]);
+        if (hasDeclick)
+        {
+            const int dcN = std::min (n, declickPos);
+            for (int k = 0; k < dcN; ++k)
+            {
+                const float w = static_cast<float> (declickPos - k) * (1.0f / 64.0f);
+                ml[k] += declickL[tg] * w;
+                mr[k] += declickR[tg] * w;
+            }
+        }
         lastBusL[tg] = ml[n - 1];
         lastBusR[tg] = mr[n - 1];
         if (tg == 0)
         {
-            // the declick tail of the note this voice played before fades out over the first samples
-            for (int k = 0; k < n && declickPos > 0; ++k)
-            {
-                const float w = static_cast<float> (declickPos) * (1.0f / 64.0f);
-                ml[k] += declickL * w;
-                mr[k] += declickR * w;
-                --declickPos;
-            }
             lastL = ml[n - 1];
             lastR = mr[n - 1];
         }
         simd::addScaled (out.l[tg], ml, 1.0f, n); // d += m * 1.0f is d += m exactly
         simd::addScaled (out.r[tg], mr, 1.0f, n);
     }
+    declickPos = std::max (0, declickPos - n);
     outL = lastL;
     outR = lastR;
     lastLevel = std::max (std::fabs (lastL), std::fabs (lastR));
