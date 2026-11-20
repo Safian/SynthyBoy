@@ -22,12 +22,13 @@ inline float sanitize (float v) noexcept
     return v;
 }
 
-inline float softLimit (float x) noexcept
+// Loop limit matching the own engine's delay effects (fx_effects.h: loopLimit bound = 8.0).
+// Bounds the feedback loop while preserving linear headroom up to +-8.0.
+constexpr float kLoopLimit = 8.0f;
+
+inline float softLimit (float v) noexcept
 {
-    // Fast cubic soft clipper to keep feedback stable
-    if (x > 1.5f) return 1.0f;
-    if (x < -1.5f) return -1.0f;
-    return x - (4.0f / 27.0f) * x * x * x;
+    return kLoopLimit * std::clamp (v * (1.0f / kLoopLimit), -1.0f, 1.0f);
 }
 } // namespace
 
