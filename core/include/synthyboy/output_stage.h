@@ -467,6 +467,7 @@ private:
     int since = 0, holdN = 1, calm = 0, D = 1, W = 2;
     bool idle = true;
     // make-up gain, switch
+    static_assert (std::atomic<float>::is_always_lock_free, "output stage atomics must be lock free (audio thread)");
     std::atomic<float> gDb { 0.0f };
     std::atomic<float> targetGain { 1.0f };
     float curGain = 1.0f, smCoef = 0.99886686f;
