@@ -334,34 +334,67 @@ TEST (own_osc_multisample_read_out_has_the_position)
 // instead of stepping once per control period (finding rank 24). Reuses setup from own_osc_multisample_read_out_has_the_position.
 TEST (own_osc_multisample_gain_is_ramped_per_sample)
 {
-    const double hz = 440.0;
-    const double amp = 1.0;
     const int rate = 44100;
     const double seconds = 1.0;
     const size_t totalFrames = static_cast<size_t> (rate * seconds);
-    std::vector<float> pureSine (totalFrames);
-    for (size_t i = 0; i < totalFrames; ++i)
-        pureSine[i] = static_cast<float> (amp * std::sin (6.283185307179586 * hz * static_cast<double> (i) / rate));
+    std::vector<float> constSample (totalFrames, 1.0f);
 
     MemoryContentStore store;
-    store.add ("o", "inst/p.wav", encodeWav (pureSine.data(), nullptr, pureSine.size(), rate, 24));
+    store.add ("o", "inst/p.wav", encodeWav (constSample.data(), nullptr, constSample.size(), rate, 24));
     const std::string sfz = "<region> sample=p.wav lokey=0 hikey=127 pitch_keycenter=69 loop_mode=one_shot\n";
     store.add ("o", "inst/p.sfz", std::vector<uint8_t> (sfz.begin(), sfz.end()));
     StateContent c;
-    ContentFileRef i;
-    i.pack = "o";
-    i.file = "inst/p.sfz";
-    attachInstrument (c, 1, i, 1);
-    auto e = createOwnEngine();
-    e->setParam (kParamMasterPolyphony, 8.0f);
-    e->prepare (static_cast<double> (rate), 256, qualityForTier (Tier::high));
-    set (*e, "filter1.on", 0.0f);
-    set (*e, "master.volume", 0.0f);
-    set (*e, "env1.attack", 0.0f);
-    set (*e, "osc1.type", 4.0f);
-    e->setContentStore (&store);
-    e->setContent (c);
+    ContentFileRef instRef;
+    instRef.pack = "o";
+    instRef.file = "inst/p.sfz";
+    attachInstrument (c, 1, instRef, 1);
 
+    auto setupEngine = [&] ()
+    {
+        auto e = createOwnEngine();
+        e->setParam (kParamMasterPolyphony, 8.0f);
+        e->setParam (kParamMasterVolume, 0.0f);
+        e->prepare (static_cast<double> (rate), 256, qualityForTier (Tier::high));
+        set (*e, "filter1.on", 0.0f);
+        set (*e, "master.volume", 0.0f);
+        set (*e, "env1.attack", 0.0f);
+        set (*e, "osc1.type", 4.0f);
+        e->setContentStore (&store);
+        e->setContent (c);
+        return e;
+    };
+
+    // STEP 1: verify that with a FIXED gain the output is constant to 1e-6 over 0.2 s
+    float fixedVal = 0.0f;
+    {
+        auto e = setupEngine();
+        set (*e, "osc1.level", 100.0f);
+
+        const int fixedFrames = 256 + static_cast<int> (rate * 0.2); // 256 frames onset + 8820 frames (0.2 s)
+        std::vector<float> fixL (static_cast<size_t> (fixedFrames)), fixR (static_cast<size_t> (fixedFrames));
+        Event on = sbtest::noteOn (0, 69, 1.0f);
+        int pos = 0;
+        while (pos < fixedFrames)
+        {
+            const int n = std::min (32, fixedFrames - pos);
+            if (pos == 0)
+                e->process (&on, 1, fixL.data() + pos, fixR.data() + pos, n);
+            else
+                e->process (nullptr, 0, fixL.data() + pos, fixR.data() + pos, n);
+            pos += n;
+        }
+        fixedVal = fixL[256];
+        float minFix = fixedVal, maxFix = fixedVal;
+        for (int k = 256; k < fixedFrames; ++k)
+        {
+            minFix = std::min (minFix, fixL[static_cast<size_t> (k)]);
+            maxFix = std::max (maxFix, fixL[static_cast<size_t> (k)]);
+        }
+        CHECK (maxFix - minFix < 1.0e-6f);
+    }
+
+    // STEP 2 & 3: rising gain ramp verification
+    auto e = setupEngine();
     const int riseFrames = 22050; // 0.5 s at 44100 Hz
     std::vector<float> l (static_cast<size_t> (riseFrames)), r (static_cast<size_t> (riseFrames));
     Event on = sbtest::noteOn (0, 69, 1.0f);
@@ -378,33 +411,40 @@ TEST (own_osc_multisample_gain_is_ramped_per_sample)
         pos += n;
     }
 
-    std::vector<float> gain (static_cast<size_t> (riseFrames), -1.0f);
-    for (int k = 0; k < riseFrames; ++k)
+    float globalMaxSampleStep = 0.0f;
+    float globalMaxPeriodRise = 0.0f;
+    const int startPeriod = 8; // skip initial onset / anti-click (sample 256)
+    const int endPeriod = (riseFrames - 1) / 32;
+    for (int p = startPeriod; p < endPeriod; ++p)
     {
-        if (std::fabs (pureSine[static_cast<size_t> (k)]) >= 0.5f)
-            gain[static_cast<size_t> (k)] = l[static_cast<size_t> (k)] / pureSine[static_cast<size_t> (k)];
-    }
-
-    float maxStep = 0.0f;
-    for (int k = 256; k < riseFrames - 1; ++k)
-    {
-        if (gain[static_cast<size_t> (k)] >= 0.0f && gain[static_cast<size_t> (k + 1)] >= 0.0f)
+        const int pStart = p * 32;
+        float pMinStep = 1e9f, pMaxStep = 0.0f;
+        float pSumStep = 0.0f;
+        for (int i = 0; i < 32; ++i)
         {
-            const float step = std::fabs (gain[static_cast<size_t> (k + 1)] - gain[static_cast<size_t> (k)]);
-            maxStep = std::max (maxStep, step);
+            const float s = std::fabs (l[static_cast<size_t> (pStart + i + 1)] - l[static_cast<size_t> (pStart + i)]);
+            pMinStep = std::min (pMinStep, s);
+            pMaxStep = std::max (pMaxStep, s);
+            pSumStep += (l[static_cast<size_t> (pStart + i + 1)] - l[static_cast<size_t> (pStart + i)]);
+            globalMaxSampleStep = std::max (globalMaxSampleStep, s);
         }
+        const float periodRise = l[static_cast<size_t> (pStart + 32)] - l[static_cast<size_t> (pStart)];
+        globalMaxPeriodRise = std::max (globalMaxPeriodRise, periodRise);
+
+        // Linear inside the period: all 32 differences equal within 2 percent of period step
+        const float avgStep = pSumStep / 32.0f;
+        if (avgStep > 1e-6f)
+            CHECK ((pMaxStep - pMinStep) <= 0.02f * avgStep);
+
+        // Sum of 32 differences equals change of gain over the period
+        CHECK (std::fabs (pSumStep - periodRise) < 1.0e-6f);
     }
 
-    float gainEnd = 0.0f;
-    for (int k = 21500; k < riseFrames; ++k)
-        if (gain[static_cast<size_t> (k)] > gainEnd)
-            gainEnd = gain[static_cast<size_t> (k)];
-    const float totalRise = gainEnd;
-    const float expectedSteppedJump = totalRise * 32.0f / static_cast<float> (riseFrames);
-    const float expectedRampedStep = expectedSteppedJump / 32.0f;
-    std::printf ("    multisample gain ramp: totalRise = %.4f, maxStep = %.7f, steppedJump = %.7f, rampedStep = %.7f\n",
-                 totalRise, maxStep, expectedSteppedJump, expectedRampedStep);
-    CHECK (maxStep <= 1.5f * expectedRampedStep);
+    // Largest per-sample step is at most (1 / 32) of the largest per-period rise times 1.05
+    CHECK (globalMaxSampleStep <= (globalMaxPeriodRise / 32.0f) * 1.05f);
+
+    std::printf ("    multisample gain ramp: fixed = %.7f, maxStep = %.7f, maxPeriodRise = %.7f, rampedStep = %.7f\n",
+                 fixedVal, globalMaxSampleStep, globalMaxPeriodRise, globalMaxPeriodRise / 32.0f);
 }
 
 // S4: granular and spectral types play the same sample at the same pitch and at a level in the range of the Sample type
