@@ -500,8 +500,8 @@ def test_dry_run_commands_k61_and_xl():
     assert code == 0
     k61_text = "\n".join(logs_k61)
     assert "DEVICE-LOCK" in k61_text
-    assert "SEQNOTE_VEL=127 /tmp/seqnote 129 0 0.8 48" in k61_text
-    assert "SEQNOTE_VEL=64 /tmp/seqnote 129 0 0.8 48" in k61_text
+    assert "SEQNOTE_VEL=127 /tmp/seqnote 129 0 3.0 48" in k61_text
+    assert "SEQNOTE_VEL=64 /tmp/seqnote 129 0 3.0 48" in k61_text
     assert "mtouch tap 38 698 90" in k61_text
     assert "ssh root@192.168.0.30 'printf '1\\n' > /tmp/synthyboy-select-program'" in k61_text
     assert "printf '0\\n' > /tmp/synthyboy-select-program'" in k61_text  # preflight only
@@ -516,8 +516,8 @@ def test_dry_run_commands_k61_and_xl():
     assert code == 0
     xl_text = "\n".join(logs_xl)
     assert "DEVICE-LOCK-XL" in xl_text
-    assert "SEQNOTE_VEL=127 /tmp/seqnote 129 0 0.8 48" in xl_text
-    assert "SEQNOTE_VEL=64 /tmp/seqnote 129 0 0.8 48" in xl_text
+    assert "SEQNOTE_VEL=127 /tmp/seqnote 129 0 3.0 48" in xl_text
+    assert "SEQNOTE_VEL=64 /tmp/seqnote 129 0 3.0 48" in xl_text
     assert "MIDI input path, not the pads: XL has no pad injection" in xl_text
     assert "mtouch tap 924 101 90" in xl_text
     assert "xshot.sh preflight" in xl_text

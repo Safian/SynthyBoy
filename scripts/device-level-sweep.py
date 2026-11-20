@@ -39,6 +39,10 @@ DEFAULT_HALF_TOL = 3.0       # dB
 PRESET_COUNT = 160           # Factory presets only
 FIRST_INDEX = 1              # Program index 0 is the empty "Init" program: not swept
 LAST_INDEX = FIRST_INDEX + PRESET_COUNT - 1   # 160 (program_list_length is 161)
+# The offline level table (docs/release/OUTPUT-LEVEL-TABLE-2026-11-20.md) holds the note for 3 s; slow-attack pads and risers peak after seconds, so a 0.8 s hold
+# measured them 10..23 dB too low (first full sweep 2026-11-20: 39 of 159 presets). Hold like the offline gesture and measure the whole note.
+SWEEP_HOLD_S = 3.0
+SWEEP_WINDOW_S = 4.5
 SWEEP_NOTE = 48              # C3, the note of the offline level table (OUTPUT-LEVEL-TABLE)
 QUIET_PEAK = 1e-3            # a status write below this (-60 dBFS) counts as silence
 
@@ -687,7 +691,7 @@ def run_sweep(args, logger=None) -> int:
                 executor.tap_reset_peak_hold()
 
                 # 3. FULL hit (velocity 127) measured over its own window
-                full_peak_linear, full_events = executor.hit_and_measure(velocity=127, hold_s=0.8, window_s=3.0)
+                full_peak_linear, full_events = executor.hit_and_measure(velocity=127, hold_s=SWEEP_HOLD_S, window_s=SWEEP_WINDOW_S)
                 full_peak_dbfs = linear_to_dbfs(full_peak_linear)
                 if not hit_reached_plugin(full_events, 127):
                     log(f"FULL hit did not reach the plugin as note {SWEEP_NOTE} vel 127 (play log: {full_events})")
@@ -703,7 +707,7 @@ def run_sweep(args, logger=None) -> int:
                 executor.tap_reset_peak_hold()
 
                 # 6. HALF hit (velocity 64)
-                half_peak_linear, half_events = executor.hit_and_measure(velocity=64, hold_s=0.8, window_s=3.0)
+                half_peak_linear, half_events = executor.hit_and_measure(velocity=64, hold_s=SWEEP_HOLD_S, window_s=SWEEP_WINDOW_S)
                 half_peak_dbfs = linear_to_dbfs(half_peak_linear)
                 if not hit_reached_plugin(half_events, 64):
                     log(f"HALF hit did not reach the plugin as note {SWEEP_NOTE} vel 64 (play log: {half_events})")
