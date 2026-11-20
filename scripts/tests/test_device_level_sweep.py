@@ -18,7 +18,6 @@ import os
 import shutil
 import tempfile
 from unittest.mock import MagicMock, patch
-import pytest
 
 # Dynamically import scripts/device-level-sweep.py
 SPEC = importlib.util.spec_from_file_location(
@@ -92,7 +91,7 @@ def test_parse_status_output_peak():
         "output_blocks: 1250\n"
     )
     pk = sweep_mod.parse_status_output_peak(sample_text)
-    assert pk == pytest.approx(0.31622, abs=1e-5)
+    assert pk is not None and abs(pk - 0.31622) < 1e-5
 
     # Make sure output_peak_total is not picked if output_peak is absent
     no_peak_text = (
@@ -135,9 +134,13 @@ def test_device_lock():
 
             # Attempting to acquire again raises RuntimeError
             lock2 = sweep_mod.DeviceLock(lock_path, dry_run=False, logger=lambda m: None)
-            with pytest.raises(RuntimeError) as exc_info:
+            raised = False
+            try:
                 lock2.acquire()
-            assert "already exists" in str(exc_info.value)
+            except RuntimeError as exc:
+                raised = True
+                assert "already exists" in str(exc)
+            assert raised, "expected RuntimeError when acquiring existing lock"
 
         # After block, lock is released
         assert not os.path.exists(lock_path)
