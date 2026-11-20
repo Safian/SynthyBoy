@@ -29,7 +29,7 @@ endif()
 # static (cross builds for the MPC: the binary then needs nothing of the device but the kernel).
 add_executable(synthyboy_tier_bench tier_bench.cpp)
 target_link_libraries(synthyboy_tier_bench PRIVATE synthyboy_core)
-target_include_directories(synthyboy_tier_bench PRIVATE "${PROJECT_SOURCE_DIR}/shell-mpc")
+target_include_directories(synthyboy_tier_bench PRIVATE "${PROJECT_SOURCE_DIR}/shell-mpc" "${CMAKE_CURRENT_SOURCE_DIR}")
 set_target_properties(synthyboy_tier_bench PROPERTIES CXX_EXTENSIONS OFF)
 option(SYNTHYBOY_TIER_BENCH_STATIC "Link synthyboy_tier_bench fully static (Linux cross builds for the MPC)" OFF)
 if(SYNTHYBOY_TIER_BENCH_STATIC)

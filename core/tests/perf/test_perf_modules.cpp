@@ -12,6 +12,8 @@
 #include "test_runner.h"
 
 using namespace synthyboy::perf;
+using synthyboy::ParamInfo;
+using synthyboy::findParamByKey;
 
 namespace
 {
