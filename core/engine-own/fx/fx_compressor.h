@@ -204,11 +204,12 @@ public:
                     out[1] += sig[b][1] * gain * makeup;
                 }
             }
-            float d[2] = { in[0], in[1] };
+            float d[2] = { p.bands == 3 ? in[0] : sig[0][0] + sig[1][0] + sig[2][0],
+                           p.bands == 3 ? in[1] : sig[0][1] + sig[1][1] + sig[2][1] };
             if (limitMode)
                 for (int c = 0; c < 2; ++c)
                 {
-                    dry[c].push (in[c]);
+                    dry[c].push (d[c]);
                     d[c] = dry[c].read (static_cast<float> (lookAhead));
                 }
             l[i] = d[0] + (out[0] - d[0]) * p.mix;
