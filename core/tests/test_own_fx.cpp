@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "fx/fx_effects.h"
 #include "own_oracle.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/content_store.h"
@@ -1152,4 +1153,149 @@ TEST (fx_pool_parameters_are_modulation_destinations)
     for (size_t i = static_cast<size_t> (0.2 * kSr); i < a.left.size(); ++i)
         diff = std::max (diff, static_cast<double> (std::fabs (a.left[i] - b.left[i])));
     CHECK (diff > 0.05);
+}
+
+// Existing test in this file setting up distortion: fx_pool_order_rack_bypass_and_crossfade (line 558)
+TEST (fx_distortion_reset_clears_dc_blocker_and_downsample_phase)
+{
+    // (a1) DC blocker reset:
+    // Process 0.5 s of a signal with a DC offset of 0.5 through a distortion type using the DC blocker (type 6: Asymmetric).
+    // In unfixed code, reset() does not clear dc[2], so the accumulated DC state leaks out as a decaying offset
+    // during subsequent silence (first output sample is -0.37223658).
+    // In fixed code, reset() clears dc[0] = dc[1] = 0.0f, so every output sample during silence is exactly 0.0f.
+    {
+        own::Distortion dist;
+        dist.prepare (kSr);
+        own::Distortion::Params p;
+        p.type = 6; // Asymmetric (uses 10 Hz DC blocker)
+        p.driveDb = 0.0f;
+        p.mix = 1.0f;
+        p.order = 0; // bypass SVF filter
+        dist.set (p);
+
+        const int nDc = static_cast<int> (0.5 * kSr);
+        std::vector<float> dcL (nDc, 0.5f), dcR (nDc, 0.5f);
+        dist.process (dcL.data(), dcR.data(), nDc);
+
+        dist.reset();
+
+        const int nSilence = static_cast<int> (0.1 * kSr);
+        std::vector<float> silL (nSilence, 0.0f), silR (nSilence, 0.0f);
+        dist.process (silL.data(), silR.data(), nSilence);
+
+        bool allZero = true;
+        float maxLeak = 0.0f;
+        for (int i = 0; i < nSilence; ++i)
+        {
+            if (silL[i] != 0.0f || silR[i] != 0.0f)
+                allZero = false;
+            maxLeak = std::max (maxLeak, std::max (std::fabs (silL[i]), std::fabs (silR[i])));
+        }
+        // Fails on unfixed code (first sample is -0.37223658, maxLeak ~0.3722)
+        CHECK_EQ (silL[0], 0.0f);
+        CHECK (allZero);
+        CHECK_EQ (maxLeak, 0.0f);
+    }
+
+    // (a2) Down Sample (sample-hold) phase reset:
+    // Two instances: one fresh, one used then reset.
+    // In unfixed code, reset() does not clear holdPhase[2], so the used instance retains its phase offset
+    // and downsamples at different sample indices than the fresh instance (max diff ~0.28).
+    // In fixed code, reset() clears holdPhase[0] = holdPhase[1] = 0.0f, giving bit-identical output.
+    {
+        own::Distortion fresh, used;
+        fresh.prepare (kSr);
+        used.prepare (kSr);
+
+        own::Distortion::Params p;
+        p.type = 5; // Down Sample
+        p.driveDb = 15.0f; // period ≈ 8.62 samples at 48 kHz
+        p.mix = 1.0f;
+        p.order = 0;
+        fresh.set (p);
+        used.set (p);
+
+        // Advance used instance by 5 samples so holdPhase becomes 5.0f
+        std::vector<float> warmL (5, 0.7f), warmR (5, 0.7f);
+        used.process (warmL.data(), warmR.data(), 5);
+
+        used.reset();
+
+        // Process identical input on both: test signal with sine wave (period not a multiple of downsample period)
+        const int nTest = 480;
+        std::vector<float> inFreshL (nTest), inFreshR (nTest);
+        std::vector<float> inUsedL (nTest), inUsedR (nTest);
+        for (int i = 0; i < nTest; ++i)
+        {
+            const float s = 0.8f * std::sin (2.0f * 3.14159265f * 333.0f * static_cast<float> (i) / static_cast<float> (kSr));
+            inFreshL[i] = inUsedL[i] = s;
+            inFreshR[i] = inUsedR[i] = s;
+        }
+
+        fresh.process (inFreshL.data(), inFreshR.data(), nTest);
+        used.process (inUsedL.data(), inUsedR.data(), nTest);
+
+        bool bitIdentical = true;
+        float maxDiff = 0.0f;
+        for (int i = 0; i < nTest; ++i)
+        {
+            if (inFreshL[i] != inUsedL[i] || inFreshR[i] != inUsedR[i])
+                bitIdentical = false;
+            maxDiff = std::max (maxDiff, std::max (std::fabs (inFreshL[i] - inUsedL[i]), std::fabs (inFreshR[i] - inUsedR[i])));
+        }
+        // Fails on unfixed code (maxDiff ~0.2828 > 0)
+        CHECK (bitIdentical);
+        CHECK_EQ (maxDiff, 0.0f);
+    }
+
+    // (b) Bit-identity reference checksums:
+    // Print for 3 distortion types with fixed settings and fixed pseudo-random input (LCG).
+    // The build worker compares these lines starting DIST-CHECKSUM between commit 1 and commit 2.
+    {
+        struct Lcg
+        {
+            uint32_t state;
+            explicit Lcg (uint32_t seed) : state (seed) {}
+            uint32_t next() noexcept { state = state * 1664525u + 1013904223u; return state; }
+            float sample() noexcept { return static_cast<float> (next()) * (2.0f / 4294967296.0f) - 1.0f; }
+        };
+
+        const int kTypes[3] = { 0, 4, 6 }; // Soft Clip, Bit Crush, Asymmetric
+        for (int t : kTypes)
+        {
+            own::Distortion dist;
+            dist.prepare (kSr);
+            own::Distortion::Params p;
+            p.type = t;
+            p.driveDb = 12.0f;
+            p.mix = 1.0f;
+            p.cutoff = 4000.0f;
+            p.resonance = 0.5f;
+            p.blend = 0.0f;
+            p.order = 1; // active SVF pre-filter
+            dist.set (p);
+
+            const int n = 512;
+            std::vector<float> bufL (n), bufR (n);
+            Lcg rng (123456789u);
+            for (int i = 0; i < n; ++i)
+            {
+                bufL[i] = rng.sample();
+                bufR[i] = rng.sample();
+            }
+
+            dist.process (bufL.data(), bufR.data(), n);
+
+            double sumAbs = 0.0;
+            for (int i = 0; i < n; ++i)
+                sumAbs += static_cast<double> (std::fabs (bufL[i])) + static_cast<double> (std::fabs (bufR[i]));
+
+            std::printf ("DIST-CHECKSUM type=%d sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                         t, sumAbs,
+                         static_cast<double> (bufL[n - 8]), static_cast<double> (bufL[n - 7]),
+                         static_cast<double> (bufL[n - 6]), static_cast<double> (bufL[n - 5]),
+                         static_cast<double> (bufL[n - 4]), static_cast<double> (bufL[n - 3]),
+                         static_cast<double> (bufL[n - 2]), static_cast<double> (bufL[n - 1]));
+        }
+    }
 }
