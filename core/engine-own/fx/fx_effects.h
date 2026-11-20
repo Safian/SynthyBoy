@@ -670,13 +670,24 @@ public:
     bool fast = false; // tier low: tanh, sin, exp, exp2 and pow by the cheaper forms of dsp/fastmath.h
     struct Params { int type = 0; float driveDb = 0.0f, mix = 1.0f, cutoff = 4000.0f, resonance = 0.5f, blend = 0.0f; int order = 0; };
     void prepare (double sr) { sampleRate = sr; reset(); }
-    void reset() noexcept { for (auto& s : svf) s.reset(); held[0] = held[1] = 0.0f; counter = 0; }
+    void reset() noexcept
+    {
+        for (auto& s : svf) s.reset();
+        held[0] = held[1] = 0.0f;
+        holdPhase[0] = holdPhase[1] = 0.0f;
+        dc[0] = dc[1] = 0.0f;
+        counter = 0;
+    }
     void set (const Params& np) noexcept { p = np; }
     void process (float* l, float* r, int n) noexcept
     {
         const float g = std::pow (10.0f, p.driveDb * 0.05f);
         const float cg = Svf::coefficient (p.cutoff, sampleRate);
         const float k = 2.0f - 1.9f * clamp01 (p.resonance);
+        const float u = clamp01 ((p.driveDb + 30.0f) / 60.0f);
+        const float dExp = std::clamp (p.driveDb, -30.0f, 30.0f) * 0.05f;
+        const float d = fast ? fastmath::pow10 (dExp) : std::pow (10.0f, dExp);
+        const float dcA = 1.0f - (fast ? fastmath::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)) : std::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)));
         float* io[2] = { l, r };
         for (int c = 0; c < 2; ++c)
             for (int i = 0; i < n; ++i)
@@ -684,7 +695,7 @@ public:
                 const float dry = io[c][i];
                 float x = dry;
                 if (p.order == 1) x = filt (c, x, cg, k);
-                x = shape (c, x * g);
+                x = shape (c, x * g, u, d, dcA);
                 if (p.order == 2) x = filt (c, x, cg, k);
                 io[c][i] = dry * (1.0f - p.mix) + x * p.mix;
             }
@@ -698,15 +709,11 @@ private:
         const float b = std::clamp (p.blend, 0.0f, 2.0f);
         return b < 1.0f ? lerp (svf[c].lp, svf[c].bp * k, b) : lerp (svf[c].bp * k, svf[c].hp, b - 1.0f);
     }
-    float shape (int c, float v) noexcept
+    float shape (int c, float v, float u, float d, float dcA) noexcept
     {
         // v = x * drive; the laws of docs/engine-spec/06-effects.md section 4
-        const float u = clamp01 ((p.driveDb + 30.0f) / 60.0f);
-        const float dExp = std::clamp (p.driveDb, -30.0f, 30.0f) * 0.05f;
-        const float d = fast ? fastmath::pow10 (dExp) : std::pow (10.0f, dExp);
         auto th = [this] (float a) { return fast ? fastmath::tanh (a) : std::tanh (a); };
         auto ex = [this] (float a) { return fast ? fastmath::exp (a) : std::exp (a); };
-        const float x = d != 0.0f ? v / d : v; // the unscaled input
         float y;
         switch (p.type)
         {
@@ -714,9 +721,16 @@ private:
             case 1: y = std::clamp (v, -1.0f, 1.0f); break;
             case 2: { const float t = 0.25f * v + 0.75f; y = std::fabs (-4.0f * (t - ffloor (t)) + 2.0f) - 1.0f; break; }
             case 3: { const float t = 0.5f - 0.25f * v; y = fast ? fastmath::sinCycles (t) : std::sin (kTwoPif * (t - ffloor (t))); break; }
-            case 4: { const float q = std::clamp (u * u, 1.5e-8f, 1.0f); y = std::round (x / q) * q; break; }
+            case 4:
+            {
+                const float x = d != 0.0f ? v / d : v;
+                const float q = std::clamp (u * u, 1.5e-8f, 1.0f);
+                y = std::round (x / q) * q;
+                break;
+            }
             case 5:
             {
+                const float x = d != 0.0f ? v / d : v;
                 const float period = std::max (static_cast<float> (sampleRate) * std::max (0.99f / std::max ((1.0f - u) * (1.0f - u), 1.0e-4f), 1.0f) / 88200.0f, 1.0f);
                 holdPhase[c] += 1.0f;
                 if (holdPhase[c] >= period) { holdPhase[c] -= period; held[c] = x; }
@@ -735,8 +749,8 @@ private:
         const bool asym = p.type == 6 || p.type == 7 || p.type == 10 || p.type == 11 || p.type == 13;
         if (asym) // 10 Hz DC blocker
         {
-            const float a = 1.0f - (fast ? fastmath::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)) : std::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)));
-            dc[c] += a * (y - dc[c]);
+            dc[c] += dcA * (y - dc[c]);
+            dc[c] = flushDenormal (dc[c]);
             y -= dc[c];
         }
         return y;
