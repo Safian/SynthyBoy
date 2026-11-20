@@ -1541,6 +1541,54 @@ void testLfoParameterCoverage()
         check (tested == 8, "random LFO " + std::to_string (rlfo) + ": all 8 engine parameters checked");
     }
 }
+
+void testSpikeDecimation()
+{
+    // A spike one sample wide in d.y must reach its own row in both detail levels (full and reduced)
+    const ui::Rect rect = { 0, 0, 400, 200 };
+    const ui::Rect plot = ui::lfodisplay::plotRect (rect, ui::lfodisplay::Data {});
+    const float expectedRow = ui::lfodisplay::rowOf (plot, 1.0f);
+
+    for (int spikeIdx : { 1, 35, 36, 100, 125, 126 })
+    {
+        float y[128] = {};
+        y[spikeIdx] = 1.0f;
+        ui::lfodisplay::Data d;
+        d.kind = ui::lfodisplay::Data::Kind::Shape;
+        d.y = y;
+        d.n = 128;
+
+        for (int detail : { 1, 2 })
+        {
+            ui::theme::setDetail (detail);
+            uit::Scene sc (400, 200, uit::kBackgroundRgba);
+            ui::lfodisplay::draw (sc.builder(), rect, d, false);
+
+            bool reachedRow = false;
+            const gpu::SceneData& sd = *sc.data;
+            for (uint32_t opIdx = 0; opIdx < sd.numOps; ++opIdx)
+            {
+                if (sd.ops[opIdx].op == gpu::kOpCurve)
+                {
+                    const int first = static_cast<int> (sd.ops[opIdx].f[0]);
+                    const int n = static_cast<int> (sd.ops[opIdx].f[1]);
+                    for (int i = 0; i < n; ++i)
+                    {
+                        if (std::abs (sd.y[first + i] - expectedRow) < 1e-3f)
+                        {
+                            reachedRow = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            check (reachedRow, "detail level " + std::to_string (detail) +
+                               ": a spike one sample wide (at index " + std::to_string (spikeIdx) +
+                               ") reaches its own row");
+        }
+    }
+    ui::theme::setDetail (1);
+}
 }
 
 int main()
@@ -1565,6 +1613,7 @@ int main()
     testDisplay();
     testKeyFollowCurve();
     testTouchAndDraw();
+    testSpikeDecimation();
     std::printf ("%s: %d failed\n", uit::g_fails ? "FAIL" : "PASS", uit::g_fails);
     return uit::g_fails ? 1 : 0;
 }

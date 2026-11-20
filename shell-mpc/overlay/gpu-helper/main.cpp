@@ -48,6 +48,7 @@
 #include "../gpu_clock.h"
 #include "../sdf_font.h"
 #include "../gpu/scene.h"
+#include "../gpu/stroke_strip.h"
 #include "../gpu/cell_cache.h"
 #include "../gpu/cell_plan.h"
 #include "../vblank_linux.h"
@@ -1061,37 +1062,11 @@ private:
                 case kOpStroke:
                     if (pts_.size() >= 2 && std::isfinite (o.f[0]) && o.f[0] > 0.0f && o.f[0] <= kMaxStroke)
                     {
-                        const float half = o.f[0], ext = half + style_.soft * 0.5f + 1.0f;
+                        const float half = o.f[0];
                         beginDraw (GL_TRIANGLE_STRIP, 1, o.rgba, half, true);
-                        const int m = static_cast<int> (pts_.size());
-                        for (int i = 0; i < m; ++i)
-                        {
-                            float n1x = 0, n1y = 0, n2x = 0, n2y = 0;
-                            if (i > 0)
-                            {
-                                const float dx = pts_[static_cast<size_t> (i)].x - pts_[static_cast<size_t> (i - 1)].x, dy = pts_[static_cast<size_t> (i)].y - pts_[static_cast<size_t> (i - 1)].y;
-                                const float l = std::sqrt (dx * dx + dy * dy);
-                                if (l > 1e-6f) { n1x = -dy / l; n1y = dx / l; }
-                            }
-                            if (i < m - 1)
-                            {
-                                const float dx = pts_[static_cast<size_t> (i + 1)].x - pts_[static_cast<size_t> (i)].x, dy = pts_[static_cast<size_t> (i + 1)].y - pts_[static_cast<size_t> (i)].y;
-                                const float l = std::sqrt (dx * dx + dy * dy);
-                                if (l > 1e-6f) { n2x = -dy / l; n2y = dx / l; }
-                            }
-                            if (i == 0) { n1x = n2x; n1y = n2y; }
-                            if (i == m - 1) { n2x = n1x; n2y = n1y; }
-                            float mx = n1x + n2x, my = n1y + n2y, ml = std::sqrt (mx * mx + my * my);
-                            if (ml < 1e-4f) { mx = n1x; my = n1y; ml = 1.0f; }
-                            mx /= ml;
-                            my /= ml;
-                            float cosHalf = mx * n2x + my * n2y;
-                            if (cosHalf < 0.4f)
-                                cosHalf = 0.4f;     // miter limit 2.5
-                            const float k2 = ext / cosHalf;
-                            add (pts_[static_cast<size_t> (i)].x + mx * k2, pts_[static_cast<size_t> (i)].y + my * k2, ext, 0.0f);
-                            add (pts_[static_cast<size_t> (i)].x - mx * k2, pts_[static_cast<size_t> (i)].y - my * k2, -ext, 0.0f);
-                        }
+                        gpu::buildStrokeStrip (pts_, half, style_.soft, [&] (float x, float y, float d0, float d1) {
+                            add (x, y, d0, d1);
+                        });
                         end();
                     }
                     break;
