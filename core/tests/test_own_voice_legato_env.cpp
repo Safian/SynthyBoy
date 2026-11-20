@@ -109,3 +109,106 @@ TEST (voice_legato_note_takes_the_envelope_scaling_of_its_step_reference_control
 {
     legatoNoteTakesTheScalingOfItsStep (true);
 }
+
+// Existing test in this file: voice_legato_note_takes_the_envelope_scaling_of_its_step_without_modulation.
+// Regression test: Lorenz and Rossler attractors scale speed across low and high rates and stay stable.
+TEST (own_rlfo_attractors_scale_rate_and_stay_stable)
+{
+    for (int style = 3; style <= 4; ++style)
+    {
+        // 1. Low-rate scaling: 0.1 Hz vs 1.0 Hz at 44100 Hz.
+        // Before fix: both rates clamp dt to 0.001f, giving maxDiff == 0.0f.
+        // After fix: 1.0 Hz integrates 10x further in ODE time, giving maxDiff > 0.05f.
+        {
+            RandomLfo lfoA;
+            RandomLfo lfoB;
+            lfoA.seed (1234u);
+            lfoB.seed (1234u);
+            const float cyclesA = 0.1f * (32.0f / 44100.0f);
+            const float cyclesB = 1.0f * (32.0f / 44100.0f);
+            float maxDiffLow = 0.0f;
+            for (int i = 0; i < 500; ++i)
+            {
+                const float a = lfoA.advance (style, cyclesA);
+                const float b = lfoB.advance (style, cyclesB);
+                const float diff = std::fabs (a - b);
+                if (diff > maxDiffLow)
+                    maxDiffLow = diff;
+            }
+            CHECK (maxDiffLow > 0.05f);
+        }
+
+        // 2. High-rate scaling: 30.0 Hz vs 60.0 Hz at 44100 Hz.
+        // Before fix: both rates clamp dt to 0.02f, giving maxDiff == 0.0f.
+        // After fix: 60.0 Hz advances 2x faster, giving maxDiff > 0.05f.
+        {
+            RandomLfo lfoA;
+            RandomLfo lfoB;
+            lfoA.seed (1234u);
+            lfoB.seed (1234u);
+            const float cyclesA = 30.0f * (32.0f / 44100.0f);
+            const float cyclesB = 60.0f * (32.0f / 44100.0f);
+            float maxDiffHigh = 0.0f;
+            for (int i = 0; i < 200; ++i)
+            {
+                const float a = lfoA.advance (style, cyclesA);
+                const float b = lfoB.advance (style, cyclesB);
+                const float diff = std::fabs (a - b);
+                if (diff > maxDiffHigh)
+                    maxDiffHigh = diff;
+            }
+            CHECK (maxDiffHigh > 0.05f);
+        }
+
+        // 3. High-rate stability: 100.0 Hz at 44100 Hz for 5000 periods.
+        // Verify every output is finite and in [-1.0f, 1.0f], and range > 0.1f (not stuck at reset).
+        {
+            RandomLfo lfoStab;
+            lfoStab.seed (1234u);
+            const float cyclesStab = 100.0f * (32.0f / 44100.0f);
+            float minVal = 100.0f;
+            float maxVal = -100.0f;
+            bool allFinite = true;
+            bool inRange = true;
+            for (int i = 0; i < 5000; ++i)
+            {
+                const float val = lfoStab.advance (style, cyclesStab);
+                if (!std::isfinite (val))
+                    allFinite = false;
+                if (val < -1.0f || val > 1.0f)
+                    inRange = false;
+                if (val < minVal)
+                    minVal = val;
+                if (val > maxVal)
+                    maxVal = val;
+            }
+            CHECK (allFinite);
+            CHECK (inRange);
+            CHECK ((maxVal - minVal) > 0.1f);
+        }
+    }
+
+    // 4. Bit-identity verification for styles 0, 1, 2 (Perlin, S&H, Sine interpolate).
+    for (int s = 0; s <= 2; ++s)
+    {
+        RandomLfo lfoCheck;
+        lfoCheck.seed (42u);
+        const float checkCycles = 0.037f;
+        double sum = 0.0;
+        float last8[8] = {};
+        for (int i = 0; i < 256; ++i)
+        {
+            const float val = lfoCheck.advance (s, checkCycles);
+            sum += static_cast<double> (val);
+            if (i >= 256 - 8)
+                last8[i - (256 - 8)] = val;
+        }
+        std::printf ("RLFO-CHECKSUM style=%d sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                     s, sum,
+                     static_cast<double> (last8[0]), static_cast<double> (last8[1]),
+                     static_cast<double> (last8[2]), static_cast<double> (last8[3]),
+                     static_cast<double> (last8[4]), static_cast<double> (last8[5]),
+                     static_cast<double> (last8[6]), static_cast<double> (last8[7]));
+    }
+}
+
