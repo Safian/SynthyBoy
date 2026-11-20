@@ -23,7 +23,7 @@ namespace adaa
 constexpr float kEps = 1.0f / 1024.0f;
 
 /** The types (bit n = distortion type n) that run through the ADAA. Types 4 and 5 are lo-fi effects on purpose and never join. */
-constexpr uint32_t kConverted = (1u << 0) | (1u << 1) | (1u << 6) | (1u << 7) | (1u << 8) | (1u << 9) | (1u << 10) | (1u << 11);
+constexpr uint32_t kConverted = (1u << 0) | (1u << 1) | (1u << 2) | (1u << 3) | (1u << 6) | (1u << 7) | (1u << 8) | (1u << 9) | (1u << 10) | (1u << 11);
 
 /** x = the last raw input (before the drive), g = the gain b was computed for, b = the bounded part of F at x * g. */
 struct State
@@ -47,6 +47,14 @@ inline float lncoshBnd (float t, bool fast) noexcept
 inline float oneMinusExp (float s, bool fast) noexcept
 {
     return 1.0f - (fast ? fastmath::exp (-s) : std::exp (-s));
+}
+
+/** The periodic integral of the Linear Fold triangle (0 .. 0.5), w = fract (v / 4 + 3/4): Fp (w) = 4 w (1 - 2 w) below 1/2, 4 (2 w - 1) (w - 1) above. */
+inline float foldIntegral (float v) noexcept
+{
+    const float t = 0.25f * v + 0.75f;
+    const float w = t - ffloor (t);
+    return w < 0.5f ? 4.0f * w * (1.0f - 2.0f * w) : 4.0f * (2.0f * w - 1.0f) * (w - 1.0f);
 }
 
 /** The piecewise linear part of the antiderivative at t, the argument of the closed form (t = v; type 9: 32 v; type 6: v + 0.3). */
@@ -78,6 +86,7 @@ inline float bnd (int type, float t, bool fast) noexcept
         case 10: return t >= 0.0f ? lncoshBnd (t, fast) : (s >= 0.5f ? -0.125f : 0.5f * t * t - 0.5f * s);
         case 7: return t >= 0.0f ? -oneMinusExp (s, fast) : -0.25f * oneMinusExp (2.0f * s, fast); // F = v + e^-v - 1 above zero, -v / 2 + e^2v / 4 - 1/4 below
         case 8: return -oneMinusExp (s, fast);
+        case 2: return foldIntegral (t);
         default: return 0.0f;
     }
 }
@@ -101,6 +110,8 @@ inline float naive (int type, float t, bool fast) noexcept
             auto ex = [fast] (float a) noexcept { return fast ? fastmath::exp (a) : std::exp (a); };
             return ex (std::min (t, 0.0f)) - ex (-std::max (t, 0.0f));
         }
+        case 2: { const float u = 0.25f * t + 0.75f; return std::fabs (-4.0f * (u - ffloor (u)) + 2.0f) - 1.0f; }
+        case 3: return fast ? fastmath::sinCycles (0.25f * t) : std::sin (0.5f * kPif * t);
         case 1: return std::clamp (t, -1.0f, 1.0f);
         case 11: return std::fabs (std::clamp (t, -1.0f, 1.0f));
         default: return t;
@@ -123,6 +134,16 @@ inline float step (int type, State& s, float x, float g, bool fast) noexcept
         return naive (type, c, fast);
     }
     const float tp = s.x * ge + off;
+    if (type == 3) // Sine Fold: the closed form has no quotient, sin (pi m / 2) * sinc (dv / 4) with m the midpoint, dv the difference (the cosine identity of the plan 3.2)
+    {
+        const float z = 0.25f * (t - tp);
+        const float pz = kPif * z, pz2 = pz * pz;
+        const float sinc = std::fabs (z) < (fast ? 0.05f : 0.01f) ? 1.0f - pz2 * (1.0f / 6.0f - pz2 * (1.0f / 120.0f)) : (fast ? fastmath::sinCycles (0.5f * z) : std::sin (pz)) / pz;
+        const float ys = (fast ? fastmath::sinCycles (0.125f * (t + tp)) : std::sin (0.25f * kPif * (t + tp))) * sinc;
+        s.x = flushDenormal (x);
+        s.g = ge;
+        return ys;
+    }
     if (ge != s.g) // the gain changed: the stored bounded part belongs to the old gain
     {
         s.b = bnd (type, tp, fast);
