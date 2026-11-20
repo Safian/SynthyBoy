@@ -1,6 +1,6 @@
 # Plan: anti-aliasing of the nonlinear stages (distortion effect and oscillator warps)
 
-NOT FINISHED (this list is removed when the last section is committed): section 3 (design options and the chosen design), section 4 (task breakdown), section 5 (acceptance), section 6 (risks), section 7 (references), section 8 (closing line).
+NOT FINISHED (this list is removed when the last section is committed): section 4 (task breakdown), section 5 (acceptance), section 6 (risks), section 7 (references), section 8 (closing line).
 
 Status: plan only, written from code and document reading. No build, no test, no gate, no benchmark was run; nothing under `core/` is changed. Branch `worktree-agent-aca32ecdd63e9789d`, base `6069a30f` (develop).
 Covers: `docs/review/OWN-ENGINE-DSP-AUDIT-2-EFFECTS-OUTPUT-2026-11-20.md` rank 1 (distortion without oversampling and ADAA, X-Shaper stubs), `docs/review/OWN-ENGINE-DSP-AUDIT-1-VOICE-PATH-2026-11-20.md` rank 5 (hard nonlinear warps and hard sync) and rank 4 (pre-warp band limit `3.2 * sampleRate`), each corrected by `docs/review/OWN-ENGINE-DSP-AUDIT-{1,2}-VERIFICATION-2026-11-20.md` and by `TODO.md:59,66,67,84`.
@@ -110,3 +110,122 @@ Reference for the oscillator tests (no stored constants): the same oscillator wi
 * Whether ADAA alone reaches the thresholds of section 5 (if not: owner decision D1, section 3).
 * Whether the 3.2 -> 2.0 band limit change of task C1 lowers `ALIAS_DB` of the Dist warps at 4x (HYPOTHESIS: it does, by the intermodulation of the 22 images above the 4x Nyquist at note 96; if it does not, C1 is dropped and the spec's 3.2 stays).
 * Whether hard sync at 2x with a BLEP matches the 4x level (the -25 dB of M0 is the number to improve).
+
+---
+
+## 3. Design options and the chosen design
+
+### 3.0 The three techniques and what they do to a signal (derived, not measured)
+
+* **First-order ADAA** (antiderivative anti-aliasing: Parker, Zavalishin, Le Bivic 2016; Bilbao, Esqueda, Parker, Valimaki 2017). For a nonlinearity `f` with antiderivative `F` (`F' = f`) the output is `y[n] = (F (v[n]) - F (v[n-1])) / (v[n] - v[n-1])`, and `f ((v[n] + v[n-1]) / 2)` when `abs (v[n] - v[n-1])` is below a threshold. That is the average of `f` over the straight line between two input samples, i.e. the naive output of the continuous nonlinearity, filtered by a box of one sample and then sampled. Consequences: (1) every spectral line above Nyquist is weighted by `sinc^2 (f / fs)` in power before it folds (zeros at `fs`, `2 fs`, ...); (2) the output is delayed by half a sample; (3) in a linear stretch of `f` it equals `(v[n] + v[n-1]) / 2`, a two-tap low pass `cos (pi f / fs)`. Latency in the sense of the spec (integer samples reported to the host): zero; the half sample is a property of the signal path.
+* **Polyphase half-band oversampling** (2x or 4x; reference: de Soras, HIIR, 2005 for the IIR form; Kaiser-window FIR half-bands in any DSP text, the engine already builds Kaiser decimators, `core/engine-own/osc/wt_osc.h:84-112`). Run the law at `os * fs`, low-pass, decimate. Lines between `fs / 2` and `os * fs / 2` are not aliased at all, those above fold into a band of which only `1 / os` stays audible.
+* **BLEP / BLAMP** (band-limited step / ramp: Brandt 2001; Valimaki, Pekonen, Nam 2012 for PolyBLEP; Esqueda, Valimaki, Bilbao 2016 for PolyBLAMP). A discontinuity of the signal (jump `J`) or of its slope (`dS`, per sample) at a known sub-sample instant is replaced by its band-limited version by adding a short residual to the 2 samples around it. Derived here for the 2-point polynomial form: with `d` in [0, 1) the time since the event measured at the first sample after it (in samples), the residual added to the sample after is `-(J / 2) (1 - d)^2` and to the sample before `+(J / 2) d^2` (step), `+dS (1 - d)^3 / 6` and `+dS d^3 / 6` (ramp). Check: for `J = 1`, `d -> 1` the sample before moves by `1/2` (the band-limited step passes through the midpoint) and the sample after by 0; the continuous residual `r (u) = (1 + u)^2 / 2` for `-1 < u < 0`, `-(1 - u)^2 / 2` for `0 <= u < 1` jumps by -1 at `u = 0`, cancelling the step, and its integral over `[-1, 1]` is `1/6 - 1/6 = 0` (the ramp residual `rho (u) = (1 + u)^3 / 6`, `(1 - u)^3 / 6` is its running integral, zero beyond `u = 1`, so a residual changes no mean level).
+
+**Estimated alias suppression by these techniques (HYPOTHESIS; model: the power spectrum above Nyquist of a signal with edges falls as `A / f^2`, the folded power is spread evenly over the audible band; the decisions are the measurements M-A and M-B).**
+Power that folds into the audible band `[0, fs / 2]`, in units of `A / fs`: at 1x all of `f > fs / 2`: `integral from 0.5 to infinity of dx / x^2 = 2`. 2x oversampling: only `f > fs` folds, into `[0, fs]`, of which half is audible: `1 * 0.5 = 0.5`, ratio `0.5 / 2 = 0.25` = **-6.0 dB**. 4x: `f > 2 fs` (power `1 / 2`), a quarter audible: `0.5 * 0.25 = 0.125`, ratio `0.0625` = **-12.0 dB**. First-order ADAA at 1x: the integrand becomes `sin^2 (pi x) / (pi^2 x^4)`: on `[0.5, 1]` by Simpson with step 0.125 (values 1.621, 0.567, 0.160, 0.025, 0): `0.125 / 3 * (1.621 + 4 * 0.567 + 2 * 0.160 + 4 * 0.025 + 0) = 0.180`; on `[1, infinity)` with the mean `sin^2 = 0.5`: `0.5 / (3 pi^2) = 0.017`; sum `0.197`, ratio `0.197 / 2 = 0.098` = **-10.1 dB**. So first-order ADAA is worth more than 2x oversampling and less than 4x for edge-dominated spectra, at zero latency. For smooth laws (soft clip at low drive) the aliased power sits right above Nyquist, where `sinc^2` is only -3.9 dB (`f = 0.5 fs`) to -8.7 dB (`0.7 fs`): HYPOTHESIS 4 to 6 dB, with much less aliasing to start with.
+**The price of ADAA in the pass band (derived).** In a linear stretch the two-tap average has the gain `cos (pi f / fs)`: -0.09 dB at 2 kHz, -0.56 dB at 5 kHz, -2.4 dB at 10 kHz, -6.4 dB at 15 kHz (44.1 kHz), on the wet signal only; at 2x it is `cos (pi f / (2 fs))`: -0.6 dB at 10 kHz, -1.3 dB at 15 kHz. The half-sample delay of the wet path against the dry path at mix 50 % costs `cos (pi f / fs)` of the sum again: -0.57 dB at 10 kHz.
+
+### 3.1 Options for the distortion effect
+
+| | Option A: ADAA-1 at the host rate | Option B: half-band oversampling 2x / 4x, naive law | Option C: ADAA-1 inside 2x oversampling |
+|---|---|---|---|
+| How | per type a closed-form antiderivative, one state pair per channel | linear-phase Kaiser FIR half-band up, law, half-band down; or IIR polyphase all-pass pairs | A, at `2 fs`, between the two half-bands |
+| Alias suppression (model above) | -10 dB (edge types), 4 to 6 dB (smooth) | -6 dB (2x), -12 dB (4x), all types alike; plus the decimator's transition band | about -16 dB (edge types): -6 plus the ADAA gain at `2 fs` (HYPOTHESIS: the two do not simply add) |
+| Sound change | alias lines fall; the wet path loses treble by `cos (pi f / fs)` (numbers above) | alias lines fall; no pass-band droop beyond the half-band's own | alias lines fall most; droop `cos (pi f / (2 fs))` |
+| Latency | **0** (spec `06-effects.md:345` keeps) | FIR: a 31-tap half-band pair delays `2 * 15` samples at `2 fs` = **15 base samples** (0.34 ms at 44.1 kHz) that must be reported; IIR: a frequency-dependent group delay (HYPOTHESIS: 2 to 3 base samples for a 4-coefficient design) that cannot be reported as an integer, so the dry path of the mix would comb | as B |
+| CPU per sample and channel (operation counts; the cycles are HYPOTHESIS, decided by task A3) | per type, below | about 16 MAC up + 16 MAC down per base sample (a 31-tap half-band has 16 non-zero coefficients) + 2 evaluations of today's law (`fastmath::tanh` = about 17 flops and one divide, `core/engine-own/dsp/fastmath.h:16-25`) | B + A's extra |
+| Memory | 2 floats of state per channel (+ 1 for the exp family) | 2 x 15 floats of history per channel | B + A |
+| Real-time safety | no allocation, no lock, no libm beyond today's (`fastmath` at tier low); one divide with a guarded denominator | same | same |
+| Risk | float conditioning of the quotient (3.2); the treble droop; the branch near a zero denominator | latency + `IntDelay` clears its history at a change (`core/engine-own/fx/fx_latency.h:20-27`) + a module with latency is never muted (`fx_module.h:157`: the Mix-0 saving of `docs/MPC.md:465` is lost for it) | both |
+
+**Cost of option A per type (operation count of the formulas of 3.2, fast forms at tier low; today's law for comparison).**
+
+| Type | Today | ADAA-1 | Extra per sample (HYPOTHESIS; 1 flop = 1 to 3 cycles on the dependent chains of a Horner polynomial, a divide 14 to 18 cycles as `docs/release/CPU-REVIEW-OSC.md` assumes for `vdiv.f32`) |
+|------|-------|--------|------|
+| 1 Hard clip, 11 Rectify | min / max | 3 compares, 2 multiplies, one divide | about 20 cycles |
+| 2 Linear fold | floor, abs | floor, 2 multiplies, one divide | about 30 cycles |
+| 3 Sine fold | one table sine (`fastmath::sinCycles`, 11 operations, `fastmath.h:71-81`) | two table sines and one divide (closed form 3.2) | about 50 cycles |
+| 0 Soft clip, 9 Zero-Square, 6 Tube, 10 Asym | `fastmath::tanh` (about 17 flops, one divide) | `exp2` (6 Horner steps, `fastmath.h:27-40`) + `log2` (8 Horner steps, `:42-52`) + one divide: about 50 flops | about 70 to 130 cycles |
+| 7 Diode 1, 8 Diode 2 | one `exp2` | one `exp2` + one divide | about 25 cycles |
+| 12, 13 X-Shaper | (stub) | table interpolation of the curve and of its integral, two lerps, one divide | about 40 cycles |
+
+Per block (256 evaluations): extra 8.4 k to 33 k cycles = **5 to 21 us = 0.18 to 0.71 % of a block** at 1.608 GHz (`256 * 33 / 1.608e9 = 5.2 us`; `256 * 130 / 1.608e9 = 20.7 us`; 29.02 us = 1 %), HYPOTHESIS, decided by `tier_bench --sections` with the loads of task A3. Option B at 2x: `256 * (32 MAC + 2 * 17 flops) = 256 * 66 = 16.9 k` flops plus 2 divides per sample, the same order, with latency. Option C: both.
+
+**Chosen for the effect: option A on every tier, with option C as an owner-gated second stage for the tiers that have the CPU (decision D1).**
+Reasons: (1) the specification says the distortion has zero latency (`06-effects.md:345`) and that the reported latency counts the modules that are on; option A keeps that, B and C change it for every preset that has a distortion (19 of 160) and for the whole chain's reported latency; (2) on the Key 61 option A costs the same order as option B at 2x and gives more suppression on edge types (-10 against -6 dB) with no memory; (3) state of two floats per channel; (4) it is the audit's own recommendation for the hard types ("1st-order ADAA for Hard Clip, Soft Clip, Linear Fold, Rectify, Diode", `docs/review/OWN-ENGINE-DSP-AUDIT-2-EFFECTS-OUTPUT-2026-11-20.md:31,300`). The audit's "2x HIIR on medium / high" is the option C stage; it conflicts with the spec text on latency and with the dry-path alignment, so it is the owner's call (D1) with the cost known: latency 15 samples reported, the Mix-0 saving lost for the module, treble droop halved. The plan specifies stage C completely (tasks E7 to E9) so that the owner's "yes" needs no further design; it is not started without it.
+
+**Intentionally unchanged:** types 4 and 5 (1.4).
+
+### 3.2 The antiderivatives of the effect (the exact formulas the tasks implement)
+
+Input `v = x * g` (`g = 10^(driveDb/20)`), `f` the law of `fx_effects.h:718-748`. Notation: `L (s) = log1p (exp (-2 s))` for `s >= 0` (`fast`: `0.69314718 * fastmath::log2 (1 + fastmath::exp (-2 s))`), `E (s) = 1 - exp (-s)`, `s = abs (v)`. Every kernel keeps two state values per channel, `vPrev` and `bPrev` (the bounded part of `F` at `vPrev`), so each sample costs one evaluation of the bounded part. `F` is split as `F = Lin + Bnd` with `Lin` piecewise linear (exact in float for neighbouring samples) and `Bnd` bounded by 0.7, because the plain difference `F (a) - F (b)` of two values near 30 loses `30 * 6e-8 = 1.8e-6` of absolute precision, which divided by `abs (a - b) = 1e-3` is `1.8e-3` = -55 dB; the split brings it to `0.7 * 6e-8 / 1e-3 = 4e-5` = -88 dB. Threshold `eps = 2^-10 = 9.77e-4` on `abs (a - b)`; below it `y = f ((a + b) / 2)` (error of the midpoint rule for tanh: `f'' dv^2 / 24 <= 0.77 * 9.5e-7 / 24 = 3e-8`; at a kink `dv / 8 = 1.2e-4` = -78 dB).
+
+| Type | `f (v)` | `Lin (v)` | `Bnd (v)` | `y` for `abs (a - b) >= eps` |
+|---|---|---|---|---|
+| 0 Soft clip | `tanh v` | `s` | `L (s) - ln 2` | `((Lin a - Lin b) + (Bnd a - Bnd b)) / (a - b)` |
+| 9 Zero-Square | `tanh (32 v)` | the same in `u = 32 v` | same | the same formula in `u` (the quotient `(F (a) - F (b)) / (a - b)` is invariant under the scaling; `eps` applies to `u`) |
+| 6 Tube | `tanh (v + 0.3) - tanh 0.3` | `abs (w)`, `w = v + 0.3` | `L (abs w) - ln 2` | `((Lin a - Lin b) + (Bnd a - Bnd b)) / (a - b) - tanh 0.3` with `Lin`, `Bnd` of `w` |
+| 10 Asym | `v >= 0: tanh v`, `v < 0: max (v, -0.5)` | `v` for `v >= 0`, `0.5 s` for `v < 0` | `v >= 0: L (s) - ln 2`; `v < 0: (s >= 0.5 ? -0.125 : 0.5 v^2 - 0.5 s)` | as soft clip |
+| 7 Diode 1 | `v >= 0: 1 - e^-v`, `v < 0: -0.5 (1 - e^(2 v))` | `v` for `v >= 0`, `0.5 s` for `v < 0` | `v >= 0: -E (s)`; `v < 0: -0.25 (1 - exp (-2 s))` | as soft clip |
+| 8 Diode 2 | `sign (v) (1 - e^-s)` | `s` | `-E (s)` | as soft clip |
+| 1 Hard clip | `clamp (v, -1, 1)` | `s` | `s < 1: -0.5 + 0.5 (1 - s)^2`; else `-0.5` | as soft clip |
+| 11 Rectify | `abs (clamp (v, -1, 1))` | `v` | `sign (v) * (s < 1 ? 0.5 s^2 : s - 0.5) - v` (bounded by 0.5) | as soft clip |
+| 2 Linear fold | triangle `abs (-4 w + 2) - 1`, `w = fract (0.25 v + 0.75)` | 0 | `Fp (w) = w < 0.5 ? 4 w (1 - 2 w) : 4 (2 w - 1) (w - 1)` (periodic, 0 to 0.5, already `integral of f dv`) | `(Fp (wa) - Fp (wb)) / (a - b)` (no extra factor: `Fp` already contains `dv / dw = 4`) |
+| 3 Sine fold | `sin (pi v / 2)` (the `fract` of line 723 is range reduction only: `sin (2 pi (0.5 - 0.25 v)) = sin (pi - pi v / 2) = sin (pi v / 2)`) | 0 | `-(2 / pi) cos (pi v / 2)` | closed form with no quotient: `y = sin (pi s / 2) * sinc (dv / 4)`, `s = (a + b) / 2`, `dv = a - b`, `sinc (z) = sin (pi z) / (pi z)`, series `1 - (pi z)^2 / 6` for `abs z < 0.01` (from `cos A - cos B = -2 sin ((A + B) / 2) sin ((A - B) / 2)`) |
+| 12, 13 X-Shaper | tables of 3.3 | | `C` of 3.3 | 3.3 |
+
+Checks by hand (for the implementer's unit values): Diode 1 `F (v) = v + e^-v - 1` for `v >= 0` and `-0.5 v + 0.25 e^(2 v) - 0.25` for `v < 0`, both 0 at 0 and with slope 1 from both sides; Asym for `-0.5 <= v < 0`: `F = 0.5 v^2`, for `v < -0.5`: `F = -0.5 v - 0.125` (continuous at -0.5: `0.125 = 0.25 - 0.125`); Rectify `F (v) = sign (v) H (s)`, `H (u) = u <= 1 ? u^2 / 2 : u - 0.5`; Linear fold `Fp (0.5) = 0` from both branches and `Fp (1) = 0`. Float safety: a non-finite or `abs v >= 1e6` input resets the pair to `(0, Bnd (0))` and returns the naive law of the clamped value; both states are passed through `flushDenormal`.
+
+### 3.3 X-Shaper: the definition and the design
+
+The behaviour is defined by the spec (1.1 B d); no owner decision is needed to implement it. What changes in sound against today: types 12 and 13 stop being a drive-scaled hard clip: with no curve drawn they become the clamped identity (`y = clamp (x, -1, 1)`, the drive no longer scales; `A150`: "the input is not scaled"), with curves they follow them. No factory preset uses them (1.1 B e), so no preset changes.
+Data path: `ContentSet::build` samples `content.shaperA` and `content.shaperB` into 513-point tables with the curve law of `sampleCurve257` (`content_set.cpp:20-45`, `powerShape`, y clamped to 0..1) and, for each, the table of the cumulative integral; an empty (or one-point) curve is the identity `y[i] = i / 512`. `ContentSet` is immutable and handed over off the audio thread (`content_set.h:20-25`); the module reads it through `FxFrame::content` (`fx_module.h:34`, set at `own_engine.cpp:1511`), and `Distortion` gets plain pointers per call, never a vector.
+Evaluation (audio thread, 512 segments, `h = 1 / 512`): for `u` in [0, 1], `s = 512 u`, `i = min (int s, 511)`, `t = s - i`: `c (u) = y[i] + (y[i+1] - y[i]) t`; `C (u) = I[i] + h (y[i] t + 0.5 (y[i+1] - y[i]) t^2)` with `I[i] = h * sum over k < i of (y[k] + y[k+1]) / 2` (double accumulation at build time). Outside: `u > 1: c = y[512]`, `C = C (1) + y[512] (u - 1)`; `u < 0: c = y[0]`, `C = y[0] u`. Morph with `m = clamp01 ((driveDb + 30) / 60)` (the `u` of `fx_effects.h:687`): `c = (1 - m) cA + m cB`, `C = (1 - m) CA + m CB` (linear, so exact). Type 12: `y = sign (x) c (min (abs x, 1))`, `F (x) = C (abs x)` (even; `integral from 0 to x of sign (t) c (abs t) dt = C (abs x)` for both signs of `x`, continued linearly beyond 1). Type 13: `u = (x + 1) / 2`, `y = 2 c (u) - 1`, `F (x) = 4 C (u) - 2 u` (`dt = 2 du`). ADAA of 3.0 on these is exact for the drawn piecewise-linear curve. Type 13 keeps the 10 Hz DC blocker (`fx_effects.h:749`).
+Memory: `4 * 513 * 4 = 8.2 KB` per `ContentSet` that has a curve (none when both are empty).
+
+### 3.4 Options for the oscillator warps
+
+**Hard sync (and the other phase warps with a jump or a kink).**
+
+| | Option S1: more oversampling | Option S2: 2-point PolyBLEP + PolyBLAMP at the wraps | Option S3: minBLEP table |
+|---|---|---|---|
+| How | Key 61 `warp=4x` (`shell-mpc/device_profile.h:119`) | at the oversampled sample where the master phase wraps, add the 2-point residuals of 3.0 to the two samples around it, before the decimator | a 16 to 32 sample band-limited step residual read from a table |
+| Alias suppression (model) | 4x against 2x: -6 dB more (the model of 3.0); the measured 2x against 4x difference is -25 dB (`core/tests/test_own_profile.cpp:288-289`) | removes the aliasing of the jump at the oversampled rate; what is left is the decimator's transition band and the polynomial's error: HYPOTHESIS at least 12 dB better than 2x without it, decided by M-B | best |
+| CPU | oversampled evaluations double and the decimator grows from 32 to 128 taps (below) | evaluations only at wraps: wraps per block and lane `= f0 * 128 / fs` (note 96: `2092.97 * 128 / 44100 = 6.07`; note 60: `261.63 * 128 / 44100 = 0.76`); 4 extra scalar `sampleAt` per wrap | 16 to 32 residual samples per wrap |
+| Memory | `history` 127 floats per lane (`wt_osc.h:526`) already there | none (works in `buf`, `wt_osc.h:853`) | a table |
+| Risk | CPU on the Key 61; changes the sound of every warp preset | the residual needs the right `J`: it is evaluated from the same function (`sampleAt`) on both sides of the wrap, so it is right for every warp combination without a cross signal | table + more state |
+
+Arithmetic for S1 against S2 at the worst case, 8 notes x unison cap 3 = 24 lanes at tier low, 128 frames (`docs/release/CPU-REVIEW-OSC.md:65`): evaluations per block today `2 * 128 * 24 = 6144`; S1 `12288` (+6144) plus the decimator: `dot32` per base sample and lane = 32 MAC, `dot128` = 128 MAC, `+96 * 128 * 24 = 295 k` MAC per block (NEON, four per instruction: 74 k instructions, about 46 us = 1.6 % of a block at one per cycle, HYPOTHESIS). S2: wraps per block `6.07 * 24 = 146` at note 96, `0.76 * 24 = 18` at note 60; evaluations `4 * 146 = 584` (note 96) or `73` (note 60) against 6144: **+9.5 % and +1.2 % of the oscillator's evaluations** (they are scalar `sampleAt` calls, so about three times dearer each than a lane evaluation: +29 % and +3.6 % of the warped oscillator's sample work, HYPOTHESIS), against S1's +100 %. **Chosen: S2**, applied at both oversampling rates, with the existing 2x / 4x kept (the spec: "a better engine can use polyBLEP / BLAMP at the discontinuities of the phase maps", `docs/engine-spec/02-oscillator.md:410-412`; it keeps the spec's own oversampled path and its 3.2 factor for the linear warps, `:452`).
+Where the discontinuities are (derived from `warp.h:116-148`, slot 1 map `p -> pp`): Sync, Sync Var: jump at the master wrap (1.1 C c); Flip: jump at the wrap (`pp (1-) = 1 - a`, `pp (0+) = 0`) and a slope jump at `p = 0.5`; Mirror: slope jumps at 0.5 and at the wrap; Pulse: slope jump at `p = 1 - 0.7 a`; Formant (window `0.5 - 0.5 cos (2 pi p)` is 0 with zero slope at the wrap), Bend family, Squeeze (three derivatives zero at the ends, `warp.h:145`), Asym family, PD, FM: no event at the master wrap (smooth, or the modulator decides). The events are `{0}` for Sync / Sync Var, `{0, 0.5}` for Flip, `{0, 0.5}` for Mirror (slope only), `{1 - 0.7 a}` for Pulse. Limits stated, not hidden: the events of the **second** slot live in the phase after slot 1 and are not handled when slot 1 is neither `None` nor smooth; warps with a cross signal (FM, PD, RM, AM) are not handled (their jump depends on the modulator sample).
+
+**The sample-domain warps (Quantize and the 14 Dist warps).** ADAA-1 at the oversampled rate on the warp's own input, per voice lane and slot, with the closed forms of 3.5 (the machinery of 3.2 in the `y` domain: `v = y * gain (a)`). Alternative considered: 4x for these warps only: rejected, it doubles the oscillator. The 3.2 -> 2.0 band limit change (task C1) is separate.
+**Quantize** `F (y) = k y / L - k^2 / (2 L^2)`, `k = round (L y)`, `L = 2 + 62 (1 - a)^2` (`warp.h:173`), derived: for `y >= 0`, `F = sum over j < k of (j / L)(1 / L) + (k / L)(y - (k - 0.5) / L) = k (k - 1) / (2 L^2) + k y / L - k (k - 0.5) / L^2 = k y / L - k^2 / (2 L^2)`; checked at `y = -0.7 / L` (k = -1): `F = 0.7 / L^2 - 0.5 / L^2 = 0.2 / L^2`, equal to the direct integral. `round` becomes `floor (L y + 0.5)` (differs from `std::round` only on exact negative halves).
+
+### 3.5 Closed forms for the Dist warps (`warp.h:182-233`; kernels work in `v`, the quotient in `y` equals the quotient in `v`, the factor `1 / gain` cancels)
+
+| Warp | `f` | `F` in `v` (`Lin` / `Bnd` split as 3.2 where it is a tanh or a clip) |
+|---|---|---|
+| Tube `th (w) - c`, `w = g y + 0.2 a`, `g = 1 + 6 a`, `c = th (0.2 a)` | tanh family | `lncosh (w)`; `y = ADAA_tanh (w1, w0) - c` |
+| Soft Clip `th (y (1 + 8 a))` | tanh | `lncosh (v)` |
+| Hard Clip `clamp (y (1 + 8 a), -1, 1)` | clip | 3.2 row 1 |
+| Diode 1 `v > 0 ? th v : 0.4 th v`, `v = y (1 + 6 a)` | tanh with two slopes | `(v > 0 ? 1 : 0.4) lncosh (v)` |
+| Diode 2 `v / (1 + abs v)` | rational | `abs v - log1p (abs v)` |
+| Linear Fold: `v' = (v + 1) mod 4`, `f = v' < 2 ? v' - 1 : 3 - v'` | triangle | `w = v' / 4`; `Fp (w) = w < 0.5 ? 4 w (2 w - 1) : -4 (2 w - 1) (w - 1)` (derived: `4 * integral of (4 w - 1)` and `4 * integral of (3 - 4 w)` with `Fp (0) = 0`, continuity at 0.5, `Fp (1) = 0`) |
+| Sine Fold `sin (v pi / 2)`, `v = y (1 + 5 a)` | sine | `sin (pi s / 2) sinc (dv / 4)` of 3.2 |
+| Zero-Square `lerp (y, sign y, a)` | | `(1 - a) y^2 / 2 + a abs y` (in `y`) |
+| Asym `th (u) - c`, `u = (y + 0.5 a) (1 + 3 a)`, `c = th (0.5 a (1 + 3 a))` | tanh | `lncosh (u)`; `y = ADAA_tanh (u1, u0) - c` (the constant `c` integrates to `c y`, which the quotient turns back into `c`) |
+| Rectify `lerp (y, 2 abs y - 0.6366, a)` | | `(1 - a) y^2 / 2 + a (y abs y - 0.6366 y)` (in `y`) |
+| Sine Shaper `lerp (y, sin (2 pi y), a)` (the law of `warp.h:217-218`, sic) | | `(1 - a) y^2 / 2 + a (1 - cos (2 pi y)) / (2 pi)` (in `y`) |
+| Stomp `v / sqrt (1 + v^2)`, `v = y (1 + 10 a)` | | `sqrt (1 + v^2)` |
+| Tape (`c = clamp (v, -1.5, 1.5)`, `f = c - (4 / 27) c^3`) | | `abs v <= 1.5: v^2 / 2 - v^4 / 27`; else `0.9375 + (abs v - 1.5)` (`f (1.5) = 1.5 - 0.5 = 1`; `F (1.5) = 1.125 - 0.1875`) |
+| Soft Sat `(2 / pi) atan v` | | `(2 / pi) (v atan v - 0.5 log1p (v^2))` |
+| Quantize | | 3.4 |
+
+`lncosh (u) = abs u - ln 2 + L (abs u)`. Kernels that are not split (Soft Sat, Stomp, Tape, the quadratic forms) have `F` up to about 10 for the gains of the code (`1 + 10 a <= 11` on `y` of peak 1), so their float quotient error at `eps` is `10 * 6e-8 / 1e-3 = 6e-4` = -64 dB; accepted, it is below the alias levels compared (HYPOTHESIS: decided by M-B; `eps` may be raised to `2^-9` for them if it is not).
+
+### 3.6 What each design changes in sound, per preset
+
+* Effect, option A: the 19 presets with a distortion (1.1 D) change: the alias lines fall (model 4 to 10 dB), the wet path loses treble by `cos (pi f / fs)` and is half a sample late; `breakbeat_slice_keys` (Bit Crush) is bit identical. The refcompare / level baselines of `TODO.md:60` move for these 19 presets only; the level of the fundamental changes by `cos (pi * 1000 / 44100) = 0.9975` = -0.02 dB at 1 kHz, a DC input is unchanged.
+* X-Shaper: no preset.
+* Warps: the 6 Sync presets: the master-wrap alias falls, the level is unchanged (the residual has zero mean, `1/6 - 1/6`). The Formant, Bend and FM A presets (8): bit identical (no event, no sample-domain warp). Dist and Quantize warps: no preset.
+* Band limit (task C1): only at 4x, only Dist and Quantize warps: no preset.
