@@ -29,5 +29,25 @@ class DefaultEngine(unittest.TestCase):
         self.assertRegex(text, r'set\(SYNTHYBOY_SHELL_ENGINE "\$\{SYNTHYBOY_SHELL_ENGINE_DEFAULT\}"|set\(SYNTHYBOY_SHELL_ENGINE "own"')
 
 
+SHELL_FILES = [
+    "shell-juce/PluginProcessor.cpp", "shell-clap/synthyboy_plugin.cpp", "shell-clap/synthyboy_clap.cpp", "shell-clap/bitmap/NativeUiHost.cpp",
+    "shell-mpc/synthyboy_mpc.cpp", "shell-mpc/CMakeLists.txt", "shell-mpc/accept.sh", "shell-mpc/tests/pad_pressure_host.cpp",
+]
+
+
+class ShellsOwnEngineOnly(unittest.TestCase):
+    """R2: the JUCE, CLAP and MPC shells create the own engine only."""
+
+    def test_no_engine_switch_in_the_shells(self):
+        pat = re.compile(r"SYNTHYBOY_SHELL_ENGINE_VITAL|SYNTHYBOY_MPC_ENGINE_VITAL|SYNTHYBOY_HAS_VITAL|EngineKind::vital|vital DSP")
+        for f in SHELL_FILES:
+            hits = [n + 1 for n, line in enumerate(read(f).splitlines()) if pat.search(line)]
+            self.assertEqual(hits, [], f"{f}: Vital engine switch at lines {hits}")
+
+    def test_about_text_names_the_own_engine_only(self):
+        for f in ("shell-juce/PluginProcessor.cpp", "shell-clap/bitmap/NativeUiHost.cpp"):
+            self.assertNotIn("kCapVoiceControl", read(f).split("aboutText")[1].split("}")[0], f)
+
+
 if __name__ == "__main__":
     unittest.main()
