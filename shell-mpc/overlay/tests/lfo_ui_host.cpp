@@ -1568,7 +1568,7 @@ void testSpikeDecimation()
             const gpu::SceneData& sd = *sc.data;
             for (uint32_t opIdx = 0; opIdx < sd.numOps; ++opIdx)
             {
-                if (sd.ops[opIdx].type == gpu::kOpCurve)
+                if (sd.ops[opIdx].op == gpu::kOpCurve)
                 {
                     const int first = static_cast<int> (sd.ops[opIdx].f[0]);
                     const int n = static_cast<int> (sd.ops[opIdx].f[1]);
