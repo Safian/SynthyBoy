@@ -224,3 +224,121 @@ TEST (own_global_voice_source_follows_the_newest_note)
     CHECK (plain > 1.0e-3);
     CHECK (std::fabs (db (held, plain)) > 1.0); // before the fix the route fell back to zero as soon as the last voice ended
 }
+
+// named existing test: own_direct_follows_master_volume (line 90)
+// document 06 section 11: splitter bands delay-align unequal band latencies before merge
+TEST (own_splitter_bands_compensate_latency_before_merge)
+{
+    // 1. Splitter M/S (splitter_ms.on = 1, Limiter in Mid rack compressor.rack = 8, Side rack 9 empty)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "osc1.pan", -100);
+        set (*e, "env1.attack", 0);
+        set (*e, "splitter_ms.on", 1);
+        set (*e, "compressor.on", 1);
+        set (*e, "compressor.limit", 1);
+        set (*e, "compressor.bands", 3);
+        set (*e, "compressor.mid.upper_threshold", 12);
+        set (*e, "compressor.mix", 100);
+        set (*e, "compressor.rack", 8);
+
+        const auto r = sbtest::render (*e, { sbtest::noteOn (0, 64) }, static_cast<int> (0.4 * kSr), 256);
+        const double rmsL = rms (r.left, 0.15, 0.35);
+        const double rmsR = rms (r.right, 0.15, 0.35);
+        std::printf ("    splitter_ms: rmsL=%.4f, rmsR=%.4f (ratio=%.4f)\n", rmsL, rmsR, rmsR / std::max (rmsL, 1e-9));
+        CHECK (rmsL > 0.4);
+        CHECK (rmsR < 0.01 * rmsL);
+    }
+
+    // 2. Splitter L/H (splitter_lh.on = 1, splitter_lh.freq = 1000, Limiter in Low rack compressor.rack = 3, High rack 4 empty)
+    {
+        auto setupLh = [] (bool withLimiter)
+        {
+            auto e = make();
+            sinePatch (*e);
+            set (*e, "env1.attack", 0);
+            set (*e, "osc1.tune", 21.31f);
+            set (*e, "splitter_lh.on", 1);
+            set (*e, "splitter_lh.freq", 1000);
+            if (withLimiter)
+            {
+                set (*e, "compressor.on", 1);
+                set (*e, "compressor.limit", 1);
+                set (*e, "compressor.bands", 3);
+                set (*e, "compressor.mid.upper_threshold", 12);
+                set (*e, "compressor.mix", 100);
+                set (*e, "compressor.rack", 3);
+            }
+            return e;
+        };
+        const auto ref = sbtest::render (*setupLh (false), { sbtest::noteOn (0, 83) }, static_cast<int> (0.4 * kSr), 256);
+        const double refRms = rms (ref.left, 0.15, 0.35);
+        const auto rLh = sbtest::render (*setupLh (true), { sbtest::noteOn (0, 83) }, static_cast<int> (0.4 * kSr), 256);
+        const double rmsLh = rms (rLh.left, 0.15, 0.35);
+        std::printf ("    splitter_lh: refRms=%.4f, rmsLh=%.4f (ratio=%.4f)\n", refRms, rmsLh, rmsLh / std::max (refRms, 1e-9));
+        CHECK (refRms > 0.4);
+        CHECK (rmsLh > 0.90 * refRms);
+    }
+
+    // 3. Splitter L/M/H (splitter_lmh.on = 1, splitter_lmh.freq_low = 300, splitter_lmh.freq_high = 1000, Limiter in High rack compressor.rack = 7, Low/Mid racks 5/6 empty)
+    {
+        auto setupLmh = [] (bool withLimiter)
+        {
+            auto e = make();
+            sinePatch (*e);
+            set (*e, "env1.attack", 0);
+            set (*e, "osc1.tune", 21.31f);
+            set (*e, "splitter_lmh.on", 1);
+            set (*e, "splitter_lmh.freq_low", 300);
+            set (*e, "splitter_lmh.freq_high", 1000);
+            if (withLimiter)
+            {
+                set (*e, "compressor.on", 1);
+                set (*e, "compressor.limit", 1);
+                set (*e, "compressor.bands", 3);
+                set (*e, "compressor.mid.upper_threshold", 12);
+                set (*e, "compressor.mix", 100);
+                set (*e, "compressor.rack", 7);
+            }
+            return e;
+        };
+        const auto refLmh = sbtest::render (*setupLmh (false), { sbtest::noteOn (0, 83) }, static_cast<int> (0.4 * kSr), 256);
+        const double refRmsLmh = rms (refLmh.left, 0.15, 0.35);
+        const auto rLmh = sbtest::render (*setupLmh (true), { sbtest::noteOn (0, 83) }, static_cast<int> (0.4 * kSr), 256);
+        const double rmsLmh = rms (rLmh.left, 0.15, 0.35);
+        std::printf ("    splitter_lmh: refRms=%.4f, rmsLmh=%.4f (ratio=%.4f)\n", refRmsLmh, rmsLmh, rmsLmh / std::max (refRmsLmh, 1e-9));
+        CHECK (refRmsLmh > 0.4);
+        CHECK (rmsLmh > 0.90 * refRmsLmh);
+    }
+
+    // 4. Equal/zero-latency bit-identity checksum: render Splitter L/H with zero-latency effects
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "env1.attack", 0);
+        set (*e, "splitter_lh.on", 1);
+        set (*e, "splitter_lh.freq", 800);
+        set (*e, "eq.on", 0);
+        set (*e, "compressor.on", 0);
+        const auto r = sbtest::render (*e, { sbtest::noteOn (0, 69) }, static_cast<int> (0.2 * kSr), 256);
+        CHECK (sbtest::allFinite (r.left));
+        CHECK (r.left.size() >= 8);
+        double sumAbs = 0.0;
+        for (float s : r.left)
+            sumAbs += std::fabs (static_cast<double> (s));
+        CHECK (sumAbs > 0.0);
+        const size_t sz = r.left.size();
+        std::printf ("SPLITTERLAT-CHECKSUM zero_lat sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                     sumAbs,
+                     static_cast<double> (r.left[sz - 8]),
+                     static_cast<double> (r.left[sz - 7]),
+                     static_cast<double> (r.left[sz - 6]),
+                     static_cast<double> (r.left[sz - 5]),
+                     static_cast<double> (r.left[sz - 4]),
+                     static_cast<double> (r.left[sz - 3]),
+                     static_cast<double> (r.left[sz - 2]),
+                     static_cast<double> (r.left[sz - 1]));
+    }
+}
+
