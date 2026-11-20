@@ -42,6 +42,25 @@ inline float softClip (float x) noexcept
     return x * (27.0f + x2) / (27.0f + 9.0f * x2);
 }
 
+/** softClip (x) and its slope 9 (9 - x^2)^2 / (27 + 9 x^2)^2 (0 outside (-3, 3)) with one division: both share r = 1 / (27 + 9 x^2). */
+inline float softClipAndSlope (float x, float& slope) noexcept
+{
+    if (x <= -3.0f)
+    {
+        slope = 0.0f;
+        return -1.0f;
+    }
+    if (x >= 3.0f)
+    {
+        slope = 0.0f;
+        return 1.0f;
+    }
+    const float x2 = x * x;
+    const float r = 1.0f / (27.0f + 9.0f * x2);
+    slope = 9.0f * (9.0f - x2) * (9.0f - x2) * r * r;
+    return x * (27.0f + x2) * r;
+}
+
 /** TPT 1-pole stage (trapezoidal integration). */
 struct OnePoleTPT
 {
@@ -165,7 +184,7 @@ struct Ladder4Pole
         // the coefficients are a function of g alone: kept while g stays the same (a held or constant cutoff)
         if (!(haveG && g == lastG))
         {
-            const float gSafe = std::max (1e-5f, std::min (g, 50.0f)); // never binds: the cutoff is clamped to 0.49 * sampleRate before, so g <= tan (0.49 * pi) = 31.8; the diode ladder below keeps 0.95 (unit delay in its feedback)
+            const float gSafe = std::max (1e-5f, std::min (g, 50.0f)); // never binds: the cutoff is clamped to 0.49 * sampleRate before, so g <= tan (0.49 * pi) = 31.8
             cG = gSafe / (1.0f + gSafe);
             cG0 = 1.0f / (1.0f + gSafe);
             cG2 = cG * cG;
@@ -212,17 +231,26 @@ struct Ladder4Pole
     }
 };
 
-/** TB-303 diode ladder model with highpass in resonance feedback. */
+/** TB-303 diode ladder model with highpass in resonance feedback. The feedback is delay-free: with the four (uncoupled) stage states fixed the output is linear in the
+    loop input u, so the loop u = sc (D - k sc (hp (y4 (u)))) is solved in the same sample: a linear solve for the start and one Newton step on the exact scalar equation
+    (docs/plans/diode-ladder.md, 3.3). The coefficients are cached on (g, res, sampleRate). */
 struct DiodeLadder
 {
     float s[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     float hpState = 0.0f;
+
+    // cache: the key (a value that cannot be a real one until the first call) and what is derived from it
+    bool haveCoef = false;
+    float lastG = -1.0f, lastRes = -1.0f, lastSr = -1.0f;
+    float cG = 0.0f, cG0 = 0.0f, cG2 = 0.0f, cG3 = 0.0f, cG4 = 0.0f;
+    float cA = 0.0f, cTwoGHp = 0.0f, cK = 0.0f, cC = 0.0f, cInvDen = 0.0f;
 
     void reset() noexcept
     {
         for (int i = 0; i < 4; ++i)
             s[i] = 0.0f;
         hpState = 0.0f;
+        haveCoef = false;
     }
 
     float process (float in, float g, float res, float drive, float sampleRate) noexcept
@@ -231,21 +259,51 @@ struct DiodeLadder
             s[i] = sanitize (s[i]);
         hpState = sanitize (hpState);
 
-        const float gSafe = std::max (1e-5f, std::min (g, 0.95f));
-        const float G = gSafe / (1.0f + gSafe);
-        const float k = 3.82f * res;
+        if (!(haveCoef && g == lastG && res == lastRes && sampleRate == lastSr))
+        {
+            const float gSafe = std::max (1e-5f, std::min (g, 50.0f)); // as Ladder4Pole: never binds, the caller clamps the cutoff to 0.49 * sampleRate
+            cG = gSafe / (1.0f + gSafe);
+            cG0 = 1.0f / (1.0f + gSafe);
+            cG2 = cG * cG;
+            cG3 = cG2 * cG;
+            cG4 = cG3 * cG;
 
-        // 303 feedback high-pass around 30 Hz
-        const float gHp = std::tan (kPi * 30.0f / static_cast<float> (sampleRate));
-        const float gHpSafe = std::max (1e-5f, std::min (gHp, 0.5f));
-        const float GHp = gHpSafe / (1.0f + gHpSafe);
+            // 303 feedback high-pass around 30 Hz
+            const float gHp = std::tan (kPi * 30.0f / sampleRate);
+            const float gHpSafe = std::max (1e-5f, std::min (gHp, 0.5f));
+            const float GHp = gHpSafe / (1.0f + gHpSafe);
+            cA = 1.0f / (1.0f + gHpSafe);
+            cTwoGHp = 2.0f * GHp;
 
-        const float fbLP = GHp * (s[3] - hpState) + hpState;
-        hpState = sanitize (GHp * (s[3] - hpState) + fbLP);
-        const float fbHP = s[3] - fbLP;
+            cK = 3.82f * res;
+            cC = cA * cG4;
+            cInvDen = 1.0f / (1.0f + cK * cC);
+            lastG = g;
+            lastRes = res;
+            lastSr = sampleRate;
+            haveCoef = true;
+        }
+        const float G = cG, G2 = cG2, G3 = cG3;
+        const float k = cK, c = cC;
 
-        const float driveGain = 1.0f + 4.0f * drive;
-        const float u = softClip (driveGain * in - k * softClip (fbHP));
+        const float D = (1.0f + 4.0f * drive) * in;
+        float u;
+        if (k == 0.0f)
+            u = softClip (D);
+        else
+        {
+            // the output of the stages for u = 0, then the feedback high-pass on it: fbHP = p + c u
+            const float S = cG0 * (G3 * s[0] + G2 * s[1] + G * s[2] + s[3]);
+            const float p = cA * (S - hpState);
+            // the linear solve is the start value; one Newton step on f (u) = u - sc (D - k sc (p + c u)) corrects it (f' >= 1, so u stays a convex mix of u0 and sc (A), inside [-1, 1])
+            const float u0 = std::max (-1.0f, std::min ((D - k * softClip (p)) * cInvDen, 1.0f));
+            float d1 = 0.0f, d2 = 0.0f;
+            const float sc1 = softClipAndSlope (p + c * u0, d1);
+            const float sc2 = softClipAndSlope (D - k * sc1, d2);
+            const float f = u0 - sc2;
+            const float fd = 1.0f + d2 * k * d1 * c;
+            u = u0 - f / fd;
+        }
 
         float y = u;
         for (int i = 0; i < 4; ++i)
@@ -254,6 +312,7 @@ struct DiodeLadder
             y = v + s[i];
             s[i] = sanitize (v + y);
         }
+        hpState = sanitize (hpState + cTwoGHp * (y - hpState));
         return y;
     }
 };
@@ -344,12 +403,38 @@ struct Biquad
 class DelayLine
 {
 public:
+    /** Owning form: the line allocates its own storage (maxSamples + 4 floats). */
     void prepare (size_t maxSamples)
     {
-        buffer_.assign (maxSamples + 4, 0.0f);
+        owned_.assign (maxSamples + 4, 0.0f);
+        data_ = owned_.data();
+        size_ = owned_.size();
         writeIndex_ = 0;
         written_ = false;
     }
+
+    /** Non-owning form: the line runs on `length` floats of storage somebody else owns (FilterImpl's delay arena; a length is what prepare () would allocate: maxSamples + 4).
+        The storage must be zero and outlive the line; the line does not clear it here. Every read / write below is the one of the owning form. */
+    void bind (float* externalBuf, size_t length) noexcept
+    {
+        owned_.clear();
+        owned_.shrink_to_fit();
+        data_ = externalBuf;
+        size_ = externalBuf != nullptr ? length : 0;
+        writeIndex_ = 0;
+        written_ = false;
+    }
+
+    /** Forgets what was written without touching the storage (the owner has zeroed it already). */
+    void rewind() noexcept
+    {
+        writeIndex_ = 0;
+        written_ = false;
+    }
+
+    /** Heap bytes this line owns (0 for a bound line). */
+    size_t ownedBytes() const noexcept { return owned_.capacity() * sizeof (float); }
+    size_t ownedAllocs() const noexcept { return owned_.capacity() != 0 ? 1u : 0u; }
 
     /** A line that was never written is all zero at index 0 already: only a written one is cleared (a voice resets its filters at every
         note and most filter types never touch their delay lines). */
@@ -357,29 +442,29 @@ public:
     {
         if (!written_)
             return;
-        std::fill (buffer_.begin(), buffer_.end(), 0.0f);
+        std::fill (data_, data_ + size_, 0.0f);
         writeIndex_ = 0;
         written_ = false;
     }
 
     void write (float in) noexcept
     {
-        if (buffer_.empty())
+        if (size_ == 0)
             return;
         written_ = true;
-        buffer_[writeIndex_] = sanitize (in);
+        data_[writeIndex_] = sanitize (in);
         // (writeIndex_ + 1) % size without the integer division, which 32 bit ARM makes through a library call
-        if (++writeIndex_ == buffer_.size())
+        if (++writeIndex_ == size_)
             writeIndex_ = 0;
     }
     /** write () of a value the caller has sanitized already (the pair kernels sanitize in the lanes): the same store without the scalar compares. */
     void writeSanitized (float in) noexcept
     {
-        if (buffer_.empty())
+        if (size_ == 0)
             return;
         written_ = true;
-        buffer_[writeIndex_] = in;
-        if (++writeIndex_ == buffer_.size())
+        data_[writeIndex_] = in;
+        if (++writeIndex_ == size_)
             writeIndex_ = 0;
     }
 
@@ -390,10 +475,10 @@ public:
         size_t intD = 1;
         float frac = 0.0f;
     };
-    bool empty() const noexcept { return buffer_.empty(); }
+    bool empty() const noexcept { return size_ == 0; }
     Tap tapFor (float delaySamples) const noexcept
     {
-        const float maxD = static_cast<float> (buffer_.size() - 2);
+        const float maxD = static_cast<float> (size_ - 2);
         const float d = std::max (1.0f, std::min (delaySamples, maxD));
         Tap t;
         t.intD = static_cast<size_t> (d);
@@ -404,27 +489,27 @@ public:
     {
         const size_t intD = t.intD;
         const float frac = t.frac;
-        const size_t size = buffer_.size();
+        const size_t size = size_;
         size_t i1 = writeIndex_ + size - intD;
         if (i1 >= size)
             i1 -= size;
         size_t i2 = writeIndex_ + size - intD - 1;
         if (i2 >= size)
             i2 -= size;
-        return buffer_[i1] * (1.0f - frac) + buffer_[i2] * frac;
+        return data_[i1] * (1.0f - frac) + data_[i2] * frac;
     }
 
     float read (float delaySamples) const noexcept
     {
-        if (buffer_.empty())
+        if (size_ == 0)
             return 0.0f;
 
-        const float maxD = static_cast<float> (buffer_.size() - 2);
+        const float maxD = static_cast<float> (size_ - 2);
         const float d = std::max (1.0f, std::min (delaySamples, maxD));
         const auto intD = static_cast<size_t> (d);
         const float frac = d - static_cast<float> (intD);
 
-        const size_t size = buffer_.size();
+        const size_t size = size_;
         // intD <= size - 2 and writeIndex_ < size, so both sums are in [1, 2 size): one subtraction is the same as the remainder
         size_t i1 = writeIndex_ + size - intD;
         if (i1 >= size)
@@ -433,11 +518,13 @@ public:
         if (i2 >= size)
             i2 -= size;
 
-        return buffer_[i1] * (1.0f - frac) + buffer_[i2] * frac;
+        return data_[i1] * (1.0f - frac) + data_[i2] * frac;
     }
 
 private:
-    std::vector<float> buffer_;
+    std::vector<float> owned_;
+    float* data_ = nullptr;
+    size_t size_ = 0;
     size_t writeIndex_ = 0;
     bool written_ = false;
 };
@@ -451,6 +538,13 @@ struct AllpassDiffuser
     void prepare (size_t samples, float g)
     {
         delay.prepare (samples);
+        gain = g;
+    }
+
+    /** The delay on `length` floats of somebody else's storage (see DelayLine::bind). */
+    void bind (float* externalBuf, size_t length, float g) noexcept
+    {
+        delay.bind (externalBuf, length);
         gain = g;
     }
 
