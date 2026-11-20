@@ -33,8 +33,9 @@ DEFAULT_OUTPUT_DIR = os.path.join(ROOT_DIR, "content", "presets")
 with open(PARAMS_JSON_PATH, "r", encoding="utf-8") as f:
     _doc = json.load(f)
 
-STATE_VERSION = int(_doc["stateVersion"])
-assert STATE_VERSION == 4, "this generator writes state version 4"
+# The factory presets stay at state version 4 by decision (3fd5d3dd: the engine migrates them on load); docs/params.json "stateVersion" is the ENGINE's version (5).
+STATE_VERSION = 4
+assert int(_doc["stateVersion"]) >= STATE_VERSION, "the engine state version must not be older than the version the factory presets are written in"
 params_data = _doc["params"]
 param_table_keys = [p["key"] for p in params_data]
 param_info = {p["key"]: p for p in params_data}
