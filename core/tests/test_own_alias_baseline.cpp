@@ -110,7 +110,9 @@ TEST (own_alias_baseline_effect_grid)
                 const aliasm::Result m = measureEffect (t, dr, fast);
                 std::printf ("ALIAS-BASELINE fx type=%d drive=%g fast=%d alias=%.2f harm=%.2f\n", t, static_cast<double> (dr), fast ? 1 : 0, m.aliasDb, m.harmDb);
                 CHECK (std::isfinite (m.aliasDb) && std::isfinite (m.harmDb));
-                CHECK (m.aliasDb > -140.0);
+                // not -140: a law that does not bend the signal (Hard Clip at drive 0 with a peak of 0.5 is a bit exact pass-through) measures the float rounding floor of the sine, -153.8 dB;
+                // -160 only catches a meter that returns garbage (the meter itself is guarded by hardClipAt24 below)
+                CHECK (m.aliasDb > -160.0);
                 if (t == 1 && dr == 24.0f && !fast)
                     hardClipAt24 = m.aliasDb;
             }
