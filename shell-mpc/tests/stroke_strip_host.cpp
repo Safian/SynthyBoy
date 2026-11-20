@@ -179,14 +179,15 @@ std::vector<Pt> makeVShape (float spacing)
     return pts;
 }
 
-int countFailingRowsV (const std::vector<Vertex>& verts, std::string& report, const char* label)
+int countFailingRowsArm (const std::vector<Vertex>& armVerts, int xMin, int xMax, std::string& report, const char* label)
 {
-    int fails = 0;
+    int fails = 0, zeroRows = 0;
     int firstFailY = -1, lastFailY = -1;
     float minSum = 999.0f, minMax = 999.0f;
     for (int y = 24; y <= 296; ++y)
     {
-        const RowResult r = evalRow (y, 0, 25, verts);
+        const RowResult r = evalRow (y, xMin, xMax, armVerts);
+        if (r.sum == 0.0f) ++zeroRows;
         if (r.sum < 1.40f || r.sum > 1.75f || r.max < 0.75f)
         {
             ++fails;
@@ -199,8 +200,8 @@ int countFailingRowsV (const std::vector<Vertex>& verts, std::string& report, co
     char buf[512];
     if (fails > 0)
     {
-        std::snprintf (buf, sizeof buf, "%s: %d / 273 rows failed in y=[24..296] (failing range y=[%d..%d], min sum=%.4f, min max=%.4f)",
-                       label, fails, firstFailY, lastFailY, minSum, minMax);
+        std::snprintf (buf, sizeof buf, "%s: %d / 273 rows failed in y=[24..296] (failing range y=[%d..%d], zero-coverage rows=%d, min sum=%.4f, min max=%.4f)",
+                       label, fails, firstFailY, lastFailY, zeroRows, minSum, minMax);
     }
     else
     {
@@ -234,25 +235,32 @@ void testVShapeFailureAndPass()
 {
     const std::vector<Pt> v3 = makeVShape (0.0f);
 
-    // Old builder on 3-point V: MUST fail
+    // Old builder on 3-point V: MUST fail on both arms near tip
     std::vector<Vertex> vertsOld;
     buildStrokeStripOld (v3.data(), v3.size(), 0.775f, 1.0f, [&] (float x, float y, float d0, float d1) {
         vertsOld.push_back ({ x, y, d0, d1 });
     });
+    // In old builder, point 0 has 2 verts, point 1 (tip) has 2 verts, point 2 has 2 verts.
+    const std::vector<Vertex> arm1Old (vertsOld.begin(), vertsOld.begin() + 4);
     std::string reportOld;
-    const int failsOld = countFailingRowsV (vertsOld, reportOld, "Old builder (3-point V)");
+    const int failsOld = countFailingRowsArm (arm1Old, 0, 15, reportOld, "Old builder (Arm 1, 3-point V)");
     std::printf ("INFO  %s\n", reportOld.c_str());
     check (failsOld > 0, "V test fails on old builder code before fix (steep lines narrow near tip)");
 
-    // New builder on 3-point V: MUST pass
+    // New builder on 3-point V: Arm 1 and Arm 2 MUST pass
     std::vector<Vertex> vertsNew;
     synthyboy_mpc::overlay::gpu::buildStrokeStrip (v3, 0.775f, 1.0f, [&] (float x, float y, float d0, float d1) {
         vertsNew.push_back ({ x, y, d0, d1 });
     });
-    std::string reportNew;
-    const int failsNew = countFailingRowsV (vertsNew, reportNew, "New builder (3-point V)");
-    std::printf ("INFO  %s\n", reportNew.c_str());
-    check (failsNew == 0, "V test passes on new builder (bevel join maintains full width)");
+    // In new builder, point 0 has 2 verts, tip has 4 verts (2 for incoming, 2 for outgoing).
+    const std::vector<Vertex> arm1New (vertsNew.begin(), vertsNew.begin() + 4);
+    const std::vector<Vertex> arm2New (vertsNew.begin() + 4, vertsNew.end());
+    std::string reportNew1, reportNew2;
+    const int failsNew1 = countFailingRowsArm (arm1New, 0, 15, reportNew1, "New builder (Arm 1, 3-point V)");
+    const int failsNew2 = countFailingRowsArm (arm2New, 7, 22, reportNew2, "New builder (Arm 2, 3-point V)");
+    std::printf ("INFO  %s\n", reportNew1.c_str());
+    std::printf ("INFO  %s\n", reportNew2.c_str());
+    check (failsNew1 == 0 && failsNew2 == 0, "V test passes on new builder (bevel join maintains full width on both arms)");
 
     // New builder at 4.3 px sample spacing
     const std::vector<Pt> v43 = makeVShape (4.3f);
@@ -260,10 +268,18 @@ void testVShapeFailureAndPass()
     synthyboy_mpc::overlay::gpu::buildStrokeStrip (v43, 0.775f, 1.0f, [&] (float x, float y, float d0, float d1) {
         verts43.push_back ({ x, y, d0, d1 });
     });
-    std::string report43;
-    const int fails43 = countFailingRowsV (verts43, report43, "New builder (4.3 px spacing)");
-    std::printf ("INFO  %s\n", report43.c_str());
-    check (fails43 == 0, "V test at 4.3 px sample spacing passes (coverage sum in [1.40, 1.75], max >= 0.75)");
+    // Tip point index is where (10.5, 300) is
+    size_t tipIdx43 = 0;
+    for (size_t i = 0; i < v43.size(); ++i)
+        if (v43[i].x == 10.5f && v43[i].y == 300.0f) { tipIdx43 = i; break; }
+    const std::vector<Vertex> arm1_43 (verts43.begin(), verts43.begin() + static_cast<ptrdiff_t> (tipIdx43 * 2 + 2));
+    const std::vector<Vertex> arm2_43 (verts43.begin() + static_cast<ptrdiff_t> (tipIdx43 * 2 + 2), verts43.end());
+    std::string report43_1, report43_2;
+    const int fails43_1 = countFailingRowsArm (arm1_43, 0, 15, report43_1, "New builder (Arm 1, 4.3 px spacing)");
+    const int fails43_2 = countFailingRowsArm (arm2_43, 7, 22, report43_2, "New builder (Arm 2, 4.3 px spacing)");
+    std::printf ("INFO  %s\n", report43_1.c_str());
+    std::printf ("INFO  %s\n", report43_2.c_str());
+    check (fails43_1 == 0 && fails43_2 == 0, "V test at 4.3 px sample spacing passes (coverage sum in [1.40, 1.75], max >= 0.75)");
 
     // New builder at 8.6 px sample spacing
     const std::vector<Pt> v86 = makeVShape (8.6f);
@@ -271,10 +287,17 @@ void testVShapeFailureAndPass()
     synthyboy_mpc::overlay::gpu::buildStrokeStrip (v86, 0.775f, 1.0f, [&] (float x, float y, float d0, float d1) {
         verts86.push_back ({ x, y, d0, d1 });
     });
-    std::string report86;
-    const int fails86 = countFailingRowsV (verts86, report86, "New builder (8.6 px spacing)");
-    std::printf ("INFO  %s\n", report86.c_str());
-    check (fails86 == 0, "V test at 8.6 px sample spacing passes (coverage sum in [1.40, 1.75], max >= 0.75)");
+    size_t tipIdx86 = 0;
+    for (size_t i = 0; i < v86.size(); ++i)
+        if (v86[i].x == 10.5f && v86[i].y == 300.0f) { tipIdx86 = i; break; }
+    const std::vector<Vertex> arm1_86 (verts86.begin(), verts86.begin() + static_cast<ptrdiff_t> (tipIdx86 * 2 + 2));
+    const std::vector<Vertex> arm2_86 (verts86.begin() + static_cast<ptrdiff_t> (tipIdx86 * 2 + 2), verts86.end());
+    std::string report86_1, report86_2;
+    const int fails86_1 = countFailingRowsArm (arm1_86, 0, 15, report86_1, "New builder (Arm 1, 8.6 px spacing)");
+    const int fails86_2 = countFailingRowsArm (arm2_86, 7, 22, report86_2, "New builder (Arm 2, 8.6 px spacing)");
+    std::printf ("INFO  %s\n", report86_1.c_str());
+    std::printf ("INFO  %s\n", report86_2.c_str());
+    check (fails86_1 == 0 && fails86_2 == 0, "V test at 8.6 px sample spacing passes (coverage sum in [1.40, 1.75], max >= 0.75)");
 }
 
 void testArmSlopes()
@@ -285,10 +308,11 @@ void testArmSlopes()
     synthyboy_mpc::overlay::gpu::buildStrokeStrip (pts22, 0.775f, 1.0f, [&] (float x, float y, float d0, float d1) {
         verts22.push_back ({ x, y, d0, d1 });
     });
+    const std::vector<Vertex> arm1_22 (verts22.begin(), verts22.begin() + 4);
     int fails22 = 0;
     for (int y = 24; y <= 126; ++y)
     {
-        const RowResult r = evalRow (y, 5, 115, verts22);
+        const RowResult r = evalRow (y, 5, 65, arm1_22);
         if (r.sum < 1.40f || r.sum > 1.75f || r.max < 0.75f)
             ++fails22;
     }
@@ -300,10 +324,11 @@ void testArmSlopes()
     synthyboy_mpc::overlay::gpu::buildStrokeStrip (pts24, 0.775f, 1.0f, [&] (float x, float y, float d0, float d1) {
         verts24.push_back ({ x, y, d0, d1 });
     });
+    const std::vector<Vertex> arm1_24 (verts24.begin(), verts24.begin() + 4);
     int fails24 = 0;
     for (int y = 24; y <= 136; ++y)
     {
-        const RowResult r = evalRow (y, 5, 115, verts24);
+        const RowResult r = evalRow (y, 5, 65, arm1_24);
         if (r.sum < 1.40f || r.sum > 1.75f || r.max < 0.75f)
             ++fails24;
     }
