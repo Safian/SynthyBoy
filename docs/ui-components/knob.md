@@ -21,6 +21,9 @@ A rotary control for a continuous value from 0 to 1: a dial with a name, an opti
 | `side` | `bool` | medium variant: dial at the left, name and value in a column at its right | false |
 | `led` | `bool` | a LED on the label: the knob carries the on / off switch of what it sets | false |
 | `ledOn` | `bool` | the switch is on; off = drawn dim and no touch except the switch | true |
+| `isDb` | `bool` | whether the parameter is in dB (enables 0.1 dB / 2 px fine tuning) | false |
+| `dbMin`, `dbMax` | `double` | dB range when `isDb` is true (e.g. -60.0 to +6.0) | 0.0 |
+| `skew` | `double` | non-linear curve exponent (e.g. 2.5 for volume) | 1.0 |
 | `mods[8]`, `numMods`, `selectedSource` | from `ModInput` | the modulations of this control (source id, name of 6 characters, depth -1 to +1, polarity, bypassed) and the selected source | none, `kNoSource` |
 
 Add a modulation with `state.add (sourceId, "LFO 1", depth, bidirectional, bypassed, macro)`.
@@ -31,7 +34,8 @@ Add a modulation with `state.add (sourceId, "LFO 1", depth, bidirectional, bypas
 ## Touch and knob behaviour
 | Gesture | Change |
 |---|---|
-| vertical drag (200 px = the whole range, from the value at touch down, after leaving the 6 px tap square) | `Value`, `id`, `value` 0 to 1 |
+| vertical drag (no dead zone: any movement >= 1 px changes value; fine mode < 80 px/s changes 0.1 dB per 2 px or 1/1000 range per 2 px; fast movement uses coarse mapping 200 px = full range; transitions apply to deltas smoothly) | `Value`, `id`, `value` 0 to 1 |
+| tap on value text (`valueHit()`) | `Request`, `id`: requests numeric entry (owner opens `TextEntry`) |
 | double tap | `Value` with `defaultValue` (not when already there) |
 | drag that starts on the modulation chip (only when `selectedSource` is in `mods`) | `Depth`: `index` = source id, `value` = new depth -1 to +1 |
 | long press, 600 ms (`tick (nowMs)` must be called) | `ModsRequest` |
@@ -39,7 +43,7 @@ Add a modulation with `state.add (sourceId, "LFO 1", depth, bidirectional, bypas
 | `turn (delta)` | `Value`, `value + delta`, clamped |
 | mouse wheel | one notch = 1/128 (`wheelUnit()`) |
 
-A change that does not change the value (end stop, default already set) is not reported. A sideways slide is not a drag.
+A change that does not change the value (end stop, default already set) is not reported. A tap-vs-drag threshold of at most 2 px ensures tapping value text or double tapping works reliably. A sideways slide is not a drag.
 
 ## Q-Link
 Can be a Q member (`QGroup::set (slot, &knob)`), one slot. A turn adds `delta` to the normalised value (continuous). In a Q group the label takes the Q colour.
