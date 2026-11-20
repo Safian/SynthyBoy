@@ -224,3 +224,11 @@ foreach(alias_src ${SYNTHYBOY_ALIAS_TEST_SOURCES})
     synthyboy_add_test(synthyboy_test_own_alias_${alias_short} "${alias_src}")
     target_include_directories(synthyboy_test_own_alias_${alias_short} PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 endforeach()
+
+# tests of the measurement helpers (bench/perf/*.h): every core/tests/perf/test_perf_*.cpp is one test executable named synthyboy_<file name>
+file(GLOB SYNTHYBOY_PERF_TESTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/perf/test_perf_*.cpp")
+foreach(src ${SYNTHYBOY_PERF_TESTS})
+    get_filename_component(perf_test_name ${src} NAME_WE)
+    synthyboy_add_test(synthyboy_${perf_test_name} ${src})
+    target_include_directories(synthyboy_${perf_test_name} PRIVATE "${PROJECT_SOURCE_DIR}/bench")
+endforeach()
