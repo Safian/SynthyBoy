@@ -309,6 +309,97 @@ TEST (Splitters_ReconstructionFlatMagnitude)
     }
 }
 
+// Based on Splitters_ReconstructionFlatMagnitude (lines 265-296) and RoutingHelpers_SplitAndMerge (lines 654-666)
+TEST (SplitterLMH_ReconstructionFlatSum)
+{
+    // Three-band Linkwitz-Riley (LR4) splitter reconstruction test.
+    // Low band is phase-aligned at f2 by a 2nd-order all-pass (AP2) matching LR4_LP(f2) + LR4_HP(f2).
+    // With unity band gains and mix = 1.0, the reconstructed sum must have flat magnitude within 0.1 dB
+    // across the spectrum (50 Hz - 16 kHz) after filter transient settles.
+    constexpr double kSampleRate = 48000.0;
+    synthyboy::fx::SplitterLMH lmh;
+    lmh.prepare (kSampleRate, 512);
+
+    struct TestCase
+    {
+        float f1;
+        float f2;
+        float freqs[12];
+    };
+
+    const TestCase cases[2] = {
+        // Case 1: Wide crossovers (f1 = 200 Hz, f2 = 2000 Hz, f_geom ~= 632.46 Hz)
+        {
+            200.0f,
+            2000.0f,
+            { 50.0f, 100.0f, 200.0f, 350.0f, 632.4555f, 1100.0f, 2000.0f, 3500.0f, 6000.0f, 9000.0f, 12500.0f, 16000.0f }
+        },
+        // Case 2: Close crossovers (f1 = 800 Hz, f2 = 1200 Hz, f_geom ~= 979.80 Hz)
+        {
+            800.0f,
+            1200.0f,
+            { 50.0f, 100.0f, 200.0f, 400.0f, 600.0f, 800.0f, 979.7959f, 1200.0f, 2400.0f, 4800.0f, 9600.0f, 16000.0f }
+        }
+    };
+
+    for (const auto& tc : cases)
+    {
+        synthyboy::fx::SplitterLMH::Params p;
+        p.enabled = true;
+        p.splitFreq1 = tc.f1;
+        p.splitFreq2 = tc.f2;
+        p.lowBypass = false;
+        p.lowGainDb = 0.0f;
+        p.midBypass = false;
+        p.midGainDb = 0.0f;
+        p.highBypass = false;
+        p.highGainDb = 0.0f;
+        p.mix = 1.0f;
+        p.levelDb = 0.0f;
+        lmh.setParams (p);
+
+        for (int fi = 0; fi < 12; ++fi)
+        {
+            const float freq = tc.freqs[fi];
+            const double periodSamples = kSampleRate / static_cast<double> (freq);
+
+            // Settle time: at least 10 cycles and at least 0.05 seconds (~2400 samples)
+            const int warmupCycles = std::max (10, static_cast<int> (std::round (0.05 * kSampleRate / periodSamples)));
+            const int numWarmup = static_cast<int> (std::round (static_cast<double> (warmupCycles) * periodSamples));
+
+            // Measurement window: integer number of complete sine cycles (at least 8 cycles, at least 0.04s)
+            const int measureCycles = std::max (8, static_cast<int> (std::round (0.04 * kSampleRate / periodSamples)));
+            const int numMeasure = static_cast<int> (std::round (static_cast<double> (measureCycles) * periodSamples));
+
+            const int totalSamples = numWarmup + numMeasure;
+
+            std::vector<float> inL (static_cast<size_t> (totalSamples));
+            std::vector<float> inR (static_cast<size_t> (totalSamples));
+            generateSine (inL.data(), inR.data(), totalSamples, kSampleRate, freq);
+
+            auto curL = inL;
+            auto curR = inR;
+
+            lmh.reset();
+            lmh.process (curL.data(), curR.data(), totalSamples);
+
+            const float inRMS_L = computeRMS (inL.data() + numWarmup, numMeasure);
+            const float outRMS_L = computeRMS (curL.data() + numWarmup, numMeasure);
+            CHECK (inRMS_L > 0.0f);
+            CHECK (outRMS_L > 0.0f);
+            const float gainDb_L = 20.0f * std::log10 (outRMS_L / inRMS_L);
+            CHECK_NEAR (gainDb_L, 0.0f, 0.1f);
+
+            const float inRMS_R = computeRMS (inR.data() + numWarmup, numMeasure);
+            const float outRMS_R = computeRMS (curR.data() + numWarmup, numMeasure);
+            CHECK (inRMS_R > 0.0f);
+            CHECK (outRMS_R > 0.0f);
+            const float gainDb_R = 20.0f * std::log10 (outRMS_R / inRMS_R);
+            CHECK_NEAR (gainDb_R, 0.0f, 0.1f);
+        }
+    }
+}
+
 // ============================================================================
 // 3. No NaN or Inf on Extremes & Denormals
 // ============================================================================
