@@ -33,6 +33,8 @@ public:
         bool led = false;          // a LED on the label: the knob carries the on / off switch of what it sets (SMOOTH: the smoothing and its time are ONE control). `ledOn`: the switch is on; off = the knob is drawn dim and takes no touch, a tap on the
                                    // label / the LED (the text column, `ledHit ()`) switches (an Index change 0 / 1 with the knob's id, made on the touch up)
         bool ledOn = true;
+        bool isDb = false;         // parameter unit is dB (master volume, mixer levels, etc.)
+        double dbMin = -60.0, dbMax = 6.0, skew = 1.0;
     };
     State state;
     static constexpr double kDragPx = 200.0, kLongPressMs = 600.0;
@@ -156,6 +158,37 @@ public:
         }
     }
 
+    Rect valueHit() const noexcept
+    {
+        if (state.valueText[0] == '\0')
+            return {};
+        const Geom g = geom();
+        if (g.valueBox.empty())
+            return {};
+        const int h = std::max (40, g.valueBox.h);
+        const int y = std::max (rect_.y, g.valueBox.y + (g.valueBox.h - h) / 2);
+        return { g.valueBox.x, y, g.valueBox.w, std::min (rect_.bottom() - y, h) };
+    }
+
+    double dbOfNorm (double norm) const noexcept
+    {
+        norm = std::clamp (norm, 0.0, 1.0);
+        double prop = norm;
+        if (state.skew > 0.0 && state.skew != 1.0 && norm > 0.0)
+            prop = std::exp (std::log (norm) / state.skew);
+        return state.dbMin + (state.dbMax - state.dbMin) * prop;
+    }
+
+    double normOfDb (double db) const noexcept
+    {
+        if (state.dbMax <= state.dbMin)
+            return 0.0;
+        double prop = std::clamp ((db - state.dbMin) / (state.dbMax - state.dbMin), 0.0, 1.0);
+        if (state.skew > 0.0 && state.skew != 1.0)
+            return std::pow (prop, state.skew);
+        return prop;
+    }
+
     /** A knob with a switched-off LED is drawn dim all over (as a disabled one) and takes no touch but the switch. */
     void draw (gpu::SceneBuilder& sb) const override
     {
@@ -250,49 +283,130 @@ protected:
         }
     }
 
+    static constexpr double kFineSpeedThreshold = 80.0; // px/s: movements slower than this use fine mode
+    static constexpr double kTapMaxDist = 2.0;          // px: tap-vs-drag threshold (at most 2 px)
+
     Change onDown (int x, int y, double now) override
     {
         tap_.down (x, y, now);
         downMs_ = now;
+        lastMs_ = now;
+        startX_ = x;
+        startY_ = y;
+        lastY_ = y;
         long_ = false;
+        moved_ = false;
         start_ = std::clamp (state.value, 0.0, 1.0);
+        curValue_ = start_;
         const ModEntry* e = state.selected();
         onTab_ = e != nullptr && tabHit().contains (x, y);
         startDepth_ = e ? e->depth : 0.0;
+        onValue_ = ! onTab_ && valueHit().contains (x, y);
         return Change::none();
     }
-    Change onMove (int, int y) override
+    Change onMove (int x, int y) override { return onMove (x, y, 0.0); }
+    Change onMove (int x, int y, double nowMs) override
     {
-        if (onLed_ || inert_)
+        if (onLed_ || inert_ || long_)
             return Change::none();
-        if (long_ || ! tap_.move (tap_.startX(), y))   // only the vertical movement matters: a sideways slide is not a drag, a vertical one beyond the tap square is
+
+        const double totalDy = static_cast<double> (std::abs (y - startY_));
+        const double totalDx = static_cast<double> (std::abs (x - startX_));
+        if (totalDy > kTapMaxDist || totalDx > kTapMaxDist)
+            moved_ = true;
+
+        // A tap on value text preserves a tap-vs-drag threshold of at most 2 px so tap is not perturbed
+        if (onValue_ && ! moved_)
             return Change::none();
-        const double dy = static_cast<double> (tap_.startY() - y);
+
+        // Sideways movement alone is not a vertical drag
+        if (y == lastY_)
+        {
+            lastMs_ = nowMs;
+            return Change::none();
+        }
+
+        const double dy = static_cast<double> (lastY_ - y);
+        lastY_ = y;
+
         if (onTab_)
         {
-            const double d = std::clamp (startDepth_ + dy / kDragPx * 2.0, -1.0, 1.0);
+            const double totalDeltaY = static_cast<double> (startY_ - y);
+            const double d = std::clamp (startDepth_ + totalDeltaY / kDragPx * 2.0, -1.0, 1.0);
             const ModEntry* e = state.selected();
             return e && std::fabs (d - e->depth) > 1.0e-12 ? Change::depth (id_, e->source, d) : Change::none();
         }
-        return emit (start_ + dy / kDragPx);
+
+        // Drag sensitivity formulas:
+        // 1. Gesture speed:
+        //    dt = (nowMs - lastMs) / 1000.0 [seconds]
+        //    speed = |dy| / dt [pixels / second]
+        // 2. Fine mode threshold: speed < 80 px/s
+        //    - dB parameters (state.isDb):
+        //      deltaDb = dy * (0.1 dB / 2 px) = dy * 0.05 dB
+        //      plain = dbOfNorm(curValue)
+        //      newPlain = clamp(plain + deltaDb, dbMin, dbMax)
+        //      deltaNorm = normOfDb(newPlain) - curValue
+        //    - Non-dB parameters (!state.isDb):
+        //      deltaNorm = dy * (0.001 / 2 px) = dy * 0.0005
+        // 3. Coarse mode: speed >= 80 px/s (or dt <= 0):
+        //    deltaNorm = dy / kDragPx = dy / 200.0
+        // 4. Smooth accumulation:
+        //    curValue = clamp(curValue + deltaNorm, 0.0, 1.0)
+        //    Applied incrementally per movement delta to guarantee no jump when switching modes.
+
+        double dt = (nowMs > 0.0 && lastMs_ > 0.0 && nowMs > lastMs_) ? (nowMs - lastMs_) * 0.001 : 0.0;
+        double speed = (dt > 0.0) ? std::abs (dy) / dt : 1000.0;
+        lastMs_ = nowMs;
+
+        double deltaNorm = 0.0;
+        if (speed < kFineSpeedThreshold)
+        {
+            if (state.isDb)
+            {
+                const double currentDb = dbOfNorm (curValue_);
+                const double newDb = std::clamp (currentDb + dy * 0.05, state.dbMin, state.dbMax);
+                deltaNorm = normOfDb (newDb) - curValue_;
+            }
+            else
+            {
+                deltaNorm = dy * 0.0005; // 1/1000 of normalized range per 2 px
+            }
+        }
+        else
+        {
+            deltaNorm = dy / kDragPx; // coarse mapping: 200 px for full range
+        }
+
+        curValue_ = std::clamp (curValue_ + deltaNorm, 0.0, 1.0);
+        return emit (curValue_);
     }
-    Change onUp (int, int) override
+    Change onUp (int x, int y) override
     {
         if (onLed_)   // the switch on the label: a tap flips it
         {
             onLed_ = false;
             return tap_.up() != 0 ? Change::indexed (id_, state.ledOn ? 0 : 1, state.ledOn ? 0.0 : 1.0) : Change::none();
         }
-        if (inert_)
+        if (inert_ || long_)
         {
             tap_.reset();
             return Change::none();
         }
-        if (long_)
+
+        const bool isTap = ! moved_ && std::abs (x - startX_) <= kTapMaxDist && std::abs (y - startY_) <= kTapMaxDist;
+        if (isTap && onValue_)
+        {
+            tap_.reset();
+            return Change::request (id_);
+        }
+
+        if (moved_)
         {
             tap_.reset();
             return Change::none();
         }
+
         return tap_.up() == 2 && ! onTab_ ? emit (state.defaultValue) : Change::none();
     }
     Change onTurn (double delta) override { return state.led && ! state.ledOn ? Change::none() : emit (state.value + delta); }
@@ -300,7 +414,8 @@ protected:
 public:
     Change tick (double nowMs) override
     {
-        if (! captured_ || ! enabled_ || long_ || onLed_ || inert_ || tap_.moved() || nowMs - downMs_ < kLongPressMs)
+        lastMs_ = nowMs;
+        if (! captured_ || ! enabled_ || long_ || onLed_ || inert_ || moved_ || nowMs - downMs_ < kLongPressMs)
             return Change::none();
         long_ = true;
         return Change::modsRequest (id_);
@@ -313,8 +428,9 @@ private:
         return std::fabs (v - std::clamp (state.value, 0.0, 1.0)) < 1.0e-12 ? Change::none() : Change::normalised (id_, v);
     }
     TapGesture tap_;
-    double start_ = 0.0, startDepth_ = 0.0, downMs_ = 0.0;
-    bool onTab_ = false, long_ = false, onLed_ = false, inert_ = false;
+    double start_ = 0.0, curValue_ = 0.0, startDepth_ = 0.0, downMs_ = 0.0, lastMs_ = 0.0;
+    int startX_ = 0, startY_ = 0, lastY_ = 0;
+    bool onTab_ = false, long_ = false, onLed_ = false, inert_ = false, onValue_ = false, moved_ = false;
 };
 
 // ===============================================================================================================================================================

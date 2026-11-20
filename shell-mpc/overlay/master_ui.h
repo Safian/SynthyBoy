@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "../ui/list.h"
+#include "../ui/text_entry.h"
 #include "../ui/theme.h"
 #include "../ui/voice_master.h"
 #include "instance_view.h"
@@ -35,7 +36,7 @@ class MasterUi
 public:
     static constexpr int kElementPage = 9;           // the page of the Master tab
     static constexpr int kElementMaster = kElementPage;
-    enum Page { kPageList = 15 };
+    enum Page { kPageList = 15, kPageKeyboard = 16 };
 
     enum Id : int
     {
@@ -53,7 +54,8 @@ public:
         kMpeOn = 150, kMpeBend, kMpeMacro, kMpeYModwheel, kMpeBendToX, kMpeYBipolar,
         // the plugin-wide pad pressure layer (shell parameters of the plugin, not of the engine: no Q group)
         kPadPressure = 160, kPadAmount, kLimiter, kNoSmoothing, kOversample4x,
-        kList = 700, kListBackdrop = 701
+        kList = 700, kListBackdrop = 701,
+        kKeyboardOk = 710, kKeyboardCancel = 711
     };
 
     enum class T : uint8_t { Knob, Number, Toggle, Stepper, List, Inert };
@@ -80,6 +82,7 @@ public:
         w_ = w; h_ = h;
         const ui::Rect tab { 0, kTabY, w, kTabH };
         full_.place (tab);
+        entry_.place (tab);
         list_.place ({ 340, kTabY + 20, 600, 8 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
         list_.setPopup (tab);
         list_.setId (kList);
@@ -142,7 +145,7 @@ public:
         if (! gesture_ || ! gestureDown_)
             return false;
         if (ev.kind == TouchEvent::Move)
-            handle (gesture_->touchMove (x, y), stack, inst);
+            handle (gesture_->touchMove (x, y, nowMs), stack, inst);
         else
         {
             handle (gesture_->touchUp (x, y), stack, inst);
@@ -192,14 +195,20 @@ public:
     void draw (gpu::SceneBuilder& sb) const
     {
         page::ground (sb);
-        full_.draw (sb);
-        if (pageTop_ == kPageList)
-            list_.draw (sb);
+        if (pageTop_ == kPageKeyboard)
+            entry_.draw (sb);
+        else
+        {
+            full_.draw (sb);
+            if (pageTop_ == kPageList)
+                list_.draw (sb);
+        }
     }
 
     // ---- access for the tests
     ui::MasterScreen& screen() noexcept { return full_; }
     ui::ListPopup& list() noexcept { return list_; }
+    ui::TextEntry& keyboard() noexcept { return entry_; }
     const std::vector<Item>& items() const noexcept { return items_; }
     const Item* item (int id) const noexcept
     {
@@ -290,6 +299,13 @@ private:
                     kn->state.value = kn->state.modValue = uibind::normOf (it.param, val);
                     kn->state.defaultValue = uibind::normOf (it.param, p.def);
                     uibind::formatValue (p, val, kn->state.valueText, sizeof kn->state.valueText);
+                    kn->state.isDb = (p.unit == synthyboy::Unit::dB);
+                    if (kn->state.isDb)
+                    {
+                        kn->state.dbMin = p.min;
+                        kn->state.dbMax = p.max;
+                        kn->state.skew = p.skew;
+                    }
                     break;
                 }
                 case T::Number:
@@ -355,6 +371,31 @@ private:
             stack.back();
             return;
         }
+        if (ch.id == kKeyboardCancel)
+        {
+            stack.back();
+            return;
+        }
+        if (ch.id == kKeyboardOk)
+        {
+            if (textEntryParam_ >= 0)
+            {
+                const synthyboy::ParamInfo& pi = uibind::info (textEntryParam_);
+                const std::string& str = entry_.text();
+                char* end = nullptr;
+                double val = std::strtod (str.c_str(), &end);
+                if (end != str.c_str())
+                {
+                    double clamped = std::clamp (val, static_cast<double> (pi.min), static_cast<double> (pi.max));
+                    double rounded = std::round (clamped * 10.0) / 10.0;
+                    if (std::abs (rounded) < 1.0e-4)
+                        rounded = 0.0;
+                    uibind::writePlain (inst, textEntryParam_, rounded);
+                }
+            }
+            stack.back();
+            return;
+        }
         if (ch.id == kLimiter)
         {
             bool on = false;
@@ -392,6 +433,22 @@ private:
             }
             return;
         }
+        if (it->type == T::Knob && ch.kind == ui::ChangeKind::Request)
+        {
+            textEntryParam_ = it->param;
+            const synthyboy::ParamInfo& pi = uibind::info (it->param);
+            float curVal = inst.param (it->param);
+            if (std::abs (curVal) < 0.05f)
+                curVal = 0.0f;
+            char initial[32];
+            std::snprintf (initial, sizeof initial, "%.1f", curVal);
+            char title[64];
+            std::snprintf (title, sizeof title, "%s (%.1f .. %.1f dB)", pi.name, pi.min, pi.max);
+            entry_.begin (title, initial, 16, kKeyboardOk, kKeyboardCancel, ui::TextEntry::Layer::Symbols);
+            stack.openDetail (kPageKeyboard);
+            pageTop_ = kPageKeyboard;
+            return;
+        }
         switch (ch.kind)
         {
             case ui::ChangeKind::Value:
@@ -426,7 +483,7 @@ private:
         };
         const bool main = g < 6;
         const int first = main ? 0 : 6, count = main ? 6 : 4;
-        const bool list = pageTop_ == kPageList;
+        const bool list = pageTop_ == kPageList || pageTop_ == kPageKeyboard;
         if (list)
             qSlots_.publish (inst, 0, 0, [] (int, int*) {});   // the list has no group: no slot has a target
         else
@@ -441,15 +498,18 @@ private:
 
     ui::Component* topComponent() noexcept
     {
+        if (pageTop_ == kPageKeyboard)
+            return &entry_;
         return pageTop_ == kPageList ? static_cast<ui::Component*> (&list_) : static_cast<ui::Component*> (&full_);
     }
 
     ui::MasterScreen full_;
     ui::ListPopup list_;
+    ui::TextEntry entry_;
     std::vector<Item> items_;
 
     int w_ = kCanvasW, h_ = kCanvasH;
-    int pageTop_ = 0, listParam_ = -1;
+    int pageTop_ = 0, listParam_ = -1, textEntryParam_ = -1;
     double lastMs_ = 0.0;
     int polyphonyIdx_ = -1, slopeIdx_ = -1, scaleTypeIdx_ = -1, scaleKeyIdx_ = -1, scaleModeIdx_ = -1;
 

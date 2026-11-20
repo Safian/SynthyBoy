@@ -706,12 +706,220 @@ void testMasterQuality()
     check (r.inst.get ("quality.oversample_4x") > 0.5f, "a tap on OVERSAMPLE 4X switches quality.oversample_4x on");
 }
 
+void testMasterVolumeKnob()
+{
+    // A. 1 px drag changes the value (no dead zone)
+    {
+        MRig r;
+        r.inst.set ("master.volume", -18.0f);
+        r.refresh();
+        ui::MasterScreen& m = r.ui.screen();
+        const ui::Rect v = m.volume.rect();
+        const int vx = v.x + v.w / 2, vy = v.y + v.h / 3;
+        TouchEvent ev;
+        ev.kind = TouchEvent::Down; ev.x = vx; ev.y = vy;
+        r.ui.touch (ev, r.stack, r.inst, r.now);
+        ev.kind = TouchEvent::Move; ev.x = vx; ev.y = vy - 1;
+        r.now += 20.0;
+        r.ui.touch (ev, r.stack, r.inst, r.now);
+        ev.kind = TouchEvent::Up;
+        r.ui.touch (ev, r.stack, r.inst, r.now);
+        r.refresh();
+        check (r.inst.get ("master.volume") != -18.0f, "volume knob: a 1 px drag changes the value");
+    }
+
+    // B. 30 px slow drag (below 80 px/s) = 1.5 dB within 0.05
+    {
+        MRig r;
+        r.inst.set ("master.volume", -18.0f);
+        r.refresh();
+        ui::MasterScreen& m = r.ui.screen();
+        const ui::Rect v = m.volume.rect();
+        const int vx = v.x + v.w / 2, vy = v.y + v.h / 3;
+        TouchEvent ev;
+        ev.kind = TouchEvent::Down; ev.x = vx; ev.y = vy;
+        r.ui.touch (ev, r.stack, r.inst, r.now);
+        ev.kind = TouchEvent::Move; ev.x = vx; ev.y = vy - 30;
+        r.now += 500.0; // 30 px in 500 ms = 60 px/s (< 80 px/s)
+        r.ui.touch (ev, r.stack, r.inst, r.now);
+        ev.kind = TouchEvent::Up;
+        r.ui.touch (ev, r.stack, r.inst, r.now);
+        r.refresh();
+        const float val = r.inst.get ("master.volume");
+        check (std::fabs (val - (-18.0f + 1.5f)) <= 0.05f,
+               "volume knob: 30 px slow drag (below 80 px/s) = 1.5 dB within 0.05 (got " + std::to_string (val) + ")");
+    }
+
+    // C. The same 30 px fast keeps the old coarse change (~5 to 7 dB)
+    {
+        MRig r;
+        r.inst.set ("master.volume", -18.0f);
+        r.refresh();
+        ui::MasterScreen& m = r.ui.screen();
+        const ui::Rect v = m.volume.rect();
+        const int vx = v.x + v.w / 2, vy = v.y + v.h / 3;
+        TouchEvent ev;
+        ev.kind = TouchEvent::Down; ev.x = vx; ev.y = vy;
+        r.ui.touch (ev, r.stack, r.inst, r.now);
+        ev.kind = TouchEvent::Move; ev.x = vx; ev.y = vy - 30;
+        r.now += 16.0; // 30 px in 16 ms = 1875 px/s (>= 80 px/s)
+        r.ui.touch (ev, r.stack, r.inst, r.now);
+        ev.kind = TouchEvent::Up;
+        r.ui.touch (ev, r.stack, r.inst, r.now);
+        r.refresh();
+        const float val = r.inst.get ("master.volume");
+        check (val >= -18.0f + 5.0f && val <= -18.0f + 7.5f,
+               "volume knob: the same 30 px fast keeps the old coarse change (got " + std::to_string (val) + ")");
+    }
+
+    // D. A down drag of 8 px after an up drag lands on a value reproducible within 0.1 dB
+    {
+        MRig r;
+        r.inst.set ("master.volume", -18.0f);
+        r.refresh();
+        ui::MasterScreen& m = r.ui.screen();
+        const ui::Rect v = m.volume.rect();
+        const int vx = v.x + v.w / 2, vy = v.y + v.h / 3;
+        TouchEvent ev;
+        ev.kind = TouchEvent::Down; ev.x = vx; ev.y = vy;
+        r.ui.touch (ev, r.stack, r.inst, r.now);
+        ev.kind = TouchEvent::Move; ev.x = vx; ev.y = vy - 20; // up 20 px (+1.0 dB -> -17.0 dB)
+        r.now += 400.0;
+        r.ui.touch (ev, r.stack, r.inst, r.now);
+        ev.kind = TouchEvent::Move; ev.x = vx; ev.y = vy - 20 + 8; // down 8 px (-0.4 dB -> -17.4 dB)
+        r.now += 200.0;
+        r.ui.touch (ev, r.stack, r.inst, r.now);
+        ev.kind = TouchEvent::Up;
+        r.ui.touch (ev, r.stack, r.inst, r.now);
+        r.refresh();
+        const float val = r.inst.get ("master.volume");
+        check (std::fabs (val - (-17.4f)) <= 0.1f,
+               "volume knob: down drag of 8 px after up drag lands on value reproducible within 0.1 dB (got " + std::to_string (val) + ")");
+    }
+
+    // E. Tap on value text opens entry and typing -17.3 OK sets -17.3
+    {
+        MRig r;
+        r.inst.set ("master.volume", -12.0f);
+        r.refresh();
+        ui::MasterScreen& m = r.ui.screen();
+        const ui::Knob::Geom g = m.volume.geom();
+        r.tapAt (g.valueBox.x + g.valueBox.w / 2, g.valueBox.y + g.valueBox.h / 2);
+        check (r.ui.topPage() == MasterUi::kPageKeyboard, "volume knob: tap on value text opens numeric entry");
+
+        auto tapKeyKind = [&] (ui::TextEntry::KeyKind k)
+        {
+            const int idx = r.ui.keyboard().keyOfKind (k);
+            if (idx >= 0)
+            {
+                const ui::Rect kr = r.ui.keyboard().key (idx).r;
+                r.tapAt (kr.x + kr.w / 2, kr.y + kr.h / 2);
+            }
+        };
+        auto typeChar = [&] (char c)
+        {
+            const int idx = r.ui.keyboard().keyOf (c);
+            if (idx >= 0)
+            {
+                const ui::Rect kr = r.ui.keyboard().key (idx).r;
+                r.tapAt (kr.x + kr.w / 2, kr.y + kr.h / 2);
+            }
+        };
+        auto typeStr = [&] (const char* s)
+        {
+            for (const char* p = s; *p; ++p)
+                typeChar (*p);
+        };
+
+        tapKeyKind (ui::TextEntry::Clear);
+        typeStr ("-17.3");
+        tapKeyKind (ui::TextEntry::Ok);
+        r.refresh();
+        const float val = r.inst.get ("master.volume");
+        check (std::fabs (val - (-17.3f)) <= 0.05f && r.ui.topPage() == 0,
+               "volume knob: typing -17.3 and OK sets -17.3 dB (got " + std::to_string (val) + ")");
+    }
+
+    // F. Entering 99 clamps to +6.0
+    {
+        MRig r;
+        r.inst.set ("master.volume", -12.0f);
+        r.refresh();
+        ui::MasterScreen& m = r.ui.screen();
+        const ui::Knob::Geom g = m.volume.geom();
+        r.tapAt (g.valueBox.x + g.valueBox.w / 2, g.valueBox.y + g.valueBox.h / 2);
+        auto tapKeyKind = [&] (ui::TextEntry::KeyKind k)
+        {
+            const int idx = r.ui.keyboard().keyOfKind (k);
+            if (idx >= 0)
+            {
+                const ui::Rect kr = r.ui.keyboard().key (idx).r;
+                r.tapAt (kr.x + kr.w / 2, kr.y + kr.h / 2);
+            }
+        };
+        auto typeChar = [&] (char c)
+        {
+            const int idx = r.ui.keyboard().keyOf (c);
+            if (idx >= 0)
+            {
+                const ui::Rect kr = r.ui.keyboard().key (idx).r;
+                r.tapAt (kr.x + kr.w / 2, kr.y + kr.h / 2);
+            }
+        };
+        tapKeyKind (ui::TextEntry::Clear);
+        typeChar ('9');
+        typeChar ('9');
+        tapKeyKind (ui::TextEntry::Ok);
+        r.refresh();
+        const float val = r.inst.get ("master.volume");
+        check (std::fabs (val - 6.0f) <= 0.05f && r.ui.topPage() == 0,
+               "volume knob: entering 99 clamps to +6.0 dB (got " + std::to_string (val) + ")");
+    }
+
+    // G. Cancel leaves the value
+    {
+        MRig r;
+        r.inst.set ("master.volume", -12.0f);
+        r.refresh();
+        ui::MasterScreen& m = r.ui.screen();
+        const ui::Knob::Geom g = m.volume.geom();
+        r.tapAt (g.valueBox.x + g.valueBox.w / 2, g.valueBox.y + g.valueBox.h / 2);
+        auto tapKeyKind = [&] (ui::TextEntry::KeyKind k)
+        {
+            const int idx = r.ui.keyboard().keyOfKind (k);
+            if (idx >= 0)
+            {
+                const ui::Rect kr = r.ui.keyboard().key (idx).r;
+                r.tapAt (kr.x + kr.w / 2, kr.y + kr.h / 2);
+            }
+        };
+        auto typeChar = [&] (char c)
+        {
+            const int idx = r.ui.keyboard().keyOf (c);
+            if (idx >= 0)
+            {
+                const ui::Rect kr = r.ui.keyboard().key (idx).r;
+                r.tapAt (kr.x + kr.w / 2, kr.y + kr.h / 2);
+            }
+        };
+        tapKeyKind (ui::TextEntry::Clear);
+        typeChar ('5');
+        typeChar ('0');
+        tapKeyKind (ui::TextEntry::Cancel);
+        r.refresh();
+        const float val = r.inst.get ("master.volume");
+        check (std::fabs (val - (-12.0f)) <= 0.05f && r.ui.topPage() == 0,
+               "volume knob: cancel leaves the value unchanged (got " + std::to_string (val) + ")");
+    }
+}
+
 int main()
 {
     std::printf ("=== SynthyBoy MPC Overlay: Master & Voice Host Tests ===\n");
     testMasterParametersExist();
     testMasterSidesAndBlocks();
     testMasterValuesAndWrites();
+    testMasterVolumeKnob();
     testMasterGroupsAndMeters();
     testMasterDraw();
     testMasterPadPressure();

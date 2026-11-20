@@ -518,6 +518,7 @@ public:
         return onDown (x, y, nowMs);
     }
     virtual Change touchMove (int x, int y) { return captured_ && enabled_ ? onMove (x, y) : Change::none(); }
+    virtual Change touchMove (int x, int y, double nowMs) { return captured_ && enabled_ ? onMove (x, y, nowMs) : Change::none(); }
     virtual Change touchUp (int x, int y)
     {
         if (! captured_)
@@ -557,6 +558,7 @@ protected:
     virtual void drawBody (Pen& pen) const = 0;
     virtual Change onDown (int, int, double) { return Change::none(); }
     virtual Change onMove (int, int) { return Change::none(); }
+    virtual Change onMove (int x, int y, double /*nowMs*/) { return onMove (x, y); }
     virtual Change onUp (int, int) { return Change::none(); }
     virtual Change onTurn (double) { return Change::none(); }
 
