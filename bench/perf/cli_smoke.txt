@@ -11,3 +11,4 @@ verify_guard~any~--verify --load basic --config low~verify: 0 of 1 renders diffe
 pmu_flag~posix~--load basic --config low --seconds 0.3 --pmu cache --csv /dev/null~pmu: 
 first_blocks~posix~--load basic --config low --first-blocks 4~first: block 3 
 evict_flag~posix~--load basic --config low --seconds 0.3 --evict~health: run_delay
+modules_fx~posix~--modules --module-group fx --module-reps 1 --seconds 0.3 --config low,fx=all~module-table: 13 cases
