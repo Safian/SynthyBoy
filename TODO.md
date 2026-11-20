@@ -121,6 +121,12 @@ Gemini 4 Neon írta, kódolvasásból, mérés nélkül; megvalósítás előtt 
 - 17. A README 20,5 MB-ot ír a hullámtábla-bankra, a jelentés szerint valójában kb. 33,1 MB. Szúrópróba: a 20,5 MB a README-ben megvan; a 33,1 MB-ot nem ellenőriztem.
 - 18. A mérőprogram más `libm`-et használ, mint az eszközön futó plugin; kivételkezelés és RTTI bekapcsolva a DSP-könyvtárakban.
 
+## Wave 2 összefésülés (2026-11-21): nyitott piros tesztek
+- `own_alias_dist_tanh_lowers_the_aliasing_and_keeps_the_harmonics` (`core/tests/test_own_alias_dist_tanh.cpp:87`): a 9-es típus (Zero-Square, 0 dB) ADAA-nyeresége 5,91 dB, a teszt 6,0 dB-t kér (a terv modellje 10,1 dB); a kernel egyezik a dupla pontosságú referenciával (a teszt (e) pontja zöld), tehát a küszöb vagy a modell téves. Kész, ha az owner döntése szerint a küszöb vagy a terv javul, és a teszt zöld.
+- `own_spectral_a_waiting_voice_is_silent` (`core/tests/test_own_osc_types.cpp:1696`): az első 128 minta RMS-aránya 1,02 (a teszt < 0,97-et vár); a várakozó hangok némák, de a 11 megszólaló hang összege nagyobb, mint mind a 16-é, vagyis az RMS-arány a fázisoktól függ és nem bizonyítja a némaságot. Kész, ha a teszt a várakozó hangok némaságát hangonként méri (pl. a `waitingForTest` és az `isActive` alapján), és zöld.
+- A develop-on (b908cbac) is piros, a wave 2-től függetlenül: `synthyboy_test_engine` (`engine_block_size_independence`), `synthyboy_test_own_osc_options` (aranyhash), `synthyboy_test_own_voice_count_gain`, `synthyboy_test_output_stage_presets`, `synthyboy_test_release_scripts` (4 Python-teszt: `test_docs_release`, `test_mpc_skin_names`, `test_mpc_skin_osc`, `test_mpc_skin_subtabs`). Kész, ha mind zöld Apple Silicon Release buildben is, vagy a hiba oka dokumentált.
+- `synthyboy_param_audit_scan` (1 órás időkorlát) a wave 2 összefésülésén nem futott le. Kész, ha egyszer végigfutott az összefésült fán.
+
 ## Tudás és ügynök-eszközök
 - Tudásmappa (`docs/dsp-knowledge/`: témánként rövid fájl forrásokkal, döntésekkel és bizonyító teszttel, tisztaszoba-szabály, tesztreceptek) és egy rá mutató vékony skill: az owner döntésére vár.
 - A `.hw-local/synth-knowledge/vital/code` (405 fájl) és `sources/` Vital-forráskódot tartalmaz: a saját motor munkáihoz tiltani kell, vagy el kell vinni onnan (owner döntése).
