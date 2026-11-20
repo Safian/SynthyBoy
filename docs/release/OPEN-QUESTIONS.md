@@ -37,7 +37,7 @@ Not listed because it is fixed:
 ## B. Every matching line (generated)
 
 <!-- BEGIN AUTO-MARKERS -->
-Lines found: 80 in 10 files.
+Lines found: 83 in 10 files.
 
 ### README.md
 
@@ -122,6 +122,9 @@ Lines found: 80 in 10 files.
 - docs/MPC.md:1415 [Pending]: - **Loading mark:** while `IEngine::contentPending ()` is true the plugin-drawn pages show it, see "Loading mark" below.
 - docs/MPC.md:1425 [Pending]: While a wavetable the current parameters name is still being built, every plugin-drawn page (`PageView`, `shell-mpc/overlay/page_view.h`) draws a 4 px amber ...
 - docs/MPC.md:1429 [is open]: `scripts/build-preset-index.py` (run by `scripts/build-mpc.sh` after the presets are copied; usable on `content/presets`) writes `Content/presets/index.json`...
+- docs/MPC.md:1490 [not measured]: | 4 | not measured: the host app crashed while the 4th track was being added (see below) | | | | | |
+- docs/MPC.md:1493 [NOT measured]: About 80 to 90 MB of host RSS per added SynthyBoy track (a little above the 72 MB heap of the probe). No `VmSwap`, no OOM or kill line in `dmesg` at any read...
+- docs/MPC.md:1495 [is open]: The host app (`MPC`, pid 15978) crashed at 00:27:46 (a Sentry crash envelope was sent) while the plugin list was being scrolled for the fourth track, with th...
 ### docs/NAMING.md
 
 - docs/NAMING.md:29 [Still open]: ## Still open (owner / counsel – not done)
@@ -144,7 +147,31 @@ Lines found: 80 in 10 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 60.
+Commits found: 66.
+
+### 6c8f5cb0 (2026-11-21) docs/MPC.md: memory on the Key 61 (engine probe and host series 1-3 tracks); TODO: 4th track and the
+
+- matching line: docs/MPC.md: memory on the Key 61 (engine probe and host series 1-3 tracks); TODO: 4th track and the host crash open
+
+### 32083e41 (2026-11-21) TODO: distortion plan items for the engine core owner (O2-O4, L1, Z1, owner decisions D1 D2 D4), rev
+
+- matching line: TODO: distortion plan items for the engine core owner (O2-O4, L1, Z1, owner decisions D1 D2 D4), reverb-convolve remaining batches
+
+### b908cbac (2026-11-21) scripts/build-arm32-test.sh: one test or bench target for 32 bit ARM in a Debian 12 container (stati
+
+- matching line: scripts/build-arm32-test.sh: one test or bench target for 32 bit ARM in a Debian 12 container (static, own engine); TODO: missing builder image line removed
+
+### 51a61171 (2026-11-21) TODO: perf plan T18 (docs) still to assign
+
+- matching line: TODO: perf plan T18 (docs) still to assign
+
+### d3990a77 (2026-11-21) TODO: Key 61 memory measurement 1 results, probe tier and rss_kb issues, missing armv7 builder image
+
+- matching line: TODO: Key 61 memory measurement 1 results, probe tier and rss_kb issues, missing armv7 builder image
+
+### 15d5550c (2026-11-21) docs: Key 61 has 4 GB RAM (measured MemTotal), TODO: memory measurement 1 results, probe tier and rs
+
+- matching line: docs: Key 61 has 4 GB RAM (measured MemTotal), TODO: memory measurement 1 results, probe tier and rss_kb issues, missing armv7 builder image
 
 ### e8080e9b (2026-11-20) TODO.md: plan wave 1 merged, filter arena held back, memory numbers, Spectral start budget
 

@@ -1478,7 +1478,7 @@ The display thread's calls into the host (`audioMasterAutomate`, `UpdateDisplay`
 
 Measured 2026-11-20/21 on the MPC Key 61 (armv7, MPC OS 3.10.1.12, develop `bf18c706`). The device reports `MemTotal` 4,113,388 kB (4 GB, not 2 GB) and has no swap (`SwapFree` 0): the OOM killer is the only limit.
 
-**Engine probe** (`synthyboy_test_own_memory` built static for armv7 with `scripts/build-arm32-test.sh`, run on the device; the Mac gives 67.2 MB and 2515 allocations for tier low). One instance of tier low: 4761 allocations, 72.38 MB heap (peak 105.6 MB), prepare 51.8 ms voices and 38.8 ms effects; four instances: 289.5 MB (peak 322.8 MB). The tiers xl and high print the same bytes as low (not understood), and the probe's `rss_kb` column is not usable. The built-in 33.1 MB wavetable bank is warmed before the counters start and exists once per process.
+**Engine probe** (`synthyboy_test_own_memory` built static for armv7 with `scripts/build-arm32-test.sh`, run on the device; the Mac gives 67.2 MB and 2515 allocations for tier low). One instance of tier low: 4761 allocations, 72.38 MB heap (peak 105.6 MB), the prepare times are in the probe output (`.hw-local/mpc-perf/`); four instances: 289.5 MB (peak 322.8 MB). The tiers xl and high print the same bytes as low (not understood), and the probe's `rss_kb` column is not usable. The built-in 33.1 MB wavetable bank is warmed before the counters start and exists once per process.
 
 **The real host** (test project Sbtest, one Spectral preset (Spectral Vowel Freeze) per SynthyBoy track, tier low, one note held, readings 8 to 20 s after the preset load, nothing saved):
 
