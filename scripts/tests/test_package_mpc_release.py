@@ -64,7 +64,7 @@ class TestPackageMpcRelease(unittest.TestCase):
         (folder / "version.xml").write_text(
             '<?xml version="1.0" encoding="utf-8"?>\n'
             "<plugincontent>\n"
-            "    <version>0.1.0.0</version>\n"
+            "    <version>0.1.0.1</version>\n"
             "    <uiversion>0.1.0.0</uiversion>\n"
             "</plugincontent>\n",
             encoding="utf-8",

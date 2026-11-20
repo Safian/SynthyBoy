@@ -30,8 +30,13 @@ endif()
 
 project(SynthyBoy VERSION 0.1.0 LANGUAGES C CXX)
 
+set(SYNTHYBOY_BUILD_NUMBER 1)
+math(EXPR SYNTHYBOY_VST2_VERSION "${PROJECT_VERSION_MAJOR} * 1000 + ${PROJECT_VERSION_MINOR} * 100 + ${PROJECT_VERSION_PATCH} * 10 + ${SYNTHYBOY_BUILD_NUMBER}")
+
 # The version shown in Preferences / About (UiHost::aboutText, S15-20): the project version above, for every target (the plug-in shells and the tests)
 add_compile_definitions(SYNTHYBOY_VERSION_STRING="${PROJECT_VERSION}")
+add_compile_definitions(SYNTHYBOY_BUILD_NUMBER=${SYNTHYBOY_BUILD_NUMBER})
+add_compile_definitions(SYNTHYBOY_VST2_VERSION=${SYNTHYBOY_VST2_VERSION})
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

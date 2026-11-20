@@ -1173,7 +1173,7 @@ std::string makeWavetableLibrary (synthyboy::CatalogueSources& sources)
     make ("packs"); make ("packs/com.t.pack"); make ("packs/com.t.pack/Analog");
     touch ("packs/com.t.pack/Analog/warm.wav");
     const std::string sha (64, 'a');
-    touch ("packs/com.t.pack/contentpack.json", ("{\"schemaVersion\":1,\"id\":\"com.t.pack\",\"name\":\"T\",\"version\":\"1.0.0\",\"license\":\"CC0-1.0\",\"attribution\":\"t\",\"kind\":\"wavetables\",\"requires_plugin\":\">=0.1.0\","
+    touch ("packs/com.t.pack/contentpack.json", ("{\"schemaVersion\":1,\"id\":\"com.t.pack\",\"name\":\"T\",\"version\":\"0.1.0\",\"license\":\"CC0-1.0\",\"attribution\":\"t\",\"kind\":\"wavetables\",\"requires_plugin\":\">=0.1.0\","
                                                   "\"files\":[{\"path\":\"Analog/warm.wav\",\"sha256\":\"" + sha + "\",\"size\":4096,\"title\":\"Warm Saw\"}]}").c_str());
     make ("SynthyBoy"); make ("SynthyBoy/Wavetables"); make ("SynthyBoy/Wavetables/Bass");
     touch ("SynthyBoy/Wavetables/Bass/x.wav"); touch ("SynthyBoy/Wavetables/Bass/y.wav"); touch ("SynthyBoy/Wavetables/Bass/z.wav");

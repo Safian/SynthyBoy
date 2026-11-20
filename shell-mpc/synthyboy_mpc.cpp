@@ -51,6 +51,10 @@
 #include "poll_guard.h"
 #include "program_list.h"
 
+#ifndef SYNTHYBOY_VST2_VERSION
+#error "SYNTHYBOY_VST2_VERSION must come from the build"
+#endif
+
 // Live LFO display (docs/MPC.md "LFO pictures"). Compile switch SYNTHYBOY_MPC_LFO_LIVE (CMake option of the same name; the source default is 0:
 // with 0 nothing below the switch is compiled and the plugin is exactly the one without this code). When 1 the plugin has four display-only
 // parameters after the engine's list (index paramCount() + n - 1 for LFO n): the cursor of the LFO picture of the skin (lfo_live.h).
@@ -2758,7 +2762,7 @@ static VstIntPtr dispatch(AEffect* e, VstInt32 opcode, VstInt32 index,
 
     case effGetVendorVersion:
     {
-        return 1000; // version 1.0.0.0
+        return SYNTHYBOY_VST2_VERSION; // 0.1.0 build 1 -> 101
     }
 
     case effCanDo:
@@ -3401,7 +3405,7 @@ extern "C"
         // Build unique ID from four bytes: (('S'<<24)|('f'<<16)|('S'<<8)|'B')
         effect->uniqueID = (static_cast<VstInt32>('S') << 24) | (static_cast<VstInt32>('f') << 16)
                          | (static_cast<VstInt32>('S') << 8) | static_cast<VstInt32>('B');
-        effect->version = 1000;
+        effect->version = SYNTHYBOY_VST2_VERSION; // 0.1.0 build 1 -> 101
 
         // Store the host callback for transport queries
 #if SYNTHYBOY_MPC_CALLBACK_STATS

@@ -88,7 +88,7 @@ private:
 
 std::string manifest (const std::string& kind, const std::string& name, const std::string& files)
 {
-    return "{\"schemaVersion\":1,\"id\":\"com.test.pack\",\"name\":\"" + name + "\",\"version\":\"1.0.0\",\"license\":\"CC0-1.0\",\"attribution\":\"t\",\"kind\":\"" + kind
+    return "{\"schemaVersion\":1,\"id\":\"com.test.pack\",\"name\":\"" + name + "\",\"version\":\"0.1.0\",\"license\":\"CC0-1.0\",\"attribution\":\"t\",\"kind\":\"" + kind
         + "\",\"requires_plugin\":\">=0.1.0\",\"files\":[" + files + "]}";
 }
 std::string sha (char c) { return std::string (64, c); }

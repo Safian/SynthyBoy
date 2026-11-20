@@ -30,6 +30,11 @@ _spec = importlib.util.spec_from_file_location("gen_mpc_xpl", HERE / "gen-mpc-xp
 gen_mpc_xpl = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gen_mpc_xpl)
 
+_pv_spec = importlib.util.spec_from_file_location("product_version", HERE / "product_version.py")
+_pv_mod = importlib.util.module_from_spec(_pv_spec)
+_pv_spec.loader.exec_module(_pv_mod)
+_version_text, _build, _vst2_int, _four_part_version = _pv_mod.load(REPO)
+
 # The device's path of the plugin binary (<PLUGIN file=...>).
 DEVICE_PLUGIN_PATHS = {
     "xl": "/nvme/VST2 Plugins/Safian - VST - SynthyBoy/VST/synthyboy-arm64.so",
@@ -55,7 +60,7 @@ PLUGIN_ATTRS = {
     "format": "VST",
     "category": "Synth",
     "manufacturer": "Safian",
-    "version": "1.0.0.0",
+    "version": _four_part_version,
     "uid": "53665342",
     "isInstrument": "1",
     "fileTime": "0",

@@ -31,9 +31,13 @@ a host that cannot run the plug-in's toolkit (the Kick app on the MPC, a framebu
 * **Option**: `SYNTHYBOY_BITMAP_GUI` (CMake) is ON with the JUCE plug-in and in the ARMv7 script, OFF otherwise (`--no-ui` of the script builds the JUCE free module without it). The static
   library `synthyboy_static` (iOS, `SYNTHYBOY_WITH_VITAL=OFF`) never contains it: `scripts/check-no-vital.sh` stays clean.
 
+## Product versioning
+
+The product version is set in CMakeLists.txt through the project VERSION and SYNTHYBOY_BUILD_NUMBER, and in plugin.json through version and build. All other versions derive from these entries. The VST2 integer version follows the formula major multiplied by 1000 plus minor multiplied by 100 plus patch multiplied by 10 plus the build number, meaning version 0.1.0 build 1 evaluates to 101. Format versions for state and presets remain completely separate, so earlier projects and presets continue to load because the plugin only validates the state document format version. The packs carry their own version field, and for the first release all of them are 0.1.0.
+
 ## Cutting a release
 
-1. Set the version in `CMakeLists.txt` (`project(SynthyBoy VERSION x.y.z)`) and in `plugin.json` (`version`); `scripts/check-manifest.py` fails if they differ.
+1. Set the version in `CMakeLists.txt` (`project(SynthyBoy VERSION x.y.z)` and `set(SYNTHYBOY_BUILD_NUMBER n)`) and in `plugin.json` (`version` and `build`); `scripts/check-manifest.py` fails if they differ.
    If a content pack changed, raise its version in its `contentpack.json` and in `plugin.json` (same check) and regenerate its file list
    (`python3 tools/contentpack/contentpack.py manifest --dir content/presets`).
 2. Merge to the release commit, wait for the `build` workflow to be green on it. The release workflow refuses a tagged commit without a successful `build.yml` run.

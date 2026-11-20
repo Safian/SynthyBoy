@@ -11,7 +11,7 @@
 #   --check FILE       compare generated output to FILE (no write)
 #   --plugin-dir DIR   fill a plugin folder that already holds binaries in DIR/VST/:
 #                      write plugin.json with file32/file64 only for existing .so files,
-#                      and version.xml with the root manifest version (+ ".0" as fourth part).
+#                      and version.xml with the root manifest version (<major>.<minor>.<patch>.<build>).
 #                      Exits 2 on error.
 #
 # Another plugin (migration step 12 of docs/ui-components/TEMPLATE.md; scripts/build-mpc.sh --plugin DIR): --package-manifest FILE is that plugin's finished plugin.json (template-mpc/package/plugin.json):
@@ -55,6 +55,7 @@ def generate(root_manifest):
         "file32": "VST/synthyboy-arm32.so",
         "file64": "VST/synthyboy-arm64.so",
         "version": root_manifest["version"],
+        "build": root_manifest.get("build", 1),
         "description": MPC_DESCRIPTION,
         "author": root_manifest.get("author", ""),
         "license": root_manifest.get("license", ""),
@@ -168,9 +169,10 @@ def main(argv=None):
 
         # Build version.xml
         version_parts = root["version"].split(".")
-        while len(version_parts) < 4:
+        while len(version_parts) < 3:
             version_parts.append("0")
-        version_text = ".".join(version_parts[:3]) + ".0"
+        build_val = root.get("build", 1)
+        version_text = "%s.%s.%s.%s" % (version_parts[0], version_parts[1], version_parts[2], build_val)
 
         has_skins = (plugin_dir / "Plugin Skins" / "TUI.json").is_file()
 

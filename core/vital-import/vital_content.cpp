@@ -537,7 +537,7 @@ UserWavetableStore::UserWavetableStore (const std::string& packDirectory)
         info_.schemaVersion = 1;
         info_.id = "user.imported-vital";
         info_.name = "Imported Vital Wavetables";
-        info_.version = "1.0.0";
+        info_.version = "0.1.0";
         info_.license = "user-supplied";
         info_.attribution = "user-supplied";
         info_.kind = "wavetables";

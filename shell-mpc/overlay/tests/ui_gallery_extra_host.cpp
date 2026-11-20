@@ -498,7 +498,7 @@ void makeWavetableGalleryLibrary (synthyboy::CatalogueSources& src)
         std::ofstream (root / "packs" / pack / f[0]) << "placeholder";
         list += std::string (list.empty() ? "" : ",") + "{\"path\":\"" + f[0] + "\",\"sha256\":\"" + std::string (64, 'b') + "\",\"size\":4096,\"title\":\"" + f[1] + "\"}";
     }
-    std::ofstream (root / "packs" / pack / "contentpack.json") << "{\"schemaVersion\":1,\"id\":\"" << pack << "\",\"name\":\"Gallery Wavetables\",\"version\":\"1.0.0\",\"license\":\"CC0-1.0\",\"attribution\":\"t\","
+    std::ofstream (root / "packs" / pack / "contentpack.json") << "{\"schemaVersion\":1,\"id\":\"" << pack << "\",\"name\":\"Gallery Wavetables\",\"version\":\"0.1.0\",\"license\":\"CC0-1.0\",\"attribution\":\"t\","
                                                                   "\"kind\":\"wavetables\",\"requires_plugin\":\">=0.1.0\",\"files\":[" << list << "]}";
     fs::create_directories (root / "SynthyBoy" / "Wavetables" / "Bass", ec);
     for (const char* n : { "sub_grind.wav", "reese_move.wav" })

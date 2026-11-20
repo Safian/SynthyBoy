@@ -342,6 +342,19 @@ def check_manifest(manifest_path, mode="checked-in", assets_dir=None):
     elif manifest.get("version") != m.group(1):
         errors.append("version %r != CMake project VERSION %r" % (manifest.get("version"), m.group(1)))
 
+    m = re.search(r"set\(\s*SYNTHYBOY_BUILD_NUMBER\s+(\d+)\s*\)", cmake_text)
+    if not m:
+        errors.append("CMakeLists.txt: no set(SYNTHYBOY_BUILD_NUMBER <n>) found")
+    else:
+        cmake_build = int(m.group(1))
+        manifest_build = manifest.get("build")
+        is_root = manifest_path.resolve() == (ROOT / "plugin.json").resolve()
+        if manifest_build is None:
+            if is_root:
+                errors.append("root manifest is missing 'build' (expected %d from CMake)" % cmake_build)
+        elif manifest_build != cmake_build:
+            errors.append("build %r != CMake SYNTHYBOY_BUILD_NUMBER %r" % (manifest_build, cmake_build))
+
     m = re.search(r'CLAP_ID\s+"([^"]+)"', cmake_text)
     if not m:
         errors.append("CMakeLists.txt: no CLAP_ID found")

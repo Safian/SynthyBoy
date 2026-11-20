@@ -192,7 +192,7 @@ class FillManifestTests(Workspace):
             self.assertEqual(build["entry_point"], "synthyboy.clap")
         cp = filled["contentPacks"][0]
         self.assertEqual((cp["status"], cp["sha256"], cp["size"]), ("released", pack["sha256"], pack["size"]))
-        self.assertTrue(cp["url"].endswith("/com.safian.synthyboy.factory-presets-1.2.0.zip"))
+        self.assertTrue(cp["url"].endswith("/com.safian.synthyboy.factory-presets-0.1.0.zip"))
         self.assertEqual(filled["assets"], [{"id": cp["id"], "name": cp["name"], "version": cp["version"], "url": cp["url"],
                                              "sha256": cp["sha256"], "size": cp["size"], "required": False, "type": "presets",
                                              "license": "CC0-1.0"}])
@@ -305,7 +305,7 @@ class FillManifestTests(Workspace):
     def test_a_pack_zip_with_a_changed_file_is_refused(self):
         self.package_all()
         self.build_pack()
-        target = self.assets / "com.safian.synthyboy.factory-presets-1.2.0.zip"
+        target = self.assets / "com.safian.synthyboy.factory-presets-0.1.0.zip"
         with zipfile.ZipFile(target) as zf:
             members = {n: zf.read(n) for n in zf.namelist()}
         first = next(n for n in members if n.endswith(".sbpreset"))

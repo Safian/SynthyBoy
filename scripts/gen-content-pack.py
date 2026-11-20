@@ -39,11 +39,11 @@ ROOT_NOTE = 60                 # the pitched samples are tuned to MIDI 60 (what 
 PEAK = 0.891                   # -1 dBFS: the headroom of the samples
 PACKS = {
     "factory-wavetables": {"id": "com.safian.synthyboy.factory-wavetables", "name": "Factory Wavetables", "kind": "wavetables",
-                   "version": "1.1.0", "description": "(set from the recipes by factory_wavetable_meta)"},
+                   "version": "0.1.0", "description": "(set from the recipes by factory_wavetable_meta)"},
     "factory-samples": {"id": "com.safian.synthyboy.factory-samples", "name": "Factory Samples", "kind": "samples",
                 "description": "12 synthesised samples, 3 key-mapped instruments and 3 impulse responses made by scripts/gen-content-pack.py under CC0-1.0; 44.1 kHz, 16 bit."},
 }
-VERSION = "1.0.0"
+VERSION = "0.1.0"
 
 
 def rng_for(name):
@@ -950,7 +950,7 @@ def addon_packs():
             if os.path.isfile(pj):
                 with open(pj, "r", encoding="utf-8") as f:
                     meta = json.load(f)
-                meta = {"id": meta["id"], "name": meta["name"], "kind": "wavetables", "version": meta.get("version", "1.0.0"), "description": meta.get("description", "")}
+                meta = {"id": meta["id"], "name": meta["name"], "kind": "wavetables", "version": meta.get("version", "0.1.0"), "description": meta.get("description", "")}
                 out.append((d, meta, load_recipes(os.path.join(ADDON_RECIPES, d))))
     return out
 

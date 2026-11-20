@@ -12,6 +12,7 @@ JSON state chunk (returned by effGetChunk).
 """
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -21,6 +22,11 @@ from pathlib import Path
 from xml.sax.saxutils import escape as xml_escape, unescape as xml_unescape
 from typing import Any, Dict, List, Optional, Tuple
 
+HERE = Path(__file__).resolve().parent
+_pv_spec = importlib.util.spec_from_file_location("product_version", HERE / "product_version.py")
+_pv_mod = importlib.util.module_from_spec(_pv_spec)
+_pv_spec.loader.exec_module(_pv_mod)
+
 # JUCE MemoryBlock::toBase64Encoding() alphabet (64 characters, '.' represents 0)
 JUCE_BASE64_ALPHABET = ".ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+"
 
@@ -28,7 +34,7 @@ JUCE_BASE64_ALPHABET = ".ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012
 VST2_CHUNK_MAGIC = b"CcnK"  # 0x43636e4b: VST chunk magic
 VST2_FX_MAGIC_BANK = b"FBCh"  # 0x46424368: Bank chunk magic (opaque bank)
 DEFAULT_FX_ID = b"SfSB"  # Plugin unique ID ('S','f','S','B' -> 0x53665342)
-DEFAULT_FX_VERSION = 1000
+DEFAULT_FX_VERSION = _pv_mod.load(HERE.parent)[2]
 DEFAULT_NUM_PROGRAMS = 137
 BANK_HEADER_SIZE = 160
 

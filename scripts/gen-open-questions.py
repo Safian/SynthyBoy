@@ -20,7 +20,7 @@ PATTERN = (r"not (yet )?(measured|verified|tested|seen|checked|tried|known|built
            r"pending|(still|stays|remains?|is|are|left) open|open (bug|question|item|issue)")
 COMMIT_PATTERN = (r"not (yet )?(measured|verified|tested|seen|checked|tried|known|built)|unverified|TODO|known (open )?bug|GUESS|"
                   r"open question|NOT measured")
-BASE_REF = "feature/mpc-overlay"
+BASE_REF = "develop"
 RE = re.compile(PATTERN, re.I)
 CRE = re.compile(COMMIT_PATTERN, re.I)
 

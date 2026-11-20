@@ -45,7 +45,7 @@ class PackTests(unittest.TestCase):
             (d / "instrument.sfz").write_text("<region> sample=a.wav\n")
             (d / "a.wav").write_bytes(random.Random(name).getrandbits(8 * size).to_bytes(size, "little"))  # incompressible
         code, _, err = run_quiet(["manifest", "--dir", str(self.pack), "--id", "com.safian.synthyboy.test-instruments", "--name", "Test Instruments",
-                                  "--version", "1.0.0", "--kind", "samples", "--license", "CC0-1.0", "--attribution", "Test",
+                                  "--version", "0.1.0", "--kind", "samples", "--license", "CC0-1.0", "--attribution", "Test",
                                   "--requires-plugin", ">=0.1.0", "--description", "fixture"])
         self.assertEqual(code, 0, err)
 
@@ -74,14 +74,14 @@ class PackTests(unittest.TestCase):
         out = self.tmp / "out"
         code, stdout, err = run_quiet(["build", "--dir", str(self.pack), "--out", str(out), "--summary", str(self.tmp / "s.json")])
         self.assertEqual(code, 0, err)
-        zip_path = out / "com.safian.synthyboy.test-instruments-1.0.0.zip"
+        zip_path = out / "com.safian.synthyboy.test-instruments-0.1.0.zip"
         with zipfile.ZipFile(zip_path) as zf:
             self.assertEqual(zf.namelist()[0], "contentpack.json")
             self.assertEqual(sorted(zf.namelist()[1:]), sorted(f["path"] for f in json.loads(zf.read("contentpack.json"))["files"]))
         summary = json.loads((self.tmp / "s.json").read_text())
         self.assertEqual(summary["sha256"], hashlib.sha256(zip_path.read_bytes()).hexdigest())
         self.assertEqual(summary["size"], zip_path.stat().st_size)
-        self.assertEqual(cp.verify_zip(zip_path, "com.safian.synthyboy.test-instruments", "1.0.0"), [])
+        self.assertEqual(cp.verify_zip(zip_path, "com.safian.synthyboy.test-instruments", "0.1.0"), [])
         again = cp.build_pack(self.pack, self.tmp / "out2")
         self.assertEqual(again["sha256"], summary["sha256"])
 
@@ -102,7 +102,7 @@ class PackTests(unittest.TestCase):
         for slug in os.listdir(split):
             manifest = json.loads((split / slug / "contentpack.json").read_text())
             self.assertEqual(manifest["id"], "com.safian.synthyboy.test-instruments-" + slug)
-            self.assertEqual(manifest["version"], "1.0.0")
+            self.assertEqual(manifest["version"], "0.1.0")
             self.assertEqual(manifest["kind"], "samples")
             self.assertEqual(cp.verify_directory(split / slug), [])
             summary = cp.build_pack(split / slug, self.tmp / "zips", max_bytes=50000)  # each part fits where the whole did not
@@ -196,7 +196,7 @@ class PackTests(unittest.TestCase):
         out = self.tmp / "all"
         code, text, _ = run_quiet(["build-all", "--manifest", str(ROOT / "plugin.json"), "--out", str(out)])
         self.assertEqual(code, 0, text)
-        self.assertEqual(sorted(p.name for p in out.glob("*.zip")), ["com.safian.synthyboy.factory-presets-1.2.0.zip"])
+        self.assertEqual(sorted(p.name for p in out.glob("*.zip")), ["com.safian.synthyboy.factory-presets-0.1.0.zip"])
         # a plugin.json that names another version than the pack holds is refused
         plugin = json.loads((ROOT / "plugin.json").read_text(encoding="utf-8"))
         plugin["contentPacks"][0]["version"] = "9.9.9"

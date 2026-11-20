@@ -126,7 +126,7 @@ class CheckPresetsTest(unittest.TestCase):
             "schemaVersion": 1,
             "id": "com.safian.synthyboy.test-pack",
             "name": "Test Pack",
-            "version": "1.0.0",
+            "version": "0.1.0",
             "license": "CC0-1.0",
             "attribution": "Tester",
             "kind": "presets",
