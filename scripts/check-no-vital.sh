@@ -111,6 +111,30 @@ CPP
         echo "self-test FAILED: the importer identifiers were rejected" >&2
         status=1
     fi
+
+    # the source tree of the own engine: a Vital identifier or a GPL header fails, plain words and the AGPL header pass
+    mkdir -p "$dir/src-clean" "$dir/src-vital" "$dir/src-gpl"
+    printf '%s\n' '// SPDX-License-Identifier: AGPL-3.0-or-later' '// tuned against the reference engine, Vital by name only' 'int ok() { return 1; }' > "$dir/src-clean/a.cpp"
+    printf '%s\n' '// SPDX-License-Identifier: AGPL-3.0-or-later' '#include "vital/synth_base.h"' 'int bad() { return sbvital::x(); }' > "$dir/src-vital/a.cpp"
+    printf '%s\n' '// This program is free software under the GNU General Public License, version 3' 'int gpl() { return 2; }' > "$dir/src-gpl/a.cpp"
+    if check_source "$dir/src-clean" 2>/dev/null; then
+        echo "self-test: a source tree without Vital identifiers and with the AGPL header passes: ok"
+    else
+        echo "self-test FAILED: the clean source tree was rejected" >&2
+        status=1
+    fi
+    if check_source "$dir/src-vital" 2>/dev/null; then
+        echo "self-test FAILED: a source tree with a Vital identifier was accepted" >&2
+        status=1
+    else
+        echo "self-test: a source tree with a Vital identifier is rejected: ok"
+    fi
+    if check_source "$dir/src-gpl" 2>/dev/null; then
+        echo "self-test FAILED: a source tree with a GPL header was accepted" >&2
+        status=1
+    else
+        echo "self-test: a source tree with a GPL header is rejected: ok"
+    fi
     return $status
 }
 
