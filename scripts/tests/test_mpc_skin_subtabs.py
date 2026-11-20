@@ -65,6 +65,18 @@ class LayoutFileTests(unittest.TestCase):
                     self.assertEqual(len(page["controls"]), 16)
 
     def test_v34_and_v32_hold_the_same_parameters(self):
+        # mpc-ui-pages.json has 34 tabs with dedicated FX Filt (fx_filter_1 + fx_filter_2) and Distort tabs.
+        # The 32-tab fallback (mpc-ui-pages-v32.json) merges them into Flt+Dist (14 controls) and omits fx_filter_2
+        # (the 7 Formant/Comb parameters activated in ownEngine in 84c9fc21) to respect the 32-tab limit.
+        fx_filter_2_params = {
+            "FX Filter Comb Blend Offset",
+            "FX Filter Formant Resonance",
+            "FX Filter Formant Spread",
+            "FX Filter Formant Transpose",
+            "FX Filter Formant X",
+            "FX Filter Formant Y",
+            "FX Filter Key Tracking",
+        }
         sets = {}
         for path in LAYOUTS:
             with tempfile.TemporaryDirectory() as tmp:
@@ -72,9 +84,10 @@ class LayoutFileTests(unittest.TestCase):
                 self.assertEqual(code, 0, err)
                 ui = json.loads((Path(tmp) / "ui.json").read_text(encoding="utf-8"))
                 sets[path.name] = {c["param"] for p in ui["pages"] for c in p["controls"] if c != "empty"}
-        first = next(iter(sets.values()))
-        for name, s in sets.items():
-            self.assertEqual(s, first, name)
+        v34 = sets["mpc-ui-pages.json"]
+        v32 = sets["mpc-ui-pages-v32.json"]
+        self.assertEqual(v32 - v34, set())
+        self.assertEqual(v34 - v32, fx_filter_2_params)
 
     def test_the_whole_baseline_is_in_the_layouts(self):
         # nothing is lost in the rearrangement: every parameter that had a control at 7a0d198 has one (the Env tabs repeat the eight knobs of the
