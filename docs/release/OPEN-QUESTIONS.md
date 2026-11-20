@@ -132,10 +132,10 @@ Lines found: 81 in 10 files.
 - docs/PARAMETERS.md:3226 [pending]: * **Free-form LFO shapes / wavetable editing**: pending (Phase 5, UI): LFOs use the built-in shape list and oscillators the built-in wavetables; there is no ...
 ### docs/PERFORMANCE.md
 
-- docs/PERFORMANCE.md:84 [still open]: (ARCHITECTURE 2.2). The measurements on an MPC are in docs/MPC.md (own engine, tier low); the first measurement on a mid-range phone is still open (ARCHITECT...
+- docs/PERFORMANCE.md:86 [still open]: (ARCHITECTURE 2.2). The measurements on an MPC are in docs/MPC.md (own engine, tier low); the first measurement on a mid-range phone is still open (ARCHITECT...
 ### docs/QUALITY.md
 
-- docs/QUALITY.md:52 [pending]: per-key values go from -35 dB to below -90 dB, depending on where the first partial above Nyquist falls). The cause is visible in the
+- docs/QUALITY.md:54 [pending]: per-key values go from -35 dB to below -90 dB, depending on where the first partial above Nyquist falls). The cause is visible in the
 ### docs/RELEASE.md
 
 - docs/RELEASE.md:86 [was not built]: that linux-armv7 was not built; `--require-armv7` makes that an error, `--armv7-clap FILE` takes a binary built elsewhere. Building the ARMv7 module on a

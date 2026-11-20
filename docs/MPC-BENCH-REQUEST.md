@@ -33,9 +33,7 @@ Any stop/restart of the stock software is the hardware session's / owner's decis
 
 ```sh
 ./synthyboy_bench-armv7 --engine own   --seconds 10 --block 128 --sr 48000
-./synthyboy_bench-armv7 --engine vital --seconds 10 --block 128 --sr 48000
 ./synthyboy_bench-armv7 --engine own   --seconds 10 --block 64  --sr 48000
-./synthyboy_bench-armv7 --engine vital --seconds 10 --block 64  --sr 48000
 ```
 
 Each run prints the configuration and, for two patches (the default patch and a heavy patch: 3 oscillators x 7 unison voices, two
@@ -52,7 +50,7 @@ send all raw outputs unedited.
   **worst block time versus the block budget** (block / sample-rate: 2.667 ms for 128 frames at 48 kHz, 1.333 ms for 64).
   A tier is only usable on the MPC if the worst block stays well under the budget with headroom for the rest of the Kick audio
   thread work.
-- Nothing is promised in advance; on the development laptop the Vital engine costs about 9x the own engine per voice.
+- Nothing is promised in advance. (The Vital engine this request once compared with is removed; the own engine is the only engine.)
 
 ## 5. Where the results go
 
