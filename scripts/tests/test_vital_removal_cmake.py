@@ -97,5 +97,28 @@ class ReferenceToolsGone(unittest.TestCase):
         self.assertNotIn("roundtrip", read("scripts/audit-vital-import.py"))
 
 
+class Workflow(unittest.TestCase):
+    """R6: CI builds the own engine; the Vital-free rule is the general rule (check-no-vital.sh on the core library of every Unix build)."""
+
+    def test_no_vital_engine_in_the_jobs(self):
+        text = read(".github/workflows/build.yml")
+        for needle in ("SYNTHYBOY_SHELL_ENGINE", "--engine vital", "run-param-audit", "ios-vital-free", "-DSYNTHYBOY_WITH_VITAL"):
+            self.assertNotIn(needle, text, needle)
+
+    def test_the_general_rule_runs_in_the_build_job(self):
+        text = read(".github/workflows/build.yml")
+        build_job = text.split("\n  build:\n")[1].split("\n  core-sanitizers:")[0] if "\n  build:\n" in text else ""
+        self.assertIn("scripts/check-no-vital.sh build/core/libsynthyboy_core.a", build_job)
+
+    def test_the_file_is_yaml_and_every_job_has_steps(self):
+        try:
+            import yaml
+        except ImportError:
+            self.skipTest("no PyYAML")
+        doc = yaml.safe_load(read(".github/workflows/build.yml"))
+        for name, job in doc["jobs"].items():
+            self.assertIn("steps", job, name)
+
+
 if __name__ == "__main__":
     unittest.main()
