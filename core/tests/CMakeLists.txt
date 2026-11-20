@@ -209,6 +209,8 @@ target_include_directories(synthyboy_test_own_comb_pitch PRIVATE "${PROJECT_SOUR
 synthyboy_add_test(synthyboy_test_own_engine_fixes test_own_engine_fixes.cpp)
 synthyboy_add_test(synthyboy_test_own_filter_styles test_own_filter_styles.cpp)
 target_include_directories(synthyboy_test_own_filter_styles PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/core/filters-serum/include")
+synthyboy_add_test(synthyboy_test_own_diode_probe test_own_diode_probe.cpp)
+target_include_directories(synthyboy_test_own_diode_probe PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/core/filters-serum/include")
 synthyboy_add_test(synthyboy_test_own_keys_claimed test_own_keys_claimed.cpp)
 synthyboy_add_test(synthyboy_test_own_note_storm test_own_note_storm.cpp)
 synthyboy_add_test(synthyboy_test_own_content_policy test_own_content_policy.cpp)
