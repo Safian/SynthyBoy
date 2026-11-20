@@ -507,6 +507,8 @@ void OwnEngine::silence() noexcept
 {
     voiceCountGainCur = voiceCountGainPrev = 1.0f;
     voiceCountGainDb = 0.0f;
+    vcgRampStart = 0;
+    vcgRampLen = kControlPeriod;
     lastVoiceCountGain.store (1.0f, std::memory_order_relaxed);
     for (auto& g : ghosts)
         g.used = false;
@@ -536,6 +538,8 @@ void OwnEngine::reset()
 {
     voiceCountGainCur = voiceCountGainPrev = 1.0f;
     voiceCountGainDb = 0.0f;
+    vcgRampStart = 0;
+    vcgRampLen = kControlPeriod;
     lastVoiceCountGain.store (1.0f, std::memory_order_relaxed);
     for (auto& g : ghosts)
         g.used = false;
@@ -1569,6 +1573,19 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             }
         }
         int end = std::min (numFrames, pos + (kControlPeriod - controlPos));
+        auto countSounding = [&] () -> int
+        {
+            int cnt = 0;
+            forEachActive ([&] (int i)
+            {
+                const Voice* v = voices[static_cast<size_t> (i)].get();
+                if (!v->killing() && v->countLevel() > 0.0f)
+                    ++cnt;
+            });
+            return cnt;
+        };
+        int soundingBeforeMid = 0;
+        bool midNoteOn = false;
         if (eventGrid)
         {
             // tier low: an event takes effect at the start of the control period that contains its frame (up to 0.73 ms early), so a block is never cut by events
@@ -1577,13 +1594,19 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         }
         else
         {
+            if (controlPos != 0 && ei < numEvents && events[ei].frame <= pos)
+                soundingBeforeMid = countSounding();
             while (ei < numEvents && events[ei].frame <= pos)
+            {
+                if (controlPos != 0 && events[ei].type == Event::NoteOn)
+                    midNoteOn = true;
                 handleEvent (events[ei++]);
+            }
             if (ei < numEvents)
                 end = std::min (end, std::max (events[ei].frame, pos + 1));
         }
         const int n = end - pos;
-        if (controlPos == 0)
+        auto updateVcg = [&] (int soundingBefore, int stepSamples)
         {
             voiceCountGainPrev = voiceCountGainCur;
             const float alpha = voiceCountAlpha.load (std::memory_order_relaxed);
@@ -1630,7 +1653,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                     T = std::pow (n_eff, -alpha);
                     targetDb = -alpha * (20.0f * std::log10 (n_eff));
                 }
-                if (soundingAtPeriodStart == 0)
+                if (soundingBefore == 0)
                 {
                     voiceCountGainCur = T;
                     voiceCountGainPrev = T;
@@ -1638,7 +1661,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 }
                 else
                 {
-                    const float dtMs = (static_cast<float> (kControlPeriod) / static_cast<float> (sampleRate)) * 1000.0f;
+                    const float dtMs = (static_cast<float> (stepSamples) / static_cast<float> (sampleRate)) * 1000.0f;
                     const float maxDownDb = 3.0f * dtMs;
                     const float maxUpDb = 0.15f * dtMs;
                     if (targetDb < voiceCountGainDb)
@@ -1654,6 +1677,22 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 }
             }
             lastVoiceCountGain.store (voiceCountGainCur, std::memory_order_relaxed);
+        };
+        if (controlPos == 0)
+        {
+            updateVcg (soundingAtPeriodStart, kControlPeriod);
+            vcgRampStart = 0;
+            vcgRampLen = kControlPeriod;
+        }
+        else if (midNoteOn)
+        {
+            const float curFrac = clamp01 (static_cast<float> (controlPos - vcgRampStart) / static_cast<float> (std::max (1, vcgRampLen)));
+            const float curG = lerp (voiceCountGainPrev, voiceCountGainCur, curFrac);
+            voiceCountGainCur = voiceCountGainPrev = curG;
+            voiceCountGainDb = 20.0f * std::log10 (std::max (curG, 1.0e-6f));
+            updateVcg (soundingBeforeMid, n);
+            vcgRampStart = controlPos;
+            vcgRampLen = std::max (1, n);
         }
         // the voices add to Main, Bus 1, Bus 2 and Direct; the buses run through their racks and go to their destination, Main through the Main rack
         for (int t = 0; t < 4; ++t)
@@ -1674,9 +1713,18 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
         if (voiceCountGainPrev != 1.0f || voiceCountGainCur != 1.0f)
         {
             float gRamp[kControlPeriod];
-            const float invPeriod = 1.0f / static_cast<float> (kControlPeriod);
-            for (int i = 0; i < n; ++i)
-                gRamp[i] = lerp (voiceCountGainPrev, voiceCountGainCur, static_cast<float> (controlPos + i + 1) * invPeriod);
+            if (vcgRampStart == 0 && vcgRampLen == kControlPeriod)
+            {
+                const float invPeriod = 1.0f / static_cast<float> (kControlPeriod);
+                for (int i = 0; i < n; ++i)
+                    gRamp[i] = lerp (voiceCountGainPrev, voiceCountGainCur, static_cast<float> (controlPos + i + 1) * invPeriod);
+            }
+            else
+            {
+                const float invLen = 1.0f / static_cast<float> (vcgRampLen);
+                for (int i = 0; i < n; ++i)
+                    gRamp[i] = lerp (voiceCountGainPrev, voiceCountGainCur, clamp01 (static_cast<float> (controlPos - vcgRampStart + i + 1) * invLen));
+            }
             for (int t = 0; t < 4; ++t)
             {
                 simd::mulRamp (mixL[t], gRamp, n);
