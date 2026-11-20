@@ -1214,3 +1214,89 @@ TEST (ownv_flanger_headroom_thd_and_dc_loop_limit)
         CHECK (allFiniteAndBounded);
     }
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------------
+// idle filter bypass bit-exactness check (rank 18)
+// Reuses the rig and helper calls (make, set, run) from TEST (ownv_filter_vectors_f1_f4_f6_f7)
+
+TEST (ownv_idle_filters_checksum)
+{
+    auto idleFilterPatch = [] () -> std::unique_ptr<IEngine>
+    {
+        auto e = make();
+        set (*e, "osc1.wavetable", 1); // Saw
+        set (*e, "osc1.level", 100);
+        set (*e, "master.volume", 0);
+        set (*e, "filter1.cutoff", 1000);
+        set (*e, "filter1.resonance", 20);
+        set (*e, "filter2.cutoff", 2000);
+        set (*e, "filter2.resonance", 20);
+        return e;
+    };
+
+    auto printChecksum = [] (const char* name, const std::vector<float>& left)
+    {
+        CHECK (sbtest::allFinite (left));
+        CHECK (left.size() >= 8);
+        double sumAbs = 0.0;
+        for (float s : left)
+            sumAbs += std::fabs (static_cast<double> (s));
+        CHECK (sumAbs > 0.0);
+        const size_t sz = left.size();
+        std::printf ("IDLEFILTER-CHECKSUM %s sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                     name, sumAbs,
+                     static_cast<double> (left[sz - 8]),
+                     static_cast<double> (left[sz - 7]),
+                     static_cast<double> (left[sz - 6]),
+                     static_cast<double> (left[sz - 5]),
+                     static_cast<double> (left[sz - 4]),
+                     static_cast<double> (left[sz - 3]),
+                     static_cast<double> (left[sz - 2]),
+                     static_cast<double> (left[sz - 1]));
+    };
+
+    const std::vector<Event> chord = { sbtest::noteOn (0, 60), sbtest::noteOn (0, 64), sbtest::noteOn (0, 67) };
+
+    // Patch 1: both filters on
+    {
+        auto e = idleFilterPatch();
+        set (*e, "filter1.on", 1.0f);
+        set (*e, "filter2.on", 1.0f);
+        const auto r = run (*e, chord, 1.0);
+        printChecksum ("both_filters_on", r.left);
+    }
+
+    // Patch 2: filter 1 on and filter 2 off
+    {
+        auto e = idleFilterPatch();
+        set (*e, "filter1.on", 1.0f);
+        set (*e, "filter2.on", 0.0f);
+        const auto r = run (*e, chord, 1.0);
+        printChecksum ("filter1_on_filter2_off", r.left);
+    }
+
+    // Patch 3: both off
+    {
+        auto e = idleFilterPatch();
+        set (*e, "filter1.on", 0.0f);
+        set (*e, "filter2.on", 0.0f);
+        const auto r = run (*e, chord, 1.0);
+        printChecksum ("both_filters_off", r.left);
+    }
+
+    // Patch 4: filter 2 switched ON by a parameter change after 0.5 s of the note
+    {
+        auto e = idleFilterPatch();
+        set (*e, "filter1.on", 1.0f);
+        set (*e, "filter2.on", 0.0f);
+        const int halfFrames = static_cast<int> (0.5 * kSr);
+        const int totalFrames = static_cast<int> (1.0 * kSr);
+        auto r1 = sbtest::render (*e, chord, halfFrames, 256);
+        set (*e, "filter2.on", 1.0f);
+        auto r2 = sbtest::render (*e, {}, totalFrames - halfFrames, 256);
+        std::vector<float> left = std::move (r1.left);
+        left.insert (left.end(), r2.left.begin(), r2.left.end());
+        printChecksum ("filter2_switched_on_at_0_5s", left);
+    }
+}
+
