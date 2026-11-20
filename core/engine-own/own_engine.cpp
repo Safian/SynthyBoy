@@ -1152,6 +1152,7 @@ void OwnEngine::controlTick() noexcept
     const float fdt = static_cast<float> (dt);
     const ParamIndex& pi = paramIndex();
     globals.songBeats += globals.playing ? dt * globals.bpm / 60.0 : 0.0;
+    globals.songSeconds = globals.songBeats * 60.0 / std::max (globals.bpm, 1.0);
     // global LFO phases (free running; the voices read them for the free-run LFOs) and the shared instance of the mono LFOs
     bool anyDown = numPressed > 0;
     for (int c = 0; c < numChannels && !anyDown; ++c)
@@ -1368,7 +1369,6 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     globals.matrix = &matrix;
     globals.lfoContent = contentNow;
     globals.monoCore = monoCore;
-    globals.songSeconds = globals.songBeats * 60.0 / std::max (globals.bpm, 1.0);
     globals.sampleRate = sampleRate;
     globals.bpm = tpBpm.load (std::memory_order_relaxed);
     if (tpPlaying.load (std::memory_order_relaxed))
@@ -1378,6 +1378,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
     }
     else
         globals.playing = false;
+    globals.songSeconds = globals.songBeats * 60.0 / std::max (globals.bpm, 1.0);
     {
         const int xyz = static_cast<int> (base[static_cast<size_t> (pi.master.mpeXyz)] + 0.5f);
         if (xyz != lastXyzMode) // a changed mapping gives the macros back to their knobs
