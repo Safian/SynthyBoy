@@ -193,8 +193,7 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             auto isExtreme = [&] (int k) -> bool {
                 if (k <= 0 || k >= d.n - 1) return false;
                 const float prev = d.y[k - 1], cur = d.y[k], next = d.y[k + 1];
-                return (cur >= prev && cur >= next && (cur > prev || cur > next))
-                    || (cur <= prev && cur <= next && (cur < prev || cur < next));
+                return (cur > prev && cur > next) || (cur < prev && cur < next);
             };
             for (int i = 0; i < n; ++i)
             {
