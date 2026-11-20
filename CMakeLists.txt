@@ -50,11 +50,11 @@ endif()
 #   SYNTHYBOY_BUILD_PLUGIN  VST3 + CLAP via JUCE (fetches JUCE and clap-juce-extensions); OFF builds only the core
 #                           (used by the ARMv7 / AArch64 cross builds and the sanitizer jobs)
 #   SYNTHYBOY_BUILD_TESTS   core unit / real-time / thread tests (CTest)
-#   SYNTHYBOY_WITH_VITAL    Vital-derived engine in core/engine-vital (docs/ARCHITECTURE.md 2.2); OFF for iOS (nothing
-#                           of core/engine-vital is then added to the build)
+#   SYNTHYBOY_WITH_VITAL    Vital-derived engine in core/engine-vital (docs/plans/vital-removal.md); OFF by default, nothing
+#                           of core/engine-vital is then added to the build (the option goes with the directory)
 option(SYNTHYBOY_BUILD_PLUGIN "Build the JUCE plugin (VST3 + CLAP)" ON)
 option(SYNTHYBOY_BUILD_TESTS "Build the core tests" ON)
-option(SYNTHYBOY_WITH_VITAL "Include the Vital-derived engine (core/engine-vital)" ON)
+option(SYNTHYBOY_WITH_VITAL "Include the Vital-derived engine (core/engine-vital)" OFF)
 option(SYNTHYBOY_BUILD_MPC_SHELL "Build the MPC VST2 shell (shell-mpc)" OFF)
 set(MPC_SDK_DIR "" CACHE PATH "Path to the MPC plugin SDK (for shell-mpc)")
 # SYNTHYBOY_BITMAP_GUI: the native CLAP module (shell-clap, synthyboy.clap) renders the editor of shell-juce/ui into a pixel buffer and offers it through the CLAP extension
@@ -86,13 +86,8 @@ else()
     set(SYNTHYBOY_NEEDS_JUCE OFF)
 endif()
 
-# Engine of the JUCE shell (the plugin that ships). The Vital-derived engine is the default whenever it is part of the build; "own"
-# is the fallback (and the engine of builds without Vital, e.g. iOS) and can be forced with -DSYNTHYBOY_SHELL_ENGINE=own.
-if(SYNTHYBOY_WITH_VITAL)
-    set(SYNTHYBOY_SHELL_ENGINE_DEFAULT "vital")
-else()
-    set(SYNTHYBOY_SHELL_ENGINE_DEFAULT "own")
-endif()
+# Engine of the JUCE shell (the plugin that ships): the own engine. "vital" is only possible in a build with -DSYNTHYBOY_WITH_VITAL=ON.
+set(SYNTHYBOY_SHELL_ENGINE_DEFAULT "own")
 set(SYNTHYBOY_SHELL_ENGINE "${SYNTHYBOY_SHELL_ENGINE_DEFAULT}" CACHE STRING "Engine used by the JUCE plugin: own | vital")
 set_property(CACHE SYNTHYBOY_SHELL_ENGINE PROPERTY STRINGS own vital)
 if(NOT SYNTHYBOY_SHELL_ENGINE STREQUAL "own" AND NOT SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
