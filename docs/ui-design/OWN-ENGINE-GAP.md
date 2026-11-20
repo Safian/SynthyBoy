@@ -1,43 +1,6 @@
 # The own engine against the UI: what the iOS app shows and what it can do
 
-Date 2026-11-12, branch `ios-ui`. Owner decision (question 110): SynthyBoy on iOS has the **same UI as everywhere**, drawn by the plug-in through the bitmap GUI extension
-(`BITMAP-GUI-EXTENSION.md` section 14), with the **own engine** (`core/engine-own`, no Vital-derived code, `ARCHITECTURE.md` 2.2). The own engine (state after the parity work, branch `engine-own-impl`) acts on the keys of the generated table below (the spike's engine acted on 7 of 2637). This file is the work list for the own-engine parity task: every area of the UI, how much of it the own
-engine implements, and what is missing. The table is generated (`scripts/gen-own-engine-gap.py`, numbers from `synthyboy_paramdump --own-engine-gap`).
-
-## 1. What the UI does with the own engine (verified)
-
-The UI asks the engine two things, and only the first changes what is drawn:
-
-| Mechanism | Source | Effect in the UI |
-|---|---|---|
-| Capability dimming | `IEngine::capabilities ()` / `capabilities2 ()` against `requiredCaps ()` / `requiredCaps2 ()` of each key and of each value of a choice (`shell-juce/ui/model/ControlModel.cpp`, `capStateForKey`, `capStateForValue`), rule R5 of `13-new-keys.md` | A key whose bits the engine does not report is **drawn dimmed with the tooltip "not available in this engine"**; it stays visible, editable and stored (it is not hidden, not disabled, not removed from the page). Same for the entries of a choice list that need a bit, and for the matrix sources and destinations of the blocks above. |
-| `IEngine::supportsParam ()` | the engine | **Not read by the UI.** It is the "own engine" column of `PARAMETERS.md` and the `ownEngine` field of `params.json`. |
-
-So three kinds of key exist with the own engine, and the table in section 2 counts them:
-
-* **acts** (7 keys): `master.volume`, `master.bend_range`, `master.transpose`, `master.tune`, `osc1.wavetable` (Sine / Saw), `filter1.on`, `filter1.cutoff`. Live and audible.
-* **dimmed** (1757 keys): the keys added after state version 2 (the blocks of `13-new-keys.md`). The own engine reports one capability bit (`kCapEventContract`: sustain pedal and the per-note
-  tuning expression) and none of the second word. Drawn dimmed, tooltip, value stays editable.
-* **editable and without effect** (873 keys): the keys of state version 2 (everything Vital has: the oscillators, filter, envelopes, LFOs, matrix, the nine effects). They predate the
-  capability words, so every engine "knows" them, **the UI draws them like live controls**, and the own engine ignores them. This is the real finding: on iOS a user can turn
-  the level, warp, envelope and every effect knob of the main page and nothing happens, with nothing in the picture that says so. `09-kick-integration.md` (own engine flag) planned
-  "Kick dims parameters with `ownEngine: false`"; the bitmap GUI and the UI kit do not implement it. Question 134 asks for the decision; until it is answered nothing is changed.
-
-What was checked (all with the own engine, the same code as the iOS archive):
-
-| Check | Where | Result |
-|---|---|---|
-| Every top level page (OSC MIX FLT ENV LFO MOD FX GLB) renders and differs from the one before, phone 390 x 844 and tablet 1024 x 768, the frame settles afterwards | `bg_every_tab_renders_phone_and_tablet_whatever_the_engine_can_do` (`tests/bitmap-gui/test_bitmap_gui.cpp`) | passes: macOS arm64 (ctest) and the iOS 26.5 simulator (arm64) |
-| The 31 tests of the bitmap GUI (drag a knob, text input, files, remote pages, undo, two fingers, resize, scale, menus, several instances, race with the audio thread, ...) | `synthyboy_test_bitmap_gui` | passes with the own engine on macOS arm64 and in the simulator; one assertion about SOUND is own-engine aware (below) |
-| Golden pictures at 390 x 844, 1024 x 768, 1024 x 600 (+ the FLT page and scale 2) with the capabilities of the own engine | `tests/bitmap-gui/golden-own/` (`golden/` stays the Vital engine's) | the simulator build reproduces the macOS pictures to 0.0000 % (FLT page 0.06 %, a pixel of anti-aliasing) |
-| No crash, no assertion, no leak on tapping a dimmed control | the drag / tap tests above act on dimmed and inert controls too (the osc 1 level knob is inert with the own engine) | passes |
-
-The pictures: `golden-own/phone-390x844.sbg` (the reference screenshot of the own engine at the phone size; written as PNG with `SYNTHYBOY_BITMAP_GUI_DUMP_DIR`). In it the macro knobs
-M5 .. M8, the sub oscillator ("MUTED / OFF") and the remap editor are dimmed; the oscillator page knobs (frame, warp, morph, level) look live and are inert.
-
-Two assertions of the tests depend on the engine and say so with `SYNTHYBOY_HARNESS_OWN_ENGINE`: the level drag changes the CLAP parameter on every engine, the SOUND follows only on
-the Vital engine (with the own engine the test asserts that it does not, so the day the own engine implements `osc1.level` the test fails and is changed on purpose); the meter of a sounding note
-moves for fewer frames (the fixed envelope settles after 150 ms): 4 .. 6 frames measured instead of 5 or more.
+Generated state of 2026-11-20, tree 6b246cce: the own engine acts on 2622 of 2637 keys. The table (section 2) and the list of the remaining keys (section 2a) are generated by scripts/gen-own-engine-gap.py from synthyboy_paramdump --own-engine-gap; --check fails when this file is out of date. The sections under "History" are the text of 2026-11-12 and are no longer the state of the engine.
 
 ## 2. The table (generated)
 
@@ -101,7 +64,44 @@ Areas are the groups of the parameter table (`group` field of `params.json`), `E
 
 <!-- END GENERATED REMAINING KEYS -->
 
-## 3. What is not a key
+## History: the state of 2026-11-12 (superseded by the generated sections)
+
+### 1. What the UI does with the own engine (verified)
+
+The UI asks the engine two things, and only the first changes what is drawn:
+
+| Mechanism | Source | Effect in the UI |
+|---|---|---|
+| Capability dimming | `IEngine::capabilities ()` / `capabilities2 ()` against `requiredCaps ()` / `requiredCaps2 ()` of each key and of each value of a choice (`shell-juce/ui/model/ControlModel.cpp`, `capStateForKey`, `capStateForValue`), rule R5 of `13-new-keys.md` | A key whose bits the engine does not report is **drawn dimmed with the tooltip "not available in this engine"**; it stays visible, editable and stored (it is not hidden, not disabled, not removed from the page). Same for the entries of a choice list that need a bit, and for the matrix sources and destinations of the blocks above. |
+| `IEngine::supportsParam ()` | the engine | **Not read by the UI.** It is the "own engine" column of `PARAMETERS.md` and the `ownEngine` field of `params.json`. |
+
+So three kinds of key exist with the own engine, and the table in section 2 counts them:
+
+* **acts** (7 keys): `master.volume`, `master.bend_range`, `master.transpose`, `master.tune`, `osc1.wavetable` (Sine / Saw), `filter1.on`, `filter1.cutoff`. Live and audible.
+* **dimmed** (1757 keys): the keys added after state version 2 (the blocks of `13-new-keys.md`). The own engine reports one capability bit (`kCapEventContract`: sustain pedal and the per-note
+  tuning expression) and none of the second word. Drawn dimmed, tooltip, value stays editable.
+* **editable and without effect** (873 keys): the keys of state version 2 (everything Vital has: the oscillators, filter, envelopes, LFOs, matrix, the nine effects). They predate the
+  capability words, so every engine "knows" them, **the UI draws them like live controls**, and the own engine ignores them. This is the real finding: on iOS a user can turn
+  the level, warp, envelope and every effect knob of the main page and nothing happens, with nothing in the picture that says so. `09-kick-integration.md` (own engine flag) planned
+  "Kick dims parameters with `ownEngine: false`"; the bitmap GUI and the UI kit do not implement it. Question 134 asks for the decision; until it is answered nothing is changed.
+
+What was checked (all with the own engine, the same code as the iOS archive):
+
+| Check | Where | Result |
+|---|---|---|
+| Every top level page (OSC MIX FLT ENV LFO MOD FX GLB) renders and differs from the one before, phone 390 x 844 and tablet 1024 x 768, the frame settles afterwards | `bg_every_tab_renders_phone_and_tablet_whatever_the_engine_can_do` (`tests/bitmap-gui/test_bitmap_gui.cpp`) | passes: macOS arm64 (ctest) and the iOS 26.5 simulator (arm64) |
+| The 31 tests of the bitmap GUI (drag a knob, text input, files, remote pages, undo, two fingers, resize, scale, menus, several instances, race with the audio thread, ...) | `synthyboy_test_bitmap_gui` | passes with the own engine on macOS arm64 and in the simulator; one assertion about SOUND is own-engine aware (below) |
+| Golden pictures at 390 x 844, 1024 x 768, 1024 x 600 (+ the FLT page and scale 2) with the capabilities of the own engine | `tests/bitmap-gui/golden-own/` (`golden/` stays the Vital engine's) | the simulator build reproduces the macOS pictures to 0.0000 % (FLT page 0.06 %, a pixel of anti-aliasing) |
+| No crash, no assertion, no leak on tapping a dimmed control | the drag / tap tests above act on dimmed and inert controls too (the osc 1 level knob is inert with the own engine) | passes |
+
+The pictures: `golden-own/phone-390x844.sbg` (the reference screenshot of the own engine at the phone size; written as PNG with `SYNTHYBOY_BITMAP_GUI_DUMP_DIR`). In it the macro knobs
+M5 .. M8, the sub oscillator ("MUTED / OFF") and the remap editor are dimmed; the oscillator page knobs (frame, warp, morph, level) look live and are inert.
+
+Two assertions of the tests depend on the engine and say so with `SYNTHYBOY_HARNESS_OWN_ENGINE`: the level drag changes the CLAP parameter on every engine, the SOUND follows only on
+the Vital engine (with the own engine the test asserts that it does not, so the day the own engine implements `osc1.level` the test fails and is changed on purpose); the meter of a sounding note
+moves for fewer frames (the fixed envelope settles after 150 ms): 4 .. 6 frames measured instead of 5 or more.
+
+### 3. What is not a key
 
 | UI feature | Own engine | What is missing |
 |---|---|---|
@@ -117,7 +117,7 @@ Areas are the groups of the parameter table (`group` field of `params.json`), `E
 | Live displays that do not depend on the engine | peak meter, voice counter, CPU load, scope ring are computed from the plug-in's output in `process ()` (`synthyboy_clap.cpp`) | nothing |
 | Latency | 0 | (Bode needs a Hilbert latency: with the effect) |
 
-## 4. The work list for the own-engine parity task
+### 4. The work list for the own-engine parity task
 
 Ordered by what a user of the main page notices first. Every item is finished only when it has engine, capability bit (set ONLY when an off / on render test proves an audible
 difference, rule R5), the render test, and the entry in `docs/PARAMETERS.md` ("own engine" column, generated) and in the table above (`scripts/gen-own-engine-gap.py`); clean-room
@@ -136,7 +136,7 @@ discipline of `ARCHITECTURE.md` 2.2 applies: no copying from `core/engine-vital/
 
 Until a key moves from "editable, no effect" to "acts", the decision of question 134 (dim it, or leave it) is the only thing that tells an iOS user the control is inert.
 
-## 5. Open question for the owner
+### 5. Open question for the owner
 
 * **Question 134**: dim the keys of version 2 that `supportsParam ()` says the engine does not act on (the design of `09-kick-integration.md`), or leave them as live looking controls. Default used:
   nothing changed (the owner asked for the same UI as everywhere); the cost of dimming is one more rule in `capStateForKey` and a host query (`UiHost::supportsParam`).
