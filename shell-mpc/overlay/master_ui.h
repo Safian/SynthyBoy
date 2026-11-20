@@ -53,7 +53,7 @@ public:
         // MPE
         kMpeOn = 150, kMpeBend, kMpeMacro, kMpeYModwheel, kMpeBendToX, kMpeYBipolar,
         // the plugin-wide pad pressure layer (shell parameters of the plugin, not of the engine: no Q group)
-        kPadPressure = 160, kPadAmount, kLimiter, kNoSmoothing, kOversample4x,
+        kPadPressure = 160, kPadAmount, kLimiter, kNoSmoothing, kOversample4x, kClip,
         kList = 700, kListBackdrop = 701,
         kKeyboardOk = 710, kKeyboardCancel = 711
     };
@@ -82,6 +82,7 @@ public:
         w_ = w; h_ = h;
         const ui::Rect tab { 0, kTabY, w, kTabH };
         full_.place (tab);
+        full_.clip.setId (kClip);
         entry_.place (tab);
         list_.place ({ 340, kTabY + 20, 600, 8 * ui::ListPopup::kRowH + 2 * ui::ListPopup::kPad });
         list_.setPopup (tab);
@@ -94,6 +95,7 @@ public:
     {
         pageTop_ = stack.depth() >= 2 ? stack.id (stack.depth() - 1) : 0;
         pull (inst);
+        full_.clip.update (inst.takeClipFlag(), nowMs);
         full_.voiceMeter.activeVoices = in.live != nullptr ? in.live->activeVoices : 0;
         full_.voiceMeter.polyphony = std::max (1, static_cast<int> (std::lround (inst.param (polyphonyIdx_))));
         const float pk = in.live != nullptr ? in.live->stripPeak[9] : 0.0f;   // the engine's master peak (the larger of the channels)
@@ -401,6 +403,11 @@ private:
             bool on = false;
             if (inst.outputLimiter (on) && ch.kind == ui::ChangeKind::Index)
                 inst.setOutputLimiter (ch.index != 0);
+            return;
+        }
+        if (ch.id == kClip)
+        {
+            full_.clip.clear();
             return;
         }
         if (ch.id == kPadPressure || ch.id == kPadAmount)

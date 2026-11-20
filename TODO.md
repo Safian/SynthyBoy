@@ -5,7 +5,6 @@ Ami elkészült, azt TÖRÖLD innen (nincs „kész" rész: a történet a commi
 mi a baj, hol látszik (fájl:sor / eszköz / mérés), és mitől kész. Aki dolgozik rajta, írja a sor végére: `(fut: <ág>)`.
 
 ## Eszköz-felület (MPC XL, Key 61)
-- Master oldal: kis piros „CLIP” felirat a kimeneti mérő fölött, mint a keverőkön (owner kérése, 2026-11-20). Akkor gyullad ki, amikor a motor végi master védelem működésbe lép (a jel ±1,8 fölé megy: `core/engine-own/dsp/master_stage.h`, `outputLimit`), mert ez a védelem ma láthatatlan és nem kapcsolható. Kell hozzá: a motor jelezze a felületnek, hogy a blokkban volt-e ilyen minta (zárolás és foglalás nélkül, a meglévő kiolvasó úton); a felirat tartson kb. 2 másodpercig, vagy koppintásra törlődjön, ahogy a host csúcskijelzője. Kész, ha egy szándékosan túlhajtott preseten kigyullad mindkét eszközön, tiszta játéknál soha, és a `test_rt_alloc` átmegy.
 - Q-Link gombok az XL-en nem tesztelhetők gépről (nincs befecskendező eszköz, csak a Key 61-re van). Kész, ha a VOLUME Q-Linkkel is igazolt mindkét eszközön.
 - Leütéserő az XL-en: a napló szerint az utolsó 16 hang mind 127-tel érkezett. Valódi padütéses próba (Full Level ki és be) az ownerrel; a Key 61 billentyűzet velocity-görbéje sincs megmérve.
 - `sample.loop_link` (hurokhossz-összekötés): a specifikáció szerint csak szerkesztő-segéd, de a felületen nincs hozzá látható vezérlő (`shell-juce/ui/panels/OscPanel.cpp:92` csak listázza). Megvalósítani a szerkesztőben, vagy kivenni a kulcsot.

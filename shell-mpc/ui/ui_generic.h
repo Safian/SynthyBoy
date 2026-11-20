@@ -13,6 +13,8 @@
 #include "text_entry.h"
 #include "composite.h"
 #include "mixer_strip.h"
+#include "clip_hold.h"
+#include "clip_label.h"
 #include "env_graph.h"
 #include "qgroup.h"
 #include "mod_board.h"

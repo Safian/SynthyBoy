@@ -35,6 +35,8 @@ public:
     bool readLive (void* out, size_t bytes) const noexcept override { return out != nullptr && bytes == sizeof (synthyboy::LiveValues) && live (*static_cast<synthyboy::LiveValues*> (out)); }
     /** The live values of the engine (readout of the targets the overlay subscribed, the LFO phases, the envelope stages ...). false: the engine has not written any yet. */
     virtual bool live (synthyboy::LiveValues& out) const noexcept = 0;
+    /** True if the master stage safety knee was hit since the last poll (IEngine::takeClipFlag). Cleared on read. */
+    virtual bool takeClipFlag() noexcept { return false; }
     /** The Mixer page is on screen: the engine measures the source strips (LiveValues::stripPeak[0 .. 6]) for the next moments (IEngine::requestMeters). Called every update of that page; lock free. */
     virtual void requestMeters() noexcept {}
     /** true while a wavetable the current program names is still being built (the sound is the table the oscillator had until then): the plugin-drawn pages show a thin amber bar at the top of the tab. */

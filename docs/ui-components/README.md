@@ -68,6 +68,7 @@ A scene is built with `gpu::SceneData data;` (heap: about 336 KB) and `gpu::Scen
 | continuous value 0 to 1 | `Knob` | [knob.md](knob.md) |
 | continuous value in a row or cell | `SliderBar`, `HBar` | [bars.md](bars.md) |
 | level with a peak meter | `Fader` | [bars.md](bars.md) |
+| clip indicator with hold | `ClipLabel` | [clip-label.md](clip-label.md) |
 | whole number, or decimal with a step | `NumberField` | [number-field.md](number-field.md) |
 | small integer (voices 1 to 16) | `UpDownStepper` | [stepper.md](stepper.md) |
 | set of notes of an octave | `NoteMask` | [note-mask.md](note-mask.md) |
@@ -87,7 +88,7 @@ A scene is built with `gpu::SceneData data;` (heap: about 336 KB) and `gpu::Scen
 | your own widget | derive from `Component` / `Composite` | [core.md](core.md), [composites.md](composites.md) |
 
 ## The components
-**Basic controls**: [Knob](knob.md), [NumberField](number-field.md), [Stepper and UpDownStepper](stepper.md), [Carousel and EnvCarousel](carousel.md), [LedToggle and ToggleIcon](toggle.md), [LedList](led-list.md), [MenuButton, DetailButton, RouteButton, RouteDropdown](buttons.md), [HBar, SliderBar, Fader](bars.md), [PictogramSelector](pictogram-selector.md), [NoteMask](note-mask.md).
+**Basic controls**: [Knob](knob.md), [NumberField](number-field.md), [Stepper and UpDownStepper](stepper.md), [Carousel and EnvCarousel](carousel.md), [LedToggle and ToggleIcon](toggle.md), [LedList](led-list.md), [ClipLabel](clip-label.md), [MenuButton, DetailButton, RouteButton, RouteDropdown](buttons.md), [HBar, SliderBar, Fader](bars.md), [PictogramSelector](pictogram-selector.md), [NoteMask](note-mask.md).
 
 **Lists and pop-ups**: [ListPopup](list-popup.md), [TextEntry](text-entry.md), [ModSourceBoard](mod-source-board.md), [FxGallery](fx-gallery.md) (engine-bound), [ModulationsPage and ModTargetsPage](modulations-page.md).
 

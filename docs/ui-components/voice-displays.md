@@ -1,7 +1,7 @@
 # Master and Voice displays (voice_master.h)
 
 ## What it is
-Four small displays of the Master page: `PortamentoCurveDisplay` (the glide slope curve), `MiniKeyboardDisplay` (an octave of keys with the in-scale notes lit; a tap picks the scale key), `PeakMeterDisplay` (two output peak meters with a dB scale and hold lines), `VoiceMeterDisplay` (the number of sounding voices as a bar). Use them as read-outs beside the controls of a master page.
+Four small displays of the Master page: `PortamentoCurveDisplay` (the glide slope curve), `MiniKeyboardDisplay` (an octave of keys with the in-scale notes lit; a tap picks the scale key), `PeakMeterDisplay` (two output peak meters with a dB scale and hold lines), `VoiceMeterDisplay` (the number of sounding voices as a bar). Alongside `PeakMeterDisplay`, `ClipLabel` ([clip-label.md](clip-label.md)) indicates safety limiter action above the meter bars. Use them as read-outs beside the controls of a master page.
 
 ## Header and types
 `shell-mpc/ui/voice_master.h`: `PortamentoCurveDisplay`, `MiniKeyboardDisplay`, `PeakMeterDisplay`, `VoiceMeterDisplay` (`MiniKeyboardDisplay` has a `State` struct; the other three are `Component`s with public fields).

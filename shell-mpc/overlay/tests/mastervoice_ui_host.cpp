@@ -63,7 +63,7 @@ void testMasterSidesAndBlocks()
     check (m.rect().w == 1280 && m.rect().h == 628 && r.stack.element() == MasterUi::kElementPage, "the page has the whole tab and is the element of the Master tab");
     check (m.side() == ui::MasterScreen::SideMain, "the first side is MAIN: OUTPUT, PITCH, VOICES, GLIDE");
     std::string bad;
-    std::vector<ui::Component*> main = { &m.volume, &m.spread, &m.stereoRouting, &m.voiceOverride, &m.outputLimiter, &m.noSmoothing, &m.oversample4x, &m.tune, &m.transpose, &m.bendUp, &m.bendDown, &m.bendLink, &m.polyphony, &m.legato, &m.polyLegato, &m.phaseLegato,
+    std::vector<ui::Component*> main = { &m.volume, &m.clip, &m.spread, &m.stereoRouting, &m.voiceOverride, &m.outputLimiter, &m.noSmoothing, &m.oversample4x, &m.tune, &m.transpose, &m.bendUp, &m.bendDown, &m.bendLink, &m.polyphony, &m.legato, &m.polyLegato, &m.phaseLegato,
                                          &m.sameNote, &m.stealPriority, &m.velocityTrack, &m.padPressure, &m.padAmount, &m.portaTime, &m.portaSlope, &m.portaAlways, &m.portaScaled };
     check (sizesOk (main, bad), "every control of the side MAIN is >= 56 px high and has its minimum size " + bad);
     // each block holds its group, and the blocks are filled (the controls reach the lower part of the block)
@@ -913,6 +913,103 @@ void testMasterVolumeKnob()
     }
 }
 
+void testMasterClip()
+{
+    // 1. ClipHold logic with real numbers
+    {
+        ui::ClipHold hold;
+        check (! hold.active (0.0), "clip hold: initial state is inactive");
+        hold.update (true, 0.0);
+        check (hold.active (0.0), "clip hold: hit at t=0 is active at 0");
+        check (hold.active (2000.0), "clip hold: active until 2000");
+        check (! hold.active (2001.0), "clip hold: not active at 2001");
+
+        // second hit at t=1500 extends to 3500
+        hold.update (true, 1500.0);
+        check (hold.active (3500.0), "clip hold: second hit at t=1500 extends to 3500");
+        check (! hold.active (3501.0), "clip hold: not active at 3501");
+
+        // tap clears
+        hold.clear();
+        check (! hold.active (1500.0), "clip hold: tap clears immediately");
+        check (! hold.active (0.0), "clip hold: inactive across timeline after clear");
+
+        // hit after clear lights again
+        hold.update (true, 1600.0);
+        check (hold.active (1600.0), "clip hold: hit after clear lights again");
+        check (hold.active (3600.0), "clip hold: stays active until 3600");
+        check (! hold.active (3601.0), "clip hold: inactive at 3601");
+    }
+
+    // 2. Master page layout & properties
+    {
+        MRig r;
+        r.refresh();
+        ui::MasterScreen& m = r.ui.screen();
+        check (m.clip.rect().w >= 56 && m.clip.rect().h >= 56 && m.clip.sizeOk(),
+               "clip label: touch target of at least 56 pixels (" + std::to_string (m.clip.rect().w) + " x " + std::to_string (m.clip.rect().h) + ")");
+        check (m.blockRect (0).contains (m.clip.rect()), "clip label: inside the OUTPUT block");
+        check (! m.clip.rect().overlaps (m.meters.rect()), "clip label: does not overlap output meters");
+        check (! m.clip.rect().overlaps (m.volume.rect()), "clip label: does not overlap volume knob");
+        check (! m.groups[0].rect().overlaps (m.clip.rect()), "clip label: outside Q group 0 frame");
+    }
+
+    // 3. Drawing: inactive vs active pixel colours at the label's position in CPU scene
+    {
+        MRig r;
+        r.refresh();
+        ui::MasterScreen& m = r.ui.screen();
+        const ui::theme::Look& T = ui::theme::L();
+        const ui::Rect badge = m.clip.badgeRect();
+        const int px = badge.x + 8;
+        const int py = badge.y + badge.h / 2;
+
+        // Inactive by default
+        check (! m.clip.state.active, "clip label: inactive by default");
+        auto dataInactive = std::make_unique<gpu::SceneData>();
+        gpu::SceneBuilder sbInactive (*dataInactive);
+        sbInactive.begin (gpu::kKindPlay, 0, 1280, 800);
+        r.ui.draw (sbInactive);
+        std::vector<uint32_t> cvInactive;
+        renderScene (*dataInactive, cvInactive);
+        const uint32_t colInactive = cvInactive[py * 1280 + px] & 0x00ffffff;
+        check (uit::channelDistance (colInactive, T.negative) > 40,
+               "clip label: inactive pixel is dim/dark, not bright alert red");
+
+        // Active after clip hit
+        r.inst.clipFlag = true;
+        r.refresh();
+        check (m.clip.state.active, "clip label: lit after clip flag hit");
+        auto dataActive = std::make_unique<gpu::SceneData>();
+        gpu::SceneBuilder sbActive (*dataActive);
+        sbActive.begin (gpu::kKindPlay, 0, 1280, 800);
+        r.ui.draw (sbActive);
+        std::vector<uint32_t> cvActive;
+        renderScene (*dataActive, cvActive);
+        const uint32_t colActive = cvActive[py * 1280 + px] & 0x00ffffff;
+        check (uit::channelDistance (colActive, T.negative) <= 20,
+               "clip label: active pixel is bright alert red");
+
+        // 4. Touch on the label clears
+        r.tap (m.clip);
+        check (! m.clip.state.active, "clip label: touch on the label clears it");
+        auto dataCleared = std::make_unique<gpu::SceneData>();
+        gpu::SceneBuilder sbCleared (*dataCleared);
+        sbCleared.begin (gpu::kKindPlay, 0, 1280, 800);
+        r.ui.draw (sbCleared);
+        std::vector<uint32_t> cvCleared;
+        renderScene (*dataCleared, cvCleared);
+        const uint32_t colCleared = cvCleared[py * 1280 + px] & 0x00ffffff;
+        check (uit::channelDistance (colCleared, T.negative) > 40,
+               "clip label: cleared label returns to dim appearance");
+
+        // New hit after clear lights again
+        r.inst.clipFlag = true;
+        r.refresh();
+        check (m.clip.state.active, "clip label: hit after clear lights again");
+    }
+}
+
 int main()
 {
     std::printf ("=== SynthyBoy MPC Overlay: Master & Voice Host Tests ===\n");
@@ -922,6 +1019,7 @@ int main()
     testMasterVolumeKnob();
     testMasterGroupsAndMeters();
     testMasterDraw();
+    testMasterClip();
     testMasterPadPressure();
     testMasterOutputLimiter();
     testMasterQuality();
