@@ -2,9 +2,11 @@
 // spectral morph and the memory of the wavetable bank (docs/engine-spec/07 section 8, vectors S1 .. S5, and 02 section 13).
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <functional>
 #include <cstdio>
 #include <memory>
@@ -13,6 +15,7 @@
 #include <vector>
 
 #include "osc/wavetable_bank.h"
+#include "own_engine.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
@@ -1508,4 +1511,270 @@ TEST (own_osc_spectral_external_warp_checksum)
         const auto out = r.render (69, 0.45, 0.5);
         printChecksum ("mask_osc2_u2", out.l);
     }
+}
+
+// docs/plans/spectral-start.md S4: the engine owns the start ledger. It runs only where the quality asks for it and has the 32 sample event grid (tier low): one tick per control period of 32
+// samples whatever the host block size; tier high and a low quality without the control economy leave it disabled (no tick, nothing stored).
+TEST (own_spectral_start_ledger_runs_with_the_control_grid_only_at_tier_low)
+{
+    auto ticksOf = [] (const Quality& q, int block, bool& enabled)
+    {
+        auto engine = createOwnEngine();
+        engine->prepare (44100.0, 512, q);
+        std::vector<float> l (512), r (512);
+        for (int done = 0; done < 1280; done += block)
+            engine->process (nullptr, 0, l.data(), r.data(), std::min (block, 1280 - done));
+        const auto& ledger = static_cast<own::OwnEngine*> (engine.get())->startLedgerForTest();
+        enabled = ledger.enabledForTest();
+        return ledger.tickForTest();
+    };
+    for (int block : { 128, 32, 512 })
+    {
+        bool enabled = false;
+        const uint32_t ticks = ticksOf (qualityForTier (Tier::low), block, enabled);
+        CHECK (enabled);
+        CHECK_EQ (ticks, 1280u / 32u);   // 40 control periods, the host block does not matter (the last block of the 512 run is 256 frames)
+    }
+    {
+        bool enabled = true;
+        const uint32_t ticks = ticksOf (qualityForTier (Tier::high), 128, enabled);
+        CHECK (! enabled);
+        CHECK_EQ (ticks, 0u);
+    }
+    {
+        Quality q = qualityForTier (Tier::low);
+        q.economy = 0;   // no control economy: no event grid, no stagger
+        bool enabled = true;
+        const uint32_t ticks = ticksOf (q, 128, enabled);
+        CHECK (! enabled);
+        CHECK_EQ (ticks, 0u);
+    }
+}
+
+// ---- docs/plans/spectral-start.md S5: the Spectral note start is spread over the blocks at tier low --------------------------------------------------------------------------------------
+// The numbers are those of the cost model at the budget of 2400 us a block (spectral::kStartBudgetUs, fixed by the device measurement; the plan's first figures were for 810 us): a voice's
+// start work is 156 .. 245 us warm (mono), so 11 voices of a chord start at once (2250 us) and the others in the next quad; a tick = a control period = 32 samples = 0.7256 ms at 44.1 kHz,
+// a quad = 4 ticks = 128 samples = 2.9025 ms.
+namespace
+{
+constexpr double kSpecSr = 44100.0;
+constexpr int kSpecKeys[16] = { 60, 64, 67, 72, 62, 65, 69, 71, 55, 59, 52, 57, 50, 53, 74, 76 };
+
+struct SpecRig
+{
+    MemoryContentStore store;
+    StateContent content;
+    std::unique_ptr<IEngine> e;
+
+    /** `q` is tier low with the stagger on or off; osc1 is the Spectral oscillator on a 2 s sine, no envelope attack, no filter; `liftUnisonCap`: unison 4 (the low tier's cap is 3). */
+    SpecRig (const Quality& q, int unison, int polyphony = 8, bool liftUnisonCap = false, bool killFirst = false)
+    {
+        e = createOwnEngine();
+        e->setParam (kParamMasterPolyphony, static_cast<float> (polyphony));
+        e->prepare (kSpecSr, 512, q);
+        if (liftUnisonCap)
+            static_cast<own::OwnEngine*> (e.get())->setLowTierUnisonCap (0);
+        set (*e, "filter1.on", 0.0f);
+        set (*e, "master.volume", 0.0f);
+        set (*e, "env1.attack", 0.0f);
+        set (*e, "env1.release", 50.0f);
+        set (*e, "osc1.level", 100.0f);
+        set (*e, "osc1.random_phase", 0.0f);
+        set (*e, "osc1.type", 3.0f);
+        set (*e, "osc1.unison.voices", static_cast<float> (unison));
+        if (killFirst)
+        {
+            set (*e, "master.voice_override", 0.0f);       // Kill mode
+            set (*e, "master.voice.steal_priority", 0.0f); // the value whose case is the default of pickVictim: the earliest goes
+        }
+        store.add ("test", "sine.wav", sineWav (440.0, 0.8, 44100, 2.0));
+        ContentFileRef ref;
+        ref.pack = "test";
+        ref.file = "sine.wav";
+        ref.name = "sine";
+        attachSample (content, 1, ref, 44100, 88200, 1);
+        e->setContentStore (&store);
+        e->setContent (content);
+        set (*e, "osc1.sample.root", 69.0f);
+        set (*e, "osc1.sample.loop_mode", 1.0f);
+    }
+
+    const spectral::StartLedger& ledger() const { return static_cast<own::OwnEngine*> (e.get())->startLedgerForTest(); }
+
+    /** `notes` note-ons at frame 0; the last note is released at frame `offLastAt`, the others at `offAllAt` (-1: never). */
+    Out render (int notes, int frames, int block, int offLastAt = -1, int offAllAt = -1)
+    {
+        Out o;
+        o.l.assign (static_cast<size_t> (frames), 0.0f);
+        o.r.assign (static_cast<size_t> (frames), 0.0f);
+        for (int pos = 0; pos < frames; pos += block)
+        {
+            const int n = std::min (block, frames - pos);
+            Event ev[20];
+            int ne = 0;
+            if (pos == 0)
+                for (int i = 0; i < notes; ++i)
+                    ev[ne++] = sbtest::noteOn (0, kSpecKeys[i], 1.0f);
+            if (offLastAt >= pos && offLastAt < pos + n)
+                ev[ne++] = sbtest::noteOff (offLastAt - pos, kSpecKeys[notes - 1]);
+            if (offAllAt >= pos && offAllAt < pos + n)
+                for (int i = 0; i < notes; ++i)
+                    if (! (offLastAt >= 0 && i == notes - 1))
+                        ev[ne++] = sbtest::noteOff (offAllAt - pos, kSpecKeys[i]);
+            e->process (ev, ne, o.l.data() + pos, o.r.data() + pos, n);
+        }
+        return o;
+    }
+};
+
+Quality lowStagger (bool on)
+{
+    Quality q = qualityForTier (Tier::low);
+    q.spectralStart = on ? 1 : 0;
+    return q;
+}
+
+uint64_t fnv1a (const Out& o)
+{
+    uint64_t h = 1469598103934665603ull;
+    auto mix = [&h] (const std::vector<float>& x)
+    {
+        const unsigned char* b = reinterpret_cast<const unsigned char*> (x.data());
+        for (size_t i = 0; i < x.size() * sizeof (float); ++i)
+        {
+            h ^= b[i];
+            h *= 1099511628211ull;
+        }
+    };
+    mix (o.l);
+    mix (o.r);
+    return h;
+}
+} // namespace
+
+TEST (own_spectral_chord_start_is_spread_by_the_budget)
+{
+    struct Row { int notes, unison; bool lift; uint32_t now, later, maxWait; };
+    const Row rows[] = {
+        { 3, 1, false, 3, 0, 0 },     // 3 voices: 557 .. 646 us
+        { 1, 4, true, 4, 0, 0 },      // a single note of unison 4: 802 us, never delayed
+        { 3, 2, false, 6, 0, 0 },     // 1203 us
+        { 4, 2, false, 8, 0, 0 },     // 1604 us: the chord of the three Spectral presets starts whole (it waited 8 ticks = 5.8 ms at the budget of 810)
+        { 3, 4, true, 11, 1, 4 },     // 12 voices: the 12th waits one quad (4 ticks = 2.9 ms)
+        { 8, 2, false, 11, 5, 4 },    // 16 voices: 11 at once (2250 us), 5 in the next quad
+    };
+    for (const Row& row : rows)
+    {
+        SpecRig r (lowStagger (true), row.unison, 8, row.lift);
+        r.render (row.notes, 2048, 128);
+        const auto& l = r.ledger();
+        CHECK (l.enabledForTest());
+        CHECK_EQ (l.grantedNowForTest(), row.now);
+        CHECK_EQ (l.grantedLaterForTest(), row.later);
+        CHECK_EQ (l.maxWaitTicksForTest(), row.maxWait);
+        CHECK (l.maxBookedForTest() <= static_cast<uint32_t> (spectral::kStartBudgetUs));
+        CHECK_EQ (l.waitingForTest(), 0);
+        std::printf ("    %d notes x %d: now %u later %u max wait %u ticks (%.1f ms)\n", row.notes, row.unison, l.grantedNowForTest(), l.grantedLaterForTest(), l.maxWaitTicksForTest(),
+                     l.maxWaitTicksForTest() * 32.0 / kSpecSr * 1000.0);
+    }
+    {   // the stagger off: nothing is requested
+        SpecRig r (lowStagger (false), 2);
+        r.render (8, 2048, 128);
+        CHECK (! r.ledger().enabledForTest());
+        CHECK_EQ (r.ledger().grantedNowForTest() + r.ledger().grantedLaterForTest(), 0u);
+    }
+}
+
+TEST (own_spectral_a_waiting_voice_is_silent)
+{
+    // 8 notes of unison 2: 5 of the 16 voices start 128 samples (4 ticks) late and are silent until then
+    SpecRig on (lowStagger (true), 2), off (lowStagger (false), 2);
+    const Out a = on.render (8, 2 * 44100, 128, -1, 22050), b = off.render (8, 2 * 44100, 128, -1, 22050);
+    const double ra = rmsOfRange (a.l, 0, 128), rb = rmsOfRange (b.l, 0, 128);
+    std::printf ("    first 128 samples: rms %.5f staggered, %.5f at once (ratio %.3f)\n", ra, rb, ra / std::max (rb, 1.0e-12));
+    CHECK (rb > 1.0e-4);
+    CHECK (ra < 0.97 * rb);            // before: exactly 1 (the two renders are identical)
+    CHECK (ra > 0.6 * rb);             // 11 of the 16 voices sound
+    CHECK (a.l != b.l);
+    CHECK (sbtest::allFinite (a.l) && sbtest::allFinite (a.r) && sbtest::allFinite (b.l));
+    CHECK (peakOf (a.l, 40000, a.l.size()) < 1.0e-4);
+    CHECK (peakOf (b.l, 40000, b.l.size()) < 1.0e-4);
+}
+
+TEST (own_spectral_kill_burst_keeps_the_start_work_of_the_survivors_only)
+{
+    // 16 notes struck together, polyphony 4, Kill mode: the notes 12 .. 15 survive. Notes 0 .. 5 got their start at the note-on (11 voices); the work booked for the given up voices of
+    // the later quads is given back, so the survivors start in the next quad (4 ticks); without cancelSerial they would wait 8.
+    SpecRig r (lowStagger (true), 2, 4, false, true);
+    r.render (16, 2048, 128);
+    const auto& l = r.ledger();
+    CHECK_EQ (l.grantedNowForTest(), 11u);
+    CHECK_EQ (l.grantedLaterForTest(), 8u);
+    CHECK_EQ (l.maxWaitTicksForTest(), 4u);
+    CHECK_EQ (l.waitingForTest(), 0);
+}
+
+TEST (own_spectral_start_is_block_size_independent_and_repeats)
+{
+    uint64_t first = 0;
+    for (int block : { 32, 64, 128, 256, 512, 128 })
+    {
+        SpecRig r (lowStagger (true), 2);
+        const Out o = r.render (8, 20000, block);
+        CHECK (sbtest::allFinite (o.l));
+        const uint64_t h = fnv1a (o);
+        if (first == 0)
+            first = h;
+        else
+            CHECK (h == first);
+        CHECK (r.ledger().maxWaitTicksForTest() == 4u);
+    }
+}
+
+TEST (own_spectral_note_off_while_waiting)
+{
+    // the last note (its voices wait until tick 4 = frame 128) is released at frame 40, the others at 0.4 s
+    SpecRig r (lowStagger (true), 2);
+    const Out o = r.render (8, 2 * 44100, 128, 40, 17640);
+    CHECK_EQ (r.ledger().maxWaitTicksForTest(), 4u);
+    CHECK (sbtest::allFinite (o.l) && sbtest::allFinite (o.r));
+    CHECK (rmsOfRange (o.l, 2000, 8000) > 1.0e-4);
+    CHECK (peakOf (o.l, 60000, o.l.size()) < 1.0e-4);
+}
+
+// Where the sound must not change (the build worker compares the lines of the base and the changed commit): a single note, a chord that fits the budget, tier high. The chord of 8 notes of
+// unison 2 is the one that waits: its line with the stagger on is the only one that may differ from the stagger off after the change.
+TEST (own_spectral_start_checksums_and_what_must_not_change)
+{
+    auto print = [] (const char* name, const Out& o) -> uint64_t
+    {
+        CHECK (sbtest::allFinite (o.l));
+        double sumAbs = 0.0;
+        for (float x : o.l)
+            sumAbs += std::fabs (static_cast<double> (x));
+        CHECK (sumAbs > 0.0);
+        const size_t sz = o.l.size();
+        std::printf ("SPECSTART-CHECKSUM %s sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n", name, sumAbs,
+                     static_cast<double> (o.l[sz - 8]), static_cast<double> (o.l[sz - 7]), static_cast<double> (o.l[sz - 6]), static_cast<double> (o.l[sz - 5]),
+                     static_cast<double> (o.l[sz - 4]), static_cast<double> (o.l[sz - 3]), static_cast<double> (o.l[sz - 2]), static_cast<double> (o.l[sz - 1]));
+        return fnv1a (o);
+    };
+    constexpr int kFrames = 8192;
+    const uint64_t singleOn = print ("single_on", SpecRig (lowStagger (true), 2).render (1, kFrames, 128));
+    const uint64_t singleOff = print ("single_off", SpecRig (lowStagger (false), 2).render (1, kFrames, 128));
+    const uint64_t c3On = print ("chord3x1_on", SpecRig (lowStagger (true), 1).render (3, kFrames, 128));
+    const uint64_t c3Off = print ("chord3x1_off", SpecRig (lowStagger (false), 1).render (3, kFrames, 128));
+    const uint64_t c4On = print ("chord4x2_on", SpecRig (lowStagger (true), 2).render (4, kFrames, 128));
+    const uint64_t c4Off = print ("chord4x2_off", SpecRig (lowStagger (false), 2).render (4, kFrames, 128));
+    const uint64_t c8On = print ("chord8x2_on", SpecRig (lowStagger (true), 2).render (8, kFrames, 128));
+    const uint64_t c8Off = print ("chord8x2_off", SpecRig (lowStagger (false), 2).render (8, kFrames, 128));
+    Quality high = qualityForTier (Tier::high);
+    const uint64_t h8 = print ("high_chord8x2", SpecRig (high, 2).render (8, kFrames, 128));
+    high.spectralStart = 1;   // no control economy at tier high: the setting does nothing
+    const uint64_t h8Flag = print ("high_chord8x2_flag", SpecRig (high, 2).render (8, kFrames, 128));
+    CHECK (singleOn == singleOff);     // a single note is never delayed
+    CHECK (c3On == c3Off);             // a chord that fits the budget is the sound of before
+    CHECK (c4On == c4Off);             // so is the chord of the three Spectral presets (1604 us)
+    CHECK (c8On != c8Off);             // 16 voices do not fit: five start a quad late (before the change: equal)
+    CHECK (h8 == h8Flag);              // nothing changes at the other tiers
 }

@@ -317,6 +317,7 @@ void OwnEngine::setQuality (const Quality& q) noexcept
     unisonCap.store (std::clamp (q.maxUnison, 1, kMaxUnisonVoices), std::memory_order_relaxed);
     qualityTier.store (q.oversampling <= 1 ? 0 : (q.interpolation == Interpolation::spectral ? 2 : 1), std::memory_order_relaxed);
     economyMask.store (economyOf (q), std::memory_order_relaxed);
+    spectralStartOn.store (spectralStartOf (q), std::memory_order_relaxed);
     tierLowCap.store (q.economy < 0 && q.oversampling <= 1, std::memory_order_relaxed);
     fxMask.store (q.fxMask, std::memory_order_relaxed);
     fxMakeup.store (q.fxMakeup, std::memory_order_relaxed);
@@ -557,6 +558,7 @@ void OwnEngine::reset()
     std::fill (sustainPending.begin(), sustainPending.end(), static_cast<uint8_t> (0));
     noteCounter = 0;
     voiceCtlCounter = 0;
+    spectralScratch->start.reset();
     for (auto& row : chokeLatest)
         for (auto& x : row)
             x = 0;
@@ -691,12 +693,16 @@ Voice* OwnEngine::allocateVoice (bool legato) noexcept
         return free;
     Voice* victim = pickVictim (false);
     if (victim != nullptr)
+    {
         ++cntStolen;
+        spectralScratch->start.cancelSerial (victim->serial());   // the stolen voice starts a new note: its old note's waiting Spectral voices are gone
+    }
     return victim != nullptr ? victim : (free != nullptr ? free : pickVictim (true));
 }
 
 void OwnEngine::ghostKill (Voice& v) noexcept
 {
+    spectralScratch->start.cancelSerial (v.serial());   // a Spectral voice of the note that has not started yet never will; the work booked for the ones that did is given back
     Ghost* slot = nullptr;
     for (auto& g : ghosts)
         if (!g.used)
@@ -773,6 +779,7 @@ void OwnEngine::killExcess() noexcept
 
 void OwnEngine::killOverflowVoice (Voice& v) noexcept
 {
+    spectralScratch->start.cancelSerial (v.serial());
     if ((economyMask.load (std::memory_order_relaxed) & kEconomyControl) != 0)
         ghostKill (v); // tier low: the voice stops, a ramp of its last output fades on the buses
     else
@@ -1480,6 +1487,9 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 if (!v->killing() && v->countLevel() > 0.0f)
                     ++soundingAtPeriodStart;
             });
+            // the start ledger: configured from the quality here (it changes only when the quality does), one tick per control period before the voices tick
+            spectralScratch->start.configure (spectralStartOn.load (std::memory_order_relaxed), spectral::kStartBudgetUs);
+            spectralScratch->start.beginTick();
             controlTick();
             // everything below that reads only parameters (and the global modulation) is redone only when one of them changed since the last period
             const uint32_t mask = effectiveFxMask (fxMask.load (std::memory_order_relaxed), base[fxReverbForce] >= 0.5f);

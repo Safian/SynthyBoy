@@ -178,6 +178,8 @@ void LibOsc::stopAll() noexcept
         l.voice.reset();
     for (auto& s : noteStarted)
         s = true; // a stopped player is not restarted before the next note
+    specPending_ = 0;
+    specReleasePending_ = false;
     from = -1;
 }
 
@@ -193,6 +195,8 @@ void LibOsc::resetForNote() noexcept
     }
     for (auto& s : noteStarted)
         s = false;
+    specPending_ = 0;
+    specReleasePending_ = false;
     cur = 0;
     from = -1;
     fadePos = 0;
@@ -210,6 +214,11 @@ void LibOsc::resetForNote() noexcept
 void LibOsc::setType (int newType, bool fresh) noexcept
 {
     newType = std::clamp (newType, 0, 4);
+    if (newType != cur && newType != kOscTypeSpectral)
+    {
+        specPending_ = 0;   // a Spectral voice that is still waiting for its start never starts once the type is another
+        specReleasePending_ = false;
+    }
     if (fresh)
     {
         cur = newType;
@@ -671,6 +680,11 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
             beginType (type);
         }
     }
+    else if (type == kOscTypeSpectral && specPending_ != 0)
+    {
+        SB_SECTION (sections::libNoteStart);
+        startPendingSpectral();   // the voices of the note that did not fit the start budget ask again, once per control period
+    }
     if (type == kOscTypeSample)
     {
         for (int u = 0; u < U; ++u)
@@ -761,16 +775,16 @@ void LibOsc::beginType (int type) noexcept
     }
     else if (type == kOscTypeSpectral && haveSample && smp->analysis.valid() && lp.scratch != nullptr)
     {
-        for (int u = 0; u < U; ++u)
+        // the start positions are drawn now, in unison order, whenever a voice may start: the draws do not depend on how long a voice waits for the start ledger
+        const int n = std::min (U, kSpecU);
+        for (int u = 0; u < n; ++u)
         {
-            specVoices[static_cast<size_t> (u)].setReferenceKernels (lp.referenceKernels);
-            specParams.pitchRatio = ratioOf (uni[u]);
-            // the frames of a voice come every kHop samples: the voices of a chord and of the unison start at different offsets inside their hop (a quarter of a hop apart), so that in the steady
-            // state every block carries about a quarter of their frames and not all of them every fourth block. The note serial counts the notes of the engine (the same for a render and its
-            // repetition), the unison voice and the oscillator move the start on, so notes struck together and their voices fall on different quarters.
-            const uint32_t quarter = (lp.serial * static_cast<uint32_t> (U) + static_cast<uint32_t> (u) + 2u * static_cast<uint32_t> (oi)) % static_cast<uint32_t> (spectral::kStartSteps);
-            specVoices[static_cast<size_t> (u)].noteOn (&smp->analysis, specParams, startFraction (u), static_cast<int> (quarter) * spectral::kStartStep);
+            specVoices[static_cast<size_t> (u)].reset();
+            specStartFrac_[u] = startFraction (u);
         }
+        specPending_ = static_cast<uint8_t> ((1u << n) - 1u);
+        specReleasePending_ = false;
+        startPendingSpectral();
     }
     else if (type == kOscTypeMultisample && cs != nullptr && cs->instrument[oi] != nullptr)
     {
@@ -818,6 +832,46 @@ void LibOsc::beginType (int type) noexcept
     }
 }
 
+void LibOsc::startPendingSpectral() noexcept
+{
+    const ContentSet* cs = boundSet;
+    const ContentSet::Sample* smp = cs != nullptr ? &cs->sample[oscIdx] : nullptr;
+    if (smp == nullptr || !smp->valid || !smp->analysis.valid() || lp.scratch == nullptr)
+    {
+        specPending_ = 0;
+        specReleasePending_ = false;
+        return;
+    }
+    const int n = std::min (U, kSpecU);
+    specPending_ = static_cast<uint8_t> (specPending_ & ((1u << n) - 1u));   // (the unison voices that are no longer rendered do not start)
+    bool smears = false;
+    for (int w = 0; w < 2; ++w)
+        smears = smears || (specParams.warpType[w] == static_cast<int> (spectral::Warp::smear) && specParams.warpAmount[w] > 0.0f);
+    const int channels = smp->analysis.channels() > 1 ? 2 : 1;
+    for (int u = 0; u < n; ++u)
+    {
+        if ((specPending_ & (1u << u)) == 0)
+            continue;
+        // the frames of a voice come every kHop samples: the voices of a chord and of the unison start at different offsets inside their hop (a quarter of a hop apart), so that in the steady
+        // state every block carries about a quarter of their frames and not all of them every fourth block. The note serial counts the notes of the engine (the same for a render and its
+        // repetition), the unison voice and the oscillator move the start on, so notes struck together and their voices fall on different quarters.
+        const uint32_t quarter = (lp.serial * static_cast<uint32_t> (U) + static_cast<uint32_t> (u) + 2u * static_cast<uint32_t> (oscIdx)) % static_cast<uint32_t> (spectral::kStartSteps);
+        const int offset = static_cast<int> (quarter) * spectral::kStartStep;
+        // the start ledger (tier low): the voice starts when the start work of this and the next blocks fits the budget, in the order of the note serial; disabled it always says yes
+        if (!lp.scratch->start.request (spectral::startKey (lp.serial, oscIdx, u), spectral::SpectralVoice::startPattern (offset, smears, channels)))
+            break;   // the later unison voices and notes come after this one
+        spectral::SpectralVoice& sv = specVoices[static_cast<size_t> (u)];
+        sv.setReferenceKernels (lp.referenceKernels);
+        specParams.pitchRatio = ratioOf (uni[u]);
+        sv.noteOn (&smp->analysis, specParams, specStartFrac_[u], offset);
+        specPending_ = static_cast<uint8_t> (specPending_ & ~(1u << u));
+        if (specReleasePending_)
+            sv.releaseLoop();
+    }
+    if (specPending_ == 0)
+        specReleasePending_ = false;
+}
+
 void LibOsc::noteOff (bool loopExit) noexcept
 {
     for (auto& v : sampleVoices)
@@ -829,6 +883,8 @@ void LibOsc::noteOff (bool loopExit) noexcept
     for (auto& v : specVoices)
         if (loopExit || specParams.loopMode == sampleosc::LoopMode::tailed)
             v.releaseLoop();
+    if (specPending_ != 0 && (loopExit || specParams.loopMode == sampleosc::LoopMode::tailed))
+        specReleasePending_ = true;   // a voice that has not started has nothing to release yet: it is released when it starts
     if (cur == kOscTypeMultisample && boundSet != nullptr && boundSet->instrument[oscIdx] != nullptr)
     {
         const multisample::Instrument& inst = *boundSet->instrument[oscIdx];

@@ -168,6 +168,9 @@ private:
     };
     float ratioOf (Unison& un) const noexcept;
     void beginType (int type) noexcept;
+    /** The Spectral voices of the note that have not started yet (specPending_): each asks the start ledger of the engine in unison order and starts when it is granted (a voice that does not fit the
+        start budget of the block waits, silent, and asks again in the next control period). Called by beginType and by update () while a voice is pending. */
+    void startPendingSpectral() noexcept;
     void renderType (int type, int t0, int n, float* L, float* R, const float* const* cross) noexcept;
     float modulator (int warpType, int slot, const float* const* cross, int k, float& m) const noexcept;
 
@@ -200,6 +203,9 @@ private:
     // Spectral
     std::vector<spectral::SpectralVoice> specVoices;
     spectral::SpectralParams specParams;
+    uint8_t specPending_ = 0;              // bit u: the Spectral voice u of the note has not started (it waits for the start ledger)
+    bool specReleasePending_ = false;      // the note was released while voices were pending: they are released when they start
+    float specStartFrac_[kSpecU] = {};     // the start positions drawn at the note start (in unison order, so they do not depend on how long a voice waits)
     std::vector<float> filterGain;
     float lastCut = 1.0e9f, lastMix = 1.0e9f, lastFltPos = -1.0f;
     int lastFltTable = -1;

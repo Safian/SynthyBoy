@@ -84,6 +84,8 @@ public:
     float voiceCountGain() const noexcept { return lastVoiceCountGain.load (std::memory_order_relaxed); }
     void setContent (const StateContent& content) override;
     void setContentStore (const IContentStore* store) override;
+    /** Tests only: the ledger that spreads the note starts of the Spectral oscillators over the blocks (core/spectral start_ledger.h). */
+    const spectral::StartLedger& startLedgerForTest() const noexcept { return spectralScratch->start; }
 
 private:
     static constexpr int numChannels = 16;
@@ -152,6 +154,7 @@ private:
     uint32_t chokeLatest[3][256] = {}, chokeCounter[3] = {};
     std::atomic<int> qualityTier { 2 };
     std::atomic<bool> tierLowCap { false };  // the quality is a plain tier low (Quality::economy negative, oversampling 1): setLowTierUnisonCap applies; a quality with explicit economy groups carries its own cap in maxUnison
+    std::atomic<bool> spectralStartOn { false }; // spectralStartOf (quality): the ledger is configured from it on the audio thread, at a control period start
     std::atomic<uint32_t> economyMask { 0 }; // the economy groups in force (Quality::economy, EconomyFlags); read at the start of every block
     std::atomic<bool> ultraRender { false };
     std::atomic<float> liveSampleHead[3];         // the read head of the sample oscillators (the voice that is heard), -1 = none
