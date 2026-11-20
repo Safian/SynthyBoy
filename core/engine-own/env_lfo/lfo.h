@@ -182,26 +182,47 @@ public:
             case 3: // Lorenz attractor
             case 4: // Rossler attractor
             {
-                const float dt = std::min (0.02f * std::max (cycles, 0.001f) * 50.0f, 0.02f);
-                const int steps = 4;
-                for (int i = 0; i < steps; ++i)
+                const float totalT = std::clamp (cycles, 0.0f, 0.25f) * 8.0f;
+                const float hMax = (style == 3) ? 0.01f : 0.05f;
+                const int steps = totalT > 0.0f ? std::clamp (static_cast<int> (std::ceil (totalT / hMax)), 1, 64) : 0;
+                const float h = steps > 0 ? totalT / static_cast<float> (steps) : 0.0f;
+
+                auto deriv = [style] (float x, float y, float z, float& dx, float& dy, float& dz) noexcept
                 {
                     if (style == 3)
                     {
-                        const float dx = 10.0f * (ly - lx), dy = lx * (28.0f - lz) - ly, dz = lx * ly - (8.0f / 3.0f) * lz;
-                        lx += dx * dt / steps * 8.0f;
-                        ly += dy * dt / steps * 8.0f;
-                        lz += dz * dt / steps * 8.0f;
+                        dx = 10.0f * (y - x);
+                        dy = x * (28.0f - z) - y;
+                        dz = x * y - (8.0f / 3.0f) * z;
                     }
                     else
                     {
-                        const float dx = -ly - lz, dy = lx + 0.2f * ly, dz = 0.2f + lz * (lx - 5.7f);
-                        lx += dx * dt / steps * 8.0f;
-                        ly += dy * dt / steps * 8.0f;
-                        lz += dz * dt / steps * 8.0f;
+                        dx = -y - z;
+                        dy = x + 0.2f * y;
+                        dz = 0.2f + z * (x - 5.7f);
                     }
+                };
+
+                for (int i = 0; i < steps; ++i)
+                {
+                    float k1x = 0.0f, k1y = 0.0f, k1z = 0.0f;
+                    deriv (lx, ly, lz, k1x, k1y, k1z);
+
+                    float k2x = 0.0f, k2y = 0.0f, k2z = 0.0f;
+                    deriv (lx + 0.5f * h * k1x, ly + 0.5f * h * k1y, lz + 0.5f * h * k1z, k2x, k2y, k2z);
+
+                    float k3x = 0.0f, k3y = 0.0f, k3z = 0.0f;
+                    deriv (lx + 0.5f * h * k2x, ly + 0.5f * h * k2y, lz + 0.5f * h * k2z, k3x, k3y, k3z);
+
+                    float k4x = 0.0f, k4y = 0.0f, k4z = 0.0f;
+                    deriv (lx + h * k3x, ly + h * k3y, lz + h * k3z, k4x, k4y, k4z);
+
+                    lx += (h / 6.0f) * (k1x + 2.0f * k2x + 2.0f * k3x + k4x);
+                    ly += (h / 6.0f) * (k1y + 2.0f * k2y + 2.0f * k3y + k4y);
+                    lz += (h / 6.0f) * (k1z + 2.0f * k2z + 2.0f * k3z + k4z);
                 }
-                if (!std::isfinite (lx) || !std::isfinite (ly) || !std::isfinite (lz))
+                if (!std::isfinite (lx) || !std::isfinite (ly) || !std::isfinite (lz)
+                    || std::fabs (lx) > 100.0f || std::fabs (ly) > 100.0f || std::fabs (lz) > 200.0f)
                 {
                     lx = 0.1f;
                     ly = lz = 0.0f;
