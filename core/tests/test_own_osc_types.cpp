@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "osc/wavetable_bank.h"
+#include "own_engine.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
@@ -1507,5 +1508,43 @@ TEST (own_osc_spectral_external_warp_checksum)
         set (*r.e, "osc2.level", 100.0f);
         const auto out = r.render (69, 0.45, 0.5);
         printChecksum ("mask_osc2_u2", out.l);
+    }
+}
+
+// docs/plans/spectral-start.md S4: the engine owns the start ledger. It runs only where the quality asks for it and has the 32 sample event grid (tier low): one tick per control period of 32
+// samples whatever the host block size; tier high and a low quality without the control economy leave it disabled (no tick, nothing stored).
+TEST (own_spectral_start_ledger_runs_with_the_control_grid_only_at_tier_low)
+{
+    auto ticksOf = [] (const Quality& q, int block, bool& enabled)
+    {
+        auto engine = createOwnEngine();
+        engine->prepare (44100.0, 512, q);
+        std::vector<float> l (512), r (512);
+        for (int done = 0; done < 1280; done += block)
+            engine->process (nullptr, 0, l.data(), r.data(), std::min (block, 1280 - done));
+        const auto& ledger = static_cast<own::OwnEngine*> (engine.get())->startLedgerForTest();
+        enabled = ledger.enabledForTest();
+        return ledger.tickForTest();
+    };
+    for (int block : { 128, 32, 512 })
+    {
+        bool enabled = false;
+        const uint32_t ticks = ticksOf (qualityForTier (Tier::low), block, enabled);
+        CHECK (enabled);
+        CHECK_EQ (ticks, 1280u / 32u);   // 40 control periods, the host block does not matter (the last block of the 512 run is 256 frames)
+    }
+    {
+        bool enabled = true;
+        const uint32_t ticks = ticksOf (qualityForTier (Tier::high), 128, enabled);
+        CHECK (! enabled);
+        CHECK_EQ (ticks, 0u);
+    }
+    {
+        Quality q = qualityForTier (Tier::low);
+        q.economy = 0;   // no control economy: no event grid, no stagger
+        bool enabled = true;
+        const uint32_t ticks = ticksOf (q, 128, enabled);
+        CHECK (! enabled);
+        CHECK_EQ (ticks, 0u);
     }
 }
