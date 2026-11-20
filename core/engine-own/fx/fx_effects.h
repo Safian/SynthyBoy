@@ -516,7 +516,7 @@ public:
     {
         sampleRate = sr;
         for (auto& d : line)
-            d.prepare (static_cast<int> (sr * 0.9));
+            d.prepare (static_cast<int> (sr * 0.105));
         reset();
     }
     void reset() noexcept { for (auto& d : line) d.reset(); phase = 0.0f; }
@@ -524,9 +524,10 @@ public:
     void idle (int n) noexcept
     {
         const float sr = static_cast<float> (sampleRate);
+        const float inc = p.rate / sr;
         for (int s = 0; s < n; ++s)
         {
-            phase += p.rate / sr;
+            phase += inc;
             phase -= ffloor (phase);
         }
     }
@@ -534,6 +535,7 @@ public:
     void process (float* l, float* r, int n) noexcept
     {
         const float sr = static_cast<float> (sampleRate);
+        const float inc = p.rate / sr;
         const float f = std::clamp (p.feedback, -1.0f, 1.0f);
         const float dc = 1.0f / std::clamp (p.centerHz, 20.0f, 16000.0f);
         const float m = 0.5f * clamp01 (p.mix); // the mix knob runs over half of the equal power law
@@ -541,7 +543,7 @@ public:
         float* io[2] = { l, r };
         for (int i = 0; i < n; ++i)
         {
-            phase += p.rate / sr;
+            phase += inc;
             phase -= ffloor (phase);
             for (int c = 0; c < 2; ++c)
             {
@@ -550,7 +552,7 @@ public:
                 const float tri = std::fabs (2.0f * (x - ffloor (x)) - 1.0f);
                 const float mod = p.depth * (2.0f * tri - 1.0f) + 1.0f;
                 const float delay = std::max ((dc - 0.0005f) * mod + 0.0005f, 1.0f / 20000.0f);
-                const float period = std::clamp (delay * sr, 2.0f, 0.85f * sr);
+                const float period = std::clamp (delay * sr, 2.0f, 0.1f * sr);
                 const float rd = line[c].readCubic (period);
                 const float in = io[c][i];
                 line[c].push (loopLimit (in + f * rd));
@@ -578,9 +580,10 @@ public:
     void idle (int n) noexcept
     {
         const float sr = static_cast<float> (sampleRate);
+        const float inc = p.rate / sr;
         for (int s = 0; s < n; ++s)
         {
-            phase += p.rate / sr;
+            phase += inc;
             phase -= ffloor (phase);
         }
     }
@@ -590,6 +593,7 @@ public:
     void process (float* l, float* r, int n) noexcept
     {
         const float sr = static_cast<float> (sampleRate);
+        const float inc = p.rate / sr;
         const float fbk = clamp01 (p.feedback);
         const float braw = clamp01 (p.blend) * 2.0f;
         const float p1 = clamp01 (1.0f - braw), p5 = clamp01 (braw - 1.0f), p3 = 1.0f - p1 - p5;
@@ -599,7 +603,7 @@ public:
         float hc1[2] = {}, hc2[2] = {}, hS[2][kStages] = {};
         for (int i = 0; i < n; ++i)
         {
-            phase += p.rate / sr;
+            phase += inc;
             phase -= ffloor (phase);
             for (int c = 0; c < 2; ++c)
             {
@@ -648,8 +652,8 @@ public:
                     if (s == 11) tap[2] = x;
                 }
                 const float ap = p1 * tap[0] + p3 * tap[1] + p5 * tap[2];
-                bpA[c] += c2 * (ap - bpA[c]);
-                bpB[c] += c1 * (bpA[c] - bpB[c]);
+                bpA[c] = flushDenormal (bpA[c] + c2 * (ap - bpA[c]));
+                bpB[c] = flushDenormal (bpB[c] + c1 * (bpA[c] - bpB[c]));
                 fb[c] = fast ? fastmath::tanh (fbk * (bpA[c] - bpB[c])) : std::tanh (fbk * (bpA[c] - bpB[c]));
                 const float wet = 0.5f * (dry + ap);
                 io[c][i] = dry * (1.0f - p.mix) + wet * p.mix; // linear crossfade (document 06, section 1)
