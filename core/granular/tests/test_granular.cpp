@@ -686,3 +686,68 @@ TEST (granular_the_output_stage_in_lanes_is_the_per_sample_stage)
     CHECK_EQ (blocks, 200);
     CHECK_EQ (different, 0);
 }
+
+// Rank 17: loop grains crossfade reads partner inside loop span, and works in reverse
+TEST (granular_loop_grains_crossfade_boundary)
+{
+    // A sample that is one continuous sine (440.25 Hz cosine at 44.1 kHz, 2 seconds)
+    const double sampleRate = 44100.0;
+    const double hz = 440.25;
+    const int totalFrames = static_cast<int> (sampleRate * 2.0);
+    std::vector<float> sampleData (static_cast<size_t> (totalFrames));
+    for (size_t i = 0; i < sampleData.size(); ++i)
+        sampleData[i] = static_cast<float> (0.5 * std::cos (2.0 * kPi * hz * static_cast<double> (i) / sampleRate));
+
+    SampleData sample;
+    sample.loadFromFrames (sampleData.data(), nullptr, totalFrames, sampleRate);
+    const auto view = sample.view();
+
+    float maxSineJump = 0.0f;
+    for (size_t i = 1; i < sampleData.size(); ++i)
+        maxSineJump = std::max (maxSineJump, std::fabs (sampleData[i] - sampleData[i - 1]));
+
+    // Loop from 0 to half of the sample with a crossfade
+    GrainParams p;
+    p.loopLo = 0.0f;
+    p.loopHi = 0.5f;
+    p.loopGrains = true;
+    p.loopCrossfade = 0.1f;
+    p.densityHz = 1.0f;
+    p.maxGrains = 1;
+    p.lengthSec = 1.0f;
+    p.gain = 1.0f;
+    p.windowAmount = 0.0f; // rectangular window so grain envelope does not attenuate boundary
+    p.manual = true;
+    p.scanSpeed = 0.0f;
+
+    // Forward grains: start just before loopHi (0.5), crossing into loopLo (0.0)
+    p.reverseGrains = false;
+    p.position = 0.45f;
+    GranularVoice vf;
+    vf.prepare (sampleRate);
+    vf.noteOn (&view, p, 1u, 0.0f, true, 0.0f);
+    const auto outFwd = render (vf, p, 8192);
+
+    float maxJumpFwd = 0.0f;
+    for (size_t i = 100; i + 100 < outFwd.size(); ++i)
+        maxJumpFwd = std::max (maxJumpFwd, std::fabs (outFwd[i] - outFwd[i - 1]));
+
+    // Reverse grains: start just before loopLo (0.0), crossing into loopHi (0.5)
+    p.reverseGrains = true;
+    p.position = 0.05f;
+    GranularVoice vr;
+    vr.prepare (sampleRate);
+    vr.noteOn (&view, p, 1u, 0.0f, true, 0.0f);
+    const auto outRev = render (vr, p, 8192);
+
+    float maxJumpRev = 0.0f;
+    for (size_t i = 100; i + 100 < outRev.size(); ++i)
+        maxJumpRev = std::max (maxJumpRev, std::fabs (outRev[i] - outRev[i - 1]));
+
+    std::printf ("    sine max jump: %f\n", maxSineJump);
+    std::printf ("    forward max jump: %f (ratio: %.3fx)\n", maxJumpFwd, maxJumpFwd / maxSineJump);
+    std::printf ("    reverse max jump: %f (ratio: %.3fx)\n", maxJumpRev, maxJumpRev / maxSineJump);
+
+    CHECK (maxJumpFwd <= 1.5f * maxSineJump);
+    CHECK (maxJumpRev <= 1.5f * maxSineJump);
+}

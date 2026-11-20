@@ -482,10 +482,23 @@ bool GranularVoice::renderGrainsReference (const GrainParams& p, float* left, fl
                 {
                     const float t = static_cast<float> (1.0 - toEnd / xfade);
                     float al, ar;
-                    readSample (*sample_, g.pos - loopLen, rate, al, ar);
+                    readSample (*sample_, lg0 + static_cast<double> (t) * xfade, rate, al, ar);
                     const float a = std::cos (t * 1.5707963f), b = std::sin (t * 1.5707963f);
                     sl = sl * a + al * b;
                     sr = sr * a + ar * b;
+                }
+                else if (step < 0.0)
+                {
+                    const double toStart = g.pos - lg0;
+                    if (toStart < xfade)
+                    {
+                        const float t = static_cast<float> (1.0 - toStart / xfade);
+                        float al, ar;
+                        readSample (*sample_, lg1 - static_cast<double> (t) * xfade, rate, al, ar);
+                        const float a = std::cos (t * 1.5707963f), b = std::sin (t * 1.5707963f);
+                        sl = sl * a + al * b;
+                        sr = sr * a + ar * b;
+                    }
                 }
             }
             if (sw != 0)
@@ -736,10 +749,23 @@ bool GranularVoice::renderGrains (const GrainParams& p, float* left, float* righ
                 {
                     const float t = static_cast<float> (1.0 - toEnd / xfade);
                     float al, ar;
-                    read.read (g.pos - loopLen, al, ar);
+                    read.read (lg0 + static_cast<double> (t) * xfade, al, ar);
                     const float a = std::cos (t * 1.5707963f), b = std::sin (t * 1.5707963f);
                     sl = sl * a + al * b;
                     sr = sr * a + ar * b;
+                }
+                else if (step < 0.0)
+                {
+                    const double toStart = g.pos - lg0;
+                    if (toStart < xfade)
+                    {
+                        const float t = static_cast<float> (1.0 - toStart / xfade);
+                        float al, ar;
+                        read.read (lg1 - static_cast<double> (t) * xfade, al, ar);
+                        const float a = std::cos (t * 1.5707963f), b = std::sin (t * 1.5707963f);
+                        sl = sl * a + al * b;
+                        sr = sr * a + ar * b;
+                    }
                 }
             }
             if (shaped)
