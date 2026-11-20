@@ -43,11 +43,8 @@ sys.exit(0 if ok else 1)
 PY
 EXP=$(nm -gU "$LIB" | awk '{print $NF}' | sort | tr '\n' ' ')
 [ "$EXP" = "_VSTPluginMain " ] || { echo "exports: $EXP" | cut -c1-600; echo "ACCEPT FAIL: exported symbols must be only _VSTPluginMain"; exit 1; }
-# engine selection follows SYNTHYBOY_SHELL_ENGINE (configure-only checks of the compile definition)
-grep -q -- "-DSYNTHYBOY_MPC_ENGINE_VITAL=1" $B/build.ninja || { echo "ACCEPT FAIL: default build (SYNTHYBOY_SHELL_ENGINE=vital) must compile shell-mpc with -DSYNTHYBOY_MPC_ENGINE_VITAL=1"; exit 1; }
-cmake -S . -B $B-own -G Ninja $BASE_OPTS -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BUILD_TESTS=OFF -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DSYNTHYBOY_SHELL_ENGINE=own -DMPC_SDK_DIR="$MPC_SDK" > $B-own.configure.log 2>&1 || { tail -20 $B-own.configure.log; echo "ACCEPT FAIL: configure with SYNTHYBOY_SHELL_ENGINE=own"; exit 1; }
-grep -q -- "-DSYNTHYBOY_MPC_ENGINE_VITAL=0" $B-own/build.ninja || { echo "ACCEPT FAIL: with -DSYNTHYBOY_SHELL_ENGINE=own (and Vital in the build) shell-mpc must be compiled with -DSYNTHYBOY_MPC_ENGINE_VITAL=0"; exit 1; }
-grep -q "SYNTHYBOY_MPC_ENGINE_VITAL" shell-mpc/synthyboy_mpc.cpp || { echo "ACCEPT FAIL: the source does not use SYNTHYBOY_MPC_ENGINE_VITAL"; exit 1; }
+# the shell creates the own engine (a Vital engine switch is excluded by scripts/tests/test_vital_removal_cmake.py)
+grep -q "EngineKind::own" shell-mpc/synthyboy_mpc.cpp || { echo "ACCEPT FAIL: the source does not create the own engine"; exit 1; }
 # plugin folder / content path logic
 c++ -std=c++17 -O1 -Wall -Wextra -o $B/paths_test shell-mpc/tests/paths_test.cpp && $B/paths_test > $B/paths.log 2>&1 || { cat $B/paths.log 2>/dev/null | tail -12; echo "ACCEPT FAIL: paths_test (shell-mpc/plugin_paths.h)"; exit 1; }
 # MPC manifest: only binaries that exist, version.xml
@@ -329,14 +326,12 @@ for d in specoff specself specself25; do
 done
 grep -q "Spectrum %d" "$(find build-mpc-live-on -name '*synthyboy_mpc*.so' -o -name '*synthyboy_mpc*.dylib' | head -1)" || { echo "ACCEPT FAIL: the spectrum build has no spectrum code"; exit 1; }
 grep -q "Spectrum %d" "$(find build-mpc-live-specoff -name '*synthyboy_mpc*.so' -o -name '*synthyboy_mpc*.dylib' | head -1)" && { echo "ACCEPT FAIL: trace of the spectrum in the build with SYNTHYBOY_MPC_SPECTRUM=OFF"; exit 1; }
-# pad pressure to Filter 1 cutoff (SYNTHYBOY_MPC_PAD_PRESSURE, default ON): pad_pressure.h and the plugin in the own engine (the pressure opens the filter), in the Vital engine
-# (the two parameters exist, the audio ignores them), without the display parameters, and switched off (no trace of it: no names, no chunk member)
+# pad pressure to Filter 1 cutoff (SYNTHYBOY_MPC_PAD_PRESSURE, default ON): pad_pressure.h and the plugin in the own engine (the pressure opens the filter), without the display parameters, and switched off (no trace of it: no names, no chunk member)
 c++ -std=c++17 -O1 -Wall -Wextra $LIVEINC -o $B/pad_pressure_host shell-mpc/tests/pad_pressure_host.cpp $B/core/libsynthyboy_core.a -lpthread || { echo "ACCEPT FAIL: pad_pressure_host build"; exit 1; }
 pp_lib() { find build-mpc-live-$1 -name '*synthyboy_mpc*.dylib' -o -name '*synthyboy_mpc*.so' | head -1; }
 $B/pad_pressure_host "$(pp_lib on)" own > $B/pad-pressure-own.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-own.log; echo "ACCEPT FAIL: pad_pressure_host (own engine)"; exit 1; }
 grep -E "^INFO" $B/pad-pressure-own.log
 $B/pad_pressure_host "$(pp_lib off)" own 0 > $B/pad-pressure-nodisplay.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-nodisplay.log; echo "ACCEPT FAIL: pad_pressure_host (no display parameters)"; exit 1; }
-$B/pad_pressure_host "$LIB" vital > $B/pad-pressure-vital.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-vital.log; echo "ACCEPT FAIL: pad_pressure_host (Vital engine)"; exit 1; }
 $B/pad_pressure_host "$(pp_lib padoff)" own off > $B/pad-pressure-off.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-off.log; echo "ACCEPT FAIL: pad_pressure_host (switched off)"; exit 1; }
 $B/pad_pressure_host "$OVLON" own overlay > $B/pad-pressure-ovlon.log 2>&1 || { grep -E "^FAIL" $B/pad-pressure-ovlon.log; echo "ACCEPT FAIL: pad_pressure_host with the overlay built in (Overlay Instance after the pad pressure parameters)"; exit 1; }
 # (the names are asked of the built plugin: the compiler may fold the literal into the copy, so no string of the binary says it)

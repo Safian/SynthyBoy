@@ -19,16 +19,6 @@ set_target_properties(synthyboy_mpc PROPERTIES
     C_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON)
 
-# Engine selection follows SYNTHYBOY_SHELL_ENGINE (same as the root CMakeLists.txt for the JUCE shell).
-# When SYNTHYBOY_SHELL_ENGINE is "vital" and Vital is in the build, SYNTHYBOY_MPC_ENGINE_VITAL=1;
-# otherwise SYNTHYBOY_MPC_ENGINE_VITAL=0. The source uses #if SYNTHYBOY_MPC_ENGINE_VITAL && SYNTHYBOY_HAS_VITAL.
-if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-    set(SYNTHYBOY_MPC_ENGINE_VITAL 1)
-else()
-    set(SYNTHYBOY_MPC_ENGINE_VITAL 0)
-endif()
-target_compile_definitions(synthyboy_mpc PRIVATE SYNTHYBOY_MPC_ENGINE_VITAL=${SYNTHYBOY_MPC_ENGINE_VITAL})
-
 target_compile_options(synthyboy_mpc PRIVATE -Wall -Wextra -Wpedantic)
 
 # Output level (docs/MPC.md "Output level"): the shell output stage (shell-mpc/output_stage.h -> core/include/synthyboy/output_stage.h).

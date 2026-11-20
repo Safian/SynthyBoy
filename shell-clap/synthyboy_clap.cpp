@@ -129,13 +129,7 @@ public:
     {
         if (! self.engine)
             return false;
-        const EngineKind kind =
-#if SYNTHYBOY_HAS_VITAL
-            EngineKind::vital;
-#else
-            EngineKind::own;
-#endif
-        return renderOfflineAny (*self.engine, kind, &self.content, &self.contentStore, request, audio);
+        return renderOfflineAny (*self.engine, EngineKind::own, &self.content, &self.contentStore, request, audio);
     }
 
     LastNote lastNote() override
