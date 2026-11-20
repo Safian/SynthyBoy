@@ -48,32 +48,58 @@ Areas are the groups of the parameter table (`group` field of `params.json`), `E
 
 | UI area (panel) | Keys | Own engine acts | Drawn dimmed (capability missing) | Editable, no effect | What is missing |
 |---|---:|---:|---:|---:|---|
-| Top bar: master volume, bend range, transpose, tune | 11 | 11 | 0 | 0 | Acts: volume, polyphony, bend range, velocity tracking, transpose, tune, legato, poly legato, bend down range / link, stereo spread, stereo routing. Missing: the velocity and note curves (legato options). |
-| Master / Portamento (Glide) | 4 | 4 | 0 | 0 | Acts (time, slope, always, scaled by interval). |
-| Master / Curves, Voicing | 7 | 7 | 0 | 0 | Acts: same note rule, steal priority, voice override Kill (50 ms fade) / Steal, note recall, stereo routing. Missing: velocity and note curves. |
-| Master / Scale, Tuning, MPE | 13 | 13 | 0 | 0 | Acts: key scale conforming, concert pitch A4, Pythagorean / Just / user Scala tuning, the MTS-ESP seam, MPE (member channel bend, axes to macros, Y to mod wheel, bend to X). |
-| Quality | 2 | 2 | 0 | 0 | 4x oversampling and the no-smoothing switch (warped oscillators run 4x oversampled internally). |
-| Voice Control | 62 | 62 | 0 | 0 | Acts: per voice pan / detune / cutoff / envelope time steps, randomisation, scaling, the oscillator mask, the three sources. |
-| Oscillators: wavetable choice, frame, warp, level, pan, pitch | 81 | 81 | 0 | 0 | Acts: oscillators 1 .. 3 (level, pan, pitch, frame, phase, destination, env 1). Missing: the pitch modes, transpose snap, fixed pitch, filter blend and sends, the frame remap, smooth interpolation. |
-| Oscillators: wavetable table, unison, spectral morph, warp lists | 93 | 93 | 0 | 0 | Acts: the 15 built-in tables and user tables (Preset table, from the content store), the spectral morph (all 11 types), unison (voices, detune, curve, blend, spread, mode, range), warp 1 and 2 (Sync .. Squeeze, FM / RM / PD / AM from the other oscillators, the Noise, the Sub and the filters, bends, asymmetry, Remap 1-4, Odd/Even, Filter LPF / HPF, the distortion warps, the 23 spectral warps on the Spectral type), key and velocity mapping, Ratio SRC, smooth interpolation. Missing: the Serum unison law, stack styles, transpose snap. |
-| Oscillators: sample, granular, spectral, multisample types | 255 | 240 | 0 | 15 | Acts: the Sample type (pitch, start, loops, slices, scan, normalize, fade edges, unison), the Granular and Spectral types (all keys incl. the X|Y control, the filter mask and wavetable filter, Mask / Vocode from the other oscillators and the Noise), the Multisample type (SFZ zones, envelope override, timbre, release triggers, key switches, choke groups of the slot). Missing: nothing of this area. |
-| Sub oscillator | 14 | 14 | 0 | 0 | Acts: waveform, octave, tune, level, pan, destination, env 1, phase. Missing: direct out, contiguous phase, bus sends, filter blend. |
-| Noise oscillator | 19 | 19 | 0 | 0 | Acts: colours, level, pan, destination, env 1, stereo. Missing: the sample noise type, pitch, fine, phase, keytrack, loop, bounce. |
-| Mixer (buses, sends, destinations) | 8 | 8 | 0 | 0 | Acts: filter blend, sends, Bus 1 / 2 (rack, level, destination, bypass), Direct, Main bypass. |
-| Filter 1 (cutoff, on) | 17 | 17 | 0 | 0 | Acts: on, model, style, cutoff, resonance, drive, blend, mix, keytrack, var, pan, level, clean mode, env 1, destination, bus sends (the models map onto the filters-serum types; Diode, Formant, Comb, Phaser written here). |
-| Filter 2, FX filter, model settings | 49 | 49 | 0 | 0 | Acts: filter 2 (same keys), routing, the formant / comb offset settings, the FX filter (without pan, clean mode, keytrack). |
-| Envelopes 1 .. 6 | 96 | 96 | 0 | 0 | Acts: all times (ms or beats), sustain and the three curves (squared amplitude, DAHDSR), legato inverted. |
-| LFOs 1 .. 10, random LFOs | 202 | 202 | 0 | 0 | Acts: the 12 shapes and the custom shape with point modulation, rate, tempo sync, key follow, all six sync types, delay, fade, smooth, direction, swing, stereo offset, host lock, mono, the five random styles (stereo). |
-| Macros 1 .. 8 | 8 | 8 | 0 | 0 | Acts. |
-| Modulation matrix (64 slots) | 1024 | 1024 | 0 | 0 | Acts: source, destination, amount, power, bipolar, stereo lanes, bypass, aux source (inv, power, output), rise / fall / delay of a slot, the amount of a slot as destination, per slot curves, cycle check. |
-| FX chain: order, racks, slots (16 instances) | 480 | 480 | 0 | 0 | Acts: the order (a repeated choice is repaired), the racks Main / Bus 1 / Bus 2 and the bands of the splitters, the pool of 16 instance slots (fxiNN: type, on, rack, order, 24 modulatable values, 10 ms crossfade) and the latency compensation between the paths of the mixer. |
-| FX: chorus, flanger, phaser | 35 | 35 | 0 | 0 | Acts: chorus, flanger (the intended design of document 06), phaser (12 stages, depth 2, blend, feedback). |
-| FX: delay, reverb | 37 | 37 | 0 | 0 | Acts: delay (all styles, sync, tape glide, filter, offset, hq), reverb (the six algorithms with room, ER size, diffusion A / B, feedback, width, force enable). |
-| FX: compressor, distortion, EQ | 54 | 54 | 0 | 0 | Acts: compressor (multiband, upward and downward stages, Limit mode with look-ahead, Serum mode, crossovers, limiter latency), distortion (all 14 types with the filter key track), EQ (Vital and Serum law, second peak band). |
-| FX: hyper dimension, utility, Bode, convolve, splitters | 66 | 66 | 0 | 0 | Acts: Hyper/Dimension, Utility, Bode, Convolve (impulse of the content store, both laws), the three splitters with their band racks. Missing: hyper / bode retrigger. |
+| Top bar: master volume, bend range, transpose, tune | 11 | 11 | 0 | 0 | Acts: volume, polyphony, bend range, velocity tracking, transpose, tune, legato, poly legato, bend down range / link, stereo spread, stereo routing. Missing keys: none. |
+| Master / Portamento (Glide) | 4 | 4 | 0 | 0 | Acts (time, slope, always, scaled by interval). Missing keys: none. |
+| Master / Curves, Voicing | 7 | 7 | 0 | 0 | Acts: same note rule, steal priority, voice override Kill (50 ms fade) / Steal, note recall, stereo routing. Missing keys: none. |
+| Master / Scale, Tuning, MPE | 13 | 13 | 0 | 0 | Acts: key scale conforming, concert pitch A4, Pythagorean / Just / user Scala tuning, the MTS-ESP seam, MPE (member channel bend, axes to macros, Y to mod wheel, bend to X). Missing keys: none. |
+| Quality | 2 | 2 | 0 | 0 | 4x oversampling and the no-smoothing switch (warped oscillators run 4x oversampled internally). Missing keys: none. |
+| Voice Control | 62 | 62 | 0 | 0 | Acts: per voice pan / detune / cutoff / envelope time steps, randomisation, scaling, the oscillator mask, the three sources. Missing keys: none. |
+| Oscillators: wavetable choice, frame, warp, level, pan, pitch | 81 | 81 | 0 | 0 | Acts: oscillators 1 .. 3 (level, pan, pitch, frame, phase, destination, env 1). Missing keys: none. |
+| Oscillators: wavetable table, unison, spectral morph, warp lists | 93 | 93 | 0 | 0 | Acts: the 15 built-in tables and user tables (Preset table, from the content store), the spectral morph (all 11 types), unison (voices, detune, curve, blend, spread, mode, range), warp 1 and 2 (Sync .. Squeeze, FM / RM / PD / AM from the other oscillators, the Noise, the Sub and the filters, bends, asymmetry, Remap 1-4, Odd/Even, Filter LPF / HPF, the distortion warps, the 23 spectral warps on the Spectral type), key and velocity mapping, Ratio SRC, smooth interpolation. Missing keys: none. |
+| Oscillators: sample, granular, spectral, multisample types | 255 | 240 | 0 | 15 | Acts: the Sample type (pitch, start, loops, slices, scan, normalize, fade edges, unison), the Granular and Spectral types (all keys incl. the X|Y control, the filter mask and wavetable filter, Mask / Vocode from the other oscillators and the Noise), the Multisample type (SFZ zones, envelope override, timbre, release triggers, key switches, choke groups of the slot). Missing keys: osc1.gran.xy_y, osc1.gran.y_axis, osc1.sample.loop_link, osc1.spec.xy_y, osc1.spec.y_axis, osc2.gran.xy_y, osc2.gran.y_axis, osc2.sample.loop_link, osc2.spec.xy_y, osc2.spec.y_axis, osc3.gran.xy_y, osc3.gran.y_axis, osc3.sample.loop_link, osc3.spec.xy_y, osc3.spec.y_axis. |
+| Sub oscillator | 14 | 14 | 0 | 0 | Acts: waveform, octave, tune, level, pan, destination, env 1, phase. Missing keys: none. |
+| Noise oscillator | 19 | 19 | 0 | 0 | Acts: colours, level, pan, destination, env 1, stereo. Missing keys: none. |
+| Mixer (buses, sends, destinations) | 8 | 8 | 0 | 0 | Acts: filter blend, sends, Bus 1 / 2 (rack, level, destination, bypass), Direct, Main bypass. Missing keys: none. |
+| Filter 1 (cutoff, on) | 17 | 17 | 0 | 0 | Acts: on, model, style, cutoff, resonance, drive, blend, mix, keytrack, var, pan, level, clean mode, env 1, destination, bus sends (the models map onto the filters-serum types; Diode, Formant, Comb, Phaser written here). Missing keys: none. |
+| Filter 2, FX filter, model settings | 49 | 49 | 0 | 0 | Acts: filter 2 (same keys), routing, the formant / comb offset settings, the FX filter (without pan, clean mode, keytrack). Missing keys: none. |
+| Envelopes 1 .. 6 | 96 | 96 | 0 | 0 | Acts: all times (ms or beats), sustain and the three curves (squared amplitude, DAHDSR), legato inverted. Missing keys: none. |
+| LFOs 1 .. 10, random LFOs | 202 | 202 | 0 | 0 | Acts: the 12 shapes and the custom shape with point modulation, rate, tempo sync, key follow, all six sync types, delay, fade, smooth, direction, swing, stereo offset, host lock, mono, the five random styles (stereo). Missing keys: none. |
+| Macros 1 .. 8 | 8 | 8 | 0 | 0 | Acts. Missing keys: none. |
+| Modulation matrix (64 slots) | 1024 | 1024 | 0 | 0 | Acts: source, destination, amount, power, bipolar, stereo lanes, bypass, aux source (inv, power, output), rise / fall / delay of a slot, the amount of a slot as destination, per slot curves, cycle check. Missing keys: none. |
+| FX chain: order, racks, slots (16 instances) | 480 | 480 | 0 | 0 | Acts: the order (a repeated choice is repaired), the racks Main / Bus 1 / Bus 2 and the bands of the splitters, the pool of 16 instance slots (fxiNN: type, on, rack, order, 24 modulatable values, 10 ms crossfade) and the latency compensation between the paths of the mixer. Missing keys: none. |
+| FX: chorus, flanger, phaser | 35 | 35 | 0 | 0 | Acts: chorus, flanger (the intended design of document 06), phaser (12 stages, depth 2, blend, feedback). Missing keys: none. |
+| FX: delay, reverb | 37 | 37 | 0 | 0 | Acts: delay (all styles, sync, tape glide, filter, offset, hq), reverb (the six algorithms with room, ER size, diffusion A / B, feedback, width, force enable). Missing keys: none. |
+| FX: compressor, distortion, EQ | 54 | 54 | 0 | 0 | Acts: compressor (multiband, upward and downward stages, Limit mode with look-ahead, Serum mode, crossovers, limiter latency), distortion (all 14 types with the filter key track), EQ (Vital and Serum law, second peak band). Missing keys: none. |
+| FX: hyper dimension, utility, Bode, convolve, splitters | 66 | 66 | 0 | 0 | Acts: Hyper/Dimension, Utility, Bode, Convolve (impulse of the content store, both laws), the three splitters with their band racks. Missing keys: none. |
 | **All** | **2637** | **2622** | **0** | **15** | |
 
 <!-- END GENERATED TABLE -->
+
+## 2a. Remaining keys (generated)
+
+<!-- BEGIN GENERATED REMAINING KEYS (scripts/gen-own-engine-gap.py) -->
+
+**15 keys remain.**
+
+| Area | Key | State | Missing capability bits |
+|---|---|---|---|
+| Oscillators: sample, granular, spectral, multisample types | osc1.gran.xy_y | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc1.gran.y_axis | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc1.sample.loop_link | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc1.spec.xy_y | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc1.spec.y_axis | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc2.gran.xy_y | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc2.gran.y_axis | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc2.sample.loop_link | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc2.spec.xy_y | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc2.spec.y_axis | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc3.gran.xy_y | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc3.gran.y_axis | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc3.sample.loop_link | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc3.spec.xy_y | editable, no effect |  |
+| Oscillators: sample, granular, spectral, multisample types | osc3.spec.y_axis | editable, no effect |  |
+
+<!-- END GENERATED REMAINING KEYS -->
 
 ## 3. What is not a key
 
