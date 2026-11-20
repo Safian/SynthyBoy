@@ -188,5 +188,27 @@ class DocsAndLegal(unittest.TestCase):
         self.assertRegex(read("docs/ARCHITECTURE.md")[:900], r"(?i)vital-derived engine (has been )?removed")
 
 
+class EngineDirectoryGone(unittest.TestCase):
+    """R7: core/engine-vital is deleted, core no longer links it, the SYNTHYBOY_WITH_VITAL option and SYNTHYBOY_HAS_VITAL are gone."""
+
+    # text of the build files, scripts, workflows, shells and the living docs (history records and reports keep their old wording)
+    LIVING = ["CMakeLists.txt", "core/CMakeLists.txt", "core/src/engine_factory.cpp", "core/include/synthyboy/engine.h", "README.md", "docs/RELEASE.md",
+              "docs/MPC.md", "docs/BITMAP-GUI-EXTENSION.md", "shell-juce/ui/README.md", "tests/bitmap-gui/CMakeLists.txt", "tools/vital-import/CMakeLists.txt",
+              "tools/param-audit/CMakeLists.txt", ".github/workflows/build.yml", "scripts/build-mpc.sh", "scripts/mpc-container-build.sh", "scripts/build-arm32-test.sh",
+              "scripts/build-tier-bench.sh", "scripts/test-ios-static-ui.sh", "scripts/run-param-audit.sh", "docs/release/VOICE-COUNT-GAIN-SPEC.md"]
+
+    def test_directory_is_gone(self):
+        self.assertFalse(os.path.exists(os.path.join(ROOT, "core", "engine-vital")))
+
+    def test_core_cmake_has_no_engine_vital(self):
+        self.assertNotIn("engine-vital", read("core/CMakeLists.txt"))
+
+    def test_no_option_and_no_define(self):
+        for f in self.LIVING:
+            text = read(f)
+            for needle in ("SYNTHYBOY_WITH_VITAL", "SYNTHYBOY_HAS_VITAL"):
+                self.assertNotIn(needle, text, f"{f}: {needle}")
+
+
 if __name__ == "__main__":
     unittest.main()
