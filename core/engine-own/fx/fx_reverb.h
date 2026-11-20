@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <array>
+#include <cstddef>
+#include <vector>
 
 #include "fx_dsp.h"
 
@@ -38,6 +40,7 @@ struct AllPassLine
 {
     DelayLine line;
     void prepare (int maxSamples) { line.prepare (maxSamples); }
+    void bind (float* buf, int pow2Size) noexcept { line.bind (buf, pow2Size); }
     void reset() noexcept { line.reset(); }
     float process (float x, float delay, float c) noexcept
     {
@@ -73,70 +76,49 @@ public:
         int type = 0, room = 2;
     };
 
+    Reverb() = default;
+    // the delay lines point into `arena`: a copy would point into the arena of the other reverb (a move keeps the heap block)
+    Reverb (const Reverb&) = delete;
+    Reverb& operator= (const Reverb&) = delete;
+    Reverb (Reverb&&) noexcept = default;
+    Reverb& operator= (Reverb&&) noexcept = default;
+
+    /** One block of storage holds every delay line: the two pre-delay lines (always used) and then, overlapping, the lines of the four mutually exclusive cores (activeGroup). */
     void prepare (double sr)
     {
         sampleRate = sr;
         scale = 1;
         while (static_cast<double> (scale) < sr / 44100.0)
             scale <<= 1;
-        for (int k = 0; k < kLines; ++k)
-        {
-            line[k].prepare (static_cast<int> (sr / 44100.0 * 2.0 * 11400.0) + 4096);
-            apLine[k].prepare (1100 * scale);
-        }
-        for (int k = 0; k < 8; ++k)
-        {
-            net[k].prepare (static_cast<int> (sr * 0.5) + 64);
-            netAp[k].prepare (static_cast<int> (sr * 0.02) + 64);
-        }
-        for (auto& a : inAp)
-            a.prepare (static_cast<int> (sr * 0.02) + 64);
-        const float pr = static_cast<float> (sr / 29761.0) * 2.83f * 1.2f;
-        for (int b = 0; b < 2; ++b)
-        {
-            plModAp[b].prepare (static_cast<int> (1000.0f * pr) + 64);
-            plDel1[b].prepare (static_cast<int> (4500.0f * pr) + 64);
-            plAp2[b].prepare (static_cast<int> (2700.0f * pr) + 64);
-            plDel2[b].prepare (static_cast<int> (3800.0f * pr) + 64);
-        }
-        for (auto& a : plIn)
-            a.prepare (static_cast<int> (400.0f * pr) + 64);
-        const int vmax = static_cast<int> (1700.0 * sr / 44100.0 * 2.83 * 1.2) + 128;
-        for (int c = 0; c < 2; ++c)
-        {
-            vInAp[c].prepare (static_cast<int> (200.0 * sr / 44100.0 * 2.83) + 64);
-            for (int k = 0; k < 8; ++k)
-                vComb[c][k].prepare (vmax);
-            for (int k = 0; k < 4; ++k)
-                vAp[c][k].prepare (static_cast<int> (600.0 * sr / 44100.0 * 2.83) + 64);
-        }
-        erLine.prepare (static_cast<int> (sr * 0.17) + 64);
-        pre[0].prepare (static_cast<int> (sr * 0.32));
-        pre[1].prepare (static_cast<int> (sr * 0.32));
+        layoutLines (nullptr);   // measures: coreOffset and groupFloats
+        const size_t most = std::max ({ groupFloats[0], groupFloats[1], groupFloats[2], groupFloats[3] });
+        arena.assign (coreOffset + most, 0.0f);
+        layoutLines (arena.data());
+        activeGroup = -1;
         reset();
     }
+    /** The heap bytes of the delay lines (one block) and the number of blocks. */
+    size_t memoryBytes() const noexcept { return arena.size() * sizeof (float); }
+    int bufferAllocCount() const noexcept { return arena.empty() ? 0 : 1; }
+
     void reset() noexcept
     {
-        for (auto& d : line) d.reset();
-        for (auto& d : apLine) d.reset();
-        for (auto& d : pre) d.reset();
-        for (auto& d : net) d.reset();
-        for (auto& d : netAp) d.reset();
-        for (auto& d : inAp) d.reset();
-        for (auto& d : plIn) d.reset();
+        // the pre-delay lines, and the lines of the core that holds the arena (all of it while no core has run yet)
+        pre[0].reset();
+        pre[1].reset();
+        const size_t from = coreOffset, count = activeGroup < 0 ? arena.size() - coreOffset : groupFloats[activeGroup];
+        if (! arena.empty())
+            std::fill (arena.begin() + static_cast<std::ptrdiff_t> (from), arena.begin() + static_cast<std::ptrdiff_t> (from + count), 0.0f);
+        rewindLines();
         for (int b = 0; b < 2; ++b)
         {
-            plModAp[b].reset(); plDel1[b].reset(); plAp2[b].reset(); plDel2[b].reset(); plDamp[b].reset(); plFeed[b] = 0.0f;
+            plDamp[b].reset(); plFeed[b] = 0.0f;
         }
         for (int c = 0; c < 2; ++c)
         {
-            vInAp[c].reset();
-            for (auto& d : vComb[c]) d.reset();
-            for (auto& d : vAp[c]) d.reset();
             vLp[c] = 0.0f;
             for (auto& s : vDamp[c]) s.reset();
         }
-        erLine.reset();
         for (auto& x : hsLp) x = 0.0f;
         for (auto& x : lsLp) x = 0.0f;
         for (auto& x : inLp) x = 0.0f;
@@ -169,6 +151,8 @@ public:
         pdCur += (pdTarget - pdCur) * 0.04f;
         const bool useWidth = std::fabs (p.width - 1.0f) > 1.0e-4f;
         const int type = std::clamp (p.type, 0, 5);
+        if (groupOf (type) != activeGroup)
+            enterGroup (groupOf (type));
         const float aHs = TrapLp::coefficient (p.highShelfHz, sampleRate), aLs = TrapLp::coefficient (p.lowShelfHz, sampleRate);
         coefs.cHi = OnePole::coefficient (p.highCut, sampleRate);
         coefs.cLo = OnePole::coefficient (p.lowCut, sampleRate);
@@ -210,6 +194,134 @@ public:
 
 private:
     static constexpr float kLn1000 = 6.907755279f;
+    // ---------------------------------------------------------------- the storage
+    /** The core group of a type: 0 the 16 line network (type 0), 1 the plate, 2 the 8 line networks (Hall, Nitrous, Basin), 3 the vintage. */
+    static int groupOf (int type) noexcept { return type == 0 ? 0 : (type == 1 ? 1 : (type == 3 ? 3 : 2)); }
+
+    /** Gives every line its place in the arena (base null: nothing is bound, the sizes are measured). The lengths are the ones a line allocated for itself when each line had its own block. */
+    void layoutLines (float* base) noexcept
+    {
+        const double sr = sampleRate;
+        size_t cur = 0;
+        const auto place = [&] (DelayLine& d, int maxSamples)
+        {
+            const int n = DelayLine::storageSize (maxSamples);
+            if (base != nullptr)
+                d.bind (base + cur, n);
+            cur += static_cast<size_t> (n);
+        };
+        const int preMax = static_cast<int> (sr * 0.32);
+        place (pre[0], preMax);
+        place (pre[1], preMax);
+        coreOffset = cur;
+
+        // group 0: the 16 line network (no early reflections)
+        cur = coreOffset;
+        for (int k = 0; k < kLines; ++k)
+        {
+            place (line[k], static_cast<int> (sr / 44100.0 * 2.0 * 11400.0) + 4096);
+            place (apLine[k].line, 1100 * scale);
+        }
+        groupFloats[0] = cur - coreOffset;
+
+        // group 1: the plate
+        cur = coreOffset;
+        place (erLine, static_cast<int> (sr * 0.17) + 64);
+        const float pr = static_cast<float> (sr / 29761.0) * 2.83f * 1.2f;
+        for (int b = 0; b < 2; ++b)
+        {
+            place (plModAp[b].line, static_cast<int> (1000.0f * pr) + 64);
+            place (plDel1[b], static_cast<int> (4500.0f * pr) + 64);
+            place (plAp2[b].line, static_cast<int> (2700.0f * pr) + 64);
+            place (plDel2[b], static_cast<int> (3800.0f * pr) + 64);
+        }
+        for (auto& a : plIn)
+            place (a.line, static_cast<int> (400.0f * pr) + 64);
+        groupFloats[1] = cur - coreOffset;
+
+        // group 2: the 8 line networks (Hall, Nitrous, Basin)
+        cur = coreOffset;
+        place (erLine, static_cast<int> (sr * 0.17) + 64);
+        for (int k = 0; k < 8; ++k)
+        {
+            place (net[k], static_cast<int> (sr * 0.5) + 64);
+            place (netAp[k].line, static_cast<int> (sr * 0.02) + 64);
+        }
+        for (auto& a : inAp)
+            place (a.line, static_cast<int> (sr * 0.02) + 64);
+        groupFloats[2] = cur - coreOffset;
+
+        // group 3: the vintage
+        cur = coreOffset;
+        place (erLine, static_cast<int> (sr * 0.17) + 64);
+        const int vmax = static_cast<int> (1700.0 * sr / 44100.0 * 2.83 * 1.2) + 128;
+        for (int c = 0; c < 2; ++c)
+        {
+            place (vInAp[c].line, static_cast<int> (200.0 * sr / 44100.0 * 2.83) + 64);
+            for (int k = 0; k < 8; ++k)
+                place (vComb[c][k], vmax);
+            for (int k = 0; k < 4; ++k)
+                place (vAp[c][k].line, static_cast<int> (600.0 * sr / 44100.0 * 2.83) + 64);
+        }
+        groupFloats[3] = cur - coreOffset;
+    }
+
+    /** The write position of every line of the cores back to 0 (the pre-delay lines are reset by reset ()). */
+    void rewindLines() noexcept
+    {
+        for (auto& d : line) d.rewind();
+        for (auto& d : apLine) d.line.rewind();
+        for (auto& d : net) d.rewind();
+        for (auto& d : netAp) d.line.rewind();
+        for (auto& d : inAp) d.line.rewind();
+        for (auto& d : plIn) d.line.rewind();
+        for (int b = 0; b < 2; ++b)
+        {
+            plModAp[b].line.rewind(); plDel1[b].rewind(); plAp2[b].line.rewind(); plDel2[b].rewind();
+        }
+        for (int c = 0; c < 2; ++c)
+        {
+            vInAp[c].line.rewind();
+            for (auto& d : vComb[c]) d.rewind();
+            for (auto& d : vAp[c]) d.line.rewind();
+        }
+        erLine.rewind();
+    }
+
+    /** Another core takes the arena over (the type of the reverb changed to another group): it starts from silence, whatever the core before it left in the lines and in its filters. */
+    void enterGroup (int g) noexcept
+    {
+        if (! arena.empty())
+            std::fill (arena.begin() + static_cast<std::ptrdiff_t> (coreOffset), arena.begin() + static_cast<std::ptrdiff_t> (coreOffset + groupFloats[g]), 0.0f);
+        rewindLines();
+        switch (g)
+        {
+            case 0:
+                for (auto& x : hsLp) x = 0.0f;
+                for (auto& x : lsLp) x = 0.0f;
+                break;
+            case 1:
+                for (int b = 0; b < 2; ++b)
+                {
+                    plDamp[b].reset();
+                    plFeed[b] = 0.0f;
+                }
+                break;
+            case 2:
+                for (auto& s : netDamp) s.reset();
+                for (int k = 0; k < 8; ++k)
+                    netLen[k] = -1.0f;
+                break;
+            default:
+                for (int c = 0; c < 2; ++c)
+                {
+                    vLp[c] = 0.0f;
+                    for (auto& s : vDamp[c]) s.reset();
+                }
+                break;
+        }
+        activeGroup = g;
+    }
     // ---------------------------------------------------------------- type 0: the 16 line network
     void prepareFdn() noexcept
     {
@@ -512,6 +624,10 @@ private:
     struct { float cHi = 0.1f, cLo = 0.001f; } coefs;
     double sampleRate = 48000.0;
     int scale = 2;
+    std::vector<float> arena;          // the storage of every delay line (see prepare ())
+    size_t coreOffset = 0;             // the start of the lines of the cores: the two pre-delay lines come first
+    size_t groupFloats[4] = {};        // the floats the lines of each core group use from coreOffset on
+    int activeGroup = -1;              // the core group that holds the arena (-1: none yet)
     DelayLine line[kLines], pre[2];
     AllPassLine apLine[kLines];
     float hsLp[kLines] = {}, lsLp[kLines] = {}, inLp[4] = {};
