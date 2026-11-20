@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Static checks of the build files after the Vital engine removal (docs/plans/vital-removal.md): no cmake run, the files are read as text."""
 
+import json
 import os
 import re
 import unittest
@@ -136,6 +137,38 @@ class LayersModel(unittest.TestCase):
             text = read(f)
             for needle in ("wtedit::vital", "namespace vital", "using namespace vital", "vitalGroup", "Vital Group", "vital_model"):
                 self.assertNotIn(needle, text, f"{f}: {needle}")
+
+
+class DocsAndLegal(unittest.TestCase):
+    """R9 (V4): licence stays AGPL-3.0-or-later, the Vital engine leaves NOTICE, THIRD_PARTY.md, plugin.json, README and the generators; old records say they are history."""
+
+    def test_notice_and_third_party(self):
+        notice = read("NOTICE")
+        self.assertIn("AGPL-3.0-or-later", notice)
+        for needle in ("Vital (https://github.com/mtytel/vital)", "core/engine-vital", "KISS FFT", "JSON for Modern C++"):
+            self.assertNotIn(needle, notice, needle)
+        third = read("THIRD_PARTY.md")
+        self.assertNotIn("core/engine-vital/upstream", third)
+        self.assertNotIn("Source included in this repository", third)
+
+    def test_plugin_json_description(self):
+        with open(os.path.join(ROOT, "plugin.json"), encoding="utf-8") as f:
+            self.assertNotIn("Vital", json.load(f)["description"])
+
+    def test_readme_has_one_engine(self):
+        text = read("README.md")
+        for needle in ("SYNTHYBOY_SHELL_ENGINE", "SYNTHYBOY_WITH_VITAL=ON (default)", "ios-vital-free", "EngineKind::own | EngineKind::vital", "Two engines"):
+            self.assertNotIn(needle, text, needle)
+
+    def test_generators_do_not_name_the_vital_engine(self):
+        self.assertNotIn("core/engine-vital", read("scripts/gen-params-doc.py"))
+        self.assertNotIn("core/engine-vital", read("docs/PARAMETERS.md"))
+        self.assertNotIn("Vital engine", read("scripts/gen-sound-set-batch2-doc.py"))
+        self.assertNotIn("engine-vital", read("scripts/gen-factory-presets.py"))
+
+    def test_history_records_say_so(self):
+        self.assertRegex(read("docs/UPSTREAM.md")[:600], r"(?i)history")
+        self.assertRegex(read("docs/ARCHITECTURE.md")[:900], r"(?i)vital-derived engine (has been )?removed")
 
 
 if __name__ == "__main__":
