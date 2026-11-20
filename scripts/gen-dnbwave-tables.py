@@ -4,9 +4,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Generates Serum-compatible 2048 samples/frame RIFF WAV wavetables with 'clm ' metadata chunk:
-1. content/wavetables/DnbWave.wav: Single-cycle descending kick chirp (ICanHasKick style)
-2. content/wavetables/DnbWave_sweep.wav: 64-frame morph sweep from pure sine to dense chirp
-3. content/wavetables/DnbWave_drive.wav: 64-frame morph sweep with analog tanh saturation
+1. content/wavetables/Digital/DnbWave.wav: Single-cycle descending kick chirp (ICanHasKick style)
+2. content/wavetables/Digital/DnbWave_sweep.wav: 64-frame morph sweep from pure sine to dense chirp
+3. content/wavetables/Digital/DnbWave_drive.wav: 64-frame morph sweep with analog tanh saturation
 """
 
 import math
@@ -57,17 +57,16 @@ def main():
 
     # --- Digital & Bass ---
     # 1. DnbWave (Single frame kick chirp)
-    for d in (target_dir, digital_dir):
-        make_wavetable(os.path.join(d, "DnbWave.wav"), 1,
-                       lambda w, y: math.sin(2.0 * math.pi * (15.0 * w - 7.0 * (w**2))))
-        make_wavetable(os.path.join(d, "DnbWave_sweep.wav"), 64,
-                       lambda w, y: math.sin(2.0 * math.pi * ((1.0 + 14.0 * y) * w - 7.0 * y * (w**2))))
-        make_wavetable(os.path.join(d, "DnbWave_drive.wav"), 64,
-                       lambda w, y: math.tanh(2.5 * math.sin(2.0 * math.pi * ((1.0 + 14.0 * y) * w - 7.0 * y * (w**2)))))
-        make_wavetable(os.path.join(d, "Monster_growl.wav"), 64,
-                       lambda w, y: math.tanh(2.5 * math.sin(2.0 * math.pi * w + (2.0 + 4.0 * y) * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * (2.0 + 3.0 * y)))))
-        make_wavetable(os.path.join(d, "Acid_303.wav"), 64,
-                       lambda w, y: math.tanh((1.0 - 2.0 * w) + 1.2 * math.exp(-4.0 * w) * math.sin(2.0 * math.pi * w * (2.0 + 14.0 * y))))
+    make_wavetable(os.path.join(digital_dir, "DnbWave.wav"), 1,
+                   lambda w, y: math.sin(2.0 * math.pi * (15.0 * w - 7.0 * (w**2))))
+    make_wavetable(os.path.join(digital_dir, "DnbWave_sweep.wav"), 64,
+                   lambda w, y: math.sin(2.0 * math.pi * ((1.0 + 14.0 * y) * w - 7.0 * y * (w**2))))
+    make_wavetable(os.path.join(digital_dir, "DnbWave_drive.wav"), 64,
+                   lambda w, y: math.tanh(2.5 * math.sin(2.0 * math.pi * ((1.0 + 14.0 * y) * w - 7.0 * y * (w**2)))))
+    make_wavetable(os.path.join(digital_dir, "Monster_growl.wav"), 64,
+                   lambda w, y: math.tanh(2.5 * math.sin(2.0 * math.pi * w + (2.0 + 4.0 * y) * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * (2.0 + 3.0 * y)))))
+    make_wavetable(os.path.join(digital_dir, "Acid_303.wav"), 64,
+                   lambda w, y: math.tanh((1.0 - 2.0 * w) + 1.2 * math.exp(-4.0 * w) * math.sin(2.0 * math.pi * w * (2.0 + 14.0 * y))))
 
     make_wavetable(os.path.join(digital_dir, "Hard_sync.wav"), 64,
                    lambda w, y: 1.0 - 2.0 * ((w * (1.0 + 7.0 * y)) % 1.0))
@@ -89,9 +88,8 @@ def main():
                    lambda w, y: math.tanh(2.5 * math.sin(2.0 * math.pi * w * (1.0 + 4.0 * y)) * math.exp(-3.0 * w) + 0.5 * math.sin(2.0 * math.pi * w)))
 
     # --- Analog & Shapes ---
-    for d in (target_dir, analog_dir):
-        make_wavetable(os.path.join(d, "PWM_sweep.wav"), 64,
-                       lambda w, y: 1.0 if w < (0.05 + 0.9 * y) else -1.0)
+    make_wavetable(os.path.join(analog_dir, "PWM_sweep.wav"), 64,
+                   lambda w, y: 1.0 if w < (0.05 + 0.9 * y) else -1.0)
 
     # Basic shapes (4 frames: Sine, Triangle, Saw, Square)
     def basic_shape(w, y):
@@ -128,9 +126,8 @@ def main():
                    lambda w, y: 0.2 * ((1.0 - 2.0 * w) + (1.0 - 2.0 * ((w * (1.01 + 0.03 * y)) % 1.0)) + (1.0 - 2.0 * ((w * (0.99 - 0.03 * y) + 1.0) % 1.0)) + (1.0 - 2.0 * ((w * (1.02 + 0.06 * y)) % 1.0)) + (1.0 - 2.0 * ((w * (0.98 - 0.06 * y) + 1.0) % 1.0))))
 
     # --- Spectral & Harmonics ---
-    for d in (target_dir, spectral_dir):
-        make_wavetable(os.path.join(d, "Metallic_comb.wav"), 64,
-                       lambda w, y: math.tanh(math.sin(2.0 * math.pi * w) + 0.6 * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * 2.73) + 0.4 * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * 5.41 * (1.0 + y))))
+    make_wavetable(os.path.join(spectral_dir, "Metallic_comb.wav"), 64,
+                   lambda w, y: math.tanh(math.sin(2.0 * math.pi * w) + 0.6 * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * 2.73) + 0.4 * math.sin(math.pi * w) * math.sin(2.0 * math.pi * w * 5.41 * (1.0 + y))))
 
     make_wavetable(os.path.join(spectral_dir, "Organ_drawbars.wav"), 64,
                    lambda w, y: (math.sin(2.0 * math.pi * w) + 0.8 * math.sin(4.0 * math.pi * w) + 0.6 * math.sin(6.0 * math.pi * w) + 0.4 * math.sin(8.0 * math.pi * w)) * 0.4)
@@ -150,9 +147,8 @@ def main():
                    lambda w, y: math.sin(2.0 * math.pi * w) - 0.5 * y * math.sin(6.0 * math.pi * w) + 0.3 * y * math.sin(10.0 * math.pi * w))
 
     # --- Vowel & Formants ---
-    for d in (target_dir, vowel_dir):
-        make_wavetable(os.path.join(d, "Vowel_formant.wav"), 64,
-                       lambda w, y: math.sin(math.pi * w) * (math.sin(2.0 * math.pi * w * (2.0 + 5.0 * y)) + 0.7 * math.sin(2.0 * math.pi * w * (5.0 + 9.0 * y))))
+    make_wavetable(os.path.join(vowel_dir, "Vowel_formant.wav"), 64,
+                   lambda w, y: math.sin(math.pi * w) * (math.sin(2.0 * math.pi * w * (2.0 + 5.0 * y)) + 0.7 * math.sin(2.0 * math.pi * w * (5.0 + 9.0 * y))))
     make_wavetable(os.path.join(vowel_dir, "Vowel_talkbox.wav"), 64,
                    lambda w, y: math.sin(math.pi * w) * (math.sin(2.0 * math.pi * w * (1.0 + 4.0 * y)) + 0.8 * math.sin(2.0 * math.pi * w * (3.0 + 8.0 * y)) + 0.5 * math.sin(2.0 * math.pi * w * (6.0 + 10.0 * y))))
 
