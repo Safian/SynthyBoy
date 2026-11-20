@@ -44,9 +44,9 @@ inline std::vector<float> sine (double peak = 0.5)
 }
 
 /** The left channel of a Distortion run (both channels carry the input), the input processed in chunks of `chunk`. */
-inline std::vector<float> run (const own::Distortion::Params& p, bool fast, const std::vector<float>& in, size_t chunk = 32)
+inline std::vector<float> run (const synthyboy::own::Distortion::Params& p, bool fast, const std::vector<float>& in, size_t chunk = 32)
 {
-    own::Distortion d;
+    synthyboy::own::Distortion d;
     d.prepare (kFs);
     d.fast = fast;
     d.set (p);
@@ -56,9 +56,9 @@ inline std::vector<float> run (const own::Distortion::Params& p, bool fast, cons
     return l;
 }
 
-inline own::Distortion::Params params (int type, float driveDb)
+inline synthyboy::own::Distortion::Params params (int type, float driveDb)
 {
-    own::Distortion::Params p;
+    synthyboy::own::Distortion::Params p;
     p.type = type;
     p.driveDb = driveDb;
     p.mix = 1.0f;
@@ -78,7 +78,7 @@ inline aliasm::Result measure (int type, float driveDb, bool fast, bool on)
 /** The DIST-AA-CHECKSUM line of a type (drive +12 dB, LCG input, order 0, mix 1, 512 samples), the format of core/tests/test_own_fx.cpp (DIST-CHECKSUM). */
 inline void checksum (int type)
 {
-    own::Distortion dist;
+    synthyboy::own::Distortion dist;
     dist.prepare (kFs);
     dist.set (params (type, 12.0f));
     const int n = 512;
@@ -106,7 +106,7 @@ inline bool same (const std::vector<float>& a, const std::vector<float>& b)
 /** The common checks of the converted types: block split (32, 7, 128 give the same bits) and reset () against a fresh instance. Returns true when both hold. */
 inline bool blockSplitAndReset (int type, bool fast)
 {
-    const own::Distortion::Params p = params (type, 12.0f);
+    const synthyboy::own::Distortion::Params p = params (type, 12.0f);
     std::vector<float> in (4096);
     Lcg rng (987654321u);
     for (auto& v : in)
@@ -114,7 +114,7 @@ inline bool blockSplitAndReset (int type, bool fast)
     const std::vector<float> a = run (p, fast, in, 32), b = run (p, fast, in, 7), c = run (p, fast, in, 128);
     bool ok = same (a, b) && same (a, c);
 
-    own::Distortion warm, fresh;
+    synthyboy::own::Distortion warm, fresh;
     warm.prepare (kFs);
     fresh.prepare (kFs);
     warm.fast = fresh.fast = fast;
