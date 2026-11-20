@@ -197,19 +197,17 @@ inline void draw (gpu::SceneBuilder& sb, const Rect& r, const Data& d, bool cach
             };
             for (int i = 0; i < n; ++i)
             {
-                int srcIdx = std::min (d.n - 1, i * step);
-                if (i > 0 && i < n - 1)
-                {
-                    if (! isExtreme (srcIdx))
-                    {
-                        const int left = srcIdx - 1;
-                        const int right = srcIdx + 1;
-                        if (left > 0 && isExtreme (left))
-                            srcIdx = left;
-                        else if (right < d.n - 1 && isExtreme (right) && (i == n - 2 || (right + 1) / 2 == i))
-                            srcIdx = right;
-                    }
-                }
+                const int s1 = 2 * i - 1;
+                const int s2 = std::min (d.n - 1, 2 * i);
+                const bool ext1 = s1 > 0 && s1 < d.n - 1 && isExtreme (s1);
+                const bool ext2 = s2 > 0 && s2 < d.n - 1 && isExtreme (s2);
+                int srcIdx = s2;
+                if (ext1 && ext2)
+                    srcIdx = std::abs (d.y[s1]) >= std::abs (d.y[s2]) ? s1 : s2;
+                else if (ext1)
+                    srcIdx = s1;
+                else if (ext2)
+                    srcIdx = s2;
                 rows[i] = std::min (bottom + 40.0f, std::max (top - 40.0f, rowOf (plot, d.y[srcIdx])));
             }
         }

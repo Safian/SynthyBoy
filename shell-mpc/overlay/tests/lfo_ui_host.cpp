@@ -1587,6 +1587,49 @@ void testSpikeDecimation()
                                ") reaches its own row");
         }
     }
+
+    // Alternating case: max at odd index directly followed by min at next even index
+    for (int oddIdx : { 1, 35, 125 })
+    {
+        float y[128] = {};
+        y[oddIdx] = 1.0f;
+        y[oddIdx + 1] = -0.5f;
+        ui::lfodisplay::Data d;
+        d.kind = ui::lfodisplay::Data::Kind::Shape;
+        d.y = y;
+        d.n = 128;
+
+        for (int detail : { 1, 2 })
+        {
+            ui::theme::setDetail (detail);
+            uit::Scene sc (400, 200, uit::kBackgroundRgba);
+            ui::lfodisplay::draw (sc.builder(), rect, d, false);
+
+            bool reachedRow = false;
+            const gpu::SceneData& sd = *sc.data;
+            for (uint32_t opIdx = 0; opIdx < sd.numOps; ++opIdx)
+            {
+                if (sd.ops[opIdx].op == gpu::kOpCurve)
+                {
+                    const int first = static_cast<int> (sd.ops[opIdx].f[0]);
+                    const int n = static_cast<int> (sd.ops[opIdx].f[1]);
+                    for (int i = 0; i < n; ++i)
+                    {
+                        if (std::abs (sd.y[first + i] - expectedRow) < 1e-3f)
+                        {
+                            reachedRow = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            check (reachedRow, "detail level " + std::to_string (detail) +
+                               ": alternating max at odd index " + std::to_string (oddIdx) +
+                               " and min at even index " + std::to_string (oddIdx + 1) +
+                               " reaches max row");
+        }
+    }
+
     ui::theme::setDetail (1);
 }
 
