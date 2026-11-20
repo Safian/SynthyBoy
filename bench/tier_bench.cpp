@@ -6,10 +6,19 @@
 //
 //   synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets]
 //                        [--seconds 30] [--repeat N] [--budget PCT] [--notes K] [--retrigger 1] [--paced] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz]
-//                        [--sections] [--list]
+//                        [--sections] [--list] [--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N]
 //
-//   --core N        pin the process to CPU N (Linux: sched_setaffinity; elsewhere the option is refused). Nothing else of the machine is touched: no scheduling class,
-//                   no priority, no frequency governor. The CPU the run really was on, its part number and its frequency settings are printed.
+//   --core N        pin the measuring thread to CPU N (Linux: sched_setaffinity; elsewhere the option is refused). The frequency governor is not touched. The CPU the run
+//                   really was on, its part number and its frequency settings are printed. The engine's helper threads are moved to the other CPUs (see --no-helpers-away).
+//   --rt N          run the measuring thread SCHED_FIFO with priority N (1 .. 99), as the host's audio thread would run: the block times then do not contain the time other
+//                   normal threads took from the core. Needs root; without it the policy is refused, a line says so and the run goes on (--rt-require stops it instead).
+//   --mlock         lock the memory of the process (mlockall), so a page fault cannot land in a block
+//   --rt-gap MS     with --rt: after every 64 blocks sleep MS milliseconds outside the timed region, so the real-time throttling of the kernel cannot fire (default: the
+//                   shortest gap that keeps the duty below 94 %, 12 ms for 128 frames at 44.1 kHz; 0 = no gap)
+//   --rt-require    exit 1 when --rt could not be applied
+//   --no-helpers-away  leave the engine's helper threads as they are inherited (with --core they are then pinned to the measured core too)
+//   --retry-invalid N  a run that the health rules mark INVALID (a stall, run queue delay, a frequency drop, a major page fault, heat) is repeated up to N times (default 2);
+//                   the last run is kept and its validity is in the csv
 //   --set NAME      the list of profiles (default settings):
 //                     settings  "low" (what the MPC build ships) and one change at a time: unison 4 / 7 / 16, warp 4x, morph full, math exact, control full, fx all,
 //                               samples high; then everything at once with 8 voices; each with the notes of its polyphony
@@ -55,6 +64,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -88,6 +98,9 @@
 
 #include "device_profile.h"
 #include "own_heavy_patch.h"
+#include "perf/perf_env.h"
+#include "perf/perf_sched.h"
+#include "perf/perf_stats.h"
 
 using namespace synthyboy;
 
@@ -242,6 +255,12 @@ struct Options
     double tolerance = 0.0;  // --verify: a sample may differ by this share of the load's largest sample (default 0: the same values)
     std::string profilePath; // --profile
     uint32_t savingsOff = 0; // --no-fx-mute, --scalar-filters: OwnSaving bits switched off (before / after measurements with one binary)
+    int rt = 0;              // --rt: SCHED_FIFO priority of the measuring thread, 0 = normal scheduling
+    bool mlock = false;      // --mlock
+    double rtGapMs = -1.0;   // --rt-gap: -1 = the shortest gap that keeps the real-time duty below 94 %
+    bool rtRequire = false;  // --rt-require
+    bool helpersAway = true; // --no-helpers-away clears it
+    int retryInvalid = 2;    // --retry-invalid
 };
 
 struct PresetData
@@ -354,9 +373,24 @@ struct Result
     std::vector<double> slowSectionMs; // the sections of the longest block (--sections)
     double slowBlockMs = 0.0;
     std::vector<double> sectionReads; // clock reads that land in the section's time per block (own scopes + scopes directly inside)
+    // health of the run (perf/perf_stats.h: a run disturbed by the scheduler, the governor, page faults or heat is INVALID, never averaged in)
+    double p999Ms = 0.0;
+    double runDelayShare = 0.0;   // time the thread waited in a run queue / (that + the time it ran), over the whole run
+    double threadCpuMs = 0.0;     // cpu time of the measuring thread over the whole run
+    double sumMs = 0.0;           // the block times of the measured window added
+    long nivcsw = 0;              // involuntary context switches of the thread over the whole run
+    long minflt = 0, minfltMeasured = 0, majflt = 0; // minor page faults of the whole run and of the measured window, major faults of the measured window
+    long rssKb = -1;
+    double tempMaxC = std::numeric_limits<double>::quiet_NaN();
+    long khzBefore = 0, khzAfter = 0;
+    bool valid = true;
+    std::string invalidReason;
 };
 
-Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load& load, int notes)
+long currentKhz (int cpu);
+std::string readLine (const std::string& path);
+
+Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load& load, int notes, int cpu)
 {
     auto engine = createEngine (EngineKind::own);
     applyLoad (*engine, load);
@@ -379,9 +413,18 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
     int voiceMax = 0;
     float sink = 0.0f;
     const auto blockTime = std::chrono::duration<double> (o.block / o.sampleRate);
+    // the gap after every perf::kRtGapEvery blocks of a real-time run (outside the timed region): the kernel throttles a real-time thread that is busy for 95 % of a second
+    const double gapMs = o.rtGapMs >= 0.0 ? o.rtGapMs : std::ceil (perf::minGapMs (1000.0 * o.block / o.sampleRate, perf::kRtGapEvery, 0.95, 0.01));
+    const perf::SchedStat sched0 = perf::readThreadSchedstat();
+    const perf::Rusage rusage0 = perf::readRusage();
+    perf::Rusage rusageWarm = rusage0;
+    const double cpuMs0 = perf::threadCpuMs();
+    const long khzBefore = currentKhz (cpu);
     const auto start = std::chrono::steady_clock::now();
     for (long long b = 0; b < warmup + measured; ++b)
     {
+        if (b == warmup)
+            rusageWarm = perf::readRusage();
         events.clear();
         if (b % retrigger == 0)
         {
@@ -445,7 +488,12 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
             voiceSum += av;
             voiceMax = std::max (voiceMax, av);
         }
+        if (o.rt > 0 && ! o.paced && gapMs > 0.0 && (b + 1) % perf::kRtGapEvery == 0)
+            std::this_thread::sleep_for (std::chrono::duration<double, std::milli> (gapMs));
     }
+    const perf::SchedStat sched1 = perf::readThreadSchedstat();
+    const perf::Rusage rusage1 = perf::readRusage();
+    const double cpuMs1 = perf::threadCpuMs();
     if (sink == 12345.678f)
         std::puts ("");
 
@@ -454,16 +502,43 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
     const double budget = o.block / o.sampleRate;
     double sum = 0.0;
     for (const double t : times)
-    {
         sum += t;
-        r.over += t > budget ? 1 : 0;
-    }
-    std::sort (times.begin(), times.end());
-    r.minMs = 1000.0 * times.front();
-    r.medianMs = 1000.0 * times[times.size() / 2];
-    r.p99Ms = 1000.0 * times[static_cast<size_t> (0.99 * static_cast<double> (times.size() - 1))];
-    r.maxMs = 1000.0 * times.back();
+    const perf::Summary summary = perf::summarize (times, budget);   // the same indices as before: sorted[n / 2], sorted[floor (0.99 * (n - 1))]
+    r.over = static_cast<long long> (summary.over);
+    r.minMs = 1000.0 * summary.min;
+    r.medianMs = 1000.0 * summary.median;
+    r.p99Ms = 1000.0 * summary.p99;
+    r.p999Ms = 1000.0 * summary.p999;
+    r.maxMs = 1000.0 * summary.max;
     r.meanMs = 1000.0 * sum / static_cast<double> (times.size());
+    r.sumMs = 1000.0 * sum;
+    {
+        perf::SchedStat delta;
+        delta.ok = sched0.ok && sched1.ok;
+        delta.runNs = sched1.runNs - sched0.runNs;
+        delta.waitNs = sched1.waitNs - sched0.waitNs;
+        r.runDelayShare = delta.ok ? perf::waitShare (delta) : 0.0;
+        r.threadCpuMs = cpuMs1 - cpuMs0;
+        r.nivcsw = rusage1.nivcsw - rusage0.nivcsw;
+        r.minflt = rusage1.minflt - rusage0.minflt;
+        r.minfltMeasured = rusage1.minflt - rusageWarm.minflt;
+        r.majflt = rusage1.majflt - rusageWarm.majflt;
+        r.rssKb = perf::readRssKb();
+        r.tempMaxC = perf::maxThermalC();
+        r.khzBefore = khzBefore;
+        r.khzAfter = currentKhz (cpu);
+        perf::RunHealth health;
+        health.runDelayShare = r.runDelayShare;
+        health.khzBefore = static_cast<double> (r.khzBefore);
+        health.khzAfter = static_cast<double> (r.khzAfter);
+        health.khzMax = cpu >= 0 ? static_cast<double> (std::atol (readLine ("/sys/devices/system/cpu/cpu" + std::to_string (cpu) + "/cpufreq/scaling_max_freq").c_str())) : 0.0;
+        health.tempMaxC = std::isnan (r.tempMaxC) ? 0.0 : r.tempMaxC;
+        health.maxMs = r.maxMs;
+        health.budgetMs = 1000.0 * budget;
+        health.majflt = r.majflt;
+        r.invalidReason = perf::invalidReason (health);
+        r.valid = r.invalidReason.empty();
+    }
     r.voicesMean = voiceSum / static_cast<double> (times.size());
     r.voicesMax = voiceMax;
     if (o.sections)
@@ -574,7 +649,8 @@ long currentKhz (int cpu)
 [[noreturn]] void usage (const char* message)
 {
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
-                          "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--scalar-warp] [--no-voice-savings] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list]\n", message);
+                          "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--scalar-warp] [--no-voice-savings] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list] "
+                          "[--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -809,9 +885,16 @@ int main (int argc, char** argv)
         else if (a == "--scalar-content") o.savingsOff |= kOwnSavingContentKernels;
         else if (a == "--no-voice-savings") o.savingsOff |= kOwnSavingVoiceControl;
         else if (a == "--budget")      o.budget = std::atof (next());
+        else if (a == "--rt")          o.rt = std::atoi (next());
+        else if (a == "--mlock")       o.mlock = true;
+        else if (a == "--rt-gap")      o.rtGapMs = std::atof (next());
+        else if (a == "--rt-require")  o.rtRequire = true;
+        else if (a == "--no-helpers-away") o.helpersAway = false;
+        else if (a == "--retry-invalid") o.retryInvalid = std::atoi (next());
         else usage (("unknown argument " + a).c_str());
     }
-    if (o.seconds <= 0.0 || o.block < 1 || o.block > 8192 || o.notes < 0 || o.notes > kMaxVoices || o.sampleRate < 8000.0 || o.retrigger <= 0.0 || o.repeat < 1 || o.repeat > 99 || o.budget < 0.0)
+    if (o.seconds <= 0.0 || o.block < 1 || o.block > 8192 || o.notes < 0 || o.notes > kMaxVoices || o.sampleRate < 8000.0 || o.retrigger <= 0.0 || o.repeat < 1 || o.repeat > 99 || o.budget < 0.0
+        || (o.rt != 0 && (o.rt < 1 || o.rt > 99)) || o.rtGapMs < -1.0 || o.retryInvalid < 0 || o.retryInvalid > 9)
         usage ("argument out of range");
     if (o.micro)
     {
@@ -936,22 +1019,57 @@ int main (int argc, char** argv)
             addNamed (n, false);
     }
 
-    // ---- the CPU ----
+    // ---- the CPU and the scheduling ----
+#if ! defined(__linux__)
     if (o.core >= 0)
     {
-#if defined(__linux__)
-        cpu_set_t set;
-        CPU_ZERO (&set);
-        CPU_SET (static_cast<unsigned> (o.core), &set);
-        if (sched_setaffinity (0, sizeof set, &set) != 0)
-        {
-            std::perror ("tier_bench: sched_setaffinity");
-            return 1;
-        }
-#else
         std::fprintf (stderr, "tier_bench: --core needs Linux (sched_setaffinity); run without it here\n");
         return 2;
+    }
 #endif
+    if (o.core >= 0 && o.helpersAway)
+    {
+        // The helper threads of the engine take the mask of their creator unless the start hook moves them; the wavetable builder thread calls no hook, so it is born in the
+        // first prepare () with the mask of this thread. So: the hook, then this thread gets the helper mask, a throw-away engine starts that builder thread, and only then
+        // this thread pins itself to the measured core.
+        perf::installHelperPolicyHook (o.core);
+#if defined(__linux__)
+        const std::vector<int> helpers = perf::helperCpus (perf::parseCpuList (perf::readTextFile ("/sys/devices/system/cpu/online")), o.core);
+        cpu_set_t helperSet;
+        CPU_ZERO (&helperSet);
+        for (const int c : helpers)
+            if (c >= 0 && c < CPU_SETSIZE)
+                CPU_SET (static_cast<unsigned> (c), &helperSet);
+        (void) sched_setaffinity (0, sizeof helperSet, &helperSet);
+        if (! profiles.empty())
+        {
+            auto warmEngine = createEngine (EngineKind::own);
+            Quality warmQuality = synthyboy_mpc::profileQuality (profiles[0]);
+            warmQuality.realtime = true;
+            warmEngine->prepare (o.sampleRate, o.block, warmQuality);
+        }
+        std::string helperText;
+        for (const int c : helpers)
+            helperText += (helperText.empty() ? "" : ",") + std::to_string (c);
+        std::printf ("helpers: engine threads on cpus %s (measured cpu %d)\n", helperText.c_str(), o.core);
+#endif
+    }
+    else if (o.core >= 0)
+        std::printf ("helpers: left as inherited\n");
+    if (o.core >= 0 || o.rt > 0 || o.mlock)
+    {
+        const perf::SchedResult sched = perf::applySched ({ o.core, o.rt, o.mlock });
+        std::printf ("%s\n", sched.text.c_str());
+        if (o.core >= 0 && ! sched.affinityOk)
+        {
+            std::fprintf (stderr, "tier_bench: sched_setaffinity: %s\n", std::strerror (sched.err));
+            return 1;
+        }
+        if (o.rt > 0 && ! sched.fifoOk && o.rtRequire)
+        {
+            std::fprintf (stderr, "tier_bench: --rt-require: the real-time policy was refused\n");
+            return 1;
+        }
     }
     if (o.ftz)
         flushDenormalsOn();
@@ -1048,7 +1166,8 @@ int main (int argc, char** argv)
         return 1;
     }
     if (csv != nullptr)
-        std::fprintf (csv, "device,cpu,cpu_info,profile,settings,load,group,notes,voices_mean,voices_max,sr,block,blocks,min_pct,median_pct,p99_pct,max_pct,mean_pct,min_ms,median_ms,p99_ms,max_ms,mean_ms,blocks_over_100pct,cpu_khz_after_run,pass\n");
+        std::fprintf (csv, "device,cpu,cpu_info,profile,settings,load,group,notes,voices_mean,voices_max,sr,block,blocks,min_pct,median_pct,p99_pct,max_pct,mean_pct,min_ms,median_ms,p99_ms,max_ms,mean_ms,blocks_over_100pct,cpu_khz_after_run,pass"
+                          ",p999_pct,rt_prio,thread_cpu_ms,run_delay_pct,nivcsw,minflt_run,minflt_measured,majflt,rss_kb,temp_c_max,khz_before,valid,invalid_reason\n");
 
     std::printf ("\nshare of the block's real time (%.3f ms = 100 %%) spent in process(), one core:\n", budgetMs);
     std::printf ("%-58s %-24s %5s %6s | %7s %7s %7s %7s %7s | %5s %8s %4s\n", "profile", "load", "notes", "voices", "min %", "median%", "p99 %", "max %", "mean %", "over", "cpu MHz", "pass");
@@ -1070,12 +1189,26 @@ int main (int argc, char** argv)
             for (size_t li = 0; li < loads.size(); ++li)
             {
                 const Load& l = loads[li];
-                const Result r = run (o, profiles[c], l, notes);
                 const double k = 100.0 / budgetMs;
-                const long khz = currentKhz (cpu);
-                std::printf ("%-58s %-24.24s %5d %6.1f | %7.2f %7.2f %7.2f %7.2f %7.2f | %5lld %8ld %4d\n", configs[c].c_str(), l.name.c_str(), notes, r.voicesMean, r.minMs * k, r.medianMs * k,
-                             r.p99Ms * k, r.maxMs * k, r.meanMs * k, r.over, khz / 1000, pass);
-                std::fflush (stdout);
+                Result r;
+                long khz = 0;
+                for (int attempt = 0;; ++attempt)
+                {
+                    r = run (o, profiles[c], l, notes, cpu);
+                    khz = currentKhz (cpu);
+                    std::printf ("%-58s %-24.24s %5d %6.1f | %7.2f %7.2f %7.2f %7.2f %7.2f | %5lld %8ld %4d\n", configs[c].c_str(), l.name.c_str(), notes, r.voicesMean, r.minMs * k, r.medianMs * k,
+                                 r.p99Ms * k, r.maxMs * k, r.meanMs * k, r.over, khz / 1000, pass);
+                    char temp[24] = "n/a";
+                    if (! std::isnan (r.tempMaxC))
+                        std::snprintf (temp, sizeof temp, "%.1f", r.tempMaxC);
+                    const std::string verdict = r.valid ? std::string ("valid") : "INVALID (" + r.invalidReason + ")";
+                    std::printf ("    health: run_delay %.4f %%, thread cpu %.1f ms of %.1f ms, nivcsw %ld, minflt %ld (measured %ld), majflt %ld, rss %ld kB, temp %s C, cpu %ld -> %ld kHz, %s\n",
+                                 100.0 * r.runDelayShare, r.threadCpuMs, r.sumMs, r.nivcsw, r.minflt, r.minfltMeasured, r.majflt, r.rssKb, temp, r.khzBefore, r.khzAfter, verdict.c_str());
+                    std::fflush (stdout);
+                    if (r.valid || attempt >= o.retryInvalid)
+                        break;
+                    std::printf ("    retry %d: %s\n", attempt + 1, r.invalidReason.c_str());
+                }
                 if (o.sections)
                 {
                     // Every scope reads the clock twice: about one read lands in the scope's own section and one in the section around it. "less clock" takes, per
@@ -1109,9 +1242,13 @@ int main (int argc, char** argv)
                 }
                 if (csv != nullptr)
                 {
-                    std::fprintf (csv, "\"%s\",%d,\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%d,%.2f,%d,%.0f,%d,%lld,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%.5f,%.5f,%.5f,%lld,%ld,%d\n", model.c_str(), cpu,
+                    char tempText[24] = "";
+                    if (! std::isnan (r.tempMaxC))
+                        std::snprintf (tempText, sizeof tempText, "%.1f", r.tempMaxC);
+                    std::fprintf (csv, "\"%s\",%d,\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",%d,%.2f,%d,%.0f,%d,%lld,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.5f,%.5f,%.5f,%.5f,%lld,%ld,%d,%.3f,%d,%.1f,%.4f,%ld,%ld,%ld,%ld,%ld,%s,%ld,%d,\"%s\"\n", model.c_str(), cpu,
                                   cpuText.c_str(), configs[c].c_str(), synthyboy_mpc::describeProfile (profiles[c]).c_str(), l.name.c_str(), l.group.c_str(), notes, r.voicesMean, r.voicesMax,
-                                  o.sampleRate, o.block, r.blocks, r.minMs * k, r.medianMs * k, r.p99Ms * k, r.maxMs * k, r.meanMs * k, r.minMs, r.medianMs, r.p99Ms, r.maxMs, r.meanMs, r.over, khz, pass);
+                                  o.sampleRate, o.block, r.blocks, r.minMs * k, r.medianMs * k, r.p99Ms * k, r.maxMs * k, r.meanMs * k, r.minMs, r.medianMs, r.p99Ms, r.maxMs, r.meanMs, r.over, khz, pass, r.p999Ms * k, o.rt, r.threadCpuMs, 100.0 * r.runDelayShare, r.nivcsw, r.minflt,
+                                  r.minfltMeasured, r.majflt, r.rssKb, tempText, r.khzBefore, r.valid ? 1 : 0, r.invalidReason.c_str());
                     std::fflush (csv);
                 }
                 cells[c][li].p99.push_back (r.p99Ms * k);
@@ -1119,7 +1256,10 @@ int main (int argc, char** argv)
             }
         }
     if (csv != nullptr)
+    {
         std::fclose (csv);
+        std::printf ("csv schema 2: %s\n", o.csv.c_str());
+    }
 
     // The number the budget rule reads: per profile, the factory preset with the highest 99th percentile, where a preset's 99th percentile is the MEDIAN of its passes;
     // next to it the lowest and highest pass (the spread) and the longest single block of any pass.
