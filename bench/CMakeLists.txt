@@ -12,6 +12,10 @@ else()
     target_compile_options(synthyboy_bench PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# The defaults of synthyboy_bench are those of the devices: 44.1 kHz and flush-to-zero on (the header line prints "engine own, 44100 Hz").
+add_test(NAME synthyboy_bench_defaults COMMAND synthyboy_bench --engine own --patch default --seconds 0.3)
+set_tests_properties(synthyboy_bench_defaults PROPERTIES PASS_REGULAR_EXPRESSION "own, 44100 Hz" TIMEOUT 120)
+
 add_executable(synthyboy_noteon_bench noteon_bench.cpp)
 target_link_libraries(synthyboy_noteon_bench PRIVATE synthyboy_core)
 set_target_properties(synthyboy_noteon_bench PROPERTIES CXX_EXTENSIONS OFF)
@@ -57,6 +61,21 @@ else()
     target_compile_options(synthyboy_libm_probe PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+# The hardware performance counters (bench/pmu_probe.cpp, bench/perf/perf_pmu.h): links nothing of the engine; the same link rule as synthyboy_tier_bench.
+add_executable(synthyboy_pmu_probe pmu_probe.cpp)
+target_include_directories(synthyboy_pmu_probe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+set_target_properties(synthyboy_pmu_probe PROPERTIES CXX_EXTENSIONS OFF)
+if(SYNTHYBOY_TIER_BENCH_STATIC)
+    target_link_options(synthyboy_pmu_probe PRIVATE -static)
+elseif(SYNTHYBOY_TIER_BENCH_STATIC_LIBCXX)
+    target_link_options(synthyboy_pmu_probe PRIVATE -static-libstdc++ -static-libgcc)
+endif()
+if(MSVC)
+    target_compile_options(synthyboy_pmu_probe PRIVATE /W4)
+else()
+    target_compile_options(synthyboy_pmu_probe PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 # What a profile step changes in the sound (bench/profile_compare.cpp): level and spectrum differences of every factory preset between two profiles.
 add_executable(synthyboy_profile_compare profile_compare.cpp)
 target_link_libraries(synthyboy_profile_compare PRIVATE synthyboy_core)
@@ -96,6 +115,16 @@ set_tests_properties(synthyboy_fx_cost_smoke PROPERTIES PASS_REGULAR_EXPRESSION 
 # difference of the two links).
 add_test(NAME synthyboy_libm_probe COMMAND synthyboy_libm_probe --quick)
 set_tests_properties(synthyboy_libm_probe PROPERTIES PASS_REGULAR_EXPRESSION "LIBM-PROBE-RESULT ok" TIMEOUT 120)
+
+# The performance counters a device offers (bench/pmu_probe.cpp, bench/perf/perf_pmu.h): prints which events open and what a group reads; usable on any platform.
+add_test(NAME synthyboy_pmu_probe COMMAND synthyboy_pmu_probe)
+set_tests_properties(synthyboy_pmu_probe PROPERTIES PASS_REGULAR_EXPRESSION "PMU-PROBE-RESULT" TIMEOUT 120)
+
+# The synthetic loads of docs/plans/distortion-antialiasing.md (task A3): dist:<type> and warp:<type>:<amount> are known load names (--list prints them).
+add_test(NAME tier_bench_alias_load_dist COMMAND synthyboy_tier_bench --list --config low --load dist:1)
+set_tests_properties(tier_bench_alias_load_dist PROPERTIES PASS_REGULAR_EXPRESSION "load +dist:1 " TIMEOUT 120)
+add_test(NAME tier_bench_alias_load_warp COMMAND synthyboy_tier_bench --list --config low --load warp:1:35)
+set_tests_properties(tier_bench_alias_load_warp PROPERTIES PASS_REGULAR_EXPRESSION "load +warp:1:35 " TIMEOUT 120)
 
 # CLI smoke tests of the benchmarks, one line per test in bench/perf/cli_smoke.txt:  name~platform~arguments~regular expression
 # platform: any | posix (not Windows) | linux;  @PRESETS@ = content/presets;  the test is synthyboy_tier_bench_<name>

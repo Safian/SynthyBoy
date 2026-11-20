@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--preset FILE] [--preset-dir DIR] [--csv FILE] [--sr 48000] [--retrigger S]
+//   synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--preset FILE] [--preset-dir DIR] [--csv FILE] [--sr 44100] [--retrigger S] [--no-ftz]
 //
 // K notes are held and retriggered every S seconds (default 1). The first second is rendered but not measured. Prints,
 // for the requested configuration and then once per quality tier (the tier's quality: voices, unison, oversampling, ...), the
@@ -24,6 +24,11 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+
+#if defined(__x86_64__) || defined(__i386__)
+ #include <pmmintrin.h>
+ #include <xmmintrin.h>
+#endif
 
 #if defined(__linux__) && (defined(__arm__) || defined(__aarch64__))
  #define SB_BENCH_PROFILE 1
@@ -125,8 +130,11 @@ void enableFtz()
     __asm__ __volatile__("mrs %0, fpcr" : "=r"(fpcr));
     fpcr |= (1ull << 24);
     __asm__ __volatile__("msr fpcr, %0" ::"r"(fpcr));
+#elif defined(__x86_64__) || defined(__i386__)
+    _MM_SET_FLUSH_ZERO_MODE (_MM_FLUSH_ZERO_ON);
+    _MM_SET_DENORMALS_ZERO_MODE (_MM_DENORMALS_ZERO_ON);
 #else
-    std::fprintf (stderr, "bench: --ftz is only implemented for ARM\n");
+    std::fprintf (stderr, "bench: flush-to-zero is only implemented for ARM and x86\n");
 #endif
 }
 
@@ -141,12 +149,12 @@ struct Options
     const char* presetFile = nullptr; // --preset FILE: a .sbpreset instead of the default / heavy patch
     const char* csvFile = nullptr;    // --csv FILE: with --preset-dir, a line "name,mean,p99,worst" per preset
     const char* presetDir = nullptr;  // --preset-dir DIR: every .sbpreset below DIR, one line each
-    double sampleRate = 48000.0;
+    double sampleRate = 44100.0;
     double retrigger = 1.0;
     bool defaultPatch = true, heavyPatch = true;
     const char* profileFile = nullptr;
     std::string tier = "all"; // requested | low | medium | high | all
-    bool ftz = false;
+    bool ftz = true;
     float killFadeMs = -1.0f; // --kill-fade MS: tier low fade of a stolen voice in ms (-1 = the engine default)
     int morphSpread = -1; // --morph-spread 0|1: keep the morph spread across the unison voices at tier low (-1 = the engine default)
     int unisonCap = -1; // --unison-cap N: tier low unison voices per oscillator of the own engine (0 = none, -1 = the engine default)
@@ -448,7 +456,7 @@ void print (const char* label, const Options& o, int voices, const Result& r)
 
 [[noreturn]] void usage (const char* message)
 {
-    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 48000] [--retrigger S] [--profile FILE] [--ftz] [--idle] [--sections] [--unison-cap N] [--morph-spread 0|1] [--kill-fade MS] [--tier requested|low|medium|high|all]\n", message);
+    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 44100] [--retrigger S] [--profile FILE] [--ftz] [--no-ftz] [--idle] [--sections] [--unison-cap N] [--morph-spread 0|1] [--kill-fade MS] [--tier requested|low|medium|high|all]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -484,6 +492,7 @@ int main (int argc, char** argv)
         else if (a == "--retrigger") o.retrigger = std::atof (next());
         else if (a == "--profile")   o.profileFile = next();
         else if (a == "--ftz")       o.ftz = true;
+        else if (a == "--no-ftz")    o.ftz = false;
         else if (a == "--idle")      o.idle = true;
         else if (a == "--sections")  o.sections = true;
         else if (a == "--unison-cap") o.unisonCap = std::atoi (next());
