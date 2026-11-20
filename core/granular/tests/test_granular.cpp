@@ -828,3 +828,68 @@ TEST (granular_loop_grains_crossfade_boundary)
         CHECK (maxJumpRegionRev <= regionLimit);
     }
 }
+
+// granular_mip_selection_blocks_fractional_octave_aliasing
+// Reuses helper types, includes, set-up calls and check macros from granular_loop_grains_crossfade_boundary (lines 691-765)
+TEST (granular_mip_selection_blocks_fractional_octave_aliasing)
+{
+    const double sampleRate = 44100.0;
+    constexpr int kFrames = 8192;
+    std::vector<float> sineData (kFrames);
+    for (int i = 0; i < kFrames; ++i)
+        sineData[static_cast<size_t> (i)] = static_cast<float> (std::sin (2.0 * kPi * 18000.0 * static_cast<double> (i) / sampleRate));
+
+    SampleData sample;
+    CHECK (sample.loadFromFrames (sineData.data(), nullptr, kFrames, sampleRate));
+    CHECK (sample.numMipLevels() >= 2);
+    const auto view = sample.view();
+
+    GrainParams p;
+    p.pitchRatio = 1.8f;
+    p.densityHz = 4.0f;
+    p.lengthSec = 0.5f;
+    p.maxGrains = 1;
+    p.windowAmount = 0.0f;
+    p.manual = true;
+    p.position = 0.1f;
+    p.loopGrains = true;
+    p.loopLo = 0.0f;
+    p.loopHi = 1.0f;
+    p.gain = 1.0f;
+
+    GranularVoice voice;
+    voice.prepare (sampleRate);
+    voice.noteOn (&view, p, 1u, 0.0f, true, 0.0f);
+
+    constexpr int kRenderLen = 4096;
+    auto rendered = render (voice, p, kRenderLen, 256);
+    rendered.resize (kRenderLen);
+
+    const double measuredRms = rms (rendered, 512);
+    const double unattenuatedRms = 0.7071;
+    const double rejectionDb = 20.0 * std::log10 (std::max (measuredRms / unattenuatedRms, 1e-12));
+
+    // BEFORE FIX: floor(log2(1.8)) = floor(0.848) = 0 (mip 0) -> rejectionDb ≈ 0 dB (rms ≈ 0.707).
+    // AFTER FIX:  ceil(0.848) = 1 (mip 1) -> rejectionDb < -40 dB (rms < 0.007).
+    CHECK (rejectionDb < -35.0);
+
+    // Also render at pitchRatio = 1.0f and print GRANMIP-CHECKSUM (sum of abs + last 8 samples, %.9g) for unity bit-identity.
+    GrainParams pUnity = p;
+    pUnity.pitchRatio = 1.0f;
+
+    GranularVoice voiceUnity;
+    voiceUnity.prepare (sampleRate);
+    voiceUnity.noteOn (&view, pUnity, 1u, 0.0f, true, 0.0f);
+
+    auto renderedUnity = render (voiceUnity, pUnity, kRenderLen, 256);
+    renderedUnity.resize (kRenderLen);
+
+    double sumAbs = 0.0;
+    for (float s : renderedUnity)
+        sumAbs += static_cast<double> (std::fabs (s));
+    std::printf ("GRANMIP-CHECKSUM: %.9g", sumAbs);
+    for (int i = kRenderLen - 8; i < kRenderLen; ++i)
+        std::printf (" [%d]=%.9g", i, static_cast<double> (renderedUnity[static_cast<size_t> (i)]));
+    std::printf ("\n");
+}
+

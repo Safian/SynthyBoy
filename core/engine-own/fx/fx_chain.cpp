@@ -196,6 +196,9 @@ void FxChain::reset() noexcept
     splitLh.reset();
     splitLmh.reset();
     splitMs.reset();
+    for (auto& d : dlLh) { d.set (0); d.clear(); }
+    for (auto& d : dlLmh) { d.set (0); d.clear(); }
+    for (auto& d : dlMs) { d.set (0); d.clear(); }
     idleSettled = 0;
     for (int i = 0; i < 16; ++i)
     {
@@ -513,6 +516,23 @@ void FxChain::update (const float* base, const float* delta, const FxFrame& fram
     }
     buildPlan (base);
     {
+        const int l0 = rackLatency (3, false), l1 = rackLatency (4, false), mx = std::max (l0, l1);
+        dlLh[0].set (mx - l0);
+        dlLh[1].set (mx - l1);
+    }
+    {
+        const int l0 = rackLatency (5, false), l1 = rackLatency (6, false), l2 = rackLatency (7, false);
+        const int mx = std::max ({ l0, l1, l2 });
+        dlLmh[0].set (mx - l0);
+        dlLmh[1].set (mx - l1);
+        dlLmh[2].set (mx - l2);
+    }
+    {
+        const int l0 = rackLatency (8, false), l1 = rackLatency (9, false), mx = std::max (l0, l1);
+        dlMs[0].set (mx - l0);
+        dlMs[1].set (mx - l1);
+    }
+    {
         // the longest gap between two echoes: a delay (4 s, times the offset up to 4) or a pool slot that may hold one; everything else repeats within a second
         bool echoes = on[2];
         if (pool != nullptr)
@@ -596,6 +616,8 @@ void FxChain::runModule (int m, float* l, float* r, int n, int t0, int depth) no
             splitLh.split (l, r, bl[0], br[0], bl[1], br[1], n);
             runRack (3, bl[0], br[0], n, t0, depth + 1);
             runRack (4, bl[1], br[1], n, t0, depth + 1);
+            dlLh[0].process (bl[0], br[0], n);
+            dlLh[1].process (bl[1], br[1], n);
             splitLh.merge (bl[0], br[0], bl[1], br[1], l, r, n);
             break;
         }
@@ -606,6 +628,9 @@ void FxChain::runModule (int m, float* l, float* r, int n, int t0, int depth) no
             runRack (5, bl[0], br[0], n, t0, depth + 1);
             runRack (6, bl[1], br[1], n, t0, depth + 1);
             runRack (7, bl[2], br[2], n, t0, depth + 1);
+            dlLmh[0].process (bl[0], br[0], n);
+            dlLmh[1].process (bl[1], br[1], n);
+            dlLmh[2].process (bl[2], br[2], n);
             splitLmh.merge (bl[0], br[0], bl[1], br[1], bl[2], br[2], l, r, n);
             break;
         }
@@ -615,6 +640,8 @@ void FxChain::runModule (int m, float* l, float* r, int n, int t0, int depth) no
             splitMs.split (l, r, bl[0], br[0], bl[1], br[1], n);
             runRack (8, bl[0], br[0], n, t0, depth + 1);
             runRack (9, bl[1], br[1], n, t0, depth + 1);
+            dlMs[0].process (bl[0], br[0], n);
+            dlMs[1].process (bl[1], br[1], n);
             splitMs.merge (bl[0], br[0], bl[1], br[1], l, r, n);
             break;
         }

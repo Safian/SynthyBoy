@@ -857,3 +857,140 @@ TEST (own_wt_osc_morph_stagger_timing_of_the_worst_block)
     }
     CHECK (true);
 }
+
+// Pattern copied from own_wt_osc_silent_oscillator_early_out_is_bit_identical_when_the_level_rises_later (lines 511-620)
+// and makeTables / OscTick setup (lines 1-140).
+TEST (own_wt_osc_smooth_frame_scan_ramps_per_sample)
+{
+    // 1. Build a 2-frame Wavetable:
+    //    frame 0: sinCoeff[0][1] = +1.0f (+sin(2 pi x))
+    //    frame 1: sinCoeff[1][1] = -1.0f (-sin(2 pi x))
+    //    all other harmonics 0, normalizePeak = true.
+    //    Linear blend w in [0, 1] gives y(p, w) = (1 - 2 w) * sin(2 pi p).
+    std::vector<std::vector<float>> cc (2, std::vector<float> (Wavetable::kCycle / 2 + 1, 0.0f));
+    std::vector<std::vector<float>> ss = cc;
+    ss[0][1] = 1.0f;
+    ss[1][1] = -1.0f;
+    Wavetable wt;
+    wt.build (cc, ss, true);
+
+    // 2. Run two WtOsc instances:
+    //    oscConst with frame = 0.0f constant.
+    //    oscSweep whose frame steps linearly by df = 1.0f / 32.0f = 0.03125f per 32-sample period.
+    //    sr = 48000.0, voices = 1, level = 1.0f, pan = 0.0f, smooth = true, semis = 0.0f (f = 8.1758 Hz).
+    //    start (0.25f, 0.0f, rng) -> phase moves from 0.25 to 0.3045, keeping oscConst in [0.94, 1.00].
+    WtOsc oscConst, oscSweep;
+    Rng rngConst, rngSweep;
+    oscConst.start (0.25f, 0.0f, rngConst);
+    oscSweep.start (0.25f, 0.0f, rngSweep);
+
+    OscTick tConst;
+    tConst.wt = &wt;
+    tConst.voices = 1;
+    tConst.level = 1.0f;
+    tConst.pan = 0.0f;
+    tConst.panRight = 0.0f;
+    tConst.smooth = true;
+    tConst.semis = 0.0f;
+    tConst.frame = 0.0f;
+    tConst.active = true;
+
+    OscTick tSweep = tConst;
+
+    // Priming period -1 with jump = true, frame = 0.0f (so prevFrameOf = 0.0f)
+    tConst.jump = true;
+    tSweep.jump = true;
+    oscConst.update (tConst, 48000.0, rngConst);
+    oscSweep.update (tSweep, 48000.0, rngSweep);
+    tConst.jump = false;
+    tSweep.jump = false;
+
+    float constL[320] = {}, constR[320] = {};
+    float sweepL[320] = {}, sweepR[320] = {};
+
+    for (int p = 0; p < 10; ++p)
+    {
+        tSweep.frame = static_cast<float> (p + 1) * 0.03125f;
+        oscConst.update (tConst, 48000.0, rngConst);
+        oscSweep.update (tSweep, 48000.0, rngSweep);
+
+        oscConst.render (0, 32, constL + p * 32, constR + p * 32, nullptr, 48000.0);
+        oscSweep.render (0, 32, sweepL + p * 32, sweepR + p * 32, nullptr, 48000.0);
+    }
+
+    // 3. Recover instantaneous blend weight w[k] = 0.5f * (1.0f - sweepL[k] / constL[k])
+    float w[320];
+    for (int k = 0; k < 320; ++k)
+        w[k] = 0.5f * (1.0f - sweepL[k] / constL[k]);
+
+    float maxStep = 0.0f;
+    float minInnerStep = 1.0f;
+    for (int k = 1; k < 320; ++k)
+    {
+        const float step = std::fabs (w[k] - w[k - 1]);
+        maxStep = std::max (maxStep, step);
+        if ((k % 32) != 0)
+            minInnerStep = std::min (minInnerStep, step);
+    }
+
+    // BEFORE FIX:
+    // inside each 32-sample period w[k] is flat (minInnerStep == 0.0f).
+    // at each 32-sample boundary w jumps by df = 0.03125f (maxStep == 0.03125f).
+    // AFTER FIX:
+    // w ramps by 0.03125f / 32 = 0.0009765625f per sample (maxStep ≈ 0.000977f, minInnerStep ≈ 0.000977f).
+    CHECK (maxStep < 0.0015f);
+    CHECK (minInnerStep > 0.0005f);
+
+    // 4. Split period (t0 = 0, n = 10 then t0 = 10, n = 22) on oscSweep
+    tSweep.frame = 11.0f * 0.03125f;
+    oscConst.update (tConst, 48000.0, rngConst);
+    oscSweep.update (tSweep, 48000.0, rngSweep);
+
+    float splitConstL[32] = {}, splitConstR[32] = {};
+    float splitSweepL[32] = {}, splitSweepR[32] = {};
+
+    oscConst.render (0, 10, splitConstL, splitConstR, nullptr, 48000.0);
+    oscSweep.render (0, 10, splitSweepL, splitSweepR, nullptr, 48000.0);
+    oscConst.render (10, 22, splitConstL + 10, splitConstR + 10, nullptr, 48000.0);
+    oscSweep.render (10, 22, splitSweepL + 10, splitSweepR + 10, nullptr, 48000.0);
+
+    float wSplit[32];
+    for (int k = 0; k < 32; ++k)
+        wSplit[k] = 0.5f * (1.0f - splitSweepL[k] / splitConstL[k]);
+
+    float maxSplitStep = std::fabs (wSplit[0] - w[319]);
+    for (int k = 1; k < 32; ++k)
+        maxSplitStep = std::max (maxSplitStep, std::fabs (wSplit[k] - wSplit[k - 1]));
+
+    CHECK (maxSplitStep < 0.0015f);
+
+    // 5. Static-frame bit-identity checksum: 10 periods with constant frame = 0.37f
+    WtOsc oscStatic;
+    Rng rngStatic;
+    oscStatic.start (0.25f, 0.0f, rngStatic);
+
+    OscTick tStatic = tConst;
+    tStatic.frame = 0.37f;
+    tStatic.jump = true;
+
+    float staticL[320] = {}, staticR[320] = {};
+    for (int p = 0; p < 10; ++p)
+    {
+        if (p > 0)
+            tStatic.jump = false;
+        oscStatic.update (tStatic, 48000.0, rngStatic);
+        oscStatic.render (0, 32, staticL + p * 32, staticR + p * 32, nullptr, 48000.0);
+    }
+
+    double staticSum = 0.0;
+    for (int k = 0; k < 320; ++k)
+        staticSum += static_cast<double> (staticL[k]);
+
+    std::printf ("WTFRAME-CHECKSUM static sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                 staticSum,
+                 static_cast<double> (staticL[312]), static_cast<double> (staticL[313]),
+                 static_cast<double> (staticL[314]), static_cast<double> (staticL[315]),
+                 static_cast<double> (staticL[316]), static_cast<double> (staticL[317]),
+                 static_cast<double> (staticL[318]), static_cast<double> (staticL[319]));
+}
+
