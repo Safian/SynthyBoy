@@ -295,7 +295,7 @@ struct DiodeLadder
             // the output of the stages for u = 0, then the feedback high-pass on it: fbHP = p + c u
             const float S = cG0 * (G3 * s[0] + G2 * s[1] + G * s[2] + s[3]);
             const float p = cA * (S - hpState);
-            // the linear solve is the start value; one Newton step on f (u) = u - sc (D - k sc (p + c u)) corrects it (f' >= 1, so u stays a convex mix of u0 and sc (A), inside [-1, 1])
+            // the linear solve is the start value; two Newton steps on f (u) = u - sc (D - k sc (p + c u)) correct it (f' >= 1, so u stays a convex mix of u0 and sc (A), inside [-1, 1])
             const float u0 = std::max (-1.0f, std::min ((D - k * softClip (p)) * cInvDen, 1.0f));
             float d1 = 0.0f, d2 = 0.0f;
             const float sc1 = softClipAndSlope (p + c * u0, d1);
@@ -303,6 +303,11 @@ struct DiodeLadder
             const float f = u0 - sc2;
             const float fd = 1.0f + d2 * k * d1 * c;
             u = u0 - f / fd;
+            // a second Newton step (docs/plans/diode-ladder.md, risks: "the Newton step is not accurate enough on the real signal"): one more pair of softClip evaluations
+            // and one division; near the Nyquist (g up to 31.8) the first step leaves 3e-3 of relative error, two steps bring it below 1e-3
+            const float sc1b = softClipAndSlope (p + c * u, d1);
+            const float sc2b = softClipAndSlope (D - k * sc1b, d2);
+            u -= (u - sc2b) / (1.0f + d2 * k * d1 * c);
         }
 
         float y = u;
