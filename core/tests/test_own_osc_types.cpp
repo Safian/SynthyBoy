@@ -637,8 +637,14 @@ TEST (own_osc_spectral_morph_vectors)
 TEST (own_wavetable_bank_memory)
 {
     const size_t bytes = own::builtinBankBytes();
-    std::printf ("    built-in wavetable bank: %.1f MB (the eight 64 frame tables with all mip levels and spectra)\n", static_cast<double>(bytes) / 1048576.0);
+    std::printf ("    built-in wavetable bank: %.2f MB (%.2f MiB), all 15 tables with all mip levels and spectra\n", static_cast<double> (bytes) / 1.0e6, static_cast<double> (bytes) / 1048576.0);
     CHECK (bytes < 32u * 1024u * 1024u);
+    // the exact accounting: 519 frames (eight 64 frame tables and seven single frame tables), each 13,896 time floats (18 mip levels with 4 guard samples) and 2,048 spectrum floats
+    CHECK_EQ (bytes, static_cast<size_t> (519u * (13896u + 2048u) * sizeof (float)));
+    CHECK_EQ (bytes, static_cast<size_t> (33099744u));
+    CHECK_EQ (own::Wavetable::kBankDocumentedBytes, static_cast<size_t> (33099744u));
+    CHECK_EQ (own::Wavetable::kNumLevels, 18);
+    CHECK_EQ (own::Wavetable::size (17), 256);   // the floor of 256 samples per level
 }
 
 // the lazy bank (Quality::lazyTables): a table is built when it is first chosen; the audio thread reads a finished table by an atomic pointer and never a substitute
