@@ -43,10 +43,10 @@ public:
     static constexpr size_t kSlots = 4096;       // lines the ring holds between two ticks of the display thread
     static constexpr size_t kLineBytes = 192;    // a line longer than this is cut
 
-    static const std::string& path()
+    static std::string path()
     {
-        static const std::string p = [] { const char* e = std::getenv ("SYNTHYBOY_MPC_PLAY_LOG_FILE"); return std::string (e != nullptr && *e != 0 ? e : "/tmp/synthyboy-play-log"); }();
-        return p;
+        const char* e = std::getenv ("SYNTHYBOY_MPC_PLAY_LOG_FILE");
+        return std::string (e != nullptr && *e != 0 ? e : "/tmp/synthyboy-play-log");
     }
     static bool exists (const std::string& p) { return safefile::regularFileSize (p.c_str()) >= 0; }
 
