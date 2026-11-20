@@ -1299,3 +1299,164 @@ TEST (fx_distortion_reset_clears_dc_blocker_and_downsample_phase)
         }
     }
 }
+
+// Reusing test patterns, types and checks from fx_distortion_reset_clears_dc_blocker_and_downsample_phase (line 1159)
+TEST (fx_flanger_delay_cap_and_phaser_denormal_flush)
+{
+    // (1) Flanger 0.1 s delay cap and maximum valid delay verification
+    {
+        own::Flanger fl;
+        fl.prepare (kSr);
+        own::Flanger::Params p;
+        p.mix = 1.0f;
+        p.feedback = 0.0f;
+        p.rate = 0.0f;
+        p.phaseOffset = 0.5f;
+        p.centerHz = 20.0f;
+        p.depth = 5.0f;
+        fl.set (p);
+
+        const int n1 = 16000;
+        std::vector<float> l1 (n1, 0.0f), r1 (n1, 0.0f);
+        r1[0] = 1.0f;
+        fl.process (l1.data(), r1.data(), n1);
+
+        // Because readCubic is evaluated before push at sample 0, an impulse fed at index 0 echoes at index period + 1.
+        // Before fix (0.85 * sr clamp): delay echoes at sample 14281 (r1[4801] == 0.0f, r1[14281] ≈ 0.7071f).
+        // After fix (0.10 * sr clamp): delay clamped to 4800 samples (r1[4801] ≈ 0.7071f, r1[14281] == 0.0f).
+        std::printf ("FLANGER: echo at sample 4801=%.4f (unclamped 14281=%.4f)\n", r1[4801], r1[14281]);
+        CHECK (std::fabs (r1[4801]) > 0.5f);
+        CHECK (std::fabs (r1[14281]) < 1.0e-5f);
+
+        // Maximum valid delay: depth = 1.0, centerHz = 20.0 Hz -> delay = 0.0995 s = 4776 samples.
+        // Echo appears at sample 4776 + 1 = 4777.
+        fl.reset();
+        p.depth = 1.0f;
+        fl.set (p);
+
+        const int n2 = 6000;
+        std::vector<float> l2 (n2, 0.0f), r2 (n2, 0.0f);
+        r2[0] = 1.0f;
+        fl.process (l2.data(), r2.data(), n2);
+
+        // Fits within the 0.105 s buffer (8192 floats) without wrap-around:
+        CHECK (std::fabs (r2[4777]) > 0.5f);
+    }
+
+    // (2) Phaser bpA / bpB feedback denormal flush
+    {
+        own::Phaser ph;
+        ph.prepare (kSr);
+        ph.fast = false;
+        own::Phaser::Params p;
+        p.mix = 1.0f;
+        p.feedback = 0.5f;
+        p.rate = 0.0f;
+        p.depthSemis = 0.0f;
+        p.centerHz = 2000.0f;
+        p.blend = 0.0f;
+        p.phaseOffset = 0.0f;
+        p.depth2 = 0.0f;
+        ph.set (p);
+
+        const int n = 501;
+        std::vector<float> l (n, 0.0f), r (n, 0.0f);
+        l[0] = 1.0e-15f;
+        r[0] = 1.0e-15f;
+
+        ph.process (l.data(), r.data(), n);
+
+        float maxTail = 0.0f;
+        for (int i = 400; i <= 500; ++i)
+        {
+            maxTail = std::max (maxTail, std::fabs (l[i]));
+            maxTail = std::max (maxTail, std::fabs (r[i]));
+        }
+        // Fails on unfixed code: maxTail ≈ 2.3e-21 > 0.0f due to unflushed recursive bpA/bpB states.
+        // In fixed code: bpB is flushed below 1.0e-18f, silencing tails to exact 0.0f.
+        CHECK_EQ (maxTail, 0.0f);
+    }
+
+    // (3) Bit-identity reference checksums across commits 1 and 2
+    {
+        struct Lcg
+        {
+            uint32_t state;
+            explicit Lcg (uint32_t seed) : state (seed) {}
+            uint32_t next() noexcept { state = state * 1664525u + 1013904223u; return state; }
+            float sample() noexcept { return static_cast<float> (next()) * (1.0f / 4294967296.0f) - 0.5f; } // [-0.5, 0.5]
+        };
+
+        const int n = 512;
+        // Two valid Flanger configs:
+        const own::Flanger::Params flConfigs[2] = {
+            [] () { own::Flanger::Params p; p.centerHz = 330.0f; p.depth = 0.5f; p.rate = 0.25f; p.feedback = 0.5f; return p; } (),
+            [] () { own::Flanger::Params p; p.centerHz = 20.0f; p.depth = 1.0f; p.rate = 1.7f; p.feedback = -0.6f; return p; } ()
+        };
+
+        for (int cfg = 0; cfg < 2; ++cfg)
+        {
+            own::Flanger fl;
+            fl.prepare (kSr);
+            fl.set (flConfigs[cfg]);
+
+            std::vector<float> bufL (n), bufR (n);
+            Lcg rng (123456789u + static_cast<uint32_t> (cfg * 100));
+            for (int i = 0; i < n; ++i)
+            {
+                bufL[i] = rng.sample();
+                bufR[i] = rng.sample();
+            }
+
+            fl.process (bufL.data(), bufR.data(), n);
+
+            double sumAbs = 0.0;
+            for (int i = 0; i < n; ++i)
+                sumAbs += static_cast<double> (std::fabs (bufL[i])) + static_cast<double> (std::fabs (bufR[i]));
+
+            std::printf ("FLANGER-CHECKSUM cfg=%d sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                         cfg, sumAbs,
+                         static_cast<double> (bufL[n - 8]), static_cast<double> (bufL[n - 7]),
+                         static_cast<double> (bufL[n - 6]), static_cast<double> (bufL[n - 5]),
+                         static_cast<double> (bufL[n - 4]), static_cast<double> (bufL[n - 3]),
+                         static_cast<double> (bufL[n - 2]), static_cast<double> (bufL[n - 1]));
+        }
+
+        // One normal-level Phaser config:
+        {
+            own::Phaser ph;
+            ph.prepare (kSr);
+            ph.fast = false;
+            own::Phaser::Params p;
+            p.centerHz = 1200.0f;
+            p.depthSemis = 18.0f;
+            p.rate = 0.7f;
+            p.feedback = 0.6f;
+            p.blend = 0.5f;
+            p.mix = 0.7f;
+            ph.set (p);
+
+            std::vector<float> bufL (n), bufR (n);
+            Lcg rng (987654321u);
+            for (int i = 0; i < n; ++i)
+            {
+                bufL[i] = rng.sample();
+                bufR[i] = rng.sample();
+            }
+
+            ph.process (bufL.data(), bufR.data(), n);
+
+            double sumAbs = 0.0;
+            for (int i = 0; i < n; ++i)
+                sumAbs += static_cast<double> (std::fabs (bufL[i])) + static_cast<double> (std::fabs (bufR[i]));
+
+            std::printf ("PHASER-CHECKSUM sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                         sumAbs,
+                         static_cast<double> (bufL[n - 8]), static_cast<double> (bufL[n - 7]),
+                         static_cast<double> (bufL[n - 6]), static_cast<double> (bufL[n - 5]),
+                         static_cast<double> (bufL[n - 4]), static_cast<double> (bufL[n - 3]),
+                         static_cast<double> (bufL[n - 2]), static_cast<double> (bufL[n - 1]));
+        }
+    }
+}
+
