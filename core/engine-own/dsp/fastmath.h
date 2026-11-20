@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 
 namespace synthyboy
 {
@@ -34,18 +35,21 @@ inline float exp2 (float x) noexcept
     const int n = static_cast<int> (r); // round to nearest (ties away from zero)
     const float f = x - static_cast<float> (n);
     const float p = 1.0f + f * (0.693147207f + f * (0.240226512f + f * (0.0555032721f + f * (0.0096180256f + f * (0.00134004322f + f * 0.00015469732f)))));
-    union { uint32_t u; float v; } s;
-    s.u = static_cast<uint32_t> (n + 127) << 23;
-    return p * s.v;
+    uint32_t u = static_cast<uint32_t> (n + 127) << 23;
+    float v;
+    std::memcpy (&v, &u, sizeof v);
+    return p * v;
 }
 /** log2 (x) for x > 0 (normal numbers): the exponent from the bits, log2 of the mantissa in [1, 2) by a degree 8 polynomial; absolute error below 6e-8. */
 inline float log2 (float x) noexcept
 {
-    union { uint32_t u; float v; } s;
-    s.v = x;
-    const int e = static_cast<int> (s.u >> 23) - 127;
-    s.u = (s.u & 0x007fffffu) | 0x3f800000u;
-    const float t = s.v - 1.0f;
+    uint32_t u;
+    std::memcpy (&u, &x, sizeof u);
+    const int e = static_cast<int> (u >> 23) - 127;
+    u = (u & 0x007fffffu) | 0x3f800000u;
+    float m;
+    std::memcpy (&m, &u, sizeof m);
+    const float t = m - 1.0f;
     const float p = 4.8863582e-08f + t * (1.44268678f + t * (-0.721114614f + t * (0.478323545f + t * (-0.345996012f + t * (0.239231663f + t * (-0.134534254f + t * (0.0502775074f + t * -0.00887469665f)))))));
     return static_cast<float> (e) + p;
 }
