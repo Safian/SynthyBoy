@@ -705,3 +705,245 @@ TEST (formula_fuzz_1000_strings)
     // Fuzz of 1000 iterations must finish well within bounded time (< 2000 ms)
     CHECK (elapsedMs < 2000);
 }
+
+TEST (formula_dnb_wave_generation)
+{
+    Formula f;
+    Error err;
+
+    // 1. DnbWave single-cycle kick-chirp (ICanHasKick style)
+    err = Formula::compile ("sin(2*pi * (15*w - 7*w^2))", f);
+    CHECK (err.ok);
+    CHECK (! f.isMultiFrame());
+    CHECK (f.usesW());
+
+    // Boundary zero-crossings (w = 0 and w = 1)
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    std::vector<float> frame (kSamplesPerFrame);
+    err = renderFrames (f, 1, frame.data());
+    CHECK (err.ok);
+
+    // Verify all samples are in [-1, 1]
+    for (float s : frame)
+    {
+        CHECK (std::isfinite (s));
+        CHECK (s >= -1.0f && s <= 1.0f);
+    }
+
+    // Verify frequency drop (chirp): more zero-crossings in first quarter than in last quarter
+    int zeroCrossingsFirstQuarter = 0;
+    for (int i = 1; i < kSamplesPerFrame / 4; ++i)
+        if ((frame[i - 1] < 0.0f && frame[i] >= 0.0f) || (frame[i - 1] > 0.0f && frame[i] <= 0.0f))
+            ++zeroCrossingsFirstQuarter;
+
+    int zeroCrossingsLastQuarter = 0;
+    for (int i = kSamplesPerFrame * 3 / 4; i < kSamplesPerFrame; ++i)
+        if ((frame[i - 1] < 0.0f && frame[i] >= 0.0f) || (frame[i - 1] > 0.0f && frame[i] <= 0.0f))
+            ++zeroCrossingsLastQuarter;
+
+    CHECK (zeroCrossingsFirstQuarter > zeroCrossingsLastQuarter);
+
+    // 2. DnbWave chirp up
+    err = Formula::compile ("sin(2*pi * (w + 7*w^2))", f);
+    CHECK (err.ok);
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f);
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);
+
+    // 3. DnbWave sweep (y) - multi-frame wavetable
+    err = Formula::compile ("sin(2*pi * ((1 + 14*y)*w - 7*y*w^2))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK (f.usesY());
+
+    std::vector<float> multiFrames (4 * kSamplesPerFrame);
+    err = renderFrames (f, 4, multiFrames.data());
+    CHECK (err.ok);
+
+    // Frame 0 (y = 0) is pure fundamental sine
+    for (int i = 0; i < kSamplesPerFrame; ++i)
+    {
+        const double w = static_cast<double> (i) / (kSamplesPerFrame - 1);
+        const float expected = static_cast<float> (std::sin (2.0 * 3.14159265358979323846 * w));
+        CHECK_NEAR (multiFrames[i], expected, 0.01f);
+    }
+
+    // 4. DnbWave drive (y) - saturated
+    err = Formula::compile ("tanh(2.5 * sin(2*pi * ((1 + 14*y)*w - 7*y*w^2)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 5. Monster growl (y)
+    err = Formula::compile ("tanh(2.5 * sin(2*pi*w + (2 + 4*y) * sin(pi*w) * sin(2*pi*w * (2 + 3*y))))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 6. Acid 303 (y)
+    err = Formula::compile ("tanh((1 - 2*w) + 1.2 * exp(-4*w) * sin(2*pi*w * (2 + 14*y)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 7. Vowel formant (y)
+    err = Formula::compile ("sin(pi*w) * (sin(2*pi*w * (2 + 5*y)) + 0.7 * sin(2*pi*w * (5 + 9*y)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 8. Metallic comb (y)
+    err = Formula::compile ("tanh(sin(2*pi*w) + 0.6 * sin(pi*w) * sin(2*pi*w * 2.73) + 0.4 * sin(pi*w) * sin(2*pi*w * 5.41 * (1 + y)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 9. Hard sync sweep (y)
+    err = Formula::compile ("1 - 2 * ((w * (1 + 7*y)) % 1)", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 10. FM sweep (y)
+    err = Formula::compile ("sin(2*pi*w + 4.0 * y * sin(4*pi*w))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 11. Organ drawbars
+    err = Formula::compile ("sin(2*pi*w) + 0.8*sin(4*pi*w) + 0.6*sin(6*pi*w) + 0.4*sin(8*pi*w)", f);
+    CHECK (err.ok);
+    CHECK (! f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 12. Bitcrush sweep (y)
+    err = Formula::compile ("rint(sin(2*pi*w) * (2 + 14 * (1 - y))) / (2 + 14 * (1 - y))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 13. Modern talking (y)
+    err = Formula::compile ("tanh(1.8 * (sin(2*pi*w)*0.35 + sin(pi*w) * sin(2*pi*w * (3 + 6*y)) * exp(-2*w) * 1.4))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 14. Reese detune (y)
+    err = Formula::compile ("1 - w - (w * (1.04 + 0.12*y) % 1)", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 15. Supersaw stack (y)
+    err = Formula::compile ("0.34 * (3 - 2*w - 2 * (w * (1.02 + 0.06*y) % 1) - 2 * ((w * (0.98 - 0.06*y) + 1) % 1))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 16. Sub 808 drop (y)
+    err = Formula::compile ("sin(2*pi * (w + (2 + 6*y) * w * (1 - w)^2))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 17. Buchla wavefold (y)
+    err = Formula::compile ("tanh(1.5 * sin(2*pi*w + (1 + 3*y) * sin(4*pi*w)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 18. Acoustic pluck (y)
+    err = Formula::compile ("sin(2*pi*w) + (0.6*sin(4*pi*w) + 0.4*sin(6*pi*w) + 0.3*sin(8*pi*w) + 0.2*sin(10*pi*w)) * (1 - 0.85*y)", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 19. Shepard riser (y)
+    err = Formula::compile ("0.5 * sin(2*pi*w * 2^y) + 0.7 * sin(2*pi*w * 2^(1+y)) + 0.5 * sin(2*pi*w * 2^(2+y)) + 0.3 * sin(2*pi*w * 2^(3+y))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 20. Comb filter sweep (y)
+    err = Formula::compile ("1 - w - ((w + 0.05 + 0.3*y) % 1)", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 21. Tape saturate (y)
+    err = Formula::compile ("tanh(2.0 * sin(2*pi * (w + 0.03 * y * sin(2*pi*w * 3))))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 22. Chime bells
+    err = Formula::compile ("sin(2*pi*w) + sin(pi*w) * (0.65*sin(2*pi*w * 2.76) + 0.4*sin(2*pi*w * 5.4) + 0.2*sin(2*pi*w * 8.9))", f);
+    CHECK (err.ok);
+    CHECK (! f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 23. Donk bass (y)
+    err = Formula::compile ("sin(2*pi * (w + (4 + 10*y) * w * (1 - w)^3))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 24. Dirty sync (y)
+    err = Formula::compile ("(1 - 2 * ((w * (1.0 + 7.0*y)) % 1)) * (1 - 0.4 * sin(pi*w))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 25. Neuro squelch (y)
+    err = Formula::compile ("tanh(2.5 * sin(2*pi*w * (1 + 4*y)) * exp(-3*w) + 0.5 * sin(2*pi*w))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 26. Casio CZ res (y)
+    err = Formula::compile ("sin(2*pi*w * (2 + 10*y)) * 0.5 * (1 - cos(2*pi*w))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 27. Hypersaw 5x (y)
+    err = Formula::compile ("0.2 * (5 - 2*w - 2*((w*(1.01+0.03*y))%1) - 2*((w*(0.99-0.03*y)+1)%1) - 2*((w*(1.02+0.06*y))%1) - 2*((w*(0.98-0.06*y)+1)%1))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+
+    // 28. Gamelan gong (y)
+    err = Formula::compile ("sin(2*pi*w) + sin(pi*w) * (0.8*sin(2*pi*w * 1.52) + 0.6*sin(2*pi*w * 2.76) + 0.4*sin(2*pi*w * (4.2 + 2.0*y)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 29. Harmonic ladder (y)
+    err = Formula::compile ("sin(2*pi*w) + 0.5*sin(4*pi*w) * y + 0.33*sin(6*pi*w) * y^2 + 0.25*sin(8*pi*w) * y^3 + 0.2*sin(10*pi*w) * y^4", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 30. Vowel talkbox (y)
+    err = Formula::compile ("sin(pi*w) * (sin(2*pi*w * (1 + 4*y)) + 0.8 * sin(2*pi*w * (3 + 8*y)) + 0.5 * sin(2*pi*w * (6 + 10*y)))", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+
+    // 31. Chebyshev fold (y)
+    err = Formula::compile ("sin(2*pi*w) - 0.5*y * sin(6*pi*w) + 0.3*y * sin(10*pi*w)", f);
+    CHECK (err.ok);
+    CHECK (f.isMultiFrame());
+    CHECK_NEAR (f.evaluate (-1.0), 0.0f, 1e-5f); // w = 0
+    CHECK_NEAR (f.evaluate (1.0), 0.0f, 1e-4f);  // w = 1
+}

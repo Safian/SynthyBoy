@@ -855,11 +855,63 @@ private:
     {
         ensureLibrary();
         juce::PopupMenu menu;
-        juce::PopupMenu examples;
+        juce::PopupMenu digitalMenu;
+        juce::PopupMenu analogMenu;
+        juce::PopupMenu spectralMenu;
+        juce::PopupMenu vowelMenu;
+        juce::PopupMenu shapingMenu;
+        juce::PopupMenu allMenu;
+
         const auto& list = formulaExamples();
         for (size_t i = 0; i < list.size(); ++i)
-            examples.addItem (static_cast<int> (i) + 1, juce::String (list[i].name) + ":  " + list[i].expression);
-        menu.addSubMenu ("Examples", examples);
+        {
+            const int id = static_cast<int> (i) + 1;
+            const juce::String itemText = juce::String (list[i].name) + ":  " + list[i].expression;
+            const std::string name (list[i].name);
+
+            allMenu.addItem (id, itemText);
+
+            if (name.find ("Dnb") != std::string::npos || name.find ("Monster") != std::string::npos
+                || name.find ("Acid") != std::string::npos || name.find ("sync") != std::string::npos
+                || name.find ("FM") != std::string::npos || name.find ("Bitcrush") != std::string::npos
+                || name.find ("Modern talking") != std::string::npos || name.find ("Reese") != std::string::npos
+                || name.find ("808") != std::string::npos || name.find ("Donk") != std::string::npos
+                || name.find ("squelch") != std::string::npos)
+            {
+                digitalMenu.addItem (id, itemText);
+            }
+            else if (name.find ("Vowel") != std::string::npos || name.find ("Formant") != std::string::npos
+                     || name.find ("talkbox") != std::string::npos || name.find ("Talkbox") != std::string::npos)
+            {
+                vowelMenu.addItem (id, itemText);
+            }
+            else if (name.find ("Spectral") != std::string::npos || name.find ("harmonic") != std::string::npos
+                     || name.find ("Harmonic") != std::string::npos || name.find ("Bell") != std::string::npos
+                     || name.find ("Metallic") != std::string::npos || name.find ("Organ") != std::string::npos
+                     || name.find ("Pluck") != std::string::npos || name.find ("pluck") != std::string::npos
+                     || name.find ("Chime") != std::string::npos || name.find ("Shepard") != std::string::npos
+                     || name.find ("Gamelan") != std::string::npos || name.find ("gong") != std::string::npos)
+            {
+                spectralMenu.addItem (id, itemText);
+            }
+            else if (name.find ("folded") != std::string::npos || name.find ("wavefold") != std::string::npos
+                     || name.find ("fold") != std::string::npos || name.find ("rectified") != std::string::npos
+                     || name.find ("Comb") != std::string::npos || name.find ("Tape") != std::string::npos)
+            {
+                shapingMenu.addItem (id, itemText);
+            }
+            else
+            {
+                analogMenu.addItem (id, itemText);
+            }
+        }
+
+        menu.addSubMenu ("Digital & Bass", digitalMenu);
+        menu.addSubMenu ("Analog & Shapes", analogMenu);
+        menu.addSubMenu ("Spectral & Harmonics", spectralMenu);
+        menu.addSubMenu ("Vowel & Formants", vowelMenu);
+        menu.addSubMenu ("Waveshaping & Math", shapingMenu);
+        menu.addSubMenu ("All Formula Presets", allMenu);
         menu.addSeparator();
         formulaLibrary->addTo (menu, 1000);
         menu.showMenuAsync (popupOptions (presetsBtn),
@@ -1598,17 +1650,18 @@ void WavetableEditorSheet::setMode (Mode newMode)
     layersTabBtn.setToggleState (newMode == Mode::layers, juce::dontSendNotification);
 
     const bool isWide = (getWidth() >= 600);
+    const bool sideBySideCanvases = isWide && (newMode == Mode::wave || newMode == Mode::spectrum);
 
     if (waveCanvas)
         waveCanvas->setVisible (newMode == Mode::wave || isWide);
     if (spectrumCanvas)
-        spectrumCanvas->setVisible (newMode == Mode::spectrum || isWide);
+        spectrumCanvas->setVisible (newMode == Mode::spectrum || sideBySideCanvases);
     if (processView)
-        processView->setVisible (newMode == Mode::process && ! isWide);
+        processView->setVisible (newMode == Mode::process);
     if (formulaView)
-        formulaView->setVisible (newMode == Mode::formula && ! isWide);
+        formulaView->setVisible (newMode == Mode::formula);
     if (layersView)
-        layersView->setVisible (newMode == Mode::layers && ! isWide);
+        layersView->setVisible (newMode == Mode::layers);
 
     resized();
 }
@@ -1851,10 +1904,19 @@ bool WavetableEditorSheet::applyFormula (const std::string& expression, std::str
         if (currentFrameIndex < wt.numFrames())
         {
             auto& frame = wt.getFrame (currentFrameIndex);
-            for (size_t s = 0; s < wtedit::kWaveformSize; ++s)
+            if (f.usesQ())
             {
-                const double x = (static_cast<double> (s) / static_cast<double> (wtedit::kWaveformSize - 1)) * 2.0 - 1.0;
-                frame[s] = f.evaluate (x, static_cast<int> (currentFrameIndex), static_cast<int> (wt.numFrames()));
+                std::vector<float> buffer (wtedit::kWaveformSize);
+                formula::renderFrames (f, 1, buffer.data());
+                std::copy_n (buffer.data(), wtedit::kWaveformSize, frame.sampleData());
+            }
+            else
+            {
+                for (size_t s = 0; s < wtedit::kWaveformSize; ++s)
+                {
+                    const double x = (static_cast<double> (s) / static_cast<double> (wtedit::kWaveformSize - 1)) * 2.0 - 1.0;
+                    frame[s] = f.evaluate (x, static_cast<int> (currentFrameIndex), static_cast<int> (wt.numFrames()));
+                }
             }
         }
     }
@@ -2586,7 +2648,13 @@ void WavetableEditorSheet::resized()
         if (waveCanvas)
             waveCanvas->setBounds (leftArea);
 
-        if (spectrumCanvas)
+        if (currentMode == Mode::process && processView)
+            processView->setBounds (rightArea);
+        else if (currentMode == Mode::formula && formulaView)
+            formulaView->setBounds (rightArea);
+        else if (currentMode == Mode::layers && layersView)
+            layersView->setBounds (rightArea);
+        else if (spectrumCanvas)
             spectrumCanvas->setBounds (rightArea);
     }
     else
