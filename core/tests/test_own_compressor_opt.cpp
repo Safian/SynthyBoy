@@ -287,3 +287,136 @@ TEST (compressor_limiter_timing_report)
     }
     std::printf ("limiter block (128 samples, 1 band): old %.4f ms, new %.4f ms\n", ms[0], ms[1]);
 }
+
+// Multiband parallel mix phase alignment across crossover frequencies (audit part 2, rank 8).
+// Follows the compressor setup and block processing of compressor_matches_reference_over_blocks_and_parameter_changes.
+TEST (compressor_multiband_parallel_mix_has_no_crossover_notch)
+{
+    constexpr double kPi = 3.14159265358979323846;
+    auto measureRatio = [] (int bands, int mode, double f) -> double {
+        const int totalSamples = 9600;
+        const int blockSize = 64;
+        std::vector<float> inL (static_cast<size_t> (totalSamples));
+        std::vector<float> inR (static_cast<size_t> (totalSamples));
+        for (int i = 0; i < totalSamples; ++i)
+        {
+            const double phase = 2.0 * kPi * f * static_cast<double> (i) / 48000.0;
+            const float s = static_cast<float> (std::sin (phase));
+            inL[static_cast<size_t> (i)] = s;
+            inR[static_cast<size_t> (i)] = s;
+        }
+
+        Compressor comp;
+        comp.prepare (48000.0);
+        Compressor::Params p;
+        p.mix = 0.5f;
+        p.crossLow = 160.0f;
+        p.crossHigh = 2500.0f;
+        p.bands = bands;
+        p.mode = mode;
+        for (auto& bd : p.band)
+        {
+            bd.upperDb = 12.0f;
+            bd.lowerDb = -100.0f;
+            bd.upperRatio = 0.0f;
+            bd.lowerRatio = 0.0f;
+            bd.gainDb = 0.0f;
+        }
+        comp.set (p);
+
+        std::vector<float> outL = inL;
+        std::vector<float> outR = inR;
+        for (int offset = 0; offset < totalSamples; offset += blockSize)
+            comp.process (outL.data() + offset, outR.data() + offset, blockSize);
+
+        const int startSample = 4800;
+        const int endSample = 9600;
+        const int count = endSample - startSample;
+        double inSumSq = 0.0;
+        double outSumSq = 0.0;
+        for (int i = startSample; i < endSample; ++i)
+        {
+            inSumSq += static_cast<double> (inL[static_cast<size_t> (i)]) * static_cast<double> (inL[static_cast<size_t> (i)]);
+            outSumSq += static_cast<double> (outL[static_cast<size_t> (i)]) * static_cast<double> (outL[static_cast<size_t> (i)]);
+        }
+        const double inRms = std::sqrt (inSumSq / static_cast<double> (count));
+        const double outRms = std::sqrt (outSumSq / static_cast<double> (count));
+        return outRms / inRms;
+    };
+
+    // 1. Multiband (bands = 0), mode = 0 (Compress), f = 2500 Hz
+    {
+        const double ratio = measureRatio (0, 0, 2500.0);
+        CHECK (std::fabs (ratio - 1.0) < 0.02);
+    }
+    // 2. Multiband (bands = 0), mode = 0 (Compress), f = 160 Hz
+    {
+        const double ratio = measureRatio (0, 0, 160.0);
+        CHECK (std::fabs (ratio - 1.0) < 0.02);
+    }
+    // 3. Low Band (bands = 1), mode = 0 (Compress), f = 160 Hz
+    {
+        const double ratio = measureRatio (1, 0, 160.0);
+        CHECK (std::fabs (ratio - 1.0) < 0.02);
+    }
+    // 4. High Band (bands = 2), mode = 0 (Compress), f = 2500 Hz
+    {
+        const double ratio = measureRatio (2, 0, 2500.0);
+        CHECK (std::fabs (ratio - 1.0) < 0.02);
+    }
+    // 5. Multiband (bands = 0), mode = 1 (Limit), f = 2500 Hz
+    {
+        const double ratio = measureRatio (0, 1, 2500.0);
+        CHECK (std::fabs (ratio - 1.0) < 0.02);
+    }
+
+    // 6. Single-band checksum for bit-identity verification
+    {
+        Compressor comp;
+        comp.prepare (48000.0);
+        Compressor::Params p;
+        p.bands = 3;
+        p.mode = 0;
+        p.mix = 0.5f;
+        for (auto& bd : p.band)
+        {
+            bd.upperDb = -20.0f;
+            bd.upperRatio = 0.5f;
+            bd.lowerDb = -100.0f;
+            bd.lowerRatio = 0.0f;
+            bd.gainDb = 0.0f;
+        }
+        comp.set (p);
+
+        struct Lcg
+        {
+            uint32_t state;
+            explicit Lcg (uint32_t seed) : state (seed) {}
+            uint32_t next() noexcept { state = state * 1664525u + 1013904223u; return state; }
+            float sample() noexcept { return static_cast<float> (next()) * (2.0f / 4294967296.0f) - 1.0f; }
+        };
+
+        const int n = 512;
+        std::vector<float> bufL (static_cast<size_t> (n)), bufR (static_cast<size_t> (n));
+        Lcg rng (123456789u);
+        for (int i = 0; i < n; ++i)
+        {
+            bufL[static_cast<size_t> (i)] = rng.sample();
+            bufR[static_cast<size_t> (i)] = rng.sample();
+        }
+
+        comp.process (bufL.data(), bufR.data(), n);
+
+        double sumAbs = 0.0;
+        for (int i = 0; i < n; ++i)
+            sumAbs += static_cast<double> (std::fabs (bufL[static_cast<size_t> (i)])) + static_cast<double> (std::fabs (bufR[static_cast<size_t> (i)]));
+
+        std::printf ("COMPMIX-CHECKSUM single_band sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                     sumAbs,
+                     static_cast<double> (bufL[n - 8]), static_cast<double> (bufL[n - 7]),
+                     static_cast<double> (bufL[n - 6]), static_cast<double> (bufL[n - 5]),
+                     static_cast<double> (bufL[n - 4]), static_cast<double> (bufL[n - 3]),
+                     static_cast<double> (bufL[n - 2]), static_cast<double> (bufL[n - 1]));
+    }
+}
+
