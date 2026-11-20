@@ -88,6 +88,10 @@ endif()
 add_test(NAME synthyboy_libm_probe COMMAND synthyboy_libm_probe --quick)
 set_tests_properties(synthyboy_libm_probe PROPERTIES PASS_REGULAR_EXPRESSION "LIBM-PROBE-RESULT ok" TIMEOUT 120)
 
+# The performance counters a device offers (bench/pmu_probe.cpp, bench/perf/perf_pmu.h): prints which events open and what a group reads; usable on any platform.
+add_test(NAME synthyboy_pmu_probe COMMAND synthyboy_pmu_probe)
+set_tests_properties(synthyboy_pmu_probe PROPERTIES PASS_REGULAR_EXPRESSION "PMU-PROBE-RESULT" TIMEOUT 120)
+
 # CLI smoke tests of the benchmarks, one line per test in bench/perf/cli_smoke.txt:  name~platform~arguments~regular expression
 # platform: any | posix (not Windows) | linux;  @PRESETS@ = content/presets;  the test is synthyboy_tier_bench_<name>
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/perf/cli_smoke.txt" SYNTHYBOY_CLI_SMOKE)
