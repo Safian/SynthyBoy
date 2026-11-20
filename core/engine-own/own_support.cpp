@@ -48,9 +48,9 @@ bool implementedKey (const std::string& k)
         if (rest.rfind ("sample.", 0) == 0)
             return !inList (rest.substr (7), { "loop_link" }); // loop_link is an editing aid of the UI (keeps the loop length when a marker moves)
         if (rest.rfind ("gran.", 0) == 0)
-            return !inList (rest.substr (5), { "y_axis", "xy_y" });
+            return true;
         if (rest.rfind ("spec.", 0) == 0)
-            return !inList (rest.substr (5), { "y_axis", "xy_y" });
+            return true;
         if (rest.rfind ("multi.", 0) == 0)
             return true;
         return inList (rest, { "on", "level", "pan", "transpose", "tune", "wavetable", "frame", "frame_spread", "phase", "random_phase", "destination", "env1",

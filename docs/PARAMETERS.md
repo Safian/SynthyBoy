@@ -201,8 +201,8 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.gran.rand_warp` | Osc 1 Grain Random Warp | 0 .. 100 % | 0 % | Osc 1 / Granular | mod | yes |
 | `osc1.gran.rand_warp2` | Osc 1 Grain Random Warp 2 | 0 .. 100 % | 0 % | Osc 1 / Granular | mod | yes |
 | `osc1.gran.spawn_pattern` | Osc 1 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 1 / Granular |  | yes |
-| `osc1.gran.y_axis` | Osc 1 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 1 / Granular |  |  |
-| `osc1.gran.xy_y` | Osc 1 Grain Y Position | 0 .. 100 % | 50 % | Osc 1 / Granular | mod |  |
+| `osc1.gran.y_axis` | Osc 1 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 1 / Granular |  | yes |
+| `osc1.gran.xy_y` | Osc 1 Grain Y Position | 0 .. 100 % | 50 % | Osc 1 / Granular | mod | yes |
 | `osc1.spec.freq_lo` | Osc 1 Spectral Freq Lo | 20 .. 20000 Hz (skew 0.300000012) | 20 Hz | Osc 1 / Spectral | mod | yes |
 | `osc1.spec.freq_hi` | Osc 1 Spectral Freq Hi | 20 .. 20000 Hz (skew 0.300000012) | 20000 Hz | Osc 1 / Spectral | mod | yes |
 | `osc1.spec.lohi_smooth` | Osc 1 Spectral Smooth Band Edges | 0 Off, 1 On | On | Osc 1 / Spectral |  | yes |
@@ -215,8 +215,8 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc1.spec.scan_keytrack` | Osc 1 Spectral Scan Key Track | 0 Off, 1 On | Off | Osc 1 / Spectral |  | yes |
 | `osc1.spec.phase_lock` | Osc 1 Spectral Phase Lock | 0 Off, 1 On | Off | Osc 1 / Spectral |  | yes |
 | `osc1.spec.transients` | Osc 1 Spectral Transients | 0 Off, 1 On | Off | Osc 1 / Spectral |  | yes |
-| `osc1.spec.y_axis` | Osc 1 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 1 / Spectral |  |  |
-| `osc1.spec.xy_y` | Osc 1 Spectral Y Position | 0 .. 100 % | 50 % | Osc 1 / Spectral | mod |  |
+| `osc1.spec.y_axis` | Osc 1 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 1 / Spectral |  | yes |
+| `osc1.spec.xy_y` | Osc 1 Spectral Y Position | 0 .. 100 % | 50 % | Osc 1 / Spectral | mod | yes |
 | `osc1.multi.override` | Osc 1 Multisample Envelope Override | 0 Off, 1 On | Off | Osc 1 / Multisample |  | yes |
 | `osc1.multi.delay` | Osc 1 Multisample Delay | 0 .. 2000 ms (skew 0.400000006) | 0 ms | Osc 1 / Multisample |  | yes |
 | `osc1.multi.attack` | Osc 1 Multisample Attack | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 1 / Multisample |  | yes |
@@ -337,8 +337,8 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.gran.rand_warp` | Osc 2 Grain Random Warp | 0 .. 100 % | 0 % | Osc 2 / Granular | mod | yes |
 | `osc2.gran.rand_warp2` | Osc 2 Grain Random Warp 2 | 0 .. 100 % | 0 % | Osc 2 / Granular | mod | yes |
 | `osc2.gran.spawn_pattern` | Osc 2 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 2 / Granular |  | yes |
-| `osc2.gran.y_axis` | Osc 2 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 2 / Granular |  |  |
-| `osc2.gran.xy_y` | Osc 2 Grain Y Position | 0 .. 100 % | 50 % | Osc 2 / Granular | mod |  |
+| `osc2.gran.y_axis` | Osc 2 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 2 / Granular |  | yes |
+| `osc2.gran.xy_y` | Osc 2 Grain Y Position | 0 .. 100 % | 50 % | Osc 2 / Granular | mod | yes |
 | `osc2.spec.freq_lo` | Osc 2 Spectral Freq Lo | 20 .. 20000 Hz (skew 0.300000012) | 20 Hz | Osc 2 / Spectral | mod | yes |
 | `osc2.spec.freq_hi` | Osc 2 Spectral Freq Hi | 20 .. 20000 Hz (skew 0.300000012) | 20000 Hz | Osc 2 / Spectral | mod | yes |
 | `osc2.spec.lohi_smooth` | Osc 2 Spectral Smooth Band Edges | 0 Off, 1 On | On | Osc 2 / Spectral |  | yes |
@@ -351,8 +351,8 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc2.spec.scan_keytrack` | Osc 2 Spectral Scan Key Track | 0 Off, 1 On | Off | Osc 2 / Spectral |  | yes |
 | `osc2.spec.phase_lock` | Osc 2 Spectral Phase Lock | 0 Off, 1 On | Off | Osc 2 / Spectral |  | yes |
 | `osc2.spec.transients` | Osc 2 Spectral Transients | 0 Off, 1 On | Off | Osc 2 / Spectral |  | yes |
-| `osc2.spec.y_axis` | Osc 2 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 2 / Spectral |  |  |
-| `osc2.spec.xy_y` | Osc 2 Spectral Y Position | 0 .. 100 % | 50 % | Osc 2 / Spectral | mod |  |
+| `osc2.spec.y_axis` | Osc 2 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 2 / Spectral |  | yes |
+| `osc2.spec.xy_y` | Osc 2 Spectral Y Position | 0 .. 100 % | 50 % | Osc 2 / Spectral | mod | yes |
 | `osc2.multi.override` | Osc 2 Multisample Envelope Override | 0 Off, 1 On | Off | Osc 2 / Multisample |  | yes |
 | `osc2.multi.delay` | Osc 2 Multisample Delay | 0 .. 2000 ms (skew 0.400000006) | 0 ms | Osc 2 / Multisample |  | yes |
 | `osc2.multi.attack` | Osc 2 Multisample Attack | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 2 / Multisample |  | yes |
@@ -473,8 +473,8 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.gran.rand_warp` | Osc 3 Grain Random Warp | 0 .. 100 % | 0 % | Osc 3 / Granular | mod | yes |
 | `osc3.gran.rand_warp2` | Osc 3 Grain Random Warp 2 | 0 .. 100 % | 0 % | Osc 3 / Granular | mod | yes |
 | `osc3.gran.spawn_pattern` | Osc 3 Grain Spawn Pattern | 0 Together, 1 Even, 2 Exp, 3 Random | Together | Osc 3 / Granular |  | yes |
-| `osc3.gran.y_axis` | Osc 3 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 3 / Granular |  |  |
-| `osc3.gran.xy_y` | Osc 3 Grain Y Position | 0 .. 100 % | 50 % | Osc 3 / Granular | mod |  |
+| `osc3.gran.y_axis` | Osc 3 Grain Y Axis | 18 choices: 0 None, 1 Level, 2 Warp, ... , 17 Rand Warp 2 | None | Osc 3 / Granular |  | yes |
+| `osc3.gran.xy_y` | Osc 3 Grain Y Position | 0 .. 100 % | 50 % | Osc 3 / Granular | mod | yes |
 | `osc3.spec.freq_lo` | Osc 3 Spectral Freq Lo | 20 .. 20000 Hz (skew 0.300000012) | 20 Hz | Osc 3 / Spectral | mod | yes |
 | `osc3.spec.freq_hi` | Osc 3 Spectral Freq Hi | 20 .. 20000 Hz (skew 0.300000012) | 20000 Hz | Osc 3 / Spectral | mod | yes |
 | `osc3.spec.lohi_smooth` | Osc 3 Spectral Smooth Band Edges | 0 Off, 1 On | On | Osc 3 / Spectral |  | yes |
@@ -487,8 +487,8 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `osc3.spec.scan_keytrack` | Osc 3 Spectral Scan Key Track | 0 Off, 1 On | Off | Osc 3 / Spectral |  | yes |
 | `osc3.spec.phase_lock` | Osc 3 Spectral Phase Lock | 0 Off, 1 On | Off | Osc 3 / Spectral |  | yes |
 | `osc3.spec.transients` | Osc 3 Spectral Transients | 0 Off, 1 On | Off | Osc 3 / Spectral |  | yes |
-| `osc3.spec.y_axis` | Osc 3 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 3 / Spectral |  |  |
-| `osc3.spec.xy_y` | Osc 3 Spectral Y Position | 0 .. 100 % | 50 % | Osc 3 / Spectral | mod |  |
+| `osc3.spec.y_axis` | Osc 3 Spectral Y Axis | 8 choices: 0 None, 1 Level, 2 Warp, ... , 7 Freq Hi | None | Osc 3 / Spectral |  | yes |
+| `osc3.spec.xy_y` | Osc 3 Spectral Y Position | 0 .. 100 % | 50 % | Osc 3 / Spectral | mod | yes |
 | `osc3.multi.override` | Osc 3 Multisample Envelope Override | 0 Off, 1 On | Off | Osc 3 / Multisample |  | yes |
 | `osc3.multi.delay` | Osc 3 Multisample Delay | 0 .. 2000 ms (skew 0.400000006) | 0 ms | Osc 3 / Multisample |  | yes |
 | `osc3.multi.attack` | Osc 3 Multisample Attack | 0 .. 10000 ms (skew 0.300000012) | 0 ms | Osc 3 / Multisample |  | yes |

@@ -7,7 +7,8 @@
 #   Runs "synthyboy_paramdump --own-engine-gap" (one line per key: key, group, live, dimmed, missing capability bits) and rewrites:
 #   1. The summary table between <!-- BEGIN GENERATED TABLE (scripts/gen-own-engine-gap.py) --> and <!-- END GENERATED TABLE -->
 #   2. The remaining keys list between <!-- BEGIN GENERATED REMAINING KEYS (scripts/gen-own-engine-gap.py) --> and <!-- END GENERATED REMAINING KEYS -->
-#   of docs/ui-design/OWN-ENGINE-GAP.md. --check only compares and fails when either block would change.
+#   of docs/ui-design/OWN-ENGINE-GAP.md. Keys without DSP by design (UI_ONLY) are separated into their own sub-table.
+#   --check only compares and fails when either block would change.
 # The areas (regular expression over the group of the key) and the "Acts:" descriptions are part of this script; a key that no area claims makes the script fail, so a new
 # group of the parameter table cannot slip past the work list.
 #
@@ -79,11 +80,25 @@ def load(paramdump):
     return rows
 
 
+# Keys that are not engine work (by key suffix) and the reason why:
+UI_ONLY = {
+    "sample.loop_link": "editor action without DSP effect (docs/ui-design/13-new-keys.md A39)",
+}
+
+
+def ui_only_reason(key):
+    for suffix, reason in UI_ONLY.items():
+        if key == suffix or key.endswith("." + suffix):
+            return reason
+    return None
+
+
 def generate(rows):
     totals = collections.OrderedDict((name, [0, 0, 0, 0]) for name, _, _ in AREAS)
     unclaimed = collections.Counter()
     area_missing_keys = collections.OrderedDict((name, []) for name, _, _ in AREAS)
     remaining = []
+    by_design = []
 
     for key, group, live, dimmed, missing in rows:
         for name, pattern, _ in AREAS:
@@ -96,7 +111,11 @@ def generate(rows):
                 if not live:
                     state = "dimmed" if dimmed else "editable, no effect"
                     area_missing_keys[name].append(key)
-                    remaining.append((name, key, state, missing))
+                    reason = ui_only_reason(key)
+                    if reason is not None:
+                        by_design.append((name, key, reason))
+                    else:
+                        remaining.append((name, key, state, missing))
                 break
         else:
             unclaimed[group] += 1
@@ -109,8 +128,15 @@ def generate(rows):
         t = totals[name]
         sums = [a + b for a, b in zip(sums, t)]
         missing_keys = area_missing_keys[name]
-        if missing_keys:
-            missing_text = " Missing keys: %s." % ", ".join(sorted(missing_keys))
+        engine_missing = [k for k in missing_keys if ui_only_reason(k) is None]
+        design_missing = [k for k in missing_keys if ui_only_reason(k) is not None]
+        parts = []
+        if engine_missing:
+            parts.append(", ".join(sorted(engine_missing)))
+        if design_missing:
+            parts.append("by design: %s" % ", ".join(sorted(design_missing)))
+        if parts:
+            missing_text = " Missing keys: %s." % "; ".join(parts)
         else:
             missing_text = " Missing keys: none."
         what_is_missing = acts + missing_text
@@ -118,10 +144,11 @@ def generate(rows):
     lines.append("| **All** | **%d** | **%d** | **%d** | **%d** | |" % tuple(sums))
     table_str = "\n".join(lines)
 
+    area_order = {name: i for i, (name, _, _) in enumerate(AREAS)}
+    blocks = []
     if not remaining:
-        keys_str = "No key remains: the own engine acts on every key."
+        blocks.append("No key remains: the own engine acts on every key.")
     else:
-        area_order = {name: i for i, (name, _, _) in enumerate(AREAS)}
         sorted_remaining = sorted(remaining, key=lambda r: (area_order.get(r[0], 999), r[1]))
         total = len(sorted_remaining)
         heading = "**1 key remains.**" if total == 1 else "**%d keys remain.**" % total
@@ -133,8 +160,21 @@ def generate(rows):
         ]
         for area, key, state, missing in sorted_remaining:
             keys_lines.append("| %s | %s | %s | %s |" % (area, key, state, missing))
-        keys_str = "\n".join(keys_lines)
+        blocks.append("\n".join(keys_lines))
 
+    if by_design:
+        sorted_design = sorted(by_design, key=lambda r: (area_order.get(r[0], 999), r[1]))
+        design_lines = [
+            "Keys without DSP by design (not engine work):",
+            "",
+            "| Area | Key | Reason |",
+            "|---|---|---|",
+        ]
+        for area, key, reason in sorted_design:
+            design_lines.append("| %s | %s | %s |" % (area, key, reason))
+        blocks.append("\n".join(design_lines))
+
+    keys_str = "\n\n".join(blocks)
     return table_str, keys_str
 
 
