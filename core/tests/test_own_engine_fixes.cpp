@@ -542,3 +542,51 @@ TEST (own_osc_phase_legato_poly_context_osc1_and_osc3)
     const auto poly3_0 = renderLegato (3, 0.0f, 0.0f), poly3_1 = renderLegato (3, 1.0f, 0.0f);
     CHECK (diffDb (poly3_0, poly3_1, note2Sample) > -30.0);
 }
+
+TEST (own_sub_phase_contiguous_poly_and_mono_behavior)
+{
+    // Sub Phase Contiguous (docs/engine-spec/02-oscillator.md section 9):
+    // When a note starts while a previous note is still active/held,
+    // sub.phase_contiguous makes the new voice continue the sub oscillator phase
+    // of the running voice (own_engine.cpp:885).
+    // When master.legato == 1.0f, monophonic voice glide reuses the held voice without
+    // starting a new voice, so sub.phase_contiguous is inert in mono legato.
+    auto renderSub = [] (float contiguousVal, float masterLegatoVal)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "osc1.on", 0.0f);
+        set (*e, "sub.on", 1.0f);
+        set (*e, "sub.octave", 0.0f);
+        set (*e, "sub.level", 100.0f);
+        set (*e, "sub.waveform", 0.0f);
+        set (*e, "sub.phase_contiguous", contiguousVal);
+        set (*e, "master.legato", masterLegatoVal);
+        set (*e, "env1.release", 2000.0f);
+
+        const int t1 = static_cast<int> (0.25 * kSr);
+        return sbtest::render (*e, { sbtest::noteOn (0, 48), sbtest::noteOn (t1, 55), sbtest::noteOff (static_cast<int> (0.45 * kSr), 48) },
+                               static_cast<int> (0.5 * kSr), 256);
+    };
+
+    auto diffDb = [] (const sbtest::Rendered& a, const sbtest::Rendered& b, size_t from)
+    {
+        double d = 0.0, p = 1.0e-9;
+        for (size_t i = from; i < a.left.size(); ++i)
+        {
+            d = std::max (d, std::fabs (static_cast<double> (a.left[i] - b.left[i])));
+            p = std::max (p, std::fabs (static_cast<double> (a.left[i])));
+        }
+        return 20.0 * std::log10 (std::max (d / p, 1.0e-9));
+    };
+
+    const size_t note2Sample = static_cast<size_t> (0.25 * kSr);
+
+    // 1. With master.legato == 1.0f (mono glide), sub.phase_contiguous has no effect (audit baseline behavior)
+    const auto mono0 = renderSub (0.0f, 1.0f), mono1 = renderSub (1.0f, 1.0f);
+    CHECK (diffDb (mono0, mono1, note2Sample) < -100.0);
+
+    // 2. With polyphonic overlapping notes (master.legato == 0.0f), sub.phase_contiguous produces distinct phase
+    const auto poly0 = renderSub (0.0f, 0.0f), poly1 = renderSub (1.0f, 0.0f);
+    CHECK (diffDb (poly0, poly1, note2Sample) > -30.0);
+}
