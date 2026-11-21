@@ -13,6 +13,8 @@ struct LfoLiveProbe
     float playhead = -1.0f;        // the playhead as a fraction of the plot width, -1 when the engine plays no voice with this LFO (or the LFO is a random LFO)
     juce::Rectangle<int> plot;     // the plot area in the coordinates of the panel's display
     bool bound = false;            // the display listens to the live bus (it is on screen)
+    int gridDivisions = 16;
+    bool snap = true;
 };
 /** False when `panel` is not an LFO panel. */
 bool probeLfoPanel (Panel& panel, LfoLiveProbe& out);

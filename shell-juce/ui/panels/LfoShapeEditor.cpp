@@ -44,12 +44,6 @@ bool sameShape (const ContentLfoShape& a, const ContentLfoShape& b)
         && std::equal (a.points.begin(), a.points.end(), b.points.begin());
 }
 
-float snapTo (float v, int divisions) noexcept
-{
-    const auto d = static_cast<float> (divisions);
-    return std::round (v * d) / d;
-}
-
 } // namespace
 
 const char* lfoShapePresetName (int builtInShape)
