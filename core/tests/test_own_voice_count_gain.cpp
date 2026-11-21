@@ -251,9 +251,10 @@ TEST (voice_count_gain_steady_state_follows_n_to_the_minus_alpha)
         const std::vector<int> keys (keys8.begin(), keys8.begin() + n);
         auto a = makeEngine (testPatch(), {}, q, nullptr, 0.0f, 128), b = makeEngine (testPatch(), {}, q, nullptr, 0.5f, 128);
         std::vector<float> L0, R0, L1, R1;
-        // held to the end: the gain read at the end of the render (0.3 s after the strike) is the steady one
-        render (*a, keys, 10.0, 0.3, L0, R0);
-        render (*b, keys, 10.0, 0.3, L1, R1);
+        // held to the end: the gain read at the end of the render is the steady one. The render is longer than the window 0.2 .. 0.3 s that rmsDb reads (0.3 s is 112 blocks of 128 = 14336 frames,
+        // and the window ends at frame 14400: the 64 frames after the end were read from past the vector, heap garbage that changed with the load of the machine)
+        render (*a, keys, 10.0, 0.35, L0, R0);
+        render (*b, keys, 10.0, 0.35, L1, R1);
         const double expect = -10.0 * std::log10 (static_cast<double> (n));
         const double got = rmsDb (L1, R1, 0.2, 0.3) - rmsDb (L0, R0, 0.2, 0.3);
         std::printf ("  %d voices: %.3f dB (expected %.3f), engine gain %.6f (expected %.6f)\n", n, got, expect, static_cast<double> (ownVoiceCountGain (*b)), std::pow (static_cast<double> (n), -0.5));
