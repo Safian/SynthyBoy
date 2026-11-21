@@ -12,6 +12,7 @@
 #include "EditorAdapter.h"
 #include "ui/Editor.h"
 #include "ui/panels/EnvCurveView.h"
+#include "ui/panels/LfoPanelProbe.h"
 #include "ui/panels/LfoShapeEditor.h"
 #include "ui/panels/LfoTabsPanel.h"
 #include "ui/panels/OscWaveView.h"
@@ -119,6 +120,21 @@ void drag (juce::Component& c, juce::Point<float> from, juce::Point<float> to)
     c.mouseDrag (mouse (c, from + (to - from) * 0.5f, from, true));
     c.mouseDrag (mouse (c, to, from, true));
     c.mouseUp (mouse (c, to, from, true));
+}
+
+juce::MouseEvent mouseWithMods (juce::Component& c, juce::Point<float> pos, juce::Point<float> downPos, juce::ModifierKeys mods, bool dragged, int clicks = 1)
+{
+    auto source = juce::Desktop::getInstance().getMainMouseSource();
+    return juce::MouseEvent (source, pos, mods.withFlags (juce::ModifierKeys::leftButtonModifier), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &c, &c,
+                             juce::Time::getCurrentTime(), downPos, juce::Time::getCurrentTime(), clicks, dragged);
+}
+
+void dragWithMods (juce::Component& c, juce::Point<float> from, juce::Point<float> to, juce::ModifierKeys mods)
+{
+    c.mouseDown (mouseWithMods (c, from, from, mods, false));
+    c.mouseDrag (mouseWithMods (c, from + (to - from) * 0.5f, from, mods, true));
+    c.mouseDrag (mouseWithMods (c, to, from, mods, true));
+    c.mouseUp (mouseWithMods (c, to, from, mods, true));
 }
 
 void doubleTap (juce::Component& c, juce::Point<float> p)
@@ -542,6 +558,69 @@ TEST (uil_mono_pill_toggles_the_polyphony)
     mono->onClick();
     CHECK_EQ (rig.param ("master.polyphony"), 12.0f); // back to the voice count it had
     CHECK (! mono->getToggleState());
+}
+
+TEST (uil_lfo_phase_snap_pure_logic_and_gesture)
+{
+    // Pure logic test of the snap function: values snap to k/N, free mode does not
+    // 1. Grid snapping to k/N (e.g. N = 16, 8, 4)
+    CHECK_NEAR (snapPhase (0.23f, 16, false), 4.0f / 16.0f, 1.0e-5f);
+    CHECK_NEAR (snapPhase (0.06f, 16, false), 1.0f / 16.0f, 1.0e-5f);
+    CHECK_NEAR (snapPhase (0.49f, 8, false), 4.0f / 8.0f, 1.0e-5f);
+    CHECK_NEAR (snapPhase (0.76f, 4, false), 3.0f / 4.0f, 1.0e-5f);
+    CHECK_NEAR (snapPhase (0.0f, 16, false), 0.0f, 1.0e-5f);
+    CHECK_NEAR (snapPhase (1.0f, 16, false), 1.0f, 1.0e-5f);
+
+    // Clamping on out-of-range values
+    CHECK_NEAR (snapPhase (-0.15f, 16, false), 0.0f, 1.0e-5f);
+    CHECK_NEAR (snapPhase (1.15f, 16, false), 1.0f, 1.0e-5f);
+
+    // Free mode does not snap: returns exact value in [0, 1]
+    CHECK_NEAR (snapPhase (0.23f, 16, true), 0.23f, 1.0e-5f);
+    CHECK_NEAR (snapPhase (0.06f, 16, true), 0.06f, 1.0e-5f);
+    CHECK_NEAR (snapPhase (0.49f, 8, true), 0.49f, 1.0e-5f);
+
+    // Divisions <= 0 returns unquantized
+    CHECK_NEAR (snapPhase (0.23f, 0, false), 0.23f, 1.0e-5f);
+
+    // UI gesture test: dragging phase marker on LfoShapeView
+    Rig rig;
+    auto* panel = rig.panelTitled ("LFO 1");
+    CHECK (panel != nullptr);
+    if (panel == nullptr)
+        return;
+
+    LfoLiveProbe probe;
+    CHECK (probeLfoPanel (*panel, probe));
+    CHECK (! probe.plot.isEmpty());
+
+    // The first child of panel is LfoShapeView
+    CHECK (! panel->getChildren().isEmpty());
+    auto* visual = panel->getChildren()[0];
+    CHECK (visual != nullptr);
+    if (visual == nullptr)
+        return;
+
+    const auto plot = probe.plot.toFloat();
+    const auto posForPhase = [&plot] (float norm)
+    {
+        return juce::Point<float> (plot.getX() + norm * plot.getWidth(), plot.getCentreY());
+    };
+
+    // 1. Drag without modifier: snaps to grid (16 divisions -> 0.23f snaps to 4/16 = 0.25f, 90 deg)
+    rig.setParam ("lfo1.phase", 0.0f);
+    drag (*visual, posForPhase (0.0f), posForPhase (0.23f));
+    CHECK_NEAR (rig.param ("lfo1.phase"), 0.25f * 360.0f, 0.5f);
+
+    // 2. Drag with Shift modifier (fine/free drag convention in SynthyBoy / JUCE): does NOT snap
+    rig.setParam ("lfo1.phase", 0.0f);
+    dragWithMods (*visual, posForPhase (0.0f), posForPhase (0.23f), juce::ModifierKeys::shiftModifier);
+    CHECK_NEAR (rig.param ("lfo1.phase"), 0.23f * 360.0f, 0.5f);
+
+    // 3. Drag with Alt modifier (Serum / SynthyBoy convention): does NOT snap
+    rig.setParam ("lfo1.phase", 0.0f);
+    dragWithMods (*visual, posForPhase (0.0f), posForPhase (0.23f), juce::ModifierKeys::altModifier);
+    CHECK_NEAR (rig.param ("lfo1.phase"), 0.23f * 360.0f, 0.5f);
 }
 
 TEST (uil_zz_screenshots)

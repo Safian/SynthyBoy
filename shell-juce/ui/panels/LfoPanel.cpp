@@ -154,6 +154,9 @@ public:
     int shapeIndex() const { return choiceIndexOf (shapeHandle); }
     bool isCustom() const { return ! random && shapeIndex() == kLfoShapeCustom; }
     LfoShapeEditor* shapeEditor() noexcept { return editor.get(); }
+    int gridDivisions() const noexcept { return editor != nullptr ? editor->gridColumns() : 16; }
+    bool snapOn() const noexcept { return snap; }
+    void setSnap (bool shouldSnap) noexcept { snap = shouldSnap; }
 
     /** Height at `width`: the stepper bar and the read-only display, or the stepper bar and the shape editor. */
     int preferredHeight (int width) const
@@ -200,11 +203,13 @@ public:
         if (isCustom() || area.getWidth() < 4.0f || area.getHeight() < 4.0f)
             return;
 
-        // grid: centre line and quarters
+        // grid: centre line and grid divisions (same grid as the point editor uses)
+        const int cols = gridDivisions();
+        g.setColour (c.outline.withAlpha (0.45f));
+        for (int i = 1; i < cols; ++i)
+            g.drawVerticalLine (juce::roundToInt (area.getX() + area.getWidth() * static_cast<float> (i) / static_cast<float> (cols)), area.getY(), area.getBottom());
         g.setColour (c.outline);
         g.drawHorizontalLine (juce::roundToInt (area.getCentreY()), area.getX(), area.getRight());
-        for (int i = 1; i < 4; ++i)
-            g.drawVerticalLine (juce::roundToInt (area.getX() + area.getWidth() * static_cast<float> (i) / 4.0f), area.getY(), area.getBottom());
 
         // the curve; the part before the start phase is drawn dimmer (the LFO starts at the phase marker)
         const float phase = phaseHandle.valid() ? phaseHandle.plain() / 360.0f : 0.0f;
@@ -247,13 +252,13 @@ public:
         if (! phaseHandle.valid() || ! plot.contains (e.getPosition()))
             return;
         phaseHandle.beginGesture();
-        setPhaseFrom (e.position.x);
+        setPhaseFrom (e.position.x, e.mods);
     }
 
     void mouseDrag (const juce::MouseEvent& e) override
     {
         if (phaseHandle.inGesture())
-            setPhaseFrom (e.position.x);
+            setPhaseFrom (e.position.x, e.mods);
     }
 
     void mouseUp (const juce::MouseEvent&) override
@@ -349,12 +354,15 @@ private:
         shapeHandle.setPlainComplete (static_cast<float> ((now + direction + count) % count));
     }
 
-    void setPhaseFrom (float x)
+    void setPhaseFrom (float x, juce::ModifierKeys mods = {})
     {
         const auto area = plot.toFloat();
         if (area.getWidth() <= 0.0f)
             return;
-        phaseHandle.setNormalised (juce::jlimit (0.0f, 1.0f, (x - area.getX()) / area.getWidth()));
+        const float raw = (x - area.getX()) / area.getWidth();
+        const bool freeMode = (! snap) || mods.isShiftDown() || mods.isAltDown();
+        const float snapped = snapPhase (raw, gridDivisions(), freeMode);
+        phaseHandle.setNormalised (snapped);
     }
 
     juce::String shapeName() const
@@ -392,6 +400,7 @@ private:
     std::unique_ptr<LfoShapeEditor> editor;
     int lastBuiltIn = 0;
     bool wasCustom = false;
+    bool snap = true;
 };
 
 namespace
@@ -548,6 +557,8 @@ bool probeLfoPanel (Panel& panel, LfoLiveProbe& out)
     out.playhead = lfo->display()->playheadFraction();
     out.plot = lfo->display()->plotBounds();
     out.bound = LiveBus::shown (*lfo->display());
+    out.gridDivisions = lfo->display()->gridDivisions();
+    out.snap = lfo->display()->snapOn();
     return true;
 }
 } // namespace synthyboy::ui
