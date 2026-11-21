@@ -691,6 +691,13 @@ public:
             adaaState[0] = adaaState[1] = adaa::State();
         p = np;
     }
+    void setShaper (const float* yA, const float* IA, const float* yB, const float* IB) noexcept
+    {
+        shaperA = yA;
+        shaperIntA = IA;
+        shaperB = yB;
+        shaperIntB = IB;
+    }
     void process (float* l, float* r, int n) noexcept
     {
         aaOn = (synthyboy::aa::off() & synthyboy::aa::kDistortion) == 0; // the test and benchmark switch, read once per call
@@ -728,7 +735,7 @@ private:
         const float v = x * g;
         auto th = [this] (float a) { return fast ? fastmath::tanh (a) : std::tanh (a); };
         auto ex = [this] (float a) { return fast ? fastmath::exp (a) : std::exp (a); };
-        float y;
+        float y = std::clamp (v, -1.0f, 1.0f);
         if (aaOn && p.type >= 0 && p.type < 32 && ((adaa::kConverted >> p.type) & 1u) != 0u)
             y = adaa::step (p.type, adaaState[c], x, g, fast); // first-order ADAA (fx_adaa.h)
         else
@@ -760,8 +767,10 @@ private:
             case 9: y = th (32.0f * v); break;
             case 10: y = th (std::max (v, 0.0f)) + std::max (std::min (v, 0.0f), -0.5f); break;
             case 11: y = std::fabs (std::clamp (v, -1.0f, 1.0f)); break;
-            case 12: y = std::clamp (v, -1.0f, 1.0f); break; // X-Shaper: the drawn curves default to the identity
-            default: y = std::clamp (v, -1.0f, 1.0f); break;
+            case 12:
+            case 13:
+                y = aaOn ? adaa::stepShaper (p.type, adaaState[c], x, u, shaperA, shaperIntA, shaperB, shaperIntB) : std::clamp (v, -1.0f, 1.0f);
+                break;
         }
         const bool asym = p.type == 6 || p.type == 7 || p.type == 10 || p.type == 11 || p.type == 13;
         if (asym) // 10 Hz DC blocker
@@ -777,6 +786,10 @@ private:
     Svf svf[2];
     float held[2] = {}, holdPhase[2] = {}, dc[2] = {};
     adaa::State adaaState[2];
+    const float* shaperA = nullptr;
+    const float* shaperIntA = nullptr;
+    const float* shaperB = nullptr;
+    const float* shaperIntB = nullptr;
     bool aaOn = true;
     unsigned counter = 0;
 };
