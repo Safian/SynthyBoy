@@ -3,7 +3,7 @@
 The engine written for this project (original code, no Vital-derived content, clean-room process of `docs/ARCHITECTURE.md` 2.2): a Serum-class
 subtractive wavetable synth behind `synthyboy::IEngine`. It is always built and the only engine of iOS builds. Its sources are the public
 documents (`docs/engine-spec/*.md` of branch `engine-spec`, `docs/ui-design/*`, the manuals), DSP literature and black-box measurements of
-engine-vital through `IEngine` (`tools/own-oracle`); it never reads `core/engine-vital`.
+the former Vital engine through `IEngine` (`tools/own-oracle`, until that engine was removed on 2026-11-21); it never read the Vital engine's sources.
 
 ## Layout
 
@@ -49,10 +49,10 @@ type change. Memory of the library voices (granular clouds, spectral voices, mul
 
 Tuning / scale / MPE (step 6), the mixer graph (buses, sends), voice control, the effect racks, Bode, Convolve and the splitters, the Serum unison law, stack styles, transpose snap.
 
-## Known differences to engine-vital
+## Known differences to the former Vital engine
 
 Wavetable names with several frames (Saw to Square, Sine to Saw, Harmonic Series, Odd Harmonics, Formant Sweep, FM Sweep, PWM Sweep, Bell Partials) are defined
-here, not matched frame by frame. The warps are original definitions; they alias less than engine-vital (measured, see the report of the work).
+here, not matched frame by frame. The warps are original definitions; they alias less than the former Vital engine (measured, see the report of the work).
 The filters-serum types can run away at resonance and drive 100 %: `voice/filter_unit.h` guards the output.
 
 ## The effects (branch engine-own-d)

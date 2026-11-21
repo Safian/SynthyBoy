@@ -172,8 +172,8 @@ struct Svf
 };
 
 /** Coefficient g = tan (pi f / sr) of a phaser stage whose cutoff is `hz` (the all-pass stages of the phaser effect and of filter model 7: the pole sits at the cutoff the key names; the notches
-    of the 4 stage chain are at 0.4142 and 2.4142 times it, document 06, 8.1). Engine-vital once ran these stages with the 44.1 kHz default (every pole 8.8 % high at 48 kHz); the own
-    engine had emulated that with a pole scale of 1.0884 until engine-vital was fixed. */
+    of the 4 stage chain are at 0.4142 and 2.4142 times it, document 06, 8.1). The former Vital engine once ran these stages with the 44.1 kHz default (every pole 8.8 % high at 48 kHz); the own
+    engine had emulated that with a pole scale of 1.0884 until the former Vital engine was fixed. */
 inline float phaserStageG (float hz, double sr) noexcept
 {
     const float f = std::min (hz, static_cast<float> (sr) * 0.45f);
