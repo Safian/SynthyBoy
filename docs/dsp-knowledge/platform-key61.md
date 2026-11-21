@@ -50,3 +50,7 @@
 - XL: Mesa 24.3.4, EGL 1.5, work group 256 x 3 / 256 invocations, shared memory 32 KiB, 8 compute SSBO blocks, 192 image units, devfreq 300-1000 MHz.
 - A GPU dispatch plus read-back through shared memory suits non-realtime parallel work; whether a GPU FFT pays off is unmeasured (open item in TODO.md: the overlay thread time split decides).
 
+
+## SynthyBoy vs a stock Akai synth (Key 61, 2026-11-21)
+
+- 8-note chord (MIDI 48 52 55 59 60 64 67 71, vel 100), 30 s, 3 interleaved rounds, spread < 0.2 points, MPC process % of one core, net of each plugin's idle: AIR TubeSynth "Rich Swell" 18.8; SynthyBoy "Acid Saw Reso" 22.8 (overlay hidden) / 30.0 (visible); "Lorenz Garden" (unison 3, 3 wavetables, 2 filters, chorus + delay, 6 voices) 52.7 / 60.3. Heavy preset about 3x TubeSynth, light preset 1.2-1.6x. Our overlay costs about 8 points idle and 15 during the chord (overlay thread 9-10 %). The claim "costs about as much as Akai's own synths" is NOT supported; not to be written in the user guide. Not compared: Akai wavetable synths (Hype, Mini D, Jura). `measured: key61-night-2026-11-21/cpu-compare/results.md`
