@@ -189,6 +189,11 @@ Decided: level and gain-reduction METERS are host-drawn native `Meter` widgets b
 - **M3. Device check:** XL and Key 61, meters visible, the 20 fps cap, popups over the meters (z-order), no audio gap (callback statistics), the modified-star TODO in `TODO.md`.
 Not in scope: the Distortion level dots (they sit on our curve: stay on our plane).
 
+
+## Disabled blocks (owner rule 2026-11-21)
+
+A block whose on/off switch is OFF (Sub, Noise, Osc A/B/C, Filter 1/2, every FX slot, any other toggled block) is drawn entirely grey and takes no touch except its own switch (central `disabled` state in `shell-mpc/ui/`, bound per page to the block's `*.on` parameter; TODO.md has the full rule). For this plan: a disabled block needs NO animation, its live parts are not drawn and its AnimGate (T1) stays closed; switching it on invalidates the block's cells (colour and live parts return at once).
+
 ## Owner decisions (relayed 2026-11-21, verbatim sources in the coordinator's notes)
 
 * Q1: the background and the zoom / Expand button are NOT on the animation path: drawn once as static cells, not removed.
