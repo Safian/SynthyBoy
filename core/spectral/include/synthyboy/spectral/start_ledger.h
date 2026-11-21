@@ -20,9 +20,10 @@ constexpr int kStartTicksPerQuad = 4;
 constexpr int kStartQuads = 5;           // a start books at most the 5 quads from its own
 constexpr int kStartFrameUs = 89;        // warm us of one synthesis frame on the Key 61 (docs/engine-spec/07 section 4a)
 constexpr int kStartShapeUs = 67;        // warm us of one spectral shaping
-/** Warm us of start work per quad and block. The device measurement of the Key 61 (a fixed cold penalty of 0.070 ms, a cold factor of 0.94, 0.19 .. 0.20 ms a voice) fixed it:
-    8 voices (4 notes of unison 2) and a stereo single note of unison 4 start whole. */
-constexpr int kStartBudgetUs = 2400;
+/** Warm us of start work per quad and block. 1700 since 2026-11-21: the interleaved budget sweep on the Key 61 (2400 / 1700 / 2000 / 1400 us; results in
+    .hw-local/mpc-perf/noteon-burst/budget-sweep-results.md) put 10 of 12 Spectral strike rows under 1.5 blocks at 1700 against 0 of 12 at 2400, the steady state unchanged. 8 voices
+    (4 notes of unison 2, 1604 us) and a stereo single note of unison 4 still start whole; of a larger chord 8 voices start at once, the others in the next quads (tier low only). */
+constexpr int kStartBudgetUs = 1700;
 
 /** The warm us that the start work of one voice puts into the quads 0 .. 4 counted from the quad of its start tick. */
 struct StartPattern
