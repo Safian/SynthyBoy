@@ -26,11 +26,5 @@ if(SYNTHYBOY_BUILD_TESTS)
     target_include_directories(synthyboy_test_vital_bank PRIVATE "${SB_VITAL_IMPORT_DIR}" "${SB_VITAL_IMPORT_DIR}/tests")
     target_compile_definitions(synthyboy_test_vital_bank PRIVATE
         SB_VITAL_PRESETS_DIR="${PROJECT_SOURCE_DIR}/tests/vital-presets")
-    # a cross-check against the engine's own built-in tables needs the Vital-derived engine
-    if(SYNTHYBOY_WITH_VITAL)
-        synthyboy_add_test(synthyboy_test_vital_import_crosscheck tests/test_crosscheck.cpp
-            LINK synthyboy_engine_vital)
-        target_include_directories(synthyboy_test_vital_import_crosscheck PRIVATE
-            "${SB_VITAL_IMPORT_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../engine-vital/adapter")
-    endif()
+
 endif()

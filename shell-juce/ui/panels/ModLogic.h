@@ -112,7 +112,7 @@ inline int modAmountSlotOfChoice (int dstChoice) noexcept
 }
 
 /** True if slot `slot` pointed at the amount destination `dstChoice` would close a loop of amount modulations (a slot that modulates its
-    own amount, or A -> amount of B -> ... -> amount of A). The engine leaves such a connection unwired (core/engine-vital, MODAMT). */
+    own amount, or A -> amount of B -> ... -> amount of A). The engine leaves such a connection unwired (MODAMT loop guard). */
 inline bool modAmountWouldLoop (const ModMatrixAccess& matrix, int slot, int dstChoice) noexcept
 {
     int cur = modAmountSlotOfChoice (dstChoice);
