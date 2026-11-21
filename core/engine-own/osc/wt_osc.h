@@ -670,13 +670,12 @@ public:
         const Wavetable& wt = *tick.wt;
         const int frames = wt.numFrames();
         const double nyq = 0.5 * sampleRate;
-        const int count = warped
-            ? (historyVoices > 0 ? std::min (curCount, historyVoices) : 0)
-            : std::max (curCount, prevCount);
-        const float invP = 1.0f / static_cast<float> (kControlPeriod);
-        const float a0 = tick.warpAmount[0], a1 = tick.warpAmount[1];
         // a warp can create content far above the pitch: the oscillator then runs at four times the rate, with a band limited decimation
         const bool warped = tick.oversample || warpNeedsOversampling (tick.warp[0]) || warpNeedsOversampling (tick.warp[1]);
+        // the decimator history is sized for the tier's unison count: the oversampled path never goes past it
+        const int count = warped ? std::min (std::max (curCount, prevCount), historyVoices) : std::max (curCount, prevCount);
+        const float invP = 1.0f / static_cast<float> (kControlPeriod);
+        const float a0 = tick.warpAmount[0], a1 = tick.warpAmount[1];
         const int cs0 = tick.warpSrc[0], cs1 = tick.warpSrc[1];
         const bool morphing = morphActive;
         SB_SECTION (warped ? sections::oscWarp : (morphing ? sections::oscMorph : sections::oscTable));
