@@ -15,7 +15,9 @@
 #include "../dsp/section_timing.h"
 #include "morph.h"
 #include "warp.h"
+#include "warp_adaa.h"
 #include "wavetable_bank.h"
+#include "synthyboy/aa_switch.h"
 
 namespace synthyboy
 {
@@ -199,6 +201,8 @@ public:
         for (auto& fs : filterState)
             for (auto& x : fs)
                 x = 0.0f;
+        for (auto& wa : warpAa)
+            wa[0] = wa[1] = warpadaa::State{};
         if (historyDirty) // the decimator history is written only by the oversampled path: a note that never ran it starts with the zeros that are already there
         {
             std::fill (history.begin(), history.end(), 0.0f);
@@ -633,6 +637,7 @@ public:
         std::fill (R, R + n, 0.0f);
         if (pending || tick.wt == nullptr || tick.level <= 0.0f) // pending: the last tick (not yet applied) is silent
             return;
+        const bool aaOn = (synthyboy::aa::off() & synthyboy::aa::kWarpAdaa) == 0;
         const Wavetable& wt = *tick.wt;
         const int frames = wt.numFrames();
         const double nyq = 0.5 * sampleRate;
@@ -660,6 +665,7 @@ public:
         {
             if (curGainL[v] == 0.0f && curGainR[v] == 0.0f && prevGainL[v] == 0.0f && prevGainR[v] == 0.0f)
             {
+                warpAa[v][0] = warpAa[v][1] = warpadaa::State{};
                 // silent voice: advance the phase only
                 {
                     // the phase advance of n samples at the final increment, modulo 2^32, without a 64 bit conversion (a library call on ARM): the double product is exact
@@ -778,7 +784,7 @@ public:
                 return h1 - (z[1] += g * (h1 - z[1]));
             };
             // one sample of the oscillator at the (32 bit) phase `ph`; k selects the sample of the cross signals, wB is the weight of the second cycle
-            auto sampleAt = [&] (uint32_t ph, int k, float fk, float wB) noexcept
+            auto sampleAt = [&] (uint32_t ph, int k, float fk, float wB, bool probe = false) noexcept
             {
                 const float p = static_cast<float> (ph >> 8) * (1.0f / 16777216.0f);
                 float window = 1.0f, w2 = 1.0f, pp = p;
@@ -816,12 +822,16 @@ public:
                     }
                 y *= window;
                 if (tick.warp[0] != 0)
-                    y = warpSample (tick.warp[0], y, a0, m0, tick.fastMath);
+                    y = (!probe && aaOn && warpIsSampleDomain (tick.warp[0]))
+                            ? warpadaa::step (tick.warp[0], warpAa[v][0], y, a0, tick.fastMath)
+                            : warpSample (tick.warp[0], y, a0, m0, tick.fastMath);
                 if (tick.warp[1] != 0)
-                    y = warpSample (tick.warp[1], y, a1, m1, tick.fastMath);
-                if (filt0)
+                    y = (!probe && aaOn && warpIsSampleDomain (tick.warp[1]))
+                            ? warpadaa::step (tick.warp[1], warpAa[v][1], y, a1, tick.fastMath)
+                            : warpSample (tick.warp[1], y, a1, m1, tick.fastMath);
+                if (!probe && filt0)
                     y = filterStage (0, tick.warp[0], a0, y);
-                if (filt1)
+                if (!probe && filt1)
                     y = filterStage (1, tick.warp[1], a1, y);
                 return y;
             };
@@ -1251,6 +1261,7 @@ private:
     bool morphActive = false;
     int frameIdx[kMaxVoices] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
     float filterState[kMaxVoices][4] = {};
+    warpadaa::State warpAa[kMaxVoices][2] = {};
     uint32_t phase[kMaxVoices] = {};
     std::vector<float> history;                  // [voice][kTaps - 1]: the oversampled path's last samples (allocated in prepareMorph ())
     bool historyDirty = false;
