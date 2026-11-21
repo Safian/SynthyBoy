@@ -17,8 +17,6 @@
 
 #if defined (_WIN32)
  #include <malloc.h>
-#elif defined (__APPLE__)
- #include <mach/mach.h>
 #endif
 
 #include "osc/wavetable_bank.h"
@@ -122,35 +120,52 @@ constexpr int kBlock = 128;
 /** Parses the VmRSS value in kilobytes from /proc/self/status text. Returns -1 if not found or malformed. */
 long parseVmRssKb (const char* text) noexcept
 {
-    (void) text;
+    if (text == nullptr)
+        return -1;
+    const char* p = text;
+    while (*p != '\0')
+    {
+        if (std::strncmp (p, "VmRSS:", 6) == 0)
+        {
+            p += 6;
+            while (*p == ' ' || *p == '\t')
+                ++p;
+            char* end = nullptr;
+            const long val = std::strtol (p, &end, 10);
+            if (end != p && val >= 0)
+                return val;
+            return -1;
+        }
+        while (*p != '\0' && *p != '\n')
+            ++p;
+        if (*p == '\n')
+            ++p;
+    }
     return -1;
 }
 
-/** The resident set of this process in kilobytes (0: not known on this platform). */
-long residentKb()
+/** The resident set of this process in kilobytes from /proc/self/status on Linux (-1 where unavailable). */
+long residentKb() noexcept
 {
-#if defined (__APPLE__)
-    mach_task_basic_info_data_t info;
-    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
-    if (task_info (mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t> (&info), &count) != KERN_SUCCESS)
-        return 0;
-    return static_cast<long> (info.resident_size / 1024);
-#elif defined (__linux__)
+#if defined (__linux__)
     std::FILE* f = std::fopen ("/proc/self/status", "r");
     if (f == nullptr)
-        return 0;
+        return -1;
     char line[256];
-    long kb = 0;
+    long kb = -1;
     while (std::fgets (line, sizeof (line), f) != nullptr)
-        if (std::strncmp (line, "VmRSS:", 6) == 0)
+    {
+        const long val = parseVmRssKb (line);
+        if (val >= 0)
         {
-            kb = std::strtol (line + 6, nullptr, 10);
+            kb = val;
             break;
         }
+    }
     std::fclose (f);
     return kb;
 #else
-    return 0;
+    return -1;
 #endif
 }
 
@@ -213,7 +228,7 @@ void report (const char* name, const std::vector<std::unique_ptr<IEngine>>& engi
         fxMs += e->prepareDetailMs (1);
     }
     std::printf ("MEM-BASELINE tier=%s allocs=%llu bytes=%llu live_bytes=%lld peak_bytes=%lld prepare_voices_ms=%.2f prepare_fx_ms=%.2f rss_kb=%ld\n",
-                 name, after.allocs - before.allocs, after.bytes - before.bytes, after.live - before.live, g_peakBytes.load(), voicesMs, fxMs, after.rssKb - before.rssKb);
+                 name, after.allocs - before.allocs, after.bytes - before.bytes, after.live - before.live, g_peakBytes.load(), voicesMs, fxMs, after.rssKb);
 }
 } // namespace
 
