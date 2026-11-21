@@ -835,28 +835,7 @@ private:
             }
             const float u = th (0.5f * (dIn * xp - k * kDiodeFb * fb)) * kDiodeGain;
             // right hand side with the old states (the neighbours through the algebraic saturator)
-            float s0, s1, s2, s3;
-            if (quick)
-            {
-                // tier low: the four saturators of the old states through ONE division (Montgomery batch inversion of d_j = v_j^2 + 3; |v| clamped so that the
-                // product of the four d_j stays finite); the results differ from sat () in the last bits only
-                const float v0 = std::max (-1.0e4f, std::min (dv[0], 1.0e4f)), v1 = std::max (-1.0e4f, std::min (dv[1], 1.0e4f)),
-                            v2 = std::max (-1.0e4f, std::min (dv[2], 1.0e4f)), v3 = std::max (-1.0e4f, std::min (dv[3], 1.0e4f));
-                const float d0 = v0 * v0 + 3.0f, d1 = v1 * v1 + 3.0f, d2 = v2 * v2 + 3.0f, d3 = v3 * v3 + 3.0f;
-                const float q01 = d0 * d1, q23 = d2 * d3;
-                const float rq = 1.0f / (q01 * q23);
-                s0 = v0 - 0.9f * v0 * v0 * v0 * (rq * d1 * q23);
-                s1 = v1 - 0.9f * v1 * v1 * v1 * (rq * d0 * q23);
-                s2 = v2 - 0.9f * v2 * v2 * v2 * (rq * d3 * q01);
-                s3 = v3 - 0.9f * v3 * v3 * v3 * (rq * d2 * q01);
-            }
-            else
-            {
-                s0 = sat (dv[0]);
-                s1 = sat (dv[1]);
-                s2 = sat (dv[2]);
-                s3 = sat (dv[3]);
-            }
+            const float s0 = sat (dv[0]), s1 = sat (dv[1]), s2 = sat (dv[2]), s3 = sat (dv[3]);
             const float in0 = up * (dU + s1) + (1.0f - w) * dU, in1 = up * (s0 + s2) + (1.0f - w) * s0, in2 = up * (s1 + s3) + (1.0f - w) * s1,
                         in3 = up * 0.0f + lo * s2;
             float rhs[4] = { (1.0f - g) * dv[0] + g * in0 + g * lo * u, (1.0f - g) * dv[1] + g * in1, (1.0f - g) * dv[2] + g * in2, (1.0f - g) * dv[3] + g * in3 };
