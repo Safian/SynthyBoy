@@ -28,7 +28,7 @@ Part C: commits reachable from `feature/mpc-overlay` whose message matches `not 
 | A15 | `.xpl` generation: the shared set (XL plugin path) loads on the Key 61; the same set on the MPC XL itself after a package install | Verified on the Key 61 (the list appears, the presets load, the path need not match the device); not verified on the XL | docs/RELEASE.md:180 |
 | A17 | The envelope graph (fit / lock) and the LFO editor with its grid in the preset | No branch or documentation line found in this tree; the owner has to say what is open before the release | - |
 | A18 | Name clearance for a public release (trademark registers, plugin databases, stores, domains) | Owner / counsel, not done | docs/NAMING.md:29 |
-| A19 | MTS-ESP library licence: believed permissive, not verified | Open | THIRD_PARTY.md:74 |
+| A19 | MTS-ESP library licence: believed permissive, not verified | Open | THIRD_PARTY.md:62 |
 
 Not listed because it is fixed:
 - Stale README documentation on factory presets and parameters (former item A16): fixed, `README.md` updated as the project's front page with current numbers from `docs/params.json` (2637 parameters), `content/presets` (112 factory presets), `core/include/synthyboy/state.h` (state format version 5 in code, 4 in presets), `docs/MPC.md`, `core/filters-serum/CATALOGUE.md` (27 filter models), and `shell-mpc/device_profile.h`.
