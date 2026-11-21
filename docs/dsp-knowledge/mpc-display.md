@@ -20,6 +20,13 @@
   (protocol 8); all live ops of a page must be one contiguous pass after the static cells
   (`shell-mpc/overlay/gpu/cell_plan.h`). Plan: `docs/plans/overlay-static-anim-layers.md`.
 
+## Plane stacking facts (measured read-only 2026-11-21, plugin page open)
+
+- Primary plane FB format is **XR24 (no alpha)** on both devices: XL plane 34 (JUCE message thread allocates, 800x1280, pitch 3200), Key 61 plane 33. Source: `/sys/kernel/debug/dri/0/state` and `drmprobe info`.
+- The host writes alpha byte **255 in every pixel** of its primary buffer (drmgrab dump of both devices, 1,024,000 of 1,024,000 pixels). With XR24 the plane scans out opaque in any case, so a hole in the host's skin background cannot be transparent.
+- XL (RK3588 VOP2): planes have `zpos` (range, mutable; primary 0, cursor plane 40 = 1), `alpha` (65535) and `pixel blend mode` (value 0) properties. Key 61 (RK3288 VOP): planes 33/35/38/40 have NO zpos, alpha or blend property; order is fixed (primary 33 lowest, our plane 38 above it).
+- Consequence: an under-plane design needs the primary to be non-opaque (the shim would have to re-wrap the host buffer as AR24, which only works if the host writes alpha 0 in the holes; it writes 255 today) and, on the Key 61, is impossible because the primary cannot be moved above our plane. Open: whether XL accepts the AR24 re-wrap (`ADDFB2` on the same GEM handle) and what the blend mode value 0 means in the enum list.
+
 ## Decisions
 
 - g117: full takeover, one plane, one writer: the shim merges the helper's finished buffer
