@@ -44,413 +44,6 @@
   },
   "views": [
     {
-      "name": "filter1",
-      "kind": "filterui",
-      "index": 1,
-      "tab": "Filter 1",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "103a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a1064",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "filter2",
-      "kind": "filterui",
-      "index": 2,
-      "tab": "Filter 2",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "173a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a1764",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "lfo1",
-      "kind": "lfoui",
-      "index": 1,
-      "tab": "LFO 1",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "1e3a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a1e64",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "lfo2",
-      "kind": "lfoui",
-      "index": 2,
-      "tab": "LFO 2",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "253a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a2564",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "lfo3",
-      "kind": "lfoui",
-      "index": 3,
-      "tab": "LFO 3",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "2c3a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a2c64",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "lfo4",
-      "kind": "lfoui",
-      "index": 4,
-      "tab": "LFO 4",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "333a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a3364",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "env1",
-      "kind": "envui",
-      "index": 1,
-      "tab": "Env 1",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "4f3a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a4f64",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "env2",
-      "kind": "envui",
-      "index": 2,
-      "tab": "Env 2",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "563a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a5664",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "env3",
-      "kind": "envui",
-      "index": 3,
-      "tab": "Env 3",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "5d3a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a5d64",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "env4",
-      "kind": "envui",
-      "index": 4,
-      "tab": "Env 4",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "643a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a6464",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "macros",
-      "kind": "macros",
-      "index": 1,
-      "tab": "Macros",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "6b3a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a6b64",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
       "name": "play1",
       "kind": "play",
       "index": 1,
@@ -488,10 +81,10 @@
       }
     },
     {
-      "name": "mixer",
-      "kind": "mixer",
+      "name": "macros",
+      "kind": "macros",
       "index": 1,
-      "tab": "Mixer",
+      "tab": "Macros",
       "region": {
         "x": 0,
         "y": 0,
@@ -505,7 +98,7 @@
           "y": 24,
           "w": 6,
           "h": 6,
-          "rgb": "873a2c",
+          "rgb": "6b3a2c",
           "cover": "1e1d1e"
         },
         {
@@ -513,155 +106,7 @@
           "y": 24,
           "w": 6,
           "h": 6,
-          "rgb": "3a8764",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "fx",
-      "kind": "fx",
-      "index": 1,
-      "tab": "FX",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "8e3a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a8e64",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "mod",
-      "kind": "mod",
-      "index": 1,
-      "tab": "Mod",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "953a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a9564",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "master",
-      "kind": "master",
-      "index": 1,
-      "tab": "Master",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "9c3a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3a9c64",
-          "cover": "1e1d1e"
-        }
-      ],
-      "instance": {
-        "x": 45,
-        "y": 24,
-        "w": 6,
-        "h": 6
-      }
-    },
-    {
-      "name": "voice",
-      "kind": "voice",
-      "index": 1,
-      "tab": "Voice",
-      "region": {
-        "x": 0,
-        "y": 0,
-        "w": 1280,
-        "h": 628
-      },
-      "opaque": true,
-      "markers": [
-        {
-          "x": 33,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "a33a2c",
-          "cover": "1e1d1e"
-        },
-        {
-          "x": 1241,
-          "y": 24,
-          "w": 6,
-          "h": 6,
-          "rgb": "3aa364",
+          "rgb": "3a6b64",
           "cover": "1e1d1e"
         }
       ],
@@ -847,6 +292,561 @@
           "w": 6,
           "h": 6,
           "rgb": "3ac664",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "env1",
+      "kind": "envui",
+      "index": 1,
+      "tab": "Env 1",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "4f3a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a4f64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "env2",
+      "kind": "envui",
+      "index": 2,
+      "tab": "Env 2",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "563a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a5664",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "env3",
+      "kind": "envui",
+      "index": 3,
+      "tab": "Env 3",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "5d3a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a5d64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "env4",
+      "kind": "envui",
+      "index": 4,
+      "tab": "Env 4",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "643a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a6464",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "lfo1",
+      "kind": "lfoui",
+      "index": 1,
+      "tab": "LFO 1",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "1e3a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a1e64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "lfo2",
+      "kind": "lfoui",
+      "index": 2,
+      "tab": "LFO 2",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "253a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a2564",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "lfo3",
+      "kind": "lfoui",
+      "index": 3,
+      "tab": "LFO 3",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "2c3a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a2c64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "lfo4",
+      "kind": "lfoui",
+      "index": 4,
+      "tab": "LFO 4",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "333a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a3364",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "fx",
+      "kind": "fx",
+      "index": 1,
+      "tab": "FX",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "8e3a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a8e64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "mixer",
+      "kind": "mixer",
+      "index": 1,
+      "tab": "Mixer",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "873a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a8764",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "filter1",
+      "kind": "filterui",
+      "index": 1,
+      "tab": "Filter 1",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "103a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a1064",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "filter2",
+      "kind": "filterui",
+      "index": 2,
+      "tab": "Filter 2",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "173a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a1764",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "mod",
+      "kind": "mod",
+      "index": 1,
+      "tab": "Mod",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "953a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a9564",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "master",
+      "kind": "master",
+      "index": 1,
+      "tab": "Master",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "9c3a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3a9c64",
+          "cover": "1e1d1e"
+        }
+      ],
+      "instance": {
+        "x": 45,
+        "y": 24,
+        "w": 6,
+        "h": 6
+      }
+    },
+    {
+      "name": "voice",
+      "kind": "voice",
+      "index": 1,
+      "tab": "Voice",
+      "region": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 628
+      },
+      "opaque": true,
+      "markers": [
+        {
+          "x": 33,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "a33a2c",
+          "cover": "1e1d1e"
+        },
+        {
+          "x": 1241,
+          "y": 24,
+          "w": 6,
+          "h": 6,
+          "rgb": "3aa364",
           "cover": "1e1d1e"
         }
       ],

@@ -11,7 +11,7 @@
     },
     {
       "name": "Macros",
-      "fn": "Macros",
+      "fn": "Play",
       "kick": [
         "macros",
         "macros_2"
@@ -51,30 +51,6 @@
       "fn": "Osc",
       "kick": [
         "noise"
-      ]
-    },
-    {
-      "name": "Mixer",
-      "fn": "Mix",
-      "kick": [
-        "mix_routing",
-        "mix_bus"
-      ],
-      "label": "Mix"
-    },
-    {
-      "name": "Filter 1",
-      "fn": "Filter",
-      "kick": [
-        "filter1_main"
-      ],
-      "label": "Filter"
-    },
-    {
-      "name": "Filter 2",
-      "fn": "Filter",
-      "kick": [
-        "filter2_main"
       ]
     },
     {
@@ -136,19 +112,43 @@
       ]
     },
     {
-      "name": "Mod",
-      "fn": "Mod",
-      "kick": [
-        "mod_slot_1",
-        "mod_slot_2"
-      ]
-    },
-    {
       "name": "FX",
       "fn": "FX",
       "kick": [
         "fx_order_1",
         "fx_switches"
+      ]
+    },
+    {
+      "name": "Mixer",
+      "fn": "Mix",
+      "kick": [
+        "mix_routing",
+        "mix_bus"
+      ],
+      "label": "Mix"
+    },
+    {
+      "name": "Filter 1",
+      "fn": "Filter",
+      "kick": [
+        "filter1_main"
+      ],
+      "label": "Filter"
+    },
+    {
+      "name": "Filter 2",
+      "fn": "Filter",
+      "kick": [
+        "filter2_main"
+      ]
+    },
+    {
+      "name": "Mod",
+      "fn": "Mod",
+      "kick": [
+        "mod_slot_1",
+        "mod_slot_2"
       ]
     },
     {
