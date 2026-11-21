@@ -12,6 +12,7 @@
 
 #include <cstdio>
 
+#include "synthyboy/aa_switch.h"
 #include "synthyboy/hash.h"
 #include "synthyboy/params.h"
 
@@ -181,6 +182,10 @@ void LibOsc::stopAll() noexcept
     specPending_ = 0;
     specReleasePending_ = false;
     from = -1;
+    for (auto& lane : postAa)
+        for (auto& ch : lane)
+            for (auto& slot : ch)
+                slot = warpadaa::State();
 }
 
 void LibOsc::resetForNote() noexcept
@@ -209,6 +214,10 @@ void LibOsc::resetForNote() noexcept
         extSamples[e] = 0;
         extValid[e] = false;
     }
+    for (auto& lane : postAa)
+        for (auto& ch : lane)
+            for (auto& slot : ch)
+                slot = warpadaa::State();
 }
 
 void LibOsc::setType (int newType, bool fresh) noexcept
@@ -945,7 +954,7 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
         }
         rm = rateBuf.data();
     }
-    auto postWarp = [&] (float y, int k) noexcept
+    auto postWarp = [&] (float y, int k, int u, int ch) noexcept
     {
         for (int s = 0; s < 2; ++s)
         {
@@ -968,10 +977,18 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
             else if (w == kWarpQuantize)
             {
                 const float levels = std::exp2 (1.0f + 14.0f * (1.0f - a) * (1.0f - a) * (1.0f - a));
-                y = std::round (y * levels) / levels;
+                if ((aa::off () & aa::kLibWarp) == 0)
+                    y = warpadaa::stepQuantize (postAa[u][ch][s], y, levels);
+                else
+                    y = std::round (y * levels) / levels;
             }
             else if (w >= kWarpDistTube && w <= kWarpDistSoftSat)
-                y = warpSample (w, y, a, 0.0f);
+            {
+                if ((aa::off () & aa::kLibWarp) == 0)
+                    y = warpadaa::step (w, postAa[u][ch][s], y, a, false);
+                else
+                    y = warpSample (w, y, a, 0.0f);
+            }
         }
         return y;
     };
@@ -1003,8 +1020,8 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
             {
                 const float t = static_cast<float> (t0 + k + 1) * invP;
                 float sl = a[k], sr2 = b[k];
-                sl = postWarp (sl, k);
-                sr2 = postWarp (sr2, k);
+                sl = postWarp (sl, k, u, 0);
+                sr2 = postWarp (sr2, k, u, 1);
                 L[k] += sl * lerp (uni[u].gPrevL, uni[u].gL, t);
                 R[k] += sr2 * lerp (uni[u].gPrevR, uni[u].gR, t);
             }
@@ -1032,7 +1049,7 @@ void LibOsc::renderType (int type, int t0, int n, float* L, float* R, const floa
             for (int k = 0; k < n; ++k)
             {
                 const float t = static_cast<float> (t0 + k + 1) * invP;
-                const float sl = postWarp (a[k], k), sr2 = postWarp (b[k], k);
+                const float sl = postWarp (a[k], k, u, 0), sr2 = postWarp (b[k], k, u, 1);
                 L[k] += sl * lerp (uni[u].gPrevL, uni[u].gL, t);
                 R[k] += sr2 * lerp (uni[u].gPrevR, uni[u].gR, t);
             }
