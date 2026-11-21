@@ -44,6 +44,15 @@
 - Trial skin on the Macros tab (self-test LFO cursor at 25 steps/s): only Meters bound through `Parameter/Named/<name>` and `Parameter <index>` show live data. Every Plotter (`Info/Index/0..7`, `Info/Named/<name>`, `Parameter/Named/<name>`, `Parameter 2637` with drawHistory true and false) and the Meter on `Info/Named/...` stayed empty. So the Info namespaces and the Plotter give nothing to an external plugin (XL not run; the stock skins' `Info/Named/` data comes from the built-in engines).
 - The host redraws a visible Meter page on the Key 61 at 8.0 picture changes/s (81 in 10 s, intervals 99-150 ms, median 109 ms, alternating two framebuffers), 0 on another tab. The XL does 20/s. A host Meter therefore updates at about 8 fps on the Key 61 (poller `flipwatch`, raw logs in the scratchpad `k61-trial/`).
 
+## Host popups on the plugin track view: blur and dim (XL, long press ~700 ms, measured 2026-11-21)
+
+- A short tap on the PRESET / PLUGIN / TRACK fields only focuses them; a hold of about 700 ms opens the popup (TRACK opens none).
+- PRESET field: a left side panel, x 0..639, full height (the preset list). The page behind it (x 640 and up) is BLURRED and DIMMED: fit `popup = a * blur_r(normal) + b` gives r = 4, a = 0.194, b = -0.10, MAE 0.50 (without blur: a 0.109, b 2.41, MAE 0.82). A flat area goes from 29.67 to 5.67, about 19 % of its brightness: a dark scrim of about 81 %.
+- PLUGIN field: a centred modal dialog (x 122..1158, y 10..728, TYPE / MANUFACTURER / CLOSE / SELECT). The page around it is blurred and dimmed the same way: r = 5, a = 0.216, b = -0.45, MAE 0.97; flat areas 29.67 -> 5.67 again.
+- Our overlay hides by itself in both cases (status `hidden: no view on screen`, `view: none`, `view_hides` counts up): the helper does not draw over these host popups today.
+- The host drawers (left Browser / Mixer panel, top transport panel) do NOT blur or dim the page (earlier measurement); the Load dialog replaces the whole screen. The Monitor popup was not found on this view and the Q-Link touch overlay is not reachable by touchscreen.
+- Raw: scratchpad `popup3/` (grabs, `an.py`).
+
 ## Decisions
 
 - g117: full takeover, one plane, one writer: the shim merges the helper's finished buffer
