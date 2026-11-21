@@ -56,6 +56,11 @@ void setSlot (IEngine& e, int slot, int type, int rack = 0, int order = 1023, bo
     setParam (e, poolKey (slot, "on").c_str(), on ? 1.0f : 0.0f);
 }
 
+// The first sample above this level is the onset. The half-band FIR of the 2x distortion (and the Hilbert FIR of Bode) is linear phase: it rings before its centre (measured with the saw
+// patch: 1e-5 from 8 samples early, 1.1e-4 from 5 samples early, 2e-3 one sample early, the real onset 0.04 at +15), so a level of 1e-4 reported the onset 10 samples after the dry path
+// instead of 15; the first real sample is 0.04 or more, the ringing below 3e-3.
+constexpr float kOnsetLevel = 1.0e-2f;
+
 struct LatencyResult { int reported; double onset; };
 
 LatencyResult measureLatency (const Quality& q, const KV& cfg, const std::vector<std::pair<int, int>>& slots = {}, bool slotOn = true)
@@ -76,7 +81,7 @@ LatencyResult measureLatency (const Quality& q, const KV& cfg, const std::vector
     const auto r = sbtest::render (*e, { sbtest::noteOn (static_cast<int> (0.1 * kSr), 69) }, static_cast<int> (0.5 * kSr), 256);
     double onset = -1.0;
     for (size_t i = 0; i < r.left.size(); ++i)
-        if (std::fabs (r.left[i]) > 1.0e-4f)
+        if (std::fabs (r.left[i]) > kOnsetLevel)
         {
             onset = static_cast<double> (i) - 0.1 * kSr;
             break;
