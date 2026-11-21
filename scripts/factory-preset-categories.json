@@ -31,13 +31,25 @@
       "group": "Bass Acid",
       "why": "Classic 303-style resonant sawtooth acid line"
     },
+    "Acoustic Bore Reed": {
+      "group": "Lead Synth",
+      "why": "Clarinet to saxophone bore table reed lead morphed by pressure"
+    },
     "Acoustic Style Pluck": {
       "group": "Pluck",
       "why": "Crisp acoustic guitar transient steel-string pluck"
     },
+    "Air Chiff Flute": {
+      "group": "Lead Synth",
+      "why": "Breathy mono flute with noise-table chiff and pressure breath"
+    },
     "Alien Communication": {
       "group": "Texture",
       "why": "Resonant formant alien vocal chatter soundscape"
+    },
+    "Analog Sweep Bass": {
+      "group": "Bass Synth",
+      "why": "Saw filter-sweep table bass with envelope bark and sine sub"
     },
     "Aux Keyscale Pluck": {
       "group": "Pluck",
@@ -95,6 +107,10 @@
       "group": "Texture",
       "why": "Breathing industrial atmosphere with formant noise and Lorenz LFO"
     },
+    "Cathedral Bell Ring": {
+      "group": "Bells+Mallets",
+      "why": "Additive bronze bell strike table settling to the hum"
+    },
     "Cathedral Choir": {
       "group": "Pad Warm",
       "why": "Vast reverberant sacred choir pad"
@@ -106,6 +122,10 @@
     "Chime Drop": {
       "group": "Bells+Mallets",
       "why": "Delicate falling metallic glass chime cluster"
+    },
+    "Choir Swell Ensemble": {
+      "group": "Pad Warm",
+      "why": "Men, women and children choir table pad with long swell"
     },
     "Chord Cloud Pad": {
       "group": "Pad Evolving",
@@ -147,6 +167,10 @@
       "group": "Bass Reese",
       "why": "Detuned dual-saw bass with rhythmic hand-drawn wobble LFO"
     },
+    "Cymbal Cloud Riser": {
+      "group": "FX",
+      "why": "Thirty-six partial metal cloud riser with flanger and echoes"
+    },
     "Dark Cinema Drone": {
       "group": "Texture",
       "why": "Low suspenseful cinematic atmospheric drone"
@@ -175,6 +199,10 @@
       "group": "Bass Acid",
       "why": "Warm saturated diode ladder filter resonant bass"
     },
+    "Diphthong Morph Vox": {
+      "group": "Lead Synth",
+      "why": "Eight-diphthong table talking lead with stepped LFO words"
+    },
     "Dirty Distortion Bass": {
       "group": "Bass Acid",
       "why": "Overdriven industrial bass using dirty filter model"
@@ -182,6 +210,10 @@
     "Dirty Peak Lead": {
       "group": "Lead Synth",
       "why": "Distorted resonant peak filter industrial synth lead"
+    },
+    "Dispersion Phase Pad": {
+      "group": "Pad Evolving",
+      "why": "Phase-dispersion table pad with soft clip and slow swirl"
     },
     "Drawbar Organ Keys": {
       "group": "Keys",
@@ -215,6 +247,10 @@
       "group": "Pad Evolving",
       "why": "Airy crystalline glass texture with slowly shifting overtones"
     },
+    "FM Chain Tine Keys": {
+      "group": "Keys",
+      "why": "Three-operator FM chain electric piano with tine decay"
+    },
     "FM Digital Lead": {
       "group": "Lead Sync+FM",
       "why": "Crisp digital FM synthesis lead with sharp modulation"
@@ -238,6 +274,10 @@
     "Formant Vowel Bass": {
       "group": "Bass Synth",
       "why": "Formant filter sweeping vocal vowel bassline"
+    },
+    "Free Bar Vibraphone": {
+      "group": "Bells+Mallets",
+      "why": "Free-bar mode table vibraphone with wheel motor tremolo"
     },
     "Frozen Aurora": {
       "group": "Pad Evolving",
@@ -271,6 +311,10 @@
       "group": "Pad Warm",
       "why": "Peaceful warm morning dawn analog pad"
     },
+    "Gong Bloom Pad": {
+      "group": "Pad Evolving",
+      "why": "Gong-mode table pad that blooms with the swell envelope"
+    },
     "Gong Grain Swarm": {
       "group": "FX",
       "why": "Inharmonic metallic grain swarm effect"
@@ -294,6 +338,10 @@
     "Harmonic Tine Pluck": {
       "group": "Pluck",
       "why": "Rich harmonic struck tine transient pluck"
+    },
+    "Harmonic Wah Bass": {
+      "group": "Bass Synth",
+      "why": "Harmonic band-sweep table talking funk wah bass"
     },
     "Harp Drops": {
       "group": "Pluck",
@@ -395,6 +443,10 @@
       "group": "Pad Warm",
       "why": "Warm hollow wooden pipe organ pad with odd harmonics"
     },
+    "PD Reso Acid Bass": {
+      "group": "Bass Acid",
+      "why": "Phase-distortion resonance table acid bass with diode bite"
+    },
     "Parallel Dusk Pad": {
       "group": "Pad Evolving",
       "why": "Dual parallel stereo filters with opposing LFO cutoff motion"
@@ -406,6 +458,10 @@
     "Phaser Sweep Lead": {
       "group": "Lead Synth",
       "why": "Spacey multi-stage phaser swept solo synth lead"
+    },
+    "Pink Noise Sub": {
+      "group": "Bass Sub+808",
+      "why": "Sine sub bass with a closing pink-noise table thump"
     },
     "Pitch Drop 808": {
       "group": "Bass Sub+808",
@@ -475,6 +531,10 @@
       "group": "Texture",
       "why": "Endless ascending Shepard tone drone with Lorenz LFO modulation"
     },
+    "Shimmer Bell Walk": {
+      "group": "Bells+Mallets",
+      "why": "Church bell table whose partials open with velocity"
+    },
     "Slow Motion Waves": {
       "group": "Pad Evolving",
       "why": "Slow morphing wavetable sweep across spectral frames"
@@ -490,6 +550,10 @@
     "Sonar Ping": {
       "group": "FX",
       "why": "Deep ocean submarine acoustic sonar ping"
+    },
+    "Soprano Vowel Pad": {
+      "group": "Pad Warm",
+      "why": "Women's vowel-cycle table choir pad with slow vowel walk"
     },
     "Space Odyssey Pad": {
       "group": "Pad Evolving",
@@ -531,6 +595,10 @@
       "group": "Pad Warm",
       "why": "Bright crystalline shimmering high-register synth pad"
     },
+    "Step Morph Pluck": {
+      "group": "Sequence",
+      "why": "Wave-sequencing step table pluck with stepped LFO and echoes"
+    },
     "Stretched Glass Choir": {
       "group": "Pad Evolving",
       "why": "Spectral-stretched partials drifting across random LFOs"
@@ -563,6 +631,18 @@
       "group": "Bass Acid",
       "why": "Hard-sync modulated aggressive growl bass"
     },
+    "Sync Saw Raw Bass": {
+      "group": "Bass Synth",
+      "why": "Hard-sync saw table raw mono bass with hard clip"
+    },
+    "Sync Sine Screamer": {
+      "group": "Lead Sync+FM",
+      "why": "Hard-sync sine table mono lead with envelope scream"
+    },
+    "Talk Box Baritone": {
+      "group": "Lead Synth",
+      "why": "Men's vowel-cycle table talk-box lead with wheel mouth"
+    },
     "Tempo Gate Chords": {
       "group": "Sequence",
       "why": "Chords rhythmic chopped by a 16-step tempo-synced gate LFO"
@@ -578,6 +658,10 @@
     "Trance Short Pluck": {
       "group": "Sequence",
       "why": "Punchy sequenced trance groove pluck with tight decay"
+    },
+    "Trance Stack Lead": {
+      "group": "Lead Synth",
+      "why": "Seven-saw phase-spread table supersaw lead with fifth layer"
     },
     "Tri Soft Solo": {
       "group": "Lead Synth",
@@ -619,6 +703,10 @@
       "group": "Keys",
       "why": "Classic warm Rhodes electric piano with soft tines"
     },
+    "Vinyl Crackle Bed": {
+      "group": "Texture",
+      "why": "Crackle-pulse table dust bed with vinyl ticks and basin reverb"
+    },
     "Vinyl Dust Crackle": {
       "group": "Texture",
       "why": "Continuous vintage vinyl record dust and crackle generator"
@@ -658,6 +746,14 @@
     "Warm Vintage Lead": {
       "group": "Lead Synth",
       "why": "Smooth vintage analog lowpass filtered solo lead"
+    },
+    "West Coast Wavefold": {
+      "group": "Lead Sync+FM",
+      "why": "Sine wave-folder table mono lead with wheel and pressure fold"
+    },
+    "Wind Sweep Riser": {
+      "group": "FX",
+      "why": "Noise band-sweep table wind riser on a fixed low cycle"
     }
   }
 }

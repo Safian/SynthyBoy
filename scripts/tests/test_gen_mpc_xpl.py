@@ -305,9 +305,9 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
                 gen_res = subprocess.run(gen_cmd, capture_output=True, text=True)
                 self.assertEqual(gen_res.returncode, 0, f"Generator failed: {gen_res.stderr}\n{gen_res.stdout}")
 
-                # Verify exactly 160 .xpl files generated (the 112 of the first sets and the 24 each of sound set batches 1 and 2)
+                # Verify exactly 184 .xpl files generated (the 112 of the first sets and the 24 each of sound set batches 1, 2 and 3)
                 xpl_files = list(out_dir.glob("*.xpl"))
-                self.assertEqual(len(xpl_files), 160, f"Expected 160 preset files, got {len(xpl_files)}")
+                self.assertEqual(len(xpl_files), 184, f"Expected 184 preset files, got {len(xpl_files)}")
 
                 # Check each file has valid envelope and header, and decodes (dec.py) to the structure of the file the device wrote
                 device_blob = TestDecodesLikeDeviceFiles._decode_with_dec_py(get_example_path("zz-sbtest-program.xpl"))
@@ -319,7 +319,7 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
                     self.assertEqual((header, [k for k in keys if k not in ("content", "mpcOutputLimiter")], param_keys), device_structure, f"{xf.name}: structure differs from the device's file")
                     self.assertIn("mpcOutputLimiter", keys, f"{xf.name}: no limiter setting in the chunk")
                     parsed = gen_mpc_xpl.parse_xpl(xf.read_text(encoding="utf-8"))
-                    self.assertEqual(parsed["header"]["num_programs"], 161)
+                    self.assertEqual(parsed["header"]["num_programs"], 185)
                     self.assertEqual(parsed["header"]["chunk_magic"], b"CcnK")
                     self.assertEqual(parsed["header"]["fx_magic"], b"FBCh")
                     self.assertGreater(len(parsed["chunk_bytes"]), 1000)
@@ -350,10 +350,10 @@ class TestPresetGenerationWithHelperOrFixtures(unittest.TestCase):
         self.assertEqual(tmpl["header"]["num_programs"], 113)  # template has old 113
         chunk = (FIXTURES_DIR / "acid_saw_reso.chunk").read_bytes()
         name = "Acid Saw Reso"
-        # Without num_programs override, it derives 161 from factory presets count (160) + 1 (Init)
+        # Without num_programs override, it derives 185 from factory presets count (184) + 1 (Init)
         _, xml_text = gen_mpc_xpl.create_xpl_from_chunk(chunk, name, tmpl)
         parsed = gen_mpc_xpl.parse_xpl(xml_text)
-        self.assertEqual(parsed["header"]["num_programs"], 161)
+        self.assertEqual(parsed["header"]["num_programs"], 185)
 
     def test_create_xpl_override_num_programs(self):
         tmpl = gen_mpc_xpl.parse_xpl(get_example_path("prev_Acid_Saw_Reso.xpl").read_text(encoding="utf-8"))

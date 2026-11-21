@@ -297,9 +297,9 @@ TEST (factory_presets_pack_validation)
     CHECK_EQ (pack.license, "CC0-1.0");
     CHECK_EQ (pack.attribution, "Safian Szabolcs");
     CHECK_EQ (pack.kind, "presets");
-    CHECK_EQ (pack.files.size(), 160u);
+    CHECK_EQ (pack.files.size(), 184u);
 
-    // Verify all 160 presets on disk against manifest SHA-256
+    // Verify all 184 presets on disk against manifest SHA-256
     std::vector<std::string> errors;
     CHECK (verifyContentPack (factoryDir.string(), pack, errors));
     if (! errors.empty())
@@ -308,9 +308,9 @@ TEST (factory_presets_pack_validation)
             std::printf ("    [factory_pack error] %s\n", err.c_str());
     }
 
-    // Verify all 160 presets via directory scanner and check license
+    // Verify all 184 presets via directory scanner and check license
     const auto entries = scanPresetDirectory (factoryDir.string());
-    CHECK_EQ (entries.size(), 160u);
+    CHECK_EQ (entries.size(), 184u);
     for (const auto& e : entries)
     {
         CHECK_EQ (e.meta.license, "CC0-1.0");
@@ -326,7 +326,7 @@ TEST (scan_prefix_read_equals_whole_file_parse)
     const std::filesystem::path repoRoot = std::filesystem::path (__FILE__).parent_path().parent_path().parent_path();
     const std::filesystem::path factoryDir = repoRoot / "content" / "presets";
     const auto entries = scanPresetDirectory (factoryDir.string());
-    CHECK_EQ (entries.size(), 160u);
+    CHECK_EQ (entries.size(), 184u);
     for (const auto& e : entries)
     {
         std::ifstream f (e.path, std::ios::binary);
@@ -370,7 +370,7 @@ TEST (factory_presets_load_values_are_stable)
     // shell does): the scan keeps only names and paths, the values come from the file when the program is selected.
     const std::filesystem::path repoRoot = std::filesystem::path (__FILE__).parent_path().parent_path().parent_path();
     const auto entries = scanPresetDirectory ((repoRoot / "content" / "presets").string());
-    CHECK_EQ (entries.size(), 160u);
+    CHECK_EQ (entries.size(), 184u);
     for (const auto& e : entries)
     {
         std::ifstream f (e.path, std::ios::binary);

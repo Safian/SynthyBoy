@@ -214,8 +214,27 @@ def cmd_gains(a):
     print("rule (median change about 0, nobody above +6 dB of master.volume): kMakeupGainDb = %+.1f dB" % g)
 
 
+def parse_only(only_arg):
+    if not only_arg:
+        return None
+    names = set()
+    if isinstance(only_arg, list):
+        for item in only_arg:
+            for n in item.split(","):
+                n = n.strip()
+                if n:
+                    names.add(n)
+    elif isinstance(only_arg, str):
+        for n in only_arg.split(","):
+            n = n.strip()
+            if n:
+                names.add(n)
+    return names if names else None
+
+
 def cmd_solve(a):
     targets = load_targets(a.targets)
+    only_names = parse_only(getattr(a, "only", None))
     os.makedirs(a.work, exist_ok=True)
     prev, applied = None, {}
     for rnd in range(a.rounds + 1):
@@ -230,6 +249,11 @@ def cmd_solve(a):
         new_levels = {}
         new_tier_trims = {}
         for n, v in levels.items():
+            if only_names is not None and n not in only_names:
+                new_levels[n] = v
+                if n in tier_trims:
+                    new_tier_trims[n] = tier_trims[n]
+                continue
             p = ps.get(n)
             if p is None:
                 new_levels[n] = v
@@ -449,6 +473,7 @@ def cmd_report(a):
 
 
 def cmd_table(a):
+    only_names = parse_only(getattr(a, "only", None))
     rows = read_measure(a.measure)
     ps = by_preset(rows)
     levels = current_levels()
@@ -490,6 +515,8 @@ def cmd_table(a):
     cat_notes = {}
 
     for n in sorted(ps.keys(), key=lambda x: (ps[x]["category"], x)):
+        if only_names is not None and n not in only_names:
+            continue
         p = ps[n]
         cat = p["category"]
         vol = levels.get(n, 0.0)
@@ -616,12 +643,14 @@ def main():
     s.add_argument("--targets", default=TARGETS_PATH); s.add_argument("--rounds", type=int, default=3); s.add_argument("--work", default="level-to-stock-work")
     s.add_argument("--gate", help="synthyboy_preset_render: its raw peaks (every tier) are kept under +2.85 dBFS so the preset gate passes")
     s.add_argument("--rule", choices=["stock", "top"], default="stock", help="top: owner's 2026-11-20 level rule (T=-4.5 dBFS, chords <= -0.5 dBFS)")
+    s.add_argument("--only", help="Preset name(s) or comma-separated names to solve for (leaves other presets untouched)")
     sm = sub.add_parser("simulate")
     sm.add_argument("--measure", required=True); sm.add_argument("--targets", default=TARGETS_PATH); sm.add_argument("--alphas", type=float, nargs="+", default=[0.0, 0.25, 0.5])
     r = sub.add_parser("report")
     r.add_argument("--measure", required=True); r.add_argument("--before"); r.add_argument("--targets", default=TARGETS_PATH); r.add_argument("--md")
     t = sub.add_parser("table")
     t.add_argument("--measure", required=True); t.add_argument("--out")
+    t.add_argument("--only", help="Preset name(s) or comma-separated names to include in table")
     a = ap.parse_args()
     if a.cmd == "measure":
         measure(a.probe, a.content_dir, a.gain, a.out)

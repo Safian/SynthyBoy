@@ -155,7 +155,7 @@ struct Stats
 TEST (output_stage_on_every_factory_preset)
 {
     const auto presets = loadPresets();
-    CHECK (presets.size() >= 160);
+    CHECK (presets.size() >= 184);
     // the factory packs by their pack ids (DirectoryContentStore: <root>/<pack id>/<file>), made by CMake as for the preset gate
     DirectoryContentStore store (SYNTHYBOY_TEST_CONTENT_STORE);
     struct Prof { const char* name; const char* text; };
@@ -270,7 +270,7 @@ TEST (output_stage_on_every_factory_preset)
 TEST (output_stage_presets_sit_at_the_stock_level)
 {
     const auto presets = loadPresets();
-    CHECK (presets.size() >= 160);
+    CHECK (presets.size() >= 184);
     DirectoryContentStore store (SYNTHYBOY_TEST_CONTENT_STORE);
     const char* profiles[] = { "low", "high,voices=16,control=economy" };
 

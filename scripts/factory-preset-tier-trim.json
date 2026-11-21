@@ -1,4 +1,5 @@
 {
+ "Acoustic Bore Reed": 1.3,
  "Bend Formant Growl": 0.7,
  "Bode Barber Riser": 1.9,
  "Bode Shifter Drone": 6.4,
@@ -6,6 +7,7 @@
  "Breakbeat Slice Keys": -1.9,
  "Breath Flute Lead": 0.5,
  "Breath of Machines": -0.6,
+ "Cathedral Bell Ring": -0.6,
  "Cathedral Choir": 1.5,
  "Chorused Saw Solo": 0.5,
  "Cosmic Drift Lead": 5.5,
@@ -13,12 +15,14 @@
  "Deep Sea Ambient": 1.6,
  "Diffusor Cloud Pad": 1.5,
  "Ethereal Glass": 1.8,
+ "FM Chain Tine Keys": 0.6,
  "Frozen Aurora": 4.5,
  "Frozen Pluck Drone": -1.6,
  "Glass Organ Tones": 2.7,
  "Glass Ping Pluck": -0.9,
  "Glass Zone Bells": -0.9,
  "Golden Dawn Pad": 2.0,
+ "Gong Bloom Pad": 1.7,
  "Gong Grain Swarm": 0.6,
  "Harmonic Cloud": 3.1,
  "Hyper Dimension Pad": 2.9,
@@ -36,6 +40,7 @@
  "Reverse Gong Swell": -0.9,
  "Shepard Ascent": -0.5,
  "Sonar Ping": 1.6,
+ "Soprano Vowel Pad": 0.9,
  "Space Odyssey Pad": 4.3,
  "Spectral Bowed Glass": 0.7,
  "Spectral Vowel Freeze": 1.7,
@@ -50,5 +55,6 @@
  "Vibraphone Bars": 1.7,
  "Vowel Choir Pad": 1.0,
  "Vowel Table Lead": 1.9,
- "Vowel Whistle Lead": 0.5
+ "Vowel Whistle Lead": 0.5,
+ "West Coast Wavefold": 1.6
 }

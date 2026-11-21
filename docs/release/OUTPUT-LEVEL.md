@@ -68,6 +68,7 @@ Hype "Almighty" (first reference): note −10.9, 4-note −6.5. Highest stock pe
 - Over -0.50 dBFS: exactly 0 chords across all 160 presets and both profiles.
 - Velocity dynamics (v127 vs v64 diff): median `+11.91 dB` (~12 dB expected from v^2 law with track 100%).
 - Presets reaching master.volume max (+6.0 dB): 5 presets (Bode Barber Riser, Diode Bite Lead, Diode Saturated Bass, Rising Grain Riser, Spectral Gong Pad).
+- Sound set batch 3 (24 presets, total 184 factory presets) is levelled by the same rule: all 184 presets meet T = -10.0 dBFS note target and the -0.5 dBFS chord limit with unity shell gain and voice-count alpha 0.5.
 
 ## C. Refuted or corrected claims (do not reuse)
 
@@ -94,6 +95,7 @@ Hype "Almighty" (first reference): note −10.9, 4-note −6.5. Highest stock pe
 4. **Pluck / Keys sustain 20 dB under stock.** Sound design (faster decay), not levelling. Closed by: owner listening decision per preset.
 5. **Presets that cannot reach their target under the peak rule** (list in the levelling test). Closed by: the fix per preset (trim / limiter on that preset) after D1.
 6. **XL output / monitor volume.** Not readable from the host screen. Closed by: the owner reading the knob once.
+7. **Sound set batch 3 levelling.** The 24 presets of sound set batch 3 (total 184 factory presets) are levelled by the same rule (T = -10.0 dBFS, chords <= -0.5 dBFS, master.volume <= +1.0 dB).
 
 ### D1 detail: the result of the unity / hard-peak run (commit e03e09f4, Key 61 medians, target in brackets)
 

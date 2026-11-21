@@ -7,7 +7,7 @@
   "attribution": "Safian Szabolcs",
   "kind": "presets",
   "requires_plugin": ">=0.1.0",
-  "description": "160 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
+  "description": "184 factory presets covering Bass, Lead, Pad, Pluck, Keys and FX under CC0-1.0 license.",
   "files": [
     {
       "path": "Bass/solid_sub.sbpreset",
@@ -808,6 +808,126 @@
       "path": "Bass/ladder_fm_bass.sbpreset",
       "sha256": "6092dd2b26c1ed6e3f90cd05d7171765b8c5f4d2fdea5fe8bb7761765fc1803c",
       "size": 50863
+    },
+    {
+      "path": "Bass/analog_sweep_bass.sbpreset",
+      "sha256": "7c78d77519812401d8fa46d88dd3c13cb8f1494918715404d73e52efe3da57f7",
+      "size": 50893
+    },
+    {
+      "path": "Lead/trance_stack_lead.sbpreset",
+      "sha256": "89e82af52099bb8adea703abd60d01de35594bb55944df08451f78ab88b8316a",
+      "size": 50852
+    },
+    {
+      "path": "Lead/sync_sine_screamer.sbpreset",
+      "sha256": "d19fff06e1f58ea5482cba820d99eafd8ffe4a392758e6ce7701002fe49577c7",
+      "size": 50861
+    },
+    {
+      "path": "Bass/sync_saw_raw_bass.sbpreset",
+      "sha256": "9c9f0f02cd617082f274a613c02665c0e048c3c3ba49fcb88e46039a04199087",
+      "size": 50847
+    },
+    {
+      "path": "Keys/fm_chain_tine_keys.sbpreset",
+      "sha256": "83b20c46fe1803eb45dbfe049a2f84924d485a64bec1fef79fabf52fc9725463",
+      "size": 50923
+    },
+    {
+      "path": "Bass/pd_reso_acid_bass.sbpreset",
+      "sha256": "97718cd16347e2fb5307a3fa459f01380bb12e9ebc11afade3fdc478c9ac049f",
+      "size": 50872
+    },
+    {
+      "path": "Pluck/step_morph_pluck.sbpreset",
+      "sha256": "6e0a63ee433b821c177c520f04d32d369114d3da0a22a80bc2da4a3d65f60518",
+      "size": 50943
+    },
+    {
+      "path": "Lead/west_coast_wavefold.sbpreset",
+      "sha256": "74000015ffc1b355cae560df5fadd4d8331f9b93ba8022ae5ec8dcfea8dafb2c",
+      "size": 50933
+    },
+    {
+      "path": "Keys/shimmer_bell_walk.sbpreset",
+      "sha256": "1a9bd1463e48d446a8d2c4c94b1daab4fa8226ccf88099963021085ae50b30df",
+      "size": 50913
+    },
+    {
+      "path": "Keys/free_bar_vibraphone.sbpreset",
+      "sha256": "e152882daa60f583c416095137e41f5a0d66ad13291bdbba0d0db49a60de9d8a",
+      "size": 50914
+    },
+    {
+      "path": "Pad/gong_bloom_pad.sbpreset",
+      "sha256": "a2dc455faafe9dcdd43b2fe42bfa9ba5a0acbfa2aed4d961eabb5c5c4d7d9485",
+      "size": 50936
+    },
+    {
+      "path": "FX/cymbal_cloud_riser.sbpreset",
+      "sha256": "0ef727fa77962337de6637fda788e5a355925df9c05c16b4a9056dc4c476a4de",
+      "size": 50931
+    },
+    {
+      "path": "FX/wind_sweep_riser.sbpreset",
+      "sha256": "03abf9beebaa9a20ccef31d8075f97af9b2e308d10fb3c1ccfa985c2122ce379",
+      "size": 50935
+    },
+    {
+      "path": "Lead/air_chiff_flute.sbpreset",
+      "sha256": "67863d486325b1d48762893f2aee91681c33bf930c7f19cde4c760f1379b5b36",
+      "size": 50950
+    },
+    {
+      "path": "Bass/pink_noise_sub.sbpreset",
+      "sha256": "37794b88eb041d22c0a54e901d87e04ecdd2db64ab429c89748c17d50eca0c19",
+      "size": 50939
+    },
+    {
+      "path": "FX/vinyl_crackle_bed.sbpreset",
+      "sha256": "7827c7ca36b951f7a2781313db12a74027d7406f1f555d1b9c865baad5da39b0",
+      "size": 51052
+    },
+    {
+      "path": "Lead/acoustic_bore_reed.sbpreset",
+      "sha256": "ca280f261cafa2487cc1f640476e06af1863b1ee0d960c92e1a9ad8cff6e87ff",
+      "size": 51034
+    },
+    {
+      "path": "Bass/harmonic_wah_bass.sbpreset",
+      "sha256": "008a35e6e7d4cb49c7b87477b4afa3bcd4c5e2c0c633329e7296725c256ddec9",
+      "size": 50944
+    },
+    {
+      "path": "Keys/cathedral_bell_ring.sbpreset",
+      "sha256": "c2a4e63bdf11783504f0591c60c2647384d1d46ae4fc5c3142836a641edb1d1c",
+      "size": 50972
+    },
+    {
+      "path": "Pad/dispersion_phase_pad.sbpreset",
+      "sha256": "515cda390903db5d8f351d10488c733102850d77a43c31c16f80956c7b2c2285",
+      "size": 51163
+    },
+    {
+      "path": "Pad/soprano_vowel_pad.sbpreset",
+      "sha256": "c00720ffb9c9db12c52924959cfbf7e6df094bf5aca33a36e6bcb394fdf153a5",
+      "size": 50956
+    },
+    {
+      "path": "Lead/talk_box_baritone.sbpreset",
+      "sha256": "e2f3c954245722d44f3234fda3a32f5efdb1b4f9bb4e699da79ae2165ef79e31",
+      "size": 50976
+    },
+    {
+      "path": "Pad/choir_swell_ensemble.sbpreset",
+      "sha256": "532910495823655433f2b84c5ed034c73ee96aa401939c603a23a7156f826faa",
+      "size": 50974
+    },
+    {
+      "path": "Lead/diphthong_morph_vox.sbpreset",
+      "sha256": "519b9ac6ca7007e8771a4708c5ae717e24c0f614c0055c1617eb0bee8d6d7d50",
+      "size": 51022
     }
   ]
 }
