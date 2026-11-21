@@ -142,7 +142,11 @@ Lines found: 80 in 9 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 82.
+Commits found: 83.
+
+### 2b21ffef (2026-11-21) TODO: Q-Link touch overlay of the host not measured (needs the hardware knobs)
+
+- matching line: TODO: Q-Link touch overlay of the host not measured (needs the hardware knobs)
 
 ### 58269410 (2026-11-21) TODO: master.tune and distortion.drive done (deleted); open: Pulse phase-0 event, osc_options golden
 
