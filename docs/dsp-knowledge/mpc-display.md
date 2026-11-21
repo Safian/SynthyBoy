@@ -39,6 +39,11 @@
 - About 80 % of the 25/s steps are visible (201 distinct states in 10 s; 41 gaps of 80 ms and 9 of 90 ms); one torn frame (a bar half-updated, the host's software render read mid-draw) was seen.
 - Decision (owner / coordinator, 2026-11-21): level and gain-reduction meters may use host Meters (20 fps is enough, correct popup z-order); moving playhead dots and drawn curves stay on our plane (30 fps, no tearing).
 
+## Key 61: host Meter redraw rate and the Info / Plotter handles (measured 2026-11-21)
+
+- Trial skin on the Macros tab (self-test LFO cursor at 25 steps/s): only Meters bound through `Parameter/Named/<name>` and `Parameter <index>` show live data. Every Plotter (`Info/Index/0..7`, `Info/Named/<name>`, `Parameter/Named/<name>`, `Parameter 2637` with drawHistory true and false) and the Meter on `Info/Named/...` stayed empty. So the Info namespaces and the Plotter give nothing to an external plugin (XL not run; the stock skins' `Info/Named/` data comes from the built-in engines).
+- The host redraws a visible Meter page on the Key 61 at 8.0 picture changes/s (81 in 10 s, intervals 99-150 ms, median 109 ms, alternating two framebuffers), 0 on another tab. The XL does 20/s. A host Meter therefore updates at about 8 fps on the Key 61 (poller `flipwatch`, raw logs in the scratchpad `k61-trial/`).
+
 ## Decisions
 
 - g117: full takeover, one plane, one writer: the shim merges the helper's finished buffer

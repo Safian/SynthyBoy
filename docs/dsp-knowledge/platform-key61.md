@@ -40,3 +40,11 @@
 - Key 61 (RK3288): zone0 `cpu-thermal` and zone1 `gpu-thermal`, governor step_wise, ONE trip point each: 113 C critical. NO passive (throttle) trip point: the cooling devices `cpufreq-cpu0` (max state 11) and `devfreq-ffa30000.gpu` (max 4) exist but nothing steps them before 113 C. Reading while a benchmark ran: cpu 68.8 C, gpu 66.5 C (tonight's benches peaked at 69-72 C). No fan.
 - Rule for every device run (owner, 2026-11-21): record the start and end temperature of every zone; the Key 61 has no passive trip, so the limit is set by us: stop and cool down at 85 C (28 C under critical, still 15 C above the highest value seen tonight).
 - GPU devfreq (`/sys/class/devfreq/ffa30000.gpu`): governor simple_ondemand, 100..600 MHz, steps 100/200/300/400/600 MHz.
+
+## GPU (Key 61 Mali-T760 and XL Mali-G610; EGL probe 2026-11-21)
+
+- Both: Mesa Panfrost through a surfaceless EGL context on the render node (probe: `.hw-local/mpc-tools/gpu-info/`, outputs `k61.txt`, `xl.txt`). OpenGL ES 3.1 context works, 3.2 fails. COMPUTE SHADERS compile and link (`#version 310 es`). No OpenCL, rusticl or ICD file on either device.
+- Key 61: Mesa 24.0.7, EGL 1.4, compute work group size 128 and 128 invocations, GL_EXT_color_buffer_float, EXT_shader_framebuffer_fetch, OES_texture_float present; missing against the XL: EXT_gpu_shader5, OES_sample_shading, EXT_disjoint_timer_query, EXT_multi_draw_indirect, EXT_texture_storage. devfreq 100-600 MHz (100/200/300/400/600), simple_ondemand.
+- XL: Mesa 24.3.4, EGL 1.5, work group 256 x 3 / 256 invocations, shared memory 32 KiB, 8 compute SSBO blocks, 192 image units, devfreq 300-1000 MHz.
+- A GPU dispatch plus read-back through shared memory suits non-realtime parallel work; whether a GPU FFT pays off is unmeasured (open item in TODO.md: the overlay thread time split decides).
+
