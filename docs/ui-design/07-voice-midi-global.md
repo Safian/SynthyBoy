@@ -242,7 +242,7 @@ All 11 `Master` parameters in `docs/params.json` are exposed across two 8-knob r
 | Page ID | Page Name | Knob 1 | Knob 2 | Knob 3 | Knob 4 | Knob 5 | Knob 6 | Knob 7 | Knob 8 |
 |---------|-----------|--------|--------|--------|--------|--------|--------|--------|--------|
 | `master_voicing` | **Master & Voicing** | `master.volume` | `master.transpose` | `master.tune` | `master.polyphony` | `master.legato` | `master.bend_range` | `master.velocity_track` | `master.portamento.time` |
-| `master_porta` | **Portamento & Glide** | `master.portamento.time` | `master.portamento.slope` | `master.portamento.always` | `master.portamento.scaled` | `master.legato` | `master.polyphony` | `master.bend_range` | `master.volume` |
+| `master_porta` | **Portamento & Glide** | `master.portamento.slope` | `master.portamento.always` | `master.portamento.scaled` | `master.stereo_routing` | *(empty)* | *(empty)* | *(empty)* | *(empty)* |
 
 ---
 

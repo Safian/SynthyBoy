@@ -13,6 +13,7 @@
     "master.portamento.always": "Porta Always",
     "master.portamento.scaled": "Porta Scaled",
     "master.portamento.slope": "Porta Slope",
+    "master.stereo_routing": "Stereo Route",
     "master.stereo_spread": "Stereo Spread",
     "master.velocity_track": "Velocity Track",
     "master.voice.same_note": "Same Note Mode",

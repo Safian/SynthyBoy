@@ -277,14 +277,14 @@
       "section": "Master",
       "title": "Portamento & Glide",
       "knobs": [
-        {"key": "master.portamento.time", "shortLabel": "Porta Time", "widget": "knob"},
         {"key": "master.portamento.slope", "shortLabel": "Porta Slp", "widget": "bipolar_knob"},
         {"key": "master.portamento.always", "shortLabel": "Porta Alw", "widget": "stepped"},
         {"key": "master.portamento.scaled", "shortLabel": "Portamento", "widget": "stepped"},
-        {"key": "master.legato", "shortLabel": "Legato", "widget": "stepped"},
-        {"key": "master.polyphony", "shortLabel": "Polyphony", "widget": "knob"},
-        {"key": "master.bend_range", "shortLabel": "Pitch Bend", "widget": "knob"},
-        {"key": "master.volume", "shortLabel": "Volume", "widget": "bipolar_knob"}
+        {"key": "master.stereo_routing", "shortLabel": "Stereo", "widget": "knob"},
+        null,
+        null,
+        null,
+        null
       ]
     },
     {

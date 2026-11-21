@@ -241,7 +241,7 @@ Every key in the table below is a verified key from `docs/params.json`:
 |---|---------|---------|------------|--------|--------|--------|--------|--------|--------|--------|--------|
 | 1 | `macros` | Perf | **Macros & Performance** | `macro.1` | `macro.2` | `macro.3` | `macro.4` | `master.volume` | `filter1.cutoff` | `filter1.resonance` | `env1.release` |
 | 2 | `master_voicing` | Master | **Master & Voicing** | `master.volume` | `master.transpose` | `master.tune` | `master.polyphony` | `master.legato` | `master.bend_range` | `master.velocity_track` | `master.portamento.time` |
-| 3 | `master_porta` | Master | **Portamento & Glide** | `master.portamento.time` | `master.portamento.slope` | `master.portamento.always` | `master.portamento.scaled` | `master.legato` | `master.polyphony` | `master.bend_range` | `master.volume` |
+| 3 | `master_porta` | Master | **Portamento & Glide** | `master.portamento.slope` | `master.portamento.always` | `master.portamento.scaled` | `master.stereo_routing` | *(empty)* | *(empty)* | *(empty)* | *(empty)* |
 | 4 | `osc1_main` | Osc | **Osc 1 Main** | `osc1.on` | `osc1.wavetable` | `osc1.frame` | `osc1.level` | `osc1.pan` | `osc1.transpose` | `osc1.tune` | `osc1.destination` |
 | 5 | `osc1_unison` | Osc | **Osc 1 Unison & Phase** | `osc1.unison.voices` | `osc1.unison.detune` | `osc1.unison.spread` | `osc1.unison.blend` | `osc1.unison.stack` | `osc1.unison.detune_curve` | `osc1.phase` | `osc1.random_phase` |
 | 6 | `osc1_shaping` | Osc | **Osc 1 Morph & Warp** | `osc1.morph.type` | `osc1.morph.amount` | `osc1.morph.spread` | `osc1.warp.type` | `osc1.warp.amount` | `osc1.warp.phase` | `osc1.warp.spread` | `osc1.frame_spread` |
