@@ -116,13 +116,6 @@ public:
         out[1] = res[1];
     }
 
-    void up (float x, float out[2]) noexcept
-    {
-        const auto res = up (x);
-        out[0] = res[0];
-        out[1] = res[1];
-    }
-
     /** 2x decimator: takes 2 samples at 2x (a = even, b = odd), outputs 1 sample at 1x. */
     float down (float a, float b) noexcept
     {
