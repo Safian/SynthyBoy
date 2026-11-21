@@ -1804,3 +1804,18 @@ TEST (own_spectral_start_checksums_and_what_must_not_change)
     CHECK (c8On != c8Off);             // 16 voices do not fit: five start a quad late (before the change: equal)
     CHECK (h8 == h8Flag);              // nothing changes at the other tiers
 }
+
+// Quality::spectralStartBudgetUs: 0 is the default budget (the render of chord8x2_on), a budget that holds the whole chord is the render with the ledger off.
+TEST (own_spectral_start_budget_quality_field)
+{
+    constexpr int kFrames = 8192;
+    const uint64_t def = fnv1a (SpecRig (lowStagger (true), 2).render (8, kFrames, 128));
+    const uint64_t off = fnv1a (SpecRig (lowStagger (false), 2).render (8, kFrames, 128));
+    Quality q0 = lowStagger (true);
+    q0.spectralStartBudgetUs = 0;
+    CHECK (fnv1a (SpecRig (q0, 2).render (8, kFrames, 128)) == def);
+    Quality big = lowStagger (true);
+    big.spectralStartBudgetUs = 100000;
+    CHECK (fnv1a (SpecRig (big, 2).render (8, kFrames, 128)) == off);
+    CHECK (def != off);
+}

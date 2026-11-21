@@ -21,7 +21,7 @@ namespace own
 {
 namespace master
 {
-/** The output safety stage: the identity up to +-1.8 (a loud patch with a boosting warp or filter passes unchanged, like the headroom of engine-vital), above it a smooth knee that
+/** The output safety stage: the identity up to +-1.8 (a loud patch with a boosting warp or filter passes unchanged, like the headroom of the former Vital engine), above it a smooth knee that
     approaches +-2 (any patch stays bounded). A knee that starts at 1 distorts a signal with peaks of 1.5 and aliases the distortion (a high-pass warp measured -58 dB). */
 inline float outputLimit (float y) noexcept
 {

@@ -7,7 +7,7 @@
 //   synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets]
 //                        [--seconds 30] [--repeat N] [--budget PCT] [--notes K] [--retrigger 1] [--paced] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz]
 //                        [--sections] [--list] [--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] [--pmu compute|cache] [--pmu-require]
-//                        [--evict] [--first-blocks N] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK]
+//                        [--evict] [--first-blocks N] [--start-budget-us N] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK]
 //
 //   --core N        pin the measuring thread to CPU N (Linux: sched_setaffinity; elsewhere the option is refused). The frequency governor is not touched. The CPU the run
 //                   really was on, its part number and its frequency settings are printed. The engine's helper threads are moved to the other CPUs (see --no-helpers-away).
@@ -31,6 +31,7 @@
 //                   --seconds defaults to 2 here. With --rt a run that the health rules mark INVALID is repeated (--retry-invalid).
 //   --module-group G  only the cases of one group: fx, filter, warp, morph, unison or osc (default all)
 //   --module-reps N   repetitions of every case (default 3)
+//   --start-budget-us N  the budget of the Spectral start ledger in microseconds per block (Quality::spectralStartBudgetUs, N >= 1); without it the built-in default.
 //   --first-blocks N  no steady run: for every profile and load a fresh engine, the time of prepare (), then the first N blocks (1 .. 64) with the chord struck in block 0 and no
 //                   warm-up, each with its time and its minor page faults: the first-note and first-touch cost that a long run hides
 //   --retry-invalid N  a run that the health rules mark INVALID (a stall, run queue delay, a frequency drop, a major page fault, heat) is repeated up to N times (default 2);
@@ -289,6 +290,7 @@ struct Options
     bool pmuRequire = false; // --pmu-require
     bool evict = false;      // --evict
     int firstBlocks = 0;     // --first-blocks
+    int startBudgetUs = 0;   // --start-budget-us: Quality::spectralStartBudgetUs (0 = the default budget)
     bool modules = false;    // --modules
     int moduleReps = 3;      // --module-reps
     std::string moduleGroup = "all"; // --module-group
@@ -464,6 +466,7 @@ Result run (const Options& o, const synthyboy_mpc::Profile& profile, const Load&
     applyLoad (*engine, load);
     setOwnSavingsOff (*engine, o.savingsOff);
     Quality quality = synthyboy_mpc::profileQuality (profile);
+    quality.spectralStartBudgetUs = o.startBudgetUs;
     quality.realtime = true; // as the shell: the audio thread never waits for a helper thread
     engine->prepare (o.sampleRate, o.block, quality);
 
@@ -674,6 +677,7 @@ std::vector<float> renderForVerify (const Options& o, const synthyboy_mpc::Profi
     applyLoad (*engine, load);
     setOwnSavingsOff (*engine, off);
     Quality quality = synthyboy_mpc::profileQuality (profile);
+    quality.spectralStartBudgetUs = o.startBudgetUs;
     quality.realtime = false;
     engine->prepare (o.sampleRate, o.block, quality);
     std::vector<float> out, l (static_cast<size_t> (o.block)), r (static_cast<size_t> (o.block));
@@ -762,7 +766,7 @@ long currentKhz (int cpu)
     std::fprintf (stderr, "%s\nusage: synthyboy_tier_bench --presets DIR [--core N] [--set settings|ladder|tiers|quick] [--config PROFILE]... [--load NAME]... [--all-presets] [--seconds 30] "
                           "[--notes K] [--retrigger 1] [--paced] [--repeat N] [--budget PCT] [--verify] [--no-fx-mute] [--scalar-filters] [--scalar-warp] [--no-voice-savings] [--csv FILE] [--block 128] [--sr 44100] [--no-ftz] [--sections] [--list] "
                           "[--rt N] [--mlock] [--rt-gap MS] [--rt-require] [--no-helpers-away] [--retry-invalid N] "
-                          "[--pmu compute|cache] [--pmu-require] [--evict] [--first-blocks N] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK]\n", message);
+                          "[--pmu compute|cache] [--pmu-require] [--evict] [--first-blocks N] [--start-budget-us N] [--modules] [--module-group GROUP] [--module-reps N] [--no-aa MASK]\n", message);
     std::exit (2);
 }
 } // namespace
@@ -973,6 +977,7 @@ void runFirstBlocks (const Options& o, const synthyboy_mpc::Profile& profile, co
     applyLoad (*engine, load);
     setOwnSavingsOff (*engine, o.savingsOff);
     Quality quality = synthyboy_mpc::profileQuality (profile);
+    quality.spectralStartBudgetUs = o.startBudgetUs;
     quality.realtime = true;
     const auto p0 = std::chrono::steady_clock::now();
     engine->prepare (o.sampleRate, o.block, quality);
@@ -1077,6 +1082,7 @@ int main (int argc, char** argv)
         else if (a == "--module-group") o.moduleGroup = next();
         else if (a == "--module-reps") o.moduleReps = std::atoi (next());
         else if (a == "--first-blocks") o.firstBlocks = std::atoi (next());
+        else if (a == "--start-budget-us") { o.startBudgetUs = std::atoi (next()); if (o.startBudgetUs < 1) usage ("--start-budget-us needs N >= 1"); }
         else usage (("unknown argument " + a).c_str());
     }
     if (o.seconds <= 0.0 || o.block < 1 || o.block > 8192 || o.notes < 0 || o.notes > kMaxVoices || o.sampleRate < 8000.0 || o.retrigger <= 0.0 || o.repeat < 1 || o.repeat > 99 || o.budget < 0.0
@@ -1263,6 +1269,7 @@ int main (int argc, char** argv)
             auto warmEngine = createEngine (EngineKind::own);
             Quality warmQuality = synthyboy_mpc::profileQuality (profiles[0]);
             warmQuality.realtime = true;
+            warmQuality.spectralStartBudgetUs = o.startBudgetUs;
             warmEngine->prepare (o.sampleRate, o.block, warmQuality);
         }
         std::string helperText;
@@ -1324,6 +1331,8 @@ int main (int argc, char** argv)
     {
         for (size_t c = 0; c < configs.size(); ++c)
             std::printf ("profile %-64s = %s\n", configs[c].c_str(), synthyboy_mpc::describeProfile (profiles[c]).c_str());
+        if (o.startBudgetUs > 0)
+            std::printf ("spectral start budget: %d us\n", o.startBudgetUs);
         for (const auto& l : loads)
             std::printf ("load    %-40s (%s)\n", l.name.c_str(), l.group.c_str());
         std::printf ("%zu runs, %.0f s of audio (a run takes its audio time multiplied by the load it measures)\n", configs.size() * loads.size() * static_cast<size_t> (o.repeat),

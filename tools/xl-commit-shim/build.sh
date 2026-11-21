@@ -4,12 +4,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Builds xl-commit-shim.so for aarch64 inside the Debian 12 Docker container
-# (kick-armv7-builder:latest) using /usr/bin/aarch64-linux-gnu-gcc.
+# (debian:12-slim by default; the cross compiler is installed in the container unless the image already has it; MPC_BUILD_IMAGE overrides).
 
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IMAGE="${MPC_BUILD_IMAGE:-kick-armv7-builder:latest}"
+IMAGE="${MPC_BUILD_IMAGE:-debian:12-slim}"
 OUT="$HERE/xl-commit-shim.so"
 
 # Ensure we hold a build slot if buildslot.sh is present and slot not already acquired
@@ -22,14 +22,19 @@ fi
 echo "Building aarch64 xl-commit-shim.so using container $IMAGE..."
 
 docker run --rm \
-  -u "$(id -u):$(id -g)" \
+  -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -v "$HERE":/work \
   -w /work \
   "$IMAGE" \
-  /usr/bin/aarch64-linux-gnu-gcc \
-    -O2 -fPIC -shared -Wall -Wextra -pthread -ldl \
-    /work/xl-commit-shim.c \
-    -o /work/xl-commit-shim.so
+  bash -c '
+set -euo pipefail
+if ! command -v aarch64-linux-gnu-gcc >/dev/null 2>&1; then
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+fi
+aarch64-linux-gnu-gcc -O2 -fPIC -shared -Wall -Wextra -pthread /work/xl-commit-shim.c -o /work/xl-commit-shim.so -ldl
+chown "$HOST_UID:$HOST_GID" /work/xl-commit-shim.so
+'
 
 if [ ! -f "$OUT" ]; then
     echo "Error: Failed to build $OUT" >&2

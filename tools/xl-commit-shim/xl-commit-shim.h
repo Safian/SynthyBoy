@@ -41,6 +41,8 @@ extern "C" {
 
 // Dumb buffer IOCTL
 #define DRM_IOCTL_MODE_CREATE_DUMB     0xc02064b2
+#define DRM_IOCTL_MODE_MAP_DUMB        0xc01064b3
+#define DRM_IOCTL_MODE_DESTROY_DUMB    0xc00464b4
 
 struct drm_mode_create_dumb {
     uint32_t height;
@@ -50,6 +52,16 @@ struct drm_mode_create_dumb {
     uint32_t handle;
     uint32_t pitch;
     uint64_t size;
+};
+
+struct drm_mode_map_dumb {
+    uint32_t handle;
+    uint32_t pad;
+    uint64_t offset;
+};
+
+struct drm_mode_destroy_dumb {
+    uint32_t handle;
 };
 
 typedef struct _drmModeObjectProperties {
@@ -77,7 +89,8 @@ typedef struct _drmModeProperty {
 
 typedef void *drmModeAtomicReqPtr;
 
-#define MAX_ITEMS_PER_REQ 32
+#define MAX_ITEMS_PER_REQ 64
+#define RING_ENTRY_MAX_ITEMS 128
 #define RING_BUFFER_SIZE 2048
 #define RING_BUFFER_MASK (RING_BUFFER_SIZE - 1)
 
@@ -111,9 +124,11 @@ typedef struct {
     int err;                 // errno if ret < 0
     int call_site;           // enum CallSite
     uint64_t duration_ns;    // duration in ns
+    bool is_merged;          // true if stage 3 merged commit
+    bool is_fallback;        // true if fallback commit
     bool has_items;          // whether items are populated
     uint32_t num_items;
-    ShimPropItem items[MAX_ITEMS_PER_REQ];
+    ShimPropItem items[RING_ENTRY_MAX_ITEMS];
     char msg[256];
 } RingEntry;
 
@@ -127,6 +142,9 @@ int drmModeAtomicCommit(int fd, drmModeAtomicReqPtr req, uint32_t flags, void *u
 #ifdef SHIM_TEST
 void shim_test_reset(void);
 void shim_test_set_stage2(bool enabled);
+void shim_test_set_stage3(bool enabled);
+bool shim_test_is_stage3_enabled(void);
+bool shim_test_is_plane46_active(void);
 uint32_t shim_test_get_ring_count(void);
 bool shim_test_get_ring_entry(uint32_t index, RingEntry *out);
 void shim_test_drain_logger(FILE *fp);
