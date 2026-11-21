@@ -641,6 +641,7 @@ public:
             return;
         const bool aaOn = (synthyboy::aa::off() & synthyboy::aa::kWarpAdaa) == 0;
         const bool blepOn = (synthyboy::aa::off() & synthyboy::aa::kBlep) == 0;
+        const bool blampOn = (synthyboy::aa::off() & synthyboy::aa::kBlamp) == 0;
         const Wavetable& wt = *tick.wt;
         const int frames = wt.numFrames();
         const double nyq = 0.5 * sampleRate;
@@ -957,12 +958,15 @@ public:
                         ph += incO;
                     }
                 }
-                if (blepOn)
+                if (blepOn || blampOn)
                 {
-                    if (blepPend[v].J != 0.0f)
+                    if (blepPend[v].J != 0.0f || blepPend[v].dS != 0.0f)
                     {
                         const float omD = 1.0f - blepPend[v].d;
-                        buf[nt - 1] -= 0.5f * blepPend[v].J * omD * omD;
+                        if (blepPend[v].J != 0.0f)
+                            buf[nt - 1] -= 0.5f * blepPend[v].J * omD * omD;
+                        if (blepPend[v].dS != 0.0f)
+                            buf[nt - 1] += blepPend[v].dS * omD * omD * omD * (1.0f / 6.0f);
                         blepPend[v] = BlepPending{};
                     }
                     WarpEvent events[2];
@@ -986,39 +990,68 @@ public:
                             numEvents = slotEvents (tick.warp[1], a1, events);
                         }
                     }
-                    bool hasKind1 = false;
+                    bool anyActiveEvent = false;
                     for (int e = 0; e < numEvents; ++e)
-                        if (events[e].kind == 1)
-                            hasKind1 = true;
-                    if (hasKind1)
+                        if (blampOn || events[e].kind == 1)
+                            anyActiveEvent = true;
+                    if (anyActiveEvent)
                     {
+                        constexpr uint32_t kDelta = 1u << 22; // 1/1024 cycle
                         const int totalOs = n * os;
                         uint32_t pCur = ph0;
                         for (int k = 0; k < n; ++k)
                         {
                             const float t = static_cast<float> (t0 + k + 1) * invP;
                             const uint32_t incO = static_cast<uint32_t> (lerp (prevInc[v], curInc[v], t) * (4294967296.0f / static_cast<float> (os)));
+                            const float incCycles = static_cast<float> (incO) * (1.0f / 4294967296.0f);
                             const float wBk = cB != nullptr ? lerp (wB0, wB1, stepFrac (k + 1)) : 0.0f;
                             for (int j = 0; j < os; ++j)
                             {
                                 const int s = k * os + j;
                                 const uint32_t pNext = pCur + incO;
-                                if (pNext < incO)
+                                for (int e = 0; e < numEvents; ++e)
                                 {
-                                    const float d = static_cast<float> (pNext) / static_cast<float> (incO);
-                                    const float J = sampleAt (0u, 0, 1.0f, wBk, true) - sampleAt (0xFFFFFFFFu, 0, 1.0f, wBk, true);
-                                    if (std::fabs (J) >= 1.0e-6f)
+                                    const WarpEvent& ev = events[e];
+                                    if (!blampOn && ev.kind != 1)
+                                        continue;
+                                    if (ev.phase != pCur && static_cast<uint32_t> (ev.phase - pCur) <= incO)
                                     {
-                                        buf[nt - 1 + s] += 0.5f * J * d * d;
+                                        const float d = static_cast<float> (static_cast<uint32_t> (pNext - ev.phase)) / static_cast<float> (incO);
+                                        const float fRight = sampleAt (ev.phase, 0, 1.0f, wBk, true);
+                                        const float fLeft = (ev.kind == 1) ? sampleAt (ev.phase - 1u, 0, 1.0f, wBk, true) : fRight;
+                                        float J = 0.0f;
+                                        if (blepOn && ev.kind == 1)
+                                        {
+                                            J = fRight - fLeft;
+                                            if (std::fabs (J) < 1.0e-6f)
+                                                J = 0.0f;
+                                        }
+                                        float dS = 0.0f;
+                                        if (blampOn)
+                                        {
+                                            const float fPlus = sampleAt (ev.phase + kDelta, 0, 1.0f, wBk, true);
+                                            const float fMinus = sampleAt (ev.phase - kDelta, 0, 1.0f, wBk, true);
+                                            const float dPlus = (fPlus - fRight) * 1024.0f;
+                                            const float dMinus = (fLeft - fMinus) * 1024.0f;
+                                            dS = incCycles * (dPlus - dMinus);
+                                        }
+                                        if (J != 0.0f)
+                                            buf[nt - 1 + s] += 0.5f * J * d * d;
+                                        if (dS != 0.0f)
+                                            buf[nt - 1 + s] += dS * d * d * d * (1.0f / 6.0f);
                                         if (s + 1 < totalOs)
                                         {
                                             const float omD = 1.0f - d;
-                                            buf[nt - 1 + s + 1] -= 0.5f * J * omD * omD;
+                                            if (J != 0.0f)
+                                                buf[nt - 1 + s + 1] -= 0.5f * J * omD * omD;
+                                            if (dS != 0.0f)
+                                                buf[nt - 1 + s + 1] += dS * omD * omD * omD * (1.0f / 6.0f);
                                         }
-                                        else
+                                        else if (J != 0.0f || dS != 0.0f)
                                         {
                                             blepPend[v].d = d;
                                             blepPend[v].J = J;
+                                            blepPend[v].dS = dS;
                                         }
                                     }
                                 }
@@ -1337,7 +1370,7 @@ private:
     int frameIdx[kMaxVoices] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
     float filterState[kMaxVoices][4] = {};
     warpadaa::State warpAa[kMaxVoices][2] = {};
-    struct BlepPending { float d = 0.0f, J = 0.0f; };
+    struct BlepPending { float d = 0.0f, J = 0.0f, dS = 0.0f; };
     BlepPending blepPend[kMaxVoices] = {};
     uint32_t phase[kMaxVoices] = {};
     std::vector<float> history;                  // [voice][kTaps - 1]: the oversampled path's last samples (allocated in prepareMorph ())
