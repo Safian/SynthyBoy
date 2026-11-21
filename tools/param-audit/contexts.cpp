@@ -311,6 +311,7 @@ static std::vector<Context> contextsForBase (const ParamInfo& info)
         add ("sub-filter", cat (on, { { "sub.destination", 0.0f } }));
         add ("sub-blend", cat (on, { { "sub.destination", 5.0f }, { "filter1.blend", 50.0f } }));
         add ("sub-legato", cat (on, { { "master.legato", 1.0f } }), "legato");
+        add ("sub-poly-legato", on, "legato");
         return out;
     }
 
