@@ -238,6 +238,13 @@ Script scriptByName (const std::string& name)
         return basic ("chord8", 0.6, 1.0, { 48, 52, 55, 59, 60, 64, 67, 71 });
     if (name == "scale")
         return basic ("scale", 0.6, 1.0, { 49, 54 });
+    if (name == "host")
+    {
+        auto s = basic ("host", 0.6, 1.0, { 48, 55 });
+        s.transportPlaying = true;
+        s.songPosBeats = 1.0;
+        return s;
+    }
     if (name == "legato")
     {
         Script s;
@@ -448,6 +455,8 @@ Audio Rig::renderOnce (const Script& script)
     engine_->restartEffectPhases(); // the phases of the effect LFOs start at 0: a render does not depend on the renders before it (IEngine::restartEffectPhases)
     TransportInfo tr;
     tr.bpm = script.bpm;
+    tr.playing = script.transportPlaying;
+    tr.songPosBeats = script.songPosBeats;
     engine_->setTransport (tr);
     Audio out;
     out.l.assign (static_cast<size_t> (script.frames), 0.0f);

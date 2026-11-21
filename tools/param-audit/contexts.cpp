@@ -191,6 +191,7 @@ static std::vector<Context> contextsForBase (const ParamInfo& info)
         else if (starts (sub, "warp.") || starts (sub, "warp2."))
         {
             const std::string typeKey = P + (starts (sub, "warp2.") ? ".warp2.type" : ".warp.type");
+            const std::string amtKey = P + (starts (sub, "warp2.") ? ".warp2.amount" : ".warp.amount");
             if (ends (sub, ".type"))
                 add ("base", pre);
             else
@@ -198,7 +199,7 @@ static std::vector<Context> contextsForBase (const ParamInfo& info)
                 const std::set<int> first = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
                 for (int t : first)
                     add ("warp" + std::to_string (t), cat (pre, { { typeKey, static_cast<float> (t) } }));
-                add ("warp+unison", cat (pre, { { typeKey, 1.0f }, { P + ".unison.voices", 5.0f } }));
+                add ("warp+unison", cat (pre, { { typeKey, 1.0f }, { amtKey, 30.0f }, { P + ".unison.voices", 5.0f } }));
                 for (int t : { 12, 14, 17, 20, 25, 27, 30, 34, 38, 41, 44, 47, 50, 52, 60, 76, 80 })
                     add ("warp" + std::to_string (t), cat (pre, { { typeKey, static_cast<float> (t) } }));
             }
@@ -238,6 +239,7 @@ static std::vector<Context> contextsForBase (const ParamInfo& info)
             add ("base", pre);
             add ("unison", cat (pre, { { P + ".unison.voices", 5.0f } }));
             add ("legato", cat (pre, { { "master.legato", 1.0f } }), "legato");
+            add ("phase-legato-poly", pre, "legato");
             add ("same", cat (pre, { { P + ".random_phase", 0.0f } }), "same");
         }
         else if (starts (sub, "pitch_") || sub == "fixed_pitch" || sub == "transpose_snap" || sub == "ratio_src")
@@ -309,6 +311,7 @@ static std::vector<Context> contextsForBase (const ParamInfo& info)
         add ("sub-filter", cat (on, { { "sub.destination", 0.0f } }));
         add ("sub-blend", cat (on, { { "sub.destination", 5.0f }, { "filter1.blend", 50.0f } }));
         add ("sub-legato", cat (on, { { "master.legato", 1.0f } }), "legato");
+        add ("sub-poly-legato", on, "legato");
         return out;
     }
 
@@ -388,8 +391,11 @@ static std::vector<Context> contextsForBase (const ParamInfo& info)
         for (int sync = 1; sync <= 4; ++sync)
             add ("lfo+sync" + std::to_string (sync), cat (cat (cat (rate, lowCut), routeOverrides (1, src, "osc1.level", 80.0f)), { { L + ".sync", static_cast<float> (sync) } }));
         if (! random)
+        {
             for (int t = 1; t <= 5; ++t)
                 add ("lfo+type" + std::to_string (t), cat (cat (cat (rate, lowCut), routeOverrides (1, src, "osc1.level", 80.0f)), { { L + ".sync_type", static_cast<float> (t) } }), "legato");
+            add ("lfo-host", cat (cat (cat (rate, lowCut), routeOverrides (1, src, "osc1.level", 80.0f)), { { L + ".sync_type", 1.0f } }), "host");
+        }
         (void) n;
         return out;
     }

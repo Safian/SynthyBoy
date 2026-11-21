@@ -665,9 +665,11 @@ void Voice::fillOscPart (int o, OscPart& op) noexcept
     op.warp[0] = static_cast<int> (P (oi.warpType) + 0.5f);
     op.warpAmount[0] = clamp01 (P (oi.warpAmount) * 0.01f);
     op.warpPhase[0] = P (oi.warpPhase) * (1.0f / 360.0f);
+    op.warpSpread[0] = std::clamp (P (oi.warpSpread) * 0.01f, -1.0f, 1.0f);
     op.warp[1] = static_cast<int> (P (oi.warp2Type) + 0.5f);
     op.warpAmount[1] = clamp01 (P (oi.warp2Amount) * 0.01f);
     op.warpPhase[1] = P (oi.warp2Phase) * (1.0f / 360.0f);
+    op.warpSpread[1] = std::clamp (P (oi.warp2Spread) * 0.01f, -1.0f, 1.0f);
     op.morphType = static_cast<int> (P (lk.idx[lk_morphType]) + 0.5f);
     op.morphAmount = clamp01 (P (lk.idx[lk_morphAmount]) * 0.01f);
     op.morphSpread = std::clamp (P (lk.idx[lk_morphSpread]) * 0.01f, -1.0f, 1.0f);
@@ -1282,9 +1284,11 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         t.warp[0] = op.warp[0];
         t.warpAmount[0] = op.warpAmount[0];
         t.warpPhase[0] = op.warpPhase[0];
+        t.warpSpread[0] = op.warpSpread[0];
         t.warp[1] = op.warp[1];
         t.warpAmount[1] = op.warpAmount[1];
         t.warpPhase[1] = op.warpPhase[1];
+        t.warpSpread[1] = op.warpSpread[1];
         t.morphType = op.morphType;
         t.morphAmount = op.morphAmount;
         t.morphSpread = op.morphSpread;

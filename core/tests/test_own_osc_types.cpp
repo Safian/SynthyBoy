@@ -1819,3 +1819,86 @@ TEST (own_spectral_start_budget_quality_field)
     CHECK (fnv1a (SpecRig (big, 2).render (8, kFrames, 128)) == off);
     CHECK (def != off);
 }
+
+TEST (own_sample_loop_exit_leaves_loop_on_release)
+{
+    // A sample with a loop (e.g. 10% to 30%):
+    // When loop_exit = 0, on noteOff the sample continues looping.
+    // When loop_exit = 1, on noteOff the sample exits the loop and plays forward past 30%.
+    auto renderSample = [] (int oscNum, float loopExitVal)
+    {
+        MemoryContentStore store;
+        StateContent content;
+        auto e = createOwnEngine();
+        e->setParam (kParamMasterPolyphony, 8.0f);
+        e->prepare (kSr, 256, qualityForTier (Tier::high));
+        store.add ("test", "sine.wav", sineWav (440.0, 0.8, 44100, 2.0));
+        ContentFileRef ref;
+        ref.pack = "test";
+        ref.file = "sine.wav";
+        ref.name = "sine";
+        attachSample (content, oscNum, ref, 44100, 88200, 1);
+        e->setContentStore (&store);
+        e->setContent (content);
+
+        const std::string P = "osc" + std::to_string (oscNum);
+        if (oscNum != 1)
+        {
+            set (*e, "osc1.on", 0.0f);
+            set (*e, (P + ".on").c_str(), 1.0f);
+        }
+        set (*e, "filter1.on", 0.0f);
+        set (*e, "master.volume", 0.0f);
+        set (*e, "env1.attack", 0.0f);
+        set (*e, "env1.sustain", 100.0f);
+        set (*e, "env1.release", 500.0f); // 500 ms release tail
+        set (*e, (P + ".level").c_str(), 100.0f);
+        set (*e, (P + ".type").c_str(), 1.0f); // Sample oscillator
+        set (*e, (P + ".sample.root").c_str(), 69.0f);
+        set (*e, (P + ".sample.loop_mode").c_str(), 1.0f); // forward loop
+        set (*e, (P + ".sample.loop_start").c_str(), 10.0f);
+        set (*e, (P + ".sample.loop_end").c_str(), 30.0f);
+        set (*e, (P + ".sample.loop_exit").c_str(), loopExitVal);
+
+        // Note-on at 0, Note-off at 0.2s (after loop has engaged), total render 0.5s
+        const size_t total = static_cast<size_t> (0.5 * kSr);
+        const size_t offAt = static_cast<size_t> (0.2 * kSr);
+        Out o;
+        o.l.assign (total, 0.0f);
+        o.r.assign (total, 0.0f);
+        size_t pos = 0;
+        while (pos < total)
+        {
+            const size_t n = std::min<size_t> (256, total - pos);
+            Event ev[2];
+            int ne = 0;
+            if (pos == 0)
+                ev[ne++] = sbtest::noteOn (0, 69, 1.0f);
+            if (offAt >= pos && offAt < pos + n)
+                ev[ne++] = sbtest::noteOff (static_cast<int> (offAt - pos), 69);
+            e->process (ev, ne, o.l.data() + pos, o.r.data() + pos, static_cast<int> (n));
+            pos += n;
+        }
+        return o;
+    };
+
+    auto diffDb = [] (const Out& a, const Out& b, size_t from)
+    {
+        double d = 0.0, p = 1.0e-9;
+        for (size_t i = from; i < a.l.size(); ++i)
+        {
+            d = std::max (d, std::fabs (static_cast<double> (a.l[i] - b.l[i])));
+            p = std::max (p, std::fabs (static_cast<double> (a.l[i])));
+        }
+        return 20.0 * std::log10 (std::max (d / p, 1.0e-9));
+    };
+
+    const size_t offSample = static_cast<size_t> (0.25 * kSr);
+    // osc1: loop_exit 0 vs 1 must differ during release
+    const Out o1_0 = renderSample (1, 0.0f), o1_1 = renderSample (1, 1.0f);
+    CHECK (diffDb (o1_0, o1_1, offSample) > -20.0);
+
+    // osc3: loop_exit 0 vs 1 must differ during release
+    const Out o3_0 = renderSample (3, 0.0f), o3_1 = renderSample (3, 1.0f);
+    CHECK (diffDb (o3_0, o3_1, offSample) > -20.0);
+}

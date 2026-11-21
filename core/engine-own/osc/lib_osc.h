@@ -198,6 +198,7 @@ private:
     std::vector<sampleosc::SampleVoice> sampleVoices;
     sampleosc::SampleOscParams sparams;
     bool sliced = false;
+    bool loopExited_ = false;
     double rateSpeed = 1.0;
     // Granular
     std::vector<granular::GranularVoice> grainVoices;

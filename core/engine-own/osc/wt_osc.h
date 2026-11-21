@@ -349,7 +349,7 @@ public:
             offOk = !reference_;
         }
         int n = 0;
-        auto addVoice = [&] (float semis, float amp, float gainL, float gainR, float framePos) noexcept
+        auto addVoice = [&] (float semis, float amp, float gainL, float gainR, float framePos, float w0, float w1) noexcept
         {
             double f;
             float inc;
@@ -380,15 +380,20 @@ public:
             curGainL[n] = amp * gainL * panL * t.level;
             curGainR[n] = amp * gainR * panR * t.level;
             curFrameOf[n] = std::clamp (t.frame + t.frameSpread * framePos, 0.0f, 1.0f);
+            curWarpA[0][n] = w0;
+            curWarpA[1][n] = w1;
             ++n;
         };
         for (int i = 0; i < pairs; ++i)
         {
             const float amp = i == 0 ? ac : ad;
             const float stack = stackRatioSemis (t.stack, i, t.stackRepeat);
+            const float pairFrac = (pairs > 1) ? static_cast<float> (i) / static_cast<float> (pairs - 1) : 0.0f;
+            const float w0 = std::clamp (t.warpAmount[0] + t.warpSpread[0] * pairFrac, 0.0f, 1.0f);
+            const float w1 = std::clamp (t.warpAmount[1] + t.warpSpread[1] * pairFrac, 0.0f, 1.0f);
             if (odd && i == 0)
             {
-                addVoice (t.semis + stack, amp, sa + sb, sa + sb, 0.0f);
+                addVoice (t.semis + stack, amp, sa + sb, sa + sb, 0.0f, w0, w1);
                 continue;
             }
             float tt = (static_cast<float> (2 * i + bump)) / divisor;
@@ -418,8 +423,8 @@ public:
             const bool leftFlat = (i % 2) == 0;
             const float leftSemis = leftFlat ? -semisOff : semisOff;
             const float pos = divisor > 0.0f ? (static_cast<float> (2 * i + bump)) / divisor : 0.0f;
-            addVoice (t.semis + stack + leftSemis, amp, sa, sb, -pos);   // the left channel voice
-            addVoice (t.semis + stack - leftSemis, amp, sb, sa, pos);    // the right channel voice
+            addVoice (t.semis + stack + leftSemis, amp, sa, sb, -pos, w0, w1);   // the left channel voice
+            addVoice (t.semis + stack - leftSemis, amp, sb, sa, pos, w0, w1);    // the right channel voice
         }
         curCount = n;
         for (int i = n; i < kMaxVoices; ++i)
@@ -427,6 +432,8 @@ public:
             curGainL[i] = curGainR[i] = 0.0f;
             curInc[i] = curInc[0];
             curFrameOf[i] = curFrameOf[0];
+            curWarpA[0][i] = curWarpA[0][0];
+            curWarpA[1][i] = curWarpA[1][0];
         }
         curFrame = t.frame;
         if (t.jump)
@@ -675,7 +682,6 @@ public:
         // the decimator history is sized for the tier's unison count: the oversampled path never goes past it
         const int count = warped ? std::min (std::max (curCount, prevCount), historyVoices) : std::max (curCount, prevCount);
         const float invP = 1.0f / static_cast<float> (kControlPeriod);
-        const float a0 = tick.warpAmount[0], a1 = tick.warpAmount[1];
         const int cs0 = tick.warpSrc[0], cs1 = tick.warpSrc[1];
         const bool morphing = morphActive;
         SB_SECTION (warped ? sections::oscWarp : (morphing ? sections::oscMorph : sections::oscTable));
@@ -688,11 +694,12 @@ public:
         // the same for every lane of this call
         float bw = 1.0f;
         for (int w = 0; w < 2; ++w)
-            bw = std::max (bw, warpBandwidthFactor (tick.warp[w], tick.warpAmount[w]));
+            bw = std::max (bw, warpBandwidthFactor (tick.warp[w], std::clamp (tick.warpAmount[w] + std::max (0.0f, tick.warpSpread[w]), 0.0f, 1.0f)));
         const int os = tick.lowWarp ? kOversampleLow : kOversample, nt = tick.lowWarp ? kTapsLow : kTaps;
         const double rateI = sampleRate * (warped ? os : 1);
         for (int v = 0; v < count; ++v)
         {
+            const float a0 = curWarpA[0][v], a1 = curWarpA[1][v];
             if (curGainL[v] == 0.0f && curGainR[v] == 0.0f && prevGainL[v] == 0.0f && prevGainR[v] == 0.0f)
             {
                 warpAa[v][0] = warpAa[v][1] = warpadaa::State{};
@@ -1407,6 +1414,7 @@ private:
     bool historyDirty = false;
     float prevInc[kMaxVoices] = {}, curInc[kMaxVoices] = {}, prevGainL[kMaxVoices] = {}, curGainL[kMaxVoices] = {}, prevGainR[kMaxVoices] = {},
           curGainR[kMaxVoices] = {}, prevFrameOf[kMaxVoices] = {}, curFrameOf[kMaxVoices] = {};
+    float curWarpA[2][kMaxVoices] = {};
     float prevFrame = 0.0f, curFrame = 0.0f;
     float lastCross[6] = {};
     int curCount = 1, prevCount = 1;
