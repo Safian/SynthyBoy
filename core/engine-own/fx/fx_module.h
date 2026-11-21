@@ -34,6 +34,7 @@ struct FxFrame
     double songBeats = 0.0;
     const ContentSet* content = nullptr; // the set this block reads (Convolve takes its impulse from it)
     bool lowCost = false;                // tier low: the cheaper forms of dsp/fastmath.h in the per sample code
+    bool distOs2 = false;                // economy group Warp clear (warp=4x): distortion runs 2x oversampled (15 samples latency)
     bool realtime = false;               // Quality::realtime: the audio thread never waits for a helper thread
     bool muteSkip = false;               // economy group Control: a module whose mix is exactly 0 is not processed (FxModule::process)
     bool makeup = true;                  // Quality::fxMakeup: a bypassed effect that is on in the preset leaves its loudness as a gain (FxChain, FxModule::makeupGain)
