@@ -1,5 +1,5 @@
 {
- "comment": "Parameter keys that had a control on the MPC skin at commit 7a0d198 (gen-mpc-ui.py --layout scripts/mpc-ui-pages.json of that commit, plus the eight knobs of every Env tab that 10_env.py added). The restructured skin must keep every one of them (scripts/tests/test_mpc_skin_subtabs.py).",
+ "comment": "Parameter keys that had a control on the MPC skin at historic commit 7a0d198 (gen-mpc-ui.py of that commit, plus the eight knobs of every Env tab that 10_env.py added).",
  "keys": [
   "bus1.destination",
   "bus1.fx_bypass",

@@ -50,7 +50,19 @@ class OscSkinTest(unittest.TestCase):
     def setUpClass(cls):
         cls._tmp = tempfile.TemporaryDirectory()
         cls.root = Path(cls._tmp.name)
-        cls.skins = base.generate_skins(cls.root)
+        osc_layout = cls.root / "osc_layout.json"
+        osc_layout.write_text(json.dumps({
+            "format": "synthyboy-mpc-ui-pages", "version": 2,
+            "pages": [
+                {"name": "Osc 1", "kick": ["osc1_main"]},
+                {"name": "Osc1 Shp", "kick": ["osc1_unison", "osc1_shaping"]},
+                {"name": "Osc 2", "kick": ["osc2_main"]},
+                {"name": "Osc2 Shp", "kick": ["osc2_unison", "osc2_shaping"]},
+                {"name": "Osc 3", "kick": ["osc3_main"]},
+                {"name": "Osc3 Shp", "kick": ["osc3_unison", "osc3_shaping"]},
+            ]
+        }), encoding="utf-8")
+        cls.skins = base.generate_skins(cls.root, layout=osc_layout)
         cls.only = cls.root / "only_osc"
         cls.only.mkdir()
         (cls.only / "20_osc.py").symlink_to(ROOT / "scripts" / "mpc-skin-extras" / "20_osc.py")
@@ -138,7 +150,7 @@ class OscSkinTest(unittest.TestCase):
             self.assertIn("OK     TUI.json: image osc_wt_%02d.png present" % choice, report)
 
     def test_skin_is_deterministic(self):
-        skins2 = base.generate_skins(self.root / "again")
+        skins2 = base.generate_skins(self.root / "again", layout=self.root / "osc_layout.json")
         self.assertEqual(base.run_apply(skins2, self.only)[0], 0)
         for p in sorted(self.skins.iterdir()):
             self.assertEqual((skins2 / p.name).read_bytes(), p.read_bytes(), p.name)

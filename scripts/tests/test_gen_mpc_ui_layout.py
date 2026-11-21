@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SynthyBoy - tests of scripts/gen-mpc-ui.py --layout (the MPC pages of the own engine, scripts/mpc-ui-pages.json).
+# SynthyBoy - tests of scripts/gen-mpc-ui.py --layout (the MPC pages of the own engine, scripts/overlay-skin/mpc-ui-pages-overlay.json).
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 PARAMS_JSON = ROOT / "docs" / "params.json"
 PAGES_JSON = ROOT / "docs" / "kick-pages.json"
-LAYOUT_JSON = ROOT / "scripts" / "mpc-ui-pages.json"
+LAYOUT_JSON = ROOT / "scripts" / "overlay-skin" / "mpc-ui-pages-overlay.json"
 
 
 def load(name, relative):
@@ -134,7 +134,10 @@ class LayoutModeTests(unittest.TestCase):
                 self.assertEqual(block, sorted(block, reverse=True), "page %s, block %d has an empty slot before a control" % (p["name"], b // 4))
 
     def test_no_page_without_controls(self):
+        custom = {p["name"] for p in self.layout["pages"] if p.get("custom")}
         for p in self.ui["pages"]:
+            if p["name"] in custom:
+                continue
             self.assertTrue(any(c != "empty" for c in p["controls"]), p["name"])
 
     def test_slots_follow_the_rule(self):
@@ -169,8 +172,7 @@ class LayoutModeTests(unittest.TestCase):
 
     def test_faders_only_on_level_pages(self):
         faders = {c["param"] for p in self.ui["pages"] for c in p["controls"] if c != "empty" and c["widget"] == "fader"}
-        self.assertEqual(faders, {"Bus 1 Level", "Bus 2 Level"} | {"%s Level" % m for m in
-                                                                   ("Chorus", "Compressor", "Delay", "Distortion", "EQ", "Flanger", "Phaser", "Reverb")})
+        self.assertEqual(faders, {"Bus 1 Level", "Bus 2 Level"})
         for name in ("Osc 1 Level", "Osc 2 Level", "Osc 3 Level", "Noise Level", "Sub Level", "Master Volume", "Direct Level", "Osc 1 Pan"):
             for p in self.ui["pages"]:
                 for c in p["controls"]:

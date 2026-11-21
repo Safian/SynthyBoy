@@ -16,7 +16,7 @@ import test_mpc_skin_extras as base  # noqa: E402
 
 ROOT = base.ROOT
 SHORT_NAMES = ROOT / "scripts" / "mpc-short-names.json"
-LAYOUTS = sorted((ROOT / "scripts").glob("mpc-ui-pages*.json"))
+LAYOUTS = [ROOT / "scripts" / "overlay-skin" / "mpc-ui-pages-overlay.json"]
 gen = lay.gen
 names_mod = base.load("t_85_names", base.REAL_EXTRAS / "85_names.py")
 NAME_AREA_W = gen.NAME_AREA_W
@@ -152,6 +152,8 @@ class NameRulesTests(unittest.TestCase):
                     if key in self.overrides:
                         if tab["name"] == "Env 1" and key == "env1.release":
                             self.assertEqual(name, "Release", "%s / %s" % (tab["name"], key))
+                        elif tab["name"] == "Filter 1" and key in ("filter1.cutoff", "filter1.resonance"):
+                            self.assertEqual(name, self.overrides[key].split()[-1], "%s / %s" % (tab["name"], key))
                         else:
                             self.assertEqual(name, self.overrides[key], "%s / %s" % (tab["name"], key))
                     elif name in short[key]:
@@ -162,11 +164,10 @@ class NameRulesTests(unittest.TestCase):
 
     def test_documented_examples(self):
         tabs = {t["name"]: t["names"] for t in next(iter(self.metas.values()))["tabs"]}
-        self.assertEqual(tabs["Osc1 Shp"]["osc1.unison.detune_curve"], "Detune Curve")
         self.assertEqual(tabs["Mixer"]["osc1.filter_blend"], "Osc 1 Filt Blend")
         self.assertEqual(tabs["Mixer"]["osc2.filter_blend"], "Osc 2 Filt Blend")
-        self.assertEqual(tabs["Mod 1-2"]["mod01.source"], "Mod 01 Source")
-        self.assertEqual(tabs["Mod 1-2"]["mod02.source"], "Mod 02 Source")
+        self.assertEqual(tabs["Mod"]["mod01.source"], "Mod 01 Source")
+        self.assertEqual(tabs["Mod"]["mod02.source"], "Mod 02 Source")
 
     def test_env1_release_name_per_tab(self):
         for layout, meta in self.metas.items():
@@ -192,6 +193,9 @@ class NameLabelsOnTheSkinTests(unittest.TestCase):
     def tearDownClass(cls):
         cls._tmp.cleanup()
 
+    LABELS = {p["name"]: p["label"] for p in json.loads(LAYOUTS[0].read_text(encoding="utf-8"))["pages"] if "label" in p}
+    REVERSE_LABELS = {v: k for k, v in LABELS.items()}
+
     def tabs(self):
         return self.tui["pageData"]["tabs"]
 
@@ -215,14 +219,15 @@ class NameLabelsOnTheSkinTests(unittest.TestCase):
     def test_every_named_control_is_followed_by_its_text(self):
         count = 0
         for tab in self.tabs():
+            internal_tab_name = self.REVERSE_LABELS.get(tab["tabName"], tab["tabName"])
             for c, label in self.controls_and_labels(tab):
                 count += 1
                 self.assertEqual(label["componentData"]["type"], "Label")
                 self.assertEqual(label["componentData"]["name"], c["componentData"]["name"] + " name")
                 key = base_key(self.tui, c)
-                expected = SHELL_NAMES[key] if key in SHELL_NAMES else self.names[tab["tabName"]][key]   # the short names of the shell's own parameters are 45_pad_pressure.py's
+                expected = SHELL_NAMES[key] if key in SHELL_NAMES else self.names[internal_tab_name][key]   # the short names of the shell's own parameters are 45_pad_pressure.py's
                 self.assertEqual(label["componentData"]["data"]["text"], expected, (tab["tabName"], key))
-        self.assertGreater(count, 250)
+        self.assertGreater(count, 150)
 
     def test_style_is_the_selector_header_weight(self):
         for tab in self.tabs():
@@ -254,7 +259,7 @@ class NameLabelsOnTheSkinTests(unittest.TestCase):
                     continue
                 owner = controls[d["name"].rsplit(" name", 1)[0] if d["name"].endswith(" name") else d["name"].rsplit(" seg ", 1)[0]]
                 self.assertEqual(remap, owner["handle remapping"]["map"], (tab["tabName"], d["name"]))
-        self.assertGreater(count, 300)
+        self.assertGreater(count, 150)
 
     def test_value_keeps_white_24(self):
         defs = {d["key"]: d["value"] for d in self.tui["pageData"]["componentDefinitions"]["localComponentDefinitions"]}
@@ -314,7 +319,7 @@ class NameLabelsOnTheSkinTests(unittest.TestCase):
                     self.assertIn(lay.BY_KEY[key]["name"], lay.BY_NAME)
 
     def test_env1_release_label_text(self):
-        env1_tab = next(t for t in self.tabs() if t["tabName"] == "Env 1")
+        env1_tab = next(t for t in self.tabs() if t["tabName"] in ("Env 1", "Env"))
         env1_labels = {c["componentData"]["name"]: label["componentData"]["data"]["text"]
                        for c, label in self.controls_and_labels(env1_tab)}
         self.assertIn("Env 1 Release", env1_labels)

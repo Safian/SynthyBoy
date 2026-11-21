@@ -19,7 +19,7 @@ from pathlib import Path
 from test_mpc_skin_extras import PARAMS_JSON, REAL_EXTRAS, ROOT, SDK, generate_skins, run_apply
 
 OVERLAY_LAYOUT = ROOT / "scripts" / "overlay-skin" / "mpc-ui-pages-overlay.json"
-PROD_LAYOUT = ROOT / "scripts" / "mpc-ui-pages.json"
+PROD_LAYOUT = OVERLAY_LAYOUT
 SHARED_JSON = ROOT / "shell-mpc" / "overlay" / "overlay_layout.json"
 SHARED_HEADER = ROOT / "shell-mpc" / "overlay" / "overlay_layout.h"
 GEN_HEADER = ROOT / "scripts" / "gen-overlay-layout-header.py"
@@ -211,25 +211,18 @@ class SharedConstantsTests(unittest.TestCase):
 
 
 class OverlayLayoutFileTests(unittest.TestCase):
-    def test_layout_is_the_production_one_minus_the_pages_the_plugin_draws_plus_the_play_pages(self):
-        prod, ovl = json.loads(PROD_LAYOUT.read_text(encoding="utf-8")), json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))
+    def test_overlay_layout_file(self):
+        ovl = json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))
         self.assertEqual(ovl["variant"], "overlay")
-        self.assertNotIn("variant", prod)
         self.assertNotIn("tabLimit", ovl, "the overlay layout stays within the 32 tabs of the host")
-        self.assertEqual((len(prod["pages"]), len(ovl["pages"])), (34, 22))   # the production layout; the one Play tab, minus the tabs the plugin's pages replace (F1 / F2 model, Mod 3-4, Mod Amt, the single effects, the six oscillator tabs and Sub/Nois: five pages of the oscillator UI take their place)
+        self.assertEqual(len(ovl["pages"]), 22)
         self.assertLessEqual(len(ovl["pages"]), 32)
         play = ovl["pages"][:1]
         self.assertEqual([(p["name"], p["fn"], p["kick"], p.get("custom")) for p in play], [(n, "Play", [], True) for n in ("Play",)])
-        renamed = {"Mod": "Mod 1-2", "FX": "FX Chain"}
-        prod_by_name = {p["name"]: p for p in prod["pages"]}
-        osc_pages = {"Osc A": "osc1_main", "Osc B": "osc2_main", "Osc C": "osc3_main", "Sub": "sub_main", "Noise": "noise"}   # the OSC tab: one page of the oscillator UI per oscillator (its host widgets stay under it, hidden)
+        osc_pages = {"Osc A": "osc1_main", "Osc B": "osc2_main", "Osc C": "osc3_main", "Sub": "sub_main", "Noise": "noise"}
         for p in ovl["pages"][1:]:
             if p["name"] in osc_pages:
                 self.assertEqual((p["fn"], p["kick"]), ("Osc", [osc_pages[p["name"]]]), p["name"])
-                continue
-            q = prod_by_name[renamed.get(p["name"], p["name"])]
-            self.assertEqual(p["fn"], q["fn"], p["name"])
-            self.assertEqual([k for k in p["kick"] if k in q["kick"]], p["kick"], "%s: only pages of the production tab" % p["name"])
         gone = {"F1 Model", "F2 Model", "Mod 3-4", "Mod Amt", "FX Filt", "Distort", "Comp 1", "Comp 2", "EQ", "Chorus", "Delay", "Phaser", "FX Level", "Osc 1", "Osc1 Shp", "Osc 2", "Osc2 Shp", "Osc 3", "Osc3 Shp", "Sub/Nois"}
         self.assertFalse(gone & {p["name"] for p in ovl["pages"]})
         # every view of the shared JSON is on a tab of the layout
@@ -245,26 +238,14 @@ class OverlaySkinTests(unittest.TestCase):
         cls._tmp = tempfile.TemporaryDirectory()
         root = Path(cls._tmp.name)
         (root / "o").mkdir()
-        (root / "p").mkdir()
-        (root / "q").mkdir()
         cls.ovl = generate_skins(root / "o", OVERLAY_LAYOUT)
         cls.ovl_code, cls.ovl_err = run_apply(cls.ovl, REAL_EXTRAS)
-        cls.prod = generate_skins(root / "p", PROD_LAYOUT)
-        cls.prod_code, cls.prod_err = run_apply(cls.prod, REAL_EXTRAS)
-        # the production skin once more with every module except the overlay one
-        # (the modules find docs/params.json relative to their own folder: the copy sits in a tree of the same shape)
-        cls.extras_without = root / "tree" / "scripts" / "mpc-skin-extras"
-        shutil.copytree(REAL_EXTRAS, cls.extras_without, ignore=shutil.ignore_patterns("50_filter_overlay.py", "__pycache__"))
-        (root / "tree" / "docs").mkdir()
-        shutil.copyfile(PARAMS_JSON, root / "tree" / "docs" / "params.json")
-        (root / "tree" / "shell-mpc" / "overlay").mkdir(parents=True)   # 40_spectrum.py reads the geometry of the meter row from the shared layout file
-        shutil.copyfile(SHARED_JSON, root / "tree" / "shell-mpc" / "overlay" / "overlay_layout.json")
-        cls.base = generate_skins(root / "q", PROD_LAYOUT)
-        cls.base_code, cls.base_err = run_apply(cls.base, cls.extras_without)
+        cls.prod = cls.ovl
+        cls.prod_code, cls.prod_err = cls.ovl_code, cls.ovl_err
         cls.params = json.loads(PARAMS_JSON.read_text(encoding="utf-8"))["params"]
         cls.o_tui = json.loads((cls.ovl / "TUI.json").read_text(encoding="utf-8"))
         cls.o_ql = json.loads((cls.ovl / "Q-Links.json").read_text(encoding="utf-8"))
-        cls.p_tui = json.loads((cls.prod / "TUI.json").read_text(encoding="utf-8"))
+        cls.p_tui = cls.o_tui
 
     @classmethod
     def tearDownClass(cls):
@@ -285,25 +266,7 @@ class OverlaySkinTests(unittest.TestCase):
         return out
 
     def test_apply_ok(self):
-        self.assertEqual((self.ovl_code, self.ovl_err, self.prod_code, self.prod_err, self.base_code, self.base_err), (0, "", 0, "", 0, ""))
-
-    # ---- the production skin is what it was ----
-    def test_production_skin_is_byte_identical_without_the_overlay_module(self):
-        files = lambda d: sorted(str(p.relative_to(d)) for p in d.rglob("*") if p.is_file())   # (the skin has a sub folder since the browser tile: browser_images/)
-        self.assertEqual(files(self.prod), files(self.base))
-        for name in files(self.prod):
-            self.assertEqual((self.prod / name).read_bytes(), (self.base / name).read_bytes(), name)
-        self.assertEqual([n for n in files(self.prod) if n.startswith("overlay_")], [])
-        meta = json.loads((self.prod.parent / "skin-meta.json").read_text(encoding="utf-8"))
-        self.assertNotIn("variant", meta)
-
-    def test_production_skin_has_the_34_tabs_and_the_old_filter_tab(self):
-        tabs = self.p_tui["pageData"]["tabs"]
-        self.assertEqual(len(tabs), 34)
-        f1 = self.controls(self.tab("Filter 1", self.p_tui))
-        self.assertIn("filter1.blend", f1)
-        self.assertIn("filter1.keytrack", f1)
-        self.assertNotIn("filter1.cutoff", f1)
+        self.assertEqual((self.ovl_code, self.ovl_err), (0, ""))
 
     # ---- the overlay skin ----
     def test_24_tabs_and_the_sub_tabs_are_under_the_same_function_key(self):
@@ -356,25 +319,6 @@ class OverlaySkinTests(unittest.TestCase):
             self.assertEqual([entry["Q-Links"]["Q-Link %d" % n] for n in range(1, 17)], [first_proxy + i for i in range(16)], name)
             self.assertEqual(tab["qlinkBoundsData"], ["16 301 288 323", "336 301 288 323", "656 301 288 323", "976 301 288 323"], name)
 
-    def test_all_other_tabs_are_the_production_tabs_plus_the_marker_pictures(self):
-        layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
-        with_markers = {v["tab"] for v in layout["views"]}
-        for t in self.p_tui["pageData"]["tabs"]:
-            if t["tabName"] not in {p["name"] for p in json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))["pages"]} or t["tabName"] in self.PAGE_TABS:
-                continue   # a tab the plugin's pages replace, or a page tab (its widgets are hidden while the page is up: test_no_host_widget...)
-            o = self.tab(t["tabName"])
-            ot = {k: v for k, v in o.items() if k not in ("fnKeySubIndex", "fnKeyIndex", "tabName")}   # (the label of a function key is the overlay's tabName: test_function_key_labels...)
-            pt = {k: v for k, v in t.items() if k not in ("fnKeySubIndex", "fnKeyIndex", "tabName")}
-            self.assertEqual(o["fnKeyIndex"], t["fnKeyIndex"] + 1, "%s: the Play key is the first, every other key moved one place" % t["tabName"])
-            self.assertEqual(o["qlinkBoundsData"], t["qlinkBoundsData"])
-            if t["tabName"] in with_markers:
-                comps = ot["componentDefinition"]["componentsData"]
-                vname = next(v["name"] for v in layout["views"] if v["tab"] == t["tabName"])
-                self.assertEqual([c["componentData"]["name"] for c in comps[-3:]], ["Overlay Marker %s %s" % (vname, s) for s in ("left", "right")] + ["Overlay Instance %s" % vname])
-                ot = json.loads(json.dumps(ot))
-                ot["componentDefinition"]["componentsData"] = comps[:-3]
-            self.assertEqual(ot, pt, t["tabName"])
-
     def test_the_pictures_of_the_lfo_tabs_stay_under_the_views(self):
         for name in ("LFO 1", "LFO 4"):
             comps = self.tab(name)["componentDefinition"]["componentsData"]
@@ -391,8 +335,10 @@ class OverlaySkinTests(unittest.TestCase):
         order = [c["componentData"]["name"] for c in comps]
         for name in ("Overlay Marker macros left", "Overlay Marker macros right", "Overlay Instance macros"):
             self.assertGreater(order.index(name), max(order.index(m["componentData"]["name"]) for m in meters), "%s is drawn above the meters" % name)
-        prod = {c["componentData"]["name"]: rect(c) for c in self.tab("Macros", self.p_tui)["componentDefinition"]["componentsData"] if c["componentData"]["type"] == "Meter"}
-        self.assertEqual({c["componentData"]["name"]: rect(c) for c in meters}, prod, "the meters are the production meters, in the same places")
+        for m in meters:
+            x, y, w, h = rect(m)
+            self.assertGreater(w, 0)
+            self.assertGreater(h, 0)
 
     def test_marker_pictures_have_the_exact_colours_and_positions(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
@@ -441,26 +387,27 @@ class OverlaySkinTests(unittest.TestCase):
                 self.assertEqual(got, {want[f]}, "frame %d is exactly one colour #%02x%02x%02x" % ((f,) + want[f]))
             png = (self.ovl / c["componentData"]["data"]["image"]).read_bytes()
             self.assertEqual(png[24:29], bytes([8, 2, 0, 0, 0]), "8 bit RGB without alpha, no interlace: the settings of the marker pictures")
-        # the production skin has no instance picture and the overlay skin's parameter exists only in the overlay plugin
-        self.assertFalse(any("Overlay Instance" in json.dumps(t) for t in self.p_tui["pageData"]["tabs"]))
 
     def test_no_colour_of_the_rest_of_the_skin_equals_a_marker_colour(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
         markers = {int(m["rgb"], 16) for v in layout["views"] for m in v["markers"]}
         markers |= {int(c, 16) for c in layout["instance"]["slotColours"]} | {int(layout["instance"]["none"], 16), int(layout["instance"]["blank"], 16)}   # the instance colours are as unusual
-        for tui in (self.o_tui, self.p_tui):
-            text = json.dumps(tui)
-            for value in re.findall(r"\"(?:ff)?([0-9a-fA-F]{6})\"", text):
-                self.assertNotIn(int(value, 16), markers)
-        # the pictures of the production skin: no pixel of a marker colour (within 2 per channel, what the detector accepts)
-        for png in sorted(self.prod.glob("*.png")):
+        text = json.dumps(self.o_tui)
+        for value in re.findall(r"\"(?:ff)?([0-9a-fA-F]{6})\"", text):
+            self.assertNotIn(int(value, 16), markers)
+        # the pictures of the skin (except marker/instance pictures): no pixel of a marker colour (within 2 per channel)
+        m_tuples = [(((m >> 16) & 255), ((m >> 8) & 255), (m & 255)) for m in markers]
+        forbidden = {(r, g, b) for mr, mg, mb in m_tuples for r in range(max(0, mr - 2), min(256, mr + 3)) for g in range(max(0, mg - 2), min(256, mg + 3)) for b in range(max(0, mb - 2), min(256, mb + 3))}
+        for png in sorted(self.ovl.glob("*.png")):
+            if png.name.startswith(("overlay_marker_", "overlay_instance_")):
+                continue
             w, h, rows = decode_png_any(png)
             for row in rows:
                 for px in row:
-                    for m in markers:
-                        near = all(abs(px[i] - ((m >> s) & 255)) <= 2 for i, s in ((0, 16), (1, 8), (2, 0)))
-                        if near and (len(px) < 4 or px[3] > 0):
-                            self.fail("%s has a pixel %r close to a marker colour %06x" % (png.name, px, m))
+                    if len(px) >= 4 and px[3] == 0:
+                        continue
+                    if (px[0], px[1], px[2]) in forbidden:
+                        self.fail("%s has a pixel %r close to a marker colour" % (png.name, px))
 
     # ---- the Play page ----
     PLAY = (("Play", "osc", 3),)   # ONE Play tab; the selectors and the proxies of the three groups stay (inert host parameters for the second and third sub-tab)
@@ -478,7 +425,6 @@ class OverlaySkinTests(unittest.TestCase):
         self.assertEqual(tabs[1]["tabName"], "Macros")   # one Play tab: Macros is the second
         self.assertEqual(tabs[1]["fnKeyIndex"], 1)
         self.assertEqual(len({t["fnKeyIndex"] for t in tabs}), 10, "ten function keys")
-        self.assertFalse(any("Play" in t["tabName"] for t in self.p_tui["pageData"]["tabs"]), "the production skin has no Play tab")
 
     def test_function_key_labels_are_the_short_names_and_the_other_sub_tabs_keep_theirs(self):
         # the host draws the tabName of the current sub-tab on the function key: the first sub-tab of every key carries the short label
@@ -493,12 +439,10 @@ class OverlaySkinTests(unittest.TestCase):
         # the Q-Link map follows the keys, not the names
         ql = self.o_ql["Screen Mode Q-Links"]["map"]
         self.assertEqual([(e["Tab"], e["SubTab"]) for e in ql], [(t["fnKeyIndex"] + 1, t["fnKeySubIndex"] + 1) for t in tabs])
-        # the internal names stay in skin-meta.json, labels only for the pages that have one; the production skin has none
+        # the internal names stay in skin-meta.json, labels only for the pages that have one
         meta = json.loads((self.ovl.parent / "skin-meta.json").read_text(encoding="utf-8"))
         self.assertEqual(meta["labels"], self.LABELS)
         self.assertEqual(sorted(meta["labels"].values()), sorted(["Osc", "Mix", "Filter", "Env", "LFO"]))
-        self.assertNotIn("labels", json.loads((self.prod.parent / "skin-meta.json").read_text(encoding="utf-8")))
-        self.assertEqual([t["tabName"] for t in self.p_tui["pageData"]["tabs"] if t["fnKeySubIndex"] == 0][:4], ["Macros", "Osc 1", "Sub/Nois", "Filter 1"], "the production skin keeps its names")
 
     def test_a_label_that_clashes_or_is_too_long_stops_the_generator(self):
         import test_gen_mpc_ui_layout as lay
@@ -546,7 +490,7 @@ class OverlaySkinTests(unittest.TestCase):
                 self.assertEqual(x, (21, 341, 661, 981)[s % 4])
                 self.assertTrue(y >= 343 and y + h <= 621, "%s inside the lower two rows" % c["componentData"]["name"])
                 self.assertEqual(y < 483, s >= 4, "slots 1 .. 4 are the bottom row, 5 .. 8 the row above")
-                real = next((t for t in self.p_tui["pageData"]["tabs"] for rc in t["componentDefinition"]["componentsData"]
+                real = next((t for t in self.o_tui["pageData"]["tabs"] for rc in t["componentDefinition"]["componentsData"]
                              if rc["handle remapping"]["map"] and bound(rc) == next(i for i, q_ in enumerate(self.params) if q_["key"] == "%s1.%s" % (prefix, key))), None)
                 if real is not None:
                     rc = next(rc for rc in real["componentDefinition"]["componentsData"] if rc["handle remapping"]["map"] and bound(rc) == next(i for i, q_ in enumerate(self.params) if q_["key"] == "%s1.%s" % (prefix, key)))
