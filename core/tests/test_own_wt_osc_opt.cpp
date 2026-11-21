@@ -994,3 +994,133 @@ TEST (own_wt_osc_smooth_frame_scan_ramps_per_sample)
                  static_cast<double> (staticL[318]), static_cast<double> (staticL[319]));
 }
 
+TEST (own_wt_osc_external_shared_morph_scratch_and_tier_sized_history)
+{
+    TestRng r (42);
+    const auto tables = makeTables (r);
+    const Wavetable* wt = tables[1].get();
+
+    MorphScratch sharedScratch;
+    WtOsc shared0, shared1;
+    shared0.prepareMorph (&sharedScratch, 4);
+    shared1.prepareMorph (&sharedScratch, 4);
+
+    WtOsc priv0, priv1;
+    priv0.prepareMorph();
+    priv1.prepareMorph();
+
+    // Verify memory bounds for tier-sized history and external shared scratch
+    CHECK (shared0.morphOwnedBytes() <= 35000);
+    CHECK (shared1.morphOwnedBytes() <= 35000);
+    CHECK_EQ (shared0.morphOwnedBytes(), static_cast<size_t> (34864));
+    CHECK_EQ (shared1.morphOwnedBytes(), static_cast<size_t> (34864));
+    CHECK (priv0.morphOwnedBytes() > 60000);
+    CHECK (priv1.morphOwnedBytes() > 60000);
+
+    // Verify clearState preserves scratch pointer and tier history
+    shared0.clearState();
+    CHECK_EQ (shared0.morphOwnedBytes(), static_cast<size_t> (34864));
+
+    const int morphTypes[4] = { kMorphVocode, kMorphHarmonicStretch, kMorphSmear, kMorphPhaseDisperse };
+    const char* const morphNames[4] = { "Vocode", "HarmonicStretch", "Smear", "PhaseDisperse" };
+
+    for (int m = 0; m < 4; ++m)
+    {
+        const int mType = morphTypes[m];
+
+        OscTick t0;
+        t0.wt = wt;
+        t0.semis = 48.0f; // C3
+        t0.voices = 4;
+        t0.detuneSemis = 0.25f;
+        t0.spread = 0.5f;
+        t0.blend = 0.7f;
+        t0.level = 0.5f;
+        t0.frame = 0.35f;
+        t0.morphType = mType;
+        t0.morphAmount = 0.6f;
+        t0.warp[0] = kWarpSync;
+        t0.warpAmount[0] = 0.45f;
+        t0.active = true;
+
+        OscTick t1 = t0;
+        t1.semis = 55.0f; // G3
+        t1.frame = 0.75f;
+        t1.morphAmount = 0.4f;
+        t1.warpAmount[0] = 0.35f;
+
+        // Reset state for clean comparison
+        shared0.clearState();
+        shared1.clearState();
+        priv0.clearState();
+        priv1.clearState();
+
+        Rng rngS0, rngS1, rngP0, rngP1;
+        shared0.start (0.125f, 0.5f, rngS0);
+        shared1.start (0.375f, 0.5f, rngS1);
+        priv0.start (0.125f, 0.5f, rngP0);
+        priv1.start (0.375f, 0.5f, rngP1);
+
+        constexpr int kTotalSamples = 4096;
+        constexpr int kChunk = 32;
+        constexpr int kPeriods = kTotalSamples / kChunk;
+        float chordSharedL[kTotalSamples] = {}, chordSharedR[kTotalSamples] = {};
+        float chordPrivL[kTotalSamples] = {}, chordPrivR[kTotalSamples] = {};
+
+        const double sampleRate = 44100.0;
+
+        for (int p = 0; p < kPeriods; ++p)
+        {
+            const bool firstOfNote = (p == 0);
+
+            // Render shared scratch instances
+            shared0.update (t0, sampleRate, rngS0);
+            shared0.updateMorph (sampleRate, firstOfNote, nullptr);
+            float s0L[kChunk], s0R[kChunk];
+            shared0.render (0, kChunk, s0L, s0R, nullptr, sampleRate);
+
+            shared1.update (t1, sampleRate, rngS1);
+            shared1.updateMorph (sampleRate, firstOfNote, nullptr);
+            float s1L[kChunk], s1R[kChunk];
+            shared1.render (0, kChunk, s1L, s1R, nullptr, sampleRate);
+
+            // Render private scratch instances
+            priv0.update (t0, sampleRate, rngP0);
+            priv0.updateMorph (sampleRate, firstOfNote, nullptr);
+            float p0L[kChunk], p0R[kChunk];
+            priv0.render (0, kChunk, p0L, p0R, nullptr, sampleRate);
+
+            priv1.update (t1, sampleRate, rngP1);
+            priv1.updateMorph (sampleRate, firstOfNote, nullptr);
+            float p1L[kChunk], p1R[kChunk];
+            priv1.render (0, kChunk, p1L, p1R, nullptr, sampleRate);
+
+            for (int i = 0; i < kChunk; ++i)
+            {
+                chordSharedL[p * kChunk + i] = s0L[i] + s1L[i];
+                chordSharedR[p * kChunk + i] = s0R[i] + s1R[i];
+                chordPrivL[p * kChunk + i] = p0L[i] + p1L[i];
+                chordPrivR[p * kChunk + i] = p0R[i] + p1R[i];
+            }
+        }
+
+        // Must be bit-identical between shared and legacy private scratch
+        CHECK_EQ (std::memcmp (chordSharedL, chordPrivL, sizeof (chordSharedL)), 0);
+        CHECK_EQ (std::memcmp (chordSharedR, chordPrivR, sizeof (chordSharedR)), 0);
+
+        double sumAbs = 0.0;
+        for (int i = 0; i < kTotalSamples; ++i)
+            sumAbs += static_cast<double> (std::fabs (chordSharedL[i]));
+
+        CHECK (sumAbs > 10.0); // signal is audible and non-zero
+
+        std::printf ("WTOSC-SHARED-SCRATCH-CHECKSUM morph=%d name=%s sum=%.9g last8=%.9g %.9g %.9g %.9g %.9g %.9g %.9g %.9g\n",
+                     mType, morphNames[m], sumAbs,
+                     static_cast<double> (chordSharedL[kTotalSamples - 8]), static_cast<double> (chordSharedL[kTotalSamples - 7]),
+                     static_cast<double> (chordSharedL[kTotalSamples - 6]), static_cast<double> (chordSharedL[kTotalSamples - 5]),
+                     static_cast<double> (chordSharedL[kTotalSamples - 4]), static_cast<double> (chordSharedL[kTotalSamples - 3]),
+                     static_cast<double> (chordSharedL[kTotalSamples - 2]), static_cast<double> (chordSharedL[kTotalSamples - 1]));
+    }
+}
+
+
