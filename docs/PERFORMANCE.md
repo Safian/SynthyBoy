@@ -1,6 +1,6 @@
 # Performance
 
-**History note (2026-11-21):** the Vital-derived engine is removed (docs/plans/vital-removal.md) and `synthyboy_bench` has the own engine only (`--engine own`, or no option). The `vital` columns and the `--engine vital` commands below are the last numbers of that engine, kept as a record; they cannot be reproduced on the current tree.
+**History note (2026-11-21):** the Vital-derived engine is removed (docs/plans/vital-removal.md) and `synthyboy_bench` has the own engine only (`--engine own`, or no option). Any `vital` numbers named here are the last ones of that engine, kept as a record; they cannot be reproduced on the current tree.
 
 **These are NOT numbers for the Akai MPC Key 61 (Linux ARMv7, two isolated cores) or for any phone.** They were taken on a
 development laptop, in a release build, with other work running on the machine. They show how the two engines compare and
@@ -25,7 +25,6 @@ for two patches. Nothing is asserted.
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSYNTHYBOY_BUILD_PLUGIN=OFF
 cmake --build build
 build/bench/synthyboy_bench --engine own   --seconds 10          # both patches (--patch default | heavy | both)
-build/bench/synthyboy_bench --engine vital --seconds 10
 ```
 
 ## Device Measurements and Protocol
