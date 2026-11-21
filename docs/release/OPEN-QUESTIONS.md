@@ -142,7 +142,27 @@ Lines found: 80 in 9 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 74.
+Commits found: 79.
+
+### 5bd9af0f (2026-11-21) TODO: owner decisions 2026-11-21 (audio-rate mod: measure on the Key 61 too; LFO phase snap: do; the
+
+- matching line: TODO: owner decisions 2026-11-21 (audio-rate mod: measure on the Key 61 too; LFO phase snap: do; the other small gaps postponed but kept; V6 done: Vital source moved out of synth-knowledge)
+
+### 16297701 (2026-11-21) dsp-knowledge + TODO: the classic Diode pair loop was 4.8 % slower on the Key 61 (not merged); profi
+
+- matching line: dsp-knowledge + TODO: the classic Diode pair loop was 4.8 % slower on the Key 61 (not merged); profile before the next change
+
+### 5921ddfa (2026-11-21) TODO: feature gaps from the Vital public feature list and the ui-design GAP rows checked against tod
+
+- matching line: TODO: feature gaps from the Vital public feature list and the ui-design GAP rows checked against today's code
+
+### d0d96c06 (2026-11-21) TODO: audio-rate matrix modulation gap (found by comparing Vital's public feature list), owner decis
+
+- matching line: TODO: audio-rate matrix modulation gap (found by comparing Vital's public feature list), owner decision
+
+### e31f1c70 (2026-11-21) TODO: the no-Vital gate for core/engine-own exists (check-no-vital.sh --source, Vital removal R10)
+
+- matching line: TODO: the no-Vital gate for core/engine-own exists (check-no-vital.sh --source, Vital removal R10)
 
 ### 25aaa77b (2026-11-21) TODO: C1 reverted (5.5 % slower on the Key 61), the classic Diode section is still 0.72 ms per block
 
