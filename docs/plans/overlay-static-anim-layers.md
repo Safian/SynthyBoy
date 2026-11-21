@@ -180,6 +180,15 @@ Only Distortion has anything that moves by itself; every other FX display change
 
 Consequences: 1 V item (Distortion level), 0 other autonomous movers; the busiest page is Distortion with 2 dots and 2 lines driven by one scalar; at most about 202k px (the Distortion display cell) is repainted while it moves, at most 30 times a second. The plan section 3 FX row names only curve drags as the animated part: the AnimGate (T1) and T4 must ALSO be woken by the `inLevel` change of Distortion, not only by control drags. The owner's expectation that several things move at once on the FX page is not borne out by the code on this page; it holds for the Mixer and Master meters (`docs/MPC.md:1342`).
 
+
+## Meter split and meter tasks (owner decision 2026-11-21: "oké legyen így")
+
+Decided: level and gain-reduction METERS are host-drawn native `Meter` widgets bound to plugin parameters (the host redraws a visible page at a fixed 20 fps only while a value changes, 0 when idle; correct popup z-order; about 80 % of 25/s steps visible; one torn frame seen: `docs/dsp-knowledge/mpc-display.md`). Moving playhead dots and drawn curves stay on OUR plane (30 fps, no tearing). Plan, after g119 (layout cleanup) and g121 (host-skin background prototype) have landed, because all of it edits the same skin files (`scripts/mpc-skin-extras/*`, the overlay layout):
+- **M1. Mixer and Master meters -> host Meters.** One native Meter per existing meter, bound to an output parameter the plugin updates (the pattern of `scripts/mpc-skin-extras/40_spectrum.py`); remove their drawing from our live layer; keep the value path the plugin already has (`docs/MPC.md:1342`). Acceptance: pixel/position check against the current meter cells, host test of the parameter feed, the page stays gated like the other host-skin elements.
+- **M2. New FX meters on the FX page as host Meters:** compressor gain reduction plus input / output level, reverb and delay output level. Needs engine-side level readers per FX slot (the engine publishes only the Distortion input level today: `core/engine-own/own_engine.cpp:1997`), output parameters for them, and the Meter elements in the FX tab of the overlay skin.
+- **M3. Device check:** XL and Key 61, meters visible, the 20 fps cap, popups over the meters (z-order), no audio gap (callback statistics), the modified-star TODO in `TODO.md`.
+Not in scope: the Distortion level dots (they sit on our curve: stay on our plane).
+
 ## Owner decisions (relayed 2026-11-21, verbatim sources in the coordinator's notes)
 
 * Q1: the background and the zoom / Expand button are NOT on the animation path: drawn once as static cells, not removed.
