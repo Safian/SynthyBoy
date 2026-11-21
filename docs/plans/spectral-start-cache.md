@@ -62,5 +62,5 @@ The ledger does **not** look at the cache: it books the full cost whether the fr
 
 ## Open
 
-- Default on or off: decide from a device A/B/A (`tier_bench --start-cache`, interleaved with the cache off, `measurement.md`); until then the Quality switch `spectralStartCache` defaults to off.
+- Default on or off: decide from a device A/B/A (`tier_bench --start-cache`, interleaved with the cache off, `measurement.md`); decided by the owner 2026-11-21: `Quality::spectralStartCache` defaults to -1 = by tier, on at low (`spectralStartCacheOf`), off at medium / high.
 - Whether to extend the cache to the regular frames after the start (no: the pitch, position and phases move every frame).

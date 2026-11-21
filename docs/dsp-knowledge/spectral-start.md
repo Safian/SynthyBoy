@@ -13,7 +13,7 @@
 - **Budget sweep** (interleaved, one session): rows under 1.5 blocks out of 12 Spectral rows:
   2400 us 0, 2000 us 4, 1700 us 10, 1400 us 8; single-run noise +-0.3 blocks, so 1700 and 1400
   are not separable. Steady-state p99 does not depend on the budget. `measured: budget-sweep-results.md`
-- **Start cache** (switch `Quality::spectralStartCache`, default off; `tier_bench --start-cache`; plan `docs/plans/spectral-start-cache.md`): the start frames are memoised per (inputs, channel, frame), bit-identical to the cache off. `test: own_spectral_start_cache_repeated_chord_is_bit_identical_and_second_strike_hits` (a 4x2 chord struck twice: strike 1 computes 24 frames, strike 2 hits 24 and computes none; the two renders have the same FNV hash), `spectral_the_start_cache_is_bit_identical_and_the_second_strike_makes_no_frame` (other start offsets, phase lock, filter, stereo, Smear bypass). Mac, indicative only (Spectral Gong Pad, low, retrigger 0.5 s, 20 s, two runs per variant, A/B/A/B): longest block 4.29 / 2.58 % off against 2.39 / 1.86 % on, p99 1.45 / 1.23 against 1.20 / 1.21; the A17 is not measured. `measured: tier_bench on the Mac, 2026-11-21`
+- **Start cache** (switch `Quality::spectralStartCache`, default by tier: on at low only (owner decision 2026-11-21), off at medium / high; `tier_bench --start-cache` / `--no-start-cache`; `test: device_profile_host` (the low profile enables it, medium and high do not); plan `docs/plans/spectral-start-cache.md`): the start frames are memoised per (inputs, channel, frame), bit-identical to the cache off. `test: own_spectral_start_cache_repeated_chord_is_bit_identical_and_second_strike_hits` (a 4x2 chord struck twice: strike 1 computes 24 frames, strike 2 hits 24 and computes none; the two renders have the same FNV hash), `spectral_the_start_cache_is_bit_identical_and_the_second_strike_makes_no_frame` (other start offsets, phase lock, filter, stereo, Smear bypass). Mac, indicative only (Spectral Gong Pad, low, retrigger 0.5 s, 20 s, two runs per variant, A/B/A/B): longest block 4.29 / 2.58 % off against 2.39 / 1.86 % on, p99 1.45 / 1.23 against 1.20 / 1.21; the A17 is not measured. `measured: tier_bench on the Mac, 2026-11-21`
 
 ## Decisions
 
@@ -34,6 +34,6 @@
 - The earlier 1.59 / 1.62 readings did not reproduce at 1700 on this HEAD (1.28 / 1.30): noise or the newer code.
 - Decision (coordinator, 2026-11-21): the budget stays 1700 us (1400 is only weakly better and costs more voice delay). A start-frame cache (memoised start frames for repeated notes, bit-identical) is being analysed and may remove the rest.
 
-## Start cache (2026-11-21, branch worktree-agent-aadd1287d0f23c8e2, off by default)
+## Start cache (2026-11-21, branch worktree-agent-aadd1287d0f23c8e2; on at tier low by the owner's decision, off at medium / high)
 
 - Bit-identical memo of the start frames (process-wide, 3.2 MB, lock-free). Key 61 A/B/A (OFF/ON x5, budget 1700): Chord Morph strike 1.18-1.43 -> 0.77-0.88 blocks (repeated chord); Vowel Freeze and Gong Pad unchanged (no hits: random start or modulated inputs at the note-on, per the plan's caveat, hit counters not printed); a 16-note chord transposed every strike (all misses) costs about +0.1 block, inside the noise. Output bit-identical in all 72 comparisons. `measured: key61-night-2026-11-21/start-cache/job2-results.md`

@@ -31,6 +31,7 @@
 //                   --seconds defaults to 2 here. With --rt a run that the health rules mark INVALID is repeated (--retry-invalid).
 //   --module-group G  only the cases of one group: fx, filter, warp, morph, unison or osc (default all)
 //   --module-reps N   repetitions of every case (default 3)
+//   --no-start-cache     Quality::spectralStartCache off (default: by the profile, on at low).
 //   --start-cache        Quality::spectralStartCache on: a note struck again takes its first Spectral frames from the process-wide start cache (docs/plans/spectral-start-cache.md).
 //   --start-budget-us N  the budget of the Spectral start ledger in microseconds per block (Quality::spectralStartBudgetUs, N >= 1); without it the built-in default.
 //   --first-blocks N  no steady run: for every profile and load a fresh engine, the time of prepare (), then the first N blocks (1 .. 64) with the chord struck in block 0 and no
@@ -292,7 +293,7 @@ struct Options
     bool evict = false;      // --evict
     int firstBlocks = 0;     // --first-blocks
     int startBudgetUs = 0;   // --start-budget-us: Quality::spectralStartBudgetUs (0 = the default budget)
-    int startCache = 0;      // --start-cache: Quality::spectralStartCache (the process-wide cache of the Spectral start frames)
+    int startCache = -1;     // --start-cache (1) / --no-start-cache (0), default by the profile (on at low): Quality::spectralStartCache (the process-wide cache of the Spectral start frames)
     bool modules = false;    // --modules
     int moduleReps = 3;      // --module-reps
     std::string moduleGroup = "all"; // --module-group
@@ -1088,6 +1089,7 @@ int main (int argc, char** argv)
         else if (a == "--module-reps") o.moduleReps = std::atoi (next());
         else if (a == "--first-blocks") o.firstBlocks = std::atoi (next());
         else if (a == "--start-cache") o.startCache = 1;
+        else if (a == "--no-start-cache") o.startCache = 0;
         else if (a == "--start-budget-us") { o.startBudgetUs = std::atoi (next()); if (o.startBudgetUs < 1) usage ("--start-budget-us needs N >= 1"); }
         else usage (("unknown argument " + a).c_str());
     }

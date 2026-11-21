@@ -81,6 +81,22 @@ int main (int argc, char** argv)
         check (describeProfile (profileLow()) == "low,voices=8,unison=3,warp=2x,morph=half,math=fast,control=economy,start=stagger,fx=low,samples=low", "the description of low names every setting");
     }
 
+    // ---- the Spectral start cache: on at tier low only (owner decision 2026-11-21), bit-identical memo ---------------------------------------------------
+    {
+        Profile p;
+        check (parseProfile ("low", p), "start cache: 'low' parses");
+        check (synthyboy::spectralStartCacheOf (profileQuality (p)), "start cache: the low profile enables it");
+        check (synthyboy::spectralStartCacheOf (low), "start cache: tier low enables it");
+        check (parseProfile ("medium", p) && ! synthyboy::spectralStartCacheOf (profileQuality (p)), "start cache: the medium profile does not");
+        check (parseProfile ("high", p) && ! synthyboy::spectralStartCacheOf (profileQuality (p)), "start cache: the high profile does not");
+        check (! synthyboy::spectralStartCacheOf (medium) && ! synthyboy::spectralStartCacheOf (high), "start cache: tiers medium and high do not");
+        synthyboy::Quality offLow = low;
+        offLow.spectralStartCache = 0;
+        synthyboy::Quality onHigh = high;
+        onHigh.spectralStartCache = 1;
+        check (! synthyboy::spectralStartCacheOf (offLow) && synthyboy::spectralStartCacheOf (onHigh), "start cache: an explicit 0 / 1 overrides the tier (bench)");
+    }
+
     // ---- the Spectral start stagger (docs/plans/spectral-start.md S2) --------------------------------------------------------------------------------------
     {
         check (synthyboy::spectralStartOf (low), "spectralStartOf: tier low staggers the Spectral start");

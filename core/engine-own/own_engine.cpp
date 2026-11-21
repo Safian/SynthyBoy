@@ -320,9 +320,9 @@ void OwnEngine::setQuality (const Quality& q) noexcept
     economyMask.store (economyOf (q), std::memory_order_relaxed);
     spectralStartOn.store (spectralStartOf (q), std::memory_order_relaxed);
     spectralStartBudget.store (q.spectralStartBudgetUs, std::memory_order_relaxed);
-    if (q.spectralStartCache != 0)
+    if (spectralStartCacheOf (q))
         spectral::StartCache::instance().prepare();   // allocates the table once, here and not on the audio thread
-    spectralStartCacheOn.store (q.spectralStartCache != 0, std::memory_order_relaxed);
+    spectralStartCacheOn.store (spectralStartCacheOf (q), std::memory_order_relaxed);
     tierLowCap.store (q.economy < 0 && q.oversampling <= 1, std::memory_order_relaxed);
     fxMask.store (q.fxMask, std::memory_order_relaxed);
     fxMakeup.store (q.fxMakeup, std::memory_order_relaxed);
