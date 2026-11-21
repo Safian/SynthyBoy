@@ -17,6 +17,7 @@
 #include "fx_compressor.h"
 #include "fx_dsp.h"
 #include "fx_adaa.h"
+#include "fx_oversampler.h"
 #include "fx_eq.h"
 #include "fx_reverb.h"
 
@@ -673,8 +674,10 @@ private:
 class Distortion
 {
 public:
+    static constexpr int kLatency = HalfBand2x::kLatency;
     bool fast = false; // tier low: tanh, sin, exp, exp2 and pow by the cheaper forms of dsp/fastmath.h
-    struct Params { int type = 0; float driveDb = 0.0f, mix = 1.0f, cutoff = 4000.0f, resonance = 0.5f, blend = 0.0f; int order = 0; };
+    struct Params { int type = 0; float driveDb = 0.0f, mix = 1.0f, cutoff = 4000.0f, resonance = 0.5f, blend = 0.0f; int order = 0; bool os2 = false; };
+    int latencySamples() const noexcept { return p.os2 ? kLatency : 0; }
     void prepare (double sr) { sampleRate = sr; reset(); }
     void reset() noexcept
     {
@@ -683,6 +686,9 @@ public:
         holdPhase[0] = holdPhase[1] = 0.0f;
         dc[0] = dc[1] = 0.0f;
         adaaState[0] = adaaState[1] = adaa::State();
+        for (auto& o : oversampler) o.reset();
+        for (auto& d : dryDelay) d.reset();
+        for (auto& d : lofiDelay) d.reset();
         counter = 0;
         primed = false;
     }
@@ -692,6 +698,13 @@ public:
     {
         if (np.type != p.type) // switching the type clears the state (docs/engine-spec/06-effects.md section 4)
             adaaState[0] = adaaState[1] = adaa::State();
+        if (np.os2 != p.os2)
+        {
+            adaaState[0] = adaaState[1] = adaa::State();
+            for (auto& o : oversampler) o.reset();
+            for (auto& d : dryDelay) d.reset();
+            for (auto& d : lofiDelay) d.reset();
+        }
         p = np;
         const DriveLaw now = driveLaw (p.driveDb);
         prevLaw = primed ? curLaw : now;
@@ -716,27 +729,87 @@ public:
         const float invP = 1.0f / static_cast<float> (std::max (period, 1));
         const float dcA = 1.0f - (fast ? fastmath::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)) : std::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)));
         float* io[2] = { l, r };
+        if (!p.os2)
+        {
+            for (int c = 0; c < 2; ++c)
+                for (int i = 0; i < n; ++i)
+                {
+                    const float dry = io[c][i];
+                    float x = dry;
+                    float g = curLaw.g, u = curLaw.u, d = curLaw.d;
+                    if (ramp)
+                    {
+                        const float t = std::min (static_cast<float> (t0 + i + 1) * invP, 1.0f);
+                        g = prevLaw.g + (curLaw.g - prevLaw.g) * t;
+                        u = prevLaw.u + (curLaw.u - prevLaw.u) * t;
+                        d = prevLaw.d + (curLaw.d - prevLaw.d) * t;
+                    }
+                    if (p.order == 1) x = filt (c, x, cg, k);
+                    x = applyDc (c, shape (c, x, g, u, d), dcA);
+                    if (p.order == 2) x = filt (c, x, cg, k);
+                    io[c][i] = dry * (1.0f - p.mix) + x * p.mix;
+                }
+            return;
+        }
+        const bool lofi = p.type == 4 || p.type == 5; // Bit Crush and Down Sample are lo-fi effects on purpose and are delayed without oversampling
         for (int c = 0; c < 2; ++c)
             for (int i = 0; i < n; ++i)
             {
                 const float dry = io[c][i];
+                const float dryDelayed = dryDelay[c].pushPop (dry);
                 float x = dry;
-                float g = curLaw.g, u = curLaw.u, d = curLaw.d;
-                if (ramp)
-                {
-                    const float t = std::min (static_cast<float> (t0 + i + 1) * invP, 1.0f);
-                    g = prevLaw.g + (curLaw.g - prevLaw.g) * t;
-                    u = prevLaw.u + (curLaw.u - prevLaw.u) * t;
-                    d = prevLaw.d + (curLaw.d - prevLaw.d) * t;
-                }
                 if (p.order == 1) x = filt (c, x, cg, k);
-                x = shape (c, x, g, u, d, dcA);
+                if (lofi)
+                {
+                    float g = curLaw.g, u = curLaw.u, d = curLaw.d;
+                    if (ramp)
+                    {
+                        const float t = std::min (static_cast<float> (t0 + i + 1) * invP, 1.0f);
+                        g = prevLaw.g + (curLaw.g - prevLaw.g) * t;
+                        u = prevLaw.u + (curLaw.u - prevLaw.u) * t;
+                        d = prevLaw.d + (curLaw.d - prevLaw.d) * t;
+                    }
+                    x = lofiDelay[c].pushPop (shape (c, x, g, u, d));
+                }
+                else
+                {
+                    const auto up2 = oversampler[c].up (x);
+                    float g0 = curLaw.g, u0 = curLaw.u, d0 = curLaw.d;
+                    float g1 = curLaw.g, u1 = curLaw.u, d1 = curLaw.d;
+                    if (ramp)
+                    {
+                        const float t05 = std::min ((static_cast<float> (t0 + i) + 0.5f) * invP, 1.0f);
+                        const float t1 = std::min (static_cast<float> (t0 + i + 1) * invP, 1.0f);
+                        g0 = prevLaw.g + (curLaw.g - prevLaw.g) * t05;
+                        u0 = prevLaw.u + (curLaw.u - prevLaw.u) * t05;
+                        d0 = prevLaw.d + (curLaw.d - prevLaw.d) * t05;
+                        g1 = prevLaw.g + (curLaw.g - prevLaw.g) * t1;
+                        u1 = prevLaw.u + (curLaw.u - prevLaw.u) * t1;
+                        d1 = prevLaw.d + (curLaw.d - prevLaw.d) * t1;
+                    }
+                    const float y0 = shape (c, up2[0], g0, u0, d0);
+                    const float y1 = shape (c, up2[1], g1, u1, d1);
+                    x = applyDc (c, oversampler[c].down (y0, y1), dcA);
+                }
                 if (p.order == 2) x = filt (c, x, cg, k);
-                io[c][i] = dry * (1.0f - p.mix) + x * p.mix;
+                io[c][i] = dryDelayed * (1.0f - p.mix) + x * p.mix;
             }
     }
 
 private:
+    struct Delay15
+    {
+        std::array<float, 16> buf {};
+        int pos = 0;
+        void reset() noexcept { buf.fill (0.0f); pos = 0; }
+        float pushPop (float x) noexcept
+        {
+            buf[static_cast<size_t> (pos)] = x;
+            const float out = buf[static_cast<size_t> ((pos - kLatency) & 15)];
+            pos = (pos + 1) & 15;
+            return out;
+        }
+    };
     /** What the drive in dB makes of the shaper: the gain, the morph / bit depth position and the divisor of the sample rate and bit laws. */
     struct DriveLaw { float g = 1.0f, u = 0.5f, d = 1.0f; };
     DriveLaw driveLaw (float driveDb) const noexcept
@@ -755,7 +828,7 @@ private:
         const float b = std::clamp (p.blend, 0.0f, 2.0f);
         return b < 1.0f ? lerp (svf[c].lp, svf[c].bp * k, b) : lerp (svf[c].bp * k, svf[c].hp, b - 1.0f);
     }
-    float shape (int c, float x, float g, float u, float d, float dcA) noexcept
+    float shape (int c, float x, float g, float u, float d) noexcept
     {
         // v = x * drive; the laws of docs/engine-spec/06-effects.md section 4
         const float v = x * g;
@@ -773,17 +846,17 @@ private:
             case 3: { const float t = 0.5f - 0.25f * v; y = fast ? fastmath::sinCycles (t) : std::sin (kTwoPif * (t - ffloor (t))); break; }
             case 4:
             {
-                const float x = d != 0.0f ? v / d : v;
+                const float qx = d != 0.0f ? v / d : v;
                 const float q = std::clamp (u * u, 1.5e-8f, 1.0f);
-                y = std::round (x / q) * q;
+                y = std::round (qx / q) * q;
                 break;
             }
             case 5:
             {
-                const float x = d != 0.0f ? v / d : v;
+                const float dx = d != 0.0f ? v / d : v;
                 const float period = std::max (static_cast<float> (sampleRate) * std::max (0.99f / std::max ((1.0f - u) * (1.0f - u), 1.0e-4f), 1.0f) / 88200.0f, 1.0f);
                 holdPhase[c] += 1.0f;
-                if (holdPhase[c] >= period) { holdPhase[c] -= period; held[c] = x; }
+                if (holdPhase[c] >= period) { holdPhase[c] -= period; held[c] = dx; }
                 y = held[c];
                 break;
             }
@@ -798,6 +871,10 @@ private:
                 y = aaOn ? adaa::stepShaper (p.type, adaaState[c], x, u, shaperA, shaperIntA, shaperB, shaperIntB) : std::clamp (v, -1.0f, 1.0f);
                 break;
         }
+        return y;
+    }
+    float applyDc (int c, float y, float dcA) noexcept
+    {
         const bool asym = p.type == 6 || p.type == 7 || p.type == 10 || p.type == 11 || p.type == 13;
         if (asym) // 10 Hz DC blocker
         {
@@ -812,6 +889,9 @@ private:
     bool primed = false;
     double sampleRate = 48000.0;
     Svf svf[2];
+    HalfBand2x oversampler[2];
+    Delay15 dryDelay[2];
+    Delay15 lofiDelay[2];
     float held[2] = {}, holdPhase[2] = {}, dc[2] = {};
     adaa::State adaaState[2];
     const float* shaperA = nullptr;
