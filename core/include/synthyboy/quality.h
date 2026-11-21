@@ -100,6 +100,9 @@ struct Quality
         starts its last voices some control periods later (they are silent until then). Negative (default): by the tier, on when `oversampling` is 1 (low). 0 off, 1 on. It needs the 32 sample
         event grid of the control economy (see spectralStartOf), without it the setting does nothing. */
     int spectralStart = -1;
+    /** The budget of the Spectral start ledger, in microseconds of start work per block. 0 (default): the built-in `kStartBudgetUs` (core/spectral start_ledger.h). Any value > 0 is the budget
+        itself (bench / measurement, e.g. tier_bench --start-budget-us); the profiles do not set it. */
+    int spectralStartBudgetUs = 0;
 };
 
 /** The economy groups a quality runs with (see Quality::economy). */

@@ -318,6 +318,7 @@ void OwnEngine::setQuality (const Quality& q) noexcept
     qualityTier.store (q.oversampling <= 1 ? 0 : (q.interpolation == Interpolation::spectral ? 2 : 1), std::memory_order_relaxed);
     economyMask.store (economyOf (q), std::memory_order_relaxed);
     spectralStartOn.store (spectralStartOf (q), std::memory_order_relaxed);
+    spectralStartBudget.store (q.spectralStartBudgetUs, std::memory_order_relaxed);
     tierLowCap.store (q.economy < 0 && q.oversampling <= 1, std::memory_order_relaxed);
     fxMask.store (q.fxMask, std::memory_order_relaxed);
     fxMakeup.store (q.fxMakeup, std::memory_order_relaxed);
@@ -1488,7 +1489,10 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                     ++soundingAtPeriodStart;
             });
             // the start ledger: configured from the quality here (it changes only when the quality does), one tick per control period before the voices tick
-            spectralScratch->start.configure (spectralStartOn.load (std::memory_order_relaxed), spectral::kStartBudgetUs);
+            {
+                const int budget = spectralStartBudget.load (std::memory_order_relaxed);
+                spectralScratch->start.configure (spectralStartOn.load (std::memory_order_relaxed), budget > 0 ? budget : spectral::kStartBudgetUs);
+            }
             spectralScratch->start.beginTick();
             controlTick();
             // everything below that reads only parameters (and the global modulation) is redone only when one of them changed since the last period
