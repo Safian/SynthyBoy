@@ -415,3 +415,75 @@ TEST (own_distortion_drive_does_not_step)
     }
     CHECK (20.0 * std::log10 (std::max (d / p, 1.0e-9)) > -40.0);
 }
+
+// osc1.warp.spread, osc1.warp2.spread, osc3.warp.spread, osc3.warp2.spread: unison spread of warp amount.
+// With unison voices >= 2, warp spread moves the warp amount of outer voice pairs relative to the center pair (docs/engine-spec/02-oscillator.md section 6).
+TEST (own_warp_spread_and_warp2_spread_affect_unison_voices)
+{
+    auto renderOscWarp = [] (int osc, int warpSlot, float spreadVal)
+    {
+        auto e = make();
+        sinePatch (*e);
+        const std::string P = "osc" + std::to_string (osc);
+        if (osc != 1)
+        {
+            set (*e, "osc1.on", 0);
+            set (*e, (P + ".on").c_str(), 1);
+            set (*e, (P + ".level").c_str(), 100);
+            set (*e, (P + ".wavetable").c_str(), 0);
+        }
+        set (*e, (P + ".unison.voices").c_str(), 5);
+        set (*e, (P + ".unison.detune").c_str(), 20);
+        const std::string warpKey = warpSlot == 1 ? P + ".warp.type" : P + ".warp2.type";
+        const std::string amtKey = warpSlot == 1 ? P + ".warp.amount" : P + ".warp2.amount";
+        const std::string spreadKey = warpSlot == 1 ? P + ".warp.spread" : P + ".warp2.spread";
+        set (*e, warpKey.c_str(), 1); // Sync warp
+        set (*e, amtKey.c_str(), 30);
+        set (*e, spreadKey.c_str(), spreadVal);
+        return sbtest::render (*e, { sbtest::noteOn (0, 48) }, static_cast<int> (0.2 * kSr), 256);
+    };
+
+    auto diffDb = [] (const sbtest::Rendered& a, const sbtest::Rendered& b)
+    {
+        double d = 0.0, p = 1.0e-9;
+        for (size_t i = 0; i < a.left.size(); ++i)
+        {
+            d = std::max (d, std::fabs (static_cast<double> (a.left[i] - b.left[i])));
+            p = std::max (p, std::fabs (static_cast<double> (a.left[i])));
+        }
+        return 20.0 * std::log10 (std::max (d / p, 1.0e-9));
+    };
+
+    // osc1 warp 1 & 2 spread
+    const auto r1_0 = renderOscWarp (1, 1, 0.0f), r1_80 = renderOscWarp (1, 1, 80.0f);
+    CHECK (diffDb (r1_0, r1_80) > -30.0);
+
+    const auto r1w2_0 = renderOscWarp (1, 2, 0.0f), r1w2_80 = renderOscWarp (1, 2, 80.0f);
+    CHECK (diffDb (r1w2_0, r1w2_80) > -30.0);
+
+    // osc3 warp 1 & 2 spread
+    const auto r3_0 = renderOscWarp (3, 1, 0.0f), r3_80 = renderOscWarp (3, 1, 80.0f);
+    CHECK (diffDb (r3_0, r3_80) > -30.0);
+
+    const auto r3w2_0 = renderOscWarp (3, 2, 0.0f), r3w2_80 = renderOscWarp (3, 2, 80.0f);
+    CHECK (diffDb (r3w2_0, r3w2_80) > -30.0);
+
+    // Modulation of warp spread (MOD-DEAD test)
+    auto renderModSpread = [] (float macroVal)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "osc1.unison.voices", 5);
+        set (*e, "osc1.unison.detune", 20);
+        set (*e, "osc1.warp.type", 1);
+        set (*e, "osc1.warp.amount", 30);
+        set (*e, "osc1.warp.spread", 0);
+        set (*e, "macro.1", macroVal);
+        set (*e, "mod01.source", srcChoice ("macro1"));
+        set (*e, "mod01.destination", dstChoice ("osc1.warp.spread"));
+        set (*e, "mod01.amount", 80);
+        return sbtest::render (*e, { sbtest::noteOn (0, 48) }, static_cast<int> (0.2 * kSr), 256);
+    };
+    const auto m0 = renderModSpread (0.0f), m100 = renderModSpread (100.0f);
+    CHECK (diffDb (m0, m100) > -30.0);
+}
