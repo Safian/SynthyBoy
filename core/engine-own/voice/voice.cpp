@@ -759,7 +759,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
                 tuneTrack += (target - tuneTrack) * tuneCoef;
             }
     }
-    const float noteSemis = tuneTrack + glideOffset + bend + tuneExpr + g.base[mi.transpose] + g.base[mi.tune] * 0.01f;
+    // the master transpose and tune are added after the matrix of this period (noteSemis below): a slot on master.tune moves the pitch like one on an oscillator tune
+    const float noteSemisKnobless = tuneTrack + glideOffset + bend + tuneExpr;
     lastSemis = tuneTrack + glideOffset;
 
     if (g.baseEpoch == 0 || !vcCacheValid || vcCacheEpoch != g.baseEpoch || vcCacheSequence != sequence) // epoch 0: the caller gives no epoch, nothing is kept
@@ -1098,6 +1099,8 @@ void Voice::tick (const TickGlobals& g, int voiceIndex) noexcept
         else
             smoothedPressure = polyPressure;
     }
+    // the pitch of the note with the modulated master transpose and tune (docs/engine-spec/01:176, 04:191); the readers of the pitch are all below this line
+    const float noteSemis = noteSemisKnobless + P (mi.transpose) + P (mi.tune) * 0.01f;
 
     // ---- amplitude: envelope 1, velocity
     {

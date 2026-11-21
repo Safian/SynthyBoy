@@ -684,22 +684,36 @@ public:
         dc[0] = dc[1] = 0.0f;
         adaaState[0] = adaaState[1] = adaa::State();
         counter = 0;
+        primed = false;
     }
+    /** The drive of the new control period: it is reached at the end of the period (process (): linear across it, nothing is stepped, docs/engine-spec/06-effects.md section 1), the
+        period before it is where the ramp starts. The first set () after a reset () has no period before: no ramp. */
     void set (const Params& np) noexcept
     {
         if (np.type != p.type) // switching the type clears the state (docs/engine-spec/06-effects.md section 4)
             adaaState[0] = adaaState[1] = adaa::State();
         p = np;
+        const DriveLaw now = driveLaw (p.driveDb);
+        prevLaw = primed ? curLaw : now;
+        curLaw = now;
+        primed = true;
     }
-    void process (float* l, float* r, int n) noexcept
+    void setShaper (const float* yA, const float* IA, const float* yB, const float* IB) noexcept
+    {
+        shaperA = yA;
+        shaperIntA = IA;
+        shaperB = yB;
+        shaperIntB = IB;
+    }
+    /** t0 / period: the position of the call in the control period (the gain, the morph and the divisor of the drive are interpolated across it from the period before to this one,
+        like the Serum law of the EQ); period 0 (a caller without periods): the drive of the last set () at once. */
+    void process (float* l, float* r, int n, int t0 = 0, int period = 0) noexcept
     {
         aaOn = (synthyboy::aa::off() & synthyboy::aa::kDistortion) == 0; // the test and benchmark switch, read once per call
-        const float g = std::pow (10.0f, p.driveDb * 0.05f);
         const float cg = Svf::coefficient (p.cutoff, sampleRate);
         const float k = 2.0f - 1.9f * clamp01 (p.resonance);
-        const float u = clamp01 ((p.driveDb + 30.0f) / 60.0f);
-        const float dExp = std::clamp (p.driveDb, -30.0f, 30.0f) * 0.05f;
-        const float d = fast ? fastmath::pow10 (dExp) : std::pow (10.0f, dExp);
+        const bool ramp = period > 0 && (prevLaw.g != curLaw.g || prevLaw.u != curLaw.u || prevLaw.d != curLaw.d); // a still drive: the same values as without the ramp, bit for bit
+        const float invP = 1.0f / static_cast<float> (std::max (period, 1));
         const float dcA = 1.0f - (fast ? fastmath::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)) : std::exp (-kTwoPif * 10.0f / static_cast<float> (sampleRate)));
         float* io[2] = { l, r };
         for (int c = 0; c < 2; ++c)
@@ -707,6 +721,14 @@ public:
             {
                 const float dry = io[c][i];
                 float x = dry;
+                float g = curLaw.g, u = curLaw.u, d = curLaw.d;
+                if (ramp)
+                {
+                    const float t = std::min (static_cast<float> (t0 + i + 1) * invP, 1.0f);
+                    g = prevLaw.g + (curLaw.g - prevLaw.g) * t;
+                    u = prevLaw.u + (curLaw.u - prevLaw.u) * t;
+                    d = prevLaw.d + (curLaw.d - prevLaw.d) * t;
+                }
                 if (p.order == 1) x = filt (c, x, cg, k);
                 x = shape (c, x, g, u, d, dcA);
                 if (p.order == 2) x = filt (c, x, cg, k);
@@ -715,6 +737,17 @@ public:
     }
 
 private:
+    /** What the drive in dB makes of the shaper: the gain, the morph / bit depth position and the divisor of the sample rate and bit laws. */
+    struct DriveLaw { float g = 1.0f, u = 0.5f, d = 1.0f; };
+    DriveLaw driveLaw (float driveDb) const noexcept
+    {
+        DriveLaw w;
+        w.g = std::pow (10.0f, driveDb * 0.05f);
+        w.u = clamp01 ((driveDb + 30.0f) / 60.0f);
+        const float dExp = std::clamp (driveDb, -30.0f, 30.0f) * 0.05f;
+        w.d = fast ? fastmath::pow10 (dExp) : std::pow (10.0f, dExp);
+        return w;
+    }
     float filt (int c, float x, float g, float k) noexcept
     {
         svf[c].process (x, g, k);
@@ -728,7 +761,7 @@ private:
         const float v = x * g;
         auto th = [this] (float a) { return fast ? fastmath::tanh (a) : std::tanh (a); };
         auto ex = [this] (float a) { return fast ? fastmath::exp (a) : std::exp (a); };
-        float y;
+        float y = std::clamp (v, -1.0f, 1.0f);
         if (aaOn && p.type >= 0 && p.type < 32 && ((adaa::kConverted >> p.type) & 1u) != 0u)
             y = adaa::step (p.type, adaaState[c], x, g, fast); // first-order ADAA (fx_adaa.h)
         else
@@ -760,8 +793,10 @@ private:
             case 9: y = th (32.0f * v); break;
             case 10: y = th (std::max (v, 0.0f)) + std::max (std::min (v, 0.0f), -0.5f); break;
             case 11: y = std::fabs (std::clamp (v, -1.0f, 1.0f)); break;
-            case 12: y = std::clamp (v, -1.0f, 1.0f); break; // X-Shaper: the drawn curves default to the identity
-            default: y = std::clamp (v, -1.0f, 1.0f); break;
+            case 12:
+            case 13:
+                y = aaOn ? adaa::stepShaper (p.type, adaaState[c], x, u, shaperA, shaperIntA, shaperB, shaperIntB) : std::clamp (v, -1.0f, 1.0f);
+                break;
         }
         const bool asym = p.type == 6 || p.type == 7 || p.type == 10 || p.type == 11 || p.type == 13;
         if (asym) // 10 Hz DC blocker
@@ -773,10 +808,16 @@ private:
         return y;
     }
     Params p;
+    DriveLaw prevLaw, curLaw;
+    bool primed = false;
     double sampleRate = 48000.0;
     Svf svf[2];
     float held[2] = {}, holdPhase[2] = {}, dc[2] = {};
     adaa::State adaaState[2];
+    const float* shaperA = nullptr;
+    const float* shaperIntA = nullptr;
+    const float* shaperB = nullptr;
+    const float* shaperIntB = nullptr;
     bool aaOn = true;
     unsigned counter = 0;
 };

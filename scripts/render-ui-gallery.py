@@ -81,14 +81,26 @@ def run_build(bdir):
     return subprocess.run(["cmake", "--build", str(bdir), "--target", "ui_gallery_host", "-j4"]).returncode
 
 
-def find_or_build_host(repo_root, custom_bin=None, build_dir=None, build=None):
-    """The ui_gallery_host to run. A binary named with --host-bin is used as it is. Otherwise, when a build directory with a CMake cache is known (--build-dir, or one of the usual
-    names under the repository), its target is ALWAYS built first, so the pictures are never those of a binary older than the sources (an existing binary was used without a rebuild
-    before: stale pictures after a merge); a failing build is an error, never a silent fall back to the old binary. Without any configured directory an existing binary is used,
-    else one is configured and built under build/. `build` is the build step (a function of the directory returning the exit code); tests pass a fake one."""
-    build = build or run_build
-    if custom_bin and os.path.isfile(custom_bin) and os.access(custom_bin, os.X_OK):
-        return Path(custom_bin)
+def find_or_build_host(repo_root, custom_bin=None, build_dir=None, build=None, allow_build=False):
+    """The ui_gallery_host to run.
+    A binary specified via --host-bin (custom_bin) or SYNTHYBOY_UI_GALLERY_HOST is used as given.
+    Otherwise, candidate build directories are searched for an existing ui_gallery_host binary.
+    Building or rebuilding the binary is ONLY done when explicitly requested (allow_build=True, via --build).
+    When allow_build is True and a configured directory with a CMake cache is known, its target is built first;
+    if no configured directory exists, one is configured and built under build/.
+    When allow_build is False and no binary is found, a RuntimeError is raised without invoking any build.
+    `build` is the build step (a function of the directory returning the exit code); tests pass a fake one.
+    """
+    if not custom_bin:
+        env_bin = os.environ.get("SYNTHYBOY_UI_GALLERY_HOST")
+        if env_bin:
+            custom_bin = env_bin
+
+    if custom_bin:
+        c_path = Path(custom_bin)
+        if c_path.is_file() and os.access(c_path, os.X_OK):
+            return c_path
+        raise RuntimeError(f"Specified host binary not found or not executable: {custom_bin}")
 
     candidate_dirs = []
     if build_dir:
@@ -100,37 +112,47 @@ def find_or_build_host(repo_root, custom_bin=None, build_dir=None, build=None):
         repo_root / "build-native",
     ])
 
-    configured = [d for d in candidate_dirs if (d / "CMakeCache.txt").is_file()]
-    if build_dir and Path(build_dir) in configured:
-        configured = [Path(build_dir)]   # the directory the caller named: only that one
-    for bdir in configured:
-        rc = build(bdir)
-        if rc != 0:
-            raise RuntimeError(f"The build of ui_gallery_host in {bdir} failed (exit code {rc}); not using a possibly stale binary.")
-        found = host_binary_in(bdir)
+    if allow_build:
+        build = build or run_build
+        configured = [d for d in candidate_dirs if (d / "CMakeCache.txt").is_file()]
+        if build_dir and Path(build_dir) in configured:
+            configured = [Path(build_dir)]   # the directory the caller named: only that one
+        for bdir in configured:
+            rc = build(bdir)
+            if rc != 0:
+                raise RuntimeError(f"The build of ui_gallery_host in {bdir} failed (exit code {rc}); not using a possibly stale binary.")
+            found = host_binary_in(bdir)
+            if found:
+                return found
+            raise RuntimeError(f"The build in {bdir} succeeded but there is no ui_gallery_host binary in it (is SYNTHYBOY_BUILD_MPC_SHELL on?).")
+
+        for bdir in candidate_dirs:
+            found = host_binary_in(bdir)
+            if found:
+                return found
+
+        # If no configured build directory exists, configure and build under repo_root / "build"
+        default_build = repo_root / "build"
+        print(f"Configuring and building ui_gallery_host in {default_build}...")
+        default_build.mkdir(parents=True, exist_ok=True)
+        subprocess.run([
+            "cmake", "-S", str(repo_root), "-B", str(default_build),
+            "-DCMAKE_BUILD_TYPE=Release", "-DSYNTHYBOY_BUILD_MPC_SHELL=ON"
+        ], check=True)
+        subprocess.run(["cmake", "--build", str(default_build), "--target", "ui_gallery_host", "-j4"], check=True)
+        found = host_binary_in(default_build)
         if found:
             return found
-        raise RuntimeError(f"The build in {bdir} succeeded but there is no ui_gallery_host binary in it (is SYNTHYBOY_BUILD_MPC_SHELL on?).")
 
+        raise RuntimeError("Could not find or build ui_gallery_host binary.")
+
+    # allow_build is False: search for an existing binary without building anything
     for bdir in candidate_dirs:
         found = host_binary_in(bdir)
         if found:
             return found
 
-    # If no configured build directory exists, configure and build under repo_root / "build"
-    default_build = repo_root / "build"
-    print(f"Configuring and building ui_gallery_host in {default_build}...")
-    default_build.mkdir(parents=True, exist_ok=True)
-    subprocess.run([
-        "cmake", "-S", str(repo_root), "-B", str(default_build),
-        "-DCMAKE_BUILD_TYPE=Release", "-DSYNTHYBOY_BUILD_MPC_SHELL=ON"
-    ], check=True)
-    subprocess.run(["cmake", "--build", str(default_build), "--target", "ui_gallery_host", "-j4"], check=True)
-    found = host_binary_in(default_build)
-    if found:
-        return found
-
-    raise RuntimeError("Could not find or build ui_gallery_host binary.")
+    raise RuntimeError("ui_gallery_host binary not found (pass --host-bin, set SYNTHYBOY_UI_GALLERY_HOST, or pass --build to build).")
 
 
 def parse_page_and_state(filename, known_views, states):
@@ -388,8 +410,9 @@ def main():
     parser = argparse.ArgumentParser(description="SynthyBoy UI gallery renderer")
     parser.add_argument("--out", default="", help="Output directory for PNGs and index.html (default: build/ui-gallery)")
     parser.add_argument("--presets", nargs="*", default=[], help="Presets to render (.sbpreset files)")
-    parser.add_argument("--host-bin", default="", help="Path to ui_gallery_host binary")
+    parser.add_argument("--host-bin", default="", help="Path to ui_gallery_host binary (can also be set via SYNTHYBOY_UI_GALLERY_HOST)")
     parser.add_argument("--build-dir", default="", help="Build directory")
+    parser.add_argument("--build", action="store_true", help="Build ui_gallery_host target before rendering")
     parser.add_argument("--list", action="store_true", help="Print STATE\\tPAGE\\tFILE lines (sorted by state, then page)")
     parser.add_argument("--knobs", type=int, default=16, choices=[4, 16], help="Q-Link knobs of the device: 16 (MPC XL, the default: idle chips 5..16) or 4 (Key 61)")
     parser.add_argument("--only", default="", help="Comma-separated list of page-name beginnings to include in --list and contact sheet")
@@ -409,7 +432,12 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Locate ui_gallery_host
-    host_bin = find_or_build_host(repo_root, custom_bin=args.host_bin, build_dir=args.build_dir)
+    host_bin = find_or_build_host(
+        repo_root,
+        custom_bin=args.host_bin,
+        build_dir=args.build_dir,
+        allow_build=args.build,
+    )
     print(f"Using host binary: {host_bin}")
 
     # Presets

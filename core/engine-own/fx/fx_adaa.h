@@ -160,6 +160,97 @@ inline float step (int type, State& s, float x, float g, bool fast) noexcept
     s.b = flushDenormal (bt);
     return y;
 }
+
+/** The 512-segment interpolation of a transfer curve (y == nullptr: identity clamp (u, 0, 1)). */
+inline float shaperC (const float* y, float u) noexcept
+{
+    if (u <= 0.0f) return y ? y[0] : 0.0f;
+    if (u >= 1.0f) return y ? y[512] : 1.0f;
+    if (!y) return u;
+    const float s = 512.0f * u;
+    const int i = std::min (static_cast<int> (s), 511);
+    const float t = s - static_cast<float> (i);
+    return y[i] + (y[i + 1] - y[i]) * t;
+}
+
+/** The 512-segment interpolation of the curve's cumulative integral (null pair: identity u^2 / 2 for u in [0, 1]). */
+inline float shaperI (const float* y, const float* I, float u) noexcept
+{
+    if (!y || !I)
+    {
+        if (u <= 0.0f) return 0.0f;
+        if (u >= 1.0f) return u - 0.5f;
+        return 0.5f * u * u;
+    }
+    if (u <= 0.0f) return y[0] * u;
+    if (u >= 1.0f) return I[512] + y[512] * (u - 1.0f);
+    constexpr float h = 1.0f / 512.0f;
+    const float s = 512.0f * u;
+    const int i = std::min (static_cast<int> (s), 511);
+    const float t = s - static_cast<float> (i);
+    return I[i] + h * (y[i] * t + 0.5f * (y[i + 1] - y[i]) * t * t);
+}
+
+/** One sample of the X-Shaper (types 12 and 13): x = raw input, m = morph in [0, 1], curves A and B with their cumulative integrals. */
+inline float stepShaper (int type, State& s, float x, float m, const float* yA, const float* IA, const float* yB, const float* IB) noexcept
+{
+    auto evalNaive = [type, m, yA, yB] (float v) noexcept -> float
+    {
+        if (type == 13)
+        {
+            const float u = 0.5f * (v + 1.0f);
+            const float c = (1.0f - m) * shaperC (yA, u) + m * shaperC (yB, u);
+            return 2.0f * c - 1.0f;
+        }
+        else
+        {
+            if (v == 0.0f)
+                return 0.0f;
+            const float u = std::min (std::fabs (v), 1.0f);
+            const float c = (1.0f - m) * shaperC (yA, u) + m * shaperC (yB, u);
+            return v > 0.0f ? c : -c;
+        }
+    };
+
+    auto evalF = [type, m, yA, IA, yB, IB] (float v) noexcept -> float
+    {
+        if (type == 13)
+        {
+            const float u = 0.5f * (v + 1.0f);
+            const float C = (1.0f - m) * shaperI (yA, IA, u) + m * shaperI (yB, IB, u);
+            return 4.0f * C - 2.0f * u;
+        }
+        else
+        {
+            const float u = std::fabs (v);
+            return (1.0f - m) * shaperI (yA, IA, u) + m * shaperI (yB, IB, u);
+        }
+    };
+
+    if (!(std::fabs (x) < 1.0e6f)) // too large or not finite: reset the pair and return the naive law
+    {
+        const float c = x != x ? 0.0f : (x > 0.0f ? 1.0e6f : -1.0e6f);
+        s.x = 0.0f;
+        s.g = m;
+        s.b = evalF (0.0f);
+        return evalNaive (c);
+    }
+    if (s.g != m) // morph changed: recompute stored integral at previous x
+    {
+        s.b = evalF (s.x);
+        s.g = m;
+    }
+    const float Fx = evalF (x);
+    const float dx = x - s.x;
+    float y;
+    if (std::fabs (dx) < kEps)
+        y = evalNaive (0.5f * (x + s.x));
+    else
+        y = (Fx - s.b) / dx;
+    s.x = flushDenormal (x);
+    s.b = flushDenormal (Fx);
+    return y;
+}
 } // namespace adaa
 } // namespace own
 } // namespace synthyboy

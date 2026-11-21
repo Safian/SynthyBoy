@@ -16,6 +16,7 @@
 
 #include "../dsp/util.h"
 #include "content_set.h"
+#include "warp_adaa.h"
 #include "wt_osc.h"
 
 namespace synthyboy
@@ -183,6 +184,7 @@ private:
     const ContentSet* boundSet = nullptr;
     int oscIdx = 0;
     OscTick tick;
+    warpadaa::State postAa[kMaxU][2][2] = {};
     LibParams lp;
     int U = 1;
     Unison uni[kMaxU];
