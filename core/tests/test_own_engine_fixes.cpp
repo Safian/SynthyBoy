@@ -369,6 +369,33 @@ TEST (own_master_tune_is_a_modulation_destination)
     CHECK (z.first > 10.0 * z.second);
 }
 
+// docs/engine-spec/01:176, 04:191: master.transpose is a modulation destination. A slot (macro 1 at 100 %, amount moves by expected semitones)
+// shifts the pitch of the voice. Range is -48 .. +48 semitones (width 96). With amount = +12.5 % (+12 / 96 * 100 %), moves by +12 semitones
+// (one octave up: 440 Hz -> 880 Hz); with amount = -12.5 %, moves by -12 semitones (one octave down: 440 Hz -> 220 Hz); with amount = 0 %, 440 Hz unmodulated.
+// Fails today because master.transpose is declared kAuto (not kMod), so dstChoice ("master.transpose") returns 0 (destination refused).
+TEST (own_master_transpose_is_a_modulation_destination)
+{
+    auto lines = [] (float amount, double hzA, double hzB)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "macro.1", 100);
+        set (*e, "mod01.source", srcChoice ("macro1"));
+        set (*e, "mod01.destination", dstChoice ("master.transpose"));
+        set (*e, "mod01.amount", amount);
+        const auto r = sbtest::render (*e, { sbtest::noteOn (0, 69) }, static_cast<int> (1.0 * kSr), 256);
+        return std::pair<double, double> { line (r.left, 0.3, 0.8, hzA), line (r.left, 0.3, 0.8, hzB) };
+    };
+    CHECK (dstChoice ("master.transpose") > 0.0f);
+    const double up = 440.0 * 2.0, down = 440.0 * 0.5;
+    const auto u = lines (12.5f, up, 440.0);
+    CHECK (u.first > 10.0 * u.second);
+    const auto d = lines (-12.5f, down, 440.0);
+    CHECK (d.first > 10.0 * d.second);
+    const auto z = lines (0.0f, 440.0, up);
+    CHECK (z.first > 10.0 * z.second);
+}
+
 // docs/engine-spec/06-effects.md section 1: "nothing is stepped". A jump of distortion.drive in the middle of a held note makes no click: the largest sample to sample step across the jump is
 // at most 2.5 times the largest step of the steady sound before and after it (a click is of the order of the signal, 10 .. 100 times). Before the fix the drive of the new period was
 // applied at once (x8.3 on the step). quality.no_smoothing = 1 keeps the step: the two renders differ by more than -40 dB re peak after the jump.

@@ -199,9 +199,9 @@ TEST (fxi_keys_need_the_capability_bit_and_the_type_the_modules_bit)
     // a modulation destination that is a slot parameter needs the bit as well
     const size_t dest = static_cast<size_t> (findParamIndex (findParamByKey ("mod01.destination")->id));
     const size_t choice = modDestinationChoiceOf (static_cast<size_t> (fxInstanceKeys (0).p[0]));
-    CHECK_EQ (choice, static_cast<size_t> (520));
+    CHECK_EQ (choice, static_cast<size_t> (521));
     CHECK ((requiredCapsForValue (dest, static_cast<float> (choice)) & kCapFxInstances) != 0);
-    CHECK_EQ (modDestinationChoiceOf (static_cast<size_t> (fxInstanceKeys (15).p[23])), static_cast<size_t> (903));
+    CHECK_EQ (modDestinationChoiceOf (static_cast<size_t> (fxInstanceKeys (15).p[23])), static_cast<size_t> (904));
 }
 
 TEST (fxi_slots_survive_a_state_round_trip)

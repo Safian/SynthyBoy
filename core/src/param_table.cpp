@@ -560,7 +560,7 @@ constexpr ParamInfo kRaw[] = {
     whole ("master.polyphony", "Master Polyphony", "Master", 1.0f, 32.0f, 16.0f, Unit::voices, kAuto),
     whole ("master.bend_range", "Master Pitch Bend Range", "Master", 0.0f, 24.0f, 2.0f, Unit::semitone, kAuto),
     SB_PCT_RANGE ("master.velocity_track", "Master Velocity Tracking", "Master", -100.0f, 100.0f, 100.0f, kAuto),
-    whole ("master.transpose", "Master Transpose", "Master", -48.0f, 48.0f, 0.0f, Unit::semitone, kAuto),
+    whole ("master.transpose", "Master Transpose", "Master", -48.0f, 48.0f, 0.0f, Unit::semitone, kMod),
     cont ("master.tune", "Master Tune", "Master", -100.0f, 100.0f, 0.0f, Unit::cents, kMod),
     onOff ("master.legato", "Master Legato", "Master", false),
     cont ("master.portamento.time", "Portamento Time", "Master / Portamento", 0.0f, 8000.0f, 0.0f, Unit::ms, kAuto, 1, 0.3f),
@@ -1048,7 +1048,7 @@ constexpr size_t countModulatable() noexcept
 }
 
 static_assert (static_cast<size_t> (kNumModDestinations) == 1 + countModulatable() + kNumModSlots + 2,
-               "kNumModDestinations must be 1 + countModulatable (453 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28 + 21 of block B29 + 3 of block B30 + 256 of block B31 + 3 of block B32 + 3 of block B34) + 64 mod amounts + portamento + polyphony");
+               "kNumModDestinations must be 1 + countModulatable (454 + 384 of block B22 + 3 of block B23 + 2 of block B25 + 3 of block B27 + 51 of block B28 + 21 of block B29 + 3 of block B30 + 256 of block B31 + 3 of block B32 + 3 of block B34) + 64 mod amounts + portamento + polyphony");
 } // namespace
 
 const ParamInfo* paramTable() noexcept { return kTable.items; }

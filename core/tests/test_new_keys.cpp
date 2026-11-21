@@ -59,9 +59,9 @@ TEST (counts_and_constants)
     CHECK (paramCount() <= kMaxParams);
     CHECK_EQ (kMaxParams, static_cast<size_t> (4096)); // raised for block B22 (FX instance pool)
     CHECK_EQ (kNumModSources, 57);
-    CHECK_EQ (kNumModDestinations, 1249);
+    CHECK_EQ (kNumModDestinations, 1250);
     CHECK_EQ (modSourceCount(), static_cast<size_t> (57));
-    CHECK_EQ (modDestinationCount(), static_cast<size_t> (1248));
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (1249));
     CHECK_EQ (kNumFxSlots, 16);
     CHECK_EQ (kNumWavetableChoices, 15); // + "Saw Down" (GROUPB WP-18)
     CHECK_EQ (kLfoShapeCustom, 12);
@@ -75,7 +75,7 @@ TEST (counts_and_constants)
             ++modulatable;
             newModulatable += i >= kNumKeysV2 ? 1 : 0;
         }
-    CHECK_EQ (modulatable, static_cast<size_t> (453 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256 + 3 + 3)); // 3: eq.mid2.cutoff / gain / resonance of B34, 3: oscN.spec.flt_frame of B32, 256: the modulatable rise / fall / delay / delay_beats of the 64 slots of B31, 3: oscN.multi.timbre of B30, 21: the 7 modulatable keys of oscN.spec.* of B29, 51: the 17 modulatable keys of oscN.gran.* of B28 // 2: delay.offset_left, reverb.feedback of B25 // 3: sub.phase, noise.stereo, noise.filter of B23
+    CHECK_EQ (modulatable, static_cast<size_t> (454 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256 + 3 + 3)); // 3: eq.mid2.cutoff / gain / resonance of B34, 3: oscN.spec.flt_frame of B32, 256: the modulatable rise / fall / delay / delay_beats of the 64 slots of B31, 3: oscN.multi.timbre of B30, 21: the 7 modulatable keys of oscN.spec.* of B29, 51: the 17 modulatable keys of oscN.gran.* of B28 // 2: delay.offset_left, reverb.feedback of B25 // 3: sub.phase, noise.stereo, noise.filter of B23
     CHECK_EQ (newModulatable, static_cast<size_t> (184 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256 + 3 + 3)); // 134 + the 8 FX levels of B16 + the 12 of B14 + 8 of B17 + 10 of B18 + 11 of B15 + 1 of B20 (master.stereo_routing) + the 384 pool parameters of B22
 }
 
@@ -249,8 +249,8 @@ TEST (choice_lists_are_append_only)
         CHECK_EQ (choiceCount (byKey (key)), static_cast<size_t> (58));
         CHECK_EQ (byKey (key).max, 57.0f);
     }
-    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (1249));
-    CHECK_EQ (byKey ("mod64.destination").max, 1248.0f);
+    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (1250));
+    CHECK_EQ (byKey ("mod64.destination").max, 1249.0f);
 
     // MANUALCHECK: the delay mode Tap->Delay of Serum 2 (manual p.166) is appended to the four Vital styles
     {
@@ -304,27 +304,27 @@ TEST (destination_numbers_of_version_2_do_not_move)
             CHECK_EQ (modDestinationParamIndex (next), static_cast<int> (i));
             ++next;
         }
-    CHECK_EQ (next, static_cast<size_t> (270));
+    CHECK_EQ (next, static_cast<size_t> (271));
 
     // 13-new-keys.md section 2: B01 270-273, B02 274-289, B04 290-319, B09 320-337, B10 338-356, B11 357-365, B12 366-403, B16 404-411, B14 412-423, B17 424-431, B18 432-441
     struct Range { const char* first; int firstChoice; const char* last; int lastChoice; };
     const Range ranges[] = {
-        { "macro.5", 270, "macro.8", 273 },
-        { "lfo9.rate", 274, "lfo10.keytrack_tune", 289 },
-        { "env1.delay_beats", 290, "env6.release_beats", 319 },
-        { "osc1.sample.scan", 320, "osc3.warp2.spread", 337 },
-        { "osc1.filter_blend", 338, "direct.level", 356 },
-        { "filter1.var", 357, "fxfilter.level", 365 },
-        { "hyperdim.rate", 366, "splitter_ms.level", 403 },
-        { "chorus.level", 404, "reverb.level", 411 }, // B16: the FX levels
-        { "osc1.pitch_coarse", 412, "osc3.unison.blend_shape", 423 }, // B14
-        { "compressor.crossover_low", 424, "reverb.diff_b", 431 }, // B17
-        { "sub.octave", 432, "noise.phase", 441 }, // B18
-        { "master.stereo_spread", 442, "lfo10.swing", 452 }, // B15
-        { "master.stereo_routing", 453, "master.stereo_routing", 453 }, // B20
-        { "mod01.amount", 454, "mod64.amount", 517 },
-        { "master.portamento.time", 518, "master.portamento.time", 518 },
-        { "master.polyphony", 519, "master.polyphony", 519 },
+        { "macro.5", 271, "macro.8", 274 },
+        { "lfo9.rate", 275, "lfo10.keytrack_tune", 290 },
+        { "env1.delay_beats", 291, "env6.release_beats", 320 },
+        { "osc1.sample.scan", 321, "osc3.warp2.spread", 338 },
+        { "osc1.filter_blend", 339, "direct.level", 357 },
+        { "filter1.var", 358, "fxfilter.level", 366 },
+        { "hyperdim.rate", 367, "splitter_ms.level", 404 },
+        { "chorus.level", 405, "reverb.level", 412 }, // B16: the FX levels
+        { "osc1.pitch_coarse", 413, "osc3.unison.blend_shape", 424 }, // B14
+        { "compressor.crossover_low", 425, "reverb.diff_b", 432 }, // B17
+        { "sub.octave", 433, "noise.phase", 442 }, // B18
+        { "master.stereo_spread", 443, "lfo10.swing", 453 }, // B15
+        { "master.stereo_routing", 454, "master.stereo_routing", 454 }, // B20
+        { "mod01.amount", 455, "mod64.amount", 518 },
+        { "master.portamento.time", 519, "master.portamento.time", 519 },
+        { "master.polyphony", 520, "master.polyphony", 520 },
     };
     for (const auto& r : ranges)
     {
@@ -340,7 +340,7 @@ TEST (destination_numbers_of_version_2_do_not_move)
 
     // every choice 1..453 names a modulatable parameter, in strictly increasing table order
     int previous = -1;
-    for (size_t c = 1; c <= 453; ++c)
+    for (size_t c = 1; c <= 454; ++c)
     {
         const int p = modDestinationParamIndex (c);
         CHECK (p > previous);
