@@ -142,7 +142,11 @@ Lines found: 80 in 9 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 83.
+Commits found: 84.
+
+### 99758d11 (2026-11-21) dsp-knowledge: host redraw rate of native widgets; TODO: modified star with the self-test build
+
+- matching line: dsp-knowledge: host redraw rate of native widgets; TODO: modified star with the self-test build
 
 ### 2b21ffef (2026-11-21) TODO: Q-Link touch overlay of the host not measured (needs the hardware knobs)
 
