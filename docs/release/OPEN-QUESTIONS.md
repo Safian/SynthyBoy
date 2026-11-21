@@ -144,7 +144,39 @@ Lines found: 80 in 10 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 60.
+Commits found: 68.
+
+### ba96f3be (2026-11-21) TODO: memory probe tiers are equal because prepare() does not scale with the tier (memory plan item)
+
+- matching line: TODO: memory probe tiers are equal because prepare() does not scale with the tier (memory plan item), rss_kb fix pending build
+
+### b5766d8c (2026-11-21) TODO: release screenshots of the main screen once the device build is final (owner)
+
+- matching line: TODO: release screenshots of the main screen once the device build is final (owner)
+
+### 6c8f5cb0 (2026-11-21) docs/MPC.md: memory on the Key 61 (engine probe and host series 1-3 tracks); TODO: 4th track and the
+
+- matching line: docs/MPC.md: memory on the Key 61 (engine probe and host series 1-3 tracks); TODO: 4th track and the host crash open
+
+### 32083e41 (2026-11-21) TODO: distortion plan items for the engine core owner (O2-O4, L1, Z1, owner decisions D1 D2 D4), rev
+
+- matching line: TODO: distortion plan items for the engine core owner (O2-O4, L1, Z1, owner decisions D1 D2 D4), reverb-convolve remaining batches
+
+### b908cbac (2026-11-21) scripts/build-arm32-test.sh: one test or bench target for 32 bit ARM in a Debian 12 container (stati
+
+- matching line: scripts/build-arm32-test.sh: one test or bench target for 32 bit ARM in a Debian 12 container (static, own engine); TODO: missing builder image line removed
+
+### 51a61171 (2026-11-21) TODO: perf plan T18 (docs) still to assign
+
+- matching line: TODO: perf plan T18 (docs) still to assign
+
+### d3990a77 (2026-11-21) TODO: Key 61 memory measurement 1 results, probe tier and rss_kb issues, missing armv7 builder image
+
+- matching line: TODO: Key 61 memory measurement 1 results, probe tier and rss_kb issues, missing armv7 builder image
+
+### 15d5550c (2026-11-21) docs: Key 61 has 4 GB RAM (measured MemTotal), TODO: memory measurement 1 results, probe tier and rs
+
+- matching line: docs: Key 61 has 4 GB RAM (measured MemTotal), TODO: memory measurement 1 results, probe tier and rss_kb issues, missing armv7 builder image
 
 ### e8080e9b (2026-11-20) TODO.md: plan wave 1 merged, filter arena held back, memory numbers, Spectral start budget
 
