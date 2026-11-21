@@ -342,3 +342,29 @@ TEST (own_splitter_bands_compensate_latency_before_merge)
     }
 }
 
+
+// docs/engine-spec/01:176, 04:191: master.tune is a modulation destination. A slot (macro 1 at 100 %, amount +-50 % of the -100 .. +100 cent range = +-100 cents) moves the pitch of the voice;
+// before the fix the voice read the knob (g.base) and the slot did nothing. 440 Hz note: +100 cents = 466.164 Hz, -100 cents = 415.305 Hz. Goertzel lines over 0.3 .. 0.8 s, 5 Hz apart from the
+// unmodulated line (a 0.5 s Hann window resolves ~3 Hz), the wanted line must be 10x the line of the unmodulated pitch.
+TEST (own_master_tune_is_a_modulation_destination)
+{
+    auto lines = [] (float amount, double hzA, double hzB)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "macro.1", 100);
+        set (*e, "mod01.source", srcChoice ("macro1"));
+        set (*e, "mod01.destination", dstChoice ("master.tune"));
+        set (*e, "mod01.amount", amount);
+        const auto r = sbtest::render (*e, { sbtest::noteOn (0, 69) }, static_cast<int> (1.0 * kSr), 256);
+        return std::pair<double, double> { line (r.left, 0.3, 0.8, hzA), line (r.left, 0.3, 0.8, hzB) };
+    };
+    CHECK (dstChoice ("master.tune") > 0.0f);
+    const double up = 440.0 * std::pow (2.0, 1.0 / 12.0), down = 440.0 * std::pow (2.0, -1.0 / 12.0);
+    const auto u = lines (50.0f, up, 440.0);
+    CHECK (u.first > 10.0 * u.second);
+    const auto d = lines (-50.0f, down, 440.0);
+    CHECK (d.first > 10.0 * d.second);
+    const auto z = lines (0.0f, 440.0, up);
+    CHECK (z.first > 10.0 * z.second);
+}
