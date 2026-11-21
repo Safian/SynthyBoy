@@ -142,7 +142,27 @@ Lines found: 80 in 9 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 88.
+Commits found: 93.
+
+### 7bb4677a (2026-11-21) TODO + plan: disabled blocks rule (grey, not tappable)
+
+- matching line: TODO + plan: disabled blocks rule (grey, not tappable)
+
+### e1307bfb (2026-11-21) TODO: start cache on at tier low (owner ok), disabled look and no touch for switched-off blocks (own
+
+- matching line: TODO: start cache on at tier low (owner ok), disabled look and no touch for switched-off blocks (owner)
+
+### 7d64fb66 (2026-11-21) TODO: Key 61 CPU comparison against a stock Akai synth
+
+- matching line: TODO: Key 61 CPU comparison against a stock Akai synth
+
+### 2e01f2c9 (2026-11-21) TODO: no total CPU budget for stacked effect instances on tier low
+
+- matching line: TODO: no total CPU budget for stacked effect instances on tier low
+
+### a89c8b96 (2026-11-21) TODO: tab order with Play and Macros on the first function key
+
+- matching line: TODO: tab order with Play and Macros on the first function key
 
 ### 9267257d (2026-11-21) TODO: overlay thread time split on the Key 61
 
