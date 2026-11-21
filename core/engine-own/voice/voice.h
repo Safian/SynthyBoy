@@ -246,7 +246,7 @@ private:
         int warp[2] = {};
         float blend = 0, send[2] = {}, fixedNote = 0, coarseSemis = 0, transpose = 0, tune001 = 0, frame = 0, frameSpread = 0, level = 0, pan = 0, panRight = 0, detuneSemis = 0, curve = 0,
               blendShape = 0, spread = 0, uniBlend = 0, morphAmount = 0, morphSpread = 0, remapRise = 0, remapFall = 0;
-        float warpAmount[2] = {}, warpPhase[2] = {};
+        float warpAmount[2] = {}, warpPhase[2] = {}, warpSpread[2] = {};
         bool env1 = true, track = true, bendTrack = true, smooth = false, remapOn = false;
         float libV[kLibKeyCount] = {};   // the keys of the library oscillators, filled when a library type first needs them (libValid)
         bool libValid = false;

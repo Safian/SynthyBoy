@@ -191,6 +191,7 @@ static std::vector<Context> contextsForBase (const ParamInfo& info)
         else if (starts (sub, "warp.") || starts (sub, "warp2."))
         {
             const std::string typeKey = P + (starts (sub, "warp2.") ? ".warp2.type" : ".warp.type");
+            const std::string amtKey = P + (starts (sub, "warp2.") ? ".warp2.amount" : ".warp.amount");
             if (ends (sub, ".type"))
                 add ("base", pre);
             else
@@ -198,7 +199,7 @@ static std::vector<Context> contextsForBase (const ParamInfo& info)
                 const std::set<int> first = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
                 for (int t : first)
                     add ("warp" + std::to_string (t), cat (pre, { { typeKey, static_cast<float> (t) } }));
-                add ("warp+unison", cat (pre, { { typeKey, 1.0f }, { P + ".unison.voices", 5.0f } }));
+                add ("warp+unison", cat (pre, { { typeKey, 1.0f }, { amtKey, 30.0f }, { P + ".unison.voices", 5.0f } }));
                 for (int t : { 12, 14, 17, 20, 25, 27, 30, 34, 38, 41, 44, 47, 50, 52, 60, 76, 80 })
                     add ("warp" + std::to_string (t), cat (pre, { { typeKey, static_cast<float> (t) } }));
             }
