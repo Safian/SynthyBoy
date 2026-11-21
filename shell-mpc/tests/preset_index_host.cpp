@@ -41,7 +41,7 @@ int main (int argc, char** argv)
     check (std::system (cmd.c_str()) == 0, "the index script ran");
 
     const auto scanned = scanPrograms (dir);
-    check (scanned.size() == 160, "the scan finds the 160 factory presets");
+    check (scanned.size() == 184, "the scan finds the 184 factory presets");
     std::vector<ProgramEntry> fromIndex;
     std::string why;
     check (loadPresetIndex (dir, fromIndex, why) && why == "index", "a current index is used");

@@ -122,16 +122,16 @@ class TestNaming(unittest.TestCase):
             ]
         )
 
-    def test_all_160_factory_presets_planned_with_valid_browser_categories(self):
+    def test_all_184_factory_presets_planned_with_valid_browser_categories(self):
         presets_dir = REPO / "content" / "presets"
         cats = gen.preset_categories(presets_dir)
-        self.assertEqual(len(cats), 160)
+        self.assertEqual(len(cats), 184)
         chunks = [(name, b"{}") for name in sorted(cats.keys())]
         rows = gen.plan(chunks, presets_dir, categories_file=gen.CATEGORIES_FILE)
-        self.assertEqual(len(rows), 160)
+        self.assertEqual(len(rows), 184)
 
-        # Check sequential numbering 000..159
-        self.assertEqual([r[0] for r in rows], list(range(160)))
+        # Check sequential numbering 000..183
+        self.assertEqual([r[0] for r in rows], list(range(184)))
 
         # Check that no category word contains slash and all match valid group names
         for number, folder, cword, name, chunk in rows:
@@ -145,7 +145,7 @@ class TestNaming(unittest.TestCase):
         (file name, <preset> name, chunk name) and no content pack entry ends with "*"."""
         presets_dir = REPO / "content" / "presets"
         cats = gen.preset_categories(presets_dir)
-        self.assertEqual(len(cats), 160)
+        self.assertEqual(len(cats), 184)
         for name in cats:
             self.assertFalse(name.rstrip().endswith("*"), name)
         chunks = [(name, ('{"mpcProgram":1,"mpcProgramName":%s}' % json.dumps(name)).encode("utf-8")) for name in sorted(cats)]
@@ -155,7 +155,7 @@ class TestNaming(unittest.TestCase):
                 out = Path(t, "f" if by_folders else "flat")
                 gen.write_set(rows, out, gen.DEVICE_PLUGIN_PATHS["xl"], by_folders=by_folders)
                 files = sorted(out.rglob("*.xpl"))
-                self.assertEqual(len(files), 160)
+                self.assertEqual(len(files), 184)
                 for f in files:
                     self.assertFalse(f.stem.rstrip().endswith("*"), f.name)
                     parsed = fmt.parse_xpl(f.read_text(encoding="utf-8"))
