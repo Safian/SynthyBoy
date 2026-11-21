@@ -135,6 +135,7 @@ Gemini 4 Neon írta, kódolvasásból, mérés nélkül; megvalósítás előtt 
 - A kutatásban csak emlékezetből felsorolt forrásokat (Bristow-Johnson, Brandt, Dattorro, Bencina, MPE- és SFZ-specifikáció) meg kell nyitni, mielőtt a tudásmappába kerülnek.
 
 ## Repó-rend
+- `scripts/tests/test_render_ui_gallery.py` a repó `build/` könyvtárában fordítja a `ui_gallery_host`-ot: ha az a könyvtár MPC shell nélkül van konfigurálva, „unknown target" hibával bukik (2026-11-21, develop `08185fb2`), és egy Python-teszt mellékesen fordít. Kész, ha a teszt kihagyja magát, amikor a cél nincs konfigurálva (vagy `--host-bin`/környezeti változóval kapja a binárist), és nem fordít.
 - `agy/g54-pack-versions-010` (0.1.0 verziószövegek): beolvasztás a kiadásjelölt körben.
 - `agy/g84-reduced-set-proposal` (csökkentett preset-készlet): az owner döntésére vár.
 - `work/sound-batch-3` (24 új preset): meghallgatásra vár.
