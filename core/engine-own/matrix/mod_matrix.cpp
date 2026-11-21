@@ -23,10 +23,11 @@ bool startsWith (const char* s, const char* prefix) noexcept
     return std::strncmp (s, prefix, std::strlen (prefix)) == 0;
 }
 
-/** Per voice parameters: everything the voice reads; the rest (master, effects) is modulated by the global sources only. */
+/** Per voice parameters: everything the voice reads; the rest (master, effects) is modulated by the global sources only. The master tune and transpose are the exception: the pitch of
+    the note is the voice's, so the voice matrix modulates them (docs/engine-spec/01:176, 04:191). */
 bool isVoiceParam (const ParamInfo& info) noexcept
 {
-    static const char* const prefixes[] = { "osc", "sub.", "noise.", "filter1.", "filter2.", "env", "lfo", "rlfo", "mod" };
+    static const char* const prefixes[] = { "osc", "sub.", "noise.", "filter1.", "filter2.", "env", "lfo", "rlfo", "mod", "master.tune", "master.transpose" };
     for (const char* p : prefixes)
         if (startsWith (info.key, p))
             return true;
