@@ -590,3 +590,55 @@ TEST (own_sub_phase_contiguous_poly_and_mono_behavior)
     const auto poly0 = renderSub (0.0f, 0.0f), poly1 = renderSub (1.0f, 0.0f);
     CHECK (diffDb (poly0, poly1, note2Sample) > -30.0);
 }
+
+TEST (own_lfo_host_sync_requires_playing_transport)
+{
+    // LFO Host Sync (docs/engine-spec/03-envelopes-lfos.md:178, 200, events.h:52):
+    // In Free-run (sync_type 1), lfoN.host anchors the LFO phase to the host transport clock
+    // (g.songSeconds = songPosBeats * 60 / bpm) when g.playing is true.
+    // When the transport is stopped (playing == false), LFOs in HOST mode run free
+    // using the engine's internal free-running phase, making lfoN.host inert by design.
+    auto renderLfo = [] (int lfoNum, float hostVal, bool transportPlaying, double songBeats)
+    {
+        auto e = make();
+        sinePatch (*e);
+        const std::string L = "lfo" + std::to_string (lfoNum);
+        set (*e, (L + ".rate").c_str(), 4.0f);
+        set (*e, (L + ".sync_type").c_str(), 1.0f); // Free-run
+        set (*e, (L + ".host").c_str(), hostVal);
+        set (*e, "mod01.source", srcChoice (L.c_str()));
+        set (*e, "mod01.destination", dstChoice ("osc1.level"));
+        set (*e, "mod01.amount", 80.0f);
+
+        TransportInfo tr;
+        tr.bpm = 120.0;
+        tr.playing = transportPlaying;
+        tr.songPosBeats = songBeats;
+        e->setTransport (tr);
+
+        return sbtest::render (*e, { sbtest::noteOn (0, 48) }, static_cast<int> (0.3 * kSr), 256);
+    };
+
+    auto diffDb = [] (const sbtest::Rendered& a, const sbtest::Rendered& b)
+    {
+        double d = 0.0, p = 1.0e-9;
+        for (size_t i = 0; i < a.left.size(); ++i)
+        {
+            d = std::max (d, std::fabs (static_cast<double> (a.left[i] - b.left[i])));
+            p = std::max (p, std::fabs (static_cast<double> (a.left[i])));
+        }
+        return 20.0 * std::log10 (std::max (d / p, 1.0e-9));
+    };
+
+    // 1. Stopped transport (playing == false): host sync has no effect (audit baseline)
+    const auto stopped0 = renderLfo (1, 0.0f, false, 0.0), stopped1 = renderLfo (1, 1.0f, false, 0.0);
+    CHECK (diffDb (stopped0, stopped1) < -100.0);
+
+    // 2. Running transport (playing == true, songPosBeats = 1.0): lfo1.host produces distinct phase
+    const auto play1_0 = renderLfo (1, 0.0f, true, 1.0), play1_1 = renderLfo (1, 1.0f, true, 1.0);
+    CHECK (diffDb (play1_0, play1_1) > -30.0);
+
+    // 3. Running transport for lfo10.host produces distinct phase
+    const auto play10_0 = renderLfo (10, 0.0f, true, 1.0), play10_1 = renderLfo (10, 1.0f, true, 1.0);
+    CHECK (diffDb (play10_0, play10_1) > -30.0);
+}
