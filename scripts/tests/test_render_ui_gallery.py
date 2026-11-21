@@ -3,12 +3,15 @@
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 try:
     from PIL import Image
@@ -20,13 +23,22 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPT = ROOT / "scripts" / "render-ui-gallery.py"
 LAYOUT_JSON = ROOT / "shell-mpc" / "overlay" / "overlay_layout.json"
 
+spec = importlib.util.spec_from_file_location("render_ui_gallery", SCRIPT)
+gal = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gal)
+
 
 class TestRenderUiGallery(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Locate host binary
         cls.host_bin = None
-        for bdir in [ROOT / "build", ROOT / "build-test", ROOT / "build-mpc"]:
+        env_host = os.environ.get("SYNTHYBOY_UI_GALLERY_HOST")
+        if env_host and Path(env_host).is_file():
+            cls.host_bin = Path(env_host)
+            return
+
+        for bdir in [ROOT / "build", ROOT / "build-test", ROOT / "build-mpc", ROOT / "build-native"]:
             for sub in ["shell-mpc", ""]:
                 b = bdir / sub / "ui_gallery_host"
                 if b.is_file():
@@ -36,6 +48,9 @@ class TestRenderUiGallery(unittest.TestCase):
                 break
 
     def test_layout_views_present_in_gallery(self):
+        if not self.host_bin:
+            raise unittest.SkipTest("No ui_gallery_host binary given or found (pass --host-bin or set SYNTHYBOY_UI_GALLERY_HOST)")
+
         with open(LAYOUT_JSON, "r", encoding="utf-8") as f:
             layout = json.load(f)
         views = layout.get("views", [])
@@ -80,6 +95,34 @@ class TestRenderUiGallery(unittest.TestCase):
                         self.assertGreater(colors, 1, f"{png_file.name} must not be a single colour (found {colors} colors)")
                 else:
                     self.assertGreater(png_file.stat().st_size, 1000, f"{png_file.name} is too small to be valid")
+
+    def test_no_build_invoked_when_host_bin_not_given(self):
+        """Assert that render-ui-gallery does not invoke cmake/ninja when no host binary is given."""
+        # Case 1: Configured build dir exists with CMakeCache.txt
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            bdir = tmp_root / "build"
+            bdir.mkdir()
+            (bdir / "CMakeCache.txt").write_text("# mock CMakeCache without ui_gallery_host\n")
+
+            with patch.object(gal.subprocess, "run") as mock_run:
+                with self.assertRaises(RuntimeError):
+                    gal.find_or_build_host(tmp_root)
+
+                for call in mock_run.call_args_list:
+                    cmd_args = call[0][0] if call[0] else []
+                    cmd_str = " ".join(str(c) for c in cmd_args)
+                    self.assertNotIn("cmake", cmd_str, f"cmake was unexpectedly invoked: {cmd_str}")
+                    self.assertNotIn("ninja", cmd_str, f"ninja was unexpectedly invoked: {cmd_str}")
+                self.assertEqual(mock_run.call_count, 0, "No build commands (cmake/ninja) should be executed")
+
+        # Case 2: No configured build dir exists
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            with patch.object(gal.subprocess, "run") as mock_run:
+                with self.assertRaises(RuntimeError):
+                    gal.find_or_build_host(tmp_root)
+                self.assertEqual(mock_run.call_count, 0, "No build commands (cmake/ninja) should be executed")
 
 
 if __name__ == "__main__":
