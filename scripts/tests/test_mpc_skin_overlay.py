@@ -274,16 +274,18 @@ class OverlaySkinTests(unittest.TestCase):
         self.assertEqual(len(tabs), 22)
         self.assertLessEqual(len(tabs), 32, "the host's limit")
         f1, f2 = self.tab("Filter 1"), self.tab("Filter 2")
-        self.assertEqual((f1["fnKeyIndex"], f2["fnKeyIndex"]), (4, 4))   # the Play key is the first one
+        self.assertEqual((f1["fnKeyIndex"], f2["fnKeyIndex"]), (7, 7))   # the Play key is the first one
         self.assertEqual((f1["fnKeySubIndex"], f2["fnKeySubIndex"]), (0, 1))
         self.assertEqual(len({(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs}), 22)
         for gone in ("F1 Model", "F2 Model", "Mod 3-4", "Mod Amt", "FX Filt", "Distort", "Comp 1", "Comp 2", "EQ", "Chorus", "Delay", "Phaser", "FX Level", "Osc 1", "Osc1 Shp", "Osc 2", "Osc2 Shp", "Osc 3", "Osc3 Shp", "Sub/Nois"):
             self.assertFalse([t for t in tabs if t["tabName"] == gone], gone)
 
-    PAGE_TABS = ("Filter 1", "Filter 2", "Osc A", "Osc B", "Osc C", "Sub", "Noise", "Env 1", "Env 2", "Env 3", "Env 4", "LFO 1", "LFO 2", "LFO 3", "LFO 4", "Macros", "Mixer", "Mod", "FX", "Master", "Voice")
+    PAGE_TABS = ("Osc A", "Osc B", "Osc C", "Sub", "Noise", "Env 1", "Env 2", "Env 3", "Env 4", "LFO 1", "LFO 2", "LFO 3", "LFO 4", "FX", "Macros", "Mixer", "Filter 1", "Filter 2", "Mod", "Master", "Voice")
 
     def test_the_page_tabs_are_the_views_of_the_layout(self):
         layout = json.loads(SHARED_JSON.read_text(encoding="utf-8"))
+        overlay = json.loads(OVERLAY_LAYOUT.read_text(encoding="utf-8"))
+        self.assertEqual([v["tab"] for v in layout["views"]], [p["name"] for p in overlay["pages"]], "the views table equals the layout order")
         views = {v["tab"] for v in layout["views"] if v["kind"] in PAGE_KINDS and v["kind"] != "play"}
         self.assertEqual(views, set(self.PAGE_TABS))
 
@@ -422,7 +424,7 @@ class OverlaySkinTests(unittest.TestCase):
         tabs = self.o_tui["pageData"]["tabs"]
         self.assertEqual([t["tabName"] for t in tabs[:1]], ["Play"])
         self.assertEqual([(t["fnKeyIndex"], t["fnKeySubIndex"]) for t in tabs[:1]], [(0, 0)])
-        self.assertEqual(tabs[1]["tabName"], "Macros")   # one Play tab: Macros is the second
+        self.assertEqual(tabs[1]["tabName"], "Osc")   # one Play tab: Osc is the second
         self.assertEqual(tabs[1]["fnKeyIndex"], 1)
         self.assertEqual(len({t["fnKeyIndex"] for t in tabs}), 10, "ten function keys")
 
@@ -430,9 +432,9 @@ class OverlaySkinTests(unittest.TestCase):
         # the host draws the tabName of the current sub-tab on the function key: the first sub-tab of every key carries the short label
         tabs = self.o_tui["pageData"]["tabs"]
         first = [t["tabName"] for t in tabs if t["fnKeySubIndex"] == 0]
-        self.assertEqual(first, ["Play", "Macros", "Osc", "Mix", "Filter", "Env", "LFO", "Mod", "FX", "Master"])
+        self.assertEqual(first, ["Play", "Osc", "Env", "LFO", "FX", "Macros", "Mix", "Filter", "Mod", "Master"])
         later = [t["tabName"] for t in tabs if t["fnKeySubIndex"] > 0]
-        self.assertEqual(later, ["Osc B", "Osc C", "Sub", "Noise", "Filter 2", "Env 2", "Env 3", "Env 4", "LFO 2", "LFO 3", "LFO 4", "Voice"])
+        self.assertEqual(later, ["Osc B", "Osc C", "Sub", "Noise", "Env 2", "Env 3", "Env 4", "LFO 2", "LFO 3", "LFO 4", "Filter 2", "Voice"])
         names = [t["tabName"] for t in tabs]
         self.assertEqual(len(names), len(set(names)), "the tab names of the finished skin are unique")
         self.assertTrue(all(1 <= len(n) <= 8 for n in names))

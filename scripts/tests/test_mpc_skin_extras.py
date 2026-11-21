@@ -195,7 +195,7 @@ class SkinExtrasTest(unittest.TestCase):
     def test_errors_stop_with_clear_message(self):
         cases = {
             "unknown key": ("def apply(tui, qlinks, ctx):\n    ctx.param_index('nope.nothing')\n", "unknown parameter key 'nope.nothing'"),
-            "unknown tab": ("def apply(tui, qlinks, ctx):\n    ctx.tab('No Such Tab')\n", "unknown tab 'No Such Tab'; tabs are: 'Play', 'Macros'"),
+            "unknown tab": ("def apply(tui, qlinks, ctx):\n    ctx.tab('No Such Tab')\n", "unknown tab 'No Such Tab'; tabs are: 'Play', 'Osc A'"),
             "raises": ("def apply(tui, qlinks, ctx):\n    raise ValueError('boom')\n", "ValueError: boom"),
             "no apply": ("x = 1\n", "has no apply"),
             "syntax": ("def apply(:\n", "SyntaxError"),
