@@ -37,7 +37,7 @@ Not listed because it is fixed:
 ## B. Every matching line (generated)
 
 <!-- BEGIN AUTO-MARKERS -->
-Lines found: 81 in 10 files.
+Lines found: 80 in 9 files.
 
 ### README.md
 
@@ -130,9 +130,6 @@ Lines found: 81 in 10 files.
 
 - docs/PARAMETERS.md:3225 [pending]: * **Sample oscillator**: pending (Phase 4): it needs content packs (docs/ARCHITECTURE.md section 6). The engine has one; the noise oscillator above is its bu...
 - docs/PARAMETERS.md:3226 [pending]: * **Free-form LFO shapes / wavetable editing**: pending (Phase 5, UI): LFOs use the built-in shape list and oscillators the built-in wavetables; there is no ...
-### docs/PERFORMANCE.md
-
-- docs/PERFORMANCE.md:86 [still open]: (ARCHITECTURE 2.2). The measurements on an MPC are in docs/MPC.md (own engine, tier low); the first measurement on a mid-range phone is still open (ARCHITECT...
 ### docs/QUALITY.md
 
 - docs/QUALITY.md:54 [pending]: per-key values go from -35 dB to below -90 dB, depending on where the first partial above Nyquist falls). The cause is visible in the
@@ -145,7 +142,11 @@ Lines found: 81 in 10 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 69.
+Commits found: 70.
+
+### 07d8d238 (2026-11-21) TODO: test_render_ui_gallery builds in the repo build dir and fails when it has no MPC shell
+
+- matching line: TODO: test_render_ui_gallery builds in the repo build dir and fails when it has no MPC shell
 
 ### ba96f3be (2026-11-21) TODO: memory probe tiers are equal because prepare() does not scale with the tier (memory plan item)
 
