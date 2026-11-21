@@ -239,6 +239,7 @@ static std::vector<Context> contextsForBase (const ParamInfo& info)
             add ("base", pre);
             add ("unison", cat (pre, { { P + ".unison.voices", 5.0f } }));
             add ("legato", cat (pre, { { "master.legato", 1.0f } }), "legato");
+            add ("phase-legato-poly", pre, "legato");
             add ("same", cat (pre, { { P + ".random_phase", 0.0f } }), "same");
         }
         else if (starts (sub, "pitch_") || sub == "fixed_pitch" || sub == "transpose_snap" || sub == "ratio_src")
