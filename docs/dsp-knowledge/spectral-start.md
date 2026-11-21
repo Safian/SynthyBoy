@@ -13,6 +13,7 @@
 - **Budget sweep** (interleaved, one session): rows under 1.5 blocks out of 12 Spectral rows:
   2400 us 0, 2000 us 4, 1700 us 10, 1400 us 8; single-run noise +-0.3 blocks, so 1700 and 1400
   are not separable. Steady-state p99 does not depend on the budget. `measured: budget-sweep-results.md`
+- **Start cache** (switch `Quality::spectralStartCache`, default off; `tier_bench --start-cache`; plan `docs/plans/spectral-start-cache.md`): the start frames are memoised per (inputs, channel, frame), bit-identical to the cache off. `test: own_spectral_start_cache_repeated_chord_is_bit_identical_and_second_strike_hits` (a 4x2 chord struck twice: strike 1 computes 24 frames, strike 2 hits 24 and computes none; the two renders have the same FNV hash), `spectral_the_start_cache_is_bit_identical_and_the_second_strike_makes_no_frame` (other start offsets, phase lock, filter, stereo, Smear bypass). Mac, indicative only (Spectral Gong Pad, low, retrigger 0.5 s, 20 s, two runs per variant, A/B/A/B): longest block 4.29 / 2.58 % off against 2.39 / 1.86 % on, p99 1.45 / 1.23 against 1.20 / 1.21; the A17 is not measured. `measured: tier_bench on the Mac, 2026-11-21`
 
 ## Decisions
 
@@ -20,6 +21,7 @@
 
 ## Open
 
+- Start cache on the Key 61: A/B/A on the device (measurement.md), then the default.
 - Gong Pad 8 Kill and Chord Morph 8 Steal stay around 1.6 blocks: more runs, or another lever
   (HYPOTHESIS: not budget-limited). Worker-thread start preparation was considered and
   deferred: no free core on the Key 61 (host audio threads on all four), and it makes the start

@@ -155,6 +155,7 @@ private:
     std::atomic<int> qualityTier { 2 };
     std::atomic<bool> tierLowCap { false };  // the quality is a plain tier low (Quality::economy negative, oversampling 1): setLowTierUnisonCap applies; a quality with explicit economy groups carries its own cap in maxUnison
     std::atomic<bool> spectralStartOn { false }; // spectralStartOf (quality): the ledger is configured from it on the audio thread, at a control period start
+    std::atomic<bool> spectralStartCacheOn { false }; // Quality::spectralStartCache: copied to the Spectral scratch at a control period start
     std::atomic<int> spectralStartBudget { 0 };  // Quality::spectralStartBudgetUs: 0 = spectral::kStartBudgetUs; read with spectralStartOn
     std::atomic<uint32_t> economyMask { 0 }; // the economy groups in force (Quality::economy, EconomyFlags); read at the start of every block
     std::atomic<bool> ultraRender { false };
