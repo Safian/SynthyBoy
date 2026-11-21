@@ -5,7 +5,7 @@
 # Usage:
 #   python3 scripts/gen-mpc-ui.py --params docs/params.json --pages docs/kick-pages.json --out <dir>
 #   python3 scripts/gen-mpc-ui.py --params docs/params.json --pages docs/kick-pages.json --out <dir> --page-ids osc1_main,filter1_main
-#   python3 scripts/gen-mpc-ui.py --params docs/params.json --pages docs/kick-pages.json --out <dir> --layout scripts/mpc-ui-pages.json
+#   python3 scripts/gen-mpc-ui.py --params docs/params.json --pages docs/kick-pages.json --out <dir> --layout scripts/overlay-skin/mpc-ui-pages-overlay.json
 #
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later

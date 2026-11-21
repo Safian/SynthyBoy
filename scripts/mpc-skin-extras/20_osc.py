@@ -5,7 +5,7 @@
 # Per tab "Osc N": a large picture of the selected wavetable in the upper two rows of the 4 x 4 grid (PICTURE below), the 8 knobs of
 # osc N Main in rows 3-4, and the Q-Link map rewritten so that those knobs are Q-Link 1-8 (the lower two hardware rows): the rows seen on the
 # screen are the rows of the hardware (Bank Direction "Column": Q-Link 4*(3-row)+col+1, row 0 = top, col 0 = left). The unison and the
-# shaping knobs are on the tab "OscN Shp" (scripts/mpc-ui-pages.json).
+# shaping knobs are on the tab "OscN Shp".
 #
 # The picture: one Image film strip per wavetable choice (15), each valid only while oscN.wavetable has that choice (bounds version 2,
 # IndexedEnabling, ui-reference 7.4); the strip frame follows oscN.frame. The 15 PNGs are shared by the three oscillators (same file names),

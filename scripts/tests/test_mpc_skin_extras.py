@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 PARAMS_JSON = ROOT / "docs" / "params.json"
 PAGES_JSON = ROOT / "docs" / "kick-pages.json"
-LAYOUT_JSON = ROOT / "scripts" / "mpc-ui-pages.json"
+LAYOUT_JSON = ROOT / "scripts" / "overlay-skin" / "mpc-ui-pages-overlay.json"
 REAL_EXTRAS = ROOT / "scripts" / "mpc-skin-extras"
 APPLY = ROOT / "scripts" / "apply-mpc-skin-extras.py"
 GEN = ROOT / "scripts" / "gen-mpc-ui.py"
@@ -32,7 +32,7 @@ MODULE_OK = textwrap.dedent('''
     def apply(tui, qlinks, ctx):
         import shutil
         shutil.copy(ctx.skins_dir.parent / "sample.png", ctx.skins_dir / "sample.png")
-        tab = ctx.tab("Osc 1")
+        tab = ctx.tab("Filter 2")
         tab["componentDefinition"]["componentsData"].append({
             "version": 2,
             "componentData": {"version": 1, "name": "Sample Image", "type": "Image", "data": {
@@ -137,7 +137,7 @@ class SkinExtrasTest(unittest.TestCase):
 
     def test_module_without_change_keeps_bytes(self):
         skins, extras = self.fresh()
-        (extras / "10_noop.py").write_text("def apply(tui, qlinks, ctx):\n    ctx.tab('Osc 1'); ctx.param_index('env1.delay')\n")
+        (extras / "10_noop.py").write_text("def apply(tui, qlinks, ctx):\n    ctx.tab('Filter 2'); ctx.param_index('env1.delay')\n")
         before = snapshot(skins)
         self.assertEqual(run_apply(skins, extras), (0, ""))
         self.assertEqual(snapshot(skins), before)
@@ -148,7 +148,7 @@ class SkinExtrasTest(unittest.TestCase):
         (extras / "10_sample.py").write_text(MODULE_OK)
         self.assertEqual(run_apply(skins, extras), (0, ""))
         tui = json.loads((skins / "TUI.json").read_text(encoding="utf-8"))
-        tab = next(t for t in tui["pageData"]["tabs"] if t["tabName"] == "Osc 1")
+        tab = next(t for t in tui["pageData"]["tabs"] if t["tabName"] == "Filter 2")
         last = tab["componentDefinition"]["componentsData"][-1]
         self.assertEqual(last["componentData"]["name"], "Sample Image")
         self.assertEqual(last["componentData"]["data"]["image"], "sample.png")
@@ -195,7 +195,7 @@ class SkinExtrasTest(unittest.TestCase):
     def test_errors_stop_with_clear_message(self):
         cases = {
             "unknown key": ("def apply(tui, qlinks, ctx):\n    ctx.param_index('nope.nothing')\n", "unknown parameter key 'nope.nothing'"),
-            "unknown tab": ("def apply(tui, qlinks, ctx):\n    ctx.tab('No Such Tab')\n", "unknown tab 'No Such Tab'; tabs are: 'Macros'"),
+            "unknown tab": ("def apply(tui, qlinks, ctx):\n    ctx.tab('No Such Tab')\n", "unknown tab 'No Such Tab'; tabs are: 'Play', 'Macros'"),
             "raises": ("def apply(tui, qlinks, ctx):\n    raise ValueError('boom')\n", "ValueError: boom"),
             "no apply": ("x = 1\n", "has no apply"),
             "syntax": ("def apply(:\n", "SyntaxError"),

@@ -367,7 +367,7 @@ constexpr Page s_kickPages[kKickPageCount] = {
     // Page 2: Master & Voicing (Master)
     { "master_voicing", "Master & Voicing", "Master", { "master.volume", "master.transpose", "master.tune", "master.polyphony", "master.legato", "master.bend_range", "master.velocity_track", "master.portamento.time" }, 8, nullptr, 0 },
     // Page 3: Portamento & Glide (Master)
-    { "master_porta", "Portamento & Glide", "Master", { "master.portamento.time", "master.portamento.slope", "master.portamento.always", "master.portamento.scaled", "master.legato", "master.polyphony", "master.bend_range", "master.volume" }, 8, nullptr, 0 },
+    { "master_porta", "Portamento & Glide", "Master", { "master.portamento.slope", "master.portamento.always", "master.portamento.scaled", "master.stereo_routing", nullptr, nullptr, nullptr, nullptr }, 8, nullptr, 0 },
     // Page 4: Osc 1 Main (Osc)
     { "osc1_main", "Osc 1 Main", "Osc", { "osc1.on", "osc1.wavetable", "osc1.frame", "osc1.level", "osc1.pan", "osc1.transpose", "osc1.tune", "osc1.destination" }, 8, nullptr, 0 },
     // Page 5: Osc 1 Unison & Phase (Osc)

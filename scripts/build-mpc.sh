@@ -16,8 +16,8 @@
 #   --skins DIR      copy this directory verbatim into Plugin Skins/ in the output folder instead of generating it
 #                    (default: generated from the layout file with gen-mpc-ui.py --layout and the SDK's tools/gen_ui.py (through scripts/run-gen-ui.py),
 #                    then scripts/apply-mpc-skin-extras.py)
-#   --skin-layout F  the layout file of the generated skin (default: scripts/mpc-ui-pages.json, 34 tabs, which the Key 61 loads;
-#                    scripts/mpc-ui-pages-v32.json is the 32 tab fallback)
+#   --skin-layout F  the layout file of the generated skin (default: scripts/overlay-skin/mpc-ui-pages-overlay.json,
+#                    the production layout, 22 tabs)
 #   --cmake-arg ARG  an extra argument of the CMake configure step of the plugin module, e.g. --cmake-arg -DSYNTHYBOY_MPC_LFO_LIVE_HZ=25 (repeatable; no
 #                    spaces inside an argument). A CMake tree keeps the options of earlier runs in its cache: when one tree is used for several variants
 #                    (--build-dir), pass every option of the variant each time. Not applied to the --bench trees.
@@ -50,7 +50,7 @@ out_dir="$repo_root/build-mpc"
 build_dir="$repo_root/build-mpc/tree"
 jobs=2
 skins_dir=""
-skin_layout="$repo_root/scripts/mpc-ui-pages.json"
+skin_layout="$repo_root/scripts/overlay-skin/mpc-ui-pages-overlay.json"
 with_bench=0
 release=0
 xpl_presets="xl"
@@ -377,9 +377,8 @@ fi
 # Its schema lists both file32 and file64 as required, while docs/plugin-folder-format.md of the SDK says a 32-bit MPC uses only file32 and a 64-bit one
 # only file64. With both binaries built there is nothing to accept. A single-architecture build accepts exactly the one finding about the key of the
 # architecture that was not built; any other error fails the build.
-# Second accepted finding: the default skin has 34 tabs (sub-tabs included) and the validator reports exactly "34 tabs; at most 32 are supported" (the overlay layout has 36:
-# the number of pages of the --skin-layout file is the number accepted, any other count is an error). The Key 61
-# (MPC 3.10.1.12) loads such a skin (docs/MPC.md); the 32 tab fallback is scripts/mpc-ui-pages-v32.json (--skin-layout), which has no such finding.
+# Second accepted finding: the number of pages of the --skin-layout file is the number accepted (if > 32, any other count is an error). The Key 61
+# (MPC 3.10.1.12) loads such a skin (docs/MPC.md).
 if [[ "$validate" == 1 ]]; then
     echo "$me: running SDK validator on $plugin_folder"
     report="$(python3 "$MPC_SDK/tools/validate.py" "$plugin_folder" 2>&1 || true)"
@@ -388,8 +387,8 @@ if [[ "$validate" == 1 ]]; then
     [[ "$arch" == arm32 ]] && expected_missing="file64"
     [[ "$arch" == arm64 ]] && expected_missing="file32"
     other="$(echo "$report" | grep '^ERROR' || true)"
-    # the number of tabs the layout file has (34 for the default layout, 36 for scripts/overlay-skin/mpc-ui-pages-overlay.json): exactly this finding is accepted
-    layout_tabs="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["pages"]))' "$skin_layout" 2>/dev/null || echo 34)"
+    # the number of tabs the layout file has (22 for the overlay production layout): exactly this finding is accepted if > 32
+    layout_tabs="$(python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["pages"]))' "$skin_layout" 2>/dev/null || echo 22)"
     [[ -z "$plugin_dir" ]] || layout_tabs=0   # another plugin: no tab limit finding is expected
     other="$(echo "$other" | grep -v "^ERROR  TUI.json: ${layout_tabs} tabs; at most 32 are supported\$" || true)"
     if [[ -n "$expected_missing" ]]; then other="$(echo "$other" | grep -v "plugin.json is missing required keys: $expected_missing\$" || true)"; fi
