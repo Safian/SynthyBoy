@@ -55,6 +55,17 @@ std::vector<uint8_t> sineWav (double hz, double amp, int rate, double seconds)
     return encodeWav (x.data(), nullptr, n, rate, 16);
 }
 
+/** A sine of hz whose amplitude rises linearly from 0 to amp over the file: every position of the file has its own level and its own phase, so a loop that
+    is left differs from one that is kept by far more than any threshold (docs/dsp-knowledge/testing.md: no signal whose whole periods line up with the loop). */
+std::vector<uint8_t> risingSineWav (double hz, double amp, int rate, double seconds)
+{
+    const size_t n = static_cast<size_t> (rate * seconds);
+    std::vector<float> x (n);
+    for (size_t i = 0; i < n; ++i)
+        x[i] = static_cast<float> (amp * (static_cast<double> (i) / static_cast<double> (n)) * std::sin (6.283185307179586 * hz * static_cast<double> (i) / rate));
+    return encodeWav (x.data(), nullptr, n, rate, 16);
+}
+
 struct Rig
 {
     MemoryContentStore store;
@@ -1833,7 +1844,7 @@ TEST (own_sample_loop_exit_leaves_loop_on_release)
         auto e = createOwnEngine();
         e->setParam (kParamMasterPolyphony, 8.0f);
         e->prepare (kSr, 256, qualityForTier (Tier::high));
-        store.add ("test", "sine.wav", sineWav (440.0, 0.8, 44100, 2.0));
+        store.add ("test", "sine.wav", risingSineWav (437.0, 0.8, 44100, 2.0)); // 437 Hz: 0.4 s of loop is 174.8 periods, not whole ones
         ContentFileRef ref;
         ref.pack = "test";
         ref.file = "sine.wav";
@@ -1861,9 +1872,11 @@ TEST (own_sample_loop_exit_leaves_loop_on_release)
         set (*e, (P + ".sample.loop_end").c_str(), 30.0f);
         set (*e, (P + ".sample.loop_exit").c_str(), loopExitVal);
 
-        // Note-on at 0, Note-off at 0.2s (after loop has engaged), total render 0.5s
-        const size_t total = static_cast<size_t> (0.5 * kSr);
-        const size_t offAt = static_cast<size_t> (0.2 * kSr);
+        // The loop is 0.2 .. 0.6 s of the 2 s file (played at 44100 / 48000 of the host rate). Note-on at 0, note-off at 0.9 s (the loop has wrapped once and the voice is
+        // inside it, 0.19 s before its end), render to 1.4 s: leaving the loop reaches its end at about 1.09 s and goes on to the louder part of the file, keeping it wraps back to
+        // the quiet start of the loop.
+        const size_t total = static_cast<size_t> (1.4 * kSr);
+        const size_t offAt = static_cast<size_t> (0.9 * kSr);
         Out o;
         o.l.assign (total, 0.0f);
         o.r.assign (total, 0.0f);
@@ -1894,14 +1907,15 @@ TEST (own_sample_loop_exit_leaves_loop_on_release)
         return 20.0 * std::log10 (std::max (d / p, 1.0e-9));
     };
 
-    const size_t offSample = static_cast<size_t> (0.25 * kSr);
-    // osc1: loop_exit 0 vs 1 must differ during release
+    const size_t offSample = static_cast<size_t> (1.15 * kSr); // after the end of the loop is reached when it is left
+    // osc1: loop_exit 0 vs 1 must differ during release, by far more than the threshold (the two renders are different signals)
     const Out o1_0 = renderSample (1, 0.0f), o1_1 = renderSample (1, 1.0f);
-    CHECK (diffDb (o1_0, o1_1, offSample) > -20.0);
-
-    // osc3: loop_exit 0 vs 1 must differ during release
+    // osc3: the same
     const Out o3_0 = renderSample (3, 0.0f), o3_1 = renderSample (3, 1.0f);
-    CHECK (diffDb (o3_0, o3_1, offSample) > -20.0);
+    const double d1 = diffDb (o1_0, o1_1, offSample), d3 = diffDb (o3_0, o3_1, offSample);
+    std::printf ("loop_exit 0 vs 1 after the loop end: osc1 %.1f dB, osc3 %.1f dB\n", d1, d3);
+    CHECK (d1 > -20.0);
+    CHECK (d3 > -20.0);
 }
 
 // docs/plans/spectral-start-cache.md: a chord struck again (the note serials move on, so the voices start on other quarters) renders the same bits with the start cache on as with it off, and its
