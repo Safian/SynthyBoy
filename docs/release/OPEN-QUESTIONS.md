@@ -142,7 +142,19 @@ Lines found: 80 in 9 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 95.
+Commits found: 98.
+
+### c9b63cc3 (2026-11-21) TODO: describeProfile prints a misleading low prefix (the XL runs the table's high profile)
+
+- matching line: TODO: describeProfile prints a misleading low prefix (the XL runs the table's high profile)
+
+### d5434468 (2026-11-21) TODO: XL quality profile discrepancy, hooks build without overlay
+
+- matching line: TODO: XL quality profile discrepancy, hooks build without overlay
+
+### a3b1e23e (2026-11-21) TODO: batch 6 done items removed (start cache, transpose, dead keys, desktop LFO snap); phase_memory
+
+- matching line: TODO: batch 6 done items removed (start cache, transpose, dead keys, desktop LFO snap); phase_memory audit shift to check
 
 ### cc4c0d75 (2026-11-21) TODO: develop reds found by the batch 6 build (shell_clap segfault, distortion mix 0 not dry, three 
 

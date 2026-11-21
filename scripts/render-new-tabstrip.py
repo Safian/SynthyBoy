@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "tabstrip-new-order.png"
+OUT = ROOT / "docs" / "release" / "tabstrip-new-order.png"
 
 # MPC Landscape resolution
 WIDTH = 1280
