@@ -284,6 +284,19 @@ public:
         p.resonance = clamp01 (pct (b, d, res));
         p.blend = clamp01 (pct (b, d, blend)) * 2.0f;
         fx.fast = f.lowCost;
+        if (f.content != nullptr)
+        {
+            const auto& c0 = f.content->shaper[0];
+            const auto& i0 = f.content->shaperInt[0];
+            const auto& c1 = f.content->shaper[1];
+            const auto& i1 = f.content->shaperInt[1];
+            fx.setShaper (c0.empty() ? nullptr : c0.data(),
+                          i0.empty() ? nullptr : i0.data(),
+                          c1.empty() ? nullptr : c1.data(),
+                          i1.empty() ? nullptr : i1.data());
+        }
+        else
+            fx.setShaper (nullptr, nullptr, nullptr, nullptr);
         fx.set (p);
     }
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
