@@ -487,3 +487,58 @@ TEST (own_warp_spread_and_warp2_spread_affect_unison_voices)
     const auto m0 = renderModSpread (0.0f), m100 = renderModSpread (100.0f);
     CHECK (diffDb (m0, m100) > -30.0);
 }
+
+TEST (own_osc_phase_legato_poly_context_osc1_and_osc3)
+{
+    // Phase Legato (docs/engine-spec/02-oscillator.md, docs/ui-design/13-new-keys.md A86):
+    // When a note starts while a previous note is still held (polyphonic overlap),
+    // the new note takes the held note's running oscillator phases when phase_legato == 1.
+    // When master.legato == 1 (monophonic glide), the engine glides the existing voice
+    // without starting a new voice or resetting phases (own_engine.cpp:837), making phase_legato inert.
+    auto renderLegato = [] (int oscNum, float phaseLegatoVal, float masterLegatoVal)
+    {
+        auto e = make();
+        sinePatch (*e);
+        const std::string P = "osc" + std::to_string (oscNum);
+        if (oscNum != 1)
+        {
+            set (*e, "osc1.on", 0.0f);
+            set (*e, (P + ".on").c_str(), 1.0f);
+            set (*e, (P + ".level").c_str(), 100.0f);
+            set (*e, (P + ".wavetable").c_str(), 0.0f);
+        }
+        set (*e, (P + ".random_phase").c_str(), 0.0f);
+        set (*e, (P + ".phase_legato").c_str(), phaseLegatoVal);
+        set (*e, "master.legato", masterLegatoVal);
+        set (*e, "env1.release", 2000.0f);
+
+        // Note 48 at 0, Note 55 at 0.25s (while 48 is held), Note 48 off at 0.45s, render 0.5s
+        const int t1 = static_cast<int> (0.25 * kSr);
+        return sbtest::render (*e, { sbtest::noteOn (0, 48), sbtest::noteOn (t1, 55), sbtest::noteOff (static_cast<int> (0.45 * kSr), 48) },
+                               static_cast<int> (0.5 * kSr), 256);
+    };
+
+    auto diffDb = [] (const sbtest::Rendered& a, const sbtest::Rendered& b, size_t from)
+    {
+        double d = 0.0, p = 1.0e-9;
+        for (size_t i = from; i < a.left.size(); ++i)
+        {
+            d = std::max (d, std::fabs (static_cast<double> (a.left[i] - b.left[i])));
+            p = std::max (p, std::fabs (static_cast<double> (a.left[i])));
+        }
+        return 20.0 * std::log10 (std::max (d / p, 1.0e-9));
+    };
+
+    const size_t note2Sample = static_cast<size_t> (0.25 * kSr);
+
+    // 1. With master.legato == 1.0f (monophonic glide), phase_legato has no effect (explaining audit baseline)
+    const auto mono0 = renderLegato (1, 0.0f, 1.0f), mono1 = renderLegato (1, 1.0f, 1.0f);
+    CHECK (diffDb (mono0, mono1, note2Sample) < -100.0);
+
+    // 2. With polyphonic overlapping notes (master.legato == 0.0f), osc1 and osc3 phase_legato produce distinct phases
+    const auto poly1_0 = renderLegato (1, 0.0f, 0.0f), poly1_1 = renderLegato (1, 1.0f, 0.0f);
+    CHECK (diffDb (poly1_0, poly1_1, note2Sample) > -30.0);
+
+    const auto poly3_0 = renderLegato (3, 0.0f, 0.0f), poly3_1 = renderLegato (3, 1.0f, 0.0f);
+    CHECK (diffDb (poly3_0, poly3_1, note2Sample) > -30.0);
+}
