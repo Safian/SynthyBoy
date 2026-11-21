@@ -16,7 +16,7 @@
 
 ## Decisions
 
-- Budget 1700 us (2026-11-21). The 4x2 chord (1604 us) still starts whole.
+- Budget 1700 us (2026-11-21, merged). The 4x2 chord (1604 us) still starts whole; in an 8x2 chord 8 voices start at once, 4 wait 2.9 ms and 4 wait 5.8 ms (`test: own_spectral_chord_start`).
 
 ## Open
 
