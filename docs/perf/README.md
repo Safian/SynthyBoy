@@ -280,7 +280,7 @@ Complete list of options supported by `bench/tier_bench.cpp`:
 | `--block` | `N` | Audio block size in frames (default 128). |
 | `--sr` | `HZ` | Audio sample rate in Hz (default 44100.0). |
 | `--no-ftz` | - | Disable flush-to-zero / denormals-are-zero floating-point hardware modes. |
-| `--start-budget-us` | `N` | Spectral start budget in microseconds of start work per block (`Quality::spectralStartBudgetUs`), tier low ledger. Measurement only: profiles do not set it. Default 2400 (`spectral::kStartBudgetUs`). |
+| `--start-budget-us` | `N` | Spectral start budget in microseconds of start work per block (`Quality::spectralStartBudgetUs`), tier low ledger. Measurement only: profiles do not set it. Default 1700 (`spectral::kStartBudgetUs`; was 2400 until 2026-11-21, when the interleaved budget sweep on the Key 61 put 10 of 12 Spectral strike rows under 1.5 blocks at 1700 against 0 of 12 at 2400). |
 | `--sections` | - | Report exclusive execution time spent in each DSP section (requires build with `-DSYNTHYBOY_SECTION_TIMING=ON`). |
 | `--list` | - | Print the resolved list of quality profiles and loads that would run, then exit. |
 | `--repeat` | `N` | Repeat entire benchmark sequence $N$ times (default 1). Summary reports median and spread. |
