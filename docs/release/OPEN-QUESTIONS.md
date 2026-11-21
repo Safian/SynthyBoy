@@ -142,11 +142,19 @@ Lines found: 80 in 9 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 80.
+Commits found: 82.
+
+### 58269410 (2026-11-21) TODO: master.tune and distortion.drive done (deleted); open: Pulse phase-0 event, osc_options golden
+
+- matching line: TODO: master.tune and distortion.drive done (deleted); open: Pulse phase-0 event, osc_options golden (Sync BLEP), filter_response_rates load flake, DEAD keys of the fresh baseline, master.transpose...
 
 ### afd82145 (2026-11-21) OPEN-QUESTIONS: Part A citation of THIRD_PARTY.md moved to line 62 (MTS-ESP not verified); generated
 
 - matching line: OPEN-QUESTIONS: Part A citation of THIRD_PARTY.md moved to line 62 (MTS-ESP not verified); generated parts regenerated
+
+### 17c735a4 (2026-11-21) fix(scripts): require --build flag to build ui_gallery_host
+
+- matching line: Untouched: TODO.md, core/, vital-import/, .hw-local/, Archive/
 
 ### 5bd9af0f (2026-11-21) TODO: owner decisions 2026-11-21 (audio-rate mod: measure on the Key 61 too; LFO phase snap: do; the
 
