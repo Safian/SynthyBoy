@@ -214,5 +214,27 @@ class EngineDirectoryGone(unittest.TestCase):
                 self.assertNotIn(needle, text, f"{f}: {needle}")
 
 
+class VitalImportClean(unittest.TestCase):
+    """Vital preset importer and remaining code contain no references to deleted core/engine-vital."""
+
+    def test_vital_import_cmake_has_no_vital_engine(self):
+        text = read("core/vital-import/CMakeLists.txt")
+        self.assertNotIn("SYNTHYBOY_WITH_VITAL", text)
+        self.assertNotIn("synthyboy_engine_vital", text)
+        self.assertNotIn("engine-vital", text)
+
+    def test_crosscheck_test_is_gone(self):
+        self.assertFalse(os.path.exists(os.path.join(ROOT, "core", "vital-import", "tests", "test_crosscheck.cpp")))
+
+    def test_vital_import_builtin_ref_comment_clean(self):
+        text = read("core/vital-import/builtin_ref.cpp")
+        self.assertNotIn("core/engine-vital", text)
+        self.assertNotIn("SYNTHYBOY_WITH_VITAL", text)
+
+    def test_modlogic_comment_clean(self):
+        text = read("shell-juce/ui/panels/ModLogic.h")
+        self.assertNotIn("core/engine-vital", text)
+
+
 if __name__ == "__main__":
     unittest.main()
