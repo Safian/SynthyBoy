@@ -77,7 +77,11 @@ struct VoiceOptTest
         if (!same (a.filtLevel, b.filtLevel, sizeof a.filtLevel) || !same (a.filtLevelPrev, b.filtLevelPrev, sizeof a.filtLevelPrev)) return 21;
         if (!same (&a.ampCur, &b.ampCur, 4) || !same (&a.ampPrev, &b.ampPrev, 4) || !same (&a.velGain, &b.velGain, 4)) return 22;
         if (!same (&a.noiseGain, &b.noiseGain, 4) || a.noiseCh.on != b.noiseCh.on) return 23;
-        if (!same (&a.vc, &b.vc, sizeof a.vc)) return 24;
+        // field by field: VoiceCtl ends in bool mask[5] and 3 bytes of padding that nobody writes (a memcmp of the whole struct compared heap garbage and failed with 3 bytes 0 vs 53, 44, 34)
+        if (!same (&a.vc.pan, &b.vc.pan, 4) || !same (&a.vc.detuneSemis, &b.vc.detuneSemis, 4) || !same (&a.vc.cutoffSemis, &b.vc.cutoffSemis, 4) || !same (&a.vc.envFactor, &b.vc.envFactor, 4)
+            || !same (&a.vc.lfoFactor, &b.vc.lfoFactor, 4) || !same (&a.vc.mod1, &b.vc.mod1, 4) || !same (&a.vc.mod2, &b.vc.mod2, 4) || !same (&a.vc.index, &b.vc.index, 4)
+            || !same (a.vc.mask, b.vc.mask, sizeof a.vc.mask))
+            return 24;
         if (!same (a.extMono, b.extMono, sizeof a.extMono) || !same (a.oscMono, b.oscMono, sizeof a.oscMono)) return 25;
         if (!same (a.srcLevel, b.srcLevel, sizeof a.srcLevel)) return 26;
         if (!same (a.lastBusL, b.lastBusL, sizeof a.lastBusL) || !same (a.lastBusR, b.lastBusR, sizeof a.lastBusR)) return 27;
