@@ -1,0 +1,38 @@
+# DSP knowledge (SynthyBoy own engine)
+
+What we know for sure, so that a plan starts from the best known solution instead of a guess.
+Every planner and worker that designs or changes DSP, real-time code, memory use or the MPC
+display path reads the topic files below that touch its work **before** writing the plan.
+
+## Rules
+
+1. **Clean room.** Nothing here comes from Vital, Serum or any other product's code. No code
+   excerpts from third-party synths, no reading of `core/vital-import/` or
+   `/Users/szabi/Documents/Projects/Safian/.hw-local/synth-knowledge/` to write these files.
+   Published papers, books, datasheets and standards are fine, cited.
+2. **Every claim has its evidence**, one of:
+   - `measured:` a measurement of ours: where the raw data lives (device files under
+     `.hw-local/mpc-perf/` are local to the owner's Mac; the numbers are copied here), the
+     commit, the device, the date, the method (A/B/A, runs, spread);
+   - `source:` a source that was **opened** (URL or book with chapter/section/page, read on a
+     given date); a source remembered but not opened does not go in;
+   - `test:` the test in the repo that proves it (`core/tests/...`, the check name).
+3. **A topic file** = one question area: the facts, the decisions taken with their reason, the
+   rejected options with the number that rejected them, and the open questions. Short: if it
+   grows past about 150 lines, split it.
+4. **Hypotheses are marked** `HYPOTHESIS` and are not used as a decision without a measurement.
+5. **Update on every finding.** A measurement that changes a fact changes the file in the same
+   commit that lands the change (or the revert). Wrong facts are corrected, not left with a note.
+
+## Topics
+
+| File | Area |
+|---|---|
+| [measurement.md](measurement.md) | How to measure on the devices (A/B/A, drift, spread) and on the Mac; what a number is worth |
+| [platform-key61.md](platform-key61.md) | MPC Key 61 / XL CPU, memory, cores, what is fast and slow on the Cortex-A17 |
+| [mpc-display.md](mpc-display.md) | The MPC host's display pipeline (DRM planes, commits) and our overlay |
+| [spectral-start.md](spectral-start.md) | Note-on spikes of the Spectral oscillator and the start ledger |
+| [antialiasing.md](antialiasing.md) | ADAA, oversampling, band limits: what each bought, measured |
+| [filters.md](filters.md) | Diode / ladder filters: solvers, cost, accuracy |
+| [testing.md](testing.md) | Test recipes that catch real defects; bit-identity; checksums |
+| [sources.md](sources.md) | The opened literature, with what each source is used for |

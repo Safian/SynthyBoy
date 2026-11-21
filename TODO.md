@@ -131,9 +131,8 @@ Gemini 4 Neon írta, kódolvasásból, mérés nélkül; megvalósítás előtt 
 - `synthyboy_param_audit_scan` (1 órás időkorlát) a wave 2 összefésülésén nem futott le. Kész, ha egyszer végigfutott az összefésült fán.
 
 ## Tudás és ügynök-eszközök
-- Tudásmappa (`docs/dsp-knowledge/`: témánként rövid fájl forrásokkal, döntésekkel és bizonyító teszttel, tisztaszoba-szabály, tesztreceptek) és egy rá mutató vékony skill: az owner döntésére vár.
+- Tudásmappa (`docs/dsp-knowledge/`, 2026-11-21 megkezdve): a szakirodalmi forrásokat (Bristow-Johnson, Brandt, Dattorro, Bencina, Zavalishin, MPE, SFZ, ARM Cortex-A17) meg kell nyitni, és a `sources.md`-be idézettel bevezetni; a meglévő tervekből (`docs/plans/`) az ellenőrzött tényeket a témafájlokba kell átvinni. Kész, ha minden témafájl minden állítása mért, megnyitott forrás vagy teszt, és a `sources.md` nem üres.
 - A `.hw-local/synth-knowledge/vital/code` (405 fájl) és `sources/` Vital-forráskódot tartalmaz: a saját motor munkáihoz tiltani kell, vagy el kell vinni onnan (owner döntése).
-- A kutatásban csak emlékezetből felsorolt forrásokat (Bristow-Johnson, Brandt, Dattorro, Bencina, MPE- és SFZ-specifikáció) meg kell nyitni, mielőtt a tudásmappába kerülnek.
 
 ## Repó-rend
 - `scripts/tests/test_render_ui_gallery.py` a repó `build/` könyvtárában fordítja a `ui_gallery_host`-ot: ha az a könyvtár MPC shell nélkül van konfigurálva, „unknown target" hibával bukik (2026-11-21, develop `08185fb2`), és egy Python-teszt mellékesen fordít. Kész, ha a teszt kihagyja magát, amikor a cél nincs konfigurálva (vagy `--host-bin`/környezeti változóval kapja a binárist), és nem fordít.
