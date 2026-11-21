@@ -299,7 +299,7 @@ public:
             fx.setShaper (nullptr, nullptr, nullptr, nullptr);
         fx.set (p);
     }
-    void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n); }
+    void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n, callOffset(), callPeriod()); }
 
 private:
     Distortion fx;
