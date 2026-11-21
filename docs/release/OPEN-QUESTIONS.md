@@ -147,7 +147,19 @@ Lines found: 83 in 10 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 66.
+Commits found: 69.
+
+### ba96f3be (2026-11-21) TODO: memory probe tiers are equal because prepare() does not scale with the tier (memory plan item)
+
+- matching line: TODO: memory probe tiers are equal because prepare() does not scale with the tier (memory plan item), rss_kb fix pending build
+
+### b5766d8c (2026-11-21) TODO: release screenshots of the main screen once the device build is final (owner)
+
+- matching line: TODO: release screenshots of the main screen once the device build is final (owner)
+
+### e2ef6e87 (2026-11-21) TODO.md: wave 2 merge, open red tests (alias dist_tanh type 9 gain, waiting-voice silence metric), r
+
+- matching line: TODO.md: wave 2 merge, open red tests (alias dist_tanh type 9 gain, waiting-voice silence metric), red tests already on develop, audit scan not run
 
 ### 6c8f5cb0 (2026-11-21) docs/MPC.md: memory on the Key 61 (engine probe and host series 1-3 tracks); TODO: 4th track and the
 
