@@ -96,11 +96,12 @@ class OscSkinTest(unittest.TestCase):
             self.assertTrue(all(expected["Q-Link %d" % i] == -1 for i in range(9, 17)))
 
     def test_shp_tabs_hold_unison_and_shaping(self):
+        # 16 controls: all 8 from oscN_unison (including unison.stack, ownEngine: true since 84c9fc21) and all 8 from oscN_shaping
         for n in (1, 2, 3):
             tab = self.tab("Osc%d Shp" % n)
-            self.assertEqual(len(tab["componentDefinition"]["componentsData"]), 15)
+            self.assertEqual(len(tab["componentDefinition"]["componentsData"]), 16)
             params = {e["handle remapping"]["map"][0]["value"] for e in tab["componentDefinition"]["componentsData"]}
-            for key in ("osc%d.unison.voices" % n, "osc%d.warp.type" % n, "osc%d.morph.amount" % n, "osc%d.phase" % n):
+            for key in ("osc%d.unison.voices" % n, "osc%d.unison.stack" % n, "osc%d.warp.type" % n, "osc%d.morph.amount" % n, "osc%d.phase" % n):
                 self.assertIn("Parameter %d" % self.index[key], params)
 
     def test_pictures_one_per_wavetable_shared_files(self):
