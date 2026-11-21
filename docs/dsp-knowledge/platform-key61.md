@@ -16,9 +16,15 @@
   SLOWER (0.7249 -> 0.7648 ms/block, A/B/A, every A slower than every B). The loop is bound by
   the latency of the sample-to-sample recurrence, not by divider throughput.
   `measured: .hw-local/mpc-perf/noteon-burst/c1-abba-results.md; reverted 39f8323c`
-- **Independent recurrences overlap:** two channels in one loop (SVF pair loops, NEON 2 lanes)
-  is the lever for latency-bound filters. `source/test: classic_filters.h svfPairLoop`; diode pair
-  loop on the device: pending.
+- **Interleaving two channels did NOT help the classic Diode on the A17:** a bit-identical
+  two-channel pair loop (`9ab6e01b`, not merged) was 4.8 % SLOWER (0.7234 -> 0.7579 ms/block, A/B/A,
+  every A above every B; Acid control equal). With C1 (+5.5 %) that is two failed levers: the
+  "latency-bound recurrence" explanation is NOT confirmed either (HYPOTHESIS now: register
+  pressure on ARMv7 VFP/NEON; the plain per-channel code at `25aaa77b` is the best measured).
+  Next step must start from a measurement of where the time goes (perf counters / sections),
+  not from another guess. `measured: noteon-burst/pair-abba-results.md, 2026-11-21`
+- SVF pair loops (`classic_filters.h svfPairLoop`, NEON 2 lanes for model 3) remain; whether they
+  help on the A17 was not measured with A/B/A (HYPOTHESIS).
 - **Bit identity across builds needs `-ffp-contract=off`** when comparing standalone compiles:
   FMA contraction alone produced "differences" (Bode FIR, 2026-11-20).
 

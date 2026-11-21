@@ -13,4 +13,4 @@
 
 ## Open
 
-- Classic Diode two-channel pair loop: bit-identical, device A/B/A pending.
+- Classic Diode: C1 batch inversion +5.5 % and the two-channel pair loop +4.8 % on the Key 61 (both rejected, see platform-key61.md). The section stays 0.72 ms/block; next: profile it (PMU counters, `tier_bench --pmu --sections`) before any change.
