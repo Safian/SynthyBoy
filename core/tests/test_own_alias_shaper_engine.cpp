@@ -10,7 +10,7 @@
 #include "own_engine.h"
 #include "synthyboy/content_state.h"
 #include "synthyboy/engine.h"
-#include "synthyboy/param_ids.h"
+#include "synthyboy/params.h"
 #include "synthyboy/quality.h"
 #include "synthyboy/state.h"
 #include "test_runner.h"
