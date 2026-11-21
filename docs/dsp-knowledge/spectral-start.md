@@ -31,3 +31,7 @@
 - Mean worst block over the 12 rows: 1400 us = 1.25 blocks, 1700 us = 1.42 blocks; 1400 is lower on 9 of 12 rows, but 11 of 12 differences are inside the noise (rule: more than max(0.3 blocks, run spread)). Only Chord Morph 8 Steal clears it (1.30 -> 0.98). Gong Pad 8 Kill: 1.28 vs 1.34 (noise). Rows under 1.5 blocks: 9/12 at 1700, 10-11/12 at 1400. Steady p99 unchanged (0.66 vs 0.67). Control 0.69-0.79 at both.
 - The earlier 1.59 / 1.62 readings did not reproduce at 1700 on this HEAD (1.28 / 1.30): noise or the newer code.
 - Decision (coordinator, 2026-11-21): the budget stays 1700 us (1400 is only weakly better and costs more voice delay). A start-frame cache (memoised start frames for repeated notes, bit-identical) is being analysed and may remove the rest.
+
+## Start cache (2026-11-21, branch worktree-agent-aadd1287d0f23c8e2, off by default)
+
+- Bit-identical memo of the start frames (process-wide, 3.2 MB, lock-free). Key 61 A/B/A (OFF/ON x5, budget 1700): Chord Morph strike 1.18-1.43 -> 0.77-0.88 blocks (repeated chord); Vowel Freeze and Gong Pad unchanged (no hits: random start or modulated inputs at the note-on, per the plan's caveat, hit counters not printed); a 16-note chord transposed every strike (all misses) costs about +0.1 block, inside the noise. Output bit-identical in all 72 comparisons. `measured: key61-night-2026-11-21/start-cache/job2-results.md`

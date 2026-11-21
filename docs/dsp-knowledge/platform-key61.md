@@ -29,6 +29,8 @@
 - **Bit identity across builds needs `-ffp-contract=off`** when comparing standalone compiles:
   FMA contraction alone produced "differences" (Bode FIR, 2026-11-20).
 
+- **Third failed lever, the precomputed 4x4 inverse** (tier-low fast path, branch worktree-agent-af82a810d4a3e202d, not merged): Mac 29 % faster, Key 61 13 % SLOWER (plain median 0.978 -> 1.127 ms, filter section 0.705 -> 0.824 ms, +254 k instructions per block, IPC 0.73 -> 0.81: the extra instructions outweigh the gained overlap). `measured: key61-night-2026-11-21/diode-inverse/job1-results.md (A/B/A x3)`. Rule learned: on the A17 the diode loop is best left as the plain elimination; the Mac is not a predictor for this loop.
+
 ## Open
 
 - Diode Saturated Bass filter section is 0.72 ms/block (about 4x the gate). Saturator curve
