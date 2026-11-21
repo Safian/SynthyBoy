@@ -49,6 +49,13 @@ synthyboy_add_test(synthyboy_test_own_content_opt test_own_content_opt.cpp)   # 
 target_include_directories(synthyboy_test_own_content_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
 synthyboy_add_test(synthyboy_test_own_compressor_opt test_own_compressor_opt.cpp)   # the CPU optimisation of the Compressor limiter changes no output sample
 target_include_directories(synthyboy_test_own_compressor_opt PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own")
+# The tests of the effect optimisation (docs/plans/reverb-convolve.md): every core/tests/test_fxopt_<name>.cpp is the executable synthyboy_test_fxopt_<name> (a new task adds no line here).
+file(GLOB SYNTHYBOY_FXOPT_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/test_fxopt_*.cpp")
+foreach(fxopt_src ${SYNTHYBOY_FXOPT_TEST_SOURCES})
+    get_filename_component(fxopt_name "${fxopt_src}" NAME_WE)
+    synthyboy_add_test(synthyboy_${fxopt_name} "${fxopt_src}")
+    target_include_directories(synthyboy_${fxopt_name} PRIVATE "${PROJECT_SOURCE_DIR}/core/engine-own" "${PROJECT_SOURCE_DIR}/core/fx-serum-b" "${PROJECT_SOURCE_DIR}/core/tests")
+endforeach()
 synthyboy_add_test(synthyboy_test_preset_render_output test_preset_render_output.cpp LINK synthyboy_fx_serum_b)   # the files of synthyboy_preset_render --float32 / --hash
 target_include_directories(synthyboy_test_preset_render_output PRIVATE "${PROJECT_SOURCE_DIR}/tools/preset-render" "${PROJECT_SOURCE_DIR}/core/fx-serum-b")
 synthyboy_add_test(synthyboy_test_own_helper_thread test_own_helper_thread.cpp)   # the wake-up flag and the helper threads of the engine

@@ -53,26 +53,16 @@ void HyperDimension::prepare (double sampleRate, int maxBlock)
     while (cap < minCapacity)
         cap <<= 1;
 
-    hyperMask_ = cap - 1;
-    for (auto& buf : hyperBuffers_)
-        buf.assign (static_cast<size_t> (cap), 0.0f);
-
-    dimMask_ = cap - 1;
-    for (auto& buf : dimBuffers_)
-        buf.assign (static_cast<size_t> (cap), 0.0f);
+    mask_ = cap - 1;
+    buf_.assign (static_cast<size_t> (cap), 0.0f);
 
     reset();
 }
 
 void HyperDimension::reset() noexcept
 {
-    for (auto& buf : hyperBuffers_)
-        std::fill (buf.begin(), buf.end(), 0.0f);
-    hyperWriteIndices_.fill (0);
-
-    for (auto& buf : dimBuffers_)
-        std::fill (buf.begin(), buf.end(), 0.0f);
-    dimWriteIndices_.fill (0);
+    std::fill (buf_.begin(), buf_.end(), 0.0f);
+    wr_ = 0;
 
     dimLfoPhase_ = 0.0f;
     retrigger();
@@ -137,6 +127,27 @@ void HyperDimension::process (float* l, float* r, int n) noexcept
     const float dimBase3 = (0.0125f + 0.0150f * std::clamp (params_.dimSize, 0.0f, 1.0f)) * static_cast<float> (sampleRate_);
     const float dimBase4 = (0.0175f + 0.0220f * std::clamp (params_.dimSize, 0.0f, 1.0f)) * static_cast<float> (sampleRate_);
 
+    // What depends only on the parameters, once per call (the same expressions as per sample before): the voice delays, pans and LFO increments
+    const float maxExcursion = detune * 0.003f * static_cast<float> (sampleRate_);
+    float baseDelay[kMaxUnison] = {}, panL[kMaxUnison] = {}, panR[kMaxUnison] = {}, lfoStep[kMaxUnison] = {};
+    for (int v = 0; v < unison; ++v)
+    {
+        const size_t uv = static_cast<size_t> (v);
+        const float vCenter = 0.012f + 0.0025f * (static_cast<float> (v) - static_cast<float> (unison - 1) * 0.5f);
+        baseDelay[uv] = vCenter * static_cast<float> (sampleRate_);
+        float pan = 0.0f;
+        if (unison > 1)
+            pan = -1.0f + 2.0f * static_cast<float> (v) / static_cast<float> (unison - 1);
+        const float angle = (pan + 1.0f) * (0.25f * kPi);
+        panL[uv] = std::cos (angle);
+        panR[uv] = std::sin (angle);
+        const float lfoFreq = rate * kRateSpreads[uv];
+        lfoStep[uv] = kTwoPi * lfoFreq; // the per sample increment is lfoStep * invFs, written as before so that the compiler contracts the accumulation the same way (bit identical phases)
+    }
+    // A mix that is 0 now and stays 0 makes its part of the sum exactly 0 (the output is the same bit for bit): the work is skipped, the phases still advance
+    const bool hypActive = currentHyperMix_ != 0.0f || targetHyperMix != 0.0f; // (with unison 0 the voices add nothing, and the blend still pulls the dry signal down)
+    const bool dimActive = currentDimMix_ != 0.0f || targetDimMix != 0.0f;
+
     for (int i = 0; i < n; ++i)
     {
         const float inL = l[i];
@@ -148,41 +159,30 @@ void HyperDimension::process (float* l, float* r, int n) noexcept
         currentDimMix_ += stepDimMix;
         currentLevel_ += stepLevel;
 
+        // The one delay line: written before the voices and the taps read it
+        buf_[static_cast<size_t> (wr_)] = monoIn;
+        wr_ = (wr_ + 1) & mask_;
+
         // Process Hyper
         float hypL = 0.0f;
         float hypR = 0.0f;
 
-        if (unison > 0)
+        if (hypActive)
         {
             for (int v = 0; v < unison; ++v)
             {
                 const size_t uv = static_cast<size_t> (v);
-                auto& buf = hyperBuffers_[uv];
-                int& wr = hyperWriteIndices_[uv];
                 float& phase = hyperLfoPhases_[uv];
 
-                buf[static_cast<size_t> (wr)] = monoIn;
-                wr = (wr + 1) & hyperMask_;
-
-                // Delay time for voice
-                const float vCenter = 0.012f + 0.0025f * (static_cast<float> (v) - static_cast<float> (unison - 1) * 0.5f);
-                const float baseDelaySamples = vCenter * static_cast<float> (sampleRate_);
-                const float maxExcursion = detune * 0.003f * static_cast<float> (sampleRate_);
-                const float delaySamples = baseDelaySamples + maxExcursion * std::sin (phase);
-
-                const float voiceSample = readCubicFromBuffer (buf.data(), hyperMask_, wr, delaySamples);
+                const float delaySamples = baseDelay[uv] + maxExcursion * std::sin (phase);
+                const float voiceSample = readCubicFromBuffer (buf_.data(), mask_, wr_, delaySamples);
 
                 // Stereo spread
-                float pan = 0.0f;
-                if (unison > 1)
-                    pan = -1.0f + 2.0f * static_cast<float> (v) / static_cast<float> (unison - 1);
-                const float angle = (pan + 1.0f) * (0.25f * kPi);
-                hypL += voiceSample * std::cos (angle);
-                hypR += voiceSample * std::sin (angle);
+                hypL += voiceSample * panL[uv];
+                hypR += voiceSample * panR[uv];
 
                 // Advance LFO
-                const float lfoFreq = rate * kRateSpreads[uv];
-                phase += kTwoPi * lfoFreq * invFs;
+                phase += lfoStep[uv] * invFs;
                 if (phase >= kTwoPi)
                     phase -= kTwoPi;
             }
@@ -190,39 +190,43 @@ void HyperDimension::process (float* l, float* r, int n) noexcept
             hypL *= hyperVoiceNorm;
             hypR *= hyperVoiceNorm;
         }
-
-        // Hyper blend
-        const float hyperOutL = inL + (hypL - inL) * currentHyperMix_;
-        const float hyperOutR = inR + (hypR - inR) * currentHyperMix_;
-
-        // Process Dimension
-        // Dimension feeds from input signal (mono sum)
-        for (size_t d = 0; d < 4; ++d)
+        else
         {
-            auto& buf = dimBuffers_[d];
-            int& wr = dimWriteIndices_[d];
-            buf[static_cast<size_t> (wr)] = monoIn;
-            wr = (wr + 1) & dimMask_;
+            for (int v = 0; v < unison; ++v)
+            {
+                float& phase = hyperLfoPhases_[static_cast<size_t> (v)];
+                phase += lfoStep[static_cast<size_t> (v)] * invFs;
+                if (phase >= kTwoPi)
+                    phase -= kTwoPi;
+            }
         }
 
-        const float tap1 = readCubicFromBuffer (dimBuffers_[0].data(), dimMask_, dimWriteIndices_[0], dimBase1);
-        const float tap2 = readCubicFromBuffer (dimBuffers_[1].data(), dimMask_, dimWriteIndices_[1], dimBase2);
-        const float tap3 = readCubicFromBuffer (dimBuffers_[2].data(), dimMask_, dimWriteIndices_[2], dimBase3);
-        const float tap4 = readCubicFromBuffer (dimBuffers_[3].data(), dimMask_, dimWriteIndices_[3], dimBase4);
+        // Hyper blend
+        const float hyperOutL = hypActive ? inL + (hypL - inL) * currentHyperMix_ : inL;
+        const float hyperOutR = hypActive ? inR + (hypR - inR) * currentHyperMix_ : inR;
 
-        // Slow subtle amplitude modulation
-        const float modSin = std::sin (dimLfoPhase_);
-        const float modCos = std::cos (dimLfoPhase_);
+        // Process Dimension: feeds from the input signal (mono sum), which is in the delay line
+        float dimL = 0.0f, dimR = 0.0f;
+        if (dimActive)
+        {
+            const float tap1 = readCubicFromBuffer (buf_.data(), mask_, wr_, dimBase1);
+            const float tap2 = readCubicFromBuffer (buf_.data(), mask_, wr_, dimBase2);
+            const float tap3 = readCubicFromBuffer (buf_.data(), mask_, wr_, dimBase3);
+            const float tap4 = readCubicFromBuffer (buf_.data(), mask_, wr_, dimBase4);
+
+            // Slow subtle amplitude modulation
+            const float modSin = std::sin (dimLfoPhase_);
+            const float modCos = std::cos (dimLfoPhase_);
+            dimL = (tap1 * (1.0f + 0.12f * modSin) - tap2 * (1.0f + 0.12f * modCos)) * 0.5f;
+            dimR = (-tap3 * (1.0f - 0.12f * modSin) + tap4 * (1.0f - 0.12f * modCos)) * 0.5f;
+        }
         dimLfoPhase_ += dimLfoInc;
         if (dimLfoPhase_ >= kTwoPi)
             dimLfoPhase_ -= kTwoPi;
 
-        const float dimL = (tap1 * (1.0f + 0.12f * modSin) - tap2 * (1.0f + 0.12f * modCos)) * 0.5f;
-        const float dimR = (-tap3 * (1.0f - 0.12f * modSin) + tap4 * (1.0f - 0.12f * modCos)) * 0.5f;
-
         // Dimension blend
-        const float wetL = hyperOutL + dimL * currentDimMix_;
-        const float wetR = hyperOutR + dimR * currentDimMix_;
+        const float wetL = dimActive ? hyperOutL + dimL * currentDimMix_ : hyperOutL;
+        const float wetR = dimActive ? hyperOutR + dimR * currentDimMix_ : hyperOutR;
 
         // Apply final level
         l[i] = flushDenormal (wetL * currentLevel_);

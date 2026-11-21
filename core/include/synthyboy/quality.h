@@ -96,12 +96,22 @@ struct Quality
         core/engine-own/fx/fx_makeup.h, docs/release/TIER-LEVEL-COMPENSATION.md): the sound keeps the level of the full quality, the character of the effect is still missing. Does nothing
         while no effect that is on is bypassed (the signal path is then the one of every earlier version). false: the bypassed effect leaves nothing (the levels of before the makeup). */
     bool fxMakeup = true;
+    /** The note start of the Spectral oscillator is spread over the host blocks (core/spectral start_ledger.h, docs/plans/spectral-start.md): a chord whose start work does not fit the budget of one block
+        starts its last voices some control periods later (they are silent until then). Negative (default): by the tier, on when `oversampling` is 1 (low). 0 off, 1 on. It needs the 32 sample
+        event grid of the control economy (see spectralStartOf), without it the setting does nothing. */
+    int spectralStart = -1;
 };
 
 /** The economy groups a quality runs with (see Quality::economy). */
 constexpr uint32_t economyOf (const Quality& q) noexcept
 {
     return q.economy < 0 ? (q.oversampling <= 1 ? static_cast<uint32_t> (kEconomyAll) : 0u) : (static_cast<uint32_t> (q.economy) & static_cast<uint32_t> (kEconomyAll));
+}
+
+/** Whether the Spectral start stagger runs with this quality: the setting, and the control economy (its event grid makes the stagger independent of the host block size). */
+constexpr bool spectralStartOf (const Quality& q) noexcept
+{
+    return (q.spectralStart < 0 ? q.oversampling <= 1 : q.spectralStart != 0) && (economyOf (q) & static_cast<uint32_t> (kEconomyControl)) != 0u;
 }
 
 constexpr Quality qualityForTier (Tier tier) noexcept

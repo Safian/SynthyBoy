@@ -5,7 +5,7 @@
 // A profile is the engine's quality spelled out setting by setting: the polyphony cap, the unison cap, the interpolation of the sample oscillators, the effects that may run
 // and the four economy groups of the own engine (core/include/synthyboy/quality.h, EconomyFlags). It is written as a text, a base and changes to it:
 //
-//     low | medium | high [, voices=1..32] [, unison=1..16] [, warp=2x|4x] [, morph=half|full] [, math=fast|exact] [, control=economy|full] [, fx=low|all] [, samples=low|medium|high]
+//     low | medium | high [, voices=1..32] [, unison=1..16] [, warp=2x|4x] [, morph=half|full] [, math=fast|exact] [, control=economy|full] [, start=stagger|off] [, fx=low|all] [, samples=low|medium|high]
 //
 // "low" is what the MPC build has always run (8 voices, 3 unison voices per oscillator, every economy group, the heavy effects bypassed); "medium" and "high" are the tiers of
 // quality.h. Example: "low,unison=7,warp=4x" keeps the cheap approximations and gives seven unison voices and the 4x warps.
@@ -43,10 +43,11 @@ struct Profile
     int samples = 0;         // interpolation of the sample oscillators: 0 low, 1 medium, 2 high (the engine's tier number)
     uint32_t fxMask = synthyboy::qualityForTier (synthyboy::Tier::low).fxMask;
     uint32_t economy = synthyboy::kEconomyAll;
+    bool stagger = true;     // the note start of the Spectral oscillator is spread over the blocks (Quality::spectralStart; it needs the control economy)
 
     bool operator== (const Profile& o) const noexcept
     {
-        return maxVoices == o.maxVoices && unison == o.unison && samples == o.samples && fxMask == o.fxMask && economy == o.economy;
+        return maxVoices == o.maxVoices && unison == o.unison && samples == o.samples && fxMask == o.fxMask && economy == o.economy && stagger == o.stagger;
     }
     bool operator!= (const Profile& o) const noexcept { return ! (*this == o); }
 };
@@ -56,12 +57,12 @@ inline Profile profileLow() noexcept { return Profile {}; }
 inline Profile profileMedium() noexcept
 {
     const synthyboy::Quality q = synthyboy::qualityForTier (synthyboy::Tier::medium);
-    return Profile { q.maxVoices, q.maxUnison, 1, q.fxMask, 0u };
+    return Profile { q.maxVoices, q.maxUnison, 1, q.fxMask, 0u, false };
 }
 inline Profile profileHigh() noexcept
 {
     const synthyboy::Quality q = synthyboy::qualityForTier (synthyboy::Tier::high);
-    return Profile { q.maxVoices, q.maxUnison, 2, q.fxMask, 0u };
+    return Profile { q.maxVoices, q.maxUnison, 2, q.fxMask, 0u, false };
 }
 
 /** Reads a profile text (the grammar at the top; spaces around the parts are ignored). False with a reason in `error` when it does not parse; `out` is then untouched. */
@@ -120,6 +121,11 @@ inline bool parseProfile (const std::string& text, Profile& out, std::string* er
         else if (key == "morph")   { if (value != "half" && value != "full") return fail ("morph must be half or full, not '" + value + "'"); flag (p.economy, synthyboy::kEconomyMorph, value == "half"); }
         else if (key == "math")    { if (value != "fast" && value != "exact") return fail ("math must be fast or exact, not '" + value + "'"); flag (p.economy, synthyboy::kEconomyMath, value == "fast"); }
         else if (key == "control") { if (value != "economy" && value != "full") return fail ("control must be economy or full, not '" + value + "'"); flag (p.economy, synthyboy::kEconomyControl, value == "economy"); }
+        else if (key == "start")
+        {
+            if (value != "stagger" && value != "off") return fail ("start must be stagger or off, not '" + value + "'");
+            p.stagger = value == "stagger";
+        }
         else if (key == "fx")
         {
             if (value == "low") p.fxMask = profileLow().fxMask;
@@ -150,6 +156,7 @@ inline std::string describeProfile (const Profile& p)
     t += (p.economy & synthyboy::kEconomyMorph) != 0 ? ",morph=half" : ",morph=full";
     t += (p.economy & synthyboy::kEconomyMath) != 0 ? ",math=fast" : ",math=exact";
     t += (p.economy & synthyboy::kEconomyControl) != 0 ? ",control=economy" : ",control=full";
+    t += p.stagger ? ",start=stagger" : ",start=off";
     t += p.fxMask == synthyboy::kFxAll ? ",fx=all" : ",fx=low";
     t += p.samples == 0 ? ",samples=low" : (p.samples == 1 ? ",samples=medium" : ",samples=high");
     return t;
@@ -165,6 +172,7 @@ inline synthyboy::Quality profileQuality (const Profile& p) noexcept
     q.interpolation = p.samples == 2 ? synthyboy::Interpolation::spectral : synthyboy::Interpolation::linear;
     q.fxMask = p.fxMask;
     q.economy = static_cast<int> (p.economy & synthyboy::kEconomyAll);
+    q.spectralStart = p.stagger ? 1 : 0;
     return q;
 }
 

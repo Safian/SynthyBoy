@@ -12,9 +12,11 @@
 #include <array>
 
 #include "../osc/warp.h"
+#include "synthyboy/aa_switch.h"
 #include "../voice/filter_unit.h"
 #include "fx_compressor.h"
 #include "fx_dsp.h"
+#include "fx_adaa.h"
 #include "fx_eq.h"
 #include "fx_reverb.h"
 
@@ -680,11 +682,18 @@ public:
         held[0] = held[1] = 0.0f;
         holdPhase[0] = holdPhase[1] = 0.0f;
         dc[0] = dc[1] = 0.0f;
+        adaaState[0] = adaaState[1] = adaa::State();
         counter = 0;
     }
-    void set (const Params& np) noexcept { p = np; }
+    void set (const Params& np) noexcept
+    {
+        if (np.type != p.type) // switching the type clears the state (docs/engine-spec/06-effects.md section 4)
+            adaaState[0] = adaaState[1] = adaa::State();
+        p = np;
+    }
     void process (float* l, float* r, int n) noexcept
     {
+        aaOn = (synthyboy::aa::off() & synthyboy::aa::kDistortion) == 0; // the test and benchmark switch, read once per call
         const float g = std::pow (10.0f, p.driveDb * 0.05f);
         const float cg = Svf::coefficient (p.cutoff, sampleRate);
         const float k = 2.0f - 1.9f * clamp01 (p.resonance);
@@ -699,7 +708,7 @@ public:
                 const float dry = io[c][i];
                 float x = dry;
                 if (p.order == 1) x = filt (c, x, cg, k);
-                x = shape (c, x * g, u, d, dcA);
+                x = shape (c, x, g, u, d, dcA);
                 if (p.order == 2) x = filt (c, x, cg, k);
                 io[c][i] = dry * (1.0f - p.mix) + x * p.mix;
             }
@@ -713,12 +722,16 @@ private:
         const float b = std::clamp (p.blend, 0.0f, 2.0f);
         return b < 1.0f ? lerp (svf[c].lp, svf[c].bp * k, b) : lerp (svf[c].bp * k, svf[c].hp, b - 1.0f);
     }
-    float shape (int c, float v, float u, float d, float dcA) noexcept
+    float shape (int c, float x, float g, float u, float d, float dcA) noexcept
     {
         // v = x * drive; the laws of docs/engine-spec/06-effects.md section 4
+        const float v = x * g;
         auto th = [this] (float a) { return fast ? fastmath::tanh (a) : std::tanh (a); };
         auto ex = [this] (float a) { return fast ? fastmath::exp (a) : std::exp (a); };
         float y;
+        if (aaOn && p.type >= 0 && p.type < 32 && ((adaa::kConverted >> p.type) & 1u) != 0u)
+            y = adaa::step (p.type, adaaState[c], x, g, fast); // first-order ADAA (fx_adaa.h)
+        else
         switch (p.type)
         {
             case 0: y = th (v); break;
@@ -763,6 +776,8 @@ private:
     double sampleRate = 48000.0;
     Svf svf[2];
     float held[2] = {}, holdPhase[2] = {}, dc[2] = {};
+    adaa::State adaaState[2];
+    bool aaOn = true;
     unsigned counter = 0;
 };
 

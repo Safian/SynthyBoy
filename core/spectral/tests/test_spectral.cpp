@@ -1691,3 +1691,85 @@ TEST (spectral_deterministic_note_serial_offsets)
     // Comparison of v1 and v2 output would follow.
 }
 
+// docs/plans/spectral-start.md S3: the cost model of a note start (frames and shapings by quad, a quad = 4 chunks of 32 samples = 128 samples) is what the voice really makes. The counters
+// of the voice count the frames and the shapings of the start (not the regular frames of the hops), the model is the pure function startWork / startPattern.
+TEST (spectral_the_start_work_by_quad_is_what_the_voice_makes)
+{
+    struct Row { int offset; int frames[kStartQuads]; int shapes[kStartQuads]; unsigned short us[kStartQuads]; };
+    const Row rows[4] = {
+        {   0, { 1, 1, 0, 0, 1 }, { 1, 1, 0, 0, 1 }, { 156, 156, 0, 0, 156 } },
+        { 128, { 2, 0, 0, 1, 0 }, { 1, 0, 0, 1, 0 }, { 245, 0, 0, 156, 0 } },
+        { 256, { 2, 0, 1, 0, 0 }, { 1, 0, 1, 0, 0 }, { 245, 0, 156, 0, 0 } },
+        { 384, { 1, 2, 0, 0, 0 }, { 1, 1, 0, 0, 0 }, { 156, 245, 0, 0, 0 } },
+    };
+    const unsigned short smearUs[kStartQuads] = { 535, 0, 0, 0, 0 };
+
+    // the pure function
+    for (int k = 0; k < 4; ++k)
+    {
+        int f[kStartQuads], s[kStartQuads];
+        SpectralVoice::startWork (rows[k].offset, false, f, s);
+        int total = 0;
+        for (int i = 0; i < kStartQuads; ++i)
+        {
+            CHECK_EQ (f[i], rows[k].frames[i]);
+            CHECK_EQ (s[i], rows[k].shapes[i]);
+            total += f[i];
+        }
+        CHECK_EQ (total, 3);   // every start makes the three frames of the priming that exist
+        for (int channels = 1; channels <= 2; ++channels)
+        {
+            const StartPattern pattern = SpectralVoice::startPattern (rows[k].offset, false, channels);
+            for (int i = 0; i < kStartQuads; ++i)
+                CHECK_EQ (static_cast<int> (pattern.us[i]), rows[k].us[i] * channels);
+        }
+        SpectralVoice::startWork (rows[k].offset, true, f, s);
+        CHECK (f[0] == 3 && s[0] == 4 && f[1] + f[2] + f[3] + f[4] == 0 && s[1] + s[2] + s[3] + s[4] == 0);
+        const StartPattern smear = SpectralVoice::startPattern (rows[k].offset, true, 1);
+        for (int i = 0; i < kStartQuads; ++i)
+            CHECK_EQ (smear.us[i], smearUs[i]);
+    }
+
+    // the voice: counters per quad of 4 chunks of 32 samples, mono and stereo sample, with and without the Smear warp
+    std::vector<float> l = rich (220.0, 1.5), r = sine (330.0, 1.5);
+    SampleData stereoData;
+    stereoData.loadFromFrames (l.data(), r.data(), static_cast<int64_t> (l.size()), kSr);
+    Analysis stereo;
+    CHECK (stereo.build (stereoData.view()));
+    CHECK_EQ (stereo.channels(), 2);
+    Tone mono (l);
+    for (int ch = 1; ch <= 2; ++ch)
+        for (int smears = 0; smears < 2; ++smears)
+            for (int k = 0; k < 4; ++k)
+            {
+                const Analysis& analysis = ch == 1 ? mono.analysis : stereo;
+                SpectralParams p = frozen (0.4f);
+                if (smears != 0)
+                {
+                    p.warpType[0] = static_cast<int> (Warp::smear);
+                    p.warpAmount[0] = 0.5f;
+                }
+                SpectralVoice v;
+                v.prepare (kSr);
+                v.noteOn (&analysis, p, 0.0f, rows[k].offset);
+                int expectF[kStartQuads], expectS[kStartQuads];
+                SpectralVoice::startWork (rows[k].offset, smears != 0, expectF, expectS);
+                int f = 0, s = 0, lastF = 0, lastS = 0;
+                std::vector<float> a (32), b (32);
+                for (int quad = 0; quad < kStartQuads + 1; ++quad)
+                {
+                    for (int chunk = 0; chunk < 4; ++chunk)
+                        v.process (p, a.data(), b.data(), 32);
+                    v.startCountersForTest (f, s);
+                    const int wantF = quad < kStartQuads ? expectF[quad] * ch : 0;
+                    const int wantS = quad < kStartQuads ? expectS[quad] * ch : 0;
+                    const bool okF = CHECK_EQ (f - lastF, wantF);
+                    const bool okS = CHECK_EQ (s - lastS, wantS);
+                    if (! (okF && okS))
+                        std::printf ("    channels %d smear %d offset %d quad %d: frames %d (model %d) shapings %d (model %d)\n", ch, smears, rows[k].offset, quad, f - lastF, wantF, s - lastS, wantS);
+                    lastF = f;
+                    lastS = s;
+                }
+            }
+}
+

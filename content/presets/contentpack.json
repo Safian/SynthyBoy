@@ -681,13 +681,13 @@
     },
     {
       "path": "Pad/lorenz_garden.sbpreset",
-      "sha256": "6878052871829d8f9108520e97eaf8383434d4aa402d98f322a5fc401da7c81f",
-      "size": 50628
+      "sha256": "4a718fed81aecc216230a4c7a5b857850dc5d6e0d9f77a02d51600e8c7f6de31",
+      "size": 50646
     },
     {
       "path": "FX/breath_of_machines.sbpreset",
-      "sha256": "8af458b5cdc2fbdbfccb84dfa3970fca02b102d700316d9f4fbbb49f70bcc1eb",
-      "size": 50597
+      "sha256": "66277bf47310ae815b58c2edb0b96f256087a2b5041c10589f4c21aa06187440",
+      "size": 50598
     },
     {
       "path": "Pad/chord_cloud_pad.sbpreset",

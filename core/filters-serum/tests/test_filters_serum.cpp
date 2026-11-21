@@ -1288,3 +1288,399 @@ TEST (serum_diode_probe_before_change)
 
     CHECK (true);
 }
+
+// =============================================================================
+// Diode ladder tests (docs/plans/diode-ladder.md, task A1): the zero-delay
+// feedback, the lifted 0.95 clamp and the cached coefficients of DiodeLadder.
+// =============================================================================
+
+namespace
+{
+
+/** A verbatim copy of DiodeLadder as it stood before task A1 (unit delay in the feedback, g clamped at 0.95, tan () every sample). */
+struct LegacyDiodeLadder
+{
+    float s[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    float hpState = 0.0f;
+
+    void reset() noexcept
+    {
+        for (int i = 0; i < 4; ++i)
+            s[i] = 0.0f;
+        hpState = 0.0f;
+    }
+
+    float process (float in, float g, float res, float drive, float sampleRate) noexcept
+    {
+        for (int i = 0; i < 4; ++i)
+            s[i] = sanitize (s[i]);
+        hpState = sanitize (hpState);
+
+        const float gSafe = std::max (1e-5f, std::min (g, 0.95f));
+        const float G = gSafe / (1.0f + gSafe);
+        const float k = 3.82f * res;
+
+        const float gHp = std::tan (kPi * 30.0f / static_cast<float> (sampleRate));
+        const float gHpSafe = std::max (1e-5f, std::min (gHp, 0.5f));
+        const float GHp = gHpSafe / (1.0f + gHpSafe);
+
+        const float fbLP = GHp * (s[3] - hpState) + hpState;
+        hpState = sanitize (GHp * (s[3] - hpState) + fbLP);
+        const float fbHP = s[3] - fbLP;
+
+        const float driveGain = 1.0f + 4.0f * drive;
+        const float u = softClip (driveGain * in - k * softClip (fbHP));
+
+        float y = u;
+        for (int i = 0; i < 4; ++i)
+        {
+            const float v = G * (y - s[i]);
+            y = v + s[i];
+            s[i] = sanitize (v + y);
+        }
+        return y;
+    }
+};
+
+double refSoftClip (double x)
+{
+    if (x <= -3.0)
+        return -1.0;
+    if (x >= 3.0)
+        return 1.0;
+    const double x2 = x * x;
+    return x * (27.0 + x2) / (27.0 + 9.0 * x2);
+}
+
+/** The converged solution of the delay-free diode ladder in double precision (the root of u - sc (D - k sc (p + c u)) by bisection). */
+struct RefDiode
+{
+    double s[4] = { 0.0, 0.0, 0.0, 0.0 };
+    double h = 0.0;
+
+    double step (double in, double g, double res, double drive, double sr)
+    {
+        const double pi = 3.14159265358979323846;
+        const double gS = std::max (1.0e-5, std::min (g, 50.0));
+        const double G = gS / (1.0 + gS);
+        const double G0 = 1.0 / (1.0 + gS);
+        const double gh = std::max (1.0e-5, std::min (std::tan (pi * 30.0 / sr), 0.5));
+        const double a = 1.0 / (1.0 + gh);
+        const double GH = gh / (1.0 + gh);
+        const double k = 3.82 * res;
+        const double D = (1.0 + 4.0 * drive) * in;
+        const double S = G0 * (G * G * G * s[0] + G * G * s[1] + G * s[2] + s[3]);
+        const double p = a * (S - h);
+        const double c = a * G * G * G * G;
+
+        double lo = -1.0, hi = 1.0;
+        for (int i = 0; i < 100; ++i)
+        {
+            const double mid = 0.5 * (lo + hi);
+            const double fm = mid - refSoftClip (D - k * refSoftClip (p + c * mid));
+            if (fm > 0.0)
+                hi = mid;
+            else
+                lo = mid;
+        }
+        const double u = 0.5 * (lo + hi);
+
+        double y = u;
+        for (int i = 0; i < 4; ++i)
+        {
+            const double v = G * (y - s[i]);
+            y = v + s[i];
+            s[i] = v + y;
+        }
+        h += 2.0 * GH * (y - h);
+        return y;
+    }
+};
+
+/** The -3 dB corner of four equal one-poles at the cutoff knob fc: fs / pi atan (0.43498 tan (pi fc / fs)). */
+double diodeExpectedCorner (double sr, double fc)
+{
+    const double pi = 3.14159265358979323846;
+    return sr / pi * std::atan (0.43498 * std::tan (pi * fc / sr));
+}
+
+void diodeSetup (Filter& filter, double sr, float fc, float res, float drive, float var = 0.0f)
+{
+    filter.prepare (sr);
+    filter.setType (static_cast<int> (FilterType::AcidLadder));
+    FilterParams p;
+    p.cutoff = fc;
+    p.resonance = res;
+    p.drive = drive;
+    p.var = var;
+    p.blend = 0.0f;
+    p.mix = 1.0f;
+    filter.setParams (p);
+    filter.reset();
+}
+
+std::vector<float> diodeSaw (size_t n, double hz, double sr, float amplitude)
+{
+    std::vector<float> x (n);
+    double phase = 0.0;
+    for (auto& v : x)
+    {
+        v = amplitude * static_cast<float> (2.0 * phase - 1.0);
+        phase += hz / sr;
+        if (phase >= 1.0)
+            phase -= 1.0;
+    }
+    return x;
+}
+
+double diodeRelRms (const std::vector<double>& ref, const std::vector<double>& got, size_t from)
+{
+    double e = 0.0, r = 0.0;
+    for (size_t i = from; i < ref.size(); ++i)
+    {
+        const double d = got[i] - ref[i];
+        e += d * d;
+        r += ref[i] * ref[i];
+    }
+    return std::sqrt (e / std::max (r, 1.0e-30));
+}
+
+} // namespace
+
+// D1: the cutoff knob keeps opening above 10.67 kHz.
+TEST (serum_diode_d1_cutoff_reach)
+{
+    const double sr = 44100.0;
+    const float cutoffs[] = { 8000.0f, 12000.0f, 16000.0f, 19000.0f };
+    for (float fc : cutoffs)
+    {
+        Filter filter;
+        diodeSetup (filter, sr, fc, 0.0f, 0.0f);
+        const double f3db = findCornerFrequency (filter, sr);
+        const double expected = diodeExpectedCorner (sr, static_cast<double> (fc));
+        CHECK (std::fabs (f3db - expected) / expected < 0.03);
+    }
+}
+
+// D2: no self-oscillation, bounded, at every cutoff up to 0.49 sr.
+TEST (serum_diode_d2_stability)
+{
+    const double sr = 44100.0;
+    const float cutoffs[] = { 2000.0f, 5000.0f, 8000.0f, 10000.0f, 12000.0f, 16000.0f, 19000.0f, 20000.0f, static_cast<float> (sr * 0.49) };
+    const float resonances[] = { 1.0f, 0.5f };
+    for (float res : resonances)
+    {
+        const float drive = res == 1.0f ? 1.0f : 0.5f;
+        for (float fc : cutoffs)
+        {
+            Filter filter;
+            diodeSetup (filter, sr, fc, res, drive, 0.5f);
+
+            SimpleRng rng;
+            const int nNoise = static_cast<int> (sr * 2.0);
+            const int nSilence = static_cast<int> (sr * 2.0);
+            float peak = 0.0f;
+            bool finite = true;
+            for (int i = 0; i < nNoise; ++i)
+            {
+                const float y = filter.process (rng.nextFloat (-1.0f, 1.0f));
+                if (!std::isfinite (y))
+                    finite = false;
+                peak = std::max (peak, std::fabs (y));
+            }
+            float tailPeak = 0.0f;
+            for (int i = 0; i < nSilence; ++i)
+            {
+                const float y = filter.process (0.0f);
+                if (!std::isfinite (y))
+                    finite = false;
+                peak = std::max (peak, std::fabs (y));
+                if (i >= nSilence - 1000)
+                    tailPeak = std::max (tailPeak, std::fabs (y));
+            }
+            CHECK (finite);
+            CHECK (peak < 8.0f);
+            CHECK (tailPeak < 1.0e-3f);
+        }
+    }
+}
+
+// D3: the resonance peak sits at the knob frequency (calc: 4954 Hz at 5 kHz, 9924 Hz at 10 kHz, res 100 %).
+TEST (serum_diode_d3_tuning)
+{
+    const double sr = 44100.0;
+    struct Row
+    {
+        float fc;
+        double expectedHz;
+    };
+    const Row rows[] = { { 5000.0f, 4954.0 }, { 10000.0f, 9924.0 } };
+    for (const auto& row : rows)
+    {
+        Filter filter;
+        diodeSetup (filter, sr, row.fc, 1.0f, 0.0f);
+        const std::vector<float> ir = diodeProbeImpulse (filter);
+        const int n = static_cast<int> (ir.size());
+        double bestMag = 0.0, bestHz = 0.0;
+        for (double hz = 200.0; hz <= 0.45 * sr; hz += 5.0)
+        {
+            double re = 0.0, im = 0.0;
+            const double omega = 2.0 * 3.14159265358979323846 * hz / sr;
+            for (int i = 0; i < n; ++i)
+            {
+                re += ir[i] * std::cos (omega * i);
+                im -= ir[i] * std::sin (omega * i);
+            }
+            const double mag = std::sqrt (re * re + im * im);
+            if (mag > bestMag)
+            {
+                bestMag = mag;
+                bestHz = hz;
+            }
+        }
+        CHECK (std::fabs (bestHz - row.expectedHz) / row.expectedHz < 0.03);
+    }
+}
+
+// D4: a fast cutoff sweep at full resonance stays finite and bounded (guard).
+TEST (serum_diode_d4_modulation)
+{
+    const double sr = 44100.0;
+    Filter filter;
+    diodeSetup (filter, sr, 200.0f, 1.0f, 0.5f, 0.5f);
+    FilterParams p;
+    p.cutoff = 200.0f;
+    p.resonance = 1.0f;
+    p.drive = 0.5f;
+    p.var = 0.5f;
+    p.blend = 0.0f;
+    p.mix = 1.0f;
+
+    SimpleRng rng;
+    const int nTotal = static_cast<int> (sr * 1.0);
+    const int sweepSamples = static_cast<int> (sr * 0.050f);
+    float peak = 0.0f;
+    bool finite = true;
+    for (int i = 0; i < nTotal; ++i)
+    {
+        const int posInPeriod = i % sweepSamples;
+        const float halfPeriod = static_cast<float> (sweepSamples) * 0.5f;
+        float norm = 0.0f;
+        if (static_cast<float> (posInPeriod) < halfPeriod)
+            norm = static_cast<float> (posInPeriod) / halfPeriod;
+        else
+            norm = 1.0f - (static_cast<float> (posInPeriod) - halfPeriod) / halfPeriod;
+        p.cutoff = 200.0f + norm * (20000.0f - 200.0f);
+        filter.setParams (p);
+        const float y = filter.process (rng.nextFloat (-1.0f, 1.0f));
+        if (!std::isfinite (y))
+            finite = false;
+        peak = std::max (peak, std::fabs (y));
+    }
+    CHECK (finite);
+    CHECK (peak < 8.0f);
+}
+
+// D5: 96 kHz: the corners follow the knob and the filter stays bounded at 42 kHz.
+TEST (serum_diode_d5_96khz)
+{
+    const double sr = 96000.0;
+    const float cutoffs[] = { 16000.0f, 24000.0f, 36000.0f, 42000.0f };
+    for (float fc : cutoffs)
+    {
+        Filter filter;
+        diodeSetup (filter, sr, fc, 0.0f, 0.0f);
+        const double f3db = findCornerFrequency (filter, sr);
+        const double expected = diodeExpectedCorner (sr, static_cast<double> (fc));
+        CHECK (std::fabs (f3db - expected) / expected < 0.03);
+    }
+
+    Filter filter;
+    diodeSetup (filter, sr, 42000.0f, 1.0f, 1.0f);
+    SimpleRng rng;
+    float peak = 0.0f;
+    bool finite = true;
+    for (int i = 0; i < 96000; ++i)
+    {
+        const float y = filter.process (rng.nextFloat (-1.0f, 1.0f));
+        if (!std::isfinite (y))
+            finite = false;
+        peak = std::max (peak, std::fabs (y));
+    }
+    CHECK (finite);
+    CHECK (peak < 8.0f);
+}
+
+// D6: at resonance 0 below the old limit (g <= 0.95) the new ladder is the old one, bit for bit.
+TEST (serum_diode_d6_res0_bit_identical_below_the_old_limit)
+{
+    const std::vector<float> saw = diodeSaw (4410, 110.0, 44100.0, 0.8f);
+    const float drives[] = { 0.0f, 0.5f, 1.0f };
+    const float cutoffs[] = { 100.0f, 1000.0f, 5000.0f, 10000.0f };
+    for (float drive : drives)
+    {
+        for (float fc : cutoffs)
+        {
+            const float g = std::tan (kPi * fc / 44100.0f);
+            LegacyDiodeLadder legacy;
+            DiodeLadder now;
+            int mismatches = 0;
+            for (float x : saw)
+            {
+                const float a = legacy.process (x, g, 0.0f, drive, 44100.0f);
+                const float b = now.process (x, g, 0.0f, drive, 44100.0f);
+                if (!(a == b))
+                    ++mismatches;
+            }
+            CHECK_EQ (mismatches, 0);
+        }
+    }
+}
+
+// D7: the float ladder matches the converged double-precision solution (and follows a sample rate change).
+TEST (serum_diode_d7_matches_the_converged_solution)
+{
+    struct Setting
+    {
+        float res, drive;
+    };
+    const Setting settings[] = { { 0.5f, 0.5f }, { 1.0f, 0.5f }, { 1.0f, 1.0f } };
+    const float cutoffs[] = { 500.0f, 5000.0f, 15000.0f, 21609.0f };
+    const std::vector<float> saw = diodeSaw (22050, 110.0, 44100.0, 0.8f);
+
+    for (float fc : cutoffs)
+    {
+        for (const auto& st : settings)
+        {
+            const float g = std::tan (kPi * fc / 44100.0f);
+            DiodeLadder dl;
+            RefDiode ref;
+            std::vector<double> r (saw.size()), y (saw.size());
+            for (size_t i = 0; i < saw.size(); ++i)
+            {
+                y[i] = static_cast<double> (dl.process (saw[i], g, st.res, st.drive, 44100.0f));
+                r[i] = ref.step (static_cast<double> (saw[i]), static_cast<double> (g), static_cast<double> (st.res), static_cast<double> (st.drive), 44100.0);
+            }
+            CHECK (diodeRelRms (r, y, 11025) < 1.0e-3);
+        }
+    }
+
+    // second leg: the sample rate changes mid-stream (both the cutoff and the 30 Hz high-pass coefficient follow it)
+    {
+        const std::vector<float> saw2 = diodeSaw (2000, 110.0, 44100.0, 0.8f);
+        const float g44 = std::tan (kPi * 5000.0f / 44100.0f);
+        const float g96 = std::tan (kPi * 5000.0f / 96000.0f);
+        DiodeLadder dl;
+        RefDiode ref;
+        std::vector<double> r (saw2.size()), y (saw2.size());
+        for (size_t i = 0; i < saw2.size(); ++i)
+        {
+            const bool second = i >= 1000;
+            const float g = second ? g96 : g44;
+            const float sr = second ? 96000.0f : 44100.0f;
+            y[i] = static_cast<double> (dl.process (saw2[i], g, 1.0f, 0.5f, sr));
+            r[i] = ref.step (static_cast<double> (saw2[i]), static_cast<double> (g), 1.0, 0.5, static_cast<double> (sr));
+        }
+        CHECK (diodeRelRms (r, y, 1000) < 1.0e-3);
+    }
+}

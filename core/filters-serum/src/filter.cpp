@@ -30,34 +30,72 @@ class FilterImpl
 public:
     FilterImpl() = default;
     ~FilterImpl() = default;
+    // the delay lines point into delayArena_: a copy would point into the other filter's arena
+    FilterImpl (const FilterImpl&) = delete;
+    FilterImpl& operator= (const FilterImpl&) = delete;
 
     void prepare (double sampleRate)
     {
         sampleRate_ = std::max (22050.0, std::min (sampleRate, 192000.0));
         const auto srFloat = static_cast<float> (sampleRate_);
 
+        // The delay lines of three mutually exclusive filter families share ONE arena (the families never run together: a filter has one type). Group 0: the combs of
+        // Cmb / Flg / Phs, DistComb and Comb2 (two lines); group 1: Allpasses and Diffusor (eight stages); group 2: Combs and Reverb (four combs, two allpasses).
+        // Every line is the length DelayLine::prepare (n) would have allocated (n + 4); each group starts at the start of the arena.
+
         // Allocate maximum delay buffers (min cutoff 20 Hz -> ~9600 samples at 192 kHz)
         const size_t maxDelaySamples = static_cast<size_t> (sampleRate_ * 0.06) + 64; // ~11500 samples
-        combDelay1_.prepare (maxDelaySamples);
-        combDelay2_.prepare (maxDelaySamples);
+        const size_t combLen = maxDelaySamples + 4;
 
         // Diffuser delays (8 stages with staggered lengths)
         static constexpr float kDiffuserMs[8] = { 1.2f, 2.5f, 4.1f, 6.7f, 9.3f, 13.1f, 17.5f, 23.3f };
+        size_t diffLen[8];
+        size_t len1 = 0;
         for (int i = 0; i < 8; ++i)
         {
-            const size_t diffLen = static_cast<size_t> (kDiffuserMs[i] * 0.001f * srFloat) + 16;
-            diffuserDelays_[i].prepare (diffLen);
+            diffLen[i] = static_cast<size_t> (kDiffuserMs[i] * 0.001f * srFloat) + 16 + 4;
+            len1 += diffLen[i];
         }
 
         // Reverb comb & allpass delays
         static constexpr float kReverbCombMs[4] = { 29.7f, 37.1f, 41.3f, 43.7f };
+        size_t revLen[4];
+        size_t len2 = 0;
         for (int i = 0; i < 4; ++i)
         {
-            const size_t combLen = static_cast<size_t> (kReverbCombMs[i] * 0.001f * srFloat) + 16;
-            reverbCombs_[i].prepare (combLen);
+            revLen[i] = static_cast<size_t> (kReverbCombMs[i] * 0.001f * srFloat) + 16 + 4;
+            len2 += revLen[i];
         }
-        reverbAP_[0].prepare (static_cast<size_t> (5.1f * 0.001f * srFloat) + 16, 0.7f);
-        reverbAP_[1].prepare (static_cast<size_t> (12.7f * 0.001f * srFloat) + 16, 0.7f);
+        const size_t ap0Len = static_cast<size_t> (5.1f * 0.001f * srFloat) + 16 + 4;
+        const size_t ap1Len = static_cast<size_t> (12.7f * 0.001f * srFloat) + 16 + 4;
+        len2 += ap0Len + ap1Len;
+
+        const size_t len0 = 2 * combLen;
+        groupLen_[0] = len0;
+        groupLen_[1] = len1;
+        groupLen_[2] = len2;
+        delayArena_.assign (std::max ({ len0, len1, len2 }), 0.0f);   // the only heap block of the delay lines
+
+        float* base = delayArena_.data();
+        combDelay1_.bind (base, combLen);
+        combDelay2_.bind (base + combLen, combLen);
+        size_t off = 0;
+        for (int i = 0; i < 8; ++i)
+        {
+            diffuserDelays_[i].bind (base + off, diffLen[i]);
+            off += diffLen[i];
+        }
+        off = 0;
+        for (int i = 0; i < 4; ++i)
+        {
+            reverbCombs_[i].bind (base + off, revLen[i]);
+            off += revLen[i];
+        }
+        reverbAP_[0].bind (base + off, ap0Len, 0.7f);
+        off += ap0Len;
+        reverbAP_[1].bind (base + off, ap1Len, 0.7f);
+
+        delayGroup_ = delayGroupFor (type_);
 
         reset();
     }
@@ -104,7 +142,76 @@ public:
     void setType (int type) noexcept
     {
         if (type >= 0 && type < kFilterTypeCount)
+        {
             type_ = static_cast<FilterType> (type);
+            const int newGroup = delayGroupFor (type_);
+            if (newGroup >= 0 && newGroup != delayGroup_ && ! delayArena_.empty())
+            {
+                // another family of delay lines takes the arena over: it starts from silence, whatever the family before it left there
+                std::fill (delayArena_.begin(), delayArena_.begin() + static_cast<std::ptrdiff_t> (groupLen_[newGroup]), 0.0f);
+                combDelay1_.rewind();
+                combDelay2_.rewind();
+                for (auto& d : diffuserDelays_)
+                    d.rewind();
+                for (auto& rc : reverbCombs_)
+                    rc.rewind();
+                reverbAP_[0].delay.rewind();
+                reverbAP_[1].delay.rewind();
+                // the one-pole memories the families run on beside the lines (the feedback low-passes of the combs, the reverb and the comb combs, the feedback high-pass,
+                // the phaser all-passes) belong to the family as well: the Combs and Reverb types read combFeedbackLP_ [0..3] and the Cmb / Flg / Phs types [0], and
+                // another family leaves them where its last block ended
+                for (auto& lp : combFeedbackLP_)
+                    lp.reset();
+                combFeedbackHP_.reset();
+                for (auto& ap : phaserAP_)
+                    ap.reset();
+                delayGroup_ = newGroup;
+            }
+        }
+    }
+
+    /** Heap bytes / blocks of the delay lines (tests, through filterDelayBytes () / filterDelayAllocs ()). */
+    size_t delayBytes() const noexcept
+    {
+        size_t n = delayArena_.capacity() * sizeof (float);
+        n += combDelay1_.ownedBytes() + combDelay2_.ownedBytes() + reverbAP_[0].delay.ownedBytes() + reverbAP_[1].delay.ownedBytes();
+        for (const auto& d : diffuserDelays_)
+            n += d.ownedBytes();
+        for (const auto& d : reverbCombs_)
+            n += d.ownedBytes();
+        return n;
+    }
+    size_t delayAllocs() const noexcept
+    {
+        size_t n = delayArena_.capacity() != 0 ? 1u : 0u;
+        n += combDelay1_.ownedAllocs() + combDelay2_.ownedAllocs() + reverbAP_[0].delay.ownedAllocs() + reverbAP_[1].delay.ownedAllocs();
+        for (const auto& d : diffuserDelays_)
+            n += d.ownedAllocs();
+        for (const auto& d : reverbCombs_)
+            n += d.ownedAllocs();
+        return n;
+    }
+
+    /** The family of delay lines a filter type runs on: 0 the combs, 1 the diffuser stages, 2 the reverb combs and allpasses, -1 none. */
+    static int delayGroupFor (FilterType t) noexcept
+    {
+        switch (t)
+        {
+            case FilterType::CmbL: case FilterType::FlgL: case FilterType::PhsL:
+            case FilterType::CmbH: case FilterType::FlgH: case FilterType::PhsH:
+            case FilterType::CmbHL: case FilterType::FlgHL: case FilterType::PhsHL:
+            case FilterType::DistComb1LP: case FilterType::DistComb1BP: case FilterType::DistComb2LP: case FilterType::DistComb2BP:
+            case FilterType::Comb2:
+                return 0;
+            case FilterType::Allpasses:
+            case FilterType::Diffusor:
+                return 1;
+            case FilterType::Combs:
+            case FilterType::Reverb:
+                return 2;
+            default:
+                return -1;
+        }
     }
 
     int getType() const noexcept
@@ -830,6 +937,9 @@ private:
     Biquad biquad1_;
     Biquad biquad2_;
 
+    std::vector<float> delayArena_;   // the storage of all the delay lines below (they overlap: see prepare ())
+    size_t groupLen_[3] = { 0, 0, 0 };
+    int delayGroup_ = -1;             // the family that holds the arena (-1: none yet)
     DelayLine combDelay1_;
     DelayLine combDelay2_;
     DelayLine diffuserDelays_[8];
@@ -1679,6 +1789,32 @@ Filter& Filter::operator= (Filter&&) noexcept = default;
 void Filter::prepare (double sampleRate)
 {
     impl_->prepare (sampleRate);
+}
+
+namespace
+{
+// The tests read the delay memory of a filter; filter.h has no accessor for it. Naming the private member through an explicit instantiation (which is not access checked) keeps the header untouched.
+struct FilterImplAccess
+{
+    using type = std::unique_ptr<FilterImpl> Filter::*;
+    friend type filterImplMember (FilterImplAccess);
+};
+template <typename Tag, typename Tag::type Member>
+struct FilterImplAccessor
+{
+    friend typename Tag::type filterImplMember (Tag) { return Member; }
+};
+template struct FilterImplAccessor<FilterImplAccess, &Filter::impl_>;
+} // namespace
+
+size_t filterDelayBytes (const Filter& f) noexcept
+{
+    return (f.*filterImplMember (FilterImplAccess {}))->delayBytes();
+}
+
+size_t filterDelayAllocs (const Filter& f) noexcept
+{
+    return (f.*filterImplMember (FilterImplAccess {}))->delayAllocs();
 }
 
 void Filter::reset() noexcept

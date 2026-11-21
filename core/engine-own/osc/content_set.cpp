@@ -17,16 +17,19 @@ namespace synthyboy
 {
 namespace own
 {
-std::vector<float> sampleCurve257 (const std::vector<ContentPoint>& pts)
+namespace
+{
+/** A drawn curve sampled at `count` positions (x = i / (count - 1)); empty for fewer than two points. */
+std::vector<float> sampleCurveN (const std::vector<ContentPoint>& pts, int count)
 {
     std::vector<float> out;
     if (pts.size() < 2)
         return out;
-    out.resize (257);
+    out.resize (static_cast<size_t> (count));
     size_t seg = 0;
-    for (int i = 0; i < 257; ++i)
+    for (int i = 0; i < count; ++i)
     {
-        const float x = static_cast<float> (i) / 256.0f;
+        const float x = static_cast<float> (i) / static_cast<float> (count - 1);
         while (seg + 2 < pts.size() && x > pts[seg + 1].x)
             ++seg;
         const ContentPoint& a = pts[seg];
@@ -45,6 +48,17 @@ std::vector<float> sampleCurve257 (const std::vector<ContentPoint>& pts)
     }
     return out;
 }
+} // namespace
+
+std::vector<float> sampleCurve257 (const std::vector<ContentPoint>& pts)
+{
+    return sampleCurveN (pts, 257);
+}
+
+std::vector<float> sampleCurve513 (const std::vector<ContentPoint>& pts)
+{
+    return sampleCurveN (pts, 513);
+}
 
 std::unique_ptr<ContentSet> ContentSet::build (const StateContent& content, const IContentStore* store)
 {
@@ -61,6 +75,22 @@ std::unique_ptr<ContentSet> ContentSet::build (const StateContent& content, cons
                 set->specFilterY[r.osc - 1].push_back (p.y);
             }
         }
+    // the X-Shaper transfer curves of the distortion (docs/engine-spec/06-effects.md section 4): 513 points and the cumulative trapezoid integral of each (empty = the identity)
+    for (int q = 0; q < 2; ++q)
+    {
+        set->shaper[q] = sampleCurve513 (q == 0 ? content.shaperA : content.shaperB);
+        if (set->shaper[q].empty())
+            continue;
+        const std::vector<float>& y = set->shaper[q];
+        set->shaperInt[q].resize (y.size());
+        double sum = 0.0;
+        for (size_t i = 0; i < y.size(); ++i)
+        {
+            set->shaperInt[q][i] = static_cast<float> (sum / 512.0);
+            if (i + 1 < y.size())
+                sum += 0.5 * (static_cast<double> (y[i]) + static_cast<double> (y[i + 1]));
+        }
+    }
     if (store == nullptr)
         return set;
     std::vector<uint8_t> bytes;
