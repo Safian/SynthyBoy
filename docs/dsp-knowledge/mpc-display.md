@@ -27,6 +27,12 @@
 - XL (RK3588 VOP2): planes have `zpos` (range, mutable; primary 0, cursor plane 40 = 1), `alpha` (65535) and `pixel blend mode` (value 0) properties. Key 61 (RK3288 VOP): planes 33/35/38/40 have NO zpos, alpha or blend property; order is fixed (primary 33 lowest, our plane 38 above it).
 - Consequence: an under-plane design needs the primary to be non-opaque (the shim would have to re-wrap the host buffer as AR24, which only works if the host writes alpha 0 in the holes; it writes 255 today) and, on the Key 61, is impossible because the primary cannot be moved above our plane. Open: whether XL accepts the AR24 re-wrap (`ADDFB2` on the same GEM handle) and what the blend mode value 0 means in the enum list.
 
+## Host filmstrip cache (XL, read-only, 2026-11-21)
+
+- The MPC process does NOT map `/var/tmp/filmstrips` (0 mappings in `/proc/<pid>/maps`, no open fd): the decoded images are read into heap; the files are a cache from an EARLIER run (mtime 2026-11-20 17:58, the app started 01:43 on 21st). Writing into the files cannot change what the host draws: hypothesis rejected.
+- 838 files `temp_<hex>.img` on tmpfs (`/var/tmp` -> `/var/volatile/tmp`, 8 GB), mode 0644 root:root. Raw pixels, no header: the size equals w*h*4. 85 files are exactly 3,215,360 B = 1280x628x4 (a full tab page), 90 are 2,419,200 B, 52 are 576,000 B.
+- The stock skins carry full-page backgrounds as plain PNGs: of the 211 PNGs over 60 kB under `/usr/share/Akai`, 62 are 1280x629 and 8 are 1280x630 (the stock synth skins, `Plugin Skins`), a few 1280x628 (MPC60, SP1200, MPC3000 skins, Program Edit). So the host accepts full-page images and a decoded full page costs 3.2 MB in the cache.
+
 ## Decisions
 
 - g117: full takeover, one plane, one writer: the shim merges the helper's finished buffer
