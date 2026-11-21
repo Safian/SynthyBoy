@@ -1707,9 +1707,12 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             const float curG = lerp (voiceCountGainPrev, voiceCountGainCur, curFrac);
             voiceCountGainCur = voiceCountGainPrev = curG;
             voiceCountGainDb = 20.0f * std::log10 (std::max (curG, 1.0e-6f));
-            updateVcg (soundingBeforeMid, n);
+            // the step and the ramp run to the end of the control period, not to the end of this segment: the segment ends at the next event or at the end of the host block, and the gain
+            // must not depend on the host block size
+            const int toPeriodEnd = std::max (1, kControlPeriod - controlPos);
+            updateVcg (soundingBeforeMid, toPeriodEnd);
             vcgRampStart = controlPos;
-            vcgRampLen = std::max (1, n);
+            vcgRampLen = toPeriodEnd;
         }
         // the voices add to Main, Bus 1, Bus 2 and Direct; the buses run through their racks and go to their destination, Main through the Main rack
         for (int t = 0; t < 4; ++t)
