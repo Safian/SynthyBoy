@@ -147,7 +147,19 @@ Lines found: 83 in 10 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 69.
+Commits found: 72.
+
+### 15b42314 (2026-11-21) TODO: static and animation layer split of the overlay drawing (owner)
+
+- matching line: TODO: static and animation layer split of the overlay drawing (owner)
+
+### f308174f (2026-11-21) TODO: wave 2 burst result on a quiet Key 61 (1.50-1.73 blocks, one 2.31), device timings need interl
+
+- matching line: TODO: wave 2 burst result on a quiet Key 61 (1.50-1.73 blocks, one 2.31), device timings need interleaved A/B/A runs
+
+### 07d8d238 (2026-11-21) TODO: test_render_ui_gallery builds in the repo build dir and fails when it has no MPC shell
+
+- matching line: TODO: test_render_ui_gallery builds in the repo build dir and fails when it has no MPC shell
 
 ### ba96f3be (2026-11-21) TODO: memory probe tiers are equal because prepare() does not scale with the tier (memory plan item)
 
