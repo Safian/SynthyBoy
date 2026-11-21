@@ -258,10 +258,10 @@ Amount smoothing: the amount (and `delta`) is interpolated linearly per sample a
 | Odd/Even | `E = (T(x) + T(x + 0.5))/2`, `O = (T(x) - T(x + 0.5))/2`; `y = e E + o O` with `e = min(1, 2a)`, `o = min(1, 2(1 - a))` (a = 0.5 is the identity) |
 | Filter LPF / HPF | two cascaded one-pole filters on the sample stream with cutoff `ratio * f0` where `ratio = 2^(7a)` (LPF) or `0.5 * 2^(7a)` (HPF) (`g = x/(1+x)`, `x = min(2 pi ratio f0/sr_i, 8)`); the HPF is `input - lowpass` twice |
 | Dist ... (Tube, Soft Clip, Hard Clip, Diode 1/2, Linear Fold, Sine Fold, Zero-Square, Asym, Rectify) | the waveshaper of the same name in the distortion effect (document 6 section on the distortion), at drive `10^(30 a/20)` (0 .. 30 dB) with the sample clamped to +-40/drive first; no DC removal |
-| Dist Sine Shaper | `sin(1.5708 d y)` |
+| Dist Sine Shaper | `lerp(y, sin(2 pi y), a)` (spec follows the code (owner decision D3, 2026-11-21)) |
 | Dist Stomp Box | `0.7 tanh(2 d y) + 0.3 clamp(d y, -1, 1)` |
 | Dist Tape Sat. | `0.6366 atan(1.4137 d y)` |
-| Dist Soft Sat. | `d y/(1 + |d y|)` |
+| Dist Soft Sat. | `(2/pi) atan(d y)` with `d = 1 + 6a` (spec follows the code (owner decision D3, 2026-11-21)) |
 
 (`d` = the drive, `y` the table sample.)
 
