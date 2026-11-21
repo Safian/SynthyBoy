@@ -193,9 +193,9 @@ TEST (appended_choice_values_need_a_capability)
     CHECK_EQ (need ("mod09.destination", 403.0f), static_cast<EngineCapsMask> (kCapFxSplitters));
     CHECK_EQ (need ("mod09.destination", 424.0f), static_cast<EngineCapsMask> (kCapFxCompressorLimit)); // compressor.crossover_low
     CHECK_EQ (need ("mod09.destination", 431.0f), static_cast<EngineCapsMask> (kCapFxReverbAlgos));   // reverb.diff_b
-    CHECK_EQ (need ("mod09.destination", 453.0f), static_cast<EngineCapsMask> (kCapModAmount));       // master.stereo_routing
-    CHECK_EQ (need ("mod09.destination", 454.0f), static_cast<EngineCapsMask> (kCapModAmount));       // mod01.amount
-    CHECK_EQ (need ("mod09.destination", 519.0f), static_cast<EngineCapsMask> (kCapModAmount));       // master.polyphony
+    CHECK_EQ (need ("mod09.destination", 454.0f), static_cast<EngineCapsMask> (kCapModAmount));       // master.stereo_routing
+    CHECK_EQ (need ("mod09.destination", 455.0f), static_cast<EngineCapsMask> (kCapModAmount));       // mod01.amount
+    CHECK_EQ (need ("mod09.destination", 520.0f), static_cast<EngineCapsMask> (kCapModAmount));       // master.polyphony
     CHECK_EQ (need ("distortion.type", 5.0f), static_cast<EngineCapsMask> (kCapNone));
     CHECK_EQ (need ("distortion.type", 6.0f), static_cast<EngineCapsMask> (kCapFxDistortionExtras));
     CHECK_EQ (need ("distortion.type", 13.0f), static_cast<EngineCapsMask> (kCapFxDistortionExtras));
