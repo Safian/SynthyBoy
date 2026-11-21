@@ -600,9 +600,14 @@ TEST (fx_pool_order_rack_bypass_and_crossfade)
         sawPatch (*x);
         setSlot (*x, 2, kFxTypeDistortion, 1);
         const auto r = sbtest::render (*x, ev, static_cast<int> (0.5 * kSr), 256);
+        const size_t lat = static_cast<size_t> (x->latencySamples());
         double d = 0;
-        for (size_t i = 0; i < r.left.size(); ++i)
-            d = std::max (d, static_cast<double> (std::fabs (r.left[i] - plain.left[i])));
+        for (size_t i = 0; i < lat && i < r.left.size(); ++i)
+            d = std::max (d, static_cast<double> (std::fabs (r.left[i])));
+        // The master volume smoother (set to 0 dB after prepare) ramps for about 960 samples and sits after the latency delay, so for those samples the shifted signal meets a later
+        // gain (measured: ratio 1.046 at the start, exactly 1 from sample 960 on); the shifted comparison starts after it.
+        for (size_t i = 2048; i + lat < r.left.size(); ++i)
+            d = std::max (d, static_cast<double> (std::fabs (r.left[i + lat] - plain.left[i])));
         CHECK (d < 1.0e-6);
     }
     {

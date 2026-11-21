@@ -283,6 +283,7 @@ public:
         p.cutoff = V (b, d, cutoff) * std::exp2 (kt * (f.lastNote - 60.0f) * (1.0f / 12.0f));
         p.resonance = clamp01 (pct (b, d, res));
         p.blend = clamp01 (pct (b, d, blend)) * 2.0f;
+        p.os2 = f.distOs2;
         fx.fast = f.lowCost;
         if (f.content != nullptr)
         {
@@ -298,12 +299,15 @@ public:
         else
             fx.setShaper (nullptr, nullptr, nullptr, nullptr);
         fx.set (p);
+        os2 = p.os2;
     }
     void run (float* l, float* r, int n) noexcept override { fx.process (l, r, n, callOffset(), callPeriod()); }
+    int latency() const noexcept override { return os2 ? Distortion::kLatency : 0; }
 
 private:
     Distortion fx;
     int type, drive, mix, order, cutoff, res, blend, keytrack;
+    bool os2 = false;
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------- EQ

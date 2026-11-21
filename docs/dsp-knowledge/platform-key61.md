@@ -11,6 +11,7 @@
   4761 allocations; host RSS grows 80-90 MB per added SynthyBoy track; 3 tracks leave 2.54 GB
   available. The 33.1 MB wavetable bank is per process. `prepare()` does not scale with the
   tier yet (xl/high allocate the same). `measured: docs/MPC.md "Memory on the Key 61"`
+- **WtOsc shared MorphScratch and tier-sized history (T5):** `WtOsc::prepareMorph (shared, maxUnison)` takes an engine-shared `MorphScratch` (24,592 B) and sizes the oversampling history to `maxUnison * 127` floats; per oscillator `morphOwnedBytes()` 65,552 B (private scratch, 16 voices) -> 34,864 B (shared, unison 4), 30,688 B less, 2.63 MB over 108 oscillators; bit-identical sound (WTOSC-SHARED-SCRATCH-CHECKSUM, 4 morph types). **Not wired into Voice / OwnEngine yet** (T8/T9): `synthyboy_test_own_memory` on the Mac, develop -> merged tree: 66,933,896 -> 66,938,528 B per instance (+4,632 B, the new members), 2485 allocations both, so no instance saving exists until the wiring lands. `measured: 2026-11-21, Mac arm64, Release; test: own_wt_osc_external_shared_morph_scratch_and_tier_sized_history, synthyboy_test_own_memory (MEM-BASELINE)`
 - **Division is not the bottleneck of the classic Diode loop on the A17:** replacing four
   independent `sat()` divisions by one (batch inversion, C1) made the filter section 5.5 %
   SLOWER (0.7249 -> 0.7648 ms/block, A/B/A, every A slower than every B). The loop is bound by

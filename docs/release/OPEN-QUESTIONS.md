@@ -142,7 +142,23 @@ Lines found: 80 in 9 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 82.
+Commits found: 86.
+
+### 9267257d (2026-11-21) TODO: overlay thread time split on the Key 61
+
+- matching line: TODO: overlay thread time split on the Key 61
+
+### de3cebac (2026-11-21) TODO: Spectral start budget is per instance; measure several SynthyBoy tracks struck together on the
+
+- matching line: TODO: Spectral start budget is per instance; measure several SynthyBoy tracks struck together on the Key 61
+
+### 99758d11 (2026-11-21) dsp-knowledge: host redraw rate of native widgets; TODO: modified star with the self-test build
+
+- matching line: dsp-knowledge: host redraw rate of native widgets; TODO: modified star with the self-test build
+
+### 2b21ffef (2026-11-21) TODO: Q-Link touch overlay of the host not measured (needs the hardware knobs)
+
+- matching line: TODO: Q-Link touch overlay of the host not measured (needs the hardware knobs)
 
 ### 58269410 (2026-11-21) TODO: master.tune and distortion.drive done (deleted); open: Pulse phase-0 event, osc_options golden
 

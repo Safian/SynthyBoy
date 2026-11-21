@@ -504,14 +504,18 @@ public:
     {
         // In place: the same state as `*this = WtOsc()`, without building a 9 KB temporary and copying it over the object.
         auto mb = std::move (morphBuf);
-        auto ms = std::move (morphScratch);
+        auto* const msPtr = morphScratchPtr;
+        auto ms = std::move (ownedMorphScratch);
         auto hist = std::move (history);
+        const int hv = historyVoices;
         const bool dirty = historyDirty;
         this->~WtOsc();
         ::new (static_cast<void*> (this)) WtOsc();
         morphBuf = std::move (mb);
-        morphScratch = std::move (ms);
+        morphScratchPtr = msPtr;
+        ownedMorphScratch = std::move (ms);
         history = std::move (hist);
+        historyVoices = hv;
         historyDirty = dirty;
         if (historyDirty)
         {
@@ -521,15 +525,35 @@ public:
     }
 
     /** Prepares the buffers of the spectral morph (allocates; call from prepare ()). */
-    void prepareMorph()
+    void prepareMorph (MorphScratch* sharedScratch = nullptr, int maxUnison = kMaxVoices)
     {
         if (morphBuf.empty())
-        {
             morphBuf.assign (static_cast<size_t> (kMorphGroups) * 2 * kMorphStride, 0.0f);
-            morphScratch = std::make_unique<MorphScratch>();
+
+        if (sharedScratch != nullptr)
+        {
+            morphScratchPtr = sharedScratch;
+            ownedMorphScratch.reset();
         }
-        if (history.empty())
-            history.assign (static_cast<size_t> (kMaxVoices) * (kTaps - 1), 0.0f);
+        else if (morphScratchPtr == nullptr)
+        {
+            ownedMorphScratch = std::make_unique<MorphScratch>();
+            morphScratchPtr = ownedMorphScratch.get();
+        }
+
+        historyVoices = std::clamp (maxUnison, 1, kMaxVoices);
+        const size_t targetHistorySize = static_cast<size_t> (historyVoices) * (kTaps - 1);
+        if (history.size() != targetHistorySize)
+        {
+            history.assign (targetHistorySize, 0.0f);
+            historyDirty = false;
+        }
+    }
+
+    /** The heap memory owned by this oscillator for morphing and oversampling. */
+    size_t morphOwnedBytes() const noexcept
+    {
+        return (morphBuf.size() + history.size()) * sizeof (float) + (ownedMorphScratch ? sizeof (MorphScratch) : 0);
     }
 
     /** The stagger of the morph rebuilds (round 13, docs/release/CPU-REVIEW-OSC.md F1): `n` = morphStaggerSeed (note serial, oscillator index) (Voice::tick, at the note start). The voices of a
@@ -618,7 +642,8 @@ public:
                     if (cache == nullptr || !cache->fetch (key, b - 1))
                     {
                         SB_SECTION (sections::oscMorphBuild);
-                        buildMorphCycle (wt, framePos, true, tick.morphType, key.m, K, incMax, sampleRate, b, *morphScratch, tick.lowMorph, tick.scalarWarp, reference_);
+                        if (morphScratchPtr != nullptr)
+                            buildMorphCycle (wt, framePos, true, tick.morphType, key.m, K, incMax, sampleRate, b, *morphScratchPtr, tick.lowMorph, tick.scalarWarp, reference_);
                         if (cache != nullptr && (reference_ || !moving))
                             cache->store (key, b - 1);
                     }
@@ -645,11 +670,12 @@ public:
         const Wavetable& wt = *tick.wt;
         const int frames = wt.numFrames();
         const double nyq = 0.5 * sampleRate;
-        const int count = std::max (curCount, prevCount);
-        const float invP = 1.0f / static_cast<float> (kControlPeriod);
-        const float a0 = tick.warpAmount[0], a1 = tick.warpAmount[1];
         // a warp can create content far above the pitch: the oscillator then runs at four times the rate, with a band limited decimation
         const bool warped = tick.oversample || warpNeedsOversampling (tick.warp[0]) || warpNeedsOversampling (tick.warp[1]);
+        // the decimator history is sized for the tier's unison count: the oversampled path never goes past it
+        const int count = warped ? std::min (std::max (curCount, prevCount), historyVoices) : std::max (curCount, prevCount);
+        const float invP = 1.0f / static_cast<float> (kControlPeriod);
+        const float a0 = tick.warpAmount[0], a1 = tick.warpAmount[1];
         const int cs0 = tick.warpSrc[0], cs1 = tick.warpSrc[1];
         const bool morphing = morphActive;
         SB_SECTION (warped ? sections::oscWarp : (morphing ? sections::oscMorph : sections::oscTable));
@@ -863,6 +889,8 @@ public:
             }
             else
             {
+                if (history.empty() || v >= historyVoices)
+                    continue;
                 const float* taps = tick.lowWarp ? decimatorTaps2() : decimatorTaps();
                 float* hist = history.data() + static_cast<size_t> (v) * (kTaps - 1); // the last nt - 1 samples of the os x signal, then this period's
                 float buf[kTaps - 1 + kOversample * kControlPeriod];
@@ -1363,7 +1391,9 @@ private:
     float morphKeyFrame[kMorphGroups] = {}, morphKeyM[kMorphGroups] = {};
     float* morphOld (int g) noexcept { return morphBuf.data() + (static_cast<size_t> (g) * 2 + static_cast<size_t> (morphNewSlot[g] ^ 1)) * kMorphStride + 1; }
     float* morphNew (int g) noexcept { return morphBuf.data() + (static_cast<size_t> (g) * 2 + static_cast<size_t> (morphNewSlot[g])) * kMorphStride + 1; }
-    std::unique_ptr<MorphScratch> morphScratch;
+    MorphScratch* morphScratchPtr = nullptr;
+    std::unique_ptr<MorphScratch> ownedMorphScratch;
+    int historyVoices = 0;
     int morphAge = 0, morphGroups = 1;
     uint32_t morphStagger = 0;                   // setMorphStagger ()
     bool morphActive = false;

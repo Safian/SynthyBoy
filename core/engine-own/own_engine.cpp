@@ -1533,6 +1533,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
             frame.realtime = realtimeFlag;
             frame.makeup = fxMakeup.load (std::memory_order_relaxed);
             frame.lowCost = (globals.economy & kEconomyMath) != 0;
+            frame.distOs2 = (globals.economy & kEconomyWarp) == 0;
             frame.scalarLoops = (savingsOff.load (std::memory_order_relaxed) & kOwnSavingVectorFilters) != 0;
             frame.muteSkip = (globals.economy & kEconomyControl) != 0 && (savingsOff.load (std::memory_order_relaxed) & kOwnSavingFxMute) == 0;
             for (auto& f : fx)
