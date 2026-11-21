@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""render-ui-gallery.py always builds the ui_gallery_host target when a build directory with a CMake cache is known (a fake build step stands in for cmake)."""
+"""render-ui-gallery.py builds the ui_gallery_host target when explicitly requested with allow_build=True (--build), or uses existing binary without building."""
 import importlib.util
 import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parent.parent / "render-ui-gallery.py"
 spec = importlib.util.spec_from_file_location("render_ui_gallery", SCRIPT)
@@ -39,16 +40,16 @@ class FindOrBuildHost(unittest.TestCase):
             return rc
         return build
 
-    def test_existing_binary_is_rebuilt_first(self):
+    def test_existing_binary_is_rebuilt_first_when_build_allowed(self):
         (self.bdir / "CMakeCache.txt").write_text("")
         make_binary(self.bdir / "shell-mpc" / "ui_gallery_host")   # an old binary is there
-        got = gal.find_or_build_host(self.root, build_dir=self.bdir, build=self.fake_build())
+        got = gal.find_or_build_host(self.root, build_dir=self.bdir, build=self.fake_build(), allow_build=True)
         self.assertEqual(self.calls, [self.bdir])
         self.assertEqual(got, self.bdir / "shell-mpc" / "ui_gallery_host")
 
-    def test_no_binary_yet_is_built(self):
+    def test_no_binary_yet_is_built_when_build_allowed(self):
         (self.bdir / "CMakeCache.txt").write_text("")
-        got = gal.find_or_build_host(self.root, build_dir=self.bdir, build=self.fake_build())
+        got = gal.find_or_build_host(self.root, build_dir=self.bdir, build=self.fake_build(), allow_build=True)
         self.assertEqual(self.calls, [self.bdir])
         self.assertTrue(got.is_file())
 
@@ -56,23 +57,23 @@ class FindOrBuildHost(unittest.TestCase):
         (self.bdir / "CMakeCache.txt").write_text("")
         make_binary(self.bdir / "shell-mpc" / "ui_gallery_host")
         with self.assertRaises(RuntimeError):
-            gal.find_or_build_host(self.root, build_dir=self.bdir, build=self.fake_build(rc=2))
+            gal.find_or_build_host(self.root, build_dir=self.bdir, build=self.fake_build(rc=2), allow_build=True)
         self.assertEqual(self.calls, [self.bdir])
 
-    def test_usual_directory_under_the_repository_is_built_too(self):
+    def test_usual_directory_under_the_repository_is_built_too_when_build_allowed(self):
         d = self.root / "build-mpc"
         d.mkdir()
         (d / "CMakeCache.txt").write_text("")
         make_binary(d / "shell-mpc" / "ui_gallery_host")
-        gal.find_or_build_host(self.root, build=self.fake_build())
+        gal.find_or_build_host(self.root, build=self.fake_build(), allow_build=True)
         self.assertEqual(self.calls, [d])
 
-    def test_named_directory_only(self):
+    def test_named_directory_only_when_build_allowed(self):
         (self.bdir / "CMakeCache.txt").write_text("")
         other = self.root / "build-mpc"
         other.mkdir()
         (other / "CMakeCache.txt").write_text("")
-        gal.find_or_build_host(self.root, build_dir=self.bdir, build=self.fake_build())
+        gal.find_or_build_host(self.root, build_dir=self.bdir, build=self.fake_build(), allow_build=True)
         self.assertEqual(self.calls, [self.bdir])
 
     def test_host_bin_is_used_as_given(self):
@@ -88,6 +89,27 @@ class FindOrBuildHost(unittest.TestCase):
         got = gal.find_or_build_host(self.root, build_dir=self.bdir, build=self.fake_build())
         self.assertEqual(got, self.bdir / "ui_gallery_host")
         self.assertEqual(self.calls, [])
+
+    def test_default_does_not_build_even_with_cache(self):
+        (self.bdir / "CMakeCache.txt").write_text("")
+        make_binary(self.bdir / "shell-mpc" / "ui_gallery_host")
+        got = gal.find_or_build_host(self.root, build_dir=self.bdir, build=self.fake_build())
+        self.assertEqual(self.calls, [])
+        self.assertEqual(got, self.bdir / "shell-mpc" / "ui_gallery_host")
+
+    def test_default_raises_when_no_binary_without_build(self):
+        (self.bdir / "CMakeCache.txt").write_text("")
+        with self.assertRaises(RuntimeError):
+            gal.find_or_build_host(self.root, build_dir=self.bdir, build=self.fake_build())
+        self.assertEqual(self.calls, [])
+
+    def test_env_var_host_bin_used_as_given(self):
+        b = Path(self.tmp.name) / "env_bin"
+        make_binary(b)
+        with patch.dict(os.environ, {"SYNTHYBOY_UI_GALLERY_HOST": str(b)}):
+            got = gal.find_or_build_host(self.root, build=self.fake_build())
+            self.assertEqual(got, b)
+            self.assertEqual(self.calls, [])
 
 
 if __name__ == "__main__":
