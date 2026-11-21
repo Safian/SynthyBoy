@@ -142,7 +142,7 @@ Lines found: 80 in 9 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 86.
+Commits found: 87.
 
 ### 9267257d (2026-11-21) TODO: overlay thread time split on the Key 61
 
@@ -151,6 +151,10 @@ Commits found: 86.
 ### de3cebac (2026-11-21) TODO: Spectral start budget is per instance; measure several SynthyBoy tracks struck together on the
 
 - matching line: TODO: Spectral start budget is per instance; measure several SynthyBoy tracks struck together on the Key 61
+
+### 0f288f9e (2026-11-21) docs: regenerate OPEN-QUESTIONS.md again (another session committed a TODO commit meanwhile)
+
+- matching line: docs: regenerate OPEN-QUESTIONS.md again (another session committed a TODO commit meanwhile)
 
 ### 99758d11 (2026-11-21) dsp-knowledge: host redraw rate of native widgets; TODO: modified star with the self-test build
 
