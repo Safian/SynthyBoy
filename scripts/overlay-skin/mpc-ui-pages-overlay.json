@@ -10,6 +10,14 @@
       "custom": true
     },
     {
+      "name": "Macros",
+      "fn": "Play",
+      "kick": [
+        "macros",
+        "macros_2"
+      ]
+    },
+    {
       "name": "Osc A",
       "fn": "Osc",
       "kick": [
@@ -109,14 +117,6 @@
       "kick": [
         "fx_order_1",
         "fx_switches"
-      ]
-    },
-    {
-      "name": "Macros",
-      "fn": "Macros",
-      "kick": [
-        "macros",
-        "macros_2"
       ]
     },
     {
