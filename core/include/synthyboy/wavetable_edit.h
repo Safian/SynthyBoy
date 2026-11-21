@@ -397,8 +397,8 @@ namespace ops
 } // namespace ops
 
 //==============================================================================
-/// Vital Group / Component / Keyframe non-UI data model.
-namespace vital
+/// Group / Component / Keyframe non-UI data model of the layers of a wavetable (the layers view of the editor).
+namespace layers
 {
     enum class InterpolationStyle
     {
@@ -499,7 +499,7 @@ namespace vital
     private:
         std::vector<std::unique_ptr<Component>> components_;
     };
-} // namespace vital
+} // namespace layers
 
 //==============================================================================
 /// Bounded undo/redo command stack preserving bit-exact wavetable states.

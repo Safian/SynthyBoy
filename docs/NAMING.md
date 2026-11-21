@@ -7,7 +7,7 @@ trademark of Steinberg Media Technologies GmbH; only the factual compatibility s
 
 - Product / bundle / CLAP name: `SynthyBoy`. CLAP id: `com.safian.synthyboy`. VST3 bundle: `SynthyBoy.vst3`; CLAP bundle: `SynthyBoy.clap`.
 - Do not use "Vital", "Vital Audio", "Tytel", "Matt Tytel" in the product name or marketing (upstream README). The factual
-  statement "the engine is derived from Vital" is allowed in `NOTICE`/About.
+  statement "the engine is derived from Vital" was allowed in `NOTICE`/About while the Vital-derived engine existed; it is removed and the statement is no longer made.
 - Do not use "VST" in the product name; do not use the VST3 logo.
 - Avoid a Nintendo-flavoured presentation (no game-console iconography, no "Game Boy" wording) because of the `-Boy` suffix.
 

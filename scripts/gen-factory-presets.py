@@ -564,8 +564,7 @@ def file_name_of(name: str) -> str:
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
-# Showcase presets (12): the engine features of state version 3. Every key used here is live in the Vital engine (all bits of
-# engine_caps.h are set by engine-vital; the sample oscillator needs sample content and is not shown). Only real table keys
+# Showcase presets (12): the engine features of state version 3. The sample oscillator needs sample content and is not shown. Only real table keys
 # (strict), values inside their ranges (checked), content only where the preset needs it.
 # ---------------------------------------------------------------------------------------------------------------------------
 def merge(*parts: dict) -> dict:

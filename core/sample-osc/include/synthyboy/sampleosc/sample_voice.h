@@ -80,7 +80,7 @@ public:
     /** Unison level scaling multiplier. */
     void setUnisonLevel (float level) noexcept;
 
-    // --- SynthyBoy extensions (engine-vital integration) ---
+    // --- SynthyBoy extensions ---
     /** Continuous pitch relative to the root key in semitones (bend, transposition, tune, unison detune of the host oscillator). Once
         set it replaces the pitch derived from the played key and params.tune; NaN returns to the key based pitch. Real-time safe. */
     void setSemitoneOffset (float semitones) noexcept;

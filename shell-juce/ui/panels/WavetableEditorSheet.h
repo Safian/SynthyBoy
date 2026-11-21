@@ -111,7 +111,7 @@ public:
     /** Applies active drawing tool to current frame at given step index. */
     void applyToolAt (wtedit::DrawingTool tool, int gridSize, int stepIndex, float param);
 
-    /** Renders the Vital component group layers to the wavetable. */
+    /** Renders the component group layers to the wavetable. */
     void renderLayersToTable();
 
     /** Frame operations. */
@@ -213,7 +213,7 @@ private:
     wtedit::UndoStack undoStack { 50 };
     bool undoPending = false;   // an edit started after the last recorded state
     bool strokeActive = false;  // a drawing gesture (mouse down .. up) is in progress: it is one undo step
-    wtedit::vital::Group vitalGroup;
+    wtedit::layers::Group layerGroup;
     size_t currentFrameIndex = 0;
     float lastModWheel = 0.0f;
     int rangeStart = -1;

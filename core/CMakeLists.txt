@@ -64,37 +64,16 @@ else()
     target_compile_options(synthyboy_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Vital-derived code (docs/ARCHITECTURE.md 2.2) lives only in engine-vital/; with SYNTHYBOY_WITH_VITAL=OFF
-# (iOS) nothing of it is added to the build.
-if(SYNTHYBOY_WITH_VITAL)
-    message(STATUS "SYNTHYBOY_WITH_VITAL=ON: Vital-derived engine is built (core/engine-vital)")
-    add_subdirectory(engine-vital)
-    # the adapter (our code, strict warnings like the rest of the core) is compiled into the core; the imported DSP is
-    # the separate static library
-    target_sources(synthyboy_core PRIVATE engine-vital/adapter/vital_engine.cpp engine-vital/adapter/vital_bindings.cpp
-                                          engine-vital/adapter/vital_fx_pool.cpp
-                                          engine-vital/adapter/vital_tables.cpp)
-    target_include_directories(synthyboy_core PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/engine-vital/adapter")
-    target_link_libraries(synthyboy_core PRIVATE synthyboy_engine_vital)
-    target_compile_definitions(synthyboy_core PUBLIC SYNTHYBOY_HAS_VITAL=1)
-else()
-    message(STATUS "SYNTHYBOY_WITH_VITAL=OFF: own engine only")
-    target_compile_definitions(synthyboy_core PUBLIC SYNTHYBOY_HAS_VITAL=0)
-endif()
-
 add_subdirectory(tuning)
 add_subdirectory(formula)
 add_subdirectory(filters-serum)
 add_subdirectory(wavetable-edit)
 add_subdirectory(shapes)
-# the custom LFO shapes and the velocity / note curves of engine-vital are evaluated with the shapes package
+# the custom LFO shapes and the velocity / note curves are evaluated with the shapes package
 target_link_libraries(synthyboy_core PUBLIC synthyboy_shapes) # PUBLIC: the GUI previews custom LFO shapes with the same evaluator
 
 if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(tests)
-    if(SYNTHYBOY_WITH_VITAL)
-        add_subdirectory(engine-vital/tests)
-    endif()
 endif()
 
 # Packages with their own CMake (after the tests: they use synthyboy_add_test)

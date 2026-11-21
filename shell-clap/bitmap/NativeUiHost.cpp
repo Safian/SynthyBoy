@@ -197,7 +197,7 @@ juce::String NativeUiHost::aboutText() const
    #else
     const juce::String version ("dev");
    #endif
-    const juce::String engineName = (engineCaps() & kCapVoiceControl) != 0 ? "vital DSP (AGPL-3.0)" : "own engine";
+    const juce::String engineName = "own engine";
     int packs = 0; // installed content packs: the directories below <userDir>/packs
     std::error_code ec;
     if (! plugin.userDir.empty())
@@ -224,11 +224,7 @@ bool NativeUiHost::renderOffline (const OfflineRequest& request, OfflineAudio& o
     OfflineRequest copy = request;
     if (copy.values == nullptr)
         copy.values = values.get();
-    EngineKind kind = EngineKind::own;
-   #if SYNTHYBOY_HAS_VITAL
-    kind = EngineKind::vital;
-   #endif
-    return renderOfflineAny (*plugin.engine, kind, &plugin.content, &plugin.contentStore, copy, out);
+    return renderOfflineAny (*plugin.engine, EngineKind::own, &plugin.content, &plugin.contentStore, copy, out);
 }
 
 ui::UiHost::LastNote NativeUiHost::lastNote() const

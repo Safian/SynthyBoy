@@ -16,9 +16,8 @@
 #   --group PREFIX       only the keys starting with PREFIX (filter1.  chorus.  osc2.  mod01.)
 #   --part I/N           only every N-th key (the I-th share, 0 <= I < N): one of N machines of a CI matrix; the report then compares these keys with the baseline only
 #   --jobs N             parallel processes by key shard (default: number of CPUs); the result does not depend on N
-#   --baseline FILE      compare with this baseline (default docs/ui-design/param-audit-baseline.json); regressions = a changed verdict or curve
+#   --baseline FILE      compare with this baseline (default docs/ui-design/param-audit-baseline-own.json); regressions = a changed verdict or curve
 #   --update-baseline    write the baseline from this run (intended changes show up in git diff)
-#   --engine vital|own   engine under test (default vital; "own" only for the keys it claims)
 #   --seed N             seed handed to the tool (the renders are deterministic; recorded in the report)
 #   --keep-wavs DIR      write the rendered audio of the swept keys as WAV files (listen to a key: --keys '^filter1\.cutoff$' --keep-wavs /tmp/w)
 #   --list-keys          print the keys the run would cover with their support in the engine, and exit
@@ -31,7 +30,7 @@
 #   --help
 # Output (in the output directory): report.md, keys.csv, keys-compact.csv, keys.json (with the metric curves), summary.json, semantics.log, shard logs.
 # Exit codes: 0 clean; 1 regression against the baseline, unexplained DEAD key, unexplained finding or failed semantic check (self-test: a fault was not caught);
-#             2 usage error; 3 build problem (configure / build failed or the Vital engine is not part of the build).
+#             2 usage error; 3 build problem (configure / build failed ).
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -42,9 +41,9 @@ keys=""
 group=""
 jobs=""
 part=""
-baseline="$root/docs/ui-design/param-audit-baseline.json"
+baseline="$root/docs/ui-design/param-audit-baseline-own.json"
 update_baseline=0
-engine=vital
+engine=own   # the own engine is the only engine
 seed=1
 wavs=""
 list_keys=0
@@ -70,7 +69,6 @@ while [ $# -gt 0 ]; do
         --jobs) [ $# -ge 2 ] || die_usage "--jobs needs a value"; jobs="$2"; shift ;;
         --baseline) [ $# -ge 2 ] || die_usage "--baseline needs a value"; baseline="$2"; shift ;;
         --update-baseline) update_baseline=1 ;;
-        --engine) [ $# -ge 2 ] || die_usage "--engine needs a value"; engine="$2"; shift ;;
         --seed) [ $# -ge 2 ] || die_usage "--seed needs a value"; seed="$2"; shift ;;
         --keep-wavs) [ $# -ge 2 ] || die_usage "--keep-wavs needs a value"; wavs="$2"; shift ;;
         --list-keys) list_keys=1 ;;
@@ -85,7 +83,6 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-case "$engine" in vital|own) ;; *) die_usage "--engine must be vital or own" ;; esac
 case "$build_dir" in /*) ;; *) build_dir="$root/$build_dir" ;; esac
 if [ -z "$jobs" ]; then
     jobs="$( (nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) | head -n1)"
@@ -97,12 +94,8 @@ case "$jobs" in ''|*[!0-9]*) die_usage "--jobs must be a number" ;; esac
 build() {
     if [ ! -f "$build_dir/CMakeCache.txt" ]; then
         echo "configuring $build_dir (core only: no plug-in, no bitmap GUI)"
-        cmake -S "$root" -B "$build_dir" -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF -DSYNTHYBOY_WITH_VITAL=ON >"$build_dir.configure.log" 2>&1 \
+        cmake -S "$root" -B "$build_dir" -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_BITMAP_GUI=OFF >"$build_dir.configure.log" 2>&1 \
             || { echo "configure failed, see $build_dir.configure.log" >&2; exit 3; }
-    fi
-    if ! grep -q '^SYNTHYBOY_WITH_VITAL:BOOL=ON' "$build_dir/CMakeCache.txt"; then
-        echo "the build directory $build_dir has no Vital engine (SYNTHYBOY_WITH_VITAL=OFF): the audit needs it" >&2
-        exit 3
     fi
     cmake --build "$build_dir" --target synthyboy_param_audit synthyboy_test_param_semantics -j "$jobs" >"$build_dir/param-audit-build.log" 2>&1 \
         || { echo "build failed, see $build_dir/param-audit-build.log" >&2; tail -20 "$build_dir/param-audit-build.log" >&2; exit 3; }
@@ -119,10 +112,10 @@ audit="$(find_tool synthyboy_param_audit)"
 semtest="$(find_tool synthyboy_test_param_semantics)"
 
 if [ "$list_keys" -eq 1 ]; then
-    args=(--engine "$engine")
+    args=()
     [ -n "$keys" ] && args+=(--keys "$keys")
     [ -n "$group" ] && args+=(--group "$group")
-    exec "$audit" --list-keys "${args[@]}"
+    exec "$audit" --list-keys ${args[@]+"${args[@]}"}
 fi
 
 # ---- self test ----------------------------------------------------------------------------------------------------------------------------------------------
@@ -173,7 +166,7 @@ start="$(date +%s)"
 echo "param-audit: mode $mode, engine $engine, $jobs job(s), output $out"
 
 if [ "$stage1" -eq 1 ]; then
-    shard_args=(--engine "$engine" --seed "$seed" --out "$out")
+    shard_args=(--seed "$seed" --out "$out")
     if [ "$mode" = quick ]; then shard_args+=(--quick); else shard_args+=(--full); fi
     [ "$all_instances" -eq 1 ] && shard_args+=(--all-instances)
     [ -n "$keys" ] && shard_args+=(--keys "$keys")
@@ -214,7 +207,7 @@ fi
 
 end="$(date +%s)"
 if [ "$stage1" -eq 1 ]; then
-    rep_args=(--in "$out" --out "$out" --mode "$mode" --engine "$engine" --wall "$((end - start))" --exemptions "$root/tools/param-audit/exemptions.tsv")
+    rep_args=(--in "$out" --out "$out" --mode "$mode" --wall "$((end - start))" --exemptions "$root/tools/param-audit/exemptions.tsv")
     [ -n "$sem_log" ] && rep_args+=(--semantics-log "$sem_log")
     if [ -z "$keys$group" ]; then
         [ -f "$baseline" ] && rep_args+=(--baseline "$baseline")

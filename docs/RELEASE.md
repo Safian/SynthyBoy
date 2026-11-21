@@ -29,7 +29,7 @@ a host that cannot run the plug-in's toolkit (the Kick app on the MPC, a framebu
 * **Dependencies (Linux)**: the module needs only libc, libm, libstdc++ and libgcc_s (and the dynamic loader). FreeType is linked statically, the glyphs are the embedded Roboto
   (no fontconfig), ALSA / JACK are compiled out, libX11 is not linked (JUCE loads it on demand and the GUI never opens a display). `scripts/build-armv7-clap.sh` fails the build otherwise.
 * **Option**: `SYNTHYBOY_BITMAP_GUI` (CMake) is ON with the JUCE plug-in and in the ARMv7 script, OFF otherwise (`--no-ui` of the script builds the JUCE free module without it). The static
-  library `synthyboy_static` (iOS, `SYNTHYBOY_WITH_VITAL=OFF`) never contains it: `scripts/check-no-vital.sh` stays clean.
+  library `synthyboy_static` (iOS) never contains it: `scripts/check-no-vital.sh` stays clean.
 
 ## Product versioning
 
@@ -151,7 +151,7 @@ scripts/build-mpc.sh --xpl-presets xl --dump-tool build-native/shell-mpc/dump_mp
 1. Build the native MPC shell and the chunk dumper helper:
    ```bash
    cmake -S . -B build-native -G Ninja -DCMAKE_BUILD_TYPE=Release \
-       -DSYNTHYBOY_BUILD_PLUGIN=OFF -DSYNTHYBOY_WITH_VITAL=OFF \
+       -DSYNTHYBOY_BUILD_PLUGIN=OFF \
        -DSYNTHYBOY_BUILD_MPC_SHELL=ON -DMPC_SDK_DIR="$MPC_SDK"
    cmake --build build-native --target dump_mpc_chunks synthyboy_mpc
    ```

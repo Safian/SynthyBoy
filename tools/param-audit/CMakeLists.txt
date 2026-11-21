@@ -1,5 +1,5 @@
 # SynthyBoy - param-audit: the parameter effect audit (docs/ui-design/PARAM-AUDIT-REPORT.md). Added by the top level CMakeLists.txt when SYNTHYBOY_BUILD_TESTS and
-# SYNTHYBOY_WITH_VITAL are ON (the Vital-derived engine is the engine under test; the iOS / no-Vital build has neither the tool nor the tests).
+# the tests are part of the build (the own engine is the engine under test).
 # Copyright (C) 2026 Safian Szabolcs
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -25,7 +25,7 @@ synthyboy_add_test(synthyboy_test_param_semantics test_param_semantics.cpp LINK 
 set_tests_properties(synthyboy_test_param_semantics PROPERTIES LABELS "slow;audit" TIMEOUT 1800)
 
 # Stage 1 as a gate: the quick run (the representative values of every key of instance 1 and of the last instance of every family, plus the modulation sweep of every
-# modulatable key) against the committed baseline docs/ui-design/param-audit-baseline.json. Label `audit` (the CI job `param-audit` runs it; the build matrix leaves it out with
+# modulatable key) against the committed baseline docs/ui-design/param-audit-baseline-own.json. Label `audit` (the CI job `param-audit` runs it; the build matrix leaves it out with
 # `-LE audit`) and `slow`. The full run (every value of every key) is the same script without --quick: add -DSYNTHYBOY_PARAM_AUDIT_FULL=ON to register it (hours).
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND AND NOT WIN32)

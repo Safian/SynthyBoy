@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_preset_render --presets DIR [--engine vital|own] [--tier low|medium|high|all] [--summary-only] [--velocity]
+//   synthyboy_preset_render --presets DIR [--engine own] [--tier low|medium|high|all] [--summary-only] [--velocity]
 //                           [--wav OUTDIR] [--chord-wav OUTDIR] [--float32] [--hash] [--filter SUBSTRING] [--sr 48000] [--content-dir DIR] [--scalar-content] [--hold SECONDS]
 //                           [--output-stage]
 //   --output-stage    every render goes through the output stage of the shells (core/include/synthyboy/output_stage.h: kMakeupGainDb, the look-ahead limiter on), so the WAVs and the
@@ -62,7 +62,7 @@ constexpr double kNotSilentDb = -60.0;
 struct Options
 {
     std::string presets;
-    EngineKind engine = EngineKind::vital;
+    EngineKind engine = EngineKind::own;
     std::string tier = "all";
     bool summaryOnly = false;
     bool velocity = false;
@@ -287,7 +287,7 @@ int main (int argc, char** argv)
         const std::string a = argv[i];
         auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : std::string(); };
         if (a == "--presets") o.presets = next();
-        else if (a == "--engine") o.engine = next() == "own" ? EngineKind::own : EngineKind::vital;
+        else if (a == "--engine") { if (next() != "own") { std::fprintf (stderr, "the own engine is the only engine\n"); return 2; } }
         else if (a == "--tier") o.tier = next();
         else if (a == "--summary-only") o.summaryOnly = true;
         else if (a == "--velocity") o.velocity = true;
@@ -311,7 +311,7 @@ int main (int argc, char** argv)
     }
     if (o.presets.empty() || ! isEngineAvailable (o.engine))
     {
-        std::fprintf (stderr, "usage: synthyboy_preset_render --presets DIR [--engine vital|own] [--tier low|medium|high|all] [--summary-only] [--velocity] "
+        std::fprintf (stderr, "usage: synthyboy_preset_render --presets DIR [--engine own] [--tier low|medium|high|all] [--summary-only] [--velocity] "
                               "[--wav OUTDIR] [--chord-wav OUTDIR] [--float32] [--hash] [--filter TEXT] [--sr 48000] [--content-dir DIR] [--voice-gain-alpha A]  (the engine must be built in)\n");
         return 2;
     }
@@ -379,7 +379,7 @@ int main (int argc, char** argv)
             }
     }
     std::printf ("preset-render: %zu presets, %zu tiers, engine %s, %.0f Hz\n", presets.size(), tiers.size(),
-                 o.engine == EngineKind::vital ? "vital" : "own", o.sampleRate);
+                 engineName (o.engine), o.sampleRate);
 
     for (const auto& t : tiers)
     {

@@ -1,5 +1,7 @@
 # Performance
 
+**History note (2026-11-21):** the Vital-derived engine is removed (docs/plans/vital-removal.md) and `synthyboy_bench` has the own engine only (`--engine own`, or no option). The `vital` columns and the `--engine vital` commands below are the last numbers of that engine, kept as a record; they cannot be reproduced on the current tree.
+
 **These are NOT numbers for the Akai MPC Key 61 (Linux ARMv7, two isolated cores) or for any phone.** They were taken on a
 development laptop, in a release build, with other work running on the machine. They show how the two engines compare and
 give a rough scale; the architecture's tier numbers (docs/ARCHITECTURE.md 3.6) stay targets until measured on the devices.

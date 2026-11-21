@@ -23,8 +23,8 @@ namespace
 std::atomic<unsigned long> g_allocations { 0 };
 std::atomic<unsigned long> g_frees { 0 };
 std::atomic<unsigned long> g_threadFrees { 0 };   // frees on the counted thread only (the audio thread of the test), like g_allocations
-// Only the thread that runs the test (and calls process ()) is counted: the engine-vital Convolve module partitions its impulse response on
-// a builder thread of its own (docs/UPSTREAM.md), which is allowed to allocate; the real-time rule is about the audio thread.
+// Only the thread that runs the test (and calls process ()) is counted: background builder threads (e.g. convolution IR partitioning)
+// are allowed to allocate; the real-time rule is about the audio thread.
 thread_local bool t_countThisThread = false;
 struct CountThisThread
 {

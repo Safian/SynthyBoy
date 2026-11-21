@@ -10,6 +10,8 @@
 #include <vector>
 
 #include "synthyboy/engine.h"
+#include "synthyboy/params.h"
+#include "synthyboy/state.h"
 #include "test_runner.h"
 #include "test_engines.h"
 #include "test_util.h"
@@ -73,20 +75,33 @@ TEST (engine_factory)
     CHECK (own != nullptr && error == nullptr);
     CHECK (isEngineAvailable (EngineKind::own));
     CHECK (std::strcmp (engineName (EngineKind::own), "own") == 0);
-    CHECK (std::strcmp (engineName (EngineKind::vital), "vital") == 0);
+    CHECK (createEngine (EngineKind::own) != nullptr); // null error pointer is fine
+}
 
-    error = nullptr;
-    auto vital = createEngine (EngineKind::vital, &error);
-    if (isEngineAvailable (EngineKind::vital))
-    {
-        CHECK (vital != nullptr && error == nullptr);
-    }
-    else
-    {
-        CHECK (vital == nullptr);
-        CHECK (error != nullptr && std::strlen (error) > 10);
-    }
-    CHECK (createEngine (EngineKind::vital) == nullptr || isEngineAvailable (EngineKind::vital)); // null error pointer is fine
+// V7 (docs/plans/vital-removal.md): EngineKind::vital is only a name that old callers and saved settings may still carry; the engine is the
+// own engine (the state format names no engine, the parameter table is shared), so a version 2 state of the Vital days loads and sounds.
+TEST (engine_kind_vital_is_an_alias_of_the_own_engine)
+{
+    CHECK (isEngineAvailable (EngineKind::vital));
+    CHECK (std::strcmp (engineName (EngineKind::vital), "own") == 0);
+    const char* error = "unset";
+    auto engine = createEngine (EngineKind::vital, &error);
+    CHECK (engine != nullptr && error == nullptr);
+    if (engine == nullptr)
+        return;
+    CHECK (setOwnVoiceCountAlpha (*engine, 0.5f)); // false for any engine but the own one
+
+    static const char kV2[] = "{\"format\":\"synthyboy-state\",\"version\":2,\"params\":{\"master.volume\":-6,\"osc1.wavetable\":0,\"filter1.cutoff\":8000}}";
+    ParamValues values = ParamValues::defaults();
+    const LoadResult loaded = loadState (kV2, sizeof (kV2) - 1, values);
+    CHECK (loaded.status == LoadStatus::ok);
+    CHECK_EQ (loaded.version, 2);
+    for (size_t i = 0; i < paramCount(); ++i)
+        engine->setParam (static_cast<uint32_t> (i), values.plain[i]);
+    engine->prepare (kSampleRate, 512, Quality {});
+    const std::vector<Event> events { noteOn (0, 60) };
+    const auto out = sbtest::render (*engine, events, 24000, 256);
+    CHECK (sbtest::peak (out.left) > 0.01f);
 }
 
 TEST (engine_silence_without_notes)

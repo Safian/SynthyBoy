@@ -26,7 +26,7 @@ class ITuningSource;
 namespace synthyboy
 {
 /**
- * A synthesis engine. Shells and UIs only see this interface; engine-own and (optionally) engine-vital implement it.
+ * A synthesis engine. Shells and UIs only see this interface; engine-own implements it.
  *
  * Threading: prepare / reset / destruction are called while no process() runs. setParam, getParam and activeVoices
  * may be called from any thread at any time (lock free); process() is called from one audio thread at a time.
@@ -158,13 +158,13 @@ public:
         multisample) of oscillator 1 .. 3, 3 .. 5 the user wavetable of oscillator 1 .. 3 (the built-in saw plays), 6 the impulse of Convolve (bypassed), 7 the sample of the noise source. Any thread. */
     virtual unsigned missingContent() const noexcept { return 0; }
 
-    /** Latency of the output in samples at the host rate, as of the last process() (any thread). engine-vital: Bode's Hilbert filter
+    /** Latency of the output in samples at the host rate, as of the last process() (any thread). Bode's Hilbert filter
         delays the signal path it sits in, the engine delays every other path to match (the Direct output, the other buses, the bands of
         a splitter, the voices that bypass the rack), so the whole output is late by this value and a host can compensate it. 0 without
         such an effect. It changes when Bode is switched on or off or moved to another rack. */
     virtual int latencySamples() const noexcept { return 0; }
 
-    /** True when a parameter changed that the engine can only apply in prepare() (engine-vital: quality.oversample_4x resizes the buffers
+    /** True when a parameter changed that the engine can only apply in prepare() (quality.oversample_4x resizes the buffers
         of the effects and the voices, which must not happen on the audio thread). Any thread, lock free. The shell then prepares the engine
         again on a thread that may allocate (JUCE: the message thread with the processing suspended; CLAP: request_restart). */
     virtual bool needsPrepare() const noexcept { return false; }
@@ -218,19 +218,19 @@ float ownVoiceCountGain (const IEngine& engine) noexcept;
 
 enum class EngineKind
 {
-    own,  // engine-own: always available
-    vital // engine-vital: Vital-derived DSP, only when built with SYNTHYBOY_WITH_VITAL=ON (never on iOS)
+    own,  // engine-own: the engine
+    vital // only a name for old callers and saved settings that still carry it: it is the own engine (docs/plans/vital-removal.md V7)
 };
 
-/** True if the engine of this kind is part of this build. */
+/** True if the engine of this kind is part of this build (every kind: they all are the own engine). */
 bool isEngineAvailable (EngineKind kind) noexcept;
 
-/** Short stable name ("own", "vital"), for logs and command lines. */
+/** Short stable name ("own"; EngineKind::vital is the own engine too), for logs and command lines. */
 const char* engineName (EngineKind kind) noexcept;
 
 /**
- * Creates an engine of the given kind. Returns nullptr if it is not part of this build (EngineKind::vital without
- * Vital); if errorMessage is not null it then receives a static, human readable text (and nullptr otherwise).
+ * Creates an engine of the given kind: the own engine for every kind (EngineKind::vital is its old name). Returns nullptr only for a
+ * kind outside the enum; if errorMessage is not null it then receives a static, human readable text (and nullptr otherwise).
  */
 std::unique_ptr<IEngine> createEngine (EngineKind kind, const char** errorMessage = nullptr);
 } // namespace synthyboy

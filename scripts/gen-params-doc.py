@@ -95,9 +95,8 @@ def main():
       "can do. `docs/params.json` is the same table for machines (Kick's own UI reads it). State format version %d stores every "
       "parameter by key (docs/ARCHITECTURE.md 5.2)." % doc["stateVersion"])
     w("")
-    w("**%d parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of iOS builds) acts on the "
-      "parameter; every parameter is stored, saved and read back by every engine, the engine of the Vital-derived DSP "
-      "(`core/engine-vital`) acts on all of them." % doc["count"])
+    w("**%d parameters.** Column *own engine*: yes = the own engine (`core/engine-own`, the engine of every build) acts on the "
+      "parameter; every parameter is stored, saved and read back by the engine whether it acts on it or not." % doc["count"])
     w("")
 
     # summary by top level group

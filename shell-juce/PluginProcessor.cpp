@@ -35,14 +35,9 @@
 
 namespace
 {
-/** The engine the shell was configured with (CMake SYNTHYBOY_SHELL_ENGINE: the Vital-derived engine whenever it is part of the
-    build, the own engine otherwise or on request). */
+/** The engine of the shell: the own engine. */
 std::unique_ptr<synthyboy::IEngine> createShellEngine()
 {
-   #if SYNTHYBOY_SHELL_ENGINE_VITAL
-    if (auto vital = synthyboy::createEngine (synthyboy::EngineKind::vital))
-        return vital;
-   #endif
     return synthyboy::createOwnEngine();
 }
 } // namespace
@@ -164,7 +159,7 @@ juce::String SynthyBoyProcessor::aboutText() const
    #else
     const juce::String version ("dev");
    #endif
-    const juce::String engineName = (caps & synthyboy::kCapVoiceControl) != 0 ? "vital DSP (AGPL-3.0)" : "own engine";
+    const juce::String engineName = "own engine";
     int packs = 0; // installed content packs: the directories below <userDir>/packs
     std::error_code ec;
     if (! userDir.empty())
@@ -510,11 +505,7 @@ bool SynthyBoyProcessor::renderOffline (const synthyboy::OfflineRequest& request
         const std::lock_guard<std::mutex> lock (contentMutex);
         content = patchContent;
     }
-    synthyboy::EngineKind kind = synthyboy::EngineKind::own;
-#if SYNTHYBOY_SHELL_ENGINE_VITAL
-    kind = synthyboy::EngineKind::vital;
-#endif
-    return synthyboy::renderOfflineAny (*engine, kind, &content, contentStore.get(), copy, out);
+    return synthyboy::renderOfflineAny (*engine, synthyboy::EngineKind::own, &content, contentStore.get(), copy, out);
 }
 
 synthyboy::ui::UiHost::LastNote SynthyBoyProcessor::lastNote() const

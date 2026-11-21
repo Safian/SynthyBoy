@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-//   synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--preset FILE] [--preset-dir DIR] [--csv FILE] [--sr 44100] [--retrigger S] [--no-ftz]
+//   synthyboy_bench [--engine own] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--preset FILE] [--preset-dir DIR] [--csv FILE] [--sr 44100] [--retrigger S] [--no-ftz]
 //
 // K notes are held and retriggered every S seconds (default 1). The first second is rendered but not measured. Prints,
 // for the requested configuration and then once per quality tier (the tier's quality: voices, unison, oversampling, ...), the
@@ -456,7 +456,7 @@ void print (const char* label, const Options& o, int voices, const Result& r)
 
 [[noreturn]] void usage (const char* message)
 {
-    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own|vital] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 44100] [--retrigger S] [--profile FILE] [--ftz] [--no-ftz] [--idle] [--sections] [--unison-cap N] [--morph-spread 0|1] [--kill-fade MS] [--tier requested|low|medium|high|all]\n", message);
+    std::fprintf (stderr, "%s\nusage: synthyboy_bench [--engine own] [--patch default|heavy|both] [--seconds N] [--block 128] [--voices K] [--sr 44100] [--retrigger S] [--profile FILE] [--ftz] [--no-ftz] [--idle] [--sections] [--unison-cap N] [--morph-spread 0|1] [--kill-fade MS] [--tier requested|low|medium|high|all]\n", message);
     std::exit (2);
 }
 } // namespace

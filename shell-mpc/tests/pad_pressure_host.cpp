@@ -2,12 +2,11 @@
 // Copyright (C) 2026 Safian Szabolcs
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //
-// Usage: pad_pressure_host <plugin library> <own|vital> [off] [DISPLAY_PARAMS] [overlay]
+// Usage: pad_pressure_host <plugin library> <own> [off] [DISPLAY_PARAMS] [overlay]
 //   DISPLAY_PARAMS: the display parameters between the engine's list and the pad pressure parameters (default 36 = 4 LFO cursors + 32 spectrum columns; 0 = LFO_LIVE=OFF).
 //   The plugin must be built with SYNTHYBOY_MPC_PAD_PRESSURE=ON and SYNTHYBOY_MPC_LFO_LIVE / SPECTRUM as in the default of the shell (the two parameters are the last two of the list).
 //   overlay: the plugin was built with SYNTHYBOY_MPC_OVERLAY: "Overlay Instance" is the last parameter, AFTER the two pad pressure parameters (their indexes do not move).
 //   own:   the own engine (the engine of the MPC package): the pressure of a note opens Filter 1 (checked on the audio).
-//   vital: the Vital engine has no such layer: the two parameters exist and are saved, the audio does not depend on them.
 //   off:   a build with SYNTHYBOY_MPC_PAD_PRESSURE=OFF: nothing after the display parameters, no member in the chunk.
 // Also checks the pure functions of pad_pressure.h. Links the core (paramCount, parameter table). Run the TSan build too.
 #include "mpc_vst2_abi.h"
@@ -115,8 +114,7 @@ static AEffect* make (void* lib)
 
 int main (int argc, char** argv)
 {
-    if (argc < 3) { std::fprintf (stderr, "usage: pad_pressure_host <plugin> own|vital [off]\n"); return 2; }
-    const bool own = std::string (argv[2]) == "own";
+    if (argc < 3 || std::string (argv[2]) != "own") { std::fprintf (stderr, "usage: pad_pressure_host <plugin> own [off]\n"); return 2; }
     std::vector<std::string> rest;
     bool overlay = false;
     for (int i = 3; i < argc; ++i)
@@ -279,8 +277,7 @@ int main (int argc, char** argv)
     std::vector<float> a, b;
     const double bBase = brightness (base, 127, &a);
     const double bQuiet = brightness (offNoPressure, 0, &b);
-    check ((a == b && bBase == bQuiet) || ! own, "switch off: the pressure changes nothing (identical audio with and without pressure)");
-    if (own)
+    check (a == b && bBase == bQuiet, "switch off: the pressure changes nothing (identical audio with and without pressure)");
     {
         AEffect* mid = engine (true, 0.35f);
         AEffect* full = engine (true, 1.0f);
@@ -347,13 +344,6 @@ int main (int argc, char** argv)
         check (std::fabs (bMatOn - bMatOff) < 1e-9 * (1.0 + bMatOff) || bMatOn == bMatOff,
                "own engine: preset with Poly Aftertouch -> Cutoff route does not double the effect");
         for (AEffect* x : { mid, full, idle, sw, matOn, matOff }) x->dispatcher (x, effClose, 0, 0, nullptr, 0.0f);
-    }
-    else
-    {
-        AEffect* full = engine (true, 1.0f);
-        const double bFull = brightness (full, 127);
-        check (std::fabs (bFull - bBase) < 1e-9 * (1.0 + bBase), "vital engine: no pressure layer, the audio does not depend on the two parameters");
-        full->dispatcher (full, effClose, 0, 0, nullptr, 0.0f);
     }
     base->dispatcher (base, effClose, 0, 0, nullptr, 0.0f);
     offNoPressure->dispatcher (offNoPressure, effClose, 0, 0, nullptr, 0.0f);

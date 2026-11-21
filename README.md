@@ -9,11 +9,11 @@ A minimal 8-voice polyphonic synthesizer, built as **VST3**, **CLAP** and (macOS
 |-------|-------|
 | 0 Spike (8-voice synth, VST3 + CLAP from one code base) | done |
 | 1 Foundation (core / shells split, `IEngine`, parameter table, state, CI matrix) | done |
-| 2 Vital take-over (DSP import, JUCE removal, ARMv7 NEON) | done; real MPC hardware measurement still open |
+| 2 Vital take-over (DSP import, JUCE removal, ARMv7 NEON) | done, then removed again: the own engine is the only engine (docs/plans/vital-removal.md) |
 | 3 Engine completion (oscillators, filters, matrix, FX, tiers) | done; state version 3 with 1484 parameters and the capability bits of the Serum-class packages (sample oscillator, 37 filter types, buses / racks, Hyper / Dimension, Utility, Bode, Convolve, tuning, MPE) |
 | 4 Content and presets | done: ContentPack format, 160 CC0 factory presets (112 initial + 24 batch 1 + 24 batch 2), state v4, macro-wired, perceptually level-normalised (`-12.5 LUFS` internal) |
 | 5 UI | in progress: UI kit and all panels with a control for every key, wavetable editor, headless GUI tests; MPC Key 61 & XL overlay UI verified on hardware; desktop DAW embedding not verified |
-| 6 Native CLAP shell and static build | done (iOS build is Vital-free) |
+| 6 Native CLAP shell and static build | done (no build holds Vital-derived code) |
 | 7 Release (signing, notarisation, packs as assets, manual) | not started |
 
 Quality gates beyond the unit tests: the core and the GUI tests run under ASan + UBSan, the threaded tests under ThreadSanitizer, `synthyboy_fuzz_smoke`
@@ -52,7 +52,7 @@ feeds garbage and mutated documents to every parser, and `synthyboy_preset_sanit
 | Waveform  | Sine / Saw   | Saw |
 | Cutoff    | 20 .. 20000 Hz | 8000 Hz |
 
-The spike's description above is kept for orientation only; the plugin is now the Vital-derived engine (see [Engines](#engines)) with its own touch-first editor (`shell-juce/ui`, `SYNTHYBOY_GENERIC_UI=1` brings JUCE's generic parameter GUI back).
+The spike's description above is kept for orientation only; the plugin is now the own engine (see [Engine](#engine)) with its own touch-first editor (`shell-juce/ui`, `SYNTHYBOY_GENERIC_UI=1` brings JUCE's generic parameter GUI back).
 
 - VST3 category: `Instrument|Synth`; CLAP id `com.safian.synthyboy`, features `instrument`, `synthesizer`
 
@@ -73,34 +73,28 @@ The MPC VST2 build (`scripts/build-mpc.sh`, [docs/MPC.md](docs/MPC.md); end-user
 
 | Path | Content |
 |------|---------|
-| `core/` | `synthyboy_core`: JUCE-free C++17 static library. `include/synthyboy/` public API (`IEngine`, `ParamInfo` table, state I/O, `Quality`, events), `src/` the 1484-entry parameter table, state format 3 with the `content` section, content store, engine capability bits, number formatting, `engine-own/` the engine (the spike's 8-voice synth ported off JUCE), `engine-vital/` the Vital-derived DSP and its adapter (the only place with Vital-derived code, see [Engines](#engines)), `tests/` unit, real-time (no allocation), thread and fuzz tests with an own tiny runner; the Serum-class packages are `tuning/`, `formula/`, `shapes/`, `wavetable-edit/`, `wavetable-render/`, `vital-import/`, `sample-osc/`, `filters-serum/`, `fx-serum-a/`, `fx-serum-b/` (each with a REPORT, overview: docs/ARCHITECTURE.md 3.1) |
+| `core/` | `synthyboy_core`: JUCE-free C++17 static library. `include/synthyboy/` public API (`IEngine`, `ParamInfo` table, state I/O, `Quality`, events), `src/` the 1484-entry parameter table, state format 3 with the `content` section, content store, engine capability bits, number formatting, `engine-own/` the engine (see [Engine](#engine)), `tests/` unit, real-time (no allocation), thread and fuzz tests with an own tiny runner; the Serum-class packages are `tuning/`, `formula/`, `shapes/`, `wavetable-edit/`, `wavetable-render/`, `vital-import/`, `sample-osc/`, `filters-serum/`, `fx-serum-a/`, `fx-serum-b/` (each with a REPORT, overview: docs/ARCHITECTURE.md 3.1) |
 | `shell-juce/` | thin `juce::AudioProcessor`: parameter layout generated from the core table, MIDI/params to core events, state blob from the core |
 | `tests/clap-smoke/` | `clap_smoke`: loads the built `.clap`, checks parameter parity with the core table, audio, state round trip |
 | `cmake/toolchains/` | `armv7-linux-gnueabihf`, `aarch64-linux-gnu` cross toolchain files |
 | `plugin.json`, `schema/` | plugin manifest and its JSON schema (`scripts/check-manifest.py`) |
 | `tools/contentpack/` | `contentpack.py`: builds, verifies and splits ContentPacks (zip + `contentpack.json`), see docs/RELEASE.md |
 | `bench/`, `tools/paramdump/`, `tools/preset-render/` | `synthyboy_bench`: real-time factor and block times of a default and a heavy patch per tier; `synthyboy_paramdump`: the parameter table as JSON (`docs/params.json`); `synthyboy_preset_render`: renders the factory presets at every tier, checks them and prints the level spread and the velocity curve (`--wav DIR` writes the renders for listening) |
-| `scripts/` | `build.sh`, `check-manifest.py`, release: `package-release.py`, `fill-manifest.py`, `build-armv7-clap.sh`, `make-local-release.sh` ([docs/RELEASE.md](docs/RELEASE.md)), `check-no-vital.sh` (the iOS rule), `gen-params-doc.py` / `check-params-doc.sh` (docs/PARAMETERS.md and params.json) |
-| `docs/ARCHITECTURE.md`, `PARAMETERS.md`, `QUALITY.md`, `UPSTREAM.md`, `PERFORMANCE.md` | design and phase plan, the parameter reference (generated), audio quality gates and their measurements, record of the Vital take-over, benchmark numbers |
+| `scripts/` | `build.sh`, `check-manifest.py`, release: `package-release.py`, `fill-manifest.py`, `build-armv7-clap.sh`, `make-local-release.sh` ([docs/RELEASE.md](docs/RELEASE.md)), `check-no-vital.sh` (no Vital-derived code in the core library, none in the source of the own engine), `gen-params-doc.py` / `check-params-doc.sh` (docs/PARAMETERS.md and params.json) |
+| `docs/ARCHITECTURE.md`, `PARAMETERS.md`, `QUALITY.md`, `UPSTREAM.md`, `PERFORMANCE.md` | design and phase plan, the parameter reference (generated), audio quality gates and their measurements, history of the removed Vital take-over, benchmark numbers |
 | `docs/ui-components/` | developer documentation of the MPC UI component library (`shell-mpc/ui/`): one page per component, how a page is built, reuse in another plugin; entry page [docs/ui-components/README.md](docs/ui-components/README.md), instructions for AI agents [shell-mpc/ui/AGENTS.md](shell-mpc/ui/AGENTS.md) |
 
 CMake options: `SYNTHYBOY_BUILD_PLUGIN` (ON; OFF builds only the core, no JUCE download), `SYNTHYBOY_BUILD_TESTS` (ON),
-`SYNTHYBOY_WITH_VITAL` (ON; OFF leaves `core/engine-vital` out of the build completely, as for iOS), `SYNTHYBOY_SHELL_ENGINE` (`vital` by default when Vital is part of the build, else `own`: the engine of the JUCE plugin), `SYNTHYBOY_DEFAULT_TIER` (`high` | `medium` | `low`: the quality tier of the plugin).
+`SYNTHYBOY_DEFAULT_TIER` (`high` | `medium` | `low`: the quality tier of the plugin).
 
-## Engines
+## Engine
 
-Two engines sit behind `synthyboy::IEngine` (`createEngine (EngineKind::own | EngineKind::vital)`):
-
-| Engine | Where | Built | Notes |
-|--------|-------|-------|-------|
-| `own` | `core/engine-own` | always | the spike's synth, original code, a documented subset of the parameters ([core/engine-own/README.md](core/engine-own/README.md)); the fallback of the plugin and the only engine allowed on iOS |
-| `vital` | `core/engine-vital` | `SYNTHYBOY_WITH_VITAL=ON` (default) | DSP derived from [Vital](https://github.com/mtytel/vital) (commit 636ca0e, GPL-3.0-or-later, namespace `sbvital`) with an adapter that maps the SynthyBoy parameters onto it (1484 keys; the engine reports what it implements through capability bits, docs/ARCHITECTURE.md 3.8): 3 wavetable or sample oscillators with unison, spectral morph and two warp slots, noise, 2 filters + FX filter with 37 filter types, 6 envelopes, 10 LFOs, 4 random LFOs, 8 macros, a 64-slot modulation matrix, buses / racks, 16 effect slots (the 9 of Vital plus Hyper / Dimension, Utility, Bode, Convolve and three splitters), tuning / key scale / MPE, quality tiers; mapping and behaviour: [core/engine-vital/README.md](core/engine-vital/README.md), every change to the imported files: [docs/UPSTREAM.md](docs/UPSTREAM.md) |
+One engine sits behind `synthyboy::IEngine` (`createEngine (EngineKind::own)`): `core/engine-own`, original code, which acts on 2634 of the 2637 parameters of the table ([core/engine-own/README.md](core/engine-own/README.md), the list of the keys it does not act on: [docs/ui-design/OWN-ENGINE-GAP.md](docs/ui-design/OWN-ENGINE-GAP.md)). It is the engine of every build: the JUCE plugin, the native CLAP module, the MPC package and iOS. An engine derived from [Vital](https://github.com/mtytel/vital) was part of earlier versions; it was removed (plan and decisions: [docs/plans/vital-removal.md](docs/plans/vital-removal.md), record of the take-over: [docs/UPSTREAM.md](docs/UPSTREAM.md)). `EngineKind::vital` remains only as another name of the own engine, so that old settings and callers still work.
 
 The parameters are our own table (keys like `osc1.unison.detune`, our units): [docs/PARAMETERS.md](docs/PARAMETERS.md), machine readable `docs/params.json`; what the engine does
-and what it is measured to do: [docs/QUALITY.md](docs/QUALITY.md). The JUCE plugin uses the Vital engine; `-DSYNTHYBOY_SHELL_ENGINE=own` builds it with the own
-engine (it is also the engine when `SYNTHYBOY_WITH_VITAL=OFF`; `vital` with Vital off is a configure error). `build/bench/synthyboy_bench --engine own|vital` prints the real-time factor
-([docs/PERFORMANCE.md](docs/PERFORMANCE.md)). The CI job `ios-vital-free` builds the core without Vital and checks the static
-library with `scripts/check-no-vital.sh`.
+and what it is measured to do: [docs/QUALITY.md](docs/QUALITY.md). `build/bench/synthyboy_bench` prints the real-time factor
+([docs/PERFORMANCE.md](docs/PERFORMANCE.md)). The CI job `no-vital` builds the core and checks the static
+library with `scripts/check-no-vital.sh` (the importer of the `.vital` file format, `core/vital-import`, is not Vital-derived code and is allowed; the source of `core/engine-own` may not get a Vital identifier or a GPL header).
 
 ## Building
 
@@ -189,9 +183,9 @@ For **Akai MPC Standalone OS** (MPC Key 61, MPC XL, etc. running MPC OS 3.10.1+)
 - `manifest`: `plugin.json` against `schema/plugin-manifest.schema.json`.
 
 `.github/workflows/release.yml` runs only for a pushed tag `v*.*.*` (or by hand) and creates a **draft** release with the zips of all five platforms, the content packs and `plugin.json.release`: [docs/RELEASE.md](docs/RELEASE.md); `scripts/make-local-release.sh` does the same locally (Docker for linux-armv7) into `dist/`.
-- `ios-vital-free`: `-DSYNTHYBOY_WITH_VITAL=OFF`, core build + tests, `scripts/check-no-vital.sh` on `libsynthyboy_core.a` (and its `--self-test`).
+- `no-vital`: core build + tests, `scripts/check-no-vital.sh` on `libsynthyboy_core.a` and `libsynthyboy_static.a`, on the source of `core/engine-own` (`--source`) and its `--self-test`; the `build` job runs it on the core library too.
 
-All other jobs build and test the Vital engine too; `build` (Linux) also builds the plugin with `-DSYNTHYBOY_SHELL_ENGINE=own` and runs `clap_smoke` on it (the default plugin runs it too), checks that `docs/params.json` and `docs/PARAMETERS.md` are current, `linux-aarch64` prints benchmark numbers.
+Every job builds and tests the own engine; `build` (Linux) runs `clap_smoke` on the plugin, checks that `docs/params.json` and `docs/PARAMETERS.md` are current, `linux-aarch64` prints benchmark numbers.
 
 First GitHub run 2026-11-04: Linux and macOS green; Windows failed only in the pluginval SHA-256 check (fixed).
 clap-validator found three real issues in the spike (Cutoff text round trip; parameter values changed on state load

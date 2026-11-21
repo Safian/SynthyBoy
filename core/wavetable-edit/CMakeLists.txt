@@ -7,7 +7,7 @@ add_library(synthyboy_wtedit STATIC
     src/wavetable.cpp
     src/drawing_tools.cpp
     src/frame_ops.cpp
-    src/vital_model.cpp
+    src/layers_model.cpp
     src/undo.cpp
     src/audio_import.cpp
     src/image_import.cpp

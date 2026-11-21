@@ -50,11 +50,8 @@ endif()
 #   SYNTHYBOY_BUILD_PLUGIN  VST3 + CLAP via JUCE (fetches JUCE and clap-juce-extensions); OFF builds only the core
 #                           (used by the ARMv7 / AArch64 cross builds and the sanitizer jobs)
 #   SYNTHYBOY_BUILD_TESTS   core unit / real-time / thread tests (CTest)
-#   SYNTHYBOY_WITH_VITAL    Vital-derived engine in core/engine-vital (docs/ARCHITECTURE.md 2.2); OFF for iOS (nothing
-#                           of core/engine-vital is then added to the build)
 option(SYNTHYBOY_BUILD_PLUGIN "Build the JUCE plugin (VST3 + CLAP)" ON)
 option(SYNTHYBOY_BUILD_TESTS "Build the core tests" ON)
-option(SYNTHYBOY_WITH_VITAL "Include the Vital-derived engine (core/engine-vital)" ON)
 option(SYNTHYBOY_BUILD_MPC_SHELL "Build the MPC VST2 shell (shell-mpc)" OFF)
 set(MPC_SDK_DIR "" CACHE PATH "Path to the MPC plugin SDK (for shell-mpc)")
 # SYNTHYBOY_BITMAP_GUI: the native CLAP module (shell-clap, synthyboy.clap) renders the editor of shell-juce/ui into a pixel buffer and offers it through the CLAP extension
@@ -84,22 +81,6 @@ if(SYNTHYBOY_BUILD_PLUGIN OR SYNTHYBOY_BITMAP_GUI)
     set(SYNTHYBOY_NEEDS_JUCE ON)
 else()
     set(SYNTHYBOY_NEEDS_JUCE OFF)
-endif()
-
-# Engine of the JUCE shell (the plugin that ships). The Vital-derived engine is the default whenever it is part of the build; "own"
-# is the fallback (and the engine of builds without Vital, e.g. iOS) and can be forced with -DSYNTHYBOY_SHELL_ENGINE=own.
-if(SYNTHYBOY_WITH_VITAL)
-    set(SYNTHYBOY_SHELL_ENGINE_DEFAULT "vital")
-else()
-    set(SYNTHYBOY_SHELL_ENGINE_DEFAULT "own")
-endif()
-set(SYNTHYBOY_SHELL_ENGINE "${SYNTHYBOY_SHELL_ENGINE_DEFAULT}" CACHE STRING "Engine used by the JUCE plugin: own | vital")
-set_property(CACHE SYNTHYBOY_SHELL_ENGINE PROPERTY STRINGS own vital)
-if(NOT SYNTHYBOY_SHELL_ENGINE STREQUAL "own" AND NOT SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-    message(FATAL_ERROR "SYNTHYBOY_SHELL_ENGINE must be 'own' or 'vital' (got '${SYNTHYBOY_SHELL_ENGINE}')")
-endif()
-if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital" AND NOT SYNTHYBOY_WITH_VITAL)
-    message(FATAL_ERROR "SYNTHYBOY_SHELL_ENGINE=vital needs SYNTHYBOY_WITH_VITAL=ON (the Vital-derived engine is not part of this build)")
 endif()
 
 # Quality tier of the JUCE shell (docs/ARCHITECTURE.md 3.6): high on desktop. There is no user-visible parameter for it.
@@ -213,11 +194,8 @@ if(SYNTHYBOY_BUILD_TESTS)
     add_subdirectory(tools/preset-render)
     add_subdirectory(tools/sound-lab)
     add_subdirectory(tools/filter-response)
-    if(SYNTHYBOY_WITH_VITAL)
-        add_subdirectory(tools/param-audit)
-        add_subdirectory(tools/ref-compare)
-        add_subdirectory(tools/own-oracle)
-    endif()
+    add_subdirectory(tools/param-audit)
+    add_subdirectory(tools/ref-compare)
     add_subdirectory(tools/vital-import)
     add_subdirectory(tools/serum-import)
     add_subdirectory(tools/contentpack)
@@ -336,13 +314,8 @@ target_include_directories(SynthyBoy PRIVATE shell-clap "${CLAP_INCLUDE_DIR}")
 
 target_include_directories(SynthyBoy PRIVATE shell-juce "${CMAKE_CURRENT_BINARY_DIR}")
 
-if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-    target_compile_definitions(SynthyBoy PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
-else()
-    target_compile_definitions(SynthyBoy PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
-endif()
 target_compile_definitions(SynthyBoy PRIVATE SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER})
-message(STATUS "JUCE shell engine: ${SYNTHYBOY_SHELL_ENGINE}, tier: ${SYNTHYBOY_DEFAULT_TIER}")
+message(STATUS "JUCE shell engine: own, tier: ${SYNTHYBOY_DEFAULT_TIER}")
 
 target_compile_definitions(SynthyBoy PUBLIC
     JUCE_WEB_BROWSER=0
@@ -412,11 +385,6 @@ if(SYNTHYBOY_BUILD_TESTS)
         JucePlugin_Name="SynthyBoy"
         SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-        target_compile_definitions(synthyboy_test_ui_render PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
-    else()
-        target_compile_definitions(synthyboy_test_ui_render PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
-    endif()
 
     # the library alone: a real SynthyBoyEditor on a UiHost that is no AudioProcessor and has no APVTS (what the Kick app is); no PluginProcessor, no adapter
     synthyboy_add_test(synthyboy_test_ui_plainhost
@@ -441,11 +409,6 @@ if(SYNTHYBOY_BUILD_TESTS)
         JucePlugin_Name="SynthyBoy"
         SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-        target_compile_definitions(synthyboy_test_glb PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
-    else()
-        target_compile_definitions(synthyboy_test_glb PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
-    endif()
 
     synthyboy_add_test(synthyboy_test_fx
         shell-juce/ui/tests/test_fx.cpp
@@ -462,11 +425,6 @@ if(SYNTHYBOY_BUILD_TESTS)
         JucePlugin_Name="SynthyBoy"
         SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-        target_compile_definitions(synthyboy_test_fx PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
-    else()
-        target_compile_definitions(synthyboy_test_fx PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
-    endif()
 
     synthyboy_add_test(synthyboy_test_ui_fxinst
         shell-juce/ui/tests/test_fxinstances_ui.cpp
@@ -483,11 +441,6 @@ if(SYNTHYBOY_BUILD_TESTS)
         JucePlugin_Name="SynthyBoy"
         SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-        target_compile_definitions(synthyboy_test_ui_fxinst PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
-    else()
-        target_compile_definitions(synthyboy_test_ui_fxinst PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
-    endif()
 
     synthyboy_add_test(synthyboy_test_ui_panels
         shell-juce/ui/tests/test_ui_panels.cpp
@@ -505,11 +458,6 @@ if(SYNTHYBOY_BUILD_TESTS)
         SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
         SYNTHYBOY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-        target_compile_definitions(synthyboy_test_ui_panels PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
-    else()
-        target_compile_definitions(synthyboy_test_ui_panels PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
-    endif()
 
     synthyboy_add_test(synthyboy_test_ui_lfo
         shell-juce/ui/tests/test_ui_lfo.cpp
@@ -527,11 +475,6 @@ if(SYNTHYBOY_BUILD_TESTS)
         SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
         SYNTHYBOY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-        target_compile_definitions(synthyboy_test_ui_lfo PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
-    else()
-        target_compile_definitions(synthyboy_test_ui_lfo PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
-    endif()
 
     synthyboy_add_test(synthyboy_test_ui_wtremap
         shell-juce/ui/tests/test_ui_wtremap.cpp
@@ -549,11 +492,6 @@ if(SYNTHYBOY_BUILD_TESTS)
         SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
         SYNTHYBOY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-        target_compile_definitions(synthyboy_test_ui_wtremap PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
-    else()
-        target_compile_definitions(synthyboy_test_ui_wtremap PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
-    endif()
 
     synthyboy_add_test(synthyboy_test_ui_gaps
         shell-juce/ui/tests/test_ui_gaps.cpp
@@ -571,11 +509,6 @@ if(SYNTHYBOY_BUILD_TESTS)
         SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
         SYNTHYBOY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-        target_compile_definitions(synthyboy_test_ui_gaps PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
-    else()
-        target_compile_definitions(synthyboy_test_ui_gaps PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
-    endif()
 
     synthyboy_add_test(synthyboy_test_ui_shellfeat
         shell-juce/ui/tests/test_ui_shellfeat.cpp
@@ -593,11 +526,6 @@ if(SYNTHYBOY_BUILD_TESTS)
         SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
         SYNTHYBOY_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-        target_compile_definitions(synthyboy_test_ui_shellfeat PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
-    else()
-        target_compile_definitions(synthyboy_test_ui_shellfeat PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
-    endif()
 
     # the content pipeline of the shell (WP-01): library, sample / table / IR flows, Vital import, Missing Files, library menus (synthetic fixtures only)
     synthyboy_add_test(synthyboy_test_ui_content
@@ -616,11 +544,6 @@ if(SYNTHYBOY_BUILD_TESTS)
         JucePlugin_Name="SynthyBoy"
         SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-        target_compile_definitions(synthyboy_test_ui_content PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
-    else()
-        target_compile_definitions(synthyboy_test_ui_content PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
-    endif()
 
     # GROUPD (WP-14 / 15 / 16): Switch to wavetable, Render OSC Warp, Resample, the last note as audio, wavetable frame <-> LFO shape
     synthyboy_add_test(synthyboy_test_ui_groupd
@@ -638,11 +561,6 @@ if(SYNTHYBOY_BUILD_TESTS)
         JucePlugin_Name="SynthyBoy"
         SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-        target_compile_definitions(synthyboy_test_ui_groupd PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
-    else()
-        target_compile_definitions(synthyboy_test_ui_groupd PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
-    endif()
 
     synthyboy_add_test(synthyboy_test_desktop_presets
         shell-juce/ui/tests/test_desktop_presets.cpp
@@ -660,11 +578,6 @@ if(SYNTHYBOY_BUILD_TESTS)
         JucePlugin_Name="SynthyBoy"
         SYNTHYBOY_DEFAULT_TIER=${SYNTHYBOY_DEFAULT_TIER}
         JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    if(SYNTHYBOY_SHELL_ENGINE STREQUAL "vital")
-        target_compile_definitions(synthyboy_test_desktop_presets PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=1)
-    else()
-        target_compile_definitions(synthyboy_test_desktop_presets PRIVATE SYNTHYBOY_SHELL_ENGINE_VITAL=0)
-    endif()
 endif()
 
 if(SYNTHYBOY_BITMAP_GUI AND SYNTHYBOY_BUILD_TESTS AND NOT WIN32)

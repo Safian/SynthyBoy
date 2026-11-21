@@ -96,7 +96,7 @@ enum EngineCaps : EngineCapsMask
     kCapModSources2      = 1ull << 61, // WP-06: the modulation sources 43 .. 57 (Oscillator A .. Fixed)
     kCapWarpSources      = 1ull << 62, // WP-06: the warp modes 52 .. 75 (FM / PD / AM / RM from the Noise, Sub, Filter 1, Filter 2)
     // GROUPB WP-18 (13-new-keys.md 4.36): a choice only; bit 63, the last one
-    kCapWavetableSawDown = 1ull << 63, // WP-18: oscN.wavetable = 14 "Saw Down" (the built-in falling saw of Vital's Init table)
+    kCapWavetableSawDown = 1ull << 63, // WP-18: oscN.wavetable = 14 "Saw Down" (the built-in falling saw)
 };
 
 // ---- the second capability word (GROUPC, 13-new-keys.md 4.37): the 64 bits above are all in use, so the capabilities of the new oscillator types live in a
