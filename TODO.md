@@ -150,6 +150,7 @@ A `docs/ui-design` kb. 300 GAP-sorának nagy része elavult (a motor 2634/2637 k
 - Tudásmappa (`docs/dsp-knowledge/`, 2026-11-21 megkezdve): a szakirodalmi forrásokat (Bristow-Johnson, Brandt, Dattorro, Bencina, Zavalishin, MPE, SFZ, ARM Cortex-A17) meg kell nyitni, és a `sources.md`-be idézettel bevezetni; a meglévő tervekből (`docs/plans/`) az ellenőrzött tényeket a témafájlokba kell átvinni. Kész, ha minden témafájl minden állítása mért, megnyitott forrás vagy teszt, és a `sources.md` nem üres.
 
 ## Repó-rend
+- Piros tesztek a develop-ban (batch 6 bázisán mérve, 2026-11-21): `synthyboy_test_shell_clap` szegmenshibával áll le (a Vital kivezetése óta a saját motoron fut), a `param_semantics` `effect_mix_zero_is_the_dry_signal` esete bukik (distortion mix 0 nem száraz), és a param-audit 3 megmagyarázatlan CLICK-et talál (`distortion.drive`, `master.mpe.xyz_macro`, `utility.hpf`). Kész, ha mindhárom oka megvan és javítva (teszt vagy kód, bizonyítékkal).
 - `scripts/tests/test_render_ui_gallery.py` a repó `build/` könyvtárában fordítja a `ui_gallery_host`-ot: ha az a könyvtár MPC shell nélkül van konfigurálva, „unknown target" hibával bukik (2026-11-21, develop `08185fb2`), és egy Python-teszt mellékesen fordít. Kész, ha a teszt kihagyja magát, amikor a cél nincs konfigurálva (vagy `--host-bin`/környezeti változóval kapja a binárist), és nem fordít.
 - `agy/g54-pack-versions-010` (0.1.0 verziószövegek): beolvasztás a kiadásjelölt körben.
 - `agy/g84-reduced-set-proposal` (csökkentett preset-készlet): az owner döntésére vár.
