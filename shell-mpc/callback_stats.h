@@ -164,7 +164,7 @@ public:
             dispatcherCount[opcode].fetch_add (1, std::memory_order_relaxed);
         if (opcode == effVendorSpecific)
             capture (vendorCaps, vendorSeen, opcode, index, value, opt, ptrSet);
-        else if (effectOpcodeName (opcode) == nullptr)
+        else if (effectOpcodeName (opcode) == nullptr || opcode == effEditOpen || opcode == effEditGetRect)
             capture (unknownCaps, unknownSeen, opcode, index, value, opt, ptrSet);
     }
 
