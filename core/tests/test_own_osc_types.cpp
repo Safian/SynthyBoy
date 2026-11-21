@@ -20,6 +20,7 @@
 #include "synthyboy/content_store.h"
 #include "synthyboy/engine.h"
 #include "synthyboy/offline_render.h"
+#include "synthyboy/spectral/start_cache.h"
 #include "synthyboy/state.h"
 #include "synthyboy/user_content.h"
 #include "synthyboy/wave_convert.h"
@@ -51,6 +52,17 @@ std::vector<uint8_t> sineWav (double hz, double amp, int rate, double seconds)
     std::vector<float> x (n);
     for (size_t i = 0; i < n; ++i)
         x[i] = static_cast<float> (amp * std::sin (6.283185307179586 * hz * static_cast<double> (i) / rate));
+    return encodeWav (x.data(), nullptr, n, rate, 16);
+}
+
+/** A sine of hz whose amplitude rises linearly from 0 to amp over the file: every position of the file has its own level and its own phase, so a loop that
+    is left differs from one that is kept by far more than any threshold (docs/dsp-knowledge/testing.md: no signal whose whole periods line up with the loop). */
+std::vector<uint8_t> risingSineWav (double hz, double amp, int rate, double seconds)
+{
+    const size_t n = static_cast<size_t> (rate * seconds);
+    std::vector<float> x (n);
+    for (size_t i = 0; i < n; ++i)
+        x[i] = static_cast<float> (amp * (static_cast<double> (i) / static_cast<double> (n)) * std::sin (6.283185307179586 * hz * static_cast<double> (i) / rate));
     return encodeWav (x.data(), nullptr, n, rate, 16);
 }
 
@@ -1818,4 +1830,145 @@ TEST (own_spectral_start_budget_quality_field)
     big.spectralStartBudgetUs = 100000;
     CHECK (fnv1a (SpecRig (big, 2).render (8, kFrames, 128)) == off);
     CHECK (def != off);
+}
+
+TEST (own_sample_loop_exit_leaves_loop_on_release)
+{
+    // A sample with a loop (e.g. 10% to 30%):
+    // When loop_exit = 0, on noteOff the sample continues looping.
+    // When loop_exit = 1, on noteOff the sample exits the loop and plays forward past 30%.
+    auto renderSample = [] (int oscNum, float loopExitVal)
+    {
+        MemoryContentStore store;
+        StateContent content;
+        auto e = createOwnEngine();
+        e->setParam (kParamMasterPolyphony, 8.0f);
+        e->prepare (kSr, 256, qualityForTier (Tier::high));
+        store.add ("test", "sine.wav", risingSineWav (437.0, 0.8, 44100, 2.0)); // 437 Hz: 0.4 s of loop is 174.8 periods, not whole ones
+        ContentFileRef ref;
+        ref.pack = "test";
+        ref.file = "sine.wav";
+        ref.name = "sine";
+        attachSample (content, oscNum, ref, 44100, 88200, 1);
+        e->setContentStore (&store);
+        e->setContent (content);
+
+        const std::string P = "osc" + std::to_string (oscNum);
+        if (oscNum != 1)
+        {
+            set (*e, "osc1.on", 0.0f);
+            set (*e, (P + ".on").c_str(), 1.0f);
+        }
+        set (*e, "filter1.on", 0.0f);
+        set (*e, "master.volume", 0.0f);
+        set (*e, "env1.attack", 0.0f);
+        set (*e, "env1.sustain", 100.0f);
+        set (*e, "env1.release", 500.0f); // 500 ms release tail
+        set (*e, (P + ".level").c_str(), 100.0f);
+        set (*e, (P + ".type").c_str(), 1.0f); // Sample oscillator
+        set (*e, (P + ".sample.root").c_str(), 69.0f);
+        set (*e, (P + ".sample.loop_mode").c_str(), 1.0f); // forward loop
+        set (*e, (P + ".sample.loop_start").c_str(), 10.0f);
+        set (*e, (P + ".sample.loop_end").c_str(), 30.0f);
+        set (*e, (P + ".sample.loop_exit").c_str(), loopExitVal);
+
+        // The loop is 0.2 .. 0.6 s of the 2 s file (played at 44100 / 48000 of the host rate). Note-on at 0, note-off at 0.9 s (the loop has wrapped once and the voice is
+        // inside it, 0.19 s before its end), render to 1.4 s: leaving the loop reaches its end at about 1.09 s and goes on to the louder part of the file, keeping it wraps back to
+        // the quiet start of the loop.
+        const size_t total = static_cast<size_t> (1.4 * kSr);
+        const size_t offAt = static_cast<size_t> (0.9 * kSr);
+        Out o;
+        o.l.assign (total, 0.0f);
+        o.r.assign (total, 0.0f);
+        size_t pos = 0;
+        while (pos < total)
+        {
+            const size_t n = std::min<size_t> (256, total - pos);
+            Event ev[2];
+            int ne = 0;
+            if (pos == 0)
+                ev[ne++] = sbtest::noteOn (0, 69, 1.0f);
+            if (offAt >= pos && offAt < pos + n)
+                ev[ne++] = sbtest::noteOff (static_cast<int> (offAt - pos), 69);
+            e->process (ev, ne, o.l.data() + pos, o.r.data() + pos, static_cast<int> (n));
+            pos += n;
+        }
+        return o;
+    };
+
+    auto diffDb = [] (const Out& a, const Out& b, size_t from)
+    {
+        double d = 0.0, p = 1.0e-9;
+        for (size_t i = from; i < a.l.size(); ++i)
+        {
+            d = std::max (d, std::fabs (static_cast<double> (a.l[i] - b.l[i])));
+            p = std::max (p, std::fabs (static_cast<double> (a.l[i])));
+        }
+        return 20.0 * std::log10 (std::max (d / p, 1.0e-9));
+    };
+
+    const size_t offSample = static_cast<size_t> (1.15 * kSr); // after the end of the loop is reached when it is left
+    // osc1: loop_exit 0 vs 1 must differ during release, by far more than the threshold (the two renders are different signals)
+    const Out o1_0 = renderSample (1, 0.0f), o1_1 = renderSample (1, 1.0f);
+    // osc3: the same
+    const Out o3_0 = renderSample (3, 0.0f), o3_1 = renderSample (3, 1.0f);
+    const double d1 = diffDb (o1_0, o1_1, offSample), d3 = diffDb (o3_0, o3_1, offSample);
+    std::printf ("loop_exit 0 vs 1 after the loop end: osc1 %.1f dB, osc3 %.1f dB\n", d1, d3);
+    CHECK (d1 > -20.0);
+    CHECK (d3 > -20.0);
+}
+
+// docs/plans/spectral-start-cache.md: a chord struck again (the note serials move on, so the voices start on other quarters) renders the same bits with the start cache on as with it off, and its
+// second strike makes no start frame: every (inputs, channel, frame) is answered by the cache (the engine's ledger books the same either way, so the timing is the one of the cache off).
+TEST (own_spectral_start_cache_repeated_chord_is_bit_identical_and_second_strike_hits)
+{
+    spectral::StartCache& cache = spectral::StartCache::instance();
+    cache.prepare();
+    constexpr int kStrikeFrames = 30000;
+    auto run = [&] (bool cacheOn, uint64_t& missesAfter1, uint64_t& hitsAfter1, uint64_t& missesAfter2, uint64_t& hitsAfter2) -> Out
+    {
+        cache.clearForTest();
+        Quality q = lowStagger (true);
+        q.spectralStartCache = cacheOn ? 1 : 0;
+        SpecRig r (q, 2);
+        Out all;
+        for (int strike = 0; strike < 2; ++strike)
+        {
+            Out o;
+            o.l.assign (static_cast<size_t> (kStrikeFrames), 0.0f);
+            o.r.assign (static_cast<size_t> (kStrikeFrames), 0.0f);
+            for (int pos = 0; pos < kStrikeFrames; pos += 128)
+            {
+                Event ev[8];
+                int ne = 0;
+                if (pos == 0)
+                    for (int i = 0; i < 4; ++i)
+                        ev[ne++] = sbtest::noteOn (0, kSpecKeys[i], 1.0f);
+                if (pos == 15360)
+                    for (int i = 0; i < 4; ++i)
+                        ev[ne++] = sbtest::noteOff (0, kSpecKeys[i]);
+                r.e->process (ev, ne, o.l.data() + pos, o.r.data() + pos, 128);
+            }
+            all.l.insert (all.l.end(), o.l.begin(), o.l.end());
+            all.r.insert (all.r.end(), o.r.begin(), o.r.end());
+            const spectral::StartCache::Stats st = cache.statsForTest();
+            (strike == 0 ? missesAfter1 : missesAfter2) = st.misses;
+            (strike == 0 ? hitsAfter1 : hitsAfter2) = st.hits;
+        }
+        return all;
+    };
+    uint64_t m1 = 0, h1 = 0, m2 = 0, h2 = 0, om1 = 0, oh1 = 0, om2 = 0, oh2 = 0;
+    const Out off = run (false, om1, oh1, om2, oh2);
+    const Out on = run (true, m1, h1, m2, h2);
+    CHECK (sbtest::allFinite (off.l) && sbtest::allFinite (on.l));
+    CHECK (rmsOfRange (on.l, 2000, 8000) > 1.0e-4);
+    CHECK_EQ (om2 + oh2, uint64_t (0));        // the cache off never asks it
+    CHECK (m1 > 0);                            // the first strike computes (and stores) its frames
+    CHECK_EQ (m2, m1);                         // the second strike computes none
+    CHECK (h2 > h1);                           // and every frame of it is a hit
+    CHECK (fnv1a (off) == fnv1a (on));
+    std::printf ("SPECSTART-CHECKSUM chord4x2_twice_cache_off %016llx\nSPECSTART-CHECKSUM chord4x2_twice_cache_on %016llx\n", static_cast<unsigned long long> (fnv1a (off)),
+                 static_cast<unsigned long long> (fnv1a (on)));
+    std::printf ("start cache: strike 1 misses %llu hits %llu, strike 2 misses %llu hits %llu\n", static_cast<unsigned long long> (m1), static_cast<unsigned long long> (h1),
+                 static_cast<unsigned long long> (m2), static_cast<unsigned long long> (h2));
 }

@@ -103,6 +103,10 @@ struct Quality
     /** The budget of the Spectral start ledger, in microseconds of start work per block. 0 (default): the built-in `kStartBudgetUs` (core/spectral start_ledger.h). Any value > 0 is the budget
         itself (bench / measurement, e.g. tier_bench --start-budget-us); the profiles do not set it. */
     int spectralStartBudgetUs = 0;
+    /** The start cache of the Spectral oscillator (core/spectral start_cache.h, docs/plans/spectral-start-cache.md): the first frames of a note are kept in a process-wide table of 3.2 MB and a note
+        struck again with the same settings takes them from it. The sound is bit-identical to the cache off (only the work differs). Negative (default): by the tier, on when `oversampling` is 1 (low; owner decision
+        2026-11-21), off for medium and high. 0 off, 1 on (bench / measurement, tier_bench --start-cache / --no-start-cache). */
+    int spectralStartCache = -1;
 };
 
 /** The economy groups a quality runs with (see Quality::economy). */
@@ -115,6 +119,12 @@ constexpr uint32_t economyOf (const Quality& q) noexcept
 constexpr bool spectralStartOf (const Quality& q) noexcept
 {
     return (q.spectralStart < 0 ? q.oversampling <= 1 : q.spectralStart != 0) && (economyOf (q) & static_cast<uint32_t> (kEconomyControl)) != 0u;
+}
+
+/** Whether the Spectral start cache runs with this quality: the setting, by the tier (low) when it is negative. */
+constexpr bool spectralStartCacheOf (const Quality& q) noexcept
+{
+    return q.spectralStartCache < 0 ? q.oversampling <= 1 : q.spectralStartCache != 0;
 }
 
 constexpr Quality qualityForTier (Tier tier) noexcept

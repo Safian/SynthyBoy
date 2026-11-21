@@ -8,6 +8,7 @@
 #include <mutex>
 #include "own_engine.h"
 #include "osc/lib_osc.h"
+#include "synthyboy/spectral/start_cache.h"
 
 #include <chrono>
 #include "dsp/section_timing.h"
@@ -319,6 +320,9 @@ void OwnEngine::setQuality (const Quality& q) noexcept
     economyMask.store (economyOf (q), std::memory_order_relaxed);
     spectralStartOn.store (spectralStartOf (q), std::memory_order_relaxed);
     spectralStartBudget.store (q.spectralStartBudgetUs, std::memory_order_relaxed);
+    if (spectralStartCacheOf (q))
+        spectral::StartCache::instance().prepare();   // allocates the table once, here and not on the audio thread
+    spectralStartCacheOn.store (spectralStartCacheOf (q), std::memory_order_relaxed);
     tierLowCap.store (q.economy < 0 && q.oversampling <= 1, std::memory_order_relaxed);
     fxMask.store (q.fxMask, std::memory_order_relaxed);
     fxMakeup.store (q.fxMakeup, std::memory_order_relaxed);
@@ -1493,6 +1497,7 @@ void OwnEngine::process (const Event* events, int numEvents, float* left, float*
                 const int budget = spectralStartBudget.load (std::memory_order_relaxed);
                 spectralScratch->start.configure (spectralStartOn.load (std::memory_order_relaxed), budget > 0 ? budget : spectral::kStartBudgetUs);
             }
+            spectralScratch->startCache = spectralStartCacheOn.load (std::memory_order_relaxed);
             spectralScratch->start.beginTick();
             controlTick();
             // everything below that reads only parameters (and the global modulation) is redone only when one of them changed since the last period

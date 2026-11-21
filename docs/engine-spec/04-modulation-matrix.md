@@ -189,6 +189,7 @@ Tolerance +-0.1 dB; frequencies +-0.2 Hz.
 |-----|------------|-----|-----|-------|
 | `master.volume` | vol | 0 | 7399.44 | 7399.44 |
 | `master.tune` | lin | -1 | 1 | 2 |
+| `master.transpose` | lin | -48 | 48 | 96 |
 | `oscN.level` | sqrt | 0 | 1 | 1 |
 | `oscN.pan` | lin | -1 | 1 | 2 |
 | `oscN.transpose` | lin | -48 | 48 | 96 |

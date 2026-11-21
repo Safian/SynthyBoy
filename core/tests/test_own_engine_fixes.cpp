@@ -369,6 +369,33 @@ TEST (own_master_tune_is_a_modulation_destination)
     CHECK (z.first > 10.0 * z.second);
 }
 
+// docs/engine-spec/01:176, 04:191: master.transpose is a modulation destination. A slot (macro 1 at 100 %, amount moves by expected semitones)
+// shifts the pitch of the voice. Range is -48 .. +48 semitones (width 96). With amount = +12.5 % (+12 / 96 * 100 %), moves by +12 semitones
+// (one octave up: 440 Hz -> 880 Hz); with amount = -12.5 %, moves by -12 semitones (one octave down: 440 Hz -> 220 Hz); with amount = 0 %, 440 Hz unmodulated.
+// Fails today because master.transpose is declared kAuto (not kMod), so dstChoice ("master.transpose") returns 0 (destination refused).
+TEST (own_master_transpose_is_a_modulation_destination)
+{
+    auto lines = [] (float amount, double hzA, double hzB)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "macro.1", 100);
+        set (*e, "mod01.source", srcChoice ("macro1"));
+        set (*e, "mod01.destination", dstChoice ("master.transpose"));
+        set (*e, "mod01.amount", amount);
+        const auto r = sbtest::render (*e, { sbtest::noteOn (0, 69) }, static_cast<int> (1.0 * kSr), 256);
+        return std::pair<double, double> { line (r.left, 0.3, 0.8, hzA), line (r.left, 0.3, 0.8, hzB) };
+    };
+    CHECK (dstChoice ("master.transpose") > 0.0f);
+    const double up = 440.0 * 2.0, down = 440.0 * 0.5;
+    const auto u = lines (12.5f, up, 440.0);
+    CHECK (u.first > 10.0 * u.second);
+    const auto d = lines (-12.5f, down, 440.0);
+    CHECK (d.first > 10.0 * d.second);
+    const auto z = lines (0.0f, 440.0, up);
+    CHECK (z.first > 10.0 * z.second);
+}
+
 // docs/engine-spec/06-effects.md section 1: "nothing is stepped". A jump of distortion.drive in the middle of a held note makes no click: the largest sample to sample step across the jump is
 // at most 2.5 times the largest step of the steady sound before and after it (a click is of the order of the signal, 10 .. 100 times). Before the fix the drive of the new period was
 // applied at once (x8.3 on the step). quality.no_smoothing = 1 keeps the step: the two renders differ by more than -40 dB re peak after the jump.
@@ -414,4 +441,231 @@ TEST (own_distortion_drive_does_not_step)
         p = std::max (p, std::fabs (static_cast<double> (smooth.first[i])));
     }
     CHECK (20.0 * std::log10 (std::max (d / p, 1.0e-9)) > -40.0);
+}
+
+// osc1.warp.spread, osc1.warp2.spread, osc3.warp.spread, osc3.warp2.spread: unison spread of warp amount.
+// With unison voices >= 2, warp spread moves the warp amount of outer voice pairs relative to the center pair (docs/engine-spec/02-oscillator.md section 6).
+TEST (own_warp_spread_and_warp2_spread_affect_unison_voices)
+{
+    auto renderOscWarp = [] (int osc, int warpSlot, float spreadVal)
+    {
+        auto e = make();
+        sinePatch (*e);
+        const std::string P = "osc" + std::to_string (osc);
+        if (osc != 1)
+        {
+            set (*e, "osc1.on", 0);
+            set (*e, (P + ".on").c_str(), 1);
+            set (*e, (P + ".level").c_str(), 100);
+            set (*e, (P + ".wavetable").c_str(), 0);
+        }
+        set (*e, (P + ".unison.voices").c_str(), 5);
+        set (*e, (P + ".unison.detune").c_str(), 20);
+        const std::string warpKey = warpSlot == 1 ? P + ".warp.type" : P + ".warp2.type";
+        const std::string amtKey = warpSlot == 1 ? P + ".warp.amount" : P + ".warp2.amount";
+        const std::string spreadKey = warpSlot == 1 ? P + ".warp.spread" : P + ".warp2.spread";
+        set (*e, warpKey.c_str(), 1); // Sync warp
+        set (*e, amtKey.c_str(), 30);
+        set (*e, spreadKey.c_str(), spreadVal);
+        return sbtest::render (*e, { sbtest::noteOn (0, 48) }, static_cast<int> (0.2 * kSr), 256);
+    };
+
+    auto diffDb = [] (const sbtest::Rendered& a, const sbtest::Rendered& b)
+    {
+        double d = 0.0, p = 1.0e-9;
+        for (size_t i = 0; i < a.left.size(); ++i)
+        {
+            d = std::max (d, std::fabs (static_cast<double> (a.left[i] - b.left[i])));
+            p = std::max (p, std::fabs (static_cast<double> (a.left[i])));
+        }
+        return 20.0 * std::log10 (std::max (d / p, 1.0e-9));
+    };
+
+    // osc1 warp 1 & 2 spread
+    const auto r1_0 = renderOscWarp (1, 1, 0.0f), r1_80 = renderOscWarp (1, 1, 80.0f);
+    CHECK (diffDb (r1_0, r1_80) > -30.0);
+
+    const auto r1w2_0 = renderOscWarp (1, 2, 0.0f), r1w2_80 = renderOscWarp (1, 2, 80.0f);
+    CHECK (diffDb (r1w2_0, r1w2_80) > -30.0);
+
+    // osc3 warp 1 & 2 spread
+    const auto r3_0 = renderOscWarp (3, 1, 0.0f), r3_80 = renderOscWarp (3, 1, 80.0f);
+    CHECK (diffDb (r3_0, r3_80) > -30.0);
+
+    const auto r3w2_0 = renderOscWarp (3, 2, 0.0f), r3w2_80 = renderOscWarp (3, 2, 80.0f);
+    CHECK (diffDb (r3w2_0, r3w2_80) > -30.0);
+
+    // Modulation of warp spread (MOD-DEAD test)
+    auto renderModSpread = [] (float macroVal)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "osc1.unison.voices", 5);
+        set (*e, "osc1.unison.detune", 20);
+        set (*e, "osc1.warp.type", 1);
+        set (*e, "osc1.warp.amount", 30);
+        set (*e, "osc1.warp.spread", 0);
+        set (*e, "macro.1", macroVal);
+        set (*e, "mod01.source", srcChoice ("macro1"));
+        set (*e, "mod01.destination", dstChoice ("osc1.warp.spread"));
+        set (*e, "mod01.amount", 80);
+        return sbtest::render (*e, { sbtest::noteOn (0, 48) }, static_cast<int> (0.2 * kSr), 256);
+    };
+    const auto m0 = renderModSpread (0.0f), m100 = renderModSpread (100.0f);
+    CHECK (diffDb (m0, m100) > -30.0);
+}
+
+TEST (own_osc_phase_legato_poly_context_osc1_and_osc3)
+{
+    // Phase Legato (docs/engine-spec/02-oscillator.md, docs/ui-design/13-new-keys.md A86):
+    // When a note starts while a previous note is still held (polyphonic overlap),
+    // the new note takes the held note's running oscillator phases when phase_legato == 1.
+    // When master.legato == 1 (monophonic glide), the engine glides the existing voice
+    // without starting a new voice or resetting phases (own_engine.cpp:837), making phase_legato inert.
+    auto renderLegato = [] (int oscNum, float phaseLegatoVal, float masterLegatoVal)
+    {
+        auto e = make();
+        sinePatch (*e);
+        const std::string P = "osc" + std::to_string (oscNum);
+        if (oscNum != 1)
+        {
+            set (*e, "osc1.on", 0.0f);
+            set (*e, (P + ".on").c_str(), 1.0f);
+            set (*e, (P + ".level").c_str(), 100.0f);
+            set (*e, (P + ".wavetable").c_str(), 0.0f);
+        }
+        set (*e, (P + ".random_phase").c_str(), 0.0f);
+        set (*e, (P + ".phase_legato").c_str(), phaseLegatoVal);
+        set (*e, "master.legato", masterLegatoVal);
+        set (*e, "env1.release", 2000.0f);
+
+        // Note 48 at 0, Note 55 at 0.25s (while 48 is held), Note 48 off at 0.45s, render 0.5s
+        const int t1 = static_cast<int> (0.25 * kSr);
+        return sbtest::render (*e, { sbtest::noteOn (0, 48), sbtest::noteOn (t1, 55), sbtest::noteOff (static_cast<int> (0.45 * kSr), 48) },
+                               static_cast<int> (0.5 * kSr), 256);
+    };
+
+    auto diffDb = [] (const sbtest::Rendered& a, const sbtest::Rendered& b, size_t from)
+    {
+        double d = 0.0, p = 1.0e-9;
+        for (size_t i = from; i < a.left.size(); ++i)
+        {
+            d = std::max (d, std::fabs (static_cast<double> (a.left[i] - b.left[i])));
+            p = std::max (p, std::fabs (static_cast<double> (a.left[i])));
+        }
+        return 20.0 * std::log10 (std::max (d / p, 1.0e-9));
+    };
+
+    const size_t note2Sample = static_cast<size_t> (0.25 * kSr);
+
+    // 1. With master.legato == 1.0f (monophonic glide), phase_legato has no effect (explaining audit baseline)
+    const auto mono0 = renderLegato (1, 0.0f, 1.0f), mono1 = renderLegato (1, 1.0f, 1.0f);
+    CHECK (diffDb (mono0, mono1, note2Sample) < -100.0);
+
+    // 2. With polyphonic overlapping notes (master.legato == 0.0f), osc1 and osc3 phase_legato produce distinct phases
+    const auto poly1_0 = renderLegato (1, 0.0f, 0.0f), poly1_1 = renderLegato (1, 1.0f, 0.0f);
+    CHECK (diffDb (poly1_0, poly1_1, note2Sample) > -30.0);
+
+    const auto poly3_0 = renderLegato (3, 0.0f, 0.0f), poly3_1 = renderLegato (3, 1.0f, 0.0f);
+    CHECK (diffDb (poly3_0, poly3_1, note2Sample) > -30.0);
+}
+
+TEST (own_sub_phase_contiguous_poly_and_mono_behavior)
+{
+    // Sub Phase Contiguous (docs/engine-spec/02-oscillator.md section 9):
+    // When a note starts while a previous note is still active/held,
+    // sub.phase_contiguous makes the new voice continue the sub oscillator phase
+    // of the running voice (own_engine.cpp:885).
+    // When master.legato == 1.0f, monophonic voice glide reuses the held voice without
+    // starting a new voice, so sub.phase_contiguous is inert in mono legato.
+    auto renderSub = [] (float contiguousVal, float masterLegatoVal)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "osc1.on", 0.0f);
+        set (*e, "sub.on", 1.0f);
+        set (*e, "sub.octave", 0.0f);
+        set (*e, "sub.level", 100.0f);
+        set (*e, "sub.waveform", 0.0f);
+        set (*e, "sub.phase_contiguous", contiguousVal);
+        set (*e, "master.legato", masterLegatoVal);
+        set (*e, "env1.release", 2000.0f);
+
+        const int t1 = static_cast<int> (0.25 * kSr);
+        return sbtest::render (*e, { sbtest::noteOn (0, 48), sbtest::noteOn (t1, 55), sbtest::noteOff (static_cast<int> (0.45 * kSr), 48) },
+                               static_cast<int> (0.5 * kSr), 256);
+    };
+
+    auto diffDb = [] (const sbtest::Rendered& a, const sbtest::Rendered& b, size_t from)
+    {
+        double d = 0.0, p = 1.0e-9;
+        for (size_t i = from; i < a.left.size(); ++i)
+        {
+            d = std::max (d, std::fabs (static_cast<double> (a.left[i] - b.left[i])));
+            p = std::max (p, std::fabs (static_cast<double> (a.left[i])));
+        }
+        return 20.0 * std::log10 (std::max (d / p, 1.0e-9));
+    };
+
+    const size_t note2Sample = static_cast<size_t> (0.25 * kSr);
+
+    // 1. With master.legato == 1.0f (mono glide), sub.phase_contiguous has no effect (audit baseline behavior)
+    const auto mono0 = renderSub (0.0f, 1.0f), mono1 = renderSub (1.0f, 1.0f);
+    CHECK (diffDb (mono0, mono1, note2Sample) < -100.0);
+
+    // 2. With polyphonic overlapping notes (master.legato == 0.0f), sub.phase_contiguous produces distinct phase
+    const auto poly0 = renderSub (0.0f, 0.0f), poly1 = renderSub (1.0f, 0.0f);
+    CHECK (diffDb (poly0, poly1, note2Sample) > -30.0);
+}
+
+TEST (own_lfo_host_sync_requires_playing_transport)
+{
+    // LFO Host Sync (docs/engine-spec/03-envelopes-lfos.md:178, 200, events.h:52):
+    // In Free-run (sync_type 1), lfoN.host anchors the LFO phase to the host transport clock
+    // (g.songSeconds = songPosBeats * 60 / bpm) when g.playing is true.
+    // When the transport is stopped (playing == false), LFOs in HOST mode run free
+    // using the engine's internal free-running phase, making lfoN.host inert by design.
+    auto renderLfo = [] (int lfoNum, float hostVal, bool transportPlaying, double songBeats)
+    {
+        auto e = make();
+        sinePatch (*e);
+        const std::string L = "lfo" + std::to_string (lfoNum);
+        set (*e, (L + ".rate").c_str(), 4.0f);
+        set (*e, (L + ".sync_type").c_str(), 1.0f); // Free-run
+        set (*e, (L + ".host").c_str(), hostVal);
+        set (*e, "mod01.source", srcChoice (L.c_str()));
+        set (*e, "mod01.destination", dstChoice ("osc1.level"));
+        set (*e, "mod01.amount", 80.0f);
+
+        TransportInfo tr;
+        tr.bpm = 120.0;
+        tr.playing = transportPlaying;
+        tr.songPosBeats = songBeats;
+        e->setTransport (tr);
+
+        return sbtest::render (*e, { sbtest::noteOn (0, 48) }, static_cast<int> (0.3 * kSr), 256);
+    };
+
+    auto diffDb = [] (const sbtest::Rendered& a, const sbtest::Rendered& b)
+    {
+        double d = 0.0, p = 1.0e-9;
+        for (size_t i = 0; i < a.left.size(); ++i)
+        {
+            d = std::max (d, std::fabs (static_cast<double> (a.left[i] - b.left[i])));
+            p = std::max (p, std::fabs (static_cast<double> (a.left[i])));
+        }
+        return 20.0 * std::log10 (std::max (d / p, 1.0e-9));
+    };
+
+    // 1. Stopped transport (playing == false): host sync has no effect (audit baseline)
+    const auto stopped0 = renderLfo (1, 0.0f, false, 0.0), stopped1 = renderLfo (1, 1.0f, false, 0.0);
+    CHECK (diffDb (stopped0, stopped1) < -100.0);
+
+    // 2. Running transport (playing == true, songPosBeats = 1.0): lfo1.host produces distinct phase
+    const auto play1_0 = renderLfo (1, 0.0f, true, 1.0), play1_1 = renderLfo (1, 1.0f, true, 1.0);
+    CHECK (diffDb (play1_0, play1_1) > -30.0);
+
+    // 3. Running transport for lfo10.host produces distinct phase
+    const auto play10_0 = renderLfo (10, 0.0f, true, 1.0), play10_1 = renderLfo (10, 1.0f, true, 1.0);
+    CHECK (diffDb (play10_0, play10_1) > -30.0);
 }

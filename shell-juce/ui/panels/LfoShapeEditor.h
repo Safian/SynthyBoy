@@ -48,6 +48,24 @@ const char* lfoShapePresetName (int builtInShape);
     custom shape point list of a normal LFO. Returns false for a bad index / the same LFO. One host gesture per parameter. */
 bool copyLfoSettings (UiContext& ctx, bool random, int from, int to);
 
+/** Snaps value v to the nearest division out of `divisions`. */
+inline float snapTo (float v, int divisions) noexcept
+{
+    if (divisions <= 0)
+        return v;
+    const auto d = static_cast<float> (divisions);
+    return std::round (v * d) / d;
+}
+
+/** Pure snap function for LFO phase / editor coordinates. When freeMode is false and divisions > 0,
+    snaps value v in [0, 1] to the nearest k / divisions division. When freeMode is true, returns v unchanged. */
+inline float snapPhase (float v, int divisions, bool freeMode = false) noexcept
+{
+    if (freeMode || divisions <= 0)
+        return juce::jlimit (0.0f, 1.0f, v);
+    return juce::jlimit (0.0f, 1.0f, snapTo (v, divisions));
+}
+
 class LfoShapeEditor final : public juce::Component, private juce::Timer
 {
 public:

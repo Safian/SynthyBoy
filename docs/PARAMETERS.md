@@ -64,7 +64,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | `master.polyphony` | Master Polyphony | 1 .. 32 voices (steps of 1) | 16 voices | Master | mod | yes |
 | `master.bend_range` | Master Pitch Bend Range | 0 .. 24 st (steps of 1) | 2 st | Master |  | yes |
 | `master.velocity_track` | Master Velocity Tracking | -100 .. 100 % | 100 % | Master |  | yes |
-| `master.transpose` | Master Transpose | -48 .. 48 st (steps of 1) | 0 st | Master |  | yes |
+| `master.transpose` | Master Transpose | -48 .. 48 st (steps of 1) | 0 st | Master | mod | yes |
 | `master.tune` | Master Tune | -100 .. 100 ct | 0 ct | Master | mod | yes |
 | `master.legato` | Master Legato | 0 Off, 1 On | Off | Master |  | yes |
 | `master.portamento.time` | Portamento Time | 0 .. 8000 ms (skew 0.300000012) | 0 ms | Master / Portamento | mod | yes |
@@ -986,7 +986,7 @@ Modulation: parameters marked *mod* can be the destination of a modulation slot.
 | Key | Name | Range | Default | Group | Mod | Own engine |
 |-----|------|-------|---------|-------|-----|------------|
 | `modNN.source` | Mod NN Source (NN = 01 .. 64) | 0 None, 1..57 sources (list below) | None | Mod Matrix / Slot 01 |  | yes |
-| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..1248 destinations (list below) | None | Mod Matrix / Slot 01 |  | yes |
+| `modNN.destination` | Mod NN Destination (NN = 01 .. 64) | 0 None, 1..1249 destinations (list below) | None | Mod Matrix / Slot 01 |  | yes |
 | `modNN.amount` | Mod NN Amount (NN = 01 .. 64) | -100 .. 100 % | 0 % | Mod Matrix / Slot 01 | mod | yes |
 | `modNN.power` | Mod NN Curve (NN = 01 .. 64) | -10 .. 10 | 0 | Mod Matrix / Slot 01 |  | yes |
 | `modNN.bipolar` | Mod NN Bipolar (NN = 01 .. 64) | 0 Off, 1 On | Off | Mod Matrix / Slot 01 |  | yes |
@@ -3200,6 +3200,7 @@ Choice values of `modNN.destination` (0 = None): every parameter flagged *mod*, 
 | 1246 | `eq.mid2.cutoff` | EQ Mid 2 Cutoff |
 | 1247 | `eq.mid2.gain` | EQ Mid 2 Gain |
 | 1248 | `eq.mid2.resonance` | EQ Mid 2 Resonance |
+| 1249 | `master.transpose` | Master Transpose |
 
 ## Built-in wavetables and LFO shapes
 

@@ -59,9 +59,9 @@ TEST (counts_and_constants)
     CHECK (paramCount() <= kMaxParams);
     CHECK_EQ (kMaxParams, static_cast<size_t> (4096)); // raised for block B22 (FX instance pool)
     CHECK_EQ (kNumModSources, 57);
-    CHECK_EQ (kNumModDestinations, 1249);
+    CHECK_EQ (kNumModDestinations, 1250);
     CHECK_EQ (modSourceCount(), static_cast<size_t> (57));
-    CHECK_EQ (modDestinationCount(), static_cast<size_t> (1248));
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (1249));
     CHECK_EQ (kNumFxSlots, 16);
     CHECK_EQ (kNumWavetableChoices, 15); // + "Saw Down" (GROUPB WP-18)
     CHECK_EQ (kLfoShapeCustom, 12);
@@ -75,7 +75,7 @@ TEST (counts_and_constants)
             ++modulatable;
             newModulatable += i >= kNumKeysV2 ? 1 : 0;
         }
-    CHECK_EQ (modulatable, static_cast<size_t> (453 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256 + 3 + 3)); // 3: eq.mid2.cutoff / gain / resonance of B34, 3: oscN.spec.flt_frame of B32, 256: the modulatable rise / fall / delay / delay_beats of the 64 slots of B31, 3: oscN.multi.timbre of B30, 21: the 7 modulatable keys of oscN.spec.* of B29, 51: the 17 modulatable keys of oscN.gran.* of B28 // 2: delay.offset_left, reverb.feedback of B25 // 3: sub.phase, noise.stereo, noise.filter of B23
+    CHECK_EQ (modulatable, static_cast<size_t> (454 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256 + 3 + 3)); // 3: eq.mid2.cutoff / gain / resonance of B34, 3: oscN.spec.flt_frame of B32, 256: the modulatable rise / fall / delay / delay_beats of the 64 slots of B31, 3: oscN.multi.timbre of B30, 21: the 7 modulatable keys of oscN.spec.* of B29, 51: the 17 modulatable keys of oscN.gran.* of B28 // 2: delay.offset_left, reverb.feedback of B25 // 3: sub.phase, noise.stereo, noise.filter of B23
     CHECK_EQ (newModulatable, static_cast<size_t> (184 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256 + 3 + 3)); // 134 + the 8 FX levels of B16 + the 12 of B14 + 8 of B17 + 10 of B18 + 11 of B15 + 1 of B20 (master.stereo_routing) + the 384 pool parameters of B22
 }
 
@@ -179,7 +179,9 @@ TEST (first_880_keys_are_byte_identical_to_state_version_2)
     // computed with sbgolden::fingerprint (880) on commit 9c97a69 (golden_v2.h)
     // REFCOMPARE round 3 (B34, 13-new-keys.md 4.48), deliberate: the plain ranges of eq.low / mid / high.gain (+-15 -> +-24 dB), of the six compressor thresholds (-80 .. 0 -> -120 .. +12 dB) and of the three compressor gains (+-30 -> +-36 dB)
     // grew (the values of a v2 state stay valid); the fingerprint of the first 880 keys includes the ranges: 0xd0dcc938695354b2 before
-    CHECK_EQ (sbgolden::fingerprint (kNumKeysV2), 0xc87e9fbe8ddc33caull);
+    // master.transpose became modulatable (flags kAuto -> kMod): deliberate, the flags are part of the fingerprint; no stored value changes meaning, because
+    // the destination is appended LAST (choice 1249) and every other destination number stays (destination_numbers_of_version_2_do_not_move): 0xc87e9fbe8ddc33ca before
+    CHECK_EQ (sbgolden::fingerprint (kNumKeysV2), 0xa3fb0fe6e85bc2b4ull);
 }
 
 TEST (choice_lists_are_append_only)
@@ -249,8 +251,8 @@ TEST (choice_lists_are_append_only)
         CHECK_EQ (choiceCount (byKey (key)), static_cast<size_t> (58));
         CHECK_EQ (byKey (key).max, 57.0f);
     }
-    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (1249));
-    CHECK_EQ (byKey ("mod64.destination").max, 1248.0f);
+    CHECK_EQ (choiceCount (byKey ("mod01.destination")), static_cast<size_t> (1250));
+    CHECK_EQ (byKey ("mod64.destination").max, 1249.0f);
 
     // MANUALCHECK: the delay mode Tap->Delay of Serum 2 (manual p.166) is appended to the four Vital styles
     {
@@ -295,10 +297,10 @@ TEST (mod_sources_are_extended_by_appending)
 
 TEST (destination_numbers_of_version_2_do_not_move)
 {
-    // the destination choice lists every modulatable key in table order: the 269 keys of version 2 keep 1..269
+    // the destination choice lists every modulatable key in table order: the 269 keys of version 2 keep 1..269 (master.transpose, modulatable since later, sits at the very end)
     size_t next = 1;
     for (size_t i = 0; i < kNumKeysV2; ++i)
-        if ((paramTable()[i].flags & kParamModulatable) != 0)
+        if ((paramTable()[i].flags & kParamModulatable) != 0 && std::strcmp (paramTable()[i].key, "master.transpose") != 0) // transpose is appended last (1249)
         {
             CHECK_EQ (modDestinationChoiceOf (i), next);
             CHECK_EQ (modDestinationParamIndex (next), static_cast<int> (i));

@@ -200,6 +200,7 @@ void LibOsc::resetForNote() noexcept
     }
     for (auto& s : noteStarted)
         s = false;
+    loopExited_ = false;
     specPending_ = 0;
     specReleasePending_ = false;
     cur = 0;
@@ -696,10 +697,13 @@ void LibOsc::update (const OscTick& t, const LibParams& p, const ContentSet* con
     }
     if (type == kOscTypeSample)
     {
+        auto sp = sparams;
+        if (loopExited_)
+            sp.loopMode = sampleosc::LoopMode::none;
         for (int u = 0; u < U; ++u)
         {
             sampleosc::SampleVoice& sv = sampleVoices[static_cast<size_t> (u)];
-            sv.setParams (sparams);
+            sv.setParams (sp);
             sv.setSemitoneOffset (uni[u].semis);
             sv.setSpeedMultiplier (rateSpeed);
         }
@@ -883,6 +887,8 @@ void LibOsc::startPendingSpectral() noexcept
 
 void LibOsc::noteOff (bool loopExit) noexcept
 {
+    if (loopExit || sparams.loopMode == sampleosc::LoopMode::tailed)
+        loopExited_ = true;
     for (auto& v : sampleVoices)
         if (v.isActive() && (loopExit || sparams.loopMode == sampleosc::LoopMode::tailed))
             v.releaseLoop();

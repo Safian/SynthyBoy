@@ -178,6 +178,7 @@ TEST (choice_names_match_the_range)
 TEST (modulation_destinations_are_listed)
 {
     size_t modulatable = 0;
+    size_t transposeCount = 0;
     std::set<std::string> labels;
     for (size_t i = 0; i < paramCount(); ++i)
     {
@@ -192,6 +193,15 @@ TEST (modulation_destinations_are_listed)
             continue;
         }
         ++modulatable;
+        if (std::strcmp (p.key, "master.transpose") == 0)
+        {
+            // appended LAST: no stored destination number (presets, states) may shift when a key becomes modulatable
+            CHECK_EQ (choice, modDestinationCount());
+            CHECK_EQ (modDestinationParamIndex (choice), static_cast<int> (i));
+            --modulatable; // not part of the table-order numbering below
+            ++transposeCount;
+            continue;
+        }
         // listed once, in table order: choice k is the k-th modulatable parameter and carries its name; the 66 appended destinations of block B20
         // (64 mod amounts, portamento time, polyphony) sit after key 1595, so the modulatable keys of later blocks (B22) continue at 520
         CHECK_EQ (choice, modulatable + (i > 1595 ? 66u : 0u));
@@ -200,9 +210,11 @@ TEST (modulation_destinations_are_listed)
         CHECK (std::strcmp (choiceName (dest, choice), p.name) == 0);
         CHECK (labels.insert (p.name).second);
     }
-    CHECK_EQ (modulatable, static_cast<size_t> (453 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256 + 3 + 3)); // + 3 of B23, 2 of B25, 3 of B34 (eq.mid2.cutoff / gain / resonance) // 384: the 16 x 24 parameters fxiNN.pKK of block B22
-    CHECK_EQ (modDestinationCount(), static_cast<size_t> (519 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256 + 3 + 3));
-    CHECK_EQ (byKey ("mod17.destination").max, static_cast<float> (519 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256 + 3 + 3));
+    CHECK_EQ (transposeCount, 1u);
+    ++modulatable; // master.transpose
+    CHECK_EQ (modulatable, static_cast<size_t> (454 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256 + 3 + 3)); // + 3 of B23, 2 of B25, 3 of B34 (eq.mid2.cutoff / gain / resonance) // 384: the 16 x 24 parameters fxiNN.pKK of block B22
+    CHECK_EQ (modDestinationCount(), static_cast<size_t> (520 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256 + 3 + 3));
+    CHECK_EQ (byKey ("mod17.destination").max, static_cast<float> (520 + 384 + 3 + 2 + 3 + 51 + 21 + 3 + 256 + 3 + 3));
     CHECK (modulatable > 200);
     CHECK_EQ (modDestinationParamIndex (0), -1);
     CHECK_EQ (modDestinationParamIndex (modDestinationCount() + 1), -1);

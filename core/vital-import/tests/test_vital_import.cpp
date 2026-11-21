@@ -138,7 +138,7 @@ TEST (vi_table_vs_params)
             ++modulatable;
             CHECK (keys.count (paramTable()[i].key) == 1);
         }
-    CHECK_EQ (modulatable, static_cast<size_t> (269));
+    CHECK_EQ (modulatable, static_cast<size_t> (270));
 }
 
 TEST (vi_effect_order_decoder_bijection)

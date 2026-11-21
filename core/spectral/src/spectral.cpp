@@ -4,6 +4,7 @@
 
 #include "synthyboy/spectral/spectral.h"
 #include "synthyboy/spectral/kernels.h"
+#include "synthyboy/spectral/start_cache.h"
 
 #include <algorithm>
 #include <atomic>
@@ -123,6 +124,8 @@ bool Analysis::build (const SampleView& sample)
     data_.clear();
     transient_.clear();
     frames_ = 0;
+    static std::atomic<uint64_t> nextId { 1 };
+    id_ = nextId.fetch_add (1);
     if (! sample.isValid())
         return false;
     channels_ = std::min (2, sample.numChannels);
@@ -1282,6 +1285,56 @@ void SpectralVoice::startPhases (const SpectralParams& p, int ch, int j, float* 
     }
 }
 
+/** An external warp (mask / vocode) reads another oscillator's live spectrum: not a function of the settings, so the start cache leaves it alone. */
+static bool hasExternalWarp (const SpectralParams& p) noexcept
+{
+    for (int w = 0; w < 2; ++w)
+        if (p.warpType[w] >= 0 && p.warpType[w] < kNumSpectralWarps && p.warpAmount[w] > 0.0f && isExternalWarp (p.warpType[w]))
+            return true;
+    return false;
+}
+
+constexpr int kKeyChannelFrame = 15;   // the key word that the caller sets per channel and frame
+
+static uint64_t bitsOf (float x) noexcept { uint32_t u; std::memcpy (&u, &x, sizeof u); return u; }
+static uint64_t bitsOf (double x) noexcept { uint64_t u; std::memcpy (&u, &x, sizeof u); return u; }
+
+/** The key of the start cache: every input of shapeFrame and of the start frames (no Smear, no external warp) as bits, the spectral filter by two independent 64 bit hashes of its floats. The
+    word kKeyChannelFrame is left to the caller (channel, frame). What is not in it does not reach the frame: gain, scan speed, transients, the start offset, the mask of the call. */
+static void startCacheKey (const SpectralParams& p, const Analysis& an, double startFrame, double hostRate, uint64_t* key) noexcept
+{
+    for (int i = 0; i < StartCache::kWords; ++i)
+        key[i] = 0;
+    key[0] = an.id();
+    key[1] = bitsOf (startFrame);
+    key[2] = bitsOf (hostRate);
+    key[3] = bitsOf (p.pitchRatio) | (bitsOf (p.freqShiftHz) << 32);
+    key[4] = bitsOf (p.freqLoHz) | (bitsOf (p.freqHiHz) << 32);
+    key[5] = (p.bandSmooth ? 1u : 0u) | (p.bandPostWarp ? 2u : 0u) | (p.phaseLock ? 4u : 0u) | (kernels::haveNeon() ? 8u : 0u) | (kernels::findPeaksVector() ? 16u : 0u)
+             | (p.filterGain != nullptr ? 32u : 0u) | (static_cast<uint64_t> (an.channels()) << 8);
+    // a warp that shapeFrame does not run (no type or no amount) is the same key whatever its other values
+    for (int w = 0; w < 2; ++w)
+        if (p.warpType[w] >= 0 && p.warpType[w] < kNumSpectralWarps && p.warpAmount[w] > 0.0f)
+        {
+            key[6] |= static_cast<uint64_t> (static_cast<uint32_t> (p.warpType[w] + 1)) << (32 * w);
+            key[7] |= bitsOf (p.warpAmount[w]) << (32 * w);
+            key[8] |= bitsOf (p.warpVar[w]) << (32 * w);
+        }
+    if (p.filterGain != nullptr)
+    {
+        uint64_t a = 0xcbf29ce484222325ull, b = 0x9e3779b97f4a7c15ull;
+        for (int k = 0; k < kBins; ++k)
+        {
+            const uint64_t x = bitsOf (p.filterGain[k]);
+            a = (a ^ x) * 0x100000001b3ull;
+            b = (b + x + 0x632be59bd9b4e019ull) * 0xff51afd7ed558ccdull;
+            b ^= b >> 29;
+        }
+        key[9] = a;
+        key[10] = b;
+    }
+}
+
 /** Makes the frames of `mask` (bit j - 1: frame j of the priming) of every channel into the ring, in order, at the position of the start (startFrame_) with the settings `p` has now: one shaping for
     them all (the Smear warp, which keeps a memory that each shaping changes, shapes every frame, after one more shaping for the frame 0 that is never made when `phantom`: its memory is then
     what the four shapings of the old priming left). Frame j lies at ring position j kHop. */
@@ -1294,6 +1347,15 @@ void SpectralVoice::startFrames (const SpectralParams& p, int mask, bool phantom
     bool smears = false;
     for (int w = 0; w < 2; ++w)
         smears = smears || (p.warpType[w] == static_cast<int> (Warp::smear) && p.warpAmount[w] > 0.0f);
+    // the start cache (docs/plans/spectral-start-cache.md): without Smear (its memory makes a frame depend on the frames before it) and without a live external spectrum, a frame is a function of
+    // the key alone
+    StartCache* cache = nullptr;
+    uint64_t key[StartCache::kWords];
+    if (scratch.startCache && ! reference_ && ! legacyStartOla_ && ! smears && ! hasExternalWarp (p) && StartCache::instance().ready())
+    {
+        cache = &StartCache::instance();
+        startCacheKey (p, an, startFrame_, hostRate_, key);
+    }
     for (int ch = 0; ch < channels; ++ch)
     {
         Channel& c = channel_[ch];
@@ -1308,6 +1370,25 @@ void SpectralVoice::startFrames (const SpectralParams& p, int mask, bool phantom
         {
             if (! (mask & (1 << (j - 1))))
                 continue;
+            const int first = (3 - j) * kHop;
+            const int at = (j * kHop) & (kFftSize - 1);
+            if (cache != nullptr)
+            {
+                key[kKeyChannelFrame] = static_cast<uint64_t> (ch) | (static_cast<uint64_t> (j) << 8);
+                if (cache->get (key, j, scratch.olaTmp, scratch.phaseTmp))
+                {
+                    // what startPhases leaves in the voice, then the contribution the frame adds to the ring (the same floats, the same order)
+                    if (j > phaseFrame_[ch])
+                    {
+                        std::memcpy (c.synthPhase, scratch.phaseTmp, sizeof (float) * kBins);
+                        phaseFrame_[ch] = j;
+                        phaseInit_[ch] = true;
+                    }
+                    for (int n = first; n < kFftSize; ++n)
+                        c.ring[(at + n) & (kFftSize - 1)] += scratch.olaTmp[n];
+                    continue;
+                }
+            }
             if (! shaped || smears)
             {
                 shapeFrame (p, an, std::min (ch, an.channels() - 1), startFrame_, hostRate_, scratch, c.smear, twist, ! reference_);
@@ -1316,7 +1397,6 @@ void SpectralVoice::startFrames (const SpectralParams& p, int mask, bool phantom
             }
             ++framesMadeForTest_;
             startPhases (p, ch, j, scratch.phaseTmp);
-            const int at = (j * kHop) & (kFftSize - 1);
             if (reference_)
             {
                 for (int k = 0; k < kBins; ++k)
@@ -1351,7 +1431,16 @@ void SpectralVoice::startFrames (const SpectralParams& p, int mask, bool phantom
                 scratch.im[0] = 0.0f;
                 scratch.im[kBins - 1] = 0.0f;
                 kernels::RealIfft::instance().inverse (scratch.re, scratch.im, scratch.zr, scratch.zi, neon);
-                if (legacyStartOla_)
+                if (cache != nullptr)
+                {
+                    // through a zeroed temporary so that the contribution can be kept (0 + x is x, test: the priming overlap add straight into the ring is the old one)
+                    std::memset (scratch.olaTmp + first, 0, sizeof (float) * static_cast<size_t> (kFftSize - first));
+                    kernels::overlapAdd (scratch.olaTmp, 0, scratch.zr, scratch.zi, kOutputScale, neon, first);
+                    for (int n = first; n < kFftSize; ++n)
+                        c.ring[(at + n) & (kFftSize - 1)] += scratch.olaTmp[n];
+                    cache->put (key, j, scratch.olaTmp, scratch.phaseTmp);
+                }
+                else if (legacyStartOla_)
                 {
                     std::memset (scratch.olaTmp, 0, sizeof (float) * kFftSize);
                     kernels::overlapAdd (scratch.olaTmp, 0, scratch.zr, scratch.zi, kOutputScale, neon);
