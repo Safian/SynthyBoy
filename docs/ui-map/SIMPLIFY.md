@@ -23,8 +23,6 @@ Each item: what parameter is duplicated, where it lives now, which one to keep, 
 | D2 | `osc.on`, `osc.destination` | Osc top bar + Mixer strip | Osc top bar | Mixer strip copies | Same as D1. Mixer routing bar makes destination visual; strip copy adds confusion (`shell-mpc/overlay/mixer_ui.h:322-326`). | Low |
 | D3 | `filter1.level`, `filter1.pan`, `filter1.destination`, `filter1.bus1_send`, `filter1.bus2_send` | Filter OUT block + Filter OUTPUT popup + Mixer strip | Filter OUT block | Filter OUTPUT popup copies of level/pan; Mixer strip copies | Level and pan are in the OUT block already on the Filter page. The OUTPUT popup (`shell-mpc/overlay/filter_ui.h:287-288`) adds nothing new (`shell-mpc/ui/filter_display.h:555`). The popup should contain only DEST + BUS 1 + BUS 2. | Low: users lose nothing functional. |
 | D4 | `master.volume` | Master OUTPUT block + Mixer MASTER strip | Master page | Mixer strip fader | Volume has a full knob + peak meter on Master. Mixer's MASTER strip has a tall fader but no clip indicator. Keep both as intentional shortcut — **[judgement]**. | Low |
-| D5 | All LFO params on Play compact vs LFO full-screen | Appear in both compact third and LFO full-screen | LFO full-screen | Compact third duplicates — already covered by rule: compact is the shortcut, full-screen is the authority | No removal needed; the duplicate table in lfo.md lists them for awareness. Play compact is the intentional shortcut. | — |
-| D6 | `envN.rate`, `envN.division`, `envN.sync`, `envN.sync_type`, `envN.phase`, `envN.delay`, `envN.direction`, `envN.swing`, `envN.stereo`, `envN.mono`, `envN.fade_in`, `envN.smooth*`, `envN.keytrack*`, `envN.shape`, `envN.host` | Play compact ENV controls block vs Env full-screen | Env full-screen is the authority | **Remove from Play compact ENV** — these advanced timing/motion params are not shown in the compact view now either; they appear only in the full docs as "also on" full-screen. No action needed: they were never visible in Play compact in the first place. | — | — |
 | D7 | LFO `stereo` appears as both a knob (`lfo1.stereo`) and a toggle (`rlfo1.stereo`) in the same visual slot | `shell-mpc/overlay/lfo_ui.h:493, 520` | The two are different params (regular vs random LFO) so both must stay, but the **label** should disambiguate | No removal, rename only: knob → "STEREO SPREAD"; toggle → "STEREO (L/R)" | Shared name in same area causes confusion (`play.md` Questionable §1). | Low |
 | D8 | Env 4 tabs vs in-page EnvSelector | `overlay_layout.json:268-390` — 4 tabs for 6 envelopes | In-page EnvSelector handles all 6 | **Remove 3 redundant tabs** (keep 1 "Env" tab, remove Env 2/3/4 tabs) | The EnvSelector bar on the page already navigates all 6 envelopes (`env.md` Questionable §3). Three tabs waste navigation slots. **[judgement]** | Medium: users who open Env 2 by tapping the tab must now use the in-page selector. |
 | D9 | Filter 2 host tab | `overlay_layout.json:47-119` — 2 tabs for 2 filters | In-page CURVES selector handles both | **Remove "Filter 2" tab**, keep "Filter" (or "Filter 1") | The CURVES selector (F1 / F2 / F1+F2) lets you switch on either tab (`filter.md` Questionable §3). Second tab wastes a navigation slot. **[judgement]** | Medium: same as D8. |
@@ -119,3 +117,17 @@ Default view means what the user sees without opening any popup or full-screen.
 3. Hiding the COMB knob when not in Comb mode.
 4. Adding a BEATS toggle to the Play compact ENV panel (new).
 5. Moving the Mixer routing bar chips from passive to tappable (UX correctness, not control reduction).
+
+---
+
+## 6 — Reviewer's addition (Claude Opus, 2026-11-21): the bolder cut the owner asked for
+
+The list above removes dead code and a few duplicates but barely changes what the user looks at (FX ~200 controls, Osc ~74, Play ~82). The owner's goal is "less to look at". Proposal, judgement, for the owner to decide:
+
+- **FX: essentials-first pages.** Each effect's default view shows at most 8 controls (on/off, mix, and the 4-6 parameters that define its character; e.g. Delay: time/sync, feedback, filter, ping-pong/style, mix); everything else behind one MORE button on that effect. Target ~200 -> ~70 visible.
+- **Osc: one default view per oscillator type** (wavetable, sample, granular, spectral, multisample) with at most 8-12 controls; the rest stays in the existing MORE / detail pages. Target ~74 -> ~35 visible.
+- **Tabs:** Env 1-4 -> one Env tab with the in-page selector (D8), Filter 1-2 -> one Filter tab with the curve selector (D9). With the owner's order: Play+Macros, Osc, Env, LFO, FX, Mixer, Filter, Mod, Master.
+- **Hide what does not apply** (beyond the switched-off rule): model-specific knobs only for their model (COMB, FORMANT), sync-mode-specific fields only in that mode (TRIP/DOT, KEY TRANSPOSE), random-LFO-irrelevant controls hidden, not dimmed.
+- **One home per parameter:** level/pan/destination live on the Mixer (the console) and on the module's own page only as a read-only indicator, except the intentional Play/Macros shortcuts.
+
+Each item needs the gallery before/after pictures and the owner's yes before implementation.
