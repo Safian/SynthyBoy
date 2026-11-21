@@ -162,6 +162,24 @@ Questions that need the owner:
 - Q5. Any element the owner wants animated but we classed static (knob under the finger, Mod page values)? Default here: measured first (section 3, row "Mod, Macros, Master, Voice").
 
 
+
+### FX page inventory of moving things (T2, code reading 2026-11-21; paths under `shell-mpc/`)
+
+Only Distortion has anything that moves by itself; every other FX display changes only on a parameter edit (touch / Q-Link). The Meter-vs-drawing decision for (V) items is taken from the measured host redraw rate (open measurement).
+
+| Element | What moves | Source | Rate | Area | Class | Note |
+|---|---|---|---|---|---|---|
+| Distortion, level dots | two dots at +/- input level on the curve, a thin line from zero to each | reader `overlay/fx_ui.h:761-764`, drawn `ui/fx_display.h:432-441`, engine `core/engine-own/own_engine.cpp:1997` | engine once per block (about 300 ms release), overlay repaint at most every 33.3 ms (`overlay/controller.h:102`), only on scene-hash change | plot about 1204x114 in a display cell 1264x160 | V on the data side (one scalar), but the dot sits ON our curve | a host Meter cannot place a dot on a curve; keep as an animated part of the cell unless the host Meter can carry a marker |
+| Distortion transfer curve | none, edit only | `ui/fx_display.h:421-427` | edit | plot 1204x114 | D, static between edits | |
+| EQ curve and band dots | none, edit only | `ui/fx_display.h:216-239` | edit | 1264x160 | D | 192 points |
+| Compressor curves (1 or 3 bands) | none, edit only; there is NO gain-reduction or level meter | `ui/fx_display.h:243-336` | edit | 1264x220 | D | |
+| Delay taps / ping-pong | none, edit only (tempo-synced time converted by `FxUi::delayMs`, `overlay/fx_ui.h:744`; a host tempo change would move it: unverified) | `ui/fx_display.h:338-390` | edit | 1264x176 | D | up to 12 stems per lane |
+| FX Filter response and cutoff marker | none, edit only (modulation of the filter parameters is not read) | `overlay/fx_ui.h:770-810`, `ui/fx_display.h:392-406` | edit | 1264x160 | D | 256 points |
+| Chorus, Flanger, Phaser, Reverb, Hyper/Dimension, Utility, Bode, Convolve | no display, no LFO indicator | `ui/fx_display.h:5-6, 55-65` | n/a | 0 | n/a | |
+| Splitters, chain bar | no motion | `ui/fx_band_board.h`, `ui/fx_chain_bar.h` | n/a | 1264x206..240 | n/a | |
+
+Consequences: 1 V item (Distortion level), 0 other autonomous movers; the busiest page is Distortion with 2 dots and 2 lines driven by one scalar; at most about 202k px (the Distortion display cell) is repainted while it moves, at most 30 times a second. The plan section 3 FX row names only curve drags as the animated part: the AnimGate (T1) and T4 must ALSO be woken by the `inLevel` change of Distortion, not only by control drags. The owner's expectation that several things move at once on the FX page is not borne out by the code on this page; it holds for the Mixer and Master meters (`docs/MPC.md:1342`).
+
 ## Owner decisions (relayed 2026-11-21, verbatim sources in the coordinator's notes)
 
 * Q1: the background and the zoom / Expand button are NOT on the animation path: drawn once as static cells, not removed.
