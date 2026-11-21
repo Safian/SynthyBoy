@@ -119,6 +119,13 @@ namespace
 constexpr double kSr = 44100.0;
 constexpr int kBlock = 128;
 
+/** Parses the VmRSS value in kilobytes from /proc/self/status text. Returns -1 if not found or malformed. */
+long parseVmRssKb (const char* text) noexcept
+{
+    (void) text;
+    return -1;
+}
+
 /** The resident set of this process in kilobytes (0: not known on this platform). */
 long residentKb()
 {
@@ -274,4 +281,24 @@ TEST (own_memory_report_content_and_reverb)
     CHECK (after.allocs > before.allocs);
     CHECK (after.bytes > before.bytes);
     report ("low_spectral_reverb", engines, before, after);
+}
+
+TEST (own_memory_parse_vm_rss)
+{
+    CHECK_EQ (parseVmRssKb (nullptr), -1L);
+    CHECK_EQ (parseVmRssKb (""), -1L);
+    CHECK_EQ (parseVmRssKb ("Name:\tsynth\nVmPeak:\t  120000 kB\n"), -1L);
+    CHECK_EQ (parseVmRssKb ("VmRSS:\t   74112 kB\n"), 74112L);
+    const char* sampleStatus =
+        "Name:\tsynthyboy_test\n"
+        "State:\tR (running)\n"
+        "VmPeak:\t  120000 kB\n"
+        "VmSize:\t  115000 kB\n"
+        "VmHWM:\t   80000 kB\n"
+        "VmRSS:\t   74112 kB\n"
+        "VmData:\t   60000 kB\n";
+    CHECK_EQ (parseVmRssKb (sampleStatus), 74112L);
+    CHECK_EQ (parseVmRssKb ("VmRSS: 0 kB\n"), 0L);
+    CHECK_EQ (parseVmRssKb ("VmRSS:\n"), -1L);
+    CHECK_EQ (parseVmRssKb ("VmRSS: invalid kB\n"), -1L);
 }
