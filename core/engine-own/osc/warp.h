@@ -250,7 +250,7 @@ struct WarpEvent
     int kind;
 };
 
-/** The events of the phase map of slot 1 for the amount a (at most 2 into out). Smooth maps (Formant, Bend family, Squeeze, Asym family, PD) and the modulation warps have none. */
+/** The events of the phase map of slot 1 for the amount a (at most 2 into out; Pulse has both its slope jumps). Smooth maps (Formant, Bend family, Squeeze, Asym family, PD) and the modulation warps have none. */
 inline int warpEvents (int type, float a, WarpEvent* out) noexcept
 {
     switch (type)
@@ -267,8 +267,9 @@ inline int warpEvents (int type, float a, WarpEvent* out) noexcept
             out[1] = { 2147483648u, 2 };
             return 2;
         case kWarpPulse:
-            out[0] = { static_cast<uint32_t> ((1.0 - 0.7 * static_cast<double> (a)) * 4294967296.0), 2 };
-            return 1;
+            out[0] = { static_cast<uint32_t> ((1.0 - 0.7 * static_cast<double> (a)) * 4294967296.0), 2 }; // the slope drops from 1 / (1 - 0.7 a) to 0 where the map clamps
+            out[1] = { 0u, 2 }; // and at the wrap it rises from 0 back to that slope; the value is continuous (the table is periodic), so a slope jump only
+            return 2;
         default:
             return 0;
     }

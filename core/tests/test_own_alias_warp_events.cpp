@@ -40,9 +40,11 @@ TEST (own_alias_warp_events_of_the_phase_maps)
     CHECK_EQ (e[0].kind, 2);
     CHECK_EQ (e[1].kind, 2);
 
-    CHECK_EQ (warpEvents (kWarpPulse, 0.5f, e), 1);
+    CHECK_EQ (warpEvents (kWarpPulse, 0.5f, e), 2);
     CHECK (e[0].phase >= 2791728741u && e[0].phase <= 2791728743u); // (1 - 0.7 * 0.5) * 2^32
     CHECK_EQ (e[0].kind, 2);
+    CHECK_EQ (e[1].phase, 0u); // the slope rises again at the wrap
+    CHECK_EQ (e[1].kind, 2);
 
     CHECK_EQ (warpEvents (kWarpFormant, 0.5f, e), 0);
     CHECK_EQ (warpEvents (kWarpBend, 0.5f, e), 0);
