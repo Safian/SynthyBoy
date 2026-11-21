@@ -1603,3 +1603,94 @@ TEST (fx_reverb_arena_topology_switch_leaves_no_stale_bleed)
         arenaProcess (r, s1, s2);
     }
 }
+
+// docs/engine-spec/06-effects.md section 1: the drive of the distortion is reached across the control period (linear), never stepped; the ADAA state of the types that carry it stays right: the
+// settled output after the ramp equals an instance that ran the new drive from the start (types without a DC blocker: the state is the last input and its integral, both re-made for a new gain).
+TEST (fx_distortion_drive_ramps_across_the_period)
+{
+    const int period = 32;
+    auto run = [period] (int type, float driveA, float driveB, int jumpPeriod, int periods, std::vector<float>& out)
+    {
+        own::Distortion d;
+        d.prepare (kSr);
+        out.clear();
+        for (int k = 0; k < periods; ++k)
+        {
+            own::Distortion::Params p;
+            p.type = type;
+            p.driveDb = k >= jumpPeriod ? driveB : driveA;
+            p.mix = 1.0f;
+            p.order = 0;
+            d.set (p);
+            std::vector<float> l (period), r (period);
+            for (int i = 0; i < period; ++i)
+                l[i] = r[i] = 0.6f * std::sin (2.0f * 3.14159265f * 440.0f * static_cast<float> (k * period + i) / static_cast<float> (kSr));
+            d.process (l.data(), r.data(), period, 0, period);
+            out.insert (out.end(), l.begin(), l.end());
+        }
+    };
+    // 1. a step of the drive from -10 to +20 dB on a constant small input: the output climbs across the period, no step of the size of the whole change
+    {
+        own::Distortion d;
+        d.prepare (kSr);
+        own::Distortion::Params p;
+        p.type = 0;
+        p.mix = 1.0f;
+        p.order = 0;
+        std::vector<float> y;
+        for (int k = 0; k < 4; ++k)
+        {
+            p.driveDb = k < 2 ? -10.0f : 20.0f;
+            d.set (p);
+            std::vector<float> l (period, 0.05f), r (period, 0.05f);
+            d.process (l.data(), r.data(), period, 0, period);
+            y.insert (y.end(), l.begin(), l.end());
+        }
+        const float before = y[2 * period - 1], after = y[3 * period + period - 1];
+        double maxStep = 0.0;
+        for (size_t i = 2 * period - 1; i < y.size(); ++i)
+            maxStep = std::max (maxStep, static_cast<double> (std::fabs (y[i] - y[i - 1])));
+        CHECK (after - before > 0.3f);                                             // the change is there (tanh (0.05 * 0.316) = 0.016 -> tanh (0.5) = 0.46)
+        CHECK (maxStep < 0.4 * static_cast<double> (after - before));              // and it is spread: one sample takes at most 40 % of it (a step takes all of it)
+        CHECK (std::fabs (y[3 * period + period - 1] - std::tanh (0.5f)) < 1.0e-4f); // the end of the period has the new drive
+    }
+    // 2. the ADAA state after the ramp: settled output equals the instance with the new drive from the start
+    for (int type : { 0, 1, 2, 3, 8, 9, 12 })
+    {
+        std::vector<float> a, b;
+        run (type, -10.0f, 20.0f, 100, 300, a);
+        run (type, 20.0f, 20.0f, 100, 300, b);
+        std::vector<float> jumped;
+        run (type, -10.0f, 20.0f, 100, 300, jumped);
+        run (type, 20.0f, 20.0f, 0, 300, b);
+        double maxDiff = 0.0;
+        for (size_t i = 102 * period; i < jumped.size(); ++i)
+            maxDiff = std::max (maxDiff, static_cast<double> (std::fabs (jumped[i] - b[i])));
+        bool finite = true;
+        for (float v : jumped)
+            finite = finite && std::isfinite (v);
+        CHECK (finite);
+        if (maxDiff > 1.0e-4)
+            std::printf ("    type %d: settled output differs by %g\n", type, maxDiff);
+        CHECK (maxDiff < 1.0e-4);
+    }
+    // 3. a still drive is bit for bit what it was without periods
+    for (int type : { 0, 4, 5, 12 })
+    {
+        std::vector<float> withPeriods;
+        run (type, 12.0f, 12.0f, 0, 50, withPeriods);
+        own::Distortion d;
+        d.prepare (kSr);
+        own::Distortion::Params p;
+        p.type = type;
+        p.driveDb = 12.0f;
+        p.mix = 1.0f;
+        p.order = 0;
+        d.set (p);
+        std::vector<float> l (period * 50), r (period * 50);
+        for (size_t i = 0; i < l.size(); ++i)
+            l[i] = r[i] = 0.6f * std::sin (2.0f * 3.14159265f * 440.0f * static_cast<float> (i) / static_cast<float> (kSr));
+        d.process (l.data(), r.data(), static_cast<int> (l.size()));
+        CHECK (l == withPeriods);
+    }
+}

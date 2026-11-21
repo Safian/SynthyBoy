@@ -368,3 +368,50 @@ TEST (own_master_tune_is_a_modulation_destination)
     const auto z = lines (0.0f, 440.0, up);
     CHECK (z.first > 10.0 * z.second);
 }
+
+// docs/engine-spec/06-effects.md section 1: "nothing is stepped". A jump of distortion.drive in the middle of a held note makes no click: the largest sample to sample step across the jump is
+// at most 2.5 times the largest step of the steady sound before and after it (a click is of the order of the signal, 10 .. 100 times). Before the fix the drive of the new period was
+// applied at once (x8.3 on the step). quality.no_smoothing = 1 keeps the step: the two renders differ by more than -40 dB re peak after the jump.
+TEST (own_distortion_drive_does_not_step)
+{
+    auto render = [] (float noSmoothing)
+    {
+        auto e = make();
+        sinePatch (*e);
+        set (*e, "env1.release", 5);
+        set (*e, "distortion.on", 1);
+        set (*e, "distortion.type", 0);
+        set (*e, "distortion.mix", 100);
+        set (*e, "distortion.drive", -10);
+        set (*e, "quality.no_smoothing", noSmoothing);
+        std::vector<float> all;
+        const int block = 256, jumpBlock = static_cast<int> (0.3 * kSr) / block;
+        for (int b = 0; b < static_cast<int> (0.5 * kSr) / block; ++b)
+        {
+            if (b == jumpBlock)
+                set (*e, "distortion.drive", 20);
+            const auto r = sbtest::render (*e, b == 0 ? std::vector<Event> { sbtest::noteOn (0, 36, 0.8f) } : std::vector<Event> {}, block, block);
+            all.insert (all.end(), r.left.begin(), r.left.end());
+        }
+        return std::pair<std::vector<float>, int> { all, jumpBlock * block };
+    };
+    auto largest = [] (const std::vector<float>& x, size_t from, size_t to)
+    {
+        double s = 0.0;
+        for (size_t i = from; i < to && i < x.size(); ++i)
+            s = std::max (s, std::fabs (static_cast<double> (x[i]) - x[i - 1]));
+        return s;
+    };
+    const auto smooth = render (0.0f), stepped = render (1.0f);
+    const size_t j = static_cast<size_t> (smooth.second);
+    const double atJump = largest (smooth.first, j - 96, j + 2400), steady = std::max (largest (smooth.first, j - 4800, j - 100), largest (smooth.first, j + 6000, j + 9600));
+    std::printf ("    drive -10 -> 20 dB: step at the jump %.5f, steady %.5f (x%.2f)\n", atJump, steady, atJump / steady);
+    CHECK (atJump <= 2.5 * steady + 1.0e-4);
+    double d = 0.0, p = 1.0e-9;
+    for (size_t i = j; i < smooth.first.size(); ++i)
+    {
+        d = std::max (d, std::fabs (static_cast<double> (smooth.first[i]) - stepped.first[i]));
+        p = std::max (p, std::fabs (static_cast<double> (smooth.first[i])));
+    }
+    CHECK (20.0 * std::log10 (std::max (d / p, 1.0e-9)) > -40.0);
+}
