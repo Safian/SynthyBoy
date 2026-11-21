@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #define MAX_FAKE_REQS 32
-#define MAX_FAKE_PROPS 64
+#define MAX_FAKE_PROPS 128
 #define MAX_COMMIT_CALLS 64
 
 typedef struct {
@@ -34,13 +34,54 @@ static CommitCall g_fake_commits[MAX_COMMIT_CALLS];
 static int g_fake_commit_count = 0;
 static int g_fake_commit_ret = 0;
 static int g_fake_commit_errno = 0;
+static int g_fake_commit_rets[MAX_COMMIT_CALLS];
+static int g_fake_commit_errs[MAX_COMMIT_CALLS];
+static bool g_use_per_commit_ret = false;
+
+static bool g_fake_destroy_dumb_called = false;
+static uint32_t g_fake_destroyed_handle = 0;
+static bool g_fake_rmfb_called = false;
+static uint32_t g_fake_rmfb_id = 0;
+static bool g_fake_mmap_called = false;
+static bool g_fake_munmap_called = false;
+static uint8_t g_fake_dumb_buf[400 * 300 * 4];
 
 static void fake_reset(void) {
     memset(g_fake_reqs, 0, sizeof(g_fake_reqs));
     memset(g_fake_commits, 0, sizeof(g_fake_commits));
+    memset(g_fake_commit_rets, 0, sizeof(g_fake_commit_rets));
+    memset(g_fake_commit_errs, 0, sizeof(g_fake_commit_errs));
+    memset(g_fake_dumb_buf, 0, sizeof(g_fake_dumb_buf));
     g_fake_commit_count = 0;
     g_fake_commit_ret = 0;
     g_fake_commit_errno = 0;
+    g_use_per_commit_ret = false;
+    g_fake_destroy_dumb_called = false;
+    g_fake_destroyed_handle = 0;
+    g_fake_rmfb_called = false;
+    g_fake_rmfb_id = 0;
+    g_fake_mmap_called = false;
+    g_fake_munmap_called = false;
+}
+
+void *fake_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+    (void)addr; (void)prot; (void)flags; (void)fd; (void)offset;
+    assert(length <= sizeof(g_fake_dumb_buf));
+    g_fake_mmap_called = true;
+    return g_fake_dumb_buf;
+}
+
+int fake_munmap(void *addr, size_t length) {
+    (void)addr; (void)length;
+    g_fake_munmap_called = true;
+    return 0;
+}
+
+int fake_drmModeRmFB(int fd, uint32_t bufferId) {
+    (void)fd;
+    g_fake_rmfb_called = true;
+    g_fake_rmfb_id = bufferId;
+    return 0;
 }
 
 drmModeAtomicReqPtr fake_drmModeAtomicAlloc(void) {
@@ -79,6 +120,7 @@ int fake_drmModeAtomicGetCursor(drmModeAtomicReqPtr req) {
 }
 
 int fake_drmModeAtomicCommit(int fd, drmModeAtomicReqPtr req, uint32_t flags, void *user_data) {
+    int call_idx = g_fake_commit_count;
     if (g_fake_commit_count < MAX_COMMIT_CALLS) {
         CommitCall *c = &g_fake_commits[g_fake_commit_count++];
         c->fd = fd;
@@ -91,6 +133,12 @@ int fake_drmModeAtomicCommit(int fd, drmModeAtomicReqPtr req, uint32_t flags, vo
         } else {
             c->item_count = 0;
         }
+    }
+    if (g_use_per_commit_ret) {
+        if (g_fake_commit_rets[call_idx] < 0) {
+            errno = g_fake_commit_errs[call_idx];
+        }
+        return g_fake_commit_rets[call_idx];
     }
     if (g_fake_commit_ret < 0) {
         errno = g_fake_commit_errno;
@@ -183,6 +231,18 @@ int fake_drmIoctl(int fd, unsigned long request, void *arg) {
         create->handle = 42;
         create->pitch = 1600;
         create->size = 400 * 300 * 4;
+        return 0;
+    }
+    if (request == DRM_IOCTL_MODE_MAP_DUMB) {
+        struct drm_mode_map_dumb *map = (struct drm_mode_map_dumb *)arg;
+        assert(map->handle == 42);
+        map->offset = 0x1000;
+        return 0;
+    }
+    if (request == DRM_IOCTL_MODE_DESTROY_DUMB) {
+        struct drm_mode_destroy_dumb *destroy = (struct drm_mode_destroy_dumb *)arg;
+        g_fake_destroy_dumb_called = true;
+        g_fake_destroyed_handle = destroy->handle;
         return 0;
     }
     return -1;
@@ -582,6 +642,386 @@ static void test_background_logger_thread(void) {
     printf("test_background_logger_thread PASSED\n");
 }
 
+static void test_stage3_on_merged_frame_commit(void) {
+    printf("Running test_stage3_on_merged_frame_commit...\n");
+    fake_reset();
+    shim_test_reset();
+    shim_test_set_stage3(true);
+
+    int fd = 10;
+    drmModeAtomicReqPtr req = drmModeAtomicAlloc();
+    assert(req != NULL);
+
+    // Host adds 15 properties
+    for (uint32_t i = 0; i < 15; i++) {
+        drmModeAtomicAddProperty(req, 34, 1000 + i, 2000 + i);
+    }
+    assert(drmModeAtomicGetCursor(req) == 15);
+
+    void *host_userdata = (void *)0xfacefeed;
+    int ret = drmModeAtomicCommit(fd, req, DRM_MODE_PAGE_FLIP_EVENT, host_userdata);
+    assert(ret == 0);
+
+    // Fake libdrm receives exactly ONE commit with 15 + 10 = 25 items
+    assert(g_fake_commit_count == 1);
+    CommitCall *c = &g_fake_commits[0];
+    assert(c->fd == fd);
+    assert(c->flags == DRM_MODE_PAGE_FLIP_EVENT);
+    assert(c->user_data == host_userdata);
+    assert(c->item_count == 25);
+
+    // Host request object untouched (cursor still 15)
+    assert(drmModeAtomicGetCursor(req) == 15);
+
+    // First 15 items match host items
+    for (uint32_t i = 0; i < 15; i++) {
+        assert(c->props[i].object_id == 34);
+        assert(c->props[i].property_id == 1000 + i);
+        assert(c->props[i].value == 2000 + i);
+    }
+
+    // Plane 46 properties (items 15..24)
+    // FB_ID (101) = 99
+    assert(c->props[15].object_id == 46);
+    assert(c->props[15].property_id == 101);
+    assert(c->props[15].value == 99);
+
+    // CRTC_ID (102) = 82
+    assert(c->props[16].object_id == 46);
+    assert(c->props[16].property_id == 102);
+    assert(c->props[16].value == 82);
+
+    // CRTC_X (103) = 200
+    assert(c->props[17].object_id == 46);
+    assert(c->props[17].property_id == 103);
+    assert(c->props[17].value == 200);
+
+    // CRTC_Y (104) = 200
+    assert(c->props[18].object_id == 46);
+    assert(c->props[18].property_id == 104);
+    assert(c->props[18].value == 200);
+
+    // CRTC_W (105) = 400
+    assert(c->props[19].object_id == 46);
+    assert(c->props[19].property_id == 105);
+    assert(c->props[19].value == 400);
+
+    // CRTC_H (106) = 300
+    assert(c->props[20].object_id == 46);
+    assert(c->props[20].property_id == 106);
+    assert(c->props[20].value == 300);
+
+    // SRC_X (107) = 0
+    assert(c->props[21].object_id == 46);
+    assert(c->props[21].property_id == 107);
+    assert(c->props[21].value == 0);
+
+    // SRC_Y (108) = 0
+    assert(c->props[22].object_id == 46);
+    assert(c->props[22].property_id == 108);
+    assert(c->props[22].value == 0);
+
+    // SRC_W (109) = 400 << 16
+    assert(c->props[23].object_id == 46);
+    assert(c->props[23].property_id == 109);
+    assert(c->props[23].value == ((uint64_t)400 << 16));
+
+    // SRC_H (110) = 300 << 16
+    assert(c->props[24].object_id == 46);
+    assert(c->props[24].property_id == 110);
+    assert(c->props[24].value == ((uint64_t)300 << 16));
+
+    // Verify test buffer pattern fill
+    assert(g_fake_mmap_called);
+    assert(g_fake_munmap_called);
+    uint32_t *pixels = (uint32_t *)g_fake_dumb_buf;
+    // Border at (0,0) is white
+    assert(pixels[0] == 0x00FFFFFF);
+    // Border at (15, 100) is white
+    assert(pixels[100 * 400 + 15] == 0x00FFFFFF);
+    // Inside at (20, 200) away from diagonal is mid-red
+    assert(pixels[200 * 400 + 20] == 0x00C03030);
+    // Diagonal at (100, 75) is white
+    assert(pixels[75 * 400 + 100] == 0x00FFFFFF);
+
+    assert(shim_test_is_plane46_active() == true);
+
+    drmModeAtomicFree(req);
+    printf("test_stage3_on_merged_frame_commit PASSED\n");
+}
+
+static void test_stage3_failing_merged_fallback(void) {
+    printf("Running test_stage3_failing_merged_fallback...\n");
+    fake_reset();
+    shim_test_reset();
+    shim_test_set_stage3(true);
+
+    int fd = 10;
+    drmModeAtomicReqPtr req = drmModeAtomicAlloc();
+    assert(req != NULL);
+
+    for (uint32_t i = 0; i < 15; i++) {
+        drmModeAtomicAddProperty(req, 34, 1000 + i, 2000 + i);
+    }
+
+    // Configure fake libdrm:
+    // First commit (merged) returns -1 with errno 22 (EINVAL)
+    // Second commit (fallback) returns 0
+    g_use_per_commit_ret = true;
+    g_fake_commit_rets[0] = -1;
+    g_fake_commit_errs[0] = 22; // EINVAL
+    g_fake_commit_rets[1] = 0;
+    g_fake_commit_errs[1] = 0;
+
+    void *host_userdata = (void *)0xcafe;
+    int ret = drmModeAtomicCommit(fd, req, DRM_MODE_PAGE_FLIP_EVENT, host_userdata);
+    assert(ret == 0); // Host got the fallback commit's return value (0)
+
+    // Exactly 2 commits occurred
+    assert(g_fake_commit_count == 2);
+
+    // Commit 0: merged attempt (25 items)
+    assert(g_fake_commits[0].item_count == 25);
+
+    // Commit 1: original host request fallback (15 items)
+    assert(g_fake_commits[1].item_count == 15);
+    assert(g_fake_commits[1].flags == DRM_MODE_PAGE_FLIP_EVENT);
+    assert(g_fake_commits[1].user_data == host_userdata);
+    for (uint32_t i = 0; i < 15; i++) {
+        assert(g_fake_commits[1].props[i].object_id == 34);
+        assert(g_fake_commits[1].props[i].property_id == 1000 + i);
+    }
+
+    // Stage 3 is now OFF!
+    assert(shim_test_is_stage3_enabled() == false);
+
+    drmModeAtomicFree(req);
+    printf("test_stage3_failing_merged_fallback PASSED\n");
+}
+
+static void test_stage3_test_only_host_commit_not_merged(void) {
+    printf("Running test_stage3_test_only_host_commit_not_merged...\n");
+    fake_reset();
+    shim_test_reset();
+    shim_test_set_stage3(true);
+
+    int fd = 10;
+    drmModeAtomicReqPtr req = drmModeAtomicAlloc();
+    assert(req != NULL);
+    for (uint32_t i = 0; i < 15; i++) {
+        drmModeAtomicAddProperty(req, 34, 1000 + i, 2000 + i);
+    }
+    void *host_userdata = (void *)0xfacefeed;
+    // The host's own commit is TEST_ONLY: it applies nothing, so it must be forwarded as it is.
+    int ret = drmModeAtomicCommit(fd, req, DRM_MODE_PAGE_FLIP_EVENT | DRM_MODE_ATOMIC_TEST_ONLY, host_userdata);
+    assert(ret == 0);
+    assert(g_fake_commit_count == 1);
+    assert(g_fake_commits[0].flags == (DRM_MODE_PAGE_FLIP_EVENT | DRM_MODE_ATOMIC_TEST_ONLY));
+    assert(g_fake_commits[0].user_data == host_userdata);
+    assert(g_fake_commits[0].item_count == 15);   // no plane 46 items added
+    assert(drmModeAtomicGetCursor(req) == 15);    // the host's request is untouched
+    // Stage 3 stays on, and the following live frame commit still merges (the TEST_ONLY one did not set the plane-active state).
+    drmModeAtomicReqPtr req2 = drmModeAtomicAlloc();
+    for (uint32_t i = 0; i < 15; i++) {
+        drmModeAtomicAddProperty(req2, 34, 1000 + i, 2000 + i);
+    }
+    ret = drmModeAtomicCommit(fd, req2, DRM_MODE_PAGE_FLIP_EVENT, host_userdata);
+    assert(ret == 0);
+    assert(g_fake_commit_count == 2);
+    assert(g_fake_commits[1].item_count == 25);
+
+    drmModeAtomicFree(req);
+    drmModeAtomicFree(req2);
+    printf("test_stage3_test_only_host_commit_not_merged PASSED\n");
+}
+
+static void test_stage3_cursor_commit_unmerged(void) {
+    printf("Running test_stage3_cursor_commit_unmerged...\n");
+    fake_reset();
+    shim_test_reset();
+    shim_test_set_stage3(true);
+
+    int fd = 10;
+    drmModeAtomicReqPtr req = drmModeAtomicAlloc();
+    assert(req != NULL);
+    drmModeAtomicAddProperty(req, 40, 50, 100);
+
+    // Call site (b): DRM_MODE_ATOMIC_NONBLOCK and user_data == NULL
+    int ret = drmModeAtomicCommit(fd, req, DRM_MODE_ATOMIC_NONBLOCK, NULL);
+    assert(ret == 0);
+
+    // Exactly 1 commit, untouched / unmerged
+    assert(g_fake_commit_count == 1);
+    assert(g_fake_commits[0].flags == DRM_MODE_ATOMIC_NONBLOCK);
+    assert(g_fake_commits[0].item_count == 1);
+    assert(g_fake_commits[0].props[0].object_id == 40);
+
+    drmModeAtomicFree(req);
+    printf("test_stage3_cursor_commit_unmerged PASSED\n");
+}
+
+static void test_stage3_off_disables_plane_and_frees_fb(void) {
+    printf("Running test_stage3_off_disables_plane_and_frees_fb...\n");
+    fake_reset();
+    shim_test_reset();
+    shim_test_set_stage3(true);
+
+    int fd = 10;
+    // Step 1: Active Stage 3 frame commit
+    drmModeAtomicReqPtr req1 = drmModeAtomicAlloc();
+    for (uint32_t i = 0; i < 15; i++) {
+        drmModeAtomicAddProperty(req1, 34, 1000 + i, 2000 + i);
+    }
+    int ret = drmModeAtomicCommit(fd, req1, DRM_MODE_PAGE_FLIP_EVENT, (void *)1);
+    assert(ret == 0);
+    assert(shim_test_is_plane46_active() == true);
+    drmModeAtomicFree(req1);
+
+    fake_reset(); // Reset commit tracking
+
+    // Step 2: Stage 3 turned OFF
+    shim_test_set_stage3(false);
+
+    // Step 3: Next frame commit disables plane 46
+    drmModeAtomicReqPtr req2 = drmModeAtomicAlloc();
+    for (uint32_t i = 0; i < 15; i++) {
+        drmModeAtomicAddProperty(req2, 34, 1000 + i, 2000 + i);
+    }
+    ret = drmModeAtomicCommit(fd, req2, DRM_MODE_PAGE_FLIP_EVENT, (void *)2);
+    assert(ret == 0);
+
+    // Exactly 1 commit disabling plane 46: 15 host items + 2 disable items = 17 items
+    assert(g_fake_commit_count == 1);
+    assert(g_fake_commits[0].item_count == 17);
+    assert(g_fake_commits[0].props[15].object_id == 46);
+    assert(g_fake_commits[0].props[15].property_id == 101); // FB_ID
+    assert(g_fake_commits[0].props[15].value == 0);
+    assert(g_fake_commits[0].props[16].object_id == 46);
+    assert(g_fake_commits[0].props[16].property_id == 102); // CRTC_ID
+    assert(g_fake_commits[0].props[16].value == 0);
+
+    // Plane 46 no longer active
+    assert(shim_test_is_plane46_active() == false);
+
+    // Test buffer and FB freed!
+    assert(g_fake_rmfb_called == true);
+    assert(g_fake_rmfb_id == 99);
+    assert(g_fake_destroy_dumb_called == true);
+    assert(g_fake_destroyed_handle == 42);
+
+    drmModeAtomicFree(req2);
+    printf("test_stage3_off_disables_plane_and_frees_fb PASSED\n");
+}
+
+static void test_stage3_70_items_not_merged(void) {
+    printf("Running test_stage3_70_items_not_merged...\n");
+    fake_reset();
+    shim_test_reset();
+    shim_test_set_stage3(true);
+
+    int fd = 10;
+    drmModeAtomicReqPtr req = drmModeAtomicAlloc();
+    assert(req != NULL);
+
+    for (uint32_t i = 0; i < 70; i++) {
+        drmModeAtomicAddProperty(req, 34, 100 + i, 200 + i);
+    }
+    assert(drmModeAtomicGetCursor(req) == 70);
+
+    int ret = drmModeAtomicCommit(fd, req, DRM_MODE_PAGE_FLIP_EVENT, (void *)0x70);
+    assert(ret == 0);
+
+    // Exactly 1 commit, with exactly 70 items (NOT merged!)
+    assert(g_fake_commit_count == 1);
+    assert(g_fake_commits[0].item_count == 70);
+
+    drmModeAtomicFree(req);
+    printf("test_stage3_70_items_not_merged PASSED\n");
+}
+
+static void test_item_list_logged_on_count_change(void) {
+    printf("Running test_item_list_logged_on_count_change...\n");
+    fake_reset();
+    shim_test_reset();
+
+    int fd = 10;
+    // 8 frame commits with 15 items
+    for (int c = 0; c < 8; c++) {
+        drmModeAtomicReqPtr req = drmModeAtomicAlloc();
+        for (uint32_t i = 0; i < 15; i++) drmModeAtomicAddProperty(req, 34, 100 + i, 200 + i);
+        drmModeAtomicCommit(fd, req, DRM_MODE_PAGE_FLIP_EVENT, NULL);
+        drmModeAtomicFree(req);
+    }
+
+    // 9th frame commit with 15 items: should NOT have items logged (after first 8, same count)
+    drmModeAtomicReqPtr req9 = drmModeAtomicAlloc();
+    for (uint32_t i = 0; i < 15; i++) drmModeAtomicAddProperty(req9, 34, 100 + i, 200 + i);
+    drmModeAtomicCommit(fd, req9, DRM_MODE_PAGE_FLIP_EVENT, NULL);
+    drmModeAtomicFree(req9);
+
+    RingEntry e9;
+    assert(shim_test_get_ring_entry(8, &e9));
+    assert(e9.has_items == false);
+
+    // 10th frame commit with 23 items: item count changed from 15 to 23!
+    drmModeAtomicReqPtr req10 = drmModeAtomicAlloc();
+    for (uint32_t i = 0; i < 23; i++) drmModeAtomicAddProperty(req10, 34, 100 + i, 300 + i);
+    drmModeAtomicCommit(fd, req10, DRM_MODE_PAGE_FLIP_EVENT, NULL);
+    drmModeAtomicFree(req10);
+
+    RingEntry e10;
+    assert(shim_test_get_ring_entry(9, &e10));
+    assert(e10.has_items == true); // Item list is logged!
+    assert(e10.num_items == 23);
+    assert(e10.items[22].object_id == 34);
+    assert(e10.items[22].property_id == 122);
+    assert(e10.items[22].value == 322);
+
+    // Drain into string and verify log output
+    char log_buf[8192];
+    memset(log_buf, 0, sizeof(log_buf));
+    FILE *mem_fp = fmemopen(log_buf, sizeof(log_buf) - 1, "w");
+    assert(mem_fp != NULL);
+    shim_test_drain_logger(mem_fp);
+    fclose(mem_fp);
+
+    assert(strstr(log_buf, "items=[34:100=300") != NULL);
+    assert(strstr(log_buf, "34:122=322") != NULL);
+
+    printf("test_item_list_logged_on_count_change PASSED\n");
+}
+
+static void test_stage2_off_frees_buffer(void) {
+    printf("Running test_stage2_off_frees_buffer...\n");
+    fake_reset();
+    shim_test_reset();
+
+    int fd = 10;
+    // Enable stage 2 and commit a frame -> creates dumb buffer during probe
+    shim_test_set_stage2(true);
+    drmModeAtomicReqPtr req = drmModeAtomicAlloc();
+    drmModeAtomicAddProperty(req, 34, 1, 1);
+    drmModeAtomicCommit(fd, req, DRM_MODE_PAGE_FLIP_EVENT, NULL);
+    drmModeAtomicFree(req);
+
+    assert(g_fake_destroy_dumb_called == false);
+    assert(g_fake_rmfb_called == false);
+
+    // Disable stage 2
+    shim_test_set_stage2(false);
+
+    // Next frame commit: frees test buffer because both stage 2 and 3 are off!
+    drmModeAtomicReqPtr req2 = drmModeAtomicAlloc();
+    drmModeAtomicAddProperty(req2, 34, 1, 1);
+    drmModeAtomicCommit(fd, req2, DRM_MODE_PAGE_FLIP_EVENT, NULL);
+    drmModeAtomicFree(req2);
+
+    assert(g_fake_rmfb_called == true);
+    assert(g_fake_destroy_dumb_called == true);
+
+    printf("test_stage2_off_frees_buffer PASSED\n");
+}
+
 int main(void) {
     printf("=== Starting xl-commit-shim Host Tests ===\n");
     test_forward_and_ring_recording();
@@ -594,6 +1034,14 @@ int main(void) {
     test_4mb_log_cap();
     test_logger_drain_and_formatting();
     test_background_logger_thread();
+    test_stage3_on_merged_frame_commit();
+    test_stage3_failing_merged_fallback();
+    test_stage3_cursor_commit_unmerged();
+    test_stage3_test_only_host_commit_not_merged();
+    test_stage3_off_disables_plane_and_frees_fb();
+    test_stage3_70_items_not_merged();
+    test_item_list_logged_on_count_change();
+    test_stage2_off_frees_buffer();
     printf("=== All xl-commit-shim Host Tests PASSED! ===\n");
     return 0;
 }

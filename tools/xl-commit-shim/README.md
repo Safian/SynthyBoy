@@ -15,7 +15,7 @@ A read-only survey of the MPC XL host application (`/usr/bin/MPC`, AArch64 PIE, 
 
 ## Purpose
 
-To investigate whether our plane 46 can be added directly into the host's atomic commit cycle safely and cleanly, starting with a non-intrusive Stage 1 measurement shim, followed by an opt-in Stage 2 `DRM_MODE_ATOMIC_TEST_ONLY` probe.
+To investigate whether our plane 46 can be added directly into the host's atomic commit cycle safely and cleanly, starting with a non-intrusive Stage 1 measurement shim, followed by an opt-in Stage 2 `DRM_MODE_ATOMIC_TEST_ONLY` probe, and finally Stage 3 live atomic commit merging with test buffer rendering.
 
 ## Architecture
 
@@ -42,6 +42,46 @@ To investigate whether our plane 46 can be added directly into the host's atomic
   - **Never** uses `DRM_MODE_PAGE_FLIP_EVENT` with `TEST_ONLY`.
   - **Never** touches or alters the host's live request.
   - Frees the request immediately and logs the return value (`errno`) and call duration.
+
+### Stage 3: Live Atomic Request Merge (Opt-in via `/tmp/xl-commit-shim-stage3`)
+- Enabled by the file `/tmp/xl-commit-shim-stage3` (sampled once per second by the logger thread).
+- **Single atomic commit per frame**: For every frame commit (call site a), the shim builds a fresh merged atomic request combining the host's recorded properties + 10 plane-46 properties:
+  - `FB_ID = <test_fb_id>` (400x300 dumb buffer)
+  - `CRTC_ID = 82`
+  - `CRTC_X = 200`, `CRTC_Y = 200`
+  - `CRTC_W = 400`, `CRTC_H = 300`
+  - `SRC_X = 0`, `SRC_Y = 0`
+  - `SRC_W = 400 << 16`, `SRC_H = 300 << 16`
+  - Plane `zpos`, `alpha`, and `pixel blend mode` remain at hardware defaults.
+- Commits this merged request with the host's own flags and `user_data` in place of the original request.
+- **Fail-safe Fallback**:
+  - If the merged commit returns an error, the shim IMMEDIATELY commits the host's ORIGINAL request (same flags/user_data).
+  - Disables Stage 3 atomically (logged once with the errno and removes `/tmp/xl-commit-shim-stage3`).
+  - Returns the original commit's return value and errno to the host so the host never encounters a failure caused by the shim.
+- **Cursor Commits Untouched**: Call site (b) non-blocking cursor commits pass through completely unmerged.
+- **Test Buffer & Visible Pattern**:
+  - 400x300 XR24 dumb buffer mapped via `DRM_IOCTL_MODE_MAP_DUMB` and filled once at creation on the host thread:
+    - 16 px border in solid white (`0x00FFFFFF`).
+    - Mid-red interior (`0x00C03030`).
+    - Diagonal white stripe from top-left to bottom-right so panel orientation is immediately visible.
+  - Unmapped immediately after filling (`munmap`).
+- **Clean Switching Off & Buffer Lifecycle**:
+  - When `/tmp/xl-commit-shim-stage3` disappears, the NEXT frame commit disables plane 46 in the merged request (`FB_ID=0`, `CRTC_ID=0`).
+  - Only after that disable commit returns 0 are the test framebuffer (`drmModeRmFB`) and dumb buffer (`DRM_IOCTL_MODE_DESTROY_DUMB`) destroyed.
+  - Shared owner with use count: when both Stage 2 and Stage 3 are off, the test buffer is completely freed on the next frame commit.
+- **Screen & Hardware Verification**:
+  - **On-Screen**: Look for a white-bordered red 400x300 rectangle with a white diagonal stripe at panel coordinates (200, 200).
+  - **DRM debugfs**: Inspect `/sys/kernel/debug/dri/0/state` to verify plane 46 is active on CRTC 82 with its FB attached:
+    ```bash
+    cat /sys/kernel/debug/dri/0/state | grep -A 10 "plane\[46\]"
+    ```
+- **Logging & Summary Metrics**:
+  - Full property item list logged on any frame commit whose item count differs from the previous frame commit (e.g., transition from 15 to 23 items).
+  - Every 5-second summary window reports:
+    - Merged commits per second (`rate(merged)=...`).
+    - Non-merged commit durations (`dur_ns min=... med=... p99=... max=...`).
+    - Merged commit durations (`merged_dur_ns min=... med=... p99=... max=...`).
+    - Fallback count (`fallbacks=...`).
 
 ## Building
 
@@ -73,11 +113,19 @@ Tests verify:
 - First 8 commits contain items; subsequent commits contain item counts only.
 - Stage 2 disabled: exactly one commit performed.
 - Stage 2 enabled: exactly one extra `TEST_ONLY` commit per second, containing 23 properties (13 host + 10 plane 46), host request untouched, no `PAGE_FLIP_EVENT` on `TEST_ONLY`.
-- Cursor call site (b) does not trigger Stage 2.
+- Cursor call site (b) does not trigger Stage 2 or Stage 3 merging.
 - Error forwarding and errno preservation.
-- Summary line generation.
+- Summary line generation (including `rate(merged)`, `merged_dur_ns`, and `fallbacks`).
 - 4 MB log cap enforcement.
 - Thread startup and clean join.
+- Stage 3 on: 15-item host frame commit results in exactly ONE commit with 15 + 10 = 25 items, flags and user_data identical, host request cursor untouched (15), plane 46 FB_ID matches test FB, return value passes through.
+- Stage 3 visible pattern fill: 16 px white border, mid-red interior (`0x00C03030`), diagonal white stripe.
+- Stage 3 failing merged commit: fake libdrm returns error, immediate fallback commit with original 15 items, stage 3 disabled atomically, host receives fallback result.
+- Stage 3 cursor commits: pass through unmerged.
+- Stage 3 off: one frame commit disabling plane 46 (`FB_ID=0`, `CRTC_ID=0`), then `drmModeRmFB` and `DRM_IOCTL_MODE_DESTROY_DUMB` called.
+- Stage 3 safety: requests with 70 items (> 64 limit) or incomplete property sets are not merged.
+- Item count change logging: full property list is logged when host frame item count changes from 15 to 23.
+- Stage 2 off buffer cleanup: dumb buffer and FB are freed when both stage 2 and stage 3 are off.
 
 ## Deployment Script (`xlshim.sh`)
 
@@ -89,21 +137,39 @@ tools/xl-commit-shim/xlshim.sh --dry-run start
 tools/xl-commit-shim/xlshim.sh --dry-run status
 tools/xl-commit-shim/xlshim.sh --dry-run stage2 on
 tools/xl-commit-shim/xlshim.sh --dry-run stage2 off
+tools/xl-commit-shim/xlshim.sh --dry-run stage3 on
+tools/xl-commit-shim/xlshim.sh --dry-run stage3 off
+tools/xl-commit-shim/xlshim.sh --dry-run recover
 tools/xl-commit-shim/xlshim.sh --dry-run stop
 
 # Install and restart MPC with shim preloaded:
 tools/xl-commit-shim/xlshim.sh start
 
-# Check status:
+# Check status (PID, maps, stage flags, last summary, log tail):
 tools/xl-commit-shim/xlshim.sh status
 
 # Enable/disable Stage 2:
 tools/xl-commit-shim/xlshim.sh stage2 on
 tools/xl-commit-shim/xlshim.sh stage2 off
 
+# Enable/disable Stage 3 (live merged plane 46 with visible pattern):
+tools/xl-commit-shim/xlshim.sh stage3 on
+tools/xl-commit-shim/xlshim.sh stage3 off
+
 # View logs:
 tools/xl-commit-shim/xlshim.sh log 50
 
-# Recovery / normal restore (removes runtime drop-in and restarts MPC):
+# One-command safe recovery (removes stage 2/3 flags, removes drop-in, restarts MPC normally):
+tools/xl-commit-shim/xlshim.sh recover
+
+# Normal restore (removes runtime drop-in and restarts MPC):
 tools/xl-commit-shim/xlshim.sh stop
 ```
+
+## Review notes (2026-11-21)
+- A host commit that is itself `DRM_MODE_ATOMIC_TEST_ONLY` (0x100) is never merged into (it applies nothing; merging would set the plane-active state for a plane that was not set and let the disable path free a framebuffer still scanned out). Host test: `test_stage3_test_only_host_commit_not_merged`.
+- Any merged-commit failure, including a transient EBUSY, disables stage 3 for the rest of the run (conservative; the log line names the errno).
+- If the disabling merge itself keeps failing, every frame does a failed merged commit plus the original (two commits per frame) until it succeeds: a retry cap is a TODO for the generalised (Key 61) version.
+- The constants (CRTC 82, plane 46, 400x300 at (200,200)) are XL-only; the Key 61 version discovers them at run time.
+- `recover` relies on the restart of the `acvs` service closing the DRM file descriptor: the kernel then removes the framebuffer and disables the plane.
+- The aarch64 build (`build.sh`) uses `debian:12-slim` and installs the cross compiler in the container.
