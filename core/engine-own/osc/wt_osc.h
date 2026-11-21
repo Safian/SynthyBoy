@@ -203,6 +203,8 @@ public:
                 x = 0.0f;
         for (auto& wa : warpAa)
             wa[0] = wa[1] = warpadaa::State{};
+        for (auto& bp : blepPend)
+            bp = BlepPending{};
         if (historyDirty) // the decimator history is written only by the oversampled path: a note that never ran it starts with the zeros that are already there
         {
             std::fill (history.begin(), history.end(), 0.0f);
@@ -638,6 +640,7 @@ public:
         if (pending || tick.wt == nullptr || tick.level <= 0.0f) // pending: the last tick (not yet applied) is silent
             return;
         const bool aaOn = (synthyboy::aa::off() & synthyboy::aa::kWarpAdaa) == 0;
+        const bool blepOn = (synthyboy::aa::off() & synthyboy::aa::kBlep) == 0;
         const Wavetable& wt = *tick.wt;
         const int frames = wt.numFrames();
         const double nyq = 0.5 * sampleRate;
@@ -666,6 +669,7 @@ public:
             if (curGainL[v] == 0.0f && curGainR[v] == 0.0f && prevGainL[v] == 0.0f && prevGainR[v] == 0.0f)
             {
                 warpAa[v][0] = warpAa[v][1] = warpadaa::State{};
+                blepPend[v] = BlepPending{};
                 // silent voice: advance the phase only
                 {
                     // the phase advance of n samples at the final increment, modulo 2^32, without a 64 bit conversion (a library call on ARM): the double product is exact
@@ -912,6 +916,7 @@ public:
 #else
                 const bool lanes = false;
 #endif
+                const uint32_t ph0 = ph;
                 if (lanes)
                 {
 #if SB_NEON
@@ -950,6 +955,76 @@ public:
                                                             : (fmOnly ? fmSample (ph, k, static_cast<float> (j + 1) * (1.0f / static_cast<float> (os)), wBk)
                                                                       : sampleAt (ph, k, static_cast<float> (j + 1) * (1.0f / static_cast<float> (os)), wBk));
                         ph += incO;
+                    }
+                }
+                if (blepOn)
+                {
+                    if (blepPend[v].J != 0.0f)
+                    {
+                        const float omD = 1.0f - blepPend[v].d;
+                        buf[nt - 1] -= 0.5f * blepPend[v].J * omD * omD;
+                        blepPend[v] = BlepPending{};
+                    }
+                    WarpEvent events[2];
+                    int numEvents = 0;
+                    if (cs0 < 0 && cs1 < 0 && !filt0 && !filt1)
+                    {
+                        auto slotEvents = [] (int type, float amount, WarpEvent* out) noexcept -> int
+                        {
+                            if (amount == 0.0f && type != kWarpMirror)
+                                return 0;
+                            return warpEvents (type, amount, out);
+                        };
+                        if (tick.warp[0] != kWarpNone)
+                        {
+                            WarpEvent tmp[2];
+                            if (slotEvents (tick.warp[1], a1, tmp) == 0)
+                                numEvents = slotEvents (tick.warp[0], a0, events);
+                        }
+                        else
+                        {
+                            numEvents = slotEvents (tick.warp[1], a1, events);
+                        }
+                    }
+                    bool hasKind1 = false;
+                    for (int e = 0; e < numEvents; ++e)
+                        if (events[e].kind == 1)
+                            hasKind1 = true;
+                    if (hasKind1)
+                    {
+                        const int totalOs = n * os;
+                        uint32_t pCur = ph0;
+                        for (int k = 0; k < n; ++k)
+                        {
+                            const float t = static_cast<float> (t0 + k + 1) * invP;
+                            const uint32_t incO = static_cast<uint32_t> (lerp (prevInc[v], curInc[v], t) * (4294967296.0f / static_cast<float> (os)));
+                            const float wBk = cB != nullptr ? lerp (wB0, wB1, stepFrac (k + 1)) : 0.0f;
+                            for (int j = 0; j < os; ++j)
+                            {
+                                const int s = k * os + j;
+                                const uint32_t pNext = pCur + incO;
+                                if (pNext < incO)
+                                {
+                                    const float d = static_cast<float> (pNext) / static_cast<float> (incO);
+                                    const float J = sampleAt (0u, 0, 1.0f, wBk, true) - sampleAt (0xFFFFFFFFu, 0, 1.0f, wBk, true);
+                                    if (std::fabs (J) >= 1.0e-6f)
+                                    {
+                                        buf[nt - 1 + s] += 0.5f * J * d * d;
+                                        if (s + 1 < totalOs)
+                                        {
+                                            const float omD = 1.0f - d;
+                                            buf[nt - 1 + s + 1] -= 0.5f * J * omD * omD;
+                                        }
+                                        else
+                                        {
+                                            blepPend[v].d = d;
+                                            blepPend[v].J = J;
+                                        }
+                                    }
+                                }
+                                pCur = pNext;
+                            }
+                        }
                     }
                 }
                 for (int k = 0; k < n; ++k)
@@ -1262,6 +1337,8 @@ private:
     int frameIdx[kMaxVoices] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
     float filterState[kMaxVoices][4] = {};
     warpadaa::State warpAa[kMaxVoices][2] = {};
+    struct BlepPending { float d = 0.0f, J = 0.0f; };
+    BlepPending blepPend[kMaxVoices] = {};
     uint32_t phase[kMaxVoices] = {};
     std::vector<float> history;                  // [voice][kTaps - 1]: the oversampled path's last samples (allocated in prepareMorph ())
     bool historyDirty = false;
