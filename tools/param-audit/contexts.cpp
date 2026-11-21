@@ -391,8 +391,11 @@ static std::vector<Context> contextsForBase (const ParamInfo& info)
         for (int sync = 1; sync <= 4; ++sync)
             add ("lfo+sync" + std::to_string (sync), cat (cat (cat (rate, lowCut), routeOverrides (1, src, "osc1.level", 80.0f)), { { L + ".sync", static_cast<float> (sync) } }));
         if (! random)
+        {
             for (int t = 1; t <= 5; ++t)
                 add ("lfo+type" + std::to_string (t), cat (cat (cat (rate, lowCut), routeOverrides (1, src, "osc1.level", 80.0f)), { { L + ".sync_type", static_cast<float> (t) } }), "legato");
+            add ("lfo-host", cat (cat (cat (rate, lowCut), routeOverrides (1, src, "osc1.level", 80.0f)), { { L + ".sync_type", 1.0f } }), "host");
+        }
         (void) n;
         return out;
     }

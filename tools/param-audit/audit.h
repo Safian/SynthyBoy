@@ -43,6 +43,8 @@ struct Script
     int steadyFrom = 0, steadyTo = 0; // the steady part of the held notes (spectral metrics are measured here)
     int offFrame = 0;                 // the note off (envelope metrics)
     double bpm = 120.0;
+    bool transportPlaying = false;
+    double songPosBeats = 0.0;
 };
 /** "default" (C3 + G3, velocity 100, 0.6 s held, 1.0 s long), "long" (the same, 2 s: delays, reverbs), "single" (C3 alone), "chord8" (eight notes), "legato" (two overlapping notes), "seq" (two notes in a row),
     "bend" (C3 and a pitch bend of +1 at 0.3 s), "same" (the same key twice), "fast" (two quick notes of 0.1 s), "mpe" (member channel notes with expressions), "scale" (notes between the scale degrees). */
