@@ -142,7 +142,11 @@ Lines found: 80 in 9 files.
 ## C. Commit messages with markers (generated)
 
 <!-- BEGIN AUTO-COMMITS -->
-Commits found: 79.
+Commits found: 80.
+
+### afd82145 (2026-11-21) OPEN-QUESTIONS: Part A citation of THIRD_PARTY.md moved to line 62 (MTS-ESP not verified); generated
+
+- matching line: OPEN-QUESTIONS: Part A citation of THIRD_PARTY.md moved to line 62 (MTS-ESP not verified); generated parts regenerated
 
 ### 5bd9af0f (2026-11-21) TODO: owner decisions 2026-11-21 (audio-rate mod: measure on the Key 61 too; LFO phase snap: do; the
 

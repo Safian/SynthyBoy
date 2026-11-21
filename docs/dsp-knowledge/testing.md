@@ -15,3 +15,5 @@
 - **Bit identity across compiles:** `-ffp-contract=off` (see platform file).
 - **Batch builds:** workers write, one build worker builds the merged tree once; phase A (old
   code, new tests must fail) and phase B (all pass).
+- **Never memcmp a struct:** padding bytes hold heap garbage (voice_opt compared `VoiceCtl` with its 3 padding bytes and was red only after an unrelated layout change); compare the fields.
+- **A test that has never been built is not a test:** the agy branches of 2026-11-21 had a wrong include (`synthyboy/param_ids.h`) and a doubly declared member (`fx_oversampler.h`); both showed only in the first build.
