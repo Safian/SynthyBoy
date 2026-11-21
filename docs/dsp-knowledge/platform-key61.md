@@ -33,3 +33,9 @@
 - Diode Saturated Bass filter section is 0.72 ms/block (about 4x the gate). Saturator curve
   change = sound change (owner decision); estimated gain small because the chain, not the
   divide, dominates (HYPOTHESIS).
+
+## Thermal limits (read-only, 2026-11-21)
+
+- Key 61 (RK3288): zone0 `cpu-thermal` and zone1 `gpu-thermal`, governor step_wise, ONE trip point each: 113 C critical. NO passive (throttle) trip point: the cooling devices `cpufreq-cpu0` (max state 11) and `devfreq-ffa30000.gpu` (max 4) exist but nothing steps them before 113 C. Reading while a benchmark ran: cpu 68.8 C, gpu 66.5 C (tonight's benches peaked at 69-72 C). No fan.
+- Rule for every device run (owner, 2026-11-21): record the start and end temperature of every zone; the Key 61 has no passive trip, so the limit is set by us: stop and cool down at 85 C (28 C under critical, still 15 C above the highest value seen tonight).
+- GPU devfreq (`/sys/class/devfreq/ffa30000.gpu`): governor simple_ondemand, 100..600 MHz, steps 100/200/300/400/600 MHz.

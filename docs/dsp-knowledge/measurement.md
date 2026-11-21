@@ -25,3 +25,9 @@
 
 - Device timing claims in plans, commit messages and TODO carry the method (A/B/A, runs) and
   the spread. Single-run numbers are labelled as such.
+
+## Thermal limits and the run rule (XL, read-only, 2026-11-21)
+
+- XL (RK3588): zones package, bigcore0, bigcore2, littlecore, center, gpu, npu (step_wise). Passive trips at 85 C on bigcore0, bigcore2, littlecore and gpu; the center zone has two ACTIVE trips (75 C and 85 C: the pwm-fan, cooling device0, max state 3); every zone has a critical trip at 115 C. Cooling devices: pwm-fan, cpufreq cpu0 / cpu4 / cpu6 (max 4 / 6 / 6), devfreq gpu (max 7). Idle-ish reading 62.8-64.7 C (load average 3), fan state 0.
+- GPU devfreq (`fb000000.gpu`): simple_ondemand, 300..1000 MHz in 100 MHz steps.
+- Rule for every device run (owner, 2026-11-21): record the start and end temperature of all zones; stop the run and cool down if any zone comes within 10 C of its first passive trip point: XL 75 C (the fan's first active trip is also 75 C), Key 61 85 C (our own limit, see platform-key61.md).
