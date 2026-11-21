@@ -41,6 +41,7 @@
     "filter2.formant.transpose": "Formant Transpose",
     "filter2.keytrack": "Key Tracking",
     "flanger.phase_offset": "Flanger Offset",
+    "fxfilter.keytrack": "Key Tracking",
     "master.bend_down_link": "Down Same As Up",
     "master.bend_down_range": "Bend Down",
     "master.bend_range": "Bend Range",
